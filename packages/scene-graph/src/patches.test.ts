@@ -38,4 +38,15 @@ describe("domain patches", () => {
     expect(validatePatch(document, operation)).toEqual({ valid: true })
     expect(commitPatch(document, operation).document.constraints).toEqual([operation.constraint])
   })
+
+  it("rejects deleting an object referenced by a derived intersection", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [
+      { id: "line-a", type: "line", a: { x: 0, y: 0 }, b: { x: 1, y: 1 } },
+      { id: "line-b", type: "line", a: { x: 0, y: 1 }, b: { x: 1, y: 0 } },
+      { id: "intersection", type: "intersection", lineA: "line-a", lineB: "line-b", x: 0.5, y: 0.5 }
+    ]
+
+    expect(validatePatch(document, { op: "deleteObject", id: "line-a" })).toEqual({ valid: false, errors: ["object is referenced by another object"] })
+  })
 })
