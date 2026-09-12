@@ -43,4 +43,17 @@ describe("MathCanvas workbench", () => {
     expect(screen.getAllByText("圆弧 1")).toHaveLength(2)
     expect(canvas.querySelectorAll("path")).toHaveLength(1)
   })
+
+  it("creates and edits a line through the canvas and properties", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "添加直线" }))
+    const canvas = screen.getByRole("img", { name: "几何画布" })
+    fireEvent.click(canvas, { clientX: 220, clientY: 200 })
+    fireEvent.click(canvas, { clientX: 580, clientY: 80 })
+
+    expect(screen.getAllByText("直线 1")).toHaveLength(2)
+    expect(canvas.querySelectorAll("line").length).toBeGreaterThan(23)
+    fireEvent.change(screen.getByRole("spinbutton", { name: "端点 A X" }), { target: { value: "-5" } })
+    expect((screen.getByRole("spinbutton", { name: "端点 A X" }) as HTMLInputElement).value).toBe("-5")
+  })
 })

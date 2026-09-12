@@ -43,12 +43,15 @@ export function validatePatch(document: GeometryDocument, operation: DomainOpera
   }
   if (operation.op === "updatePrimitive") {
     const primitive = document.primitives.find((candidate) => candidate.id === operation.id)
-    if (!primitive || (primitive.type !== "circle" && primitive.type !== "arc")) errors.push("object is not editable")
+    if (!primitive || !["line", "circle", "arc"].includes(primitive.type)) errors.push("object is not editable")
+    if (operation.patch.a && (!Number.isFinite(operation.patch.a.x) || !Number.isFinite(operation.patch.a.y))) errors.push("line start must be finite")
+    if (operation.patch.b && (!Number.isFinite(operation.patch.b.x) || !Number.isFinite(operation.patch.b.y))) errors.push("line end must be finite")
     if (operation.patch.center && (!Number.isFinite(operation.patch.center.x) || !Number.isFinite(operation.patch.center.y))) errors.push("center must be finite")
     if (operation.patch.radius !== undefined && (!Number.isFinite(operation.patch.radius) || operation.patch.radius <= 0)) errors.push("radius must be positive")
     if (operation.patch.startAngle !== undefined && !Number.isFinite(operation.patch.startAngle)) errors.push("start angle must be finite")
     if (operation.patch.endAngle !== undefined && !Number.isFinite(operation.patch.endAngle)) errors.push("end angle must be finite")
     if (primitive?.type === "circle" && (operation.patch.startAngle !== undefined || operation.patch.endAngle !== undefined)) errors.push("circle does not support arc angles")
+    if (primitive?.type !== "line" && (operation.patch.a !== undefined || operation.patch.b !== undefined)) errors.push("only lines support endpoints")
   }
   if (operation.op === "setParameter" && !Number.isFinite(operation.value)) errors.push("parameter value must be finite")
   if (operation.op === "setParameterExpression") {

@@ -12,6 +12,8 @@ export type DomainOperation =
   | { op: "toggleVisibility"; id: string; visible: boolean }
 
 export interface PrimitiveUpdatePatch {
+  a?: { x: number; y: number }
+  b?: { x: number; y: number }
   center?: { x: number; y: number }
   radius?: number
   startAngle?: number
@@ -127,9 +129,15 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
     changedIds = [operation.primitive.id]
   } else if (operation.op === "updatePrimitive") {
     const primitive = next.primitives.find((candidate) => candidate.id === operation.id)
-    if (!primitive || (primitive.type !== "circle" && primitive.type !== "arc")) return { document, changed: false, error: "object is not editable" }
-    if (operation.patch.center) primitive.center = { ...primitive.center, ...operation.patch.center }
-    if (operation.patch.radius !== undefined) primitive.radius = operation.patch.radius
+    if (!primitive || !["line", "circle", "arc"].includes(primitive.type)) return { document, changed: false, error: "object is not editable" }
+    if (primitive.type === "line") {
+      if (operation.patch.a) primitive.a = { ...primitive.a, ...operation.patch.a }
+      if (operation.patch.b) primitive.b = { ...primitive.b, ...operation.patch.b }
+    }
+    if (primitive.type === "circle" || primitive.type === "arc") {
+      if (operation.patch.center) primitive.center = { ...primitive.center, ...operation.patch.center }
+      if (operation.patch.radius !== undefined) primitive.radius = operation.patch.radius
+    }
     if (primitive.type === "arc") {
       if (operation.patch.startAngle !== undefined) primitive.startAngle = operation.patch.startAngle
       if (operation.patch.endAngle !== undefined) primitive.endAngle = operation.patch.endAngle

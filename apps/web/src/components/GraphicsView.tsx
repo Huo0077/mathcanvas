@@ -4,7 +4,7 @@ import type { Coordinate, GeometryDocument, PrimitiveSpec } from "@draw/dsl"
 const toX = (x: number) => 40 + ((x + 10) / 20) * 720
 const toY = (y: number) => 320 - ((y + 6) / 12) * 360
 
-type CreationMode = "circle" | "arc" | null
+type CreationMode = "line" | "circle" | "arc" | null
 
 interface GraphicsViewProps {
   document: GeometryDocument
