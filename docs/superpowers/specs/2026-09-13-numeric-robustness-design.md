@@ -66,6 +66,7 @@ Add discriminated result types in `packages/geometry-kernel/src/types.ts`:
 ```ts
 export type IntersectionResult =
   | { kind: "none"; reason: "disjoint" | "parallel" }
+  | { kind: "point"; point: Coordinate }
   | { kind: "tangent"; point: Coordinate }
   | { kind: "points"; points: [Coordinate, Coordinate] }
   | { kind: "coincident" }
@@ -93,7 +94,7 @@ Circle intersection classification remains local because orientation predicates 
 `packages/scene-graph/src/operations.ts` consumes detailed results internally:
 
 - `none` hides a derived intersection as a valid empty result.
-- `tangent` and `points` update coordinates and visibility.
+- `point`, `tangent`, and `points` update coordinates and visibility.
 - `coincident` hides the single-point derived object because it has infinitely many solutions.
 - `degenerate` throws a deterministic error so `applyOperation` rolls back the transaction.
 
