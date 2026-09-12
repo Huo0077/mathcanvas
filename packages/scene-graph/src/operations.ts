@@ -3,12 +3,20 @@ import { evaluateLineParameters, evaluateParameterExpressions, intersectCircles,
 
 export type DomainOperation =
   | { op: "addPrimitive"; primitive: PrimitiveSpec }
+  | { op: "updatePrimitive"; id: string; patch: PrimitiveUpdatePatch }
   | { op: "setParameter"; id: string; value: number }
   | { op: "setParameterExpression"; id: string; expression: string }
   | { op: "addConstraint"; constraint: ConstraintSpec }
   | { op: "deleteConstraint"; id: string }
   | { op: "deleteObject"; id: string }
   | { op: "toggleVisibility"; id: string; visible: boolean }
+
+export interface PrimitiveUpdatePatch {
+  center?: { x: number; y: number }
+  radius?: number
+  startAngle?: number
+  endAngle?: number
+}
 
 export interface OperationResult {
   document: GeometryDocument
@@ -117,6 +125,16 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
     if (next.primitives.some((primitive) => primitive.id === operation.primitive.id)) return { document, changed: false, error: "duplicate object id" }
     next.primitives.push(operation.primitive)
     changedIds = [operation.primitive.id]
+  } else if (operation.op === "updatePrimitive") {
+    const primitive = next.primitives.find((candidate) => candidate.id === operation.id)
+    if (!primitive || (primitive.type !== "circle" && primitive.type !== "arc")) return { document, changed: false, error: "object is not editable" }
+    if (operation.patch.center) primitive.center = { ...primitive.center, ...operation.patch.center }
+    if (operation.patch.radius !== undefined) primitive.radius = operation.patch.radius
+    if (primitive.type === "arc") {
+      if (operation.patch.startAngle !== undefined) primitive.startAngle = operation.patch.startAngle
+      if (operation.patch.endAngle !== undefined) primitive.endAngle = operation.patch.endAngle
+    }
+    changedIds = [operation.id]
   } else if (operation.op === "setParameter") {
     const parameter = next.parameters[operation.id] ?? { id: operation.id, value: operation.value }
     next.parameters[operation.id] = { ...parameter, value: operation.value, expression: undefined }

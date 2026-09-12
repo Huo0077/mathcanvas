@@ -19,13 +19,28 @@ describe("MathCanvas workbench", () => {
     expect(screen.getByRole("img", { name: "几何画布" }).querySelectorAll("circle")).toHaveLength(2)
   })
 
-  it("adds and renders a circle and an arc", () => {
+  it("creates and edits a circle through the canvas and properties", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "添加圆" }))
-    fireEvent.click(screen.getByRole("button", { name: "添加圆弧" }))
+    const canvas = screen.getByRole("img", { name: "几何画布" })
+    fireEvent.click(canvas, { clientX: 400, clientY: 140 })
+    fireEvent.click(canvas, { clientX: 508, clientY: 140 })
 
-    expect(screen.getAllByText("新圆 C")).toHaveLength(2)
-    expect(screen.getByRole("img", { name: "几何画布" }).querySelectorAll("circle")).toHaveLength(2)
-    expect(screen.getByRole("img", { name: "几何画布" }).querySelectorAll("path")).toHaveLength(1)
+    expect(screen.getAllByText("圆 1")).toHaveLength(3)
+    expect(canvas.querySelectorAll("ellipse")).toHaveLength(1)
+    fireEvent.change(screen.getByRole("spinbutton", { name: "半径" }), { target: { value: "4" } })
+    expect((screen.getByRole("spinbutton", { name: "半径" }) as HTMLInputElement).value).toBe("4")
+  })
+
+  it("creates an arc from center, start, and end clicks", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "添加圆弧" }))
+    const canvas = screen.getByRole("img", { name: "几何画布" })
+    fireEvent.click(canvas, { clientX: 400, clientY: 140 })
+    fireEvent.click(canvas, { clientX: 544, clientY: 140 })
+    fireEvent.click(canvas, { clientX: 400, clientY: 20 })
+
+    expect(screen.getAllByText("圆弧 1")).toHaveLength(2)
+    expect(canvas.querySelectorAll("path")).toHaveLength(1)
   })
 })

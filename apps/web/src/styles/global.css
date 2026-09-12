@@ -20,6 +20,8 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgb(61 90 254 / 3
 .panel-section { padding: var(--space-4); border-bottom: 1px solid var(--color-border); }
 .panel-title { margin: 0 0 var(--space-3); font-size: 0.75rem; color: var(--color-muted); text-transform: uppercase; letter-spacing: 0.08em; }
 .object-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2) 0; }
+.object-row { cursor: pointer; border-radius: var(--radius-sm); padding-inline: var(--space-2); }
+.object-row.selected { background: var(--color-accent-soft); }
 .object-meta { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
 .object-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--color-accent); flex: 0 0 auto; }
 .object-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -30,6 +32,11 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgb(61 90 254 / 3
 .properties-label { display: flex; justify-content: space-between; gap: var(--space-3); font-size: 0.875rem; }
 .properties input[type="range"] { width: 100%; accent-color: var(--color-accent); }
 .metric { color: var(--color-accent); font-variant-numeric: tabular-nums; }
+.toolbar button[data-active="true"] { background: var(--color-accent-soft); color: var(--color-accent); border-color: var(--color-accent); }
+.primitive-properties { display: grid; gap: var(--space-2); margin-top: var(--space-4); }
+.primitive-properties h3 { margin: 0; font-size: 0.9rem; }
+.primitive-properties label { display: grid; gap: var(--space-1); font-size: 0.8rem; color: var(--color-muted); }
+.primitive-properties input { min-height: 36px; width: 100%; border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 0 var(--space-2); color: var(--color-ink); }
 .agent-status { display: flex; gap: var(--space-2); align-items: center; font-size: 0.875rem; color: var(--color-muted); }
 .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-success); }
 .footer-note { grid-column: 1 / -1; padding: var(--space-2) var(--space-5); font-size: 0.75rem; color: var(--color-muted); background: var(--color-panel); border-top: 1px solid var(--color-border); }

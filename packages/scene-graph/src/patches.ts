@@ -41,6 +41,15 @@ export function validatePatch(document: GeometryDocument, operation: DomainOpera
       if (first?.type !== "circle" || second?.type !== "circle") errors.push("circle intersection references invalid circles")
     }
   }
+  if (operation.op === "updatePrimitive") {
+    const primitive = document.primitives.find((candidate) => candidate.id === operation.id)
+    if (!primitive || (primitive.type !== "circle" && primitive.type !== "arc")) errors.push("object is not editable")
+    if (operation.patch.center && (!Number.isFinite(operation.patch.center.x) || !Number.isFinite(operation.patch.center.y))) errors.push("center must be finite")
+    if (operation.patch.radius !== undefined && (!Number.isFinite(operation.patch.radius) || operation.patch.radius <= 0)) errors.push("radius must be positive")
+    if (operation.patch.startAngle !== undefined && !Number.isFinite(operation.patch.startAngle)) errors.push("start angle must be finite")
+    if (operation.patch.endAngle !== undefined && !Number.isFinite(operation.patch.endAngle)) errors.push("end angle must be finite")
+    if (primitive?.type === "circle" && (operation.patch.startAngle !== undefined || operation.patch.endAngle !== undefined)) errors.push("circle does not support arc angles")
+  }
   if (operation.op === "setParameter" && !Number.isFinite(operation.value)) errors.push("parameter value must be finite")
   if (operation.op === "setParameterExpression") {
     try {

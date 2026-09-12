@@ -28,6 +28,7 @@ npm run build
 - 参数滑块 → Domain Operation → DAG 重算 → SVG 更新
 - 依赖对象局部传播与约束 Patch 校验
 - 平行、垂直、重合约束投影
+- 圆、圆弧的画布创建与属性编辑
 - Algebra View 的显示/隐藏
 - 撤销/重做事务栈
 - `.mgeo` 文件下载与加载接口
