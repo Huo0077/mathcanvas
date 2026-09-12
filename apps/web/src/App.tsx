@@ -28,8 +28,9 @@ export function App() {
   const replace = useSceneStore((state) => state.replace)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [fileError, setFileError] = useState<string | null>(null)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [creationStep, setCreationStep] = useState<CreationStep | null>(null)
+  const selectedId = selectedIds.at(-1) ?? null
   const slope = document.parameters.slope
   const slopeLine = useMemo(() => document.primitives.find((primitive) => primitive.id === "line-slope"), [document.primitives])
 
@@ -64,7 +65,7 @@ export function App() {
       if (Math.hypot(coordinate.x - creationStep.center.x, coordinate.y - creationStep.center.y) < 0.05) return
       const id = nextPrimitiveId(document, "line")
       apply({ op: "addPrimitive", primitive: { id, type: "line", a: creationStep.center, b: coordinate, label: `直线 ${id.split("-").at(-1)}` } })
-      setSelectedId(id)
+      setSelectedIds([id])
       setCreationStep(null)
       return
     }
@@ -73,7 +74,7 @@ export function App() {
       if (radius < 0.05) return
       const id = nextPrimitiveId(document, "circle")
       apply({ op: "addPrimitive", primitive: { id, type: "circle", center: creationStep.center, radius, label: `圆 ${id.split("-").at(-1)}` } })
-      setSelectedId(id)
+      setSelectedIds([id])
       setCreationStep(null)
       return
     }
@@ -87,7 +88,7 @@ export function App() {
     const endAngle = Math.atan2(coordinate.y - creationStep.center.y, coordinate.x - creationStep.center.x)
     const id = nextPrimitiveId(document, "arc")
     apply({ op: "addPrimitive", primitive: { id, type: "arc", center: creationStep.center, radius, startAngle, endAngle, label: `圆弧 ${id.split("-").at(-1)}` } })
-    setSelectedId(id)
+    setSelectedIds([id])
     setCreationStep(null)
   }
 
@@ -96,15 +97,35 @@ export function App() {
   }
 
   const selectedPrimitive = selectedId ? document.primitives.find((primitive) => primitive.id === selectedId) ?? null : null
-  const deleteSelected = () => {
-    if (!selectedId) return
-    const validation = validatePatch(document, { op: "deleteObject", id: selectedId })
-    if (!validation.valid) {
-      setFileError(validation.errors.join(", "))
+  const allSelectedLocked = selectedIds.length > 0 && selectedIds.every((id) => document.primitives.find((primitive) => primitive.id === id)?.locked)
+  const updateSelection = (id: string | null, additive = false) => {
+    setCreationStep(null)
+    if (!id) {
+      setSelectedIds([])
       return
     }
-    apply({ op: "deleteObject", id: selectedId })
-    setSelectedId(null)
+    setSelectedIds((current) => additive ? (current.includes(id) ? current.filter((candidate) => candidate !== id) : [...current, id]) : [id])
+  }
+  const selectBox = (bounds: { minX: number; minY: number; maxX: number; maxY: number }) => {
+    const contained = document.primitives.filter((primitive) => {
+      if (primitive.type === "point") return primitive.x >= bounds.minX && primitive.x <= bounds.maxX && primitive.y >= bounds.minY && primitive.y <= bounds.maxY
+      if (primitive.type === "line") return [primitive.a, primitive.b].every((point) => point.x >= bounds.minX && point.x <= bounds.maxX && point.y >= bounds.minY && point.y <= bounds.maxY)
+      if (primitive.type === "circle" || primitive.type === "arc") return primitive.center.x >= bounds.minX && primitive.center.x <= bounds.maxX && primitive.center.y >= bounds.minY && primitive.center.y <= bounds.maxY
+      return primitive.x >= bounds.minX && primitive.x <= bounds.maxX && primitive.y >= bounds.minY && primitive.y <= bounds.maxY
+    }).map((primitive) => primitive.id)
+    setSelectedIds(contained)
+  }
+  const toggleLock = () => selectedIds.forEach((id) => apply({ op: "toggleLock", id, locked: !allSelectedLocked }))
+  const deleteSelected = () => {
+    if (!selectedIds.length) return
+    const validations = selectedIds.map((id) => validatePatch(document, { op: "deleteObject", id }))
+    const invalid = validations.find((validation) => !validation.valid)
+    if (invalid && !invalid.valid) {
+      setFileError(invalid.errors.join(", "))
+      return
+    }
+    for (const id of [...selectedIds].reverse()) apply({ op: "deleteObject", id })
+    setSelectedIds([])
   }
 
   useEffect(() => {
@@ -113,14 +134,14 @@ export function App() {
         setCreationStep(null)
         return
       }
-      if ((event.key === "Delete" || event.key === "Backspace") && selectedId && !(event.target instanceof HTMLInputElement)) {
+      if ((event.key === "Delete" || event.key === "Backspace") && selectedIds.length > 0 && !(event.target instanceof HTMLInputElement)) {
         event.preventDefault()
         deleteSelected()
       }
     }
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [selectedId, document, apply])
+  }, [selectedIds, document, apply])
 
-  return <div className="app-shell"><WorkspaceHeader /><div className="workbench"><GeometryToolbar hasSelection={Boolean(selectedId)} creationMode={creationMode} onSelectTool={() => setCreationStep(null)} onDelete={deleteSelected} onUndo={undo} onRedo={redo} onSave={save} onOpen={() => fileInputRef.current?.click()} onAddPoint={() => apply({ op: "addPrimitive", primitive: { id: nextPrimitiveId(document, "point"), type: "point", x: 2, y: 1, label: "新点 A" } })} onAddLine={() => startCreation("line")} onAddCircle={() => startCreation("circle")} onAddArc={() => startCreation("arc")} /><AlgebraView primitives={document.primitives} selectedId={selectedId} onSelect={(id) => { setCreationStep(null); setSelectedId(id) }} onToggle={(id, visible) => apply({ op: "toggleVisibility", id, visible })} /><GraphicsView document={document} selectedId={selectedId} creationMode={creationMode} onSelect={(id) => { setCreationStep(null); setSelectedId(id) }} onCanvasClick={handleCanvasCreationClick} /><aside className="panel right"><PropertiesBar selectedPrimitive={selectedPrimitive} onUpdatePrimitive={(patch) => selectedId && apply({ op: "updatePrimitive", id: selectedId, patch })} value={slope?.value ?? 0.5} min={slope?.min ?? 0.15} max={slope?.max ?? 0.85} step={slope?.step ?? 0.05} onChange={(value) => apply({ op: "setParameter", id: "slope", value })} /><AgentDock /></aside><div className="footer-note">revision {document.revision} · {creationMode ? `${creationMode === "line" ? "直线" : creationMode === "circle" ? "圆" : "圆弧"}创建：${creationMode === "line" ? (creationStep?.center ? "点击终点" : "点击起点") : creationStep?.mode === "arc" ? (creationStep.start ? "点击终点" : "点击起点") : creationStep?.center ? "点击边缘" : "点击圆心"}` : slopeLine?.type === "line" ? "Scene Graph / Dependency DAG 已连接" : "等待图元"}</div></div>{fileError && <div role="alert" className="footer-note">{fileError}</div>}<input ref={fileInputRef} hidden aria-label="加载 .mgeo" type="file" accept=".mgeo,application/json" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; file.text().then(load).catch(() => setFileError("无法读取 .mgeo 文件")); event.target.value = "" }} /></div>
+  return <div className="app-shell"><WorkspaceHeader /><div className="workbench"><GeometryToolbar hasSelection={selectedIds.length > 0} allSelectedLocked={allSelectedLocked} creationMode={creationMode} onSelectTool={() => setCreationStep(null)} onDelete={deleteSelected} onToggleLock={toggleLock} onUndo={undo} onRedo={redo} onSave={save} onOpen={() => fileInputRef.current?.click()} onAddPoint={() => apply({ op: "addPrimitive", primitive: { id: nextPrimitiveId(document, "point"), type: "point", x: 2, y: 1, label: "新点 A" } })} onAddLine={() => startCreation("line")} onAddCircle={() => startCreation("circle")} onAddArc={() => startCreation("arc")} /><AlgebraView primitives={document.primitives} selectedIds={selectedIds} onSelect={updateSelection} onToggle={(id, visible) => apply({ op: "toggleVisibility", id, visible })} /><GraphicsView document={document} selectedIds={selectedIds} creationMode={creationMode} onSelect={updateSelection} onBoxSelect={selectBox} onCanvasClick={handleCanvasCreationClick} /><aside className="panel right"><PropertiesBar selectedPrimitive={selectedPrimitive} onUpdatePrimitive={(patch) => selectedId && apply({ op: "updatePrimitive", id: selectedId, patch })} value={slope?.value ?? 0.5} min={slope?.min ?? 0.15} max={slope?.max ?? 0.85} step={slope?.step ?? 0.05} onChange={(value) => apply({ op: "setParameter", id: "slope", value })} /><AgentDock /></aside><div className="footer-note">revision {document.revision} · {creationMode ? `${creationMode === "line" ? "直线" : creationMode === "circle" ? "圆" : "圆弧"}创建：${creationMode === "line" ? (creationStep?.center ? "点击终点" : "点击起点") : creationStep?.mode === "arc" ? (creationStep.start ? "点击终点" : "点击起点") : creationStep?.center ? "点击边缘" : "点击圆心"}` : slopeLine?.type === "line" ? "Scene Graph / Dependency DAG 已连接" : "等待图元"}</div></div>{fileError && <div role="alert" className="footer-note">{fileError}</div>}<input ref={fileInputRef} hidden aria-label="加载 .mgeo" type="file" accept=".mgeo,application/json" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; file.text().then(load).catch(() => setFileError("无法读取 .mgeo 文件")); event.target.value = "" }} /></div>
 }

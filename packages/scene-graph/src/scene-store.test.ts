@@ -92,4 +92,14 @@ describe("scene graph operations", () => {
     expect(delta.x).toBeCloseTo(0)
     expect(delta.y).toBeCloseTo(Math.sqrt(10))
   })
+
+  it("toggles lock state through a domain operation", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [{ id: "point-1", type: "point", x: 1, y: 2 }]
+
+    const result = applyOperation(document, { op: "toggleLock", id: "point-1", locked: true })
+
+    expect(result.changed).toBe(true)
+    expect(result.document.primitives[0]).toMatchObject({ id: "point-1", locked: true })
+  })
 })

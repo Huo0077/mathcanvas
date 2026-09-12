@@ -49,4 +49,12 @@ describe("domain patches", () => {
 
     expect(validatePatch(document, { op: "deleteObject", id: "line-a" })).toEqual({ valid: false, errors: ["object is referenced by another object"] })
   })
+
+  it("rejects editing and deleting a locked object", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [{ id: "point-1", type: "point", x: 1, y: 2, locked: true }]
+
+    expect(validatePatch(document, { op: "deleteObject", id: "point-1" })).toEqual({ valid: false, errors: ["object is locked"] })
+    expect(validatePatch(document, { op: "updatePrimitive", id: "point-1", patch: { center: { x: 2, y: 3 } } })).toEqual({ valid: false, errors: ["object is not editable", "object is locked"] })
+  })
 })

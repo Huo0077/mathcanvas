@@ -4,6 +4,7 @@ import { evaluateLineParameters, evaluateParameterExpressions, intersectCircles,
 export type DomainOperation =
   | { op: "addPrimitive"; primitive: PrimitiveSpec }
   | { op: "updatePrimitive"; id: string; patch: PrimitiveUpdatePatch }
+  | { op: "toggleLock"; id: string; locked: boolean }
   | { op: "setParameter"; id: string; value: number }
   | { op: "setParameterExpression"; id: string; expression: string }
   | { op: "addConstraint"; constraint: ConstraintSpec }
@@ -129,7 +130,7 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
     changedIds = [operation.primitive.id]
   } else if (operation.op === "updatePrimitive") {
     const primitive = next.primitives.find((candidate) => candidate.id === operation.id)
-    if (!primitive || !["line", "circle", "arc"].includes(primitive.type)) return { document, changed: false, error: "object is not editable" }
+    if (!primitive || !["line", "circle", "arc"].includes(primitive.type) || primitive.locked) return { document, changed: false, error: primitive?.locked ? "object is locked" : "object is not editable" }
     if (primitive.type === "line") {
       if (operation.patch.a) primitive.a = { ...primitive.a, ...operation.patch.a }
       if (operation.patch.b) primitive.b = { ...primitive.b, ...operation.patch.b }
@@ -143,6 +144,10 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
       if (operation.patch.endAngle !== undefined) primitive.endAngle = operation.patch.endAngle
     }
     changedIds = [operation.id]
+  } else if (operation.op === "toggleLock") {
+    const primitive = next.primitives.find((candidate) => candidate.id === operation.id)
+    if (!primitive) return { document, changed: false, error: "object not found" }
+    primitive.locked = operation.locked
   } else if (operation.op === "setParameter") {
     const parameter = next.parameters[operation.id] ?? { id: operation.id, value: operation.value }
     next.parameters[operation.id] = { ...parameter, value: operation.value, expression: undefined }

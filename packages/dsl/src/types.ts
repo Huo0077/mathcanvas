@@ -22,6 +22,7 @@ export interface PointPrimitive {
   y: number
   label?: string
   visible?: boolean
+  locked?: boolean
 }
 
 export interface LinePrimitive {
@@ -32,6 +33,7 @@ export interface LinePrimitive {
   slopeParameter?: string
   label?: string
   visible?: boolean
+  locked?: boolean
 }
 
 export interface CirclePrimitive {
@@ -41,6 +43,7 @@ export interface CirclePrimitive {
   radius: number
   label?: string
   visible?: boolean
+  locked?: boolean
 }
 
 export interface ArcPrimitive {
@@ -52,6 +55,7 @@ export interface ArcPrimitive {
   endAngle: number
   label?: string
   visible?: boolean
+  locked?: boolean
 }
 
 export interface IntersectionPrimitive {
@@ -63,6 +67,7 @@ export interface IntersectionPrimitive {
   y: number
   label?: string
   visible?: boolean
+  locked?: boolean
 }
 
 export interface LineCircleIntersectionPrimitive {
@@ -75,6 +80,7 @@ export interface LineCircleIntersectionPrimitive {
   y: number
   label?: string
   visible?: boolean
+  locked?: boolean
 }
 
 export interface CircleCircleIntersectionPrimitive {
@@ -87,6 +93,7 @@ export interface CircleCircleIntersectionPrimitive {
   y: number
   label?: string
   visible?: boolean
+  locked?: boolean
 }
 
 export type PrimitiveSpec =

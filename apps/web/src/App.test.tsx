@@ -68,4 +68,14 @@ describe("MathCanvas workbench", () => {
     expect(screen.getAllByText("新点 A")).toHaveLength(pointLabelsBeforeDelete.length - 2)
     expect((screen.getByRole("button", { name: "删除对象" }) as HTMLButtonElement).disabled).toBe(true)
   })
+
+  it("locks a selected object and disables destructive actions", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(screen.getAllByText("新点 A")[0])
+    fireEvent.click(screen.getByRole("button", { name: "锁定对象" }))
+
+    expect(screen.getByRole("button", { name: "解锁对象" })).toBeTruthy()
+    expect((screen.getByRole("button", { name: "删除对象" }) as HTMLButtonElement).disabled).toBe(true)
+  })
 })

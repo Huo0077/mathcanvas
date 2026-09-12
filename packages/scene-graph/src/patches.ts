@@ -52,6 +52,7 @@ export function validatePatch(document: GeometryDocument, operation: DomainOpera
   if (operation.op === "updatePrimitive") {
     const primitive = document.primitives.find((candidate) => candidate.id === operation.id)
     if (!primitive || !["line", "circle", "arc"].includes(primitive.type)) errors.push("object is not editable")
+    if (primitive?.locked) errors.push("object is locked")
     if (operation.patch.a && (!Number.isFinite(operation.patch.a.x) || !Number.isFinite(operation.patch.a.y))) errors.push("line start must be finite")
     if (operation.patch.b && (!Number.isFinite(operation.patch.b.x) || !Number.isFinite(operation.patch.b.y))) errors.push("line end must be finite")
     if (operation.patch.center && (!Number.isFinite(operation.patch.center.x) || !Number.isFinite(operation.patch.center.y))) errors.push("center must be finite")
@@ -61,6 +62,7 @@ export function validatePatch(document: GeometryDocument, operation: DomainOpera
     if (primitive?.type === "circle" && (operation.patch.startAngle !== undefined || operation.patch.endAngle !== undefined)) errors.push("circle does not support arc angles")
     if (primitive?.type !== "line" && (operation.patch.a !== undefined || operation.patch.b !== undefined)) errors.push("only lines support endpoints")
   }
+  if (operation.op === "toggleLock" && !ids.has(operation.id)) errors.push("object not found")
   if (operation.op === "setParameter" && !Number.isFinite(operation.value)) errors.push("parameter value must be finite")
   if (operation.op === "setParameterExpression") {
     try {
@@ -78,6 +80,7 @@ export function validatePatch(document: GeometryDocument, operation: DomainOpera
   }
   if (operation.op === "deleteConstraint" && !document.constraints.some((constraint) => constraint.id === operation.id)) errors.push("constraint not found")
   if ((operation.op === "deleteObject" || operation.op === "toggleVisibility") && !ids.has(operation.id)) errors.push("object not found")
+  if ((operation.op === "deleteObject" || operation.op === "toggleVisibility") && document.primitives.find((primitive) => primitive.id === operation.id)?.locked) errors.push("object is locked")
   if (operation.op === "deleteObject" && isReferenced(document, operation.id)) errors.push("object is referenced by another object")
   return errors.length ? { valid: false, errors } : { valid: true }
 }
