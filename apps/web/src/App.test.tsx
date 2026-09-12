@@ -56,4 +56,16 @@ describe("MathCanvas workbench", () => {
     fireEvent.change(screen.getByRole("spinbutton", { name: "端点 A X" }), { target: { value: "-5" } })
     expect((screen.getByRole("spinbutton", { name: "端点 A X" }) as HTMLInputElement).value).toBe("-5")
   })
+
+  it("selects and deletes a point with the keyboard", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    const pointLabelsBeforeDelete = screen.getAllByText("新点 A")
+    fireEvent.click(pointLabelsBeforeDelete[0])
+    expect((screen.getByRole("button", { name: "删除对象" }) as HTMLButtonElement).disabled).toBe(false)
+    fireEvent.keyDown(window, { key: "Delete" })
+
+    expect(screen.getAllByText("新点 A")).toHaveLength(pointLabelsBeforeDelete.length - 2)
+    expect((screen.getByRole("button", { name: "删除对象" }) as HTMLButtonElement).disabled).toBe(true)
+  })
 })

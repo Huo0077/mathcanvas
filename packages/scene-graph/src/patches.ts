@@ -19,6 +19,14 @@ function isConstraint(value: unknown): value is ConstraintSpec {
   return Boolean(value && typeof value === "object" && "id" in value && "type" in value && "targets" in value)
 }
 
+function isReferenced(document: GeometryDocument, id: string): boolean {
+  return document.constraints.some((constraint) => constraint.targets.includes(id)) || document.primitives.some((primitive) => (
+    (primitive.type === "intersection" && (primitive.lineA === id || primitive.lineB === id)) ||
+    (primitive.type === "lineCircleIntersection" && (primitive.lineId === id || primitive.circleId === id)) ||
+    (primitive.type === "circleIntersection" && (primitive.circleA === id || primitive.circleB === id))
+  ))
+}
+
 export function validatePatch(document: GeometryDocument, operation: DomainOperation): PatchValidationResult {
   const ids = primitiveIds(document)
   const errors: string[] = []
@@ -70,7 +78,7 @@ export function validatePatch(document: GeometryDocument, operation: DomainOpera
   }
   if (operation.op === "deleteConstraint" && !document.constraints.some((constraint) => constraint.id === operation.id)) errors.push("constraint not found")
   if ((operation.op === "deleteObject" || operation.op === "toggleVisibility") && !ids.has(operation.id)) errors.push("object not found")
-  if (operation.op === "deleteObject" && document.constraints.some((constraint) => constraint.targets.includes(operation.id))) errors.push("object is referenced by constraint")
+  if (operation.op === "deleteObject" && isReferenced(document, operation.id)) errors.push("object is referenced by another object")
   return errors.length ? { valid: false, errors } : { valid: true }
 }
 

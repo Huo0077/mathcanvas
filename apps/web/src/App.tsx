@@ -1,6 +1,7 @@
-import { useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 
 import { decodeMgeo, encodeMgeo } from "@draw/dsl"
+import { validatePatch } from "@draw/scene-graph"
 
 import { AlgebraView } from "./components/AlgebraView"
 import { AgentDock } from "./components/AgentDock"
@@ -95,6 +96,31 @@ export function App() {
   }
 
   const selectedPrimitive = selectedId ? document.primitives.find((primitive) => primitive.id === selectedId) ?? null : null
+  const deleteSelected = () => {
+    if (!selectedId) return
+    const validation = validatePatch(document, { op: "deleteObject", id: selectedId })
+    if (!validation.valid) {
+      setFileError(validation.errors.join(", "))
+      return
+    }
+    apply({ op: "deleteObject", id: selectedId })
+    setSelectedId(null)
+  }
 
-  return <div className="app-shell"><WorkspaceHeader /><div className="workbench"><GeometryToolbar creationMode={creationMode} onUndo={undo} onRedo={redo} onSave={save} onOpen={() => fileInputRef.current?.click()} onAddPoint={() => apply({ op: "addPrimitive", primitive: { id: nextPrimitiveId(document, "point"), type: "point", x: 2, y: 1, label: "新点 A" } })} onAddLine={() => startCreation("line")} onAddCircle={() => startCreation("circle")} onAddArc={() => startCreation("arc")} /><AlgebraView primitives={document.primitives} selectedId={selectedId} onSelect={setSelectedId} onToggle={(id, visible) => apply({ op: "toggleVisibility", id, visible })} /><GraphicsView document={document} selectedId={selectedId} creationMode={creationMode} onSelect={setSelectedId} onCanvasClick={handleCanvasCreationClick} /><aside className="panel right"><PropertiesBar selectedPrimitive={selectedPrimitive} onUpdatePrimitive={(patch) => selectedId && apply({ op: "updatePrimitive", id: selectedId, patch })} value={slope?.value ?? 0.5} min={slope?.min ?? 0.15} max={slope?.max ?? 0.85} step={slope?.step ?? 0.05} onChange={(value) => apply({ op: "setParameter", id: "slope", value })} /><AgentDock /></aside><div className="footer-note">revision {document.revision} · {creationMode ? `${creationMode === "line" ? "直线" : creationMode === "circle" ? "圆" : "圆弧"}创建：${creationMode === "line" ? (creationStep?.center ? "点击终点" : "点击起点") : creationStep?.mode === "arc" ? (creationStep.start ? "点击终点" : "点击起点") : creationStep?.center ? "点击边缘" : "点击圆心"}` : slopeLine?.type === "line" ? "Scene Graph / Dependency DAG 已连接" : "等待图元"}</div></div>{fileError && <div role="alert" className="footer-note">{fileError}</div>}<input ref={fileInputRef} hidden aria-label="加载 .mgeo" type="file" accept=".mgeo,application/json" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; file.text().then(load).catch(() => setFileError("无法读取 .mgeo 文件")); event.target.value = "" }} /></div>
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setCreationStep(null)
+        return
+      }
+      if ((event.key === "Delete" || event.key === "Backspace") && selectedId && !(event.target instanceof HTMLInputElement)) {
+        event.preventDefault()
+        deleteSelected()
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [selectedId, document, apply])
+
+  return <div className="app-shell"><WorkspaceHeader /><div className="workbench"><GeometryToolbar hasSelection={Boolean(selectedId)} creationMode={creationMode} onSelectTool={() => setCreationStep(null)} onDelete={deleteSelected} onUndo={undo} onRedo={redo} onSave={save} onOpen={() => fileInputRef.current?.click()} onAddPoint={() => apply({ op: "addPrimitive", primitive: { id: nextPrimitiveId(document, "point"), type: "point", x: 2, y: 1, label: "新点 A" } })} onAddLine={() => startCreation("line")} onAddCircle={() => startCreation("circle")} onAddArc={() => startCreation("arc")} /><AlgebraView primitives={document.primitives} selectedId={selectedId} onSelect={(id) => { setCreationStep(null); setSelectedId(id) }} onToggle={(id, visible) => apply({ op: "toggleVisibility", id, visible })} /><GraphicsView document={document} selectedId={selectedId} creationMode={creationMode} onSelect={(id) => { setCreationStep(null); setSelectedId(id) }} onCanvasClick={handleCanvasCreationClick} /><aside className="panel right"><PropertiesBar selectedPrimitive={selectedPrimitive} onUpdatePrimitive={(patch) => selectedId && apply({ op: "updatePrimitive", id: selectedId, patch })} value={slope?.value ?? 0.5} min={slope?.min ?? 0.15} max={slope?.max ?? 0.85} step={slope?.step ?? 0.05} onChange={(value) => apply({ op: "setParameter", id: "slope", value })} /><AgentDock /></aside><div className="footer-note">revision {document.revision} · {creationMode ? `${creationMode === "line" ? "直线" : creationMode === "circle" ? "圆" : "圆弧"}创建：${creationMode === "line" ? (creationStep?.center ? "点击终点" : "点击起点") : creationStep?.mode === "arc" ? (creationStep.start ? "点击终点" : "点击起点") : creationStep?.center ? "点击边缘" : "点击圆心"}` : slopeLine?.type === "line" ? "Scene Graph / Dependency DAG 已连接" : "等待图元"}</div></div>{fileError && <div role="alert" className="footer-note">{fileError}</div>}<input ref={fileInputRef} hidden aria-label="加载 .mgeo" type="file" accept=".mgeo,application/json" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; file.text().then(load).catch(() => setFileError("无法读取 .mgeo 文件")); event.target.value = "" }} /></div>
 }
