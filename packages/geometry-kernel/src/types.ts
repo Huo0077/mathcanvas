@@ -1,3 +1,3 @@
-import type { Coordinate, LinePrimitive } from "@draw/dsl"
+import type { ArcPrimitive, CirclePrimitive, Coordinate, LinePrimitive } from "@draw/dsl"
 
-export type { Coordinate, LinePrimitive }
+export type { ArcPrimitive, CirclePrimitive, Coordinate, LinePrimitive }

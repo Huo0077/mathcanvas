@@ -36,3 +36,27 @@ test("workbench updates the intersection and adds a point", async ({ page }) => 
   await page.getByRole("button", { name: "添加点" }).click()
   await expect(page.getByText("新点 A").first()).toBeVisible()
 })
+
+test("opens and restores an mgeo document through the file input", async ({ page }) => {
+  await page.goto("/")
+  const document = {
+    schemaVersion: "0.1",
+    revision: 7,
+    workspace: "calculus",
+    coordinateSystems: ["cartesian-2d"],
+    parameters: {},
+    primitives: [{ id: "restored-point", type: "point", x: 3, y: 2, label: "恢复点" }],
+    constraints: [],
+    dynamics: [],
+    annotations: [],
+    metadata: { id: "restored-document", name: "Restored", createdAt: "2026-09-12T00:00:00.000Z", updatedAt: "2026-09-12T00:00:00.000Z" }
+  }
+  await page.locator('input[aria-label="加载 .mgeo"]').setInputFiles({
+    name: "restored.mgeo",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify({ format: "mgeo", formatVersion: "0.1", document }))
+  })
+
+  await expect(page.getByText("恢复点").first()).toBeVisible()
+  await expect(page.getByText(/revision 7/)).toBeVisible()
+})

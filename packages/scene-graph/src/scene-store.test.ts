@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import { createEmptyDocument } from "@draw/dsl"
 
-import { applyOperation } from "./index"
+import { applyOperation, commitPatch, getAffectedPrimitiveIds, recomputeDerivedObjects } from "./index"
 
 describe("scene graph operations", () => {
   it("updates a parameter without mutating the previous document", () => {
@@ -38,5 +38,26 @@ describe("scene graph operations", () => {
     expect(result.changed).toBe(false)
     expect(result.document).toBe(before)
     expect(result.error).toContain("Circular parameter reference")
+  })
+
+  it("tracks only the dependent primitives for a parameter change", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [
+      { id: "line-a", type: "line", a: { x: -1, y: 0 }, b: { x: 1, y: 1 }, slopeParameter: "slope" },
+      { id: "line-b", type: "line", a: { x: -1, y: 1 }, b: { x: 1, y: 0 } },
+      { id: "intersection", type: "intersection", lineA: "line-a", lineB: "line-b", x: 0, y: 0 },
+      { id: "unrelated", type: "point", x: 2, y: 2 }
+    ]
+    expect([...getAffectedPrimitiveIds(document, ["slope"])]).toEqual(["slope", "line-a", "intersection"])
+    expect(recomputeDerivedObjects(document, ["slope"]).primitives.find((primitive) => primitive.id === "unrelated")).toEqual(document.primitives[3])
+  })
+
+  it("rejects an invalid constraint without changing the document", () => {
+    const document = createEmptyDocument("calculus")
+    const result = commitPatch(document, { op: "addConstraint", constraint: { id: "parallel-1", type: "parallel", targets: ["missing-a", "missing-b"] } })
+
+    expect(result.changed).toBe(false)
+    expect(result.document).toBe(document)
+    expect(result.error).toContain("constraint has invalid targets")
   })
 })

@@ -18,4 +18,14 @@ describe("MathCanvas workbench", () => {
     expect(screen.getAllByText("新点 A")).toHaveLength(2)
     expect(screen.getByRole("img", { name: "几何画布" }).querySelectorAll("circle")).toHaveLength(2)
   })
+
+  it("adds and renders a circle and an arc", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "添加圆" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加圆弧" }))
+
+    expect(screen.getAllByText("新圆 C")).toHaveLength(2)
+    expect(screen.getByRole("img", { name: "几何画布" }).querySelectorAll("circle")).toHaveLength(2)
+    expect(screen.getByRole("img", { name: "几何画布" }).querySelectorAll("path")).toHaveLength(1)
+  })
 })

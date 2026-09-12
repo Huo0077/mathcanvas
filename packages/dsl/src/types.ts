@@ -43,6 +43,17 @@ export interface CirclePrimitive {
   visible?: boolean
 }
 
+export interface ArcPrimitive {
+  id: string
+  type: "arc"
+  center: Coordinate
+  radius: number
+  startAngle: number
+  endAngle: number
+  label?: string
+  visible?: boolean
+}
+
 export interface IntersectionPrimitive {
   id: string
   type: "intersection"
@@ -54,7 +65,38 @@ export interface IntersectionPrimitive {
   visible?: boolean
 }
 
-export type PrimitiveSpec = PointPrimitive | LinePrimitive | CirclePrimitive | IntersectionPrimitive
+export interface LineCircleIntersectionPrimitive {
+  id: string
+  type: "lineCircleIntersection"
+  lineId: string
+  circleId: string
+  solutionIndex?: 0 | 1
+  x: number
+  y: number
+  label?: string
+  visible?: boolean
+}
+
+export interface CircleCircleIntersectionPrimitive {
+  id: string
+  type: "circleIntersection"
+  circleA: string
+  circleB: string
+  solutionIndex?: 0 | 1
+  x: number
+  y: number
+  label?: string
+  visible?: boolean
+}
+
+export type PrimitiveSpec =
+  | PointPrimitive
+  | LinePrimitive
+  | CirclePrimitive
+  | ArcPrimitive
+  | IntersectionPrimitive
+  | LineCircleIntersectionPrimitive
+  | CircleCircleIntersectionPrimitive
 
 export interface ConstraintSpec {
   id: string
