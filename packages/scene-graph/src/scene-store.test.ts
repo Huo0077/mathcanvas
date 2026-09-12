@@ -93,6 +93,50 @@ describe("scene graph operations", () => {
     expect(delta.y).toBeCloseTo(Math.sqrt(10))
   })
 
+  it("rejects conflicting constraints and rolls back the document", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [
+      { id: "line-a", type: "line", a: { x: 0, y: 0 }, b: { x: 4, y: 0 } },
+      { id: "line-b", type: "line", a: { x: 1, y: 2 }, b: { x: 2, y: 5 } }
+    ]
+    document.constraints = [{ id: "parallel-1", type: "parallel", targets: ["line-a", "line-b"] }]
+
+    const result = commitPatch(document, { op: "addConstraint", constraint: { id: "perpendicular-1", type: "perpendicular", targets: ["line-a", "line-b"] } })
+
+    expect(result.changed).toBe(false)
+    expect(result.document).toBe(document)
+    expect(result.error).toContain("constraint solving failed")
+  })
+
+  it("hides a valid parallel intersection without rejecting the transaction", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [
+      { id: "line-a", type: "line", a: { x: 0, y: 0 }, b: { x: 2, y: 0 } },
+      { id: "line-b", type: "line", a: { x: 0, y: 1 }, b: { x: 2, y: 1 } },
+      { id: "intersection", type: "intersection", lineA: "line-a", lineB: "line-b", x: 0, y: 0 }
+    ]
+
+    const result = applyOperation(document, { op: "updatePrimitive", id: "line-a", patch: { b: { x: 3, y: 0 } } })
+
+    expect(result.changed).toBe(true)
+    expect(result.document.primitives[2]).toMatchObject({ visible: false })
+  })
+
+  it("rolls back recomputation for a degenerate intersection source", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [
+      { id: "line-a", type: "line", a: { x: 1, y: 1 }, b: { x: 1, y: 1 } },
+      { id: "line-b", type: "line", a: { x: 0, y: 0 }, b: { x: 2, y: 0 } },
+      { id: "intersection", type: "intersection", lineA: "line-a", lineB: "line-b", x: 0, y: 0 }
+    ]
+
+    const result = applyOperation(document, { op: "updatePrimitive", id: "line-b", patch: { b: { x: 3, y: 0 } } })
+
+    expect(result.changed).toBe(false)
+    expect(result.document).toBe(document)
+    expect(result.error).toContain("degenerate intersection")
+  })
+
   it("toggles lock state through a domain operation", () => {
     const document = createEmptyDocument("calculus")
     document.primitives = [{ id: "point-1", type: "point", x: 1, y: 2 }]
@@ -103,6 +147,65 @@ describe("scene graph operations", () => {
     expect(result.document.primitives[0]).toMatchObject({ id: "point-1", locked: true })
   })
 
+  it("creates and removes a persistent group atomically", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [
+      { id: "point-1", type: "point", x: 1, y: 2 },
+      { id: "point-2", type: "point", x: 3, y: 4 }
+    ]
+
+    const grouped = commitPatch(document, { op: "createGroup", group: { id: "group-1", label: "分组 1", members: ["point-1", "point-2"] } })
+    const ungrouped = commitPatch(grouped.document, { op: "deleteGroup", id: "group-1" })
+
+    expect(grouped.document.groups).toEqual([{ id: "group-1", label: "分组 1", members: ["point-1", "point-2"] }])
+    expect(grouped.document.revision).toBe(1)
+    expect(ungrouped.document.groups).toEqual([])
+    expect(ungrouped.document.revision).toBe(2)
+  })
+
+  it("aligns primitive bounds in one transaction", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [
+      { id: "point-1", type: "point", x: 1, y: 2 },
+      { id: "circle-1", type: "circle", center: { x: 5, y: 4 }, radius: 2 }
+    ]
+
+    const result = commitPatch(document, { op: "alignPrimitives", ids: ["point-1", "circle-1"], alignment: "left" })
+
+    expect(result.document.primitives).toEqual([
+      { id: "point-1", type: "point", x: 1, y: 2 },
+      { id: "circle-1", type: "circle", center: { x: 3, y: 4 }, radius: 2 }
+    ])
+    expect(result.document.revision).toBe(1)
+  })
+
+  it("aligns horizontal and vertical centers on their matching axes", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [
+      { id: "point-1", type: "point", x: 1, y: 2 },
+      { id: "point-2", type: "point", x: 5, y: 6 }
+    ]
+
+    const horizontal = commitPatch(document, { op: "alignPrimitives", ids: ["point-1", "point-2"], alignment: "horizontalCenter" })
+    const vertical = commitPatch(document, { op: "alignPrimitives", ids: ["point-1", "point-2"], alignment: "verticalCenter" })
+
+    expect(horizontal.document.primitives.map((primitive) => (primitive.type === "point" ? primitive.x : null))).toEqual([3, 3])
+    expect(vertical.document.primitives.map((primitive) => (primitive.type === "point" ? primitive.y : null))).toEqual([4, 4])
+  })
+
+  it("updates visibility for multiple primitives in one transaction", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [
+      { id: "point-1", type: "point", x: 1, y: 2 },
+      { id: "point-2", type: "point", x: 3, y: 4 }
+    ]
+
+    const result = commitPatch(document, { op: "setPrimitivesVisible", ids: ["point-1", "point-2"], visible: false })
+
+    expect(result.document.primitives.map((primitive) => primitive.visible)).toEqual([false, false])
+    expect(result.document.revision).toBe(1)
+  })
+
   it("keeps a 1000-primitive incremental recomputation bounded", () => {
     const document = createEmptyDocument("calculus")
     document.parameters.slope = { id: "slope", value: 1 }
@@ -110,17 +213,38 @@ describe("scene graph operations", () => {
       { id: "line-a", type: "line", a: { x: -2, y: -2 }, b: { x: 2, y: 2 }, slopeParameter: "slope" },
       { id: "line-b", type: "line", a: { x: -2, y: 2 }, b: { x: 2, y: -2 } },
       { id: "intersection", type: "intersection", lineA: "line-a", lineB: "line-b", x: 0, y: 0 },
-      ...Array.from({ length: 997 }, (_, index) => ({ id: `point-${index}`, type: "point" as const, x: index % 20, y: Math.floor(index / 20) }))
+      { id: "near-line-a", type: "line", a: { x: -2, y: -1e-9 }, b: { x: 2, y: 1e-9 } },
+      { id: "near-line-b", type: "line", a: { x: -2, y: 1 }, b: { x: 2, y: 1 + 3e-9 } },
+      { id: "near-intersection", type: "intersection", lineA: "near-line-a", lineB: "near-line-b", x: 0, y: 0 },
+      ...Array.from({ length: 994 }, (_, index) => ({ id: `point-${index}`, type: "point" as const, x: index % 20, y: Math.floor(index / 20) }))
     ]
     const unrelated = document.primitives.at(-1)
 
     const startedAt = performance.now()
-    const recomputed = recomputeDerivedObjects(document, ["slope"])
+    const recomputed = recomputeDerivedObjects(document, ["slope", "near-line-a"])
     const elapsed = performance.now() - startedAt
 
     expect(document.primitives).toHaveLength(1000)
-    expect([...getAffectedPrimitiveIds(document, ["slope"])]).toEqual(["slope", "line-a", "intersection"])
+    expect([...getAffectedPrimitiveIds(document, ["slope", "near-line-a"])]).toEqual(["slope", "near-line-a", "line-a", "near-intersection", "intersection"])
+    const nearIntersection = recomputed.primitives.find((primitive) => primitive.id === "near-intersection")
+    expect(nearIntersection).toMatchObject({ visible: true })
+    expect(nearIntersection && nearIntersection.type === "intersection" && Number.isFinite(nearIntersection.x) && Number.isFinite(nearIntersection.y)).toBe(true)
     expect(recomputed.primitives.at(-1)).toBe(unrelated)
     expect(elapsed).toBeLessThan(100)
+  })
+
+  it("keeps independent constraint components stable during incremental recomputation", () => {
+    const document = createEmptyDocument("calculus")
+    document.parameters.slope = { id: "slope", value: 1 }
+    const activeLines = Array.from({ length: 12 }, (_, index) => ({ id: `active-${index}`, type: "line" as const, a: { x: 0, y: index }, b: { x: 2, y: index + 1 }, ...(index === 0 ? { slopeParameter: "slope" } : {}) }))
+    const untouchedLines = Array.from({ length: 12 }, (_, index) => ({ id: `untouched-${index}`, type: "line" as const, a: { x: 10, y: index }, b: { x: 12, y: index + 2 } }))
+    document.primitives = [...activeLines, ...untouchedLines]
+    document.constraints = [...Array.from({ length: 11 }, (_, index) => ({ id: `active-${index}`, type: "parallel" as const, targets: [`active-${index}`, `active-${index + 1}`] })), ...Array.from({ length: 11 }, (_, index) => ({ id: `untouched-${index}`, type: "perpendicular" as const, targets: [`untouched-${index}`, `untouched-${index + 1}`] }))]
+    const untouched = document.primitives.find((primitive) => primitive.id === "untouched-11")
+
+    const recomputed = recomputeDerivedObjects(document, ["slope"])
+
+    expect(recomputed.primitives.find((primitive) => primitive.id === "untouched-11")).toBe(untouched)
+    expect(recomputed.primitives.find((primitive) => primitive.id === "active-11")).not.toBe(activeLines[11])
   })
 })

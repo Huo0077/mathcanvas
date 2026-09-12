@@ -11,6 +11,7 @@ export function validateDocument(document: unknown): ValidationResult {
   if (!workspaces.has(value.workspace ?? "")) errors.push("workspace is invalid")
   if (!value.parameters || typeof value.parameters !== "object") errors.push("parameters must be an object")
   if (!Array.isArray(value.primitives)) errors.push("primitives must be an array")
+  if (!Array.isArray(value.groups)) errors.push("groups must be an array")
   if (!Array.isArray(value.constraints)) errors.push("constraints must be an array")
   if (!Array.isArray(value.dynamics)) errors.push("dynamics must be an array")
   if (!Array.isArray(value.annotations)) errors.push("annotations must be an array")
@@ -24,7 +25,7 @@ export function validateDocument(document: unknown): ValidationResult {
       }
       if (ids.has(primitive.id)) errors.push(`duplicate primitive id: ${primitive.id}`)
       ids.add(primitive.id)
-      if (!["point", "line", "segment", "circle", "arc", "intersection", "lineCircleIntersection", "circleIntersection"].includes(primitive.type)) {
+      if (!["point", "line", "segment", "ray", "polyline", "parabola", "ellipse", "hyperbola", "circle", "arc", "intersection", "lineCircleIntersection", "circleIntersection"].includes(primitive.type)) {
         errors.push(`invalid primitive type: ${primitive.type}`)
       }
     }
@@ -32,10 +33,53 @@ export function validateDocument(document: unknown): ValidationResult {
   if (Array.isArray(value.primitives)) {
     const primitives = value.primitives as PrimitiveSpec[]
     const byId = new Map(primitives.map((primitive) => [primitive.id, primitive]))
+    if (Array.isArray(value.groups)) {
+      const groupIds = new Set<string>()
+      const groupedMembers = new Set<string>()
+      for (const group of value.groups) {
+        if (!group || typeof group !== "object" || typeof group.id !== "string") {
+          errors.push("every group needs a stable id")
+          continue
+        }
+        if (groupIds.has(group.id)) errors.push(`duplicate group id: ${group.id}`)
+        groupIds.add(group.id)
+        if (!Array.isArray(group.members) || group.members.length < 2 || group.members.some((member) => !byId.has(member))) errors.push(`group has invalid members: ${group.id}`)
+        if (Array.isArray(group.members) && new Set(group.members).size !== group.members.length) errors.push(`group has duplicate members: ${group.id}`)
+        if (Array.isArray(group.members)) {
+          for (const member of group.members) {
+            if (groupedMembers.has(member)) errors.push(`primitive belongs to multiple groups: ${member}`)
+            groupedMembers.add(member)
+          }
+        }
+      }
+    }
     for (const primitive of primitives) {
       if (primitive.type === "segment") {
         if (!Number.isFinite(primitive.a.x) || !Number.isFinite(primitive.a.y) || !Number.isFinite(primitive.b.x) || !Number.isFinite(primitive.b.y)) errors.push("segment endpoints must be finite")
         if (primitive.a.x === primitive.b.x && primitive.a.y === primitive.b.y) errors.push("segment endpoints must differ")
+      }
+      if (primitive.type === "ray") {
+        if (![primitive.a?.x, primitive.a?.y, primitive.b?.x, primitive.b?.y].every(Number.isFinite)) errors.push("ray endpoints must be finite")
+        if (primitive.a?.x === primitive.b?.x && primitive.a?.y === primitive.b?.y) errors.push("ray direction must differ")
+      }
+      if (primitive.type === "polyline") {
+        if (!Array.isArray(primitive.points) || primitive.points.length < 2) errors.push("polyline needs at least two points")
+        if (Array.isArray(primitive.points)) {
+          if (primitive.points.some((point) => !point || !Number.isFinite(point.x) || !Number.isFinite(point.y))) errors.push("polyline points must be finite")
+          for (let index = 1; index < primitive.points.length; index += 1) {
+            const previous = primitive.points[index - 1]
+            const current = primitive.points[index]
+            if (previous && current && previous.x === current.x && previous.y === current.y) errors.push("polyline consecutive points must differ")
+          }
+        }
+      }
+      if (primitive.type === "parabola") {
+        if (![primitive.vertex?.x, primitive.vertex?.y, primitive.focalParameter].every(Number.isFinite) || primitive.focalParameter === 0 || !["x", "y"].includes(primitive.axis)) errors.push("parabola geometry is invalid")
+      }
+      if (primitive.type === "ellipse" || primitive.type === "hyperbola") {
+        const center = primitive.center
+        if (![center?.x, center?.y, primitive.radiusX, primitive.radiusY].every(Number.isFinite) || primitive.radiusX <= 0 || primitive.radiusY <= 0) errors.push(`${primitive.type} geometry is invalid`)
+        if (primitive.type === "hyperbola" && !["x", "y"].includes(primitive.axis)) errors.push("hyperbola axis is invalid")
       }
       if (primitive.type === "circle" || primitive.type === "arc") {
         if (!Number.isFinite(primitive.center.x) || !Number.isFinite(primitive.center.y) || !Number.isFinite(primitive.radius) || primitive.radius <= 0) {

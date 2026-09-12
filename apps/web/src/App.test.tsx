@@ -91,4 +91,37 @@ describe("MathCanvas workbench", () => {
     expect(screen.getByRole("button", { name: "解锁对象" })).toBeTruthy()
     expect((screen.getByRole("button", { name: "删除对象" }) as HTMLButtonElement).disabled).toBe(true)
   })
+
+  it("groups a multi-selection and applies batch visibility", () => {
+    render(<App />)
+    fireEvent.click(screen.getAllByText("y = 0")[0])
+    fireEvent.click(screen.getAllByText("参数直线")[0], { shiftKey: true })
+
+    fireEvent.click(screen.getByRole("button", { name: "创建分组" }))
+    expect(screen.getByRole("button", { name: "取消分组" })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole("button", { name: /批量(隐藏|显示)/ }))
+    expect(screen.getByRole("button", { name: "显示 y = 0" })).toBeTruthy()
+    expect(screen.getByRole("button", { name: "显示 参数直线" })).toBeTruthy()
+  })
+
+  it("offers six alignment actions for a multi-selection", () => {
+    render(<App />)
+    fireEvent.click(screen.getAllByText("y = 0")[0])
+    fireEvent.click(screen.getAllByText("参数直线")[0], { shiftKey: true })
+
+    for (const name of ["左对齐", "右对齐", "上对齐", "下对齐", "横向居中（X）", "纵向居中（Y）"]) {
+      expect(screen.getByRole("button", { name })).toBeTruthy()
+    }
+  })
+
+  it("announces a rejected batch operation", () => {
+    render(<App />)
+    fireEvent.click(screen.getAllByText("y = 0")[0])
+    fireEvent.click(screen.getAllByText("参数直线")[0], { shiftKey: true })
+    fireEvent.click(screen.getByRole("button", { name: "锁定对象" }))
+    fireEvent.click(screen.getByRole("button", { name: /批量(隐藏|显示)/ }))
+
+    expect(screen.getByRole("alert").textContent).toContain("selection contains locked object")
+  })
 })

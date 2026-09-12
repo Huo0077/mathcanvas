@@ -68,4 +68,51 @@ describe("domain patches", () => {
     expect(validatePatch(document, { op: "addPrimitive", primitive: { ...segment, b: segment.a } })).toEqual({ valid: false, errors: ["segment endpoints must differ"] })
     expect(commitPatch(added.document, { op: "updatePrimitive", id: segment.id, patch: { b: segment.a } })).toMatchObject({ document: added.document, changed: false, error: "segment endpoints must differ" })
   })
+
+  it("rejects degenerate rays and polylines at the patch boundary", () => {
+    const document = createEmptyDocument("calculus")
+    const ray = { id: "ray-1", type: "ray" as const, a: { x: 0, y: 0 }, b: { x: 0, y: 0 } }
+    const polyline = { id: "polyline-1", type: "polyline" as const, points: [{ x: 0, y: 0 }, { x: 0, y: 0 }] }
+
+    expect(validatePatch(document, { op: "addPrimitive", primitive: ray })).toEqual({ valid: false, errors: ["ray direction must differ"] })
+    expect(validatePatch(document, { op: "addPrimitive", primitive: polyline })).toEqual({ valid: false, errors: ["polyline consecutive points must differ"] })
+  })
+
+  it("rejects overlapping groups and locked batch alignment", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [
+      { id: "point-1", type: "point", x: 1, y: 2 },
+      { id: "point-2", type: "point", x: 3, y: 4, locked: true },
+      { id: "point-3", type: "point", x: 5, y: 6 }
+    ]
+    document.groups = [{ id: "group-1", members: ["point-1", "point-2"] }]
+
+    expect(validatePatch(document, { op: "createGroup", group: { id: "group-2", members: ["point-2", "point-3"] } })).toEqual({ valid: false, errors: ["primitive already belongs to a group"] })
+    expect(validatePatch(document, { op: "alignPrimitives", ids: ["point-1", "point-2"], alignment: "left" })).toEqual({ valid: false, errors: ["selection contains locked object"] })
+  })
+
+  it("rejects invalid alignment values and locked constrained dependents", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [
+      { id: "line-a", type: "line", a: { x: 0, y: 0 }, b: { x: 2, y: 0 } },
+      { id: "line-b", type: "line", a: { x: 0, y: 1 }, b: { x: 2, y: 1 } },
+      { id: "line-c", type: "line", a: { x: 0, y: 2 }, b: { x: 2, y: 2 }, locked: true },
+      { id: "point-1", type: "point", x: 5, y: 5 }
+    ]
+    document.constraints = [
+      { id: "parallel-1", type: "parallel", targets: ["line-a", "line-b"] },
+      { id: "parallel-2", type: "parallel", targets: ["line-b", "line-c"] }
+    ]
+
+    const invalidAlignment = validatePatch(document, { op: "alignPrimitives", ids: ["line-a", "point-1"], alignment: "diagonal" as never })
+    const lockedDependent = validatePatch(document, { op: "alignPrimitives", ids: ["line-a", "point-1"], alignment: "left" })
+    const singleObject = validatePatch(document, { op: "alignPrimitives", ids: ["line-a"], alignment: "left" })
+
+    expect(invalidAlignment.valid).toBe(false)
+    expect(invalidAlignment.valid ? [] : invalidAlignment.errors).toContain("alignment is invalid")
+    expect(lockedDependent.valid).toBe(false)
+    expect(lockedDependent.valid ? [] : lockedDependent.errors).toContain("alignment would move locked constrained object")
+    expect(singleObject.valid).toBe(false)
+    expect(singleObject.valid ? [] : singleObject.errors).toContain("alignment requires multiple objects")
+  })
 })

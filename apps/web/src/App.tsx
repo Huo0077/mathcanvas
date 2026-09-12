@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 
 import { decodeMgeo, encodeMgeo } from "@draw/dsl"
 import { validatePatch } from "@draw/scene-graph"
+import type { Alignment } from "@draw/scene-graph"
 
 import { AlgebraView } from "./components/AlgebraView"
 import { AgentDock } from "./components/AgentDock"
@@ -11,13 +12,19 @@ import { PropertiesBar } from "./components/PropertiesBar"
 import { WorkspaceHeader } from "./components/WorkspaceHeader"
 import { useSceneStore } from "./store"
 
-type CreationMode = "line" | "segment" | "circle" | "arc" | null
-type CreationStep = { mode: Exclude<CreationMode, null>; center: { x: number; y: number } | null; start?: { x: number; y: number } }
+type CreationMode = "line" | "segment" | "ray" | "polyline" | "circle" | "arc" | null
+type CreationStep = { mode: Exclude<CreationMode, null>; center: { x: number; y: number } | null; start?: { x: number; y: number }; points?: { x: number; y: number }[] }
 
 function nextPrimitiveId(document: ReturnType<typeof useSceneStore.getState>["document"], prefix: string): string {
   let index = 1
   while (document.primitives.some((primitive) => primitive.id === `${prefix}-${index}`)) index += 1
   return `${prefix}-${index}`
+}
+
+function nextGroupId(document: ReturnType<typeof useSceneStore.getState>["document"]): string {
+  let index = 1
+  while (document.groups.some((group) => group.id === `group-${index}`)) index += 1
+  return `group-${index}`
 }
 
 export function App() {
@@ -26,6 +33,7 @@ export function App() {
   const undo = useSceneStore((state) => state.undo)
   const redo = useSceneStore((state) => state.redo)
   const replace = useSceneStore((state) => state.replace)
+  const operationError = useSceneStore((state) => state.error)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [fileError, setFileError] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -57,15 +65,20 @@ export function App() {
   const startCreation = (mode: Exclude<CreationMode, null>) => setCreationStep({ mode, center: null })
   const handleCanvasClick = (coordinate: { x: number; y: number }) => {
     if (!creationStep) return
+    if (creationStep.mode === "polyline") {
+      const points = creationStep.points ?? []
+      if (!points.length || Math.hypot(coordinate.x - points.at(-1)!.x, coordinate.y - points.at(-1)!.y) >= 0.05) setCreationStep({ ...creationStep, points: [...points, coordinate] })
+      return
+    }
     if (!creationStep.center) {
       setCreationStep({ ...creationStep, center: coordinate })
       return
     }
-    if (creationStep.mode === "line" || creationStep.mode === "segment") {
+    if (creationStep.mode === "line" || creationStep.mode === "segment" || creationStep.mode === "ray") {
       if (Math.hypot(coordinate.x - creationStep.center.x, coordinate.y - creationStep.center.y) < 0.05) return
       const type = creationStep.mode
       const id = nextPrimitiveId(document, type)
-      apply({ op: "addPrimitive", primitive: { id, type, a: creationStep.center, b: coordinate, label: `${type === "line" ? "直线" : "线段"} ${id.split("-").at(-1)}` } })
+      apply({ op: "addPrimitive", primitive: { id, type, a: creationStep.center, b: coordinate, label: `${type === "line" ? "直线" : type === "ray" ? "射线" : "线段"} ${id.split("-").at(-1)}` } })
       setSelectedIds([id])
       setCreationStep(null)
       return
@@ -96,9 +109,21 @@ export function App() {
   const handleCanvasCreationClick = (coordinate: { x: number; y: number }) => {
     handleCanvasClick(coordinate)
   }
+  const handleCanvasDoubleClick = (coordinate: { x: number; y: number }) => {
+    if (!creationStep || creationStep.mode !== "polyline") return
+    const points = creationStep.points ?? []
+    const finalPoints = !points.length || Math.hypot(coordinate.x - points.at(-1)!.x, coordinate.y - points.at(-1)!.y) < 0.05 ? points : [...points, coordinate]
+    if (finalPoints.length < 2) return
+    const id = nextPrimitiveId(document, "polyline")
+    apply({ op: "addPrimitive", primitive: { id, type: "polyline", points: finalPoints, label: `折线 ${id.split("-").at(-1)}` } })
+    setSelectedIds([id])
+    setCreationStep(null)
+  }
 
   const selectedPrimitive = selectedId ? document.primitives.find((primitive) => primitive.id === selectedId) ?? null : null
   const allSelectedLocked = selectedIds.length > 0 && selectedIds.every((id) => document.primitives.find((primitive) => primitive.id === id)?.locked)
+  const allSelectedVisible = selectedIds.length > 0 && selectedIds.every((id) => document.primitives.find((primitive) => primitive.id === id)?.visible !== false)
+  const selectedGroup = document.groups.find((group) => group.members.length === selectedIds.length && group.members.every((id) => selectedIds.includes(id))) ?? null
   const updateSelection = (id: string | null, additive = false) => {
     setCreationStep(null)
     if (!id) {
@@ -111,12 +136,19 @@ export function App() {
     const contained = document.primitives.filter((primitive) => {
       if (primitive.type === "point") return primitive.x >= bounds.minX && primitive.x <= bounds.maxX && primitive.y >= bounds.minY && primitive.y <= bounds.maxY
       if (primitive.type === "line" || primitive.type === "segment") return [primitive.a, primitive.b].every((point) => point.x >= bounds.minX && point.x <= bounds.maxX && point.y >= bounds.minY && point.y <= bounds.maxY)
+      if (primitive.type === "ray") return [primitive.a, primitive.b].every((point) => point.x >= bounds.minX && point.x <= bounds.maxX && point.y >= bounds.minY && point.y <= bounds.maxY)
+      if (primitive.type === "polyline") return primitive.points.every((point) => point.x >= bounds.minX && point.x <= bounds.maxX && point.y >= bounds.minY && point.y <= bounds.maxY)
       if (primitive.type === "circle" || primitive.type === "arc") return primitive.center.x >= bounds.minX && primitive.center.x <= bounds.maxX && primitive.center.y >= bounds.minY && primitive.center.y <= bounds.maxY
+      if (primitive.type === "parabola") return primitive.vertex.x >= bounds.minX && primitive.vertex.x <= bounds.maxX && primitive.vertex.y >= bounds.minY && primitive.vertex.y <= bounds.maxY
+      if (primitive.type === "ellipse" || primitive.type === "hyperbola") return primitive.center.x >= bounds.minX && primitive.center.x <= bounds.maxX && primitive.center.y >= bounds.minY && primitive.center.y <= bounds.maxY
       return primitive.x >= bounds.minX && primitive.x <= bounds.maxX && primitive.y >= bounds.minY && primitive.y <= bounds.maxY
     }).map((primitive) => primitive.id)
     setSelectedIds(contained)
   }
-  const toggleLock = () => selectedIds.forEach((id) => apply({ op: "toggleLock", id, locked: !allSelectedLocked }))
+  const toggleLock = () => apply({ op: "setPrimitivesLocked", ids: selectedIds, locked: !allSelectedLocked })
+  const createGroup = () => apply({ op: "createGroup", group: { id: nextGroupId(document), label: `分组 ${document.groups.length + 1}`, members: selectedIds } })
+  const deleteGroup = () => selectedGroup && apply({ op: "deleteGroup", id: selectedGroup.id })
+  const alignSelection = (alignment: Alignment) => apply({ op: "alignPrimitives", ids: selectedIds, alignment })
   const deleteSelected = () => {
     if (!selectedIds.length) return
     const validations = selectedIds.map((id) => validatePatch(document, { op: "deleteObject", id }))
@@ -144,8 +176,8 @@ export function App() {
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [selectedIds, document, apply])
 
-  const creationLabel = creationMode === "line" ? "直线" : creationMode === "segment" ? "线段" : creationMode === "circle" ? "圆" : "圆弧"
-  const creationHint = creationMode === "line" || creationMode === "segment" ? (creationStep?.center ? "点击终点" : "点击起点") : creationStep?.mode === "arc" ? (creationStep.start ? "点击终点" : "点击起点") : creationStep?.center ? "点击边缘" : "点击圆心"
+  const creationLabel = creationMode === "line" ? "直线" : creationMode === "segment" ? "线段" : creationMode === "ray" ? "射线" : creationMode === "polyline" ? "折线" : creationMode === "circle" ? "圆" : "圆弧"
+  const creationHint = creationMode === "polyline" ? "点击添加顶点，双击结束" : creationMode === "line" || creationMode === "segment" || creationMode === "ray" ? (creationStep?.center ? "点击终点" : "点击起点") : creationStep?.mode === "arc" ? (creationStep.start ? "点击终点" : "点击起点") : creationStep?.center ? "点击边缘" : "点击圆心"
 
-  return <div className="app-shell"><WorkspaceHeader /><div className="workbench"><GeometryToolbar hasSelection={selectedIds.length > 0} allSelectedLocked={allSelectedLocked} creationMode={creationMode} onSelectTool={() => setCreationStep(null)} onDelete={deleteSelected} onToggleLock={toggleLock} onUndo={undo} onRedo={redo} onSave={save} onOpen={() => fileInputRef.current?.click()} onAddPoint={() => apply({ op: "addPrimitive", primitive: { id: nextPrimitiveId(document, "point"), type: "point", x: 2, y: 1, label: "新点 A" } })} onAddLine={() => startCreation("line")} onAddSegment={() => startCreation("segment")} onAddCircle={() => startCreation("circle")} onAddArc={() => startCreation("arc")} /><AlgebraView primitives={document.primitives} selectedIds={selectedIds} onSelect={updateSelection} onToggle={(id, visible) => apply({ op: "toggleVisibility", id, visible })} /><GraphicsView document={document} selectedIds={selectedIds} creationMode={creationMode} onSelect={updateSelection} onBoxSelect={selectBox} onCanvasClick={handleCanvasCreationClick} /><aside className="panel right"><PropertiesBar selectedPrimitive={selectedPrimitive} onUpdatePrimitive={(patch) => selectedId && apply({ op: "updatePrimitive", id: selectedId, patch })} value={slope?.value ?? 0.5} min={slope?.min ?? 0.15} max={slope?.max ?? 0.85} step={slope?.step ?? 0.05} onChange={(value) => apply({ op: "setParameter", id: "slope", value })} /><AgentDock /></aside><div className="footer-note">revision {document.revision} · {creationMode ? `${creationLabel}创建：${creationHint}` : slopeLine?.type === "line" ? "Scene Graph / Dependency DAG 已连接" : "等待图元"}</div></div>{fileError && <div role="alert" className="footer-note">{fileError}</div>}<input ref={fileInputRef} hidden aria-label="加载 .mgeo" type="file" accept=".mgeo,application/json" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; file.text().then(load).catch(() => setFileError("无法读取 .mgeo 文件")); event.target.value = "" }} /></div>
+  return <div className="app-shell"><WorkspaceHeader /><div className="workbench"><GeometryToolbar hasSelection={selectedIds.length > 0} allSelectedLocked={allSelectedLocked} creationMode={creationMode} onSelectTool={() => setCreationStep(null)} onDelete={deleteSelected} onToggleLock={toggleLock} onUndo={undo} onRedo={redo} onSave={save} onOpen={() => fileInputRef.current?.click()} onAddPoint={() => apply({ op: "addPrimitive", primitive: { id: nextPrimitiveId(document, "point"), type: "point", x: 2, y: 1, label: "新点 A" } })} onAddLine={() => startCreation("line")} onAddSegment={() => startCreation("segment")} onAddRay={() => startCreation("ray")} onAddPolyline={() => startCreation("polyline")} onAddCircle={() => startCreation("circle")} onAddArc={() => startCreation("arc")} /><AlgebraView primitives={document.primitives} selectedIds={selectedIds} onSelect={updateSelection} onToggle={(id, visible) => apply({ op: "toggleVisibility", id, visible })} /><GraphicsView document={document} selectedIds={selectedIds} creationMode={creationMode} onSelect={updateSelection} onBoxSelect={selectBox} onCanvasClick={handleCanvasCreationClick} onCanvasDoubleClick={handleCanvasDoubleClick} /><aside className="panel right"><PropertiesBar selectedPrimitive={selectedPrimitive} selectedCount={selectedIds.length} selectedGroupId={selectedGroup?.id ?? null} allSelectedVisible={allSelectedVisible} onCreateGroup={createGroup} onDeleteGroup={deleteGroup} onAlign={alignSelection} onToggleBatchVisibility={() => apply({ op: "setPrimitivesVisible", ids: selectedIds, visible: !allSelectedVisible })} onUpdatePrimitive={(patch) => selectedId && apply({ op: "updatePrimitive", id: selectedId, patch })} value={slope?.value ?? 0.5} min={slope?.min ?? 0.15} max={slope?.max ?? 0.85} step={slope?.step ?? 0.05} onChange={(value) => apply({ op: "setParameter", id: "slope", value })} /><AgentDock /></aside><div className="footer-note">revision {document.revision} · {creationMode ? `${creationLabel}创建：${creationHint}` : slopeLine?.type === "line" ? "Scene Graph / Dependency DAG 已连接" : "等待图元"}</div></div>{(fileError || operationError) && <div role="alert" className="footer-note">{fileError ?? operationError}</div>}<input ref={fileInputRef} hidden aria-label="加载 .mgeo" type="file" accept=".mgeo,application/json" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; file.text().then(load).catch(() => setFileError("无法读取 .mgeo 文件")); event.target.value = "" }} /></div>
 }

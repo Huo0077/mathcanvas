@@ -9,6 +9,7 @@ interface SceneState {
   document: GeometryDocument
   history: GeometryDocument[]
   future: GeometryDocument[]
+  error: string | null
   apply: (operation: DomainOperation) => void
   undo: () => void
   redo: () => void
@@ -19,10 +20,11 @@ export const useSceneStore = create<SceneState>((set) => ({
   document: createDemoDocument(),
   history: [],
   future: [],
+  error: null,
   apply: (operation) => set((state) => {
     const result = commitPatch(state.document, operation)
-    if (!result.changed) return state
-    return { document: result.document, history: [...state.history, state.document], future: [] }
+    if (!result.changed) return result.error ? { error: result.error } : state
+    return { document: result.document, history: [...state.history, state.document], future: [], error: null }
   }),
   undo: () => set((state) => {
     const previous = state.history.at(-1)
@@ -34,5 +36,5 @@ export const useSceneStore = create<SceneState>((set) => ({
     if (!next) return state
     return { document: next, history: [...state.history, state.document], future: state.future.slice(1) }
   }),
-  replace: (document) => set({ document, history: [], future: [] })
+  replace: (document) => set({ document, history: [], future: [], error: null })
 }))

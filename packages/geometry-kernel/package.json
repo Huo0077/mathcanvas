@@ -10,6 +10,7 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@draw/dsl": "0.1.0"
+    "@draw/dsl": "0.1.0",
+    "robust-predicates": "^3.0.3"
   }
 }

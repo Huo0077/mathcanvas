@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { createEmptyDocument, decodeMgeo, encodeMgeo } from "./index"
+import { createEmptyDocument, decodeMgeo, encodeMgeo, validateDocument } from "./index"
 
 describe("Geometry DSL codec", () => {
   it("round-trips a versioned document with stable metadata", () => {
@@ -18,5 +18,49 @@ describe("Geometry DSL codec", () => {
     document.primitives = [{ id: "segment-1", type: "segment", a: { x: -1, y: 2 }, b: { x: 3, y: 4 } }]
 
     expect(decodeMgeo(encodeMgeo(document)).primitives[0]).toEqual(document.primitives[0])
+  })
+
+  it("round-trips persistent primitive groups", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [
+      { id: "point-1", type: "point", x: 1, y: 2 },
+      { id: "point-2", type: "point", x: 3, y: 4 }
+    ]
+    document.groups = [{ id: "group-1", label: "示例分组", members: ["point-1", "point-2"] }]
+
+    expect(decodeMgeo(encodeMgeo(document)).groups).toEqual(document.groups)
+  })
+
+  it("loads legacy documents without groups as an empty group list", () => {
+    const document = createEmptyDocument("calculus")
+    const legacy = JSON.parse(encodeMgeo(document))
+    delete legacy.document.groups
+
+    expect(decodeMgeo(JSON.stringify(legacy)).groups).toEqual([])
+  })
+
+  it("round-trips ray and polyline primitives", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      { id: "ray-1", type: "ray", a: { x: 0, y: 0 }, b: { x: 2, y: 1 } },
+      { id: "polyline-1", type: "polyline", points: [{ x: 0, y: 0 }, { x: 3, y: 4 }, { x: 6, y: 4 }] }
+    ]
+
+    expect(decodeMgeo(encodeMgeo(document)).primitives).toEqual(document.primitives)
+  })
+
+  it("rejects degenerate rays and polylines", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [
+      { id: "ray-1", type: "ray", a: { x: 0, y: 0 }, b: { x: 0, y: 0 } },
+      { id: "polyline-1", type: "polyline", points: [{ x: 0, y: 0 }, { x: 0, y: 0 }] }
+    ]
+
+    const result = validateDocument(document)
+    expect(result.valid).toBe(false)
+    if (!result.valid) {
+      expect(result.errors).toContain("ray direction must differ")
+      expect(result.errors).toContain("polyline consecutive points must differ")
+    }
   })
 })

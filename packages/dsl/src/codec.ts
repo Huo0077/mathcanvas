@@ -15,6 +15,7 @@ export function createEmptyDocument(workspace: Workspace): GeometryDocument {
     coordinateSystems: ["cartesian-2d"],
     parameters: {},
     primitives: [],
+    groups: [],
     constraints: [],
     dynamics: [],
     annotations: [],
@@ -35,7 +36,10 @@ export function decodeMgeo(serialized: string): GeometryDocument {
   } catch {
     throw new Error("Invalid .mgeo JSON")
   }
-  const candidate = parsed && typeof parsed === "object" && "document" in parsed ? (parsed as { document: unknown }).document : parsed
+  const rawCandidate = parsed && typeof parsed === "object" && "document" in parsed ? (parsed as { document: unknown }).document : parsed
+  const candidate = rawCandidate && typeof rawCandidate === "object"
+    ? { ...rawCandidate, groups: "groups" in rawCandidate ? (rawCandidate as { groups: unknown }).groups : [] }
+    : rawCandidate
   const result = validateDocument(candidate)
   if (!result.valid) throw new Error(`Invalid geometry document: ${result.errors.join(", ")}`)
   return candidate as GeometryDocument

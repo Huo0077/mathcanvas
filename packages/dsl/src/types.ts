@@ -46,6 +46,59 @@ export interface SegmentPrimitive {
   locked?: boolean
 }
 
+export interface RayPrimitive {
+  id: string
+  type: "ray"
+  a: Coordinate
+  b: Coordinate
+  label?: string
+  visible?: boolean
+  locked?: boolean
+}
+
+export interface PolylinePrimitive {
+  id: string
+  type: "polyline"
+  points: Coordinate[]
+  label?: string
+  visible?: boolean
+  locked?: boolean
+}
+
+export interface ParabolaPrimitive {
+  id: string
+  type: "parabola"
+  vertex: Coordinate
+  focalParameter: number
+  axis: "x" | "y"
+  label?: string
+  visible?: boolean
+  locked?: boolean
+}
+
+export interface EllipsePrimitive {
+  id: string
+  type: "ellipse"
+  center: Coordinate
+  radiusX: number
+  radiusY: number
+  label?: string
+  visible?: boolean
+  locked?: boolean
+}
+
+export interface HyperbolaPrimitive {
+  id: string
+  type: "hyperbola"
+  center: Coordinate
+  radiusX: number
+  radiusY: number
+  axis: "x" | "y"
+  label?: string
+  visible?: boolean
+  locked?: boolean
+}
+
 export interface CirclePrimitive {
   id: string
   type: "circle"
@@ -110,6 +163,11 @@ export type PrimitiveSpec =
   | PointPrimitive
   | LinePrimitive
   | SegmentPrimitive
+  | RayPrimitive
+  | PolylinePrimitive
+  | ParabolaPrimitive
+  | EllipsePrimitive
+  | HyperbolaPrimitive
   | CirclePrimitive
   | ArcPrimitive
   | IntersectionPrimitive
@@ -120,6 +178,12 @@ export interface ConstraintSpec {
   id: string
   type: "parallel" | "perpendicular" | "coincident"
   targets: string[]
+}
+
+export interface GroupSpec {
+  id: string
+  label?: string
+  members: string[]
 }
 
 export interface DynamicSpec {
@@ -151,6 +215,7 @@ export interface GeometryDocument {
   coordinateSystems: string[]
   parameters: Record<string, ParameterSpec>
   primitives: PrimitiveSpec[]
+  groups: GroupSpec[]
   constraints: ConstraintSpec[]
   dynamics: DynamicSpec[]
   annotations: AnnotationSpec[]

@@ -3,8 +3,7 @@ import type { Coordinate, GeometryDocument, PrimitiveSpec } from "@draw/dsl"
 
 const toX = (x: number) => 40 + ((x + 10) / 20) * 720
 const toY = (y: number) => 320 - ((y + 6) / 12) * 360
-
-type CreationMode = "line" | "segment" | "circle" | "arc" | null
+type CreationMode = "line" | "segment" | "ray" | "polyline" | "circle" | "arc" | null
 
 interface GraphicsViewProps {
   document: GeometryDocument
@@ -12,6 +11,7 @@ interface GraphicsViewProps {
   creationMode: CreationMode
   onSelect: (id: string | null, additive?: boolean) => void
   onCanvasClick: (coordinate: Coordinate) => void
+  onCanvasDoubleClick: (coordinate: Coordinate) => void
   onBoxSelect: (bounds: { minX: number; minY: number; maxX: number; maxY: number }) => void
 }
 
@@ -25,58 +25,48 @@ function eventToWorld(event: ReactMouseEvent<SVGElement>): Coordinate {
   return { x: (viewX - 400) / 36, y: (140 - viewY) / 30 }
 }
 
-export function GraphicsView({ document, selectedIds, creationMode, onSelect, onCanvasClick, onBoxSelect }: GraphicsViewProps) {
+export function GraphicsView({ document, selectedIds, creationMode, onSelect, onCanvasClick, onCanvasDoubleClick, onBoxSelect }: GraphicsViewProps) {
   const [dragStart, setDragStart] = useState<Coordinate | null>(null)
   const [dragCurrent, setDragCurrent] = useState<Coordinate | null>(null)
   const suppressClick = useRef(false)
   const lines = document.primitives.filter((primitive): primitive is Extract<typeof primitive, { type: "line" }> => primitive.type === "line" && primitive.visible !== false)
+  const rays = document.primitives.filter((primitive): primitive is Extract<typeof primitive, { type: "ray" }> => primitive.type === "ray" && primitive.visible !== false)
   const segments = document.primitives.filter((primitive): primitive is Extract<typeof primitive, { type: "segment" }> => primitive.type === "segment" && primitive.visible !== false)
+  const polylines = document.primitives.filter((primitive): primitive is Extract<typeof primitive, { type: "polyline" }> => primitive.type === "polyline" && primitive.visible !== false)
   const circles = document.primitives.filter((primitive): primitive is Extract<typeof primitive, { type: "circle" }> => primitive.type === "circle" && primitive.visible !== false)
   const arcs = document.primitives.filter((primitive): primitive is Extract<typeof primitive, { type: "arc" }> => primitive.type === "arc" && primitive.visible !== false)
   const points = document.primitives.filter((primitive): primitive is Extract<typeof primitive, { type: "point" }> => primitive.type === "point" && primitive.visible !== false)
   const intersections = document.primitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "intersection" | "lineCircleIntersection" | "circleIntersection" }> => ["intersection", "lineCircleIntersection", "circleIntersection"].includes(primitive.type) && primitive.visible !== false)
-  const arcPath = (centerX: number, centerY: number, radius: number, startAngle: number, endAngle: number) => {
-    const start = { x: toX(centerX + radius * Math.cos(startAngle)), y: toY(centerY + radius * Math.sin(startAngle)) }
-    const end = { x: toX(centerX + radius * Math.cos(endAngle)), y: toY(centerY + radius * Math.sin(endAngle)) }
-    const largeArc = Math.abs(endAngle - startAngle) > Math.PI ? 1 : 0
-    const sweep = endAngle >= startAngle ? 0 : 1
-    return `M ${start.x} ${start.y} A ${radius * 36} ${radius * 30} 0 ${largeArc} ${sweep} ${end.x} ${end.y}`
-  }
   const viewportLine = (line: Extract<PrimitiveSpec, { type: "line" }>) => {
     const deltaX = line.b.x - line.a.x
     if (Math.abs(deltaX) < 1e-9) return { a: { x: line.a.x, y: -6 }, b: { x: line.a.x, y: 6 } }
     const slope = (line.b.y - line.a.y) / deltaX
     return { a: { x: -10, y: line.a.y + slope * (-10 - line.a.x) }, b: { x: 10, y: line.a.y + slope * (10 - line.a.x) } }
   }
-  const handleObjectClick = (event: ReactMouseEvent<SVGElement>, id: string) => {
-    event.stopPropagation()
-    if (creationMode) {
-      onCanvasClick(eventToWorld(event))
-      return
-    }
-    onSelect(id, event.shiftKey)
+  const viewportRay = (ray: Extract<PrimitiveSpec, { type: "ray" }>) => {
+    const length = Math.hypot(ray.b.x - ray.a.x, ray.b.y - ray.a.y)
+    if (!Number.isFinite(length) || length === 0) return { a: ray.a, b: ray.b }
+    const unit = { x: (ray.b.x - ray.a.x) / length, y: (ray.b.y - ray.a.y) / length }
+    const limits = [unit.x > 0 ? (-10 - ray.a.x) / unit.x : Infinity, unit.x < 0 ? (10 - ray.a.x) / unit.x : Infinity, unit.y > 0 ? (-6 - ray.a.y) / unit.y : Infinity, unit.y < 0 ? (6 - ray.a.y) / unit.y : Infinity].filter((value) => value >= 0 && Number.isFinite(value))
+    const distance = Math.min(...limits, 20)
+    return { a: ray.a, b: { x: ray.a.x + unit.x * distance, y: ray.a.y + unit.y * distance } }
   }
-  const handlePointerDown = (event: ReactPointerEvent<SVGSVGElement>) => {
-    if (creationMode) return
-    const coordinate = eventToWorld(event)
-    setDragStart(coordinate)
-    setDragCurrent(coordinate)
-  }
-  const handlePointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
-    if (dragStart) setDragCurrent(eventToWorld(event))
-  }
-  const handlePointerUp = (event: ReactPointerEvent<SVGSVGElement>) => {
-    if (!dragStart) return
-    const end = eventToWorld(event)
-    const bounds = { minX: Math.min(dragStart.x, end.x), minY: Math.min(dragStart.y, end.y), maxX: Math.max(dragStart.x, end.x), maxY: Math.max(dragStart.y, end.y) }
-    const dragged = Math.abs(end.x - dragStart.x) > 0.15 || Math.abs(end.y - dragStart.y) > 0.15
-    if (dragged) {
-      suppressClick.current = true
-      onBoxSelect(bounds)
-    }
-    setDragStart(null)
-    setDragCurrent(null)
-  }
+  const handleObjectClick = (event: ReactMouseEvent<SVGElement>, id: string) => { event.stopPropagation(); if (creationMode) onCanvasClick(eventToWorld(event)); else onSelect(id, event.shiftKey) }
+  const handlePointerDown = (event: ReactPointerEvent<SVGSVGElement>) => { if (creationMode) return; const coordinate = eventToWorld(event); setDragStart(coordinate); setDragCurrent(coordinate) }
+  const handlePointerMove = (event: ReactPointerEvent<SVGSVGElement>) => { if (dragStart) setDragCurrent(eventToWorld(event)) }
+  const handlePointerUp = (event: ReactPointerEvent<SVGSVGElement>) => { if (!dragStart) return; const end = eventToWorld(event); const bounds = { minX: Math.min(dragStart.x, end.x), minY: Math.min(dragStart.y, end.y), maxX: Math.max(dragStart.x, end.x), maxY: Math.max(dragStart.y, end.y) }; if (Math.abs(end.x - dragStart.x) > 0.15 || Math.abs(end.y - dragStart.y) > 0.15) { suppressClick.current = true; onBoxSelect(bounds) }; setDragStart(null); setDragCurrent(null) }
   const selectionRect = dragStart && dragCurrent ? { x: toX(Math.min(dragStart.x, dragCurrent.x)), y: toY(Math.max(dragStart.y, dragCurrent.y)), width: Math.abs(toX(dragCurrent.x) - toX(dragStart.x)), height: Math.abs(toY(dragCurrent.y) - toY(dragStart.y)) } : null
-  return <main className="graphics"><div className="canvas-card"><svg viewBox="0 0 800 380" role="img" aria-label="几何画布" onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onClick={(event) => { if (suppressClick.current) { suppressClick.current = false; return } if (creationMode) onCanvasClick(eventToWorld(event)); else if (!dragStart) onSelect(null) }}><g stroke="#e6eaf2" strokeWidth="1">{Array.from({ length: 21 }, (_, index) => <line key={`v-${index}`} x1={40 + index * 36} y1="20" x2={40 + index * 36} y2="340" />)}{Array.from({ length: 11 }, (_, index) => <line key={`h-${index}`} x1="40" y1={20 + index * 32} x2="760" y2={20 + index * 32} />)}</g><line x1="40" y1={toY(0)} x2="760" y2={toY(0)} stroke="#9aa6bd" strokeWidth="1.5" /><line x1={toX(0)} y1="20" x2={toX(0)} y2="340" stroke="#9aa6bd" strokeWidth="1.5" />{lines.map((line) => { const visibleLine = viewportLine(line); return <line key={line.id} data-primitive-type="line" onClick={(event) => handleObjectClick(event, line.id)} x1={toX(visibleLine.a.x)} y1={toY(visibleLine.a.y)} x2={toX(visibleLine.b.x)} y2={toY(visibleLine.b.y)} stroke={line.id === "line-slope" ? "#3d5afe" : "#172033"} strokeWidth={selectedIds.includes(line.id) ? 5 : 3} strokeLinecap="round" /> })}{segments.map((segment) => <g key={segment.id} data-primitive-type="segment" onClick={(event) => handleObjectClick(event, segment.id)}><line x1={toX(segment.a.x)} y1={toY(segment.a.y)} x2={toX(segment.b.x)} y2={toY(segment.b.y)} stroke={selectedIds.includes(segment.id) ? "#3d5afe" : "#0b7285"} strokeWidth={selectedIds.includes(segment.id) ? 5 : 3} strokeLinecap="round" /><circle cx={toX(segment.a.x)} cy={toY(segment.a.y)} r="4" fill="#0b7285" /><circle cx={toX(segment.b.x)} cy={toY(segment.b.y)} r="4" fill="#0b7285" /></g>)}{circles.map((circle) => <g key={circle.id} onClick={(event) => handleObjectClick(event, circle.id)}><ellipse cx={toX(circle.center.x)} cy={toY(circle.center.y)} rx={circle.radius * 36} ry={circle.radius * 30} fill="none" stroke={selectedIds.includes(circle.id) ? "#3d5afe" : "#0f8a63"} strokeWidth={selectedIds.includes(circle.id) ? 5 : 3} /><text x={toX(circle.center.x) + circle.radius * 36 + 8} y={toY(circle.center.y)} fill="#172033" fontSize="14" fontWeight="700">{circle.label ?? circle.id}</text></g>)}{arcs.map((arc) => <path key={arc.id} onClick={(event) => handleObjectClick(event, arc.id)} d={arcPath(arc.center.x, arc.center.y, arc.radius, arc.startAngle, arc.endAngle)} fill="none" stroke={selectedIds.includes(arc.id) ? "#3d5afe" : "#f08a24"} strokeWidth={selectedIds.includes(arc.id) ? 5 : 3} />)}{points.map((point) => <g key={point.id} onClick={(event) => handleObjectClick(event, point.id)}><circle cx={toX(point.x)} cy={toY(point.y)} r="6" fill="#3d5afe" stroke="white" strokeWidth="3" /><text x={toX(point.x) + 12} y={toY(point.y) + 5} fill="#172033" fontSize="14" fontWeight="700">{point.label ?? point.id}</text></g>)}{intersections.map((primitive) => <g key={primitive.id} onClick={(event) => handleObjectClick(event, primitive.id)}><circle cx={toX(primitive.x)} cy={toY(primitive.y)} r="7" fill="#f04f5f" stroke="white" strokeWidth="3" /><text x={toX(primitive.x) + 12} y={toY(primitive.y) - 12} fill="#172033" fontSize="14" fontWeight="700">{primitive.label ?? "交点"} ({primitive.x.toFixed(2)}, {primitive.y.toFixed(2)})</text></g>)}{selectionRect && <rect className="selection-rect" x={selectionRect.x} y={selectionRect.y} width={selectionRect.width} height={selectionRect.height} />}</svg></div></main>
+  return <main className="graphics"><div className="canvas-card"><svg viewBox="0 0 800 380" role="img" aria-label="几何画布" onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onDoubleClick={(event) => creationMode === "polyline" && onCanvasDoubleClick(eventToWorld(event))} onClick={(event) => { if (suppressClick.current) { suppressClick.current = false; return }; if (creationMode) onCanvasClick(eventToWorld(event)); else if (!dragStart) onSelect(null) }}>
+    <g stroke="#e6eaf2" strokeWidth="1">{Array.from({ length: 21 }, (_, index) => <line key={`v-${index}`} x1={40 + index * 36} y1="20" x2={40 + index * 36} y2="340" />)}{Array.from({ length: 11 }, (_, index) => <line key={`h-${index}`} x1="40" y1={20 + index * 32} x2="760" y2={20 + index * 32} />)}</g>
+    <line x1="40" y1={toY(0)} x2="760" y2={toY(0)} stroke="#9aa6bd" strokeWidth="1.5" /><line x1={toX(0)} y1="20" x2={toX(0)} y2="340" stroke="#9aa6bd" strokeWidth="1.5" />
+    {lines.map((line) => { const visible = viewportLine(line); return <line key={line.id} data-primitive-type="line" onClick={(event) => handleObjectClick(event, line.id)} x1={toX(visible.a.x)} y1={toY(visible.a.y)} x2={toX(visible.b.x)} y2={toY(visible.b.y)} stroke="#172033" strokeWidth={selectedIds.includes(line.id) ? 5 : 3} /> })}
+    {rays.map((ray) => { const visible = viewportRay(ray); return <line key={ray.id} data-primitive-type="ray" onClick={(event) => handleObjectClick(event, ray.id)} x1={toX(visible.a.x)} y1={toY(visible.a.y)} x2={toX(visible.b.x)} y2={toY(visible.b.y)} stroke="#7c3aed" strokeWidth={selectedIds.includes(ray.id) ? 5 : 3} /> })}
+    {segments.map((segment) => <line key={segment.id} data-primitive-type="segment" onClick={(event) => handleObjectClick(event, segment.id)} x1={toX(segment.a.x)} y1={toY(segment.a.y)} x2={toX(segment.b.x)} y2={toY(segment.b.y)} stroke="#0b7285" strokeWidth={selectedIds.includes(segment.id) ? 5 : 3} />)}
+    {polylines.map((polyline) => <polyline key={polyline.id} data-primitive-type="polyline" onClick={(event) => handleObjectClick(event, polyline.id)} points={polyline.points.map((point) => `${toX(point.x)},${toY(point.y)}`).join(" ")} fill="none" stroke="#b45309" strokeWidth={selectedIds.includes(polyline.id) ? 5 : 3} />)}
+    {circles.map((circle) => <g key={circle.id} onClick={(event) => handleObjectClick(event, circle.id)}><ellipse cx={toX(circle.center.x)} cy={toY(circle.center.y)} rx={circle.radius * 36} ry={circle.radius * 30} fill="none" stroke="#0f8a63" strokeWidth={selectedIds.includes(circle.id) ? 5 : 3} /><text x={toX(circle.center.x) + circle.radius * 36 + 8} y={toY(circle.center.y)} fill="#172033" fontSize="14" fontWeight="700">{circle.label ?? circle.id}</text></g>)}
+    {arcs.map((arc) => <path key={arc.id} onClick={(event) => handleObjectClick(event, arc.id)} d={`M ${toX(arc.center.x + arc.radius * Math.cos(arc.startAngle))} ${toY(arc.center.y + arc.radius * Math.sin(arc.startAngle))} A ${arc.radius * 36} ${arc.radius * 30} 0 ${Math.abs(arc.endAngle - arc.startAngle) > Math.PI ? 1 : 0} ${arc.endAngle >= arc.startAngle ? 0 : 1} ${toX(arc.center.x + arc.radius * Math.cos(arc.endAngle))} ${toY(arc.center.y + arc.radius * Math.sin(arc.endAngle))}`} fill="none" stroke="#f08a24" strokeWidth={selectedIds.includes(arc.id) ? 5 : 3} />)}
+    {points.map((point) => <g key={point.id} onClick={(event) => handleObjectClick(event, point.id)}><circle cx={toX(point.x)} cy={toY(point.y)} r="6" fill="#3d5afe" /><text x={toX(point.x) + 12} y={toY(point.y) + 5} fill="#172033" fontSize="14" fontWeight="700">{point.label ?? point.id}</text></g>)}
+    {intersections.map((primitive) => <g key={primitive.id} onClick={(event) => handleObjectClick(event, primitive.id)}><circle cx={toX(primitive.x)} cy={toY(primitive.y)} r="7" fill="#f04f5f" /><text x={toX(primitive.x) + 12} y={toY(primitive.y) - 12} fill="#172033" fontSize="14" fontWeight="700">{primitive.label ?? "交点 P"} ({primitive.x.toFixed(2)}, {primitive.y.toFixed(2)})</text></g>)}
+    {selectionRect && <rect className="selection-rect" x={selectionRect.x} y={selectionRect.y} width={selectionRect.width} height={selectionRect.height} />}
+  </svg></div></main>
 }
