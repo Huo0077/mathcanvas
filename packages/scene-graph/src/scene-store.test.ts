@@ -60,4 +60,36 @@ describe("scene graph operations", () => {
     expect(result.document).toBe(document)
     expect(result.error).toContain("constraint has invalid targets")
   })
+
+  it("projects a valid parallel constraint through the domain operation", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [
+      { id: "line-a", type: "line", a: { x: 0, y: 0 }, b: { x: 4, y: 0 } },
+      { id: "line-b", type: "line", a: { x: 1, y: 2 }, b: { x: 2, y: 5 } }
+    ]
+
+    const result = commitPatch(document, { op: "addConstraint", constraint: { id: "parallel-1", type: "parallel", targets: ["line-a", "line-b"] } })
+    const line = result.document.primitives.find((primitive) => primitive.id === "line-b")
+
+    expect(result.changed).toBe(true)
+    expect(line).toMatchObject({ a: { y: 3.5 }, b: { y: 3.5 } })
+    expect((line as Extract<typeof line, { type: "line" }>).b.x - (line as Extract<typeof line, { type: "line" }>).a.x).toBeCloseTo(Math.sqrt(10))
+  })
+
+  it("reprojects constrained dependents when a driving parameter changes", () => {
+    const document = createEmptyDocument("calculus")
+    document.parameters.slope = { id: "slope", value: 1 }
+    document.primitives = [
+      { id: "line-a", type: "line", a: { x: 0, y: 0 }, b: { x: 4, y: 4 }, slopeParameter: "slope" },
+      { id: "line-b", type: "line", a: { x: 1, y: 2 }, b: { x: 2, y: 5 } }
+    ]
+    document.constraints = [{ id: "perpendicular-1", type: "perpendicular", targets: ["line-a", "line-b"] }]
+
+    const result = applyOperation(document, { op: "setParameter", id: "slope", value: 0 })
+    const line = result.document.primitives.find((primitive) => primitive.id === "line-b") as Extract<typeof document.primitives[number], { type: "line" }>
+    const delta = { x: line.b.x - line.a.x, y: line.b.y - line.a.y }
+
+    expect(delta.x).toBeCloseTo(0)
+    expect(delta.y).toBeCloseTo(Math.sqrt(10))
+  })
 })

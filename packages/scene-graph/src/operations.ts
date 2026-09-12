@@ -1,5 +1,5 @@
 import type { ConstraintSpec, GeometryDocument, PrimitiveSpec } from "@draw/dsl"
-import { evaluateLineParameters, evaluateParameterExpressions, intersectCircles, intersectLineCircle, intersectLines } from "@draw/geometry-kernel"
+import { evaluateLineParameters, evaluateParameterExpressions, intersectCircles, intersectLineCircle, intersectLines, projectLineConstraint } from "@draw/geometry-kernel"
 
 export type DomainOperation =
   | { op: "addPrimitive"; primitive: PrimitiveSpec }
@@ -30,6 +30,12 @@ export function getAffectedPrimitiveIds(document: GeometryDocument, changedIds: 
     for (const dependency of primitiveDependencies(primitive)) {
       dependents.set(dependency, [...(dependents.get(dependency) ?? []), primitive.id])
     }
+  }
+  for (const constraint of document.constraints) {
+    if (constraint.targets.length !== 2) continue
+    const [first, second] = constraint.targets
+    dependents.set(first, [...(dependents.get(first) ?? []), second])
+    dependents.set(second, [...(dependents.get(second) ?? []), first])
   }
   const affected = new Set(changedIds)
   const queue = [...changedIds]
@@ -64,21 +70,37 @@ function resolveIntersection(primitive: Extract<PrimitiveSpec, { type: "intersec
 
 export function recomputeDerivedObjects(document: GeometryDocument, changedIds?: string[]): GeometryDocument {
   const parameters = evaluateParameterExpressions(document.parameters)
-  const evaluatedDocument = { ...document, parameters }
+  const evaluatedDocument = {
+    ...document,
+    parameters,
+    primitives: document.primitives.map((primitive) => primitive.type === "line" ? evaluateLineParameters({ ...document, parameters }, primitive) : primitive)
+  }
   const affected = changedIds === undefined
     ? new Set(document.primitives.map((primitive) => primitive.id))
     : getAffectedPrimitiveIds(document, changedIds)
-  const lines = new Map(
-    evaluatedDocument.primitives
+  const projectedPrimitives = [...evaluatedDocument.primitives]
+  const projectedLines = new Map(
+    projectedPrimitives
       .filter((primitive): primitive is Extract<PrimitiveSpec, { type: "line" }> => primitive.type === "line")
-      .map((line) => [line.id, evaluateLineParameters(evaluatedDocument, line)])
+      .map((line) => [line.id, line])
   )
+  const lines = projectedLines
+  for (const constraint of evaluatedDocument.constraints) {
+    if (constraint.targets.length !== 2) continue
+    const first = projectedLines.get(constraint.targets[0])
+    const second = projectedLines.get(constraint.targets[1])
+    if (!first || !second) continue
+    const projected = projectLineConstraint(first, second, constraint.type)
+    projectedLines.set(projected.id, projected)
+    const primitiveIndex = projectedPrimitives.findIndex((primitive) => primitive.id === projected.id)
+    if (primitiveIndex >= 0) projectedPrimitives[primitiveIndex] = projected
+  }
   const circles = new Map(
-    evaluatedDocument.primitives
+    projectedPrimitives
       .filter((primitive): primitive is Extract<PrimitiveSpec, { type: "circle" }> => primitive.type === "circle")
       .map((circle) => [circle.id, circle])
   )
-  const primitives = evaluatedDocument.primitives.map((primitive) => {
+  const primitives = projectedPrimitives.map((primitive) => {
     if (!affected.has(primitive.id)) return primitive
     if (primitive.type === "line") return lines.get(primitive.id) ?? primitive
     if (primitive.type !== "intersection" && primitive.type !== "lineCircleIntersection" && primitive.type !== "circleIntersection") return primitive
@@ -106,6 +128,7 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
   } else if (operation.op === "addConstraint") {
     if (next.constraints.some((constraint) => constraint.id === operation.constraint.id)) return { document, changed: false, error: "duplicate constraint id" }
     next.constraints.push(operation.constraint)
+    changedIds = operation.constraint.targets
   } else if (operation.op === "deleteObject") {
     const before = next.primitives.length
     next.primitives = next.primitives.filter((primitive) => primitive.id !== operation.id)

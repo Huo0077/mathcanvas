@@ -51,7 +51,9 @@ export function validateDocument(document: unknown): ValidationResult {
         }
         if (constraintIds.has(constraint.id)) errors.push(`duplicate constraint id: ${constraint.id}`)
         constraintIds.add(constraint.id)
+        if (!["parallel", "perpendicular", "coincident"].includes(constraint.type)) errors.push(`invalid constraint type: ${constraint.id}`)
         if (!Array.isArray(constraint.targets) || constraint.targets.length !== 2 || constraint.targets.some((target) => !byId.has(target))) errors.push(`constraint has invalid targets: ${constraint.id}`)
+        if (Array.isArray(constraint.targets) && constraint.targets.length === 2 && constraint.targets[0] === constraint.targets[1]) errors.push(`constraint targets must differ: ${constraint.id}`)
         if ((constraint.type === "parallel" || constraint.type === "perpendicular") && constraint.targets.some((target) => byId.get(target)?.type !== "line")) errors.push(`constraint requires two lines: ${constraint.id}`)
       }
     }

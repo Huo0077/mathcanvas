@@ -52,7 +52,8 @@ export function validatePatch(document: GeometryDocument, operation: DomainOpera
   if (operation.op === "addConstraint") {
     if (!isConstraint(operation.constraint)) errors.push("constraint is invalid")
     if (document.constraints.some((constraint) => constraint.id === operation.constraint.id)) errors.push("duplicate constraint id")
-    if (operation.constraint.targets.length !== 2 || operation.constraint.targets.some((target) => !ids.has(target))) errors.push("constraint has invalid targets")
+    if (!["parallel", "perpendicular", "coincident"].includes(operation.constraint.type)) errors.push("constraint type is invalid")
+    if (operation.constraint.targets.length !== 2 || operation.constraint.targets[0] === operation.constraint.targets[1] || operation.constraint.targets.some((target) => !ids.has(target))) errors.push("constraint has invalid targets")
     if ((operation.constraint.type === "parallel" || operation.constraint.type === "perpendicular") && operation.constraint.targets.some((target) => document.primitives.find((primitive) => primitive.id === target)?.type !== "line")) errors.push("constraint requires two lines")
   }
   if (operation.op === "deleteConstraint" && !document.constraints.some((constraint) => constraint.id === operation.id)) errors.push("constraint not found")
