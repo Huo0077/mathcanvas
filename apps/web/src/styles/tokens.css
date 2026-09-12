@@ -1,0 +1,18 @@
+:root {
+  --color-ink: #172033;
+  --color-muted: #647089;
+  --color-canvas: #f6f8fc;
+  --color-panel: #ffffff;
+  --color-border: #dfe5ef;
+  --color-accent: #3d5afe;
+  --color-accent-soft: #e9edff;
+  --color-success: #0f8a63;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --shadow-panel: 0 12px 32px rgb(31 45 74 / 8%);
+}

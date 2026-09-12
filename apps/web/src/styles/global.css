@@ -1,0 +1,37 @@
+@import "./tokens.css";
+
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; background: var(--color-canvas); color: var(--color-ink); font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+button, input { font: inherit; }
+button { min-height: 44px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-panel); color: var(--color-ink); cursor: pointer; padding: 0 var(--space-3); }
+button:hover { border-color: var(--color-accent); }
+button:focus-visible, input:focus-visible { outline: 3px solid rgb(61 90 254 / 30%); outline-offset: 2px; }
+.app-shell { min-height: 100vh; display: grid; grid-template-rows: auto 1fr; }
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-3) var(--space-5); background: var(--color-panel); border-bottom: 1px solid var(--color-border); }
+.brand { display: flex; align-items: center; gap: var(--space-3); font-weight: 750; letter-spacing: -0.02em; }
+.brand-mark { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: var(--color-accent); color: white; }
+.workspace-tabs { display: flex; gap: var(--space-2); }
+.workspace-tabs button[data-active="true"] { background: var(--color-accent-soft); color: var(--color-accent); border-color: transparent; }
+.workbench { display: grid; grid-template-columns: 230px minmax(0, 1fr) 260px; grid-template-rows: auto 1fr auto; min-height: 0; }
+.toolbar { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: var(--space-2); padding: var(--space-3) var(--space-5); background: var(--color-panel); border-bottom: 1px solid var(--color-border); }
+.toolbar .primary { background: var(--color-accent); border-color: var(--color-accent); color: white; }
+.panel { background: var(--color-panel); border-right: 1px solid var(--color-border); min-height: 0; }
+.panel.right { border-right: 0; border-left: 1px solid var(--color-border); }
+.panel-section { padding: var(--space-4); border-bottom: 1px solid var(--color-border); }
+.panel-title { margin: 0 0 var(--space-3); font-size: 0.75rem; color: var(--color-muted); text-transform: uppercase; letter-spacing: 0.08em; }
+.object-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2) 0; }
+.object-meta { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.object-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--color-accent); flex: 0 0 auto; }
+.object-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.icon-button { width: 44px; padding: 0; }
+.graphics { min-width: 0; min-height: 0; padding: var(--space-4); display: grid; place-items: center; }
+.canvas-card { width: min(100%, 900px); background: var(--color-panel); border: 1px solid var(--color-border); border-radius: var(--radius-md); box-shadow: var(--shadow-panel); padding: var(--space-3); }
+.canvas-card svg { display: block; width: 100%; height: auto; border-radius: var(--radius-sm); background: #fbfcff; }
+.properties-label { display: flex; justify-content: space-between; gap: var(--space-3); font-size: 0.875rem; }
+.properties input[type="range"] { width: 100%; accent-color: var(--color-accent); }
+.metric { color: var(--color-accent); font-variant-numeric: tabular-nums; }
+.agent-status { display: flex; gap: var(--space-2); align-items: center; font-size: 0.875rem; color: var(--color-muted); }
+.status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-success); }
+.footer-note { grid-column: 1 / -1; padding: var(--space-2) var(--space-5); font-size: 0.75rem; color: var(--color-muted); background: var(--color-panel); border-top: 1px solid var(--color-border); }
+@media (max-width: 960px) { .workbench { grid-template-columns: 200px minmax(0, 1fr); } .panel.right { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--color-border); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 680px) { .topbar { align-items: flex-start; flex-direction: column; } .workspace-tabs { width: 100%; overflow-x: auto; } .workbench { display: block; } .panel, .panel.right { border: 0; border-bottom: 1px solid var(--color-border); } .graphics { min-height: 55vh; padding: var(--space-3); } .toolbar { padding: var(--space-3); } }
