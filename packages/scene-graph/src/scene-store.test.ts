@@ -102,4 +102,25 @@ describe("scene graph operations", () => {
     expect(result.changed).toBe(true)
     expect(result.document.primitives[0]).toMatchObject({ id: "point-1", locked: true })
   })
+
+  it("keeps a 1000-primitive incremental recomputation bounded", () => {
+    const document = createEmptyDocument("calculus")
+    document.parameters.slope = { id: "slope", value: 1 }
+    document.primitives = [
+      { id: "line-a", type: "line", a: { x: -2, y: -2 }, b: { x: 2, y: 2 }, slopeParameter: "slope" },
+      { id: "line-b", type: "line", a: { x: -2, y: 2 }, b: { x: 2, y: -2 } },
+      { id: "intersection", type: "intersection", lineA: "line-a", lineB: "line-b", x: 0, y: 0 },
+      ...Array.from({ length: 997 }, (_, index) => ({ id: `point-${index}`, type: "point" as const, x: index % 20, y: Math.floor(index / 20) }))
+    ]
+    const unrelated = document.primitives.at(-1)
+
+    const startedAt = performance.now()
+    const recomputed = recomputeDerivedObjects(document, ["slope"])
+    const elapsed = performance.now() - startedAt
+
+    expect(document.primitives).toHaveLength(1000)
+    expect([...getAffectedPrimitiveIds(document, ["slope"])]).toEqual(["slope", "line-a", "intersection"])
+    expect(recomputed.primitives.at(-1)).toBe(unrelated)
+    expect(elapsed).toBeLessThan(100)
+  })
 })

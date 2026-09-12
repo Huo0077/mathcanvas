@@ -12,4 +12,11 @@ describe("Geometry DSL codec", () => {
     expect(restored.revision).toBe(0)
     expect(restored.metadata.id).toBe(document.metadata.id)
   })
+
+  it("round-trips a segment primitive", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [{ id: "segment-1", type: "segment", a: { x: -1, y: 2 }, b: { x: 3, y: 4 } }]
+
+    expect(decodeMgeo(encodeMgeo(document)).primitives[0]).toEqual(document.primitives[0])
+  })
 })

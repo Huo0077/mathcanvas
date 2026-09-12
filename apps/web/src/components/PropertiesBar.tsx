@@ -7,7 +7,7 @@ interface PropertiesBarProps { value: number; min: number; max: number; step: nu
 export function PropertiesBar({ value, min, max, step, onChange, selectedPrimitive, onUpdatePrimitive }: PropertiesBarProps) {
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => onChange(Number(event.target.value))
   const selectedCircleOrArc = selectedPrimitive?.type === "circle" || selectedPrimitive?.type === "arc" ? selectedPrimitive : null
-  const selectedLine = selectedPrimitive?.type === "line" ? selectedPrimitive : null
+  const selectedLine = selectedPrimitive?.type === "line" || selectedPrimitive?.type === "segment" ? selectedPrimitive : null
   const updateNumber = (field: "radius" | "startAngle" | "endAngle", event: ChangeEvent<HTMLInputElement>) => onUpdatePrimitive({ [field]: Number(event.target.value) })
   const updateCenter = (axis: "x" | "y", event: ChangeEvent<HTMLInputElement>) => {
     if (!selectedCircleOrArc) return

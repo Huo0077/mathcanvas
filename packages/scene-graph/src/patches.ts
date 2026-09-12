@@ -34,6 +34,10 @@ export function validatePatch(document: GeometryDocument, operation: DomainOpera
     const primitive = operation.primitive
     if (!isPrimitive(primitive)) errors.push("primitive is invalid")
     if (ids.has(primitive.id)) errors.push("duplicate object id")
+    if (primitive.type === "segment") {
+      if (!Number.isFinite(primitive.a.x) || !Number.isFinite(primitive.a.y) || !Number.isFinite(primitive.b.x) || !Number.isFinite(primitive.b.y)) errors.push("segment endpoints must be finite")
+      if (primitive.a.x === primitive.b.x && primitive.a.y === primitive.b.y) errors.push("segment endpoints must differ")
+    }
     if (primitive.type === "intersection") {
       const lineIds = new Set(document.primitives.filter((primitive) => primitive.type === "line").map((line) => line.id))
       if (!lineIds.has(primitive.lineA) || !lineIds.has(primitive.lineB)) errors.push("intersection references missing line")
@@ -51,7 +55,7 @@ export function validatePatch(document: GeometryDocument, operation: DomainOpera
   }
   if (operation.op === "updatePrimitive") {
     const primitive = document.primitives.find((candidate) => candidate.id === operation.id)
-    if (!primitive || !["line", "circle", "arc"].includes(primitive.type)) errors.push("object is not editable")
+    if (!primitive || !["line", "segment", "circle", "arc"].includes(primitive.type)) errors.push("object is not editable")
     if (primitive?.locked) errors.push("object is locked")
     if (operation.patch.a && (!Number.isFinite(operation.patch.a.x) || !Number.isFinite(operation.patch.a.y))) errors.push("line start must be finite")
     if (operation.patch.b && (!Number.isFinite(operation.patch.b.x) || !Number.isFinite(operation.patch.b.y))) errors.push("line end must be finite")
@@ -60,7 +64,12 @@ export function validatePatch(document: GeometryDocument, operation: DomainOpera
     if (operation.patch.startAngle !== undefined && !Number.isFinite(operation.patch.startAngle)) errors.push("start angle must be finite")
     if (operation.patch.endAngle !== undefined && !Number.isFinite(operation.patch.endAngle)) errors.push("end angle must be finite")
     if (primitive?.type === "circle" && (operation.patch.startAngle !== undefined || operation.patch.endAngle !== undefined)) errors.push("circle does not support arc angles")
-    if (primitive?.type !== "line" && (operation.patch.a !== undefined || operation.patch.b !== undefined)) errors.push("only lines support endpoints")
+    if (primitive?.type !== "line" && primitive?.type !== "segment" && (operation.patch.a !== undefined || operation.patch.b !== undefined)) errors.push("only lines and segments support endpoints")
+    if (primitive?.type === "segment") {
+      const nextA = operation.patch.a ?? primitive.a
+      const nextB = operation.patch.b ?? primitive.b
+      if (nextA.x === nextB.x && nextA.y === nextB.y) errors.push("segment endpoints must differ")
+    }
   }
   if (operation.op === "toggleLock" && !ids.has(operation.id)) errors.push("object not found")
   if (operation.op === "setParameter" && !Number.isFinite(operation.value)) errors.push("parameter value must be finite")

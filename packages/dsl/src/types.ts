@@ -36,6 +36,16 @@ export interface LinePrimitive {
   locked?: boolean
 }
 
+export interface SegmentPrimitive {
+  id: string
+  type: "segment"
+  a: Coordinate
+  b: Coordinate
+  label?: string
+  visible?: boolean
+  locked?: boolean
+}
+
 export interface CirclePrimitive {
   id: string
   type: "circle"
@@ -99,6 +109,7 @@ export interface CircleCircleIntersectionPrimitive {
 export type PrimitiveSpec =
   | PointPrimitive
   | LinePrimitive
+  | SegmentPrimitive
   | CirclePrimitive
   | ArcPrimitive
   | IntersectionPrimitive

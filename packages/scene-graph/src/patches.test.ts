@@ -57,4 +57,15 @@ describe("domain patches", () => {
     expect(validatePatch(document, { op: "deleteObject", id: "point-1" })).toEqual({ valid: false, errors: ["object is locked"] })
     expect(validatePatch(document, { op: "updatePrimitive", id: "point-1", patch: { center: { x: 2, y: 3 } } })).toEqual({ valid: false, errors: ["object is not editable", "object is locked"] })
   })
+
+  it("validates and edits segment endpoints", () => {
+    const document = createEmptyDocument("calculus")
+    const segment = { id: "segment-1", type: "segment" as const, a: { x: 0, y: 0 }, b: { x: 2, y: 1 } }
+    const added = commitPatch(document, { op: "addPrimitive", primitive: segment })
+
+    expect(added.changed).toBe(true)
+    expect(commitPatch(added.document, { op: "updatePrimitive", id: segment.id, patch: { b: { x: 4, y: 3 } } }).document.primitives[0]).toMatchObject({ b: { x: 4, y: 3 } })
+    expect(validatePatch(document, { op: "addPrimitive", primitive: { ...segment, b: segment.a } })).toEqual({ valid: false, errors: ["segment endpoints must differ"] })
+    expect(commitPatch(added.document, { op: "updatePrimitive", id: segment.id, patch: { b: segment.a } })).toMatchObject({ document: added.document, changed: false, error: "segment endpoints must differ" })
+  })
 })

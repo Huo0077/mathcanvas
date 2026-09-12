@@ -130,8 +130,8 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
     changedIds = [operation.primitive.id]
   } else if (operation.op === "updatePrimitive") {
     const primitive = next.primitives.find((candidate) => candidate.id === operation.id)
-    if (!primitive || !["line", "circle", "arc"].includes(primitive.type) || primitive.locked) return { document, changed: false, error: primitive?.locked ? "object is locked" : "object is not editable" }
-    if (primitive.type === "line") {
+    if (!primitive || !["line", "segment", "circle", "arc"].includes(primitive.type) || primitive.locked) return { document, changed: false, error: primitive?.locked ? "object is locked" : "object is not editable" }
+    if (primitive.type === "line" || primitive.type === "segment") {
       if (operation.patch.a) primitive.a = { ...primitive.a, ...operation.patch.a }
       if (operation.patch.b) primitive.b = { ...primitive.b, ...operation.patch.b }
     }

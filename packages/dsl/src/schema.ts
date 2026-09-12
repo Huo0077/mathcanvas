@@ -24,7 +24,7 @@ export function validateDocument(document: unknown): ValidationResult {
       }
       if (ids.has(primitive.id)) errors.push(`duplicate primitive id: ${primitive.id}`)
       ids.add(primitive.id)
-      if (!["point", "line", "circle", "arc", "intersection", "lineCircleIntersection", "circleIntersection"].includes(primitive.type)) {
+      if (!["point", "line", "segment", "circle", "arc", "intersection", "lineCircleIntersection", "circleIntersection"].includes(primitive.type)) {
         errors.push(`invalid primitive type: ${primitive.type}`)
       }
     }
@@ -33,6 +33,10 @@ export function validateDocument(document: unknown): ValidationResult {
     const primitives = value.primitives as PrimitiveSpec[]
     const byId = new Map(primitives.map((primitive) => [primitive.id, primitive]))
     for (const primitive of primitives) {
+      if (primitive.type === "segment") {
+        if (!Number.isFinite(primitive.a.x) || !Number.isFinite(primitive.a.y) || !Number.isFinite(primitive.b.x) || !Number.isFinite(primitive.b.y)) errors.push("segment endpoints must be finite")
+        if (primitive.a.x === primitive.b.x && primitive.a.y === primitive.b.y) errors.push("segment endpoints must differ")
+      }
       if (primitive.type === "circle" || primitive.type === "arc") {
         if (!Number.isFinite(primitive.center.x) || !Number.isFinite(primitive.center.y) || !Number.isFinite(primitive.radius) || primitive.radius <= 0) {
           errors.push(`${primitive.type} geometry is invalid`)

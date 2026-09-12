@@ -57,6 +57,19 @@ describe("MathCanvas workbench", () => {
     expect((screen.getByRole("spinbutton", { name: "端点 A X" }) as HTMLInputElement).value).toBe("-5")
   })
 
+  it("creates and edits a segment through the canvas and properties", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "添加线段" }))
+    const canvas = screen.getByRole("img", { name: "几何画布" })
+    fireEvent.click(canvas, { clientX: 292, clientY: 200 })
+    fireEvent.click(canvas, { clientX: 508, clientY: 80 })
+
+    expect(screen.getAllByText("线段 1")).toHaveLength(2)
+    expect(canvas.querySelectorAll('[data-primitive-type="segment"]')).toHaveLength(1)
+    fireEvent.change(screen.getByRole("spinbutton", { name: "端点 B Y" }), { target: { value: "3" } })
+    expect((screen.getByRole("spinbutton", { name: "端点 B Y" }) as HTMLInputElement).value).toBe("3")
+  })
+
   it("selects and deletes a point with the keyboard", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "添加点" }))
