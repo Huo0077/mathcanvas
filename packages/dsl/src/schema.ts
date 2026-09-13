@@ -25,7 +25,7 @@ export function validateDocument(document: unknown): ValidationResult {
       }
       if (ids.has(primitive.id)) errors.push(`duplicate primitive id: ${primitive.id}`)
       ids.add(primitive.id)
-      if (!["point", "line", "segment", "ray", "polyline", "parabola", "ellipse", "hyperbola", "function", "circle", "arc", "intersection", "lineCircleIntersection", "circleIntersection"].includes(primitive.type)) {
+      if (!["point", "line", "segment", "ray", "polyline", "parabola", "ellipse", "hyperbola", "function", "circle", "arc", "intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection"].includes(primitive.type)) {
         errors.push(`invalid primitive type: ${primitive.type}`)
       }
     }
@@ -94,6 +94,7 @@ export function validateDocument(document: unknown): ValidationResult {
       if (primitive.type === "intersection" && (!byId.get(primitive.lineA) || !byId.get(primitive.lineB))) errors.push("intersection references missing line")
       if (primitive.type === "lineCircleIntersection" && (byId.get(primitive.lineId)?.type !== "line" || byId.get(primitive.circleId)?.type !== "circle")) errors.push("line-circle intersection references invalid objects")
       if (primitive.type === "circleIntersection" && (byId.get(primitive.circleA)?.type !== "circle" || byId.get(primitive.circleB)?.type !== "circle")) errors.push("circle intersection references invalid circles")
+      if (primitive.type === "curveIntersection" && (primitive.objectA === primitive.objectB || !byId.has(primitive.objectA) || !byId.has(primitive.objectB))) errors.push("curve intersection references invalid objects")
     }
     if (Array.isArray(value.constraints)) {
       const constraintIds = new Set<string>()

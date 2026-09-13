@@ -128,6 +128,22 @@ describe("MathCanvas workbench", () => {
     expect((screen.getByRole("spinbutton", { name: "定义域终点" }) as HTMLInputElement).value).toBe("4")
   })
 
+  it("creates a sampled intersection between a function and a conic", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "添加椭圆" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加函数图像" }))
+    const rows = Array.from(globalThis.document.querySelectorAll(".object-row"))
+    const ellipseRow = rows.find((row) => row.textContent?.includes("椭圆"))
+    const functionRow = rows.find((row) => row.textContent?.includes("函数"))
+    fireEvent.click(ellipseRow!)
+    fireEvent.click(functionRow!, { shiftKey: true })
+
+    expect(screen.getByRole("button", { name: "添加交点" })).toBeTruthy()
+    fireEvent.click(screen.getByRole("button", { name: "添加交点" }))
+    expect(screen.getAllByRole("button", { name: /隐藏 交点/ }).some((button) => /^隐藏 交点 \d+$/.test(button.getAttribute("aria-label") ?? ""))).toBe(true)
+    expect(screen.getByRole("img", { name: "几何画布" }).querySelectorAll('[data-primitive-type="curveIntersection"]')).toHaveLength(1)
+  })
+
   it("selects and deletes a point with the keyboard", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "添加点" }))

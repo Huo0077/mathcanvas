@@ -93,6 +93,20 @@ describe("domain patches", () => {
     expect(validatePatch(document, { op: "updatePrimitive", id: "function-1", patch: { expression: "x+" } })).toEqual({ valid: false, errors: ["invalid function expression"] })
   })
 
+  it("creates and protects a sampled curve intersection", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [
+      { id: "ellipse-1", type: "ellipse", center: { x: 0, y: 0 }, radiusX: 4, radiusY: 2 },
+      { id: "function-1", type: "function", expression: "x*x", domain: [-4, 4], samples: 128 }
+    ]
+
+    const result = commitPatch(document, { op: "addPrimitive", primitive: { id: "curve-intersection-1", type: "curveIntersection", objectA: "ellipse-1", objectB: "function-1", x: 0, y: 0 } })
+
+    expect(result.changed).toBe(true)
+    expect(result.document.primitives[2]).toMatchObject({ type: "curveIntersection", visible: true })
+    expect(validatePatch(result.document, { op: "deleteObject", id: "ellipse-1" })).toEqual({ valid: false, errors: ["object is referenced by another object"] })
+  })
+
   it("rejects overlapping groups and locked batch alignment", () => {
     const document = createEmptyDocument("calculus")
     document.primitives = [

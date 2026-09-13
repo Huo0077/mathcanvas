@@ -1,5 +1,5 @@
 import type { ConstraintSpec, GeometryDocument, GroupSpec, PrimitiveSpec } from "@draw/dsl"
-import { evaluateLineParameters, evaluateParameterExpressions, intersectCirclesDetailed, intersectLineCircleDetailed, intersectLinesDetailed, solveLineConstraints, type IntersectionResult } from "@draw/geometry-kernel"
+import { evaluateLineParameters, evaluateParameterExpressions, intersectCirclesDetailed, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, solveLineConstraints, type IntersectionResult, type SampledPrimitive } from "@draw/geometry-kernel"
 
 export type DomainOperation =
   | { op: "addPrimitive"; primitive: PrimitiveSpec }
@@ -85,7 +85,12 @@ function primitiveDependencies(primitive: PrimitiveSpec): string[] {
   if (primitive.type === "intersection") return [primitive.lineA, primitive.lineB]
   if (primitive.type === "lineCircleIntersection") return [primitive.lineId, primitive.circleId]
   if (primitive.type === "circleIntersection") return [primitive.circleA, primitive.circleB]
+  if (primitive.type === "curveIntersection") return [primitive.objectA, primitive.objectB]
   return []
+}
+
+function isSampledPrimitive(primitive: PrimitiveSpec | undefined): primitive is SampledPrimitive {
+  return Boolean(primitive && ["line", "segment", "ray", "polyline", "circle", "arc", "parabola", "ellipse", "hyperbola", "function"].includes(primitive.type))
 }
 
 export function getAffectedPrimitiveIds(document: GeometryDocument, changedIds: string[]): Set<string> {
@@ -161,9 +166,21 @@ export function recomputeDerivedObjects(document: GeometryDocument, changedIds?:
       .filter((primitive): primitive is Extract<PrimitiveSpec, { type: "circle" }> => primitive.type === "circle")
       .map((circle) => [circle.id, circle])
   )
+  const primitiveMap = new Map(projectedPrimitives.map((primitive) => [primitive.id, primitive]))
   const primitives = projectedPrimitives.map((primitive) => {
     if (!affected.has(primitive.id)) return primitive
     if (primitive.type === "line") return lines.get(primitive.id) ?? primitive
+    if (primitive.type === "curveIntersection") {
+      const first = primitiveMap.get(primitive.objectA)
+      const second = primitiveMap.get(primitive.objectB)
+      if (!isSampledPrimitive(first) || !isSampledPrimitive(second)) throw new Error("curve intersection references unsupported objects")
+      const result = intersectSampledPrimitives(first, second)
+      if (result.kind === "degenerate") throw new Error(`degenerate curve intersection: ${result.reason}`)
+      if (result.kind === "none" || result.kind === "coincident") return { ...primitive, visible: false }
+      if (result.kind === "point" || result.kind === "tangent") return { ...primitive, x: result.point.x, y: result.point.y, visible: true }
+      const point = result.points[primitive.solutionIndex ?? 0]
+      return { ...primitive, x: point.x, y: point.y, visible: true }
+    }
     if (primitive.type !== "intersection" && primitive.type !== "lineCircleIntersection" && primitive.type !== "circleIntersection") return primitive
     const result = resolveIntersection(primitive, lines, circles)
     if (result.kind === "degenerate") throw new Error(`degenerate intersection: ${result.reason}`)

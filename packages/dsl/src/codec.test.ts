@@ -53,7 +53,8 @@ describe("Geometry DSL codec", () => {
     const document = createEmptyDocument("conics")
     document.primitives = [
       { id: "ellipse-1", type: "ellipse", center: { x: 1, y: -1 }, radiusX: 4, radiusY: 2 },
-      { id: "function-1", type: "function", expression: "2*x+1", domain: [-5, 5], samples: 64 }
+      { id: "function-1", type: "function", expression: "2*x+1", domain: [-5, 5], samples: 64 },
+      { id: "curve-intersection-1", type: "curveIntersection", objectA: "ellipse-1", objectB: "function-1", x: 0, y: 0, label: "交点 1" }
     ]
 
     expect(decodeMgeo(encodeMgeo(document)).primitives).toEqual(document.primitives)

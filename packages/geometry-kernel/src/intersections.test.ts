@@ -1,9 +1,23 @@
 import { describe, expect, it } from "vitest"
 
-import { intersectCircles, intersectCirclesDetailed, intersectLineCircle, intersectLineCircleDetailed, intersectLines, intersectLinesDetailed, intersectPolylineCircleDetailed, intersectPolylineLineDetailed, intersectRayCircleDetailed, intersectRayLineDetailed } from "./index"
+import { intersectCircles, intersectCirclesDetailed, intersectLineCircle, intersectLineCircleDetailed, intersectLines, intersectLinesDetailed, intersectPolylineCircleDetailed, intersectPolylineLineDetailed, intersectRayCircleDetailed, intersectRayLineDetailed, intersectSampledPrimitives } from "./index"
 import type { PolylinePrimitive, RayPrimitive } from "@draw/dsl"
 
 describe("line intersections", () => {
+  it("finds sampled intersections between a function and an ellipse", () => {
+    const result = intersectSampledPrimitives(
+      { id: "function", type: "function", expression: "x*x", domain: [-4, 4], samples: 256 },
+      { id: "ellipse", type: "ellipse", center: { x: 0, y: 0 }, radiusX: 4, radiusY: 2 }
+    )
+
+    expect(result.kind).toBe("points")
+    if (result.kind === "points") {
+      expect(result.points[0].y).toBeGreaterThan(1)
+      expect(result.points[1].y).toBeGreaterThan(1)
+      expect(Math.abs(result.points[0].x)).toBeCloseTo(Math.abs(result.points[1].x), 1)
+    }
+  })
+
   it("filters ray-line intersections to the forward half-line", () => {
     const ray: RayPrimitive = { id: "ray", type: "ray", a: { x: 0, y: 0 }, b: { x: 1, y: 0 } }
     expect(intersectRayLineDetailed(ray, { id: "line", type: "line", a: { x: 2, y: -1 }, b: { x: 2, y: 1 } })).toEqual({ kind: "point", point: { x: 2, y: 0 } })

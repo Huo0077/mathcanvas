@@ -170,6 +170,19 @@ export interface CircleCircleIntersectionPrimitive {
   locked?: boolean
 }
 
+export interface CurveIntersectionPrimitive {
+  id: string
+  type: "curveIntersection"
+  objectA: string
+  objectB: string
+  solutionIndex?: 0 | 1
+  x: number
+  y: number
+  label?: string
+  visible?: boolean
+  locked?: boolean
+}
+
 export type PrimitiveSpec =
   | PointPrimitive
   | LinePrimitive
@@ -185,6 +198,7 @@ export type PrimitiveSpec =
   | IntersectionPrimitive
   | LineCircleIntersectionPrimitive
   | CircleCircleIntersectionPrimitive
+  | CurveIntersectionPrimitive
 
 export interface ConstraintSpec {
   id: string

@@ -1,0 +1,74 @@
+import type { Coordinate, PrimitiveSpec } from "@draw/dsl"
+
+import { sampleEllipse, sampleHyperbola, sampleParabola } from "./conics"
+import { sampleFunction } from "./calculus"
+import { evaluateParameterExpression } from "./parameters"
+import type { IntersectionResult } from "./types"
+
+export type SampledPrimitive = Extract<PrimitiveSpec, { type: "line" | "segment" | "ray" | "polyline" | "circle" | "arc" | "parabola" | "ellipse" | "hyperbola" | "function" }>
+
+function uniquePoints(points: Coordinate[], tolerance = 1e-4): Coordinate[] {
+  const unique: Coordinate[] = []
+  for (const point of points) {
+    if (!unique.some((candidate) => Math.hypot(candidate.x - point.x, candidate.y - point.y) <= tolerance * Math.max(1, Math.abs(point.x), Math.abs(point.y)))) unique.push(point)
+  }
+  return unique
+}
+
+function segmentIntersection(first: [Coordinate, Coordinate], second: [Coordinate, Coordinate], tolerance = 1e-9): Coordinate | null {
+  const firstDirection = { x: first[1].x - first[0].x, y: first[1].y - first[0].y }
+  const secondDirection = { x: second[1].x - second[0].x, y: second[1].y - second[0].y }
+  const denominator = firstDirection.x * secondDirection.y - firstDirection.y * secondDirection.x
+  if (Math.abs(denominator) <= tolerance) return null
+  const offset = { x: second[0].x - first[0].x, y: second[0].y - first[0].y }
+  const firstParameter = (offset.x * secondDirection.y - offset.y * secondDirection.x) / denominator
+  const secondParameter = (offset.x * firstDirection.y - offset.y * firstDirection.x) / denominator
+  if (firstParameter < -tolerance || firstParameter > 1 + tolerance || secondParameter < -tolerance || secondParameter > 1 + tolerance) return null
+  return { x: first[0].x + firstParameter * firstDirection.x, y: first[0].y + firstParameter * firstDirection.y }
+}
+
+function samplePrimitive(primitive: SampledPrimitive): Coordinate[] {
+  if (primitive.type === "line") {
+    const direction = { x: primitive.b.x - primitive.a.x, y: primitive.b.y - primitive.a.y }
+    return [{ x: primitive.a.x - direction.x * 100, y: primitive.a.y - direction.y * 100 }, { x: primitive.a.x + direction.x * 100, y: primitive.a.y + direction.y * 100 }]
+  }
+  if (primitive.type === "segment") return [primitive.a, primitive.b]
+  if (primitive.type === "ray") {
+    const direction = { x: primitive.b.x - primitive.a.x, y: primitive.b.y - primitive.a.y }
+    return [primitive.a, { x: primitive.a.x + direction.x * 100, y: primitive.a.y + direction.y * 100 }]
+  }
+  if (primitive.type === "polyline") return primitive.points
+  if (primitive.type === "circle") return Array.from({ length: 257 }, (_, index) => { const angle = Math.PI * 2 * index / 256; return { x: primitive.center.x + primitive.radius * Math.cos(angle), y: primitive.center.y + primitive.radius * Math.sin(angle) } })
+  if (primitive.type === "arc") return Array.from({ length: 129 }, (_, index) => { const angle = primitive.startAngle + (primitive.endAngle - primitive.startAngle) * index / 128; return { x: primitive.center.x + primitive.radius * Math.cos(angle), y: primitive.center.y + primitive.radius * Math.sin(angle) } })
+  if (primitive.type === "parabola") return sampleParabola(primitive, [-12, 12], 256)
+  if (primitive.type === "ellipse") return sampleEllipse(primitive, 256)
+  if (primitive.type === "hyperbola") {
+    const branch = sampleHyperbola(primitive, [-12, 12], 256)
+    const opposite = branch.map((point) => primitive.axis === "x" ? { x: point.x, y: 2 * primitive.center.y - point.y } : { x: 2 * primitive.center.x - point.x, y: point.y })
+    return [...branch, ...opposite]
+  }
+  return sampleFunction((x) => evaluateParameterExpression(primitive.expression, { x }), primitive.domain, primitive.samples ?? 256)
+}
+
+export function intersectSampledPrimitives(first: SampledPrimitive, second: SampledPrimitive): IntersectionResult {
+  let firstPoints: Coordinate[]
+  let secondPoints: Coordinate[]
+  try {
+    firstPoints = samplePrimitive(first)
+    secondPoints = samplePrimitive(second)
+  } catch (error) {
+    return { kind: "degenerate", reason: error instanceof Error ? error.message : "curve sampling failed" }
+  }
+  if (firstPoints.length < 2 || secondPoints.length < 2) return { kind: "degenerate", reason: "curve sampling needs at least two points" }
+  const points: Coordinate[] = []
+  for (let firstIndex = 1; firstIndex < firstPoints.length; firstIndex += 1) {
+    for (let secondIndex = 1; secondIndex < secondPoints.length; secondIndex += 1) {
+      const point = segmentIntersection([firstPoints[firstIndex - 1], firstPoints[firstIndex]], [secondPoints[secondIndex - 1], secondPoints[secondIndex]])
+      if (point) points.push(point)
+    }
+  }
+  const unique = uniquePoints(points)
+  if (unique.length === 0) return { kind: "none", reason: "curves are disjoint" }
+  if (unique.length === 1) return { kind: "point", point: unique[0] }
+  return { kind: "points", points: [unique[0], unique[1]] }
+}

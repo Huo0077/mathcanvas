@@ -24,6 +24,7 @@ function isReferenced(document: GeometryDocument, id: string): boolean {
     (primitive.type === "intersection" && (primitive.lineA === id || primitive.lineB === id)) ||
     (primitive.type === "lineCircleIntersection" && (primitive.lineId === id || primitive.circleId === id)) ||
     (primitive.type === "circleIntersection" && (primitive.circleA === id || primitive.circleB === id))
+    || (primitive.type === "curveIntersection" && (primitive.objectA === id || primitive.objectB === id))
   ))
 }
 
@@ -62,6 +63,12 @@ export function validatePatch(document: GeometryDocument, operation: DomainOpera
       const first = document.primitives.find((candidate) => candidate.id === primitive.circleA)
       const second = document.primitives.find((candidate) => candidate.id === primitive.circleB)
       if (first?.type !== "circle" || second?.type !== "circle") errors.push("circle intersection references invalid circles")
+    }
+    if (primitive.type === "curveIntersection") {
+      const first = document.primitives.find((candidate) => candidate.id === primitive.objectA)
+      const second = document.primitives.find((candidate) => candidate.id === primitive.objectB)
+      const supported = ["line", "segment", "ray", "polyline", "circle", "arc", "parabola", "ellipse", "hyperbola", "function"]
+      if (primitive.objectA === primitive.objectB || !first || !second || !supported.includes(first.type) || !supported.includes(second.type)) errors.push("curve intersection references invalid objects")
     }
   }
   if (operation.op === "updatePrimitive") {
