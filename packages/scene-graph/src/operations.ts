@@ -109,6 +109,7 @@ function primitiveDependencies(primitive: PrimitiveSpec): string[] {
   if (primitive.type === "lineCircleIntersection") return [primitive.lineId, primitive.circleId]
   if (primitive.type === "circleIntersection") return [primitive.circleA, primitive.circleB]
   if (primitive.type === "curveIntersection") return [primitive.objectA, primitive.objectB]
+  if (primitive.type === "intersectionSet") return [primitive.objectA, primitive.objectB]
   return []
 }
 
@@ -238,6 +239,16 @@ export function recomputeDerivedObjects(document: GeometryDocument, changedIds?:
       return point ? { ...primitive, x: point.x, y: point.y } : primitive
     }
     if (primitive.type === "line") return lines.get(primitive.id) ?? primitive
+    if (primitive.type === "intersectionSet") {
+      const first = primitiveMap.get(primitive.objectA)
+      const second = primitiveMap.get(primitive.objectB)
+      if (!isSampledPrimitive(first) || !isSampledPrimitive(second)) throw new Error("intersection set references unsupported objects")
+      const result = intersectSampledPrimitives(first, second)
+      if (result.kind === "degenerate") throw new Error(`degenerate intersection set: ${result.reason}`)
+      if (result.kind === "none" || result.kind === "coincident") return { ...primitive, points: [], visible: false }
+      if (result.kind === "point" || result.kind === "tangent") return { ...primitive, points: [result.point], visible: true }
+      return { ...primitive, points: result.points, visible: true }
+    }
     if (primitive.type === "curveIntersection") {
       const first = primitiveMap.get(primitive.objectA)
       const second = primitiveMap.get(primitive.objectB)

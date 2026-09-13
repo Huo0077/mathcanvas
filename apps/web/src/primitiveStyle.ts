@@ -17,7 +17,8 @@ const defaultStrokes: Record<PrimitiveSpec["type"], string> = {
   intersection: "#f04f5f",
   lineCircleIntersection: "#f04f5f",
   circleIntersection: "#f04f5f",
-  curveIntersection: "#f04f5f"
+  curveIntersection: "#f04f5f",
+  intersectionSet: "#f04f5f"
 }
 
 export function defaultStrokeFor(primitive: PrimitiveSpec): string {

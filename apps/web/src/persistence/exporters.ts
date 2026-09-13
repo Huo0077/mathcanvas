@@ -55,6 +55,7 @@ function primitiveSvg(primitive: PrimitiveSpec): string {
   if (primitive.type === "polyline") return `<polyline points="${pointsAttribute(primitive.points)}" ${svgStyleFor(primitive)} />`
   if (primitive.type === "connection") return ""
   if (primitive.type === "locus") return ""
+  if (primitive.type === "intersectionSet") return ""
   if (primitive.type === "circle") return `<circle cx="${toX(primitive.center.x)}" cy="${toY(primitive.center.y)}" r="${radiusToSvg(primitive.radius)}" ${svgStyleFor(primitive)} />`
   if (primitive.type === "arc") return `<path d="M ${toX(primitive.center.x + primitive.radius * Math.cos(primitive.startAngle))} ${toY(primitive.center.y + primitive.radius * Math.sin(primitive.startAngle))} A ${radiusToSvg(primitive.radius)} ${radiusToSvg(primitive.radius)} 0 ${Math.abs(primitive.endAngle - primitive.startAngle) > Math.PI ? 1 : 0} ${primitive.endAngle >= primitive.startAngle ? 0 : 1} ${toX(primitive.center.x + primitive.radius * Math.cos(primitive.endAngle))} ${toY(primitive.center.y + primitive.radius * Math.sin(primitive.endAngle))}" ${svgStyleFor(primitive)} />`
   if (primitive.type === "point") return `<circle cx="${toX(primitive.x)}" cy="${toY(primitive.y)}" r="6" ${svgStyleFor(primitive)} />`
@@ -81,6 +82,7 @@ function primitiveData(primitive: PrimitiveSpec): string {
   if (primitive.type === "polyline") return JSON.stringify({ points: primitive.points })
   if (primitive.type === "connection") return JSON.stringify({ kind: primitive.kind, startPointId: primitive.startPointId, endPointId: primitive.endPointId, control: primitive.control })
   if (primitive.type === "locus") return JSON.stringify({ sourcePointId: primitive.sourcePointId, parameterId: primitive.parameterId, domain: primitive.domain, samples: primitive.samples })
+  if (primitive.type === "intersectionSet") return JSON.stringify({ objectA: primitive.objectA, objectB: primitive.objectB, points: primitive.points })
   if (primitive.type === "circle" || primitive.type === "arc") return JSON.stringify({ center: primitive.center, radius: primitive.radius })
   if (primitive.type === "parabola") return JSON.stringify({ vertex: primitive.vertex, focalParameter: primitive.focalParameter, axis: primitive.axis, rotation: primitive.rotation ?? 0 })
   if (primitive.type === "ellipse" || primitive.type === "hyperbola") return JSON.stringify({ center: primitive.center, radiusX: primitive.radiusX, radiusY: primitive.radiusY, axis: "axis" in primitive ? primitive.axis : undefined, rotation: primitive.rotation ?? 0 })

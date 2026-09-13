@@ -68,6 +68,18 @@ describe("scene graph operations", () => {
     }
   })
 
+  it("recomputes an intersection set with every sampled solution", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [
+      { id: "line-a", type: "line", a: { x: -2, y: 0 }, b: { x: 2, y: 0 } },
+      { id: "line-b", type: "line", a: { x: 0, y: -2 }, b: { x: 0, y: 2 } },
+      { id: "set-1", type: "intersectionSet", objectA: "line-a", objectB: "line-b", points: [] }
+    ]
+
+    const result = recomputeDerivedObjects(document)
+    expect(result.primitives.find((primitive) => primitive.id === "set-1")).toMatchObject({ visible: true, points: [{ x: 0, y: 0 }] })
+  })
+
   it("rejects an invalid constraint without changing the document", () => {
     const document = createEmptyDocument("calculus")
     const result = commitPatch(document, { op: "addConstraint", constraint: { id: "parallel-1", type: "parallel", targets: ["missing-a", "missing-b"] } })

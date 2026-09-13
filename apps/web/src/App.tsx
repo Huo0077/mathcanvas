@@ -191,7 +191,9 @@ export function App() {
 
   const selectedPrimitive = selectedId ? document.primitives.find((primitive) => primitive.id === selectedId) ?? null : null
   const intersectionTypes = ["point", "line", "segment", "ray", "polyline", "circle", "arc", "parabola", "ellipse", "hyperbola", "function"] as const
-  const canCreateIntersection = selectedIds.length === 2 && selectedIds.every((id) => intersectionTypes.includes(document.primitives.find((primitive) => primitive.id === id)?.type as typeof intersectionTypes[number]))
+  const selectedPointIds = selectedIds.filter((id) => document.primitives.find((primitive) => primitive.id === id)?.type === "point")
+  const canCreatePointConnection = (selectedIds.length === 2 || selectedIds.length === 3) && selectedPointIds.length === selectedIds.length
+  const canCreateIntersection = canCreatePointConnection || (selectedIds.length === 2 && selectedIds.every((id) => intersectionTypes.includes(document.primitives.find((primitive) => primitive.id === id)?.type as typeof intersectionTypes[number])))
   const allSelectedLocked = selectedIds.length > 0 && selectedIds.every((id) => document.primitives.find((primitive) => primitive.id === id)?.locked)
   const allSelectedVisible = selectedIds.length > 0 && selectedIds.every((id) => document.primitives.find((primitive) => primitive.id === id)?.visible !== false)
   const selectedGroup = document.groups.find((group) => group.members.length === selectedIds.length && group.members.every((id) => selectedIds.includes(id))) ?? null
@@ -215,6 +217,7 @@ export function App() {
       if (primitive.type === "function") return primitive.domain[0] >= bounds.minX && primitive.domain[1] <= bounds.maxX
       if (primitive.type === "connection") return false
       if (primitive.type === "locus") return false
+      if (primitive.type === "intersectionSet") return false
       return primitive.x >= bounds.minX && primitive.x <= bounds.maxX && primitive.y >= bounds.minY && primitive.y <= bounds.maxY
     }).map((primitive) => primitive.id)
     setSelectedIds(contained)
@@ -226,14 +229,17 @@ export function App() {
   const createIntersection = () => {
     if (!canCreateIntersection) return
     const [objectA, objectB] = selectedIds
-    if (selectedIds.every((id) => document.primitives.find((primitive) => primitive.id === id)?.type === "point")) {
+    if (canCreatePointConnection) {
       const id = nextPrimitiveId(document, "connection")
-      apply({ op: "addPrimitive", primitive: { id, type: "connection", kind: "segment", startPointId: objectA, endPointId: objectB, label: `连接 ${id.split("-").at(-1)}` } })
+      const isParabola = selectedIds.length === 3
+      apply({ op: "addPrimitive", primitive: isParabola
+        ? { id, type: "connection", kind: "parabola", startPointId: objectA, endPointId: objectB, control: { thirdPointId: selectedIds[2] }, label: `抛物线连接 ${id.split("-").at(-1)}` }
+        : { id, type: "connection", kind: "segment", startPointId: objectA, endPointId: objectB, label: `连接 ${id.split("-").at(-1)}` } })
       setSelectedIds([id])
       return
     }
-    const id = nextPrimitiveId(document, "curveIntersection")
-    apply({ op: "addPrimitive", primitive: { id, type: "curveIntersection", objectA, objectB, x: 0, y: 0, label: `交点 ${id.split("-").at(-1)}` } })
+    const id = nextPrimitiveId(document, "intersectionSet")
+    apply({ op: "addPrimitive", primitive: { id, type: "intersectionSet", objectA, objectB, points: [], label: `交点集合 ${id.split("-").at(-1)}` } })
     setSelectedIds([id])
   }
   const addPoint = () => {

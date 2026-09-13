@@ -1,7 +1,7 @@
 import type { GeometryDocument, PrimitiveSpec, ValidationResult } from "./types"
 
 const workspaces = new Set(["calculus", "conics", "cad", "geometry3d"])
-const primitiveTypes = new Set(["point", "line", "segment", "ray", "polyline", "connection", "locus", "parabola", "ellipse", "hyperbola", "function", "circle", "arc", "intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection"])
+const primitiveTypes = new Set(["point", "line", "segment", "ray", "polyline", "connection", "locus", "parabola", "ellipse", "hyperbola", "function", "circle", "arc", "intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection", "intersectionSet"])
 const sampledTypes = new Set(["line", "segment", "ray", "polyline", "circle", "arc", "parabola", "ellipse", "hyperbola", "function"])
 
 type RecordValue = Record<string, unknown>
@@ -72,6 +72,12 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>): string[]
   }
   if (type === "connection") {
     if (!["segment", "line", "ray", "polyline", "parabola"].includes(String(value.kind)) || referenceType(byId, value.startPointId) !== "point" || referenceType(byId, value.endPointId) !== "point" || value.startPointId === value.endPointId) errors.push("connection references invalid points")
+    if (value.kind === "parabola") {
+      const control = isRecord(value.control) ? value.control : undefined
+      const hasThirdPoint = typeof control?.thirdPointId === "string" && referenceType(byId, control.thirdPointId) === "point"
+      const hasVertexModel = isFiniteCoordinate(control?.vertex) && ["x", "y"].includes(String(control?.axis)) && isFiniteNumber(control?.focalParameter) && control.focalParameter !== 0
+      if (!hasThirdPoint && !hasVertexModel) errors.push("parabola connection needs a third point or vertex model")
+    }
   }
   if (type === "locus") {
     if (referenceType(byId, value.sourcePointId) !== "point" || typeof value.parameterId !== "string" || !Array.isArray(value.domain) || value.domain.length !== 2 || !value.domain.every(isFiniteNumber) || value.domain[0] >= value.domain[1] || !isFiniteNumber(value.samples) || !Number.isInteger(value.samples) || value.samples < 2 || value.samples > 4096) errors.push("locus geometry is invalid")
@@ -106,6 +112,11 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>): string[]
   if (type === "curveIntersection") {
     if (value.objectA === value.objectB || !sampledTypes.has(referenceType(byId, value.objectA) ?? "") || !sampledTypes.has(referenceType(byId, value.objectB) ?? "")) errors.push("curve intersection references invalid objects")
     if (!isFiniteNumber(value.x) || !isFiniteNumber(value.y)) errors.push("intersection coordinates must be finite")
+  }
+  if (type === "intersectionSet") {
+    if (value.objectA === value.objectB || !sampledTypes.has(referenceType(byId, value.objectA) ?? "") || !sampledTypes.has(referenceType(byId, value.objectB) ?? "")) errors.push("intersection set references invalid objects")
+    if (!Array.isArray(value.points) || value.points.some((point) => !isFiniteCoordinate(point))) errors.push("intersection set points are invalid")
+    if (value.selectedIndex !== undefined && (!isFiniteNumber(value.selectedIndex) || !Number.isInteger(value.selectedIndex) || value.selectedIndex < 0)) errors.push("intersection set selection is invalid")
   }
   return errors
 }

@@ -96,6 +96,21 @@ describe("MathCanvas workbench", () => {
     expect(screen.getByRole("img", { name: "几何画布" }).querySelector('[data-primitive-type="connection"]')).toBeTruthy()
   })
 
+  it("requires a third point for a parabola connection", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    const pointRows = Array.from(globalThis.document.querySelectorAll(".object-row")).filter((row) => /新点 [A-Z]/.test(row.textContent ?? "")).slice(-3)
+    fireEvent.click(pointRows[0])
+    fireEvent.click(pointRows[1], { shiftKey: true })
+    fireEvent.click(pointRows[2], { shiftKey: true })
+
+    fireEvent.click(screen.getByRole("button", { name: "创建三点抛物线" }))
+
+    expect(screen.getByRole("img", { name: "几何画布" }).querySelector('[data-connection-kind="parabola"]')).toBeTruthy()
+  })
+
   it("binds a selected point to a path from the property bar", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "添加点" }))
@@ -135,7 +150,7 @@ describe("MathCanvas workbench", () => {
     fireEvent.click(canvas, { clientX: 400, clientY: 20 })
 
     expect(screen.getAllByText("圆弧 1")).toHaveLength(2)
-    expect(canvas.querySelectorAll('path:not([data-hit-target="true"])')).toHaveLength(1)
+    expect(canvas.querySelectorAll('[data-primitive-type="arc"] path:not([data-hit-target="true"])')).toHaveLength(1)
   })
 
   it("creates and edits a line through the canvas and properties", () => {
@@ -229,6 +244,8 @@ describe("MathCanvas workbench", () => {
     fireEvent.change(screen.getByLabelText("填充颜色"), { target: { value: "#ffff00" } })
 
     expect(screen.getByText(/焦点：\(0\.00, 3\.00\) \/ \(0\.00, -3\.00\)/)).toBeTruthy()
+    expect(screen.getByText("F₁")).toBeTruthy()
+    expect(screen.getByText("F₂")).toBeTruthy()
     const ellipseGraphs = Array.from(screen.getByRole("img", { name: "几何画布" }).querySelectorAll('[data-primitive-type="ellipse"] polyline:not([data-hit-target="true"])'))
     expect(ellipseGraphs.some((graph) => graph.getAttribute("fill") === "#ffff00")).toBe(true)
   })
@@ -312,8 +329,8 @@ describe("MathCanvas workbench", () => {
 
     expect(screen.getByRole("button", { name: "添加交点" })).toBeTruthy()
     fireEvent.click(screen.getByRole("button", { name: "添加交点" }))
-    expect(screen.getAllByRole("button", { name: /隐藏 交点/ }).some((button) => /^隐藏 交点 \d+$/.test(button.getAttribute("aria-label") ?? ""))).toBe(true)
-    expect(screen.getByRole("img", { name: "几何画布" }).querySelectorAll('[data-primitive-type="curveIntersection"]')).toHaveLength(1)
+    expect(screen.getAllByRole("button", { name: /交点/ }).some((button) => /(交点|交点集合)/.test(button.getAttribute("aria-label") ?? ""))).toBe(true)
+    expect(screen.getByRole("img", { name: "几何画布" }).querySelectorAll('[data-primitive-type="intersectionSet"]')).toHaveLength(1)
   })
 
   it("selects and deletes a point with the keyboard", () => {

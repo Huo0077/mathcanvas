@@ -50,6 +50,28 @@ describe("Geometry DSL codec", () => {
     expect(decodeMgeo(encodeMgeo(document)).primitives).toEqual(document.primitives)
   })
 
+  it("round-trips an intersection set", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [
+      { id: "line-a", type: "line", a: { x: -2, y: 0 }, b: { x: 2, y: 0 } },
+      { id: "line-b", type: "line", a: { x: 0, y: -2 }, b: { x: 0, y: 2 } },
+      { id: "intersection-set-1", type: "intersectionSet", objectA: "line-a", objectB: "line-b", points: [] }
+    ]
+
+    expect(decodeMgeo(encodeMgeo(document)).primitives).toEqual(document.primitives)
+  })
+
+  it("rejects a parabola connection without an extra constraint", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [
+      { id: "point-a", type: "point", x: 0, y: 0 },
+      { id: "point-b", type: "point", x: 2, y: 1 },
+      { id: "connection-1", type: "connection", kind: "parabola", startPointId: "point-a", endPointId: "point-b" }
+    ]
+
+    expect(validateDocument(document)).toEqual({ valid: false, errors: ["parabola connection needs a third point or vertex model"] })
+  })
+
   it("round-trips persistent primitive groups", () => {
     const document = createEmptyDocument("calculus")
     document.primitives = [

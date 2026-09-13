@@ -4,7 +4,7 @@ import type { PrimitiveUpdatePatch } from "@draw/scene-graph"
 export type DragHandle = "body" | "a" | "b" | "radius" | "startAngle" | "endAngle" | "vertex" | "radiusX" | "radiusY" | "rotation" | `vertex-${number}`
 export type DragAction = { kind: "translate"; delta: { x: number; y: number } } | { kind: "update"; patch: PrimitiveUpdatePatch }
 
-const derivedTypes = new Set(["intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection"])
+const derivedTypes = new Set(["intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection", "intersectionSet"])
 
 function distance(first: { x: number; y: number }, second: { x: number; y: number }): number {
   return Math.hypot(first.x - second.x, first.y - second.y)

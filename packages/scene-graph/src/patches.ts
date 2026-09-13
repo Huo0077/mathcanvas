@@ -29,6 +29,7 @@ function isReferenced(document: GeometryDocument, id: string): boolean {
     (primitive.type === "lineCircleIntersection" && (primitive.lineId === id || primitive.circleId === id)) ||
     (primitive.type === "circleIntersection" && (primitive.circleA === id || primitive.circleB === id)) ||
     (primitive.type === "curveIntersection" && (primitive.objectA === id || primitive.objectB === id))
+    || (primitive.type === "intersectionSet" && (primitive.objectA === id || primitive.objectB === id))
   ))
 }
 
@@ -109,7 +110,7 @@ export function validatePatch(document: GeometryDocument, operation: DomainOpera
   }
   if (operation.op === "translatePrimitive") {
     const primitive = document.primitives.find((candidate) => candidate.id === operation.id)
-    if (!primitive || ["intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection"].includes(primitive.type)) errors.push("object is not editable")
+    if (!primitive || ["intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection", "intersectionSet", "locus"].includes(primitive.type)) errors.push("object is not editable")
     if (primitive?.locked) errors.push("object is locked")
     if (!isCoordinate(operation.delta)) errors.push("translation must be finite")
   }

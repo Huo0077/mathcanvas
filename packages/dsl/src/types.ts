@@ -185,6 +185,15 @@ export interface CurveIntersectionPrimitive extends PrimitivePresentation {
   y: number
 }
 
+export interface IntersectionSetPrimitive extends PrimitivePresentation {
+  id: string
+  type: "intersectionSet"
+  objectA: string
+  objectB: string
+  points: Coordinate[]
+  selectedIndex?: number
+}
+
 export type PrimitiveSpec =
   | PointPrimitive
   | LinePrimitive
@@ -203,6 +212,7 @@ export type PrimitiveSpec =
   | LineCircleIntersectionPrimitive
   | CircleCircleIntersectionPrimitive
   | CurveIntersectionPrimitive
+  | IntersectionSetPrimitive
 
 export interface ConstraintSpec {
   id: string
