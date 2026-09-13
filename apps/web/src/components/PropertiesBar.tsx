@@ -1,9 +1,10 @@
-import { useEffect, useState, type ChangeEvent, type ReactNode } from "react"
+import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react"
 import type { PrimitiveSpec } from "@draw/dsl"
-import { evaluateParameterExpression, parseExpression, sampleFunctionSegments } from "@draw/geometry-kernel"
+import { advanceAnimation, evaluateParameterExpression, functionPresets, parseExpression, sampleFunctionSegments, type AnimationMode, type AnimationState } from "@draw/geometry-kernel"
 import type { Alignment, PrimitiveUpdatePatch } from "@draw/scene-graph"
 
 import { defaultStrokeFor } from "../primitiveStyle"
+import { useSceneStore } from "../store"
 interface PropertiesBarProps {
   value: number
   min: number
@@ -85,11 +86,35 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
   const editable = selectedPrimitive?.locked !== true
   const [expressionDraft, setExpressionDraft] = useState(selectedFunction?.expression ?? "")
   const [expressionError, setExpressionError] = useState<string | null>(null)
+  const beginPreview = useSceneStore((state) => state.beginPreview)
+  const previewParameter = useSceneStore((state) => state.previewParameter)
+  const commitPreview = useSceneStore((state) => state.commitPreview)
+  const [animationMode, setAnimationMode] = useState<AnimationMode>("loop")
+  const [animationPlaying, setAnimationPlaying] = useState(false)
+  const animationRef = useRef<AnimationState>({ value, direction: 1, mode: "loop", playing: false, speed: 0.2 })
 
   useEffect(() => {
     setExpressionDraft(selectedFunction?.expression ?? "")
     setExpressionError(null)
   }, [selectedFunction?.id, selectedFunction?.expression])
+
+  useEffect(() => {
+    if (!animationPlaying) animationRef.current = { ...animationRef.current, value, mode: animationMode, playing: false, speed: Math.max((max - min) / 4, step) }
+  }, [animationPlaying, animationMode, max, min, step, value])
+
+  useEffect(() => {
+    if (!animationPlaying) return
+    const timer = window.setInterval(() => {
+      const next = advanceAnimation(animationRef.current, 0.05, [min, max])
+      animationRef.current = next
+      previewParameter("slope", next.value)
+      if (!next.playing) {
+        setAnimationPlaying(false)
+        commitPreview()
+      }
+    }, 50)
+    return () => window.clearInterval(timer)
+  }, [animationPlaying, commitPreview, max, min, previewParameter])
 
   const updatePoint = (axis: "x" | "y", next: number) => selectedPoint && editable && onUpdatePrimitive({ [axis]: next })
   const updateCenter = (axis: "x" | "y", next: number) => selectedCircleOrArc && editable && onUpdatePrimitive({ center: { ...selectedCircleOrArc.center, [axis]: next } })
@@ -145,6 +170,31 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
       setExpressionError("表达式暂不可计算")
     }
   }
+  const applyFunctionPreset = (presetId: string) => {
+    const preset = functionPresets.find((candidate) => candidate.id === presetId)
+    if (!preset || !selectedFunction || !editable) return
+    setExpressionDraft(preset.expression)
+    setExpressionError(null)
+    onUpdatePrimitive({ expression: preset.expression, domain: preset.defaultDomain })
+  }
+  const toggleAnimation = () => {
+    if (animationPlaying) {
+      setAnimationPlaying(false)
+      animationRef.current = { ...animationRef.current, playing: false }
+      commitPreview()
+      return
+    }
+    beginPreview()
+    animationRef.current = { value, direction: 1, mode: animationMode, playing: true, speed: Math.max((max - min) / 4, step) }
+    setAnimationPlaying(true)
+  }
+  const stopAnimation = () => {
+    if (!animationPlaying) return
+    setAnimationPlaying(false)
+    animationRef.current = { ...animationRef.current, playing: false, value: min }
+    previewParameter("slope", min)
+    commitPreview()
+  }
   const functionMetrics = selectedFunction ? (() => {
     try {
       const segments = sampleFunctionSegments((x) => evaluateParameterExpression(selectedFunction.expression, { x }), selectedFunction.domain, selectedFunction.samples ?? 128)
@@ -158,6 +208,18 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
 
   return <section className="panel-section properties">
     <h2 className="panel-title">Properties Bar</h2>
+    <div className="animation-controls" aria-label="动态控制">
+      <span className="properties-label">参数动态演变</span>
+      <div className="property-actions">
+        <button type="button" aria-label={animationPlaying ? "暂停动画" : "播放动画"} onClick={toggleAnimation}>{animationPlaying ? "暂停" : "播放"}</button>
+        <button type="button" aria-label="停止动画" onClick={stopAnimation} disabled={!animationPlaying}>停止</button>
+        <select aria-label="动画模式" value={animationMode} onChange={(event) => setAnimationMode(event.target.value as AnimationMode)}>
+          <option value="loop">循环</option>
+          <option value="once">单次</option>
+          <option value="pingPong">往返</option>
+        </select>
+      </div>
+    </div>
     {!selectedPrimitive && <>
       <label className="properties-label" htmlFor="slope-slider"><span>直线斜率参数</span><strong className="metric">{value.toFixed(2)}</strong></label>
       <input id="slope-slider" aria-label="直线斜率" type="range" min={min} max={max} step={step} value={value} onChange={(event) => onChange(numberValue(event))} />
@@ -182,7 +244,7 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
      {selectedPolyline && <div className="primitive-properties"><h3>折线属性</h3><p className="footer-note">共 {selectedPolyline.points.length} 个顶点</p>{selectedPolyline.points.map((point, index) => <div key={`${selectedPolyline.id}-${index}`} className="endpoint-group"><strong>顶点 {index + 1}</strong><CoordinateField label={`顶点 ${index + 1} X`} value={point.x} disabled={!editable} onChange={(next) => updatePolylinePoint(index, "x", next)} /><CoordinateField label={`顶点 ${index + 1} Y`} value={point.y} disabled={!editable} onChange={(next) => updatePolylinePoint(index, "y", next)} /></div>)}</div>}
      {selectedParabola && <div className="primitive-properties"><h3>抛物线属性</h3><CoordinateField label="顶点 X" value={selectedParabola.vertex.x} disabled={!editable} onChange={(next) => updateParabolaVertex("x", next)} /><CoordinateField label="顶点 Y" value={selectedParabola.vertex.y} disabled={!editable} onChange={(next) => updateParabolaVertex("y", next)} /><Field label="焦参数"><input aria-label="焦参数" type="number" disabled={!editable} step="0.1" value={selectedParabola.focalParameter} onChange={(event) => onUpdatePrimitive({ focalParameter: numberValue(event) })} /></Field><Field label="轴向"><select aria-label="抛物线轴向" disabled={!editable} value={selectedParabola.axis} onChange={(event) => onUpdatePrimitive({ axis: event.target.value as "x" | "y" })}><option value="x">横轴</option><option value="y">纵轴</option></select></Field><Field label="旋转角度（度）"><input aria-label="抛物线旋转角度" type="number" disabled={!editable} step="1" value={rotationDegrees(selectedParabola.rotation)} onChange={(event) => updateRotation(numberValue(event))} /></Field><p className="footer-note">焦点：{(() => { const focus = parabolaFocus(selectedParabola); return `(${focus.x.toFixed(2)}, ${focus.y.toFixed(2)})` })()}</p></div>}
      {selectedEllipseOrHyperbola && <div className="primitive-properties"><h3>{selectedEllipseOrHyperbola.type === "ellipse" ? "椭圆属性" : "双曲线属性"}</h3><CoordinateField label="中心 X" value={selectedEllipseOrHyperbola.center.x} disabled={!editable} onChange={(next) => updateConicCenter("x", next)} /><CoordinateField label="中心 Y" value={selectedEllipseOrHyperbola.center.y} disabled={!editable} onChange={(next) => updateConicCenter("y", next)} /><Field label="横向半径"><input aria-label="横向半径" type="number" disabled={!editable} min="0.01" step="0.1" value={selectedEllipseOrHyperbola.radiusX} onChange={(event) => onUpdatePrimitive({ radiusX: Math.max(0.01, numberValue(event)) })} /></Field><Field label="纵向半径"><input aria-label="纵向半径" type="number" disabled={!editable} min="0.01" step="0.1" value={selectedEllipseOrHyperbola.radiusY} onChange={(event) => onUpdatePrimitive({ radiusY: Math.max(0.01, numberValue(event)) })} /></Field>{selectedEllipseOrHyperbola.type === "hyperbola" && <Field label="轴向"><select aria-label="双曲线轴向" disabled={!editable} value={selectedEllipseOrHyperbola.axis} onChange={(event) => onUpdatePrimitive({ axis: event.target.value as "x" | "y" })}><option value="x">横轴</option><option value="y">纵轴</option></select></Field>}<Field label="旋转角度（度）"><input aria-label={`${selectedEllipseOrHyperbola.type === "ellipse" ? "椭圆" : "双曲线"}旋转角度`} type="number" disabled={!editable} step="1" value={rotationDegrees(selectedEllipseOrHyperbola.rotation)} onChange={(event) => updateRotation(numberValue(event))} /></Field><p className="footer-note">焦点：{(() => { const focus = conicFoci(selectedEllipseOrHyperbola); return `(${focus.first.x.toFixed(2)}, ${focus.first.y.toFixed(2)}) / (${focus.second.x.toFixed(2)}, ${focus.second.y.toFixed(2)})` })()}</p>{ellipseMetrics && <div className="metric-grid"><span>长半轴<strong>{ellipseMetrics.major.toFixed(2)}</strong></span><span>短半轴<strong>{ellipseMetrics.minor.toFixed(2)}</strong></span><span>离心率<strong>{ellipseMetrics.eccentricity.toFixed(3)}</strong></span><span>面积<strong>{(Math.PI * selectedEllipseOrHyperbola.radiusX * selectedEllipseOrHyperbola.radiusY).toFixed(2)}</strong></span></div>}{hyperbolaMetrics && <div className="metric-grid"><span>离心率<strong>{hyperbolaMetrics.eccentricity.toFixed(3)}</strong></span><span>渐近线角<strong>{hyperbolaMetrics.asymptoteAngle.toFixed(2)}°</strong></span></div>}</div>}
-     {selectedFunction && <div className="primitive-properties"><h3>函数图像属性</h3><Field label="表达式"><input aria-label="函数表达式" type="text" disabled={!editable} value={expressionDraft} onChange={(event) => updateFunctionExpression(event.target.value)} /></Field>{expressionError && <p className="footer-note" role="alert">{expressionError}</p>}<CoordinateField label="定义域起点" value={selectedFunction.domain[0]} disabled={!editable} onChange={(next) => updateFunctionDomain(0, next)} /><CoordinateField label="定义域终点" value={selectedFunction.domain[1]} disabled={!editable} onChange={(next) => updateFunctionDomain(1, next)} /><Field label="采样点数"><input aria-label="采样点数" type="number" disabled={!editable} min="2" max="2048" step="1" value={selectedFunction.samples ?? 128} onChange={(event) => onUpdatePrimitive({ samples: numberValue(event) })} /></Field><p className="footer-note">定义域 [{selectedFunction.domain[0]}, {selectedFunction.domain[1]}] · {selectedFunction.samples ?? 128} 个采样点</p>{functionMetrics && <p className="footer-note">值域 [{functionMetrics.min.toFixed(2)}, {functionMetrics.max.toFixed(2)}]</p>}</div>}
+     {selectedFunction && <div className="primitive-properties"><h3>函数图像属性</h3><Field label="函数预设"><select aria-label="函数预设" disabled={!editable} value="" onChange={(event) => applyFunctionPreset(event.target.value)}><option value="" disabled>选择常见函数</option>{["basic", "exponential", "logarithmic", "trigonometric", "hyperbolic", "composite"].map((category) => <optgroup key={category} label={category}>{functionPresets.filter((preset) => preset.category === category).map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}</optgroup>)}</select></Field><Field label="表达式"><input aria-label="函数表达式" type="text" disabled={!editable} value={expressionDraft} onChange={(event) => updateFunctionExpression(event.target.value)} /></Field>{expressionError && <p className="footer-note" role="alert">{expressionError}</p>}<CoordinateField label="定义域起点" value={selectedFunction.domain[0]} disabled={!editable} onChange={(next) => updateFunctionDomain(0, next)} /><CoordinateField label="定义域终点" value={selectedFunction.domain[1]} disabled={!editable} onChange={(next) => updateFunctionDomain(1, next)} /><Field label="采样点数"><input aria-label="采样点数" type="number" disabled={!editable} min="2" max="2048" step="1" value={selectedFunction.samples ?? 128} onChange={(event) => onUpdatePrimitive({ samples: numberValue(event) })} /></Field><p className="footer-note">定义域 [{selectedFunction.domain[0]}, {selectedFunction.domain[1]}] · {selectedFunction.samples ?? 128} 个采样点</p>{functionMetrics && <p className="footer-note">值域 [{functionMetrics.min.toFixed(2)}, {functionMetrics.max.toFixed(2)}]</p>}</div>}
      {selectedCircleOrArc && <div className="primitive-properties"><h3>{selectedCircleOrArc.type === "circle" ? "圆属性" : "圆弧属性"}</h3><CoordinateField label="圆心 X" value={selectedCircleOrArc.center.x} disabled={!editable} onChange={(next) => updateCenter("x", next)} /><CoordinateField label="圆心 Y" value={selectedCircleOrArc.center.y} disabled={!editable} onChange={(next) => updateCenter("y", next)} /><Field label="半径"><input aria-label="半径" type="number" disabled={!editable} min="0.01" step="0.1" value={selectedCircleOrArc.radius} onChange={(event) => onUpdatePrimitive({ radius: Math.max(0.01, numberValue(event)) })} /></Field>{selectedCircleOrArc.type === "arc" && <><Field label="起始角（度）"><input aria-label="起始角" type="number" disabled={!editable} step="1" value={rotationDegrees(selectedCircleOrArc.startAngle)} onChange={(event) => onUpdatePrimitive({ startAngle: rotationRadians(numberValue(event)) })} /></Field><Field label="结束角（度）"><input aria-label="结束角" type="number" disabled={!editable} step="1" value={rotationDegrees(selectedCircleOrArc.endAngle)} onChange={(event) => onUpdatePrimitive({ endAngle: rotationRadians(numberValue(event)) })} /></Field></>}{selectedCircleOrArc.type === "circle" ? <div className="metric-grid"><span>周长<strong>{(2 * Math.PI * selectedCircleOrArc.radius).toFixed(2)}</strong></span><span>面积<strong>{(Math.PI * selectedCircleOrArc.radius ** 2).toFixed(2)}</strong></span></div> : <div className="metric-grid"><span>圆心角<strong>{(arcAngle * 180 / Math.PI).toFixed(2)}°</strong></span><span>弧长<strong>{(arcAngle * selectedCircleOrArc.radius).toFixed(2)}</strong></span></div>}</div>}
      {selectedIntersection && <div className="primitive-properties"><h3>派生交点</h3><p className="footer-note">该点由其他图元计算，不可直接拖动。</p><CoordinateField label="交点 X" value={selectedIntersection.x} readOnly onChange={() => undefined} /><CoordinateField label="交点 Y" value={selectedIntersection.y} readOnly onChange={() => undefined} /></div>}
     {selectedCount > 1 && <div className="batch-properties"><h3>批量编辑 · {selectedCount} 个对象</h3><div className="batch-actions">{canCreateIntersection && <button aria-label="添加交点" onClick={onCreateIntersection}>添加交点</button>}<button aria-label={selectedGroupId ? "取消分组" : "创建分组"} onClick={selectedGroupId ? onDeleteGroup : onCreateGroup}>{selectedGroupId ? "取消分组" : "创建分组"}</button><button aria-label={allSelectedVisible ? "批量隐藏" : "批量显示"} onClick={onToggleBatchVisibility}>{allSelectedVisible ? "批量隐藏" : "批量显示"}</button>{alignments.map((alignment) => <button key={alignment.value} aria-label={alignment.label} onClick={() => onAlign(alignment.value)}>{alignment.label}</button>)}</div></div>}

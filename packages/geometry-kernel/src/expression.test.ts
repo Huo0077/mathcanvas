@@ -40,4 +40,20 @@ describe("expression AST", () => {
 
     expect(evaluateExpression(expression, { x: Math.PI / 2 })).toBeCloseTo(1)
   })
+
+  it("evaluates inverse trigonometric, hyperbolic, and logarithmic functions", () => {
+    const expression = parseExpression("asinh(sinh(x)) + acosh(cosh(x)) + atanh(tanh(x)) + log10(100) + ln(e)")
+
+    expect(evaluateExpression(expression, { x: 0.25 })).toBeCloseTo(0.25 + 0.25 + 0.25 + 2 + 1)
+  })
+
+  it("evaluates composite expressions with function aliases and constants", () => {
+    const expression = parseExpression("exp(-x^2) * cos(2*x) + pi - e")
+
+    expect(evaluateExpression(expression, { x: 0 })).toBeCloseTo(1 + Math.PI - Math.E)
+  })
+
+  it("rejects unknown functions instead of executing arbitrary identifiers", () => {
+    expect(() => parseExpression("alert(x)")).toThrow("Unknown function: alert")
+  })
 })

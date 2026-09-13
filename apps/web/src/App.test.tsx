@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react"
 import { beforeEach, describe, expect, it } from "vitest"
 
 import { App } from "./App"
+import { useSceneStore } from "./store"
 
 describe("MathCanvas workbench", () => {
   beforeEach(() => localStorage.clear())
@@ -66,6 +67,19 @@ describe("MathCanvas workbench", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "添加点" }))
     expect(screen.getByRole("img", { name: "几何画布" }).querySelectorAll('[data-primitive-type="point"]').length).toBeGreaterThan(0)
+  })
+
+  it("assigns sequential point labels for classroom-style constructions", () => {
+    const previousDocument = useSceneStore.getState().document
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+
+    expect(screen.getAllByText("新点 A").length).toBeGreaterThan(0)
+    expect(screen.getAllByText("新点 B").length).toBeGreaterThan(0)
+    expect(screen.getAllByText("新点 C").length).toBeGreaterThan(0)
+    useSceneStore.getState().replace(previousDocument)
   })
 
   it("creates and edits a circle through the canvas and properties", () => {
@@ -236,6 +250,27 @@ describe("MathCanvas workbench", () => {
     expect((screen.getByRole("spinbutton", { name: "定义域终点" }) as HTMLInputElement).value).toBe("4")
   })
 
+  it("applies a common function preset from the property bar", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "添加函数图像" }))
+
+    fireEvent.change(screen.getByRole("combobox", { name: "函数预设" }), { target: { value: "sine" } })
+
+    expect(screen.getByDisplayValue("sin(x)")).toBeTruthy()
+    expect(screen.getByDisplayValue(String(-2 * Math.PI))).toBeTruthy()
+  })
+
+  it("exposes play, pause, stop, and animation mode controls", () => {
+    render(<App />)
+
+    fireEvent.click(screen.getByRole("button", { name: "播放动画" }))
+    expect(screen.getByRole("button", { name: "暂停动画" })).toBeTruthy()
+    fireEvent.change(screen.getByRole("combobox", { name: "动画模式" }), { target: { value: "pingPong" } })
+    fireEvent.click(screen.getByRole("button", { name: "暂停动画" }))
+    expect(screen.getByRole("button", { name: "播放动画" })).toBeTruthy()
+    expect((screen.getByRole("button", { name: "停止动画" }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
   it("creates a sampled intersection between a function and a conic", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "添加椭圆" }))
@@ -255,12 +290,12 @@ describe("MathCanvas workbench", () => {
   it("selects and deletes a point with the keyboard", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "添加点" }))
-    const pointLabelsBeforeDelete = screen.getAllByText("新点 A")
+    const pointLabelsBeforeDelete = screen.getAllByText(/新点 [A-Z]/)
     fireEvent.click(pointLabelsBeforeDelete[0])
     expect((screen.getByRole("button", { name: "删除对象" }) as HTMLButtonElement).disabled).toBe(false)
     fireEvent.keyDown(window, { key: "Delete" })
 
-    expect(screen.getAllByText("新点 A")).toHaveLength(pointLabelsBeforeDelete.length - 2)
+    expect(screen.getAllByText(/新点 [A-Z]/)).toHaveLength(pointLabelsBeforeDelete.length - 2)
     expect((screen.getByRole("button", { name: "删除对象" }) as HTMLButtonElement).disabled).toBe(true)
   })
 

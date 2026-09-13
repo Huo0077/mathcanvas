@@ -9,7 +9,9 @@ export type ExpressionNode =
 
 type Token = { type: "number" | "identifier" | "operator" | "parenthesis"; value: string }
 
-const functions = new Set(["abs", "cos", "exp", "log", "sin", "sqrt", "tan"])
+const functions = new Set([
+  "abs", "acos", "acosh", "asin", "asinh", "atan", "atanh", "ceil", "cos", "cosh", "exp", "floor", "ln", "log", "log10", "sin", "sinh", "sqrt", "tan", "tanh"
+])
 
 export function normalizeFunctionExpression(source: string): string {
   const normalized = source.trim().replace(/^y\s*=\s*/i, "")
@@ -142,6 +144,12 @@ export function parseExpression(source: string): ExpressionNode {
   return new ExpressionParser(source).parse()
 }
 
+export type CompiledExpression = ExpressionNode
+
+export function compileExpression(source: string): CompiledExpression {
+  return parseExpression(source)
+}
+
 export function evaluateExpression(expression: ExpressionNode, variables: Record<string, number>): number {
   if (expression.type === "number") return expression.value
   if (expression.type === "variable") {
@@ -158,12 +166,24 @@ export function evaluateExpression(expression: ExpressionNode, variables: Record
   if (expression.type === "call") {
     const value = evaluateExpression(expression.argument, variables)
     if (expression.name === "abs") return Math.abs(value)
+    if (expression.name === "acos") return Math.acos(value)
+    if (expression.name === "acosh") return Math.acosh(value)
+    if (expression.name === "asin") return Math.asin(value)
+    if (expression.name === "asinh") return Math.asinh(value)
+    if (expression.name === "atan") return Math.atan(value)
+    if (expression.name === "atanh") return Math.atanh(value)
+    if (expression.name === "ceil") return Math.ceil(value)
     if (expression.name === "cos") return Math.cos(value)
+    if (expression.name === "cosh") return Math.cosh(value)
     if (expression.name === "exp") return Math.exp(value)
-    if (expression.name === "log") return Math.log(value)
+    if (expression.name === "floor") return Math.floor(value)
+    if (expression.name === "ln" || expression.name === "log") return Math.log(value)
+    if (expression.name === "log10") return Math.log10(value)
     if (expression.name === "sin") return Math.sin(value)
+    if (expression.name === "sinh") return Math.sinh(value)
     if (expression.name === "sqrt") return Math.sqrt(value)
-    return Math.tan(value)
+    if (expression.name === "tan") return Math.tan(value)
+    return Math.tanh(value)
   }
   const left = evaluateExpression(expression.left, variables)
   const right = evaluateExpression(expression.right, variables)
@@ -172,4 +192,8 @@ export function evaluateExpression(expression: ExpressionNode, variables: Record
   if (expression.operator === "*") return left * right
   if (expression.operator === "/") return left / right
   return left ** right
+}
+
+export function evaluateCompiledExpression(expression: CompiledExpression, variables: Record<string, number>): number {
+  return evaluateExpression(expression, variables)
 }

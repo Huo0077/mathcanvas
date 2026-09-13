@@ -29,6 +29,15 @@ function nextGroupId(document: ReturnType<typeof useSceneStore.getState>["docume
   return `group-${index}`
 }
 
+function nextPointLabel(document: ReturnType<typeof useSceneStore.getState>["document"]): string {
+  const usedLabels = new Set(document.primitives.filter((primitive) => primitive.type === "point").map((primitive) => primitive.label))
+  for (let index = 0; index < 26; index += 1) {
+    const label = `新点 ${String.fromCharCode(65 + index)}`
+    if (!usedLabels.has(label)) return label
+  }
+  return `新点 ${document.primitives.filter((primitive) => primitive.type === "point").length + 1}`
+}
+
 export function App() {
   const document = useSceneStore((state) => state.document)
   const apply = useSceneStore((state) => state.apply)
@@ -221,7 +230,7 @@ export function App() {
   }
   const addPoint = () => {
     const id = nextPrimitiveId(document, "point")
-    apply({ op: "addPrimitive", primitive: { id, type: "point", x: 2, y: 1, label: "新点 A" } })
+    apply({ op: "addPrimitive", primitive: { id, type: "point", x: 2, y: 1, label: nextPointLabel(document) } })
   }
   const handleDragEnd = (id: string, action: import("./interaction").DragAction) => {
     apply(action.kind === "translate" ? { op: "translatePrimitive", id, delta: action.delta } : { op: "updatePrimitive", id, patch: action.patch })
