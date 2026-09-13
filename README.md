@@ -1,6 +1,10 @@
 # MathCanvas
 
-MathCanvas 是一个面向数学与工程场景的 2D 交互绘图工作台原型，采用 React、TypeScript 和 Vite 构建。项目将 Geometry DSL、数值几何内核、Scene Graph 与 SVG 工作台分层，便于多人协作和逐步扩展。
+MathCanvas 是一个面向数学与工程场景的 2D 交互绘图工作台原型。项目采用 React、TypeScript 和 Vite 构建，并将 Geometry DSL、数值几何内核、Scene Graph 与 SVG 工作台分层，便于持续扩展和多人协作。
+
+## 当前状态
+
+P0 技术验证、P1 数学内核和 P2 交互能力均已完成，项目当前进入 P3 需求规划阶段。P2 已覆盖几何创建与编辑、函数图像、属性检查器、点与轨迹、交点分析以及动态演变等核心工作流。
 
 ## 快速开始
 
@@ -9,7 +13,71 @@ npm install
 npm run dev
 ```
 
-启动后打开 Vite 输出的本地地址即可使用工作台。
+启动后打开 Vite 输出的本地地址即可使用工作台。Windows PowerShell 也可以使用对应的 `npm.cmd` 命令：
+
+```powershell
+npm.cmd install
+npm.cmd run dev
+```
+
+### 浏览器验收
+
+```bash
+npm run build
+npm run test:e2e
+```
+
+`test:e2e` 会启动本地预览服务并运行 Playwright Chromium 用例。手动测试时，先运行 `npm run dev`，再在浏览器打开终端输出的地址。
+
+## 已实现能力
+
+### 画布与图元
+
+- 创建、选择、拖动、框选、Shift 多选、删除、锁定、分组和对齐。
+- 支持点、直线、线段、射线、折线、圆、圆弧、抛物线、椭圆、双曲线和函数图像。
+- 支持拖动图元本体及控制点；移动端点后，使用点 ID 的关联图元会自动更新。
+- 画布横向填充工作区，支持撤销/重做、显隐控制和本地草稿自动保存。
+
+### 属性检查器
+
+- 公共样式：颜色、填充色、线宽、透明度和线形。
+- 直线：斜率、截距、方向和端点信息。
+- 圆与圆弧：圆心、半径、起止角和范围。
+- 抛物线、椭圆、双曲线：中心、顶点、焦点、轴向、离心率及渐近线等关键特征。
+- 函数图像：公式、定义域、采样状态、值域提示和采样交点。
+- 属性栏会根据当前选中的图元切换为对应的特异化字段，并保留统一的样式编辑入口。
+
+### 函数与公式
+
+- 公式框支持直接输入和光标位置插入，不依赖单独的函数选择器。
+- 计算器式快捷键盘支持常见函数、常数、运算符和括号的快速插入。
+- 支持嵌套与复合表达式，例如 `sin(ln(x))`、`exp(-x^2) * cos(2*x)` 和 `a*sin(b*x+c)+d`。
+- 支持常用形式 `e^x`、`|x|`、`sqrt(x)`、三角函数、反三角函数、双曲函数以及带底数的 `log_b(x)`。
+- 处理无定义值、无穷值和不连续区间时分段采样，避免错误连接渐近线两侧的曲线。
+- 在公式框内按 `Backspace` 或 `Delete` 只编辑文本，不会误删函数图元。
+
+### 点、交点与轨迹
+
+- 新建点自动提供 A、B、C 等课堂常用标签，也支持修改标签和显示坐标。
+- 鼠标悬停图元时显示当前接触点的画布坐标。
+- 图元相交时显示交点坐标；交点默认是派生结果，不会自动创建为独立图元。
+- 用户可以将交点保存为持久化点，并继续用于标注、连线或其他几何构造。
+- 支持动点、路径参数、轨迹显示和轨迹清除；点可绑定到直线、线段、射线、折线、圆、圆弧或函数路径。
+- 选中两个已标记点后，可以创建保持点引用的线段、直线、射线或折线；抛物线连接需要额外提供顶点、轴向、焦参数或第三点。
+
+### 动态演变与导出
+
+- 支持参数播放、暂停、停止、单次、循环和往返模式。
+- 动画帧使用临时状态，不逐帧污染撤销记录；停止或确认后再提交几何参数。
+- 支持 `.mgeo`、SVG、CSV 和 PNG 导出，并提供导出失败反馈。
+- 约束列表显示满足状态、冲突信息和数值误差诊断，异常 Patch 会回滚。
+
+## 包结构
+
+- `packages/dsl`：版本化 Geometry Document、图元类型、校验和 `.mgeo` 编解码。
+- `packages/geometry-kernel`：数值策略、约束、交点、射线/折线、圆锥曲线和微积分计算。
+- `packages/scene-graph`：Domain Operation、Patch 校验、依赖传播和事务回滚。
+- `apps/web`：工作台 UI、SVG 画布、交互状态、属性检查器和文件导入导出。
 
 ## 验证命令
 
@@ -20,55 +88,21 @@ npm run build
 npm run test:e2e
 ```
 
-当前基线：15 个测试文件、108 个测试通过；4 个 workspace 类型检查通过；生产构建和 5 个 Chromium E2E 用例通过。
+当前验证基线：23 个测试文件、180 个测试通过；4 个 workspace 类型检查通过；生产构建通过；5 个 Chromium E2E 用例通过。`npm run lint` 当前无法执行，因为仓库尚未安装 `eslint` 命令。
 
-## 当前能力
+## 项目文档
 
-### P0：技术验证
-
-- npm workspaces monorepo：`apps/web`、`packages/dsl`、`packages/geometry-kernel`、`packages/scene-graph`
-- Geometry DSL v0.1、稳定对象 ID、revision 和 `.mgeo` JSON 编解码
-- React/Vite 工作台、Algebra View、SVG 画布、撤销/重做
-- 点、直线、线段、圆、圆弧的创建、选择、编辑、删除和锁定
-- 框选、Shift 多选、对象分组、对齐和批量显隐/锁定
-- Playwright Chromium 浏览器验收
-- 独立工作区文档切换与往返保留
-- `.mgeo`、SVG 和 CSV 导出
-- PNG 导出、导出失败提示与本地草稿自动保存
-- 约束列表、满足状态、删除入口和冲突恢复提示
-- 约束批量清理与数值误差诊断
-
-### P1：数学内核
-
-- 表达式 AST、参数环境和依赖 DAG 链式重算
-- 平行、垂直、重合约束投影、冲突检测和失败回滚
-- 尺度化容差、鲁棒谓词、退化输入检测和显式交点结果
-- 直线、直线-圆、圆-圆交点分类：`none`、`point`、`tangent`、`points`、`coincident`、`degenerate`
-- 射线/折线与直线、圆的交点过滤和端点去重
-- 抛物线、椭圆、双曲线采样
-- 函数采样、数值导数和梯形积分 API
-- 1000 图元增量重算及多组件约束性能基准
-
-### P2：交互状态
-
-- 点、直线、线段、圆、圆弧的基础交互闭环已完成
-- 射线/折线已接入基础工具栏、创建流程和 SVG 渲染
-- 射线/折线、圆锥曲线和函数图像已接入工具栏、SVG 渲染、属性编辑和采样交点
-
-## 包结构
-
-- `packages/dsl`：版本化 Geometry Document、图元类型、校验和 `.mgeo` codec
-- `packages/geometry-kernel`：数值策略、交点、约束、射线/折线、圆锥和微积分计算
-- `packages/scene-graph`：Domain Operation、Patch 校验、依赖传播和事务回滚
-- `apps/web`：工作台 UI、SVG 画布、交互状态和文件导入导出
+- [项目进度](docs/project-progress.md)：记录各阶段完成项、验证证据和下一步计划。
+- [功能目录](docs/feature-catalog.md)：记录当前可用能力、规划能力和明确限制。
+- [GitHub 调研](docs/research/graphing-tools.md)：记录对 GeoGebra、JSXGraph、function-plot 等同类项目的功能与架构调研。
 
 ## 协作约定
 
-- 每个可验证切片都要同步更新 `docs/project-progress.md`。
+- 每完成一个可验证切片，同步更新 `docs/project-progress.md` 和相关功能文档。
 - 提交前运行测试、类型检查、构建和相关 E2E 验证。
-- 数学内核、Scene Graph 和 UI 变更应保持边界清晰，避免直接修改 Agent、Provider 或题图解析代码。
-- 推荐通过功能分支和 Pull Request 协作；当前公开仓库为 [Huo0077/mathcanvas](https://github.com/Huo0077/mathcanvas)。
+- 数学内核、Scene Graph 和 UI 变更保持边界清晰，避免在组件内重复实现几何算法。
+- 推荐通过功能分支和 Pull Request 协作；公开仓库为 [Huo0077/mathcanvas](https://github.com/Huo0077/mathcanvas)。
 
 ## 下一步
 
-P2 交互收尾已完成，下一步进入 P3 需求规划。
+P2 交互能力已完成，下一阶段进入 P3 需求规划，重点包括更丰富的函数分析工具、导数/切线/积分等派生对象，以及更完整的数学题图构造工作流。
