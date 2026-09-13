@@ -1,6 +1,7 @@
 import type { Coordinate, GeometryDocument, PrimitiveSpec } from "@draw/dsl"
-import { evaluateParameterExpression, sampleEllipse, sampleFunctionSegments, sampleHyperbola, sampleParabola } from "@draw/geometry-kernel"
+import { evaluateParameterExpression, sampleEllipse, sampleFunctionSegments, sampleHyperbolaBranches, sampleParabola } from "@draw/geometry-kernel"
 
+import { svgStyleFor } from "../primitiveStyle"
 import { VIEWBOX, WORLD_BOUNDS, WORLD_SCALE, worldToSvg } from "../viewport"
 
 const toX = (x: number) => worldToSvg({ x, y: 0 }).x
@@ -32,9 +33,7 @@ function sampledSegments(primitive: Extract<PrimitiveSpec, { type: "parabola" | 
     if (primitive.type === "parabola") return [sampleParabola(primitive, [WORLD_BOUNDS.minX, WORLD_BOUNDS.maxX], 128)]
     if (primitive.type === "ellipse") return [sampleEllipse(primitive, 160)]
     if (primitive.type === "hyperbola") {
-      const branch = sampleHyperbola(primitive, [WORLD_BOUNDS.minX, WORLD_BOUNDS.maxX], 128)
-      const opposite = branch.map((point) => primitive.axis === "x" ? { x: point.x, y: 2 * primitive.center.y - point.y } : { x: 2 * primitive.center.x - point.x, y: point.y })
-      return [branch, opposite]
+      return sampleHyperbolaBranches(primitive, [WORLD_BOUNDS.minX, WORLD_BOUNDS.maxX], 128)
     }
     return sampleFunctionSegments((x) => evaluateParameterExpression(primitive.expression, { x }), primitive.domain, primitive.samples ?? 128)
   } catch {
@@ -44,24 +43,22 @@ function sampledSegments(primitive: Extract<PrimitiveSpec, { type: "parabola" | 
 
 function primitiveSvg(primitive: PrimitiveSpec): string {
   if (primitive.visible === false) return ""
-  const selectedStroke = primitive.type === "point" || primitive.type === "intersection" || primitive.type === "lineCircleIntersection" || primitive.type === "circleIntersection" || primitive.type === "curveIntersection" ? "#f04f5f" : "#172033"
   if (primitive.type === "line") {
     const visible = viewportLine(primitive)
-    return `<line x1="${toX(visible.a.x)}" y1="${toY(visible.a.y)}" x2="${toX(visible.b.x)}" y2="${toY(visible.b.y)}" stroke="${selectedStroke}" stroke-width="3" />`
+    return `<line x1="${toX(visible.a.x)}" y1="${toY(visible.a.y)}" x2="${toX(visible.b.x)}" y2="${toY(visible.b.y)}" ${svgStyleFor(primitive)} />`
   }
-  if (primitive.type === "segment") return `<line x1="${toX(primitive.a.x)}" y1="${toY(primitive.a.y)}" x2="${toX(primitive.b.x)}" y2="${toY(primitive.b.y)}" stroke="#0b7285" stroke-width="3" />`
+  if (primitive.type === "segment") return `<line x1="${toX(primitive.a.x)}" y1="${toY(primitive.a.y)}" x2="${toX(primitive.b.x)}" y2="${toY(primitive.b.y)}" ${svgStyleFor(primitive)} />`
   if (primitive.type === "ray") {
     const visible = viewportRay(primitive)
-    return `<line x1="${toX(visible.a.x)}" y1="${toY(visible.a.y)}" x2="${toX(visible.b.x)}" y2="${toY(visible.b.y)}" stroke="#7c3aed" stroke-width="3" />`
+    return `<line x1="${toX(visible.a.x)}" y1="${toY(visible.a.y)}" x2="${toX(visible.b.x)}" y2="${toY(visible.b.y)}" ${svgStyleFor(primitive)} />`
   }
-  if (primitive.type === "polyline") return `<polyline points="${pointsAttribute(primitive.points)}" fill="none" stroke="#b45309" stroke-width="3" />`
-  if (primitive.type === "circle") return `<circle cx="${toX(primitive.center.x)}" cy="${toY(primitive.center.y)}" r="${radiusToSvg(primitive.radius)}" fill="none" stroke="#0f8a63" stroke-width="3" />`
-  if (primitive.type === "arc") return `<path d="M ${toX(primitive.center.x + primitive.radius * Math.cos(primitive.startAngle))} ${toY(primitive.center.y + primitive.radius * Math.sin(primitive.startAngle))} A ${radiusToSvg(primitive.radius)} ${radiusToSvg(primitive.radius)} 0 ${Math.abs(primitive.endAngle - primitive.startAngle) > Math.PI ? 1 : 0} ${primitive.endAngle >= primitive.startAngle ? 0 : 1} ${toX(primitive.center.x + primitive.radius * Math.cos(primitive.endAngle))} ${toY(primitive.center.y + primitive.radius * Math.sin(primitive.endAngle))}" fill="none" stroke="#f08a24" stroke-width="3" />`
-  if (primitive.type === "point") return `<circle cx="${toX(primitive.x)}" cy="${toY(primitive.y)}" r="6" fill="#3d5afe" />`
-  if (primitive.type === "intersection" || primitive.type === "lineCircleIntersection" || primitive.type === "circleIntersection" || primitive.type === "curveIntersection") return `<circle cx="${toX(primitive.x)}" cy="${toY(primitive.y)}" r="7" fill="#f04f5f" />`
+  if (primitive.type === "polyline") return `<polyline points="${pointsAttribute(primitive.points)}" ${svgStyleFor(primitive)} />`
+  if (primitive.type === "circle") return `<circle cx="${toX(primitive.center.x)}" cy="${toY(primitive.center.y)}" r="${radiusToSvg(primitive.radius)}" ${svgStyleFor(primitive)} />`
+  if (primitive.type === "arc") return `<path d="M ${toX(primitive.center.x + primitive.radius * Math.cos(primitive.startAngle))} ${toY(primitive.center.y + primitive.radius * Math.sin(primitive.startAngle))} A ${radiusToSvg(primitive.radius)} ${radiusToSvg(primitive.radius)} 0 ${Math.abs(primitive.endAngle - primitive.startAngle) > Math.PI ? 1 : 0} ${primitive.endAngle >= primitive.startAngle ? 0 : 1} ${toX(primitive.center.x + primitive.radius * Math.cos(primitive.endAngle))} ${toY(primitive.center.y + primitive.radius * Math.sin(primitive.endAngle))}" ${svgStyleFor(primitive)} />`
+  if (primitive.type === "point") return `<circle cx="${toX(primitive.x)}" cy="${toY(primitive.y)}" r="6" ${svgStyleFor(primitive)} />`
+  if (primitive.type === "intersection" || primitive.type === "lineCircleIntersection" || primitive.type === "circleIntersection" || primitive.type === "curveIntersection") return `<circle cx="${toX(primitive.x)}" cy="${toY(primitive.y)}" r="7" ${svgStyleFor(primitive)} />`
   const segments = sampledSegments(primitive)
-  const stroke = primitive.type === "function" ? "#16a34a" : primitive.type === "hyperbola" ? "#9333ea" : "#db2777"
-  return segments.map((points) => `<polyline points="${pointsAttribute(points)}" fill="none" stroke="${stroke}" stroke-width="3" />`).join("")
+  return segments.map((points) => `<polyline points="${pointsAttribute(points)}" ${svgStyleFor(primitive)} />`).join("")
 }
 
 export function exportSvg(document: GeometryDocument): string {

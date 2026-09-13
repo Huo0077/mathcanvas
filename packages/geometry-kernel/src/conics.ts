@@ -36,3 +36,12 @@ export function sampleHyperbola(hyperbola: HyperbolaPrimitive, domain: [number, 
   }
   return points
 }
+
+export function sampleHyperbolaBranches(hyperbola: HyperbolaPrimitive, domain: [number, number], steps = 64): [Coordinate[], Coordinate[]] {
+  const first = sampleHyperbola(hyperbola, domain, steps)
+  const second = first.map((point) => ({
+    x: 2 * hyperbola.center.x - point.x,
+    y: 2 * hyperbola.center.y - point.y
+  }))
+  return [first, second]
+}

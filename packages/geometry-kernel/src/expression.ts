@@ -1,11 +1,21 @@
-export type BinaryOperator = "+" | "-" | "*" | "/"
+export type BinaryOperator = "+" | "-" | "*" | "/" | "^"
 
 export type ExpressionNode =
   | { type: "number"; value: number }
   | { type: "variable"; name: string }
+  | { type: "unary"; operator: "+" | "-"; argument: ExpressionNode }
+  | { type: "call"; name: string; argument: ExpressionNode }
   | { type: "binary"; operator: BinaryOperator; left: ExpressionNode; right: ExpressionNode }
 
 type Token = { type: "number" | "identifier" | "operator" | "parenthesis"; value: string }
+
+const functions = new Set(["abs", "cos", "exp", "log", "sin", "sqrt", "tan"])
+
+export function normalizeFunctionExpression(source: string): string {
+  const normalized = source.trim().replace(/^y\s*=\s*/i, "")
+  if (!normalized) throw new Error("Expected expression")
+  return normalized
+}
 
 function tokenize(source: string): Token[] {
   const tokens: Token[] = []
@@ -28,7 +38,7 @@ function tokenize(source: string): Token[] {
       index += identifier[0].length
       continue
     }
-    if ("+-*/".includes(character)) {
+    if ("+-*/^".includes(character)) {
       tokens.push({ type: "operator", value: character })
       index += 1
       continue
@@ -48,7 +58,7 @@ class ExpressionParser {
   private position = 0
 
   constructor(source: string) {
-    this.tokens = tokenize(source)
+    this.tokens = tokenize(normalizeFunctionExpression(source))
   }
 
   parse(): ExpressionNode {
@@ -67,12 +77,27 @@ class ExpressionParser {
   }
 
   private parseMulDiv(): ExpressionNode {
-    let expression = this.parsePrimary()
+    let expression = this.parseUnary()
     while (this.isOperator("*") || this.isOperator("/")) {
       const operator = this.consume().value as BinaryOperator
-      expression = { type: "binary", operator, left: expression, right: this.parsePrimary() }
+      expression = { type: "binary", operator, left: expression, right: this.parseUnary() }
     }
     return expression
+  }
+
+  private parseUnary(): ExpressionNode {
+    if (this.isOperator("+") || this.isOperator("-")) {
+      const operator = this.consume().value as "+" | "-"
+      return { type: "unary", operator, argument: this.parseUnary() }
+    }
+    return this.parsePower()
+  }
+
+  private parsePower(): ExpressionNode {
+    const left = this.parsePrimary()
+    if (!this.isOperator("^")) return left
+    this.consume()
+    return { type: "binary", operator: "^", left, right: this.parseUnary() }
   }
 
   private parsePrimary(): ExpressionNode {
@@ -84,6 +109,14 @@ class ExpressionParser {
     }
     if (token.type === "identifier") {
       this.position += 1
+      if (this.tokens[this.position]?.value === "(") {
+        if (!functions.has(token.value.toLowerCase())) throw new Error(`Unknown function: ${token.value}`)
+        this.position += 1
+        const argument = this.parseAddSub()
+        if (this.tokens[this.position]?.value !== ")") throw new Error("Expected closing parenthesis")
+        this.position += 1
+        return { type: "call", name: token.value.toLowerCase(), argument }
+      }
       return { type: "variable", name: token.value }
     }
     if (token.value === "(") {
@@ -112,14 +145,31 @@ export function parseExpression(source: string): ExpressionNode {
 export function evaluateExpression(expression: ExpressionNode, variables: Record<string, number>): number {
   if (expression.type === "number") return expression.value
   if (expression.type === "variable") {
+    if (expression.name.toLowerCase() === "pi") return Math.PI
+    if (expression.name.toLowerCase() === "e") return Math.E
     const value = variables[expression.name]
     if (value === undefined) throw new Error(`Unknown variable: ${expression.name}`)
     return value
+  }
+  if (expression.type === "unary") {
+    const value = evaluateExpression(expression.argument, variables)
+    return expression.operator === "-" ? -value : value
+  }
+  if (expression.type === "call") {
+    const value = evaluateExpression(expression.argument, variables)
+    if (expression.name === "abs") return Math.abs(value)
+    if (expression.name === "cos") return Math.cos(value)
+    if (expression.name === "exp") return Math.exp(value)
+    if (expression.name === "log") return Math.log(value)
+    if (expression.name === "sin") return Math.sin(value)
+    if (expression.name === "sqrt") return Math.sqrt(value)
+    return Math.tan(value)
   }
   const left = evaluateExpression(expression.left, variables)
   const right = evaluateExpression(expression.right, variables)
   if (expression.operator === "+") return left + right
   if (expression.operator === "-") return left - right
   if (expression.operator === "*") return left * right
-  return left / right
+  if (expression.operator === "/") return left / right
+  return left ** right
 }

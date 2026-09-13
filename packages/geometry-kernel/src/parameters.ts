@@ -4,13 +4,32 @@ import { evaluateExpression, parseExpression, type ExpressionNode } from "./expr
 
 function evaluateNode(expression: ExpressionNode, resolve: (name: string) => number): number {
   if (expression.type === "number") return expression.value
-  if (expression.type === "variable") return resolve(expression.name)
+  if (expression.type === "variable") {
+    if (expression.name.toLowerCase() === "pi") return Math.PI
+    if (expression.name.toLowerCase() === "e") return Math.E
+    return resolve(expression.name)
+  }
+  if (expression.type === "unary") {
+    const value = evaluateNode(expression.argument, resolve)
+    return expression.operator === "-" ? -value : value
+  }
+  if (expression.type === "call") {
+    const value = evaluateNode(expression.argument, resolve)
+    if (expression.name === "abs") return Math.abs(value)
+    if (expression.name === "cos") return Math.cos(value)
+    if (expression.name === "exp") return Math.exp(value)
+    if (expression.name === "log") return Math.log(value)
+    if (expression.name === "sin") return Math.sin(value)
+    if (expression.name === "sqrt") return Math.sqrt(value)
+    return Math.tan(value)
+  }
   const left = evaluateNode(expression.left, resolve)
   const right = evaluateNode(expression.right, resolve)
   if (expression.operator === "+") return left + right
   if (expression.operator === "-") return left - right
   if (expression.operator === "*") return left * right
-  return left / right
+  if (expression.operator === "/") return left / right
+  return left ** right
 }
 
 export function evaluateParameterExpressions(parameters: Record<string, ParameterSpec>): Record<string, ParameterSpec> {

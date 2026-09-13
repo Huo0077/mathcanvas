@@ -102,6 +102,13 @@ describe("domain patches", () => {
     expect(result.document.primitives[0]).toMatchObject({ rotation: Math.PI / 4, label: "旋转椭圆" })
   })
 
+  it("rejects invalid style patch values", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [{ id: "point-1", type: "point", x: 0, y: 0 }]
+
+    expect(validatePatch(document, { op: "updatePrimitive", id: "point-1", patch: { style: { stroke: 12 as unknown as string, dash: 8 as unknown as string } } })).toEqual({ valid: false, errors: ["stroke is invalid", "dash is invalid"] })
+  })
+
   it("creates and protects a sampled curve intersection", () => {
     const document = createEmptyDocument("conics")
     document.primitives = [

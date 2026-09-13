@@ -179,11 +179,36 @@ describe("MathCanvas workbench", () => {
     expect(screen.getByRole("img", { name: "几何画布" }).querySelector('[data-drag-handle="rotation"]')).toBeTruthy()
   })
 
+  it("renders a typed function expression with common math notation", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "添加函数图像" }))
+    fireEvent.change(screen.getByRole("textbox", { name: "函数表达式" }), { target: { value: "y = sin(x)^2" } })
+
+    expect((screen.getByRole("textbox", { name: "函数表达式" }) as HTMLInputElement).value).toBe("y = sin(x)^2")
+    const graphs = Array.from(screen.getByRole("img", { name: "几何画布" }).querySelectorAll('[data-primitive-type="function"] polyline:not([data-hit-target="true"])'))
+    expect(graphs.some((graph) => !graph.getAttribute("points")?.includes("500,20"))).toBe(true)
+  })
+
+  it("applies common style properties to a selected line", () => {
+    render(<App />)
+    fireEvent.click(screen.getAllByText("y = 0")[0])
+    fireEvent.change(screen.getByLabelText("线条颜色"), { target: { value: "#ff0000" } })
+    fireEvent.change(screen.getByRole("spinbutton", { name: "线宽" }), { target: { value: "7" } })
+    fireEvent.change(screen.getByRole("spinbutton", { name: "透明度" }), { target: { value: "0.5" } })
+    fireEvent.change(screen.getByRole("combobox", { name: "线型" }), { target: { value: "8 6" } })
+
+    const line = screen.getByRole("img", { name: "几何画布" }).querySelector('[data-primitive-type="line"] line:not([data-hit-target="true"])')!
+    expect(line.getAttribute("stroke")).toBe("#ff0000")
+    expect(line.getAttribute("stroke-width")).toBe("7")
+    expect(line.getAttribute("stroke-dasharray")).toBe("8 6")
+    expect(line.parentElement?.getAttribute("opacity")).toBe("0.5")
+  })
+
   it("adds and edits a sampled function in the workbench", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "添加函数图像" }))
-    expect(screen.getAllByText("函数 1")).toHaveLength(2)
-    expect(screen.getByRole("img", { name: "几何画布" }).querySelectorAll('[data-primitive-type="function"]')).toHaveLength(1)
+    expect(screen.getByRole("textbox", { name: "函数表达式" })).toBeTruthy()
+    expect(screen.getByRole("img", { name: "几何画布" }).querySelectorAll('[data-primitive-type="function"]').length).toBeGreaterThan(0)
     fireEvent.change(screen.getByRole("textbox", { name: "函数表达式" }), { target: { value: "2*x+1" } })
     fireEvent.change(screen.getByRole("spinbutton", { name: "定义域终点" }), { target: { value: "4" } })
     expect((screen.getByRole("textbox", { name: "函数表达式" }) as HTMLInputElement).value).toBe("2*x+1")

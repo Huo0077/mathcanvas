@@ -34,4 +34,10 @@ describe("expression AST", () => {
     expect(() => evaluateExpression(parseExpression("x + 1"), {})).toThrow("Unknown variable: x")
     expect(() => parseExpression("2 +")).toThrow("Expected expression")
   })
+
+  it("evaluates function notation, powers, and unary signs", () => {
+    const expression = parseExpression("-sin(x)^2 + sqrt(4)")
+
+    expect(evaluateExpression(expression, { x: Math.PI / 2 })).toBeCloseTo(1)
+  })
 })

@@ -77,9 +77,18 @@ export function validatePatch(document: GeometryDocument, operation: DomainOpera
     if (operation.patch.samples !== undefined && (!Number.isInteger(operation.patch.samples) || operation.patch.samples < 2 || operation.patch.samples > 2048)) errors.push("function sample count is invalid")
     if (operation.patch.rotation !== undefined && !Number.isFinite(operation.patch.rotation)) errors.push("rotation must be finite")
     if (operation.patch.label !== undefined && typeof operation.patch.label !== "string") errors.push("label is invalid")
-    if (operation.patch.style?.strokeWidth !== undefined && (!Number.isFinite(operation.patch.style.strokeWidth) || operation.patch.style.strokeWidth <= 0)) errors.push("stroke width must be positive")
-    if (operation.patch.style?.opacity !== undefined && (!Number.isFinite(operation.patch.style.opacity) || operation.patch.style.opacity < 0 || operation.patch.style.opacity > 1)) errors.push("opacity must be between 0 and 1")
-    if (operation.patch.style && (primitive?.type === undefined)) errors.push("object is not editable")
+    if (operation.patch.style !== undefined) {
+      const style = operation.patch.style
+      if (!style || typeof style !== "object" || Array.isArray(style)) errors.push("style is invalid")
+      else {
+        if (style.stroke !== undefined && typeof style.stroke !== "string") errors.push("stroke is invalid")
+        if (style.fill !== undefined && typeof style.fill !== "string") errors.push("fill is invalid")
+        if (style.dash !== undefined && typeof style.dash !== "string") errors.push("dash is invalid")
+        if (style.strokeWidth !== undefined && (!Number.isFinite(style.strokeWidth) || style.strokeWidth <= 0)) errors.push("stroke width must be positive")
+        if (style.opacity !== undefined && (!Number.isFinite(style.opacity) || style.opacity < 0 || style.opacity > 1)) errors.push("opacity must be between 0 and 1")
+      }
+    }
+    if (operation.patch.style !== undefined && primitive?.type === undefined) errors.push("object is not editable")
     if (primitive?.type === "ray") {
       const nextA = operation.patch.a ?? primitive.a
       const nextB = operation.patch.b ?? primitive.b

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { sampleEllipse, sampleHyperbola, sampleParabola } from "./conics"
+import { sampleEllipse, sampleHyperbola, sampleHyperbolaBranches, sampleParabola } from "./conics"
 
 describe("conic sampling", () => {
   it("samples finite parabola, ellipse, and hyperbola points", () => {
@@ -17,5 +17,12 @@ describe("conic sampling", () => {
     expect(ellipsePoint.y).toBeCloseTo(5)
     expect(parabolaPoint.x).toBeCloseTo(1)
     expect(parabolaPoint.y).toBeCloseTo(2)
+  })
+
+  it("keeps both hyperbola branches on the rotated local axis", () => {
+    const [first, second] = sampleHyperbolaBranches({ id: "h", type: "hyperbola", center: { x: 1, y: 2 }, radiusX: 3, radiusY: 2, axis: "x", rotation: Math.PI / 4 }, [2, 2], 1)
+
+    expect(second[0].x).toBeCloseTo(2 - first[0].x)
+    expect(second[0].y).toBeCloseTo(4 - first[0].y)
   })
 })
