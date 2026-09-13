@@ -77,3 +77,31 @@ test("switches workspaces and exports SVG and CSV files", async ({ page }) => {
   await page.getByRole("button", { name: "微积分" }).click()
   await expect(page.getByText(/交点 P \(0\.00, 0\.00\)/)).toBeVisible()
 })
+
+test("shows constraint status and recovery controls", async ({ page }) => {
+  await page.goto("/")
+  const document = {
+    schemaVersion: "0.1",
+    revision: 2,
+    workspace: "calculus",
+    coordinateSystems: ["cartesian-2d"],
+    parameters: {},
+    primitives: [
+      { id: "line-a", type: "line", a: { x: -2, y: 0 }, b: { x: 2, y: 0 }, label: "基准线" },
+      { id: "line-b", type: "line", a: { x: -2, y: 1 }, b: { x: 2, y: 1 }, label: "平行线" }
+    ],
+    constraints: [{ id: "parallel-1", type: "parallel", targets: ["line-a", "line-b"] }],
+    dynamics: [],
+    annotations: [],
+    metadata: { id: "constraint-document", name: "Constraints", createdAt: "2026-09-13T00:00:00.000Z", updatedAt: "2026-09-13T00:00:00.000Z" }
+  }
+  await page.locator('input[aria-label="加载 .mgeo"]').setInputFiles({
+    name: "constraints.mgeo",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify({ format: "mgeo", formatVersion: "0.1", document }))
+  })
+
+  await expect(page.getByText("约束列表")).toBeVisible()
+  await expect(page.getByText("已满足")).toBeVisible()
+  await expect(page.getByRole("button", { name: "删除约束 parallel-1" })).toBeVisible()
+})

@@ -46,6 +46,18 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgb(61 90 254 / 3
 .selection-rect { fill: rgb(61 90 254 / 12%); stroke: var(--color-accent); stroke-dasharray: 6 4; pointer-events: none; }
 .agent-status { display: flex; gap: var(--space-2); align-items: center; font-size: 0.875rem; color: var(--color-muted); }
 .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-success); }
+.empty-state { margin: 0; color: var(--color-muted); font-size: 0.8rem; line-height: 1.5; }
+.constraint-list { display: grid; gap: var(--space-2); list-style: none; margin: 0; padding: 0; }
+.constraint-row { display: grid; gap: var(--space-1); padding: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm); }
+.constraint-row.constraint-ok { border-left: 3px solid var(--color-success); }
+.constraint-row.constraint-warning { border-left: 3px solid var(--color-warning); }
+.constraint-main { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.constraint-row p { margin: 0; color: var(--color-muted); font-size: 0.75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.constraint-status { font-size: 0.7rem; color: var(--color-success); }
+.constraint-status[data-status="需检查"], .constraint-status[data-status="无效"] { color: var(--color-warning); }
+.constraint-row button { min-height: 36px; justify-self: end; padding-inline: var(--space-2); font-size: 0.75rem; }
+.constraint-error { display: grid; gap: var(--space-1); margin-bottom: var(--space-3); padding: var(--space-2); border: 1px solid var(--color-warning); border-radius: var(--radius-sm); background: var(--color-warning-soft); color: var(--color-ink); font-size: 0.8rem; }
+.constraint-error span, .constraint-error small { color: var(--color-muted); line-height: 1.45; }
 .footer-note { grid-column: 1 / -1; padding: var(--space-2) var(--space-5); font-size: 0.75rem; color: var(--color-muted); background: var(--color-panel); border-top: 1px solid var(--color-border); }
 @media (max-width: 960px) { .workbench { grid-template-columns: 200px minmax(0, 1fr); } .panel.right { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--color-border); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 680px) { .topbar { align-items: flex-start; flex-direction: column; } .workspace-tabs { width: 100%; overflow-x: auto; } .workbench { display: block; } .panel, .panel.right { border: 0; border-bottom: 1px solid var(--color-border); } .graphics { min-height: 55vh; padding: var(--space-3); } .toolbar { padding: var(--space-3); } }

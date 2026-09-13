@@ -40,7 +40,7 @@ export function projectLineConstraint(first: LinePrimitive, second: LinePrimitiv
   }
 }
 
-function residual(first: LinePrimitive, second: LinePrimitive, type: ConstraintSpec["type"]): number {
+export function constraintResidual(first: LinePrimitive, second: LinePrimitive, type: ConstraintSpec["type"]): number {
   const firstDirection = direction(first)
   const secondDirection = direction(second)
   if (firstDirection.length < 1e-12 || secondDirection.length < 1e-12) return 0
@@ -96,7 +96,7 @@ export function solveLineConstraints(lines: Map<string, LinePrimitive>, constrai
       if (constraint.targets.length !== 2) return true
       const first = projected.get(constraint.targets[0])
       const second = projected.get(constraint.targets[1])
-      return !first || !second || residual(first, second, constraint.type) <= tolerance
+      return !first || !second || constraintResidual(first, second, constraint.type) <= tolerance
     })) return { lines: projected, converged: true }
   }
   return { lines: projected, converged: false }
