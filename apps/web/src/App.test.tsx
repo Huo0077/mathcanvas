@@ -4,6 +4,20 @@ import { describe, expect, it } from "vitest"
 import { App } from "./App"
 
 describe("MathCanvas workbench", () => {
+  it("switches workspaces without losing each workspace document", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "圆锥曲线" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    expect(screen.getAllByText("新点 A")).toHaveLength(2)
+
+    fireEvent.click(screen.getByRole("button", { name: "微积分" }))
+    expect(screen.getByText(/交点 P \(0\.00, 0\.00\)/)).toBeTruthy()
+    fireEvent.click(screen.getByRole("button", { name: "圆锥曲线" }))
+    expect(screen.getAllByText("新点 A")).toHaveLength(2)
+    expect(screen.getByRole("button", { name: "圆锥曲线" }).getAttribute("aria-pressed")).toBe("true")
+    fireEvent.click(screen.getByRole("button", { name: "微积分" }))
+  })
+
   it("shows the default intersection and updates it from the slope slider", () => {
     render(<App />)
     expect(screen.getByText(/交点 P \(0\.00, 0\.00\)/)).toBeTruthy()

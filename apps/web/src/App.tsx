@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 
-import { decodeMgeo, encodeMgeo } from "@draw/dsl"
+import { decodeMgeo, encodeMgeo, type Workspace } from "@draw/dsl"
 import { validatePatch } from "@draw/scene-graph"
 import type { Alignment } from "@draw/scene-graph"
 
@@ -10,6 +10,7 @@ import { GeometryToolbar } from "./components/GeometryToolbar"
 import { GraphicsView } from "./components/GraphicsView"
 import { PropertiesBar } from "./components/PropertiesBar"
 import { WorkspaceHeader } from "./components/WorkspaceHeader"
+import { exportCsv, exportSvg } from "./persistence/exporters"
 import { useSceneStore } from "./store"
 
 type CreationMode = "line" | "segment" | "ray" | "polyline" | "circle" | "arc" | null
@@ -32,6 +33,7 @@ export function App() {
   const apply = useSceneStore((state) => state.apply)
   const undo = useSceneStore((state) => state.undo)
   const redo = useSceneStore((state) => state.redo)
+  const switchWorkspace = useSceneStore((state) => state.switchWorkspace)
   const replace = useSceneStore((state) => state.replace)
   const operationError = useSceneStore((state) => state.error)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -42,15 +44,19 @@ export function App() {
   const slope = document.parameters.slope
   const slopeLine = useMemo(() => document.primitives.find((primitive) => primitive.id === "line-slope"), [document.primitives])
 
-  const save = () => {
-    const blob = new Blob([encodeMgeo(document)], { type: "application/json" })
+  const download = (content: string, type: string, extension: string) => {
+    const blob = new Blob([content], { type })
     const url = URL.createObjectURL(blob)
     const anchor = globalThis.document.createElement("a")
     anchor.href = url
-    anchor.download = `${document.metadata.name.replace(/\s+/g, "-")}.mgeo`
+    anchor.download = `${document.metadata.name.replace(/\s+/g, "-")}.${extension}`
     anchor.click()
     URL.revokeObjectURL(url)
   }
+
+  const save = () => download(encodeMgeo(document), "application/json", "mgeo")
+  const exportSvgFile = () => download(exportSvg(document), "image/svg+xml", "svg")
+  const exportCsvFile = () => download(exportCsv(document), "text/csv;charset=utf-8", "csv")
 
   const load = (serialized: string) => {
     try {
@@ -202,5 +208,5 @@ export function App() {
   const creationLabel = creationMode === "line" ? "直线" : creationMode === "segment" ? "线段" : creationMode === "ray" ? "射线" : creationMode === "polyline" ? "折线" : creationMode === "circle" ? "圆" : "圆弧"
   const creationHint = creationMode === "polyline" ? "点击添加顶点，双击结束" : creationMode === "line" || creationMode === "segment" || creationMode === "ray" ? (creationStep?.center ? "点击终点" : "点击起点") : creationStep?.mode === "arc" ? (creationStep.start ? "点击终点" : "点击起点") : creationStep?.center ? "点击边缘" : "点击圆心"
 
-  return <div className="app-shell"><WorkspaceHeader /><div className="workbench"><GeometryToolbar hasSelection={selectedIds.length > 0} allSelectedLocked={allSelectedLocked} creationMode={creationMode} onSelectTool={() => setCreationStep(null)} onDelete={deleteSelected} onToggleLock={toggleLock} onUndo={undo} onRedo={redo} onSave={save} onOpen={() => fileInputRef.current?.click()} onAddPoint={() => apply({ op: "addPrimitive", primitive: { id: nextPrimitiveId(document, "point"), type: "point", x: 2, y: 1, label: "新点 A" } })} onAddLine={() => startCreation("line")} onAddSegment={() => startCreation("segment")} onAddRay={() => startCreation("ray")} onAddPolyline={() => startCreation("polyline")} onAddCircle={() => startCreation("circle")} onAddArc={() => startCreation("arc")} onAddParabola={() => addDefaultPrimitive("parabola")} onAddEllipse={() => addDefaultPrimitive("ellipse")} onAddHyperbola={() => addDefaultPrimitive("hyperbola")} onAddFunction={() => addDefaultPrimitive("function")} /><AlgebraView primitives={document.primitives} selectedIds={selectedIds} onSelect={updateSelection} onToggle={(id, visible) => apply({ op: "toggleVisibility", id, visible })} /><GraphicsView document={document} selectedIds={selectedIds} creationMode={creationMode} onSelect={updateSelection} onBoxSelect={selectBox} onCanvasClick={handleCanvasCreationClick} onCanvasDoubleClick={handleCanvasDoubleClick} /><aside className="panel right"><PropertiesBar selectedPrimitive={selectedPrimitive} selectedCount={selectedIds.length} selectedGroupId={selectedGroup?.id ?? null} allSelectedVisible={allSelectedVisible} canCreateIntersection={canCreateIntersection} onCreateGroup={createGroup} onDeleteGroup={deleteGroup} onCreateIntersection={createIntersection} onAlign={alignSelection} onToggleBatchVisibility={() => apply({ op: "setPrimitivesVisible", ids: selectedIds, visible: !allSelectedVisible })} onUpdatePrimitive={(patch) => selectedId && apply({ op: "updatePrimitive", id: selectedId, patch })} value={slope?.value ?? 0.5} min={slope?.min ?? 0.15} max={slope?.max ?? 0.85} step={slope?.step ?? 0.05} onChange={(value) => apply({ op: "setParameter", id: "slope", value })} /><AgentDock /></aside><div className="footer-note">revision {document.revision} · {creationMode ? `${creationLabel}创建：${creationHint}` : slopeLine?.type === "line" ? "Scene Graph / Dependency DAG 已连接" : "等待图元"}</div></div>{(fileError || operationError) && <div role="alert" className="footer-note">{fileError ?? operationError}</div>}<input ref={fileInputRef} hidden aria-label="加载 .mgeo" type="file" accept=".mgeo,application/json" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; file.text().then(load).catch(() => setFileError("无法读取 .mgeo 文件")); event.target.value = "" }} /></div>
+  return <div className="app-shell"><WorkspaceHeader activeWorkspace={document.workspace} onWorkspaceChange={(workspace: Workspace) => { setSelectedIds([]); setCreationStep(null); switchWorkspace(workspace) }} /><div className="workbench"><GeometryToolbar hasSelection={selectedIds.length > 0} allSelectedLocked={allSelectedLocked} creationMode={creationMode} onSelectTool={() => setCreationStep(null)} onDelete={deleteSelected} onToggleLock={toggleLock} onUndo={undo} onRedo={redo} onSave={save} onOpen={() => fileInputRef.current?.click()} onExportSvg={exportSvgFile} onExportCsv={exportCsvFile} onAddPoint={() => apply({ op: "addPrimitive", primitive: { id: nextPrimitiveId(document, "point"), type: "point", x: 2, y: 1, label: "新点 A" } })} onAddLine={() => startCreation("line")} onAddSegment={() => startCreation("segment")} onAddRay={() => startCreation("ray")} onAddPolyline={() => startCreation("polyline")} onAddCircle={() => startCreation("circle")} onAddArc={() => startCreation("arc")} onAddParabola={() => addDefaultPrimitive("parabola")} onAddEllipse={() => addDefaultPrimitive("ellipse")} onAddHyperbola={() => addDefaultPrimitive("hyperbola")} onAddFunction={() => addDefaultPrimitive("function")} /><AlgebraView primitives={document.primitives} selectedIds={selectedIds} onSelect={updateSelection} onToggle={(id, visible) => apply({ op: "toggleVisibility", id, visible })} /><GraphicsView document={document} selectedIds={selectedIds} creationMode={creationMode} onSelect={updateSelection} onBoxSelect={selectBox} onCanvasClick={handleCanvasCreationClick} onCanvasDoubleClick={handleCanvasDoubleClick} /><aside className="panel right"><PropertiesBar selectedPrimitive={selectedPrimitive} selectedCount={selectedIds.length} selectedGroupId={selectedGroup?.id ?? null} allSelectedVisible={allSelectedVisible} canCreateIntersection={canCreateIntersection} onCreateGroup={createGroup} onDeleteGroup={deleteGroup} onCreateIntersection={createIntersection} onAlign={alignSelection} onToggleBatchVisibility={() => apply({ op: "setPrimitivesVisible", ids: selectedIds, visible: !allSelectedVisible })} onUpdatePrimitive={(patch) => selectedId && apply({ op: "updatePrimitive", id: selectedId, patch })} value={slope?.value ?? 0.5} min={slope?.min ?? 0.15} max={slope?.max ?? 0.85} step={slope?.step ?? 0.05} onChange={(value) => apply({ op: "setParameter", id: "slope", value })} /><AgentDock /></aside><div className="footer-note">revision {document.revision} · 工作区：{document.workspace} · {creationMode ? `${creationLabel}创建：${creationHint}` : slopeLine?.type === "line" ? "Scene Graph / Dependency DAG 已连接" : "等待图元"}</div></div>{(fileError || operationError) && <div role="alert" className="footer-note">{fileError ?? operationError}</div>}<input ref={fileInputRef} hidden aria-label="加载 .mgeo" type="file" accept=".mgeo,application/json" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; file.text().then(load).catch(() => setFileError("无法读取 .mgeo 文件")); event.target.value = "" }} /></div>
 }

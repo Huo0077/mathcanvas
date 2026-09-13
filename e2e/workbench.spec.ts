@@ -60,3 +60,20 @@ test("opens and restores an mgeo document through the file input", async ({ page
   await expect(page.getByText("恢复点").first()).toBeVisible()
   await expect(page.getByText(/revision 7/)).toBeVisible()
 })
+
+test("switches workspaces and exports SVG and CSV files", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "圆锥曲线" }).click()
+  await expect(page.getByRole("button", { name: "圆锥曲线" })).toHaveAttribute("aria-pressed", "true")
+
+  const svgDownload = page.waitForEvent("download")
+  await page.getByRole("button", { name: "导出 SVG" }).click()
+  await expect((await svgDownload).suggestedFilename()).toMatch(/\.svg$/)
+
+  const csvDownload = page.waitForEvent("download")
+  await page.getByRole("button", { name: "导出 CSV" }).click()
+  await expect((await csvDownload).suggestedFilename()).toMatch(/\.csv$/)
+
+  await page.getByRole("button", { name: "微积分" }).click()
+  await expect(page.getByText(/交点 P \(0\.00, 0\.00\)/)).toBeVisible()
+})
