@@ -85,6 +85,15 @@ export interface ConnectionPrimitive extends PrimitivePresentation {
   }
 }
 
+export interface LocusPrimitive extends PrimitivePresentation {
+  id: string
+  type: "locus"
+  sourcePointId: string
+  parameterId: string
+  domain: [number, number]
+  samples: number
+}
+
 export interface ParabolaPrimitive extends PrimitivePresentation {
   id: string
   type: "parabola"
@@ -183,6 +192,7 @@ export type PrimitiveSpec =
   | RayPrimitive
   | PolylinePrimitive
   | ConnectionPrimitive
+  | LocusPrimitive
   | ParabolaPrimitive
   | EllipsePrimitive
   | HyperbolaPrimitive

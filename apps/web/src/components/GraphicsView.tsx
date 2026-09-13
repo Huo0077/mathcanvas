@@ -1,7 +1,7 @@
 import { type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, useMemo, useRef, useState } from "react"
 import type { Coordinate, GeometryDocument, PrimitiveSpec } from "@draw/dsl"
 import { evaluateParameterExpression, sampleEllipse, sampleFunctionSegments, sampleHyperbolaBranches, sampleParabola } from "@draw/geometry-kernel"
-import { applyOperation, type DomainOperation } from "@draw/scene-graph"
+import { applyOperation, recomputeDerivedObjects, type DomainOperation } from "@draw/scene-graph"
 
 import { createDragAction, getDragHandle, rotationHandlePoint, type DragAction, type DragHandle } from "../interaction"
 import { dashFor, fillFor, opacityFor, strokeFor, strokeWidthFor } from "../primitiveStyle"
@@ -59,6 +59,21 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
     const start = pointById.get(connection.startPointId)
     const end = pointById.get(connection.endPointId)
     return start && end ? { start, end } : null
+  }
+  const locusSegments = (locus: Extract<PrimitiveSpec, { type: "locus" }>): Coordinate[][] => {
+    const source = displayPrimitives.find((primitive): primitive is Extract<PrimitiveSpec, { type: "point" }> => primitive.id === locus.sourcePointId && primitive.type === "point")
+    const parameter = previewDocument.parameters[locus.parameterId]
+    if (!source || source.binding?.kind !== "onPath" || !parameter) return []
+    const points: Coordinate[] = []
+    const samples = Math.max(2, Math.min(4096, locus.samples))
+    for (let index = 0; index < samples; index += 1) {
+      const value = locus.domain[0] + (locus.domain[1] - locus.domain[0]) * index / (samples - 1)
+      const nextParameters = { ...previewDocument.parameters, [locus.parameterId]: { ...parameter, value, expression: undefined } }
+      const nextDocument = recomputeDerivedObjects({ ...previewDocument, parameters: nextParameters }, [locus.parameterId, source.id])
+      const nextPoint = nextDocument.primitives.find((primitive): primitive is Extract<PrimitiveSpec, { type: "point" }> => primitive.id === source.id && primitive.type === "point")
+      if (nextPoint && Number.isFinite(nextPoint.x) && Number.isFinite(nextPoint.y)) points.push({ x: nextPoint.x, y: nextPoint.y })
+    }
+    return points.length > 1 ? [points] : []
   }
 
   const viewportLine = (line: Extract<PrimitiveSpec, { type: "line" }>) => {
@@ -154,6 +169,7 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
     {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "point" }> => primitive.type === "point" && primitive.visible !== false).map((point) => <g key={point.id} data-primitive-type="point" opacity={opacityFor(point)} onPointerDown={(event) => beginDrag(event, point.id)} onClick={(event) => handleObjectClick(event, point.id)}><circle data-hit-target="true" cx={toX(point.x)} cy={toY(point.y)} r="14" fill="transparent" pointerEvents="all" /><circle cx={toX(point.x)} cy={toY(point.y)} r="6" fill={fillFor(point)} stroke={strokeFor(point)} strokeWidth={strokeWidthFor(point, selectedIds.includes(point.id))} strokeDasharray={dashFor(point)} /><text x={toX(point.x) + 12} y={toY(point.y) + 5} fill="#172033" fontSize="14" fontWeight="700">{point.label ?? point.id}</text></g>)}
     {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "intersection" | "lineCircleIntersection" | "circleIntersection" | "curveIntersection" }> => ["intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection"].includes(primitive.type) && primitive.visible !== false).map((primitive) => <g key={primitive.id} data-primitive-type={primitive.type} opacity={opacityFor(primitive)} onClick={(event) => handleObjectClick(event, primitive.id)}><circle cx={toX(primitive.x)} cy={toY(primitive.y)} r="7" fill={fillFor(primitive)} stroke={strokeFor(primitive)} strokeWidth={strokeWidthFor(primitive, false)} strokeDasharray={dashFor(primitive)} /><text x={toX(primitive.x) + 12} y={toY(primitive.y) - 12} fill="#172033" fontSize="14" fontWeight="700">{primitive.label ?? "交点 P"} ({primitive.x.toFixed(2)}, {primitive.y.toFixed(2)})</text></g>)}
     {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "connection" }> => primitive.type === "connection" && primitive.visible !== false).map((connection) => { const endpoints = connectionEndpoints(connection); if (!endpoints) return null; return <g key={connection.id} data-primitive-type="connection" opacity={opacityFor(connection)} onClick={(event) => handleObjectClick(event, connection.id)}><line data-hit-target="true" x1={toX(endpoints.start.x)} y1={toY(endpoints.start.y)} x2={toX(endpoints.end.x)} y2={toY(endpoints.end.y)} stroke="transparent" strokeWidth="18" pointerEvents="stroke" /><line x1={toX(endpoints.start.x)} y1={toY(endpoints.start.y)} x2={toX(endpoints.end.x)} y2={toY(endpoints.end.y)} stroke={strokeFor(connection)} strokeWidth={strokeWidthFor(connection, selectedIds.includes(connection.id))} strokeDasharray={dashFor(connection)} /></g> })}
+    {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "locus" }> => primitive.type === "locus" && primitive.visible !== false).map((locus) => <g key={locus.id} data-primitive-type="locus" opacity={opacityFor(locus)} onClick={(event) => handleObjectClick(event, locus.id)}>{locusSegments(locus).map((points, index) => <polyline key={`${locus.id}-${index}`} points={pointsAttribute(points)} fill="none" stroke={strokeFor(locus)} strokeWidth={strokeWidthFor(locus, selectedIds.includes(locus.id))} strokeDasharray={dashFor(locus)} />)}</g>)}
     {selectionRect && <rect className="selection-rect" x={selectionRect.x} y={selectionRect.y} width={selectionRect.width} height={selectionRect.height} />}
   </svg></div></main>
 }

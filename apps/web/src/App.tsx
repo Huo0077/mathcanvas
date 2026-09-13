@@ -214,6 +214,7 @@ export function App() {
       if (primitive.type === "ellipse" || primitive.type === "hyperbola") return primitive.center.x >= bounds.minX && primitive.center.x <= bounds.maxX && primitive.center.y >= bounds.minY && primitive.center.y <= bounds.maxY
       if (primitive.type === "function") return primitive.domain[0] >= bounds.minX && primitive.domain[1] <= bounds.maxX
       if (primitive.type === "connection") return false
+      if (primitive.type === "locus") return false
       return primitive.x >= bounds.minX && primitive.x <= bounds.maxX && primitive.y >= bounds.minY && primitive.y <= bounds.maxY
     }).map((primitive) => primitive.id)
     setSelectedIds(contained)

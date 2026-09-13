@@ -96,6 +96,21 @@ describe("MathCanvas workbench", () => {
     expect(screen.getByRole("img", { name: "几何画布" }).querySelector('[data-primitive-type="connection"]')).toBeTruthy()
   })
 
+  it("binds a selected point to a path from the property bar", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    const pointRows = Array.from(globalThis.document.querySelectorAll(".object-row")).filter((row) => /新点 [A-Z]/.test(row.textContent ?? ""))
+    fireEvent.click(pointRows.at(-1)!)
+    const pathSelect = screen.getByRole("combobox", { name: "点路径绑定" }) as HTMLSelectElement
+    const pathOption = Array.from(pathSelect.options).find((option) => option.value)
+    expect(pathOption).toBeTruthy()
+    fireEvent.change(pathSelect, { target: { value: pathOption!.value } })
+
+    expect(screen.getByRole("spinbutton", { name: "路径参数" })).toBeTruthy()
+    fireEvent.click(screen.getByRole("button", { name: "记录轨迹" }))
+    expect(screen.getByRole("img", { name: "几何画布" }).querySelector('[data-primitive-type="locus"]')).toBeTruthy()
+  })
+
   it("creates and edits a circle through the canvas and properties", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "添加圆" }))

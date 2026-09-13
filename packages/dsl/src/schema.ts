@@ -1,7 +1,7 @@
 import type { GeometryDocument, PrimitiveSpec, ValidationResult } from "./types"
 
 const workspaces = new Set(["calculus", "conics", "cad", "geometry3d"])
-const primitiveTypes = new Set(["point", "line", "segment", "ray", "polyline", "connection", "parabola", "ellipse", "hyperbola", "function", "circle", "arc", "intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection"])
+const primitiveTypes = new Set(["point", "line", "segment", "ray", "polyline", "connection", "locus", "parabola", "ellipse", "hyperbola", "function", "circle", "arc", "intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection"])
 const sampledTypes = new Set(["line", "segment", "ray", "polyline", "circle", "arc", "parabola", "ellipse", "hyperbola", "function"])
 
 type RecordValue = Record<string, unknown>
@@ -72,6 +72,9 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>): string[]
   }
   if (type === "connection") {
     if (!["segment", "line", "ray", "polyline", "parabola"].includes(String(value.kind)) || referenceType(byId, value.startPointId) !== "point" || referenceType(byId, value.endPointId) !== "point" || value.startPointId === value.endPointId) errors.push("connection references invalid points")
+  }
+  if (type === "locus") {
+    if (referenceType(byId, value.sourcePointId) !== "point" || typeof value.parameterId !== "string" || !Array.isArray(value.domain) || value.domain.length !== 2 || !value.domain.every(isFiniteNumber) || value.domain[0] >= value.domain[1] || !isFiniteNumber(value.samples) || !Number.isInteger(value.samples) || value.samples < 2 || value.samples > 4096) errors.push("locus geometry is invalid")
   }
   if (type === "parabola" && (!isFiniteCoordinate(value.vertex) || !isFiniteNumber(value.focalParameter) || value.focalParameter === 0 || !["x", "y"].includes(String(value.axis)) || (value.rotation !== undefined && !isFiniteNumber(value.rotation)))) errors.push("parabola geometry is invalid")
   if (type === "ellipse" || type === "hyperbola") {

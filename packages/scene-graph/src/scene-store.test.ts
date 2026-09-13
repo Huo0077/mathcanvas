@@ -52,6 +52,22 @@ describe("scene graph operations", () => {
     expect(recomputeDerivedObjects(document, ["slope"]).primitives.find((primitive) => primitive.id === "unrelated")).toEqual(document.primitives[3])
   })
 
+  it("recomputes a point bound to a circle path", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [
+      { id: "circle-1", type: "circle", center: { x: 1, y: 2 }, radius: 3 },
+      { id: "point-1", type: "point", x: 0, y: 0, binding: { kind: "onPath", pathId: "circle-1", parameter: 0.25 } }
+    ]
+
+    const recomputed = recomputeDerivedObjects(document)
+    const point = recomputed.primitives.find((primitive) => primitive.id === "point-1")
+    expect(point?.type).toBe("point")
+    if (point?.type === "point") {
+      expect(point.x).toBeCloseTo(1)
+      expect(point.y).toBeCloseTo(5)
+    }
+  })
+
   it("rejects an invalid constraint without changing the document", () => {
     const document = createEmptyDocument("calculus")
     const result = commitPatch(document, { op: "addConstraint", constraint: { id: "parallel-1", type: "parallel", targets: ["missing-a", "missing-b"] } })

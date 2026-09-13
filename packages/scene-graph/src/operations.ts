@@ -1,5 +1,5 @@
-import type { ConstraintSpec, GeometryDocument, GroupSpec, PrimitiveSpec } from "@draw/dsl"
-import { evaluateLineParameters, evaluateParameterExpressions, intersectCirclesDetailed, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, solveLineConstraints, type IntersectionResult, type SampledPrimitive } from "@draw/geometry-kernel"
+import type { ConstraintSpec, Coordinate, GeometryDocument, GroupSpec, PointBinding, PrimitiveSpec } from "@draw/dsl"
+import { evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, intersectCirclesDetailed, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, solveLineConstraints, type IntersectionResult, type SampledPrimitive } from "@draw/geometry-kernel"
 
 export type DomainOperation =
   | { op: "addPrimitive"; primitive: PrimitiveSpec }
@@ -23,6 +23,7 @@ export type Alignment = "left" | "right" | "top" | "bottom" | "horizontalCenter"
 export interface PrimitiveUpdatePatch {
   x?: number
   y?: number
+  binding?: PointBinding
   a?: { x: number; y: number }
   b?: { x: number; y: number }
   center?: { x: number; y: number }
@@ -99,12 +100,51 @@ function translateFunction(primitive: Extract<PrimitiveSpec, { type: "function" 
 }
 
 function primitiveDependencies(primitive: PrimitiveSpec): string[] {
+  if (primitive.type === "point" && primitive.binding) {
+    if (primitive.binding.kind === "onPath") return [primitive.binding.pathId, ...(primitive.binding.parameterId ? [primitive.binding.parameterId] : [])]
+    if (primitive.binding.kind === "derived") return [primitive.binding.sourceId]
+  }
   if (primitive.type === "line") return primitive.slopeParameter ? [primitive.slopeParameter] : []
   if (primitive.type === "intersection") return [primitive.lineA, primitive.lineB]
   if (primitive.type === "lineCircleIntersection") return [primitive.lineId, primitive.circleId]
   if (primitive.type === "circleIntersection") return [primitive.circleA, primitive.circleB]
   if (primitive.type === "curveIntersection") return [primitive.objectA, primitive.objectB]
   return []
+}
+
+function resolveBoundPoint(binding: PointBinding, primitives: Map<string, PrimitiveSpec>, parameters: GeometryDocument["parameters"]): Coordinate | null {
+  if (binding.kind !== "onPath") return null
+  const path = primitives.get(binding.pathId)
+  const parameter = binding.parameterId ? parameters[binding.parameterId]?.value : binding.parameter
+  if (!path || parameter === undefined || !Number.isFinite(parameter)) return null
+  const t = Math.min(1, Math.max(0, parameter))
+  if (path.type === "line" || path.type === "segment" || path.type === "ray") return { x: path.a.x + (path.b.x - path.a.x) * t, y: path.a.y + (path.b.y - path.a.y) * t }
+  if (path.type === "circle") {
+    const angle = t * Math.PI * 2
+    return { x: path.center.x + path.radius * Math.cos(angle), y: path.center.y + path.radius * Math.sin(angle) }
+  }
+  if (path.type === "arc") {
+    const angle = path.startAngle + (path.endAngle - path.startAngle) * t
+    return { x: path.center.x + path.radius * Math.cos(angle), y: path.center.y + path.radius * Math.sin(angle) }
+  }
+  if (path.type === "polyline") {
+    const lengths = path.points.slice(1).map((point, index) => Math.hypot(point.x - path.points[index].x, point.y - path.points[index].y))
+    const total = lengths.reduce((sum, length) => sum + length, 0)
+    if (!total) return null
+    let distance = t * total
+    for (let index = 0; index < lengths.length; index += 1) {
+      if (distance <= lengths[index] || index === lengths.length - 1) {
+        const ratio = lengths[index] ? distance / lengths[index] : 0
+        return { x: path.points[index].x + (path.points[index + 1].x - path.points[index].x) * ratio, y: path.points[index].y + (path.points[index + 1].y - path.points[index].y) * ratio }
+      }
+      distance -= lengths[index]
+    }
+  }
+  if (path.type === "function") {
+    const x = path.domain[0] + (path.domain[1] - path.domain[0]) * t
+    try { return { x, y: evaluateParameterExpression(path.expression, { x, ...Object.fromEntries(Object.entries(parameters).map(([id, spec]) => [id, spec.value])) }) } } catch { return null }
+  }
+  return null
 }
 
 function isSampledPrimitive(primitive: PrimitiveSpec | undefined): primitive is SampledPrimitive {
@@ -193,6 +233,10 @@ export function recomputeDerivedObjects(document: GeometryDocument, changedIds?:
   const primitiveMap = new Map(projectedPrimitives.map((primitive) => [primitive.id, primitive]))
   const primitives = projectedPrimitives.map((primitive) => {
     if (!affected.has(primitive.id)) return primitive
+    if (primitive.type === "point" && primitive.binding) {
+      const point = resolveBoundPoint(primitive.binding, primitiveMap, parameters)
+      return point ? { ...primitive, x: point.x, y: point.y } : primitive
+    }
     if (primitive.type === "line") return lines.get(primitive.id) ?? primitive
     if (primitive.type === "curveIntersection") {
       const first = primitiveMap.get(primitive.objectA)
@@ -229,6 +273,7 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
     if (primitive.type === "point") {
       if (operation.patch.x !== undefined) primitive.x = operation.patch.x
       if (operation.patch.y !== undefined) primitive.y = operation.patch.y
+      if (operation.patch.binding !== undefined) primitive.binding = operation.patch.binding
     }
     if (primitive.type === "line" || primitive.type === "segment" || primitive.type === "ray") {
       if (operation.patch.a) primitive.a = { ...primitive.a, ...operation.patch.a }

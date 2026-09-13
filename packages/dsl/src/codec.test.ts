@@ -38,6 +38,18 @@ describe("Geometry DSL codec", () => {
     expect(validateDocument(document)).toEqual({ valid: false, errors: ["connection references invalid points"] })
   })
 
+  it("round-trips a locus primitive", () => {
+    const document = createEmptyDocument("calculus")
+    document.parameters = { t: { id: "t", value: 0.5, min: 0, max: 1, step: 0.01 } }
+    document.primitives = [
+      { id: "point-1", type: "point", x: 1, y: 0, binding: { kind: "onPath", pathId: "circle-1", parameterId: "t", parameter: 0.5 } },
+      { id: "circle-1", type: "circle", center: { x: 0, y: 0 }, radius: 2 },
+      { id: "locus-1", type: "locus", sourcePointId: "point-1", parameterId: "t", domain: [0, 1], samples: 32 }
+    ]
+
+    expect(decodeMgeo(encodeMgeo(document)).primitives).toEqual(document.primitives)
+  })
+
   it("round-trips persistent primitive groups", () => {
     const document = createEmptyDocument("calculus")
     document.primitives = [

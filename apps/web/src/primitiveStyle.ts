@@ -7,6 +7,7 @@ const defaultStrokes: Record<PrimitiveSpec["type"], string> = {
   ray: "#7c3aed",
   polyline: "#b45309",
   connection: "#2563eb",
+  locus: "#7c3aed",
   parabola: "#db2777",
   ellipse: "#0891b2",
   hyperbola: "#9333ea",
