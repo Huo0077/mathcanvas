@@ -30,11 +30,17 @@ export interface ParameterSpec {
   label?: string
 }
 
+export type PointBinding =
+  | { kind: "free" }
+  | { kind: "onPath"; pathId: string; parameterId?: string; parameter: number }
+  | { kind: "derived"; sourceId: string; feature: string }
+
 export interface PointPrimitive extends PrimitivePresentation {
   id: string
   type: "point"
   x: number
   y: number
+  binding?: PointBinding
 }
 
 export interface LinePrimitive extends PrimitivePresentation {
@@ -63,6 +69,20 @@ export interface PolylinePrimitive extends PrimitivePresentation {
   id: string
   type: "polyline"
   points: Coordinate[]
+}
+
+export interface ConnectionPrimitive extends PrimitivePresentation {
+  id: string
+  type: "connection"
+  kind: "segment" | "line" | "ray" | "polyline" | "parabola"
+  startPointId: string
+  endPointId: string
+  control?: {
+    vertex?: Coordinate
+    axis?: "x" | "y"
+    focalParameter?: number
+    thirdPointId?: string
+  }
 }
 
 export interface ParabolaPrimitive extends PrimitivePresentation {
@@ -162,6 +182,7 @@ export type PrimitiveSpec =
   | SegmentPrimitive
   | RayPrimitive
   | PolylinePrimitive
+  | ConnectionPrimitive
   | ParabolaPrimitive
   | EllipsePrimitive
   | HyperbolaPrimitive

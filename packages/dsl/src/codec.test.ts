@@ -20,6 +20,24 @@ describe("Geometry DSL codec", () => {
     expect(decodeMgeo(encodeMgeo(document)).primitives[0]).toEqual(document.primitives[0])
   })
 
+  it("round-trips a point-referenced connection", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [
+      { id: "point-a", type: "point", x: 0, y: 0, label: "A" },
+      { id: "point-b", type: "point", x: 3, y: 2, label: "B" },
+      { id: "connection-1", type: "connection", kind: "segment", startPointId: "point-a", endPointId: "point-b" }
+    ]
+
+    expect(decodeMgeo(encodeMgeo(document)).primitives).toEqual(document.primitives)
+  })
+
+  it("rejects connections that do not reference two points", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [{ id: "connection-1", type: "connection", kind: "segment", startPointId: "missing-a", endPointId: "missing-b" }]
+
+    expect(validateDocument(document)).toEqual({ valid: false, errors: ["connection references invalid points"] })
+  })
+
   it("round-trips persistent primitive groups", () => {
     const document = createEmptyDocument("calculus")
     document.primitives = [

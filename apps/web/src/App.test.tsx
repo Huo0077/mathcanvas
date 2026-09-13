@@ -82,6 +82,20 @@ describe("MathCanvas workbench", () => {
     useSceneStore.getState().replace(previousDocument)
   })
 
+  it("connects two selected points with a live segment reference", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    const pointRows = Array.from(globalThis.document.querySelectorAll(".object-row")).filter((row) => /新点 [A-Z]/.test(row.textContent ?? ""))
+    const [first, second] = pointRows.slice(-2)
+    fireEvent.click(first)
+    fireEvent.click(second, { shiftKey: true })
+
+    fireEvent.click(screen.getByRole("button", { name: "连接选中点" }))
+
+    expect(screen.getByRole("img", { name: "几何画布" }).querySelector('[data-primitive-type="connection"]')).toBeTruthy()
+  })
+
   it("creates and edits a circle through the canvas and properties", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "添加圆" }))

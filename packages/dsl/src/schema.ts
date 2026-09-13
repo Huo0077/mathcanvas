@@ -1,7 +1,7 @@
 import type { GeometryDocument, PrimitiveSpec, ValidationResult } from "./types"
 
 const workspaces = new Set(["calculus", "conics", "cad", "geometry3d"])
-const primitiveTypes = new Set(["point", "line", "segment", "ray", "polyline", "parabola", "ellipse", "hyperbola", "function", "circle", "arc", "intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection"])
+const primitiveTypes = new Set(["point", "line", "segment", "ray", "polyline", "connection", "parabola", "ellipse", "hyperbola", "function", "circle", "arc", "intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection"])
 const sampledTypes = new Set(["line", "segment", "ray", "polyline", "circle", "arc", "parabola", "ellipse", "hyperbola", "function"])
 
 type RecordValue = Record<string, unknown>
@@ -49,6 +49,11 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>): string[]
   if (!type || !primitiveTypes.has(type)) return [`invalid primitive type: ${String(value.type)}`]
   validatePresentation(value, errors)
   if (type === "point" && (!isFiniteNumber(value.x) || !isFiniteNumber(value.y))) errors.push("point coordinates must be finite")
+  if (type === "point" && value.binding !== undefined) {
+    if (!isRecord(value.binding) || !["free", "onPath", "derived"].includes(String(value.binding.kind))) errors.push("point binding is invalid")
+    else if (value.binding.kind === "onPath" && (typeof value.binding.pathId !== "string" || !isFiniteNumber(value.binding.parameter))) errors.push("point path binding is invalid")
+    else if (value.binding.kind === "derived" && (typeof value.binding.sourceId !== "string" || typeof value.binding.feature !== "string")) errors.push("point derived binding is invalid")
+  }
   if (type === "line" || type === "segment" || type === "ray") {
     if (!isFiniteCoordinate(value.a) || !isFiniteCoordinate(value.b)) errors.push(`${type} endpoints must be finite`)
     else if ((type === "segment" || type === "ray") && value.a.x === value.b.x && value.a.y === value.b.y) errors.push(type === "segment" ? "segment endpoints must differ" : "ray direction must differ")
@@ -64,6 +69,9 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>): string[]
         if (isFiniteCoordinate(previous) && isFiniteCoordinate(current) && previous.x === current.x && previous.y === current.y) errors.push("polyline consecutive points must differ")
       }
     }
+  }
+  if (type === "connection") {
+    if (!["segment", "line", "ray", "polyline", "parabola"].includes(String(value.kind)) || referenceType(byId, value.startPointId) !== "point" || referenceType(byId, value.endPointId) !== "point" || value.startPointId === value.endPointId) errors.push("connection references invalid points")
   }
   if (type === "parabola" && (!isFiniteCoordinate(value.vertex) || !isFiniteNumber(value.focalParameter) || value.focalParameter === 0 || !["x", "y"].includes(String(value.axis)) || (value.rotation !== undefined && !isFiniteNumber(value.rotation)))) errors.push("parabola geometry is invalid")
   if (type === "ellipse" || type === "hyperbola") {
