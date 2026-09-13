@@ -154,12 +154,18 @@ export function recomputeDerivedObjects(document: GeometryDocument, changedIds?:
   const activeLineIds = changedIds === undefined
     ? undefined
     : new Set([...affected].filter((id) => projectedLines.has(id)))
-  const solved = solveLineConstraints(projectedLines, evaluatedDocument.constraints, undefined, undefined, activeLineIds)
+  const activeConstraintIds = changedIds === undefined
+    ? undefined
+    : new Set(evaluatedDocument.constraints
+      .filter((constraint) => constraint.targets.length === 2 && constraint.targets.every((target) => affected.has(target)))
+      .map((constraint) => constraint.id))
+  const solved = solveLineConstraints(projectedLines, evaluatedDocument.constraints, undefined, undefined, changedIds === undefined ? undefined : activeLineIds, activeConstraintIds)
   if (!solved.converged) throw new Error("constraint solving failed to converge")
   const lines = solved.lines
+  const primitiveIndexById = new Map(projectedPrimitives.map((primitive, index) => [primitive.id, index]))
   for (const [id, projected] of lines) {
-    const primitiveIndex = projectedPrimitives.findIndex((primitive) => primitive.id === id)
-    if (primitiveIndex >= 0) projectedPrimitives[primitiveIndex] = projected
+    const primitiveIndex = primitiveIndexById.get(id)
+    if (primitiveIndex !== undefined) projectedPrimitives[primitiveIndex] = projected
   }
   const circles = new Map(
     projectedPrimitives

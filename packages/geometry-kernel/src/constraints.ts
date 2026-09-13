@@ -55,19 +55,24 @@ function residual(first: LinePrimitive, second: LinePrimitive, type: ConstraintS
   return Math.max(directionError, offsetError)
 }
 
-function activeConstraints(constraints: ConstraintSpec[], activeLineIds?: ReadonlySet<string>): ConstraintSpec[] {
+function activeConstraints(constraints: ConstraintSpec[], activeLineIds?: ReadonlySet<string>, activeConstraintIds?: ReadonlySet<string>): ConstraintSpec[] {
+  if (activeConstraintIds !== undefined) return constraints.filter((constraint) => activeConstraintIds.has(constraint.id))
   if (activeLineIds === undefined) return constraints
   const neighbors = new Map<string, string[]>()
   for (const constraint of constraints) {
     if (constraint.targets.length !== 2) continue
     const [first, second] = constraint.targets
-    neighbors.set(first, [...(neighbors.get(first) ?? []), second])
-    neighbors.set(second, [...(neighbors.get(second) ?? []), first])
+    const firstNeighbors = neighbors.get(first)
+    if (firstNeighbors) firstNeighbors.push(second)
+    else neighbors.set(first, [second])
+    const secondNeighbors = neighbors.get(second)
+    if (secondNeighbors) secondNeighbors.push(first)
+    else neighbors.set(second, [first])
   }
   const component = new Set<string>()
   const queue = [...activeLineIds]
-  while (queue.length) {
-    const lineId = queue.shift()!
+  for (let index = 0; index < queue.length; index += 1) {
+    const lineId = queue[index]
     if (component.has(lineId)) continue
     component.add(lineId)
     queue.push(...(neighbors.get(lineId) ?? []))
@@ -75,9 +80,9 @@ function activeConstraints(constraints: ConstraintSpec[], activeLineIds?: Readon
   return constraints.filter((constraint) => constraint.targets.length === 2 && constraint.targets.every((target) => component.has(target)))
 }
 
-export function solveLineConstraints(lines: Map<string, LinePrimitive>, constraints: ConstraintSpec[], maxIterations?: number, tolerance = 1e-8, activeLineIds?: ReadonlySet<string>): ConstraintSolveResult {
+export function solveLineConstraints(lines: Map<string, LinePrimitive>, constraints: ConstraintSpec[], maxIterations?: number, tolerance = 1e-8, activeLineIds?: ReadonlySet<string>, activeConstraintIds?: ReadonlySet<string>): ConstraintSolveResult {
   const projected = new Map(lines)
-  const selectedConstraints = activeConstraints(constraints, activeLineIds)
+  const selectedConstraints = activeConstraints(constraints, activeLineIds, activeConstraintIds)
   const iterationLimit = maxIterations ?? Math.max(12, selectedConstraints.length + 1)
   for (let iteration = 0; iteration < iterationLimit; iteration += 1) {
     for (const constraint of selectedConstraints) {

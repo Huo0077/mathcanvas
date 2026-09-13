@@ -247,4 +247,35 @@ describe("scene graph operations", () => {
     expect(recomputed.primitives.find((primitive) => primitive.id === "untouched-11")).toBe(untouched)
     expect(recomputed.primitives.find((primitive) => primitive.id === "active-11")).not.toBe(activeLines[11])
   })
+
+  it.each([1000, 5000, 10000])("keeps %s constrained lines within the incremental budget", (lineCount) => {
+    const document = createEmptyDocument("calculus")
+    document.parameters.slope = { id: "slope", value: 1 }
+    document.primitives = Array.from({ length: lineCount }, (_, index) => ({
+      id: `line-${index}`,
+      type: "line" as const,
+      a: { x: 0, y: index },
+      b: { x: 2, y: index + (index === 0 ? 2 : 1) },
+      ...(index === 0 ? { slopeParameter: "slope" } : {})
+    }))
+    const componentSize = 10
+    document.constraints = Array.from({ length: (lineCount / componentSize) * (componentSize - 1) }, (_, index) => {
+      const componentIndex = Math.floor(index / (componentSize - 1))
+      const lineIndex = componentIndex * componentSize + index % (componentSize - 1)
+      return {
+        id: `constraint-${index}`,
+        type: "parallel" as const,
+        targets: [`line-${lineIndex}`, `line-${lineIndex + 1}`]
+      }
+    })
+    const untouched = document.primitives.at(-1)
+
+    const startedAt = performance.now()
+    const recomputed = recomputeDerivedObjects(document, ["slope"])
+    const elapsed = performance.now() - startedAt
+
+    expect(elapsed).toBeLessThan(1000)
+    expect(recomputed.primitives.find((primitive) => primitive.id === "line-1")).not.toBe(document.primitives[1])
+    expect(recomputed.primitives.at(-1)).toBe(untouched)
+  })
 })
