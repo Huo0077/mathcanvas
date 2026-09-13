@@ -1,11 +1,24 @@
 import type { Workspace } from "@draw/dsl"
 
 const workspaceTabs: { value: Workspace; label: string }[] = [
-  { value: "cad", label: "解析几何" },
+  { value: "cad", label: "工程制图" },
   { value: "conics", label: "圆锥曲线" },
   { value: "calculus", label: "微积分" },
-  { value: "geometry3d", label: "三维几何" }
+  { value: "geometry3d", label: "立体几何" }
 ]
+
+function HeaderIcon({ name }: { name: "grid" | "curve" | "integral" | "cube" | "search" | "settings" | "user" }) {
+  const paths = {
+    grid: <><rect x="4" y="4" width="6" height="6" rx="1" /><rect x="14" y="4" width="6" height="6" rx="1" /><rect x="4" y="14" width="6" height="6" rx="1" /><rect x="14" y="14" width="6" height="6" rx="1" /></>,
+    curve: <><path d="M4 17c3-8 6-10 9-5s5 4 7-5" /><path d="M4 20h16" /></>,
+    integral: <path d="M16 4c-4 0-3 4-3 8s1 8-3 8M10 4h8M7 20h8" />,
+    cube: <><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z" /><path d="M4.5 7.8 12 12l7.5-4.2M12 12v9" /></>,
+    search: <><circle cx="10.8" cy="10.8" r="6.3" /><path d="m16 16 4 4" /></>,
+    settings: <><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z" /><path d="m19.4 15 .1.1a2 2 0 0 1-2.8 2.8l-.1-.1a2 2 0 0 0-3.4 1.4v.2a2 2 0 0 1-4 0v-.2a2 2 0 0 0-3.4-1.4l-.1.1A2 2 0 0 1 3 15.1l.1-.1A2 2 0 0 0 1.7 11.6h-.2a2 2 0 0 1 0-4h.2A2 2 0 0 0 3.1 4.2L3 4.1A2 2 0 0 1 5.8 1.3l.1.1a2 2 0 0 0 3.4-1.4v-.2a2 2 0 0 1 4 0V0a2 2 0 0 0 3.4 1.4l.1-.1A2 2 0 0 1 19.6 4l-.1.1a2 2 0 0 0 1.4 3.4h.2a2 2 0 0 1 0 4h-.2a2 2 0 0 0-1.5 3.5Z" transform="translate(0 3) scale(.72)" /></>,
+    user: <><circle cx="12" cy="8" r="3.3" /><path d="M5.5 20c.7-3.5 2.8-5.2 6.5-5.2s5.8 1.7 6.5 5.2" /></>
+  }
+  return <svg className="ui-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>
+}
 
 interface WorkspaceHeaderProps {
   activeWorkspace: Workspace
@@ -13,5 +26,12 @@ interface WorkspaceHeaderProps {
 }
 
 export function WorkspaceHeader({ activeWorkspace, onWorkspaceChange }: WorkspaceHeaderProps) {
-  return <header className="topbar"><div className="brand"><span className="brand-mark" aria-hidden="true">∑</span><span>MathCanvas</span></div><nav className="workspace-tabs" aria-label="工作区">{workspaceTabs.map((workspace) => <button key={workspace.value} type="button" aria-pressed={activeWorkspace === workspace.value} data-active={activeWorkspace === workspace.value} onClick={() => onWorkspaceChange(workspace.value)}>{workspace.label}</button>)}</nav></header>
+  return <header className="topbar">
+    <div className="topbar-leading">
+      <div className="brand"><span className="brand-mark" aria-hidden="true">∑</span><span>MathCanvas</span></div>
+      <div className="model-status" aria-label="模型状态：最佳"><span className="health-dot" aria-hidden="true" /><span><small>模型状态</small><strong>最佳</strong></span></div>
+    </div>
+    <nav className="workspace-tabs" aria-label="工作区">{workspaceTabs.map((workspace, index) => <button key={workspace.value} type="button" aria-pressed={activeWorkspace === workspace.value} data-active={activeWorkspace === workspace.value} onClick={() => onWorkspaceChange(workspace.value)}><HeaderIcon name={["grid", "curve", "integral", "cube"][index] as "grid" | "curve" | "integral" | "cube"} /><span>{workspace.label}</span></button>)}</nav>
+    <div className="topbar-actions"><label className="search-box"><HeaderIcon name="search" /><input aria-label="搜索" placeholder="搜索" /></label><button className="topbar-icon" type="button" aria-label="设置"><HeaderIcon name="settings" /></button><button className="topbar-icon profile-button" type="button" aria-label="用户中心"><HeaderIcon name="user" /></button></div>
+  </header>
 }

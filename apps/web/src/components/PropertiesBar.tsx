@@ -267,9 +267,10 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
   })() : null
 
   return <section className="panel-section properties" aria-label="属性检查器">
-    <h2 className="panel-title">属性检查器</h2>
+    <div className="inspector-heading"><div><span className="panel-kicker">选中对象</span><h2 className="panel-title">属性面板</h2></div><span className="inspector-indicator" aria-hidden="true" /></div>
+    <div className="inspector-tabs" role="tablist" aria-label="属性面板标签"><button type="button" role="tab" aria-selected="true" data-active="true">属性</button><button type="button" role="tab" aria-selected="false">约束与智能体</button></div>
     <div className="animation-controls" aria-label="动态控制">
-      <span className="properties-label">参数动态演变</span>
+      <span className="properties-label"><strong>动画演示</strong><small>参数动态演变</small></span>
       <div className="property-actions">
         <button type="button" aria-label={animationPlaying ? "暂停动画" : "播放动画"} onClick={toggleAnimation}>{animationPlaying ? "暂停" : "播放"}</button>
         <button type="button" aria-label="停止动画" onClick={stopAnimation} disabled={!animationPlaying}>停止</button>
