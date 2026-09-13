@@ -55,7 +55,7 @@ describe("domain patches", () => {
     document.primitives = [{ id: "point-1", type: "point", x: 1, y: 2, locked: true }]
 
     expect(validatePatch(document, { op: "deleteObject", id: "point-1" })).toEqual({ valid: false, errors: ["object is locked"] })
-    expect(validatePatch(document, { op: "updatePrimitive", id: "point-1", patch: { center: { x: 2, y: 3 } } })).toEqual({ valid: false, errors: ["object is not editable", "object is locked"] })
+    expect(validatePatch(document, { op: "updatePrimitive", id: "point-1", patch: { center: { x: 2, y: 3 } } })).toEqual({ valid: false, errors: ["object is locked", "only circles and conics support center"] })
   })
 
   it("validates and edits segment endpoints", () => {
@@ -91,6 +91,15 @@ describe("domain patches", () => {
     expect(parabola.document.primitives[0]).toMatchObject({ focalParameter: 3, vertex: { x: 1, y: 2 } })
     expect(functionResult.document.primitives[1]).toMatchObject({ expression: "2*x+1", domain: [-2, 6] })
     expect(validatePatch(document, { op: "updatePrimitive", id: "function-1", patch: { expression: "x+" } })).toEqual({ valid: false, errors: ["invalid function expression"] })
+  })
+
+  it("accepts rotation and label edits for conics", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [{ id: "ellipse-1", type: "ellipse", center: { x: 0, y: 0 }, radiusX: 4, radiusY: 2 }]
+
+    const result = commitPatch(document, { op: "updatePrimitive", id: "ellipse-1", patch: { rotation: Math.PI / 4, label: "旋转椭圆" } })
+
+    expect(result.document.primitives[0]).toMatchObject({ rotation: Math.PI / 4, label: "旋转椭圆" })
   })
 
   it("creates and protects a sampled curve intersection", () => {
@@ -143,5 +152,37 @@ describe("domain patches", () => {
     expect(lockedDependent.valid ? [] : lockedDependent.errors).toContain("alignment would move locked constrained object")
     expect(singleObject.valid).toBe(false)
     expect(singleObject.valid ? [] : singleObject.errors).toContain("alignment requires multiple objects")
+  })
+
+  it("rejects malformed primitive patches without throwing", () => {
+    const document = createEmptyDocument("calculus")
+    const malformedOperations = [
+      { op: "addPrimitive", primitive: { id: "point-1", type: "point" } },
+      { op: "addPrimitive", primitive: { id: "segment-1", type: "segment" } }
+    ] as never[]
+
+    for (const operation of malformedOperations) {
+      expect(() => validatePatch(document, operation)).not.toThrow()
+      expect(validatePatch(document, operation).valid).toBe(false)
+    }
+  })
+
+  it("translates a function through one domain operation", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [{ id: "function-1", type: "function", expression: "x*x", domain: [-2, 2] }]
+
+    const result = commitPatch(document, { op: "translatePrimitive", id: "function-1", delta: { x: 2, y: 1 } })
+
+    expect(result.changed).toBe(true)
+    expect(result.document.primitives[0]).toMatchObject({ expression: "((x-2)*(x-2))+1", domain: [0, 4] })
+  })
+
+  it("translates a ray body while preserving its direction", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [{ id: "ray-1", type: "ray", a: { x: 1, y: 2 }, b: { x: 3, y: 5 } }]
+
+    const result = commitPatch(document, { op: "translatePrimitive", id: "ray-1", delta: { x: -2, y: 4 } })
+
+    expect(result.document.primitives[0]).toMatchObject({ a: { x: -1, y: 6 }, b: { x: 1, y: 9 } })
   })
 })

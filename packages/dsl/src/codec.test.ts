@@ -74,4 +74,18 @@ describe("Geometry DSL codec", () => {
       expect(result.errors).toContain("polyline consecutive points must differ")
     }
   })
+
+  it("rejects malformed primitive fields without throwing", () => {
+    const base = createEmptyDocument("calculus")
+    const malformedDocuments = [
+      { ...base, primitives: [{ id: "point-1", type: "point" }] },
+      { ...base, primitives: [{ id: "segment-1", type: "segment" }] },
+      { ...base, primitives: [{ id: "circle-1", type: "circle", radius: 1 }] }
+    ]
+
+    for (const document of malformedDocuments) {
+      expect(() => validateDocument(document)).not.toThrow()
+      expect(validateDocument(document).valid).toBe(false)
+    }
+  })
 })

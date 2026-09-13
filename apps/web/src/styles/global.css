@@ -29,7 +29,11 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgb(61 90 254 / 3
 .icon-button { width: 44px; padding: 0; }
 .graphics { min-width: 0; min-height: 0; padding: var(--space-4); display: grid; place-items: center; }
 .canvas-card { width: min(100%, 900px); background: var(--color-panel); border: 1px solid var(--color-border); border-radius: var(--radius-md); box-shadow: var(--shadow-panel); padding: var(--space-3); }
-.canvas-card svg { display: block; width: 100%; height: auto; border-radius: var(--radius-sm); background: #fbfcff; }
+.canvas-card svg { display: block; width: 100%; height: auto; border-radius: var(--radius-sm); background: #fbfcff; touch-action: none; }
+.canvas-card svg [data-hit-target="true"] { cursor: grab; }
+.canvas-card svg.is-dragging, .canvas-card svg.is-dragging [data-hit-target="true"] { cursor: grabbing; }
+.drag-handles circle { fill: var(--color-panel); stroke: var(--color-accent); stroke-width: 2; cursor: grab; }
+.drag-handles circle:hover { fill: var(--color-accent-soft); }
 .properties-label { display: flex; justify-content: space-between; gap: var(--space-3); font-size: 0.875rem; }
 .properties input[type="range"] { width: 100%; accent-color: var(--color-accent); }
 .metric { color: var(--color-accent); font-variant-numeric: tabular-nums; }
@@ -37,7 +41,13 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgb(61 90 254 / 3
 .primitive-properties { display: grid; gap: var(--space-2); margin-top: var(--space-4); }
 .primitive-properties h3 { margin: 0; font-size: 0.9rem; }
 .primitive-properties label { display: grid; gap: var(--space-1); font-size: 0.8rem; color: var(--color-muted); }
-.primitive-properties input { min-height: 36px; width: 100%; border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 0 var(--space-2); color: var(--color-ink); }
+.primitive-properties input, .primitive-properties select { min-height: 36px; width: 100%; border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 0 var(--space-2); color: var(--color-ink); background: var(--color-panel); }
+.primitive-properties input[type="color"] { padding: 3px; cursor: pointer; }
+.property-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
+.property-actions button { min-width: 0; padding-inline: var(--space-2); }
+.metric-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
+.metric-grid span { display: grid; gap: var(--space-1); padding: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-muted); font-size: 0.75rem; }
+.metric-grid strong { color: var(--color-ink); font-size: 0.8rem; font-variant-numeric: tabular-nums; }
 .batch-properties { display: grid; gap: var(--space-2); margin-top: var(--space-4); }
 .batch-properties h3 { margin: 0; font-size: 0.9rem; }
 .batch-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }

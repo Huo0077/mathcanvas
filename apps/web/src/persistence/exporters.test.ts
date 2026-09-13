@@ -30,4 +30,19 @@ describe("document exporters", () => {
     expect(csv).toContain('point-1,point,"点, ""A""",true,false')
     expect(csv).toContain('"{""x"":2,""y"":1}"')
   })
+
+  it("uses the canvas scale when exporting circles", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [{ id: "circle-1", type: "circle", center: { x: 0, y: 0 }, radius: 1 }]
+
+    expect(exportSvg(document)).toMatch(/<circle[^>]+r="33\.333333333333[0-9]+"/)
+    expect(exportSvg(document)).not.toContain("<ellipse")
+  })
+
+  it("keeps function branches separate around undefined values", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [{ id: "function-1", type: "function", expression: "1/x", domain: [-1, 1], samples: 128 }]
+
+    expect(exportSvg(document).match(/<polyline/g)).toHaveLength(2)
+  })
 })

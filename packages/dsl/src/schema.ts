@@ -1,115 +1,161 @@
 import type { GeometryDocument, PrimitiveSpec, ValidationResult } from "./types"
 
 const workspaces = new Set(["calculus", "conics", "cad", "geometry3d"])
+const primitiveTypes = new Set(["point", "line", "segment", "ray", "polyline", "parabola", "ellipse", "hyperbola", "function", "circle", "arc", "intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection"])
+const sampledTypes = new Set(["line", "segment", "ray", "polyline", "circle", "arc", "parabola", "ellipse", "hyperbola", "function"])
 
-export function validateDocument(document: unknown): ValidationResult {
+type RecordValue = Record<string, unknown>
+
+function isRecord(value: unknown): value is RecordValue {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value))
+}
+
+function isFiniteCoordinate(value: unknown): value is { x: number; y: number } {
+  return isRecord(value) && Number.isFinite(value.x) && Number.isFinite(value.y)
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value)
+}
+
+function validatePresentation(value: RecordValue, errors: string[]): void {
+  if (value.label !== undefined && typeof value.label !== "string") errors.push("primitive label is invalid")
+  if (value.visible !== undefined && typeof value.visible !== "boolean") errors.push("primitive visibility is invalid")
+  if (value.locked !== undefined && typeof value.locked !== "boolean") errors.push("primitive lock state is invalid")
+  if (value.style !== undefined) {
+    if (!isRecord(value.style)) errors.push("primitive style is invalid")
+    else {
+      if (value.style.stroke !== undefined && typeof value.style.stroke !== "string") errors.push("primitive stroke is invalid")
+      if (value.style.fill !== undefined && typeof value.style.fill !== "string") errors.push("primitive fill is invalid")
+      if (value.style.strokeWidth !== undefined && (!isFiniteNumber(value.style.strokeWidth) || value.style.strokeWidth <= 0)) errors.push("primitive stroke width is invalid")
+      if (value.style.opacity !== undefined && (!isFiniteNumber(value.style.opacity) || value.style.opacity < 0 || value.style.opacity > 1)) errors.push("primitive opacity is invalid")
+      if (value.style.dash !== undefined && typeof value.style.dash !== "string") errors.push("primitive dash is invalid")
+    }
+  }
+}
+
+function primitiveType(value: unknown): string | undefined {
+  return isRecord(value) && typeof value.type === "string" ? value.type : undefined
+}
+
+function referenceType(byId: Map<string, unknown>, value: unknown): string | undefined {
+  return typeof value === "string" ? primitiveType(byId.get(value)) : undefined
+}
+
+function validatePrimitive(value: unknown, byId: Map<string, unknown>): string[] {
+  if (!isRecord(value) || typeof value.id !== "string") return ["every primitive needs a stable id"]
   const errors: string[] = []
-  if (!document || typeof document !== "object") return { valid: false, errors: ["document must be an object"] }
-  const value = document as Partial<GeometryDocument>
-  if (value.schemaVersion !== "0.1") errors.push("schemaVersion must be 0.1")
-  if (!Number.isInteger(value.revision) || (value.revision ?? -1) < 0) errors.push("revision must be a non-negative integer")
-  if (!workspaces.has(value.workspace ?? "")) errors.push("workspace is invalid")
-  if (!value.parameters || typeof value.parameters !== "object") errors.push("parameters must be an object")
-  if (!Array.isArray(value.primitives)) errors.push("primitives must be an array")
-  if (!Array.isArray(value.groups)) errors.push("groups must be an array")
-  if (!Array.isArray(value.constraints)) errors.push("constraints must be an array")
-  if (!Array.isArray(value.dynamics)) errors.push("dynamics must be an array")
-  if (!Array.isArray(value.annotations)) errors.push("annotations must be an array")
-  if (!value.metadata || typeof value.metadata !== "object" || !value.metadata.id) errors.push("metadata.id is required")
-  if (Array.isArray(value.primitives)) {
-    const ids = new Set<string>()
-    for (const primitive of value.primitives) {
-      if (!primitive || typeof primitive !== "object" || typeof primitive.id !== "string") {
-        errors.push("every primitive needs a stable id")
-        continue
-      }
-      if (ids.has(primitive.id)) errors.push(`duplicate primitive id: ${primitive.id}`)
-      ids.add(primitive.id)
-      if (!["point", "line", "segment", "ray", "polyline", "parabola", "ellipse", "hyperbola", "function", "circle", "arc", "intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection"].includes(primitive.type)) {
-        errors.push(`invalid primitive type: ${primitive.type}`)
+  const type = primitiveType(value)
+  if (!type || !primitiveTypes.has(type)) return [`invalid primitive type: ${String(value.type)}`]
+  validatePresentation(value, errors)
+  if (type === "point" && (!isFiniteNumber(value.x) || !isFiniteNumber(value.y))) errors.push("point coordinates must be finite")
+  if (type === "line" || type === "segment" || type === "ray") {
+    if (!isFiniteCoordinate(value.a) || !isFiniteCoordinate(value.b)) errors.push(`${type} endpoints must be finite`)
+    else if ((type === "segment" || type === "ray") && value.a.x === value.b.x && value.a.y === value.b.y) errors.push(type === "segment" ? "segment endpoints must differ" : "ray direction must differ")
+    if (value.slopeParameter !== undefined && typeof value.slopeParameter !== "string") errors.push("line slope parameter is invalid")
+  }
+  if (type === "polyline") {
+    if (!Array.isArray(value.points) || value.points.length < 2) errors.push("polyline needs at least two points")
+    if (Array.isArray(value.points)) {
+      if (value.points.some((point) => !isFiniteCoordinate(point))) errors.push("polyline points must be finite")
+      for (let index = 1; index < value.points.length; index += 1) {
+        const previous = value.points[index - 1]
+        const current = value.points[index]
+        if (isFiniteCoordinate(previous) && isFiniteCoordinate(current) && previous.x === current.x && previous.y === current.y) errors.push("polyline consecutive points must differ")
       }
     }
   }
-  if (Array.isArray(value.primitives)) {
-    const primitives = value.primitives as PrimitiveSpec[]
-    const byId = new Map(primitives.map((primitive) => [primitive.id, primitive]))
-    if (Array.isArray(value.groups)) {
-      const groupIds = new Set<string>()
-      const groupedMembers = new Set<string>()
-      for (const group of value.groups) {
-        if (!group || typeof group !== "object" || typeof group.id !== "string") {
-          errors.push("every group needs a stable id")
-          continue
-        }
-        if (groupIds.has(group.id)) errors.push(`duplicate group id: ${group.id}`)
-        groupIds.add(group.id)
-        if (!Array.isArray(group.members) || group.members.length < 2 || group.members.some((member) => !byId.has(member))) errors.push(`group has invalid members: ${group.id}`)
-        if (Array.isArray(group.members) && new Set(group.members).size !== group.members.length) errors.push(`group has duplicate members: ${group.id}`)
-        if (Array.isArray(group.members)) {
-          for (const member of group.members) {
-            if (groupedMembers.has(member)) errors.push(`primitive belongs to multiple groups: ${member}`)
-            groupedMembers.add(member)
-          }
-        }
+  if (type === "parabola" && (!isFiniteCoordinate(value.vertex) || !isFiniteNumber(value.focalParameter) || value.focalParameter === 0 || !["x", "y"].includes(String(value.axis)) || (value.rotation !== undefined && !isFiniteNumber(value.rotation)))) errors.push("parabola geometry is invalid")
+  if (type === "ellipse" || type === "hyperbola") {
+    if (!isFiniteCoordinate(value.center) || !isFiniteNumber(value.radiusX) || !isFiniteNumber(value.radiusY) || value.radiusX <= 0 || value.radiusY <= 0 || (value.rotation !== undefined && !isFiniteNumber(value.rotation))) errors.push(`${type} geometry is invalid`)
+    if (type === "hyperbola" && !["x", "y"].includes(String(value.axis))) errors.push("hyperbola axis is invalid")
+  }
+  if (type === "function") {
+    if (typeof value.expression !== "string" || !value.expression.trim()) errors.push("function expression is required")
+    if (!Array.isArray(value.domain) || value.domain.length !== 2 || !value.domain.every(isFiniteNumber) || value.domain[0] >= value.domain[1]) errors.push("function domain is invalid")
+    if (value.samples !== undefined && (!isFiniteNumber(value.samples) || !Number.isInteger(value.samples) || value.samples < 2 || value.samples > 2048)) errors.push("function sample count is invalid")
+  }
+  if (type === "circle" || type === "arc") {
+    if (!isFiniteCoordinate(value.center) || !isFiniteNumber(value.radius) || value.radius <= 0) errors.push(`${type} geometry is invalid`)
+    if (type === "arc" && (!isFiniteNumber(value.startAngle) || !isFiniteNumber(value.endAngle))) errors.push("arc angles must be finite")
+  }
+  if (type === "intersection") {
+    if (typeof value.lineA !== "string" || typeof value.lineB !== "string" || !byId.has(value.lineA) || !byId.has(value.lineB)) errors.push("intersection references missing line")
+    else if (referenceType(byId, value.lineA) !== "line" || referenceType(byId, value.lineB) !== "line" || value.lineA === value.lineB) errors.push("intersection references invalid lines")
+    if (!isFiniteNumber(value.x) || !isFiniteNumber(value.y)) errors.push("intersection coordinates must be finite")
+  }
+  if (type === "lineCircleIntersection") {
+    if (referenceType(byId, value.lineId) !== "line" || referenceType(byId, value.circleId) !== "circle") errors.push("line-circle intersection references invalid objects")
+    if (!isFiniteNumber(value.x) || !isFiniteNumber(value.y)) errors.push("intersection coordinates must be finite")
+  }
+  if (type === "circleIntersection") {
+    if (referenceType(byId, value.circleA) !== "circle" || referenceType(byId, value.circleB) !== "circle" || value.circleA === value.circleB) errors.push("circle intersection references invalid circles")
+    if (!isFiniteNumber(value.x) || !isFiniteNumber(value.y)) errors.push("intersection coordinates must be finite")
+  }
+  if (type === "curveIntersection") {
+    if (value.objectA === value.objectB || !sampledTypes.has(referenceType(byId, value.objectA) ?? "") || !sampledTypes.has(referenceType(byId, value.objectB) ?? "")) errors.push("curve intersection references invalid objects")
+    if (!isFiniteNumber(value.x) || !isFiniteNumber(value.y)) errors.push("intersection coordinates must be finite")
+  }
+  return errors
+}
+
+export function validateDocument(document: unknown): ValidationResult {
+  const errors: string[] = []
+  if (!isRecord(document)) return { valid: false, errors: ["document must be an object"] }
+  if (document.schemaVersion !== "0.1") errors.push("schemaVersion must be 0.1")
+  if (!Number.isInteger(document.revision) || Number(document.revision) < 0) errors.push("revision must be a non-negative integer")
+  if (typeof document.workspace !== "string" || !workspaces.has(document.workspace)) errors.push("workspace is invalid")
+  if (!isRecord(document.parameters) || Array.isArray(document.parameters)) errors.push("parameters must be an object")
+  if (!Array.isArray(document.primitives)) errors.push("primitives must be an array")
+  if (!Array.isArray(document.groups)) errors.push("groups must be an array")
+  if (!Array.isArray(document.constraints)) errors.push("constraints must be an array")
+  if (!Array.isArray(document.dynamics)) errors.push("dynamics must be an array")
+  if (!Array.isArray(document.annotations)) errors.push("annotations must be an array")
+  if (!isRecord(document.metadata) || typeof document.metadata.id !== "string" || !document.metadata.id) errors.push("metadata.id is required")
+
+  const primitives = Array.isArray(document.primitives) ? document.primitives : []
+  const primitiveIds = new Set<string>()
+  const primitiveById = new Map<string, unknown>()
+  for (const primitive of primitives) {
+    if (isRecord(primitive) && typeof primitive.id === "string") {
+      if (primitiveIds.has(primitive.id)) errors.push(`duplicate primitive id: ${primitive.id}`)
+      primitiveIds.add(primitive.id)
+      primitiveById.set(primitive.id, primitive)
+    }
+  }
+  for (const primitive of primitives) errors.push(...validatePrimitive(primitive, primitiveById))
+
+  if (Array.isArray(document.groups)) {
+    const groupIds = new Set<string>()
+    const groupedMembers = new Set<string>()
+    for (const group of document.groups) {
+      if (!isRecord(group) || typeof group.id !== "string") {
+        errors.push("every group needs a stable id")
+        continue
+      }
+      if (groupIds.has(group.id)) errors.push(`duplicate group id: ${group.id}`)
+      groupIds.add(group.id)
+      if (!Array.isArray(group.members) || group.members.length < 2 || group.members.some((member) => typeof member !== "string" || !primitiveIds.has(member))) errors.push(`group has invalid members: ${group.id}`)
+      if (Array.isArray(group.members) && new Set(group.members).size !== group.members.length) errors.push(`group has duplicate members: ${group.id}`)
+      if (Array.isArray(group.members)) for (const member of group.members) {
+        if (typeof member === "string" && groupedMembers.has(member)) errors.push(`primitive belongs to multiple groups: ${member}`)
+        if (typeof member === "string") groupedMembers.add(member)
       }
     }
-    for (const primitive of primitives) {
-      if (primitive.type === "segment") {
-        if (!Number.isFinite(primitive.a.x) || !Number.isFinite(primitive.a.y) || !Number.isFinite(primitive.b.x) || !Number.isFinite(primitive.b.y)) errors.push("segment endpoints must be finite")
-        if (primitive.a.x === primitive.b.x && primitive.a.y === primitive.b.y) errors.push("segment endpoints must differ")
+  }
+
+  if (Array.isArray(document.constraints)) {
+    const constraintIds = new Set<string>()
+    for (const constraint of document.constraints) {
+      if (!isRecord(constraint) || typeof constraint.id !== "string") {
+        errors.push("every constraint needs a stable id")
+        continue
       }
-      if (primitive.type === "ray") {
-        if (![primitive.a?.x, primitive.a?.y, primitive.b?.x, primitive.b?.y].every(Number.isFinite)) errors.push("ray endpoints must be finite")
-        if (primitive.a?.x === primitive.b?.x && primitive.a?.y === primitive.b?.y) errors.push("ray direction must differ")
-      }
-      if (primitive.type === "polyline") {
-        if (!Array.isArray(primitive.points) || primitive.points.length < 2) errors.push("polyline needs at least two points")
-        if (Array.isArray(primitive.points)) {
-          if (primitive.points.some((point) => !point || !Number.isFinite(point.x) || !Number.isFinite(point.y))) errors.push("polyline points must be finite")
-          for (let index = 1; index < primitive.points.length; index += 1) {
-            const previous = primitive.points[index - 1]
-            const current = primitive.points[index]
-            if (previous && current && previous.x === current.x && previous.y === current.y) errors.push("polyline consecutive points must differ")
-          }
-        }
-      }
-      if (primitive.type === "parabola") {
-        if (![primitive.vertex?.x, primitive.vertex?.y, primitive.focalParameter].every(Number.isFinite) || primitive.focalParameter === 0 || !["x", "y"].includes(primitive.axis)) errors.push("parabola geometry is invalid")
-      }
-      if (primitive.type === "ellipse" || primitive.type === "hyperbola") {
-        const center = primitive.center
-        if (![center?.x, center?.y, primitive.radiusX, primitive.radiusY].every(Number.isFinite) || primitive.radiusX <= 0 || primitive.radiusY <= 0) errors.push(`${primitive.type} geometry is invalid`)
-        if (primitive.type === "hyperbola" && !["x", "y"].includes(primitive.axis)) errors.push("hyperbola axis is invalid")
-      }
-      if (primitive.type === "function") {
-        if (typeof primitive.expression !== "string" || !primitive.expression.trim()) errors.push("function expression is required")
-        if (!Array.isArray(primitive.domain) || primitive.domain.length !== 2 || !primitive.domain.every(Number.isFinite) || primitive.domain[0] >= primitive.domain[1]) errors.push("function domain is invalid")
-        if (primitive.samples !== undefined && (!Number.isInteger(primitive.samples) || primitive.samples < 2 || primitive.samples > 2048)) errors.push("function sample count is invalid")
-      }
-      if (primitive.type === "circle" || primitive.type === "arc") {
-        if (!Number.isFinite(primitive.center.x) || !Number.isFinite(primitive.center.y) || !Number.isFinite(primitive.radius) || primitive.radius <= 0) {
-          errors.push(`${primitive.type} geometry is invalid`)
-        }
-      }
-      if (primitive.type === "intersection" && (!byId.get(primitive.lineA) || !byId.get(primitive.lineB))) errors.push("intersection references missing line")
-      if (primitive.type === "lineCircleIntersection" && (byId.get(primitive.lineId)?.type !== "line" || byId.get(primitive.circleId)?.type !== "circle")) errors.push("line-circle intersection references invalid objects")
-      if (primitive.type === "circleIntersection" && (byId.get(primitive.circleA)?.type !== "circle" || byId.get(primitive.circleB)?.type !== "circle")) errors.push("circle intersection references invalid circles")
-      if (primitive.type === "curveIntersection" && (primitive.objectA === primitive.objectB || !byId.has(primitive.objectA) || !byId.has(primitive.objectB))) errors.push("curve intersection references invalid objects")
-    }
-    if (Array.isArray(value.constraints)) {
-      const constraintIds = new Set<string>()
-      for (const constraint of value.constraints) {
-        if (!constraint || typeof constraint !== "object" || typeof constraint.id !== "string") {
-          errors.push("every constraint needs a stable id")
-          continue
-        }
-        if (constraintIds.has(constraint.id)) errors.push(`duplicate constraint id: ${constraint.id}`)
-        constraintIds.add(constraint.id)
-        if (!["parallel", "perpendicular", "coincident"].includes(constraint.type)) errors.push(`invalid constraint type: ${constraint.id}`)
-        if (!Array.isArray(constraint.targets) || constraint.targets.length !== 2 || constraint.targets.some((target) => !byId.has(target))) errors.push(`constraint has invalid targets: ${constraint.id}`)
-        if (Array.isArray(constraint.targets) && constraint.targets.length === 2 && constraint.targets[0] === constraint.targets[1]) errors.push(`constraint targets must differ: ${constraint.id}`)
-        if ((constraint.type === "parallel" || constraint.type === "perpendicular") && constraint.targets.some((target) => byId.get(target)?.type !== "line")) errors.push(`constraint requires two lines: ${constraint.id}`)
-      }
+      if (constraintIds.has(constraint.id)) errors.push(`duplicate constraint id: ${constraint.id}`)
+      constraintIds.add(constraint.id)
+      if (!["parallel", "perpendicular", "coincident"].includes(String(constraint.type))) errors.push(`invalid constraint type: ${constraint.id}`)
+      if (!Array.isArray(constraint.targets) || constraint.targets.length !== 2 || constraint.targets.some((target) => typeof target !== "string" || !primitiveIds.has(target)) || constraint.targets[0] === constraint.targets[1]) errors.push(`constraint has invalid targets: ${constraint.id}`)
+      if ((constraint.type === "parallel" || constraint.type === "perpendicular") && Array.isArray(constraint.targets) && constraint.targets.some((target) => referenceType(primitiveById, target) !== "line")) errors.push(`constraint requires two lines: ${constraint.id}`)
     }
   }
   return errors.length ? { valid: false, errors } : { valid: true }

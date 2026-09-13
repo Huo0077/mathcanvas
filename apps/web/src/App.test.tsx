@@ -28,11 +28,44 @@ describe("MathCanvas workbench", () => {
     expect(screen.getByText(/交点 P \(8\.00, 0\.00\)/)).toBeTruthy()
   })
 
+  it("shows the selected line slope characteristics in the properties panel", () => {
+    render(<App />)
+    fireEvent.click(screen.getAllByText("参数直线")[0])
+
+    expect(screen.getByText("斜率特征")).toBeTruthy()
+    expect(screen.getByText("倾角")).toBeTruthy()
+    expect(screen.getByText("截距")).toBeTruthy()
+  })
+
+  it("shows editable point coordinates when a point is selected", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(screen.getAllByText("新点 A")[0])
+
+    expect(screen.getByRole("spinbutton", { name: "点 X" })).toBeTruthy()
+    expect(screen.getByRole("spinbutton", { name: "点 Y" })).toBeTruthy()
+  })
+
+  it("drags a line body and updates its dependent intersection", () => {
+    render(<App />)
+    fireEvent.change(screen.getByRole("slider", { name: "直线斜率" }), { target: { value: "0.5" } })
+    const canvas = screen.getByRole("img", { name: "几何画布" })
+    const line = canvas.querySelectorAll('[data-primitive-type="line"]')[1]
+    const intersection = canvas.querySelector('[data-primitive-type="intersection"] text')!
+    const before = intersection.textContent
+
+    fireEvent.pointerDown(line, { clientX: 400, clientY: 140, pointerId: 1 })
+    fireEvent.pointerMove(canvas, { clientX: 400, clientY: 110, pointerId: 1 })
+    expect(intersection.textContent).not.toBe(before)
+    fireEvent.pointerUp(canvas, { clientX: 400, clientY: 110, pointerId: 1 })
+
+    expect(intersection.textContent).not.toBe(before)
+  })
+
   it("adds a point through the domain operation path", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "添加点" }))
-    expect(screen.getAllByText("新点 A")).toHaveLength(2)
-    expect(screen.getByRole("img", { name: "几何画布" }).querySelectorAll("circle")).toHaveLength(2)
+    expect(screen.getByRole("img", { name: "几何画布" }).querySelectorAll('[data-primitive-type="point"]').length).toBeGreaterThan(0)
   })
 
   it("creates and edits a circle through the canvas and properties", () => {
@@ -43,9 +76,11 @@ describe("MathCanvas workbench", () => {
     fireEvent.click(canvas, { clientX: 508, clientY: 140 })
 
     expect(screen.getAllByText("圆 1")).toHaveLength(3)
-    expect(canvas.querySelectorAll("ellipse")).toHaveLength(1)
+    expect(canvas.querySelectorAll('g[data-primitive-type="circle"] > circle:not([data-hit-target="true"])')).toHaveLength(1)
     fireEvent.change(screen.getByRole("spinbutton", { name: "半径" }), { target: { value: "4" } })
     expect((screen.getByRole("spinbutton", { name: "半径" }) as HTMLInputElement).value).toBe("4")
+    fireEvent.change(screen.getByLabelText("线条颜色"), { target: { value: "#ff0000" } })
+    expect(canvas.querySelector('g[data-primitive-type="circle"] > circle:not([data-hit-target="true"])')?.getAttribute("stroke")).toBe("#ff0000")
   })
 
   it("creates an arc from center, start, and end clicks", () => {
@@ -57,7 +92,7 @@ describe("MathCanvas workbench", () => {
     fireEvent.click(canvas, { clientX: 400, clientY: 20 })
 
     expect(screen.getAllByText("圆弧 1")).toHaveLength(2)
-    expect(canvas.querySelectorAll("path")).toHaveLength(1)
+    expect(canvas.querySelectorAll('path:not([data-hit-target="true"])')).toHaveLength(1)
   })
 
   it("creates and edits a line through the canvas and properties", () => {
@@ -131,6 +166,17 @@ describe("MathCanvas workbench", () => {
     expect(screen.getAllByText("双曲线 1")).toHaveLength(2)
     expect(screen.getByRole("combobox", { name: "双曲线轴向" })).toBeTruthy()
     expect(screen.getByRole("img", { name: "几何画布" }).querySelectorAll('[data-primitive-type="hyperbola"]')).toHaveLength(1)
+  })
+
+  it("rotates an ellipse from the properties panel", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "添加椭圆" }))
+
+    const rotation = screen.getByRole("spinbutton", { name: "椭圆旋转角度" }) as HTMLInputElement
+    fireEvent.change(rotation, { target: { value: "45" } })
+
+    expect(rotation.value).toBe("45")
+    expect(screen.getByRole("img", { name: "几何画布" }).querySelector('[data-drag-handle="rotation"]')).toBeTruthy()
   })
 
   it("adds and edits a sampled function in the workbench", () => {

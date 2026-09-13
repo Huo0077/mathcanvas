@@ -189,4 +189,13 @@ describe("line intersections", () => {
       { id: "second", type: "circle", center: { x: 2, y: 0 }, radius: 1 }
     ).kind).toBe("degenerate")
   })
+
+  it("keeps infinite-line sampled intersections independent of endpoint length", () => {
+    const result = intersectSampledPrimitives(
+      { id: "short-line", type: "line", a: { x: -0.05, y: 0 }, b: { x: 0.05, y: 0 } },
+      { id: "circle", type: "circle", center: { x: 0, y: 0 }, radius: 10 }
+    )
+
+    expect(result.kind).toBe("points")
+  })
 })

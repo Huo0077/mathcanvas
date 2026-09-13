@@ -5,6 +5,21 @@ export interface Coordinate {
   y: number
 }
 
+export interface PrimitiveStyle {
+  stroke?: string
+  fill?: string
+  strokeWidth?: number
+  opacity?: number
+  dash?: string
+}
+
+export interface PrimitivePresentation {
+  label?: string
+  visible?: boolean
+  locked?: boolean
+  style?: PrimitiveStyle
+}
+
 export interface ParameterSpec {
   id: string
   value: number
@@ -15,136 +30,103 @@ export interface ParameterSpec {
   label?: string
 }
 
-export interface PointPrimitive {
+export interface PointPrimitive extends PrimitivePresentation {
   id: string
   type: "point"
   x: number
   y: number
-  label?: string
-  visible?: boolean
-  locked?: boolean
 }
 
-export interface LinePrimitive {
+export interface LinePrimitive extends PrimitivePresentation {
   id: string
   type: "line"
   a: Coordinate
   b: Coordinate
   slopeParameter?: string
-  label?: string
-  visible?: boolean
-  locked?: boolean
 }
 
-export interface SegmentPrimitive {
+export interface SegmentPrimitive extends PrimitivePresentation {
   id: string
   type: "segment"
   a: Coordinate
   b: Coordinate
-  label?: string
-  visible?: boolean
-  locked?: boolean
 }
 
-export interface RayPrimitive {
+export interface RayPrimitive extends PrimitivePresentation {
   id: string
   type: "ray"
   a: Coordinate
   b: Coordinate
-  label?: string
-  visible?: boolean
-  locked?: boolean
 }
 
-export interface PolylinePrimitive {
+export interface PolylinePrimitive extends PrimitivePresentation {
   id: string
   type: "polyline"
   points: Coordinate[]
-  label?: string
-  visible?: boolean
-  locked?: boolean
 }
 
-export interface ParabolaPrimitive {
+export interface ParabolaPrimitive extends PrimitivePresentation {
   id: string
   type: "parabola"
   vertex: Coordinate
   focalParameter: number
   axis: "x" | "y"
-  label?: string
-  visible?: boolean
-  locked?: boolean
+  rotation?: number
 }
 
-export interface EllipsePrimitive {
+export interface EllipsePrimitive extends PrimitivePresentation {
   id: string
   type: "ellipse"
   center: Coordinate
   radiusX: number
   radiusY: number
-  label?: string
-  visible?: boolean
-  locked?: boolean
+  rotation?: number
 }
 
-export interface HyperbolaPrimitive {
+export interface HyperbolaPrimitive extends PrimitivePresentation {
   id: string
   type: "hyperbola"
   center: Coordinate
   radiusX: number
   radiusY: number
   axis: "x" | "y"
-  label?: string
-  visible?: boolean
-  locked?: boolean
+  rotation?: number
 }
 
-export interface FunctionPrimitive {
+export interface FunctionPrimitive extends PrimitivePresentation {
   id: string
   type: "function"
   expression: string
   domain: [number, number]
   samples?: number
-  label?: string
-  visible?: boolean
-  locked?: boolean
 }
 
-export interface CirclePrimitive {
+export interface CirclePrimitive extends PrimitivePresentation {
   id: string
   type: "circle"
   center: Coordinate
   radius: number
-  label?: string
-  visible?: boolean
-  locked?: boolean
 }
 
-export interface ArcPrimitive {
+export interface ArcPrimitive extends PrimitivePresentation {
   id: string
   type: "arc"
   center: Coordinate
   radius: number
   startAngle: number
   endAngle: number
-  label?: string
-  visible?: boolean
-  locked?: boolean
 }
 
-export interface IntersectionPrimitive {
+export interface IntersectionPrimitive extends PrimitivePresentation {
   id: string
   type: "intersection"
   lineA: string
   lineB: string
   x: number
   y: number
-  label?: string
-  visible?: boolean
-  locked?: boolean
 }
 
-export interface LineCircleIntersectionPrimitive {
+export interface LineCircleIntersectionPrimitive extends PrimitivePresentation {
   id: string
   type: "lineCircleIntersection"
   lineId: string
@@ -152,12 +134,9 @@ export interface LineCircleIntersectionPrimitive {
   solutionIndex?: 0 | 1
   x: number
   y: number
-  label?: string
-  visible?: boolean
-  locked?: boolean
 }
 
-export interface CircleCircleIntersectionPrimitive {
+export interface CircleCircleIntersectionPrimitive extends PrimitivePresentation {
   id: string
   type: "circleIntersection"
   circleA: string
@@ -165,12 +144,9 @@ export interface CircleCircleIntersectionPrimitive {
   solutionIndex?: 0 | 1
   x: number
   y: number
-  label?: string
-  visible?: boolean
-  locked?: boolean
 }
 
-export interface CurveIntersectionPrimitive {
+export interface CurveIntersectionPrimitive extends PrimitivePresentation {
   id: string
   type: "curveIntersection"
   objectA: string
@@ -178,9 +154,6 @@ export interface CurveIntersectionPrimitive {
   solutionIndex?: 0 | 1
   x: number
   y: number
-  label?: string
-  visible?: boolean
-  locked?: boolean
 }
 
 export type PrimitiveSpec =

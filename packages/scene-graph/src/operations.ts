@@ -16,10 +16,13 @@ export type DomainOperation =
   | { op: "alignPrimitives"; ids: string[]; alignment: Alignment }
   | { op: "setPrimitivesLocked"; ids: string[]; locked: boolean }
   | { op: "setPrimitivesVisible"; ids: string[]; visible: boolean }
+  | { op: "translatePrimitive"; id: string; delta: { x: number; y: number } }
 
 export type Alignment = "left" | "right" | "top" | "bottom" | "horizontalCenter" | "verticalCenter"
 
 export interface PrimitiveUpdatePatch {
+  x?: number
+  y?: number
   a?: { x: number; y: number }
   b?: { x: number; y: number }
   center?: { x: number; y: number }
@@ -35,6 +38,9 @@ export interface PrimitiveUpdatePatch {
   expression?: string
   domain?: [number, number]
   samples?: number
+  rotation?: number
+  label?: string
+  style?: { stroke?: string; fill?: string; strokeWidth?: number; opacity?: number; dash?: string }
 }
 
 export interface OperationResult {
@@ -56,7 +62,7 @@ function angleOnArc(angle: number, start: number, end: number): boolean {
 
 function primitiveBounds(primitive: PrimitiveSpec): PrimitiveBounds | null {
   if (primitive.type === "point") return { minX: primitive.x, maxX: primitive.x, minY: primitive.y, maxY: primitive.y }
-  if (primitive.type === "line" || primitive.type === "segment") return {
+  if (primitive.type === "line" || primitive.type === "segment" || primitive.type === "ray") return {
     minX: Math.min(primitive.a.x, primitive.b.x), maxX: Math.max(primitive.a.x, primitive.b.x),
     minY: Math.min(primitive.a.y, primitive.b.y), maxY: Math.max(primitive.a.y, primitive.b.y)
   }
@@ -71,13 +77,25 @@ function primitiveBounds(primitive: PrimitiveSpec): PrimitiveBounds | null {
 
 function translatePrimitive(primitive: PrimitiveSpec, x: number, y: number): PrimitiveSpec {
   if (primitive.type === "point") return { ...primitive, x: primitive.x + x, y: primitive.y + y }
-  if (primitive.type === "line" || primitive.type === "segment") return {
+  if (primitive.type === "line" || primitive.type === "segment" || primitive.type === "ray") return {
     ...primitive,
     a: { x: primitive.a.x + x, y: primitive.a.y + y },
     b: { x: primitive.b.x + x, y: primitive.b.y + y }
   }
+  if (primitive.type === "polyline") return { ...primitive, points: primitive.points.map((point) => ({ x: point.x + x, y: point.y + y })) }
   if (primitive.type === "circle" || primitive.type === "arc") return { ...primitive, center: { x: primitive.center.x + x, y: primitive.center.y + y } }
+  if (primitive.type === "parabola") return { ...primitive, vertex: { x: primitive.vertex.x + x, y: primitive.vertex.y + y } }
+  if (primitive.type === "ellipse" || primitive.type === "hyperbola") return { ...primitive, center: { x: primitive.center.x + x, y: primitive.center.y + y } }
   return primitive
+}
+
+function signedOffset(value: number): string {
+  return value < 0 ? String(value) : `+${value}`
+}
+
+function translateFunction(primitive: Extract<PrimitiveSpec, { type: "function" }>, x: number, y: number): Extract<PrimitiveSpec, { type: "function" }> {
+  const shiftedExpression = primitive.expression.replace(/\bx\b/g, `(x${signedOffset(-x)})`)
+  return { ...primitive, expression: `(${shiftedExpression})${signedOffset(y)}`, domain: [primitive.domain[0] + x, primitive.domain[1] + x] }
 }
 
 function primitiveDependencies(primitive: PrimitiveSpec): string[] {
@@ -207,7 +225,11 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
     changedIds = [operation.primitive.id]
   } else if (operation.op === "updatePrimitive") {
     const primitive = next.primitives.find((candidate) => candidate.id === operation.id)
-    if (!primitive || !["line", "segment", "ray", "polyline", "parabola", "ellipse", "hyperbola", "function", "circle", "arc"].includes(primitive.type) || primitive.locked) return { document, changed: false, error: primitive?.locked ? "object is locked" : "object is not editable" }
+    if (!primitive || !["point", "line", "segment", "ray", "polyline", "parabola", "ellipse", "hyperbola", "function", "circle", "arc"].includes(primitive.type) || primitive.locked) return { document, changed: false, error: primitive?.locked ? "object is locked" : "object is not editable" }
+    if (primitive.type === "point") {
+      if (operation.patch.x !== undefined) primitive.x = operation.patch.x
+      if (operation.patch.y !== undefined) primitive.y = operation.patch.y
+    }
     if (primitive.type === "line" || primitive.type === "segment" || primitive.type === "ray") {
       if (operation.patch.a) primitive.a = { ...primitive.a, ...operation.patch.a }
       if (operation.patch.b) primitive.b = { ...primitive.b, ...operation.patch.b }
@@ -217,12 +239,14 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
       if (operation.patch.vertex) primitive.vertex = { ...primitive.vertex, ...operation.patch.vertex }
       if (operation.patch.focalParameter !== undefined) primitive.focalParameter = operation.patch.focalParameter
       if (operation.patch.axis !== undefined) primitive.axis = operation.patch.axis
+      if (operation.patch.rotation !== undefined) primitive.rotation = operation.patch.rotation
     }
     if (primitive.type === "ellipse" || primitive.type === "hyperbola") {
       if (operation.patch.center) primitive.center = { ...primitive.center, ...operation.patch.center }
       if (operation.patch.radiusX !== undefined) primitive.radiusX = operation.patch.radiusX
       if (operation.patch.radiusY !== undefined) primitive.radiusY = operation.patch.radiusY
       if (primitive.type === "hyperbola" && operation.patch.axis !== undefined) primitive.axis = operation.patch.axis
+      if (operation.patch.rotation !== undefined) primitive.rotation = operation.patch.rotation
     }
     if (primitive.type === "function") {
       if (operation.patch.expression !== undefined) primitive.expression = operation.patch.expression
@@ -237,7 +261,17 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
       if (operation.patch.startAngle !== undefined) primitive.startAngle = operation.patch.startAngle
       if (operation.patch.endAngle !== undefined) primitive.endAngle = operation.patch.endAngle
     }
+    if (operation.patch.label !== undefined) primitive.label = operation.patch.label
+    if (operation.patch.style !== undefined) primitive.style = { ...primitive.style, ...operation.patch.style }
     changedIds = [operation.id]
+  } else if (operation.op === "translatePrimitive") {
+    const primitive = next.primitives.find((candidate) => candidate.id === operation.id)
+    if (primitive) {
+      next.primitives = next.primitives.map((candidate) => candidate.id !== operation.id
+        ? candidate
+        : candidate.type === "function" ? translateFunction(candidate, operation.delta.x, operation.delta.y) : translatePrimitive(candidate, operation.delta.x, operation.delta.y))
+      changedIds = [operation.id]
+    }
   } else if (operation.op === "toggleLock") {
     const primitive = next.primitives.find((candidate) => candidate.id === operation.id)
     if (!primitive) return { document, changed: false, error: "object not found" }
