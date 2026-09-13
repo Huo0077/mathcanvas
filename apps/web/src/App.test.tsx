@@ -179,6 +179,27 @@ describe("MathCanvas workbench", () => {
     expect(screen.getByRole("img", { name: "几何画布" }).querySelector('[data-drag-handle="rotation"]')).toBeTruthy()
   })
 
+  it("shows vertical-major ellipse foci and fill styling", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "添加椭圆" }))
+    fireEvent.change(screen.getByRole("spinbutton", { name: "纵向半径" }), { target: { value: "5" } })
+    fireEvent.change(screen.getByLabelText("填充颜色"), { target: { value: "#ffff00" } })
+
+    expect(screen.getByText(/焦点：\(0\.00, 3\.00\) \/ \(0\.00, -3\.00\)/)).toBeTruthy()
+    const ellipseGraphs = Array.from(screen.getByRole("img", { name: "几何画布" }).querySelectorAll('[data-primitive-type="ellipse"] polyline:not([data-hit-target="true"])'))
+    expect(ellipseGraphs.some((graph) => graph.getAttribute("fill") === "#ffff00")).toBe(true)
+  })
+
+  it("disables every parabola geometry control after locking", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "添加抛物线" }))
+    fireEvent.click(screen.getByRole("button", { name: "锁定图元" }))
+
+    expect((screen.getByRole("spinbutton", { name: "焦参数" }) as HTMLInputElement).disabled).toBe(true)
+    expect((screen.getByRole("combobox", { name: "抛物线轴向" }) as HTMLSelectElement).disabled).toBe(true)
+    expect((screen.getByRole("spinbutton", { name: "抛物线旋转角度" }) as HTMLInputElement).disabled).toBe(true)
+  })
+
   it("renders a typed function expression with common math notation", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "添加函数图像" }))
