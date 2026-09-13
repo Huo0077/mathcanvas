@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react"
-import type { PrimitiveSpec } from "@draw/dsl"
+import type { AnnotationFeature, PrimitiveSpec } from "@draw/dsl"
 import { advanceAnimation, evaluateParameterExpression, functionPresets, parseExpression, sampleFunctionSegments, type AnimationMode, type AnimationState } from "@draw/geometry-kernel"
 import type { Alignment, PrimitiveUpdatePatch } from "@draw/scene-graph"
 
 import { defaultStrokeFor } from "../primitiveStyle"
+import { annotationFeatureOptions } from "../annotations"
 import { useSceneStore } from "../store"
 interface PropertiesBarProps {
   value: number
@@ -24,6 +25,7 @@ interface PropertiesBarProps {
   onCreateIntersection: () => void
   onAlign: (alignment: Alignment) => void
   onToggleBatchVisibility: () => void
+  onAddAnnotation: (feature: AnnotationFeature, index?: number, text?: string) => void
 }
 
 const alignments: { value: Alignment; label: string }[] = [
@@ -72,7 +74,7 @@ function CoordinateField({ label, value, onChange, disabled = false, readOnly = 
   return <Field label={label}><input aria-label={label} type="number" step="0.1" value={value} disabled={disabled} readOnly={readOnly} onChange={(event) => onChange(numberValue(event))} /></Field>
 }
 
-export function PropertiesBar({ value, min, max, step, onChange, selectedPrimitive, selectedCount, selectedGroupId, allSelectedVisible, canCreateIntersection, onUpdatePrimitive, onToggleSelectedVisibility, onToggleSelectedLock, onCreateGroup, onDeleteGroup, onCreateIntersection, onAlign, onToggleBatchVisibility }: PropertiesBarProps) {
+export function PropertiesBar({ value, min, max, step, onChange, selectedPrimitive, selectedCount, selectedGroupId, allSelectedVisible, canCreateIntersection, onUpdatePrimitive, onToggleSelectedVisibility, onToggleSelectedLock, onCreateGroup, onDeleteGroup, onCreateIntersection, onAlign, onToggleBatchVisibility, onAddAnnotation }: PropertiesBarProps) {
   const selectedPoint = selectedPrimitive?.type === "point" ? selectedPrimitive : null
   const selectedLinear = selectedPrimitive?.type === "line" || selectedPrimitive?.type === "segment" || selectedPrimitive?.type === "ray" ? selectedPrimitive : null
   const selectedPolyline = selectedPrimitive?.type === "polyline" ? selectedPrimitive : null
@@ -86,11 +88,14 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
   const editable = selectedPrimitive?.locked !== true
   const [expressionDraft, setExpressionDraft] = useState(selectedFunction?.expression ?? "")
   const [expressionError, setExpressionError] = useState<string | null>(null)
+  const [annotationText, setAnnotationText] = useState("")
   const beginPreview = useSceneStore((state) => state.beginPreview)
   const previewParameter = useSceneStore((state) => state.previewParameter)
   const commitPreview = useSceneStore((state) => state.commitPreview)
   const sceneDocument = useSceneStore((state) => state.document)
   const applySceneOperation = useSceneStore((state) => state.apply)
+  const annotationOptions = selectedPrimitive ? annotationFeatureOptions(selectedPrimitive) : []
+  const selectedAnnotations = selectedPrimitive ? sceneDocument.annotations.filter((annotation) => annotation.target === selectedPrimitive.id || (annotation.anchor?.kind === "primitive" && annotation.anchor.primitiveId === selectedPrimitive.id)) : []
   const pathPrimitives = sceneDocument.primitives.filter((primitive) => ["line", "segment", "ray", "polyline", "circle", "arc", "function"].includes(primitive.type))
   const [animationMode, setAnimationMode] = useState<AnimationMode>("loop")
   const [animationPlaying, setAnimationPlaying] = useState(false)
@@ -100,6 +105,10 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
     setExpressionDraft(selectedFunction?.expression ?? "")
     setExpressionError(null)
   }, [selectedFunction?.id, selectedFunction?.expression])
+
+  useEffect(() => {
+    setAnnotationText(selectedPrimitive ? selectedPrimitive.label ?? selectedPrimitive.id : "")
+  }, [selectedPrimitive?.id, selectedPrimitive?.label])
 
   useEffect(() => {
     if (!animationPlaying) animationRef.current = { ...animationRef.current, value, mode: animationMode, playing: false, speed: Math.max((max - min) / 4, step) }
@@ -262,5 +271,6 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
      {selectedCircleOrArc && <div className="primitive-properties"><h3>{selectedCircleOrArc.type === "circle" ? "圆属性" : "圆弧属性"}</h3><CoordinateField label="圆心 X" value={selectedCircleOrArc.center.x} disabled={!editable} onChange={(next) => updateCenter("x", next)} /><CoordinateField label="圆心 Y" value={selectedCircleOrArc.center.y} disabled={!editable} onChange={(next) => updateCenter("y", next)} /><Field label="半径"><input aria-label="半径" type="number" disabled={!editable} min="0.01" step="0.1" value={selectedCircleOrArc.radius} onChange={(event) => onUpdatePrimitive({ radius: Math.max(0.01, numberValue(event)) })} /></Field>{selectedCircleOrArc.type === "arc" && <><Field label="起始角（度）"><input aria-label="起始角" type="number" disabled={!editable} step="1" value={rotationDegrees(selectedCircleOrArc.startAngle)} onChange={(event) => onUpdatePrimitive({ startAngle: rotationRadians(numberValue(event)) })} /></Field><Field label="结束角（度）"><input aria-label="结束角" type="number" disabled={!editable} step="1" value={rotationDegrees(selectedCircleOrArc.endAngle)} onChange={(event) => onUpdatePrimitive({ endAngle: rotationRadians(numberValue(event)) })} /></Field></>}{selectedCircleOrArc.type === "circle" ? <div className="metric-grid"><span>周长<strong>{(2 * Math.PI * selectedCircleOrArc.radius).toFixed(2)}</strong></span><span>面积<strong>{(Math.PI * selectedCircleOrArc.radius ** 2).toFixed(2)}</strong></span></div> : <div className="metric-grid"><span>圆心角<strong>{(arcAngle * 180 / Math.PI).toFixed(2)}°</strong></span><span>弧长<strong>{(arcAngle * selectedCircleOrArc.radius).toFixed(2)}</strong></span></div>}</div>}
       {selectedIntersection && <div className="primitive-properties"><h3>{selectedIntersection.type === "intersectionSet" ? "交点集合" : "派生交点"}</h3>{selectedIntersection.type === "intersectionSet" ? <><p className="footer-note">共 {selectedIntersection.points.length} 个交点；位置会随来源图元更新。</p>{selectedIntersection.points.map((point, index) => <div className="metric-grid" key={`${selectedIntersection.id}-point-${index}`}><span>交点 {index + 1}<strong>({point.x.toFixed(2)}, {point.y.toFixed(2)})</strong></span></div>)}</> : <><p className="footer-note">该点由其他图元计算，不可直接拖动。</p><CoordinateField label="交点 X" value={selectedIntersection.x} readOnly onChange={() => undefined} /><CoordinateField label="交点 Y" value={selectedIntersection.y} readOnly onChange={() => undefined} /></>}</div>}
     {selectedCount > 1 && <div className="batch-properties"><h3>批量编辑 · {selectedCount} 个对象</h3><div className="batch-actions">{canCreateIntersection && (selectedPrimitive?.type === "point" ? <button aria-label={selectedCount === 3 ? "创建三点抛物线" : "连接选中点"} onClick={onCreateIntersection}>{selectedCount === 3 ? "创建三点抛物线" : "连接选中点"}</button> : <button aria-label="添加交点" onClick={onCreateIntersection}>添加交点</button>)}<button aria-label={selectedGroupId ? "取消分组" : "创建分组"} onClick={selectedGroupId ? onDeleteGroup : onCreateGroup}>{selectedGroupId ? "取消分组" : "创建分组"}</button><button aria-label={allSelectedVisible ? "批量隐藏" : "批量显示"} onClick={onToggleBatchVisibility}>{allSelectedVisible ? "批量隐藏" : "批量显示"}</button>{alignments.map((alignment) => <button key={alignment.value} aria-label={alignment.label} onClick={() => onAlign(alignment.value)}>{alignment.label}</button>)}</div></div>}
+    {selectedPrimitive && <div className="primitive-properties annotation-properties"><h3>图元标注</h3><Field label="标注文本"><input aria-label="标注文本" type="text" value={annotationText} onChange={(event) => setAnnotationText(event.target.value)} /></Field><div className="property-actions">{annotationOptions.map((option) => <button key={`${option.feature}-${option.index ?? "default"}`} type="button" aria-label={`添加${option.label}标注`} disabled={!editable} onClick={() => onAddAnnotation(option.feature, option.index, annotationText)}>{`添加${option.label}`}</button>)}</div>{selectedAnnotations.length > 0 && <div className="annotation-list" aria-label="当前图元标注">{selectedAnnotations.map((annotation) => <div className="annotation-row" key={annotation.id}><span>{annotation.text}</span><button type="button" aria-label={`删除标注 ${annotation.text}`} onClick={() => applySceneOperation({ op: "deleteAnnotation", id: annotation.id })}>删除</button></div>)}</div>}</div>}
   </section>
 }

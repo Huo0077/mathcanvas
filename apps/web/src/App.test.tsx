@@ -69,6 +69,20 @@ describe("MathCanvas workbench", () => {
     expect(screen.getByRole("img", { name: "几何画布" }).querySelectorAll('[data-primitive-type="point"]').length).toBeGreaterThan(0)
   })
 
+  it("creates a persistent point annotation from the property bar", () => {
+    const previousDocument = useSceneStore.getState().document
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(screen.getAllByText("新点 A").at(-1)!)
+    fireEvent.change(screen.getByRole("textbox", { name: "标注文本" }), { target: { value: "A" } })
+    fireEvent.click(screen.getByRole("button", { name: "添加点标注" }))
+
+    const canvas = screen.getByRole("img", { name: "几何画布" })
+    expect(canvas.querySelector('[data-annotation-id] text')?.textContent).toBe("A")
+    expect(screen.getByRole("button", { name: "删除标注 A" })).toBeTruthy()
+    useSceneStore.getState().replace(previousDocument)
+  })
+
   it("assigns sequential point labels for classroom-style constructions", () => {
     const previousDocument = useSceneStore.getState().document
     render(<App />)

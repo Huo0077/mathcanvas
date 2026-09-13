@@ -39,6 +39,17 @@ describe("document exporters", () => {
     expect(exportSvg(document)).not.toContain("<ellipse")
   })
 
+  it("exports visible annotations at their anchored positions", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [{ id: "point-1", type: "point", x: 2, y: 1 }]
+    document.annotations = [{ id: "annotation-1", text: "A", anchor: { kind: "primitive", primitiveId: "point-1", feature: "point" }, offset: { x: 0.25, y: 0.25 } }]
+
+    const svg = exportSvg(document)
+
+    expect(svg).toContain('data-annotation-id="annotation-1"')
+    expect(svg).toContain(">A</text>")
+  })
+
   it("keeps function branches separate around undefined values", () => {
     const document = createEmptyDocument("calculus")
     document.primitives = [{ id: "function-1", type: "function", expression: "1/x", domain: [-1, 1], samples: 128 }]

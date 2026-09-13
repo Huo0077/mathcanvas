@@ -83,6 +83,28 @@ describe("Geometry DSL codec", () => {
     expect(decodeMgeo(encodeMgeo(document)).groups).toEqual(document.groups)
   })
 
+  it("round-trips anchored annotations", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [{ id: "circle-1", type: "circle", center: { x: 1, y: 2 }, radius: 3 }]
+    const annotation = {
+      id: "annotation-1",
+      text: "圆心 O",
+      anchor: { kind: "primitive", primitiveId: "circle-1", feature: "center" },
+      offset: { x: 0.2, y: -0.3 },
+      visible: true
+    }
+    document.annotations = [annotation as never]
+
+    expect(decodeMgeo(encodeMgeo(document)).annotations).toEqual([annotation])
+  })
+
+  it("rejects annotations with missing anchors", () => {
+    const document = createEmptyDocument("calculus")
+    document.annotations = [{ id: "annotation-1", text: "缺失图元", anchor: { kind: "primitive", primitiveId: "missing" } } as never]
+
+    expect(validateDocument(document)).toEqual({ valid: false, errors: ["annotation references missing primitive: annotation-1"] })
+  })
+
   it("loads legacy documents without groups as an empty group list", () => {
     const document = createEmptyDocument("calculus")
     const legacy = JSON.parse(encodeMgeo(document))

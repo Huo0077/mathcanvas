@@ -1,4 +1,4 @@
-import type { ConstraintSpec, Coordinate, GeometryDocument, GroupSpec, PointBinding, PrimitiveSpec } from "@draw/dsl"
+import type { AnnotationSpec, ConstraintSpec, Coordinate, GeometryDocument, GroupSpec, PointBinding, PrimitiveSpec } from "@draw/dsl"
 import { evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, intersectCirclesDetailed, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, solveLineConstraints, type IntersectionResult, type SampledPrimitive } from "@draw/geometry-kernel"
 
 export type DomainOperation =
@@ -7,6 +7,8 @@ export type DomainOperation =
   | { op: "toggleLock"; id: string; locked: boolean }
   | { op: "setParameter"; id: string; value: number }
   | { op: "setParameterExpression"; id: string; expression: string }
+  | { op: "addAnnotation"; annotation: AnnotationSpec }
+  | { op: "deleteAnnotation"; id: string }
   | { op: "addConstraint"; constraint: ConstraintSpec }
   | { op: "deleteConstraint"; id: string }
   | { op: "deleteObject"; id: string }
@@ -340,6 +342,12 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
     const parameter = next.parameters[operation.id] ?? { id: operation.id, value: 0 }
     next.parameters[operation.id] = { ...parameter, expression: operation.expression }
     changedIds = [operation.id]
+  } else if (operation.op === "addAnnotation") {
+    next.annotations.push(operation.annotation)
+  } else if (operation.op === "deleteAnnotation") {
+    const before = next.annotations.length
+    next.annotations = next.annotations.filter((annotation) => annotation.id !== operation.id)
+    if (before === next.annotations.length) return { document, changed: false, error: "annotation not found" }
   } else if (operation.op === "addConstraint") {
     if (next.constraints.some((constraint) => constraint.id === operation.constraint.id)) return { document, changed: false, error: "duplicate constraint id" }
     next.constraints.push(operation.constraint)

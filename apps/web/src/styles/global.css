@@ -43,6 +43,13 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgb(61 90 254 / 3
 .primitive-properties label { display: grid; gap: var(--space-1); font-size: 0.8rem; color: var(--color-muted); }
 .primitive-properties input, .primitive-properties select { min-height: 36px; width: 100%; border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 0 var(--space-2); color: var(--color-ink); background: var(--color-panel); }
 .primitive-properties input[type="color"] { padding: 3px; cursor: pointer; }
+.annotation-list { display: grid; gap: var(--space-2); }
+.annotation-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm); font-size: 0.8rem; }
+.annotation-row span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.annotation-row button { min-height: 32px; padding-inline: var(--space-2); font-size: 0.75rem; }
+.annotation-marker line { stroke: var(--color-accent); stroke-width: 1.25; stroke-dasharray: 3 3; opacity: 0.7; }
+.annotation-marker circle { fill: var(--color-panel); stroke: var(--color-accent); stroke-width: 1.5; }
+.annotation-marker text { fill: var(--color-ink); font-size: 13px; font-weight: 700; paint-order: stroke; stroke: var(--color-panel); stroke-width: 4px; stroke-linejoin: round; }
 .property-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
 .property-actions button { min-width: 0; padding-inline: var(--space-2); }
 .metric-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }

@@ -233,9 +233,18 @@ export interface DynamicSpec {
   parameter?: string
 }
 
+export type AnnotationFeature = "point" | "center" | "focus" | "vertex" | "intersection" | "start" | "end"
+
+export type AnnotationAnchor =
+  | { kind: "coordinate"; x: number; y: number }
+  | { kind: "primitive"; primitiveId: string; feature?: AnnotationFeature; index?: number }
+
 export interface AnnotationSpec {
   id: string
   text: string
+  anchor?: AnnotationAnchor
+  offset?: Coordinate
+  visible?: boolean
   target?: string
   x?: number
   y?: number

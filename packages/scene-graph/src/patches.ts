@@ -1,4 +1,4 @@
-import { validateDocument, type ConstraintSpec, type GeometryDocument, type PrimitiveSpec } from "@draw/dsl"
+import { validateDocument, type AnnotationSpec, type ConstraintSpec, type GeometryDocument, type PrimitiveSpec } from "@draw/dsl"
 import { parseExpression } from "@draw/geometry-kernel"
 
 import { applyOperation, type DomainOperation } from "./operations"
@@ -19,12 +19,16 @@ function isConstraint(value: unknown): value is ConstraintSpec {
   return Boolean(value && typeof value === "object" && "id" in value && "type" in value && "targets" in value)
 }
 
+function isAnnotation(value: unknown): value is AnnotationSpec {
+  return Boolean(value && typeof value === "object" && "id" in value && "text" in value)
+}
+
 function isCoordinate(value: unknown): value is { x: number; y: number } {
   return Boolean(value && typeof value === "object" && Number.isFinite((value as { x?: unknown }).x) && Number.isFinite((value as { y?: unknown }).y))
 }
 
 function isReferenced(document: GeometryDocument, id: string): boolean {
-  return document.groups.some((group) => group.members.includes(id)) || document.constraints.some((constraint) => constraint.targets.includes(id)) || document.primitives.some((primitive) => (
+  return document.groups.some((group) => group.members.includes(id)) || document.constraints.some((constraint) => constraint.targets.includes(id)) || document.annotations.some((annotation) => annotation.target === id || (annotation.anchor?.kind === "primitive" && annotation.anchor.primitiveId === id)) || document.primitives.some((primitive) => (
     (primitive.type === "intersection" && (primitive.lineA === id || primitive.lineB === id)) ||
     (primitive.type === "lineCircleIntersection" && (primitive.lineId === id || primitive.circleId === id)) ||
     (primitive.type === "circleIntersection" && (primitive.circleA === id || primitive.circleB === id)) ||
@@ -108,6 +112,15 @@ export function validatePatch(document: GeometryDocument, operation: DomainOpera
       if (isCoordinate(nextA) && isCoordinate(nextB) && nextA.x === nextB.x && nextA.y === nextB.y) errors.push("segment endpoints must differ")
     }
   }
+  if (operation.op === "addAnnotation") {
+    if (!isAnnotation(operation.annotation)) errors.push("annotation is invalid")
+    else {
+      if (document.annotations.some((annotation) => annotation.id === operation.annotation.id)) errors.push("duplicate annotation id")
+      const validation = validateDocument({ ...document, annotations: [...document.annotations, operation.annotation] })
+      if (!validation.valid) errors.push(...validation.errors.filter((error) => !error.startsWith("duplicate annotation id:")))
+    }
+  }
+  if (operation.op === "deleteAnnotation" && !document.annotations.some((annotation) => annotation.id === operation.id)) errors.push("annotation not found")
   if (operation.op === "translatePrimitive") {
     const primitive = document.primitives.find((candidate) => candidate.id === operation.id)
     if (!primitive || ["intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection", "intersectionSet", "locus"].includes(primitive.type)) errors.push("object is not editable")

@@ -174,6 +174,27 @@ describe("domain patches", () => {
     }
   })
 
+  it("adds and deletes persistent annotations transactionally", () => {
+    const document = createEmptyDocument("calculus")
+    const annotation = { id: "annotation-1", text: "A", anchor: { kind: "coordinate", x: 1, y: 2 } }
+    const added = commitPatch(document, { op: "addAnnotation", annotation } as never)
+
+    expect(added.changed).toBe(true)
+    expect(added.document.annotations).toEqual([annotation])
+
+    const deleted = commitPatch(added.document, { op: "deleteAnnotation", id: annotation.id } as never)
+    expect(deleted.changed).toBe(true)
+    expect(deleted.document.annotations).toEqual([])
+  })
+
+  it("protects primitives referenced by annotations", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [{ id: "line-a", type: "line", a: { x: 0, y: 0 }, b: { x: 1, y: 1 } }]
+    const annotated = commitPatch(document, { op: "addAnnotation", annotation: { id: "annotation-1", text: "A", anchor: { kind: "primitive", primitiveId: "line-a" } } } as never)
+
+    expect(validatePatch(annotated.document, { op: "deleteObject", id: "line-a" })).toEqual({ valid: false, errors: ["object is referenced by another object"] })
+  })
+
   it("translates a function through one domain operation", () => {
     const document = createEmptyDocument("calculus")
     document.primitives = [{ id: "function-1", type: "function", expression: "x*x", domain: [-2, 2] }]

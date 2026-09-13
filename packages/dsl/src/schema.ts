@@ -3,6 +3,7 @@ import type { GeometryDocument, PrimitiveSpec, ValidationResult } from "./types"
 const workspaces = new Set(["calculus", "conics", "cad", "geometry3d"])
 const primitiveTypes = new Set(["point", "line", "segment", "ray", "polyline", "connection", "locus", "parabola", "ellipse", "hyperbola", "function", "circle", "arc", "intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection", "intersectionSet"])
 const sampledTypes = new Set(["line", "segment", "ray", "polyline", "circle", "arc", "parabola", "ellipse", "hyperbola", "function"])
+const annotationFeatures = new Set(["point", "center", "focus", "vertex", "intersection", "start", "end"])
 
 type RecordValue = Record<string, unknown>
 
@@ -121,6 +122,32 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>): string[]
   return errors
 }
 
+function validateAnnotation(value: unknown, byId: Map<string, unknown>): string[] {
+  if (!isRecord(value) || typeof value.id !== "string") return ["every annotation needs a stable id"]
+  const errors: string[] = []
+  if (typeof value.text !== "string" || !value.text.trim()) errors.push(`annotation text is required: ${value.id}`)
+  if (value.visible !== undefined && typeof value.visible !== "boolean") errors.push(`annotation visibility is invalid: ${value.id}`)
+  if (value.offset !== undefined && !isFiniteCoordinate(value.offset)) errors.push(`annotation offset is invalid: ${value.id}`)
+  if (value.target !== undefined) {
+    if (typeof value.target !== "string" || !byId.has(value.target)) errors.push(`annotation references missing primitive: ${value.id}`)
+  }
+  if (value.x !== undefined || value.y !== undefined) {
+    if (!isFiniteNumber(value.x) || !isFiniteNumber(value.y)) errors.push(`annotation coordinates are invalid: ${value.id}`)
+  }
+  if (value.anchor !== undefined) {
+    if (!isRecord(value.anchor) || !["coordinate", "primitive"].includes(String(value.anchor.kind))) errors.push(`annotation anchor is invalid: ${value.id}`)
+    else if (value.anchor.kind === "coordinate" && (!isFiniteNumber(value.anchor.x) || !isFiniteNumber(value.anchor.y))) errors.push(`annotation anchor coordinates are invalid: ${value.id}`)
+    else if (value.anchor.kind === "primitive") {
+      if (typeof value.anchor.primitiveId !== "string" || !byId.has(value.anchor.primitiveId)) errors.push(`annotation references missing primitive: ${value.id}`)
+      if (value.anchor.feature !== undefined && !annotationFeatures.has(String(value.anchor.feature))) errors.push(`annotation feature is invalid: ${value.id}`)
+      if (value.anchor.index !== undefined && (typeof value.anchor.index !== "number" || !Number.isInteger(value.anchor.index) || value.anchor.index < 0)) errors.push(`annotation feature index is invalid: ${value.id}`)
+    }
+  } else if (value.target === undefined && (value.x === undefined || value.y === undefined)) {
+    errors.push(`annotation needs an anchor: ${value.id}`)
+  }
+  return errors
+}
+
 export function validateDocument(document: unknown): ValidationResult {
   const errors: string[] = []
   if (!isRecord(document)) return { valid: false, errors: ["document must be an object"] }
@@ -146,6 +173,17 @@ export function validateDocument(document: unknown): ValidationResult {
     }
   }
   for (const primitive of primitives) errors.push(...validatePrimitive(primitive, primitiveById))
+
+  if (Array.isArray(document.annotations)) {
+    const annotationIds = new Set<string>()
+    for (const annotation of document.annotations) {
+      if (isRecord(annotation) && typeof annotation.id === "string") {
+        if (annotationIds.has(annotation.id)) errors.push(`duplicate annotation id: ${annotation.id}`)
+        annotationIds.add(annotation.id)
+      }
+      errors.push(...validateAnnotation(annotation, primitiveById))
+    }
+  }
 
   if (Array.isArray(document.groups)) {
     const groupIds = new Set<string>()
