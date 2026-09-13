@@ -52,10 +52,15 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgb(61 90 254 / 3
 .constraint-row.constraint-ok { border-left: 3px solid var(--color-success); }
 .constraint-row.constraint-warning { border-left: 3px solid var(--color-warning); }
 .constraint-main { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.constraint-main label { display: flex; align-items: center; gap: var(--space-1); min-width: 0; }
+.constraint-main input { width: 16px; height: 16px; accent-color: var(--color-accent); }
 .constraint-row p { margin: 0; color: var(--color-muted); font-size: 0.75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.constraint-residual { color: var(--color-muted); font-size: 0.7rem; font-variant-numeric: tabular-nums; }
 .constraint-status { font-size: 0.7rem; color: var(--color-success); }
 .constraint-status[data-status="需检查"], .constraint-status[data-status="无效"] { color: var(--color-warning); }
 .constraint-row button { min-height: 36px; justify-self: end; padding-inline: var(--space-2); font-size: 0.75rem; }
+.constraint-batch-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); margin-bottom: var(--space-3); }
+.constraint-batch-actions button { min-width: 0; padding-inline: var(--space-2); font-size: 0.75rem; }
 .constraint-error { display: grid; gap: var(--space-1); margin-bottom: var(--space-3); padding: var(--space-2); border: 1px solid var(--color-warning); border-radius: var(--radius-sm); background: var(--color-warning-soft); color: var(--color-ink); font-size: 0.8rem; }
 .constraint-error span, .constraint-error small { color: var(--color-muted); line-height: 1.45; }
 .footer-note { grid-column: 1 / -1; padding: var(--space-2) var(--space-5); font-size: 0.75rem; color: var(--color-muted); background: var(--color-panel); border-top: 1px solid var(--color-border); }

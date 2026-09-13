@@ -74,6 +74,10 @@ test("switches workspaces and exports SVG and CSV files", async ({ page }) => {
   await page.getByRole("button", { name: "导出 CSV" }).click()
   await expect((await csvDownload).suggestedFilename()).toMatch(/\.csv$/)
 
+  const pngDownload = page.waitForEvent("download")
+  await page.getByRole("button", { name: "导出 PNG" }).click()
+  await expect((await pngDownload).suggestedFilename()).toMatch(/\.png$/)
+
   await page.getByRole("button", { name: "微积分" }).click()
   await expect(page.getByText(/交点 P \(0\.00, 0\.00\)/)).toBeVisible()
 })
@@ -104,4 +108,13 @@ test("shows constraint status and recovery controls", async ({ page }) => {
   await expect(page.getByText("约束列表")).toBeVisible()
   await expect(page.getByText("已满足")).toBeVisible()
   await expect(page.getByRole("button", { name: "删除约束 parallel-1" })).toBeVisible()
+})
+
+test("restores the latest workspace draft after reload", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "添加点" }).click()
+  await expect(page.getByText("新点 A").first()).toBeVisible()
+  await page.reload()
+  await expect(page.getByText("新点 A").first()).toBeVisible()
+  await expect(page.getByText(/草稿自动保存/)).toBeVisible()
 })
