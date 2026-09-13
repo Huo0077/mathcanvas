@@ -45,7 +45,7 @@ function tokenize(source: string): Token[] {
       index += 1
       continue
     }
-    if ("()".includes(character)) {
+    if ("()|".includes(character)) {
       tokens.push({ type: "parenthesis", value: character })
       index += 1
       continue
@@ -111,13 +111,15 @@ class ExpressionParser {
     }
     if (token.type === "identifier") {
       this.position += 1
+      const normalizedName = token.value.toLowerCase()
+      const logarithmBase = normalizedName.match(/^log_(\d+(?:\.\d+)?)$/)
       if (this.tokens[this.position]?.value === "(") {
-        if (!functions.has(token.value.toLowerCase())) throw new Error(`Unknown function: ${token.value}`)
+        if (!functions.has(normalizedName) && !logarithmBase) throw new Error(`Unknown function: ${token.value}`)
         this.position += 1
         const argument = this.parseAddSub()
         if (this.tokens[this.position]?.value !== ")") throw new Error("Expected closing parenthesis")
         this.position += 1
-        return { type: "call", name: token.value.toLowerCase(), argument }
+        return { type: "call", name: normalizedName, argument }
       }
       return { type: "variable", name: token.value }
     }
@@ -127,6 +129,13 @@ class ExpressionParser {
       if (this.tokens[this.position]?.value !== ")") throw new Error("Expected closing parenthesis")
       this.position += 1
       return expression
+    }
+    if (token.value === "|") {
+      this.position += 1
+      const argument = this.parseAddSub()
+      if (this.tokens[this.position]?.value !== "|") throw new Error("Expected closing absolute value")
+      this.position += 1
+      return { type: "call", name: "abs", argument }
     }
     throw new Error("Expected expression")
   }
@@ -178,6 +187,10 @@ export function evaluateExpression(expression: ExpressionNode, variables: Record
     if (expression.name === "exp") return Math.exp(value)
     if (expression.name === "floor") return Math.floor(value)
     if (expression.name === "ln" || expression.name === "log") return Math.log(value)
+    if (expression.name.startsWith("log_")) {
+      const base = Number(expression.name.slice(4))
+      return base > 0 && base !== 1 ? Math.log(value) / Math.log(base) : Number.NaN
+    }
     if (expression.name === "log10") return Math.log10(value)
     if (expression.name === "sin") return Math.sin(value)
     if (expression.name === "sinh") return Math.sinh(value)

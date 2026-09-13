@@ -6,6 +6,7 @@ import { applyOperation, recomputeDerivedObjects, type DomainOperation } from "@
 import { createDragAction, getDragHandle, rotationHandlePoint, type DragAction, type DragHandle } from "../interaction"
 import { resolveAnnotationPoint } from "../annotations"
 import { clipFunctionSegmentsToBounds } from "../functionGraph"
+import { getIntersectionPreviews, type IntersectionPreview } from "../intersectionPreview"
 import { dashFor, fillFor, opacityFor, strokeFor, strokeWidthFor } from "../primitiveStyle"
 import { VIEWBOX, WORLD_BOUNDS, WORLD_SCALE, svgToWorld, worldToSvg } from "../viewport"
 
@@ -20,6 +21,7 @@ interface GraphicsViewProps {
   onCanvasDoubleClick: (coordinate: Coordinate) => void
   onBoxSelect: (bounds: { minX: number; minY: number; maxX: number; maxY: number }) => void
   onDragEnd: (id: string, action: DragAction) => void
+  onCreateIntersection: (preview: IntersectionPreview) => void
 }
 
 function eventToWorld(event: ReactMouseEvent<SVGElement> | ReactPointerEvent<SVGElement>): Coordinate {
@@ -61,10 +63,12 @@ function pointsAttribute(points: Coordinate[]): string {
   return points.map((point) => `${toX(point.x)},${toY(point.y)}`).join(" ")
 }
 
-export function GraphicsView({ document, selectedIds, creationMode, onSelect, onCanvasClick, onCanvasDoubleClick, onBoxSelect, onDragEnd }: GraphicsViewProps) {
+export function GraphicsView({ document, selectedIds, creationMode, onSelect, onCanvasClick, onCanvasDoubleClick, onBoxSelect, onDragEnd, onCreateIntersection }: GraphicsViewProps) {
   const [dragStart, setDragStart] = useState<Coordinate | null>(null)
   const [dragCurrent, setDragCurrent] = useState<Coordinate | null>(null)
   const [dragState, setDragState] = useState<{ id: string; handle: DragHandle; origin: Coordinate; pointerId: number } | null>(null)
+  const [hoverCoordinate, setHoverCoordinate] = useState<Coordinate | null>(null)
+  const [hoverPrimitiveType, setHoverPrimitiveType] = useState<string | null>(null)
   const suppressClick = useRef(false)
   const previewDocument = useMemo(() => {
     if (!dragState || !dragCurrent) return document
@@ -79,6 +83,16 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
     return result.changed ? result.document : document
   }, [document, dragCurrent, dragState])
   const displayPrimitives = previewDocument.primitives
+  const intersectionPreviews = useMemo(() => {
+    const persistentPairs = new Set(previewDocument.primitives.flatMap((primitive) => {
+      if (primitive.type === "intersection") return [[primitive.lineA, primitive.lineB].sort().join("::")]
+      if (primitive.type === "lineCircleIntersection") return [[primitive.lineId, primitive.circleId].sort().join("::")]
+      if (primitive.type === "circleIntersection") return [[primitive.circleA, primitive.circleB].sort().join("::")]
+      if (primitive.type === "curveIntersection") return [[primitive.objectA, primitive.objectB].sort().join("::")]
+      return []
+    }))
+    return getIntersectionPreviews(previewDocument).filter((preview) => !persistentPairs.has([preview.objectA, preview.objectB].sort().join("::")))
+  }, [previewDocument])
   const pointById = new Map(displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "point" }> => primitive.type === "point").map((point) => [point.id, point]))
   const connectionEndpoints = (connection: Extract<PrimitiveSpec, { type: "connection" }>) => {
     const start = pointById.get(connection.startPointId)
@@ -134,6 +148,9 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
   const handlePointerDown = (event: ReactPointerEvent<SVGSVGElement>) => { if (creationMode || dragState) return; const coordinate = eventToWorld(event); setDragStart(coordinate); setDragCurrent(coordinate) }
   const handlePointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
     const coordinate = eventToWorld(event)
+    setHoverCoordinate(coordinate)
+    const primitiveGroup = (event.target as Element).closest<SVGGElement>("[data-primitive-type]")
+    setHoverPrimitiveType(primitiveGroup?.getAttribute("data-primitive-type") ?? null)
     if (dragState) { if (event.pointerId === dragState.pointerId) setDragCurrent(coordinate); return }
     if (dragStart) setDragCurrent(coordinate)
   }
@@ -185,8 +202,9 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
     const labelPoint = { x: point.x + offset.x, y: point.y + offset.y }
     return <g key={annotation.id} data-annotation-id={annotation.id} className="annotation-marker" pointerEvents="none"><line x1={toX(point.x)} y1={toY(point.y)} x2={toX(labelPoint.x)} y2={toY(labelPoint.y)} /><circle cx={toX(point.x)} cy={toY(point.y)} r="3" /><text x={toX(labelPoint.x) + 5} y={toY(labelPoint.y) - 5}>{annotation.text}</text></g>
   })
+  const renderIntersectionPreviews = () => intersectionPreviews.map((preview) => <g key={`${preview.objectA}-${preview.objectB}-${preview.solutionIndex}`} data-auto-intersection="true" onClick={(event) => { event.stopPropagation(); onCreateIntersection(preview) }}><circle cx={toX(preview.point.x)} cy={toY(preview.point.y)} r="8" fill="var(--color-panel)" stroke="var(--color-warning)" strokeWidth="2" strokeDasharray="3 2" /><text x={toX(preview.point.x) + 12} y={toY(preview.point.y) - 10} fill="var(--color-warning)" fontSize="12" fontWeight="700">交点 ({preview.point.x.toFixed(2)}, {preview.point.y.toFixed(2)}){preview.approximate ? " · 近似" : ""}</text></g>)
 
-  return <main className="graphics"><div className="canvas-card"><svg className={dragState ? "is-dragging" : undefined} viewBox={`0 0 ${VIEWBOX.width} ${VIEWBOX.height}`} role="img" aria-label="几何画布" onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={finishDrag} onPointerCancel={finishDrag} onDoubleClick={(event) => creationMode === "polyline" && onCanvasDoubleClick(eventToWorld(event))} onClick={(event) => { if (suppressClick.current) { suppressClick.current = false; return }; if (creationMode) onCanvasClick(eventToWorld(event)); else if (!dragStart) onSelect(null) }}>
+  return <main className="graphics"><div className="canvas-card">{hoverCoordinate && <div className="coordinate-readout" data-coordinate-readout="true" role="status">{hoverPrimitiveType ? `${hoverPrimitiveType} · ` : ""}({hoverCoordinate.x.toFixed(2)}, {hoverCoordinate.y.toFixed(2)})</div>}<svg className={dragState ? "is-dragging" : undefined} viewBox={`0 0 ${VIEWBOX.width} ${VIEWBOX.height}`} role="img" aria-label="几何画布" onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerLeave={() => { setHoverCoordinate(null); setHoverPrimitiveType(null) }} onPointerUp={finishDrag} onPointerCancel={finishDrag} onDoubleClick={(event) => creationMode === "polyline" && onCanvasDoubleClick(eventToWorld(event))} onClick={(event) => { if (suppressClick.current) { suppressClick.current = false; return }; if (creationMode) onCanvasClick(eventToWorld(event)); else if (!dragStart) onSelect(null) }}>
     <g stroke="#e6eaf2" strokeWidth="1">{Array.from({ length: 21 }, (_, index) => { const x = worldToSvg({ x: WORLD_BOUNDS.minX + index, y: 0 }).x; return <line key={`v-${index}`} x1={x} y1={VIEWBOX.top} x2={x} y2={VIEWBOX.bottom} /> })}{Array.from({ length: 13 }, (_, index) => { const y = worldToSvg({ x: 0, y: WORLD_BOUNDS.minY + index }).y; return <line key={`h-${index}`} x1={VIEWBOX.left} y1={y} x2={VIEWBOX.right} y2={y} /> })}</g>
     <line x1={VIEWBOX.left} y1={toY(0)} x2={VIEWBOX.right} y2={toY(0)} stroke="#9aa6bd" strokeWidth="1.5" /><line x1={toX(0)} y1={VIEWBOX.top} x2={toX(0)} y2={VIEWBOX.bottom} stroke="#9aa6bd" strokeWidth="1.5" />
     {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "line" }> => primitive.type === "line" && primitive.visible !== false).map((line) => { const visible = viewportLine(line); return <g key={line.id} data-primitive-type="line" opacity={opacityFor(line)} onPointerDown={(event) => beginDrag(event, line.id)} onClick={(event) => handleObjectClick(event, line.id)}><line data-hit-target="true" x1={toX(visible.a.x)} y1={toY(visible.a.y)} x2={toX(visible.b.x)} y2={toY(visible.b.y)} stroke="transparent" strokeWidth="18" pointerEvents="stroke" /><line x1={toX(visible.a.x)} y1={toY(visible.a.y)} x2={toX(visible.b.x)} y2={toY(visible.b.y)} stroke={strokeFor(line)} strokeWidth={strokeWidthFor(line, selectedIds.includes(line.id))} strokeDasharray={dashFor(line)} />{renderHandles(line)}</g> })}
@@ -207,6 +225,7 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
     {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "connection" }> => primitive.type === "connection" && primitive.kind === "parabola" && primitive.visible !== false).map((connection) => { const endpoints = connectionEndpoints(connection); const control = connectionControl(connection); if (!endpoints || !control) return null; const path = `M ${toX(endpoints.start.x)} ${toY(endpoints.start.y)} Q ${toX(control.x)} ${toY(control.y)} ${toX(endpoints.end.x)} ${toY(endpoints.end.y)}`; return <g key={connection.id} data-primitive-type="connection" data-connection-kind="parabola" opacity={opacityFor(connection)} onClick={(event) => handleObjectClick(event, connection.id)}><path data-hit-target="true" d={path} fill="none" stroke="transparent" strokeWidth="18" pointerEvents="stroke" /><path d={path} fill="none" stroke={strokeFor(connection)} strokeWidth={strokeWidthFor(connection, selectedIds.includes(connection.id))} strokeDasharray={dashFor(connection)} /></g> })}
     {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "locus" }> => primitive.type === "locus" && primitive.visible !== false).map((locus) => <g key={locus.id} data-primitive-type="locus" opacity={opacityFor(locus)} onClick={(event) => handleObjectClick(event, locus.id)}>{locusSegments(locus).map((points, index) => <polyline key={`${locus.id}-${index}`} points={pointsAttribute(points)} fill="none" stroke={strokeFor(locus)} strokeWidth={strokeWidthFor(locus, selectedIds.includes(locus.id))} strokeDasharray={dashFor(locus)} />)}</g>)}
     {renderAnnotations()}
+    {renderIntersectionPreviews()}
     {selectionRect && <rect className="selection-rect" x={selectionRect.x} y={selectionRect.y} width={selectionRect.width} height={selectionRect.height} />}
   </svg></div></main>
 }

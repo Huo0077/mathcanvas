@@ -3,8 +3,10 @@
   --color-muted: #647089;
   --color-canvas: #f6f8fc;
   --color-panel: #ffffff;
+  --color-surface-subtle: #f8faff;
   --color-border: #dfe5ef;
   --color-accent: #3d5afe;
+  --color-accent-strong: #3046d8;
   --color-accent-soft: #e9edff;
   --color-success: #0f8a63;
   --color-warning: #b45309;
@@ -14,7 +16,12 @@
   --space-3: 0.75rem;
   --space-4: 1rem;
   --space-5: 1.5rem;
+  --space-6: 2rem;
   --radius-sm: 8px;
   --radius-md: 14px;
+  --radius-lg: 18px;
   --shadow-panel: 0 12px 32px rgb(31 45 74 / 8%);
+  --shadow-card: 0 8px 22px rgb(31 45 74 / 6%);
+  --panel-right-width: 328px;
+  --control-height: 40px;
 }

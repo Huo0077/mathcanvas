@@ -2,10 +2,14 @@ import { fireEvent, render, screen } from "@testing-library/react"
 import { beforeEach, describe, expect, it } from "vitest"
 
 import { App } from "./App"
+import { createDemoDocument } from "./demoDocument"
 import { useSceneStore } from "./store"
 
 describe("MathCanvas workbench", () => {
-  beforeEach(() => localStorage.clear())
+  beforeEach(() => {
+    localStorage.clear()
+    useSceneStore.getState().replace(createDemoDocument())
+  })
 
   it("switches workspaces without losing each workspace document", () => {
     render(<App />)
@@ -36,6 +40,16 @@ describe("MathCanvas workbench", () => {
     expect(screen.getByText("斜率特征")).toBeTruthy()
     expect(screen.getByText("倾角")).toBeTruthy()
     expect(screen.getByText("截距")).toBeTruthy()
+  })
+
+  it("organizes selected properties into an inspector hierarchy", () => {
+    render(<App />)
+    fireEvent.click(screen.getAllByText("参数直线")[0])
+
+    expect(screen.getByRole("region", { name: "属性检查器" })).toBeTruthy()
+    expect(screen.getByText("当前图元")).toBeTruthy()
+    expect(screen.getByText("外观")).toBeTruthy()
+    expect(screen.getByText("直线", { selector: ".property-type-badge" })).toBeTruthy()
   })
 
   it("shows editable point coordinates when a point is selected", () => {
@@ -310,23 +324,25 @@ describe("MathCanvas workbench", () => {
     expect((screen.getByRole("spinbutton", { name: "定义域终点" }) as HTMLInputElement).value).toBe("4")
   })
 
-  it("applies a common function preset from the property bar", () => {
+  it("inserts nested functions from the formula keyboard", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "添加函数图像" }))
+    fireEvent.click(screen.getByRole("button", { name: "插入 sin" }))
+    fireEvent.click(screen.getByRole("button", { name: "插入 ln" }))
 
-    fireEvent.change(screen.getByRole("combobox", { name: "函数预设" }), { target: { value: "sine" } })
+    const formula = screen.getByRole("textbox", { name: "函数表达式" }) as HTMLTextAreaElement
+    fireEvent.change(formula, { target: { value: "sin(ln(x))" } })
 
-    expect(screen.getByDisplayValue("sin(x)")).toBeTruthy()
-    expect(screen.getByDisplayValue(String(-2 * Math.PI))).toBeTruthy()
+    expect(formula.value).toBe("sin(ln(x))")
+    expect(screen.getByRole("button", { name: "插入对数" })).toBeTruthy()
   })
 
-  it("keeps a visible formula editor after choosing a function preset", () => {
+  it("keeps a visible formula editor for direct input", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "添加函数图像" }))
-    fireEvent.change(screen.getByRole("combobox", { name: "函数预设" }), { target: { value: "exponential" } })
 
     expect(screen.getByRole("textbox", { name: "函数表达式" })).toBeTruthy()
-    expect(screen.getByDisplayValue("e^x")).toBeTruthy()
+    expect(screen.getByPlaceholderText("例如：y = e^x 或 sin(ln(x))")).toBeTruthy()
   })
 
   it("exposes play, pause, stop, and animation mode controls", () => {
@@ -356,6 +372,22 @@ describe("MathCanvas workbench", () => {
     expect(screen.getByRole("img", { name: "几何画布" }).querySelectorAll('[data-primitive-type="intersectionSet"]')).toHaveLength(1)
   })
 
+  it("shows pointer coordinates and creates a persistent intersection on click", () => {
+    render(<App />)
+    const canvas = screen.getByRole("img", { name: "几何画布" })
+    fireEvent.pointerMove(canvas, { clientX: 400, clientY: 220, pointerId: 1 })
+    expect(screen.getByRole("status").textContent).toContain("(0.00, 0.00)")
+
+    fireEvent.click(screen.getByRole("button", { name: "添加圆" }))
+    fireEvent.click(canvas, { clientX: 400, clientY: 220 })
+    fireEvent.click(canvas, { clientX: 466, clientY: 220 })
+    const preview = canvas.querySelector('[data-auto-intersection]')
+    expect(preview).toBeTruthy()
+    fireEvent.click(preview!)
+
+    expect(useSceneStore.getState().document.primitives.some((primitive) => primitive.type === "lineCircleIntersection")).toBe(true)
+  })
+
   it("selects and deletes a point with the keyboard", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "添加点" }))
@@ -364,7 +396,7 @@ describe("MathCanvas workbench", () => {
     expect((screen.getByRole("button", { name: "删除对象" }) as HTMLButtonElement).disabled).toBe(false)
     fireEvent.keyDown(window, { key: "Delete" })
 
-    expect(screen.getAllByText(/新点 [A-Z]/)).toHaveLength(pointLabelsBeforeDelete.length - 2)
+    expect(screen.queryAllByText(/新点 [A-Z]/)).toHaveLength(pointLabelsBeforeDelete.length - 2)
     expect((screen.getByRole("button", { name: "删除对象" }) as HTMLButtonElement).disabled).toBe(true)
   })
 

@@ -53,6 +53,11 @@ describe("expression AST", () => {
     expect(evaluateExpression(expression, { x: 0 })).toBeCloseTo(1 + Math.PI - Math.E)
   })
 
+  it("supports classroom absolute value and subscript logarithm notation", () => {
+    expect(evaluateExpression(parseExpression("|x|"), { x: -3 })).toBe(3)
+    expect(evaluateExpression(parseExpression("log_2(x)"), { x: 8 })).toBeCloseTo(3)
+  })
+
   it("rejects unknown functions instead of executing arbitrary identifiers", () => {
     expect(() => parseExpression("alert(x)")).toThrow("Unknown function: alert")
   })
