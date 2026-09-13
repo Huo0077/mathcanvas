@@ -320,6 +320,15 @@ describe("MathCanvas workbench", () => {
     expect(screen.getByDisplayValue(String(-2 * Math.PI))).toBeTruthy()
   })
 
+  it("keeps a visible formula editor after choosing a function preset", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "添加函数图像" }))
+    fireEvent.change(screen.getByRole("combobox", { name: "函数预设" }), { target: { value: "exponential" } })
+
+    expect(screen.getByRole("textbox", { name: "函数表达式" })).toBeTruthy()
+    expect(screen.getByDisplayValue("e^x")).toBeTruthy()
+  })
+
   it("exposes play, pause, stop, and animation mode controls", () => {
     render(<App />)
 

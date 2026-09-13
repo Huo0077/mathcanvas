@@ -5,6 +5,7 @@ import { applyOperation, recomputeDerivedObjects, type DomainOperation } from "@
 
 import { createDragAction, getDragHandle, rotationHandlePoint, type DragAction, type DragHandle } from "../interaction"
 import { resolveAnnotationPoint } from "../annotations"
+import { clipFunctionSegmentsToBounds } from "../functionGraph"
 import { dashFor, fillFor, opacityFor, strokeFor, strokeWidthFor } from "../primitiveStyle"
 import { VIEWBOX, WORLD_BOUNDS, WORLD_SCALE, svgToWorld, worldToSvg } from "../viewport"
 
@@ -116,7 +117,7 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
     return { a: ray.a, b: { x: ray.a.x + unit.x * distance, y: ray.a.y + unit.y * distance } }
   }
   const functionSegments = (primitive: Extract<PrimitiveSpec, { type: "function" }>) => {
-    try { return sampleFunctionSegments((x) => evaluateParameterExpression(primitive.expression, { x }), primitive.domain, primitive.samples ?? 128) } catch { return [] }
+    try { return clipFunctionSegmentsToBounds(sampleFunctionSegments((x) => evaluateParameterExpression(primitive.expression, { x }), primitive.domain, primitive.samples ?? 128), WORLD_BOUNDS) } catch { return [] }
   }
   const handleObjectClick = (event: ReactMouseEvent<SVGElement>, id: string) => { event.stopPropagation(); if (creationMode) onCanvasClick(eventToWorld(event)); else onSelect(id, event.shiftKey) }
   const beginDrag = (event: ReactPointerEvent<SVGElement>, id: string) => {

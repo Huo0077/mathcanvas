@@ -16,7 +16,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgb(61 90 254 / 3
 .toolbar { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: var(--space-2); padding: var(--space-3) var(--space-5); background: var(--color-panel); border-bottom: 1px solid var(--color-border); }
 .toolbar .primary { background: var(--color-accent); border-color: var(--color-accent); color: white; }
 .panel { background: var(--color-panel); border-right: 1px solid var(--color-border); min-height: 0; }
-.panel.right { border-right: 0; border-left: 1px solid var(--color-border); }
+.panel.right { border-right: 0; border-left: 1px solid var(--color-border); overflow-y: auto; }
 .panel-section { padding: var(--space-4); border-bottom: 1px solid var(--color-border); }
 .panel-title { margin: 0 0 var(--space-3); font-size: 0.75rem; color: var(--color-muted); text-transform: uppercase; letter-spacing: 0.08em; }
 .object-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2) 0; }
@@ -27,8 +27,8 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgb(61 90 254 / 3
 .object-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--color-accent); flex: 0 0 auto; }
 .object-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .icon-button { width: 44px; padding: 0; }
-.graphics { min-width: 0; min-height: 0; padding: var(--space-4); display: grid; place-items: center; }
-.canvas-card { width: min(100%, 900px); background: var(--color-panel); border: 1px solid var(--color-border); border-radius: var(--radius-md); box-shadow: var(--shadow-panel); padding: var(--space-3); }
+.graphics { min-width: 0; min-height: 0; padding: var(--space-4); display: grid; align-items: start; justify-items: center; overflow: auto; }
+.canvas-card { width: min(100%, 900px); align-self: start; position: sticky; top: var(--space-4); background: var(--color-panel); border: 1px solid var(--color-border); border-radius: var(--radius-md); box-shadow: var(--shadow-panel); padding: var(--space-3); }
 .canvas-card svg { display: block; width: 100%; height: auto; border-radius: var(--radius-sm); background: #fbfcff; touch-action: none; }
 .canvas-card svg [data-hit-target="true"] { cursor: grab; }
 .canvas-card svg.is-dragging, .canvas-card svg.is-dragging [data-hit-target="true"] { cursor: grabbing; }
@@ -41,7 +41,8 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgb(61 90 254 / 3
 .primitive-properties { display: grid; gap: var(--space-2); margin-top: var(--space-4); }
 .primitive-properties h3 { margin: 0; font-size: 0.9rem; }
 .primitive-properties label { display: grid; gap: var(--space-1); font-size: 0.8rem; color: var(--color-muted); }
-.primitive-properties input, .primitive-properties select { min-height: 36px; width: 100%; border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 0 var(--space-2); color: var(--color-ink); background: var(--color-panel); }
+.primitive-properties input, .primitive-properties select, .primitive-properties textarea { min-height: 36px; width: 100%; border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: var(--space-2); color: var(--color-ink); background: var(--color-panel); }
+.primitive-properties textarea { min-height: 72px; resize: vertical; line-height: 1.45; }
 .primitive-properties input[type="color"] { padding: 3px; cursor: pointer; }
 .annotation-list { display: grid; gap: var(--space-2); }
 .annotation-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm); font-size: 0.8rem; }

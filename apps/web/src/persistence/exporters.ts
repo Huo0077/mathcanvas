@@ -3,6 +3,7 @@ import { evaluateParameterExpression, sampleEllipse, sampleFunctionSegments, sam
 
 import { svgStyleFor } from "../primitiveStyle"
 import { resolveAnnotationPoint } from "../annotations"
+import { clipFunctionSegmentsToBounds } from "../functionGraph"
 import { VIEWBOX, WORLD_BOUNDS, WORLD_SCALE, worldToSvg } from "../viewport"
 
 const toX = (x: number) => worldToSvg({ x, y: 0 }).x
@@ -36,7 +37,7 @@ function sampledSegments(primitive: Extract<PrimitiveSpec, { type: "parabola" | 
     if (primitive.type === "hyperbola") {
       return sampleHyperbolaBranches(primitive, [WORLD_BOUNDS.minX, WORLD_BOUNDS.maxX], 128)
     }
-    return sampleFunctionSegments((x) => evaluateParameterExpression(primitive.expression, { x }), primitive.domain, primitive.samples ?? 128)
+    return clipFunctionSegmentsToBounds(sampleFunctionSegments((x) => evaluateParameterExpression(primitive.expression, { x }), primitive.domain, primitive.samples ?? 128), WORLD_BOUNDS)
   } catch {
     return []
   }

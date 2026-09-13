@@ -14,4 +14,9 @@ describe("function presets", () => {
     expect(preset?.defaultDomain).toEqual([0, 20])
     expect(evaluateCompiledExpression(compileExpression(preset!.expression), { x: 0 })).toBeCloseTo(1)
   })
+
+  it("uses classroom-friendly notation for the exponential preset", () => {
+    expect(getFunctionPreset("exponential")?.expression).toBe("e^x")
+    expect(evaluateCompiledExpression(compileExpression("e^x"), { x: 1 })).toBeCloseTo(Math.E)
+  })
 })
