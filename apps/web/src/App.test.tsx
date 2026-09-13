@@ -70,6 +70,34 @@ describe("MathCanvas workbench", () => {
     expect((screen.getByRole("spinbutton", { name: "端点 B Y" }) as HTMLInputElement).value).toBe("3")
   })
 
+  it("creates and edits a ray through the canvas and properties", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "添加射线" }))
+    const canvas = screen.getByRole("img", { name: "几何画布" })
+    fireEvent.click(canvas, { clientX: 220, clientY: 200 })
+    fireEvent.click(canvas, { clientX: 580, clientY: 80 })
+
+    expect(screen.getAllByText("射线 1")).toHaveLength(2)
+    expect(canvas.querySelectorAll('[data-primitive-type="ray"]')).toHaveLength(1)
+    fireEvent.change(screen.getByRole("spinbutton", { name: "起点 A X" }), { target: { value: "-4" } })
+    expect((screen.getByRole("spinbutton", { name: "起点 A X" }) as HTMLInputElement).value).toBe("-4")
+  })
+
+  it("creates and edits a polyline through the canvas and properties", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "添加折线" }))
+    const canvas = screen.getByRole("img", { name: "几何画布" })
+    fireEvent.click(canvas, { clientX: 220, clientY: 200 })
+    fireEvent.click(canvas, { clientX: 400, clientY: 100 })
+    fireEvent.click(canvas, { clientX: 580, clientY: 220 })
+    fireEvent.doubleClick(canvas, { clientX: 650, clientY: 140 })
+
+    expect(screen.getAllByText("折线 1")).toHaveLength(2)
+    expect(canvas.querySelectorAll('[data-primitive-type="polyline"]')).toHaveLength(1)
+    fireEvent.change(screen.getByRole("spinbutton", { name: "顶点 2 X" }), { target: { value: "-2" } })
+    expect((screen.getByRole("spinbutton", { name: "顶点 2 X" }) as HTMLInputElement).value).toBe("-2")
+  })
+
   it("selects and deletes a point with the keyboard", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "添加点" }))
