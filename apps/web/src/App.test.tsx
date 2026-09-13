@@ -345,6 +345,17 @@ describe("MathCanvas workbench", () => {
     expect(screen.getByPlaceholderText("例如：y = e^x 或 sin(ln(x))")).toBeTruthy()
   })
 
+  it("does not delete a function when Backspace is pressed in its formula editor", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "添加函数图像" }))
+    const formula = screen.getByRole("textbox", { name: "函数表达式" })
+
+    fireEvent.keyDown(formula, { key: "Backspace" })
+
+    expect(screen.getByRole("textbox", { name: "函数表达式" })).toBeTruthy()
+    expect(useSceneStore.getState().document.primitives.some((primitive) => primitive.type === "function")).toBe(true)
+  })
+
   it("exposes play, pause, stop, and animation mode controls", () => {
     render(<App />)
 

@@ -52,8 +52,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .object-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--color-accent); flex: 0 0 auto; }
 .object-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .icon-button { width: 44px; padding: 0; }
-.graphics { min-width: 0; min-height: 0; padding: var(--space-4); display: grid; align-items: start; justify-items: center; overflow: auto; }
-.canvas-card { width: min(100%, 900px); align-self: start; position: sticky; top: var(--space-4); background: var(--color-panel); border: 1px solid var(--color-border); border-radius: var(--radius-md); box-shadow: var(--shadow-panel); padding: var(--space-3); }
+.graphics { min-width: 0; min-height: 0; padding: var(--space-4); display: grid; align-items: stretch; justify-items: stretch; overflow: auto; }
+.canvas-card { width: 100%; align-self: start; position: sticky; top: var(--space-4); background: var(--color-panel); border: 1px solid var(--color-border); border-radius: var(--radius-md); box-shadow: var(--shadow-panel); padding: var(--space-3); }
 .coordinate-readout { position: absolute; top: var(--space-4); left: var(--space-4); z-index: 1; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: rgb(255 255 255 / 92%); box-shadow: var(--shadow-card); color: var(--color-ink); font-size: 0.75rem; font-variant-numeric: tabular-nums; pointer-events: none; }
 .canvas-card [data-auto-intersection] { cursor: pointer; }
 .canvas-card svg { display: block; width: 100%; height: auto; border-radius: var(--radius-sm); background: #fbfcff; touch-action: none; }

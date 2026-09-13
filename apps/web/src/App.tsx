@@ -45,6 +45,10 @@ function nextPointLabel(document: ReturnType<typeof useSceneStore.getState>["doc
   return `新点 ${document.primitives.filter((primitive) => primitive.type === "point").length + 1}`
 }
 
+function isTextEditingTarget(target: EventTarget | null): boolean {
+  return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement || (target instanceof HTMLElement && target.isContentEditable)
+}
+
 export function App() {
   const document = useSceneStore((state) => state.document)
   const apply = useSceneStore((state) => state.apply)
@@ -302,7 +306,7 @@ export function App() {
         setCreationStep(null)
         return
       }
-      if ((event.key === "Delete" || event.key === "Backspace") && selectedIds.length > 0 && !(event.target instanceof HTMLInputElement)) {
+      if ((event.key === "Delete" || event.key === "Backspace") && selectedIds.length > 0 && !isTextEditingTarget(event.target)) {
         event.preventDefault()
         deleteSelected()
       }
