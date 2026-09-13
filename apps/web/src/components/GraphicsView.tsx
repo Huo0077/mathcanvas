@@ -1,5 +1,6 @@
 import { type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, useRef, useState } from "react"
 import type { Coordinate, GeometryDocument, PrimitiveSpec } from "@draw/dsl"
+import { evaluateParameterExpression, sampleEllipse, sampleFunction, sampleHyperbola, sampleParabola } from "@draw/geometry-kernel"
 
 const toX = (x: number) => 40 + ((x + 10) / 20) * 720
 const toY = (y: number) => 320 - ((y + 6) / 12) * 360
@@ -33,6 +34,10 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
   const rays = document.primitives.filter((primitive): primitive is Extract<typeof primitive, { type: "ray" }> => primitive.type === "ray" && primitive.visible !== false)
   const segments = document.primitives.filter((primitive): primitive is Extract<typeof primitive, { type: "segment" }> => primitive.type === "segment" && primitive.visible !== false)
   const polylines = document.primitives.filter((primitive): primitive is Extract<typeof primitive, { type: "polyline" }> => primitive.type === "polyline" && primitive.visible !== false)
+  const parabolas = document.primitives.filter((primitive): primitive is Extract<typeof primitive, { type: "parabola" }> => primitive.type === "parabola" && primitive.visible !== false)
+  const ellipses = document.primitives.filter((primitive): primitive is Extract<typeof primitive, { type: "ellipse" }> => primitive.type === "ellipse" && primitive.visible !== false)
+  const hyperbolas = document.primitives.filter((primitive): primitive is Extract<typeof primitive, { type: "hyperbola" }> => primitive.type === "hyperbola" && primitive.visible !== false)
+  const functions = document.primitives.filter((primitive): primitive is Extract<typeof primitive, { type: "function" }> => primitive.type === "function" && primitive.visible !== false)
   const circles = document.primitives.filter((primitive): primitive is Extract<typeof primitive, { type: "circle" }> => primitive.type === "circle" && primitive.visible !== false)
   const arcs = document.primitives.filter((primitive): primitive is Extract<typeof primitive, { type: "arc" }> => primitive.type === "arc" && primitive.visible !== false)
   const points = document.primitives.filter((primitive): primitive is Extract<typeof primitive, { type: "point" }> => primitive.type === "point" && primitive.visible !== false)
@@ -51,6 +56,14 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
     const distance = Math.min(...limits, 20)
     return { a: ray.a, b: { x: ray.a.x + unit.x * distance, y: ray.a.y + unit.y * distance } }
   }
+  const pointsAttribute = (points: Coordinate[]) => points.map((point) => `${toX(point.x)},${toY(point.y)}`).join(" ")
+  const functionPoints = (primitive: Extract<PrimitiveSpec, { type: "function" }>) => {
+    try {
+      return sampleFunction((x) => evaluateParameterExpression(primitive.expression, { x }), primitive.domain, primitive.samples ?? 128)
+    } catch {
+      return []
+    }
+  }
   const handleObjectClick = (event: ReactMouseEvent<SVGElement>, id: string) => { event.stopPropagation(); if (creationMode) onCanvasClick(eventToWorld(event)); else onSelect(id, event.shiftKey) }
   const handlePointerDown = (event: ReactPointerEvent<SVGSVGElement>) => { if (creationMode) return; const coordinate = eventToWorld(event); setDragStart(coordinate); setDragCurrent(coordinate) }
   const handlePointerMove = (event: ReactPointerEvent<SVGSVGElement>) => { if (dragStart) setDragCurrent(eventToWorld(event)) }
@@ -63,6 +76,10 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
     {rays.map((ray) => { const visible = viewportRay(ray); return <line key={ray.id} data-primitive-type="ray" onClick={(event) => handleObjectClick(event, ray.id)} x1={toX(visible.a.x)} y1={toY(visible.a.y)} x2={toX(visible.b.x)} y2={toY(visible.b.y)} stroke="#7c3aed" strokeWidth={selectedIds.includes(ray.id) ? 5 : 3} /> })}
     {segments.map((segment) => <line key={segment.id} data-primitive-type="segment" onClick={(event) => handleObjectClick(event, segment.id)} x1={toX(segment.a.x)} y1={toY(segment.a.y)} x2={toX(segment.b.x)} y2={toY(segment.b.y)} stroke="#0b7285" strokeWidth={selectedIds.includes(segment.id) ? 5 : 3} />)}
     {polylines.map((polyline) => <polyline key={polyline.id} data-primitive-type="polyline" onClick={(event) => handleObjectClick(event, polyline.id)} points={polyline.points.map((point) => `${toX(point.x)},${toY(point.y)}`).join(" ")} fill="none" stroke="#b45309" strokeWidth={selectedIds.includes(polyline.id) ? 5 : 3} />)}
+    {parabolas.map((parabola) => <polyline key={parabola.id} data-primitive-type="parabola" onClick={(event) => handleObjectClick(event, parabola.id)} points={pointsAttribute(sampleParabola(parabola, [-10, 10], 128))} fill="none" stroke="#db2777" strokeWidth={selectedIds.includes(parabola.id) ? 5 : 3} />)}
+    {ellipses.map((ellipse) => <polyline key={ellipse.id} data-primitive-type="ellipse" onClick={(event) => handleObjectClick(event, ellipse.id)} points={pointsAttribute(sampleEllipse(ellipse, 160))} fill="none" stroke="#0891b2" strokeWidth={selectedIds.includes(ellipse.id) ? 5 : 3} />)}
+    {hyperbolas.map((hyperbola) => { const branch = sampleHyperbola(hyperbola, [-10, 10], 128); const opposite = branch.map((point) => hyperbola.axis === "x" ? { x: point.x, y: 2 * hyperbola.center.y - point.y } : { x: 2 * hyperbola.center.x - point.x, y: point.y }); return <g key={hyperbola.id} data-primitive-type="hyperbola" onClick={(event) => handleObjectClick(event, hyperbola.id)}><polyline points={pointsAttribute(branch)} fill="none" stroke="#9333ea" strokeWidth={selectedIds.includes(hyperbola.id) ? 5 : 3} /><polyline points={pointsAttribute(opposite)} fill="none" stroke="#9333ea" strokeWidth={selectedIds.includes(hyperbola.id) ? 5 : 3} /></g> })}
+    {functions.map((primitive) => <polyline key={primitive.id} data-primitive-type="function" onClick={(event) => handleObjectClick(event, primitive.id)} points={pointsAttribute(functionPoints(primitive))} fill="none" stroke="#16a34a" strokeWidth={selectedIds.includes(primitive.id) ? 5 : 3} />)}
     {circles.map((circle) => <g key={circle.id} onClick={(event) => handleObjectClick(event, circle.id)}><ellipse cx={toX(circle.center.x)} cy={toY(circle.center.y)} rx={circle.radius * 36} ry={circle.radius * 30} fill="none" stroke="#0f8a63" strokeWidth={selectedIds.includes(circle.id) ? 5 : 3} /><text x={toX(circle.center.x) + circle.radius * 36 + 8} y={toY(circle.center.y)} fill="#172033" fontSize="14" fontWeight="700">{circle.label ?? circle.id}</text></g>)}
     {arcs.map((arc) => <path key={arc.id} onClick={(event) => handleObjectClick(event, arc.id)} d={`M ${toX(arc.center.x + arc.radius * Math.cos(arc.startAngle))} ${toY(arc.center.y + arc.radius * Math.sin(arc.startAngle))} A ${arc.radius * 36} ${arc.radius * 30} 0 ${Math.abs(arc.endAngle - arc.startAngle) > Math.PI ? 1 : 0} ${arc.endAngle >= arc.startAngle ? 0 : 1} ${toX(arc.center.x + arc.radius * Math.cos(arc.endAngle))} ${toY(arc.center.y + arc.radius * Math.sin(arc.endAngle))}`} fill="none" stroke="#f08a24" strokeWidth={selectedIds.includes(arc.id) ? 5 : 3} />)}
     {points.map((point) => <g key={point.id} onClick={(event) => handleObjectClick(event, point.id)}><circle cx={toX(point.x)} cy={toY(point.y)} r="6" fill="#3d5afe" /><text x={toX(point.x) + 12} y={toY(point.y) + 5} fill="#172033" fontSize="14" fontWeight="700">{point.label ?? point.id}</text></g>)}

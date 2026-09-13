@@ -99,6 +99,17 @@ export interface HyperbolaPrimitive {
   locked?: boolean
 }
 
+export interface FunctionPrimitive {
+  id: string
+  type: "function"
+  expression: string
+  domain: [number, number]
+  samples?: number
+  label?: string
+  visible?: boolean
+  locked?: boolean
+}
+
 export interface CirclePrimitive {
   id: string
   type: "circle"
@@ -168,6 +179,7 @@ export type PrimitiveSpec =
   | ParabolaPrimitive
   | EllipsePrimitive
   | HyperbolaPrimitive
+  | FunctionPrimitive
   | CirclePrimitive
   | ArcPrimitive
   | IntersectionPrimitive

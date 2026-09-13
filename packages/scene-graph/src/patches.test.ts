@@ -78,6 +78,21 @@ describe("domain patches", () => {
     expect(validatePatch(document, { op: "addPrimitive", primitive: polyline })).toEqual({ valid: false, errors: ["polyline consecutive points must differ"] })
   })
 
+  it("validates conic and function property edits", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [
+      { id: "parabola-1", type: "parabola", vertex: { x: 0, y: 0 }, focalParameter: 2, axis: "y" },
+      { id: "function-1", type: "function", expression: "x*x", domain: [-4, 4], samples: 32 }
+    ]
+
+    const parabola = commitPatch(document, { op: "updatePrimitive", id: "parabola-1", patch: { focalParameter: 3, vertex: { x: 1, y: 2 } } })
+    const functionResult = commitPatch(parabola.document, { op: "updatePrimitive", id: "function-1", patch: { expression: "2*x+1", domain: [-2, 6] } })
+
+    expect(parabola.document.primitives[0]).toMatchObject({ focalParameter: 3, vertex: { x: 1, y: 2 } })
+    expect(functionResult.document.primitives[1]).toMatchObject({ expression: "2*x+1", domain: [-2, 6] })
+    expect(validatePatch(document, { op: "updatePrimitive", id: "function-1", patch: { expression: "x+" } })).toEqual({ valid: false, errors: ["invalid function expression"] })
+  })
+
   it("rejects overlapping groups and locked batch alignment", () => {
     const document = createEmptyDocument("calculus")
     document.primitives = [

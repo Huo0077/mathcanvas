@@ -66,17 +66,30 @@ export function validatePatch(document: GeometryDocument, operation: DomainOpera
   }
   if (operation.op === "updatePrimitive") {
     const primitive = document.primitives.find((candidate) => candidate.id === operation.id)
-    if (!primitive || !["line", "segment", "ray", "polyline", "circle", "arc"].includes(primitive.type)) errors.push("object is not editable")
+    if (!primitive || !["line", "segment", "ray", "polyline", "parabola", "ellipse", "hyperbola", "function", "circle", "arc"].includes(primitive.type)) errors.push("object is not editable")
     if (primitive?.locked) errors.push("object is locked")
     if (operation.patch.a && (!Number.isFinite(operation.patch.a.x) || !Number.isFinite(operation.patch.a.y))) errors.push("line start must be finite")
     if (operation.patch.b && (!Number.isFinite(operation.patch.b.x) || !Number.isFinite(operation.patch.b.y))) errors.push("line end must be finite")
     if (operation.patch.center && (!Number.isFinite(operation.patch.center.x) || !Number.isFinite(operation.patch.center.y))) errors.push("center must be finite")
+    if (operation.patch.vertex && (!Number.isFinite(operation.patch.vertex.x) || !Number.isFinite(operation.patch.vertex.y))) errors.push("vertex must be finite")
     if (operation.patch.radius !== undefined && (!Number.isFinite(operation.patch.radius) || operation.patch.radius <= 0)) errors.push("radius must be positive")
+    if (operation.patch.radiusX !== undefined && (!Number.isFinite(operation.patch.radiusX) || operation.patch.radiusX <= 0)) errors.push("radius X must be positive")
+    if (operation.patch.radiusY !== undefined && (!Number.isFinite(operation.patch.radiusY) || operation.patch.radiusY <= 0)) errors.push("radius Y must be positive")
+    if (operation.patch.focalParameter !== undefined && (!Number.isFinite(operation.patch.focalParameter) || operation.patch.focalParameter === 0)) errors.push("focal parameter must be non-zero")
+    if (operation.patch.axis !== undefined && !["x", "y"].includes(operation.patch.axis)) errors.push("axis is invalid")
     if (operation.patch.startAngle !== undefined && !Number.isFinite(operation.patch.startAngle)) errors.push("start angle must be finite")
     if (operation.patch.endAngle !== undefined && !Number.isFinite(operation.patch.endAngle)) errors.push("end angle must be finite")
     if (primitive?.type === "circle" && (operation.patch.startAngle !== undefined || operation.patch.endAngle !== undefined)) errors.push("circle does not support arc angles")
     if (primitive?.type !== "line" && primitive?.type !== "segment" && primitive?.type !== "ray" && (operation.patch.a !== undefined || operation.patch.b !== undefined)) errors.push("only lines, segments, and rays support endpoints")
     if (operation.patch.points !== undefined && primitive?.type !== "polyline") errors.push("only polylines support vertices")
+    if (operation.patch.expression !== undefined) {
+      if (primitive?.type !== "function") errors.push("only functions support expressions")
+      else {
+        try { parseExpression(operation.patch.expression) } catch { errors.push("invalid function expression") }
+      }
+    }
+    if (operation.patch.domain !== undefined && (!Number.isFinite(operation.patch.domain[0]) || !Number.isFinite(operation.patch.domain[1]) || operation.patch.domain[0] >= operation.patch.domain[1])) errors.push("function domain is invalid")
+    if (operation.patch.samples !== undefined && (!Number.isInteger(operation.patch.samples) || operation.patch.samples < 2 || operation.patch.samples > 2048)) errors.push("function sample count is invalid")
     if (primitive?.type === "ray") {
       const nextA = operation.patch.a ?? primitive.a
       const nextB = operation.patch.b ?? primitive.b

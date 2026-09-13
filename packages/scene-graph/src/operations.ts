@@ -23,10 +23,18 @@ export interface PrimitiveUpdatePatch {
   a?: { x: number; y: number }
   b?: { x: number; y: number }
   center?: { x: number; y: number }
+  vertex?: { x: number; y: number }
   radius?: number
+  radiusX?: number
+  radiusY?: number
+  focalParameter?: number
+  axis?: "x" | "y"
   startAngle?: number
   endAngle?: number
   points?: { x: number; y: number }[]
+  expression?: string
+  domain?: [number, number]
+  samples?: number
 }
 
 export interface OperationResult {
@@ -176,12 +184,28 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
     changedIds = [operation.primitive.id]
   } else if (operation.op === "updatePrimitive") {
     const primitive = next.primitives.find((candidate) => candidate.id === operation.id)
-    if (!primitive || !["line", "segment", "ray", "polyline", "circle", "arc"].includes(primitive.type) || primitive.locked) return { document, changed: false, error: primitive?.locked ? "object is locked" : "object is not editable" }
+    if (!primitive || !["line", "segment", "ray", "polyline", "parabola", "ellipse", "hyperbola", "function", "circle", "arc"].includes(primitive.type) || primitive.locked) return { document, changed: false, error: primitive?.locked ? "object is locked" : "object is not editable" }
     if (primitive.type === "line" || primitive.type === "segment" || primitive.type === "ray") {
       if (operation.patch.a) primitive.a = { ...primitive.a, ...operation.patch.a }
       if (operation.patch.b) primitive.b = { ...primitive.b, ...operation.patch.b }
     }
     if (primitive.type === "polyline" && operation.patch.points) primitive.points = operation.patch.points
+    if (primitive.type === "parabola") {
+      if (operation.patch.vertex) primitive.vertex = { ...primitive.vertex, ...operation.patch.vertex }
+      if (operation.patch.focalParameter !== undefined) primitive.focalParameter = operation.patch.focalParameter
+      if (operation.patch.axis !== undefined) primitive.axis = operation.patch.axis
+    }
+    if (primitive.type === "ellipse" || primitive.type === "hyperbola") {
+      if (operation.patch.center) primitive.center = { ...primitive.center, ...operation.patch.center }
+      if (operation.patch.radiusX !== undefined) primitive.radiusX = operation.patch.radiusX
+      if (operation.patch.radiusY !== undefined) primitive.radiusY = operation.patch.radiusY
+      if (primitive.type === "hyperbola" && operation.patch.axis !== undefined) primitive.axis = operation.patch.axis
+    }
+    if (primitive.type === "function") {
+      if (operation.patch.expression !== undefined) primitive.expression = operation.patch.expression
+      if (operation.patch.domain !== undefined) primitive.domain = operation.patch.domain
+      if (operation.patch.samples !== undefined) primitive.samples = operation.patch.samples
+    }
     if (primitive.type === "circle" || primitive.type === "arc") {
       if (operation.patch.center) primitive.center = { ...primitive.center, ...operation.patch.center }
       if (operation.patch.radius !== undefined) primitive.radius = operation.patch.radius

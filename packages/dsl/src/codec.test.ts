@@ -49,6 +49,16 @@ describe("Geometry DSL codec", () => {
     expect(decodeMgeo(encodeMgeo(document)).primitives).toEqual(document.primitives)
   })
 
+  it("round-trips conic and function primitives", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [
+      { id: "ellipse-1", type: "ellipse", center: { x: 1, y: -1 }, radiusX: 4, radiusY: 2 },
+      { id: "function-1", type: "function", expression: "2*x+1", domain: [-5, 5], samples: 64 }
+    ]
+
+    expect(decodeMgeo(encodeMgeo(document)).primitives).toEqual(document.primitives)
+  })
+
   it("rejects degenerate rays and polylines", () => {
     const document = createEmptyDocument("calculus")
     document.primitives = [

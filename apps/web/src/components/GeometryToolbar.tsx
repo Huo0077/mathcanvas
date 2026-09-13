@@ -10,6 +10,10 @@ interface GeometryToolbarProps {
   onAddPolyline: () => void
   onAddCircle: () => void
   onAddArc: () => void
+  onAddParabola: () => void
+  onAddEllipse: () => void
+  onAddHyperbola: () => void
+  onAddFunction: () => void
   onDelete: () => void
   onToggleLock: () => void
   onSelectTool: () => void
@@ -28,6 +32,10 @@ export function GeometryToolbar(props: GeometryToolbarProps) {
     <button aria-label="添加折线" aria-pressed={props.creationMode === "polyline"} data-active={props.creationMode === "polyline"} onClick={props.onAddPolyline}>折线</button>
     <button aria-label="添加圆" aria-pressed={props.creationMode === "circle"} data-active={props.creationMode === "circle"} onClick={props.onAddCircle}>圆</button>
     <button aria-label="添加圆弧" aria-pressed={props.creationMode === "arc"} data-active={props.creationMode === "arc"} onClick={props.onAddArc}>圆弧</button>
+    <button aria-label="添加抛物线" onClick={props.onAddParabola}>抛物线</button>
+    <button aria-label="添加椭圆" onClick={props.onAddEllipse}>椭圆</button>
+    <button aria-label="添加双曲线" onClick={props.onAddHyperbola}>双曲线</button>
+    <button aria-label="添加函数图像" onClick={props.onAddFunction}>函数图像</button>
     <button aria-label="删除对象" disabled={!props.hasSelection || props.allSelectedLocked} onClick={props.onDelete}>删除</button>
     <button aria-label={props.allSelectedLocked ? "解锁对象" : "锁定对象"} disabled={!props.hasSelection} onClick={props.onToggleLock}>{props.allSelectedLocked ? "解锁" : "锁定"}</button>
     <button onClick={props.onUndo}>撤销</button><button onClick={props.onRedo}>重做</button><button onClick={props.onSave}>保存 .mgeo</button><button onClick={props.onOpen}>打开 .mgeo</button>

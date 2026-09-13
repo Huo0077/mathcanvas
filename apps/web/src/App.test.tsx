@@ -98,6 +98,36 @@ describe("MathCanvas workbench", () => {
     expect((screen.getByRole("spinbutton", { name: "顶点 2 X" }) as HTMLInputElement).value).toBe("-2")
   })
 
+  it("adds and edits conic curves in the workbench", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "添加抛物线" }))
+    expect(screen.getAllByText("抛物线 1")).toHaveLength(2)
+    expect(screen.getByRole("spinbutton", { name: "焦参数" })).toBeTruthy()
+    fireEvent.change(screen.getByRole("spinbutton", { name: "顶点 X" }), { target: { value: "1" } })
+    expect((screen.getByRole("spinbutton", { name: "顶点 X" }) as HTMLInputElement).value).toBe("1")
+
+    fireEvent.click(screen.getByRole("button", { name: "添加椭圆" }))
+    expect(screen.getAllByText("椭圆 1")).toHaveLength(2)
+    expect(screen.getByRole("spinbutton", { name: "横向半径" })).toBeTruthy()
+    expect(screen.getByRole("img", { name: "几何画布" }).querySelectorAll('[data-primitive-type="ellipse"]')).toHaveLength(1)
+
+    fireEvent.click(screen.getByRole("button", { name: "添加双曲线" }))
+    expect(screen.getAllByText("双曲线 1")).toHaveLength(2)
+    expect(screen.getByRole("combobox", { name: "双曲线轴向" })).toBeTruthy()
+    expect(screen.getByRole("img", { name: "几何画布" }).querySelectorAll('[data-primitive-type="hyperbola"]')).toHaveLength(1)
+  })
+
+  it("adds and edits a sampled function in the workbench", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "添加函数图像" }))
+    expect(screen.getAllByText("函数 1")).toHaveLength(2)
+    expect(screen.getByRole("img", { name: "几何画布" }).querySelectorAll('[data-primitive-type="function"]')).toHaveLength(1)
+    fireEvent.change(screen.getByRole("textbox", { name: "函数表达式" }), { target: { value: "2*x+1" } })
+    fireEvent.change(screen.getByRole("spinbutton", { name: "定义域终点" }), { target: { value: "4" } })
+    expect((screen.getByRole("textbox", { name: "函数表达式" }) as HTMLInputElement).value).toBe("2*x+1")
+    expect((screen.getByRole("spinbutton", { name: "定义域终点" }) as HTMLInputElement).value).toBe("4")
+  })
+
   it("selects and deletes a point with the keyboard", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "添加点" }))

@@ -25,7 +25,7 @@ export function validateDocument(document: unknown): ValidationResult {
       }
       if (ids.has(primitive.id)) errors.push(`duplicate primitive id: ${primitive.id}`)
       ids.add(primitive.id)
-      if (!["point", "line", "segment", "ray", "polyline", "parabola", "ellipse", "hyperbola", "circle", "arc", "intersection", "lineCircleIntersection", "circleIntersection"].includes(primitive.type)) {
+      if (!["point", "line", "segment", "ray", "polyline", "parabola", "ellipse", "hyperbola", "function", "circle", "arc", "intersection", "lineCircleIntersection", "circleIntersection"].includes(primitive.type)) {
         errors.push(`invalid primitive type: ${primitive.type}`)
       }
     }
@@ -80,6 +80,11 @@ export function validateDocument(document: unknown): ValidationResult {
         const center = primitive.center
         if (![center?.x, center?.y, primitive.radiusX, primitive.radiusY].every(Number.isFinite) || primitive.radiusX <= 0 || primitive.radiusY <= 0) errors.push(`${primitive.type} geometry is invalid`)
         if (primitive.type === "hyperbola" && !["x", "y"].includes(primitive.axis)) errors.push("hyperbola axis is invalid")
+      }
+      if (primitive.type === "function") {
+        if (typeof primitive.expression !== "string" || !primitive.expression.trim()) errors.push("function expression is required")
+        if (!Array.isArray(primitive.domain) || primitive.domain.length !== 2 || !primitive.domain.every(Number.isFinite) || primitive.domain[0] >= primitive.domain[1]) errors.push("function domain is invalid")
+        if (primitive.samples !== undefined && (!Number.isInteger(primitive.samples) || primitive.samples < 2 || primitive.samples > 2048)) errors.push("function sample count is invalid")
       }
       if (primitive.type === "circle" || primitive.type === "arc") {
         if (!Number.isFinite(primitive.center.x) || !Number.isFinite(primitive.center.y) || !Number.isFinite(primitive.radius) || primitive.radius <= 0) {
