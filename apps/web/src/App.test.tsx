@@ -474,9 +474,13 @@ describe("MathCanvas workbench", () => {
     fireEvent.click(canvas, { clientX: 466, clientY: 220 })
     const preview = canvas.querySelector('[data-auto-intersection]')
     expect(preview).toBeTruthy()
+    expect(preview?.querySelector('[data-hit-target="true"]')?.getAttribute("r")).toBe("14")
+    expect(preview?.querySelector('circle:not([data-hit-target="true"])')?.getAttribute("r")).toBe("4")
+    expect(preview?.querySelector('[data-intersection-info="true"]')).toBeNull()
     fireEvent.click(preview!)
 
     expect(useSceneStore.getState().document.primitives.some((primitive) => primitive.type === "lineCircleIntersection")).toBe(true)
+    expect(canvas.querySelector('[data-intersection-info="true"]')).toBeTruthy()
   })
 
   it("selects and deletes a point with the keyboard", () => {
