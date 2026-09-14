@@ -112,10 +112,11 @@
 - [x] P3-6：积分区域、零点/极值/拐点分析集合和结构化数值诊断
 - [x] P3-7：微积分分析工具、属性状态、Algebra View 条目和画布标记集成
 - [x] P3-8：P3 文档、完整测试、类型检查、构建和 E2E 验证
+- [x] P6-1：3D 向量、平面、射线—平面求交和二面角基础几何内核
 
 ## 下一步
 
-P3 已完成，下一步实现 P6-1 的 3D 向量与基础几何内核。
+P6-1 已完成，下一步扩展 DSL 3D 类型、校验和 `.mgeo` round-trip。
 
 > 射线/折线、圆锥曲线和函数采样已接入工具栏、SVG 渲染、属性编辑和 UI 回归测试；选中两条可采样曲线即可创建持久化交点。
 
@@ -136,7 +137,7 @@ P3 已完成，下一步实现 P6-1 的 3D 向量与基础几何内核。
 
 ## 最新验证证据
 
-- `npm.cmd test`：23 个测试文件、202 个测试通过
+- `npm.cmd test`：24 个测试文件、204 个测试通过
 - `npm.cmd run typecheck`：4 个 workspace 通过
 - 默认 `npm.cmd run build`：当前沙箱因 Vite 写入 `.vite-temp`/`dist` 返回 `EPERM`；使用 `vite build apps/web --configLoader runner --outDir D:\\draw\\build-check\\mathcanvas-current` 完成等价 Web 构建验证
 - `npm.cmd exec playwright test`：5 个 Chromium 浏览器用例通过
