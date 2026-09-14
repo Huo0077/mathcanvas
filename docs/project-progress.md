@@ -2,8 +2,8 @@
 
 > 这份文件是项目的单一进度记录。每完成一个可验证的切片，就更新“已完成”和“下一步”，并附上验证证据。
 
-**最后更新：** 2026-09-13
-**当前阶段：** P1 数学内核已完成，P2 交互已完成
+**最后更新：** 2026-09-14
+**当前阶段：** P1 数学内核、P2 交互和 P3 函数分析已完成，P6 v1 基线完成，P6 v2 已完成 Slice 1-4，暂停于 Slice 4
 **总体状态：** 开发中
 
 ## 已完成
@@ -103,10 +103,46 @@
 - [x] P2：属性检查器整体 UI 优化，统一卡片层级、图元类型徽标、双列字段、响应式布局和可见焦点态
 - [x] P2：中间画布横向填充工作区，函数编辑框的 Backspace/Delete 不再误删函数图元
 - [x] P2：函数公式键盘支持光标插入、嵌套函数和带底数对数；画布支持坐标悬停与点击创建持久交点
+- [x] P2：函数无定义区间与采样渐近线断线保护；画布支持动态视口中心、鼠标中键或 `Space + 左键` 平移
+- [x] P3-1：表达式编译缓存与有细化上限的自适应函数采样接入绘图、属性值域、导出和采样交点
+- [x] P3-2：一阶/二阶中心差分导数内核，覆盖非有限邻域
+- [x] P3-3：基于自适应样本的零点、极值和拐点数值检测
+- [x] P3-4：可持久化一阶/二阶导函数图元，保存来源引用并联动重算
+- [x] P3-5：可持久化切线、法线和割线图元，保存来源引用并联动重算
+- [x] P3-6：积分区域、零点/极值/拐点分析集合和结构化数值诊断
+- [x] P3-7：微积分分析工具、属性状态、Algebra View 条目和画布标记集成
+- [x] P3-8：P3 文档、完整测试、类型检查、构建和 E2E 验证
+- [x] P6-1：3D 向量、平面、射线—平面求交和二面角基础几何内核
+- [x] P6-2：3D DSL 类型、几何校验、`.mgeo` round-trip 和旧 2D 文档兼容
+- [x] P6-3：参数化立方体 Three.js 场景、geometry3d 工作区入口和 WebGL 降级状态
+- [x] P6-4：棱锥、圆柱和圆锥参数化 Three.js 模型与创建入口
+- [x] P6-5：3D 相机旋转、平移、缩放、重置和空间拾取
+- [x] P6-6：隐藏边、透明面、法向量和选中态显示
+- [x] P6-7：剖切平面、截面计算和截面派生对象
+- [x] P6-8：立方体展开/折叠布局与动画
+- [x] P6-9：二面角测量显示
+- [x] P6-10：`geometry3d` 工作区、Algebra View 和立体属性栏集成
+- [x] P6-11：P6 文档、完整验证、review、commit、push
+
+### P6 v2：点驱动通用立体几何（分片实施中）
+
+- [x] 方案 C 已确认：基础对象采用点、线、面驱动，参数化实体作为快捷模板。
+- [x] 完成点、线、面、拓扑、builder、依赖重算、拾取和教学反馈的设计规格。
+- [x] 完成十个可独立验证切片的实施计划，明确测试、类型检查、构建、E2E、review、commit 和 push 门槛。
+- [x] P6 v2-1：3D DSL 基础对象与旧文档兼容。
+- [x] P6 v2-2：纯三维几何与可注册实体 builder。
+- [x] P6 v2-3：Scene Graph 依赖索引与拓扑重算。
+- [x] P6 v2-4：点线面课堂构造工具与关键点交互。
+- [ ] P6 v2-5：四类固定实体迁移为统一拓扑模板。
+- [ ] P6 v2-6：空间拾取、约束与教学测量。
+- [ ] P6 v2-7：通用剖切与截面派生对象。
+- [ ] P6 v2-8：拓扑展开布局与折叠动画。
+- [ ] P6 v2-9：二面角与空间关系教学标记。
+- [ ] P6 v2-10：工作区整合、兼容、文档与最终验收。
 
 ## 下一步
 
-P2 交互收尾已完成，下一步进入 P3 需求规划。
+P6 v1 参数化基线已完成；P6 v2 已完成 Slice 1-4，下一步执行统一拓扑模板迁移。P4 Agent、P5 题图解析和 P7 工程制图仍保持在明确排除范围内。
 
 > 射线/折线、圆锥曲线和函数采样已接入工具栏、SVG 渲染、属性编辑和 UI 回归测试；选中两条可采样曲线即可创建持久化交点。
 
@@ -127,8 +163,42 @@ P2 交互收尾已完成，下一步进入 P3 需求规划。
 
 ## 最新验证证据
 
-- `npm.cmd test`：23 个测试文件、179 个测试通过
+- `npm.cmd test`：25 个测试文件、213 个测试通过
+- P6-3 聚焦测试：`apps/web/src/threeScene.test.ts` 通过
+- P6-3 全量测试：25 个测试文件、203 个测试通过
 - `npm.cmd run typecheck`：4 个 workspace 通过
-- `npm.cmd run build`：Vite Web bundle 与 3 个核心 package 构建通过
+- P6-3 Web 构建：`vite build` 使用隔离 `outDir` 通过
+- P6-3 浏览器验证：Playwright 被宿主环境的 Vite `.vite-temp` `EPERM` 阻断，未标记为通过
+- P6-4 聚焦测试：`apps/web/src/threeScene.test.ts` 的 4 个用例通过
+- P6-4 Web 构建：`vite build` 使用隔离 `outDir` 通过
+- P6-4 浏览器验证：同一宿主环境阻断，未标记为通过
+- P6-5 聚焦测试：`apps/web/src/threeScene.test.ts` 的 6 个用例通过
+- P6-5 Web 构建：待完整验证后记录
+- P6-5 浏览器验证：同一宿主环境阻断，未标记为通过
+- P6-6 聚焦测试：`apps/web/src/threeScene.test.ts` 的 7 个用例通过
+- P6-6 Web 构建：`vite build` 使用隔离 `outDir` 通过
+- P6-6 浏览器验证：同一宿主环境阻断，未标记为通过
+- P6-7 聚焦内核/DSL/Scene Graph 测试：48 个用例通过
+- P6-7 Web 构建：待完整验证后记录
+- P6-7 浏览器验证：同一宿主环境阻断，未标记为通过
+- P6-8 聚焦测试：`apps/web/src/threeScene.test.ts` 的 8 个用例通过
+- P6-8 Web 构建：待完整验证后记录
+- P6-8 浏览器验证：同一宿主环境阻断，未标记为通过
+- P6-9 聚焦内核测试：`packages/geometry-kernel/src/geometry3d.test.ts` 通过
+- P6-9 Web 构建：`vite build` 使用隔离 `outDir` 通过
+- P6-9 浏览器验证：同一宿主环境阻断，未标记为通过
+- P6-10 聚焦测试：3D 属性栏 UI 与 Scene Graph 3D patch 更新测试通过
+- P6-10 浏览器验证：Playwright 3D 用例通过，覆盖立方体、棱锥、圆柱和圆锥创建及属性编辑
+- P6-10 类型检查：四个 workspace 通过；生产构建通过
+- P6-10 review：无 Critical/Important 问题；修复 Three.js 挂载点删除 React 控件和重置按钮覆盖控制组问题
+- P6-11 最终验证：全量单测 25 个测试文件、215 个用例通过；全量 Playwright 6 个用例通过；生产构建通过；`git diff --check` 通过
+- P6 v2-1 验证：DSL codec 23 个用例通过；CSV exporter 6 个用例通过；全量单测 25 个测试文件、219 个用例通过；四个 workspace 类型检查通过；隔离目录 Vite 生产构建通过；`git diff --check` 通过
+- P6 v2-2 验证：geometry3d 与 solid-builders 聚焦 19 个用例通过；全量单测 26 个测试文件、235 个用例通过；四个 workspace 类型检查通过；隔离目录 Vite 生产构建通过；`git diff --check` 通过
+- P6 v2-3 验证：Scene Graph 聚焦 31 个用例通过；全量单测 26 个测试文件、240 个用例通过；四个 workspace 类型检查通过；`git diff --check` 通过
+- P6 v2-4 验证：UI 聚焦测试 53 个用例通过；全量单测 26 个测试文件、245 个用例通过；四个 workspace 类型检查通过；隔离目录 Vite 生产构建通过；`git diff --check` 通过；浏览器验证因宿主环境浏览器绑定 `Cannot redefine property: process` 阻断，未标记为通过
+- P6-8 Web 构建：`vite build` 使用隔离 `outDir` 通过
+- P6-7 Web 构建：`vite build` 使用隔离 `outDir` 通过
+- 默认 `npm.cmd run build`：当前沙箱因 Vite 写入 `.vite-temp`/`dist` 返回 `EPERM`；使用 `vite build apps/web --configLoader runner --outDir D:\\draw\\build-check\\mathcanvas-current` 完成等价 Web 构建验证
+- `npm.cmd exec playwright test`：5 个 Chromium 浏览器用例通过
 - `npm.cmd run lint`：未执行成功，仓库当前未安装 `eslint` 命令
-- GitHub：提交 `91d82fe` 已推送到 `origin/main`
+- GitHub：P2 修复与 P3-1 之前的提交均已推送到 `origin/main`

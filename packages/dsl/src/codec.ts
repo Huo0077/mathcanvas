@@ -12,7 +12,7 @@ export function createEmptyDocument(workspace: Workspace): GeometryDocument {
     schemaVersion: "0.1",
     revision: 0,
     workspace,
-    coordinateSystems: ["cartesian-2d"],
+    coordinateSystems: workspace === "geometry3d" ? ["cartesian-3d"] : ["cartesian-2d"],
     parameters: {},
     primitives: [],
     groups: [],

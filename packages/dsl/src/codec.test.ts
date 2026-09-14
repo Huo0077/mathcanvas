@@ -149,6 +149,64 @@ describe("Geometry DSL codec", () => {
     }
   })
 
+  it("round-trips a derivative primitive with a stable source reference", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [
+      { id: "function-1", type: "function", expression: "x^2", domain: [-2, 2], samples: 32 },
+      { id: "derivative-1", type: "derivative", sourceId: "function-1", order: 1, domain: [-2, 2], samples: 32, points: [], status: "approximate" }
+    ]
+
+    expect(decodeMgeo(encodeMgeo(document)).primitives).toEqual(document.primitives)
+  })
+
+  it("round-trips parameterized 3D solids while keeping the schema version", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      { id: "cube-1", type: "cube", origin: { x: -1, y: -1, z: -1 }, size: { x: 2, y: 2, z: 2 } },
+      { id: "pyramid-1", type: "pyramid", baseCenter: { x: 0, y: 0, z: 0 }, baseSize: { x: 2, y: 2 }, height: 3 },
+      { id: "cylinder-1", type: "cylinder", center: { x: 0, y: 0, z: 0 }, radius: 1, height: 2, segments: 16 },
+      { id: "cone-1", type: "cone", center: { x: 3, y: 0, z: 0 }, radius: 1, height: 2, segments: 16 }
+    ]
+
+    const restored = decodeMgeo(encodeMgeo(document))
+    expect(restored.schemaVersion).toBe("0.1")
+    expect(restored.coordinateSystems).toEqual(["cartesian-3d"])
+    expect(restored.primitives).toEqual(document.primitives)
+  })
+
+  it("round-trips a section with a stable solid source reference", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      { id: "cube-1", type: "cube", origin: { x: -1, y: -1, z: -1 }, size: { x: 2, y: 2, z: 2 } },
+      { id: "section-1", type: "section", sourceId: "cube-1", plane: { normal: { x: 0, y: 0, z: 1 }, constant: 0 }, points: [{ x: -1, y: -1, z: 0 }, { x: 1, y: -1, z: 0 }, { x: 1, y: 1, z: 0 }, { x: -1, y: 1, z: 0 }], status: "approximate" }
+    ]
+
+    expect(decodeMgeo(encodeMgeo(document)).primitives).toEqual(document.primitives)
+  })
+
+  it("round-trips tangent, normal, and secant primitives", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [
+      { id: "function-1", type: "function", expression: "x^2", domain: [-2, 2], samples: 32 },
+      { id: "tangent-1", type: "tangent", sourceId: "function-1", x: 1, point: { x: 1, y: 1 }, slope: 2, a: { x: -2, y: -5 }, b: { x: 2, y: 7 }, status: "approximate" },
+      { id: "normal-1", type: "normal", sourceId: "function-1", x: 1, point: { x: 1, y: 1 }, slope: -0.5, a: { x: -2, y: 2.5 }, b: { x: 2, y: 0.5 }, status: "approximate" },
+      { id: "secant-1", type: "secant", sourceId: "function-1", x1: -1, x2: 1, points: [{ x: -1, y: 1 }, { x: 1, y: 1 }], slope: 0, a: { x: -2, y: 1 }, b: { x: 2, y: 1 }, status: "approximate" }
+    ]
+
+    expect(decodeMgeo(encodeMgeo(document)).primitives).toEqual(document.primitives)
+  })
+
+  it("round-trips integral and analysis result primitives", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [
+      { id: "function-1", type: "function", expression: "x^2", domain: [-1, 1], samples: 32 },
+      { id: "integral-1", type: "integral", sourceId: "function-1", domain: [0, 1], steps: 64, points: [], area: 1 / 3, status: "approximate" },
+      { id: "analysis-1", type: "analysisSet", sourceId: "function-1", domain: [-1, 1], samples: 64, results: [{ kind: "zero", x: 0, y: 0, approximate: true }], status: "approximate" }
+    ]
+
+    expect(decodeMgeo(encodeMgeo(document)).primitives).toEqual(document.primitives)
+  })
+
   it("rejects malformed primitive fields without throwing", () => {
     const base = createEmptyDocument("calculus")
     const malformedDocuments = [
@@ -161,5 +219,89 @@ describe("Geometry DSL codec", () => {
       expect(() => validateDocument(document)).not.toThrow()
       expect(validateDocument(document).valid).toBe(false)
     }
+  })
+
+  it("round-trips a point-driven 3D topology document", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      { id: "point-a", type: "point3", position: { x: 0, y: 0, z: 0 }, label: "A", binding: { kind: "free" } },
+      { id: "point-b", type: "point3", position: { x: 1, y: 0, z: 0 }, label: "B", binding: { kind: "free" } },
+      { id: "point-c", type: "point3", position: { x: 0, y: 1, z: 0 }, label: "C", binding: { kind: "free" } },
+      { id: "point-d", type: "point3", position: { x: 0, y: 0, z: 1 }, label: "D", binding: { kind: "free" } },
+      { id: "line-ab", type: "line3", definition: { kind: "throughPoints", pointIds: ["point-a", "point-b"] } },
+      { id: "segment-ab", type: "segment3", pointIds: ["point-a", "point-b"] },
+      { id: "ray-ac", type: "ray3", originId: "point-a", throughId: "point-c" },
+      { id: "plane-abc", type: "plane3", definition: { kind: "throughPoints", pointIds: ["point-a", "point-b", "point-c"] } },
+      { id: "circle-abc", type: "circle3", centerId: "point-a", normal: { x: 0, y: 0, z: 1 }, radius: 2 },
+      { id: "edge-ab", type: "edge3", pointIds: ["point-a", "point-b"], faceIds: ["face-abc", "face-abd"] },
+      { id: "edge-ac", type: "edge3", pointIds: ["point-a", "point-c"], faceIds: ["face-abc", "face-acd"] },
+      { id: "edge-ad", type: "edge3", pointIds: ["point-a", "point-d"], faceIds: ["face-abd", "face-acd"] },
+      { id: "edge-bc", type: "edge3", pointIds: ["point-b", "point-c"], faceIds: ["face-abc", "face-bcd"] },
+      { id: "edge-bd", type: "edge3", pointIds: ["point-b", "point-d"], faceIds: ["face-abd", "face-bcd"] },
+      { id: "edge-cd", type: "edge3", pointIds: ["point-c", "point-d"], faceIds: ["face-acd", "face-bcd"] },
+      { id: "face-abc", type: "face3", pointIds: ["point-a", "point-b", "point-c"], edgeIds: ["edge-ab", "edge-bc", "edge-ac"], planeId: "plane-abc" },
+      { id: "face-abd", type: "face3", pointIds: ["point-a", "point-b", "point-d"], edgeIds: ["edge-ab", "edge-bd", "edge-ad"] },
+      { id: "face-acd", type: "face3", pointIds: ["point-a", "point-c", "point-d"], edgeIds: ["edge-ac", "edge-cd", "edge-ad"] },
+      { id: "face-bcd", type: "face3", pointIds: ["point-b", "point-c", "point-d"], edgeIds: ["edge-bc", "edge-cd", "edge-bd"] },
+      { id: "solid-1", type: "polyhedron3", vertexIds: ["point-a", "point-b", "point-c", "point-d"], edgeIds: ["edge-ab", "edge-ac", "edge-ad", "edge-bc", "edge-bd", "edge-cd"], faceIds: ["face-abc", "face-abd", "face-acd", "face-bcd"], construction: { kind: "fromFaces", sourceIds: ["face-abc", "face-abd", "face-acd", "face-bcd"] } }
+    ]
+
+    expect(decodeMgeo(encodeMgeo(document)).primitives).toEqual(document.primitives)
+  })
+
+  it("rejects invalid 3D references and degenerate definitions", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      { id: "point-a", type: "point3", position: { x: 0, y: 0, z: 0 } },
+      { id: "point-b", type: "point3", position: { x: 1, y: 0, z: 0 } },
+      { id: "point-c", type: "point3", position: { x: 2, y: 0, z: 0 } },
+      { id: "point-d", type: "point3", position: { x: 0, y: 1, z: 0 } },
+      { id: "point-e", type: "point3", position: { x: 3, y: 0, z: 0 } },
+      { id: "point-f", type: "point3", position: { x: 3, y: 1, z: 0 } },
+      { id: "line-1", type: "line3", definition: { kind: "throughPoints", pointIds: ["point-a", "missing"] } },
+      { id: "plane-1", type: "plane3", definition: { kind: "throughPoints", pointIds: ["point-a", "point-a", "point-a"] } },
+      { id: "plane-2", type: "plane3", definition: { kind: "throughPoints", pointIds: ["point-a", "point-b", "point-c"] } },
+      { id: "edge-1", type: "edge3", pointIds: ["point-a", "point-b"] },
+      { id: "edge-2", type: "edge3", pointIds: ["point-b", "point-c"] },
+      { id: "edge-3", type: "edge3", pointIds: ["point-c", "point-a"] },
+      { id: "edge-4", type: "edge3", pointIds: ["point-d", "point-e"] },
+      { id: "edge-5", type: "edge3", pointIds: ["point-e", "point-f"] },
+      { id: "edge-6", type: "edge3", pointIds: ["point-f", "point-d"] },
+      { id: "face-1", type: "face3", pointIds: ["point-a", "point-a"] },
+      { id: "face-2", type: "face3", pointIds: ["point-a", "point-b", "point-c"], edgeIds: ["edge-1"] },
+      { id: "face-3", type: "face3", pointIds: ["point-a", "point-b", "point-c", "point-d", "point-e", "point-f"], edgeIds: ["edge-1", "edge-2", "edge-3", "edge-4", "edge-5", "edge-6"] },
+      { id: "solid-1", type: "polyhedron3", vertexIds: ["point-a", "missing"], edgeIds: [], faceIds: [] },
+      { id: "solid-2", type: "polyhedron3", vertexIds: ["point-a", "point-b", "point-c", "point-d"], edgeIds: [], faceIds: [] },
+      { id: "solid-3", type: "polyhedron3", vertexIds: ["point-a", "point-b", "point-c", "point-d"], edgeIds: ["edge-1", "edge-1", "edge-1", "edge-1", "edge-1", "edge-1"], faceIds: ["face-2", "face-2", "face-2", "face-2"] },
+      { id: "solid-4", type: "polyhedron3", vertexIds: ["point-a", "point-b", "point-c", "point-d"], edgeIds: [], faceIds: [], construction: { kind: "template", templateId: "cube", parameterIds: ["missing-parameter"], sourceIds: [] } }
+    ]
+
+    const result = validateDocument(document)
+    expect(result.valid).toBe(false)
+    if (!result.valid) {
+      expect(result.errors).toContain("line3 references invalid points")
+      expect(result.errors).toContain("plane3 points must be distinct")
+      expect(result.errors).toContain("plane3 points are collinear")
+      expect(result.errors).toContain("face3 needs at least three distinct points")
+      expect(result.errors).toContain("face3 boundary is not closed")
+      expect(result.errors).toContain("face3 points are collinear")
+      expect(result.errors).toContain("polyhedron3 references missing vertex")
+      expect(result.errors).toContain("polyhedron3 vertices are coplanar")
+      expect(result.errors).toContain("polyhedron3 edge references must be unique")
+      expect(result.errors).toContain("polyhedron3 face references must be unique")
+      expect(result.errors).toContain("polyhedron3 template construction is invalid")
+    }
+  })
+
+  it("keeps legacy parameterized solids readable alongside point-driven objects", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      { id: "cube-legacy", type: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 2, z: 2 } },
+      { id: "point-a", type: "point3", position: { x: 0, y: 0, z: 0 }, binding: { kind: "free" } }
+    ]
+
+    const restored = decodeMgeo(encodeMgeo(document))
+    expect(restored.schemaVersion).toBe("0.1")
+    expect(restored.primitives).toEqual(document.primitives)
   })
 })

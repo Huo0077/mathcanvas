@@ -1,7 +1,7 @@
 import type { Coordinate, PrimitiveSpec } from "@draw/dsl"
 
 import { sampleEllipse, sampleHyperbolaBranches, sampleParabola } from "./conics"
-import { sampleFunctionSegments } from "./calculus"
+import { adaptiveSampleFunctionSegments } from "./calculus"
 import { evaluateParameterExpression } from "./parameters"
 import type { IntersectionResult } from "./types"
 
@@ -51,7 +51,7 @@ function samplePrimitive(primitive: SampledPrimitive): Coordinate[][] {
   if (primitive.type === "hyperbola") {
     return sampleHyperbolaBranches(primitive, [-12, 12], 256)
   }
-  return sampleFunctionSegments((x) => evaluateParameterExpression(primitive.expression, { x }), primitive.domain, primitive.samples ?? 256)
+  return adaptiveSampleFunctionSegments((x) => evaluateParameterExpression(primitive.expression, { x }), primitive.domain, { initialSteps: primitive.samples ?? 256, maxSteps: Math.max(primitive.samples ?? 256, 2048) })
 }
 
 export function intersectSampledPrimitives(first: SampledPrimitive, second: SampledPrimitive): IntersectionResult {

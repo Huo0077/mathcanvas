@@ -1,4 +1,5 @@
 import { useState } from "react"
+import type { Workspace } from "@draw/dsl"
 
 interface GeometryToolbarProps {
   onUndo: () => void
@@ -19,12 +20,19 @@ interface GeometryToolbarProps {
   onAddEllipse: () => void
   onAddHyperbola: () => void
   onAddFunction: () => void
+  onAddCube: () => void
+  onAddPyramid: () => void
+  onAddCylinder: () => void
+  onAddCone: () => void
+  onAddSection: () => void
   onDelete: () => void
   onToggleLock: () => void
   onSelectTool: () => void
   creationMode: "line" | "segment" | "ray" | "polyline" | "circle" | "arc" | null
   hasSelection: boolean
   allSelectedLocked: boolean
+  workspace: Workspace
+  canCreateSection: boolean
 }
 
 type ToolbarIconName = "select" | "point" | "line" | "circle" | "curve" | "function" | "undo" | "redo" | "trash" | "lock" | "save" | "text" | "camera" | "brush"
@@ -59,18 +67,28 @@ export function GeometryToolbar(props: GeometryToolbarProps) {
     <section className={`toolbar-group object-tools${objectsOpen ? " is-open" : ""}`}>
       <div className="toolbar-group-heading"><div><span className="toolbar-kicker">创建</span><strong>添加对象</strong></div><button className="toolbar-expand" type="button" aria-label="添加对象" aria-expanded={objectsOpen} onClick={() => setObjectsOpen((open) => !open)}>⌄</button></div>
       <div className="object-tool-grid">
-        <ToolButton label="添加点" icon="point" primary onClick={props.onAddPoint} />
+        <ToolButton label={props.workspace === "geometry3d" ? "添加空间点" : "添加点"} icon="point" primary onClick={props.onAddPoint} />
         <ToolButton label="选择工具" icon="select" active={props.creationMode === null} onClick={props.onSelectTool} />
-        <ToolButton label="添加直线" icon="line" active={props.creationMode === "line"} onClick={props.onAddLine} />
-        <ToolButton label="添加线段" icon="line" active={props.creationMode === "segment"} onClick={props.onAddSegment} />
-        <ToolButton label="添加射线" icon="line" active={props.creationMode === "ray"} onClick={props.onAddRay} />
-        <ToolButton label="添加折线" icon="curve" active={props.creationMode === "polyline"} onClick={props.onAddPolyline} />
-        <ToolButton label="添加圆" icon="circle" active={props.creationMode === "circle"} onClick={props.onAddCircle} />
-        <ToolButton label="添加圆弧" icon="curve" active={props.creationMode === "arc"} onClick={props.onAddArc} />
-        <ToolButton label="添加抛物线" icon="curve" onClick={props.onAddParabola} />
-        <ToolButton label="添加椭圆" icon="circle" onClick={props.onAddEllipse} />
-        <ToolButton label="添加双曲线" icon="curve" onClick={props.onAddHyperbola} />
-        <ToolButton label="添加函数图像" icon="function" onClick={props.onAddFunction} />
+        {props.workspace !== "geometry3d" && <>
+          <ToolButton label="添加直线" icon="line" active={props.creationMode === "line"} onClick={props.onAddLine} />
+          <ToolButton label="添加线段" icon="line" active={props.creationMode === "segment"} onClick={props.onAddSegment} />
+          <ToolButton label="添加射线" icon="line" active={props.creationMode === "ray"} onClick={props.onAddRay} />
+          <ToolButton label="添加折线" icon="curve" active={props.creationMode === "polyline"} onClick={props.onAddPolyline} />
+          <ToolButton label="添加圆" icon="circle" active={props.creationMode === "circle"} onClick={props.onAddCircle} />
+          <ToolButton label="添加圆弧" icon="curve" active={props.creationMode === "arc"} onClick={props.onAddArc} />
+          <ToolButton label="添加抛物线" icon="curve" onClick={props.onAddParabola} />
+          <ToolButton label="添加椭圆" icon="circle" onClick={props.onAddEllipse} />
+          <ToolButton label="添加双曲线" icon="curve" onClick={props.onAddHyperbola} />
+          <ToolButton label="添加函数图像" icon="function" onClick={props.onAddFunction} />
+        </>}
+        {props.workspace === "geometry3d" && <ToolButton label="添加立方体" icon="curve" onClick={props.onAddCube} />}
+        {props.workspace === "geometry3d" && <ToolButton label="添加棱锥" icon="curve" onClick={props.onAddPyramid} />}
+        {props.workspace === "geometry3d" && <ToolButton label="添加圆柱" icon="circle" onClick={props.onAddCylinder} />}
+        {props.workspace === "geometry3d" && <ToolButton label="添加圆锥" icon="curve" onClick={props.onAddCone} />}
+        {props.workspace === "geometry3d" && <ToolButton label="由选中点创建空间直线" icon="line" onClick={props.onAddLine} />}
+        {props.workspace === "geometry3d" && <ToolButton label="由选中点创建空间平面" icon="line" onClick={props.onAddSegment} />}
+        {props.workspace === "geometry3d" && <ToolButton label="由选中点创建空间面" icon="curve" onClick={props.onAddPolyline} />}
+        {props.workspace === "geometry3d" && <ToolButton label="创建截面" icon="curve" disabled={!props.canCreateSection} onClick={props.onAddSection} />}
       </div>
     </section>
     <section className="toolbar-group multimodal-tools">

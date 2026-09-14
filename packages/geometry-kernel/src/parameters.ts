@@ -1,6 +1,6 @@
 import type { ParameterSpec } from "@draw/dsl"
 
-import { evaluateExpression, parseExpression, type ExpressionNode } from "./expression"
+import { compileExpression, evaluateExpression, type ExpressionNode } from "./expression"
 
 function evaluateNode(expression: ExpressionNode, resolve: (name: string) => number): number {
   if (expression.type === "number") return expression.value
@@ -43,7 +43,7 @@ export function evaluateParameterExpressions(parameters: Record<string, Paramete
     if (states.get(id) === "done") return parameter.value
     states.set(id, "visiting")
     const value = parameter.expression
-      ? evaluateNode(parseExpression(parameter.expression), resolve)
+      ? evaluateNode(compileExpression(parameter.expression), resolve)
       : parameter.value
     if (!Number.isFinite(value)) throw new Error(`Parameter is not finite: ${id}`)
     parameter.value = value
@@ -56,5 +56,5 @@ export function evaluateParameterExpressions(parameters: Record<string, Paramete
 }
 
 export function evaluateParameterExpression(expression: string, variables: Record<string, number>): number {
-  return evaluateExpression(parseExpression(expression), variables)
+  return evaluateExpression(compileExpression(expression), variables)
 }

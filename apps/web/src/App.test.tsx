@@ -18,7 +18,7 @@ describe("MathCanvas workbench", () => {
     expect(screen.getAllByText("新点 A")).toHaveLength(2)
 
     fireEvent.click(screen.getByRole("button", { name: "微积分" }))
-    expect(screen.getByText(/交点 P \(0\.00, 0\.00\)/)).toBeTruthy()
+    expect(screen.getByRole("img", { name: "几何画布" }).querySelector('[data-intersection-info="true"]')).toBeNull()
     fireEvent.click(screen.getByRole("button", { name: "圆锥曲线" }))
     expect(screen.getAllByText("新点 A")).toHaveLength(2)
     expect(screen.getByRole("button", { name: "圆锥曲线" }).getAttribute("aria-pressed")).toBe("true")
@@ -27,10 +27,49 @@ describe("MathCanvas workbench", () => {
 
   it("shows the default intersection and updates it from the slope slider", () => {
     render(<App />)
-    expect(screen.getByText(/交点 P \(0\.00, 0\.00\)/)).toBeTruthy()
+    const canvas = screen.getByRole("img", { name: "几何画布" })
+    expect(canvas.querySelector('[data-primitive-type="intersection"] [data-intersection-info="true"]')).toBeNull()
+    expect(canvas.querySelector('[data-primitive-type="intersection"] [data-hit-target="true"]')?.getAttribute("r")).toBe("14")
     const slider = screen.getByRole("slider", { name: "直线斜率" })
     fireEvent.change(slider, { target: { value: "0.25" } })
-    expect(screen.getByText(/交点 P \(8\.00, 0\.00\)/)).toBeTruthy()
+    expect(canvas.querySelector('[data-primitive-type="intersection"] [data-intersection-info="true"]')).toBeNull()
+    fireEvent.click(screen.getAllByText("交点 P")[0])
+    expect(canvas.querySelector('[data-primitive-type="intersection"] [data-intersection-info="true"]')?.textContent).toContain("交点 P (8.00, 0.00)")
+  })
+
+  it("creates and edits a 3D solid from the workspace property inspector", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加立方体" }))
+
+    expect(screen.getAllByText("立方体 1")[0]).toBeTruthy()
+    expect(screen.getByText("立体几何属性")).toBeTruthy()
+    fireEvent.change(screen.getByRole("spinbutton", { name: "尺寸 X" }), { target: { value: "5" } })
+    expect(useSceneStore.getState().document.primitives.find((primitive) => primitive.id === "cube-1")).toMatchObject({ type: "cube", size: { x: 5 } })
+  })
+
+  it("creates point-driven 3D geometry from selected classroom points", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
+
+    expect(useSceneStore.getState().document.primitives.filter((primitive) => primitive.type === "point3")).toHaveLength(2)
+    fireEvent.click(screen.getByText("A"))
+    fireEvent.click(screen.getByText("B"), { shiftKey: true })
+    fireEvent.click(screen.getByRole("button", { name: "由选中点创建空间直线" }))
+
+    expect(useSceneStore.getState().document.primitives.some((primitive) => primitive.type === "line3")).toBe(true)
+  })
+
+  it("edits the source coordinates of a selected space point", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
+
+    fireEvent.change(screen.getByRole("spinbutton", { name: "坐标 X" }), { target: { value: "4" } })
+
+    expect(useSceneStore.getState().document.primitives.filter((primitive) => primitive.type === "point3").at(-1)).toMatchObject({ position: { x: 4 } })
   })
 
   it("shows the selected line slope characteristics in the properties panel", () => {
@@ -66,15 +105,42 @@ describe("MathCanvas workbench", () => {
     fireEvent.change(screen.getByRole("slider", { name: "直线斜率" }), { target: { value: "0.5" } })
     const canvas = screen.getByRole("img", { name: "几何画布" })
     const line = canvas.querySelectorAll('[data-primitive-type="line"]')[1]
-    const intersection = canvas.querySelector('[data-primitive-type="intersection"] text')!
-    const before = intersection.textContent
+    const before = useSceneStore.getState().document.primitives.find((primitive) => primitive.type === "intersection")
 
     fireEvent.pointerDown(line, { clientX: 400, clientY: 140, pointerId: 1 })
     fireEvent.pointerMove(canvas, { clientX: 400, clientY: 110, pointerId: 1 })
-    expect(intersection.textContent).not.toBe(before)
     fireEvent.pointerUp(canvas, { clientX: 400, clientY: 110, pointerId: 1 })
 
-    expect(intersection.textContent).not.toBe(before)
+    const after = useSceneStore.getState().document.primitives.find((primitive) => primitive.type === "intersection")
+    expect(after).not.toEqual(before)
+    expect(canvas.querySelector('[data-primitive-type="intersection"] [data-intersection-info="true"]')).toBeNull()
+  })
+
+  it("pans the canvas with the middle mouse button without changing the document", () => {
+    render(<App />)
+    const canvas = screen.getByRole("img", { name: "几何画布" })
+    const beforeRevision = useSceneStore.getState().document.revision
+    const beforeCenter = canvas.getAttribute("data-viewport-center")
+
+    fireEvent.pointerDown(canvas, { button: 1, clientX: 400, clientY: 220, pointerId: 7 })
+    fireEvent.pointerMove(canvas, { button: 1, clientX: 500, clientY: 260, pointerId: 7 })
+    fireEvent.pointerUp(canvas, { button: 1, clientX: 500, clientY: 260, pointerId: 7 })
+
+    expect(canvas.getAttribute("data-viewport-center")).not.toBe(beforeCenter)
+    expect(useSceneStore.getState().document.revision).toBe(beforeRevision)
+  })
+
+  it("pans when the middle-button gesture starts on an object", () => {
+    render(<App />)
+    const canvas = screen.getByRole("img", { name: "几何画布" })
+    const line = canvas.querySelector('[data-primitive-type="line"]')!
+    const beforeCenter = canvas.getAttribute("data-viewport-center")
+
+    fireEvent.pointerDown(line, { button: 1, clientX: 400, clientY: 220, pointerId: 8 })
+    fireEvent.pointerMove(canvas, { button: 1, clientX: 500, clientY: 260, pointerId: 8 })
+    fireEvent.pointerUp(canvas, { button: 1, clientX: 500, clientY: 260, pointerId: 8 })
+
+    expect(canvas.getAttribute("data-viewport-center")).not.toBe(beforeCenter)
   })
 
   it("adds a point through the domain operation path", () => {
@@ -335,6 +401,20 @@ describe("MathCanvas workbench", () => {
 
     expect(formula.value).toBe("sin(ln(x))")
     expect(screen.getByRole("button", { name: "插入对数" })).toBeTruthy()
+  })
+
+  it("creates linked calculus analysis objects from the function inspector", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "添加函数图像" }))
+    fireEvent.click(screen.getByRole("button", { name: "创建导函数" }))
+    fireEvent.click(screen.getByRole("button", { name: "创建切线" }))
+    fireEvent.click(screen.getByRole("button", { name: "创建积分区域" }))
+
+    const canvas = screen.getByRole("img", { name: "几何画布" })
+    expect(canvas.querySelector('[data-primitive-type="derivative"]')).toBeTruthy()
+    expect(canvas.querySelector('[data-primitive-type="tangent"]')).toBeTruthy()
+    expect(canvas.querySelector('[data-primitive-type="integral"]')).toBeTruthy()
+    expect(screen.getByText("导函数")).toBeTruthy()
   })
 
   it("keeps a visible formula editor for direct input", () => {

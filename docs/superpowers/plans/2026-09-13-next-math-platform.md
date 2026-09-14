@@ -97,3 +97,29 @@
 - [x] Add a fixed-size fixture with multiple independent constraint components.
 - [x] Assert only the active component changes identity and remains within the performance budget.
 - [x] Record fresh test, typecheck, build, and E2E evidence.
+
+### Task 7: Discontinuous Function Plotting and Pannable Viewport
+
+**Files:**
+- Modify: `packages/geometry-kernel/src/calculus.ts`
+- Modify: `packages/geometry-kernel/src/calculus.test.ts`
+- Modify: `apps/web/src/functionGraph.ts`
+- Modify: `apps/web/src/functionGraph.test.ts`
+- Modify: `apps/web/src/viewport.ts`
+- Modify: `apps/web/src/viewport.test.ts`
+- Modify: `apps/web/src/components/GraphicsView.tsx`
+- Modify: `apps/web/src/App.test.tsx`
+- Modify: `README.md`
+- Modify: `docs/project-progress.md`
+- Modify: `docs/feature-catalog.md`
+
+**Interfaces:**
+- `sampleFunctionSegments` keeps returning separate finite sample runs and additionally rejects a sampled interval that crosses an unobserved vertical discontinuity.
+- Viewport mapping accepts an explicit viewport `{ center: Coordinate; scale: number }`, while default arguments preserve the existing origin-centered behavior for non-UI callers.
+- `GraphicsView` owns transient viewport state and exposes panning through middle-button drag or `Space` plus left-button drag; object drag and box selection remain separate.
+
+- [x] Add a regression test where a singularity falls between two finite samples and assert no clipped segment becomes a vertical connector.
+- [x] Add viewport mapping tests for a translated center and a UI test for panning without changing the scene document.
+- [x] Implement discontinuity detection and pass the current visible world bounds to function clipping.
+- [x] Implement dynamic viewport mapping, grid generation, infinite-object clipping, and explicit pan gesture handling.
+- [x] Update product documentation and record fresh test, typecheck, build, and E2E evidence.

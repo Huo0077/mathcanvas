@@ -27,13 +27,29 @@ function isCoordinate(value: unknown): value is { x: number; y: number } {
   return Boolean(value && typeof value === "object" && Number.isFinite((value as { x?: unknown }).x) && Number.isFinite((value as { y?: unknown }).y))
 }
 
+function isVector3(value: unknown): value is { x: number; y: number; z: number } {
+  return Boolean(isCoordinate(value) && Number.isFinite((value as { z?: unknown }).z))
+}
+
 function isReferenced(document: GeometryDocument, id: string): boolean {
   return document.groups.some((group) => group.members.includes(id)) || document.constraints.some((constraint) => constraint.targets.includes(id)) || document.annotations.some((annotation) => annotation.target === id || (annotation.anchor?.kind === "primitive" && annotation.anchor.primitiveId === id)) || document.primitives.some((primitive) => (
     (primitive.type === "intersection" && (primitive.lineA === id || primitive.lineB === id)) ||
     (primitive.type === "lineCircleIntersection" && (primitive.lineId === id || primitive.circleId === id)) ||
     (primitive.type === "circleIntersection" && (primitive.circleA === id || primitive.circleB === id)) ||
     (primitive.type === "curveIntersection" && (primitive.objectA === id || primitive.objectB === id))
-    || (primitive.type === "intersectionSet" && (primitive.objectA === id || primitive.objectB === id))
+     || (primitive.type === "intersectionSet" && (primitive.objectA === id || primitive.objectB === id))
+     || (primitive.type === "point3" && primitive.binding && ((primitive.binding.kind === "onLine" && primitive.binding.lineId === id) || (primitive.binding.kind === "onPlane" && primitive.binding.planeId === id) || (primitive.binding.kind === "derived" && primitive.binding.sourceIds.includes(id))))
+     || (primitive.type === "line3" && (primitive.definition.kind === "throughPoints" ? primitive.definition.pointIds.includes(id) : primitive.definition.pointId === id))
+     || (primitive.type === "segment3" && primitive.pointIds.includes(id))
+     || (primitive.type === "ray3" && (primitive.originId === id || primitive.throughId === id))
+     || (primitive.type === "plane3" && (primitive.definition.kind === "throughPoints" ? primitive.definition.pointIds.includes(id) : primitive.definition.pointId === id))
+     || (primitive.type === "circle3" && primitive.centerId === id)
+     || (primitive.type === "edge3" && (primitive.pointIds.includes(id) || primitive.faceIds?.includes(id)))
+     || (primitive.type === "face3" && (primitive.pointIds.includes(id) || primitive.edgeIds?.includes(id) || primitive.planeId === id))
+     || (primitive.type === "polyhedron3" && (primitive.vertexIds.includes(id) || primitive.edgeIds.includes(id) || primitive.faceIds.includes(id) || primitive.construction?.sourceIds.includes(id)))
+     || (primitive.type === "derivative" && primitive.sourceId === id)
+    || ((primitive.type === "tangent" || primitive.type === "normal" || primitive.type === "secant") && primitive.sourceId === id)
+    || ((primitive.type === "integral" || primitive.type === "analysisSet") && primitive.sourceId === id)
   ))
 }
 
@@ -51,13 +67,14 @@ export function validatePatch(document: GeometryDocument, operation: DomainOpera
   }
   if (operation.op === "updatePrimitive") {
     const primitive = document.primitives.find((candidate) => candidate.id === operation.id)
-    const editable = ["point", "line", "segment", "ray", "polyline", "parabola", "ellipse", "hyperbola", "function", "circle", "arc"]
+    const editable = ["point", "point3", "line", "segment", "ray", "polyline", "parabola", "ellipse", "hyperbola", "function", "circle", "arc", "cube", "pyramid", "cylinder", "cone"]
     if (!primitive || !editable.includes(primitive.type)) errors.push("object is not editable")
     if (primitive?.locked) errors.push("object is locked")
     if (operation.patch.a && !isCoordinate(operation.patch.a)) errors.push("line start must be finite")
     if (operation.patch.b && !isCoordinate(operation.patch.b)) errors.push("line end must be finite")
     if (operation.patch.x !== undefined && !Number.isFinite(operation.patch.x)) errors.push("point X must be finite")
     if (operation.patch.y !== undefined && !Number.isFinite(operation.patch.y)) errors.push("point Y must be finite")
+    if (operation.patch.position3 !== undefined && (!isVector3(operation.patch.position3) || primitive?.type !== "point3")) errors.push(primitive?.type === "point3" ? "point position must be finite" : "only point3 supports position")
     if (operation.patch.center && !isCoordinate(operation.patch.center)) errors.push("center must be finite")
     if (operation.patch.vertex && !isCoordinate(operation.patch.vertex)) errors.push("vertex must be finite")
     if (operation.patch.radius !== undefined && (!Number.isFinite(operation.patch.radius) || operation.patch.radius <= 0)) errors.push("radius must be positive")
@@ -80,6 +97,14 @@ export function validatePatch(document: GeometryDocument, operation: DomainOpera
     }
     if (operation.patch.domain !== undefined && (!Array.isArray(operation.patch.domain) || operation.patch.domain.length !== 2 || !operation.patch.domain.every(Number.isFinite) || operation.patch.domain[0] >= operation.patch.domain[1])) errors.push("function domain is invalid")
     if (operation.patch.samples !== undefined && (!Number.isInteger(operation.patch.samples) || operation.patch.samples < 2 || operation.patch.samples > 2048)) errors.push("function sample count is invalid")
+    if (operation.patch.origin3 !== undefined && (!isVector3(operation.patch.origin3) || primitive?.type !== "cube")) errors.push(primitive?.type === "cube" ? "origin must be finite" : "only cubes support origin")
+    if (operation.patch.size3 !== undefined && (!isVector3(operation.patch.size3) || primitive?.type !== "cube" || operation.patch.size3.x <= 0 || operation.patch.size3.y <= 0 || operation.patch.size3.z <= 0)) errors.push(primitive?.type === "cube" ? "cube size must be positive" : "only cubes support size")
+    if (operation.patch.baseCenter3 !== undefined && (!isVector3(operation.patch.baseCenter3) || primitive?.type !== "pyramid")) errors.push(primitive?.type === "pyramid" ? "base center must be finite" : "only pyramids support base center")
+    if (operation.patch.baseSize3 !== undefined && (!operation.patch.baseSize3 || !Number.isFinite(operation.patch.baseSize3.x) || !Number.isFinite(operation.patch.baseSize3.y) || primitive?.type !== "pyramid" || operation.patch.baseSize3.x <= 0 || operation.patch.baseSize3.y <= 0)) errors.push(primitive?.type === "pyramid" ? "pyramid base size must be positive" : "only pyramids support base size")
+    if (operation.patch.center3 !== undefined && (!isVector3(operation.patch.center3) || !["cylinder", "cone"].includes(primitive?.type ?? ""))) errors.push(["cylinder", "cone"].includes(primitive?.type ?? "") ? "center must be finite" : "only cylinders and cones support center")
+    if (operation.patch.height !== undefined && (!Number.isFinite(operation.patch.height) || operation.patch.height <= 0 || !["pyramid", "cylinder", "cone"].includes(primitive?.type ?? ""))) errors.push(["pyramid", "cylinder", "cone"].includes(primitive?.type ?? "") ? "height must be positive" : "only solids with height support height")
+    if (operation.patch.radius3 !== undefined && (!Number.isFinite(operation.patch.radius3) || operation.patch.radius3 <= 0 || !["cylinder", "cone"].includes(primitive?.type ?? ""))) errors.push(["cylinder", "cone"].includes(primitive?.type ?? "") ? "3D radius must be positive" : "only cylinders and cones support radius")
+    if (operation.patch.segments !== undefined && (!Number.isInteger(operation.patch.segments) || operation.patch.segments < 3 || operation.patch.segments > 256 || !["cylinder", "cone"].includes(primitive?.type ?? ""))) errors.push(["cylinder", "cone"].includes(primitive?.type ?? "") ? "segment count is invalid" : "only cylinders and cones support segments")
     if (operation.patch.rotation !== undefined && !Number.isFinite(operation.patch.rotation)) errors.push("rotation must be finite")
     if (operation.patch.label !== undefined && typeof operation.patch.label !== "string") errors.push("label is invalid")
     if (operation.patch.style !== undefined) {

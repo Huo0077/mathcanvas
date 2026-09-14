@@ -2,9 +2,84 @@ import { describe, expect, it } from "vitest"
 
 import { createEmptyDocument } from "@draw/dsl"
 
-import { applyOperation, commitPatch, getAffectedPrimitiveIds, recomputeDerivedObjects } from "./index"
+import { applyOperation, commitPatch, createFace3, createLine3, createPoint3, createPolyhedron3, getAffectedPrimitiveIds, getDependencyIndex, patchPoint3, recomputeDerivedObjects } from "./index"
 
 describe("scene graph operations", () => {
+  it("creates point-driven 3D primitives with stable topology references", () => {
+    const pointA = createPoint3("point-a", { x: 0, y: 0, z: 0 })
+    const pointB = createPoint3("point-b", { x: 1, y: 0, z: 0 })
+    const pointC = createPoint3("point-c", { x: 0, y: 1, z: 0 })
+    const pointD = createPoint3("point-d", { x: 0, y: 0, z: 1 })
+    const line = createLine3("line-ab", [pointA.id, pointB.id])
+    const face = createFace3("face-abc", [pointA.id, pointB.id, pointC.id])
+    const solid = createPolyhedron3("solid-abcd", [pointA.id, pointB.id, pointC.id, pointD.id], ["edge-ab"], [face.id])
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [pointA, pointB, pointC, pointD, line, face, solid]
+
+    expect(line.definition).toEqual({ kind: "throughPoints", pointIds: ["point-a", "point-b"] })
+    expect(face.pointIds).toEqual(["point-a", "point-b", "point-c"])
+    expect(solid.vertexIds).toEqual(["point-a", "point-b", "point-c", "point-d"])
+    expect(getDependencyIndex(document).get("point-a")).toEqual(new Set(["line-ab", "face-abc", "solid-abcd"]))
+  })
+
+  it("patches a point3 through the same immutable operation pipeline", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [createPoint3("point-a", { x: 0, y: 0, z: 0 })]
+
+    const result = applyOperation(document, patchPoint3("point-a", { x: 2, y: 3, z: 4 }))
+
+    expect(result.changed).toBe(true)
+    expect(result.document).not.toBe(document)
+    expect(result.document.primitives[0]).toMatchObject({ type: "point3", position: { x: 2, y: 3, z: 4 } })
+  })
+
+  it("recomputes a point3 bound to a line3 after its source point moves", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      createPoint3("point-a", { x: 0, y: 0, z: 0 }),
+      createPoint3("point-b", { x: 2, y: 0, z: 0 }),
+      createLine3("line-ab", ["point-a", "point-b"]),
+      createPoint3("point-on-line", { x: 0, y: 0, z: 0 }, { kind: "onLine", lineId: "line-ab", parameter: 0.5 })
+    ]
+
+    const result = applyOperation(document, patchPoint3("point-a", { x: 2, y: 0, z: 0 }))
+    const boundPoint = result.document.primitives.find((primitive) => primitive.id === "point-on-line")
+
+    expect(boundPoint).toMatchObject({ position: { x: 2, y: 0, z: 0 } })
+    expect([...getAffectedPrimitiveIds(document, ["point-a"])]).toEqual(["point-a", "line-ab", "point-on-line"])
+  })
+
+  it("recomputes chained point3 bindings regardless of document order", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      createPoint3("point-a", { x: 0, y: 0, z: 0 }),
+      createPoint3("point-b", { x: 2, y: 0, z: 0 }),
+      createPoint3("point-midpoint", { x: 0, y: 0, z: 0 }, { kind: "derived", sourceIds: ["point-on-line", "point-b"], feature: "midpoint" }),
+      createPoint3("point-on-line", { x: 0, y: 0, z: 0 }, { kind: "onLine", lineId: "line-ab", parameter: 0.5 }),
+      createLine3("line-ab", ["point-a", "point-b"])
+    ]
+
+    const result = recomputeDerivedObjects(document, ["point-a"])
+
+    expect(result.primitives.find((primitive) => primitive.id === "point-on-line")).toMatchObject({ position: { x: 1, y: 0, z: 0 } })
+    expect(result.primitives.find((primitive) => primitive.id === "point-midpoint")).toMatchObject({ position: { x: 1.5, y: 0, z: 0 } })
+  })
+
+  it("protects 3D source points and topology objects from deletion", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      createPoint3("point-a", { x: 0, y: 0, z: 0 }),
+      createPoint3("point-b", { x: 1, y: 0, z: 0 }),
+      createLine3("line-ab", ["point-a", "point-b"])
+    ]
+
+    const pointResult = commitPatch(document, { op: "deleteObject", id: "point-a" })
+    const lineResult = commitPatch(document, { op: "deleteObject", id: "line-ab" })
+
+    expect(pointResult.changed).toBe(false)
+    expect(pointResult.error).toContain("referenced")
+    expect(lineResult.changed).toBe(true)
+  })
   it("updates a parameter without mutating the previous document", () => {
     const before = createEmptyDocument("calculus")
     const result = applyOperation(before, { op: "setParameter", id: "slope", value: 2 })
@@ -68,6 +143,23 @@ describe("scene graph operations", () => {
     }
   })
 
+  it("recomputes a persisted section when its solid source changes", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      { id: "cube-1", type: "cube", origin: { x: -1, y: -1, z: -1 }, size: { x: 2, y: 2, z: 2 } },
+      { id: "section-1", type: "section", sourceId: "cube-1", plane: { normal: { x: 0, y: 0, z: 1 }, constant: 0 }, points: [], status: "undefined" }
+    ]
+
+    const initial = recomputeDerivedObjects(document)
+    expect(initial.primitives.find((primitive) => primitive.id === "section-1")).toMatchObject({ status: "approximate", visible: true, points: expect.any(Array) })
+
+    const moved = structuredClone(initial) as typeof initial
+    const cube = moved.primitives.find((primitive) => primitive.id === "cube-1")
+    if (cube?.type === "cube") cube.origin.z = 4
+    const updated = recomputeDerivedObjects(moved, ["cube-1"])
+    expect(updated.primitives.find((primitive) => primitive.id === "section-1")).toMatchObject({ status: "undefined", visible: false, points: [] })
+  })
+
   it("recomputes an intersection set with every sampled solution", () => {
     const document = createEmptyDocument("calculus")
     document.primitives = [
@@ -78,6 +170,53 @@ describe("scene graph operations", () => {
 
     const result = recomputeDerivedObjects(document)
     expect(result.primitives.find((primitive) => primitive.id === "set-1")).toMatchObject({ visible: true, points: [{ x: 0, y: 0 }] })
+  })
+
+  it("recomputes a derivative when its source function changes", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [
+      { id: "function-1", type: "function", expression: "x^2", domain: [-2, 2], samples: 16 },
+      { id: "derivative-1", type: "derivative", sourceId: "function-1", order: 1, domain: [-2, 2], samples: 16, points: [], status: "approximate" }
+    ]
+
+    const initial = recomputeDerivedObjects(document)
+    const updated = applyOperation(initial, { op: "updatePrimitive", id: "function-1", patch: { expression: "2*x" } })
+    const derivative = updated.document.primitives.find((primitive) => primitive.id === "derivative-1")
+
+    expect(initial.primitives.find((primitive) => primitive.id === "derivative-1")).toMatchObject({ points: expect.any(Array) })
+    expect(derivative).toMatchObject({ status: "approximate", points: expect.arrayContaining([expect.objectContaining({ y: expect.closeTo(2, 0.1) })]) })
+  })
+
+  it("recomputes tangent, normal, and secant values from their source function", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [
+      { id: "function-1", type: "function", expression: "x^2", domain: [-2, 2], samples: 16 },
+      { id: "tangent-1", type: "tangent", sourceId: "function-1", x: 1, point: { x: 0, y: 0 }, slope: 0, a: { x: -2, y: 0 }, b: { x: 2, y: 0 }, status: "failed" },
+      { id: "normal-1", type: "normal", sourceId: "function-1", x: 1, point: { x: 0, y: 0 }, slope: 0, a: { x: -2, y: 0 }, b: { x: 2, y: 0 }, status: "failed" },
+      { id: "secant-1", type: "secant", sourceId: "function-1", x1: -1, x2: 1, points: [], slope: 0, a: { x: -2, y: 0 }, b: { x: 2, y: 0 }, status: "failed" }
+    ]
+
+    const result = recomputeDerivedObjects(document)
+    expect(result.primitives).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "tangent-1", point: { x: 1, y: 1 }, slope: expect.closeTo(2, 0.1), status: "approximate" }),
+      expect.objectContaining({ id: "normal-1", point: { x: 1, y: 1 }, slope: expect.closeTo(-0.5, 0.1), status: "approximate" }),
+      expect.objectContaining({ id: "secant-1", points: [{ x: -1, y: 1 }, { x: 1, y: 1 }], slope: expect.closeTo(0, 0.1), status: "approximate" })
+    ]))
+  })
+
+  it("recomputes integral area and analysis results from their source function", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [
+      { id: "function-1", type: "function", expression: "x^2", domain: [-1, 1], samples: 16 },
+      { id: "integral-1", type: "integral", sourceId: "function-1", domain: [0, 1], steps: 64, points: [], area: null, status: "failed" },
+      { id: "analysis-1", type: "analysisSet", sourceId: "function-1", domain: [-1, 1], samples: 64, results: [], status: "failed" }
+    ]
+
+    const result = recomputeDerivedObjects(document)
+    expect(result.primitives).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "integral-1", area: expect.closeTo(1 / 3, 0.001), status: "approximate" }),
+      expect.objectContaining({ id: "analysis-1", results: expect.arrayContaining([expect.objectContaining({ kind: "minimum" })]), status: "approximate" })
+    ]))
   })
 
   it("rejects an invalid constraint without changing the document", () => {

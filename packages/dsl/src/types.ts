@@ -5,6 +5,24 @@ export interface Coordinate {
   y: number
 }
 
+export interface Vector3 {
+  x: number
+  y: number
+  z: number
+}
+
+export interface PlaneFrame {
+  origin: Vector3
+  u: Vector3
+  v: Vector3
+}
+
+export type Point3Binding =
+  | { kind: "free" }
+  | { kind: "onLine"; lineId: string; parameter: number }
+  | { kind: "onPlane"; planeId: string; coordinates: [number, number]; frame: PlaneFrame }
+  | { kind: "derived"; sourceIds: string[]; feature: string }
+
 export interface PrimitiveStyle {
   stroke?: string
   fill?: string
@@ -41,6 +59,83 @@ export interface PointPrimitive extends PrimitivePresentation {
   x: number
   y: number
   binding?: PointBinding
+}
+
+export interface Point3Primitive extends PrimitivePresentation {
+  id: string
+  type: "point3"
+  position: Vector3
+  binding?: Point3Binding
+}
+
+export type Line3Definition =
+  | { kind: "throughPoints"; pointIds: [string, string] }
+  | { kind: "pointDirection"; pointId: string; direction: Vector3 }
+
+export interface Line3Primitive extends PrimitivePresentation {
+  id: string
+  type: "line3"
+  definition: Line3Definition
+}
+
+export interface Segment3Primitive extends PrimitivePresentation {
+  id: string
+  type: "segment3"
+  pointIds: [string, string]
+}
+
+export interface Ray3Primitive extends PrimitivePresentation {
+  id: string
+  type: "ray3"
+  originId: string
+  throughId: string
+}
+
+export type Plane3Definition =
+  | { kind: "throughPoints"; pointIds: [string, string, string] }
+  | { kind: "pointNormal"; pointId: string; normal: Vector3 }
+
+export interface Plane3Primitive extends PrimitivePresentation {
+  id: string
+  type: "plane3"
+  definition: Plane3Definition
+}
+
+export interface Circle3Primitive extends PrimitivePresentation {
+  id: string
+  type: "circle3"
+  centerId: string
+  normal: Vector3
+  radius: number
+}
+
+export interface Edge3Primitive extends PrimitivePresentation {
+  id: string
+  type: "edge3"
+  pointIds: [string, string]
+  faceIds?: string[]
+}
+
+export interface Face3Primitive extends PrimitivePresentation {
+  id: string
+  type: "face3"
+  pointIds: string[]
+  edgeIds?: string[]
+  planeId?: string
+}
+
+export type SolidConstruction =
+  | { kind: "template"; templateId: string; parameterIds?: string[]; sourceIds: string[] }
+  | { kind: "fromPoints"; sourceIds: string[] }
+  | { kind: "fromFaces"; sourceIds: string[] }
+
+export interface Polyhedron3Primitive extends PrimitivePresentation {
+  id: string
+  type: "polyhedron3"
+  vertexIds: string[]
+  edgeIds: string[]
+  faceIds: string[]
+  construction?: SolidConstruction
 }
 
 export interface LinePrimitive extends PrimitivePresentation {
@@ -130,6 +225,124 @@ export interface FunctionPrimitive extends PrimitivePresentation {
   samples?: number
 }
 
+export interface DerivativePrimitive extends PrimitivePresentation {
+  id: string
+  type: "derivative"
+  sourceId: string
+  order: 1 | 2
+  domain: [number, number]
+  samples: number
+  points: Coordinate[]
+  status: "approximate" | "undefined" | "failed"
+  diagnostic?: string
+}
+
+export interface TangentPrimitive extends PrimitivePresentation {
+  id: string
+  type: "tangent"
+  sourceId: string
+  x: number
+  point: Coordinate
+  slope: number
+  a: Coordinate
+  b: Coordinate
+  status: "approximate" | "undefined" | "failed"
+  vertical?: boolean
+  diagnostic?: string
+}
+
+export interface NormalPrimitive extends Omit<TangentPrimitive, "type"> {
+  type: "normal"
+}
+
+export interface SecantPrimitive extends PrimitivePresentation {
+  id: string
+  type: "secant"
+  sourceId: string
+  x1: number
+  x2: number
+  points: [Coordinate, Coordinate] | []
+  slope: number
+  a: Coordinate
+  b: Coordinate
+  status: "approximate" | "undefined" | "failed"
+  vertical?: boolean
+  diagnostic?: string
+}
+
+export interface AnalysisResult {
+  kind: "zero" | "maximum" | "minimum" | "inflection"
+  x: number
+  y: number
+  approximate: true
+}
+
+export interface IntegralPrimitive extends PrimitivePresentation {
+  id: string
+  type: "integral"
+  sourceId: string
+  domain: [number, number]
+  steps: number
+  points: Coordinate[]
+  area: number | null
+  status: "approximate" | "undefined" | "failed"
+  diagnostic?: string
+}
+
+export interface AnalysisSetPrimitive extends PrimitivePresentation {
+  id: string
+  type: "analysisSet"
+  sourceId: string
+  domain: [number, number]
+  samples: number
+  results: AnalysisResult[]
+  status: "approximate" | "undefined" | "failed"
+  diagnostic?: string
+}
+
+export interface CubePrimitive extends PrimitivePresentation {
+  id: string
+  type: "cube"
+  origin: Vector3
+  size: Vector3
+}
+
+export interface PyramidPrimitive extends PrimitivePresentation {
+  id: string
+  type: "pyramid"
+  baseCenter: Vector3
+  baseSize: { x: number; y: number }
+  height: number
+}
+
+export interface CylinderPrimitive extends PrimitivePresentation {
+  id: string
+  type: "cylinder"
+  center: Vector3
+  radius: number
+  height: number
+  segments: number
+}
+
+export interface ConePrimitive extends PrimitivePresentation {
+  id: string
+  type: "cone"
+  center: Vector3
+  radius: number
+  height: number
+  segments: number
+}
+
+export interface SectionPrimitive extends PrimitivePresentation {
+  id: string
+  type: "section"
+  sourceId: string
+  plane: { normal: Vector3; constant: number }
+  points: Vector3[]
+  status: "approximate" | "undefined" | "failed"
+  diagnostic?: string
+}
+
 export interface CirclePrimitive extends PrimitivePresentation {
   id: string
   type: "circle"
@@ -196,9 +409,13 @@ export interface IntersectionSetPrimitive extends PrimitivePresentation {
 
 export type PrimitiveSpec =
   | PointPrimitive
+  | Point3Primitive
   | LinePrimitive
+  | Line3Primitive
   | SegmentPrimitive
+  | Segment3Primitive
   | RayPrimitive
+  | Ray3Primitive
   | PolylinePrimitive
   | ConnectionPrimitive
   | LocusPrimitive
@@ -206,6 +423,22 @@ export type PrimitiveSpec =
   | EllipsePrimitive
   | HyperbolaPrimitive
   | FunctionPrimitive
+  | DerivativePrimitive
+  | TangentPrimitive
+  | NormalPrimitive
+  | SecantPrimitive
+  | IntegralPrimitive
+  | AnalysisSetPrimitive
+  | CubePrimitive
+  | PyramidPrimitive
+  | CylinderPrimitive
+  | ConePrimitive
+  | Plane3Primitive
+  | Circle3Primitive
+  | Edge3Primitive
+  | Face3Primitive
+  | Polyhedron3Primitive
+  | SectionPrimitive
   | CirclePrimitive
   | ArcPrimitive
   | IntersectionPrimitive

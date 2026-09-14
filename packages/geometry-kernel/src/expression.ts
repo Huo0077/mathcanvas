@@ -155,8 +155,19 @@ export function parseExpression(source: string): ExpressionNode {
 
 export type CompiledExpression = ExpressionNode
 
+const compiledExpressionCache = new Map<string, CompiledExpression>()
+
 export function compileExpression(source: string): CompiledExpression {
-  return parseExpression(source)
+  const normalized = normalizeFunctionExpression(source)
+  const cached = compiledExpressionCache.get(normalized)
+  if (cached) return cached
+  const compiled = parseExpression(normalized)
+  compiledExpressionCache.set(normalized, compiled)
+  return compiled
+}
+
+export function clearExpressionCache(): void {
+  compiledExpressionCache.clear()
 }
 
 export function evaluateExpression(expression: ExpressionNode, variables: Record<string, number>): number {

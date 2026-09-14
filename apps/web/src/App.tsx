@@ -10,6 +10,7 @@ import { GeometryToolbar } from "./components/GeometryToolbar"
 import { GraphicsView } from "./components/GraphicsView"
 import { PropertiesBar } from "./components/PropertiesBar"
 import { WorkspaceHeader } from "./components/WorkspaceHeader"
+import { ThreeSceneView } from "./threeScene"
 import type { IntersectionPreview } from "./intersectionPreview"
 import { loadActiveWorkspace, loadDraft, saveDraft } from "./persistence/draftStorage"
 import { exportCsv, exportSvg } from "./persistence/exporters"
@@ -43,6 +44,15 @@ function nextPointLabel(document: ReturnType<typeof useSceneStore.getState>["doc
     if (!usedLabels.has(label)) return label
   }
   return `新点 ${document.primitives.filter((primitive) => primitive.type === "point").length + 1}`
+}
+
+function nextPoint3Label(document: ReturnType<typeof useSceneStore.getState>["document"]): string {
+  const usedLabels = new Set(document.primitives.filter((primitive) => primitive.type === "point3").map((primitive) => primitive.label))
+  for (let index = 0; index < 26; index += 1) {
+    const label = String.fromCharCode(65 + index)
+    if (!usedLabels.has(label)) return label
+  }
+  return `P${document.primitives.filter((primitive) => primitive.type === "point3").length + 1}`
 }
 
 function isTextEditingTarget(target: EventTarget | null): boolean {
@@ -115,7 +125,24 @@ export function App() {
   }
 
   const creationMode: CreationMode = creationStep?.mode ?? null
-  const startCreation = (mode: Exclude<CreationMode, null>) => setCreationStep({ mode, center: null })
+  const startCreation = (mode: Exclude<CreationMode, null>) => {
+    if (document.workspace === "geometry3d") {
+      if (mode === "line") {
+        if (canCreateLine3) addLine3()
+        else setFileError("请先选择两个空间点创建直线")
+      }
+      if (mode === "segment") {
+        if (canCreatePlane3) addPlane3()
+        else setFileError("请先选择三个空间点创建平面")
+      }
+      if (mode === "ray" || mode === "polyline") {
+        if (canCreateFace3) addFace3()
+        else setFileError("请先选择三个或更多空间点创建空间面")
+      }
+      return
+    }
+    setCreationStep({ mode, center: null })
+  }
   const handleCanvasClick = (coordinate: { x: number; y: number }) => {
     if (!creationStep) return
     if (creationStep.mode === "polyline") {
@@ -203,6 +230,10 @@ export function App() {
   const selectedPrimitive = selectedId ? document.primitives.find((primitive) => primitive.id === selectedId) ?? null : null
   const intersectionTypes = ["point", "line", "segment", "ray", "polyline", "circle", "arc", "parabola", "ellipse", "hyperbola", "function"] as const
   const selectedPointIds = selectedIds.filter((id) => document.primitives.find((primitive) => primitive.id === id)?.type === "point")
+  const selectedPoint3Ids = selectedIds.filter((id) => document.primitives.find((primitive) => primitive.id === id)?.type === "point3")
+  const canCreateLine3 = selectedPoint3Ids.length === 2 && selectedPoint3Ids.length === selectedIds.length
+  const canCreatePlane3 = selectedPoint3Ids.length === 3 && selectedPoint3Ids.length === selectedIds.length
+  const canCreateFace3 = selectedPoint3Ids.length >= 3 && selectedPoint3Ids.length === selectedIds.length
   const canCreatePointConnection = (selectedIds.length === 2 || selectedIds.length === 3) && selectedPointIds.length === selectedIds.length
   const canCreateIntersection = canCreatePointConnection || (selectedIds.length === 2 && selectedIds.every((id) => intersectionTypes.includes(document.primitives.find((primitive) => primitive.id === id)?.type as typeof intersectionTypes[number])))
   const allSelectedLocked = selectedIds.length > 0 && selectedIds.every((id) => document.primitives.find((primitive) => primitive.id === id)?.locked)
@@ -226,10 +257,18 @@ export function App() {
       if (primitive.type === "parabola") return primitive.vertex.x >= bounds.minX && primitive.vertex.x <= bounds.maxX && primitive.vertex.y >= bounds.minY && primitive.vertex.y <= bounds.maxY
       if (primitive.type === "ellipse" || primitive.type === "hyperbola") return primitive.center.x >= bounds.minX && primitive.center.x <= bounds.maxX && primitive.center.y >= bounds.minY && primitive.center.y <= bounds.maxY
       if (primitive.type === "function") return primitive.domain[0] >= bounds.minX && primitive.domain[1] <= bounds.maxX
+      if (primitive.type === "derivative") return primitive.points.length > 0 && primitive.points.every((point) => point.x >= bounds.minX && point.x <= bounds.maxX && point.y >= bounds.minY && point.y <= bounds.maxY)
+      if (primitive.type === "tangent" || primitive.type === "normal") return [primitive.a, primitive.b].every((point) => point.x >= bounds.minX && point.x <= bounds.maxX && point.y >= bounds.minY && point.y <= bounds.maxY)
+      if (primitive.type === "secant") return [primitive.a, primitive.b].every((point) => point.x >= bounds.minX && point.x <= bounds.maxX && point.y >= bounds.minY && point.y <= bounds.maxY)
+      if (primitive.type === "integral") return primitive.points.length > 0 && primitive.points.every((point) => point.x >= bounds.minX && point.x <= bounds.maxX && point.y >= bounds.minY && point.y <= bounds.maxY)
+      if (primitive.type === "analysisSet") return primitive.results.length > 0 && primitive.results.every((point) => point.x >= bounds.minX && point.x <= bounds.maxX && point.y >= bounds.minY && point.y <= bounds.maxY)
+      if (primitive.type === "cube" || primitive.type === "pyramid" || primitive.type === "cylinder" || primitive.type === "cone") return false
+      if (primitive.type === "section") return false
       if (primitive.type === "connection") return false
       if (primitive.type === "locus") return false
       if (primitive.type === "intersectionSet") return false
-      return primitive.x >= bounds.minX && primitive.x <= bounds.maxX && primitive.y >= bounds.minY && primitive.y <= bounds.maxY
+      if (primitive.type === "intersection" || primitive.type === "lineCircleIntersection" || primitive.type === "circleIntersection" || primitive.type === "curveIntersection") return primitive.x >= bounds.minX && primitive.x <= bounds.maxX && primitive.y >= bounds.minY && primitive.y <= bounds.maxY
+      return false
     }).map((primitive) => primitive.id)
     setSelectedIds(contained)
   }
@@ -251,6 +290,30 @@ export function App() {
     }
     const id = nextPrimitiveId(document, "intersectionSet")
     apply({ op: "addPrimitive", primitive: { id, type: "intersectionSet", objectA, objectB, points: [], label: `交点集合 ${id.split("-").at(-1)}` } })
+    setSelectedIds([id])
+  }
+
+  const addDefaultCube = () => {
+    const id = nextPrimitiveId(document, "cube")
+    apply({ op: "addPrimitive", primitive: { id, type: "cube", origin: { x: -2, y: -2, z: -1 }, size: { x: 4, y: 4, z: 2 }, label: `立方体 ${id.split("-").at(-1)}` } })
+    setSelectedIds([id])
+  }
+  const addDefaultSolid = (type: "pyramid" | "cylinder" | "cone") => {
+    const id = nextPrimitiveId(document, type)
+    const primitive = type === "pyramid"
+      ? { id, type, baseCenter: { x: -2, y: 0, z: -2 }, baseSize: { x: 4, y: 4 }, height: 4, label: `棱锥 ${id.split("-").at(-1)}` }
+      : type === "cylinder"
+        ? { id, type, center: { x: 3, y: 0, z: 0 }, radius: 1.5, height: 3, segments: 24, label: `圆柱 ${id.split("-").at(-1)}` }
+        : { id, type, center: { x: -3, y: 0, z: 3 }, radius: 1.5, height: 3, segments: 24, label: `圆锥 ${id.split("-").at(-1)}` }
+    apply({ op: "addPrimitive", primitive })
+    setSelectedIds([id])
+  }
+  const solidTypes = ["cube", "pyramid", "cylinder", "cone"] as const
+  const canCreateSection = selectedPrimitive !== null && solidTypes.includes(selectedPrimitive.type as typeof solidTypes[number])
+  const addSection = () => {
+    if (!selectedPrimitive || !solidTypes.includes(selectedPrimitive.type as typeof solidTypes[number])) return
+    const id = nextPrimitiveId(document, "section")
+    apply({ op: "addPrimitive", primitive: { id, type: "section", sourceId: selectedPrimitive.id, plane: { normal: { x: 0, y: 1, z: 0 }, constant: -1.5 }, points: [], status: "undefined", label: `截面 ${id.split("-").at(-1)}` } })
     setSelectedIds([id])
   }
   const createIntersectionFromPreview = (preview: IntersectionPreview) => {
@@ -276,8 +339,37 @@ export function App() {
     setSelectedIds([id])
   }
   const addPoint = () => {
+    if (document.workspace === "geometry3d") {
+      addPoint3()
+      return
+    }
     const id = nextPrimitiveId(document, "point")
     apply({ op: "addPrimitive", primitive: { id, type: "point", x: 2, y: 1, label: nextPointLabel(document) } })
+  }
+  function addPoint3() {
+    const pointCount = document.primitives.filter((primitive) => primitive.type === "point3").length
+    const id = nextPrimitiveId(document, "point3")
+    const position = { x: (pointCount % 3) * 2, y: Math.floor(pointCount / 3) * 2, z: 0 }
+    apply({ op: "addPrimitive", primitive: { id, type: "point3", position, binding: { kind: "free" }, label: nextPoint3Label(document) } })
+    setSelectedIds([id])
+  }
+  function addLine3() {
+    if (!canCreateLine3) return
+    const id = nextPrimitiveId(document, "line3")
+    apply({ op: "addPrimitive", primitive: { id, type: "line3", definition: { kind: "throughPoints", pointIds: selectedPoint3Ids as [string, string] }, label: `空间直线 ${id.split("-").at(-1)}` } })
+    setSelectedIds([id])
+  }
+  function addPlane3() {
+    if (!canCreatePlane3) return
+    const id = nextPrimitiveId(document, "plane3")
+    apply({ op: "addPrimitive", primitive: { id, type: "plane3", definition: { kind: "throughPoints", pointIds: selectedPoint3Ids as [string, string, string] }, label: `空间平面 ${id.split("-").at(-1)}` } })
+    setSelectedIds([id])
+  }
+  function addFace3() {
+    if (!canCreateFace3) return
+    const id = nextPrimitiveId(document, "face3")
+    apply({ op: "addPrimitive", primitive: { id, type: "face3", pointIds: [...selectedPoint3Ids], label: `空间面 ${id.split("-").at(-1)}` } })
+    setSelectedIds([id])
   }
   const addAnnotation = (feature: AnnotationFeature, index?: number, text?: string) => {
     if (!selectedPrimitive) return
@@ -318,5 +410,5 @@ export function App() {
   const creationLabel = creationMode === "line" ? "直线" : creationMode === "segment" ? "线段" : creationMode === "ray" ? "射线" : creationMode === "polyline" ? "折线" : creationMode === "circle" ? "圆" : "圆弧"
   const creationHint = creationMode === "polyline" ? "点击添加顶点，双击结束" : creationMode === "line" || creationMode === "segment" || creationMode === "ray" ? (creationStep?.center ? "点击终点" : "点击起点") : creationStep?.mode === "arc" ? (creationStep.start ? "点击终点" : "点击起点") : creationStep?.center ? "点击边缘" : "点击圆心"
 
-  return <div className="app-shell"><WorkspaceHeader activeWorkspace={document.workspace} onWorkspaceChange={(workspace: Workspace) => { setSelectedIds([]); setCreationStep(null); switchWorkspace(workspace) }} /><div className="workbench"><GeometryToolbar hasSelection={selectedIds.length > 0} allSelectedLocked={allSelectedLocked} creationMode={creationMode} onSelectTool={() => setCreationStep(null)} onDelete={deleteSelected} onToggleLock={toggleLock} onUndo={undo} onRedo={redo} onSave={save} onOpen={() => fileInputRef.current?.click()} onExportSvg={exportSvgFile} onExportCsv={exportCsvFile} onExportPng={exportPngFile} onAddPoint={addPoint} onAddLine={() => startCreation("line")} onAddSegment={() => startCreation("segment")} onAddRay={() => startCreation("ray")} onAddPolyline={() => startCreation("polyline")} onAddCircle={() => startCreation("circle")} onAddArc={() => startCreation("arc")} onAddParabola={() => addDefaultPrimitive("parabola")} onAddEllipse={() => addDefaultPrimitive("ellipse")} onAddHyperbola={() => addDefaultPrimitive("hyperbola")} onAddFunction={() => addDefaultPrimitive("function")} /><AlgebraView primitives={document.primitives} selectedIds={selectedIds} onSelect={updateSelection} onToggle={(id, visible) => apply({ op: "toggleVisibility", id, visible })} /><GraphicsView document={document} selectedIds={selectedIds} creationMode={creationMode} onSelect={updateSelection} onBoxSelect={selectBox} onCanvasClick={handleCanvasCreationClick} onCanvasDoubleClick={handleCanvasDoubleClick} onDragEnd={handleDragEnd} onCreateIntersection={createIntersectionFromPreview} /><aside className="panel right"><PropertiesBar selectedPrimitive={selectedPrimitive} selectedCount={selectedIds.length} selectedGroupId={selectedGroup?.id ?? null} allSelectedVisible={allSelectedVisible} canCreateIntersection={canCreateIntersection} onCreateGroup={createGroup} onDeleteGroup={deleteGroup} onCreateIntersection={createIntersection} onAlign={alignSelection} onToggleSelectedVisibility={() => selectedId && apply({ op: "toggleVisibility", id: selectedId, visible: selectedPrimitive?.visible === false })} onToggleSelectedLock={() => selectedId && apply({ op: "toggleLock", id: selectedId, locked: !selectedPrimitive?.locked })} onToggleBatchVisibility={() => apply({ op: "setPrimitivesVisible", ids: selectedIds, visible: !allSelectedVisible })} onUpdatePrimitive={(patch) => selectedId && apply({ op: "updatePrimitive", id: selectedId, patch })} onAddAnnotation={addAnnotation} value={slope?.value ?? 0.5} min={slope?.min ?? 0.15} max={slope?.max ?? 0.85} step={slope?.step ?? 0.05} onChange={(value) => apply({ op: "setParameter", id: "slope", value })} /><AgentDock /></aside><div className="footer-note">revision {document.revision} · 工作区：{document.workspace} · 草稿自动保存 · {creationMode ? `${creationLabel}创建：${creationHint}` : slopeLine?.type === "line" ? "Scene Graph / Dependency DAG 已连接" : "等待图元"}</div></div>{(fileError || operationError) && <div role="alert" className="footer-note">{fileError ?? operationError}</div>}<input ref={fileInputRef} hidden aria-label="加载 .mgeo" type="file" accept=".mgeo,application/json" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; file.text().then(load).catch(() => setFileError("无法读取 .mgeo 文件")); event.target.value = "" }} /></div>
+  return <div className="app-shell"><WorkspaceHeader activeWorkspace={document.workspace} onWorkspaceChange={(workspace: Workspace) => { setSelectedIds([]); setCreationStep(null); switchWorkspace(workspace) }} /><div className="workbench"><GeometryToolbar workspace={document.workspace} canCreateSection={canCreateSection} hasSelection={selectedIds.length > 0} allSelectedLocked={allSelectedLocked} creationMode={creationMode} onSelectTool={() => setCreationStep(null)} onDelete={deleteSelected} onToggleLock={toggleLock} onUndo={undo} onRedo={redo} onSave={save} onOpen={() => fileInputRef.current?.click()} onExportSvg={exportSvgFile} onExportCsv={exportCsvFile} onExportPng={exportPngFile} onAddPoint={addPoint} onAddLine={() => startCreation("line")} onAddSegment={() => startCreation("segment")} onAddRay={() => startCreation("ray")} onAddPolyline={() => startCreation("polyline")} onAddCircle={() => startCreation("circle")} onAddArc={() => startCreation("arc")} onAddParabola={() => addDefaultPrimitive("parabola")} onAddEllipse={() => addDefaultPrimitive("ellipse")} onAddHyperbola={() => addDefaultPrimitive("hyperbola")} onAddFunction={() => addDefaultPrimitive("function")} onAddCube={addDefaultCube} onAddPyramid={() => addDefaultSolid("pyramid")} onAddCylinder={() => addDefaultSolid("cylinder")} onAddCone={() => addDefaultSolid("cone")} onAddSection={addSection} /><AlgebraView primitives={document.primitives} selectedIds={selectedIds} onSelect={updateSelection} onToggle={(id, visible) => apply({ op: "toggleVisibility", id, visible })} />{document.workspace === "geometry3d" ? <ThreeSceneView document={document} selectedIds={selectedIds} onSelect={updateSelection} /> : <GraphicsView document={document} selectedIds={selectedIds} creationMode={creationMode} onSelect={updateSelection} onBoxSelect={selectBox} onCanvasClick={handleCanvasCreationClick} onCanvasDoubleClick={handleCanvasDoubleClick} onDragEnd={handleDragEnd} onCreateIntersection={createIntersectionFromPreview} />}<aside className="panel right"><PropertiesBar selectedPrimitive={selectedPrimitive} selectedCount={selectedIds.length} selectedGroupId={selectedGroup?.id ?? null} allSelectedVisible={allSelectedVisible} canCreateIntersection={canCreateIntersection} onCreateGroup={createGroup} onDeleteGroup={deleteGroup} onCreateIntersection={createIntersection} onAlign={alignSelection} onToggleSelectedVisibility={() => selectedId && apply({ op: "toggleVisibility", id: selectedId, visible: selectedPrimitive?.visible === false })} onToggleSelectedLock={() => selectedId && apply({ op: "toggleLock", id: selectedId, locked: !selectedPrimitive?.locked })} onToggleBatchVisibility={() => apply({ op: "setPrimitivesVisible", ids: selectedIds, visible: !allSelectedVisible })} onUpdatePrimitive={(patch) => selectedId && apply({ op: "updatePrimitive", id: selectedId, patch })} onAddAnnotation={addAnnotation} value={slope?.value ?? 0.5} min={slope?.min ?? 0.15} max={slope?.max ?? 0.85} step={slope?.step ?? 0.05} onChange={(value) => apply({ op: "setParameter", id: "slope", value })} /><AgentDock /></aside><div className="footer-note">revision {document.revision} · 工作区：{document.workspace} · 草稿自动保存 · {creationMode ? `${creationLabel}创建：${creationHint}` : slopeLine?.type === "line" ? "Scene Graph / Dependency DAG 已连接" : "等待图元"}</div></div>{(fileError || operationError) && <div role="alert" className="footer-note">{fileError ?? operationError}</div>}<input ref={fileInputRef} hidden aria-label="加载 .mgeo 文件" type="file" accept=".mgeo,application/json" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; file.text().then(load).catch(() => setFileError("无法读取 .mgeo 文件")); event.target.value = "" }} /></div>
 }
