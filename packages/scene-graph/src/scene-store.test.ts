@@ -2,9 +2,84 @@ import { describe, expect, it } from "vitest"
 
 import { createEmptyDocument } from "@draw/dsl"
 
-import { applyOperation, commitPatch, getAffectedPrimitiveIds, recomputeDerivedObjects } from "./index"
+import { applyOperation, commitPatch, createFace3, createLine3, createPoint3, createPolyhedron3, getAffectedPrimitiveIds, getDependencyIndex, patchPoint3, recomputeDerivedObjects } from "./index"
 
 describe("scene graph operations", () => {
+  it("creates point-driven 3D primitives with stable topology references", () => {
+    const pointA = createPoint3("point-a", { x: 0, y: 0, z: 0 })
+    const pointB = createPoint3("point-b", { x: 1, y: 0, z: 0 })
+    const pointC = createPoint3("point-c", { x: 0, y: 1, z: 0 })
+    const pointD = createPoint3("point-d", { x: 0, y: 0, z: 1 })
+    const line = createLine3("line-ab", [pointA.id, pointB.id])
+    const face = createFace3("face-abc", [pointA.id, pointB.id, pointC.id])
+    const solid = createPolyhedron3("solid-abcd", [pointA.id, pointB.id, pointC.id, pointD.id], ["edge-ab"], [face.id])
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [pointA, pointB, pointC, pointD, line, face, solid]
+
+    expect(line.definition).toEqual({ kind: "throughPoints", pointIds: ["point-a", "point-b"] })
+    expect(face.pointIds).toEqual(["point-a", "point-b", "point-c"])
+    expect(solid.vertexIds).toEqual(["point-a", "point-b", "point-c", "point-d"])
+    expect(getDependencyIndex(document).get("point-a")).toEqual(new Set(["line-ab", "face-abc", "solid-abcd"]))
+  })
+
+  it("patches a point3 through the same immutable operation pipeline", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [createPoint3("point-a", { x: 0, y: 0, z: 0 })]
+
+    const result = applyOperation(document, patchPoint3("point-a", { x: 2, y: 3, z: 4 }))
+
+    expect(result.changed).toBe(true)
+    expect(result.document).not.toBe(document)
+    expect(result.document.primitives[0]).toMatchObject({ type: "point3", position: { x: 2, y: 3, z: 4 } })
+  })
+
+  it("recomputes a point3 bound to a line3 after its source point moves", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      createPoint3("point-a", { x: 0, y: 0, z: 0 }),
+      createPoint3("point-b", { x: 2, y: 0, z: 0 }),
+      createLine3("line-ab", ["point-a", "point-b"]),
+      createPoint3("point-on-line", { x: 0, y: 0, z: 0 }, { kind: "onLine", lineId: "line-ab", parameter: 0.5 })
+    ]
+
+    const result = applyOperation(document, patchPoint3("point-a", { x: 2, y: 0, z: 0 }))
+    const boundPoint = result.document.primitives.find((primitive) => primitive.id === "point-on-line")
+
+    expect(boundPoint).toMatchObject({ position: { x: 2, y: 0, z: 0 } })
+    expect([...getAffectedPrimitiveIds(document, ["point-a"])]).toEqual(["point-a", "line-ab", "point-on-line"])
+  })
+
+  it("recomputes chained point3 bindings regardless of document order", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      createPoint3("point-a", { x: 0, y: 0, z: 0 }),
+      createPoint3("point-b", { x: 2, y: 0, z: 0 }),
+      createPoint3("point-midpoint", { x: 0, y: 0, z: 0 }, { kind: "derived", sourceIds: ["point-on-line", "point-b"], feature: "midpoint" }),
+      createPoint3("point-on-line", { x: 0, y: 0, z: 0 }, { kind: "onLine", lineId: "line-ab", parameter: 0.5 }),
+      createLine3("line-ab", ["point-a", "point-b"])
+    ]
+
+    const result = recomputeDerivedObjects(document, ["point-a"])
+
+    expect(result.primitives.find((primitive) => primitive.id === "point-on-line")).toMatchObject({ position: { x: 1, y: 0, z: 0 } })
+    expect(result.primitives.find((primitive) => primitive.id === "point-midpoint")).toMatchObject({ position: { x: 1.5, y: 0, z: 0 } })
+  })
+
+  it("protects 3D source points and topology objects from deletion", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      createPoint3("point-a", { x: 0, y: 0, z: 0 }),
+      createPoint3("point-b", { x: 1, y: 0, z: 0 }),
+      createLine3("line-ab", ["point-a", "point-b"])
+    ]
+
+    const pointResult = commitPatch(document, { op: "deleteObject", id: "point-a" })
+    const lineResult = commitPatch(document, { op: "deleteObject", id: "line-ab" })
+
+    expect(pointResult.changed).toBe(false)
+    expect(pointResult.error).toContain("referenced")
+    expect(lineResult.changed).toBe(true)
+  })
   it("updates a parameter without mutating the previous document", () => {
     const before = createEmptyDocument("calculus")
     const result = applyOperation(before, { op: "setParameter", id: "slope", value: 2 })

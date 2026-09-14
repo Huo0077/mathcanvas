@@ -131,7 +131,7 @@
 - [x] 完成十个可独立验证切片的实施计划，明确测试、类型检查、构建、E2E、review、commit 和 push 门槛。
 - [x] P6 v2-1：3D DSL 基础对象与旧文档兼容。
 - [x] P6 v2-2：纯三维几何与可注册实体 builder。
-- [ ] P6 v2-3：Scene Graph 依赖索引与拓扑重算。
+- [x] P6 v2-3：Scene Graph 依赖索引与拓扑重算。
 - [ ] P6 v2-4：点线面课堂构造工具与关键点交互。
 - [ ] P6 v2-5：四类固定实体迁移为统一拓扑模板。
 - [ ] P6 v2-6：空间拾取、约束与教学测量。
@@ -194,6 +194,7 @@ P6 v1 参数化基线已完成；下一步执行 P6 v2 点驱动通用立体几�
 - P6-11 最终验证：全量单测 25 个测试文件、215 个用例通过；全量 Playwright 6 个用例通过；生产构建通过；`git diff --check` 通过
 - P6 v2-1 验证：DSL codec 23 个用例通过；CSV exporter 6 个用例通过；全量单测 25 个测试文件、219 个用例通过；四个 workspace 类型检查通过；隔离目录 Vite 生产构建通过；`git diff --check` 通过
 - P6 v2-2 验证：geometry3d 与 solid-builders 聚焦 19 个用例通过；全量单测 26 个测试文件、235 个用例通过；四个 workspace 类型检查通过；隔离目录 Vite 生产构建通过；`git diff --check` 通过
+- P6 v2-3 验证：Scene Graph 聚焦 31 个用例通过；全量单测 26 个测试文件、240 个用例通过；四个 workspace 类型检查通过；`git diff --check` 通过
 - P6-8 Web 构建：`vite build` 使用隔离 `outDir` 通过
 - P6-7 Web 构建：`vite build` 使用隔离 `outDir` 通过
 - 默认 `npm.cmd run build`：当前沙箱因 Vite 写入 `.vite-temp`/`dist` 返回 `EPERM`；使用 `vite build apps/web --configLoader runner --outDir D:\\draw\\build-check\\mathcanvas-current` 完成等价 Web 构建验证

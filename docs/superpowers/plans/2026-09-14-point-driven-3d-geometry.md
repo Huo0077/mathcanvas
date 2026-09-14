@@ -48,8 +48,9 @@
 **Verification:** geometry-kernel 聚焦测试 19/19；全量 `npm.cmd test`：26 个测试文件、235 个用例；`npm.cmd run typecheck`：4 个 workspace；隔离目录 Vite 生产构建通过；`git diff --check` 通过。完成后 commit `feat(p6): add extensible solid builders` 并推送。
 
 ## Slice 3：Scene Graph 依赖索引与拓扑重算
+**Status:** [x] 已实现并完成验证。
 
-**Files:** `packages/scene-graph/src/operations.ts`、`patches.ts`、`scene-store.ts`、相关测试。
+**Files:** `packages/scene-graph/src/operations.ts`、`patches.ts`、`scene-store.test.ts`。
 
 **Interfaces:** `createPoint3`、`createLine3`、`createFace3`、`createPolyhedron3`、`patchPoint3`、反向依赖索引、派生重算状态。
 
@@ -57,7 +58,7 @@
 
 **Implementation:** 建立 source ID 到 dependents 的索引；按受影响分量拓扑排序重算；把模板输出作为子对象写入同一事务；失败时保留合法快照并返回诊断。
 
-**Verification:** Scene Graph 聚焦/全量测试、类型检查、性能回归。完成后 commit `feat(p6): propagate 3d point dependencies` 并推送。
+**Verification:** Scene Graph 聚焦测试 31/31；全量 `npm.cmd test`：26 个测试文件、240 个用例；`npm.cmd run typecheck`：4 个 workspace；`git diff --check` 通过。完成后 commit `feat(p6): propagate 3d point dependencies` 并推送。
 
 ## Slice 4：点线面构造工具与关键点交互
 

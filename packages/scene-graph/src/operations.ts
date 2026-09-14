@@ -1,4 +1,4 @@
-import type { AnnotationSpec, ConstraintSpec, Coordinate, GeometryDocument, GroupSpec, PointBinding, PrimitiveSpec, Vector3 } from "@draw/dsl"
+import type { AnnotationSpec, ConstraintSpec, Coordinate, GeometryDocument, GroupSpec, Point3Binding, Point3Primitive, PointBinding, PrimitiveSpec, Vector3 } from "@draw/dsl"
 import { adaptiveSampleFunctionSegments, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, findExtrema, findInflectionPoints, findZeros, intersectCirclesDetailed, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, sectionConvexPolyhedron, solveLineConstraints, type IntersectionResult, type SampledPrimitive } from "@draw/geometry-kernel"
 
 export type DomainOperation =
@@ -52,6 +52,8 @@ export interface PrimitiveUpdatePatch {
   height?: number
   radius3?: number
   segments?: number
+  position3?: Vector3
+  binding3?: Point3Binding
 }
 
 export interface OperationResult {
@@ -61,6 +63,26 @@ export interface OperationResult {
 }
 
 interface PrimitiveBounds { minX: number; maxX: number; minY: number; maxY: number }
+
+export function createPoint3(id: string, position: Vector3, binding: Point3Binding = { kind: "free" }): Point3Primitive {
+  return { id, type: "point3", position: { ...position }, binding }
+}
+
+export function createLine3(id: string, pointIds: [string, string]): Extract<PrimitiveSpec, { type: "line3" }> {
+  return { id, type: "line3", definition: { kind: "throughPoints", pointIds: [...pointIds] as [string, string] } }
+}
+
+export function createFace3(id: string, pointIds: string[], edgeIds?: string[]): Extract<PrimitiveSpec, { type: "face3" }> {
+  return { id, type: "face3", pointIds: [...pointIds], ...(edgeIds ? { edgeIds: [...edgeIds] } : {}) }
+}
+
+export function createPolyhedron3(id: string, vertexIds: string[], edgeIds: string[], faceIds: string[], construction: Extract<NonNullable<Extract<PrimitiveSpec, { type: "polyhedron3" }>["construction"]>, { kind: "fromPoints" | "fromFaces" }> = { kind: "fromFaces", sourceIds: [...vertexIds, ...edgeIds, ...faceIds] }): Extract<PrimitiveSpec, { type: "polyhedron3" }> {
+  return { id, type: "polyhedron3", vertexIds: [...vertexIds], edgeIds: [...edgeIds], faceIds: [...faceIds], construction: { ...construction, sourceIds: [...construction.sourceIds] } }
+}
+
+export function patchPoint3(id: string, position: Vector3): Extract<DomainOperation, { op: "updatePrimitive" }> {
+  return { op: "updatePrimitive", id, patch: { position3: { ...position } } }
+}
 
 function angleOnArc(angle: number, start: number, end: number): boolean {
   const full = Math.PI * 2
@@ -110,22 +132,32 @@ function translateFunction(primitive: Extract<PrimitiveSpec, { type: "function" 
 }
 
 function primitiveDependencies(primitive: PrimitiveSpec): string[] {
+  const dependencies: string[] = []
   if (primitive.type === "point" && primitive.binding) {
-    if (primitive.binding.kind === "onPath") return [primitive.binding.pathId, ...(primitive.binding.parameterId ? [primitive.binding.parameterId] : [])]
-    if (primitive.binding.kind === "derived") return [primitive.binding.sourceId]
+    if (primitive.binding.kind === "onPath") dependencies.push(primitive.binding.pathId, ...(primitive.binding.parameterId ? [primitive.binding.parameterId] : []))
+    if (primitive.binding.kind === "derived") dependencies.push(primitive.binding.sourceId)
   }
-  if (primitive.type === "line") return primitive.slopeParameter ? [primitive.slopeParameter] : []
-  if (primitive.type === "intersection") return [primitive.lineA, primitive.lineB]
-  if (primitive.type === "lineCircleIntersection") return [primitive.lineId, primitive.circleId]
-  if (primitive.type === "circleIntersection") return [primitive.circleA, primitive.circleB]
-  if (primitive.type === "curveIntersection") return [primitive.objectA, primitive.objectB]
-  if (primitive.type === "intersectionSet") return [primitive.objectA, primitive.objectB]
-  if (primitive.type === "derivative") return [primitive.sourceId]
-  if (primitive.type === "tangent" || primitive.type === "normal") return [primitive.sourceId]
-  if (primitive.type === "secant") return [primitive.sourceId]
-  if (primitive.type === "integral" || primitive.type === "analysisSet") return [primitive.sourceId]
-  if (primitive.type === "section") return [primitive.sourceId]
-  return []
+  if (primitive.type === "point3" && primitive.binding) {
+    if (primitive.binding.kind === "onLine") dependencies.push(primitive.binding.lineId)
+    if (primitive.binding.kind === "onPlane") dependencies.push(primitive.binding.planeId)
+    if (primitive.binding.kind === "derived") dependencies.push(...primitive.binding.sourceIds)
+  }
+  if (primitive.type === "line") dependencies.push(...(primitive.slopeParameter ? [primitive.slopeParameter] : []))
+  if (primitive.type === "line3") dependencies.push(...(primitive.definition.kind === "throughPoints" ? primitive.definition.pointIds : [primitive.definition.pointId]))
+  if (primitive.type === "segment3") dependencies.push(...primitive.pointIds)
+  if (primitive.type === "ray3") dependencies.push(primitive.originId, primitive.throughId)
+  if (primitive.type === "plane3") dependencies.push(...(primitive.definition.kind === "throughPoints" ? primitive.definition.pointIds : [primitive.definition.pointId]))
+  if (primitive.type === "circle3") dependencies.push(primitive.centerId)
+  if (primitive.type === "edge3") dependencies.push(...primitive.pointIds, ...(primitive.faceIds ?? []))
+  if (primitive.type === "face3") dependencies.push(...primitive.pointIds, ...(primitive.edgeIds ?? []), ...(primitive.planeId ? [primitive.planeId] : []))
+  if (primitive.type === "polyhedron3") dependencies.push(...primitive.vertexIds, ...primitive.edgeIds, ...primitive.faceIds, ...(primitive.construction?.sourceIds ?? []), ...(primitive.construction?.kind === "template" ? (primitive.construction.parameterIds ?? []) : []))
+  if (primitive.type === "intersection") dependencies.push(primitive.lineA, primitive.lineB)
+  if (primitive.type === "lineCircleIntersection") dependencies.push(primitive.lineId, primitive.circleId)
+  if (primitive.type === "circleIntersection") dependencies.push(primitive.circleA, primitive.circleB)
+  if (primitive.type === "curveIntersection") dependencies.push(primitive.objectA, primitive.objectB)
+  if (primitive.type === "intersectionSet") dependencies.push(primitive.objectA, primitive.objectB)
+  if (primitive.type === "derivative" || primitive.type === "tangent" || primitive.type === "normal" || primitive.type === "secant" || primitive.type === "integral" || primitive.type === "analysisSet" || primitive.type === "section") dependencies.push(primitive.sourceId)
+  return [...new Set(dependencies)]
 }
 
 function solidSectionGeometry(primitive: Extract<PrimitiveSpec, { type: "cube" | "pyramid" | "cylinder" | "cone" }>): { vertices: Vector3[]; edges: [number, number][] } {
@@ -278,30 +310,104 @@ function recomputeAnalysisSet(primitive: Extract<PrimitiveSpec, { type: "analysi
     : { ...primitive, results: [], status: "undefined" as const, diagnostic: "source function is undefined across the analysis domain" }
 }
 
-export function getAffectedPrimitiveIds(document: GeometryDocument, changedIds: string[]): Set<string> {
-  const dependents = new Map<string, string[]>()
+export function getDependencyIndex(document: GeometryDocument): Map<string, Set<string>> {
+  const dependents = new Map<string, Set<string>>()
   for (const primitive of document.primitives) {
     for (const dependency of primitiveDependencies(primitive)) {
-      dependents.set(dependency, [...(dependents.get(dependency) ?? []), primitive.id])
+      const primitiveDependents = dependents.get(dependency) ?? new Set<string>()
+      primitiveDependents.add(primitive.id)
+      dependents.set(dependency, primitiveDependents)
     }
   }
   for (const constraint of document.constraints) {
     if (constraint.targets.length !== 2) continue
     const [first, second] = constraint.targets
-    dependents.set(first, [...(dependents.get(first) ?? []), second])
-    dependents.set(second, [...(dependents.get(second) ?? []), first])
+    const firstDependents = dependents.get(first) ?? new Set<string>()
+    firstDependents.add(second)
+    dependents.set(first, firstDependents)
+    const secondDependents = dependents.get(second) ?? new Set<string>()
+    secondDependents.add(first)
+    dependents.set(second, secondDependents)
   }
+  return dependents
+}
+
+export function getAffectedPrimitiveIds(document: GeometryDocument, changedIds: string[]): Set<string> {
+  const dependents = getDependencyIndex(document)
   const affected = new Set(changedIds)
   const queue = [...changedIds]
   while (queue.length) {
     const changedId = queue.shift()!
-    for (const dependent of dependents.get(changedId) ?? []) {
+    for (const dependent of dependents.get(changedId) ?? new Set<string>()) {
       if (affected.has(dependent)) continue
       affected.add(dependent)
       queue.push(dependent)
     }
   }
   return affected
+}
+
+function point3Position(primitive: PrimitiveSpec | undefined, points: Map<string, Point3Primitive>): Vector3 | null {
+  if (!primitive) return null
+  if (primitive.type === "point3") return primitive.position
+  if (primitive.type === "segment3" || primitive.type === "edge3") {
+    const first = points.get(primitive.pointIds[0])
+    return first?.position ?? null
+  }
+  if (primitive.type === "ray3") return points.get(primitive.originId)?.position ?? null
+  return null
+}
+
+function resolveLine3Endpoints(primitive: Extract<PrimitiveSpec, { type: "line3" }>, points: Map<string, Point3Primitive>): { first: Vector3; second: Vector3 } | null {
+  if (primitive.definition.kind === "throughPoints") {
+    const first = points.get(primitive.definition.pointIds[0])
+    const second = points.get(primitive.definition.pointIds[1])
+    return first && second ? { first: first.position, second: second.position } : null
+  }
+  const point = points.get(primitive.definition.pointId)
+  if (!point) return null
+  return { first: point.position, second: { x: point.position.x + primitive.definition.direction.x, y: point.position.y + primitive.definition.direction.y, z: point.position.z + primitive.definition.direction.z } }
+}
+
+function resolveBoundPoint3(primitive: Extract<PrimitiveSpec, { type: "point3" }>, primitives: Map<string, PrimitiveSpec>): Vector3 | null {
+  const binding = primitive.binding
+  if (!binding || binding.kind === "free") return null
+  const points = new Map([...primitives.values()].filter((candidate): candidate is Point3Primitive => candidate.type === "point3").map((point) => [point.id, point]))
+  if (binding.kind === "onLine") {
+    const line = primitives.get(binding.lineId)
+    if (!line || line.type !== "line3") return null
+    const endpoints = resolveLine3Endpoints(line, points)
+    if (!endpoints || !Number.isFinite(binding.parameter)) return null
+    return { x: endpoints.first.x + (endpoints.second.x - endpoints.first.x) * binding.parameter, y: endpoints.first.y + (endpoints.second.y - endpoints.first.y) * binding.parameter, z: endpoints.first.z + (endpoints.second.z - endpoints.first.z) * binding.parameter }
+  }
+  if (binding.kind === "onPlane") {
+    const plane = primitives.get(binding.planeId)
+    if (!plane || plane.type !== "plane3") return null
+    return { x: binding.frame.origin.x + binding.coordinates[0] * binding.frame.u.x + binding.coordinates[1] * binding.frame.v.x, y: binding.frame.origin.y + binding.coordinates[0] * binding.frame.u.y + binding.coordinates[1] * binding.frame.v.y, z: binding.frame.origin.z + binding.coordinates[0] * binding.frame.u.z + binding.coordinates[1] * binding.frame.v.z }
+  }
+  if (binding.feature === "midpoint" && binding.sourceIds.length >= 2) {
+    const first = point3Position(primitives.get(binding.sourceIds[0]), points)
+    const second = point3Position(primitives.get(binding.sourceIds[1]), points)
+    if (first && second) return { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2, z: (first.z + second.z) / 2 }
+  }
+  return null
+}
+
+function recomputeBoundPoint3s(primitives: PrimitiveSpec[], affected: Set<string>): void {
+  for (let pass = 0; pass < primitives.length; pass += 1) {
+    let changed = false
+    const primitiveMap = new Map(primitives.map((primitive) => [primitive.id, primitive]))
+    for (let index = 0; index < primitives.length; index += 1) {
+      const primitive = primitives[index]
+      if (primitive.type !== "point3" || !primitive.binding || !affected.has(primitive.id)) continue
+      const position = resolveBoundPoint3(primitive, primitiveMap)
+      if (!position || primitive.position.x === position.x && primitive.position.y === position.y && primitive.position.z === position.z) continue
+      primitives[index] = { ...primitive, position }
+      primitiveMap.set(primitive.id, primitives[index])
+      changed = true
+    }
+    if (!changed) return
+  }
 }
 
 function resolveIntersection(primitive: Extract<PrimitiveSpec, { type: "intersection" | "lineCircleIntersection" | "circleIntersection" }>, lines: Map<string, Extract<PrimitiveSpec, { type: "line" }>>, circles: Map<string, Extract<PrimitiveSpec, { type: "circle" }>>): IntersectionResult {
@@ -352,6 +458,7 @@ export function recomputeDerivedObjects(document: GeometryDocument, changedIds?:
     const primitiveIndex = primitiveIndexById.get(id)
     if (primitiveIndex !== undefined) projectedPrimitives[primitiveIndex] = projected
   }
+  recomputeBoundPoint3s(projectedPrimitives, affected)
   const circles = new Map(
     projectedPrimitives
       .filter((primitive): primitive is Extract<PrimitiveSpec, { type: "circle" }> => primitive.type === "circle")
@@ -360,6 +467,10 @@ export function recomputeDerivedObjects(document: GeometryDocument, changedIds?:
   const primitiveMap = new Map(projectedPrimitives.map((primitive) => [primitive.id, primitive]))
   const primitives = projectedPrimitives.map((primitive) => {
     if (!affected.has(primitive.id)) return primitive
+    if (primitive.type === "point3" && primitive.binding) {
+      const position = resolveBoundPoint3(primitive, primitiveMap)
+      return position ? { ...primitive, position } : primitive
+    }
     if (primitive.type === "point" && primitive.binding) {
       const point = resolveBoundPoint(primitive.binding, primitiveMap, parameters)
       return point ? { ...primitive, x: point.x, y: point.y } : primitive
@@ -426,11 +537,15 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
     changedIds = [operation.primitive.id]
   } else if (operation.op === "updatePrimitive") {
     const primitive = next.primitives.find((candidate) => candidate.id === operation.id)
-    if (!primitive || !["point", "line", "segment", "ray", "polyline", "parabola", "ellipse", "hyperbola", "function", "circle", "arc", "cube", "pyramid", "cylinder", "cone"].includes(primitive.type) || primitive.locked) return { document, changed: false, error: primitive?.locked ? "object is locked" : "object is not editable" }
+    if (!primitive || !["point", "point3", "line", "segment", "ray", "polyline", "parabola", "ellipse", "hyperbola", "function", "circle", "arc", "cube", "pyramid", "cylinder", "cone"].includes(primitive.type) || primitive.locked) return { document, changed: false, error: primitive?.locked ? "object is locked" : "object is not editable" }
     if (primitive.type === "point") {
       if (operation.patch.x !== undefined) primitive.x = operation.patch.x
       if (operation.patch.y !== undefined) primitive.y = operation.patch.y
       if (operation.patch.binding !== undefined) primitive.binding = operation.patch.binding
+    }
+    if (primitive.type === "point3") {
+      if (operation.patch.position3 !== undefined) primitive.position = { ...operation.patch.position3 }
+      if (operation.patch.binding3 !== undefined) primitive.binding = operation.patch.binding3
     }
     if (primitive.type === "line" || primitive.type === "segment" || primitive.type === "ray") {
       if (operation.patch.a) primitive.a = { ...primitive.a, ...operation.patch.a }
