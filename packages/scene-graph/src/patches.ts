@@ -65,6 +65,21 @@ export function validatePatch(document: GeometryDocument, operation: DomainOpera
       if (!validation.valid) errors.push(...validation.errors.filter((error) => !error.startsWith("duplicate primitive id:")))
     }
   }
+  if (operation.op === "addPrimitives") {
+    const batchIds = new Set<string>()
+    if (!Array.isArray(operation.primitives) || operation.primitives.length === 0) errors.push("primitives are invalid")
+    else {
+      for (const primitive of operation.primitives) {
+        if (!isPrimitive(primitive)) errors.push("primitive is invalid")
+        else if (ids.has(primitive.id) || batchIds.has(primitive.id)) errors.push("duplicate object id")
+        else batchIds.add(primitive.id)
+      }
+      if (errors.length === 0) {
+        const validation = validateDocument({ ...document, primitives: [...document.primitives, ...operation.primitives] })
+        if (!validation.valid) errors.push(...validation.errors.filter((error) => !error.startsWith("duplicate primitive id:")))
+      }
+    }
+  }
   if (operation.op === "updatePrimitive") {
     const primitive = document.primitives.find((candidate) => candidate.id === operation.id)
     const editable = ["point", "point3", "line", "segment", "ray", "polyline", "parabola", "ellipse", "hyperbola", "function", "circle", "arc", "cube", "pyramid", "cylinder", "cone"]

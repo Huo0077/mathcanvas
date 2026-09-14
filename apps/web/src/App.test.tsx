@@ -44,8 +44,13 @@ describe("MathCanvas workbench", () => {
 
     expect(screen.getAllByText("立方体 1")[0]).toBeTruthy()
     expect(screen.getByText("立体几何属性")).toBeTruthy()
+    const topology = useSceneStore.getState().document.primitives.find((primitive) => primitive.type === "polyhedron3")
+    expect(topology).toMatchObject({ type: "polyhedron3", construction: { kind: "template", templateId: "cube" } })
+    expect(useSceneStore.getState().document.primitives.filter((primitive) => primitive.type === "point3")).toHaveLength(8)
     fireEvent.change(screen.getByRole("spinbutton", { name: "尺寸 X" }), { target: { value: "5" } })
     expect(useSceneStore.getState().document.primitives.find((primitive) => primitive.id === "cube-1")).toMatchObject({ type: "cube", size: { x: 5 } })
+    const movedPoint = topology?.type === "polyhedron3" ? useSceneStore.getState().document.primitives.find((primitive) => primitive.id === topology.vertexIds[1]) : null
+    expect(movedPoint).toMatchObject({ type: "point3", position: { x: 3 } })
   })
 
   it("creates point-driven 3D geometry from selected classroom points", () => {

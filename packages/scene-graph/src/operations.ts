@@ -1,8 +1,9 @@
 import type { AnnotationSpec, ConstraintSpec, Coordinate, GeometryDocument, GroupSpec, Point3Binding, Point3Primitive, PointBinding, PrimitiveSpec, Vector3 } from "@draw/dsl"
-import { adaptiveSampleFunctionSegments, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, findExtrema, findInflectionPoints, findZeros, intersectCirclesDetailed, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, sectionConvexPolyhedron, solveLineConstraints, type IntersectionResult, type SampledPrimitive } from "@draw/geometry-kernel"
+import { adaptiveSampleFunctionSegments, buildSolidTemplate, createBuilderContext, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, findExtrema, findInflectionPoints, findZeros, intersectCirclesDetailed, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, sectionConvexPolyhedron, solveLineConstraints, type IntersectionResult, type SampledPrimitive, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
 
 export type DomainOperation =
   | { op: "addPrimitive"; primitive: PrimitiveSpec }
+  | { op: "addPrimitives"; primitives: PrimitiveSpec[] }
   | { op: "updatePrimitive"; id: string; patch: PrimitiveUpdatePatch }
   | { op: "toggleLock"; id: string; locked: boolean }
   | { op: "setParameter"; id: string; value: number }
@@ -410,6 +411,23 @@ function recomputeBoundPoint3s(primitives: PrimitiveSpec[], affected: Set<string
   }
 }
 
+function syncTemplateTopology(primitives: PrimitiveSpec[]): void {
+  const primitiveMap = new Map(primitives.map((primitive) => [primitive.id, primitive]))
+  for (const polyhedron of primitives) {
+    if (polyhedron.type !== "polyhedron3" || polyhedron.construction?.kind !== "template") continue
+    const source = polyhedron.construction.sourceIds.map((id) => primitiveMap.get(id)).find((candidate): candidate is TemplateSolidPrimitive => Boolean(candidate && ["cube", "pyramid", "cylinder", "cone"].includes(candidate.type)))
+    if (!source || source.type !== polyhedron.construction.templateId) continue
+    const result = buildSolidTemplate(source, createBuilderContext(source.id))
+    const generatedPoints = new Map(result.primitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "point3" }> => primitive.type === "point3").map((primitive) => [primitive.id, primitive.position]))
+    for (let index = 0; index < primitives.length; index += 1) {
+      const primitive = primitives[index]
+      if (primitive.type !== "point3") continue
+      const position = generatedPoints.get(primitive.id)
+      if (position) primitives[index] = { ...primitive, position: { ...position } }
+    }
+  }
+}
+
 function resolveIntersection(primitive: Extract<PrimitiveSpec, { type: "intersection" | "lineCircleIntersection" | "circleIntersection" }>, lines: Map<string, Extract<PrimitiveSpec, { type: "line" }>>, circles: Map<string, Extract<PrimitiveSpec, { type: "circle" }>>): IntersectionResult {
   if (primitive.type === "intersection") {
     const first = lines.get(primitive.lineA)
@@ -459,6 +477,7 @@ export function recomputeDerivedObjects(document: GeometryDocument, changedIds?:
     if (primitiveIndex !== undefined) projectedPrimitives[primitiveIndex] = projected
   }
   recomputeBoundPoint3s(projectedPrimitives, affected)
+  syncTemplateTopology(projectedPrimitives)
   const circles = new Map(
     projectedPrimitives
       .filter((primitive): primitive is Extract<PrimitiveSpec, { type: "circle" }> => primitive.type === "circle")
@@ -535,6 +554,10 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
     if (next.primitives.some((primitive) => primitive.id === operation.primitive.id)) return { document, changed: false, error: "duplicate object id" }
     next.primitives.push(operation.primitive)
     changedIds = [operation.primitive.id]
+  } else if (operation.op === "addPrimitives") {
+    if (operation.primitives.some((primitive, index) => next.primitives.some((candidate) => candidate.id === primitive.id) || operation.primitives.slice(0, index).some((candidate) => candidate.id === primitive.id))) return { document, changed: false, error: "duplicate object id" }
+    next.primitives.push(...operation.primitives)
+    changedIds = operation.primitives.map((primitive) => primitive.id)
   } else if (operation.op === "updatePrimitive") {
     const primitive = next.primitives.find((candidate) => candidate.id === operation.id)
     if (!primitive || !["point", "point3", "line", "segment", "ray", "polyline", "parabola", "ellipse", "hyperbola", "function", "circle", "arc", "cube", "pyramid", "cylinder", "cone"].includes(primitive.type) || primitive.locked) return { document, changed: false, error: primitive?.locked ? "object is locked" : "object is not editable" }
@@ -546,6 +569,12 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
     if (primitive.type === "point3") {
       if (operation.patch.position3 !== undefined) primitive.position = { ...operation.patch.position3 }
       if (operation.patch.binding3 !== undefined) primitive.binding = operation.patch.binding3
+      if (operation.patch.position3 !== undefined) {
+        for (const candidate of next.primitives) {
+          if (candidate.type !== "polyhedron3" || !candidate.vertexIds.includes(primitive.id) || candidate.construction?.kind !== "template") continue
+          candidate.construction = { kind: "fromFaces", sourceIds: [...candidate.faceIds] }
+        }
+      }
     }
     if (primitive.type === "line" || primitive.type === "segment" || primitive.type === "ray") {
       if (operation.patch.a) primitive.a = { ...primitive.a, ...operation.patch.a }

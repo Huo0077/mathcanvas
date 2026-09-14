@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { buildFromPoints, buildFrustum, buildPrism, buildSolid, createBuilderContext, listSolidBuilders, registerSolidBuilder } from "./solid-builders"
+import { buildFromPoints, buildFrustum, buildPrism, buildSolid, buildSolidTemplate, createBuilderContext, listSolidBuilders, registerSolidBuilder } from "./solid-builders"
 
 const triangle = [
   { x: 0, y: 0, z: 0 },
@@ -9,6 +9,22 @@ const triangle = [
 ]
 
 describe("solid builders", () => {
+  it("creates stable topology templates from legacy solid parameters", () => {
+    const legacy = { id: "cube-1", type: "cube" as const, origin: { x: -1, y: -2, z: -3 }, size: { x: 2, y: 4, z: 6 }, label: "立方体 1" }
+    const first = buildSolidTemplate(legacy)
+    const second = buildSolidTemplate(legacy)
+    const polyhedron = first.primitives.find((primitive) => primitive.type === "polyhedron3")
+
+    expect(first.diagnostics).toEqual([])
+    expect(first.vertexIds).toHaveLength(8)
+    expect(first.edgeIds).toHaveLength(12)
+    expect(first.faceIds).toHaveLength(6)
+    expect(polyhedron).toMatchObject({ label: "立方体 1", construction: { kind: "template", templateId: "cube", sourceIds: expect.arrayContaining(["cube-1"]) } })
+    expect(second.vertexIds).toEqual(first.vertexIds)
+    expect(second.edgeIds).toEqual(first.edgeIds)
+    expect(second.faceIds).toEqual(first.faceIds)
+  })
+
   it("builds a point-driven triangular prism with closed topology", () => {
     const result = buildPrism({ base: triangle, vector: { x: 0, y: 0, z: 3 } }, createBuilderContext("prism"))
 

@@ -98,7 +98,8 @@ function areCoplanarPoint3s(byId: Map<string, unknown>, pointIds: unknown): bool
   const ab = { x: second.x - first.x, y: second.y - first.y, z: second.z - first.z }
   const ac = { x: third.x - first.x, y: third.y - first.y, z: third.z - first.z }
   const normal = { x: ab.y * ac.z - ab.z * ac.y, y: ab.z * ac.x - ab.x * ac.z, z: ab.x * ac.y - ab.y * ac.x }
-  return definedPositions.every((position) => normal.x * (position.x - first.x) + normal.y * (position.y - first.y) + normal.z * (position.z - first.z) === 0)
+  const scale = Math.max(1, ...definedPositions.flatMap((position) => [Math.abs(position.x), Math.abs(position.y), Math.abs(position.z)]))
+  return definedPositions.every((position) => Math.abs(normal.x * (position.x - first.x) + normal.y * (position.y - first.y) + normal.z * (position.z - first.z)) <= 1e-8 * scale)
 }
 
 function areIndependentVectors3(first: unknown, second: unknown): boolean {

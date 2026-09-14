@@ -1,4 +1,4 @@
-import type { PrimitiveSpec } from "@draw/dsl"
+import type { ConePrimitive, CubePrimitive, CylinderPrimitive, PrimitiveSpec, PyramidPrimitive } from "@draw/dsl"
 
 import { areCoplanar, crossVector3, subtractVector3, type Vector3 } from "./geometry3d"
 
@@ -73,6 +73,8 @@ export interface RoundSolidInput {
   height: number
   segments: number
 }
+
+export type TemplateSolidPrimitive = CubePrimitive | PyramidPrimitive | CylinderPrimitive | ConePrimitive
 
 function diagnostic(code: GeometryDiagnosticCode, message: string): GeometryDiagnostic {
   return { code, message }
@@ -378,4 +380,29 @@ export function buildSolid(builderId: string, input: unknown, context: BuilderCo
   } catch {
     return emptyResult([diagnostic("invalid-input", "solid builder failed to create valid geometry")])
   }
+}
+
+function templateInput(primitive: TemplateSolidPrimitive): CubeInput | PyramidInput | RoundSolidInput {
+  if (primitive.type === "cube") return { origin: primitive.origin, size: primitive.size }
+  if (primitive.type === "pyramid") return { baseCenter: primitive.baseCenter, baseSize: primitive.baseSize, height: primitive.height }
+  return { center: primitive.center, radius: primitive.radius, height: primitive.height, segments: primitive.segments }
+}
+
+function templatePointLabel(index: number): string {
+  return index < 26 ? String.fromCharCode(65 + index) : `P${index + 1}`
+}
+
+export function buildSolidTemplate(primitive: TemplateSolidPrimitive, context: BuilderContext = createBuilderContext(primitive.id)): SolidBuildResult {
+  const result = buildSolid(primitive.type, templateInput(primitive), context)
+  if (result.diagnostics.length > 0) return result
+  const topologyIds = new Set([...result.vertexIds, ...result.edgeIds, ...result.faceIds, ...(result.polyhedronId ? [result.polyhedronId] : [])])
+  const primitives = result.primitives.map((candidate) => {
+    if (!topologyIds.has(candidate.id)) return candidate
+    if (candidate.type === "point3") return { ...candidate, label: templatePointLabel(result.vertexIds.indexOf(candidate.id)), style: primitive.style }
+    if (candidate.type === "edge3") return { ...candidate, label: `棱 ${result.edgeIds.indexOf(candidate.id) + 1}`, style: primitive.style }
+    if (candidate.type === "face3") return { ...candidate, label: `面 ${result.faceIds.indexOf(candidate.id) + 1}`, style: primitive.style }
+    if (candidate.type === "polyhedron3") return { ...candidate, label: primitive.label, style: primitive.style, construction: { kind: "template" as const, templateId: primitive.type, sourceIds: [primitive.id, ...result.vertexIds, ...result.edgeIds, ...result.faceIds] } }
+    return candidate
+  })
+  return { ...result, primitives }
 }

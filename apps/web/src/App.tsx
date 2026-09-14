@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 
 import { decodeMgeo, encodeMgeo, type AnnotationFeature, type PrimitiveSpec, type Workspace } from "@draw/dsl"
+import { buildSolidTemplate } from "@draw/geometry-kernel"
 import { validatePatch } from "@draw/scene-graph"
 import type { Alignment } from "@draw/scene-graph"
 
@@ -14,6 +15,7 @@ import { ThreeSceneView } from "./threeScene"
 import type { IntersectionPreview } from "./intersectionPreview"
 import { loadActiveWorkspace, loadDraft, saveDraft } from "./persistence/draftStorage"
 import { exportCsv, exportSvg } from "./persistence/exporters"
+import { migrateLegacySolids } from "./solidTemplates"
 import { useSceneStore } from "./store"
 
 type CreationMode = "line" | "segment" | "ray" | "polyline" | "circle" | "arc" | null
@@ -117,7 +119,7 @@ export function App() {
 
   const load = (serialized: string) => {
     try {
-      replace(decodeMgeo(serialized))
+      replace(migrateLegacySolids(decodeMgeo(serialized)))
       setFileError(null)
     } catch (error) {
       setFileError(error instanceof Error ? error.message : "无法打开 .mgeo 文件")
@@ -206,7 +208,7 @@ export function App() {
     const workspace = loadActiveWorkspace()
     if (workspace && workspace !== document.workspace) switchWorkspace(workspace)
     const draft = loadDraft(workspace ?? document.workspace)
-    if (draft) { skipNextDraftSaveRef.current = true; replace(draft) }
+    if (draft) { skipNextDraftSaveRef.current = true; replace(migrateLegacySolids(draft)) }
   }, [document.workspace, replace, switchWorkspace])
 
   useEffect(() => {
@@ -295,8 +297,7 @@ export function App() {
 
   const addDefaultCube = () => {
     const id = nextPrimitiveId(document, "cube")
-    apply({ op: "addPrimitive", primitive: { id, type: "cube", origin: { x: -2, y: -2, z: -1 }, size: { x: 4, y: 4, z: 2 }, label: `立方体 ${id.split("-").at(-1)}` } })
-    setSelectedIds([id])
+    addSolidTemplate({ id, type: "cube", origin: { x: -2, y: -2, z: -1 }, size: { x: 4, y: 4, z: 2 }, label: `立方体 ${id.split("-").at(-1)}` })
   }
   const addDefaultSolid = (type: "pyramid" | "cylinder" | "cone") => {
     const id = nextPrimitiveId(document, type)
@@ -305,8 +306,13 @@ export function App() {
       : type === "cylinder"
         ? { id, type, center: { x: 3, y: 0, z: 0 }, radius: 1.5, height: 3, segments: 24, label: `圆柱 ${id.split("-").at(-1)}` }
         : { id, type, center: { x: -3, y: 0, z: 3 }, radius: 1.5, height: 3, segments: 24, label: `圆锥 ${id.split("-").at(-1)}` }
-    apply({ op: "addPrimitive", primitive })
-    setSelectedIds([id])
+    addSolidTemplate(primitive)
+  }
+  const addSolidTemplate = (primitive: Extract<PrimitiveSpec, { type: "cube" | "pyramid" | "cylinder" | "cone" }>) => {
+    const result = buildSolidTemplate(primitive)
+    if (result.diagnostics.length > 0) { setFileError(result.diagnostics.map((diagnostic) => diagnostic.message).join("；")); return }
+    apply({ op: "addPrimitives", primitives: [primitive, ...result.primitives] })
+    setSelectedIds([primitive.id])
   }
   const solidTypes = ["cube", "pyramid", "cylinder", "cone"] as const
   const canCreateSection = selectedPrimitive !== null && solidTypes.includes(selectedPrimitive.type as typeof solidTypes[number])

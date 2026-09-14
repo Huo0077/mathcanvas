@@ -1,10 +1,36 @@
 import { describe, expect, it } from "vitest"
 
 import { createEmptyDocument } from "@draw/dsl"
+import { buildSolidTemplate } from "@draw/geometry-kernel"
 
 import { applyOperation, commitPatch, createFace3, createLine3, createPoint3, createPolyhedron3, getAffectedPrimitiveIds, getDependencyIndex, patchPoint3, recomputeDerivedObjects } from "./index"
 
 describe("scene graph operations", () => {
+  it("recomputes template topology when legacy solid parameters change", () => {
+    const source = { id: "cube-1", type: "cube" as const, origin: { x: -1, y: -1, z: -1 }, size: { x: 2, y: 2, z: 2 }, label: "立方体 1" }
+    const topology = buildSolidTemplate(source)
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [source, ...topology.primitives]
+
+    const updated = commitPatch(document, { op: "updatePrimitive", id: source.id, patch: { size3: { x: 5, y: 2, z: 2 } } })
+    expect(updated.changed).toBe(true)
+    const point = updated.document.primitives.find((primitive) => primitive.id === topology.vertexIds[1])
+    expect(point).toMatchObject({ type: "point3", position: { x: 4 } })
+  })
+
+  it("materializes a template when a generated point is edited", () => {
+    const source = { id: "cube-1", type: "cube" as const, origin: { x: -1, y: -1, z: -1 }, size: { x: 2, y: 2, z: 2 }, label: "立方体 1" }
+    const topology = buildSolidTemplate(source)
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [source, ...topology.primitives]
+
+    const updated = commitPatch(document, { op: "updatePrimitive", id: topology.vertexIds[0], patch: { position3: { x: -2, y: -1, z: -1 } } })
+    const polyhedron = updated.document.primitives.find((primitive) => primitive.type === "polyhedron3")
+    expect(updated.changed).toBe(true)
+    expect(polyhedron).toMatchObject({ construction: { kind: "fromFaces" } })
+    expect(updated.document.primitives.find((primitive) => primitive.id === topology.vertexIds[0])).toMatchObject({ position: { x: -2 } })
+  })
+
   it("creates point-driven 3D primitives with stable topology references", () => {
     const pointA = createPoint3("point-a", { x: 0, y: 0, z: 0 })
     const pointB = createPoint3("point-b", { x: 1, y: 0, z: 0 })
