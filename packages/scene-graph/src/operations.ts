@@ -240,11 +240,13 @@ function sourceVertices(source: PrimitiveSpec, primitiveMap: Map<string, Primiti
 }
 
 /** Default cutting plane: horizontal through the source's bounding-box center so a new cut is actually visible. */
-export function sectionPlaneThroughSource(document: GeometryDocument, sourceId: string): { normal: Vector3; constant: number } {
+/** Default cutting plane: horizontal through the source's bounding-box center. Returns null when the source
+ * vertices cannot be resolved, so callers never persist a fabricated plane. */
+export function sectionPlaneThroughSource(document: GeometryDocument, sourceId: string): { normal: Vector3; constant: number } | null {
   const primitiveMap = new Map(document.primitives.map((primitive) => [primitive.id, primitive]))
   const source = primitiveMap.get(sourceId)
   const vertices = source ? sourceVertices(source, primitiveMap) : []
-  if (vertices.length === 0) return { normal: { x: 0, y: 1, z: 0 }, constant: -1.5 }
+  if (vertices.length === 0) return null
   const heights = vertices.map((vertex) => vertex.y)
   return { normal: { x: 0, y: 1, z: 0 }, constant: -(Math.min(...heights) + Math.max(...heights)) / 2 }
 }

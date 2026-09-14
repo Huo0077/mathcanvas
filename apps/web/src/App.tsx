@@ -330,8 +330,13 @@ export function App() {
   const canCreateSection = selectedPrimitive !== null && solidTypes.includes(selectedPrimitive.type as typeof solidTypes[number])
   const addSection = () => {
     if (!selectedPrimitive || !solidTypes.includes(selectedPrimitive.type as typeof solidTypes[number])) return
+    const plane = sectionPlaneThroughSource(document, selectedPrimitive.id)
+    if (!plane) {
+      setFileError("无法解析该实体的顶点，暂时不能创建截面。")
+      return
+    }
     const id = nextPrimitiveId(document, "section")
-    apply({ op: "addPrimitive", primitive: { id, type: "section", sourceId: selectedPrimitive.id, plane: sectionPlaneThroughSource(document, selectedPrimitive.id), points: [], classification: "none", status: "undefined", label: `截面 ${id.split("-").at(-1)}` } })
+    apply({ op: "addPrimitive", primitive: { id, type: "section", sourceId: selectedPrimitive.id, plane, points: [], classification: "none", status: "undefined", label: `截面 ${id.split("-").at(-1)}` } })
     setSelectedIds([id])
   }
   const createIntersectionFromPreview = (preview: IntersectionPreview) => {

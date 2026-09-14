@@ -91,10 +91,9 @@ function interpolateVector3(first: Vector3, second: Vector3, ratio: number): Vec
   return addVector3(first, scaleVector3(subtractVector3(second, first), ratio))
 }
 
-export function intersectPlaneSegment(first: Vector3, second: Vector3, plane: Plane3): Vector3[] {
+export function intersectPlaneSegment(first: Vector3, second: Vector3, plane: Plane3, tolerance = 1e-10): Vector3[] {
   const firstValue = planeValue(first, plane)
   const secondValue = planeValue(second, plane)
-  const tolerance = 1e-10
   if (Math.abs(firstValue) <= tolerance && Math.abs(secondValue) <= tolerance) return [first, second]
   if (Math.abs(firstValue) <= tolerance) return [first]
   if (Math.abs(secondValue) <= tolerance) return [second]

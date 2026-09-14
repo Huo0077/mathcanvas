@@ -101,4 +101,29 @@ describe("3D sections", () => {
       expect(Math.hypot(ordered[index].x - next.x, ordered[index].y - next.y, ordered[index].z - next.z)).toBeCloseTo(2, 6)
     }
   })
+
+  it("chains an L-shaped non-convex section in boundary order", () => {
+    // L profile (x,z) = (0,0),(3,0),(3,1),(1,1),(1,3),(0,3) extruded along y from 0 to 1, cut at y = 0.5.
+    const profile = [{ x: 0, z: 0 }, { x: 3, z: 0 }, { x: 3, z: 1 }, { x: 1, z: 1 }, { x: 1, z: 3 }, { x: 0, z: 3 }]
+    const vertices: Vector3[] = [...profile.map((point) => ({ x: point.x, y: 0, z: point.z })), ...profile.map((point) => ({ x: point.x, y: 1, z: point.z }))]
+    const faces: number[][] = [
+      profile.map((_, index) => index),
+      profile.map((_, index) => profile.length + index),
+      ...profile.map((_, index) => [index, (index + 1) % profile.length, profile.length + ((index + 1) % profile.length), profile.length + index])
+    ]
+
+    const section = sectionPolyhedron3(vertices, faces, { normal: { x: 0, y: 1, z: 0 }, constant: -0.5 })
+
+    expect(section.status).toBe("polygon")
+    expect(section.points).toHaveLength(6)
+    const profileKeys = new Set(profile.map((point) => `${point.x},0.5,${point.z}`))
+    for (const point of section.points) expect(profileKeys.has(`${point.x},${point.y},${point.z}`)).toBe(true)
+    // Every consecutive pair must be a real profile edge: three of length 1/2 and two of length 3, so the ring
+    // cannot cut the diagonal across the notch (which would show up as sqrt(2)).
+    const edgeLengths = section.points.map((point, index) => {
+      const next = section.points[(index + 1) % section.points.length]
+      return Math.round(Math.hypot(point.x - next.x, point.z - next.z))
+    }).sort((first, second) => first - second)
+    expect(edgeLengths).toEqual([1, 1, 2, 2, 3, 3])
+  })
 })

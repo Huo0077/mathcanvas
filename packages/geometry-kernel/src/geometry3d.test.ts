@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { addVector3, areCoplanar, crossVector3, dihedralAngle, dihedralAngleDegrees, distanceVector3, dotVector3, intersectRayPlane, normalizeVector3, planeFromPoints, scaleVector3, sectionCube, subtractVector3, tripleProduct } from "./geometry3d"
+import { addVector3, areCoplanar, crossVector3, dihedralAngle, dihedralAngleDegrees, distanceVector3, dotVector3, intersectPlaneSegment, intersectRayPlane, normalizeVector3, planeFromPoints, scaleVector3, sectionCube, subtractVector3, tripleProduct } from "./geometry3d"
 
 describe("3D geometry kernel", () => {
   it("performs immutable vector operations", () => {
@@ -26,6 +26,15 @@ describe("3D geometry kernel", () => {
     expect(intersectRayPlane({ x: 0, y: 0, z: 2 }, { x: 1, y: 0, z: 0 }, plane)).toBeNull()
     expect(dihedralAngle({ x: 0, y: 0, z: 1 }, { x: 0, y: 1, z: 0 })).toBeCloseTo(Math.PI / 2)
     expect(dihedralAngleDegrees({ x: 0, y: 0, z: 1 }, { x: 0, y: 1, z: 0 })).toBeCloseTo(90)
+  })
+
+  it("honours a caller tolerance when classifying near-plane segment endpoints", () => {
+    const plane = { normal: { x: 0, y: 0, z: 1 }, constant: 0 }
+    const offPlane = { x: 0, y: 0, z: 1e-8 }
+    const onPlane = { x: 1, y: 0, z: 0 }
+
+    expect(intersectPlaneSegment(offPlane, onPlane, plane, 1e-10)).toEqual([onPlane])
+    expect(intersectPlaneSegment(offPlane, onPlane, plane, 1e-6)).toEqual([offPlane, onPlane])
   })
 
   it("computes the four-point section of a cube by a horizontal plane", () => {

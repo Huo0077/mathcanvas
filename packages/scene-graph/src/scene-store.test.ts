@@ -231,6 +231,20 @@ describe("scene graph operations", () => {
     expect(section?.type === "section" && section.points).toEqual([{ x: 1, y: 1, z: 1 }])
   })
 
+  it("refuses to invent a cut plane when the source vertices cannot be resolved", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      { id: "solid-broken", type: "polyhedron3", vertexIds: ["missing-vertex"], edgeIds: [], faceIds: [] },
+      { id: "cube-1", type: "cube", origin: { x: -1, y: -1, z: -1 }, size: { x: 2, y: 2, z: 2 } }
+    ]
+
+    expect(sectionPlaneThroughSource(document, "solid-broken")).toBeNull()
+    expect(sectionPlaneThroughSource(document, "absent")).toBeNull()
+    const cubePlane = sectionPlaneThroughSource(document, "cube-1")
+    expect(cubePlane?.normal).toEqual({ x: 0, y: 1, z: 0 })
+    expect(cubePlane?.constant).toBeCloseTo(0)
+  })
+
   it("places a default cut plane through the bounding box of the source", () => {
     const document = createEmptyDocument("geometry3d")
     document.primitives = [
