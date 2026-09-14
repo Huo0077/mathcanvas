@@ -113,6 +113,8 @@ function primitiveDependencies(primitive: PrimitiveSpec): string[] {
   if (primitive.type === "curveIntersection") return [primitive.objectA, primitive.objectB]
   if (primitive.type === "intersectionSet") return [primitive.objectA, primitive.objectB]
   if (primitive.type === "derivative") return [primitive.sourceId]
+  if (primitive.type === "tangent" || primitive.type === "normal") return [primitive.sourceId]
+  if (primitive.type === "secant") return [primitive.sourceId]
   return []
 }
 
@@ -167,6 +169,43 @@ function recomputeDerivative(primitive: Extract<PrimitiveSpec, { type: "derivati
     return points.length ? { ...primitive, points, status: "approximate", diagnostic: undefined } : { ...primitive, points: [], status: "undefined", diagnostic: "source function is undefined across the derivative domain" }
   } catch (error) {
     return { ...primitive, points: [], status: "failed", diagnostic: error instanceof Error ? error.message : "derivative evaluation failed" }
+  }
+}
+
+function evaluateSource(source: Extract<PrimitiveSpec, { type: "function" }>, x: number, parameters: GeometryDocument["parameters"]): number {
+  const variables = Object.fromEntries(Object.entries(parameters).map(([id, parameter]) => [id, parameter.value]))
+  return evaluateParameterExpression(source.expression, { ...variables, x })
+}
+
+function lineEndpoints(point: Coordinate, slope: number, domain: [number, number], vertical = false): { a: Coordinate; b: Coordinate } {
+  if (vertical) return { a: { x: point.x, y: domain[0] }, b: { x: point.x, y: domain[1] } }
+  return { a: { x: domain[0], y: point.y + slope * (domain[0] - point.x) }, b: { x: domain[1], y: point.y + slope * (domain[1] - point.x) } }
+}
+
+function recomputeTangent(primitive: Extract<PrimitiveSpec, { type: "tangent" | "normal" }>, source: Extract<PrimitiveSpec, { type: "function" }>, parameters: GeometryDocument["parameters"]): Extract<PrimitiveSpec, { type: "tangent" | "normal" }> {
+  try {
+    const y = evaluateSource(source, primitive.x, parameters)
+    const sourceValue = (x: number) => evaluateSource(source, x, parameters)
+    const derivative = numericalDerivative(sourceValue, primitive.x)
+    if (!Number.isFinite(y) || !Number.isFinite(derivative)) return { ...primitive, point: { x: primitive.x, y: 0 }, status: "undefined" as const, diagnostic: "source function is undefined at the selected x" }
+    const vertical = primitive.type === "normal" && Math.abs(derivative) < 1e-8
+    const slope = primitive.type === "normal" ? (vertical ? 0 : -1 / derivative) : derivative
+    return { ...primitive, point: { x: primitive.x, y }, slope, vertical, ...lineEndpoints({ x: primitive.x, y }, slope, source.domain, vertical), status: "approximate" as const, diagnostic: undefined }
+  } catch (error) {
+    return { ...primitive, point: { x: primitive.x, y: 0 }, status: "failed" as const, diagnostic: error instanceof Error ? error.message : "line evaluation failed" }
+  }
+}
+
+function recomputeSecant(primitive: Extract<PrimitiveSpec, { type: "secant" }>, source: Extract<PrimitiveSpec, { type: "function" }>, parameters: GeometryDocument["parameters"]): Extract<PrimitiveSpec, { type: "secant" }> {
+  try {
+    const first = { x: primitive.x1, y: evaluateSource(source, primitive.x1, parameters) }
+    const second = { x: primitive.x2, y: evaluateSource(source, primitive.x2, parameters) }
+    if (!Number.isFinite(first.y) || !Number.isFinite(second.y)) return { ...primitive, points: [], status: "undefined" as const, diagnostic: "source function is undefined at a secant endpoint" }
+    const vertical = Math.abs(second.x - first.x) < 1e-8
+    const slope = vertical ? 0 : (second.y - first.y) / (second.x - first.x)
+    return { ...primitive, points: [first, second], slope, vertical, ...lineEndpoints(first, slope, source.domain, vertical), status: "approximate" as const, diagnostic: undefined }
+  } catch (error) {
+    return { ...primitive, points: [], status: "failed" as const, diagnostic: error instanceof Error ? error.message : "secant evaluation failed" }
   }
 }
 
@@ -260,6 +299,11 @@ export function recomputeDerivedObjects(document: GeometryDocument, changedIds?:
       const source = primitiveMap.get(primitive.sourceId)
       if (source?.type !== "function") return { ...primitive, points: [], status: "failed" as const, diagnostic: "derivative source function is missing" }
       return recomputeDerivative(primitive, source, parameters)
+    }
+    if (primitive.type === "tangent" || primitive.type === "normal" || primitive.type === "secant") {
+      const source = primitiveMap.get(primitive.sourceId)
+      if (source?.type !== "function") return { ...primitive, status: "failed" as const, diagnostic: "derived line source function is missing" }
+      return primitive.type === "secant" ? recomputeSecant(primitive, source, parameters) : recomputeTangent(primitive, source, parameters)
     }
     if (primitive.type === "line") return lines.get(primitive.id) ?? primitive
     if (primitive.type === "intersectionSet") {

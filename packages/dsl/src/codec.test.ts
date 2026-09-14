@@ -159,6 +159,18 @@ describe("Geometry DSL codec", () => {
     expect(decodeMgeo(encodeMgeo(document)).primitives).toEqual(document.primitives)
   })
 
+  it("round-trips tangent, normal, and secant primitives", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [
+      { id: "function-1", type: "function", expression: "x^2", domain: [-2, 2], samples: 32 },
+      { id: "tangent-1", type: "tangent", sourceId: "function-1", x: 1, point: { x: 1, y: 1 }, slope: 2, a: { x: -2, y: -5 }, b: { x: 2, y: 7 }, status: "approximate" },
+      { id: "normal-1", type: "normal", sourceId: "function-1", x: 1, point: { x: 1, y: 1 }, slope: -0.5, a: { x: -2, y: 2.5 }, b: { x: 2, y: 0.5 }, status: "approximate" },
+      { id: "secant-1", type: "secant", sourceId: "function-1", x1: -1, x2: 1, points: [{ x: -1, y: 1 }, { x: 1, y: 1 }], slope: 0, a: { x: -2, y: 1 }, b: { x: 2, y: 1 }, status: "approximate" }
+    ]
+
+    expect(decodeMgeo(encodeMgeo(document)).primitives).toEqual(document.primitives)
+  })
+
   it("rejects malformed primitive fields without throwing", () => {
     const base = createEmptyDocument("calculus")
     const malformedDocuments = [

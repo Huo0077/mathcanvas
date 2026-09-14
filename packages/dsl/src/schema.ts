@@ -1,7 +1,7 @@
 import type { GeometryDocument, PrimitiveSpec, ValidationResult } from "./types"
 
 const workspaces = new Set(["calculus", "conics", "cad", "geometry3d"])
-const primitiveTypes = new Set(["point", "line", "segment", "ray", "polyline", "connection", "locus", "parabola", "ellipse", "hyperbola", "function", "derivative", "circle", "arc", "intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection", "intersectionSet"])
+const primitiveTypes = new Set(["point", "line", "segment", "ray", "polyline", "connection", "locus", "parabola", "ellipse", "hyperbola", "function", "derivative", "tangent", "normal", "secant", "circle", "arc", "intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection", "intersectionSet"])
 const sampledTypes = new Set(["line", "segment", "ray", "polyline", "circle", "arc", "parabola", "ellipse", "hyperbola", "function"])
 const annotationFeatures = new Set(["point", "center", "focus", "vertex", "intersection", "start", "end"])
 
@@ -101,6 +101,20 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>): string[]
     if (!Array.isArray(value.points) || value.points.some((point) => !isFiniteCoordinate(point))) errors.push("derivative points are invalid")
     if (!["approximate", "undefined", "failed"].includes(String(value.status))) errors.push("derivative status is invalid")
     if (value.diagnostic !== undefined && typeof value.diagnostic !== "string") errors.push("derivative diagnostic is invalid")
+  }
+  if (type === "tangent" || type === "normal") {
+    if (referenceType(byId, value.sourceId) !== "function") errors.push(`${type} references invalid function`)
+    if (!isFiniteNumber(value.x) || !isFiniteCoordinate(value.point) || !isFiniteNumber(value.slope) || !isFiniteCoordinate(value.a) || !isFiniteCoordinate(value.b)) errors.push(`${type} geometry is invalid`)
+    if (value.vertical !== undefined && typeof value.vertical !== "boolean") errors.push(`${type} vertical state is invalid`)
+    if (!["approximate", "undefined", "failed"].includes(String(value.status))) errors.push(`${type} status is invalid`)
+    if (value.diagnostic !== undefined && typeof value.diagnostic !== "string") errors.push(`${type} diagnostic is invalid`)
+  }
+  if (type === "secant") {
+    if (referenceType(byId, value.sourceId) !== "function") errors.push("secant references invalid function")
+    if (!isFiniteNumber(value.x1) || !isFiniteNumber(value.x2) || value.x1 === value.x2 || !Array.isArray(value.points) || (value.points.length !== 0 && (value.points.length !== 2 || value.points.some((point) => !isFiniteCoordinate(point)))) || !isFiniteNumber(value.slope) || !isFiniteCoordinate(value.a) || !isFiniteCoordinate(value.b)) errors.push("secant geometry is invalid")
+    if (value.vertical !== undefined && typeof value.vertical !== "boolean") errors.push("secant vertical state is invalid")
+    if (!["approximate", "undefined", "failed"].includes(String(value.status))) errors.push("secant status is invalid")
+    if (value.diagnostic !== undefined && typeof value.diagnostic !== "string") errors.push("secant diagnostic is invalid")
   }
   if (type === "circle" || type === "arc") {
     if (!isFiniteCoordinate(value.center) || !isFiniteNumber(value.radius) || value.radius <= 0) errors.push(`${type} geometry is invalid`)

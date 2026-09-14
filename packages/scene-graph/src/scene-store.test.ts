@@ -95,6 +95,23 @@ describe("scene graph operations", () => {
     expect(derivative).toMatchObject({ status: "approximate", points: expect.arrayContaining([expect.objectContaining({ y: expect.closeTo(2, 0.1) })]) })
   })
 
+  it("recomputes tangent, normal, and secant values from their source function", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [
+      { id: "function-1", type: "function", expression: "x^2", domain: [-2, 2], samples: 16 },
+      { id: "tangent-1", type: "tangent", sourceId: "function-1", x: 1, point: { x: 0, y: 0 }, slope: 0, a: { x: -2, y: 0 }, b: { x: 2, y: 0 }, status: "failed" },
+      { id: "normal-1", type: "normal", sourceId: "function-1", x: 1, point: { x: 0, y: 0 }, slope: 0, a: { x: -2, y: 0 }, b: { x: 2, y: 0 }, status: "failed" },
+      { id: "secant-1", type: "secant", sourceId: "function-1", x1: -1, x2: 1, points: [], slope: 0, a: { x: -2, y: 0 }, b: { x: 2, y: 0 }, status: "failed" }
+    ]
+
+    const result = recomputeDerivedObjects(document)
+    expect(result.primitives).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "tangent-1", point: { x: 1, y: 1 }, slope: expect.closeTo(2, 0.1), status: "approximate" }),
+      expect.objectContaining({ id: "normal-1", point: { x: 1, y: 1 }, slope: expect.closeTo(-0.5, 0.1), status: "approximate" }),
+      expect.objectContaining({ id: "secant-1", points: [{ x: -1, y: 1 }, { x: 1, y: 1 }], slope: expect.closeTo(0, 0.1), status: "approximate" })
+    ]))
+  })
+
   it("rejects an invalid constraint without changing the document", () => {
     const document = createEmptyDocument("calculus")
     const result = commitPatch(document, { op: "addConstraint", constraint: { id: "parallel-1", type: "parallel", targets: ["missing-a", "missing-b"] } })

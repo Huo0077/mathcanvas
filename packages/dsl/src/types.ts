@@ -142,6 +142,39 @@ export interface DerivativePrimitive extends PrimitivePresentation {
   diagnostic?: string
 }
 
+export interface TangentPrimitive extends PrimitivePresentation {
+  id: string
+  type: "tangent"
+  sourceId: string
+  x: number
+  point: Coordinate
+  slope: number
+  a: Coordinate
+  b: Coordinate
+  status: "approximate" | "undefined" | "failed"
+  vertical?: boolean
+  diagnostic?: string
+}
+
+export interface NormalPrimitive extends Omit<TangentPrimitive, "type"> {
+  type: "normal"
+}
+
+export interface SecantPrimitive extends PrimitivePresentation {
+  id: string
+  type: "secant"
+  sourceId: string
+  x1: number
+  x2: number
+  points: [Coordinate, Coordinate] | []
+  slope: number
+  a: Coordinate
+  b: Coordinate
+  status: "approximate" | "undefined" | "failed"
+  vertical?: boolean
+  diagnostic?: string
+}
+
 export interface CirclePrimitive extends PrimitivePresentation {
   id: string
   type: "circle"
@@ -219,6 +252,9 @@ export type PrimitiveSpec =
   | HyperbolaPrimitive
   | FunctionPrimitive
   | DerivativePrimitive
+  | TangentPrimitive
+  | NormalPrimitive
+  | SecantPrimitive
   | CirclePrimitive
   | ArcPrimitive
   | IntersectionPrimitive
