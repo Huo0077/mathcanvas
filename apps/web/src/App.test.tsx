@@ -33,6 +33,17 @@ describe("MathCanvas workbench", () => {
     expect(screen.getByText(/交点 P \(8\.00, 0\.00\)/)).toBeTruthy()
   })
 
+  it("creates and edits a 3D solid from the workspace property inspector", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加立方体" }))
+
+    expect(screen.getAllByText("立方体 1")[0]).toBeTruthy()
+    expect(screen.getByText("立体几何属性")).toBeTruthy()
+    fireEvent.change(screen.getByRole("spinbutton", { name: "尺寸 X" }), { target: { value: "5" } })
+    expect(useSceneStore.getState().document.primitives.find((primitive) => primitive.id === "cube-1")).toMatchObject({ type: "cube", size: { x: 5 } })
+  })
+
   it("shows the selected line slope characteristics in the properties panel", () => {
     render(<App />)
     fireEvent.click(screen.getAllByText("参数直线")[0])

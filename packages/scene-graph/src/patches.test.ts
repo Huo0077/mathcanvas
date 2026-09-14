@@ -93,6 +93,16 @@ describe("domain patches", () => {
     expect(validatePatch(document, { op: "updatePrimitive", id: "function-1", patch: { expression: "x+" } })).toEqual({ valid: false, errors: ["invalid function expression"] })
   })
 
+  it("validates and edits 3D solid properties", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [{ id: "cube-1", type: "cube", origin: { x: -2, y: -2, z: -1 }, size: { x: 4, y: 4, z: 2 } }]
+
+    const result = commitPatch(document, { op: "updatePrimitive", id: "cube-1", patch: { origin3: { x: 1, y: 2, z: 3 }, size3: { x: 5, y: 6, z: 7 } } })
+
+    expect(result.changed).toBe(true)
+    expect(result.document.primitives[0]).toMatchObject({ origin: { x: 1, y: 2, z: 3 }, size: { x: 5, y: 6, z: 7 } })
+  })
+
   it("accepts rotation and label edits for conics", () => {
     const document = createEmptyDocument("conics")
     document.primitives = [{ id: "ellipse-1", type: "ellipse", center: { x: 0, y: 0 }, radiusX: 4, radiusY: 2 }]
