@@ -683,7 +683,9 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
     changedIds = operation.primitives.map((primitive) => primitive.id)
   } else if (operation.op === "updatePrimitive") {
     const primitive = next.primitives.find((candidate) => candidate.id === operation.id)
-    if (!primitive || !["point", "point3", "line", "segment", "ray", "polyline", "parabola", "ellipse", "hyperbola", "function", "circle", "arc", "cube", "pyramid", "cylinder", "cone"].includes(primitive.type) || primitive.locked) return { document, changed: false, error: primitive?.locked ? "object is locked" : "object is not editable" }
+    const editableGeometry = ["point", "point3", "line", "segment", "ray", "polyline", "parabola", "ellipse", "hyperbola", "function", "circle", "arc", "cube", "pyramid", "cylinder", "cone"]
+    const geometryPatchKeys = Object.keys(operation.patch).filter((key) => key !== "style" && key !== "label")
+    if (!primitive || (geometryPatchKeys.length > 0 && !editableGeometry.includes(primitive.type)) || primitive.locked) return { document, changed: false, error: primitive?.locked ? "object is locked" : "object is not editable" }
     if (primitive.type === "point") {
       if (operation.patch.x !== undefined) primitive.x = operation.patch.x
       if (operation.patch.y !== undefined) primitive.y = operation.patch.y
@@ -746,6 +748,17 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
       if (operation.patch.segments !== undefined) primitive.segments = operation.patch.segments
     }
     if (operation.patch.label !== undefined) primitive.label = operation.patch.label
+    // A template solid paints its generated point/edge/face children, so a template style change recolours them too.
+    if (operation.patch.style !== undefined && ["cube", "pyramid", "cylinder", "cone"].includes(primitive.type)) {
+      for (const candidate of next.primitives) {
+        if (candidate.type !== "polyhedron3" || candidate.construction?.kind !== "template" || candidate.construction.sourceIds[0] !== primitive.id) continue
+        candidate.style = { ...candidate.style, ...operation.patch.style }
+        for (const childId of [...candidate.vertexIds, ...candidate.edgeIds, ...candidate.faceIds]) {
+          const child = next.primitives.find((entry) => entry.id === childId)
+          if (child) child.style = { ...child.style, ...operation.patch.style }
+        }
+      }
+    }
     if (operation.patch.style !== undefined) primitive.style = { ...primitive.style, ...operation.patch.style }
     changedIds = [operation.id]
   } else if (operation.op === "translatePrimitive") {

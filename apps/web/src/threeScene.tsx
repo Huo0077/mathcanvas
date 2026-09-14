@@ -174,7 +174,7 @@ export function createFace3Mesh(primitive: Face3Primitive, points: Map<string, P
   for (let index = 1; index < positions.length - 1; index += 1) indices.push(0, index, index + 1)
   geometry.setIndex(indices)
   geometry.computeVertexNormals()
-  const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: selected ? "#4c3ac7" : strokeFor(primitive), transparent: true, opacity: Math.min(0.48, opacityFor(primitive)), side: THREE.DoubleSide }))
+  const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: selected ? "#4c3ac7" : primitive.style?.fill ?? strokeFor(primitive), transparent: true, opacity: Math.min(0.48, opacityFor(primitive)), side: THREE.DoubleSide }))
   mesh.userData.primitiveId = primitive.id
   mesh.userData.primitiveType = primitive.type
   return mesh

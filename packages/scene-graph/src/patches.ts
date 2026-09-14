@@ -96,7 +96,9 @@ export function validatePatch(document: GeometryDocument, operation: DomainOpera
   if (operation.op === "updatePrimitive") {
     const primitive = document.primitives.find((candidate) => candidate.id === operation.id)
     const editable = ["point", "point3", "line", "segment", "ray", "polyline", "parabola", "ellipse", "hyperbola", "function", "circle", "arc", "cube", "pyramid", "cylinder", "cone"]
-    if (!primitive || !editable.includes(primitive.type)) errors.push("object is not editable")
+    // Style and label are presentation, so any unlocked object may change them even when its geometry is derived.
+    const geometryPatchKeys = Object.keys(operation.patch).filter((key) => key !== "style" && key !== "label")
+    if (!primitive || (geometryPatchKeys.length > 0 && !editable.includes(primitive.type))) errors.push("object is not editable")
     if (primitive?.locked) errors.push("object is locked")
     if (operation.patch.a && !isCoordinate(operation.patch.a)) errors.push("line start must be finite")
     if (operation.patch.b && !isCoordinate(operation.patch.b)) errors.push("line end must be finite")

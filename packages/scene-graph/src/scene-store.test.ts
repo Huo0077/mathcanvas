@@ -265,6 +265,37 @@ describe("scene graph operations", () => {
     expect(resolvePolyhedronTopology(document, "v0")).toBeNull()
   })
 
+  it("styles any spatial object, including derived topology and sections", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      createPoint3("v0", { x: -1, y: -1, z: -1 }), createPoint3("v1", { x: 1, y: -1, z: -1 }), createPoint3("v2", { x: 1, y: 1, z: -1 }),
+      createFace3("f-bottom", ["v0", "v1", "v2"]),
+      { id: "section-1", type: "section", sourceId: "f-bottom", plane: { normal: { x: 0, y: 0, z: 1 }, constant: 0 }, points: [], classification: "none", status: "undefined" }
+    ]
+
+    const faceStyled = applyOperation(document, { op: "updatePrimitive", id: "f-bottom", patch: { style: { stroke: "#ff0000", opacity: 0.5 } } })
+    const sectionStyled = applyOperation(faceStyled.document, { op: "updatePrimitive", id: "section-1", patch: { style: { stroke: "#00ff00" } } })
+
+    expect(faceStyled.changed).toBe(true)
+    expect(faceStyled.document.primitives.find((primitive) => primitive.id === "f-bottom")).toMatchObject({ style: { stroke: "#ff0000", opacity: 0.5 } })
+    expect(sectionStyled.changed).toBe(true)
+    expect(sectionStyled.document.primitives.find((primitive) => primitive.id === "section-1")).toMatchObject({ style: { stroke: "#00ff00" } })
+  })
+
+  it("recolours every generated child when a template solid style changes", () => {
+    const source = { id: "cube-1", type: "cube" as const, origin: { x: -1, y: -1, z: -1 }, size: { x: 2, y: 2, z: 2 }, label: "立方体 1" }
+    const topology = buildSolidTemplate(source)
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [source, ...topology.primitives]
+
+    const styled = commitPatch(document, { op: "updatePrimitive", id: "cube-1", patch: { style: { stroke: "#ff0000" } } })
+
+    expect(styled.changed).toBe(true)
+    const children = styled.document.primitives.filter((primitive) => ["point3", "edge3", "face3", "polyhedron3"].includes(primitive.type))
+    expect(children.length).toBeGreaterThan(10)
+    for (const child of children) expect(child.style?.stroke).toBe("#ff0000")
+  })
+
   it("places a default cut plane through the bounding box of the source", () => {
     const document = createEmptyDocument("geometry3d")
     document.primitives = [

@@ -696,6 +696,22 @@ describe("MathCanvas workbench", () => {
     expect(useSceneStore.getState().document.primitives.some((primitive) => primitive.type === "line3")).toBe(false)
   })
 
+  it("recolours a 3D solid and its generated topology from the property inspector", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加立方体" }))
+
+    fireEvent.change(screen.getByLabelText("线条颜色"), { target: { value: "#ff0000" } })
+    fireEvent.change(screen.getByLabelText("填充颜色"), { target: { value: "#00ff00" } })
+
+    const primitives = useSceneStore.getState().document.primitives
+    expect(primitives.find((primitive) => primitive.id === "cube-1")).toMatchObject({ style: { stroke: "#ff0000", fill: "#00ff00" } })
+    const faces = primitives.filter((primitive) => primitive.type === "face3")
+    expect(faces.length).toBeGreaterThan(0)
+    for (const face of faces) expect(face.style?.stroke).toBe("#ff0000")
+    for (const face of faces) expect(face.style?.fill).toBe("#00ff00")
+  })
+
   it("undoes and redoes one 3D construction step at a time", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
