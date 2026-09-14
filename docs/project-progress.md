@@ -119,10 +119,11 @@
 - [x] P6-5：3D 相机旋转、平移、缩放、重置和空间拾取
 - [x] P6-6：隐藏边、透明面、法向量和选中态显示
 - [x] P6-7：剖切平面、截面计算和截面派生对象
+- [x] P6-8：立方体展开/折叠布局与动画
 
 ## 下一步
 
-P6-7 已完成，下一步实现折叠/展开布局与动画。
+P6-8 已完成，下一步实现二面角测量。
 
 > 射线/折线、圆锥曲线和函数采样已接入工具栏、SVG 渲染、属性编辑和 UI 回归测试；选中两条可采样曲线即可创建持久化交点。
 
@@ -143,7 +144,7 @@ P6-7 已完成，下一步实现折叠/展开布局与动画。
 
 ## 最新验证证据
 
-- `npm.cmd test`：25 个测试文件、212 个测试通过
+- `npm.cmd test`：25 个测试文件、213 个测试通过
 - P6-3 聚焦测试：`apps/web/src/threeScene.test.ts` 通过
 - P6-3 全量测试：25 个测试文件、203 个测试通过
 - `npm.cmd run typecheck`：4 个 workspace 通过
@@ -161,6 +162,10 @@ P6-7 已完成，下一步实现折叠/展开布局与动画。
 - P6-7 聚焦内核/DSL/Scene Graph 测试：48 个用例通过
 - P6-7 Web 构建：待完整验证后记录
 - P6-7 浏览器验证：同一宿主环境阻断，未标记为通过
+- P6-8 聚焦测试：`apps/web/src/threeScene.test.ts` 的 8 个用例通过
+- P6-8 Web 构建：待完整验证后记录
+- P6-8 浏览器验证：同一宿主环境阻断，未标记为通过
+- P6-8 Web 构建：`vite build` 使用隔离 `outDir` 通过
 - P6-7 Web 构建：`vite build` 使用隔离 `outDir` 通过
 - 默认 `npm.cmd run build`：当前沙箱因 Vite 写入 `.vite-temp`/`dist` 返回 `EPERM`；使用 `vite build apps/web --configLoader runner --outDir D:\\draw\\build-check\\mathcanvas-current` 完成等价 Web 构建验证
 - `npm.cmd exec playwright test`：5 个 Chromium 浏览器用例通过

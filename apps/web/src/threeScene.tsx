@@ -15,6 +15,37 @@ export interface SolidVisualOptions {
   showHiddenEdges?: boolean
   showNormals?: boolean
   transparentFaces?: boolean
+  unfoldProgress?: number
+}
+
+export interface CubeFaceLayout {
+  center: { x: number; y: number; z: number }
+  width: number
+  height: number
+  rotation: { x: number; y: number; z: number }
+}
+
+export function cubeUnfoldCenters(size: { x: number; y: number; z: number }, progress: number): CubeFaceLayout[] {
+  const clamped = Math.max(0, Math.min(1, progress))
+  const folded = [
+    { x: 0, y: 0, z: size.z / 2 }, { x: 0, y: 0, z: -size.z / 2 },
+    { x: size.x / 2, y: 0, z: 0 }, { x: -size.x / 2, y: 0, z: 0 },
+    { x: 0, y: size.y / 2, z: 0 }, { x: 0, y: -size.y / 2, z: 0 }
+  ]
+  const unfolded = [
+    { x: 0, y: 0, z: size.z / 2 }, { x: 0, y: 0, z: -size.z * 1.5 },
+    { x: size.x * 1.5, y: 0, z: 0 }, { x: -size.x * 1.5, y: 0, z: 0 },
+    { x: 0, y: size.y * 1.5, z: 0 }, { x: 0, y: -size.y * 1.5, z: 0 }
+  ]
+  const dimensions = [
+    { width: size.x, height: size.y, rotation: { x: 0, y: 0, z: 0 } }, { width: size.x, height: size.y, rotation: { x: 0, y: Math.PI, z: 0 } },
+    { width: size.z, height: size.y, rotation: { x: 0, y: Math.PI / 2, z: 0 } }, { width: size.z, height: size.y, rotation: { x: 0, y: -Math.PI / 2, z: 0 } },
+    { width: size.x, height: size.z, rotation: { x: -Math.PI / 2, y: 0, z: 0 } }, { width: size.x, height: size.z, rotation: { x: Math.PI / 2, y: 0, z: 0 } }
+  ]
+  return folded.map((center, index) => ({
+    center: { x: center.x + (unfolded[index].x - center.x) * clamped, y: center.y + (unfolded[index].y - center.y) * clamped, z: center.z + (unfolded[index].z - center.z) * clamped },
+    ...dimensions[index]
+  }))
 }
 
 export interface CameraState {
@@ -185,12 +216,33 @@ export function createSectionMesh(primitive: SectionPrimitive): THREE.Mesh | nul
 }
 
 export function createSolidGroup(primitive: SolidPrimitive, selected: boolean, options: SolidVisualOptions = {}): THREE.Group {
+  if (primitive.type === "cube" && options.unfoldProgress !== undefined && options.unfoldProgress > 0.001) return createCubeUnfoldGroup(primitive, selected, options)
   const group = new THREE.Group()
   const mesh = createSolidMesh(primitive, selected, options)
   group.add(mesh)
   group.add(solidOutline(mesh, primitive, selected))
   if (options.showHiddenEdges) group.add(hiddenEdgeOverlay(mesh, primitive))
   if (options.showNormals) normalVisuals(mesh).forEach((normal) => group.add(normal))
+  return group
+}
+
+function createCubeUnfoldGroup(primitive: CubePrimitive, selected: boolean, options: SolidVisualOptions): THREE.Group {
+  const group = new THREE.Group()
+  const center = { x: primitive.origin.x + primitive.size.x / 2, y: primitive.origin.y + primitive.size.y / 2, z: primitive.origin.z + primitive.size.z / 2 }
+  cubeUnfoldCenters(primitive.size, options.unfoldProgress ?? 1).forEach((face, index) => {
+    const geometry = new THREE.PlaneGeometry(face.width, face.height)
+    const mesh = new THREE.Mesh(geometry, solidMaterial(primitive, selected, options))
+    mesh.position.set(center.x + face.center.x, center.y + face.center.y, center.z + face.center.z)
+    mesh.rotation.set(face.rotation.x, face.rotation.y, face.rotation.z)
+    mesh.userData.primitiveId = primitive.id
+    mesh.userData.visualRole = `unfolded-face-${index}`
+    group.add(mesh)
+    const outline = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), new THREE.LineBasicMaterial({ color: selected ? "#4c3ac7" : primitive.style?.stroke ?? strokeFor(primitive), transparent: true, opacity: opacityFor(primitive) }))
+    outline.position.copy(mesh.position)
+    outline.rotation.copy(mesh.rotation)
+    outline.userData.primitiveId = primitive.id
+    group.add(outline)
+  })
   return group
 }
 
@@ -220,7 +272,23 @@ export function ThreeSceneView({ document, selectedIds, onSelect }: ThreeSceneVi
   const [showHiddenEdges, setShowHiddenEdges] = useState(false)
   const [showNormals, setShowNormals] = useState(false)
   const [transparentFaces, setTransparentFaces] = useState(false)
+  const [unfolded, setUnfolded] = useState(false)
+  const [unfoldProgress, setUnfoldProgress] = useState(0)
   const [webglAvailable, setWebglAvailable] = useState(true)
+
+  useEffect(() => {
+    const target = unfolded ? 1 : 0
+    let frame = 0
+    const animate = () => {
+      setUnfoldProgress((current) => {
+        const next = current + (target - current) * 0.2
+        if (Math.abs(target - next) > 0.001) frame = requestAnimationFrame(animate)
+        return Math.abs(target - next) <= 0.001 ? target : next
+      })
+    }
+    frame = requestAnimationFrame(animate)
+    return () => cancelAnimationFrame(frame)
+  }, [unfolded])
 
   useEffect(() => {
     const container = containerRef.current
@@ -257,7 +325,7 @@ export function ThreeSceneView({ document, selectedIds, onSelect }: ThreeSceneVi
 
     visibleSolids(document).forEach((primitive) => {
       const selected = selectedIds.includes(primitive.id)
-      scene.add(createSolidGroup(primitive, selected, { showHiddenEdges, showNormals, transparentFaces }))
+      scene.add(createSolidGroup(primitive, selected, { showHiddenEdges, showNormals, transparentFaces, unfoldProgress }))
     })
     document.primitives.filter((primitive): primitive is SectionPrimitive => primitive.type === "section" && primitive.visible !== false).forEach((primitive) => {
       const mesh = createSectionMesh(primitive)
@@ -338,8 +406,8 @@ export function ThreeSceneView({ document, selectedIds, onSelect }: ThreeSceneVi
       renderer.dispose()
       if (container.contains(renderer.domElement)) container.removeChild(renderer.domElement)
     }
-  }, [document, onSelect, selectedIds, showHiddenEdges, showNormals, transparentFaces])
+  }, [document, onSelect, selectedIds, showHiddenEdges, showNormals, transparentFaces, unfoldProgress])
 
   const hasSolid = document.primitives.some((primitive) => ["cube", "pyramid", "cylinder", "cone"].includes(primitive.type) && primitive.visible !== false)
-  return <div className="three-canvas-shell" ref={containerRef} data-3d-scene="true" aria-label="3D 几何场景">{webglAvailable && <div className="three-scene-controls" aria-label="3D显示控制"><button type="button" aria-pressed={transparentFaces} onClick={() => setTransparentFaces((visible) => !visible)}>透明面</button><button type="button" aria-pressed={showHiddenEdges} onClick={() => setShowHiddenEdges((visible) => !visible)}>隐藏边</button><button type="button" aria-pressed={showNormals} onClick={() => setShowNormals((visible) => !visible)}>法向量</button><button className="three-reset-button" type="button" aria-label="重置3D视角" onClick={() => resetCameraRef.current()}>重置视角</button></div>}{!webglAvailable && <div className="three-scene-status" role="status">当前浏览器不支持 WebGL，无法显示 3D 场景。</div>}{webglAvailable && !hasSolid && <div className="three-scene-status" role="status">添加立体对象开始探索三维空间。</div>}</div>
+  return <div className="three-canvas-shell" ref={containerRef} data-3d-scene="true" aria-label="3D 几何场景">{webglAvailable && <div className="three-scene-controls" aria-label="3D显示控制"><button type="button" aria-pressed={transparentFaces} onClick={() => setTransparentFaces((visible) => !visible)}>透明面</button><button type="button" aria-pressed={showHiddenEdges} onClick={() => setShowHiddenEdges((visible) => !visible)}>隐藏边</button><button type="button" aria-pressed={showNormals} onClick={() => setShowNormals((visible) => !visible)}>法向量</button><button type="button" aria-pressed={unfolded} onClick={() => setUnfolded((visible) => !visible)}>{unfolded ? "折叠" : "展开"}</button><button className="three-reset-button" type="button" aria-label="重置3D视角" onClick={() => resetCameraRef.current()}>重置视角</button></div>}{!webglAvailable && <div className="three-scene-status" role="status">当前浏览器不支持 WebGL，无法显示 3D 场景。</div>}{webglAvailable && !hasSolid && <div className="three-scene-status" role="status">添加立体对象开始探索三维空间。</div>}</div>
 }

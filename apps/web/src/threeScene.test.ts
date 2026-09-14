@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import * as THREE from "three"
 
-import { createCameraState, createCubeMesh, createSolidGroup, createSolidMesh, panCameraState, pickPrimitiveAt, resetCameraState, rotateCameraState, zoomCameraState } from "./threeScene"
+import { createCameraState, createCubeMesh, createSolidGroup, createSolidMesh, cubeUnfoldCenters, panCameraState, pickPrimitiveAt, resetCameraState, rotateCameraState, zoomCameraState } from "./threeScene"
 
 describe("Three.js geometry scene", () => {
   it("maps a parameterized cube to a centered box mesh", () => {
@@ -82,5 +82,15 @@ describe("Three.js geometry scene", () => {
       if (child instanceof THREE.Mesh || child instanceof THREE.LineSegments) child.geometry.dispose()
       if ("material" in child && child.material instanceof THREE.Material) child.material.dispose()
     })
+  })
+
+  it("moves cube faces into a deterministic unfold layout", () => {
+    const folded = cubeUnfoldCenters({ x: 2, y: 4, z: 6 }, 0)
+    const unfolded = cubeUnfoldCenters({ x: 2, y: 4, z: 6 }, 1)
+
+    expect(folded).toHaveLength(6)
+    expect(unfolded).toHaveLength(6)
+    expect(unfolded).not.toEqual(folded)
+    expect(new Set(unfolded.map((face) => `${face.center.x},${face.center.y},${face.center.z}`)).size).toBe(6)
   })
 })

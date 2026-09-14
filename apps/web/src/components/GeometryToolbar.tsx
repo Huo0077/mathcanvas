@@ -24,6 +24,7 @@ interface GeometryToolbarProps {
   onAddPyramid: () => void
   onAddCylinder: () => void
   onAddCone: () => void
+  onAddSection: () => void
   onDelete: () => void
   onToggleLock: () => void
   onSelectTool: () => void
@@ -31,6 +32,7 @@ interface GeometryToolbarProps {
   hasSelection: boolean
   allSelectedLocked: boolean
   workspace: Workspace
+  canCreateSection: boolean
 }
 
 type ToolbarIconName = "select" | "point" | "line" | "circle" | "curve" | "function" | "undo" | "redo" | "trash" | "lock" | "save" | "text" | "camera" | "brush"
@@ -81,6 +83,7 @@ export function GeometryToolbar(props: GeometryToolbarProps) {
         {props.workspace === "geometry3d" && <ToolButton label="添加棱锥" icon="curve" onClick={props.onAddPyramid} />}
         {props.workspace === "geometry3d" && <ToolButton label="添加圆柱" icon="circle" onClick={props.onAddCylinder} />}
         {props.workspace === "geometry3d" && <ToolButton label="添加圆锥" icon="curve" onClick={props.onAddCone} />}
+        {props.workspace === "geometry3d" && <ToolButton label="创建截面" icon="curve" disabled={!props.canCreateSection} onClick={props.onAddSection} />}
       </div>
     </section>
     <section className="toolbar-group multimodal-tools">
