@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { evaluateExpression, parseExpression } from "./expression"
+import { compileExpression, evaluateExpression, parseExpression } from "./expression"
 
 describe("expression AST", () => {
   it("parses and evaluates arithmetic with variables and parentheses", () => {
@@ -56,6 +56,10 @@ describe("expression AST", () => {
   it("supports classroom absolute value and subscript logarithm notation", () => {
     expect(evaluateExpression(parseExpression("|x|"), { x: -3 })).toBe(3)
     expect(evaluateExpression(parseExpression("log_2(x)"), { x: 8 })).toBeCloseTo(3)
+  })
+
+  it("reuses compiled ASTs for equivalent normalized sources", () => {
+    expect(compileExpression(" y = x * x ")).toBe(compileExpression("x * x"))
   })
 
   it("rejects unknown functions instead of executing arbitrary identifiers", () => {

@@ -1,5 +1,5 @@
 import type { Coordinate, GeometryDocument, PrimitiveSpec } from "@draw/dsl"
-import { evaluateParameterExpression, sampleEllipse, sampleFunctionSegments, sampleHyperbolaBranches, sampleParabola } from "@draw/geometry-kernel"
+import { adaptiveSampleFunctionSegments, evaluateParameterExpression, sampleEllipse, sampleHyperbolaBranches, sampleParabola } from "@draw/geometry-kernel"
 
 import { svgStyleFor } from "../primitiveStyle"
 import { resolveAnnotationPoint } from "../annotations"
@@ -37,7 +37,7 @@ function sampledSegments(primitive: Extract<PrimitiveSpec, { type: "parabola" | 
     if (primitive.type === "hyperbola") {
       return sampleHyperbolaBranches(primitive, [WORLD_BOUNDS.minX, WORLD_BOUNDS.maxX], 128)
     }
-    return clipFunctionSegmentsToBounds(sampleFunctionSegments((x) => evaluateParameterExpression(primitive.expression, { x }), primitive.domain, primitive.samples ?? 128), WORLD_BOUNDS)
+    return clipFunctionSegmentsToBounds(adaptiveSampleFunctionSegments((x) => evaluateParameterExpression(primitive.expression, { x }), primitive.domain, { initialSteps: primitive.samples ?? 128, maxSteps: Math.max(primitive.samples ?? 128, 2048) }), WORLD_BOUNDS)
   } catch {
     return []
   }

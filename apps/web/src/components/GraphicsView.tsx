@@ -1,6 +1,6 @@
 import { type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react"
 import type { Coordinate, GeometryDocument, PrimitiveSpec } from "@draw/dsl"
-import { evaluateParameterExpression, sampleEllipse, sampleFunctionSegments, sampleHyperbolaBranches, sampleParabola } from "@draw/geometry-kernel"
+import { adaptiveSampleFunctionSegments, evaluateParameterExpression, sampleEllipse, sampleHyperbolaBranches, sampleParabola } from "@draw/geometry-kernel"
 import { applyOperation, recomputeDerivedObjects, type DomainOperation } from "@draw/scene-graph"
 
 import { createDragAction, getDragHandle, rotationHandlePoint, type DragAction, type DragHandle } from "../interaction"
@@ -129,7 +129,7 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
     return { a: { x: worldBounds.minX, y: line.a.y + slope * (worldBounds.minX - line.a.x) }, b: { x: worldBounds.maxX, y: line.a.y + slope * (worldBounds.maxX - line.a.x) } }
   }
   const functionSegments = (primitive: Extract<PrimitiveSpec, { type: "function" }>) => {
-    try { return clipFunctionSegmentsToBounds(sampleFunctionSegments((x) => evaluateParameterExpression(primitive.expression, { x }), primitive.domain, primitive.samples ?? 128), worldBounds) } catch { return [] }
+    try { return clipFunctionSegmentsToBounds(adaptiveSampleFunctionSegments((x) => evaluateParameterExpression(primitive.expression, { x }), primitive.domain, { initialSteps: primitive.samples ?? 128, maxSteps: Math.max(primitive.samples ?? 128, 2048) }), worldBounds) } catch { return [] }
   }
   const handleObjectClick = (event: ReactMouseEvent<SVGElement>, id: string) => { event.stopPropagation(); if (creationMode) onCanvasClick(eventToWorld(event, viewport)); else onSelect(id, event.shiftKey) }
   const beginDrag = (event: ReactPointerEvent<SVGElement>, id: string) => {

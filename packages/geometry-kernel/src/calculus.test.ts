@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { numericalDerivative, numericalIntegral, sampleFunction, sampleFunctionSegments } from "./calculus"
+import { adaptiveSampleFunctionSegments, numericalDerivative, numericalIntegral, sampleFunction, sampleFunctionSegments } from "./calculus"
 
 describe("calculus numerical MVP", () => {
   it("samples functions and estimates derivatives and integrals", () => {
@@ -30,5 +30,12 @@ describe("calculus numerical MVP", () => {
     const segments = sampleFunctionSegments((x) => 10 * Math.exp(-10000 * (x - 0.0625) ** 2), [0, 0.5], 4)
 
     expect(segments).toHaveLength(1)
+  })
+
+  it("adds samples around a narrow feature without inventing a discontinuity", () => {
+    const segments = adaptiveSampleFunctionSegments((x) => 10 * Math.exp(-10000 * (x - 0.0625) ** 2), [0, 0.5], { initialSteps: 4, maxSteps: 64 })
+
+    expect(segments).toHaveLength(1)
+    expect(segments[0].some((point) => Math.abs(point.x - 0.0625) < 0.01 && point.y > 9)).toBe(true)
   })
 })

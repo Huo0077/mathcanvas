@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react"
 import type { AnnotationFeature, PrimitiveSpec } from "@draw/dsl"
-import { advanceAnimation, evaluateParameterExpression, parseExpression, sampleFunctionSegments, type AnimationMode, type AnimationState } from "@draw/geometry-kernel"
+import { adaptiveSampleFunctionSegments, advanceAnimation, evaluateParameterExpression, parseExpression, type AnimationMode, type AnimationState } from "@draw/geometry-kernel"
 import type { Alignment, PrimitiveUpdatePatch } from "@draw/scene-graph"
 
 import { defaultStrokeFor } from "../primitiveStyle"
@@ -257,7 +257,7 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
   }
   const functionMetrics = selectedFunction ? (() => {
     try {
-      const segments = sampleFunctionSegments((x) => evaluateParameterExpression(selectedFunction.expression, { x }), selectedFunction.domain, selectedFunction.samples ?? 128)
+      const segments = adaptiveSampleFunctionSegments((x) => evaluateParameterExpression(selectedFunction.expression, { x }), selectedFunction.domain, { initialSteps: selectedFunction.samples ?? 128, maxSteps: Math.max(selectedFunction.samples ?? 128, 2048) })
       const values = segments.flat().map((point) => point.y)
       if (!values.length) return null
       return { min: Math.min(...values), max: Math.max(...values) }

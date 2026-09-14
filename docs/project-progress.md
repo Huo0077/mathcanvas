@@ -3,7 +3,7 @@
 > 这份文件是项目的单一进度记录。每完成一个可验证的切片，就更新“已完成”和“下一步”，并附上验证证据。
 
 **最后更新：** 2026-09-14
-**当前阶段：** P1 数学内核已完成，P2 交互已完成
+**当前阶段：** P1 数学内核、P2 交互已完成，P3 正在实现
 **总体状态：** 开发中
 
 ## 已完成
@@ -104,10 +104,11 @@
 - [x] P2：中间画布横向填充工作区，函数编辑框的 Backspace/Delete 不再误删函数图元
 - [x] P2：函数公式键盘支持光标插入、嵌套函数和带底数对数；画布支持坐标悬停与点击创建持久交点
 - [x] P2：函数无定义区间与采样渐近线断线保护；画布支持动态视口中心、鼠标中键或 `Space + 左键` 平移
+- [x] P3-1：表达式编译缓存与有细化上限的自适应函数采样接入绘图、属性值域、导出和采样交点
 
 ## 下一步
 
-P2 交互收尾已完成，下一步进入 P3 需求规划。
+P3-1 已完成，下一步实现一阶/二阶导数内核。
 
 > 射线/折线、圆锥曲线和函数采样已接入工具栏、SVG 渲染、属性编辑和 UI 回归测试；选中两条可采样曲线即可创建持久化交点。
 
@@ -128,9 +129,9 @@ P2 交互收尾已完成，下一步进入 P3 需求规划。
 
 ## 最新验证证据
 
-- `npm.cmd test`：23 个测试文件、187 个测试通过
+- `npm.cmd test`：23 个测试文件、189 个测试通过
 - `npm.cmd run typecheck`：4 个 workspace 通过
 - 默认 `npm.cmd run build`：当前沙箱因 Vite 写入 `.vite-temp`/`dist` 返回 `EPERM`；使用 `vite build apps/web --configLoader runner --outDir D:\\draw\\build-check\\mathcanvas-current` 完成等价 Web 构建验证
 - `npm.cmd exec playwright test`：5 个 Chromium 浏览器用例通过
 - `npm.cmd run lint`：未执行成功，仓库当前未安装 `eslint` 命令
-- GitHub：提交 `91d82fe` 已推送到 `origin/main`
+- GitHub：P2 修复与 P3-1 之前的提交均已推送到 `origin/main`
