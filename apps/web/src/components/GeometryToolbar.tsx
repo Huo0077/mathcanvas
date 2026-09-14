@@ -1,4 +1,5 @@
 import { useState } from "react"
+import type { Workspace } from "@draw/dsl"
 
 interface GeometryToolbarProps {
   onUndo: () => void
@@ -19,12 +20,14 @@ interface GeometryToolbarProps {
   onAddEllipse: () => void
   onAddHyperbola: () => void
   onAddFunction: () => void
+  onAddCube: () => void
   onDelete: () => void
   onToggleLock: () => void
   onSelectTool: () => void
   creationMode: "line" | "segment" | "ray" | "polyline" | "circle" | "arc" | null
   hasSelection: boolean
   allSelectedLocked: boolean
+  workspace: Workspace
 }
 
 type ToolbarIconName = "select" | "point" | "line" | "circle" | "curve" | "function" | "undo" | "redo" | "trash" | "lock" | "save" | "text" | "camera" | "brush"
@@ -71,6 +74,7 @@ export function GeometryToolbar(props: GeometryToolbarProps) {
         <ToolButton label="添加椭圆" icon="circle" onClick={props.onAddEllipse} />
         <ToolButton label="添加双曲线" icon="curve" onClick={props.onAddHyperbola} />
         <ToolButton label="添加函数图像" icon="function" onClick={props.onAddFunction} />
+        {props.workspace === "geometry3d" && <ToolButton label="添加立方体" icon="curve" onClick={props.onAddCube} />}
       </div>
     </section>
     <section className="toolbar-group multimodal-tools">

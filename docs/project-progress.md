@@ -114,10 +114,11 @@
 - [x] P3-8：P3 文档、完整测试、类型检查、构建和 E2E 验证
 - [x] P6-1：3D 向量、平面、射线—平面求交和二面角基础几何内核
 - [x] P6-2：3D DSL 类型、几何校验、`.mgeo` round-trip 和旧 2D 文档兼容
+- [x] P6-3：参数化立方体 Three.js 场景、geometry3d 工作区入口和 WebGL 降级状态
 
 ## 下一步
 
-P6-2 已完成，下一步实现参数化立方体与 Three.js 场景。
+P6-3 已完成，下一步实现棱锥、圆柱和圆锥模型。
 
 > 射线/折线、圆锥曲线和函数采样已接入工具栏、SVG 渲染、属性编辑和 UI 回归测试；选中两条可采样曲线即可创建持久化交点。
 
@@ -138,8 +139,12 @@ P6-2 已完成，下一步实现参数化立方体与 Three.js 场景。
 
 ## 最新验证证据
 
-- `npm.cmd test`：24 个测试文件、202 个测试通过
+- `npm.cmd test`：25 个测试文件、203 个测试通过
+- P6-3 聚焦测试：`apps/web/src/threeScene.test.ts` 通过
+- P6-3 全量测试：25 个测试文件、203 个测试通过
 - `npm.cmd run typecheck`：4 个 workspace 通过
+- P6-3 Web 构建：`vite build` 使用隔离 `outDir` 通过
+- P6-3 浏览器验证：Playwright 被宿主环境的 Vite `.vite-temp` `EPERM` 阻断，未标记为通过
 - 默认 `npm.cmd run build`：当前沙箱因 Vite 写入 `.vite-temp`/`dist` 返回 `EPERM`；使用 `vite build apps/web --configLoader runner --outDir D:\\draw\\build-check\\mathcanvas-current` 完成等价 Web 构建验证
 - `npm.cmd exec playwright test`：5 个 Chromium 浏览器用例通过
 - `npm.cmd run lint`：未执行成功，仓库当前未安装 `eslint` 命令
