@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { adaptiveSampleFunctionSegments, numericalDerivative, numericalIntegral, numericalSecondDerivative, sampleFunction, sampleFunctionSegments } from "./calculus"
+import { adaptiveSampleFunctionSegments, findExtrema, findInflectionPoints, findZeros, numericalDerivative, numericalIntegral, numericalSecondDerivative, sampleFunction, sampleFunctionSegments } from "./calculus"
 
 describe("calculus numerical MVP", () => {
   it("samples functions and estimates derivatives and integrals", () => {
@@ -43,5 +43,12 @@ describe("calculus numerical MVP", () => {
     expect(numericalSecondDerivative((x) => x ** 3, 2)).toBeCloseTo(12, 3)
     expect(numericalDerivative((x) => x < 0 ? Number.NaN : x, 0)).toBeNaN()
     expect(numericalSecondDerivative((x) => x < 0 ? Number.NaN : x, 0)).toBeNaN()
+  })
+
+  it("finds approximate zeros, extrema, and inflection points", () => {
+    expect(findZeros((x) => x ** 2 - 1, [-2, 2], 64).map((point) => point.x)).toEqual([-1, 1])
+    expect(findExtrema((x) => x ** 2, [-2, 2], 64)).toEqual([expect.objectContaining({ kind: "minimum", x: 0, approximate: true })])
+    expect(findExtrema((x) => -(x ** 2), [-2, 2], 64)).toEqual([expect.objectContaining({ kind: "maximum", x: 0, approximate: true })])
+    expect(findInflectionPoints((x) => x ** 3, [-2, 2], 64)).toEqual([expect.objectContaining({ kind: "inflection", x: 0, approximate: true })])
   })
 })

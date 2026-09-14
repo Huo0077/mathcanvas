@@ -10,6 +10,13 @@ export interface AdaptiveSamplingOptions {
   maxDepth?: number
 }
 
+export type NumericalAnalysisKind = "zero" | "maximum" | "minimum" | "inflection"
+
+export interface NumericalAnalysisPoint extends FunctionSamplePoint {
+  kind: NumericalAnalysisKind
+  approximate: true
+}
+
 function isDiscontinuousInterval(functionValue: (x: number) => number, first: FunctionSamplePoint, second: FunctionSamplePoint): boolean {
   const quarter = (first.x * 3 + second.x) / 4
   const midpoint = (first.x + second.x) / 2
@@ -94,6 +101,88 @@ export function adaptiveSampleFunctionSegments(functionValue: (x: number) => num
     samples.push(...(index === 0 ? refined : refined.slice(1)))
   }
   return segmentsFromSamples(functionValue, samples)
+}
+
+function appendAnalysisPoint(points: NumericalAnalysisPoint[], point: NumericalAnalysisPoint): void {
+  if (!points.some((candidate) => candidate.kind === point.kind && Math.abs(candidate.x - point.x) < 1e-5)) points.push(point)
+}
+
+function analysisSamples(functionValue: (x: number) => number, domain: [number, number], steps: number): FunctionSamplePoint[][] {
+  return adaptiveSampleFunctionSegments(functionValue, domain, { initialSteps: steps, maxSteps: Math.max(steps + 1, steps * 8) })
+}
+
+function bisectZero(functionValue: (x: number) => number, first: FunctionSamplePoint, second: FunctionSamplePoint): FunctionSamplePoint | null {
+  if (first.y === 0) return first
+  if (second.y === 0) return second
+  if (first.y * second.y > 0) return null
+  let left = first
+  let right = second
+  for (let iteration = 0; iteration < 32; iteration += 1) {
+    const midpointX = (left.x + right.x) / 2
+    let midpointY: number
+    try { midpointY = functionValue(midpointX) } catch { return null }
+    if (!Number.isFinite(midpointY)) return null
+    const midpoint = { x: midpointX, y: midpointY }
+    if (Math.abs(midpointY) < 1e-10 || Math.abs(right.x - left.x) < 1e-8) return midpoint
+    if (left.y * midpointY <= 0) right = midpoint
+    else left = midpoint
+  }
+  const x = (left.x + right.x) / 2
+  let y: number
+  try { y = functionValue(x) } catch { return null }
+  return Number.isFinite(y) ? { x, y } : null
+}
+
+export function findZeros(functionValue: (x: number) => number, domain: [number, number], steps = 128): NumericalAnalysisPoint[] {
+  const points: NumericalAnalysisPoint[] = []
+  for (const segment of analysisSamples(functionValue, domain, steps)) {
+    for (const point of segment) {
+      if (point.y === 0) appendAnalysisPoint(points, { ...point, kind: "zero", approximate: true })
+    }
+    for (let index = 1; index < segment.length; index += 1) {
+      const zero = bisectZero(functionValue, segment[index - 1], segment[index])
+      if (zero) appendAnalysisPoint(points, { ...zero, kind: "zero", approximate: true })
+    }
+  }
+  return points.sort((first, second) => first.x - second.x)
+}
+
+export function findExtrema(functionValue: (x: number) => number, domain: [number, number], steps = 128): NumericalAnalysisPoint[] {
+  const points: NumericalAnalysisPoint[] = []
+  for (const segment of analysisSamples(functionValue, domain, steps)) {
+    for (let index = 1; index < segment.length - 1; index += 1) {
+      const previous = segment[index - 1]
+      const current = segment[index]
+      const next = segment[index + 1]
+      const isMaximum = current.y >= previous.y && current.y >= next.y && (current.y > previous.y || current.y > next.y)
+      const isMinimum = current.y <= previous.y && current.y <= next.y && (current.y < previous.y || current.y < next.y)
+      if (isMaximum) appendAnalysisPoint(points, { ...current, kind: "maximum", approximate: true })
+      if (isMinimum) appendAnalysisPoint(points, { ...current, kind: "minimum", approximate: true })
+    }
+  }
+  return points.sort((first, second) => first.x - second.x)
+}
+
+export function findInflectionPoints(functionValue: (x: number) => number, domain: [number, number], steps = 128): NumericalAnalysisPoint[] {
+  const points: NumericalAnalysisPoint[] = []
+  const secondDerivative = (x: number) => numericalSecondDerivative(functionValue, x)
+  for (const segment of analysisSamples(functionValue, domain, steps)) {
+    const values = segment.map((point) => ({ point, second: secondDerivative(point.x) }))
+    for (let index = 1; index < values.length; index += 1) {
+      const previous = values[index - 1]
+      const current = values[index]
+      if (current.second === 0) appendAnalysisPoint(points, { ...current.point, kind: "inflection", approximate: true })
+      if (previous.second * current.second < 0) {
+        const zero = bisectZero(secondDerivative, { x: previous.point.x, y: previous.second }, { x: current.point.x, y: current.second })
+        if (zero) {
+          let y: number
+          try { y = functionValue(zero.x) } catch { y = Number.NaN }
+          if (Number.isFinite(y)) appendAnalysisPoint(points, { x: zero.x, y, kind: "inflection", approximate: true })
+        }
+      }
+    }
+  }
+  return points.sort((first, second) => first.x - second.x)
 }
 
 export function sampleFunction(functionValue: (x: number) => number, domain: [number, number], steps = 128): { x: number; y: number }[] {
