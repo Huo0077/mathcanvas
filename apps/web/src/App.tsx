@@ -46,6 +46,15 @@ function nextPointLabel(document: ReturnType<typeof useSceneStore.getState>["doc
   return `新点 ${document.primitives.filter((primitive) => primitive.type === "point").length + 1}`
 }
 
+function nextPoint3Label(document: ReturnType<typeof useSceneStore.getState>["document"]): string {
+  const usedLabels = new Set(document.primitives.filter((primitive) => primitive.type === "point3").map((primitive) => primitive.label))
+  for (let index = 0; index < 26; index += 1) {
+    const label = String.fromCharCode(65 + index)
+    if (!usedLabels.has(label)) return label
+  }
+  return `P${document.primitives.filter((primitive) => primitive.type === "point3").length + 1}`
+}
+
 function isTextEditingTarget(target: EventTarget | null): boolean {
   return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement || (target instanceof HTMLElement && target.isContentEditable)
 }
@@ -116,7 +125,24 @@ export function App() {
   }
 
   const creationMode: CreationMode = creationStep?.mode ?? null
-  const startCreation = (mode: Exclude<CreationMode, null>) => setCreationStep({ mode, center: null })
+  const startCreation = (mode: Exclude<CreationMode, null>) => {
+    if (document.workspace === "geometry3d") {
+      if (mode === "line") {
+        if (canCreateLine3) addLine3()
+        else setFileError("请先选择两个空间点创建直线")
+      }
+      if (mode === "segment") {
+        if (canCreatePlane3) addPlane3()
+        else setFileError("请先选择三个空间点创建平面")
+      }
+      if (mode === "ray" || mode === "polyline") {
+        if (canCreateFace3) addFace3()
+        else setFileError("请先选择三个或更多空间点创建空间面")
+      }
+      return
+    }
+    setCreationStep({ mode, center: null })
+  }
   const handleCanvasClick = (coordinate: { x: number; y: number }) => {
     if (!creationStep) return
     if (creationStep.mode === "polyline") {
@@ -204,6 +230,10 @@ export function App() {
   const selectedPrimitive = selectedId ? document.primitives.find((primitive) => primitive.id === selectedId) ?? null : null
   const intersectionTypes = ["point", "line", "segment", "ray", "polyline", "circle", "arc", "parabola", "ellipse", "hyperbola", "function"] as const
   const selectedPointIds = selectedIds.filter((id) => document.primitives.find((primitive) => primitive.id === id)?.type === "point")
+  const selectedPoint3Ids = selectedIds.filter((id) => document.primitives.find((primitive) => primitive.id === id)?.type === "point3")
+  const canCreateLine3 = selectedPoint3Ids.length === 2 && selectedPoint3Ids.length === selectedIds.length
+  const canCreatePlane3 = selectedPoint3Ids.length === 3 && selectedPoint3Ids.length === selectedIds.length
+  const canCreateFace3 = selectedPoint3Ids.length >= 3 && selectedPoint3Ids.length === selectedIds.length
   const canCreatePointConnection = (selectedIds.length === 2 || selectedIds.length === 3) && selectedPointIds.length === selectedIds.length
   const canCreateIntersection = canCreatePointConnection || (selectedIds.length === 2 && selectedIds.every((id) => intersectionTypes.includes(document.primitives.find((primitive) => primitive.id === id)?.type as typeof intersectionTypes[number])))
   const allSelectedLocked = selectedIds.length > 0 && selectedIds.every((id) => document.primitives.find((primitive) => primitive.id === id)?.locked)
@@ -309,8 +339,37 @@ export function App() {
     setSelectedIds([id])
   }
   const addPoint = () => {
+    if (document.workspace === "geometry3d") {
+      addPoint3()
+      return
+    }
     const id = nextPrimitiveId(document, "point")
     apply({ op: "addPrimitive", primitive: { id, type: "point", x: 2, y: 1, label: nextPointLabel(document) } })
+  }
+  function addPoint3() {
+    const pointCount = document.primitives.filter((primitive) => primitive.type === "point3").length
+    const id = nextPrimitiveId(document, "point3")
+    const position = { x: (pointCount % 3) * 2, y: Math.floor(pointCount / 3) * 2, z: 0 }
+    apply({ op: "addPrimitive", primitive: { id, type: "point3", position, binding: { kind: "free" }, label: nextPoint3Label(document) } })
+    setSelectedIds([id])
+  }
+  function addLine3() {
+    if (!canCreateLine3) return
+    const id = nextPrimitiveId(document, "line3")
+    apply({ op: "addPrimitive", primitive: { id, type: "line3", definition: { kind: "throughPoints", pointIds: selectedPoint3Ids as [string, string] }, label: `空间直线 ${id.split("-").at(-1)}` } })
+    setSelectedIds([id])
+  }
+  function addPlane3() {
+    if (!canCreatePlane3) return
+    const id = nextPrimitiveId(document, "plane3")
+    apply({ op: "addPrimitive", primitive: { id, type: "plane3", definition: { kind: "throughPoints", pointIds: selectedPoint3Ids as [string, string, string] }, label: `空间平面 ${id.split("-").at(-1)}` } })
+    setSelectedIds([id])
+  }
+  function addFace3() {
+    if (!canCreateFace3) return
+    const id = nextPrimitiveId(document, "face3")
+    apply({ op: "addPrimitive", primitive: { id, type: "face3", pointIds: [...selectedPoint3Ids], label: `空间面 ${id.split("-").at(-1)}` } })
+    setSelectedIds([id])
   }
   const addAnnotation = (feature: AnnotationFeature, index?: number, text?: string) => {
     if (!selectedPrimitive) return

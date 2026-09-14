@@ -124,6 +124,7 @@ function Vector3Fields({ prefix, value, disabled, onChange }: { prefix: string; 
 
 export function PropertiesBar({ value, min, max, step, onChange, selectedPrimitive, selectedCount, selectedGroupId, allSelectedVisible, canCreateIntersection, onUpdatePrimitive, onToggleSelectedVisibility, onToggleSelectedLock, onCreateGroup, onDeleteGroup, onCreateIntersection, onAlign, onToggleBatchVisibility, onAddAnnotation }: PropertiesBarProps) {
   const selectedPoint = selectedPrimitive?.type === "point" ? selectedPrimitive : null
+  const selectedPoint3 = selectedPrimitive?.type === "point3" ? selectedPrimitive : null
   const selectedLinear = selectedPrimitive?.type === "line" || selectedPrimitive?.type === "segment" || selectedPrimitive?.type === "ray" ? selectedPrimitive : null
   const selectedPolyline = selectedPrimitive?.type === "polyline" ? selectedPrimitive : null
   const selectedParabola = selectedPrimitive?.type === "parabola" ? selectedPrimitive : null
@@ -181,6 +182,7 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
   }, [animationPlaying, commitPreview, max, min, previewParameter])
 
   const updatePoint = (axis: "x" | "y", next: number) => selectedPoint && editable && onUpdatePrimitive({ [axis]: next })
+  const updatePoint3 = (axis: keyof Vector3, next: number) => selectedPoint3 && editable && onUpdatePrimitive({ position3: { ...selectedPoint3.position, [axis]: next } })
   const updatePointBinding = (pathId: string) => selectedPoint && editable && onUpdatePrimitive({ binding: pathId ? { kind: "onPath", pathId, parameterId: Object.keys(sceneDocument.parameters)[0], parameter: selectedPoint.binding?.kind === "onPath" ? selectedPoint.binding.parameter : 0 } : { kind: "free" } })
   const updatePointParameter = (parameter: number) => selectedPoint?.binding?.kind === "onPath" && editable && onUpdatePrimitive({ binding: { ...selectedPoint.binding, parameter } })
   const createLocus = () => {
@@ -324,6 +326,7 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
         </select>
       </div>
     </div>
+    {selectedPoint3 && <div className="primitive-properties"><h3>空间点坐标</h3><Vector3Fields prefix="坐标" value={selectedPoint3.position} disabled={!editable || selectedPoint3.binding?.kind !== "free"} onChange={updatePoint3} /><p className="footer-note">点位置是空间构造的真源；线、面和实体通过点引用联动。</p></div>}
     {selectedSolid && <div className="primitive-properties"><h3>立体几何属性</h3>{selectedSolid.type === "cube" && <><Vector3Fields prefix="原点" value={selectedSolid.origin} disabled={!editable} onChange={(axis, next) => onUpdatePrimitive({ origin3: { ...selectedSolid.origin, [axis]: next } })} /><Vector3Fields prefix="尺寸" value={selectedSolid.size} disabled={!editable} onChange={(axis, next) => onUpdatePrimitive({ size3: { ...selectedSolid.size, [axis]: Math.max(0.01, next) } })} /></>}{selectedSolid.type === "pyramid" && <><Vector3Fields prefix="底面中心" value={selectedSolid.baseCenter} disabled={!editable} onChange={(axis, next) => onUpdatePrimitive({ baseCenter3: { ...selectedSolid.baseCenter, [axis]: next } })} /><CoordinateField label="底面尺寸 X" value={selectedSolid.baseSize.x} disabled={!editable} onChange={(next) => onUpdatePrimitive({ baseSize3: { ...selectedSolid.baseSize, x: Math.max(0.01, next) } })} /><CoordinateField label="底面尺寸 Y" value={selectedSolid.baseSize.y} disabled={!editable} onChange={(next) => onUpdatePrimitive({ baseSize3: { ...selectedSolid.baseSize, y: Math.max(0.01, next) } })} /><CoordinateField label="高度" value={selectedSolid.height} disabled={!editable} onChange={(next) => onUpdatePrimitive({ height: Math.max(0.01, next) })} /></>}{(selectedSolid.type === "cylinder" || selectedSolid.type === "cone") && <><Vector3Fields prefix="中心" value={selectedSolid.center} disabled={!editable} onChange={(axis, next) => onUpdatePrimitive({ center3: { ...selectedSolid.center, [axis]: next } })} /><CoordinateField label="半径 3D" value={selectedSolid.radius} disabled={!editable} onChange={(next) => onUpdatePrimitive({ radius3: Math.max(0.01, next) })} /><CoordinateField label="高度" value={selectedSolid.height} disabled={!editable} onChange={(next) => onUpdatePrimitive({ height: Math.max(0.01, next) })} /><Field label="分段数"><input aria-label="分段数" type="number" min="3" max="256" step="1" disabled={!editable} value={selectedSolid.segments} onChange={(event) => onUpdatePrimitive({ segments: Math.max(3, Math.min(256, Math.round(numberValue(event)))) })} /></Field></>}</div>}
     {!selectedPrimitive && <>
       <label className="properties-label" htmlFor="slope-slider"><span>直线斜率参数</span><strong className="metric">{value.toFixed(2)}</strong></label>

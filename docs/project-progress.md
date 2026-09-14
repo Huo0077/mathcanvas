@@ -132,7 +132,7 @@
 - [x] P6 v2-1：3D DSL 基础对象与旧文档兼容。
 - [x] P6 v2-2：纯三维几何与可注册实体 builder。
 - [x] P6 v2-3：Scene Graph 依赖索引与拓扑重算。
-- [ ] P6 v2-4：点线面课堂构造工具与关键点交互。
+- [x] P6 v2-4：点线面课堂构造工具与关键点交互。
 - [ ] P6 v2-5：四类固定实体迁移为统一拓扑模板。
 - [ ] P6 v2-6：空间拾取、约束与教学测量。
 - [ ] P6 v2-7：通用剖切与截面派生对象。
@@ -142,7 +142,7 @@
 
 ## 下一步
 
-P6 v1 参数化基线已完成；下一步执行 P6 v2 点驱动通用立体几何计划。P4 Agent、P5 题图解析和 P7 工程制图仍保持在明确排除范围内。
+P6 v1 参数化基线已完成；P6 v2 已完成 Slice 1-4，下一步执行统一拓扑模板迁移。P4 Agent、P5 题图解析和 P7 工程制图仍保持在明确排除范围内。
 
 > 射线/折线、圆锥曲线和函数采样已接入工具栏、SVG 渲染、属性编辑和 UI 回归测试；选中两条可采样曲线即可创建持久化交点。
 
@@ -195,6 +195,7 @@ P6 v1 参数化基线已完成；下一步执行 P6 v2 点驱动通用立体几�
 - P6 v2-1 验证：DSL codec 23 个用例通过；CSV exporter 6 个用例通过；全量单测 25 个测试文件、219 个用例通过；四个 workspace 类型检查通过；隔离目录 Vite 生产构建通过；`git diff --check` 通过
 - P6 v2-2 验证：geometry3d 与 solid-builders 聚焦 19 个用例通过；全量单测 26 个测试文件、235 个用例通过；四个 workspace 类型检查通过；隔离目录 Vite 生产构建通过；`git diff --check` 通过
 - P6 v2-3 验证：Scene Graph 聚焦 31 个用例通过；全量单测 26 个测试文件、240 个用例通过；四个 workspace 类型检查通过；`git diff --check` 通过
+- P6 v2-4 验证：UI 聚焦测试 53 个用例通过；全量单测 26 个测试文件、245 个用例通过；四个 workspace 类型检查通过；隔离目录 Vite 生产构建通过；`git diff --check` 通过；浏览器验证因宿主环境浏览器绑定 `Cannot redefine property: process` 阻断，未标记为通过
 - P6-8 Web 构建：`vite build` 使用隔离 `outDir` 通过
 - P6-7 Web 构建：`vite build` 使用隔离 `outDir` 通过
 - 默认 `npm.cmd run build`：当前沙箱因 Vite 写入 `.vite-temp`/`dist` 返回 `EPERM`；使用 `vite build apps/web --configLoader runner --outDir D:\\draw\\build-check\\mathcanvas-current` 完成等价 Web 构建验证

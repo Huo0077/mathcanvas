@@ -70,7 +70,9 @@
 
 **Implementation:** 复用平面图的工具、选择、锁定、删除和属性编辑模式；增加三维辅助平面/网格、坐标读数和明确的构造步骤反馈。
 
-**Verification:** UI 单测、类型检查、构建和 Playwright 点线面主流程。完成后 commit `feat(p6): add point driven 3d construction tools` 并推送。
+**Status:** [x] 已实现并完成 Slice 4 验证。
+
+**Verification:** UI 聚焦测试 53/53；全量测试 26 个测试文件、245 个用例；四个 workspace 类型检查；隔离目录 Vite 生产构建；`git diff --check` 通过。浏览器验证受宿主环境浏览器绑定 `Cannot redefine property: process` 阻断，未标记为通过。完成后 commit `feat(p6): add point driven 3d construction tools` 并推送。
 
 ## Slice 5：固定实体迁移为统一拓扑模板
 

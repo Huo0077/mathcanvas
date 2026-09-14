@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import * as THREE from "three"
-import type { CubePrimitive, GeometryDocument, PyramidPrimitive, CylinderPrimitive, ConePrimitive, SectionPrimitive } from "@draw/dsl"
+import type { CubePrimitive, Face3Primitive, GeometryDocument, Line3Primitive, Point3Primitive, PyramidPrimitive, CylinderPrimitive, ConePrimitive, Ray3Primitive, SectionPrimitive, Segment3Primitive, Vector3 } from "@draw/dsl"
 import { dihedralAngleDegrees } from "@draw/geometry-kernel"
 
 import { opacityFor, strokeFor } from "./primitiveStyle"
@@ -11,6 +11,7 @@ const scenePalette = {
 } as const
 
 type SolidPrimitive = CubePrimitive | PyramidPrimitive | CylinderPrimitive | ConePrimitive
+type PointDrivenLinePrimitive = Line3Primitive | Segment3Primitive | Ray3Primitive
 
 export interface SolidVisualOptions {
   showHiddenEdges?: boolean
@@ -95,6 +96,59 @@ export function pickPrimitiveAt(scene: THREE.Scene, camera: THREE.Camera, normal
   const intersections = raycaster.intersectObjects(scene.children, true)
   const hit = intersections.find((intersection) => typeof intersection.object.userData.primitiveId === "string")
   return typeof hit?.object.userData.primitiveId === "string" ? hit.object.userData.primitiveId : null
+}
+
+export function createPoint3Mesh(primitive: Point3Primitive, selected: boolean): THREE.Mesh {
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.14, 16, 12), new THREE.MeshBasicMaterial({ color: selected ? "#4c3ac7" : strokeFor(primitive), transparent: opacityFor(primitive) < 1, opacity: opacityFor(primitive) }))
+  mesh.position.set(primitive.position.x, primitive.position.y, primitive.position.z)
+  mesh.userData.primitiveId = primitive.id
+  mesh.userData.primitiveType = primitive.type
+  return mesh
+}
+
+function point3ById(points: Map<string, Point3Primitive>, id: string): Vector3 | null {
+  return points.get(id)?.position ?? null
+}
+
+function pointDrivenLineEndpoints(primitive: PointDrivenLinePrimitive, points: Map<string, Point3Primitive>): [Vector3, Vector3] | null {
+  if (primitive.type === "line3") {
+    if (primitive.definition.kind === "throughPoints") {
+      const first = point3ById(points, primitive.definition.pointIds[0])
+      const second = point3ById(points, primitive.definition.pointIds[1])
+      return first && second ? [first, second] : null
+    }
+    const origin = point3ById(points, primitive.definition.pointId)
+    return origin ? [origin, { x: origin.x + primitive.definition.direction.x, y: origin.y + primitive.definition.direction.y, z: origin.z + primitive.definition.direction.z }] : null
+  }
+  const pointIds = primitive.type === "ray3" ? [primitive.originId, primitive.throughId] : primitive.pointIds
+  const first = point3ById(points, pointIds[0])
+  const second = point3ById(points, pointIds[1])
+  return first && second ? [first, second] : null
+}
+
+export function createPointDrivenLine(primitive: PointDrivenLinePrimitive, points: Map<string, Point3Primitive>, selected: boolean): THREE.Line | null {
+  const endpoints = pointDrivenLineEndpoints(primitive, points)
+  if (!endpoints) return null
+  const geometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(endpoints[0].x, endpoints[0].y, endpoints[0].z), new THREE.Vector3(endpoints[1].x, endpoints[1].y, endpoints[1].z)])
+  const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: selected ? "#4c3ac7" : strokeFor(primitive), transparent: opacityFor(primitive) < 1, opacity: opacityFor(primitive) }))
+  line.userData.primitiveId = primitive.id
+  line.userData.primitiveType = primitive.type
+  return line
+}
+
+export function createFace3Mesh(primitive: Face3Primitive, points: Map<string, Point3Primitive>, selected: boolean): THREE.Mesh | null {
+  const positions = primitive.pointIds.map((id) => point3ById(points, id))
+  if (positions.some((position) => !position) || positions.length < 3) return null
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions.flatMap((position) => [position!.x, position!.y, position!.z]), 3))
+  const indices: number[] = []
+  for (let index = 1; index < positions.length - 1; index += 1) indices.push(0, index, index + 1)
+  geometry.setIndex(indices)
+  geometry.computeVertexNormals()
+  const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: selected ? "#4c3ac7" : strokeFor(primitive), transparent: true, opacity: Math.min(0.48, opacityFor(primitive)), side: THREE.DoubleSide }))
+  mesh.userData.primitiveId = primitive.id
+  mesh.userData.primitiveType = primitive.type
+  return mesh
 }
 
 function solidMaterial(primitive: SolidPrimitive, selected: boolean, options: SolidVisualOptions = {}): THREE.MeshStandardMaterial {
@@ -326,6 +380,20 @@ export function ThreeSceneView({ document, selectedIds, onSelect }: ThreeSceneVi
     scene.add(new THREE.GridHelper(14, 14, scenePalette.grid, scenePalette.grid))
     scene.add(new THREE.AxesHelper(5))
 
+    const points = new Map(document.primitives.filter((primitive): primitive is Point3Primitive => primitive.type === "point3").map((primitive) => [primitive.id, primitive]))
+    document.primitives.filter((primitive) => primitive.visible !== false).forEach((primitive) => {
+      const selected = selectedIds.includes(primitive.id)
+      if (primitive.type === "point3") scene.add(createPoint3Mesh(primitive, selected))
+      if (primitive.type === "line3" || primitive.type === "segment3" || primitive.type === "ray3") {
+        const line = createPointDrivenLine(primitive, points, selected)
+        if (line) scene.add(line)
+      }
+      if (primitive.type === "face3") {
+        const face = createFace3Mesh(primitive, points, selected)
+        if (face) scene.add(face)
+      }
+    })
+
     visibleSolids(document).forEach((primitive) => {
       const selected = selectedIds.includes(primitive.id)
       scene.add(createSolidGroup(primitive, selected, { showHiddenEdges, showNormals, transparentFaces, unfoldProgress }))
@@ -411,7 +479,7 @@ export function ThreeSceneView({ document, selectedIds, onSelect }: ThreeSceneVi
     }
   }, [document, onSelect, selectedIds, showHiddenEdges, showNormals, transparentFaces, unfoldProgress])
 
-  const hasSolid = document.primitives.some((primitive) => ["cube", "pyramid", "cylinder", "cone"].includes(primitive.type) && primitive.visible !== false)
+  const hasGeometry = document.primitives.some((primitive) => ["point3", "line3", "segment3", "ray3", "face3", "cube", "pyramid", "cylinder", "cone"].includes(primitive.type) && primitive.visible !== false)
   const angle = dihedralAngleDegrees({ x: 1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 })
-  return <div className="three-canvas-shell" ref={containerRef} data-3d-scene="true" aria-label="3D 几何场景"><div className="three-render-target" ref={renderTargetRef} />{webglAvailable && <div className="three-scene-controls" aria-label="3D显示控制"><button type="button" aria-pressed={transparentFaces} onClick={() => setTransparentFaces((visible) => !visible)}>透明面</button><button type="button" aria-pressed={showHiddenEdges} onClick={() => setShowHiddenEdges((visible) => !visible)}>隐藏边</button><button type="button" aria-pressed={showNormals} onClick={() => setShowNormals((visible) => !visible)}>法向量</button><button type="button" aria-pressed={unfolded} onClick={() => setUnfolded((visible) => !visible)}>{unfolded ? "折叠" : "展开"}</button><button type="button" aria-pressed={showAngle} onClick={() => setShowAngle((visible) => !visible)}>测量二面角</button></div>}{webglAvailable && <button className="three-reset-button" type="button" aria-label="重置3D视角" onClick={() => resetCameraRef.current()}>重置视角</button>}{showAngle && webglAvailable && <div className="three-angle-readout" role="status">二面角：{angle.toFixed(1)}°（示例法向量 X/Y）</div>}{!webglAvailable && <div className="three-scene-status" role="status">当前浏览器不支持 WebGL，无法显示 3D 场景。</div>}{webglAvailable && !hasSolid && <div className="three-scene-status" role="status">添加立体对象开始探索三维空间。</div>}</div>
+  return <div className="three-canvas-shell" ref={containerRef} data-3d-scene="true" aria-label="3D 几何场景"><div className="three-render-target" ref={renderTargetRef} />{webglAvailable && <div className="three-scene-controls" aria-label="3D显示控制"><button type="button" aria-pressed={transparentFaces} onClick={() => setTransparentFaces((visible) => !visible)}>透明面</button><button type="button" aria-pressed={showHiddenEdges} onClick={() => setShowHiddenEdges((visible) => !visible)}>隐藏边</button><button type="button" aria-pressed={showNormals} onClick={() => setShowNormals((visible) => !visible)}>法向量</button><button type="button" aria-pressed={unfolded} onClick={() => setUnfolded((visible) => !visible)}>{unfolded ? "折叠" : "展开"}</button><button type="button" aria-pressed={showAngle} onClick={() => setShowAngle((visible) => !visible)}>测量二面角</button></div>}{webglAvailable && <button className="three-reset-button" type="button" aria-label="重置3D视角" onClick={() => resetCameraRef.current()}>重置视角</button>}{showAngle && webglAvailable && <div className="three-angle-readout" role="status">二面角：{angle.toFixed(1)}°（示例法向量 X/Y）</div>}{!webglAvailable && <div className="three-scene-status" role="status">当前浏览器不支持 WebGL，无法显示 3D 场景。</div>}{webglAvailable && !hasGeometry && <div className="three-scene-status" role="status">添加点、线或面开始探索三维空间。</div>}</div>
 }

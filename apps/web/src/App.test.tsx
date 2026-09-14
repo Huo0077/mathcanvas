@@ -44,6 +44,30 @@ describe("MathCanvas workbench", () => {
     expect(useSceneStore.getState().document.primitives.find((primitive) => primitive.id === "cube-1")).toMatchObject({ type: "cube", size: { x: 5 } })
   })
 
+  it("creates point-driven 3D geometry from selected classroom points", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
+
+    expect(useSceneStore.getState().document.primitives.filter((primitive) => primitive.type === "point3")).toHaveLength(2)
+    fireEvent.click(screen.getByText("A"))
+    fireEvent.click(screen.getByText("B"), { shiftKey: true })
+    fireEvent.click(screen.getByRole("button", { name: "由选中点创建空间直线" }))
+
+    expect(useSceneStore.getState().document.primitives.some((primitive) => primitive.type === "line3")).toBe(true)
+  })
+
+  it("edits the source coordinates of a selected space point", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
+
+    fireEvent.change(screen.getByRole("spinbutton", { name: "坐标 X" }), { target: { value: "4" } })
+
+    expect(useSceneStore.getState().document.primitives.filter((primitive) => primitive.type === "point3").at(-1)).toMatchObject({ position: { x: 4 } })
+  })
+
   it("shows the selected line slope characteristics in the properties panel", () => {
     render(<App />)
     fireEvent.click(screen.getAllByText("参数直线")[0])

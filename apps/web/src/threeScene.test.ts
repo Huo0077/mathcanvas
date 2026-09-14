@@ -1,9 +1,48 @@
 import { describe, expect, it } from "vitest"
 import * as THREE from "three"
 
-import { createCameraState, createCubeMesh, createSolidGroup, createSolidMesh, cubeUnfoldCenters, panCameraState, pickPrimitiveAt, resetCameraState, rotateCameraState, zoomCameraState } from "./threeScene"
+import { createCameraState, createCubeMesh, createFace3Mesh, createPoint3Mesh, createPointDrivenLine, createSolidGroup, createSolidMesh, cubeUnfoldCenters, panCameraState, pickPrimitiveAt, resetCameraState, rotateCameraState, zoomCameraState } from "./threeScene"
 
 describe("Three.js geometry scene", () => {
+  it("renders a selectable point3 at its source position", () => {
+    const mesh = createPoint3Mesh({ id: "point3-a", type: "point3", position: { x: 1, y: 2, z: 3 } }, false)
+
+    expect(mesh.position.toArray()).toEqual([1, 2, 3])
+    expect(mesh.userData.primitiveId).toBe("point3-a")
+
+    mesh.geometry.dispose()
+    ;(mesh.material as THREE.Material).dispose()
+  })
+
+  it("renders a line3 from stable point references", () => {
+    const points = new Map([
+      ["point-a", { id: "point-a", type: "point3" as const, position: { x: 0, y: 0, z: 0 } }],
+      ["point-b", { id: "point-b", type: "point3" as const, position: { x: 2, y: 3, z: 4 } }]
+    ])
+    const line = createPointDrivenLine({ id: "line-ab", type: "line3", definition: { kind: "throughPoints", pointIds: ["point-a", "point-b"] } }, points, false)
+
+    expect(line).toBeTruthy()
+    expect(line?.geometry.attributes.position.count).toBe(2)
+    expect(line?.userData.primitiveId).toBe("line-ab")
+    line?.geometry.dispose()
+    ;(line?.material as THREE.Material | undefined)?.dispose()
+  })
+
+  it("renders a face3 from a closed point ring", () => {
+    const points = new Map([
+      ["point-a", { id: "point-a", type: "point3" as const, position: { x: 0, y: 0, z: 0 } }],
+      ["point-b", { id: "point-b", type: "point3" as const, position: { x: 2, y: 0, z: 0 } }],
+      ["point-c", { id: "point-c", type: "point3" as const, position: { x: 0, y: 2, z: 0 } }]
+    ])
+    const mesh = createFace3Mesh({ id: "face-abc", type: "face3", pointIds: ["point-a", "point-b", "point-c"] }, points, false)
+
+    expect(mesh).toBeTruthy()
+    expect(mesh?.geometry.index?.count).toBe(3)
+    expect(mesh?.userData.primitiveId).toBe("face-abc")
+    mesh?.geometry.dispose()
+    ;(mesh?.material as THREE.Material | undefined)?.dispose()
+  })
+
   it("maps a parameterized cube to a centered box mesh", () => {
     const mesh = createCubeMesh({
       id: "cube-1",
