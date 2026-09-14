@@ -34,6 +34,7 @@ function isReferenced(document: GeometryDocument, id: string): boolean {
     (primitive.type === "circleIntersection" && (primitive.circleA === id || primitive.circleB === id)) ||
     (primitive.type === "curveIntersection" && (primitive.objectA === id || primitive.objectB === id))
     || (primitive.type === "intersectionSet" && (primitive.objectA === id || primitive.objectB === id))
+    || (primitive.type === "derivative" && primitive.sourceId === id)
   ))
 }
 

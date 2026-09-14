@@ -1,5 +1,5 @@
 import type { AnnotationSpec, ConstraintSpec, Coordinate, GeometryDocument, GroupSpec, PointBinding, PrimitiveSpec } from "@draw/dsl"
-import { evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, intersectCirclesDetailed, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, solveLineConstraints, type IntersectionResult, type SampledPrimitive } from "@draw/geometry-kernel"
+import { adaptiveSampleFunctionSegments, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, intersectCirclesDetailed, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, numericalDerivative, numericalSecondDerivative, solveLineConstraints, type IntersectionResult, type SampledPrimitive } from "@draw/geometry-kernel"
 
 export type DomainOperation =
   | { op: "addPrimitive"; primitive: PrimitiveSpec }
@@ -112,6 +112,7 @@ function primitiveDependencies(primitive: PrimitiveSpec): string[] {
   if (primitive.type === "circleIntersection") return [primitive.circleA, primitive.circleB]
   if (primitive.type === "curveIntersection") return [primitive.objectA, primitive.objectB]
   if (primitive.type === "intersectionSet") return [primitive.objectA, primitive.objectB]
+  if (primitive.type === "derivative") return [primitive.sourceId]
   return []
 }
 
@@ -152,6 +153,21 @@ function resolveBoundPoint(binding: PointBinding, primitives: Map<string, Primit
 
 function isSampledPrimitive(primitive: PrimitiveSpec | undefined): primitive is SampledPrimitive {
   return Boolean(primitive && ["line", "segment", "ray", "polyline", "circle", "arc", "parabola", "ellipse", "hyperbola", "function"].includes(primitive.type))
+}
+
+function recomputeDerivative(primitive: Extract<PrimitiveSpec, { type: "derivative" }>, source: Extract<PrimitiveSpec, { type: "function" }>, parameters: GeometryDocument["parameters"]): Extract<PrimitiveSpec, { type: "derivative" }> {
+  const variables = Object.fromEntries(Object.entries(parameters).map(([id, parameter]) => [id, parameter.value]))
+  const sourceValue = (x: number) => evaluateParameterExpression(source.expression, { ...variables, x })
+  const derivativeValue = primitive.order === 1
+    ? (x: number) => numericalDerivative(sourceValue, x)
+    : (x: number) => numericalSecondDerivative(sourceValue, x)
+  try {
+    const segments = adaptiveSampleFunctionSegments(derivativeValue, primitive.domain, { initialSteps: primitive.samples, maxSteps: Math.max(primitive.samples, 2048) })
+    const points = segments.flat()
+    return points.length ? { ...primitive, points, status: "approximate", diagnostic: undefined } : { ...primitive, points: [], status: "undefined", diagnostic: "source function is undefined across the derivative domain" }
+  } catch (error) {
+    return { ...primitive, points: [], status: "failed", diagnostic: error instanceof Error ? error.message : "derivative evaluation failed" }
+  }
 }
 
 export function getAffectedPrimitiveIds(document: GeometryDocument, changedIds: string[]): Set<string> {
@@ -239,6 +255,11 @@ export function recomputeDerivedObjects(document: GeometryDocument, changedIds?:
     if (primitive.type === "point" && primitive.binding) {
       const point = resolveBoundPoint(primitive.binding, primitiveMap, parameters)
       return point ? { ...primitive, x: point.x, y: point.y } : primitive
+    }
+    if (primitive.type === "derivative") {
+      const source = primitiveMap.get(primitive.sourceId)
+      if (source?.type !== "function") return { ...primitive, points: [], status: "failed" as const, diagnostic: "derivative source function is missing" }
+      return recomputeDerivative(primitive, source, parameters)
     }
     if (primitive.type === "line") return lines.get(primitive.id) ?? primitive
     if (primitive.type === "intersectionSet") {

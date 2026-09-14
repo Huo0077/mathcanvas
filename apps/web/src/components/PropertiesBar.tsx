@@ -51,6 +51,7 @@ const primitiveTypeLabels: Record<PrimitiveSpec["type"], string> = {
   ellipse: "椭圆",
   hyperbola: "双曲线",
   function: "函数",
+  derivative: "导函数",
   circle: "圆",
   arc: "圆弧",
   intersection: "直线交点",

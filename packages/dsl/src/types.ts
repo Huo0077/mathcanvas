@@ -130,6 +130,18 @@ export interface FunctionPrimitive extends PrimitivePresentation {
   samples?: number
 }
 
+export interface DerivativePrimitive extends PrimitivePresentation {
+  id: string
+  type: "derivative"
+  sourceId: string
+  order: 1 | 2
+  domain: [number, number]
+  samples: number
+  points: Coordinate[]
+  status: "approximate" | "undefined" | "failed"
+  diagnostic?: string
+}
+
 export interface CirclePrimitive extends PrimitivePresentation {
   id: string
   type: "circle"
@@ -206,6 +218,7 @@ export type PrimitiveSpec =
   | EllipsePrimitive
   | HyperbolaPrimitive
   | FunctionPrimitive
+  | DerivativePrimitive
   | CirclePrimitive
   | ArcPrimitive
   | IntersectionPrimitive

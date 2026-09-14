@@ -30,13 +30,14 @@ function viewportRay(ray: Extract<PrimitiveSpec, { type: "ray" }>): { a: Coordin
   return { a: ray.a, b: { x: ray.a.x + unit.x * distance, y: ray.a.y + unit.y * distance } }
 }
 
-function sampledSegments(primitive: Extract<PrimitiveSpec, { type: "parabola" | "ellipse" | "hyperbola" | "function" }>): Coordinate[][] {
+function sampledSegments(primitive: Extract<PrimitiveSpec, { type: "parabola" | "ellipse" | "hyperbola" | "function" | "derivative" }>): Coordinate[][] {
   try {
     if (primitive.type === "parabola") return [sampleParabola(primitive, [WORLD_BOUNDS.minX, WORLD_BOUNDS.maxX], 128)]
     if (primitive.type === "ellipse") return [sampleEllipse(primitive, 160)]
     if (primitive.type === "hyperbola") {
       return sampleHyperbolaBranches(primitive, [WORLD_BOUNDS.minX, WORLD_BOUNDS.maxX], 128)
     }
+    if (primitive.type === "derivative") return [primitive.points]
     return clipFunctionSegmentsToBounds(adaptiveSampleFunctionSegments((x) => evaluateParameterExpression(primitive.expression, { x }), primitive.domain, { initialSteps: primitive.samples ?? 128, maxSteps: Math.max(primitive.samples ?? 128, 2048) }), WORLD_BOUNDS)
   } catch {
     return []
@@ -58,6 +59,7 @@ function primitiveSvg(primitive: PrimitiveSpec): string {
   if (primitive.type === "connection") return ""
   if (primitive.type === "locus") return ""
   if (primitive.type === "intersectionSet") return ""
+  if (primitive.type === "derivative") return ""
   if (primitive.type === "circle") return `<circle cx="${toX(primitive.center.x)}" cy="${toY(primitive.center.y)}" r="${radiusToSvg(primitive.radius)}" ${svgStyleFor(primitive)} />`
   if (primitive.type === "arc") return `<path d="M ${toX(primitive.center.x + primitive.radius * Math.cos(primitive.startAngle))} ${toY(primitive.center.y + primitive.radius * Math.sin(primitive.startAngle))} A ${radiusToSvg(primitive.radius)} ${radiusToSvg(primitive.radius)} 0 ${Math.abs(primitive.endAngle - primitive.startAngle) > Math.PI ? 1 : 0} ${primitive.endAngle >= primitive.startAngle ? 0 : 1} ${toX(primitive.center.x + primitive.radius * Math.cos(primitive.endAngle))} ${toY(primitive.center.y + primitive.radius * Math.sin(primitive.endAngle))}" ${svgStyleFor(primitive)} />`
   if (primitive.type === "point") return `<circle cx="${toX(primitive.x)}" cy="${toY(primitive.y)}" r="6" ${svgStyleFor(primitive)} />`
@@ -99,6 +101,7 @@ function primitiveData(primitive: PrimitiveSpec): string {
   if (primitive.type === "circle" || primitive.type === "arc") return JSON.stringify({ center: primitive.center, radius: primitive.radius })
   if (primitive.type === "parabola") return JSON.stringify({ vertex: primitive.vertex, focalParameter: primitive.focalParameter, axis: primitive.axis, rotation: primitive.rotation ?? 0 })
   if (primitive.type === "ellipse" || primitive.type === "hyperbola") return JSON.stringify({ center: primitive.center, radiusX: primitive.radiusX, radiusY: primitive.radiusY, axis: "axis" in primitive ? primitive.axis : undefined, rotation: primitive.rotation ?? 0 })
+  if (primitive.type === "derivative") return JSON.stringify({ sourceId: primitive.sourceId, order: primitive.order, domain: primitive.domain, samples: primitive.samples, points: primitive.points, status: primitive.status })
   return JSON.stringify({ expression: primitive.expression, domain: primitive.domain, samples: primitive.samples })
 }
 

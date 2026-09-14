@@ -149,6 +149,16 @@ describe("Geometry DSL codec", () => {
     }
   })
 
+  it("round-trips a derivative primitive with a stable source reference", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [
+      { id: "function-1", type: "function", expression: "x^2", domain: [-2, 2], samples: 32 },
+      { id: "derivative-1", type: "derivative", sourceId: "function-1", order: 1, domain: [-2, 2], samples: 32, points: [], status: "approximate" }
+    ]
+
+    expect(decodeMgeo(encodeMgeo(document)).primitives).toEqual(document.primitives)
+  })
+
   it("rejects malformed primitive fields without throwing", () => {
     const base = createEmptyDocument("calculus")
     const malformedDocuments = [

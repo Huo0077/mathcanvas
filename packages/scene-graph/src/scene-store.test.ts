@@ -80,6 +80,21 @@ describe("scene graph operations", () => {
     expect(result.primitives.find((primitive) => primitive.id === "set-1")).toMatchObject({ visible: true, points: [{ x: 0, y: 0 }] })
   })
 
+  it("recomputes a derivative when its source function changes", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [
+      { id: "function-1", type: "function", expression: "x^2", domain: [-2, 2], samples: 16 },
+      { id: "derivative-1", type: "derivative", sourceId: "function-1", order: 1, domain: [-2, 2], samples: 16, points: [], status: "approximate" }
+    ]
+
+    const initial = recomputeDerivedObjects(document)
+    const updated = applyOperation(initial, { op: "updatePrimitive", id: "function-1", patch: { expression: "2*x" } })
+    const derivative = updated.document.primitives.find((primitive) => primitive.id === "derivative-1")
+
+    expect(initial.primitives.find((primitive) => primitive.id === "derivative-1")).toMatchObject({ points: expect.any(Array) })
+    expect(derivative).toMatchObject({ status: "approximate", points: expect.arrayContaining([expect.objectContaining({ y: expect.closeTo(2, 0.1) })]) })
+  })
+
   it("rejects an invalid constraint without changing the document", () => {
     const document = createEmptyDocument("calculus")
     const result = commitPatch(document, { op: "addConstraint", constraint: { id: "parallel-1", type: "parallel", targets: ["missing-a", "missing-b"] } })

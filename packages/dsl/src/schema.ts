@@ -1,7 +1,7 @@
 import type { GeometryDocument, PrimitiveSpec, ValidationResult } from "./types"
 
 const workspaces = new Set(["calculus", "conics", "cad", "geometry3d"])
-const primitiveTypes = new Set(["point", "line", "segment", "ray", "polyline", "connection", "locus", "parabola", "ellipse", "hyperbola", "function", "circle", "arc", "intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection", "intersectionSet"])
+const primitiveTypes = new Set(["point", "line", "segment", "ray", "polyline", "connection", "locus", "parabola", "ellipse", "hyperbola", "function", "derivative", "circle", "arc", "intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection", "intersectionSet"])
 const sampledTypes = new Set(["line", "segment", "ray", "polyline", "circle", "arc", "parabola", "ellipse", "hyperbola", "function"])
 const annotationFeatures = new Set(["point", "center", "focus", "vertex", "intersection", "start", "end"])
 
@@ -92,6 +92,15 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>): string[]
     if (typeof value.expression !== "string" || !value.expression.trim()) errors.push("function expression is required")
     if (!Array.isArray(value.domain) || value.domain.length !== 2 || !value.domain.every(isFiniteNumber) || value.domain[0] >= value.domain[1]) errors.push("function domain is invalid")
     if (value.samples !== undefined && (!isFiniteNumber(value.samples) || !Number.isInteger(value.samples) || value.samples < 2 || value.samples > 2048)) errors.push("function sample count is invalid")
+  }
+  if (type === "derivative") {
+    if (referenceType(byId, value.sourceId) !== "function") errors.push("derivative references invalid function")
+    if (![1, 2].includes(Number(value.order))) errors.push("derivative order is invalid")
+    if (!Array.isArray(value.domain) || value.domain.length !== 2 || !value.domain.every(isFiniteNumber) || value.domain[0] >= value.domain[1]) errors.push("derivative domain is invalid")
+    if (!isFiniteNumber(value.samples) || !Number.isInteger(value.samples) || value.samples < 2 || value.samples > 2048) errors.push("derivative sample count is invalid")
+    if (!Array.isArray(value.points) || value.points.some((point) => !isFiniteCoordinate(point))) errors.push("derivative points are invalid")
+    if (!["approximate", "undefined", "failed"].includes(String(value.status))) errors.push("derivative status is invalid")
+    if (value.diagnostic !== undefined && typeof value.diagnostic !== "string") errors.push("derivative diagnostic is invalid")
   }
   if (type === "circle" || type === "arc") {
     if (!isFiniteCoordinate(value.center) || !isFiniteNumber(value.radius) || value.radius <= 0) errors.push(`${type} geometry is invalid`)

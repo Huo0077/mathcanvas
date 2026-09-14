@@ -12,6 +12,7 @@ const defaultStrokes: Record<PrimitiveSpec["type"], string> = {
   ellipse: "#0891b2",
   hyperbola: "#9333ea",
   function: "#16a34a",
+  derivative: "#0f766e",
   circle: "#0f8a63",
   arc: "#f08a24",
   intersection: "#f04f5f",
