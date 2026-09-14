@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { adaptiveSampleFunctionSegments, numericalDerivative, numericalIntegral, sampleFunction, sampleFunctionSegments } from "./calculus"
+import { adaptiveSampleFunctionSegments, numericalDerivative, numericalIntegral, numericalSecondDerivative, sampleFunction, sampleFunctionSegments } from "./calculus"
 
 describe("calculus numerical MVP", () => {
   it("samples functions and estimates derivatives and integrals", () => {
@@ -37,5 +37,11 @@ describe("calculus numerical MVP", () => {
 
     expect(segments).toHaveLength(1)
     expect(segments[0].some((point) => Math.abs(point.x - 0.0625) < 0.01 && point.y > 9)).toBe(true)
+  })
+
+  it("estimates second derivatives and reports undefined neighborhoods", () => {
+    expect(numericalSecondDerivative((x) => x ** 3, 2)).toBeCloseTo(12, 3)
+    expect(numericalDerivative((x) => x < 0 ? Number.NaN : x, 0)).toBeNaN()
+    expect(numericalSecondDerivative((x) => x < 0 ? Number.NaN : x, 0)).toBeNaN()
   })
 })

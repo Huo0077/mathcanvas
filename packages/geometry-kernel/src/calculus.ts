@@ -101,7 +101,28 @@ export function sampleFunction(functionValue: (x: number) => number, domain: [nu
 }
 
 export function numericalDerivative(functionValue: (x: number) => number, x: number, step = 1e-5): number {
-  return (functionValue(x + step) - functionValue(x - step)) / (2 * step)
+  if (!Number.isFinite(x) || !Number.isFinite(step) || step <= 0) return Number.NaN
+  try {
+    const forward = functionValue(x + step)
+    const backward = functionValue(x - step)
+    return Number.isFinite(forward) && Number.isFinite(backward) ? (forward - backward) / (2 * step) : Number.NaN
+  } catch {
+    return Number.NaN
+  }
+}
+
+export function numericalSecondDerivative(functionValue: (x: number) => number, x: number, step = 1e-4): number {
+  if (!Number.isFinite(x) || !Number.isFinite(step) || step <= 0) return Number.NaN
+  try {
+    const center = functionValue(x)
+    const forward = functionValue(x + step)
+    const backward = functionValue(x - step)
+    return Number.isFinite(center) && Number.isFinite(forward) && Number.isFinite(backward)
+      ? (forward - 2 * center + backward) / (step ** 2)
+      : Number.NaN
+  } catch {
+    return Number.NaN
+  }
 }
 
 export function numericalIntegral(functionValue: (x: number) => number, domain: [number, number], steps = 256): number {

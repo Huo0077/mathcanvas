@@ -105,10 +105,11 @@
 - [x] P2：函数公式键盘支持光标插入、嵌套函数和带底数对数；画布支持坐标悬停与点击创建持久交点
 - [x] P2：函数无定义区间与采样渐近线断线保护；画布支持动态视口中心、鼠标中键或 `Space + 左键` 平移
 - [x] P3-1：表达式编译缓存与有细化上限的自适应函数采样接入绘图、属性值域、导出和采样交点
+- [x] P3-2：一阶/二阶中心差分导数内核，覆盖非有限邻域
 
 ## 下一步
 
-P3-1 已完成，下一步实现一阶/二阶导数内核。
+P3-2 已完成，下一步实现零点、极值和拐点检测。
 
 > 射线/折线、圆锥曲线和函数采样已接入工具栏、SVG 渲染、属性编辑和 UI 回归测试；选中两条可采样曲线即可创建持久化交点。
 
@@ -129,7 +130,7 @@ P3-1 已完成，下一步实现一阶/二阶导数内核。
 
 ## 最新验证证据
 
-- `npm.cmd test`：23 个测试文件、189 个测试通过
+- `npm.cmd test`：23 个测试文件、190 个测试通过
 - `npm.cmd run typecheck`：4 个 workspace 通过
 - 默认 `npm.cmd run build`：当前沙箱因 Vite 写入 `.vite-temp`/`dist` 返回 `EPERM`；使用 `vite build apps/web --configLoader runner --outDir D:\\draw\\build-check\\mathcanvas-current` 完成等价 Web 构建验证
 - `npm.cmd exec playwright test`：5 个 Chromium 浏览器用例通过
