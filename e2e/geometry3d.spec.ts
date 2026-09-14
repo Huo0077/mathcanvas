@@ -18,6 +18,8 @@ test("opens the 3D workspace and adds a parameterized cube", async ({ page }) =>
   await expect(unfold).toHaveAttribute("aria-pressed", "false")
   await unfold.click()
   await expect(page.getByRole("button", { name: "折叠" })).toHaveAttribute("aria-pressed", "true")
+  await page.getByRole("button", { name: "测量二面角" }).click()
+  await expect(page.getByText(/二面角：90\.0°/)).toBeVisible()
   await expect(page.getByText("添加立方体")).toBeVisible()
 
   await page.getByRole("button", { name: "添加立方体" }).click()

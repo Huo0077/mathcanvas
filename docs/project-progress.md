@@ -120,10 +120,11 @@
 - [x] P6-6：隐藏边、透明面、法向量和选中态显示
 - [x] P6-7：剖切平面、截面计算和截面派生对象
 - [x] P6-8：立方体展开/折叠布局与动画
+- [x] P6-9：二面角测量显示
 
 ## 下一步
 
-P6-8 已完成，下一步实现二面角测量。
+P6-9 已完成，下一步完善 geometry3d 工作区、Algebra View 和属性栏集成。
 
 > 射线/折线、圆锥曲线和函数采样已接入工具栏、SVG 渲染、属性编辑和 UI 回归测试；选中两条可采样曲线即可创建持久化交点。
 
@@ -165,6 +166,9 @@ P6-8 已完成，下一步实现二面角测量。
 - P6-8 聚焦测试：`apps/web/src/threeScene.test.ts` 的 8 个用例通过
 - P6-8 Web 构建：待完整验证后记录
 - P6-8 浏览器验证：同一宿主环境阻断，未标记为通过
+- P6-9 聚焦内核测试：`packages/geometry-kernel/src/geometry3d.test.ts` 通过
+- P6-9 Web 构建：`vite build` 使用隔离 `outDir` 通过
+- P6-9 浏览器验证：同一宿主环境阻断，未标记为通过
 - P6-8 Web 构建：`vite build` 使用隔离 `outDir` 通过
 - P6-7 Web 构建：`vite build` 使用隔离 `outDir` 通过
 - 默认 `npm.cmd run build`：当前沙箱因 Vite 写入 `.vite-temp`/`dist` 返回 `EPERM`；使用 `vite build apps/web --configLoader runner --outDir D:\\draw\\build-check\\mathcanvas-current` 完成等价 Web 构建验证

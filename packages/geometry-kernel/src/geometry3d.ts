@@ -57,6 +57,10 @@ export function dihedralAngle(firstNormal: Vector3, secondNormal: Vector3): numb
   return Math.acos(cosine)
 }
 
+export function dihedralAngleDegrees(firstNormal: Vector3, secondNormal: Vector3): number {
+  return dihedralAngle(firstNormal, secondNormal) * 180 / Math.PI
+}
+
 function planeValue(point: Vector3, plane: Plane3): number {
   return dotVector3(plane.normal, point) + plane.constant
 }
