@@ -18,6 +18,8 @@ test("opens the 3D workspace and adds a parameterized cube", async ({ page }) =>
 
   await page.getByRole("button", { name: "添加立方体" }).click()
   await expect(page.getByText("立方体 1").first()).toBeVisible()
+  await page.getByRole("button", { name: "创建截面" }).click()
+  await expect(page.getByText("截面 1").first()).toBeVisible()
   await page.getByRole("button", { name: "添加棱锥" }).click()
   await expect(page.getByText("棱锥 1").first()).toBeVisible()
   await page.getByRole("button", { name: "添加圆柱" }).click()

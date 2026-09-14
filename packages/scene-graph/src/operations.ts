@@ -1,5 +1,5 @@
-import type { AnnotationSpec, ConstraintSpec, Coordinate, GeometryDocument, GroupSpec, PointBinding, PrimitiveSpec } from "@draw/dsl"
-import { adaptiveSampleFunctionSegments, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, findExtrema, findInflectionPoints, findZeros, intersectCirclesDetailed, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, solveLineConstraints, type IntersectionResult, type SampledPrimitive } from "@draw/geometry-kernel"
+import type { AnnotationSpec, ConstraintSpec, Coordinate, GeometryDocument, GroupSpec, PointBinding, PrimitiveSpec, Vector3 } from "@draw/dsl"
+import { adaptiveSampleFunctionSegments, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, findExtrema, findInflectionPoints, findZeros, intersectCirclesDetailed, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, sectionConvexPolyhedron, solveLineConstraints, type IntersectionResult, type SampledPrimitive } from "@draw/geometry-kernel"
 
 export type DomainOperation =
   | { op: "addPrimitive"; primitive: PrimitiveSpec }
@@ -116,7 +116,51 @@ function primitiveDependencies(primitive: PrimitiveSpec): string[] {
   if (primitive.type === "tangent" || primitive.type === "normal") return [primitive.sourceId]
   if (primitive.type === "secant") return [primitive.sourceId]
   if (primitive.type === "integral" || primitive.type === "analysisSet") return [primitive.sourceId]
+  if (primitive.type === "section") return [primitive.sourceId]
   return []
+}
+
+function solidSectionGeometry(primitive: Extract<PrimitiveSpec, { type: "cube" | "pyramid" | "cylinder" | "cone" }>): { vertices: Vector3[]; edges: [number, number][] } {
+  if (primitive.type === "cube") {
+    const { origin, size } = primitive
+    const vertices = [
+      { x: origin.x, y: origin.y, z: origin.z }, { x: origin.x + size.x, y: origin.y, z: origin.z }, { x: origin.x + size.x, y: origin.y + size.y, z: origin.z }, { x: origin.x, y: origin.y + size.y, z: origin.z },
+      { x: origin.x, y: origin.y, z: origin.z + size.z }, { x: origin.x + size.x, y: origin.y, z: origin.z + size.z }, { x: origin.x + size.x, y: origin.y + size.y, z: origin.z + size.z }, { x: origin.x, y: origin.y + size.y, z: origin.z + size.z }
+    ]
+    return { vertices, edges: [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]] }
+  }
+  if (primitive.type === "pyramid") {
+    const halfX = primitive.baseSize.x / 2
+    const halfZ = primitive.baseSize.y / 2
+    const { baseCenter } = primitive
+    const vertices = [{ x: baseCenter.x - halfX, y: baseCenter.y, z: baseCenter.z - halfZ }, { x: baseCenter.x + halfX, y: baseCenter.y, z: baseCenter.z - halfZ }, { x: baseCenter.x + halfX, y: baseCenter.y, z: baseCenter.z + halfZ }, { x: baseCenter.x - halfX, y: baseCenter.y, z: baseCenter.z + halfZ }, { x: baseCenter.x, y: baseCenter.y + primitive.height, z: baseCenter.z }]
+    return { vertices, edges: [[0, 1], [1, 2], [2, 3], [3, 0], [0, 4], [1, 4], [2, 4], [3, 4]] }
+  }
+  const vertices: Vector3[] = []
+  const halfHeight = primitive.height / 2
+  for (const y of [-halfHeight, halfHeight]) for (let index = 0; index < primitive.segments; index += 1) {
+    const angle = index * Math.PI * 2 / primitive.segments
+    vertices.push({ x: primitive.center.x + primitive.radius * Math.cos(angle), y: primitive.center.y + halfHeight + y, z: primitive.center.z + primitive.radius * Math.sin(angle) })
+  }
+  const edges: [number, number][] = []
+  for (let index = 0; index < primitive.segments; index += 1) {
+    const next = (index + 1) % primitive.segments
+    edges.push([index, next], [primitive.segments + index, primitive.segments + next], [index, primitive.segments + index])
+  }
+  if (primitive.type === "cone") {
+    const apex = vertices.length
+    vertices.push({ x: primitive.center.x, y: primitive.center.y + primitive.height, z: primitive.center.z })
+    for (let index = 0; index < primitive.segments; index += 1) edges.push([primitive.segments + index, apex])
+  }
+  return { vertices, edges }
+}
+
+function recomputeSection(primitive: Extract<PrimitiveSpec, { type: "section" }>, source: Extract<PrimitiveSpec, { type: "cube" | "pyramid" | "cylinder" | "cone" }>): Extract<PrimitiveSpec, { type: "section" }> {
+  const geometry = solidSectionGeometry(source)
+  const points = sectionConvexPolyhedron(geometry.vertices, geometry.edges, primitive.plane)
+  return points.length >= 3
+    ? { ...primitive, points, status: "approximate", visible: true, diagnostic: undefined }
+    : { ...primitive, points: [], status: "undefined", visible: false, diagnostic: "cutting plane does not intersect the solid in a polygon" }
 }
 
 function resolveBoundPoint(binding: PointBinding, primitives: Map<string, PrimitiveSpec>, parameters: GeometryDocument["parameters"]): Coordinate | null {
@@ -326,6 +370,11 @@ export function recomputeDerivedObjects(document: GeometryDocument, changedIds?:
       const source = primitiveMap.get(primitive.sourceId)
       if (source?.type !== "function") return { ...primitive, status: "failed" as const, diagnostic: "analysis source function is missing" }
       return primitive.type === "integral" ? recomputeIntegral(primitive, source, parameters) : recomputeAnalysisSet(primitive, source, parameters)
+    }
+    if (primitive.type === "section") {
+      const source = primitiveMap.get(primitive.sourceId)
+      if (!source || !["cube", "pyramid", "cylinder", "cone"].includes(source.type)) return { ...primitive, points: [], status: "failed" as const, visible: false, diagnostic: "section source solid is missing" }
+      return recomputeSection(primitive, source as Extract<PrimitiveSpec, { type: "cube" | "pyramid" | "cylinder" | "cone" }>)
     }
     if (primitive.type === "line") return lines.get(primitive.id) ?? primitive
     if (primitive.type === "intersectionSet") {

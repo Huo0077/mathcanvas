@@ -62,7 +62,7 @@ function primitiveSvg(primitive: PrimitiveSpec): string {
   if (primitive.type === "connection") return ""
   if (primitive.type === "locus") return ""
   if (primitive.type === "intersectionSet") return ""
-  if (primitive.type === "cube" || primitive.type === "pyramid" || primitive.type === "cylinder" || primitive.type === "cone") return ""
+  if (primitive.type === "cube" || primitive.type === "pyramid" || primitive.type === "cylinder" || primitive.type === "cone" || primitive.type === "section") return ""
   if (primitive.type === "circle") return `<circle cx="${toX(primitive.center.x)}" cy="${toY(primitive.center.y)}" r="${radiusToSvg(primitive.radius)}" ${svgStyleFor(primitive)} />`
   if (primitive.type === "arc") return `<path d="M ${toX(primitive.center.x + primitive.radius * Math.cos(primitive.startAngle))} ${toY(primitive.center.y + primitive.radius * Math.sin(primitive.startAngle))} A ${radiusToSvg(primitive.radius)} ${radiusToSvg(primitive.radius)} 0 ${Math.abs(primitive.endAngle - primitive.startAngle) > Math.PI ? 1 : 0} ${primitive.endAngle >= primitive.startAngle ? 0 : 1} ${toX(primitive.center.x + primitive.radius * Math.cos(primitive.endAngle))} ${toY(primitive.center.y + primitive.radius * Math.sin(primitive.endAngle))}" ${svgStyleFor(primitive)} />`
   if (primitive.type === "point") return `<circle cx="${toX(primitive.x)}" cy="${toY(primitive.y)}" r="6" ${svgStyleFor(primitive)} />`
@@ -112,6 +112,7 @@ function primitiveData(primitive: PrimitiveSpec): string {
   if (primitive.type === "cube") return JSON.stringify({ origin: primitive.origin, size: primitive.size })
   if (primitive.type === "pyramid") return JSON.stringify({ baseCenter: primitive.baseCenter, baseSize: primitive.baseSize, height: primitive.height })
   if (primitive.type === "cylinder" || primitive.type === "cone") return JSON.stringify({ center: primitive.center, radius: primitive.radius, height: primitive.height, segments: primitive.segments })
+  if (primitive.type === "section") return JSON.stringify({ sourceId: primitive.sourceId, plane: primitive.plane, points: primitive.points, status: primitive.status })
   return JSON.stringify({ expression: primitive.expression, domain: primitive.domain, samples: primitive.samples })
 }
 

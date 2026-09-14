@@ -56,3 +56,48 @@ export function dihedralAngle(firstNormal: Vector3, secondNormal: Vector3): numb
   const cosine = Math.min(1, Math.max(-1, Math.abs(dotVector3(first, second))))
   return Math.acos(cosine)
 }
+
+function planeValue(point: Vector3, plane: Plane3): number {
+  return dotVector3(plane.normal, point) + plane.constant
+}
+
+function interpolateVector3(first: Vector3, second: Vector3, ratio: number): Vector3 {
+  return addVector3(first, scaleVector3(subtractVector3(second, first), ratio))
+}
+
+export function intersectPlaneSegment(first: Vector3, second: Vector3, plane: Plane3): Vector3[] {
+  const firstValue = planeValue(first, plane)
+  const secondValue = planeValue(second, plane)
+  const tolerance = 1e-10
+  if (Math.abs(firstValue) <= tolerance && Math.abs(secondValue) <= tolerance) return [first, second]
+  if (Math.abs(firstValue) <= tolerance) return [first]
+  if (Math.abs(secondValue) <= tolerance) return [second]
+  if (firstValue * secondValue > 0) return []
+  return [interpolateVector3(first, second, firstValue / (firstValue - secondValue))]
+}
+
+export function sectionCube(origin: Vector3, size: Vector3, plane: Plane3): Vector3[] {
+  const vertices = [
+    { x: origin.x, y: origin.y, z: origin.z },
+    { x: origin.x + size.x, y: origin.y, z: origin.z },
+    { x: origin.x + size.x, y: origin.y + size.y, z: origin.z },
+    { x: origin.x, y: origin.y + size.y, z: origin.z },
+    { x: origin.x, y: origin.y, z: origin.z + size.z },
+    { x: origin.x + size.x, y: origin.y, z: origin.z + size.z },
+    { x: origin.x + size.x, y: origin.y + size.y, z: origin.z + size.z },
+    { x: origin.x, y: origin.y + size.y, z: origin.z + size.z }
+  ]
+  const edges: [number, number][] = [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]]
+  return sectionConvexPolyhedron(vertices, edges, plane)
+}
+
+export function sectionConvexPolyhedron(vertices: Vector3[], edges: [number, number][], plane: Plane3): Vector3[] {
+  const unique = new Map<string, Vector3>()
+  for (const [firstIndex, secondIndex] of edges) {
+    for (const point of intersectPlaneSegment(vertices[firstIndex], vertices[secondIndex], plane)) {
+      const key = `${point.x.toFixed(10)},${point.y.toFixed(10)},${point.z.toFixed(10)}`
+      unique.set(key, point)
+    }
+  }
+  return [...unique.values()]
+}

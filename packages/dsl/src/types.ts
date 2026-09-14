@@ -244,6 +244,16 @@ export interface ConePrimitive extends PrimitivePresentation {
   segments: number
 }
 
+export interface SectionPrimitive extends PrimitivePresentation {
+  id: string
+  type: "section"
+  sourceId: string
+  plane: { normal: Vector3; constant: number }
+  points: Vector3[]
+  status: "approximate" | "undefined" | "failed"
+  diagnostic?: string
+}
+
 export interface CirclePrimitive extends PrimitivePresentation {
   id: string
   type: "circle"
@@ -330,6 +340,7 @@ export type PrimitiveSpec =
   | PyramidPrimitive
   | CylinderPrimitive
   | ConePrimitive
+  | SectionPrimitive
   | CirclePrimitive
   | ArcPrimitive
   | IntersectionPrimitive

@@ -1,7 +1,7 @@
 import type { GeometryDocument, PrimitiveSpec, ValidationResult } from "./types"
 
 const workspaces = new Set(["calculus", "conics", "cad", "geometry3d"])
-const primitiveTypes = new Set(["point", "line", "segment", "ray", "polyline", "connection", "locus", "parabola", "ellipse", "hyperbola", "function", "derivative", "tangent", "normal", "secant", "integral", "analysisSet", "cube", "pyramid", "cylinder", "cone", "circle", "arc", "intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection", "intersectionSet"])
+const primitiveTypes = new Set(["point", "line", "segment", "ray", "polyline", "connection", "locus", "parabola", "ellipse", "hyperbola", "function", "derivative", "tangent", "normal", "secant", "integral", "analysisSet", "cube", "pyramid", "cylinder", "cone", "section", "circle", "arc", "intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection", "intersectionSet"])
 const sampledTypes = new Set(["line", "segment", "ray", "polyline", "circle", "arc", "parabola", "ellipse", "hyperbola", "function"])
 const annotationFeatures = new Set(["point", "center", "focus", "vertex", "intersection", "start", "end"])
 
@@ -145,6 +145,13 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>): string[]
   }
   if (type === "cylinder" || type === "cone") {
     if (!isFiniteCoordinate3(value.center) || !isFiniteNumber(value.radius) || value.radius <= 0 || !isFiniteNumber(value.height) || value.height <= 0 || !isFiniteNumber(value.segments) || !Number.isInteger(value.segments) || value.segments < 3 || value.segments > 256) errors.push(`${type} geometry is invalid`)
+  }
+  if (type === "section") {
+    if (typeof value.sourceId !== "string" || !byId.has(value.sourceId) || !["cube", "pyramid", "cylinder", "cone"].includes(referenceType(byId, value.sourceId) ?? "")) errors.push("section references invalid solid")
+    if (!isRecord(value.plane) || !isFiniteCoordinate3(value.plane.normal) || !isFiniteNumber(value.plane.constant)) errors.push("section plane is invalid")
+    if (!Array.isArray(value.points) || value.points.some((point) => !isFiniteCoordinate3(point))) errors.push("section points are invalid")
+    if (!["approximate", "undefined", "failed"].includes(String(value.status))) errors.push("section status is invalid")
+    if (value.diagnostic !== undefined && typeof value.diagnostic !== "string") errors.push("section diagnostic is invalid")
   }
   if (type === "circle" || type === "arc") {
     if (!isFiniteCoordinate(value.center) || !isFiniteNumber(value.radius) || value.radius <= 0) errors.push(`${type} geometry is invalid`)

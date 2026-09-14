@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import * as THREE from "three"
-import type { CubePrimitive, GeometryDocument, PyramidPrimitive, CylinderPrimitive, ConePrimitive } from "@draw/dsl"
+import type { CubePrimitive, GeometryDocument, PyramidPrimitive, CylinderPrimitive, ConePrimitive, SectionPrimitive } from "@draw/dsl"
 
 import { opacityFor, strokeFor } from "./primitiveStyle"
 
@@ -168,6 +168,22 @@ function normalVisuals(mesh: THREE.Mesh): THREE.ArrowHelper[] {
   })
 }
 
+export function createSectionMesh(primitive: SectionPrimitive): THREE.Mesh | null {
+  if (primitive.points.length < 3) return null
+  const positions = primitive.points.flatMap((point) => [point.x, point.y, point.z])
+  const indices: number[] = []
+  for (let index = 1; index < primitive.points.length - 1; index += 1) indices.push(0, index, index + 1)
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3))
+  geometry.setIndex(indices)
+  geometry.computeVertexNormals()
+  const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: primitive.style?.fill ?? "#f97316", transparent: true, opacity: 0.42, side: THREE.DoubleSide, depthWrite: false }))
+  mesh.userData.primitiveId = primitive.id
+  mesh.userData.primitiveType = primitive.type
+  mesh.userData.visualRole = "section"
+  return mesh
+}
+
 export function createSolidGroup(primitive: SolidPrimitive, selected: boolean, options: SolidVisualOptions = {}): THREE.Group {
   const group = new THREE.Group()
   const mesh = createSolidMesh(primitive, selected, options)
@@ -242,6 +258,10 @@ export function ThreeSceneView({ document, selectedIds, onSelect }: ThreeSceneVi
     visibleSolids(document).forEach((primitive) => {
       const selected = selectedIds.includes(primitive.id)
       scene.add(createSolidGroup(primitive, selected, { showHiddenEdges, showNormals, transparentFaces }))
+    })
+    document.primitives.filter((primitive): primitive is SectionPrimitive => primitive.type === "section" && primitive.visible !== false).forEach((primitive) => {
+      const mesh = createSectionMesh(primitive)
+      if (mesh) scene.add(mesh)
     })
 
     const render = () => renderer.render(scene, camera)

@@ -68,6 +68,23 @@ describe("scene graph operations", () => {
     }
   })
 
+  it("recomputes a persisted section when its solid source changes", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      { id: "cube-1", type: "cube", origin: { x: -1, y: -1, z: -1 }, size: { x: 2, y: 2, z: 2 } },
+      { id: "section-1", type: "section", sourceId: "cube-1", plane: { normal: { x: 0, y: 0, z: 1 }, constant: 0 }, points: [], status: "undefined" }
+    ]
+
+    const initial = recomputeDerivedObjects(document)
+    expect(initial.primitives.find((primitive) => primitive.id === "section-1")).toMatchObject({ status: "approximate", visible: true, points: expect.any(Array) })
+
+    const moved = structuredClone(initial) as typeof initial
+    const cube = moved.primitives.find((primitive) => primitive.id === "cube-1")
+    if (cube?.type === "cube") cube.origin.z = 4
+    const updated = recomputeDerivedObjects(moved, ["cube-1"])
+    expect(updated.primitives.find((primitive) => primitive.id === "section-1")).toMatchObject({ status: "undefined", visible: false, points: [] })
+  })
+
   it("recomputes an intersection set with every sampled solution", () => {
     const document = createEmptyDocument("calculus")
     document.primitives = [

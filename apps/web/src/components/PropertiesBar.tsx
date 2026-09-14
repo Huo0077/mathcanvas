@@ -61,6 +61,7 @@ const primitiveTypeLabels: Record<PrimitiveSpec["type"], string> = {
   pyramid: "棱锥",
   cylinder: "圆柱",
   cone: "圆锥",
+  section: "截面",
   circle: "圆",
   arc: "圆弧",
   intersection: "直线交点",

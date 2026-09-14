@@ -174,6 +174,16 @@ describe("Geometry DSL codec", () => {
     expect(restored.primitives).toEqual(document.primitives)
   })
 
+  it("round-trips a section with a stable solid source reference", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      { id: "cube-1", type: "cube", origin: { x: -1, y: -1, z: -1 }, size: { x: 2, y: 2, z: 2 } },
+      { id: "section-1", type: "section", sourceId: "cube-1", plane: { normal: { x: 0, y: 0, z: 1 }, constant: 0 }, points: [{ x: -1, y: -1, z: 0 }, { x: 1, y: -1, z: 0 }, { x: 1, y: 1, z: 0 }, { x: -1, y: 1, z: 0 }], status: "approximate" }
+    ]
+
+    expect(decodeMgeo(encodeMgeo(document)).primitives).toEqual(document.primitives)
+  })
+
   it("round-trips tangent, normal, and secant primitives", () => {
     const document = createEmptyDocument("calculus")
     document.primitives = [
