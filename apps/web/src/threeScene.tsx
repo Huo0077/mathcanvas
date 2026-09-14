@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react"
 import * as THREE from "three"
-import type { CubePrimitive, Edge3Primitive, Face3Primitive, GeometryDocument, Line3Primitive, Point3Primitive, PyramidPrimitive, CylinderPrimitive, ConePrimitive, Ray3Primitive, SectionPrimitive, Segment3Primitive, Vector3 } from "@draw/dsl"
-import { dihedralAngleDegrees } from "@draw/geometry-kernel"
+import type { CubePrimitive, Edge3Primitive, Face3Primitive, GeometryDocument, Line3Primitive, Point3Primitive, Polyhedron3Primitive, PyramidPrimitive, CylinderPrimitive, ConePrimitive, Ray3Primitive, SectionPrimitive, Segment3Primitive, Vector3 } from "@draw/dsl"
+import { dihedralAngleDegrees, unfoldPolyhedron3, type UnfoldLayout3 } from "@draw/geometry-kernel"
+import { resolvePolyhedronTopology } from "@draw/scene-graph"
 
 import { opacityFor, strokeFor } from "./primitiveStyle"
 
@@ -323,6 +324,41 @@ export function createSectionMesh(primitive: SectionPrimitive): THREE.Object3D |
   return mesh
 }
 
+/** Render a computed unfold layout as one filled mesh plus an outline per face, keeping pick metadata on each face. */
+export function createUnfoldNetGroup(polyhedronId: string, layout: UnfoldLayout3, selected: boolean): THREE.Group {
+  const group = new THREE.Group()
+  group.userData.primitiveId = polyhedronId
+  group.userData.visualRole = "unfold-net"
+  layout.faces.forEach((face, index) => {
+    if (face.positions.length < 3) return
+    const positions = face.positions.flatMap((point) => [point.x, point.y, point.z])
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3))
+    const indices: number[] = []
+    for (let corner = 1; corner < face.positions.length - 1; corner += 1) indices.push(0, corner, corner + 1)
+    geometry.setIndex(indices)
+    geometry.computeVertexNormals()
+    const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: selected ? "#7c6cf0" : "#9c96c4", transparent: true, opacity: 0.82, side: THREE.DoubleSide, metalness: 0.05, roughness: 0.8 }))
+    mesh.userData.primitiveId = polyhedronId
+    mesh.userData.primitiveType = "polyhedron3"
+    mesh.userData.visualRole = "unfold-face"
+    mesh.userData.partId = `unfolded-face-${index}`
+    const outlinePoints = [...face.positions, face.positions[0]].map((point) => new THREE.Vector3(point.x, point.y, point.z))
+    const outline = new THREE.Line(new THREE.BufferGeometry().setFromPoints(outlinePoints), new THREE.LineBasicMaterial({ color: selected ? "#4c3ac7" : "#6f6a92" }))
+    outline.userData.primitiveId = polyhedronId
+    outline.userData.partId = `unfolded-face-${index}`
+    outline.userData.visualRole = "unfold-face-outline"
+    mesh.add(outline)
+    group.add(mesh)
+  })
+  return group
+}
+
+/** Respect the platform reduced-motion preference so folding jumps instead of animating. */
+export function prefersReducedMotion(): boolean {
+  return typeof globalThis.matchMedia === "function" && globalThis.matchMedia("(prefers-reduced-motion: reduce)").matches
+}
+
 export function createSolidGroup(primitive: SolidPrimitive, selected: boolean, options: SolidVisualOptions = {}): THREE.Group {
   if (primitive.type === "cube" && options.unfoldProgress !== undefined && options.unfoldProgress > 0.001) return createCubeUnfoldGroup(primitive, selected, options)
   const group = new THREE.Group()
@@ -391,6 +427,10 @@ export function ThreeSceneView({ document, selectedIds, onSelect }: ThreeSceneVi
 
   useEffect(() => {
     const target = unfolded ? 1 : 0
+    if (prefersReducedMotion()) {
+      setUnfoldProgress(target)
+      return
+    }
     let frame = 0
     const animate = () => {
       setUnfoldProgress((current) => {
@@ -436,8 +476,13 @@ export function ThreeSceneView({ document, selectedIds, onSelect }: ThreeSceneVi
     scene.add(new THREE.GridHelper(14, 14, scenePalette.grid, scenePalette.grid))
     scene.add(new THREE.AxesHelper(5))
 
+    const unfoldedPolyhedra = unfoldProgress > 0.001
+      ? document.primitives.filter((primitive): primitive is Polyhedron3Primitive => primitive.type === "polyhedron3" && primitive.visible !== false)
+      : []
+    const unfoldedChildIds = new Set(unfoldedPolyhedra.flatMap((polyhedron) => [...polyhedron.edgeIds, ...polyhedron.faceIds]))
     const points = new Map(document.primitives.filter((primitive): primitive is Point3Primitive => primitive.type === "point3").map((primitive) => [primitive.id, primitive]))
     document.primitives.filter((primitive) => primitive.visible !== false).forEach((primitive) => {
+      if (unfoldedChildIds.has(primitive.id)) return
       const selected = selectedIds.includes(primitive.id)
       if (primitive.type === "point3") scene.add(createPoint3Mesh(primitive, selected))
       if (primitive.type === "line3" || primitive.type === "segment3" || primitive.type === "ray3") {
@@ -462,6 +507,20 @@ export function ThreeSceneView({ document, selectedIds, onSelect }: ThreeSceneVi
       const mesh = createSectionMesh(primitive)
       if (mesh) scene.add(mesh)
     })
+    let unfoldFaceCount = 0
+    unfoldedPolyhedra.forEach((polyhedron) => {
+      const topology = resolvePolyhedronTopology(document, polyhedron.id)
+      if (!topology) return
+      const layout = unfoldPolyhedron3(topology.vertices, topology.faces, unfoldProgress, topology.rootFaceId)
+      if (layout.status !== "ok") return
+      scene.add(createUnfoldNetGroup(polyhedron.id, layout, selectedIds.includes(polyhedron.id)))
+      unfoldFaceCount += layout.faces.length
+    })
+    const sceneShell = containerRef.current
+    if (sceneShell) {
+      sceneShell.dataset.unfoldFaces = String(unfoldFaceCount)
+      sceneShell.dataset.unfoldProgress = unfoldProgress.toFixed(2)
+    }
 
     const render = () => renderer.render(scene, camera)
     const setCameraState = (nextState: CameraState) => {

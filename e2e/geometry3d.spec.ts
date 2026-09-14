@@ -89,3 +89,22 @@ test("cuts point-driven topology into a visible section", async ({ page }) => {
   await expect(algebra.getByRole("button", { name: "隐藏 截面 1" })).toBeVisible()
   await expect(page.getByRole("alert")).toHaveCount(0)
 })
+
+test("unfolds point-driven topology into a flat net and folds it back", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "添加立方体" }).click()
+
+  const scene = page.locator("[data-3d-scene]")
+  await expect(scene).toHaveAttribute("data-unfold-faces", "0")
+
+  await page.getByRole("button", { name: "展开", exact: true }).click()
+
+  // A cube net is six faces laid out flat, driven by the materialized polyhedron topology.
+  await expect(scene).toHaveAttribute("data-unfold-faces", "6")
+  await expect(scene).toHaveAttribute("data-unfold-progress", "1.00")
+  await expect(page.getByRole("button", { name: "折叠", exact: true })).toHaveAttribute("aria-pressed", "true")
+
+  await page.getByRole("button", { name: "折叠", exact: true }).click()
+  await expect(scene).toHaveAttribute("data-unfold-faces", "0")
+})

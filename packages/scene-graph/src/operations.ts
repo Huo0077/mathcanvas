@@ -1,5 +1,5 @@
 import type { AnnotationSpec, ConstraintSpec, Coordinate, GeometryDocument, GroupSpec, Measurement3, Point3Binding, Point3Primitive, PointBinding, PrimitiveSpec, Section3Classification, Vector3 } from "@draw/dsl"
-import { adaptiveSampleFunctionSegments, buildSolidTemplate, calculateMeasurement3, createBuilderContext, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, findExtrema, findInflectionPoints, findZeros, intersectCirclesDetailed, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, orderSectionPoints3, sectionConvexPolyhedron, sectionPolyhedron3, solveLineConstraints, type IntersectionResult, type SampledPrimitive, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
+import { adaptiveSampleFunctionSegments, buildSolidTemplate, calculateMeasurement3, createBuilderContext, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, findExtrema, findInflectionPoints, findZeros, intersectCirclesDetailed, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, orderSectionPoints3, sectionConvexPolyhedron, sectionPolyhedron3, solveLineConstraints, type FaceRing3, type IntersectionResult, type SampledPrimitive, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
 
 export type DomainOperation =
   | { op: "addPrimitive"; primitive: PrimitiveSpec }
@@ -240,6 +240,35 @@ function sourceVertices(source: PrimitiveSpec, primitiveMap: Map<string, Primiti
 }
 
 /** Default cutting plane: horizontal through the source's bounding-box center so a new cut is actually visible. */
+/** Resolved point-driven topology of one polyhedron, ready for kernel helpers such as unfolding. */
+export interface PolyhedronTopology3 {
+  vertices: Record<string, Vector3>
+  faces: FaceRing3[]
+  rootFaceId: string
+}
+
+/** Read a polyhedron's stable vertex and face rings, or null when the topology is incomplete. */
+export function resolvePolyhedronTopology(document: GeometryDocument, polyhedronId: string): PolyhedronTopology3 | null {
+  const primitiveMap = new Map(document.primitives.map((primitive) => [primitive.id, primitive]))
+  const polyhedron = primitiveMap.get(polyhedronId)
+  if (polyhedron?.type !== "polyhedron3") return null
+  const vertices: Record<string, Vector3> = {}
+  for (const vertexId of polyhedron.vertexIds) {
+    const vertex = primitiveMap.get(vertexId)
+    if (vertex?.type !== "point3") return null
+    vertices[vertexId] = { ...vertex.position }
+  }
+  const faces: FaceRing3[] = []
+  for (const faceId of polyhedron.faceIds) {
+    const face = primitiveMap.get(faceId)
+    if (face?.type !== "face3" || face.pointIds.length < 3) return null
+    if (face.pointIds.some((pointId) => !vertices[pointId])) return null
+    faces.push({ id: faceId, pointIds: [...face.pointIds] })
+  }
+  if (faces.length < 4) return null
+  return { vertices, faces, rootFaceId: faces[0].id }
+}
+
 /** Default cutting plane: horizontal through the source's bounding-box center. Returns null when the source
  * vertices cannot be resolved, so callers never persist a fabricated plane. */
 export function sectionPlaneThroughSource(document: GeometryDocument, sourceId: string): { normal: Vector3; constant: number } | null {

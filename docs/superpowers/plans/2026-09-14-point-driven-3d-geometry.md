@@ -124,7 +124,9 @@
 
 **Implementation:** 从根面传播局部坐标，以共享棱旋转相邻面；将临时折叠姿态与持久化布局分离，支持 reduced motion。
 
-**Verification:** 内核/动画测试、类型检查、构建和 Playwright 展开/折叠流程。完成后 commit `feat(p6): add topology based unfolding` 并推送。
+**Status:** [x] 已实现并完成 Slice 8 验证。
+
+**Verification:** 内核 `unfold3d.test.ts` 8 个、Scene Graph 40 个、渲染 `threeScene.test.ts` 17 个用例通过；全量 `npm.cmd test`：34 个测试文件、316 个用例通过；`npm.cmd run typecheck`：4 个 workspace 通过；Web 生产构建通过；Playwright 10 个用例通过（含展开/折回点驱动拓扑）；`git diff --check` 通过。完成后 commit `feat(p6): add topology based unfolding`（本轮只提交本地）。
 
 ## Slice 9：二面角与空间关系教学标记
 

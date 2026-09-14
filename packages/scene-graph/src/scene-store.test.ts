@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest"
 import { createEmptyDocument } from "@draw/dsl"
 import { buildSolidTemplate } from "@draw/geometry-kernel"
 
-import { applyOperation, commitPatch, createFace3, createLine3, createPoint3, createPolyhedron3, getAffectedPrimitiveIds, getDependencyIndex, patchPoint3, recomputeDerivedObjects, sectionPlaneThroughSource } from "./index"
+import { applyOperation, commitPatch, createFace3, createLine3, createPoint3, createPolyhedron3, getAffectedPrimitiveIds, getDependencyIndex, patchPoint3, recomputeDerivedObjects, resolvePolyhedronTopology, sectionPlaneThroughSource } from "./index"
 
 describe("scene graph operations", () => {
   it("recomputes template topology when legacy solid parameters change", () => {
@@ -243,6 +243,26 @@ describe("scene graph operations", () => {
     const cubePlane = sectionPlaneThroughSource(document, "cube-1")
     expect(cubePlane?.normal).toEqual({ x: 0, y: 1, z: 0 })
     expect(cubePlane?.constant).toBeCloseTo(0)
+  })
+
+  it("resolves a polyhedron topology for unfolding and rejects incomplete topology", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      createPoint3("v0", { x: -1, y: -1, z: -1 }), createPoint3("v1", { x: 1, y: -1, z: -1 }), createPoint3("v2", { x: 1, y: 1, z: -1 }), createPoint3("v3", { x: -1, y: 1, z: -1 }),
+      createPoint3("v4", { x: -1, y: -1, z: 1 }), createPoint3("v5", { x: 1, y: -1, z: 1 }), createPoint3("v6", { x: 1, y: 1, z: 1 }), createPoint3("v7", { x: -1, y: 1, z: 1 }),
+      createFace3("f-bottom", ["v0", "v1", "v2", "v3"]), createFace3("f-top", ["v4", "v5", "v6", "v7"]), createFace3("f-front", ["v0", "v1", "v5", "v4"]),
+      createFace3("f-right", ["v1", "v2", "v6", "v5"]), createFace3("f-back", ["v2", "v3", "v7", "v6"]), createFace3("f-left", ["v3", "v0", "v4", "v7"]),
+      createPolyhedron3("solid-1", ["v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7"], [], ["f-bottom", "f-top", "f-front", "f-right", "f-back", "f-left"]),
+      { id: "solid-broken", type: "polyhedron3", vertexIds: ["v0", "missing"], edgeIds: [], faceIds: ["f-bottom"] }
+    ]
+
+    const topology = resolvePolyhedronTopology(document, "solid-1")
+
+    expect(topology?.faces.map((face) => face.id)).toHaveLength(6)
+    expect(topology?.rootFaceId).toBe("f-bottom")
+    expect(topology?.vertices.v6).toEqual({ x: 1, y: 1, z: 1 })
+    expect(resolvePolyhedronTopology(document, "solid-broken")).toBeNull()
+    expect(resolvePolyhedronTopology(document, "v0")).toBeNull()
   })
 
   it("places a default cut plane through the bounding box of the source", () => {

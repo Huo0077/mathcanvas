@@ -2,8 +2,9 @@ import { describe, expect, it } from "vitest"
 import * as THREE from "three"
 
 import type { SectionPrimitive } from "@draw/dsl"
+import { unfoldPolyhedron3 } from "@draw/geometry-kernel"
 
-import { createCameraState, createCubeMesh, createFace3Mesh, createPoint3Mesh, createPointDrivenLine, createSectionMesh, createSolidGroup, createSolidMesh, cubeUnfoldCenters, panCameraState, pickPrimitiveAt, pickRaycastHit3, resetCameraState, rotateCameraState, zoomCameraState } from "./threeScene"
+import { createCameraState, createCubeMesh, createFace3Mesh, createPoint3Mesh, createPointDrivenLine, createSectionMesh, createSolidGroup, createSolidMesh, createUnfoldNetGroup, cubeUnfoldCenters, panCameraState, pickPrimitiveAt, pickRaycastHit3, prefersReducedMotion, resetCameraState, rotateCameraState, zoomCameraState } from "./threeScene"
 
 describe("Three.js geometry scene", () => {
   it("renders a selectable point3 at its source position", () => {
@@ -217,5 +218,48 @@ describe("Three.js geometry scene", () => {
       if (child instanceof THREE.Mesh || child instanceof THREE.LineSegments) child.geometry.dispose()
       if ("material" in child && child.material instanceof THREE.Material) child.material.dispose()
     })
+  })
+
+  it("builds one pickable filled face with an outline per unfolded face", () => {
+    const cubeVertices: Record<string, { x: number; y: number; z: number }> = {
+      v0: { x: -1, y: -1, z: -1 }, v1: { x: 1, y: -1, z: -1 }, v2: { x: 1, y: 1, z: -1 }, v3: { x: -1, y: 1, z: -1 },
+      v4: { x: -1, y: -1, z: 1 }, v5: { x: 1, y: -1, z: 1 }, v6: { x: 1, y: 1, z: 1 }, v7: { x: -1, y: 1, z: 1 }
+    }
+    const cubeFaces = [
+      { id: "bottom", pointIds: ["v0", "v1", "v2", "v3"] },
+      { id: "top", pointIds: ["v4", "v5", "v6", "v7"] },
+      { id: "front", pointIds: ["v0", "v1", "v5", "v4"] },
+      { id: "right", pointIds: ["v1", "v2", "v6", "v5"] },
+      { id: "back", pointIds: ["v2", "v3", "v7", "v6"] },
+      { id: "left", pointIds: ["v3", "v0", "v4", "v7"] }
+    ]
+    const layout = unfoldPolyhedron3(cubeVertices, cubeFaces, 1, "bottom")
+
+    const group = createUnfoldNetGroup("solid-1", layout, true)
+    const faces = group.children.filter((child) => child.userData.visualRole === "unfold-face")
+
+    expect(faces).toHaveLength(6)
+    expect(faces[0].userData).toMatchObject({ primitiveId: "solid-1", primitiveType: "polyhedron3" })
+    expect(String(faces[0].userData.partId)).toMatch(/^unfolded-face-\d$/)
+    expect(faces[0].children.some((child) => child.userData.visualRole === "unfold-face-outline")).toBe(true)
+
+    group.traverse((child) => {
+      if (child instanceof THREE.Mesh || child instanceof THREE.Line) child.geometry.dispose()
+      if ("material" in child && child.material instanceof THREE.Material) child.material.dispose()
+    })
+  })
+
+  it("reads the platform reduced-motion preference", () => {
+    const original = globalThis.matchMedia
+    const stub = (matches: boolean) => ((query: string) => ({ matches, media: query, onchange: null, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, dispatchEvent: () => false })) as unknown as typeof globalThis.matchMedia
+    try {
+      globalThis.matchMedia = stub(true)
+      expect(prefersReducedMotion()).toBe(true)
+      globalThis.matchMedia = stub(false)
+      expect(prefersReducedMotion()).toBe(false)
+    } finally {
+      if (original) globalThis.matchMedia = original
+      else Reflect.deleteProperty(globalThis, "matchMedia")
+    }
   })
 })
