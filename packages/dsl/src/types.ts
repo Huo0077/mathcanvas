@@ -333,12 +333,16 @@ export interface ConePrimitive extends PrimitivePresentation {
   segments: number
 }
 
+/** Ordered-boundary classification of a plane/polyhedron section. */
+export type Section3Classification = "none" | "point" | "segment" | "polygon" | "insufficient-data"
+
 export interface SectionPrimitive extends PrimitivePresentation {
   id: string
   type: "section"
   sourceId: string
   plane: { normal: Vector3; constant: number }
   points: Vector3[]
+  classification: Section3Classification
   status: "approximate" | "undefined" | "failed"
   diagnostic?: string
 }

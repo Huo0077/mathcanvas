@@ -257,6 +257,16 @@ describe("domain patches", () => {
     expect(commitPatch(added.document, { op: "deleteMeasurement", id: measurement.id }).document.measurements).toEqual([])
   })
 
+  it("protects a solid referenced by a section", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      { id: "cube-1", type: "cube", origin: { x: -1, y: -1, z: -1 }, size: { x: 2, y: 2, z: 2 } },
+      { id: "section-1", type: "section", sourceId: "cube-1", plane: { normal: { x: 0, y: 0, z: 1 }, constant: 0 }, points: [], classification: "none", status: "undefined" }
+    ]
+
+    expect(validatePatch(document, { op: "deleteObject", id: "cube-1" })).toEqual({ valid: false, errors: ["object is referenced by another object"] })
+  })
+
   it("rejects malformed measurement patches without throwing", () => {
     const document = createEmptyDocument("geometry3d")
     document.primitives = [{ id: "point-a", type: "point3", position: { x: 0, y: 0, z: 0 } }]

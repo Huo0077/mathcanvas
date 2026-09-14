@@ -5,6 +5,13 @@ import { App } from "./App"
 import { createDemoDocument } from "./demoDocument"
 import { useSceneStore } from "./store"
 
+/** Algebra View rows are the closest user-facing handle on a document object; scope by row label to stay unambiguous. */
+function algebraRow(label: string): HTMLElement {
+  const row = Array.from(globalThis.document.querySelectorAll(".algebra-panel .object-row")).find((candidate) => candidate.querySelector(".object-name")?.textContent === label)
+  if (!row) throw new Error(`missing algebra row ${label}`)
+  return row as HTMLElement
+}
+
 describe("MathCanvas workbench", () => {
   beforeEach(() => {
     localStorage.clear()
@@ -608,11 +615,6 @@ describe("MathCanvas workbench", () => {
   })
 
   it("creates and deletes a spatial measurement so its sources become deletable again", () => {
-    const algebraRow = (label: string) => {
-      const row = Array.from(globalThis.document.querySelectorAll(".algebra-panel .object-row")).find((candidate) => candidate.querySelector(".object-name")?.textContent === label)
-      if (!row) throw new Error(`missing algebra row ${label}`)
-      return row as HTMLElement
-    }
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
     fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
@@ -634,5 +636,18 @@ describe("MathCanvas workbench", () => {
     fireEvent.click(algebraRow("A"))
     fireEvent.keyDown(window, { key: "Delete" })
     expect(useSceneStore.getState().document.primitives.some((primitive) => primitive.type === "point3" && primitive.label === "A")).toBe(false)
+  })
+
+  it("cuts point-driven topology with an ordered section boundary", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加立方体" }))
+    fireEvent.click(algebraRow("立方体 1 拓扑"))
+    fireEvent.click(screen.getByRole("button", { name: "创建截面" }))
+
+    const section = useSceneStore.getState().document.primitives.find((primitive) => primitive.type === "section")
+    expect(section).toMatchObject({ classification: "polygon", status: "approximate", visible: true })
+    const points = section?.type === "section" ? section.points : []
+    expect(new Set(points.map((point) => `${point.x},${point.y},${point.z}`))).toEqual(new Set(["-2,0,-1", "2,0,-1", "2,0,1", "-2,0,1"]))
   })
 })

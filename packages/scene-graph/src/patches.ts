@@ -62,6 +62,7 @@ function isReferenced(document: GeometryDocument, id: string): boolean {
      || (primitive.type === "derivative" && primitive.sourceId === id)
     || ((primitive.type === "tangent" || primitive.type === "normal" || primitive.type === "secant") && primitive.sourceId === id)
     || ((primitive.type === "integral" || primitive.type === "analysisSet") && primitive.sourceId === id)
+    || (primitive.type === "section" && primitive.sourceId === id)
   ))
 }
 

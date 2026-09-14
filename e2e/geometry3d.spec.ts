@@ -75,3 +75,17 @@ test("nests spatial topology under an expandable algebra row", async ({ page }) 
   await expect(algebra.getByText("面", { exact: true })).toBeVisible()
   await expect(algebra.getByRole("button", { name: "收起 立方体 1 拓扑 的子对象" })).toBeVisible()
 })
+
+test("cuts point-driven topology into a visible section", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "添加立方体" }).click()
+
+  const algebra = page.locator(".algebra-panel")
+  await algebra.getByText("立方体 1 拓扑").click()
+  await page.getByRole("button", { name: "创建截面" }).click()
+
+  await expect(algebra.getByText("截面 1")).toBeVisible()
+  await expect(algebra.getByRole("button", { name: "隐藏 截面 1" })).toBeVisible()
+  await expect(page.getByRole("alert")).toHaveCount(0)
+})

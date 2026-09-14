@@ -110,7 +110,9 @@
 
 **Implementation:** 按面边界求平面交，去重并排序截面点，建立截面边界和高亮渲染；诊断状态不生成虚假点。
 
-**Verification:** 内核/DSL/Scene Graph 聚焦测试、全量测试、构建和 Playwright 剖切流程。完成后 commit `feat(p6): generalize solid sections` 并推送。
+**Status:** [x] 已实现并完成 Slice 7 验证。
+
+**Verification:** 内核 `sections3d.test.ts` 8 个、Scene Graph 38 个、补丁校验 24 个、渲染 15 个、codec 26 个用例通过；全量 `npm.cmd test`：33 个测试文件、302 个用例通过；`npm.cmd run typecheck`：4 个 workspace 通过；Web 生产构建通过；Playwright 9 个用例通过（含剖切点驱动拓扑得到可见截面）；`git diff --check` 通过。完成后 commit `feat(p6): generalize solid sections`（本轮只提交本地）。
 
 ## Slice 8：展开布局与动画
 

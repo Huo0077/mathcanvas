@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest"
 import * as THREE from "three"
 
-import { createCameraState, createCubeMesh, createFace3Mesh, createPoint3Mesh, createPointDrivenLine, createSolidGroup, createSolidMesh, cubeUnfoldCenters, panCameraState, pickPrimitiveAt, pickRaycastHit3, resetCameraState, rotateCameraState, zoomCameraState } from "./threeScene"
+import type { SectionPrimitive } from "@draw/dsl"
+
+import { createCameraState, createCubeMesh, createFace3Mesh, createPoint3Mesh, createPointDrivenLine, createSectionMesh, createSolidGroup, createSolidMesh, cubeUnfoldCenters, panCameraState, pickPrimitiveAt, pickRaycastHit3, resetCameraState, rotateCameraState, zoomCameraState } from "./threeScene"
 
 describe("Three.js geometry scene", () => {
   it("renders a selectable point3 at its source position", () => {
@@ -153,6 +155,49 @@ describe("Three.js geometry scene", () => {
     expect(unfolded).toHaveLength(6)
     expect(unfolded).not.toEqual(folded)
     expect(new Set(unfolded.map((face) => `${face.center.x},${face.center.y},${face.center.z}`)).size).toBe(6)
+  })
+
+  it("draws a closed boundary over an ordered section polygon", () => {
+    const section: SectionPrimitive = {
+      id: "section-1",
+      type: "section",
+      sourceId: "solid-1",
+      plane: { normal: { x: 0, y: 0, z: 1 }, constant: 0 },
+      points: [{ x: -1, y: -1, z: 0 }, { x: 1, y: -1, z: 0 }, { x: 1, y: 1, z: 0 }, { x: -1, y: 1, z: 0 }],
+      classification: "polygon",
+      status: "approximate"
+    }
+
+    const object = createSectionMesh(section)
+    const boundary = object?.children.find((child) => child.userData.visualRole === "section-boundary") as THREE.Line | undefined
+
+    expect(boundary).toBeTruthy()
+    expect((boundary?.geometry.getAttribute("position") as THREE.BufferAttribute).count).toBe(5)
+
+    object?.traverse((child) => {
+      if (child instanceof THREE.Mesh || child instanceof THREE.Line) child.geometry.dispose()
+      if ("material" in child && child.material instanceof THREE.Material) child.material.dispose()
+    })
+  })
+
+  it("draws a tangent section as a segment instead of an area", () => {
+    const section: SectionPrimitive = {
+      id: "section-2",
+      type: "section",
+      sourceId: "solid-1",
+      plane: { normal: { x: 1, y: 0, z: 1 }, constant: -2 },
+      points: [{ x: 1, y: -1, z: 1 }, { x: 1, y: 1, z: 1 }],
+      classification: "segment",
+      status: "approximate"
+    }
+
+    const object = createSectionMesh(section)
+
+    expect(object).toBeInstanceOf(THREE.Line)
+    object?.traverse((child) => {
+      if (child instanceof THREE.Mesh || child instanceof THREE.Line) child.geometry.dispose()
+      if ("material" in child && child.material instanceof THREE.Material) child.material.dispose()
+    })
   })
 
   it("reports the picked unfolded face as a stable sub-part id", () => {

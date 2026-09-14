@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 
 import { decodeMgeo, encodeMgeo, type AnnotationFeature, type ConstraintType, type Measurement3Metric, type PrimitiveSpec, type Workspace } from "@draw/dsl"
 import { buildSolidTemplate, createMeasurement3 } from "@draw/geometry-kernel"
-import { validatePatch } from "@draw/scene-graph"
+import { sectionPlaneThroughSource, validatePatch } from "@draw/scene-graph"
 import type { Alignment } from "@draw/scene-graph"
 
 import { AlgebraView } from "./components/AlgebraView"
@@ -326,12 +326,12 @@ export function App() {
     apply({ op: "addPrimitives", primitives: [primitive, ...result.primitives] })
     setSelectedIds([primitive.id])
   }
-  const solidTypes = ["cube", "pyramid", "cylinder", "cone"] as const
+  const solidTypes = ["cube", "pyramid", "cylinder", "cone", "polyhedron3"] as const
   const canCreateSection = selectedPrimitive !== null && solidTypes.includes(selectedPrimitive.type as typeof solidTypes[number])
   const addSection = () => {
     if (!selectedPrimitive || !solidTypes.includes(selectedPrimitive.type as typeof solidTypes[number])) return
     const id = nextPrimitiveId(document, "section")
-    apply({ op: "addPrimitive", primitive: { id, type: "section", sourceId: selectedPrimitive.id, plane: { normal: { x: 0, y: 1, z: 0 }, constant: -1.5 }, points: [], status: "undefined", label: `截面 ${id.split("-").at(-1)}` } })
+    apply({ op: "addPrimitive", primitive: { id, type: "section", sourceId: selectedPrimitive.id, plane: sectionPlaneThroughSource(document, selectedPrimitive.id), points: [], classification: "none", status: "undefined", label: `截面 ${id.split("-").at(-1)}` } })
     setSelectedIds([id])
   }
   const createIntersectionFromPreview = (preview: IntersectionPreview) => {

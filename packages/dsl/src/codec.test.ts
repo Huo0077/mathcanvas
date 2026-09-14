@@ -25,6 +25,27 @@ describe("Geometry DSL codec", () => {
     expect(restored.measurements).toEqual(document.measurements)
   })
 
+  it("derives a section classification for documents written before the field existed", () => {
+    const document = createEmptyDocument("geometry3d")
+    const legacy = JSON.stringify({
+      format: "mgeo",
+      formatVersion: "0.1",
+      document: {
+        ...document,
+        primitives: [
+          { id: "cube-1", type: "cube", origin: { x: -1, y: -1, z: -1 }, size: { x: 2, y: 2, z: 2 } },
+          { id: "polygon-section", type: "section", sourceId: "cube-1", plane: { normal: { x: 0, y: 0, z: 1 }, constant: 0 }, points: [{ x: -1, y: -1, z: 0 }, { x: 1, y: -1, z: 0 }, { x: 1, y: 1, z: 0 }], status: "approximate" },
+          { id: "segment-section", type: "section", sourceId: "cube-1", plane: { normal: { x: 1, y: 0, z: 1 }, constant: -2 }, points: [{ x: 1, y: -1, z: 1 }, { x: 1, y: 1, z: 1 }], status: "approximate" },
+          { id: "empty-section", type: "section", sourceId: "cube-1", plane: { normal: { x: 0, y: 1, z: 0 }, constant: 99 }, points: [], status: "undefined" }
+        ]
+      }
+    })
+
+    const restored = decodeMgeo(legacy)
+
+    expect(restored.primitives.filter((primitive) => primitive.type === "section").map((primitive) => primitive.type === "section" ? primitive.classification : null)).toEqual(["polygon", "segment", "none"])
+  })
+
   it("round-trips a versioned document with stable metadata", () => {
     const document = createEmptyDocument("calculus")
     const restored = decodeMgeo(encodeMgeo(document))
@@ -200,7 +221,7 @@ describe("Geometry DSL codec", () => {
     const document = createEmptyDocument("geometry3d")
     document.primitives = [
       { id: "cube-1", type: "cube", origin: { x: -1, y: -1, z: -1 }, size: { x: 2, y: 2, z: 2 } },
-      { id: "section-1", type: "section", sourceId: "cube-1", plane: { normal: { x: 0, y: 0, z: 1 }, constant: 0 }, points: [{ x: -1, y: -1, z: 0 }, { x: 1, y: -1, z: 0 }, { x: 1, y: 1, z: 0 }, { x: -1, y: 1, z: 0 }], status: "approximate" }
+      { id: "section-1", type: "section", sourceId: "cube-1", plane: { normal: { x: 0, y: 0, z: 1 }, constant: 0 }, points: [{ x: -1, y: -1, z: 0 }, { x: 1, y: -1, z: 0 }, { x: 1, y: 1, z: 0 }, { x: -1, y: 1, z: 0 }], classification: "polygon", status: "approximate" }
     ]
 
     expect(decodeMgeo(encodeMgeo(document)).primitives).toEqual(document.primitives)

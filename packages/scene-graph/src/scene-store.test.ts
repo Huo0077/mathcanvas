@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest"
 import { createEmptyDocument } from "@draw/dsl"
 import { buildSolidTemplate } from "@draw/geometry-kernel"
 
-import { applyOperation, commitPatch, createFace3, createLine3, createPoint3, createPolyhedron3, getAffectedPrimitiveIds, getDependencyIndex, patchPoint3, recomputeDerivedObjects } from "./index"
+import { applyOperation, commitPatch, createFace3, createLine3, createPoint3, createPolyhedron3, getAffectedPrimitiveIds, getDependencyIndex, patchPoint3, recomputeDerivedObjects, sectionPlaneThroughSource } from "./index"
 
 describe("scene graph operations", () => {
   it("recomputes template topology when legacy solid parameters change", () => {
@@ -173,7 +173,7 @@ describe("scene graph operations", () => {
     const document = createEmptyDocument("geometry3d")
     document.primitives = [
       { id: "cube-1", type: "cube", origin: { x: -1, y: -1, z: -1 }, size: { x: 2, y: 2, z: 2 } },
-      { id: "section-1", type: "section", sourceId: "cube-1", plane: { normal: { x: 0, y: 0, z: 1 }, constant: 0 }, points: [], status: "undefined" }
+      { id: "section-1", type: "section", sourceId: "cube-1", plane: { normal: { x: 0, y: 0, z: 1 }, constant: 0 }, points: [], classification: "none", status: "undefined" }
     ]
 
     const initial = recomputeDerivedObjects(document)
@@ -184,6 +184,62 @@ describe("scene graph operations", () => {
     if (cube?.type === "cube") cube.origin.z = 4
     const updated = recomputeDerivedObjects(moved, ["cube-1"])
     expect(updated.primitives.find((primitive) => primitive.id === "section-1")).toMatchObject({ status: "undefined", visible: false, points: [] })
+  })
+
+  it("cuts materialized point-driven topology with an ordered classified boundary", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      createPoint3("v0", { x: -1, y: -1, z: -1 }), createPoint3("v1", { x: 1, y: -1, z: -1 }), createPoint3("v2", { x: 1, y: 1, z: -1 }), createPoint3("v3", { x: -1, y: 1, z: -1 }),
+      createPoint3("v4", { x: -1, y: -1, z: 1 }), createPoint3("v5", { x: 1, y: -1, z: 1 }), createPoint3("v6", { x: 1, y: 1, z: 1 }), createPoint3("v7", { x: -1, y: 1, z: 1 }),
+      createFace3("f-bottom", ["v0", "v1", "v2", "v3"]), createFace3("f-top", ["v4", "v5", "v6", "v7"]), createFace3("f-front", ["v0", "v1", "v5", "v4"]),
+      createFace3("f-right", ["v1", "v2", "v6", "v5"]), createFace3("f-back", ["v2", "v3", "v7", "v6"]), createFace3("f-left", ["v3", "v0", "v4", "v7"]),
+      createPolyhedron3("solid-1", ["v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7"], [], ["f-bottom", "f-top", "f-front", "f-right", "f-back", "f-left"]),
+      { id: "section-1", type: "section", sourceId: "solid-1", plane: { normal: { x: 0, y: 0, z: 1 }, constant: 0 }, points: [], classification: "none", status: "undefined" }
+    ]
+
+    const recomputed = recomputeDerivedObjects(document)
+    const section = recomputed.primitives.find((primitive) => primitive.id === "section-1")
+    expect(section).toMatchObject({ classification: "polygon", status: "approximate", visible: true })
+
+    const points = section?.type === "section" ? section.points : []
+    expect(points).toHaveLength(4)
+    for (let index = 0; index < points.length; index += 1) {
+      const next = points[(index + 1) % points.length]
+      expect(Math.hypot(points[index].x - next.x, points[index].y - next.y, points[index].z - next.z)).toBeCloseTo(2, 6)
+    }
+
+    const moved = applyOperation(recomputed, patchPoint3("v7", { x: 3, y: 1, z: 1 }))
+    const movedSection = moved.document.primitives.find((primitive) => primitive.id === "section-1")
+    expect(movedSection).toMatchObject({ classification: "polygon", visible: true })
+    expect(movedSection?.type === "section" && movedSection.points.some((point) => Math.abs(point.x - 1) < 1e-9 && Math.abs(point.y - 1) < 1e-9 && Math.abs(point.z) < 1e-9)).toBe(true)
+  })
+
+  it("reports a vertex-tangent cut as a point without claiming drawable geometry", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      createPoint3("v0", { x: -1, y: -1, z: -1 }), createPoint3("v1", { x: 1, y: -1, z: -1 }), createPoint3("v2", { x: 1, y: 1, z: -1 }), createPoint3("v3", { x: -1, y: 1, z: -1 }),
+      createPoint3("v4", { x: -1, y: -1, z: 1 }), createPoint3("v5", { x: 1, y: -1, z: 1 }), createPoint3("v6", { x: 1, y: 1, z: 1 }), createPoint3("v7", { x: -1, y: 1, z: 1 }),
+      createFace3("f-bottom", ["v0", "v1", "v2", "v3"]), createFace3("f-top", ["v4", "v5", "v6", "v7"]), createFace3("f-front", ["v0", "v1", "v5", "v4"]),
+      createFace3("f-right", ["v1", "v2", "v6", "v5"]), createFace3("f-back", ["v2", "v3", "v7", "v6"]), createFace3("f-left", ["v3", "v0", "v4", "v7"]),
+      createPolyhedron3("solid-1", ["v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7"], [], ["f-bottom", "f-top", "f-front", "f-right", "f-back", "f-left"]),
+      { id: "section-1", type: "section", sourceId: "solid-1", plane: { normal: { x: 1, y: 1, z: 1 }, constant: -3 }, points: [], classification: "none", status: "undefined" }
+    ]
+
+    const section = recomputeDerivedObjects(document).primitives.find((primitive) => primitive.id === "section-1")
+
+    expect(section).toMatchObject({ classification: "point", visible: false })
+    expect(section?.type === "section" && section.points).toEqual([{ x: 1, y: 1, z: 1 }])
+  })
+
+  it("places a default cut plane through the bounding box of the source", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      { id: "cube-1", type: "cube", origin: { x: -1, y: -3, z: -1 }, size: { x: 2, y: 2, z: 2 } },
+      { id: "pyramid-1", type: "pyramid", baseCenter: { x: 0, y: 0, z: 0 }, baseSize: { x: 4, y: 4 }, height: 4 }
+    ]
+
+    expect(sectionPlaneThroughSource(document, "cube-1")).toEqual({ normal: { x: 0, y: 1, z: 0 }, constant: 2 })
+    expect(sectionPlaneThroughSource(document, "pyramid-1")).toEqual({ normal: { x: 0, y: 1, z: 0 }, constant: -2 })
   })
 
   it("recomputes an intersection set with every sampled solution", () => {

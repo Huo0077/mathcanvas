@@ -293,8 +293,17 @@ function normalVisuals(mesh: THREE.Mesh): THREE.ArrowHelper[] {
   })
 }
 
-export function createSectionMesh(primitive: SectionPrimitive): THREE.Mesh | null {
-  if (primitive.points.length < 3) return null
+export function createSectionMesh(primitive: SectionPrimitive): THREE.Object3D | null {
+  if (primitive.points.length < 2) return null
+  const sectionColor = primitive.style?.stroke ?? "#f97316"
+  if (primitive.points.length === 2) {
+    // A vertex-tangent or edge-coincident cut is a segment, not an area.
+    const segment = new THREE.Line(new THREE.BufferGeometry().setFromPoints(primitive.points.map((point) => new THREE.Vector3(point.x, point.y, point.z))), new THREE.LineBasicMaterial({ color: sectionColor }))
+    segment.userData.primitiveId = primitive.id
+    segment.userData.primitiveType = primitive.type
+    segment.userData.visualRole = "section"
+    return segment
+  }
   const positions = primitive.points.flatMap((point) => [point.x, point.y, point.z])
   const indices: number[] = []
   for (let index = 1; index < primitive.points.length - 1; index += 1) indices.push(0, index, index + 1)
@@ -306,6 +315,11 @@ export function createSectionMesh(primitive: SectionPrimitive): THREE.Mesh | nul
   mesh.userData.primitiveId = primitive.id
   mesh.userData.primitiveType = primitive.type
   mesh.userData.visualRole = "section"
+  // Section points are ordered along the boundary, so the closed loop reflects the real cut outline.
+  const boundaryPoints = [...primitive.points, primitive.points[0]].map((point) => new THREE.Vector3(point.x, point.y, point.z))
+  const boundary = new THREE.Line(new THREE.BufferGeometry().setFromPoints(boundaryPoints), new THREE.LineBasicMaterial({ color: sectionColor }))
+  boundary.userData.visualRole = "section-boundary"
+  mesh.add(boundary)
   return mesh
 }
 

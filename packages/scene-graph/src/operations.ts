@@ -1,5 +1,5 @@
-import type { AnnotationSpec, ConstraintSpec, Coordinate, GeometryDocument, GroupSpec, Measurement3, Point3Binding, Point3Primitive, PointBinding, PrimitiveSpec, Vector3 } from "@draw/dsl"
-import { adaptiveSampleFunctionSegments, buildSolidTemplate, calculateMeasurement3, createBuilderContext, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, findExtrema, findInflectionPoints, findZeros, intersectCirclesDetailed, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, sectionConvexPolyhedron, solveLineConstraints, type IntersectionResult, type SampledPrimitive, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
+import type { AnnotationSpec, ConstraintSpec, Coordinate, GeometryDocument, GroupSpec, Measurement3, Point3Binding, Point3Primitive, PointBinding, PrimitiveSpec, Section3Classification, Vector3 } from "@draw/dsl"
+import { adaptiveSampleFunctionSegments, buildSolidTemplate, calculateMeasurement3, createBuilderContext, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, findExtrema, findInflectionPoints, findZeros, intersectCirclesDetailed, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, orderSectionPoints3, sectionConvexPolyhedron, sectionPolyhedron3, solveLineConstraints, type IntersectionResult, type SampledPrimitive, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
 
 export type DomainOperation =
   | { op: "addPrimitive"; primitive: PrimitiveSpec }
@@ -198,12 +198,70 @@ function solidSectionGeometry(primitive: Extract<PrimitiveSpec, { type: "cube" |
   return { vertices, edges }
 }
 
-function recomputeSection(primitive: Extract<PrimitiveSpec, { type: "section" }>, source: Extract<PrimitiveSpec, { type: "cube" | "pyramid" | "cylinder" | "cone" }>): Extract<PrimitiveSpec, { type: "section" }> {
-  const geometry = solidSectionGeometry(source)
-  const points = sectionConvexPolyhedron(geometry.vertices, geometry.edges, primitive.plane)
-  return points.length >= 3
-    ? { ...primitive, points, status: "approximate", visible: true, diagnostic: undefined }
-    : { ...primitive, points: [], status: "undefined", visible: false, diagnostic: "cutting plane does not intersect the solid in a polygon" }
+function classifySectionPoints(points: Vector3[]): Section3Classification {
+  if (points.length === 0) return "none"
+  if (points.length === 1) return "point"
+  if (points.length === 2) return "segment"
+  return "polygon"
+}
+
+/** Resolve materialized point-driven topology into ordered vertex positions and face rings. */
+function polyhedronSectionTopology(polyhedron: Extract<PrimitiveSpec, { type: "polyhedron3" }>, primitiveMap: Map<string, PrimitiveSpec>): { vertices: Vector3[]; faces: number[][] } | null {
+  const vertices: Vector3[] = []
+  for (const vertexId of polyhedron.vertexIds) {
+    const vertex = primitiveMap.get(vertexId)
+    if (vertex?.type !== "point3") return null
+    vertices.push({ ...vertex.position })
+  }
+  const faces: number[][] = []
+  for (const faceId of polyhedron.faceIds) {
+    const face = primitiveMap.get(faceId)
+    if (face?.type !== "face3") return null
+    const ring = face.pointIds.map((pointId) => polyhedron.vertexIds.indexOf(pointId))
+    if (ring.length < 3 || ring.some((index) => index < 0)) return null
+    faces.push(ring)
+  }
+  return faces.length >= 4 ? { vertices, faces } : null
+}
+
+/** Templates materialize their topology as point3/edge3/face3/polyhedron3 objects; cut that topology when present. */
+function templateTopology(sourceId: string, primitiveMap: Map<string, PrimitiveSpec>): Extract<PrimitiveSpec, { type: "polyhedron3" }> | null {
+  for (const primitive of primitiveMap.values()) {
+    if (primitive.type === "polyhedron3" && primitive.construction?.kind === "template" && primitive.construction.sourceIds[0] === sourceId) return primitive
+  }
+  return null
+}
+
+/** Vertex positions of a section source: materialized topology first, template tessellation as fallback. */
+function sourceVertices(source: PrimitiveSpec, primitiveMap: Map<string, PrimitiveSpec>): Vector3[] {
+  if (source.type === "polyhedron3") return polyhedronSectionTopology(source, primitiveMap)?.vertices ?? []
+  if (["cube", "pyramid", "cylinder", "cone"].includes(source.type)) return solidSectionGeometry(source as Extract<PrimitiveSpec, { type: "cube" | "pyramid" | "cylinder" | "cone" }>).vertices
+  return []
+}
+
+/** Default cutting plane: horizontal through the source's bounding-box center so a new cut is actually visible. */
+export function sectionPlaneThroughSource(document: GeometryDocument, sourceId: string): { normal: Vector3; constant: number } {
+  const primitiveMap = new Map(document.primitives.map((primitive) => [primitive.id, primitive]))
+  const source = primitiveMap.get(sourceId)
+  const vertices = source ? sourceVertices(source, primitiveMap) : []
+  if (vertices.length === 0) return { normal: { x: 0, y: 1, z: 0 }, constant: -1.5 }
+  const heights = vertices.map((vertex) => vertex.y)
+  return { normal: { x: 0, y: 1, z: 0 }, constant: -(Math.min(...heights) + Math.max(...heights)) / 2 }
+}
+
+function recomputeSection(primitive: Extract<PrimitiveSpec, { type: "section" }>, source: PrimitiveSpec, primitiveMap: Map<string, PrimitiveSpec>): Extract<PrimitiveSpec, { type: "section" }> {
+  const polyhedron = source.type === "polyhedron3" ? source : templateTopology(source.id, primitiveMap)
+  const topology = polyhedron ? polyhedronSectionTopology(polyhedron, primitiveMap) : null
+  if (topology) {
+    const result = sectionPolyhedron3(topology.vertices, topology.faces, primitive.plane)
+    if (result.status === "none") return { ...primitive, points: [], classification: "none", status: "undefined", visible: false, diagnostic: result.explanation }
+    if (result.status === "insufficient-data") return { ...primitive, points: [], classification: "insufficient-data", status: "failed", visible: false, diagnostic: result.explanation }
+    return { ...primitive, points: result.points, classification: result.status, status: "approximate", visible: result.status !== "point", diagnostic: result.status === "polygon" ? undefined : result.explanation }
+  }
+  if (!["cube", "pyramid", "cylinder", "cone"].includes(source.type)) return { ...primitive, points: [], classification: "insufficient-data", status: "failed", visible: false, diagnostic: "截面来源不是可剖切的实体。" }
+  const geometry = solidSectionGeometry(source as Extract<PrimitiveSpec, { type: "cube" | "pyramid" | "cylinder" | "cone" }>)
+  const points = orderSectionPoints3(sectionConvexPolyhedron(geometry.vertices, geometry.edges, primitive.plane), primitive.plane)
+  return { ...primitive, points, classification: classifySectionPoints(points), status: points.length > 0 ? "approximate" : "undefined", visible: points.length > 0, diagnostic: points.length >= 3 ? undefined : "剖切平面与模板实体相切或沿棱相交。" }
 }
 
 function resolveBoundPoint(binding: PointBinding, primitives: Map<string, PrimitiveSpec>, parameters: GeometryDocument["parameters"]): Coordinate | null {
@@ -513,8 +571,8 @@ export function recomputeDerivedObjects(document: GeometryDocument, changedIds?:
     }
     if (primitive.type === "section") {
       const source = primitiveMap.get(primitive.sourceId)
-      if (!source || !["cube", "pyramid", "cylinder", "cone"].includes(source.type)) return { ...primitive, points: [], status: "failed" as const, visible: false, diagnostic: "section source solid is missing" }
-      return recomputeSection(primitive, source as Extract<PrimitiveSpec, { type: "cube" | "pyramid" | "cylinder" | "cone" }>)
+      if (!source) return { ...primitive, points: [], classification: "insufficient-data" as const, status: "failed" as const, visible: false, diagnostic: "截面来源实体不存在。" }
+      return recomputeSection(primitive, source, primitiveMap)
     }
     if (primitive.type === "line") return lines.get(primitive.id) ?? primitive
     if (primitive.type === "intersectionSet") {

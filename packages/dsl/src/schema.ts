@@ -360,6 +360,7 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>, parameter
     if (typeof value.sourceId !== "string" || !byId.has(value.sourceId) || !solidTypes.has(referenceType(byId, value.sourceId) ?? "")) errors.push("section references invalid solid")
     if (!isRecord(value.plane) || !isFiniteCoordinate3(value.plane.normal) || !isFiniteNumber(value.plane.constant)) errors.push("section plane is invalid")
     if (!Array.isArray(value.points) || value.points.some((point) => !isFiniteCoordinate3(point))) errors.push("section points are invalid")
+    if (value.classification !== undefined && !["none", "point", "segment", "polygon", "insufficient-data"].includes(String(value.classification))) errors.push("section classification is invalid")
     if (!["approximate", "undefined", "failed"].includes(String(value.status))) errors.push("section status is invalid")
     if (value.diagnostic !== undefined && typeof value.diagnostic !== "string") errors.push("section diagnostic is invalid")
   }
