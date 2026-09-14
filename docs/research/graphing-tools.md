@@ -55,7 +55,34 @@ MathCanvas 第一阶段实现笛卡尔函数和常见函数预设，保留编译
 
 `requestAnimationFrame` 回调提供 progress 和 delta time，并支持取消。MathCanvas 使用同样的生命周期思路：帧内只更新临时动画状态，停止或确认后一次性提交最终参数。
 
-## 对 MathCanvas 的决策
+## 三维几何参考（2026-09-14）
+
+本轮针对 P6 通用化查看了以下公开 GitHub 项目的产品边界和实现分层：
+
+| 项目 | GitHub | 许可证 | 本次关注点 |
+| --- | --- | --- | --- |
+| GeoGebra | [geogebra/geogebra](https://github.com/geogebra/geogebra) | GPL-3.0 系列 | 点、线、面对象关系、父子依赖、标签和动态重算 |
+| Three.js | [mrdoob/three.js](https://github.com/mrdoob/three.js) | MIT | 场景图、材质、Raycaster、相机控制和渲染层边界 |
+| JSXGraph | [jsxgraph/jsxgraph](https://github.com/jsxgraph/jsxgraph) | MIT/LGPL 双许可 | 父对象引用、约束组合和交互式几何构造 |
+| CindyJS | [CindyJS/CindyJS](https://github.com/CindyJS/CindyJS) | MIT | 约束驱动几何、动态对象和教学演示反馈 |
+
+### 采用的启发
+
+- GeoGebra 的对象标签和父子关系支持 Algebra View 展开子部件，但 MathCanvas 只借鉴行为，不复制 GPL 代码。
+- JSXGraph 和 CindyJS 说明点、线、面应通过来源引用和约束组合，而不是把最终屏幕坐标当作唯一真源。
+- Three.js 适合管理渲染场景、隐藏线、透明材质、拾取和相机；数学对象、拓扑校验、截面和测量应留在 DSL、Scene Graph 和 geometry-kernel。
+- 高中立体几何的主要交互难点是点线面归属、共面/非共面、遮挡、空间方向、截面边界和二面角补角。界面必须显示来源点、辅助线/面、法向量、精度和失败原因。
+
+### 对 MathCanvas 的决策
+
+1. 采用方案 C：基础对象以 `point3`、`line3`、`plane3`、`edge3` 和 `face3` 为核心，`polyhedron3` 由拓扑引用组合。
+2. `cube`、`pyramid`、`cylinder` 和 `cone` 保留为 builder 快捷模板，并且必须生成可拆解、可编辑的点、棱和面。
+3. Scene Graph 维护稳定 ID 和反向依赖，点移动触发线、面、实体、截面、展开和测量的局部重算。
+4. 不直接引入上述项目的领域对象模型或源码；新增依赖前重新核对版本、许可证和兼容性。
+
+详细三维设计见 [`docs/superpowers/specs/2026-09-14-point-driven-3d-geometry-design.md`](../superpowers/specs/2026-09-14-point-driven-3d-geometry-design.md)，实施切片见 [`docs/superpowers/plans/2026-09-14-point-driven-3d-geometry.md`](../superpowers/plans/2026-09-14-point-driven-3d-geometry.md)。
+
+## 函数与二维能力决策
 
 1. **统一路径绑定。** 自由点、路径点、特征点和轨迹点都通过明确的来源引用表达。
 2. **表达式先编译。** 函数预设只提供合法 DSL 表达式，用户输入使用同一编译器和同一错误反馈。
