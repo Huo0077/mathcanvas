@@ -21,6 +21,9 @@ interface GeometryToolbarProps {
   onAddHyperbola: () => void
   onAddFunction: () => void
   onAddCube: () => void
+  onAddPyramid: () => void
+  onAddCylinder: () => void
+  onAddCone: () => void
   onDelete: () => void
   onToggleLock: () => void
   onSelectTool: () => void
@@ -75,6 +78,9 @@ export function GeometryToolbar(props: GeometryToolbarProps) {
         <ToolButton label="添加双曲线" icon="curve" onClick={props.onAddHyperbola} />
         <ToolButton label="添加函数图像" icon="function" onClick={props.onAddFunction} />
         {props.workspace === "geometry3d" && <ToolButton label="添加立方体" icon="curve" onClick={props.onAddCube} />}
+        {props.workspace === "geometry3d" && <ToolButton label="添加棱锥" icon="curve" onClick={props.onAddPyramid} />}
+        {props.workspace === "geometry3d" && <ToolButton label="添加圆柱" icon="circle" onClick={props.onAddCylinder} />}
+        {props.workspace === "geometry3d" && <ToolButton label="添加圆锥" icon="curve" onClick={props.onAddCone} />}
       </div>
     </section>
     <section className="toolbar-group multimodal-tools">

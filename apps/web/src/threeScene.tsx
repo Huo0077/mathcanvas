@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import * as THREE from "three"
-import type { CubePrimitive, GeometryDocument } from "@draw/dsl"
+import type { CubePrimitive, GeometryDocument, PyramidPrimitive, CylinderPrimitive, ConePrimitive } from "@draw/dsl"
 
 import { opacityFor, strokeFor } from "./primitiveStyle"
 
@@ -9,10 +9,11 @@ const scenePalette = {
   grid: "#d9deea"
 } as const
 
-export function createCubeMesh(primitive: CubePrimitive, selected: boolean): THREE.Mesh {
-  const geometry = new THREE.BoxGeometry(primitive.size.x, primitive.size.y, primitive.size.z)
+type SolidPrimitive = CubePrimitive | PyramidPrimitive | CylinderPrimitive | ConePrimitive
+
+function solidMaterial(primitive: SolidPrimitive, selected: boolean): THREE.MeshStandardMaterial {
   const opacity = opacityFor(primitive)
-  const material = new THREE.MeshStandardMaterial({
+  return new THREE.MeshStandardMaterial({
     color: primitive.style?.fill ?? strokeFor(primitive),
     emissive: selected ? primitive.style?.stroke ?? strokeFor(primitive) : "#000000",
     emissiveIntensity: selected ? 0.28 : 0,
@@ -22,6 +23,11 @@ export function createCubeMesh(primitive: CubePrimitive, selected: boolean): THR
     opacity: Math.min(1, opacity * 0.72),
     side: THREE.DoubleSide
   })
+}
+
+export function createCubeMesh(primitive: CubePrimitive, selected: boolean): THREE.Mesh {
+  const geometry = new THREE.BoxGeometry(primitive.size.x, primitive.size.y, primitive.size.z)
+  const material = solidMaterial(primitive, selected)
   const mesh = new THREE.Mesh(geometry, material)
   mesh.position.set(
     primitive.origin.x + primitive.size.x / 2,
@@ -33,7 +39,38 @@ export function createCubeMesh(primitive: CubePrimitive, selected: boolean): THR
   return mesh
 }
 
-function cubeOutline(mesh: THREE.Mesh, primitive: CubePrimitive, selected: boolean): THREE.LineSegments {
+function createPyramidGeometry(primitive: PyramidPrimitive): THREE.BufferGeometry {
+  const halfX = primitive.baseSize.x / 2
+  const halfZ = primitive.baseSize.y / 2
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute([
+    -halfX, 0, -halfZ,
+    halfX, 0, -halfZ,
+    halfX, 0, halfZ,
+    -halfX, 0, halfZ,
+    0, primitive.height, 0
+  ], 3))
+  geometry.setIndex([0, 2, 1, 0, 3, 2, 0, 1, 4, 1, 2, 4, 2, 3, 4, 3, 0, 4])
+  geometry.computeVertexNormals()
+  return geometry
+}
+
+export function createSolidMesh(primitive: SolidPrimitive, selected: boolean): THREE.Mesh {
+  if (primitive.type === "cube") return createCubeMesh(primitive, selected)
+  const geometry = primitive.type === "pyramid"
+    ? createPyramidGeometry(primitive)
+    : primitive.type === "cylinder"
+      ? new THREE.CylinderGeometry(primitive.radius, primitive.radius, primitive.height, primitive.segments)
+      : new THREE.ConeGeometry(primitive.radius, primitive.height, primitive.segments)
+  const mesh = new THREE.Mesh(geometry, solidMaterial(primitive, selected))
+  if (primitive.type === "pyramid") mesh.position.set(primitive.baseCenter.x, primitive.baseCenter.y, primitive.baseCenter.z)
+  else mesh.position.set(primitive.center.x, primitive.center.y + primitive.height / 2, primitive.center.z)
+  mesh.userData.primitiveId = primitive.id
+  mesh.userData.primitiveType = primitive.type
+  return mesh
+}
+
+function solidOutline(mesh: THREE.Mesh, primitive: SolidPrimitive, selected: boolean): THREE.LineSegments {
   const geometry = new THREE.EdgesGeometry(mesh.geometry)
   const material = new THREE.LineBasicMaterial({
     color: selected ? "#4c3ac7" : primitive.style?.stroke ?? strokeFor(primitive),
@@ -46,8 +83,8 @@ function cubeOutline(mesh: THREE.Mesh, primitive: CubePrimitive, selected: boole
   return outline
 }
 
-function visibleCubes(document: GeometryDocument): CubePrimitive[] {
-  return document.primitives.filter((primitive): primitive is CubePrimitive => primitive.type === "cube" && primitive.visible !== false)
+function visibleSolids(document: GeometryDocument): SolidPrimitive[] {
+  return document.primitives.filter((primitive): primitive is SolidPrimitive => ["cube", "pyramid", "cylinder", "cone"].includes(primitive.type) && primitive.visible !== false)
 }
 
 function disposeScene(scene: THREE.Scene): void {
@@ -103,11 +140,11 @@ export function ThreeSceneView({ document, selectedIds, onSelect }: ThreeSceneVi
     scene.add(new THREE.GridHelper(14, 14, scenePalette.grid, scenePalette.grid))
     scene.add(new THREE.AxesHelper(5))
 
-    visibleCubes(document).forEach((primitive) => {
+    visibleSolids(document).forEach((primitive) => {
       const selected = selectedIds.includes(primitive.id)
-      const mesh = createCubeMesh(primitive, selected)
+      const mesh = createSolidMesh(primitive, selected)
       scene.add(mesh)
-      scene.add(cubeOutline(mesh, primitive, selected))
+      scene.add(solidOutline(mesh, primitive, selected))
     })
 
     const render = () => renderer.render(scene, camera)
@@ -135,5 +172,6 @@ export function ThreeSceneView({ document, selectedIds, onSelect }: ThreeSceneVi
     }
   }, [document, onSelect, selectedIds])
 
-  return <div className="three-canvas-shell" ref={containerRef} data-3d-scene="true" aria-label="3D 几何场景">{!webglAvailable && <div className="three-scene-status" role="status">当前浏览器不支持 WebGL，无法显示 3D 场景。</div>}{webglAvailable && document.primitives.filter((primitive) => primitive.type === "cube").length === 0 && <div className="three-scene-status" role="status">添加立方体开始探索三维空间。</div>}</div>
+  const hasSolid = document.primitives.some((primitive) => ["cube", "pyramid", "cylinder", "cone"].includes(primitive.type) && primitive.visible !== false)
+  return <div className="three-canvas-shell" ref={containerRef} data-3d-scene="true" aria-label="3D 几何场景">{!webglAvailable && <div className="three-scene-status" role="status">当前浏览器不支持 WebGL，无法显示 3D 场景。</div>}{webglAvailable && !hasSolid && <div className="three-scene-status" role="status">添加立体对象开始探索三维空间。</div>}</div>
 }
