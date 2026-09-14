@@ -1,8 +1,18 @@
 import { describe, expect, it } from "vitest"
 
-import { createEmptyDocument } from "@draw/dsl"
+import { createEmptyDocument, validateDocument } from "@draw/dsl"
+import { buildSolidTemplate } from "@draw/geometry-kernel"
 
 import { commitPatch, validatePatch } from "./patches"
+
+/** A cube the way the 3D workspace builds one: the parameter row plus its generated topology. */
+function templateCubeDocument() {
+  const cube = { id: "cube-1", type: "cube" as const, origin: { x: -1, y: -1, z: -1 }, size: { x: 2, y: 2, z: 2 }, label: "立方体 1" }
+  const built = buildSolidTemplate(cube)
+  const document = createEmptyDocument("geometry3d")
+  document.primitives = [cube, ...built.primitives]
+  return { document, cube, built }
+}
 
 describe("domain patches", () => {
   it("rejects an intersection that references missing lines", () => {
@@ -265,6 +275,53 @@ describe("domain patches", () => {
     ]
 
     expect(validatePatch(document, { op: "deleteObject", id: "cube-1" })).toEqual({ valid: false, errors: ["object is referenced by another object"] })
+  })
+
+  it("deletes a template solid together with the topology it generated", () => {
+    const { document, built } = templateCubeDocument()
+
+    expect(validatePatch(document, { op: "deleteObject", id: "cube-1" })).toEqual({ valid: true })
+    const result = commitPatch(document, { op: "deleteObject", id: "cube-1" })
+
+    expect(result.changed).toBe(true)
+    expect(result.document.primitives).toHaveLength(0)
+    expect(validateDocument(result.document).valid).toBe(true)
+    expect(built.primitives.length).toBeGreaterThan(20)
+  })
+
+  it("deletes the whole template family when the generated topology is the target", () => {
+    const { document, built } = templateCubeDocument()
+
+    const result = commitPatch(document, { op: "deleteObject", id: built.polyhedronId! })
+
+    expect(result.changed).toBe(true)
+    expect(result.document.primitives).toHaveLength(0)
+    expect(validateDocument(result.document).valid).toBe(true)
+  })
+
+  it("deletes the whole template family when one generated edge is the target", () => {
+    const { document, built } = templateCubeDocument()
+
+    const result = commitPatch(document, { op: "deleteObject", id: built.edgeIds[0] })
+
+    expect(result.changed).toBe(true)
+    expect(result.document.primitives).toHaveLength(0)
+    expect(validateDocument(result.document).valid).toBe(true)
+  })
+
+  it("still protects a template solid that another object depends on", () => {
+    const { document } = templateCubeDocument()
+    document.primitives.push({ id: "section-1", type: "section", sourceId: "cube-1", plane: { normal: { x: 0, y: 0, z: 1 }, constant: 0 }, points: [], classification: "none", status: "undefined" })
+
+    expect(validatePatch(document, { op: "deleteObject", id: "cube-1" })).toEqual({ valid: false, errors: ["object is referenced by another object"] })
+  })
+
+  it("still protects a generated face that a measurement depends on", () => {
+    const { document, built } = templateCubeDocument()
+    document.measurements = [{ id: "measurement3-1", kind: "measurement3", metric: "area", sourceIds: [built.faceIds[0]], precision: "numeric-approximation", status: "valid", explanation: "面积" }]
+
+    expect(validatePatch(document, { op: "deleteObject", id: "cube-1" })).toEqual({ valid: false, errors: ["object is referenced by another object"] })
+    expect(validatePatch(document, { op: "deleteObject", id: built.faceIds[0] })).toEqual({ valid: false, errors: ["object is referenced by another object"] })
   })
 
   it("rejects malformed measurement patches without throwing", () => {

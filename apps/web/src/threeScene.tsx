@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import * as THREE from "three"
-import type { CubePrimitive, Edge3Primitive, Face3Primitive, GeometryDocument, Line3Primitive, Point3Primitive, Polyhedron3Primitive, PyramidPrimitive, CylinderPrimitive, ConePrimitive, Ray3Primitive, SectionPrimitive, Segment3Primitive, Vector3 } from "@draw/dsl"
+import type { ConePrimitive, CubePrimitive, Edge3Primitive, Face3Primitive, GeometryDocument, Line3Primitive, Plane3Primitive, Point3Primitive, Polyhedron3Primitive, PyramidPrimitive, CylinderPrimitive, Ray3Primitive, SectionPrimitive, Segment3Primitive, Vector3 } from "@draw/dsl"
 import { dihedralAngleDegrees, unfoldPolyhedron3, type DihedralMarker3, type UnfoldLayout3 } from "@draw/geometry-kernel"
 import { resolveDihedralMarker3, resolvePolyhedronTopology } from "@draw/scene-graph"
 
@@ -78,6 +78,40 @@ export function resetCameraState(): CameraState {
   return createCameraState()
 }
 
+/**
+ * Frame a set of bounds: keep the viewing angles, move the target to the centre and pull back until the whole
+ * figure fits the tighter screen axis. Without this a one-unit tetrahedron opens as a speck in a sixteen-unit
+ * view, which is exactly how "the figure is there but you cannot see it" happens.
+ */
+export function fitCameraState(state: CameraState, bounds: THREE.Box3, camera: THREE.PerspectiveCamera): CameraState {
+  if (bounds.isEmpty()) return { ...state, target: { x: 0, y: 0, z: 0 }, distance: createCameraState().distance }
+  const centre = bounds.getCenter(new THREE.Vector3())
+  const radius = Math.max(bounds.getSize(new THREE.Vector3()).length() / 2, 0.35)
+  const vertical = camera.fov * Math.PI / 360
+  const horizontal = Math.atan(Math.tan(vertical) * Math.max(camera.aspect, 0.1))
+  const distance = Math.max(radius / Math.sin(vertical), radius / Math.sin(horizontal)) * 1.25
+  return { ...state, target: { x: centre.x, y: centre.y, z: centre.z }, distance: Math.max(3, Math.min(60, distance)) }
+}
+
+/** World-space bounds of everything drawn, ignoring the grid and axes so they never drive the framing. */
+export function contentBounds(scene: THREE.Object3D): THREE.Box3 {
+  scene.updateMatrixWorld(true)
+  const bounds = new THREE.Box3()
+  for (const child of scene.children) {
+    if (child.userData.excludeFromFit) continue
+    bounds.expandByObject(child)
+  }
+  return bounds
+}
+
+/** A round helper size (1/2/5 x 10^n) so the grid keeps readable cells at any scene scale. */
+export function niceGridStep(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) return 1
+  const magnitude = 10 ** Math.floor(Math.log10(value))
+  const normalized = value / magnitude
+  return (normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10) * magnitude
+}
+
 function applyCameraState(camera: THREE.PerspectiveCamera, state: CameraState): void {
   const azimuth = state.azimuth * Math.PI / 180
   const elevation = state.elevation * Math.PI / 180
@@ -90,8 +124,35 @@ function applyCameraState(camera: THREE.PerspectiveCamera, state: CameraState): 
   camera.lookAt(state.target.x, state.target.y, state.target.z)
 }
 
-export function pickPrimitiveAt(scene: THREE.Scene, camera: THREE.Camera, normalizedPoint: { x: number; y: number }): string | null {
-  return pickRaycastHit3(scene, camera, normalizedPoint)?.primitiveId ?? null
+/**
+ * Vertex handles are editor affordances, not geometry: they are sized in screen space so a fine mesh (a
+ * 24-segment cylinder base has 48 vertices only 11px apart) does not turn into a string of beads, and so
+ * handles neither grow without bound when you zoom in nor vanish when you zoom out. Measured against the
+ * shipped build, the old world-space radius drew a 9px blob per vertex; 3px keeps vertices legible without
+ * swallowing the figure. The grab area is deliberately larger than the drawing (PICK_TOLERANCE_PX), which is
+ * the same visible-6 / hit-14 bargain the 2D canvas strikes.
+ */
+export const POINT_HANDLE_RADIUS_PX = 3
+/** Grab radius for a click, in CSS pixels. Handles and thin edges are clickable beyond their drawn size. */
+export const PICK_TOLERANCE_PX = 7
+/** World radius used before the scene measures the camera; ThreeSceneView replaces it every frame. */
+const DEFAULT_POINT_HANDLE_RADIUS = 0.05
+/** three.js defaults Line.threshold to a whole world unit, which is far too grabby for geometry drawn at this scale. */
+const DEFAULT_PICK_TOLERANCE = 0.05
+
+/** World radius that projects to a constant pixel radius at `distance` from a camera. */
+export function pointHandleWorldRadius(camera: THREE.PerspectiveCamera, distance: number, viewportHeight: number, radiusPx = POINT_HANDLE_RADIUS_PX): number {
+  const worldPerPixel = 2 * Math.max(distance, 0) * Math.tan(camera.fov * Math.PI / 360) / Math.max(viewportHeight, 1)
+  return radiusPx * worldPerPixel
+}
+
+export interface RaycastPickOptions {
+  /** Click tolerance in world units at the picked depth; callers convert from PICK_TOLERANCE_PX. */
+  tolerance?: number
+}
+
+export function pickPrimitiveAt(scene: THREE.Scene, camera: THREE.Camera, normalizedPoint: { x: number; y: number }, options: RaycastPickOptions = {}): string | null {
+  return pickRaycastHit3(scene, camera, normalizedPoint, options)?.primitiveId ?? null
 }
 
 export interface RaycastHit3 {
@@ -99,36 +160,68 @@ export interface RaycastHit3 {
   partId?: string
   depth: number
   worldPoint: Vector3
-  kind: "point" | "line" | "edge" | "face" | "solid" | "marker"
+  kind: "point" | "line" | "edge" | "face" | "plane" | "solid" | "marker"
 }
 
 function pickKind(primitiveType: unknown): RaycastHit3["kind"] {
   if (primitiveType === "point3") return "point"
   if (primitiveType === "edge3") return "edge"
   if (primitiveType === "face3") return "face"
+  if (primitiveType === "plane3") return "plane"
   if (["cube", "pyramid", "cylinder", "cone", "polyhedron3"].includes(String(primitiveType))) return "solid"
   return "line"
 }
 
-export function pickRaycastHit3(scene: THREE.Scene, camera: THREE.Camera, normalizedPoint: { x: number; y: number }): RaycastHit3 | null {
+/** Share of the click tolerance a kind may claim: small handles need the most, surfaces none. */
+const pickKindAllowance: Record<RaycastHit3["kind"], number> = { point: 1, edge: 0.5, line: 0.5, face: 0, plane: 0, solid: 0, marker: 0 }
+
+export function pickRaycastHit3(scene: THREE.Scene, camera: THREE.Camera, normalizedPoint: { x: number; y: number }, options: RaycastPickOptions = {}): RaycastHit3 | null {
+  const tolerance = options.tolerance ?? DEFAULT_PICK_TOLERANCE
   const raycaster = new THREE.Raycaster()
+  raycaster.params.Line.threshold = tolerance
   raycaster.setFromCamera(new THREE.Vector2(normalizedPoint.x * 2 - 1, -(normalizedPoint.y * 2 - 1)), camera)
   scene.updateMatrixWorld(true)
   const intersections = raycaster.intersectObjects(scene.children, true)
-  const priority: Record<RaycastHit3["kind"], number> = { point: 0, edge: 1, face: 2, line: 3, solid: 4, marker: 5 }
   const hits = intersections.flatMap((intersection) => {
     const primitiveId = intersection.object.userData.primitiveId
     if (typeof primitiveId !== "string") return []
     const kind = pickKind(intersection.object.userData.primitiveType)
-    return [{ primitiveId, partId: typeof intersection.object.userData.partId === "string" ? intersection.object.userData.partId : undefined, depth: intersection.distance, worldPoint: { x: intersection.point.x, y: intersection.point.y, z: intersection.point.z }, kind, priority: priority[kind] }]
+    return [{ primitiveId, partId: typeof intersection.object.userData.partId === "string" ? intersection.object.userData.partId : undefined, depth: intersection.distance, worldPoint: { x: intersection.point.x, y: intersection.point.y, z: intersection.point.z }, kind, score: intersection.distance - pickKindAllowance[kind] * tolerance }]
   })
-  const hit = hits.sort((first, second) => first.priority - second.priority || first.depth - second.depth)[0]
+  // Rank by what is really under the cursor. A fixed kind priority let a handle on the far side of a solid win
+  // over the surface the user clicked; the per-kind allowance keeps small handles grabbable without that.
+  const hit = hits.sort((first, second) => first.score - second.score)[0]
   if (!hit) return null
   return { primitiveId: hit.primitiveId, partId: hit.partId, depth: hit.depth, worldPoint: hit.worldPoint, kind: hit.kind }
 }
 
-export function createPoint3Mesh(primitive: Point3Primitive, selected: boolean): THREE.Mesh {
-  const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.14, 16, 12), new THREE.MeshBasicMaterial({ color: selected ? "#4c3ac7" : strokeFor(primitive), transparent: opacityFor(primitive) < 1, opacity: opacityFor(primitive) }))
+/**
+ * A template solid (cube/pyramid/cylinder/cone) is never drawn as its own object: the scene shows the
+ * point/edge/face children generated from it. Those generated edges and faces are display-only, so a raycast
+ * hit on one of them belongs to the owning solid — otherwise the solid could not be clicked at all once its
+ * post-creation selection is lost, which makes it look permanently frozen. Generated vertices are deliberately
+ * left out: clicking a vertex selects the point, because moving points is how a template solid becomes
+ * point-driven.
+ */
+export function templateTopologyOwners(document: GeometryDocument): Map<string, string> {
+  const owners = new Map<string, string>()
+  for (const primitive of document.primitives) {
+    if (primitive.type !== "polyhedron3" || primitive.construction?.kind !== "template") continue
+    const ownerId = primitive.construction.sourceIds[0]
+    if (!ownerId) continue
+    for (const childId of [...primitive.edgeIds, ...primitive.faceIds]) owners.set(childId, ownerId)
+  }
+  return owners
+}
+
+export function resolveSelectableHit(primitiveId: string | null, owners: Map<string, string>): string | null {
+  return primitiveId === null ? null : owners.get(primitiveId) ?? primitiveId
+}
+
+export function createPoint3Mesh(primitive: Point3Primitive, selected: boolean, worldRadius = DEFAULT_POINT_HANDLE_RADIUS): THREE.Mesh {
+  // A unit sphere plus a scale keeps the handle resizable every frame without rebuilding geometry.
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), new THREE.MeshBasicMaterial({ color: selected ? "#4c3ac7" : strokeFor(primitive), transparent: opacityFor(primitive) < 1, opacity: opacityFor(primitive) }))
+  mesh.scale.setScalar(worldRadius)
   mesh.position.set(primitive.position.x, primitive.position.y, primitive.position.z)
   mesh.userData.primitiveId = primitive.id
   mesh.userData.primitiveType = primitive.type
@@ -165,8 +258,69 @@ export function createPointDrivenLine(primitive: PointDrivenLinePrimitive, point
   return line
 }
 
-export function createFace3Mesh(primitive: Face3Primitive, points: Map<string, Point3Primitive>, selected: boolean): THREE.Mesh | null {
-  const positions = primitive.pointIds.map((id) => point3ById(points, id))
+const PLANE3_DEFAULT_FILL = "#3b6ef5"
+
+/** Origin plus an in-plane orthonormal basis for a plane3, or null when the definition is degenerate. */
+function planeFrame3(primitive: Plane3Primitive, points: Map<string, Point3Primitive>): { origin: THREE.Vector3; u: THREE.Vector3; v: THREE.Vector3 } | null {
+  const basisFromNormal = (origin: THREE.Vector3, normal: THREE.Vector3) => {
+    if (!Number.isFinite(normal.x) || normal.lengthSq() < 1e-9) return null
+    normal.normalize()
+    const helper = Math.abs(normal.x) < 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0)
+    const u = new THREE.Vector3().crossVectors(helper, normal).normalize()
+    return { origin, u, v: new THREE.Vector3().crossVectors(normal, u).normalize() }
+  }
+  if (primitive.definition.kind === "pointNormal") {
+    const origin = points.get(primitive.definition.pointId)?.position
+    return origin ? basisFromNormal(new THREE.Vector3(origin.x, origin.y, origin.z), new THREE.Vector3(primitive.definition.normal.x, primitive.definition.normal.y, primitive.definition.normal.z)) : null
+  }
+  const corners = primitive.definition.pointIds.map((id) => points.get(id)?.position)
+  if (corners.some((corner) => !corner)) return null
+  const [first, second, third] = corners as Vector3[]
+  const normal = new THREE.Vector3().crossVectors(
+    new THREE.Vector3(second.x - first.x, second.y - first.y, second.z - first.z),
+    new THREE.Vector3(third.x - first.x, third.y - first.y, third.z - first.z)
+  )
+  // Collinear defining points describe no plane at all; drawing nothing beats drawing an arbitrary one.
+  if (normal.lengthSq() < 1e-9) return null
+  const origin = new THREE.Vector3((first.x + second.x + third.x) / 3, (first.y + second.y + third.y) / 3, (first.z + second.z + third.z) / 3)
+  return basisFromNormal(origin, normal)
+}
+
+/**
+ * A plane is infinite, so what gets drawn is a bounded patch centred on its defining points, sized by the
+ * caller from the scene it sits in — this is the "合适大小" a plane needs to be usable at all.
+ */
+export function createPlane3Mesh(primitive: Plane3Primitive, points: Map<string, Point3Primitive>, selected: boolean, halfSize: number): THREE.Mesh | null {
+  const frame = planeFrame3(primitive, points)
+  if (!frame) return null
+  const { origin, u, v } = frame
+  const corner = (offsetU: number, offsetV: number) => new THREE.Vector3().copy(origin).addScaledVector(u, offsetU * halfSize).addScaledVector(v, offsetV * halfSize)
+  const corners = [corner(-1, -1), corner(1, -1), corner(1, 1), corner(-1, 1)]
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(corners.flatMap((point) => [point.x, point.y, point.z]), 3))
+  geometry.setIndex([0, 1, 2, 0, 2, 3])
+  geometry.computeVertexNormals()
+  const colour = selected ? "#4c3ac7" : primitive.style?.fill ?? PLANE3_DEFAULT_FILL
+  const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: colour, transparent: true, opacity: selected ? 0.3 : 0.18, side: THREE.DoubleSide, depthWrite: false }))
+  mesh.userData.primitiveId = primitive.id
+  mesh.userData.primitiveType = primitive.type
+  mesh.userData.visualRole = "plane3"
+  const outlinePoints = [...corners, corners[0]]
+  const outline = new THREE.Line(new THREE.BufferGeometry().setFromPoints(outlinePoints), new THREE.LineBasicMaterial({ color: colour, transparent: true, opacity: 0.9 }))
+  outline.userData.visualRole = "plane3-outline"
+  mesh.add(outline)
+  // Two crossing centre lines read as "this is a plane", not a floating sheet.
+  for (const direction of [u, v]) {
+    const from = corner(0, 0).addScaledVector(direction, -halfSize)
+    const to = corner(0, 0).addScaledVector(direction, halfSize)
+    const guide = new THREE.Line(new THREE.BufferGeometry().setFromPoints([from, to]), new THREE.LineBasicMaterial({ color: colour, transparent: true, opacity: 0.35 }))
+    guide.userData.visualRole = "plane3-guide"
+    mesh.add(guide)
+  }
+  return mesh
+}
+
+export function createFace3Mesh(primitive: Face3Primitive, points: Map<string, Point3Primitive>, selected: boolean): THREE.Mesh | null {  const positions = primitive.pointIds.map((id) => point3ById(points, id))
   if (positions.some((position) => !position) || positions.length < 3) return null
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions.flatMap((position) => [position!.x, position!.y, position!.z]), 3))
@@ -436,6 +590,8 @@ export function ThreeSceneView({ document, selectedIds, onSelect }: ThreeSceneVi
   const renderTargetRef = useRef<HTMLDivElement>(null)
   const cameraStateRef = useRef<CameraState>(createCameraState())
   const resetCameraRef = useRef<() => void>(() => undefined)
+  const fitCameraRef = useRef<() => void>(() => undefined)
+  const fittedDocumentRef = useRef<string | null>(null)
   const [showHiddenEdges, setShowHiddenEdges] = useState(false)
   const [showNormals, setShowNormals] = useState(false)
   const [transparentFaces, setTransparentFaces] = useState(false)
@@ -468,8 +624,10 @@ export function ThreeSceneView({ document, selectedIds, onSelect }: ThreeSceneVi
 
     const scene = new THREE.Scene()
     scene.background = new THREE.Color(scenePalette.background)
-    const width = Math.max(container.clientWidth, 320)
-    const height = Math.max(container.clientHeight, 480)
+    // The shell owns the viewport height, so measure it exactly: clamping here would desync the drawing
+    // buffer from the CSS box and stretch the projection.
+    const viewportSize = () => ({ width: Math.max(container.clientWidth, 1), height: Math.max(container.clientHeight, 1) })
+    const { width, height } = viewportSize()
     const camera = new THREE.PerspectiveCamera(42, width / height, 0.1, 1000)
     applyCameraState(camera, cameraStateRef.current)
 
@@ -492,18 +650,21 @@ export function ThreeSceneView({ document, selectedIds, onSelect }: ThreeSceneVi
     const keyLight = new THREE.DirectionalLight("#ffffff", 2.4)
     keyLight.position.set(6, 10, 8)
     scene.add(keyLight)
-    scene.add(new THREE.GridHelper(14, 14, scenePalette.grid, scenePalette.grid))
-    scene.add(new THREE.AxesHelper(5))
 
     const unfoldedPolyhedra = unfoldProgress > 0.001
       ? document.primitives.filter((primitive): primitive is Polyhedron3Primitive => primitive.type === "polyhedron3" && primitive.visible !== false)
       : []
     const unfoldedChildIds = new Set(unfoldedPolyhedra.flatMap((polyhedron) => [...polyhedron.edgeIds, ...polyhedron.faceIds]))
     const points = new Map(document.primitives.filter((primitive): primitive is Point3Primitive => primitive.type === "point3").map((primitive) => [primitive.id, primitive]))
+    const pointHandles: THREE.Mesh[] = []
     document.primitives.filter((primitive) => primitive.visible !== false).forEach((primitive) => {
       if (unfoldedChildIds.has(primitive.id)) return
       const selected = selectedIds.includes(primitive.id)
-      if (primitive.type === "point3") scene.add(createPoint3Mesh(primitive, selected))
+      if (primitive.type === "point3") {
+        const handle = createPoint3Mesh(primitive, selected)
+        pointHandles.push(handle)
+        scene.add(handle)
+      }
       if (primitive.type === "line3" || primitive.type === "segment3" || primitive.type === "ray3") {
         const line = createPointDrivenLine(primitive, points, selected)
         if (line) scene.add(line)
@@ -537,6 +698,7 @@ export function ThreeSceneView({ document, selectedIds, onSelect }: ThreeSceneVi
     })
     const sceneShell = containerRef.current
     let dihedralMarkerCount = 0
+    let planeCount = 0
     document.measurements
       .filter((measurement) => measurement.metric === "dihedral" && measurement.status === "valid" && measurement.sourceIds.some((id) => selectedIds.includes(id)))
       .forEach((measurement) => {
@@ -545,30 +707,84 @@ export function ThreeSceneView({ document, selectedIds, onSelect }: ThreeSceneVi
         scene.add(createDihedralMarkerGroup(marker, measurement.sourceIds.every((id) => selectedIds.includes(id))))
         dihedralMarkerCount += 1
       })
+    // Planes are drawn last: their patch is sized from the figure they belong to, so the figure must exist first.
+    const contentRadius = contentBounds(scene).getSize(new THREE.Vector3()).length() / 2
+    const planeHalfSize = Math.max(Math.min(contentRadius * 1.6, 60), 1.2)
+    document.primitives.filter((primitive): primitive is Plane3Primitive => primitive.type === "plane3" && primitive.visible !== false).forEach((primitive) => {
+      const plane = createPlane3Mesh(primitive, points, selectedIds.includes(primitive.id), planeHalfSize)
+      if (!plane) return
+      scene.add(plane)
+      planeCount += 1
+    })
     if (sceneShell) {
       sceneShell.dataset.unfoldFaces = String(unfoldFaceCount)
       sceneShell.dataset.unfoldProgress = unfoldProgress.toFixed(2)
       sceneShell.dataset.dihedralMarkers = String(dihedralMarkerCount)
+      sceneShell.dataset.planeCount = String(planeCount)
     }
 
-    const render = () => renderer.render(scene, camera)
+    const sceneBounds = contentBounds(scene)
+    if (sceneShell) {
+      const size = sceneBounds.getSize(new THREE.Vector3())
+      const centre = sceneBounds.getCenter(new THREE.Vector3())
+      sceneShell.dataset.contentBounds = sceneBounds.isEmpty() ? "empty" : `${centre.x.toFixed(2)},${centre.y.toFixed(2)},${centre.z.toFixed(2)} size ${size.x.toFixed(2)},${size.y.toFixed(2)},${size.z.toFixed(2)}`
+    }
+    // Grid and axes follow the figure: at a one-unit scale a fixed five-unit axes helper slashes straight
+    // through the solid and a fourteen-unit grid turns into visual noise.
+    const hasContent = !sceneBounds.isEmpty()
+    const helperSpan = hasContent ? Math.max(sceneBounds.getSize(new THREE.Vector3()).length(), 4) : 14
+    const gridStep = niceGridStep(helperSpan / 14)
+    const grid = new THREE.GridHelper(gridStep * 14, 14, scenePalette.grid, scenePalette.grid)
+    grid.userData.excludeFromFit = true
+    scene.add(grid)
+    const axes = new THREE.AxesHelper(hasContent ? Math.max(planeHalfSize * 0.7, 1.2) : 5)
+    axes.userData.excludeFromFit = true
+    scene.add(axes)
+
+    let viewportHeight = height
+    const syncPointHandleScales = () => {
+      for (const handle of pointHandles) handle.scale.setScalar(pointHandleWorldRadius(camera, camera.position.distanceTo(handle.position), viewportHeight))
+    }
+    const render = () => {
+      syncPointHandleScales()
+      if (sceneShell) {
+        sceneShell.dataset.cameraDistance = cameraStateRef.current.distance.toFixed(2)
+        sceneShell.dataset.cameraTarget = `${cameraStateRef.current.target.x.toFixed(2)},${cameraStateRef.current.target.y.toFixed(2)},${cameraStateRef.current.target.z.toFixed(2)}`
+      }
+      renderer.render(scene, camera)
+    }
+    /** Click tolerance in world units, so a grab is always the same number of pixels wide. */
+    const pickTolerance = () => pointHandleWorldRadius(camera, cameraStateRef.current.distance, viewportHeight, PICK_TOLERANCE_PX)
     const setCameraState = (nextState: CameraState) => {
       cameraStateRef.current = nextState
       applyCameraState(camera, nextState)
       render()
     }
     resetCameraRef.current = () => setCameraState(resetCameraState())
+    const fitToContent = () => {
+      cameraStateRef.current = fitCameraState(cameraStateRef.current, sceneBounds, camera)
+      applyCameraState(camera, cameraStateRef.current)
+      render()
+    }
+    fitCameraRef.current = fitToContent
+    // Fit when a different document arrives (open file, switch workspace, restore draft), not on every edit:
+    // re-framing while the user is working would fight their own camera moves.
+    if (fittedDocumentRef.current !== document.metadata.id) {
+      fittedDocumentRef.current = document.metadata.id
+      fitToContent()
+    }
     render()
     const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => {
-      const nextWidth = Math.max(container.clientWidth, 320)
-      const nextHeight = Math.max(container.clientHeight, 480)
-      camera.aspect = nextWidth / nextHeight
+      const next = viewportSize()
+      viewportHeight = next.height
+      camera.aspect = next.width / next.height
       camera.updateProjectionMatrix()
-      renderer.setSize(nextWidth, nextHeight, false)
+      renderer.setSize(next.width, next.height, false)
       render()
     })
     resizeObserver?.observe(container)
 
+    const topologyOwners = templateTopologyOwners(document)
     let pointerState: { pointerId: number; x: number; y: number; lastX: number; lastY: number; button: number; moved: boolean; shiftKey: boolean } | null = null
     const pointFromEvent = (event: PointerEvent) => {
       const bounds = renderer.domElement.getBoundingClientRect()
@@ -597,7 +813,7 @@ export function ThreeSceneView({ document, selectedIds, onSelect }: ThreeSceneVi
     const handlePointerUp = (event: PointerEvent) => {
       if (!pointerState || pointerState.pointerId !== event.pointerId) return
       const point = pointFromEvent(event)
-      if (!pointerState.moved && pointerState.button === 0) onSelect(pickPrimitiveAt(scene, camera, point), event.shiftKey)
+      if (!pointerState.moved && pointerState.button === 0) onSelect(resolveSelectableHit(pickPrimitiveAt(scene, camera, point, { tolerance: pickTolerance() }), topologyOwners), event.shiftKey)
       renderer.domElement.releasePointerCapture(event.pointerId)
       pointerState = null
     }
@@ -614,6 +830,7 @@ export function ThreeSceneView({ document, selectedIds, onSelect }: ThreeSceneVi
     renderer.domElement.addEventListener("contextmenu", handleContextMenu)
     return () => {
       resetCameraRef.current = () => undefined
+      fitCameraRef.current = () => undefined
       renderer.domElement.removeEventListener("pointerdown", handlePointerDown)
       renderer.domElement.removeEventListener("pointermove", handlePointerMove)
       renderer.domElement.removeEventListener("pointerup", handlePointerUp)
@@ -629,5 +846,5 @@ export function ThreeSceneView({ document, selectedIds, onSelect }: ThreeSceneVi
 
   const hasGeometry = document.primitives.some((primitive) => ["point3", "line3", "segment3", "ray3", "edge3", "face3", "polyhedron3", "cube", "pyramid", "cylinder", "cone"].includes(primitive.type) && primitive.visible !== false)
   const angle = dihedralAngleDegrees({ x: 1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 })
-  return <div className="three-canvas-shell" ref={containerRef} data-3d-scene="true" aria-label="3D 几何场景"><div className="three-render-target" ref={renderTargetRef} />{webglAvailable && <div className="three-scene-controls" aria-label="3D显示控制"><button type="button" aria-pressed={transparentFaces} onClick={() => setTransparentFaces((visible) => !visible)}>透明面</button><button type="button" aria-pressed={showHiddenEdges} onClick={() => setShowHiddenEdges((visible) => !visible)}>隐藏边</button><button type="button" aria-pressed={showNormals} onClick={() => setShowNormals((visible) => !visible)}>法向量</button><button type="button" aria-pressed={unfolded} onClick={() => setUnfolded((visible) => !visible)}>{unfolded ? "折叠" : "展开"}</button><button type="button" aria-pressed={showAngle} onClick={() => setShowAngle((visible) => !visible)}>测量二面角</button></div>}{webglAvailable && <button className="three-reset-button" type="button" aria-label="重置3D视角" onClick={() => resetCameraRef.current()}>重置视角</button>}{showAngle && webglAvailable && <div className="three-angle-readout" role="status">二面角：{angle.toFixed(1)}°（示例法向量 X/Y）</div>}{!webglAvailable && <div className="three-scene-status" role="status">当前浏览器不支持 WebGL，无法显示 3D 场景。</div>}{webglAvailable && !hasGeometry && <div className="three-scene-status" role="status">添加点、线或面开始探索三维空间。</div>}</div>
+  return <div className="three-canvas-shell" ref={containerRef} data-3d-scene="true" aria-label="3D 几何场景"><div className="three-render-target" ref={renderTargetRef} />{webglAvailable && <div className="three-scene-controls" aria-label="3D显示控制"><button type="button" aria-pressed={transparentFaces} onClick={() => setTransparentFaces((visible) => !visible)}>透明面</button><button type="button" aria-pressed={showHiddenEdges} onClick={() => setShowHiddenEdges((visible) => !visible)}>隐藏边</button><button type="button" aria-pressed={showNormals} onClick={() => setShowNormals((visible) => !visible)}>法向量</button><button type="button" aria-pressed={unfolded} onClick={() => setUnfolded((visible) => !visible)}>{unfolded ? "折叠" : "展开"}</button><button type="button" aria-pressed={showAngle} onClick={() => setShowAngle((visible) => !visible)}>测量二面角</button></div>}{webglAvailable && <div className="three-camera-controls" aria-label="3D视角控制"><button type="button" aria-label="适应视图" title="把视角调整到刚好框住当前图形" onClick={() => fitCameraRef.current()}>适应视图</button><button type="button" aria-label="重置3D视角" title="回到默认视角" onClick={() => resetCameraRef.current()}>重置视角</button></div>}{showAngle && webglAvailable && <div className="three-angle-readout" role="status">二面角：{angle.toFixed(1)}°（示例法向量 X/Y）</div>}{!webglAvailable && <div className="three-scene-status" role="status">当前浏览器不支持 WebGL，无法显示 3D 场景。</div>}{webglAvailable && !hasGeometry && <div className="three-scene-status" role="status">添加点、线或面开始探索三维空间。</div>}</div>
 }

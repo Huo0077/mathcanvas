@@ -1,0 +1,172 @@
+{
+  "format": "mgeo",
+  "formatVersion": "0.1",
+  "document": {
+    "schemaVersion": "0.1",
+    "revision": 0,
+    "workspace": "geometry3d",
+    "coordinateSystems": [
+      "cartesian-3d"
+    ],
+    "parameters": {},
+    "primitives": [
+      {
+        "id": "point3-A",
+        "type": "point3",
+        "position": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "binding": {
+          "kind": "free"
+        },
+        "label": "A"
+      },
+      {
+        "id": "point3-B",
+        "type": "point3",
+        "position": {
+          "x": 0,
+          "y": 0,
+          "z": 1
+        },
+        "binding": {
+          "kind": "free"
+        },
+        "label": "B"
+      },
+      {
+        "id": "point3-C",
+        "type": "point3",
+        "position": {
+          "x": 1,
+          "y": 0,
+          "z": 0
+        },
+        "binding": {
+          "kind": "free"
+        },
+        "label": "C"
+      },
+      {
+        "id": "point3-D",
+        "type": "point3",
+        "position": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        },
+        "binding": {
+          "kind": "free"
+        },
+        "label": "D"
+      },
+      {
+        "id": "edge3-1",
+        "type": "edge3",
+        "pointIds": [
+          "point3-A",
+          "point3-B"
+        ],
+        "label": "AB"
+      },
+      {
+        "id": "edge3-2",
+        "type": "edge3",
+        "pointIds": [
+          "point3-A",
+          "point3-C"
+        ],
+        "label": "AC"
+      },
+      {
+        "id": "edge3-3",
+        "type": "edge3",
+        "pointIds": [
+          "point3-A",
+          "point3-D"
+        ],
+        "label": "AD"
+      },
+      {
+        "id": "edge3-4",
+        "type": "edge3",
+        "pointIds": [
+          "point3-B",
+          "point3-C"
+        ],
+        "label": "BC"
+      },
+      {
+        "id": "edge3-5",
+        "type": "edge3",
+        "pointIds": [
+          "point3-B",
+          "point3-D"
+        ],
+        "label": "BD"
+      },
+      {
+        "id": "edge3-6",
+        "type": "edge3",
+        "pointIds": [
+          "point3-C",
+          "point3-D"
+        ],
+        "label": "CD"
+      },
+      {
+        "id": "face3-1",
+        "type": "face3",
+        "pointIds": [
+          "point3-A",
+          "point3-B",
+          "point3-C"
+        ],
+        "label": "ABC"
+      },
+      {
+        "id": "face3-2",
+        "type": "face3",
+        "pointIds": [
+          "point3-A",
+          "point3-B",
+          "point3-D"
+        ],
+        "label": "ABD"
+      },
+      {
+        "id": "face3-3",
+        "type": "face3",
+        "pointIds": [
+          "point3-A",
+          "point3-C",
+          "point3-D"
+        ],
+        "label": "ACD"
+      },
+      {
+        "id": "face3-4",
+        "type": "face3",
+        "pointIds": [
+          "point3-B",
+          "point3-C",
+          "point3-D"
+        ],
+        "label": "BCD"
+      }
+    ],
+    "groups": [],
+    "constraints": [],
+    "dynamics": [],
+    "annotations": [],
+    "measurements": [],
+    "metadata": {
+      "id": "doc-tetrahedron",
+      "name": "Tetrahedron A(0,0,0) B(0,0,1) C(1,0,0) D(1,1,1)",
+      "createdAt": "2026-09-14T16:59:01.232Z",
+      "updatedAt": "2026-09-14T16:59:01.232Z"
+    }
+  }
+}

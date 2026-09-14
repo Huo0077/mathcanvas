@@ -30,6 +30,26 @@ export function measurementOptionsFor(workspace: Workspace, selection: Primitive
   return options
 }
 
+export interface Point3ToolAvailability { line: boolean; plane: boolean; face: boolean }
+
+/**
+ * What the three "由选中点创建…" tools can do right now. The selection has to be spatial points and nothing
+ * else: a face picked alongside two points used to look like "two points" and fail with a confusing message.
+ */
+export function point3ToolAvailability(point3Count: number, selectionSize: number): Point3ToolAvailability {
+  const pointsOnly = point3Count > 0 && point3Count === selectionSize
+  return { line: pointsOnly && point3Count === 2, plane: pointsOnly && point3Count === 3, face: pointsOnly && point3Count >= 3 }
+}
+
+/** Plain-language guidance shown in the toolbar: the tools need Shift-clicked points and nothing said so before. */
+export function point3ToolHint(point3Count: number, selectionSize = point3Count): string {
+  if (point3Count > 0 && selectionSize !== point3Count) return `选中 ${selectionSize} 项，其中只有 ${point3Count} 个是空间点：请只保留空间点后再创建`
+  if (point3Count === 0) return "按住 Shift 依次点选空间点：选 2 个建直线，选 3 个建平面，选 3 个以上建空间面"
+  if (point3Count === 1) return "已选 1 个空间点：再选 1 个就能创建直线"
+  if (point3Count === 2) return "已选 2 个空间点：现在可以创建直线"
+  return `已选 ${point3Count} 个空间点：现在可以创建平面和空间面`
+}
+
 export function constraintOptionsFor(workspace: Workspace, selection: PrimitiveSpec[]): ConstraintOption[] {
   if (workspace !== "geometry3d") return []
   const ids = selection.map((primitive) => primitive.id)

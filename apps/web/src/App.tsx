@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 
 import { decodeMgeo, encodeMgeo, type AnnotationFeature, type ConstraintType, type Measurement3Metric, type PrimitiveSpec, type Workspace } from "@draw/dsl"
 import { buildSolidTemplate, createMeasurement3 } from "@draw/geometry-kernel"
-import { sectionPlaneThroughSource, validatePatch } from "@draw/scene-graph"
+import { deletionTargets, sectionPlaneThroughSource, validatePatch } from "@draw/scene-graph"
 import type { Alignment } from "@draw/scene-graph"
 
 import { AlgebraView } from "./components/AlgebraView"
@@ -16,6 +16,7 @@ import type { IntersectionPreview } from "./intersectionPreview"
 import { loadActiveWorkspace, loadDraft, saveDraft } from "./persistence/draftStorage"
 import { exportCsv, exportSvg } from "./persistence/exporters"
 import { migrateLegacySolids } from "./solidTemplates"
+import { point3ToolAvailability, point3ToolHint } from "./spatialTools"
 import { useSceneStore } from "./store"
 
 type CreationMode = "line" | "segment" | "ray" | "polyline" | "circle" | "arc" | null
@@ -143,15 +144,15 @@ export function App() {
     if (document.workspace === "geometry3d") {
       if (mode === "line") {
         if (canCreateLine3) addLine3()
-        else setFileError("请先选择两个空间点创建直线")
+        else setFileError("请先在代数区按住 Shift 依次点选 2 个空间点，再创建直线")
       }
       if (mode === "segment") {
         if (canCreatePlane3) addPlane3()
-        else setFileError("请先选择三个空间点创建平面")
+        else setFileError("请先按住 Shift 点选 3 个不共线的空间点，再创建平面")
       }
       if (mode === "ray" || mode === "polyline") {
         if (canCreateFace3) addFace3()
-        else setFileError("请先选择三个或更多空间点创建空间面")
+        else setFileError("请先按住 Shift 点选 3 个以上的空间点，再创建空间面")
       }
       return
     }
@@ -245,9 +246,10 @@ export function App() {
   const intersectionTypes = ["point", "line", "segment", "ray", "polyline", "circle", "arc", "parabola", "ellipse", "hyperbola", "function"] as const
   const selectedPointIds = selectedIds.filter((id) => document.primitives.find((primitive) => primitive.id === id)?.type === "point")
   const selectedPoint3Ids = selectedIds.filter((id) => document.primitives.find((primitive) => primitive.id === id)?.type === "point3")
-  const canCreateLine3 = selectedPoint3Ids.length === 2 && selectedPoint3Ids.length === selectedIds.length
-  const canCreatePlane3 = selectedPoint3Ids.length === 3 && selectedPoint3Ids.length === selectedIds.length
-  const canCreateFace3 = selectedPoint3Ids.length >= 3 && selectedPoint3Ids.length === selectedIds.length
+  const point3ToolState = point3ToolAvailability(selectedPoint3Ids.length, selectedIds.length)
+  const canCreateLine3 = point3ToolState.line
+  const canCreatePlane3 = point3ToolState.plane
+  const canCreateFace3 = point3ToolState.face
   const canCreatePointConnection = (selectedIds.length === 2 || selectedIds.length === 3) && selectedPointIds.length === selectedIds.length
   const canCreateIntersection = canCreatePointConnection || (selectedIds.length === 2 && selectedIds.every((id) => intersectionTypes.includes(document.primitives.find((primitive) => primitive.id === id)?.type as typeof intersectionTypes[number])))
   const allSelectedLocked = selectedIds.length > 0 && selectedIds.every((id) => document.primitives.find((primitive) => primitive.id === id)?.locked)
@@ -372,7 +374,10 @@ export function App() {
   function addPoint3() {
     const pointCount = document.primitives.filter((primitive) => primitive.type === "point3").length
     const id = nextPrimitiveId(document, "point3")
-    const position = { x: (pointCount % 3) * 2, y: Math.floor(pointCount / 3) * 2, z: 0 }
+    // Walk a 2x2xk lattice: the first three points must never be collinear (a plane needs three non-collinear
+    // points) and no two points may land on top of each other. The old row-major layout put A, B and C on one
+    // line, so "add three points, build a plane" always failed.
+    const position = { x: (pointCount % 2) * 3, y: (Math.floor(pointCount / 2) % 2) * 3, z: Math.floor(pointCount / 4) * 3 }
     apply({ op: "addPrimitive", primitive: { id, type: "point3", position, binding: { kind: "free" }, label: nextPoint3Label(document) } })
     setSelectedIds([id])
   }
@@ -437,8 +442,15 @@ export function App() {
       setFileError(invalid.errors.join(", "))
       return
     }
-    for (const id of [...selectedIds].reverse()) apply({ op: "deleteObject", id })
+    // A solid and its generated topology are one object, so a selection covering both must delete it once.
+    const removed = new Set<string>()
+    for (const id of [...selectedIds].reverse()) {
+      if (removed.has(id)) continue
+      for (const target of deletionTargets(document, id)) removed.add(target)
+      apply({ op: "deleteObject", id })
+    }
     setSelectedIds([])
+    setFileError(null)
   }
 
   useEffect(() => {
@@ -459,5 +471,5 @@ export function App() {
   const creationLabel = creationMode === "line" ? "直线" : creationMode === "segment" ? "线段" : creationMode === "ray" ? "射线" : creationMode === "polyline" ? "折线" : creationMode === "circle" ? "圆" : "圆弧"
   const creationHint = creationMode === "polyline" ? "点击添加顶点，双击结束" : creationMode === "line" || creationMode === "segment" || creationMode === "ray" ? (creationStep?.center ? "点击终点" : "点击起点") : creationStep?.mode === "arc" ? (creationStep.start ? "点击终点" : "点击起点") : creationStep?.center ? "点击边缘" : "点击圆心"
 
-  return <div className="app-shell"><WorkspaceHeader activeWorkspace={document.workspace} onWorkspaceChange={(workspace: Workspace) => { setSelectedIds([]); setCreationStep(null); switchWorkspace(workspace) }} /><div className="workbench"><GeometryToolbar workspace={document.workspace} canCreateSection={canCreateSection} hasSelection={selectedIds.length > 0} allSelectedLocked={allSelectedLocked} creationMode={creationMode} onSelectTool={() => setCreationStep(null)} onDelete={deleteSelected} onToggleLock={toggleLock} onUndo={undo} onRedo={redo} onSave={save} onOpen={() => fileInputRef.current?.click()} onExportSvg={exportSvgFile} onExportCsv={exportCsvFile} onExportPng={exportPngFile} onAddPoint={addPoint} onAddLine={() => startCreation("line")} onAddSegment={() => startCreation("segment")} onAddRay={() => startCreation("ray")} onAddPolyline={() => startCreation("polyline")} onAddCircle={() => startCreation("circle")} onAddArc={() => startCreation("arc")} onAddParabola={() => addDefaultPrimitive("parabola")} onAddEllipse={() => addDefaultPrimitive("ellipse")} onAddHyperbola={() => addDefaultPrimitive("hyperbola")} onAddFunction={() => addDefaultPrimitive("function")} onAddCube={addDefaultCube} onAddPyramid={() => addDefaultSolid("pyramid")} onAddCylinder={() => addDefaultSolid("cylinder")} onAddCone={() => addDefaultSolid("cone")} onAddSection={addSection} /><AlgebraView primitives={document.primitives} measurements={document.measurements} workspace={document.workspace} selectedIds={selectedIds} onSelect={updateSelection} onToggle={(id, visible) => apply({ op: "toggleVisibility", id, visible })} />{document.workspace === "geometry3d" ? <ThreeSceneView document={document} selectedIds={selectedIds} onSelect={updateSelection} /> : <GraphicsView document={document} selectedIds={selectedIds} creationMode={creationMode} onSelect={updateSelection} onBoxSelect={selectBox} onCanvasClick={handleCanvasCreationClick} onCanvasDoubleClick={handleCanvasDoubleClick} onDragEnd={handleDragEnd} onCreateIntersection={createIntersectionFromPreview} />}<aside className="panel right"><PropertiesBar selectedPrimitive={selectedPrimitive} selectedIds={selectedIds} selectedCount={selectedIds.length} selectedGroupId={selectedGroup?.id ?? null} allSelectedVisible={allSelectedVisible} canCreateIntersection={canCreateIntersection} onCreateGroup={createGroup} onDeleteGroup={deleteGroup} onCreateIntersection={createIntersection} onAlign={alignSelection} onToggleSelectedVisibility={() => selectedId && apply({ op: "toggleVisibility", id: selectedId, visible: selectedPrimitive?.visible === false })} onToggleSelectedLock={() => selectedId && apply({ op: "toggleLock", id: selectedId, locked: !selectedPrimitive?.locked })} onToggleBatchVisibility={() => apply({ op: "setPrimitivesVisible", ids: selectedIds, visible: !allSelectedVisible })} onUpdatePrimitive={(patch) => selectedId && apply({ op: "updatePrimitive", id: selectedId, patch })} onAddAnnotation={addAnnotation} onCreateMeasurement={addMeasurement} onCreateConstraint={addConstraint} onDeleteMeasurement={deleteMeasurement} value={slope?.value ?? 0.5} min={slope?.min ?? 0.15} max={slope?.max ?? 0.85} step={slope?.step ?? 0.05} onChange={(value) => apply({ op: "setParameter", id: "slope", value })} /><AgentDock /></aside><div className="footer-note">revision {document.revision} · 工作区：{document.workspace} · 草稿自动保存 · {creationMode ? `${creationLabel}创建：${creationHint}` : slopeLine?.type === "line" ? "Scene Graph / Dependency DAG 已连接" : "等待图元"}</div></div>{(fileError || operationError) && <div role="alert" className="footer-note">{fileError ?? operationError}</div>}<input ref={fileInputRef} hidden aria-label="加载 .mgeo 文件" type="file" accept=".mgeo,application/json" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; file.text().then(load).catch(() => setFileError("无法读取 .mgeo 文件")); event.target.value = "" }} /></div>
+  return <div className="app-shell"><WorkspaceHeader activeWorkspace={document.workspace} onWorkspaceChange={(workspace: Workspace) => { setSelectedIds([]); setCreationStep(null); switchWorkspace(workspace) }} /><div className="workbench"><GeometryToolbar workspace={document.workspace} canCreateSection={canCreateSection} hasSelection={selectedIds.length > 0} allSelectedLocked={allSelectedLocked} creationMode={creationMode} onSelectTool={() => setCreationStep(null)} onDelete={deleteSelected} onToggleLock={toggleLock} onUndo={undo} onRedo={redo} onSave={save} onOpen={() => fileInputRef.current?.click()} onExportSvg={exportSvgFile} onExportCsv={exportCsvFile} onExportPng={exportPngFile} onAddPoint={addPoint} onAddLine={() => startCreation("line")} onAddSegment={() => startCreation("segment")} onAddRay={() => startCreation("ray")} onAddPolyline={() => startCreation("polyline")} onAddCircle={() => startCreation("circle")} onAddArc={() => startCreation("arc")} onAddParabola={() => addDefaultPrimitive("parabola")} onAddEllipse={() => addDefaultPrimitive("ellipse")} onAddHyperbola={() => addDefaultPrimitive("hyperbola")} onAddFunction={() => addDefaultPrimitive("function")} onAddCube={addDefaultCube} onAddPyramid={() => addDefaultSolid("pyramid")} onAddCylinder={() => addDefaultSolid("cylinder")} onAddCone={() => addDefaultSolid("cone")} onAddSection={addSection} point3ToolHint={point3ToolHint(selectedPoint3Ids.length, selectedIds.length)} /><AlgebraView primitives={document.primitives} measurements={document.measurements} workspace={document.workspace} selectedIds={selectedIds} onSelect={updateSelection} onToggle={(id, visible) => apply({ op: "toggleVisibility", id, visible })} />{document.workspace === "geometry3d" ? <ThreeSceneView document={document} selectedIds={selectedIds} onSelect={updateSelection} /> : <GraphicsView document={document} selectedIds={selectedIds} creationMode={creationMode} onSelect={updateSelection} onBoxSelect={selectBox} onCanvasClick={handleCanvasCreationClick} onCanvasDoubleClick={handleCanvasDoubleClick} onDragEnd={handleDragEnd} onCreateIntersection={createIntersectionFromPreview} />}<aside className="panel right"><PropertiesBar selectedPrimitive={selectedPrimitive} selectedIds={selectedIds} selectedCount={selectedIds.length} selectedGroupId={selectedGroup?.id ?? null} allSelectedVisible={allSelectedVisible} canCreateIntersection={canCreateIntersection} onCreateGroup={createGroup} onDeleteGroup={deleteGroup} onCreateIntersection={createIntersection} onAlign={alignSelection} onToggleSelectedVisibility={() => selectedId && apply({ op: "toggleVisibility", id: selectedId, visible: selectedPrimitive?.visible === false })} onToggleSelectedLock={() => selectedId && apply({ op: "toggleLock", id: selectedId, locked: !selectedPrimitive?.locked })} onToggleBatchVisibility={() => apply({ op: "setPrimitivesVisible", ids: selectedIds, visible: !allSelectedVisible })} onUpdatePrimitive={(patch) => selectedId && apply({ op: "updatePrimitive", id: selectedId, patch })} onAddAnnotation={addAnnotation} onCreateMeasurement={addMeasurement} onCreateConstraint={addConstraint} onDeleteMeasurement={deleteMeasurement} value={slope?.value ?? 0.5} min={slope?.min ?? 0.15} max={slope?.max ?? 0.85} step={slope?.step ?? 0.05} onChange={(value) => apply({ op: "setParameter", id: "slope", value })} /><AgentDock /></aside><div className="footer-note">revision {document.revision} · 工作区：{document.workspace} · 草稿自动保存 · {creationMode ? `${creationLabel}创建：${creationHint}` : slopeLine?.type === "line" ? "Scene Graph / Dependency DAG 已连接" : "等待图元"}</div></div>{(fileError || operationError) && <div role="alert" className="footer-note">{fileError ?? operationError}</div>}<input ref={fileInputRef} hidden aria-label="加载 .mgeo 文件" type="file" accept=".mgeo,application/json" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; file.text().then(load).catch(() => setFileError("无法读取 .mgeo 文件")); event.target.value = "" }} /></div>
 }

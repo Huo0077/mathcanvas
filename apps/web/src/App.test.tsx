@@ -692,7 +692,9 @@ describe("MathCanvas workbench", () => {
     fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
     fireEvent.click(screen.getByRole("button", { name: "由选中点创建空间直线" }))
 
-    expect(screen.getByRole("alert").textContent).toContain("请先选择两个空间点")
+    // The message has to say how to select, not just that the selection is wrong.
+    expect(screen.getByRole("alert").textContent).toContain("Shift")
+    expect(screen.getByRole("alert").textContent).toContain("空间点")
     expect(useSceneStore.getState().document.primitives.some((primitive) => primitive.type === "line3")).toBe(false)
   })
 

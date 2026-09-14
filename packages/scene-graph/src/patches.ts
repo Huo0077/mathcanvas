@@ -1,7 +1,7 @@
 import { validateDocument, type AnnotationSpec, type ConstraintSpec, type GeometryDocument, type Measurement3, type PrimitiveSpec } from "@draw/dsl"
 import { parseExpression } from "@draw/geometry-kernel"
 
-import { applyOperation, type DomainOperation } from "./operations"
+import { applyOperation, deletionTargets, type DomainOperation } from "./operations"
 
 export type PatchValidationResult =
   | { valid: true }
@@ -43,8 +43,8 @@ function isVector3(value: unknown): value is { x: number; y: number; z: number }
   return Boolean(isCoordinate(value) && Number.isFinite((value as { z?: unknown }).z))
 }
 
-function isReferenced(document: GeometryDocument, id: string): boolean {
-  return document.groups.some((group) => group.members.includes(id)) || document.constraints.some((constraint) => constraint.targets.includes(id)) || document.measurements.some((measurement) => measurement.sourceIds.includes(id)) || document.annotations.some((annotation) => annotation.target === id || (annotation.anchor?.kind === "primitive" && annotation.anchor.primitiveId === id)) || document.primitives.some((primitive) => (
+function isReferenced(document: GeometryDocument, id: string, ignoredReferrers: Set<string> = new Set()): boolean {
+  return document.groups.some((group) => group.members.includes(id)) || document.constraints.some((constraint) => constraint.targets.includes(id)) || document.measurements.some((measurement) => measurement.sourceIds.includes(id)) || document.annotations.some((annotation) => annotation.target === id || (annotation.anchor?.kind === "primitive" && annotation.anchor.primitiveId === id)) || document.primitives.some((primitive) => !ignoredReferrers.has(primitive.id) && (
     (primitive.type === "intersection" && (primitive.lineA === id || primitive.lineB === id)) ||
     (primitive.type === "lineCircleIntersection" && (primitive.lineId === id || primitive.circleId === id)) ||
     (primitive.type === "circleIntersection" && (primitive.circleA === id || primitive.circleB === id)) ||
@@ -215,7 +215,11 @@ export function validatePatch(document: GeometryDocument, operation: DomainOpera
   if (operation.op === "deleteConstraint" && !document.constraints.some((constraint) => constraint.id === operation.id)) errors.push("constraint not found")
   if ((operation.op === "deleteObject" || operation.op === "toggleVisibility") && !ids.has(operation.id)) errors.push("object not found")
   if ((operation.op === "deleteObject" || operation.op === "toggleVisibility") && document.primitives.find((primitive) => primitive.id === operation.id)?.locked) errors.push("object is locked")
-  if (operation.op === "deleteObject" && isReferenced(document, operation.id)) errors.push("object is referenced by another object")
+  if (operation.op === "deleteObject") {
+    // References that come from the object's own generated topology do not protect it.
+    const targets = deletionTargets(document, operation.id)
+    if ([...targets].some((target) => isReferenced(document, target, targets))) errors.push("object is referenced by another object")
+  }
   if (operation.op === "createGroup") {
     if (document.groups.some((group) => group.id === operation.group.id)) errors.push("duplicate group id")
     if (operation.group.members.length < 2 || new Set(operation.group.members).size !== operation.group.members.length || operation.group.members.some((id) => !ids.has(id))) errors.push("group has invalid members")

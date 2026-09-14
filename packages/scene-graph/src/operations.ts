@@ -670,8 +670,25 @@ export function recomputeDerivedObjects(document: GeometryDocument, changedIds?:
   return { ...evaluatedDocument, primitives, measurements }
 }
 
-export function applyOperation(document: GeometryDocument, operation: DomainOperation): OperationResult {
-  const next = structuredClone(document) as GeometryDocument
+/**
+ * A template solid (cube/pyramid/cylinder/cone) is not a single primitive: the workspace also materialises a
+ * polyhedron plus its vertices, edges and faces so the figure can be drawn and measured. Those parts exist only
+ * to draw the solid, so for deletion they are the same object — deleting any member deletes the family. Treating
+ * the generated parts as ordinary referrers instead made a solid impossible to delete, and deleting the
+ * generated part alone left the rest of the figure floating in the scene.
+ */
+export function deletionTargets(document: GeometryDocument, id: string): Set<string> {
+  const targets = new Set<string>([id])
+  const polyhedron = document.primitives.find((primitive) => {
+    if (primitive.type !== "polyhedron3" || primitive.construction?.kind !== "template") return false
+    return primitive.id === id || primitive.construction.sourceIds[0] === id || primitive.vertexIds.includes(id) || primitive.edgeIds.includes(id) || primitive.faceIds.includes(id)
+  })
+  if (!polyhedron || polyhedron.type !== "polyhedron3") return targets
+  for (const member of [polyhedron.id, ...(polyhedron.construction?.sourceIds ?? []), ...polyhedron.vertexIds, ...polyhedron.edgeIds, ...polyhedron.faceIds]) targets.add(member)
+  return targets
+}
+
+export function applyOperation(document: GeometryDocument, operation: DomainOperation): OperationResult {  const next = structuredClone(document) as GeometryDocument
   let changedIds: string[] = []
   if (operation.op === "addPrimitive") {
     if (next.primitives.some((primitive) => primitive.id === operation.primitive.id)) return { document, changed: false, error: "duplicate object id" }
@@ -792,10 +809,11 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
     next.constraints.push(operation.constraint)
     changedIds = operation.constraint.targets
   } else if (operation.op === "deleteObject") {
+    const targets = deletionTargets(next, operation.id)
     const before = next.primitives.length
-    next.primitives = next.primitives.filter((primitive) => primitive.id !== operation.id)
+    next.primitives = next.primitives.filter((primitive) => !targets.has(primitive.id))
     if (before === next.primitives.length) return { document, changed: false, error: "object not found" }
-    changedIds = [operation.id]
+    changedIds = [...targets]
   } else if (operation.op === "deleteConstraint") {
     const before = next.constraints.length
     next.constraints = next.constraints.filter((constraint) => constraint.id !== operation.id)

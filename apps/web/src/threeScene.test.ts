@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest"
 import * as THREE from "three"
 
-import type { SectionPrimitive } from "@draw/dsl"
-import { dihedralMarker3, unfoldPolyhedron3 } from "@draw/geometry-kernel"
+import type { GeometryDocument, Point3Primitive, PrimitiveSpec, SectionPrimitive } from "@draw/dsl"
+import { createEmptyDocument } from "@draw/dsl"
+import { buildSolidTemplate, dihedralMarker3, unfoldPolyhedron3 } from "@draw/geometry-kernel"
 
-import { createCameraState, createCubeMesh, createDihedralMarkerGroup, createFace3Mesh, createPoint3Mesh, createPointDrivenLine, createSectionMesh, createSolidGroup, createSolidMesh, createUnfoldNetGroup, cubeUnfoldCenters, panCameraState, pickPrimitiveAt, pickRaycastHit3, prefersReducedMotion, resetCameraState, rotateCameraState, zoomCameraState } from "./threeScene"
+import { POINT_HANDLE_RADIUS_PX, createCameraState, createCubeMesh, createDihedralMarkerGroup, createEdge3Line, createFace3Mesh, createPlane3Mesh, createPoint3Mesh, createPointDrivenLine, createSectionMesh, createSolidGroup, createSolidMesh, createUnfoldNetGroup, cubeUnfoldCenters, fitCameraState, panCameraState, pickPrimitiveAt, pickRaycastHit3, pointHandleWorldRadius, prefersReducedMotion, resetCameraState, resolveSelectableHit, rotateCameraState, templateTopologyOwners, zoomCameraState } from "./threeScene"
 
 describe("Three.js geometry scene", () => {
   it("renders a selectable point3 at its source position", () => {
@@ -132,6 +133,167 @@ describe("Three.js geometry scene", () => {
     })
   })
 
+  it("sizes a vertex handle in world units but keeps it constant on screen", () => {
+    const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 1000)
+    const handle = createPoint3Mesh({ id: "point-handle", type: "point3", position: { x: 0, y: 0, z: 0 } }, false, 0.25)
+
+    expect((handle.geometry as THREE.SphereGeometry).parameters.radius).toBe(1)
+    expect(handle.scale.x).toBeCloseTo(0.25, 6)
+
+    // Doubling the distance must double the world radius so the handle covers the same pixels.
+    const near = pointHandleWorldRadius(camera, 8, 400)
+    const far = pointHandleWorldRadius(camera, 16, 400)
+    expect(far / near).toBeCloseTo(2, 6)
+
+    // The projected diameter matches the requested pixel size.
+    const worldPerPixel = 2 * 8 * Math.tan((42 * Math.PI / 180) / 2) / 400
+    expect((near * 2) / worldPerPixel).toBeCloseTo(POINT_HANDLE_RADIUS_PX * 2, 6)
+  })
+
+  it("hands the click to the surface under the cursor instead of an object on the far side", () => {
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100)
+    camera.position.set(0, 0, 8)
+    camera.lookAt(0, 0, 0)
+    const scene = new THREE.Scene()
+    const points = new Map([["p0", { id: "p0", type: "point3" as const, position: { x: -1, y: -1, z: 0 } }], ["p1", { id: "p1", type: "point3" as const, position: { x: 1, y: -1, z: 0 } }], ["p2", { id: "p2", type: "point3" as const, position: { x: 1, y: 1, z: 0 } }], ["p3", { id: "p3", type: "point3" as const, position: { x: -1, y: 1, z: 0 } }]])
+    const face = createFace3Mesh({ id: "face-front", type: "face3", pointIds: ["p0", "p1", "p2", "p3"] }, points, false)!
+    // A handle four units behind the face must not win just because it is a point.
+    const behind = createPoint3Mesh({ id: "point-behind", type: "point3", position: { x: 0, y: 0, z: -4 } }, false, 0.05)
+    scene.add(face, behind)
+
+    const hit = pickRaycastHit3(scene, camera, { x: 0.5, y: 0.5 })
+
+    expect(hit?.primitiveId).toBe("face-front")
+    expect(hit?.kind).toBe("face")
+
+    scene.traverse((object) => {
+      if (object instanceof THREE.Mesh) object.geometry.dispose()
+      if (object instanceof THREE.Mesh && object.material instanceof THREE.Material) object.material.dispose()
+    })
+  })
+
+  it("still lets a handle that sits on a surface win the click", () => {
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100)
+    camera.position.set(0, 0, 8)
+    camera.lookAt(0, 0, 0)
+    const points = new Map([["p0", { id: "p0", type: "point3" as const, position: { x: -1, y: -1, z: 0 } }], ["p1", { id: "p1", type: "point3" as const, position: { x: 1, y: -1, z: 0 } }], ["p2", { id: "p2", type: "point3" as const, position: { x: 1, y: 1, z: 0 } }], ["p3", { id: "p3", type: "point3" as const, position: { x: -1, y: 1, z: 0 } }]])
+    const build = () => {
+      const scene = new THREE.Scene()
+      const face = createFace3Mesh({ id: "face-front", type: "face3", pointIds: ["p0", "p1", "p2", "p3"] }, points, false)!
+      // Sunk slightly behind the face, the way a solid's vertex handle sits inside its own surface.
+      const sunk = createPoint3Mesh({ id: "point-sunk", type: "point3", position: { x: 0, y: 0, z: -0.2 } }, false, 0.05)
+      scene.add(face, sunk)
+      return scene
+    }
+    const dispose = (scene: THREE.Scene) => scene.traverse((object) => {
+      if (object instanceof THREE.Mesh) object.geometry.dispose()
+      if (object instanceof THREE.Mesh && object.material instanceof THREE.Material) object.material.dispose()
+    })
+
+    const tight = build()
+    expect(pickRaycastHit3(tight, camera, { x: 0.5, y: 0.5 }, { tolerance: 0.01 })?.primitiveId).toBe("face-front")
+    dispose(tight)
+
+    // The screen-space allowance is what makes a small handle grabbable through its own surface.
+    const forgiving = build()
+    expect(pickRaycastHit3(forgiving, camera, { x: 0.5, y: 0.5 }, { tolerance: 0.3 })?.primitiveId).toBe("point-sunk")
+    dispose(forgiving)
+  })
+
+  it("does not let a line the cursor never touched steal the click", () => {
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100)
+    camera.position.set(0, 0, 8)
+    camera.lookAt(0, 0, 0)
+    const points = new Map([
+      ["l0", { id: "l0", type: "point3" as const, position: { x: 0.5, y: -1, z: 0 } }],
+      ["l1", { id: "l1", type: "point3" as const, position: { x: 0.5, y: 1, z: 0 } }],
+      ["p0", { id: "p0", type: "point3" as const, position: { x: -1, y: -1, z: 0 } }],
+      ["p1", { id: "p1", type: "point3" as const, position: { x: 1, y: -1, z: 0 } }],
+      ["p2", { id: "p2", type: "point3" as const, position: { x: 1, y: 1, z: 0 } }],
+      ["p3", { id: "p3", type: "point3" as const, position: { x: -1, y: 1, z: 0 } }]
+    ])
+    const scene = new THREE.Scene()
+    const face = createFace3Mesh({ id: "face-front", type: "face3", pointIds: ["p0", "p1", "p2", "p3"] }, points, false)!
+    const line = createPointDrivenLine({ id: "line-3d", type: "line3", definition: { kind: "throughPoints", pointIds: ["l0", "l1"] } }, points, false)!
+    scene.add(face, line)
+
+    // three.js defaults the line grab distance to a whole world unit, which is how an untouched edge used to win.
+    expect(pickRaycastHit3(scene, camera, { x: 0.5, y: 0.5 }, { tolerance: 0.04 })?.primitiveId).toBe("face-front")
+    expect(pickRaycastHit3(scene, camera, { x: 0.5, y: 0.5 }, { tolerance: 1 })?.primitiveId).toBe("line-3d")
+
+    scene.traverse((object) => {
+      if (object instanceof THREE.Mesh || object instanceof THREE.Line) object.geometry.dispose()
+      if ("material" in object && object.material instanceof THREE.Material) object.material.dispose()
+    })
+  })
+
+  it("draws a finite, pickable plane through its three defining points", () => {
+    const points = new Map([
+      ["p0", { id: "p0", type: "point3" as const, position: { x: 0, y: 0, z: 0 } }],
+      ["p1", { id: "p1", type: "point3" as const, position: { x: 4, y: 0, z: 0 } }],
+      ["p2", { id: "p2", type: "point3" as const, position: { x: 0, y: 4, z: 0 } }]
+    ])
+    const plane = createPlane3Mesh({ id: "plane-abc", type: "plane3", definition: { kind: "throughPoints", pointIds: ["p0", "p1", "p2"] } }, points, false, 2)
+
+    expect(plane).toBeTruthy()
+    expect(plane?.userData).toMatchObject({ primitiveId: "plane-abc", primitiveType: "plane3" })
+    // A plane is infinite; what is drawn is a bounded quad centred on the defining points.
+    const position = plane!.geometry.getAttribute("position") as THREE.BufferAttribute
+    const corners = Array.from({ length: position.count }, (_, index) => new THREE.Vector3().fromBufferAttribute(position, index))
+    for (const corner of corners) expect(Math.abs(corner.z)).toBeLessThan(1e-6)
+    expect(Math.max(...corners.map((corner) => corner.x)) - Math.min(...corners.map((corner) => corner.x))).toBeCloseTo(4, 5)
+    expect(corners.reduce((sum, corner) => sum + corner.x, 0) / corners.length).toBeCloseTo(4 / 3, 5)
+    // The plane must be hittable, otherwise it stays decorative.
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100)
+    camera.position.set(4 / 3, 4 / 3, 12)
+    camera.lookAt(4 / 3, 4 / 3, 0)
+    const scene = new THREE.Scene()
+    scene.add(plane!)
+    expect(pickPrimitiveAt(scene, camera, { x: 0.5, y: 0.5 })).toBe("plane-abc")
+
+    scene.traverse((object) => {
+      if (object instanceof THREE.Mesh || object instanceof THREE.Line) object.geometry.dispose()
+      if ("material" in object && object.material instanceof THREE.Material) object.material.dispose()
+    })
+  })
+
+  it("refuses to draw a plane whose defining points are collinear", () => {
+    const points = new Map([
+      ["p0", { id: "p0", type: "point3" as const, position: { x: 0, y: 0, z: 0 } }],
+      ["p1", { id: "p1", type: "point3" as const, position: { x: 1, y: 0, z: 0 } }],
+      ["p2", { id: "p2", type: "point3" as const, position: { x: 2, y: 0, z: 0 } }]
+    ])
+
+    expect(createPlane3Mesh({ id: "plane-degenerate", type: "plane3", definition: { kind: "throughPoints", pointIds: ["p0", "p1", "p2"] } }, points, false, 2)).toBeNull()
+  })
+
+  it("frames a figure by moving the target and pulling back, keeping the viewing angles", () => {
+    const camera = new THREE.PerspectiveCamera(42, 16 / 9, 0.1, 1000)
+    const bounds = new THREE.Box3(new THREE.Vector3(0, 0, 0), new THREE.Vector3(1, 1, 1))
+    const fitted = fitCameraState({ azimuth: 45, elevation: 30, distance: 16, target: { x: 0, y: 0, z: 0 } }, bounds, camera)
+
+    expect(fitted.azimuth).toBe(45)
+    expect(fitted.elevation).toBe(30)
+    expect(fitted.target).toEqual({ x: 0.5, y: 0.5, z: 0.5 })
+
+    // Every corner of the box must land inside the frustum at the fitted distance.
+    const distance = fitted.distance
+    const cameraAtFitted = new THREE.PerspectiveCamera(42, 16 / 9, 0.1, 1000)
+    const horizontal = distance * Math.cos(30 * Math.PI / 180)
+    cameraAtFitted.position.set(fitted.target.x + horizontal * Math.cos(Math.PI / 4), fitted.target.y + distance * Math.sin(30 * Math.PI / 180), fitted.target.z + horizontal * Math.sin(Math.PI / 4))
+    cameraAtFitted.lookAt(fitted.target.x, fitted.target.y, fitted.target.z)
+    cameraAtFitted.updateMatrixWorld(true)
+    cameraAtFitted.updateProjectionMatrix()
+    for (const corner of [new THREE.Vector3(0, 0, 0), new THREE.Vector3(1, 1, 1), new THREE.Vector3(1, 0, 1), new THREE.Vector3(0, 1, 0)]) {
+      const projected = corner.clone().project(cameraAtFitted)
+      expect(Math.abs(projected.x)).toBeLessThan(1)
+      expect(Math.abs(projected.y)).toBeLessThan(1)
+    }
+
+    // An empty scene falls back to the default view instead of collapsing the camera.
+    expect(fitCameraState(createCameraState(), new THREE.Box3(), camera).distance).toBe(createCameraState().distance)
+  })
+
   it("builds optional hidden-edge and normal visual layers", () => {
     const group = createSolidGroup({ id: "cube-visual", type: "cube", origin: { x: -1, y: -1, z: -1 }, size: { x: 2, y: 2, z: 2 } }, false, { showHiddenEdges: true, showNormals: true })
     const hiddenEdges = group.children.find((child) => child.userData.visualRole === "hidden-edges") as THREE.LineSegments | undefined
@@ -196,6 +358,60 @@ describe("Three.js geometry scene", () => {
 
     expect(object).toBeInstanceOf(THREE.Line)
     object?.traverse((child) => {
+      if (child instanceof THREE.Mesh || child instanceof THREE.Line) child.geometry.dispose()
+      if ("material" in child && child.material instanceof THREE.Material) child.material.dispose()
+    })
+  })
+
+  it("hands a click on a template solid's derived edge or face to the owning solid", () => {
+    const cube: Extract<PrimitiveSpec, { type: "cube" }> = { id: "cube-1", type: "cube", origin: { x: -2, y: -2, z: -1 }, size: { x: 4, y: 4, z: 2 }, label: "立方体 1" }
+    const built = buildSolidTemplate(cube)
+    const document: GeometryDocument = { ...createEmptyDocument("geometry3d"), primitives: [cube, ...built.primitives] }
+    const owners = templateTopologyOwners(document)
+
+    // Every derived edge and face belongs to the solid, so clicking the body selects the editable object.
+    expect(built.edgeIds).toHaveLength(12)
+    expect(built.faceIds).toHaveLength(6)
+    expect(owners.size).toBe(18)
+    for (const childId of [...built.edgeIds, ...built.faceIds]) expect(owners.get(childId)).toBe("cube-1")
+
+    // Generated vertices stay directly selectable: dragging one is how a template solid becomes point-driven.
+    for (const vertexId of built.vertexIds) expect(owners.has(vertexId)).toBe(false)
+
+    expect(resolveSelectableHit(built.edgeIds[0], owners)).toBe("cube-1")
+    expect(resolveSelectableHit(built.vertexIds[0], owners)).toBe(built.vertexIds[0])
+    expect(resolveSelectableHit("face-user", owners)).toBe("face-user")
+    expect(resolveSelectableHit(null, owners)).toBeNull()
+  })
+
+  it("resolves a raycast on a template solid's surface to the solid itself", () => {
+    const cube: Extract<PrimitiveSpec, { type: "cube" }> = { id: "cube-1", type: "cube", origin: { x: -2, y: -2, z: -1 }, size: { x: 4, y: 4, z: 2 }, label: "立方体 1" }
+    const built = buildSolidTemplate(cube)
+    const document: GeometryDocument = { ...createEmptyDocument("geometry3d"), primitives: [cube, ...built.primitives] }
+    const owners = templateTopologyOwners(document)
+    const points = new Map(document.primitives.filter((primitive): primitive is Point3Primitive => primitive.type === "point3").map((primitive) => [primitive.id, primitive]))
+    const scene = new THREE.Scene()
+    // Mirror what ThreeSceneView draws for a template solid: the topology children, never the solid itself.
+    for (const primitive of document.primitives) {
+      if (primitive.type === "face3") {
+        const face = createFace3Mesh(primitive, points, false)
+        if (face) scene.add(face)
+      }
+      if (primitive.type === "edge3") {
+        const edge = createEdge3Line(primitive, points, false)
+        if (edge) scene.add(edge)
+      }
+    }
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100)
+    camera.position.set(0, 0, 12)
+    camera.lookAt(0, 0, 0)
+
+    const rawHit = pickPrimitiveAt(scene, camera, { x: 0.5, y: 0.5 })
+
+    expect(rawHit).not.toBe("cube-1")
+    expect(resolveSelectableHit(rawHit, owners)).toBe("cube-1")
+
+    scene.traverse((child) => {
       if (child instanceof THREE.Mesh || child instanceof THREE.Line) child.geometry.dispose()
       if ("material" in child && child.material instanceof THREE.Material) child.material.dispose()
     })

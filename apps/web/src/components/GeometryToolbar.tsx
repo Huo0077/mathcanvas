@@ -33,6 +33,7 @@ interface GeometryToolbarProps {
   allSelectedLocked: boolean
   workspace: Workspace
   canCreateSection: boolean
+  point3ToolHint: string
 }
 
 type ToolbarIconName = "select" | "point" | "line" | "circle" | "curve" | "function" | "undo" | "redo" | "trash" | "lock" | "save" | "text" | "camera" | "brush"
@@ -90,6 +91,7 @@ export function GeometryToolbar(props: GeometryToolbarProps) {
         {props.workspace === "geometry3d" && <ToolButton label="由选中点创建空间面" icon="curve" onClick={props.onAddPolyline} />}
         {props.workspace === "geometry3d" && <ToolButton label="创建截面" icon="curve" disabled={!props.canCreateSection} onClick={props.onAddSection} />}
       </div>
+      {props.workspace === "geometry3d" && <p className="toolbar-hint" data-point3-hint="true">{props.point3ToolHint}</p>}
     </section>
     <section className="toolbar-group multimodal-tools">
       <div className="toolbar-group-heading"><div><span className="toolbar-kicker">输入</span><strong>多模态输入</strong></div></div>
