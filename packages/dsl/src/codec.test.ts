@@ -25,6 +25,38 @@ describe("Geometry DSL codec", () => {
     expect(restored.measurements).toEqual(document.measurements)
   })
 
+  it("round-trips a point-driven 3D document with topology, section and dihedral measurement", () => {
+    const document = createEmptyDocument("geometry3d")
+    const positions: Record<string, { x: number; y: number; z: number }> = {
+      v0: { x: -1, y: -1, z: -1 }, v1: { x: 1, y: -1, z: -1 }, v2: { x: 1, y: 1, z: -1 }, v3: { x: -1, y: 1, z: -1 },
+      v4: { x: -1, y: -1, z: 1 }, v5: { x: 1, y: -1, z: 1 }, v6: { x: 1, y: 1, z: 1 }, v7: { x: -1, y: 1, z: 1 }
+    }
+    document.primitives = [
+      ...Object.entries(positions).map(([id, position]) => ({ id, type: "point3" as const, position })),
+      { id: "e0", type: "edge3", pointIds: ["v0", "v1"] }, { id: "e1", type: "edge3", pointIds: ["v1", "v2"] },
+      { id: "e2", type: "edge3", pointIds: ["v2", "v3"] }, { id: "e3", type: "edge3", pointIds: ["v3", "v0"] },
+      { id: "e4", type: "edge3", pointIds: ["v4", "v5"] }, { id: "e5", type: "edge3", pointIds: ["v5", "v6"] },
+      { id: "e6", type: "edge3", pointIds: ["v6", "v7"] }, { id: "e7", type: "edge3", pointIds: ["v7", "v4"] },
+      { id: "e8", type: "edge3", pointIds: ["v0", "v4"] }, { id: "e9", type: "edge3", pointIds: ["v1", "v5"] },
+      { id: "e10", type: "edge3", pointIds: ["v2", "v6"] }, { id: "e11", type: "edge3", pointIds: ["v3", "v7"] },
+      { id: "f-bottom", type: "face3", pointIds: ["v0", "v1", "v2", "v3"] },
+      { id: "f-top", type: "face3", pointIds: ["v4", "v5", "v6", "v7"] },
+      { id: "f-front", type: "face3", pointIds: ["v0", "v1", "v5", "v4"] },
+      { id: "f-right", type: "face3", pointIds: ["v1", "v2", "v6", "v5"] },
+      { id: "f-back", type: "face3", pointIds: ["v2", "v3", "v7", "v6"] },
+      { id: "f-left", type: "face3", pointIds: ["v3", "v0", "v4", "v7"] },
+      { id: "solid-1", type: "polyhedron3", vertexIds: Object.keys(positions), edgeIds: ["e0", "e1", "e2", "e3", "e4", "e5", "e6", "e7", "e8", "e9", "e10", "e11"], faceIds: ["f-bottom", "f-top", "f-front", "f-right", "f-back", "f-left"] },
+      { id: "section-1", type: "section", sourceId: "solid-1", plane: { normal: { x: 0, y: 0, z: 1 }, constant: 0 }, points: [{ x: -1, y: -1, z: 0 }, { x: 1, y: -1, z: 0 }, { x: 1, y: 1, z: 0 }, { x: -1, y: 1, z: 0 }], classification: "polygon", status: "approximate" }
+    ]
+    document.measurements = [{ id: "measurement3-1", kind: "measurement3", sourceIds: ["f-bottom", "f-front"], metric: "dihedral", dihedralKind: "exterior", value: 90, unit: "°", precision: "numeric-approximation", status: "valid", explanation: "以公共棱为轴计算二面角。" }]
+
+    const restored = decodeMgeo(encodeMgeo(document))
+
+    expect(restored.primitives).toEqual(document.primitives)
+    expect(restored.measurements).toEqual(document.measurements)
+    expect(restored.schemaVersion).toBe("0.1")
+  })
+
   it("derives a section classification for documents written before the field existed", () => {
     const document = createEmptyDocument("geometry3d")
     const legacy = JSON.stringify({

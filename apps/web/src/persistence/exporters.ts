@@ -121,13 +121,25 @@ function primitiveData(primitive: PrimitiveSpec): string {
   if (primitive.type === "edge3") return JSON.stringify({ pointIds: primitive.pointIds, faceIds: primitive.faceIds ?? [] })
   if (primitive.type === "face3") return JSON.stringify({ pointIds: primitive.pointIds, edgeIds: primitive.edgeIds ?? [], planeId: primitive.planeId })
   if (primitive.type === "polyhedron3") return JSON.stringify({ vertexIds: primitive.vertexIds, edgeIds: primitive.edgeIds, faceIds: primitive.faceIds, construction: primitive.construction })
-  if (primitive.type === "section") return JSON.stringify({ sourceId: primitive.sourceId, plane: primitive.plane, points: primitive.points, status: primitive.status })
+  if (primitive.type === "section") return JSON.stringify({ sourceId: primitive.sourceId, plane: primitive.plane, points: primitive.points, classification: primitive.classification, status: primitive.status })
   if (primitive.type === "function") return JSON.stringify({ expression: primitive.expression, domain: primitive.domain, samples: primitive.samples })
   const unsupportedPrimitive: never = primitive
   return JSON.stringify(unsupportedPrimitive)
 }
 
 export function exportCsv(document: GeometryDocument): string {
-  const rows = [["id", "type", "label", "visible", "locked", "data"], ...document.primitives.map((primitive) => [primitive.id, primitive.type, primitive.label ?? "", primitive.visible !== false, primitive.locked === true, primitiveData(primitive)])]
+  const rows = [
+    ["id", "type", "label", "visible", "locked", "data"],
+    ...document.primitives.map((primitive) => [primitive.id, primitive.type, primitive.label ?? "", primitive.visible !== false, primitive.locked === true, primitiveData(primitive)]),
+    // Measurements are derived teaching results rather than geometry, so they get their own rows.
+    ...document.measurements.map((measurement) => [
+      measurement.id,
+      "measurement3",
+      measurement.metric === "dihedral" ? (measurement.dihedralKind === "exterior" ? "二面角外角" : "二面角内角") : measurement.metric,
+      true,
+      false,
+      JSON.stringify({ sourceIds: measurement.sourceIds, metric: measurement.metric, dihedralKind: measurement.dihedralKind, value: measurement.value, unit: measurement.unit, precision: measurement.precision, status: measurement.status, explanation: measurement.explanation })
+    ])
+  ]
   return `${rows.map((row) => row.map(csvCell).join(",")).join("\r\n")}\r\n`
 }

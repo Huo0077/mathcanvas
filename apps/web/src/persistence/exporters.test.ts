@@ -42,6 +42,21 @@ describe("document exporters", () => {
     expect(csv).not.toContain('"label":"A"')
   })
 
+  it("exports sections with their classification and measurements as their own rows", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      { id: "solid-1", type: "polyhedron3", vertexIds: ["a", "b", "c", "d"], edgeIds: ["e1", "e2", "e3", "e4", "e5", "e6"], faceIds: ["f1", "f2", "f3", "f4"] },
+      { id: "section-1", type: "section", sourceId: "solid-1", plane: { normal: { x: 0, y: 0, z: 1 }, constant: 0 }, points: [{ x: 0, y: 0, z: 0 }], classification: "point", status: "approximate" }
+    ]
+    document.measurements = [{ id: "measurement3-1", kind: "measurement3", sourceIds: ["f1", "f2"], metric: "dihedral", dihedralKind: "exterior", value: 60, unit: "°", precision: "numeric-approximation", status: "valid", explanation: "以公共棱为轴计算。" }]
+
+    const csv = exportCsv(document)
+
+    expect(csv).toContain('""classification"":""point""')
+    expect(csv).toContain("measurement3-1,measurement3,二面角外角,true,false")
+    expect(csv).toContain('""value"":60,""unit"":""°""')
+  })
+
   it("uses the canvas scale when exporting circles", () => {
     const document = createEmptyDocument("calculus")
     document.primitives = [{ id: "circle-1", type: "circle", center: { x: 0, y: 0 }, radius: 1 }]

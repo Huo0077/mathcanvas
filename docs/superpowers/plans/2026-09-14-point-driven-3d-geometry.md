@@ -152,7 +152,7 @@
 
 **Implementation:** 统一 UI 入口、对象树、属性字段、诊断提示和导出；补全文档与验证证据，不扩大到 Agent/CAD/题图解析。
 
-**Verification:** 聚焦测试、全量 `npm test`、`npm run typecheck`、生产构建、全量 Playwright、`git diff --check`；只读 code review 解决 Critical/Important 问题后 commit `docs(p6): document point driven 3d rollout` 并推送。
+**Verification:** 聚焦测试 `codec.test.ts` 27 个（含点驱动 3D 文档完整往返）、`App.test.tsx` 54 个（含 3D 工作区往返、WebGL 降级、导出门控、非法构造提示、单步撤销重做）、`exporters.test.ts` 7 个；全量 `npm.cmd test`：35 个测试文件、334 个用例通过；`npm.cmd run typecheck`：4 个 workspace 通过；生产构建通过；全量 Playwright 11 个用例通过；`git diff --check` 通过。完成后 commit `docs(p6): document point driven 3d rollout`（本轮只提交本地）。
 
 ## 完成定义
 

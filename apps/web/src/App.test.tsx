@@ -650,4 +650,63 @@ describe("MathCanvas workbench", () => {
     const points = section?.type === "section" ? section.points : []
     expect(new Set(points.map((point) => `${point.x},${point.y},${point.z}`))).toEqual(new Set(["-2,0,-1", "2,0,-1", "2,0,1", "-2,0,1"]))
   })
+
+  it("keeps a point-driven 3D document while switching workspaces", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加立方体" }))
+    fireEvent.click(algebraRow("立方体 1 拓扑"))
+    fireEvent.click(screen.getByRole("button", { name: "创建截面" }))
+
+    fireEvent.click(screen.getByRole("button", { name: "微积分" }))
+    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+
+    const primitives = useSceneStore.getState().document.primitives
+    expect(useSceneStore.getState().document.workspace).toBe("geometry3d")
+    expect(primitives.filter((primitive) => primitive.type === "point3")).toHaveLength(8)
+    expect(primitives.some((primitive) => primitive.type === "polyhedron3")).toBe(true)
+    expect(primitives.some((primitive) => primitive.type === "section")).toBe(true)
+  })
+
+  it("shows a WebGL fallback state instead of a silent blank 3D canvas", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+
+    expect(screen.getByText(/不支持 WebGL/)).toBeTruthy()
+  })
+
+  it("disables projected exports in the 3D workspace and keeps them in planar workspaces", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+
+    expect((screen.getByRole("button", { name: "导出 SVG" }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole("button", { name: "导出 PNG" }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole("button", { name: "导出 CSV" }) as HTMLButtonElement).disabled).toBe(false)
+
+    fireEvent.click(screen.getByRole("button", { name: "微积分" }))
+    expect((screen.getByRole("button", { name: "导出 SVG" }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it("explains an invalid spatial construction instead of creating objects", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "由选中点创建空间直线" }))
+
+    expect(screen.getByRole("alert").textContent).toContain("请先选择两个空间点")
+    expect(useSceneStore.getState().document.primitives.some((primitive) => primitive.type === "line3")).toBe(false)
+  })
+
+  it("undoes and redoes one 3D construction step at a time", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加立方体" }))
+    expect(useSceneStore.getState().document.primitives.some((primitive) => primitive.type === "cube")).toBe(true)
+
+    fireEvent.click(screen.getByRole("button", { name: "撤销" }))
+    expect(useSceneStore.getState().document.primitives).toHaveLength(0)
+
+    fireEvent.click(screen.getByRole("button", { name: "重做" }))
+    expect(useSceneStore.getState().document.primitives.some((primitive) => primitive.type === "cube")).toBe(true)
+    expect(useSceneStore.getState().document.primitives.some((primitive) => primitive.type === "polyhedron3")).toBe(true)
+  })
 })

@@ -57,8 +57,8 @@ function ToolbarIcon({ name }: { name: ToolbarIconName }) {
   return <svg className="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>
 }
 
-function ToolButton({ label, icon, onClick, active = false, disabled = false, primary = false }: { label: string; icon?: ToolbarIconName; onClick: () => void; active?: boolean; disabled?: boolean; primary?: boolean }) {
-  return <button type="button" className={`tool-button${primary ? " primary" : ""}`} aria-label={label} aria-pressed={icon === "select" || active ? active : undefined} data-active={active} disabled={disabled} onClick={onClick}>{icon && <ToolbarIcon name={icon} />}<span>{label}</span></button>
+function ToolButton({ label, icon, onClick, active = false, disabled = false, primary = false, title }: { label: string; icon?: ToolbarIconName; onClick: () => void; active?: boolean; disabled?: boolean; primary?: boolean; title?: string }) {
+  return <button type="button" className={`tool-button${primary ? " primary" : ""}`} aria-label={label} aria-pressed={icon === "select" || active ? active : undefined} data-active={active} disabled={disabled} title={title} onClick={onClick}>{icon && <ToolbarIcon name={icon} />}<span>{label}</span></button>
 }
 
 export function GeometryToolbar(props: GeometryToolbarProps) {
@@ -101,7 +101,7 @@ export function GeometryToolbar(props: GeometryToolbarProps) {
     </section>
     <section className="toolbar-group export-tools">
       <div className="toolbar-group-heading"><div><span className="toolbar-kicker">文件</span><strong>保存 / 导出</strong></div></div>
-      <div className="toolbar-inline-actions"><ToolButton label="保存 .mgeo" icon="save" onClick={props.onSave} /><ToolButton label="打开 .mgeo" onClick={props.onOpen} /><ToolButton label="导出 SVG" onClick={props.onExportSvg} /><ToolButton label="导出 CSV" onClick={props.onExportCsv} /><ToolButton label="导出 PNG" onClick={props.onExportPng} /></div>
+      <div className="toolbar-inline-actions"><ToolButton label="保存 .mgeo" icon="save" onClick={props.onSave} /><ToolButton label="打开 .mgeo" onClick={props.onOpen} /><ToolButton label="导出 SVG" disabled={props.workspace === "geometry3d"} title={props.workspace === "geometry3d" ? "立体几何暂不提供 SVG 投影导出，将在 P7 工程制图切片接入；当前可导出 .mgeo 和 CSV" : undefined} onClick={props.onExportSvg} /><ToolButton label="导出 CSV" onClick={props.onExportCsv} /><ToolButton label="导出 PNG" disabled={props.workspace === "geometry3d"} title={props.workspace === "geometry3d" ? "立体几何暂不提供 PNG 投影导出，将在 P7 工程制图切片接入；当前可导出 .mgeo 和 CSV" : undefined} onClick={props.onExportPng} /></div>
     </section>
   </div>
 }

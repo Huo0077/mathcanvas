@@ -4,7 +4,7 @@ MathCanvas 是一个面向数学与工程场景的 2D 交互绘图工作台原�
 
 ## 当前状态
 
-P0 技术验证、P1 数学内核、P2 交互和 P3 函数分析均已完成，P6 v1 参数化 3D 基线及 P6 v2 前九个切片已完成。当前进入 P6 v2 Slice 10，将完成工作区整合、兼容与最终验收。
+P0 技术验证、P1 数学内核、P2 交互、P3 函数分析以及 P6 立体几何（v1 参数化基线 + v2 点驱动拓扑十个切片）均已完成。下一步进入 P7 工程制图 MVP。
 
 ## 快速开始
 
@@ -102,7 +102,7 @@ npm run build
 npm run test:e2e
 ```
 
-当前验证基线：35 个测试文件、327 个测试通过；4 个 workspace 类型检查通过；Web 生产构建通过；11 个 Playwright Chromium 用例通过（首次运行需先执行 `npx playwright install chromium`，否则会报缺少浏览器可执行文件）。`npm run lint` 当前仍无法执行，因为仓库尚未安装 `eslint` 命令。
+当前验证基线：35 个测试文件、334 个测试通过；4 个 workspace 类型检查通过；Web 生产构建通过；11 个 Playwright Chromium 用例通过（首次运行需先执行 `npx playwright install chromium`，否则会报缺少浏览器可执行文件）。`npm run lint` 当前仍无法执行，因为仓库尚未安装 `eslint` 命令。
 
 ## 项目文档
 
@@ -121,4 +121,4 @@ npm run test:e2e
 
 ## 下一步
 
-P6 v2 Slice 1-9 已完成；下一步进入 Slice 10“工作区整合、兼容、文档与最终验收”。P6 v2 十个切片收尾后实施 P7 工程制图 MVP（主/俯/左三视图、轴测图、投影联动、SVG/DXF 导出）。
+P6（P6 v1 参数化基线与 P6 v2 点驱动拓扑十个切片）已完成；下一步实施 P7 工程制图 MVP（主/俯/左三视图、轴测图、投影联动、SVG/DXF 导出）。立体几何工作区暂不提供 SVG/PNG 投影导出，导出入口已禁用并说明原因，`.mgeo` 与 CSV 导出在 3D 保持可用。
