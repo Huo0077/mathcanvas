@@ -25,11 +25,13 @@
 
 **Interfaces:** `Vector3`、`Point3`、`Line3`、`Segment3`、`Ray3`、`Plane3`、`Circle3`、`Edge3`、`Face3`、`Polyhedron3`、`SolidConstruction`。
 
+**Status:** [x] 已实现并完成验证。
+
 **Failing tests:** 新增 3D 对象合法解码、稳定 ID、点引用、三点定面和旧 2D/旧 P6 文件仍可解码的失败测试；覆盖重复点 ID、缺失引用、零方向、共线三点和未闭合面的错误。
 
 **Implementation:** 扩展 discriminated union 和 schema 校验；保持旧类型分支；将旧固定实体映射为兼容拓扑视图，不改变现有 2D API。
 
-**Verification:** `npm test -- packages/dsl`、`npm run typecheck`、codec round-trip 测试。完成后更新进度文档，commit `feat(p6): add point-driven 3d dsl` 并推送。
+**Verification:** `npm.cmd test -- packages/dsl/src/codec.test.ts`：23/23；全量 `npm.cmd test`：25 个测试文件、219 个用例；`npm.cmd run typecheck`：4 个 workspace；隔离目录 Vite build 通过；`git diff --check` 通过。完成后更新进度文档，commit `feat(p6): add point-driven 3d dsl` 并推送。
 
 ## Slice 2：纯三维几何与 builder 注册表
 

@@ -237,7 +237,8 @@ export function App() {
       if (primitive.type === "connection") return false
       if (primitive.type === "locus") return false
       if (primitive.type === "intersectionSet") return false
-      return primitive.x >= bounds.minX && primitive.x <= bounds.maxX && primitive.y >= bounds.minY && primitive.y <= bounds.maxY
+      if (primitive.type === "intersection" || primitive.type === "lineCircleIntersection" || primitive.type === "circleIntersection" || primitive.type === "curveIntersection") return primitive.x >= bounds.minX && primitive.x <= bounds.maxX && primitive.y >= bounds.minY && primitive.y <= bounds.maxY
+      return false
     }).map((primitive) => primitive.id)
     setSelectedIds(contained)
   }

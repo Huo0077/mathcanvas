@@ -31,6 +31,17 @@ describe("document exporters", () => {
     expect(csv).toContain('"{""x"":2,""y"":1}"')
   })
 
+  it("exports point-driven 3D data without presentation fields", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [{ id: "point3-1", type: "point3", position: { x: 1, y: 2, z: 3 }, binding: { kind: "free" }, label: "A", visible: false }]
+
+    const csv = exportCsv(document)
+
+    expect(csv).toContain("point3-1,point3,A,false,false")
+    expect(csv).toContain('"{""position"":{""x"":1,""y"":2,""z"":3},""binding"":{""kind"":""free""}}"')
+    expect(csv).not.toContain('"label":"A"')
+  })
+
   it("uses the canvas scale when exporting circles", () => {
     const document = createEmptyDocument("calculus")
     document.primitives = [{ id: "circle-1", type: "circle", center: { x: 0, y: 0 }, radius: 1 }]

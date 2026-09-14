@@ -1,8 +1,9 @@
 import type { GeometryDocument, PrimitiveSpec, ValidationResult } from "./types"
 
 const workspaces = new Set(["calculus", "conics", "cad", "geometry3d"])
-const primitiveTypes = new Set(["point", "line", "segment", "ray", "polyline", "connection", "locus", "parabola", "ellipse", "hyperbola", "function", "derivative", "tangent", "normal", "secant", "integral", "analysisSet", "cube", "pyramid", "cylinder", "cone", "section", "circle", "arc", "intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection", "intersectionSet"])
+const primitiveTypes = new Set(["point", "point3", "line", "line3", "segment", "segment3", "ray", "ray3", "polyline", "connection", "locus", "parabola", "ellipse", "hyperbola", "function", "derivative", "tangent", "normal", "secant", "integral", "analysisSet", "cube", "pyramid", "cylinder", "cone", "plane3", "circle3", "edge3", "face3", "polyhedron3", "section", "circle", "arc", "intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection", "intersectionSet"])
 const sampledTypes = new Set(["line", "segment", "ray", "polyline", "circle", "arc", "parabola", "ellipse", "hyperbola", "function"])
+const solidTypes = new Set(["cube", "pyramid", "cylinder", "cone", "polyhedron3"])
 const annotationFeatures = new Set(["point", "center", "focus", "vertex", "intersection", "start", "end"])
 
 type RecordValue = Record<string, unknown>
@@ -21,6 +22,123 @@ function isFiniteCoordinate3(value: unknown): value is { x: number; y: number; z
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value)
+}
+
+function isFiniteVector3(value: unknown): value is { x: number; y: number; z: number } {
+  return isFiniteCoordinate3(value)
+}
+
+function isNonZeroVector3(value: unknown): boolean {
+  return isFiniteVector3(value) && (value.x !== 0 || value.y !== 0 || value.z !== 0)
+}
+
+function isDistinctStringList(value: unknown, minimumLength: number): value is string[] {
+  return Array.isArray(value) && value.length >= minimumLength && value.every((item) => typeof item === "string") && new Set(value).size === value.length
+}
+
+function referencesTypes(byId: Map<string, unknown>, value: unknown, allowedTypes: Set<string>): boolean {
+  return Array.isArray(value) && value.every((id) => typeof id === "string" && allowedTypes.has(referenceType(byId, id) ?? ""))
+}
+
+function point3Position(byId: Map<string, unknown>, id: unknown): { x: number; y: number; z: number } | undefined {
+  if (typeof id !== "string") return undefined
+  const primitive = byId.get(id)
+  if (!isRecord(primitive) || primitive.type !== "point3" || !isFiniteVector3(primitive.position)) return undefined
+  return primitive.position
+}
+
+function areCollinearPoint3s(byId: Map<string, unknown>, pointIds: unknown): boolean {
+  if (!Array.isArray(pointIds) || pointIds.length !== 3) return false
+  const positions = pointIds.map((id) => point3Position(byId, id))
+  if (positions.some((position) => !position)) return false
+  const [first, second, third] = positions as [{ x: number; y: number; z: number }, { x: number; y: number; z: number }, { x: number; y: number; z: number }]
+  const ab = { x: second.x - first.x, y: second.y - first.y, z: second.z - first.z }
+  const ac = { x: third.x - first.x, y: third.y - first.y, z: third.z - first.z }
+  return ab.y * ac.z - ab.z * ac.y === 0 && ab.z * ac.x - ab.x * ac.z === 0 && ab.x * ac.y - ab.y * ac.x === 0
+}
+
+function areCollinearPoint3List(byId: Map<string, unknown>, pointIds: unknown): boolean {
+  if (!Array.isArray(pointIds) || pointIds.length < 3) return false
+  const positions = pointIds.map((id) => point3Position(byId, id))
+  if (positions.some((position) => !position)) return false
+  const definedPositions = positions as Array<{ x: number; y: number; z: number }>
+  const first = definedPositions[0]
+  const second = definedPositions.find((position) => position.x !== first.x || position.y !== first.y || position.z !== first.z)
+  if (!second) return true
+  const ab = { x: second.x - first.x, y: second.y - first.y, z: second.z - first.z }
+  return definedPositions.every((position) => {
+    const ac = { x: position.x - first.x, y: position.y - first.y, z: position.z - first.z }
+    return ab.y * ac.z - ab.z * ac.y === 0 && ab.z * ac.x - ab.x * ac.z === 0 && ab.x * ac.y - ab.y * ac.x === 0
+  })
+}
+
+function areCoplanarPoint3s(byId: Map<string, unknown>, pointIds: unknown): boolean {
+  if (!Array.isArray(pointIds) || pointIds.length < 4) return true
+  const positions = pointIds.map((id) => point3Position(byId, id))
+  if (positions.some((position) => !position)) return false
+  const definedPositions = positions as Array<{ x: number; y: number; z: number }>
+  const first = definedPositions[0]
+  let second: { x: number; y: number; z: number } | undefined
+  let third: { x: number; y: number; z: number } | undefined
+  for (let secondIndex = 1; secondIndex < definedPositions.length && !second; secondIndex += 1) {
+    for (let thirdIndex = secondIndex + 1; thirdIndex < definedPositions.length; thirdIndex += 1) {
+      const candidateSecond = definedPositions[secondIndex]
+      const candidateThird = definedPositions[thirdIndex]
+      const ab = { x: candidateSecond.x - first.x, y: candidateSecond.y - first.y, z: candidateSecond.z - first.z }
+      const ac = { x: candidateThird.x - first.x, y: candidateThird.y - first.y, z: candidateThird.z - first.z }
+      const cross = { x: ab.y * ac.z - ab.z * ac.y, y: ab.z * ac.x - ab.x * ac.z, z: ab.x * ac.y - ab.y * ac.x }
+      if (cross.x !== 0 || cross.y !== 0 || cross.z !== 0) {
+        second = candidateSecond
+        third = candidateThird
+        break
+      }
+    }
+  }
+  if (!second || !third) return true
+  const ab = { x: second.x - first.x, y: second.y - first.y, z: second.z - first.z }
+  const ac = { x: third.x - first.x, y: third.y - first.y, z: third.z - first.z }
+  const normal = { x: ab.y * ac.z - ab.z * ac.y, y: ab.z * ac.x - ab.x * ac.z, z: ab.x * ac.y - ab.y * ac.x }
+  return definedPositions.every((position) => normal.x * (position.x - first.x) + normal.y * (position.y - first.y) + normal.z * (position.z - first.z) === 0)
+}
+
+function areIndependentVectors3(first: unknown, second: unknown): boolean {
+  if (!isFiniteVector3(first) || !isFiniteVector3(second)) return false
+  return first.y * second.z - first.z * second.y !== 0 || first.z * second.x - first.x * second.z !== 0 || first.x * second.y - first.y * second.x !== 0
+}
+
+function isValidPlaneFrame(value: unknown): boolean {
+  return isRecord(value) && isFiniteVector3(value.origin) && areIndependentVectors3(value.u, value.v)
+}
+
+function hasClosedFaceBoundary(byId: Map<string, unknown>, pointIds: unknown, edgeIds: unknown): boolean {
+  if (!Array.isArray(pointIds) || !Array.isArray(edgeIds) || pointIds.length !== edgeIds.length) return false
+  const pointSet = new Set(pointIds.filter((id): id is string => typeof id === "string"))
+  const degrees = new Map<string, number>()
+  const adjacency = new Map<string, Set<string>>()
+  for (const pointId of pointSet) adjacency.set(pointId, new Set())
+  for (const edgeId of edgeIds) {
+    if (typeof edgeId !== "string") return false
+    const edge = byId.get(edgeId)
+    if (!isRecord(edge) || edge.type !== "edge3" || !Array.isArray(edge.pointIds) || edge.pointIds.length !== 2) return false
+    const [start, end] = edge.pointIds
+    if (typeof start !== "string" || typeof end !== "string" || !pointSet.has(start) || !pointSet.has(end) || start === end) return false
+    degrees.set(start, (degrees.get(start) ?? 0) + 1)
+    degrees.set(end, (degrees.get(end) ?? 0) + 1)
+    adjacency.get(start)?.add(end)
+    adjacency.get(end)?.add(start)
+  }
+  if (!pointIds.every((id) => typeof id === "string" && degrees.get(id) === 2)) return false
+  const firstPoint = pointIds[0]
+  if (typeof firstPoint !== "string") return false
+  const visited = new Set<string>()
+  const pending = [firstPoint]
+  while (pending.length > 0) {
+    const pointId = pending.pop()
+    if (!pointId || visited.has(pointId)) continue
+    visited.add(pointId)
+    for (const neighbor of adjacency.get(pointId) ?? []) if (!visited.has(neighbor)) pending.push(neighbor)
+  }
+  return visited.size === pointSet.size
 }
 
 function validatePresentation(value: RecordValue, errors: string[]): void {
@@ -47,7 +165,7 @@ function referenceType(byId: Map<string, unknown>, value: unknown): string | und
   return typeof value === "string" ? primitiveType(byId.get(value)) : undefined
 }
 
-function validatePrimitive(value: unknown, byId: Map<string, unknown>): string[] {
+function validatePrimitive(value: unknown, byId: Map<string, unknown>, parameterIds: Set<string>): string[] {
   if (!isRecord(value) || typeof value.id !== "string") return ["every primitive needs a stable id"]
   const errors: string[] = []
   const type = primitiveType(value)
@@ -58,6 +176,97 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>): string[]
     if (!isRecord(value.binding) || !["free", "onPath", "derived"].includes(String(value.binding.kind))) errors.push("point binding is invalid")
     else if (value.binding.kind === "onPath" && (typeof value.binding.pathId !== "string" || !isFiniteNumber(value.binding.parameter))) errors.push("point path binding is invalid")
     else if (value.binding.kind === "derived" && (typeof value.binding.sourceId !== "string" || typeof value.binding.feature !== "string")) errors.push("point derived binding is invalid")
+  }
+  if (type === "point3") {
+    if (!isFiniteVector3(value.position)) errors.push("point3 position must be finite")
+    if (value.binding !== undefined) {
+      if (!isRecord(value.binding) || !["free", "onLine", "onPlane", "derived"].includes(String(value.binding.kind))) errors.push("point3 binding is invalid")
+      else if (value.binding.kind === "onLine" && (typeof value.binding.lineId !== "string" || !["line3", "segment3", "ray3"].includes(referenceType(byId, value.binding.lineId) ?? "") || !isFiniteNumber(value.binding.parameter))) errors.push("point3 line binding is invalid")
+      else if (value.binding.kind === "onPlane" && (typeof value.binding.planeId !== "string" || referenceType(byId, value.binding.planeId) !== "plane3" || !Array.isArray(value.binding.coordinates) || value.binding.coordinates.length !== 2 || !value.binding.coordinates.every(isFiniteNumber) || !isValidPlaneFrame(value.binding.frame))) errors.push("point3 plane binding is invalid")
+      else if (value.binding.kind === "derived" && (!Array.isArray(value.binding.sourceIds) || value.binding.sourceIds.length === 0 || value.binding.sourceIds.some((sourceId) => typeof sourceId !== "string" || !byId.has(sourceId)) || typeof value.binding.feature !== "string")) errors.push("point3 derived binding is invalid")
+    }
+  }
+  if (type === "line3") {
+    const definition = isRecord(value.definition) ? value.definition : undefined
+    if (!definition || !["throughPoints", "pointDirection"].includes(String(definition.kind))) errors.push("line3 definition is invalid")
+    else if (definition.kind === "throughPoints" && (!Array.isArray(definition.pointIds) || definition.pointIds.length !== 2 || definition.pointIds[0] === definition.pointIds[1] || !referencesTypes(byId, definition.pointIds, new Set(["point3"])))) errors.push("line3 references invalid points")
+    else if (definition.kind === "pointDirection" && (typeof definition.pointId !== "string" || referenceType(byId, definition.pointId) !== "point3" || !isNonZeroVector3(definition.direction))) errors.push("line3 point-direction definition is invalid")
+  }
+  if (type === "segment3") {
+    if (!Array.isArray(value.pointIds) || value.pointIds.length !== 2 || value.pointIds[0] === value.pointIds[1] || !referencesTypes(byId, value.pointIds, new Set(["point3"]))) errors.push("segment3 references invalid points")
+  }
+  if (type === "ray3") {
+    if (typeof value.originId !== "string" || typeof value.throughId !== "string" || value.originId === value.throughId || referenceType(byId, value.originId) !== "point3" || referenceType(byId, value.throughId) !== "point3") errors.push("ray3 references invalid points")
+  }
+  if (type === "plane3") {
+    const definition = isRecord(value.definition) ? value.definition : undefined
+    if (!definition || !["throughPoints", "pointNormal"].includes(String(definition.kind))) errors.push("plane3 definition is invalid")
+    else if (definition.kind === "throughPoints") {
+      if (!Array.isArray(definition.pointIds) || definition.pointIds.length !== 3 || !isDistinctStringList(definition.pointIds, 3)) errors.push("plane3 points must be distinct")
+      else if (!referencesTypes(byId, definition.pointIds, new Set(["point3"]))) errors.push("plane3 references invalid points")
+      else if (areCollinearPoint3s(byId, definition.pointIds)) errors.push("plane3 points are collinear")
+    }
+    else if (definition.kind === "pointNormal" && (typeof definition.pointId !== "string" || referenceType(byId, definition.pointId) !== "point3" || !isNonZeroVector3(definition.normal))) errors.push("plane3 point-normal definition is invalid")
+  }
+  if (type === "circle3") {
+    if (typeof value.centerId !== "string" || referenceType(byId, value.centerId) !== "point3" || !isNonZeroVector3(value.normal) || !isFiniteNumber(value.radius) || value.radius <= 0) errors.push("circle3 geometry is invalid")
+  }
+  if (type === "edge3") {
+    if (!Array.isArray(value.pointIds) || value.pointIds.length !== 2 || value.pointIds[0] === value.pointIds[1] || !referencesTypes(byId, value.pointIds, new Set(["point3"]))) errors.push("edge3 references invalid points")
+    if (value.faceIds !== undefined && (!isDistinctStringList(value.faceIds, 1) || !referencesTypes(byId, value.faceIds, new Set(["face3"])))) errors.push("edge3 references invalid faces")
+  }
+  if (type === "face3") {
+    const facePointIds = Array.isArray(value.pointIds) ? value.pointIds : []
+    const faceEdgeIds = Array.isArray(value.edgeIds) ? value.edgeIds : []
+    const validFacePoints = isDistinctStringList(facePointIds, 3) && referencesTypes(byId, facePointIds, new Set(["point3"]))
+    if (!validFacePoints) errors.push("face3 needs at least three distinct points")
+    else if (areCollinearPoint3List(byId, facePointIds)) errors.push("face3 points are collinear")
+    else if (facePointIds.length >= 4 && !areCoplanarPoint3s(byId, facePointIds)) errors.push("face3 points are not coplanar")
+    if (value.edgeIds !== undefined) {
+      const validFaceEdges = isDistinctStringList(faceEdgeIds, 1) && referencesTypes(byId, faceEdgeIds, new Set(["edge3"]))
+      if (!validFaceEdges) errors.push("face3 references invalid edges")
+      else if (!hasClosedFaceBoundary(byId, facePointIds, faceEdgeIds)) errors.push("face3 boundary is not closed")
+    }
+    if (value.planeId !== undefined && (typeof value.planeId !== "string" || referenceType(byId, value.planeId) !== "plane3")) errors.push("face3 references invalid plane")
+  }
+  if (type === "polyhedron3") {
+    const vertexIds = Array.isArray(value.vertexIds) ? value.vertexIds : []
+    const edgeIds = Array.isArray(value.edgeIds) ? value.edgeIds : []
+    const faceIds = Array.isArray(value.faceIds) ? value.faceIds : []
+    const validVertices = isDistinctStringList(vertexIds, 4) && referencesTypes(byId, vertexIds, new Set(["point3"]))
+    const validEdges = edgeIds.length >= 6 && edgeIds.every((edgeId) => typeof edgeId === "string" && referenceType(byId, edgeId) === "edge3")
+    const validFaces = faceIds.length >= 4 && faceIds.every((faceId) => typeof faceId === "string" && referenceType(byId, faceId) === "face3")
+    if (!validVertices) errors.push("polyhedron3 references missing vertex")
+    if (!validEdges) errors.push("polyhedron3 references invalid edges")
+    if (!validFaces) errors.push("polyhedron3 references invalid faces")
+    if (Array.isArray(value.edgeIds) && new Set(edgeIds).size !== edgeIds.length) errors.push("polyhedron3 edge references must be unique")
+    if (Array.isArray(value.faceIds) && new Set(faceIds).size !== faceIds.length) errors.push("polyhedron3 face references must be unique")
+    if (validVertices && areCoplanarPoint3s(byId, vertexIds)) errors.push("polyhedron3 vertices are coplanar")
+    if (validVertices && validEdges) {
+      const vertexSet = new Set(vertexIds)
+      for (const edgeId of edgeIds) {
+        const edge = byId.get(edgeId)
+        if (!isRecord(edge) || !Array.isArray(edge.pointIds) || edge.pointIds.length !== 2 || edge.pointIds.some((pointId) => typeof pointId !== "string" || !vertexSet.has(pointId))) {
+          errors.push("polyhedron3 edge is outside vertex set")
+          break
+        }
+      }
+    }
+    if (validVertices && validFaces) {
+      const vertexSet = new Set(vertexIds)
+      for (const faceId of faceIds) {
+        const face = byId.get(faceId)
+        if (!isRecord(face) || !Array.isArray(face.pointIds) || face.pointIds.some((pointId) => typeof pointId !== "string" || !vertexSet.has(pointId))) {
+          errors.push("polyhedron3 face is outside vertex set")
+          break
+        }
+      }
+    }
+    if (value.construction !== undefined) {
+      const construction = isRecord(value.construction) ? value.construction : undefined
+      if (!construction || !["template", "fromPoints", "fromFaces"].includes(String(construction.kind)) || !Array.isArray(construction.sourceIds) || construction.sourceIds.some((sourceId) => typeof sourceId !== "string" || !byId.has(sourceId))) errors.push("polyhedron3 construction is invalid")
+      if (construction?.kind === "template" && (typeof construction.templateId !== "string" || (construction.parameterIds !== undefined && (!isDistinctStringList(construction.parameterIds, 1) || construction.parameterIds.some((parameterId) => !parameterIds.has(parameterId)))))) errors.push("polyhedron3 template construction is invalid")
+    }
   }
   if (type === "line" || type === "segment" || type === "ray") {
     if (!isFiniteCoordinate(value.a) || !isFiniteCoordinate(value.b)) errors.push(`${type} endpoints must be finite`)
@@ -147,7 +356,7 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>): string[]
     if (!isFiniteCoordinate3(value.center) || !isFiniteNumber(value.radius) || value.radius <= 0 || !isFiniteNumber(value.height) || value.height <= 0 || !isFiniteNumber(value.segments) || !Number.isInteger(value.segments) || value.segments < 3 || value.segments > 256) errors.push(`${type} geometry is invalid`)
   }
   if (type === "section") {
-    if (typeof value.sourceId !== "string" || !byId.has(value.sourceId) || !["cube", "pyramid", "cylinder", "cone"].includes(referenceType(byId, value.sourceId) ?? "")) errors.push("section references invalid solid")
+    if (typeof value.sourceId !== "string" || !byId.has(value.sourceId) || !solidTypes.has(referenceType(byId, value.sourceId) ?? "")) errors.push("section references invalid solid")
     if (!isRecord(value.plane) || !isFiniteCoordinate3(value.plane.normal) || !isFiniteNumber(value.plane.constant)) errors.push("section plane is invalid")
     if (!Array.isArray(value.points) || value.points.some((point) => !isFiniteCoordinate3(point))) errors.push("section points are invalid")
     if (!["approximate", "undefined", "failed"].includes(String(value.status))) errors.push("section status is invalid")
@@ -232,7 +441,8 @@ export function validateDocument(document: unknown): ValidationResult {
       primitiveById.set(primitive.id, primitive)
     }
   }
-  for (const primitive of primitives) errors.push(...validatePrimitive(primitive, primitiveById))
+  const parameterIds = isRecord(document.parameters) ? new Set(Object.keys(document.parameters)) : new Set<string>()
+  for (const primitive of primitives) errors.push(...validatePrimitive(primitive, primitiveById, parameterIds))
 
   if (Array.isArray(document.annotations)) {
     const annotationIds = new Set<string>()

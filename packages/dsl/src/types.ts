@@ -11,6 +11,18 @@ export interface Vector3 {
   z: number
 }
 
+export interface PlaneFrame {
+  origin: Vector3
+  u: Vector3
+  v: Vector3
+}
+
+export type Point3Binding =
+  | { kind: "free" }
+  | { kind: "onLine"; lineId: string; parameter: number }
+  | { kind: "onPlane"; planeId: string; coordinates: [number, number]; frame: PlaneFrame }
+  | { kind: "derived"; sourceIds: string[]; feature: string }
+
 export interface PrimitiveStyle {
   stroke?: string
   fill?: string
@@ -47,6 +59,83 @@ export interface PointPrimitive extends PrimitivePresentation {
   x: number
   y: number
   binding?: PointBinding
+}
+
+export interface Point3Primitive extends PrimitivePresentation {
+  id: string
+  type: "point3"
+  position: Vector3
+  binding?: Point3Binding
+}
+
+export type Line3Definition =
+  | { kind: "throughPoints"; pointIds: [string, string] }
+  | { kind: "pointDirection"; pointId: string; direction: Vector3 }
+
+export interface Line3Primitive extends PrimitivePresentation {
+  id: string
+  type: "line3"
+  definition: Line3Definition
+}
+
+export interface Segment3Primitive extends PrimitivePresentation {
+  id: string
+  type: "segment3"
+  pointIds: [string, string]
+}
+
+export interface Ray3Primitive extends PrimitivePresentation {
+  id: string
+  type: "ray3"
+  originId: string
+  throughId: string
+}
+
+export type Plane3Definition =
+  | { kind: "throughPoints"; pointIds: [string, string, string] }
+  | { kind: "pointNormal"; pointId: string; normal: Vector3 }
+
+export interface Plane3Primitive extends PrimitivePresentation {
+  id: string
+  type: "plane3"
+  definition: Plane3Definition
+}
+
+export interface Circle3Primitive extends PrimitivePresentation {
+  id: string
+  type: "circle3"
+  centerId: string
+  normal: Vector3
+  radius: number
+}
+
+export interface Edge3Primitive extends PrimitivePresentation {
+  id: string
+  type: "edge3"
+  pointIds: [string, string]
+  faceIds?: string[]
+}
+
+export interface Face3Primitive extends PrimitivePresentation {
+  id: string
+  type: "face3"
+  pointIds: string[]
+  edgeIds?: string[]
+  planeId?: string
+}
+
+export type SolidConstruction =
+  | { kind: "template"; templateId: string; parameterIds?: string[]; sourceIds: string[] }
+  | { kind: "fromPoints"; sourceIds: string[] }
+  | { kind: "fromFaces"; sourceIds: string[] }
+
+export interface Polyhedron3Primitive extends PrimitivePresentation {
+  id: string
+  type: "polyhedron3"
+  vertexIds: string[]
+  edgeIds: string[]
+  faceIds: string[]
+  construction?: SolidConstruction
 }
 
 export interface LinePrimitive extends PrimitivePresentation {
@@ -320,9 +409,13 @@ export interface IntersectionSetPrimitive extends PrimitivePresentation {
 
 export type PrimitiveSpec =
   | PointPrimitive
+  | Point3Primitive
   | LinePrimitive
+  | Line3Primitive
   | SegmentPrimitive
+  | Segment3Primitive
   | RayPrimitive
+  | Ray3Primitive
   | PolylinePrimitive
   | ConnectionPrimitive
   | LocusPrimitive
@@ -340,6 +433,11 @@ export type PrimitiveSpec =
   | PyramidPrimitive
   | CylinderPrimitive
   | ConePrimitive
+  | Plane3Primitive
+  | Circle3Primitive
+  | Edge3Primitive
+  | Face3Primitive
+  | Polyhedron3Primitive
   | SectionPrimitive
   | CirclePrimitive
   | ArcPrimitive

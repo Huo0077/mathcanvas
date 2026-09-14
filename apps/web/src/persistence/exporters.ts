@@ -62,7 +62,7 @@ function primitiveSvg(primitive: PrimitiveSpec): string {
   if (primitive.type === "connection") return ""
   if (primitive.type === "locus") return ""
   if (primitive.type === "intersectionSet") return ""
-  if (primitive.type === "cube" || primitive.type === "pyramid" || primitive.type === "cylinder" || primitive.type === "cone" || primitive.type === "section") return ""
+  if (primitive.type === "cube" || primitive.type === "pyramid" || primitive.type === "cylinder" || primitive.type === "cone" || primitive.type === "point3" || primitive.type === "line3" || primitive.type === "segment3" || primitive.type === "ray3" || primitive.type === "plane3" || primitive.type === "circle3" || primitive.type === "edge3" || primitive.type === "face3" || primitive.type === "polyhedron3" || primitive.type === "section") return ""
   if (primitive.type === "circle") return `<circle cx="${toX(primitive.center.x)}" cy="${toY(primitive.center.y)}" r="${radiusToSvg(primitive.radius)}" ${svgStyleFor(primitive)} />`
   if (primitive.type === "arc") return `<path d="M ${toX(primitive.center.x + primitive.radius * Math.cos(primitive.startAngle))} ${toY(primitive.center.y + primitive.radius * Math.sin(primitive.startAngle))} A ${radiusToSvg(primitive.radius)} ${radiusToSvg(primitive.radius)} 0 ${Math.abs(primitive.endAngle - primitive.startAngle) > Math.PI ? 1 : 0} ${primitive.endAngle >= primitive.startAngle ? 0 : 1} ${toX(primitive.center.x + primitive.radius * Math.cos(primitive.endAngle))} ${toY(primitive.center.y + primitive.radius * Math.sin(primitive.endAngle))}" ${svgStyleFor(primitive)} />`
   if (primitive.type === "point") return `<circle cx="${toX(primitive.x)}" cy="${toY(primitive.y)}" r="6" ${svgStyleFor(primitive)} />`
@@ -112,8 +112,19 @@ function primitiveData(primitive: PrimitiveSpec): string {
   if (primitive.type === "cube") return JSON.stringify({ origin: primitive.origin, size: primitive.size })
   if (primitive.type === "pyramid") return JSON.stringify({ baseCenter: primitive.baseCenter, baseSize: primitive.baseSize, height: primitive.height })
   if (primitive.type === "cylinder" || primitive.type === "cone") return JSON.stringify({ center: primitive.center, radius: primitive.radius, height: primitive.height, segments: primitive.segments })
+  if (primitive.type === "point3") return JSON.stringify({ position: primitive.position, binding: primitive.binding })
+  if (primitive.type === "line3") return JSON.stringify(primitive.definition)
+  if (primitive.type === "segment3") return JSON.stringify({ pointIds: primitive.pointIds })
+  if (primitive.type === "ray3") return JSON.stringify({ originId: primitive.originId, throughId: primitive.throughId })
+  if (primitive.type === "plane3") return JSON.stringify(primitive.definition)
+  if (primitive.type === "circle3") return JSON.stringify({ centerId: primitive.centerId, normal: primitive.normal, radius: primitive.radius })
+  if (primitive.type === "edge3") return JSON.stringify({ pointIds: primitive.pointIds, faceIds: primitive.faceIds ?? [] })
+  if (primitive.type === "face3") return JSON.stringify({ pointIds: primitive.pointIds, edgeIds: primitive.edgeIds ?? [], planeId: primitive.planeId })
+  if (primitive.type === "polyhedron3") return JSON.stringify({ vertexIds: primitive.vertexIds, edgeIds: primitive.edgeIds, faceIds: primitive.faceIds, construction: primitive.construction })
   if (primitive.type === "section") return JSON.stringify({ sourceId: primitive.sourceId, plane: primitive.plane, points: primitive.points, status: primitive.status })
-  return JSON.stringify({ expression: primitive.expression, domain: primitive.domain, samples: primitive.samples })
+  if (primitive.type === "function") return JSON.stringify({ expression: primitive.expression, domain: primitive.domain, samples: primitive.samples })
+  const unsupportedPrimitive: never = primitive
+  return JSON.stringify(unsupportedPrimitive)
 }
 
 export function exportCsv(document: GeometryDocument): string {

@@ -129,7 +129,7 @@
 - [x] 方案 C 已确认：基础对象采用点、线、面驱动，参数化实体作为快捷模板。
 - [x] 完成点、线、面、拓扑、builder、依赖重算、拾取和教学反馈的设计规格。
 - [x] 完成十个可独立验证切片的实施计划，明确测试、类型检查、构建、E2E、review、commit 和 push 门槛。
-- [ ] P6 v2-1：3D DSL 基础对象与旧文档兼容。
+- [x] P6 v2-1：3D DSL 基础对象与旧文档兼容。
 - [ ] P6 v2-2：纯三维几何与可注册实体 builder。
 - [ ] P6 v2-3：Scene Graph 依赖索引与拓扑重算。
 - [ ] P6 v2-4：点线面课堂构造工具与关键点交互。
@@ -192,6 +192,7 @@ P6 v1 参数化基线已完成；下一步执行 P6 v2 点驱动通用立体几�
 - P6-10 类型检查：四个 workspace 通过；生产构建通过
 - P6-10 review：无 Critical/Important 问题；修复 Three.js 挂载点删除 React 控件和重置按钮覆盖控制组问题
 - P6-11 最终验证：全量单测 25 个测试文件、215 个用例通过；全量 Playwright 6 个用例通过；生产构建通过；`git diff --check` 通过
+- P6 v2-1 验证：DSL codec 23 个用例通过；CSV exporter 6 个用例通过；全量单测 25 个测试文件、219 个用例通过；四个 workspace 类型检查通过；隔离目录 Vite 生产构建通过；`git diff --check` 通过
 - P6-8 Web 构建：`vite build` 使用隔离 `outDir` 通过
 - P6-7 Web 构建：`vite build` 使用隔离 `outDir` 通过
 - 默认 `npm.cmd run build`：当前沙箱因 Vite 写入 `.vite-temp`/`dist` 返回 `EPERM`；使用 `vite build apps/web --configLoader runner --outDir D:\\draw\\build-check\\mathcanvas-current` 完成等价 Web 构建验证
