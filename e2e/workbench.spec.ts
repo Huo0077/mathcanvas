@@ -26,7 +26,7 @@ test("opens and restores an mgeo document through the file input", async ({ page
     annotations: [],
     metadata: { id: "restored-document", name: "Restored", createdAt: "2026-09-12T00:00:00.000Z", updatedAt: "2026-09-12T00:00:00.000Z" }
   }
-  await page.locator('input[aria-label="加载 .mgeo"]').setInputFiles({
+  await page.getByLabel("加载 .mgeo 文件").setInputFiles({
     name: "restored.mgeo",
     mimeType: "application/json",
     buffer: Buffer.from(JSON.stringify({ format: "mgeo", formatVersion: "0.1", document }))
@@ -74,7 +74,7 @@ test("shows constraint status and recovery controls", async ({ page }) => {
     annotations: [],
     metadata: { id: "constraint-document", name: "Constraints", createdAt: "2026-09-13T00:00:00.000Z", updatedAt: "2026-09-13T00:00:00.000Z" }
   }
-  await page.locator('input[aria-label="加载 .mgeo"]').setInputFiles({
+  await page.getByLabel("加载 .mgeo 文件").setInputFiles({
     name: "constraints.mgeo",
     mimeType: "application/json",
     buffer: Buffer.from(JSON.stringify({ format: "mgeo", formatVersion: "0.1", document }))

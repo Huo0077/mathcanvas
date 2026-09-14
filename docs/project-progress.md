@@ -121,10 +121,12 @@
 - [x] P6-7：剖切平面、截面计算和截面派生对象
 - [x] P6-8：立方体展开/折叠布局与动画
 - [x] P6-9：二面角测量显示
+- [x] P6-10：`geometry3d` 工作区、Algebra View 和立体属性栏集成
+- [x] P6-11：P6 文档、完整验证、review、commit、push
 
 ## 下一步
 
-P6-9 已完成，下一步完善 geometry3d 工作区、Algebra View 和属性栏集成。
+P6 已完成，下一步按产品路线规划后续阶段；P4 Agent、P5 题图解析和 P7 工程制图仍保持在明确排除范围内。
 
 > 射线/折线、圆锥曲线和函数采样已接入工具栏、SVG 渲染、属性编辑和 UI 回归测试；选中两条可采样曲线即可创建持久化交点。
 
@@ -169,6 +171,11 @@ P6-9 已完成，下一步完善 geometry3d 工作区、Algebra View 和属性�
 - P6-9 聚焦内核测试：`packages/geometry-kernel/src/geometry3d.test.ts` 通过
 - P6-9 Web 构建：`vite build` 使用隔离 `outDir` 通过
 - P6-9 浏览器验证：同一宿主环境阻断，未标记为通过
+- P6-10 聚焦测试：3D 属性栏 UI 与 Scene Graph 3D patch 更新测试通过
+- P6-10 浏览器验证：Playwright 3D 用例通过，覆盖立方体、棱锥、圆柱和圆锥创建及属性编辑
+- P6-10 类型检查：四个 workspace 通过；生产构建通过
+- P6-10 review：无 Critical/Important 问题；修复 Three.js 挂载点删除 React 控件和重置按钮覆盖控制组问题
+- P6-11 最终验证：全量单测 25 个测试文件、215 个用例通过；全量 Playwright 6 个用例通过；生产构建通过；`git diff --check` 通过
 - P6-8 Web 构建：`vite build` 使用隔离 `outDir` 通过
 - P6-7 Web 构建：`vite build` 使用隔离 `outDir` 通过
 - 默认 `npm.cmd run build`：当前沙箱因 Vite 写入 `.vite-temp`/`dist` 返回 `EPERM`；使用 `vite build apps/web --configLoader runner --outDir D:\\draw\\build-check\\mathcanvas-current` 完成等价 Web 构建验证
