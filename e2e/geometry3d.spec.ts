@@ -6,6 +6,8 @@ test("opens the 3D workspace and adds a parameterized cube", async ({ page }) =>
 
   const scene = page.locator("[data-3d-scene]")
   await expect(scene).toBeVisible()
+  await expect(page.getByRole("button", { name: "重置3D视角" })).toBeVisible()
+  await page.getByRole("button", { name: "重置3D视角" }).click()
   await expect(page.getByText("添加立方体")).toBeVisible()
 
   await page.getByRole("button", { name: "添加立方体" }).click()

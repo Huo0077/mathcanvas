@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import * as THREE from "three"
 
-import { createCubeMesh, createSolidMesh } from "./threeScene"
+import { createCameraState, createCubeMesh, createSolidMesh, panCameraState, pickPrimitiveAt, resetCameraState, rotateCameraState, zoomCameraState } from "./threeScene"
 
 describe("Three.js geometry scene", () => {
   it("maps a parameterized cube to a centered box mesh", () => {
@@ -35,6 +35,33 @@ describe("Three.js geometry scene", () => {
     expect(mesh.userData.primitiveId).toBe(id)
     expect(mesh.userData.primitiveType).toBe(expectedKind)
     expect(mesh.geometry.attributes.position.count).toBeGreaterThan(0)
+
+    mesh.geometry.dispose()
+    const material = mesh.material as THREE.Material
+    material.dispose()
+  })
+
+  it("updates and resets an orbit camera without mutating the source state", () => {
+    const initial = createCameraState()
+    const rotated = rotateCameraState(initial, 24, -12)
+    const panned = panCameraState(rotated, 2, -1)
+    const zoomed = zoomCameraState(panned, 0.6)
+
+    expect(rotated).not.toEqual(initial)
+    expect(zoomed.distance).toBeLessThan(panned.distance)
+    expect(resetCameraState()).toEqual(initial)
+  })
+
+  it("picks a solid mesh by viewport coordinates", () => {
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100)
+    camera.position.set(0, 0, 8)
+    camera.lookAt(0, 0, 0)
+    const mesh = createCubeMesh({ id: "cube-pick", type: "cube", origin: { x: -1, y: -1, z: -1 }, size: { x: 2, y: 2, z: 2 } }, false)
+    const scene = new THREE.Scene()
+    scene.add(mesh)
+
+    expect(pickPrimitiveAt(scene, camera, { x: 0.5, y: 0.5 })).toBe("cube-pick")
+    expect(pickPrimitiveAt(scene, camera, { x: 0.99, y: 0.99 })).toBeNull()
 
     mesh.geometry.dispose()
     const material = mesh.material as THREE.Material

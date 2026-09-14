@@ -116,10 +116,11 @@
 - [x] P6-2：3D DSL 类型、几何校验、`.mgeo` round-trip 和旧 2D 文档兼容
 - [x] P6-3：参数化立方体 Three.js 场景、geometry3d 工作区入口和 WebGL 降级状态
 - [x] P6-4：棱锥、圆柱和圆锥参数化 Three.js 模型与创建入口
+- [x] P6-5：3D 相机旋转、平移、缩放、重置和空间拾取
 
 ## 下一步
 
-P6-4 已完成，下一步实现相机控制与空间拾取。
+P6-5 已完成，下一步实现隐藏线、透明面、法向量和选中态。
 
 > 射线/折线、圆锥曲线和函数采样已接入工具栏、SVG 渲染、属性编辑和 UI 回归测试；选中两条可采样曲线即可创建持久化交点。
 
@@ -149,6 +150,9 @@ P6-4 已完成，下一步实现相机控制与空间拾取。
 - P6-4 聚焦测试：`apps/web/src/threeScene.test.ts` 的 4 个用例通过
 - P6-4 Web 构建：`vite build` 使用隔离 `outDir` 通过
 - P6-4 浏览器验证：同一宿主环境阻断，未标记为通过
+- P6-5 聚焦测试：`apps/web/src/threeScene.test.ts` 的 6 个用例通过
+- P6-5 Web 构建：待完整验证后记录
+- P6-5 浏览器验证：同一宿主环境阻断，未标记为通过
 - 默认 `npm.cmd run build`：当前沙箱因 Vite 写入 `.vite-temp`/`dist` 返回 `EPERM`；使用 `vite build apps/web --configLoader runner --outDir D:\\draw\\build-check\\mathcanvas-current` 完成等价 Web 构建验证
 - `npm.cmd exec playwright test`：5 个 Chromium 浏览器用例通过
 - `npm.cmd run lint`：未执行成功，仓库当前未安装 `eslint` 命令
