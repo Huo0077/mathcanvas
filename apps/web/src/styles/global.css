@@ -173,6 +173,19 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .object-row:hover { background: #faf9ff; }
 .object-row.selected { border-color: #ded9ff; background: #f1efff; }
 .object-dot { width: 8px; height: 8px; background: #6c5ce7; box-shadow: 0 0 0 4px rgb(108 92 231 / 10%); }
+.object-tree { display: grid; gap: 2px; }
+.object-subtree { display: grid; gap: 2px; margin: 2px 0 6px 12px; padding-left: 8px; border-left: 2px solid #eeecfb; }
+.object-group { display: grid; gap: 2px; }
+.object-group-label { padding: 2px 0 2px 6px; color: #8b86a3; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em; }
+.object-row-child { min-height: 36px; }
+.row-expand { width: 22px; min-height: 22px; font-size: 0.7rem; }
+.measurement-row { align-items: flex-start; flex-direction: column; gap: 2px; cursor: default; }
+.measurement-row .object-meta { width: 100%; }
+.measurement-status { margin-left: auto; padding: 1px 6px; border-radius: 999px; color: #4a4a68; background: #f1effa; font-size: 0.66rem; font-weight: 700; }
+.measurement-status[data-status="valid"] { color: #1c7a5e; background: #e6f7f0; }
+.measurement-status[data-status="degenerate"], .measurement-status[data-status="numeric-failure"] { color: #a14b2c; background: #fdefe8; }
+.measurement-source, .measurement-explanation { color: #8b86a3; font-size: 0.7rem; line-height: 1.4; }
+.object-dot[data-object-type="measurement3"] { background: #8b86a3; box-shadow: 0 0 0 4px rgb(139 134 163 / 12%); }
 .object-dot[data-object-type="line"], .object-dot[data-object-type="segment"], .object-dot[data-object-type="ray"] { background: #21a794; box-shadow: 0 0 0 4px rgb(33 167 148 / 10%); }
 .object-dot[data-object-type="point"], .object-dot[data-object-type="intersection"] { background: #e39a48; box-shadow: 0 0 0 4px rgb(227 154 72 / 12%); }
 .icon-button { display: grid; place-items: center; width: 30px; min-height: 30px; border: 0; color: #9d99aa; background: transparent; }

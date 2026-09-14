@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react"
-import type { AnnotationFeature, PrimitiveSpec, Vector3 } from "@draw/dsl"
+import type { AnnotationFeature, ConstraintType, Measurement3Metric, PrimitiveSpec, Vector3 } from "@draw/dsl"
+import { constraintOptionsFor, measurementOptionsFor } from "../spatialTools"
 import { adaptiveSampleFunctionSegments, advanceAnimation, evaluateParameterExpression, parseExpression, type AnimationMode, type AnimationState } from "@draw/geometry-kernel"
 import type { Alignment, PrimitiveUpdatePatch } from "@draw/scene-graph"
 
@@ -15,6 +16,7 @@ interface PropertiesBarProps {
   step: number
   onChange: (value: number) => void
   selectedPrimitive: PrimitiveSpec | null
+  selectedIds: string[]
   selectedCount: number
   selectedGroupId: string | null
   allSelectedVisible: boolean
@@ -28,6 +30,9 @@ interface PropertiesBarProps {
   onAlign: (alignment: Alignment) => void
   onToggleBatchVisibility: () => void
   onAddAnnotation: (feature: AnnotationFeature, index?: number, text?: string) => void
+  onCreateMeasurement: (metric: Measurement3Metric) => void
+  onCreateConstraint: (type: ConstraintType, targets: string[]) => void
+  onDeleteMeasurement: (id: string) => void
 }
 
 const alignments: { value: Alignment; label: string }[] = [
@@ -122,7 +127,7 @@ function Vector3Fields({ prefix, value, disabled, onChange }: { prefix: string; 
   return <div className="metric-grid"><CoordinateField label={`${prefix} X`} value={value.x} disabled={disabled} onChange={(next) => onChange("x", next)} /><CoordinateField label={`${prefix} Y`} value={value.y} disabled={disabled} onChange={(next) => onChange("y", next)} /><CoordinateField label={`${prefix} Z`} value={value.z} disabled={disabled} onChange={(next) => onChange("z", next)} /></div>
 }
 
-export function PropertiesBar({ value, min, max, step, onChange, selectedPrimitive, selectedCount, selectedGroupId, allSelectedVisible, canCreateIntersection, onUpdatePrimitive, onToggleSelectedVisibility, onToggleSelectedLock, onCreateGroup, onDeleteGroup, onCreateIntersection, onAlign, onToggleBatchVisibility, onAddAnnotation }: PropertiesBarProps) {
+export function PropertiesBar({ value, min, max, step, onChange, selectedPrimitive, selectedIds, selectedCount, selectedGroupId, allSelectedVisible, canCreateIntersection, onUpdatePrimitive, onToggleSelectedVisibility, onToggleSelectedLock, onCreateGroup, onDeleteGroup, onCreateIntersection, onAlign, onToggleBatchVisibility, onAddAnnotation, onCreateMeasurement, onCreateConstraint, onDeleteMeasurement }: PropertiesBarProps) {
   const selectedPoint = selectedPrimitive?.type === "point" ? selectedPrimitive : null
   const selectedPoint3 = selectedPrimitive?.type === "point3" ? selectedPrimitive : null
   const selectedLinear = selectedPrimitive?.type === "line" || selectedPrimitive?.type === "segment" || selectedPrimitive?.type === "ray" ? selectedPrimitive : null
@@ -153,6 +158,9 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
   const [animationMode, setAnimationMode] = useState<AnimationMode>("loop")
   const [animationPlaying, setAnimationPlaying] = useState(false)
   const animationRef = useRef<AnimationState>({ value, direction: 1, mode: "loop", playing: false, speed: 0.2 })
+  const selected3dPrimitives = selectedIds.map((id) => sceneDocument.primitives.find((primitive) => primitive.id === id)).filter((primitive): primitive is PrimitiveSpec => Boolean(primitive))
+  const measurementOptions = measurementOptionsFor(sceneDocument.workspace, selected3dPrimitives)
+  const constraintOptions = constraintOptionsFor(sceneDocument.workspace, selected3dPrimitives)
 
   useEffect(() => {
     setExpressionDraft(selectedFunction?.expression ?? "")
@@ -347,6 +355,9 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
       <Field label="透明度"><input aria-label="透明度" type="number" disabled={!editable} min="0" max="1" step="0.05" value={selectedPrimitive.style?.opacity ?? 1} onChange={(event) => onUpdatePrimitive({ style: { opacity: Math.min(1, Math.max(0, numberValue(event))) } })} /></Field>
       <Field label="线型"><select aria-label="线型" disabled={!editable} value={selectedPrimitive.style?.dash ?? "solid"} onChange={(event) => onUpdatePrimitive({ style: { dash: event.target.value === "solid" ? undefined : event.target.value } })}><option value="solid">实线</option><option value="8 6">虚线</option><option value="2 5">点线</option></select></Field>
     </div>}
+    {measurementOptions.length > 0 && <div className="primitive-properties"><h3>教学测量</h3><p className="footer-note">结果会保留来源对象，并在点移动后自动重算。</p><div className="property-actions" aria-label="三维测量工具">{measurementOptions.map((option) => <button key={option.metric} type="button" onClick={() => onCreateMeasurement(option.metric)}>{option.label}</button>)}</div></div>}
+    {constraintOptions.length > 0 && <div className="primitive-properties"><h3>空间约束</h3><p className="footer-note">约束保留来源 ID，并在约束列表显示残差和冲突解释。</p><div className="property-actions" aria-label="三维约束工具">{constraintOptions.map((option) => <button key={option.type} type="button" onClick={() => onCreateConstraint(option.type, option.targets)}>{option.label}</button>)}</div></div>}
+    {selectedIds.length === 1 && sceneDocument.measurements.filter((measurement) => measurement.sourceIds.includes(selectedIds[0])).map((measurement) => <div className="primitive-properties" key={measurement.id}><h3>{measurement.metric}测量</h3><p className="footer-note">来源：{measurement.sourceIds.join("、")} · {measurement.precision === "numeric-approximation" ? "数值近似" : "输入精确"}</p><div className="metric-grid"><span>结果<strong>{measurement.value === undefined ? "—" : `${measurement.value.toFixed(3)} ${measurement.unit ?? ""}`}</strong></span><span>状态<strong>{measurement.status}</strong></span></div><p className="footer-note">{measurement.explanation}</p><div className="property-actions"><button type="button" aria-label={`删除测量 ${measurement.id}`} onClick={() => onDeleteMeasurement(measurement.id)}>删除测量</button></div></div>)}
      {showSlopeParameter && <div className="primitive-properties"><label className="properties-label" htmlFor="selected-slope-slider"><span>直线斜率参数</span><strong className="metric">{value.toFixed(2)}</strong></label><input id="selected-slope-slider" aria-label="选中直线斜率" type="range" disabled={!editable} min={min} max={max} step={step} value={value} onChange={(event) => onChange(numberValue(event))} /></div>}
      {selectedPoint && <div className="primitive-properties"><h3>点坐标</h3><CoordinateField label="点 X" value={selectedPoint.x} disabled={!editable || selectedPoint.binding?.kind === "onPath"} onChange={(next) => updatePoint("x", next)} /><CoordinateField label="点 Y" value={selectedPoint.y} disabled={!editable || selectedPoint.binding?.kind === "onPath"} onChange={(next) => updatePoint("y", next)} /><Field label="路径绑定"><select aria-label="点路径绑定" disabled={!editable} value={selectedPoint.binding?.kind === "onPath" ? selectedPoint.binding.pathId : ""} onChange={(event) => updatePointBinding(event.target.value)}><option value="">自由点</option>{pathPrimitives.map((path) => <option key={path.id} value={path.id}>{path.label ?? path.id}</option>)}</select></Field>{selectedPoint.binding?.kind === "onPath" && <><Field label="路径参数"><input aria-label="路径参数" type="number" min="0" max="1" step="0.01" disabled={!editable} value={selectedPoint.binding.parameter} onChange={(event) => updatePointParameter(numberValue(event))} /></Field><button type="button" aria-label="记录轨迹" disabled={!editable} onClick={createLocus}>记录轨迹</button></>}</div>}
      {selectedLinear && <div className="primitive-properties"><h3>斜率特征</h3><div className="metric-grid"><span>倾角<strong>{lineAngle(selectedLinear).toFixed(2)}°</strong></span><span>长度<strong>{lineLength(selectedLinear).toFixed(2)}</strong></span><span>方向向量<strong>({(selectedLinear.b.x - selectedLinear.a.x).toFixed(2)}, {(selectedLinear.b.y - selectedLinear.a.y).toFixed(2)})</strong></span><span>截距<strong>{selectedSlope === null ? "垂直线" : (selectedLinear.a.y - selectedSlope * selectedLinear.a.x).toFixed(2)}</strong></span></div>{selectedSlope === null ? <button type="button" disabled={!editable} onClick={() => updateSlope(0)}>设为水平线</button> : <Field label="斜率"><input aria-label="选中直线斜率值" type="number" step="0.1" value={selectedSlope} readOnly={showSlopeParameter} disabled={!editable} onChange={(event) => updateSlope(numberValue(event))} /></Field>}{(["a", "b"] as const).map((endpoint) => <div key={endpoint} className="endpoint-group"><strong>{selectedLinear.type === "ray" && endpoint === "a" ? "起点 A" : selectedLinear.type === "ray" && endpoint === "b" ? "方向点 B" : `端点 ${endpoint.toUpperCase()}`}</strong><CoordinateField label={`${selectedLinear.type === "ray" ? endpoint === "a" ? "起点" : "方向点" : "端点"} ${endpoint.toUpperCase()} X`} value={selectedLinear[endpoint].x} disabled={!editable} onChange={(next) => updateEndpoint(endpoint, "x", next)} /><CoordinateField label={`${selectedLinear.type === "ray" ? endpoint === "a" ? "起点" : "方向点" : "端点"} ${endpoint.toUpperCase()} Y`} value={selectedLinear[endpoint].y} disabled={!editable || (selectedLinear.type === "line" && Boolean(selectedLinear.slopeParameter) && endpoint === "b")} onChange={(next) => updateEndpoint(endpoint, "y", next)} /></div>)}</div>}

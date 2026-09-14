@@ -83,7 +83,7 @@ test("shows constraint status and recovery controls", async ({ page }) => {
   })
 
   await expect(page.getByText("约束列表")).toBeVisible()
-  await expect(page.getByText("已满足")).toBeVisible()
+  await expect(page.getByText("已满足", { exact: true })).toBeVisible()
   await expect(page.getByRole("button", { name: "删除约束 parallel-1" })).toBeVisible()
 })
 

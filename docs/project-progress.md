@@ -3,7 +3,7 @@
 > 这份文件是项目的单一进度记录。每完成一个可验证的切片，就更新“已完成”和“下一步”，并附上验证证据。
 
 **最后更新：** 2026-09-14
-**当前阶段：** P1 数学内核、P2 交互和 P3 函数分析已完成，P6 v1 基线完成，P6 v2 已完成 Slice 1-5，进入 Slice 6
+**当前阶段：** P1 数学内核、P2 交互和 P3 函数分析已完成，P6 v1 基线完成，P6 v2 已完成 Slice 1-6，进入 Slice 7
 **总体状态：** 开发中
 
 ## 已完成
@@ -134,7 +134,7 @@
 - [x] P6 v2-3：Scene Graph 依赖索引与拓扑重算。
 - [x] P6 v2-4：点线面课堂构造工具与关键点交互。
 - [x] P6 v2-5：四类固定实体迁移为统一拓扑模板。
-- [ ] P6 v2-6：空间拾取、约束与教学测量。
+- [x] P6 v2-6：空间拾取、约束与教学测量。
 - [ ] P6 v2-7：通用剖切与截面派生对象。
 - [ ] P6 v2-8：拓扑展开布局与折叠动画。
 - [ ] P6 v2-9：二面角与空间关系教学标记。
@@ -142,7 +142,7 @@
 
 ## 下一步
 
-P6 v1 参数化基线已完成；P6 v2 已完成 Slice 1-5，下一步执行空间拾取、约束与教学测量。P4 Agent、P5 题图解析和 P7 工程制图仍保持在明确排除范围内。
+P6 v2 已完成 Slice 1-6，下一步执行 Slice 7“通用剖切与截面派生对象”。P4 Agent、P5 题图解析保持排除；P7 工程制图已由项目确认收窄为 MVP（主/俯/左三视图、轴测图、投影联动、SVG/DXF 导出），排在本轮 P6 v2 收尾之后，先补设计与切片计划再实施。
 
 > 射线/折线、圆锥曲线和函数采样已接入工具栏、SVG 渲染、属性编辑和 UI 回归测试；选中两条可采样曲线即可创建持久化交点。
 
@@ -197,6 +197,14 @@ P6 v1 参数化基线已完成；P6 v2 已完成 Slice 1-5，下一步执行空�
 - P6 v2-3 验证：Scene Graph 聚焦 31 个用例通过；全量单测 26 个测试文件、240 个用例通过；四个 workspace 类型检查通过；`git diff --check` 通过
 - P6 v2-4 验证：UI 聚焦测试 53 个用例通过；全量单测 26 个测试文件、245 个用例通过；四个 workspace 类型检查通过；隔离目录 Vite 生产构建通过；`git diff --check` 通过；浏览器验证因宿主环境浏览器绑定 `Cannot redefine property: process` 阻断，未标记为通过
 - P6 v2-5 验证：DSL、builder、迁移和 Scene Graph 聚焦测试 73 个用例通过；四个 workspace 类型检查通过；Web 生产构建通过；3D 模板 Playwright 用例 1 个通过；`git diff --check` 通过
+- P6 v2-6 聚焦测试：`measurements3d.test.ts` 4 个、`constraints3d.test.ts` 2 个、`patches.test.ts` 23 个、`scene-store.test.ts` 34 个、`AlgebraView.test.tsx` 5 个、`store.test.ts` 1 个用例通过
+- P6 v2-6 全量单测：32 个测试文件、286 个用例通过（本轮新增 `store.test.ts`、`AlgebraView.test.tsx`、`spatialTools.test.ts` 三个测试文件，并为测量重算、测量删除、补丁校验、拾取优先级/子部件、空间工具门控和 `.mgeo` 测量往返补充用例；同时修复了 Slice 5 拓扑迁移遗留的 2 个 App UI 失败用例）
+- P6 v2-6 类型检查：四个 workspace 通过
+- P6 v2-6 Web 生产构建：`vite build` 通过
+- P6 v2-6 浏览器验证：Playwright 8 个用例通过，其中新增“空间点拾取并创建教学测量”“顶点/棱/面子树展开”2 个 3D 用例；本机需先执行 `npx playwright install chromium` 安装浏览器
+- P6 v2-6 修复：测试未重置整个 store 造成跨测试文档污染（改为在 `beforeEach` 完整重置，保留 `replace` 按工作区合并的语义，避免打开文件后把其他工作区的内存文档和草稿一起覆盖）、`addMeasurement` 缺少形状与字段校验会抛异常并接受非法 metric、测量来源缺失时用世界原点伪造点面距离、单个面/圆错误提供“长度”入口、点在线/点在面的来源顺序依赖点击顺序、App 工具栏误删圆柱/圆锥入口
+- P6 v2-6 review：只读 code review 发现并修复了上述数据丢失路径与伪造坐标问题；等长/等角未纳入 DSL，约束投影求解、二面角内角/外角、固定距离输入入口等未完成项已写入功能目录的“明确限制”
+- P6 v2-6 边界：`docs/feature-catalog.md` 与实施计划同步更新；Slice 6 只覆盖拾取/约束/测量，截面仍在 Slice 7
 - P6-8 Web 构建：`vite build` 使用隔离 `outDir` 通过
 - P6-7 Web 构建：`vite build` 使用隔离 `outDir` 通过
 - 默认 `npm.cmd run build`：当前沙箱因 Vite 写入 `.vite-temp`/`dist` 返回 `EPERM`；使用 `vite build apps/web --configLoader runner --outDir D:\\draw\\build-check\\mathcanvas-current` 完成等价 Web 构建验证

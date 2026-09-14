@@ -1,5 +1,5 @@
-import type { AnnotationSpec, ConstraintSpec, Coordinate, GeometryDocument, GroupSpec, Point3Binding, Point3Primitive, PointBinding, PrimitiveSpec, Vector3 } from "@draw/dsl"
-import { adaptiveSampleFunctionSegments, buildSolidTemplate, createBuilderContext, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, findExtrema, findInflectionPoints, findZeros, intersectCirclesDetailed, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, sectionConvexPolyhedron, solveLineConstraints, type IntersectionResult, type SampledPrimitive, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
+import type { AnnotationSpec, ConstraintSpec, Coordinate, GeometryDocument, GroupSpec, Measurement3, Point3Binding, Point3Primitive, PointBinding, PrimitiveSpec, Vector3 } from "@draw/dsl"
+import { adaptiveSampleFunctionSegments, buildSolidTemplate, calculateMeasurement3, createBuilderContext, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, findExtrema, findInflectionPoints, findZeros, intersectCirclesDetailed, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, sectionConvexPolyhedron, solveLineConstraints, type IntersectionResult, type SampledPrimitive, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
 
 export type DomainOperation =
   | { op: "addPrimitive"; primitive: PrimitiveSpec }
@@ -12,6 +12,8 @@ export type DomainOperation =
   | { op: "deleteAnnotation"; id: string }
   | { op: "addConstraint"; constraint: ConstraintSpec }
   | { op: "deleteConstraint"; id: string }
+  | { op: "addMeasurement"; measurement: Measurement3 }
+  | { op: "deleteMeasurement"; id: string }
   | { op: "deleteObject"; id: string }
   | { op: "toggleVisibility"; id: string; visible: boolean }
   | { op: "createGroup"; group: GroupSpec }
@@ -544,7 +546,8 @@ export function recomputeDerivedObjects(document: GeometryDocument, changedIds?:
     const point = result.points[primitive.type === "intersection" ? 0 : primitive.solutionIndex ?? 0]
     return { ...primitive, x: point.x, y: point.y, visible: true }
   })
-  return { ...evaluatedDocument, primitives }
+  const measurements = evaluatedDocument.measurements.map((measurement) => calculateMeasurement3(measurement, primitives))
+  return { ...evaluatedDocument, primitives, measurements }
 }
 
 export function applyOperation(document: GeometryDocument, operation: DomainOperation): OperationResult {
@@ -664,6 +667,14 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
     const before = next.constraints.length
     next.constraints = next.constraints.filter((constraint) => constraint.id !== operation.id)
     if (before === next.constraints.length) return { document, changed: false, error: "constraint not found" }
+  } else if (operation.op === "addMeasurement") {
+    if (next.measurements.some((measurement) => measurement.id === operation.measurement.id)) return { document, changed: false, error: "duplicate measurement id" }
+    next.measurements.push(operation.measurement)
+    changedIds = operation.measurement.sourceIds
+  } else if (operation.op === "deleteMeasurement") {
+    const before = next.measurements.length
+    next.measurements = next.measurements.filter((measurement) => measurement.id !== operation.id)
+    if (before === next.measurements.length) return { document, changed: false, error: "measurement not found" }
   } else if (operation.op === "toggleVisibility") {
     const primitive = next.primitives.find((candidate) => candidate.id === operation.id)
     if (!primitive) return { document, changed: false, error: "object not found" }

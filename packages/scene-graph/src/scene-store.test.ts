@@ -471,4 +471,18 @@ describe("scene graph operations", () => {
     expect(recomputed.primitives.find((primitive) => primitive.id === "line-1")).not.toBe(document.primitives[1])
     expect(recomputed.primitives.at(-1)).toBe(untouched)
   })
+
+  it("recomputes a spatial measurement after its source point moves", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [createPoint3("point-a", { x: 0, y: 0, z: 0 }), createPoint3("point-b", { x: 1, y: 0, z: 0 })]
+    const measurement = { id: "measurement3-1", kind: "measurement3" as const, sourceIds: ["point-a", "point-b"], metric: "distance" as const, precision: "numeric-approximation" as const, status: "valid" as const, explanation: "两点距离" }
+    const measured = applyOperation(document, { op: "addMeasurement", measurement })
+
+    expect(measured.document.measurements[0]).toMatchObject({ metric: "distance", value: 1, status: "valid" })
+
+    const moved = applyOperation(measured.document, patchPoint3("point-a", { x: 1, y: 4, z: 0 }))
+
+    expect(moved.document.measurements[0]).toMatchObject({ metric: "distance", value: 4, status: "valid" })
+    expect(moved.document.measurements[0].explanation).toContain("两个空间点")
+  })
 })

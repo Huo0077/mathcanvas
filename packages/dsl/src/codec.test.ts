@@ -3,6 +3,28 @@ import { describe, expect, it } from "vitest"
 import { createEmptyDocument, decodeMgeo, encodeMgeo, validateDocument } from "./index"
 
 describe("Geometry DSL codec", () => {
+  it("loads legacy documents without measurements", () => {
+    const document = createEmptyDocument("geometry3d")
+    const legacy = JSON.stringify({ ...document, measurements: undefined })
+
+    const restored = decodeMgeo(legacy)
+
+    expect(restored.measurements).toEqual([])
+  })
+
+  it("round-trips spatial measurements with their sources", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      { id: "point-a", type: "point3", position: { x: 0, y: 0, z: 0 } },
+      { id: "point-b", type: "point3", position: { x: 3, y: 4, z: 0 } }
+    ]
+    document.measurements = [{ id: "measurement3-1", kind: "measurement3", sourceIds: ["point-a", "point-b"], metric: "distance", value: 5, unit: "u", precision: "numeric-approximation", status: "valid", explanation: "由两个空间点 point-a、point-b 的坐标计算距离。" }]
+
+    const restored = decodeMgeo(encodeMgeo(document))
+
+    expect(restored.measurements).toEqual(document.measurements)
+  })
+
   it("round-trips a versioned document with stable metadata", () => {
     const document = createEmptyDocument("calculus")
     const restored = decodeMgeo(encodeMgeo(document))

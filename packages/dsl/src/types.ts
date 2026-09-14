@@ -447,10 +447,30 @@ export type PrimitiveSpec =
   | CurveIntersectionPrimitive
   | IntersectionSetPrimitive
 
+export type ConstraintType = "parallel" | "perpendicular" | "coincident" | "pointOnLine" | "pointOnPlane" | "collinear" | "coplanar" | "fixedDistance"
+
 export interface ConstraintSpec {
   id: string
-  type: "parallel" | "perpendicular" | "coincident"
+  type: ConstraintType
   targets: string[]
+  value?: number
+  tolerance?: number
+  enabled?: boolean
+}
+
+export type Measurement3Metric = "length" | "angle" | "area" | "volume" | "distance" | "dihedral"
+export type Measurement3Status = "valid" | "degenerate" | "insufficient-data" | "numeric-failure"
+
+export interface Measurement3 {
+  id: string
+  kind: "measurement3"
+  sourceIds: string[]
+  metric: Measurement3Metric
+  value?: number
+  unit?: string
+  precision: "exact-input" | "numeric-approximation"
+  status: Measurement3Status
+  explanation: string
 }
 
 export interface GroupSpec {
@@ -501,6 +521,7 @@ export interface GeometryDocument {
   constraints: ConstraintSpec[]
   dynamics: DynamicSpec[]
   annotations: AnnotationSpec[]
+  measurements: Measurement3[]
   metadata: DocumentMetadata
 }
 

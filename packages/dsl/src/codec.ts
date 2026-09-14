@@ -19,6 +19,7 @@ export function createEmptyDocument(workspace: Workspace): GeometryDocument {
     constraints: [],
     dynamics: [],
     annotations: [],
+    measurements: [],
     metadata: { id: createId("doc"), name: "Untitled geometry", createdAt: now, updatedAt: now }
   }
 }
@@ -38,7 +39,7 @@ export function decodeMgeo(serialized: string): GeometryDocument {
   }
   const rawCandidate = parsed && typeof parsed === "object" && "document" in parsed ? (parsed as { document: unknown }).document : parsed
   const candidate = rawCandidate && typeof rawCandidate === "object"
-    ? { ...rawCandidate, groups: "groups" in rawCandidate ? (rawCandidate as { groups: unknown }).groups : [] }
+    ? { ...rawCandidate, groups: "groups" in rawCandidate ? (rawCandidate as { groups: unknown }).groups : [], measurements: "measurements" in rawCandidate ? (rawCandidate as { measurements: unknown }).measurements : [] }
     : rawCandidate
   const result = validateDocument(candidate)
   if (!result.valid) throw new Error(`Invalid geometry document: ${result.errors.join(", ")}`)

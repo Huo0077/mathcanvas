@@ -82,7 +82,7 @@ function activeConstraints(constraints: ConstraintSpec[], activeLineIds?: Readon
 
 export function solveLineConstraints(lines: Map<string, LinePrimitive>, constraints: ConstraintSpec[], maxIterations?: number, tolerance = 1e-8, activeLineIds?: ReadonlySet<string>, activeConstraintIds?: ReadonlySet<string>): ConstraintSolveResult {
   const projected = new Map(lines)
-  const selectedConstraints = activeConstraints(constraints, activeLineIds, activeConstraintIds)
+  const selectedConstraints = activeConstraints(constraints, activeLineIds, activeConstraintIds).filter((constraint) => ["parallel", "perpendicular", "coincident"].includes(constraint.type) && constraint.targets.every((target) => lines.has(target)))
   const iterationLimit = maxIterations ?? Math.max(12, selectedConstraints.length + 1)
   for (let iteration = 0; iteration < iterationLimit; iteration += 1) {
     for (const constraint of selectedConstraints) {

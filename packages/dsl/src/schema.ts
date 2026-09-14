@@ -430,6 +430,7 @@ export function validateDocument(document: unknown): ValidationResult {
   if (!Array.isArray(document.constraints)) errors.push("constraints must be an array")
   if (!Array.isArray(document.dynamics)) errors.push("dynamics must be an array")
   if (!Array.isArray(document.annotations)) errors.push("annotations must be an array")
+  if (document.measurements !== undefined && !Array.isArray(document.measurements)) errors.push("measurements must be an array")
   if (!isRecord(document.metadata) || typeof document.metadata.id !== "string" || !document.metadata.id) errors.push("metadata.id is required")
 
   const primitives = Array.isArray(document.primitives) ? document.primitives : []
@@ -484,9 +485,34 @@ export function validateDocument(document: unknown): ValidationResult {
       }
       if (constraintIds.has(constraint.id)) errors.push(`duplicate constraint id: ${constraint.id}`)
       constraintIds.add(constraint.id)
-      if (!["parallel", "perpendicular", "coincident"].includes(String(constraint.type))) errors.push(`invalid constraint type: ${constraint.id}`)
-      if (!Array.isArray(constraint.targets) || constraint.targets.length !== 2 || constraint.targets.some((target) => typeof target !== "string" || !primitiveIds.has(target)) || constraint.targets[0] === constraint.targets[1]) errors.push(`constraint has invalid targets: ${constraint.id}`)
-      if ((constraint.type === "parallel" || constraint.type === "perpendicular") && Array.isArray(constraint.targets) && constraint.targets.some((target) => referenceType(primitiveById, target) !== "line")) errors.push(`constraint requires two lines: ${constraint.id}`)
+      const type = String(constraint.type)
+      const validConstraintTypes = ["parallel", "perpendicular", "coincident", "pointOnLine", "pointOnPlane", "collinear", "coplanar", "fixedDistance"]
+      if (!validConstraintTypes.includes(type)) errors.push(`invalid constraint type: ${constraint.id}`)
+      const targetCount = type === "collinear" ? 3 : type === "coplanar" ? 4 : 2
+      if (!Array.isArray(constraint.targets) || constraint.targets.length !== targetCount || constraint.targets.some((target) => typeof target !== "string" || !primitiveIds.has(target)) || new Set(constraint.targets).size !== constraint.targets.length) errors.push(`constraint has invalid targets: ${constraint.id}`)
+      const targetTypes = Array.isArray(constraint.targets) ? constraint.targets.map((target) => referenceType(primitiveById, target)) : []
+      const lineTypes = new Set(["line", "line3", "segment3", "ray3", "edge3"])
+      if ((type === "parallel" || type === "perpendicular" || type === "coincident") && targetTypes.some((target) => !lineTypes.has(target ?? ""))) errors.push(`constraint requires two lines: ${constraint.id}`)
+      if (type === "pointOnLine" && (targetTypes[0] !== "point3" || !lineTypes.has(targetTypes[1] ?? ""))) errors.push(`pointOnLine requires a point and line: ${constraint.id}`)
+      if (type === "pointOnPlane" && (targetTypes[0] !== "point3" || targetTypes[1] !== "plane3")) errors.push(`pointOnPlane requires a point and plane: ${constraint.id}`)
+      if ((type === "collinear" || type === "coplanar") && targetTypes.some((target) => target !== "point3")) errors.push(`constraint requires spatial points: ${constraint.id}`)
+      if (type === "fixedDistance" && (targetTypes.some((target) => target !== "point3") || typeof constraint.value !== "number" || !Number.isFinite(constraint.value) || constraint.value < 0)) errors.push(`fixedDistance requires two points and a non-negative value: ${constraint.id}`)
+      if (constraint.value !== undefined && (typeof constraint.value !== "number" || !Number.isFinite(constraint.value) || constraint.value < 0)) errors.push(`constraint value is invalid: ${constraint.id}`)
+      if (constraint.tolerance !== undefined && (typeof constraint.tolerance !== "number" || !Number.isFinite(constraint.tolerance) || constraint.tolerance <= 0)) errors.push(`constraint tolerance is invalid: ${constraint.id}`)
+    }
+  }
+  if (Array.isArray(document.measurements)) {
+    const measurementIds = new Set<string>()
+    for (const measurement of document.measurements) {
+      if (!isRecord(measurement) || typeof measurement.id !== "string" || measurement.kind !== "measurement3") { errors.push("measurement is invalid"); continue }
+      if (measurementIds.has(measurement.id)) errors.push(`duplicate measurement id: ${measurement.id}`)
+      measurementIds.add(measurement.id)
+      if (!Array.isArray(measurement.sourceIds) || measurement.sourceIds.length === 0 || measurement.sourceIds.some((sourceId) => typeof sourceId !== "string" || !primitiveIds.has(sourceId))) errors.push(`measurement has invalid sources: ${measurement.id}`)
+      if (!["length", "angle", "area", "volume", "distance", "dihedral"].includes(String(measurement.metric))) errors.push(`measurement metric is invalid: ${measurement.id}`)
+      if (!["exact-input", "numeric-approximation"].includes(String(measurement.precision))) errors.push(`measurement precision is invalid: ${measurement.id}`)
+      if (!["valid", "degenerate", "insufficient-data", "numeric-failure"].includes(String(measurement.status))) errors.push(`measurement status is invalid: ${measurement.id}`)
+      if (typeof measurement.explanation !== "string") errors.push(`measurement explanation is invalid: ${measurement.id}`)
+      if (measurement.value !== undefined && !Number.isFinite(measurement.value)) errors.push(`measurement value is invalid: ${measurement.id}`)
     }
   }
   return errors.length ? { valid: false, errors } : { valid: true }

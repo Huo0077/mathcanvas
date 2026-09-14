@@ -223,4 +223,52 @@ describe("domain patches", () => {
 
     expect(result.document.primitives[0]).toMatchObject({ a: { x: -1, y: 6 }, b: { x: 1, y: 9 } })
   })
+
+  it("accepts a spatial point-on-line constraint and rejects mismatched targets", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      { id: "point-a", type: "point3", position: { x: 0, y: 0, z: 0 } },
+      { id: "point-b", type: "point3", position: { x: 1, y: 0, z: 0 } },
+      { id: "line-ab", type: "line3", definition: { kind: "throughPoints", pointIds: ["point-a", "point-b"] } }
+    ]
+    const operation = { op: "addConstraint" as const, constraint: { id: "on-line", type: "pointOnLine" as const, targets: ["point-a", "line-ab"] } }
+
+    expect(validatePatch(document, operation)).toEqual({ valid: true })
+    expect(commitPatch(document, operation).document.constraints).toEqual([operation.constraint])
+    expect(validatePatch(document, { op: "addConstraint", constraint: { id: "on-line-2", type: "pointOnLine", targets: ["point-a", "point-b"] } })).toEqual({ valid: false, errors: ["pointOnLine requires a point and line"] })
+    expect(validatePatch(document, { op: "addConstraint", constraint: { id: "collinear-1", type: "collinear", targets: ["point-a", "point-b"] } })).toEqual({ valid: false, errors: ["constraint has invalid targets"] })
+  })
+
+  it("adds and deletes a 3D measurement transactionally and protects its sources", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      { id: "point-a", type: "point3", position: { x: 0, y: 0, z: 0 } },
+      { id: "point-b", type: "point3", position: { x: 3, y: 4, z: 0 } }
+    ]
+    const measurement = { id: "measurement3-1", kind: "measurement3" as const, sourceIds: ["point-a", "point-b"], metric: "distance" as const, value: 5, unit: "u", precision: "numeric-approximation" as const, status: "valid" as const, explanation: "两个空间点的坐标计算距离。" }
+    const added = commitPatch(document, { op: "addMeasurement", measurement })
+
+    expect(added.changed).toBe(true)
+    expect(added.document.measurements).toHaveLength(1)
+    expect(added.document.measurements[0]).toMatchObject({ id: "measurement3-1", metric: "distance", status: "valid", value: 5 })
+    expect(validatePatch(added.document, { op: "deleteObject", id: "point-a" })).toEqual({ valid: false, errors: ["object is referenced by another object"] })
+    expect(validatePatch(added.document, { op: "addMeasurement", measurement })).toEqual({ valid: false, errors: ["duplicate measurement id"] })
+    expect(validatePatch(added.document, { op: "addMeasurement", measurement: { ...measurement, id: "measurement3-2", sourceIds: ["missing"] } })).toEqual({ valid: false, errors: ["measurement has invalid sources"] })
+    expect(commitPatch(added.document, { op: "deleteMeasurement", id: measurement.id }).document.measurements).toEqual([])
+  })
+
+  it("rejects malformed measurement patches without throwing", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [{ id: "point-a", type: "point3", position: { x: 0, y: 0, z: 0 } }]
+    const malformedOperations = [
+      { op: "addMeasurement", measurement: { id: "measurement3-1" } },
+      { op: "addMeasurement" },
+      { op: "addMeasurement", measurement: { id: "measurement3-2", kind: "measurement3", sourceIds: ["point-a"], metric: "bogus", precision: "numeric-approximation", status: "valid", explanation: "x" } }
+    ] as never[]
+
+    for (const operation of malformedOperations) {
+      expect(() => validatePatch(document, operation)).not.toThrow()
+      expect(validatePatch(document, operation).valid).toBe(false)
+    }
+  })
 })

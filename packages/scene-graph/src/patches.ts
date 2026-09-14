@@ -1,4 +1,4 @@
-import { validateDocument, type AnnotationSpec, type ConstraintSpec, type GeometryDocument, type PrimitiveSpec } from "@draw/dsl"
+import { validateDocument, type AnnotationSpec, type ConstraintSpec, type GeometryDocument, type Measurement3, type PrimitiveSpec } from "@draw/dsl"
 import { parseExpression } from "@draw/geometry-kernel"
 
 import { applyOperation, type DomainOperation } from "./operations"
@@ -23,6 +23,18 @@ function isAnnotation(value: unknown): value is AnnotationSpec {
   return Boolean(value && typeof value === "object" && "id" in value && "text" in value)
 }
 
+function isMeasurement(value: unknown): value is Measurement3 {
+  if (!value || typeof value !== "object") return false
+  const candidate = value as Partial<Measurement3>
+  return typeof candidate.id === "string" && candidate.id.length > 0
+    && candidate.kind === "measurement3"
+    && Array.isArray(candidate.sourceIds)
+    && ["length", "distance", "angle", "area", "volume", "dihedral"].includes(String(candidate.metric))
+    && ["exact-input", "numeric-approximation"].includes(String(candidate.precision))
+    && ["valid", "degenerate", "insufficient-data", "numeric-failure"].includes(String(candidate.status))
+    && typeof candidate.explanation === "string"
+}
+
 function isCoordinate(value: unknown): value is { x: number; y: number } {
   return Boolean(value && typeof value === "object" && Number.isFinite((value as { x?: unknown }).x) && Number.isFinite((value as { y?: unknown }).y))
 }
@@ -32,7 +44,7 @@ function isVector3(value: unknown): value is { x: number; y: number; z: number }
 }
 
 function isReferenced(document: GeometryDocument, id: string): boolean {
-  return document.groups.some((group) => group.members.includes(id)) || document.constraints.some((constraint) => constraint.targets.includes(id)) || document.annotations.some((annotation) => annotation.target === id || (annotation.anchor?.kind === "primitive" && annotation.anchor.primitiveId === id)) || document.primitives.some((primitive) => (
+  return document.groups.some((group) => group.members.includes(id)) || document.constraints.some((constraint) => constraint.targets.includes(id)) || document.measurements.some((measurement) => measurement.sourceIds.includes(id)) || document.annotations.some((annotation) => annotation.target === id || (annotation.anchor?.kind === "primitive" && annotation.anchor.primitiveId === id)) || document.primitives.some((primitive) => (
     (primitive.type === "intersection" && (primitive.lineA === id || primitive.lineB === id)) ||
     (primitive.type === "lineCircleIntersection" && (primitive.lineId === id || primitive.circleId === id)) ||
     (primitive.type === "circleIntersection" && (primitive.circleA === id || primitive.circleB === id)) ||
@@ -176,11 +188,27 @@ export function validatePatch(document: GeometryDocument, operation: DomainOpera
     if (!isConstraint(operation.constraint)) errors.push("constraint is invalid")
     else {
       if (document.constraints.some((constraint) => constraint.id === operation.constraint.id)) errors.push("duplicate constraint id")
-      if (!["parallel", "perpendicular", "coincident"].includes(operation.constraint.type)) errors.push("constraint type is invalid")
-      if (operation.constraint.targets.length !== 2 || operation.constraint.targets[0] === operation.constraint.targets[1] || operation.constraint.targets.some((target) => !ids.has(target))) errors.push("constraint has invalid targets")
-      if ((operation.constraint.type === "parallel" || operation.constraint.type === "perpendicular") && operation.constraint.targets.some((target) => document.primitives.find((primitive) => primitive.id === target)?.type !== "line")) errors.push("constraint requires two lines")
+      const validTypes = ["parallel", "perpendicular", "coincident", "pointOnLine", "pointOnPlane", "collinear", "coplanar", "fixedDistance"]
+      if (!validTypes.includes(operation.constraint.type)) errors.push("constraint type is invalid")
+      const targetCount = operation.constraint.type === "collinear" ? 3 : operation.constraint.type === "coplanar" ? 4 : 2
+      if (operation.constraint.targets.length !== targetCount || new Set(operation.constraint.targets).size !== operation.constraint.targets.length || operation.constraint.targets.some((target) => !ids.has(target))) errors.push("constraint has invalid targets")
+      const targetTypes = operation.constraint.targets.map((target) => document.primitives.find((primitive) => primitive.id === target)?.type)
+      const lineTypes = new Set(["line", "line3", "segment3", "ray3", "edge3"])
+      if ((operation.constraint.type === "parallel" || operation.constraint.type === "perpendicular" || operation.constraint.type === "coincident") && targetTypes.some((type) => !lineTypes.has(type ?? ""))) errors.push("constraint requires two lines")
+      if (operation.constraint.type === "pointOnLine" && (targetTypes[0] !== "point3" || !lineTypes.has(targetTypes[1] ?? ""))) errors.push("pointOnLine requires a point and line")
+      if (operation.constraint.type === "pointOnPlane" && (targetTypes[0] !== "point3" || targetTypes[1] !== "plane3")) errors.push("pointOnPlane requires a point and plane")
+      if ((operation.constraint.type === "collinear" || operation.constraint.type === "coplanar") && targetTypes.some((type) => type !== "point3")) errors.push("constraint requires spatial points")
+      if (operation.constraint.type === "fixedDistance" && (targetTypes.some((type) => type !== "point3") || operation.constraint.value === undefined || !Number.isFinite(operation.constraint.value) || operation.constraint.value < 0)) errors.push("fixedDistance requires two points and a non-negative value")
     }
   }
+  if (operation.op === "addMeasurement") {
+    if (!isMeasurement(operation.measurement)) errors.push("measurement is invalid")
+    else {
+      if (document.measurements.some((measurement) => measurement.id === operation.measurement.id)) errors.push("duplicate measurement id")
+      if (!operation.measurement.sourceIds.length || operation.measurement.sourceIds.some((id) => !ids.has(id))) errors.push("measurement has invalid sources")
+    }
+  }
+  if (operation.op === "deleteMeasurement" && !document.measurements.some((measurement) => measurement.id === operation.id)) errors.push("measurement not found")
   if (operation.op === "deleteConstraint" && !document.constraints.some((constraint) => constraint.id === operation.id)) errors.push("constraint not found")
   if ((operation.op === "deleteObject" || operation.op === "toggleVisibility") && !ids.has(operation.id)) errors.push("object not found")
   if ((operation.op === "deleteObject" || operation.op === "toggleVisibility") && document.primitives.find((primitive) => primitive.id === operation.id)?.locked) errors.push("object is locked")

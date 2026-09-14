@@ -90,12 +90,40 @@ function applyCameraState(camera: THREE.PerspectiveCamera, state: CameraState): 
 }
 
 export function pickPrimitiveAt(scene: THREE.Scene, camera: THREE.Camera, normalizedPoint: { x: number; y: number }): string | null {
+  return pickRaycastHit3(scene, camera, normalizedPoint)?.primitiveId ?? null
+}
+
+export interface RaycastHit3 {
+  primitiveId: string
+  partId?: string
+  depth: number
+  worldPoint: Vector3
+  kind: "point" | "line" | "edge" | "face" | "solid" | "marker"
+}
+
+function pickKind(primitiveType: unknown): RaycastHit3["kind"] {
+  if (primitiveType === "point3") return "point"
+  if (primitiveType === "edge3") return "edge"
+  if (primitiveType === "face3") return "face"
+  if (["cube", "pyramid", "cylinder", "cone", "polyhedron3"].includes(String(primitiveType))) return "solid"
+  return "line"
+}
+
+export function pickRaycastHit3(scene: THREE.Scene, camera: THREE.Camera, normalizedPoint: { x: number; y: number }): RaycastHit3 | null {
   const raycaster = new THREE.Raycaster()
   raycaster.setFromCamera(new THREE.Vector2(normalizedPoint.x * 2 - 1, -(normalizedPoint.y * 2 - 1)), camera)
   scene.updateMatrixWorld(true)
   const intersections = raycaster.intersectObjects(scene.children, true)
-  const hit = intersections.find((intersection) => typeof intersection.object.userData.primitiveId === "string")
-  return typeof hit?.object.userData.primitiveId === "string" ? hit.object.userData.primitiveId : null
+  const priority: Record<RaycastHit3["kind"], number> = { point: 0, edge: 1, face: 2, line: 3, solid: 4, marker: 5 }
+  const hits = intersections.flatMap((intersection) => {
+    const primitiveId = intersection.object.userData.primitiveId
+    if (typeof primitiveId !== "string") return []
+    const kind = pickKind(intersection.object.userData.primitiveType)
+    return [{ primitiveId, partId: typeof intersection.object.userData.partId === "string" ? intersection.object.userData.partId : undefined, depth: intersection.distance, worldPoint: { x: intersection.point.x, y: intersection.point.y, z: intersection.point.z }, kind, priority: priority[kind] }]
+  })
+  const hit = hits.sort((first, second) => first.priority - second.priority || first.depth - second.depth)[0]
+  if (!hit) return null
+  return { primitiveId: hit.primitiveId, partId: hit.partId, depth: hit.depth, worldPoint: hit.worldPoint, kind: hit.kind }
 }
 
 export function createPoint3Mesh(primitive: Point3Primitive, selected: boolean): THREE.Mesh {
@@ -301,12 +329,14 @@ function createCubeUnfoldGroup(primitive: CubePrimitive, selected: boolean, opti
     mesh.position.set(center.x + face.center.x, center.y + face.center.y, center.z + face.center.z)
     mesh.rotation.set(face.rotation.x, face.rotation.y, face.rotation.z)
     mesh.userData.primitiveId = primitive.id
+    mesh.userData.partId = `unfolded-face-${index}`
     mesh.userData.visualRole = `unfolded-face-${index}`
     group.add(mesh)
     const outline = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), new THREE.LineBasicMaterial({ color: selected ? "#4c3ac7" : primitive.style?.stroke ?? strokeFor(primitive), transparent: true, opacity: opacityFor(primitive) }))
     outline.position.copy(mesh.position)
     outline.rotation.copy(mesh.rotation)
     outline.userData.primitiveId = primitive.id
+    outline.userData.partId = `unfolded-face-${index}`
     group.add(outline)
   })
   return group

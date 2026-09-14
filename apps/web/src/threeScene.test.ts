@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import * as THREE from "three"
 
-import { createCameraState, createCubeMesh, createFace3Mesh, createPoint3Mesh, createPointDrivenLine, createSolidGroup, createSolidMesh, cubeUnfoldCenters, panCameraState, pickPrimitiveAt, resetCameraState, rotateCameraState, zoomCameraState } from "./threeScene"
+import { createCameraState, createCubeMesh, createFace3Mesh, createPoint3Mesh, createPointDrivenLine, createSolidGroup, createSolidMesh, cubeUnfoldCenters, panCameraState, pickPrimitiveAt, pickRaycastHit3, resetCameraState, rotateCameraState, zoomCameraState } from "./threeScene"
 
 describe("Three.js geometry scene", () => {
   it("renders a selectable point3 at its source position", () => {
@@ -107,6 +107,28 @@ describe("Three.js geometry scene", () => {
     material.dispose()
   })
 
+  it("prefers a spatial point over a containing face and returns depth", () => {
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100)
+    camera.position.set(0, 0, 8)
+    camera.lookAt(0, 0, 0)
+    const scene = new THREE.Scene()
+    const cube = createCubeMesh({ id: "cube-under-point", type: "cube", origin: { x: -1, y: -1, z: -1 }, size: { x: 2, y: 2, z: 2 } }, false)
+    const point = createPoint3Mesh({ id: "point-front", type: "point3", position: { x: 0, y: 0, z: 1 } }, false)
+    scene.add(cube, point)
+
+    const hit = pickRaycastHit3(scene, camera, { x: 0.5, y: 0.5 })
+
+    expect(hit?.primitiveId).toBe("point-front")
+    expect(hit?.kind).toBe("point")
+    expect(hit?.depth).toBeGreaterThan(0)
+    expect(hit?.worldPoint.z).toBeGreaterThan(0)
+
+    scene.traverse((object) => {
+      if (object instanceof THREE.Mesh) object.geometry.dispose()
+      if (object instanceof THREE.Mesh && object.material instanceof THREE.Material) object.material.dispose()
+    })
+  })
+
   it("builds optional hidden-edge and normal visual layers", () => {
     const group = createSolidGroup({ id: "cube-visual", type: "cube", origin: { x: -1, y: -1, z: -1 }, size: { x: 2, y: 2, z: 2 } }, false, { showHiddenEdges: true, showNormals: true })
     const hiddenEdges = group.children.find((child) => child.userData.visualRole === "hidden-edges") as THREE.LineSegments | undefined
@@ -131,5 +153,24 @@ describe("Three.js geometry scene", () => {
     expect(unfolded).toHaveLength(6)
     expect(unfolded).not.toEqual(folded)
     expect(new Set(unfolded.map((face) => `${face.center.x},${face.center.y},${face.center.z}`)).size).toBe(6)
+  })
+
+  it("reports the picked unfolded face as a stable sub-part id", () => {
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100)
+    camera.position.set(0, 0, 12)
+    camera.lookAt(0, 0, 0)
+    const scene = new THREE.Scene()
+    const group = createSolidGroup({ id: "cube-unfolded", type: "cube", origin: { x: -1, y: -1, z: -1 }, size: { x: 2, y: 2, z: 2 } }, false, { unfoldProgress: 1 })
+    scene.add(group)
+
+    const hit = pickRaycastHit3(scene, camera, { x: 0.5, y: 0.5 })
+
+    expect(hit?.primitiveId).toBe("cube-unfolded")
+    expect(hit?.partId).toMatch(/^unfolded-face-\d$/)
+
+    group.traverse((child) => {
+      if (child instanceof THREE.Mesh || child instanceof THREE.LineSegments) child.geometry.dispose()
+      if ("material" in child && child.material instanceof THREE.Material) child.material.dispose()
+    })
   })
 })

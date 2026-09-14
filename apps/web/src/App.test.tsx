@@ -8,7 +8,9 @@ import { useSceneStore } from "./store"
 describe("MathCanvas workbench", () => {
   beforeEach(() => {
     localStorage.clear()
-    useSceneStore.getState().replace(createDemoDocument())
+    // `replace` deliberately keeps other workspaces' documents, so tests need a full store reset.
+    const document = createDemoDocument()
+    useSceneStore.setState({ document, workspaceDocuments: { [document.workspace]: document }, history: [], future: [], previewBase: null, error: null })
   })
 
   it("switches workspaces without losing each workspace document", () => {
@@ -603,5 +605,34 @@ describe("MathCanvas workbench", () => {
     fireEvent.click(screen.getByRole("button", { name: /批量(隐藏|显示)/ }))
 
     expect(screen.getByRole("alert").textContent).toContain("selection contains locked object")
+  })
+
+  it("creates and deletes a spatial measurement so its sources become deletable again", () => {
+    const algebraRow = (label: string) => {
+      const row = Array.from(globalThis.document.querySelectorAll(".algebra-panel .object-row")).find((candidate) => candidate.querySelector(".object-name")?.textContent === label)
+      if (!row) throw new Error(`missing algebra row ${label}`)
+      return row as HTMLElement
+    }
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
+    fireEvent.click(algebraRow("A"))
+    fireEvent.click(algebraRow("B"), { shiftKey: true })
+    fireEvent.click(screen.getByRole("button", { name: "距离" }))
+
+    expect(useSceneStore.getState().document.measurements).toHaveLength(1)
+    const measurementId = useSceneStore.getState().document.measurements[0].id
+
+    fireEvent.click(algebraRow("A"))
+    fireEvent.keyDown(window, { key: "Delete" })
+    expect(screen.getByRole("alert").textContent).toContain("object is referenced by another object")
+
+    fireEvent.click(screen.getByRole("button", { name: `删除测量 ${measurementId}` }))
+    expect(useSceneStore.getState().document.measurements).toHaveLength(0)
+
+    fireEvent.click(algebraRow("A"))
+    fireEvent.keyDown(window, { key: "Delete" })
+    expect(useSceneStore.getState().document.primitives.some((primitive) => primitive.type === "point3" && primitive.label === "A")).toBe(false)
   })
 })

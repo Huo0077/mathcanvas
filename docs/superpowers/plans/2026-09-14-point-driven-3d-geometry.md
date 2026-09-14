@@ -17,7 +17,7 @@
 - 每个行为变化先写失败测试，确认失败原因正确后再写最小生产代码。
 - 领域计算不放进 React 或 Three.js 组件；无效输入返回结构化诊断，不生成伪结果。
 - 不修改 P4 Agent、P5 题图解析和 P7 工程制图范围。
-- 每个切片完成后运行聚焦测试、全量测试、类型检查及适用的构建/E2E，执行 `git diff --check`，只读 review 后独立 commit 并 `git push origin main`。
+- 每个切片完成后运行聚焦测试、全量测试、类型检查及适用的构建/E2E，执行 `git diff --check`，只读 review 后独立 commit；推送远端 `git push origin main` 在项目明确要求前暂缓，当前阶段只做本地提交。
 
 ## Slice 1：3D DSL 基础对象与兼容类型
 
@@ -96,7 +96,9 @@
 
 **Implementation:** 将 Raycaster 结果转换为稳定 ID；加入约束诊断和测量 Visitor；Algebra View 展示顶点/棱/面子树，属性栏展示来源与精度。
 
-**Verification:** 内核/Scene Graph/UI 测试、类型检查、构建和 Playwright 拾取测量流程。完成后 commit `feat(p6): add 3d constraints and measurements` 并推送。
+**Status:** [x] 已实现并完成 Slice 6 验证。
+
+**Verification:** 内核/Scene Graph/UI 聚焦测试：`measurements3d.test.ts` 6 个、`constraints3d.test.ts` 2 个、`patches.test.ts` 23 个、`scene-store.test.ts` 34 个、`AlgebraView.test.tsx` 5 个、`spatialTools.test.ts` 9 个、`store.test.ts` 1 个、`threeScene.test.ts` 13 个、`codec.test.ts` 25 个通过；全量 `npm.cmd test`：32 个测试文件、286 个用例通过；`npm.cmd run typecheck`：4 个 workspace 通过；Web 生产构建通过；Playwright 8 个用例通过（含空间点拾取并创建教学测量、顶点/棱/面子树展开）；`git diff --check` 通过。完成后 commit `feat(p6): add 3d constraints and measurements`（本轮按项目要求只提交到本地，未推送远端）。
 
 ## Slice 7：通用剖切与截面派生对象
 
