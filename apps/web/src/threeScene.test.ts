@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import * as THREE from "three"
 
-import { createCameraState, createCubeMesh, createSolidMesh, panCameraState, pickPrimitiveAt, resetCameraState, rotateCameraState, zoomCameraState } from "./threeScene"
+import { createCameraState, createCubeMesh, createSolidGroup, createSolidMesh, panCameraState, pickPrimitiveAt, resetCameraState, rotateCameraState, zoomCameraState } from "./threeScene"
 
 describe("Three.js geometry scene", () => {
   it("maps a parameterized cube to a centered box mesh", () => {
@@ -66,5 +66,21 @@ describe("Three.js geometry scene", () => {
     mesh.geometry.dispose()
     const material = mesh.material as THREE.Material
     material.dispose()
+  })
+
+  it("builds optional hidden-edge and normal visual layers", () => {
+    const group = createSolidGroup({ id: "cube-visual", type: "cube", origin: { x: -1, y: -1, z: -1 }, size: { x: 2, y: 2, z: 2 } }, false, { showHiddenEdges: true, showNormals: true })
+    const hiddenEdges = group.children.find((child) => child.userData.visualRole === "hidden-edges") as THREE.LineSegments | undefined
+    const normals = group.children.filter((child) => child.userData.visualRole === "normal")
+
+    expect(hiddenEdges).toBeTruthy()
+    expect((hiddenEdges?.material as THREE.LineDashedMaterial).depthTest).toBe(false)
+    expect((hiddenEdges?.material as THREE.LineDashedMaterial).dashSize).toBeGreaterThan(0)
+    expect(normals.length).toBeGreaterThan(0)
+
+    group.traverse((child) => {
+      if (child instanceof THREE.Mesh || child instanceof THREE.LineSegments) child.geometry.dispose()
+      if ("material" in child && child.material instanceof THREE.Material) child.material.dispose()
+    })
   })
 })

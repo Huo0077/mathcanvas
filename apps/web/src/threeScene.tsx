@@ -11,6 +11,12 @@ const scenePalette = {
 
 type SolidPrimitive = CubePrimitive | PyramidPrimitive | CylinderPrimitive | ConePrimitive
 
+export interface SolidVisualOptions {
+  showHiddenEdges?: boolean
+  showNormals?: boolean
+  transparentFaces?: boolean
+}
+
 export interface CameraState {
   azimuth: number
   elevation: number
@@ -59,7 +65,7 @@ export function pickPrimitiveAt(scene: THREE.Scene, camera: THREE.Camera, normal
   return typeof hit?.object.userData.primitiveId === "string" ? hit.object.userData.primitiveId : null
 }
 
-function solidMaterial(primitive: SolidPrimitive, selected: boolean): THREE.MeshStandardMaterial {
+function solidMaterial(primitive: SolidPrimitive, selected: boolean, options: SolidVisualOptions = {}): THREE.MeshStandardMaterial {
   const opacity = opacityFor(primitive)
   return new THREE.MeshStandardMaterial({
     color: primitive.style?.fill ?? strokeFor(primitive),
@@ -67,15 +73,15 @@ function solidMaterial(primitive: SolidPrimitive, selected: boolean): THREE.Mesh
     emissiveIntensity: selected ? 0.28 : 0,
     roughness: 0.72,
     metalness: 0.04,
-    transparent: opacity < 1,
-    opacity: Math.min(1, opacity * 0.72),
+    transparent: options.transparentFaces || opacity < 1,
+    opacity: options.transparentFaces ? Math.min(0.55, opacity) : opacity,
     side: THREE.DoubleSide
   })
 }
 
-export function createCubeMesh(primitive: CubePrimitive, selected: boolean): THREE.Mesh {
+export function createCubeMesh(primitive: CubePrimitive, selected: boolean, options: SolidVisualOptions = {}): THREE.Mesh {
   const geometry = new THREE.BoxGeometry(primitive.size.x, primitive.size.y, primitive.size.z)
-  const material = solidMaterial(primitive, selected)
+  const material = solidMaterial(primitive, selected, options)
   const mesh = new THREE.Mesh(geometry, material)
   mesh.position.set(
     primitive.origin.x + primitive.size.x / 2,
@@ -103,14 +109,14 @@ function createPyramidGeometry(primitive: PyramidPrimitive): THREE.BufferGeometr
   return geometry
 }
 
-export function createSolidMesh(primitive: SolidPrimitive, selected: boolean): THREE.Mesh {
-  if (primitive.type === "cube") return createCubeMesh(primitive, selected)
+export function createSolidMesh(primitive: SolidPrimitive, selected: boolean, options: SolidVisualOptions = {}): THREE.Mesh {
+  if (primitive.type === "cube") return createCubeMesh(primitive, selected, options)
   const geometry = primitive.type === "pyramid"
     ? createPyramidGeometry(primitive)
     : primitive.type === "cylinder"
       ? new THREE.CylinderGeometry(primitive.radius, primitive.radius, primitive.height, primitive.segments)
       : new THREE.ConeGeometry(primitive.radius, primitive.height, primitive.segments)
-  const mesh = new THREE.Mesh(geometry, solidMaterial(primitive, selected))
+  const mesh = new THREE.Mesh(geometry, solidMaterial(primitive, selected, options))
   if (primitive.type === "pyramid") mesh.position.set(primitive.baseCenter.x, primitive.baseCenter.y, primitive.baseCenter.z)
   else mesh.position.set(primitive.center.x, primitive.center.y + primitive.height / 2, primitive.center.z)
   mesh.userData.primitiveId = primitive.id
@@ -131,13 +137,54 @@ function solidOutline(mesh: THREE.Mesh, primitive: SolidPrimitive, selected: boo
   return outline
 }
 
+function hiddenEdgeOverlay(mesh: THREE.Mesh, primitive: SolidPrimitive): THREE.LineSegments {
+  const geometry = new THREE.EdgesGeometry(mesh.geometry)
+  const material = new THREE.LineDashedMaterial({
+    color: primitive.style?.stroke ?? strokeFor(primitive),
+    dashSize: 0.12,
+    gapSize: 0.08,
+    transparent: true,
+    opacity: Math.min(0.45, opacityFor(primitive)),
+    depthTest: false,
+    depthWrite: false
+  })
+  const hidden = new THREE.LineSegments(geometry, material)
+  hidden.computeLineDistances()
+  hidden.position.copy(mesh.position)
+  hidden.userData.primitiveId = primitive.id
+  hidden.userData.visualRole = "hidden-edges"
+  return hidden
+}
+
+function normalVisuals(mesh: THREE.Mesh): THREE.ArrowHelper[] {
+  return [
+    { direction: new THREE.Vector3(1, 0, 0), color: "#e05d6f" },
+    { direction: new THREE.Vector3(0, 1, 0), color: "#21a794" },
+    { direction: new THREE.Vector3(0, 0, 1), color: "#6c5ce7" }
+  ].map(({ direction, color }) => {
+    const arrow = new THREE.ArrowHelper(direction, mesh.position, 1.2, color, 0.18, 0.1)
+    arrow.userData.visualRole = "normal"
+    return arrow
+  })
+}
+
+export function createSolidGroup(primitive: SolidPrimitive, selected: boolean, options: SolidVisualOptions = {}): THREE.Group {
+  const group = new THREE.Group()
+  const mesh = createSolidMesh(primitive, selected, options)
+  group.add(mesh)
+  group.add(solidOutline(mesh, primitive, selected))
+  if (options.showHiddenEdges) group.add(hiddenEdgeOverlay(mesh, primitive))
+  if (options.showNormals) normalVisuals(mesh).forEach((normal) => group.add(normal))
+  return group
+}
+
 function visibleSolids(document: GeometryDocument): SolidPrimitive[] {
   return document.primitives.filter((primitive): primitive is SolidPrimitive => ["cube", "pyramid", "cylinder", "cone"].includes(primitive.type) && primitive.visible !== false)
 }
 
 function disposeScene(scene: THREE.Scene): void {
   scene.traverse((object) => {
-    if (!(object instanceof THREE.Mesh) && !(object instanceof THREE.LineSegments)) return
+    if (!(object instanceof THREE.Mesh) && !(object instanceof THREE.Line) && !(object instanceof THREE.LineSegments)) return
     object.geometry.dispose()
     const materials = Array.isArray(object.material) ? object.material : [object.material]
     materials.forEach((material) => material.dispose())
@@ -154,6 +201,9 @@ export function ThreeSceneView({ document, selectedIds, onSelect }: ThreeSceneVi
   const containerRef = useRef<HTMLDivElement>(null)
   const cameraStateRef = useRef<CameraState>(createCameraState())
   const resetCameraRef = useRef<() => void>(() => undefined)
+  const [showHiddenEdges, setShowHiddenEdges] = useState(false)
+  const [showNormals, setShowNormals] = useState(false)
+  const [transparentFaces, setTransparentFaces] = useState(false)
   const [webglAvailable, setWebglAvailable] = useState(true)
 
   useEffect(() => {
@@ -191,9 +241,7 @@ export function ThreeSceneView({ document, selectedIds, onSelect }: ThreeSceneVi
 
     visibleSolids(document).forEach((primitive) => {
       const selected = selectedIds.includes(primitive.id)
-      const mesh = createSolidMesh(primitive, selected)
-      scene.add(mesh)
-      scene.add(solidOutline(mesh, primitive, selected))
+      scene.add(createSolidGroup(primitive, selected, { showHiddenEdges, showNormals, transparentFaces }))
     })
 
     const render = () => renderer.render(scene, camera)
@@ -270,8 +318,8 @@ export function ThreeSceneView({ document, selectedIds, onSelect }: ThreeSceneVi
       renderer.dispose()
       if (container.contains(renderer.domElement)) container.removeChild(renderer.domElement)
     }
-  }, [document, onSelect, selectedIds])
+  }, [document, onSelect, selectedIds, showHiddenEdges, showNormals, transparentFaces])
 
   const hasSolid = document.primitives.some((primitive) => ["cube", "pyramid", "cylinder", "cone"].includes(primitive.type) && primitive.visible !== false)
-  return <div className="three-canvas-shell" ref={containerRef} data-3d-scene="true" aria-label="3D 几何场景">{webglAvailable && <button className="three-reset-button" type="button" aria-label="重置3D视角" onClick={() => resetCameraRef.current()}>重置视角</button>}{!webglAvailable && <div className="three-scene-status" role="status">当前浏览器不支持 WebGL，无法显示 3D 场景。</div>}{webglAvailable && !hasSolid && <div className="three-scene-status" role="status">添加立体对象开始探索三维空间。</div>}</div>
+  return <div className="three-canvas-shell" ref={containerRef} data-3d-scene="true" aria-label="3D 几何场景">{webglAvailable && <div className="three-scene-controls" aria-label="3D显示控制"><button type="button" aria-pressed={transparentFaces} onClick={() => setTransparentFaces((visible) => !visible)}>透明面</button><button type="button" aria-pressed={showHiddenEdges} onClick={() => setShowHiddenEdges((visible) => !visible)}>隐藏边</button><button type="button" aria-pressed={showNormals} onClick={() => setShowNormals((visible) => !visible)}>法向量</button><button className="three-reset-button" type="button" aria-label="重置3D视角" onClick={() => resetCameraRef.current()}>重置视角</button></div>}{!webglAvailable && <div className="three-scene-status" role="status">当前浏览器不支持 WebGL，无法显示 3D 场景。</div>}{webglAvailable && !hasSolid && <div className="three-scene-status" role="status">添加立体对象开始探索三维空间。</div>}</div>
 }
