@@ -364,6 +364,20 @@ describe("MathCanvas workbench", () => {
     expect(screen.getByRole("button", { name: "插入对数" })).toBeTruthy()
   })
 
+  it("creates linked calculus analysis objects from the function inspector", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "添加函数图像" }))
+    fireEvent.click(screen.getByRole("button", { name: "创建导函数" }))
+    fireEvent.click(screen.getByRole("button", { name: "创建切线" }))
+    fireEvent.click(screen.getByRole("button", { name: "创建积分区域" }))
+
+    const canvas = screen.getByRole("img", { name: "几何画布" })
+    expect(canvas.querySelector('[data-primitive-type="derivative"]')).toBeTruthy()
+    expect(canvas.querySelector('[data-primitive-type="tangent"]')).toBeTruthy()
+    expect(canvas.querySelector('[data-primitive-type="integral"]')).toBeTruthy()
+    expect(screen.getByText("导函数")).toBeTruthy()
+  })
+
   it("keeps a visible formula editor for direct input", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "添加函数图像" }))
