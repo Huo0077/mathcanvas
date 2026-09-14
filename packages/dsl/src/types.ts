@@ -470,6 +470,8 @@ export interface Measurement3 {
   kind: "measurement3"
   sourceIds: string[]
   metric: Measurement3Metric
+  /** Dihedral measurements record which angle they report; defaults to the interior teaching angle. */
+  dihedralKind?: "interior" | "exterior"
   value?: number
   unit?: string
   precision: "exact-input" | "numeric-approximation"

@@ -57,7 +57,7 @@ describe("3D measurements", () => {
     expect(measurement.value).toBeUndefined()
   })
 
-  it("reports the normal-vector angle for a dihedral measurement and discloses the supplement", () => {
+  it("reports the interior dihedral with its common edge and discloses the supplement", () => {
     const primitives: PrimitiveSpec[] = [
       { id: "face-a", type: "face3", pointIds: ["a", "b", "c"] },
       { id: "face-b", type: "face3", pointIds: ["a", "b", "d"] },
@@ -68,9 +68,31 @@ describe("3D measurements", () => {
     ]
 
     const measurement = createMeasurement3("dihedral-1", "dihedral", ["face-a", "face-b"], primitives)
+    const exterior = createMeasurement3("dihedral-2", "dihedral", ["face-a", "face-b"], primitives, "exterior")
 
     expect(measurement.status).toBe("valid")
+    expect(measurement.dihedralKind).toBe("interior")
     expect(measurement.value).toBeCloseTo(120, 5)
     expect(measurement.explanation).toContain("补角")
+    expect(measurement.explanation).toContain("公共棱：a、b")
+    expect(exterior).toMatchObject({ dihedralKind: "exterior", status: "valid" })
+    expect(exterior.value).toBeCloseTo(60, 5)
+  })
+
+  it("reports insufficient data when the two faces do not share an edge", () => {
+    const primitives: PrimitiveSpec[] = [
+      { id: "face-a", type: "face3", pointIds: ["a", "b", "c"] },
+      { id: "face-b", type: "face3", pointIds: ["a", "d", "e"] },
+      { id: "a", type: "point3", position: { x: 0, y: 0, z: 0 } },
+      { id: "b", type: "point3", position: { x: 1, y: 0, z: 0 } },
+      { id: "c", type: "point3", position: { x: 0, y: 1, z: 0 } },
+      { id: "d", type: "point3", position: { x: 0, y: 0, z: 1 } },
+      { id: "e", type: "point3", position: { x: 1, y: 0, z: 1 } }
+    ]
+
+    const measurement = createMeasurement3("dihedral-3", "dihedral", ["face-a", "face-b"], primitives)
+
+    expect(measurement.status).toBe("insufficient-data")
+    expect(measurement.value).toBeUndefined()
   })
 })

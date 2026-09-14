@@ -400,10 +400,10 @@ export function App() {
     const annotationText = text?.trim() || `${selectedPrimitive.label ?? selectedPrimitive.id} · ${feature}${index !== undefined ? ` ${index + 1}` : ""}`
     apply({ op: "addAnnotation", annotation: { id, text: annotationText, anchor: { kind: "primitive", primitiveId: selectedPrimitive.id, feature, ...(index === undefined ? {} : { index }) }, offset: { x: 0.25, y: 0.25 }, visible: true } })
   }
-  const addMeasurement = (metric: Measurement3Metric) => {
+  const addMeasurement = (metric: Measurement3Metric, dihedralKind?: "interior" | "exterior") => {
     if (document.workspace !== "geometry3d") return
     const id = nextMeasurementId(document)
-    const measurement = createMeasurement3(id, metric, selectedIds, document.primitives)
+    const measurement = createMeasurement3(id, metric, selectedIds, document.primitives, dihedralKind)
     if (measurement.status === "insufficient-data" || measurement.status === "degenerate") {
       setFileError(measurement.explanation)
       return

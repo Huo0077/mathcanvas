@@ -1,5 +1,5 @@
 import type { AnnotationSpec, ConstraintSpec, Coordinate, GeometryDocument, GroupSpec, Measurement3, Point3Binding, Point3Primitive, PointBinding, PrimitiveSpec, Section3Classification, Vector3 } from "@draw/dsl"
-import { adaptiveSampleFunctionSegments, buildSolidTemplate, calculateMeasurement3, createBuilderContext, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, findExtrema, findInflectionPoints, findZeros, intersectCirclesDetailed, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, orderSectionPoints3, sectionConvexPolyhedron, sectionPolyhedron3, solveLineConstraints, type FaceRing3, type IntersectionResult, type SampledPrimitive, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
+import { adaptiveSampleFunctionSegments, buildSolidTemplate, calculateMeasurement3, createBuilderContext, dihedralMarker3, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, findExtrema, findInflectionPoints, findZeros, intersectCirclesDetailed, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, orderSectionPoints3, sectionConvexPolyhedron, sectionPolyhedron3, sharedRingEdge3, solveLineConstraints, type DihedralMarker3, type FaceRing3, type IntersectionResult, type SampledPrimitive, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
 
 export type DomainOperation =
   | { op: "addPrimitive"; primitive: PrimitiveSpec }
@@ -267,6 +267,37 @@ export function resolvePolyhedronTopology(document: GeometryDocument, polyhedron
   }
   if (faces.length < 4) return null
   return { vertices, faces, rootFaceId: faces[0].id }
+}
+
+/** Resolve the drawable dihedral annotation for a stored dihedral measurement, or null when it cannot be drawn. */
+export function resolveDihedralMarker3(document: GeometryDocument, measurementId: string): DihedralMarker3 | null {
+  const measurement = document.measurements.find((candidate) => candidate.id === measurementId)
+  if (!measurement || measurement.metric !== "dihedral" || measurement.sourceIds.length !== 2) return null
+  const primitiveMap = new Map(document.primitives.map((primitive) => [primitive.id, primitive]))
+  const faces: Extract<PrimitiveSpec, { type: "face3" }>[] = []
+  for (const sourceId of measurement.sourceIds) {
+    const source = primitiveMap.get(sourceId)
+    if (source?.type !== "face3") return null
+    faces.push(source)
+  }
+  const hinge = sharedRingEdge3(faces[0].pointIds, faces[1].pointIds)
+  if (!hinge) return null
+  const firstPoints: Vector3[] = []
+  const secondPoints: Vector3[] = []
+  for (const pointId of faces[0].pointIds) {
+    const point = primitiveMap.get(pointId)
+    if (point?.type !== "point3") return null
+    firstPoints.push({ ...point.position })
+  }
+  for (const pointId of faces[1].pointIds) {
+    const point = primitiveMap.get(pointId)
+    if (point?.type !== "point3") return null
+    secondPoints.push({ ...point.position })
+  }
+  const hingeStart = primitiveMap.get(hinge[0])
+  const hingeEnd = primitiveMap.get(hinge[1])
+  if (hingeStart?.type !== "point3" || hingeEnd?.type !== "point3") return null
+  return dihedralMarker3(firstPoints, secondPoints, { ...hingeStart.position }, { ...hingeEnd.position })
 }
 
 /** Default cutting plane: horizontal through the source's bounding-box center. Returns null when the source

@@ -108,3 +108,24 @@ test("unfolds point-driven topology into a flat net and folds it back", async ({
   await page.getByRole("button", { name: "折叠", exact: true }).click()
   await expect(scene).toHaveAttribute("data-unfold-faces", "0")
 })
+
+test("explains a dihedral angle with its common edge and canvas markers", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "添加立方体" }).click()
+
+  const algebra = page.locator(".algebra-panel")
+  await algebra.getByRole("button", { name: "展开 立方体 1 拓扑 的子对象" }).click()
+  await algebra.getByText("面 1", { exact: true }).click()
+  await algebra.getByText("面 3", { exact: true }).click({ modifiers: ["Shift"] })
+
+  await page.getByRole("button", { name: "二面角内角", exact: true }).click()
+
+  await expect(algebra.getByText("二面角内角", { exact: true })).toBeVisible()
+  await expect(algebra.getByText(/公共棱/)).toBeVisible()
+  await expect(page.getByRole("alert")).toHaveCount(0)
+  await expect(page.locator("[data-3d-scene]")).toHaveAttribute("data-dihedral-markers", "1")
+
+  await page.getByRole("button", { name: "二面角外角", exact: true }).click()
+  await expect(algebra.getByText("二面角外角", { exact: true })).toBeVisible()
+})

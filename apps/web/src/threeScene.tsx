@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react"
 import * as THREE from "three"
 import type { CubePrimitive, Edge3Primitive, Face3Primitive, GeometryDocument, Line3Primitive, Point3Primitive, Polyhedron3Primitive, PyramidPrimitive, CylinderPrimitive, ConePrimitive, Ray3Primitive, SectionPrimitive, Segment3Primitive, Vector3 } from "@draw/dsl"
-import { dihedralAngleDegrees, unfoldPolyhedron3, type UnfoldLayout3 } from "@draw/geometry-kernel"
-import { resolvePolyhedronTopology } from "@draw/scene-graph"
+import { dihedralAngleDegrees, unfoldPolyhedron3, type DihedralMarker3, type UnfoldLayout3 } from "@draw/geometry-kernel"
+import { resolveDihedralMarker3, resolvePolyhedronTopology } from "@draw/scene-graph"
 
 import { opacityFor, strokeFor } from "./primitiveStyle"
 
@@ -354,6 +354,25 @@ export function createUnfoldNetGroup(polyhedronId: string, layout: UnfoldLayout3
   return group
 }
 
+export function createDihedralMarkerGroup(marker: DihedralMarker3, selected: boolean): THREE.Group {
+  const color = selected ? "#4c3ac7" : "#e07b39"
+  const toVector = (point: Vector3) => new THREE.Vector3(point.x, point.y, point.z)
+  const group = new THREE.Group()
+  group.userData.visualRole = "dihedral-marker"
+  const hinge = new THREE.Line(new THREE.BufferGeometry().setFromPoints([toVector(marker.hingeStart), toVector(marker.hingeEnd)]), new THREE.LineBasicMaterial({ color }))
+  hinge.userData.visualRole = "dihedral-hinge"
+  group.add(hinge)
+  const arc = new THREE.Line(new THREE.BufferGeometry().setFromPoints(marker.arc.map(toVector)), new THREE.LineBasicMaterial({ color }))
+  arc.userData.visualRole = "dihedral-arc"
+  group.add(arc)
+  for (const [index, normal] of [marker.firstNormal, marker.secondNormal].entries()) {
+    const arrow = new THREE.Line(new THREE.BufferGeometry().setFromPoints([toVector(normal.start), toVector(normal.end)]), new THREE.LineBasicMaterial({ color }))
+    arrow.userData.visualRole = `dihedral-normal-${index}`
+    group.add(arrow)
+  }
+  return group
+}
+
 /** Respect the platform reduced-motion preference so folding jumps instead of animating. */
 export function prefersReducedMotion(): boolean {
   return typeof globalThis.matchMedia === "function" && globalThis.matchMedia("(prefers-reduced-motion: reduce)").matches
@@ -517,9 +536,19 @@ export function ThreeSceneView({ document, selectedIds, onSelect }: ThreeSceneVi
       unfoldFaceCount += layout.faces.length
     })
     const sceneShell = containerRef.current
+    let dihedralMarkerCount = 0
+    document.measurements
+      .filter((measurement) => measurement.metric === "dihedral" && measurement.status === "valid" && measurement.sourceIds.some((id) => selectedIds.includes(id)))
+      .forEach((measurement) => {
+        const marker = resolveDihedralMarker3(document, measurement.id)
+        if (!marker) return
+        scene.add(createDihedralMarkerGroup(marker, measurement.sourceIds.every((id) => selectedIds.includes(id))))
+        dihedralMarkerCount += 1
+      })
     if (sceneShell) {
       sceneShell.dataset.unfoldFaces = String(unfoldFaceCount)
       sceneShell.dataset.unfoldProgress = unfoldProgress.toFixed(2)
+      sceneShell.dataset.dihedralMarkers = String(dihedralMarkerCount)
     }
 
     const render = () => renderer.render(scene, camera)

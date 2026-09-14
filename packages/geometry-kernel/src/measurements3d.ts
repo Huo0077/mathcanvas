@@ -1,6 +1,7 @@
 import type { Face3Primitive, Line3Primitive, Measurement3, Plane3Primitive, Polyhedron3Primitive, PrimitiveSpec, Point3Primitive, Vector3 } from "@draw/dsl"
 
 import { addVector3, crossVector3, distanceVector3, dotVector3, lengthVector3, normalizeVector3, planeFromPoints, subtractVector3 } from "./geometry3d"
+import { dihedralAngleDetail3, sharedRingEdge3 } from "./markers3d"
 
 type LineLike3 = Extract<PrimitiveSpec, { type: "line3" | "segment3" | "ray3" | "edge3" }>
 type MeasurementContext3 = readonly PrimitiveSpec[] | ReadonlyMap<string, PrimitiveSpec>
@@ -47,19 +48,17 @@ function facePoints(face: Face3Primitive, primitives: ReadonlyMap<string, Primit
   return points.some((point) => !point) ? null : points as Vector3[]
 }
 
+/** First shared edge of two face rings, in the first face's ring direction. */
+function sharedFaceEdge(first: Face3Primitive, second: Face3Primitive): [string, string] | null {
+  return sharedRingEdge3(first.pointIds, second.pointIds)
+}
+
 function polygonArea(points: Vector3[]): number {
   if (points.length < 3) return 0
   const origin = points[0]
   let areaVector = { x: 0, y: 0, z: 0 }
   for (let index = 1; index < points.length - 1; index += 1) areaVector = addVector3(areaVector, crossVector3(subtractVector3(points[index], origin), subtractVector3(points[index + 1], origin)))
   return lengthVector3(areaVector) / 2
-}
-
-function faceNormal(face: Face3Primitive, primitives: ReadonlyMap<string, PrimitiveSpec>): Vector3 | null {
-  const points = facePoints(face, primitives)
-  if (!points || points.length < 3) return null
-  const plane = planeFromPoints(points[0], points[1], points[2])
-  return plane?.normal ?? null
 }
 
 function pointFromPrimitive(primitive: PrimitiveSpec | undefined, primitives: ReadonlyMap<string, PrimitiveSpec>): Vector3 | null {
@@ -193,13 +192,21 @@ export function calculateMeasurement3(measurement: Measurement3, context: Measur
   }
   const faces = sources.filter((source): source is Face3Primitive => source?.type === "face3")
   if (faces.length !== 2) return invalidMeasurement(measurement.id, measurement.sourceIds, "dihedral", "insufficient-data", "二面角需要两个相邻空间面。")
-  const firstNormal = faceNormal(faces[0], primitives)
-  const secondNormal = faceNormal(faces[1], primitives)
-  return firstNormal && secondNormal ? { ...measureAngle3(measurement.id, measurement.sourceIds, firstNormal, secondNormal), metric: "dihedral", explanation: `由相邻面 ${measurement.sourceIds.join("、")} 的法向量计算夹角；当前结果为两条法向量的夹角，等于凸多面体内二面角的补角，内角/外角选择在空间关系教学切片接入。` } : invalidMeasurement(measurement.id, measurement.sourceIds, "dihedral", "degenerate", "二面角来源面退化，无法确定法向量。")
+  const hinge = sharedFaceEdge(faces[0], faces[1])
+  const firstPoints = facePoints(faces[0], primitives)
+  const secondPoints = facePoints(faces[1], primitives)
+  const hingeStart = hinge ? pointById(primitives, hinge[0]) : null
+  const hingeEnd = hinge ? pointById(primitives, hinge[1]) : null
+  if (!hinge || !firstPoints || !secondPoints || !hingeStart || !hingeEnd) return invalidMeasurement(measurement.id, measurement.sourceIds, "dihedral", "insufficient-data", "二面角需要两个共享一条公共棱的空间面。")
+  const detail = dihedralAngleDetail3(firstPoints, secondPoints, hingeStart, hingeEnd)
+  if (!detail) return invalidMeasurement(measurement.id, measurement.sourceIds, "dihedral", "degenerate", "二面角来源面退化，无法确定公共棱和面内方向。")
+  const kind = measurement.dihedralKind ?? "interior"
+  const value = kind === "exterior" ? detail.exteriorDegrees : detail.interiorDegrees
+  return { ...result(measurement.id, measurement.sourceIds, "dihedral", value, "°", `${detail.explanation}公共棱：${hinge.join("、")}。`), dihedralKind: kind }
 }
 
-export function createMeasurement3(id: string, metric: Measurement3["metric"], sourceIds: string[], context: MeasurementContext3): Measurement3 {
-  return calculateMeasurement3({ id, kind: "measurement3", sourceIds, metric, precision: "numeric-approximation", status: "insufficient-data", explanation: "等待来源对象计算。" }, context)
+export function createMeasurement3(id: string, metric: Measurement3["metric"], sourceIds: string[], context: MeasurementContext3, dihedralKind?: Measurement3["dihedralKind"]): Measurement3 {
+  return calculateMeasurement3({ id, kind: "measurement3", sourceIds, metric, precision: "numeric-approximation", status: "insufficient-data", explanation: "等待来源对象计算。", ...(dihedralKind ? { dihedralKind } : {}) }, context)
 }
 
 export const measure3d = createMeasurement3

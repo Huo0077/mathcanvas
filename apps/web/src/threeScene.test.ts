@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest"
 import * as THREE from "three"
 
 import type { SectionPrimitive } from "@draw/dsl"
-import { unfoldPolyhedron3 } from "@draw/geometry-kernel"
+import { dihedralMarker3, unfoldPolyhedron3 } from "@draw/geometry-kernel"
 
-import { createCameraState, createCubeMesh, createFace3Mesh, createPoint3Mesh, createPointDrivenLine, createSectionMesh, createSolidGroup, createSolidMesh, createUnfoldNetGroup, cubeUnfoldCenters, panCameraState, pickPrimitiveAt, pickRaycastHit3, prefersReducedMotion, resetCameraState, rotateCameraState, zoomCameraState } from "./threeScene"
+import { createCameraState, createCubeMesh, createDihedralMarkerGroup, createFace3Mesh, createPoint3Mesh, createPointDrivenLine, createSectionMesh, createSolidGroup, createSolidMesh, createUnfoldNetGroup, cubeUnfoldCenters, panCameraState, pickPrimitiveAt, pickRaycastHit3, prefersReducedMotion, resetCameraState, rotateCameraState, zoomCameraState } from "./threeScene"
 
 describe("Three.js geometry scene", () => {
   it("renders a selectable point3 at its source position", () => {
@@ -245,6 +245,28 @@ describe("Three.js geometry scene", () => {
 
     group.traverse((child) => {
       if (child instanceof THREE.Mesh || child instanceof THREE.Line) child.geometry.dispose()
+      if ("material" in child && child.material instanceof THREE.Material) child.material.dispose()
+    })
+  })
+
+  it("draws the dihedral hinge, angle arc and both face normals", () => {
+    const first = [{ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, { x: 1, y: 0, z: 1 }, { x: 0, y: 0, z: 1 }]
+    const second = [{ x: 0, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }, { x: 0, y: 1, z: 1 }, { x: 0, y: 0, z: 1 }]
+    const marker = dihedralMarker3(first, second, { x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 1 }, { radius: 0.5, arcSteps: 4 })
+    if (!marker) throw new Error("expected a dihedral marker")
+
+    const group = createDihedralMarkerGroup(marker, false)
+    const roles = group.children.map((child) => child.userData.visualRole)
+
+    expect(roles).toContain("dihedral-hinge")
+    expect(roles).toContain("dihedral-arc")
+    expect(roles).toContain("dihedral-normal-0")
+    expect(roles).toContain("dihedral-normal-1")
+    const arc = group.children.find((child) => child.userData.visualRole === "dihedral-arc") as THREE.Line
+    expect((arc.geometry.getAttribute("position") as THREE.BufferAttribute).count).toBe(5)
+
+    group.traverse((child) => {
+      if (child instanceof THREE.Line) child.geometry.dispose()
       if ("material" in child && child.material instanceof THREE.Material) child.material.dispose()
     })
   })

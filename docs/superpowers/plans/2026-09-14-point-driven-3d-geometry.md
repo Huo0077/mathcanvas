@@ -138,7 +138,9 @@
 
 **Implementation:** 统一法向量方向与公共棱方向，输出可解释角度来源；画布渲染角弧、法向量和辅助线，Algebra View 保留测量对象。
 
-**Verification:** geometry-kernel/DSL/UI 测试、类型检查、构建和 Playwright 二面角流程。完成后 commit `feat(p6): explain 3d dihedral angles` 并推送。
+**Status:** [x] 已实现并完成 Slice 9 验证。
+
+**Verification:** 内核 `markers3d.test.ts` 9 个、`measurements3d.test.ts` 7 个、渲染 `threeScene.test.ts` 18 个用例通过；全量 `npm.cmd test`：35 个测试文件、327 个用例通过；`npm.cmd run typecheck`：4 个 workspace 通过；Web 生产构建通过；Playwright 11 个用例通过（含二面角内角/外角与画布标记）；`git diff --check` 通过。完成后 commit `feat(p6): explain 3d dihedral angles`（本轮只提交本地）。
 
 ## Slice 10：工作区整合、兼容、文档与验收
 

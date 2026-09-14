@@ -5,7 +5,7 @@ import type { ConstraintType, Measurement3Metric, PrimitiveSpec, Workspace } fro
 const LINE_LIKE = ["line3", "segment3", "ray3", "edge3"]
 const SOLID_LIKE = ["polyhedron3", "cube", "pyramid", "cylinder", "cone"]
 
-export interface MeasurementOption { metric: Measurement3Metric; label: string }
+export interface MeasurementOption { metric: Measurement3Metric; label: string; dihedralKind?: "interior" | "exterior" }
 export interface ConstraintOption { type: ConstraintType; label: string; targets: string[] }
 
 const isLineLike = (primitive: PrimitiveSpec) => LINE_LIKE.includes(primitive.type)
@@ -26,7 +26,7 @@ export function measurementOptionsFor(workspace: Workspace, selection: Primitive
   if ((selection.length === 2 && lineCount === 2) || (selection.length === 3 && pointCount === 3)) options.push({ metric: "angle", label: "角度" })
   if ((selection.length === 1 && (isFace3(selection[0]) || isCircle3(selection[0]))) || (selection.length >= 3 && pointCount === selection.length)) options.push({ metric: "area", label: "面积" })
   if (selection.length === 1 && isSolidLike(selection[0])) options.push({ metric: "volume", label: "体积" })
-  if (selection.length === 2 && everyIs(selection, isFace3)) options.push({ metric: "dihedral", label: "二面角" })
+  if (selection.length === 2 && everyIs(selection, isFace3)) options.push({ metric: "dihedral", label: "二面角内角", dihedralKind: "interior" }, { metric: "dihedral", label: "二面角外角", dihedralKind: "exterior" })
   return options
 }
 
