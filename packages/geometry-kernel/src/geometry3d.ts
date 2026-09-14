@@ -33,9 +33,31 @@ export function lengthVector3(vector: Vector3): number {
   return Math.hypot(vector.x, vector.y, vector.z)
 }
 
+export function distanceVector3(first: Vector3, second: Vector3): number {
+  return lengthVector3(subtractVector3(first, second))
+}
+
+export function tripleProduct(first: Vector3, second: Vector3, third: Vector3): number {
+  return dotVector3(crossVector3(first, second), third)
+}
+
 export function normalizeVector3(vector: Vector3): Vector3 {
   const length = lengthVector3(vector)
   return length > 1e-12 ? scaleVector3(vector, 1 / length) : { x: 0, y: 0, z: 0 }
+}
+
+export function areCoplanar(points: Vector3[], tolerance = 1e-10): boolean {
+  if (points.length < 4) return true
+  const first = points[0]
+  let plane: Plane3 | null = null
+  for (let secondIndex = 1; secondIndex < points.length && !plane; secondIndex += 1) {
+    for (let thirdIndex = secondIndex + 1; thirdIndex < points.length; thirdIndex += 1) {
+      plane = planeFromPoints(first, points[secondIndex], points[thirdIndex])
+      if (plane) break
+    }
+  }
+  if (!plane) return true
+  return points.every((point) => Math.abs(dotVector3(plane.normal, point) + plane.constant) <= tolerance)
 }
 
 export function planeFromPoints(first: Vector3, second: Vector3, third: Vector3): Plane3 | null {

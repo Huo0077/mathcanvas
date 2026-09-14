@@ -158,21 +158,20 @@ type SolidBuilder<Input> = {
 
 type BuilderContext = {
   allocateId(namespace: string): string
-  addPoint(point: Point3): string
-  addEdge(edge: Edge3): string
-  addFace(face: Face3): string
-  diagnostics: GeometryDiagnostic[]
 }
 
 type SolidBuildResult = {
+  primitives: PrimitiveSpec[]
   pointIds: string[]
   edgeIds: string[]
   faceIds: string[]
-  polyhedronId: string
+  polyhedronId?: string
   diagnostics: GeometryDiagnostic[]
 }
 
-builder 的 `create` 是确定性的领域转换：只接收输入和 `BuilderContext`，不访问 DOM、Three.js、相机或网络；Context 只负责事务内的 ID 分配、子对象收集和诊断，不直接提交 Scene Graph。Scene Graph 在事务成功后一次性持久化结果。`RenderObject3` 由 Scene Graph/renderer adapter 从文档对象生成，Three.js 只能消费它，不能回写 DSL。
+```
+
+builder 的 `create` 是确定性的领域转换：只接收输入和 `BuilderContext`，不访问 DOM、Three.js、相机或网络；Context 只负责 ID 分配，不直接提交 Scene Graph。builder 返回的 `SolidBuildResult.primitives` 在 Scene Graph 事务成功后一次性持久化。`RenderObject3` 由 Scene Graph/renderer adapter 从文档对象生成，Three.js 只能消费它，不能回写 DSL。
 ```
 
 首批内置 builder 包括 `cube`、`pyramid`、`cylinder` 和 `cone`，并逐步增加任意 `prism`、`frustum`、`regularPolyhedron` 和 `fromPoints`。所有 builder 都必须生成可见的点、棱、面子对象；用户随后编辑点时，模板参数只作为构造来源和可选约束，不覆盖用户明确的点编辑。圆柱、圆锥等含曲面的实体以轴端点、中心点、法向量、半径和边界采样组成可解释的教学近似，曲面网格仍是渲染产物。

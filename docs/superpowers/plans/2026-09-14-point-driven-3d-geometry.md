@@ -39,11 +39,13 @@
 
 **Interfaces:** `Vector3` 运算、点线面关系、平面求交、法向量、`SolidBuilder`、`SolidBuildResult`、builder registry。
 
+**Status:** [x] 已实现并完成验证。
+
 **Failing tests:** 覆盖向量叉积/点积、三点定面、点到线/面距离、共面判断、棱柱/棱台/任意多面体拓扑闭合和退化输入。
 
 **Implementation:** 保持不可变纯函数；用 Composite 组装顶点、棱、面；用 Factory/Strategy 注册 cube、pyramid、cylinder、cone，并增加通用 prism/frustum/fromPoints 入口。
 
-**Verification:** geometry-kernel 聚焦测试、全量单测和类型检查。完成后 commit `feat(p6): add extensible solid builders` 并推送。
+**Verification:** geometry-kernel 聚焦测试 19/19；全量 `npm.cmd test`：26 个测试文件、235 个用例；`npm.cmd run typecheck`：4 个 workspace；隔离目录 Vite 生产构建通过；`git diff --check` 通过。完成后 commit `feat(p6): add extensible solid builders` 并推送。
 
 ## Slice 3：Scene Graph 依赖索引与拓扑重算
 
