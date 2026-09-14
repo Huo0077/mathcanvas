@@ -17,4 +17,18 @@ describe("calculus numerical MVP", () => {
       [{ x: 0.5, y: 2 }, { x: 1, y: 1 }]
     ])
   })
+
+  it("splits a vertical asymptote that falls between finite samples", () => {
+    const segments = sampleFunctionSegments((x) => 1 / (x - 0.1), [-1, 1], 4)
+
+    expect(segments).toHaveLength(2)
+    expect(segments[0].at(-1)?.x).toBe(0)
+    expect(segments[1][0].x).toBe(0.5)
+  })
+
+  it("keeps a continuous narrow peak in one sampled segment", () => {
+    const segments = sampleFunctionSegments((x) => 10 * Math.exp(-10000 * (x - 0.0625) ** 2), [0, 0.5], 4)
+
+    expect(segments).toHaveLength(1)
+  })
 })

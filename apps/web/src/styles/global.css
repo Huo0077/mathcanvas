@@ -58,7 +58,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .canvas-card [data-auto-intersection] { cursor: pointer; }
 .canvas-card svg { display: block; width: 100%; height: auto; border-radius: var(--radius-sm); background: #fbfcff; touch-action: none; }
 .canvas-card svg [data-hit-target="true"] { cursor: grab; }
-.canvas-card svg.is-dragging, .canvas-card svg.is-dragging [data-hit-target="true"] { cursor: grabbing; }
+.canvas-card svg.is-dragging, .canvas-card svg.is-dragging [data-hit-target="true"], .canvas-card svg.is-panning { cursor: grabbing; }
 .drag-handles circle { fill: var(--color-panel); stroke: var(--color-accent); stroke-width: 2; cursor: grab; }
 .drag-handles circle:hover { fill: var(--color-accent-soft); }
 .properties-label { display: flex; justify-content: space-between; gap: var(--space-3); font-size: 0.875rem; }

@@ -77,6 +77,33 @@ describe("MathCanvas workbench", () => {
     expect(intersection.textContent).not.toBe(before)
   })
 
+  it("pans the canvas with the middle mouse button without changing the document", () => {
+    render(<App />)
+    const canvas = screen.getByRole("img", { name: "几何画布" })
+    const beforeRevision = useSceneStore.getState().document.revision
+    const beforeCenter = canvas.getAttribute("data-viewport-center")
+
+    fireEvent.pointerDown(canvas, { button: 1, clientX: 400, clientY: 220, pointerId: 7 })
+    fireEvent.pointerMove(canvas, { button: 1, clientX: 500, clientY: 260, pointerId: 7 })
+    fireEvent.pointerUp(canvas, { button: 1, clientX: 500, clientY: 260, pointerId: 7 })
+
+    expect(canvas.getAttribute("data-viewport-center")).not.toBe(beforeCenter)
+    expect(useSceneStore.getState().document.revision).toBe(beforeRevision)
+  })
+
+  it("pans when the middle-button gesture starts on an object", () => {
+    render(<App />)
+    const canvas = screen.getByRole("img", { name: "几何画布" })
+    const line = canvas.querySelector('[data-primitive-type="line"]')!
+    const beforeCenter = canvas.getAttribute("data-viewport-center")
+
+    fireEvent.pointerDown(line, { button: 1, clientX: 400, clientY: 220, pointerId: 8 })
+    fireEvent.pointerMove(canvas, { button: 1, clientX: 500, clientY: 260, pointerId: 8 })
+    fireEvent.pointerUp(canvas, { button: 1, clientX: 500, clientY: 260, pointerId: 8 })
+
+    expect(canvas.getAttribute("data-viewport-center")).not.toBe(beforeCenter)
+  })
+
   it("adds a point through the domain operation path", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "添加点" }))

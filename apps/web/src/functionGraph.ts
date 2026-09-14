@@ -35,13 +35,21 @@ function clipSegment(first: FunctionGraphPoint, second: FunctionGraphPoint, boun
   ]
 }
 
+function isVerticalDiscontinuity(first: FunctionGraphPoint, second: FunctionGraphPoint, clipped: [FunctionGraphPoint, FunctionGraphPoint], bounds: FunctionGraphBounds): boolean {
+  const crossesViewport = (first.y < bounds.minY && second.y > bounds.maxY) || (first.y > bounds.maxY && second.y < bounds.minY)
+  if (!crossesViewport) return false
+  const clippedWidth = Math.abs(clipped[1].x - clipped[0].x)
+  const viewportWidth = bounds.maxX - bounds.minX
+  return clippedWidth <= viewportWidth * 0.1 && Math.abs(second.y - first.y) >= (bounds.maxY - bounds.minY) * 4
+}
+
 export function clipFunctionSegmentsToBounds(segments: FunctionGraphPoint[][], bounds: FunctionGraphBounds): FunctionGraphPoint[][] {
   const clippedSegments: FunctionGraphPoint[][] = []
   for (const segment of segments) {
     let current: FunctionGraphPoint[] = []
     for (let index = 1; index < segment.length; index += 1) {
       const clipped = clipSegment(segment[index - 1], segment[index], bounds)
-      if (!clipped) {
+      if (!clipped || isVerticalDiscontinuity(segment[index - 1], segment[index], clipped, bounds)) {
         if (current.length > 1) clippedSegments.push(current)
         current = []
         continue

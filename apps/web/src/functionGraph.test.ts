@@ -12,4 +12,10 @@ describe("function graph viewport clipping", () => {
     expect(clipped[0][1].x).toBeCloseTo(0.2)
     expect(clipped[0][1].y).toBe(1)
   })
+
+  it("does not turn a discontinuity into a vertical connector", () => {
+    const clipped = clipFunctionSegmentsToBounds([[{ x: 0, y: -10 }, { x: 0.5, y: 2.5 }]], { minX: -1, maxX: 1, minY: -1, maxY: 1 })
+
+    expect(clipped).toEqual([])
+  })
 })
