@@ -5,6 +5,12 @@ export interface Coordinate {
   y: number
 }
 
+export interface Vector3 {
+  x: number
+  y: number
+  z: number
+}
+
 export interface PrimitiveStyle {
   stroke?: string
   fill?: string
@@ -205,6 +211,39 @@ export interface AnalysisSetPrimitive extends PrimitivePresentation {
   diagnostic?: string
 }
 
+export interface CubePrimitive extends PrimitivePresentation {
+  id: string
+  type: "cube"
+  origin: Vector3
+  size: Vector3
+}
+
+export interface PyramidPrimitive extends PrimitivePresentation {
+  id: string
+  type: "pyramid"
+  baseCenter: Vector3
+  baseSize: { x: number; y: number }
+  height: number
+}
+
+export interface CylinderPrimitive extends PrimitivePresentation {
+  id: string
+  type: "cylinder"
+  center: Vector3
+  radius: number
+  height: number
+  segments: number
+}
+
+export interface ConePrimitive extends PrimitivePresentation {
+  id: string
+  type: "cone"
+  center: Vector3
+  radius: number
+  height: number
+  segments: number
+}
+
 export interface CirclePrimitive extends PrimitivePresentation {
   id: string
   type: "circle"
@@ -287,6 +326,10 @@ export type PrimitiveSpec =
   | SecantPrimitive
   | IntegralPrimitive
   | AnalysisSetPrimitive
+  | CubePrimitive
+  | PyramidPrimitive
+  | CylinderPrimitive
+  | ConePrimitive
   | CirclePrimitive
   | ArcPrimitive
   | IntersectionPrimitive

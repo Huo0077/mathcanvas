@@ -1,7 +1,7 @@
 import type { GeometryDocument, PrimitiveSpec, ValidationResult } from "./types"
 
 const workspaces = new Set(["calculus", "conics", "cad", "geometry3d"])
-const primitiveTypes = new Set(["point", "line", "segment", "ray", "polyline", "connection", "locus", "parabola", "ellipse", "hyperbola", "function", "derivative", "tangent", "normal", "secant", "integral", "analysisSet", "circle", "arc", "intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection", "intersectionSet"])
+const primitiveTypes = new Set(["point", "line", "segment", "ray", "polyline", "connection", "locus", "parabola", "ellipse", "hyperbola", "function", "derivative", "tangent", "normal", "secant", "integral", "analysisSet", "cube", "pyramid", "cylinder", "cone", "circle", "arc", "intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection", "intersectionSet"])
 const sampledTypes = new Set(["line", "segment", "ray", "polyline", "circle", "arc", "parabola", "ellipse", "hyperbola", "function"])
 const annotationFeatures = new Set(["point", "center", "focus", "vertex", "intersection", "start", "end"])
 
@@ -13,6 +13,10 @@ function isRecord(value: unknown): value is RecordValue {
 
 function isFiniteCoordinate(value: unknown): value is { x: number; y: number } {
   return isRecord(value) && Number.isFinite(value.x) && Number.isFinite(value.y)
+}
+
+function isFiniteCoordinate3(value: unknown): value is { x: number; y: number; z: number } {
+  return isRecord(value) && Number.isFinite(value.x) && Number.isFinite(value.y) && Number.isFinite(value.z)
 }
 
 function isFiniteNumber(value: unknown): value is number {
@@ -132,6 +136,15 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>): string[]
     if (!Array.isArray(value.results) || value.results.some((result) => !isRecord(result) || !["zero", "maximum", "minimum", "inflection"].includes(String(result.kind)) || !isFiniteNumber(result.x) || !isFiniteNumber(result.y) || result.approximate !== true)) errors.push("analysis set results are invalid")
     if (!["approximate", "undefined", "failed"].includes(String(value.status))) errors.push("analysis set status is invalid")
     if (value.diagnostic !== undefined && typeof value.diagnostic !== "string") errors.push("analysis set diagnostic is invalid")
+  }
+  if (type === "cube") {
+    if (!isFiniteCoordinate3(value.origin) || !isFiniteCoordinate3(value.size) || value.size.x <= 0 || value.size.y <= 0 || value.size.z <= 0) errors.push("cube geometry is invalid")
+  }
+  if (type === "pyramid") {
+    if (!isFiniteCoordinate3(value.baseCenter) || !isRecord(value.baseSize) || !isFiniteNumber(value.baseSize.x) || !isFiniteNumber(value.baseSize.y) || value.baseSize.x <= 0 || value.baseSize.y <= 0 || !isFiniteNumber(value.height) || value.height <= 0) errors.push("pyramid geometry is invalid")
+  }
+  if (type === "cylinder" || type === "cone") {
+    if (!isFiniteCoordinate3(value.center) || !isFiniteNumber(value.radius) || value.radius <= 0 || !isFiniteNumber(value.height) || value.height <= 0 || !isFiniteNumber(value.segments) || !Number.isInteger(value.segments) || value.segments < 3 || value.segments > 256) errors.push(`${type} geometry is invalid`)
   }
   if (type === "circle" || type === "arc") {
     if (!isFiniteCoordinate(value.center) || !isFiniteNumber(value.radius) || value.radius <= 0) errors.push(`${type} geometry is invalid`)

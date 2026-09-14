@@ -159,6 +159,21 @@ describe("Geometry DSL codec", () => {
     expect(decodeMgeo(encodeMgeo(document)).primitives).toEqual(document.primitives)
   })
 
+  it("round-trips parameterized 3D solids while keeping the schema version", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      { id: "cube-1", type: "cube", origin: { x: -1, y: -1, z: -1 }, size: { x: 2, y: 2, z: 2 } },
+      { id: "pyramid-1", type: "pyramid", baseCenter: { x: 0, y: 0, z: 0 }, baseSize: { x: 2, y: 2 }, height: 3 },
+      { id: "cylinder-1", type: "cylinder", center: { x: 0, y: 0, z: 0 }, radius: 1, height: 2, segments: 16 },
+      { id: "cone-1", type: "cone", center: { x: 3, y: 0, z: 0 }, radius: 1, height: 2, segments: 16 }
+    ]
+
+    const restored = decodeMgeo(encodeMgeo(document))
+    expect(restored.schemaVersion).toBe("0.1")
+    expect(restored.coordinateSystems).toEqual(["cartesian-3d"])
+    expect(restored.primitives).toEqual(document.primitives)
+  })
+
   it("round-trips tangent, normal, and secant primitives", () => {
     const document = createEmptyDocument("calculus")
     document.primitives = [
