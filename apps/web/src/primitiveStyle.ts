@@ -16,6 +16,8 @@ const defaultStrokes: Record<PrimitiveSpec["type"], string> = {
   tangent: "#2563eb",
   normal: "#7c3aed",
   secant: "#b45309",
+  integral: "#dc2626",
+  analysisSet: "#9333ea",
   circle: "#0f8a63",
   arc: "#f08a24",
   intersection: "#f04f5f",

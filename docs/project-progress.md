@@ -109,10 +109,11 @@
 - [x] P3-3：基于自适应样本的零点、极值和拐点数值检测
 - [x] P3-4：可持久化一阶/二阶导函数图元，保存来源引用并联动重算
 - [x] P3-5：可持久化切线、法线和割线图元，保存来源引用并联动重算
+- [x] P3-6：积分区域、零点/极值/拐点分析集合和结构化数值诊断
 
 ## 下一步
 
-P3-5 已完成，下一步实现积分区域与数值诊断。
+P3-6 已完成，下一步将分析对象接入微积分工作区、属性面板、Algebra View 和画布标记。
 
 > 射线/折线、圆锥曲线和函数采样已接入工具栏、SVG 渲染、属性编辑和 UI 回归测试；选中两条可采样曲线即可创建持久化交点。
 
@@ -133,7 +134,7 @@ P3-5 已完成，下一步实现积分区域与数值诊断。
 
 ## 最新验证证据
 
-- `npm.cmd test`：23 个测试文件、195 个测试通过
+- `npm.cmd test`：23 个测试文件、201 个测试通过
 - `npm.cmd run typecheck`：4 个 workspace 通过
 - 默认 `npm.cmd run build`：当前沙箱因 Vite 写入 `.vite-temp`/`dist` 返回 `EPERM`；使用 `vite build apps/web --configLoader runner --outDir D:\\draw\\build-check\\mathcanvas-current` 完成等价 Web 构建验证
 - `npm.cmd exec playwright test`：5 个 Chromium 浏览器用例通过

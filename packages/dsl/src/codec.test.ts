@@ -171,6 +171,17 @@ describe("Geometry DSL codec", () => {
     expect(decodeMgeo(encodeMgeo(document)).primitives).toEqual(document.primitives)
   })
 
+  it("round-trips integral and analysis result primitives", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [
+      { id: "function-1", type: "function", expression: "x^2", domain: [-1, 1], samples: 32 },
+      { id: "integral-1", type: "integral", sourceId: "function-1", domain: [0, 1], steps: 64, points: [], area: 1 / 3, status: "approximate" },
+      { id: "analysis-1", type: "analysisSet", sourceId: "function-1", domain: [-1, 1], samples: 64, results: [{ kind: "zero", x: 0, y: 0, approximate: true }], status: "approximate" }
+    ]
+
+    expect(decodeMgeo(encodeMgeo(document)).primitives).toEqual(document.primitives)
+  })
+
   it("rejects malformed primitive fields without throwing", () => {
     const base = createEmptyDocument("calculus")
     const malformedDocuments = [

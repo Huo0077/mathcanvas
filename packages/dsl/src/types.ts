@@ -175,6 +175,36 @@ export interface SecantPrimitive extends PrimitivePresentation {
   diagnostic?: string
 }
 
+export interface AnalysisResult {
+  kind: "zero" | "maximum" | "minimum" | "inflection"
+  x: number
+  y: number
+  approximate: true
+}
+
+export interface IntegralPrimitive extends PrimitivePresentation {
+  id: string
+  type: "integral"
+  sourceId: string
+  domain: [number, number]
+  steps: number
+  points: Coordinate[]
+  area: number | null
+  status: "approximate" | "undefined" | "failed"
+  diagnostic?: string
+}
+
+export interface AnalysisSetPrimitive extends PrimitivePresentation {
+  id: string
+  type: "analysisSet"
+  sourceId: string
+  domain: [number, number]
+  samples: number
+  results: AnalysisResult[]
+  status: "approximate" | "undefined" | "failed"
+  diagnostic?: string
+}
+
 export interface CirclePrimitive extends PrimitivePresentation {
   id: string
   type: "circle"
@@ -255,6 +285,8 @@ export type PrimitiveSpec =
   | TangentPrimitive
   | NormalPrimitive
   | SecantPrimitive
+  | IntegralPrimitive
+  | AnalysisSetPrimitive
   | CirclePrimitive
   | ArcPrimitive
   | IntersectionPrimitive

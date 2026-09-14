@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { adaptiveSampleFunctionSegments, findExtrema, findInflectionPoints, findZeros, numericalDerivative, numericalIntegral, numericalSecondDerivative, sampleFunction, sampleFunctionSegments } from "./calculus"
+import { adaptiveSampleFunctionSegments, findExtrema, findInflectionPoints, findZeros, numericalDerivative, numericalIntegral, numericalIntegralWithDiagnostics, numericalSecondDerivative, sampleFunction, sampleFunctionSegments } from "./calculus"
 
 describe("calculus numerical MVP", () => {
   it("samples functions and estimates derivatives and integrals", () => {
@@ -50,5 +50,10 @@ describe("calculus numerical MVP", () => {
     expect(findExtrema((x) => x ** 2, [-2, 2], 64)).toEqual([expect.objectContaining({ kind: "minimum", x: 0, approximate: true })])
     expect(findExtrema((x) => -(x ** 2), [-2, 2], 64)).toEqual([expect.objectContaining({ kind: "maximum", x: 0, approximate: true })])
     expect(findInflectionPoints((x) => x ** 3, [-2, 2], 64)).toEqual([expect.objectContaining({ kind: "inflection", x: 0, approximate: true })])
+  })
+
+  it("reports explicit statuses for numerical integration", () => {
+    expect(numericalIntegralWithDiagnostics((x) => x ** 2, [0, 1], 64)).toMatchObject({ status: "approximate", value: expect.closeTo(1 / 3, 0.001), steps: 64 })
+    expect(numericalIntegralWithDiagnostics((x) => x === 0 ? Number.NaN : x, [0, 1], 64)).toMatchObject({ status: "undefined", value: null })
   })
 })

@@ -30,7 +30,7 @@ function viewportRay(ray: Extract<PrimitiveSpec, { type: "ray" }>): { a: Coordin
   return { a: ray.a, b: { x: ray.a.x + unit.x * distance, y: ray.a.y + unit.y * distance } }
 }
 
-function sampledSegments(primitive: Extract<PrimitiveSpec, { type: "parabola" | "ellipse" | "hyperbola" | "function" | "derivative" | "tangent" | "normal" | "secant" }>): Coordinate[][] {
+function sampledSegments(primitive: Extract<PrimitiveSpec, { type: "parabola" | "ellipse" | "hyperbola" | "function" | "derivative" | "tangent" | "normal" | "secant" | "integral" | "analysisSet" }>): Coordinate[][] {
   try {
     if (primitive.type === "parabola") return [sampleParabola(primitive, [WORLD_BOUNDS.minX, WORLD_BOUNDS.maxX], 128)]
     if (primitive.type === "ellipse") return [sampleEllipse(primitive, 160)]
@@ -39,6 +39,8 @@ function sampledSegments(primitive: Extract<PrimitiveSpec, { type: "parabola" | 
     }
     if (primitive.type === "derivative") return [primitive.points]
     if (primitive.type === "tangent" || primitive.type === "normal" || primitive.type === "secant") return [[primitive.a, primitive.b]]
+    if (primitive.type === "integral") return [primitive.points]
+    if (primitive.type === "analysisSet") return []
     return clipFunctionSegmentsToBounds(adaptiveSampleFunctionSegments((x) => evaluateParameterExpression(primitive.expression, { x }), primitive.domain, { initialSteps: primitive.samples ?? 128, maxSteps: Math.max(primitive.samples ?? 128, 2048) }), WORLD_BOUNDS)
   } catch {
     return []
@@ -104,6 +106,8 @@ function primitiveData(primitive: PrimitiveSpec): string {
   if (primitive.type === "derivative") return JSON.stringify({ sourceId: primitive.sourceId, order: primitive.order, domain: primitive.domain, samples: primitive.samples, points: primitive.points, status: primitive.status })
   if (primitive.type === "tangent" || primitive.type === "normal") return JSON.stringify({ sourceId: primitive.sourceId, x: primitive.x, point: primitive.point, slope: primitive.slope, vertical: primitive.vertical ?? false, status: primitive.status })
   if (primitive.type === "secant") return JSON.stringify({ sourceId: primitive.sourceId, x1: primitive.x1, x2: primitive.x2, points: primitive.points, slope: primitive.slope, vertical: primitive.vertical ?? false, status: primitive.status })
+  if (primitive.type === "integral") return JSON.stringify({ sourceId: primitive.sourceId, domain: primitive.domain, steps: primitive.steps, area: primitive.area, status: primitive.status, points: primitive.points })
+  if (primitive.type === "analysisSet") return JSON.stringify({ sourceId: primitive.sourceId, domain: primitive.domain, samples: primitive.samples, results: primitive.results, status: primitive.status })
   return JSON.stringify({ expression: primitive.expression, domain: primitive.domain, samples: primitive.samples })
 }
 

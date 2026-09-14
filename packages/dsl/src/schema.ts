@@ -1,7 +1,7 @@
 import type { GeometryDocument, PrimitiveSpec, ValidationResult } from "./types"
 
 const workspaces = new Set(["calculus", "conics", "cad", "geometry3d"])
-const primitiveTypes = new Set(["point", "line", "segment", "ray", "polyline", "connection", "locus", "parabola", "ellipse", "hyperbola", "function", "derivative", "tangent", "normal", "secant", "circle", "arc", "intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection", "intersectionSet"])
+const primitiveTypes = new Set(["point", "line", "segment", "ray", "polyline", "connection", "locus", "parabola", "ellipse", "hyperbola", "function", "derivative", "tangent", "normal", "secant", "integral", "analysisSet", "circle", "arc", "intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection", "intersectionSet"])
 const sampledTypes = new Set(["line", "segment", "ray", "polyline", "circle", "arc", "parabola", "ellipse", "hyperbola", "function"])
 const annotationFeatures = new Set(["point", "center", "focus", "vertex", "intersection", "start", "end"])
 
@@ -115,6 +115,23 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>): string[]
     if (value.vertical !== undefined && typeof value.vertical !== "boolean") errors.push("secant vertical state is invalid")
     if (!["approximate", "undefined", "failed"].includes(String(value.status))) errors.push("secant status is invalid")
     if (value.diagnostic !== undefined && typeof value.diagnostic !== "string") errors.push("secant diagnostic is invalid")
+  }
+  if (type === "integral") {
+    if (referenceType(byId, value.sourceId) !== "function") errors.push("integral references invalid function")
+    if (!Array.isArray(value.domain) || value.domain.length !== 2 || !value.domain.every(isFiniteNumber) || value.domain[0] >= value.domain[1]) errors.push("integral domain is invalid")
+    if (!isFiniteNumber(value.steps) || !Number.isInteger(value.steps) || value.steps < 2 || value.steps > 8192) errors.push("integral step count is invalid")
+    if (!Array.isArray(value.points) || value.points.some((point) => !isFiniteCoordinate(point))) errors.push("integral points are invalid")
+    if (value.area !== null && !isFiniteNumber(value.area)) errors.push("integral area is invalid")
+    if (!["approximate", "undefined", "failed"].includes(String(value.status))) errors.push("integral status is invalid")
+    if (value.diagnostic !== undefined && typeof value.diagnostic !== "string") errors.push("integral diagnostic is invalid")
+  }
+  if (type === "analysisSet") {
+    if (referenceType(byId, value.sourceId) !== "function") errors.push("analysis set references invalid function")
+    if (!Array.isArray(value.domain) || value.domain.length !== 2 || !value.domain.every(isFiniteNumber) || value.domain[0] >= value.domain[1]) errors.push("analysis set domain is invalid")
+    if (!isFiniteNumber(value.samples) || !Number.isInteger(value.samples) || value.samples < 2 || value.samples > 2048) errors.push("analysis set sample count is invalid")
+    if (!Array.isArray(value.results) || value.results.some((result) => !isRecord(result) || !["zero", "maximum", "minimum", "inflection"].includes(String(result.kind)) || !isFiniteNumber(result.x) || !isFiniteNumber(result.y) || result.approximate !== true)) errors.push("analysis set results are invalid")
+    if (!["approximate", "undefined", "failed"].includes(String(value.status))) errors.push("analysis set status is invalid")
+    if (value.diagnostic !== undefined && typeof value.diagnostic !== "string") errors.push("analysis set diagnostic is invalid")
   }
   if (type === "circle" || type === "arc") {
     if (!isFiniteCoordinate(value.center) || !isFiniteNumber(value.radius) || value.radius <= 0) errors.push(`${type} geometry is invalid`)

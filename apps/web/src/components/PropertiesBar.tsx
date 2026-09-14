@@ -55,6 +55,8 @@ const primitiveTypeLabels: Record<PrimitiveSpec["type"], string> = {
   tangent: "切线",
   normal: "法线",
   secant: "割线",
+  integral: "积分区域",
+  analysisSet: "分析结果",
   circle: "圆",
   arc: "圆弧",
   intersection: "直线交点",

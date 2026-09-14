@@ -12,6 +12,15 @@ export interface AdaptiveSamplingOptions {
 
 export type NumericalAnalysisKind = "zero" | "maximum" | "minimum" | "inflection"
 
+export type NumericalStatus = "approximate" | "undefined" | "failed"
+
+export interface NumericalIntegralResult {
+  value: number | null
+  status: NumericalStatus
+  steps: number
+  diagnostic?: string
+}
+
 export interface NumericalAnalysisPoint extends FunctionSamplePoint {
   kind: NumericalAnalysisKind
   approximate: true
@@ -215,12 +224,23 @@ export function numericalSecondDerivative(functionValue: (x: number) => number, 
 }
 
 export function numericalIntegral(functionValue: (x: number) => number, domain: [number, number], steps = 256): number {
+  if (!Number.isFinite(steps) || !Number.isInteger(steps) || steps < 2) return Number.NaN
   const width = (domain[1] - domain[0]) / steps
   let sum = 0
   for (let index = 0; index <= steps; index += 1) {
-    const value = functionValue(domain[0] + index * width)
+    let value: number
+    try { value = functionValue(domain[0] + index * width) } catch { return Number.NaN }
     if (!Number.isFinite(value)) return Number.NaN
     sum += value * (index === 0 || index === steps ? 0.5 : 1)
   }
   return sum * width
+}
+
+export function numericalIntegralWithDiagnostics(functionValue: (x: number) => number, domain: [number, number], steps = 256): NumericalIntegralResult {
+  if (!Number.isFinite(domain[0]) || !Number.isFinite(domain[1]) || domain[0] >= domain[1]) return { value: null, status: "failed", steps, diagnostic: "integration domain must be finite and increasing" }
+  if (!Number.isFinite(steps) || !Number.isInteger(steps) || steps < 2) return { value: null, status: "failed", steps, diagnostic: "integration requires at least two steps" }
+  const value = numericalIntegral(functionValue, domain, steps)
+  return Number.isFinite(value)
+    ? { value, status: "approximate", steps }
+    : { value: null, status: "undefined", steps, diagnostic: "function is undefined across the integration domain" }
 }

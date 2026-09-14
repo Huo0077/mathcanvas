@@ -112,6 +112,21 @@ describe("scene graph operations", () => {
     ]))
   })
 
+  it("recomputes integral area and analysis results from their source function", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [
+      { id: "function-1", type: "function", expression: "x^2", domain: [-1, 1], samples: 16 },
+      { id: "integral-1", type: "integral", sourceId: "function-1", domain: [0, 1], steps: 64, points: [], area: null, status: "failed" },
+      { id: "analysis-1", type: "analysisSet", sourceId: "function-1", domain: [-1, 1], samples: 64, results: [], status: "failed" }
+    ]
+
+    const result = recomputeDerivedObjects(document)
+    expect(result.primitives).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "integral-1", area: expect.closeTo(1 / 3, 0.001), status: "approximate" }),
+      expect.objectContaining({ id: "analysis-1", results: expect.arrayContaining([expect.objectContaining({ kind: "minimum" })]), status: "approximate" })
+    ]))
+  })
+
   it("rejects an invalid constraint without changing the document", () => {
     const document = createEmptyDocument("calculus")
     const result = commitPatch(document, { op: "addConstraint", constraint: { id: "parallel-1", type: "parallel", targets: ["missing-a", "missing-b"] } })

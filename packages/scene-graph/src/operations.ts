@@ -1,5 +1,5 @@
 import type { AnnotationSpec, ConstraintSpec, Coordinate, GeometryDocument, GroupSpec, PointBinding, PrimitiveSpec } from "@draw/dsl"
-import { adaptiveSampleFunctionSegments, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, intersectCirclesDetailed, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, numericalDerivative, numericalSecondDerivative, solveLineConstraints, type IntersectionResult, type SampledPrimitive } from "@draw/geometry-kernel"
+import { adaptiveSampleFunctionSegments, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, findExtrema, findInflectionPoints, findZeros, intersectCirclesDetailed, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, solveLineConstraints, type IntersectionResult, type SampledPrimitive } from "@draw/geometry-kernel"
 
 export type DomainOperation =
   | { op: "addPrimitive"; primitive: PrimitiveSpec }
@@ -115,6 +115,7 @@ function primitiveDependencies(primitive: PrimitiveSpec): string[] {
   if (primitive.type === "derivative") return [primitive.sourceId]
   if (primitive.type === "tangent" || primitive.type === "normal") return [primitive.sourceId]
   if (primitive.type === "secant") return [primitive.sourceId]
+  if (primitive.type === "integral" || primitive.type === "analysisSet") return [primitive.sourceId]
   return []
 }
 
@@ -207,6 +208,22 @@ function recomputeSecant(primitive: Extract<PrimitiveSpec, { type: "secant" }>, 
   } catch (error) {
     return { ...primitive, points: [], status: "failed" as const, diagnostic: error instanceof Error ? error.message : "secant evaluation failed" }
   }
+}
+
+function recomputeIntegral(primitive: Extract<PrimitiveSpec, { type: "integral" }>, source: Extract<PrimitiveSpec, { type: "function" }>, parameters: GeometryDocument["parameters"]): Extract<PrimitiveSpec, { type: "integral" }> {
+  const sourceValue = (x: number) => evaluateSource(source, x, parameters)
+  const result = numericalIntegralWithDiagnostics(sourceValue, primitive.domain, primitive.steps)
+  const points = adaptiveSampleFunctionSegments(sourceValue, primitive.domain, { initialSteps: Math.min(primitive.steps, 512), maxSteps: Math.max(primitive.steps, 2048) }).flat()
+  return { ...primitive, points, area: result.value, status: result.status, diagnostic: result.diagnostic }
+}
+
+function recomputeAnalysisSet(primitive: Extract<PrimitiveSpec, { type: "analysisSet" }>, source: Extract<PrimitiveSpec, { type: "function" }>, parameters: GeometryDocument["parameters"]): Extract<PrimitiveSpec, { type: "analysisSet" }> {
+  const sourceValue = (x: number) => evaluateSource(source, x, parameters)
+  const results = [...findZeros(sourceValue, primitive.domain, primitive.samples), ...findExtrema(sourceValue, primitive.domain, primitive.samples), ...findInflectionPoints(sourceValue, primitive.domain, primitive.samples)]
+  const hasDefinedSamples = adaptiveSampleFunctionSegments(sourceValue, primitive.domain, { initialSteps: Math.min(primitive.samples, 256), maxSteps: Math.max(primitive.samples, 512) }).some((segment) => segment.length > 0)
+  return hasDefinedSamples
+    ? { ...primitive, results, status: "approximate" as const, diagnostic: undefined }
+    : { ...primitive, results: [], status: "undefined" as const, diagnostic: "source function is undefined across the analysis domain" }
 }
 
 export function getAffectedPrimitiveIds(document: GeometryDocument, changedIds: string[]): Set<string> {
@@ -304,6 +321,11 @@ export function recomputeDerivedObjects(document: GeometryDocument, changedIds?:
       const source = primitiveMap.get(primitive.sourceId)
       if (source?.type !== "function") return { ...primitive, status: "failed" as const, diagnostic: "derived line source function is missing" }
       return primitive.type === "secant" ? recomputeSecant(primitive, source, parameters) : recomputeTangent(primitive, source, parameters)
+    }
+    if (primitive.type === "integral" || primitive.type === "analysisSet") {
+      const source = primitiveMap.get(primitive.sourceId)
+      if (source?.type !== "function") return { ...primitive, status: "failed" as const, diagnostic: "analysis source function is missing" }
+      return primitive.type === "integral" ? recomputeIntegral(primitive, source, parameters) : recomputeAnalysisSet(primitive, source, parameters)
     }
     if (primitive.type === "line") return lines.get(primitive.id) ?? primitive
     if (primitive.type === "intersectionSet") {
