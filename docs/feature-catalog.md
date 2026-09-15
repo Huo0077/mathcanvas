@@ -64,7 +64,7 @@
 
 ## 下一阶段功能
 
-### P7 工程制图 MVP（下一阶段）
+### P7 工程制图 MVP（已完成）
 
 - P7-1 已完成投影内核：提供主视图、俯视图、左视图和轴测图的确定性正交基、二维坐标和深度值；非法三维坐标不生成投影结果。
 - P7-2 已完成 renderer-neutral 投影描述：保留 DSL 稳定源 ID，输出点、棱折线和闭合面多边形，按深度和源 ID 确定性排序，并报告缺失引用/退化几何；参数化模板只渲染已物化拓扑。
@@ -77,7 +77,7 @@
 - 工程图 SVG/DXF 导出，以及投影结果的可读性验收。
 - 继续细化三维测量辅助标记的屏幕恒定缩放和选中态视觉层级。
 
-P7 的详细设计与切片验收将在实施前单独补充；P6 点驱动三维几何的历史设计与实施记录见 [`2026-09-14-point-driven-3d-geometry-design.md`](./superpowers/specs/2026-09-14-point-driven-3d-geometry-design.md) 和 [`2026-09-14-point-driven-3d-geometry.md`](./superpowers/plans/2026-09-14-point-driven-3d-geometry.md)。
+P7 的详细设计与切片验收见 [`2026-09-15-p7-engineering-drawing-design.md`](./superpowers/specs/2026-09-15-p7-engineering-drawing-design.md) 和 [`2026-09-15-p7-engineering-drawing.md`](./superpowers/plans/2026-09-15-p7-engineering-drawing.md)；P6 点驱动三维几何的历史设计与实施记录见 [`2026-09-14-point-driven-3d-geometry-design.md`](./superpowers/specs/2026-09-14-point-driven-3d-geometry-design.md) 和 [`2026-09-14-point-driven-3d-geometry.md`](./superpowers/plans/2026-09-14-point-driven-3d-geometry.md)。
 
 ### 函数
 

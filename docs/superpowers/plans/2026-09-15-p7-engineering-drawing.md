@@ -244,18 +244,18 @@ Run exporter tests, full test/typecheck/lint/build, CAD E2E download checks, `gi
 - Modify: `README.md`
 - Modify: `docs/superpowers/plans/2026-09-15-p7-engineering-drawing.md`
 
-- [ ] **Step 1: Run the complete verification matrix**
+- [x] **Step 1: Run the complete verification matrix**
 
 Run `npm.cmd test -- --run`, `npm.cmd run typecheck`, `npm.cmd run lint`, `npm.cmd run build`, `npm.cmd run test:e2e`, and `git diff --check`. Expected: all exit code 0; existing lint warnings and Vite chunk-size warning may remain documented, but no errors or failed tests.
 
-- [ ] **Step 2: Check requirement coverage**
+- [x] **Step 2: Check requirement coverage**
 
 Verify the four views, model synchronization, source-ID selection, projection lines, annotations, SVG/PDF/DXF output, old `.mgeo` decode, undo semantics, and CAD empty/error states against the spec acceptance list.
 
-- [ ] **Step 3: Record evidence and commit**
+- [x] **Step 3: Record evidence and commit**
 
 Write exact test counts, build output, E2E scenario names, export format checks and known limitations into the progress/catalog/README documents.
 
-- [ ] **Step 4: Push the release slice**
+- [x] **Step 4: Push the release slice**
 
 Run `git status --short`, confirm only intended files are staged, commit as `docs(p7): record engineering drawing acceptance`, and push `origin/main`.
