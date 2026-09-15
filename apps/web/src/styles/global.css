@@ -59,6 +59,24 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .canvas-card svg { display: block; width: 100%; height: auto; border-radius: var(--radius-sm); background: #fbfcff; touch-action: none; }
 .canvas-card svg [data-hit-target="true"] { cursor: grab; }
 .canvas-card svg.is-dragging, .canvas-card svg.is-dragging [data-hit-target="true"], .canvas-card svg.is-panning { cursor: grabbing; }
+.engineering-drawing { min-width: 0; min-height: 0; padding: var(--space-4); overflow: auto; background: var(--color-canvas); }
+.engineering-drawing-grid { display: grid; grid-template-columns: repeat(2, minmax(260px, 1fr)); gap: var(--space-4); align-content: start; }
+.engineering-drawing-panel { display: grid; gap: var(--space-3); min-width: 0; padding: var(--space-4); background: var(--color-panel); border: 1px solid var(--color-border); border-radius: var(--radius-md); box-shadow: var(--shadow-card); }
+.engineering-drawing-panel-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); min-width: 0; }
+.engineering-drawing-panel-heading h2 { margin: 0; color: var(--color-ink); font-size: 0.95rem; letter-spacing: -0.01em; }
+.engineering-drawing-panel-status { flex: 0 0 auto; color: var(--color-muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+.engineering-drawing-svg { display: block; width: 100%; min-height: 220px; aspect-ratio: 1.35; overflow: visible; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface-subtle); }
+.engineering-drawing-axes line { stroke: var(--color-border); stroke-width: 0.015; stroke-dasharray: 0.08 0.08; vector-effect: non-scaling-stroke; }
+.engineering-drawing-primitive { cursor: pointer; outline: none; }
+.engineering-drawing-primitive polygon { fill: var(--color-accent-soft); fill-opacity: 0.58; stroke: var(--color-accent-strong); stroke-width: 0.02; vector-effect: non-scaling-stroke; }
+.engineering-drawing-primitive polyline { fill: none; stroke: var(--color-accent-strong); stroke-width: 0.025; vector-effect: non-scaling-stroke; }
+.engineering-drawing-primitive circle { fill: var(--color-panel); stroke: var(--color-accent-strong); stroke-width: 0.025; vector-effect: non-scaling-stroke; }
+.engineering-drawing-primitive.is-selected polygon, .engineering-drawing-primitive.is-selected polyline, .engineering-drawing-primitive.is-selected circle { stroke: var(--color-accent); stroke-width: 0.045; }
+.engineering-drawing-primitive:hover polygon, .engineering-drawing-primitive:hover polyline, .engineering-drawing-primitive:hover circle, .engineering-drawing-primitive:focus-visible polygon, .engineering-drawing-primitive:focus-visible polyline, .engineering-drawing-primitive:focus-visible circle { stroke: var(--color-accent); }
+.engineering-drawing-empty { display: grid; place-items: center; min-height: 220px; margin: 0; padding: var(--space-4); border: 1px dashed var(--color-border); border-radius: var(--radius-sm); color: var(--color-muted); font-size: 0.85rem; text-align: center; }
+.engineering-drawing-diagnostics { color: var(--color-muted); font-size: 0.75rem; line-height: 1.45; }
+.engineering-drawing-diagnostics summary { cursor: pointer; color: var(--color-warning); }
+.engineering-drawing-diagnostics ul { margin: var(--space-2) 0 0; padding-left: var(--space-4); }
 .drag-handles circle { fill: var(--color-panel); stroke: var(--color-accent); stroke-width: 2; cursor: grab; }
 .drag-handles circle:hover { fill: var(--color-accent-soft); }
 .properties-label { display: flex; justify-content: space-between; gap: var(--space-3); font-size: 0.875rem; }
@@ -259,5 +277,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .toolbar-group { margin-bottom: 8px; }
   .object-tool-grid { grid-template-columns: repeat(4, minmax(64px, 1fr)); }
   .graphics { min-height: 55vh; padding: 10px; }
+  .engineering-drawing { padding: 10px; }
+  .engineering-drawing-grid { grid-template-columns: minmax(0, 1fr); }
   .panel-section.properties { padding-top: 16px; }
+}
+
+@media (min-width: 681px) and (max-width: 980px) {
+  .engineering-drawing-grid { grid-template-columns: minmax(0, 1fr); }
 }

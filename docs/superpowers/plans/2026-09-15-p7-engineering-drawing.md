@@ -107,23 +107,23 @@ Run `git diff --check`, update the two product documents with only verified beha
 - Four view panels consume `resolveProjectedDrawing` and expose `data-drawing-view="front|top|left|axonometric"` for E2E assertions.
 - Each projected SVG element carries `data-source-id` and uses the existing selection callback.
 
-- [ ] **Step 1: Write failing UI tests**
+- [x] **Step 1: Write failing UI tests**
 
 Add a workbench test that switches to “工程制图”, finds all four view panels, verifies an empty-state message for an empty document, and verifies a loaded 3D model produces stable source IDs in all panels.
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 Run `npm.cmd test -- --run apps/web/src/components/EngineeringDrawingView.test.tsx apps/web/src/App.test.tsx`. Expected: the CAD workspace still renders the planar GraphicsView and the new view markers are absent.
 
-- [ ] **Step 3: Build the view from existing tokens and callbacks**
+- [x] **Step 3: Build the view from existing tokens and callbacks**
 
 Render a responsive four-panel grid with semantic titles, visible focus styles, pointer-transparent diagnostics, and keyboard-accessible view controls. Keep panel spacing, colors, borders and typography in existing CSS tokens; do not add one-off inline layout math.
 
-- [ ] **Step 4: Route only the CAD workspace through the new view**
+- [x] **Step 4: Route only the CAD workspace through the new view**
 
 In `App.tsx`, render `EngineeringDrawingView` for `document.workspace === "cad"`, keep `GraphicsView` for the existing planar workspaces, and keep `ThreeSceneView` for `geometry3d`. Preserve file save/open, undo/redo and Algebra View behavior.
 
-- [ ] **Step 5: Verify browser behavior and commit**
+- [x] **Step 5: Verify browser behavior and commit**
 
 Run the focused UI tests, `npm.cmd run typecheck`, and the CAD Playwright scenario. Commit as `feat(p7): add cad four view workspace` and push `origin/main` after `git diff --check` passes.
 

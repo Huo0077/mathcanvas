@@ -20,6 +20,19 @@ describe("MathCanvas workbench", () => {
     useSceneStore.setState({ document, workspaceDocuments: { [document.workspace]: document }, history: [], future: [], previewBase: null, error: null })
   })
 
+  it("routes the CAD workspace to four engineering drawing views", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "工程制图" }))
+
+    const engineeringDrawing = screen.getByRole("main", { name: "工程制图视图" })
+    expect(engineeringDrawing).toBeTruthy()
+    expect(engineeringDrawing.querySelectorAll("[data-drawing-view]")).toHaveLength(4)
+    expect(screen.getAllByText("暂无可投影的空间对象")).toHaveLength(4)
+    expect(screen.queryByRole("button", { name: "添加点" })).toBeNull()
+    expect(screen.getByText("工程制图根据当前文档的 3D 点、棱和面显示四个视图。")).toBeTruthy()
+    expect((screen.getByRole("button", { name: "导出 SVG" }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
   it("switches workspaces without losing each workspace document", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "圆锥曲线" }))

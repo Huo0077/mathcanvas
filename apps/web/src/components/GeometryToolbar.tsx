@@ -64,13 +64,18 @@ function ToolButton({ label, icon, onClick, active = false, disabled = false, pr
 
 export function GeometryToolbar(props: GeometryToolbarProps) {
   const [objectsOpen, setObjectsOpen] = useState(true)
+  const isPlanarWorkspace = props.workspace === "calculus" || props.workspace === "conics"
+  const projectedExportDisabled = props.workspace === "geometry3d" || props.workspace === "cad"
+  const projectedExportTitle = props.workspace === "cad"
+    ? "工程制图 SVG/PNG 导出将在 P7 导出切片接入；当前可导出 .mgeo 和 CSV"
+    : "立体几何暂不提供 SVG/PNG 投影导出，将在 P7 工程制图切片接入；当前可导出 .mgeo 和 CSV"
   return <div className="toolbar" aria-label="几何工具栏">
     <section className={`toolbar-group object-tools${objectsOpen ? " is-open" : ""}`}>
       <div className="toolbar-group-heading"><div><span className="toolbar-kicker">创建</span><strong>添加对象</strong></div><button className="toolbar-expand" type="button" aria-label="添加对象" aria-expanded={objectsOpen} onClick={() => setObjectsOpen((open) => !open)}>⌄</button></div>
       <div className="object-tool-grid">
-        <ToolButton label={props.workspace === "geometry3d" ? "添加空间点" : "添加点"} icon="point" primary onClick={props.onAddPoint} />
+        {props.workspace !== "cad" && <ToolButton label={props.workspace === "geometry3d" ? "添加空间点" : "添加点"} icon="point" primary onClick={props.onAddPoint} />}
         <ToolButton label="选择工具" icon="select" active={props.creationMode === null} onClick={props.onSelectTool} />
-        {props.workspace !== "geometry3d" && <>
+        {isPlanarWorkspace && <>
           <ToolButton label="添加直线" icon="line" active={props.creationMode === "line"} onClick={props.onAddLine} />
           <ToolButton label="添加线段" icon="line" active={props.creationMode === "segment"} onClick={props.onAddSegment} />
           <ToolButton label="添加射线" icon="line" active={props.creationMode === "ray"} onClick={props.onAddRay} />
@@ -92,6 +97,7 @@ export function GeometryToolbar(props: GeometryToolbarProps) {
         {props.workspace === "geometry3d" && <ToolButton label="创建截面" icon="curve" disabled={!props.canCreateSection} onClick={props.onAddSection} />}
       </div>
       {props.workspace === "geometry3d" && <p className="toolbar-hint" data-point3-hint="true">{props.point3ToolHint}</p>}
+      {props.workspace === "cad" && <p className="toolbar-hint" data-cad-hint="true">工程制图根据当前文档的 3D 点、棱和面显示四个视图。</p>}
     </section>
     <section className="toolbar-group multimodal-tools">
       <div className="toolbar-group-heading"><div><span className="toolbar-kicker">输入</span><strong>多模态输入</strong></div></div>
@@ -103,7 +109,7 @@ export function GeometryToolbar(props: GeometryToolbarProps) {
     </section>
     <section className="toolbar-group export-tools">
       <div className="toolbar-group-heading"><div><span className="toolbar-kicker">文件</span><strong>保存 / 导出</strong></div></div>
-      <div className="toolbar-inline-actions"><ToolButton label="保存 .mgeo" icon="save" onClick={props.onSave} /><ToolButton label="打开 .mgeo" onClick={props.onOpen} /><ToolButton label="导出 SVG" disabled={props.workspace === "geometry3d"} title={props.workspace === "geometry3d" ? "立体几何暂不提供 SVG 投影导出，将在 P7 工程制图切片接入；当前可导出 .mgeo 和 CSV" : undefined} onClick={props.onExportSvg} /><ToolButton label="导出 CSV" onClick={props.onExportCsv} /><ToolButton label="导出 PNG" disabled={props.workspace === "geometry3d"} title={props.workspace === "geometry3d" ? "立体几何暂不提供 PNG 投影导出，将在 P7 工程制图切片接入；当前可导出 .mgeo 和 CSV" : undefined} onClick={props.onExportPng} /></div>
+      <div className="toolbar-inline-actions"><ToolButton label="保存 .mgeo" icon="save" onClick={props.onSave} /><ToolButton label="打开 .mgeo" onClick={props.onOpen} /><ToolButton label="导出 SVG" disabled={projectedExportDisabled} title={projectedExportDisabled ? projectedExportTitle : undefined} onClick={props.onExportSvg} /><ToolButton label="导出 CSV" onClick={props.onExportCsv} /><ToolButton label="导出 PNG" disabled={projectedExportDisabled} title={projectedExportDisabled ? projectedExportTitle : undefined} onClick={props.onExportPng} /></div>
     </section>
   </div>
 }
