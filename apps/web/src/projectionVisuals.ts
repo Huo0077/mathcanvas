@@ -20,6 +20,7 @@ export interface ProjectionLine {
   sourceId: string
   from: ProjectedPoint
   to: ProjectedPoint
+  originView: DrawingView
   targetView: DrawingView
 }
 
@@ -67,6 +68,24 @@ function sortProjectedPrimitives(primitives: ProjectedPrimitive[]): ProjectedPri
 
 function uniqueIds(ids: string[]): string[] {
   return [...new Set(ids)]
+}
+
+const projectionTargets: DrawingView[] = ["front", "top", "left", "axonometric"]
+
+function resolveProjectionLines(document: GeometryDocument, originView: DrawingView): ProjectionLine[] {
+  const lines: ProjectionLine[] = []
+  document.primitives.forEach((primitive) => {
+    if (primitive.type !== "point3" || primitive.visible === false) return
+    const from = projectVector3(primitive.position, originView)
+    if (!from || !isFiniteProjectedPoint(from)) return
+    projectionTargets.forEach((targetView) => {
+      if (targetView === originView) return
+      const to = projectVector3(primitive.position, targetView)
+      if (!to || !isFiniteProjectedPoint(to)) return
+      lines.push({ sourceId: primitive.id, from, to, originView, targetView })
+    })
+  })
+  return lines
 }
 
 export function resolveProjectedDrawing(document: GeometryDocument, view: DrawingView): ProjectedDrawing {
@@ -163,7 +182,7 @@ export function resolveProjectedDrawing(document: GeometryDocument, view: Drawin
   return {
     view,
     primitives: sortProjectedPrimitives(primitives),
-    projectionLines: [],
+    projectionLines: resolveProjectionLines(document, view),
     annotations: [],
     diagnostics
   }

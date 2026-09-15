@@ -52,7 +52,7 @@ Use fixed world-axis bases for front/top/left and a fixed orthonormal equal-weig
 
 Run `npm.cmd test -- --run packages/geometry-kernel/src/projections3d.test.ts packages/geometry-kernel/src/geometry3d.test.ts` and `npm.cmd run typecheck --workspace @draw/geometry-kernel`. Expected: all focused tests and the package typecheck pass.
 
-- [ ] **Step 5: Record and commit the slice**
+- [x] **Step 5: Record and commit the slice**
 
 Update the progress record with the four view conventions and focused test count, then run `git diff --check`, `git add packages/geometry-kernel docs/project-progress.md docs/feature-catalog.md`, `git commit -m "feat(p7): add orthographic projection kernel"`, and `git push origin main`.
 
@@ -86,7 +86,7 @@ Resolve point positions from the document index, call the kernel projection for 
 
 Run `npm.cmd test -- --run apps/web/src/projectionVisuals.test.ts apps/web/src/threeScene.test.ts packages/dsl/src/codec.test.ts`. Expected: new resolver tests and all existing 3D/codec tests pass.
 
-- [ ] **Step 5: Commit the renderer-neutral slice**
+- [x] **Step 5: Commit the renderer-neutral slice**
 
 Run `git diff --check`, update the two product documents with only verified behavior, commit as `feat(p7): resolve projected drawing primitives`, and push `origin/main`.
 
@@ -132,28 +132,29 @@ Run the focused UI tests, `npm.cmd run typecheck`, and the CAD Playwright scenar
 **Files:**
 - Modify: `apps/web/src/components/EngineeringDrawingView.tsx`
 - Modify: `apps/web/src/projectionVisuals.ts`
-- Modify: `apps/web/src/App.tsx`
 - Test: `apps/web/src/components/EngineeringDrawingView.test.tsx`
 - Test: `apps/web/src/App.test.tsx`
-- Modify: `e2e/geometry3d.spec.ts` or create `e2e/engineering-drawing.spec.ts`
+- Modify: `e2e/engineering-drawing.spec.ts`
+- Create: `e2e/fixtures/cad-point.mgeo`
 - Modify: `docs/project-progress.md`
 
 **Interfaces:**
 - `ProjectionLine` contains `sourceId`, origin view, target view, and projected endpoints.
 - Selection callback always receives the source DSL ID, never a generated SVG node ID.
 - A changed `document.revision` recomputes all four drawings; view-local selection state is not persisted.
+- CAD continues to use the existing workspace-document boundary; a loaded `cad` document may contain 3D source primitives, while switching workspaces does not silently merge documents.
 
-- [ ] **Step 1: Write failing synchronization tests**
+- [x] **Step 1: Write failing synchronization tests**
 
 Select a source point/edge in one view and assert all matching elements expose the same selected state; update a source point through the existing property path and assert projected coordinates change in all four views; toggle projection lines and assert only temporary display state changes.
 
-- [ ] **Step 2: Implement shared selection and revision-driven recompute**
+- [x] **Step 2: Implement shared selection and revision-driven recompute**
 
-Derive view data from the current document and selected IDs, add projection-line visibility as local component state, and avoid calling `apply` from projection rendering.
+Derive view data from the current document and selected IDs, generate one finite projection-line record for each visible `point3` source and each other drawing view, add projection-line visibility as local component state, and avoid calling `apply` from projection rendering.
 
-- [ ] **Step 3: Verify and commit**
+- [x] **Step 3: Verify and commit**
 
-Run focused UI tests plus the new browser scenario, then commit as `feat(p7): link engineering drawing views` and push `origin/main`.
+Run focused UI tests plus the browser scenario, full unit/typecheck/lint/build/E2E gates, and `git diff --check`, then commit as `feat(p7): link engineering drawing views` and push `origin/main`.
 
 ### Task 5: Engineering annotations and document compatibility
 

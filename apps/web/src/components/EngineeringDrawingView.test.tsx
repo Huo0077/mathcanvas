@@ -35,4 +35,25 @@ describe("engineering drawing view", () => {
     fireEvent.click(sourceButtons[0])
     expect(onSelect).toHaveBeenCalledWith("point-a", false)
   })
+
+  it("shares selected state, recomputes coordinates, and toggles projection lines locally", () => {
+    const document = pointDocument()
+    const { rerender } = render(<EngineeringDrawingView document={document} selectedIds={["point-a"]} onSelect={() => {}} />)
+
+    expect(screen.getAllByRole("button", { name: /point-a/ }).every((button) => button.getAttribute("data-selected") === "true")).toBe(true)
+    fireEvent.click(screen.getByRole("button", { name: "显示投影线" }))
+    expect(screen.getAllByRole("img").length).toBe(4)
+    expect(screen.getAllByTestId("projection-line").length).toBeGreaterThan(0)
+
+    const updatedDocument = { ...document, revision: document.revision + 1, primitives: [{ ...document.primitives[0], position: { x: 6, y: 3, z: 4 } }] }
+    rerender(<EngineeringDrawingView document={updatedDocument} selectedIds={["point-a"]} onSelect={() => {}} />)
+    const projectedX = screen.getAllByRole("button", { name: /point-a/ }).map((button) => Number(button.querySelector("circle")?.getAttribute("cx")))
+    expect(projectedX[0]).toBe(6)
+    expect(projectedX[1]).toBe(6)
+    expect(projectedX[2]).toBe(4)
+    expect(projectedX[3]).toBeCloseTo(3 * Math.SQRT1_2)
+
+    fireEvent.click(screen.getByRole("button", { name: "隐藏投影线" }))
+    expect(screen.queryAllByTestId("projection-line")).toHaveLength(0)
+  })
 })

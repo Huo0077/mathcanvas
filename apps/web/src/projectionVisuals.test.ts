@@ -84,6 +84,14 @@ describe("renderer-neutral engineering drawing projections", () => {
     ])
   })
 
+  it("describes cross-view projection links for each stable source", () => {
+    const drawing = resolveProjectedDrawing(topologyDocument(tetrahedronPrimitives()), "front")
+
+    expect(drawing.projectionLines.length).toBeGreaterThan(0)
+    expect(drawing.projectionLines.every((line) => line.originView === "front")).toBe(true)
+    expect(drawing.projectionLines.some((line) => line.sourceId === "point-a" && line.targetView === "top")).toBe(true)
+  })
+
   it("does not render a parameterized template source beside its materialized topology", () => {
     const source: Extract<PrimitiveSpec, { type: "cube" }> = {
       id: "cube-source",

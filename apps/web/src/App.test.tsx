@@ -1,6 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react"
 import { beforeEach, describe, expect, it } from "vitest"
 
+import { createEmptyDocument } from "@draw/dsl"
+
 import { App } from "./App"
 import { createDemoDocument } from "./demoDocument"
 import { useSceneStore } from "./store"
@@ -31,6 +33,20 @@ describe("MathCanvas workbench", () => {
     expect(screen.queryByRole("button", { name: "添加点" })).toBeNull()
     expect(screen.getByText("工程制图根据当前文档的 3D 点、棱和面显示四个视图。")).toBeTruthy()
     expect((screen.getByRole("button", { name: "导出 SVG" }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it("routes CAD source selection back through the shared application state", () => {
+    const cadDocument = {
+      ...createEmptyDocument("cad"),
+      primitives: [{ id: "point3-1", type: "point3" as const, position: { x: 2, y: 3, z: 4 }, label: "A" }]
+    }
+    useSceneStore.getState().replace(cadDocument)
+    render(<App />)
+
+    const sourceButtons = screen.getAllByRole("button", { name: /point3-1/ })
+    expect(sourceButtons).toHaveLength(4)
+    fireEvent.click(sourceButtons[0])
+    expect(sourceButtons.every((button) => button.getAttribute("data-selected") === "true")).toBe(true)
   })
 
   it("switches workspaces without losing each workspace document", () => {

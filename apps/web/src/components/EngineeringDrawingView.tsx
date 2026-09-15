@@ -1,4 +1,4 @@
-import { type KeyboardEvent as ReactKeyboardEvent, useMemo } from "react"
+import { type KeyboardEvent as ReactKeyboardEvent, useMemo, useState } from "react"
 import type { GeometryDocument } from "@draw/dsl"
 
 import { resolveProjectedDrawing, type ProjectedDrawing, type ProjectedPrimitive } from "../projectionVisuals"
@@ -36,7 +36,10 @@ function primitivePoints(primitive: ProjectedPrimitive) {
 }
 
 function viewBounds(drawing: ProjectedDrawing): DrawingBounds {
-  const points = drawing.primitives.flatMap(primitivePoints)
+  const points = [
+    ...drawing.primitives.flatMap(primitivePoints),
+    ...drawing.projectionLines.flatMap((line) => [line.from, line.to])
+  ]
   if (points.length === 0) return { minX: drawingMetrics.defaultMin, minY: drawingMetrics.defaultMin, width: drawingMetrics.defaultSpan, height: drawingMetrics.defaultSpan }
   const minX = Math.min(...points.map((point) => point.x))
   const maxX = Math.max(...points.map((point) => point.x))
@@ -86,7 +89,7 @@ function renderPrimitive(primitive: ProjectedPrimitive, bounds: DrawingBounds, d
   return <g key={primitive.sourceId} className={className} {...interaction}><polyline points={svgPoints(primitive)} /></g>
 }
 
-function DrawingPanel({ definition, drawing, document, selectedIds, onSelect }: { definition: typeof viewDefinitions[number]; drawing: ProjectedDrawing; document: GeometryDocument; selectedIds: string[]; onSelect: EngineeringDrawingViewProps["onSelect"] }) {
+function DrawingPanel({ definition, drawing, document, selectedIds, onSelect, showProjectionLines }: { definition: typeof viewDefinitions[number]; drawing: ProjectedDrawing; document: GeometryDocument; selectedIds: string[]; onSelect: EngineeringDrawingViewProps["onSelect"]; showProjectionLines: boolean }) {
   const bounds = viewBounds(drawing)
   const titleId = `engineering-drawing-title-${definition.view}`
   const hasPrimitives = drawing.primitives.length > 0
@@ -98,6 +101,7 @@ function DrawingPanel({ definition, drawing, document, selectedIds, onSelect }: 
     {hasPrimitives
       ? <svg className="engineering-drawing-svg" viewBox={`${bounds.minX} ${bounds.minY} ${bounds.width} ${bounds.height}`} role="img" aria-label={`${definition.label}投影视图`}>
         <g className="engineering-drawing-axes" aria-hidden="true"><line x1={bounds.minX} y1="0" x2={bounds.minX + bounds.width} y2="0" /><line x1="0" y1={bounds.minY} x2="0" y2={bounds.minY + bounds.height} /></g>
+        {showProjectionLines && <g className="engineering-drawing-projection-lines" aria-hidden="true">{drawing.projectionLines.map((line) => <line key={`${line.sourceId}-${line.targetView}`} data-testid="projection-line" data-source-id={line.sourceId} data-origin-view={line.originView} data-target-view={line.targetView} x1={line.from.x} y1={-line.from.y} x2={line.to.x} y2={-line.to.y} />)}</g>}
         <g className="engineering-drawing-primitives">{drawing.primitives.map((primitive) => renderPrimitive(primitive, bounds, document, selectedIds, onSelect))}</g>
       </svg>
       : <p className="engineering-drawing-empty" role="status">暂无可投影的空间对象</p>}
@@ -106,6 +110,7 @@ function DrawingPanel({ definition, drawing, document, selectedIds, onSelect }: 
 }
 
 export function EngineeringDrawingView({ document, selectedIds, onSelect }: EngineeringDrawingViewProps) {
+  const [showProjectionLines, setShowProjectionLines] = useState(false)
   const drawings = useMemo(() => viewDefinitions.map((definition) => ({ definition, drawing: resolveProjectedDrawing(document, definition.view) })), [document])
-  return <main className="engineering-drawing" aria-label="工程制图视图"><div className="engineering-drawing-grid">{drawings.map(({ definition, drawing }) => <DrawingPanel key={definition.view} definition={definition} drawing={drawing} document={document} selectedIds={selectedIds} onSelect={onSelect} />)}</div></main>
+  return <main className="engineering-drawing" aria-label="工程制图视图"><div className="engineering-drawing-toolbar"><button type="button" aria-pressed={showProjectionLines} onClick={() => setShowProjectionLines((visible) => !visible)}>{showProjectionLines ? "隐藏投影线" : "显示投影线"}</button></div><div className="engineering-drawing-grid">{drawings.map(({ definition, drawing }) => <DrawingPanel key={definition.view} definition={definition} drawing={drawing} document={document} selectedIds={selectedIds} onSelect={onSelect} showProjectionLines={showProjectionLines} />)}</div></main>
 }

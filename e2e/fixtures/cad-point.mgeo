@@ -1,0 +1,31 @@
+{
+  "format": "mgeo",
+  "formatVersion": "0.1",
+  "document": {
+    "schemaVersion": "0.1",
+    "revision": 0,
+    "workspace": "cad",
+    "coordinateSystems": ["cartesian-3d"],
+    "parameters": {},
+    "primitives": [
+      {
+        "id": "point3-1",
+        "type": "point3",
+        "position": {"x": 2, "y": 3, "z": 4},
+        "binding": {"kind": "free"},
+        "label": "A"
+      }
+    ],
+    "groups": [],
+    "constraints": [],
+    "dynamics": [],
+    "annotations": [],
+    "measurements": [],
+    "metadata": {
+      "id": "doc-cad-point",
+      "name": "CAD point A(2,3,4)",
+      "createdAt": "2026-09-15T00:00:00.000Z",
+      "updatedAt": "2026-09-15T00:00:00.000Z"
+    }
+  }
+}

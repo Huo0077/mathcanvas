@@ -60,6 +60,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .canvas-card svg [data-hit-target="true"] { cursor: grab; }
 .canvas-card svg.is-dragging, .canvas-card svg.is-dragging [data-hit-target="true"], .canvas-card svg.is-panning { cursor: grabbing; }
 .engineering-drawing { min-width: 0; min-height: 0; padding: var(--space-4); overflow: auto; background: var(--color-canvas); }
+.engineering-drawing-toolbar { display: flex; justify-content: flex-end; margin-bottom: var(--space-3); }
 .engineering-drawing-grid { display: grid; grid-template-columns: repeat(2, minmax(260px, 1fr)); gap: var(--space-4); align-content: start; }
 .engineering-drawing-panel { display: grid; gap: var(--space-3); min-width: 0; padding: var(--space-4); background: var(--color-panel); border: 1px solid var(--color-border); border-radius: var(--radius-md); box-shadow: var(--shadow-card); }
 .engineering-drawing-panel-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); min-width: 0; }
@@ -67,6 +68,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .engineering-drawing-panel-status { flex: 0 0 auto; color: var(--color-muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
 .engineering-drawing-svg { display: block; width: 100%; min-height: 220px; aspect-ratio: 1.35; overflow: visible; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface-subtle); }
 .engineering-drawing-axes line { stroke: var(--color-border); stroke-width: 0.015; stroke-dasharray: 0.08 0.08; vector-effect: non-scaling-stroke; }
+.engineering-drawing-projection-lines line { stroke: var(--color-warning); stroke-width: 0.018; stroke-dasharray: 0.08 0.08; vector-effect: non-scaling-stroke; }
 .engineering-drawing-primitive { cursor: pointer; outline: none; }
 .engineering-drawing-primitive polygon { fill: var(--color-accent-soft); fill-opacity: 0.58; stroke: var(--color-accent-strong); stroke-width: 0.02; vector-effect: non-scaling-stroke; }
 .engineering-drawing-primitive polyline { fill: none; stroke: var(--color-accent-strong); stroke-width: 0.025; vector-effect: non-scaling-stroke; }
