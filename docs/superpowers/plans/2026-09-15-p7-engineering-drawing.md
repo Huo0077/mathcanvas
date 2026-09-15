@@ -36,19 +36,19 @@
 - Produces `projectVector3(point: Vector3, view: DrawingView): ProjectedPoint | null`.
 - Produces `projectionBasis(view: DrawingView)` for deterministic axis tests.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Add tests that project `{ x: 2, y: 3, z: 4 }` as front `{ x: 2, y: 3, depth: 4 }`, top `{ x: 2, y: 4, depth: 3 }`, and left `{ x: 4, y: 3, depth: 2 }`; test the axonometric basis is unit length and stable; test NaN/Infinity returns `null` and the input object is unchanged.
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 Run `npm.cmd test -- --run packages/geometry-kernel/src/projections3d.test.ts`. Expected: import resolution fails because `projections3d.ts` does not exist.
 
-- [ ] **Step 3: Implement the minimal pure functions**
+- [x] **Step 3: Implement the minimal pure functions**
 
 Use fixed world-axis bases for front/top/left and a fixed orthonormal equal-weight basis for axonometric. Check all three input coordinates with `Number.isFinite`, return `null` for invalid input, and calculate each output component with dot products. Export the module from the geometry-kernel index without importing Three.js.
 
-- [ ] **Step 4: Verify GREEN and package compatibility**
+- [x] **Step 4: Verify GREEN and package compatibility**
 
 Run `npm.cmd test -- --run packages/geometry-kernel/src/projections3d.test.ts packages/geometry-kernel/src/geometry3d.test.ts` and `npm.cmd run typecheck --workspace @draw/geometry-kernel`. Expected: all focused tests and the package typecheck pass.
 
