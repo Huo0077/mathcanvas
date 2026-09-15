@@ -54,5 +54,6 @@ export function loadDraft(workspace: Workspace): GeometryDocument | null {
 export function loadActiveWorkspace(): Workspace | null {
   if (typeof localStorage === "undefined") return null
   const workspace = localStorage.getItem(activeWorkspaceKey)
-  return workspace === "calculus" || workspace === "conics" || workspace === "cad" || workspace === "geometry3d" ? workspace : null
+  // "calculus" is deliberately absent: the workspace is retired, so an old draft must not reopen it.
+  return workspace === "conics" || workspace === "cad" || workspace === "geometry3d" ? workspace : null
 }

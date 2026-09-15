@@ -43,6 +43,9 @@ function propertiesProps(overrides: Partial<PropertiesBarProps> = {}): Propertie
     onCreateMeasurement: vi.fn(),
     onCreateConstraint: vi.fn(),
     onDeleteMeasurement: vi.fn(),
+    onCreateDerivative: vi.fn(),
+    onCreateTangent: vi.fn(),
+    onCreateIntegral: vi.fn(),
     ...overrides
   }
 }

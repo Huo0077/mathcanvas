@@ -2,8 +2,12 @@ import type { GeometryDocument, LinePrimitive } from "@draw/dsl"
 import { createEmptyDocument } from "@draw/dsl"
 import { applyOperation, recomputeDerivedObjects } from "@draw/scene-graph"
 
+/**
+ * Planar fixture used by the tests and by the "圆锥曲线" workspace: two lines with a parameter-driven slope, their
+ * intersection, and the slope slider. It used to live in the calculus workspace, which has since been retired.
+ */
 export function createDemoDocument(): GeometryDocument {
-  let document = createEmptyDocument("calculus")
+  let document = createEmptyDocument("conics")
   const lines: LinePrimitive[] = [
     { id: "line-axis", type: "line", a: { x: -8, y: 0 }, b: { x: 8, y: 0 }, label: "y = 0" },
     { id: "line-slope", type: "line", a: { x: -8, y: -4 }, b: { x: 8, y: 4 }, slopeParameter: "slope", label: "参数直线" }

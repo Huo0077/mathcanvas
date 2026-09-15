@@ -356,6 +356,8 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>, parameter
   if (type === "cylinder" || type === "cone") {
     if (!isFiniteCoordinate3(value.center) || !isFiniteNumber(value.radius) || value.radius <= 0 || !isFiniteNumber(value.height) || value.height <= 0 || !isFiniteNumber(value.segments) || !Number.isInteger(value.segments) || value.segments < 3 || value.segments > 256) errors.push(`${type} geometry is invalid`)
   }
+  if (["cube", "pyramid", "cylinder", "cone"].includes(type) && value.rotation !== undefined && !isFiniteCoordinate3(value.rotation)) errors.push(`${type} rotation must be three finite radians`)
+  if (type === "plane3" && value.halfSize !== undefined && (!isFiniteNumber(value.halfSize) || value.halfSize <= 0)) errors.push("plane3 halfSize must be a positive finite number")
   if (type === "section") {
     if (typeof value.sourceId !== "string" || !byId.has(value.sourceId) || !solidTypes.has(referenceType(byId, value.sourceId) ?? "")) errors.push("section references invalid solid")
     if (!isRecord(value.plane) || !isFiniteCoordinate3(value.plane.normal) || !isFiniteNumber(value.plane.constant)) errors.push("section plane is invalid")

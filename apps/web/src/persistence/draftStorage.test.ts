@@ -23,6 +23,13 @@ describe("draft storage", () => {
     expect(localStorage.getItem("mathcanvas:draft:calculus")).toBeNull()
   })
 
+  it("never reopens the retired calculus workspace from a stored preference", () => {
+    localStorage.setItem("mathcanvas:active-workspace", "calculus")
+
+    // The workspace is retired, so a stale preference must not drag the app back into it on startup.
+    expect(loadActiveWorkspace()).toBeNull()
+  })
+
   it("round-trips workbench preferences without touching the document draft", () => {
     saveWorkbenchPreferences({ treeTab: "layers", expandedIds: ["layer-geometry", "sheet-1"] })
 

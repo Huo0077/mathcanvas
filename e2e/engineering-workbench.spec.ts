@@ -42,6 +42,42 @@ test("drafts on a new layer, hides it, and keeps the layout after a refresh", as
   await expect(page.locator('.drawing-viewport[data-view-id="view-front"]')).toContainText("比例 1.5")
 })
 
+test("undoes and redoes from both the buttons and the keyboard", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "工程制图" }).click()
+
+  const workbench = page.locator(".engineering-workbench")
+  const revision = async () => Number(await workbench.getAttribute("data-revision"))
+  const undo = page.getByRole("button", { name: "撤销" })
+  const redo = page.getByRole("button", { name: "重做" })
+
+  // A restored document starts with no history: the buttons used to look enabled and do nothing.
+  await expect(undo).toBeDisabled()
+  await expect(redo).toBeDisabled()
+
+  await page.getByRole("button", { name: "创建", exact: true }).click()
+  await page.getByRole("button", { name: "空间点", exact: true }).click()
+  await expect.poll(revision).toBe(1)
+  await expect(undo).toBeEnabled()
+  await expect(redo).toBeDisabled()
+
+  // Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z were unbound anywhere in the app before this fix.
+  await page.keyboard.press("Control+z")
+  await expect.poll(revision).toBe(0)
+  await expect(undo).toBeDisabled()
+  await expect(redo).toBeEnabled()
+
+  await page.keyboard.press("Control+Shift+z")
+  await expect.poll(revision).toBe(1)
+  await page.keyboard.press("Control+z")
+  await expect.poll(revision).toBe(0)
+
+  await redo.click()
+  await expect.poll(revision).toBe(1)
+  await undo.click()
+  await expect.poll(revision).toBe(0)
+})
+
 test("keeps hidden views out of the exported SVG", async ({ page }) => {
   await page.goto("/")
   await page.locator('input[type="file"]').setInputFiles("e2e/fixtures/cad-dimension.mgeo")

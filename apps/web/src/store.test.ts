@@ -50,13 +50,13 @@ describe("scene store document replacement", () => {
       op: "addPrimitive",
       primitive: { id: "point3-a", type: "point3", position: { x: 1, y: 2, z: 3 }, binding: { kind: "free" } }
     })
-    useSceneStore.getState().switchWorkspace("calculus")
+    useSceneStore.getState().switchWorkspace("conics")
 
     useSceneStore.getState().replace({ ...createDemoDocument(), metadata: { ...createDemoDocument().metadata, name: "opened" } })
 
-    expect(useSceneStore.getState().document.workspace).toBe("calculus")
+    expect(useSceneStore.getState().document.workspace).toBe("conics")
     expect(useSceneStore.getState().workspaceDocuments.geometry3d?.primitives).toHaveLength(1)
-    expect(useSceneStore.getState().workspaceDocuments.calculus?.metadata.name).toBe("opened")
+    expect(useSceneStore.getState().workspaceDocuments.conics?.metadata.name).toBe("opened")
   })
 
   it("caps undo history while retaining the newest document snapshots", () => {

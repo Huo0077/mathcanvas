@@ -1,10 +1,9 @@
 import type { Workspace } from "@draw/dsl"
 
-const workspaceTabs: { value: Workspace; label: string }[] = [
-  { value: "cad", label: "工程制图" },
-  { value: "conics", label: "圆锥曲线" },
-  { value: "calculus", label: "微积分" },
-  { value: "geometry3d", label: "立体几何" }
+const workspaceTabs: { value: Workspace; label: string; icon: "grid" | "curve" | "cube" }[] = [
+  { value: "geometry3d", label: "立体几何", icon: "cube" },
+  { value: "cad", label: "工程制图", icon: "grid" },
+  { value: "conics", label: "圆锥曲线", icon: "curve" }
 ]
 
 function HeaderIcon({ name }: { name: "grid" | "curve" | "integral" | "cube" | "search" | "settings" | "user" }) {
@@ -28,15 +27,18 @@ interface WorkspaceHeaderProps {
   onRedo?: () => void
   onSave?: () => void
   onOpen?: () => void
+  /** False greys the button out, so "nothing to undo" is visible instead of a click that does nothing. */
+  canUndo?: boolean
+  canRedo?: boolean
 }
 
-export function WorkspaceHeader({ activeWorkspace, onWorkspaceChange, onUndo, onRedo, onSave, onOpen }: WorkspaceHeaderProps) {
+export function WorkspaceHeader({ activeWorkspace, onWorkspaceChange, onUndo, onRedo, onSave, onOpen, canUndo, canRedo }: WorkspaceHeaderProps) {
   return <header className="topbar">
     <div className="topbar-leading">
       <div className="brand"><span className="brand-mark" aria-hidden="true">∑</span><span>MathCanvas</span></div>
       <div className="model-status" aria-label="模型状态：最佳"><span className="health-dot" aria-hidden="true" /><span><small>模型状态</small><strong>最佳</strong></span></div>
     </div>
-    <nav className="workspace-tabs" aria-label="工作区">{workspaceTabs.map((workspace, index) => <button key={workspace.value} type="button" aria-pressed={activeWorkspace === workspace.value} data-active={activeWorkspace === workspace.value} onClick={() => onWorkspaceChange(workspace.value)}><HeaderIcon name={["grid", "curve", "integral", "cube"][index] as "grid" | "curve" | "integral" | "cube"} /><span>{workspace.label}</span></button>)}</nav>
-    <div className="topbar-actions"><div className="topbar-commands" role="group" aria-label="文件与历史">{onOpen && <button type="button" onClick={onOpen}>打开 .mgeo</button>}{onSave && <button type="button" onClick={onSave}>保存 .mgeo</button>}{onUndo && <button type="button" onClick={onUndo}>撤销</button>}{onRedo && <button type="button" onClick={onRedo}>重做</button>}</div><label className="search-box"><HeaderIcon name="search" /><input aria-label="搜索" placeholder="搜索" /></label><button className="topbar-icon" type="button" aria-label="设置"><HeaderIcon name="settings" /></button><button className="topbar-icon profile-button" type="button" aria-label="用户中心"><HeaderIcon name="user" /></button></div>
+    <nav className="workspace-tabs" aria-label="工作区">{workspaceTabs.map((workspace) => <button key={workspace.value} type="button" aria-pressed={activeWorkspace === workspace.value} data-active={activeWorkspace === workspace.value} onClick={() => onWorkspaceChange(workspace.value)}><HeaderIcon name={workspace.icon} /><span>{workspace.label}</span></button>)}</nav>
+    <div className="topbar-actions"><div className="topbar-commands" role="group" aria-label="文件与历史">{onOpen && <button type="button" onClick={onOpen}>打开 .mgeo</button>}{onSave && <button type="button" onClick={onSave}>保存 .mgeo</button>}{onUndo && <button type="button" onClick={onUndo} disabled={canUndo === false} title={canUndo === false ? "没有可撤销的操作（Ctrl+Z）" : "撤销 (Ctrl+Z)"}>撤销</button>}{onRedo && <button type="button" onClick={onRedo} disabled={canRedo === false} title={canRedo === false ? "没有可重做的操作（Ctrl+Y）" : "重做 (Ctrl+Y)"}>重做</button>}</div><label className="search-box"><HeaderIcon name="search" /><input aria-label="搜索" placeholder="搜索" /></label><button className="topbar-icon" type="button" aria-label="设置"><HeaderIcon name="settings" /></button><button className="topbar-icon profile-button" type="button" aria-label="用户中心"><HeaderIcon name="user" /></button></div>
   </header>
 }

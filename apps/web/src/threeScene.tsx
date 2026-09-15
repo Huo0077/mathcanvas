@@ -67,8 +67,48 @@ export function rotateCameraState(state: CameraState, azimuthDelta: number, elev
   return { ...state, azimuth: state.azimuth + azimuthDelta, elevation: Math.max(-85, Math.min(85, state.elevation + elevationDelta)) }
 }
 
-export function panCameraState(state: CameraState, x: number, y: number): CameraState {
-  return { ...state, target: { ...state.target, x: state.target.x + x, y: state.target.y + y } }
+/** How far the orbit centre may travel from the figure, as a multiple of the figure's radius. */
+const PAN_RANGE_FACTOR = 3
+/** Orbit-centre limit used before the scene has any geometry to anchor to. */
+const EMPTY_BOUNDS_PAN_LIMIT = 12
+
+/**
+ * The camera's own axes for an orbit state: screen-right, screen-up and the view axis (camera -> target).
+ * Panning along these instead of the world axes is what makes the figure track the pointer after the camera
+ * has been turned, and `forward` is the axis that brings a figure which is off-centre in depth to the middle.
+ */
+function cameraBasis(state: CameraState): { right: THREE.Vector3; up: THREE.Vector3; forward: THREE.Vector3 } {
+  const azimuth = state.azimuth * Math.PI / 180
+  const elevation = state.elevation * Math.PI / 180
+  // Matches applyCameraState: Z is the up axis, so elevation tilts the camera towards +Z.
+  const forward = new THREE.Vector3(-Math.cos(elevation) * Math.cos(azimuth), -Math.cos(elevation) * Math.sin(azimuth), -Math.sin(elevation))
+  const right = new THREE.Vector3(-Math.sin(azimuth), Math.cos(azimuth), 0)
+  return { right, up: new THREE.Vector3().crossVectors(right, forward), forward }
+}
+
+/** Move the orbit centre by distances measured along the camera's own right, up and forward axes. */
+export function panCameraState(state: CameraState, right: number, up: number, forward = 0): CameraState {
+  const basis = cameraBasis(state)
+  return {
+    ...state,
+    target: {
+      x: state.target.x + basis.right.x * right + basis.up.x * up + basis.forward.x * forward,
+      y: state.target.y + basis.right.y * right + basis.up.y * up + basis.forward.y * forward,
+      z: state.target.z + basis.right.z * right + basis.up.z * up + basis.forward.z * forward
+    }
+  }
+}
+
+/** Keep the orbit centre near the figure, so a drag can never lose the geometry off screen. */
+export function clampCameraTarget(target: CameraState["target"], bounds: THREE.Box3): CameraState["target"] {
+  if (bounds.isEmpty()) {
+    const clamp = (value: number) => Math.max(-EMPTY_BOUNDS_PAN_LIMIT, Math.min(EMPTY_BOUNDS_PAN_LIMIT, value))
+    return { x: clamp(target.x), y: clamp(target.y), z: clamp(target.z) }
+  }
+  const centre = bounds.getCenter(new THREE.Vector3())
+  const limit = Math.max(bounds.getSize(new THREE.Vector3()).length() / 2, 0.5) * PAN_RANGE_FACTOR
+  const clamp = (value: number, origin: number) => Math.max(origin - limit, Math.min(origin + limit, value))
+  return { x: clamp(target.x, centre.x), y: clamp(target.y, centre.y), z: clamp(target.z, centre.z) }
 }
 
 export function zoomCameraState(state: CameraState, factor: number): CameraState {
@@ -113,14 +153,18 @@ export function niceGridStep(value: number): number {
   return (normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10) * magnitude
 }
 
-function applyCameraState(camera: THREE.PerspectiveCamera, state: CameraState): void {
+/** Exported for the tests: the orbit camera is the one place the world up axis is decided. */
+export function applyCameraState(camera: THREE.PerspectiveCamera, state: CameraState): void {
   const azimuth = state.azimuth * Math.PI / 180
   const elevation = state.elevation * Math.PI / 180
   const horizontal = state.distance * Math.cos(elevation)
+  // Z is up, which is what a maths or engineering audience expects: at zero azimuth the camera sits on +X and
+  // tilting up raises it along +Z rather than +Y.
+  camera.up.set(0, 0, 1)
   camera.position.set(
     state.target.x + horizontal * Math.cos(azimuth),
-    state.target.y + state.distance * Math.sin(elevation),
-    state.target.z + horizontal * Math.sin(azimuth)
+    state.target.y + horizontal * Math.sin(azimuth),
+    state.target.z + state.distance * Math.sin(elevation)
   )
   camera.lookAt(state.target.x, state.target.y, state.target.z)
 }
@@ -215,8 +259,10 @@ export function templateTopologyOwners(document: GeometryDocument): Map<string, 
   return owners
 }
 
-export function resolveSelectableHit(primitiveId: string | null, owners: Map<string, string>): string | null {
-  return primitiveId === null ? null : owners.get(primitiveId) ?? primitiveId
+export function resolveSelectableHit(primitiveId: string | null, owners: Map<string, string>, keepSubElement = false): string | null {
+  if (primitiveId === null) return null
+  // Alt keeps the hit on the generated edge or face, so a template solid's parts stay reachable on demand.
+  return keepSubElement ? primitiveId : owners.get(primitiveId) ?? primitiveId
 }
 
 export function createPoint3Mesh(primitive: Point3Primitive, selected: boolean, worldRadius = DEFAULT_POINT_HANDLE_RADIUS): THREE.Mesh {
@@ -291,30 +337,34 @@ function planeFrame3(primitive: Plane3Primitive, points: Map<string, Point3Primi
  * A plane is infinite, so what gets drawn is a bounded patch centred on its defining points, sized by the
  * caller from the scene it sits in — this is the "合适大小" a plane needs to be usable at all.
  */
-export function createPlane3Mesh(primitive: Plane3Primitive, points: Map<string, Point3Primitive>, selected: boolean, halfSize: number): THREE.Mesh | null {
+export function createPlane3Mesh(primitive: Plane3Primitive, points: Map<string, Point3Primitive>, selected: boolean, autoHalfSize: number): THREE.Mesh | null {
   const frame = planeFrame3(primitive, points)
   if (!frame) return null
   const { origin, u, v } = frame
+  // An explicit half extent is document state; without it the patch is sized from the scene it sits in.
+  const halfSize = primitive.halfSize ?? autoHalfSize
   const corner = (offsetU: number, offsetV: number) => new THREE.Vector3().copy(origin).addScaledVector(u, offsetU * halfSize).addScaledVector(v, offsetV * halfSize)
   const corners = [corner(-1, -1), corner(1, -1), corner(1, 1), corner(-1, 1)]
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(corners.flatMap((point) => [point.x, point.y, point.z]), 3))
   geometry.setIndex([0, 1, 2, 0, 2, 3])
   geometry.computeVertexNormals()
-  const colour = selected ? "#4c3ac7" : primitive.style?.fill ?? PLANE3_DEFAULT_FILL
-  const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: colour, transparent: true, opacity: selected ? 0.3 : 0.18, side: THREE.DoubleSide, depthWrite: false }))
+  // The patch keeps the colour the user chose; selection is carried by the outline and the crossing guides.
+  const fill = primitive.style?.fill ?? PLANE3_DEFAULT_FILL
+  const accent = selected ? "#4c3ac7" : fill
+  const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: fill, transparent: true, opacity: selected ? 0.3 : 0.18, side: THREE.DoubleSide, depthWrite: false }))
   mesh.userData.primitiveId = primitive.id
   mesh.userData.primitiveType = primitive.type
   mesh.userData.visualRole = "plane3"
   const outlinePoints = [...corners, corners[0]]
-  const outline = new THREE.Line(new THREE.BufferGeometry().setFromPoints(outlinePoints), new THREE.LineBasicMaterial({ color: colour, transparent: true, opacity: 0.9 }))
+  const outline = new THREE.Line(new THREE.BufferGeometry().setFromPoints(outlinePoints), new THREE.LineBasicMaterial({ color: accent, transparent: true, opacity: 0.9 }))
   outline.userData.visualRole = "plane3-outline"
   mesh.add(outline)
   // Two crossing centre lines read as "this is a plane", not a floating sheet.
   for (const direction of [u, v]) {
     const from = corner(0, 0).addScaledVector(direction, -halfSize)
     const to = corner(0, 0).addScaledVector(direction, halfSize)
-    const guide = new THREE.Line(new THREE.BufferGeometry().setFromPoints([from, to]), new THREE.LineBasicMaterial({ color: colour, transparent: true, opacity: 0.35 }))
+    const guide = new THREE.Line(new THREE.BufferGeometry().setFromPoints([from, to]), new THREE.LineBasicMaterial({ color: accent, transparent: true, opacity: 0.35 }))
     guide.userData.visualRole = "plane3-guide"
     mesh.add(guide)
   }
@@ -329,9 +379,18 @@ export function createFace3Mesh(primitive: Face3Primitive, points: Map<string, P
   for (let index = 1; index < positions.length - 1; index += 1) indices.push(0, index, index + 1)
   geometry.setIndex(indices)
   geometry.computeVertexNormals()
-  const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: selected ? "#4c3ac7" : primitive.style?.fill ?? strokeFor(primitive), transparent: true, opacity: Math.min(0.48, opacityFor(primitive)), side: THREE.DoubleSide }))
+  const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: primitive.style?.fill ?? strokeFor(primitive), transparent: true, opacity: Math.min(0.48, opacityFor(primitive)), side: THREE.DoubleSide }))
   mesh.userData.primitiveId = primitive.id
   mesh.userData.primitiveType = primitive.type
+  mesh.userData.visualRole = "face3"
+  if (selected) {
+    // Selection is an additive outline. Overwriting the fill made a freshly chosen colour look like it had not applied.
+    const outlineGeometry = new THREE.BufferGeometry()
+    outlineGeometry.setAttribute("position", new THREE.Float32BufferAttribute(positions.flatMap((position) => [position!.x, position!.y, position!.z]), 3))
+    const outline = new THREE.LineLoop(outlineGeometry, new THREE.LineBasicMaterial({ color: "#4c3ac7", transparent: true, opacity: 0.95 }))
+    outline.userData.visualRole = "face3-outline"
+    mesh.add(outline)
+  }
   return mesh
 }
 
@@ -600,13 +659,20 @@ export function ThreeSceneView({ document, selectedIds, onSelect }: ThreeSceneVi
   const resetCameraRef = useRef<() => void>(() => undefined)
   const fitCameraRef = useRef<() => void>(() => undefined)
   const fittedDocumentRef = useRef<string | null>(null)
+  const panModeRef = useRef(false)
   const [showHiddenEdges, setShowHiddenEdges] = useState(false)
   const [showNormals, setShowNormals] = useState(false)
   const [transparentFaces, setTransparentFaces] = useState(false)
   const [unfolded, setUnfolded] = useState(false)
   const [unfoldProgress, setUnfoldProgress] = useState(0)
   const [showAngle, setShowAngle] = useState(false)
+  const [panMode, setPanMode] = useState(false)
   const [webglAvailable, setWebglAvailable] = useState(true)
+
+  // A ref keeps the pointer handler current without rebuilding the whole scene on every mode toggle.
+  useEffect(() => {
+    panModeRef.current = panMode
+  }, [panMode])
 
   useEffect(() => {
     const target = unfolded ? 1 : 0
@@ -757,8 +823,11 @@ export function ThreeSceneView({ document, selectedIds, onSelect }: ThreeSceneVi
     const helperSpan = hasContent ? Math.max(sceneBounds.getSize(new THREE.Vector3()).length(), 4) : 14
     const gridStep = niceGridStep(helperSpan / 14)
     const grid = new THREE.GridHelper(gridStep * 14, 14, scenePalette.grid, scenePalette.grid)
+    // Three.js builds its grid in the XZ plane, which is the floor only when Y is up. With Z up, the floor is XY.
+    grid.rotation.x = Math.PI / 2
     grid.userData.excludeFromFit = true
     scene.add(grid)
+    // AxesHelper already draws X/Y/Z along the world axes, so blue points up once Z is the vertical axis.
     const axes = new THREE.AxesHelper(hasContent ? Math.max(planeHalfSize * 0.7, 1.2) : 5)
     axes.userData.excludeFromFit = true
     scene.add(axes)
@@ -843,17 +912,22 @@ export function ThreeSceneView({ document, selectedIds, onSelect }: ThreeSceneVi
       const deltaX = point.x - pointerState.lastX
       const deltaY = point.y - pointerState.lastY
       pointerState.moved ||= Math.hypot(point.x - pointerState.x, point.y - pointerState.y) > 0.008
-      const nextState = pointerState.button === 1 || pointerState.shiftKey
-        ? panCameraState(cameraStateRef.current, -deltaX * cameraStateRef.current.distance * 1.5, deltaY * cameraStateRef.current.distance * 1.5)
-        : rotateCameraState(cameraStateRef.current, deltaX * 140, deltaY * 140)
+      const state = cameraStateRef.current
+      const scale = state.distance * 1.5
+      // Ctrl drags along the view axis; middle drag, Shift+drag and the pan mode drag across the screen plane.
+      const depthPan = event.ctrlKey || event.metaKey
+      const screenPan = pointerState.button === 1 || pointerState.shiftKey || panModeRef.current
+      const moved = depthPan
+        ? panCameraState(state, 0, 0, deltaY * scale)
+        : screenPan ? panCameraState(state, -deltaX * scale, deltaY * scale, 0) : rotateCameraState(state, deltaX * 140, deltaY * 140)
       pointerState.lastX = point.x
       pointerState.lastY = point.y
-      setCameraState(nextState)
+      setCameraState({ ...moved, target: clampCameraTarget(moved.target, sceneBounds) })
     }
     const handlePointerUp = (event: PointerEvent) => {
       if (!pointerState || pointerState.pointerId !== event.pointerId) return
       const point = pointFromEvent(event)
-      if (!pointerState.moved && pointerState.button === 0) onSelect(resolveSelectableHit(pickPrimitiveAt(scene, camera, point, { tolerance: pickTolerance() }), topologyOwners), event.shiftKey)
+      if (!pointerState.moved && pointerState.button === 0) onSelect(resolveSelectableHit(pickPrimitiveAt(scene, camera, point, { tolerance: pickTolerance() }), topologyOwners, event.altKey), event.shiftKey)
       renderer.domElement.releasePointerCapture(event.pointerId)
       pointerState = null
     }
@@ -886,5 +960,5 @@ export function ThreeSceneView({ document, selectedIds, onSelect }: ThreeSceneVi
 
   const hasGeometry = document.primitives.some((primitive) => ["point3", "line3", "segment3", "ray3", "edge3", "face3", "polyhedron3", "cube", "pyramid", "cylinder", "cone"].includes(primitive.type) && primitive.visible !== false)
   const angle = dihedralAngleDegrees({ x: 1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 })
-  return <div className="three-canvas-shell" ref={containerRef} data-3d-scene="true" aria-label="3D 几何场景"><div className="three-render-target" ref={renderTargetRef} /><div className="three-measurement-overlay" ref={measurementOverlayRef} aria-label="三维测量标注" />{webglAvailable && <div className="three-scene-controls" aria-label="3D显示控制"><button type="button" aria-pressed={transparentFaces} onClick={() => setTransparentFaces((visible) => !visible)}>透明面</button><button type="button" aria-pressed={showHiddenEdges} onClick={() => setShowHiddenEdges((visible) => !visible)}>隐藏边</button><button type="button" aria-pressed={showNormals} onClick={() => setShowNormals((visible) => !visible)}>法向量</button><button type="button" aria-pressed={unfolded} onClick={() => setUnfolded((visible) => !visible)}>{unfolded ? "折叠" : "展开"}</button><button type="button" aria-pressed={showAngle} onClick={() => setShowAngle((visible) => !visible)}>测量二面角</button></div>}{webglAvailable && <div className="three-camera-controls" aria-label="3D视角控制"><button type="button" aria-label="适应视图" title="把视角调整到刚好框住当前图形" onClick={() => fitCameraRef.current()}>适应视图</button><button type="button" aria-label="重置3D视角" title="回到默认视角" onClick={() => resetCameraRef.current()}>重置视角</button></div>}{showAngle && webglAvailable && <div className="three-angle-readout" role="status">二面角：{angle.toFixed(1)}°（示例法向量 X/Y）</div>}{!webglAvailable && <div className="three-scene-status" role="status">当前浏览器不支持 WebGL，无法显示 3D 场景。</div>}{webglAvailable && !hasGeometry && <div className="three-scene-status" role="status">添加点、线或面开始探索三维空间。</div>}</div>
+  return <div className="three-canvas-shell" ref={containerRef} data-3d-scene="true" data-pan-mode={panMode ? "true" : "false"} aria-label="3D 几何场景"><div className="three-render-target" ref={renderTargetRef} /><div className="three-measurement-overlay" ref={measurementOverlayRef} aria-label="三维测量标注" />{webglAvailable && <div className="three-scene-controls" aria-label="3D显示控制"><button type="button" aria-pressed={transparentFaces} onClick={() => setTransparentFaces((visible) => !visible)}>透明面</button><button type="button" aria-pressed={showHiddenEdges} onClick={() => setShowHiddenEdges((visible) => !visible)}>隐藏边</button><button type="button" aria-pressed={showNormals} onClick={() => setShowNormals((visible) => !visible)}>法向量</button><button type="button" aria-pressed={unfolded} onClick={() => setUnfolded((visible) => !visible)}>{unfolded ? "折叠" : "展开"}</button><button type="button" aria-pressed={showAngle} onClick={() => setShowAngle((visible) => !visible)}>测量二面角</button></div>}{webglAvailable && <div className="three-camera-controls" aria-label="3D视角控制"><button type="button" aria-label="平移视角" aria-pressed={panMode} title="开启后左键拖动画布即平移视角，按 Ctrl 拖动沿视线前后移动" onClick={() => setPanMode((active) => !active)}>平移视角</button><button type="button" aria-label="适应视图" title="把视角调整到刚好框住当前图形，并把视角中心移回图形" onClick={() => fitCameraRef.current()}>适应视图</button><button type="button" aria-label="重置3D视角" title="回到默认视角" onClick={() => resetCameraRef.current()}>重置视角</button></div>}{webglAvailable && <p className="three-camera-hint" data-camera-hint="true">左键拖动旋转 · 中键或 Shift+左键拖动平移 · Ctrl+拖动沿视线前后移动 · 滚轮缩放</p>}{showAngle && webglAvailable && <div className="three-angle-readout" role="status">二面角：{angle.toFixed(1)}°（示例法向量 X/Y）</div>}{!webglAvailable && <div className="three-scene-status" role="status">当前浏览器不支持 WebGL，无法显示 3D 场景。</div>}{webglAvailable && !hasGeometry && <div className="three-scene-status" role="status">添加点、线或面开始探索三维空间。</div>}</div>
 }

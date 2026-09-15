@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react"
-import type { AnnotationFeature, ConstraintType, EngineeringAnnotationKind, Measurement3Metric, PrimitiveSpec, Vector3 } from "@draw/dsl"
+import type { AnnotationFeature, ConstraintType, EngineeringAnnotationKind, Measurement3Metric, PrimitiveSpec, SolidRotation, Vector3 } from "@draw/dsl"
 import { constraintOptionsFor, measurementOptionsFor } from "../spatialTools"
-import { adaptiveSampleFunctionSegments, advanceAnimation, evaluateParameterExpression, parseExpression, type AnimationMode, type AnimationState } from "@draw/geometry-kernel"
+import { adaptiveSampleFunctionSegments, advanceAnimation, evaluateParameterExpression, functionPresets, getFunctionPreset, parseExpression, type AnimationMode, type AnimationState } from "@draw/geometry-kernel"
 import type { Alignment, PrimitiveUpdatePatch } from "@draw/scene-graph"
 
 import { defaultStrokeFor } from "../primitiveStyle"
@@ -40,6 +40,10 @@ export interface PropertiesBarProps {
   onCreateMeasurement: (metric: Measurement3Metric, dihedralKind?: "interior" | "exterior") => void
   onCreateConstraint: (type: ConstraintType, targets: string[]) => void
   onDeleteMeasurement: (id: string) => void
+  /** Calculus entry points: a function curve in the planar workspace can grow a derivative, a tangent and an area. */
+  onCreateDerivative: (sourceId: string) => void
+  onCreateTangent: (sourceId: string) => void
+  onCreateIntegral: (sourceId: string) => void
 }
 
 const alignments: { value: Alignment; label: string }[] = [
@@ -134,7 +138,33 @@ function Vector3Fields({ prefix, value, disabled, onChange }: { prefix: string; 
   return <div className="metric-grid"><CoordinateField label={`${prefix} X`} value={value.x} disabled={disabled} onChange={(next) => onChange("x", next)} /><CoordinateField label={`${prefix} Y`} value={value.y} disabled={disabled} onChange={(next) => onChange("y", next)} /><CoordinateField label={`${prefix} Z`} value={value.z} disabled={disabled} onChange={(next) => onChange("z", next)} /></div>
 }
 
-export function PropertiesBar({ value, min, max, step, onChange, selectedPrimitive, selectedIds, selectedCount, selectedGroupId, allSelectedVisible, canCreateIntersection, onUpdatePrimitive, onToggleSelectedVisibility, onToggleSelectedLock, onCreateGroup, onDeleteGroup, onCreateIntersection, onAlign, onToggleBatchVisibility, onAddAnnotation, onAddEngineeringAnnotation, onCreateMeasurement, onCreateConstraint, onDeleteMeasurement, sections = allInspectorSections }: PropertiesBarProps) {
+/** Degrees shown to the user, rounded so a 45 or 90 preset never reads back as 44.999999. */
+function displayDegrees(radians: number): number {
+  return Number((radians * 180 / Math.PI).toFixed(2))
+}
+
+/**
+ * Orientation of a parameterized solid. The angle inputs take exact degrees and step in 15s; the buttons
+ * apply the classroom angles (90 degree turns and a reset) without typing.
+ */
+function SolidRotationFields({ rotation, disabled, onChange }: { rotation: SolidRotation | undefined; disabled: boolean; onChange: (rotation: SolidRotation) => void }) {
+  const current = rotation ?? { x: 0, y: 0, z: 0 }
+  const axes = [["x", "X"], ["y", "Y"], ["z", "Z"]] as const
+  const setDegrees = (axis: "x" | "y" | "z", degrees: number) => onChange({ ...current, [axis]: rotationRadians(degrees) })
+
+  return <>
+    {axes.map(([axis, label]) => <Field key={axis} label={`绕 ${label} 轴（度）`}>
+      <input aria-label={`绕 ${label} 轴旋转角度`} type="number" step="15" disabled={disabled} value={displayDegrees(current[axis])} onChange={(event) => setDegrees(axis, numberValue(event))} />
+    </Field>)}
+    <div className="property-actions" aria-label="朝向快捷角度">
+      <button type="button" aria-label="复位朝向" disabled={disabled} onClick={() => onChange({ x: 0, y: 0, z: 0 })}>归零</button>
+      {axes.map(([axis, label]) => <button key={axis} type="button" aria-label={`绕 ${label} 轴加 90 度`} disabled={disabled} onClick={() => setDegrees(axis, displayDegrees(current[axis]) + 90)}>{label} +90°</button>)}
+    </div>
+    <p className="footer-note">角度以度为单位，按 X → Y → Z 依次绕图形自身中心旋转；快捷按钮每次叠加 90°。</p>
+  </>
+}
+
+export function PropertiesBar({ value, min, max, step, onChange, selectedPrimitive, selectedIds, selectedCount, selectedGroupId, allSelectedVisible, canCreateIntersection, onUpdatePrimitive, onToggleSelectedVisibility, onToggleSelectedLock, onCreateGroup, onDeleteGroup, onCreateIntersection, onAlign, onToggleBatchVisibility, onAddAnnotation, onAddEngineeringAnnotation, onCreateMeasurement, onCreateConstraint, onDeleteMeasurement, onCreateDerivative, onCreateTangent, onCreateIntegral, sections = allInspectorSections }: PropertiesBarProps) {
   const shows = (section: InspectorSection) => sections.includes(section)
   const selectedPoint = selectedPrimitive?.type === "point" ? selectedPrimitive : null
   const selectedPoint3 = selectedPrimitive?.type === "point3" ? selectedPrimitive : null
@@ -145,12 +175,15 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
   const selectedFunction = selectedPrimitive?.type === "function" ? selectedPrimitive : null
   const selectedCircleOrArc = selectedPrimitive?.type === "circle" || selectedPrimitive?.type === "arc" ? selectedPrimitive : null
   const selectedSolid = selectedPrimitive && ["cube", "pyramid", "cylinder", "cone"].includes(selectedPrimitive.type) ? selectedPrimitive as SolidPrimitive : null
+  const selectedPlane3 = selectedPrimitive?.type === "plane3" ? selectedPrimitive : null
   const selectedDerivedPoint = selectedPrimitive && (selectedPrimitive.type === "tangent" || selectedPrimitive.type === "normal" || selectedPrimitive.type === "secant") ? ("point" in selectedPrimitive ? selectedPrimitive.point : selectedPrimitive.points[0]) : null
   const selectedIntersection = selectedPrimitive && ["intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection", "intersectionSet"].includes(selectedPrimitive.type) ? selectedPrimitive as Extract<PrimitiveSpec, { type: "intersection" | "lineCircleIntersection" | "circleIntersection" | "curveIntersection" | "intersectionSet" }> : null
   const selectedSlope = selectedLinear ? lineSlope(selectedLinear) : null
   const showSlopeParameter = selectedLinear?.type === "line" && Boolean(selectedLinear.slopeParameter)
   const editable = selectedPrimitive?.locked !== true
   const [expressionDraft, setExpressionDraft] = useState(selectedFunction?.expression ?? "")
+  /** The preset selector shows "自定义" unless the current expression is still exactly a preset's. */
+  const selectedFunctionPresetId = functionPresets.find((preset) => preset.expression === selectedFunction?.expression)?.id ?? ""
   const [expressionError, setExpressionError] = useState<string | null>(null)
   const [logBase, setLogBase] = useState("10")
   const formulaRef = useRef<HTMLTextAreaElement>(null)
@@ -224,22 +257,6 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
     while (sceneDocument.primitives.some((primitive) => primitive.id === `locus-${index}`)) index += 1
     applySceneOperation({ op: "addPrimitive", primitive: { id: `locus-${index}`, type: "locus", sourcePointId: selectedPoint.id, parameterId, domain: [parameter.min ?? 0, parameter.max ?? 1], samples: 128, label: `轨迹 ${index}` } })
   }
-  const createDerivedAnalysis = (type: "derivative" | "tangent" | "normal" | "secant" | "integral" | "analysisSet") => {
-    if (!selectedFunction || !editable) return
-    let index = 1
-    while (sceneDocument.primitives.some((primitive) => primitive.id === `${type}-${index}`)) index += 1
-    const x = Math.max(selectedFunction.domain[0], Math.min(selectedFunction.domain[1], 0))
-    const primitive: PrimitiveSpec = type === "derivative"
-      ? { id: `${type}-${index}`, type, sourceId: selectedFunction.id, order: 1, domain: selectedFunction.domain, samples: selectedFunction.samples ?? 128, points: [], status: "approximate", label: `导函数 ${index}` }
-      : type === "tangent" || type === "normal"
-        ? { id: `${type}-${index}`, type, sourceId: selectedFunction.id, x, point: { x, y: 0 }, slope: 0, a: { x: selectedFunction.domain[0], y: 0 }, b: { x: selectedFunction.domain[1], y: 0 }, status: "failed", label: `${type === "tangent" ? "切线" : "法线"} ${index}` }
-        : type === "secant"
-          ? { id: `${type}-${index}`, type, sourceId: selectedFunction.id, x1: selectedFunction.domain[0], x2: selectedFunction.domain[1], points: [], slope: 0, a: { x: selectedFunction.domain[0], y: 0 }, b: { x: selectedFunction.domain[1], y: 0 }, status: "failed", label: `割线 ${index}` }
-          : type === "integral"
-            ? { id: `${type}-${index}`, type, sourceId: selectedFunction.id, domain: [Math.max(0, selectedFunction.domain[0]), Math.min(1, selectedFunction.domain[1])], steps: 256, points: [], area: null, status: "failed", label: `积分区域 ${index}` }
-            : { id: `${type}-${index}`, type, sourceId: selectedFunction.id, domain: selectedFunction.domain, samples: selectedFunction.samples ?? 128, results: [], status: "failed", label: `分析结果 ${index}` }
-    applySceneOperation({ op: "addPrimitive", primitive })
-  }
   const updateCenter = (axis: "x" | "y", next: number) => selectedCircleOrArc && editable && onUpdatePrimitive({ center: { ...selectedCircleOrArc.center, [axis]: next } })
   const updateEndpoint = (endpoint: "a" | "b", axis: "x" | "y", next: number) => selectedLinear && editable && !(selectedLinear.type === "line" && selectedLinear.slopeParameter && endpoint === "b" && axis === "y") && onUpdatePrimitive({ [endpoint]: { ...selectedLinear[endpoint], [axis]: next } })
   const updateSlope = (next: number) => {
@@ -292,6 +309,14 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
     } catch {
       setExpressionError("表达式暂不可计算")
     }
+  }
+  /** Picking a preset also restores its classroom domain, so e^x or sin(x) lands inside the visible canvas. */
+  const applyFunctionPreset = (presetId: string) => {
+    const preset = getFunctionPreset(presetId)
+    if (!preset) return
+    setExpressionDraft(preset.expression)
+    setExpressionError(null)
+    onUpdatePrimitive({ expression: preset.expression, domain: [...preset.defaultDomain] as [number, number] })
   }
   const insertFunctionTemplate = (template: string) => {
     if (!selectedFunction || !editable) return
@@ -357,6 +382,8 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
     </div>
     {shows("data") && selectedPoint3 && <div className="primitive-properties"><h3>空间点坐标</h3><Vector3Fields prefix="坐标" value={selectedPoint3.position} disabled={!editable || selectedPoint3.binding?.kind !== "free"} onChange={updatePoint3} /><p className="footer-note">点位置是空间构造的真源；线、面和实体通过点引用联动。</p></div>}
     {shows("data") && selectedSolid && <div className="primitive-properties"><h3>立体几何属性</h3>{selectedSolid.type === "cube" && <><Vector3Fields prefix="原点" value={selectedSolid.origin} disabled={!editable} onChange={(axis, next) => onUpdatePrimitive({ origin3: { ...selectedSolid.origin, [axis]: next } })} /><Vector3Fields prefix="尺寸" value={selectedSolid.size} disabled={!editable} onChange={(axis, next) => onUpdatePrimitive({ size3: { ...selectedSolid.size, [axis]: Math.max(0.01, next) } })} /></>}{selectedSolid.type === "pyramid" && <><Vector3Fields prefix="底面中心" value={selectedSolid.baseCenter} disabled={!editable} onChange={(axis, next) => onUpdatePrimitive({ baseCenter3: { ...selectedSolid.baseCenter, [axis]: next } })} /><CoordinateField label="底面尺寸 X" value={selectedSolid.baseSize.x} disabled={!editable} onChange={(next) => onUpdatePrimitive({ baseSize3: { ...selectedSolid.baseSize, x: Math.max(0.01, next) } })} /><CoordinateField label="底面尺寸 Y" value={selectedSolid.baseSize.y} disabled={!editable} onChange={(next) => onUpdatePrimitive({ baseSize3: { ...selectedSolid.baseSize, y: Math.max(0.01, next) } })} /><CoordinateField label="高度" value={selectedSolid.height} disabled={!editable} onChange={(next) => onUpdatePrimitive({ height: Math.max(0.01, next) })} /></>}{(selectedSolid.type === "cylinder" || selectedSolid.type === "cone") && <><Vector3Fields prefix="中心" value={selectedSolid.center} disabled={!editable} onChange={(axis, next) => onUpdatePrimitive({ center3: { ...selectedSolid.center, [axis]: next } })} /><CoordinateField label="半径 3D" value={selectedSolid.radius} disabled={!editable} onChange={(next) => onUpdatePrimitive({ radius3: Math.max(0.01, next) })} /><CoordinateField label="高度" value={selectedSolid.height} disabled={!editable} onChange={(next) => onUpdatePrimitive({ height: Math.max(0.01, next) })} /><Field label="分段数"><input aria-label="分段数" type="number" min="3" max="256" step="1" disabled={!editable} value={selectedSolid.segments} onChange={(event) => onUpdatePrimitive({ segments: Math.max(3, Math.min(256, Math.round(numberValue(event)))) })} /></Field></>}</div>}
+    {shows("data") && selectedSolid && <div className="primitive-properties"><h3>朝向</h3><SolidRotationFields rotation={selectedSolid.rotation} disabled={!editable} onChange={(rotation) => onUpdatePrimitive({ rotation3: rotation })} /></div>}
+    {shows("data") && selectedPlane3 && <div className="primitive-properties"><h3>平面大小</h3><Field label="半边长（世界单位）"><input aria-label="平面半边长" type="number" min="0.1" step="0.5" placeholder="自动" disabled={!editable} value={selectedPlane3.halfSize ?? ""} onChange={(event) => onUpdatePrimitive({ halfSize: event.target.value === "" ? null : Math.max(0.1, numberValue(event)) })} /></Field><div className="property-actions" aria-label="平面大小操作"><button type="button" disabled={!editable || selectedPlane3.halfSize === undefined} onClick={() => onUpdatePrimitive({ halfSize: null })}>恢复自动</button></div><p className="footer-note">留空表示仍按场景自动适配；填入数值后，平面画出的范围由该半边长决定。</p></div>}
     {shows("data") && !selectedPrimitive && <>
       <label className="properties-label" htmlFor="slope-slider"><span>直线斜率参数</span><strong className="metric">{value.toFixed(2)}</strong></label>
       <input id="slope-slider" aria-label="直线斜率" type="range" min={min} max={max} step={step} value={value} onChange={(event) => onChange(numberValue(event))} />
@@ -386,7 +413,7 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
      {shows("data") && selectedPolyline && <div className="primitive-properties"><h3>折线属性</h3><p className="footer-note">共 {selectedPolyline.points.length} 个顶点</p>{selectedPolyline.points.map((point, index) => <div key={`${selectedPolyline.id}-${index}`} className="endpoint-group"><strong>顶点 {index + 1}</strong><CoordinateField label={`顶点 ${index + 1} X`} value={point.x} disabled={!editable} onChange={(next) => updatePolylinePoint(index, "x", next)} /><CoordinateField label={`顶点 ${index + 1} Y`} value={point.y} disabled={!editable} onChange={(next) => updatePolylinePoint(index, "y", next)} /></div>)}</div>}
      {shows("data") && selectedParabola && <div className="primitive-properties"><h3>抛物线属性</h3><CoordinateField label="顶点 X" value={selectedParabola.vertex.x} disabled={!editable} onChange={(next) => updateParabolaVertex("x", next)} /><CoordinateField label="顶点 Y" value={selectedParabola.vertex.y} disabled={!editable} onChange={(next) => updateParabolaVertex("y", next)} /><Field label="焦参数"><input aria-label="焦参数" type="number" disabled={!editable} step="0.1" value={selectedParabola.focalParameter} onChange={(event) => onUpdatePrimitive({ focalParameter: numberValue(event) })} /></Field><Field label="轴向"><select aria-label="抛物线轴向" disabled={!editable} value={selectedParabola.axis} onChange={(event) => onUpdatePrimitive({ axis: event.target.value as "x" | "y" })}><option value="x">横轴</option><option value="y">纵轴</option></select></Field><Field label="旋转角度（度）"><input aria-label="抛物线旋转角度" type="number" disabled={!editable} step="1" value={rotationDegrees(selectedParabola.rotation)} onChange={(event) => updateRotation(numberValue(event))} /></Field><p className="footer-note">焦点：{(() => { const focus = parabolaFocus(selectedParabola); return `(${focus.x.toFixed(2)}, ${focus.y.toFixed(2)})` })()}</p></div>}
      {shows("data") && selectedEllipseOrHyperbola && <div className="primitive-properties"><h3>{selectedEllipseOrHyperbola.type === "ellipse" ? "椭圆属性" : "双曲线属性"}</h3><CoordinateField label="中心 X" value={selectedEllipseOrHyperbola.center.x} disabled={!editable} onChange={(next) => updateConicCenter("x", next)} /><CoordinateField label="中心 Y" value={selectedEllipseOrHyperbola.center.y} disabled={!editable} onChange={(next) => updateConicCenter("y", next)} /><Field label="横向半径"><input aria-label="横向半径" type="number" disabled={!editable} min="0.01" step="0.1" value={selectedEllipseOrHyperbola.radiusX} onChange={(event) => onUpdatePrimitive({ radiusX: Math.max(0.01, numberValue(event)) })} /></Field><Field label="纵向半径"><input aria-label="纵向半径" type="number" disabled={!editable} min="0.01" step="0.1" value={selectedEllipseOrHyperbola.radiusY} onChange={(event) => onUpdatePrimitive({ radiusY: Math.max(0.01, numberValue(event)) })} /></Field>{selectedEllipseOrHyperbola.type === "hyperbola" && <Field label="轴向"><select aria-label="双曲线轴向" disabled={!editable} value={selectedEllipseOrHyperbola.axis} onChange={(event) => onUpdatePrimitive({ axis: event.target.value as "x" | "y" })}><option value="x">横轴</option><option value="y">纵轴</option></select></Field>}<Field label="旋转角度（度）"><input aria-label={`${selectedEllipseOrHyperbola.type === "ellipse" ? "椭圆" : "双曲线"}旋转角度`} type="number" disabled={!editable} step="1" value={rotationDegrees(selectedEllipseOrHyperbola.rotation)} onChange={(event) => updateRotation(numberValue(event))} /></Field><p className="footer-note">焦点：{(() => { const focus = conicFoci(selectedEllipseOrHyperbola); return `(${focus.first.x.toFixed(2)}, ${focus.first.y.toFixed(2)}) / (${focus.second.x.toFixed(2)}, ${focus.second.y.toFixed(2)})` })()}</p>{ellipseMetrics && <div className="metric-grid"><span>长半轴<strong>{ellipseMetrics.major.toFixed(2)}</strong></span><span>短半轴<strong>{ellipseMetrics.minor.toFixed(2)}</strong></span><span>离心率<strong>{ellipseMetrics.eccentricity.toFixed(3)}</strong></span><span>面积<strong>{(Math.PI * selectedEllipseOrHyperbola.radiusX * selectedEllipseOrHyperbola.radiusY).toFixed(2)}</strong></span></div>}{hyperbolaMetrics && <div className="metric-grid"><span>离心率<strong>{hyperbolaMetrics.eccentricity.toFixed(3)}</strong></span><span>渐近线角<strong>{hyperbolaMetrics.asymptoteAngle.toFixed(2)}°</strong></span></div>}</div>}
-     {shows("data") && selectedFunction && <div className="primitive-properties function-properties"><h3>函数图像属性</h3><Field label="公式"><textarea ref={formulaRef} aria-label="函数表达式" rows={2} placeholder="例如：y = e^x 或 sin(ln(x))" disabled={!editable} value={expressionDraft} onChange={(event) => updateFunctionExpression(event.target.value)} /></Field><FormulaKeyboard logBase={logBase} onLogBaseChange={setLogBase} onInsert={insertFunctionTemplate} />{expressionError && <p className="footer-note" role="alert">{expressionError}</p>}<CoordinateField label="定义域起点" value={selectedFunction.domain[0]} disabled={!editable} onChange={(next) => updateFunctionDomain(0, next)} /><CoordinateField label="定义域终点" value={selectedFunction.domain[1]} disabled={!editable} onChange={(next) => updateFunctionDomain(1, next)} /><Field label="采样点数"><input aria-label="采样点数" type="number" disabled={!editable} min="2" max="2048" step="1" value={selectedFunction.samples ?? 128} onChange={(event) => onUpdatePrimitive({ samples: numberValue(event) })} /></Field><p className="footer-note">定义域 [{selectedFunction.domain[0]}, {selectedFunction.domain[1]}] · {selectedFunction.samples ?? 128} 个采样点</p>{functionMetrics && <p className="footer-note">值域 [{functionMetrics.min.toFixed(2)}, {functionMetrics.max.toFixed(2)}]</p>}<div className="property-actions" aria-label="微积分分析工具"><button type="button" aria-label="创建导函数" disabled={!editable} onClick={() => createDerivedAnalysis("derivative")}>导函数</button><button type="button" aria-label="创建切线" disabled={!editable} onClick={() => createDerivedAnalysis("tangent")}>切线</button><button type="button" aria-label="创建法线" disabled={!editable} onClick={() => createDerivedAnalysis("normal")}>法线</button><button type="button" aria-label="创建割线" disabled={!editable} onClick={() => createDerivedAnalysis("secant")}>割线</button><button type="button" aria-label="创建积分区域" disabled={!editable} onClick={() => createDerivedAnalysis("integral")}>积分区域</button><button type="button" aria-label="创建分析结果" disabled={!editable} onClick={() => createDerivedAnalysis("analysisSet")}>分析结果</button></div></div>}
+     {shows("data") && selectedFunction && <div className="primitive-properties function-properties"><h3>函数图像属性</h3><Field label="常用函数预设"><select aria-label="函数预设" disabled={!editable} value={selectedFunctionPresetId} onChange={(event) => applyFunctionPreset(event.target.value)}><option value="">自定义</option>{functionPresets.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}</select></Field><Field label="公式"><textarea ref={formulaRef} aria-label="函数表达式" rows={2} placeholder="例如：y = e^x 或 sin(ln(x))" disabled={!editable} value={expressionDraft} onChange={(event) => updateFunctionExpression(event.target.value)} /></Field><FormulaKeyboard logBase={logBase} onLogBaseChange={setLogBase} onInsert={insertFunctionTemplate} />{expressionError && <p className="footer-note" role="alert">{expressionError}</p>}<CoordinateField label="定义域起点" value={selectedFunction.domain[0]} disabled={!editable} onChange={(next) => updateFunctionDomain(0, next)} /><CoordinateField label="定义域终点" value={selectedFunction.domain[1]} disabled={!editable} onChange={(next) => updateFunctionDomain(1, next)} /><Field label="采样点数"><input aria-label="采样点数" type="number" disabled={!editable} min="2" max="2048" step="1" value={selectedFunction.samples ?? 128} onChange={(event) => onUpdatePrimitive({ samples: numberValue(event) })} /></Field><p className="footer-note">定义域 [{selectedFunction.domain[0]}, {selectedFunction.domain[1]}] · {selectedFunction.samples ?? 128} 个采样点</p>{functionMetrics && <p className="footer-note">值域 [{functionMetrics.min.toFixed(2)}, {functionMetrics.max.toFixed(2)}]</p>}<div className="property-actions" aria-label="函数分析"><button type="button" aria-label="创建导函数" disabled={!editable} onClick={() => onCreateDerivative(selectedFunction.id)}>创建导函数</button><button type="button" aria-label="创建切线" disabled={!editable} onClick={() => onCreateTangent(selectedFunction.id)}>创建切线</button><button type="button" aria-label="创建积分区域" disabled={!editable} onClick={() => onCreateIntegral(selectedFunction.id)}>创建积分区域</button></div></div>}
      {shows("data") && selectedCircleOrArc && <div className="primitive-properties"><h3>{selectedCircleOrArc.type === "circle" ? "圆属性" : "圆弧属性"}</h3><CoordinateField label="圆心 X" value={selectedCircleOrArc.center.x} disabled={!editable} onChange={(next) => updateCenter("x", next)} /><CoordinateField label="圆心 Y" value={selectedCircleOrArc.center.y} disabled={!editable} onChange={(next) => updateCenter("y", next)} /><Field label="半径"><input aria-label="半径" type="number" disabled={!editable} min="0.01" step="0.1" value={selectedCircleOrArc.radius} onChange={(event) => onUpdatePrimitive({ radius: Math.max(0.01, numberValue(event)) })} /></Field>{selectedCircleOrArc.type === "arc" && <><Field label="起始角（度）"><input aria-label="起始角" type="number" disabled={!editable} step="1" value={rotationDegrees(selectedCircleOrArc.startAngle)} onChange={(event) => onUpdatePrimitive({ startAngle: rotationRadians(numberValue(event)) })} /></Field><Field label="结束角（度）"><input aria-label="结束角" type="number" disabled={!editable} step="1" value={rotationDegrees(selectedCircleOrArc.endAngle)} onChange={(event) => onUpdatePrimitive({ endAngle: rotationRadians(numberValue(event)) })} /></Field></>}{selectedCircleOrArc.type === "circle" ? <div className="metric-grid"><span>周长<strong>{(2 * Math.PI * selectedCircleOrArc.radius).toFixed(2)}</strong></span><span>面积<strong>{(Math.PI * selectedCircleOrArc.radius ** 2).toFixed(2)}</strong></span></div> : <div className="metric-grid"><span>圆心角<strong>{(arcAngle * 180 / Math.PI).toFixed(2)}°</strong></span><span>弧长<strong>{(arcAngle * selectedCircleOrArc.radius).toFixed(2)}</strong></span></div>}</div>}
      {shows("data") && selectedPrimitive?.type === "derivative" && <div className="primitive-properties"><h3>导函数分析</h3><p className="footer-note">来源：{selectedPrimitive.sourceId} · {selectedPrimitive.order} 阶 · 采样近似</p><p className="footer-note">状态：{selectedPrimitive.status}{selectedPrimitive.diagnostic ? ` · ${selectedPrimitive.diagnostic}` : ""}</p></div>}
      {shows("data") && (selectedPrimitive?.type === "tangent" || selectedPrimitive?.type === "normal" || selectedPrimitive?.type === "secant") && <div className="primitive-properties"><h3>{primitiveTypeLabels[selectedPrimitive.type]}分析</h3><p className="footer-note">来源：{selectedPrimitive.sourceId} · 状态：{selectedPrimitive.status}</p><div className="metric-grid"><span>斜率<strong>{selectedPrimitive.vertical ? "垂直" : selectedPrimitive.slope.toFixed(3)}</strong></span><span>计算点<strong>{selectedDerivedPoint ? `(${selectedDerivedPoint.x.toFixed(2)}, ${selectedDerivedPoint.y.toFixed(2)})` : "—"}</strong></span></div>{selectedPrimitive.diagnostic && <p className="footer-note">{selectedPrimitive.diagnostic}</p>}</div>}

@@ -3,7 +3,6 @@ import { create } from "zustand"
 import { createDefaultCadLayout, createEmptyDocument, type GeometryDocument, type Workspace } from "@draw/dsl"
 import { commitPatch, type DomainOperation } from "@draw/scene-graph"
 
-import { createDemoDocument } from "./demoDocument"
 import { loadWorkbenchPreferences, saveWorkbenchPreferences, type TreeTabPreference } from "./persistence/draftStorage"
 
 /** CAD documents always carry the default layer/sheet/view layout, even before the first save. */
@@ -43,7 +42,8 @@ function appendHistory(history: GeometryDocument[], document: GeometryDocument):
   return [...history, document].slice(-MAX_HISTORY_ENTRIES)
 }
 
-const initialDocument = createDemoDocument()
+/** The app opens on the 3D workspace now that the calculus workspace has been retired. */
+const initialDocument = withDocumentLayout(createEmptyDocument("geometry3d"))
 const initialPreferences = loadWorkbenchPreferences()
 
 export const useSceneStore = create<SceneState>((set, get) => ({

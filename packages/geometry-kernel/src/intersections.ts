@@ -95,7 +95,7 @@ export function intersectPolylineLineDetailed(polyline: PolylinePrimitive, line:
   const unique = uniquePoints(points, policy.absoluteTolerance)
   if (unique.length === 0) return coincident ? { kind: "coincident" } : { kind: "none", reason: "disjoint" }
   if (unique.length === 1) return { kind: "point", point: unique[0] }
-  return { kind: "points", points: [unique[0], unique[1]] }
+  return { kind: "points", points: unique }
 }
 
 export function intersectPolylineCircleDetailed(polyline: PolylinePrimitive, circle: CirclePrimitive, policy: NumericPolicy = defaultNumericPolicy): IntersectionResult {
@@ -112,7 +112,7 @@ export function intersectPolylineCircleDetailed(polyline: PolylinePrimitive, cir
   const unique = uniquePoints(points, policy.absoluteTolerance)
   if (unique.length === 0) return { kind: "none", reason: "disjoint" }
   if (unique.length === 1) return { kind: "point", point: unique[0] }
-  return { kind: "points", points: [unique[0], unique[1]] }
+  return { kind: "points", points: unique }
 }
 
 export function intersectLineCircleDetailed(line: LinePrimitive, circle: CirclePrimitive, policy: NumericPolicy = defaultNumericPolicy): IntersectionResult {

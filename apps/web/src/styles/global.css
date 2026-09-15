@@ -56,6 +56,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .canvas-card { width: 100%; align-self: start; position: sticky; top: var(--space-4); background: var(--color-panel); border: 1px solid var(--color-border); border-radius: var(--radius-md); box-shadow: var(--shadow-panel); padding: var(--space-3); }
 .coordinate-readout { position: absolute; top: var(--space-4); left: var(--space-4); z-index: 1; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: rgb(255 255 255 / 92%); box-shadow: var(--shadow-card); color: var(--color-ink); font-size: 0.75rem; font-variant-numeric: tabular-nums; pointer-events: none; }
 .canvas-card [data-auto-intersection] { cursor: pointer; }
+/* Zoom controls live on the canvas rather than in the geometry toolbar so the wheel, the buttons and the
+   percentage readout stay next to the coordinates they affect. */
+.canvas-viewport-controls { position: absolute; right: var(--space-4); bottom: var(--space-4); z-index: 1; display: flex; align-items: center; gap: var(--space-1); padding: var(--space-1); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: rgb(255 255 255 / 92%); box-shadow: var(--shadow-card); }
+.canvas-viewport-controls button { min-width: 30px; height: 30px; padding: 0 var(--space-2); border: 0; border-radius: 6px; background: transparent; color: var(--color-ink); font-size: 0.85rem; line-height: 1; cursor: pointer; }
+.canvas-viewport-controls button:hover { background: var(--color-accent-soft); }
+.canvas-viewport-controls button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+.canvas-viewport-controls .zoom-readout { min-width: 48px; color: var(--color-muted); font-size: 0.72rem; font-variant-numeric: tabular-nums; text-align: center; }
 .canvas-card svg { display: block; width: 100%; height: auto; border-radius: var(--radius-sm); background: #fbfcff; touch-action: none; }
 .canvas-card svg [data-hit-target="true"] { cursor: grab; }
 .canvas-card svg.is-dragging, .canvas-card svg.is-dragging [data-hit-target="true"], .canvas-card svg.is-panning { cursor: grabbing; }
@@ -230,6 +237,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .three-scene-status { position: absolute; inset: 50% auto auto 50%; transform: translate(-50%, -50%); width: min(82%, 320px); padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: rgb(255 255 255 / 92%); color: var(--color-muted); font-size: 0.82rem; line-height: 1.5; text-align: center; }
 .three-camera-controls { position: absolute; z-index: 2; top: var(--space-3); right: var(--space-3); display: flex; flex-wrap: wrap; gap: var(--space-1); }
 .three-camera-controls button { min-height: 44px; padding-inline: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-muted); background: rgb(255 255 255 / 92%); box-shadow: var(--shadow-card); }
+.three-camera-controls button[aria-pressed="true"] { border-color: var(--color-accent); color: var(--color-accent); background: var(--color-accent-soft); }
+.three-camera-hint { position: absolute; z-index: 2; bottom: var(--space-3); left: var(--space-3); margin: 0; padding: var(--space-1) var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-muted); background: rgb(255 255 255 / 88%); font-size: 0.72rem; pointer-events: none; }
+.three-canvas-shell[data-pan-mode="true"] canvas { cursor: grab; }
+.three-canvas-shell[data-pan-mode="true"] canvas:active { cursor: grabbing; }
 .toolbar-hint { margin: var(--space-2) 0 0; color: var(--color-muted); font-size: 0.78rem; line-height: 1.4; }
 .three-scene-controls { position: absolute; z-index: 2; top: var(--space-3); left: var(--space-3); display: flex; flex-wrap: wrap; gap: var(--space-1); }
 .three-scene-controls button { min-height: 44px; padding-inline: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-muted); background: rgb(255 255 255 / 92%); box-shadow: var(--shadow-card); }

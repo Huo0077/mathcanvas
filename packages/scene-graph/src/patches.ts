@@ -187,7 +187,7 @@ export function validatePatch(document: GeometryDocument, operation: DomainOpera
   }
   if (operation.op === "updatePrimitive") {
     const primitive = document.primitives.find((candidate) => candidate.id === operation.id)
-    const editable = ["point", "point3", "line", "segment", "ray", "polyline", "parabola", "ellipse", "hyperbola", "function", "circle", "arc", "cube", "pyramid", "cylinder", "cone"]
+    const editable = ["point", "point3", "line", "segment", "ray", "polyline", "parabola", "ellipse", "hyperbola", "function", "circle", "arc", "cube", "pyramid", "cylinder", "cone", "plane3"]
     // Style and label are presentation, so any unlocked object may change them even when its geometry is derived.
     const geometryPatchKeys = Object.keys(operation.patch).filter((key) => key !== "style" && key !== "label")
     if (!primitive || (geometryPatchKeys.length > 0 && !editable.includes(primitive.type))) errors.push("object is not editable")
@@ -228,6 +228,15 @@ export function validatePatch(document: GeometryDocument, operation: DomainOpera
     if (operation.patch.radius3 !== undefined && (!Number.isFinite(operation.patch.radius3) || operation.patch.radius3 <= 0 || !["cylinder", "cone"].includes(primitive?.type ?? ""))) errors.push(["cylinder", "cone"].includes(primitive?.type ?? "") ? "3D radius must be positive" : "only cylinders and cones support radius")
     if (operation.patch.segments !== undefined && (!Number.isInteger(operation.patch.segments) || operation.patch.segments < 3 || operation.patch.segments > 256 || !["cylinder", "cone"].includes(primitive?.type ?? ""))) errors.push(["cylinder", "cone"].includes(primitive?.type ?? "") ? "segment count is invalid" : "only cylinders and cones support segments")
     if (operation.patch.rotation !== undefined && !Number.isFinite(operation.patch.rotation)) errors.push("rotation must be finite")
+    if (operation.patch.rotation3 !== undefined) {
+      const isTemplate = ["cube", "pyramid", "cylinder", "cone"].includes(primitive?.type ?? "")
+      if (!isTemplate) errors.push("only template solids support orientation")
+      else if (Object.values(operation.patch.rotation3).some((value) => !Number.isFinite(value))) errors.push("orientation must be finite radians")
+    }
+    if (operation.patch.halfSize !== undefined) {
+      if (primitive?.type !== "plane3") errors.push("only planes support a patch size")
+      else if (operation.patch.halfSize !== null && (!Number.isFinite(operation.patch.halfSize) || operation.patch.halfSize <= 0)) errors.push("plane half size must be positive")
+    }
     if (operation.patch.label !== undefined && typeof operation.patch.label !== "string") errors.push("label is invalid")
     if (operation.patch.style !== undefined) {
       const style = operation.patch.style
