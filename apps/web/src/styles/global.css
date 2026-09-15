@@ -480,6 +480,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .engineering-drawing-draft circle { fill: var(--color-panel); stroke: var(--color-accent-strong); stroke-width: 0.025; vector-effect: non-scaling-stroke; }
 .engineering-drawing-draft.is-selected line, .engineering-drawing-draft.is-selected polyline, .engineering-drawing-draft.is-selected circle { stroke: var(--color-accent); stroke-width: 0.045; }
 .status-bar-notice { color: var(--color-warning); font-weight: 650; }
+/* 左下角的功能指引：只在点击功能键后出现，压成一行到两行的小浮层，不铺满底部也不挡画布。 */
+.guidance-hint { position: fixed; left: 18px; bottom: 18px; z-index: 40; display: flex; align-items: flex-start; gap: var(--space-2); max-width: min(420px, calc(100vw - 36px)); padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); border-left: 3px solid var(--color-accent); border-radius: var(--radius-sm); background: rgb(255 255 255 / 97%); box-shadow: var(--shadow-card); color: var(--color-ink); font-size: 0.75rem; line-height: 1.45; }
+.guidance-hint-mark { flex: 0 0 auto; width: 16px; height: 16px; margin-top: 1px; border-radius: 50%; background: var(--color-accent-soft); color: var(--color-accent-strong); font-size: 0.68rem; font-weight: 700; line-height: 16px; text-align: center; }
+.guidance-hint-text { flex: 1 1 auto; }
+.guidance-hint-close { flex: 0 0 auto; padding: 0 2px; border: 0; background: transparent; color: var(--color-muted); font-size: 0.95rem; line-height: 1; cursor: pointer; }
+.guidance-hint-close:hover { color: var(--color-ink); }
+.guidance-hint-close:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
 
 /* Context inspector: tab chrome, no-selection context and projection source diagnostics. */
 .engineering-inspector { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; background: #f8f7fb; }
