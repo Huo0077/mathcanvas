@@ -271,7 +271,16 @@ P7-1 至 P7-6 已完成；P4 Agent、P5 题图解析保持在排除范围内。
 - [x] 本地 `main` 已设置跟踪 `origin/main`
 - [x] 通过远程分支检查确认 `origin/main` 可访问
 
-下一步：邀请协作者并按功能切分分支，通过 Pull Request 合并变更。
+### 本地与 GitHub 进度对比
+
+- 对比时间：2026-09-15。
+- 本地 `HEAD`、`origin/main` 和本次抓取的 `FETCH_HEAD` 均为 `966412630ea6d42e0196703f19afa46019002867`（提交标题：`feat(cad): add layered drawing document foundation`）。
+- `git log --left-right --count HEAD...origin/main` 结果为 `0 0`：本地没有领先或落后于 GitHub 的提交。
+- `git diff --stat HEAD origin/main` 与 `git diff --name-status HEAD origin/main` 均无输出：在本次进度文档更新前，提交内容、进度文档和计划文档在 GitHub 上与本地提交一致。
+- 当前同步内容包括 Task 1/2 的 DSL 与 Scene Graph 基础；Task 3-7 尚未开发，继续等待用户授权。
+- 本次对比记录写入后，`docs/project-progress.md` 产生了一个尚未提交的本地文档改动；因此 GitHub 仍停留在上述 `9664126`，待后续明确授权后再推送本次记录。
+
+下一步：等待用户授权后再继续 Task 3；若只进行文档维护，可在本地更新后单独提交并推送。
 
 ## 最新验证证据
 
