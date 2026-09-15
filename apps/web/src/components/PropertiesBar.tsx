@@ -40,6 +40,7 @@ export interface PropertiesBarProps {
   onCreateMeasurement: (metric: Measurement3Metric, dihedralKind?: "interior" | "exterior") => void
   onCreateConstraint: (type: ConstraintType, targets: string[]) => void
   onDeleteMeasurement: (id: string) => void
+  onDeleteSelected?: () => void
   /** Calculus entry points: a function curve in the planar workspace can grow a derivative, a tangent and an area. */
   onCreateDerivative: (sourceId: string) => void
   onCreateTangent: (sourceId: string) => void
@@ -130,6 +131,16 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   return <label>{label}{children}</label>
 }
 
+function InspectorAccordion({ title, open, onToggle, children }: { title: string; open: boolean; onToggle: () => void; children?: ReactNode }) {
+  return <section className={`inspector-accordion${open ? " is-open" : ""}`}>
+    <button className="inspector-accordion-trigger" type="button" aria-expanded={open} onClick={onToggle}>
+      <span>{title}</span>
+      <span aria-hidden="true">{open ? "−" : "+"}</span>
+    </button>
+    {open && <div className="inspector-accordion-content">{children}</div>}
+  </section>
+}
+
 function CoordinateField({ label, value, onChange, disabled = false, readOnly = false }: { label: string; value: number; onChange: (value: number) => void; disabled?: boolean; readOnly?: boolean }) {
   return <Field label={label}><input aria-label={label} type="number" step="0.1" value={value} disabled={disabled} readOnly={readOnly} onChange={(event) => onChange(numberValue(event))} /></Field>
 }
@@ -164,8 +175,11 @@ function SolidRotationFields({ rotation, disabled, onChange }: { rotation: Solid
   </>
 }
 
-export function PropertiesBar({ value, min, max, step, onChange, selectedPrimitive, selectedIds, selectedCount, selectedGroupId, allSelectedVisible, canCreateIntersection, onUpdatePrimitive, onToggleSelectedVisibility, onToggleSelectedLock, onCreateGroup, onDeleteGroup, onCreateIntersection, onAlign, onToggleBatchVisibility, onAddAnnotation, onAddEngineeringAnnotation, onCreateMeasurement, onCreateConstraint, onDeleteMeasurement, onCreateDerivative, onCreateTangent, onCreateIntegral, sections = allInspectorSections }: PropertiesBarProps) {
-  const shows = (section: InspectorSection) => sections.includes(section)
+export function PropertiesBar({ value, min, max, step, onChange, selectedPrimitive, selectedIds, selectedCount, selectedGroupId, allSelectedVisible, canCreateIntersection, onUpdatePrimitive, onToggleSelectedVisibility, onToggleSelectedLock, onDeleteSelected, onCreateGroup, onDeleteGroup, onCreateIntersection, onAlign, onToggleBatchVisibility, onAddAnnotation, onAddEngineeringAnnotation, onCreateMeasurement, onCreateConstraint, onDeleteMeasurement, onCreateDerivative, onCreateTangent, onCreateIntegral, sections = allInspectorSections }: PropertiesBarProps) {
+  const [openSections, setOpenSections] = useState<Record<InspectorSection, boolean>>({ data: true, appearance: false, constraints: false, engineering: true })
+  const usesExternalSections = sections.length < allInspectorSections.length
+  const shows = (section: InspectorSection) => sections.includes(section) && (usesExternalSections || openSections[section])
+  const toggleSection = (section: InspectorSection) => setOpenSections((current) => ({ ...current, [section]: !current[section] }))
   const selectedPoint = selectedPrimitive?.type === "point" ? selectedPrimitive : null
   const selectedPoint3 = selectedPrimitive?.type === "point3" ? selectedPrimitive : null
   const selectedLinear = selectedPrimitive?.type === "line" || selectedPrimitive?.type === "segment" || selectedPrimitive?.type === "ray" ? selectedPrimitive : null
@@ -198,6 +212,7 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
   const pathPrimitives = sceneDocument.primitives.filter((primitive) => ["line", "segment", "ray", "polyline", "circle", "arc", "function"].includes(primitive.type))
   const [animationMode, setAnimationMode] = useState<AnimationMode>("loop")
   const [animationPlaying, setAnimationPlaying] = useState(false)
+  const [animationOpen, setAnimationOpen] = useState(false)
   const animationRef = useRef<AnimationState>({ value, direction: 1, mode: "loop", playing: false, speed: 0.2 })
   const selected3dPrimitives = selectedIds.map((id) => sceneDocument.primitives.find((primitive) => primitive.id === id)).filter((primitive): primitive is PrimitiveSpec => Boolean(primitive))
   const measurementOptions = measurementOptionsFor(sceneDocument.workspace, selected3dPrimitives)
@@ -368,27 +383,31 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
 
   return <section className="panel-section properties" aria-label="属性检查器">
     <div className="inspector-heading"><div><span className="panel-kicker">选中对象</span><h2 className="panel-title">属性面板</h2></div><span className="inspector-indicator" aria-hidden="true" /></div>
-    <div className="animation-controls" aria-label="动态控制">
-      <span className="properties-label"><strong>动画演示</strong><small>参数动态演变</small></span>
-      <div className="property-actions">
-        <button type="button" aria-label={animationPlaying ? "暂停动画" : "播放动画"} onClick={toggleAnimation}>{animationPlaying ? "暂停" : "播放"}</button>
-        <button type="button" aria-label="停止动画" onClick={stopAnimation} disabled={!animationPlaying}>停止</button>
-        <select aria-label="动画模式" value={animationMode} onChange={(event) => setAnimationMode(event.target.value as AnimationMode)}>
-          <option value="loop">循环</option>
-          <option value="once">单次</option>
-          <option value="pingPong">往返</option>
-        </select>
+    {selectedPrimitive && <div className="inspector-selected-heading"><div><span className="panel-kicker">当前图元</span><h3>{selectedPrimitive.label ?? selectedPrimitive.id}</h3></div><span className="property-type-badge">{primitiveTypeLabels[selectedPrimitive.type]}</span><div className="inspector-quick-actions"><button type="button" aria-label={selectedPrimitive.locked ? "解锁图元" : "锁定图元"} onClick={onToggleSelectedLock}>{selectedPrimitive.locked ? "解锁" : "锁定"}</button><button type="button" aria-label="快速删除对象" disabled={selectedPrimitive.locked} onClick={onDeleteSelected}>删除</button></div></div>}
+    {!selectedPrimitive && <div className="inspector-empty-state"><div className="inspector-empty-icon" aria-hidden="true">⌁</div><strong>未选择任何图元</strong><span>在画布中点击点、直线或椭圆即可配置几何参数与外观参数</span></div>}
+    {selectedPrimitive && !usesExternalSections && <>
+      <InspectorAccordion title="几何参数" open={openSections.data} onToggle={() => toggleSection("data")} />
+      <InspectorAccordion title="外观样式" open={openSections.appearance} onToggle={() => toggleSection("appearance")} />
+      <InspectorAccordion title="几何约束" open={openSections.constraints} onToggle={() => toggleSection("constraints")} />
+    </>}
+    {selectedPrimitive && <InspectorAccordion title="动效演示" open={animationOpen} onToggle={() => setAnimationOpen((open) => !open)}>
+      <div className="animation-controls" aria-label="动态控制">
+        <span className="properties-label"><strong>动画演示</strong></span>
+        <div className="property-actions">
+          <button type="button" aria-label={animationPlaying ? "暂停动画" : "播放动画"} onClick={toggleAnimation}>{animationPlaying ? "暂停" : "播放"}</button>
+          <button type="button" aria-label="停止动画" onClick={stopAnimation} disabled={!animationPlaying}>停止</button>
+          <select aria-label="动画模式" value={animationMode} onChange={(event) => setAnimationMode(event.target.value as AnimationMode)}>
+            <option value="loop">循环</option>
+            <option value="once">单次</option>
+            <option value="pingPong">往返</option>
+          </select>
+        </div>
       </div>
-    </div>
+    </InspectorAccordion>}
     {shows("data") && selectedPoint3 && <div className="primitive-properties"><h3>空间点坐标</h3><Vector3Fields prefix="坐标" value={selectedPoint3.position} disabled={!editable || selectedPoint3.binding?.kind !== "free"} onChange={updatePoint3} /><p className="footer-note">点位置是空间构造的真源；线、面和实体通过点引用联动。</p></div>}
     {shows("data") && selectedSolid && <div className="primitive-properties"><h3>立体几何属性</h3>{selectedSolid.type === "cube" && <><Vector3Fields prefix="原点" value={selectedSolid.origin} disabled={!editable} onChange={(axis, next) => onUpdatePrimitive({ origin3: { ...selectedSolid.origin, [axis]: next } })} /><Vector3Fields prefix="尺寸" value={selectedSolid.size} disabled={!editable} onChange={(axis, next) => onUpdatePrimitive({ size3: { ...selectedSolid.size, [axis]: Math.max(0.01, next) } })} /></>}{selectedSolid.type === "pyramid" && <><Vector3Fields prefix="底面中心" value={selectedSolid.baseCenter} disabled={!editable} onChange={(axis, next) => onUpdatePrimitive({ baseCenter3: { ...selectedSolid.baseCenter, [axis]: next } })} /><CoordinateField label="底面尺寸 X" value={selectedSolid.baseSize.x} disabled={!editable} onChange={(next) => onUpdatePrimitive({ baseSize3: { ...selectedSolid.baseSize, x: Math.max(0.01, next) } })} /><CoordinateField label="底面尺寸 Y" value={selectedSolid.baseSize.y} disabled={!editable} onChange={(next) => onUpdatePrimitive({ baseSize3: { ...selectedSolid.baseSize, y: Math.max(0.01, next) } })} /><CoordinateField label="高度" value={selectedSolid.height} disabled={!editable} onChange={(next) => onUpdatePrimitive({ height: Math.max(0.01, next) })} /></>}{(selectedSolid.type === "cylinder" || selectedSolid.type === "cone") && <><Vector3Fields prefix="中心" value={selectedSolid.center} disabled={!editable} onChange={(axis, next) => onUpdatePrimitive({ center3: { ...selectedSolid.center, [axis]: next } })} /><CoordinateField label="半径 3D" value={selectedSolid.radius} disabled={!editable} onChange={(next) => onUpdatePrimitive({ radius3: Math.max(0.01, next) })} /><CoordinateField label="高度" value={selectedSolid.height} disabled={!editable} onChange={(next) => onUpdatePrimitive({ height: Math.max(0.01, next) })} /><Field label="分段数"><input aria-label="分段数" type="number" min="3" max="256" step="1" disabled={!editable} value={selectedSolid.segments} onChange={(event) => onUpdatePrimitive({ segments: Math.max(3, Math.min(256, Math.round(numberValue(event)))) })} /></Field></>}</div>}
     {shows("data") && selectedSolid && <div className="primitive-properties"><h3>朝向</h3><SolidRotationFields rotation={selectedSolid.rotation} disabled={!editable} onChange={(rotation) => onUpdatePrimitive({ rotation3: rotation })} /></div>}
     {shows("data") && selectedPlane3 && <div className="primitive-properties"><h3>平面大小</h3><Field label="半边长（世界单位）"><input aria-label="平面半边长" type="number" min="0.1" step="0.5" placeholder="自动" disabled={!editable} value={selectedPlane3.halfSize ?? ""} onChange={(event) => onUpdatePrimitive({ halfSize: event.target.value === "" ? null : Math.max(0.1, numberValue(event)) })} /></Field><div className="property-actions" aria-label="平面大小操作"><button type="button" disabled={!editable || selectedPlane3.halfSize === undefined} onClick={() => onUpdatePrimitive({ halfSize: null })}>恢复自动</button></div><p className="footer-note">留空表示仍按场景自动适配；填入数值后，平面画出的范围由该半边长决定。</p></div>}
-    {shows("data") && !selectedPrimitive && <>
-      <label className="properties-label" htmlFor="slope-slider"><span>直线斜率参数</span><strong className="metric">{value.toFixed(2)}</strong></label>
-      <input id="slope-slider" aria-label="直线斜率" type="range" min={min} max={max} step={step} value={value} onChange={(event) => onChange(numberValue(event))} />
-      <p className="footer-note">选择图元后，这里会切换为对应的几何属性。</p>
-    </>}
     {shows("appearance") && selectedPrimitive && <div className="primitive-properties">
       <div className="property-card-heading"><div><span className="property-kicker">当前图元</span><h3>{selectedPrimitive.label ?? selectedPrimitive.id}</h3></div><span className="property-type-badge">{primitiveTypeLabels[selectedPrimitive.type]}</span></div>
       <h3 className="property-subheading">外观</h3>
@@ -405,6 +424,7 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
     </div>}
     {shows("constraints") && visibleMeasurementOptions.length > 0 && <div className="primitive-properties"><h3>教学测量</h3><p className="footer-note">结果会保留来源对象，并在点移动后自动重算。</p>{selectedFacePair && <p className="measurement-guidance">已选两个面：二面角内角读实体内部夹角，外角读它的补角。</p>}<div className="property-actions" aria-label="三维测量工具">{visibleMeasurementOptions.map((option) => <button key={`${option.metric}-${option.dihedralKind ?? "default"}`} type="button" onClick={() => onCreateMeasurement(option.metric, option.dihedralKind)}>{option.label}</button>)}</div></div>}
     {shows("constraints") && constraintOptions.length > 0 && <div className="primitive-properties"><h3>空间约束</h3><p className="footer-note">约束保留来源 ID，并在约束列表显示残差和冲突解释。</p><div className="property-actions" aria-label="三维约束工具">{constraintOptions.map((option) => <button key={option.type} type="button" onClick={() => onCreateConstraint(option.type, option.targets)}>{option.label}</button>)}</div></div>}
+    {shows("constraints") && selectedPrimitive && constraintOptions.length === 0 && <div className="inspector-empty-constraints"><span>暂无约束</span><button type="button" disabled title="当前图元暂无可用约束">+添加</button></div>}
     {shows("engineering") && engineeringAnnotationOptions.length > 0 && <div className="primitive-properties"><h3>工程标注</h3><p className="footer-note">标注保留空间来源，并在四视图中随来源对象自动重算。</p><div className="property-actions" aria-label="工程标注工具">{engineeringAnnotationOptions.map((option) => <button key={option.kind} type="button" aria-label={option.ariaLabel} onClick={() => onAddEngineeringAnnotation(option.kind)}>{option.label}</button>)}</div></div>}
     {shows("data") && selectedIds.length === 1 && sceneDocument.measurements.filter((measurement) => measurement.sourceIds.includes(selectedIds[0])).map((measurement) => <div className="primitive-properties" key={measurement.id}><h3>{measurement.metric === "dihedral" ? (measurement.dihedralKind === "exterior" ? "二面角外角" : "二面角内角") : `${measurement.metric}测量`}</h3><p className="footer-note">来源：{measurement.sourceIds.join("、")} · {measurement.precision === "numeric-approximation" ? "数值近似" : "输入精确"}</p><div className="metric-grid"><span>结果<strong>{measurement.value === undefined ? "—" : `${measurement.value.toFixed(3)} ${measurement.unit ?? ""}`}</strong></span><span>状态<strong>{measurement.status}</strong></span></div><p className="footer-note">{measurement.explanation}</p><div className="property-actions"><button type="button" aria-label={`删除测量 ${measurement.id}`} onClick={() => onDeleteMeasurement(measurement.id)}>删除测量</button></div></div>)}
      {shows("data") && showSlopeParameter && <div className="primitive-properties"><label className="properties-label" htmlFor="selected-slope-slider"><span>直线斜率参数</span><strong className="metric">{value.toFixed(2)}</strong></label><input id="selected-slope-slider" aria-label="选中直线斜率" type="range" disabled={!editable} min={min} max={max} step={step} value={value} onChange={(event) => onChange(numberValue(event))} /></div>}

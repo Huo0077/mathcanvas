@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises"
+
 import { expect, test } from "@playwright/test"
 
 test("workbench updates the intersection and adds a point", async ({ page }) => {
@@ -7,7 +9,8 @@ test("workbench updates the intersection and adds a point", async ({ page }) => 
   await expect(page.getByRole("img", { name: "几何画布" })).toBeVisible()
   await expect(page.getByRole("img", { name: "几何画布" }).locator('[data-intersection-info="true"]')).toHaveCount(0)
 
-  await page.getByRole("slider", { name: "直线斜率" }).fill("0.25")
+  await page.locator(".algebra-panel").getByText("参数直线", { exact: true }).click()
+  await page.getByRole("slider", { name: "选中直线斜率" }).fill("0.25")
   await expect(page.getByRole("img", { name: "几何画布" }).locator('[data-intersection-info="true"]')).toHaveCount(0)
   await page.getByText("交点 P", { exact: true }).click()
   await expect(page.getByText(/交点 P \(8\.00, 0\.00\)/)).toBeVisible()
@@ -37,14 +40,18 @@ test("opens and restores an mgeo document through the file input", async ({ page
   })
 
   await expect(page.getByText("恢复点").first()).toBeVisible()
-  await expect(page.getByText(/revision 7/)).toBeVisible()
+  const save = page.waitForEvent("download")
+  await page.getByRole("banner").getByRole("button", { name: "保存 .mgeo" }).click()
+  const savedPath = await (await save).path()
+  const savedDocument = JSON.parse(await readFile(savedPath!, "utf8")) as { document: { revision: number } }
+  expect(savedDocument.document.revision).toBe(7)
 })
 
 test("switches workspaces and exports SVG and CSV files", async ({ page }) => {
   await page.goto("/")
 
-  // A fresh session opens on 立体几何 and the retired calculus workspace is not offered at all.
-  await expect(page.getByRole("button", { name: "立体几何" })).toHaveAttribute("aria-pressed", "true")
+  // A fresh session opens on 圆锥曲线 and the retired calculus workspace is not offered at all.
+  await expect(page.getByRole("button", { name: "圆锥曲线" })).toHaveAttribute("aria-pressed", "true")
   await expect(page.getByRole("button", { name: "微积分" })).toHaveCount(0)
 
   await page.getByRole("button", { name: "圆锥曲线" }).click()
@@ -103,7 +110,7 @@ test("restores the latest workspace draft after reload", async ({ page }) => {
   await expect(page.getByText("新点 A").first()).toBeVisible()
   await page.reload()
   await expect(page.getByText("新点 A").first()).toBeVisible()
-  await expect(page.getByText(/草稿自动保存/)).toBeVisible()
+  await expect(page.getByRole("status", { name: "操作提示" })).toContainText("点击图元查看属性")
 })
 
 test("zooms the conics canvas and keeps every crossing of a line and a curve", async ({ page }) => {

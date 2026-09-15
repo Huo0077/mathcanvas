@@ -14,12 +14,72 @@ function algebraRow(label: string): HTMLElement {
   return row as HTMLElement
 }
 
+function openInspectorSection(label: string): void {
+  const trigger = screen.getByRole("button", { name: label })
+  if (trigger.getAttribute("aria-expanded") === "false") fireEvent.click(trigger)
+}
+
 describe("MathCanvas workbench", () => {
   beforeEach(() => {
     localStorage.clear()
     // `replace` deliberately keeps other workspaces' documents, so tests need a full store reset.
     const document = createDemoDocument()
     useSceneStore.setState({ document, workspaceDocuments: { [document.workspace]: document }, history: [], future: [], previewBase: null, error: null, treeTab: "model", expandedIds: ["sheet-1"], filterQuery: "" })
+  })
+
+  it("renders each workspace command from the shared Ribbon only once", () => {
+    render(<App />)
+
+    expect(screen.getAllByRole("button", { name: "添加点" })).toHaveLength(1)
+
+    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    expect(screen.getAllByRole("button", { name: "添加立方体" })).toHaveLength(1)
+
+    fireEvent.click(screen.getByRole("button", { name: "工程制图" }))
+    expect(screen.getAllByRole("button", { name: "导出 SVG" })).toHaveLength(1)
+  })
+
+  it("shows a focused empty Inspector before an object is selected", () => {
+    render(<App />)
+
+    expect(screen.getByText("未选择任何图元")).toBeTruthy()
+    expect(screen.getByText("在画布中点击点、直线或椭圆即可配置几何参数与外观参数")).toBeTruthy()
+    expect(screen.queryByRole("slider", { name: "直线斜率" })).toBeNull()
+    expect(screen.queryByRole("button", { name: "播放动画" })).toBeNull()
+  })
+
+  it("opens geometry parameters by default and keeps appearance collapsed", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(screen.getAllByText("新点 A")[0])
+
+    expect(screen.getByRole("button", { name: "几何参数" }).getAttribute("aria-expanded")).toBe("true")
+    expect(screen.getByRole("button", { name: "外观样式" }).getAttribute("aria-expanded")).toBe("false")
+    expect(screen.queryByLabelText("线条颜色")).toBeNull()
+
+    fireEvent.click(screen.getByRole("button", { name: "外观样式" }))
+    expect(screen.getByLabelText("线条颜色")).toBeTruthy()
+  })
+
+  it("updates the bottom status prompt as a line is created", () => {
+    render(<App />)
+    const status = screen.getByRole("status", { name: "操作提示" })
+    const canvas = screen.getByRole("img", { name: "几何画布" })
+
+    fireEvent.click(screen.getByRole("button", { name: "添加直线" }))
+    expect(status.textContent).toContain("第1步")
+    fireEvent.click(canvas, { clientX: 320, clientY: 180 })
+    expect(status.textContent).toContain("第2步")
+  })
+
+  it("explains when the selected object has no geometry constraints", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(screen.getAllByText("新点 A")[0])
+    openInspectorSection("几何约束")
+
+    expect(screen.getByText("暂无约束")).toBeTruthy()
+    expect(screen.getByRole("button", { name: "+添加" })).toBeTruthy()
   })
 
   it("routes the CAD workspace to four engineering drawing views", () => {
@@ -33,7 +93,6 @@ describe("MathCanvas workbench", () => {
     expect(screen.queryByRole("button", { name: "添加点" })).toBeNull()
     expect(screen.getByRole("region", { name: "工程状态栏" }).textContent).toContain("工程制图根据当前文档的 3D 点、棱和面显示四个视图。")
 
-    fireEvent.click(screen.getByRole("button", { name: "导出" }))
     expect((screen.getByRole("button", { name: "导出 SVG" }) as HTMLButtonElement).disabled).toBe(false)
   })
 
@@ -101,8 +160,7 @@ describe("MathCanvas workbench", () => {
   it("undoes and redoes with the keyboard, the way most people expect", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "工程制图" }))
-    fireEvent.click(screen.getByRole("button", { name: "创建" }))
-    fireEvent.click(screen.getByRole("button", { name: "空间点" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
     expect(useSceneStore.getState().document.primitives).toHaveLength(1)
 
     fireEvent.keyDown(window, { key: "z", ctrlKey: true })
@@ -190,7 +248,6 @@ describe("MathCanvas workbench", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "工程制图" }))
     fireEvent.click(screen.getByRole("button", { name: "2D 绘图" }))
-    fireEvent.click(screen.getByRole("button", { name: "创建" }))
     fireEvent.click(screen.getByRole("button", { name: "添加点" }))
 
     expect(useSceneStore.getState().document.primitives[0]).toMatchObject({ type: "point", layerId: "layer-geometry" })
@@ -208,7 +265,6 @@ describe("MathCanvas workbench", () => {
     fireEvent.click(screen.getByRole("tab", { name: "图层树" }))
     fireEvent.click(screen.getByRole("button", { name: "隐藏 几何" }))
     fireEvent.click(screen.getByRole("button", { name: "2D 绘图" }))
-    fireEvent.click(screen.getByRole("button", { name: "创建" }))
     fireEvent.click(screen.getByRole("button", { name: "添加点" }))
 
     expect(useSceneStore.getState().document.primitives).toHaveLength(0)
@@ -234,7 +290,8 @@ describe("MathCanvas workbench", () => {
     const canvas = screen.getByRole("img", { name: "几何画布" })
     expect(canvas.querySelector('[data-primitive-type="intersection"] [data-intersection-info="true"]')).toBeNull()
     expect(canvas.querySelector('[data-primitive-type="intersection"] [data-hit-target="true"]')?.getAttribute("r")).toBe("14")
-    const slider = screen.getByRole("slider", { name: "直线斜率" })
+    fireEvent.click(screen.getAllByText("参数直线")[0])
+    const slider = screen.getByRole("slider", { name: "选中直线斜率" })
     fireEvent.change(slider, { target: { value: "0.25" } })
     expect(canvas.querySelector('[data-primitive-type="intersection"] [data-intersection-info="true"]')).toBeNull()
     fireEvent.click(screen.getAllByText("交点 P")[0])
@@ -331,7 +388,7 @@ describe("MathCanvas workbench", () => {
 
     expect(screen.getByRole("region", { name: "属性检查器" })).toBeTruthy()
     expect(screen.getByText("当前图元")).toBeTruthy()
-    expect(screen.getByText("外观")).toBeTruthy()
+    expect(screen.getByRole("button", { name: "外观样式" })).toBeTruthy()
     expect(screen.getByText("直线", { selector: ".property-type-badge" })).toBeTruthy()
   })
 
@@ -346,7 +403,8 @@ describe("MathCanvas workbench", () => {
 
   it("drags a line body and updates its dependent intersection", () => {
     render(<App />)
-    fireEvent.change(screen.getByRole("slider", { name: "直线斜率" }), { target: { value: "0.5" } })
+    fireEvent.click(screen.getAllByText("参数直线")[0])
+    fireEvent.change(screen.getByRole("slider", { name: "选中直线斜率" }), { target: { value: "0.5" } })
     const canvas = screen.getByRole("img", { name: "几何画布" })
     const line = canvas.querySelectorAll('[data-primitive-type="line"]')[1]
     const before = useSceneStore.getState().document.primitives.find((primitive) => primitive.type === "intersection")
@@ -425,6 +483,7 @@ describe("MathCanvas workbench", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "添加点" }))
     fireEvent.click(screen.getAllByText("新点 A").at(-1)!)
+    openInspectorSection("外观样式")
     fireEvent.change(screen.getByRole("textbox", { name: "标注文本" }), { target: { value: "A" } })
     fireEvent.click(screen.getByRole("button", { name: "添加点标注" }))
 
@@ -502,6 +561,7 @@ describe("MathCanvas workbench", () => {
     expect(canvas.querySelectorAll('g[data-primitive-type="circle"] > circle:not([data-hit-target="true"])')).toHaveLength(1)
     fireEvent.change(screen.getByRole("spinbutton", { name: "半径" }), { target: { value: "4" } })
     expect((screen.getByRole("spinbutton", { name: "半径" }) as HTMLInputElement).value).toBe("4")
+    openInspectorSection("外观样式")
     fireEvent.change(screen.getByLabelText("线条颜色"), { target: { value: "#ff0000" } })
     expect(canvas.querySelector('g[data-primitive-type="circle"] > circle:not([data-hit-target="true"])')?.getAttribute("stroke")).toBe("#ff0000")
   })
@@ -606,6 +666,7 @@ describe("MathCanvas workbench", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "添加椭圆" }))
     fireEvent.change(screen.getByRole("spinbutton", { name: "纵向半径" }), { target: { value: "5" } })
+    openInspectorSection("外观样式")
     fireEvent.change(screen.getByLabelText("填充颜色"), { target: { value: "#ffff00" } })
 
     expect(screen.getByText(/焦点：\(0\.00, 3\.00\) \/ \(0\.00, -3\.00\)/)).toBeTruthy()
@@ -628,6 +689,7 @@ describe("MathCanvas workbench", () => {
   it("applies common style properties to a selected line", () => {
     render(<App />)
     fireEvent.click(screen.getAllByText("y = 0")[0])
+    openInspectorSection("外观样式")
     fireEvent.change(screen.getByLabelText("线条颜色"), { target: { value: "#ff0000" } })
     fireEvent.change(screen.getByRole("spinbutton", { name: "线宽" }), { target: { value: "7" } })
     fireEvent.change(screen.getByRole("spinbutton", { name: "透明度" }), { target: { value: "0.5" } })
@@ -642,6 +704,8 @@ describe("MathCanvas workbench", () => {
 
   it("exposes play, pause, stop, and animation mode controls", () => {
     render(<App />)
+    fireEvent.click(screen.getAllByText("参数直线")[0])
+    openInspectorSection("动效演示")
 
     fireEvent.click(screen.getByRole("button", { name: "播放动画" }))
     expect(screen.getByRole("button", { name: "暂停动画" })).toBeTruthy()
@@ -805,9 +869,9 @@ describe("MathCanvas workbench", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "添加点" }))
     fireEvent.click(screen.getAllByText("新点 A")[0])
-    fireEvent.click(screen.getByRole("button", { name: "锁定对象" }))
+    fireEvent.click(screen.getByRole("button", { name: "锁定图元" }))
 
-    expect(screen.getByRole("button", { name: "解锁对象" })).toBeTruthy()
+    expect(screen.getByRole("button", { name: "解锁图元" })).toBeTruthy()
     expect((screen.getByRole("button", { name: "删除对象" }) as HTMLButtonElement).disabled).toBe(true)
   })
 
@@ -851,6 +915,7 @@ describe("MathCanvas workbench", () => {
     fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
     fireEvent.click(algebraRow("A"))
     fireEvent.click(algebraRow("B"), { shiftKey: true })
+    openInspectorSection("几何约束")
     fireEvent.click(screen.getByRole("button", { name: "距离" }))
 
     expect(useSceneStore.getState().document.measurements).toHaveLength(1)
@@ -875,6 +940,7 @@ describe("MathCanvas workbench", () => {
     fireEvent.click(screen.getByRole("button", { name: "展开 立方体 1 拓扑 的子对象" }))
     fireEvent.click(algebraRow("面 1"))
     fireEvent.click(algebraRow("面 2"), { shiftKey: true })
+    openInspectorSection("几何约束")
 
     expect(globalThis.document.querySelectorAll(".object-row.selected")).toHaveLength(2)
     expect(Array.from(globalThis.document.querySelectorAll(".object-row.selected .object-dot")).map((dot) => dot.getAttribute("data-object-type"))).toEqual(["face3", "face3"])
@@ -935,11 +1001,11 @@ describe("MathCanvas workbench", () => {
   it("explains an invalid spatial construction instead of creating objects", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
-    fireEvent.click(screen.getByRole("button", { name: "由选中点创建空间直线" }))
+    const command = screen.getByRole("button", { name: "由选中点创建空间直线" }) as HTMLButtonElement
 
-    // The message has to say how to select, not just that the selection is wrong.
-    expect(screen.getByRole("alert").textContent).toContain("Shift")
-    expect(screen.getByRole("alert").textContent).toContain("空间点")
+    expect(command.disabled).toBe(true)
+    expect(command.title).toContain("Shift")
+    expect(command.title).toContain("空间点")
     expect(useSceneStore.getState().document.primitives.some((primitive) => primitive.type === "line3")).toBe(false)
   })
 
@@ -947,6 +1013,7 @@ describe("MathCanvas workbench", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
     fireEvent.click(screen.getByRole("button", { name: "添加立方体" }))
+    openInspectorSection("外观样式")
 
     fireEvent.change(screen.getByLabelText("线条颜色"), { target: { value: "#ff0000" } })
     fireEvent.change(screen.getByLabelText("填充颜色"), { target: { value: "#00ff00" } })

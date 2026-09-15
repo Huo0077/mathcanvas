@@ -16,7 +16,6 @@ test("drafts on a new layer, hides it, and keeps the layout after a refresh", as
   await page.getByRole("button", { name: "新建图层" }).click()
   await page.getByRole("button", { name: "图层 1", exact: true }).click()
   await page.getByRole("button", { name: "2D 绘图" }).click()
-  await page.getByRole("button", { name: "创建", exact: true }).click()
   await page.getByRole("button", { name: "添加直线" }).click()
 
   const surface = page.getByRole("img", { name: /模型视图/ })
@@ -55,8 +54,7 @@ test("undoes and redoes from both the buttons and the keyboard", async ({ page }
   await expect(undo).toBeDisabled()
   await expect(redo).toBeDisabled()
 
-  await page.getByRole("button", { name: "创建", exact: true }).click()
-  await page.getByRole("button", { name: "空间点", exact: true }).click()
+  await page.getByRole("button", { name: "添加空间点", exact: true }).click()
   await expect.poll(revision).toBe(1)
   await expect(undo).toBeEnabled()
   await expect(redo).toBeDisabled()
@@ -87,7 +85,6 @@ test("keeps hidden views out of the exported SVG", async ({ page }) => {
   const tree = page.getByRole("region", { name: "模型与图纸树" })
   await tree.getByRole("button", { name: "隐藏 主视图" }).click()
 
-  await page.getByRole("button", { name: "导出", exact: true }).click()
   const download = page.waitForEvent("download")
   await page.getByRole("button", { name: "导出 SVG", exact: true }).click()
   const path = await (await download).path()
@@ -114,10 +111,11 @@ test("supports keyboard selection, command entry, cancellation and inspector tab
   await page.keyboard.press("ArrowLeft")
   await expect(inspector.getByRole("tab", { name: "数据" })).toHaveAttribute("aria-selected", "true")
 
-  await page.getByRole("button", { name: "创建", exact: true }).click()
-  await page.getByRole("button", { name: "空间点", exact: true }).click()
-  await expect(page.getByRole("region", { name: "工程状态栏" })).toContainText("空间点")
+  await page.getByRole("button", { name: "2D 绘图" }).click()
+  await page.getByRole("button", { name: "添加直线", exact: true }).click()
+  await expect(page.getByRole("region", { name: "工程状态栏" })).toContainText("第1步：点击确定直线的第一个点")
 
   await page.keyboard.press("Escape")
-  await expect(page.getByRole("button", { name: "空间点", exact: true })).toHaveCount(0)
+  await expect(page.getByRole("region", { name: "工程状态栏" })).toContainText("2D 绘图：")
+  await expect(page.locator(".engineering-drawing-draft")).toHaveCount(0)
 })

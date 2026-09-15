@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react"
 
 import type { Measurement3, Polyhedron3Primitive, PrimitiveSpec, Workspace } from "@draw/dsl"
 
-interface AlgebraViewProps { primitives: PrimitiveSpec[]; selectedIds: string[]; onSelect: (id: string, additive: boolean) => void; onToggle: (id: string, visible: boolean) => void; measurements?: Measurement3[]; workspace?: Workspace; filter?: string }
+interface AlgebraViewProps { primitives: PrimitiveSpec[]; selectedIds: string[]; onSelect: (id: string, additive: boolean) => void; onToggle: (id: string, visible: boolean) => void; measurements?: Measurement3[]; workspace?: Workspace; filter?: string; className?: string; id?: string }
 
 const measurementLabels: Record<Measurement3["metric"], string> = { length: "长度", distance: "距离", angle: "角度", area: "面积", volume: "体积", dihedral: "二面角" }
 
@@ -48,7 +48,7 @@ function solidGroupLabel(solid: Polyhedron3Primitive, byId: Map<string, Primitiv
   return construction?.kind === "template" ? `${base} 拓扑` : base
 }
 
-export function AlgebraView({ primitives, selectedIds, onSelect, onToggle, measurements = [], workspace, filter = "" }: AlgebraViewProps) {
+export function AlgebraView({ primitives, selectedIds, onSelect, onToggle, measurements = [], workspace, filter = "", className = "panel", id }: AlgebraViewProps) {
   const [expandedSolids, setExpandedSolids] = useState<string[]>([])
   const byId = new Map(primitives.map((primitive) => [primitive.id, primitive]))
   const solids = workspace === "geometry3d" ? primitives.filter((primitive): primitive is Polyhedron3Primitive => primitive.type === "polyhedron3") : []
@@ -93,7 +93,7 @@ export function AlgebraView({ primitives, selectedIds, onSelect, onToggle, measu
     </div>
   }
 
-  return <aside className="panel"><section className="panel-section algebra-panel"><div className="panel-heading"><div><span className="panel-kicker">对象管理</span><h2 className="panel-title">代数区</h2></div><span className="object-count">{primitives.length}</span></div><div className="object-list">
+  return <aside id={id} className={className} data-mobile-dock="objects"><section className="panel-section algebra-panel"><div className="panel-heading"><div><span className="panel-kicker">对象管理</span><h2 className="panel-title">代数区</h2></div><span className="object-count">{primitives.length}</span></div><div className="object-list">
     {topLevel.map((primitive) => primitive.type === "polyhedron3" ? renderSolid(primitive) : renderRow(primitive))}
     {measurements.length > 0 && <div className="object-group"><div className="object-group-label">教学测量</div>{measurements.map((measurement) => <div className="object-row measurement-row" key={measurement.id}><div className="object-meta"><span className="object-dot" data-object-type="measurement3" aria-hidden="true" /><span className="object-name">{measurement.metric === "dihedral" ? (measurement.dihedralKind === "exterior" ? "二面角外角" : "二面角内角") : `${measurementLabels[measurement.metric]}测量`}</span><span className="measurement-status" data-status={measurement.status}>{measurement.status}</span></div><small className="measurement-source">{measurement.sourceIds.join("、")} · {measurement.precision === "numeric-approximation" ? "数值近似" : "输入精确"}</small><small className="measurement-explanation">{measurement.explanation}</small></div>)}</div>}
   </div></section></aside>

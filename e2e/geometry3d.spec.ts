@@ -67,6 +67,7 @@ test("picks spatial points and turns them into a teaching measurement", async ({
   await algebra.getByText("A", { exact: true }).click()
   await algebra.getByText("B", { exact: true }).click({ modifiers: ["Shift"] })
 
+  await page.getByRole("region", { name: "属性检查器" }).getByRole("button", { name: "几何约束" }).click()
   await page.locator('[aria-label="三维测量工具"]').getByRole("button", { name: "距离", exact: true }).click()
 
   await expect(algebra.getByText("教学测量")).toBeVisible()
@@ -120,10 +121,12 @@ test("selects a solid by clicking its body and recolours it repeatedly", async (
   const box = (await canvas.boundingBox())!
   // Click far outside the solid but inside the scene, clear of the overlay controls at the top corners.
   await page.mouse.click(box.x + 6, box.y + box.height * 0.6)
-  await expect(page.locator(".property-card-heading h3")).toHaveCount(0)
+  const selectedHeading = page.locator(".inspector-selected-heading h3")
+  await expect(selectedHeading).toHaveCount(0)
 
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
-  await expect(page.locator(".property-card-heading h3")).toHaveText("立方体 1")
+  await expect(selectedHeading).toHaveText("立方体 1")
+  await page.getByRole("region", { name: "属性检查器" }).getByRole("button", { name: "外观样式" }).click()
 
   for (const colour of ["#ff0000", "#00ff00", "#8b5cf6"]) {
     await page.getByLabel("填充颜色").fill(colour)
@@ -139,7 +142,7 @@ test("picks the vertex under the cursor instead of one hidden behind the solid",
   await page.getByRole("button", { name: "立体几何" }).click()
   await page.getByRole("button", { name: "添加立方体" }).click()
 
-  const heading = page.locator(".property-card-heading h3")
+  const heading = page.locator(".inspector-selected-heading h3")
   const box = (await page.locator("[data-3d-scene] canvas").boundingBox())!
 
   // The camera looks from (+x, +y, +z), so this corner is the nearest one and its handle is reachable.
@@ -204,17 +207,18 @@ test("builds a visible plane from three selected points", async ({ page }) => {
   await page.getByRole("button", { name: "立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
-  const hint = page.locator("[data-point3-hint]")
-  await expect(hint).toContainText("按住 Shift")
+  const planeCommand = page.getByRole("button", { name: "由选中点创建空间平面" })
+  await expect(planeCommand).toHaveAttribute("title", "请先按住 Shift 点选 3 个不共线的空间点")
 
   // Default placement must keep the first three points off a single line, or a plane is impossible.
   for (let index = 0; index < 3; index += 1) await page.getByRole("button", { name: "添加空间点" }).click()
   const algebra = page.locator(".algebra-panel")
   await algebra.getByText("A", { exact: true }).click()
   await algebra.getByText("B", { exact: true }).click({ modifiers: ["Shift"] })
-  await expect(hint).toContainText("可以创建直线")
+  await expect(page.getByRole("button", { name: "由选中点创建空间直线" })).toBeEnabled()
   await algebra.getByText("C", { exact: true }).click({ modifiers: ["Shift"] })
-  await expect(hint).toContainText("平面")
+  await expect(planeCommand).toBeEnabled()
+  await expect(planeCommand).toHaveAttribute("title", "按住 Shift 点选三个不共线空间点")
 
   await page.getByRole("button", { name: "由选中点创建空间平面" }).click()
 
@@ -223,6 +227,7 @@ test("builds a visible plane from three selected points", async ({ page }) => {
   // The plane used to exist only in the document; now the scene actually draws it.
   await expect(scene).toHaveAttribute("data-plane-count", "1")
   await algebra.getByText("空间平面 1").first().click()
+  await page.getByRole("region", { name: "属性检查器" }).getByRole("button", { name: "外观样式" }).click()
   await expect(page.getByLabel("填充颜色")).toBeEnabled()
 })
 
@@ -432,6 +437,7 @@ test("explains a dihedral angle with its common edge and canvas markers", async 
   await algebra.getByText("面 1", { exact: true }).click()
   await algebra.getByText("面 3", { exact: true }).click({ modifiers: ["Shift"] })
 
+  await page.getByRole("region", { name: "属性检查器" }).getByRole("button", { name: "几何约束" }).click()
   await page.getByRole("button", { name: "二面角内角", exact: true }).click()
 
   await expect(algebra.getByText("二面角内角", { exact: true })).toBeVisible()

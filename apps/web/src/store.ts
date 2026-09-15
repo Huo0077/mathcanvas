@@ -42,8 +42,8 @@ function appendHistory(history: GeometryDocument[], document: GeometryDocument):
   return [...history, document].slice(-MAX_HISTORY_ENTRIES)
 }
 
-/** The app opens on the 3D workspace now that the calculus workspace has been retired. */
-const initialDocument = withDocumentLayout(createEmptyDocument("geometry3d"))
+/** Start new sessions in the planar workspace while keeping other workspaces available on demand. */
+const initialDocument = withDocumentLayout(createEmptyDocument("conics"))
 const initialPreferences = loadWorkbenchPreferences()
 
 export const useSceneStore = create<SceneState>((set, get) => ({

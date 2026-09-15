@@ -22,6 +22,10 @@
   --radius-lg: 20px;
   --shadow-panel: 0 16px 40px rgb(47 42 78 / 8%);
   --shadow-card: 0 8px 24px rgb(47 42 78 / 6%);
-  --panel-right-width: 344px;
+  --topbar-height: 40px;
+  --tabbar-height: 32px;
+  --ribbon-height: 80px;
+  --panel-left-width: 240px;
+  --panel-right-width: 292px;
   --control-height: 38px;
 }

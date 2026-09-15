@@ -11,7 +11,6 @@ test("opens the CAD workspace with four accessible engineering views", async ({ 
   await expect(page.getByRole("button", { name: "添加点" })).toHaveCount(0)
   await expect(page.getByRole("region", { name: "工程状态栏" })).toContainText("工程制图根据当前文档的 3D 点、棱和面显示四个视图。")
 
-  await page.getByRole("button", { name: "导出", exact: true }).click()
   await expect(page.getByRole("button", { name: "导出 SVG", exact: true })).toBeEnabled()
 })
 
@@ -55,8 +54,6 @@ test("exports CAD views as SVG, DXF, and PDF", async ({ page }) => {
   await page.goto("/")
   await page.locator('input[type="file"]').setInputFiles("e2e/fixtures/cad-dimension.mgeo")
   await page.getByRole("button", { name: "工程制图" }).click()
-  await page.getByRole("button", { name: "导出", exact: true }).click()
-
   for (const [label, extension] of [["导出 SVG", ".svg"], ["导出 DXF", ".dxf"], ["导出 PDF", ".pdf"]] as const) {
     const download = page.waitForEvent("download")
     await page.getByRole("button", { name: label, exact: true }).click()
