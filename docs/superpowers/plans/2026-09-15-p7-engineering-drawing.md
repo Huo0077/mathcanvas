@@ -216,23 +216,23 @@ Run codec, kernel, App and CAD browser tests; commit as `feat(p7): add engineeri
 - `exportEngineeringDxf` returns ASCII entities for lines, polylines and text with stable layers.
 - `exportEngineeringPdf` uses the pinned `pdf-lib` dependency to write the same vector geometry to one or more pages; its license and version are recorded in `docs/research/graphing-tools.md` before the dependency is installed.
 
-- [ ] **Step 1: Write failing exporter tests**
+- [x] **Step 1: Write failing exporter tests**
 
 Assert SVG has four named view groups and source IDs, DXF has `SECTION/ENTITIES`, `LINE`/`LWPOLYLINE`/`TEXT`, and PDF output begins with a valid PDF header and contains the expected page count.
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 Run `npm.cmd test -- --run apps/web/src/persistence/engineeringExporters.test.ts`. Expected: exporter module/functions are absent.
 
-- [ ] **Step 3: Add the reviewed PDF dependency and implement shared-description adapters**
+- [x] **Step 3: Add the reviewed PDF dependency and implement shared-description adapters**
 
 Record the `pdf-lib` license/version decision, add the dependency, and serialize the existing projected line/polygon/annotation descriptions only; preserve finite-value filtering and diagnostics; never rasterize the 3D canvas.
 
-- [ ] **Step 4: Add toolbar actions and download errors**
+- [x] **Step 4: Add toolbar actions and download errors**
 
 Add CAD-only SVG/PDF/DXF buttons with accessible labels, disabled/unsupported states, and the existing file-error feedback path. Keep 3D SVG/PNG restrictions unchanged.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run exporter tests, full test/typecheck/lint/build, CAD E2E download checks, `git diff --check`, then commit as `feat(p7): export engineering drawings` and push `origin/main`.
 

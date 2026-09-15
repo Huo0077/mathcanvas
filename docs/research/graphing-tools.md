@@ -55,6 +55,12 @@ MathCanvas 第一阶段实现笛卡尔函数和常见函数预设，保留编译
 
 `requestAnimationFrame` 回调提供 progress 和 delta time，并支持取消。MathCanvas 使用同样的生命周期思路：帧内只更新临时动画状态，停止或确认后一次性提交最终参数。
 
+## P7 导出依赖决策
+
+- `pdf-lib@1.17.1` 作为 PDF 向量输出依赖，许可证为 MIT；仅调用其文档、页面、标准 Helvetica 字体和矢量线/文字 API，不复制第三方源码。
+- SVG、DXF、PDF 均消费 Web 层的 `ProjectedDrawing[]`，不访问 Three.js、不重新计算三维投影；无效点、棱和标注只输出诊断或状态文本，不生成伪造几何。
+- DXF 输出为 ASCII `SECTION/ENTITIES`，使用稳定源 ID 生成图层名；PDF 按视图生成矢量页面，避免截图或栅格化。
+
 ## 三维几何参考（2026-09-14）
 
 本轮针对 P6 通用化查看了以下公开 GitHub 项目的产品边界和实现分层：

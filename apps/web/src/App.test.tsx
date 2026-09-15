@@ -32,7 +32,7 @@ describe("MathCanvas workbench", () => {
     expect(screen.getAllByText("暂无可投影的空间对象")).toHaveLength(4)
     expect(screen.queryByRole("button", { name: "添加点" })).toBeNull()
     expect(screen.getByText("工程制图根据当前文档的 3D 点、棱和面显示四个视图。")).toBeTruthy()
-    expect((screen.getByRole("button", { name: "导出 SVG" }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole("button", { name: "导出 SVG" }) as HTMLButtonElement).disabled).toBe(false)
   })
 
   it("routes CAD source selection back through the shared application state", () => {

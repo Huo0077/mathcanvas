@@ -231,6 +231,13 @@ P7-1 投影内核、P7-2 文档投影描述、P7-3 CAD 四视图工作区和 P7-
 - CAD 属性栏新增线性尺寸、角度、公差创建入口；创建操作进入文档与 undo history，来源对象移动后随 `revision` 自动重算。
 - P7-5 完整验收：41 个测试文件、385 个单测通过；四个 workspace 类型检查通过；Lint 0 errors（保留 36 个既有 warnings）；生产构建通过；Playwright 20/20 通过；`git diff --check` 通过。P7-6 SVG/PDF/DXF 导出仍为下一切片。
 
+### P7-6 工程图导出
+
+- 新增共享 `ProjectedDrawing[]` 导出适配器：SVG 输出四视图、稳定源 ID、工程标注和诊断；DXF 输出 `SECTION/ENTITIES` 中的 `LINE`、`LWPOLYLINE`、`POINT` 和 `TEXT`；PDF 使用 `pdf-lib@1.17.1` 输出矢量页面。
+- CAD 工具栏启用 SVG、DXF、PDF 下载，3D 工作区仍禁用投影 SVG/PNG；现有平面 SVG/PNG/CSV 行为保持不变。
+- 依赖许可证与边界已记录在 `docs/research/graphing-tools.md`，导出器不调用 Three.js 或重复计算投影。
+- P7-6 完整验收：42 个测试文件、388 个单测通过；四个 workspace 类型检查通过；Lint 0 errors（保留 36 个既有 warnings）；生产构建通过；Playwright 21/21 通过；`git diff --check` 通过。
+
 > 射线/折线、圆锥曲线和函数采样已接入工具栏、SVG 渲染、属性编辑和 UI 回归测试；选中两条可采样曲线即可创建持久化交点。
 
 ## 进度更新规则

@@ -9,7 +9,7 @@ test("opens the CAD workspace with four accessible engineering views", async ({ 
   await expect(engineeringDrawing.locator("[data-drawing-view]")).toHaveCount(4)
   await expect(engineeringDrawing.getByText("暂无可投影的空间对象")).toHaveCount(4)
   await expect(page.getByRole("button", { name: "添加点" })).toHaveCount(0)
-  await expect(page.getByRole("button", { name: "导出 SVG" })).toBeDisabled()
+  await expect(page.getByRole("button", { name: "导出 SVG" })).toBeEnabled()
   await expect(page.getByText("工程制图根据当前文档的 3D 点、棱和面显示四个视图。")).toBeVisible()
 })
 
@@ -46,4 +46,16 @@ test("creates a linear engineering annotation from selected CAD sources", async 
 
   await expect(engineeringDrawing.getByTestId("engineering-annotation")).toContainText("5.000 mm")
   await expect(page.getByText("工程标注")).toBeVisible()
+})
+
+test("exports CAD views as SVG, DXF, and PDF", async ({ page }) => {
+  await page.goto("/")
+  await page.locator('input[type="file"]').setInputFiles("e2e/fixtures/cad-dimension.mgeo")
+  await page.getByRole("button", { name: "工程制图" }).click()
+
+  for (const [label, extension] of [["导出 SVG", ".svg"], ["导出 DXF", ".dxf"], ["导出 PDF", ".pdf"]] as const) {
+    const download = page.waitForEvent("download")
+    await page.getByRole("button", { name: label }).click()
+    await expect((await download).suggestedFilename()).toMatch(new RegExp(`${extension.replace(".", "\\.")}$`))
+  }
 })

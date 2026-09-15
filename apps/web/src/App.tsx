@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 
-import { decodeMgeo, encodeMgeo, type AnnotationFeature, type ConstraintType, type EngineeringAnnotationKind, type Measurement3Metric, type PrimitiveSpec, type Workspace } from "@draw/dsl"
+import { decodeMgeo, encodeMgeo, type AnnotationFeature, type ConstraintType, type EngineeringAnnotationKind, type GeometryDocument, type Measurement3Metric, type PrimitiveSpec, type Workspace } from "@draw/dsl"
 import { buildSolidTemplate, createMeasurement3 } from "@draw/geometry-kernel"
 import { deletionTargets, sectionPlaneThroughSource, validatePatch } from "@draw/scene-graph"
 import type { Alignment } from "@draw/scene-graph"
@@ -16,12 +16,19 @@ import { ThreeSceneView } from "./threeScene"
 import type { IntersectionPreview } from "./intersectionPreview"
 import { loadActiveWorkspace, loadDraft, saveDraft } from "./persistence/draftStorage"
 import { exportCsv, exportSvg } from "./persistence/exporters"
+import { exportEngineeringDxf, exportEngineeringPdf, exportEngineeringSvg } from "./persistence/engineeringExporters"
+import { resolveProjectedDrawing } from "./projectionVisuals"
 import { migrateLegacySolids } from "./solidTemplates"
 import { point3ToolAvailability, point3ToolHint } from "./spatialTools"
 import { useSceneStore } from "./store"
 
 type CreationMode = "line" | "segment" | "ray" | "polyline" | "circle" | "arc" | null
 type CreationStep = { mode: Exclude<CreationMode, null>; center: { x: number; y: number } | null; start?: { x: number; y: number }; points?: { x: number; y: number }[] }
+const engineeringDrawingViews = ["front", "top", "left", "axonometric"] as const
+
+function projectedEngineeringDrawings(document: GeometryDocument) {
+  return engineeringDrawingViews.map((view) => resolveProjectedDrawing(document, view))
+}
 
 function nextPrimitiveId(document: ReturnType<typeof useSceneStore.getState>["document"], prefix: string): string {
   let index = 1
@@ -113,8 +120,25 @@ export function App() {
   const save = () => {
     try { download(encodeMgeo(document), "application/json", "mgeo"); setFileError(null) } catch (error) { reportFileError(error, "无法保存 .mgeo 文件") }
   }
-  const exportSvgFile = () => {
-    try { download(exportSvg(document), "image/svg+xml", "svg"); setFileError(null) } catch (error) { reportFileError(error, "无法导出 SVG 文件") }
+  const exportSvgFile = async (format: "svg" | "dxf" | "pdf" = "svg") => {
+    try {
+      if (format === "pdf") {
+        if (document.workspace !== "cad") return
+        const content = await exportEngineeringPdf(projectedEngineeringDrawings(document))
+        downloadBlob(new Blob([content.buffer as ArrayBuffer], { type: "application/pdf" }), "pdf")
+        setFileError(null)
+        return
+      }
+      if (format === "dxf") {
+        if (document.workspace !== "cad") return
+        download(exportEngineeringDxf(projectedEngineeringDrawings(document)), "application/dxf", "dxf")
+        setFileError(null)
+        return
+      }
+      const content = document.workspace === "cad" ? exportEngineeringSvg(projectedEngineeringDrawings(document)) : exportSvg(document)
+      download(content, "image/svg+xml", "svg")
+      setFileError(null)
+    } catch (error) { reportFileError(error, "无法导出 SVG 文件") }
   }
   const exportCsvFile = () => {
     try { download(exportCsv(document), "text/csv;charset=utf-8", "csv"); setFileError(null) } catch (error) { reportFileError(error, "无法导出 CSV 文件") }
@@ -136,7 +160,6 @@ export function App() {
       image.src = svgUrl
     } catch (error) { reportFileError(error, "无法导出 PNG 文件") }
   }
-
   const load = (serialized: string) => {
     try {
       replace(migrateLegacySolids(decodeMgeo(serialized)))
