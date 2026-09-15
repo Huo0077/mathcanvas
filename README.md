@@ -4,7 +4,7 @@ MathCanvas 是一个面向数学与工程场景的 2D 交互绘图工作台原�
 
 ## 当前状态
 
-**统一 Ribbon 基线已完成**（2026-09-15）：微积分工作区标签已退役，当前新会话默认打开内部 `conics` 工作区（界面标签暂为「圆锥曲线」）；含微积分图元的旧 `.mgeo` 仍可打开。P0 技术验证、P1 数学内核、P2 交互、P3 函数分析、P6 立体几何、P7 工程制图与 Ribbon UI 基线均已完成；本轮后续 UI 优化已写入实施计划，尚未开始编码。CAD 工作区仍保留分层命令栏、模型/图层/图纸树、可持久化图纸视口、2D 直接绘图模式、上下文 Inspector、四视图、投影线联动、工程标注以及 SVG/DXF/PDF 矢量导出。
+**统一 Ribbon 基线已完成**（2026-09-15）：微积分工作区标签已退役，当前新会话默认打开内部 `conics` 工作区（界面标签暂为「圆锥曲线」）；含微积分图元的旧 `.mgeo` 仍可打开。P0 技术验证、P1 数学内核、P2 交互、P3 函数分析、P6 立体几何、P7 工程制图与 Ribbon UI 基线均已完成。2026-09-16 复核修复了操作指引浮层遮挡底部状态栏的问题；平面几何改名、点名、属性面板精简等后续 UI 优化仍在计划中，尚未实现。CAD 工作区仍保留分层命令栏、模型/图层/图纸树、可持久化图纸视口、2D 直接绘图模式、上下文 Inspector、四视图、投影线联动、工程标注以及 SVG/DXF/PDF 矢量导出。
 
 ### 统一工作区界面
 
@@ -145,7 +145,7 @@ npm run build
 npm run test:e2e
 ```
 
-当前验证基线：`npm.cmd test` 为 57 个测试文件、518 个用例通过；4 个 workspace 类型检查通过；ESLint 0 个 error、40 条 warning；Web 生产构建通过；Playwright Chromium 33/33 通过，覆盖 Ribbon、跨工作区操作和 1440px/768px/390px 视口。后续 UI 优化尚未实现，因此尚未纳入新的功能验证。Vite 仍提示主 bundle 超过 500 KB；Vitest 的 jsdom 3D 测试仍会输出 WebGL context 未实现提示。首次运行需先执行 `npx playwright install chromium`，否则会报缺少浏览器可执行文件。
+当前验证基线（2026-09-16）：`npm.cmd test` 为 59 个测试文件、533 个用例通过；4 个 workspace 类型检查通过；ESLint 0 个 error、40 条 warning；Web 生产构建通过；Playwright Chromium 34/34 通过，覆盖 Ribbon、跨工作区操作和 1440px/768px/390px 视口。Vite 仍提示主 bundle 超过 500 KB（当前约 1.52 MB，gzip 约 478 KB）；Vitest 的 jsdom 3D 测试仍会输出 WebGL context 未实现提示。首次运行需先执行 `npx playwright install chromium`，否则会报缺少浏览器可执行文件。
 
 工程工作台 Task 1-7 的聚焦验证：`LayerTree`/`DrawingTree`/`CommandBar`/`EngineeringWorkbench`/`DrawingViewport`/`DrawingSheetView`/`EngineeringInspector` 等新增测试文件 7 个；DSL 与 Scene Graph 图层/图纸操作 3 个测试文件、41 个用例；`e2e/engineering-workbench.spec.ts` 覆盖旧文档迁移、2D 绘图写入活动图层、图层隐藏、刷新后布局保持、隐藏视图不导出和键盘操作。
 
@@ -160,7 +160,7 @@ npm run test:e2e
 - [工程工作台设计规格](docs/superpowers/specs/2026-09-15-engineering-workbench-design.md)：记录 2D/3D 混合 CAD 工作流、经典层次界面和文档模型。
 - [工程工作台层次化实施计划](docs/superpowers/plans/2026-09-15-engineering-workbench-hierarchy.md)：记录 Task 1-7 的接口、测试与验证门槛。
 - [Ribbon UI 设计规格](docs/superpowers/specs/2026-09-15-ribbon-ui-redesign.md)：记录共享 Ribbon 基线及后续平面几何、属性面板、CAD 画布和 3D 引导优化。
-- [Ribbon UI 实施计划](docs/superpowers/plans/2026-09-15-ribbon-ui-redesign.md)：Task 1-6 为已完成基线，Task 7-13 为待用户确认的后续优化。
+- [Ribbon UI 实施计划](docs/superpowers/plans/2026-09-15-ribbon-ui-redesign.md)：Task 1-6 为已完成基线，Task 7-13 为尚未实现的后续优化。
 
 ## 协作约定
 

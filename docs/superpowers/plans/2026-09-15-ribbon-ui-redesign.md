@@ -40,9 +40,9 @@
 
 ---
 
-## Follow-up Scope (2026-09-16, pending user review)
+## Follow-up Scope (2026-09-16, pending implementation)
 
-本节补充已实施 Ribbon 基线之上的后续改动。所有复选框保持未完成；开始代码实现前需由用户审阅并确认本节范围。继续在当前工作区单会话执行，不使用子代代理，不覆盖已有未提交改动，不提交或推送 GitHub。
+本节补充已实施 Ribbon 基线之上的后续改动。所有复选框保持未完成；这些功能仍需逐项实现和验证。继续在当前工作区单会话执行，不使用子代代理，不覆盖已有未提交改动；提交或推送仅在用户明确要求时执行。
 
 ### Task 7: Rename the Planar Workspace and Improve Primitive Naming
 

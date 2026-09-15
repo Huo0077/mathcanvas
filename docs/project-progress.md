@@ -3,7 +3,7 @@
 > 这份文件是项目的单一进度记录。每完成一个可验证的切片，就更新“已完成”和“下一步”，并附上验证证据。
 
 **最后更新：** 2026-09-16
-**当前阶段：** P0-P6 与 P7 工程制图已完成；MathCanvas 统一 Ribbon UI 基线已完成。新会话进入内部 `conics` 工作区（界面仍显示“圆锥曲线”），三个工作区共用可折叠命令区，CAD 保留工程树与上下文检查器，窄屏增加对象/属性抽屉。2026-09-16 后续 UI 优化已完成方案与计划写入，尚未开始实现。P4 Agent 与 P5 题图解析仍在排除范围内。
+**当前阶段：** P0-P6 与 P7 工程制图已完成；MathCanvas 统一 Ribbon UI 基线已完成。新会话进入内部 `conics` 工作区（界面仍显示“圆锥曲线”），三个工作区共用可折叠命令区，CAD 保留工程树与上下文检查器，窄屏增加对象/属性抽屉。2026-09-16 后续 UI 优化已完成方案与计划写入，尚未开始实现；本轮另修复操作指引浮层遮挡状态栏的布局问题。P4 Agent 与 P5 题图解析仍在排除范围内。
 **总体状态：** 开发中
 
 ### Ribbon UI 重构（2026-09-15）
@@ -16,7 +16,7 @@
 - [x] 390px 手机视口采用对象列表/属性检查器抽屉；修复内容超过 `100vh`、顶部搜索框遮挡标签的问题。
 - [x] 将旧 E2E 选择器迁移到新 Ribbon 命令和 Inspector 交互。
 
-**Ribbon 基线验证：** `npm.cmd test` 为 57 个测试文件、518 个用例通过；四个 workspace 类型检查通过；ESLint 0 error、40 warnings；Web 生产构建通过；Playwright 33/33 通过，覆盖桌面、平板、手机视口、Ribbon 折叠/临时呼出/固定、CAD 工作流与 `.mgeo` 往返。Vite bundle 仍提示超过 500 KB；jsdom 的 Three.js WebGL 未实现提示不影响测试结果。后续 UI 优化尚未实现，暂无新增功能验证计数。
+**Ribbon 基线验证（2026-09-16）：** `npm.cmd test` 为 59 个测试文件、533 个用例通过；四个 workspace 类型检查通过；ESLint 0 error、40 warnings；Web 生产构建通过；Playwright 34/34 通过，覆盖桌面、平板、手机视口、Ribbon 折叠/临时呼出/固定、CAD 工作流与 `.mgeo` 往返。修复后的操作指引浮层不再覆盖状态栏，Ribbon 外部点击回归通过。Vite bundle 仍提示超过 500 KB（约 1.52 MB，gzip 约 478 KB）；jsdom 的 Three.js WebGL 未实现提示不影响测试结果。后续 UI 功能任务仍未实现。
 
 ### 2026-09-16 后续 UI 优化计划
 
@@ -429,16 +429,13 @@ P7-1 至 P7-6 与工程工作台层次化改造 Task 1-7 均已完成；P4 Agent
 - [x] 本地 `main` 已设置跟踪 `origin/main`
 - [x] 通过远程分支检查确认 `origin/main` 可访问
 
-### 本地与 GitHub 进度对比
+### 本地与 GitHub 进度对比（2026-09-16 更新）
 
-- 对比时间：2026-09-15。
-- 本地 `HEAD`、`origin/main` 和本次抓取的 `FETCH_HEAD` 均为 `966412630ea6d42e0196703f19afa46019002867`（提交标题：`feat(cad): add layered drawing document foundation`）。
-- `git log --left-right --count HEAD...origin/main` 结果为 `0 0`：本地没有领先或落后于 GitHub 的提交。
-- `git diff --stat HEAD origin/main` 与 `git diff --name-status HEAD origin/main` 均无输出：在本次进度文档更新前，提交内容、进度文档和计划文档在 GitHub 上与本地提交一致。
-- 当前同步内容包括 Task 1/2 的 DSL 与 Scene Graph 基础；Task 3-7 尚未开发，继续等待用户授权。
-- 本次对比记录写入后，`docs/project-progress.md` 产生了一个尚未提交的本地文档改动；因此 GitHub 仍停留在上述 `9664126`，待后续明确授权后再推送本次记录。
+- 推送前对比：本地 `main` 为 `48096b4`，`origin/main` 为 `86eb7f3`，本地领先 2 个提交、没有落后提交；本地还包含 Ribbon 引导/测量入口修复和操作指引浮层布局修复。
+- 本轮已更新所有与当前 Ribbon 进度直接相关的文档，并按用户要求将本地版本同步到 GitHub；同步后的 `main` 与 `origin/main` 应保持一致，最终以推送后的 Git 状态核验为准。
+- 已同步范围包括远程操作指引、统一 Ribbon 基线、测量入口修复、状态栏浮层避让，以及本页记录的验证结果；2026-09-16 后续 UI 优化仍属于待实现计划。
 
-下一步：先由用户审阅并确认 2026-09-16 后续 UI 计划，再按 Task 7-13 实现和验证；本次文档与当前 Ribbon 基线改动将提交并推送到 GitHub。
+下一步：按 Ribbon 实施计划 Task 7-13 逐项继续，完成后由用户在本地浏览器验收；不将计划项误报为已实现。
 
 ## 最新验证证据
 
