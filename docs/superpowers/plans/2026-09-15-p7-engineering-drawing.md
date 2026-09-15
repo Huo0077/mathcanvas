@@ -70,19 +70,19 @@ Update the progress record with the four view conventions and focused test count
 - `ProjectedPrimitive` supports `point`, `polyline`, and `polygon`, each retaining a stable `sourceId`.
 - Invalid or incomplete sources add a diagnostic and do not create a fake origin point or zero-length line.
 
-- [ ] **Step 1: Write failing resolver tests**
+- [x] **Step 1: Write failing resolver tests**
 
 Build a document containing point3, edge3, face3, a polyhedron3 and one invalid reference. Assert each valid view keeps source IDs, face polygons are closed, depth is finite, invalid references create diagnostics, and template-generated topology is not rendered twice.
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 Run `npm.cmd test -- --run apps/web/src/projectionVisuals.test.ts`. Expected: the resolver module/import is missing.
 
-- [ ] **Step 3: Implement source resolution and depth ordering**
+- [x] **Step 3: Implement source resolution and depth ordering**
 
 Resolve point positions from the document index, call the kernel projection for every requested view, turn edges into ordered polylines and faces into closed polygons, and sort render records by a deterministic depth key. Reuse existing topology conventions rather than creating a second template builder.
 
-- [ ] **Step 4: Verify focused and existing 3D behavior**
+- [x] **Step 4: Verify focused and existing 3D behavior**
 
 Run `npm.cmd test -- --run apps/web/src/projectionVisuals.test.ts apps/web/src/threeScene.test.ts packages/dsl/src/codec.test.ts`. Expected: new resolver tests and all existing 3D/codec tests pass.
 
