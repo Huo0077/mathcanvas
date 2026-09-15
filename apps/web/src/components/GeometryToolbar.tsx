@@ -2,10 +2,6 @@ import { useState } from "react"
 import type { Workspace } from "@draw/dsl"
 
 interface GeometryToolbarProps {
-  onUndo: () => void
-  onRedo: () => void
-  onSave: () => void
-  onOpen: () => void
   onExportSvg: (format?: "svg" | "dxf" | "pdf") => void
   onExportCsv: () => void
   onExportPng: () => void
@@ -64,7 +60,7 @@ function ToolButton({ label, icon, onClick, active = false, disabled = false, pr
 
 export function GeometryToolbar(props: GeometryToolbarProps) {
   const [objectsOpen, setObjectsOpen] = useState(true)
-  const isPlanarWorkspace = props.workspace === "calculus" || props.workspace === "conics"
+  const isPlanarWorkspace = props.workspace === "conics"
   const projectedExportDisabled = props.workspace === "geometry3d"
   const pngExportDisabled = props.workspace === "geometry3d" || props.workspace === "cad"
   const projectedExportTitle = props.workspace === "cad"
@@ -86,7 +82,9 @@ export function GeometryToolbar(props: GeometryToolbarProps) {
           <ToolButton label="添加抛物线" icon="curve" onClick={props.onAddParabola} />
           <ToolButton label="添加椭圆" icon="circle" onClick={props.onAddEllipse} />
           <ToolButton label="添加双曲线" icon="curve" onClick={props.onAddHyperbola} />
-          <ToolButton label="添加函数图像" icon="function" onClick={props.onAddFunction} />
+          {/* The calculus workspace is retired, but a function is still the natural second operand of a line or a
+              conic, so the planar workspace keeps the entry point for exp / trigonometric and composite curves. */}
+          <ToolButton label="添加函数" icon="function" onClick={props.onAddFunction} />
         </>}
         {props.workspace === "geometry3d" && <ToolButton label="添加立方体" icon="curve" onClick={props.onAddCube} />}
         {props.workspace === "geometry3d" && <ToolButton label="添加棱锥" icon="curve" onClick={props.onAddPyramid} />}
@@ -106,11 +104,11 @@ export function GeometryToolbar(props: GeometryToolbarProps) {
     </section>
     <section className="toolbar-group editing-tools">
       <div className="toolbar-group-heading"><div><span className="toolbar-kicker">编辑</span><strong>画布操作</strong></div></div>
-      <div className="toolbar-inline-actions"><ToolButton label="撤销" icon="undo" onClick={props.onUndo} /><ToolButton label="重做" icon="redo" onClick={props.onRedo} /><ToolButton label="删除对象" icon="trash" disabled={!props.hasSelection || props.allSelectedLocked} onClick={props.onDelete} /><ToolButton label={props.allSelectedLocked ? "解锁对象" : "锁定对象"} icon="lock" disabled={!props.hasSelection} onClick={props.onToggleLock} /></div>
+      <div className="toolbar-inline-actions"><ToolButton label="删除对象" icon="trash" disabled={!props.hasSelection || props.allSelectedLocked} onClick={props.onDelete} /><ToolButton label={props.allSelectedLocked ? "解锁对象" : "锁定对象"} icon="lock" disabled={!props.hasSelection} onClick={props.onToggleLock} /></div>
     </section>
     <section className="toolbar-group export-tools">
-      <div className="toolbar-group-heading"><div><span className="toolbar-kicker">文件</span><strong>保存 / 导出</strong></div></div>
-      <div className="toolbar-inline-actions"><ToolButton label="保存 .mgeo" icon="save" onClick={props.onSave} /><ToolButton label="打开 .mgeo" onClick={props.onOpen} /><ToolButton label="导出 SVG" disabled={projectedExportDisabled} title={projectedExportDisabled ? projectedExportTitle : undefined} onClick={() => props.onExportSvg("svg")} /><ToolButton label="导出 CSV" onClick={props.onExportCsv} />{props.workspace === "cad" && <><ToolButton label="导出 DXF" onClick={() => props.onExportSvg("dxf")} /><ToolButton label="导出 PDF" onClick={() => props.onExportSvg("pdf")} /></>}<ToolButton label="导出 PNG" disabled={pngExportDisabled} title={pngExportDisabled ? projectedExportTitle : undefined} onClick={props.onExportPng} /></div>
+      <div className="toolbar-group-heading"><div><span className="toolbar-kicker">导出</span><strong>文件输出</strong></div></div>
+      <div className="toolbar-inline-actions"><ToolButton label="导出 SVG" disabled={projectedExportDisabled} title={projectedExportDisabled ? projectedExportTitle : undefined} onClick={() => props.onExportSvg("svg")} /><ToolButton label="导出 CSV" onClick={props.onExportCsv} /><ToolButton label="导出 PNG" disabled={pngExportDisabled} title={pngExportDisabled ? projectedExportTitle : undefined} onClick={props.onExportPng} /></div>
     </section>
   </div>
 }

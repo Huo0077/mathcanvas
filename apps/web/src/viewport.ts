@@ -37,6 +37,40 @@ export function visibleWorldBounds(viewport: Viewport = DEFAULT_VIEWPORT) {
   return { minX: viewport.center.x - halfWidth, maxX: viewport.center.x + halfWidth, minY: viewport.center.y - halfHeight, maxY: viewport.center.y + halfHeight }
 }
 
+/** Zoom is expressed as a multiple of the default scale. 0.05x shows a wide neighbourhood, 40x resolves a
+ * single feature; outside that range circles and grid lines either vanish or swamp the canvas. */
+export const MIN_ZOOM = 0.05
+export const MAX_ZOOM = 40
+
+export function clampZoom(zoom: number): number {
+  if (!Number.isFinite(zoom)) return 1
+  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom))
+}
+
+/**
+ * Zoom about a screen anchor so the world point under the pointer stays under the pointer — the behaviour users
+ * expect from a wheel zoom. `zoomViewport` is the same operation anchored at the middle of the canvas.
+ */
+export function zoomViewportAt(viewport: Viewport, factor: number, anchorSvg: Coordinate): Viewport {
+  const scale = DEFAULT_VIEWPORT.scale * clampZoom((viewport.scale / DEFAULT_VIEWPORT.scale) * factor)
+  const anchor = svgToWorld(anchorSvg, viewport)
+  return {
+    center: { x: anchor.x - (anchorSvg.x - svgCenter.x) / scale, y: anchor.y + (anchorSvg.y - svgCenter.y) / scale },
+    scale
+  }
+}
+
+export function zoomViewport(viewport: Viewport, factor: number, anchorSvg: Coordinate = svgCenter): Viewport {
+  return zoomViewportAt(viewport, factor, anchorSvg)
+}
+
+/** Grid lines every `step` world units, with the step growing as the canvas zooms out so the grid never
+ * collapses into a solid block (roughly one line per 28 screen pixels or more). */
+export function gridStep(scale: number, minimumSpacing = 28): number {
+  const steps = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000]
+  return steps.find((step) => step * scale >= minimumSpacing) ?? steps[steps.length - 1]
+}
+
 export function rayToViewport(ray: { a: Coordinate; b: Coordinate }, bounds: WorldBounds): { a: Coordinate; b: Coordinate } {
   const length = Math.hypot(ray.b.x - ray.a.x, ray.b.y - ray.a.y)
   if (!Number.isFinite(length) || length === 0) return { a: ray.a, b: ray.b }

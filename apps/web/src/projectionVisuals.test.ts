@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest"
 import { createEmptyDocument, type GeometryDocument, type PrimitiveSpec } from "@draw/dsl"
 import { buildSolidTemplate } from "@draw/geometry-kernel"
 
-import { resolveProjectedDrawing } from "./projectionVisuals"
+import { resolveProjectedDrawing, defaultDraftView, drawingViewLabels, projectedDrawingForView } from "./projectionVisuals"
 
 function topologyDocument(primitives: PrimitiveSpec[]): GeometryDocument {
   return { ...createEmptyDocument("cad"), primitives }
@@ -133,5 +133,33 @@ describe("renderer-neutral engineering drawing projections", () => {
     expect(drawing.annotations[0]).toMatchObject({ id: "dimension-invalid", status: "insufficient-data" })
     expect(drawing.annotations[0].position).toBeUndefined()
     expect(drawing.diagnostics).toEqual(expect.arrayContaining([expect.stringContaining("dimension-invalid")]))
+  })
+})
+
+describe("drawing view metadata", () => {
+  it("labels every drawing view kind for the tree and the viewports", () => {
+    expect(drawingViewLabels).toEqual({ model: "模型视图", front: "主视图", top: "俯视图", left: "左视图", axonometric: "轴测图" })
+  })
+
+  it("synthesises a drafting view when the sheet has none", () => {
+    const sheet = { id: "sheet-1", name: "工程图纸", paper: "A4" as const, orientation: "landscape" as const, scale: 2, viewIds: [] }
+    const draft = defaultDraftView(sheet, [{ id: "view-front", kind: "front" as const, x: 0, y: 0, width: 10, height: 10, scale: 1, visible: true, showProjectionLines: false }])
+
+    expect(draft).toMatchObject({ id: "view-model", kind: "model", scale: 2, visible: true })
+  })
+
+  it("reuses an existing model view instead of creating a second one", () => {
+    const existing = { id: "view-model", kind: "model" as const, x: 5, y: 6, width: 100, height: 80, scale: 3, visible: false, showProjectionLines: false }
+
+    expect(defaultDraftView(null, [existing])).toEqual(existing)
+  })
+
+  it("never fabricates a projected drawing for the drafting view", () => {
+    const document = topologyDocument([{ id: "point-a", type: "point3", position: { x: 0, y: 0, z: 0 } }])
+    const modelView = { id: "view-model", kind: "model" as const, x: 0, y: 0, width: 10, height: 10, scale: 1, visible: true, showProjectionLines: false }
+    const frontView = { ...modelView, id: "view-front", kind: "front" as const }
+
+    expect(projectedDrawingForView(document, modelView)).toBeNull()
+    expect(projectedDrawingForView(document, frontView)?.primitives).toHaveLength(1)
   })
 })

@@ -1,7 +1,41 @@
-import type { GeometryDocument, PrimitiveSpec } from "@draw/dsl"
+import type { DrawingSheetSpec, DrawingViewSpec, GeometryDocument, PrimitiveSpec } from "@draw/dsl"
 import { projectVector3, resolveEngineeringAnnotation, type DrawingView, type ProjectedPoint } from "@draw/geometry-kernel"
 
 export type { DrawingView, ProjectedPoint } from "@draw/geometry-kernel"
+
+/** Renderer-neutral labels shared by the drawing tree, the sheet viewports and the exporters. */
+export const drawingViewLabels: Record<DrawingViewSpec["kind"], string> = {
+  model: "模型视图",
+  front: "主视图",
+  top: "俯视图",
+  left: "左视图",
+  axonometric: "轴测图"
+}
+
+/** P7 keeps projecting the four orthographic views; the drafting view is the planar 2D surface. */
+export const defaultSheetViewSize = { width: 560, height: 380 }
+
+export function defaultDraftView(sheet: DrawingSheetSpec | null, views: DrawingViewSpec[]): DrawingViewSpec {
+  const existing = views.find((view) => view.kind === "model")
+  if (existing) return existing
+  return {
+    id: "view-model",
+    kind: "model",
+    x: 24,
+    y: 24,
+    width: defaultSheetViewSize.width,
+    height: defaultSheetViewSize.height,
+    scale: sheet?.scale ?? 1,
+    visible: true,
+    showProjectionLines: false
+  }
+}
+
+/** The projected drawing for a document view spec, or null when the view cannot be projected. */
+export function projectedDrawingForView(document: GeometryDocument, view: DrawingViewSpec): ProjectedDrawing | null {
+  if (view.kind === "model") return null
+  return resolveProjectedDrawing(document, view.kind)
+}
 
 export interface ProjectedDrawing {
   view: DrawingView

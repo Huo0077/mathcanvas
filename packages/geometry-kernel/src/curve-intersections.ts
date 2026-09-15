@@ -54,6 +54,11 @@ function samplePrimitive(primitive: SampledPrimitive): Coordinate[][] {
   return adaptiveSampleFunctionSegments((x) => evaluateParameterExpression(primitive.expression, { x }), primitive.domain, { initialSteps: primitive.samples ?? 256, maxSteps: Math.max(primitive.samples ?? 256, 2048) })
 }
 
+/** Two sampled curves can cross more than twice; clipping the list to the first pair silently hid real
+ * intersections (a line met sin(x) six times and only two markers survived). Pathological pairs such as
+ * sin(1/x) against the x axis would report hundreds, so the list is bounded for the canvas and the property bar. */
+export const MAX_CURVE_INTERSECTIONS = 64
+
 export function intersectSampledPrimitives(first: SampledPrimitive, second: SampledPrimitive): IntersectionResult {
   let firstPoints: Coordinate[][]
   let secondPoints: Coordinate[][]
@@ -78,5 +83,5 @@ export function intersectSampledPrimitives(first: SampledPrimitive, second: Samp
   const unique = uniquePoints(points)
   if (unique.length === 0) return { kind: "none", reason: "curves are disjoint" }
   if (unique.length === 1) return { kind: "point", point: unique[0] }
-  return { kind: "points", points: [unique[0], unique[1]] }
+  return { kind: "points", points: unique.slice(0, MAX_CURVE_INTERSECTIONS) }
 }

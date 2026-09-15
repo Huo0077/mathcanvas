@@ -3,7 +3,7 @@
 > 这份文件是项目的单一进度记录。每完成一个可验证的切片，就更新“已完成”和“下一步”，并附上验证证据。
 
 **最后更新：** 2026-09-15
-**当前阶段：** P0-P6 与 P7 工程制图 MVP 已完成；工程工作台层次化改造的 Task 1、Task 2 已完成，Task 3 及之后按用户要求暂停。P7 覆盖四视图、投影联动、工程标注、文档兼容和 SVG/DXF/PDF 导出，P4 Agent 与 P5 题图解析仍在排除范围内。
+**当前阶段：** P0-P6 与 P7 工程制图已完成；工程工作台层次化改造 Task 1-7 全部完成。CAD 工作区现为完整工程制图工作台（分层命令栏、模型/图层/图纸树、可持久化图纸视口、2D 直接绘图、上下文 Inspector），P7 覆盖四视图、投影联动、工程标注、文档兼容和 SVG/DXF/PDF 导出。P4 Agent 与 P5 题图解析仍在排除范围内。
 **总体状态：** 开发中
 
 ## 已完成
@@ -179,9 +179,122 @@
 
 - ✅ **5 号**：选中两个面后，属性面板直接提供二面角内角/外角入口和测量解释。
 - ✅ **6 号**：测量结果已直接标注在画布上；辅助法向量和角弧已保留，屏幕恒定缩放作为后续视觉细化。
-- ⚠️ **选中态高亮色完全覆盖填充色**（`face3` / `plane3` / 实体都一样，改完颜色需取消选中才可见），属 6 号范围，已与用户确认后处理。
+- ⚠️ **选中态高亮色完全覆盖填充色**（`face3` / `plane3` / 实体都一样，改完颜色需取消选中才可见），属 6 号范围，已与用户确认后处理。 → ✅ **已修复**（见下方「P6 v3-7」）。
 - ❓ **点立方体的"面"会选中整个立体**：这是本轮修复 1 号时引入的判定规则（模板实体的棱/面归属所属实体），生成的顶点仍可直接选中以保留点驱动编辑。若产品希望"点面=选面"，需改判定方式，待确认。
-- ❓ 平面目前只有**自动尺寸**（按所属图形包围盒自适应，即用户要求的"合适大小"），还没有手动拖动/缩放平面边界的入口。
+- ❓ 平面目前只有**自动尺寸**（按所属图形包围盒自适应，即用户要求的"合适大小"），还没有手动拖动/缩放平面边界的入口（视角移动问题已在「P6 v3-8」单独解决，平面边界拖动仍未做）。
+- ✅ **模板实体的朝向**：原本四个模板全部锁死沿世界 +Z，现已支持三轴朝向（见「P6 v3-9」）。
+
+### P6 v3-8 视角不再只能在原点附近打转（已完成）
+
+- **用户的判断与实测不符，先复现再改**：用真实浏览器读取页面已暴露的 `data-camera-target` 取硬数据 —— 平移**本来就有**（中键拖动、Shift+左键拖动都会改变枢轴）：初始 `0.00,0.00,0.00` → Shift 拖动后 `-3.66,0.00,0.00` → 中键拖动后 `-3.66,7.50,0.00`。所以不是"锁死在原点"。
+- **实测定位到的 4 个真实缺陷**：
+  1. **完全不可发现**：3D 工作区可见文案里没有任何一句提到平移，界面上只有「适应视图」「重置视角」。这是找不到功能的直接原因。
+  2. **永远动不了 Z**：`panCameraState` 只写 `x` 和 `y`，三次手势后 `target.z` 始终是 `0.00`；z 方向偏心的图形无论怎么拖都无法居中。
+  3. **方向是世界轴对齐而非跟随屏幕**：`target.x += -deltaX * distance * 1.5`。相机旋转后横向拖动不再对应屏幕横向，手感变成"拖了却往怪方向跑"。
+  4. **没有任何范围限制**：可以无限平移把图形丢出画面。
+- **修复**：
+  - `panCameraState` 改为沿**相机自身基向量**平移（`cameraBasis` 由 azimuth/elevation 推出 right / up / forward），新增第三个 `forward` 分量用于沿视线纵深移动；横向拖动现在在世界 X 与 Z 上同时产生位移。
+  - 新增 `clampCameraTarget`：把枢轴夹在以**当前图形包围盒**中心、半径为 `3 × 包围盒半径`（`PAN_RANGE_FACTOR`）的范围内；场景没有几何时退回原点周围 ±12（`EMPTY_BOUNDS_PAN_LIMIT`）。
+  - 交互与可发现性：新增「平移视角」按钮（`aria-pressed` + 画布 `data-pan-mode` + `grab/grabbing` 光标），开启后左键拖动即平移；画布左下角常驻手势提示「左键拖动旋转 · 中键或 Shift+左键拖动平移 · Ctrl+拖动沿视线前后移动 · 滚轮缩放」；`Ctrl`（或 `Cmd`）拖动沿视线纵深移动。
+  - 「适应视图」的提示文案补充说明它同时把视角中心移回图形。
+- **RED→GREEN 证据**：`threeScene.test.ts` 新增 3 个用例，先在旧实现上失败并给出正确原因（`expected { x: 2, y: +0, z: +0 } to deeply equal { x: +0, y: +0, z: -2 }`，即横向拖动错误地只改世界 X）；实现后通过。
+- **浏览器实测**：初始 `0.00,0.00,0.00` → Shift+右拖 `-3.02,0.00,3.02`（X/Z 同步、Y 不动，正是方位角 45° 的相机右向量）→ Ctrl+上拖 `2.50,4.50,8.53`（位移 `(5.5,4.5,5.5)` 恰为视线方向）→ 连续 8 次大幅拖动后停在 `-9.25,4.50,9.25`（受限，不再无限增长）→「适应视图」回到 `0.00,0.00,0.00`；「平移视角」按钮 `aria-pressed=true`、画布 `data-pan-mode=true`，开启后普通左键拖动确实平移而非旋转。
+- **回归**：全量单测 51 个测试文件、469 个用例通过；4 个 workspace 类型检查通过；lint 0 error、**37 条 warning**（较基线 36 多 1 条，来自新增的可测试纯函数 `clampCameraTarget` 导出触发的既有 `react-refresh/only-export-components` 规则，属既有规则的重复计数）；生产构建通过；Playwright **26/26** 通过（新增 2 个视角导航用例）。
+
+### P6 v3-9 参数化实体支持三轴朝向（已完成）
+
+- **用户报告**：生成圆锥等图形时，图形只能朝向一个方向。
+- **根因（代码级证据）**：`packages/geometry-kernel/src/solid-builders.ts` 里四个模板全部硬编码沿世界 +Z 生成 —— `buildCube` 用 `buildPrism({ vector: {x:0, y:0, z:size.z} })`；`buildPyramid` 把顶点固定在 `baseCenter.z + height`；`buildCylinder` 沿 `{x:0, y:0, height}` 拉伸；`buildCone` 把顶点固定在 `center.z + height`。数据模型里也没有任何朝向字段（`ConePrimitive`/`CylinderPrimitive` = `{center, radius, height, segments}`，`PyramidPrimitive` = `{baseCenter, baseSize, height}`，`CubePrimitive` = `{origin, size}`），属性面板只暴露这些。
+- **同时确认「拖生成点来定向」这条路走不通**：`packages/scene-graph/src/operations.ts` 的 `syncTemplateTopology`（L551-566）在 L617 **每次重算都会执行**，把模板生成的每个 `point3` 位置按模板参数写回，手动移动的顶点会被弹回原位。
+- **修复**：
+  - `packages/dsl/src/types.ts` 新增 `SolidRotation`（弧度，X → Y → Z）与四类模板的可选 `rotation` 字段；`schema.ts` 校验必须是三个有限弧度；旧 `.mgeo` 缺该字段时行为完全不变。
+  - `solid-builders.ts` 新增 `rotateAboutPivot` 与 `templatePivot`（立方体取包围盒中心，棱锥/圆柱/圆锥取轴线中点），在 `buildSolidTemplate` 里对**已生成的顶点**统一应用旋转 —— 一处改动覆盖四个模板，刚校验过的拓扑也不会被刚体旋转破坏；渲染、投影、导出、测量因此全部自动跟随。
+  - `packages/scene-graph` 的 `PrimitiveUpdatePatch` 新增 `rotation3?: Partial<Vector3>`（按轴合并，未给出的轴保留原角度）；`updatePrimitive` 在四类模板上写入 `rotation`。
+  - 属性面板新增「朝向」卡片：三个按度输入的角度框（`step=15`，可精确输入 45/90）、「归零」按钮与各轴「+90°」快捷按钮，并说明旋转顺序与轴心。
+- **RED→GREEN 证据**：`solid-builders.test.ts` 新增 4 个用例，先在旧实现上失败并给出正确原因（`expected +0 to be close to -2`、`expected 2 to be close to 6`、`expected 2 to be close to 2.8284271247461903`，即旋转被完全忽略）；实现后通过。另在 `codec.test.ts` 新增 3 个用例（朝向往返、旧文档保持直立、非有限角度被拒绝），`operations.test.ts` 新增 2 个用例（朝向写入文档且生成拓扑跟随、按轴合并不影响其他轴）。
+- **浏览器实测**：默认圆锥（半径 1.5、高度 3）包尺寸 `3.10,3.10,3.10`；高度改为 6 后 `3.10,3.10,6.10`；点「绕 X 轴 +90°」后变为 `3.10,6.10,3.10`，输入框显示 `90`，刷新后从草稿恢复仍为 `90`。截图对照确认圆锥由「轴沿世界 Z（屏幕上横躺）」变为「轴沿世界 −Y（屏幕上竖直朝下）」。
+- **顺带纠正文档**：`docs/feature-catalog.md` 原写「编辑生成点后可脱离模板独立修改」，与 `syncTemplateTopology` 的实际行为相反，已改为明确说明并指向朝向参数。
+- **回归**：全量单测 51 个测试文件、478 个用例通过；4 个 workspace 类型检查通过；lint 0 error、37 条 warning（与上一轮持平）；生产构建通过；Playwright 27/27 通过。
+
+### P6 v3-11 立体几何改为 Z 轴朝上（已完成）
+
+- **用户反馈**：立体几何的 xyz 轴不符合直觉，要求 Z 轴在上。
+- **根因**：整个 3D 视图按 Three.js 默认的 **Y 朝上**搭建 —— `applyCameraState` 把仰角放在 Y 上（`position.y = target.y + distance·sin(elevation)`），`cameraBasis` 的 `right/up` 也按 Y-up 推导；`camera.up` 从未设置，一直是默认的 `(0,1,0)`；`THREE.GridHelper` 生成的网格在 XZ 平面（那是 Y-up 的地面）。
+- **修复**：
+  - `applyCameraState`：相机位置改为 `(cos el·cos az, cos el·sin az, sin el)`，仰角绕世界 **Z** 抬起；同时显式 `camera.up.set(0, 0, 1)`，否则 `lookAt` 会带着默认的 Y-up 产生滚转。该函数改为导出以便直接断言相机姿态。
+  - `cameraBasis`：`forward` 与 `right` 按 Z-up 重新推导，平移方向继续跟随屏幕。
+  - 网格：`grid.rotation.x = Math.PI / 2`，把 Three.js 的 XZ 地面转成 **XY** 地面。`AxesHelper` 本身沿世界轴绘制，无需改动，因此蓝色 +Z 自然朝上。
+- **RED→GREEN 证据**：`threeScene.test.ts` 先改期望再看失败 —— `expected { x: +0, y: +0, z: -2 } to deeply equal { x: +0, y: +2, z: +0 }`（平移基向量仍是 Y-up）；新增 1 个用例断言 `camera.up === (0,0,1)`、仰角 0 时相机在 `+X`、仰角 90 时相机升到 `+Z`。实现后 36 个用例通过。
+- **浏览器实测**：截图确认蓝色 +Z 竖直朝上、网格平铺为地面、立方体为 3/4 俯视；`data-content-bounds` 仍为 `0.00,0.00,0.00 size 4.10,4.10,2.10`（几何本身未变，只有视角改变）。E2E 里按世界点投影点击顶点的辅助函数 `projectDefaultCamera` 也同步改成 Z-up（否则"点顶点不穿透"用例会点到实体上）。
+- **回归**：全量单测 51 个测试文件、484 个用例通过；4 个 workspace 类型检查通过；生产构建通过；Playwright 30/30 通过。lint 0 error、**38 条 warning**（较 37 多 1 条，来自导出 `applyCameraState` 以便测试相机姿态所触发的既有 `react-refresh/only-export-components` 规则）。
+### 圆锥曲线工作区四项修复（画布缩放 / 交点全显 / 函数入口 / 函数可删）（已完成）
+
+- **用户报告**（圆锥曲线部分）：1) 画布不能缩放；2) 线之间的交点只显示一个；3) 应该能加入 `exp`、简单三角函数等简单函数，似乎可以和微积分部分稍作整合；4) 无法删除函数。
+- **复现与根因**（先复现再定位，全部用真实代码实测）：
+  1. **缩放**：`GraphicsView` 只有中键拖动与 `Space+左键拖动` 平移，没有滚轮也没有按钮；而且圆与圆弧半径写死 `WORLD_SCALE`，与 `viewport.scale` 脱钩，所以即使加了缩放，圆也会画错。
+  2. **交点只显示一个（两个独立缺陷）**：内核 `intersectSampledPrimitives` 把结果截断成 `[unique[0], unique[1]]` —— 实测直线与 `sin(x)` 有 6 个交点只显示 2 个，折线—直线、折线—圆同样截断；`GraphicsView` 的 `persistentPairs` 按“整对”过滤预览 —— 实测直线与圆 2 个交点，保存其中一个后剩下 0 个。
+  3. **函数入口**：`onAddFunction` 传进了工具栏却从未渲染（退役切片的守卫测试还断言它不存在），而内核、DSL、`PropertiesBar` 的函数编辑区与 `functionPresets` 都还在。
+  4. **无法删除函数**：`isReferenced()` 把 `derivative/tangent/normal/secant/integral/analysisSet` 当普通引用者，所以含派生分析对象的函数删除时报 `object is referenced by another object`（探针实测画布点击、代数区、键盘三种入口全部失败）。
+- **修复**：
+  - **内核**：`IntersectionResult.points` 由 `[Coordinate, Coordinate]` 放宽为 `Coordinate[]`；`intersectSampledPrimitives`、`intersectPolylineLineDetailed`、`intersectPolylineCircleDetailed` 返回全部去重交点，并用 `MAX_CURVE_INTERSECTIONS = 64` 兜住 `sin(1/x)` 这类病态输入。
+  - **画布**：`viewport.ts` 新增 `zoomViewportAt`（以指针为锚点，锚点世界坐标保持不动）、`clampZoom`（0.05×～40×）、`zoomViewport`、`gridStep`（自适应网格步长）；`GraphicsView` 用原生 `wheel` 监听（`passive: false`，否则页面跟着滚）缩放，新增「放大画布 / 缩小画布 / 重置视图」按钮与百分比读数，圆与圆弧半径改用 `viewport.scale`，网格按缩放自适应。
+  - **交点显示**：只有 `intersectionSet`（会实体化整对全部解）隐藏整对预览，单个交点图元只隐藏自己那个坐标，拖动时实时预览也不受影响。
+  - **函数**：工具栏恢复「添加函数」；属性栏新增「常用函数预设」下拉（预设文案中文化：指数函数 `e^x`、正弦 `sin(x)`、双曲、高斯等，选择预设同时套用其课堂定义域）与「创建导函数 / 创建切线 / 创建积分区域」；`App.addFunctionAnalysis` 生成合法图元，`applyOperation` 在同一补丁内完成派生重算。
+  - **删除**：`deletionTargets()` 把函数的派生分析对象并入同一对象一起删除，沿用模板实体拓扑的既有先例（`isReferenced` 通过 `ignoredReferrers` 放行）。
+- **RED→GREEN 证据**：新增 `packages/geometry-kernel/src/curve-intersections.test.ts` 4 个用例，先在旧实现上失败（`expected [ { x: 1, y: +0 }, { x: +0, y: 1 } ] to have a length of 3 but got 2`）；`operations.test.ts` 新增函数分析删除 2 个用例先失败（`expected false to be true`）；`viewport.test.ts` 新增 4 个缩放用例先失败（`(0 , zoomViewportAt) is not a function`）；`App.test.tsx` 新增/改写 9 个用例先失败（`Unable to find role="button" name="添加函数"` 等），实现后全部通过。
+- **回归**：全量单测 52 个测试文件、501 个用例通过；4 个 workspace 类型检查通过；lint 0 error、38 条既有 warning（无新增）；生产构建通过；Playwright 31/31 通过（新增「圆锥曲线画布缩放 + 直线与正弦的多个交点」浏览器用例）。
+- **与退役切片的取舍**：微积分**工作区标签**继续退役，不恢复第四个标签；本次只把「添加函数 + 导数 / 切线 / 积分」入口放回圆锥曲线工作区，属于用户明确要求的回补，因此退役切片的守卫测试改为「标签不存在，但圆锥曲线提供添加函数」。
+- **仍未做**：函数预设下拉只覆盖内核已有预设，没有自定义参数化 `a*sin(b*x+c)+d` 表单；`analysisSet`（零点 / 极值 / 拐点）与法线 / 割线仍未接入界面入口；保存的交点仍受既有的来源删除保护（删除被交点引用的图元会先提示）。
+
+### 微积分工作区退役（切片 1 已完成，代码清理待续）
+
+- **用户要求**：微积分部分用不到，删除。
+- **已确认范围**：删 UI 与内核、保留 DSL 图元类型与解码路径（旧 `.mgeo` 仍可打开、只能查看/删除）；默认工作区改为 `geometry3d`。
+- **切片 1（界面与默认，已完成并全绿）**：
+  - `WorkspaceHeader` 工作区标签移除「微积分」，并把图标从"按下标取"改为每个标签自带，避免删项后图标错位。
+  - `store.ts` 初始文档由 `createDemoDocument()`（calculus）改为 `withDocumentLayout(createEmptyDocument("geometry3d"))` —— 启动不再有任何演示内容。
+  - `draftStorage.loadActiveWorkspace` 白名单去掉 `"calculus"`，旧草稿不会把应用带回已退役的工作区。
+  - `GeometryToolbar` 的 `isPlanarWorkspace` 收窄为仅 `conics`。
+  - 测试夹具 `createDemoDocument()` 改为 `conics` 文档（内容不变：两条直线 + 交点 + 斜率参数），因此平面画布相关用例无需逐个改工作区。
+  - 新增 `e2e/fixtures/planar-demo.mgeo`（由 `createDemoDocument()` 经 `encodeMgeo` 生成），替代原先"启动即有演示内容"的假设。
+- **切片的验证**：全量单测 51 个测试文件、484 个用例通过；Playwright 30/30 通过（含加载 `workspace: "calculus"` 文档仍能正常打开的兼容用例，以及"微积分标签不存在"的断言）。
+- **切片 1b：可见入口清零（已完成）**：圆锥曲线工具栏的「添加函数图像」已移除；函数检查器里的「创建导函数/切线/法线/割线/积分区域/分析结果」按钮行与 `createDerivedAnalysis` 辅助函数已删除。微积分图元因此在任何工作区都无法再新建，遗留的内核/渲染/导出代码不再可达。
+- **守卫测试（把你提的两条要求钉死）**：
+  - `draftStorage.test.ts`：残留的 `active-workspace = "calculus"` 偏好不会让应用重新进入已退役工作区。
+  - `App.test.tsx`：外壳里不存在「微积分」按钮；圆锥曲线工作区不存在「添加函数图像」（但抛物线/椭圆仍在）；加载含 `workspace: "calculus"` 与 `function` 图元的旧文档仍能打开、对象仍列出（可查看/删除）而不抛错。
+  - `e2e/workbench.spec.ts`：全新会话停在「立体几何」，且「微积分」标签数量为 0。
+  - 随之删除 7 个依赖函数/微积分入口的 App 用例。
+- **按你的决定保留**：DSL 图元类型与 schema、`PropertiesBar` 的函数编辑区、`GraphicsView` 的函数/派生渲染分支、导出相关行、内核 `calculus.ts` 与 `operations.ts` 的重算分支。这些只在打开旧 `.mgeo` 时可达，不会再产生新的微积分对象。
+### P7 修复：工图工作台的撤销与重做（已完成）
+
+- **用户报告**：工程制图工作区里「重做」按键没有反应、「撤销」按键不能撤销。
+- **先复现再定位**：用真实浏览器读页面已暴露的 `data-revision` 实测，撤销/重做**对命令栏创建、2D 绘图、图层增删与显隐、视图比例调整都是有效的**（revision 依次 1→2→3→2→1，重做回到 1）。所以问题不在 store 的 history/future 机制。
+- **实测到的两个真实缺陷**：
+  1. **键盘快捷键完全没有实现**：全项目只有 3 处 `keydown` 监听，分别处理 Escape / Delete / Backspace；`ctrlKey` 唯一用处是 3D 视角的纵深平移。实测 `Ctrl+Z`、`Ctrl+Y`、`Ctrl+Shift+Z` 按下后 revision 均停在 1 不动 —— 这是"按键没反应"最直接的原因。
+  2. **撤销/重做按钮从不进入禁用态**：项目里没有任何 `canUndo`/`canRedo` 计算（grep 无结果），空历史时按钮依然可点，点了没有任何反馈。另外草稿恢复走的是 `replace()`，会清空 history，所以刷新后内容还在但"撤不掉"，而按钮看起来仍然可用 —— 观感就是"撤销失效"。
+- **修复**：
+  - `App.tsx` 新增 `historyShortcut(event)`：Ctrl/Cmd+Z 撤销、Ctrl/Cmd+Shift+Z 与 Ctrl/Cmd+Y 重做，带 `preventDefault()`；用既有的 `isTextEditingTarget` 跳过输入框/文本域/下拉/可编辑区，不抢文本框里的撤销。监听器依赖补上 `undo`/`redo`。
+  - `WorkspaceHeader` 新增 `canUndo`/`canRedo`：为 `false` 时按钮 `disabled`，并给出「没有可撤销的操作（Ctrl+Z）」这类提示；`App.tsx` 从 store 的 `history.length`/`future.length` 计算。
+- **RED→GREEN 证据**：`App.test.tsx` 新增 3 个用例，先在旧实现上失败并给出正确原因（`expected [ { id: 'point3-1', … } ] to have a length of +0 but got 1`、`expected false to be true`），实现后通过；其中"不抢文本框快捷键"的用例作为反向守卫。
+- **浏览器实测**：`Ctrl+Z` revision 1→0、`Ctrl+Y` 0→1、`Ctrl+Shift+Z` 1→2；按钮禁用态随历史正确切换（绘图后 undo 可用/redo 禁用 → 撤销后 undo 禁用/redo 可用 → 重做后反过来）。
+- **回归**：全量单测 51 个测试文件、484 个用例通过；4 个 workspace 类型检查通过；lint 0 error、37 条 warning（无新增）；生产构建通过；Playwright 30/30 通过。
+### P6 v3-10 模板子元素可选取 + 平面可手动定尺寸（已完成）
+
+- **修复一：模板实体的棱/面取不到**。既有规则（`templateTopologyOwners` + `resolveSelectableHit`）把落在模板生成棱/面上的命中映射回所属实体，这是 P6 v3 第 1 号修复让实体"能被点选"的关键，因此不能简单推翻。改为 `resolveSelectableHit(id, owners, keepSubElement)`：默认行为不变，**按住 Alt 点击**时保留命中到的棱/面本身。
+- **修复二：平面只有自动尺寸**。`plane3` 新增可选 `halfSize`（画出面片的半边长，世界单位）；`createPlane3Mesh` 用 `primitive.halfSize ?? autoHalfSize`，缺省时仍按场景自适应。属性面板新增「平面大小」卡片：半边长数值输入（留空＝自动）与「恢复自动」按钮；`halfSize: null` 会把字段从文档里删除而不是存 0。
+- **顺带修掉两个会拦住这次改动的既有缺口**：
+  1. `updatePrimitive` 的几何白名单在 `patches.ts` 与 `operations.ts` 里**各有一份**，两份都不含 `plane3`，所以平面此前根本无法通过属性面板修改任何几何。两份都已补上 `plane3`。
+  2. `rotation3`（上一轮新增）此前没有任何 patch 校验，非有限角度可以写进文档。现已补上 per-axis 有限性校验与类型校验，`halfSize` 同样补上正数与类型校验。
+- **RED→GREEN 证据**：`threeScene.test.ts` 新增 2 个用例，并**临时移除新行为实跑确认它们会失败**（`expected 2.8284270825993416 to be close to 7.0710678118654755`、`expected 'cube-1' to be 'face-1'`），恢复后通过。另新增 `operations.test.ts` 2 个（写入半边长、清空后字段被移除）、`codec.test.ts` 2 个（半边长往返、非正数被拒）。
+- **浏览器实测**：普通点击立方体得到「立方体」，Alt+点击同一位置得到「空间面」；平面在有三点时自动尺寸下 x 跨度约 7，填入半边长 8 后跨度翻倍以上，点「恢复自动」回到原值。
+- **回归**：全量单测 51 个测试文件、484 个用例通过；4 个 workspace 类型检查通过；lint 0 error、37 条 warning（无新增）；生产构建通过；Playwright 29/29 通过。
+### P6 v3-7 修复 1 条遗留：选中态不再覆盖填充色（已完成）
+
+- **根因**：选中态是通过**改写材质基础色**实现的。`createPlane3Mesh` 用 `colour = selected ? "#4c3ac7" : style.fill` 同时充当面片、外框和两条中心引导线的颜色；`createFace3Mesh` 同样用 `color: selected ? "#4c3ac7" : style.fill`。用户刚改完颜色看到的是强调紫，只有取消选中才露出真实填充色。
+- **修复**：改成与 `solidMaterial` 一致的**非破坏式**做法——`face3` 与 `plane3` 的材质 `color` 永远取用户填充色；选中提示改由附加的强调色外框承担（`face3` 新增 `face3-outline` `LineLoop` 子对象，`plane3` 的外框与中心引导线在选中时取强调色），并保留选中时略高的面片不透明度。
+- **顺带确认**：模板实体（立方体/棱锥/圆柱/圆锥）**本来就没有这个 bug**——`solidMaterial` 一直保留 `color: style.fill` 并用加性 `emissive`（强度 0.28）表达选中，实测选中状态下立方体填充色仍清晰可辨，因此本轮未改动实体渲染。
+- **RED→GREEN 证据**：`threeScene.test.ts` 新增 2 个用例，先在旧实现上失败并给出正确原因（`expected '4c3ac7' to be 'ff0000'`），修复后通过；实测选中与未选中截图对照，`plane3` 与 `face3` 在选中态下均显示用户所选的红色填充，外框为强调色。
+- **回归**：全量单测 51 个测试文件、466 个用例通过；4 个 workspace 类型检查通过；lint 0 error、36 条既有 warning；生产构建通过；Playwright 24/24 通过。
 
 ### P6 v3 验收结果
 
@@ -194,7 +307,7 @@
 
 ### 之后
 
-P7-1 至 P7-6 已完成；P4 Agent、P5 题图解析保持在排除范围内。
+P7-1 至 P7-6 与工程工作台层次化改造 Task 1-7 均已完成；P4 Agent、P5 题图解析保持在排除范围内。CAD 工作台的后续可选方向（手动拖动视口边界、B-rep/DWG 导入、自动尺寸布局）仍属于设计文档中的明确限制。
 
 ### P7-1 验收结果
 
@@ -238,23 +351,27 @@ P7-1 至 P7-6 已完成；P4 Agent、P5 题图解析保持在排除范围内。
 - 依赖许可证与边界已记录在 `docs/research/graphing-tools.md`，导出器不调用 Three.js 或重复计算投影。
 - P7-6 完整验收：42 个测试文件、388 个单测通过；四个 workspace 类型检查通过；Lint 0 errors（保留 36 个既有 warnings）；生产构建通过；Playwright 21/21 通过；`git diff --check` 通过。
 
-### 工程工作台层次化改造：Task 1-2
+### 工程工作台层次化改造：Task 1-7（全部完成）
 
 - [x] **Task 1：图层、图纸和视图文档模型**：新增可选 `layers`、`drawingViews`、`drawingSheets`、`activeLayerId` 和 `activeSheetId` 字段；旧 `.mgeo` 自动解释为默认几何层、默认图纸和四个 P7 视图。
 - [x] **Task 2：可撤销图层与布局操作**：新增图层、活动图层、图纸和视图的 Scene Graph 操作；删除图层时重分配图元，删除被引用视图或来源时保持引用保护。
 - [x] **兼容与校验**：保持 `schemaVersion: "0.1"`，校验图层父子关系、活动引用、视图尺寸/比例和图纸视图引用；历史图元未指定 `layerId` 时不改写存储数据。
+- [x] **Task 3：工作台壳、分层命令栏和状态栏**：新增 `CommandBar`（选择/创建/修改/标注/检查/导出六个一级类别、堆叠二级面板、`返回`、仅在命令激活时拦截 `Esc` 且不抢输入框焦点）、`StatusBar`（命令提示、捕捉、坐标、单位、比例、当前图层、诊断数、拒绝原因）和 `EngineeringWorkbench`（模式切换 + 左右停靠面板开关 + 命令区/画布区/Inspector 区/状态区四个插槽）。文件、撤销、重做和保存从 `GeometryToolbar` 上移到 `WorkspaceHeader`，CAD 工作区不再渲染大杂烩工具栏。
+- [x] **Task 4：模型树、图层树和图纸树**：新增 `DocumentTreePanel`（三个标签页 + 共享过滤 + 方向键切换）、`LayerTree`（父子缩进、当前层、显隐、锁定、新建子图层、删除保护）、`DrawingTree`（图纸展开视图、类型/比例/来源标签、视图显隐）。`AlgebraView` 支持 `filter`；`store.ts` 增加 `treeTab`/`expandedIds`/`filterQuery` 与 setter，`draftStorage.ts` 增加只保存标签页与展开节点的本地工作台偏好。
+- [x] **Task 5：图纸视口与 2D 直接绘图**：`EngineeringDrawingView` 从固定四卡片改为 `DrawingSheetView` + `DrawingViewport`；纸张、标题栏、视口矩形/比例/显隐全部来自持久化文档字段，`sheetPaperSize` 保证被移出或放大的视口不被裁剪。新增 `drawingGeometry.ts` 承载布局数学；`2D 绘图` 模式下绘图视口始终可点击，创建回调走活动视口，新图元带 `activeLayerId`，当前图层隐藏或锁定时拒绝创建并在状态栏说明。投影线开关保持临时 UI 状态。
+- [x] **Task 6：上下文 Inspector 与完整流程**：`PropertiesBar` 新增 `sections` 过滤（23 处区块按 数据/外观/约束/工程标注 分类），新增 `InspectorTabs`（方向键切换）与 `EngineeringInspector`（四页签、无选择时的图纸/视图/图层/单位/命令上下文、所选对象所在图层、投影来源列表与「来源已删除」诊断）。`AgentDock` 增加 `showConstraints` 以避免约束面板重复；CAD Inspector 通过 `propertiesBarProps` 复用同一份字段更新逻辑。
+- [x] **Task 7：迁移、E2E 与交付验证**：`engineeringExporters` 新增 `selectExportableDrawings`，隐藏视图不参与导出也不生成伪造几何；新增旧 `.mgeo` 迁移与草稿布局往返测试；重写 `e2e/engineering-drawing.spec.ts` 适配新壳，新增 `e2e/engineering-workbench.spec.ts`。
 - [x] **聚焦验证**：`npm.cmd test -- packages/dsl/src/codec.test.ts packages/dsl/src/schema.test.ts packages/scene-graph/src/operations.test.ts`：3 个测试文件、41 个测试通过。
 - [x] **类型验证**：`@draw/dsl` 与 `@draw/scene-graph` workspace 类型检查通过。
 
-### 当前暂停边界
+### Task 3-7 验证证据
 
-- [ ] Task 3：工作台壳、分层命令栏和状态栏。
-- [ ] Task 4：模型树、图层树和图纸树。
-- [ ] Task 5：图纸视口与 2D 直接绘图模式。
-- [ ] Task 6：上下文 Inspector 与完整用户流程。
-- [ ] Task 7：迁移、E2E 覆盖和最终交付验证。
-
-以上任务暂不执行，等待用户明确授权后再继续。
+- Task 3：`CommandBar.test.tsx` 6 个、`EngineeringWorkbench.test.tsx` 5 个用例通过；Web 类型检查通过；lint 保持 0 error。
+- Task 4：`LayerTree.test.tsx` 8 个、`DrawingTree.test.tsx` 5 个用例通过；`store.test.ts` 6 个、`draftStorage.test.ts` 4 个用例通过；App 层新增图层树与图纸树联动用例。
+- Task 5：`DrawingViewport.test.tsx` 7 个、`DrawingSheetView.test.tsx` 5 个、`EngineeringDrawingView.test.tsx` 4 个用例通过；App 层新增视图比例持久化、2D 绘图写入活动图层、隐藏图层拒绝创建 3 个用例。
+- Task 6：`EngineeringInspector.test.tsx` 9 个用例通过；App 层工程标注用例改为先进入「工程标注」页签。
+- Task 7：`engineeringExporters.test.ts` 5 个、`draftStorage.test.ts` 6 个用例通过；`e2e/engineering-drawing.spec.ts` 4 个、`e2e/engineering-workbench.spec.ts` 3 个用例通过（共 24 个 Playwright 用例）。
+- 全量：`npm.cmd test` 51 个测试文件、484 个用例通过；`npm.cmd run typecheck` 4 个 workspace 通过；`npm.cmd run lint` 0 error、37 条 warning；`npm.cmd run build` 通过；`npm.cmd run test:e2e` 30/30 通过。
 
 > 射线/折线、圆锥曲线和函数采样已接入工具栏、SVG 渲染、属性编辑和 UI 回归测试；选中两条可采样曲线即可创建持久化交点。
 
@@ -294,8 +411,15 @@ P7-1 至 P7-6 已完成；P4 Agent、P5 题图解析保持在排除范围内。
 - **P6 v3 新增测试资产**：`e2e/fixtures/tetrahedron.mgeo`（四面体 A(0,0,0) B(0,0,1) C(1,0,0) D(1,1,1)，4 点 + 6 棱 + 4 面），用于取景与二面角回归
 - **本轮质量与功能验证**：37 个测试文件、360 个单元/UI 用例通过；4 个 workspace 类型检查通过；ESLint 可执行并无错误（保留 36 条已有风格/依赖警告）；Web 生产构建通过并使用隔离输出目录；新增二面角入口、测量标签、撤销历史上限、展开动画收敛和预览服务退出回归。
 - **本轮浏览器验证**：17/17 个 Playwright 用例通过，包括展开/折叠和二面角流程；预览服务改为 global setup/teardown 同进程管理，Windows 下命令正常退出。
-- **工程工作台 Task 1-2 最新验证**：`npm.cmd test` 通过，44 个测试文件、400 个测试通过；`npm.cmd run typecheck` 通过，4 个 workspace 无类型错误；`npm.cmd run lint` 通过，0 error、36 条既有 warning；`npm.cmd run build` 通过；`npm.cmd run test:e2e` 通过，21/21 个 Playwright 用例通过。
-- **已知验证提示**：Vite 仍提示主 bundle 超过 500 KB；Vitest 的 3D UI 测试在 jsdom 中输出 Three.js WebGL context 未实现提示，但测试结果为通过；本轮未新增 UI 工作台代码。
+- **工程工作台 Task 3-7 最新验证**：`npm.cmd test` 通过，51 个测试文件、464 个测试通过；`npm.cmd run typecheck` 通过，4 个 workspace 无类型错误；`npm.cmd run lint` 通过，0 error、36 条既有 warning（新增组件原本多出 6 条 `react-refresh/only-export-components` warning，已通过抽出 `drawingGeometry.ts` 并把仅内部使用的布局辅助函数改为非导出消除，回到既有基线）；`npm.cmd run build` 通过；`npm.cmd run test:e2e` 通过，24/24 个 Playwright 用例通过。
+- **Z 轴朝上验证**：`npm.cmd test` 51 个测试文件、484 个用例通过（新增 1 个相机姿态用例先 RED 后 GREEN，另改 1 个平移基向量用例的期望）；lint 0 error、38 条 warning；生产构建通过；Playwright 30/30 通过；截图确认 +Z 朝上、网格为 XY 地面。
+- **微积分工作区退役（切片 1）验证**：`npm.cmd test` 51 个测试文件、484 个用例通过；Playwright 30/30 通过；启动默认工作区为 `geometry3d`，工作区标签中不再出现「微积分」，加载含 `workspace: "calculus"` 的旧 `.mgeo` 仍能正常打开。
+- **P7 撤销/重做修复验证**：`npm.cmd test` 51 个测试文件、484 个用例通过（新增 3 个 App 用例先 RED 后 GREEN）；lint 0 error、37 条 warning；生产构建通过；Playwright 30/30 通过（新增 1 个撤销/重做用例）；实测 Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z 生效且按钮禁用态随历史切换。
+- **P6 v3-10 子元素选取与平面尺寸验证**：`npm.cmd test` 51 个测试文件、484 个用例通过；lint 0 error、37 条 warning；生产构建通过；Playwright 29/29 通过（普通点击选实体、Alt 点击选面、平面半边长写入与恢复自动均在真实浏览器验证）。
+- **P6 v3-9 朝向能力验证**：`npm.cmd test` 51 个测试文件、478 个用例通过（新增 4 个内核、3 个 codec、2 个 Scene Graph 用例，内核 4 个先 RED 后 GREEN）；lint 0 error、37 条 warning；生产构建通过；Playwright 27/27 通过；浏览器实测包尺寸随朝向改变且刷新后保留。
+- **P6 v3-8 视角导航验证**：`npm.cmd test` 51 个测试文件、469 个用例通过（新增 3 个相机用例先 RED 后 GREEN）；lint 0 error、37 条 warning；生产构建通过；Playwright 26/26 通过（新增 2 个视角导航用例）；浏览器实测枢轴沿相机轴向移动、纵深可平移且被夹在图形周围的有限范围内。
+- **P6 v3-7 选中态修复验证**：`npm.cmd test` 51 个测试文件、466 个用例通过（新增 2 个 `threeScene.test.ts` 用例先 RED 后 GREEN）；4 个 workspace 类型检查通过；lint 0 error、36 条既有 warning；生产构建通过；Playwright 24/24 通过；浏览器截图对照确认 `plane3` 与 `face3` 选中态下显示用户所选填充色。
+- **已知验证提示**：Vite 仍提示主 bundle 超过 500 KB；Vitest 的 3D UI 测试在 jsdom 中输出 Three.js WebGL context 未实现提示，但测试结果为通过；本轮新增组件已由 `CommandBar`、`EngineeringWorkbench`、`LayerTree`、`DrawingTree`、`DrawingViewport`、`DrawingSheetView`、`EngineeringInspector` 七个测试文件覆盖。
 
 ### 历史证据
 

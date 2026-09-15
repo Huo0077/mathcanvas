@@ -1,23 +1,34 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 
-import { decodeMgeo, encodeMgeo, type AnnotationFeature, type ConstraintType, type EngineeringAnnotationKind, type GeometryDocument, type Measurement3Metric, type PrimitiveSpec, type Workspace } from "@draw/dsl"
+import { decodeMgeo, encodeMgeo, type AnnotationFeature, type ConstraintType, type DrawingSheetSpec, type EngineeringAnnotationKind, type Measurement3Metric, type PrimitiveSpec, type Workspace } from "@draw/dsl"
 import { buildSolidTemplate, createMeasurement3 } from "@draw/geometry-kernel"
 import { deletionTargets, sectionPlaneThroughSource, validatePatch } from "@draw/scene-graph"
 import type { Alignment } from "@draw/scene-graph"
 
 import { AlgebraView } from "./components/AlgebraView"
 import { AgentDock } from "./components/AgentDock"
-import { GeometryToolbar } from "./components/GeometryToolbar"
+import { CommandBar, type CommandCategory, type CommandCategoryId } from "./components/CommandBar"
+import { ConstraintPanel } from "./components/ConstraintPanel"
+import { DocumentTreePanel } from "./components/DocumentTreePanel"
+import { DrawingSheetView } from "./components/DrawingSheetView"
+import { DrawingTree } from "./components/DrawingTree"
+import type { DrawingViewPatch } from "./components/DrawingViewport"
 import { EngineeringDrawingView } from "./components/EngineeringDrawingView"
+import { EngineeringInspector, type InspectorSource } from "./components/EngineeringInspector"
+import { EngineeringWorkbench, type CadMode } from "./components/EngineeringWorkbench"
+import type { InspectorTab } from "./components/InspectorTabs"
+import { GeometryToolbar } from "./components/GeometryToolbar"
 import { GraphicsView } from "./components/GraphicsView"
-import { PropertiesBar } from "./components/PropertiesBar"
+import { LayerTree } from "./components/LayerTree"
+import { PropertiesBar, type PropertiesBarProps } from "./components/PropertiesBar"
+import { StatusBar } from "./components/StatusBar"
 import { WorkspaceHeader } from "./components/WorkspaceHeader"
 import { ThreeSceneView } from "./threeScene"
 import type { IntersectionPreview } from "./intersectionPreview"
 import { loadActiveWorkspace, loadDraft, saveDraft } from "./persistence/draftStorage"
 import { exportCsv, exportSvg } from "./persistence/exporters"
-import { exportEngineeringDxf, exportEngineeringPdf, exportEngineeringSvg } from "./persistence/engineeringExporters"
-import { resolveProjectedDrawing } from "./projectionVisuals"
+import { exportEngineeringDxf, exportEngineeringPdf, exportEngineeringSvg, selectExportableDrawings } from "./persistence/engineeringExporters"
+import { defaultDraftView, drawingViewLabels, resolveProjectedDrawing } from "./projectionVisuals"
 import { migrateLegacySolids } from "./solidTemplates"
 import { point3ToolAvailability, point3ToolHint } from "./spatialTools"
 import { useSceneStore } from "./store"
@@ -25,10 +36,6 @@ import { useSceneStore } from "./store"
 type CreationMode = "line" | "segment" | "ray" | "polyline" | "circle" | "arc" | null
 type CreationStep = { mode: Exclude<CreationMode, null>; center: { x: number; y: number } | null; start?: { x: number; y: number }; points?: { x: number; y: number }[] }
 const engineeringDrawingViews = ["front", "top", "left", "axonometric"] as const
-
-function projectedEngineeringDrawings(document: GeometryDocument) {
-  return engineeringDrawingViews.map((view) => resolveProjectedDrawing(document, view))
-}
 
 function nextPrimitiveId(document: ReturnType<typeof useSceneStore.getState>["document"], prefix: string): string {
   let index = 1
@@ -88,6 +95,14 @@ function isTextEditingTarget(target: EventTarget | null): boolean {
   return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement || (target instanceof HTMLElement && target.isContentEditable)
 }
 
+/** Ctrl/Cmd+Z undoes, Ctrl/Cmd+Shift+Z and Ctrl/Cmd+Y redo — unless a text field owns the keystroke. */
+function historyShortcut(event: KeyboardEvent): "undo" | "redo" | null {
+  if (!(event.ctrlKey || event.metaKey) || event.altKey || isTextEditingTarget(event.target)) return null
+  const key = event.key.toLowerCase()
+  if (key === "z") return event.shiftKey ? "redo" : "undo"
+  return key === "y" ? "redo" : null
+}
+
 export function App() {
   const document = useSceneStore((state) => state.document)
   const apply = useSceneStore((state) => state.apply)
@@ -96,15 +111,37 @@ export function App() {
   const switchWorkspace = useSceneStore((state) => state.switchWorkspace)
   const replace = useSceneStore((state) => state.replace)
   const operationError = useSceneStore((state) => state.error)
+  const treeTab = useSceneStore((state) => state.treeTab)
+  const expandedIds = useSceneStore((state) => state.expandedIds)
+  const filterQuery = useSceneStore((state) => state.filterQuery)
+  const setTreeTab = useSceneStore((state) => state.setTreeTab)
+  const toggleExpanded = useSceneStore((state) => state.toggleExpanded)
+  const setExpandedIds = useSceneStore((state) => state.setExpandedIds)
+  const setFilterQuery = useSceneStore((state) => state.setFilterQuery)
+  const canUndo = useSceneStore((state) => state.history.length > 0)
+  const canRedo = useSceneStore((state) => state.future.length > 0)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const draftLoadedRef = useRef(false)
   const skipNextDraftSaveRef = useRef(false)
   const [fileError, setFileError] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [creationStep, setCreationStep] = useState<CreationStep | null>(null)
+  const [cadMode, setCadMode] = useState<CadMode>("projection")
+  const [commandCategory, setCommandCategory] = useState<CommandCategoryId | null>(null)
+  const [activeCommand, setActiveCommand] = useState<string | null>(null)
+  const [showProjectionDiagnostics, setShowProjectionDiagnostics] = useState(false)
+  const [activeSheetId, setActiveSheetId] = useState<string | null>(null)
+  const [activeViewId, setActiveViewId] = useState<string | null>(null)
+  const [layerNotice, setLayerNotice] = useState<string | null>(null)
+  const [inspectorTab, setInspectorTab] = useState<InspectorTab>("data")
   const selectedId = selectedIds.at(-1) ?? null
   const slope = document.parameters.slope
   const slopeLine = useMemo(() => document.primitives.find((primitive) => primitive.id === "line-slope"), [document.primitives])
+  // Projection geometry is derived once per revision and shared by the four viewports and every exporter.
+  const engineeringDrawings = useMemo(() => engineeringDrawingViews.map((view) => resolveProjectedDrawing(document, view)), [document])
+  // Hidden sheet views are dropped from exports instead of being replaced with fabricated geometry.
+  const exportableEngineeringDrawings = useMemo(() => selectExportableDrawings(engineeringDrawings, document.drawingViews ?? []), [engineeringDrawings, document.drawingViews])
+  const cadDiagnosticCount = engineeringDrawings.reduce((total, drawing) => total + drawing.diagnostics.length, 0)
 
   const downloadBlob = (blob: Blob, extension: string) => {
     const url = URL.createObjectURL(blob)
@@ -124,18 +161,18 @@ export function App() {
     try {
       if (format === "pdf") {
         if (document.workspace !== "cad") return
-        const content = await exportEngineeringPdf(projectedEngineeringDrawings(document))
+        const content = await exportEngineeringPdf(exportableEngineeringDrawings)
         downloadBlob(new Blob([content.buffer as ArrayBuffer], { type: "application/pdf" }), "pdf")
         setFileError(null)
         return
       }
       if (format === "dxf") {
         if (document.workspace !== "cad") return
-        download(exportEngineeringDxf(projectedEngineeringDrawings(document)), "application/dxf", "dxf")
+        download(exportEngineeringDxf(exportableEngineeringDrawings), "application/dxf", "dxf")
         setFileError(null)
         return
       }
-      const content = document.workspace === "cad" ? exportEngineeringSvg(projectedEngineeringDrawings(document)) : exportSvg(document)
+      const content = document.workspace === "cad" ? exportEngineeringSvg(exportableEngineeringDrawings) : exportSvg(document)
       download(content, "image/svg+xml", "svg")
       setFileError(null)
     } catch (error) { reportFileError(error, "无法导出 SVG 文件") }
@@ -188,6 +225,8 @@ export function App() {
     }
     setCreationStep({ mode, center: null })
   }
+  /** New 2D objects join the active CAD layer so the layer tree can hide or lock them. */
+  const cadLayerFields = (): { layerId?: string } => document.workspace === "cad" && document.activeLayerId ? { layerId: document.activeLayerId } : {}
   const handleCanvasClick = (coordinate: { x: number; y: number }) => {
     if (!creationStep) return
     if (creationStep.mode === "polyline") {
@@ -203,7 +242,7 @@ export function App() {
       if (Math.hypot(coordinate.x - creationStep.center.x, coordinate.y - creationStep.center.y) < 0.05) return
       const type = creationStep.mode
       const id = nextPrimitiveId(document, type)
-      apply({ op: "addPrimitive", primitive: { id, type, a: creationStep.center, b: coordinate, label: `${type === "line" ? "直线" : type === "ray" ? "射线" : "线段"} ${id.split("-").at(-1)}` } })
+      apply({ op: "addPrimitive", primitive: { id, type, a: creationStep.center, b: coordinate, ...cadLayerFields(), label: `${type === "line" ? "直线" : type === "ray" ? "射线" : "线段"} ${id.split("-").at(-1)}` } })
       setSelectedIds([id])
       setCreationStep(null)
       return
@@ -212,7 +251,7 @@ export function App() {
       const radius = Math.hypot(coordinate.x - creationStep.center.x, coordinate.y - creationStep.center.y)
       if (radius < 0.05) return
       const id = nextPrimitiveId(document, "circle")
-      apply({ op: "addPrimitive", primitive: { id, type: "circle", center: creationStep.center, radius, label: `圆 ${id.split("-").at(-1)}` } })
+      apply({ op: "addPrimitive", primitive: { id, type: "circle", center: creationStep.center, radius, ...cadLayerFields(), label: `圆 ${id.split("-").at(-1)}` } })
       setSelectedIds([id])
       setCreationStep(null)
       return
@@ -226,7 +265,7 @@ export function App() {
     const startAngle = Math.atan2(creationStep.start.y - creationStep.center.y, creationStep.start.x - creationStep.center.x)
     const endAngle = Math.atan2(coordinate.y - creationStep.center.y, coordinate.x - creationStep.center.x)
     const id = nextPrimitiveId(document, "arc")
-    apply({ op: "addPrimitive", primitive: { id, type: "arc", center: creationStep.center, radius, startAngle, endAngle, label: `圆弧 ${id.split("-").at(-1)}` } })
+    apply({ op: "addPrimitive", primitive: { id, type: "arc", center: creationStep.center, radius, startAngle, endAngle, ...cadLayerFields(), label: `圆弧 ${id.split("-").at(-1)}` } })
     setSelectedIds([id])
     setCreationStep(null)
   }
@@ -240,7 +279,7 @@ export function App() {
     const finalPoints = !points.length || Math.hypot(coordinate.x - points.at(-1)!.x, coordinate.y - points.at(-1)!.y) < 0.05 ? points : [...points, coordinate]
     if (finalPoints.length < 2) return
     const id = nextPrimitiveId(document, "polyline")
-    apply({ op: "addPrimitive", primitive: { id, type: "polyline", points: finalPoints, label: `折线 ${id.split("-").at(-1)}` } })
+    apply({ op: "addPrimitive", primitive: { id, type: "polyline", points: finalPoints, ...cadLayerFields(), label: `折线 ${id.split("-").at(-1)}` } })
     setSelectedIds([id])
     setCreationStep(null)
   }
@@ -273,6 +312,25 @@ export function App() {
   }
 
   const selectedPrimitive = selectedId ? document.primitives.find((primitive) => primitive.id === selectedId) ?? null : null
+  /**
+   * Calculus entry points for the planar workspace. The retired 微积分 workspace used to build these objects, but
+   * the kernel and the DSL still model them; creating them from a selected function keeps the feature reachable
+   * without restoring a whole workspace. `applyOperation` recomputes the derived geometry in the same patch.
+   */
+  const addFunctionAnalysis = (sourceId: string, kind: "derivative" | "tangent" | "integral") => {
+    const source = document.primitives.find((primitive): primitive is Extract<PrimitiveSpec, { type: "function" }> => primitive.id === sourceId && primitive.type === "function")
+    if (!source) return
+    const id = nextPrimitiveId(document, kind)
+    const index = id.split("-").at(-1)
+    const midpoint = (source.domain[0] + source.domain[1]) / 2
+    const primitive: PrimitiveSpec = kind === "derivative"
+      ? { id, type: "derivative", sourceId, order: 1, domain: [...source.domain], samples: source.samples ?? 128, points: [], status: "approximate", label: `导函数 ${index}` }
+      : kind === "tangent"
+        ? { id, type: "tangent", sourceId, x: midpoint, point: { x: midpoint, y: 0 }, slope: 0, a: { x: source.domain[0], y: 0 }, b: { x: source.domain[1], y: 0 }, status: "approximate", label: `切线 ${index}` }
+        : { id, type: "integral", sourceId, domain: [...source.domain], steps: 256, points: [], area: null, status: "approximate", label: `积分区域 ${index}` }
+    apply({ op: "addPrimitive", primitive })
+    setSelectedIds([id])
+  }
   const intersectionTypes = ["point", "line", "segment", "ray", "polyline", "circle", "arc", "parabola", "ellipse", "hyperbola", "function"] as const
   const selectedPointIds = selectedIds.filter((id) => document.primitives.find((primitive) => primitive.id === id)?.type === "point")
   const selectedPoint3Ids = selectedIds.filter((id) => document.primitives.find((primitive) => primitive.id === id)?.type === "point3")
@@ -399,7 +457,7 @@ export function App() {
       return
     }
     const id = nextPrimitiveId(document, "point")
-    apply({ op: "addPrimitive", primitive: { id, type: "point", x: 2, y: 1, label: nextPointLabel(document) } })
+    apply({ op: "addPrimitive", primitive: { id, type: "point", x: 2, y: 1, ...cadLayerFields(), label: nextPointLabel(document) } })
   }
   function addPoint3() {
     const pointCount = document.primitives.filter((primitive) => primitive.type === "point3").length
@@ -501,8 +559,176 @@ export function App() {
     setFileError(null)
   }
 
+  const nextLayerId = (): string => {
+    let index = 1
+    while (document.layers?.some((layer) => layer.id === `layer-${index}`)) index += 1
+    return `layer-${index}`
+  }
+  const addLayer = (parentId?: string) => {
+    const id = nextLayerId()
+    const kind = document.layers?.find((layer) => layer.id === parentId)?.kind ?? "geometry"
+    apply({ op: "addLayer", layer: { id, name: `图层 ${id.split("-").at(-1)}`, ...(parentId ? { parentId } : {}), kind, visible: true, locked: false, printable: true } })
+    if (parentId && !expandedIds.includes(parentId)) setExpandedIds([...expandedIds, parentId])
+  }
+  const deleteLayer = (id: string) => {
+    const fallback = document.layers?.find((layer) => layer.kind === "geometry" && layer.id !== id)?.id
+    apply({ op: "deleteLayer", id, ...(fallback ? { reassignTo: fallback } : {}) })
+  }
+
+  /** The active layer must be visible and unlocked before a drafting command may commit new geometry. */
+  const cadActiveLayer = (document.layers ?? []).find((layer) => layer.id === document.activeLayerId) ?? null
+  const cadActiveLayerBlockedReason = cadActiveLayer?.visible === false
+    ? `图层「${cadActiveLayer.name}」已隐藏，无法创建对象`
+    : cadActiveLayer?.locked ? `图层「${cadActiveLayer.name}」已锁定，无法创建对象` : null
+
+  const cadAnnotationSources = selectedIds.filter((id) => {    const primitive = document.primitives.find((candidate) => candidate.id === id)
+    return primitive?.type === "point3" || primitive?.type === "edge3"
+  })
+  const cadPoint3SourceCount = cadAnnotationSources.filter((id) => document.primitives.find((primitive) => primitive.id === id)?.type === "point3").length
+  const cadEdge3SourceCount = cadAnnotationSources.filter((id) => document.primitives.find((primitive) => primitive.id === id)?.type === "edge3").length
+  const canCreateLinearAnnotation = cadPoint3SourceCount === 2 || cadEdge3SourceCount === 1
+  const canCreateAngularAnnotation = cadPoint3SourceCount === 3 || cadEdge3SourceCount === 2
+
+  const cadCreateCommands: CommandCategory["commands"] = cadMode === "draft"
+    ? [
+      { id: "create-point", label: "添加点", prompt: "在 2D 视口中点击创建点" },
+      { id: "create-line", label: "添加直线", prompt: "点击起点和终点创建直线" },
+      { id: "create-segment", label: "添加线段", prompt: "点击起点和终点创建线段" },
+      { id: "create-ray", label: "添加射线", prompt: "点击起点和经过点创建射线" },
+      { id: "create-polyline", label: "添加折线", prompt: "点击顶点，双击结束" },
+      { id: "create-circle", label: "添加圆", prompt: "点击圆心和边缘" },
+      { id: "create-arc", label: "添加圆弧", prompt: "点击圆心、起点和终点" }
+    ]
+    : [
+      { id: "create-point3", label: "空间点", prompt: "添加一个用于建模的空间点" },
+      { id: "create-line3", label: "空间直线", disabled: !canCreateLine3, disabledReason: "请先按住 Shift 依次点选 2 个空间点" },
+      { id: "create-plane3", label: "空间平面", disabled: !canCreatePlane3, disabledReason: "请先按住 Shift 点选 3 个不共线的空间点" },
+      { id: "create-face3", label: "空间面", disabled: !canCreateFace3, disabledReason: "请先按住 Shift 点选 3 个以上的空间点" }
+    ]
+
+  const cadCommandCategories: CommandCategory[] = [
+    {
+      id: "select",
+      label: "选择",
+      commands: [
+        { id: "select-tool", label: "选择工具", prompt: "点击对象进行选择，Shift 加选" },
+        { id: "select-all", label: "全选", prompt: "选中当前文档的全部对象" },
+        { id: "select-clear", label: "清除选择", prompt: "清除当前选择" }
+      ]
+    },
+    { id: "create", label: "创建", commands: cadCreateCommands },
+    {
+      id: "modify",
+      label: "修改",
+      commands: [
+        { id: "modify-delete", label: "删除对象", disabled: selectedIds.length === 0, disabledReason: "请先选择要删除的对象" },
+        { id: "modify-lock", label: allSelectedLocked ? "解锁对象" : "锁定对象", disabled: selectedIds.length === 0, disabledReason: "请先选择对象" },
+        { id: "modify-hide", label: "隐藏对象", disabled: selectedIds.length === 0, disabledReason: "请先选择对象" },
+        { id: "modify-show", label: "显示对象", disabled: selectedIds.length === 0, disabledReason: "请先选择对象" },
+        { id: "modify-group", label: "创建分组", disabled: selectedIds.length === 0, disabledReason: "请先选择对象" }
+      ]
+    },
+    {
+      id: "annotate",
+      label: "标注",
+      commands: [
+        { id: "annotate-linear", label: "线性尺寸", disabled: !canCreateLinearAnnotation, disabledReason: "请选择两个空间点或一条空间棱" },
+        { id: "annotate-angular", label: "角度标注", disabled: !canCreateAngularAnnotation, disabledReason: "请选择三个空间点或两条空间棱" },
+        { id: "annotate-tolerance", label: "公差标注", disabled: !canCreateLinearAnnotation, disabledReason: "请选择两个空间点或一条空间棱" }
+      ]
+    },
+    {
+      id: "inspect",
+      label: "检查",
+      commands: [
+        { id: "inspect-diagnostics", label: showProjectionDiagnostics ? "隐藏投影诊断" : "投影诊断", prompt: "展开四个投影视图的诊断信息" },
+        { id: "inspect-sources", label: "选择全部投影来源", prompt: "选中参与投影的全部空间对象" }
+      ]
+    },
+    {
+      id: "export",
+      label: "导出",
+      commands: [
+        { id: "export-svg", label: "导出 SVG", prompt: "导出四个视图的矢量工程图" },
+        { id: "export-dxf", label: "导出 DXF", prompt: "导出 AutoCAD DXF 文件" },
+        { id: "export-pdf", label: "导出 PDF", prompt: "导出矢量 PDF 页面" },
+        { id: "export-csv", label: "导出 CSV", prompt: "导出图元清单" },
+        { id: "export-mgeo", label: "保存 .mgeo", prompt: "保存当前文档" }
+      ]
+    }
+  ]
+
+  const runCadCommand = (commandId: string) => {
+    setActiveCommand(commandId)
+    if (cadMode === "draft" && commandId.startsWith("create-") && cadActiveLayerBlockedReason) {
+      setLayerNotice(cadActiveLayerBlockedReason)
+      return
+    }
+    setLayerNotice(null)
+    switch (commandId) {
+      case "select-tool": setCreationStep(null); break
+      case "select-all": setSelectedIds(document.primitives.map((primitive) => primitive.id)); break
+      case "select-clear": setSelectedIds([]); break
+      case "create-point3": addPoint3(); break
+      case "create-line3": addLine3(); break
+      case "create-plane3": addPlane3(); break
+      case "create-face3": addFace3(); break
+      case "create-point": addPoint(); break
+      case "create-line": startCreation("line"); break
+      case "create-segment": startCreation("segment"); break
+      case "create-ray": startCreation("ray"); break
+      case "create-polyline": startCreation("polyline"); break
+      case "create-circle": startCreation("circle"); break
+      case "create-arc": startCreation("arc"); break
+      case "modify-delete": deleteSelected(); break
+      case "modify-lock": toggleLock(); break
+      case "modify-hide": apply({ op: "setPrimitivesVisible", ids: selectedIds, visible: false }); break
+      case "modify-show": apply({ op: "setPrimitivesVisible", ids: selectedIds, visible: true }); break
+      case "modify-group": createGroup(); break
+      case "annotate-linear": addEngineeringAnnotation("linear"); break
+      case "annotate-angular": addEngineeringAnnotation("angular"); break
+      case "annotate-tolerance": addEngineeringAnnotation("tolerance"); break
+      case "inspect-diagnostics": setShowProjectionDiagnostics((visible) => !visible); break
+      case "inspect-sources": {
+        const sourceIds = new Set<string>()
+        for (const drawing of engineeringDrawings) for (const primitive of drawing.primitives) sourceIds.add(primitive.sourceId)
+        setSelectedIds([...sourceIds])
+        break
+      }
+      case "export-svg": void exportSvgFile("svg"); break
+      case "export-dxf": void exportSvgFile("dxf"); break
+      case "export-pdf": void exportSvgFile("pdf"); break
+      case "export-csv": exportCsvFile(); break
+      case "export-mgeo": save(); break
+      default: break
+    }
+  }
+  const cancelCadCommand = () => {
+    setCreationStep(null)
+    setActiveCommand(null)
+    setCommandCategory(null)
+  }
+  const backToCadCategories = () => {
+    setActiveCommand(null)
+    setCommandCategory(null)
+  }
+  const handleCadModeChange = (mode: CadMode) => {
+    setCadMode(mode)
+    setCreationStep(null)
+    setActiveCommand(null)
+    setCommandCategory(null)
+    setLayerNotice(null)
+  }
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      const shortcut = historyShortcut(event)
+      if (shortcut) {
+        event.preventDefault()
+        if (shortcut === "undo") undo()
+        else redo()
+        return
+      }
       if (event.key === "Escape") {
         setCreationStep(null)
         return
@@ -514,10 +740,113 @@ export function App() {
     }
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [selectedIds, document, apply])
+  }, [selectedIds, document, apply, undo, redo])
 
   const creationLabel = creationMode === "line" ? "直线" : creationMode === "segment" ? "线段" : creationMode === "ray" ? "射线" : creationMode === "polyline" ? "折线" : creationMode === "circle" ? "圆" : "圆弧"
   const creationHint = creationMode === "polyline" ? "点击添加顶点，双击结束" : creationMode === "line" || creationMode === "segment" || creationMode === "ray" ? (creationStep?.center ? "点击终点" : "点击起点") : creationStep?.mode === "arc" ? (creationStep.start ? "点击终点" : "点击起点") : creationStep?.center ? "点击边缘" : "点击圆心"
 
-  return <div className="app-shell"><WorkspaceHeader activeWorkspace={document.workspace} onWorkspaceChange={(workspace: Workspace) => { setSelectedIds([]); setCreationStep(null); switchWorkspace(workspace) }} /><div className="workbench"><GeometryToolbar workspace={document.workspace} canCreateSection={canCreateSection} hasSelection={selectedIds.length > 0} allSelectedLocked={allSelectedLocked} creationMode={creationMode} onSelectTool={() => setCreationStep(null)} onDelete={deleteSelected} onToggleLock={toggleLock} onUndo={undo} onRedo={redo} onSave={save} onOpen={() => fileInputRef.current?.click()} onExportSvg={exportSvgFile} onExportCsv={exportCsvFile} onExportPng={exportPngFile} onAddPoint={addPoint} onAddLine={() => startCreation("line")} onAddSegment={() => startCreation("segment")} onAddRay={() => startCreation("ray")} onAddPolyline={() => startCreation("polyline")} onAddCircle={() => startCreation("circle")} onAddArc={() => startCreation("arc")} onAddParabola={() => addDefaultPrimitive("parabola")} onAddEllipse={() => addDefaultPrimitive("ellipse")} onAddHyperbola={() => addDefaultPrimitive("hyperbola")} onAddFunction={() => addDefaultPrimitive("function")} onAddCube={addDefaultCube} onAddPyramid={() => addDefaultSolid("pyramid")} onAddCylinder={() => addDefaultSolid("cylinder")} onAddCone={() => addDefaultSolid("cone")} onAddSection={addSection} point3ToolHint={point3ToolHint(selectedPoint3Ids.length, selectedIds.length)} /><AlgebraView primitives={document.primitives} measurements={document.measurements} workspace={document.workspace} selectedIds={selectedIds} onSelect={updateSelection} onToggle={(id, visible) => apply({ op: "toggleVisibility", id, visible })} />{document.workspace === "geometry3d" ? <ThreeSceneView document={document} selectedIds={selectedIds} onSelect={updateSelection} /> : document.workspace === "cad" ? <EngineeringDrawingView document={document} selectedIds={selectedIds} onSelect={updateSelection} /> : <GraphicsView document={document} selectedIds={selectedIds} creationMode={creationMode} onSelect={updateSelection} onBoxSelect={selectBox} onCanvasClick={handleCanvasCreationClick} onCanvasDoubleClick={handleCanvasDoubleClick} onDragEnd={handleDragEnd} onCreateIntersection={createIntersectionFromPreview} />}<aside className="panel right"><PropertiesBar selectedPrimitive={selectedPrimitive} selectedIds={selectedIds} selectedCount={selectedIds.length} selectedGroupId={selectedGroup?.id ?? null} allSelectedVisible={allSelectedVisible} canCreateIntersection={canCreateIntersection} onCreateGroup={createGroup} onDeleteGroup={deleteGroup} onCreateIntersection={createIntersection} onAlign={alignSelection} onToggleSelectedVisibility={() => selectedId && apply({ op: "toggleVisibility", id: selectedId, visible: selectedPrimitive?.visible === false })} onToggleSelectedLock={() => selectedId && apply({ op: "toggleLock", id: selectedId, locked: !selectedPrimitive?.locked })} onToggleBatchVisibility={() => apply({ op: "setPrimitivesVisible", ids: selectedIds, visible: !allSelectedVisible })} onUpdatePrimitive={(patch) => selectedId && apply({ op: "updatePrimitive", id: selectedId, patch })} onAddAnnotation={addAnnotation} onAddEngineeringAnnotation={addEngineeringAnnotation} onCreateMeasurement={addMeasurement} onCreateConstraint={addConstraint} onDeleteMeasurement={deleteMeasurement} value={slope?.value ?? 0.5} min={slope?.min ?? 0.15} max={slope?.max ?? 0.85} step={slope?.step ?? 0.05} onChange={(value) => apply({ op: "setParameter", id: "slope", value })} /><AgentDock /></aside><div className="footer-note">revision {document.revision} · 工作区：{document.workspace} · 草稿自动保存 · {creationMode ? `${creationLabel}创建：${creationHint}` : slopeLine?.type === "line" ? "Scene Graph / Dependency DAG 已连接" : "等待图元"}</div></div>{(fileError || operationError) && <div role="alert" className="footer-note">{fileError ?? operationError}</div>}<input ref={fileInputRef} hidden aria-label="加载 .mgeo 文件" type="file" accept=".mgeo,application/json" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; file.text().then(load).catch(() => setFileError("无法读取 .mgeo 文件")); event.target.value = "" }} /></div>
+  const activeCommandPrompt = cadCommandCategories
+    .flatMap((category) => category.commands)
+    .find((command) => command.id === activeCommand)?.prompt ?? null
+  const cadStatusPrompt = creationMode
+    ? `${creationLabel}创建：${creationHint}`
+    : activeCommandPrompt ?? (cadMode === "draft"
+      ? "2D 绘图：在视口中创建对象，新对象写入当前图层。"
+      : "工程制图根据当前文档的 3D 点、棱和面显示四个视图。")
+
+  const algebraPanel = <AlgebraView primitives={document.primitives} measurements={document.measurements} workspace={document.workspace} selectedIds={selectedIds} filter={filterQuery} onSelect={updateSelection} onToggle={(id, visible) => apply({ op: "toggleVisibility", id, visible })} />
+
+  const planarCanvas = <GraphicsView document={document} selectedIds={selectedIds} creationMode={creationMode} onSelect={updateSelection} onBoxSelect={selectBox} onCanvasClick={handleCanvasCreationClick} onCanvasDoubleClick={handleCanvasDoubleClick} onDragEnd={handleDragEnd} onCreateIntersection={createIntersectionFromPreview} />
+
+  const propertiesBarProps: PropertiesBarProps = { selectedPrimitive, selectedIds, selectedCount: selectedIds.length, selectedGroupId: selectedGroup?.id ?? null, allSelectedVisible, canCreateIntersection, onCreateGroup: createGroup, onDeleteGroup: deleteGroup, onCreateIntersection: createIntersection, onAlign: alignSelection, onToggleSelectedVisibility: () => selectedId && apply({ op: "toggleVisibility", id: selectedId, visible: selectedPrimitive?.visible === false }), onToggleSelectedLock: () => selectedId && apply({ op: "toggleLock", id: selectedId, locked: !selectedPrimitive?.locked }), onToggleBatchVisibility: () => apply({ op: "setPrimitivesVisible", ids: selectedIds, visible: !allSelectedVisible }), onUpdatePrimitive: (patch) => selectedId && apply({ op: "updatePrimitive", id: selectedId, patch }), onAddAnnotation: addAnnotation, onAddEngineeringAnnotation: addEngineeringAnnotation, onCreateMeasurement: addMeasurement, onCreateConstraint: addConstraint, onDeleteMeasurement: deleteMeasurement, onCreateDerivative: (sourceId) => addFunctionAnalysis(sourceId, "derivative"), onCreateTangent: (sourceId) => addFunctionAnalysis(sourceId, "tangent"), onCreateIntegral: (sourceId) => addFunctionAnalysis(sourceId, "integral"), value: slope?.value ?? 0.5, min: slope?.min ?? 0.15, max: slope?.max ?? 0.85, step: slope?.step ?? 0.05, onChange: (value) => apply({ op: "setParameter", id: "slope", value }) }
+
+  const propertiesPanel = <PropertiesBar {...propertiesBarProps} />
+
+  const inspectorPanel = <aside className="panel right">{propertiesPanel}<AgentDock /></aside>
+
+
+  const layers = document.layers ?? []
+  const drawingViews = document.drawingViews ?? []
+  const drawingSheets = document.drawingSheets ?? []
+  const currentSheet = drawingSheets.find((sheet) => sheet.id === (activeSheetId ?? document.activeSheetId)) ?? drawingSheets[0] ?? null
+  const fallbackSheet: DrawingSheetSpec = { id: "sheet-1", name: "工程图纸", paper: "A4", orientation: "landscape", scale: 1, viewIds: [] }
+  const sheetForCanvas = currentSheet ?? fallbackSheet
+  const draftViewSpec = defaultDraftView(currentSheet, drawingViews)
+  const activeLayerName = cadActiveLayer?.name ?? "几何"
+  const activeSheetScale = currentSheet?.scale ?? 1
+  const sourceLabels = Object.fromEntries(document.primitives.map((primitive) => [primitive.id, primitive.label ?? primitive.id]))
+
+  // Sources referenced by engineering annotations and drawing views; deleted ones stay visible as diagnostics.
+  const cadInspectorSources: InspectorSource[] = useMemo(() => {
+    const ids = new Set<string>()
+    for (const annotation of document.engineeringAnnotations ?? []) for (const id of annotation.sourceIds) ids.add(id)
+    for (const view of document.drawingViews ?? []) for (const id of view.sourceIds ?? []) ids.add(id)
+    return [...ids].map((id) => {
+      const primitive = document.primitives.find((candidate) => candidate.id === id)
+      return { id, label: primitive?.label ?? id, missing: !primitive }
+    })
+  }, [document])
+
+  const activeViewLabel = activeViewId ? drawingViewLabels[drawingViews.find((view) => view.id === activeViewId)?.kind ?? "front"] : null
+  const cadInspector = <EngineeringInspector
+    activeTab={inspectorTab}
+    onTabChange={setInspectorTab}
+    context={{
+      sheetName: sheetForCanvas.name,
+      viewName: activeViewLabel,
+      layerName: activeLayerName,
+      layerVisible: cadActiveLayer?.visible !== false,
+      layerLocked: Boolean(cadActiveLayer?.locked),
+      commandPrompt: cadStatusPrompt,
+      unit: "mm",
+      selectedLayerName: selectedPrimitive?.layerId ? layers.find((layer) => layer.id === selectedPrimitive.layerId)?.name ?? selectedPrimitive.layerId : null
+    }}
+    sources={cadInspectorSources}
+    constraints={<ConstraintPanel constraints={document.constraints} primitives={document.primitives} error={operationError?.includes("constraint") ? operationError : null} onDelete={(id) => apply({ op: "deleteConstraint", id })} onDeleteMany={(ids) => ids.forEach((id) => apply({ op: "deleteConstraint", id }))} />}
+    properties={propertiesBarProps}
+  />
+
+  const documentTreePanel = <DocumentTreePanel
+    activeTab={treeTab}
+    onTabChange={setTreeTab}
+    filter={filterQuery}
+    onFilterChange={setFilterQuery}
+    model={algebraPanel}
+    layers={<LayerTree layers={layers} activeLayerId={document.activeLayerId ?? null} expandedIds={expandedIds} filter={filterQuery} onToggleExpanded={toggleExpanded} onActivate={(id) => apply({ op: "setActiveLayer", id })} onToggleVisibility={(id, visible) => apply({ op: "updateLayer", id, patch: { visible } })} onToggleLocked={(id, locked) => apply({ op: "updateLayer", id, patch: { locked } })} onAdd={addLayer} onDelete={deleteLayer} />}
+    drawings={<DrawingTree sheets={drawingSheets} views={drawingViews} activeSheetId={currentSheet?.id ?? null} activeViewId={activeViewId} expandedIds={expandedIds} filter={filterQuery} sourceLabels={sourceLabels} onToggleExpanded={toggleExpanded} onSelectSheet={setActiveSheetId} onSelectView={setActiveViewId} onToggleView={(id, visible) => apply({ op: "updateDrawingView", id, patch: { visible } })} />}
+  />
+
+  const handleViewLayoutChange = (viewId: string, patch: DrawingViewPatch) => apply({ op: "updateDrawingView", id: viewId, patch })
+
+  const cadCanvas = <>
+    {cadMode === "draft"
+      ? <DrawingSheetView
+        sheet={sheetForCanvas}
+        views={[draftViewSpec]}
+        document={document}
+        selectedIds={selectedIds}
+        mode="draft"
+        activeViewId={draftViewSpec.id}
+        ariaLabel="二维绘图视图"
+        onSelect={updateSelection}
+        onViewSelect={setActiveViewId}
+        onViewLayoutChange={handleViewLayoutChange}
+        onCreateAt={handleCanvasCreationClick}
+      />
+      : <EngineeringDrawingView document={document} selectedIds={selectedIds} activeViewId={activeViewId} onSelect={updateSelection} onViewSelect={setActiveViewId} onViewLayoutChange={handleViewLayoutChange} />}
+    {showProjectionDiagnostics && <details className="engineering-drawing-diagnostics workbench-diagnostics" open><summary>投影诊断 {cadDiagnosticCount} 条</summary>{cadDiagnosticCount > 0 ? <ul>{engineeringDrawings.flatMap((drawing) => drawing.diagnostics).map((diagnostic, index) => <li key={`${index}-${diagnostic}`}>{diagnostic}</li>)}</ul> : <p role="status">当前四个投影视图没有诊断信息。</p>}</details>}
+  </>
+
+  const cadWorkbench = <EngineeringWorkbench
+    document={document}
+    mode={cadMode}
+    onModeChange={handleCadModeChange}
+    commandBar={<CommandBar categories={cadCommandCategories} activeCategory={commandCategory} activeCommand={activeCommand} onCategoryChange={setCommandCategory} onCommandChange={runCadCommand} onBack={backToCadCategories} onCancel={cancelCadCommand} />}
+    leftDock={documentTreePanel}
+    canvas={cadCanvas}
+    inspector={<>{cadInspector}<AgentDock showConstraints={false} /></>}
+    statusBar={<StatusBar commandPrompt={cadStatusPrompt} activeLayerName={activeLayerName} unit="mm" scale={activeSheetScale} diagnosticCount={cadDiagnosticCount} notice={layerNotice} />}
+  />
+
+  return <div className="app-shell"><WorkspaceHeader activeWorkspace={document.workspace} onWorkspaceChange={(workspace: Workspace) => { setSelectedIds([]); setCreationStep(null); setCommandCategory(null); setActiveCommand(null); switchWorkspace(workspace) }} onUndo={undo} onRedo={redo} canUndo={canUndo} canRedo={canRedo} onSave={save} onOpen={() => fileInputRef.current?.click()} />{document.workspace === "cad" ? cadWorkbench : <div className="workbench"><GeometryToolbar workspace={document.workspace} canCreateSection={canCreateSection} hasSelection={selectedIds.length > 0} allSelectedLocked={allSelectedLocked} creationMode={creationMode} onSelectTool={() => setCreationStep(null)} onDelete={deleteSelected} onToggleLock={toggleLock} onExportSvg={exportSvgFile} onExportCsv={exportCsvFile} onExportPng={exportPngFile} onAddPoint={addPoint} onAddLine={() => startCreation("line")} onAddSegment={() => startCreation("segment")} onAddRay={() => startCreation("ray")} onAddPolyline={() => startCreation("polyline")} onAddCircle={() => startCreation("circle")} onAddArc={() => startCreation("arc")} onAddParabola={() => addDefaultPrimitive("parabola")} onAddEllipse={() => addDefaultPrimitive("ellipse")} onAddHyperbola={() => addDefaultPrimitive("hyperbola")} onAddFunction={() => addDefaultPrimitive("function")} onAddCube={addDefaultCube} onAddPyramid={() => addDefaultSolid("pyramid")} onAddCylinder={() => addDefaultSolid("cylinder")} onAddCone={() => addDefaultSolid("cone")} onAddSection={addSection} point3ToolHint={point3ToolHint(selectedPoint3Ids.length, selectedIds.length)} />{algebraPanel}{document.workspace === "geometry3d" ? <ThreeSceneView document={document} selectedIds={selectedIds} onSelect={updateSelection} /> : planarCanvas}{inspectorPanel}<div className="footer-note">revision {document.revision} · 工作区：{document.workspace} · 草稿自动保存 · {creationMode ? `${creationLabel}创建：${creationHint}` : slopeLine?.type === "line" ? "Scene Graph / Dependency DAG 已连接" : "等待图元"}</div></div>}{(fileError || operationError) && <div role="alert" className="footer-note">{fileError ?? operationError}</div>}<input ref={fileInputRef} hidden aria-label="加载 .mgeo 文件" type="file" accept=".mgeo,application/json" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; file.text().then(load).catch(() => setFileError("无法读取 .mgeo 文件")); event.target.value = "" }} /></div>
 }

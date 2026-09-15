@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react"
 
 import type { Measurement3, Polyhedron3Primitive, PrimitiveSpec, Workspace } from "@draw/dsl"
 
-interface AlgebraViewProps { primitives: PrimitiveSpec[]; selectedIds: string[]; onSelect: (id: string, additive: boolean) => void; onToggle: (id: string, visible: boolean) => void; measurements?: Measurement3[]; workspace?: Workspace }
+interface AlgebraViewProps { primitives: PrimitiveSpec[]; selectedIds: string[]; onSelect: (id: string, additive: boolean) => void; onToggle: (id: string, visible: boolean) => void; measurements?: Measurement3[]; workspace?: Workspace; filter?: string }
 
 const measurementLabels: Record<Measurement3["metric"], string> = { length: "长度", distance: "距离", angle: "角度", area: "面积", volume: "体积", dihedral: "二面角" }
 
@@ -48,12 +48,14 @@ function solidGroupLabel(solid: Polyhedron3Primitive, byId: Map<string, Primitiv
   return construction?.kind === "template" ? `${base} 拓扑` : base
 }
 
-export function AlgebraView({ primitives, selectedIds, onSelect, onToggle, measurements = [], workspace }: AlgebraViewProps) {
+export function AlgebraView({ primitives, selectedIds, onSelect, onToggle, measurements = [], workspace, filter = "" }: AlgebraViewProps) {
   const [expandedSolids, setExpandedSolids] = useState<string[]>([])
   const byId = new Map(primitives.map((primitive) => [primitive.id, primitive]))
   const solids = workspace === "geometry3d" ? primitives.filter((primitive): primitive is Polyhedron3Primitive => primitive.type === "polyhedron3") : []
   const childIds = new Set(solids.flatMap((solid) => [...solid.vertexIds, ...solid.edgeIds, ...solid.faceIds]))
-  const topLevel = childIds.size > 0 ? primitives.filter((primitive) => !childIds.has(primitive.id)) : primitives
+  const query = filter.trim().toLowerCase()
+  const topLevel = (childIds.size > 0 ? primitives.filter((primitive) => !childIds.has(primitive.id)) : primitives)
+    .filter((primitive) => !query || (primitive.label ?? primitive.id).toLowerCase().includes(query))
 
   const renderRow = (primitive: PrimitiveSpec, depth = 0): ReactNode => <ObjectRow
     key={primitive.id}

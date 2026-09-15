@@ -4,8 +4,10 @@ import * as THREE from "three"
 /** Project a world point through the default 3D camera so a test can click exactly on it. */
 function projectDefaultCamera(box: { x: number; y: number; width: number; height: number }, point: THREE.Vector3) {
   const camera = new THREE.PerspectiveCamera(42, box.width / box.height, 0.1, 1000)
+  // Mirrors applyCameraState: azimuth 45, elevation 30, and world Z as the up axis.
   const horizontal = 16 * Math.cos(30 * Math.PI / 180)
-  camera.position.set(horizontal * Math.cos(Math.PI / 4), 16 * Math.sin(30 * Math.PI / 180), horizontal * Math.sin(Math.PI / 4))
+  camera.up.set(0, 0, 1)
+  camera.position.set(horizontal * Math.cos(Math.PI / 4), horizontal * Math.sin(Math.PI / 4), 16 * Math.sin(30 * Math.PI / 180))
   camera.lookAt(0, 0, 0)
   camera.updateMatrixWorld(true)
   const projected = point.clone().project(camera)
@@ -222,6 +224,151 @@ test("builds a visible plane from three selected points", async ({ page }) => {
   await expect(scene).toHaveAttribute("data-plane-count", "1")
   await algebra.getByText("空间平面 1").first().click()
   await expect(page.getByLabel("填充颜色")).toBeEnabled()
+})
+
+test("pans the 3D view along the camera axes within a bounded range", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "添加立方体" }).click()
+
+  const scene = page.locator("[data-3d-scene]")
+  const canvas = page.locator("[data-3d-scene] canvas")
+  const box = (await canvas.boundingBox())!
+  const centre = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+  const target = async () => (await scene.getAttribute("data-camera-target"))!.split(",").map(Number)
+  const drag = async (dx: number, dy: number, modifier: "Shift" | "Control") => {
+    await page.keyboard.down(modifier)
+    await page.mouse.move(centre.x, centre.y)
+    await page.mouse.down()
+    await page.mouse.move(centre.x + dx, centre.y + dy, { steps: 10 })
+    await page.mouse.up()
+    await page.keyboard.up(modifier)
+  }
+
+  expect(await target()).toEqual([0, 0, 0])
+
+  // The camera opens at azimuth 45 with Z up, so a sideways pan moves world X and Y together and leaves Z alone.
+  await drag(140, 0, "Shift")
+  const [x, y, z] = await target()
+  expect(Math.abs(x)).toBeGreaterThan(1)
+  expect(Math.abs(y)).toBeGreaterThan(1)
+  expect(Math.abs(x)).toBeCloseTo(Math.abs(y), 1)
+  expect(z).toBe(0)
+
+  // Ctrl drags along the view axis, which is the only way to centre a figure that is offset in depth.
+  const beforeDepth = await target()
+  await drag(0, -120, "Control")
+  const afterDepth = await target()
+  expect(afterDepth[0]).toBeGreaterThan(beforeDepth[0])
+  expect(afterDepth[1]).toBeGreaterThan(beforeDepth[1])
+  expect(afterDepth[2]).toBeGreaterThan(beforeDepth[2])
+
+  // The orbit centre stays bounded, so a long drag can never lose the figure off screen.
+  for (let index = 0; index < 8; index += 1) await drag(200, 0, "Shift")
+  for (const value of await target()) expect(Math.abs(value)).toBeLessThan(15)
+
+  await page.getByRole("button", { name: "适应视图" }).click()
+  expect(await target()).toEqual([0, 0, 0])
+})
+
+test("takes over left drag in pan mode and documents every view gesture", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "添加立方体" }).click()
+
+  const scene = page.locator("[data-3d-scene]")
+  const canvas = page.locator("[data-3d-scene] canvas")
+  const box = (await canvas.boundingBox())!
+
+  // The gestures used to exist with no on-screen mention, which is why panning looked unavailable.
+  await expect(page.locator("[data-camera-hint]")).toContainText("Shift+左键拖动平移")
+  await expect(page.locator("[data-camera-hint]")).toContainText("Ctrl+拖动沿视线前后移动")
+  await expect(scene).toHaveAttribute("data-pan-mode", "false")
+
+  const panButton = page.getByRole("button", { name: "平移视角" })
+  await panButton.click()
+  await expect(panButton).toHaveAttribute("aria-pressed", "true")
+  await expect(scene).toHaveAttribute("data-pan-mode", "true")
+
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(box.x + box.width / 2 - 160, box.y + box.height / 2 - 90, { steps: 10 })
+  await page.mouse.up()
+
+  const target = (await scene.getAttribute("data-camera-target"))!.split(",").map(Number)
+  expect(target.some((value) => Math.abs(value) > 0.5)).toBe(true)
+})
+
+test("reorients a cone from the property inspector with precise angles", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "添加圆锥" }).click()
+
+  const scene = page.locator("[data-3d-scene]")
+  const size = async () => (await scene.getAttribute("data-content-bounds"))!.split("size ")[1].split(",").map(Number)
+
+  // A height that differs from the diameter makes the axis visible in the reported bounds.
+  await page.getByLabel("高度").fill("6")
+  await expect.poll(async () => { const [x, , z] = await size(); return z / x }).toBeGreaterThan(1.8)
+
+  await expect(page.getByLabel("绕 X 轴旋转角度")).toHaveValue("0")
+  await page.getByRole("button", { name: "绕 X 轴加 90 度" }).click()
+
+  // The templates used to be welded to +Z; a precise 90 degree turn lays the cone along Y instead.
+  await expect(page.getByLabel("绕 X 轴旋转角度")).toHaveValue("90")
+  await expect.poll(async () => { const [x, y] = await size(); return y / x }).toBeGreaterThan(1.8)
+  await expect.poll(async () => { const [x, , z] = await size(); return Math.abs(z - x) }).toBeLessThan(0.5)
+
+  // Orientation is document state, so it comes back with the restored draft.
+  await page.reload()
+  await page.locator(".algebra-panel").getByText("圆锥 1").first().click()
+  await expect(page.getByLabel("绕 X 轴旋转角度")).toHaveValue("90")
+})
+
+test("keeps a template face reachable with Alt instead of always taking the whole solid", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "添加立方体" }).click()
+
+  const canvas = page.locator("[data-3d-scene] canvas")
+  const box = (await canvas.boundingBox())!
+  const centre = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+
+  // A plain click still selects the solid: that is the P6 v3 fix that made a solid selectable at all.
+  await page.mouse.click(centre.x, centre.y)
+  await expect(page.locator(".property-type-badge")).toHaveText("立方体")
+
+  // Alt keeps the hit on the generated face so faces stay reachable without expanding the algebra tree.
+  await page.keyboard.down("Alt")
+  await page.mouse.click(centre.x, centre.y)
+  await page.keyboard.up("Alt")
+  await expect(page.locator(".property-type-badge")).toHaveText("空间面")
+})
+
+test("resizes a plane patch by hand from the property inspector", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "立体几何" }).click()
+  for (let index = 0; index < 3; index += 1) await page.getByRole("button", { name: "添加空间点" }).click()
+  const algebra = page.locator(".algebra-panel")
+  await algebra.getByText("A", { exact: true }).click()
+  await algebra.getByText("B", { exact: true }).click({ modifiers: ["Shift"] })
+  await algebra.getByText("C", { exact: true }).click({ modifiers: ["Shift"] })
+  await page.getByRole("button", { name: "由选中点创建空间平面" }).click()
+  await algebra.getByText("空间平面 1").first().click()
+
+  const scene = page.locator("[data-3d-scene]")
+  const width = async () => Number((await scene.getAttribute("data-content-bounds"))!.split("size ")[1].split(",")[0])
+
+  // Empty means automatic: the patch is still sized from the figure.
+  await expect(page.getByLabel("平面半边长")).toHaveValue("")
+  const automatic = await width()
+
+  await page.getByLabel("平面半边长").fill("8")
+  await expect.poll(width).toBeGreaterThan(automatic * 1.5)
+
+  await page.getByRole("button", { name: "恢复自动" }).click()
+  await expect(page.getByLabel("平面半边长")).toHaveValue("")
+  await expect.poll(width).toBeCloseTo(automatic, 1)
 })
 
 test("frames an opened figure instead of leaving it a speck", async ({ page }) => {

@@ -8,7 +8,7 @@ import { resolveAnnotationPoint } from "../annotations"
 import { clipFunctionSegmentsToBounds } from "../functionGraph"
 import { getIntersectionPreviews, type IntersectionPreview } from "../intersectionPreview"
 import { dashFor, fillFor, opacityFor, strokeFor, strokeWidthFor } from "../primitiveStyle"
-import { DEFAULT_VIEWPORT, VIEWBOX, WORLD_SCALE, rayToViewport, svgToWorld, visibleWorldBounds, worldToSvg, type Viewport } from "../viewport"
+import { DEFAULT_VIEWPORT, VIEWBOX, gridStep, rayToViewport, svgToWorld, visibleWorldBounds, worldToSvg, zoomViewport, zoomViewportAt, type Viewport } from "../viewport"
 
 type CreationMode = "line" | "segment" | "ray" | "polyline" | "circle" | "arc" | null
 
@@ -24,12 +24,17 @@ interface GraphicsViewProps {
   onCreateIntersection: (preview: IntersectionPreview) => void
 }
 
-function eventToSvg(event: ReactMouseEvent<SVGElement> | ReactPointerEvent<SVGElement>): Coordinate {
-  const svg = event.currentTarget.ownerSVGElement ?? event.currentTarget as SVGSVGElement
+/** Pointer position in the SVG's own coordinate system, which is fixed by `viewBox` and independent of zoom. */
+function pointToSvg(svg: SVGSVGElement, clientX: number, clientY: number): Coordinate {
   const bounds = svg.getBoundingClientRect()
   const width = bounds.width || VIEWBOX.width
   const height = bounds.height || VIEWBOX.height
-  return { x: ((event.clientX - bounds.left) / width) * VIEWBOX.width, y: ((event.clientY - bounds.top) / height) * VIEWBOX.height }
+  return { x: ((clientX - bounds.left) / width) * VIEWBOX.width, y: ((clientY - bounds.top) / height) * VIEWBOX.height }
+}
+
+function eventToSvg(event: ReactMouseEvent<SVGElement> | ReactPointerEvent<SVGElement>): Coordinate {
+  const svg = event.currentTarget.ownerSVGElement ?? event.currentTarget as SVGSVGElement
+  return pointToSvg(svg, event.clientX, event.clientY)
 }
 
 function eventToWorld(event: ReactMouseEvent<SVGElement> | ReactPointerEvent<SVGElement>, viewport: Viewport): Coordinate {
@@ -73,6 +78,7 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
   const [hoverCoordinate, setHoverCoordinate] = useState<Coordinate | null>(null)
   const [hoverPrimitiveType, setHoverPrimitiveType] = useState<string | null>(null)
   const suppressClick = useRef(false)
+  const svgRef = useRef<SVGSVGElement>(null)
   const worldBounds = visibleWorldBounds(viewport)
   const toX = (x: number) => worldToSvg({ x, y: 0 }, viewport).x
   const toY = (y: number) => worldToSvg({ x: 0, y }, viewport).y
@@ -89,15 +95,27 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
     return result.changed ? result.document : document
   }, [document, dragCurrent, dragState])
   const displayPrimitives = previewDocument.primitives
+  /**
+   * A saved intersection must hide only the solution it captured. Filtering the whole pair instead dropped the
+   * sibling crossing of a line and a circle the moment one of them became a persistent point.
+   */
   const intersectionPreviews = useMemo(() => {
-    const persistentPairs = new Set(previewDocument.primitives.flatMap((primitive) => {
-      if (primitive.type === "intersection") return [[primitive.lineA, primitive.lineB].sort().join("::")]
-      if (primitive.type === "lineCircleIntersection") return [[primitive.lineId, primitive.circleId].sort().join("::")]
-      if (primitive.type === "circleIntersection") return [[primitive.circleA, primitive.circleB].sort().join("::")]
-      if (primitive.type === "curveIntersection") return [[primitive.objectA, primitive.objectB].sort().join("::")]
-      return []
-    }))
-    return getIntersectionPreviews(previewDocument).filter((preview) => !persistentPairs.has([preview.objectA, preview.objectB].sort().join("::")))
+    const savedPairs = new Set<string>()
+    const savedPoints = new Set<string>()
+    const key = (x: number, y: number) => `${Math.round(x * 1e6)}::${Math.round(y * 1e6)}`
+    for (const primitive of previewDocument.primitives) {
+      // Only an intersection *set* materialises every solution of a pair, so only it may hide the whole pair.
+      if (primitive.type === "intersectionSet" && primitive.points.length > 0) savedPairs.add([primitive.objectA, primitive.objectB].sort().join("::"))
+      if (primitive.type === "intersection") savedPoints.add(key(primitive.x, primitive.y))
+      if (primitive.type === "lineCircleIntersection") savedPoints.add(key(primitive.x, primitive.y))
+      if (primitive.type === "circleIntersection") savedPoints.add(key(primitive.x, primitive.y))
+      if (primitive.type === "curveIntersection") savedPoints.add(key(primitive.x, primitive.y))
+    }
+    return getIntersectionPreviews(previewDocument).filter((preview) => {
+      const pair = [preview.objectA, preview.objectB].sort().join("::")
+      if (savedPairs.has(pair)) return false
+      return !savedPoints.has(key(preview.point.x, preview.point.y))
+    })
   }, [previewDocument])
   const pointById = new Map(displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "point" }> => primitive.type === "point").map((point) => [point.id, point]))
   const connectionEndpoints = (connection: Extract<PrimitiveSpec, { type: "connection" }>) => {
@@ -200,6 +218,21 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
     window.addEventListener("blur", handleBlur)
     return () => { window.removeEventListener("keydown", handleKeyDown); window.removeEventListener("keyup", handleKeyUp); window.removeEventListener("blur", handleBlur) }
   }, [])
+  /**
+   * The wheel listener is attached natively with `passive: false` because React's synthetic wheel handler cannot
+   * preventDefault, and a zoom that also scrolls the page is unusable.
+   */
+  useEffect(() => {
+    const svg = svgRef.current
+    if (!svg) return
+    const handleWheel = (event: WheelEvent) => {
+      event.preventDefault()
+      const factor = Math.exp(-event.deltaY * 0.0015)
+      setViewport((current) => zoomViewportAt(current, factor, pointToSvg(svg, event.clientX, event.clientY)))
+    }
+    svg.addEventListener("wheel", handleWheel, { passive: false })
+    return () => svg.removeEventListener("wheel", handleWheel)
+  }, [])
   const selectionRect = dragStart && dragCurrent ? { x: toX(Math.min(dragStart.x, dragCurrent.x)), y: toY(Math.max(dragStart.y, dragCurrent.y)), width: Math.abs(toX(dragCurrent.x) - toX(dragStart.x)), height: Math.abs(toY(dragCurrent.y) - toY(dragStart.y)) } : null
   const renderHandles = (primitive: PrimitiveSpec) => {
     if (!selectedIds.includes(primitive.id) || primitive.locked) return null
@@ -233,12 +266,15 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
   })
   const renderIntersectionPreviews = () => intersectionPreviews.map((preview) => <g key={`${preview.objectA}-${preview.objectB}-${preview.solutionIndex}`} data-auto-intersection="true" onClick={(event) => { event.stopPropagation(); onCreateIntersection(preview) }}><circle data-hit-target="true" cx={toX(preview.point.x)} cy={toY(preview.point.y)} r="14" fill="transparent" pointerEvents="all" /><circle cx={toX(preview.point.x)} cy={toY(preview.point.y)} r="4" fill="var(--color-panel)" stroke="var(--color-warning)" strokeWidth="2" strokeDasharray="3 2" /></g>)
 
-  const firstGridX = Math.ceil(worldBounds.minX)
-  const firstGridY = Math.ceil(worldBounds.minY)
-  const verticalGridCount = Math.max(0, Math.floor(worldBounds.maxX) - firstGridX + 1)
-  const horizontalGridCount = Math.max(0, Math.floor(worldBounds.maxY) - firstGridY + 1)
-  return <main className="graphics"><div className="canvas-card">{hoverCoordinate && <div className="coordinate-readout" data-coordinate-readout="true" role="status">{hoverPrimitiveType ? `${hoverPrimitiveType} · ` : ""}({hoverCoordinate.x.toFixed(2)}, {hoverCoordinate.y.toFixed(2)})</div>}<svg className={panState ? "is-panning" : dragState ? "is-dragging" : undefined} data-viewport-center={`${viewport.center.x},${viewport.center.y}`} viewBox={`0 0 ${VIEWBOX.width} ${VIEWBOX.height}`} role="img" aria-label="几何画布" onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerLeave={() => { setHoverCoordinate(null); setHoverPrimitiveType(null) }} onPointerUp={finishDrag} onPointerCancel={finishDrag} onDoubleClick={(event) => creationMode === "polyline" && onCanvasDoubleClick(eventToWorld(event, viewport))} onClick={(event) => { if (suppressClick.current) { suppressClick.current = false; return }; if (creationMode) onCanvasClick(eventToWorld(event, viewport)); else if (!dragStart) onSelect(null) }}>
-    <g stroke="#e6eaf2" strokeWidth="1">{Array.from({ length: verticalGridCount }, (_, index) => { const x = toX(firstGridX + index); return <line key={`v-${firstGridX + index}`} x1={x} y1={VIEWBOX.top} x2={x} y2={VIEWBOX.bottom} /> })}{Array.from({ length: horizontalGridCount }, (_, index) => { const y = toY(firstGridY + index); return <line key={`h-${firstGridY + index}`} x1={VIEWBOX.left} y1={y} x2={VIEWBOX.right} y2={y} /> })}</g>
+  const step = gridStep(viewport.scale)
+  const firstGridX = Math.ceil(worldBounds.minX / step) * step
+  const firstGridY = Math.ceil(worldBounds.minY / step) * step
+  const verticalGridCount = Math.max(0, Math.floor((worldBounds.maxX - firstGridX) / step) + 1)
+  const horizontalGridCount = Math.max(0, Math.floor((worldBounds.maxY - firstGridY) / step) + 1)
+  const zoomFactor = viewport.scale / DEFAULT_VIEWPORT.scale
+  const zoomPercentage = `${Math.round(zoomFactor * 100)}%`
+  return <main className="graphics"><div className="canvas-card">{hoverCoordinate && <div className="coordinate-readout" data-coordinate-readout="true" role="status">{hoverPrimitiveType ? `${hoverPrimitiveType} · ` : ""}({hoverCoordinate.x.toFixed(2)}, {hoverCoordinate.y.toFixed(2)})</div>}<div className="canvas-viewport-controls" role="group" aria-label="画布缩放"><button type="button" aria-label="缩小画布" title="缩小画布（滚轮向下）" onClick={() => setViewport((current) => zoomViewport(current, 1 / 1.25))}>−</button><span className="zoom-readout" data-zoom-readout="true" aria-live="polite">{zoomPercentage}</span><button type="button" aria-label="放大画布" title="放大画布（滚轮向上）" onClick={() => setViewport((current) => zoomViewport(current, 1.25))}>＋</button><button type="button" aria-label="重置视图" title="重置视图（居中并恢复默认缩放）" onClick={() => setViewport(DEFAULT_VIEWPORT)}>重置</button></div><svg ref={svgRef} className={panState ? "is-panning" : dragState ? "is-dragging" : undefined} data-viewport-center={`${viewport.center.x},${viewport.center.y}`} data-viewport-scale={viewport.scale} viewBox={`0 0 ${VIEWBOX.width} ${VIEWBOX.height}`} role="img" aria-label="几何画布" onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerLeave={() => { setHoverCoordinate(null); setHoverPrimitiveType(null) }} onPointerUp={finishDrag} onPointerCancel={finishDrag} onDoubleClick={(event) => creationMode === "polyline" && onCanvasDoubleClick(eventToWorld(event, viewport))} onClick={(event) => { if (suppressClick.current) { suppressClick.current = false; return }; if (creationMode) onCanvasClick(eventToWorld(event, viewport)); else if (!dragStart) onSelect(null) }}>
+    <g stroke="#e6eaf2" strokeWidth="1">{Array.from({ length: verticalGridCount }, (_, index) => { const x = toX(firstGridX + index * step); return <line key={`v-${index}`} x1={x} y1={VIEWBOX.top} x2={x} y2={VIEWBOX.bottom} /> })}{Array.from({ length: horizontalGridCount }, (_, index) => { const y = toY(firstGridY + index * step); return <line key={`h-${index}`} x1={VIEWBOX.left} y1={y} x2={VIEWBOX.right} y2={y} /> })}</g>
     <line x1={VIEWBOX.left} y1={toY(0)} x2={VIEWBOX.right} y2={toY(0)} stroke="#9aa6bd" strokeWidth="1.5" /><line x1={toX(0)} y1={VIEWBOX.top} x2={toX(0)} y2={VIEWBOX.bottom} stroke="#9aa6bd" strokeWidth="1.5" />
     {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "line" }> => primitive.type === "line" && primitive.visible !== false).map((line) => { const visible = viewportLine(line); return <g key={line.id} data-primitive-type="line" opacity={opacityFor(line)} onPointerDown={(event) => beginDrag(event, line.id)} onClick={(event) => handleObjectClick(event, line.id)}><line data-hit-target="true" x1={toX(visible.a.x)} y1={toY(visible.a.y)} x2={toX(visible.b.x)} y2={toY(visible.b.y)} stroke="transparent" strokeWidth="18" pointerEvents="stroke" /><line x1={toX(visible.a.x)} y1={toY(visible.a.y)} x2={toX(visible.b.x)} y2={toY(visible.b.y)} stroke={strokeFor(line)} strokeWidth={strokeWidthFor(line, selectedIds.includes(line.id))} strokeDasharray={dashFor(line)} />{renderHandles(line)}</g> })}
     {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "ray" }> => primitive.type === "ray" && primitive.visible !== false).map((ray) => { const visible = rayToViewport(ray, worldBounds); return <g key={ray.id} data-primitive-type="ray" opacity={opacityFor(ray)} onPointerDown={(event) => beginDrag(event, ray.id)} onClick={(event) => handleObjectClick(event, ray.id)}><line data-hit-target="true" x1={toX(visible.a.x)} y1={toY(visible.a.y)} x2={toX(visible.b.x)} y2={toY(visible.b.y)} stroke="transparent" strokeWidth="18" pointerEvents="stroke" /><line x1={toX(visible.a.x)} y1={toY(visible.a.y)} x2={toX(visible.b.x)} y2={toY(visible.b.y)} stroke={strokeFor(ray)} strokeWidth={strokeWidthFor(ray, selectedIds.includes(ray.id))} strokeDasharray={dashFor(ray)} />{renderHandles(ray)}</g> })}
@@ -252,8 +288,8 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
     {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "tangent" | "normal" | "secant" }> => ["tangent", "normal", "secant"].includes(primitive.type) && primitive.visible !== false).map((primitive) => <g key={primitive.id} data-primitive-type={primitive.type} opacity={opacityFor(primitive)} onClick={(event) => handleObjectClick(event, primitive.id)}><line data-hit-target="true" x1={toX(primitive.a.x)} y1={toY(primitive.a.y)} x2={toX(primitive.b.x)} y2={toY(primitive.b.y)} stroke="transparent" strokeWidth="18" pointerEvents="stroke" /><line x1={toX(primitive.a.x)} y1={toY(primitive.a.y)} x2={toX(primitive.b.x)} y2={toY(primitive.b.y)} stroke={strokeFor(primitive)} strokeWidth={strokeWidthFor(primitive, selectedIds.includes(primitive.id))} strokeDasharray={dashFor(primitive)} /></g>)}
     {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "integral" }> => primitive.type === "integral" && primitive.visible !== false && primitive.points.length > 1).map((primitive) => <g key={primitive.id} data-primitive-type="integral" opacity={opacityFor(primitive)} onClick={(event) => handleObjectClick(event, primitive.id)}><polygon points={pointsAttribute([{ x: primitive.domain[0], y: 0 }, ...primitive.points, { x: primitive.domain[1], y: 0 }], viewport)} fill={fillFor(primitive)} fillOpacity="0.25" stroke={strokeFor(primitive)} strokeWidth={strokeWidthFor(primitive, selectedIds.includes(primitive.id))} /></g>)}
     {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "analysisSet" }> => primitive.type === "analysisSet" && primitive.visible !== false).map((primitive) => <g key={primitive.id} data-primitive-type="analysisSet" opacity={opacityFor(primitive)} onClick={(event) => handleObjectClick(event, primitive.id)}>{primitive.results.map((result, index) => <g key={`${primitive.id}-${result.kind}-${index}`} data-analysis-kind={result.kind}><circle cx={toX(result.x)} cy={toY(result.y)} r="6" fill={fillFor(primitive)} stroke={strokeFor(primitive)} strokeWidth="2" /><text x={toX(result.x) + 8} y={toY(result.y) - 8} fill={strokeFor(primitive)} fontSize="12" fontWeight="700">{result.kind}</text></g>)}</g>)}
-    {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "circle" }> => primitive.type === "circle" && primitive.visible !== false).map((circle) => <g key={circle.id} data-primitive-type="circle" opacity={opacityFor(circle)} onPointerDown={(event) => beginDrag(event, circle.id)} onClick={(event) => handleObjectClick(event, circle.id)}><circle data-hit-target="true" cx={toX(circle.center.x)} cy={toY(circle.center.y)} r={circle.radius * WORLD_SCALE} fill="none" stroke="transparent" strokeWidth="18" pointerEvents="stroke" /><circle cx={toX(circle.center.x)} cy={toY(circle.center.y)} r={circle.radius * WORLD_SCALE} fill={fillFor(circle)} stroke={strokeFor(circle)} strokeWidth={strokeWidthFor(circle, selectedIds.includes(circle.id))} strokeDasharray={dashFor(circle)} /><text x={toX(circle.center.x) + circle.radius * WORLD_SCALE + 8} y={toY(circle.center.y)} fill="#172033" fontSize="14" fontWeight="700">{circle.label ?? circle.id}</text>{renderHandles(circle)}</g>)}
-    {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "arc" }> => primitive.type === "arc" && primitive.visible !== false).map((arc) => { const path = `M ${toX(arc.center.x + arc.radius * Math.cos(arc.startAngle))} ${toY(arc.center.y + arc.radius * Math.sin(arc.startAngle))} A ${arc.radius * WORLD_SCALE} ${arc.radius * WORLD_SCALE} 0 ${Math.abs(arc.endAngle - arc.startAngle) > Math.PI ? 1 : 0} ${arc.endAngle >= arc.startAngle ? 0 : 1} ${toX(arc.center.x + arc.radius * Math.cos(arc.endAngle))} ${toY(arc.center.y + arc.radius * Math.sin(arc.endAngle))}`; return <g key={arc.id} data-primitive-type="arc" opacity={opacityFor(arc)} onPointerDown={(event) => beginDrag(event, arc.id)} onClick={(event) => handleObjectClick(event, arc.id)}><path data-hit-target="true" d={path} fill="none" stroke="transparent" strokeWidth="18" pointerEvents="stroke" /><path d={path} fill="none" stroke={strokeFor(arc)} strokeWidth={strokeWidthFor(arc, selectedIds.includes(arc.id))} strokeDasharray={dashFor(arc)} />{renderHandles(arc)}</g> })}
+    {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "circle" }> => primitive.type === "circle" && primitive.visible !== false).map((circle) => <g key={circle.id} data-primitive-type="circle" opacity={opacityFor(circle)} onPointerDown={(event) => beginDrag(event, circle.id)} onClick={(event) => handleObjectClick(event, circle.id)}><circle data-hit-target="true" cx={toX(circle.center.x)} cy={toY(circle.center.y)} r={circle.radius * viewport.scale} fill="none" stroke="transparent" strokeWidth="18" pointerEvents="stroke" /><circle cx={toX(circle.center.x)} cy={toY(circle.center.y)} r={circle.radius * viewport.scale} fill={fillFor(circle)} stroke={strokeFor(circle)} strokeWidth={strokeWidthFor(circle, selectedIds.includes(circle.id))} strokeDasharray={dashFor(circle)} /><text x={toX(circle.center.x) + circle.radius * viewport.scale + 8} y={toY(circle.center.y)} fill="#172033" fontSize="14" fontWeight="700">{circle.label ?? circle.id}</text>{renderHandles(circle)}</g>)}
+    {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "arc" }> => primitive.type === "arc" && primitive.visible !== false).map((arc) => { const path = `M ${toX(arc.center.x + arc.radius * Math.cos(arc.startAngle))} ${toY(arc.center.y + arc.radius * Math.sin(arc.startAngle))} A ${arc.radius * viewport.scale} ${arc.radius * viewport.scale} 0 ${Math.abs(arc.endAngle - arc.startAngle) > Math.PI ? 1 : 0} ${arc.endAngle >= arc.startAngle ? 0 : 1} ${toX(arc.center.x + arc.radius * Math.cos(arc.endAngle))} ${toY(arc.center.y + arc.radius * Math.sin(arc.endAngle))}`; return <g key={arc.id} data-primitive-type="arc" opacity={opacityFor(arc)} onPointerDown={(event) => beginDrag(event, arc.id)} onClick={(event) => handleObjectClick(event, arc.id)}><path data-hit-target="true" d={path} fill="none" stroke="transparent" strokeWidth="18" pointerEvents="stroke" /><path d={path} fill="none" stroke={strokeFor(arc)} strokeWidth={strokeWidthFor(arc, selectedIds.includes(arc.id))} strokeDasharray={dashFor(arc)} />{renderHandles(arc)}</g> })}
     {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "point" }> => primitive.type === "point" && primitive.visible !== false).map((point) => <g key={point.id} data-primitive-type="point" opacity={opacityFor(point)} onPointerDown={(event) => beginDrag(event, point.id)} onClick={(event) => handleObjectClick(event, point.id)}><circle data-hit-target="true" cx={toX(point.x)} cy={toY(point.y)} r="14" fill="transparent" pointerEvents="all" /><circle cx={toX(point.x)} cy={toY(point.y)} r="6" fill={fillFor(point)} stroke={strokeFor(point)} strokeWidth={strokeWidthFor(point, selectedIds.includes(point.id))} strokeDasharray={dashFor(point)} /><text x={toX(point.x) + 12} y={toY(point.y) + 5} fill="#172033" fontSize="14" fontWeight="700">{point.label ?? point.id}</text></g>)}
     {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "intersection" | "lineCircleIntersection" | "circleIntersection" | "curveIntersection" }> => ["intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection"].includes(primitive.type) && primitive.visible !== false).map((primitive) => { const selected = selectedIds.includes(primitive.id); return <g key={primitive.id} data-primitive-type={primitive.type} opacity={opacityFor(primitive)} onClick={(event) => handleObjectClick(event, primitive.id)}><circle data-hit-target="true" cx={toX(primitive.x)} cy={toY(primitive.y)} r="14" fill="transparent" pointerEvents="all" /><circle cx={toX(primitive.x)} cy={toY(primitive.y)} r={selected ? 5 : 4} fill={fillFor(primitive)} stroke={strokeFor(primitive)} strokeWidth={strokeWidthFor(primitive, selected)} strokeDasharray={dashFor(primitive)} />{selected && <text data-intersection-info="true" x={toX(primitive.x) + 9} y={toY(primitive.y) - 9} fill="#172033" fontSize="11" fontWeight="600">{primitive.label ?? "交点 P"} ({primitive.x.toFixed(2)}, {primitive.y.toFixed(2)})</text>}</g> })}
     {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "intersectionSet" }> => primitive.type === "intersectionSet" && primitive.visible !== false).map((primitive) => { const selected = selectedIds.includes(primitive.id); return <g key={primitive.id} data-primitive-type="intersectionSet" opacity={opacityFor(primitive)} onClick={(event) => handleObjectClick(event, primitive.id)}>{primitive.points.map((point, index) => <g key={`${primitive.id}-point-${index}`}><circle data-hit-target="true" cx={toX(point.x)} cy={toY(point.y)} r="14" fill="transparent" pointerEvents="all" /><circle cx={toX(point.x)} cy={toY(point.y)} r={selected ? 5 : 4} fill={fillFor(primitive)} stroke={strokeFor(primitive)} strokeWidth={strokeWidthFor(primitive, selected)} strokeDasharray={dashFor(primitive)} />{selected && <text data-intersection-info="true" x={toX(point.x) + 9} y={toY(point.y) - 9} fill="#172033" fontSize="11" fontWeight="600">{primitive.label ?? "交点集合"} {index + 1} ({point.x.toFixed(2)}, {point.y.toFixed(2)})</text>}</g>)}</g> })}

@@ -64,6 +64,10 @@ export interface PrimitiveUpdatePatch {
   style?: { stroke?: string; fill?: string; strokeWidth?: number; opacity?: number; dash?: string }
   origin3?: Vector3
   size3?: Vector3
+  /** Euler orientation of a parameterized solid, in radians; omitted axes keep their current angle. */
+  rotation3?: Partial<Vector3>
+  /** Drawn half-extent of a `plane3` patch; null returns it to automatic sizing. */
+  halfSize?: number | null
   baseCenter3?: Vector3
   baseSize3?: { x: number; y: number }
   center3?: Vector3
@@ -685,15 +689,37 @@ export function recomputeDerivedObjects(document: GeometryDocument, changedIds?:
   return { ...evaluatedDocument, primitives, measurements }
 }
 
+/** Derivative curve, tangent, normal, secant, integral region and analysis set all describe one function. */
+function functionAnalysisSourceId(primitive: PrimitiveSpec): string | null {
+  switch (primitive.type) {
+    case "derivative":
+    case "tangent":
+    case "normal":
+    case "secant":
+    case "integral":
+    case "analysisSet":
+      return primitive.sourceId
+    default:
+      return null
+  }
+}
+
 /**
  * A template solid (cube/pyramid/cylinder/cone) is not a single primitive: the workspace also materialises a
  * polyhedron plus its vertices, edges and faces so the figure can be drawn and measured. Those parts exist only
  * to draw the solid, so for deletion they are the same object — deleting any member deletes the family. Treating
  * the generated parts as ordinary referrers instead made a solid impossible to delete, and deleting the
  * generated part alone left the rest of the figure floating in the scene.
+ *
+ * Function analysis objects are the same story: a 导函数/切线/积分区域/分析集 only exists to describe its source
+ * function. Counting them as ordinary referrers made a legacy calculus document's function impossible to delete
+ * ("object is referenced by another object"), so they are deleted together with the function they came from.
  */
 export function deletionTargets(document: GeometryDocument, id: string): Set<string> {
   const targets = new Set<string>([id])
+  for (const primitive of document.primitives) {
+    if (functionAnalysisSourceId(primitive) === id) targets.add(primitive.id)
+  }
   const polyhedron = document.primitives.find((primitive) => {
     if (primitive.type !== "polyhedron3" || primitive.construction?.kind !== "template") return false
     return primitive.id === id || primitive.construction.sourceIds[0] === id || primitive.vertexIds.includes(id) || primitive.edgeIds.includes(id) || primitive.faceIds.includes(id)
@@ -730,7 +756,7 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
     changedIds = operation.primitives.map((primitive) => primitive.id)
   } else if (operation.op === "updatePrimitive") {
     const primitive = next.primitives.find((candidate) => candidate.id === operation.id)
-    const editableGeometry = ["point", "point3", "line", "segment", "ray", "polyline", "parabola", "ellipse", "hyperbola", "function", "circle", "arc", "cube", "pyramid", "cylinder", "cone"]
+    const editableGeometry = ["point", "point3", "line", "segment", "ray", "polyline", "parabola", "ellipse", "hyperbola", "function", "circle", "arc", "cube", "pyramid", "cylinder", "cone", "plane3"]
     const geometryPatchKeys = Object.keys(operation.patch).filter((key) => key !== "style" && key !== "label")
     if (!primitive || (geometryPatchKeys.length > 0 && !editableGeometry.includes(primitive.type)) || primitive.locked) return { document, changed: false, error: primitive?.locked ? "object is locked" : "object is not editable" }
     if (primitive.type === "point") {
@@ -779,20 +805,28 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
       if (operation.patch.startAngle !== undefined) primitive.startAngle = operation.patch.startAngle
       if (operation.patch.endAngle !== undefined) primitive.endAngle = operation.patch.endAngle
     }
+    if (primitive.type === "plane3" && operation.patch.halfSize !== undefined) {
+      // null puts the plane back on automatic sizing; JSON.stringify then drops the field entirely.
+      if (operation.patch.halfSize === null || !(operation.patch.halfSize > 0)) delete primitive.halfSize
+      else primitive.halfSize = operation.patch.halfSize
+    }
     if (primitive.type === "cube") {
       if (operation.patch.origin3) primitive.origin = { ...primitive.origin, ...operation.patch.origin3 }
       if (operation.patch.size3) primitive.size = { ...primitive.size, ...operation.patch.size3 }
+      if (operation.patch.rotation3) primitive.rotation = { ...(primitive.rotation ?? { x: 0, y: 0, z: 0 }), ...operation.patch.rotation3 }
     }
     if (primitive.type === "pyramid") {
       if (operation.patch.baseCenter3) primitive.baseCenter = { ...primitive.baseCenter, ...operation.patch.baseCenter3 }
       if (operation.patch.baseSize3) primitive.baseSize = { ...primitive.baseSize, ...operation.patch.baseSize3 }
       if (operation.patch.height !== undefined) primitive.height = operation.patch.height
+      if (operation.patch.rotation3) primitive.rotation = { ...(primitive.rotation ?? { x: 0, y: 0, z: 0 }), ...operation.patch.rotation3 }
     }
     if (primitive.type === "cylinder" || primitive.type === "cone") {
       if (operation.patch.center3) primitive.center = { ...primitive.center, ...operation.patch.center3 }
       if (operation.patch.radius3 !== undefined) primitive.radius = operation.patch.radius3
       if (operation.patch.height !== undefined) primitive.height = operation.patch.height
       if (operation.patch.segments !== undefined) primitive.segments = operation.patch.segments
+      if (operation.patch.rotation3) primitive.rotation = { ...(primitive.rotation ?? { x: 0, y: 0, z: 0 }), ...operation.patch.rotation3 }
     }
     if (operation.patch.label !== undefined) primitive.label = operation.patch.label
     // A template solid paints its generated point/edge/face children, so a template style change recolours them too.

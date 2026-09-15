@@ -3,6 +3,58 @@ import { describe, expect, it } from "vitest"
 import { createDefaultCadLayout, createEmptyDocument, decodeMgeo, encodeMgeo, validateDocument } from "./index"
 
 describe("Geometry DSL codec", () => {
+  it("round-trips the orientation of a template solid", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [{ id: "cone-1", type: "cone", center: { x: 0, y: 0, z: 0 }, radius: 1, height: 2, segments: 24, rotation: { x: Math.PI / 2, y: 0, z: -Math.PI / 4 } }]
+
+    const restored = decodeMgeo(encodeMgeo(document))
+
+    expect(restored.primitives[0]).toMatchObject({ type: "cone", rotation: { x: Math.PI / 2, y: 0, z: -Math.PI / 4 } })
+  })
+
+  it("keeps upright the solids written before orientation existed", () => {
+    const legacy = { format: "mgeo", formatVersion: "0.1", document: { ...createEmptyDocument("geometry3d"), primitives: [{ id: "cone-1", type: "cone", center: { x: 0, y: 0, z: 0 }, radius: 1, height: 2, segments: 24 }] } }
+
+    const restored = decodeMgeo(JSON.stringify(legacy))
+
+    expect((restored.primitives[0] as { rotation?: unknown }).rotation).toBeUndefined()
+  })
+
+  it("rejects an orientation that is not three finite radians", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [{ id: "cone-1", type: "cone", center: { x: 0, y: 0, z: 0 }, radius: 1, height: 2, segments: 24, rotation: { x: Number.NaN, y: 0, z: 0 } }]
+
+    expect(validateDocument(document).valid).toBe(false)
+    expect(() => encodeMgeo(document)).toThrow(/rotation must be three finite radians/)
+  })
+
+  it("round-trips an explicit plane patch size", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      { id: "p0", type: "point3", position: { x: 0, y: 0, z: 0 } },
+      { id: "p1", type: "point3", position: { x: 4, y: 0, z: 0 } },
+      { id: "p2", type: "point3", position: { x: 0, y: 4, z: 0 } },
+      { id: "plane-abc", type: "plane3", definition: { kind: "throughPoints", pointIds: ["p0", "p1", "p2"] }, halfSize: 6 }
+    ]
+
+    const restored = decodeMgeo(encodeMgeo(document))
+
+    expect(restored.primitives.find((primitive) => primitive.id === "plane-abc")).toMatchObject({ halfSize: 6 })
+  })
+
+  it("rejects a plane patch size that is not a positive number", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      { id: "p0", type: "point3", position: { x: 0, y: 0, z: 0 } },
+      { id: "p1", type: "point3", position: { x: 4, y: 0, z: 0 } },
+      { id: "p2", type: "point3", position: { x: 0, y: 4, z: 0 } },
+      { id: "plane-abc", type: "plane3", definition: { kind: "throughPoints", pointIds: ["p0", "p1", "p2"] }, halfSize: 0 }
+    ]
+
+    expect(validateDocument(document).valid).toBe(false)
+    expect(() => encodeMgeo(document)).toThrow(/halfSize must be a positive finite number/)
+  })
+
   it("migrates legacy CAD documents to default layers and views", () => {
     const document = createEmptyDocument("cad")
     document.primitives = [{ id: "point-1", type: "point", x: 1, y: 2 }]

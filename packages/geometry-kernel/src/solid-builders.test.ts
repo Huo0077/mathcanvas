@@ -25,8 +25,64 @@ describe("solid builders", () => {
     expect(second.faceIds).toEqual(first.faceIds)
   })
 
-  it("builds a point-driven triangular prism with closed topology", () => {
-    const result = buildPrism({ base: triangle, vector: { x: 0, y: 0, z: 3 } }, createBuilderContext("prism"))
+  const degrees = (value: number) => value * Math.PI / 180
+  const solidPoints = (result: ReturnType<typeof buildSolidTemplate>) => result.primitives.flatMap((primitive) => primitive.type === "point3" ? [{ ...primitive.position }] : [])
+  const span = (points: { x: number; y: number; z: number }[], axis: "x" | "y" | "z") => Math.max(...points.map((point) => point[axis])) - Math.min(...points.map((point) => point[axis]))
+  const distance = (point: { x: number; y: number; z: number }, origin: { x: number; y: number; z: number }) => Math.hypot(point.x - origin.x, point.y - origin.y, point.z - origin.z)
+
+  it("tips a cone by rotating it about its own axis midpoint", () => {
+    const cone = { id: "cone-1", type: "cone" as const, center: { x: 0, y: 0, z: 0 }, radius: 2, height: 4, segments: 4 }
+    const upright = buildSolidTemplate(cone)
+    const tipped = buildSolidTemplate({ ...cone, rotation: { x: degrees(90), y: 0, z: 0 } })
+    const pivot = { x: 0, y: 0, z: 2 }
+    // The apex is the vertex closest to the axis midpoint: the base ring sits further out at sqrt(r^2 + (h/2)^2).
+    const apex = (result: ReturnType<typeof buildSolidTemplate>) => solidPoints(result).reduce((closest, point) => distance(point, pivot) < distance(closest, pivot) ? point : closest)
+
+    expect(buildSolidTemplate(cone).diagnostics).toEqual([])
+    expect(tipped.diagnostics).toEqual([])
+    expect(apex(upright).z).toBeCloseTo(4, 6)
+    // A 90 degree turn about X lays the axis along -Y instead of leaving it on +Z.
+    expect(apex(tipped).x).toBeCloseTo(0, 6)
+    expect(apex(tipped).y).toBeCloseTo(-2, 6)
+    expect(apex(tipped).z).toBeCloseTo(2, 6)
+    // Rigid: the cone is tipped, not resized, so every vertex keeps its distance to the pivot.
+    const uprightDistances = solidPoints(upright).map((point) => distance(point, pivot)).sort((first, second) => first - second)
+    const tippedDistances = solidPoints(tipped).map((point) => distance(point, pivot)).sort((first, second) => first - second)
+    tippedDistances.forEach((value, index) => expect(value).toBeCloseTo(uprightDistances[index], 6))
+  })
+
+  it("lays a cylinder down by rotating it about its own axis midpoint", () => {
+    const cylinder = { id: "cylinder-1", type: "cylinder" as const, center: { x: 0, y: 0, z: 0 }, radius: 1, height: 6, segments: 4 }
+    const upright = solidPoints(buildSolidTemplate(cylinder))
+    const lying = solidPoints(buildSolidTemplate({ ...cylinder, rotation: { x: 0, y: degrees(90), z: 0 } }))
+
+    expect(span(upright, "z")).toBeCloseTo(6, 6)
+    expect(span(upright, "x")).toBeCloseTo(2, 6)
+    // Standing up the height is on Z; after a 90 degree turn about Y the same length is on X.
+    expect(span(lying, "x")).toBeCloseTo(6, 6)
+    expect(span(lying, "z")).toBeCloseTo(2, 6)
+  })
+
+  it("tilts a cube about its box centre and a pyramid about its axis midpoint", () => {
+    const cube = { id: "cube-1", type: "cube" as const, origin: { x: -1, y: -1, z: -1 }, size: { x: 2, y: 2, z: 2 } }
+    const tiltedCube = solidPoints(buildSolidTemplate({ ...cube, rotation: { x: 0, y: 0, z: degrees(45) } }))
+    // The pivot is the box centre, so a 45 degree turn about Z lines the diagonal up with the X axis.
+    expect(span(tiltedCube, "x")).toBeCloseTo(2 * Math.SQRT2, 6)
+    expect(span(tiltedCube, "z")).toBeCloseTo(2, 6)
+
+    const pyramid = { id: "pyramid-1", type: "pyramid" as const, baseCenter: { x: 0, y: 0, z: 0 }, baseSize: { x: 4, y: 4 }, height: 3 }
+    const tippedPyramid = solidPoints(buildSolidTemplate({ ...pyramid, rotation: { x: degrees(90), y: 0, z: 0 } }))
+    expect(span(tippedPyramid, "z")).toBeCloseTo(4, 6)
+    expect(span(tippedPyramid, "y")).toBeCloseTo(3, 6)
+  })
+
+  it("leaves an unrotated template exactly as it was", () => {
+    const cube = { id: "cube-1", type: "cube" as const, origin: { x: -1, y: -2, z: -3 }, size: { x: 2, y: 4, z: 6 } }
+
+    expect(solidPoints(buildSolidTemplate({ ...cube, rotation: { x: 0, y: 0, z: 0 } }))).toEqual(solidPoints(buildSolidTemplate(cube)))
+  })
+
+  it("builds a point-driven triangular prism with closed topology", () => {    const result = buildPrism({ base: triangle, vector: { x: 0, y: 0, z: 3 } }, createBuilderContext("prism"))
 
     expect(result.diagnostics).toEqual([])
     expect(result.primitives.filter((primitive) => primitive.type === "point3")).toHaveLength(6)

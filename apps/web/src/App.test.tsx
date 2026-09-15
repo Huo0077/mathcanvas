@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react"
+import { fireEvent, render, screen, within } from "@testing-library/react"
 import { beforeEach, describe, expect, it } from "vitest"
 
 import { createEmptyDocument } from "@draw/dsl"
@@ -19,7 +19,7 @@ describe("MathCanvas workbench", () => {
     localStorage.clear()
     // `replace` deliberately keeps other workspaces' documents, so tests need a full store reset.
     const document = createDemoDocument()
-    useSceneStore.setState({ document, workspaceDocuments: { [document.workspace]: document }, history: [], future: [], previewBase: null, error: null })
+    useSceneStore.setState({ document, workspaceDocuments: { [document.workspace]: document }, history: [], future: [], previewBase: null, error: null, treeTab: "model", expandedIds: ["sheet-1"], filterQuery: "" })
   })
 
   it("routes the CAD workspace to four engineering drawing views", () => {
@@ -31,7 +31,9 @@ describe("MathCanvas workbench", () => {
     expect(engineeringDrawing.querySelectorAll("[data-drawing-view]")).toHaveLength(4)
     expect(screen.getAllByText("暂无可投影的空间对象")).toHaveLength(4)
     expect(screen.queryByRole("button", { name: "添加点" })).toBeNull()
-    expect(screen.getByText("工程制图根据当前文档的 3D 点、棱和面显示四个视图。")).toBeTruthy()
+    expect(screen.getByRole("region", { name: "工程状态栏" }).textContent).toContain("工程制图根据当前文档的 3D 点、棱和面显示四个视图。")
+
+    fireEvent.click(screen.getByRole("button", { name: "导出" }))
     expect((screen.getByRole("button", { name: "导出 SVG" }) as HTMLButtonElement).disabled).toBe(false)
   })
 
@@ -63,10 +65,154 @@ describe("MathCanvas workbench", () => {
     const sourceButtons = screen.getAllByRole("button", { name: /point3-/ })
     fireEvent.click(sourceButtons[0])
     fireEvent.click(sourceButtons[1], { shiftKey: true })
+    fireEvent.click(screen.getByRole("tab", { name: "工程标注" }))
     fireEvent.click(screen.getByRole("button", { name: "Add linear annotation" }))
 
     expect(useSceneStore.getState().document.engineeringAnnotations).toHaveLength(1)
     expect(useSceneStore.getState().document.engineeringAnnotations?.[0]).toMatchObject({ kind: "linear", sourceIds: ["point3-1", "point3-2"], view: "front" })
+  })
+
+  it("no longer offers the calculus workspace anywhere in the shell", () => {
+    render(<App />)
+
+    expect(screen.queryByRole("button", { name: "微积分" })).toBeNull()
+
+    // The workspace stays retired, but 圆锥曲线 keeps a function entry so simple functions remain reachable there.
+    fireEvent.click(screen.getByRole("button", { name: "圆锥曲线" }))
+    expect(screen.getByRole("button", { name: "添加函数" })).toBeTruthy()
+    expect(screen.getByRole("button", { name: "添加抛物线" })).toBeTruthy()
+    expect(screen.getByRole("button", { name: "添加椭圆" })).toBeTruthy()
+  })
+
+  it("still opens a legacy document saved in the retired workspace without crashing", () => {
+    const legacy = {
+      ...createEmptyDocument("calculus"),
+      primitives: [{ id: "fn-1", type: "function" as const, expression: "x*x", domain: [-1, 1] as [number, number], label: "旧函数" }]
+    }
+    useSceneStore.getState().replace(legacy)
+    render(<App />)
+
+    // Compatibility promise: it opens, its objects are listed (so they can be inspected and deleted),
+    // and the retired workspace is still not offered as a destination.
+    expect(screen.getByText("旧函数")).toBeTruthy()
+    expect(screen.queryByRole("button", { name: "微积分" })).toBeNull()
+  })
+
+  it("undoes and redoes with the keyboard, the way most people expect", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "工程制图" }))
+    fireEvent.click(screen.getByRole("button", { name: "创建" }))
+    fireEvent.click(screen.getByRole("button", { name: "空间点" }))
+    expect(useSceneStore.getState().document.primitives).toHaveLength(1)
+
+    fireEvent.keyDown(window, { key: "z", ctrlKey: true })
+    expect(useSceneStore.getState().document.primitives).toHaveLength(0)
+
+    fireEvent.keyDown(window, { key: "y", ctrlKey: true })
+    expect(useSceneStore.getState().document.primitives).toHaveLength(1)
+
+    fireEvent.keyDown(window, { key: "z", ctrlKey: true })
+    fireEvent.keyDown(window, { key: "z", ctrlKey: true, shiftKey: true })
+    expect(useSceneStore.getState().document.primitives).toHaveLength(1)
+    // Cmd on macOS must behave the same way.
+    fireEvent.keyDown(window, { key: "z", metaKey: true })
+    expect(useSceneStore.getState().document.primitives).toHaveLength(0)
+  })
+
+  it("never steals an undo shortcut from a text field", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    const before = useSceneStore.getState().document.primitives.length
+
+    const field = globalThis.document.createElement("input")
+    globalThis.document.body.append(field)
+    fireEvent.keyDown(field, { key: "z", ctrlKey: true })
+    field.remove()
+
+    expect(useSceneStore.getState().document.primitives).toHaveLength(before)
+  })
+
+  it("disables the history buttons when there is nothing to undo or redo", () => {
+    render(<App />)
+    const undoButton = () => screen.getByRole("button", { name: "撤销" }) as HTMLButtonElement
+    const redoButton = () => screen.getByRole("button", { name: "重做" }) as HTMLButtonElement
+
+    // A restored draft starts with no history, so an enabled-looking button used to do nothing at all.
+    expect(undoButton().disabled).toBe(true)
+    expect(redoButton().disabled).toBe(true)
+
+    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    expect(undoButton().disabled).toBe(false)
+    expect(redoButton().disabled).toBe(true)
+
+    fireEvent.click(undoButton())
+    expect(undoButton().disabled).toBe(true)
+    expect(redoButton().disabled).toBe(false)
+  })
+
+  it("creates and activates layers from the CAD layer tree", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "工程制图" }))
+    fireEvent.click(screen.getByRole("tab", { name: "图层树" }))
+
+    expect(screen.getByRole("button", { name: "几何" })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole("button", { name: "新建图层" }))
+    expect(useSceneStore.getState().document.layers?.map((layer) => layer.name)).toContain("图层 1")
+
+    fireEvent.click(screen.getByRole("button", { name: "图层 1" }))
+    expect(useSceneStore.getState().document.activeLayerId).toBe("layer-1")
+  })
+
+  it("selects a sheet view from the CAD drawing tree and toggles its visibility", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "工程制图" }))
+    fireEvent.click(screen.getByRole("tab", { name: "图纸树" }))
+
+    const tree = screen.getByRole("region", { name: "模型与图纸树" })
+    fireEvent.click(within(tree).getByRole("button", { name: "主视图" }))
+    expect(within(tree).getByRole("button", { name: "主视图" }).getAttribute("aria-pressed")).toBe("true")
+
+    fireEvent.click(within(tree).getByRole("button", { name: "隐藏 主视图" }))
+    expect(useSceneStore.getState().document.drawingViews?.find((view) => view.id === "view-front")?.visible).toBe(false)
+  })
+
+  it("scales a projection viewport and persists the layout on the document", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "工程制图" }))
+
+    fireEvent.click(screen.getByRole("button", { name: "放大 主视图" }))
+
+    expect(useSceneStore.getState().document.drawingViews?.find((view) => view.id === "view-front")?.scale).toBe(1.5)
+  })
+
+  it("drafts 2D geometry into the active layer and hides it with that layer", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "工程制图" }))
+    fireEvent.click(screen.getByRole("button", { name: "2D 绘图" }))
+    fireEvent.click(screen.getByRole("button", { name: "创建" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+
+    expect(useSceneStore.getState().document.primitives[0]).toMatchObject({ type: "point", layerId: "layer-geometry" })
+    expect(screen.getByRole("region", { name: /模型视图/ })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole("tab", { name: "图层树" }))
+    fireEvent.click(screen.getByRole("button", { name: "隐藏 几何" }))
+
+    expect(screen.queryByRole("button", { name: /新点 A/ })).toBeNull()
+  })
+
+  it("refuses to draft on a hidden layer and explains the rejection in the status bar", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "工程制图" }))
+    fireEvent.click(screen.getByRole("tab", { name: "图层树" }))
+    fireEvent.click(screen.getByRole("button", { name: "隐藏 几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "2D 绘图" }))
+    fireEvent.click(screen.getByRole("button", { name: "创建" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+
+    expect(useSceneStore.getState().document.primitives).toHaveLength(0)
+    expect(screen.getByText(/已隐藏，无法创建对象/)).toBeTruthy()
   })
 
   it("switches workspaces without losing each workspace document", () => {
@@ -75,12 +221,12 @@ describe("MathCanvas workbench", () => {
     fireEvent.click(screen.getByRole("button", { name: "添加点" }))
     expect(screen.getAllByText("新点 A")).toHaveLength(2)
 
-    fireEvent.click(screen.getByRole("button", { name: "微积分" }))
-    expect(screen.getByRole("img", { name: "几何画布" }).querySelector('[data-intersection-info="true"]')).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    expect(screen.queryByRole("img", { name: "几何画布" })).toBeNull()
     fireEvent.click(screen.getByRole("button", { name: "圆锥曲线" }))
     expect(screen.getAllByText("新点 A")).toHaveLength(2)
     expect(screen.getByRole("button", { name: "圆锥曲线" }).getAttribute("aria-pressed")).toBe("true")
-    fireEvent.click(screen.getByRole("button", { name: "微积分" }))
+    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
   })
 
   it("shows the default intersection and updates it from the slope slider", () => {
@@ -479,16 +625,6 @@ describe("MathCanvas workbench", () => {
     expect((screen.getByRole("spinbutton", { name: "抛物线旋转角度" }) as HTMLInputElement).disabled).toBe(true)
   })
 
-  it("renders a typed function expression with common math notation", () => {
-    render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "添加函数图像" }))
-    fireEvent.change(screen.getByRole("textbox", { name: "函数表达式" }), { target: { value: "y = sin(x)^2" } })
-
-    expect((screen.getByRole("textbox", { name: "函数表达式" }) as HTMLInputElement).value).toBe("y = sin(x)^2")
-    const graphs = Array.from(screen.getByRole("img", { name: "几何画布" }).querySelectorAll('[data-primitive-type="function"] polyline:not([data-hit-target="true"])'))
-    expect(graphs.some((graph) => !graph.getAttribute("points")?.includes("500,20"))).toBe(true)
-  })
-
   it("applies common style properties to a selected line", () => {
     render(<App />)
     fireEvent.click(screen.getAllByText("y = 0")[0])
@@ -504,63 +640,6 @@ describe("MathCanvas workbench", () => {
     expect(line.parentElement?.getAttribute("opacity")).toBe("0.5")
   })
 
-  it("adds and edits a sampled function in the workbench", () => {
-    render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "添加函数图像" }))
-    expect(screen.getByRole("textbox", { name: "函数表达式" })).toBeTruthy()
-    expect(screen.getByRole("img", { name: "几何画布" }).querySelectorAll('[data-primitive-type="function"]').length).toBeGreaterThan(0)
-    fireEvent.change(screen.getByRole("textbox", { name: "函数表达式" }), { target: { value: "2*x+1" } })
-    fireEvent.change(screen.getByRole("spinbutton", { name: "定义域终点" }), { target: { value: "4" } })
-    expect((screen.getByRole("textbox", { name: "函数表达式" }) as HTMLInputElement).value).toBe("2*x+1")
-    expect((screen.getByRole("spinbutton", { name: "定义域终点" }) as HTMLInputElement).value).toBe("4")
-  })
-
-  it("inserts nested functions from the formula keyboard", () => {
-    render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "添加函数图像" }))
-    fireEvent.click(screen.getByRole("button", { name: "插入 sin" }))
-    fireEvent.click(screen.getByRole("button", { name: "插入 ln" }))
-
-    const formula = screen.getByRole("textbox", { name: "函数表达式" }) as HTMLTextAreaElement
-    fireEvent.change(formula, { target: { value: "sin(ln(x))" } })
-
-    expect(formula.value).toBe("sin(ln(x))")
-    expect(screen.getByRole("button", { name: "插入对数" })).toBeTruthy()
-  })
-
-  it("creates linked calculus analysis objects from the function inspector", () => {
-    render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "添加函数图像" }))
-    fireEvent.click(screen.getByRole("button", { name: "创建导函数" }))
-    fireEvent.click(screen.getByRole("button", { name: "创建切线" }))
-    fireEvent.click(screen.getByRole("button", { name: "创建积分区域" }))
-
-    const canvas = screen.getByRole("img", { name: "几何画布" })
-    expect(canvas.querySelector('[data-primitive-type="derivative"]')).toBeTruthy()
-    expect(canvas.querySelector('[data-primitive-type="tangent"]')).toBeTruthy()
-    expect(canvas.querySelector('[data-primitive-type="integral"]')).toBeTruthy()
-    expect(screen.getByText("导函数")).toBeTruthy()
-  })
-
-  it("keeps a visible formula editor for direct input", () => {
-    render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "添加函数图像" }))
-
-    expect(screen.getByRole("textbox", { name: "函数表达式" })).toBeTruthy()
-    expect(screen.getByPlaceholderText("例如：y = e^x 或 sin(ln(x))")).toBeTruthy()
-  })
-
-  it("does not delete a function when Backspace is pressed in its formula editor", () => {
-    render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "添加函数图像" }))
-    const formula = screen.getByRole("textbox", { name: "函数表达式" })
-
-    fireEvent.keyDown(formula, { key: "Backspace" })
-
-    expect(screen.getByRole("textbox", { name: "函数表达式" })).toBeTruthy()
-    expect(useSceneStore.getState().document.primitives.some((primitive) => primitive.type === "function")).toBe(true)
-  })
-
   it("exposes play, pause, stop, and animation mode controls", () => {
     render(<App />)
 
@@ -570,22 +649,6 @@ describe("MathCanvas workbench", () => {
     fireEvent.click(screen.getByRole("button", { name: "暂停动画" }))
     expect(screen.getByRole("button", { name: "播放动画" })).toBeTruthy()
     expect((screen.getByRole("button", { name: "停止动画" }) as HTMLButtonElement).disabled).toBe(true)
-  })
-
-  it("creates a sampled intersection between a function and a conic", () => {
-    render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "添加椭圆" }))
-    fireEvent.click(screen.getByRole("button", { name: "添加函数图像" }))
-    const rows = Array.from(globalThis.document.querySelectorAll(".object-row"))
-    const ellipseRow = rows.find((row) => row.textContent?.includes("椭圆"))
-    const functionRow = rows.find((row) => row.textContent?.includes("函数"))
-    fireEvent.click(ellipseRow!)
-    fireEvent.click(functionRow!, { shiftKey: true })
-
-    expect(screen.getByRole("button", { name: "添加交点" })).toBeTruthy()
-    fireEvent.click(screen.getByRole("button", { name: "添加交点" }))
-    expect(screen.getAllByRole("button", { name: /交点/ }).some((button) => /(交点|交点集合)/.test(button.getAttribute("aria-label") ?? ""))).toBe(true)
-    expect(screen.getByRole("img", { name: "几何画布" }).querySelectorAll('[data-primitive-type="intersectionSet"]')).toHaveLength(1)
   })
 
   it("shows pointer coordinates and creates a persistent intersection on click", () => {
@@ -606,6 +669,124 @@ describe("MathCanvas workbench", () => {
 
     expect(useSceneStore.getState().document.primitives.some((primitive) => primitive.type === "lineCircleIntersection")).toBe(true)
     expect(canvas.querySelector('[data-intersection-info="true"]')).toBeTruthy()
+  })
+
+  it("keeps the sibling intersection marker after one solution is saved", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [
+      { id: "line-a", type: "line", a: { x: -5, y: 0 }, b: { x: 5, y: 0 }, label: "直线 A" },
+      { id: "circle-a", type: "circle", center: { x: 0, y: 0 }, radius: 3, label: "圆 A" }
+    ]
+    useSceneStore.getState().replace(document)
+    render(<App />)
+    const canvas = screen.getByRole("img", { name: "几何画布" })
+    expect(canvas.querySelectorAll("[data-auto-intersection]")).toHaveLength(2)
+
+    fireEvent.click(canvas.querySelector("[data-auto-intersection]")!)
+
+    // Saving one intersection must not hide the other crossing of the same pair; the user still has to be
+    // able to promote it to a persistent point.
+    expect(canvas.querySelectorAll("[data-auto-intersection]")).toHaveLength(1)
+  })
+
+  it("shows every crossing of a line and a curve instead of only the first two", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [
+      { id: "sine", type: "function", expression: "sin(x)", domain: [-7, 7], samples: 256, label: "正弦" },
+      { id: "line-a", type: "line", a: { x: -7, y: 0 }, b: { x: 7, y: 0 }, label: "直线 A" }
+    ]
+    useSceneStore.getState().replace(document)
+
+    render(<App />)
+
+    expect(screen.getByRole("img", { name: "几何画布" }).querySelectorAll("[data-auto-intersection]")).toHaveLength(5)
+  })
+
+  it("zooms the planar canvas with the wheel and the zoom controls", () => {
+    render(<App />)
+    const canvas = screen.getByRole("img", { name: "几何画布" })
+    const scaleOf = () => Number(canvas.getAttribute("data-viewport-scale"))
+    const initial = scaleOf()
+
+    fireEvent.wheel(canvas, { deltaY: -120, clientX: 400, clientY: 220 })
+    expect(scaleOf()).toBeGreaterThan(initial)
+
+    fireEvent.click(screen.getByRole("button", { name: "放大画布" }))
+    const zoomedIn = scaleOf()
+    expect(zoomedIn).toBeGreaterThan(initial)
+
+    fireEvent.click(screen.getByRole("button", { name: "缩小画布" }))
+    expect(scaleOf()).toBeLessThan(zoomedIn)
+
+    fireEvent.click(screen.getByRole("button", { name: "重置视图" }))
+    expect(scaleOf()).toBeCloseTo(initial)
+    expect(canvas.getAttribute("data-viewport-center")).toBe("0,0")
+  })
+
+  it("scales circles and arcs with the canvas zoom", () => {
+    render(<App />)
+    const canvas = screen.getByRole("img", { name: "几何画布" })
+    fireEvent.click(screen.getByRole("button", { name: "添加圆" }))
+    fireEvent.click(canvas, { clientX: 400, clientY: 220 })
+    fireEvent.click(canvas, { clientX: 466, clientY: 220 })
+    const radiusOf = () => Number(canvas.querySelector('[data-primitive-type="circle"] circle:not([data-hit-target="true"])')!.getAttribute("r"))
+    const before = radiusOf()
+
+    fireEvent.click(screen.getByRole("button", { name: "放大画布" }))
+
+    expect(radiusOf()).toBeGreaterThan(before)
+  })
+
+  it("adds a simple function and applies exp and trigonometric presets", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "添加函数" }))
+
+    expect(screen.getByRole("img", { name: "几何画布" }).querySelectorAll('[data-primitive-type="function"]')).toHaveLength(1)
+    expect(useSceneStore.getState().document.primitives.filter((primitive) => primitive.type === "function")).toHaveLength(1)
+    // The preset list is the classroom-facing way to reach exp and trigonometric curves, so it is labelled in Chinese.
+    expect(screen.getByRole("option", { name: "指数函数 e^x" })).toBeTruthy()
+    expect(screen.getByRole("option", { name: "正弦 sin(x)" })).toBeTruthy()
+
+    fireEvent.change(screen.getByRole("combobox", { name: "函数预设" }), { target: { value: "exponential" } })
+    expect(useSceneStore.getState().document.primitives.find((primitive) => primitive.type === "function")).toMatchObject({ expression: "e^x" })
+    expect((screen.getByLabelText("函数表达式") as HTMLTextAreaElement).value).toBe("e^x")
+
+    fireEvent.change(screen.getByRole("combobox", { name: "函数预设" }), { target: { value: "sine" } })
+    expect(useSceneStore.getState().document.primitives.find((primitive) => primitive.type === "function")).toMatchObject({ expression: "sin(x)", domain: [-2 * Math.PI, 2 * Math.PI] })
+  })
+
+  it("creates a derivative, a tangent and an integral region for the selected function", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "添加函数" }))
+    const functionRow = () => screen.getAllByText("函数 1")[0]
+
+    fireEvent.click(screen.getByRole("button", { name: "创建导函数" }))
+    const derivative = useSceneStore.getState().document.primitives.find((primitive) => primitive.type === "derivative")
+    expect(derivative).toMatchObject({ type: "derivative", sourceId: "function-1", order: 1 })
+    expect(derivative?.type === "derivative" && derivative.points.length).toBeGreaterThan(1)
+
+    fireEvent.click(functionRow())
+    fireEvent.click(screen.getByRole("button", { name: "创建切线" }))
+    const tangent = useSceneStore.getState().document.primitives.find((primitive) => primitive.type === "tangent")
+    expect(tangent).toMatchObject({ type: "tangent", sourceId: "function-1", x: 0 })
+    expect(tangent?.type === "tangent" && tangent.slope).toBeCloseTo(0, 6)
+
+    fireEvent.click(functionRow())
+    fireEvent.click(screen.getByRole("button", { name: "创建积分区域" }))
+    const integral = useSceneStore.getState().document.primitives.find((primitive) => primitive.type === "integral")
+    expect(integral).toMatchObject({ type: "integral", sourceId: "function-1", domain: [-6, 6] })
+    expect(integral?.type === "integral" && integral.area).toBeCloseTo(144, 0)
+  })
+
+  it("keeps function, derivative and integral deletable as one object", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "添加函数" }))
+    fireEvent.click(screen.getByRole("button", { name: "创建导函数" }))
+    fireEvent.click(screen.getAllByText("函数 1")[0])
+    fireEvent.click(screen.getByRole("button", { name: "删除对象" }))
+
+    expect(useSceneStore.getState().document.primitives.filter((primitive) => primitive.type === "function" || primitive.type === "derivative")).toHaveLength(0)
+    expect(screen.queryAllByRole("alert")).toHaveLength(0)
   })
 
   it("selects and deletes a point with the keyboard", () => {
@@ -722,7 +903,7 @@ describe("MathCanvas workbench", () => {
     fireEvent.click(algebraRow("立方体 1 拓扑"))
     fireEvent.click(screen.getByRole("button", { name: "创建截面" }))
 
-    fireEvent.click(screen.getByRole("button", { name: "微积分" }))
+    fireEvent.click(screen.getByRole("button", { name: "圆锥曲线" }))
     fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
 
     const primitives = useSceneStore.getState().document.primitives
@@ -747,7 +928,7 @@ describe("MathCanvas workbench", () => {
     expect((screen.getByRole("button", { name: "导出 PNG" }) as HTMLButtonElement).disabled).toBe(true)
     expect((screen.getByRole("button", { name: "导出 CSV" }) as HTMLButtonElement).disabled).toBe(false)
 
-    fireEvent.click(screen.getByRole("button", { name: "微积分" }))
+    fireEvent.click(screen.getByRole("button", { name: "圆锥曲线" }))
     expect((screen.getByRole("button", { name: "导出 SVG" }) as HTMLButtonElement).disabled).toBe(false)
   })
 

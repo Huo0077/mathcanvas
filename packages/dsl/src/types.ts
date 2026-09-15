@@ -39,6 +39,16 @@ export interface PrimitivePresentation {
   style?: PrimitiveStyle
 }
 
+/**
+ * Euler orientation of a parameterized solid, in radians, applied X then Y then Z about the object's own
+ * centre. Absent means axis-aligned, which is how every pre-existing `.mgeo` document already behaves.
+ */
+export interface SolidRotation {
+  x: number
+  y: number
+  z: number
+}
+
 export interface ParameterSpec {
   id: string
   value: number
@@ -100,6 +110,8 @@ export interface Plane3Primitive extends PrimitivePresentation {
   id: string
   type: "plane3"
   definition: Plane3Definition
+  /** Half-extent of the drawn patch in world units. Absent means "fit the scene", which is the old behaviour. */
+  halfSize?: number
 }
 
 export interface Circle3Primitive extends PrimitivePresentation {
@@ -306,6 +318,7 @@ export interface CubePrimitive extends PrimitivePresentation {
   type: "cube"
   origin: Vector3
   size: Vector3
+  rotation?: SolidRotation
 }
 
 export interface PyramidPrimitive extends PrimitivePresentation {
@@ -314,6 +327,7 @@ export interface PyramidPrimitive extends PrimitivePresentation {
   baseCenter: Vector3
   baseSize: { x: number; y: number }
   height: number
+  rotation?: SolidRotation
 }
 
 export interface CylinderPrimitive extends PrimitivePresentation {
@@ -323,6 +337,7 @@ export interface CylinderPrimitive extends PrimitivePresentation {
   radius: number
   height: number
   segments: number
+  rotation?: SolidRotation
 }
 
 export interface ConePrimitive extends PrimitivePresentation {
@@ -332,6 +347,7 @@ export interface ConePrimitive extends PrimitivePresentation {
   radius: number
   height: number
   segments: number
+  rotation?: SolidRotation
 }
 
 /** Ordered-boundary classification of a plane/polyhedron section. */

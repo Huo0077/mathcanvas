@@ -76,6 +76,29 @@ export interface RoundSolidInput {
 
 export type TemplateSolidPrimitive = CubePrimitive | PyramidPrimitive | CylinderPrimitive | ConePrimitive
 
+/** The point a template solid turns about: its box centre, or the midpoint of its axis. */
+function templatePivot(primitive: TemplateSolidPrimitive): Vector3 {
+  if (primitive.type === "cube") return { x: primitive.origin.x + primitive.size.x / 2, y: primitive.origin.y + primitive.size.y / 2, z: primitive.origin.z + primitive.size.z / 2 }
+  if (primitive.type === "pyramid") return { x: primitive.baseCenter.x, y: primitive.baseCenter.y, z: primitive.baseCenter.z + primitive.height / 2 }
+  return { x: primitive.center.x, y: primitive.center.y, z: primitive.center.z + primitive.height / 2 }
+}
+
+/** Euler rotation applied X then Y then Z around a pivot. A proper rotation keeps the winding and volume valid. */
+export function rotateAboutPivot(position: Vector3, pivot: Vector3, rotation: Vector3): Vector3 {
+  const x = position.x - pivot.x
+  const y = position.y - pivot.y
+  const z = position.z - pivot.z
+  const y1 = y * Math.cos(rotation.x) - z * Math.sin(rotation.x)
+  const z1 = y * Math.sin(rotation.x) + z * Math.cos(rotation.x)
+  const x2 = x * Math.cos(rotation.y) + z1 * Math.sin(rotation.y)
+  const z2 = -x * Math.sin(rotation.y) + z1 * Math.cos(rotation.y)
+  return {
+    x: x2 * Math.cos(rotation.z) - y1 * Math.sin(rotation.z) + pivot.x,
+    y: x2 * Math.sin(rotation.z) + y1 * Math.cos(rotation.z) + pivot.y,
+    z: z2 + pivot.z
+  }
+}
+
 function diagnostic(code: GeometryDiagnosticCode, message: string): GeometryDiagnostic {
   return { code, message }
 }
@@ -396,9 +419,16 @@ export function buildSolidTemplate(primitive: TemplateSolidPrimitive, context: B
   const result = buildSolid(primitive.type, templateInput(primitive), context)
   if (result.diagnostics.length > 0) return result
   const topologyIds = new Set([...result.vertexIds, ...result.edgeIds, ...result.faceIds, ...(result.polyhedronId ? [result.polyhedronId] : [])])
+  // Orientation is applied to the finished vertices: one place covers all four templates, and a rigid
+  // rotation cannot invalidate the topology that was just validated.
+  const rotation = primitive.rotation
+  const pivot = rotation ? templatePivot(primitive) : null
   const primitives = result.primitives.map((candidate) => {
     if (!topologyIds.has(candidate.id)) return candidate
-    if (candidate.type === "point3") return { ...candidate, label: templatePointLabel(result.vertexIds.indexOf(candidate.id)), style: primitive.style }
+    if (candidate.type === "point3") {
+      const position = rotation && pivot ? rotateAboutPivot(candidate.position, pivot, rotation) : candidate.position
+      return { ...candidate, position, label: templatePointLabel(result.vertexIds.indexOf(candidate.id)), style: primitive.style }
+    }
     if (candidate.type === "edge3") return { ...candidate, label: `棱 ${result.edgeIds.indexOf(candidate.id) + 1}`, style: primitive.style }
     if (candidate.type === "face3") return { ...candidate, label: `面 ${result.faceIds.indexOf(candidate.id) + 1}`, style: primitive.style }
     if (candidate.type === "polyhedron3") return { ...candidate, label: primitive.label, style: primitive.style, construction: { kind: "template" as const, templateId: primitive.type, sourceIds: [primitive.id, ...result.vertexIds, ...result.edgeIds, ...result.faceIds] } }

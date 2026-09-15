@@ -5,7 +5,7 @@ import type { GeometryDocument, Point3Primitive, PrimitiveSpec, SectionPrimitive
 import { createEmptyDocument } from "@draw/dsl"
 import { buildSolidTemplate, dihedralMarker3, unfoldPolyhedron3 } from "@draw/geometry-kernel"
 
-import { POINT_HANDLE_RADIUS_PX, createCameraState, createCubeMesh, createDihedralMarkerGroup, createEdge3Line, createFace3Mesh, createPlane3Mesh, createPoint3Mesh, createPointDrivenLine, createSectionMesh, createSolidGroup, createSolidMesh, createUnfoldNetGroup, cubeUnfoldCenters, fitCameraState, nextUnfoldProgress, panCameraState, pickPrimitiveAt, pickRaycastHit3, pointHandleWorldRadius, prefersReducedMotion, resetCameraState, resolveSelectableHit, rotateCameraState, templateTopologyOwners, zoomCameraState } from "./threeScene"
+import { POINT_HANDLE_RADIUS_PX, applyCameraState, clampCameraTarget, createCameraState, createCubeMesh, createDihedralMarkerGroup, createEdge3Line, createFace3Mesh, createPlane3Mesh, createPoint3Mesh, createPointDrivenLine, createSectionMesh, createSolidGroup, createSolidMesh, createUnfoldNetGroup, cubeUnfoldCenters, fitCameraState, nextUnfoldProgress, panCameraState, pickPrimitiveAt, pickRaycastHit3, pointHandleWorldRadius, prefersReducedMotion, resetCameraState, resolveSelectableHit, rotateCameraState, templateTopologyOwners, zoomCameraState } from "./threeScene"
 
 describe("Three.js geometry scene", () => {
   it("converges an unfold animation to its target within a short render window", () => {
@@ -54,6 +54,48 @@ describe("Three.js geometry scene", () => {
     ;(mesh?.material as THREE.Material | undefined)?.dispose()
   })
 
+  it("keeps a selected face's own fill colour and marks the selection with an outline", () => {
+    const points = new Map([
+      ["point-a", { id: "point-a", type: "point3" as const, position: { x: 0, y: 0, z: 0 } }],
+      ["point-b", { id: "point-b", type: "point3" as const, position: { x: 2, y: 0, z: 0 } }],
+      ["point-c", { id: "point-c", type: "point3" as const, position: { x: 0, y: 2, z: 0 } }]
+    ])
+    const face = { id: "face-abc", type: "face3" as const, pointIds: ["point-a", "point-b", "point-c"], style: { fill: "#ff0000" } }
+    const mesh = createFace3Mesh(face, points, true)!
+
+    // Selection used to overwrite the fill, so the chosen colour only appeared after deselecting.
+    expect((mesh.material as THREE.MeshBasicMaterial).color.getHexString()).toBe("ff0000")
+    const outline = mesh.children.find((child) => child.userData.visualRole === "face3-outline") as THREE.LineLoop | undefined
+    expect(outline).toBeTruthy()
+    expect((outline!.material as THREE.LineBasicMaterial).color.getHexString()).toBe("4c3ac7")
+
+    mesh.traverse((object) => {
+      if (object instanceof THREE.Mesh || object instanceof THREE.Line) object.geometry.dispose()
+      if ("material" in object && object.material instanceof THREE.Material) object.material.dispose()
+    })
+  })
+
+  it("keeps a selected plane's own fill colour while its outline and guides take the accent colour", () => {
+    const points = new Map([
+      ["p0", { id: "p0", type: "point3" as const, position: { x: 0, y: 0, z: 0 } }],
+      ["p1", { id: "p1", type: "point3" as const, position: { x: 4, y: 0, z: 0 } }],
+      ["p2", { id: "p2", type: "point3" as const, position: { x: 0, y: 4, z: 0 } }]
+    ])
+    const plane = createPlane3Mesh({ id: "plane-abc", type: "plane3", definition: { kind: "throughPoints", pointIds: ["p0", "p1", "p2"] }, style: { fill: "#ff0000" } }, points, true, 2)!
+
+    expect((plane.material as THREE.MeshBasicMaterial).color.getHexString()).toBe("ff0000")
+    const outline = plane.children.find((child) => child.userData.visualRole === "plane3-outline") as THREE.Line
+    expect((outline.material as THREE.LineBasicMaterial).color.getHexString()).toBe("4c3ac7")
+    const guides = plane.children.filter((child) => child.userData.visualRole === "plane3-guide") as THREE.Line[]
+    expect(guides).toHaveLength(2)
+    for (const guide of guides) expect((guide.material as THREE.LineBasicMaterial).color.getHexString()).toBe("4c3ac7")
+
+    plane.traverse((object) => {
+      if (object instanceof THREE.Mesh || object instanceof THREE.Line) object.geometry.dispose()
+      if ("material" in object && object.material instanceof THREE.Material) object.material.dispose()
+    })
+  })
+
   it("maps a parameterized cube to a centered box mesh", () => {
     const mesh = createCubeMesh({
       id: "cube-1",
@@ -100,6 +142,60 @@ describe("Three.js geometry scene", () => {
     expect(rotated).not.toEqual(initial)
     expect(zoomed.distance).toBeLessThan(panned.distance)
     expect(resetCameraState()).toEqual(initial)
+    expect(rotated.target).toEqual(initial.target)
+    expect(panned.target).not.toEqual(rotated.target)
+  })
+
+  it("pans along the camera's own axes so the figure follows the pointer after any rotation", () => {
+    const facing = { azimuth: 0, elevation: 0, distance: 16, target: { x: 0, y: 0, z: 0 } }
+    // Z is up: looking down -X, screen-right is +Y and screen-up is +Z, so a sideways pan must not move world X.
+    expect(panCameraState(facing, 2, 0, 0).target).toEqual({ x: 0, y: 2, z: 0 })
+    expect(panCameraState(facing, 0, 3, 0).target).toEqual({ x: 0, y: 0, z: 3 })
+    // Depth runs along the view axis; without it a figure that is off-centre in depth can never be centred.
+    expect(panCameraState(facing, 0, 0, 4).target).toEqual({ x: -4, y: 0, z: 0 })
+
+    // After a quarter turn the same screen-space pan moves a different world axis.
+    const quarterTurn = panCameraState({ ...facing, azimuth: 90 }, 2, 0, 0).target
+    expect(quarterTurn.x).toBeCloseTo(-2, 10)
+    expect(quarterTurn.y).toBeCloseTo(0, 10)
+    expect(quarterTurn.z).toBeCloseTo(0, 10)
+  })
+
+  it("keeps the world Z axis pointing up for the orbit camera", () => {
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100)
+
+    applyCameraState(camera, { azimuth: 0, elevation: 0, distance: 10, target: { x: 0, y: 0, z: 0 } })
+
+    // Level with the horizon: the camera sits on +X and its up vector is world +Z, not the Three.js default +Y.
+    expect(camera.position.toArray()).toEqual([10, 0, 0])
+    expect(camera.up.toArray()).toEqual([0, 0, 1])
+    // Tilting up must raise the camera along +Z.
+    applyCameraState(camera, { azimuth: 0, elevation: 90, distance: 10, target: { x: 0, y: 0, z: 0 } })
+    expect(camera.position.x).toBeCloseTo(0, 6)
+    expect(camera.position.y).toBeCloseTo(0, 6)
+    expect(camera.position.z).toBeCloseTo(10, 6)
+  })
+
+  it("keeps a screen-plane pan perpendicular to the view axis", () => {
+    const state = { azimuth: 45, elevation: 35, distance: 16, target: { x: 0, y: 0, z: 0 } }
+    const axis = panCameraState(state, 0, 0, 1).target
+    const panned = panCameraState(state, 2, -3, 0).target
+
+    expect(axis.x * panned.x + axis.y * panned.y + axis.z * panned.z).toBeCloseTo(0, 10)
+  })
+
+  it("clamps the orbit centre to a bounded range around the figure", () => {
+    const bounds = new THREE.Box3(new THREE.Vector3(-1, -1, -1), new THREE.Vector3(1, 1, 1))
+    const limit = clampCameraTarget({ x: 1e6, y: 0, z: 0 }, bounds).x
+
+    // Bounded, but still far enough out to reach every part of a figure of this size.
+    expect(limit).toBeGreaterThan(3)
+    expect(limit).toBeLessThan(20)
+    expect(clampCameraTarget({ x: -1e6, y: 1e6, z: 0 }, bounds)).toEqual({ x: -limit, y: limit, z: 0 })
+    // Anything already inside the range is left exactly where the user put it.
+    expect(clampCameraTarget({ x: 0.5, y: 0, z: 0 }, bounds)).toEqual({ x: 0.5, y: 0, z: 0 })
+    // With no geometry the camera falls back to a fixed neighbourhood of the origin rather than unbounded space.
+    expect(Math.abs(clampCameraTarget({ x: 1e6, y: -1e6, z: 0 }, new THREE.Box3()).x)).toBeLessThanOrEqual(50)
   })
 
   it("picks a solid mesh by viewport coordinates", () => {
@@ -264,8 +360,51 @@ describe("Three.js geometry scene", () => {
     })
   })
 
-  it("refuses to draw a plane whose defining points are collinear", () => {
+  it("draws a plane at its stored half extent instead of the automatic one", () => {
     const points = new Map([
+      ["p0", { id: "p0", type: "point3" as const, position: { x: 0, y: 0, z: 0 } }],
+      ["p1", { id: "p1", type: "point3" as const, position: { x: 4, y: 0, z: 0 } }],
+      ["p2", { id: "p2", type: "point3" as const, position: { x: 0, y: 4, z: 0 } }]
+    ])
+    const plane = { id: "plane-abc", type: "plane3" as const, definition: { kind: "throughPoints" as const, pointIds: ["p0", "p1", "p2"] as [string, string, string] } }
+    // Reach from the patch centre to a corner is halfSize * sqrt(2) for a square patch.
+    const cornerReach = (mesh: THREE.Mesh) => {
+      const position = mesh.geometry.getAttribute("position")
+      const corners = Array.from({ length: position.count }, (_, index) => new THREE.Vector3().fromBufferAttribute(position, index))
+      const centre = corners.reduce((sum, corner) => sum.add(corner), new THREE.Vector3()).multiplyScalar(1 / corners.length)
+      return corners[0].distanceTo(centre)
+    }
+    const dispose = (mesh: THREE.Mesh) => mesh.traverse((object) => {
+      if (object instanceof THREE.Mesh || object instanceof THREE.Line) object.geometry.dispose()
+      if ("material" in object && object.material instanceof THREE.Material) object.material.dispose()
+    })
+
+    const automatic = createPlane3Mesh(plane, points, false, 2)!
+    const manual = createPlane3Mesh({ ...plane, halfSize: 5 }, points, false, 2)!
+
+    // Without a stored size the patch still follows the scene it sits in.
+    expect(cornerReach(automatic)).toBeCloseTo(2 * Math.SQRT2, 6)
+    // A stored size wins over the automatic one; ignoring it is exactly the bug this pins.
+    expect(cornerReach(manual)).toBeCloseTo(5 * Math.SQRT2, 6)
+
+    dispose(automatic)
+    dispose(manual)
+  })
+
+  it("keeps a template sub-element only when the caller asks for it", () => {
+    const owners = new Map([["face-1", "cube-1"], ["edge-1", "cube-1"]])
+
+    // Default behaviour, unchanged since P6 v3: a hit on generated topology selects the owning solid,
+    // which is the only way the solid can be picked at all.
+    expect(resolveSelectableHit("face-1", owners)).toBe("cube-1")
+    expect(resolveSelectableHit("edge-1", owners)).toBe("cube-1")
+    // Alt keeps the hit on the part itself so faces and edges stay reachable.
+    expect(resolveSelectableHit("face-1", owners, true)).toBe("face-1")
+    expect(resolveSelectableHit("edge-1", owners, true)).toBe("edge-1")
+    expect(resolveSelectableHit(null, owners, true)).toBeNull()
+  })
+
+  it("refuses to draw a plane whose defining points are collinear", () => {    const points = new Map([
       ["p0", { id: "p0", type: "point3" as const, position: { x: 0, y: 0, z: 0 } }],
       ["p1", { id: "p1", type: "point3" as const, position: { x: 1, y: 0, z: 0 } }],
       ["p2", { id: "p2", type: "point3" as const, position: { x: 2, y: 0, z: 0 } }]
