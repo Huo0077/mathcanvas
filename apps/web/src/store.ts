@@ -23,6 +23,12 @@ interface SceneState {
   replace: (document: GeometryDocument) => void
 }
 
+export const MAX_HISTORY_ENTRIES = 100
+
+function appendHistory(history: GeometryDocument[], document: GeometryDocument): GeometryDocument[] {
+  return [...history, document].slice(-MAX_HISTORY_ENTRIES)
+}
+
 const initialDocument = createDemoDocument()
 
 export const useSceneStore = create<SceneState>((set) => ({
@@ -38,7 +44,7 @@ export const useSceneStore = create<SceneState>((set) => ({
     return {
       document: result.document,
       workspaceDocuments: { ...state.workspaceDocuments, [result.document.workspace]: result.document },
-      history: [...state.history, state.document],
+      history: appendHistory(state.history, state.document),
       future: [],
       previewBase: null,
       error: null
@@ -52,7 +58,7 @@ export const useSceneStore = create<SceneState>((set) => ({
   }),
   commitPreview: () => set((state) => {
     if (!state.previewBase) return state
-    return { history: [...state.history, state.previewBase], future: [], previewBase: null }
+    return { history: appendHistory(state.history, state.previewBase), future: [], previewBase: null }
   }),
   cancelPreview: () => set((state) => {
     if (!state.previewBase) return state
@@ -75,7 +81,7 @@ export const useSceneStore = create<SceneState>((set) => ({
     return {
       document: next,
       workspaceDocuments: { ...state.workspaceDocuments, [next.workspace]: next },
-      history: [...state.history, state.document],
+      history: appendHistory(state.history, state.document),
       future: state.future.slice(1),
       previewBase: null
     }

@@ -5,9 +5,16 @@ import type { GeometryDocument, Point3Primitive, PrimitiveSpec, SectionPrimitive
 import { createEmptyDocument } from "@draw/dsl"
 import { buildSolidTemplate, dihedralMarker3, unfoldPolyhedron3 } from "@draw/geometry-kernel"
 
-import { POINT_HANDLE_RADIUS_PX, createCameraState, createCubeMesh, createDihedralMarkerGroup, createEdge3Line, createFace3Mesh, createPlane3Mesh, createPoint3Mesh, createPointDrivenLine, createSectionMesh, createSolidGroup, createSolidMesh, createUnfoldNetGroup, cubeUnfoldCenters, fitCameraState, panCameraState, pickPrimitiveAt, pickRaycastHit3, pointHandleWorldRadius, prefersReducedMotion, resetCameraState, resolveSelectableHit, rotateCameraState, templateTopologyOwners, zoomCameraState } from "./threeScene"
+import { POINT_HANDLE_RADIUS_PX, createCameraState, createCubeMesh, createDihedralMarkerGroup, createEdge3Line, createFace3Mesh, createPlane3Mesh, createPoint3Mesh, createPointDrivenLine, createSectionMesh, createSolidGroup, createSolidMesh, createUnfoldNetGroup, cubeUnfoldCenters, fitCameraState, nextUnfoldProgress, panCameraState, pickPrimitiveAt, pickRaycastHit3, pointHandleWorldRadius, prefersReducedMotion, resetCameraState, resolveSelectableHit, rotateCameraState, templateTopologyOwners, zoomCameraState } from "./threeScene"
 
 describe("Three.js geometry scene", () => {
+  it("converges an unfold animation to its target within a short render window", () => {
+    let progress = 0
+    for (let frame = 0; frame < 8; frame += 1) progress = nextUnfoldProgress(progress, 1)
+
+    expect(progress).toBe(1)
+  })
+
   it("renders a selectable point3 at its source position", () => {
     const mesh = createPoint3Mesh({ id: "point3-a", type: "point3", position: { x: 1, y: 2, z: 3 } }, false)
 

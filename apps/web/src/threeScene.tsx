@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react"
 import * as THREE from "three"
 import type { ConePrimitive, CubePrimitive, Edge3Primitive, Face3Primitive, GeometryDocument, Line3Primitive, Plane3Primitive, Point3Primitive, Polyhedron3Primitive, PyramidPrimitive, CylinderPrimitive, Ray3Primitive, SectionPrimitive, Segment3Primitive, Vector3 } from "@draw/dsl"
 import { dihedralAngleDegrees, unfoldPolyhedron3, type DihedralMarker3, type UnfoldLayout3 } from "@draw/geometry-kernel"
+import { resolveMeasurementVisual } from "./measurementVisuals"
 import { resolveDihedralMarker3, resolvePolyhedronTopology } from "@draw/scene-graph"
 
 import { opacityFor, strokeFor } from "./primitiveStyle"
@@ -532,6 +533,12 @@ export function prefersReducedMotion(): boolean {
   return typeof globalThis.matchMedia === "function" && globalThis.matchMedia("(prefers-reduced-motion: reduce)").matches
 }
 
+export function nextUnfoldProgress(current: number, target: number): number {
+  if (target === 0) return 0
+  const next = current + (target - current) * 0.6
+  return Math.abs(target - next) <= 0.001 ? target : next
+}
+
 export function createSolidGroup(primitive: SolidPrimitive, selected: boolean, options: SolidVisualOptions = {}): THREE.Group {
   if (primitive.type === "cube" && options.unfoldProgress !== undefined && options.unfoldProgress > 0.001) return createCubeUnfoldGroup(primitive, selected, options)
   const group = new THREE.Group()
@@ -588,6 +595,7 @@ export interface ThreeSceneViewProps {
 export function ThreeSceneView({ document, selectedIds, onSelect }: ThreeSceneViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const renderTargetRef = useRef<HTMLDivElement>(null)
+  const measurementOverlayRef = useRef<HTMLDivElement>(null)
   const cameraStateRef = useRef<CameraState>(createCameraState())
   const resetCameraRef = useRef<() => void>(() => undefined)
   const fitCameraRef = useRef<() => void>(() => undefined)
@@ -609,9 +617,9 @@ export function ThreeSceneView({ document, selectedIds, onSelect }: ThreeSceneVi
     let frame = 0
     const animate = () => {
       setUnfoldProgress((current) => {
-        const next = current + (target - current) * 0.2
-        if (Math.abs(target - next) > 0.001) frame = requestAnimationFrame(animate)
-        return Math.abs(target - next) <= 0.001 ? target : next
+        const next = nextUnfoldProgress(current, target)
+        if (next !== target) frame = requestAnimationFrame(animate)
+        return next
       })
     }
     frame = requestAnimationFrame(animate)
@@ -707,6 +715,19 @@ export function ThreeSceneView({ document, selectedIds, onSelect }: ThreeSceneVi
         scene.add(createDihedralMarkerGroup(marker, measurement.sourceIds.every((id) => selectedIds.includes(id))))
         dihedralMarkerCount += 1
       })
+    const measurementVisuals = document.measurements
+      .filter((measurement) => measurement.sourceIds.some((id) => selectedIds.includes(id)))
+      .map((measurement) => resolveMeasurementVisual(document, measurement.id))
+      .filter((visual): visual is NonNullable<ReturnType<typeof resolveMeasurementVisual>> => Boolean(visual))
+    measurementVisuals.filter((visual) => visual.kind === "label").forEach((visual) => {
+      visual.segments.forEach((segment) => {
+        const geometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(segment.start.x, segment.start.y, segment.start.z), new THREE.Vector3(segment.end.x, segment.end.y, segment.end.z)])
+        const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: "#604fda", transparent: true, opacity: 0.75 }))
+        line.userData.measurementId = visual.id
+        line.userData.visualRole = "measurement-helper"
+        scene.add(line)
+      })
+    })
     // Planes are drawn last: their patch is sized from the figure they belong to, so the figure must exist first.
     const contentRadius = contentBounds(scene).getSize(new THREE.Vector3()).length() / 2
     const planeHalfSize = Math.max(Math.min(contentRadius * 1.6, 60), 1.2)
@@ -721,6 +742,7 @@ export function ThreeSceneView({ document, selectedIds, onSelect }: ThreeSceneVi
       sceneShell.dataset.unfoldProgress = unfoldProgress.toFixed(2)
       sceneShell.dataset.dihedralMarkers = String(dihedralMarkerCount)
       sceneShell.dataset.planeCount = String(planeCount)
+      sceneShell.dataset.measurementLabelCount = String(measurementVisuals.length)
     }
 
     const sceneBounds = contentBounds(scene)
@@ -747,6 +769,24 @@ export function ThreeSceneView({ document, selectedIds, onSelect }: ThreeSceneVi
     }
     const render = () => {
       syncPointHandleScales()
+      const overlay = measurementOverlayRef.current
+      if (overlay) {
+        overlay.replaceChildren()
+        const bounds = renderer.domElement.getBoundingClientRect()
+        for (const visual of measurementVisuals) {
+          const projected = new THREE.Vector3(visual.position.x, visual.position.y, visual.position.z).project(camera)
+          const visible = projected.z >= -1 && projected.z <= 1
+          if (!visible) continue
+          const label = globalThis.document.createElement("div")
+          label.className = "three-measurement-label"
+          label.dataset.measurementId = visual.id
+          label.setAttribute("role", "status")
+          label.textContent = visual.label
+          label.style.left = `${(projected.x * 0.5 + 0.5) * bounds.width}px`
+          label.style.top = `${(-projected.y * 0.5 + 0.5) * bounds.height}px`
+          overlay.appendChild(label)
+        }
+      }
       if (sceneShell) {
         sceneShell.dataset.cameraDistance = cameraStateRef.current.distance.toFixed(2)
         sceneShell.dataset.cameraTarget = `${cameraStateRef.current.target.x.toFixed(2)},${cameraStateRef.current.target.y.toFixed(2)},${cameraStateRef.current.target.z.toFixed(2)}`
@@ -846,5 +886,5 @@ export function ThreeSceneView({ document, selectedIds, onSelect }: ThreeSceneVi
 
   const hasGeometry = document.primitives.some((primitive) => ["point3", "line3", "segment3", "ray3", "edge3", "face3", "polyhedron3", "cube", "pyramid", "cylinder", "cone"].includes(primitive.type) && primitive.visible !== false)
   const angle = dihedralAngleDegrees({ x: 1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 })
-  return <div className="three-canvas-shell" ref={containerRef} data-3d-scene="true" aria-label="3D 几何场景"><div className="three-render-target" ref={renderTargetRef} />{webglAvailable && <div className="three-scene-controls" aria-label="3D显示控制"><button type="button" aria-pressed={transparentFaces} onClick={() => setTransparentFaces((visible) => !visible)}>透明面</button><button type="button" aria-pressed={showHiddenEdges} onClick={() => setShowHiddenEdges((visible) => !visible)}>隐藏边</button><button type="button" aria-pressed={showNormals} onClick={() => setShowNormals((visible) => !visible)}>法向量</button><button type="button" aria-pressed={unfolded} onClick={() => setUnfolded((visible) => !visible)}>{unfolded ? "折叠" : "展开"}</button><button type="button" aria-pressed={showAngle} onClick={() => setShowAngle((visible) => !visible)}>测量二面角</button></div>}{webglAvailable && <div className="three-camera-controls" aria-label="3D视角控制"><button type="button" aria-label="适应视图" title="把视角调整到刚好框住当前图形" onClick={() => fitCameraRef.current()}>适应视图</button><button type="button" aria-label="重置3D视角" title="回到默认视角" onClick={() => resetCameraRef.current()}>重置视角</button></div>}{showAngle && webglAvailable && <div className="three-angle-readout" role="status">二面角：{angle.toFixed(1)}°（示例法向量 X/Y）</div>}{!webglAvailable && <div className="three-scene-status" role="status">当前浏览器不支持 WebGL，无法显示 3D 场景。</div>}{webglAvailable && !hasGeometry && <div className="three-scene-status" role="status">添加点、线或面开始探索三维空间。</div>}</div>
+  return <div className="three-canvas-shell" ref={containerRef} data-3d-scene="true" aria-label="3D 几何场景"><div className="three-render-target" ref={renderTargetRef} /><div className="three-measurement-overlay" ref={measurementOverlayRef} aria-label="三维测量标注" />{webglAvailable && <div className="three-scene-controls" aria-label="3D显示控制"><button type="button" aria-pressed={transparentFaces} onClick={() => setTransparentFaces((visible) => !visible)}>透明面</button><button type="button" aria-pressed={showHiddenEdges} onClick={() => setShowHiddenEdges((visible) => !visible)}>隐藏边</button><button type="button" aria-pressed={showNormals} onClick={() => setShowNormals((visible) => !visible)}>法向量</button><button type="button" aria-pressed={unfolded} onClick={() => setUnfolded((visible) => !visible)}>{unfolded ? "折叠" : "展开"}</button><button type="button" aria-pressed={showAngle} onClick={() => setShowAngle((visible) => !visible)}>测量二面角</button></div>}{webglAvailable && <div className="three-camera-controls" aria-label="3D视角控制"><button type="button" aria-label="适应视图" title="把视角调整到刚好框住当前图形" onClick={() => fitCameraRef.current()}>适应视图</button><button type="button" aria-label="重置3D视角" title="回到默认视角" onClick={() => resetCameraRef.current()}>重置视角</button></div>}{showAngle && webglAvailable && <div className="three-angle-readout" role="status">二面角：{angle.toFixed(1)}°（示例法向量 X/Y）</div>}{!webglAvailable && <div className="three-scene-status" role="status">当前浏览器不支持 WebGL，无法显示 3D 场景。</div>}{webglAvailable && !hasGeometry && <div className="three-scene-status" role="status">添加点、线或面开始探索三维空间。</div>}</div>
 }

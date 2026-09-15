@@ -638,6 +638,21 @@ describe("MathCanvas workbench", () => {
     expect(useSceneStore.getState().document.primitives.some((primitive) => primitive.type === "point3" && primitive.label === "A")).toBe(false)
   })
 
+  it("explains the two dihedral angle choices for selected faces", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加立方体" }))
+    fireEvent.click(screen.getByRole("button", { name: "展开 立方体 1 拓扑 的子对象" }))
+    fireEvent.click(algebraRow("面 1"))
+    fireEvent.click(algebraRow("面 2"), { shiftKey: true })
+
+    expect(globalThis.document.querySelectorAll(".object-row.selected")).toHaveLength(2)
+    expect(Array.from(globalThis.document.querySelectorAll(".object-row.selected .object-dot")).map((dot) => dot.getAttribute("data-object-type"))).toEqual(["face3", "face3"])
+    expect(screen.getByText(/已选两个面/)).toBeTruthy()
+    expect(screen.getByRole("button", { name: "二面角内角" })).toBeTruthy()
+    expect(screen.getByRole("button", { name: "二面角外角" })).toBeTruthy()
+  })
+
   it("cuts point-driven topology with an ordered section boundary", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "立体几何" }))

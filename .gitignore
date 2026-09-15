@@ -1,6 +1,7 @@
 node_modules/
 dist/
 apps/web/dist/
+build-check/
 test-results/
 playwright-report/
 blob-report/

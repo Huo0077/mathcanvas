@@ -10,6 +10,6 @@ export default defineConfig({
     },
     setupFiles: ["./test-setup.ts"],
     globals: true,
-    include: ["packages/**/*.test.ts", "apps/**/*.test.ts", "apps/**/*.test.tsx"]
+    include: ["packages/**/*.test.ts", "apps/**/*.test.ts", "apps/**/*.test.tsx", "scripts/**/*.test.ts"]
   }
 })
