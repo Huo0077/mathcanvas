@@ -1,11 +1,22 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib"
 
+import type { DrawingViewSpec } from "@draw/dsl"
+
 import type { ProjectedAnnotation, ProjectedDrawing, ProjectedPrimitive } from "../projectionVisuals"
 
 const svgWidth = 1000
 const svgHeight = 700
 const viewCellWidth = 500
 const viewCellHeight = 350
+
+/**
+ * Exporters only emit views the sheet keeps visible, so a hidden view never produces fabricated geometry.
+ * Views without a persisted spec keep their projected content.
+ */
+export function selectExportableDrawings(drawings: ProjectedDrawing[], views: DrawingViewSpec[] = []): ProjectedDrawing[] {
+  if (views.length === 0) return drawings
+  return drawings.filter((drawing) => views.find((view) => view.kind === drawing.view)?.visible !== false)
+}
 
 interface DrawingBounds {
   minX: number

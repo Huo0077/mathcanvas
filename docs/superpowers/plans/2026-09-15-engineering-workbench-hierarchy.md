@@ -21,9 +21,9 @@
 
 ## Current Execution Boundary
 
-- 本轮在当前会话内执行，不使用子代代理。
-- 用户要求完成 Task 2 后暂停，因此 Task 1、Task 2 已执行，Task 3 至 Task 7 保持待执行状态。
-- 当前文档更新、完整验证和 GitHub 推送属于用户本轮明确授权的交付动作，不代表开始 Task 3 之后的功能开发。
+- Task 1-7 已全部执行，并逐任务通过聚焦测试、Web 类型检查、全量单测、lint、build 与 Playwright E2E 验证。
+- 完整验证门（`npm test` 51 文件 / 464 用例、`npm run typecheck`、`npm run lint` 0 error / 36 条既有 warning、`npm run build`、`npm run test:e2e` 24/24）在 Task 7 收尾时执行通过。
+- 实现阶段未自动创建 Git commit；提交与远程推送仍需用户明确要求。
 
 ---
 
@@ -146,29 +146,29 @@ Expected: PASS with existing deletion/reference protections unchanged.
 - `CommandBar` exposes `onCategoryChange(category)`, `onCommandChange(command)`, `onBack()`, and `onCancel()`.
 - `StatusBar` consumes `commandPrompt`, `activeLayerName`, `unit`, `scale`, and `diagnosticCount`.
 
-- [ ] **Step 1: Write navigation and layout tests**
+- [x] **Step 1: Write navigation and layout tests**
 
 Assert that the first render shows only top-level categories, selecting `创建` reveals the creation commands, `返回` restores categories, `Esc` calls cancellation, and the shell renders left dock, central canvas slot, Inspector slot and bottom status.
 
-- [ ] **Step 2: Run focused tests and verify failures**
+- [x] **Step 2: Run focused tests and verify failures**
 
 Run: `npm.cmd test -- apps/web/src/components/CommandBar.test.tsx apps/web/src/components/EngineeringWorkbench.test.tsx`
 
 Expected: FAIL because the new components do not exist.
 
-- [ ] **Step 3: Implement the shell without changing geometry behavior**
+- [x] **Step 3: Implement the shell without changing geometry behavior**
 
 Move file, undo/redo and save controls into the header; render `EngineeringWorkbench` for `cad`; keep `geometry3d`, `conics` and `calculus` behavior intact. Use slots/callbacks instead of duplicating object-edit logic from `App.tsx`.
 
-- [ ] **Step 4: Implement command hierarchy and keyboard cancellation**
+- [x] **Step 4: Implement command hierarchy and keyboard cancellation**
 
 Define categories `select`, `create`, `modify`, `annotate`, `inspect`, `export`. Use a stacked secondary panel with an explicit back button. Register a document-level `Escape` handler only when a command is active and never intercept input, textarea or select editing targets.
 
-- [ ] **Step 5: Add responsive and accessible CSS**
+- [x] **Step 5: Add responsive and accessible CSS**
 
 Use existing tokens for panel widths, spacing, borders and focus rings. At narrow widths turn the left and right docks into labelled drawers while the drawing canvas remains scrollable. Keep command targets at least 44px.
 
-- [ ] **Step 6: Run component tests and Web typecheck**
+- [x] **Step 6: Run component tests and Web typecheck**
 
 Run: `npm.cmd test -- apps/web/src/components/CommandBar.test.tsx apps/web/src/components/EngineeringWorkbench.test.tsx`
 
@@ -193,25 +193,25 @@ Expected: PASS with no regressions in existing component tests.
 - `LayerTree` consumes `layers`, `activeLayerId`, and callbacks `onActivate`, `onToggleVisibility`, `onToggleLocked`, `onAdd`, `onDelete`.
 - `DrawingTree` consumes `drawingSheets`, `drawingViews`, and callbacks `onSelectSheet`, `onSelectView`, `onToggleView`.
 
-- [ ] **Step 1: Write tree interaction tests**
+- [x] **Step 1: Write tree interaction tests**
 
 Verify nested rendering, filter text, active-layer state, group visibility/lock actions, sheet-to-view expansion, view selection and source ID labels.
 
-- [ ] **Step 2: Run focused tests and verify failures**
+- [x] **Step 2: Run focused tests and verify failures**
 
 Run: `npm.cmd test -- apps/web/src/components/LayerTree.test.tsx apps/web/src/components/DrawingTree.test.tsx`
 
 Expected: FAIL because the new tree components do not exist.
 
-- [ ] **Step 3: Implement the three tree tabs**
+- [x] **Step 3: Implement the three tree tabs**
 
 Reuse `AlgebraView` row selection and visibility semantics for the model tab. Render layer parents before children with indentation, type badges, eye and lock actions. Render sheets with nested view rows and view kind/scale metadata.
 
-- [ ] **Step 4: Wire document operations and UI state**
+- [x] **Step 4: Wire document operations and UI state**
 
 Keep expanded node IDs, active tree tab and filter query in UI state. Route layer and view mutations through scene-graph operations. Persist only active tab and expanded IDs in local workspace preferences, not in `.mgeo`.
 
-- [ ] **Step 5: Run tree tests, store tests and typecheck**
+- [x] **Step 5: Run tree tests, store tests and typecheck**
 
 Run: `npm.cmd test -- apps/web/src/components/LayerTree.test.tsx apps/web/src/components/DrawingTree.test.tsx apps/web/src/store.test.ts`
 
@@ -237,33 +237,33 @@ Expected: PASS.
 - `DrawingViewport` consumes `view`, optional `projectedDrawing`, `mode: "projection" | "draft"`, `selectedIds`, and `onSelect`.
 - `resolveProjectedDrawing` remains the only projection geometry source for projection mode.
 
-- [ ] **Step 1: Write viewport and linkage tests**
+- [x] **Step 1: Write viewport and linkage tests**
 
 Assert that a default sheet renders four viewports, view layout updates use the view ID, projection-line toggles remain temporary, 2D mode renders editable document primitives, and selecting a projected primitive emits its source ID.
 
-- [ ] **Step 2: Run focused tests and verify failures**
+- [x] **Step 2: Run focused tests and verify failures**
 
 Run: `npm.cmd test -- apps/web/src/components/DrawingSheetView.test.tsx apps/web/src/components/DrawingViewport.test.tsx apps/web/src/projectionVisuals.test.ts`
 
 Expected: FAIL because the sheet and viewport components do not exist.
 
-- [ ] **Step 3: Implement paper and viewport layout**
+- [x] **Step 3: Implement paper and viewport layout**
 
 Render paper bounds and a title block from sheet metadata. Render each view at its persisted rectangle and scale. Make the active view visually distinct and provide `aria-label` values containing sheet and view names.
 
-- [ ] **Step 4: Preserve P7 projection and source selection**
+- [x] **Step 4: Preserve P7 projection and source selection**
 
 Move the existing primitive/annotation rendering into `DrawingViewport`. Keep `sourceId` as the selection payload, use the current `onSelect` callback, and do not create derived primitives on click. Keep diagnostics and invalid annotation states visible in the viewport status region.
 
-- [ ] **Step 5: Cache shared projected drawings**
+- [x] **Step 5: Cache shared projected drawings**
 
 Add a memoized resolver at the workbench boundary keyed by `document.revision` and view kind. Compute each view’s `ProjectedDrawing` once per revision, pass the cached result to all viewports and exporters, and invalidate the cache after a document operation changes the revision.
 
-- [ ] **Step 6: Add direct 2D drafting mode**
+- [x] **Step 6: Add direct 2D drafting mode**
 
 Route existing point/line/segment/ray/polyline/circle/arc creation callbacks through the active 2D viewport. New primitives receive `activeLayerId`; reject creation when the active layer is hidden or locked and show the reason in `StatusBar`.
 
-- [ ] **Step 7: Run focused tests and existing engineering tests**
+- [x] **Step 7: Run focused tests and existing engineering tests**
 
 Run: `npm.cmd test -- apps/web/src/components/DrawingSheetView.test.tsx apps/web/src/components/DrawingViewport.test.tsx apps/web/src/components/EngineeringDrawingView.test.tsx apps/web/src/projectionVisuals.test.ts`
 
@@ -286,25 +286,25 @@ Expected: PASS with existing P7 selection, diagnostics and annotation coverage i
 - `InspectorTabs` exposes `activeTab: "data" | "appearance" | "constraints" | "engineering"` and `onTabChange(tab)`.
 - Existing `PropertiesBar` field update callbacks remain the source of truth for primitive edits.
 
-- [ ] **Step 1: Write Inspector and flow regression tests**
+- [x] **Step 1: Write Inspector and flow regression tests**
 
 Cover no selection, one selection, multi-selection, 2D layer assignment, projection source metadata, constraint diagnostics, engineering annotation actions, and keyboard tab navigation.
 
-- [ ] **Step 2: Run focused tests and verify failures**
+- [x] **Step 2: Run focused tests and verify failures**
 
 Run: `npm.cmd test -- apps/web/src/components/EngineeringInspector.test.tsx apps/web/src/App.test.tsx`
 
 Expected: FAIL for the new Inspector behavior.
 
-- [ ] **Step 3: Split existing property sections into contextual tabs**
+- [x] **Step 3: Split existing property sections into contextual tabs**
 
 Keep object-specific update logic in `PropertiesBar`, but render it through Data and Appearance tabs. Show constraints and engineering annotations only when applicable. For multiple selection show only batch-safe actions.
 
-- [ ] **Step 4: Add sheet, layer and command context**
+- [x] **Step 4: Add sheet, layer and command context**
 
 When nothing is selected, show active sheet, active view and active layer settings. Disable object-only commands without selection. Show source IDs and “来源已删除” for invalid projection references.
 
-- [ ] **Step 5: Run focused tests and full Web tests**
+- [x] **Step 5: Run focused tests and full Web tests**
 
 Run: `npm.cmd test -- apps/web/src/components/EngineeringInspector.test.tsx apps/web/src/App.test.tsx`
 
@@ -325,19 +325,19 @@ Expected: PASS.
 - Draft storage preserves active workspace and new document layout without changing the existing per-workspace key format.
 - Exporters consume the persisted sheet/view layout where supported and continue to consume `ProjectedDrawing` for SVG/DXF/PDF geometry.
 
-- [ ] **Step 1: Write migration and persistence E2E tests**
+- [x] **Step 1: Write migration and persistence E2E tests**
 
 Load a legacy `.mgeo`, create a layer and line in 2D mode, hide the layer, create a 3D projection sheet, change a view scale, refresh, and verify the layout and visibility state remain.
 
-- [ ] **Step 2: Add export regression assertions**
+- [x] **Step 2: Add export regression assertions**
 
 Verify SVG, DXF and PDF export still contain engineering annotations and source-linked projected geometry. Verify hidden or invalid views do not emit fabricated geometry.
 
-- [ ] **Step 3: Update user documentation**
+- [x] **Step 3: Update user documentation**
 
 Document the two CAD modes, the model/layer/drawing trees, active layer behavior, view layout controls, command cancellation and supported exports in `README.md` and `docs/project-progress.md`. Include the local development command `npm.cmd run dev` from `D:\draw\draw`.
 
-- [ ] **Step 4: Run the complete verification gate**
+- [x] **Step 4: Run the complete verification gate**
 
 Run in order:
 

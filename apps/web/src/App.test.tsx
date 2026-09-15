@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react"
+import { fireEvent, render, screen, within } from "@testing-library/react"
 import { beforeEach, describe, expect, it } from "vitest"
 
 import { createEmptyDocument } from "@draw/dsl"
@@ -19,7 +19,7 @@ describe("MathCanvas workbench", () => {
     localStorage.clear()
     // `replace` deliberately keeps other workspaces' documents, so tests need a full store reset.
     const document = createDemoDocument()
-    useSceneStore.setState({ document, workspaceDocuments: { [document.workspace]: document }, history: [], future: [], previewBase: null, error: null })
+    useSceneStore.setState({ document, workspaceDocuments: { [document.workspace]: document }, history: [], future: [], previewBase: null, error: null, treeTab: "model", expandedIds: ["sheet-1"], filterQuery: "" })
   })
 
   it("routes the CAD workspace to four engineering drawing views", () => {
@@ -31,7 +31,9 @@ describe("MathCanvas workbench", () => {
     expect(engineeringDrawing.querySelectorAll("[data-drawing-view]")).toHaveLength(4)
     expect(screen.getAllByText("暂无可投影的空间对象")).toHaveLength(4)
     expect(screen.queryByRole("button", { name: "添加点" })).toBeNull()
-    expect(screen.getByText("工程制图根据当前文档的 3D 点、棱和面显示四个视图。")).toBeTruthy()
+    expect(screen.getByRole("region", { name: "工程状态栏" }).textContent).toContain("工程制图根据当前文档的 3D 点、棱和面显示四个视图。")
+
+    fireEvent.click(screen.getByRole("button", { name: "导出" }))
     expect((screen.getByRole("button", { name: "导出 SVG" }) as HTMLButtonElement).disabled).toBe(false)
   })
 
@@ -63,10 +65,76 @@ describe("MathCanvas workbench", () => {
     const sourceButtons = screen.getAllByRole("button", { name: /point3-/ })
     fireEvent.click(sourceButtons[0])
     fireEvent.click(sourceButtons[1], { shiftKey: true })
+    fireEvent.click(screen.getByRole("tab", { name: "工程标注" }))
     fireEvent.click(screen.getByRole("button", { name: "Add linear annotation" }))
 
     expect(useSceneStore.getState().document.engineeringAnnotations).toHaveLength(1)
     expect(useSceneStore.getState().document.engineeringAnnotations?.[0]).toMatchObject({ kind: "linear", sourceIds: ["point3-1", "point3-2"], view: "front" })
+  })
+
+  it("creates and activates layers from the CAD layer tree", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "工程制图" }))
+    fireEvent.click(screen.getByRole("tab", { name: "图层树" }))
+
+    expect(screen.getByRole("button", { name: "几何" })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole("button", { name: "新建图层" }))
+    expect(useSceneStore.getState().document.layers?.map((layer) => layer.name)).toContain("图层 1")
+
+    fireEvent.click(screen.getByRole("button", { name: "图层 1" }))
+    expect(useSceneStore.getState().document.activeLayerId).toBe("layer-1")
+  })
+
+  it("selects a sheet view from the CAD drawing tree and toggles its visibility", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "工程制图" }))
+    fireEvent.click(screen.getByRole("tab", { name: "图纸树" }))
+
+    const tree = screen.getByRole("region", { name: "模型与图纸树" })
+    fireEvent.click(within(tree).getByRole("button", { name: "主视图" }))
+    expect(within(tree).getByRole("button", { name: "主视图" }).getAttribute("aria-pressed")).toBe("true")
+
+    fireEvent.click(within(tree).getByRole("button", { name: "隐藏 主视图" }))
+    expect(useSceneStore.getState().document.drawingViews?.find((view) => view.id === "view-front")?.visible).toBe(false)
+  })
+
+  it("scales a projection viewport and persists the layout on the document", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "工程制图" }))
+
+    fireEvent.click(screen.getByRole("button", { name: "放大 主视图" }))
+
+    expect(useSceneStore.getState().document.drawingViews?.find((view) => view.id === "view-front")?.scale).toBe(1.5)
+  })
+
+  it("drafts 2D geometry into the active layer and hides it with that layer", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "工程制图" }))
+    fireEvent.click(screen.getByRole("button", { name: "2D 绘图" }))
+    fireEvent.click(screen.getByRole("button", { name: "创建" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+
+    expect(useSceneStore.getState().document.primitives[0]).toMatchObject({ type: "point", layerId: "layer-geometry" })
+    expect(screen.getByRole("region", { name: /模型视图/ })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole("tab", { name: "图层树" }))
+    fireEvent.click(screen.getByRole("button", { name: "隐藏 几何" }))
+
+    expect(screen.queryByRole("button", { name: /新点 A/ })).toBeNull()
+  })
+
+  it("refuses to draft on a hidden layer and explains the rejection in the status bar", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "工程制图" }))
+    fireEvent.click(screen.getByRole("tab", { name: "图层树" }))
+    fireEvent.click(screen.getByRole("button", { name: "隐藏 几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "2D 绘图" }))
+    fireEvent.click(screen.getByRole("button", { name: "创建" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+
+    expect(useSceneStore.getState().document.primitives).toHaveLength(0)
+    expect(screen.getByText(/已隐藏，无法创建对象/)).toBeTruthy()
   })
 
   it("switches workspaces without losing each workspace document", () => {

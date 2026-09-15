@@ -3,7 +3,7 @@
 > 这份文件是项目的单一进度记录。每完成一个可验证的切片，就更新“已完成”和“下一步”，并附上验证证据。
 
 **最后更新：** 2026-09-15
-**当前阶段：** P0-P6 与 P7 工程制图 MVP 已完成；工程工作台层次化改造的 Task 1、Task 2 已完成，Task 3 及之后按用户要求暂停。P7 覆盖四视图、投影联动、工程标注、文档兼容和 SVG/DXF/PDF 导出，P4 Agent 与 P5 题图解析仍在排除范围内。
+**当前阶段：** P0-P6 与 P7 工程制图已完成；工程工作台层次化改造 Task 1-7 全部完成。CAD 工作区现为完整工程制图工作台（分层命令栏、模型/图层/图纸树、可持久化图纸视口、2D 直接绘图、上下文 Inspector），P7 覆盖四视图、投影联动、工程标注、文档兼容和 SVG/DXF/PDF 导出。P4 Agent 与 P5 题图解析仍在排除范围内。
 **总体状态：** 开发中
 
 ## 已完成
@@ -194,7 +194,7 @@
 
 ### 之后
 
-P7-1 至 P7-6 已完成；P4 Agent、P5 题图解析保持在排除范围内。
+P7-1 至 P7-6 与工程工作台层次化改造 Task 1-7 均已完成；P4 Agent、P5 题图解析保持在排除范围内。CAD 工作台的后续可选方向（手动拖动视口边界、B-rep/DWG 导入、自动尺寸布局）仍属于设计文档中的明确限制。
 
 ### P7-1 验收结果
 
@@ -238,23 +238,27 @@ P7-1 至 P7-6 已完成；P4 Agent、P5 题图解析保持在排除范围内。
 - 依赖许可证与边界已记录在 `docs/research/graphing-tools.md`，导出器不调用 Three.js 或重复计算投影。
 - P7-6 完整验收：42 个测试文件、388 个单测通过；四个 workspace 类型检查通过；Lint 0 errors（保留 36 个既有 warnings）；生产构建通过；Playwright 21/21 通过；`git diff --check` 通过。
 
-### 工程工作台层次化改造：Task 1-2
+### 工程工作台层次化改造：Task 1-7（全部完成）
 
 - [x] **Task 1：图层、图纸和视图文档模型**：新增可选 `layers`、`drawingViews`、`drawingSheets`、`activeLayerId` 和 `activeSheetId` 字段；旧 `.mgeo` 自动解释为默认几何层、默认图纸和四个 P7 视图。
 - [x] **Task 2：可撤销图层与布局操作**：新增图层、活动图层、图纸和视图的 Scene Graph 操作；删除图层时重分配图元，删除被引用视图或来源时保持引用保护。
 - [x] **兼容与校验**：保持 `schemaVersion: "0.1"`，校验图层父子关系、活动引用、视图尺寸/比例和图纸视图引用；历史图元未指定 `layerId` 时不改写存储数据。
+- [x] **Task 3：工作台壳、分层命令栏和状态栏**：新增 `CommandBar`（选择/创建/修改/标注/检查/导出六个一级类别、堆叠二级面板、`返回`、仅在命令激活时拦截 `Esc` 且不抢输入框焦点）、`StatusBar`（命令提示、捕捉、坐标、单位、比例、当前图层、诊断数、拒绝原因）和 `EngineeringWorkbench`（模式切换 + 左右停靠面板开关 + 命令区/画布区/Inspector 区/状态区四个插槽）。文件、撤销、重做和保存从 `GeometryToolbar` 上移到 `WorkspaceHeader`，CAD 工作区不再渲染大杂烩工具栏。
+- [x] **Task 4：模型树、图层树和图纸树**：新增 `DocumentTreePanel`（三个标签页 + 共享过滤 + 方向键切换）、`LayerTree`（父子缩进、当前层、显隐、锁定、新建子图层、删除保护）、`DrawingTree`（图纸展开视图、类型/比例/来源标签、视图显隐）。`AlgebraView` 支持 `filter`；`store.ts` 增加 `treeTab`/`expandedIds`/`filterQuery` 与 setter，`draftStorage.ts` 增加只保存标签页与展开节点的本地工作台偏好。
+- [x] **Task 5：图纸视口与 2D 直接绘图**：`EngineeringDrawingView` 从固定四卡片改为 `DrawingSheetView` + `DrawingViewport`；纸张、标题栏、视口矩形/比例/显隐全部来自持久化文档字段，`sheetPaperSize` 保证被移出或放大的视口不被裁剪。新增 `drawingGeometry.ts` 承载布局数学；`2D 绘图` 模式下绘图视口始终可点击，创建回调走活动视口，新图元带 `activeLayerId`，当前图层隐藏或锁定时拒绝创建并在状态栏说明。投影线开关保持临时 UI 状态。
+- [x] **Task 6：上下文 Inspector 与完整流程**：`PropertiesBar` 新增 `sections` 过滤（23 处区块按 数据/外观/约束/工程标注 分类），新增 `InspectorTabs`（方向键切换）与 `EngineeringInspector`（四页签、无选择时的图纸/视图/图层/单位/命令上下文、所选对象所在图层、投影来源列表与「来源已删除」诊断）。`AgentDock` 增加 `showConstraints` 以避免约束面板重复；CAD Inspector 通过 `propertiesBarProps` 复用同一份字段更新逻辑。
+- [x] **Task 7：迁移、E2E 与交付验证**：`engineeringExporters` 新增 `selectExportableDrawings`，隐藏视图不参与导出也不生成伪造几何；新增旧 `.mgeo` 迁移与草稿布局往返测试；重写 `e2e/engineering-drawing.spec.ts` 适配新壳，新增 `e2e/engineering-workbench.spec.ts`。
 - [x] **聚焦验证**：`npm.cmd test -- packages/dsl/src/codec.test.ts packages/dsl/src/schema.test.ts packages/scene-graph/src/operations.test.ts`：3 个测试文件、41 个测试通过。
 - [x] **类型验证**：`@draw/dsl` 与 `@draw/scene-graph` workspace 类型检查通过。
 
-### 当前暂停边界
+### Task 3-7 验证证据
 
-- [ ] Task 3：工作台壳、分层命令栏和状态栏。
-- [ ] Task 4：模型树、图层树和图纸树。
-- [ ] Task 5：图纸视口与 2D 直接绘图模式。
-- [ ] Task 6：上下文 Inspector 与完整用户流程。
-- [ ] Task 7：迁移、E2E 覆盖和最终交付验证。
-
-以上任务暂不执行，等待用户明确授权后再继续。
+- Task 3：`CommandBar.test.tsx` 6 个、`EngineeringWorkbench.test.tsx` 5 个用例通过；Web 类型检查通过；lint 保持 0 error。
+- Task 4：`LayerTree.test.tsx` 8 个、`DrawingTree.test.tsx` 5 个用例通过；`store.test.ts` 6 个、`draftStorage.test.ts` 4 个用例通过；App 层新增图层树与图纸树联动用例。
+- Task 5：`DrawingViewport.test.tsx` 7 个、`DrawingSheetView.test.tsx` 5 个、`EngineeringDrawingView.test.tsx` 4 个用例通过；App 层新增视图比例持久化、2D 绘图写入活动图层、隐藏图层拒绝创建 3 个用例。
+- Task 6：`EngineeringInspector.test.tsx` 9 个用例通过；App 层工程标注用例改为先进入「工程标注」页签。
+- Task 7：`engineeringExporters.test.ts` 5 个、`draftStorage.test.ts` 6 个用例通过；`e2e/engineering-drawing.spec.ts` 4 个、`e2e/engineering-workbench.spec.ts` 3 个用例通过（共 24 个 Playwright 用例）。
+- 全量：`npm.cmd test` 51 个测试文件、464 个用例通过；`npm.cmd run typecheck` 4 个 workspace 通过；`npm.cmd run lint` 0 error、36 条既有 warning；`npm.cmd run build` 通过；`npm.cmd run test:e2e` 24/24 通过。
 
 > 射线/折线、圆锥曲线和函数采样已接入工具栏、SVG 渲染、属性编辑和 UI 回归测试；选中两条可采样曲线即可创建持久化交点。
 
@@ -285,8 +289,8 @@ P7-1 至 P7-6 已完成；P4 Agent、P5 题图解析保持在排除范围内。
 - **P6 v3 新增测试资产**：`e2e/fixtures/tetrahedron.mgeo`（四面体 A(0,0,0) B(0,0,1) C(1,0,0) D(1,1,1)，4 点 + 6 棱 + 4 面），用于取景与二面角回归
 - **本轮质量与功能验证**：37 个测试文件、360 个单元/UI 用例通过；4 个 workspace 类型检查通过；ESLint 可执行并无错误（保留 36 条已有风格/依赖警告）；Web 生产构建通过并使用隔离输出目录；新增二面角入口、测量标签、撤销历史上限、展开动画收敛和预览服务退出回归。
 - **本轮浏览器验证**：17/17 个 Playwright 用例通过，包括展开/折叠和二面角流程；预览服务改为 global setup/teardown 同进程管理，Windows 下命令正常退出。
-- **工程工作台 Task 1-2 最新验证**：`npm.cmd test` 通过，44 个测试文件、400 个测试通过；`npm.cmd run typecheck` 通过，4 个 workspace 无类型错误；`npm.cmd run lint` 通过，0 error、36 条既有 warning；`npm.cmd run build` 通过；`npm.cmd run test:e2e` 通过，21/21 个 Playwright 用例通过。
-- **已知验证提示**：Vite 仍提示主 bundle 超过 500 KB；Vitest 的 3D UI 测试在 jsdom 中输出 Three.js WebGL context 未实现提示，但测试结果为通过；本轮未新增 UI 工作台代码。
+- **工程工作台 Task 3-7 最新验证**：`npm.cmd test` 通过，51 个测试文件、464 个测试通过；`npm.cmd run typecheck` 通过，4 个 workspace 无类型错误；`npm.cmd run lint` 通过，0 error、36 条既有 warning（新增组件原本多出 6 条 `react-refresh/only-export-components` warning，已通过抽出 `drawingGeometry.ts` 并把仅内部使用的布局辅助函数改为非导出消除，回到既有基线）；`npm.cmd run build` 通过；`npm.cmd run test:e2e` 通过，24/24 个 Playwright 用例通过。
+- **已知验证提示**：Vite 仍提示主 bundle 超过 500 KB；Vitest 的 3D UI 测试在 jsdom 中输出 Three.js WebGL context 未实现提示，但测试结果为通过；本轮新增组件已由 `CommandBar`、`EngineeringWorkbench`、`LayerTree`、`DrawingTree`、`DrawingViewport`、`DrawingSheetView`、`EngineeringInspector` 七个测试文件覆盖。
 
 ### 历史证据
 

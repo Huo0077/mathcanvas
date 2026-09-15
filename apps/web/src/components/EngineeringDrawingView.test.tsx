@@ -17,10 +17,10 @@ describe("engineering drawing view", () => {
     render(<EngineeringDrawingView document={createEmptyDocument("cad")} selectedIds={[]} onSelect={() => {}} />)
 
     expect(screen.getAllByRole("region")).toHaveLength(4)
-    expect(screen.getByRole("region", { name: "主视图" }).dataset.drawingView).toBe("front")
-    expect(screen.getByRole("region", { name: "俯视图" }).dataset.drawingView).toBe("top")
-    expect(screen.getByRole("region", { name: "左视图" }).dataset.drawingView).toBe("left")
-    expect(screen.getByRole("region", { name: "轴测图" }).dataset.drawingView).toBe("axonometric")
+    expect(screen.getByRole("region", { name: /主视图/ }).dataset.drawingView).toBe("front")
+    expect(screen.getByRole("region", { name: /俯视图/ }).dataset.drawingView).toBe("top")
+    expect(screen.getByRole("region", { name: /左视图/ }).dataset.drawingView).toBe("left")
+    expect(screen.getByRole("region", { name: /轴测图/ }).dataset.drawingView).toBe("axonometric")
     expect(screen.getAllByText("暂无可投影的空间对象")).toHaveLength(4)
   })
 

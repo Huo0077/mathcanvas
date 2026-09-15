@@ -23,15 +23,20 @@ function HeaderIcon({ name }: { name: "grid" | "curve" | "integral" | "cube" | "
 interface WorkspaceHeaderProps {
   activeWorkspace: Workspace
   onWorkspaceChange: (workspace: Workspace) => void
+  /** File and history commands belong to the global shell, not to a geometry toolbar. */
+  onUndo?: () => void
+  onRedo?: () => void
+  onSave?: () => void
+  onOpen?: () => void
 }
 
-export function WorkspaceHeader({ activeWorkspace, onWorkspaceChange }: WorkspaceHeaderProps) {
+export function WorkspaceHeader({ activeWorkspace, onWorkspaceChange, onUndo, onRedo, onSave, onOpen }: WorkspaceHeaderProps) {
   return <header className="topbar">
     <div className="topbar-leading">
       <div className="brand"><span className="brand-mark" aria-hidden="true">∑</span><span>MathCanvas</span></div>
       <div className="model-status" aria-label="模型状态：最佳"><span className="health-dot" aria-hidden="true" /><span><small>模型状态</small><strong>最佳</strong></span></div>
     </div>
     <nav className="workspace-tabs" aria-label="工作区">{workspaceTabs.map((workspace, index) => <button key={workspace.value} type="button" aria-pressed={activeWorkspace === workspace.value} data-active={activeWorkspace === workspace.value} onClick={() => onWorkspaceChange(workspace.value)}><HeaderIcon name={["grid", "curve", "integral", "cube"][index] as "grid" | "curve" | "integral" | "cube"} /><span>{workspace.label}</span></button>)}</nav>
-    <div className="topbar-actions"><label className="search-box"><HeaderIcon name="search" /><input aria-label="搜索" placeholder="搜索" /></label><button className="topbar-icon" type="button" aria-label="设置"><HeaderIcon name="settings" /></button><button className="topbar-icon profile-button" type="button" aria-label="用户中心"><HeaderIcon name="user" /></button></div>
+    <div className="topbar-actions"><div className="topbar-commands" role="group" aria-label="文件与历史">{onOpen && <button type="button" onClick={onOpen}>打开 .mgeo</button>}{onSave && <button type="button" onClick={onSave}>保存 .mgeo</button>}{onUndo && <button type="button" onClick={onUndo}>撤销</button>}{onRedo && <button type="button" onClick={onRedo}>重做</button>}</div><label className="search-box"><HeaderIcon name="search" /><input aria-label="搜索" placeholder="搜索" /></label><button className="topbar-icon" type="button" aria-label="设置"><HeaderIcon name="settings" /></button><button className="topbar-icon profile-button" type="button" aria-label="用户中心"><HeaderIcon name="user" /></button></div>
   </header>
 }

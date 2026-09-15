@@ -4,7 +4,7 @@ MathCanvas 是一个面向数学与工程场景的 2D 交互绘图工作台原�
 
 ## 当前状态
 
-P0 技术验证、P1 数学内核、P2 交互、P3 函数分析、P6 立体几何与 P7 工程制图 MVP 均已完成；工程工作台层次化改造的 Task 1、Task 2 已完成，Task 3 及之后暂按计划暂停。P7 覆盖四视图、投影线联动、工程标注以及 SVG/DXF/PDF 矢量导出。
+P0 技术验证、P1 数学内核、P2 交互、P3 函数分析、P6 立体几何与 P7 工程制图均已完成；工程工作台层次化改造的 Task 1-7 全部落地。CAD 工作区现在是完整的工程制图工作台：分层命令栏、模型/图层/图纸三类树、可持久化图纸视口、2D 直接绘图模式和上下文 Inspector，并保留四视图、投影线联动、工程标注以及 SVG/DXF/PDF 矢量导出。
 
 完整进度、各项根因与验证证据见 [`docs/project-progress.md`](./docs/project-progress.md)。
 
@@ -22,10 +22,10 @@ npm.cmd install
 npm.cmd run dev
 ```
 
-在本地仓库 `D:\draw\draw` 中也可以直接执行：
+在本地仓库中也可以直接执行（当前检出位于 `D:\数学画布\mathcanvas-main`）：
 
 ```powershell
-Set-Location D:\draw\draw
+Set-Location D:\数学画布\mathcanvas-main
 npm.cmd run dev
 ```
 
@@ -94,12 +94,16 @@ npm run test:e2e
 - 二面角按公共棱报告面内内角，属性栏可选内角/外角，测量说明给出两个角度与公共棱；选中来源面时画布绘制公共棱、角弧和朝外法向量标记。
 - 3D 文档继续使用 `schemaVersion: "0.1"`，旧 2D `.mgeo` 文件保持可读。
 
-### 工程工作台改版范围
+### 工程制图工作台
 
-- 目标交互采用经典 CAD 层次：命令栏、模型/图层/图纸树、中心图纸视口、上下文属性检查器和底部状态栏。
-- CAD 同时支持 2D 直接绘图和 3D 投影制图；投影几何继续复用 P7 的 renderer-neutral 描述，不把派生投影图元写回文档。
-- 当前已落地文档层基础：图层、活动图层、图纸、视图布局及可撤销 Scene Graph 操作；旧 `.mgeo` 自动使用默认布局。
-- 工作台 UI 壳、树面板、图纸视口、2D 直接绘图流程和上下文 Inspector 属于 Task 3-6，按当前计划等待后续授权。
+- 经典 CAD 层次：顶部任务类别命令栏（选择、创建、修改、标注、检查、导出）+ 二级命令面板与「返回」，文件、撤销、重做和保存在全局头部。
+- 左侧停靠面板提供模型树 / 图层树 / 图纸树三个标签页，共享名称过滤；图层树支持层级、当前层、显隐、锁定、新建子图层和删除（至少保留一个几何图层）；图纸树按图纸展开视图，显示视图类型、比例和来源对象。
+- 中心区域有两种模式：`3D 投影` 展示主视图、俯视图、左视图和轴测图四张图纸视口（投影线开关是临时状态），`2D 绘图` 提供可直接点击绘制的绘图视口。
+- 2D 绘图新建的点、直线、线段、射线、折线、圆和圆弧写入当前图层；当前图层被隐藏或锁定时拒绝创建，并在底部状态栏说明原因。
+- 图纸布局（纸张、标题栏、视口位置、尺寸、比例、显隐）属于文档状态，保存进 `.mgeo` 并参与撤销/重做；当前树标签页与展开节点属于本地工作台偏好，不写入文档。
+- 右侧上下文 Inspector 分为数据、外观、约束、工程标注四个页签；无选择时显示当前图纸、视图、图层、单位和命令提示，并列出工程标注/图纸视图引用到的来源对象，已删除的来源标记为「来源已删除」。
+- 投影几何继续复用 P7 的 renderer-neutral 描述；隐藏的视图不参与导出，也不会生成伪造几何。
+- 旧 `.mgeo` 文件在解码时迁移为默认几何/尺寸/辅助线/注释图层、默认 A4 横向图纸和四个 P7 视图。
 
 ### 动态演变与导出
 
@@ -125,9 +129,9 @@ npm run build
 npm run test:e2e
 ```
 
-当前验证基线：44 个测试文件、400 个测试通过；4 个 workspace 类型检查通过；ESLint 0 个 error（保留 36 个既有 warning）；Web 生产构建通过；21 个 Playwright Chromium 用例通过且命令正常退出。Vite 仍提示主 bundle 超过 500 KB。首次运行需先执行 `npx playwright install chromium`，否则会报缺少浏览器可执行文件。
+当前验证基线：51 个测试文件、464 个测试通过；4 个 workspace 类型检查通过；ESLint 0 个 error（保留 36 个既有 warning）；Web 生产构建通过；24 个 Playwright Chromium 用例通过且命令正常退出。Vite 仍提示主 bundle 超过 500 KB。首次运行需先执行 `npx playwright install chromium`，否则会报缺少浏览器可执行文件。
 
-工程工作台基础模型的聚焦验证：DSL 与 Scene Graph 相关 3 个测试文件、41 个测试通过；`@draw/dsl` 和 `@draw/scene-graph` 类型检查通过。
+工程工作台 Task 1-7 的聚焦验证：`LayerTree`/`DrawingTree`/`CommandBar`/`EngineeringWorkbench`/`DrawingViewport`/`DrawingSheetView`/`EngineeringInspector` 等新增测试文件 7 个；DSL 与 Scene Graph 图层/图纸操作 3 个测试文件、41 个用例；`e2e/engineering-workbench.spec.ts` 覆盖旧文档迁移、2D 绘图写入活动图层、图层隐藏、刷新后布局保持、隐藏视图不导出和键盘操作。
 
 ## 项目文档
 
@@ -138,7 +142,7 @@ npm run test:e2e
 - [P6 v2 点驱动 3D 设计规格](docs/superpowers/specs/2026-09-14-point-driven-3d-geometry-design.md)：记录点、线、面、拓扑和教学交互设计。
 - [P6 v3 测量质量设计规格](docs/superpowers/specs/2026-09-15-3d-measurement-quality-design.md)：记录测量可视化、二面角入口、撤销历史和验证门禁。
 - [工程工作台设计规格](docs/superpowers/specs/2026-09-15-engineering-workbench-design.md)：记录 2D/3D 混合 CAD 工作流、经典层次界面和文档模型。
-- [工程工作台层次化实施计划](docs/superpowers/plans/2026-09-15-engineering-workbench-hierarchy.md)：记录 Task 1-2 的完成状态与 Task 3+ 的暂停边界。
+- [工程工作台层次化实施计划](docs/superpowers/plans/2026-09-15-engineering-workbench-hierarchy.md)：记录 Task 1-7 的接口、测试与验证门槛。
 
 ## 协作约定
 
@@ -149,4 +153,4 @@ npm run test:e2e
 
 ## 下一步
 
-P6 与 P7 已完成。P7 的投影、工程标注和导出均消费稳定的 renderer-neutral 描述；`.mgeo` 与 CSV 导出在 3D 保持可用，3D 投影 SVG/PNG 继续明确禁用。工程工作台当前完成文档模型和 Scene Graph 操作基础，Task 3-7 等待用户授权后继续。
+P6 与 P7 已完成，工程工作台层次化改造 Task 1-7 全部交付。P7 的投影、工程标注和导出均消费稳定的 renderer-neutral 描述；`.mgeo` 与 CSV 导出在 3D 保持可用，3D 投影 SVG/PNG 继续明确禁用。CAD 工作台后续可继续扩展的方向是手动拖动视口边界、B-rep/DWG 导入和自动尺寸布局，这些仍在明确限制范围内。

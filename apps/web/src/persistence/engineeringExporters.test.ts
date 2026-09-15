@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest"
 
-import { exportEngineeringDxf, exportEngineeringPdf, exportEngineeringSvg } from "./engineeringExporters"
+import type { DrawingViewSpec } from "@draw/dsl"
+
+import { exportEngineeringDxf, exportEngineeringPdf, exportEngineeringSvg, selectExportableDrawings } from "./engineeringExporters"
 import type { ProjectedDrawing } from "../projectionVisuals"
 
 function drawing(): ProjectedDrawing[] {
@@ -44,5 +46,24 @@ describe("engineering drawing exporters", () => {
 
     expect(header).toBe("%PDF-")
     expect(pdf.byteLength).toBeGreaterThan(500)
+  })
+
+  it("keeps engineering annotations and source ids out of a hidden view's export", () => {
+    const views: DrawingViewSpec[] = [
+      { id: "view-front", kind: "front", x: 0, y: 0, width: 10, height: 10, scale: 1, visible: false, showProjectionLines: false },
+      { id: "view-top", kind: "top", x: 0, y: 0, width: 10, height: 10, scale: 1, visible: true, showProjectionLines: false }
+    ]
+    const topDrawing: ProjectedDrawing = { ...drawing()[0], view: "top" }
+
+    const exportable = selectExportableDrawings([...drawing(), topDrawing], views)
+    expect(exportable.map((candidate) => candidate.view)).toEqual(["top"])
+
+    const svg = exportEngineeringSvg(exportable)
+    expect(svg).toContain('data-drawing-view="top"')
+    expect(svg).not.toContain('data-drawing-view="front"')
+  })
+
+  it("keeps every projected view when the document has no persisted layout", () => {
+    expect(selectExportableDrawings(drawing(), [])).toHaveLength(1)
   })
 })
