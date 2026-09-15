@@ -1,8 +1,42 @@
 import { describe, expect, it } from "vitest"
 
-import { createEmptyDocument, decodeMgeo, encodeMgeo, validateDocument } from "./index"
+import { createDefaultCadLayout, createEmptyDocument, decodeMgeo, encodeMgeo, validateDocument } from "./index"
 
 describe("Geometry DSL codec", () => {
+  it("migrates legacy CAD documents to default layers and views", () => {
+    const document = createEmptyDocument("cad")
+    document.primitives = [{ id: "point-1", type: "point", x: 1, y: 2 }]
+    const originalPrimitives = structuredClone(document.primitives)
+
+    const restored = decodeMgeo(JSON.stringify(document))
+
+    expect(restored.layers?.map((layer) => layer.name)).toEqual(["几何", "尺寸", "辅助线", "注释"])
+    expect(restored.drawingSheets).toHaveLength(1)
+    expect(restored.drawingViews?.map((view) => view.kind)).toEqual(["front", "top", "left", "axonometric"])
+    expect(restored.primitives).toEqual(originalPrimitives)
+  })
+
+  it("round trips nested layer and sheet layout data", () => {
+    const document = createDefaultCadLayout(createEmptyDocument("cad"))
+    document.layers?.push({
+      id: "layer-detail",
+      name: "细节",
+      parentId: "layer-geometry",
+      kind: "geometry",
+      visible: true,
+      locked: false,
+      printable: true
+    })
+    const frontView = document.drawingViews?.find((view) => view.id === "view-front")
+    if (frontView) Object.assign(frontView, { x: 24, y: 32, width: 240, height: 180, scale: 2 })
+
+    const restored = decodeMgeo(encodeMgeo(document))
+
+    expect(restored.layers).toEqual(document.layers)
+    expect(restored.drawingSheets).toEqual(document.drawingSheets)
+    expect(restored.drawingViews).toEqual(document.drawingViews)
+  })
+
   it("loads legacy documents without measurements", () => {
     const document = createEmptyDocument("geometry3d")
     const legacy = JSON.stringify({ ...document, measurements: undefined })

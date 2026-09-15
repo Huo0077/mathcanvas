@@ -1,7 +1,7 @@
 import { validateDocument, type AnnotationSpec, type ConstraintSpec, type EngineeringAnnotation, type GeometryDocument, type Measurement3, type PrimitiveSpec } from "@draw/dsl"
 import { parseExpression } from "@draw/geometry-kernel"
 
-import { applyOperation, deletionTargets, type DomainOperation } from "./operations"
+import { applyOperation, deletionTargets, layerDescendantIds, type DomainOperation } from "./operations"
 
 export type PatchValidationResult =
   | { valid: true }
@@ -54,6 +54,24 @@ function isVector3(value: unknown): value is { x: number; y: number; z: number }
   return Boolean(isCoordinate(value) && Number.isFinite((value as { z?: unknown }).z))
 }
 
+function isLayer(value: unknown): value is NonNullable<GeometryDocument["layers"]>[number] {
+  if (!value || typeof value !== "object") return false
+  const layer = value as Record<string, unknown>
+  return typeof layer.id === "string" && typeof layer.name === "string" && typeof layer.kind === "string" && typeof layer.visible === "boolean" && typeof layer.locked === "boolean" && typeof layer.printable === "boolean"
+}
+
+function isDrawingView(value: unknown): value is NonNullable<GeometryDocument["drawingViews"]>[number] {
+  if (!value || typeof value !== "object") return false
+  const view = value as Record<string, unknown>
+  return typeof view.id === "string" && typeof view.kind === "string" && Number.isFinite(view.x) && Number.isFinite(view.y) && Number.isFinite(view.width) && Number.isFinite(view.height) && Number.isFinite(view.scale) && typeof view.visible === "boolean" && typeof view.showProjectionLines === "boolean"
+}
+
+function isDrawingSheet(value: unknown): value is NonNullable<GeometryDocument["drawingSheets"]>[number] {
+  if (!value || typeof value !== "object") return false
+  const sheet = value as Record<string, unknown>
+  return typeof sheet.id === "string" && typeof sheet.name === "string" && typeof sheet.paper === "string" && typeof sheet.orientation === "string" && Number.isFinite(sheet.scale) && Array.isArray(sheet.viewIds) && sheet.viewIds.every((id) => typeof id === "string")
+}
+
 function isReferenced(document: GeometryDocument, id: string, ignoredReferrers: Set<string> = new Set()): boolean {
   return document.groups.some((group) => group.members.includes(id)) || document.constraints.some((constraint) => constraint.targets.includes(id)) || document.measurements.some((measurement) => measurement.sourceIds.includes(id)) || (document.engineeringAnnotations ?? []).some((annotation) => annotation.sourceIds.includes(id)) || document.annotations.some((annotation) => annotation.target === id || (annotation.anchor?.kind === "primitive" && annotation.anchor.primitiveId === id)) || document.primitives.some((primitive) => !ignoredReferrers.has(primitive.id) && (
     (primitive.type === "intersection" && (primitive.lineA === id || primitive.lineB === id)) ||
@@ -80,6 +98,69 @@ function isReferenced(document: GeometryDocument, id: string, ignoredReferrers: 
 export function validatePatch(document: GeometryDocument, operation: DomainOperation): PatchValidationResult {
   const ids = primitiveIds(document)
   const errors: string[] = []
+  if (operation.op === "addLayer") {
+    const layers = document.layers ?? []
+    if (!isLayer(operation.layer)) errors.push("layer is invalid")
+    else {
+      if (layers.some((layer) => layer.id === operation.layer.id)) errors.push("duplicate layer id")
+      if (operation.layer.parentId && (!layers.some((layer) => layer.id === operation.layer.parentId) || operation.layer.parentId === operation.layer.id)) errors.push("layer parent is missing")
+    }
+  }
+  if (operation.op === "updateLayer") {
+    const layer = (document.layers ?? []).find((candidate) => candidate.id === operation.id)
+    if (!layer) errors.push("layer not found")
+    if (operation.patch.parentId !== undefined && (!document.layers?.some((candidate) => candidate.id === operation.patch.parentId) || operation.patch.parentId === operation.id)) errors.push("layer parent is missing")
+    if (operation.patch.kind !== undefined && !["geometry", "dimension", "construction", "annotation", "reference"].includes(operation.patch.kind)) errors.push("layer kind is invalid")
+    if (operation.patch.name !== undefined && typeof operation.patch.name !== "string") errors.push("layer name is invalid")
+  }
+  if (operation.op === "deleteLayer") {
+    const layers = document.layers ?? []
+    const layer = layers.find((candidate) => candidate.id === operation.id)
+    if (!layer) errors.push("layer not found")
+    else {
+      const removedIds = layerDescendantIds(document, operation.id)
+      const targetId = operation.reassignTo ?? layers.find((candidate) => candidate.kind === "geometry" && !removedIds.has(candidate.id))?.id
+      if (!targetId) errors.push("no replacement layer")
+      else if (!layers.some((candidate) => candidate.id === targetId) || removedIds.has(targetId)) errors.push("replacement layer is missing")
+    }
+  }
+  if (operation.op === "setActiveLayer") {
+    const layer = (document.layers ?? []).find((candidate) => candidate.id === operation.id)
+    if (!layer) errors.push("layer not found")
+    else {
+      if (!layer.visible) errors.push("active layer must be visible")
+      if (layer.locked) errors.push("active layer must be unlocked")
+    }
+  }
+  if (operation.op === "addDrawingSheet") {
+    if (!isDrawingSheet(operation.sheet)) errors.push("drawing sheet is invalid")
+    else {
+      if ((document.drawingSheets ?? []).some((sheet) => sheet.id === operation.sheet.id)) errors.push("duplicate drawing sheet id")
+      const viewIds = new Set((document.drawingViews ?? []).map((view) => view.id))
+      if (operation.sheet.viewIds.some((id) => !viewIds.has(id))) errors.push("drawing sheet references missing view")
+    }
+  }
+  if (operation.op === "updateDrawingSheet") {
+    if (!(document.drawingSheets ?? []).some((sheet) => sheet.id === operation.id)) errors.push("drawing sheet not found")
+    if (operation.patch.viewIds !== undefined) {
+      const viewIds = new Set((document.drawingViews ?? []).map((view) => view.id))
+      if (!operation.patch.viewIds.every((id) => viewIds.has(id))) errors.push("drawing sheet references missing view")
+    }
+  }
+  if (operation.op === "addDrawingView") {
+    if (!isDrawingView(operation.view)) errors.push("drawing view is invalid")
+    else if ((document.drawingViews ?? []).some((view) => view.id === operation.view.id)) errors.push("duplicate drawing view id")
+  }
+  if (operation.op === "updateDrawingView") {
+    if (!(document.drawingViews ?? []).some((view) => view.id === operation.id)) errors.push("drawing view not found")
+    if (operation.patch.width !== undefined && (!Number.isFinite(operation.patch.width) || operation.patch.width <= 0)) errors.push("drawing view width is invalid")
+    if (operation.patch.height !== undefined && (!Number.isFinite(operation.patch.height) || operation.patch.height <= 0)) errors.push("drawing view height is invalid")
+    if (operation.patch.scale !== undefined && (!Number.isFinite(operation.patch.scale) || operation.patch.scale <= 0)) errors.push("drawing view scale is invalid")
+  }
+  if (operation.op === "deleteDrawingView") {
+    if (!(document.drawingViews ?? []).some((view) => view.id === operation.id)) errors.push("drawing view not found")
+    if ((document.drawingSheets ?? []).some((sheet) => sheet.viewIds.includes(operation.id))) errors.push("drawing view is referenced by a sheet")
+  }
   if (operation.op === "addPrimitive") {
     const primitive = operation.primitive
     if (!isPrimitive(primitive)) errors.push("primitive is invalid")

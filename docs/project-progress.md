@@ -3,7 +3,7 @@
 > 这份文件是项目的单一进度记录。每完成一个可验证的切片，就更新“已完成”和“下一步”，并附上验证证据。
 
 **最后更新：** 2026-09-15
-**当前阶段：** P0-P6 与 P7 工程制图 MVP 已完成；P7 覆盖四视图、投影联动、工程标注、文档兼容和 SVG/DXF/PDF 导出，P4 Agent 与 P5 题图解析仍在排除范围内。
+**当前阶段：** P0-P6 与 P7 工程制图 MVP 已完成；工程工作台层次化改造的 Task 1、Task 2 已完成，Task 3 及之后按用户要求暂停。P7 覆盖四视图、投影联动、工程标注、文档兼容和 SVG/DXF/PDF 导出，P4 Agent 与 P5 题图解析仍在排除范围内。
 **总体状态：** 开发中
 
 ## 已完成
@@ -238,6 +238,24 @@ P7-1 至 P7-6 已完成；P4 Agent、P5 题图解析保持在排除范围内。
 - 依赖许可证与边界已记录在 `docs/research/graphing-tools.md`，导出器不调用 Three.js 或重复计算投影。
 - P7-6 完整验收：42 个测试文件、388 个单测通过；四个 workspace 类型检查通过；Lint 0 errors（保留 36 个既有 warnings）；生产构建通过；Playwright 21/21 通过；`git diff --check` 通过。
 
+### 工程工作台层次化改造：Task 1-2
+
+- [x] **Task 1：图层、图纸和视图文档模型**：新增可选 `layers`、`drawingViews`、`drawingSheets`、`activeLayerId` 和 `activeSheetId` 字段；旧 `.mgeo` 自动解释为默认几何层、默认图纸和四个 P7 视图。
+- [x] **Task 2：可撤销图层与布局操作**：新增图层、活动图层、图纸和视图的 Scene Graph 操作；删除图层时重分配图元，删除被引用视图或来源时保持引用保护。
+- [x] **兼容与校验**：保持 `schemaVersion: "0.1"`，校验图层父子关系、活动引用、视图尺寸/比例和图纸视图引用；历史图元未指定 `layerId` 时不改写存储数据。
+- [x] **聚焦验证**：`npm.cmd test -- packages/dsl/src/codec.test.ts packages/dsl/src/schema.test.ts packages/scene-graph/src/operations.test.ts`：3 个测试文件、41 个测试通过。
+- [x] **类型验证**：`@draw/dsl` 与 `@draw/scene-graph` workspace 类型检查通过。
+
+### 当前暂停边界
+
+- [ ] Task 3：工作台壳、分层命令栏和状态栏。
+- [ ] Task 4：模型树、图层树和图纸树。
+- [ ] Task 5：图纸视口与 2D 直接绘图模式。
+- [ ] Task 6：上下文 Inspector 与完整用户流程。
+- [ ] Task 7：迁移、E2E 覆盖和最终交付验证。
+
+以上任务暂不执行，等待用户明确授权后再继续。
+
 > 射线/折线、圆锥曲线和函数采样已接入工具栏、SVG 渲染、属性编辑和 UI 回归测试；选中两条可采样曲线即可创建持久化交点。
 
 ## 进度更新规则
@@ -267,6 +285,8 @@ P7-1 至 P7-6 已完成；P4 Agent、P5 题图解析保持在排除范围内。
 - **P6 v3 新增测试资产**：`e2e/fixtures/tetrahedron.mgeo`（四面体 A(0,0,0) B(0,0,1) C(1,0,0) D(1,1,1)，4 点 + 6 棱 + 4 面），用于取景与二面角回归
 - **本轮质量与功能验证**：37 个测试文件、360 个单元/UI 用例通过；4 个 workspace 类型检查通过；ESLint 可执行并无错误（保留 36 条已有风格/依赖警告）；Web 生产构建通过并使用隔离输出目录；新增二面角入口、测量标签、撤销历史上限、展开动画收敛和预览服务退出回归。
 - **本轮浏览器验证**：17/17 个 Playwright 用例通过，包括展开/折叠和二面角流程；预览服务改为 global setup/teardown 同进程管理，Windows 下命令正常退出。
+- **工程工作台 Task 1-2 最新验证**：`npm.cmd test` 通过，44 个测试文件、400 个测试通过；`npm.cmd run typecheck` 通过，4 个 workspace 无类型错误；`npm.cmd run lint` 通过，0 error、36 条既有 warning；`npm.cmd run build` 通过；`npm.cmd run test:e2e` 通过，21/21 个 Playwright 用例通过。
+- **已知验证提示**：Vite 仍提示主 bundle 超过 500 KB；Vitest 的 3D UI 测试在 jsdom 中输出 Three.js WebGL context 未实现提示，但测试结果为通过；本轮未新增 UI 工作台代码。
 
 ### 历史证据
 

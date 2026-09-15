@@ -1,5 +1,5 @@
 import { validateDocument } from "./schema"
-import type { GeometryDocument, Section3Classification, Workspace } from "./types"
+import type { DrawingSheetSpec, DrawingViewSpec, GeometryDocument, LayerSpec, Section3Classification, Workspace } from "./types"
 
 function createId(prefix: string): string {
   const uuid = globalThis.crypto?.randomUUID?.()
@@ -22,6 +22,42 @@ export function createEmptyDocument(workspace: Workspace): GeometryDocument {
     measurements: [],
     engineeringAnnotations: [],
     metadata: { id: createId("doc"), name: "Untitled geometry", createdAt: now, updatedAt: now }
+  }
+}
+
+const defaultLayers: LayerSpec[] = [
+  { id: "layer-geometry", name: "几何", kind: "geometry", visible: true, locked: false, printable: true },
+  { id: "layer-dimension", name: "尺寸", kind: "dimension", visible: true, locked: false, printable: true },
+  { id: "layer-construction", name: "辅助线", kind: "construction", visible: true, locked: false, printable: false },
+  { id: "layer-annotation", name: "注释", kind: "annotation", visible: true, locked: false, printable: true }
+]
+
+const defaultViews: DrawingViewSpec[] = [
+  { id: "view-front", kind: "front", x: 40, y: 40, width: 300, height: 220, scale: 1, visible: true, showProjectionLines: false },
+  { id: "view-top", kind: "top", x: 360, y: 40, width: 300, height: 220, scale: 1, visible: true, showProjectionLines: false },
+  { id: "view-left", kind: "left", x: 40, y: 280, width: 300, height: 220, scale: 1, visible: true, showProjectionLines: false },
+  { id: "view-axonometric", kind: "axonometric", x: 360, y: 280, width: 300, height: 220, scale: 1, visible: true, showProjectionLines: false }
+]
+
+export function createDefaultCadLayout(document: GeometryDocument): GeometryDocument {
+  const layers = document.layers ?? defaultLayers.map((layer) => ({ ...layer }))
+  const drawingViews = document.drawingViews ?? (document.workspace === "cad" ? defaultViews.map((view) => ({ ...view })) : [])
+  const drawingSheets = document.drawingSheets ?? [{
+    id: "sheet-1",
+    name: "工程图纸",
+    paper: "A4",
+    orientation: "landscape",
+    scale: 1,
+    viewIds: drawingViews.map((view) => view.id)
+  } satisfies DrawingSheetSpec]
+
+  return {
+    ...document,
+    layers,
+    drawingViews,
+    drawingSheets,
+    activeLayerId: document.activeLayerId ?? layers.find((layer) => layer.kind === "geometry")?.id ?? layers[0]?.id,
+    activeSheetId: document.activeSheetId ?? drawingSheets[0]?.id
   }
 }
 
@@ -68,7 +104,10 @@ export function decodeMgeo(serialized: string): GeometryDocument {
       primitives: withSectionClassification((rawCandidate as { primitives?: unknown }).primitives)
     }
     : rawCandidate
-  const result = validateDocument(candidate)
+  const migrated = candidate && typeof candidate === "object"
+    ? createDefaultCadLayout(candidate as GeometryDocument)
+    : candidate
+  const result = validateDocument(migrated)
   if (!result.valid) throw new Error(`Invalid geometry document: ${result.errors.join(", ")}`)
-  return candidate as GeometryDocument
+  return migrated as GeometryDocument
 }

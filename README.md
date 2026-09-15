@@ -4,7 +4,7 @@ MathCanvas 是一个面向数学与工程场景的 2D 交互绘图工作台原�
 
 ## 当前状态
 
-P0 技术验证、P1 数学内核、P2 交互、P3 函数分析、P6 立体几何与 P7 工程制图 MVP 均已完成；P7 覆盖四视图、投影线联动、工程标注以及 SVG/DXF/PDF 矢量导出。
+P0 技术验证、P1 数学内核、P2 交互、P3 函数分析、P6 立体几何与 P7 工程制图 MVP 均已完成；工程工作台层次化改造的 Task 1、Task 2 已完成，Task 3 及之后暂按计划暂停。P7 覆盖四视图、投影线联动、工程标注以及 SVG/DXF/PDF 矢量导出。
 
 完整进度、各项根因与验证证据见 [`docs/project-progress.md`](./docs/project-progress.md)。
 
@@ -19,6 +19,13 @@ npm run dev
 
 ```powershell
 npm.cmd install
+npm.cmd run dev
+```
+
+在本地仓库 `D:\draw\draw` 中也可以直接执行：
+
+```powershell
+Set-Location D:\draw\draw
 npm.cmd run dev
 ```
 
@@ -87,6 +94,13 @@ npm run test:e2e
 - 二面角按公共棱报告面内内角，属性栏可选内角/外角，测量说明给出两个角度与公共棱；选中来源面时画布绘制公共棱、角弧和朝外法向量标记。
 - 3D 文档继续使用 `schemaVersion: "0.1"`，旧 2D `.mgeo` 文件保持可读。
 
+### 工程工作台改版范围
+
+- 目标交互采用经典 CAD 层次：命令栏、模型/图层/图纸树、中心图纸视口、上下文属性检查器和底部状态栏。
+- CAD 同时支持 2D 直接绘图和 3D 投影制图；投影几何继续复用 P7 的 renderer-neutral 描述，不把派生投影图元写回文档。
+- 当前已落地文档层基础：图层、活动图层、图纸、视图布局及可撤销 Scene Graph 操作；旧 `.mgeo` 自动使用默认布局。
+- 工作台 UI 壳、树面板、图纸视口、2D 直接绘图流程和上下文 Inspector 属于 Task 3-6，按当前计划等待后续授权。
+
 ### 动态演变与导出
 
 - 支持参数播放、暂停、停止、单次、循环和往返模式。
@@ -111,7 +125,9 @@ npm run build
 npm run test:e2e
 ```
 
-当前验证基线：37 个测试文件、360 个测试通过；4 个 workspace 类型检查通过；ESLint 0 个 error（保留 36 个 warning）；Web 生产构建通过；17 个 Playwright Chromium 用例通过且命令正常退出。首次运行需先执行 `npx playwright install chromium`，否则会报缺少浏览器可执行文件。
+当前验证基线：44 个测试文件、400 个测试通过；4 个 workspace 类型检查通过；ESLint 0 个 error（保留 36 个既有 warning）；Web 生产构建通过；21 个 Playwright Chromium 用例通过且命令正常退出。Vite 仍提示主 bundle 超过 500 KB。首次运行需先执行 `npx playwright install chromium`，否则会报缺少浏览器可执行文件。
+
+工程工作台基础模型的聚焦验证：DSL 与 Scene Graph 相关 3 个测试文件、41 个测试通过；`@draw/dsl` 和 `@draw/scene-graph` 类型检查通过。
 
 ## 项目文档
 
@@ -121,6 +137,8 @@ npm run test:e2e
 - [P6 v2 点驱动 3D 实施计划](docs/superpowers/plans/2026-09-14-point-driven-3d-geometry.md)：记录十个切片、接口、验证门槛和提交约定。
 - [P6 v2 点驱动 3D 设计规格](docs/superpowers/specs/2026-09-14-point-driven-3d-geometry-design.md)：记录点、线、面、拓扑和教学交互设计。
 - [P6 v3 测量质量设计规格](docs/superpowers/specs/2026-09-15-3d-measurement-quality-design.md)：记录测量可视化、二面角入口、撤销历史和验证门禁。
+- [工程工作台设计规格](docs/superpowers/specs/2026-09-15-engineering-workbench-design.md)：记录 2D/3D 混合 CAD 工作流、经典层次界面和文档模型。
+- [工程工作台层次化实施计划](docs/superpowers/plans/2026-09-15-engineering-workbench-hierarchy.md)：记录 Task 1-2 的完成状态与 Task 3+ 的暂停边界。
 
 ## 协作约定
 
@@ -131,4 +149,4 @@ npm run test:e2e
 
 ## 下一步
 
-P6 与 P7 已完成。P7 的投影、工程标注和导出均消费稳定的 renderer-neutral 描述；`.mgeo` 与 CSV 导出在 3D 保持可用，3D 投影 SVG/PNG 继续明确禁用。
+P6 与 P7 已完成。P7 的投影、工程标注和导出均消费稳定的 renderer-neutral 描述；`.mgeo` 与 CSV 导出在 3D 保持可用，3D 投影 SVG/PNG 继续明确禁用。工程工作台当前完成文档模型和 Scene Graph 操作基础，Task 3-7 等待用户授权后继续。

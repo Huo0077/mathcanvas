@@ -33,6 +33,7 @@ export interface PrimitiveStyle {
 
 export interface PrimitivePresentation {
   label?: string
+  layerId?: string
   visible?: boolean
   locked?: boolean
   style?: PrimitiveStyle
@@ -532,6 +533,40 @@ export interface DocumentMetadata {
   updatedAt: string
 }
 
+export interface LayerSpec {
+  id: string
+  name: string
+  parentId?: string
+  kind: "geometry" | "dimension" | "construction" | "annotation" | "reference"
+  visible: boolean
+  locked: boolean
+  printable: boolean
+  color?: string
+  lineStyle?: "continuous" | "dashed" | "center"
+}
+
+export interface DrawingViewSpec {
+  id: string
+  kind: "model" | "front" | "top" | "left" | "axonometric"
+  sourceIds?: string[]
+  x: number
+  y: number
+  width: number
+  height: number
+  scale: number
+  visible: boolean
+  showProjectionLines: boolean
+}
+
+export interface DrawingSheetSpec {
+  id: string
+  name: string
+  paper: "A4" | "A3" | "A2" | "custom"
+  orientation: "portrait" | "landscape"
+  scale: number
+  viewIds: string[]
+}
+
 export interface GeometryDocument {
   schemaVersion: "0.1"
   revision: number
@@ -545,6 +580,11 @@ export interface GeometryDocument {
   annotations: AnnotationSpec[]
   measurements: Measurement3[]
   engineeringAnnotations?: EngineeringAnnotation[]
+  layers?: LayerSpec[]
+  drawingViews?: DrawingViewSpec[]
+  drawingSheets?: DrawingSheetSpec[]
+  activeLayerId?: string
+  activeSheetId?: string
   metadata: DocumentMetadata
 }
 

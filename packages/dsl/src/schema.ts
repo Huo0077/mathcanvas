@@ -419,6 +419,73 @@ function validateAnnotation(value: unknown, byId: Map<string, unknown>): string[
   return errors
 }
 
+function validateLayers(value: unknown, errors: string[]): Set<string> {
+  const layerIds = new Set<string>()
+  if (!Array.isArray(value)) return layerIds
+  for (const layer of value) {
+    if (!isRecord(layer) || typeof layer.id !== "string" || !layer.id) {
+      errors.push("every layer needs a stable id")
+      continue
+    }
+    if (layerIds.has(layer.id)) errors.push(`duplicate layer id: ${layer.id}`)
+    layerIds.add(layer.id)
+  }
+  for (const layer of value) {
+    if (!isRecord(layer) || typeof layer.id !== "string" || !layer.id) continue
+    if (typeof layer.name !== "string") errors.push(`layer name is invalid: ${layer.id}`)
+    if (!["geometry", "dimension", "construction", "annotation", "reference"].includes(String(layer.kind))) errors.push(`layer kind is invalid: ${layer.id}`)
+    if (typeof layer.visible !== "boolean") errors.push(`layer visibility is invalid: ${layer.id}`)
+    if (typeof layer.locked !== "boolean") errors.push(`layer lock state is invalid: ${layer.id}`)
+    if (typeof layer.printable !== "boolean") errors.push(`layer printable state is invalid: ${layer.id}`)
+    if (layer.parentId !== undefined && (typeof layer.parentId !== "string" || !layerIds.has(layer.parentId) || layer.parentId === layer.id)) errors.push(`layer parent is missing: ${layer.id}`)
+    if (layer.color !== undefined && typeof layer.color !== "string") errors.push(`layer color is invalid: ${layer.id}`)
+    if (layer.lineStyle !== undefined && !["continuous", "dashed", "center"].includes(String(layer.lineStyle))) errors.push(`layer line style is invalid: ${layer.id}`)
+  }
+  return layerIds
+}
+
+function validateDrawingViews(value: unknown, errors: string[]): Set<string> {
+  const viewIds = new Set<string>()
+  if (!Array.isArray(value)) return viewIds
+  for (const view of value) {
+    if (!isRecord(view) || typeof view.id !== "string" || !view.id) {
+      errors.push("every drawing view needs a stable id")
+      continue
+    }
+    if (viewIds.has(view.id)) errors.push(`duplicate drawing view id: ${view.id}`)
+    viewIds.add(view.id)
+    if (!["model", "front", "top", "left", "axonometric"].includes(String(view.kind))) errors.push(`drawing view kind is invalid: ${view.id}`)
+    if (view.sourceIds !== undefined && (!Array.isArray(view.sourceIds) || view.sourceIds.some((sourceId) => typeof sourceId !== "string"))) errors.push(`drawing view sources are invalid: ${view.id}`)
+    if (!isFiniteNumber(view.x)) errors.push(`drawing view x is invalid: ${view.id}`)
+    if (!isFiniteNumber(view.y)) errors.push(`drawing view y is invalid: ${view.id}`)
+    if (!isFiniteNumber(view.width) || view.width <= 0) errors.push(`drawing view width is invalid: ${view.id}`)
+    if (!isFiniteNumber(view.height) || view.height <= 0) errors.push(`drawing view height is invalid: ${view.id}`)
+    if (!isFiniteNumber(view.scale) || view.scale <= 0) errors.push(`drawing view scale is invalid: ${view.id}`)
+    if (typeof view.visible !== "boolean") errors.push(`drawing view visibility is invalid: ${view.id}`)
+    if (typeof view.showProjectionLines !== "boolean") errors.push(`drawing view projection lines are invalid: ${view.id}`)
+  }
+  return viewIds
+}
+
+function validateDrawingSheets(value: unknown, viewIds: Set<string>, errors: string[]): Set<string> {
+  const sheetIds = new Set<string>()
+  if (!Array.isArray(value)) return sheetIds
+  for (const sheet of value) {
+    if (!isRecord(sheet) || typeof sheet.id !== "string" || !sheet.id) {
+      errors.push("every drawing sheet needs a stable id")
+      continue
+    }
+    if (sheetIds.has(sheet.id)) errors.push(`duplicate drawing sheet id: ${sheet.id}`)
+    sheetIds.add(sheet.id)
+    if (typeof sheet.name !== "string") errors.push(`drawing sheet name is invalid: ${sheet.id}`)
+    if (!["A4", "A3", "A2", "custom"].includes(String(sheet.paper))) errors.push(`drawing sheet paper is invalid: ${sheet.id}`)
+    if (!["portrait", "landscape"].includes(String(sheet.orientation))) errors.push(`drawing sheet orientation is invalid: ${sheet.id}`)
+    if (!isFiniteNumber(sheet.scale) || sheet.scale <= 0) errors.push(`drawing sheet scale is invalid: ${sheet.id}`)
+    if (!Array.isArray(sheet.viewIds) || sheet.viewIds.some((viewId) => typeof viewId !== "string" || !viewIds.has(viewId))) errors.push(`drawing sheet references missing view: ${sheet.id}`)
+  }
+  return sheetIds
+}
+
 export function validateDocument(document: unknown): ValidationResult {
   const errors: string[] = []
   if (!isRecord(document)) return { valid: false, errors: ["document must be an object"] }
@@ -433,7 +500,16 @@ export function validateDocument(document: unknown): ValidationResult {
   if (!Array.isArray(document.annotations)) errors.push("annotations must be an array")
   if (document.measurements !== undefined && !Array.isArray(document.measurements)) errors.push("measurements must be an array")
   if (document.engineeringAnnotations !== undefined && !Array.isArray(document.engineeringAnnotations)) errors.push("engineeringAnnotations must be an array")
+  if (document.layers !== undefined && !Array.isArray(document.layers)) errors.push("layers must be an array")
+  if (document.drawingViews !== undefined && !Array.isArray(document.drawingViews)) errors.push("drawingViews must be an array")
+  if (document.drawingSheets !== undefined && !Array.isArray(document.drawingSheets)) errors.push("drawingSheets must be an array")
   if (!isRecord(document.metadata) || typeof document.metadata.id !== "string" || !document.metadata.id) errors.push("metadata.id is required")
+
+  const layerIds = validateLayers(document.layers, errors)
+  const drawingViewIds = validateDrawingViews(document.drawingViews, errors)
+  const drawingSheetIds = validateDrawingSheets(document.drawingSheets, drawingViewIds, errors)
+  if (document.activeLayerId !== undefined && (typeof document.activeLayerId !== "string" || !layerIds.has(document.activeLayerId))) errors.push("activeLayerId references missing layer")
+  if (document.activeSheetId !== undefined && (typeof document.activeSheetId !== "string" || !drawingSheetIds.has(document.activeSheetId))) errors.push("activeSheetId references missing sheet")
 
   const primitives = Array.isArray(document.primitives) ? document.primitives : []
   const primitiveIds = new Set<string>()
@@ -446,7 +522,10 @@ export function validateDocument(document: unknown): ValidationResult {
     }
   }
   const parameterIds = isRecord(document.parameters) ? new Set(Object.keys(document.parameters)) : new Set<string>()
-  for (const primitive of primitives) errors.push(...validatePrimitive(primitive, primitiveById, parameterIds))
+  for (const primitive of primitives) {
+    if (isRecord(primitive) && primitive.layerId !== undefined && (typeof primitive.layerId !== "string" || !layerIds.has(primitive.layerId))) errors.push(`primitive layer is missing: ${isRecord(primitive) && typeof primitive.id === "string" ? primitive.id : "unknown"}`)
+    errors.push(...validatePrimitive(primitive, primitiveById, parameterIds))
+  }
 
   if (Array.isArray(document.annotations)) {
     const annotationIds = new Set<string>()

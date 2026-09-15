@@ -1,4 +1,4 @@
-import type { AnnotationSpec, ConstraintSpec, Coordinate, EngineeringAnnotation, GeometryDocument, GroupSpec, Measurement3, Point3Binding, Point3Primitive, PointBinding, PrimitiveSpec, Section3Classification, Vector3 } from "@draw/dsl"
+import type { AnnotationSpec, ConstraintSpec, Coordinate, DrawingSheetSpec, DrawingViewSpec, EngineeringAnnotation, GeometryDocument, GroupSpec, LayerSpec, Measurement3, Point3Binding, Point3Primitive, PointBinding, PrimitiveSpec, Section3Classification, Vector3 } from "@draw/dsl"
 import { adaptiveSampleFunctionSegments, buildSolidTemplate, calculateMeasurement3, createBuilderContext, dihedralMarker3, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, findExtrema, findInflectionPoints, findZeros, intersectCirclesDetailed, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, orderSectionPoints3, sectionConvexPolyhedron, sectionPolyhedron3, sharedRingEdge3, solveLineConstraints, type DihedralMarker3, type FaceRing3, type IntersectionResult, type SampledPrimitive, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
 
 export type DomainOperation =
@@ -23,9 +23,22 @@ export type DomainOperation =
   | { op: "alignPrimitives"; ids: string[]; alignment: Alignment }
   | { op: "setPrimitivesLocked"; ids: string[]; locked: boolean }
   | { op: "setPrimitivesVisible"; ids: string[]; visible: boolean }
+  | { op: "addLayer"; layer: LayerSpec }
+  | { op: "updateLayer"; id: string; patch: LayerUpdatePatch }
+  | { op: "deleteLayer"; id: string; reassignTo?: string }
+  | { op: "setActiveLayer"; id: string }
+  | { op: "addDrawingSheet"; sheet: DrawingSheetSpec }
+  | { op: "updateDrawingSheet"; id: string; patch: DrawingSheetUpdatePatch }
+  | { op: "addDrawingView"; view: DrawingViewSpec }
+  | { op: "updateDrawingView"; id: string; patch: DrawingViewUpdatePatch }
+  | { op: "deleteDrawingView"; id: string }
   | { op: "translatePrimitive"; id: string; delta: { x: number; y: number } }
 
 export type Alignment = "left" | "right" | "top" | "bottom" | "horizontalCenter" | "verticalCenter"
+
+export type LayerUpdatePatch = Partial<Omit<LayerSpec, "id">>
+export type DrawingSheetUpdatePatch = Partial<Omit<DrawingSheetSpec, "id">>
+export type DrawingViewUpdatePatch = Partial<Omit<DrawingViewSpec, "id">>
 
 export interface PrimitiveUpdatePatch {
   x?: number
@@ -690,6 +703,21 @@ export function deletionTargets(document: GeometryDocument, id: string): Set<str
   return targets
 }
 
+export function layerDescendantIds(document: GeometryDocument, id: string): Set<string> {
+  const descendants = new Set<string>([id])
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const layer of document.layers ?? []) {
+      if (layer.parentId && descendants.has(layer.parentId) && !descendants.has(layer.id)) {
+        descendants.add(layer.id)
+        changed = true
+      }
+    }
+  }
+  return descendants
+}
+
 export function applyOperation(document: GeometryDocument, operation: DomainOperation): OperationResult {  const next = structuredClone(document) as GeometryDocument
   let changedIds: string[] = []
   if (operation.op === "addPrimitive") {
@@ -870,6 +898,32 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
       return translatePrimitive(primitive, x, y)
     })
     changedIds = operation.ids
+  } else if (operation.op === "addLayer") {
+    next.layers = [...(next.layers ?? []), operation.layer]
+    if (!next.activeLayerId) next.activeLayerId = operation.layer.id
+  } else if (operation.op === "updateLayer") {
+    next.layers = (next.layers ?? []).map((layer) => layer.id === operation.id ? { ...layer, ...operation.patch, id: layer.id } : layer)
+  } else if (operation.op === "deleteLayer") {
+    const removedIds = layerDescendantIds(next, operation.id)
+    const targetId = operation.reassignTo ?? (next.layers ?? []).find((layer) => layer.kind === "geometry" && !removedIds.has(layer.id))?.id
+    if (!targetId) return { document, changed: false, error: "no replacement layer" }
+    next.primitives = next.primitives.map((primitive) => removedIds.has(primitive.layerId ?? "") ? { ...primitive, layerId: targetId } : primitive)
+    next.layers = (next.layers ?? []).filter((layer) => !removedIds.has(layer.id))
+    if (removedIds.has(next.activeLayerId ?? "")) next.activeLayerId = targetId
+  } else if (operation.op === "setActiveLayer") {
+    next.activeLayerId = operation.id
+  } else if (operation.op === "addDrawingSheet") {
+    next.drawingSheets = [...(next.drawingSheets ?? []), operation.sheet]
+    if (!next.activeSheetId) next.activeSheetId = operation.sheet.id
+  } else if (operation.op === "updateDrawingSheet") {
+    next.drawingSheets = (next.drawingSheets ?? []).map((sheet) => sheet.id === operation.id ? { ...sheet, ...operation.patch, id: sheet.id } : sheet)
+  } else if (operation.op === "addDrawingView") {
+    next.drawingViews = [...(next.drawingViews ?? []), operation.view]
+  } else if (operation.op === "updateDrawingView") {
+    next.drawingViews = (next.drawingViews ?? []).map((view) => view.id === operation.id ? { ...view, ...operation.patch, id: view.id } : view)
+  } else if (operation.op === "deleteDrawingView") {
+    next.drawingViews = (next.drawingViews ?? []).filter((view) => view.id !== operation.id)
+    next.drawingSheets = (next.drawingSheets ?? []).map((sheet) => ({ ...sheet, viewIds: sheet.viewIds.filter((viewId) => viewId !== operation.id) }))
   }
   try {
     const recomputed = recomputeDerivedObjects(next, changedIds)
