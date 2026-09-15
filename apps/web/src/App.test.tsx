@@ -868,6 +868,72 @@ describe("MathCanvas workbench", () => {
     expect(useSceneStore.getState().document.primitives.some((primitive) => primitive.type === "point3" && primitive.label === "A")).toBe(false)
   })
 
+  it("shows a small bottom-left guide when a feature button is clicked", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "圆锥曲线" }))
+
+    expect(screen.queryByRole("status", { name: "操作指引" })).toBeNull()
+
+    fireEvent.click(screen.getByRole("button", { name: "添加圆弧" }))
+    const hint = screen.getByRole("status", { name: "操作指引" })
+    expect(hint.textContent).toContain("圆心")
+    expect(hint.textContent).toContain("终点")
+  })
+
+  it("replaces the guide on the next feature click and closes it on demand", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "圆锥曲线" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加折线" }))
+    expect(screen.getByRole("status", { name: "操作指引" }).textContent).toContain("双击")
+
+    fireEvent.click(screen.getByRole("button", { name: "添加函数" }))
+    expect(screen.getByRole("status", { name: "操作指引" }).textContent).toContain("预设")
+
+    fireEvent.click(screen.getByRole("button", { name: "关闭操作指引" }))
+    expect(screen.queryByRole("status", { name: "操作指引" })).toBeNull()
+  })
+
+  it("dismisses the guide with Escape and clears it once a creation finishes", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "圆锥曲线" }))
+    const canvas = screen.getByRole("img", { name: "几何画布" })
+
+    fireEvent.click(screen.getByRole("button", { name: "添加直线" }))
+    fireEvent.keyDown(window, { key: "Escape" })
+    expect(screen.queryByRole("status", { name: "操作指引" })).toBeNull()
+
+    fireEvent.click(screen.getByRole("button", { name: "添加直线" }))
+    fireEvent.click(canvas, { clientX: 220, clientY: 200 })
+    fireEvent.click(canvas, { clientX: 420, clientY: 260 })
+    expect(useSceneStore.getState().document.primitives.some((primitive) => primitive.type === "line")).toBe(true)
+    expect(screen.queryByRole("status", { name: "操作指引" })).toBeNull()
+  })
+
+  it("explains the dihedral workflow instead of only naming the measurement", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加立方体" }))
+    fireEvent.click(screen.getByRole("button", { name: "展开 立方体 1 拓扑 的子对象" }))
+    fireEvent.click(algebraRow("面 1"))
+    fireEvent.click(algebraRow("面 3"), { shiftKey: true })
+    fireEvent.click(screen.getByRole("button", { name: "二面角内角" }))
+
+    expect(useSceneStore.getState().document.measurements).toHaveLength(1)
+    const hint = screen.getByRole("status", { name: "操作指引" })
+    expect(hint.textContent).toContain("公共棱")
+    expect(hint.textContent).toContain("外角")
+  })
+
+  it("confirms an added space point and points at the Shift multi-select", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
+
+    expect(screen.getByRole("status", { name: "操作指引" }).textContent).toContain("Shift")
+    // 成功添加只给指引，不该出现红色报错。
+    expect(screen.queryByRole("alert")).toBeNull()
+  })
+
   it("explains the two dihedral angle choices for selected faces", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
@@ -937,9 +1003,11 @@ describe("MathCanvas workbench", () => {
     fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
     fireEvent.click(screen.getByRole("button", { name: "由选中点创建空间直线" }))
 
-    // The message has to say how to select, not just that the selection is wrong.
-    expect(screen.getByRole("alert").textContent).toContain("Shift")
-    expect(screen.getByRole("alert").textContent).toContain("空间点")
+    // 预置条件不足时给左下角操作指引（说清要选什么），而不是一条只说"选择不对"的报错。
+    const hint = screen.getByRole("status", { name: "操作指引" })
+    expect(hint.textContent).toContain("Shift")
+    expect(hint.textContent).toContain("空间点")
+    expect(screen.queryByRole("alert")).toBeNull()
     expect(useSceneStore.getState().document.primitives.some((primitive) => primitive.type === "line3")).toBe(false)
   })
 

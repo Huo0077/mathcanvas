@@ -442,3 +442,39 @@ test("explains a dihedral angle with its common edge and canvas markers", async 
   await page.getByRole("button", { name: "二面角外角", exact: true }).click()
   await expect(algebra.getByText("二面角外角", { exact: true })).toBeVisible()
 })
+
+test("shows a small bottom-left guide only after a feature button is clicked", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "添加立方体" }).click()
+
+  const algebra = page.locator(".algebra-panel")
+  const hint = page.getByRole("status", { name: "操作指引" })
+
+  // 点「添加立方体」就出现该功能的指引，关掉后不再占位。
+  await page.getByRole("button", { name: "添加立方体" }).click()
+  await expect(hint).toContainText("Alt")
+  await page.getByRole("button", { name: "关闭操作指引" }).click()
+  await expect(hint).toHaveCount(0)
+
+  await algebra.getByRole("button", { name: "展开 立方体 1 拓扑 的子对象" }).click()
+  await algebra.getByText("面 1", { exact: true }).click()
+  await algebra.getByText("面 3", { exact: true }).click({ modifiers: ["Shift"] })
+  // 只选对象不产生新的指引。
+  await expect(hint).toHaveCount(0)
+
+  await page.getByRole("button", { name: "二面角内角", exact: true }).click()
+  await expect(hint).toBeVisible()
+  await expect(hint).toContainText("公共棱")
+  await expect(hint).toContainText("外角")
+
+  // 指引必须贴在左下角，而且足够小，不会变成挡住画布的面板。
+  const box = (await hint.boundingBox())!
+  const viewport = page.viewportSize()!
+  expect(box.width).toBeLessThan(480)
+  expect(box.x).toBeLessThan(viewport.width / 2)
+  expect(box.y + box.height).toBeGreaterThan(viewport.height * 0.6)
+
+  await page.getByRole("button", { name: "关闭操作指引" }).click()
+  await expect(hint).toHaveCount(0)
+})

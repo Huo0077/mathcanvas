@@ -83,6 +83,13 @@ npm run test:e2e
 - 支持动点、路径参数、轨迹显示和轨迹清除；点可绑定到直线、线段、射线、折线、圆、圆弧或函数路径。
 - 选中两个已标记点后，可以创建保持点引用的线段、直线、射线或折线；抛物线连接需要额外提供顶点、轴向、焦参数或第三点。
 
+### 操作指引
+
+- 点击功能键（添加图元、空间构造、测量、约束、函数分析等）后，画布左下角出现一条**小尺寸**指引，说明这一步该点什么、要按哪个键（`Esc` / `Shift` / `Alt`）或刚创建了什么。
+- 指引只在点击功能键时出现：切换工作区、按 `Esc`、点右侧 `×`，或一步创建动作完成时自动消失；点另一个功能键会被新指引替换，不会变成常驻说明面板。
+- 预置条件不足时给出可执行的做法，而不是只说「选择不对」的报错——例如二面角会提示「按住 Alt 点实体表面单独选面，Shift 加选第二个面」。
+- 选中立方体、棱锥、圆柱、圆锥会提示 `Alt + 点击` 可单独选中棱或面（二面角与剖切都依赖这个入口）。
+
 ### 三维几何工作区
 
 - 切换到“立体几何”工作区后，可创建空间点；新点自动使用 A、B、C 等课堂标签。
@@ -132,7 +139,7 @@ npm run build
 npm run test:e2e
 ```
 
-当前验证基线：52 个测试文件、501 个测试通过；4 个 workspace 类型检查通过；ESLint 0 个 error（保留 38 条既有 warning）；Web 生产构建通过；31 个 Playwright Chromium 用例通过且命令正常退出。Vite 仍提示主 bundle 超过 500 KB。首次运行需先执行 `npx playwright install chromium`，否则会报缺少浏览器可执行文件。
+当前验证基线：54 个测试文件、516 个测试通过；4 个 workspace 类型检查通过；ESLint 0 个 error（保留 38 条既有 warning）；Web 生产构建通过；32 个 Playwright Chromium 用例通过且命令正常退出。Vite 仍提示主 bundle 超过 500 KB。首次运行需先执行 `npx playwright install chromium`，否则会报缺少浏览器可执行文件。
 
 工程工作台 Task 1-7 的聚焦验证：`LayerTree`/`DrawingTree`/`CommandBar`/`EngineeringWorkbench`/`DrawingViewport`/`DrawingSheetView`/`EngineeringInspector` 等新增测试文件 7 个；DSL 与 Scene Graph 图层/图纸操作 3 个测试文件、41 个用例；`e2e/engineering-workbench.spec.ts` 覆盖旧文档迁移、2D 绘图写入活动图层、图层隐藏、刷新后布局保持、隐藏视图不导出和键盘操作。
 

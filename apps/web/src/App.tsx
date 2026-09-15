@@ -19,6 +19,8 @@ import { EngineeringWorkbench, type CadMode } from "./components/EngineeringWork
 import type { InspectorTab } from "./components/InspectorTabs"
 import { GeometryToolbar } from "./components/GeometryToolbar"
 import { GraphicsView } from "./components/GraphicsView"
+import { GuidanceHint } from "./components/GuidanceHint"
+import { guidanceFor } from "./guidance"
 import { LayerTree } from "./components/LayerTree"
 import { PropertiesBar, type PropertiesBarProps } from "./components/PropertiesBar"
 import { StatusBar } from "./components/StatusBar"
@@ -124,6 +126,11 @@ export function App() {
   const draftLoadedRef = useRef(false)
   const skipNextDraftSaveRef = useRef(false)
   const [fileError, setFileError] = useState<string | null>(null)
+  /**
+   * 左下角的一次性操作指引：只在点击功能键时写入，由用户关闭、Esc、切换工作区或「创建动作完成」
+   * 清空，所以它不会变成一块常驻的说明面板。
+   */
+  const [guidance, setGuidance] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [creationStep, setCreationStep] = useState<CreationStep | null>(null)
   const [cadMode, setCadMode] = useState<CadMode>("projection")
@@ -209,21 +216,23 @@ export function App() {
   const creationMode: CreationMode = creationStep?.mode ?? null
   const startCreation = (mode: Exclude<CreationMode, null>) => {
     if (document.workspace === "geometry3d") {
+      // 预置条件不足时给左下角指引，而不是弹一条不知道该怎么做的报错。
       if (mode === "line") {
         if (canCreateLine3) addLine3()
-        else setFileError("请先在代数区按住 Shift 依次点选 2 个空间点，再创建直线")
+        else setGuidance(guidanceFor({ kind: "point3Tool", tool: "line", outcome: "blocked", point3Count: selectedPoint3Ids.length }))
       }
       if (mode === "segment") {
         if (canCreatePlane3) addPlane3()
-        else setFileError("请先按住 Shift 点选 3 个不共线的空间点，再创建平面")
+        else setGuidance(guidanceFor({ kind: "point3Tool", tool: "plane", outcome: "blocked", point3Count: selectedPoint3Ids.length }))
       }
       if (mode === "ray" || mode === "polyline") {
         if (canCreateFace3) addFace3()
-        else setFileError("请先按住 Shift 点选 3 个以上的空间点，再创建空间面")
+        else setGuidance(guidanceFor({ kind: "point3Tool", tool: "face", outcome: "blocked", point3Count: selectedPoint3Ids.length }))
       }
       return
     }
     setCreationStep({ mode, center: null })
+    setGuidance(guidanceFor({ kind: "creation", mode }))
   }
   /** New 2D objects join the active CAD layer so the layer tree can hide or lock them. */
   const cadLayerFields = (): { layerId?: string } => document.workspace === "cad" && document.activeLayerId ? { layerId: document.activeLayerId } : {}
@@ -298,6 +307,16 @@ export function App() {
     try { saveDraft(document) } catch (error) { reportFileError(error, "无法自动保存草稿") }
   }, [document])
 
+  /**
+   * 一次多步创建（直线/圆/圆弧/折线）画完就撤掉指引：已经完成的点击序列留着只会变成过期说明。
+   * 用「上一步是否 pending」判断，避免把一次性指引（添加函数、测量）也一起清掉。
+   */
+  const pendingCreationRef = useRef(false)
+  useEffect(() => {
+    if (pendingCreationRef.current && !creationStep) setGuidance(null)
+    pendingCreationRef.current = creationStep !== null
+  }, [creationStep])
+
   const addDefaultPrimitive = (type: "parabola" | "ellipse" | "hyperbola" | "function") => {
     const id = nextPrimitiveId(document, type)
     const primitive = type === "parabola"
@@ -309,6 +328,7 @@ export function App() {
           : { id, type, expression: "x*x", domain: [-6, 6] as [number, number], samples: 128, label: `函数 ${id.split("-").at(-1)}` }
     apply({ op: "addPrimitive", primitive })
     setSelectedIds([id])
+    setGuidance(guidanceFor(type === "function" ? { kind: "function" } : { kind: "conic", type }))
   }
 
   const selectedPrimitive = selectedId ? document.primitives.find((primitive) => primitive.id === selectedId) ?? null : null
@@ -330,6 +350,7 @@ export function App() {
         : { id, type: "integral", sourceId, domain: [...source.domain], steps: 256, points: [], area: null, status: "approximate", label: `积分区域 ${index}` }
     apply({ op: "addPrimitive", primitive })
     setSelectedIds([id])
+    setGuidance(guidanceFor({ kind: "functionAnalysis", analysis: kind }))
   }
   const intersectionTypes = ["point", "line", "segment", "ray", "polyline", "circle", "arc", "parabola", "ellipse", "hyperbola", "function"] as const
   const selectedPointIds = selectedIds.filter((id) => document.primitives.find((primitive) => primitive.id === id)?.type === "point")
@@ -349,6 +370,9 @@ export function App() {
       setSelectedIds([])
       return
     }
+    // 选中模板实体时说明 Alt 修饰键，否则用户永远找不到「单独选中一个面」的入口（二面角、剖切都靠它）。
+    const picked = document.primitives.find((primitive) => primitive.id === id)
+    if (picked && ["cube", "pyramid", "cylinder", "cone"].includes(picked.type)) setGuidance(guidanceFor({ kind: "selectSolid" }))
     setSelectedIds((current) => additive ? (current.includes(id) ? current.filter((candidate) => candidate !== id) : [...current, id]) : [id])
   }
   const selectBox = (bounds: { minX: number; minY: number; maxX: number; maxY: number }) => {
@@ -415,6 +439,7 @@ export function App() {
     if (result.diagnostics.length > 0) { setFileError(result.diagnostics.map((diagnostic) => diagnostic.message).join("；")); return }
     apply({ op: "addPrimitives", primitives: [primitive, ...result.primitives] })
     setSelectedIds([primitive.id])
+    setGuidance(guidanceFor({ kind: "solid", solid: primitive.type }))
   }
   const solidTypes = ["cube", "pyramid", "cylinder", "cone", "polyhedron3"] as const
   const canCreateSection = selectedPrimitive !== null && solidTypes.includes(selectedPrimitive.type as typeof solidTypes[number])
@@ -428,6 +453,7 @@ export function App() {
     const id = nextPrimitiveId(document, "section")
     apply({ op: "addPrimitive", primitive: { id, type: "section", sourceId: selectedPrimitive.id, plane, points: [], classification: "none", status: "undefined", label: `截面 ${id.split("-").at(-1)}` } })
     setSelectedIds([id])
+    setGuidance(guidanceFor({ kind: "section" }))
   }
   const createIntersectionFromPreview = (preview: IntersectionPreview) => {
     const first = document.primitives.find((primitive) => primitive.id === preview.objectA)
@@ -458,6 +484,7 @@ export function App() {
     }
     const id = nextPrimitiveId(document, "point")
     apply({ op: "addPrimitive", primitive: { id, type: "point", x: 2, y: 1, ...cadLayerFields(), label: nextPointLabel(document) } })
+    setGuidance(guidanceFor({ kind: "point", workspace: document.workspace }))
   }
   function addPoint3() {
     const pointCount = document.primitives.filter((primitive) => primitive.type === "point3").length
@@ -468,24 +495,28 @@ export function App() {
     const position = { x: (pointCount % 2) * 3, y: (Math.floor(pointCount / 2) % 2) * 3, z: Math.floor(pointCount / 4) * 3 }
     apply({ op: "addPrimitive", primitive: { id, type: "point3", position, binding: { kind: "free" }, label: nextPoint3Label(document) } })
     setSelectedIds([id])
+    setGuidance(guidanceFor({ kind: "point", workspace: "geometry3d" }))
   }
   function addLine3() {
     if (!canCreateLine3) return
     const id = nextPrimitiveId(document, "line3")
     apply({ op: "addPrimitive", primitive: { id, type: "line3", definition: { kind: "throughPoints", pointIds: selectedPoint3Ids as [string, string] }, label: `空间直线 ${id.split("-").at(-1)}` } })
     setSelectedIds([id])
+    setGuidance(guidanceFor({ kind: "point3Tool", tool: "line", outcome: "created" }))
   }
   function addPlane3() {
     if (!canCreatePlane3) return
     const id = nextPrimitiveId(document, "plane3")
     apply({ op: "addPrimitive", primitive: { id, type: "plane3", definition: { kind: "throughPoints", pointIds: selectedPoint3Ids as [string, string, string] }, label: `空间平面 ${id.split("-").at(-1)}` } })
     setSelectedIds([id])
+    setGuidance(guidanceFor({ kind: "point3Tool", tool: "plane", outcome: "created" }))
   }
   function addFace3() {
     if (!canCreateFace3) return
     const id = nextPrimitiveId(document, "face3")
     apply({ op: "addPrimitive", primitive: { id, type: "face3", pointIds: [...selectedPoint3Ids], label: `空间面 ${id.split("-").at(-1)}` } })
     setSelectedIds([id])
+    setGuidance(guidanceFor({ kind: "point3Tool", tool: "face", outcome: "created" }))
   }
   const addAnnotation = (feature: AnnotationFeature, index?: number, text?: string) => {
     if (!selectedPrimitive) return
@@ -516,16 +547,19 @@ export function App() {
     const id = nextMeasurementId(document)
     const measurement = createMeasurement3(id, metric, selectedIds, document.primitives, dihedralKind)
     if (measurement.status === "insufficient-data" || measurement.status === "degenerate") {
-      setFileError(measurement.explanation)
+      // 来源不够时给出「要选什么」，比抛一条测量说明更能让人继续操作。
+      setGuidance(guidanceFor({ kind: "measurement", metric, outcome: "blocked" }))
       return
     }
     apply({ op: "addMeasurement", measurement })
+    setGuidance(guidanceFor({ kind: "measurement", metric, outcome: "created", ...(dihedralKind ? { dihedralKind } : {}) }))
     setFileError(null)
   }
   const addConstraint = (type: ConstraintType, targets: string[]) => {
     if (document.workspace !== "geometry3d") return
     const id = nextConstraintId(document)
     apply({ op: "addConstraint", constraint: { id, type, targets } })
+    setGuidance(guidanceFor({ kind: "constraint", type, outcome: "created" }))
     setFileError(null)
   }
   const deleteMeasurement = (id: string) => {
@@ -731,6 +765,7 @@ export function App() {
       }
       if (event.key === "Escape") {
         setCreationStep(null)
+        setGuidance(null)
         return
       }
       if ((event.key === "Delete" || event.key === "Backspace") && selectedIds.length > 0 && !isTextEditingTarget(event.target)) {
@@ -848,5 +883,5 @@ export function App() {
     statusBar={<StatusBar commandPrompt={cadStatusPrompt} activeLayerName={activeLayerName} unit="mm" scale={activeSheetScale} diagnosticCount={cadDiagnosticCount} notice={layerNotice} />}
   />
 
-  return <div className="app-shell"><WorkspaceHeader activeWorkspace={document.workspace} onWorkspaceChange={(workspace: Workspace) => { setSelectedIds([]); setCreationStep(null); setCommandCategory(null); setActiveCommand(null); switchWorkspace(workspace) }} onUndo={undo} onRedo={redo} canUndo={canUndo} canRedo={canRedo} onSave={save} onOpen={() => fileInputRef.current?.click()} />{document.workspace === "cad" ? cadWorkbench : <div className="workbench"><GeometryToolbar workspace={document.workspace} canCreateSection={canCreateSection} hasSelection={selectedIds.length > 0} allSelectedLocked={allSelectedLocked} creationMode={creationMode} onSelectTool={() => setCreationStep(null)} onDelete={deleteSelected} onToggleLock={toggleLock} onExportSvg={exportSvgFile} onExportCsv={exportCsvFile} onExportPng={exportPngFile} onAddPoint={addPoint} onAddLine={() => startCreation("line")} onAddSegment={() => startCreation("segment")} onAddRay={() => startCreation("ray")} onAddPolyline={() => startCreation("polyline")} onAddCircle={() => startCreation("circle")} onAddArc={() => startCreation("arc")} onAddParabola={() => addDefaultPrimitive("parabola")} onAddEllipse={() => addDefaultPrimitive("ellipse")} onAddHyperbola={() => addDefaultPrimitive("hyperbola")} onAddFunction={() => addDefaultPrimitive("function")} onAddCube={addDefaultCube} onAddPyramid={() => addDefaultSolid("pyramid")} onAddCylinder={() => addDefaultSolid("cylinder")} onAddCone={() => addDefaultSolid("cone")} onAddSection={addSection} point3ToolHint={point3ToolHint(selectedPoint3Ids.length, selectedIds.length)} />{algebraPanel}{document.workspace === "geometry3d" ? <ThreeSceneView document={document} selectedIds={selectedIds} onSelect={updateSelection} /> : planarCanvas}{inspectorPanel}<div className="footer-note">revision {document.revision} · 工作区：{document.workspace} · 草稿自动保存 · {creationMode ? `${creationLabel}创建：${creationHint}` : slopeLine?.type === "line" ? "Scene Graph / Dependency DAG 已连接" : "等待图元"}</div></div>}{(fileError || operationError) && <div role="alert" className="footer-note">{fileError ?? operationError}</div>}<input ref={fileInputRef} hidden aria-label="加载 .mgeo 文件" type="file" accept=".mgeo,application/json" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; file.text().then(load).catch(() => setFileError("无法读取 .mgeo 文件")); event.target.value = "" }} /></div>
+  return <div className="app-shell"><WorkspaceHeader activeWorkspace={document.workspace} onWorkspaceChange={(workspace: Workspace) => { setSelectedIds([]); setCreationStep(null); setGuidance(null); setCommandCategory(null); setActiveCommand(null); switchWorkspace(workspace) }} onUndo={undo} onRedo={redo} canUndo={canUndo} canRedo={canRedo} onSave={save} onOpen={() => fileInputRef.current?.click()} />{document.workspace === "cad" ? cadWorkbench : <div className="workbench"><GeometryToolbar workspace={document.workspace} canCreateSection={canCreateSection} hasSelection={selectedIds.length > 0} allSelectedLocked={allSelectedLocked} creationMode={creationMode} onSelectTool={() => setCreationStep(null)} onDelete={deleteSelected} onToggleLock={toggleLock} onExportSvg={exportSvgFile} onExportCsv={exportCsvFile} onExportPng={exportPngFile} onAddPoint={addPoint} onAddLine={() => startCreation("line")} onAddSegment={() => startCreation("segment")} onAddRay={() => startCreation("ray")} onAddPolyline={() => startCreation("polyline")} onAddCircle={() => startCreation("circle")} onAddArc={() => startCreation("arc")} onAddParabola={() => addDefaultPrimitive("parabola")} onAddEllipse={() => addDefaultPrimitive("ellipse")} onAddHyperbola={() => addDefaultPrimitive("hyperbola")} onAddFunction={() => addDefaultPrimitive("function")} onAddCube={addDefaultCube} onAddPyramid={() => addDefaultSolid("pyramid")} onAddCylinder={() => addDefaultSolid("cylinder")} onAddCone={() => addDefaultSolid("cone")} onAddSection={addSection} point3ToolHint={point3ToolHint(selectedPoint3Ids.length, selectedIds.length)} />{algebraPanel}{document.workspace === "geometry3d" ? <ThreeSceneView document={document} selectedIds={selectedIds} onSelect={updateSelection} /> : planarCanvas}{inspectorPanel}<div className="footer-note">revision {document.revision} · 工作区：{document.workspace} · 草稿自动保存 · {creationMode ? `${creationLabel}创建：${creationHint}` : slopeLine?.type === "line" ? "Scene Graph / Dependency DAG 已连接" : "等待图元"}</div></div>}{(fileError || operationError) && <div role="alert" className="footer-note">{fileError ?? operationError}</div>}{document.workspace !== "cad" && guidance && <GuidanceHint text={guidance} onDismiss={() => setGuidance(null)} />}<input ref={fileInputRef} hidden aria-label="加载 .mgeo 文件" type="file" accept=".mgeo,application/json" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; file.text().then(load).catch(() => setFileError("无法读取 .mgeo 文件")); event.target.value = "" }} /></div>
 }
