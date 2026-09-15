@@ -223,6 +223,14 @@ P7-1 投影内核、P7-2 文档投影描述、P7-3 CAD 四视图工作区和 P7-
 - P7-4 聚焦测试：`projectionVisuals` 5 个、`EngineeringDrawingView` 3 个、`App` 58 个用例通过；浏览器场景覆盖 CAD 源 ID 选择、12 条投影线显示/隐藏和选中态保留。
 - P7-4 完整验收：40 个测试文件、373 个单测通过；四个 workspace 类型检查通过；Lint 0 errors（保留 36 个既有 warnings）；生产构建通过；Playwright 19 个用例通过；`git diff --check` 通过。
 
+### P7-5 工程标注与文档兼容
+
+- 新增可选文档字段 `engineeringAnnotations`，旧 `.mgeo` 缺失时解码为空数组；schema 校验稳定 ID、来源、视图、状态、单位和公差，保持 `schemaVersion: "0.1"`。
+- `geometry-kernel` 新增线性尺寸、角度和公差解析：从点或棱来源计算值与投影位置，缺失来源和退化来源分别返回 `insufficient-data` / `degenerate`，不伪造坐标。
+- Scene Graph 新增工程标注新增/删除操作，并阻止删除仍被工程标注引用的来源对象；Web 投影描述和四视图消费同一份解析结果，展示有效数值及无效诊断。
+- CAD 属性栏新增线性尺寸、角度、公差创建入口；创建操作进入文档与 undo history，来源对象移动后随 `revision` 自动重算。
+- P7-5 完整验收：41 个测试文件、385 个单测通过；四个 workspace 类型检查通过；Lint 0 errors（保留 36 个既有 warnings）；生产构建通过；Playwright 20/20 通过；`git diff --check` 通过。P7-6 SVG/PDF/DXF 导出仍为下一切片。
+
 > 射线/折线、圆锥曲线和函数采样已接入工具栏、SVG 渲染、属性编辑和 UI 回归测试；选中两条可采样曲线即可创建持久化交点。
 
 ## 进度更新规则

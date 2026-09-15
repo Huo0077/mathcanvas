@@ -1,4 +1,4 @@
-import type { AnnotationSpec, ConstraintSpec, Coordinate, GeometryDocument, GroupSpec, Measurement3, Point3Binding, Point3Primitive, PointBinding, PrimitiveSpec, Section3Classification, Vector3 } from "@draw/dsl"
+import type { AnnotationSpec, ConstraintSpec, Coordinate, EngineeringAnnotation, GeometryDocument, GroupSpec, Measurement3, Point3Binding, Point3Primitive, PointBinding, PrimitiveSpec, Section3Classification, Vector3 } from "@draw/dsl"
 import { adaptiveSampleFunctionSegments, buildSolidTemplate, calculateMeasurement3, createBuilderContext, dihedralMarker3, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, findExtrema, findInflectionPoints, findZeros, intersectCirclesDetailed, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, orderSectionPoints3, sectionConvexPolyhedron, sectionPolyhedron3, sharedRingEdge3, solveLineConstraints, type DihedralMarker3, type FaceRing3, type IntersectionResult, type SampledPrimitive, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
 
 export type DomainOperation =
@@ -10,6 +10,8 @@ export type DomainOperation =
   | { op: "setParameterExpression"; id: string; expression: string }
   | { op: "addAnnotation"; annotation: AnnotationSpec }
   | { op: "deleteAnnotation"; id: string }
+  | { op: "addEngineeringAnnotation"; annotation: EngineeringAnnotation }
+  | { op: "deleteEngineeringAnnotation"; id: string }
   | { op: "addConstraint"; constraint: ConstraintSpec }
   | { op: "deleteConstraint"; id: string }
   | { op: "addMeasurement"; measurement: Measurement3 }
@@ -804,6 +806,15 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
     const before = next.annotations.length
     next.annotations = next.annotations.filter((annotation) => annotation.id !== operation.id)
     if (before === next.annotations.length) return { document, changed: false, error: "annotation not found" }
+  } else if (operation.op === "addEngineeringAnnotation") {
+    if (next.engineeringAnnotations?.some((annotation) => annotation.id === operation.annotation.id)) return { document, changed: false, error: "duplicate engineering annotation id" }
+    next.engineeringAnnotations = [...(next.engineeringAnnotations ?? []), operation.annotation]
+    changedIds = operation.annotation.sourceIds
+  } else if (operation.op === "deleteEngineeringAnnotation") {
+    const annotations = next.engineeringAnnotations ?? []
+    const filtered = annotations.filter((annotation) => annotation.id !== operation.id)
+    if (filtered.length === annotations.length) return { document, changed: false, error: "engineering annotation not found" }
+    next.engineeringAnnotations = filtered
   } else if (operation.op === "addConstraint") {
     if (next.constraints.some((constraint) => constraint.id === operation.constraint.id)) return { document, changed: false, error: "duplicate constraint id" }
     next.constraints.push(operation.constraint)

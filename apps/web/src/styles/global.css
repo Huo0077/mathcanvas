@@ -75,6 +75,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .engineering-drawing-primitive circle { fill: var(--color-panel); stroke: var(--color-accent-strong); stroke-width: 0.025; vector-effect: non-scaling-stroke; }
 .engineering-drawing-primitive.is-selected polygon, .engineering-drawing-primitive.is-selected polyline, .engineering-drawing-primitive.is-selected circle { stroke: var(--color-accent); stroke-width: 0.045; }
 .engineering-drawing-primitive:hover polygon, .engineering-drawing-primitive:hover polyline, .engineering-drawing-primitive:hover circle, .engineering-drawing-primitive:focus-visible polygon, .engineering-drawing-primitive:focus-visible polyline, .engineering-drawing-primitive:focus-visible circle { stroke: var(--color-accent); }
+.engineering-drawing-annotation text { fill: var(--color-ink); font-size: 0.22px; font-weight: 700; paint-order: stroke; stroke: var(--color-surface-subtle); stroke-width: 0.06px; stroke-linejoin: round; }
+.engineering-drawing-annotation-degenerate text, .engineering-drawing-annotation-insufficient-data text { fill: var(--color-warning); }
+.engineering-drawing-annotation-statuses { display: grid; gap: var(--space-1); }
+.engineering-drawing-annotation-statuses:empty { display: none; }
+.engineering-drawing-annotation-statuses .engineering-drawing-annotation { padding: var(--space-1) var(--space-2); border-left: 2px solid var(--color-warning); color: var(--color-warning); font-size: 0.75rem; line-height: 1.4; }
 .engineering-drawing-empty { display: grid; place-items: center; min-height: 220px; margin: 0; padding: var(--space-4); border: 1px dashed var(--color-border); border-radius: var(--radius-sm); color: var(--color-muted); font-size: 0.85rem; text-align: center; }
 .engineering-drawing-diagnostics { color: var(--color-muted); font-size: 0.75rem; line-height: 1.45; }
 .engineering-drawing-diagnostics summary { cursor: pointer; color: var(--color-warning); }

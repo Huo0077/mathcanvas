@@ -20,6 +20,7 @@ export function createEmptyDocument(workspace: Workspace): GeometryDocument {
     dynamics: [],
     annotations: [],
     measurements: [],
+    engineeringAnnotations: [],
     metadata: { id: createId("doc"), name: "Untitled geometry", createdAt: now, updatedAt: now }
   }
 }
@@ -63,6 +64,7 @@ export function decodeMgeo(serialized: string): GeometryDocument {
       ...rawCandidate,
       groups: "groups" in rawCandidate ? (rawCandidate as { groups: unknown }).groups : [],
       measurements: "measurements" in rawCandidate ? (rawCandidate as { measurements: unknown }).measurements : [],
+      engineeringAnnotations: "engineeringAnnotations" in rawCandidate ? (rawCandidate as { engineeringAnnotations: unknown }).engineeringAnnotations : [],
       primitives: withSectionClassification((rawCandidate as { primitives?: unknown }).primitives)
     }
     : rawCandidate

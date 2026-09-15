@@ -1,4 +1,4 @@
-import { validateDocument, type AnnotationSpec, type ConstraintSpec, type GeometryDocument, type Measurement3, type PrimitiveSpec } from "@draw/dsl"
+import { validateDocument, type AnnotationSpec, type ConstraintSpec, type EngineeringAnnotation, type GeometryDocument, type Measurement3, type PrimitiveSpec } from "@draw/dsl"
 import { parseExpression } from "@draw/geometry-kernel"
 
 import { applyOperation, deletionTargets, type DomainOperation } from "./operations"
@@ -35,6 +35,17 @@ function isMeasurement(value: unknown): value is Measurement3 {
     && typeof candidate.explanation === "string"
 }
 
+function isEngineeringAnnotation(value: unknown): value is EngineeringAnnotation {
+  if (!value || typeof value !== "object") return false
+  const candidate = value as Partial<EngineeringAnnotation>
+  return typeof candidate.id === "string" && candidate.id.length > 0
+    && ["linear", "angular", "tolerance", "fillet", "chamfer"].includes(String(candidate.kind))
+    && Array.isArray(candidate.sourceIds)
+    && ["front", "top", "left", "axonometric"].includes(String(candidate.view))
+    && ["valid", "degenerate", "insufficient-data"].includes(String(candidate.status))
+    && typeof candidate.explanation === "string"
+}
+
 function isCoordinate(value: unknown): value is { x: number; y: number } {
   return Boolean(value && typeof value === "object" && Number.isFinite((value as { x?: unknown }).x) && Number.isFinite((value as { y?: unknown }).y))
 }
@@ -44,7 +55,7 @@ function isVector3(value: unknown): value is { x: number; y: number; z: number }
 }
 
 function isReferenced(document: GeometryDocument, id: string, ignoredReferrers: Set<string> = new Set()): boolean {
-  return document.groups.some((group) => group.members.includes(id)) || document.constraints.some((constraint) => constraint.targets.includes(id)) || document.measurements.some((measurement) => measurement.sourceIds.includes(id)) || document.annotations.some((annotation) => annotation.target === id || (annotation.anchor?.kind === "primitive" && annotation.anchor.primitiveId === id)) || document.primitives.some((primitive) => !ignoredReferrers.has(primitive.id) && (
+  return document.groups.some((group) => group.members.includes(id)) || document.constraints.some((constraint) => constraint.targets.includes(id)) || document.measurements.some((measurement) => measurement.sourceIds.includes(id)) || (document.engineeringAnnotations ?? []).some((annotation) => annotation.sourceIds.includes(id)) || document.annotations.some((annotation) => annotation.target === id || (annotation.anchor?.kind === "primitive" && annotation.anchor.primitiveId === id)) || document.primitives.some((primitive) => !ignoredReferrers.has(primitive.id) && (
     (primitive.type === "intersection" && (primitive.lineA === id || primitive.lineB === id)) ||
     (primitive.type === "lineCircleIntersection" && (primitive.lineId === id || primitive.circleId === id)) ||
     (primitive.type === "circleIntersection" && (primitive.circleA === id || primitive.circleB === id)) ||
@@ -176,6 +187,15 @@ export function validatePatch(document: GeometryDocument, operation: DomainOpera
     }
   }
   if (operation.op === "deleteAnnotation" && !document.annotations.some((annotation) => annotation.id === operation.id)) errors.push("annotation not found")
+  if (operation.op === "addEngineeringAnnotation") {
+    if (!isEngineeringAnnotation(operation.annotation)) errors.push("engineering annotation is invalid")
+    else {
+      if ((document.engineeringAnnotations ?? []).some((annotation) => annotation.id === operation.annotation.id)) errors.push("duplicate engineering annotation id")
+      const validation = validateDocument({ ...document, engineeringAnnotations: [...(document.engineeringAnnotations ?? []), operation.annotation] })
+      if (!validation.valid) errors.push(...validation.errors.filter((error) => !error.startsWith("duplicate engineering annotation id:")))
+    }
+  }
+  if (operation.op === "deleteEngineeringAnnotation" && !(document.engineeringAnnotations ?? []).some((annotation) => annotation.id === operation.id)) errors.push("engineering annotation not found")
   if (operation.op === "translatePrimitive") {
     const primitive = document.primitives.find((candidate) => candidate.id === operation.id)
     if (!primitive || ["intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection", "intersectionSet", "locus"].includes(primitive.type)) errors.push("object is not editable")

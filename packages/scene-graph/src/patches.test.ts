@@ -207,6 +207,30 @@ describe("domain patches", () => {
     expect(deleted.document.annotations).toEqual([])
   })
 
+  it("adds and deletes engineering annotations transactionally", () => {
+    const document = createEmptyDocument("cad")
+    document.primitives = [
+      { id: "point-a", type: "point3", position: { x: 0, y: 0, z: 0 } },
+      { id: "point-b", type: "point3", position: { x: 1, y: 0, z: 0 } }
+    ]
+    const engineeringAnnotation = {
+      id: "dimension-1",
+      kind: "linear" as const,
+      sourceIds: ["point-a", "point-b"],
+      view: "front" as const,
+      status: "valid" as const,
+      explanation: "线性尺寸"
+    }
+
+    const added = commitPatch(document, { op: "addEngineeringAnnotation", annotation: engineeringAnnotation } as never)
+    expect(added.changed).toBe(true)
+    expect(added.document.engineeringAnnotations).toEqual([engineeringAnnotation])
+
+    const deleted = commitPatch(added.document, { op: "deleteEngineeringAnnotation", id: engineeringAnnotation.id } as never)
+    expect(deleted.changed).toBe(true)
+    expect(deleted.document.engineeringAnnotations).toEqual([])
+  })
+
   it("protects primitives referenced by annotations", () => {
     const document = createEmptyDocument("calculus")
     document.primitives = [{ id: "line-a", type: "line", a: { x: 0, y: 0 }, b: { x: 1, y: 1 } }]

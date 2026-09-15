@@ -38,7 +38,8 @@ function primitivePoints(primitive: ProjectedPrimitive) {
 function viewBounds(drawing: ProjectedDrawing): DrawingBounds {
   const points = [
     ...drawing.primitives.flatMap(primitivePoints),
-    ...drawing.projectionLines.flatMap((line) => [line.from, line.to])
+    ...drawing.projectionLines.flatMap((line) => [line.from, line.to]),
+    ...drawing.annotations.flatMap((annotation) => annotation.position ? [annotation.position] : [])
   ]
   if (points.length === 0) return { minX: drawingMetrics.defaultMin, minY: drawingMetrics.defaultMin, width: drawingMetrics.defaultSpan, height: drawingMetrics.defaultSpan }
   const minX = Math.min(...points.map((point) => point.x))
@@ -89,22 +90,35 @@ function renderPrimitive(primitive: ProjectedPrimitive, bounds: DrawingBounds, d
   return <g key={primitive.sourceId} className={className} {...interaction}><polyline points={svgPoints(primitive)} /></g>
 }
 
+function renderAnnotation(annotation: ProjectedDrawing["annotations"][number]) {
+  if (!annotation.position) return null
+  return <g key={annotation.id} className={`engineering-drawing-annotation engineering-drawing-annotation-${annotation.status}`} data-testid="engineering-annotation" data-annotation-id={annotation.id} data-status={annotation.status} data-source-ids={annotation.sourceIds.join(",")}><text x={annotation.position.x} y={-annotation.position.y}>{annotation.text}</text></g>
+}
+
+function renderInvalidAnnotation(annotation: ProjectedDrawing["annotations"][number]) {
+  if (annotation.position) return null
+  return <div key={annotation.id} className={`engineering-drawing-annotation engineering-drawing-annotation-${annotation.status}`} data-testid="engineering-annotation" data-annotation-id={annotation.id} data-status={annotation.status}>{annotation.id}: {annotation.status} · {annotation.explanation}</div>
+}
+
 function DrawingPanel({ definition, drawing, document, selectedIds, onSelect, showProjectionLines }: { definition: typeof viewDefinitions[number]; drawing: ProjectedDrawing; document: GeometryDocument; selectedIds: string[]; onSelect: EngineeringDrawingViewProps["onSelect"]; showProjectionLines: boolean }) {
   const bounds = viewBounds(drawing)
   const titleId = `engineering-drawing-title-${definition.view}`
   const hasPrimitives = drawing.primitives.length > 0
+  const hasDrawingContent = drawing.primitives.length > 0 || drawing.annotations.some((annotation) => annotation.position)
   return <section className="engineering-drawing-panel" data-drawing-view={definition.view} aria-labelledby={titleId}>
     <header className="engineering-drawing-panel-heading">
       <div><span className="panel-kicker">工程视图</span><h2 id={titleId}>{definition.label}</h2></div>
       <span className="engineering-drawing-panel-status">{hasPrimitives ? `${drawing.primitives.length} 个图元` : "空视图"}</span>
     </header>
-    {hasPrimitives
+    {hasDrawingContent
       ? <svg className="engineering-drawing-svg" viewBox={`${bounds.minX} ${bounds.minY} ${bounds.width} ${bounds.height}`} role="img" aria-label={`${definition.label}投影视图`}>
         <g className="engineering-drawing-axes" aria-hidden="true"><line x1={bounds.minX} y1="0" x2={bounds.minX + bounds.width} y2="0" /><line x1="0" y1={bounds.minY} x2="0" y2={bounds.minY + bounds.height} /></g>
         {showProjectionLines && <g className="engineering-drawing-projection-lines" aria-hidden="true">{drawing.projectionLines.map((line) => <line key={`${line.sourceId}-${line.targetView}`} data-testid="projection-line" data-source-id={line.sourceId} data-origin-view={line.originView} data-target-view={line.targetView} x1={line.from.x} y1={-line.from.y} x2={line.to.x} y2={-line.to.y} />)}</g>}
         <g className="engineering-drawing-primitives">{drawing.primitives.map((primitive) => renderPrimitive(primitive, bounds, document, selectedIds, onSelect))}</g>
+        <g className="engineering-drawing-annotations">{drawing.annotations.map(renderAnnotation)}</g>
       </svg>
       : <p className="engineering-drawing-empty" role="status">暂无可投影的空间对象</p>}
+    <div className="engineering-drawing-annotation-statuses">{drawing.annotations.map(renderInvalidAnnotation)}</div>
     {drawing.diagnostics.length > 0 && <details className="engineering-drawing-diagnostics"><summary>诊断 {drawing.diagnostics.length} 条</summary><ul>{drawing.diagnostics.map((diagnostic) => <li key={diagnostic}>{diagnostic}</li>)}</ul></details>}
   </section>
 }

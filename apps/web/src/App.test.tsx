@@ -49,6 +49,26 @@ describe("MathCanvas workbench", () => {
     expect(sourceButtons.every((button) => button.getAttribute("data-selected") === "true")).toBe(true)
   })
 
+  it("creates a linear engineering annotation from two selected space points", () => {
+    const cadDocument = {
+      ...createEmptyDocument("cad"),
+      primitives: [
+        { id: "point3-1", type: "point3" as const, position: { x: 0, y: 0, z: 0 }, label: "A" },
+        { id: "point3-2", type: "point3" as const, position: { x: 3, y: 4, z: 0 }, label: "B" }
+      ]
+    }
+    useSceneStore.getState().replace(cadDocument)
+    render(<App />)
+
+    const sourceButtons = screen.getAllByRole("button", { name: /point3-/ })
+    fireEvent.click(sourceButtons[0])
+    fireEvent.click(sourceButtons[1], { shiftKey: true })
+    fireEvent.click(screen.getByRole("button", { name: "Add linear annotation" }))
+
+    expect(useSceneStore.getState().document.engineeringAnnotations).toHaveLength(1)
+    expect(useSceneStore.getState().document.engineeringAnnotations?.[0]).toMatchObject({ kind: "linear", sourceIds: ["point3-1", "point3-2"], view: "front" })
+  })
+
   it("switches workspaces without losing each workspace document", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "圆锥曲线" }))

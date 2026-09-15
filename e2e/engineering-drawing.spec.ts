@@ -33,3 +33,17 @@ test("links CAD views with temporary projection lines and shared source selectio
   await expect(engineeringDrawing.getByTestId("projection-line")).toHaveCount(0)
   await expect(engineeringDrawing.locator('[data-source-id="point3-1"][data-selected="true"]')).toHaveCount(4)
 })
+
+test("creates a linear engineering annotation from selected CAD sources", async ({ page }) => {
+  await page.goto("/")
+  await page.locator('input[type="file"]').setInputFiles("e2e/fixtures/cad-dimension.mgeo")
+  await page.getByRole("button", { name: "工程制图" }).click()
+
+  const engineeringDrawing = page.getByRole("main", { name: "工程制图视图" })
+  await engineeringDrawing.locator('[data-source-id="point3-1"]').first().click()
+  await engineeringDrawing.locator('[data-source-id="point3-2"]').first().click({ modifiers: ["Shift"] })
+  await page.getByRole("button", { name: "Add linear annotation" }).click()
+
+  await expect(engineeringDrawing.getByTestId("engineering-annotation")).toContainText("5.000 mm")
+  await expect(page.getByText("工程标注")).toBeVisible()
+})

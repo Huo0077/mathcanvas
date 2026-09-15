@@ -56,4 +56,23 @@ describe("engineering drawing view", () => {
     fireEvent.click(screen.getByRole("button", { name: "隐藏投影线" }))
     expect(screen.queryAllByTestId("projection-line")).toHaveLength(0)
   })
+
+  it("renders engineering annotation values and invalid status", () => {
+    const document = {
+      ...pointDocument(),
+      primitives: [
+        { id: "point-a", type: "point3" as const, position: { x: 0, y: 0, z: 0 }, label: "A" },
+        { id: "point-b", type: "point3" as const, position: { x: 3, y: 4, z: 0 }, label: "B" }
+      ],
+      engineeringAnnotations: [
+        { id: "dimension-1", kind: "linear" as const, sourceIds: ["point-a", "point-b"], view: "front" as const, status: "valid" as const, explanation: "" },
+        { id: "dimension-invalid", kind: "linear" as const, sourceIds: ["missing", "point-a"], view: "front" as const, status: "insufficient-data" as const, explanation: "" }
+      ]
+    }
+
+    render(<EngineeringDrawingView document={document} selectedIds={[]} onSelect={() => {}} />)
+
+    expect(screen.getAllByTestId("engineering-annotation").some((node) => node.textContent?.includes("5"))).toBe(true)
+    expect(screen.getAllByText(/dimension-invalid.*insufficient-data/).length).toBeGreaterThan(0)
+  })
 })

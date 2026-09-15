@@ -1,5 +1,5 @@
 import type { GeometryDocument, PrimitiveSpec } from "@draw/dsl"
-import { projectVector3, type DrawingView, type ProjectedPoint } from "@draw/geometry-kernel"
+import { projectVector3, resolveEngineeringAnnotation, type DrawingView, type ProjectedPoint } from "@draw/geometry-kernel"
 
 export type { DrawingView, ProjectedPoint } from "@draw/geometry-kernel"
 
@@ -29,7 +29,8 @@ export interface ProjectedAnnotation {
   sourceIds: string[]
   kind: "linear" | "angular" | "tolerance" | "fillet" | "chamfer"
   text: string
-  position: ProjectedPoint
+  position?: ProjectedPoint
+  explanation: string
   status: "valid" | "degenerate" | "insufficient-data"
 }
 
@@ -86,6 +87,30 @@ function resolveProjectionLines(document: GeometryDocument, originView: DrawingV
     })
   })
   return lines
+}
+
+function annotationText(annotation: ReturnType<typeof resolveEngineeringAnnotation>): string {
+  if (annotation.value === undefined) return `${annotation.id}: ${annotation.status}`
+  const unit = annotation.unit ?? (annotation.kind === "angular" ? "deg" : "mm")
+  const tolerance = annotation.tolerance ? ` +${annotation.tolerance.upper}/-${annotation.tolerance.lower}` : ""
+  return `${annotation.id}: ${annotation.value.toFixed(3)} ${unit}${tolerance}`
+}
+
+function resolveProjectedAnnotations(document: GeometryDocument, view: DrawingView): ProjectedAnnotation[] {
+  return (document.engineeringAnnotations ?? [])
+    .filter((annotation) => annotation.view === view)
+    .map((annotation) => {
+      const resolved = resolveEngineeringAnnotation(document, annotation)
+      return {
+        id: resolved.id,
+        sourceIds: resolved.sourceIds,
+        kind: resolved.kind,
+        text: annotationText(resolved),
+        position: resolved.position,
+        explanation: resolved.explanation,
+        status: resolved.status
+      }
+    })
 }
 
 export function resolveProjectedDrawing(document: GeometryDocument, view: DrawingView): ProjectedDrawing {
@@ -179,11 +204,16 @@ export function resolveProjectedDrawing(document: GeometryDocument, view: Drawin
   const unmaterializedTemplates = document.primitives.filter((primitive) => isTemplatePrimitive(primitive) && !templateSourceIds.has(primitive.id))
   unmaterializedTemplates.forEach((primitive) => addDiagnostic(primitive.id, "template topology is not materialized"))
 
+  const annotations = resolveProjectedAnnotations(document, view)
+  annotations.forEach((annotation) => {
+    if (annotation.status !== "valid") addDiagnostic(annotation.id, `${annotation.status}: ${annotation.explanation}`)
+  })
+
   return {
     view,
     primitives: sortProjectedPrimitives(primitives),
     projectionLines: resolveProjectionLines(document, view),
-    annotations: [],
+    annotations,
     diagnostics
   }
 }

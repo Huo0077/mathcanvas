@@ -176,23 +176,23 @@ Run focused UI tests plus the browser scenario, full unit/typecheck/lint/build/E
 - `EngineeringAnnotation` contains `{ id, kind, sourceIds, view, value?, unit?, tolerance?, status, explanation }`.
 - `resolveEngineeringAnnotation(document, annotation)` returns finite projected geometry or a diagnostic status; it never invents a coordinate.
 
-- [ ] **Step 1: Write failing codec and kernel tests**
+- [x] **Step 1: Write failing codec and kernel tests**
 
 Test old documents without `engineeringAnnotations`, round-trip one linear annotation, reject missing source IDs, calculate a valid length/angle, and return `insufficient-data` for a deleted or degenerate source.
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 Run `npm.cmd test -- --run packages/dsl/src/codec.test.ts packages/geometry-kernel/src/engineeringAnnotations.test.ts`. Expected: the new types/functions are absent and old decode behavior remains the control case.
 
-- [ ] **Step 3: Add backward-compatible data and pure calculations**
+- [x] **Step 3: Add backward-compatible data and pure calculations**
 
 Extend schema validation and codec defaults without changing `schemaVersion`, implement linear/angle/tolerance status calculations in the kernel, and use the same result for UI and export.
 
-- [ ] **Step 4: Add accessible annotation editing**
+- [x] **Step 4: Add accessible annotation editing**
 
 Expose only source-valid annotation actions in the CAD properties surface, show value/unit/status, and keep invalid/degenerate states visible without committing fake values.
 
-- [ ] **Step 5: Verify round-trip and commit**
+- [x] **Step 5: Verify round-trip and commit**
 
 Run codec, kernel, App and CAD browser tests; commit as `feat(p7): add engineering annotations` and push `origin/main`.
 

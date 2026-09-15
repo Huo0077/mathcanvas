@@ -509,6 +509,22 @@ export interface AnnotationSpec {
   y?: number
 }
 
+export type EngineeringAnnotationKind = "linear" | "angular" | "tolerance" | "fillet" | "chamfer"
+export type EngineeringAnnotationView = "front" | "top" | "left" | "axonometric"
+export type EngineeringAnnotationStatus = "valid" | "degenerate" | "insufficient-data"
+
+export interface EngineeringAnnotation {
+  id: string
+  kind: EngineeringAnnotationKind
+  sourceIds: string[]
+  view: EngineeringAnnotationView
+  value?: number
+  unit?: string
+  tolerance?: { upper: number; lower: number }
+  status: EngineeringAnnotationStatus
+  explanation: string
+}
+
 export interface DocumentMetadata {
   id: string
   name: string
@@ -528,6 +544,7 @@ export interface GeometryDocument {
   dynamics: DynamicSpec[]
   annotations: AnnotationSpec[]
   measurements: Measurement3[]
+  engineeringAnnotations?: EngineeringAnnotation[]
   metadata: DocumentMetadata
 }
 

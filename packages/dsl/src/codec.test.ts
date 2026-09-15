@@ -379,4 +379,44 @@ describe("Geometry DSL codec", () => {
     expect(restored.schemaVersion).toBe("0.1")
     expect(restored.primitives).toEqual(document.primitives)
   })
+
+  it("defaults engineering annotations for legacy documents and round-trips them", () => {
+    const document = createEmptyDocument("cad")
+    document.primitives = [
+      { id: "point-a", type: "point3", position: { x: 0, y: 0, z: 0 } },
+      { id: "point-b", type: "point3", position: { x: 3, y: 4, z: 0 } }
+    ]
+    const legacy = JSON.parse(encodeMgeo(document)) as { document: Record<string, unknown> }
+    delete legacy.document.engineeringAnnotations
+    const restoredLegacy = decodeMgeo(JSON.stringify(legacy))
+    expect(restoredLegacy.engineeringAnnotations).toEqual([])
+
+    document.engineeringAnnotations = [{
+      id: "dimension-1",
+      kind: "linear",
+      sourceIds: ["point-a", "point-b"],
+      view: "front",
+      value: 5,
+      unit: "mm",
+      status: "valid",
+      explanation: "两点之间的线性尺寸"
+    }]
+    expect(decodeMgeo(encodeMgeo(document)).engineeringAnnotations).toEqual(document.engineeringAnnotations)
+  })
+
+  it("rejects engineering annotations with missing sources", () => {
+    const document = createEmptyDocument("cad")
+    document.engineeringAnnotations = [{
+      id: "dimension-invalid",
+      kind: "linear",
+      sourceIds: ["missing-point"],
+      view: "front",
+      status: "insufficient-data",
+      explanation: "缺少来源"
+    }]
+
+    const result = validateDocument(document)
+    expect(result.valid).toBe(false)
+    if (!result.valid) expect(result.errors).toContain("engineering annotation has invalid sources: dimension-invalid")
+  })
 })

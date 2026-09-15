@@ -432,6 +432,7 @@ export function validateDocument(document: unknown): ValidationResult {
   if (!Array.isArray(document.dynamics)) errors.push("dynamics must be an array")
   if (!Array.isArray(document.annotations)) errors.push("annotations must be an array")
   if (document.measurements !== undefined && !Array.isArray(document.measurements)) errors.push("measurements must be an array")
+  if (document.engineeringAnnotations !== undefined && !Array.isArray(document.engineeringAnnotations)) errors.push("engineeringAnnotations must be an array")
   if (!isRecord(document.metadata) || typeof document.metadata.id !== "string" || !document.metadata.id) errors.push("metadata.id is required")
 
   const primitives = Array.isArray(document.primitives) ? document.primitives : []
@@ -455,6 +456,26 @@ export function validateDocument(document: unknown): ValidationResult {
         annotationIds.add(annotation.id)
       }
       errors.push(...validateAnnotation(annotation, primitiveById))
+    }
+  }
+
+  if (Array.isArray(document.engineeringAnnotations)) {
+    const engineeringAnnotationIds = new Set<string>()
+    for (const annotation of document.engineeringAnnotations) {
+      if (!isRecord(annotation) || typeof annotation.id !== "string") {
+        errors.push("every engineering annotation needs a stable id")
+        continue
+      }
+      if (engineeringAnnotationIds.has(annotation.id)) errors.push(`duplicate engineering annotation id: ${annotation.id}`)
+      engineeringAnnotationIds.add(annotation.id)
+      if (!["linear", "angular", "tolerance", "fillet", "chamfer"].includes(String(annotation.kind))) errors.push(`engineering annotation kind is invalid: ${annotation.id}`)
+      if (!Array.isArray(annotation.sourceIds) || annotation.sourceIds.length === 0 || annotation.sourceIds.some((sourceId) => typeof sourceId !== "string" || !primitiveIds.has(sourceId))) errors.push(`engineering annotation has invalid sources: ${annotation.id}`)
+      if (!["front", "top", "left", "axonometric"].includes(String(annotation.view))) errors.push(`engineering annotation view is invalid: ${annotation.id}`)
+      if (annotation.value !== undefined && !isFiniteNumber(annotation.value)) errors.push(`engineering annotation value is invalid: ${annotation.id}`)
+      if (annotation.unit !== undefined && typeof annotation.unit !== "string") errors.push(`engineering annotation unit is invalid: ${annotation.id}`)
+      if (annotation.tolerance !== undefined && (!isRecord(annotation.tolerance) || !isFiniteNumber(annotation.tolerance.upper) || !isFiniteNumber(annotation.tolerance.lower))) errors.push(`engineering annotation tolerance is invalid: ${annotation.id}`)
+      if (!["valid", "degenerate", "insufficient-data"].includes(String(annotation.status))) errors.push(`engineering annotation status is invalid: ${annotation.id}`)
+      if (typeof annotation.explanation !== "string") errors.push(`engineering annotation explanation is invalid: ${annotation.id}`)
     }
   }
 

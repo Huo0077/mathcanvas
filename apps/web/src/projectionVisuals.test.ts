@@ -109,4 +109,29 @@ describe("renderer-neutral engineering drawing projections", () => {
     expect(sourceIds).toEqual(expect.arrayContaining(generated.edgeIds))
     expect(sourceIds).toEqual(expect.arrayContaining(generated.faceIds))
   })
+
+  it("projects engineering annotations from stable 3D sources", () => {
+    const drawing = resolveProjectedDrawing({
+      ...topologyDocument([
+        { id: "point-a", type: "point3", position: { x: 0, y: 0, z: 0 } },
+        { id: "point-b", type: "point3", position: { x: 3, y: 4, z: 0 } }
+      ]),
+      engineeringAnnotations: [{ id: "dimension-1", kind: "linear", sourceIds: ["point-a", "point-b"], view: "front", status: "valid", explanation: "" }]
+    }, "front")
+
+    expect(drawing.annotations).toHaveLength(1)
+    expect(drawing.annotations[0]).toMatchObject({ id: "dimension-1", status: "valid", position: { x: 1.5, y: 2 } })
+    expect(drawing.annotations[0].text).toContain("5")
+  })
+
+  it("keeps invalid engineering annotation diagnostics without inventing a position", () => {
+    const drawing = resolveProjectedDrawing({
+      ...topologyDocument([{ id: "point-a", type: "point3", position: { x: 0, y: 0, z: 0 } }]),
+      engineeringAnnotations: [{ id: "dimension-invalid", kind: "linear", sourceIds: ["missing", "point-a"], view: "front", status: "insufficient-data", explanation: "" }]
+    }, "front")
+
+    expect(drawing.annotations[0]).toMatchObject({ id: "dimension-invalid", status: "insufficient-data" })
+    expect(drawing.annotations[0].position).toBeUndefined()
+    expect(drawing.diagnostics).toEqual(expect.arrayContaining([expect.stringContaining("dimension-invalid")]))
+  })
 })

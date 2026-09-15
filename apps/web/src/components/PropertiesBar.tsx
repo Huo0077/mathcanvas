@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react"
-import type { AnnotationFeature, ConstraintType, Measurement3Metric, PrimitiveSpec, Vector3 } from "@draw/dsl"
+import type { AnnotationFeature, ConstraintType, EngineeringAnnotationKind, Measurement3Metric, PrimitiveSpec, Vector3 } from "@draw/dsl"
 import { constraintOptionsFor, measurementOptionsFor } from "../spatialTools"
 import { adaptiveSampleFunctionSegments, advanceAnimation, evaluateParameterExpression, parseExpression, type AnimationMode, type AnimationState } from "@draw/geometry-kernel"
 import type { Alignment, PrimitiveUpdatePatch } from "@draw/scene-graph"
@@ -30,6 +30,7 @@ interface PropertiesBarProps {
   onAlign: (alignment: Alignment) => void
   onToggleBatchVisibility: () => void
   onAddAnnotation: (feature: AnnotationFeature, index?: number, text?: string) => void
+  onAddEngineeringAnnotation: (kind: EngineeringAnnotationKind) => void
   onCreateMeasurement: (metric: Measurement3Metric, dihedralKind?: "interior" | "exterior") => void
   onCreateConstraint: (type: ConstraintType, targets: string[]) => void
   onDeleteMeasurement: (id: string) => void
@@ -127,7 +128,7 @@ function Vector3Fields({ prefix, value, disabled, onChange }: { prefix: string; 
   return <div className="metric-grid"><CoordinateField label={`${prefix} X`} value={value.x} disabled={disabled} onChange={(next) => onChange("x", next)} /><CoordinateField label={`${prefix} Y`} value={value.y} disabled={disabled} onChange={(next) => onChange("y", next)} /><CoordinateField label={`${prefix} Z`} value={value.z} disabled={disabled} onChange={(next) => onChange("z", next)} /></div>
 }
 
-export function PropertiesBar({ value, min, max, step, onChange, selectedPrimitive, selectedIds, selectedCount, selectedGroupId, allSelectedVisible, canCreateIntersection, onUpdatePrimitive, onToggleSelectedVisibility, onToggleSelectedLock, onCreateGroup, onDeleteGroup, onCreateIntersection, onAlign, onToggleBatchVisibility, onAddAnnotation, onCreateMeasurement, onCreateConstraint, onDeleteMeasurement }: PropertiesBarProps) {
+export function PropertiesBar({ value, min, max, step, onChange, selectedPrimitive, selectedIds, selectedCount, selectedGroupId, allSelectedVisible, canCreateIntersection, onUpdatePrimitive, onToggleSelectedVisibility, onToggleSelectedLock, onCreateGroup, onDeleteGroup, onCreateIntersection, onAlign, onToggleBatchVisibility, onAddAnnotation, onAddEngineeringAnnotation, onCreateMeasurement, onCreateConstraint, onDeleteMeasurement }: PropertiesBarProps) {
   const selectedPoint = selectedPrimitive?.type === "point" ? selectedPrimitive : null
   const selectedPoint3 = selectedPrimitive?.type === "point3" ? selectedPrimitive : null
   const selectedLinear = selectedPrimitive?.type === "line" || selectedPrimitive?.type === "segment" || selectedPrimitive?.type === "ray" ? selectedPrimitive : null
@@ -165,6 +166,16 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
     ? [...measurementOptions.filter((option) => option.metric !== "dihedral"), { metric: "dihedral" as const, label: "二面角内角", dihedralKind: "interior" as const }, { metric: "dihedral" as const, label: "二面角外角", dihedralKind: "exterior" as const }]
     : measurementOptions
   const constraintOptions = constraintOptionsFor(sceneDocument.workspace, selected3dPrimitives)
+  const selectedPoint3Ids = selected3dPrimitives.filter((primitive) => primitive.type === "point3").map((primitive) => primitive.id)
+  const selectedEdge3Ids = selected3dPrimitives.filter((primitive) => primitive.type === "edge3").map((primitive) => primitive.id)
+  const canCreateLinearAnnotation = selectedPoint3Ids.length === 2 || selectedEdge3Ids.length === 1
+  const canCreateAngularAnnotation = selectedPoint3Ids.length === 3 || selectedEdge3Ids.length === 2
+  const engineeringAnnotationOptions = sceneDocument.workspace === "cad"
+    ? [
+      ...(canCreateLinearAnnotation ? [{ kind: "linear" as const, label: "线性尺寸", ariaLabel: "Add linear annotation" }, { kind: "tolerance" as const, label: "公差", ariaLabel: "Add tolerance annotation" }] : []),
+      ...(canCreateAngularAnnotation ? [{ kind: "angular" as const, label: "角度", ariaLabel: "Add angular annotation" }] : [])
+    ]
+    : []
 
   useEffect(() => {
     setExpressionDraft(selectedFunction?.expression ?? "")
@@ -361,6 +372,7 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
     </div>}
     {visibleMeasurementOptions.length > 0 && <div className="primitive-properties"><h3>教学测量</h3><p className="footer-note">结果会保留来源对象，并在点移动后自动重算。</p>{selectedFacePair && <p className="measurement-guidance">已选两个面：二面角内角读实体内部夹角，外角读它的补角。</p>}<div className="property-actions" aria-label="三维测量工具">{visibleMeasurementOptions.map((option) => <button key={`${option.metric}-${option.dihedralKind ?? "default"}`} type="button" onClick={() => onCreateMeasurement(option.metric, option.dihedralKind)}>{option.label}</button>)}</div></div>}
     {constraintOptions.length > 0 && <div className="primitive-properties"><h3>空间约束</h3><p className="footer-note">约束保留来源 ID，并在约束列表显示残差和冲突解释。</p><div className="property-actions" aria-label="三维约束工具">{constraintOptions.map((option) => <button key={option.type} type="button" onClick={() => onCreateConstraint(option.type, option.targets)}>{option.label}</button>)}</div></div>}
+    {engineeringAnnotationOptions.length > 0 && <div className="primitive-properties"><h3>工程标注</h3><p className="footer-note">标注保留空间来源，并在四视图中随来源对象自动重算。</p><div className="property-actions" aria-label="工程标注工具">{engineeringAnnotationOptions.map((option) => <button key={option.kind} type="button" aria-label={option.ariaLabel} onClick={() => onAddEngineeringAnnotation(option.kind)}>{option.label}</button>)}</div></div>}
     {selectedIds.length === 1 && sceneDocument.measurements.filter((measurement) => measurement.sourceIds.includes(selectedIds[0])).map((measurement) => <div className="primitive-properties" key={measurement.id}><h3>{measurement.metric === "dihedral" ? (measurement.dihedralKind === "exterior" ? "二面角外角" : "二面角内角") : `${measurement.metric}测量`}</h3><p className="footer-note">来源：{measurement.sourceIds.join("、")} · {measurement.precision === "numeric-approximation" ? "数值近似" : "输入精确"}</p><div className="metric-grid"><span>结果<strong>{measurement.value === undefined ? "—" : `${measurement.value.toFixed(3)} ${measurement.unit ?? ""}`}</strong></span><span>状态<strong>{measurement.status}</strong></span></div><p className="footer-note">{measurement.explanation}</p><div className="property-actions"><button type="button" aria-label={`删除测量 ${measurement.id}`} onClick={() => onDeleteMeasurement(measurement.id)}>删除测量</button></div></div>)}
      {showSlopeParameter && <div className="primitive-properties"><label className="properties-label" htmlFor="selected-slope-slider"><span>直线斜率参数</span><strong className="metric">{value.toFixed(2)}</strong></label><input id="selected-slope-slider" aria-label="选中直线斜率" type="range" disabled={!editable} min={min} max={max} step={step} value={value} onChange={(event) => onChange(numberValue(event))} /></div>}
      {selectedPoint && <div className="primitive-properties"><h3>点坐标</h3><CoordinateField label="点 X" value={selectedPoint.x} disabled={!editable || selectedPoint.binding?.kind === "onPath"} onChange={(next) => updatePoint("x", next)} /><CoordinateField label="点 Y" value={selectedPoint.y} disabled={!editable || selectedPoint.binding?.kind === "onPath"} onChange={(next) => updatePoint("y", next)} /><Field label="路径绑定"><select aria-label="点路径绑定" disabled={!editable} value={selectedPoint.binding?.kind === "onPath" ? selectedPoint.binding.pathId : ""} onChange={(event) => updatePointBinding(event.target.value)}><option value="">自由点</option>{pathPrimitives.map((path) => <option key={path.id} value={path.id}>{path.label ?? path.id}</option>)}</select></Field>{selectedPoint.binding?.kind === "onPath" && <><Field label="路径参数"><input aria-label="路径参数" type="number" min="0" max="1" step="0.01" disabled={!editable} value={selectedPoint.binding.parameter} onChange={(event) => updatePointParameter(numberValue(event))} /></Field><button type="button" aria-label="记录轨迹" disabled={!editable} onClick={createLocus}>记录轨迹</button></>}</div>}
