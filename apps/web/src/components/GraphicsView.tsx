@@ -2,8 +2,9 @@ import { type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEv
 import type { Coordinate, GeometryDocument, PrimitiveSpec } from "@draw/dsl"
 import { adaptiveSampleFunctionSegments, evaluateParameterExpression, sampleEllipse, sampleHyperbolaBranches, sampleParabola } from "@draw/geometry-kernel"
 import { applyOperation, recomputeDerivedObjects, type DomainOperation } from "@draw/scene-graph"
+import type { BoxSelectionMode } from "@draw/geometry-kernel"
 
-import { createDragAction, getDragHandle, rotationHandlePoint, type DragAction, type DragHandle } from "../interaction"
+import { createDragAction, getDragHandle, primitiveHandlePoints, type DragAction, type DragHandle } from "../interaction"
 import { resolveAnnotationPoint } from "../annotations"
 import { clipFunctionSegmentsToBounds } from "../functionGraph"
 import { getIntersectionPreviews, type IntersectionPreview } from "../intersectionPreview"
@@ -19,7 +20,7 @@ interface GraphicsViewProps {
   onSelect: (id: string | null, additive?: boolean) => void
   onCanvasClick: (coordinate: Coordinate) => void
   onCanvasDoubleClick: (coordinate: Coordinate) => void
-  onBoxSelect: (bounds: { minX: number; minY: number; maxX: number; maxY: number }) => void
+  onBoxSelect: (bounds: { minX: number; minY: number; maxX: number; maxY: number }, mode: BoxSelectionMode) => void
   onDragEnd: (id: string, action: DragAction) => void
   onCreateIntersection: (preview: IntersectionPreview) => void
   onPointerCoordinate?: (coordinate: Coordinate | null) => void
@@ -207,7 +208,7 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
     if (!dragStart) return
     const end = eventToWorld(event, viewport)
     const bounds = { minX: Math.min(dragStart.x, end.x), minY: Math.min(dragStart.y, end.y), maxX: Math.max(dragStart.x, end.x), maxY: Math.max(dragStart.y, end.y) }
-    if (Math.abs(end.x - dragStart.x) > 0.15 || Math.abs(end.y - dragStart.y) > 0.15) { suppressClick.current = true; onBoxSelect(bounds) }
+    if (Math.abs(end.x - dragStart.x) > 0.15 || Math.abs(end.y - dragStart.y) > 0.15) { suppressClick.current = true; onBoxSelect(bounds, end.x >= dragStart.x ? "window" : "crossing") }
     setDragStart(null)
     setDragCurrent(null)
   }
@@ -235,28 +236,11 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
     svg.addEventListener("wheel", handleWheel, { passive: false })
     return () => svg.removeEventListener("wheel", handleWheel)
   }, [])
-  const selectionRect = dragStart && dragCurrent ? { x: toX(Math.min(dragStart.x, dragCurrent.x)), y: toY(Math.max(dragStart.y, dragCurrent.y)), width: Math.abs(toX(dragCurrent.x) - toX(dragStart.x)), height: Math.abs(toY(dragCurrent.y) - toY(dragStart.y)) } : null
+  const selectionRect = dragStart && dragCurrent ? { x: toX(Math.min(dragStart.x, dragCurrent.x)), y: toY(Math.max(dragStart.y, dragCurrent.y)), width: Math.abs(toX(dragCurrent.x) - toX(dragStart.x)), height: Math.abs(toY(dragCurrent.y) - toY(dragStart.y)), mode: dragCurrent.x >= dragStart.x ? "window" as const : "crossing" as const } : null
   const renderHandles = (primitive: PrimitiveSpec) => {
     if (!selectedIds.includes(primitive.id) || primitive.locked) return null
-    const handles: { handle: DragHandle; point: Coordinate }[] = []
-    if (primitive.type === "line" || primitive.type === "segment" || primitive.type === "ray") handles.push({ handle: "a", point: primitive.a }, { handle: "b", point: primitive.b })
-    if (primitive.type === "polyline") primitive.points.forEach((point, index) => handles.push({ handle: `vertex-${index}`, point }))
-    if (primitive.type === "parabola") handles.push({ handle: "vertex", point: primitive.vertex }, { handle: "rotation", point: rotationHandlePoint(primitive) })
-    if (primitive.type === "circle") handles.push({ handle: "radius", point: { x: primitive.center.x + primitive.radius, y: primitive.center.y } })
-    if (primitive.type === "arc") {
-      handles.push({ handle: "startAngle", point: { x: primitive.center.x + primitive.radius * Math.cos(primitive.startAngle), y: primitive.center.y + primitive.radius * Math.sin(primitive.startAngle) } })
-      handles.push({ handle: "endAngle", point: { x: primitive.center.x + primitive.radius * Math.cos(primitive.endAngle), y: primitive.center.y + primitive.radius * Math.sin(primitive.endAngle) } })
-      const middleAngle = (primitive.startAngle + primitive.endAngle) / 2
-      handles.push({ handle: "radius", point: { x: primitive.center.x + primitive.radius * Math.cos(middleAngle), y: primitive.center.y + primitive.radius * Math.sin(middleAngle) } })
-    }
-    if (primitive.type === "ellipse" || primitive.type === "hyperbola") {
-      const rotation = primitive.rotation ?? 0
-      handles.push(
-        { handle: "radiusX", point: { x: primitive.center.x + primitive.radiusX * Math.cos(rotation), y: primitive.center.y + primitive.radiusX * Math.sin(rotation) } },
-        { handle: "radiusY", point: { x: primitive.center.x - primitive.radiusY * Math.sin(rotation), y: primitive.center.y + primitive.radiusY * Math.cos(rotation) } },
-        { handle: "rotation", point: rotationHandlePoint(primitive) }
-      )
-    }
+    // 控制点几何与 CAD 2D 绘图共用 interaction.ts 的定义，两个视口不再各写一份。
+    const handles = primitiveHandlePoints(primitive)
     return <g className="drag-handles" aria-hidden="true">{handles.map(({ handle, point }) => <circle key={handle} data-drag-handle={handle} cx={toX(point.x)} cy={toY(point.y)} r="6" onPointerDown={(event) => beginDrag(event, primitive.id)} />)}</g>
   }
   const renderAnnotations = () => previewDocument.annotations.filter((annotation) => annotation.visible !== false).map((annotation) => {
@@ -301,6 +285,6 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
     {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "locus" }> => primitive.type === "locus" && primitive.visible !== false).map((locus) => <g key={locus.id} data-primitive-type="locus" opacity={opacityFor(locus)} onClick={(event) => handleObjectClick(event, locus.id)}>{locusSegments(locus).map((points, index) => <polyline key={`${locus.id}-${index}`} points={pointsAttribute(points, viewport)} fill="none" stroke={strokeFor(locus)} strokeWidth={strokeWidthFor(locus, selectedIds.includes(locus.id))} strokeDasharray={dashFor(locus)} />)}</g>)}
     {renderAnnotations()}
     {renderIntersectionPreviews()}
-    {selectionRect && <rect className="selection-rect" x={selectionRect.x} y={selectionRect.y} width={selectionRect.width} height={selectionRect.height} />}
+    {selectionRect && <rect className="selection-rect" data-selection-mode={selectionRect.mode} x={selectionRect.x} y={selectionRect.y} width={selectionRect.width} height={selectionRect.height} />}
   </svg></div></main>
 }

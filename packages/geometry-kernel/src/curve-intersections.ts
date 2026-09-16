@@ -15,7 +15,8 @@ function uniquePoints(points: Coordinate[], tolerance = 1e-4): Coordinate[] {
   return unique
 }
 
-function segmentIntersection(first: [Coordinate, Coordinate], second: [Coordinate, Coordinate], tolerance = 1e-9): Coordinate | null {
+/** 线段相交（含端点）；采样求交与框选判定共用同一份实现。 */
+export function segmentIntersection(first: [Coordinate, Coordinate], second: [Coordinate, Coordinate], tolerance = 1e-9): Coordinate | null {
   const firstDirection = { x: first[1].x - first[0].x, y: first[1].y - first[0].y }
   const secondDirection = { x: second[1].x - second[0].x, y: second[1].y - second[0].y }
   const denominator = firstDirection.x * secondDirection.y - firstDirection.y * secondDirection.x

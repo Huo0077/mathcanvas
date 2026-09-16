@@ -81,14 +81,16 @@ describe("drawing viewport", () => {
 
   it("maps a drafting click on the paper to document coordinates", () => {
     const onCreateAt = vi.fn()
-    render(<DrawingViewport view={draftView} sheetName="工程图纸" mode="draft" document={draftDocument()} selectedIds={[]} onSelect={() => {}} onCreateAt={onCreateAt} />)
+    // 用空文档：这条用例只验证像素→图纸坐标的映射，吸附行为由下面的 snap 用例单独覆盖。
+    render(<DrawingViewport view={draftView} sheetName="工程图纸" mode="draft" document={createEmptyDocument("cad")} selectedIds={[]} onSelect={() => {}} onCreateAt={onCreateAt} />)
 
     const svg = screen.getByRole("img", { name: /模型视图/ })
     svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 400, height: 200, right: 400, bottom: 200, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect
     fireEvent.click(svg, { clientX: 200, clientY: 100 })
 
     const [minX, minY, width, height] = (svg.getAttribute("viewBox") ?? "").split(" ").map(Number)
-    expect(onCreateAt).toHaveBeenCalledWith({ x: minX + width / 2, y: -(minY + height / 2) })
+    // 视口中心必须映射到窗口中心；`+ 0` 只是把 -0 归一成 0（落点坐标统一收敛，不留浮点尘埃）。
+    expect(onCreateAt).toHaveBeenCalledWith({ x: minX + width / 2, y: -(minY + height / 2) + 0 })
   })
 
   it("filters out drafting primitives that live on a hidden layer", () => {
@@ -101,5 +103,283 @@ describe("drawing viewport", () => {
 
     expect(screen.queryByRole("button", { name: /点 1/ })).toBeNull()
     expect(screen.getByText("当前图层还没有二维图元")).toBeTruthy()
+  })
+
+  it("keeps the drafting window fixed instead of re-fitting it to the drawn content", () => {
+    const empty = render(<DrawingViewport view={draftView} sheetName="工程图纸" mode="draft" document={createEmptyDocument("cad")} selectedIds={[]} onSelect={() => {}} />)
+    const emptyViewBox = empty.getByRole("img", { name: /模型视图/ }).getAttribute("viewBox")
+
+    // 画了图元之后窗口必须一模一样，否则画下第一个点整个坐标系就会跳。
+    const filled = render(<DrawingViewport view={draftView} sheetName="工程图纸" mode="draft" document={draftDocument()} selectedIds={[]} onSelect={() => {}} />)
+    const filledViewBox = filled.getAllByRole("img", { name: /模型视图/ })[0].getAttribute("viewBox")
+
+    expect(emptyViewBox).toBe("-50 -50 100 100")
+    expect(filledViewBox).toBe(emptyViewBox)
+  })
+
+  it("draws a drafting grid that thins out when zoomed out", () => {
+    const narrow = render(<DrawingViewport view={draftView} sheetName="工程图纸" mode="draft" document={createEmptyDocument("cad")} selectedIds={[]} onSelect={() => {}} />)
+    const majorCount = narrow.container.querySelectorAll(".engineering-drawing-grid-major line").length
+    expect(majorCount).toBeGreaterThan(0)
+
+    const wide = render(<DrawingViewport view={{ ...draftView, id: "view-wide", scale: 0.1 }} sheetName="工程图纸" mode="draft" document={createEmptyDocument("cad")} selectedIds={[]} onSelect={() => {}} />)
+    // 缩小到 0.1 倍时窗口跨 1000，主网格必须自动加粗，否则会画出上百条线。
+    expect(wide.container.querySelectorAll(".engineering-drawing-grid-major line").length).toBeLessThanOrEqual(majorCount * 2)
+  })
+
+  it("snaps the drafting click to an existing endpoint and labels the snap", () => {
+    const onCreateAt = vi.fn()
+    const document: GeometryDocument = {
+      ...createEmptyDocument("cad"),
+      primitives: [{ id: "segment-1", type: "segment", a: { x: 10, y: 10 }, b: { x: 30, y: 10 }, label: "线段 1" }]
+    }
+    render(<DrawingViewport view={draftView} sheetName="工程图纸" mode="draft" document={document} selectedIds={[]} onSelect={() => {}} onCreateAt={onCreateAt} />)
+
+    const svg = screen.getByRole("img", { name: /模型视图/ })
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 400, height: 400, right: 400, bottom: 400, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect
+    // 窗口 -50..50 映射到 400px：端点 (10,10) 在 (240, 160)。指针偏 4px 仍应吸到端点上。
+    fireEvent.pointerMove(svg, { clientX: 244, clientY: 164, pointerId: 1 })
+    expect(svg.querySelector('[data-draft-snap="endpoint"]')).toBeTruthy()
+
+    fireEvent.click(svg, { clientX: 244, clientY: 164 })
+    expect(onCreateAt).toHaveBeenCalledWith({ x: 10, y: 10 })
+  })
+
+  it("previews the object being drawn and reports its length and angle", () => {
+    render(
+      <DrawingViewport
+        view={draftView}
+        sheetName="工程图纸"
+        mode="draft"
+        document={createEmptyDocument("cad")}
+        selectedIds={[]}
+        creation={{ mode: "line", center: { x: 0, y: 0 } }}
+        onSelect={() => {}}
+        onCreateAt={() => {}}
+      />
+    )
+    const svg = screen.getByRole("img", { name: /模型视图/ })
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 400, height: 400, right: 400, bottom: 400, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect
+
+    fireEvent.pointerMove(svg, { clientX: 300, clientY: 200, pointerId: 1 })
+
+    expect(svg.querySelector('[data-draft-preview="line"]')).toBeTruthy()
+    // 从原点拖到 (25, 0)：长度 25、角度 0°。
+    expect(svg.querySelector("[data-draft-readout]")?.textContent).toBe("25 · 0°")
+  })
+
+  it("constrains the preview to an axis while Shift is held", () => {
+    const onCreateAt = vi.fn()
+    render(
+      <DrawingViewport
+        view={draftView}
+        sheetName="工程图纸"
+        mode="draft"
+        document={createEmptyDocument("cad")}
+        selectedIds={[]}
+        creation={{ mode: "line", center: { x: 0, y: 0 } }}
+        onSelect={() => {}}
+        onCreateAt={onCreateAt}
+      />
+    )
+    const svg = screen.getByRole("img", { name: /模型视图/ })
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 400, height: 400, right: 400, bottom: 400, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect
+
+    // 按住 Shift 时 y 被压到 0；不按时保留自由落点。目标点 (30, 3) 对应像素 (320, 188)。
+    fireEvent.click(svg, { clientX: 320, clientY: 188, shiftKey: true })
+    expect(onCreateAt).toHaveBeenCalledWith({ x: 30, y: 0 })
+
+    onCreateAt.mockClear()
+    fireEvent.click(svg, { clientX: 320, clientY: 188 })
+    expect(onCreateAt).toHaveBeenCalledWith({ x: 30, y: 3 })
+  })
+
+  it("snaps free placement to the grid only while grid snapping is on", () => {
+    const onCreateAt = vi.fn()
+    render(<DrawingViewport view={draftView} sheetName="工程图纸" mode="draft" document={createEmptyDocument("cad")} selectedIds={[]} onSelect={() => {}} onCreateAt={onCreateAt} />)
+    const svg = screen.getByRole("img", { name: /模型视图/ })
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 400, height: 400, right: 400, bottom: 400, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect
+
+    // 默认关闭：像素 (292, 228) 落在 (23, -7)，不被量化。
+    fireEvent.click(svg, { clientX: 292, clientY: 228 })
+    expect(onCreateAt).toHaveBeenCalledWith({ x: 23, y: -7 })
+
+    const toggle = screen.getByRole("button", { name: "切换栅格捕捉" })
+    expect(toggle.getAttribute("data-draft-grid-snap")).toBe("off")
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute("data-draft-grid-snap")).toBe("on")
+
+    onCreateAt.mockClear()
+    fireEvent.click(svg, { clientX: 292, clientY: 228 })
+    // 比例 1 时次网格不可见，因此按主网格 10 量化。
+    expect(onCreateAt).toHaveBeenCalledWith({ x: 20, y: -10 })
+  })
+
+  it("lets object snap win over grid snapping", () => {
+    const onCreateAt = vi.fn()
+    const document: GeometryDocument = {
+      ...createEmptyDocument("cad"),
+      // 端点故意落在非整格坐标上，这样"吸到端点"与"吸到网格"能被区分开。
+      primitives: [{ id: "segment-1", type: "segment", a: { x: 3.5, y: 7.25 }, b: { x: 13.5, y: 7.25 }, label: "线段 1" }]
+    }
+    render(<DrawingViewport view={draftView} sheetName="工程图纸" mode="draft" document={document} selectedIds={[]} onSelect={() => {}} onCreateAt={onCreateAt} />)
+    const svg = screen.getByRole("img", { name: /模型视图/ })
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 400, height: 400, right: 400, bottom: 400, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect
+
+    fireEvent.click(screen.getByRole("button", { name: "切换栅格捕捉" }))
+    fireEvent.click(svg, { clientX: 214, clientY: 171 })
+
+    expect(onCreateAt).toHaveBeenCalledWith({ x: 3.5, y: 7.25 })
+  })
+
+  it("snaps to intersections and quadrant points, not just endpoints", () => {
+    const document: GeometryDocument = {
+      ...createEmptyDocument("cad"),
+      primitives: [
+        { id: "s1", type: "segment", a: { x: -20, y: -10 }, b: { x: 20, y: -10 }, label: "水平线" },
+        { id: "s2", type: "segment", a: { x: 6, y: -30 }, b: { x: 6, y: 10 }, label: "竖直线" },
+        { id: "c1", type: "circle", center: { x: -30, y: 20 }, radius: 20, label: "圆" }
+      ]
+    }
+    render(<DrawingViewport view={draftView} sheetName="工程图纸" mode="draft" document={document} selectedIds={[]} onSelect={() => {}} onCreateAt={() => {}} />)
+    const svg = screen.getByRole("img", { name: /模型视图/ })
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 400, height: 400, right: 400, bottom: 400, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect
+
+    // 交点 (6, -10) → 像素 (224, 240)
+    fireEvent.pointerMove(svg, { clientX: 224, clientY: 240, pointerId: 1 })
+    expect(svg.querySelector('[data-draft-snap="intersection"]')).toBeTruthy()
+
+    // 圆的象限点 (-10, 20) → 像素 (160, 120)
+    fireEvent.pointerMove(svg, { clientX: 160, clientY: 120, pointerId: 1 })
+    expect(svg.querySelector('[data-draft-snap="quadrant"]')).toBeTruthy()
+  })
+
+  it("cycles overlapping snap candidates with Tab", () => {
+    const onCreateAt = vi.fn()
+    const document: GeometryDocument = {
+      ...createEmptyDocument("cad"),
+      // 端点 (0,0) 同时落在另一条线段上：同一位置既有"端点"也有"最近点"。
+      primitives: [
+        { id: "s1", type: "segment", a: { x: 0, y: 0 }, b: { x: 30, y: 0 }, label: "线段 1" },
+        { id: "s2", type: "segment", a: { x: 0, y: -20 }, b: { x: 0, y: 20 }, label: "线段 2" }
+      ]
+    }
+    render(<DrawingViewport view={draftView} sheetName="工程图纸" mode="draft" document={document} selectedIds={[]} onSelect={() => {}} onCreateAt={onCreateAt} />)
+    const svg = screen.getByRole("img", { name: /模型视图/ })
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 400, height: 400, right: 400, bottom: 400, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect
+
+    // (2, 2) → 像素 (208, 192)：容差内同时有端点/交点/中点/最近点。
+    fireEvent.pointerMove(svg, { clientX: 208, clientY: 192, pointerId: 1 })
+    const layer = svg.querySelector('[data-draft-snap-candidates]')!
+    const total = Number(layer.getAttribute("data-draft-snap-candidates"))
+    expect(total).toBeGreaterThan(1)
+    const first = svg.querySelector("[data-draft-snap]")!.getAttribute("data-draft-snap")
+
+    fireEvent.keyDown(svg, { key: "Tab" })
+    expect(svg.querySelector("[data-draft-snap]")!.getAttribute("data-draft-snap")).not.toBe(first)
+
+    // 点击必须落在 Tab 选中的那个候选上。
+    const label = svg.querySelector(".engineering-drawing-snap-label")!.textContent ?? ""
+    expect(label).toContain("2/")
+    fireEvent.click(svg, { clientX: 208, clientY: 192 })
+    expect(onCreateAt).toHaveBeenCalledTimes(1)
+  })
+
+  it("shows grip handles for the selected draft primitive and drags an endpoint", () => {
+    const onDragEnd = vi.fn()
+    render(<DrawingViewport view={draftView} sheetName="工程图纸" mode="draft" document={draftDocument()} selectedIds={["line-1"]} onSelect={() => {}} onDragEnd={onDragEnd} />)
+    const svg = screen.getByRole("img", { name: /模型视图/ })
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 400, height: 400, right: 400, bottom: 400, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect
+
+    // line-1 是 (-2,-1) → (2,1)：端点在窗口 -50..50、400px 视口下映射到 (192,204) 与 (208,196)。
+    expect(svg.querySelectorAll("[data-draft-handle]")).toHaveLength(2)
+    const handleA = svg.querySelector('[data-draft-handle="a"]')!
+
+    fireEvent.pointerDown(handleA, { clientX: 192, clientY: 204, pointerId: 9, button: 0 })
+    fireEvent.pointerMove(svg, { clientX: 172, clientY: 204, pointerId: 9 })
+    fireEvent.pointerUp(svg, { clientX: 172, clientY: 204, pointerId: 9 })
+
+    expect(onDragEnd).toHaveBeenCalledWith("line-1", { kind: "update", patch: { a: { x: -7, y: -1 } } })
+  })
+
+  it("ignores a grip drag that never really moved", () => {
+    const onDragEnd = vi.fn()
+    render(<DrawingViewport view={draftView} sheetName="工程图纸" mode="draft" document={draftDocument()} selectedIds={["line-1"]} onSelect={() => {}} onDragEnd={onDragEnd} />)
+    const svg = screen.getByRole("img", { name: /模型视图/ })
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 400, height: 400, right: 400, bottom: 400, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect
+
+    fireEvent.pointerDown(svg.querySelector('[data-draft-handle="b"]')!, { clientX: 208, clientY: 196, pointerId: 9, button: 0 })
+    fireEvent.pointerMove(svg, { clientX: 208.5, clientY: 196.5, pointerId: 9 })
+    fireEvent.pointerUp(svg, { clientX: 208.5, clientY: 196.5, pointerId: 9 })
+
+    expect(onDragEnd).not.toHaveBeenCalled()
+  })
+
+  it("does not offer draft handles when nothing is selected", () => {
+    render(<DrawingViewport view={draftView} sheetName="工程图纸" mode="draft" document={draftDocument()} selectedIds={[]} onSelect={() => {}} onDragEnd={() => {}} />)
+
+    expect(screen.getByRole("img", { name: /模型视图/ }).querySelectorAll("[data-draft-handle]")).toHaveLength(0)
+  })
+
+  it("translates a draft primitive when its body is dragged away from the grips", () => {
+    const onDragEnd = vi.fn()
+    render(<DrawingViewport view={draftView} sheetName="工程图纸" mode="draft" document={draftDocument()} selectedIds={["line-1"]} onSelect={() => {}} onDragEnd={onDragEnd} />)
+    const svg = screen.getByRole("img", { name: /模型视图/ })
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 400, height: 400, right: 400, bottom: 400, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect
+
+    // line-1 的中点 (0,0) 距离两个端点各 2.24 世界单位，超出 2 单位的夹点容差 → 判为整体平移。
+    const body = svg.querySelector('[data-primitive-id="line-1"]')!
+    fireEvent.pointerDown(body, { clientX: 200, clientY: 200, pointerId: 4, button: 0 })
+    fireEvent.pointerMove(svg, { clientX: 208, clientY: 200, pointerId: 4 })
+    fireEvent.pointerUp(svg, { clientX: 208, clientY: 200, pointerId: 4 })
+
+    expect(onDragEnd).toHaveBeenCalledWith("line-1", { kind: "translate", delta: { x: 2, y: 0 } })
+  })
+
+  it("box-selects with the direction deciding the mode", () => {
+    const onBoxSelect = vi.fn()
+    render(<DrawingViewport view={draftView} sheetName="工程图纸" mode="draft" document={draftDocument()} selectedIds={[]} onSelect={() => {}} onBoxSelect={onBoxSelect} />)
+    const svg = screen.getByRole("img", { name: /模型视图/ })
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 400, height: 400, right: 400, bottom: 400, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect
+
+    // 右 → 左：相交选择，拖动过程中矩形就带上了语义。
+    fireEvent.pointerDown(svg, { clientX: 250, clientY: 150, pointerId: 3, button: 0 })
+    fireEvent.pointerMove(svg, { clientX: 150, clientY: 250, pointerId: 3 })
+    expect(svg.querySelector('[data-draft-box="crossing"]')).toBeTruthy()
+    fireEvent.pointerUp(svg, { clientX: 150, clientY: 250, pointerId: 3 })
+    expect(onBoxSelect).toHaveBeenCalledWith({ minX: -12.5, minY: -12.5, maxX: 12.5, maxY: 12.5 }, "crossing")
+
+    // 左 → 右：窗口选择。
+    onBoxSelect.mockClear()
+    fireEvent.pointerDown(svg, { clientX: 150, clientY: 250, pointerId: 3, button: 0 })
+    fireEvent.pointerMove(svg, { clientX: 250, clientY: 150, pointerId: 3 })
+    expect(svg.querySelector('[data-draft-box="window"]')).toBeTruthy()
+    fireEvent.pointerUp(svg, { clientX: 250, clientY: 150, pointerId: 3 })
+    expect(onBoxSelect).toHaveBeenCalledWith({ minX: -12.5, minY: -12.5, maxX: 12.5, maxY: 12.5 }, "window")
+  })
+
+  it("does not start a box selection while a creation is pending", () => {
+    const onBoxSelect = vi.fn()
+    render(
+      <DrawingViewport
+        view={draftView}
+        sheetName="工程图纸"
+        mode="draft"
+        document={draftDocument()}
+        selectedIds={[]}
+        creation={{ mode: "line", center: null }}
+        onSelect={() => {}}
+        onBoxSelect={onBoxSelect}
+      />
+    )
+    const svg = screen.getByRole("img", { name: /模型视图/ })
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 400, height: 400, right: 400, bottom: 400, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect
+
+    fireEvent.pointerDown(svg, { clientX: 250, clientY: 150, pointerId: 3, button: 0 })
+    fireEvent.pointerMove(svg, { clientX: 150, clientY: 250, pointerId: 3 })
+    fireEvent.pointerUp(svg, { clientX: 150, clientY: 250, pointerId: 3 })
+
+    expect(svg.querySelector("[data-draft-box]")).toBeNull()
+    expect(onBoxSelect).not.toHaveBeenCalled()
   })
 })

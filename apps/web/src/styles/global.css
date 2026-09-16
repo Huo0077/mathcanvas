@@ -193,6 +193,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .endpoint-group { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); padding-top: var(--space-2); border-top: 1px solid var(--color-border); }
 .endpoint-group > strong { grid-column: 1 / -1; font-size: 0.78rem; }
 .selection-rect { fill: rgb(61 90 254 / 12%); stroke: var(--color-accent); stroke-dasharray: 6 4; pointer-events: none; }
+/* 框选方向要一眼可辨：窗口选择（左→右）实线，相交选择（右→左）虚线绿色。 */
+.selection-rect[data-selection-mode="window"] { stroke-dasharray: none; }
+.selection-rect[data-selection-mode="crossing"] { fill: rgb(21 154 136 / 12%); stroke: var(--color-success); }
+.engineering-drawing-box-select { fill: rgb(108 92 231 / 12%); stroke: var(--color-accent); stroke-width: 1; vector-effect: non-scaling-stroke; pointer-events: none; }
+.engineering-drawing-box-select[data-draft-box="crossing"] { fill: rgb(21 154 136 / 14%); stroke: var(--color-success); stroke-dasharray: 6 4; }
 .agent-status { display: flex; gap: var(--space-2); align-items: center; font-size: 0.875rem; color: var(--color-muted); }
 .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-success); }
 .empty-state { margin: 0; color: var(--color-muted); font-size: 0.8rem; line-height: 1.5; }
@@ -542,6 +547,20 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .engineering-drawing-draft line, .engineering-drawing-draft polyline { fill: none; stroke: var(--color-ink); stroke-width: 0.022; vector-effect: non-scaling-stroke; }
 .engineering-drawing-draft circle { fill: var(--color-paper); stroke: var(--color-ink); stroke-width: 0.022; vector-effect: non-scaling-stroke; }
 .engineering-drawing-draft.is-selected line, .engineering-drawing-draft.is-selected polyline, .engineering-drawing-draft.is-selected circle { stroke: var(--color-accent); stroke-width: 0.04; }
+/* 绘图辅助层：栅格、橡皮筋预览、捕捉标记与实时读数。全部 vector-effect 保持屏幕像素粗细，缩放不变形。 */
+.engineering-drawing-grid line { stroke: #eceaf4; stroke-width: 1; vector-effect: non-scaling-stroke; }
+.engineering-drawing-grid-major line { stroke: #ddd9ea; }
+.engineering-drawing-grid-minor line { stroke: #f1eff8; }
+.engineering-drawing-draft-preview { stroke: var(--color-accent); stroke-width: 1.5; stroke-dasharray: 6 4; vector-effect: non-scaling-stroke; pointer-events: none; }
+.engineering-drawing-snap-marker { fill: none; stroke: var(--color-accent-strong); stroke-width: 1.5; vector-effect: non-scaling-stroke; pointer-events: none; }
+.engineering-drawing-snap-layer[data-draft-snap="endpoint"] .engineering-drawing-snap-marker { fill: var(--color-accent-soft); }
+.engineering-drawing-snap-layer[data-draft-snap="midpoint"] .engineering-drawing-snap-marker { fill: var(--color-warning-soft); }
+.engineering-drawing-snap-label, .engineering-drawing-readout { fill: var(--color-accent-strong); font-size: 11px; font-weight: 600; paint-order: stroke; stroke: var(--color-paper); stroke-width: 3px; pointer-events: none; }
+.engineering-drawing-readout { fill: var(--color-ink); font-variant-numeric: tabular-nums; }
+/* 夹点：拖动二维图元的控制点，样式与数学画布的控制点保持一致。 */
+.engineering-drawing-grips circle { fill: var(--color-paper); stroke: var(--color-accent-strong); stroke-width: 1.5; vector-effect: non-scaling-stroke; cursor: grab; pointer-events: all; }
+.engineering-drawing-grips circle:hover { fill: var(--color-accent-soft); }
+.engineering-drawing-svg[data-draft-dragging="true"] { cursor: grabbing; }
 .status-bar-notice { color: var(--color-warning); font-weight: 650; }
 /* 左下角的功能指引：只在点击功能键后出现，压成一行到两行的小浮层，不铺满底部也不挡画布。 */
 .guidance-hint { position: fixed; left: 18px; bottom: 60px; z-index: 40; display: flex; align-items: flex-start; gap: var(--space-2); max-width: min(420px, calc(100vw - 36px)); padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); border-left: 3px solid var(--color-accent); border-radius: var(--radius-sm); background: rgb(255 255 255 / 97%); box-shadow: var(--shadow-card); color: var(--color-ink); font-size: 0.75rem; line-height: 1.45; }

@@ -6,6 +6,75 @@
 **当前阶段：** P0-P6 与 P7 工程制图已完成；MathCanvas 统一 Ribbon UI 基线、2026-09-16 后续 UI 优化（Task 7-13）与**工程制图视觉重做（Task 14）**均已完成。新会话进入内部 `conics` 工作区（界面显示「平面几何」），三个工作区共用可折叠命令区，CAD 保留工程树与上下文检查器，窄屏增加对象/属性抽屉。右侧检查器已移除约束与智能体展示（约束数据保留），3D 画布显示点名并在底部提示法向量/示例二面角状态；工程制图采用「制图台 + 图纸」层次，图纸等比适应并带显式缩放入口。P4 Agent 与 P5 题图解析仍在排除范围内。
 **总体状态：** 开发中
 
+### CAD 2D 绘图交互重做（2026-09-16）
+
+- **用户反馈**：「工程绘图似乎不好画图」，要求参考开源项目优化。
+- **复现与根因**（读 `DrawingViewport` 实测，三条都是硬伤，不只是手感）：
+  1. **坐标系随内容跳**：`draftBounds(document)` 按已画内容自适应算 viewBox，空文档是 `-4..4`；画下第一个点后窗口立刻缩放到该点附近 → 用户落第二个点时参照系已经换了，等于没法连续作图。
+  2. **创建过程零反馈**：`creationStep` 只存在于 `App`，没有传给视口，所以画直线/圆/圆弧/折线时画布上什么都不显示，必须点完最后一下才知道对不对。
+  3. **没有捕捉与约束**：点击直接按像素换算成图纸坐标（会是 `-13.7264957` 这种值），既无法对齐已有端点/中点/圆心，也无法画水平线；同时 2D 模式下 `view.scale` 完全没被使用，标题栏的 −/＋ 是死按钮。
+- **修复**（纯 SVG/React，无新依赖）：
+  - 新增 `apps/web/src/drafting.ts` 纯内核：`draftWindow`（固定窗口，比例 1 跨 100，只随 `view.scale` 缩放）、`draftGrid`（主 10mm 自适应加粗 + 次 1mm 仅在屏幕间距 ≥8px 时显示）、`clientToDraft`（像素→图纸坐标，y 向上，落点收敛到 0.001）、`draftSnapCandidates`（端点/中点/圆心）、`resolveDraftSnap`（**捕捉优先级 端点 > 中点 > 圆心**，同级取最近，容差外返回 null 以保留自由落点）、`constrainAngle`（正交 90°/极轴 45° 投影）、`draftMeasurement`（长度 + 0–360° 方位角）。
+  - `DrawingViewport`：2D 模式改用固定窗口与栅格；新增指针悬停 → 捕捉 → 角度约束的解析链路（**捕捉优先于正交**，用户明确指到端点时不被拽到轴线上）；渲染橡皮筋预览（直线/线段/射线/折线/圆/圆弧与最终形状同构）、捕捉标记与类型标签、实时「长度 · 角度」读数；标题栏新增「自由 → 正交 → 45°」切换按钮，按住 `Shift` 可临时正交。做图元绑定：这些图层都是临时 UI 状态，不写进 `.mgeo`。
+  - `DrawingSheetView` / `App`：把进行中的 `creationStep` 透传给绘图视口，仅用于预览。
+- **RED→GREEN 证据**：`drafting.test.ts` 16 个用例先因模块不存在整体失败；`DrawingViewport.test.tsx` 新增 5 个用例先在旧实现上失败（固定窗口 `expected "0 -48.4 100.7 100.7" to be "-50 -50 100 100"`、捕捉标记不存在、`[data-draft-preview]` 不存在等）。实现后全部通过。过程中修掉两个自己写错的断言（缺自适应网格导致缩小后画 202 条主网格线；像素→坐标换算算错）。
+- **既有测试的行为微调**：「maps a drafting click on the paper to document coordinates」改用空文档作为夹具——旧夹具的线段端点落在 12px 捕捉半径内，会被新吸附正确吸住，而这条用例本意只是验证坐标映射；另把 `-0` 归一为 `0`。
+- **浏览器实测**：`e2e/engineering-workbench.spec.ts` 新增用例断言拖动时有预览与读数、画完 `viewBox` 与画前完全一致、指针靠近已有端点时出现 `[data-draft-snap="endpoint"]`。
+- **回归**：全量单测 60 个测试文件、567 个用例通过；4 个 workspace 类型检查通过；lint 0 error、40 条既有 warning（无新增）；生产构建通过；Playwright 38/38 通过。
+- **开源调研（已完成）**：`docs/research/drafting-interaction-patterns.md`（176 行、89 条来源链接、27 处许可证标注）。文档以「现状基线（已实现）」+「尚未实现」开头，把调研重点放在未完成部分：交点/垂足/切点/最近点/象限点捕捉、捕捉候选 Tab 循环、动态输入与命令行坐标、夹点编辑、框选方向语义、命中容差、偏移/修剪/延伸；并给出「不借鉴」清单与许可证速查（QCAD 是 **GPL-3.0**、JSketcher 为 Autodrop3d 自定义许可，均不能按宽松依赖评估）。
+- **本轮补完的两项（调研文档点名的缺口）**：
+  1. **栅格捕捉接线**：`snapToGrid` + 新增 `draftGridSnapStep`（取最细可见网格：次网格可见时 1mm，否则主网格）此前是死代码；现在标题栏有独立开关，捕捉优先级为 **对象捕捉 > 栅格捕捉 > 角度约束**（有专门的用例：端点位于非整格坐标 `(3.5, 7.25)` 时，开了栅格捕捉仍然吸到端点）。
+  2. **极轴语义修正**：`constrainAngle` 原先对所有角度都取最近 45° 倍数 —— 那不是极轴追踪而是"把光标永久锁在 45° 的倍数上"。现在加了 `thresholdDegrees`：正交（含 Shift）**始终**压到轴上，45° 极轴**只在指针偏离射线 ≤4° 时**吸附，否则保持自由落点。
+- **本轮抓到的一个真实缺陷**：`resolvePointer` 的返回值被 TypeScript 推断成 `snap: string | null`，`npm run typecheck` 报 TS2345。`vite build` 只做类型擦除，不会发现这类错误——这正是 typecheck 必须单独跑的原因。已用显式返回类型修掉。
+- **RED→GREEN 证据（本轮）**：`drafting.test.ts` 新增 4 个用例（最细网格步长、正交严格性、极轴阈值内/外）与 `DrawingViewport.test.tsx` 新增 2 个用例（栅格捕捉默认关闭→开启后量化到 10mm；对象捕捉优先于栅格捕捉），实现后 33 个聚焦用例通过。
+- **回归（本轮结束）**：全量单测 60 个测试文件、572 个用例通过；4 个 workspace 类型检查通过；lint 0 error、40 条既有 warning（无新增）；生产构建通过；Playwright 38/38 通过（e2e 新增断言：栅格捕捉开关从 `off` → `on`，且远离图元处出现 `[data-draft-snap="grid"]`）。
+- **仍未做**：动态输入与命令行坐标（`@dx,dy` / `@d<a`）、框选方向语义（左→右包含 / 右→左相交）、命中容差、切点捕捉、偏移/修剪/延伸。优先级与开源参考见该文档的「针对本仓库的优先级建议」。
+
+### CAD 2D 绘图方向框选 + Esc 分级（调研优先级 ⑤，2026-09-16 已完成）
+
+- **依据**：调研文档「框选方向语义与 Esc 分级」——左→右为窗口选择、右→左为相交选择，且 Esc 要分级而不是一次性全清。
+- **几何判定进内核**：新增 `packages/geometry-kernel/src/selection.ts`，导出 `pointInSelectionBox` / `primitiveInSelectionBox`（window）/ `primitiveCrossesSelectionBox`（crossing）/ `selectPrimitivesInBox`。要点：
+  - 圆的"圆周是否穿过框"用**半径 ∈ [圆心到框的最近距离, 圆心到框内最远角落距离]** 判定：大圆把框整个套住时圆周并不经过框，不该被相交框选选中（去掉上界就会误选，这一点用变异检验确认过）。
+  - 无界直线/射线按定义它的两个端点判定（保留数学画布的历史语义），相交模式下用一个足够长的线段近似它去和框的四条边求交。
+  - 圆弧没有解析的框相交判定，按**与渲染相同的 24 段**采样，保证"看到的形状"和"选中的形状"一致；折线按其各段。
+  - 顺手把 `curve-intersections.ts` 里的 `segmentIntersection` 由私有改为导出，框选与采样求交共用一份实现。
+- **方向语义接线**：`drafting.ts` 新增 `boxSelectionMode`（方向→语义）与 `normalizeSelectionBox`；`GraphicsView` 与 `DrawingViewport` 都在拖动时就带上语义，矩形分别用 `data-selection-mode` / `data-draft-box` 标记，样式上窗口选择实线、相交选择绿色虚线（一眼可辨）。CAD 2D 绘图新增框选：空白处按下拖框才启动，**有创建挂起或按到图元/夹点时不启动**（否则会把"点第一个点"或"拖夹点"误判成框选）。
+- **Esc 分级**（`App.tsx`）：创建/CAD 命令 → 操作指引 → 选择，逐级取消；没有待取消的动作时保持不动，不会误删文档。
+- **过程中修掉的两个真实缺陷**：
+  1. **`keydown` effect 依赖数组陈旧**：`creationStep` / `activeCommand` / `guidance` 都不在依赖里，分级 Esc 读到的全是旧值、按下去毫无反应。已补齐依赖。
+  2. **`selection.ts` 重复的 circle 分支**：恢复变异时把整个分支写重了，第二个分支被 TypeScript 窄化成 `never` 而报错——由 `npm run typecheck` 抓到（`vite build` 只做类型擦除，发现不了）。
+- **变异检验（两次，结果不同）**：第一次删掉 crossing 的"包含即相交"早返回 —— **没被抓到**，因为该性质对每种类型都是结构性成立的，这个变异是语义等价的、什么也没证明；第二次去掉圆的"最远距离"上界 —— 被抓住（"套住框的大圆"用例 `expected true to be false`）。这说明第一版测试的强度边界，也说明变异检验本身需要挑真正有区别的变异。
+- **RED→GREEN 证据**：`selection.test.ts` 13 个用例（两种语义、圆的相切/套住/穿过、无界图元、折线与圆弧采样、跳过 `point3`）；`drafting.test.ts` +2（方向→语义、矩形归一）；`DrawingViewport.test.tsx` +2（拖动中矩形带正确语义并在松手时提交、有创建挂起时不启动框选）；`App.test.tsx` +1（Esc 分级：先关指引、再清选择、文档不变——这条用例第一次写错，暴露了"指引优先于选择"的真实顺序）。
+- **浏览器实测**：`e2e/engineering-workbench.spec.ts` 新增用例——画线段后右→左拖框（断言 `data-draft-box="crossing"` 出现 → 线段 `data-selected="true"` → `data-revision` 不变），再左→右拖一个不完整包含的框（断言 `data-draft-box="window"` → 不选中）。
+- **回归**：全量单测 62 个测试文件、619 个用例通过；4 个 workspace 类型检查通过；lint 0 error、40 条 warning（无新增）；生产构建通过；Playwright 40/40 通过。
+- **边界**：数学画布的函数、圆锥曲线与派生曲线仍只有"完全包含"语义（没有解析的框相交几何）；CAD 绘图还没有「先框选再执行移动/删除」的命令式工作流，框选目前只改选择状态。
+
+### CAD 2D 绘图夹点编辑（调研优先级 ④，2026-09-16 已完成）
+
+- **依据**：调研文档把「夹点编辑」列在捕捉之后，并明确要求**直接复用 `interaction.ts`，但容差必须按屏幕像素换算，不能用默认 0.35**。
+- **做了什么**：
+  - `interaction.ts` 新增 `primitiveHandlePoints(primitive)`，把控制点几何从 `GraphicsView` 里提出来成为共享纯函数（线段/射线端点、折线顶点、抛物线顶点与旋转、圆半径、圆弧起止角与半径中点、椭圆/双曲线三轴）；`GraphicsView` 改为调用它，**两个视口不再各写一份手柄几何**（派生对象、锁定对象、无手柄图元一律返回空数组）。
+  - `DrawingViewport` 新增夹点：选中图元才显示控制点；按下控制点 → `createDragAction(primitive, handle, origin, current)`；按下图元本体 → 先用 `getDragHandle(primitive, point, gripTolerance)` 判断是否落在控制点上，否则整体平移。拖动期间用 `applyOperation` 生成**临时文档**做预览（端点移动时关联交点跟着重算），指针抬起才把 `DragAction` 交给 App 提交成一次可撤销改动；位移小于半个夹点半径视为误触，不提交。
+  - 容差换算：`gripTolerance(width) = DRAFT_GRIP_PIXELS / width * span`（`DRAFT_GRIP_PIXELS = 8`）。调研文档点名的这个坑是真的——默认 0.35 世界单位在跨度 100 的窗口里只有约 1.7px。
+  - `DrawingSheetView` / `App` 透传 `onDragEnd`，与数学画布共用 `handleDragEnd`（`translatePrimitive` / `updatePrimitive`）。
+- **RED→GREEN 证据**：`interaction.test.ts` 新增 3 个用例（端点手柄、折线/圆/圆弧手柄、锁定与派生对象无手柄）；`DrawingViewport.test.tsx` 新增 4 个（选中才显示夹点、拖端点提交 `update` 动作、微小位移不提交、拖本体提交 `translate`）。实现后 28 个聚焦用例通过。
+- **过程中修掉的自己的错**：测试里把端点 `(-2,-1)` 的像素位置算成 `clientY 208`（实际 204，窗口 400px / 跨度 100 → 4px 每单位）；另一个用例拿半径 1 的小圆测"拖本体"，但 8px 夹点容差等于 2 世界单位，圆心的按下被正确判成半径编辑——改成拖线段本体（中点距端点 2.24 单位，超出容差）才测到翻译语义。
+- **浏览器实测**：`e2e/engineering-workbench.spec.ts` 新增用例——画线段 → 点本体选中 → 断言出现 `[data-draft-handle="a"]` → 按住拖动（断言 `data-draft-dragging` 由 true 变 false）→ `data-revision` 增加 → 夹点位置随端点移动。
+- **回归**：全量单测 61 个测试文件、601 个用例通过；4 个 workspace 类型检查通过；lint 0 error、40 条 warning（无新增）；生产构建通过；Playwright 39/39 通过。
+
+### CAD 2D 绘图捕捉扩展（调研优先级 ① ②，2026-09-16 已完成）
+
+- **依据**：`docs/research/drafting-interaction-patterns.md` 把「扩展捕捉类型」与「捕捉候选排序 + Tab 循环」列为最值得先做的两项；本切片按该优先级实施。
+- **几何原语落在内核**（文档要求，不在 UI 里重复实现几何）：新增 `packages/geometry-kernel/src/snap-geometry.ts`，导出 `nearestPointOnPrimitive` / `perpendicularPointOnPrimitive` / `quadrantPointsOnPrimitive` / `planarIntersections`。实现要点：
+  - 图元先拆成「支撑直线 + 范围规则」或「圆 + 范围规则」两种原子（折线拆成多段、圆弧按扫过角过滤），范围判定统一在原子层，因此"看起来在图元上"和"真的在图元上"一致。
+  - `nearest` **夹取**到实体自身范围（线段收到端点、射线收到起点、圆弧收到扫过范围内的最近端点），这是"实体上最近点"的数学定义；`perpendicular` **不夹取**——脚点落在实体之外时垂足不存在。
+  - 交点复用既有 `intersectLinesDetailed` / `intersectLineCircleDetailed` / `intersectCirclesDetailed`，只补范围过滤与去重，不重写求交算法。
+- **候选编排与排序**（`apps/web/src/drafting.ts`）：`SnapKind` 扩展为 `endpoint | intersection | midpoint | center | quadrant | perpendicular | nearest | grid`；新增 `rankDraftSnaps(raw, candidates, { tolerance, primitives })` 返回**按优先级 → 距离排序**的候选数组，并按位置去重（两条线段共端点时"端点"与"交点"重合，只保留优先级更高的）。`nearest` 由指针位置决定，不能预先列举，因此只在排序时按 `primitives` 现算，并**固定排在最后**——否则它在数学上永远最近，会吃掉所有其他候选。`resolveDraftSnap` 保留旧签名（返回最优候选）以兼容既有调用与测试。
+- **视口接线**（`DrawingViewport.tsx`）：候选按「文档 + 锚点」`useMemo` 缓存（交点计算是 O(n²)，不能每次指针移动重算）；垂足需要创建锚点，因此把 `creationAnchor` 作为 `from` 传入；命中多个候选时按 **Tab** 循环（`<svg>` 在 2D 模式获得 `tabIndex`，`onKeyDown` 里 `preventDefault`），标记标签显示「交点 2/3（Tab 切换）」与 `data-draft-snap-candidates`，让状态可被测试与 e2e 断言。
+- **RED→GREEN 证据**：`snap-geometry.test.ts` 15 个用例（象限点、圆弧扫过范围、最近点夹取、垂足不夹取、线段/直线/圆/圆/折线/圆弧求交与范围过滤）；`drafting.test.ts` 新增 6 个（象限点、交点、垂足需要锚点、按优先级去重、`nearest` 垫底、极轴阈值）；`DrawingViewport.test.tsx` 新增 2 个（交点与象限点捕捉标记、Tab 循环后点击落在第 2 个候选上）。实现后 40 个聚焦用例通过。
+- **本轮修掉的两个自己写错的地方**（都由门禁而不是肉眼发现）：`drafting.ts` 里旧的 `*_PRIORITY` 常量未删除导致重复声明（esbuild transform 直接失败）；`nearestPointOnPrimitive` 里 `candidate` 的初值从未被使用，被 ESLint `no-useless-assignment` 判为 **error**。另外把「圆弧最近点在扫过范围外」的语义从"返回 null"改成"夹取到圆弧端点"，并修正了测试里标错方向的"下半圆"用例（0°→90° 的四分之一圆弧才是可判定的）。
+- **回归**：全量单测 61 个测试文件、594 个用例通过；4 个 workspace 类型检查通过；lint 0 error、40 条 warning（无新增）；生产构建通过；Playwright 38/38 通过（e2e 增加"实体中段给最近点"的断言）。
+
 ### Ribbon UI 重构（2026-09-15）
 
 - [x] 统一 Top Bar、工作区 Tab 和 Ribbon；移除重复的工作区按钮与旧命令入口。

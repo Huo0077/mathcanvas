@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 
 import { decodeMgeo, encodeMgeo, type AnnotationFeature, type DrawingSheetSpec, type EngineeringAnnotationKind, type Measurement3Metric, type PrimitiveSpec, type Workspace } from "@draw/dsl"
-import { buildSolidTemplate, createMeasurement3 } from "@draw/geometry-kernel"
+import { buildSolidTemplate, createMeasurement3, selectPrimitivesInBox, type BoxSelectionMode } from "@draw/geometry-kernel"
 import { deletionTargets, sectionPlaneThroughSource, validatePatch } from "@draw/scene-graph"
 import type { Alignment } from "@draw/scene-graph"
 
@@ -377,13 +377,16 @@ export function App() {
     if (picked && ["cube", "pyramid", "cylinder", "cone"].includes(picked.type)) setGuidance(guidanceFor({ kind: "selectSolid" }))
     setSelectedIds((current) => additive ? (current.includes(id) ? current.filter((candidate) => candidate !== id) : [...current, id]) : [id])
   }
-  const selectBox = (bounds: { minX: number; minY: number; maxX: number; maxY: number }) => {
-    const contained = document.primitives.filter((primitive) => {
-      if (primitive.type === "point") return primitive.x >= bounds.minX && primitive.x <= bounds.maxX && primitive.y >= bounds.minY && primitive.y <= bounds.maxY
-      if (primitive.type === "line" || primitive.type === "segment") return [primitive.a, primitive.b].every((point) => point.x >= bounds.minX && point.x <= bounds.maxX && point.y >= bounds.minY && point.y <= bounds.maxY)
-      if (primitive.type === "ray") return [primitive.a, primitive.b].every((point) => point.x >= bounds.minX && point.x <= bounds.maxX && point.y >= bounds.minY && point.y <= bounds.maxY)
-      if (primitive.type === "polyline") return primitive.points.every((point) => point.x >= bounds.minX && point.x <= bounds.maxX && point.y >= bounds.minY && point.y <= bounds.maxY)
-      if (primitive.type === "circle" || primitive.type === "arc") return primitive.center.x >= bounds.minX && primitive.center.x <= bounds.maxX && primitive.center.y >= bounds.minY && primitive.center.y <= bounds.maxY
+  /**
+   * 框选：**左→右**只选完全包含的对象，**右→左**选相交的对象（CAD 约定）。
+   * 平面基础图元交给内核的 `selectPrimitivesInBox`；函数、圆锥曲线和派生曲线仍按原有的
+   * "完全包含"判定（它们没有解析的框相交几何，相交语义只覆盖平面基础图元）。
+   */
+  const planarBoxTypes = new Set(["point", "line", "segment", "ray", "polyline", "circle", "arc"])
+  const selectBox = (bounds: { minX: number; minY: number; maxX: number; maxY: number }, mode: BoxSelectionMode = "window") => {
+    const planar = selectPrimitivesInBox(document.primitives, bounds, mode)
+    const rest = document.primitives.filter((primitive) => {
+      if (planarBoxTypes.has(primitive.type)) return false
       if (primitive.type === "parabola") return primitive.vertex.x >= bounds.minX && primitive.vertex.x <= bounds.maxX && primitive.vertex.y >= bounds.minY && primitive.vertex.y <= bounds.maxY
       if (primitive.type === "ellipse" || primitive.type === "hyperbola") return primitive.center.x >= bounds.minX && primitive.center.x <= bounds.maxX && primitive.center.y >= bounds.minY && primitive.center.y <= bounds.maxY
       if (primitive.type === "function") return primitive.domain[0] >= bounds.minX && primitive.domain[1] <= bounds.maxX
@@ -392,15 +395,10 @@ export function App() {
       if (primitive.type === "secant") return [primitive.a, primitive.b].every((point) => point.x >= bounds.minX && point.x <= bounds.maxX && point.y >= bounds.minY && point.y <= bounds.maxY)
       if (primitive.type === "integral") return primitive.points.length > 0 && primitive.points.every((point) => point.x >= bounds.minX && point.x <= bounds.maxX && point.y >= bounds.minY && point.y <= bounds.maxY)
       if (primitive.type === "analysisSet") return primitive.results.length > 0 && primitive.results.every((point) => point.x >= bounds.minX && point.x <= bounds.maxX && point.y >= bounds.minY && point.y <= bounds.maxY)
-      if (primitive.type === "cube" || primitive.type === "pyramid" || primitive.type === "cylinder" || primitive.type === "cone") return false
-      if (primitive.type === "section") return false
-      if (primitive.type === "connection") return false
-      if (primitive.type === "locus") return false
-      if (primitive.type === "intersectionSet") return false
       if (primitive.type === "intersection" || primitive.type === "lineCircleIntersection" || primitive.type === "circleIntersection" || primitive.type === "curveIntersection") return primitive.x >= bounds.minX && primitive.x <= bounds.maxX && primitive.y >= bounds.minY && primitive.y <= bounds.maxY
       return false
     }).map((primitive) => primitive.id)
-    setSelectedIds(contained)
+    setSelectedIds([...planar, ...rest])
   }
   const toggleLock = () => apply({ op: "setPrimitivesLocked", ids: selectedIds, locked: !allSelectedLocked })
   const createGroup = () => apply({ op: "createGroup", group: { id: nextGroupId(document), label: `分组 ${document.groups.length + 1}`, members: selectedIds } })
@@ -734,9 +732,10 @@ export function App() {
         return
       }
       if (event.key === "Escape") {
-        setCreationStep(null)
-        setActiveCommand(null)
-        setGuidance(null)
+        // Esc 分级：先取消进行中的创建（含 CAD 命令），再关掉指引，最后才清空选择。
+        if (creationStep || activeCommand) { setCreationStep(null); setActiveCommand(null); setGuidance(null); return }
+        if (guidance) { setGuidance(null); return }
+        if (selectedIds.length > 0) { setSelectedIds([]); return }
         return
       }
       if ((event.key === "Delete" || event.key === "Backspace") && selectedIds.length > 0 && !isTextEditingTarget(event.target)) {
@@ -746,7 +745,7 @@ export function App() {
     }
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [selectedIds, document, apply, undo, redo])
+  }, [selectedIds, document, apply, undo, redo, creationStep, activeCommand, guidance])
 
   const statusPrompt = resolveStatusPrompt({ mode: creationMode, selectedCount: selectedIds.length, selectedLabel: selectedPrimitive?.label ?? selectedPrimitive?.id ?? null, hasCenter: Boolean(creationStep?.center), hasStart: Boolean(creationStep?.start), pointCount: creationStep?.points?.length ?? 0, sceneControl })
 
@@ -832,6 +831,9 @@ export function App() {
         mode="draft"
         activeViewId={draftViewSpec.id}
         ariaLabel="二维绘图视图"
+        creation={creationStep}
+        onDragEnd={handleDragEnd}
+        onBoxSelect={selectBox}
         onSelect={updateSelection}
         onViewSelect={setActiveViewId}
         onViewLayoutChange={handleViewLayoutChange}

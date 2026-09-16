@@ -55,6 +55,33 @@ export function getDragHandle(primitive: PrimitiveSpec, pointer: { x: number; y:
   return "body"
 }
 
+/**
+ * 可拖动控制点的位置（数学画布与 CAD 2D 绘图共用同一份定义，避免两个视口各写一套手柄几何）。
+ * 顺序即渲染顺序；派生对象、锁定对象和没有手柄的图元返回空数组。
+ */
+export function primitiveHandlePoints(primitive: PrimitiveSpec): { handle: DragHandle; point: { x: number; y: number } }[] {
+  if (derivedTypes.has(primitive.type) || primitive.locked) return []
+  const handles: { handle: DragHandle; point: { x: number; y: number } }[] = []
+  if (primitive.type === "line" || primitive.type === "segment" || primitive.type === "ray") handles.push({ handle: "a", point: primitive.a }, { handle: "b", point: primitive.b })
+  if (primitive.type === "polyline") primitive.points.forEach((point, index) => handles.push({ handle: `vertex-${index}`, point }))
+  if (primitive.type === "parabola") handles.push({ handle: "vertex", point: primitive.vertex }, { handle: "rotation", point: rotationHandlePoint(primitive) })
+  if (primitive.type === "circle") handles.push({ handle: "radius", point: { x: primitive.center.x + primitive.radius, y: primitive.center.y } })
+  if (primitive.type === "arc") {
+    handles.push({ handle: "startAngle", point: pointOnCircle(primitive.center, primitive.radius, primitive.startAngle) })
+    handles.push({ handle: "endAngle", point: pointOnCircle(primitive.center, primitive.radius, primitive.endAngle) })
+    handles.push({ handle: "radius", point: pointOnCircle(primitive.center, primitive.radius, (primitive.startAngle + primitive.endAngle) / 2) })
+  }
+  if (primitive.type === "ellipse" || primitive.type === "hyperbola") {
+    const rotation = primitive.rotation ?? 0
+    handles.push(
+      { handle: "radiusX", point: { x: primitive.center.x + primitive.radiusX * Math.cos(rotation), y: primitive.center.y + primitive.radiusX * Math.sin(rotation) } },
+      { handle: "radiusY", point: { x: primitive.center.x - primitive.radiusY * Math.sin(rotation), y: primitive.center.y + primitive.radiusY * Math.cos(rotation) } },
+      { handle: "rotation", point: rotationHandlePoint(primitive) }
+    )
+  }
+  return handles
+}
+
 export function createDragAction(primitive: PrimitiveSpec, handle: DragHandle, origin: { x: number; y: number }, current: { x: number; y: number }): DragAction | null {
   if (derivedTypes.has(primitive.type) || primitive.locked) return null
   if (handle === "body") return { kind: "translate", delta: { x: current.x - origin.x, y: current.y - origin.y } }

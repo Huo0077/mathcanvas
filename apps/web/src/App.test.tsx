@@ -1002,6 +1002,27 @@ describe("MathCanvas workbench", () => {
     expect(screen.queryByRole("status", { name: "操作指引" })).toBeNull()
   })
 
+  it("clears the selection with Escape once nothing needs cancelling", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "平面几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(algebraRow("A"))
+    const deleteButton = () => screen.getByRole("button", { name: "删除对象" }) as HTMLButtonElement
+    expect(deleteButton().disabled).toBe(false)
+    const before = useSceneStore.getState().document.primitives.length
+
+    // Esc 分级：第一次关掉刚弹出的指引，选择保持不变；第二次才清空选择，且不动文档。
+    fireEvent.keyDown(window, { key: "Escape" })
+    expect(screen.queryByRole("status", { name: "操作指引" })).toBeNull()
+    expect(deleteButton().disabled).toBe(false)
+
+    fireEvent.keyDown(window, { key: "Escape" })
+    expect(deleteButton().disabled).toBe(true)
+    expect(useSceneStore.getState().document.primitives).toHaveLength(before)
+    expect(globalThis.document.querySelectorAll(".algebra-panel .object-row.selected")).toHaveLength(0)
+    expect(algebraRow("A")).toBeTruthy()
+  })
+
   it("explains the dihedral workflow instead of only naming the measurement", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "立体几何" }))

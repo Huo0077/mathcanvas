@@ -45,6 +45,110 @@ test("drafts on a new layer, hides it, and keeps the layout after a refresh", as
   await expect(page.getByRole("button", { name: "缩小 主视图" })).toBeEnabled()
 })
 
+test("drafts with a fixed window, live preview and object snap", async ({ page }) => {
+  await page.goto("/")
+  await page.locator('input[type="file"]').setInputFiles("e2e/fixtures/cad-point.mgeo")
+  await page.getByRole("button", { name: "工程制图" }).click()
+  await page.getByRole("button", { name: "2D 绘图" }).click()
+
+  const surface = page.getByRole("img", { name: /模型视图/ })
+  // 坐标窗口是固定的：画之前先记下来，画完必须一模一样（旧实现按内容自适应，点一下整个坐标系就跳）。
+  const windowBefore = await surface.getAttribute("viewBox")
+
+  await page.getByRole("button", { name: "添加线段", exact: true }).click()
+  await surface.click({ position: { x: 80, y: 140 } })
+  await surface.hover({ position: { x: 240, y: 140 } })
+
+  // 拖拽过程中能看见橡皮筋预览和长度/角度读数。
+  await expect(surface.locator('[data-draft-preview="segment"]')).toHaveCount(1)
+  await expect(surface.locator("[data-draft-readout]")).toHaveCount(1)
+
+  await surface.click({ position: { x: 240, y: 140 } })
+  await expect(page.locator(".engineering-drawing-draft")).toHaveCount(1)
+  await expect(surface).toHaveAttribute("viewBox", windowBefore ?? "")
+
+  // 指针靠近已有端点时必须给出捕捉标记（12px 捕捉半径）。
+  await surface.hover({ position: { x: 82, y: 142 } })
+  await expect(surface.locator('[data-draft-snap="endpoint"]')).toHaveCount(1)
+
+  // 指针落在实体中段但不在特征点上：给"最近点"，这样才能沿线滑动取点。
+  await surface.hover({ position: { x: 133, y: 140 } })
+  await expect(surface.locator('[data-draft-snap="nearest"]')).toHaveCount(1)
+
+  // 栅格捕捉开关：打开后远离图元的位置会给栅格捕捉，而不是自由落点。
+  const gridToggle = page.getByRole("button", { name: "切换栅格捕捉" })
+  await expect(gridToggle).toHaveAttribute("data-draft-grid-snap", "off")
+  await gridToggle.click()
+  await expect(gridToggle).toHaveAttribute("data-draft-grid-snap", "on")
+  await surface.hover({ position: { x: 133, y: 97 } })
+  await expect(surface.locator('[data-draft-snap="grid"]')).toHaveCount(1)
+})
+
+test("edits a draft primitive by dragging its grip", async ({ page }) => {
+  await page.goto("/")
+  await page.locator('input[type="file"]').setInputFiles("e2e/fixtures/cad-point.mgeo")
+  await page.getByRole("button", { name: "工程制图" }).click()
+  await page.getByRole("button", { name: "2D 绘图" }).click()
+
+  const surface = page.getByRole("img", { name: /模型视图/ })
+  await page.getByRole("button", { name: "添加线段", exact: true }).click()
+  await surface.click({ position: { x: 80, y: 140 } })
+  await surface.click({ position: { x: 240, y: 140 } })
+  await expect(page.locator(".engineering-drawing-draft")).toHaveCount(1)
+
+  // 选中线段后必须出现夹点；拖动端点要真的提交成一次文档改动（revision 增加）。
+  await surface.click({ position: { x: 160, y: 140 } })
+  const grip = surface.locator('[data-draft-handle="a"]')
+  await expect(grip).toHaveCount(1)
+  const before = Number(await page.locator(".engineering-workbench").getAttribute("data-revision"))
+  const box = (await grip.boundingBox())!
+
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await page.mouse.down()
+  await expect(surface).toHaveAttribute("data-draft-dragging", "true")
+  await page.mouse.move(box.x + box.width / 2 + 40, box.y + box.height / 2 + 24, { steps: 6 })
+  await page.mouse.up()
+
+  await expect(surface).toHaveAttribute("data-draft-dragging", "false")
+  await expect.poll(async () => Number(await page.locator(".engineering-workbench").getAttribute("data-revision"))).toBeGreaterThan(before)
+  // 拖动结束后夹点跟着端点走了，说明改动已经落到文档上。
+  const movedBox = (await grip.boundingBox())!
+  expect(Math.abs(movedBox.x - box.x) + Math.abs(movedBox.y - box.y)).toBeGreaterThan(10)
+})
+
+test("box-selects draft geometry with the drag direction deciding the mode", async ({ page }) => {
+  await page.goto("/")
+  await page.locator('input[type="file"]').setInputFiles("e2e/fixtures/cad-point.mgeo")
+  await page.getByRole("button", { name: "工程制图" }).click()
+  await page.getByRole("button", { name: "2D 绘图" }).click()
+
+  const surface = page.getByRole("img", { name: /模型视图/ })
+  await page.getByRole("button", { name: "添加线段", exact: true }).click()
+  await surface.click({ position: { x: 140, y: 120 } })
+  await surface.click({ position: { x: 260, y: 200 } })
+  const box = (await surface.boundingBox())!
+  const revision = async () => Number(await page.locator(".engineering-workbench").getAttribute("data-revision"))
+  const before = await revision()
+
+  // 右 → 左拖框 = 相交选择：拖动中矩形带 crossing 语义，松手后线段被选中。
+  await page.mouse.move(box.x + 320, box.y + 240)
+  await page.mouse.down()
+  await page.mouse.move(box.x + 100, box.y + 80, { steps: 6 })
+  await expect(surface.locator('[data-draft-box="crossing"]')).toHaveCount(1)
+  await page.mouse.up()
+  await expect(surface.locator('[data-primitive-id][data-selected="true"]')).toHaveCount(1)
+  // 框选只改选择状态，不产生文档改动。
+  expect(await revision()).toBe(before)
+
+  // 左 → 右拖框 = 窗口选择：框不完整包含线段，因此不选中。
+  await page.mouse.move(box.x + 40, box.y + 40)
+  await page.mouse.down()
+  await page.mouse.move(box.x + 180, box.y + 160, { steps: 6 })
+  await expect(surface.locator('[data-draft-box="window"]')).toHaveCount(1)
+  await page.mouse.up()
+  await expect(surface.locator('[data-primitive-id][data-selected="true"]')).toHaveCount(0)
+})
+
 test("undoes and redoes from both the buttons and the keyboard", async ({ page }) => {
   await page.goto("/")
   await page.getByRole("button", { name: "工程制图" }).click()

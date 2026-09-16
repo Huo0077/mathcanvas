@@ -4,7 +4,10 @@ import type { DrawingSheetSpec, DrawingViewSpec, GeometryDocument } from "@draw/
 
 import { sheetFitScale, sheetPaperSize } from "../drawingGeometry"
 import type { ProjectedDrawing } from "../projectionVisuals"
-import { DrawingViewport, type DrawingViewPatch, type DrawingViewportMode } from "./DrawingViewport"
+import type { DrawingViewPatch, DrawingViewportMode, DraftCreation } from "./DrawingViewport"
+import { DrawingViewport } from "./DrawingViewport"
+import type { DragAction } from "../interaction"
+import type { BoxSelectionMode, SelectionBox } from "@draw/geometry-kernel"
 
 interface DrawingSheetViewProps {
   sheet: DrawingSheetSpec
@@ -15,6 +18,12 @@ interface DrawingSheetViewProps {
   projectedDrawings?: ProjectedDrawing[]
   activeViewId?: string | null
   projectionLinesOverride?: boolean
+  /** 进行中的二维创建步骤，用于在绘图视口里画橡皮筋预览。 */
+  creation?: DraftCreation | null
+  /** 夹点拖动提交（与数学画布共用 DragAction 语义）。 */
+  onDragEnd?: (id: string, action: DragAction) => void
+  /** 框选提交：方向决定语义（左→右完全包含 / 右→左相交）。 */
+  onBoxSelect?: (box: SelectionBox, mode: BoxSelectionMode) => void
   /** Command slot rendered on the left of the sheet toolbar, so the whole CAD area has exactly one toolbar. */
   projectionLinesControl?: ReactNode
   ariaLabel?: string
@@ -25,7 +34,7 @@ interface DrawingSheetViewProps {
 }
 
 /** The paper always contains every placed view, so a moved or scaled viewport is never clipped away. */
-export function DrawingSheetView({ sheet, views, document, selectedIds, mode, projectedDrawings = [], activeViewId = null, projectionLinesOverride, projectionLinesControl, ariaLabel = "工程制图视图", onSelect, onViewSelect, onViewLayoutChange, onCreateAt }: DrawingSheetViewProps) {
+export function DrawingSheetView({ sheet, views, document, selectedIds, mode, projectedDrawings = [], activeViewId = null, projectionLinesOverride, creation = null, onDragEnd, onBoxSelect, projectionLinesControl, ariaLabel = "工程制图视图", onSelect, onViewSelect, onViewLayoutChange, onCreateAt }: DrawingSheetViewProps) {
   const paper = useMemo(() => sheetPaperSize(sheet, views), [sheet, views])
   const { width: paperWidth, height: paperHeight } = paper
   const [fit, setFit] = useState(1)
@@ -118,11 +127,14 @@ export function DrawingSheetView({ sheet, views, document, selectedIds, mode, pr
               selectedIds={selectedIds}
               active={view.id === activeViewId}
               projectedDrawing={drawingByView.get(view.id) ?? null}
+              creation={creation}
               projectionLinesOverride={projectionLinesOverride}
               onSelect={onSelect}
               onActivate={onViewSelect}
               onLayoutChange={onViewLayoutChange}
               onCreateAt={onCreateAt}
+              onDragEnd={onDragEnd}
+              onBoxSelect={onBoxSelect}
             />
           </div>)}
         </div>

@@ -1,5 +1,7 @@
 export * from "./types"
 export * from "./intersections"
+export * from "./snap-geometry"
+export * from "./selection"
 export * from "./evaluate"
 export * from "./expression"
 export * from "./function-presets"
