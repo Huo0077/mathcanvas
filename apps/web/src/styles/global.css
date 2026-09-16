@@ -79,9 +79,21 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .canvas-card svg { display: block; width: 100%; height: auto; border-radius: var(--radius-sm); background: #fbfcff; touch-action: none; }
 .canvas-card svg [data-hit-target="true"] { cursor: grab; }
 .canvas-card svg.is-dragging, .canvas-card svg.is-dragging [data-hit-target="true"], .canvas-card svg.is-panning { cursor: grabbing; }
-.engineering-drawing { position: relative; flex: 1 1 auto; width: 100%; height: 100%; min-width: 0; min-height: 0; padding: 0; overflow: hidden; background: var(--color-canvas); --drawing-toolbar-height: 48px; }
-/* 工具栏是"画布的工具"，不是图纸的一部分：紧凑段控件居左，比例读数居右。 */
-.engineering-drawing-toolbar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); height: var(--drawing-toolbar-height); padding: 0 var(--space-4); background: var(--color-panel); border-bottom: 1px solid var(--color-border); }
+.engineering-drawing { position: relative; display: flex; flex-direction: column; flex: 1 1 auto; width: 100%; height: 100%; min-width: 0; min-height: 0; padding: 0; overflow: hidden; background: var(--color-canvas); --drawing-toolbar-height: 48px; }
+/* 工具栏是普通流里的一行：它占多少高度，制图台面就少多少。不要再给纸区加同样的 inset 偏移，否则高度被算两次。 */
+/* 工具栏固定单行：它每高 50px，制图台面就矮 50px，纸张随之变小。
+   窄屏放不下时让命令组横向滚动，而不是换行把纸挤小。 */
+.engineering-drawing-toolbar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); flex: 0 0 auto; flex-wrap: nowrap; min-height: var(--drawing-toolbar-height); padding: var(--space-1) var(--space-3); background: var(--color-panel); border-bottom: 1px solid var(--color-border); }
+.drawing-toolbar-group { display: flex; align-items: center; gap: var(--space-1); flex: 1 1 auto; min-width: 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
+/* 组内元素不收缩：空间不够时横向滚动，而不是挤压后换行把制图台面顶高。 */
+.drawing-toolbar-group > * { flex: 0 0 auto; }
+.drawing-toolbar-hint { color: var(--color-muted); font-size: 0.68rem; white-space: nowrap; }
+@media (max-width: 1400px) { .drawing-toolbar-hint { display: none; } }
+/* 工具条上的小标签输入：标签在左、输入框固定宽，键盘流与图纸内完全一致。 */
+.drawing-toolbar-field { display: inline-flex; align-items: center; gap: var(--space-1); color: var(--color-muted); font-size: 0.7rem; white-space: nowrap; }
+.drawing-toolbar-field input { width: 78px; min-height: 28px; padding: 0 var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface-subtle); color: var(--color-ink); font-size: 0.72rem; font-variant-numeric: tabular-nums; }
+.drawing-toolbar-field input:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+.drawing-toolbar-field input::placeholder { color: var(--color-muted); }
 .drawing-toolbar-group { display: flex; align-items: center; gap: var(--space-1); }
 .engineering-drawing-toolbar button { min-height: 30px; padding: 0 var(--space-3); border: 1px solid transparent; border-radius: 999px; background: transparent; color: var(--color-muted); font-size: 0.76rem; font-weight: 600; cursor: pointer; }
 .engineering-drawing-toolbar button:hover { background: var(--color-panel); color: var(--color-ink); }
@@ -91,10 +103,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .drawing-zoom-readout { display: inline-flex; align-items: baseline; gap: var(--space-2); color: var(--color-muted); font-size: 0.72rem; }
 .drawing-zoom-readout strong { color: var(--color-ink); font-size: 0.78rem; font-variant-numeric: tabular-nums; }
 /* 4px 制图底纹：极淡的格线让"画布"读成一个工作台面，而不是一块空白 div。 */
-/* 24px 制图底纹：极淡的格线让"画布"读成一个工作台面，而不是一块空白 div。
-   内边距 + margin:auto 居中；fit 状态下不出滚动条（否则滚动条会反过来改变用于 fit 的尺寸），
-   放大超过一屏后才切成可滚动，于是"整张纸"仍然可及。 */
-.drawing-sheet-area { position: absolute; inset: var(--drawing-toolbar-height) 0 0; display: flex; padding: var(--space-4); overflow: hidden; background-color: var(--color-drafting-surface); background-image: linear-gradient(to right, var(--color-drafting-grid) 1px, transparent 1px), linear-gradient(to bottom, var(--color-drafting-grid) 1px, transparent 1px); background-size: 24px 24px, 24px 24px; box-shadow: inset 0 1px 3px rgb(30 36 56 / 7%); }
+/* 制图台面：占满工具栏之后剩余的全部高度（flex 占位，不用 inset）。内边距 + margin:auto 让纸张居中，
+   fit 状态不出滚动条（否则滚动条会反过来改变用于 fit 的尺寸），放大超过一屏后才切成可滚动。 */
+.drawing-sheet-area { position: relative; display: flex; flex: 1 1 auto; padding: var(--space-4); overflow: hidden; background-color: var(--color-drafting-surface); background-image: linear-gradient(to right, var(--color-drafting-grid) 1px, transparent 1px), linear-gradient(to bottom, var(--color-drafting-grid) 1px, transparent 1px); background-size: 24px 24px, 24px 24px; box-shadow: inset 0 1px 3px rgb(30 36 56 / 7%); }
 .drawing-sheet-area[data-zoomed="true"] { overflow: auto; }
 .drawing-sheet-area[data-zoomed="true"] { cursor: grab; }
 .drawing-sheet-area[data-zoomed="true"]:active { cursor: grabbing; }

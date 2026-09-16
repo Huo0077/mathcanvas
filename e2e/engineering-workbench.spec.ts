@@ -384,3 +384,59 @@ test("fills the drafting area with the sheet and keeps an explicit display scale
   expect(refitted.scale).toBeCloseTo(fitted.scale, 2)
   expect(await page.locator(".drawing-sheet-area").evaluate((element) => element.scrollHeight <= element.clientHeight + 1)).toBe(true)
 })
+
+test("keeps the 2D drafting commands on the toolbar, off the drawing surface", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "工程制图" }).click()
+  await page.getByRole("button", { name: "2D 绘图" }).click()
+  await page.waitForSelector(".drawing-sheet")
+  await expect(page.getByLabel("坐标输入")).toBeVisible()
+
+  const layout = async () => page.evaluate(() => {
+    const rect = (element: Element | null) => {
+      if (!element) return null
+      const box = element.getBoundingClientRect()
+      return { x: Math.round(box.x), y: Math.round(box.y), right: Math.round(box.right), bottom: Math.round(box.bottom), w: Math.round(box.width), h: Math.round(box.height) }
+    }
+    const toolbar = document.querySelector(".engineering-drawing-toolbar")
+    const sheetArea = document.querySelector(".drawing-sheet-area")
+    const coordinate = document.querySelector('input[aria-label="坐标输入"]')
+    return {
+      toolbar: rect(toolbar),
+      sheetArea: rect(sheetArea),
+      coordinate: rect(coordinate),
+      coordinateInsideSheet: Boolean(sheetArea && coordinate && sheetArea.contains(coordinate)),
+      offsetInsideSheet: Boolean(sheetArea?.querySelector('[data-draft-edit="offset"]')),
+      sheetScale: Number(document.querySelector(".drawing-sheet")?.getAttribute("data-sheet-scale")),
+      toolbarCount: document.querySelectorAll(".engineering-drawing-toolbar").length
+    }
+  })
+
+  const before = await layout()
+  // 只有一条工具栏；命令区在图纸之上，绝不在纸内（纸内的控件会随 CSS zoom 一起放大并压住画布）。
+  expect(before.toolbarCount).toBe(1)
+  expect(before.coordinate).not.toBeNull()
+  expect(before.coordinateInsideSheet).toBe(false)
+  expect(before.offsetInsideSheet).toBe(false)
+  expect(before.toolbar!.bottom).toBeLessThanOrEqual(before.sheetArea!.y + 1)
+  expect(before.coordinate!.bottom).toBeLessThanOrEqual(before.toolbar!.bottom)
+  // 工具栏保持单行（约 48px）：它每高一行，纸张就小一圈。A4 纸张有最小尺寸，所以适配比例可能小于 1。
+  expect(before.toolbar!.h).toBeLessThanOrEqual(60)
+  expect(before.sheetScale).toBeGreaterThan(0.5)
+
+  // 开始创建后，长度/角度动态输入也出现在同一条工具栏上。
+  await page.getByRole("button", { name: "添加直线", exact: true }).click()
+  await page.getByLabel("坐标输入").fill("0,0")
+  await page.getByLabel("坐标输入").press("Enter")
+  await expect(page.getByLabel("输入长度")).toBeVisible()
+  await expect(page.getByLabel("输入角度")).toBeVisible()
+  const after = await layout()
+  expect(after.coordinateInsideSheet).toBe(false)
+  expect(after.toolbar!.h).toBeLessThanOrEqual(60)
+
+  // 工具栏上的命令依然能用：敲相对坐标即可落点成线。
+  await page.getByLabel("坐标输入").fill("@40<0")
+  await page.getByLabel("坐标输入").press("Enter")
+  await expect(page.locator(".engineering-drawing-draft")).toHaveCount(1)
+  await expect(page.getByRole("alert")).toHaveCount(0)
+})

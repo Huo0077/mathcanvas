@@ -1,4 +1,4 @@
-import { useMemo, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react"
 
 import type { DrawingViewSpec, GeometryDocument, PrimitiveSpec } from "@draw/dsl"
 
@@ -24,6 +24,7 @@ import {
   type SnapCandidate,
   type SnapKind
 } from "../drafting"
+import type { DraftControls as DraftControlsContract } from "./DraftControlsRow"
 import type { BoxSelectionMode, SelectionBox } from "@draw/geometry-kernel"
 import type { GeometryEditRequest } from "../draftEditing"
 import { applyAngle, applyDistance, parseDraftAngle, parseDraftCoordinate, parseDraftDistance } from "../draftCoordinate"
@@ -42,9 +43,6 @@ export interface DraftCreation {
   points?: DraftPoint[]
 }
 
-/** 角度约束：自由 / 临时正交（Shift）/ 常驻正交 / 45° 极轴追踪。 */
-type DraftConstraint = "free" | "ortho" | "polar45"
-
 /** 极轴追踪的吸附阈值：指针偏离射线超过这个角度就保持自由落点。 */
 const DRAFT_POLAR_THRESHOLD_DEGREES = 4
 
@@ -56,6 +54,15 @@ function formatNumber(value: number): string {
 /** 夹点捕捉半径（屏幕像素）与夹点视觉半径（按约 520px 宽的视口折算成窗口单位）。 */
 const DRAFT_GRIP_PIXELS = 8
 const DRAFT_GRIP_RADIUS_RATIO = 6 / 520
+
+/**
+ * 2D 绘图的命令区由 DrawingViewport 持有状态，但**渲染在图纸之外**的工具栏里（见 `DraftControlsRow`）：
+ * 这些控件如果留在图纸坐标系内，会随图纸一起缩放并与画布内容重叠。
+ */
+export type { DraftControls } from "./DraftControlsRow"
+
+/** 角度约束模式：自由 → 正交 → 45° 极轴。 */
+export type DraftConstraint = "free" | "ortho" | "polar45"
 
 interface DrawingViewportProps {
   view: DrawingViewSpec
@@ -79,6 +86,13 @@ interface DrawingViewportProps {
   onBoxSelect?: (box: SelectionBox, mode: BoxSelectionMode) => void
   /** 偏移 / 修剪 / 延伸：视口只发请求，几何与补丁由 App + draftEditing 负责。 */
   onEditSelected?: (request: GeometryEditRequest) => void
+  /** 把命令区的渲染交给外层工具条；不传时保持在视口内（测试与独立用法）。 */
+  onDraftControls?: (controls: DraftControlsContract | null) => void
+  /**
+   * 工具条已经接管命令区：此时**任何**视口都不在图纸内渲染命令，避免出现两份输入框。
+   * 与 `onDraftControls` 的区别是它只表示"由外层负责"，不需要上报。
+   */
+  draftControlsHandledExternally?: boolean
 }
 
 const drawingMetrics = {
@@ -282,7 +296,7 @@ function renderCreationPreview(creation: DraftCreation, hover: DraftPoint, span:
   return <line {...common} x1={anchor.x} y1={-anchor.y} x2={hover.x} y2={-hover.y} />
 }
 
-export function DrawingViewport({ view, sheetName, mode, document, selectedIds, active = false, projectedDrawing = null, creation = null, projectionLinesOverride, onSelect, onActivate, onLayoutChange, onCreateAt, onDragEnd, onBoxSelect, onEditSelected }: DrawingViewportProps) {
+export function DrawingViewport({ view, sheetName, mode, document, selectedIds, active = false, projectedDrawing = null, creation = null, projectionLinesOverride, onSelect, onActivate, onLayoutChange, onCreateAt, onDragEnd, onBoxSelect, onEditSelected, onDraftControls, draftControlsHandledExternally = false }: DrawingViewportProps) {
   const label = drawingViewLabels[view.kind]
   const title = `${sheetName} · ${label}`
   const [hover, setHover] = useState<DraftHover | null>(null)
@@ -296,6 +310,14 @@ export function DrawingViewport({ view, sheetName, mode, document, selectedIds, 
   const [dynamicAngle, setDynamicAngle] = useState("")
   const [coordinateError, setCoordinateError] = useState<string | null>(null)
   const [offsetDistance, setOffsetDistance] = useState("5")
+  /** 上一次上报给工具条的命令区状态，用于按值去重（指针移动只改 placeholder）。 */
+  const lastPublishedRef = useRef<DraftControlsContract | null>(null)
+  /** 最新一次指针与落点回调：命令区的回调保持稳定引用，避免发布 effect 每帧重跑。 */
+  const hoverRef = useRef<DraftHover | null>(null)
+  const onCreateAtRef = useRef(onCreateAt)
+  onCreateAtRef.current = onCreateAt
+  const onEditSelectedRef = useRef(onEditSelected)
+  onEditSelectedRef.current = onEditSelected
 
   /**
    * 拖动期间用临时文档做预览（与数学画布同一套做法）：`applyOperation` 会顺带重算派生对象，
@@ -480,39 +502,98 @@ export function DrawingViewport({ view, sheetName, mode, document, selectedIds, 
       return
     }
     // 指针移动重新解析时把候选序号复位到最优候选。
-    setHover(resolvePointer(event.currentTarget, event.clientX, event.clientY, event.shiftKey, 0))
+    const resolved = resolvePointer(event.currentTarget, event.clientX, event.clientY, event.shiftKey, 0)
+    hoverRef.current = resolved
+    setHover(resolved)
   }
 
   /** 命令行坐标：绝对 / 相对 / 极坐标都走这里，落点走与鼠标点击同一条 `onCreateAt` 路径。 */
-  const submitCoordinate = () => {
-    if (!onCreateAt) return
+  const submitCoordinate = useCallback(() => {
+    const create = onCreateAtRef.current
+    if (!create) return
     const result = parseDraftCoordinate(coordinateDraft, { last: anchor })
     if (!result.ok) { setCoordinateError(result.error); return }
     setCoordinateError(null)
     setCoordinateDraft("")
     setDynamicDistance("")
     setDynamicAngle("")
-    onCreateAt(result.point)
-  }
+    create(result.point)
+  }, [coordinateDraft, anchor])
 
   /** 动态输入：只改长度或只改角度，另一次元沿用当前指针（AutoCAD 的动态输入语义）。 */
-  const submitDistance = () => {
-    if (!onCreateAt || !anchor) return
+  const submitDistance = useCallback(() => {
+    const create = onCreateAtRef.current
+    if (!create || !anchor) return
     const result = parseDraftDistance(dynamicDistance)
     if (!result.ok) { setCoordinateError(result.error); return }
     setCoordinateError(null)
     setDynamicDistance("")
-    onCreateAt(applyDistance(anchor, hover?.point ?? anchor, result.value))
-  }
+    create(applyDistance(anchor, hoverRef.current?.point ?? anchor, result.value))
+  }, [anchor, dynamicDistance])
 
-  const submitAngle = () => {
-    if (!onCreateAt || !anchor) return
+  const submitAngle = useCallback(() => {
+    const create = onCreateAtRef.current
+    if (!create || !anchor) return
     const result = parseDraftAngle(dynamicAngle)
     if (!result.ok) { setCoordinateError(result.error); return }
     setCoordinateError(null)
     setDynamicAngle("")
-    onCreateAt(applyAngle(anchor, hover?.point ?? anchor, result.value))
-  }
+    create(applyAngle(anchor, hoverRef.current?.point ?? anchor, result.value))
+  }, [anchor, dynamicAngle])
+
+  /**
+   * 把命令区交给外层工具条（图纸之外）。视口内的 `resolvePointer` / `submit*` 都依赖 svg 的实时矩形，
+   * 所以坐标输入仍走同一条 `onCreateAt` 路径；这里只交出状态与回调，不改变任何落点语义。
+   * 指针每移动一次 placeholder 就会变，所以按值比较后再上报，避免父层无意义重渲染（也更省一次布局）。
+   */
+  useEffect(() => {
+    if (!onDraftControls) return
+    if (mode !== "draft") { onDraftControls(null); return }
+    const measurement = anchor ? draftMeasurement(anchor, hover?.point ?? anchor) : null
+    const next: DraftControlsContract = {
+      constraint,
+      cycleConstraint: () => setConstraint((current) => current === "free" ? "ortho" : current === "ortho" ? "polar45" : "free"),
+      gridSnap,
+      toggleGridSnap: () => setGridSnap((current) => !current),
+      coordinateDraft,
+      setCoordinateDraft: (value) => { setCoordinateDraft(value); setCoordinateError(null) },
+      dynamicDistance,
+      setDynamicDistance: (value) => { setDynamicDistance(value); setCoordinateError(null) },
+      dynamicAngle,
+      setDynamicAngle: (value) => { setDynamicAngle(value); setCoordinateError(null) },
+      offsetDistance,
+      setOffsetDistance,
+      hasAnchor: Boolean(anchor),
+      lengthPlaceholder: measurement ? formatNumber(measurement.length) : "—",
+      anglePlaceholder: measurement ? formatNumber(measurement.angleDeg) : "—",
+      submitCoordinate,
+      submitDistance,
+      submitAngle,
+      coordinateError,
+      canEdit: Boolean(onEditSelectedRef.current),
+      offsetEnabled: selectedIds.length === 1,
+      trimExtendEnabled: selectedIds.length === 2,
+      applyEdit: (request) => onEditSelectedRef.current?.(request),
+      selectedCount: selectedIds.length
+    }
+    const previous = lastPublishedRef.current
+    if (previous
+      && previous.constraint === next.constraint
+      && previous.gridSnap === next.gridSnap
+      && previous.coordinateDraft === next.coordinateDraft
+      && previous.dynamicDistance === next.dynamicDistance
+      && previous.dynamicAngle === next.dynamicAngle
+      && previous.offsetDistance === next.offsetDistance
+      && previous.hasAnchor === next.hasAnchor
+      && previous.lengthPlaceholder === next.lengthPlaceholder
+      && previous.anglePlaceholder === next.anglePlaceholder
+      && previous.coordinateError === next.coordinateError
+      && previous.canEdit === next.canEdit
+      && previous.offsetEnabled === next.offsetEnabled
+      && previous.trimExtendEnabled === next.trimExtendEnabled) return
+    lastPublishedRef.current = next
+    onDraftControls(next)
+  }, [onDraftControls, mode, constraint, gridSnap, coordinateDraft, dynamicDistance, dynamicAngle, offsetDistance, anchor, hover, coordinateError, selectedIds.length, submitCoordinate, submitDistance, submitAngle])
 
   const gridLines = (step: number, keyPrefix: string) => {
     const vertical: React.ReactNode[] = []
@@ -551,16 +632,14 @@ export function DrawingViewport({ view, sheetName, mode, document, selectedIds, 
       <div className="drawing-viewport-label"><span>工程视图</span><h3>{label}</h3></div>
       <span className="engineering-drawing-panel-status">{statusText}</span>
       <div className="drawing-viewport-actions">
-        {mode === "draft" && <button type="button" aria-label="切换角度约束" aria-pressed={constraint !== "free"} data-draft-constraint={constraint} title="自由 → 正交 → 45° 极轴；按住 Shift 可临时正交" onClick={() => setConstraint((current) => current === "free" ? "ortho" : current === "ortho" ? "polar45" : "free")}>{constraint === "free" ? "自由" : constraint === "ortho" ? "正交" : "45° 极轴"}</button>}
-        {mode === "draft" && <button type="button" aria-label="切换栅格捕捉" aria-pressed={gridSnap} data-draft-grid-snap={gridSnap ? "on" : "off"} title="把落点对齐到最细可见网格；对象捕捉仍然优先" onClick={() => setGridSnap((current) => !current)}>栅格捕捉</button>}
+        {/* 角度约束与栅格捕捉现在只在图纸之外的工具栏上有一份（见 DraftControlsRow）；这里不再重复渲染。 */}
         <button type="button" aria-label={`缩小 ${label}`} disabled={view.scale <= 0.1} onClick={() => changeScale(-0.5)}>−</button>
         <button type="button" aria-label={`放大 ${label}`} onClick={() => changeScale(0.5)}>＋</button>
         <button className="icon-button" type="button" aria-label={`${view.visible === false ? "显示" : "隐藏"} ${label}`} aria-pressed={view.visible === false} onClick={() => onLayoutChange?.(view.id, { visible: view.visible === false })}><TreeEyeIcon visible={view.visible !== false} /></button>
       </div>
     </div>
-    {/* 命令行与动态输入放在视口工具栏而不是光标旁：图纸带 CSS zoom，光标旁的浮层定位与清晰度都不稳，
-       这里换取可测、可控，并且键盘流（输入→回车）完全一致。 */}
-    {mode === "draft" && <div className="drawing-viewport-input" data-draft-input="true">
+    {/* 命令行 / 动态输入 / 修改命令渲染在图纸之外的工具栏（见 DraftControls）：放在图纸坐标系里会随缩放重叠。 */}
+    {mode === "draft" && !onDraftControls && !draftControlsHandledExternally && <div className="drawing-viewport-input" data-draft-input="true">
       <label><span>坐标</span><input aria-label="坐标输入" value={coordinateDraft} placeholder="10,20 / @10,5 / @20<45" onChange={(event) => { setCoordinateDraft(event.target.value); setCoordinateError(null) }} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); submitCoordinate() } }} /></label>
       {anchor && <>
         <label><span>长度</span><input aria-label="输入长度" value={dynamicDistance} placeholder={hover ? formatNumber(draftMeasurement(anchor, hover.point).length) : "—"} onChange={(event) => { setDynamicDistance(event.target.value); setCoordinateError(null) }} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); submitDistance() } }} /></label>
@@ -569,8 +648,7 @@ export function DrawingViewport({ view, sheetName, mode, document, selectedIds, 
       </>}
       {coordinateError && <span className="drawing-viewport-input-error" role="alert">{coordinateError}</span>}
     </div>}
-    {/* 修改类操作：偏移（新建平行对象）、修剪/延伸（原地改几何）。规则写在按钮提示里，不做隐式猜测。 */}
-    {mode === "draft" && onEditSelected && <div className="drawing-viewport-input" data-draft-edit-row="true">
+    {mode === "draft" && !onDraftControls && !draftControlsHandledExternally && onEditSelected && <div className="drawing-viewport-input" data-draft-edit-row="true">
       <label><span>偏移距离</span><input aria-label="偏移距离" value={offsetDistance} onChange={(event) => setOffsetDistance(event.target.value)} /></label>
       <button type="button" data-draft-edit="offset" disabled={selectedIds.length !== 1} title="按偏移距离新建一个平行对象（正值在行进方向左侧，负值在右侧）；需恰好选中一个图元" onClick={() => { const distance = Number(offsetDistance); onEditSelected({ kind: "offset", distance: Number.isFinite(distance) ? distance : 0 }) }}>偏移</button>
       <button type="button" data-draft-edit="trim" disabled={selectedIds.length !== 2} title="先选边界、再选被修剪的对象；保留目标 a 端所在的一半" onClick={() => onEditSelected({ kind: "trim" })}>修剪</button>

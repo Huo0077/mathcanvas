@@ -1,10 +1,11 @@
-import { fireEvent, render, screen } from "@testing-library/react"
+import { act, fireEvent, render, screen } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
 
 import { createEmptyDocument, type DrawingViewSpec, type GeometryDocument } from "@draw/dsl"
 
 import { resolveProjectedDrawing } from "../projectionVisuals"
 import { DrawingViewport } from "./DrawingViewport"
+import type { DraftControls } from "./DraftControlsRow"
 
 const projectionView: DrawingViewSpec = { id: "view-front", kind: "front", x: 0, y: 0, width: 300, height: 220, scale: 1, visible: true, showProjectionLines: false }
 const draftView: DrawingViewSpec = { id: "view-model", kind: "model", x: 0, y: 0, width: 300, height: 220, scale: 1, visible: true, showProjectionLines: false }
@@ -196,7 +197,9 @@ describe("drawing viewport", () => {
 
   it("snaps free placement to the grid only while grid snapping is on", () => {
     const onCreateAt = vi.fn()
-    render(<DrawingViewport view={draftView} sheetName="工程图纸" mode="draft" document={createEmptyDocument("cad")} selectedIds={[]} onSelect={() => {}} onCreateAt={onCreateAt} />)
+    // 栅格捕捉开关现在渲染在图纸之外的工具栏上（DraftControlsRow）；视口只上报状态与回调。
+    const published: { current: DraftControls | null } = { current: null }
+    render(<DrawingViewport view={draftView} sheetName="工程图纸" mode="draft" document={createEmptyDocument("cad")} selectedIds={[]} onSelect={() => {}} onCreateAt={onCreateAt} onDraftControls={(controls) => { published.current = controls }} />)
     const svg = screen.getByRole("img", { name: /模型视图/ })
     svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 400, height: 400, right: 400, bottom: 400, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect
 
@@ -204,10 +207,9 @@ describe("drawing viewport", () => {
     fireEvent.click(svg, { clientX: 292, clientY: 228 })
     expect(onCreateAt).toHaveBeenCalledWith({ x: 23, y: -7 })
 
-    const toggle = screen.getByRole("button", { name: "切换栅格捕捉" })
-    expect(toggle.getAttribute("data-draft-grid-snap")).toBe("off")
-    fireEvent.click(toggle)
-    expect(toggle.getAttribute("data-draft-grid-snap")).toBe("on")
+    expect(published.current?.gridSnap).toBe(false)
+    act(() => published.current?.toggleGridSnap())
+    expect(published.current?.gridSnap).toBe(true)
 
     onCreateAt.mockClear()
     fireEvent.click(svg, { clientX: 292, clientY: 228 })
@@ -222,11 +224,12 @@ describe("drawing viewport", () => {
       // 端点故意落在非整格坐标上，这样"吸到端点"与"吸到网格"能被区分开。
       primitives: [{ id: "segment-1", type: "segment", a: { x: 3.5, y: 7.25 }, b: { x: 13.5, y: 7.25 }, label: "线段 1" }]
     }
-    render(<DrawingViewport view={draftView} sheetName="工程图纸" mode="draft" document={document} selectedIds={[]} onSelect={() => {}} onCreateAt={onCreateAt} />)
+    const published: { current: DraftControls | null } = { current: null }
+    render(<DrawingViewport view={draftView} sheetName="工程图纸" mode="draft" document={document} selectedIds={[]} onSelect={() => {}} onCreateAt={onCreateAt} onDraftControls={(controls) => { published.current = controls }} />)
     const svg = screen.getByRole("img", { name: /模型视图/ })
     svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 400, height: 400, right: 400, bottom: 400, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect
 
-    fireEvent.click(screen.getByRole("button", { name: "切换栅格捕捉" }))
+    act(() => published.current?.toggleGridSnap())
     fireEvent.click(svg, { clientX: 214, clientY: 171 })
 
     expect(onCreateAt).toHaveBeenCalledWith({ x: 3.5, y: 7.25 })

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react"
+import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
 
 import { createEmptyDocument, type DrawingSheetSpec, type DrawingViewSpec, type GeometryDocument } from "@draw/dsl"
@@ -6,6 +6,7 @@ import { createEmptyDocument, type DrawingSheetSpec, type DrawingViewSpec, type 
 import { resolveProjectedDrawing } from "../projectionVisuals"
 import { sheetFitScale, sheetPaperSize } from "../drawingGeometry"
 import { DrawingSheetView } from "./DrawingSheetView"
+import { DraftControlsRow, type DraftControls } from "./DraftControlsRow"
 
 const sheet: DrawingSheetSpec = { id: "sheet-1", name: "工程图纸", paper: "A4", orientation: "landscape", scale: 1, viewIds: ["view-front", "view-top"] }
 
@@ -18,20 +19,25 @@ function pointDocument(): GeometryDocument {
   return { ...createEmptyDocument("cad"), primitives: [{ id: "point3-1", type: "point3", position: { x: 2, y: 3, z: 4 }, label: "A" }] }
 }
 
-function renderSheet(overrides: { document?: GeometryDocument; activeViewId?: string | null } = {}) {
+function renderSheet(overrides: { document?: GeometryDocument; activeViewId?: string | null; mode?: "projection" | "draft" } = {}) {
   const document = overrides.document ?? pointDocument()
-  const handlers = { onSelect: vi.fn(), onViewSelect: vi.fn(), onViewLayoutChange: vi.fn(), onCreateAt: vi.fn() }
-  render(<DrawingSheetView
+  const handlers = { onSelect: vi.fn(), onViewSelect: vi.fn(), onViewLayoutChange: vi.fn(), onCreateAt: vi.fn(), onEditSelected: vi.fn() }
+  /** 命令区渲染在这条图纸之外的工具栏里；用与 App 相同的插槽接上去，并用观察者记录上报的状态。 */
+  const published: { current: DraftControls | null } = { current: null }
+  const isDraft = overrides.mode === "draft"
+  const view = render(<DrawingSheetView
     sheet={sheet}
     views={views}
     document={document}
     selectedIds={[]}
-    mode="projection"
+    mode={overrides.mode ?? "projection"}
     projectedDrawings={[resolveProjectedDrawing(document, "front"), resolveProjectedDrawing(document, "top")]}
     activeViewId={overrides.activeViewId ?? null}
+    onDraftControlsChange={isDraft ? (controls) => { published.current = controls } : undefined}
+    draftControlsSlot={isDraft ? (controls) => <DraftControlsRow controls={controls} /> : undefined}
     {...handlers}
   />)
-  return handlers
+  return { ...handlers, published, container: view.container }
 }
 
 describe("drawing sheet view", () => {
@@ -112,6 +118,27 @@ describe("drawing sheet view", () => {
     // jsdom has no layout, so the measured box is empty and the sheet stays at 1:1.
     expect(paper.dataset.sheetFit).toBe("1.000")
     expect(paper.style.zoom).toBe("1")
+  })
+
+  it("renders the drafting commands on the toolbar, never inside the paper", async () => {
+    // The command row used to live inside the paper, where CSS zoom both scaled it and let it overlap the
+    // canvas. It must render on the toolbar (outside .drawing-sheet-area) and never inside the sheet.
+    // The row appears one effect pass after mount: the viewport publishes, then the toolbar renders it.
+    const { published, container } = renderSheet({ mode: "draft" })
+
+    // Scope to THIS render's container: the file mounts several sheets and every render stays in the DOM.
+    const root = container.querySelector(".engineering-drawing") as HTMLElement
+    const toolbar = root.querySelector(".engineering-drawing-toolbar") as HTMLElement
+    const sheetArea = root.querySelector(".drawing-sheet-area") as HTMLElement
+
+    await waitFor(() => expect(root.querySelectorAll('input[aria-label="坐标输入"]')).toHaveLength(1))
+    const coordinate = root.querySelectorAll('input[aria-label="坐标输入"]')
+    expect(toolbar.contains(coordinate[0])).toBe(true)
+    expect(sheetArea.querySelectorAll('input[aria-label="坐标输入"]')).toHaveLength(0)
+    expect(sheetArea.querySelector('[data-draft-edit="offset"]')).toBeNull()
+    // ...and the viewport published its state so the toolbar could render it.
+    expect(published.current).not.toBeNull()
+    expect(typeof published.current?.submitCoordinate).toBe("function")
   })
 
   it("gives the automatic fit an explicit zoom the user can override and reset", () => {

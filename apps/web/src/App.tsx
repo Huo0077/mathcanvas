@@ -9,6 +9,7 @@ import { AlgebraView } from "./components/AlgebraView"
 import { AppChrome } from "./components/AppChrome"
 import { DocumentTreePanel } from "./components/DocumentTreePanel"
 import { DrawingSheetView } from "./components/DrawingSheetView"
+import { DraftControlsRow, type DraftControls } from "./components/DraftControlsRow"
 import { DrawingTree } from "./components/DrawingTree"
 import type { DrawingViewPatch } from "./components/DrawingViewport"
 import { EngineeringDrawingView } from "./components/EngineeringDrawingView"
@@ -141,6 +142,8 @@ export function App() {
   const [layerNotice, setLayerNotice] = useState<string | null>(null)
   const [sceneControl, setSceneControl] = useState<SceneControlMode | null>(null)
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("data")
+  /** 2D 绘图命令区（坐标/动态输入/约束/栅格/偏移）由活动绘图视口上报，渲染在图纸之外的工具栏上。 */
+  const [draftControls, setDraftControls] = useState<DraftControls | null>(null)
   const [activeRibbonTab, setActiveRibbonTab] = useState<RibbonTabId | null>("home")
   const [ribbonExpanded, setRibbonExpanded] = useState(true)
   const [ribbonPinned, setRibbonPinned] = useState(false)
@@ -854,6 +857,9 @@ export function App() {
         onDragEnd={handleDragEnd}
         onBoxSelect={selectBox}
         onEditSelected={editSelectedGeometry}
+        onDraftControlsChange={setDraftControls}
+        draftControlsSlot={(controls) => <DraftControlsRow controls={controls} />}
+        draftControlsHandledExternally
         onSelect={updateSelection}
         onViewSelect={setActiveViewId}
         onViewLayoutChange={handleViewLayoutChange}
