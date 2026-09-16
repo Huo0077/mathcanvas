@@ -24,6 +24,12 @@ export interface IntersectionPreview {
   classification: string
   label: string
   reason?: string
+  /**
+   * 截面预览的剖切面与来源实体。只有边界点时画布上只看到一条交线，看不出"切在哪"；
+   * 画布据此再画一块半透明剖切面片，也据此让"拖动截面 = 沿法向挪刀口"成立。
+   */
+  plane?: { normal: Vector3; constant: number }
+  sourceId?: string
 }
 
 const SOLID_TYPES = ["cube", "pyramid", "cylinder", "cone", "polyhedron3"]
@@ -91,7 +97,10 @@ export function resolveIntersectionPreview(document: GeometryDocument, selectedI
     segments: [],
     points: result.points,
     classification: result.status,
-    label: result.status === "point" ? "默认剖切平面截面 · 1 点" : result.status === "segment" ? "默认剖切平面截面 · 1 段" : `默认剖切平面截面 · ${result.points.length} 边形`
+    label: result.status === "point" ? "默认剖切平面截面 · 1 点" : result.status === "segment" ? "默认剖切平面截面 · 1 段" : `默认剖切平面截面 · ${result.points.length} 边形`,
+    // The boundary alone does not say where the cut is; the plane is what the canvas draws as a patch.
+    plane,
+    sourceId: single.id
   }
 }
 

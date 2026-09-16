@@ -1,7 +1,7 @@
 import { validateDocument, type AnnotationSpec, type ConstraintSpec, type EngineeringAnnotation, type GeometryDocument, type Measurement3, type PrimitiveSpec } from "@draw/dsl"
 import { parseExpression } from "@draw/geometry-kernel"
 
-import { applyOperation, deletionTargets, layerDescendantIds, type DomainOperation } from "./operations"
+import { applyOperation, deletionTargets, isFreeDraggable3, layerDescendantIds, templateTopologyIds, type DomainOperation } from "./operations"
 
 export type PatchValidationResult =
   | { valid: true }
@@ -292,6 +292,33 @@ export function validatePatch(document: GeometryDocument, operation: DomainOpera
     if (!primitive || ["intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection", "intersectionSet", "locus"].includes(primitive.type)) errors.push("object is not editable")
     if (primitive?.locked) errors.push("object is locked")
     if (!isCoordinate(operation.delta)) errors.push("translation must be finite")
+  }
+  if (operation.op === "translatePrimitive3") {
+    const primitive = document.primitives.find((candidate) => candidate.id === operation.id)
+    if (!primitive) errors.push("object not found")
+    else {
+      const points = new Map(document.primitives.filter((candidate): candidate is Extract<PrimitiveSpec, { type: "point3" }> => candidate.type === "point3").map((point) => [point.id, point]))
+      if (!isFreeDraggable3(primitive, points, templateTopologyIds(document))) errors.push("object is not draggable")
+    }
+    if (!isVector3(operation.delta)) errors.push("translation must be finite")
+  }
+  if (operation.op === "moveSectionPlane") {
+    const primitive = document.primitives.find((candidate) => candidate.id === operation.id)
+    if (!primitive || primitive.type !== "section") errors.push("section not found")
+    else if (primitive.locked) errors.push("object is locked")
+    if (!Number.isFinite(operation.distance)) errors.push("plane offset must be finite")
+  }
+  if (operation.op === "rotateSectionPlane" || operation.op === "setSectionPlane") {
+    const primitive = document.primitives.find((candidate) => candidate.id === operation.id)
+    if (!primitive || primitive.type !== "section") errors.push("section not found")
+    else if (primitive.locked) errors.push("object is locked")
+    if (operation.op === "rotateSectionPlane") {
+      if (!["x", "y", "z"].includes(operation.axis) || !Number.isFinite(operation.degrees)) errors.push("plane rotation is invalid")
+      if (operation.pivot !== undefined && !isVector3(operation.pivot)) errors.push("plane pivot must be finite")
+    } else {
+      if (!isVector3(operation.normal) || Math.hypot(operation.normal.x, operation.normal.y, operation.normal.z) < 1e-9) errors.push("plane normal is invalid")
+      if (!Number.isFinite(operation.constant)) errors.push("plane offset must be finite")
+    }
   }
   if (operation.op === "toggleLock" && !ids.has(operation.id)) errors.push("object not found")
   if (operation.op === "setParameter" && !Number.isFinite(operation.value)) errors.push("parameter value must be finite")

@@ -1,7 +1,7 @@
 export type PromptCreationMode = "line" | "segment" | "ray" | "polyline" | "circle" | "arc" | null
 
 /** Display control currently switched on in the 3D scene. They are temporary display state, never document state. */
-export type SceneControlMode = "normals" | "dihedral-demo"
+export type SceneControlMode = "normals" | "dihedral-demo" | "free-drag"
 
 interface StatusPromptState {
   mode: PromptCreationMode
@@ -19,6 +19,7 @@ interface StatusPromptState {
  */
 export function resolveSceneControlPrompt(sceneControl: SceneControlMode): string {
   if (sceneControl === "normals") return "法向量已显示：每个可见面的外法向量由面顶点顺序算出，随朝向和剖切结果一起更新。"
+  if (sceneControl === "free-drag") return "自由拖动已开启：左键按住图形整体移动（在屏幕平面内，深度不变）。实体、点、以及由点驱动的棱/线/面/平面都能拖；拖动时视角不会旋转。"
   return "这里显示的是坐标轴夹角的示例值，不读取你的选择；要测量实际二面角，请按住 Alt 点实体表面单独选两个面，再在右侧属性区点「二面角内角」或「二面角外角」。"
 }
 
@@ -30,7 +31,12 @@ export function resolveIntersectionPreviewPrompt(preview: { kind: string; label:
   if (!preview) return null
   if (preview.kind === "insufficient") return preview.reason ?? null
   if (preview.kind === "none") return null
-  if (preview.kind === "section") return `${preview.label}：这是穿过实体的默认剖切平面，点工具栏「创建截面」可保存为图元。`
+  if (preview.kind === "section") {
+    // "已选中…" itself carries information the user needs, so an un-hovered section preview must not
+    // replace it. The cut gets explained once the user actually points at it.
+    if (hovering) return `${preview.label}：点击即创建截面；创建后选中截面，在自由拖动模式下拖动或按方向键可移动剖切面。`
+    return null
+  }
   return hovering ? `${preview.label}：点击即可创建为截线图元。` : `${preview.label}：把指针移到虚线上可创建为截线图元。`
 }
 

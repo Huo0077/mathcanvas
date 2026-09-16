@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 
-import { decodeMgeo, encodeMgeo, type AnnotationFeature, type DrawingSheetSpec, type EngineeringAnnotationKind, type Measurement3Metric, type PrimitiveSpec, type Workspace } from "@draw/dsl"
+import { decodeMgeo, encodeMgeo, type AnnotationFeature, type DrawingSheetSpec, type EngineeringAnnotationKind, type Measurement3Metric, type PrimitiveSpec, type Vector3, type Workspace } from "@draw/dsl"
 import { buildSolidTemplate, createMeasurement3, selectPrimitivesInBox, type BoxSelectionMode } from "@draw/geometry-kernel"
-import { deletionTargets, sectionPlaneThroughSource, validatePatch } from "@draw/scene-graph"
+import { deletionTargets, sectionPivot, sectionPlaneThroughSource, sectionSourceVertices, validatePatch } from "@draw/scene-graph"
 import type { Alignment } from "@draw/scene-graph"
 
 import { AlgebraView } from "./components/AlgebraView"
@@ -157,10 +157,13 @@ export function App() {
   )
   /** 只有真正可画的两类才交给 3D 场景；`none` / `insufficient` 由状态栏解释原因。 */
   const drawablePreview = intersectionPreview?.kind === "intersection" || intersectionPreview?.kind === "section"
-    ? { kind: intersectionPreview.kind, segments: intersectionPreview.segments, points: intersectionPreview.points, label: intersectionPreview.label }
+    ? { kind: intersectionPreview.kind, segments: intersectionPreview.segments, points: intersectionPreview.points, label: intersectionPreview.label, plane: intersectionPreview.plane, sourceId: intersectionPreview.sourceId }
     : null
-  /** 单个实体的截面预览不抢状态栏（它指向既有的「创建截面」按钮，状态栏留给选择提示）。 */
-  const previewStatus = drawablePreview?.kind === "section" ? null : intersectionPreview
+  /**
+   * 截面预览同样要进状态栏：它指向既有的「创建截面」按钮，而"画布上这条虚线是什么"必须说出来，
+   * 否则用户看到一个不明所以的红色虚线圈。
+   */
+  const previewStatus = intersectionPreview
   const [activeRibbonTab, setActiveRibbonTab] = useState<RibbonTabId | null>("home")
   const [ribbonExpanded, setRibbonExpanded] = useState(true)
   const [ribbonPinned, setRibbonPinned] = useState(false)
@@ -506,6 +509,26 @@ export function App() {
     setSelectedIds([id])
     setGuidance(guidanceFor({ kind: "section" }))
   }
+  /**
+   * 剖切面绕**实体中心**旋转：绕平面自身垂足转会把刀口推出实体（实测平面到原点距离从 1.5 掉到 0.15），
+   * 而学生想要的"把刀口摆斜"是绕着图形转，倾斜后截面还要看得见。
+   */
+  const sectionPivotFor = (section: Extract<PrimitiveSpec, { type: "section" }>) => {
+    const source = document.primitives.find((primitive) => primitive.id === section.sourceId)
+    const vertices = sectionSourceVertices(document, section.sourceId)
+    return source && vertices.length > 0 ? sectionPivot(vertices) : null
+  }
+  const rotateSelectedSection = (axis: "x" | "y" | "z", degrees: number) => {
+    const section = document.workspace === "geometry3d" && selectedPrimitive?.type === "section" ? selectedPrimitive : null
+    if (!section) return
+    const pivot = sectionPivotFor(section)
+    apply({ op: "rotateSectionPlane", id: section.id, axis, degrees, ...(pivot ? { pivot } : {}) })
+  }
+  /** 「以面为剖切面」由 3D 场景在拾取到面后回调，这里只负责把平面落到选中的截面上。 */
+  const applySectionFace = (id: string, plane: { normal: Vector3; constant: number }) => {
+    apply({ op: "setSectionPlane", id, normal: plane.normal, constant: plane.constant })
+    setGuidance("已用该面作为剖切面：拖动截面或按方向键仍可沿新法向平移。")
+  }
   const createIntersectionFromPreview = (preview: IntersectionPreview) => {
     const first = document.primitives.find((primitive) => primitive.id === preview.objectA)
     const second = document.primitives.find((primitive) => primitive.id === preview.objectB)
@@ -819,7 +842,7 @@ export function App() {
 
   const planarCanvas = <GraphicsView document={document} selectedIds={selectedIds} creationMode={creationMode} onSelect={updateSelection} onBoxSelect={selectBox} onCanvasClick={handleCanvasCreationClick} onCanvasDoubleClick={handleCanvasDoubleClick} onDragEnd={handleDragEnd} onCreateIntersection={createIntersectionFromPreview} onPointerCoordinate={setPointerCoordinate} />
 
-  const propertiesBarProps: PropertiesBarProps = { selectedPrimitive, selectedIds, selectedCount: selectedIds.length, selectedGroupId: selectedGroup?.id ?? null, allSelectedVisible, canCreateIntersection, onCreateGroup: createGroup, onDeleteGroup: deleteGroup, onCreateIntersection: createIntersection, onAlign: alignSelection, onToggleSelectedVisibility: () => selectedId && apply({ op: "toggleVisibility", id: selectedId, visible: selectedPrimitive?.visible === false }), onToggleSelectedLock: () => selectedId && apply({ op: "toggleLock", id: selectedId, locked: !selectedPrimitive?.locked }), onDeleteSelected: deleteSelected, onToggleBatchVisibility: () => apply({ op: "setPrimitivesVisible", ids: selectedIds, visible: !allSelectedVisible }), onUpdatePrimitive: (patch) => selectedId && apply({ op: "updatePrimitive", id: selectedId, patch }), onAddAnnotation: addAnnotation, onAddEngineeringAnnotation: addEngineeringAnnotation, onCreateMeasurement: addMeasurement, onDeleteMeasurement: deleteMeasurement, onCreateDerivative: (sourceId) => addFunctionAnalysis(sourceId, "derivative"), onCreateTangent: (sourceId) => addFunctionAnalysis(sourceId, "tangent"), onCreateIntegral: (sourceId) => addFunctionAnalysis(sourceId, "integral"), value: slope?.value ?? 0.5, min: slope?.min ?? 0.15, max: slope?.max ?? 0.85, step: slope?.step ?? 0.05, onChange: (value) => apply({ op: "setParameter", id: "slope", value }) }
+  const propertiesBarProps: PropertiesBarProps = { selectedPrimitive, selectedIds, selectedCount: selectedIds.length, selectedGroupId: selectedGroup?.id ?? null, allSelectedVisible, canCreateIntersection, onCreateGroup: createGroup, onDeleteGroup: deleteGroup, onCreateIntersection: createIntersection, onAlign: alignSelection, onToggleSelectedVisibility: () => selectedId && apply({ op: "toggleVisibility", id: selectedId, visible: selectedPrimitive?.visible === false }), onToggleSelectedLock: () => selectedId && apply({ op: "toggleLock", id: selectedId, locked: !selectedPrimitive?.locked }), onDeleteSelected: deleteSelected, onToggleBatchVisibility: () => apply({ op: "setPrimitivesVisible", ids: selectedIds, visible: !allSelectedVisible }), onUpdatePrimitive: (patch) => selectedId && apply({ op: "updatePrimitive", id: selectedId, patch }), onRotateSection: rotateSelectedSection, onAddAnnotation: addAnnotation, onAddEngineeringAnnotation: addEngineeringAnnotation, onCreateMeasurement: addMeasurement, onDeleteMeasurement: deleteMeasurement, onCreateDerivative: (sourceId) => addFunctionAnalysis(sourceId, "derivative"), onCreateTangent: (sourceId) => addFunctionAnalysis(sourceId, "tangent"), onCreateIntegral: (sourceId) => addFunctionAnalysis(sourceId, "integral"), value: slope?.value ?? 0.5, min: slope?.min ?? 0.15, max: slope?.max ?? 0.85, step: slope?.step ?? 0.05, onChange: (value) => apply({ op: "setParameter", id: "slope", value }) }
 
   const propertiesPanel = <PropertiesBar {...propertiesBarProps} />
 
@@ -950,7 +973,7 @@ export function App() {
         <button type="button" aria-controls="properties-dock" aria-expanded={mobileDock === "properties"} onClick={() => setMobileDock((current) => current === "properties" ? null : "properties")}>属性检查器</button>
       </div>
       {algebraPanel}
-      {document.workspace === "geometry3d" ? <ThreeSceneView document={document} selectedIds={selectedIds} onSelect={updateSelection} onStatusPromptChange={setSceneControl} preview={drawablePreview} onPreviewHover={setPreviewHovered} onPreviewClick={createFromIntersectionPreview} /> : planarCanvas}
+      {document.workspace === "geometry3d" ? <ThreeSceneView document={document} selectedIds={selectedIds} onSelect={updateSelection} onStatusPromptChange={setSceneControl} preview={drawablePreview} onPreviewHover={setPreviewHovered} onPreviewClick={createFromIntersectionPreview} onDragEnd={(id, delta) => apply({ op: "translatePrimitive3", id, delta })} onMoveSection={(id, distance) => apply({ op: "moveSectionPlane", id, distance })} onPickSectionFace={applySectionFace} /> : planarCanvas}
       {inspectorPanel}
       <div className="status-bar" role="status" aria-live="polite" aria-label="操作提示"><span className="status-bar-prompt">{statusPrompt}</span><span className="status-bar-item">{pointerCoordinate ? `坐标 (${pointerCoordinate.x.toFixed(2)}, ${pointerCoordinate.y.toFixed(2)})` : "坐标 —"}</span><span className="status-bar-item">对象 {document.primitives.length}</span><span className="status-bar-item">工作区 {document.workspace}</span></div>
     </div>}

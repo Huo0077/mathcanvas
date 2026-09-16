@@ -9,4 +9,10 @@ export interface ThreeScenePreview {
   segments: { a: Vector3; b: Vector3 }[]
   points: Vector3[]
   label: string
+  /**
+   * 截面预览的剖切面（法向 + 常数项，`normal · p + constant = 0`）与来源实体 id。
+   * 只有边界点的话画布上只看到一条交线，看不出"切在哪"；带上平面才能在画布上画出剖切面片。
+   */
+  plane?: { normal: Vector3; constant: number }
+  sourceId?: string
 }

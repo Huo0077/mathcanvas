@@ -4,8 +4,7 @@ import * as THREE from "three"
 import type { GeometryDocument, Point3Primitive, PrimitiveSpec, SectionPrimitive } from "@draw/dsl"
 import { createEmptyDocument } from "@draw/dsl"
 import { buildSolidTemplate, dihedralMarker3, unfoldPolyhedron3 } from "@draw/geometry-kernel"
-
-import { POINT_HANDLE_RADIUS_PX, applyCameraState, clampCameraTarget, createCameraState, createCubeMesh, createDihedralMarkerGroup, createEdge3Line, createFace3Mesh, createPlane3Mesh, createPoint3Mesh, createPointDrivenLine, createSectionMesh, createSolidGroup, createSolidMesh, createUnfoldNetGroup, cubeUnfoldCenters, fitCameraState, nextUnfoldProgress, panCameraState, pickPrimitiveAt, pickRaycastHit3, pointHandleWorldRadius, prefersReducedMotion, resetCameraState, resolveSelectableHit, rotateCameraState, templateTopologyOwners, zoomCameraState } from "./threeScene"
+import { POINT_HANDLE_RADIUS_PX, applyCameraState, applyDragOffsets, cameraBasis, clampCameraTarget, createCameraState, createCubeMesh, createDihedralMarkerGroup, createEdge3Line, createFace3Mesh, createPlane3Mesh, createPlanePatch, createPoint3Mesh, createPointDrivenLine, createSectionMesh, createSolidGroup, createSolidMesh, createUnfoldNetGroup, cubeUnfoldCenters, dragFamilyIds, dragWorldPoint, fitCameraState, nextUnfoldProgress, panCameraState, pickPrimitiveAt, pickRaycastHit3, pointHandleWorldRadius, prefersReducedMotion, resetCameraState, resolveSelectableHit, rotateCameraState, sectionUnitNormal, templateTopologyOwners, zoomCameraState } from "./threeScene"
 
 describe("Three.js geometry scene", () => {
   it("converges an unfold animation to its target within a short render window", () => {
@@ -645,5 +644,180 @@ describe("Three.js geometry scene", () => {
       if (original) globalThis.matchMedia = original
       else Reflect.deleteProperty(globalThis, "matchMedia")
     }
+  })
+})
+
+describe("free 3D drag", () => {
+  /** A camera built the way applyCameraState builds one, so drag geometry is tested against the real basis. */
+  function cameraFor(state = createCameraState()) {
+    const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 1000)
+    applyCameraState(camera, state)
+    camera.updateMatrixWorld(true)
+    return camera
+  }
+
+  it("moves the figure along the camera's screen axes, not the world axes", () => {
+    const camera = cameraFor({ azimuth: 0, elevation: 0, distance: 10, target: { x: 0, y: 0, z: 0 } })
+    const anchor = new THREE.Vector3(0, 0, 0)
+
+    // At azimuth 0 the camera sits on +X looking at the origin: screen-right is world +Y, screen-down is -Z
+    // (Z is the up axis). A drag that only changed world X would be the old world-axis bug all over again.
+    expect(dragWorldPoint(camera, anchor, { x: 0.6, y: 0.5 })!.y).toBeGreaterThan(0.5)
+    expect(dragWorldPoint(camera, anchor, { x: 0.5, y: 0.6 })!.z).toBeLessThan(-0.5)
+    // The dragged figure stays in the plane it was grabbed in, so it cannot slide towards the camera.
+    expect(dragWorldPoint(camera, anchor, { x: 0.6, y: 0.6 })!.x).toBeCloseTo(0, 10)
+  })
+
+  it("turns the drag direction with the camera", () => {
+    const anchor = new THREE.Vector3(0, 0, 0)
+    const forward = dragWorldPoint(cameraFor({ azimuth: 0, elevation: 0, distance: 10, target: { x: 0, y: 0, z: 0 } }), anchor, { x: 0.7, y: 0.5 })!
+    const turned = dragWorldPoint(cameraFor({ azimuth: 90, elevation: 0, distance: 10, target: { x: 0, y: 0, z: 0 } }), anchor, { x: 0.7, y: 0.5 })!
+
+    // A camera turned 90° about Z makes screen-right world -X instead of +Y.
+    expect(forward.y).toBeGreaterThan(0.5)
+    expect(Math.abs(forward.x)).toBeLessThan(0.01)
+    expect(turned.x).toBeLessThan(-0.5)
+  })
+
+  it("maps the same pointer position to the same world point and no movement for no movement", () => {
+    const camera = cameraFor()
+    const anchor = new THREE.Vector3(1, 2, 3)
+    const basis = cameraBasis(createCameraState())
+
+    // The screen centre is not the anchor: the plane through the anchor is only met where the ray crosses it.
+    // What matters is that an unchanged pointer produces an unchanged point, which is what "not moved" means.
+    const first = dragWorldPoint(camera, anchor, { x: 0.5, y: 0.5 })!
+    const again = dragWorldPoint(camera, anchor, { x: 0.5, y: 0.5 })!
+    expect(again.clone().sub(first).length()).toBeLessThan(1e-12)
+
+    // Sweeping the pointer across the screen slides the grabbed point along the screen plane, in order.
+    const along = (x: number) => dragWorldPoint(camera, anchor, { x, y: 0.5 })!.clone().sub(first).dot(basis.right)
+    expect(along(0.6) - along(0.4)).toBeGreaterThan(0)
+    expect(along(0.7) - along(0.6)).toBeGreaterThan(0)
+  })
+
+  it("carries a template solid's generated topology with it", () => {
+    const cube = { id: "cube-1", type: "cube" as const, origin: { x: -1, y: -1, z: -1 }, size: { x: 2, y: 2, z: 2 } }
+    const document: GeometryDocument = { ...createEmptyDocument("geometry3d"), primitives: [cube, ...buildSolidTemplate(cube).primitives] }
+    const topology = document.primitives.find((primitive) => primitive.type === "polyhedron3") as { vertexIds: string[]; edgeIds: string[]; faceIds: string[] }
+
+    const family = dragFamilyIds(document, "cube-1")
+
+    // The solid is drawn through its children, so a drag that misses one of them would look like nothing moved.
+    expect(family.has("cube-1")).toBe(true)
+    for (const childId of [...topology.vertexIds, ...topology.edgeIds, ...topology.faceIds]) expect(family.has(childId)).toBe(true)
+  })
+
+  it("carries a point-driven line's endpoints with it", () => {
+    const document: GeometryDocument = {
+      ...createEmptyDocument("geometry3d"),
+      primitives: [
+        { id: "p-a", type: "point3", position: { x: 0, y: 0, z: 0 }, binding: { kind: "free" } },
+        { id: "p-b", type: "point3", position: { x: 2, y: 0, z: 0 }, binding: { kind: "free" } },
+        { id: "p-c", type: "point3", position: { x: 0, y: 2, z: 0 }, binding: { kind: "free" } },
+        { id: "line-ab", type: "line3", definition: { kind: "throughPoints", pointIds: ["p-a", "p-b"] } },
+        { id: "face-abc", type: "face3", pointIds: ["p-a", "p-b", "p-c"] },
+        { id: "unrelated", type: "point3", position: { x: 9, y: 9, z: 9 }, binding: { kind: "free" } }
+      ]
+    }
+
+    const family = dragFamilyIds(document, "line-ab")
+
+    // The line's own endpoints move; the face that shares two of them is a separate object and stays put.
+    expect([...family].sort()).toEqual(["line-ab", "p-a", "p-b"])
+    expect(family.has("unrelated")).toBe(false)
+  })
+
+  it("moves only the family members and can be undone", () => {
+    const scene = new THREE.Scene()
+    const solid = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1))
+    solid.userData.primitiveId = "cube-1"
+    const generated = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1))
+    generated.userData.primitiveId = "cube-1-point-1"
+    generated.position.set(1, 0, 0)
+    const other = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1))
+    other.userData.primitiveId = "ball-1"
+    scene.add(solid, generated, other)
+
+    applyDragOffsets(scene, new Set(["cube-1", "cube-1-point-1"]), new THREE.Vector3(1, 0, 0))
+    applyDragOffsets(scene, new Set(["cube-1", "cube-1-point-1"]), new THREE.Vector3(0, 2, 0))
+
+    expect(solid.position.toArray()).toEqual([1, 2, 0])
+    expect(generated.position.toArray()).toEqual([2, 2, 0])
+    expect(other.position.toArray()).toEqual([0, 0, 0])
+
+    // Drawing the same delta backwards hands the picture back to the document without rebuilding the scene.
+    applyDragOffsets(scene, new Set(["cube-1", "cube-1-point-1"]), new THREE.Vector3(-1, -2, 0))
+    expect(solid.position.toArray()).toEqual([0, 0, 0])
+    expect(generated.position.toArray()).toEqual([1, 0, 0])
+
+    scene.traverse((object) => {
+      if (object instanceof THREE.Mesh) {
+        object.geometry.dispose()
+        ;(object.material as THREE.Material).dispose()
+      }
+    })
+  })
+
+  it("describes the drag direction with the camera basis the scene already pans along", () => {
+    const basis = cameraBasis({ azimuth: 45, elevation: 30, distance: 16, target: { x: 0, y: 0, z: 0 } })
+
+    expect(basis.right.length()).toBeCloseTo(1, 10)
+    expect(basis.up.length()).toBeCloseTo(1, 10)
+    expect(basis.right.dot(basis.up)).toBeCloseTo(0, 10)
+    expect(basis.up.dot(basis.forward)).toBeCloseTo(0, 10)
+  })
+})
+
+describe("section cutting plane", () => {
+  const dispose = (object: THREE.Object3D) => {
+    object.traverse((child) => {
+      if (child instanceof THREE.Mesh || child instanceof THREE.Line) child.geometry.dispose()
+      if ("material" in child && child.material instanceof THREE.Material) child.material.dispose()
+    })
+  }
+  /** A cube spanning -1..1: its horizontal cut is a 2x2 square. */
+  const cubeVertices = [
+    { x: -1, y: -1, z: -1 }, { x: 1, y: -1, z: -1 }, { x: 1, y: 1, z: -1 }, { x: -1, y: 1, z: -1 },
+    { x: -1, y: -1, z: 1 }, { x: 1, y: -1, z: 1 }, { x: 1, y: 1, z: 1 }, { x: -1, y: 1, z: 1 }
+  ]
+  const horizontal = { normal: { x: 0, y: 1, z: 0 }, constant: 0 }
+
+  it("normalises a cutting plane's normal and refuses a degenerate one", () => {
+    const unit = sectionUnitNormal({ x: 0, y: 3, z: 4 })!
+    // Normalising is float arithmetic: compare numerically, not by exact component equality.
+    expect(unit.length()).toBeCloseTo(1, 12)
+    expect(unit.y).toBeCloseTo(0.6, 12)
+    expect(unit.z).toBeCloseTo(0.8, 12)
+    expect(sectionUnitNormal({ x: 0, y: 0, z: 0 })).toBeNull()
+    expect(sectionUnitNormal({ x: Number.NaN, y: 1, z: 0 })).toBeNull()
+  })
+
+  it("draws the plane as a patch that covers the solid it cuts", () => {
+    const patch = createPlanePatch(horizontal, cubeVertices, { color: "#f97316", opacity: 0.1 })
+    expect(patch).toBeTruthy()
+    const face = patch!.children.find((child) => child.userData.visualRole === "section-plane-patch-face") as THREE.Mesh
+    patch!.updateMatrixWorld(true)
+
+    // Every corner of the patch sits in the cutting plane (y = 0) and reaches past the cube's own footprint.
+    const positions = face.geometry.getAttribute("position")
+    const corners = Array.from({ length: positions.count }, (_, index) => new THREE.Vector3().fromBufferAttribute(positions, index))
+    for (const corner of corners) expect(corner.y).toBeCloseTo(0, 10)
+    expect(Math.max(...corners.map((corner) => Math.hypot(corner.x, corner.z)))).toBeGreaterThan(Math.hypot(1, 1))
+    dispose(patch!)
+  })
+
+  it("draws nothing for a plane with no usable normal", () => {
+    expect(createPlanePatch({ normal: { x: 0, y: 0, z: 0 }, constant: 1 }, cubeVertices, { color: "#f97316", opacity: 0.1 })).toBeNull()
+  })
+
+  it("keeps the patch centred on the plane's own origin, not the solid's", () => {
+    // The same plane moved up by 1: the patch has to move with it, or it would point at the wrong cut.
+    const lifted = createPlanePatch({ normal: { x: 0, y: 1, z: 0 }, constant: -1 }, cubeVertices, { color: "#f97316", opacity: 0.1 })!
+    const face = lifted.children.find((child) => child.userData.visualRole === "section-plane-patch-face") as THREE.Mesh
+    const positions = face.geometry.getAttribute("position")
+
+    for (let index = 0; index < positions.count; index += 1) expect(positions.getY(index)).toBeCloseTo(1, 10)
+    dispose(lifted)
   })
 })

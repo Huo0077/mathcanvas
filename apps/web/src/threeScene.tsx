@@ -4,7 +4,7 @@ import type { ConePrimitive, CubePrimitive, Edge3Primitive, Face3Primitive, Geom
 import { dihedralAngleDegrees, unfoldPolyhedron3, type DihedralMarker3, type UnfoldLayout3 } from "@draw/geometry-kernel"
 import { resolveMeasurementVisual } from "./measurementVisuals"
 import type { SceneControlMode } from "./statusPrompts"
-import { resolveDihedralMarker3, resolvePolyhedronTopology } from "@draw/scene-graph"
+import { getDependencyIndex, isFreeDraggable3, planeThroughPoints, resolveDihedralMarker3, resolvePolyhedronTopology, sectionSourceVertices, templateTopologyIds } from "@draw/scene-graph"
 
 import { opacityFor, strokeFor } from "./primitiveStyle"
 import type { ThreeScenePreview } from "./threeScenePreview"
@@ -78,8 +78,9 @@ const EMPTY_BOUNDS_PAN_LIMIT = 12
  * The camera's own axes for an orbit state: screen-right, screen-up and the view axis (camera -> target).
  * Panning along these instead of the world axes is what makes the figure track the pointer after the camera
  * has been turned, and `forward` is the axis that brings a figure which is off-centre in depth to the middle.
+ * Free dragging shares it: `right`/`up` are the screen plane a dragged figure has to follow.
  */
-function cameraBasis(state: CameraState): { right: THREE.Vector3; up: THREE.Vector3; forward: THREE.Vector3 } {
+export function cameraBasis(state: CameraState): { right: THREE.Vector3; up: THREE.Vector3; forward: THREE.Vector3 } {
   const azimuth = state.azimuth * Math.PI / 180
   const elevation = state.elevation * Math.PI / 180
   // Matches applyCameraState: Z is the up axis, so elevation tilts the camera towards +Z.
@@ -207,20 +208,25 @@ export interface RaycastHit3 {
   partId?: string
   depth: number
   worldPoint: Vector3
-  kind: "point" | "line" | "edge" | "face" | "plane" | "solid" | "marker"
+  kind: "point" | "line" | "edge" | "face" | "plane" | "solid" | "marker" | "section"
 }
 
-function pickKind(primitiveType: unknown): RaycastHit3["kind"] {
-  if (primitiveType === "point3") return "point"
+function pickKind(primitiveType: unknown): RaycastHit3["kind"] {  if (primitiveType === "point3") return "point"
   if (primitiveType === "edge3") return "edge"
   if (primitiveType === "face3") return "face"
   if (primitiveType === "plane3") return "plane"
+  if (primitiveType === "section") return "section"
   if (["cube", "pyramid", "cylinder", "cone", "polyhedron3"].includes(String(primitiveType))) return "solid"
   return "line"
 }
 
-/** Share of the click tolerance a kind may claim: small handles need the most, surfaces none. */
-const pickKindAllowance: Record<RaycastHit3["kind"], number> = { point: 1, edge: 0.5, line: 0.5, face: 0, plane: 0, solid: 0, marker: 0 }
+/**
+ * Share of the click tolerance a kind may claim: small handles need the most, surfaces none.
+ * Sections stay at 0 here: their boundary lies *inside* the solid, so a blanket allowance would let a cut
+ * steal clicks meant for the solid's own vertices and edges (measured regression: clicking a cube vertex
+ * selected the section instead). They are picked deliberately instead — see `pickSectionAt`.
+ */
+const pickKindAllowance: Record<RaycastHit3["kind"], number> = { point: 1, edge: 0.5, line: 0.5, face: 0, plane: 0, solid: 0, marker: 0, section: 0 }
 
 export function pickRaycastHit3(scene: THREE.Scene, camera: THREE.Camera, normalizedPoint: { x: number; y: number }, options: RaycastPickOptions = {}): RaycastHit3 | null {
   const tolerance = options.tolerance ?? DEFAULT_PICK_TOLERANCE
@@ -261,10 +267,111 @@ export function templateTopologyOwners(document: GeometryDocument): Map<string, 
   return owners
 }
 
+/**
+ * A section is drawn as a boundary that lies *inside* the solid it cuts, so along the same ray the solid's own
+ * surface is always nearer and ordinary distance ranking can never reach the cut. Pick it deliberately: the
+ * pointer has to be on the drawn boundary (within a pixel-based tolerance), and clicking a vertex/edge handle
+ * still wins so fine-grained editing is not hijacked by a cut passing nearby.
+ */
+export function pickSectionAt(scene: THREE.Scene, camera: THREE.Camera, normalizedPoint: { x: number; y: number }, tolerance: number, preciseHit: boolean): string | null {
+  if (preciseHit) return null
+  const raycaster = new THREE.Raycaster()
+  raycaster.params.Line = { threshold: tolerance }
+  raycaster.setFromCamera(new THREE.Vector2(normalizedPoint.x * 2 - 1, -(normalizedPoint.y * 2 - 1)), camera)
+  scene.updateMatrixWorld(true)
+  const hits = raycaster
+    .intersectObjects(scene.children, true)
+    .filter((entry) => entry.object.userData.primitiveType === "section" && typeof entry.object.userData.primitiveId === "string")
+  return hits.length > 0 ? (hits[0].object.userData.primitiveId as string) : null
+}
+
 export function resolveSelectableHit(primitiveId: string | null, owners: Map<string, string>, keepSubElement = false): string | null {
   if (primitiveId === null) return null
   // Alt keeps the hit on the generated edge or face, so a template solid's parts stay reachable on demand.
   return keepSubElement ? primitiveId : owners.get(primitiveId) ?? primitiveId
+}
+
+/**
+ * 自由拖动：被拖对象在屏幕平面上的落点。
+ * 与相机自身基向量求交，所以相机转过之后图形仍然跟着指针走；深度保持不变，拖动不会把人拽进纵深。
+ */
+export function dragWorldPoint(camera: THREE.Camera, anchor: THREE.Vector3, normalizedPoint: { x: number; y: number }): THREE.Vector3 | null {
+  const raycaster = new THREE.Raycaster()
+  raycaster.setFromCamera(new THREE.Vector2(normalizedPoint.x * 2 - 1, -(normalizedPoint.y * 2 - 1)), camera)
+  const normal = new THREE.Vector3()
+  camera.getWorldDirection(normal)
+  // A plane seen edge-on cannot be intersected: the drag would slide to infinity, so keep the figure put.
+  return Math.abs(normal.dot(raycaster.ray.direction)) < 1e-6 ? null : raycaster.ray.intersectPlane(new THREE.Plane().setFromNormalAndCoplanarPoint(normal, anchor), new THREE.Vector3())
+}
+
+/** 剖切面的单位法向；法向退化（零向量 / 非有限）时返回 null，调用方据此放弃这次拖动。 */
+export function sectionUnitNormal(normal: Vector3): THREE.Vector3 | null {
+  const unit = new THREE.Vector3(normal.x, normal.y, normal.z)
+  return Number.isFinite(unit.x) && Number.isFinite(unit.y) && Number.isFinite(unit.z) && unit.lengthSq() > 1e-12 ? unit.normalize() : null
+}
+
+/**
+ * 自由拖动一个对象时真正要跟着动的全部对象：它自己、它按 id 引用的点（线段/棱/面/平面/多面体），
+ * 以及模板实体所生成的点/棱/面。少了这一步，拖点驱动的棱就"只动属性不动画面"。
+ */
+export function dragFamilyIds(document: GeometryDocument, id: string): Set<string> {
+  const { dependents, parents } = dragGraph(document)
+  const family = new Set<string>([id])
+  const queue = [id]
+  while (queue.length > 0) {
+    for (const childId of dependents.get(queue.shift()!) ?? []) {
+      if (family.has(childId)) continue
+      family.add(childId)
+      queue.push(childId)
+    }
+  }
+  // 生成的拓扑是"由父级算出来"的：拖动父级要连它的点/棱/面一起动，否则实体看着没动。
+  for (const member of [...family]) for (const parentId of parents.get(member) ?? []) family.add(parentId)
+  return family
+}
+
+/** 依赖索引的正反两向：正向着找"谁跟着它动"，反向着找"它是由谁生成的"。 */
+function dragGraph(document: GeometryDocument): { dependents: Map<string, Set<string>>; parents: Map<string, Set<string>> } {
+  const dependents = new Map<string, Set<string>>()
+  const parents = new Map<string, Set<string>>()
+  for (const [parentId, childIds] of getDependencyIndex(document)) {
+    for (const childId of childIds) {
+      const entries = dependents.get(parentId) ?? new Set<string>()
+      entries.add(childId)
+      dependents.set(parentId, entries)
+      const owners = parents.get(childId) ?? new Set<string>()
+      owners.add(parentId)
+      parents.set(childId, owners)
+    }
+  }
+  return { dependents, parents }
+}
+
+/**
+ * 把一个位移画到某个对象自己的可视元素上（不重建场景）。
+ * 拖动剖切面时用它：截面本体与剖切面片都属于同一个图元，一起挪才有"刀口在动"的观感。
+ */
+export function offsetSceneObjects(scene: THREE.Scene, primitiveId: string, delta: THREE.Vector3): void {
+  scene.traverse((object) => {
+    if (object.userData.primitiveId !== primitiveId) return
+    object.position.add(delta)
+  })
+}
+
+/**
+ * 把一个拖动位移画到场景里，而不重建场景。拖动期间文档只在节流点提交，逐帧重建会明显卡顿；
+ * 这里先把 offset 记在对象上，渲染前统一应用，抬手后再由文档接替。
+ * `delta` 传零即撤销这些临时偏移，用于把画面交还给文档。
+ */
+export function applyDragOffsets(scene: THREE.Scene, family: Set<string>, delta: THREE.Vector3): void {
+  scene.traverse((object) => {
+    const objectId = object.userData.primitiveId
+    if (typeof objectId !== "string" || !family.has(objectId)) return
+    const applied = (object.userData.dragOffset as THREE.Vector3 | undefined) ?? new THREE.Vector3()
+    object.position.add(delta)
+    applied.add(delta)
+    object.userData.dragOffset = applied
+  })
 }
 
 export function createPoint3Mesh(primitive: Point3Primitive, selected: boolean, worldRadius = DEFAULT_POINT_HANDLE_RADIUS): THREE.Mesh {
@@ -511,6 +618,8 @@ function normalVisuals(mesh: THREE.Mesh): THREE.ArrowHelper[] {
 }
 
 export function createSectionMesh(primitive: SectionPrimitive): THREE.Object3D | null {
+  // A cut that misses the solid (points moved past a face) has nothing to draw; drawing a fabricated
+  // placeholder would make "moved the plane off the solid" look like a real section.
   if (primitive.points.length < 2) return null
   const sectionColor = primitive.style?.stroke ?? "#f97316"
   if (primitive.points.length === 2) {
@@ -600,8 +709,55 @@ export function nextUnfoldProgress(current: number, target: number): number {
   return Math.abs(target - next) <= 0.001 ? target : next
 }
 
-export function createSolidGroup(primitive: SolidPrimitive, selected: boolean, options: SolidVisualOptions = {}): THREE.Group {
-  if (primitive.type === "cube" && options.unfoldProgress !== undefined && options.unfoldProgress > 0.001) return createCubeUnfoldGroup(primitive, selected, options)
+/** 平面以 `normal · p + constant = 0` 表示；法向为零向量时没有可画的平面。 */
+function planeBasisFrom(normal: Vector3, constant: number): { origin: THREE.Vector3; u: THREE.Vector3; v: THREE.Vector3 } | null {
+  const unit = new THREE.Vector3(normal.x, normal.y, normal.z)
+  if (!Number.isFinite(unit.x) || !Number.isFinite(unit.y) || !Number.isFinite(unit.z) || unit.lengthSq() < 1e-12) return null
+  const lengthSq = unit.lengthSq()
+  const origin = unit.clone().multiplyScalar(-constant / lengthSq)
+  unit.normalize()
+  const helper = Math.abs(unit.x) < 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0)
+  const u = new THREE.Vector3().crossVectors(helper, unit).normalize()
+  return { origin, u, v: new THREE.Vector3().crossVectors(unit, u).normalize() }
+}
+
+/**
+ * 剖切面片：把无穷平面画成一块恰好罩住来源实体的方形面片。
+ * 没有它的时候，截面在画布上只剩一条交线，"切在哪、往哪边挪"都看不出来。
+ */
+export function createPlanePatch(plane: { normal: Vector3; constant: number }, sourceVertices: Vector3[], options: { color: string; opacity: number; dashedEdges?: boolean }): THREE.Group | null {
+  const basis = planeBasisFrom(plane.normal, plane.constant)
+  if (!basis) return null
+  const { origin, u, v } = basis
+  // Size from the source's own footprint on the plane, so the patch reads as "the cut through this solid".
+  const radius = sourceVertices.length > 0
+    ? Math.max(...sourceVertices.map((vertex) => {
+      const offset = new THREE.Vector3(vertex.x - origin.x, vertex.y - origin.y, vertex.z - origin.z)
+      return Math.hypot(offset.dot(u), offset.dot(v))
+    })) * 1.35 + 0.3
+    : 3
+  const corner = (offsetU: number, offsetV: number) => origin.clone().addScaledVector(u, offsetU * radius).addScaledVector(v, offsetV * radius)
+  const corners = [corner(-1, -1), corner(1, -1), corner(1, 1), corner(-1, 1)]
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(corners.flatMap((point) => [point.x, point.y, point.z]), 3))
+  geometry.setIndex([0, 1, 2, 0, 2, 3])
+  geometry.computeVertexNormals()
+  const group = new THREE.Group()
+  group.userData.visualRole = "section-plane-patch"
+  const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: options.color, transparent: true, opacity: options.opacity, side: THREE.DoubleSide, depthWrite: false }))
+  mesh.userData.visualRole = "section-plane-patch-face"
+  group.add(mesh)
+  const outlinePoints = [...corners, corners[0]]
+  const outline = options.dashedEdges
+    ? new THREE.Line(new THREE.BufferGeometry().setFromPoints(outlinePoints), new THREE.LineDashedMaterial({ color: options.color, transparent: true, opacity: 0.9, dashSize: 0.3, gapSize: 0.22 }))
+    : new THREE.Line(new THREE.BufferGeometry().setFromPoints(outlinePoints), new THREE.LineBasicMaterial({ color: options.color, transparent: true, opacity: 0.9 }))
+  if (options.dashedEdges) outline.computeLineDistances()
+  outline.userData.visualRole = "section-plane-patch-outline"
+  group.add(outline)
+  return group
+}
+
+export function createSolidGroup(primitive: SolidPrimitive, selected: boolean, options: SolidVisualOptions = {}): THREE.Group {  if (primitive.type === "cube" && options.unfoldProgress !== undefined && options.unfoldProgress > 0.001) return createCubeUnfoldGroup(primitive, selected, options)
   const group = new THREE.Group()
   const mesh = createSolidMesh(primitive, selected, options)
   group.add(mesh)
@@ -647,8 +803,38 @@ function disposeScene(scene: THREE.Scene): void {
   })
 }
 
-export interface ThreeSceneViewProps {
-  document: GeometryDocument
+/** Pointer bookkeeping for one press; lives at component scope so a scene rebuild cannot end a drag. */
+interface PointerState {
+  pointerId: number
+  x: number
+  y: number
+  lastX: number
+  lastY: number
+  button: number
+  moved: boolean
+  shiftKey: boolean
+}
+
+/**
+ * 一次自由拖动。拖动期间文档完全不提交，只把位移按帧画到场景里的对象上；抬手时才提交唯一一次操作。
+ * 这正是"一次拖动 = 一步撤销"的保证：中途每提交一次，撤销栈里就多一步，用户要按好几次 Ctrl+Z 才能回到原状
+ * （实测：一次 90px 的拖动会留下 4 步）。`total` 是这次拖动的总位移，`applied` 表示画面已经动过。
+ */
+interface DragSessionState {
+  targetId: string
+  family: Set<string>
+  anchor: THREE.Vector3
+  origin: THREE.Vector3
+  /** 这次拖动的世界位移（截面时已投影到法向）。 */
+  total: THREE.Vector3
+  /** 已经画进场景的那一段，用来算增量，避免重复叠加。 */
+  visualApplied: THREE.Vector3
+  applied: boolean
+  /** 拖动截面时：把屏幕位移投影到该法向上，得到剖切面要走的世界距离。 */
+  slideNormal?: THREE.Vector3
+}
+
+export interface ThreeSceneViewProps {  document: GeometryDocument
   selectedIds: string[]
   onSelect: (id: string | null, additive?: boolean) => void
   /** Reports which display switch is on so the shell can explain what it draws; null when both are off. */
@@ -661,6 +847,13 @@ export interface ThreeSceneViewProps {
   onPreviewHover?: (hovering: boolean) => void
   /** 指针正落在虚线预览上时点击：交给 App 创建图元，而不是重新选择来源对象。 */
   onPreviewClick?: () => void
+  /** 拖动结束时上报这次拖动的总位移（屏幕平面内的世界向量）。只在抬手时回调一次：拖动期间文档不提交，
+   * 这样一次拖动就是一步撤销。拖动过程中的画面由场景自己按帧平移，不经过文档。 */
+  onDragEnd?: (id: string, delta: Vector3) => void
+  /** 选中截面时，把拖动/键盘微调解释为"沿法向平移剖切面"的世界距离。 */
+  onMoveSection?: (id: string, distance: number) => void
+  /** 开启"以面为剖切面"后，点到的那个面就成为截面 `<id>` 的剖切面。 */
+  onPickSectionFace?: (id: string, plane: { normal: Vector3; constant: number }) => void
 }
 
 /** 虚线预览：低不透明度 + 虚线的交线/截面，明确区别于用户已创建的图元。 */
@@ -671,6 +864,16 @@ function createPreviewGroup(
 ): THREE.Group {
   const group = new THREE.Group()
   group.userData.visualRole = "intersection-preview"
+  // 预览不是图形内容：它绝不能参与"适应视图"的包围盒，否则剖切面片会把取景范围撑大
+  // （实测：平移视角的边界因此从 15 涨到 15.36）。
+  group.userData.excludeFromFit = true
+  /**
+   * 拾取用的子对象集合单独放在一个子组里：预览的可见线是 1px 虚线，按像素去点它是"找针"，
+   * 所以命中判定用更宽的对象——交线用不可见的加粗线，截面则用整块剖切面（在面上任意位置点都能创建）。
+   */
+  const hitTargets: THREE.Object3D[] = []
+  /** 命中区按种类分：交线用加粗不可见线；截面只用它那圈边界线（面片不是命中区）。 */
+  const lineHitTargets: THREE.Object3D[] = []
   const points: THREE.Vector3[] = []
   if (preview.kind === "intersection") {
     for (const segment of preview.segments) {
@@ -679,25 +882,45 @@ function createPreviewGroup(
   } else {
     const loop = preview.points.length >= 2 ? [...preview.points, preview.points[0]] : []
     for (const point of loop) points.push(new THREE.Vector3(point.x, point.y, point.z))
+    // 截面预览额外画出剖切面本身：只有交线时看不出"切在哪"，也看不出往哪边挪。
+    if (preview.plane) {
+      const patch = createPlanePatch(preview.plane, preview.points, { color: "#f04f5f", opacity: 0.12, dashedEdges: true })
+      if (patch) {
+        patch.userData.visualRole = "section-preview-plane"
+        group.add(patch)
+      }
+    }
   }
   if (points.length >= 2) {
+    // 截面用闭合折线（Line），交线用线段集合（LineSegments）：前者是一圈边界，后者是若干条交线。
     const geometry = new THREE.BufferGeometry().setFromPoints(points)
-    const line = new THREE.LineSegments(geometry, new THREE.LineDashedMaterial({ color: "#f04f5f", dashSize: 0.35, gapSize: 0.25, transparent: true, opacity: 0.85 }))
+    const material = new THREE.LineDashedMaterial({ color: "#f04f5f", dashSize: 0.35, gapSize: 0.25, transparent: true, opacity: 0.85 })
+    const line = preview.kind === "section" ? new THREE.Line(geometry, material) : new THREE.LineSegments(geometry, material)
     line.computeLineDistances()
     line.userData.visualRole = "intersection-preview-line"
     group.add(line)
     if (interactive) {
       // 命中带：用一根不可见但更粗的线承担拾取，避免用户必须点到 1px 宽的虚线上。
-      const hit = new THREE.LineSegments(geometry.clone(), new THREE.LineBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }))
+      const hit = preview.kind === "section"
+        ? new THREE.Line(geometry.clone(), new THREE.LineBasicMaterial({ transparent: true, opacity: 0 }))
+        : new THREE.LineSegments(geometry.clone(), new THREE.LineBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }))
       hit.userData.visualRole = "intersection-preview-hit"
       group.add(hit)
+      hitTargets.push(hit)
+      if (preview.kind === "section") lineHitTargets.push(hit)
     }
   }
+  group.userData.hitTargets = hitTargets
+  /**
+   * 截面预览只认边界线：把整块剖切面当命中区会覆盖实体的一大片投影，
+   * 于是点画布上任意位置的顶点都算"指向预览"，把普通选择变成创建截面（实测回归）。
+   */
+  group.userData.lineHitTargets = lineHitTargets
   group.userData.onHoverChange = onHoverChange
   return group
 }
 
-export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPromptChange, preview = null, onPreviewHover, onPreviewClick }: ThreeSceneViewProps) {
+export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPromptChange, preview = null, onPreviewHover, onPreviewClick, onDragEnd, onMoveSection, onPickSectionFace }: ThreeSceneViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const renderTargetRef = useRef<HTMLDivElement>(null)
   const measurementOverlayRef = useRef<HTMLDivElement>(null)
@@ -707,6 +930,35 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
   const fitCameraRef = useRef<() => void>(() => undefined)
   const fittedDocumentRef = useRef<string | null>(null)
   const panModeRef = useRef(false)
+  const dragModeRef = useRef(false)
+  const pointerStateRef = useRef<PointerState | null>(null)
+  const dragSessionRef = useRef<DragSessionState | null>(null)
+  /** The selection the rebuilt scene must highlight; the pointer handlers read it without re-subscribing. */
+  const selectedIdsRef = useRef<string[]>(selectedIds)
+  selectedIdsRef.current = selectedIds
+  /** The drag callback, read through a ref so a parent re-render never restarts the scene. */
+  const dragEndRef = useRef(onDragEnd)
+  dragEndRef.current = onDragEnd
+  /** 当前预览的种类与场景组：截面预览要抢在实体拾取之前，交线预览不抢（见 handlePointerUp 的说明）。 */
+  const previewKindRef = useRef<ThreeScenePreview["kind"] | null>(preview?.kind ?? null)
+  previewKindRef.current = preview?.kind ?? null
+  /** 预览组的深度（离相机多远）：用来判断"点手柄"和"点剖切面"哪个才是用户真正指到的东西。 */
+  const previewDepthRef = useRef<number | null>(null)
+  /** 移动剖切面（沿法向的世界位移），与拖动回调解耦，方便键盘微调共用。 */
+  const moveSectionRef = useRef(onMoveSection)
+  moveSectionRef.current = onMoveSection
+  /** 以面为剖切面的回调，以及"正在等待拾取"的开关。 */
+  const pickSectionFaceRef = useRef(onPickSectionFace)
+  pickSectionFaceRef.current = onPickSectionFace
+  /** 键盘微调用：当前的文档与选择，避免把 keydown 监听器绑在频繁变化的值上。 */
+  const documentRef = useRef(document)
+  documentRef.current = document
+  /**
+   * 把进行中的拖动偏移补画到当前场景上。拖动途中场景会被重建（选中变化、窗口尺寸变化都会重建），
+   * 新场景的对象回到文档里的位置，已经"画上去"的偏移就丢了 —— 观感是一次回弹/闪跳。
+   * 由场景构建流程在 render 之后调用；也用于拖动自身的逐帧重画。
+   */
+  const resumeDragVisualRef = useRef<() => void>(() => undefined)
   const [showHiddenEdges, setShowHiddenEdges] = useState(false)
   const [showNormals, setShowNormals] = useState(false)
   const [transparentFaces, setTransparentFaces] = useState(false)
@@ -714,6 +966,11 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
   const [unfoldProgress, setUnfoldProgress] = useState(0)
   const [showAngle, setShowAngle] = useState(false)
   const [panMode, setPanMode] = useState(false)
+  const [dragMode, setDragMode] = useState(false)
+  /** 「以面为剖切面」的一次性拾取模式：开启后下一次点击面即取该面为剖切面。 */
+  const [facePickMode, setFacePickMode] = useState(false)
+  const facePickModeRef = useRef(false)
+  facePickModeRef.current = facePickMode
   const [webglAvailable, setWebglAvailable] = useState(true)
   const statusPromptChangeRef = useRef(onStatusPromptChange)
   statusPromptChangeRef.current = onStatusPromptChange
@@ -744,6 +1001,20 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
   useEffect(() => {
     panModeRef.current = panMode
   }, [panMode])
+
+  useEffect(() => {
+    dragModeRef.current = dragMode
+  }, [dragMode])
+
+  /** 两个模式互斥：同时开着的话，左键拖动到底算平移视角还是拖图形就说不清了。 */
+  const enterMode = (mode: "pan" | "drag") => {
+    const nextPan = mode === "pan" ? !panMode : false
+    const nextDrag = mode === "drag" ? !dragMode : false
+    setPanMode(nextPan)
+    setDragMode(nextDrag)
+    lastControlRef.current = nextDrag ? "free-drag" : lastControlRef.current === "free-drag" ? null : lastControlRef.current
+    statusPromptChangeRef.current?.(lastControlRef.current)
+  }
 
   useEffect(() => {
     const target = unfolded ? 1 : 0
@@ -831,6 +1102,15 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     document.primitives.filter((primitive): primitive is SectionPrimitive => primitive.type === "section" && primitive.visible !== false).forEach((primitive) => {
       const mesh = createSectionMesh(primitive)
       if (mesh) scene.add(mesh)
+      // 选中截面时把剖切面本身也画出来：只看到一圈交线的话，"刀口在哪、往哪边挪"都无从判断。
+      if (!selectedIds.includes(primitive.id)) return
+      const patch = createPlanePatch(primitive.plane, sectionSourceVertices(document, primitive.sourceId), { color: "#f97316", opacity: 0.1 })
+      if (!patch) return
+      // 剖切面片只是"刀口在哪"的指示物，不能参与拾取：它又大又正对相机，否则点击/拖动都会命中它
+      // 而不是截面本身（实测：拖它会平移面片，截面却没动）。
+      patch.traverse((child) => { child.raycast = () => undefined })
+      patch.userData.visualRole = "section-plane"
+      scene.add(patch)
     })
     // 已持久化的截线：虚线，与"预览"用同一种视觉语言，但颜色更深、实心可选中。
     document.primitives.filter((primitive) => primitive.type === "intersectionLine" && primitive.visible !== false).forEach((primitive) => {
@@ -901,6 +1181,13 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       sceneShell.dataset.dihedralMarkers = String(dihedralMarkerCount)
       sceneShell.dataset.planeCount = String(planeCount)
       sceneShell.dataset.measurementLabelCount = String(measurementVisuals.length)
+      // 剖切面的读数：剖面有没有真的动、动到哪，靠这几个数看，不靠肉眼。
+      const sections = document.primitives.filter((primitive): primitive is SectionPrimitive => primitive.type === "section")
+      const firstSection = sections[0]
+      sceneShell.dataset.sectionCount = String(sections.length)
+      sceneShell.dataset.sectionPlaneConstant = firstSection ? firstSection.plane.constant.toFixed(3) : ""
+      sceneShell.dataset.sectionPlaneNormal = firstSection ? `${firstSection.plane.normal.x.toFixed(3)},${firstSection.plane.normal.y.toFixed(3)},${firstSection.plane.normal.z.toFixed(3)}` : ""
+      sceneShell.dataset.sectionPointCount = firstSection ? String(firstSection.points.length) : ""
     }
 
     const sceneBounds = contentBounds(scene)
@@ -969,11 +1256,19 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       if (sceneShell) {
         sceneShell.dataset.cameraDistance = cameraStateRef.current.distance.toFixed(2)
         sceneShell.dataset.cameraTarget = `${cameraStateRef.current.target.x.toFixed(2)},${cameraStateRef.current.target.y.toFixed(2)},${cameraStateRef.current.target.z.toFixed(2)}`
+        // 视角角度的读数：旋转不改变视点中心，所以"有没有转"只能从这里看出来。
+        sceneShell.dataset.cameraAzimuth = cameraStateRef.current.azimuth.toFixed(2)
+        sceneShell.dataset.cameraElevation = cameraStateRef.current.elevation.toFixed(2)
       }
       renderer.render(scene, camera)
     }
     /** Click tolerance in world units, so a grab is always the same number of pixels wide. */
     const pickTolerance = () => pointHandleWorldRadius(camera, cameraStateRef.current.distance, viewportHeight, PICK_TOLERANCE_PX)
+    /** 自由拖动：把对象沿屏幕平面平移的世界位移。深度不变，所以拖完图形还在原来的纵深上。 */
+    const dragDeltaFor = (session: { anchor: THREE.Vector3; origin: THREE.Vector3 }, point: { x: number; y: number }): THREE.Vector3 | null => {
+      const current = dragWorldPoint(camera, session.anchor, point)
+      return current ? current.sub(session.origin) : null
+    }
     const setCameraState = (nextState: CameraState) => {
       cameraStateRef.current = nextState
       applyCameraState(camera, nextState)
@@ -993,6 +1288,8 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       fitToContent()
     }
     render()
+    // 场景重建后把进行中的拖动偏移补画回去，避免拖动中途回弹（见 resumeDragVisualRef）。
+    resumeDragVisualRef.current()
     const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => {
       const next = viewportSize()
       viewportHeight = next.height
@@ -1004,7 +1301,16 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     resizeObserver?.observe(container)
 
     const topologyOwners = templateTopologyOwners(document)
-    let pointerState: { pointerId: number; x: number; y: number; lastX: number; lastY: number; button: number; moved: boolean; shiftKey: boolean } | null = null
+    /** 拖动期间的重画次数：拖动必须逐次跟手重画，否则画面会一格一格跳（见 handlePointerMove）。 */
+    let dragFrames = 0
+    /** 把这次拖动已经画上去的偏移补画到（可能是刚重建的）场景上，见 resumeDragVisualRef 的说明。 */
+    resumeDragVisualRef.current = () => {
+      const session = dragSessionRef.current
+      if (!session?.applied || session.visualApplied.lengthSq() < 1e-12) return
+      if (session.slideNormal) offsetSceneObjects(scene, session.targetId, session.slideNormal.clone().multiplyScalar(session.visualApplied.dot(session.slideNormal)))
+      else applyDragOffsets(scene, session.family, session.visualApplied.clone())
+      render()
+    }
     const pointFromEvent = (event: PointerEvent) => {
       const bounds = renderer.domElement.getBoundingClientRect()
       return { x: (event.clientX - bounds.left) / Math.max(bounds.width, 1), y: (event.clientY - bounds.top) / Math.max(bounds.height, 1) }
@@ -1013,15 +1319,100 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       if (event.button !== 0 && event.button !== 1) return
       event.preventDefault()
       const point = pointFromEvent(event)
-      pointerState = { pointerId: event.pointerId, x: point.x, y: point.y, lastX: point.x, lastY: point.y, button: event.button, moved: false, shiftKey: event.shiftKey }
+      pointerStateRef.current = { pointerId: event.pointerId, x: point.x, y: point.y, lastX: point.x, lastY: point.y, button: event.button, moved: false, shiftKey: event.shiftKey }
+      dragSessionRef.current = null
+      if (sceneShell) sceneShell.dataset.dragTarget = ""
+      // 以面为剖切面：这一次点击只用来取面，取到就退出该模式。
+      if (facePickModeRef.current && event.button === 0) {
+        const hit = pickRaycastHit3(scene, camera, point, { tolerance: pickTolerance() })
+        const face = hit ? document.primitives.find((primitive) => primitive.id === hit.primitiveId) : undefined
+        const section = document.primitives.find((primitive): primitive is SectionPrimitive => primitive.type === "section" && selectedIdsRef.current.includes(primitive.id))
+        if (hit?.kind === "face" && face?.type === "face3" && section) {
+          // 由面的点环求它所在的平面；不共面的环（例如曲面侧面）会被 planeThroughPoints 直接拒绝。
+          const vertices = face.pointIds.map((id) => points.get(id)?.position).filter((position): position is Vector3 => Boolean(position))
+          const plane = planeThroughPoints(vertices)
+          if (plane) {
+            pickSectionFaceRef.current?.(section.id, plane)
+            setFacePickMode(false)
+          }
+        }
+        renderer.domElement.releasePointerCapture(event.pointerId)
+        return
+      }
+      if (dragModeRef.current && event.button === 0) {
+        const hit = pickRaycastHit3(scene, camera, point, { tolerance: pickTolerance() })
+        const targetId = resolveSelectableHit(hit?.primitiveId ?? null, topologyOwners)
+        const target = targetId ? document.primitives.find((primitive) => primitive.id === targetId) : undefined
+        // 拖动排查用读数：这一次按下到底抓到了什么。
+        if (sceneShell) sceneShell.dataset.dragTarget = `${hit?.kind ?? "none"}:${hit?.primitiveId ?? "-"}->${target?.type ?? "none"}`
+        // 截面要单独判定：它画在实体内部，按深度永远排不到，但用户指向那圈线时就是要挪刀口。
+        const sectionId = pickSectionAt(scene, camera, point, pickTolerance(), hit?.kind === "point" || hit?.kind === "edge")
+        const section = sectionId ? document.primitives.find((primitive) => primitive.id === sectionId) : undefined
+        if (section && section.type === "section") {
+          // 拖动一个截面 = 沿法向平移剖切面。截面没有自己的实体几何，拖它就是挪刀口。
+          const normal = sectionUnitNormal(section.plane.normal)
+          if (normal) {
+            // 需要一个真实的世界锚点（拖动位移由屏幕平面求交得出），用指针射线在截面所在平面上的落点。
+            const anchor = dragWorldPoint(camera, new THREE.Vector3(0, 0, 0), point)
+            if (anchor) {
+              const sectionPoint = section.points[0]
+              if (sectionPoint) anchor.set(sectionPoint.x, sectionPoint.y, sectionPoint.z)
+              dragSessionRef.current = { targetId: section.id, family: new Set([section.id]), anchor, origin: anchor.clone(), total: new THREE.Vector3(), visualApplied: new THREE.Vector3(), applied: false, slideNormal: normal }
+            }
+          }
+        } else if (hit && target && isFreeDraggable3(target, points, templateTopologyIds(document))) {
+          const anchor = new THREE.Vector3(hit.worldPoint.x, hit.worldPoint.y, hit.worldPoint.z)
+          const origin = dragWorldPoint(camera, anchor, point) ?? anchor.clone()
+          dragSessionRef.current = { targetId: target.id, family: dragFamilyIds(document, target.id), anchor, origin, total: new THREE.Vector3(), visualApplied: new THREE.Vector3(), applied: false }
+        }
+      }
       renderer.domElement.setPointerCapture(event.pointerId)
     }
     const handlePointerMove = (event: PointerEvent) => {
+      const pointerState = pointerStateRef.current
       if (!pointerState || pointerState.pointerId !== event.pointerId) return
       const point = pointFromEvent(event)
       const deltaX = point.x - pointerState.lastX
       const deltaY = point.y - pointerState.lastY
       pointerState.moved ||= Math.hypot(point.x - pointerState.x, point.y - pointerState.y) > 0.008
+      const session = dragSessionRef.current
+      if (session) {
+        const world = dragDeltaFor(session, point)
+        if (world) {
+          // 截面只认法向分量：屏幕位移先投影到法向，切向拖动不会让剖切面乱跑。
+          if (session.slideNormal) session.total.copy(session.slideNormal).multiplyScalar(world.dot(session.slideNormal))
+          else session.total.copy(world)
+          // 只画"还没画的那一段"：画面跟手，文档在整次拖动期间保持不动。
+          const step = session.total.clone().sub(session.visualApplied)
+          if (step.lengthSq() > 1e-12) {
+            if (session.slideNormal) {
+              // 截面：屏幕位移投影到法向，画面上把截面与剖切面片一起挪，抬手再提交文档。
+              const distance = step.dot(session.slideNormal)
+              if (Math.abs(distance) > 1e-12) offsetSceneObjects(scene, session.targetId, session.slideNormal.clone().multiplyScalar(distance))
+            } else {
+              applyDragOffsets(scene, session.family, step)
+            }
+            session.visualApplied.copy(session.total)
+            session.applied = true
+            /**
+             * 立刻重画。这些偏移只是改了 Three.js 对象的位置，**不会自己触发渲染**；
+             * 少了这一句，画面就要等到下一次别的渲染（相机、尺寸、提交后的场景重建）才更新，
+             * 拖动看起来就是"一帧一帧"跳（实测：20 次 pointermove 里只有 3 次真的重画）。
+             */
+            render()
+            dragFrames += 1
+            if (sceneShell) sceneShell.dataset.dragFrames = String(dragFrames)
+          }
+          /**
+           * 拖动期间**不提交文档**：每次提交都会重建整个 3D 场景（几何与材质全部重建），
+           * 那正是拖动中"顿一下"的来源，而且一次拖动会变成多步撤销。画面由上面的临时偏移负责，
+           * 抬手时再一次性提交（见 handlePointerUp）。
+           */
+        }
+        pointerState.lastX = point.x
+        pointerState.lastY = point.y
+        return
+      }
       const state = cameraStateRef.current
       const scale = state.distance * 1.5
       // Ctrl drags along the view axis; middle drag, Shift+drag and the pan mode drag across the screen plane.
@@ -1035,36 +1426,63 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       setCameraState({ ...moved, target: clampCameraTarget(moved.target, sceneBounds) })
     }
     const handlePointerUp = (event: PointerEvent) => {
+      const pointerState = pointerStateRef.current
       if (!pointerState || pointerState.pointerId !== event.pointerId) return
       const point = pointFromEvent(event)
-      if (!pointerState.moved && pointerState.button === 0) {
+      const session = dragSessionRef.current
+      if (session) {
+        dragSessionRef.current = null
+        // 拖动期间一次都没提交，所以这里的一次提交就是整次拖动唯一的一步撤销。
+        if (session.applied && session.total.lengthSq() > 1e-8) {
+          if (session.slideNormal) moveSectionRef.current?.(session.targetId, session.total.dot(session.slideNormal))
+          else dragEndRef.current?.(session.targetId, session.total)
+        }
+        // 选中放在抬手：拖动本身不该因为高亮重建而多一次场景重建。
+        if (!selectedIdsRef.current.includes(session.targetId)) onSelect(session.targetId, false)
+      } else if (!pointerState.moved && pointerState.button === 0) {
         /**
          * 点击优先级：**点 / 棱的拾取优先于"创建"**。
          * 否则虚线预览会抢走顶点手柄的点击（实测回归：点顶点手柄变成创建截线），
          * 而细粒度的空间元素本来就是用户更明确的目标；只有落到实体/面的点击才解释为创建。
+         *
+         * 截面预览是例外，但要有条件：它的那圈虚线落在实体**内部**，任何点击都会先命中实体的面，
+         * 按上面的规则永远轮不到它（实测"点虚线创建截面"完全无效）。所以指针停在预览上时让预览优先，
+         * 除非用户明确指到了一个**比剖切面更靠前**的顶点/棱手柄——那种情况下用户要的是那个手柄。
          */
         const hit = pickRaycastHit3(scene, camera, point, { tolerance: pickTolerance() })
         const precise = hit?.kind === "point" || hit?.kind === "edge"
-        if (previewHovering && onPreviewClick && !precise) onPreviewClick()
+        // 按点击位置重新判定预览（不能用 pointermove 留下的标志：原地点击可能根本没有移动事件）。
+        const previewHit = previewHitAt(point)
+        const previewInFront = previewHit.depth === null || !hit || previewHit.depth <= hit.depth
+        const sectionWins = previewKindRef.current === "section" && previewInFront
+        if (previewHit.hovering && onPreviewClick && (!precise || sectionWins)) onPreviewClick()
         else onSelect(resolveSelectableHit(hit?.primitiveId ?? null, topologyOwners, event.altKey), event.shiftKey)
       }
       renderer.domElement.releasePointerCapture(event.pointerId)
-      pointerState = null
+      pointerStateRef.current = null
     }
     /**
-     * 指针是否落在虚线预览上。用射线与预览命中线求交，阈值按屏幕像素给（与实体拾取同一套思路），
+     * 指针落在虚线预览上了吗？用射线与预览命中区求交，阈值按屏幕像素给（与实体拾取同一套思路），
      * 这样"点击创建"只在真的指向预览时生效，不会抢走普通选择。
+     * 独立成函数是因为 **点击时必须按点击位置重新判定一次**：浏览器不需要在 pointerdown 之前先发
+     * pointermove，只靠 pointermove 维护的标志会让"原地点击"读到过期状态（实测：剖切面确实在指针下、
+     * 却因为标志是 false 而创建不了截面）。
      */
-    const updatePreviewHover = (event: PointerEvent) => {
-      if (!previewGroup || !onPreviewHover) return
-      const bounds = renderer.domElement.getBoundingClientRect()
-      if (bounds.width <= 0 || bounds.height <= 0) return
-      const pointer = new THREE.Vector2(((event.clientX - bounds.left) / bounds.width) * 2 - 1, -((event.clientY - bounds.top) / bounds.height) * 2 + 1)
+    const previewHitAt = (normalizedPoint: { x: number; y: number }) => {
+      if (!previewGroup) return { hovering: false, depth: null as number | null }
       const raycaster = new THREE.Raycaster()
       raycaster.params.Line = { threshold: pickTolerance() }
-      raycaster.setFromCamera(pointer, camera)
-      const hits = raycaster.intersectObjects(previewGroup.children, false)
-      const hovering = hits.length > 0
+      raycaster.setFromCamera(new THREE.Vector2(normalizedPoint.x * 2 - 1, -(normalizedPoint.y * 2 - 1)), camera)
+      const hitTargets = (previewGroup.userData.hitTargets as THREE.Object3D[] | undefined) ?? previewGroup.children
+      const hits = raycaster.intersectObjects(hitTargets, false)
+      return { hovering: hits.length > 0, depth: hits.length > 0 ? hits[0].distance : null }
+    }
+    const updatePreviewHover = (event: PointerEvent) => {
+      if (!previewGroup || !onPreviewHover) return
+      const point = pointFromEvent(event)
+      const { hovering, depth } = previewHitAt(point)
+      previewDepthRef.current = depth
+      if (sceneShell) sceneShell.dataset.previewHovering = hovering ? "true" : "false"
       if (hovering !== previewHovering) {
         previewHovering = hovering
         onPreviewHover(hovering)
@@ -1073,6 +1491,7 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     let previewHovering = false
     const handlePointerMoveForPreview = (event: PointerEvent) => updatePreviewHover(event)
     const handlePointerLeaveForPreview = () => {
+      previewDepthRef.current = null
       if (!previewHovering) return
       previewHovering = false
       onPreviewHover?.(false)
@@ -1084,6 +1503,20 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       setCameraState(zoomCameraState(cameraStateRef.current, Math.exp(event.deltaY * 0.001)))
     }
     const handleContextMenu = (event: MouseEvent) => event.preventDefault()
+    /**
+     * 方向键微调剖切面：只在「自由拖动」开着、且选中的是截面时生效（与拖动的语义一致）。
+     * 上下键沿法向 1 个单位、左右键反向；按住 Shift 走 0.2，用来贴近某个面。
+     */
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!dragModeRef.current || event.altKey || event.ctrlKey || event.metaKey) return
+      const section = documentRef.current.primitives.find((primitive): primitive is SectionPrimitive => primitive.type === "section" && selectedIdsRef.current.includes(primitive.id))
+      if (!section || !sectionUnitNormal(section.plane.normal)) return
+      const direction = event.key === "ArrowUp" || event.key === "ArrowRight" ? 1 : event.key === "ArrowDown" || event.key === "ArrowLeft" ? -1 : 0
+      if (direction === 0) return
+      event.preventDefault()
+      moveSectionRef.current?.(section.id, direction * (event.shiftKey ? 0.2 : 1))
+    }
+    globalThis.addEventListener("keydown", handleKeyDown)
     renderer.domElement.addEventListener("pointerdown", handlePointerDown)
     renderer.domElement.addEventListener("pointermove", handlePointerMove)
     renderer.domElement.addEventListener("pointerup", handlePointerUp)
@@ -1101,6 +1534,7 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       renderer.domElement.removeEventListener("pointerleave", handlePointerLeaveForPreview)
       renderer.domElement.removeEventListener("wheel", handleWheel)
       renderer.domElement.removeEventListener("contextmenu", handleContextMenu)
+      globalThis.removeEventListener("keydown", handleKeyDown)
       resizeObserver?.disconnect()
       disposeScene(scene)
       renderer.dispose()
@@ -1109,6 +1543,8 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
   }, [document, onSelect, selectedIds, showHiddenEdges, showNormals, transparentFaces, unfoldProgress])
 
   const hasGeometry = document.primitives.some((primitive) => ["point3", "line3", "segment3", "ray3", "edge3", "face3", "polyhedron3", "cube", "pyramid", "cylinder", "cone"].includes(primitive.type) && primitive.visible !== false)
+  /** 「以面为剖切面」需要有选中的截面作为目标。 */
+  const hasSelectedSection = selectedIds.some((id) => document.primitives.some((primitive) => primitive.id === id && primitive.type === "section"))
   const angle = dihedralAngleDegrees({ x: 1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 })
-  return <div className="three-canvas-shell" ref={containerRef} data-3d-scene="true" data-pan-mode={panMode ? "true" : "false"} aria-label="3D 几何场景"><div className="three-render-target" ref={renderTargetRef} /><div className="three-measurement-overlay" ref={measurementOverlayRef} aria-label="三维测量标注" /><div className="three-point-label-overlay" ref={pointLabelOverlayRef} aria-label="三维点标注" />{webglAvailable && <div className="three-scene-controls" aria-label="3D显示控制"><button type="button" aria-pressed={transparentFaces} onClick={() => setTransparentFaces((visible) => !visible)}>透明面</button><button type="button" aria-pressed={showHiddenEdges} onClick={() => setShowHiddenEdges((visible) => !visible)}>隐藏边</button><button type="button" aria-pressed={showNormals} onClick={toggleNormals}>法向量</button><button type="button" aria-pressed={unfolded} onClick={() => setUnfolded((visible) => !visible)}>{unfolded ? "折叠" : "展开"}</button><button type="button" aria-pressed={showAngle} onClick={toggleAngleDemo}>测量二面角</button></div>}{webglAvailable && <div className="three-camera-controls" aria-label="3D视角控制"><button type="button" aria-label="平移视角" aria-pressed={panMode} title="开启后左键拖动画布即平移视角，按 Ctrl 拖动沿视线前后移动" onClick={() => setPanMode((active) => !active)}>平移视角</button><button type="button" aria-label="适应视图" title="把视角调整到刚好框住当前图形，并把视角中心移回图形" onClick={() => fitCameraRef.current()}>适应视图</button><button type="button" aria-label="重置3D视角" title="回到默认视角" onClick={() => resetCameraRef.current()}>重置视角</button></div>}{webglAvailable && <p className="three-camera-hint" data-camera-hint="true">左键拖动旋转 · 中键或 Shift+左键拖动平移 · Ctrl+拖动沿视线前后移动 · 滚轮缩放</p>}{showAngle && webglAvailable && <div className="three-angle-readout" role="status">二面角：{angle.toFixed(1)}°（示例法向量 X/Y）</div>}{!webglAvailable && <div className="three-scene-status" role="status">当前浏览器不支持 WebGL，无法显示 3D 场景。</div>}{webglAvailable && !hasGeometry && <div className="three-scene-status" role="status">添加点、线或面开始探索三维空间。</div>}</div>
+  return <div className="three-canvas-shell" ref={containerRef} data-3d-scene="true" data-pan-mode={panMode ? "true" : "false"} data-drag-mode={dragMode ? "true" : "false"} aria-label="3D 几何场景"><div className="three-render-target" ref={renderTargetRef} /><div className="three-measurement-overlay" ref={measurementOverlayRef} aria-label="三维测量标注" /><div className="three-point-label-overlay" ref={pointLabelOverlayRef} aria-label="三维点标注" />{webglAvailable && <div className="three-scene-controls" aria-label="3D显示控制"><button type="button" aria-pressed={transparentFaces} onClick={() => setTransparentFaces((visible) => !visible)}>透明面</button><button type="button" aria-pressed={showHiddenEdges} onClick={() => setShowHiddenEdges((visible) => !visible)}>隐藏边</button><button type="button" aria-pressed={showNormals} onClick={toggleNormals}>法向量</button><button type="button" aria-pressed={unfolded} onClick={() => setUnfolded((visible) => !visible)}>{unfolded ? "折叠" : "展开"}</button><button type="button" aria-pressed={showAngle} onClick={toggleAngleDemo}>测量二面角</button><button type="button" aria-label="以面为剖切面" aria-pressed={facePickMode} title="点一下这个按钮，再点实体上的某个面，该面就成为选中截面的剖切面" disabled={!hasSelectedSection} onClick={() => setFacePickMode((active) => !active)}>取面</button></div>}{webglAvailable && <div className="three-camera-controls" aria-label="3D视角控制"><button type="button" aria-label="自由拖动" aria-pressed={dragMode} title="开启后左键按住图形即整体拖动：实体、点、以及由点驱动的棱/线/面/平面都会跟着指针在屏幕平面内移动，其它对象不受影响" onClick={() => enterMode("drag")}>自由拖动</button><button type="button" aria-label="平移视角" aria-pressed={panMode} title="开启后左键拖动画布即平移视角，按 Ctrl 拖动沿视线前后移动" onClick={() => enterMode("pan")}>平移视角</button><button type="button" aria-label="适应视图" title="把视角调整到刚好框住当前图形，并把视角中心移回图形" onClick={() => fitCameraRef.current()}>适应视图</button><button type="button" aria-label="重置3D视角" title="回到默认视角" onClick={() => resetCameraRef.current()}>重置视角</button></div>}{webglAvailable && <p className="three-camera-hint" data-camera-hint="true">{dragMode ? "自由拖动已开启：左键按住图形整体移动 · 关掉按钮后左键拖动恢复为旋转视角 · 滚轮缩放" : panMode ? "平移视角已开启：左键拖动平移 · 按 Ctrl 拖动沿视线前后移动 · 滚轮缩放" : "左键拖动旋转 · 中键或 Shift+左键拖动平移 · Ctrl+拖动沿视线前后移动 · 滚轮缩放"}</p>}{showAngle && webglAvailable && <div className="three-angle-readout" role="status">二面角：{angle.toFixed(1)}°（示例法向量 X/Y）</div>}{!webglAvailable && <div className="three-scene-status" role="status">当前浏览器不支持 WebGL，无法显示 3D 场景。</div>}{webglAvailable && !hasGeometry && <div className="three-scene-status" role="status">添加点、线或面开始探索三维空间。</div>}</div>
 }

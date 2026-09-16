@@ -33,6 +33,20 @@ export type DomainOperation =
   | { op: "updateDrawingView"; id: string; patch: DrawingViewUpdatePatch }
   | { op: "deleteDrawingView"; id: string }
   | { op: "translatePrimitive"; id: string; delta: { x: number; y: number } }
+  /**
+   * 自由拖动（立体几何）：按世界向量整体平移一个空间对象。
+   * 由点驱动的对象平移它自己的点，模板实体平移自己的定位参数，生成拓扑由重算跟随。
+   */
+  | { op: "translatePrimitive3"; id: string; delta: Vector3 }
+  /**
+   * 沿自身法向平移剖切面（截面专用）。`distance` 为世界单位的有符号位移，正值朝法向方向。
+   * 截面点由 `recomputeSection` 在同一事务里重算，所以"移动剖切面"和"截面形状更新"永远一致。
+   */
+  | { op: "moveSectionPlane"; id: string; distance: number }
+  /** 绕世界轴旋转剖切面。`pivot` 省略时绕平面上离原点最近的点转；界面传实体中心，刀口才是"绕着图形摆斜"。 */
+  | { op: "rotateSectionPlane"; id: string; axis: "x" | "y" | "z"; degrees: number; pivot?: Vector3 }
+  /** 直接给定剖切面（例如"用某个面当剖切面"）。 */
+  | { op: "setSectionPlane"; id: string; normal: Vector3; constant: number }
 
 export type Alignment = "left" | "right" | "top" | "bottom" | "horizontalCenter" | "verticalCenter"
 
@@ -153,6 +167,74 @@ function translateFunction(primitive: Extract<PrimitiveSpec, { type: "function" 
   return { ...primitive, expression: `(${shiftedExpression})${signedOffset(y)}`, domain: [primitive.domain[0] + x, primitive.domain[1] + x] }
 }
 
+function shiftedPoint(point: Vector3, delta: Vector3): Vector3 {
+  return { x: point.x + delta.x, y: point.y + delta.y, z: point.z + delta.z }
+}
+
+function point3Index(document: GeometryDocument): Map<string, Point3Primitive> {
+  return new Map(document.primitives.filter((candidate): candidate is Point3Primitive => candidate.type === "point3").map((point) => [point.id, point]))
+}
+
+/** Point-driven objects only reference their points; those points are what a drag has to move. */
+function managedPointIds(primitive: PrimitiveSpec): string[] {
+  if (primitive.type === "line3") return primitive.definition.kind === "throughPoints" ? [...primitive.definition.pointIds] : [primitive.definition.pointId]
+  if (primitive.type === "segment3" || primitive.type === "edge3") return [...primitive.pointIds]
+  if (primitive.type === "ray3") return [primitive.originId, primitive.throughId]
+  if (primitive.type === "plane3") return primitive.definition.kind === "throughPoints" ? [...primitive.definition.pointIds] : [primitive.definition.pointId]
+  if (primitive.type === "face3") return [...primitive.pointIds]
+  if (primitive.type === "polyhedron3") return [...primitive.vertexIds]
+  return []
+}
+
+/**
+ * Every point/edge/face a template solid materialised. Those children are drawn from their parent, so a drag
+ * has to move the parent; letting a child move on its own would silently pull the solid apart.
+ */
+export function templateTopologyIds(document: GeometryDocument): Set<string> {
+  const ids = new Set<string>()
+  for (const primitive of document.primitives) {
+    if (primitive.type !== "polyhedron3" || primitive.construction?.kind !== "template") continue
+    for (const childId of [...primitive.vertexIds, ...primitive.edgeIds, ...primitive.faceIds]) ids.add(childId)
+  }
+  return ids
+}
+
+/**
+ * Whether free dragging may move this object at all. Generated topology is excluded (above); planes and
+ * point-driven lines/edges/faces only move when the points they are defined by can move; bound points belong
+ * to whatever binds them.
+ */
+export function isFreeDraggable3(primitive: PrimitiveSpec, points: Map<string, Point3Primitive>, generated: Set<string> = new Set()): boolean {
+  if (primitive.locked) return false
+  if (generated.has(primitive.id)) return false
+  if (primitive.type === "point3") return !primitive.binding || primitive.binding.kind === "free"
+  if (primitive.type === "cube" || primitive.type === "pyramid" || primitive.type === "cylinder" || primitive.type === "cone") return true
+  if (!["line3", "segment3", "ray3", "plane3", "face3", "polyhedron3", "edge3"].includes(primitive.type)) return false
+  const owned = managedPointIds(primitive)
+  if (owned.length === 0) return false
+  return owned.every((id) => {
+    if (generated.has(id)) return false
+    const point = points.get(id)
+    return Boolean(point) && (!point!.binding || point!.binding.kind === "free")
+  })
+}
+
+/**
+ * Translate an object along a world vector. The object's own geometry is either a stored parameter (a template
+ * solid's anchor, or a free point's position) or an inherited reference to its points; `movedIds` names what
+ * else this drag has to move, which is also what tells the dependent recompute what to re-derive.
+ */
+function translatePrimitive3(primitive: PrimitiveSpec, delta: Vector3): { primitive: PrimitiveSpec; movedIds: string[] } {
+  if (primitive.type === "point3") {
+    if (primitive.binding && primitive.binding.kind !== "free") return { primitive, movedIds: [] }
+    return { primitive: { ...primitive, position: shiftedPoint(primitive.position, delta) }, movedIds: [primitive.id] }
+  }
+  if (primitive.type === "cube") return { primitive: { ...primitive, origin: shiftedPoint(primitive.origin, delta) }, movedIds: [primitive.id] }
+  if (primitive.type === "pyramid") return { primitive: { ...primitive, baseCenter: shiftedPoint(primitive.baseCenter, delta) }, movedIds: [primitive.id] }
+  if (primitive.type === "cylinder" || primitive.type === "cone") return { primitive: { ...primitive, center: shiftedPoint(primitive.center, delta) }, movedIds: [primitive.id] }
+  return { primitive, movedIds: managedPointIds(primitive) }
+}
+
 function primitiveDependencies(primitive: PrimitiveSpec): string[] {
   const dependencies: string[] = []
   if (primitive.type === "point" && primitive.binding) {
@@ -250,6 +332,88 @@ function templateTopology(sourceId: string, primitiveMap: Map<string, PrimitiveS
     if (primitive.type === "polyhedron3" && primitive.construction?.kind === "template" && primitive.construction.sourceIds[0] === sourceId) return primitive
   }
   return null
+}
+
+/** Vertex positions of a section source: materialized topology first, template tessellation as fallback. */
+export function sectionSourceVertices(document: GeometryDocument, sourceId: string): Vector3[] {
+  const primitiveMap = new Map(document.primitives.map((primitive) => [primitive.id, primitive]))
+  const source = primitiveMap.get(sourceId)
+  return source ? sourceVertices(source, primitiveMap) : []
+}
+
+/**
+ * 截面的剖切面平移一段距离。平面以 `normal · p + constant = 0` 表示，沿法向走 `distance` 时**只改常数项**：
+ * `constant - distance * |normal|`。这里刻意不把法向单位化——同时改法向和常数项会让平面额外漂移
+ * （实测：法向 (0,3,4)、距离 1 时，平面会多走 2 个单位）。
+ */
+export function movedSectionPlane(plane: { normal: Vector3; constant: number }, distance: number): { normal: Vector3; constant: number } {
+  const length = Math.hypot(plane.normal.x, plane.normal.y, plane.normal.z)
+  if (!Number.isFinite(length) || length < 1e-9 || !Number.isFinite(distance)) return plane
+  return { normal: plane.normal, constant: plane.constant - distance * length }
+}
+
+/** 剖切面沿法向到原点的有符号偏移（教学读数：平面相对原点走了多远）。 */
+export function sectionPlaneOffset(plane: { normal: Vector3; constant: number }): number {
+  const length = Math.hypot(plane.normal.x, plane.normal.y, plane.normal.z)
+  return length < 1e-9 ? 0 : -plane.constant / length
+}
+
+function rotateVector(vector: Vector3, axis: "x" | "y" | "z", radians: number): Vector3 {
+  const cos = Math.cos(radians)
+  const sin = Math.sin(radians)
+  if (axis === "x") return { x: vector.x, y: vector.y * cos - vector.z * sin, z: vector.y * sin + vector.z * cos }
+  if (axis === "y") return { x: vector.x * cos + vector.z * sin, y: vector.y, z: -vector.x * sin + vector.z * cos }
+  return { x: vector.x * cos - vector.y * sin, y: vector.x * sin + vector.y * cos, z: vector.z }
+}
+
+/**
+ * 绕世界轴旋转剖切面，枢轴默认取平面上离原点最近的点。
+ * 绕**实体中心**转才是教学上想要的"把刀口摆斜"（见 `sectionPivotFor`）；枢轴参数化是为了让调用方给出
+ * 那个中心，同时保留"绕平面自身垂足转"这一纯几何语义。
+ */
+export function rotatedSectionPlane(plane: { normal: Vector3; constant: number }, axis: "x" | "y" | "z", degrees: number, pivot?: Vector3): { normal: Vector3; constant: number } {
+  const lengthSq = plane.normal.x ** 2 + plane.normal.y ** 2 + plane.normal.z ** 2
+  if (!Number.isFinite(lengthSq) || lengthSq < 1e-18 || !Number.isFinite(degrees)) return plane
+  const center = pivot ?? { x: -plane.constant * plane.normal.x / lengthSq, y: -plane.constant * plane.normal.y / lengthSq, z: -plane.constant * plane.normal.z / lengthSq }
+  if (!Number.isFinite(center.x) || !Number.isFinite(center.y) || !Number.isFinite(center.z)) return plane
+  const normal = rotateVector(plane.normal, axis, degrees * Math.PI / 180)
+  return { normal, constant: -(normal.x * center.x + normal.y * center.y + normal.z * center.z) }
+}
+
+/** 一组点的中心：截面的剖切面绕着它转，倾斜后的刀口才会仍然穿过实体、看得见截面。 */
+export function sectionPivot(points: Vector3[]): Vector3 | null {
+  if (points.length === 0) return null
+  const centre = points.reduce((sum, point) => ({ x: sum.x + point.x, y: sum.y + point.y, z: sum.z + point.z }), { x: 0, y: 0, z: 0 })
+  return { x: centre.x / points.length, y: centre.y / points.length, z: centre.z / points.length }
+}
+
+/** 点到平面的有符号距离：`normal·p + constant`（法向为单位向量时就是世界距离）。 */
+export function sectionDistanceToPlane(plane: { normal: Vector3; constant: number }, point: Vector3): number {
+  return plane.normal.x * point.x + plane.normal.y * point.y + plane.normal.z * point.z + plane.constant
+}
+
+export interface SectionPlaneGeometry {
+  normal: Vector3
+  constant: number
+}
+
+/**
+ * 由一组共面点求它所在的平面（前三点定法向，再用全部点校正方向）。
+ * 点不共面（例如圆柱侧面那圈顶点）或退化时返回 null——调用方据此明确拒绝，而不是塞一个瞎猜的平面。
+ */
+export function planeThroughPoints(points: Vector3[], tolerance = 1e-6): SectionPlaneGeometry | null {  if (points.length < 3) return null
+  const subtract = (a: Vector3, b: Vector3): Vector3 => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z })
+  const cross = (a: Vector3, b: Vector3): Vector3 => ({ x: a.y * b.z - a.z * b.y, y: a.z * b.x - a.x * b.z, z: a.x * b.y - a.y * b.x })
+  const dot = (a: Vector3, b: Vector3) => a.x * b.x + a.y * b.y + a.z * b.z
+  const [first, second, third] = points
+  const normal = cross(subtract(second, first), subtract(third, first))
+  const length = Math.hypot(normal.x, normal.y, normal.z)
+  if (!Number.isFinite(length) || length < 1e-9) return null
+  const unit = { x: normal.x / length, y: normal.y / length, z: normal.z / length }
+  const constant = -dot(unit, points[0])
+  // 判据是各点到平面的**绝对**距离。把容差乘上"点集尺寸"是错的：那样点集越大越松，
+  // 圆柱侧面那圈顶点就会被当成一个平面（实测）。
+  return points.every((point) => Math.abs(dot(unit, point) + constant) <= tolerance) ? { normal: unit, constant } : null
 }
 
 /** Vertex positions of a section source: materialized topology first, template tessellation as fallback. */
@@ -908,6 +1072,36 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
         : candidate.type === "function" ? translateFunction(candidate, operation.delta.x, operation.delta.y) : translatePrimitive(candidate, operation.delta.x, operation.delta.y))
       changedIds = [operation.id]
     }
+  } else if (operation.op === "translatePrimitive3") {
+    const primitive = next.primitives.find((candidate) => candidate.id === operation.id)
+    if (!primitive) return { document, changed: false, error: "object not found" }
+    if (!isFreeDraggable3(primitive, point3Index(next), templateTopologyIds(next))) return { document, changed: false, error: "object is not draggable" }
+    const moved = translatePrimitive3(primitive, operation.delta)
+    const movedIds = new Set(moved.movedIds)
+    next.primitives = next.primitives
+      .map((candidate) => candidate.id === operation.id ? moved.primitive : candidate)
+      // A point-driven object is moved by moving its points; the object itself only follows through recompute.
+      .map((candidate) => candidate.type === "point3" && candidate.id !== operation.id && movedIds.has(candidate.id) ? { ...candidate, position: shiftedPoint(candidate.position, operation.delta) } : candidate)
+    // Sections name their source by id, so they are not in the dependency index: a moved solid has to
+    // re-derive its own cuts explicitly, or the drawn section would keep the old shape while the solid moves.
+    const cutIds = next.primitives.filter((candidate): candidate is Extract<PrimitiveSpec, { type: "section" }> => candidate.type === "section" && candidate.sourceId === operation.id).map((section) => section.id)
+    changedIds = [...movedIds, operation.id, ...cutIds]
+  } else if (operation.op === "moveSectionPlane") {
+    const primitive = next.primitives.find((candidate) => candidate.id === operation.id)
+    if (!primitive || primitive.type !== "section") return { document, changed: false, error: "section not found" }
+    primitive.plane = movedSectionPlane(primitive.plane, operation.distance)
+    // 剖切面变了，截面点必须在同一次提交里重算，否则画布上的形状和读数会对不上。
+    changedIds = [operation.id]
+  } else if (operation.op === "rotateSectionPlane") {
+    const primitive = next.primitives.find((candidate) => candidate.id === operation.id)
+    if (!primitive || primitive.type !== "section") return { document, changed: false, error: "section not found" }
+    primitive.plane = rotatedSectionPlane(primitive.plane, operation.axis, operation.degrees, operation.pivot)
+    changedIds = [operation.id]
+  } else if (operation.op === "setSectionPlane") {
+    const primitive = next.primitives.find((candidate) => candidate.id === operation.id)
+    if (!primitive || primitive.type !== "section") return { document, changed: false, error: "section not found" }
+    primitive.plane = { normal: { ...operation.normal }, constant: operation.constant }
+    changedIds = [operation.id]
   } else if (operation.op === "toggleLock") {
     const primitive = next.primitives.find((candidate) => candidate.id === operation.id)
     if (!primitive) return { document, changed: false, error: "object not found" }

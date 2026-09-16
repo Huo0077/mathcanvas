@@ -328,9 +328,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .three-camera-hint { position: absolute; z-index: 2; bottom: var(--space-3); left: var(--space-3); margin: 0; padding: var(--space-1) var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-muted); background: rgb(255 255 255 / 88%); font-size: 0.72rem; pointer-events: none; }
 .three-canvas-shell[data-pan-mode="true"] canvas { cursor: grab; }
 .three-canvas-shell[data-pan-mode="true"] canvas:active { cursor: grabbing; }
+.three-canvas-shell[data-drag-mode="true"] canvas { cursor: move; }
+.three-canvas-shell[data-drag-mode="true"] canvas:active { cursor: grabbing; }
 .toolbar-hint { margin: var(--space-2) 0 0; color: var(--color-muted); font-size: 0.78rem; line-height: 1.4; }
 .three-scene-controls { position: absolute; z-index: 2; top: var(--space-3); left: var(--space-3); display: flex; flex-wrap: wrap; gap: var(--space-1); }
-.three-scene-controls button { min-height: 44px; padding-inline: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-muted); background: rgb(255 255 255 / 92%); box-shadow: var(--shadow-card); }
+.three-scene-controls button { min-height: 44px; padding-inline: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-muted); background: rgb(255 255 255 / 92%); box-shadow: var(--shadow-card); white-space: nowrap; }
 .three-scene-controls button[aria-pressed="true"] { border-color: var(--color-accent); color: var(--color-accent); background: var(--color-accent-soft); }
 .three-angle-readout { position: absolute; z-index: 2; right: var(--space-3); bottom: var(--space-3); padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-ink); background: rgb(255 255 255 / 92%); box-shadow: var(--shadow-card); font-size: 0.78rem; }
 .coordinate-readout { top: 18px; left: 18px; border-color: #e7e4ef; border-radius: 10px; color: #68637b; background: rgb(255 255 255 / 90%); }

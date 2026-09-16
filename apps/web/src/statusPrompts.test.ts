@@ -43,8 +43,12 @@ describe("status prompts", () => {
     // 选中两个对象：指针不在虚线上时提示"移到虚线上"，移上去后提示"点击即可创建"。
     expect(resolveIntersectionPreviewPrompt({ kind: "intersection", label: "面交线 · 1 段" }, false)).toContain("移到虚线上")
     expect(resolveIntersectionPreviewPrompt({ kind: "intersection", label: "面交线 · 1 段" }, true)).toContain("点击即可创建")
-    // 单个实体给的是默认剖切平面截面，指向既有的创建入口。
-    expect(resolveIntersectionPreviewPrompt({ kind: "section", label: "默认剖切平面截面 · 4 边形" }, false)).toContain("创建截面")
+    // 单个实体给的是默认剖切平面截面：指针不在剖切面上时不抢状态栏（"已选中…"本身也是用户需要的信息），
+    // 指上去才解释"点它即创建、之后怎么挪刀口"。
+    expect(resolveIntersectionPreviewPrompt({ kind: "section", label: "默认剖切平面截面 · 4 边形" }, false)).toBeNull()
+    const hovered = resolveIntersectionPreviewPrompt({ kind: "section", label: "默认剖切平面截面 · 4 边形" }, true)
+    expect(hovered).toContain("点击即创建截面")
+    expect(hovered).toContain("方向键")
     // 条件不足时直接说明原因；没有预览时不发言（交给默认提示）。
     expect(resolveIntersectionPreviewPrompt({ kind: "insufficient", label: "", reason: "两组面之间没有交线。" }, false)).toBe("两组面之间没有交线。")
     expect(resolveIntersectionPreviewPrompt({ kind: "none", label: "" }, false)).toBeNull()
