@@ -7,6 +7,7 @@ import type { SceneControlMode } from "./statusPrompts"
 import { resolveDihedralMarker3, resolvePolyhedronTopology } from "@draw/scene-graph"
 
 import { opacityFor, strokeFor } from "./primitiveStyle"
+import type { ThreeScenePreview } from "./threeScenePreview"
 
 const scenePalette = {
   background: "#fbfcff",
@@ -652,9 +653,49 @@ export interface ThreeSceneViewProps {
   onSelect: (id: string | null, additive?: boolean) => void
   /** Reports which display switch is on so the shell can explain what it draws; null when both are off. */
   onStatusPromptChange?: (sceneControl: SceneControlMode | null) => void
+  /**
+   * 虚线预览内容（截面 / 截线）。传 null 表示当前选择没有可预览对象。
+   * `interactive` 为真时指针落在预览上会高亮并上报，App 据此把点击解释为"创建图元"。
+   */
+  preview?: ThreeScenePreview | null
+  onPreviewHover?: (hovering: boolean) => void
 }
 
-export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPromptChange }: ThreeSceneViewProps) {
+/** 虚线预览：低不透明度 + 虚线的交线/截面，明确区别于用户已创建的图元。 */
+function createPreviewGroup(
+  preview: ThreeScenePreview,
+  interactive: boolean,
+  onHoverChange: (hovering: boolean) => void
+): THREE.Group {
+  const group = new THREE.Group()
+  group.userData.visualRole = "intersection-preview"
+  const points: THREE.Vector3[] = []
+  if (preview.kind === "intersection") {
+    for (const segment of preview.segments) {
+      points.push(new THREE.Vector3(segment.a.x, segment.a.y, segment.a.z), new THREE.Vector3(segment.b.x, segment.b.y, segment.b.z))
+    }
+  } else {
+    const loop = preview.points.length >= 2 ? [...preview.points, preview.points[0]] : []
+    for (const point of loop) points.push(new THREE.Vector3(point.x, point.y, point.z))
+  }
+  if (points.length >= 2) {
+    const geometry = new THREE.BufferGeometry().setFromPoints(points)
+    const line = new THREE.LineSegments(geometry, new THREE.LineDashedMaterial({ color: "#f04f5f", dashSize: 0.35, gapSize: 0.25, transparent: true, opacity: 0.85 }))
+    line.computeLineDistances()
+    line.userData.visualRole = "intersection-preview-line"
+    group.add(line)
+    if (interactive) {
+      // 命中带：用一根不可见但更粗的线承担拾取，避免用户必须点到 1px 宽的虚线上。
+      const hit = new THREE.LineSegments(geometry.clone(), new THREE.LineBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }))
+      hit.userData.visualRole = "intersection-preview-hit"
+      group.add(hit)
+    }
+  }
+  group.userData.onHoverChange = onHoverChange
+  return group
+}
+
+export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPromptChange, preview = null, onPreviewHover }: ThreeSceneViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const renderTargetRef = useRef<HTMLDivElement>(null)
   const measurementOverlayRef = useRef<HTMLDivElement>(null)
@@ -674,6 +715,8 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
   const [webglAvailable, setWebglAvailable] = useState(true)
   const statusPromptChangeRef = useRef(onStatusPromptChange)
   statusPromptChangeRef.current = onStatusPromptChange
+  const previewHoverRef = useRef(onPreviewHover)
+  previewHoverRef.current = onPreviewHover
   /**
    * Which display switch was toggled last. Both can be on at once, so the shell's hint follows the most recent
    * user action instead of a hard-coded priority; toggling the last one off clears the hint.
@@ -787,6 +830,18 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       const mesh = createSectionMesh(primitive)
       if (mesh) scene.add(mesh)
     })
+    // 已持久化的截线：虚线，与"预览"用同一种视觉语言，但颜色更深、实心可选中。
+    document.primitives.filter((primitive) => primitive.type === "intersectionLine" && primitive.visible !== false).forEach((primitive) => {
+      if (primitive.type !== "intersectionLine") return
+      const points = primitive.segments.flatMap((segment) => [new THREE.Vector3(segment.a.x, segment.a.y, segment.a.z), new THREE.Vector3(segment.b.x, segment.b.y, segment.b.z)])
+      if (points.length < 2) return
+      const line = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(points), new THREE.LineDashedMaterial({ color: primitive.style?.stroke ?? "#dc2626", dashSize: 0.3, gapSize: 0.2 }))
+      line.computeLineDistances()
+      line.userData.primitiveId = primitive.id
+      line.userData.primitiveType = primitive.type
+      line.userData.visualRole = "intersection-line"
+      scene.add(line)
+    })
     let unfoldFaceCount = 0
     unfoldedPolyhedra.forEach((polyhedron) => {
       const topology = resolvePolyhedronTopology(document, polyhedron.id)
@@ -832,7 +887,13 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       scene.add(plane)
       planeCount += 1
     })
+    // 预览层最后加入：盖在实体之上，但仍用虚线表达"还没创建"。
+    const previewGroup = preview && (preview.segments.length > 0 || preview.points.length >= 2)
+      ? createPreviewGroup(preview, Boolean(onPreviewHover), (hovering) => previewHoverRef.current?.(hovering))
+      : null
+    if (previewGroup) scene.add(previewGroup)
     if (sceneShell) {
+      sceneShell.dataset.intersectionPreview = previewGroup ? preview!.kind : "none"
       sceneShell.dataset.unfoldFaces = String(unfoldFaceCount)
       sceneShell.dataset.unfoldProgress = unfoldProgress.toFixed(2)
       sceneShell.dataset.dihedralMarkers = String(dihedralMarkerCount)
@@ -978,6 +1039,34 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       renderer.domElement.releasePointerCapture(event.pointerId)
       pointerState = null
     }
+    /**
+     * 指针是否落在虚线预览上。用射线与预览命中线求交，阈值按屏幕像素给（与实体拾取同一套思路），
+     * 这样"点击创建"只在真的指向预览时生效，不会抢走普通选择。
+     */
+    const updatePreviewHover = (event: PointerEvent) => {
+      if (!previewGroup || !onPreviewHover) return
+      const bounds = renderer.domElement.getBoundingClientRect()
+      if (bounds.width <= 0 || bounds.height <= 0) return
+      const pointer = new THREE.Vector2(((event.clientX - bounds.left) / bounds.width) * 2 - 1, -((event.clientY - bounds.top) / bounds.height) * 2 + 1)
+      const raycaster = new THREE.Raycaster()
+      raycaster.params.Line = { threshold: pickTolerance() }
+      raycaster.setFromCamera(pointer, camera)
+      const hits = raycaster.intersectObjects(previewGroup.children, false)
+      const hovering = hits.length > 0
+      if (hovering !== previewHovering) {
+        previewHovering = hovering
+        onPreviewHover(hovering)
+      }
+    }
+    let previewHovering = false
+    const handlePointerMoveForPreview = (event: PointerEvent) => updatePreviewHover(event)
+    const handlePointerLeaveForPreview = () => {
+      if (!previewHovering) return
+      previewHovering = false
+      onPreviewHover?.(false)
+    }
+    renderer.domElement.addEventListener("pointermove", handlePointerMoveForPreview)
+    renderer.domElement.addEventListener("pointerleave", handlePointerLeaveForPreview)
     const handleWheel = (event: WheelEvent) => {
       event.preventDefault()
       setCameraState(zoomCameraState(cameraStateRef.current, Math.exp(event.deltaY * 0.001)))
@@ -996,6 +1085,8 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       renderer.domElement.removeEventListener("pointermove", handlePointerMove)
       renderer.domElement.removeEventListener("pointerup", handlePointerUp)
       renderer.domElement.removeEventListener("pointercancel", handlePointerUp)
+      renderer.domElement.removeEventListener("pointermove", handlePointerMoveForPreview)
+      renderer.domElement.removeEventListener("pointerleave", handlePointerLeaveForPreview)
       renderer.domElement.removeEventListener("wheel", handleWheel)
       renderer.domElement.removeEventListener("contextmenu", handleContextMenu)
       resizeObserver?.disconnect()

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { resolveStatusPrompt } from "./statusPrompts"
+import { resolveIntersectionPreviewPrompt, resolveStatusPrompt } from "./statusPrompts"
 
 describe("status prompts", () => {
   it("describes the default selection workflow", () => {
@@ -37,5 +37,17 @@ describe("status prompts", () => {
     const prompt = resolveStatusPrompt({ mode: "line", selectedCount: 0, selectedLabel: null, hasCenter: false, hasStart: false, pointCount: 0, sceneControl: "normals" })
 
     expect(prompt).toContain("第1步")
+  })
+
+  it("describes the dashed intersection preview and its two levels", () => {
+    // 选中两个对象：指针不在虚线上时提示"移到虚线上"，移上去后提示"点击即可创建"。
+    expect(resolveIntersectionPreviewPrompt({ kind: "intersection", label: "面交线 · 1 段" }, false)).toContain("移到虚线上")
+    expect(resolveIntersectionPreviewPrompt({ kind: "intersection", label: "面交线 · 1 段" }, true)).toContain("点击即可创建")
+    // 单个实体给的是默认剖切平面截面，指向既有的创建入口。
+    expect(resolveIntersectionPreviewPrompt({ kind: "section", label: "默认剖切平面截面 · 4 边形" }, false)).toContain("创建截面")
+    // 条件不足时直接说明原因；没有预览时不发言（交给默认提示）。
+    expect(resolveIntersectionPreviewPrompt({ kind: "insufficient", label: "", reason: "两组面之间没有交线。" }, false)).toBe("两组面之间没有交线。")
+    expect(resolveIntersectionPreviewPrompt({ kind: "none", label: "" }, false)).toBeNull()
+    expect(resolveIntersectionPreviewPrompt(null, false)).toBeNull()
   })
 })

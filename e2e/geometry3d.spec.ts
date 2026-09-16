@@ -475,6 +475,21 @@ test("explains the normal and sample-angle controls in the status bar", async ({
   await expect(status).not.toContainText("示例值")
 })
 
+test("previews the section of a selected solid as a dashed overlay", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "添加立方体" }).click()
+
+  const scene = page.locator("[data-3d-scene]")
+  // 新建实体后它自动成为当前选择，所以虚线预览此刻就应该在（预览跟随选择，不是常驻）。
+  await expect(scene).toHaveAttribute("data-intersection-preview", "section")
+
+  await page.locator(".algebra-panel").getByText("立方体 1").first().click()
+  // 选中单个实体：默认剖切平面截面以虚线预览出现（状态栏留给选择提示，不抢「创建截面」按钮的说明）。
+  await expect(scene).toHaveAttribute("data-intersection-preview", "section")
+  await expect(page.getByRole("status", { name: "操作提示" })).toContainText("已选中")
+})
+
 test("labels 3D points with their classroom names inside the scene", async ({ page }) => {
   await page.goto("/")
   await page.getByRole("button", { name: "立体几何" }).click()

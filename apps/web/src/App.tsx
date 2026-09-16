@@ -9,7 +9,7 @@ import { AlgebraView } from "./components/AlgebraView"
 import { AppChrome } from "./components/AppChrome"
 import { DocumentTreePanel } from "./components/DocumentTreePanel"
 import { DrawingSheetView } from "./components/DrawingSheetView"
-import { DraftControlsRow, type DraftControls } from "./components/DraftControlsRow"
+import { DraftControlsRow } from "./components/DraftControlsRow"
 import { DrawingTree } from "./components/DrawingTree"
 import type { DrawingViewPatch } from "./components/DrawingViewport"
 import { EngineeringDrawingView, type ProjectionSource } from "./components/EngineeringDrawingView"
@@ -23,6 +23,7 @@ import { LayerTree } from "./components/LayerTree"
 import { PropertiesBar, type PropertiesBarProps } from "./components/PropertiesBar"
 import { StatusBar } from "./components/StatusBar"
 import { createRibbonGroups } from "./ribbonCommands"
+import { resolveIntersectionPreview } from "./intersectionPreview3d"
 import { ThreeSceneView } from "./threeScene"
 import type { RibbonTabId } from "./uiState"
 import type { IntersectionPreview } from "./intersectionPreview"
@@ -32,8 +33,8 @@ import { exportCsv, exportSvg } from "./persistence/exporters"
 import { exportEngineeringDxf, exportEngineeringPdf, exportEngineeringSvg, selectExportableDrawings } from "./persistence/engineeringExporters"
 import { defaultDraftView, drawingViewLabels, resolveProjectedDrawing } from "./projectionVisuals"
 import { migrateLegacySolids } from "./solidTemplates"
-import { point3ToolAvailability, point3ToolHint } from "./spatialTools"
-import { resolveStatusPrompt, type SceneControlMode } from "./statusPrompts"
+import { point3ToolAvailability } from "./spatialTools"
+import { resolveStatusPrompt, resolveIntersectionPreviewPrompt, type SceneControlMode } from "./statusPrompts"
 import { useSceneStore } from "./store"
 
 type CreationMode = "line" | "segment" | "ray" | "polyline" | "circle" | "arc" | null
@@ -143,13 +144,23 @@ export function App() {
   const [layerNotice, setLayerNotice] = useState<string | null>(null)
   const [sceneControl, setSceneControl] = useState<SceneControlMode | null>(null)
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("data")
-  /** 2D 绘图命令区（坐标/动态输入/约束/栅格/偏移）由活动绘图视口上报，渲染在图纸之外的工具栏上。 */
-  const [draftControls, setDraftControls] = useState<DraftControls | null>(null)
   /**
    * 工程制图的投影来源。工作区文档是独立的，用户在立体几何里建的模型默认不会出现在工程制图里；
    * 这里允许显式切换成投影立体几何文档，而不是让他去猜"为什么四个视图都是空的"。
    */
   const [projectionSource, setProjectionSource] = useState<ProjectionSource>("cad")
+  /** 3D 画布的虚线预览（选中一个实体给截面，选中两个对象给面交线）与指针是否落在预览上。 */
+  const [previewHovered, setPreviewHovered] = useState(false)
+  const intersectionPreview = useMemo(
+    () => (document.workspace === "geometry3d" ? resolveIntersectionPreview(document, selectedIds) : null),
+    [document, selectedIds]
+  )
+  /** 只有真正可画的两类才交给 3D 场景；`none` / `insufficient` 由状态栏解释原因。 */
+  const drawablePreview = intersectionPreview?.kind === "intersection" || intersectionPreview?.kind === "section"
+    ? { kind: intersectionPreview.kind, segments: intersectionPreview.segments, points: intersectionPreview.points, label: intersectionPreview.label }
+    : null
+  /** 单个实体的截面预览不抢状态栏（它指向既有的「创建截面」按钮，状态栏留给选择提示）。 */
+  const previewStatus = drawablePreview?.kind === "section" ? null : intersectionPreview
   const [activeRibbonTab, setActiveRibbonTab] = useState<RibbonTabId | null>("home")
   const [ribbonExpanded, setRibbonExpanded] = useState(true)
   const [ribbonPinned, setRibbonPinned] = useState(false)
@@ -757,7 +768,13 @@ export function App() {
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [selectedIds, document, apply, undo, redo, creationStep, activeCommand, guidance])
 
-  const statusPrompt = resolveStatusPrompt({ mode: creationMode, selectedCount: selectedIds.length, selectedLabel: selectedPrimitive?.label ?? selectedPrimitive?.id ?? null, hasCenter: Boolean(creationStep?.center), hasStart: Boolean(creationStep?.start), pointCount: creationStep?.points?.length ?? 0, sceneControl })
+  // 优先级：创建步骤 > 3D 显示开关提示（法向量/二面角示例）> 交线预览 > 默认选择提示。
+  // 显示开关是用户刚刚按下按钮触发的，必须盖过"选择带来的预览"，否则状态栏会像没反应。
+  const basePrompt = resolveStatusPrompt({ mode: creationMode, selectedCount: selectedIds.length, selectedLabel: selectedPrimitive?.label ?? selectedPrimitive?.id ?? null, hasCenter: Boolean(creationStep?.center), hasStart: Boolean(creationStep?.start), pointCount: creationStep?.points?.length ?? 0, sceneControl })
+  const previewPrompt = document.workspace === "geometry3d" && !sceneControl && previewStatus && previewStatus.kind !== "none"
+    ? resolveIntersectionPreviewPrompt(previewStatus, previewHovered)
+    : null
+  const statusPrompt = previewPrompt ?? basePrompt
 
   const activeCommandPrompt = ribbonGroups
     .flatMap((group) => group.commands)
@@ -863,7 +880,6 @@ export function App() {
         onDragEnd={handleDragEnd}
         onBoxSelect={selectBox}
         onEditSelected={editSelectedGeometry}
-        onDraftControlsChange={setDraftControls}
         draftControlsSlot={(controls) => <DraftControlsRow controls={controls} />}
         draftControlsHandledExternally
         onSelect={updateSelection}
@@ -904,7 +920,7 @@ export function App() {
         <button type="button" aria-controls="properties-dock" aria-expanded={mobileDock === "properties"} onClick={() => setMobileDock((current) => current === "properties" ? null : "properties")}>属性检查器</button>
       </div>
       {algebraPanel}
-      {document.workspace === "geometry3d" ? <ThreeSceneView document={document} selectedIds={selectedIds} onSelect={updateSelection} onStatusPromptChange={setSceneControl} /> : planarCanvas}
+      {document.workspace === "geometry3d" ? <ThreeSceneView document={document} selectedIds={selectedIds} onSelect={updateSelection} onStatusPromptChange={setSceneControl} preview={drawablePreview} onPreviewHover={setPreviewHovered} /> : planarCanvas}
       {inspectorPanel}
       <div className="status-bar" role="status" aria-live="polite" aria-label="操作提示"><span className="status-bar-prompt">{statusPrompt}</span><span className="status-bar-item">{pointerCoordinate ? `坐标 (${pointerCoordinate.x.toFixed(2)}, ${pointerCoordinate.y.toFixed(2)})` : "坐标 —"}</span><span className="status-bar-item">对象 {document.primitives.length}</span><span className="status-bar-item">工作区 {document.workspace}</span></div>
     </div>}

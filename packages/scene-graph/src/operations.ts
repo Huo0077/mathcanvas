@@ -352,7 +352,7 @@ function recomputeSection(primitive: Extract<PrimitiveSpec, { type: "section" }>
  * - `face3`：它自己就是一个面环；
  * - `plane3`：平面没有边界，不能作为"有界交线"的来源（返回 null，由调用方给诊断）。
  */
-function intersectionFaceRings(source: PrimitiveSpec, primitiveMap: Map<string, PrimitiveSpec>): Vector3[][] | null {
+export function intersectionFaceRings(source: PrimitiveSpec, primitiveMap: Map<string, PrimitiveSpec>): Vector3[][] | null {
   if (source.type === "face3") {
     const points: Vector3[] = []
     for (const pointId of source.pointIds) {

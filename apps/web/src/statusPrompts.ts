@@ -22,6 +22,18 @@ export function resolveSceneControlPrompt(sceneControl: SceneControlMode): strin
   return "这里显示的是坐标轴夹角的示例值，不读取你的选择；要测量实际二面角，请按住 Alt 点实体表面单独选两个面，再在右侧属性区点「二面角内角」或「二面角外角」。"
 }
 
+/**
+ * 3D 虚线预览的状态提示。预览分两级（设计规格第 8 节）：未选中对象时只在状态栏说明，
+ * 选中两个对象后画布给出完整预览与标签。
+ */
+export function resolveIntersectionPreviewPrompt(preview: { kind: string; label: string; reason?: string } | null, hovering: boolean): string | null {
+  if (!preview) return null
+  if (preview.kind === "insufficient") return preview.reason ?? null
+  if (preview.kind === "none") return null
+  if (preview.kind === "section") return `${preview.label}：这是穿过实体的默认剖切平面，点工具栏「创建截面」可保存为图元。`
+  return hovering ? `${preview.label}：点击即可创建为截线图元。` : `${preview.label}：把指针移到虚线上可创建为截线图元。`
+}
+
 export function resolveStatusPrompt({ mode, selectedCount, selectedLabel, hasCenter, hasStart, pointCount, sceneControl = null }: StatusPromptState): string {
   if (mode === "line") return hasCenter ? "第2步：点击确定直线的第二个点（按住 Shift 锁定水平/垂直）" : "第1步：点击确定直线的第一个点"
   if (mode === "segment") return hasCenter ? "第2步：点击确定线段的终点" : "第1步：点击确定线段的起点"
