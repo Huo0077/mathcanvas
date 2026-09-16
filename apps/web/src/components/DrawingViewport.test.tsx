@@ -321,6 +321,78 @@ describe("drawing viewport", () => {
     expect(screen.getByRole("img", { name: /模型视图/ }).querySelectorAll("[data-draft-handle]")).toHaveLength(0)
   })
 
+  it("places the next point instead of selecting when a creation is in progress", () => {
+    const onSelect = vi.fn()
+    const onCreateAt = vi.fn()
+    render(
+      <DrawingViewport
+        view={draftView}
+        sheetName="工程图纸"
+        mode="draft"
+        document={draftDocument()}
+        selectedIds={[]}
+        creation={{ mode: "line", center: { x: -2, y: -1 } }}
+        onSelect={onSelect}
+        onCreateAt={onCreateAt}
+      />
+    )
+    const svg = screen.getByRole("img", { name: /模型视图/ })
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 400, height: 400, right: 400, bottom: 400, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect
+
+    // 点在已有图元上：创建期间必须落点（这里是吸到端点 (2,1)），不能把创建静默取消掉。
+    fireEvent.click(svg.querySelector('[data-primitive-id="line-1"]')!, { clientX: 208, clientY: 196 })
+
+    expect(onSelect).not.toHaveBeenCalled()
+    expect(onCreateAt).toHaveBeenCalledWith({ x: 2, y: 1 })
+  })
+
+  it("still selects a draft primitive when no creation is pending", () => {
+    const onSelect = vi.fn()
+    render(<DrawingViewport view={draftView} sheetName="工程图纸" mode="draft" document={draftDocument()} selectedIds={[]} onSelect={onSelect} />)
+
+    fireEvent.click(screen.getByRole("button", { name: /直线 1/ }))
+    expect(onSelect).toHaveBeenCalledWith("line-1", false)
+  })
+
+  it("gates offset on one selection and trim/extend on two", () => {
+    const onEditSelected = vi.fn()
+    const editButton = (name: string) => screen.getByRole("button", { name }) as HTMLButtonElement
+    const { rerender } = render(<DrawingViewport view={draftView} sheetName="工程图纸" mode="draft" document={draftDocument()} selectedIds={[]} onSelect={() => {}} onEditSelected={onEditSelected} />)
+
+    expect(editButton("偏移").disabled).toBe(true)
+    expect(editButton("修剪").disabled).toBe(true)
+    expect(editButton("延伸").disabled).toBe(true)
+
+    rerender(<DrawingViewport view={draftView} sheetName="工程图纸" mode="draft" document={draftDocument()} selectedIds={["line-1"]} onSelect={() => {}} onEditSelected={onEditSelected} />)
+    expect(editButton("偏移").disabled).toBe(false)
+    expect(editButton("修剪").disabled).toBe(true)
+
+    rerender(<DrawingViewport view={draftView} sheetName="工程图纸" mode="draft" document={draftDocument()} selectedIds={["line-1", "circle-1"]} onSelect={() => {}} onEditSelected={onEditSelected} />)
+    expect(editButton("偏移").disabled).toBe(true)
+    expect(editButton("修剪").disabled).toBe(false)
+    expect(editButton("延伸").disabled).toBe(false)
+  })
+
+  it("sends the typed offset distance with the request", () => {
+    const onEditSelected = vi.fn()
+    render(<DrawingViewport view={draftView} sheetName="工程图纸" mode="draft" document={draftDocument()} selectedIds={["line-1"]} onSelect={() => {}} onEditSelected={onEditSelected} />)
+
+    fireEvent.change(screen.getByLabelText("偏移距离"), { target: { value: "-3" } })
+    fireEvent.click(screen.getByRole("button", { name: "偏移" }))
+    expect(onEditSelected).toHaveBeenCalledWith({ kind: "offset", distance: -3 })
+  })
+
+  it("sends trim and extend requests once two objects are selected", () => {
+    const onEditSelected = vi.fn()
+    render(<DrawingViewport view={draftView} sheetName="工程图纸" mode="draft" document={draftDocument()} selectedIds={["line-1", "circle-1"]} onSelect={() => {}} onEditSelected={onEditSelected} />)
+
+    fireEvent.click(screen.getByRole("button", { name: "修剪" }))
+    expect(onEditSelected).toHaveBeenCalledWith({ kind: "trim" })
+    onEditSelected.mockClear()
+    fireEvent.click(screen.getByRole("button", { name: "延伸" }))
+    expect(onEditSelected).toHaveBeenCalledWith({ kind: "extend" })
+  })
+
   it("translates a draft primitive when its body is dragged away from the grips", () => {
     const onDragEnd = vi.fn()
     render(<DrawingViewport view={draftView} sheetName="工程图纸" mode="draft" document={draftDocument()} selectedIds={["line-1"]} onSelect={() => {}} onDragEnd={onDragEnd} />)

@@ -26,6 +26,7 @@ import { ThreeSceneView } from "./threeScene"
 import type { RibbonTabId } from "./uiState"
 import type { IntersectionPreview } from "./intersectionPreview"
 import { loadActiveWorkspace, loadDraft, saveDraft } from "./persistence/draftStorage"
+import { resolveGeometryEdit, type GeometryEditRequest } from "./draftEditing"
 import { exportCsv, exportSvg } from "./persistence/exporters"
 import { exportEngineeringDxf, exportEngineeringPdf, exportEngineeringSvg, selectExportableDrawings } from "./persistence/engineeringExporters"
 import { defaultDraftView, drawingViewLabels, resolveProjectedDrawing } from "./projectionVisuals"
@@ -821,6 +822,24 @@ export function App() {
 
   const handleViewLayoutChange = (viewId: string, patch: DrawingViewPatch) => apply({ op: "updateDrawingView", id: viewId, patch })
 
+  /**
+   * 偏移 / 修剪 / 延伸：几何与前置条件都在 `draftEditing` 里判定，这里只负责把结果落成一次文档操作。
+   * 失败的说明写进 CAD 状态栏提示（`layerNotice`），成功也给一句确认——和命令栏的反馈通道一致。
+   */
+  const editSelectedGeometry = (request: GeometryEditRequest) => {
+    const selected = selectedIds.map((id) => document.primitives.find((primitive) => primitive.id === id)).filter((primitive): primitive is PrimitiveSpec => Boolean(primitive))
+    const outcome = resolveGeometryEdit(selected, request, { nextId: nextPrimitiveId(document, request.kind === "offset" ? selected[0]?.type ?? "primitive" : "primitive") })
+    if (!outcome.ok) { setLayerNotice(outcome.error); return }
+    if (outcome.kind === "create") {
+      apply({ op: "addPrimitive", primitive: outcome.primitive })
+      setSelectedIds([outcome.primitive.id])
+      setLayerNotice("已偏移出一个新对象")
+      return
+    }
+    apply({ op: "updatePrimitive", id: outcome.id, patch: outcome.patch })
+    setLayerNotice(request.kind === "trim" ? "已修剪" : "已延伸到边界")
+  }
+
   const cadCanvas = <>
     {cadMode === "draft"
       ? <DrawingSheetView
@@ -834,6 +853,7 @@ export function App() {
         creation={creationStep}
         onDragEnd={handleDragEnd}
         onBoxSelect={selectBox}
+        onEditSelected={editSelectedGeometry}
         onSelect={updateSelection}
         onViewSelect={setActiveViewId}
         onViewLayoutChange={handleViewLayoutChange}

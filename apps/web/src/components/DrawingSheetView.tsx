@@ -8,6 +8,7 @@ import type { DrawingViewPatch, DrawingViewportMode, DraftCreation } from "./Dra
 import { DrawingViewport } from "./DrawingViewport"
 import type { DragAction } from "../interaction"
 import type { BoxSelectionMode, SelectionBox } from "@draw/geometry-kernel"
+import type { GeometryEditRequest } from "../draftEditing"
 
 interface DrawingSheetViewProps {
   sheet: DrawingSheetSpec
@@ -24,6 +25,8 @@ interface DrawingSheetViewProps {
   onDragEnd?: (id: string, action: DragAction) => void
   /** 框选提交：方向决定语义（左→右完全包含 / 右→左相交）。 */
   onBoxSelect?: (box: SelectionBox, mode: BoxSelectionMode) => void
+  /** 偏移 / 修剪 / 延伸请求。 */
+  onEditSelected?: (request: GeometryEditRequest) => void
   /** Command slot rendered on the left of the sheet toolbar, so the whole CAD area has exactly one toolbar. */
   projectionLinesControl?: ReactNode
   ariaLabel?: string
@@ -34,7 +37,7 @@ interface DrawingSheetViewProps {
 }
 
 /** The paper always contains every placed view, so a moved or scaled viewport is never clipped away. */
-export function DrawingSheetView({ sheet, views, document, selectedIds, mode, projectedDrawings = [], activeViewId = null, projectionLinesOverride, creation = null, onDragEnd, onBoxSelect, projectionLinesControl, ariaLabel = "工程制图视图", onSelect, onViewSelect, onViewLayoutChange, onCreateAt }: DrawingSheetViewProps) {
+export function DrawingSheetView({ sheet, views, document, selectedIds, mode, projectedDrawings = [], activeViewId = null, projectionLinesOverride, creation = null, onDragEnd, onBoxSelect, onEditSelected, projectionLinesControl, ariaLabel = "工程制图视图", onSelect, onViewSelect, onViewLayoutChange, onCreateAt }: DrawingSheetViewProps) {
   const paper = useMemo(() => sheetPaperSize(sheet, views), [sheet, views])
   const { width: paperWidth, height: paperHeight } = paper
   const [fit, setFit] = useState(1)
@@ -135,6 +138,7 @@ export function DrawingSheetView({ sheet, views, document, selectedIds, mode, pr
               onCreateAt={onCreateAt}
               onDragEnd={onDragEnd}
               onBoxSelect={onBoxSelect}
+              onEditSelected={onEditSelected}
             />
           </div>)}
         </div>

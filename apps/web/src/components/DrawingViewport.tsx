@@ -25,6 +25,7 @@ import {
   type SnapKind
 } from "../drafting"
 import type { BoxSelectionMode, SelectionBox } from "@draw/geometry-kernel"
+import type { GeometryEditRequest } from "../draftEditing"
 import { applyAngle, applyDistance, parseDraftAngle, parseDraftCoordinate, parseDraftDistance } from "../draftCoordinate"
 import { drawingViewLabels, type ProjectedDrawing, type ProjectedPrimitive } from "../projectionVisuals"
 import { TreeEyeIcon } from "./LayerTree"
@@ -76,6 +77,8 @@ interface DrawingViewportProps {
   onDragEnd?: (id: string, action: DragAction) => void
   /** 框选提交：`window`（左→右，完全包含）或 `crossing`（右→左，相交）。 */
   onBoxSelect?: (box: SelectionBox, mode: BoxSelectionMode) => void
+  /** 偏移 / 修剪 / 延伸：视口只发请求，几何与补丁由 App + draftEditing 负责。 */
+  onEditSelected?: (request: GeometryEditRequest) => void
 }
 
 const drawingMetrics = {
@@ -178,10 +181,11 @@ function renderInvalidAnnotation(annotation: ProjectedDrawing["annotations"][num
 }
 
 /** Draft primitives reuse the P7 selection contract: the payload stays the stable document object id. */
-function renderDraftPrimitive(primitive: PrimitiveSpec, span: number, selectedIds: string[], onSelect: DrawingViewportProps["onSelect"], onPointerDown: (event: ReactPointerEvent<SVGGElement>, primitive: PrimitiveSpec) => void) {
+function renderDraftPrimitive(primitive: PrimitiveSpec, span: number, selectedIds: string[], onPrimitiveClick: (event: ReactMouseEvent<SVGGElement>, id: string) => void, onPointerDown: (event: ReactPointerEvent<SVGGElement>, primitive: PrimitiveSpec) => void) {
   const selected = selectedIds.includes(primitive.id)
   const label = `${(primitive as { label?: string }).label ?? primitive.id}`
-  const interaction = sourceInteraction(primitive.id, selected, label, onSelect)
+  // onClick 换成"创建优先"的版本：创建进行中点图元是落点，不是选中（见组件里的 handleDraftPrimitiveClick）。
+  const interaction = { ...sourceInteraction(primitive.id, selected, label, () => undefined), onClick: (event: ReactMouseEvent<SVGGElement>) => onPrimitiveClick(event, primitive.id) }
   const className = `engineering-drawing-primitive engineering-drawing-draft engineering-drawing-draft-${primitive.type}${selected ? " is-selected" : ""}`
   const pointRadius = span * drawingMetrics.pointRadiusRatio
   const wrap = (child: React.ReactNode) => <g key={primitive.id} className={className} data-primitive-id={primitive.id} {...interaction} onPointerDown={(event) => onPointerDown(event, primitive)}>{child}</g>
@@ -278,7 +282,7 @@ function renderCreationPreview(creation: DraftCreation, hover: DraftPoint, span:
   return <line {...common} x1={anchor.x} y1={-anchor.y} x2={hover.x} y2={-hover.y} />
 }
 
-export function DrawingViewport({ view, sheetName, mode, document, selectedIds, active = false, projectedDrawing = null, creation = null, projectionLinesOverride, onSelect, onActivate, onLayoutChange, onCreateAt, onDragEnd, onBoxSelect }: DrawingViewportProps) {
+export function DrawingViewport({ view, sheetName, mode, document, selectedIds, active = false, projectedDrawing = null, creation = null, projectionLinesOverride, onSelect, onActivate, onLayoutChange, onCreateAt, onDragEnd, onBoxSelect, onEditSelected }: DrawingViewportProps) {
   const label = drawingViewLabels[view.kind]
   const title = `${sheetName} · ${label}`
   const [hover, setHover] = useState<DraftHover | null>(null)
@@ -291,6 +295,7 @@ export function DrawingViewport({ view, sheetName, mode, document, selectedIds, 
   const [dynamicDistance, setDynamicDistance] = useState("")
   const [dynamicAngle, setDynamicAngle] = useState("")
   const [coordinateError, setCoordinateError] = useState<string | null>(null)
+  const [offsetDistance, setOffsetDistance] = useState("5")
 
   /**
    * 拖动期间用临时文档做预览（与数学画布同一套做法）：`applyOperation` 会顺带重算派生对象，
@@ -337,9 +342,9 @@ export function DrawingViewport({ view, sheetName, mode, document, selectedIds, 
    * ② 栅格捕捉（可选开关）——把落点量化到最细可见网格；
    * ③ 角度约束（Shift 临时正交 / 正交 / 45° 极轴）。
    */
-  const resolvePointer = (event: ReactMouseEvent<SVGSVGElement> | ReactPointerEvent<SVGSVGElement>, cycleIndex: number): DraftHover => {
-    const rect = event.currentTarget.getBoundingClientRect()
-    const raw = clientToDraft({ x: event.clientX, y: event.clientY }, rect, window)
+  const resolvePointer = (svg: SVGSVGElement, clientX: number, clientY: number, shiftKey: boolean, cycleIndex: number): DraftHover => {
+    const rect = svg.getBoundingClientRect()
+    const raw = clientToDraft({ x: clientX, y: clientY }, rect, window)
     const tolerance = rect.width > 0 ? (DRAFT_SNAP_PIXELS / rect.width) * span : 0
     const ranked = rankDraftSnaps(raw, snapCandidates, { tolerance, primitives: draftPrimitives })
     if (ranked.length > 0) {
@@ -348,9 +353,28 @@ export function DrawingViewport({ view, sheetName, mode, document, selectedIds, 
     }
     const base = gridSnap ? snapToGrid(raw, draftGridSnapStep(view.scale)) : raw
     // Shift 与「正交」都是严格正交（始终压到轴上）；「45°」是极轴追踪，只在指针贴近射线时吸附。
-    if (anchor && (event.shiftKey || constraint === "ortho")) return { point: constrainAngle(anchor, base, 90), snap: null, ranked, index: 0 }
+    if (anchor && (shiftKey || constraint === "ortho")) return { point: constrainAngle(anchor, base, 90), snap: null, ranked, index: 0 }
     if (anchor && constraint === "polar45") return { point: constrainAngle(anchor, base, 45, { thresholdDegrees: DRAFT_POLAR_THRESHOLD_DEGREES }), snap: null, ranked, index: 0 }
     return { point: base, snap: gridSnap ? "grid" : null, ranked, index: 0 }
+  }
+
+  const pointerToHover = (event: ReactMouseEvent<SVGElement> | ReactPointerEvent<SVGElement>, cycleIndex: number): DraftHover => {
+    const svg = (event.currentTarget as SVGGElement).ownerSVGElement ?? event.currentTarget as SVGSVGElement
+    return resolvePointer(svg, event.clientX, event.clientY, event.shiftKey, cycleIndex)
+  }
+
+  /**
+   * 创建进行中点到图元必须**落点**，而不是取消创建去选中它——数学画布早就是这个语义
+   * （`GraphicsView` 的 `handleObjectClick`），绘图视口以前漏了这条：命中带一加宽，
+   * 落在已有图元附近的第二次点击就会把创建静默取消（revision 不变、也没有报错）。
+   */
+  const handleDraftPrimitiveClick = (event: ReactMouseEvent<SVGGElement>, id: string) => {
+    event.stopPropagation()
+    if (creation) {
+      if (onCreateAt) onCreateAt(pointerToHover(event, hover?.index ?? 0).point)
+      return
+    }
+    onSelect(id, event.shiftKey)
   }
 
   const handleSvgClick = (event: ReactMouseEvent<SVGSVGElement>) => {
@@ -358,7 +382,7 @@ export function DrawingViewport({ view, sheetName, mode, document, selectedIds, 
     const rect = event.currentTarget.getBoundingClientRect()
     if (rect.width <= 0 || rect.height <= 0) return
     // 用点击自身的位置重新解析，但保留 Tab 选中的候选序号。
-    onCreateAt(resolvePointer(event, hover?.index ?? 0).point)
+    onCreateAt(resolvePointer(event.currentTarget, event.clientX, event.clientY, event.shiftKey, hover?.index ?? 0).point)
   }
 
   /**
@@ -456,7 +480,7 @@ export function DrawingViewport({ view, sheetName, mode, document, selectedIds, 
       return
     }
     // 指针移动重新解析时把候选序号复位到最优候选。
-    setHover(resolvePointer(event, 0))
+    setHover(resolvePointer(event.currentTarget, event.clientX, event.clientY, event.shiftKey, 0))
   }
 
   /** 命令行坐标：绝对 / 相对 / 极坐标都走这里，落点走与鼠标点击同一条 `onCreateAt` 路径。 */
@@ -545,6 +569,14 @@ export function DrawingViewport({ view, sheetName, mode, document, selectedIds, 
       </>}
       {coordinateError && <span className="drawing-viewport-input-error" role="alert">{coordinateError}</span>}
     </div>}
+    {/* 修改类操作：偏移（新建平行对象）、修剪/延伸（原地改几何）。规则写在按钮提示里，不做隐式猜测。 */}
+    {mode === "draft" && onEditSelected && <div className="drawing-viewport-input" data-draft-edit-row="true">
+      <label><span>偏移距离</span><input aria-label="偏移距离" value={offsetDistance} onChange={(event) => setOffsetDistance(event.target.value)} /></label>
+      <button type="button" data-draft-edit="offset" disabled={selectedIds.length !== 1} title="按偏移距离新建一个平行对象（正值在行进方向左侧，负值在右侧）；需恰好选中一个图元" onClick={() => { const distance = Number(offsetDistance); onEditSelected({ kind: "offset", distance: Number.isFinite(distance) ? distance : 0 }) }}>偏移</button>
+      <button type="button" data-draft-edit="trim" disabled={selectedIds.length !== 2} title="先选边界、再选被修剪的对象；保留目标 a 端所在的一半" onClick={() => onEditSelected({ kind: "trim" })}>修剪</button>
+      <button type="button" data-draft-edit="extend" disabled={selectedIds.length !== 2} title="先选边界、再选被延伸的对象；把目标 b 端拉到边界" onClick={() => onEditSelected({ kind: "extend" })}>延伸</button>
+      <span className="drawing-viewport-input-hint">偏移需选中 1 个；修剪/延伸需选中 2 个（先边界、后目标）</span>
+    </div>}
     {/* 未物化的视图不画坐标轴：四个空框已经由标题的「空视图」说明，重复的占位文字只会变成噪声。 */}
     {(mode === "draft" || hasDrawingContent) && <svg className="engineering-drawing-svg" data-draft-window={`${window.minX},${window.minY},${window.maxX},${window.maxY}`} viewBox={mode === "draft" ? `${window.minX} ${-window.maxY} ${span} ${span}` : `${bounds.minX} ${bounds.minY} ${bounds.width} ${bounds.height}`} role="img" aria-label={`${title}投影视图`} data-viewport-mode={mode} data-draft-dragging={drag ? "true" : "false"} tabIndex={mode === "draft" ? 0 : undefined} onClick={handleSvgClick} onPointerDown={beginBoxSelect} onPointerMove={handleSvgPointerMove} onPointerUp={handleSvgPointerUp} onPointerLeave={() => setHover(null)} onKeyDown={handleSvgKeyDown}>
       {mode === "draft"
@@ -552,7 +584,7 @@ export function DrawingViewport({ view, sheetName, mode, document, selectedIds, 
         : <g className="engineering-drawing-axes" aria-hidden="true"><line x1={bounds.minX} y1="0" x2={bounds.minX + bounds.width} y2="0" /><line x1="0" y1={bounds.minY} x2="0" y2={bounds.minY + bounds.height} /></g>}
       {mode === "draft" && <g className="engineering-drawing-axes" aria-hidden="true"><line x1={window.minX} y1="0" x2={window.maxX} y2="0" /><line x1="0" y1={-window.maxY} x2="0" y2={-window.minY} /></g>}
       {showProjectionLines && projectedDrawing && <g className="engineering-drawing-projection-lines" aria-hidden="true">{projectedDrawing.projectionLines.map((line) => <line key={`${line.sourceId}-${line.targetView}`} data-testid="projection-line" data-source-id={line.sourceId} data-origin-view={line.originView} data-target-view={line.targetView} x1={line.from.x} y1={-line.from.y} x2={line.to.x} y2={-line.to.y} />)}</g>}
-      <g className="engineering-drawing-primitives">{mode === "draft" ? draftPrimitives.map((primitive) => renderDraftPrimitive(primitive, span, selectedIds, onSelect, beginBodyDrag)) : (projectedDrawing?.primitives ?? []).map((primitive) => renderProjectedPrimitive(primitive, bounds, document, selectedIds, onSelect))}</g>
+      <g className="engineering-drawing-primitives">{mode === "draft" ? draftPrimitives.map((primitive) => renderDraftPrimitive(primitive, span, selectedIds, handleDraftPrimitiveClick, beginBodyDrag)) : (projectedDrawing?.primitives ?? []).map((primitive) => renderProjectedPrimitive(primitive, bounds, document, selectedIds, onSelect))}</g>
       {/* 预览与捕捉标记只属于当前操作，不写进文档。 */}
       {mode === "draft" && creation && hover && <g className="engineering-drawing-preview-layer" aria-hidden="true">{renderCreationPreview(creation, hover.point, span)}</g>}
       {mode === "draft" && hover && <g className="engineering-drawing-snap-layer" aria-hidden="true" data-draft-snap={hover.snap ?? "free"} data-draft-snap-candidates={hover.ranked.length}>

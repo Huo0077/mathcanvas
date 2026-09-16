@@ -179,6 +179,73 @@ test("places drafting points from typed coordinates", async ({ page }) => {
   expect(Number(await page.locator(".engineering-workbench").getAttribute("data-revision"))).toBeGreaterThan(0)
 })
 
+test("offsets, trims and extends selected draft geometry", async ({ page }) => {
+  await page.goto("/")
+  await page.locator('input[type="file"]').setInputFiles("e2e/fixtures/cad-point.mgeo")
+  await page.getByRole("button", { name: "工程制图" }).click()
+  await page.getByRole("button", { name: "2D 绘图" }).click()
+
+  const surface = page.getByRole("img", { name: /模型视图/ })
+  const revision = async () => Number(await page.locator(".engineering-workbench").getAttribute("data-revision"))
+  await page.getByRole("button", { name: "添加线段", exact: true }).click()
+  await surface.click({ position: { x: 120, y: 200 } })
+  await surface.click({ position: { x: 320, y: 200 } })
+  await expect(page.locator(".engineering-drawing-draft")).toHaveCount(1)
+
+  // 选中线段后「偏移」可用：偏移是新建平行对象，所以图元数从 1 变成 2，原对象留着。
+  await surface.click({ position: { x: 220, y: 200 } })
+  await expect(surface.locator('[data-primitive-id][data-selected="true"]')).toHaveCount(1)
+  await expect(page.getByRole("button", { name: "偏移" })).toBeEnabled()
+  await expect(page.getByRole("button", { name: "修剪" })).toBeDisabled()
+  const beforeOffset = await revision()
+  await page.getByLabel("偏移距离").fill("10")
+  await page.getByRole("button", { name: "偏移" }).click()
+
+  await expect(page.locator(".engineering-drawing-draft")).toHaveCount(2)
+  await expect.poll(revision).toBeGreaterThan(beforeOffset)
+  await expect(page.getByRole("region", { name: "工程状态栏" })).toContainText("已偏移")
+
+  // 副本成为当前选择，并且与原线段平行：两组夹点（夹点是图元组的兄弟节点）的 y 明显不同。
+  // 副本成为当前选择（夹点只画在选中对象上），且与原线段平行并拉开一段距离。
+  const selected = surface.locator('[data-primitive-id][data-selected="true"]').first()
+  await expect(selected).toHaveAttribute("data-primitive-id", "segment-2")
+  const copyGrip = (await surface.locator('[data-draft-handle][data-primitive-id="segment-2"]').first().boundingBox())!
+  const sourceLine = (await surface.locator('[data-primitive-id="segment-1"] line').first().boundingBox())!
+  const copyCenter = copyGrip.y + copyGrip.height / 2
+  const sourceCenter = sourceLine.y + sourceLine.height / 2
+  expect(Math.abs(copyCenter - sourceCenter)).toBeGreaterThan(5)
+
+  const status = page.getByRole("region", { name: "工程状态栏" })
+  const heightOf = async (id: string) => (await surface.locator(`[data-primitive-id="${id}"] line`).first().boundingBox())!.height
+
+  // 延伸：先选边界（segment-1），Shift 加选目标（短竖线段），把目标 b 端拉到边界上。
+  await page.getByRole("button", { name: "添加线段", exact: true }).click()
+  await surface.click({ position: { x: 220, y: 110 } })
+  await surface.click({ position: { x: 220, y: 165 } })
+  const shortHeight = await heightOf("segment-3")
+  // 用模型树点选：命中带可能重叠，树里的行是确定性的，顺序也正好是"先边界、后目标"。
+  const model = page.locator(".algebra-panel")
+  await model.getByText("线段 1", { exact: true }).click()
+  await model.getByText("线段 3", { exact: true }).click({ modifiers: ["Shift"] })
+  await expect(surface.locator('[data-primitive-id][data-selected="true"]')).toHaveCount(2)
+  await expect(page.getByRole("button", { name: "延伸" })).toBeEnabled()
+  await page.getByRole("button", { name: "延伸" }).click()
+  await expect(status).toContainText("已延伸")
+  expect(await heightOf("segment-3")).toBeGreaterThan(shortHeight)
+
+  // 修剪：画一条穿过边界的竖线段，选中边界 + 目标后剪掉 a 端之外的一半。
+  await page.getByRole("button", { name: "添加线段", exact: true }).click()
+  await surface.click({ position: { x: 275, y: 110 } })
+  await surface.click({ position: { x: 275, y: 250 } })
+  const longHeight = await heightOf("segment-4")
+  await model.getByText("线段 1", { exact: true }).click()
+  await model.getByText("线段 4", { exact: true }).click({ modifiers: ["Shift"] })
+  await expect(page.getByRole("button", { name: "修剪" })).toBeEnabled()
+  await page.getByRole("button", { name: "修剪" }).click()
+  await expect(status).toContainText("已修剪")
+  expect(await heightOf("segment-4")).toBeLessThan(longHeight)
+})
+
 test("undoes and redoes from both the buttons and the keyboard", async ({ page }) => {
   await page.goto("/")
   await page.getByRole("button", { name: "工程制图" }).click()
