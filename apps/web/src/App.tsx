@@ -464,6 +464,36 @@ export function App() {
   }
   const solidTypes = ["cube", "pyramid", "cylinder", "cone", "polyhedron3"] as const
   const canCreateSection = selectedPrimitive !== null && solidTypes.includes(selectedPrimitive.type as typeof solidTypes[number])
+  /**
+   * 点击 3D 虚线预览即创建图元（C4）：
+   * - 截线：新建 `intersectionLine`，来源是当前选中的两个对象；内核会在同一事务里算出 segments；
+   * - 截面：单个实体的默认剖切平面，走既有 `addSection`。
+   * 创建后把选择切到新图元，与"保存交点"的心智模型一致。
+   */
+  const createFromIntersectionPreview = () => {
+    if (!intersectionPreview) return
+    if (intersectionPreview.kind === "section") {
+      addSection()
+      return
+    }
+    if (intersectionPreview.kind !== "intersection" || intersectionPreview.sourceIds.length !== 2) return
+    const [firstId, secondId] = intersectionPreview.sourceIds
+    const id = nextPrimitiveId(document, "intersectionLine")
+    apply({
+      op: "addPrimitive",
+      primitive: {
+        id,
+        type: "intersectionLine",
+        sourceIds: [firstId, secondId],
+        segments: intersectionPreview.segments,
+        classification: intersectionPreview.classification === "segment" ? "segment" : "polyline",
+        status: "valid",
+        label: `截线 ${id.split("-").at(-1)}`
+      }
+    })
+    setSelectedIds([id])
+    setLayerNotice("已创建截线图元")
+  }
   const addSection = () => {
     if (!selectedPrimitive || !solidTypes.includes(selectedPrimitive.type as typeof solidTypes[number])) return
     const plane = sectionPlaneThroughSource(document, selectedPrimitive.id)
@@ -920,7 +950,7 @@ export function App() {
         <button type="button" aria-controls="properties-dock" aria-expanded={mobileDock === "properties"} onClick={() => setMobileDock((current) => current === "properties" ? null : "properties")}>属性检查器</button>
       </div>
       {algebraPanel}
-      {document.workspace === "geometry3d" ? <ThreeSceneView document={document} selectedIds={selectedIds} onSelect={updateSelection} onStatusPromptChange={setSceneControl} preview={drawablePreview} onPreviewHover={setPreviewHovered} /> : planarCanvas}
+      {document.workspace === "geometry3d" ? <ThreeSceneView document={document} selectedIds={selectedIds} onSelect={updateSelection} onStatusPromptChange={setSceneControl} preview={drawablePreview} onPreviewHover={setPreviewHovered} onPreviewClick={createFromIntersectionPreview} /> : planarCanvas}
       {inspectorPanel}
       <div className="status-bar" role="status" aria-live="polite" aria-label="操作提示"><span className="status-bar-prompt">{statusPrompt}</span><span className="status-bar-item">{pointerCoordinate ? `坐标 (${pointerCoordinate.x.toFixed(2)}, ${pointerCoordinate.y.toFixed(2)})` : "坐标 —"}</span><span className="status-bar-item">对象 {document.primitives.length}</span><span className="status-bar-item">工作区 {document.workspace}</span></div>
     </div>}

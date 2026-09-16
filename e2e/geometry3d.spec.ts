@@ -475,6 +475,46 @@ test("explains the normal and sample-angle controls in the status bar", async ({
   await expect(status).not.toContainText("示例值")
 })
 
+test("creates an intersection line by clicking the dashed preview", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "立体几何" }).click()
+
+  // 两个 4×4×4 的立方体错开 2：交叠 2×4×4，公共交线是 x=2 处的一圈矩形（12 条棱的公共部分）。
+  await page.getByRole("button", { name: "添加立方体" }).click()
+  await page.getByLabel("原点 X").fill("-2")
+  await page.getByRole("button", { name: "添加立方体" }).click()
+  await page.getByLabel("原点 X").fill("0")
+
+  const algebra = page.locator(".algebra-panel")
+  await algebra.getByText("立方体 1", { exact: true }).click()
+  await algebra.getByText("立方体 2", { exact: true }).click({ modifiers: ["Shift"] })
+
+  const scene = page.locator("[data-3d-scene]")
+  await expect(scene).toHaveAttribute("data-intersection-preview", "intersection")
+  const status = page.getByRole("status", { name: "操作提示" })
+  await expect(status).toContainText("面交线")
+
+  // 指针移到虚线上：用 NDC 命中点（实测这条交线在 (-0.10, 0.20) 附近可命中），
+  // 比"投影某条棱再取中点"可靠，因为相机取景与默认姿态并不完全一致。
+  const box = (await page.locator("[data-3d-scene] canvas").boundingBox())!
+  const toScreen = (ndcX: number, ndcY: number) => ({ x: box.x + (ndcX * 0.5 + 0.5) * box.width, y: box.y + (0.5 - ndcY * 0.5) * box.height })
+  let hit = false
+  for (const [ndcX, ndcY] of [[-0.1, 0.2], [-0.2, 0.1], [-0.1, 0.1], [0, 0.2], [-0.2, 0.2]]) {
+    const point = toScreen(ndcX, ndcY)
+    await page.mouse.move(point.x, point.y)
+    await page.waitForTimeout(120)
+    if ((await status.textContent())?.includes("点击即可创建")) { hit = true; break }
+  }
+  expect(hit).toBe(true)
+  await page.mouse.click(...Object.values(toScreen(-0.1, 0.2)) as [number, number])
+
+  // 新图元进入文档、进入代数区，并且可撤销。
+  await expect(algebra.getByText("截线 1", { exact: true })).toBeVisible()
+  await expect(page.getByRole("button", { name: "撤销" })).toBeEnabled()
+  await page.getByRole("button", { name: "撤销" }).click()
+  await expect(algebra.getByText("截线 1", { exact: true })).toHaveCount(0)
+})
+
 test("previews the section of a selected solid as a dashed overlay", async ({ page }) => {
   await page.goto("/")
   await page.getByRole("button", { name: "立体几何" }).click()

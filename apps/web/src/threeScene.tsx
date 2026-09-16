@@ -659,6 +659,8 @@ export interface ThreeSceneViewProps {
    */
   preview?: ThreeScenePreview | null
   onPreviewHover?: (hovering: boolean) => void
+  /** 指针正落在虚线预览上时点击：交给 App 创建图元，而不是重新选择来源对象。 */
+  onPreviewClick?: () => void
 }
 
 /** 虚线预览：低不透明度 + 虚线的交线/截面，明确区别于用户已创建的图元。 */
@@ -695,7 +697,7 @@ function createPreviewGroup(
   return group
 }
 
-export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPromptChange, preview = null, onPreviewHover }: ThreeSceneViewProps) {
+export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPromptChange, preview = null, onPreviewHover, onPreviewClick }: ThreeSceneViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const renderTargetRef = useRef<HTMLDivElement>(null)
   const measurementOverlayRef = useRef<HTMLDivElement>(null)
@@ -1035,7 +1037,17 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     const handlePointerUp = (event: PointerEvent) => {
       if (!pointerState || pointerState.pointerId !== event.pointerId) return
       const point = pointFromEvent(event)
-      if (!pointerState.moved && pointerState.button === 0) onSelect(resolveSelectableHit(pickPrimitiveAt(scene, camera, point, { tolerance: pickTolerance() }), topologyOwners, event.altKey), event.shiftKey)
+      if (!pointerState.moved && pointerState.button === 0) {
+        /**
+         * 点击优先级：**点 / 棱的拾取优先于"创建"**。
+         * 否则虚线预览会抢走顶点手柄的点击（实测回归：点顶点手柄变成创建截线），
+         * 而细粒度的空间元素本来就是用户更明确的目标；只有落到实体/面的点击才解释为创建。
+         */
+        const hit = pickRaycastHit3(scene, camera, point, { tolerance: pickTolerance() })
+        const precise = hit?.kind === "point" || hit?.kind === "edge"
+        if (previewHovering && onPreviewClick && !precise) onPreviewClick()
+        else onSelect(resolveSelectableHit(hit?.primitiveId ?? null, topologyOwners, event.altKey), event.shiftKey)
+      }
       renderer.domElement.releasePointerCapture(event.pointerId)
       pointerState = null
     }
