@@ -1,7 +1,7 @@
 # 截面 / 截线图元交互设计（Slice C）
 
 **日期：** 2026-09-16
-**状态：** 决策已确认（见第 8 节），按第 6 节切片实现中
+**状态：** 已实现（切片 C1-C4 全部落地并验证，提交 `a52a74d` / `a775c39` / `68ec2a8` / `0435622`；见第 9 节）
 **用户原话：** 「立体几何的模块，我希望能够获取截面，截线图元，就像平面板块获取交点图元一样，当相交时，会显示虚线的截面和截线，点击获取图元」
 
 ## 1. 目标与非目标
@@ -160,3 +160,20 @@ export function resolveIntersectionPreview(document: GeometryDocument, sourceIds
 | 点击预览 | — | 预览消失，实体图元出现 | 状态栏「已创建截线 N」 |
 
 **优先级**：预览对象的点击优先于其来源对象（否则永远只会选中来源）。与平面"创建进行中点击图元 = 落点"同一取舍，实现时复用同一优先级函数。
+
+## 9. 实现状态（2026-09-16）
+
+| 片 | 提交 | 落地内容 |
+| --- | --- | --- |
+| C1 内核 | `a52a74d` | `packages/geometry-kernel/src/intersections3d.ts`：`planeFromRing` / `planeIntersectionLine` / `intersectRings3` / `intersectFaceSets` / `faceRingsFromFaces` |
+| C2 DSL + 重算 | `a775c39` | `intersectionLine` 图元、schema 校验、codec 往返；`scene-graph` 的 `recomputeIntersectionLine`、依赖与删除保护 |
+| C3 虚线预览 | `68ec2a8` | `intersectionPreview3d.ts` + `threeScenePreview.ts`；`threeScene.tsx` 的 `createPreviewGroup`、悬停高亮与 `onPreviewClick`；`statusPrompts.ts` 文案 |
+| C4 点击创建 | `0435622` | 点击预览 → 持久化 `section` / `intersectionLine`；撤销、属性面板与代数区行 |
+| C5 文档 | 本提交 | README / feature-catalog / project-progress 更新，本规格标记为已实现 |
+
+**与设计的两处实现细化**（都是实现中发现的问题，不改变第 8 节的决策）：
+
+1. **区间求交代替点筛选**：最初按"点到交线的距离"筛面环顶点，会在平行面情形下产生一条幽灵线（实测 x = -2 处出现不属于任何交线的线段）。最终做法是两面环各自被对方平面裁剪成**区间**，再求两个区间的交；共面在进入求交前直接短路。
+2. **点击优先级再细化**：预览点击确实优先于"选中来源"，但**点/棱拾取优先于创建**——否则虚线预览会吃掉顶点手柄的拾取（实测回归）。最终优先级：点/棱拾取 > 预览点击创建 > 选中来源。
+
+**已知边界（与第 7 节一致，均已在功能目录中写明）**：不做布尔运算、不真实切开实体；圆柱/圆锥面环是多边形近似，交线因此是折线；共面面之间没有唯一交线；圆/圆弧的修剪不在本切片范围内。

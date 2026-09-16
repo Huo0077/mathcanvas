@@ -140,6 +140,9 @@
 - [x] 修复工程制图图纸本身没有铺满画布的问题（按可用区域等比缩放并居中）。
 - [x] 工程制图视觉重做（Task 14）：制图台 + 图纸层次、图框与图签、视图框刻度、显式缩放与响应式修复。
 - [x] 在选择法向量、测量二面角时补充左下角操作提示。
+- [x] 工程制图可用性修复（Task 15，切片 A + A2）：2D 绘图命令搬到图纸外的工具条，读数按视图单位定尺。
+- [x] 工程制图可用性修复（Task 16，切片 B）：工程制图可切换投影来源为立体几何文档，空状态说明原因并互相指路。
+- [x] 工程制图可用性修复（Task 17，切片 C1-C4）：新增 `intersectionLine` 图元与面环求交内核；相交时显示虚线截面/截线预览，悬停有说明，点击即创建持久化图元。
 
 详细设计与分任务步骤见 [`docs/superpowers/specs/2026-09-15-ribbon-ui-redesign.md`](./superpowers/specs/2026-09-15-ribbon-ui-redesign.md) 和 [`docs/superpowers/plans/2026-09-15-ribbon-ui-redesign.md`](./superpowers/plans/2026-09-15-ribbon-ui-redesign.md)。
 
@@ -232,6 +235,49 @@
 - `npm.cmd run build`：Web 与 3 个 package 构建通过；Vite 仍提示主 bundle 超过 500 KB（2026-09-16 清理后实测 `index-*.js` 1,540.36 kB、gzip 485.23 kB，CSS 56.49 kB、gzip 9.73 kB）。
 - `npm.cmd run test:e2e`：37/37 通过（含本轮的 3D 提示、点名标注、约束数据与图纸填充用例）。
 - 修正的验证流程问题：`npm.cmd exec playwright test` 直接运行时不会重新构建，预览服务固定读取 `build-check/mathcanvas-current`，因此源码改动必须通过 `npm.cmd run test:e2e`（先构建再跑）验证，否则会看到上一次构建的旧行为。
+
+### 工程制图可用性修复（Task 15-18，2026-09-16 已完成）
+
+**用户反馈（原话）**：「工程制图的 2d 绘图 ui 表现堪比灾难性，中间的画布内容十分混乱，而且工程绘图这个功能很难用，让人不知所云，3d 投影的模块一直显示暂无可投影的空间对象，根本不知道怎么用，立体几何的模块，我希望能够获取截面，截线图元，就像平面板块获取交点图元一样，当相交时，会显示虚线的截面和截线，点击获取图元」。
+
+三条反馈是三个独立根因，拆成 A（2D 绘图命令搬出图纸）/ B（三维投影来源）/ C（截面·截线图元）三组切片，每片跑完整门禁后单独提交。
+
+| 症状 | 根因（先定位再改） |
+|---|---|
+| 2D 绘图「中间画布十分混乱」 | 绘图命令（坐标输入、长度/角度、角度约束/栅格捕捉开关、偏移/修剪/延伸）全部渲染在**图纸内部**的视口工具栏里，和视图框、图框、图签挤在同一层，同一行还有 12 个按钮 |
+| 3D 投影「一直显示暂无可投影的空间对象」 | 工程制图与立体几何各持有**独立文档**（`workspaceDocuments`），投影只读 CAD 自己的文档；界面上既没有"投影来源"这个概念的入口，空状态也不说明原因 |
+| 立体几何「不知道怎么获取截面、截线图元」 | 截面只能先点命令再创建；没有"相交即虚线预览"的中间态，预览也无法点击创建 |
+
+#### Task 15（切片 A + A2）：2D 绘图命令移出图纸，读数按图纸单位定尺
+
+- **A（`9ca7d46`）**：新增 `DraftControlsRow.tsx`，把坐标输入、长度/角度、切换角度约束、切换栅格捕捉、偏移距离与偏移/修剪/延伸做成**图纸外**的一行工具条；`DrawingViewport` 把原本自绘的那一行状态改为 `onDraftControls` 上报（导出 `DraftControls` / `DraftConstraint` 类型），`DrawingSheetView` 新增 `draftControlsSlot` 渲染位与 `publishDraftControls`，`App.tsx` 把 `DraftControlsRow` 交给插槽并用 `draftControlsHandledExternally` 抑制纸内旧行。`global.css` 的 `.drawing-toolbar` 保持单行（高度 token `--drawing-toolbar-height: 48px`）。
+- **A2（`90f8743`）**：搬迁后暴露出读数文字尺寸失控——捕捉标签与「长度 · 角度」读数此前按纸张 CSS zoom 后的像素写死，`DrawingViewport` 改为按视图 `viewBox` 跨度换算字号（`readoutFontUserUnits(span) = span / 42`），缩放图纸时读数不再被放大成巨大文字。
+- **证据**：`DrawingSheetView.test.tsx`（+39 行）断言命令行渲染在纸**外**且纸内不再出现；`DrawingViewport.test.tsx`（A 改 19 行、A2 新增 15 行）断言外部模式不再画第二行、字号随跨度缩放；`e2e/engineering-workbench.spec.ts` 新增 `keeps the 2D drafting commands on the toolbar, off the drawing surface`（断言命令按钮的坐标区域落在图纸之外）。
+
+#### Task 16（切片 B，`b552994`）：工程制图可以投影立体几何文档
+
+- 新增 `apps/web/src/projectionSource.ts`：`ProjectionSource = "cad" | "geometry3d"`、`hasProjectableGeometry(document)`（只认可见的空间图元，二维图元与隐藏对象不算）、`projectionEmptyMessage(source, cadHasGeometry, spatialHasGeometry)`（分别说清"是哪份文档空"以及"另一份里已经有模型"）。
+- `EngineeringDrawingView` 接受 `spatialDocument` / `projectionSource`，新增「投影来源：本图纸 / 立体几何」切换按钮（`data-projection-source`、`aria-pressed`），投影与空状态用来源文档，而**图纸布局始终来自 CAD 文档**（切来源不会改图纸版式）。空状态还带一个"去立体几何"的动作提示（`emptyStateAction`）。
+- **证据**：`projectionSource.test.ts` 3 个用例（可见性判定、二维不算、四种空状态组合的文案与互相指路）；`EngineeringDrawingView.test.tsx` 新增用例断言切换后投影线来自立体几何文档且图纸布局未变；`e2e/engineering-workbench.spec.ts` 新增 `projects the spatial workspace model instead of claiming there is nothing to project`。
+
+#### Task 17（切片 C）：截面·截线图元——先虚线预览，再点击创建
+
+设计与已确认决策见 [`docs/superpowers/specs/2026-09-16-section-intersection-primitives-design.md`](./superpowers/specs/2026-09-16-section-intersection-primitives-design.md)（`1fbdda5`）。四个实现切片：
+
+- **C1（`a52a74d`）内核**：新增 `packages/geometry-kernel/src/intersections3d.ts`——`planeFromRing` / `planeIntersectionLine` / `intersectRings3` / `intersectFaceSets` / `faceRingsFromFaces`。做法是两面环各自被对方平面裁剪成区间、再求两区间的交，因此不会出现"只按点到直线距离筛点"造成的幽灵线；共面直接短路（共面重叠没有唯一交线），线段去重后用并查集串联要求区间重叠。
+- **C2（`a775c39`）DSL 与重算**：新增 `intersectionLine` 图元（`sourceIds: [string, string]`、`segments`、`classification`、`status`、`diagnostic`），进 `primitiveTypes` 与校验；`scene-graph` 的 `primitiveDependencies` / `isReferenced` 纳入 `sourceIds`，来源变化时 `recomputeIntersectionLine` 自动重算，来源被引用时禁止删除。`schemaVersion` 仍是 `"0.1"`（新类型可选，旧文件不受影响）。
+- **C3（`68ec2a8`）虚线预览**：新增 `apps/web/src/intersectionPreview3d.ts`（`resolveIntersectionPreview` → `intersection` / `section` / `none` / `insufficient`，带 `sourceIds`、`segments`、`points`、`classification`、`label`）与 `threeScenePreview.ts` 类型；`threeScene.tsx` 的 `createPreviewGroup` 画虚线（`LineDashedMaterial` + 一条不可见命中副本），悬停高亮、`onPreviewClick` 回调，状态栏文案由 `resolveIntersectionPreviewPrompt` 给出。**两级预览**：悬停只给轻提示，选中两个含面环的对象才给完整虚线预览 + 标签。
+- **C4（`0435622`）点击创建**：点击虚线预览即把预览写成持久化的 `section` / `intersectionLine` 图元（进文档、可撤销、随来源重算）；点击优先级是"点/棱拾取优先于创建"，避免预览抢走顶点手柄的拾取。
+- **明确不做**（写入功能目录）：不做布尔运算、不把实体真实切开渲染、不为"任意两实体"猜一个剖切平面；圆柱/圆锥面环是**多边形近似**，共面面之间没有唯一交线，圆/圆弧的修剪仍不在范围内。
+- **证据**：`intersections3d.test.ts` 8 个用例（含三共线点、区间求交、共面短路、去重串联）、`intersectionLine.test.ts` 6 个（来源重算、删除保护、往返）、`codec.test.ts` 往返、`intersectionPreview3d.test.ts` 4 个、`statusPrompts.test.ts` 文案优先级；`e2e/geometry3d.spec.ts` 新增 `previews the section of a selected solid as a dashed overlay` 与 `creates an intersection line by clicking the dashed preview`。
+- **过程中修掉的回归**：搬迁后重复出现两个「栅格捕捉 / 角度约束」按钮；工具条换行把纸张从 128% 压到 64%（工具条必须保持单行）；预览点击抢走顶点手柄拾取；预览提示覆盖法向量/二面角的状态提示（已定为 创建 > 场景提示 > 预览 > 默认 的优先级）。
+
+#### Task 18：完整验证（基线提升）
+
+- `npm.cmd test`：**68 个测试文件、698 个用例通过**（本轮起始 64 / 670）。
+- `npm.cmd run typecheck`：4 个 workspace 通过；`npm.cmd run lint`：0 error、39 条既有 warning（无新增）；`npm.cmd run build`：生产构建通过。
+- `npm.cmd run test:e2e`：**47/47 通过**（本轮起始 43，新增 4 个：命令条出图纸、投影来源切换、截面虚线预览、点击创建截线）。
+- 提交：`9ca7d46`（A）、`90f8743`（A2）、`b552994`（B）、`1fbdda5`（C 设计）、`a52a74d`（C1）、`a775c39`（C2）、`68ec2a8`（C3）、`0435622`（C4），均已推送 `origin/main`。
 
 ## 已完成
 
@@ -641,13 +687,14 @@ P7-1 至 P7-6 与工程工作台层次化改造 Task 1-7 均已完成；P4 Agent
 - 补齐文档时远端又前进了 1 个提交（`f6fff56`，另一会话记录同一批 CAD 2D 绘图工作），与本次文档改动**冲突于同两个文件**：已 rebase 并以远端那份更完整的分小节写法为准（README 的「CAD 2D 绘图交互」小节、进度头覆盖更多历史切片），只保留本地独有的两处——旧的「仍未做」清单改为指向已完成小节、README 的验证基线 43/43 与已剔除完成项的「下一步」。
 - 审查修复提交 `e494fa3`（`fix: align docs with reality and drop the constraint/agent leftovers`）已推送并核验：`git rev-parse HEAD` = `origin/main` = `git ls-remote` 远程 ref，divergence `0/0`，工作区 clean，远端树中已无 `ConstraintPanel.tsx`。
 
-下一步：由用户在本地浏览器验收 UI 优化、工程制图视觉重做与 CAD 2D 绘图交互；P4 Agent 与 P5 题图解析保持排除。
+下一步：由用户在本地浏览器验收工程制图可用性修复（2D 绘图命令条出图纸、投影来源切换、截面/截线虚线预览与点击创建）、UI 优化、工程制图视觉重做与 CAD 2D 绘图交互；P4 Agent 与 P5 题图解析保持排除。
 
 ## 验证证据
 
-> **当前基线（唯一权威）**：`npm.cmd test` **64 个测试文件、670 个用例通过**；4 个 workspace 类型检查通过；ESLint 0 error、39 条既有 warning；生产构建通过（JS 1,540.36 kB / gzip 485.23 kB，CSS 56.49 kB / gzip 9.73 kB）；Playwright **43/43** 通过。
+> **当前基线（唯一权威）**：`npm.cmd test` **68 个测试文件、698 个用例通过**；4 个 workspace 类型检查通过；ESLint 0 error、39 条既有 warning；生产构建通过；Playwright **47/47** 通过。
 > 下面按时间倒序列出各轮实测快照（数字是**当时**的取值，用于追溯与对比，不代表当前门禁）。
 
+- **工程制图可用性修复（Task 15-18，2026-09-16）**：切片 A/A2/B/C1-C4 全部落地并逐片跑门禁；本轮起始 64 文件 / 670 用例 → **68 文件 / 698 用例**，E2E 43/43 → **47/47**，类型检查 4 个 workspace 通过，lint 0 error / 39 条既有 warning，生产构建通过。
 - **审查复核与修复（2026-09-16）**：在 `b6d31f5` 上重新逐项核验——typecheck 0 error、lint 0 error、生产构建通过、Playwright 43/43、`git status` clean 且与 `origin/main` 一致。按符号核对了文档声明的 15 个绘图 API（`draftWindow` / `clientToDraft` / `rankDraftSnaps` / `boxSelectionMode` / `SnapKind` / `primitiveHandlePoints` / `resolveGeometryEdit` / `offsetPrimitive` / `trimPrimitive` / `extendPrimitive` / `selectPrimitivesInBox` / `tangentPointsOnPrimitive` / `parseDraftCoordinate` / `applyDistance` / `applyAngle`）**全部存在**，非测试源码无 TODO/FIXME。据审查结果修掉四处问题：① 功能目录里"约束界面可创建"的过时表述 → 改为明确说明三维约束当前**无任何 UI 入口**（数据/校验/编解码保留，恢复方式已写入文档）；② 删除 Task 9 遗留的死代码 `ConstraintPanel.tsx` 及其测试、以及随之孤立的两处 CSS 块（`.constraint-*`、`.empty-state`、`.agent-*`、`.agent-chip`、`.status-dot.pending`），删除前用全仓库 `className` 检索确证零引用；③ 本小节改为「当前基线 + 按时间倒序的历史快照」，消除"最新证据其实是旧数字"的误导；④ bundle 数字与门禁计数改为实测值。
   修复后的实测变化：测试文件 65 → **64**、用例 672 → **670**（删除的 `ConstraintPanel.test.tsx` 含 2 个用例）；lint warning 40 → **39**（`.agent-chip` 不再命中 `react-refresh/only-export-components`）；CSS 59.53 kB → **56.49 kB**；E2E 保持 **43/43**。
 - **P6 v3 全量单测**：35 个测试文件、**353** 个用例通过（本轮起始 337，新增 16 个全部是回归用例）
