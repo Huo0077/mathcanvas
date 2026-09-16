@@ -639,6 +639,7 @@ P7-1 至 P7-6 与工程工作台层次化改造 Task 1-7 均已完成；P4 Agent
 - 本轮同步范围：平面几何改名、A/B/C 与 3D 画布点名、重命名入口前移、多模态入口收敛、右侧面板精简（约束/智能体展示移除、数据保留）、CAD 画布随停靠面板扩大、法向量/二面角底部提示、**工程制图视觉重做**（制图台 + 图纸、图框与图签、视图框刻度、显式缩放、单列响应式修复），以及对应的单测/E2E 与文档。
 - 推送后核验（`git ls-remote`）：`origin/main` 曾为 `bdfa1fc`，本地与远端一致、无未推送提交；随后 fetch 发现远端领先本地 3 个提交（CAD 2D 绘图交互重做），本地以 `--ff-only` 快进到同一提交，**这批新代码在本机重新跑过全套门禁**（65 测试文件 / 672 用例、4 workspace 类型检查、lint 0 error、生产构建、Playwright 43/43）。
 - 补齐文档时远端又前进了 1 个提交（`f6fff56`，另一会话记录同一批 CAD 2D 绘图工作），与本次文档改动**冲突于同两个文件**：已 rebase 并以远端那份更完整的分小节写法为准（README 的「CAD 2D 绘图交互」小节、进度头覆盖更多历史切片），只保留本地独有的两处——旧的「仍未做」清单改为指向已完成小节、README 的验证基线 43/43 与已剔除完成项的「下一步」。
+- 审查修复提交 `e494fa3`（`fix: align docs with reality and drop the constraint/agent leftovers`）已推送并核验：`git rev-parse HEAD` = `origin/main` = `git ls-remote` 远程 ref，divergence `0/0`，工作区 clean，远端树中已无 `ConstraintPanel.tsx`。
 
 下一步：由用户在本地浏览器验收 UI 优化、工程制图视觉重做与 CAD 2D 绘图交互；P4 Agent 与 P5 题图解析保持排除。
 
