@@ -1,6 +1,6 @@
 import { type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react"
 import type { Coordinate, GeometryDocument, PrimitiveSpec } from "@draw/dsl"
-import { adaptiveSampleFunctionSegments, evaluateParameterExpression, sampleEllipse, sampleHyperbolaBranches, sampleParabola } from "@draw/geometry-kernel"
+import { adaptiveSampleFunctionSegments, evaluateParameterExpression, sampleEllipse, sampleHyperbolaBranches, sampleLocus, sampleParabola } from "@draw/geometry-kernel"
 import { applyOperation, recomputeDerivedObjects, type DomainOperation } from "@draw/scene-graph"
 import type { BoxSelectionMode } from "@draw/geometry-kernel"
 
@@ -126,20 +126,39 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
     return start && end ? { start, end } : null
   }
   const connectionControl = (connection: Extract<PrimitiveSpec, { type: "connection" }>) => connection.control?.thirdPointId ? pointById.get(connection.control.thirdPointId) : undefined
+  /**
+   * 轨迹采样交给内核的 `sampleLocus`。相对之前的实现有两点关键差别：
+   *
+   * 1. **按曲率自适应细分**，而不是把 `samples` 个点盲跑一遍。直线段上不额外加点，
+   *    急弯处才二分加密，因此在同样的"整文档重算"预算下曲线更准。
+   * 2. **跨越渐近线/间断点时切成多条分支**。旧实现把所有采样点连成一条折线，
+   *    于是双曲线型轨迹在渐近线两侧被一条凭空出现的竖线连起来 —— 那是不存在的图形。
+   *    这里返回 `Coordinate[][]`，渲染层逐条画 polyline，绝不跨分支连线。
+   */
   const locusSegments = (locus: Extract<PrimitiveSpec, { type: "locus" }>): Coordinate[][] => {
     const source = displayPrimitives.find((primitive): primitive is Extract<PrimitiveSpec, { type: "point" }> => primitive.id === locus.sourcePointId && primitive.type === "point")
     const parameter = previewDocument.parameters[locus.parameterId]
     if (!source || source.binding?.kind !== "onPath" || !parameter) return []
-    const points: Coordinate[] = []
     const samples = Math.max(2, Math.min(4096, locus.samples))
-    for (let index = 0; index < samples; index += 1) {
-      const value = locus.domain[0] + (locus.domain[1] - locus.domain[0]) * index / (samples - 1)
+    // 一次求值 = 一次整文档重算，代价很高，所以细分容差按"世界坐标下的可视精度"给：
+    // 约 1/400 个视野宽度，肉眼分辨不出折线，同时避免为看不见的精度付钱。
+    const tolerance = Math.max(1e-9, (worldBounds.maxX - worldBounds.minX) / 400)
+    const drivenAt = (value: number): Coordinate | null => {
       const nextParameters = { ...previewDocument.parameters, [locus.parameterId]: { ...parameter, value, expression: undefined } }
       const nextDocument = recomputeDerivedObjects({ ...previewDocument, parameters: nextParameters }, [locus.parameterId, source.id])
       const nextPoint = nextDocument.primitives.find((primitive): primitive is Extract<PrimitiveSpec, { type: "point" }> => primitive.id === source.id && primitive.type === "point")
-      if (nextPoint && Number.isFinite(nextPoint.x) && Number.isFinite(nextPoint.y)) points.push({ x: nextPoint.x, y: nextPoint.y })
+      return nextPoint && Number.isFinite(nextPoint.x) && Number.isFinite(nextPoint.y) ? { x: nextPoint.x, y: nextPoint.y } : null
     }
-    return points.length > 1 ? [points] : []
+    const result = sampleLocus(drivenAt, {
+      domain: [locus.domain[0], locus.domain[1]],
+      samples,
+      tolerance,
+      jumpFactor: 4,
+      maxDepth: 5,
+      breakDepth: 20,
+      maxEvaluations: Math.max(samples * 8, 256)
+    })
+    return result.branches.map((branch) => branch.points)
   }
 
   const viewportLine = (line: Extract<PrimitiveSpec, { type: "line" }>) => {

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 
 import { decodeMgeo, encodeMgeo, type AnnotationFeature, type DrawingSheetSpec, type EngineeringAnnotationKind, type Measurement3Metric, type PrimitiveSpec, type Vector3, type Workspace } from "@draw/dsl"
-import { buildSolidTemplate, createMeasurement3, selectPrimitivesInBox, type BoxSelectionMode } from "@draw/geometry-kernel"
+import { buildSolidTemplate, createMeasurement3, evaluatePlanarMeasurement, selectPrimitivesInBox, type BoxSelectionMode, type PlanarMetric } from "@draw/geometry-kernel"
 import { deletionTargets, sectionPivot, sectionPlaneThroughSource, sectionSourceVertices, validatePatch } from "@draw/scene-graph"
 import type { Alignment } from "@draw/scene-graph"
 
@@ -616,9 +616,48 @@ export function App() {
     apply({ op: "addEngineeringAnnotation", annotation: { id: nextEngineeringAnnotationId(document), kind, sourceIds, view: "front", unit: kind === "angular" ? "deg" : "mm", ...(kind === "tolerance" ? { tolerance: { upper: 0.1, lower: 0.1 } } : {}), status: "valid", explanation: "" } })
     setFileError(null)
   }
+  /**
+   * 手工新建一个参数。它不带 `ownerId`（不是某个对象生成的），所以删除对象时不会被回收。
+   * 值/上下界/步长一次给全，否则滑块会没有可用的范围。
+   */
+  const addParameter = () => {
+    let index = 1
+    while (document.parameters[`p${index}`]) index += 1
+    apply({ op: "setParameter", id: `p${index}`, value: 0.5, min: 0, max: 1, step: 0.01, label: `参数 ${index}` })
+  }
   const addMeasurement = (metric: Measurement3Metric, dihedralKind?: "interior" | "exterior") => {
-    if (document.workspace !== "geometry3d") return
     const id = nextMeasurementId(document)
+    /**
+     * 平面测量与空间测量共用 `Measurement3` 容器，但求值走内核的平面求值器
+     * （见 scene-graph 的 `calculatePlanarMeasurement`）。这里先算一次只为拒绝无意义的来源，
+     * 与空间分支"来源不够就提示要选什么"的行为保持一致。
+     */
+    if (document.workspace !== "geometry3d") {
+      const positions = new Map(document.primitives.filter((primitive) => primitive.type === "point").map((point) => [point.id, { x: point.x, y: point.y }]))
+      const reading = evaluatePlanarMeasurement({
+        id,
+        metric: metric as PlanarMetric,
+        sourceIds: selectedIds,
+        angleKind: dihedralKind === "exterior" ? "exterior" : "interior"
+      }, (sourceId) => positions.get(sourceId) ?? null)
+      if (reading.status === "insufficient-data" || reading.status === "degenerate") {
+        setGuidance(guidanceFor({ kind: "measurement", metric, outcome: "blocked" }))
+        return
+      }
+      apply({ op: "addMeasurement", measurement: {
+        id,
+        kind: "measurement3",
+        sourceIds: [...selectedIds],
+        metric,
+        ...(dihedralKind ? { dihedralKind } : {}),
+        precision: "numeric-approximation",
+        status: reading.status,
+        explanation: reading.explanation
+      } })
+      setGuidance(guidanceFor({ kind: "measurement", metric, outcome: "created", ...(dihedralKind ? { dihedralKind } : {}) }))
+      setFileError(null)
+      return
+    }
     const measurement = createMeasurement3(id, metric, selectedIds, document.primitives, dihedralKind)
     if (measurement.status === "insufficient-data" || measurement.status === "degenerate") {
       // 来源不够时给出「要选什么」，比抛一条测量说明更能让人继续操作。
@@ -838,7 +877,12 @@ export function App() {
       ? "2D 绘图：在视口中创建对象，新对象写入当前图层。"
       : "工程制图根据当前文档的 3D 点、棱和面显示四个视图。")
 
-  const algebraPanel = <AlgebraView id="algebra-dock" className={`panel${mobileDock === "objects" ? " is-mobile-open" : ""}`} primitives={document.primitives} measurements={document.measurements} workspace={document.workspace} selectedIds={selectedIds} filter={filterQuery} onSelect={updateSelection} onToggle={(id, visible) => apply({ op: "toggleVisibility", id, visible })} />
+  const algebraPanel = <AlgebraView id="algebra-dock" className={`panel${mobileDock === "objects" ? " is-mobile-open" : ""}`} primitives={document.primitives} measurements={document.measurements} parameters={document.parameters} workspace={document.workspace} selectedIds={selectedIds} filter={filterQuery} onSelect={updateSelection} onToggle={(id, visible) => apply({ op: "toggleVisibility", id, visible })} onSetParameter={(id, patch) => {
+    // 一次提交值 + 元数据。未给出的字段沿用现值（清空输入框暂时等于不改，见文档的已知限制）。
+    const current = document.parameters[id]
+    if (!current) return
+    apply({ op: "setParameter", id, value: patch.value ?? current.value, min: patch.min ?? current.min, max: patch.max ?? current.max, step: patch.step ?? current.step, label: patch.label ?? current.label, ownerId: current.ownerId })
+  }} onDeleteParameter={(id) => apply({ op: "deleteParameter", id })} onAddParameter={addParameter} />
 
   const planarCanvas = <GraphicsView document={document} selectedIds={selectedIds} creationMode={creationMode} onSelect={updateSelection} onBoxSelect={selectBox} onCanvasClick={handleCanvasCreationClick} onCanvasDoubleClick={handleCanvasDoubleClick} onDragEnd={handleDragEnd} onCreateIntersection={createIntersectionFromPreview} onPointerCoordinate={setPointerCoordinate} />
 

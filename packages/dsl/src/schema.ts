@@ -175,7 +175,12 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>, parameter
   if (type === "point" && (!isFiniteNumber(value.x) || !isFiniteNumber(value.y))) errors.push("point coordinates must be finite")
   if (type === "point" && value.binding !== undefined) {
     if (!isRecord(value.binding) || !["free", "onPath", "derived"].includes(String(value.binding.kind))) errors.push("point binding is invalid")
-    else if (value.binding.kind === "onPath" && (typeof value.binding.pathId !== "string" || !isFiniteNumber(value.binding.parameter))) errors.push("point path binding is invalid")
+    else if (value.binding.kind === "onPath") {
+      if (typeof value.binding.pathId !== "string" || !isFiniteNumber(value.binding.parameter)) errors.push("point path binding is invalid")
+      // `domain` 是抛物线/双曲线这类无界自然参数曲线的扫描窗口，必须是递增的有限区间。
+      else if (value.binding.domain !== undefined && (!Array.isArray(value.binding.domain) || value.binding.domain.length !== 2 || !value.binding.domain.every(isFiniteNumber) || value.binding.domain[0] >= value.binding.domain[1])) errors.push("point path binding domain is invalid")
+      else if (value.binding.branch !== undefined && value.binding.branch !== 0 && value.binding.branch !== 1) errors.push("point path binding branch is invalid")
+    }
     else if (value.binding.kind === "derived" && (typeof value.binding.sourceId !== "string" || typeof value.binding.feature !== "string")) errors.push("point derived binding is invalid")
   }
   if (type === "point3") {

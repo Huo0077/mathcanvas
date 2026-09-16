@@ -2,6 +2,32 @@ import { describe, expect, it } from "vitest"
 import { createDefaultCadLayout, createEmptyDocument, validateDocument } from "./index"
 
 describe("Geometry DSL document layout schema", () => {
+  /**
+   * 抛物线与双曲线的绑定参数是无界的轴向参数，所以绑定要自带一个递增的有限 `domain` 作为扫描窗口。
+   */
+  it("validates the parameter domain and branch of a path-bound point", () => {
+    const build = (binding: unknown) => {
+      const document = createEmptyDocument("conics")
+      document.primitives = [
+        { id: "parabola-1", type: "parabola", vertex: { x: 0, y: 0 }, focalParameter: 2, axis: "y" },
+        { id: "hyperbola-1", type: "hyperbola", center: { x: 0, y: 0 }, radiusX: 3, radiusY: 2, axis: "x" },
+        { id: "point-1", type: "point", x: 0, y: 0, binding: binding as never }
+      ]
+      return validateDocument(document)
+    }
+
+    expect(build({ kind: "onPath", pathId: "parabola-1", parameter: 0, domain: [-4, 4] }).valid).toBe(true)
+    expect(build({ kind: "onPath", pathId: "hyperbola-1", parameter: 0, domain: [-6, 6], branch: 1 }).valid).toBe(true)
+    // A plain onPath binding with no domain stays valid: bounded curves do not need one.
+    expect(build({ kind: "onPath", pathId: "parabola-1", parameter: 0 }).valid).toBe(true)
+
+    for (const domain of [[4, -4], [1, 1], [0], [-1, 1, 2], [Number.NaN, 1], "wide", null]) {
+      expect(build({ kind: "onPath", pathId: "parabola-1", parameter: 0, domain }).valid).toBe(false)
+    }
+    expect(build({ kind: "onPath", pathId: "hyperbola-1", parameter: 0, branch: 2 }).valid).toBe(false)
+    expect(build({ kind: "onPath", pathId: "hyperbola-1", parameter: 0, branch: -1 }).valid).toBe(false)
+  })
+
   it("rejects duplicate layer, sheet, and view IDs", () => {
     const document = createDefaultCadLayout(createEmptyDocument("cad"))
     document.layers?.push({ ...document.layers[0] })

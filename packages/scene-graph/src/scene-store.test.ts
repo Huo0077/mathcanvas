@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest"
 
-import { createEmptyDocument } from "@draw/dsl"
+import { createEmptyDocument, validateDocument } from "@draw/dsl"
 import { buildSolidTemplate } from "@draw/geometry-kernel"
 
-import { applyOperation, commitPatch, createFace3, createLine3, createPoint3, createPolyhedron3, getAffectedPrimitiveIds, getDependencyIndex, patchPoint3, recomputeDerivedObjects, resolvePolyhedronTopology, sectionPlaneThroughSource } from "./index"
+import { applyOperation, commitPatch, createFace3, createLine3, createPoint3, createPolyhedron3, getAffectedPrimitiveIds, getDependencyIndex, patchPoint3, recomputeDerivedObjects, resolvePolyhedronTopology, sectionPlaneThroughSource, topologicalRecomputeOrder, validatePatch } from "./index"
 
 describe("scene graph operations", () => {
   it("recomputes template topology when legacy solid parameters change", () => {
@@ -157,7 +157,8 @@ describe("scene graph operations", () => {
     const document = createEmptyDocument("calculus")
     document.primitives = [
       { id: "circle-1", type: "circle", center: { x: 1, y: 2 }, radius: 3 },
-      { id: "point-1", type: "point", x: 0, y: 0, binding: { kind: "onPath", pathId: "circle-1", parameter: 0.25 } }
+      // The binding parameter is the angle in radians, so π/2 is the top of the circle.
+      { id: "point-1", type: "point", x: 0, y: 0, binding: { kind: "onPath", pathId: "circle-1", parameter: Math.PI / 2 } }
     ]
 
     const recomputed = recomputeDerivedObjects(document)
@@ -167,6 +168,568 @@ describe("scene graph operations", () => {
       expect(point.x).toBeCloseTo(1)
       expect(point.y).toBeCloseTo(5)
     }
+  })
+
+  /**
+   * 绑定参数是曲线的**自然参数**：椭圆的离心角用弧度、函数的参数就是 x、直线是仿射比例 t。
+   * 于是正向映射（`resolveBoundPoint`）与反向映射（`dragBoundPoint`）由内核同一份约束定义保证互逆。
+   */
+  it("recomputes a point bound to an ellipse path using the eccentric angle", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [
+      { id: "ellipse-1", type: "ellipse", center: { x: 0, y: 0 }, radiusX: 4, radiusY: 2 },
+      { id: "point-1", type: "point", x: 0, y: 0, binding: { kind: "onPath", pathId: "ellipse-1", parameter: 0 } },
+      { id: "point-2", type: "point", x: 0, y: 0, binding: { kind: "onPath", pathId: "ellipse-1", parameter: Math.PI / 2 } },
+      { id: "point-3", type: "point", x: 0, y: 0, binding: { kind: "onPath", pathId: "ellipse-1", parameter: Math.PI } }
+    ]
+
+    const recomputed = recomputeDerivedObjects(document)
+    const at = (id: string) => recomputed.primitives.find((primitive) => primitive.id === id)
+    expect(at("point-1")).toMatchObject({ x: expect.closeTo(4, 9), y: expect.closeTo(0, 9) })
+    expect(at("point-2")).toMatchObject({ x: expect.closeTo(0, 9), y: expect.closeTo(2, 9) })
+    expect(at("point-3")).toMatchObject({ x: expect.closeTo(-4, 9), y: expect.closeTo(0, 9) })
+  })
+
+  it("follows the driving parameter table for an ellipse-bound point", () => {
+    const document = createEmptyDocument("conics")
+    document.parameters = { t: { id: "t", value: 0, min: 0, max: Math.PI * 2 } }
+    document.primitives = [
+      { id: "ellipse-1", type: "ellipse", center: { x: 1, y: 1 }, radiusX: 2, radiusY: 3, rotation: Math.PI / 2 },
+      { id: "point-1", type: "point", x: 0, y: 0, binding: { kind: "onPath", pathId: "ellipse-1", parameterId: "t", parameter: 0 } }
+    ]
+
+    const atZero = recomputeDerivedObjects(document).primitives.find((primitive) => primitive.id === "point-1")
+    // Rotated by π/2 the major axis (radiusX = 2) lies along y, so θ = 0 gives (1, 1 + 2).
+    expect(atZero).toMatchObject({ x: expect.closeTo(1, 9), y: expect.closeTo(3, 9) })
+
+    const moved = structuredClone(document) as typeof document
+    moved.parameters.t.value = Math.PI
+    const atHalf = recomputeDerivedObjects(moved).primitives.find((primitive) => primitive.id === "point-1")
+    expect(atHalf).toMatchObject({ x: expect.closeTo(1, 9), y: expect.closeTo(-1, 9) })
+  })
+
+  /**
+   * 抛物线与双曲线的轴向参数是无界的，绑定**可以不带 `domain`** —— 那时用与图形尺度成比例的默认窗口。
+   * 真正没有绑定含义的是悬空的 pathId，那种情况必须保持坐标不动（而不是抛错）。
+   */
+  it("falls back to a scale-derived window for a conic binding without a domain, and is a no-op for a dangling path", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [
+      { id: "parabola-1", type: "parabola", vertex: { x: 0, y: 0 }, focalParameter: 2, axis: "y" },
+      { id: "point-1", type: "point", x: 5, y: 99, binding: { kind: "onPath", pathId: "parabola-1", parameter: 3 } },
+      { id: "point-2", type: "point", x: 7, y: 9, binding: { kind: "onPath", pathId: "ghost", parameter: 3 } }
+    ]
+
+    const recomputed = recomputeDerivedObjects(document)
+    // No domain given, but the binding still resolves: u = 3 on y = x²/4 is (3, 2.25).
+    expect(recomputed.primitives.find((primitive) => primitive.id === "point-1")).toMatchObject({ x: expect.closeTo(3, 6), y: expect.closeTo(2.25, 6) })
+    // A dangling pathId stays a no-op rather than throwing.
+    expect(recomputed.primitives.find((primitive) => primitive.id === "point-2")).toMatchObject({ x: 7, y: 9 })
+  })
+
+  it("resolves a point bound to a line whose geometry comes from a slope parameter", () => {
+    const document = createEmptyDocument("calculus")
+    document.parameters = { slope: { id: "slope", value: 1 } }
+    // The bound point is declared before the line it depends on, so only a dependency-aware
+    // pass can give it the current geometry rather than a stale one.
+    document.primitives = [
+      { id: "point-1", type: "point", x: 0, y: 0, binding: { kind: "onPath", pathId: "line-a", parameter: 1 } },
+      { id: "line-a", type: "line", a: { x: 0, y: 0 }, b: { x: 1, y: 0 }, slopeParameter: "slope" }
+    ]
+
+    const recomputed = recomputeDerivedObjects(document)
+    // b.y = a.y + slope * (b.x - a.x) = 1, and the point sits at t = 1, i.e. at b.
+    expect(recomputed.primitives.find((primitive) => primitive.id === "point-1")).toMatchObject({ x: expect.closeTo(1, 9), y: expect.closeTo(1, 9) })
+  })
+
+  /**
+   * 动点的核心交互：拖着一个被约束的点，它必须沿着自己的曲线滑动。
+   *
+   * 拖拽在视图层被翻译成 `translatePrimitive`（增量），所以约束点必须把"当前位置 + 增量"
+   * 投影回曲线上、并写回参数 —— 而不是像自由点那样直接加 x/y
+   * （那样会立刻被重算用旧参数覆盖掉，拖动等于没发生）。
+   */
+  it("slides a point bound to a line along that line when it is dragged", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [
+      { id: "line-1", type: "line", a: { x: 0, y: 0 }, b: { x: 10, y: 0 } },
+      { id: "point-1", type: "point", x: 5, y: 0, binding: { kind: "onPath", pathId: "line-1", parameter: 0.5 } }
+    ]
+
+    // (5,0) + (3,2) = (8,2); projected onto y = 0 that is (8,0), i.e. t = 0.8.
+    const dragged = applyOperation(document, { op: "translatePrimitive", id: "point-1", delta: { x: 3, y: 2 } })
+    const point = dragged.document.primitives.find((primitive) => primitive.id === "point-1")
+
+    expect(point).toMatchObject({ x: expect.closeTo(8, 9), y: expect.closeTo(0, 9) })
+    expect(point?.type === "point" && point.binding?.kind === "onPath" ? point.binding.parameter : null).toBeCloseTo(0.8, 9)
+  })
+
+  /**
+   * 绑定参数必须用曲线的**自然参数**，而不是一律归一化到 [0, 1]。
+   * 归一化对直线是致命的：直线在画布上是横贯整个视野画的，但 `clamp(t, 0, 1)` 把点锁在
+   * `a..b` 这一段里 —— 用户看到一条长线，点却只能在中间一小段滑动。
+   */
+  it("lets a point bound to a line travel beyond the a..b segment", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [
+      { id: "line-1", type: "line", a: { x: 0, y: 0 }, b: { x: 1, y: 0 } },
+      { id: "point-1", type: "point", x: 0.5, y: 0, binding: { kind: "onPath", pathId: "line-1", parameter: 0.5 } }
+    ]
+
+    // Drag 10 units right: the line is infinite, so the point must follow all the way.
+    const forward = applyOperation(document, { op: "translatePrimitive", id: "point-1", delta: { x: 10, y: 0 } })
+    expect(forward.document.primitives.find((primitive) => primitive.id === "point-1")).toMatchObject({ x: expect.closeTo(10.5, 6), y: expect.closeTo(0, 6) })
+
+    // And far to the other side, with a vertical component that must be projected away.
+    const backward = applyOperation(document, { op: "translatePrimitive", id: "point-1", delta: { x: -100, y: 40 } })
+    expect(backward.document.primitives.find((primitive) => primitive.id === "point-1")).toMatchObject({ x: expect.closeTo(-99.5, 6), y: expect.closeTo(0, 6) })
+  })
+
+  it("lets a point bound to a ray run forward without limit but not backwards", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [
+      { id: "ray-1", type: "ray", a: { x: 0, y: 0 }, b: { x: 1, y: 0 } },
+      { id: "point-1", type: "point", x: 1, y: 0, binding: { kind: "onPath", pathId: "ray-1", parameter: 1 } }
+    ]
+    const forward = applyOperation(document, { op: "translatePrimitive", id: "point-1", delta: { x: 50, y: 0 } })
+    expect(forward.document.primitives.find((primitive) => primitive.id === "point-1")).toMatchObject({ x: expect.closeTo(51, 6) })
+    // The ray starts at a, so dragging behind it pins the point to the origin.
+    const backward = applyOperation(document, { op: "translatePrimitive", id: "point-1", delta: { x: -20, y: 0 } })
+    expect(backward.document.primitives.find((primitive) => primitive.id === "point-1")).toMatchObject({ x: expect.closeTo(0, 6) })
+  })
+
+  it("lets a point bound to a function reach both ends of its domain", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [
+      { id: "fn-1", type: "function", expression: "x*x", domain: [-6, 6], samples: 128 },
+      { id: "point-1", type: "point", x: 0, y: 0, binding: { kind: "onPath", pathId: "fn-1", parameter: 0 } }
+    ]
+    // The parameter of a function graph is x itself, so the point sits at (0, 0).
+    const initial = recomputeDerivedObjects(document)
+    expect(initial.primitives.find((primitive) => primitive.id === "point-1")).toMatchObject({ x: expect.closeTo(0, 6), y: expect.closeTo(0, 6) })
+
+    // Aim just past the right end of the curve: clamped there, because that is where the curve ends.
+    const dragged = applyOperation(initial, { op: "translatePrimitive", id: "point-1", delta: { x: 6.5, y: 36 } })
+    expect(dragged.document.primitives.find((primitive) => primitive.id === "point-1")).toMatchObject({ x: expect.closeTo(6, 4), y: expect.closeTo(36, 3) })
+    // ...and the left end is reachable too, so the whole drawn curve is usable.
+    const left = applyOperation(initial, { op: "translatePrimitive", id: "point-1", delta: { x: -6.5, y: 36 } })
+    expect(left.document.primitives.find((primitive) => primitive.id === "point-1")).toMatchObject({ x: expect.closeTo(-6, 4), y: expect.closeTo(36, 3) })
+  })
+
+  it("slides a point bound to a circle along the circle when it is dragged", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [
+      { id: "circle-1", type: "circle", center: { x: 0, y: 0 }, radius: 2 },
+      { id: "point-1", type: "point", x: 2, y: 0, binding: { kind: "onPath", pathId: "circle-1", parameter: 0 } }
+    ]
+
+    // Drag far up and to the right: desired = (2,0) + (5,5) = (7,5). The nearest point on the
+    // circle lies on the same ray from the centre, so the angle must match atan2(5, 7).
+    const dragged = applyOperation(document, { op: "translatePrimitive", id: "point-1", delta: { x: 5, y: 5 } })
+    const point = dragged.document.primitives.find((primitive) => primitive.id === "point-1")
+    if (point?.type !== "point") throw new Error("point missing")
+
+    expect(Math.hypot(point.x, point.y)).toBeCloseTo(2, 9)
+    expect(Math.atan2(point.y, point.x)).toBeCloseTo(Math.atan2(5, 7), 9)
+    expect(point.y).toBeGreaterThan(0)
+    expect(point.x).toBeGreaterThan(0)
+  })
+
+  it("clamps a bound point at the end of its segment instead of letting it leave", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [
+      { id: "segment-1", type: "segment", a: { x: 0, y: 0 }, b: { x: 4, y: 0 } },
+      { id: "point-1", type: "point", x: 2, y: 0, binding: { kind: "onPath", pathId: "segment-1", parameter: 0.5 } }
+    ]
+
+    const dragged = applyOperation(document, { op: "translatePrimitive", id: "point-1", delta: { x: 100, y: 0 } })
+    const point = dragged.document.primitives.find((primitive) => primitive.id === "point-1")
+
+    expect(point).toMatchObject({ x: expect.closeTo(4, 9), y: expect.closeTo(0, 9) })
+    expect(point?.type === "point" && point.binding?.kind === "onPath" ? point.binding.parameter : null).toBeCloseTo(1, 9)
+  })
+
+  /**
+   * 椭圆的离心角是**周期**参数（`parameterBounds` 声明 wrap，域 [0, 2π)）。
+   * 投影出来的角可能是负的（下半部分），必须先折回 [0, 2π) 再交给调用方；
+   * 直接 `clamp(θ / 2π, 0, 1)` 会把所有负角压成 0，于是点只能在上半部分跑，
+   * 一下拖到下方就弹回右顶点。
+   */
+  it("slides an ellipse-bound point through the lower half as well", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [
+      { id: "ellipse-1", type: "ellipse", center: { x: 0, y: 0 }, radiusX: 4, radiusY: 1 },
+      { id: "point-1", type: "point", x: 4, y: 0, binding: { kind: "onPath", pathId: "ellipse-1", parameter: 0 } }
+    ]
+
+    // Desired = (4,0) + (-4,-1) = (0,-1), which already lies on the ellipse.
+    const dragged = applyOperation(document, { op: "translatePrimitive", id: "point-1", delta: { x: -4, y: -1 } })
+    const point = dragged.document.primitives.find((primitive) => primitive.id === "point-1")
+    if (point?.type !== "point") throw new Error("point missing")
+
+    expect(point.x).toBeCloseTo(0, 6)
+    expect(point.y).toBeCloseTo(-1, 6)
+    // The bottom vertex is θ = 3π/2.
+    expect(point.binding?.kind === "onPath" ? point.binding.parameter : null).toBeCloseTo(Math.PI * 1.5, 6)
+  })
+
+  /**
+   * 拓扑重算顺序：声明顺序颠倒也必须先算上游。
+   * 这也正是被删掉的 `recomputeBoundPoint3s`（"最多重跑 N 遍直到不动"）原本在硬扛的事情。
+   */
+  describe("topological recompute order", () => {
+    /** m1 = midpoint(a, b); m2 = midpoint(m1, c) —— 故意把 m2 声明在 m1 前面。 */
+    const chainedDocument = () => {
+      const document = createEmptyDocument("geometry3d")
+      document.primitives = [
+        createPoint3("m2", { x: 0, y: 0, z: 0 }, { kind: "derived", feature: "midpoint", sourceIds: ["m1", "c"] }),
+        createPoint3("m1", { x: 0, y: 0, z: 0 }, { kind: "derived", feature: "midpoint", sourceIds: ["a", "b"] }),
+        createPoint3("a", { x: 0, y: 0, z: 0 }),
+        createPoint3("b", { x: 4, y: 0, z: 0 }),
+        createPoint3("c", { x: 0, y: 0, z: 4 }),
+        createPoint3("unrelated", { x: 9, y: 9, z: 9 })
+      ]
+      return document
+    }
+
+    it("puts every dependency before its dependents", () => {
+      const order = topologicalRecomputeOrder(chainedDocument(), ["a"])
+      expect(order).toContain("m1")
+      expect(order).toContain("m2")
+      expect(order.indexOf("a")).toBeLessThan(order.indexOf("m1"))
+      expect(order.indexOf("m1")).toBeLessThan(order.indexOf("m2"))
+    })
+
+    it("restricts the order to the affected closure", () => {
+      expect(topologicalRecomputeOrder(chainedDocument(), ["a"])).not.toContain("unrelated")
+      expect(topologicalRecomputeOrder(chainedDocument(), ["unrelated"])).toEqual(["unrelated"])
+    })
+
+    it("covers every primitive when no change set is given", () => {
+      const order = topologicalRecomputeOrder(chainedDocument())
+      expect([...order].sort()).toEqual(chainedDocument().primitives.map((primitive) => primitive.id).sort())
+    })
+
+    it("resolves a chained derived point in one pass regardless of declaration order", () => {
+      const recomputed = recomputeDerivedObjects(chainedDocument())
+      const at = (id: string) => recomputed.primitives.find((primitive) => primitive.id === id)
+      // a=(0,0,0), b=(4,0,0) → m1=(2,0,0); c=(0,0,4) → m2 = midpoint(m1, c) = (1,0,2)
+      expect(at("m1")).toMatchObject({ position: { x: 2, y: 0, z: 0 } })
+      expect(at("m2")).toMatchObject({ position: { x: 1, y: 0, z: 2 } })
+    })
+
+    it("resolves a chain deep enough that a single blind pass could not converge", () => {
+      const document = createEmptyDocument("geometry3d")
+      // Each point is the midpoint of the previous one and the origin: a 6-deep derived chain,
+      // declared in exactly reverse order. p6 = 1/64 of p0.
+      const primitives = [createPoint3("p0", { x: 64, y: 0, z: 0 })]
+      for (let level = 6; level >= 1; level -= 1) {
+        const sourceIds = level === 1 ? ["p0", "origin"] : [`p${level - 1}`, "origin"]
+        primitives.push(createPoint3(`p${level}`, { x: 0, y: 0, z: 0 }, { kind: "derived", feature: "midpoint", sourceIds }))
+      }
+      primitives.push(createPoint3("origin", { x: 0, y: 0, z: 0 }))
+      document.primitives = primitives
+
+      const recomputed = recomputeDerivedObjects(document)
+      expect(recomputed.primitives.find((primitive) => primitive.id === "p6")).toMatchObject({ position: { x: 1, y: 0, z: 0 } })
+    })
+  })
+
+  /**
+   * 平面测量的价值就在这一条：它会保留来源对象，并在**动点沿曲线滑动**时自动重算。
+   */
+  describe("planar measurements", () => {
+    const measuredDocument = () => {
+      const document = createEmptyDocument("conics")
+      document.primitives = [
+        { id: "line-1", type: "line", a: { x: 0, y: 0 }, b: { x: 10, y: 0 } },
+        { id: "p1", type: "point", x: 0, y: 0 },
+        { id: "p2", type: "point", x: 5, y: 0, binding: { kind: "onPath", pathId: "line-1", parameter: 0.5 } }
+      ]
+      document.measurements = [{ id: "m1", kind: "measurement3", sourceIds: ["p1", "p2"], metric: "length", precision: "numeric-approximation", status: "valid", explanation: "" }]
+      return document
+    }
+
+    it("evaluates a planar length in a planar workspace", () => {
+      const recomputed = recomputeDerivedObjects(measuredDocument())
+      expect(recomputed.measurements[0].value).toBeCloseTo(5, 9)
+      expect(recomputed.measurements[0].status).toBe("valid")
+      expect(recomputed.measurements[0].unit).toBe("u")
+    })
+
+    it("follows a dynamic point as it slides along its curve", () => {
+      const dragged = applyOperation(measuredDocument(), { op: "translatePrimitive", id: "p2", delta: { x: 4, y: 0 } })
+      // desired = (5,0) + (4,0) = (9,0) → t = 0.9, so the length becomes 9.
+      expect(dragged.changed).toBe(true)
+      expect(dragged.document.measurements[0].value).toBeCloseTo(9, 9)
+    })
+
+    it("reports degenerate geometry instead of a zero reading", () => {
+      const document = measuredDocument()
+      document.primitives = document.primitives.map((primitive) => primitive.id === "p2" ? { ...primitive, x: 0, y: 0, binding: undefined } : primitive)
+      const recomputed = recomputeDerivedObjects(document)
+      expect(recomputed.measurements[0].status).toBe("degenerate")
+      expect(recomputed.measurements[0].value).toBeUndefined()
+    })
+
+    it("measures an angle and an area from three planar points", () => {
+      const document = createEmptyDocument("conics")
+      document.primitives = [
+        { id: "a", type: "point", x: 1, y: 0 },
+        { id: "v", type: "point", x: 0, y: 0 },
+        { id: "b", type: "point", x: 0, y: 1 }
+      ]
+      document.measurements = [
+        { id: "angle", kind: "measurement3", sourceIds: ["a", "v", "b"], metric: "angle", dihedralKind: "interior", precision: "numeric-approximation", status: "valid", explanation: "" },
+        { id: "area", kind: "measurement3", sourceIds: ["a", "v", "b"], metric: "area", precision: "numeric-approximation", status: "valid", explanation: "" },
+        { id: "distance", kind: "measurement3", sourceIds: ["a", "v", "b"], metric: "distance", precision: "numeric-approximation", status: "valid", explanation: "" }
+      ]
+      const recomputed = recomputeDerivedObjects(document)
+      const at = (id: string) => recomputed.measurements.find((measurement) => measurement.id === id)
+      expect(at("angle")?.value).toBeCloseTo(Math.PI / 2, 9)
+      expect(at("area")?.value).toBeCloseTo(0.5, 9)
+      // The perpendicular distance from b to the line through a and v.
+      expect(at("distance")?.value).toBeCloseTo(1, 9)
+    })
+
+    it("leaves a measurement alone when none of its sources changed", () => {
+      const document = measuredDocument()
+      const initial = recomputeDerivedObjects(document)
+      // Move an unrelated point: the stored reading must survive untouched.
+      const withExtra = structuredClone(initial) as typeof initial
+      withExtra.primitives.push({ id: "unrelated", type: "point", x: 7, y: 7 })
+      const moved = recomputeDerivedObjects(withExtra, ["unrelated"])
+      expect(moved.measurements[0]).toEqual(initial.measurements[0])
+    })
+
+    it("still uses the spatial evaluator in the 3D workspace", () => {
+      const document = createEmptyDocument("geometry3d")
+      document.primitives = [
+        createPoint3("a", { x: 0, y: 0, z: 0 }),
+        createPoint3("b", { x: 3, y: 0, z: 0 })
+      ]
+      document.measurements = [{ id: "m1", kind: "measurement3", sourceIds: ["a", "b"], metric: "length", precision: "numeric-approximation", status: "valid", explanation: "" }]
+      expect(recomputeDerivedObjects(document).measurements[0].value).toBeCloseTo(3, 9)
+    })
+  })
+
+  /**
+   * 抛物线与双曲线的自然参数是**无界**的轴向参数 u，所以绑定自带 `domain` 作为扫描窗口，
+   * 双曲线还要记录分支。这是"只能在曲线上一小段里动"那类问题的正面解法。
+   */
+  it("binds a point to a parabola and lets it slide along the whole axis", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [
+      { id: "parabola-1", type: "parabola", vertex: { x: 0, y: 0 }, focalParameter: 2, axis: "y" },
+      { id: "point-1", type: "point", x: 0, y: 0, binding: { kind: "onPath", pathId: "parabola-1", parameter: 0, domain: [-8, 8] } }
+    ]
+    // axis "y": local = (u, u²/2p) = (u, u²/4), so the parameter is x itself.
+    const initial = recomputeDerivedObjects(document)
+    expect(initial.primitives.find((primitive) => primitive.id === "point-1")).toMatchObject({ x: expect.closeTo(0, 6), y: expect.closeTo(0, 6) })
+
+    // (3, 2.25) lies exactly on the parabola.
+    const right = applyOperation(initial, { op: "translatePrimitive", id: "point-1", delta: { x: 3, y: 2.25 } })
+    expect(right.document.primitives.find((primitive) => primitive.id === "point-1")).toMatchObject({ x: expect.closeTo(3, 4), y: expect.closeTo(2.25, 4) })
+
+    // The negative half is just as reachable: (-5, 6.25) is also on the curve.
+    const left = applyOperation(initial, { op: "translatePrimitive", id: "point-1", delta: { x: -5, y: 6.25 } })
+    expect(left.document.primitives.find((primitive) => primitive.id === "point-1")).toMatchObject({ x: expect.closeTo(-5, 4), y: expect.closeTo(6.25, 4) })
+  })
+
+  it("keeps a point on its hyperbola branch when it is dragged towards the other one", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [
+      { id: "hyperbola-1", type: "hyperbola", center: { x: 0, y: 0 }, radiusX: 3, radiusY: 2, axis: "x" },
+      // axis "x": local = (u, ±b√(1 + u²/a²)); branch 1 takes the minus sign, so u = 0 is (0, -2).
+      { id: "point-1", type: "point", x: 0, y: -2, binding: { kind: "onPath", pathId: "hyperbola-1", parameter: 0, branch: 1, domain: [-6, 6] } }
+    ]
+    const initial = recomputeDerivedObjects(document)
+    expect(initial.primitives.find((primitive) => primitive.id === "point-1")).toMatchObject({ x: expect.closeTo(0, 6), y: expect.closeTo(-2, 6) })
+
+    // Drag far above the axis: the upper branch is nearer, but the binding pins this point to the lower one.
+    const upward = applyOperation(initial, { op: "translatePrimitive", id: "point-1", delta: { x: 0, y: 10 } })
+    const pinned = upward.document.primitives.find((primitive) => primitive.id === "point-1")
+    expect(pinned && pinned.type === "point" ? pinned.y : 0).toBeLessThan(0)
+    expect(pinned?.type === "point" && pinned.binding?.kind === "onPath" ? pinned.binding.branch : null).toBe(1)
+
+    // And it can still travel far along its own branch: u = 6 gives (6, -2√5).
+    const along = applyOperation(initial, { op: "translatePrimitive", id: "point-1", delta: { x: 6, y: -2.4721 } })
+    const moved = along.document.primitives.find((primitive) => primitive.id === "point-1")
+    expect(moved).toMatchObject({ x: expect.closeTo(6, 3), y: expect.closeTo(-2 * Math.sqrt(5), 3) })
+  })
+
+  /**
+   * 驱动参数的生命周期：绑定产生的 `t-<点id>` 带 `ownerId`，归属对象被删时自动回收；
+   * 用户手工创建的参数没有 `ownerId`，永远不会被这一步碰掉。
+   */
+  describe("driver parameter lifecycle", () => {
+    const boundDocument = () => {
+      const document = createEmptyDocument("conics")
+      document.parameters = { "t-point-1": { id: "t-point-1", value: 2, min: -4, max: 4, step: 0.08, label: "P 的路径参数", ownerId: "point-1" } }
+      document.primitives = [
+        { id: "parabola-1", type: "parabola", vertex: { x: 0, y: 0 }, focalParameter: 2, axis: "y" },
+        { id: "point-1", type: "point", x: 2, y: 1, binding: { kind: "onPath", pathId: "parabola-1", parameterId: "t-point-1", parameter: 2, domain: [-4, 4] } },
+        { id: "locus-1", type: "locus", sourcePointId: "point-1", parameterId: "t-point-1", domain: [-4, 4], samples: 32 }
+      ]
+      return document
+    }
+
+    it("reclaims the driver parameter when its owner is deleted", () => {
+      const deleted = applyOperation(boundDocument(), { op: "deleteObject", id: "point-1" })
+      expect(deleted.changed).toBe(true)
+      // The point and its locus go, and so does the parameter that only existed to drive it.
+      expect(deleted.document.primitives.map((primitive) => primitive.id)).toEqual(["parabola-1"])
+      expect(Object.keys(deleted.document.parameters)).toEqual([])
+    })
+
+    it("keeps a manually created parameter because it has no owner", () => {
+      const document = boundDocument()
+      document.parameters.user = { id: "user", value: 0.5, min: 0, max: 1 }
+      const deleted = applyOperation(document, { op: "deleteObject", id: "point-1" })
+      expect(Object.keys(deleted.document.parameters)).toEqual(["user"])
+    })
+
+    it("keeps a driver parameter that something else still references", () => {
+      const document = boundDocument()
+      // A second point shares the same driver, so the parameter must survive the first point's deletion.
+      document.primitives.push({ id: "point-2", type: "point", x: 2, y: 1, binding: { kind: "onPath", pathId: "parabola-1", parameterId: "t-point-1", parameter: 2 } })
+      const deleted = applyOperation(document, { op: "deleteObject", id: "point-1" })
+      expect(Object.keys(deleted.document.parameters)).toEqual(["t-point-1"])
+      // Deleting the last referrer finally reclaims it.
+      const last = applyOperation(deleted.document, { op: "deleteObject", id: "point-2" })
+      expect(Object.keys(last.document.parameters)).toEqual([])
+    })
+
+    it("refuses to delete a parameter that is still referenced", () => {
+      const document = boundDocument()
+      const refused = applyOperation(document, { op: "deleteParameter", id: "t-point-1" })
+      expect(refused.changed).toBe(false)
+      expect(refused.error).toContain("referenced")
+
+      const withSpare = structuredClone(document) as typeof document
+      withSpare.parameters.spare = { id: "spare", value: 0 }
+      const removed = applyOperation(withSpare, { op: "deleteParameter", id: "spare" })
+      expect(removed.changed).toBe(true)
+      expect(Object.keys(removed.document.parameters)).toEqual(["t-point-1"])
+      expect(applyOperation(document, { op: "deleteParameter", id: "ghost" }).error).toBe("parameter not found")
+    })
+
+    it("records parameter metadata in one operation without erasing it on a value-only update", () => {
+      const created = applyOperation(createEmptyDocument("conics"), { op: "setParameter", id: "p1", value: 0.5, min: 0, max: 1, step: 0.01, label: "参数 1" })
+      expect(created.document.parameters.p1).toEqual({ id: "p1", value: 0.5, min: 0, max: 1, step: 0.01, label: "参数 1" })
+      // A slider drag only sends the value; the bounds and label must survive.
+      const dragged = applyOperation(created.document, { op: "setParameter", id: "p1", value: 0.9 })
+      expect(dragged.document.parameters.p1).toEqual({ id: "p1", value: 0.9, min: 0, max: 1, step: 0.01, label: "参数 1" })
+    })
+
+    it("keeps a driver parameter and its point consistent while the value is driven", () => {
+      const document = boundDocument()
+      // u = -3 on y = x²/4 is (-3, 2.25).
+      const driven = applyOperation(document, { op: "setParameter", id: "t-point-1", value: -3 })
+      expect(driven.document.primitives.find((primitive) => primitive.id === "point-1")).toMatchObject({ x: expect.closeTo(-3, 6), y: expect.closeTo(2.25, 6) })
+    })
+  })
+
+  /**
+   * 「动点之间建立线段」在 DSL 里就是 `connection`（kind: "segment"，引用两个点）。
+   * 它只存点 id，所以三条能力缺一不可：跟着点走、被依赖图登记、以及删点时不留下悬空引用。
+   */
+  describe("connection segments between dynamic points", () => {
+    const twoDynamicPoints = () => {
+      const document = createEmptyDocument("conics")
+      document.primitives = [
+        { id: "line-x", type: "line", a: { x: 0, y: 0 }, b: { x: 1, y: 0 } },
+        { id: "line-y", type: "line", a: { x: 0, y: 0 }, b: { x: 0, y: 1 } },
+        { id: "p1", type: "point", x: 0.5, y: 0, binding: { kind: "onPath", pathId: "line-x", parameter: 0.5 } },
+        { id: "p2", type: "point", x: 0, y: 0.5, binding: { kind: "onPath", pathId: "line-y", parameter: 0.5 } },
+        { id: "seg", type: "connection", kind: "segment", startPointId: "p1", endPointId: "p2" }
+      ]
+      return document
+    }
+
+    it("registers the connection as depending on the points it joins", () => {
+      const document = recomputeDerivedObjects(twoDynamicPoints())
+      // Moving either endpoint must put the segment in the affected set, or nothing downstream sees it.
+      expect(getAffectedPrimitiveIds(document, ["p1"]).has("seg")).toBe(true)
+      expect(getAffectedPrimitiveIds(document, ["p2"]).has("seg")).toBe(true)
+    })
+
+    it("follows both endpoints as they slide along their curves", () => {
+      const document = recomputeDerivedObjects(twoDynamicPoints())
+      // The endpoints start at (0.5, 0) and (0, 0.5).
+      expect(document.primitives.find((primitive) => primitive.id === "p1")).toMatchObject({ x: expect.closeTo(0.5, 9), y: expect.closeTo(0, 9) })
+      expect(document.primitives.find((primitive) => primitive.id === "p2")).toMatchObject({ x: expect.closeTo(0, 9), y: expect.closeTo(0.5, 9) })
+
+      // Slide p1 to the right and p2 up: the segment is defined by the two *current* positions.
+      const moved = applyOperation(document, { op: "translatePrimitive", id: "p1", delta: { x: 0.4, y: 0 } })
+      const second = applyOperation(moved.document, { op: "translatePrimitive", id: "p2", delta: { x: 0, y: 0.25 } })
+      expect(second.document.primitives.find((primitive) => primitive.id === "p1")).toMatchObject({ x: expect.closeTo(0.9, 6) })
+      expect(second.document.primitives.find((primitive) => primitive.id === "p2")).toMatchObject({ y: expect.closeTo(0.75, 6) })
+      // The connection itself stores no coordinates — it is pure reference, so it can never go stale.
+      expect(second.document.primitives.find((primitive) => primitive.id === "seg")).toEqual({ id: "seg", type: "connection", kind: "segment", startPointId: "p1", endPointId: "p2" })
+    })
+
+    it("deletes the connection together with a point it joins, keeping the document savable", () => {
+      const document = createEmptyDocument("conics")
+      document.primitives = [
+        { id: "p1", type: "point", x: 0, y: 0 },
+        { id: "p2", type: "point", x: 3, y: 0 },
+        { id: "keep", type: "point", x: 9, y: 9 },
+        { id: "seg", type: "connection", kind: "segment", startPointId: "p1", endPointId: "p2" }
+      ]
+
+      expect(validatePatch(document, { op: "deleteObject", id: "p1" })).toEqual({ valid: true })
+      const deleted = commitPatch(document, { op: "deleteObject", id: "p1" }).document
+      expect(deleted.primitives.map((primitive) => primitive.id).sort()).toEqual(["keep", "p2"])
+
+      // Without the cascade the dangling reference would make the whole document unsavable.
+      const dangling = { ...document, primitives: document.primitives.filter((primitive) => primitive.id !== "p1") }
+      expect(validateDocument(dangling).valid).toBe(false)
+      expect(validateDocument(deleted).valid).toBe(true)
+    })
+
+    it("can be intersected, so a segment between two dynamic points is real geometry", () => {
+      const document = createEmptyDocument("conics")
+      document.primitives = [
+        { id: "line-x", type: "line", a: { x: -5, y: 0 }, b: { x: 5, y: 0 } },
+        { id: "p1", type: "point", x: -4, y: 0, binding: { kind: "onPath", pathId: "line-x", parameter: 0.1 } },
+        { id: "p2", type: "point", x: 4, y: 0, binding: { kind: "onPath", pathId: "line-x", parameter: 0.9 } },
+        { id: "seg", type: "connection", kind: "segment", startPointId: "p1", endPointId: "p2" },
+        { id: "circle-1", type: "circle", center: { x: 0, y: 0 }, radius: 1 },
+        { id: "hits", type: "intersectionSet", objectA: "seg", objectB: "circle-1", points: [] }
+      ]
+
+      // p1 = (-4, 0) and p2 = (4, 0), so the segment crosses the unit circle at (±1, 0).
+      const recomputed = recomputeDerivedObjects(document)
+      const hits = recomputed.primitives.find((primitive) => primitive.id === "hits")
+      if (hits?.type !== "intersectionSet") throw new Error("intersection set missing")
+      expect(hits.points).toHaveLength(2)
+      for (const point of hits.points) {
+        expect(Math.abs(point.x)).toBeCloseTo(1, 6)
+        expect(point.y).toBeCloseTo(0, 6)
+      }
+    })
+
+    it("keeps the intersection live when the dynamic endpoint slides", () => {
+      const document = createEmptyDocument("conics")
+      document.primitives = [
+        { id: "line-x", type: "line", a: { x: -5, y: 0 }, b: { x: 5, y: 0 } },
+        { id: "p1", type: "point", x: -4, y: 0, binding: { kind: "onPath", pathId: "line-x", parameter: 0.1 } },
+        { id: "p2", type: "point", x: 4, y: 0, binding: { kind: "onPath", pathId: "line-x", parameter: 0.9 } },
+        { id: "seg", type: "connection", kind: "segment", startPointId: "p1", endPointId: "p2" },
+        { id: "circle-1", type: "circle", center: { x: 0, y: 0 }, radius: 1 },
+        { id: "hits", type: "intersectionSet", objectA: "seg", objectB: "circle-1", points: [] }
+      ]
+      const initial = recomputeDerivedObjects(document)
+
+      // Pull p1 back to the origin's side so the segment no longer reaches the circle on the left.
+      const moved = applyOperation(initial, { op: "translatePrimitive", id: "p1", delta: { x: 4.5, y: 0 } })
+      const hits = moved.document.primitives.find((primitive) => primitive.id === "hits")
+      if (hits?.type !== "intersectionSet") throw new Error("intersection set missing")
+      // p1 is now at (0.5, 0), so only the right crossing at (1, 0) survives.
+      expect(hits.points).toHaveLength(1)
+      expect(hits.points[0].x).toBeCloseTo(1, 6)
+    })
   })
 
   it("recomputes a persisted section when its solid source changes", () => {

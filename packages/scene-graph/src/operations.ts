@@ -1,12 +1,13 @@
 import type { AnnotationSpec, ConstraintSpec, Coordinate, DrawingSheetSpec, DrawingViewSpec, EngineeringAnnotation, GeometryDocument, GroupSpec, LayerSpec, Measurement3, Point3Binding, Point3Primitive, PointBinding, PrimitiveSpec, Section3Classification, Vector3 } from "@draw/dsl"
-import { adaptiveSampleFunctionSegments, buildSolidTemplate, calculateMeasurement3, createBuilderContext, dihedralMarker3, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, findExtrema, findInflectionPoints, findZeros, intersectCirclesDetailed, intersectFaceSets, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, orderSectionPoints3, sectionConvexPolyhedron, sectionPolyhedron3, sharedRingEdge3, solveLineConstraints, type DihedralMarker3, type FaceRing3, type IntersectionResult, type SampledPrimitive, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
+import { createDependencyGraph, adaptiveSampleFunctionSegments, arcConstraint, buildSolidTemplate, calculateMeasurement3, circleConstraint, createBuilderContext, dihedralMarker3, ellipseConstraint, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, evaluatePlanarMeasurement, findExtrema, findInflectionPoints, findZeros, functionGraphConstraint, hyperbolaConstraint, intersectCirclesDetailed, intersectFaceSets, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, lineConstraint, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, orderSectionPoints3, parabolaConstraint, polylineConstraint, rayConstraint, sectionConvexPolyhedron, sectionPolyhedron3, segmentConstraint, sharedRingEdge3, solveLineConstraints, type DihedralMarker3, type FaceRing3, type IntersectionResult, type PlanarConstraint, type PlanarMetric, type SampledPrimitive, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
 
 export type DomainOperation =
   | { op: "addPrimitive"; primitive: PrimitiveSpec }
   | { op: "addPrimitives"; primitives: PrimitiveSpec[] }
   | { op: "updatePrimitive"; id: string; patch: PrimitiveUpdatePatch }
   | { op: "toggleLock"; id: string; locked: boolean }
-  | { op: "setParameter"; id: string; value: number }
+  | { op: "setParameter"; id: string; value: number; min?: number; max?: number; step?: number; label?: string; ownerId?: string }
+  | { op: "deleteParameter"; id: string }
   | { op: "setParameterExpression"; id: string; expression: string }
   | { op: "addAnnotation"; annotation: AnnotationSpec }
   | { op: "deleteAnnotation"; id: string }
@@ -255,6 +256,8 @@ function primitiveDependencies(primitive: PrimitiveSpec): string[] {
   if (primitive.type === "edge3") dependencies.push(...primitive.pointIds, ...(primitive.faceIds ?? []))
   if (primitive.type === "face3") dependencies.push(...primitive.pointIds, ...(primitive.edgeIds ?? []), ...(primitive.planeId ? [primitive.planeId] : []))
   if (primitive.type === "polyhedron3") dependencies.push(...primitive.vertexIds, ...primitive.edgeIds, ...primitive.faceIds, ...(primitive.construction?.sourceIds ?? []), ...(primitive.construction?.kind === "template" ? (primitive.construction.parameterIds ?? []) : []))
+  // 连接（connection）只存两个点的引用，因此它依赖那些点；不含坐标，永远不会过期。
+  if (primitive.type === "connection") dependencies.push(primitive.startPointId, primitive.endPointId, ...(primitive.control?.thirdPointId ? [primitive.control.thirdPointId] : []))
   if (primitive.type === "intersection") dependencies.push(primitive.lineA, primitive.lineB)
   if (primitive.type === "lineCircleIntersection") dependencies.push(primitive.lineId, primitive.circleId)
   if (primitive.type === "circleIntersection") dependencies.push(primitive.circleA, primitive.circleB)
@@ -566,43 +569,126 @@ function recomputeIntersectionLine(
   }
 }
 
-function resolveBoundPoint(binding: PointBinding, primitives: Map<string, PrimitiveSpec>, parameters: GeometryDocument["parameters"]): Coordinate | null {
-  if (binding.kind !== "onPath") return null
-  const path = primitives.get(binding.pathId)
-  const parameter = binding.parameterId ? parameters[binding.parameterId]?.value : binding.parameter
-  if (!path || parameter === undefined || !Number.isFinite(parameter)) return null
-  const t = Math.min(1, Math.max(0, parameter))
-  if (path.type === "line" || path.type === "segment" || path.type === "ray") return { x: path.a.x + (path.b.x - path.a.x) * t, y: path.a.y + (path.b.y - path.a.y) * t }
-  if (path.type === "circle") {
-    const angle = t * Math.PI * 2
-    return { x: path.center.x + path.radius * Math.cos(angle), y: path.center.y + path.radius * Math.sin(angle) }
-  }
-  if (path.type === "arc") {
-    const angle = path.startAngle + (path.endAngle - path.startAngle) * t
-    return { x: path.center.x + path.radius * Math.cos(angle), y: path.center.y + path.radius * Math.sin(angle) }
-  }
-  if (path.type === "polyline") {
-    const lengths = path.points.slice(1).map((point, index) => Math.hypot(point.x - path.points[index].x, point.y - path.points[index].y))
-    const total = lengths.reduce((sum, length) => sum + length, 0)
-    if (!total) return null
-    let distance = t * total
-    for (let index = 0; index < lengths.length; index += 1) {
-      if (distance <= lengths[index] || index === lengths.length - 1) {
-        const ratio = lengths[index] ? distance / lengths[index] : 0
-        return { x: path.points[index].x + (path.points[index + 1].x - path.points[index].x) * ratio, y: path.points[index].y + (path.points[index + 1].y - path.points[index].y) * ratio }
-      }
-      distance -= lengths[index]
-    }
-  }
+/**
+ * 由文档里的曲线对象构造内核约束。
+ *
+ * **绑定参数就是该约束的自然参数**，不再一律归一化到 [0, 1]：
+ *
+ *   直线 / 射线 / 线段  仿射比例 t（直线与射线**不截断**）
+ *   圆 / 弧 / 椭圆      角度 θ（弧度）
+ *   折线               按弧长归一化的比例
+ *   函数图像           x 本身
+ *
+ * 统一归一化对直线是致命的：直线在画布上横贯整个视野，但 `clamp(t, 0, 1)` 会把点锁在
+ * `a..b` 这一段里 —— 用户看到一条长线，点却只能在中间一小段滑动。
+ * 交给内核约束之后，正向映射（`evaluate`）与反向映射（`project`）由同一份定义保证互逆。
+ */
+export function pathConstraint(path: PrimitiveSpec, parameters: GeometryDocument["parameters"]): PlanarConstraint | null {
+  if (path.type === "line") return lineConstraint(path.id, path.a, path.b)
+  if (path.type === "segment") return segmentConstraint(path.id, path.a, path.b)
+  if (path.type === "ray") return rayConstraint(path.id, path.a, path.b)
+  if (path.type === "circle") return circleConstraint(path.id, path.center, path.radius)
+  if (path.type === "arc") return arcConstraint(path.id, path.center, path.radius, path.startAngle, path.endAngle)
+  if (path.type === "polyline") return polylineConstraint(path.id, path.points)
+  if (path.type === "ellipse") return ellipseConstraint(path.id, path)
+  // 抛物线与双曲线的自然参数是无界的轴向参数 u，所以它们需要绑定自带一个 `domain` 作为扫描窗口。
+  if (path.type === "parabola") return parabolaConstraint(path.id, path)
+  if (path.type === "hyperbola") return hyperbolaConstraint(path.id, path)
   if (path.type === "function") {
-    const x = path.domain[0] + (path.domain[1] - path.domain[0]) * t
-    try { return { x, y: evaluateParameterExpression(path.expression, { x, ...Object.fromEntries(Object.entries(parameters).map(([id, spec]) => [id, spec.value])) }) } } catch { return null }
+    const variables = Object.fromEntries(Object.entries(parameters).map(([id, spec]) => [id, spec.value]))
+    return functionGraphConstraint(path.id, (x) => evaluateParameterExpression(path.expression, { ...variables, x }), path.domain)
   }
   return null
 }
 
+/**
+ * 滑块、动画与轨迹扫描用的**参数窗口**。
+ *
+ * 有界约束直接用它的参数域；无界约束（直线、射线、抛物线、双曲线）没有有限域：
+ * 抛物线与双曲线优先用绑定自带的 `domain`（用户可编辑），没有就取一个与图形尺度成比例的窗口；
+ * 直线与射线用与 `a→b` 长度成比例的窗口。
+ *
+ * 注意这个窗口**只决定滑块与轨迹扫多远**，拖动本身不受它限制（`dragBoundPoint` 直接写参数值）。
+ */
+export function parameterWindow(path: PrimitiveSpec, parameters: GeometryDocument["parameters"], domain?: readonly [number, number]): { min: number; max: number } {
+  const bounds = pathConstraint(path, parameters)?.parameterBounds()
+  if (bounds && Number.isFinite(bounds.min) && Number.isFinite(bounds.max)) return { min: bounds.min, max: bounds.max }
+  // 抛物线/双曲线：绑定里的 domain 是权威的（用户可改），否则给一个与焦参数/半径成比例的默认窗口。
+  if (domain && Number.isFinite(domain[0]) && Number.isFinite(domain[1]) && domain[0] < domain[1]) return { min: domain[0], max: domain[1] }
+  // 直线的 t 以 a→b 为单位长度，所以 ±2 就是"往两头各延伸两个 a..b 那么长"。
+  if (path.type === "line") return { min: -2, max: 2 }
+  if (path.type === "ray") return { min: 0, max: 3 }
+  if (path.type === "parabola") {
+    const scale = Math.max(1, Math.abs(path.focalParameter) * 2)
+    return { min: -scale, max: scale }
+  }
+  if (path.type === "hyperbola") {
+    const scale = Math.max(1, Math.abs(path.radiusX) * 2)
+    return { min: -scale, max: scale }
+  }
+  return { min: 0, max: 1 }
+}
+
+/** 把世界坐标投影到约束曲线上，返回自然参数。与 `resolveBoundPoint` 是同一份定义的正反两面。 */
+function projectOntoPath(path: PrimitiveSpec, desired: Coordinate, parameters: GeometryDocument["parameters"], branch?: 0 | 1): number | null {
+  // 双曲线必须锁在绑定记录的那一支上，否则拖过渐近线时点会跳到对面那一支。
+  const projection = pathConstraint(path, parameters)?.project(desired, branch === undefined ? {} : { previousBranch: branch })
+  return projection ? projection.parameter : null
+}
+
+/**
+ * 拖拽一个被约束的点：把"当前位置 + 增量"投影回曲线，写回参数。
+ *
+ * 自由点是直接加 x/y 的，但约束点不能这么做 —— 下一个重算会立刻用旧参数把坐标覆盖回去，
+ * 拖动等于没发生。参数写两处：
+ *   - `binding.parameter`：点自己的参数；
+ *   - 若绑定了文档参数，同时写它的值，因为 `resolveBoundPoint` 在有 `parameterId` 时只看那个参数。
+ */
+function dragBoundPoint(point: Extract<PrimitiveSpec, { type: "point" }>, delta: Coordinate, primitiveMap: Map<string, PrimitiveSpec>, parameters: GeometryDocument["parameters"]): { point: Extract<PrimitiveSpec, { type: "point" }>; parameterValue: { id: string; value: number } | null } | null {
+  if (point.binding?.kind !== "onPath") return null
+  const path = primitiveMap.get(point.binding.pathId)
+  if (!path) return null
+  const projected = projectOntoPath(path, { x: point.x + delta.x, y: point.y + delta.y }, parameters, point.binding.branch)
+  if (projected === null) return null
+  const binding: PointBinding = { ...point.binding, parameter: projected }
+  return {
+    point: { ...point, binding },
+    parameterValue: binding.parameterId ? { id: binding.parameterId, value: projected } : null
+  }
+}
+
+function resolveBoundPoint(binding: PointBinding, primitives: Map<string, PrimitiveSpec>, parameters: GeometryDocument["parameters"]): Coordinate | null {
+  if (binding.kind !== "onPath") return null
+  const path = primitives.get(binding.pathId)
+  if (!path) return null
+  const parameter = binding.parameterId ? parameters[binding.parameterId]?.value : binding.parameter
+  if (parameter === undefined || !Number.isFinite(parameter)) return null
+  return pathConstraint(path, parameters)?.evaluate(parameter, binding.branch ?? 0) ?? null
+}
+
 function isSampledPrimitive(primitive: PrimitiveSpec | undefined): primitive is SampledPrimitive {
   return Boolean(primitive && ["line", "segment", "ray", "polyline", "circle", "arc", "parabola", "ellipse", "hyperbola", "function"].includes(primitive.type))
+}
+
+/**
+ * 几何运算（求交）用的取样来源。
+ *
+ * `connection` 在文档里只存两个点的 id，没有自己的坐标，所以要先解析成真实端点才能参与运算 ——
+ * 否则"两个动点之间连的线段"就只是一根装饰线，量不了也交不了。
+ * 抛物线连接用的是二次贝塞尔控制点，不是真正的抛物线，故不在此列。
+ */
+function sampledSource(id: string, primitiveMap: Map<string, PrimitiveSpec>): SampledPrimitive | undefined {
+  const primitive = primitiveMap.get(id)
+  if (primitive?.type === "connection") {
+    if (primitive.kind !== "segment" && primitive.kind !== "line" && primitive.kind !== "ray") return undefined
+    const start = primitiveMap.get(primitive.startPointId)
+    const end = primitiveMap.get(primitive.endPointId)
+    if (start?.type !== "point" || end?.type !== "point") return undefined
+    const a = { x: start.x, y: start.y }
+    const b = { x: end.x, y: end.y }
+    return { id: primitive.id, type: primitive.kind, a, b }
+  }
+  return isSampledPrimitive(primitive) ? primitive : undefined
 }
 
 function recomputeDerivative(primitive: Extract<PrimitiveSpec, { type: "derivative" }>, source: Extract<PrimitiveSpec, { type: "function" }>, parameters: GeometryDocument["parameters"]): Extract<PrimitiveSpec, { type: "derivative" }> {
@@ -710,6 +796,35 @@ export function getAffectedPrimitiveIds(document: GeometryDocument, changedIds: 
   return affected
 }
 
+/**
+ * 受影响对象的**拓扑重算顺序**：任一对象的依赖都排在它前面。
+ *
+ * 主重算流程原来是"取所有受影响对象，按数组顺序各重算一次"，只在对象恰好按依赖顺序创建时正确。
+ * 用拓扑序之后：一趟就能算完（`recomputeBoundPoint3s` 那个"最多重跑 N 遍直到不动"的循环因此可以去掉），
+ * 并且能保证下游读到的是**刚算出来的**上游值。
+ *
+ * 两个安全措施：
+ * - 依赖里只有真实存在的图元才建边（`slopeParameter` / `parameterId` 这类参数 id 不是图元，
+ *   它们的值在参数求值的前置步骤里已经应用过，不需要参与排序）；
+ * - 环里的节点不会出现在拓扑序中，直接过滤会**静默漏算**，所以按文档顺序补在末尾。
+ */
+export function topologicalRecomputeOrder(document: GeometryDocument, changedIds?: string[]): string[] {
+  const graph = createDependencyGraph()
+  const primitiveIds = new Set(document.primitives.map((primitive) => primitive.id))
+  for (const primitive of document.primitives) {
+    graph.addNode(primitive.id, primitiveDependencies(primitive).filter((dependency) => primitiveIds.has(dependency)))
+  }
+  const affected = changedIds === undefined ? primitiveIds : getAffectedPrimitiveIds(document, changedIds)
+  const ordered = graph.topologicalOrder().filter((id) => affected.has(id))
+  const seen = new Set(ordered)
+  for (const primitive of document.primitives) {
+    if (!affected.has(primitive.id) || seen.has(primitive.id)) continue
+    ordered.push(primitive.id)
+    seen.add(primitive.id)
+  }
+  return ordered
+}
+
 function point3Position(primitive: PrimitiveSpec | undefined, points: Map<string, Point3Primitive>): Vector3 | null {
   if (!primitive) return null
   if (primitive.type === "point3") return primitive.position
@@ -754,23 +869,6 @@ function resolveBoundPoint3(primitive: Extract<PrimitiveSpec, { type: "point3" }
     if (first && second) return { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2, z: (first.z + second.z) / 2 }
   }
   return null
-}
-
-function recomputeBoundPoint3s(primitives: PrimitiveSpec[], affected: Set<string>): void {
-  for (let pass = 0; pass < primitives.length; pass += 1) {
-    let changed = false
-    const primitiveMap = new Map(primitives.map((primitive) => [primitive.id, primitive]))
-    for (let index = 0; index < primitives.length; index += 1) {
-      const primitive = primitives[index]
-      if (primitive.type !== "point3" || !primitive.binding || !affected.has(primitive.id)) continue
-      const position = resolveBoundPoint3(primitive, primitiveMap)
-      if (!position || primitive.position.x === position.x && primitive.position.y === position.y && primitive.position.z === position.z) continue
-      primitives[index] = { ...primitive, position }
-      primitiveMap.set(primitive.id, primitives[index])
-      changed = true
-    }
-    if (!changed) return
-  }
 }
 
 function syncTemplateTopology(primitives: PrimitiveSpec[]): void {
@@ -838,7 +936,8 @@ export function recomputeDerivedObjects(document: GeometryDocument, changedIds?:
     const primitiveIndex = primitiveIndexById.get(id)
     if (primitiveIndex !== undefined) projectedPrimitives[primitiveIndex] = projected
   }
-  recomputeBoundPoint3s(projectedPrimitives, affected)
+  // 受约束的 point3 不再需要"最多重跑 N 遍直到不动"的多趟循环：
+  // 主重算按拓扑序走，且每算完一个对象就更新查找表，一趟即可收敛。
   syncTemplateTopology(projectedPrimitives)
   const circles = new Map(
     projectedPrimitives
@@ -846,15 +945,20 @@ export function recomputeDerivedObjects(document: GeometryDocument, changedIds?:
       .map((circle) => [circle.id, circle])
   )
   const primitiveMap = new Map(projectedPrimitives.map((primitive) => [primitive.id, primitive]))
-  const primitives = projectedPrimitives.map((primitive) => {
-    if (!affected.has(primitive.id)) return primitive
+  /**
+   * 重算单个对象。返回 `undefined` 表示这个类型不参与本趟重算。
+   *
+   * 抽成函数是为了让主循环按**拓扑序**遍历，并在每算完一个对象后立刻更新 `primitiveMap` ——
+   * 这样下游读到的是刚刚算出来的上游值，而不是本趟开始前的那份快照。
+   */
+  const recomputePrimitive = (primitive: PrimitiveSpec): PrimitiveSpec | undefined => {
     if (primitive.type === "point3" && primitive.binding) {
       const position = resolveBoundPoint3(primitive, primitiveMap)
-      return position ? { ...primitive, position } : primitive
+      return position ? { ...primitive, position } : undefined
     }
     if (primitive.type === "point" && primitive.binding) {
       const point = resolveBoundPoint(primitive.binding, primitiveMap, parameters)
-      return point ? { ...primitive, x: point.x, y: point.y } : primitive
+      return point ? { ...primitive, x: point.x, y: point.y } : undefined
     }
     if (primitive.type === "derivative") {
       const source = primitiveMap.get(primitive.sourceId)
@@ -877,11 +981,11 @@ export function recomputeDerivedObjects(document: GeometryDocument, changedIds?:
       return recomputeSection(primitive, source, primitiveMap)
     }
     if (primitive.type === "intersectionLine") return recomputeIntersectionLine(primitive, primitiveMap)
-    if (primitive.type === "line") return lines.get(primitive.id) ?? primitive
+    if (primitive.type === "line") return lines.get(primitive.id)
     if (primitive.type === "intersectionSet") {
-      const first = primitiveMap.get(primitive.objectA)
-      const second = primitiveMap.get(primitive.objectB)
-      if (!isSampledPrimitive(first) || !isSampledPrimitive(second)) throw new Error("intersection set references unsupported objects")
+      const first = sampledSource(primitive.objectA, primitiveMap)
+      const second = sampledSource(primitive.objectB, primitiveMap)
+      if (!first || !second) throw new Error("intersection set references unsupported objects")
       const result = intersectSampledPrimitives(first, second)
       if (result.kind === "degenerate") throw new Error(`degenerate intersection set: ${result.reason}`)
       if (result.kind === "none" || result.kind === "coincident") return { ...primitive, points: [], visible: false }
@@ -889,9 +993,9 @@ export function recomputeDerivedObjects(document: GeometryDocument, changedIds?:
       return { ...primitive, points: result.points, visible: true }
     }
     if (primitive.type === "curveIntersection") {
-      const first = primitiveMap.get(primitive.objectA)
-      const second = primitiveMap.get(primitive.objectB)
-      if (!isSampledPrimitive(first) || !isSampledPrimitive(second)) throw new Error("curve intersection references unsupported objects")
+      const first = sampledSource(primitive.objectA, primitiveMap)
+      const second = sampledSource(primitive.objectB, primitiveMap)
+      if (!first || !second) throw new Error("curve intersection references unsupported objects")
       const result = intersectSampledPrimitives(first, second)
       if (result.kind === "degenerate") throw new Error(`degenerate curve intersection: ${result.reason}`)
       if (result.kind === "none" || result.kind === "coincident") return { ...primitive, visible: false }
@@ -899,16 +1003,66 @@ export function recomputeDerivedObjects(document: GeometryDocument, changedIds?:
       const point = result.points[primitive.solutionIndex ?? 0]
       return { ...primitive, x: point.x, y: point.y, visible: true }
     }
-    if (primitive.type !== "intersection" && primitive.type !== "lineCircleIntersection" && primitive.type !== "circleIntersection") return primitive
+    if (primitive.type !== "intersection" && primitive.type !== "lineCircleIntersection" && primitive.type !== "circleIntersection") return undefined
     const result = resolveIntersection(primitive, lines, circles)
     if (result.kind === "degenerate") throw new Error(`degenerate intersection: ${result.reason}`)
     if (result.kind === "none" || result.kind === "coincident") return { ...primitive, visible: false }
     if (result.kind === "point" || result.kind === "tangent") return { ...primitive, x: result.point.x, y: result.point.y, visible: true }
     const point = result.points[primitive.type === "intersection" ? 0 : primitive.solutionIndex ?? 0]
     return { ...primitive, x: point.x, y: point.y, visible: true }
+  }
+  const primitives = [...projectedPrimitives]
+  for (const id of topologicalRecomputeOrder(evaluatedDocument, changedIds)) {
+    const index = primitiveIndexById.get(id)
+    if (index === undefined) continue
+    const recomputed = recomputePrimitive(primitives[index])
+    if (recomputed === undefined || recomputed === primitives[index]) continue
+    primitives[index] = recomputed
+    // 关键：下游对象必须看到刚算出来的上游值，而不是本趟开始前的快照。
+    primitiveMap.set(id, recomputed)
+  }
+  // 测量只在它的来源对象真的进了脏集时才重算 —— 这是依赖图剪枝在测量上的体现。
+  // 来源都没变时保留上一次的读数（值本身就存在文档里），所以"拖一个和它无关的点"不会触发它。
+  const measurements = evaluatedDocument.measurements.map((measurement) => {
+    if (changedIds !== undefined && !measurement.sourceIds.some((id) => affected.has(id))) return measurement
+    return evaluatedDocument.workspace === "geometry3d"
+      ? calculateMeasurement3(measurement, primitives)
+      : calculatePlanarMeasurement(measurement, primitives)
   })
-  const measurements = evaluatedDocument.measurements.map((measurement) => calculateMeasurement3(measurement, primitives))
   return { ...evaluatedDocument, primitives, measurements }
+}
+
+/**
+ * 平面（2D）测量。
+ *
+ * 复用 `Measurement3` 这个既有容器，而不是新增一套 DSL 类型：`Measurement3Metric` 已经包含
+ * length / distance / angle / area，状态枚举也与内核的 `MeasurementStatus` 逐字一致，
+ * 因此归档格式、对象列表、检查器和导出器都不需要改动。求值则交给内核的 `evaluatePlanarMeasurement`，
+ * 由它负责退化判定（重合点、零向量、三点共线）与 atan2 角度。
+ *
+ * 两处映射：
+ * - `dihedralKind`（interior / exterior）同时承载平面角的取角方式，沿用已有的按钮签名；
+ * - 平面量的值都是数值计算的，所以 `precision` 固定为 `numeric-approximation`。
+ */
+function calculatePlanarMeasurement(measurement: Measurement3, primitives: PrimitiveSpec[]): Measurement3 {
+  const positions = new Map<string, Coordinate>()
+  for (const primitive of primitives) {
+    if (primitive.type === "point") positions.set(primitive.id, { x: primitive.x, y: primitive.y })
+  }
+  const reading = evaluatePlanarMeasurement({
+    id: measurement.id,
+    metric: measurement.metric as PlanarMetric,
+    sourceIds: measurement.sourceIds,
+    angleKind: measurement.dihedralKind === "exterior" ? "exterior" : "interior"
+  }, (id) => positions.get(id) ?? null)
+  return {
+    ...measurement,
+    value: reading.value ?? undefined,
+    unit: reading.unit,
+    status: reading.status,
+    precision: "numeric-approximation",
+    explanation: reading.explanation
+  }
 }
 
 /** Derivative curve, tangent, normal, secant, integral region and analysis set all describe one function. */
@@ -927,6 +1081,38 @@ function functionAnalysisSourceId(primitive: PrimitiveSpec): string | null {
 }
 
 /**
+ * 参数是否仍被某个图元引用。两个用途：回收自动生成的驱动参数时确认它真的成了孤儿，
+ * 以及拒绝删除仍被绑定的参数。调用前应先完成图元的增删，这样判断的是**当前**状态。
+ */
+export function parameterIsReferenced(document: GeometryDocument, parameterId: string): boolean {
+  return document.primitives.some((primitive) => {
+    if (primitive.type === "line" && primitive.slopeParameter === parameterId) return true
+    if (primitive.type === "point" && primitive.binding?.kind === "onPath" && primitive.binding.parameterId === parameterId) return true
+    if (primitive.type === "locus" && primitive.parameterId === parameterId) return true
+    if (primitive.type === "polyhedron3" && primitive.construction?.kind === "template") return (primitive.construction.parameterIds ?? []).includes(parameterId)
+    return false
+  })
+}
+
+/**
+ * 一个图元"纯派生"地依赖哪些对象 —— 也就是"这些来源没了，它就没有独立存在的意义"。
+ *
+ * 这些对象在删除时会被级联带走，而不是以"object is referenced by another object"拒绝删除。
+ * 判据是**派生性**：交点、轨迹、连接都完全由来源决定，自己不含任何独立几何。
+ */
+function cascadeSources(primitive: PrimitiveSpec): string[] {
+  if (primitive.type === "intersection") return [primitive.lineA, primitive.lineB]
+  if (primitive.type === "lineCircleIntersection") return [primitive.lineId, primitive.circleId]
+  if (primitive.type === "circleIntersection") return [primitive.circleA, primitive.circleB]
+  if (primitive.type === "curveIntersection") return [primitive.objectA, primitive.objectB]
+  if (primitive.type === "intersectionSet") return [primitive.objectA, primitive.objectB]
+  if (primitive.type === "locus") return [primitive.sourcePointId]
+  if (primitive.type === "connection") return [primitive.startPointId, primitive.endPointId, ...(primitive.control?.thirdPointId ? [primitive.control.thirdPointId] : [])]
+  const analysisSource = functionAnalysisSourceId(primitive)
+  return analysisSource === null ? [] : [analysisSource]
+}
+
+/**
  * A template solid (cube/pyramid/cylinder/cone) is not a single primitive: the workspace also materialises a
  * polyhedron plus its vertices, edges and faces so the figure can be drawn and measured. Those parts exist only
  * to draw the solid, so for deletion they are the same object — deleting any member deletes the family. Treating
@@ -936,18 +1122,35 @@ function functionAnalysisSourceId(primitive: PrimitiveSpec): string | null {
  * Function analysis objects are the same story: a 导函数/切线/积分区域/分析集 only exists to describe its source
  * function. Counting them as ordinary referrers made a legacy calculus document's function impossible to delete
  * ("object is referenced by another object"), so they are deleted together with the function they came from.
+ *
+ * **交点同理**：删除一条直线时，用户不应该先手动删掉它与别的图形的交点再回来删直线。
+ * 交点、轨迹、连接都是纯派生对象，一律随来源级联删除。
  */
 export function deletionTargets(document: GeometryDocument, id: string): Set<string> {
   const targets = new Set<string>([id])
-  for (const primitive of document.primitives) {
-    if (functionAnalysisSourceId(primitive) === id) targets.add(primitive.id)
-  }
+  // 模板实体的拓扑是一整族，先按成员归属整体纳入，后面的级联才看得到它们。
   const polyhedron = document.primitives.find((primitive) => {
     if (primitive.type !== "polyhedron3" || primitive.construction?.kind !== "template") return false
     return primitive.id === id || primitive.construction.sourceIds[0] === id || primitive.vertexIds.includes(id) || primitive.edgeIds.includes(id) || primitive.faceIds.includes(id)
   })
-  if (!polyhedron || polyhedron.type !== "polyhedron3") return targets
-  for (const member of [polyhedron.id, ...(polyhedron.construction?.sourceIds ?? []), ...polyhedron.vertexIds, ...polyhedron.edgeIds, ...polyhedron.faceIds]) targets.add(member)
+  if (polyhedron && polyhedron.type === "polyhedron3") {
+    for (const member of [polyhedron.id, ...(polyhedron.construction?.sourceIds ?? []), ...polyhedron.vertexIds, ...polyhedron.edgeIds, ...polyhedron.faceIds]) targets.add(member)
+  }
+  /**
+   * 固定点迭代，不能只扫一趟：级联出来的对象本身可能还被别的派生对象引用。
+   * 例如"直线 → 连接（引用该直线上的点）→ 连接与圆的交点"，一趟只能收到中间那层。
+   */
+  let added = true
+  while (added) {
+    added = false
+    for (const primitive of document.primitives) {
+      if (targets.has(primitive.id)) continue
+      const sources = cascadeSources(primitive)
+      if (sources.length === 0 || !sources.some((sourceId) => targets.has(sourceId))) continue
+      targets.add(primitive.id)
+      added = true
+    }
+  }
   return targets
 }
 
@@ -1067,10 +1270,26 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
   } else if (operation.op === "translatePrimitive") {
     const primitive = next.primitives.find((candidate) => candidate.id === operation.id)
     if (primitive) {
-      next.primitives = next.primitives.map((candidate) => candidate.id !== operation.id
-        ? candidate
-        : candidate.type === "function" ? translateFunction(candidate, operation.delta.x, operation.delta.y) : translatePrimitive(candidate, operation.delta.x, operation.delta.y))
-      changedIds = [operation.id]
+      const primitiveMap = new Map(next.primitives.map((candidate) => [candidate.id, candidate]))
+      const dragged = primitive.type === "point"
+        ? dragBoundPoint(primitive, operation.delta, primitiveMap, next.parameters)
+        : null
+      if (dragged) {
+        // 约束点沿曲线滑动：写回自己的参数（以及它绑定的文档参数），坐标由重算统一求出。
+        next.primitives = next.primitives.map((candidate) => candidate.id === operation.id ? dragged.point : candidate)
+        if (dragged.parameterValue) {
+          const parameter = next.parameters[dragged.parameterValue.id]
+          if (parameter) next.parameters[dragged.parameterValue.id] = { ...parameter, value: dragged.parameterValue.value }
+          changedIds = [operation.id, dragged.parameterValue.id]
+        } else {
+          changedIds = [operation.id]
+        }
+      } else {
+        next.primitives = next.primitives.map((candidate) => candidate.id !== operation.id
+          ? candidate
+          : candidate.type === "function" ? translateFunction(candidate, operation.delta.x, operation.delta.y) : translatePrimitive(candidate, operation.delta.x, operation.delta.y))
+        changedIds = [operation.id]
+      }
     }
   } else if (operation.op === "translatePrimitive3") {
     const primitive = next.primitives.find((candidate) => candidate.id === operation.id)
@@ -1108,8 +1327,23 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
     primitive.locked = operation.locked
   } else if (operation.op === "setParameter") {
     const parameter = next.parameters[operation.id] ?? { id: operation.id, value: operation.value }
-    next.parameters[operation.id] = { ...parameter, value: operation.value, expression: undefined }
+    // 只在显式给出时覆盖元数据，这样拖动滑块（只带 value）不会抹掉参数已有的 min/max/label。
+    next.parameters[operation.id] = {
+      ...parameter,
+      value: operation.value,
+      expression: undefined,
+      ...(operation.min === undefined ? {} : { min: operation.min }),
+      ...(operation.max === undefined ? {} : { max: operation.max }),
+      ...(operation.step === undefined ? {} : { step: operation.step }),
+      ...(operation.label === undefined ? {} : { label: operation.label }),
+      ...(operation.ownerId === undefined ? {} : { ownerId: operation.ownerId })
+    }
     changedIds = [operation.id]
+  } else if (operation.op === "deleteParameter") {
+    if (!next.parameters[operation.id]) return { document, changed: false, error: "parameter not found" }
+    // 参数还被图元引用时不能删：绑定里的 parameterId 一旦悬空，点会静默冻住。
+    if (parameterIsReferenced(next, operation.id)) return { document, changed: false, error: "parameter is referenced by an object" }
+    delete next.parameters[operation.id]
   } else if (operation.op === "setParameterExpression") {
     const parameter = next.parameters[operation.id] ?? { id: operation.id, value: 0 }
     next.parameters[operation.id] = { ...parameter, expression: operation.expression }
@@ -1138,6 +1372,22 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
     const before = next.primitives.length
     next.primitives = next.primitives.filter((primitive) => !targets.has(primitive.id))
     if (before === next.primitives.length) return { document, changed: false, error: "object not found" }
+    /**
+     * 回收"随对象自动生成"的驱动参数。判据是**孤儿**而不是"本次被删"：
+     * 只要它带 `ownerId`（自动生成）、归属对象已经不在文档里、且没有任何图元引用它，就是垃圾。
+     *
+     * 不能只看 `targets`：先删点 A（参数因被点 B 共用而保留）、再删点 B 时，
+     * A 早已不在 targets 里，只看 targets 就永远收不掉这个参数。
+     *
+     * 必须在图元过滤**之后**做，否则被删图元自己的绑定会被算成"仍被引用"。
+     * 用户手工创建的参数不带 `ownerId`，永远不会被这一步碰掉。
+     */
+    const survivingIds = new Set(next.primitives.map((primitive) => primitive.id))
+    for (const [parameterId, parameter] of Object.entries(next.parameters)) {
+      if (!parameter.ownerId || survivingIds.has(parameter.ownerId)) continue
+      if (parameterIsReferenced(next, parameterId)) continue
+      delete next.parameters[parameterId]
+    }
     changedIds = [...targets]
   } else if (operation.op === "deleteConstraint") {
     const before = next.constraints.length

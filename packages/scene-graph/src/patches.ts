@@ -72,6 +72,13 @@ function isDrawingSheet(value: unknown): value is NonNullable<GeometryDocument["
   return typeof sheet.id === "string" && typeof sheet.name === "string" && typeof sheet.paper === "string" && typeof sheet.orientation === "string" && Number.isFinite(sheet.scale) && Array.isArray(sheet.viewIds) && sheet.viewIds.every((id) => typeof id === "string")
 }
 
+/**
+ * 是否存在仍会引用 `id` 的对象。
+ *
+ * `ignoredReferrers` 是**同一次删除**里的对象 id：级联带走的对象不算阻塞，留下的才算。
+ * 注释 / 分组 / 约束 / 测量仍然**一律阻塞**删除 —— 它们是用户自己写下的内容，
+ * 不该因为删一个图形就被默默抹掉（这条有既有测试保护，不要顺手放宽）。
+ */
 function isReferenced(document: GeometryDocument, id: string, ignoredReferrers: Set<string> = new Set()): boolean {
   return document.groups.some((group) => group.members.includes(id)) || document.constraints.some((constraint) => constraint.targets.includes(id)) || document.measurements.some((measurement) => measurement.sourceIds.includes(id)) || (document.engineeringAnnotations ?? []).some((annotation) => annotation.sourceIds.includes(id)) || document.annotations.some((annotation) => annotation.target === id || (annotation.anchor?.kind === "primitive" && annotation.anchor.primitiveId === id)) || document.primitives.some((primitive) => !ignoredReferrers.has(primitive.id) && (
     (primitive.type === "intersection" && (primitive.lineA === id || primitive.lineB === id)) ||
@@ -80,6 +87,12 @@ function isReferenced(document: GeometryDocument, id: string, ignoredReferrers: 
     (primitive.type === "curveIntersection" && (primitive.objectA === id || primitive.objectB === id))
      || (primitive.type === "intersectionSet" && (primitive.objectA === id || primitive.objectB === id))
      || (primitive.type === "point3" && primitive.binding && ((primitive.binding.kind === "onLine" && primitive.binding.lineId === id) || (primitive.binding.kind === "onPlane" && primitive.binding.planeId === id) || (primitive.binding.kind === "derived" && primitive.binding.sourceIds.includes(id))))
+     // 二维动点绑定：删掉它所在的曲线会留下悬空的 pathId，点会静默冻住。
+     || (primitive.type === "point" && primitive.binding?.kind === "onPath" && primitive.binding.pathId === id)
+     // 轨迹追踪的源点：删掉它留下的悬空引用会让文档**过不了校验**，于是根本存不下去。
+     || (primitive.type === "locus" && primitive.sourcePointId === id)
+     // 连接引用的端点同理。正常路径由 `deletionTargets` 级联删除连接，这里是兜底。
+     || (primitive.type === "connection" && (primitive.startPointId === id || primitive.endPointId === id || primitive.control?.thirdPointId === id))
      || (primitive.type === "line3" && (primitive.definition.kind === "throughPoints" ? primitive.definition.pointIds.includes(id) : primitive.definition.pointId === id))
      || (primitive.type === "segment3" && primitive.pointIds.includes(id))
      || (primitive.type === "ray3" && (primitive.originId === id || primitive.throughId === id))

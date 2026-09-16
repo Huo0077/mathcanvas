@@ -1,8 +1,23 @@
 import { useState, type ReactNode } from "react"
 
-import type { Measurement3, Polyhedron3Primitive, PrimitiveSpec, Workspace } from "@draw/dsl"
+import type { Measurement3, ParameterSpec, Polyhedron3Primitive, PrimitiveSpec, Workspace } from "@draw/dsl"
 
-interface AlgebraViewProps { primitives: PrimitiveSpec[]; selectedIds: string[]; onSelect: (id: string, additive: boolean) => void; onToggle: (id: string, visible: boolean) => void; measurements?: Measurement3[]; workspace?: Workspace; filter?: string; className?: string; id?: string }
+interface AlgebraViewProps {
+  primitives: PrimitiveSpec[]
+  selectedIds: string[]
+  onSelect: (id: string, additive: boolean) => void
+  onToggle: (id: string, visible: boolean) => void
+  measurements?: Measurement3[]
+  /** 文档里的参数表。给出时会在列表底部渲染「参数」分组，可以改值/上下界/步长/名称，也能新建与删除。 */
+  parameters?: Record<string, ParameterSpec>
+  workspace?: Workspace
+  filter?: string
+  className?: string
+  id?: string
+  onSetParameter?: (id: string, patch: { value?: number; min?: number; max?: number; step?: number; label?: string }) => void
+  onDeleteParameter?: (id: string) => void
+  onAddParameter?: () => void
+}
 
 const measurementLabels: Record<Measurement3["metric"], string> = { length: "长度", distance: "距离", angle: "角度", area: "面积", volume: "体积", dihedral: "二面角" }
 
@@ -48,8 +63,18 @@ function solidGroupLabel(solid: Polyhedron3Primitive, byId: Map<string, Primitiv
   return construction?.kind === "template" ? `${base} 拓扑` : base
 }
 
-export function AlgebraView({ primitives, selectedIds, onSelect, onToggle, measurements = [], workspace, filter = "", className = "panel", id }: AlgebraViewProps) {
+export function AlgebraView({ primitives, selectedIds, onSelect, onToggle, measurements = [], parameters, workspace, filter = "", className = "panel", id, onSetParameter, onDeleteParameter, onAddParameter }: AlgebraViewProps) {
   const [expandedSolids, setExpandedSolids] = useState<string[]>([])
+  /**
+   * 参数分组：动点自动生成的驱动参数带 `ownerId`，标注出它属于哪个对象，
+   * 这样"这是谁在动"一眼可见；用户手工创建的参数则没有归属。
+   */
+  const parameterEntries = parameters ? Object.values(parameters).filter((parameter) => !filter.trim() || (parameter.label ?? parameter.id).toLowerCase().includes(filter.trim().toLowerCase())) : []
+  const parameterOwnerLabel = (parameter: ParameterSpec) => {
+    if (!parameter.ownerId) return null
+    const owner = primitives.find((primitive) => primitive.id === parameter.ownerId)
+    return owner ? `驱动 ${owner.label ?? owner.id}` : `驱动已删除的 ${parameter.ownerId}`
+  }
   const byId = new Map(primitives.map((primitive) => [primitive.id, primitive]))
   const solids = workspace === "geometry3d" ? primitives.filter((primitive): primitive is Polyhedron3Primitive => primitive.type === "polyhedron3") : []
   const childIds = new Set(solids.flatMap((solid) => [...solid.vertexIds, ...solid.edgeIds, ...solid.faceIds]))
@@ -96,5 +121,27 @@ export function AlgebraView({ primitives, selectedIds, onSelect, onToggle, measu
   return <aside id={id} className={className} data-mobile-dock="objects"><section className="panel-section algebra-panel"><div className="panel-heading"><div><span className="panel-kicker">对象管理</span><h2 className="panel-title">代数区</h2></div><span className="object-count">{primitives.length}</span></div><div className="object-list">
     {topLevel.map((primitive) => primitive.type === "polyhedron3" ? renderSolid(primitive) : renderRow(primitive))}
     {measurements.length > 0 && <div className="object-group"><div className="object-group-label">教学测量</div>{measurements.map((measurement) => <div className="object-row measurement-row" key={measurement.id}><div className="object-meta"><span className="object-dot" data-object-type="measurement3" aria-hidden="true" /><span className="object-name">{measurement.metric === "dihedral" ? (measurement.dihedralKind === "exterior" ? "二面角外角" : "二面角内角") : `${measurementLabels[measurement.metric]}测量`}</span><span className="measurement-status" data-status={measurement.status}>{measurement.status}</span></div><small className="measurement-source">{measurement.sourceIds.join("、")} · {measurement.precision === "numeric-approximation" ? "数值近似" : "输入精确"}</small><small className="measurement-explanation">{measurement.explanation}</small></div>)}</div>}
+    {parameters && <div className="object-group" data-parameter-group="true"><div className="object-group-label">参数</div>
+      {parameterEntries.length === 0 && <div className="object-empty">还没有参数。拖动一个绑定到曲线上的点会自动生成它的驱动参数。</div>}
+      {parameterEntries.map((parameter) => {
+        const owner = parameterOwnerLabel(parameter)
+        return <div className="object-row parameter-row" key={parameter.id} data-parameter-id={parameter.id}>
+          <div className="object-meta">
+            <span className="object-dot" data-object-type="parameter" aria-hidden="true" />
+            <span className="object-name">{parameter.label ?? parameter.id}</span>
+            {owner && <span className="parameter-owner">{owner}</span>}
+          </div>
+          <div className="parameter-fields">
+            <label>值<input aria-label={`参数值 ${parameter.id}`} type="number" step="any" value={parameter.value} onChange={(event) => onSetParameter?.(parameter.id, { value: Number(event.target.value) })} /></label>
+            <label>最小<input aria-label={`参数最小 ${parameter.id}`} type="number" step="any" value={parameter.min ?? ""} placeholder="—" onChange={(event) => onSetParameter?.(parameter.id, { min: event.target.value === "" ? undefined : Number(event.target.value) })} /></label>
+            <label>最大<input aria-label={`参数最大 ${parameter.id}`} type="number" step="any" value={parameter.max ?? ""} placeholder="—" onChange={(event) => onSetParameter?.(parameter.id, { max: event.target.value === "" ? undefined : Number(event.target.value) })} /></label>
+            <label>步长<input aria-label={`参数步长 ${parameter.id}`} type="number" step="any" value={parameter.step ?? ""} placeholder="—" onChange={(event) => onSetParameter?.(parameter.id, { step: event.target.value === "" ? undefined : Number(event.target.value) })} /></label>
+            <label>名称<input aria-label={`参数名称 ${parameter.id}`} type="text" value={parameter.label ?? ""} placeholder={parameter.id} onChange={(event) => onSetParameter?.(parameter.id, { label: event.target.value })} /></label>
+          </div>
+          <div className="property-actions"><button type="button" aria-label={`删除参数 ${parameter.id}`} onClick={() => onDeleteParameter?.(parameter.id)}>删除参数</button></div>
+        </div>
+      })}
+      {onAddParameter && <div className="property-actions"><button type="button" aria-label="新建参数" onClick={onAddParameter}>新建参数</button></div>}
+    </div>}
   </div></section></aside>
 }

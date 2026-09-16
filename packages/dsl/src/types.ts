@@ -57,11 +57,34 @@ export interface ParameterSpec {
   max?: number
   step?: number
   label?: string
+  /**
+   * 该参数是**某个对象自动生成的驱动参数**（例如绑定点沿曲线滑动用的 `t-<点id>`）。
+   * 它只描述"谁生成了我"，用于在宿主对象被删除时回收，避免留下孤儿参数；
+   * 用户手工创建并驱动的参数不带这个字段。
+   */
+  ownerId?: string
 }
 
 export type PointBinding =
   | { kind: "free" }
-  | { kind: "onPath"; pathId: string; parameterId?: string; parameter: number }
+  | {
+      kind: "onPath"
+      pathId: string
+      parameterId?: string
+      /**
+       * 曲线的**自然参数**：直线/射线/线段是仿射比例 t（直线与射线不截断），圆/弧/椭圆是角度（弧度），
+       * 折线是按弧长归一化的比例，函数图像是 x 本身，抛物线/双曲线是轴向参数 u。
+       */
+      parameter: number
+      /**
+       * 参数域，只对**无界**自然参数的曲线（抛物线、双曲线）有意义：它们的轴向参数 u 没有天然边界，
+       * 而这个域是滑块与轨迹扫描的窗口，也是「路径参数」输入框的上下界。
+       * 有界曲线（线段、折线、圆、弧、椭圆）由曲线自身决定域，不需要它。
+       */
+      domain?: [number, number]
+      /** 双曲线分支（0 / 1），其它曲线忽略。拖动时按它保持分支不跳。 */
+      branch?: 0 | 1
+    }
   | { kind: "derived"; sourceId: string; feature: string }
 
 export interface PointPrimitive extends PrimitivePresentation {

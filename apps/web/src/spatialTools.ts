@@ -9,6 +9,7 @@ export interface MeasurementOption { metric: Measurement3Metric; label: string; 
 export interface ConstraintOption { type: ConstraintType; label: string; targets: string[] }
 
 const isLineLike = (primitive: PrimitiveSpec) => LINE_LIKE.includes(primitive.type)
+const isPoint = (primitive: PrimitiveSpec) => primitive.type === "point"
 const isPoint3 = (primitive: PrimitiveSpec) => primitive.type === "point3"
 const isPlane3 = (primitive: PrimitiveSpec) => primitive.type === "plane3"
 const isFace3 = (primitive: PrimitiveSpec) => primitive.type === "face3"
@@ -16,8 +17,30 @@ const isCircle3 = (primitive: PrimitiveSpec) => primitive.type === "circle3"
 const isSolidLike = (primitive: PrimitiveSpec) => SOLID_LIKE.includes(primitive.type)
 const everyIs = (selection: PrimitiveSpec[], predicate: (primitive: PrimitiveSpec) => boolean) => selection.length > 0 && selection.every(predicate)
 
+/**
+ * 平面（2D）测量选项。只提供内核 `evaluatePlanarMeasurement` 真能算出来的组合 ——
+ * 这里给出的每一个按钮都必须有对应的求值路径，否则就是一个点了没反应的死按钮。
+ *
+ * 角的顶点约定：`sourceIds` 的第 2 个（下标 1）是顶点，所以提示里写明"按 Shift 选择时先点边上一点"。
+ * 距离取"第 3 个点到前两点确定的直线"的垂距。
+ */
+function planarMeasurementOptions(selection: PrimitiveSpec[]): MeasurementOption[] {
+  const points = selection.filter(isPoint)
+  const allPoints = points.length === selection.length
+  const options: MeasurementOption[] = []
+  if (selection.length === 2 && allPoints) options.push({ metric: "length", label: "长度" })
+  if (selection.length === 3 && allPoints) {
+    options.push(
+      { metric: "angle", label: "角度（第二个点作顶点）", dihedralKind: "interior" },
+      { metric: "area", label: "面积" },
+      { metric: "distance", label: "距离（第三个点到前两点的直线）" }
+    )
+  }
+  return options
+}
+
 export function measurementOptionsFor(workspace: Workspace, selection: PrimitiveSpec[]): MeasurementOption[] {
-  if (workspace !== "geometry3d") return []
+  if (workspace !== "geometry3d") return planarMeasurementOptions(selection)
   const lineCount = selection.filter(isLineLike).length
   const pointCount = selection.filter(isPoint3).length
   const options: MeasurementOption[] = []

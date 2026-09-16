@@ -49,15 +49,60 @@ describe("domain patches", () => {
     expect(commitPatch(document, operation).document.constraints).toEqual([operation.constraint])
   })
 
-  it("rejects deleting an object referenced by a derived intersection", () => {
-    const document = createEmptyDocument("calculus")
+  /**
+   * 3D 的点-线-面拓扑**不**在级联范围内：删掉一条空间直线依赖的点仍然被拒绝。
+   * 这是有意保留的保护 —— 那些顶层拓扑对象不是"纯派生"的，用户应当明确处理。
+   */
+  it("still refuses to delete a spatial point that a line3 depends on", () => {
+    const document = createEmptyDocument("geometry3d")
     document.primitives = [
-      { id: "line-a", type: "line", a: { x: 0, y: 0 }, b: { x: 1, y: 1 } },
-      { id: "line-b", type: "line", a: { x: 0, y: 1 }, b: { x: 1, y: 0 } },
-      { id: "intersection", type: "intersection", lineA: "line-a", lineB: "line-b", x: 0.5, y: 0.5 }
+      { id: "point-a", type: "point3", position: { x: 0, y: 0, z: 0 } },
+      { id: "point-b", type: "point3", position: { x: 1, y: 0, z: 0 } },
+      { id: "line-ab", type: "line3", definition: { kind: "throughPoints", pointIds: ["point-a", "point-b"] } }
     ]
 
-    expect(validatePatch(document, { op: "deleteObject", id: "line-a" })).toEqual({ valid: false, errors: ["object is referenced by another object"] })
+    expect(validatePatch(document, { op: "deleteObject", id: "point-a" })).toEqual({ valid: false, errors: ["object is referenced by another object"] })
+  })
+
+  /**
+   * 删掉动点所绑定的曲线会留下一个悬空的 pathId：点会静默冻住，用户完全看不出为什么。
+   * `isReferenced` 原来只覆盖了 point3 的绑定，二维点被漏掉了。
+   */
+  it("rejects deleting the curve a dynamic point is bound to", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [
+      { id: "parabola-1", type: "parabola", vertex: { x: 0, y: 0 }, focalParameter: 2, axis: "y" },
+      { id: "point-1", type: "point", x: 0, y: 0, binding: { kind: "onPath", pathId: "parabola-1", parameter: 0, domain: [-4, 4] } }
+    ]
+
+    expect(validatePatch(document, { op: "deleteObject", id: "parabola-1" })).toEqual({ valid: false, errors: ["object is referenced by another object"] })
+    // A free point is still deletable on its own.
+    expect(validatePatch(document, { op: "deleteObject", id: "point-1" }).valid).toBe(true)
+  })
+
+  /**
+   * 轨迹的 sourcePointId 也是引用。删掉被追踪的点不能留下悬空引用 ——
+   * `locus` 的 schema 校验要求源点存在，悬空的文档**存不下去**（`encodeMgeo` 会抛）。
+   * 处理方式与导函数跟着源函数走一致：轨迹是纯派生对象，跟着源点一起删。
+   */
+  it("deletes a locus together with the point it tracks, keeping the document savable", () => {
+    const document = createEmptyDocument("conics")
+    document.parameters = { t: { id: "t", value: 0.5, min: 0, max: 1 } }
+    document.primitives = [
+      { id: "point-1", type: "point", x: 1, y: 0 },
+      { id: "keep-me", type: "point", x: 5, y: 5 },
+      { id: "locus-1", type: "locus", sourcePointId: "point-1", parameterId: "t", domain: [0, 1], samples: 32 }
+    ]
+
+    expect(validatePatch(document, { op: "deleteObject", id: "point-1" })).toEqual({ valid: true })
+    const deleted = commitPatch(document, { op: "deleteObject", id: "point-1" }).document
+    expect(deleted.primitives.map((primitive) => primitive.id)).toEqual(["keep-me"])
+
+    // Sanity: the document that the guard prevents really would fail validation.
+    const dangling = { ...document, primitives: document.primitives.filter((primitive) => primitive.id !== "point-1") }
+    expect(validateDocument(dangling).valid).toBe(false)
+    // The result of the actual delete stays valid and therefore savable.
+    expect(validateDocument(deleted).valid).toBe(true)
   })
 
   it("rejects editing and deleting a locked object", () => {
@@ -129,6 +174,101 @@ describe("domain patches", () => {
     expect(validatePatch(document, { op: "updatePrimitive", id: "point-1", patch: { style: { stroke: 12 as unknown as string, dash: 8 as unknown as string } } })).toEqual({ valid: false, errors: ["stroke is invalid", "dash is invalid"] })
   })
 
+  /**
+   * 删除图形时**不需要先手动删掉它的交点**：交点是纯派生对象，跟着来源一起走。
+   * 旧行为是"object is referenced by another object"拒绝删除，用户必须先删交点再删直线。
+   */
+  it("deletes a line together with the intersection it takes part in", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [
+      { id: "line-a", type: "line", a: { x: 0, y: 0 }, b: { x: 1, y: 1 } },
+      { id: "line-b", type: "line", a: { x: 0, y: 1 }, b: { x: 1, y: 0 } },
+      { id: "keep", type: "line", a: { x: 0, y: -1 }, b: { x: 1, y: -1 } },
+      { id: "intersection", type: "intersection", lineA: "line-a", lineB: "line-b", x: 0.5, y: 0.5 }
+    ]
+
+    expect(validatePatch(document, { op: "deleteObject", id: "line-a" })).toEqual({ valid: true })
+    const deleted = commitPatch(document, { op: "deleteObject", id: "line-a" }).document
+    // The line and the intersection go; the *other* line that met it at that point stays.
+    expect(deleted.primitives.map((primitive) => primitive.id).sort()).toEqual(["keep", "line-b"])
+    // The result is a valid document, so it can still be saved.
+    expect(validateDocument(deleted).valid).toBe(true)
+  })
+
+  it("deletes a circle together with its line-circle and circle-circle intersections", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [
+      { id: "line-1", type: "line", a: { x: -5, y: 0 }, b: { x: 5, y: 0 } },
+      { id: "circle-1", type: "circle", center: { x: 0, y: 0 }, radius: 2 },
+      { id: "circle-2", type: "circle", center: { x: 3, y: 0 }, radius: 2 },
+      { id: "line-circle", type: "lineCircleIntersection", lineId: "line-1", circleId: "circle-1", x: 2, y: 0 },
+      { id: "circle-circle", type: "circleIntersection", circleA: "circle-1", circleB: "circle-2", x: 1.5, y: 0 },
+      { id: "keep", type: "point", x: 9, y: 9 }
+    ]
+
+    const deleted = commitPatch(document, { op: "deleteObject", id: "circle-1" }).document
+    expect(deleted.primitives.map((primitive) => primitive.id).sort()).toEqual(["circle-2", "keep", "line-1"])
+    expect(validateDocument(deleted).valid).toBe(true)
+  })
+
+  it("cascades through several levels, not just one", () => {
+    const document = createEmptyDocument("conics")
+    // A point → the connection joining it to another point → the intersection of that connection
+    // with a circle. Deleting the point must take the whole chain, not just the first level.
+    document.primitives = [
+      { id: "p1", type: "point", x: -4, y: 0 },
+      { id: "p2", type: "point", x: 4, y: 0 },
+      { id: "seg", type: "connection", kind: "segment", startPointId: "p1", endPointId: "p2" },
+      { id: "circle-1", type: "circle", center: { x: 0, y: 0 }, radius: 1 },
+      { id: "hits", type: "intersectionSet", objectA: "seg", objectB: "circle-1", points: [] },
+      { id: "keep", type: "point", x: 9, y: 9 }
+    ]
+
+    const deleted = commitPatch(document, { op: "deleteObject", id: "p1" }).document
+    // p1 goes, the connection goes with its endpoint, and the intersection set goes with the
+    // connection. The other point, the circle and the unrelated point survive.
+    expect(deleted.primitives.map((primitive) => primitive.id).sort()).toEqual(["circle-1", "keep", "p2"])
+    expect(validateDocument(deleted).valid).toBe(true)
+  })
+
+  /**
+   * 边界的诚实记录：**交点本身**会级联删除，但如果那个交点身上挂着用户自己写的东西
+   * （注释 / 分组 / 测量 / 约束），删除仍会被拒绝 —— 那些是既有测试保护的刻意行为，
+   * 不能因为"要删交点"就顺手把用户写的内容一起抹掉。
+   */
+  it("still asks the user to clean up their own annotations on the intersection first", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [
+      { id: "line-a", type: "line", a: { x: 0, y: 0 }, b: { x: 1, y: 1 } },
+      { id: "line-b", type: "line", a: { x: 0, y: 1 }, b: { x: 1, y: 0 } },
+      { id: "intersection", type: "intersection", lineA: "line-a", lineB: "line-b", x: 0.5, y: 0.5 }
+    ]
+    document.annotations = [{ id: "note", text: "交点", target: "intersection" }]
+
+    expect(validatePatch(document, { op: "deleteObject", id: "line-a" })).toEqual({ valid: false, errors: ["object is referenced by another object"] })
+    // Removing the note (or deleting the intersection directly) unblocks it.
+    const withoutNote = { ...document, annotations: [] }
+    expect(validatePatch(withoutNote, { op: "deleteObject", id: "line-a" })).toEqual({ valid: true })
+  })
+
+  it("still protects the object the user explicitly deleted when they annotated it", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [{ id: "point-1", type: "point", x: 1, y: 1 }]
+    document.annotations = [{ id: "note", text: "顶点", target: "point-1" }]
+
+    // A note the user wrote themselves is not silently thrown away; remove it first.
+    expect(validatePatch(document, { op: "deleteObject", id: "point-1" })).toEqual({ valid: false, errors: ["object is referenced by another object"] })
+  })
+
+  it("still protects the object the user explicitly deleted when they annotated it", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [{ id: "point-1", type: "point", x: 1, y: 1 }]
+    document.annotations = [{ id: "note", text: "顶点", target: "point-1" }]
+
+    // A note the user wrote themselves is not silently thrown away; remove it first.
+    expect(validatePatch(document, { op: "deleteObject", id: "point-1" })).toEqual({ valid: false, errors: ["object is referenced by another object"] })
+  })
+
   it("creates and protects a sampled curve intersection", () => {
     const document = createEmptyDocument("conics")
     document.primitives = [
@@ -140,7 +280,10 @@ describe("domain patches", () => {
 
     expect(result.changed).toBe(true)
     expect(result.document.primitives[2]).toMatchObject({ type: "curveIntersection", visible: true })
-    expect(validatePatch(result.document, { op: "deleteObject", id: "ellipse-1" })).toEqual({ valid: false, errors: ["object is referenced by another object"] })
+    // Deleting either source takes the sampled intersection with it, rather than refusing the delete.
+    const deleted = commitPatch(result.document, { op: "deleteObject", id: "ellipse-1" }).document
+    expect(deleted.primitives.map((primitive) => primitive.id)).toEqual(["function-1"])
+    expect(validateDocument(deleted).valid).toBe(true)
   })
 
   it("rejects overlapping groups and locked batch alignment", () => {

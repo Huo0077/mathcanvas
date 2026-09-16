@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, within } from "@testing-library/react"
-import { beforeEach, describe, expect, it } from "vitest"
+import { act, fireEvent, render, screen, within } from "@testing-library/react"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { createEmptyDocument } from "@draw/dsl"
 
@@ -549,6 +549,96 @@ describe("MathCanvas workbench", () => {
     expect(screen.getByRole("img", { name: "几何画布" }).querySelector('[data-primitive-type="connection"]')).toBeTruthy()
   })
 
+  /**
+   * 连接线段只存两个点的引用，所以画布上的线段必须随着端点移动而重新定位。
+   * 这里用改坐标的方式移动端点（而不是拖拽），断言渲染出来的线段几何确实变了。
+   */
+  it("keeps a connection segment attached when one of its points moves", () => {
+    render(<App />)
+    const placePoint = (x: string, y: string) => {
+      fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+      fireEvent.click(pointObjectRows().at(-1)!)
+      fireEvent.change(screen.getByRole("spinbutton", { name: "点 X" }), { target: { value: x } })
+      fireEvent.change(screen.getByRole("spinbutton", { name: "点 Y" }), { target: { value: y } })
+    }
+    placePoint("0", "0")
+    placePoint("4", "0")
+
+    const rows = pointObjectRows()
+    fireEvent.click(rows[0])
+    fireEvent.click(rows[1], { shiftKey: true })
+    fireEvent.click(screen.getByRole("button", { name: "连接选中点" }))
+
+    const canvas = screen.getByRole("img", { name: "几何画布" })
+    const segment = () => canvas.querySelector('[data-primitive-type="connection"] line:not([data-hit-target="true"])')!
+    const geometry = () => {
+      const element = segment()
+      return [element.getAttribute("x1"), element.getAttribute("y1"), element.getAttribute("x2"), element.getAttribute("y2")].join(",")
+    }
+    const before = geometry()
+
+    // Move the second point up by editing its Y: the segment must be re-derived from the points.
+    fireEvent.click(pointObjectRows()[1])
+    fireEvent.change(screen.getByRole("spinbutton", { name: "点 Y" }), { target: { value: "3" } })
+    expect(geometry()).not.toBe(before)
+  })
+
+  /**
+   * 完整场景：一个**被约束在曲线上的动点** + 另一个点 → 连成线段 → 在画布上拖动动点。
+   * 这条把三件事串在一起断言：把自由点变成动点、按点建连接、以及拖动时线段跟着端点走。
+   */
+  it("connects a curve-bound dynamic point to another point and follows it while dragging", () => {
+    render(<App />)
+    // 1. Bind the first point to the first available path (the x-axis line) so it becomes a dynamic point.
+    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(pointObjectRows().at(-1)!)
+    const pathSelect = screen.getByRole("combobox", { name: "点路径绑定" }) as HTMLSelectElement
+    fireEvent.change(pathSelect, { target: { value: Array.from(pathSelect.options).find((option) => option.value)!.value } })
+    const dynamicId = useSceneStore.getState().document.primitives.find((primitive) => primitive.type === "point")!.id
+    // Park it at t = 1, i.e. the line's own b, which is well inside the viewport.
+    fireEvent.change(screen.getByRole("spinbutton", { name: "路径参数" }), { target: { value: "1" } })
+
+    // 2. A second, free point.
+    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(pointObjectRows().at(-1)!)
+    fireEvent.change(screen.getByRole("spinbutton", { name: "点 X" }), { target: { value: "0" } })
+    fireEvent.change(screen.getByRole("spinbutton", { name: "点 Y" }), { target: { value: "0" } })
+
+    // 3. Connect the two points with a segment.
+    const rows = pointObjectRows()
+    fireEvent.click(rows[0])
+    fireEvent.click(rows[1], { shiftKey: true })
+    fireEvent.click(screen.getByRole("button", { name: "连接选中点" }))
+
+    const canvas = screen.getByRole("img", { name: "几何画布" })
+    const segmentGeometry = () => {
+      const element = canvas.querySelector('[data-primitive-type="connection"] line:not([data-hit-target="true"])')!
+      return [element.getAttribute("x1"), element.getAttribute("y1"), element.getAttribute("x2"), element.getAttribute("y2")].join(",")
+    }
+    const before = segmentGeometry()
+    expect(before).toBeTruthy()
+    const dynamicBefore = useSceneStore.getState().document.primitives.find((primitive) => primitive.id === dynamicId)
+    if (dynamicBefore?.type !== "point") throw new Error("dynamic point missing")
+    const xBefore = dynamicBefore.x
+
+    // 4. Drag the dynamic point on the canvas: it slides along its curve and the segment follows.
+    const handle = canvas.querySelector('[data-primitive-type="point"] circle[data-hit-target="true"]')!
+    const cx = Number(handle.getAttribute("cx"))
+    const cy = Number(handle.getAttribute("cy"))
+    fireEvent.pointerDown(handle, { clientX: cx, clientY: cy, pointerId: 3 })
+    fireEvent.pointerMove(canvas, { clientX: cx + 70, clientY: cy + 20, pointerId: 3 })
+    fireEvent.pointerUp(canvas, { clientX: cx + 70, clientY: cy + 20, pointerId: 3 })
+
+    const dragged = useSceneStore.getState().document.primitives.find((primitive) => primitive.id === dynamicId)
+    if (dragged?.type !== "point") throw new Error("dynamic point missing after drag")
+    // It actually moved, it is still bound to its curve, and it stayed on that curve (y = 0).
+    expect(dragged.x).not.toBeCloseTo(xBefore, 6)
+    expect(dragged.binding?.kind).toBe("onPath")
+    expect(dragged.y).toBeCloseTo(0, 6)
+    // ...and the rendered segment was re-derived from the new endpoint positions.
+    expect(segmentGeometry()).not.toBe(before)
+  })
+
   it("requires a third point for a parabola connection", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "添加点" }))
@@ -562,6 +652,286 @@ describe("MathCanvas workbench", () => {
     fireEvent.click(screen.getByRole("button", { name: "创建三点抛物线" }))
 
     expect(screen.getByRole("img", { name: "几何画布" }).querySelector('[data-connection-kind="parabola"]')).toBeTruthy()
+  })
+
+  /**
+   * 椭圆可以作为动点的约束曲线：参数是离心角 θ = 2πt，与圆的约定一致。
+   * 抛物线与双曲线不在此列（无界自然参数没有规范的归一化映射），所以下拉里只能找到椭圆。
+   */
+  it("binds a selected point to an ellipse path and records its locus", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "添加椭圆" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(pointObjectRows().at(-1)!)
+
+    const pathSelect = screen.getByRole("combobox", { name: "点路径绑定" }) as HTMLSelectElement
+    const ellipseOption = Array.from(pathSelect.options).find((option) => option.textContent?.includes("椭圆"))
+    expect(ellipseOption).toBeTruthy()
+    // Only the ellipse is bindable among the conics.
+    expect(Array.from(pathSelect.options).some((option) => option.textContent?.includes("抛物线"))).toBe(false)
+    fireEvent.change(pathSelect, { target: { value: ellipseOption!.value } })
+
+    const parameterInput = screen.getByRole("spinbutton", { name: "路径参数" }) as HTMLInputElement
+    expect(parameterInput).toBeTruthy()
+    // X/Y stop being hand-editable once the point is constrained.
+    expect((screen.getByRole("spinbutton", { name: "点 X" }) as HTMLInputElement).disabled).toBe(true)
+
+    // t = 0.25 → θ = π/2, the top of the default ellipse.
+    fireEvent.change(parameterInput, { target: { value: "0.25" } })
+    expect(parameterInput.value).toBe("0.25")
+
+    fireEvent.click(screen.getByRole("button", { name: "记录轨迹" }))
+    expect(screen.getByRole("img", { name: "几何画布" }).querySelector('[data-primitive-type="locus"]')).toBeTruthy()
+  })
+
+  /**
+   * 动点的核心交互：在画布上拖动一个被约束的点，它必须**沿曲线滑动**并保持约束。
+   * 修复前这个拖拽会被静默丢弃 —— 增量被加到了 x/y 上，紧接着重算又用旧参数把坐标覆盖回去。
+   */
+  it("drags a point bound to a line along that line on the canvas", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(pointObjectRows().at(-1)!)
+
+    // Bind to the first available path, which is the x-axis line y = 0.
+    const pathSelect = screen.getByRole("combobox", { name: "点路径绑定" }) as HTMLSelectElement
+    const lineOption = Array.from(pathSelect.options).find((option) => option.value)
+    fireEvent.change(pathSelect, { target: { value: lineOption!.value } })
+
+    const findPoint = () => useSceneStore.getState().document.primitives.find((primitive) => primitive.type === "point")
+    const before = findPoint()
+    if (before?.type !== "point") throw new Error("point missing")
+
+    const canvas = screen.getByRole("img", { name: "几何画布" })
+    const pointElement = canvas.querySelector('[data-primitive-type="point"]')
+    expect(pointElement).toBeTruthy()
+    fireEvent.pointerDown(pointElement!, { clientX: 400, clientY: 220, pointerId: 1 })
+    fireEvent.pointerMove(canvas, { clientX: 470, clientY: 260, pointerId: 1 })
+    fireEvent.pointerUp(canvas, { clientX: 470, clientY: 260, pointerId: 1 })
+
+    const after = findPoint()
+    if (after?.type !== "point") throw new Error("point missing after drag")
+    // It actually moved...
+    expect(after).not.toEqual(before)
+    // ...and it is still exactly on the line it is bound to (y = 0), so the constraint held.
+    expect(after.y).toBeCloseTo(0, 6)
+    expect(after.binding?.kind === "onPath" ? after.binding.parameter : null).not.toBeCloseTo(
+      before.binding?.kind === "onPath" ? before.binding.parameter : -1,
+      6
+    )
+  })
+
+  /**
+   * 动点必须有自己的驱动参数：绑定后不能再去借用文档里第一个参数（在圆锥曲线工作区就是 `slope`）。
+   * 借用的后果是「路径参数」输入框完全失效（求值只认 parameterId 指向的那个参数）、
+   * 而且拖点会把无关的直线一起转起来。
+   */
+  it("gives a bound point its own driving parameter and decouples it from the slope", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(pointObjectRows().at(-1)!)
+
+    const pathSelect = screen.getByRole("combobox", { name: "点路径绑定" }) as HTMLSelectElement
+    const lineOption = Array.from(pathSelect.options).find((option) => option.value)
+    fireEvent.change(pathSelect, { target: { value: lineOption!.value } })
+
+    const document = () => useSceneStore.getState().document
+    const point = document().primitives.find((primitive) => primitive.type === "point")
+    if (point?.type !== "point" || point.binding?.kind !== "onPath") throw new Error("binding missing")
+
+    // Its own parameter, not the shared slope parameter.
+    const parameterId = point.binding.parameterId
+    expect(parameterId).toBeTruthy()
+    expect(parameterId).not.toBe("slope")
+    expect(document().parameters[parameterId!]).toBeTruthy()
+
+    // The parameter box now actually drives the point.
+    const slopeBefore = document().parameters.slope?.value
+    const xBefore = point.x
+    fireEvent.change(screen.getByRole("spinbutton", { name: "路径参数" }), { target: { value: "0.8" } })
+
+    const moved = document().primitives.find((primitive) => primitive.type === "point")
+    if (moved?.type !== "point") throw new Error("point missing")
+    expect(moved.x).not.toBeCloseTo(xBefore, 6)
+    // ...and it left the shared slope parameter alone.
+    expect(document().parameters.slope?.value).toBeCloseTo(slopeBefore ?? 0, 9)
+
+    // The locus sweeps that same dedicated parameter over the curve's natural window.
+    // The first bindable path is the x-axis line, whose parameter is the affine ratio t,
+    // so the window is ±2 in units of the a→b segment.
+    fireEvent.click(screen.getByRole("button", { name: "记录轨迹" }))
+    const locus = document().primitives.find((primitive) => primitive.type === "locus")
+    expect(locus?.type === "locus" ? locus.parameterId : null).toBe(parameterId)
+    expect(locus?.type === "locus" ? locus.domain : null).toEqual([-2, 2])
+  })
+
+  /**
+   * 动画必须驱动**选中动点自己的参数**。之前动画目标写死成 `"slope"`，
+   * 所以在圆锥曲线工作区里选中一个动点按「播放」，动的是那条无关的直线。
+   */
+  it("animates the selected dynamic point instead of the slope line", () => {
+    vi.useFakeTimers()
+    try {
+      render(<App />)
+      fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+      fireEvent.click(pointObjectRows().at(-1)!)
+      const pathSelect = screen.getByRole("combobox", { name: "点路径绑定" }) as HTMLSelectElement
+      fireEvent.change(pathSelect, { target: { value: Array.from(pathSelect.options).find((option) => option.value)!.value } })
+
+      const document = () => useSceneStore.getState().document
+      const pointBefore = document().primitives.find((primitive) => primitive.type === "point")
+      if (pointBefore?.type !== "point" || pointBefore.binding?.kind !== "onPath") throw new Error("binding missing")
+      const parameterId = pointBefore.binding.parameterId!
+      const slopeBefore = document().parameters.slope.value
+
+      // Open the animation panel and scrub its slider: it targets the point's own parameter.
+      fireEvent.click(screen.getByRole("button", { name: "动效演示" }))
+      const scrub = screen.getByRole("slider", { name: "动画参数" }) as HTMLInputElement
+      expect(scrub.value).toBeCloseTo(document().parameters[parameterId].value, 6)
+      fireEvent.change(scrub, { target: { value: "0.9" } })
+      const pointAfterScrub = document().primitives.find((primitive) => primitive.type === "point")
+      if (pointAfterScrub?.type !== "point") throw new Error("point missing")
+      expect(pointAfterScrub.x).not.toBeCloseTo(pointBefore.x, 6)
+      expect(document().parameters.slope.value).toBeCloseTo(slopeBefore, 9)
+
+      // Playing advances that same parameter and leaves the slope alone.
+      const beforePlay = document().parameters[parameterId].value
+      fireEvent.click(screen.getByRole("button", { name: "播放动画" }))
+      act(() => {
+        vi.advanceTimersByTime(400)
+      })
+      expect(document().parameters[parameterId].value).not.toBeCloseTo(beforePlay, 6)
+      expect(document().parameters.slope.value).toBeCloseTo(slopeBefore, 9)
+
+      fireEvent.click(screen.getByRole("button", { name: "停止动画" }))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  /**
+   * 平面测量此前完全没有入口（`measurementOptionsFor` 对非 geometry3d 直接返回空），
+   * 所以画布上选两个点根本看不到"长度"按钮。这里验证入口与落库。
+   */
+  it("offers planar measurements for two selected points", () => {
+    render(<App />)
+    // Two points at the same default spot would be a degenerate length, so place them properly.
+    const placePoint = (x: string, y: string) => {
+      fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+      fireEvent.click(pointObjectRows().at(-1)!)
+      fireEvent.change(screen.getByRole("spinbutton", { name: "点 X" }), { target: { value: x } })
+      fireEvent.change(screen.getByRole("spinbutton", { name: "点 Y" }), { target: { value: y } })
+    }
+    placePoint("0", "0")
+    placePoint("3", "4")
+
+    const rows = pointObjectRows()
+    expect(rows.length).toBeGreaterThanOrEqual(2)
+    // One point alone offers nothing; two planar points offer a length.
+    fireEvent.click(rows[0])
+    expect(screen.queryByLabelText("平面测量工具")).toBeNull()
+    fireEvent.click(rows[1], { shiftKey: true })
+    expect(screen.getByLabelText("平面测量工具")).toBeTruthy()
+
+    fireEvent.click(screen.getByRole("button", { name: "长度" }))
+    const measurements = useSceneStore.getState().document.measurements
+    expect(measurements).toHaveLength(1)
+    expect(measurements[0].metric).toBe("length")
+    expect(measurements[0].sourceIds).toHaveLength(2)
+    // The 3-4-5 triangle: the reading comes from the planar evaluator, not left undefined.
+    expect(measurements[0].status).toBe("valid")
+    expect(measurements[0].value).toBeCloseTo(5, 6)
+  })
+
+  /**
+   * 抛物线与双曲线的轴向参数是无界的，所以绑定自带一个可编辑的「参数域」作为扫描窗口。
+   * 之前这两类曲线根本不在下拉里（选了也不会动），这一条验证入口 + 域编辑 + 窗口联动。
+   */
+  it("binds a selected point to a parabola and lets its parameter domain be widened", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "添加抛物线" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(pointObjectRows().at(-1)!)
+
+    const pathSelect = screen.getByRole("combobox", { name: "点路径绑定" }) as HTMLSelectElement
+    const parabolaOption = Array.from(pathSelect.options).find((option) => option.textContent?.includes("抛物线"))
+    expect(parabolaOption).toBeTruthy()
+    fireEvent.change(pathSelect, { target: { value: parabolaOption!.value } })
+
+    // A conic binding carries an editable domain because its axial parameter is unbounded.
+    const lower = screen.getByRole("spinbutton", { name: "参数域起" }) as HTMLInputElement
+    const upper = screen.getByRole("spinbutton", { name: "参数域止" }) as HTMLInputElement
+    expect(Number(upper.value)).toBeGreaterThan(Number(lower.value))
+
+    const point = useSceneStore.getState().document.primitives.find((primitive) => primitive.type === "point")
+    if (point?.type !== "point" || point.binding?.kind !== "onPath") throw new Error("binding missing")
+    expect(point.binding.domain).toBeTruthy()
+
+    // Widening the domain must widen the animation slider too, otherwise the window edit is cosmetic.
+    fireEvent.change(upper, { target: { value: "12" } })
+    const widened = useSceneStore.getState().document.primitives.find((primitive) => primitive.id === point.id)
+    expect(widened?.type === "point" && widened.binding?.kind === "onPath" ? widened.binding.domain?.[1] : null).toBe(12)
+    fireEvent.click(screen.getByRole("button", { name: "动效演示" }))
+    expect((screen.getByRole("slider", { name: "动画参数" }) as HTMLInputElement).max).toBe("12")
+  })
+
+  /**
+   * 驱动参数的生命周期与可见性：绑定产生的参数要出现在「参数」面板里、标注它的归属、
+   * 能被驱动，并在归属对象被删除时被回收 —— 而手工创建的参数不受影响。
+   */
+  it("shows the dynamic point's driver parameter and reclaims it with its point", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(pointObjectRows().at(-1)!)
+    const pathSelect = screen.getByRole("combobox", { name: "点路径绑定" }) as HTMLSelectElement
+    fireEvent.change(pathSelect, { target: { value: Array.from(pathSelect.options).find((option) => option.value)!.value } })
+
+    const document = () => useSceneStore.getState().document
+    const parameterId = Object.keys(document().parameters).find((id) => id.startsWith("t-"))
+    expect(parameterId).toBeTruthy()
+    // It is marked as generated by the point, which is what makes the cleanup safe.
+    expect(document().parameters[parameterId!].ownerId).toBeTruthy()
+
+    // It is listed in the parameter panel and attributed to its owner.
+    expect(screen.getByLabelText(`参数值 ${parameterId}`)).toBeTruthy()
+    expect(screen.getByText(/驱动/)).toBeTruthy()
+
+    // Driving it moves the point: the first bindable path is the x-axis line, parameter = affine ratio.
+    const before = document().primitives.find((primitive) => primitive.type === "point")
+    fireEvent.change(screen.getByLabelText(`参数值 ${parameterId}`), { target: { value: "1.5" } })
+    expect(document().primitives.find((primitive) => primitive.type === "point")).not.toEqual(before)
+
+    // A hand-made parameter has no owner and must survive the point's deletion.
+    fireEvent.click(screen.getByRole("button", { name: "新建参数" }))
+    expect(Object.keys(document().parameters)).toContain("p1")
+
+    fireEvent.click(pointObjectRows().at(-1)!)
+    fireEvent.click(screen.getByRole("button", { name: "快速删除对象" }))
+    // The generated driver parameter is reclaimed; the hand-made one (and the demo's own slope) stay.
+    const remaining = Object.keys(document().parameters)
+    expect(remaining).toContain("p1")
+    expect(remaining.some((id) => id.startsWith("t-"))).toBe(false)
+  })
+
+  /**
+   * 用户视角的那条规则：删掉一个图形，它带来的交点跟着一起消失，
+   * **不需要**先去把交点删掉。删除前先断言交点确实存在，否则测试可能空过。
+   */
+  it("deletes a line together with its intersection in a single action", () => {
+    render(<App />)
+    const ids = () => useSceneStore.getState().document.primitives.map((primitive) => primitive.id)
+    // The demo document ships with a parameter line crossing the x-axis, so an intersection exists.
+    expect(ids()).toContain("intersection-main")
+
+    fireEvent.click(screen.getAllByText("y = 0")[0])
+    fireEvent.click(screen.getByRole("button", { name: "快速删除对象" }))
+
+    expect(ids()).not.toContain("line-axis")
+    expect(ids()).not.toContain("intersection-main")
+    // The other line that met it at that point survives — only the deleted shape's dependents go.
+    expect(ids()).toContain("line-slope")
+    // No refusal error was shown.
+    expect(screen.queryByText(/referenced by another object/)).toBeNull()
   })
 
   it("binds a selected point to a path from the property bar", () => {

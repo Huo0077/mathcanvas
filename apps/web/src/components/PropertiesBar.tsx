@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "r
 import type { AnnotationFeature, EngineeringAnnotationKind, Measurement3Metric, PrimitiveSpec, SolidRotation, Vector3 } from "@draw/dsl"
 import { measurementOptionsFor } from "../spatialTools"
 import { adaptiveSampleFunctionSegments, advanceAnimation, evaluateParameterExpression, functionPresets, getFunctionPreset, parseExpression, type AnimationMode, type AnimationState } from "@draw/geometry-kernel"
-import type { Alignment, PrimitiveUpdatePatch } from "@draw/scene-graph"
+import { parameterWindow, type Alignment, type PrimitiveUpdatePatch } from "@draw/scene-graph"
 
 import { defaultStrokeFor } from "../primitiveStyle"
 import { annotationFeatureOptions } from "../annotations"
@@ -212,11 +212,40 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
   const applySceneOperation = useSceneStore((state) => state.apply)
   const annotationOptions = selectedPrimitive ? annotationFeatureOptions(selectedPrimitive) : []
   const selectedAnnotations = selectedPrimitive ? sceneDocument.annotations.filter((annotation) => annotation.target === selectedPrimitive.id || (annotation.anchor?.kind === "primitive" && annotation.anchor.primitiveId === selectedPrimitive.id)) : []
-  const pathPrimitives = sceneDocument.primitives.filter((primitive) => ["line", "segment", "ray", "polyline", "circle", "arc", "function"].includes(primitive.type))
+  /**
+   * 可绑定动点的曲线。
+   *
+   * 抛物线与双曲线的自然参数是无界的轴向参数 u，所以它们的绑定要自带一个 `domain` 作为扫描窗口
+   * （绑定时就写入，用户可以在「参数域」里改），双曲线还要记录分支以免拖动时跳支。
+   */
+  const pathPrimitives = sceneDocument.primitives.filter((primitive) => ["line", "segment", "ray", "polyline", "circle", "arc", "function", "ellipse", "parabola", "hyperbola"].includes(primitive.type))
   const [animationMode, setAnimationMode] = useState<AnimationMode>("loop")
   const [animationPlaying, setAnimationPlaying] = useState(false)
   const [animationOpen, setAnimationOpen] = useState(false)
   const animationRef = useRef<AnimationState>({ value, direction: 1, mode: "loop", playing: false, speed: 0.2 })
+  const selectedPointBinding = selectedPoint?.binding?.kind === "onPath" ? selectedPoint.binding : null
+  /**
+   * 选中动点所在曲线的自然参数窗口：有界曲线用它自己的参数域，抛物线/双曲线用绑定里的 `domain`。
+   * 它同时供给「路径参数」输入框和动画滑块，所以编辑「参数域」后两者都会立刻跟着变。
+   */
+  const selectedPointWindow = (() => {
+    if (!selectedPointBinding) return null
+    const path = sceneDocument.primitives.find((primitive) => primitive.id === selectedPointBinding.pathId)
+    return path ? parameterWindow(path, sceneDocument.parameters, selectedPointBinding.domain) : null
+  })()
+  /**
+   * 动画与滑块的驱动目标：优先驱动**选中动点自己的参数**（绑定产生的 `t-<点id>`），
+   * 否则退回直线斜率参数。之前动画目标写死成 `"slope"`，所以在圆锥曲线工作区里选中一个动点
+   * 按「播放」，动的是那条无关的直线，点本身纹丝不动。
+   */
+  const boundPointParameter = selectedPointBinding?.parameterId
+    ? sceneDocument.parameters[selectedPointBinding.parameterId]
+    : undefined
+  const animationParameterId = boundPointParameter ? boundPointParameter.id : showSlopeParameter ? "slope" : null
+  const animationMinimum = boundPointParameter ? selectedPointWindow?.min ?? 0 : min
+  const animationMaximum = boundPointParameter ? selectedPointWindow?.max ?? 1 : max
+  const animationStep = boundPointParameter ? (selectedPointWindow ? (selectedPointWindow.max - selectedPointWindow.min) / 100 : 0.01) : step
+  const animationValue = boundPointParameter ? boundPointParameter.value : value
   const selected3dPrimitives = selectedIds.map((id) => sceneDocument.primitives.find((primitive) => primitive.id === id)).filter((primitive): primitive is PrimitiveSpec => Boolean(primitive))
   const measurementOptions = measurementOptionsFor(sceneDocument.workspace, selected3dPrimitives)
   const selectedFacePair = selected3dPrimitives.length === 2 && selected3dPrimitives.every((primitive) => primitive.type === "face3")
@@ -244,35 +273,109 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
   }, [selectedPrimitive?.id, selectedPrimitive?.label])
 
   useEffect(() => {
-    if (!animationPlaying) animationRef.current = { ...animationRef.current, value, mode: animationMode, playing: false, speed: Math.max((max - min) / 4, step) }
-  }, [animationPlaying, animationMode, max, min, step, value])
+    if (!animationPlaying) animationRef.current = { ...animationRef.current, value: animationValue, mode: animationMode, playing: false, speed: Math.max((animationMaximum - animationMinimum) / 4, animationStep) }
+  }, [animationPlaying, animationMode, animationMaximum, animationMinimum, animationStep, animationValue])
 
   useEffect(() => {
-    if (!animationPlaying) return
+    if (!animationPlaying || !animationParameterId) return
     const timer = window.setInterval(() => {
-      const next = advanceAnimation(animationRef.current, 0.05, [min, max])
+      const next = advanceAnimation(animationRef.current, 0.05, [animationMinimum, animationMaximum])
       animationRef.current = next
-      previewParameter("slope", next.value)
+      previewParameter(animationParameterId, next.value)
       if (!next.playing) {
         setAnimationPlaying(false)
         commitPreview()
       }
     }, 50)
     return () => window.clearInterval(timer)
-  }, [animationPlaying, commitPreview, max, min, previewParameter])
+  }, [animationParameterId, animationPlaying, animationMaximum, animationMinimum, commitPreview, previewParameter])
 
   const updatePoint = (axis: "x" | "y", next: number) => selectedPoint && editable && onUpdatePrimitive({ [axis]: next })
   const updatePoint3 = (axis: keyof Vector3, next: number) => selectedPoint3 && editable && onUpdatePrimitive({ position3: { ...selectedPoint3.position, [axis]: next } })
-  const updatePointBinding = (pathId: string) => selectedPoint && editable && onUpdatePrimitive({ binding: pathId ? { kind: "onPath", pathId, parameterId: Object.keys(sceneDocument.parameters)[0], parameter: selectedPoint.binding?.kind === "onPath" ? selectedPoint.binding.parameter : 0 } : { kind: "free" } })
-  const updatePointParameter = (parameter: number) => selectedPoint?.binding?.kind === "onPath" && editable && onUpdatePrimitive({ binding: { ...selectedPoint.binding, parameter } })
+  /**
+   * 每个动点拥有**自己的**驱动参数。
+   *
+   * 之前这里盲取 `Object.keys(parameters)[0]`，在圆锥曲线工作区里就是那个 `slope`（直线斜率），
+   * 后果有三：点的参数域被限制在 `slope` 的 min/max 上、拖点会顺带把无关的直线转起来、
+   * 而「路径参数」输入框写的是 `binding.parameter`，在有 `parameterId` 时会被求值直接忽略因而完全失效。
+   * 给每个点一个专属参数后，拖拽、数字框、记录轨迹三者共用同一个真值来源，且互不干扰。
+   *
+   * 参数的 min/max 取该曲线的**自然参数窗口**（直线是 ±2 个 a→b 长度、圆/椭圆是 [0, 2π) 等）。
+   * 注意这个窗口只决定滑块和轨迹扫多远：拖动本身直接写参数值，不受它限制。
+   */
+  const pointParameterId = (pointId: string) => `t-${pointId}`
+  /** 无界自然参数的曲线需要在绑定里存一个扫描窗口（抛物线与双曲线）。 */
+  const needsDomain = (path: PrimitiveSpec) => path.type === "parabola" || path.type === "hyperbola"
+  const updatePointBinding = (pathId: string) => {
+    if (!selectedPoint || !editable) return
+    if (!pathId) {
+      onUpdatePrimitive({ binding: { kind: "free" } })
+      return
+    }
+    const path = sceneDocument.primitives.find((primitive) => primitive.id === pathId)
+    if (!path) return
+    const window = parameterWindow(path, sceneDocument.parameters)
+    const existing = selectedPoint.binding?.kind === "onPath" ? selectedPoint.binding : null
+    // 复用已有的专属参数，避免每换一次路径就留下一个孤儿参数；域与分支按新曲线重算。
+    if (existing?.parameterId && sceneDocument.parameters[existing.parameterId]) {
+      onUpdatePrimitive({ binding: {
+        kind: "onPath",
+        pathId,
+        parameterId: existing.parameterId,
+        parameter: existing.parameter,
+        ...(needsDomain(path) ? { domain: existing.domain ?? ([window.min, window.max] as [number, number]) } : {}),
+        ...(path.type === "hyperbola" ? { branch: existing.branch ?? 0 } : {})
+      } })
+      return
+    }
+    const id = pointParameterId(selectedPoint.id)
+    const value = window.min + (window.max - window.min) / 2
+    // 驱动参数带上 ownerId：点被删除时会被自动回收，不会留下孤儿参数。
+    applySceneOperation({
+      op: "setParameter",
+      id,
+      value,
+      min: window.min,
+      max: window.max,
+      step: (window.max - window.min) / 100,
+      label: `${selectedPoint.label ?? selectedPoint.id} 的路径参数`,
+      ownerId: selectedPoint.id
+    })
+    onUpdatePrimitive({ binding: {
+      kind: "onPath",
+      pathId,
+      parameterId: id,
+      parameter: value,
+      ...(needsDomain(path) ? { domain: [window.min, window.max] as [number, number] } : {}),
+      ...(path.type === "hyperbola" ? { branch: 0 as const } : {})
+    } })
+  }
+  const updatePointParameter = (parameter: number) => {
+    if (!selectedPoint || selectedPoint.binding?.kind !== "onPath" || !editable) return
+    const parameterId = selectedPoint.binding.parameterId
+    // 驱动参数才是坐标的真值来源；只改 `binding.parameter` 这个副本不会让点动起来。
+    if (parameterId && sceneDocument.parameters[parameterId]) {
+      applySceneOperation({ op: "setParameter", id: parameterId, value: parameter })
+      return
+    }
+    onUpdatePrimitive({ binding: { ...selectedPoint.binding, parameter } })
+  }
   const createLocus = () => {
-    if (!selectedPoint?.binding || selectedPoint.binding.kind !== "onPath" || !editable) return
-    const parameterId = selectedPoint.binding.parameterId ?? Object.keys(sceneDocument.parameters)[0]
-    const parameter = parameterId ? sceneDocument.parameters[parameterId] : undefined
-    if (!parameterId || !parameter) return
+    const binding = selectedPoint?.binding
+    if (!selectedPoint || binding?.kind !== "onPath" || !editable) return
+    const path = sceneDocument.primitives.find((primitive) => primitive.id === binding.pathId)
+    const window = path ? parameterWindow(path, sceneDocument.parameters, binding.domain) : { min: 0, max: 1 }
+    let parameterId = binding.parameterId
+    // 老文档里的绑定可能没有驱动参数（或它已被删掉），补一个再记录轨迹。
+    if (!parameterId || !sceneDocument.parameters[parameterId]) {
+      parameterId = pointParameterId(selectedPoint.id)
+      applySceneOperation({ op: "setParameter", id: parameterId, value: binding.parameter })
+      onUpdatePrimitive({ binding: { ...binding, parameterId } })
+    }
     let index = 1
     while (sceneDocument.primitives.some((primitive) => primitive.id === `locus-${index}`)) index += 1
-    applySceneOperation({ op: "addPrimitive", primitive: { id: `locus-${index}`, type: "locus", sourcePointId: selectedPoint.id, parameterId, domain: [parameter.min ?? 0, parameter.max ?? 1], samples: 128, label: `轨迹 ${index}` } })
+    const parameter = sceneDocument.parameters[parameterId]
+    applySceneOperation({ op: "addPrimitive", primitive: { id: `locus-${index}`, type: "locus", sourcePointId: selectedPoint.id, parameterId, domain: [parameter?.min ?? window.min, parameter?.max ?? window.max], samples: 128, label: `轨迹 ${index}` } })
   }
   const updateCenter = (axis: "x" | "y", next: number) => selectedCircleOrArc && editable && onUpdatePrimitive({ center: { ...selectedCircleOrArc.center, [axis]: next } })
   const updateEndpoint = (endpoint: "a" | "b", axis: "x" | "y", next: number) => selectedLinear && editable && !(selectedLinear.type === "line" && selectedLinear.slopeParameter && endpoint === "b" && axis === "y") && onUpdatePrimitive({ [endpoint]: { ...selectedLinear[endpoint], [axis]: next } })
@@ -361,15 +464,16 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
       commitPreview()
       return
     }
+    if (!animationParameterId) return
     beginPreview()
-    animationRef.current = { value, direction: 1, mode: animationMode, playing: true, speed: Math.max((max - min) / 4, step) }
+    animationRef.current = { value: animationValue, direction: 1, mode: animationMode, playing: true, speed: Math.max((animationMaximum - animationMinimum) / 4, animationStep) }
     setAnimationPlaying(true)
   }
   const stopAnimation = () => {
     if (!animationPlaying) return
     setAnimationPlaying(false)
-    animationRef.current = { ...animationRef.current, playing: false, value: min }
-    previewParameter("slope", min)
+    animationRef.current = { ...animationRef.current, playing: false, value: animationMinimum }
+    if (animationParameterId) previewParameter(animationParameterId, animationMinimum)
     commitPreview()
   }
   const functionMetrics = selectedFunction ? (() => {
@@ -395,7 +499,7 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
       <div className="animation-controls" aria-label="动态控制">
         <span className="properties-label"><strong>动画演示</strong></span>
         <div className="property-actions">
-          <button type="button" aria-label={animationPlaying ? "暂停动画" : "播放动画"} onClick={toggleAnimation}>{animationPlaying ? "暂停" : "播放"}</button>
+          <button type="button" aria-label={animationPlaying ? "暂停动画" : "播放动画"} onClick={toggleAnimation} disabled={!editable || !animationParameterId}>{animationPlaying ? "暂停" : "播放"}</button>
           <button type="button" aria-label="停止动画" onClick={stopAnimation} disabled={!animationPlaying}>停止</button>
           <select aria-label="动画模式" value={animationMode} onChange={(event) => setAnimationMode(event.target.value as AnimationMode)}>
             <option value="loop">循环</option>
@@ -403,6 +507,7 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
             <option value="pingPong">往返</option>
           </select>
         </div>
+        {animationParameterId && <input aria-label="动画参数" type="range" min={animationMinimum} max={animationMaximum} step={animationStep} value={animationValue} disabled={!editable} onChange={(event) => applySceneOperation({ op: "setParameter", id: animationParameterId, value: numberValue(event) })} />}
       </div>
     </InspectorAccordion>}
     {/* 重命名放在默认可见的「几何参数」区，避免必须先展开外观页签才能改名。 */}
@@ -426,11 +531,11 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
       <Field label="透明度"><input aria-label="透明度" type="number" disabled={!editable} min="0" max="1" step="0.05" value={selectedPrimitive.style?.opacity ?? 1} onChange={(event) => onUpdatePrimitive({ style: { opacity: Math.min(1, Math.max(0, numberValue(event))) } })} /></Field>
       <Field label="线型"><select aria-label="线型" disabled={!editable} value={selectedPrimitive.style?.dash ?? "solid"} onChange={(event) => onUpdatePrimitive({ style: { dash: event.target.value === "solid" ? undefined : event.target.value } })}><option value="solid">实线</option><option value="8 6">虚线</option><option value="2 5">点线</option></select></Field>
     </div>}
-    {shows("data") && visibleMeasurementOptions.length > 0 && <div className="primitive-properties"><h3>教学测量</h3><p className="footer-note">结果会保留来源对象，并在点移动后自动重算。</p>{selectedFacePair && <p className="measurement-guidance">已选两个面：二面角内角读实体内部夹角，外角读它的补角。</p>}<div className="property-actions" aria-label="三维测量工具">{visibleMeasurementOptions.map((option) => <button key={`${option.metric}-${option.dihedralKind ?? "default"}`} type="button" onClick={() => onCreateMeasurement(option.metric, option.dihedralKind)}>{option.label}</button>)}</div></div>}
+    {shows("data") && visibleMeasurementOptions.length > 0 && <div className="primitive-properties"><h3>教学测量</h3><p className="footer-note">结果会保留来源对象，并在点移动后自动重算。</p>{selectedFacePair && <p className="measurement-guidance">已选两个面：二面角内角读实体内部夹角，外角读它的补角。</p>}{sceneDocument.workspace !== "geometry3d" && <p className="measurement-guidance">平面测量：选 2 个点量长度；选 3 个点可量角度（第二个点为顶点）、面积，以及第三个点到前两点连线的垂距。</p>}<div className="property-actions" aria-label={sceneDocument.workspace === "geometry3d" ? "三维测量工具" : "平面测量工具"}>{visibleMeasurementOptions.map((option) => <button key={`${option.metric}-${option.dihedralKind ?? "default"}`} type="button" onClick={() => onCreateMeasurement(option.metric, option.dihedralKind)}>{option.label}</button>)}</div></div>}
     {shows("engineering") && engineeringAnnotationOptions.length > 0 && <div className="primitive-properties"><h3>工程标注</h3><p className="footer-note">标注保留空间来源，并在四视图中随来源对象自动重算。</p><div className="property-actions" aria-label="工程标注工具">{engineeringAnnotationOptions.map((option) => <button key={option.kind} type="button" aria-label={option.ariaLabel} onClick={() => onAddEngineeringAnnotation(option.kind)}>{option.label}</button>)}</div></div>}
     {shows("data") && selectedIds.length === 1 && sceneDocument.measurements.filter((measurement) => measurement.sourceIds.includes(selectedIds[0])).map((measurement) => <div className="primitive-properties" key={measurement.id}><h3>{measurement.metric === "dihedral" ? (measurement.dihedralKind === "exterior" ? "二面角外角" : "二面角内角") : `${measurement.metric}测量`}</h3><p className="footer-note">来源：{measurement.sourceIds.join("、")} · {measurement.precision === "numeric-approximation" ? "数值近似" : "输入精确"}</p><div className="metric-grid"><span>结果<strong>{measurement.value === undefined ? "—" : `${measurement.value.toFixed(3)} ${measurement.unit ?? ""}`}</strong></span><span>状态<strong>{measurement.status}</strong></span></div><p className="footer-note">{measurement.explanation}</p><div className="property-actions"><button type="button" aria-label={`删除测量 ${measurement.id}`} onClick={() => onDeleteMeasurement(measurement.id)}>删除测量</button></div></div>)}
      {shows("data") && showSlopeParameter && <div className="primitive-properties"><label className="properties-label" htmlFor="selected-slope-slider"><span>直线斜率参数</span><strong className="metric">{value.toFixed(2)}</strong></label><input id="selected-slope-slider" aria-label="选中直线斜率" type="range" disabled={!editable} min={min} max={max} step={step} value={value} onChange={(event) => onChange(numberValue(event))} /></div>}
-     {shows("data") && selectedPoint && <div className="primitive-properties"><h3>点坐标</h3><CoordinateField label="点 X" value={selectedPoint.x} disabled={!editable || selectedPoint.binding?.kind === "onPath"} onChange={(next) => updatePoint("x", next)} /><CoordinateField label="点 Y" value={selectedPoint.y} disabled={!editable || selectedPoint.binding?.kind === "onPath"} onChange={(next) => updatePoint("y", next)} /><Field label="路径绑定"><select aria-label="点路径绑定" disabled={!editable} value={selectedPoint.binding?.kind === "onPath" ? selectedPoint.binding.pathId : ""} onChange={(event) => updatePointBinding(event.target.value)}><option value="">自由点</option>{pathPrimitives.map((path) => <option key={path.id} value={path.id}>{path.label ?? path.id}</option>)}</select></Field>{selectedPoint.binding?.kind === "onPath" && <><Field label="路径参数"><input aria-label="路径参数" type="number" min="0" max="1" step="0.01" disabled={!editable} value={selectedPoint.binding.parameter} onChange={(event) => updatePointParameter(numberValue(event))} /></Field><button type="button" aria-label="记录轨迹" disabled={!editable} onClick={createLocus}>记录轨迹</button></>}</div>}
+     {shows("data") && selectedPoint && <div className="primitive-properties"><h3>点坐标</h3><CoordinateField label="点 X" value={selectedPoint.x} disabled={!editable || selectedPoint.binding?.kind === "onPath"} onChange={(next) => updatePoint("x", next)} /><CoordinateField label="点 Y" value={selectedPoint.y} disabled={!editable || selectedPoint.binding?.kind === "onPath"} onChange={(next) => updatePoint("y", next)} /><Field label="路径绑定"><select aria-label="点路径绑定" disabled={!editable} value={selectedPoint.binding?.kind === "onPath" ? selectedPoint.binding.pathId : ""} onChange={(event) => updatePointBinding(event.target.value)}><option value="">自由点</option>{pathPrimitives.map((path) => <option key={path.id} value={path.id}>{path.label ?? path.id}</option>)}</select></Field>{selectedPoint.binding?.kind === "onPath" && <><Field label="路径参数"><input aria-label="路径参数" type="number" min={selectedPointWindow?.min ?? 0} max={selectedPointWindow?.max ?? 1} step={selectedPointWindow ? (selectedPointWindow.max - selectedPointWindow.min) / 100 : 0.01} disabled={!editable} value={selectedPoint.binding.parameterId && sceneDocument.parameters[selectedPoint.binding.parameterId] ? sceneDocument.parameters[selectedPoint.binding.parameterId].value : selectedPoint.binding.parameter} onChange={(event) => updatePointParameter(numberValue(event))} /></Field><button type="button" aria-label="记录轨迹" disabled={!editable} onClick={createLocus}>记录轨迹</button>{selectedPointBinding?.domain && <><Field label="参数域起"><input aria-label="参数域起" type="number" step="0.1" disabled={!editable} value={selectedPointBinding.domain[0]} onChange={(event) => onUpdatePrimitive({ binding: { ...selectedPointBinding, domain: [numberValue(event), selectedPointBinding.domain![1]] } })} /></Field><Field label="参数域止"><input aria-label="参数域止" type="number" step="0.1" disabled={!editable} value={selectedPointBinding.domain[1]} onChange={(event) => onUpdatePrimitive({ binding: { ...selectedPointBinding, domain: [selectedPointBinding.domain![0], numberValue(event)] } })} /></Field></>}{selectedPointBinding?.branch !== undefined && <Field label="分支"><select aria-label="圆锥曲线分支" disabled={!editable} value={selectedPointBinding.branch} onChange={(event) => onUpdatePrimitive({ binding: { ...selectedPointBinding, branch: Number(event.target.value) as 0 | 1 } })}><option value="0">第一支</option><option value="1">第二支</option></select></Field>}</>}</div>}
      {shows("data") && selectedLinear && <div className="primitive-properties"><h3>斜率特征</h3><div className="metric-grid"><span>倾角<strong>{lineAngle(selectedLinear).toFixed(2)}°</strong></span><span>长度<strong>{lineLength(selectedLinear).toFixed(2)}</strong></span><span>方向向量<strong>({(selectedLinear.b.x - selectedLinear.a.x).toFixed(2)}, {(selectedLinear.b.y - selectedLinear.a.y).toFixed(2)})</strong></span><span>截距<strong>{selectedSlope === null ? "垂直线" : (selectedLinear.a.y - selectedSlope * selectedLinear.a.x).toFixed(2)}</strong></span></div>{selectedSlope === null ? <button type="button" disabled={!editable} onClick={() => updateSlope(0)}>设为水平线</button> : <Field label="斜率"><input aria-label="选中直线斜率值" type="number" step="0.1" value={selectedSlope} readOnly={showSlopeParameter} disabled={!editable} onChange={(event) => updateSlope(numberValue(event))} /></Field>}{(["a", "b"] as const).map((endpoint) => <div key={endpoint} className="endpoint-group"><strong>{selectedLinear.type === "ray" && endpoint === "a" ? "起点 A" : selectedLinear.type === "ray" && endpoint === "b" ? "方向点 B" : `端点 ${endpoint.toUpperCase()}`}</strong><CoordinateField label={`${selectedLinear.type === "ray" ? endpoint === "a" ? "起点" : "方向点" : "端点"} ${endpoint.toUpperCase()} X`} value={selectedLinear[endpoint].x} disabled={!editable} onChange={(next) => updateEndpoint(endpoint, "x", next)} /><CoordinateField label={`${selectedLinear.type === "ray" ? endpoint === "a" ? "起点" : "方向点" : "端点"} ${endpoint.toUpperCase()} Y`} value={selectedLinear[endpoint].y} disabled={!editable || (selectedLinear.type === "line" && Boolean(selectedLinear.slopeParameter) && endpoint === "b")} onChange={(next) => updateEndpoint(endpoint, "y", next)} /></div>)}</div>}
      {shows("data") && selectedPolyline && <div className="primitive-properties"><h3>折线属性</h3><p className="footer-note">共 {selectedPolyline.points.length} 个顶点</p>{selectedPolyline.points.map((point, index) => <div key={`${selectedPolyline.id}-${index}`} className="endpoint-group"><strong>顶点 {index + 1}</strong><CoordinateField label={`顶点 ${index + 1} X`} value={point.x} disabled={!editable} onChange={(next) => updatePolylinePoint(index, "x", next)} /><CoordinateField label={`顶点 ${index + 1} Y`} value={point.y} disabled={!editable} onChange={(next) => updatePolylinePoint(index, "y", next)} /></div>)}</div>}
      {shows("data") && selectedParabola && <div className="primitive-properties"><h3>抛物线属性</h3><CoordinateField label="顶点 X" value={selectedParabola.vertex.x} disabled={!editable} onChange={(next) => updateParabolaVertex("x", next)} /><CoordinateField label="顶点 Y" value={selectedParabola.vertex.y} disabled={!editable} onChange={(next) => updateParabolaVertex("y", next)} /><Field label="焦参数"><input aria-label="焦参数" type="number" disabled={!editable} step="0.1" value={selectedParabola.focalParameter} onChange={(event) => onUpdatePrimitive({ focalParameter: numberValue(event) })} /></Field><Field label="轴向"><select aria-label="抛物线轴向" disabled={!editable} value={selectedParabola.axis} onChange={(event) => onUpdatePrimitive({ axis: event.target.value as "x" | "y" })}><option value="x">横轴</option><option value="y">纵轴</option></select></Field><Field label="旋转角度（度）"><input aria-label="抛物线旋转角度" type="number" disabled={!editable} step="1" value={rotationDegrees(selectedParabola.rotation)} onChange={(event) => updateRotation(numberValue(event))} /></Field><p className="footer-note">焦点：{(() => { const focus = parabolaFocus(selectedParabola); return `(${focus.x.toFixed(2)}, ${focus.y.toFixed(2)})` })()}</p></div>}

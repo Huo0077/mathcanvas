@@ -17,9 +17,36 @@ const cube: PrimitiveSpec = { id: "cube-1", type: "cube", origin: { x: 0, y: 0, 
 
 const metrics = (selection: PrimitiveSpec[]) => measurementOptionsFor("geometry3d", selection).map((option) => option.metric)
 
-describe("spatial measurement options", () => {
-  it("offers no spatial tools for planar workspaces", () => {
+describe("planar measurement options", () => {
+  const planarPoint = (id: string, x: number, y: number): PrimitiveSpec => ({ id, type: "point", x, y })
+  const a = planarPoint("a", 0, 0)
+  const b = planarPoint("b", 1, 0)
+  const c = planarPoint("c", 0, 1)
+
+  it("offers only measurements the kernel can actually evaluate for the selection", () => {
+    expect(measurementOptionsFor("calculus", [a, b]).map((option) => option.metric)).toEqual(["length"])
+    expect(measurementOptionsFor("conics", [a, b, c]).map((option) => option.metric)).toEqual(["angle", "area", "distance"])
+  })
+
+  it("offers nothing for a selection that is not all planar points", () => {
+    // A 3D point in a planar workspace is not a planar point.
     expect(measurementOptionsFor("calculus", [pointA, pointB])).toEqual([])
+    expect(measurementOptionsFor("conics", [a])).toEqual([])
+    expect(measurementOptionsFor("conics", [a, b, c, planarPoint("d", 1, 1)])).toEqual([])
+    const line: PrimitiveSpec = { id: "l", type: "line", a: { x: 0, y: 0 }, b: { x: 1, y: 0 } }
+    expect(measurementOptionsFor("conics", [a, b, line])).toEqual([])
+  })
+
+  it("states the angle-vertex convention in the button label", () => {
+    const angle = measurementOptionsFor("conics", [a, b, c]).find((option) => option.metric === "angle")
+    expect(angle?.label).toContain("顶点")
+    // The existing button signature carries the interior/exterior choice.
+    expect(angle?.dihedralKind).toBe("interior")
+  })
+})
+
+describe("spatial measurement options", () => {
+  it("offers no spatial constraints for planar workspaces", () => {
     expect(constraintOptionsFor("calculus", [line, line])).toEqual([])
   })
 
