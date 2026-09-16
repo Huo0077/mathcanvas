@@ -34,7 +34,7 @@
 `polynomial.test.ts`（结式已知值、尺度不变的消元验收、隐式等值线），以及 `scene-store.test.ts` / `patches.test.ts` / `App.test.tsx` 的集成与 UI 用例
 （含"拖动被约束的点沿曲线滑动"、"一次操作删掉直线与其交点"、"连接曲线的动点与另一点后拖动，线段跟随"）。
 
-**回归**：`npm run typecheck` 4 个 workspace 全过；全量单测 **73 文件 / 933 用例通过**；`lint` 0 error。
+**回归**：`npm run typecheck` 4 个 workspace 全过；全量单测 **73 文件 / 933 用例通过**；`lint` 0 error、**52 条 warning**（其中本轮新增的 4 个内核文件贡献 5 条未使用变量，见「验证证据」的规则分布）；生产构建通过；Playwright **58/58** 通过（本轮未新增 e2e 用例，沿用 9/16 的 58 个）。
 
 **已知限制（明确未做）**：
 - **消元法（`resultant` / `eliminate`）尚无 UI 调用方**，是四个维度里唯一"内核可用、产品未用"的部分。
@@ -810,13 +810,15 @@ P7-1 至 P7-6 与工程工作台层次化改造 Task 1-7 均已完成；P4 Agent
 - 审查修复提交 `e494fa3`（`fix: align docs with reality and drop the constraint/agent leftovers`）已推送并核验：`git rev-parse HEAD` = `origin/main` = `git ls-remote` 远程 ref，divergence `0/0`，工作区 clean，远端树中已无 `ConstraintPanel.tsx`。
 - **工程制图可用性修复（Task 15-18）推送记录**：切片按 A → A2 → B → C 设计 → C1 → C2 → C3 → C4 → 文档的顺序推送——`9ca7d46`（2D 绘图命令搬出图纸）、`90f8743`（读数按视图单位定尺）、`b552994`（投影来源）、`1fbdda5`（截面/截线设计规格）、`a52a74d`（面环求交内核）、`a775c39`（`intersectionLine` 图元与重算）、`68ec2a8`（虚线预览）、`0435622`（点击创建）、`63d2dc9`（进度文档）。
 - 每次推送前都先 `git fetch origin` 并核对 divergence（另一会话会并发推送同一仓库）；推送后用 `git rev-parse HEAD` 与 `git ls-remote origin refs/heads/main` 对比确认两端 ref 相同，工作区 clean。
+- **平面几何动点系统（2026-09-17）推送记录**：`92509bd`（`feat(planar): dynamic points constrained to curves, functions and conics`，30 个文件 / +7041 −123）与 `1a38189`（`docs: record the planar dynamic point engine round`）由另一会话推送。本地 `git fetch` 发现落后 2 个提交后以 `git pull --ff-only` 快进到 `1a38189`，无冲突、无本地改动被覆盖；核验 `git rev-parse HEAD` = `origin/main` = `git ls-remote origin refs/heads/main` = `1a38189d99eed919f815d50677df0cfce28ebd94`，工作区 clean。该批次未改 `package.json` / `package-lock.json`，因此无需重跑 `npm install`。
+- **该批次在本机复跑门禁（2026-09-17）**：`typecheck` 4 个 workspace、单测 73 文件 / 933 用例、`lint` 0 error / 52 warning、生产构建、Playwright 58/58 全部通过（exit 0）。即推送方的记录已在本机独立复现，而不只是转抄。
 
-下一步：由用户在本地浏览器验收工程制图可用性修复（2D 绘图命令条出图纸、投影来源切换、截面/截线虚线预览与点击创建）、UI 优化、工程制图视觉重做与 CAD 2D 绘图交互；P4 Agent 与 P5 题图解析保持排除。
+下一步：由用户在本地浏览器验收**平面几何动点系统**（曲线上的动点拖动、路径参数与动效演示、轨迹与分支、平面测量、参数分组与孤儿回收）与工程制图可用性修复（2D 绘图命令条出图纸、投影来源切换、截面/截线虚线预览与点击创建）、UI 优化、工程制图视觉重做与 CAD 2D 绘图交互；P4 Agent 与 P5 题图解析保持排除。
 
 ## 验证证据
 
-> **当前基线（唯一权威）**：`npm.cmd test` **68 个测试文件、698 个用例通过**；4 个 workspace 类型检查通过；ESLint 0 error、39 条既有 warning；生产构建通过；Playwright **47/47** 通过。
-> 下面按时间倒序列出各轮实测快照（数字是**当时**的取值，用于追溯与对比，不代表当前门禁）。
+> **当前基线（唯一权威，2026-09-17 在 `1a38189` 上实测）**：`npm.cmd test` **73 个测试文件、933 个用例通过**；4 个 workspace 类型检查通过；ESLint **0 error、52 条 warning**（按规则：37 条 `react-refresh/only-export-components`、12 条 `@typescript-eslint/no-unused-vars`、3 条 `react-hooks/exhaustive-deps`）；生产构建通过（Vite 仍提示主 bundle 超过 500 KB）；Playwright **58/58** 通过。
+> 下面按时间倒序列出各轮实测快照（数字是**当时**的取值，用于追溯与对比，不代表当前门禁）；例如 68 文件 / 698 用例与 Playwright 47/47 属于 2026-09-16 的 Task 15-18 那一轮。
 
 - **工程制图可用性修复（Task 15-18，2026-09-16）**：切片 A/A2/B/C1-C4 全部落地并逐片跑门禁；本轮起始 64 文件 / 670 用例 → **68 文件 / 698 用例**，E2E 43/43 → **47/47**，类型检查 4 个 workspace 通过，lint 0 error / 39 条既有 warning，生产构建通过。
 - **审查复核与修复（2026-09-16）**：在 `b6d31f5` 上重新逐项核验——typecheck 0 error、lint 0 error、生产构建通过、Playwright 43/43、`git status` clean 且与 `origin/main` 一致。按符号核对了文档声明的 15 个绘图 API（`draftWindow` / `clientToDraft` / `rankDraftSnaps` / `boxSelectionMode` / `SnapKind` / `primitiveHandlePoints` / `resolveGeometryEdit` / `offsetPrimitive` / `trimPrimitive` / `extendPrimitive` / `selectPrimitivesInBox` / `tangentPointsOnPrimitive` / `parseDraftCoordinate` / `applyDistance` / `applyAngle`）**全部存在**，非测试源码无 TODO/FIXME。据审查结果修掉四处问题：① 功能目录里"约束界面可创建"的过时表述 → 改为明确说明三维约束当前**无任何 UI 入口**（数据/校验/编解码保留，恢复方式已写入文档）；② 删除 Task 9 遗留的死代码 `ConstraintPanel.tsx` 及其测试、以及随之孤立的两处 CSS 块（`.constraint-*`、`.empty-state`、`.agent-*`、`.agent-chip`、`.status-dot.pending`），删除前用全仓库 `className` 检索确证零引用；③ 本小节改为「当前基线 + 按时间倒序的历史快照」，消除"最新证据其实是旧数字"的误导；④ bundle 数字与门禁计数改为实测值。
