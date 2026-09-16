@@ -2,7 +2,7 @@
 
 > 这份文件是项目的单一进度记录。每完成一个可验证的切片，就更新“已完成”和“下一步”，并附上验证证据。
 
-**最后更新：** 2026-09-16
+**最后更新：** 2026-09-16（含当日审查复核：文档与实现一致性、死代码清理、基线与实测对齐）
 **当前阶段：** P0-P6 与 P7 工程制图已完成；MathCanvas 统一 Ribbon UI 基线、2026-09-16 后续 UI 优化（Task 7-13）、**工程制图视觉重做（Task 14）**、**圆锥曲线四项修复**（画布缩放 / 交点全显 / 函数入口 / 函数可删）、**功能键操作指引浮层**，以及 **CAD 2D 绘图交互重做**（`docs/research/drafting-interaction-patterns.md` 的调研清单已全部落地：稳定坐标窗口、橡皮筋预览、八类对象捕捉 + Tab 循环、栅格捕捉、极轴阈值、夹点编辑、方向框选 + Esc 分级、命令行坐标与动态输入、命中容差，最后一片偏移/修剪/延伸）均已完成。新会话进入内部 `conics` 工作区（界面显示「平面几何」），三个工作区共用可折叠命令区，CAD 保留工程树与上下文检查器，窄屏增加对象/属性抽屉。右侧检查器已移除约束与智能体展示（约束数据保留），3D 画布显示点名并在底部提示法向量/示例二面角状态；工程制图采用「制图台 + 图纸」层次，图纸等比适应并带显式缩放入口。P4 Agent 与 P5 题图解析仍在排除范围内。
 **总体状态：** 开发中
 
@@ -229,7 +229,7 @@
 - `npm.cmd test`：59 个测试文件、542 个用例通过（追加图纸铺满修复后为 545 个，视觉重做后为 546 个）。
 - `npm.cmd run typecheck`：4 个 workspace 通过。
 - `npm.cmd run lint`：0 error、40 条既有 warning（无新增）。
-- `npm.cmd run build`：Web 与 3 个 package 构建通过；Vite 仍提示主 bundle 超过 500 KB（约 1.51 MB，gzip 约 476 KB）。
+- `npm.cmd run build`：Web 与 3 个 package 构建通过；Vite 仍提示主 bundle 超过 500 KB（2026-09-16 清理后实测 `index-*.js` 1,540.36 kB、gzip 485.23 kB，CSS 56.49 kB、gzip 9.73 kB）。
 - `npm.cmd run test:e2e`：37/37 通过（含本轮的 3D 提示、点名标注、约束数据与图纸填充用例）。
 - 修正的验证流程问题：`npm.cmd exec playwright test` 直接运行时不会重新构建，预览服务固定读取 `build-check/mathcanvas-current`，因此源码改动必须通过 `npm.cmd run test:e2e`（先构建再跑）验证，否则会看到上一次构建的旧行为。
 
@@ -642,8 +642,13 @@ P7-1 至 P7-6 与工程工作台层次化改造 Task 1-7 均已完成；P4 Agent
 
 下一步：由用户在本地浏览器验收 UI 优化、工程制图视觉重做与 CAD 2D 绘图交互；P4 Agent 与 P5 题图解析保持排除。
 
-## 最新验证证据
+## 验证证据
 
+> **当前基线（唯一权威）**：`npm.cmd test` **64 个测试文件、670 个用例通过**；4 个 workspace 类型检查通过；ESLint 0 error、39 条既有 warning；生产构建通过（JS 1,540.36 kB / gzip 485.23 kB，CSS 56.49 kB / gzip 9.73 kB）；Playwright **43/43** 通过。
+> 下面按时间倒序列出各轮实测快照（数字是**当时**的取值，用于追溯与对比，不代表当前门禁）。
+
+- **审查复核与修复（2026-09-16）**：在 `b6d31f5` 上重新逐项核验——typecheck 0 error、lint 0 error、生产构建通过、Playwright 43/43、`git status` clean 且与 `origin/main` 一致。按符号核对了文档声明的 15 个绘图 API（`draftWindow` / `clientToDraft` / `rankDraftSnaps` / `boxSelectionMode` / `SnapKind` / `primitiveHandlePoints` / `resolveGeometryEdit` / `offsetPrimitive` / `trimPrimitive` / `extendPrimitive` / `selectPrimitivesInBox` / `tangentPointsOnPrimitive` / `parseDraftCoordinate` / `applyDistance` / `applyAngle`）**全部存在**，非测试源码无 TODO/FIXME。据审查结果修掉四处问题：① 功能目录里"约束界面可创建"的过时表述 → 改为明确说明三维约束当前**无任何 UI 入口**（数据/校验/编解码保留，恢复方式已写入文档）；② 删除 Task 9 遗留的死代码 `ConstraintPanel.tsx` 及其测试、以及随之孤立的两处 CSS 块（`.constraint-*`、`.empty-state`、`.agent-*`、`.agent-chip`、`.status-dot.pending`），删除前用全仓库 `className` 检索确证零引用；③ 本小节改为「当前基线 + 按时间倒序的历史快照」，消除"最新证据其实是旧数字"的误导；④ bundle 数字与门禁计数改为实测值。
+  修复后的实测变化：测试文件 65 → **64**、用例 672 → **670**（删除的 `ConstraintPanel.test.tsx` 含 2 个用例）；lint warning 40 → **39**（`.agent-chip` 不再命中 `react-refresh/only-export-components`）；CSS 59.53 kB → **56.49 kB**；E2E 保持 **43/43**。
 - **P6 v3 全量单测**：35 个测试文件、**353** 个用例通过（本轮起始 337，新增 16 个全部是回归用例）
 - **P6 v3 类型检查**：4 个 workspace 通过
 - **P6 v3 浏览器验证**：Playwright **17** 个用例通过（本轮起始 12，新增 5 个：实体点选反复改色、顶点拾取不穿透、删除实体连带拓扑并可撤销、被引用时仍拒绝删除、平面可建可见、打开图形自动取景）

@@ -210,25 +210,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .drawing-viewport-input input:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
 .drawing-viewport-input-hint { font-size: 0.68rem; color: var(--color-muted); }
 .drawing-viewport-input-error { font-size: 0.7rem; color: var(--color-warning); font-weight: 600; }
-.agent-status { display: flex; gap: var(--space-2); align-items: center; font-size: 0.875rem; color: var(--color-muted); }
-.status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-success); }
-.empty-state { margin: 0; color: var(--color-muted); font-size: 0.8rem; line-height: 1.5; }
-.constraint-list { display: grid; gap: var(--space-2); list-style: none; margin: 0; padding: 0; }
-.constraint-row { display: grid; gap: var(--space-1); padding: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm); }
-.constraint-row.constraint-ok { border-left: 3px solid var(--color-success); }
-.constraint-row.constraint-warning { border-left: 3px solid var(--color-warning); }
-.constraint-main { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
-.constraint-main label { display: flex; align-items: center; gap: var(--space-1); min-width: 0; }
-.constraint-main input { width: 16px; height: 16px; accent-color: var(--color-accent); }
-.constraint-row p { margin: 0; color: var(--color-muted); font-size: 0.75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.constraint-residual { color: var(--color-muted); font-size: 0.7rem; font-variant-numeric: tabular-nums; }
-.constraint-status { font-size: 0.7rem; color: var(--color-success); }
-.constraint-status[data-status="需检查"], .constraint-status[data-status="无效"] { color: var(--color-warning); }
-.constraint-row button { min-height: 36px; justify-self: end; padding-inline: var(--space-2); font-size: 0.75rem; }
-.constraint-batch-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); margin-bottom: var(--space-3); }
-.constraint-batch-actions button { min-width: 0; padding-inline: var(--space-2); font-size: 0.75rem; }
-.constraint-error { display: grid; gap: var(--space-1); margin-bottom: var(--space-3); padding: var(--space-2); border: 1px solid var(--color-warning); border-radius: var(--radius-sm); background: var(--color-warning-soft); color: var(--color-ink); font-size: 0.8rem; }
-.constraint-error span, .constraint-error small { color: var(--color-muted); line-height: 1.45; }
 .footer-note { grid-column: 1 / -1; padding: var(--space-2) var(--space-5); font-size: 0.75rem; color: var(--color-muted); background: var(--color-panel); border-top: 1px solid var(--color-border); }
 @media (max-width: 960px) { .workbench { grid-template-columns: 200px minmax(0, 1fr); } .panel.right { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--color-border); } }
 @media (max-width: 680px) { .topbar { align-items: flex-start; flex-direction: column; } .workspace-tabs { width: 100%; overflow-x: auto; } .workbench { display: block; } .panel, .panel.right { border: 0; border-bottom: 1px solid var(--color-border); } .properties { padding-bottom: var(--space-3); } .properties > .primitive-properties, .properties > .batch-properties { margin-inline: var(--space-3); padding: var(--space-3); } .graphics { min-height: 55vh; padding: var(--space-3); } .toolbar { padding: var(--space-3); } }
@@ -286,7 +267,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .panel-heading, .inspector-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .panel-heading > div, .inspector-heading > div { display: grid; gap: 4px; }
 .panel-title { margin: 0; color: #39344e; font-size: 0.94rem; font-weight: 750; letter-spacing: -0.02em; text-transform: none; }
-.object-count, .agent-chip { display: inline-grid; place-items: center; min-width: 24px; height: 24px; padding: 0 7px; border-radius: 999px; color: #6b5bdd; background: #efedff; font-size: 0.7rem; font-weight: 750; }
+.object-count { display: inline-grid; place-items: center; min-width: 24px; height: 24px; padding: 0 7px; border-radius: 999px; color: #6b5bdd; background: #efedff; font-size: 0.7rem; font-weight: 750; }
 .algebra-panel { height: 100%; padding-top: 20px; background: #fff; }
 .object-list { display: grid; gap: 3px; margin-top: 16px; }
 .object-row { min-height: 42px; padding: 5px 6px 5px 9px; border: 1px solid transparent; }
@@ -354,19 +335,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .property-subheading { border-bottom-color: #eceaf1; }
 .metric { color: #604fda; }
 .properties input[type="range"] { accent-color: #6c5ce7; }
-.agent-panel { background: #fff; }
-.agent-panel p { margin: 12px 0; color: #817c90; font-size: 0.78rem; line-height: 1.55; }
-.agent-command { display: grid; gap: 5px; color: #817c90; font-size: 0.72rem; }
-.agent-command input { min-height: 36px; width: 100%; border: 1px solid #ece8f5; border-radius: 10px; padding: 0 9px; color: #3d3850; background: #faf9fd; font-size: 0.76rem; }
-.agent-status { color: #b8782f; font-size: 0.78rem; font-weight: 650; }
-.status-dot.pending { background: #e39a48; box-shadow: 0 0 0 4px rgb(227 154 72 / 12%); }
-.agent-preview-label { display: block; margin-bottom: 6px; color: #817c90; font-size: 0.72rem; font-weight: 650; }
-.agent-panel textarea { width: 100%; min-height: 68px; resize: vertical; border: 1px solid #ece8f5; border-radius: 10px; padding: 9px; color: #9a95a7; background: #faf9fd; font-size: 0.76rem; }
-.agent-apply { width: 100%; margin-top: 10px; border-color: #6c5ce7; color: #fff; background: #6c5ce7; font-size: 0.8rem; font-weight: 700; }
-.agent-apply:hover { color: #fff; background: #5d4bd5; }
-.constraint-row { border-color: #e9e7f0; background: #fff; }
-.constraint-row.constraint-ok { border-left-color: #21a794; }
-.constraint-row.constraint-warning { border-left-color: #e39a48; }
 .footer-note { color: #928da0; background: transparent; border-top-color: #e8e6ef; }
 
 @media (max-width: 1200px) {
