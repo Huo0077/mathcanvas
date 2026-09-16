@@ -39,4 +39,13 @@ describe("ribbon command configuration", () => {
 
     expect(labels).toEqual(expect.arrayContaining(["添加空间点", "添加立方体", "创建截面"]))
   })
+
+  it("offers exactly the two multimodal conversions, both unavailable with a reason", () => {
+    const multimodal = createRibbonGroups(emptyContext).find((group) => group.id === "multimodal")
+
+    expect(multimodal?.commands.map((command) => command.id)).toEqual(["input-text-conversion", "input-image-conversion"])
+    expect(multimodal?.commands.map((command) => command.label)).toEqual(["文字转换", "图片转换"])
+    expect(multimodal?.commands.every((command) => command.disabled === true)).toBe(true)
+    expect(multimodal?.commands.map((command) => command.disabledReason)).toEqual(["文字转换服务尚未接入，暂不可用", "图片转换服务尚未接入，暂不可用"])
+  })
 })

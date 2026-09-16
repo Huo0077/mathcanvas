@@ -27,10 +27,13 @@ test("drafts on a new layer, hides it, and keeps the layout after a refresh", as
   await page.getByRole("button", { name: "隐藏 图层 1" }).click()
   await expect(page.locator(".engineering-drawing-draft")).toHaveCount(0)
 
-  // Change a projection view scale, which is persisted document state.
+  // Change a projection view scale, which is persisted document state. The per-view controls appear on hover,
+  // so the panel is hovered first.
   await page.getByRole("button", { name: "3D 投影" }).click()
+  const frontView = page.locator('.drawing-viewport[data-view-id="view-front"]')
+  await frontView.hover()
   await page.getByRole("button", { name: "放大 主视图" }).click()
-  await expect(page.locator('.drawing-viewport[data-view-id="view-front"]')).toContainText("比例 1.5")
+  await expect(page.getByRole("button", { name: "缩小 主视图" })).toBeEnabled()
 
   await page.reload()
 
@@ -38,7 +41,8 @@ test("drafts on a new layer, hides it, and keeps the layout after a refresh", as
   await expect(page.getByRole("button", { name: "工程制图" })).toHaveAttribute("aria-pressed", "true")
   await expect(page.getByRole("tab", { name: "图层树" })).toHaveAttribute("aria-selected", "true")
   await expect(page.getByRole("button", { name: "显示 图层 1" })).toBeVisible()
-  await expect(page.locator('.drawing-viewport[data-view-id="view-front"]')).toContainText("比例 1.5")
+  await page.locator('.drawing-viewport[data-view-id="view-front"]').hover()
+  await expect(page.getByRole("button", { name: "缩小 主视图" })).toBeEnabled()
 })
 
 test("undoes and redoes from both the buttons and the keyboard", async ({ page }) => {
@@ -118,4 +122,64 @@ test("supports keyboard selection, command entry, cancellation and inspector tab
   await page.keyboard.press("Escape")
   await expect(page.getByRole("region", { name: "工程状态栏" })).toContainText("2D 绘图：")
   await expect(page.locator(".engineering-drawing-draft")).toHaveCount(0)
+})
+
+test("fills the drafting area with the sheet and keeps an explicit display scale", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "工程制图" }).click()
+  await page.waitForSelector(".drawing-sheet")
+  // The measured fit arrives after the first paint, so wait for the scale to settle away from the 1:1 default.
+  await expect.poll(async () => page.locator(".drawing-sheet").getAttribute("data-sheet-scale")).not.toBe("1.000")
+
+  const geometry = async () => page.evaluate(() => {
+    const rect = (selector) => document.querySelector(selector).getBoundingClientRect()
+    const areaElement = document.querySelector(".drawing-sheet-area")
+    const style = getComputedStyle(areaElement)
+    const area = rect(".drawing-sheet-area")
+    const sheet = rect(".drawing-sheet")
+    return {
+      area: { w: Math.round(area.width), h: Math.round(area.height) },
+      // The area keeps its own margin; fit is measured against what is left of it.
+      available: { w: Math.round(areaElement.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)), h: Math.round(areaElement.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom)) },
+      sheet: { w: Math.round(sheet.width), h: Math.round(sheet.height) },
+      scale: Number(document.querySelector(".drawing-sheet").getAttribute("data-sheet-scale")),
+      zoomText: document.querySelector("[data-sheet-zoom]").textContent,
+      overflowX: document.documentElement.scrollWidth > window.innerWidth
+    }
+  })
+
+  /** The sheet animates its scale, so a measurement is only trusted once two samples agree. */
+  const settle = async () => {
+    let previous = ""
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      const current = await page.evaluate(() => {
+        const sheet = document.querySelector(".drawing-sheet").getBoundingClientRect()
+        return `${Math.round(sheet.width)}x${Math.round(sheet.height)}`
+      })
+      if (current === previous) break
+      previous = current
+      await page.waitForTimeout(80)
+    }
+    return geometry()
+  }
+
+  const fitted = await settle()
+  // Fit means the sheet uses most of the area on its binding axis without ever exceeding it.
+  expect(fitted.sheet.h).toBeLessThanOrEqual(fitted.available.h + 1)
+  expect(fitted.sheet.w).toBeLessThanOrEqual(fitted.available.w + 1)
+  expect(Math.max(fitted.sheet.h / fitted.available.h, fitted.sheet.w / fitted.available.w)).toBeGreaterThan(0.9)
+  expect(fitted.zoomText).toContain(`${Math.round(fitted.scale * 100)}%`)
+  expect(fitted.overflowX).toBe(false)
+
+  // The automatic fit is overridable: one step in magnifies, and the sheet pans instead of being cropped.
+  await page.getByRole("button", { name: "放大图纸" }).click()
+  const zoomed = await settle()
+  expect(zoomed.scale).toBeGreaterThan(fitted.scale)
+  expect(zoomed.sheet.h).toBeGreaterThan(zoomed.available.h)
+  expect(await page.locator(".drawing-sheet-area").evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true)
+
+  await page.getByRole("button", { name: "适应图纸" }).click()
+  const refitted = await settle()
+  expect(refitted.scale).toBeCloseTo(fitted.scale, 2)
+  expect(await page.locator(".drawing-sheet-area").evaluate((element) => element.scrollHeight <= element.clientHeight + 1)).toBe(true)
 })

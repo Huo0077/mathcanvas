@@ -11,6 +11,17 @@
   --color-success: #159a88;
   --color-warning: #e39a48;
   --color-warning-soft: #fff8ed;
+  /* Drafting surface: a cool slate the white paper sits on, so the sheet is the focal surface instead of
+     blending into the app background. The grid is a faint workbench texture, never a competing pattern. */
+  --color-drafting-surface: #e6e9f1;
+  --color-drafting-grid: #dde1ec;
+  --color-paper: #ffffff;
+  --color-paper-tint: #fbfcfe;
+  --color-hairline: #c6ccdb;
+  --color-hairline-strong: #a3abc0;
+  /* Chrome that lives inside the paper is authored in paper units; these are its own minimum sizes. */
+  --sheet-panel-padding: 12px;
+  --sheet-panel-gap: 10px;
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
@@ -22,6 +33,7 @@
   --radius-lg: 20px;
   --shadow-panel: 0 16px 40px rgb(47 42 78 / 8%);
   --shadow-card: 0 8px 24px rgb(47 42 78 / 6%);
+  --shadow-sheet: 0 1px 2px rgb(30 36 56 / 6%), 0 18px 42px rgb(30 36 56 / 14%);
   --topbar-height: 40px;
   --tabbar-height: 32px;
   --ribbon-height: 80px;

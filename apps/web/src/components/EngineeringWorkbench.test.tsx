@@ -66,4 +66,28 @@ describe("engineering workbench shell", () => {
     expect(screen.queryByTestId("inspector-slot")).toBeNull()
     expect(screen.getByTestId("canvas-slot")).toBeTruthy()
   })
+
+  it("reports dock state so the canvas can take the freed width", () => {
+    renderWorkbench()
+    const workbench = screen.getByRole("region", { name: "工程图视口" }).closest(".engineering-workbench")!
+
+    expect(workbench.getAttribute("data-left-open")).toBe("true")
+    expect(workbench.getAttribute("data-right-open")).toBe("true")
+
+    fireEvent.click(screen.getByRole("button", { name: "收起模型与图纸树" }))
+    expect(workbench.getAttribute("data-left-open")).toBe("false")
+    expect(workbench.getAttribute("data-right-open")).toBe("true")
+    expect(screen.getByRole("region", { name: "工程图视口" })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole("button", { name: "收起工程属性检查器" }))
+    expect(workbench.getAttribute("data-left-open")).toBe("false")
+    expect(workbench.getAttribute("data-right-open")).toBe("false")
+    // 两个面板都收起时画布仍在，并且只占一列（不再给隐藏的停靠面板留空白）。
+    expect(screen.getByTestId("canvas-slot")).toBeTruthy()
+    expect(workbench.querySelectorAll(".workbench-body > *")).toHaveLength(1)
+
+    fireEvent.click(screen.getByRole("button", { name: "展开模型与图纸树" }))
+    expect(workbench.getAttribute("data-left-open")).toBe("true")
+    expect(workbench.querySelectorAll(".workbench-body > *")).toHaveLength(2)
+  })
 })

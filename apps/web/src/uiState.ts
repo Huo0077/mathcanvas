@@ -1,4 +1,4 @@
-export type RibbonIcon = "select" | "point" | "line" | "segment" | "ray" | "polyline" | "circle" | "arc" | "parabola" | "ellipse" | "hyperbola" | "function" | "text" | "quiz" | "pen" | "delete" | "lock" | "svg" | "csv" | "png"
+export type RibbonIcon = "select" | "point" | "line" | "segment" | "ray" | "polyline" | "circle" | "arc" | "parabola" | "ellipse" | "hyperbola" | "function" | "text" | "image" | "delete" | "lock" | "svg" | "csv" | "png"
 
 export interface RibbonCommand {
   id: string

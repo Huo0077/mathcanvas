@@ -25,7 +25,7 @@ export function EngineeringWorkbench({ document, mode, onModeChange, commandBar,
   const [leftOpen, setLeftOpen] = useState(true)
   const [rightOpen, setRightOpen] = useState(true)
 
-  return <div className="engineering-workbench" data-cad-mode={mode} data-revision={document.revision} data-workspace={document.workspace}>
+  return <div className="engineering-workbench" data-cad-mode={mode} data-revision={document.revision} data-workspace={document.workspace} data-left-open={leftOpen ? "true" : "false"} data-right-open={rightOpen ? "true" : "false"}>
     <div className="workbench-mode-row">
       <div className="workbench-mode-switch" role="group" aria-label="视图模式">
         {modes.map((candidate) => <button

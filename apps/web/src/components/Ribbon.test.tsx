@@ -42,4 +42,29 @@ describe("ribbon", () => {
 
     expect(onExpandedChange).toHaveBeenCalledWith(false)
   })
+
+  it("renders the two multimodal conversions as visibly unavailable commands", () => {
+    const multimodalGroups: RibbonGroup[] = [{
+      id: "multimodal",
+      label: "多模态输入",
+      commands: [
+        { id: "input-text-conversion", label: "文字转换", icon: "text", disabled: true, disabledReason: "文字转换服务尚未接入，暂不可用" },
+        { id: "input-image-conversion", label: "图片转换", icon: "image", disabled: true, disabledReason: "图片转换服务尚未接入，暂不可用" }
+      ]
+    }]
+    const onCommand = vi.fn()
+    render(<Ribbon groups={multimodalGroups} activeTab="home" expanded={true} pinned={false} onTabChange={() => {}} onCommand={onCommand} onExpandedChange={() => {}} onPinnedChange={() => {}} />)
+
+    const textConversion = screen.getByRole("button", { name: "文字转换" }) as HTMLButtonElement
+    const imageConversion = screen.getByRole("button", { name: "图片转换" }) as HTMLButtonElement
+    expect(textConversion.disabled).toBe(true)
+    expect(imageConversion.disabled).toBe(true)
+    expect(textConversion.title).toBe("文字转换服务尚未接入，暂不可用")
+    expect(imageConversion.title).toBe("图片转换服务尚未接入，暂不可用")
+    expect(screen.queryByRole("button", { name: "抢答题" })).toBeNull()
+    expect(screen.queryByRole("button", { name: "画笔标注" })).toBeNull()
+
+    fireEvent.click(textConversion)
+    expect(onCommand).not.toHaveBeenCalled()
+  })
 })

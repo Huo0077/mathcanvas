@@ -3,6 +3,7 @@ import * as THREE from "three"
 import type { ConePrimitive, CubePrimitive, Edge3Primitive, Face3Primitive, GeometryDocument, Line3Primitive, Plane3Primitive, Point3Primitive, Polyhedron3Primitive, PyramidPrimitive, CylinderPrimitive, Ray3Primitive, SectionPrimitive, Segment3Primitive, Vector3 } from "@draw/dsl"
 import { dihedralAngleDegrees, unfoldPolyhedron3, type DihedralMarker3, type UnfoldLayout3 } from "@draw/geometry-kernel"
 import { resolveMeasurementVisual } from "./measurementVisuals"
+import type { SceneControlMode } from "./statusPrompts"
 import { resolveDihedralMarker3, resolvePolyhedronTopology } from "@draw/scene-graph"
 
 import { opacityFor, strokeFor } from "./primitiveStyle"
@@ -649,12 +650,15 @@ export interface ThreeSceneViewProps {
   document: GeometryDocument
   selectedIds: string[]
   onSelect: (id: string | null, additive?: boolean) => void
+  /** Reports which display switch is on so the shell can explain what it draws; null when both are off. */
+  onStatusPromptChange?: (sceneControl: SceneControlMode | null) => void
 }
 
-export function ThreeSceneView({ document, selectedIds, onSelect }: ThreeSceneViewProps) {
+export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPromptChange }: ThreeSceneViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const renderTargetRef = useRef<HTMLDivElement>(null)
   const measurementOverlayRef = useRef<HTMLDivElement>(null)
+  const pointLabelOverlayRef = useRef<HTMLDivElement>(null)
   const cameraStateRef = useRef<CameraState>(createCameraState())
   const resetCameraRef = useRef<() => void>(() => undefined)
   const fitCameraRef = useRef<() => void>(() => undefined)
@@ -668,6 +672,28 @@ export function ThreeSceneView({ document, selectedIds, onSelect }: ThreeSceneVi
   const [showAngle, setShowAngle] = useState(false)
   const [panMode, setPanMode] = useState(false)
   const [webglAvailable, setWebglAvailable] = useState(true)
+  const statusPromptChangeRef = useRef(onStatusPromptChange)
+  statusPromptChangeRef.current = onStatusPromptChange
+  /**
+   * Which display switch was toggled last. Both can be on at once, so the shell's hint follows the most recent
+   * user action instead of a hard-coded priority; toggling the last one off clears the hint.
+   */
+  const lastControlRef = useRef<SceneControlMode | null>(null)
+
+  const toggleNormals = () => {
+    const next = !showNormals
+    lastControlRef.current = next ? "normals" : lastControlRef.current === "normals" ? null : lastControlRef.current
+    setShowNormals(next)
+    statusPromptChangeRef.current?.(lastControlRef.current)
+  }
+  const toggleAngleDemo = () => {
+    const next = !showAngle
+    lastControlRef.current = next ? "dihedral-demo" : lastControlRef.current === "dihedral-demo" ? null : lastControlRef.current
+    setShowAngle(next)
+    statusPromptChangeRef.current?.(lastControlRef.current)
+  }
+
+  useEffect(() => () => statusPromptChangeRef.current?.(null), [])
 
   // A ref keeps the pointer handler current without rebuilding the whole scene on every mode toggle.
   useEffect(() => {
@@ -771,6 +797,9 @@ export function ThreeSceneView({ document, selectedIds, onSelect }: ThreeSceneVi
       unfoldFaceCount += layout.faces.length
     })
     const sceneShell = containerRef.current
+    // 3D point labels: an HTML overlay above the canvas, so the classroom names A/B/C stay readable at any zoom.
+    // The overlay never receives pointer events, so picking still goes through the renderer.
+    const visiblePointLabels = document.primitives.filter((primitive): primitive is Point3Primitive => primitive.type === "point3" && primitive.visible !== false)
     let dihedralMarkerCount = 0
     let planeCount = 0
     document.measurements
@@ -854,6 +883,24 @@ export function ThreeSceneView({ document, selectedIds, onSelect }: ThreeSceneVi
           label.style.left = `${(projected.x * 0.5 + 0.5) * bounds.width}px`
           label.style.top = `${(-projected.y * 0.5 + 0.5) * bounds.height}px`
           overlay.appendChild(label)
+        }
+      }
+      const labelOverlay = pointLabelOverlayRef.current
+      if (labelOverlay) {
+        labelOverlay.replaceChildren()
+        const bounds = renderer.domElement.getBoundingClientRect()
+        for (const primitive of visiblePointLabels) {
+          const projected = new THREE.Vector3(primitive.position.x, primitive.position.y, primitive.position.z).project(camera)
+          if (projected.z < -1 || projected.z > 1) continue
+          const label = globalThis.document.createElement("span")
+          label.className = "three-point-label"
+          label.dataset.pointLabel = primitive.label ?? primitive.id
+          label.dataset.pointId = primitive.id
+          label.textContent = primitive.label ?? primitive.id
+          // The marker radius is a constant pixel size, so the caption is offset in pixels too.
+          label.style.left = `${(projected.x * 0.5 + 0.5) * bounds.width + 10}px`
+          label.style.top = `${(-projected.y * 0.5 + 0.5) * bounds.height - 10}px`
+          labelOverlay.appendChild(label)
         }
       }
       if (sceneShell) {
@@ -960,5 +1007,5 @@ export function ThreeSceneView({ document, selectedIds, onSelect }: ThreeSceneVi
 
   const hasGeometry = document.primitives.some((primitive) => ["point3", "line3", "segment3", "ray3", "edge3", "face3", "polyhedron3", "cube", "pyramid", "cylinder", "cone"].includes(primitive.type) && primitive.visible !== false)
   const angle = dihedralAngleDegrees({ x: 1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 })
-  return <div className="three-canvas-shell" ref={containerRef} data-3d-scene="true" data-pan-mode={panMode ? "true" : "false"} aria-label="3D 几何场景"><div className="three-render-target" ref={renderTargetRef} /><div className="three-measurement-overlay" ref={measurementOverlayRef} aria-label="三维测量标注" />{webglAvailable && <div className="three-scene-controls" aria-label="3D显示控制"><button type="button" aria-pressed={transparentFaces} onClick={() => setTransparentFaces((visible) => !visible)}>透明面</button><button type="button" aria-pressed={showHiddenEdges} onClick={() => setShowHiddenEdges((visible) => !visible)}>隐藏边</button><button type="button" aria-pressed={showNormals} onClick={() => setShowNormals((visible) => !visible)}>法向量</button><button type="button" aria-pressed={unfolded} onClick={() => setUnfolded((visible) => !visible)}>{unfolded ? "折叠" : "展开"}</button><button type="button" aria-pressed={showAngle} onClick={() => setShowAngle((visible) => !visible)}>测量二面角</button></div>}{webglAvailable && <div className="three-camera-controls" aria-label="3D视角控制"><button type="button" aria-label="平移视角" aria-pressed={panMode} title="开启后左键拖动画布即平移视角，按 Ctrl 拖动沿视线前后移动" onClick={() => setPanMode((active) => !active)}>平移视角</button><button type="button" aria-label="适应视图" title="把视角调整到刚好框住当前图形，并把视角中心移回图形" onClick={() => fitCameraRef.current()}>适应视图</button><button type="button" aria-label="重置3D视角" title="回到默认视角" onClick={() => resetCameraRef.current()}>重置视角</button></div>}{webglAvailable && <p className="three-camera-hint" data-camera-hint="true">左键拖动旋转 · 中键或 Shift+左键拖动平移 · Ctrl+拖动沿视线前后移动 · 滚轮缩放</p>}{showAngle && webglAvailable && <div className="three-angle-readout" role="status">二面角：{angle.toFixed(1)}°（示例法向量 X/Y）</div>}{!webglAvailable && <div className="three-scene-status" role="status">当前浏览器不支持 WebGL，无法显示 3D 场景。</div>}{webglAvailable && !hasGeometry && <div className="three-scene-status" role="status">添加点、线或面开始探索三维空间。</div>}</div>
+  return <div className="three-canvas-shell" ref={containerRef} data-3d-scene="true" data-pan-mode={panMode ? "true" : "false"} aria-label="3D 几何场景"><div className="three-render-target" ref={renderTargetRef} /><div className="three-measurement-overlay" ref={measurementOverlayRef} aria-label="三维测量标注" /><div className="three-point-label-overlay" ref={pointLabelOverlayRef} aria-label="三维点标注" />{webglAvailable && <div className="three-scene-controls" aria-label="3D显示控制"><button type="button" aria-pressed={transparentFaces} onClick={() => setTransparentFaces((visible) => !visible)}>透明面</button><button type="button" aria-pressed={showHiddenEdges} onClick={() => setShowHiddenEdges((visible) => !visible)}>隐藏边</button><button type="button" aria-pressed={showNormals} onClick={toggleNormals}>法向量</button><button type="button" aria-pressed={unfolded} onClick={() => setUnfolded((visible) => !visible)}>{unfolded ? "折叠" : "展开"}</button><button type="button" aria-pressed={showAngle} onClick={toggleAngleDemo}>测量二面角</button></div>}{webglAvailable && <div className="three-camera-controls" aria-label="3D视角控制"><button type="button" aria-label="平移视角" aria-pressed={panMode} title="开启后左键拖动画布即平移视角，按 Ctrl 拖动沿视线前后移动" onClick={() => setPanMode((active) => !active)}>平移视角</button><button type="button" aria-label="适应视图" title="把视角调整到刚好框住当前图形，并把视角中心移回图形" onClick={() => fitCameraRef.current()}>适应视图</button><button type="button" aria-label="重置3D视角" title="回到默认视角" onClick={() => resetCameraRef.current()}>重置视角</button></div>}{webglAvailable && <p className="three-camera-hint" data-camera-hint="true">左键拖动旋转 · 中键或 Shift+左键拖动平移 · Ctrl+拖动沿视线前后移动 · 滚轮缩放</p>}{showAngle && webglAvailable && <div className="three-angle-readout" role="status">二面角：{angle.toFixed(1)}°（示例法向量 X/Y）</div>}{!webglAvailable && <div className="three-scene-status" role="status">当前浏览器不支持 WebGL，无法显示 3D 场景。</div>}{webglAvailable && !hasGeometry && <div className="three-scene-status" role="status">添加点、线或面开始探索三维空间。</div>}</div>
 }

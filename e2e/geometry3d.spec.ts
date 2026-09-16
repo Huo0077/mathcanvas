@@ -67,7 +67,7 @@ test("picks spatial points and turns them into a teaching measurement", async ({
   await algebra.getByText("A", { exact: true }).click()
   await algebra.getByText("B", { exact: true }).click({ modifiers: ["Shift"] })
 
-  await page.getByRole("region", { name: "属性检查器" }).getByRole("button", { name: "几何约束" }).click()
+  // 教学测量现在直接出现在默认可见的数据区，不再需要先展开「几何约束」。
   await page.locator('[aria-label="三维测量工具"]').getByRole("button", { name: "距离", exact: true }).click()
 
   await expect(algebra.getByText("教学测量")).toBeVisible()
@@ -437,7 +437,6 @@ test("explains a dihedral angle with its common edge and canvas markers", async 
   await algebra.getByText("面 1", { exact: true }).click()
   await algebra.getByText("面 3", { exact: true }).click({ modifiers: ["Shift"] })
 
-  await page.getByRole("region", { name: "属性检查器" }).getByRole("button", { name: "几何约束" }).click()
   await page.getByRole("button", { name: "二面角内角", exact: true }).click()
 
   await expect(algebra.getByText("二面角内角", { exact: true })).toBeVisible()
@@ -447,6 +446,55 @@ test("explains a dihedral angle with its common edge and canvas markers", async 
 
   await page.getByRole("button", { name: "二面角外角", exact: true }).click()
   await expect(algebra.getByText("二面角外角", { exact: true })).toBeVisible()
+})
+
+test("explains the normal and sample-angle controls in the status bar", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "添加立方体" }).click()
+
+  const status = page.getByRole("status", { name: "操作提示" })
+
+  await page.getByRole("button", { name: "法向量" }).click()
+  await expect(status).toContainText("外法向量")
+
+  // 「测量二面角」画的是坐标轴夹角的示例，不是所选面的测量值，底部提示必须说清楚。
+  await page.getByRole("button", { name: "测量二面角" }).click()
+  await expect(status).toContainText("示例值")
+  await expect(status).toContainText("Alt")
+
+  const algebra = page.locator(".algebra-panel")
+  await algebra.getByRole("button", { name: "展开 立方体 1 拓扑 的子对象" }).click()
+  await algebra.getByText("面 1", { exact: true }).click()
+  await algebra.getByText("面 3", { exact: true }).click({ modifiers: ["Shift"] })
+  await page.getByRole("button", { name: "二面角内角", exact: true }).click()
+  await expect(algebra.getByText("二面角内角", { exact: true })).toBeVisible()
+
+  // 关掉最后打开的开关后回到普通提示。
+  await page.getByRole("button", { name: "测量二面角" }).click()
+  await expect(status).not.toContainText("示例值")
+})
+
+test("labels 3D points with their classroom names inside the scene", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "添加空间点" }).click()
+  await page.getByRole("button", { name: "添加空间点" }).click()
+
+  const labels = page.locator("[data-point-label]")
+  await expect(labels).toHaveCount(2)
+  await expect(page.locator('[data-point-label="A"]')).toBeVisible()
+  await expect(page.locator('[data-point-label="B"]')).toBeVisible()
+  // 标注层只显示，不参与拾取。
+  await expect(page.locator(".three-point-label-overlay")).toHaveCSS("pointer-events", "none")
+
+  // 标注跟着相机走：把视角重新框住图形后位置随之更新，而不是留在原地。
+  const before = (await page.locator('[data-point-label="A"]').boundingBox())!
+  await page.getByRole("button", { name: "适应视图" }).click()
+  await expect.poll(async () => {
+    const after = await page.locator('[data-point-label="A"]').boundingBox()
+    return after ? Math.abs(after.x - before.x) + Math.abs(after.y - before.y) : 0
+  }).toBeGreaterThan(4)
 })
 
 test("shows a small bottom-left guide only after a feature button is clicked", async ({ page }) => {

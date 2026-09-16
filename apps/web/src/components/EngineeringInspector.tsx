@@ -1,5 +1,3 @@
-import type { ReactNode } from "react"
-
 import { InspectorTabs, type InspectorTab } from "./InspectorTabs"
 import { PropertiesBar, type InspectorSection, type PropertiesBarProps } from "./PropertiesBar"
 
@@ -26,21 +24,18 @@ interface EngineeringInspectorProps {
   onTabChange: (tab: InspectorTab) => void
   context: InspectorContext
   sources?: InspectorSource[]
-  /** Constraint diagnostics live in their own panel; the shell only places it. */
-  constraints: ReactNode
   properties: PropertiesBarProps
 }
 
-const tabLabels: Record<InspectorTab, string> = { data: "数据", appearance: "外观", constraints: "约束", engineering: "工程标注" }
+const tabLabels: Record<InspectorTab, string> = { data: "数据", appearance: "外观", engineering: "工程标注" }
 
-export function EngineeringInspector({ activeTab, onTabChange, context, sources = [], constraints, properties }: EngineeringInspectorProps) {
+export function EngineeringInspector({ activeTab, onTabChange, context, sources = [], properties }: EngineeringInspectorProps) {
   const sections: InspectorSection[] = [activeTab]
   const hasSelection = properties.selectedCount > 0
 
   return <div className="engineering-inspector" role="region" aria-label="工程上下文检查器">
     <InspectorTabs activeTab={activeTab} onTabChange={onTabChange} />
     <div className="inspector-panel" role="tabpanel" id="inspector-panel" aria-label={`${tabLabels[activeTab]}面板`}>
-      {activeTab === "constraints" && constraints}
       {activeTab === "data" && !hasSelection && <div className="inspector-context" aria-label="当前上下文">
         <h3>当前上下文</h3>
         <ul>

@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 
-import { decodeMgeo, encodeMgeo, type AnnotationFeature, type ConstraintType, type DrawingSheetSpec, type EngineeringAnnotationKind, type Measurement3Metric, type PrimitiveSpec, type Workspace } from "@draw/dsl"
+import { decodeMgeo, encodeMgeo, type AnnotationFeature, type DrawingSheetSpec, type EngineeringAnnotationKind, type Measurement3Metric, type PrimitiveSpec, type Workspace } from "@draw/dsl"
 import { buildSolidTemplate, createMeasurement3 } from "@draw/geometry-kernel"
 import { deletionTargets, sectionPlaneThroughSource, validatePatch } from "@draw/scene-graph"
 import type { Alignment } from "@draw/scene-graph"
 
 import { AlgebraView } from "./components/AlgebraView"
-import { AgentDock } from "./components/AgentDock"
 import { AppChrome } from "./components/AppChrome"
-import { ConstraintPanel } from "./components/ConstraintPanel"
 import { DocumentTreePanel } from "./components/DocumentTreePanel"
 import { DrawingSheetView } from "./components/DrawingSheetView"
 import { DrawingTree } from "./components/DrawingTree"
@@ -33,7 +31,7 @@ import { exportEngineeringDxf, exportEngineeringPdf, exportEngineeringSvg, selec
 import { defaultDraftView, drawingViewLabels, resolveProjectedDrawing } from "./projectionVisuals"
 import { migrateLegacySolids } from "./solidTemplates"
 import { point3ToolAvailability, point3ToolHint } from "./spatialTools"
-import { resolveStatusPrompt } from "./statusPrompts"
+import { resolveStatusPrompt, type SceneControlMode } from "./statusPrompts"
 import { useSceneStore } from "./store"
 
 type CreationMode = "line" | "segment" | "ray" | "polyline" | "circle" | "arc" | null
@@ -70,19 +68,17 @@ function nextMeasurementId(document: ReturnType<typeof useSceneStore.getState>["
   return `measurement3-${index}`
 }
 
-function nextConstraintId(document: ReturnType<typeof useSceneStore.getState>["document"]): string {
-  let index = 1
-  while (document.constraints.some((constraint) => constraint.id === `constraint3-${index}`)) index += 1
-  return `constraint3-${index}`
-}
-
+/**
+ * Planar points use the classroom labels A…Z; after Z the counter falls back to a running number so a
+ * long construction never reuses a label. Existing documents keep whatever labels they already stored.
+ */
 function nextPointLabel(document: ReturnType<typeof useSceneStore.getState>["document"]): string {
   const usedLabels = new Set(document.primitives.filter((primitive) => primitive.type === "point").map((primitive) => primitive.label))
   for (let index = 0; index < 26; index += 1) {
-    const label = `新点 ${String.fromCharCode(65 + index)}`
+    const label = String.fromCharCode(65 + index)
     if (!usedLabels.has(label)) return label
   }
-  return `新点 ${document.primitives.filter((primitive) => primitive.type === "point").length + 1}`
+  return `P${document.primitives.filter((primitive) => primitive.type === "point").length + 1}`
 }
 
 function nextPoint3Label(document: ReturnType<typeof useSceneStore.getState>["document"]): string {
@@ -142,6 +138,7 @@ export function App() {
   const [activeViewId, setActiveViewId] = useState<string | null>(null)
   const [pointerCoordinate, setPointerCoordinate] = useState<{ x: number; y: number } | null>(null)
   const [layerNotice, setLayerNotice] = useState<string | null>(null)
+  const [sceneControl, setSceneControl] = useState<SceneControlMode | null>(null)
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("data")
   const [activeRibbonTab, setActiveRibbonTab] = useState<RibbonTabId | null>("home")
   const [ribbonExpanded, setRibbonExpanded] = useState(true)
@@ -560,13 +557,6 @@ export function App() {
     setGuidance(guidanceFor({ kind: "measurement", metric, outcome: "created", ...(dihedralKind ? { dihedralKind } : {}) }))
     setFileError(null)
   }
-  const addConstraint = (type: ConstraintType, targets: string[]) => {
-    if (document.workspace !== "geometry3d") return
-    const id = nextConstraintId(document)
-    apply({ op: "addConstraint", constraint: { id, type, targets } })
-    setGuidance(guidanceFor({ kind: "constraint", type, outcome: "created" }))
-    setFileError(null)
-  }
   const deleteMeasurement = (id: string) => {
     const validation = validatePatch(document, { op: "deleteMeasurement", id })
     if (!validation.valid) {
@@ -758,7 +748,7 @@ export function App() {
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [selectedIds, document, apply, undo, redo])
 
-  const statusPrompt = resolveStatusPrompt({ mode: creationMode, selectedCount: selectedIds.length, selectedLabel: selectedPrimitive?.label ?? selectedPrimitive?.id ?? null, hasCenter: Boolean(creationStep?.center), hasStart: Boolean(creationStep?.start), pointCount: creationStep?.points?.length ?? 0 })
+  const statusPrompt = resolveStatusPrompt({ mode: creationMode, selectedCount: selectedIds.length, selectedLabel: selectedPrimitive?.label ?? selectedPrimitive?.id ?? null, hasCenter: Boolean(creationStep?.center), hasStart: Boolean(creationStep?.start), pointCount: creationStep?.points?.length ?? 0, sceneControl })
 
   const activeCommandPrompt = ribbonGroups
     .flatMap((group) => group.commands)
@@ -773,11 +763,11 @@ export function App() {
 
   const planarCanvas = <GraphicsView document={document} selectedIds={selectedIds} creationMode={creationMode} onSelect={updateSelection} onBoxSelect={selectBox} onCanvasClick={handleCanvasCreationClick} onCanvasDoubleClick={handleCanvasDoubleClick} onDragEnd={handleDragEnd} onCreateIntersection={createIntersectionFromPreview} onPointerCoordinate={setPointerCoordinate} />
 
-  const propertiesBarProps: PropertiesBarProps = { selectedPrimitive, selectedIds, selectedCount: selectedIds.length, selectedGroupId: selectedGroup?.id ?? null, allSelectedVisible, canCreateIntersection, onCreateGroup: createGroup, onDeleteGroup: deleteGroup, onCreateIntersection: createIntersection, onAlign: alignSelection, onToggleSelectedVisibility: () => selectedId && apply({ op: "toggleVisibility", id: selectedId, visible: selectedPrimitive?.visible === false }), onToggleSelectedLock: () => selectedId && apply({ op: "toggleLock", id: selectedId, locked: !selectedPrimitive?.locked }), onDeleteSelected: deleteSelected, onToggleBatchVisibility: () => apply({ op: "setPrimitivesVisible", ids: selectedIds, visible: !allSelectedVisible }), onUpdatePrimitive: (patch) => selectedId && apply({ op: "updatePrimitive", id: selectedId, patch }), onAddAnnotation: addAnnotation, onAddEngineeringAnnotation: addEngineeringAnnotation, onCreateMeasurement: addMeasurement, onCreateConstraint: addConstraint, onDeleteMeasurement: deleteMeasurement, onCreateDerivative: (sourceId) => addFunctionAnalysis(sourceId, "derivative"), onCreateTangent: (sourceId) => addFunctionAnalysis(sourceId, "tangent"), onCreateIntegral: (sourceId) => addFunctionAnalysis(sourceId, "integral"), value: slope?.value ?? 0.5, min: slope?.min ?? 0.15, max: slope?.max ?? 0.85, step: slope?.step ?? 0.05, onChange: (value) => apply({ op: "setParameter", id: "slope", value }) }
+  const propertiesBarProps: PropertiesBarProps = { selectedPrimitive, selectedIds, selectedCount: selectedIds.length, selectedGroupId: selectedGroup?.id ?? null, allSelectedVisible, canCreateIntersection, onCreateGroup: createGroup, onDeleteGroup: deleteGroup, onCreateIntersection: createIntersection, onAlign: alignSelection, onToggleSelectedVisibility: () => selectedId && apply({ op: "toggleVisibility", id: selectedId, visible: selectedPrimitive?.visible === false }), onToggleSelectedLock: () => selectedId && apply({ op: "toggleLock", id: selectedId, locked: !selectedPrimitive?.locked }), onDeleteSelected: deleteSelected, onToggleBatchVisibility: () => apply({ op: "setPrimitivesVisible", ids: selectedIds, visible: !allSelectedVisible }), onUpdatePrimitive: (patch) => selectedId && apply({ op: "updatePrimitive", id: selectedId, patch }), onAddAnnotation: addAnnotation, onAddEngineeringAnnotation: addEngineeringAnnotation, onCreateMeasurement: addMeasurement, onDeleteMeasurement: deleteMeasurement, onCreateDerivative: (sourceId) => addFunctionAnalysis(sourceId, "derivative"), onCreateTangent: (sourceId) => addFunctionAnalysis(sourceId, "tangent"), onCreateIntegral: (sourceId) => addFunctionAnalysis(sourceId, "integral"), value: slope?.value ?? 0.5, min: slope?.min ?? 0.15, max: slope?.max ?? 0.85, step: slope?.step ?? 0.05, onChange: (value) => apply({ op: "setParameter", id: "slope", value }) }
 
   const propertiesPanel = <PropertiesBar {...propertiesBarProps} />
 
-  const inspectorPanel = <aside id="properties-dock" className={`panel right${mobileDock === "properties" ? " is-mobile-open" : ""}`} data-mobile-dock="properties">{propertiesPanel}<AgentDock /></aside>
+  const inspectorPanel = <aside id="properties-dock" className={`panel right${mobileDock === "properties" ? " is-mobile-open" : ""}`} data-mobile-dock="properties">{propertiesPanel}</aside>
 
 
   const layers = document.layers ?? []
@@ -817,7 +807,6 @@ export function App() {
       selectedLayerName: selectedPrimitive?.layerId ? layers.find((layer) => layer.id === selectedPrimitive.layerId)?.name ?? selectedPrimitive.layerId : null
     }}
     sources={cadInspectorSources}
-    constraints={<ConstraintPanel constraints={document.constraints} primitives={document.primitives} error={operationError?.includes("constraint") ? operationError : null} onDelete={(id) => apply({ op: "deleteConstraint", id })} onDeleteMany={(ids) => ids.forEach((id) => apply({ op: "deleteConstraint", id }))} />}
     properties={propertiesBarProps}
   />
 
@@ -859,7 +848,7 @@ export function App() {
     commandBar={null}
     leftDock={documentTreePanel}
     canvas={cadCanvas}
-    inspector={<>{cadInspector}<AgentDock showConstraints={false} /></>}
+    inspector={cadInspector}
     statusBar={<StatusBar commandPrompt={cadStatusPrompt} activeLayerName={activeLayerName} unit="mm" scale={activeSheetScale} diagnosticCount={cadDiagnosticCount} notice={layerNotice} />}
   />
 
@@ -871,7 +860,7 @@ export function App() {
         <button type="button" aria-controls="properties-dock" aria-expanded={mobileDock === "properties"} onClick={() => setMobileDock((current) => current === "properties" ? null : "properties")}>属性检查器</button>
       </div>
       {algebraPanel}
-      {document.workspace === "geometry3d" ? <ThreeSceneView document={document} selectedIds={selectedIds} onSelect={updateSelection} /> : planarCanvas}
+      {document.workspace === "geometry3d" ? <ThreeSceneView document={document} selectedIds={selectedIds} onSelect={updateSelection} onStatusPromptChange={setSceneControl} /> : planarCanvas}
       {inspectorPanel}
       <div className="status-bar" role="status" aria-live="polite" aria-label="操作提示"><span className="status-bar-prompt">{statusPrompt}</span><span className="status-bar-item">{pointerCoordinate ? `坐标 (${pointerCoordinate.x.toFixed(2)}, ${pointerCoordinate.y.toFixed(2)})` : "坐标 —"}</span><span className="status-bar-item">对象 {document.primitives.length}</span><span className="status-bar-item">工作区 {document.workspace}</span></div>
     </div>}

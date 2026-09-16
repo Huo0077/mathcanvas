@@ -41,7 +41,6 @@ function propertiesProps(overrides: Partial<PropertiesBarProps> = {}): Propertie
     onAddAnnotation: vi.fn(),
     onAddEngineeringAnnotation: vi.fn(),
     onCreateMeasurement: vi.fn(),
-    onCreateConstraint: vi.fn(),
     onDeleteMeasurement: vi.fn(),
     onCreateDerivative: vi.fn(),
     onCreateTangent: vi.fn(),
@@ -54,14 +53,13 @@ function text(selector: string): string {
   return globalThis.document.querySelector(selector)?.textContent ?? ""
 }
 
-function renderInspector(options: { activeTab?: "data" | "appearance" | "constraints" | "engineering"; properties?: Partial<PropertiesBarProps>; context?: Partial<InspectorContext>; sources?: { id: string; label: string; missing: boolean }[] } = {}) {
+function renderInspector(options: { activeTab?: "data" | "appearance" | "engineering"; properties?: Partial<PropertiesBarProps>; context?: Partial<InspectorContext>; sources?: { id: string; label: string; missing: boolean }[] } = {}) {
   const onTabChange = vi.fn()
   render(<EngineeringInspector
     activeTab={options.activeTab ?? "data"}
     onTabChange={onTabChange}
     context={{ ...baseContext, ...options.context }}
     sources={options.sources ?? []}
-    constraints={<div data-testid="constraints-slot">约束列表</div>}
     properties={propertiesProps(options.properties)}
   />)
   return { onTabChange }
@@ -112,11 +110,28 @@ describe("engineering inspector", () => {
     expect(globalThis.document.querySelector('[data-source-id="point3-gone"]')?.getAttribute("data-missing")).toBe("true")
   })
 
-  it("puts constraint diagnostics on their own tab", () => {
-    renderInspector({ activeTab: "constraints" })
+  it("shows no constraint or agent UI in the CAD inspector", () => {
+    renderInspector()
 
-    expect(screen.getByTestId("constraints-slot")).toBeTruthy()
-    expect(globalThis.document.querySelector('[data-context="sheet"]')).toBeNull()
+    expect(screen.queryByRole("tab", { name: "约束" })).toBeNull()
+    expect(screen.queryByText("约束列表")).toBeNull()
+    expect(screen.queryByText("智能体 (Agent)")).toBeNull()
+  })
+
+  it("keeps supported measurement actions reachable from the data tab", () => {
+    const document = {
+      ...createEmptyDocument("geometry3d"),
+      primitives: [
+        { id: "face3-1", type: "face3" as const, pointIds: ["point3-1", "point3-2", "point3-3"], label: "面 1" },
+        { id: "face3-2", type: "face3" as const, pointIds: ["point3-2", "point3-3", "point3-4"], label: "面 3" }
+      ]
+    }
+    useSceneStore.setState({ document, workspaceDocuments: { geometry3d: document } })
+
+    renderInspector({ properties: { selectedPrimitive: document.primitives[0], selectedIds: ["face3-1", "face3-2"], selectedCount: 2 } })
+
+    expect(screen.getByRole("button", { name: "二面角内角" })).toBeTruthy()
+    expect(screen.getByRole("button", { name: "二面角外角" })).toBeTruthy()
   })
 
   it("keeps engineering annotation actions on the engineering tab only", () => {
@@ -147,7 +162,7 @@ describe("engineering inspector", () => {
   it("switches tabs when a tab is clicked", () => {
     const bound = renderInspector()
 
-    fireEvent.click(screen.getByRole("tab", { name: "约束" }))
-    expect(bound.onTabChange).toHaveBeenCalledWith("constraints")
+    fireEvent.click(screen.getByRole("tab", { name: "工程标注" }))
+    expect(bound.onTabChange).toHaveBeenCalledWith("engineering")
   })
 })

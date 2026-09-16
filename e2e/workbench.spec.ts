@@ -16,7 +16,7 @@ test("workbench updates the intersection and adds a point", async ({ page }) => 
   await expect(page.getByText(/交点 P \(8\.00, 0\.00\)/)).toBeVisible()
 
   await page.getByRole("button", { name: "添加点" }).click()
-  await expect(page.getByText("新点 A").first()).toBeVisible()
+  await expect(page.getByText("A", { exact: true }).first()).toBeVisible()
 })
 
 test("opens and restores an mgeo document through the file input", async ({ page }) => {
@@ -50,12 +50,12 @@ test("opens and restores an mgeo document through the file input", async ({ page
 test("switches workspaces and exports SVG and CSV files", async ({ page }) => {
   await page.goto("/")
 
-  // A fresh session opens on 圆锥曲线 and the retired calculus workspace is not offered at all.
-  await expect(page.getByRole("button", { name: "圆锥曲线" })).toHaveAttribute("aria-pressed", "true")
+  // A fresh session opens on 平面几何 (the internal `conics` workspace) and 微积分 is not offered at all.
+  await expect(page.getByRole("button", { name: "平面几何" })).toHaveAttribute("aria-pressed", "true")
   await expect(page.getByRole("button", { name: "微积分" })).toHaveCount(0)
 
-  await page.getByRole("button", { name: "圆锥曲线" }).click()
-  await expect(page.getByRole("button", { name: "圆锥曲线" })).toHaveAttribute("aria-pressed", "true")
+  await page.getByRole("button", { name: "平面几何" }).click()
+  await expect(page.getByRole("button", { name: "平面几何" })).toHaveAttribute("aria-pressed", "true")
 
   const svgDownload = page.waitForEvent("download")
   await page.getByRole("button", { name: "导出 SVG" }).click()
@@ -75,7 +75,7 @@ test("switches workspaces and exports SVG and CSV files", async ({ page }) => {
   await expect(page.locator("[data-3d-scene]")).toBeVisible()
 })
 
-test("shows constraint status and recovery controls", async ({ page }) => {
+test("keeps constraint data in the document without a constraint panel", async ({ page }) => {
   await page.goto("/")
   const document = {
     schemaVersion: "0.1",
@@ -98,24 +98,33 @@ test("shows constraint status and recovery controls", async ({ page }) => {
     buffer: Buffer.from(JSON.stringify({ format: "mgeo", formatVersion: "0.1", document }))
   })
 
-  await expect(page.getByText("约束列表")).toBeVisible()
-  await expect(page.getByText("已满足", { exact: true })).toBeVisible()
-  await expect(page.getByRole("button", { name: "删除约束 parallel-1" })).toBeVisible()
+  // 旧文档照常打开、约束数据照常保留，但右侧不再展示约束面板或智能体。
+  await expect(page.locator(".algebra-panel").getByText("基准线", { exact: true })).toBeVisible()
+  await expect(page.getByText("约束列表")).toHaveCount(0)
+  await expect(page.getByText("几何约束")).toHaveCount(0)
+  await expect(page.getByText("智能体 (Agent)")).toHaveCount(0)
+
+  // 保存出来的文件里约束记录仍在：撤掉的是界面，不是文档数据。
+  const save = page.waitForEvent("download")
+  await page.getByRole("banner").getByRole("button", { name: "保存 .mgeo" }).click()
+  const savedPath = await (await save).path()
+  const saved = JSON.parse(await readFile(savedPath!, "utf8")) as { document: { constraints: unknown[] } }
+  expect(saved.document.constraints).toHaveLength(1)
 })
 
 test("restores the latest workspace draft after reload", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "圆锥曲线" }).click()
+  await page.getByRole("button", { name: "平面几何" }).click()
   await page.getByRole("button", { name: "添加点" }).click()
-  await expect(page.getByText("新点 A").first()).toBeVisible()
+  await expect(page.getByText("A", { exact: true }).first()).toBeVisible()
   await page.reload()
-  await expect(page.getByText("新点 A").first()).toBeVisible()
+  await expect(page.getByText("A", { exact: true }).first()).toBeVisible()
   await expect(page.getByRole("status", { name: "操作提示" })).toContainText("点击图元查看属性")
 })
 
 test("zooms the conics canvas and keeps every crossing of a line and a curve", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "圆锥曲线" }).click()
+  await page.getByRole("button", { name: "平面几何" }).click()
   const canvas = page.getByRole("img", { name: "几何画布" })
   const scale = async () => Number(await canvas.getAttribute("data-viewport-scale"))
   const initial = await scale()

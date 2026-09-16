@@ -1,8 +1,7 @@
 import type { KeyboardEvent as ReactKeyboardEvent } from "react"
 
-import type { InspectorSection } from "./PropertiesBar"
-
-export type InspectorTab = InspectorSection
+/** The CAD inspector shows data, appearance and engineering annotations; constraint and agent UI are not part of it. */
+export type InspectorTab = "data" | "appearance" | "engineering"
 
 interface InspectorTabsProps {
   activeTab: InspectorTab
@@ -12,7 +11,6 @@ interface InspectorTabsProps {
 const tabs: { id: InspectorTab; label: string }[] = [
   { id: "data", label: "数据" },
   { id: "appearance", label: "外观" },
-  { id: "constraints", label: "约束" },
   { id: "engineering", label: "工程标注" }
 ]
 

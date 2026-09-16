@@ -15,7 +15,8 @@ interface WorkspaceTabsProps {
 
 const tabs: { id: RibbonTabId | Workspace; label: string }[] = [
   { id: "file", label: "文件" },
-  { id: "conics", label: "圆锥曲线" },
+  // The visible name changed to 平面几何; the `conics` ID and `.mgeo` format stay untouched.
+  { id: "conics", label: "平面几何" },
   { id: "geometry3d", label: "立体几何" },
   { id: "cad", label: "工程制图" }
 ]

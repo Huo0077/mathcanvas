@@ -40,9 +40,9 @@
 
 ---
 
-## Follow-up Scope (2026-09-16, pending implementation)
+## Follow-up Scope (2026-09-16, completed)
 
-本节补充已实施 Ribbon 基线之上的后续改动。所有复选框保持未完成；这些功能仍需逐项实现和验证。继续在当前工作区单会话执行，不使用子代代理，不覆盖已有未提交改动；提交或推送仅在用户明确要求时执行。
+本节补充已实施 Ribbon 基线之上的后续改动。Task 7-13 已于 2026-09-16 实现并通过完整验证，复选框据此勾选。所有改动在单个工作区内完成，未使用子代代理，未覆盖已有未提交改动；提交或推送仍需用户明确要求。
 
 ### Task 7: Rename the Planar Workspace and Improve Primitive Naming
 
@@ -58,7 +58,7 @@
 - Keep `onUpdatePrimitive({ label })` as the one rename write path; make the name field available in the selected-object data area instead of requiring the appearance tab.
 - `nextPointLabel(document)` assigns unused labels `A` through `Z`, then `P27`, `P28`, and onward; never change labels on existing documents.
 
-- [ ] **Step 1: Add failing workspace and rename tests**
+- [x] **Step 1: Add failing workspace and rename tests**
 
 ```tsx
 it("shows 平面几何 while keeping the conics workspace selected", () => {
@@ -72,21 +72,21 @@ it("creates planar points with alphabetic labels and renames a selected primitiv
 })
 ```
 
-- [ ] **Step 2: Run focused tests and confirm expected failures**
+- [x] **Step 2: Run focused tests and confirm expected failures**
 
 Run: `npm.cmd test -- apps/web/src/components/AppChrome.test.tsx apps/web/src/App.test.tsx`
 
 Expected: the old workspace label remains, the first 2D point label is “新点 A”, and the name input is not available in the default data section.
 
-- [ ] **Step 3: Update visible workspace and point names**
+- [x] **Step 3: Update visible workspace and point names**
 
 Change the tab label only; preserve `conics` in `WorkspaceTabs.handleTab` and all document switching logic. Change the 2D label allocator to choose unused alphabetic labels, preserving collision avoidance and the existing post-`Z` fallback.
 
-- [ ] **Step 4: Make rename discoverable in the data section**
+- [x] **Step 4: Make rename discoverable in the data section**
 
 Move the existing “图元名称” field from the appearance-only rendering branch into the selected primitive's data branch. Keep its value bound to `selectedPrimitive.label`, route edits through `onUpdatePrimitive({ label })`, and keep styling controls in the appearance branch.
 
-- [ ] **Step 5: Re-run workspace and App tests**
+- [x] **Step 5: Re-run workspace and App tests**
 
 Run: `npm.cmd test -- apps/web/src/components/AppChrome.test.tsx apps/web/src/App.test.tsx`
 
@@ -105,21 +105,21 @@ Expected: workspace label, alphabetic point names, rename display and stored lab
 - The `multimodal` group contains exactly `input-text-conversion` (“文字转换”) and `input-image-conversion` (“图片转换”).
 - Both commands stay disabled until their conversion services exist; the `image` icon is added to the existing closed `RibbonIcon` union and icon renderer.
 
-- [ ] **Step 1: Assert the two command IDs, labels and unavailable reasons**
+- [x] **Step 1: Assert the two command IDs, labels and unavailable reasons**
 
 Add a command configuration test asserting the exact ordered pair and disabled reasons; add a Ribbon render test asserting the labels and disabled buttons.
 
-- [ ] **Step 2: Run focused tests and confirm expected failures**
+- [x] **Step 2: Run focused tests and confirm expected failures**
 
 Run: `npm.cmd test -- apps/web/src/ribbonCommands.test.ts apps/web/src/components/Ribbon.test.tsx`
 
 Expected: the current quiz and pen commands violate the exact command list and the image command is absent.
 
-- [ ] **Step 3: Replace placeholders without claiming conversion support**
+- [x] **Step 3: Replace placeholders without claiming conversion support**
 
 Replace quiz and pen entries with the two requested labels, stable IDs, accessible image/text icons, `disabled: true`, and reasons explaining that the corresponding conversion service is not connected. Do not add file upload, OCR, AI calls or conversion parsing in this change.
 
-- [ ] **Step 4: Re-run focused Ribbon tests**
+- [x] **Step 4: Re-run focused Ribbon tests**
 
 Run: `npm.cmd test -- apps/web/src/ribbonCommands.test.ts apps/web/src/components/Ribbon.test.tsx`
 
@@ -140,25 +140,25 @@ Expected: exactly two multimodal actions render in the specified order and remai
 - Keep constraint records and codecs untouched so opening older `.mgeo` files does not discard document data.
 - Render existing measurement actions in selected-object data when the current selection supports them; keep persistent measurement result and delete controls unchanged.
 
-- [ ] **Step 1: Add failing inspector visibility and measurement regression tests**
+- [x] **Step 1: Add failing inspector visibility and measurement regression tests**
 
 Assert that neither generic nor CAD inspector exposes constraint or Agent UI. Keep a two-face selection fixture and assert that the “二面角内角” and “二面角外角” actions remain reachable from data properties.
 
-- [ ] **Step 2: Run focused tests and confirm expected failures**
+- [x] **Step 2: Run focused tests and confirm expected failures**
 
 Run: `npm.cmd test -- apps/web/src/components/EngineeringInspector.test.tsx apps/web/src/App.test.tsx`
 
 Expected: constraint/Agent content is currently present and measurement controls are currently coupled to the constraints section.
 
-- [ ] **Step 3: Remove right-panel constraint and Agent presentation**
+- [x] **Step 3: Remove right-panel constraint and Agent presentation**
 
 Remove the constraints tab/accordion rendering and unmount `AgentDock` from both standard and CAD inspectors. Preserve store constraint data, validation and file codecs; do not delete historical constraints from loaded documents.
 
-- [ ] **Step 4: Place supported measurement actions with object data**
+- [x] **Step 4: Place supported measurement actions with object data**
 
 Move the `visibleMeasurementOptions` card into the selected-object data branch. Preserve selection requirements, `onCreateMeasurement`, source IDs, result rendering and deletion behavior.
 
-- [ ] **Step 5: Re-run Inspector and App regression tests**
+- [x] **Step 5: Re-run Inspector and App regression tests**
 
 Run: `npm.cmd test -- apps/web/src/components/EngineeringInspector.test.tsx apps/web/src/App.test.tsx`
 
@@ -176,21 +176,21 @@ Expected: no right-panel constraint/Agent UI; measurement operations and existin
 - Expose existing `leftOpen` and `rightOpen` state as stable `data-left-open` and `data-right-open` attributes on `.engineering-workbench`.
 - Grid columns include only visible docks; the canvas remains `minmax(0, 1fr)` and may shrink without horizontal overflow.
 
-- [ ] **Step 1: Add failing dock-state layout assertions**
+- [x] **Step 1: Add failing dock-state layout assertions**
 
 Test that closing the left dock sets `data-left-open="false"`, closing the right dock sets `data-right-open="false"`, and both closed states are representable without removing the canvas region.
 
-- [ ] **Step 2: Run the workbench test and confirm expected failure**
+- [x] **Step 2: Run the workbench test and confirm expected failure**
 
 Run: `npm.cmd test -- apps/web/src/components/EngineeringWorkbench.test.tsx`
 
 Expected: the workbench does not expose dock state attributes.
 
-- [ ] **Step 3: Bind grid columns to dock state**
+- [x] **Step 3: Bind grid columns to dock state**
 
 Add the data attributes and CSS grid variants for left+right, left-only, right-only and no docks. Keep current dock widths and ensure the center column always receives the remaining width.
 
-- [ ] **Step 4: Verify dock toggling in unit and browser tests**
+- [x] **Step 4: Verify dock toggling in unit and browser tests**
 
 Run: `npm.cmd test -- apps/web/src/components/EngineeringWorkbench.test.tsx`
 
@@ -212,21 +212,21 @@ Expected: all four dock states remain usable and the canvas expands when either 
 - `ThreeSceneView` reports `"normals"`, `"dihedral-demo"` or `null` through an optional `onStatusPromptChange` callback whenever the corresponding display control changes.
 - `resolveStatusPrompt` accepts the scene-control mode and returns actionable copy; normal prompts explain the displayed face normals, while dihedral copy distinguishes the sample angle display from actual selected-face measurements.
 
-- [ ] **Step 1: Add failing status prompt cases**
+- [x] **Step 1: Add failing status prompt cases**
 
 Test the normal hint, the explicit sample-angle caveat and the actual workflow: select exactly two faces, then use the data-properties “二面角内角/外角” actions.
 
-- [ ] **Step 2: Run prompt tests and confirm expected failures**
+- [x] **Step 2: Run prompt tests and confirm expected failures**
 
 Run: `npm.cmd test -- apps/web/src/statusPrompts.test.ts`
 
 Expected: the prompt resolver has no 3D scene-control state.
 
-- [ ] **Step 3: Report ThreeScene control state to App**
+- [x] **Step 3: Report ThreeScene control state to App**
 
 Add the optional callback; invoke it from normal/angle toggle handlers and clear it when both controls are off or the view unmounts. Let App pass the resulting hint to the existing bottom-left status prompt without changing the 3D scene's geometry state.
 
-- [ ] **Step 4: Verify prompt transitions and 3D browser flow**
+- [x] **Step 4: Verify prompt transitions and 3D browser flow**
 
 Run: `npm.cmd test -- apps/web/src/statusPrompts.test.ts apps/web/src/App.test.tsx`
 
@@ -246,21 +246,21 @@ Expected: the status prompt changes immediately on toggle and gives the correct 
 - A pointer-transparent HTML overlay displays the existing `Point3Primitive.label` for every visible point and tracks camera projection and viewport resize.
 - Labels use stable `data-point-label` attributes for browser assertions and do not participate in raycasting or selection.
 
-- [ ] **Step 1: Add failing 3D label assertions**
+- [x] **Step 1: Add failing 3D label assertions**
 
 Add an E2E scenario that creates points A and B and asserts both `data-point-label="A"` and `data-point-label="B"` elements are visible after the scene renders. The browser assertion is the contract for the overlay, so no new geometry-kernel test is required.
 
-- [ ] **Step 2: Run focused 3D checks and confirm expected failure**
+- [x] **Step 2: Run focused 3D checks and confirm expected failure**
 
 Run: `npm.cmd test -- apps/web/src/threeScene.test.ts`
 
 Expected: no projected point-label output is produced for point3 primitives.
 
-- [ ] **Step 3: Project labels without changing the 3D domain model**
+- [x] **Step 3: Project labels without changing the 3D domain model**
 
 Create a separate overlay layer, project each visible point position through the active camera, position its label near the marker, and refresh positions in the existing render/resize lifecycle. Keep the layer pointer-transparent and dispose/remove stale labels when documents change.
 
-- [ ] **Step 4: Verify label updates in unit and browser tests**
+- [x] **Step 4: Verify label updates in unit and browser tests**
 
 Run: `npm.cmd test -- apps/web/src/threeScene.test.ts`
 
@@ -275,23 +275,49 @@ Expected: labels A and B remain aligned with their points after orbit, pan, zoom
 - Modify: `docs/project-progress.md`
 - Test: existing UI unit and E2E suites
 
-- [ ] **Step 1: Run focused tests for each changed surface**
+- [x] **Step 1: Run focused tests for each changed surface**
 
 Run the targeted commands recorded in Tasks 7–12 and fix only failures caused by this follow-up scope.
 
-- [ ] **Step 2: Run complete verification**
+- [x] **Step 2: Run complete verification**
 
 Run in order: `npm.cmd test`, `npm.cmd run typecheck`, `npm.cmd run lint`, `npm.cmd run build`, `npm.cmd run test:e2e`, and `git diff --check`.
 
 Expected: tests, typecheck, build and E2E exit successfully; lint reports no errors. Record existing warnings without silently changing unrelated code.
 
-- [ ] **Step 3: Document completed behavior and limitations**
+- [x] **Step 3: Document completed behavior and limitations**
 
 Update README and project progress with the visible “平面几何” label, alphabetic point labels, rename affordance, simplified Inspector, expanded CAD layout, 3D guidance/point labels and the fact that text/image conversion services remain unavailable.
 
-- [ ] **Step 4: Stop for user browser review**
+- [x] **Step 4: Stop for user browser review**
 
 Keep the local development server available for browser testing if already running. Do not commit or push to GitHub without a new explicit request.
+
+### Task 14: Engineering Drawing Visual Rework (added 2026-09-16)
+
+The follow-up scope above only made the CAD sheet *bigger*. User feedback: "我要的不是这种简单的放大，这样失去了美感，而且 ui 页面也不是很贴合" — so the drawing area got a real visual pass, audited first and measured in a real browser.
+
+**Files:**
+- Modify: `apps/web/src/styles/tokens.css`
+- Modify: `apps/web/src/styles/global.css`
+- Modify: `apps/web/src/drawingGeometry.ts`
+- Modify: `apps/web/src/components/DrawingSheetView.tsx`
+- Modify: `apps/web/src/components/DrawingViewport.tsx`
+- Modify: `apps/web/src/components/EngineeringDrawingView.tsx`
+- Test: `apps/web/src/components/DrawingSheetView.test.tsx`
+- Test: `e2e/engineering-workbench.spec.ts`
+
+**Interfaces:**
+- New drafting-surface tokens (`--color-drafting-surface`, `--color-drafting-grid`, `--color-paper`, `--color-paper-tint`, `--color-hairline`, `--color-hairline-strong`, `--shadow-sheet`); the brand accent stays reserved for current state.
+- `sheetFitScale(available, paper)` stays the fit primitive; the sheet is scaled with CSS `zoom` (layout-affecting) instead of `transform: scale()` so scroll range and hit areas stay correct. `data-sheet-fit` / `data-sheet-scale` are the observable state, `zoom` is the user override on top of fit.
+- `DrawingSheetView` owns the single CAD toolbar and accepts `projectionLinesControl` as a slot, so the whole CAD area has exactly one toolbar.
+
+- [x] **Step 1: Audit and record the measurable defects** (scale-inflated chrome, three near-white layers, view rectangles outside the frame, spacing scaled with the sheet, silent fit, per-view button rows).
+- [x] **Step 2: Fix the token layer and the sheet composition** (paper/frame/title block inside the frame, margin math owns the gap).
+- [x] **Step 3: Rebuild the view frame chrome** (hairline frame, corner registration ticks, in-frame captions, hover/focus-only actions, calm empty state that does not intercept clicks).
+- [x] **Step 4: Give fit an explicit zoom affordance** (fit / − / ＋ plus readout; zoomed sheets scroll instead of being cropped).
+- [x] **Step 5: Repair the single-column regression** uncovered while verifying (canvas collapsed to 68px when the body became one column).
+- [x] **Step 6: Re-run the complete verification gate** — see `docs/project-progress.md` (2026-09-16 视觉重做 section): 546 unit cases, 4 workspace typechecks, 0 lint errors, production build, 37/37 Playwright.
 
 ### Task 1: Build the Shared App Chrome
 

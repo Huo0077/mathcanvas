@@ -1,4 +1,4 @@
-﻿import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from "react"
+import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from "react"
 
 import type { DrawingViewSpec, GeometryDocument, PrimitiveSpec } from "@draw/dsl"
 
@@ -204,6 +204,7 @@ export function DrawingViewport({ view, sheetName, mode, document, selectedIds, 
     className={`engineering-drawing-panel drawing-viewport${active ? " is-active" : ""}`}
     role="region"
     aria-label={title}
+    title={title}
     data-drawing-view={view.kind}
     data-view-id={view.id}
     data-viewport-mode={mode}
@@ -212,15 +213,16 @@ export function DrawingViewport({ view, sheetName, mode, document, selectedIds, 
     onFocusCapture={() => onActivate?.(view.id)}
     onMouseDown={() => onActivate?.(view.id)}
   >
-    <header className="engineering-drawing-panel-heading">
-      <div><span className="panel-kicker">{mode === "draft" ? "2D 绘图视口" : "工程视图"}</span><h3>{label}</h3><p className="drawing-viewport-meta">{title} · 比例 {view.scale}</p></div>
+    <div className="drawing-viewport-heading">
+      <div className="drawing-viewport-label"><span>工程视图</span><h3>{label}</h3></div>
+      <span className="engineering-drawing-panel-status">{statusText}</span>
       <div className="drawing-viewport-actions">
         <button type="button" aria-label={`缩小 ${label}`} disabled={view.scale <= 0.1} onClick={() => changeScale(-0.5)}>−</button>
         <button type="button" aria-label={`放大 ${label}`} onClick={() => changeScale(0.5)}>＋</button>
         <button className="icon-button" type="button" aria-label={`${view.visible === false ? "显示" : "隐藏"} ${label}`} aria-pressed={view.visible === false} onClick={() => onLayoutChange?.(view.id, { visible: view.visible === false })}><TreeEyeIcon visible={view.visible !== false} /></button>
       </div>
-      <span className="engineering-drawing-panel-status">{statusText}</span>
-    </header>
+    </div>
+    {/* 未物化的视图不画坐标轴：四个空框已经由标题的「空视图」说明，重复的占位文字只会变成噪声。 */}
     {(mode === "draft" || hasDrawingContent) && <svg className="engineering-drawing-svg" viewBox={`${bounds.minX} ${bounds.minY} ${bounds.width} ${bounds.height}`} role="img" aria-label={`${title}投影视图`} data-viewport-mode={mode} onClick={handleSvgClick}>
       <g className="engineering-drawing-axes" aria-hidden="true"><line x1={bounds.minX} y1="0" x2={bounds.minX + bounds.width} y2="0" /><line x1="0" y1={bounds.minY} x2="0" y2={bounds.minY + bounds.height} /></g>
       {showProjectionLines && projectedDrawing && <g className="engineering-drawing-projection-lines" aria-hidden="true">{projectedDrawing.projectionLines.map((line) => <line key={`${line.sourceId}-${line.targetView}`} data-testid="projection-line" data-source-id={line.sourceId} data-origin-view={line.originView} data-target-view={line.targetView} x1={line.from.x} y1={-line.from.y} x2={line.to.x} y2={-line.to.y} />)}</g>}

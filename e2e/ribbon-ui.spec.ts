@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test"
 test("keeps workspace navigation in the tab bar and supports Ribbon fold, popup and pin", async ({ page }) => {
   await page.goto("/")
 
-  await expect(page.getByRole("button", { name: "圆锥曲线" })).toHaveAttribute("aria-pressed", "true")
+  await expect(page.getByRole("button", { name: "平面几何" })).toHaveAttribute("aria-pressed", "true")
   await expect(page.getByRole("banner").getByRole("button", { name: "立体几何" })).toHaveCount(0)
 
   const ribbon = page.getByRole("region", { name: "功能区" })
@@ -12,7 +12,7 @@ test("keeps workspace navigation in the tab bar and supports Ribbon fold, popup 
   await expect(ribbon).toHaveAttribute("data-ribbon-expanded", "false")
   await expect(ribbon.getByRole("button", { name: "添加点" })).toHaveCount(0)
 
-  await page.getByRole("button", { name: "圆锥曲线" }).click()
+  await page.getByRole("button", { name: "平面几何" }).click()
   await expect(ribbon.getByRole("button", { name: "添加点" })).toBeVisible()
   await page.getByRole("button", { name: "添加点" }).click()
   await expect(ribbon.getByRole("button", { name: "添加点" })).toHaveCount(0)
@@ -21,7 +21,7 @@ test("keeps workspace navigation in the tab bar and supports Ribbon fold, popup 
   await expect(ribbon).toHaveAttribute("data-ribbon-expanded", "true")
 
   await page.getByRole("button", { name: "收起功能区" }).click()
-  await page.getByRole("button", { name: "圆锥曲线" }).click()
+  await page.getByRole("button", { name: "平面几何" }).click()
   await page.getByRole("button", { name: "固定功能区" }).click()
   await page.getByRole("button", { name: "添加点" }).click()
   await expect(ribbon.getByRole("button", { name: "添加点" })).toBeVisible()
@@ -67,9 +67,9 @@ test("keeps the workbench content within the viewport at desktop, tablet and pho
 
   await page.getByRole("button", { name: "添加点" }).click()
   await page.getByRole("button", { name: "对象列表" }).click()
-  await page.locator(".algebra-panel").getByText("新点 A", { exact: true }).click()
+  await page.locator(".algebra-panel").getByText("A", { exact: true }).click()
   await page.getByRole("button", { name: "属性检查器" }).click()
-  await expect(page.locator(".inspector-selected-heading h3")).toHaveText("新点 A")
+  await expect(page.locator(".inspector-selected-heading h3")).toHaveText("A")
   const inspectorBounds = await page.locator(".panel.right").boundingBox()
   expect(inspectorBounds?.width).toBeLessThanOrEqual(358)
   expect((inspectorBounds?.y ?? 900) + (inspectorBounds?.height ?? 0)).toBeLessThanOrEqual(900)

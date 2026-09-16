@@ -23,20 +23,20 @@ export function EngineeringDrawingView({ document, selectedIds, activeViewId = n
   const views = (layout.drawingViews ?? []).filter((view) => view.kind !== "model")
   const projectedDrawings = useMemo(() => views.map((view) => projectedDrawingForView(document, view)).filter((drawing) => drawing !== null), [document, views])
 
-  return <>
-    <div className="engineering-drawing-toolbar"><button type="button" aria-pressed={showProjectionLines} onClick={() => setShowProjectionLines((visible) => !visible)}>{showProjectionLines ? "隐藏投影线" : "显示投影线"}</button></div>
-    {sheet && <DrawingSheetView
-      sheet={sheet}
-      views={views}
-      document={document}
-      selectedIds={selectedIds}
-      mode="projection"
-      projectedDrawings={projectedDrawings}
-      activeViewId={activeViewId}
-      projectionLinesOverride={showProjectionLines}
-      onSelect={onSelect}
-      onViewSelect={onViewSelect}
-      onViewLayoutChange={onViewLayoutChange}
-    />}
-  </>
+  // One toolbar for the whole CAD area: the sheet owns it and receives the projection-line toggle as a slot.
+  if (!sheet) return null
+  return <DrawingSheetView
+    sheet={sheet}
+    views={views}
+    document={document}
+    selectedIds={selectedIds}
+    mode="projection"
+    projectedDrawings={projectedDrawings}
+    activeViewId={activeViewId}
+    projectionLinesOverride={showProjectionLines}
+    projectionLinesControl={<button type="button" aria-pressed={showProjectionLines} onClick={() => setShowProjectionLines((visible) => !visible)}>{showProjectionLines ? "隐藏投影线" : "显示投影线"}</button>}
+    onSelect={onSelect}
+    onViewSelect={onViewSelect}
+    onViewLayoutChange={onViewLayoutChange}
+  />
 }

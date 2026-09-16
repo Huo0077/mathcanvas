@@ -79,28 +79,86 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .canvas-card svg { display: block; width: 100%; height: auto; border-radius: var(--radius-sm); background: #fbfcff; touch-action: none; }
 .canvas-card svg [data-hit-target="true"] { cursor: grab; }
 .canvas-card svg.is-dragging, .canvas-card svg.is-dragging [data-hit-target="true"], .canvas-card svg.is-panning { cursor: grabbing; }
-.engineering-drawing { min-width: 0; min-height: 0; padding: var(--space-4); overflow: auto; background: var(--color-canvas); }
-.engineering-drawing-toolbar { display: flex; justify-content: flex-end; margin-bottom: var(--space-3); }
-.engineering-drawing-grid { display: grid; grid-template-columns: repeat(2, minmax(260px, 1fr)); gap: var(--space-4); align-content: start; }
-.engineering-drawing-panel { display: grid; gap: var(--space-3); min-width: 0; padding: var(--space-4); background: var(--color-panel); border: 1px solid var(--color-border); border-radius: var(--radius-md); box-shadow: var(--shadow-card); }
-.engineering-drawing-panel-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); min-width: 0; }
-.engineering-drawing-panel-heading h2 { margin: 0; color: var(--color-ink); font-size: 0.95rem; letter-spacing: -0.01em; }
-.engineering-drawing-panel-status { flex: 0 0 auto; color: var(--color-muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
-.engineering-drawing-svg { display: block; width: 100%; min-height: 220px; aspect-ratio: 1.35; overflow: visible; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface-subtle); }
+.engineering-drawing { position: relative; flex: 1 1 auto; width: 100%; height: 100%; min-width: 0; min-height: 0; padding: 0; overflow: hidden; background: var(--color-canvas); --drawing-toolbar-height: 48px; }
+/* 工具栏是"画布的工具"，不是图纸的一部分：紧凑段控件居左，比例读数居右。 */
+.engineering-drawing-toolbar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); height: var(--drawing-toolbar-height); padding: 0 var(--space-4); background: var(--color-panel); border-bottom: 1px solid var(--color-border); }
+.drawing-toolbar-group { display: flex; align-items: center; gap: var(--space-1); }
+.engineering-drawing-toolbar button { min-height: 30px; padding: 0 var(--space-3); border: 1px solid transparent; border-radius: 999px; background: transparent; color: var(--color-muted); font-size: 0.76rem; font-weight: 600; cursor: pointer; }
+.engineering-drawing-toolbar button:hover { background: var(--color-panel); color: var(--color-ink); }
+.engineering-drawing-toolbar button[aria-pressed="true"] { border-color: var(--color-accent); background: var(--color-accent-soft); color: var(--color-accent-strong); }
+.engineering-drawing-toolbar button:disabled { opacity: 0.45; cursor: not-allowed; }
+.engineering-drawing-toolbar button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.drawing-zoom-readout { display: inline-flex; align-items: baseline; gap: var(--space-2); color: var(--color-muted); font-size: 0.72rem; }
+.drawing-zoom-readout strong { color: var(--color-ink); font-size: 0.78rem; font-variant-numeric: tabular-nums; }
+/* 4px 制图底纹：极淡的格线让"画布"读成一个工作台面，而不是一块空白 div。 */
+/* 24px 制图底纹：极淡的格线让"画布"读成一个工作台面，而不是一块空白 div。
+   内边距 + margin:auto 居中；fit 状态下不出滚动条（否则滚动条会反过来改变用于 fit 的尺寸），
+   放大超过一屏后才切成可滚动，于是"整张纸"仍然可及。 */
+.drawing-sheet-area { position: absolute; inset: var(--drawing-toolbar-height) 0 0; display: flex; padding: var(--space-4); overflow: hidden; background-color: var(--color-drafting-surface); background-image: linear-gradient(to right, var(--color-drafting-grid) 1px, transparent 1px), linear-gradient(to bottom, var(--color-drafting-grid) 1px, transparent 1px); background-size: 24px 24px, 24px 24px; box-shadow: inset 0 1px 3px rgb(30 36 56 / 7%); }
+.drawing-sheet-area[data-zoomed="true"] { overflow: auto; }
+.drawing-sheet-area[data-zoomed="true"] { cursor: grab; }
+.drawing-sheet-area[data-zoomed="true"]:active { cursor: grabbing; }
+/* 纸张：白色纸面 + 内框 + 右下角标题栏。--sheet-scale 由 fit 与用户缩放算出，槽位与内线按它反向补偿。 */
+/* 纸张：CSS zoom 而不是 transform: scale —— zoom 会参与布局，放大后滚动范围正确，
+   fit 之后也不会留下"未缩放的占位高度"把滚动条顶出来。 */
+.drawing-sheet { position: relative; flex: 0 0 auto; margin: auto; background: var(--color-paper); border: 1px solid var(--color-hairline); overflow: hidden; }
+.drawing-sheet-frame { position: absolute; inset: 12px; border: 1.25px solid var(--color-ink); pointer-events: none; }
+.drawing-sheet-frame::before, .drawing-sheet-frame::after { content: ""; position: absolute; background: transparent; }
+/* 图框分区刻度：只在框线上点一下，不画穿整张图的长线。 */
+.drawing-sheet-frame::before { top: -1.25px; left: 33.333%; width: 1.25px; height: 7px; background: var(--color-ink); opacity: 0.5; }
+.drawing-sheet-frame::after { right: -1.25px; top: 33.333%; width: 7px; height: 1.25px; background: var(--color-ink); opacity: 0.5; }
+.drawing-sheet-title-block { position: absolute; right: 12px; bottom: 12px; display: grid; grid-template-columns: auto auto; gap: 3px 14px; padding: 9px 12px 8px; border-left: 1.25px solid var(--color-ink); border-top: 1.25px solid var(--color-ink); background: var(--color-paper); color: var(--color-muted); font-size: 10px; line-height: 1.4; text-align: left; }
+.drawing-sheet-title-block strong { grid-column: 1 / -1; color: var(--color-ink); font-size: 12.5px; font-weight: 700; letter-spacing: -0.01em; }
+.drawing-sheet-title-block span { white-space: nowrap; }
+.drawing-sheet-views { position: absolute; inset: 0; }
+.drawing-viewport-slot { position: absolute; transform: translate(-50%, -50%); transition: box-shadow 0.18s ease; }
+.drawing-viewport-slot[data-active="true"] { z-index: 2; }
+/* 视图框：细线 + 四角定位刻度，像工程图上的视图，而不是一张白色卡片。 */
+.drawing-viewport { position: relative; display: block; width: 100%; height: 100%; padding: 0; border: 1px solid var(--color-hairline); background: var(--color-paper-tint); overflow: hidden; }
+.drawing-viewport::before, .drawing-viewport::after { content: ""; position: absolute; width: 9px; height: 9px; border: 1.25px solid var(--color-ink); opacity: 0.65; pointer-events: none; }
+.drawing-viewport::before { top: 0; left: 0; border-right: 0; border-bottom: 0; }
+.drawing-viewport::after { right: 0; bottom: 0; border-left: 0; border-top: 0; }
+.drawing-viewport.is-active { border-color: var(--color-accent-strong); background: var(--color-paper); }
+.drawing-viewport.is-active::before, .drawing-viewport.is-active::after { border-color: var(--color-accent-strong); opacity: 1; }
+/* 视图标题压在绘图区左上角，像图签；不占版面高度。 */
+.drawing-viewport-heading { position: absolute; top: 7px; left: 9px; right: 9px; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; pointer-events: none; }
+.drawing-viewport-label { display: flex; align-items: baseline; gap: 6px; min-width: 0; overflow: hidden; }
+.drawing-viewport-label span { color: var(--color-muted); font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap; }
+.drawing-viewport-label h3 { margin: 0; color: var(--color-ink); font-size: 12px; font-weight: 700; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.engineering-drawing-panel-status { flex: 0 0 auto; color: var(--color-muted); font-size: 8.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* 视图操作默认收起，悬停或键盘聚焦时才出现——图纸上不该常驻三个按钮。 */
+.drawing-viewport-actions { position: absolute; top: 6px; right: 8px; display: flex; gap: 3px; padding: 3px; border: 1px solid var(--color-hairline); border-radius: 999px; background: var(--color-paper); box-shadow: var(--shadow-card); opacity: 0; transform: translateY(-4px); transition: opacity 0.16s ease, transform 0.16s ease; pointer-events: none; }
+.drawing-viewport:hover .drawing-viewport-actions, .drawing-viewport:focus-within .drawing-viewport-actions, .drawing-viewport-actions:focus-within { opacity: 1; transform: none; pointer-events: auto; }
+/* 触摸设备没有悬停：控件必须常驻，否则视图比例和显隐就没有入口。 */
+@media (hover: none) { .drawing-viewport-actions { opacity: 1; transform: none; pointer-events: auto; } }
+.drawing-viewport-actions button { display: grid; place-items: center; min-width: 22px; min-height: 22px; padding: 0 5px; border: 0; border-radius: 999px; background: transparent; color: var(--color-muted); font-size: 0.72rem; line-height: 1; cursor: pointer; }
+.drawing-viewport-actions button:hover { background: var(--color-accent-soft); color: var(--color-accent-strong); }
+.drawing-viewport-actions button[aria-pressed="true"] { color: var(--color-accent-strong); }
+.drawing-viewport-actions button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+.drawing-viewport-actions .row-icon { width: 13px; height: 13px; }
+.drawing-viewport-meta { display: none; }
+/* 绘图区内缩，让标题浮在留白上，同时避免图形贴边。 */
+.engineering-drawing-svg { display: block; width: 100%; height: 100%; padding: 26px 16px 12px; overflow: visible; cursor: crosshair; }
+.drawing-viewport[data-viewport-mode="projection"] .engineering-drawing-svg { cursor: default; }
 .engineering-drawing-axes line { stroke: var(--color-border); stroke-width: 0.015; stroke-dasharray: 0.08 0.08; vector-effect: non-scaling-stroke; }
 .engineering-drawing-projection-lines line { stroke: var(--color-warning); stroke-width: 0.018; stroke-dasharray: 0.08 0.08; vector-effect: non-scaling-stroke; }
 .engineering-drawing-primitive { cursor: pointer; outline: none; }
-.engineering-drawing-primitive polygon { fill: var(--color-accent-soft); fill-opacity: 0.58; stroke: var(--color-accent-strong); stroke-width: 0.02; vector-effect: non-scaling-stroke; }
-.engineering-drawing-primitive polyline { fill: none; stroke: var(--color-accent-strong); stroke-width: 0.025; vector-effect: non-scaling-stroke; }
-.engineering-drawing-primitive circle { fill: var(--color-panel); stroke: var(--color-accent-strong); stroke-width: 0.025; vector-effect: non-scaling-stroke; }
-.engineering-drawing-primitive.is-selected polygon, .engineering-drawing-primitive.is-selected polyline, .engineering-drawing-primitive.is-selected circle { stroke: var(--color-accent); stroke-width: 0.045; }
+/* 纸张投影放在这里：它不属于"纸面样式"，但决定了纸张在制图台面上的层次。 */
+.drawing-sheet { box-shadow: var(--shadow-sheet); }
+/* 视图内容线更细、更冷：工程图读的是线，不是色块。 */
+.engineering-drawing-primitive polygon { fill: var(--color-accent-soft); fill-opacity: 0.5; stroke: var(--color-ink); stroke-width: 0.018; vector-effect: non-scaling-stroke; }
+.engineering-drawing-primitive polyline { fill: none; stroke: var(--color-ink); stroke-width: 0.022; vector-effect: non-scaling-stroke; }
+.engineering-drawing-primitive circle { fill: var(--color-paper); stroke: var(--color-ink); stroke-width: 0.022; vector-effect: non-scaling-stroke; }
+.engineering-drawing-primitive.is-selected polygon, .engineering-drawing-primitive.is-selected polyline, .engineering-drawing-primitive.is-selected circle { stroke: var(--color-accent); stroke-width: 0.04; }
 .engineering-drawing-primitive:hover polygon, .engineering-drawing-primitive:hover polyline, .engineering-drawing-primitive:hover circle, .engineering-drawing-primitive:focus-visible polygon, .engineering-drawing-primitive:focus-visible polyline, .engineering-drawing-primitive:focus-visible circle { stroke: var(--color-accent); }
 .engineering-drawing-annotation text { fill: var(--color-ink); font-size: 0.22px; font-weight: 700; paint-order: stroke; stroke: var(--color-surface-subtle); stroke-width: 0.06px; stroke-linejoin: round; }
 .engineering-drawing-annotation-degenerate text, .engineering-drawing-annotation-insufficient-data text { fill: var(--color-warning); }
 .engineering-drawing-annotation-statuses { display: grid; gap: var(--space-1); }
 .engineering-drawing-annotation-statuses:empty { display: none; }
 .engineering-drawing-annotation-statuses .engineering-drawing-annotation { padding: var(--space-1) var(--space-2); border-left: 2px solid var(--color-warning); color: var(--color-warning); font-size: 0.75rem; line-height: 1.4; }
-.engineering-drawing-empty { display: grid; place-items: center; min-height: 220px; margin: 0; padding: var(--space-4); border: 1px dashed var(--color-border); border-radius: var(--radius-sm); color: var(--color-muted); font-size: 0.85rem; text-align: center; }
+/* 空视图只作提示，不抢指针：绘图视口为空时用户仍要能点下第一笔。 */
+.engineering-drawing-empty { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: var(--space-4); color: var(--color-muted); font-size: 11px; letter-spacing: 0.02em; text-align: center; pointer-events: none; }
+.engineering-drawing-empty:empty { display: none; }
 .engineering-drawing-diagnostics { color: var(--color-muted); font-size: 0.75rem; line-height: 1.45; }
 .engineering-drawing-diagnostics summary { cursor: pointer; color: var(--color-warning); }
 .engineering-drawing-diagnostics ul { margin: var(--space-2) 0 0; padding-left: var(--space-4); }
@@ -154,8 +212,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .constraint-batch-actions button { min-width: 0; padding-inline: var(--space-2); font-size: 0.75rem; }
 .constraint-error { display: grid; gap: var(--space-1); margin-bottom: var(--space-3); padding: var(--space-2); border: 1px solid var(--color-warning); border-radius: var(--radius-sm); background: var(--color-warning-soft); color: var(--color-ink); font-size: 0.8rem; }
 .constraint-error span, .constraint-error small { color: var(--color-muted); line-height: 1.45; }
-.inspector-empty-constraints { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); margin: 0 var(--space-4) var(--space-3); padding: var(--space-2) 0; color: var(--color-muted); font-size: 0.75rem; }
-.inspector-empty-constraints button { min-height: 32px; padding-inline: var(--space-2); color: var(--color-muted); font-size: 0.75rem; }
 .footer-note { grid-column: 1 / -1; padding: var(--space-2) var(--space-5); font-size: 0.75rem; color: var(--color-muted); background: var(--color-panel); border-top: 1px solid var(--color-border); }
 @media (max-width: 960px) { .workbench { grid-template-columns: 200px minmax(0, 1fr); } .panel.right { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--color-border); } }
 @media (max-width: 680px) { .topbar { align-items: flex-start; flex-direction: column; } .workspace-tabs { width: 100%; overflow-x: auto; } .workbench { display: block; } .panel, .panel.right { border: 0; border-bottom: 1px solid var(--color-border); } .properties { padding-bottom: var(--space-3); } .properties > .primitive-properties, .properties > .batch-properties { margin-inline: var(--space-3); padding: var(--space-3); } .graphics { min-height: 55vh; padding: var(--space-3); } .toolbar { padding: var(--space-3); } }
@@ -247,6 +303,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .three-render-target { position: absolute; inset: 0; }
 .three-measurement-overlay { position: absolute; z-index: 1; inset: 0; pointer-events: none; overflow: hidden; }
 .three-measurement-label { position: absolute; transform: translate(-50%, -50%); padding: 4px 8px; border: 1px solid var(--color-accent); border-radius: 999px; background: rgb(255 255 255 / 94%); box-shadow: var(--shadow-card); color: var(--color-accent-strong); font-size: 0.78rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* Point captions sit above the canvas but must never swallow a click meant for the point handle. */
+.three-point-label-overlay { position: absolute; z-index: 1; inset: 0; pointer-events: none; overflow: hidden; }
+.three-point-label { position: absolute; transform: translateY(-50%); padding: 1px 5px; border-radius: var(--radius-sm); background: rgb(255 255 255 / 88%); color: var(--color-ink); font-size: 0.75rem; font-weight: 700; line-height: 1.35; white-space: nowrap; }
 .measurement-guidance { grid-column: 1 / -1; margin: 0; padding: var(--space-2); border-radius: var(--radius-sm); background: var(--color-accent-soft); color: var(--color-accent-strong); font-size: 0.75rem; line-height: 1.45; }
 .three-canvas-shell canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 .three-scene-status { position: absolute; inset: 50% auto auto 50%; transform: translate(-50%, -50%); width: min(82%, 320px); padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: rgb(255 255 255 / 92%); color: var(--color-muted); font-size: 0.82rem; line-height: 1.5; text-align: center; }
@@ -341,7 +400,15 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .command-bar-secondary { display: grid; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-subtle); box-shadow: var(--shadow-card); }
 .command-bar-primary button:focus-visible, .command-bar-commands button:focus-visible, .command-bar-back:focus-visible, .workbench-mode-switch button:focus-visible, .workbench-dock-toggles button:focus-visible, .topbar-commands button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 .workbench-body { display: grid; grid-template-columns: 250px minmax(0, 1fr) var(--panel-right-width); min-height: 0; min-width: 0; }
-.workbench-canvas-slot { min-width: 0; min-height: 0; overflow: auto; }
+/* 收起的停靠面板不再占列，中间画布吃掉空出来的宽度。 */
+.engineering-workbench[data-left-open="false"] .workbench-body { grid-template-columns: minmax(0, 1fr) var(--panel-right-width); }
+.engineering-workbench[data-right-open="false"] .workbench-body { grid-template-columns: 250px minmax(0, 1fr); }
+.engineering-workbench[data-left-open="false"][data-right-open="false"] .workbench-body { grid-template-columns: minmax(0, 1fr); }
+/* 画布列自身是 flex 列：图纸区吃掉剩余高度，工程图纸据此等比放大。
+   高度只在多列布局里用 100% 传递：改单列后三块内容均分高度，100% 会和行高互相撑，把画布压成一条。 */
+.workbench-canvas-slot { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
+/* Multi-column: the canvas column is a viewport, and 100% is what hands its height down to the sheet. */
+@media (min-width: 981px) { .workbench-canvas-slot { height: 100%; } }
 .workbench-dock { min-width: 0; min-height: 0; overflow: auto; background: var(--color-panel); border-right: 1px solid var(--color-border); }
 .workbench-dock-right { border-right: 0; border-left: 1px solid var(--color-border); background: #f8f7fb; }
 .workbench-status-region { background: var(--color-panel); border-top: 1px solid var(--color-border); }
@@ -416,6 +483,15 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 @media (prefers-reduced-motion: reduce) {
   .ribbon { transition: none; }
 }
+@media (max-width: 980px) {
+  /* Single-column CAD: give the canvas a real working height instead of a share of the column. */
+  .workbench-canvas-slot { height: auto; min-height: 46vh; }
+}
+@media (max-width: 600px) {
+  .engineering-drawing { --drawing-toolbar-height: 44px; }
+  .engineering-drawing-toolbar { padding: 0 var(--space-2); }
+  .drawing-zoom-readout { font-size: 0.68rem; }
+}
 .status-bar { display: flex; flex-wrap: wrap; gap: var(--space-4); padding: var(--space-2) var(--space-5); color: var(--color-muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
 .status-bar-prompt { color: var(--color-ink); font-weight: 600; }
 .status-bar-item[data-has-diagnostics="true"] { color: var(--color-warning); font-weight: 600; }
@@ -462,23 +538,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .tree-panel-body { max-height: 32vh; }
 }
 
-/* Paper layout: sheet frame, title block and placed viewports. */
-.drawing-sheet { position: relative; margin: 0 auto; background: var(--color-panel); border: 1px solid var(--color-border); border-radius: var(--radius-sm); box-shadow: var(--shadow-panel); }
-.drawing-sheet-frame { position: absolute; inset: 10px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); pointer-events: none; }
-.drawing-sheet-title-block { position: absolute; right: 16px; bottom: 12px; display: grid; gap: 2px; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface-subtle); color: var(--color-muted); font-size: 0.7rem; text-align: right; }
-.drawing-sheet-title-block strong { color: var(--color-ink); font-size: 0.82rem; }
-.drawing-sheet-views { position: absolute; inset: 0; }
-.drawing-viewport-slot { position: absolute; }
-.drawing-viewport { height: 100%; align-content: start; }
-.drawing-viewport.is-active { border-color: var(--color-accent); box-shadow: 0 0 0 2px var(--color-accent-soft); }
-.drawing-viewport-meta { margin: 2px 0 0; color: var(--color-muted); font-size: 0.72rem; }
-.engineering-drawing-panel-heading h3 { margin: 0; color: var(--color-ink); font-size: 0.95rem; letter-spacing: -0.01em; }
-.drawing-viewport-actions { display: flex; flex: 0 0 auto; gap: var(--space-1); }
-.drawing-viewport-actions button { min-width: 34px; min-height: 34px; padding: 0 var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface-subtle); color: var(--color-ink); font-size: 0.82rem; cursor: pointer; }
-.drawing-viewport-actions button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
-.engineering-drawing-draft line, .engineering-drawing-draft polyline { fill: none; stroke: var(--color-accent-strong); stroke-width: 0.025; vector-effect: non-scaling-stroke; }
-.engineering-drawing-draft circle { fill: var(--color-panel); stroke: var(--color-accent-strong); stroke-width: 0.025; vector-effect: non-scaling-stroke; }
-.engineering-drawing-draft.is-selected line, .engineering-drawing-draft.is-selected polyline, .engineering-drawing-draft.is-selected circle { stroke: var(--color-accent); stroke-width: 0.045; }
+/* Draft geometry shares the engineering drawing palette: hairline vectors, accent only for selection. */
+.engineering-drawing-draft line, .engineering-drawing-draft polyline { fill: none; stroke: var(--color-ink); stroke-width: 0.022; vector-effect: non-scaling-stroke; }
+.engineering-drawing-draft circle { fill: var(--color-paper); stroke: var(--color-ink); stroke-width: 0.022; vector-effect: non-scaling-stroke; }
+.engineering-drawing-draft.is-selected line, .engineering-drawing-draft.is-selected polyline, .engineering-drawing-draft.is-selected circle { stroke: var(--color-accent); stroke-width: 0.04; }
 .status-bar-notice { color: var(--color-warning); font-weight: 650; }
 /* 左下角的功能指引：只在点击功能键后出现，压成一行到两行的小浮层，不铺满底部也不挡画布。 */
 .guidance-hint { position: fixed; left: 18px; bottom: 60px; z-index: 40; display: flex; align-items: flex-start; gap: var(--space-2); max-width: min(420px, calc(100vw - 36px)); padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); border-left: 3px solid var(--color-accent); border-radius: var(--radius-sm); background: rgb(255 255 255 / 97%); box-shadow: var(--shadow-card); color: var(--color-ink); font-size: 0.75rem; line-height: 1.45; }

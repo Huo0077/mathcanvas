@@ -3,7 +3,7 @@
 > 这份文件是项目的单一进度记录。每完成一个可验证的切片，就更新“已完成”和“下一步”，并附上验证证据。
 
 **最后更新：** 2026-09-16
-**当前阶段：** P0-P6 与 P7 工程制图已完成；MathCanvas 统一 Ribbon UI 基线已完成。新会话进入内部 `conics` 工作区（界面仍显示“圆锥曲线”），三个工作区共用可折叠命令区，CAD 保留工程树与上下文检查器，窄屏增加对象/属性抽屉。2026-09-16 后续 UI 优化已完成方案与计划写入，尚未开始实现；本轮另修复操作指引浮层遮挡状态栏的布局问题。P4 Agent 与 P5 题图解析仍在排除范围内。
+**当前阶段：** P0-P6 与 P7 工程制图已完成；MathCanvas 统一 Ribbon UI 基线、2026-09-16 后续 UI 优化（Task 7-13）与**工程制图视觉重做（Task 14）**均已完成。新会话进入内部 `conics` 工作区（界面显示「平面几何」），三个工作区共用可折叠命令区，CAD 保留工程树与上下文检查器，窄屏增加对象/属性抽屉。右侧检查器已移除约束与智能体展示（约束数据保留），3D 画布显示点名并在底部提示法向量/示例二面角状态；工程制图采用「制图台 + 图纸」层次，图纸等比适应并带显式缩放入口。P4 Agent 与 P5 题图解析仍在排除范围内。
 **总体状态：** 开发中
 
 ### Ribbon UI 重构（2026-09-15）
@@ -11,24 +11,116 @@
 - [x] 统一 Top Bar、工作区 Tab 和 Ribbon；移除重复的工作区按钮与旧命令入口。
 - [x] 实现折叠、临时呼出、图钉固定和 `Ctrl + F1` 快捷键；修复折叠态点击图钉时被外部点击逻辑提前关闭的问题。
 - [x] 默认工作区使用内部 `conics`；保留立体几何、CAD 和旧 `.mgeo` 兼容。
-- [x] Inspector 显示精简空状态、对象名称及锁定/删除快捷操作；补充“暂无约束”空状态和折叠分组。
+- [x] Inspector 显示精简空状态、对象名称及锁定/删除快捷操作。
 - [x] 底部状态提示覆盖选择、创建阶段和 CAD；Escape 取消命令并恢复默认提示。
 - [x] 390px 手机视口采用对象列表/属性检查器抽屉；修复内容超过 `100vh`、顶部搜索框遮挡标签的问题。
 - [x] 将旧 E2E 选择器迁移到新 Ribbon 命令和 Inspector 交互。
 
-**Ribbon 基线验证（2026-09-16）：** `npm.cmd test` 为 59 个测试文件、533 个用例通过；四个 workspace 类型检查通过；ESLint 0 error、40 warnings；Web 生产构建通过；Playwright 34/34 通过，覆盖桌面、平板、手机视口、Ribbon 折叠/临时呼出/固定、CAD 工作流与 `.mgeo` 往返。修复后的操作指引浮层不再覆盖状态栏，Ribbon 外部点击回归通过。Vite bundle 仍提示超过 500 KB（约 1.52 MB，gzip 约 478 KB）；jsdom 的 Three.js WebGL 未实现提示不影响测试结果。后续 UI 功能任务仍未实现。
+**Ribbon 基线验证（2026-09-16）：** `npm.cmd test` 为 59 个测试文件、533 个用例通过；四个 workspace 类型检查通过；ESLint 0 error、40 warnings；Web 生产构建通过；Playwright 34/34 通过，覆盖桌面、平板、手机视口、Ribbon 折叠/临时呼出/固定、CAD 工作流与 `.mgeo` 往返。修复后的操作指引浮层不再覆盖状态栏，Ribbon 外部点击回归通过。Vite bundle 仍提示超过 500 KB（约 1.52 MB，gzip 约 476 KB）；jsdom 的 Three.js WebGL 未实现提示不影响测试结果。
 
-### 2026-09-16 后续 UI 优化计划
+### 2026-09-16 后续 UI 优化（Task 7-13，已完成）
 
-- [ ] 将工作区显示名从“圆锥曲线”改为“平面几何”，保留内部 `conics` ID 和旧文件兼容。
-- [ ] 将平面几何新点默认名统一为 `A、B、C`，补充 3D 场景点名显示。
-- [ ] 将图元重命名入口移动到默认可见的属性区域，并验证文档保存/恢复。
-- [ ] 将多模态入口收敛为“文字转换”和“图片转换”；服务未接入时保持禁用并说明原因。
-- [ ] 从右侧属性区移除约束和智能体展示，但保留约束数据和真实测量能力。
-- [ ] 根据 Dock 展开状态扩大工程制图中间画布。
-- [ ] 在选择法向量、测量二面角时补充左下角操作提示。
+- [x] 将工作区显示名从“圆锥曲线”改为“平面几何”，保留内部 `conics` ID 和旧文件兼容。
+- [x] 将平面几何新点默认名统一为 `A、B、C`（`Z` 之后回退 `P27`…），补充 3D 场景点名显示。
+- [x] 将图元重命名入口移动到默认可见的「几何参数」区（原先只在需展开的「外观样式」里）。
+- [x] 将多模态入口收敛为“文字转换”和“图片转换”；服务未接入时保持禁用并说明原因。
+- [x] 从右侧属性区移除约束和智能体展示，但保留约束数据和真实测量能力。
+- [x] 根据 Dock 展开状态扩大工程制图中间画布。
+- [x] 修复工程制图图纸本身没有铺满画布的问题（按可用区域等比缩放并居中）。
+- [x] 工程制图视觉重做（Task 14）：制图台 + 图纸层次、图框与图签、视图框刻度、显式缩放与响应式修复。
+- [x] 在选择法向量、测量二面角时补充左下角操作提示。
 
 详细设计与分任务步骤见 [`docs/superpowers/specs/2026-09-15-ribbon-ui-redesign.md`](./superpowers/specs/2026-09-15-ribbon-ui-redesign.md) 和 [`docs/superpowers/plans/2026-09-15-ribbon-ui-redesign.md`](./superpowers/plans/2026-09-15-ribbon-ui-redesign.md)。
+
+#### Task 7：平面几何改名、A/B/C 点名与重命名入口
+
+- **可见名称**：`WorkspaceTabs` 的标签改为「平面几何」，`conics` ID、`.mgeo` 数据与工作区切换逻辑不变；`AppChrome.test.tsx` 断言新标签存在且「圆锥曲线」不再出现，`App.test.tsx`、`e2e/ribbon-ui.spec.ts`、`e2e/workbench.spec.ts` 的选择器同步迁移。
+- **点名**：`App.tsx` 的 `nextPointLabel()` 由 `新点 A` 改为按未占用字母分配 `A`…`Z`，`Z` 之后回退 `P27`、`P28`…；测试用新的 `pointObjectRows()` 辅助函数按 `.object-name` 精确匹配单字母，避免 `getAllByText("A")` 命中坐标或其他文本。
+- **重命名**：`PropertiesBar` 把「图元名称」输入框放进默认展开的 `data` 区（外观区仍保留同一字段的样式编辑），新增用例断言默认 `aria-expanded=true` 的「几何参数」区即可改名，并断言改动写回文档标签。
+- **RED→GREEN 证据**：`App.test.tsx` 新增「assigns sequential point labels…」与「renames a selected primitive from the default data section」两个用例，在改名逻辑尚未接入时前者断言 `["A","B","C"]` 会失败（旧实现得到 `["新点 A","新点 B","新点 C"]`），后者在字段仍只存在于外观区时找不到可见输入框。
+
+#### Task 8：多模态组收敛为两个禁用入口
+
+- `ribbonCommands.ts` 的 `multimodal` 组现在只包含 `input-text-conversion`（文字转换）与 `input-image-conversion`（图片转换），两者 `disabled: true`，`disabledReason` 明确写「服务尚未接入，暂不可用」；`uiState.ts` 的 `RibbonIcon` 用 `image` 取代 `quiz`/`pen`，`Ribbon.tsx` 增加对应图标并删除旧图标。
+- **证据**：`ribbonCommands.test.ts` 断言恰好两个 ID、两个标签、全部禁用及准确原因；`Ribbon.test.tsx` 断言禁用按钮渲染、`title` 说明原因、点击不触发 `onCommand`，并断言「抢答题」「画笔标注」已不存在。
+
+#### Task 9：移除右侧约束与智能体展示，保留测量
+
+- `PropertiesBar` 删除「几何约束」手风琴、三维约束工具卡和「暂无约束」空状态，移除 `onCreateConstraint` 属性与 `constraintOptions`；`InspectorTabs`/`EngineeringInspector` 的 CAD 页签收敛为 数据/外观/工程标注，`EngineeringInspector` 不再接收 `constraints` 插槽；`App.tsx` 卸载两处 `AgentDock`、移除 `ConstraintPanel` 插槽与 `addConstraint`/`nextConstraintId`，并删除不再引用的 `AgentDock.tsx`。
+- **保留**：`document.constraints`、Scene Graph 约束操作、`.mgeo` 编码与 `ConstraintPanel`/`spatialTools` 内核均未删除；教学测量入口本就在 `data` 区，移除约束后仍在原处。
+- **证据**：`App.test.tsx` 新增用例断言通用与 CAD 检查器中都不存在「几何约束」「暂无约束」「+添加」「智能体 (Agent)」「约束」页签，同时文档 `constraints` 字段仍存在；`EngineeringInspector.test.tsx` 断言没有约束插槽、并断言两个面的选择仍能从数据页签创建「二面角内角/外角」；`e2e/workbench.spec.ts` 把旧的「约束列表/已满足/删除约束」用例改为「打开含约束的旧 `.mgeo` 不再显示约束界面，但导出的 `.mgeo` 里约束记录仍有 1 条」。
+
+#### Task 10：停靠面板收起后扩大工程画布
+
+- `EngineeringWorkbench` 在 `.engineering-workbench` 上暴露 `data-left-open` / `data-right-open`；`global.css` 的 `.workbench-body` 按四种停靠组合给出网格列（左右都开＝250px + 1fr + 右侧宽度，单开一侧只保留可见列，都收起＝单列 1fr），中间画布始终占满剩余宽度。
+- **证据**：`EngineeringWorkbench.test.tsx` 新增用例断言两个数据属性随按钮切换、画布区域始终存在、都收起时 `.workbench-body` 只剩一个子元素、重新展开后恢复两个。
+
+#### Task 11：法向量与二面角示例的底部提示
+
+- `statusPrompts.ts` 新增 `SceneControlMode`（`normals` / `dihedral-demo`）与 `resolveSceneControlPrompt()`；`resolveStatusPrompt()` 接受可选的 `sceneControl`，创建步骤优先，其次是场景显示提示。法向量提示说明它画的是各可见面的外法向量；二面角提示明确「显示的是坐标轴夹角的示例值，不读取你的选择」，并给出 `Alt` 单选两个面、再点「二面角内角/外角」的真实流程。
+- `ThreeSceneView` 新增可选 `onStatusPromptChange`，用 `lastControlRef` 记录**最后切换**的开关（两个开关可以同时打开，提示跟随最近一次操作），App 用 `sceneControl` 状态把它交给状态栏；卸载时清空提示。
+- **证据**：`statusPrompts.test.ts` 新增 3 个用例（法向量文案、示例值 + Alt + 两个测量按钮名、创建步骤优先于场景提示）；`e2e/geometry3d.spec.ts` 新增用例在真实浏览器里先开法向量看到「外法向量」，再开「测量二面角」看到「示例值」和 `Alt`，关闭后提示消失。
+
+#### Task 12：3D 画布点名标注
+
+- `ThreeSceneView` 新增 `three-point-label-overlay`（`aria-label="三维点标注"`）：在既有 render 循环里把每个可见 `point3` 投影到视口，用像素偏移（+10 / −10）生成带 `data-point-label` 与 `data-point-id` 的 `span`；标注层 `pointer-events: none`、`z-index: 1`，不参与 Raycaster 拾取，随相机旋转/缩放与 `ResizeObserver` 更新，文档变化时整体重建。
+- **证据**：`e2e/geometry3d.spec.ts` 新增用例断言两个空间点各有一个标注、点名 `A`/`B` 可见、标注层 `pointer-events: none`，并断言「适应视图」后标注位置随之变化（说明它跟着相机走而不是留在原地）。
+
+#### 追加修复：工程制图图纸没有铺满画布
+
+- **现象与定位**（真实浏览器量测，1600×1000）：`.drawing-sheet` 只有 684×524，而中间画布可用区是 1058×744 —— A4 横向图纸的固定像素尺寸（594×420 + 24 边距，随视图包围盒增大）比工作区小得多，图纸看起来是一张浮在灰色底色里的小卡片。这不是停靠面板的问题（Task 10 只解决了列宽）。
+- **真正的根因（第一轮修复没有生效的原因）**：`.workbench-canvas-slot` 里除了 `.engineering-drawing` 还有「显示投影线」工具栏（`.engineering-drawing-toolbar`）。画布列本身不是**确定高度的容器**，也没有把高度传下去，所以 `.engineering-drawing` 一直被内容撑到 556px（工具栏 44px + 内容 524px），中间 188px 永远是空白；只加 `height: 100%` 并不生效，因为百分比高度在这种 auto-height 块里无法解析。
+- **修复**：
+  - `.workbench-canvas-slot` 改为 `display: flex; flex-direction: column; height: 100%; overflow: hidden`，工具栏 `flex: 0 0 auto`，`.engineering-drawing` 用 `flex: 1 1 auto; height: 100%` 吃掉剩余全部高度。
+  - `drawingGeometry.ts` 新增 `sheetFitScale(available, paper)`：等比缩放系数 = `min(可用宽/纸宽, 可用高/纸高)`，容器或纸张无有效尺寸时退回 1（PDF 式 zoom-to-fit，圆仍是圆）。
+  - `DrawingSheetView` 把纸放进新的 `.drawing-sheet-area` 布局盒，用 `ResizeObserver` 量盒子实际尺寸算出 `fit`，对纸张应用 `transform: scale(fit)` + `transform-origin: center`，并在纸上写 `data-sheet-fit` 便于断言/排查；缩放走 CSS transform，视图内部的 SVG 与文字按比例放大不变形。
+  - 诊断 `<details>` 作为 flex 兄弟留在图纸下方（`flex: 0 0 auto`），长内容仍可滚动查看，不会被裁掉。
+- **实测效果**：1600×1000 下纸张由 684×524 变为 **856×656**（`data-sheet-fit=1.252`，占画布高度 88%），四个视图面板由 300×220 变为 **376×275**；`2D 绘图` 的单张模型视图为 991×712（fit 1.604，覆盖 94% × 96%）；两侧面板都收起时为同一张纸居中；390×844 手机视口自动缩到 fit 0.599（宽 370 / 可用 390）且无横向或纵向溢出。
+- **回归**：`DrawingSheetView.test.tsx` 新增 3 个用例（缩放算法三种比例、无尺寸时退回 1:1、纸张渲染在专用布局盒内且 jsdom 下保持 1:1）；全量单测 59 个文件、**545** 个用例通过；`npm.cmd run test:e2e` 36/36 通过；`test:e2e` 与构建均重新执行。
+
+### 工程制图视觉重做（Task 14，2026-09-16 已完成）
+
+**用户反馈**：上一版只是把图纸整体放大，失去了美感，UI 也不贴合，要求"有美感一点"。
+
+**加载的方法技能**：`redesign`（先审计再改，保留行为）+ `design-doctrine`（token by intent、八种状态、一个视觉焦点、不许 emoji）。`design-taste-frontend` 明确把自己限定在落地页/作品集，并把 dashboard 与稠密产品 UI 划为不适用范围，因此这里只借用它的"设计读法"（先判断受众与语境），不套用其页面级规则。
+
+**审计（先量后改，1600×1000 真实浏览器）**：
+
+| # | 病症（可测量） | 根因 |
+|---|---|---|
+| 1 | fit 把整个 DOM 一起拉大，视图标题/按钮/圆角/线宽按 1.25–1.6 倍膨胀 | 用 `transform: scale()` 缩放包含 UI 的整张纸 |
+| 2 | 纸张、视图框、画布三层几乎同色（#ffffff / #f8f7fc / #f4f4f8），没有视觉焦点 | 复用通用面板 token，缺制图专用表面色 |
+| 3 | 视图框越出图框：视图右/下边到 1148/888，图框内沿只到 1205/951 且右下角被标题栏占用 | 标题栏被挤进纸边距，纸张尺寸只按"视图包围盒 + 16px"算 |
+| 4 | 面板内边距/间距跟着缩放（16px → 20–26px），刚"填满"又把空间吃掉 | 制图版式沿用通用 spacing |
+| 5 | 自动 fit 没有任何比例读数或缩放入口，"被放大"像 bug | fit 是隐式行为 |
+| 6 | 每个视图常驻 3 个按钮 + 两行标题 + 虚线空状态板 | 通用面板模板套在图纸上 |
+
+**修复（按 token → 版式 → 组件 → 状态顺序）**：
+
+- **tokens.css 新增制图表面语义 token**：`--color-drafting-surface: #e6e9f1`、`--color-drafting-grid: #dde1ec`、`--color-paper: #fff`、`--color-paper-tint: #fbfcfe`、`--color-hairline(#c6ccdb)/--color-hairline-strong`、`--shadow-sheet`、`--sheet-panel-padding/--sheet-panel-gap`。品牌紫只保留给"当前状态"，工程线稿改走冷灰墨色。
+- **画布**：`.drawing-sheet-area` 变成 24px 制图底纹 + 内阴影的工作台面；纸张白 #fff 落在上面成为唯一视觉焦点。
+- **纸张版式**：底色改为纯白纸 + 内缩 12px 的深墨图框 + 只在框线上点两处分区刻度；标题栏移到图框内右下角，做成真正的图签（工程图纸 / 图幅 A4 横 / 比例 1:1 / 4 视图 / 显示 111%），与视图框对齐而不是叠在视图上。
+- **构图数学**：`sheetPaperSize` 的边距从 16 提到 100，并重写注释说明它的职责是"把图框和标题栏都留在视图之外"；实测视图框已完全落在图框内（视图 383–1148 / 框 353–1205）。
+- **视图框**：细线 + 左上右下双角定位刻度（像工程图视图而不是白卡片）；标题压在图内左上（`工程视图` 小字 + `主视图`），状态在右上；3 个操作按钮改为悬停/聚焦才出现的胶囊（触摸设备用 `@media (hover: none)` 常驻），从"每个视图一排按钮"变成"需要时才在"。
+- **缩放不再只是放大**：`DrawingSheetView` 增加 `zoom` 状态与工具栏"适应窗口 / − / ＋ + 比例读数"，纸张写 `data-sheet-fit`、`data-sheet-scale`，读数为 `fit × zoom`；缩放改用 **CSS `zoom`** 而不是 `transform: scale()`——`zoom` 参与布局，所以放大后滚动范围正确、fit 后不会留下未缩放的占位高度顶出滚动条；fit 状态 `overflow: hidden`，放大后 `data-zoomed` 切换成可滚动，整张纸仍可及（不再被裁掉）。
+- **工具栏收敛**：整个 CAD 区域只有一个工具栏（原来图纸外面一个、纸里四个），`EngineeringDrawingView` 把「显示投影线」作为插槽交给 `DrawingSheetView`，比例读数居右。
+- **空状态**：不再画坐标轴占位板，也不放虚线框；每个视图只留标题右侧的「空视图」，绘图视口为空时仍可点下第一笔（`pointer-events: none`）。
+- **响应式回归修复**：`height: 100%` 只在 ≥981px 的多列布局里传递；单列布局下三块内容会均分高度并与行高互相撑，实测把 CAD 画布压成 68px（图纸 26×20）。现在 ≤980px 时画布 `height: auto; min-height: 46vh`，390×844 实测画布 388px 高、图纸 358×283（fit 0.58），无横向溢出。
+
+**验证（全部重新执行）**：
+
+- 单测：59 个文件、**546** 个用例通过（`DrawingSheetView.test.tsx` 从 6 个增到 9 个：位置改为按中心定位 + zoom 控件行为 + 「空视图不再画坐标轴」的对应断言）。
+- 类型检查 4 个 workspace 通过；ESLint 0 error、40 条既有 warning（无新增）；生产构建通过。
+- E2E：**37/37 通过**，新增 `fills the drafting area with the sheet and keeps an explicit display scale`，断言 fit 后纸张不超过可用区且在约束轴向上占比 > 0.9、比例读数与 `data-sheet-scale` 一致、放大后变成可滚动、适应窗口后恢复且不再溢出。
+- 过程中修掉的既有 E2E 假设：`比例 1.5` 原本写在视图元信息行里（该行已按新设计移除），改为按「缩小 主视图」按钮是否可用判断视图比例已持久化；`放大 主视图` 现在需要先 hover 面板（控件默认收起）。
+
+#### Task 13：完整验证
+- `npm.cmd test`：59 个测试文件、542 个用例通过（追加图纸铺满修复后为 545 个，视觉重做后为 546 个）。
+- `npm.cmd run typecheck`：4 个 workspace 通过。
+- `npm.cmd run lint`：0 error、40 条既有 warning（无新增）。
+- `npm.cmd run build`：Web 与 3 个 package 构建通过；Vite 仍提示主 bundle 超过 500 KB（约 1.51 MB，gzip 约 476 KB）。
+- `npm.cmd run test:e2e`：37/37 通过（含本轮的 3D 提示、点名标注、约束数据与图纸填充用例）。
+- 修正的验证流程问题：`npm.cmd exec playwright test` 直接运行时不会重新构建，预览服务固定读取 `build-check/mathcanvas-current`，因此源码改动必须通过 `npm.cmd run test:e2e`（先构建再跑）验证，否则会看到上一次构建的旧行为。
 
 ## 已完成
 
@@ -431,11 +523,11 @@ P7-1 至 P7-6 与工程工作台层次化改造 Task 1-7 均已完成；P4 Agent
 
 ### 本地与 GitHub 进度对比（2026-09-16 更新）
 
-- 推送前对比：本地 `main` 为 `48096b4`，`origin/main` 为 `86eb7f3`，本地领先 2 个提交、没有落后提交；本地还包含 Ribbon 引导/测量入口修复和操作指引浮层布局修复。
-- 本轮已更新所有与当前 Ribbon 进度直接相关的文档，并按用户要求将本地版本同步到 GitHub；同步后的 `main` 与 `origin/main` 应保持一致，最终以推送后的 Git 状态核验为准。
-- 已同步范围包括远程操作指引、统一 Ribbon 基线、测量入口修复、状态栏浮层避让，以及本页记录的验证结果；2026-09-16 后续 UI 优化仍属于待实现计划。
+- 上一轮推送前对比：本地 `main` 为 `48096b4`，`origin/main` 为 `86eb7f3`，本地领先 2 个提交、没有落后提交；那一轮把远程操作指引、统一 Ribbon 基线、测量入口修复与状态栏浮层避让同步到了 GitHub。
+- 本轮（Task 7-13 与 Task 14）在本地实现并通过验证后，按用户明确要求一并提交并推送；推送后 `main` 与 `origin/main` 指向同一提交，以推送后的 Git 状态核验为准。
+- 本轮同步范围：平面几何改名、A/B/C 与 3D 画布点名、重命名入口前移、多模态入口收敛、右侧面板精简（约束/智能体展示移除、数据保留）、CAD 画布随停靠面板扩大、法向量/二面角底部提示、**工程制图视觉重做**（制图台 + 图纸、图框与图签、视图框刻度、显式缩放、单列响应式修复），以及对应的单测/E2E 与文档。
 
-下一步：按 Ribbon 实施计划 Task 7-13 逐项继续，完成后由用户在本地浏览器验收；不将计划项误报为已实现。
+下一步：由用户在本地浏览器验收本轮 UI 优化与工程制图视觉重做；P4 Agent 与 P5 题图解析保持排除。
 
 ## 最新验证证据
 
