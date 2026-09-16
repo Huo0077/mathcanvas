@@ -88,6 +88,10 @@ interface DrawingViewportProps {
   onEditSelected?: (request: GeometryEditRequest) => void
   /** 把命令区的渲染交给外层工具条；不传时保持在视口内（测试与独立用法）。 */
   onDraftControls?: (controls: DraftControlsContract | null) => void
+  /** 空视图时的下一步操作（例如切换投影来源）；只在没有可画内容时显示。 */
+  emptyStateAction?: { label: string; onClick: () => void } | null
+  /** 覆盖默认的空状态文案（投影来源不同，"空"的原因也不同）。 */
+  emptyMessage?: string
   /**
    * 工具条已经接管命令区：此时**任何**视口都不在图纸内渲染命令，避免出现两份输入框。
    * 与 `onDraftControls` 的区别是它只表示"由外层负责"，不需要上报。
@@ -304,7 +308,7 @@ function readoutFontUserUnits(span: number): number {
   return Number((span / 42).toFixed(4))
 }
 
-export function DrawingViewport({ view, sheetName, mode, document, selectedIds, active = false, projectedDrawing = null, creation = null, projectionLinesOverride, onSelect, onActivate, onLayoutChange, onCreateAt, onDragEnd, onBoxSelect, onEditSelected, onDraftControls, draftControlsHandledExternally = false }: DrawingViewportProps) {
+export function DrawingViewport({ view, sheetName, mode, document, selectedIds, active = false, projectedDrawing = null, creation = null, projectionLinesOverride, onSelect, onActivate, onLayoutChange, onCreateAt, onDragEnd, onBoxSelect, onEditSelected, onDraftControls, draftControlsHandledExternally = false, emptyStateAction = null, emptyMessage }: DrawingViewportProps) {
   const label = drawingViewLabels[view.kind]
   const title = `${sheetName} · ${label}`
   const [hover, setHover] = useState<DraftHover | null>(null)
@@ -686,7 +690,11 @@ export function DrawingViewport({ view, sheetName, mode, document, selectedIds, 
       {mode === "projection" && <g className="engineering-drawing-annotations">{(projectedDrawing?.annotations ?? []).map(renderAnnotation)}</g>}
     </svg>}
     {/* The drafting surface stays clickable while empty so the first 2D object can be placed. */}
-    {!hasDrawingContent && <p className="engineering-drawing-empty" role="status">{mode === "draft" ? "当前图层还没有二维图元" : "暂无可投影的空间对象"}</p>}
+    {/* 空视图不是一个死胡同：说明状态，并在另一份文档有内容时给出下一步操作。 */}
+    {!hasDrawingContent && <div className="engineering-drawing-empty" role="status">
+      <p>{emptyMessage ?? (mode === "draft" ? "当前图层还没有二维图元" : "暂无可投影的空间对象")}</p>
+      {emptyStateAction && <button type="button" data-empty-action="true" onClick={emptyStateAction.onClick}>{emptyStateAction.label}</button>}
+    </div>}
     {mode === "projection" && <div className="engineering-drawing-annotation-statuses">{(projectedDrawing?.annotations ?? []).map(renderInvalidAnnotation)}</div>}
     {mode === "projection" && projectedDrawing && projectedDrawing.diagnostics.length > 0 && <details className="engineering-drawing-diagnostics"><summary>诊断 {projectedDrawing.diagnostics.length} 条</summary><ul>{projectedDrawing.diagnostics.map((diagnostic) => <li key={diagnostic}>{diagnostic}</li>)}</ul></details>}
   </section>

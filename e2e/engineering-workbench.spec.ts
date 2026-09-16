@@ -385,6 +385,30 @@ test("fills the drafting area with the sheet and keeps an explicit display scale
   expect(await page.locator(".drawing-sheet-area").evaluate((element) => element.scrollHeight <= element.clientHeight + 1)).toBe(true)
 })
 
+test("projects the spatial workspace model instead of claiming there is nothing to project", async ({ page }) => {
+  await page.goto("/")
+
+  // 在立体几何里建一个立方体：工作区文档是独立的，工程制图默认看不到它。
+  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "添加立方体" }).click()
+  await page.getByRole("button", { name: "工程制图" }).click()
+
+  // 空状态要说明原因，而不是只说"暂无可投影的空间对象"。
+  await expect(page.getByText("本图纸没有可投影对象；立体几何里已有模型").first()).toBeVisible()
+  await expect(page.locator(".engineering-drawing-primitive")).toHaveCount(0)
+
+  // 一键切换投影来源后，四个视图里能看到立方体的投影。
+  await page.getByRole("button", { name: "改为投影立体几何的模型" }).first().click()
+  await expect(page.getByRole("button", { name: /投影来源：立体几何/ })).toBeVisible()
+  await expect.poll(() => page.locator(".engineering-drawing-primitive").count()).toBeGreaterThan(0)
+  await expect(page.getByText("本图纸没有可投影对象")).toHaveCount(0)
+
+  // 切回本图纸后回到空状态，来源是可逆的。
+  await page.getByRole("button", { name: /投影来源：立体几何/ }).click()
+  await expect(page.getByRole("button", { name: /投影来源：本图纸/ })).toBeVisible()
+  await expect.poll(() => page.locator(".engineering-drawing-primitive").count()).toBe(0)
+})
+
 test("keeps the 2D drafting commands on the toolbar, off the drawing surface", async ({ page }) => {
   await page.goto("/")
   await page.getByRole("button", { name: "工程制图" }).click()

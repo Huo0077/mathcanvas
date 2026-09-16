@@ -31,6 +31,10 @@ interface DrawingSheetViewProps {
   onBoxSelect?: (box: SelectionBox, mode: BoxSelectionMode) => void
   /** 偏移 / 修剪 / 延伸请求。 */
   onEditSelected?: (request: GeometryEditRequest) => void
+  /** 空视图时给出的下一步操作（例如"改为投影立体几何的模型"）。 */
+  emptyStateAction?: { label: string; onClick: () => void } | null
+  /** 空状态文案；投影来源不同，"空"的原因也不同。 */
+  emptyMessage?: string
   /** Command slot rendered on the left of the sheet toolbar, so the whole CAD area has exactly one toolbar. */
   projectionLinesControl?: ReactNode
   /**
@@ -54,7 +58,7 @@ interface DrawingSheetViewProps {
 }
 
 /** The paper always contains every placed view, so a moved or scaled viewport is never clipped away. */
-export function DrawingSheetView({ sheet, views, document, selectedIds, mode, projectedDrawings = [], activeViewId = null, projectionLinesOverride, creation = null, onDragEnd, onBoxSelect, onEditSelected, projectionLinesControl, onDraftControlsChange, draftControlsSlot, draftControlsHandledExternally = false, ariaLabel = "工程制图视图", onSelect, onViewSelect, onViewLayoutChange, onCreateAt }: DrawingSheetViewProps) {
+export function DrawingSheetView({ sheet, views, document, selectedIds, mode, projectedDrawings = [], activeViewId = null, projectionLinesOverride, creation = null, onDragEnd, onBoxSelect, onEditSelected, projectionLinesControl, onDraftControlsChange, draftControlsSlot, emptyStateAction = null, emptyMessage, draftControlsHandledExternally = false, ariaLabel = "工程制图视图", onSelect, onViewSelect, onViewLayoutChange, onCreateAt }: DrawingSheetViewProps) {
   const paper = useMemo(() => sheetPaperSize(sheet, views), [sheet, views])
   const { width: paperWidth, height: paperHeight } = paper
   const [fit, setFit] = useState(1)
@@ -159,6 +163,8 @@ export function DrawingSheetView({ sheet, views, document, selectedIds, mode, pr
               projectedDrawing={drawingByView.get(view.id) ?? null}
               creation={creation}
               projectionLinesOverride={projectionLinesOverride}
+              emptyStateAction={emptyStateAction}
+              emptyMessage={emptyMessage}
               onSelect={onSelect}
               onActivate={onViewSelect}
               onLayoutChange={onViewLayoutChange}

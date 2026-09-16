@@ -75,4 +75,41 @@ describe("engineering drawing view", () => {
     expect(screen.getAllByTestId("engineering-annotation").some((node) => node.textContent?.includes("5"))).toBe(true)
     expect(screen.getAllByText(/dimension-invalid.*insufficient-data/).length).toBeGreaterThan(0)
   })
+
+  it("points at the other workspace document when this one has nothing to project", () => {
+    // 工作区文档是独立的：用户在立体几何里建了模型，工程制图的四个视图却是空的。
+    // 空状态必须说明这件事，并给出一键切换投影来源。
+    const spatial = pointDocument()
+    render(<EngineeringDrawingView document={createEmptyDocument("cad")} spatialDocument={spatial} projectionSource="cad" onProjectionSourceChange={() => {}} selectedIds={[]} onSelect={() => {}} />)
+
+    expect(screen.getAllByText("本图纸没有可投影对象；立体几何里已有模型")).toHaveLength(4)
+    expect(screen.getAllByRole("button", { name: "改为投影立体几何的模型" })).toHaveLength(4)
+    expect(screen.getByRole("button", { name: /投影来源：本图纸/ })).toBeTruthy()
+  })
+
+  it("projects the spatial document once that source is selected", () => {
+    const spatial = pointDocument()
+    const onProjectionSourceChange = vi.fn()
+    render(<EngineeringDrawingView
+      document={createEmptyDocument("cad")}
+      spatialDocument={spatial}
+      projectionSource="geometry3d"
+      onProjectionSourceChange={onProjectionSourceChange}
+      selectedIds={[]}
+      onSelect={() => {}}
+    />)
+
+    // 立体几何的点出现在四个视图里，空状态消失。
+    expect(screen.getAllByRole("button", { name: /point-a/ })).toHaveLength(4)
+    expect(screen.queryByText(/本图纸没有可投影对象/)).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: /投影来源：立体几何/ }))
+    expect(onProjectionSourceChange).toHaveBeenCalledWith("cad")
+  })
+
+  it("hides the source switch when the spatial workspace is unavailable", () => {
+    render(<EngineeringDrawingView document={createEmptyDocument("cad")} selectedIds={[]} onSelect={() => {}} />)
+
+    expect(screen.queryByRole("button", { name: /投影来源/ })).toBeNull()
+    expect(screen.getAllByText("暂无可投影的空间对象")).toHaveLength(4)
+  })
 })

@@ -12,7 +12,7 @@ import { DrawingSheetView } from "./components/DrawingSheetView"
 import { DraftControlsRow, type DraftControls } from "./components/DraftControlsRow"
 import { DrawingTree } from "./components/DrawingTree"
 import type { DrawingViewPatch } from "./components/DrawingViewport"
-import { EngineeringDrawingView } from "./components/EngineeringDrawingView"
+import { EngineeringDrawingView, type ProjectionSource } from "./components/EngineeringDrawingView"
 import { EngineeringInspector, type InspectorSource } from "./components/EngineeringInspector"
 import { EngineeringWorkbench, type CadMode } from "./components/EngineeringWorkbench"
 import type { InspectorTab } from "./components/InspectorTabs"
@@ -113,6 +113,7 @@ export function App() {
   const replace = useSceneStore((state) => state.replace)
   const operationError = useSceneStore((state) => state.error)
   const treeTab = useSceneStore((state) => state.treeTab)
+  const workspaceDocuments = useSceneStore((state) => state.workspaceDocuments)
   const expandedIds = useSceneStore((state) => state.expandedIds)
   const filterQuery = useSceneStore((state) => state.filterQuery)
   const setTreeTab = useSceneStore((state) => state.setTreeTab)
@@ -144,6 +145,11 @@ export function App() {
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("data")
   /** 2D 绘图命令区（坐标/动态输入/约束/栅格/偏移）由活动绘图视口上报，渲染在图纸之外的工具栏上。 */
   const [draftControls, setDraftControls] = useState<DraftControls | null>(null)
+  /**
+   * 工程制图的投影来源。工作区文档是独立的，用户在立体几何里建的模型默认不会出现在工程制图里；
+   * 这里允许显式切换成投影立体几何文档，而不是让他去猜"为什么四个视图都是空的"。
+   */
+  const [projectionSource, setProjectionSource] = useState<ProjectionSource>("cad")
   const [activeRibbonTab, setActiveRibbonTab] = useState<RibbonTabId | null>("home")
   const [ribbonExpanded, setRibbonExpanded] = useState(true)
   const [ribbonPinned, setRibbonPinned] = useState(false)
@@ -865,7 +871,17 @@ export function App() {
         onViewLayoutChange={handleViewLayoutChange}
         onCreateAt={handleCanvasCreationClick}
       />
-      : <EngineeringDrawingView document={document} selectedIds={selectedIds} activeViewId={activeViewId} onSelect={updateSelection} onViewSelect={setActiveViewId} onViewLayoutChange={handleViewLayoutChange} />}
+      : <EngineeringDrawingView
+        document={document}
+        selectedIds={selectedIds}
+        activeViewId={activeViewId}
+        spatialDocument={workspaceDocuments.geometry3d ?? null}
+        projectionSource={projectionSource}
+        onProjectionSourceChange={setProjectionSource}
+        onSelect={updateSelection}
+        onViewSelect={setActiveViewId}
+        onViewLayoutChange={handleViewLayoutChange}
+      />}
     {showProjectionDiagnostics && <details className="engineering-drawing-diagnostics workbench-diagnostics" open><summary>投影诊断 {cadDiagnosticCount} 条</summary>{cadDiagnosticCount > 0 ? <ul>{engineeringDrawings.flatMap((drawing) => drawing.diagnostics).map((diagnostic, index) => <li key={`${index}-${diagnostic}`}>{diagnostic}</li>)}</ul> : <p role="status">当前四个投影视图没有诊断信息。</p>}</details>}
   </>
 
