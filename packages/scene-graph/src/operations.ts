@@ -1,5 +1,5 @@
 import type { AnnotationSpec, ConstraintSpec, Coordinate, DrawingSheetSpec, DrawingViewSpec, EngineeringAnnotation, GeometryDocument, GroupSpec, LayerSpec, Measurement3, Point3Binding, Point3Primitive, PointBinding, PrimitiveSpec, Section3Classification, Vector3 } from "@draw/dsl"
-import { adaptiveSampleFunctionSegments, buildSolidTemplate, calculateMeasurement3, createBuilderContext, dihedralMarker3, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, findExtrema, findInflectionPoints, findZeros, intersectCirclesDetailed, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, orderSectionPoints3, sectionConvexPolyhedron, sectionPolyhedron3, sharedRingEdge3, solveLineConstraints, type DihedralMarker3, type FaceRing3, type IntersectionResult, type SampledPrimitive, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
+import { adaptiveSampleFunctionSegments, buildSolidTemplate, calculateMeasurement3, createBuilderContext, dihedralMarker3, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, findExtrema, findInflectionPoints, findZeros, intersectCirclesDetailed, intersectFaceSets, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, orderSectionPoints3, sectionConvexPolyhedron, sectionPolyhedron3, sharedRingEdge3, solveLineConstraints, type DihedralMarker3, type FaceRing3, type IntersectionResult, type SampledPrimitive, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
 
 export type DomainOperation =
   | { op: "addPrimitive"; primitive: PrimitiveSpec }
@@ -178,6 +178,7 @@ function primitiveDependencies(primitive: PrimitiveSpec): string[] {
   if (primitive.type === "circleIntersection") dependencies.push(primitive.circleA, primitive.circleB)
   if (primitive.type === "curveIntersection") dependencies.push(primitive.objectA, primitive.objectB)
   if (primitive.type === "intersectionSet") dependencies.push(primitive.objectA, primitive.objectB)
+  if (primitive.type === "intersectionLine") dependencies.push(...primitive.sourceIds)
   if (primitive.type === "derivative" || primitive.type === "tangent" || primitive.type === "normal" || primitive.type === "secant" || primitive.type === "integral" || primitive.type === "analysisSet" || primitive.type === "section") dependencies.push(primitive.sourceId)
   return [...new Set(dependencies)]
 }
@@ -343,6 +344,62 @@ function recomputeSection(primitive: Extract<PrimitiveSpec, { type: "section" }>
   const geometry = solidSectionGeometry(source as Extract<PrimitiveSpec, { type: "cube" | "pyramid" | "cylinder" | "cone" }>)
   const points = orderSectionPoints3(sectionConvexPolyhedron(geometry.vertices, geometry.edges, primitive.plane), primitive.plane)
   return { ...primitive, points, classification: classifySectionPoints(points), status: points.length > 0 ? "approximate" : "undefined", visible: points.length > 0, diagnostic: points.length >= 3 ? undefined : "剖切平面与模板实体相切或沿棱相交。" }
+}
+
+/**
+ * 交线来源的面环。
+ * - `polyhedron3` / 四类模板：取物化拓扑的顶点+面环；
+ * - `face3`：它自己就是一个面环；
+ * - `plane3`：平面没有边界，不能作为"有界交线"的来源（返回 null，由调用方给诊断）。
+ */
+function intersectionFaceRings(source: PrimitiveSpec, primitiveMap: Map<string, PrimitiveSpec>): Vector3[][] | null {
+  if (source.type === "face3") {
+    const points: Vector3[] = []
+    for (const pointId of source.pointIds) {
+      const point = primitiveMap.get(pointId)
+      if (point?.type !== "point3") return null
+      points.push({ ...point.position })
+    }
+    return points.length >= 3 ? [points] : null
+  }
+  const polyhedron = source.type === "polyhedron3" ? source : templateTopology(source.id, primitiveMap)
+  if (!polyhedron) return null
+  const topology = polyhedronSectionTopology(polyhedron, primitiveMap)
+  if (!topology) return null
+  return topology.faces.map((face) => face.map((index) => topology.vertices[index]))
+}
+
+/**
+ * 交线随来源重算：两个来源的面环两两求交，去重合并后写回 `segments`。
+ * 与截面的区别：截面是"一个平面切实体"，交线是"两个对象的公共边界"。
+ */
+function recomputeIntersectionLine(
+  primitive: Extract<PrimitiveSpec, { type: "intersectionLine" }>,
+  primitiveMap: Map<string, PrimitiveSpec>
+): Extract<PrimitiveSpec, { type: "intersectionLine" }> {
+  const sources = primitive.sourceIds.map((id) => primitiveMap.get(id))
+  if (sources.some((source) => !source)) {
+    return { ...primitive, segments: [], classification: "insufficient-data", status: "insufficient-data", visible: false, diagnostic: "交线来源对象不存在。" }
+  }
+  const rings = sources.map((source) => intersectionFaceRings(source!, primitiveMap))
+  if (rings.some((entry) => !entry)) {
+    return { ...primitive, segments: [], classification: "insufficient-data", status: "insufficient-data", visible: false, diagnostic: "交线来源缺少可用的面环（平面没有边界，模板需要已物化的拓扑）。" }
+  }
+  const result = intersectFaceSets(rings[0]!, rings[1]!)
+  if (result.classification === "insufficient-data") {
+    return { ...primitive, segments: [], classification: "insufficient-data", status: "insufficient-data", visible: false, diagnostic: result.explanation }
+  }
+  if (result.classification === "none") {
+    return { ...primitive, segments: [], classification: "none", status: "degenerate", visible: false, diagnostic: [result.explanation, ...result.diagnostics].join(" ") }
+  }
+  return {
+    ...primitive,
+    segments: result.segments,
+    classification: result.classification,
+    status: "valid",
+    visible: true,
+    diagnostic: result.diagnostics.length > 0 ? result.diagnostics.join(" ") : undefined
+  }
 }
 
 function resolveBoundPoint(binding: PointBinding, primitives: Map<string, PrimitiveSpec>, parameters: GeometryDocument["parameters"]): Coordinate | null {
@@ -655,6 +712,7 @@ export function recomputeDerivedObjects(document: GeometryDocument, changedIds?:
       if (!source) return { ...primitive, points: [], classification: "insufficient-data" as const, status: "failed" as const, visible: false, diagnostic: "截面来源实体不存在。" }
       return recomputeSection(primitive, source, primitiveMap)
     }
+    if (primitive.type === "intersectionLine") return recomputeIntersectionLine(primitive, primitiveMap)
     if (primitive.type === "line") return lines.get(primitive.id) ?? primitive
     if (primitive.type === "intersectionSet") {
       const first = primitiveMap.get(primitive.objectA)

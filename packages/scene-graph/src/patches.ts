@@ -92,6 +92,7 @@ function isReferenced(document: GeometryDocument, id: string, ignoredReferrers: 
     || ((primitive.type === "tangent" || primitive.type === "normal" || primitive.type === "secant") && primitive.sourceId === id)
     || ((primitive.type === "integral" || primitive.type === "analysisSet") && primitive.sourceId === id)
     || (primitive.type === "section" && primitive.sourceId === id)
+    || (primitive.type === "intersectionLine" && primitive.sourceIds.includes(id))
   ))
 }
 

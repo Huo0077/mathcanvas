@@ -164,6 +164,27 @@ describe("Geometry DSL codec", () => {
     expect(restored.primitives.filter((primitive) => primitive.type === "section").map((primitive) => primitive.type === "section" ? primitive.classification : null)).toEqual(["polygon", "segment", "none"])
   })
 
+  it("round-trips an intersection-line primitive and rejects invalid ones", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      { id: "cube-a", type: "cube", origin: { x: -2, y: -2, z: -2 }, size: { x: 4, y: 4, z: 4 } },
+      { id: "cube-b", type: "cube", origin: { x: 0, y: -2, z: -2 }, size: { x: 4, y: 4, z: 4 } },
+      { id: "line-1", type: "intersectionLine", sourceIds: ["cube-a", "cube-b"], segments: [{ a: { x: 2, y: -2, z: -2 }, b: { x: 2, y: 2, z: -2 } }], classification: "segment", status: "valid" }
+    ]
+
+    const restored = decodeMgeo(encodeMgeo(document))
+    expect(restored.primitives).toEqual(document.primitives)
+    expect(restored.schemaVersion).toBe("0.1")
+
+    // 校验必须拦住：来源不足两个、来源相同、来源缺失、来源类型不对、段端点非有限、状态非法。
+    const invalid = (primitive: Record<string, unknown>) => validateDocument({ ...document, primitives: [document.primitives[0], document.primitives[1], primitive as never] })
+    expect(invalid({ id: "x", type: "intersectionLine", sourceIds: ["cube-a"], segments: [], status: "valid" }).valid).toBe(false)
+    expect(invalid({ id: "x", type: "intersectionLine", sourceIds: ["cube-a", "cube-a"], segments: [], status: "valid" }).valid).toBe(false)
+    expect(invalid({ id: "x", type: "intersectionLine", sourceIds: ["cube-a", "missing"], segments: [], status: "valid" }).valid).toBe(false)
+    expect(invalid({ id: "x", type: "intersectionLine", sourceIds: ["cube-a", "cube-b"], segments: [{ a: { x: 0, y: 0, z: Number.NaN }, b: { x: 1, y: 1, z: 1 } }], status: "valid" }).valid).toBe(false)
+    expect(invalid({ id: "x", type: "intersectionLine", sourceIds: ["cube-a", "cube-b"], segments: [], status: "wrong" }).valid).toBe(false)
+  })
+
   it("round-trips a versioned document with stable metadata", () => {
     const document = createEmptyDocument("calculus")
     const restored = decodeMgeo(encodeMgeo(document))

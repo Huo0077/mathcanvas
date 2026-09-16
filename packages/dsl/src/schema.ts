@@ -1,7 +1,7 @@
 import type { GeometryDocument, PrimitiveSpec, ValidationResult } from "./types"
 
 const workspaces = new Set(["calculus", "conics", "cad", "geometry3d"])
-const primitiveTypes = new Set(["point", "point3", "line", "line3", "segment", "segment3", "ray", "ray3", "polyline", "connection", "locus", "parabola", "ellipse", "hyperbola", "function", "derivative", "tangent", "normal", "secant", "integral", "analysisSet", "cube", "pyramid", "cylinder", "cone", "plane3", "circle3", "edge3", "face3", "polyhedron3", "section", "circle", "arc", "intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection", "intersectionSet"])
+const primitiveTypes = new Set(["point", "point3", "line", "line3", "segment", "segment3", "ray", "ray3", "polyline", "connection", "locus", "parabola", "ellipse", "hyperbola", "function", "derivative", "tangent", "normal", "secant", "integral", "analysisSet", "cube", "pyramid", "cylinder", "cone", "plane3", "circle3", "edge3", "face3", "polyhedron3", "section", "intersectionLine", "circle", "arc", "intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection", "intersectionSet"])
 const sampledTypes = new Set(["line", "segment", "ray", "polyline", "circle", "arc", "parabola", "ellipse", "hyperbola", "function"])
 const solidTypes = new Set(["cube", "pyramid", "cylinder", "cone", "polyhedron3"])
 const annotationFeatures = new Set(["point", "center", "focus", "vertex", "intersection", "start", "end"])
@@ -365,6 +365,17 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>, parameter
     if (value.classification !== undefined && !["none", "point", "segment", "polygon", "insufficient-data"].includes(String(value.classification))) errors.push("section classification is invalid")
     if (!["approximate", "undefined", "failed"].includes(String(value.status))) errors.push("section status is invalid")
     if (value.diagnostic !== undefined && typeof value.diagnostic !== "string") errors.push("section diagnostic is invalid")
+  }
+  if (type === "intersectionLine") {
+    const sources = value.sourceIds
+    if (!Array.isArray(sources) || sources.length !== 2 || sources.some((id) => typeof id !== "string")) errors.push("intersectionLine needs exactly two source ids")
+    else if (sources[0] === sources[1]) errors.push("intersectionLine sources must differ")
+    else if (sources.some((id) => !byId.has(id as string))) errors.push("intersectionLine references a missing source")
+    else if (!sources.every((id) => solidTypes.has(referenceType(byId, id as string) ?? "") || ["face3", "plane3"].includes(referenceType(byId, id as string) ?? ""))) errors.push("intersectionLine sources must be solids, faces or planes")
+    if (!Array.isArray(value.segments) || value.segments.some((segment) => !isRecord(segment) || !isFiniteCoordinate3(segment.a) || !isFiniteCoordinate3(segment.b))) errors.push("intersectionLine segments are invalid")
+    if (value.classification !== undefined && !["none", "segment", "polyline", "insufficient-data"].includes(String(value.classification))) errors.push("intersectionLine classification is invalid")
+    if (!["valid", "degenerate", "insufficient-data"].includes(String(value.status))) errors.push("intersectionLine status is invalid")
+    if (value.diagnostic !== undefined && typeof value.diagnostic !== "string") errors.push("intersectionLine diagnostic is invalid")
   }
   if (type === "circle" || type === "arc") {
     if (!isFiniteCoordinate(value.center) || !isFiniteNumber(value.radius) || value.radius <= 0) errors.push(`${type} geometry is invalid`)

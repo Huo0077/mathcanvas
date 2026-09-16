@@ -88,6 +88,7 @@ const primitiveTypeLabels: Record<PrimitiveSpec["type"], string> = {
   face3: "空间面",
   polyhedron3: "多面体",
   section: "截面",
+  intersectionLine: "截线",
   circle: "圆",
   arc: "圆弧",
   intersection: "直线交点",

@@ -364,6 +364,21 @@ export interface SectionPrimitive extends PrimitivePresentation {
   diagnostic?: string
 }
 
+/**
+ * 两个空间对象的公共交线（截线）。
+ * `sourceIds` 恰好两个来源（实体 / 面 / 多面体），`segments` 由来源重算生成，因此**不在界面里手改**。
+ * 与 `section` 的区别：`section` 是"一个平面切一个实体"，`intersectionLine` 是"两个对象相交"。
+ */
+export interface IntersectionLinePrimitive extends PrimitivePresentation {
+  id: string
+  type: "intersectionLine"
+  sourceIds: [string, string]
+  segments: { a: Vector3; b: Vector3 }[]
+  classification: "none" | "segment" | "polyline" | "insufficient-data"
+  status: "valid" | "degenerate" | "insufficient-data"
+  diagnostic?: string
+}
+
 export interface CirclePrimitive extends PrimitivePresentation {
   id: string
   type: "circle"
@@ -460,6 +475,7 @@ export type PrimitiveSpec =
   | Face3Primitive
   | Polyhedron3Primitive
   | SectionPrimitive
+  | IntersectionLinePrimitive
   | CirclePrimitive
   | ArcPrimitive
   | IntersectionPrimitive

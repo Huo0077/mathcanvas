@@ -62,7 +62,7 @@ function primitiveSvg(primitive: PrimitiveSpec): string {
   if (primitive.type === "connection") return ""
   if (primitive.type === "locus") return ""
   if (primitive.type === "intersectionSet") return ""
-  if (primitive.type === "cube" || primitive.type === "pyramid" || primitive.type === "cylinder" || primitive.type === "cone" || primitive.type === "point3" || primitive.type === "line3" || primitive.type === "segment3" || primitive.type === "ray3" || primitive.type === "plane3" || primitive.type === "circle3" || primitive.type === "edge3" || primitive.type === "face3" || primitive.type === "polyhedron3" || primitive.type === "section") return ""
+  if (primitive.type === "cube" || primitive.type === "pyramid" || primitive.type === "cylinder" || primitive.type === "cone" || primitive.type === "point3" || primitive.type === "line3" || primitive.type === "segment3" || primitive.type === "ray3" || primitive.type === "plane3" || primitive.type === "circle3" || primitive.type === "edge3" || primitive.type === "face3" || primitive.type === "polyhedron3" || primitive.type === "section" || primitive.type === "intersectionLine") return ""
   if (primitive.type === "circle") return `<circle cx="${toX(primitive.center.x)}" cy="${toY(primitive.center.y)}" r="${radiusToSvg(primitive.radius)}" ${svgStyleFor(primitive)} />`
   if (primitive.type === "arc") return `<path d="M ${toX(primitive.center.x + primitive.radius * Math.cos(primitive.startAngle))} ${toY(primitive.center.y + primitive.radius * Math.sin(primitive.startAngle))} A ${radiusToSvg(primitive.radius)} ${radiusToSvg(primitive.radius)} 0 ${Math.abs(primitive.endAngle - primitive.startAngle) > Math.PI ? 1 : 0} ${primitive.endAngle >= primitive.startAngle ? 0 : 1} ${toX(primitive.center.x + primitive.radius * Math.cos(primitive.endAngle))} ${toY(primitive.center.y + primitive.radius * Math.sin(primitive.endAngle))}" ${svgStyleFor(primitive)} />`
   if (primitive.type === "point") return `<circle cx="${toX(primitive.x)}" cy="${toY(primitive.y)}" r="6" ${svgStyleFor(primitive)} />`
@@ -122,6 +122,7 @@ function primitiveData(primitive: PrimitiveSpec): string {
   if (primitive.type === "face3") return JSON.stringify({ pointIds: primitive.pointIds, edgeIds: primitive.edgeIds ?? [], planeId: primitive.planeId })
   if (primitive.type === "polyhedron3") return JSON.stringify({ vertexIds: primitive.vertexIds, edgeIds: primitive.edgeIds, faceIds: primitive.faceIds, construction: primitive.construction })
   if (primitive.type === "section") return JSON.stringify({ sourceId: primitive.sourceId, plane: primitive.plane, points: primitive.points, classification: primitive.classification, status: primitive.status })
+  if (primitive.type === "intersectionLine") return JSON.stringify({ sourceIds: primitive.sourceIds, segments: primitive.segments, classification: primitive.classification, status: primitive.status })
   if (primitive.type === "function") return JSON.stringify({ expression: primitive.expression, domain: primitive.domain, samples: primitive.samples })
   const unsupportedPrimitive: never = primitive
   return JSON.stringify(unsupportedPrimitive)
