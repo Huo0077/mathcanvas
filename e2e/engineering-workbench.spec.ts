@@ -149,6 +149,36 @@ test("box-selects draft geometry with the drag direction deciding the mode", asy
   await expect(surface.locator('[data-primitive-id][data-selected="true"]')).toHaveCount(0)
 })
 
+test("places drafting points from typed coordinates", async ({ page }) => {
+  await page.goto("/")
+  await page.locator('input[type="file"]').setInputFiles("e2e/fixtures/cad-point.mgeo")
+  await page.getByRole("button", { name: "工程制图" }).click()
+  await page.getByRole("button", { name: "2D 绘图" }).click()
+
+  const surface = page.getByRole("img", { name: /模型视图/ })
+  await page.getByRole("button", { name: "添加线段", exact: true }).click()
+  await surface.click({ position: { x: 100, y: 140 } })
+
+  // 第二个点用极坐标敲进去：@40<0 应该是"从基点向右 40mm"，也就是窗口宽度的 40%。
+  const input = page.getByLabel("坐标输入")
+  await input.fill("@40<0")
+  await input.press("Enter")
+
+  await expect(page.locator(".engineering-drawing-draft")).toHaveCount(1)
+  await expect(input).toHaveValue("")
+
+  await surface.click({ position: { x: 160, y: 140 } })
+  const grips = surface.locator("[data-draft-handle]")
+  await expect(grips).toHaveCount(2)
+  const first = (await grips.nth(0).boundingBox())!
+  const second = (await grips.nth(1).boundingBox())!
+  // 精确几何（@40<0 → 基点 +(40,0)）由 DrawingViewport 单测覆盖；这里只断言与布局无关的两件事：
+  // 敲出来的线是水平的，而且明显是一条有长度的线而不是随手一点。
+  expect(Math.abs(first.y - second.y)).toBeLessThan(1.5)
+  expect(Math.abs(second.x - first.x)).toBeGreaterThan(30)
+  expect(Number(await page.locator(".engineering-workbench").getAttribute("data-revision"))).toBeGreaterThan(0)
+})
+
 test("undoes and redoes from both the buttons and the keyboard", async ({ page }) => {
   await page.goto("/")
   await page.getByRole("button", { name: "工程制图" }).click()

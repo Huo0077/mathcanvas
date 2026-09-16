@@ -146,11 +146,16 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 /* 纸张投影放在这里：它不属于"纸面样式"，但决定了纸张在制图台面上的层次。 */
 .drawing-sheet { box-shadow: var(--shadow-sheet); }
 /* 视图内容线更细、更冷：工程图读的是线，不是色块。 */
-.engineering-drawing-primitive polygon { fill: var(--color-accent-soft); fill-opacity: 0.5; stroke: var(--color-ink); stroke-width: 0.018; vector-effect: non-scaling-stroke; }
-.engineering-drawing-primitive polyline { fill: none; stroke: var(--color-ink); stroke-width: 0.022; vector-effect: non-scaling-stroke; }
-.engineering-drawing-primitive circle { fill: var(--color-paper); stroke: var(--color-ink); stroke-width: 0.022; vector-effect: non-scaling-stroke; }
-.engineering-drawing-primitive.is-selected polygon, .engineering-drawing-primitive.is-selected polyline, .engineering-drawing-primitive.is-selected circle { stroke: var(--color-accent); stroke-width: 0.04; }
+/* `vector-effect: non-scaling-stroke` 的宽度单位是**屏幕像素**：这里必须是 px 量级。
+   之前写成 0.022 / 0.04，实测渲染高度只有 0.085px —— 整张工程图都是隐形线，既看不见也点不中。 */
+.engineering-drawing-primitive polygon { fill: var(--color-accent-soft); fill-opacity: 0.5; stroke: var(--color-ink); stroke-width: 1.4; vector-effect: non-scaling-stroke; }
+.engineering-drawing-primitive polyline { fill: none; stroke: var(--color-ink); stroke-width: 1.4; vector-effect: non-scaling-stroke; }
+.engineering-drawing-primitive circle { fill: var(--color-paper); stroke: var(--color-ink); stroke-width: 1.4; vector-effect: non-scaling-stroke; }
+.engineering-drawing-primitive.is-selected polygon, .engineering-drawing-primitive.is-selected polyline, .engineering-drawing-primitive.is-selected circle { stroke: var(--color-accent); stroke-width: 2.4; }
 .engineering-drawing-primitive:hover polygon, .engineering-drawing-primitive:hover polyline, .engineering-drawing-primitive:hover circle, .engineering-drawing-primitive:focus-visible polygon, .engineering-drawing-primitive:focus-visible polyline, .engineering-drawing-primitive:focus-visible circle { stroke: var(--color-accent); }
+/* 透明加宽命中带：宽度由组件内联给出（`hitStyle`），这里只负责光标——
+   写成 CSS 会被 `.engineering-drawing-draft.is-selected line` 这类更具体的选择器覆盖。 */
+.engineering-drawing-svg [data-drawing-hit="true"] { cursor: pointer; }
 .engineering-drawing-annotation text { fill: var(--color-ink); font-size: 0.22px; font-weight: 700; paint-order: stroke; stroke: var(--color-surface-subtle); stroke-width: 0.06px; stroke-linejoin: round; }
 .engineering-drawing-annotation-degenerate text, .engineering-drawing-annotation-insufficient-data text { fill: var(--color-warning); }
 .engineering-drawing-annotation-statuses { display: grid; gap: var(--space-1); }
@@ -198,6 +203,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .selection-rect[data-selection-mode="crossing"] { fill: rgb(21 154 136 / 12%); stroke: var(--color-success); }
 .engineering-drawing-box-select { fill: rgb(108 92 231 / 12%); stroke: var(--color-accent); stroke-width: 1; vector-effect: non-scaling-stroke; pointer-events: none; }
 .engineering-drawing-box-select[data-draft-box="crossing"] { fill: rgb(21 154 136 / 14%); stroke: var(--color-success); stroke-dasharray: 6 4; }
+/* 命令行与动态输入：贴在视口工具栏下方，输入框保持紧凑。 */
+.drawing-viewport-input { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); padding: 0 var(--space-3) var(--space-2); }
+.drawing-viewport-input label { display: flex; align-items: center; gap: var(--space-1); font-size: 0.72rem; color: var(--color-muted); }
+.drawing-viewport-input input { width: 118px; min-height: 26px; padding: 0 var(--space-2); border: 1px solid var(--color-border); border-radius: 6px; font-size: 0.75rem; font-variant-numeric: tabular-nums; color: var(--color-ink); background: var(--color-panel); }
+.drawing-viewport-input input:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+.drawing-viewport-input-hint { font-size: 0.68rem; color: var(--color-muted); }
+.drawing-viewport-input-error { font-size: 0.7rem; color: var(--color-warning); font-weight: 600; }
 .agent-status { display: flex; gap: var(--space-2); align-items: center; font-size: 0.875rem; color: var(--color-muted); }
 .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-success); }
 .empty-state { margin: 0; color: var(--color-muted); font-size: 0.8rem; line-height: 1.5; }
@@ -544,9 +556,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 
 /* Draft geometry shares the engineering drawing palette: hairline vectors, accent only for selection. */
-.engineering-drawing-draft line, .engineering-drawing-draft polyline { fill: none; stroke: var(--color-ink); stroke-width: 0.022; vector-effect: non-scaling-stroke; }
-.engineering-drawing-draft circle { fill: var(--color-paper); stroke: var(--color-ink); stroke-width: 0.022; vector-effect: non-scaling-stroke; }
-.engineering-drawing-draft.is-selected line, .engineering-drawing-draft.is-selected polyline, .engineering-drawing-draft.is-selected circle { stroke: var(--color-accent); stroke-width: 0.04; }
+.engineering-drawing-draft line, .engineering-drawing-draft polyline { fill: none; stroke: var(--color-ink); stroke-width: 1.6; vector-effect: non-scaling-stroke; }
+.engineering-drawing-draft circle { fill: var(--color-paper); stroke: var(--color-ink); stroke-width: 1.6; vector-effect: non-scaling-stroke; }
+.engineering-drawing-draft.is-selected line, .engineering-drawing-draft.is-selected polyline, .engineering-drawing-draft.is-selected circle { stroke: var(--color-accent); stroke-width: 2.4; }
 /* 绘图辅助层：栅格、橡皮筋预览、捕捉标记与实时读数。全部 vector-effect 保持屏幕像素粗细，缩放不变形。 */
 .engineering-drawing-grid line { stroke: #eceaf4; stroke-width: 1; vector-effect: non-scaling-stroke; }
 .engineering-drawing-grid-major line { stroke: #ddd9ea; }

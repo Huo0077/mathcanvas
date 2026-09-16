@@ -382,4 +382,66 @@ describe("drawing viewport", () => {
     expect(svg.querySelector("[data-draft-box]")).toBeNull()
     expect(onBoxSelect).not.toHaveBeenCalled()
   })
+
+  it("places a point from a typed absolute coordinate", () => {
+    const onCreateAt = vi.fn()
+    render(<DrawingViewport view={draftView} sheetName="工程图纸" mode="draft" document={createEmptyDocument("cad")} selectedIds={[]} onSelect={() => {}} onCreateAt={onCreateAt} />)
+
+    const input = screen.getByLabelText("坐标输入") as HTMLInputElement
+    fireEvent.change(input, { target: { value: "12, -8" } })
+    fireEvent.keyDown(input, { key: "Enter" })
+
+    expect(onCreateAt).toHaveBeenCalledWith({ x: 12, y: -8 })
+    expect(input.value).toBe("")
+  })
+
+  it("places a point from a typed relative and polar coordinate", () => {
+    const onCreateAt = vi.fn()
+    render(
+      <DrawingViewport view={draftView} sheetName="工程图纸" mode="draft" document={createEmptyDocument("cad")} selectedIds={[]} creation={{ mode: "line", center: { x: 10, y: 5 } }} onSelect={() => {}} onCreateAt={onCreateAt} />
+    )
+
+    const input = screen.getByLabelText("坐标输入") as HTMLInputElement
+    fireEvent.change(input, { target: { value: "@5,0" } })
+    fireEvent.keyDown(input, { key: "Enter" })
+    expect(onCreateAt).toHaveBeenCalledWith({ x: 15, y: 5 })
+
+    onCreateAt.mockClear()
+    fireEvent.change(input, { target: { value: "@10<90" } })
+    fireEvent.keyDown(input, { key: "Enter" })
+    const point = onCreateAt.mock.calls[0][0] as { x: number; y: number }
+    expect(point.x).toBeCloseTo(10, 9)
+    expect(point.y).toBeCloseTo(15, 9)
+  })
+
+  it("explains a bad coordinate instead of placing a wrong point", () => {
+    const onCreateAt = vi.fn()
+    render(<DrawingViewport view={draftView} sheetName="工程图纸" mode="draft" document={createEmptyDocument("cad")} selectedIds={[]} onSelect={() => {}} onCreateAt={onCreateAt} />)
+
+    const input = screen.getByLabelText("坐标输入")
+    fireEvent.change(input, { target: { value: "abc" } })
+    fireEvent.keyDown(input, { key: "Enter" })
+
+    expect(onCreateAt).not.toHaveBeenCalled()
+    expect(screen.getByRole("alert").textContent).toContain("坐标")
+  })
+
+  it("offers dynamic length and angle fields only while a creation is anchored", () => {
+    const onCreateAt = vi.fn()
+    const { rerender } = render(<DrawingViewport view={draftView} sheetName="工程图纸" mode="draft" document={createEmptyDocument("cad")} selectedIds={[]} onSelect={() => {}} onCreateAt={onCreateAt} />)
+    expect(screen.queryByLabelText("输入长度")).toBeNull()
+
+    rerender(<DrawingViewport view={draftView} sheetName="工程图纸" mode="draft" document={createEmptyDocument("cad")} selectedIds={[]} creation={{ mode: "line", center: { x: 0, y: 0 } }} onSelect={() => {}} onCreateAt={onCreateAt} />)
+    const svg = screen.getByRole("img", { name: /模型视图/ })
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 400, height: 400, right: 400, bottom: 400, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect
+    // 指针放在 (3,4) 方向：输入长度 10 → 落点 (6,8)。
+    fireEvent.pointerMove(svg, { clientX: 212, clientY: 184, pointerId: 1 })
+    const length = screen.getByLabelText("输入长度") as HTMLInputElement
+    fireEvent.change(length, { target: { value: "10" } })
+    fireEvent.keyDown(length, { key: "Enter" })
+
+    const point = onCreateAt.mock.calls.at(-1)?.[0] as { x: number; y: number }
+    expect(point.x).toBeCloseTo(6, 6)
+    expect(point.y).toBeCloseTo(8, 6)
+  })
 })

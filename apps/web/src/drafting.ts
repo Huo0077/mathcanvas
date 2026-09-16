@@ -1,5 +1,5 @@
 import type { PrimitiveSpec } from "@draw/dsl"
-import { nearestPointOnPrimitive, perpendicularPointOnPrimitive, planarIntersections, quadrantPointsOnPrimitive, type BoxSelectionMode, type PlanarSnapPrimitive, type SelectionBox } from "@draw/geometry-kernel"
+import { nearestPointOnPrimitive, perpendicularPointOnPrimitive, planarIntersections, quadrantPointsOnPrimitive, tangentPointsOnPrimitive, type BoxSelectionMode, type PlanarSnapPrimitive, type SelectionBox } from "@draw/geometry-kernel"
 
 /** 能提供捕捉几何的二维图元；`point` 单独处理（它自己就是一个端点）。 */
 const snapGeometryTypes = ["line", "segment", "ray", "polyline", "circle", "arc"] as const
@@ -28,7 +28,7 @@ export interface DraftPoint {
 }
 
 /** 对象捕捉类型，按 CAD 惯例排序；`grid` 是兜底（不进候选列表），`nearest` 必须垫底。 */
-export type SnapKind = "endpoint" | "intersection" | "midpoint" | "center" | "quadrant" | "perpendicular" | "nearest" | "grid"
+export type SnapKind = "endpoint" | "intersection" | "midpoint" | "center" | "quadrant" | "perpendicular" | "tangent" | "nearest" | "grid"
 
 export interface SnapCandidate {
   point: DraftPoint
@@ -73,7 +73,8 @@ const MIDPOINT_PRIORITY = 2
 const CENTER_PRIORITY = 3
 const QUADRANT_PRIORITY = 4
 const PERPENDICULAR_PRIORITY = 5
-const NEAREST_PRIORITY = 6
+const TANGENT_PRIORITY = 6
+const NEAREST_PRIORITY = 7
 
 const priority: Record<Exclude<SnapKind, "grid">, number> = {
   endpoint: ENDPOINT_PRIORITY,
@@ -82,6 +83,7 @@ const priority: Record<Exclude<SnapKind, "grid">, number> = {
   center: CENTER_PRIORITY,
   quadrant: QUADRANT_PRIORITY,
   perpendicular: PERPENDICULAR_PRIORITY,
+  tangent: TANGENT_PRIORITY,
   nearest: NEAREST_PRIORITY
 }
 
@@ -155,6 +157,7 @@ export function draftSnapCandidates(primitives: PrimitiveSpec[], options: { from
     if (options.from) {
       const foot = perpendicularPointOnPrimitive(primitive, options.from)
       if (foot) pushCandidate(candidates, foot, "perpendicular")
+      for (const point of tangentPointsOnPrimitive(primitive, options.from)) pushCandidate(candidates, point, "tangent")
     }
   }
   // 两两交点：工程量级下 O(n²) 可接受（可见二维图元通常只有几十个）。

@@ -143,6 +143,25 @@ describe("object snap candidates", () => {
     expect(draftSnapCandidates(primitives, { from: { x: 4, y: 9 } })).toContainEqual({ point: { x: 4, y: 0 }, kind: "perpendicular" })
   })
 
+  it("offers tangent points on circles when an anchor exists", () => {
+    const primitives = planar([{ id: "c", type: "circle", center: { x: 0, y: 0 }, radius: 5 }])
+
+    expect(draftSnapCandidates(primitives).some((candidate) => candidate.kind === "tangent")).toBe(false)
+    const tangents = draftSnapCandidates(primitives, { from: { x: 10, y: 0 } }).filter((candidate) => candidate.kind === "tangent")
+    expect(tangents).toHaveLength(2)
+    expect(tangents[0].point.x).toBeCloseTo(2.5, 6)
+  })
+
+  it("ranks the tangent below the perpendicular when both are in range", () => {
+    // 锚点 (0,10)、圆 r=5：垂足是 (0,5)，切点在 (±4.33, 2.5)。取一个两者都命中的指针位置。
+    const primitives = planar([{ id: "c", type: "circle", center: { x: 0, y: 0 }, radius: 5 }])
+    const candidates = draftSnapCandidates(primitives, { from: { x: 0, y: 10 } })
+    const ranked = rankDraftSnaps({ x: 2.5, y: 3.75 }, candidates, { tolerance: 3 })
+
+    expect(ranked.some((candidate) => candidate.kind === "tangent")).toBe(true)
+    expect(ranked.findIndex((candidate) => candidate.kind === "perpendicular")).toBeLessThan(ranked.findIndex((candidate) => candidate.kind === "tangent"))
+  })
+
   it("ranks candidates by priority then distance and dedupes shared positions", () => {
     const primitives = planar([
       { id: "s1", type: "segment", a: { x: -10, y: 0 }, b: { x: 10, y: 0 } },

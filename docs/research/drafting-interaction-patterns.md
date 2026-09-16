@@ -23,7 +23,7 @@
 
 ## 尚未实现的部分（本轮重点）
 
-> **2026-09-16 更新：** 下表中的「交点 / 垂足 / 最近点 / 象限点捕捉」「捕捉候选循环切换（Tab）」「夹点编辑」与「框选方向语义与 Esc 分级」已按本文优先级 ①②④⑤ 落地（内核 `packages/geometry-kernel/src/snap-geometry.ts` 与 `selection.ts`，编排 `apps/web/src/drafting.ts`，共享手柄几何 `apps/web/src/interaction.ts`，接线 `DrawingViewport.tsx` / `App.tsx`）；「栅格捕捉接入捕捉链」与「极轴阈值触发」也已补齐。仍未实现的是表中其余各项（动态输入与命令行坐标、命中容差、切点捕捉、偏移/修剪/延伸），详见 `docs/project-progress.md`。
+> **2026-09-16 更新：** 下表中的「交点 / 垂足 / 最近点 / 象限点捕捉」「切点捕捉」「捕捉候选循环切换（Tab）」「夹点编辑」「框选方向语义与 Esc 分级」「动态输入与命令行坐标」与「命中容差」已按本文优先级 ①②④⑤⑥⑦ 落地（内核 `packages/geometry-kernel/src/snap-geometry.ts` 与 `selection.ts`，编排 `apps/web/src/drafting.ts`，输入解析 `apps/web/src/draftCoordinate.ts`，共享手柄几何 `apps/web/src/interaction.ts`，接线 `DrawingViewport.tsx` / `App.tsx`）；「栅格捕捉接入捕捉链」与「极轴阈值触发」也已补齐。命中容差这一项挖出的根因比预期严重：`non-scaling-stroke` 下 `0.022` 的线宽实测渲染成 `0.04px` 的**隐形线**、命中带约 `0.1px`，即整张工程图既看不清也点不中，现已改为像素量级 + 14px 透明命中带。动态输入的位置有一处刻意取舍：放在视口工具栏而不是光标旁（图纸带 CSS zoom，浮层定位/清晰度不稳），键盘流一致。仍未实现的只剩「偏移 / 修剪 / 延伸」（本文原就把它列为更后一片），详见 `docs/project-progress.md`。
 
 | 缺口 | 现状证据 |
 | --- | --- |

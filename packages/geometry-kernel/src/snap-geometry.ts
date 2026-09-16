@@ -162,6 +162,29 @@ export function perpendicularPointOnPrimitive(primitive: PlanarSnapPrimitive, fr
   return best
 }
 
+/**
+ * 从锚点向圆/圆弧作切线的切点。直角三角形 C-T-P 在 T 处为直角，|CT| = r、|CP| = d，
+ * 于是切点相对 C→P 方向偏转 ±acos(r/d)。锚点在圆内没有切线；正好在圆上时只有一条（切点即锚点）。
+ * 圆弧只保留落在自己扫过范围内的切点。
+ */
+export function tangentPointsOnPrimitive(primitive: PlanarSnapPrimitive, from: Coordinate): Coordinate[] {
+  if (primitive.type !== "circle" && primitive.type !== "arc") return []
+  const offset = { x: from.x - primitive.center.x, y: from.y - primitive.center.y }
+  const distanceToCenter = Math.hypot(offset.x, offset.y)
+  if (distanceToCenter < primitive.radius - 1e-9) return []
+  const baseAngle = Math.atan2(offset.y, offset.x)
+  const candidates: Coordinate[] = distanceToCenter <= primitive.radius + 1e-9
+    ? [{ x: primitive.center.x + primitive.radius * Math.cos(baseAngle), y: primitive.center.y + primitive.radius * Math.sin(baseAngle) }]
+    : [1, -1].map((sign) => {
+      const angle = baseAngle + sign * Math.acos(primitive.radius / distanceToCenter)
+      return { x: primitive.center.x + primitive.radius * Math.cos(angle), y: primitive.center.y + primitive.radius * Math.sin(angle) }
+    })
+  const kept = primitive.type === "arc" ? candidates.filter((point) => angleWithinArc(primitive, point)) : candidates
+  const unique: Coordinate[] = []
+  for (const point of kept) if (!unique.some((candidate) => Math.hypot(candidate.x - point.x, candidate.y - point.y) < 1e-9)) unique.push(point)
+  return unique
+}
+
 /** 圆/圆弧的四个象限点（圆弧只保留自己扫过的那几个）。 */
 export function quadrantPointsOnPrimitive(primitive: PlanarSnapPrimitive): Coordinate[] {
   if (primitive.type !== "circle" && primitive.type !== "arc") return []

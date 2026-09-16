@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import type { ArcPrimitive, CirclePrimitive, LinePrimitive, PolylinePrimitive, SegmentPrimitive } from "@draw/dsl"
 
-import { nearestPointOnPrimitive, perpendicularPointOnPrimitive, planarIntersections, quadrantPointsOnPrimitive } from "./snap-geometry"
+import { nearestPointOnPrimitive, perpendicularPointOnPrimitive, planarIntersections, quadrantPointsOnPrimitive, tangentPointsOnPrimitive } from "./snap-geometry"
 
 const segment: SegmentPrimitive = { id: "s", type: "segment", a: { x: 0, y: 0 }, b: { x: 10, y: 0 } }
 const line: LinePrimitive = { id: "l", type: "line", a: { x: 0, y: 0 }, b: { x: 10, y: 0 } }
@@ -61,6 +61,35 @@ describe("perpendicular foot", () => {
   it("uses the radial direction on a circle", () => {
     // 从圆心右上方出发：垂足是圆心→锚点方向与圆的交点，取离锚点最近的那个。
     expect(rounded([perpendicularPointOnPrimitive(circle, { x: 10, y: 0 })!])).toEqual([{ x: 5, y: 0 }])
+  })
+})
+
+describe("tangent points", () => {
+  it("finds both tangents from an external point", () => {
+    // 圆心 (0,0)、半径 5，锚点 (10,0)：切点与圆心连线成 ±60°。
+    const points = rounded(tangentPointsOnPrimitive(circle, { x: 10, y: 0 }))
+
+    expect(points).toHaveLength(2)
+    expect(points[0].x).toBeCloseTo(2.5, 6)
+    expect(Math.abs(points[0].y)).toBeCloseTo(4.330127, 6)
+    expect(points[1].y).toBeCloseTo(-points[0].y, 6)
+  })
+
+  it("returns nothing from an inside point and a single point on the circle", () => {
+    expect(tangentPointsOnPrimitive(circle, { x: 3, y: 0 })).toEqual([])
+    // 锚点正好在圆上：切线只有一条，切点就是锚点自己。
+    expect(rounded(tangentPointsOnPrimitive(circle, { x: 5, y: 0 }))).toEqual([{ x: 5, y: 0 }])
+  })
+
+  it("keeps only the tangents an arc actually sweeps", () => {
+    // 0°–90° 的四分之一圆弧只有 (2.5, 4.33) 这个切点落在扫过范围内。
+    const points = rounded(tangentPointsOnPrimitive(quarterArc, { x: 10, y: 0 }))
+
+    expect(points).toEqual([{ x: 2.5, y: 4.330127 }])
+  })
+
+  it("has no tangent geometry for straight entities", () => {
+    expect(tangentPointsOnPrimitive(segment, { x: 10, y: 10 })).toEqual([])
   })
 })
 

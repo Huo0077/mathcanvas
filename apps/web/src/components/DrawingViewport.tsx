@@ -25,6 +25,7 @@ import {
   type SnapKind
 } from "../drafting"
 import type { BoxSelectionMode, SelectionBox } from "@draw/geometry-kernel"
+import { applyAngle, applyDistance, parseDraftAngle, parseDraftCoordinate, parseDraftDistance } from "../draftCoordinate"
 import { drawingViewLabels, type ProjectedDrawing, type ProjectedPrimitive } from "../projectionVisuals"
 import { TreeEyeIcon } from "./LayerTree"
 
@@ -45,6 +46,11 @@ type DraftConstraint = "free" | "ortho" | "polar45"
 
 /** 极轴追踪的吸附阈值：指针偏离射线超过这个角度就保持自由落点。 */
 const DRAFT_POLAR_THRESHOLD_DEGREES = 4
+
+/** 动态输入占位符里显示当前尺寸，去掉多余小数位。 */
+function formatNumber(value: number): string {
+  return String(Number(value.toFixed(3)))
+}
 
 /** 夹点捕捉半径（屏幕像素）与夹点视觉半径（按约 520px 宽的视口折算成窗口单位）。 */
 const DRAFT_GRIP_PIXELS = 8
@@ -157,8 +163,8 @@ function renderProjectedPrimitive(primitive: ProjectedPrimitive, bounds: Drawing
   const className = `engineering-drawing-primitive engineering-drawing-${primitive.kind}${selected ? " is-selected" : ""}`
   const pointRadius = Math.max(bounds.width, bounds.height) * drawingMetrics.pointRadiusRatio
   if (primitive.kind === "point") return <g key={primitive.sourceId} className={className} {...interaction}><circle cx={primitive.point.x} cy={-primitive.point.y} r={pointRadius} /></g>
-  if (primitive.kind === "polygon") return <g key={primitive.sourceId} className={className} {...interaction}><polygon points={svgPoints(primitive)} /></g>
-  return <g key={primitive.sourceId} className={className} {...interaction}><polyline points={svgPoints(primitive)} /></g>
+  if (primitive.kind === "polygon") return <g key={primitive.sourceId} className={className} {...interaction}><polygon points={svgPoints(primitive)} /><polygon data-drawing-hit="true" style={hitStyle()} points={svgPoints(primitive)} /></g>
+  return <g key={primitive.sourceId} className={className} {...interaction}><polyline points={svgPoints(primitive)} /><polyline data-drawing-hit="true" style={hitStyle()} points={svgPoints(primitive)} /></g>
 }
 
 function renderAnnotation(annotation: ProjectedDrawing["annotations"][number]) {
@@ -180,8 +186,8 @@ function renderDraftPrimitive(primitive: PrimitiveSpec, span: number, selectedId
   const pointRadius = span * drawingMetrics.pointRadiusRatio
   const wrap = (child: React.ReactNode) => <g key={primitive.id} className={className} data-primitive-id={primitive.id} {...interaction} onPointerDown={(event) => onPointerDown(event, primitive)}>{child}</g>
 
-  if (primitive.type === "point") return wrap(<circle cx={primitive.x} cy={-primitive.y} r={pointRadius} />)
-  if (primitive.type === "circle") return wrap(<circle cx={primitive.center.x} cy={-primitive.center.y} r={primitive.radius} />)
+  if (primitive.type === "point") return wrap(<><circle cx={primitive.x} cy={-primitive.y} r={pointRadius} /><circle data-drawing-hit="true" style={hitStyle()} cx={primitive.x} cy={-primitive.y} r={Math.max(pointRadius, span * 0.02)} /></>)
+  if (primitive.type === "circle") return wrap(<><circle cx={primitive.center.x} cy={-primitive.center.y} r={primitive.radius} /><circle data-drawing-hit="true" style={hitStyle()} cx={primitive.center.x} cy={-primitive.center.y} r={primitive.radius} /></>)
   if (primitive.type === "arc") {
     const steps = 24
     const points: string[] = []
@@ -189,9 +195,9 @@ function renderDraftPrimitive(primitive: PrimitiveSpec, span: number, selectedId
       const angle = primitive.startAngle + (primitive.endAngle - primitive.startAngle) * (index / steps)
       points.push(`${primitive.center.x + primitive.radius * Math.cos(angle)},${-(primitive.center.y + primitive.radius * Math.sin(angle))}`)
     }
-    return wrap(<polyline points={points.join(" ")} />)
+    return wrap(<><polyline points={points.join(" ")} /><polyline data-drawing-hit="true" style={hitStyle()} points={points.join(" ")} /></>)
   }
-  if (primitive.type === "polyline") return wrap(<polyline points={primitive.points.map((point) => `${point.x},${-point.y}`).join(" ")} />)
+  if (primitive.type === "polyline") return wrap(<><polyline points={primitive.points.map((point) => `${point.x},${-point.y}`).join(" ")} /><polyline data-drawing-hit="true" style={hitStyle()} points={primitive.points.map((point) => `${point.x},${-point.y}`).join(" ")} /></>)
   if (primitive.type === "line") {
     const dx = primitive.b.x - primitive.a.x
     const dy = primitive.b.y - primitive.a.y
@@ -199,7 +205,7 @@ function renderDraftPrimitive(primitive: PrimitiveSpec, span: number, selectedId
     const reach = span * 2
     const from = { x: primitive.a.x - (dx / length) * reach, y: primitive.a.y - (dy / length) * reach }
     const to = { x: primitive.b.x + (dx / length) * reach, y: primitive.b.y + (dy / length) * reach }
-    return wrap(<line x1={from.x} y1={-from.y} x2={to.x} y2={-to.y} />)
+    return wrap(<><line x1={from.x} y1={-from.y} x2={to.x} y2={-to.y} /><line data-drawing-hit="true" style={hitStyle()} x1={from.x} y1={-from.y} x2={to.x} y2={-to.y} /></>)
   }
   if (primitive.type === "ray") {
     const dx = primitive.b.x - primitive.a.x
@@ -207,13 +213,24 @@ function renderDraftPrimitive(primitive: PrimitiveSpec, span: number, selectedId
     const length = Math.hypot(dx, dy) || 1
     const reach = span * 2
     const to = { x: primitive.b.x + (dx / length) * reach, y: primitive.b.y + (dy / length) * reach }
-    return wrap(<line x1={primitive.a.x} y1={-primitive.a.y} x2={to.x} y2={-to.y} />)
+    return wrap(<><line x1={primitive.a.x} y1={-primitive.a.y} x2={to.x} y2={-to.y} /><line data-drawing-hit="true" style={hitStyle()} x1={primitive.a.x} y1={-primitive.a.y} x2={to.x} y2={-to.y} /></>)
   }
-  if (primitive.type === "segment") return wrap(<line x1={primitive.a.x} y1={-primitive.a.y} x2={primitive.b.x} y2={-primitive.b.y} />)
+  if (primitive.type === "segment") return wrap(<><line x1={primitive.a.x} y1={-primitive.a.y} x2={primitive.b.x} y2={-primitive.b.y} /><line data-drawing-hit="true" style={hitStyle()} x1={primitive.a.x} y1={-primitive.a.y} x2={primitive.b.x} y2={-primitive.b.y} /></>)
   return null
 }
 
-const snapLabels: Record<SnapKind, string> = { endpoint: "端点", intersection: "交点", midpoint: "中点", center: "圆心", quadrant: "象限点", perpendicular: "垂足", nearest: "最近点", grid: "栅格" }
+/** 透明加宽命中带的屏幕像素宽度（配 `non-scaling-stroke`，所以数值本身就是像素）。 */
+const DRAFT_HIT_PIXELS = 14
+
+/**
+ * 命中带宽度用**内联样式**给，不走 CSS：`.engineering-drawing-draft.is-selected line`（0,2,1）
+ * 这类选择器会压过 `.engineering-drawing-hit`（0,2,0），之前两次尝试都被级联吃掉。
+ */
+function hitStyle(): React.CSSProperties {
+  return { fill: "none", stroke: "transparent", strokeWidth: DRAFT_HIT_PIXELS, vectorEffect: "non-scaling-stroke", pointerEvents: "stroke" }
+}
+
+const snapLabels: Record<SnapKind, string> = { endpoint: "端点", intersection: "交点", midpoint: "中点", center: "圆心", quadrant: "象限点", perpendicular: "垂足", tangent: "切点", nearest: "最近点", grid: "栅格" }
 
 /** 上一步落点：正交/极轴约束都相对它生效，也就是「从最后一次点击的地方量角度」。 */
 function creationAnchor(creation: DraftCreation | null | undefined): DraftPoint | null {
@@ -270,6 +287,10 @@ export function DrawingViewport({ view, sheetName, mode, document, selectedIds, 
   const [drag, setDrag] = useState<{ id: string; handle: DragHandle; origin: DraftPoint; pointerId: number } | null>(null)
   const [dragCurrent, setDragCurrent] = useState<DraftPoint | null>(null)
   const [boxDrag, setBoxDrag] = useState<{ anchor: DraftPoint; current: DraftPoint; pointerId: number } | null>(null)
+  const [coordinateDraft, setCoordinateDraft] = useState("")
+  const [dynamicDistance, setDynamicDistance] = useState("")
+  const [dynamicAngle, setDynamicAngle] = useState("")
+  const [coordinateError, setCoordinateError] = useState<string | null>(null)
 
   /**
    * 拖动期间用临时文档做预览（与数学画布同一套做法）：`applyOperation` 会顺带重算派生对象，
@@ -438,6 +459,37 @@ export function DrawingViewport({ view, sheetName, mode, document, selectedIds, 
     setHover(resolvePointer(event, 0))
   }
 
+  /** 命令行坐标：绝对 / 相对 / 极坐标都走这里，落点走与鼠标点击同一条 `onCreateAt` 路径。 */
+  const submitCoordinate = () => {
+    if (!onCreateAt) return
+    const result = parseDraftCoordinate(coordinateDraft, { last: anchor })
+    if (!result.ok) { setCoordinateError(result.error); return }
+    setCoordinateError(null)
+    setCoordinateDraft("")
+    setDynamicDistance("")
+    setDynamicAngle("")
+    onCreateAt(result.point)
+  }
+
+  /** 动态输入：只改长度或只改角度，另一次元沿用当前指针（AutoCAD 的动态输入语义）。 */
+  const submitDistance = () => {
+    if (!onCreateAt || !anchor) return
+    const result = parseDraftDistance(dynamicDistance)
+    if (!result.ok) { setCoordinateError(result.error); return }
+    setCoordinateError(null)
+    setDynamicDistance("")
+    onCreateAt(applyDistance(anchor, hover?.point ?? anchor, result.value))
+  }
+
+  const submitAngle = () => {
+    if (!onCreateAt || !anchor) return
+    const result = parseDraftAngle(dynamicAngle)
+    if (!result.ok) { setCoordinateError(result.error); return }
+    setCoordinateError(null)
+    setDynamicAngle("")
+    onCreateAt(applyAngle(anchor, hover?.point ?? anchor, result.value))
+  }
+
   const gridLines = (step: number, keyPrefix: string) => {
     const vertical: React.ReactNode[] = []
     const horizontal: React.ReactNode[] = []
@@ -482,6 +534,17 @@ export function DrawingViewport({ view, sheetName, mode, document, selectedIds, 
         <button className="icon-button" type="button" aria-label={`${view.visible === false ? "显示" : "隐藏"} ${label}`} aria-pressed={view.visible === false} onClick={() => onLayoutChange?.(view.id, { visible: view.visible === false })}><TreeEyeIcon visible={view.visible !== false} /></button>
       </div>
     </div>
+    {/* 命令行与动态输入放在视口工具栏而不是光标旁：图纸带 CSS zoom，光标旁的浮层定位与清晰度都不稳，
+       这里换取可测、可控，并且键盘流（输入→回车）完全一致。 */}
+    {mode === "draft" && <div className="drawing-viewport-input" data-draft-input="true">
+      <label><span>坐标</span><input aria-label="坐标输入" value={coordinateDraft} placeholder="10,20 / @10,5 / @20<45" onChange={(event) => { setCoordinateDraft(event.target.value); setCoordinateError(null) }} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); submitCoordinate() } }} /></label>
+      {anchor && <>
+        <label><span>长度</span><input aria-label="输入长度" value={dynamicDistance} placeholder={hover ? formatNumber(draftMeasurement(anchor, hover.point).length) : "—"} onChange={(event) => { setDynamicDistance(event.target.value); setCoordinateError(null) }} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); submitDistance() } }} /></label>
+        <label><span>角度</span><input aria-label="输入角度" value={dynamicAngle} placeholder={hover ? formatNumber(draftMeasurement(anchor, hover.point).angleDeg) : "—"} onChange={(event) => { setDynamicAngle(event.target.value); setCoordinateError(null) }} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); submitAngle() } }} /></label>
+        <span className="drawing-viewport-input-hint">回车按输入的尺寸落点；Tab 切换角度约束</span>
+      </>}
+      {coordinateError && <span className="drawing-viewport-input-error" role="alert">{coordinateError}</span>}
+    </div>}
     {/* 未物化的视图不画坐标轴：四个空框已经由标题的「空视图」说明，重复的占位文字只会变成噪声。 */}
     {(mode === "draft" || hasDrawingContent) && <svg className="engineering-drawing-svg" data-draft-window={`${window.minX},${window.minY},${window.maxX},${window.maxY}`} viewBox={mode === "draft" ? `${window.minX} ${-window.maxY} ${span} ${span}` : `${bounds.minX} ${bounds.minY} ${bounds.width} ${bounds.height}`} role="img" aria-label={`${title}投影视图`} data-viewport-mode={mode} data-draft-dragging={drag ? "true" : "false"} tabIndex={mode === "draft" ? 0 : undefined} onClick={handleSvgClick} onPointerDown={beginBoxSelect} onPointerMove={handleSvgPointerMove} onPointerUp={handleSvgPointerUp} onPointerLeave={() => setHover(null)} onKeyDown={handleSvgKeyDown}>
       {mode === "draft"
