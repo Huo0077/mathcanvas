@@ -1,6 +1,6 @@
 # Engineering Workbench Hierarchy Design
 
-> Status: Draft for review
+> Status: Implemented (Task 1-7 delivered and verified; the 2026-09-16 usability amendments are recorded in "Amendments" at the end of this document)
 >
 > This design follows the approved direction: 2D drafting and 3D-to-engineering-drawing workflows have equal priority, while the existing geometry and projection kernels remain reusable.
 
@@ -319,3 +319,13 @@ activeSheetId?: string
 5. 图纸布局刷新后保持，旧 `.mgeo` 文件仍可打开。
 6. 现有工程标注和 SVG/DXF/PDF 导出功能不回归。
 7. 键盘、焦点、空状态、错误状态和窄屏布局均可用。
+
+## Amendments (2026-09-16, Task 15-18)
+
+Task 1-7 交付后，三条用户反馈暴露出本设计里的三处不足。以下修订**不改变**上面的文档模型与组件边界，只修正交互归属与来源语义；实现与验证证据见 `docs/project-progress.md` 的「工程制图可用性修复（Task 15-18）」，截线的详细决策见 `docs/superpowers/specs/2026-09-16-section-intersection-primitives-design.md`。
+
+1. **2D 绘图命令的归属**（原文只在「Direct 2D Drafting」流程里描述步骤，没有说明控件画在哪）：绘图命令（坐标输入、长度/角度、角度约束与栅格捕捉开关、偏移/修剪/延伸）属于**图纸之外**的那一行工具条（`DraftControlsRow` 通过 `DrawingSheetView` 的 `draftControlsSlot` 出现在图纸工具条上，与缩放控件同一行），画布内部不再有第二套控件。原来的"视口工具栏"是造成「中间的画布内容十分混乱」的直接原因——图框、视图框、命令按钮和读数挤在同一层。
+2. **工具条单行是硬约束**：新增命令组必须塞进同一行（`--drawing-toolbar-height`）。实测工具条一旦换行会把纸张从 128% 压到 64%。
+3. **投影来源是显式状态**：图纸默认投影 CAD 文档，也可切换为立体几何文档（`ProjectionSource = "cad" | "geometry3d"`）。两份工作区文档相互独立，因此**来源必须显式**，空状态要说明是哪一份为空、另一份里是否已有模型。**图纸布局仍只属于 CAD 文档**——切换来源不得改动纸张、视图位置或比例。
+4. **读数按视图单位定尺**：捕捉标签与「长度 · 角度」读数的字号按视图 `viewBox` 跨度换算，而不是按纸张 CSS `zoom` 后的像素；否则放大图纸会把读数放大成巨大文字。
+5. **截面/截线以"看得见、点得到"为准**（新增能力，跨工作区）：在 `geometry3d` 中选中含面环的对象即出现虚线预览（单个实体 = 默认剖切平面截面；两个对象 = 两实体面环的真实交线），点击预览创建持久化图元。这**扩展**了本设计第 1 条目标里的"3D 到工程图"链路：实体交线在进入图纸之前就已可提取。

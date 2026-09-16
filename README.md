@@ -178,7 +178,7 @@ npm run test:e2e
 - [P6 v2 点驱动 3D 设计规格](docs/superpowers/specs/2026-09-14-point-driven-3d-geometry-design.md)：记录点、线、面、拓扑和教学交互设计。
 - [P6 v3 测量质量设计规格](docs/superpowers/specs/2026-09-15-3d-measurement-quality-design.md)：记录测量可视化、二面角入口、撤销历史和验证门禁。
 - [工程工作台设计规格](docs/superpowers/specs/2026-09-15-engineering-workbench-design.md)：记录 2D/3D 混合 CAD 工作流、经典层次界面和文档模型。
-- [工程工作台层次化实施计划](docs/superpowers/plans/2026-09-15-engineering-workbench-hierarchy.md)：记录 Task 1-7 的接口、测试与验证门槛。
+- [工程工作台层次化实施计划](docs/superpowers/plans/2026-09-15-engineering-workbench-hierarchy.md)：记录 Task 1-7 的接口、测试与验证门槛，以及 2026-09-16 的可用性修复（Task 15-18：绘图命令条出图纸、投影来源切换、截面/截线图元）。
 - [截面 / 截线图元交互设计](docs/superpowers/specs/2026-09-16-section-intersection-primitives-design.md)：记录截面与截线的两级预览、点击创建、`intersectionLine` 图元与面环求交的取舍（已实现）。
 - [Ribbon UI 设计规格](docs/superpowers/specs/2026-09-15-ribbon-ui-redesign.md)：记录共享 Ribbon 基线及后续平面几何、属性面板、CAD 画布和 3D 引导优化。
 - [Ribbon UI 实施计划](docs/superpowers/plans/2026-09-15-ribbon-ui-redesign.md)：Task 1-6 为已完成基线，Task 7-13 后续优化与 Task 14 工程制图视觉重做均已实现并验证。

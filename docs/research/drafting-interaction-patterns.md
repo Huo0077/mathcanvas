@@ -23,7 +23,7 @@
 
 ## 尚未实现的部分（本轮重点）
 
-> **2026-09-16 更新：** 本文清单**已全部落地**：交点 / 垂足 / 最近点 / 象限点 / 切点捕捉、捕捉候选循环切换（Tab）、栅格捕捉接入捕捉链、极轴阈值触发、夹点编辑、框选方向语义与 Esc 分级、动态输入与命令行坐标、命中容差，以及最后一片「偏移 / 修剪 / 延伸」（内核 `packages/geometry-kernel/src/editing.ts`，映射 `apps/web/src/draftEditing.ts`，视口按钮在 `DrawingViewport.tsx`）。命中容差这一项挖出的根因比预期严重：`non-scaling-stroke` 下 `0.022` 的线宽实测渲染成 `0.04px` 的**隐形线**、命中带约 `0.1px`，即整张工程图既看不清也点不中，现已改为像素量级 + 14px 透明命中带。动态输入的位置有一处刻意取舍：放在视口工具栏而不是光标旁（图纸带 CSS zoom，浮层定位/清晰度不稳），键盘流一致。偏移只做"平行复制"（折线走斜接），修剪/延伸目前只支持直线、线段、射线；圆/圆弧的修剪（拆成多段圆弧）仍不在范围内，遇到会明确报错而不是猜。详见 `docs/project-progress.md`。
+> **2026-09-16 更新：** 本文清单**已全部落地**：交点 / 垂足 / 最近点 / 象限点 / 切点捕捉、捕捉候选循环切换（Tab）、栅格捕捉接入捕捉链、极轴阈值触发、夹点编辑、框选方向语义与 Esc 分级、动态输入与命令行坐标、命中容差，以及最后一片「偏移 / 修剪 / 延伸」（内核 `packages/geometry-kernel/src/editing.ts`，映射 `apps/web/src/draftEditing.ts`，视口按钮在 `DrawingViewport.tsx`）。命中容差这一项挖出的根因比预期严重：`non-scaling-stroke` 下 `0.022` 的线宽实测渲染成 `0.04px` 的**隐形线**、命中带约 `0.1px`，即整张工程图既看不清也点不中，现已改为像素量级 + 14px 透明命中带。动态输入的位置有一处刻意取舍：放在图纸外的绘图命令条而不是光标旁（图纸带 CSS zoom，浮层定位/清晰度不稳），键盘流一致——**2026-09-16 补充**：这一条命令组原先画在图纸**内部**的视口里，与图框、视图框、读数挤在同一层，是用户反馈「中间画布内容十分混乱」的直接原因；现已随 `DraftControlsRow` 搬到图纸外那一行工具条，读数也改为按视图 `viewBox` 跨度定尺。偏移只做"平行复制"（折线走斜接），修剪/延伸目前只支持直线、线段、射线；圆/圆弧的修剪（拆成多段圆弧）仍不在范围内，遇到会明确报错而不是猜。详见 `docs/project-progress.md`。
 
 | 缺口 | 现状证据 |
 | --- | --- |
@@ -218,6 +218,8 @@ threshold = Math.max(strokeWidth / 2 + 0.1, 0.85 * (DEFAULT_COLLISION_THRESHOLD 
 
 **下一片（建议直接做，全部纯 SVG/React，零新依赖）**
 
+> **2026-09-16 状态：N1-N8 已全部实现并验证**（清单与证据见 `docs/project-progress.md` 的 CAD 2D 绘图交互重做与「工程制图可用性修复（Task 15-18）」小节）。**N9「相对零点」未实现**，代码中检索不到相对零点状态；保留在清单里作为候选。
+
 | 顺序 | 改动 | 落点 | 依据 |
 | --- | --- | --- | --- |
 | **N1** | **`SnapKind` 扩展 + 交点/垂足/切点/最近点/象限点计算**，几何算法进 `packages/geometry-kernel`（按 `line`/`ray`/`segment` 类型做范围过滤） | `apps/web/src/drafting.ts` L23、L107-L127；`packages/geometry-kernel` | [QCAD RSnap 分层](https://qcad.org/doc/qcad/latest/developer/class_r_snap.html)、[LibreCAD 捕捉清单](https://docs.librecad.org/en/latest/ref/snaps.html)、[Paper.js getNearestLocation](https://paperjs.org/reference/pathitem/) |
@@ -230,7 +232,7 @@ threshold = Math.max(strokeWidth / 2 + 0.1, 0.85 * (DEFAULT_COLLISION_THRESHOLD 
 | **N8** | **命中层（18px 透明描边或参数化距离容差）** | `DrawingViewport.tsx` 图元渲染 | [Konva hitStrokeWidth](https://konvajs.org/api/Konva.Shape.html#hitStrokeWidth)、[Excalidraw collision](https://cdn.jsdelivr.net/gh/excalidraw/excalidraw@master/packages/element/src/collision.ts) |
 | **N9** | **相对零点（可设、可锁）** | draft 视图状态 + `draftingInput.ts` | [LibreCAD relative zero](https://docs.librecad.org/en/latest/ref/snaps.html) |
 
-**其后一片**：偏移 / 修剪 / 延伸（依赖 N1 的几何原语，且原语要按"返回参数 t / 弧长"的粒度设计）。
+**其后一片**：偏移 / 修剪 / 延伸（依赖 N1 的几何原语，且原语要按"返回参数 t / 弧长"的粒度设计）。**已实现**：内核 `packages/geometry-kernel/src/editing.ts`，前置条件与补丁组装在 `apps/web/src/draftEditing.ts`，入口在图纸外的绘图命令条；修剪/延伸只支持直线、线段、射线，圆/圆弧的修剪拆成多段圆弧仍未做。
 
 **P1（需要新依赖或较大改造，先评估，本轮不建议做）**
 

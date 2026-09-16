@@ -319,6 +319,8 @@ The follow-up scope above only made the CAD sheet *bigger*. User feedback: "我�
 - [x] **Step 5: Repair the single-column regression** uncovered while verifying (canvas collapsed to 68px when the body became one column).
 - [x] **Step 6: Re-run the complete verification gate** — see `docs/project-progress.md` (2026-09-16 视觉重做 section): 546 unit cases, 4 workspace typechecks, 0 lint errors, production build, 37/37 Playwright.
 
+> **之后（Task 15-18，2026-09-16）**：Task 14 把 CAD 区域的工具栏收敛成**图纸外的一行**；随后针对三条用户反馈（2D 绘图控件混乱、3D 投影没有来源、立体几何拿不到截面/截线）又做了三组切片——绘图命令组进入那一行工具条（`DraftControlsRow`）、新增「投影来源：本图纸 / 立体几何」切换、以及虚线截面/截线预览 + 点击创建。它们不属于本计划的 Ribbon 范围，记录在 `docs/superpowers/plans/2026-09-15-engineering-workbench-hierarchy.md` 的「Follow-up: CAD usability fixes」与 `docs/superpowers/specs/2026-09-16-section-intersection-primitives-design.md`。当前门禁：68 测试文件 / 698 用例、E2E 47/47。
+
 ### Task 1: Build the Shared App Chrome
 
 **Files:**

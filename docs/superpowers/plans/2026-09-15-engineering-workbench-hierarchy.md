@@ -24,6 +24,7 @@
 - Task 1-7 已全部执行，并逐任务通过聚焦测试、Web 类型检查、全量单测、lint、build 与 Playwright E2E 验证。
 - 完整验证门（`npm test` 51 文件 / 464 用例、`npm run typecheck`、`npm run lint` 0 error / 36 条既有 warning、`npm run build`、`npm run test:e2e` 24/24）在 Task 7 收尾时执行通过。
 - 实现阶段未自动创建 Git commit；提交与远程推送仍需用户明确要求。
+- **Task 7 之后的三条用户反馈修复（Task 15-18）已完成并推送**：2D 绘图命令搬出图纸、三维投影来源切换、截面/截线虚线预览与点击创建。见文末「Follow-up: CAD usability fixes」；截线部分的设计决策另见 `docs/superpowers/specs/2026-09-16-section-intersection-primitives-design.md`。
 
 ---
 
@@ -350,3 +351,58 @@ npm.cmd run test:e2e
 ```
 
 Expected: all commands exit successfully; lint may retain only the documented existing warnings; the final Git diff contains only the planned files and documentation.
+
+---
+
+## Follow-up: CAD usability fixes (Task 15-18, added 2026-09-16)
+
+Task 7 交付后用户反馈三条可用性问题，逐条定位根因后实现。完整的测量数据、证据与提交映射见 `docs/project-progress.md` 的「工程制图可用性修复（Task 15-18）」小节。
+
+**触发反馈（原话）**：「工程制图的 2d 绘图 ui 表现堪比灾难性，中间的画布内容十分混乱，而且工程绘图这个功能很难用，让人不知所云，3d 投影的模块一直显示暂无可投影的空间对象，根本不知道怎么用，立体几何的模块，我希望能够获取截面，截线图元，就像平面板块获取交点图元一样，当相交时，会显示虚线的截面和截线，点击获取图元」。
+
+### Task 15: Move the 2D drafting commands off the drawing surface
+
+**Files:**
+- Create: `apps/web/src/components/DraftControlsRow.tsx`
+- Modify: `apps/web/src/components/DrawingViewport.tsx`（导出 `DraftControls` / `DraftConstraint`，改为 `onDraftControls` 上报）
+- Modify: `apps/web/src/components/DrawingSheetView.tsx`（`draftControlsSlot` 渲染位 + `publishDraftControls`）
+- Modify: `apps/web/src/App.tsx`、`apps/web/src/styles/global.css`
+- Test: `apps/web/src/components/DrawingSheetView.test.tsx`、`DrawingViewport.test.tsx`、`e2e/engineering-workbench.spec.ts`
+
+**Decision:** 绘图命令属于**图纸外**的那一行工具条（与缩放控件同一行、保持单行 ≤ `--drawing-toolbar-height`），纸内只留画布与读数；读数文字按视图 `viewBox` 跨度换算（`readoutFontUserUnits(span) = span / 42`），不随纸张 CSS `zoom` 被放大。
+
+- [x] **Step 1: Report draft state out of the viewport** (`onDraftControls`, `draftControlsHandledExternally` 抑制纸内旧行)。
+- [x] **Step 2: Render the command row on the sheet toolbar** (`draftControlsSlot`，无插槽时回退到纸内渲染以保证组件可独立使用)。
+- [x] **Step 3: Size the readout in viewBox units** and keep the toolbar on one row.
+- [x] **Step 4: Cover it** — 单测断言命令在纸外、纸内不出现第二行；E2E `keeps the 2D drafting commands on the toolbar, off the drawing surface`。
+
+### Task 16: Let the engineering drawing project the spatial workspace
+
+**Files:**
+- Create: `apps/web/src/projectionSource.ts`（`hasProjectableGeometry` / `projectionEmptyMessage`）
+- Modify: `apps/web/src/components/EngineeringDrawingView.tsx`、`App.tsx`、`styles/global.css`
+- Test: `apps/web/src/projectionSource.test.ts`、`components/EngineeringDrawingView.test.tsx`、`e2e/engineering-workbench.spec.ts`
+
+**Decision:** 投影来源成为**显式状态**（`"cad" | "geometry3d"`），因为两份工作区文档相互独立；**图纸布局仍然只属于 CAD 文档**，切换来源不改图纸版式。空状态必须说清是哪一份文档为空、另一份里有没有模型。
+
+- [x] **Step 1: Add the source model and empty-state copy** (可见性判定：隐藏对象与二维图元不算可投影内容)。
+- [x] **Step 2: Wire the switch in the drawing toolbar** (`data-projection-source`、`aria-pressed`) and the "去立体几何" action。
+- [x] **Step 3: Cover it** — 单测 3 个用例 + 组件用例 + E2E `projects the spatial workspace model instead of claiming there is nothing to project`。
+
+### Task 17: Section and intersection-line primitives (spec-driven, C1-C4)
+
+设计与已确认决策：`docs/superpowers/specs/2026-09-16-section-intersection-primitives-design.md`（第 8 节决策、第 9 节实现状态）。
+
+- [x] **C1 内核**：`packages/geometry-kernel/src/intersections3d.ts` 的面环求交（两区间求交 + 共面短路 + 去重串联）。
+- [x] **C2 DSL 与重算**：`intersectionLine` 图元、schema 校验、codec 往返、Scene Graph 重算与来源删除保护（`schemaVersion` 仍为 `"0.1"`）。
+- [x] **C3 虚线预览**：`intersectionPreview3d.ts` + `threeScene.tsx` 的 `createPreviewGroup`，两级预览（悬停轻提示 / 选中两个对象完整预览）。
+- [x] **C4 点击创建**：点击虚线预览写入持久化图元；优先级为 点/棱拾取 > 预览创建 > 选中来源。
+
+### Task 18: Verification gate
+
+- [x] `npm.cmd test` → **68 个测试文件、698 个用例通过**（本轮起始 64 / 670）。
+- [x] `npm.cmd run typecheck` 4 个 workspace 通过；`npm.cmd run lint` 0 error / 39 条既有 warning；`npm.cmd run build` 通过。
+- [x] `npm.cmd run test:e2e` → **47/47 通过**（本轮起始 43，新增 4 个用例）。
+- [x] 逐片提交并推送：`9ca7d46` / `90f8743` / `b552994` / `1fbdda5` / `a52a74d` / `a775c39` / `68ec2a8` / `0435622` / `63d2dc9`。
+
+**尚未实现（有意保留）**：剖切平面的法向量/偏移量仍不可调；圆/圆弧的修剪、布尔运算、实体真实剖切显示均不在范围内；圆柱/圆锥的面环为多边形近似，因此交线是折线。
