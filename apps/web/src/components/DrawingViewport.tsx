@@ -296,6 +296,14 @@ function renderCreationPreview(creation: DraftCreation, hover: DraftPoint, span:
   return <line {...common} x1={anchor.x} y1={-anchor.y} x2={hover.x} y2={-hover.y} />
 }
 
+/**
+ * 捕捉标签与实时读数写在 `viewBox` 坐标系里，所以字号必须按"用户单位"给：写 `font-size: 11px` 会被当成
+ * 11 个用户单位（窗口跨度只有 100），渲染成约 98px 的巨字并溢出图纸。按跨度折算成约 12px 的可读大小。
+ */
+function readoutFontUserUnits(span: number): number {
+  return Number((span / 42).toFixed(4))
+}
+
 export function DrawingViewport({ view, sheetName, mode, document, selectedIds, active = false, projectedDrawing = null, creation = null, projectionLinesOverride, onSelect, onActivate, onLayoutChange, onCreateAt, onDragEnd, onBoxSelect, onEditSelected, onDraftControls, draftControlsHandledExternally = false }: DrawingViewportProps) {
   const label = drawingViewLabels[view.kind]
   const title = `${sheetName} · ${label}`
@@ -614,6 +622,7 @@ export function DrawingViewport({ view, sheetName, mode, document, selectedIds, 
         : `${measurement.length} · ${measurement.angleDeg}°`
     })()
     : hover ? `X ${hover.point.x} Y ${hover.point.y}` : null
+  const labelUserUnits = readoutFontUserUnits(span)
 
   return <section
     className={`engineering-drawing-panel drawing-viewport${active ? " is-active" : ""}`}
@@ -667,8 +676,8 @@ export function DrawingViewport({ view, sheetName, mode, document, selectedIds, 
       {mode === "draft" && creation && hover && <g className="engineering-drawing-preview-layer" aria-hidden="true">{renderCreationPreview(creation, hover.point, span)}</g>}
       {mode === "draft" && hover && <g className="engineering-drawing-snap-layer" aria-hidden="true" data-draft-snap={hover.snap ?? "free"} data-draft-snap-candidates={hover.ranked.length}>
         <circle className="engineering-drawing-snap-marker" cx={hover.point.x} cy={-hover.point.y} r={span * 0.012} />
-        {hover.snap && <text className="engineering-drawing-snap-label" x={hover.point.x + span * 0.02} y={-hover.point.y - span * 0.02}>{snapLabels[hover.snap]}{hover.ranked.length > 1 ? ` ${hover.index + 1}/${hover.ranked.length}（Tab 切换）` : ""}</text>}
-        {readout && <text className="engineering-drawing-readout" data-draft-readout="true" x={hover.point.x + span * 0.02} y={-hover.point.y + span * 0.04}>{readout}</text>}
+        {hover.snap && <text className="engineering-drawing-snap-label" fontSize={labelUserUnits} x={hover.point.x + span * 0.02} y={-hover.point.y - span * 0.02}>{snapLabels[hover.snap]}{hover.ranked.length > 1 ? ` ${hover.index + 1}/${hover.ranked.length}（Tab 切换）` : ""}</text>}
+        {readout && <text className="engineering-drawing-readout" fontSize={labelUserUnits} data-draft-readout="true" x={hover.point.x + span * 0.02} y={-hover.point.y + span * 0.04}>{readout}</text>}
       </g>}
       {/* 框选矩形：方向决定语义，视觉上也要能区分（窗口=实线，相交=虚线）。 */}
       {mode === "draft" && boxDrag && <rect className="engineering-drawing-box-select" data-draft-box={boxSelectionMode(boxDrag.anchor, boxDrag.current)} x={Math.min(boxDrag.anchor.x, boxDrag.current.x)} y={-Math.max(boxDrag.anchor.y, boxDrag.current.y)} width={Math.abs(boxDrag.current.x - boxDrag.anchor.x)} height={Math.abs(boxDrag.current.y - boxDrag.anchor.y)} />}

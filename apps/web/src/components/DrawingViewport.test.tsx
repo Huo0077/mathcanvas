@@ -195,6 +195,21 @@ describe("drawing viewport", () => {
     expect(onCreateAt).toHaveBeenCalledWith({ x: 30, y: 3 })
   })
 
+  it("sizes the cursor readout in viewBox units so it cannot render as a giant glyph", () => {
+    // 曾经的缺陷：CSS 写 `font-size: 11px`，在 viewBox（跨度 100）里被当成 11 个用户单位，
+    // 渲染成约 98px 的巨字并溢出图纸。字号必须由组件按跨度给出。
+    render(<DrawingViewport view={draftView} sheetName="工程图纸" mode="draft" document={createEmptyDocument("cad")} selectedIds={[]} onSelect={() => {}} onCreateAt={() => {}} />)
+    const svg = screen.getByRole("img", { name: /模型视图/ })
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 400, height: 400, right: 400, bottom: 400, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect
+    fireEvent.pointerMove(svg, { clientX: 200, clientY: 200 })
+
+    const readout = svg.querySelector("[data-draft-readout]")
+    expect(readout).not.toBeNull()
+    // 窗口跨度 100 → 约 2.4 个用户单位（屏幕上约 12px），绝不是 11。
+    expect(Number(readout!.getAttribute("font-size"))).toBeCloseTo(100 / 42, 2)
+    expect(Number(readout!.getAttribute("font-size"))).toBeLessThan(4)
+  })
+
   it("snaps free placement to the grid only while grid snapping is on", () => {
     const onCreateAt = vi.fn()
     // 栅格捕捉开关现在渲染在图纸之外的工具栏上（DraftControlsRow）；视口只上报状态与回调。

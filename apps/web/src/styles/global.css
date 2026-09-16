@@ -546,7 +546,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .engineering-drawing-snap-marker { fill: none; stroke: var(--color-accent-strong); stroke-width: 1.5; vector-effect: non-scaling-stroke; pointer-events: none; }
 .engineering-drawing-snap-layer[data-draft-snap="endpoint"] .engineering-drawing-snap-marker { fill: var(--color-accent-soft); }
 .engineering-drawing-snap-layer[data-draft-snap="midpoint"] .engineering-drawing-snap-marker { fill: var(--color-warning-soft); }
-.engineering-drawing-snap-label, .engineering-drawing-readout { fill: var(--color-accent-strong); font-size: 11px; font-weight: 600; paint-order: stroke; stroke: var(--color-paper); stroke-width: 3px; pointer-events: none; }
+/* 标签字号由组件按 viewBox 用户单位给出（见 readoutFontUserUnits）：CSS 里的 px 会被当成用户单位。 */
+.engineering-drawing-snap-label, .engineering-drawing-readout { fill: var(--color-accent-strong); font-weight: 600; paint-order: stroke; stroke: var(--color-paper); stroke-width: 3px; pointer-events: none; }
 .engineering-drawing-readout { fill: var(--color-ink); font-variant-numeric: tabular-nums; }
 /* 夹点：拖动二维图元的控制点，样式与数学画布的控制点保持一致。 */
 .engineering-drawing-grips circle { fill: var(--color-paper); stroke: var(--color-accent-strong); stroke-width: 1.5; vector-effect: non-scaling-stroke; cursor: grab; pointer-events: all; }
