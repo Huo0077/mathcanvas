@@ -586,6 +586,28 @@ describe("MathCanvas workbench", () => {
   })
 
   /**
+   * 用户反馈："动点（绑定）的内容完全没有提示，我也不知道如何将点固定到我创立的曲线或直线轨迹上面。"
+   * 能力一直都在属性栏（「路径绑定」下拉 + 路径参数 + 记录轨迹），缺的是一句话把它说出来。
+   */
+  it("tells the user how to bind a selected point to a curve", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(pointObjectRows().at(-1)!)
+
+    const statusPrompt = () => screen.getByRole("status", { name: "操作提示" }).textContent ?? ""
+    // 默认平面文档里已经有一条直线可绑：提示要点名「路径绑定」和「动点」这两个词。
+    expect(statusPrompt()).toContain("路径绑定")
+    expect(statusPrompt()).toContain("动点")
+
+    // 绑定之后：状态栏说明三种等价用法（拖动 / 路径参数 / 记录轨迹）。
+    const pathSelect = screen.getByRole("combobox", { name: "点路径绑定" }) as HTMLSelectElement
+    fireEvent.change(pathSelect, { target: { value: Array.from(pathSelect.options).find((option) => option.value)!.value } })
+
+    expect(statusPrompt()).toContain("路径参数")
+    expect(statusPrompt()).toContain("记录轨迹")
+  })
+
+  /**
    * 完整场景：一个**被约束在曲线上的动点** + 另一个点 → 连成线段 → 在画布上拖动动点。
    * 这条把三件事串在一起断言：把自由点变成动点、按点建连接、以及拖动时线段跟着端点走。
    */

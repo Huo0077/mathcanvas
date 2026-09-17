@@ -11,6 +11,14 @@ interface StatusPromptState {
   hasStart: boolean
   pointCount: number
   sceneControl?: SceneControlMode | null
+  /**
+   * 选中的是「点」时的绑定状态。用来回答用户反馈的那个问题：
+   * "动点的内容完全没有提示，我也不知道如何将点固定到我创立的曲线或直线轨迹上面。"
+   * 绑定能力一直在属性栏里（「路径绑定」下拉 + 路径参数 + 记录轨迹），缺的只是说出来。
+   */
+  pointBinding?: { bound: boolean; hasPaths: boolean; pathLabel?: string | null } | null
+  /** 选中的是一条**能当路径**的曲线/直线：提示用户"再选一个点，把它绑到这条线上"。 */
+  pathSelected?: boolean
 }
 
 /**
@@ -34,13 +42,14 @@ export function resolveIntersectionPreviewPrompt(preview: { kind: string; label:
   if (preview.kind === "section") {
     // "已选中…" itself carries information the user needs, so an un-hovered section preview must not
     // replace it. The cut gets explained once the user actually points at it.
-    if (hovering) return `${preview.label}：点击即创建截面；创建后选中截面，在自由拖动模式下拖动或按方向键可移动剖切面。`
+    // 用户反馈："我需要的是交面、交线和交点"——所以这里点名三者：圆点是交点、虚线圈是交线、点出来的才是交面。
+    if (hovering) return `${preview.label}：一圈虚线是这一刀的交线、圆点是交点，点击即创建截面（交面）；创建后选中截面，在自由拖动模式下拖动或按方向键可移动剖切面。`
     return null
   }
-  return hovering ? `${preview.label}：点击即可创建为截线图元。` : `${preview.label}：把指针移到虚线上可创建为截线图元。`
+  return hovering ? `${preview.label}：点击即可创建为截线（交线）图元。` : `${preview.label}：把指针移到虚线上可创建为截线图元。`
 }
 
-export function resolveStatusPrompt({ mode, selectedCount, selectedLabel, hasCenter, hasStart, pointCount, sceneControl = null }: StatusPromptState): string {
+export function resolveStatusPrompt({ mode, selectedCount, selectedLabel, hasCenter, hasStart, pointCount, sceneControl = null, pointBinding = null, pathSelected = false }: StatusPromptState): string {
   if (mode === "line") return hasCenter ? "第2步：点击确定直线的第二个点（按住 Shift 锁定水平/垂直）" : "第1步：点击确定直线的第一个点"
   if (mode === "segment") return hasCenter ? "第2步：点击确定线段的终点" : "第1步：点击确定线段的起点"
   if (mode === "ray") return hasCenter ? "第2步：点击确定射线的经过点" : "第1步：点击确定射线的起点"
@@ -51,6 +60,17 @@ export function resolveStatusPrompt({ mode, selectedCount, selectedLabel, hasCen
     return hasStart ? "第3步：点击确定圆弧终点" : "第2步：点击确定圆弧起点"
   }
   if (sceneControl) return resolveSceneControlPrompt(sceneControl)
+  if (pointBinding) {
+    const name = selectedLabel ?? "这个点"
+    if (pointBinding.bound) {
+      return `${name} 是动点，绑在「${pointBinding.pathLabel ?? "路径"}」上 · 直接拖动它会严格沿这条路径滑动，也可以用「路径参数」精确摆位；点「记录轨迹」能画出它的运动轨迹`
+    }
+    if (pointBinding.hasPaths) {
+      return `${name} 现在是自由点 · 在右侧「路径绑定」里选一条曲线或直线，它就成为动点，之后可以直接在画布上拖它`
+    }
+    return `${name} 现在是自由点 · 先画一条路径（直线 / 圆 / 函数等工具），再在右侧「路径绑定」里选它，${name} 就能沿这条路径滑动`
+  }
+  if (pathSelected) return `${selectedLabel ?? "这条曲线"} 可以当路径用 · 选中一个点后在它的「路径绑定」里选这条线，那个点就成为动点（可沿它拖动）`
   if (selectedCount > 0) return `已选中${selectedLabel ?? "图元"} · 拖动控制点调整形态，按 Delete 键删除`
   return "点击图元查看属性，或在画布中拖拽框选多个对象"
 }

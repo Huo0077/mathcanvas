@@ -35,6 +35,7 @@ import { defaultDraftView, drawingViewLabels, resolveProjectedDrawing } from "./
 import { migrateLegacySolids } from "./solidTemplates"
 import { point3ToolAvailability } from "./spatialTools"
 import { resolveStatusPrompt, resolveIntersectionPreviewPrompt, type SceneControlMode } from "./statusPrompts"
+import { dynamicPointPaths, isDynamicPointPath } from "./dynamicPointPaths"
 import { useSceneStore } from "./store"
 
 type CreationMode = "line" | "segment" | "ray" | "polyline" | "circle" | "arc" | null
@@ -923,7 +924,21 @@ export function App() {
 
   // 优先级：创建步骤 > 3D 显示开关提示（法向量/二面角示例）> 交线预览 > 默认选择提示。
   // 显示开关是用户刚刚按下按钮触发的，必须盖过"选择带来的预览"，否则状态栏会像没反应。
-  const basePrompt = resolveStatusPrompt({ mode: creationMode, selectedCount: selectedIds.length, selectedLabel: selectedPrimitive?.label ?? selectedPrimitive?.id ?? null, hasCenter: Boolean(creationStep?.center), hasStart: Boolean(creationStep?.start), pointCount: creationStep?.points?.length ?? 0, sceneControl })
+  /**
+   * 选中单个平面「点」时的绑定状态：把它交给状态栏，回答"怎么把点固定到曲线上"。
+   * 只在平面/立体工作区、且恰好选中一个对象时给——多选时这句话没有意义。
+   */
+  const promptPoint = document.workspace === "cad" || selectedIds.length !== 1 || selectedPrimitive?.type !== "point" ? null : selectedPrimitive
+  const promptPathId = promptPoint?.binding?.kind === "onPath" ? promptPoint.binding.pathId : null
+  const promptPointBinding = promptPoint
+    ? {
+        bound: promptPathId !== null,
+        hasPaths: dynamicPointPaths(document.primitives).some((primitive) => primitive.id !== promptPoint.id),
+        pathLabel: promptPathId ? document.primitives.find((primitive) => primitive.id === promptPathId)?.label ?? null : null
+      }
+    : null
+  const promptPathSelected = document.workspace !== "cad" && selectedIds.length === 1 && Boolean(selectedPrimitive && isDynamicPointPath(selectedPrimitive))
+  const basePrompt = resolveStatusPrompt({ mode: creationMode, selectedCount: selectedIds.length, selectedLabel: selectedPrimitive?.label ?? selectedPrimitive?.id ?? null, hasCenter: Boolean(creationStep?.center), hasStart: Boolean(creationStep?.start), pointCount: creationStep?.points?.length ?? 0, sceneControl, pointBinding: promptPointBinding, pathSelected: promptPathSelected })
   const previewPrompt = document.workspace === "geometry3d" && !sceneControl && previewStatus && previewStatus.kind !== "none"
     ? resolveIntersectionPreviewPrompt(previewStatus, previewHovered)
     : null

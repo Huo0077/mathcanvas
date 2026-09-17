@@ -8,7 +8,8 @@ import type { SceneControlMode } from "./statusPrompts"
 import { isFreeDraggable3, planeThroughPoints, resolveDihedralMarker3, resolvePolyhedronTopology, sectionSourceVertices, templateTopologyIds } from "@draw/scene-graph"
 
 import { loadViewPreference3d, saveViewPreference3d } from "./persistence/draftStorage"
-import { GRID_CELLS, gridPlacement } from "./sceneGrid"
+import { GRID_MAJOR_EVERY, GRID_MIN_RADIUS, gridPlacement } from "./sceneGrid"
+import { buildGridGeometry, GRID_MAJOR_COLOR, GRID_MINOR_COLOR, gridLayerOpacity } from "./threeGrid"
 import { sceneContentKey, sceneSyncDecision } from "./sceneContentKey"
 import { createContentSigner } from "./sceneContentSignature"
 import { applyCameraState, boxCorners, clampCameraTarget, contentBounds, contentRadiusExcluding, createCameraState, FIT_ANIMATION_MS, fitCameraState, interpolateCameraState, isContentOutOfView, panCameraState, resetCameraState, rotateCameraState, shouldAutoFit, zoomCameraState, type CameraState } from "./threeCamera"
@@ -309,7 +310,10 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     let points = new Map<string, Point3Primitive>()
     let topologyOwners = new Map<string, string>()
     /** 背景坐标系：单位尺寸的栅格与坐标轴，真实大小与位置每帧按可见范围设置。 */
-    let gridHelper: THREE.GridHelper | null = null
+    let gridHelper: THREE.LineSegments | null = null
+    let gridMajorHelper: THREE.LineSegments | null = null
+    /** 当前栅格几何的覆盖半径（格数）：只有跨档才换几何，缩放过程中不动。 */
+    let gridRadius = 0
     let axesHelper: THREE.AxesHelper | null = null
     /** 点驱动对象的索引：拖动绑定点时按 id 就地重建受影响的那些。 */
     let objectIndex = new Map<string, THREE.Object3D>()
@@ -477,6 +481,7 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
      *（实测：每次同步都重建栅格与坐标轴）。
      */
     alive.add("static:grid")
+    alive.add("static:grid-major")
     alive.add("static:axes")
     if (preview && (preview.segments.length > 0 || preview.points.length >= 2)) alive.add("preview")
     for (const primitive of document.primitives) {
@@ -531,17 +536,25 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       const centre = sceneBounds.getCenter(new THREE.Vector3())
       sceneShell.dataset.contentBounds = sceneBounds.isEmpty() ? "empty" : `${centre.x.toFixed(2)},${centre.y.toFixed(2)},${centre.z.toFixed(2)} size ${size.x.toFixed(2)},${size.y.toFixed(2)},${size.z.toFixed(2)}`
     }
-    // Grid and axes follow the figure: at a one-unit scale a fixed five-unit axes helper slashes straight
-    // through the solid and a fourteen-unit grid turns into visual noise.
-    /** 背景坐标系：几何是单位尺寸，尺寸与位置每帧按"可见范围 + 内容到达范围"设置。
-     *  它们的签名是常量：只有首次同步才会建，之后一直沿用（放置每帧由 applyGridPlacement 负责）。 */
+    // Grid and axes follow the figure, but the grid's **cell is always one world unit**:
+    // 用户要求"网格大小要严格对应一比一"，所以缩放的只是覆盖范围，不是格边长。
+    /** 背景坐标系：1 单位细线 + 每 10 格主线；两者都只在覆盖半径跨档时换一份几何。 */
     gridHelper = keepContent("static:grid", "grid", () => {
-      const grid = new THREE.GridHelper(GRID_CELLS, GRID_CELLS, scenePalette.grid, scenePalette.grid)
-      // Three.js builds its grid in the XZ plane, which is the floor only when Y is up. With Z up, the floor is XY.
-      grid.rotation.x = Math.PI / 2
+      const grid = new THREE.LineSegments(
+        buildGridGeometry(GRID_MIN_RADIUS, { skipMultiplesOf: GRID_MAJOR_EVERY }),
+        new THREE.LineBasicMaterial({ color: GRID_MINOR_COLOR, transparent: true })
+      )
       grid.userData.excludeFromFit = true
       return grid
-    }, alive, order) as THREE.GridHelper | null
+    }, alive, order) as THREE.LineSegments | null
+    gridMajorHelper = keepContent("static:grid-major", "grid-major", () => {
+      const major = new THREE.LineSegments(
+        buildGridGeometry(GRID_MIN_RADIUS, { every: GRID_MAJOR_EVERY }),
+        new THREE.LineBasicMaterial({ color: GRID_MAJOR_COLOR, transparent: true })
+      )
+      major.userData.excludeFromFit = true
+      return major
+    }, alive, order) as THREE.LineSegments | null
     // AxesHelper already draws X/Y/Z along the world axes, so blue points up once Z is the vertical axis.
     axesHelper = keepContent("static:axes", "axes", () => {
       const axes = new THREE.AxesHelper(1)
@@ -645,13 +658,35 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
         contentSpan: span,
         contentReach: reach
       })
-      if (gridHelper) {
-        gridHelper.scale.setScalar(placement.cell)
-        gridHelper.position.set(placement.centre.x, placement.centre.y, 0)
+      /**
+       * 1 格 = 1 单位：几何本身按整数格建好，所以这里**只在覆盖半径跨档时**换一份几何。
+       * 同一档内缩放，栅格的位置与尺寸都不动——这正是用户要的"缩放不改变网格大小"。
+       */
+      if (placement.extent !== gridRadius) {
+        gridRadius = placement.extent
+        for (const [layer, options] of [[gridHelper, { skipMultiplesOf: placement.majorEvery }], [gridMajorHelper, { every: placement.majorEvery }]] as const) {
+          if (!layer) continue
+          layer.geometry.dispose()
+          layer.geometry = buildGridGeometry(placement.extent, options)
+        }
       }
-      if (axesHelper) axesHelper.scale.setScalar(placement.axesLength)
+      // 一格在屏幕上占多少像素：细线太密时淡出，主线在更远时才淡出，间距仍然是精确的 10 个单位。
+      const pixelsPerUnit = viewportHeight / (2 * Math.max(state.distance, 1e-4) * Math.tan((camera.fov * Math.PI) / 360))
+      if (gridHelper) {
+        gridHelper.position.set(placement.centre.x, placement.centre.y, 0)
+        ;(gridHelper.material as THREE.LineBasicMaterial).opacity = gridLayerOpacity(pixelsPerUnit)
+      }
+      if (gridMajorHelper) {
+        gridMajorHelper.position.set(placement.centre.x, placement.centre.y, 0)
+        ;(gridMajorHelper.material as THREE.LineBasicMaterial).opacity = gridLayerOpacity(pixelsPerUnit * placement.majorEvery)
+      }
+      if (axesHelper) {
+        axesHelper.scale.setScalar(placement.axesLength)
+        axesHelper.position.set(placement.centre.x, placement.centre.y, 0)
+      }
       if (sceneShell) {
         sceneShell.dataset.gridCell = String(placement.cell)
+        sceneShell.dataset.gridMajor = String(placement.majorEvery)
         sceneShell.dataset.gridCentre = `${placement.centre.x},${placement.centre.y}`
         sceneShell.dataset.gridExtent = String(placement.extent)
         sceneShell.dataset.axesLength = String(placement.axesLength)

@@ -528,15 +528,14 @@ export function createPreviewGroup(
 ): THREE.Group {
   const group = new THREE.Group()
   group.userData.visualRole = "intersection-preview"
-  // 预览不是图形内容：它绝不能参与"适应视图"的包围盒，否则剖切面片会把取景范围撑大
-  // （实测：平移视角的边界因此从 15 涨到 15.36）。
+  // 预览不是图形内容：它绝不能参与"适应视图"的包围盒，否则它会把取景范围撑大。
   group.userData.excludeFromFit = true
   /**
    * 拾取用的子对象集合单独放在一个子组里：预览的可见线是 1px 虚线，按像素去点它是"找针"，
-   * 所以命中判定用更宽的对象——交线用不可见的加粗线，截面则用整块剖切面（在面上任意位置点都能创建）。
+   * 所以命中判定用更宽的对象——交线用不可见的加粗线，截面用它那圈边界线的加粗副本。
    */
   const hitTargets: THREE.Object3D[] = []
-  /** 命中区按种类分：交线用加粗不可见线；截面只用它那圈边界线（面片不是命中区）。 */
+  /** 命中区按种类分：交线用加粗不可见线；截面只用它那圈边界线。 */
   const lineHitTargets: THREE.Object3D[] = []
   const points: THREE.Vector3[] = []
   if (preview.kind === "intersection") {
@@ -546,15 +545,15 @@ export function createPreviewGroup(
   } else {
     const loop = preview.points.length >= 2 ? [...preview.points, preview.points[0]] : []
     for (const point of loop) points.push(new THREE.Vector3(point.x, point.y, point.z))
-    // 截面预览额外画出剖切面本身：只有交线时看不出"切在哪"，也看不出往哪边挪。
-    if (preview.plane) {
-      const patch = createPlanePatch(preview.plane, preview.points, { color: "#f04f5f", opacity: 0.12, dashedEdges: true })
-      if (patch) {
-        patch.userData.visualRole = "section-preview-plane"
-        group.add(patch)
-      }
-    }
   }
+  /**
+   * 这里**不再**画那块半透明剖切面。
+   *
+   * 用户反馈得很直接："我需要的是交面、交线和交点，而不是创建对象之后中间出现一个大截面。"
+   * 选中一个实体时铺一块面片盖在图形中间，既挡视线又和目标无关；真正有用的是**这刀会切出什么**——
+   * 那圈交线（虚线边界）与它的交点。剖切面本身属于"创建出来的截面"（交面），
+   * 创建之后才画；用户也可以拖动 / 方向键挪刀口，那时才需要看到面片。
+   */
   if (points.length >= 2) {
     // 截面用闭合折线（Line），交线用线段集合（LineSegments）：前者是一圈边界，后者是若干条交线。
     const geometry = new THREE.BufferGeometry().setFromPoints(points)
@@ -573,6 +572,15 @@ export function createPreviewGroup(
       hitTargets.push(hit)
       if (preview.kind === "section") lineHitTargets.push(hit)
     }
+    // 交点：截面是环上的顶点、交线是每段的端点（共享端点只标一次）。用户要看的"交点"就是它们。
+    for (const vertex of uniqueVertices(points)) {
+      const marker = new THREE.Mesh(previewPointGeometry, previewPointMaterial)
+      marker.position.copy(vertex)
+      marker.userData.visualRole = "intersection-preview-point"
+      // 交点标记只是画给人看的，不能参与拾取（点击由上面那条不可见命中带负责）。
+      marker.raycast = () => undefined
+      group.add(marker)
+    }
   }
   group.userData.hitTargets = hitTargets
   /**
@@ -582,4 +590,18 @@ export function createPreviewGroup(
   group.userData.lineHitTargets = lineHitTargets
   group.userData.onHoverChange = onHoverChange
   return group
+}
+
+/** 预览的交点标记：一份共享几何与材质，避免每个顶点各建一套。 */
+const previewPointGeometry = new THREE.SphereGeometry(0.06, 10, 8)
+const previewPointMaterial = new THREE.MeshBasicMaterial({ color: "#d92b3a" })
+
+/** 去重（同一位置只留一个标记）：`1e-6` 的尺度对预览足够，且不会把相邻顶点误合并。 */
+function uniqueVertices(points: THREE.Vector3[]): THREE.Vector3[] {
+  const unique: THREE.Vector3[] = []
+  for (const point of points) {
+    if (unique.some((candidate) => candidate.distanceToSquared(point) < 1e-12)) continue
+    unique.push(point)
+  }
+  return unique
 }

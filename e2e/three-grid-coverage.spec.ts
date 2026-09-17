@@ -49,3 +49,45 @@ test("keeps the coordinate plane covering the view when zoomed out", async ({ pa
   // 缩小后可见范围变大，坐标面必须跟着变大——否则画面四周又是一片空白。
   await expect.poll(readExtent).toBeGreaterThan(near)
 })
+
+/**
+ * 用户反馈："立体缩放不要改变网格图大小，网格大小要严格对应一比一。"
+ *
+ * 旧实现按可见范围挑"好读"的格边长（1/2/5 × 10ⁿ），缩放时格子的**世界尺寸**一直在变，
+ * 网格就不再是一把可靠的尺子。现在格边长恒为 1 个世界单位，只有覆盖范围按 2 的幂分档长大；
+ * 同一档内缩放，栅格连位置都不许动。
+ */
+test("holds the grid at one world unit per cell while zooming", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "添加立方体" }).click()
+
+  const scene = page.locator("[data-3d-scene]")
+  const readGrid = async () => ({
+    cell: await scene.getAttribute("data-grid-cell"),
+    major: await scene.getAttribute("data-grid-major"),
+    extent: Number(await scene.getAttribute("data-grid-extent")),
+    centre: await scene.getAttribute("data-grid-centre")
+  })
+  const before = await readGrid()
+  expect(before.cell).toBe("1")
+  expect(before.major).toBe("10")
+
+  const box = (await page.locator("[data-3d-scene] canvas").boundingBox())!
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+
+  // 轻微缩放：仍在同一覆盖档内 —— 栅格的位置与尺寸都必须**完全不动**。
+  await page.mouse.wheel(0, -120)
+  await page.waitForTimeout(120)
+  const zoomed = await readGrid()
+  expect(zoomed.cell).toBe("1")
+  expect(zoomed.extent).toBe(before.extent)
+  expect(zoomed.centre).toBe(before.centre)
+
+  // 大幅缩小：看到更多格（覆盖范围长大），但格边长仍是 1 个单位、主线仍是 10 个单位。
+  await page.mouse.wheel(0, 2400)
+  await expect.poll(async () => (await readGrid()).extent).toBeGreaterThan(before.extent)
+  const far = await readGrid()
+  expect(far.cell).toBe("1")
+  expect(far.major).toBe("10")
+})

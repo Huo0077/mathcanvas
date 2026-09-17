@@ -39,6 +39,38 @@ describe("status prompts", () => {
     expect(prompt).toContain("第1步")
   })
 
+  /**
+   * 用户反馈："动点（动点绑定）的内容完全没有提示，我也不知道如何将点固定到我创立的曲线或直线轨迹上面。"
+   * 能力本来就有（属性栏「路径绑定」下拉 + 路径参数 + 记录轨迹），缺的是**说出来**：
+   * 选中点时状态栏必须直接告诉他去哪绑定、绑定之后能做什么。
+   */
+  it("explains how to turn a selected point into a dynamic point", () => {
+    const base = { mode: null, selectedCount: 1, selectedLabel: "点 A", hasCenter: false, hasStart: false, pointCount: 0 } as const
+
+    const withPaths = resolveStatusPrompt({ ...base, pointBinding: { bound: false, hasPaths: true } })
+    expect(withPaths).toContain("路径绑定")
+    expect(withPaths).toContain("动点")
+
+    // 还没有任何曲线/直线：先告诉他去画一条，而不是让他对着空下拉框发呆。
+    const withoutPaths = resolveStatusPrompt({ ...base, pointBinding: { bound: false, hasPaths: false } })
+    expect(withoutPaths).toContain("先画")
+    expect(withoutPaths).toContain("路径绑定")
+
+    // 已经绑定：说明三种等价用法（拖动 / 路径参数 / 记录轨迹）。
+    const bound = resolveStatusPrompt({ ...base, pointBinding: { bound: true, hasPaths: true, pathLabel: "直线 1" } })
+    expect(bound).toContain("动点")
+    expect(bound).toContain("直线 1")
+    expect(bound).toContain("路径参数")
+    expect(bound).toContain("记录轨迹")
+  })
+
+  it("points at the path binding when a curve that can host a point is selected", () => {
+    const prompt = resolveStatusPrompt({ mode: null, selectedCount: 1, selectedLabel: "直线 1", hasCenter: false, hasStart: false, pointCount: 0, pathSelected: true })
+
+    expect(prompt).toContain("路径绑定")
+    expect(prompt).toContain("动点")
+  })
+
   it("describes the dashed intersection preview and its two levels", () => {
     // 选中两个对象：指针不在虚线上时提示"移到虚线上"，移上去后提示"点击即可创建"。
     expect(resolveIntersectionPreviewPrompt({ kind: "intersection", label: "面交线 · 1 段" }, false)).toContain("移到虚线上")
@@ -49,6 +81,14 @@ describe("status prompts", () => {
     const hovered = resolveIntersectionPreviewPrompt({ kind: "section", label: "默认剖切平面截面 · 4 边形" }, true)
     expect(hovered).toContain("点击即创建截面")
     expect(hovered).toContain("方向键")
+    /**
+     * 用户反馈："我需要的是交面、交线和交点，而不是创建对象之后中间出现一个大截面。"
+     * 画布上那圈虚线是**交线**、圆点是**交点**，点出来的才是**交面**——这句提示要说清它们，
+     * 否则用户看到虚线仍然不知道它是什么。
+     */
+    expect(hovered).toContain("交线")
+    expect(hovered).toContain("交点")
+    expect(hovered).toContain("交面")
     // 条件不足时直接说明原因；没有预览时不发言（交给默认提示）。
     expect(resolveIntersectionPreviewPrompt({ kind: "insufficient", label: "", reason: "两组面之间没有交线。" }, false)).toBe("两组面之间没有交线。")
     expect(resolveIntersectionPreviewPrompt({ kind: "none", label: "" }, false)).toBeNull()
