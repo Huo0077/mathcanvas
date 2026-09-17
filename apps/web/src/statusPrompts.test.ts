@@ -113,10 +113,25 @@ describe("status prompts", () => {
 
   it("announces the automatically drawn intersections, because they no longer need a selection", () => {
     // 自动枚举之后，画布上有没有交线不再取决于选择：不说明就只剩一堆没人认识的虚线。
-    expect(resolvePreviewInventoryPrompt({ lines: 2, solids: 1, truncated: 0 })).toBe("已自动标出 2 处交线、1 处交面：点虚线创建交线图元，点半透明面片创建交面图元。")
-    expect(resolvePreviewInventoryPrompt({ lines: 3, solids: 0, truncated: 0 })).toContain("3 处交线")
-    expect(resolvePreviewInventoryPrompt({ lines: 1, solids: 2, truncated: 4 })).toContain("另有 4 处只画了交线")
+    expect(resolvePreviewInventoryPrompt({ lines: 2, solids: 1, truncated: 0, dropped: 0 })).toBe("已自动标出 2 处交线、1 处交面：点虚线创建交线图元，点半透明面片创建交面图元。")
+    expect(resolvePreviewInventoryPrompt({ lines: 3, solids: 0, truncated: 0, dropped: 0 })).toContain("3 处交线")
     // 没有交线 / 交面就不打扰（否则每次进 3D 工作区都多一句废话）。
-    expect(resolvePreviewInventoryPrompt({ lines: 0, solids: 0, truncated: 0 })).toBeNull()
+    expect(resolvePreviewInventoryPrompt({ lines: 0, solids: 0, truncated: 0, dropped: 0 })).toBeNull()
+  })
+
+  it("says what the sweep could not compute, and does not pretend a missing 交面 is a drawn 交线", () => {
+    // 截断说明必须与事实相符：被配额挤掉的那一对可能**连交线都没有**（完全包含），
+    // 所以不能说"只画了交线"——它只是"这次没算交面"。
+    const capped = resolvePreviewInventoryPrompt({ lines: 2, solids: 1, truncated: 3, dropped: 0 })
+    expect(capped).toContain("另有 3 处这次没算交面")
+    expect(capped).not.toContain("只画了交线")
+
+    // 连交线都没有、但确实少了一处交面：也必须说，不能静默。
+    const onlyTruncated = resolvePreviewInventoryPrompt({ lines: 0, solids: 0, truncated: 1, dropped: 0 })
+    expect(onlyTruncated).toContain("另有 1 处这次没算交面")
+
+    // 超出单次扫描对数上限是另一回事：那几对连交线都没画，措辞要分开。
+    const dropped = resolvePreviewInventoryPrompt({ lines: 4, solids: 2, truncated: 0, dropped: 5 })
+    expect(dropped).toContain("5 处相交对超出单次扫描上限")
   })
 })

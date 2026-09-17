@@ -123,3 +123,30 @@ export function resolveSelectableHit(primitiveId: string | null, owners: Map<str
   // Alt keeps the hit on the generated edge or face, so a template solid's parts stay reachable on demand.
   return keepSubElement ? primitiveId : owners.get(primitiveId) ?? primitiveId
 }
+
+/**
+ * 指针落在预览上时，这一次点击算"创建图元"还是算"选中几何"？
+ *
+ * 用户的模型是**看到什么就创建什么**（交线、交面一直在画布上，点一下就建），所以指针确实落在预览
+ * 画出来的几何上时预览应当赢。两个例外：
+ * - **顶点手柄**永远优先：它是可拖的交互控件，被一块交面盖住时用户仍然是在抓手柄（实测回归：
+ *   点顶点手柄变成了创建截线）。只有截面预览另说——它的边界落在实体内部，不抢就永远点不到。
+ * - **棱**只有在指针确实压在它上面时才赢：棱命中是"按像素容差"给的，指针可以离那条棱好几个像素
+ *   仍算命中。实测：点交面正中央时射线擦过一条棱（`data-pick-readout` 读出 `edge|…|behind`），
+ *   整类一刀切地让棱优先会让"点一下创建交面"完全没反应。
+ */
+export function previewBeatsPick(decision: {
+  hitKind: RaycastHit3["kind"] | null
+  /** 粗拾取命中的点离指针射线多远（世界单位）；没有命中时给正无穷。 */
+  hitDistanceToRay: number
+  /** 屏幕像素换算过来的拾取容差（世界单位）。 */
+  tolerance: number
+  /** 截面预览的那圈边界是否在粗拾取的前面（沿用既有判断）。 */
+  sectionInFront: boolean
+}): boolean {
+  const kind = decision.hitKind
+  if (kind === null) return true
+  if (kind === "point") return decision.sectionInFront
+  if (kind === "edge" || kind === "line") return decision.hitDistanceToRay > decision.tolerance * 0.25
+  return true
+}

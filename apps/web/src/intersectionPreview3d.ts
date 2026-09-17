@@ -1,6 +1,6 @@
 import type { GeometryDocument, PrimitiveSpec, Vector3 } from "@draw/dsl"
 import { intersectFaceSets, sectionPolyhedron3 } from "@draw/geometry-kernel"
-import { intersectionFaceRings, resolvePolyhedronTopology, sectionPlaneThroughSource } from "@draw/scene-graph"
+import { intersectionFaceRings, sectionPlaneThroughSource, solidTopology3 } from "@draw/scene-graph"
 
 export interface PreviewSegment {
   a: Vector3
@@ -84,8 +84,12 @@ export function resolveIntersectionPreview(document: GeometryDocument, selectedI
   if (!SOLID_TYPES.includes(single.type)) return empty
   const plane = sectionPlaneThroughSource(document, single.id)
   if (!plane) return { ...empty, kind: "insufficient", sourceIds: [single.id], reason: "无法从该实体推导默认剖切平面。" }
-  const resolved = single.type === "polyhedron3" ? resolvePolyhedronTopology(document, single.id) : null
-  const topology = resolved ? toIndexedTopology(resolved) : resolveTemplateTopology(document, single)
+  /**
+   * 来源拓扑统一交给 scene-graph 解析（与截线 / 交面同一套）：它既认参数化模板的物化拓扑，
+   * 也认"按数值编辑过顶点、已翻成显式面环"的那一种——这里再写一份只认模板的查找，
+   * 就会让编辑过的实体在这里静默失去截面预览。
+   */
+  const topology = solidTopology3(single, primitiveMap)
   if (!topology) return { ...empty, kind: "insufficient", sourceIds: [single.id], reason: "该实体还没有物化拓扑，先创建一次再剖切。" }
   const result = sectionPolyhedron3(topology.vertices, topology.faces, plane)
   if (result.status === "none" || result.status === "insufficient-data") {
@@ -102,27 +106,4 @@ export function resolveIntersectionPreview(document: GeometryDocument, selectedI
     plane,
     sourceId: single.id
   }
-}
-
-/** 场景图的拓扑（顶点按 ID 索引、面环按点 ID）转成内核求交需要的数组形式。 */
-function toIndexedTopology(topology: { vertices: Record<string, Vector3>; faces: { pointIds: string[] }[] }): { vertices: Vector3[]; faces: number[][] } {
-  const vertexIds = Object.keys(topology.vertices)
-  const indexOf = new Map(vertexIds.map((id, index) => [id, index]))
-  const vertices = vertexIds.map((id) => topology.vertices[id])
-  const faces: number[][] = []
-  for (const face of topology.faces) {
-    const ring = face.pointIds.map((id) => indexOf.get(id) ?? -1)
-    if (ring.length < 3 || ring.some((index) => index < 0)) continue
-    faces.push(ring)
-  }
-  return { vertices, faces }
-}
-
-/** 模板实体的物化拓扑（`construction.kind === "template"` 指向该来源）：找不到返回 null。 */
-function resolveTemplateTopology(document: GeometryDocument, source: PrimitiveSpec): { vertices: Vector3[]; faces: number[][] } | null {
-  const polyhedron = document.primitives.find((primitive) =>
-    primitive.type === "polyhedron3" && primitive.construction?.kind === "template" && primitive.construction.sourceIds[0] === source.id)
-  if (!polyhedron || polyhedron.type !== "polyhedron3") return null
-  const resolved = resolvePolyhedronTopology(document, polyhedron.id)
-  return resolved ? toIndexedTopology(resolved) : null
 }

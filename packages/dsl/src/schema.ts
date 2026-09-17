@@ -291,6 +291,8 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>, parameter
       const construction = isRecord(value.construction) ? value.construction : undefined
       if (!construction || !["template", "fromPoints", "fromFaces"].includes(String(construction.kind)) || !Array.isArray(construction.sourceIds) || construction.sourceIds.some((sourceId) => typeof sourceId !== "string" || !byId.has(sourceId))) errors.push("polyhedron3 construction is invalid")
       if (construction?.kind === "template" && (typeof construction.templateId !== "string" || (construction.parameterIds !== undefined && (!isDistinctStringList(construction.parameterIds, 1) || construction.parameterIds.some((parameterId) => !parameterIds.has(parameterId)))))) errors.push("polyhedron3 template construction is invalid")
+      // `fromFaces` 的 `sourceId` 是"这条拓扑属于哪个实体"：必须指向文档里真实存在的图元。
+      if (construction?.sourceId !== undefined && (typeof construction.sourceId !== "string" || !byId.has(construction.sourceId))) errors.push("polyhedron3 construction sourceId is invalid")
     }
   }
   if (type === "line" || type === "segment" || type === "ray") {

@@ -152,8 +152,11 @@ export function App() {
    * 这里允许显式切换成投影立体几何文档，而不是让他去猜"为什么四个视图都是空的"。
    */
   const [projectionSource, setProjectionSource] = useState<ProjectionSource>("cad")
-  /** 指针当前落在哪一份 3D 预览上（状态栏据此说"这一份是什么、点下去创建什么"）。 */
-  const [hoveredPreview, setHoveredPreview] = useState<ThreeScenePreview | null>(null)
+  /**
+   * 指针当前落在哪一份 3D 预览上（存 **key** 而不是对象本身：文档一变，标签与体积读数要跟着更新，
+   * 存对象会让状态栏停在上一次的那份内容上）。
+   */
+  const [hoveredPreviewKey, setHoveredPreviewKey] = useState<string | null>(null)
   /**
    * 3D 预览 = **自动**枚举出的所有两两交线 / 交面（与平面画布一致：交点一直在那儿，点一下就创建），
    * 外加"单个实体选中时的默认剖切平面截面"这一份既有预览。
@@ -189,9 +192,10 @@ export function App() {
     return list
   }, [previewSweep, selectionPreview, selectedIds])
   /**
-   * 状态栏要说的是**指针下这一份**；没有悬停时退回到选择解释（例如"两个平面没有有界交线"）。
-   * 画布上自动铺开的交线 / 交面也必须被说出来，否则用户看到一堆虚线却不知道能点。
+   * 状态栏要说的是**指针下这一份**：按 key 从当前预览里查，所以文档一变（体积、段数、标签）
+   * 读数就是最新的；没有悬停时退回到选择解释（例如"两个平面没有有界交线"）。
    */
+  const hoveredPreview = hoveredPreviewKey ? scenePreviews.find((item) => item.key === hoveredPreviewKey) ?? null : null
   const previewStatus = hoveredPreview ?? selectionPreview
   const [activeRibbonTab, setActiveRibbonTab] = useState<RibbonTabId | null>("home")
   const [ribbonExpanded, setRibbonExpanded] = useState(true)
@@ -999,7 +1003,8 @@ export function App() {
     ? resolvePreviewInventoryPrompt({
         lines: scenePreviews.filter((item) => item.kind === "intersection").length,
         solids: scenePreviews.filter((item) => item.kind === "solid").length,
-        truncated: previewSweep?.truncatedPairs ?? 0
+        truncated: previewSweep?.truncatedPairs ?? 0,
+        dropped: previewSweep?.droppedPairs ?? 0
       })
     : null
   const statusPrompt = previewPrompt ?? previewInventoryPrompt ?? basePrompt
@@ -1164,7 +1169,7 @@ export function App() {
         <button type="button" aria-controls="properties-dock" aria-expanded={mobileDock === "properties"} onClick={() => setMobileDock((current) => current === "properties" ? null : "properties")}>属性检查器</button>
       </div>
       {algebraPanel}
-      {document.workspace === "geometry3d" ? <ThreeSceneView document={document} selectedIds={selectedIds} onSelect={updateSelection} onStatusPromptChange={setSceneControl} previews={scenePreviews} onPreviewHover={(hovering, preview) => setHoveredPreview(hovering ? preview : null)} onPreviewClick={createFromPreview} onDragEnd={(id, delta) => apply({ op: "translatePrimitive3", id, delta })} onMoveSection={(id, distance) => apply({ op: "moveSectionPlane", id, distance })} onHostDragEnd={(id, parameter) => {
+      {document.workspace === "geometry3d" ? <ThreeSceneView document={document} selectedIds={selectedIds} onSelect={updateSelection} onStatusPromptChange={setSceneControl} previews={scenePreviews} onPreviewHover={(hovering, preview) => setHoveredPreviewKey(hovering ? preview.key : null)} onPreviewClick={createFromPreview} onDragEnd={(id, delta) => apply({ op: "translatePrimitive3", id, delta })} onMoveSection={(id, distance) => apply({ op: "moveSectionPlane", id, distance })} onHostDragEnd={(id, parameter) => {
         const primitive = document.primitives.find((candidate) => candidate.id === id)
         if (primitive?.type !== "point3" || !primitive.binding) return
         // 只提交参数：坐标由重算从参数算出，所以点永远精确落在宿主上。

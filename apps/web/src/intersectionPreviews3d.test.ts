@@ -105,6 +105,56 @@ describe("automatic 3D intersection previews", () => {
     expect(result.previews.filter((preview) => preview.kind === "intersection").length).toBeGreaterThan(1)
   })
 
+  it("gives a capped pair its 交面 back as soon as the budget allows", () => {
+    // 三个两两交叠的立方体：3 对都有交面，但配额只允许算 1 对。
+    const document = cubeDocument([
+      { id: "cube-a", origin: { x: -2, y: -2, z: -2 } },
+      { id: "cube-b", origin: { x: 0, y: -2, z: -2 } },
+      { id: "cube-c", origin: { x: 1, y: -2, z: -2 } }
+    ])
+    const first = computeIntersectionPreviews3d(document, { maxSolidPreviews: 1 })
+    expect(first.previews.filter((preview) => preview.kind === "solid")).toHaveLength(1)
+    expect(first.truncatedPairs).toBe(2)
+
+    /**
+     * 换一次配额再扫：被挤掉的那两对必须能补上。
+     * 受限的结果一旦按"完整结果"缓存下来，它们就会**永久**只剩交线——即使配额腾出来了也回不来。
+     */
+    const second = computeIntersectionPreviews3d(document, { previous: first.cache, maxSolidPreviews: 3 })
+    expect(second.previews.filter((preview) => preview.kind === "solid")).toHaveLength(3)
+    expect(second.truncatedPairs).toBe(0)
+  })
+
+  it("keeps the cap stable across sweeps and keeps reporting what it could not compute", () => {
+    const document = cubeDocument([
+      { id: "cube-a", origin: { x: -2, y: -2, z: -2 } },
+      { id: "cube-b", origin: { x: 0, y: -2, z: -2 } },
+      { id: "cube-c", origin: { x: 1, y: -2, z: -2 } }
+    ])
+    const first = computeIntersectionPreviews3d(document, { maxSolidPreviews: 2 })
+    expect(first.previews.filter((preview) => preview.kind === "solid")).toHaveLength(2)
+
+    // 第二次扫描（文档没变）：沿用的交面同样占配额，因此结果与第一次逐字节一致，
+    // 截断说明也必须**每次都报**——不然用户看到"有一对相交却没有面片"却没有任何解释。
+    const second = computeIntersectionPreviews3d(document, { previous: first.cache, maxSolidPreviews: 2 })
+    expect(second.previews.filter((preview) => preview.kind === "solid")).toHaveLength(2)
+    expect(second.truncatedPairs).toBe(1)
+    expect(second.previews).toEqual(first.previews)
+  })
+
+  it("counts a capped pair that has no crossing line at all", () => {
+    // 完全包含：两个表面根本不相交，所以连交线都没有——它被配额挤掉时同样是"少了一处交面"，
+    // 不能因为没有交线就不计数（那样用户完全看不到解释）。
+    const document = cubeDocument([
+      { id: "cube-outer", origin: { x: -2, y: -2, z: -2 } },
+      { id: "cube-inner", origin: { x: -1, y: -1, z: -1 }, size: { x: 2, y: 2, z: 2 } }
+    ])
+    const result = computeIntersectionPreviews3d(document, { maxSolidPreviews: 0 })
+
+    expect(result.previews).toEqual([])
+    expect(result.truncatedPairs).toBe(1)
+  })
+
   it("only treats top-level solids as candidates", () => {
     const document = cubeDocument(overlapPair)
     // 模板物化出来的 point3/edge3/face3/polyhedron3 与面、平面都不该参与自动求交：

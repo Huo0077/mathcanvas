@@ -172,7 +172,14 @@ export interface Face3Primitive extends PrimitivePresentation {
 export type SolidConstruction =
   | { kind: "template"; templateId: string; parameterIds?: string[]; sourceIds: string[] }
   | { kind: "fromPoints"; sourceIds: string[] }
-  | { kind: "fromFaces"; sourceIds: string[] }
+  /**
+   * 显式面环构造（组合体、按数值编辑过顶点的模板……）。
+   *
+   * `sourceId` 记的是"这条拓扑属于哪个**实体**图元"：模板物化时它由 `kind: "template"` 的
+   * `sourceIds[0]` 表达，而按数值改一个模板顶点会把它翻成 `fromFaces`——不把这个归属一起记下来，
+   * 那个实体就会从截面 / 交线 / 交面里静默消失（实测缺陷）。
+   */
+  | { kind: "fromFaces"; sourceIds: string[]; sourceId?: string }
 
 export interface Polyhedron3Primitive extends PrimitivePresentation {
   id: string

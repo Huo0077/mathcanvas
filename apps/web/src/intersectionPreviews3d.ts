@@ -37,6 +37,13 @@ export interface IntersectionPreview3d {
 interface PairRecord {
   signature: string
   previews: IntersectionPreview3d[]
+  /**
+   * 这一对是在配额用尽时算的（只有交线、或缺交面）。
+   *
+   * 受限结果**不算完整结果**：不能按签名长期沿用，否则配额腾出来之后它也永远补不上交面
+   *（实测：13 对挤掉第 13 对后，删掉前面任一对也回不来，除非移动它的来源）。
+   */
+  truncated: boolean
 }
 
 export interface IntersectionPreview3dCache {
@@ -63,15 +70,18 @@ export interface IntersectionPreview3dSweep {
   reusedPairs: number
   /** 被包围盒筛掉的对数。 */
   skippedPairs: number
-  /** 因为布尔交集配额被跳过、只给了交线的对数。 */
+  /** 这一对相交了、但配额用尽没算交面的对数（每次扫描都会重新报）。 */
   truncatedPairs: number
+  /** 实体对多到超过单次扫描上限、连交线都没算的对数。 */
+  droppedPairs: number
 }
 
 const CANDIDATE_TYPES = new Set<PrimitiveSpec["type"]>(["cube", "pyramid", "cylinder", "cone", "polyhedron3"])
 const DEFAULT_MAX_SOURCES = 24
-const DEFAULT_MAX_SOLID_PREVIEWS = 12
+/** 单次扫描的布尔交集配额（状态栏的说明文案也用这个数，所以导出而不是各写一份）。 */
+export const DEFAULT_MAX_SOLID_PREVIEWS = 12
 /** 实体多到两两组合失控时的硬上限：宁可少画，不要一次改动卡住画布。 */
-const MAX_PAIRS = 120
+export const MAX_PAIRS = 120
 
 /** 顶层实体：可见、类型可求交，且不是模板物化出来的"影子"多面体。 */
 function isCandidate(primitive: PrimitiveSpec): boolean {
@@ -141,6 +151,7 @@ export function computeIntersectionPreviews3d(document: GeometryDocument, option
   let reusedPairs = 0
   let skippedPairs = 0
   let truncatedPairs = 0
+  let droppedPairs = 0
   let solidPreviews = 0
   let considered = 0
   for (let firstIndex = 0; firstIndex < candidates.length; firstIndex += 1) {
@@ -156,18 +167,21 @@ export function computeIntersectionPreviews3d(document: GeometryDocument, option
       const key = `${first.primitive.id < second.primitive.id ? first.primitive.id : second.primitive.id}|${first.primitive.id < second.primitive.id ? second.primitive.id : first.primitive.id}`
       const signature = `${first.signature}‖${second.signature}`
       const cached = options.previous?.pairs[key]
-      if (cached && cached.signature === signature) {
+      if (cached && cached.signature === signature && !cached.truncated) {
         previews.push(...cached.previews)
         pairs[key] = cached
         reusedPairs += 1
+        // 沿用的交面同样占配额：这样"哪几对分到交面"在多次扫描之间是稳定的，
+        // 截断说明也就能每一次扫描都如实报出来（而不是只有首扫可见）。
+        solidPreviews += cached.previews.reduce((total, item) => total + (item.kind === "solid" ? 1 : 0), 0)
+        continue
+      }
+      if (considered > MAX_PAIRS) {
+        // 连交线都没算：既不缓存，也不混进 `truncatedPairs`（那个计数说的是"少了交面"）。
+        droppedPairs += 1
         continue
       }
       computedPairs += 1
-      if (considered > MAX_PAIRS) {
-        truncatedPairs += 1
-        pairs[key] = { signature, previews: [] }
-        continue
-      }
       const pairPreviews: IntersectionPreview3d[] = []
       // 交线：两个表面的公共边界。相交而不穿透（完全包含）时这里是空的，那是对的。
       const crossing = intersectFaceSets(first.rings, second.rings)
@@ -185,32 +199,38 @@ export function computeIntersectionPreviews3d(document: GeometryDocument, option
           label: `交线 · ${crossing.segments.length} 段`
         })
       }
-      // 交面：布尔交集。配额用尽时只保留交线，并记进 `truncatedPairs`，界面据此说明"还有 N 对没画交面"。
+      /**
+       * 交面：布尔交集。配额用尽时只保留交线（完全包含时连交线都没有），并**无条件**记进 `truncatedPairs`——
+       * 界面据此说明"还有 N 处没画交面"；没有交线的那一类同样要说明，否则就是静默少画。
+       */
       if (solidPreviews >= maxSolidPreviews) {
-        if (crossing.segments.length > 0) truncatedPairs += 1
-      } else {
-        const intersection = intersectConvexPolyhedra3(first.topology, second.topology)
-        if (intersection.status === "polyhedron" || (intersection.status === "flat" && intersection.area > 0)) {
-          solidPreviews += 1
-          pairPreviews.push({
-            key: `pair:${key}:面`,
-            kind: "solid",
-            sourceIds: [first.primitive.id, second.primitive.id],
-            segments: [],
-            vertices: intersection.vertices.map((vertex) => ({ ...vertex })),
-            faces: intersection.faces.map((face) => [...face]),
-            volume: intersection.volume,
-            area: intersection.area,
-            classification: intersection.status,
-            label: intersection.status === "flat" ? `交面 · 平板（面积 ${intersection.area.toFixed(2)}）` : `交面 · ${intersection.faces.length} 面`
-          })
-        }
+        truncatedPairs += 1
+        previews.push(...pairPreviews)
+        // 受限结果标记成 `truncated`：下次扫描（哪怕几何没变）会重新尝试，配额腾出来就能补上。
+        pairs[key] = { signature, previews: pairPreviews, truncated: true }
+        continue
+      }
+      const intersection = intersectConvexPolyhedra3(first.topology, second.topology)
+      if (intersection.status === "polyhedron" || (intersection.status === "flat" && intersection.area > 0)) {
+        solidPreviews += 1
+        pairPreviews.push({
+          key: `pair:${key}:面`,
+          kind: "solid",
+          sourceIds: [first.primitive.id, second.primitive.id],
+          segments: [],
+          vertices: intersection.vertices.map((vertex) => ({ ...vertex })),
+          faces: intersection.faces.map((face) => [...face]),
+          volume: intersection.volume,
+          area: intersection.area,
+          classification: intersection.status,
+          label: intersection.status === "flat" ? `交面 · 平板（面积 ${intersection.area.toFixed(2)}）` : `交面 · ${intersection.faces.length} 面`
+        })
       }
       previews.push(...pairPreviews)
-      pairs[key] = { signature, previews: pairPreviews }
+      pairs[key] = { signature, previews: pairPreviews, truncated: false }
     }
   }
-  return { previews, cache: { pairs }, candidates: candidates.length, computedPairs, reusedPairs, skippedPairs, truncatedPairs }
+  return { previews, cache: { pairs }, candidates: candidates.length, computedPairs, reusedPairs, skippedPairs, truncatedPairs, droppedPairs }
 }
 
 function boundsExtent(bounds: Bounds): number {

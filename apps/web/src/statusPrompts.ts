@@ -1,3 +1,5 @@
+import { DEFAULT_MAX_SOLID_PREVIEWS, MAX_PAIRS } from "./intersectionPreviews3d"
+
 export type PromptCreationMode = "line" | "segment" | "ray" | "polyline" | "circle" | "arc" | null
 
 /** Display control currently switched on in the 3D scene. They are temporary display state, never document state. */
@@ -56,22 +58,27 @@ export function resolveIntersectionPreviewPrompt(preview: { kind: string; label:
 }
 
 /**
- * 画布上"自动铺开的交线 / 交面有多少"的状态提示。
+ * 画布上"自动铺开的交线 / 交面有多少、哪些这次没算"的状态提示。
  *
  * 用户反馈过："画布上有东西，但完全没有任何提示"。自动枚举意味着预览不再依赖选择，
- * 所以只要画布上真画了交线或交面，就必须在状态栏说明它们是什么、点下去会创建什么。
+ * 所以只要画布上真画了交线或交面、或者本来该画却没算出来，就必须在状态栏说明。
+ *
+ * 两种"没画出来"要分开说，因为它们的原因和后果不同：
+ * - `truncated`：这一对确实相交，但布尔交集配额用尽，所以这次没有交面片（可能连交线都没有——
+ *   完全包含的两个实体本来就不相交于表面）。说"只画了交线"是错的。
+ * - `dropped`：实体对多到超过单次扫描上限，这一对连交线都没算。
  */
-export function resolvePreviewInventoryPrompt(inventory: { lines: number; solids: number; truncated: number }): string | null {
+export function resolvePreviewInventoryPrompt(inventory: { lines: number; solids: number; truncated: number; dropped: number }): string | null {
   const parts: string[] = []
   if (inventory.lines > 0) parts.push(`${inventory.lines} 处交线`)
   if (inventory.solids > 0) parts.push(`${inventory.solids} 处交面`)
-  if (parts.length === 0) return null
-  const truncation = inventory.truncated > 0 ? `（另有 ${inventory.truncated} 处只画了交线：交面一次最多算 ${PREVIEW_SOLID_BUDGET} 处）` : ""
-  return `已自动标出 ${parts.join("、")}：点虚线创建交线图元，点半透明面片创建交面图元${truncation}。`
+  const notes: string[] = []
+  if (inventory.truncated > 0) notes.push(`另有 ${inventory.truncated} 处这次没算交面（交面一次最多算 ${DEFAULT_MAX_SOLID_PREVIEWS} 处，改动来源后会补上）`)
+  if (inventory.dropped > 0) notes.push(`另有 ${inventory.dropped} 处相交对超出单次扫描上限（最多 ${MAX_PAIRS} 对），这次连交线都没画`)
+  if (parts.length === 0 && notes.length === 0) return null
+  const drawn = parts.length > 0 ? `已自动标出 ${parts.join("、")}：点虚线创建交线图元，点半透明面片创建交面图元。` : ""
+  return [drawn, ...notes.map((note) => `${note}。`)].join("")
 }
-
-/** 单次扫描最多算多少个布尔交集（与 `intersectionPreviews3d` 的默认配额一致）。 */
-const PREVIEW_SOLID_BUDGET = 12
 
 export function resolveStatusPrompt({ mode, selectedCount, selectedLabel, hasCenter, hasStart, pointCount, sceneControl = null, pointBinding = null, pathSelected = false }: StatusPromptState): string {
   if (mode === "line") return hasCenter ? "第2步：点击确定直线的第二个点（按住 Shift 锁定水平/垂直）" : "第1步：点击确定直线的第一个点"

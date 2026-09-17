@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import * as THREE from "three"
 
-import { createPreviewGroup } from "./threePrimitives"
+import { createPreviewGroup, disposeObject } from "./threePrimitives"
 import type { ThreeScenePreview } from "./threeScenePreview"
 
 /**
@@ -133,5 +133,31 @@ describe("虚线预览的画法", () => {
     })
     // 交点标记只是画给人看的，不能抢走点击（点击由不可见的命中带负责）。
     for (const marker of markers) expect(marker.raycast({} as never, [] as never)).toBeUndefined()
+  })
+
+  it("does not free the shared marker resources when one preview group goes away", () => {
+    /**
+     * 所有预览的交点标记共用同一份几何与材质（`previewPointGeometry` / `previewPointMaterial`）。
+     * 多份预览同时存在时，重建 / 移除**一份**不能把还在被其它预览使用的共享资源释放掉
+     *（单份预览时代几乎不会触发，改成列表之后动一个来源就会重建它相关的每一对）。
+     */
+    const group = createPreviewGroup(intersectionPreview(), false, () => undefined)
+    const markers: THREE.Mesh[] = []
+    group.traverse((object) => {
+      if (object.userData.visualRole === "intersection-preview-point") markers.push(object as THREE.Mesh)
+    })
+    expect(markers.length).toBeGreaterThan(0)
+    const geometry = markers[0].geometry
+    const material = markers[0].material as THREE.Material
+    const geometryDispose = vi.spyOn(geometry, "dispose")
+    const materialDispose = vi.spyOn(material, "dispose")
+
+    disposeObject(group)
+
+    expect(geometryDispose).not.toHaveBeenCalled()
+    expect(materialDispose).not.toHaveBeenCalled()
+    // 自己那份几何（虚线、命中带）照旧要释放：那是每份预览各自分配的。
+    const line = [...(group.children as THREE.Object3D[])].find((child) => child.userData.visualRole === "intersection-preview-line") as THREE.Line | undefined
+    expect(line?.geometry.attributes.position).toBeTruthy()
   })
 })

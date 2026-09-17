@@ -117,6 +117,61 @@ describe("intersection solid primitive", () => {
     expect(flat.diagnostic).toContain("实体")
   })
 
+  it("keeps resolving a template solid whose topology was turned into an explicit face set", () => {
+    /**
+     * 用户按数值改一个模板顶点时，`updatePrimitive` 会把这条物化拓扑从 `construction.kind: "template"`
+     * 翻成 `"fromFaces"`。如果只认 `template`，这个实体就会从自动预览里**静默消失**，
+     * 交面还会给出误导性的诊断（"来源必须是实体"——它明明是实体）。
+     *
+     * 这里用**棱锥**做这一刀：把顶点（塔尖）沿 x 挪 1，四个侧面仍然是平面，实体仍然是凸的，
+     * 所以正确的行为是"照常算出交集"，而不是"找不到拓扑"。
+     */
+    const document = createEmptyDocument("geometry3d")
+    const cube = { id: "cube-a", type: "cube" as const, origin: { x: -2, y: -2, z: -2 }, size: { x: 4, y: 4, z: 4 } }
+    const pyramid = { id: "pyr-a", type: "pyramid" as const, baseCenter: { x: 0, y: 0, z: -2 }, baseSize: { x: 4, y: 4 }, height: 4 }
+    document.primitives = [cube, ...buildSolidTemplate(cube).primitives, pyramid, ...buildSolidTemplate(pyramid).primitives]
+
+    const withSolid = applyOperation(document, { op: "addPrimitive", primitive: pending(["cube-a", "pyr-a"]) }).document
+    const before = recomputeDerivedObjects(withSolid).primitives.find((primitive) => primitive.id === "solid-1")
+    if (before?.type !== "intersectionSolid") throw new Error("expected intersectionSolid")
+    // 棱锥整个落在立方体里：交集就是棱锥自己（1/3 · 16 · 4）。
+    expect(before.status).toBe("polyhedron")
+    expect(before.volume).toBeCloseTo(64 / 3, 6)
+
+    const apex = withSolid.primitives.find((primitive) => primitive.type === "point3" && primitive.id.startsWith("pyr-a-point") && primitive.position.z === 2)
+    if (apex?.type !== "point3") throw new Error("expected the pyramid apex")
+    const edited = applyOperation(withSolid, { op: "updatePrimitive", id: apex.id, patch: { position3: { ...apex.position, x: 1 } } }).document
+    const flipped = edited.primitives.find((primitive) => primitive.type === "polyhedron3" && primitive.construction?.kind === "fromFaces")
+    const construction = flipped?.type === "polyhedron3" ? flipped.construction : undefined
+    // 归属必须一起带走：否则这个实体就再也找不到自己的拓扑了。
+    expect(construction?.kind).toBe("fromFaces")
+    expect(construction?.kind === "fromFaces" ? construction.sourceId : undefined).toBe("pyr-a")
+
+    const solid = recomputeDerivedObjects(edited).primitives.find((primitive) => primitive.id === "solid-1")
+    if (solid?.type !== "intersectionSolid") throw new Error("expected intersectionSolid")
+    expect(solid.status).toBe("polyhedron")
+    expect(solid.visible).toBe(true)
+    // 塔尖仍在立方体内：交集还是整个棱锥，体积不变。
+    expect(solid.volume).toBeCloseTo(64 / 3, 6)
+  })
+
+  it("blames the geometry, not the source type, when an edited template becomes non-convex", () => {
+    // 把立方体的**一个角**沿 x 挪 1 会让相邻三个面不再共面（实体不再是凸的）：内核就该说这件事，
+    // 而不是因为"找不到拓扑"给出"来源必须是实体"这种风马牛不相及的诊断。
+    const document = overlappingCubes()
+    const withSolid = applyOperation(document, { op: "addPrimitive", primitive: pending(["cube-a", "cube-b"]) }).document
+    const vertex = withSolid.primitives.find((primitive) => primitive.id === "cube-a-point-1")
+    if (vertex?.type !== "point3") throw new Error("expected cube-a-point-1")
+
+    const edited = applyOperation(withSolid, { op: "updatePrimitive", id: "cube-a-point-1", patch: { position3: { ...vertex.position, x: vertex.position.x - 1 } } }).document
+    const solid = recomputeDerivedObjects(edited).primitives.find((primitive) => primitive.id === "solid-1")
+    if (solid?.type !== "intersectionSolid") throw new Error("expected intersectionSolid")
+
+    expect(solid.status).toBe("insufficient-data")
+    expect(solid.diagnostic).not.toContain("来源必须是实体")
+    expect(solid.diagnostic).toContain("凸")
+  })
+
   it("is a pure derived object: it follows its sources and is deleted with them", () => {
     const document = overlappingCubes()
     const withSolid = applyOperation(document, { op: "addPrimitive", primitive: pending(["cube-a", "cube-b"]) }).document

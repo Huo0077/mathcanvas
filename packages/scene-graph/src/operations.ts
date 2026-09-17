@@ -354,12 +354,25 @@ function polyhedronSectionTopology(polyhedron: Extract<PrimitiveSpec, { type: "p
   return faces.length >= 4 ? { vertices, faces } : null
 }
 
-/** Templates materialize their topology as point3/edge3/face3/polyhedron3 objects; cut that topology when present. */
+/**
+ * 某个实体图元的物化拓扑（点驱动的 `polyhedron3`）。
+ *
+ * 两种记法都认：模板物化是 `kind: "template"` + `sourceIds[0] === 实体 id`；
+ * 而按数值改过顶点的模板会被翻成 `fromFaces`，归属记在 `sourceId` 上——不认这一种的话，
+ * 那个实体会在截面 / 交线 / 交面里**静默消失**（实测缺陷），还会给出"来源必须是实体"这种误导诊断。
+ */
 function templateTopology(sourceId: string, primitiveMap: Map<string, PrimitiveSpec>): Extract<PrimitiveSpec, { type: "polyhedron3" }> | null {
+  let fallback: Extract<PrimitiveSpec, { type: "polyhedron3" }> | null = null
   for (const primitive of primitiveMap.values()) {
-    if (primitive.type === "polyhedron3" && primitive.construction?.kind === "template" && primitive.construction.sourceIds[0] === sourceId) return primitive
+    if (primitive.type !== "polyhedron3" || !primitive.construction) continue
+    const construction = primitive.construction
+    const owner = construction.kind === "template" ? construction.sourceIds[0] : construction.kind === "fromFaces" ? construction.sourceId : undefined
+    if (owner !== sourceId) continue
+    // 参数化模板优先：同一实体同时存在两种记法时，模板那一份才是参数真源。
+    if (construction.kind === "template") return primitive
+    fallback = fallback ?? primitive
   }
-  return null
+  return fallback
 }
 
 /** Vertex positions of a section source: materialized topology first, template tessellation as fallback. */
@@ -1404,7 +1417,12 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
       if (operation.patch.position3 !== undefined) {
         for (const candidate of next.primitives) {
           if (candidate.type !== "polyhedron3" || !candidate.vertexIds.includes(primitive.id) || candidate.construction?.kind !== "template") continue
-          candidate.construction = { kind: "fromFaces", sourceIds: [...candidate.faceIds] }
+          /**
+           * 模板一旦有顶点被按数值改动，就不再是"参数化模板"了，改记成显式面环构造。
+           * **归属要一起带走**（`sourceId`）：否则这个实体在截面 / 交线 / 交面里就找不到自己的拓扑，
+           * 会被静默跳过（实测缺陷）。
+           */
+          candidate.construction = { kind: "fromFaces", sourceIds: [...candidate.faceIds], sourceId: candidate.construction.sourceIds[0] }
         }
       }
     }

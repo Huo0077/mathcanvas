@@ -562,9 +562,11 @@ export function buildPointDrivenObject(primitive: PrimitiveSpec, points: Map<str
 export function disposeObject(root: THREE.Object3D): void {
   root.traverse((object) => {
     if (!(object instanceof THREE.Mesh) && !(object instanceof THREE.Line) && !(object instanceof THREE.LineSegments)) return
-    object.geometry.dispose()
+    // 共享资源不能跟着某一个对象释放：所有预览的交点标记共用同一份几何与材质，
+    // 释放其中一份会把还在用的其它预览一起掏空（多份预览同时存在时必然发生）。
+    if (object.geometry.userData.shared !== true) object.geometry.dispose()
     const materials = Array.isArray(object.material) ? object.material : [object.material]
-    materials.forEach((material) => material.dispose())
+    materials.forEach((material) => { if (material.userData?.shared !== true) material.dispose() })
   })
 }
 
@@ -739,6 +741,9 @@ function addSolidPreview(group: THREE.Group, preview: ThreeScenePreview, highlig
 /** 预览的交点标记：一份共享几何与材质，避免每个顶点各建一套。 */
 const previewPointGeometry = new THREE.SphereGeometry(0.06, 10, 8)
 const previewPointMaterial = new THREE.MeshBasicMaterial({ color: "#d92b3a" })
+// 标记成共享：`disposeObject` 会跳过它们，否则重建任意一份预览都会掏空其它预览的标记。
+previewPointGeometry.userData.shared = true
+previewPointMaterial.userData.shared = true
 
 /** 去重（同一位置只留一个标记）：`1e-6` 的尺度对预览足够，且不会把相邻顶点误合并。 */
 function uniqueVertices(points: THREE.Vector3[]): THREE.Vector3[] {
