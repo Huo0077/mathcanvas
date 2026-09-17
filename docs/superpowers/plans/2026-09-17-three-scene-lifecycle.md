@@ -460,8 +460,8 @@ git commit -m "test(three): pin that dragging and unfolding never rebuild the re
 **Spec coverage（对照 spec 第 3.4 节）**
 1. "renderer / canvas / ResizeObserver 只在挂载时创建一次" → 完成（Task 2）。
 2. "依赖数组去掉 `document` 与 `onSelect` 的函数身份" → 完成（Task 2 + Task 3）。
-3. "`syncScene` 按 `primitiveId` 做增删改" → **仍未做（1A-1b 未开工）**，但**拖动那条路已经是按图元增量的**：1A-3 的宿主拖动每帧只重建被拖的点和它的下游对象（`refreshPrimitiveObject`，复用与整场同步完全相同的构造器 `buildPointDrivenObject`），所以"拖动时整场重建"这个最贵的场景已经消失；整体同步（增删图元、切换显示开关、展开）仍是清空后重建。
-4. "`unfoldProgress` 不再进依赖数组" → **仍未做**：它仍参与同步签名（`sceneContentKey` 里带 `unfoldProgress.toFixed(4)`，否则展开不动），所以展开动画每帧仍会重建几何——与下面的已知缺口是同一件事。
-5. "新增 `data-scene-rebuilds` 计数" → 以 `data-scene-builds` 命名完成。
+3. "`syncScene` 按 `primitiveId` 做增删改" → **已完成（1A-1b，2026-09-17 提交 `0d901d1`）**：场景对象按内容签名增量同步（`sceneContentPlan.ts` + `sceneContentSignature.ts`），签名没变就沿用原对象。实测展开动画每帧只重建那张展开网（created 1 / reused 11），切换选中只重建受影响的一两个对象（此前整场 29 个全重建）；拖动路径的 `refreshPrimitiveObject` 与整场同步共用同一张记录表。
+4. "`unfoldProgress` 不再进依赖数组" → **仍未做（但已不再痛）**：它仍参与同步签名（`sceneContentKey` 里带 `unfoldProgress.toFixed(4)`），所以展开动画每帧仍会触发一次内容同步——只是那次同步现在只重建展开网本身，其余对象全部沿用。要在依赖数组层面去掉它，需要把展开进度改成"只更新已有对象"的通道（像拖动那样），属独立改动。
+5. "新增 `data-scene-rebuilds` 计数" → 以 `data-scene-builds` 命名完成；1A-1b 又补了 `data-scene-created` / `reused` / `removed` / `content` / `created-keys` 五个读数，用来钉住"该沿用的必须沿用"。
 
-**已知缺口（显式记录，不掩盖）**: 内容对象仍是"清空后重建"，展开动画每帧仍会重建几何（只是不再重建 WebGL 上下文与 canvas）。切片 1A-1b 负责消除它——**截至 2026-09-17 的收尾仍未做**；唯一被增量化的路径是拖动（见上一条）。
+**已知缺口（显式记录，不掩盖）**: 内容对象的**整场**同步已按图元增量，但展开动画仍走"内容同步"这条通道（每帧重建展开网这一个对象，而不是像拖动那样复用同一个网对象逐帧改形状）。把展开也做成"只更新不复建"是下一步的独立优化。

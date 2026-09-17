@@ -243,9 +243,12 @@ export function projectPointOntoHost3(host: Host3, p: Vector3): { uv: [number, n
 
 **队列之外补齐的四项**（排查与实测阶段发现，均已提交）：F15 采样求交去重尺度改为"只看图形自身尺寸"（`1671289`）；设计第 8 节要求的"四个模板默认截面"验收覆盖（`6f1c144`）；相机与取景数学抽到 `apps/web/src/threeCamera.ts`（`79ebce5`，lint 56 → 42 条 warning）；背景坐标系随内容与相机自适应、3D 画布填满所在网格行（`17e8964`，用户报告的"背景坐标系太小 / 画布太小"）。
 
-**收尾时的实测门禁**：单测 **89 文件 / 1021 用例**；`typecheck` 4 个 workspace；`lint` 0 error / 42 warning；生产构建通过；Playwright **73/73**。
+**收尾时的实测门禁**：单测 **92 文件 / 1042 用例**；`typecheck` 4 个 workspace；`lint` 0 error / 16 warning；生产构建通过；Playwright **76/76**。
 
-**仍未做（明确记录）**：①`syncScene` 按 `primitiveId` 的整场增量 diff（1A-1b）——只有拖动路径已增量（`refreshPrimitiveObject`），展开动画每帧仍重建几何；②相机状态不跨工作区保留；③`threeScene.tsx` 里那些纯几何构造器（网格/拾取/拖动工具）仍与组件同文件，可再拆模块。
+**收尾列出的三条"仍未做"随后全部完成（2026-09-17，提交 `0d901d1` / `a409894`）**：
+- **1A-1b 已做**：场景内容改为按签名增量同步（`sceneContentPlan.ts` + `sceneContentSignature.ts`，按"自己的数据 + 依赖闭包 + 视图状态"判断沿用还是重建）。实测展开动画每帧只重建那张展开网（created 1 / reused 11），切换选中只重建受影响的一两个对象（此前整场 29 个全部重建）；拖动路径的增量（`refreshPrimitiveObject`）与整场同步现在共用同一张记录表。
+- **相机状态跨工作区保留已做**：新增 `apps/web/src/cameraMemory.ts`——会话内记住"某个文档配某个视角"，挂载时恢复并**跳过首次取景**，卸载时写回。刷新页面仍是默认视角。
+- **`threeScene.tsx` 拆分已做**：1927 → 1129 行，抽出 `threePrimitives.ts`（图元构造与释放，550 行）、`threePicking.ts`（拾取与选中判定，114 行）、`threeDrag.ts`（拖动族与偏移，81 行）；组件文件现在只导出组件，`react-refresh/only-export-components` 的告警清零（lint 42 → 16 条）。
 
 ## 10. 风险与回滚
 
