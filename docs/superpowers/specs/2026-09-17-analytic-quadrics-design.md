@@ -129,6 +129,12 @@ export interface Conic3 {
   foci?: Vector3[]        // 椭圆/双曲线两个，抛物线一个
   vertex?: Vector3        // 抛物线顶点
   /**
+   * 平面内的**主轴方向**（世界坐标、正交单位）：`major` 配 `semiMajor`、`minor` 配 `semiMinor`。
+   * 渲染、焦点、顶点与参数化都要它——`frame` 的 `u/v` 是任意正交基，主轴在平面内还可能再转一个角。
+   * 抛物线用 `major` 表示对称轴（指向开口）、`minor` 与之正交。
+   */
+  axes?: { major: Vector3; minor: Vector3 }
+  /**
    * `lines`：一对直线（**平行**或**相交**都可能，靠"过点是否相同"区分）；`line`：一条直线（重根 / 相切）。
    * 用"过点 + 方向"而不是"偏移数字"，是因为偏移量说不清这两类。
    */
@@ -170,10 +176,10 @@ export function intersectPlaneQuadric3(plane: Plane3, quadric: Quadric3): Conic3
 
 参数化（渲染与采样共用；闭合曲线参数域 `[0, 2π)`）：
 
-- 圆 / 椭圆：`p(t) = origin + a·cos(t)·u + b·sin(t)·v`
-- 抛物线：`p(t) = vertex + (t²/(2p))·u + t·v`（`u` 指向开口方向）
-- 双曲线：两支 `p±(t) = center ± (a·cosh t)·u + (b·sinh t)·v`
-- 直线：`p(τ) = origin + (through.s + τ·direction.s)·u + (through.t + τ·direction.t)·v`
+- 圆 / 椭圆：`p(t) = center + a·cos(t)·axes.major + b·sin(t)·axes.minor`（`t ∈ [0, 2π)`）
+- 抛物线：`p(t) = vertex + (t²/(4p))·axes.major + t·axes.minor`（`p = focalParameter` = 顶点到焦点的距离）
+- 双曲线：两支 `p±(t) = center ± a·cosh(t)·axes.major + b·sinh(t)·axes.minor`
+- 直线：`p(τ) = frame.origin + (through.s + τ·direction.s)·u + (through.t + τ·direction.t)·v`（`branch` 选第几条）
 
 **平面标架的构造规则写死**（否则测试没法断言退化直线的过点与方向）：与仓库既有的 `planeBasisFrom`（`threePrimitives.ts`）同一套约定——`n` 归一化后，`helper = |n.x| < 0.9 ? (1,0,0) : (0,1,0)`、`u = normalize(cross(helper, n))`、`v = cross(n, u)`、`origin` 取平面上离世界原点最近的点（`n·(−constant)/|n|²`）。
 
