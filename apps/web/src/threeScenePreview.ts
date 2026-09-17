@@ -1,4 +1,4 @@
-import type { Vector3 } from "@draw/dsl"
+import type { IntersectionSurfaceGeometry3, Vector3 } from "@draw/dsl"
 
 import type { IntersectionPreview3d } from "./intersectionPreviews3d"
 import type { IntersectionPreview } from "./intersectionPreview3d"
@@ -35,6 +35,11 @@ export interface ThreeScenePreview {
    * 不在边界环上，填充必须绕它铺开——否则"圆锥面"会被填成底面那团圆盘，形心还与底面圆盘区域重合。
    */
   poleIndex?: number
+  /**
+   * 交面（曲面区域）：这块区域所在的**解析曲面**（圆柱 / 圆锥）。渲染方按屏幕误差把填充细分、
+   * 并把新顶点吸到真正的曲面上——预览看上去也得是一条光滑曲面，而不是一圈平面三角形。
+   */
+  surface?: IntersectionSurfaceGeometry3
   /** 交点：位置。 */
   position?: Vector3
   /** 状态栏用它说明"这一份是什么、点下去创建什么"。 */
@@ -65,6 +70,7 @@ export function toScenePreview(preview: IntersectionPreview3d, selectedIds: stri
     hint: preview.hint,
     outerRingLength: preview.outerRingLength,
     poleIndex: preview.poleIndex,
+    surface: preview.surface,
     position: preview.position,
     label: preview.label,
     focused: preview.sourceIds.every((id) => selectedIds.includes(id))

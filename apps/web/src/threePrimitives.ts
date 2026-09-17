@@ -434,10 +434,31 @@ export function createSectionMesh(primitive: SectionPrimitive, options: { omitBo
   return group.children.length > 0 ? group : null
 }
 
+/** 区域填充的参数：形状（极点 / 缝合带 / 扇形）+ 解析曲面 + 屏幕误差容差。 */
+export interface RegionFillOptions {
+  /** 前导外环的顶点数（缝合带，见内核 `outerRingLength`）。 */
+  outerRingLength?: number
+  /** 极点下标（圆锥侧面，见内核 `poleIndex`）。 */
+  poleIndex?: number
+  /** 这块区域所在的解析曲面：给了它（且容差可用）就按屏幕误差细分、把新顶点吸到真正的曲面上。 */
+  surface?: RegionSurfaceGeometry
+  /** 世界单位的屏幕误差容差（`curveToleranceFor`）。 */
+  tolerance?: number
+}
+
+/** 有限二次曲面：底圆心 + 轴向 + 底半径 + 轴向高（圆柱半径恒定、圆锥半径线性收缩到 0）。 */
+export interface RegionSurfaceGeometry {
+  kind: "cylinder" | "cone"
+  origin: Vector3
+  axis: Vector3
+  radius: number
+  height: number
+}
+
 /**
  * 区域多边形的**填充三角化**（位置数组，非索引几何）。
  *
- * 三种形状，按"数据里带了什么"决定，缺省是"凸平面多边形的扇形"：
+ * 形状按"数据里带了什么"决定，缺省是"凸平面多边形的扇形"：
  *
  * 1. **极点**（`poleIndex`，圆锥侧面就是）：极点待在曲面内部、不在边界环上，填充必须绕它铺开。
  *    只按边界环铺的话，一张"圆锥面"会被填成底面那团圆盘（形心还和真正的底面圆盘区域重合）——
@@ -447,24 +468,27 @@ export function createSectionMesh(primitive: SectionPrimitive, options: { omitBo
  *    实测立方体 ∩ 圆柱的侧带会画成"顶上一块圆盘 + 几片横穿圆柱内部的三角形"。所以按**环向条带**缝。
  * 3. 其余（平面区域）：从第一点扇形铺开就行。
  *
+ * **曲面区域还要再走一步**（`surface` + `tolerance`）：上面三种铺法用的都是**网格顶点**（默认 48 段），
+ * 照它画出来的"圆柱面 / 圆锥面"是一圈平面三角形——默认缩放下能看出竖条纹、放大后侧影是多边形
+ *（用户口径："我需要的只是那个相交的曲面，但是在我们的图里面，相交那个曲面是由很多三角形拼出来的"）。
+ * 所以把每个三角形按**屏幕误差**均分成 `n²` 片，并把每个新顶点**吸到真正的曲面上**：
+ * 弦高 ≤ 容差 ⇒ 画面上就是一条光滑曲面（与 A1 的"真圆"同一套思路）。`n` 对整块区域取同一个值
+ *（用区域最长边的弦高反推），这样共享边上的细分点两边算出来完全一样、**不会裂**。
+ *
  * 退化三角形（重合点）直接跳过：写进去只会得到零面积片，法向也没意义。
  */
-export function regionFillPositions(points: Vector3[], outerRingLength?: number, poleIndex?: number): number[] {
-  const positions: number[] = []
+export function regionFillPositions(points: Vector3[], options: RegionFillOptions = {}): number[] {
+  const triangles: [number, number, number][] = []
   const push = (first: number, second: number, third: number) => {
     if (first === second || second === third || first === third) return
-    for (const index of [first, second, third]) {
-      const point = points[index]
-      positions.push(point.x, point.y, point.z)
-    }
+    triangles.push([first, second, third])
   }
+  const { outerRingLength, poleIndex } = options
   if (poleIndex !== undefined && poleIndex >= 0 && poleIndex < points.length && points.length >= 4) {
     // 绕极点铺：每条边界边（去掉极点后首尾相接）与极点之间一片三角形。
     const ring = points.map((_, index) => index).filter((index) => index !== poleIndex)
     for (let index = 0; index < ring.length; index += 1) push(poleIndex, ring[index], ring[(index + 1) % ring.length])
-    return positions
-  }
-  if (outerRingLength !== undefined && outerRingLength >= 3 && points.length >= 2 * outerRingLength) {
+  } else if (outerRingLength !== undefined && outerRingLength >= 3 && points.length >= 2 * outerRingLength) {
     for (let index = 0; index < outerRingLength; index += 1) {
       const next = (index + 1) % outerRingLength
       const inner = points.length - 1 - index
@@ -472,10 +496,104 @@ export function regionFillPositions(points: Vector3[], outerRingLength?: number,
       push(index, next, innerNext)
       push(index, innerNext, inner)
     }
-    return positions
+  } else {
+    for (let index = 1; index < points.length - 1; index += 1) push(0, index, index + 1)
   }
-  for (let index = 1; index < points.length - 1; index += 1) push(0, index, index + 1)
+  return curvedFillPositions(points, triangles, options)
+}
+
+/** 每块区域最多细分出多少片：再密也看不出差别，只是白占显存（性能保护，不是精度上限）。 */
+const MAX_REGION_TRIANGLES = 20000
+
+/** 按一张二次曲面把三角形铺开：不细分时就是原样（只把顶点吸到曲面上），细分时子边弦高 ≤ 容差。 */
+function curvedFillPositions(points: Vector3[], triangles: [number, number, number][], options: RegionFillOptions): number[] {
+  const surface = options.surface
+  const tolerance = options.tolerance
+  const positions: number[] = []
+  const snap = surface && Number.isFinite(tolerance) && (tolerance ?? 0) > 0 ? (point: Vector3) => snapToSurface(surface, point) : (point: Vector3) => point
+  const divisions = surface && Number.isFinite(tolerance) && (tolerance ?? 0) > 0 ? subdivisionCount(points, triangles, surface, tolerance as number) : 1
+  for (const triangle of triangles) {
+    const corners = triangle.map((index) => snap(points[index]))
+    if (divisions <= 1) {
+      for (const corner of corners) positions.push(corner.x, corner.y, corner.z)
+      continue
+    }
+    // 重心坐标均分：`(i, j)` 处的点是 `a + (b − a)·i/n + (c − a)·j/n`（`i + j ≤ n`）。
+    const at = (i: number, j: number) => {
+      const u = i / divisions
+      const v = j / divisions
+      const point = {
+        x: corners[0].x + (corners[1].x - corners[0].x) * u + (corners[2].x - corners[0].x) * v,
+        y: corners[0].y + (corners[1].y - corners[0].y) * u + (corners[2].y - corners[0].y) * v,
+        z: corners[0].z + (corners[1].z - corners[0].z) * u + (corners[2].z - corners[0].z) * v
+      }
+      return snap(point)
+    }
+    for (let i = 0; i < divisions; i += 1) {
+      for (let j = 0; j < divisions - i; j += 1) {
+        const first = at(i, j)
+        const second = at(i + 1, j)
+        const third = at(i, j + 1)
+        for (const vertex of [first, second, third]) positions.push(vertex.x, vertex.y, vertex.z)
+        if (i + j + 2 > divisions) continue
+        // 上方那一半（i + j + 1 < n 时存在）。
+        const opposite = at(i + 1, j + 1)
+        for (const vertex of [second, opposite, third]) positions.push(vertex.x, vertex.y, vertex.z)
+      }
+    }
+  }
   return positions
+}
+
+/**
+ * 每个三角形要均分成 `n × n`：`n` 由**区域最长边**的弦高反推。
+ *
+ * 一段弦高 `h` 的边，均分成 `n` 份后弦高降到 `h / n²`；要求 `h / n² ≤ tolerance` ⇒ `n ≈ √(h / tolerance)`。
+ * 对整块区域取**同一个** `n`，共享边两边的细分点才算得一样（否则会出现 T 形接缝、画面上就是裂缝）。
+ * 上限 `MAX_REGION_TRIANGLES` 是性能保护：到了那一步每个面片都远小于一个像素。
+ */
+function subdivisionCount(points: Vector3[], triangles: [number, number, number][], surface: RegionSurfaceGeometry, tolerance: number): number {
+  let worst = 0
+  for (const triangle of triangles) {
+    for (let edge = 0; edge < 3; edge += 1) {
+      const from = points[triangle[edge]]
+      const to = points[triangle[(edge + 1) % 3]]
+      const middle = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2, z: (from.z + to.z) / 2 }
+      const snapped = snapToSurface(surface, middle)
+      // 弦高 = 中点离真曲面的距离 ×2（弦在中点处的最大偏差就是它）。
+      worst = Math.max(worst, 2 * Math.hypot(snapped.x - middle.x, snapped.y - middle.y, snapped.z - middle.z))
+    }
+  }
+  if (!(worst > tolerance)) return 1
+  const needed = Math.ceil(Math.sqrt(worst / tolerance))
+  const affordable = Math.max(1, Math.floor(Math.sqrt(MAX_REGION_TRIANGLES / Math.max(triangles.length, 1))))
+  return Math.max(1, Math.min(needed, affordable))
+}
+
+/**
+ * 把一个点**吸到**这张二次曲面上：轴向坐标不变，径向距离改成该高度处的半径
+ * （圆柱恒定 `radius`；圆锥 `radius·(1 − 轴向/高)`，锥尖处为 0）。
+ *
+ * 落在轴向范围之外的点了（浮点残差或退化输入）原样返回：宁可画旧位置，也不把它甩到别处去。
+ */
+export function snapToSurface(surface: RegionSurfaceGeometry, point: Vector3): Vector3 {
+  const axisLength = Math.hypot(surface.axis.x, surface.axis.y, surface.axis.z)
+  if (!(axisLength > 0) || !(surface.radius > 0) || !(surface.height > 0)) return point
+  const axis = { x: surface.axis.x / axisLength, y: surface.axis.y / axisLength, z: surface.axis.z / axisLength }
+  const offset = { x: point.x - surface.origin.x, y: point.y - surface.origin.y, z: point.z - surface.origin.z }
+  const axial = offset.x * axis.x + offset.y * axis.y + offset.z * axis.z
+  if (axial < -1e-9 || axial > surface.height + 1e-9) return point
+  const radial = { x: offset.x - axial * axis.x, y: offset.y - axial * axis.y, z: offset.z - axial * axis.z }
+  const distance = Math.hypot(radial.x, radial.y, radial.z)
+  if (!(distance > 0)) return point
+  const level = surface.kind === "cylinder" ? surface.radius : surface.radius * (1 - axial / surface.height)
+  if (!(level > 0)) return point
+  const scale = level / distance
+  return {
+    x: surface.origin.x + axial * axis.x + radial.x * scale,
+    y: surface.origin.y + axial * axis.y + radial.y * scale,
+    z: surface.origin.z + axial * axis.z + radial.z * scale
+  }
 }
 
 /**
@@ -496,8 +614,10 @@ function ringVertices(points: Vector3[], poleIndex?: number): THREE.Vector3[] {
  * `style.stroke` 同样照办，否则检查器里那几个控件就是摆设。
  *
  * `tolerance` 是曲线的**屏幕误差容差**（世界单位，见 `conicSampling.ts`）：文档里带着解析边界
- *（`exactLoops`）且容差可用时，边界画成**真曲线**（按屏幕误差细分，放大不看出棱）；容差不可用时
- * 如实退回多边形弦，绝不拿 NaN / 无穷去采样。
+ *（`exactLoops`）且容差可用时，边界画成**真曲线**（按屏幕误差细分，放大不看出棱）；文档里带着解析曲面
+ *（`surface`）时，**填充**也按同一个容差细分并吸回真正的曲面上——于是这块"圆柱面 / 圆锥面"是一条光滑
+ * 曲面，而不是一圈平面三角形（用户口径："我需要的只是那个相交的曲面，但是在我们的图里面，相交那个曲面
+ * 是由很多三角形拼出来的"）。容差不可用时如实退回多边形弦与网格面片，绝不拿 NaN / 无穷去采样。
  */
 export function createIntersectionFaceGroup(
   primitive: Extract<PrimitiveSpec, { type: "intersectionFace" }>,
@@ -506,7 +626,7 @@ export function createIntersectionFaceGroup(
 ): THREE.Object3D | null {
   const ring = primitive.points
   if (ring.length < 3) return null
-  const positions = regionFillPositions(ring, primitive.outerRingLength, primitive.poleIndex)
+  const positions = regionFillPositions(ring, { outerRingLength: primitive.outerRingLength, poleIndex: primitive.poleIndex, surface: primitive.surface, tolerance })
   if (positions.length < 9) return null
   const vertices = ringVertices(ring, primitive.poleIndex)
   const geometry = new THREE.BufferGeometry()
@@ -525,6 +645,9 @@ export function createIntersectionFaceGroup(
   mesh.userData.primitiveId = primitive.id
   mesh.userData.primitiveType = primitive.type
   mesh.userData.visualRole = "intersection-face"
+  // 这片填充用了多少三角形（画布读数用它说明"曲面按屏幕误差细分"确实在生效）。
+  mesh.userData.triangleCount = positions.length / 9
+  group.userData.triangleCount = positions.length / 9
   group.add(mesh)
 
   const exactLoops = primitive.exactLoops && primitive.exactLoops.length > 0 ? primitive.exactLoops : null
@@ -805,11 +928,15 @@ export function disposeScene(scene: THREE.Scene): void {
  *
  * `highlighted` 只影响**画法**（指针落在上面时更实一点），不影响命中区：
  * 命中区必须一直在，否则"原地点击"（浏览器不保证先发 pointermove）会命中不了自己的预览。
+ *
+ * `tolerance` 是屏幕误差容差：曲面交面预览也按它把填充细分并吸到真正的曲面上——
+ * 预览就是"点下去会建出什么"的样子，它要是还由一圈平面三角形拼成，用户看到的就还是那句话。
  */
 export function createPreviewGroup(
   preview: ThreeScenePreview,
   highlighted: boolean,
-  onHoverChange: (hovering: boolean) => void
+  onHoverChange: (hovering: boolean) => void,
+  tolerance?: number
 ): THREE.Group {
   const group = new THREE.Group()
   group.userData.visualRole = "intersection-preview"
@@ -824,7 +951,7 @@ export function createPreviewGroup(
   const lineHitTargets: THREE.Object3D[] = []
   const points: THREE.Vector3[] = []
   if (preview.kind === "face") {
-    addFacePreview(group, preview, highlighted, hitTargets)
+    addFacePreview(group, preview, highlighted, hitTargets, tolerance)
   } else if (preview.kind === "point") {
     addPointPreview(group, preview, highlighted, hitTargets)
   } else if (preview.kind === "intersection") {
@@ -920,10 +1047,10 @@ function setOpacity(object: THREE.Mesh | THREE.Line | THREE.LineSegments, opacit
  * 不透明度刻意压得很低：画布上可能同时有好几块交面，任何一块都不该挡住别的东西；
  * 指针落上去时（`highlighted`）才加一点，让"点下去会创建哪一块"一目了然。
  */
-function addFacePreview(group: THREE.Group, preview: ThreeScenePreview, highlighted: boolean, hitTargets: THREE.Object3D[]): void {
+function addFacePreview(group: THREE.Group, preview: ThreeScenePreview, highlighted: boolean, hitTargets: THREE.Object3D[], tolerance?: number): void {
   const ring = preview.points
   if (ring.length < 3) return
-  const positions = regionFillPositions(ring, preview.outerRingLength, preview.poleIndex)
+  const positions = regionFillPositions(ring, { outerRingLength: preview.outerRingLength, poleIndex: preview.poleIndex, surface: preview.surface, tolerance })
   if (positions.length < 9) return
   const vertices = ringVertices(ring, preview.poleIndex)
   const geometry = new THREE.BufferGeometry()

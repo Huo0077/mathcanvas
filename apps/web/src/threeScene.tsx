@@ -394,6 +394,8 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     let exactCurveSegments = 0
     /** 圆类实体的边界圆（真圆）条数。 */
     let rimCurveCount = 0
+    /** 已创建交面的填充三角形总数（曲面区域按屏幕误差细分：放大时它会长大）。 */
+    let faceTriangles = 0
     previewGroups = new Map<string, THREE.Group>()
     previewByKey = new Map<string, ThreeScenePreview>()
     objectIndex = new Map<string, THREE.Object3D>()
@@ -501,16 +503,19 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     document.primitives.filter((primitive): primitive is IntersectionFacePrimitive => primitive.type === "intersectionFace" && primitive.visible !== false).forEach((primitive) => {
       const selected = selectedIds.includes(primitive.id)
       /**
-       * 文档里带着解析边界（`exactLoops`：圆柱 / 圆锥区域的两圈圆弧）时，边界画成**真曲线**，
-       * 所以它和空间圆一样要跟着缩放走——容差档必须进签名，否则放大后边界还是旧的细分。
+       * 文档里带着解析边界（`exactLoops`：圆柱 / 圆锥区域的两圈圆弧）时，边界画成**真曲线**；
+       * 带着解析曲面（`surface`）时，填充也按屏幕误差细分并吸回真正的曲面上（画成光滑曲面）。
+       * 两者都要跟着缩放走——容差档必须进签名，否则放大后还是旧的细分。
        */
-      const exactBoundary = Boolean(primitive.exactLoops && primitive.exactLoops.length > 0)
-      const flags = `sel:${selected};boundary:${exactBoundary ? `exact;${curveToleranceFlag}` : "polygon"}`
+      const analyticBoundary = Boolean(primitive.exactLoops && primitive.exactLoops.length > 0)
+      const analyticSurface = primitive.surface !== undefined
+      const flags = `sel:${selected};boundary:${analyticBoundary || analyticSurface ? `exact;${curveToleranceFlag}` : "polygon"}`
       const face = keepContent(`intersection-face:${primitive.id}`, signer.of(primitive.id, flags), () => createIntersectionFaceGroup(primitive, selected, curveTolerance), alive, order)
       if (face && typeof face.userData.segmentCount === "number") {
         exactCurveCount += 1
         exactCurveSegments += face.userData.segmentCount
       }
+      if (face && typeof face.userData.triangleCount === "number") faceTriangles += face.userData.triangleCount
     })
     document.primitives.filter((primitive): primitive is IntersectionPoint3Primitive => primitive.type === "intersectionPoint3" && primitive.visible !== false).forEach((primitive) => {
       const marker = keepContent(`intersection-point:${primitive.id}`, signer.of(primitive.id, `sel:${selectedIds.includes(primitive.id)}`), () => createIntersectionPointGroup(primitive, selectedIds.includes(primitive.id)), alive, order)
@@ -607,7 +612,13 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
      */
     const previews = previewsRef.current.filter(hasDrawablePreview)
     for (const item of previews) {
-      const group = keepContent(`preview:${item.key}`, `kind:${item.kind};${JSON.stringify(item)}`, () => createPreviewGroup(item, previewHoverKeyRef.current === item.key, (hovering) => previewHoverRef.current?.(hovering, item)), alive, order)
+      /**
+       * 曲面交面的预览也要跟着缩放走：它的填充按屏幕误差吸到真正的曲面上，容差档必须进签名。
+       * 平面区域没有 `surface`，不进签名——否则每次缩放都会白重建一遍全部预览。
+       */
+      const smoothPreview = item.surface !== undefined
+      const flags = `kind:${item.kind};${smoothPreview ? `tol:${toleranceBucket(curveTolerance)};` : ""}${JSON.stringify(item)}`
+      const group = keepContent(`preview:${item.key}`, flags, () => createPreviewGroup(item, previewHoverKeyRef.current === item.key, (hovering) => previewHoverRef.current?.(hovering, item), curveTolerance), alive, order)
       if (!group) continue
       previewGroups.set(item.key, group as THREE.Group)
       previewByKey.set(item.key, item)
@@ -641,6 +652,8 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       sceneShell.dataset.exactCurves = String(exactCurveCount)
       sceneShell.dataset.exactCurveSegments = String(exactCurveSegments)
       sceneShell.dataset.rimCurves = String(rimCurveCount)
+      // 交面填充的三角形总数：曲面区域按屏幕误差细分，放大时它必须变大（"曲面不是由几个三角形拼的"）。
+      sceneShell.dataset.faceTriangles = String(faceTriangles)
     }
 
     sceneBounds = contentBounds(scene)
@@ -1361,7 +1374,8 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     const runtime = runtimeRef.current
     if (!runtime) return
     /**
-     * 只有画布上**真的存在解析曲线**（空间圆 / 带解析边界的截面 / 带解析边界的交面）时，缩放才需要重新采样。
+     * 只有画布上**真的存在解析曲线 / 解析曲面**（空间圆 / 带解析边界的截面 / 带解析边界的交面 /
+     * 带解析曲面的交面预览）时，缩放才需要重新采样。
      * 否则把容差档写进签名会让"只有立方体"的文档在每次缩放时白跑一次同步——那既浪费，
      * 又可能顺手触发自动取景重新构图（实测：相交预览用例预先算好的投影点因此失效）。
      */
@@ -1369,7 +1383,7 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       primitive.type === "circle3" ||
       (primitive.type === "section" && primitive.exact !== undefined) ||
       (primitive.type === "intersectionFace" && primitive.exactLoops !== undefined && primitive.exactLoops.length > 0)
-    )
+    ) || previews.some((preview) => preview.kind === "face" && preview.surface !== undefined)
     const key = sceneContentKey({
       document,
       selectedIds,

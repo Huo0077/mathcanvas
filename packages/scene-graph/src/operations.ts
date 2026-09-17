@@ -800,11 +800,11 @@ function recomputeIntersectionFace(
   /**
    * 解析字段是**派生**的：这一轮算不出解析边界就必须把它摘掉，
    * 否则会留下一份和现几何对不上的边界（来源移动后尤其明显）。
-   * `outerRingLength` / `poleIndex` 同理：它们描述的是当前 `points` 的填法（前导外环多长、极点在哪个下标），
-   * 来源一动就可能对不上。
+   * `outerRingLength` / `poleIndex` / `surface` 同理：它们描述的是当前 `points` 的填法
+   *（前导外环多长、极点在哪个下标、铺完要不要吸到哪张曲面上），来源一动就可能对不上。
    */
   const withoutAnalytic = (face: Extract<PrimitiveSpec, { type: "intersectionFace" }>) => {
-    const { exactLoops: _staleLoops, areaExact: _staleAreaExact, outerRingLength: _staleOuterRingLength, poleIndex: _stalePoleIndex, ...rest } = face
+    const { exactLoops: _staleLoops, areaExact: _staleAreaExact, outerRingLength: _staleOuterRingLength, poleIndex: _stalePoleIndex, surface: _staleSurface, ...rest } = face
     return rest
   }
   const sources = primitive.sourceIds.map((id) => primitiveMap.get(id))
@@ -845,6 +845,8 @@ function recomputeIntersectionFace(
       // 圆锥侧面那类区域的极点（在曲面内部、不在边界环上）：渲染方靠它绕极点铺开填充。
       // `0` 是合法下标，所以判的是 `!== undefined`。
       ...(region.poleIndex !== undefined ? { poleIndex: region.poleIndex } : {}),
+      // 这块区域所在的解析曲面：渲染方靠它把填充吸回真正的曲面上（画成光滑曲面而不是一圈平面三角形）。
+      ...(region.surface ? { surface: region.surface } : {}),
       hint: { ...centroid },
       status: "valid",
       visible: true,

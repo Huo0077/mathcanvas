@@ -27,6 +27,27 @@ import { circleConic3, conic3Area, quadricScaleOf, type Quadric3 } from "./quadr
 
 export type IntersectionSurfaceKind = "plane" | "cylinder" | "cone"
 
+/**
+ * 曲面区域的**解析曲面**（有限实体的定义：底圆心 + 轴向 + 底半径 + 轴向高）。
+ *
+ * 为什么要把这个交出去：区域的多边形来自**网格**（默认 48 段），画布照它铺出来的"圆柱面 / 圆锥面"
+ * 就是一圈平面三角形——默认缩放下还能看出竖条纹、放大后侧影是多边形（用户口径："我需要的只是那个相交的
+ * 曲面，但是在我们的图里面，相交那个曲面是由很多三角形拼出来的"）。有了这张曲面的定义，渲染方才能按
+ * **屏幕误差**把它细分、并把每个新顶点**吸到真正的曲面上**（与 A1 的"真圆"同一套思路：
+ * 曲线是解析的，只有"画出来"这一步要离散化，段数由屏幕误差定）。
+ */
+export interface IntersectionSurfaceGeometry {
+  kind: "cylinder" | "cone"
+  /** 底面圆心（有限实体的轴向范围从它算起）。 */
+  origin: Vector3
+  /** 轴向单位向量。 */
+  axis: Vector3
+  /** 底面半径。 */
+  radius: number
+  /** 轴向高（底面到顶面 / 锥尖）。 */
+  height: number
+}
+
 export interface IntersectionSurfaceRegion {
   kind: IntersectionSurfaceKind
   /** 平面区域：合并后的外环；曲面区域：边界里最大的那条顶点环（渲染兜底）。 */
@@ -53,6 +74,10 @@ export interface IntersectionSurfaceRegion {
    *（用户反馈："交出一大堆面，但是无法获取那个曲面"）。有极点时 `points[0]` 就是它。
    */
   poleIndex?: number
+  /**
+   * 这张解析曲面本身（圆柱 / 圆锥）；半径或高反解不出来时**不写**（那就不假装能把它吸到曲面上）。
+   */
+  surface?: IntersectionSurfaceGeometry
   /** 解析边界：曲面区域有；平面区域的边界来自二次曲面时也有。串不成闭合环时**不写**。 */
   exactLoops?: CurvePiece3[][]
   /** 平面区域：法向；曲面区域：该二次曲面的轴。 */
@@ -598,6 +623,7 @@ function regionFromCandidate(candidate: RegionCandidate, pointOf: Map<string, Ve
     const poleKey = interior.length === 1 && candidate.frame && radialOf(candidate.frame, pointOf.get(interior[0]) as Vector3) <= RELATIVE_TOLERANCE * candidate.frame.scale ? interior[0] : null
     // 极点排在最前面：只认 `outerRingLength` 的老消费方从 `points[0]` 扇形铺开时也正好铺对。
     const withPole = poleKey ? [pointOf.get(poleKey) as Vector3, ...points] : points
+    const frame = candidate.frame
     return {
       kind: candidate.kind,
       points: withPole,
@@ -605,6 +631,10 @@ function regionFromCandidate(candidate: RegionCandidate, pointOf: Map<string, Ve
       // 极点与条带不会同时出现（有极点就只有一个边界环，没有第二圈可缝）；条带那套下标规则与
       // "极点在最前面"不兼容，所以有极点时如实不写 `outerRingLength`（画布绕极点铺就是对的）。
       ...(!poleKey && stitchedOuterRingLength ? { outerRingLength: stitchedOuterRingLength } : {}),
+      // 解析曲面本身：半径 / 高反解不出来时如实不写（那就不假装能把填充吸到曲面上）。
+      ...(frame && frame.radius !== null && frame.height !== null
+        ? { surface: { kind: frame.kind, origin: { ...frame.origin }, axis: { ...frame.axis }, radius: frame.radius, height: frame.height } }
+        : {}),
       ...(exactLoops ? { exactLoops } : {}),
       normal: { ...candidate.normal },
       // 曲面区域：网格面片面积求和，如实标近似。

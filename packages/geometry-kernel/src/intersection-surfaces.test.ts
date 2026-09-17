@@ -356,6 +356,21 @@ describe("mergeIntersectionSurfaces3", () => {
     const lateralCentroid = centroidOf(lateral.points)
     const discCentroid = centroidOf(disc.points)
     expect(Math.hypot(lateralCentroid.x - discCentroid.x, lateralCentroid.y - discCentroid.y, lateralCentroid.z - discCentroid.z)).toBeGreaterThan(0.05)
+
+    /**
+     * 还要把**解析曲面本身**交出去：区域的多边形来自网格（48 段），照它铺出来的"圆锥面"是一圈平面三角形
+     * （默认缩放下就能看出竖条纹、放大后侧影是多边形）。有曲面定义，渲染方才能按屏幕误差细分、
+     * 并把新顶点吸到真正的曲面上（用户口径："我需要的只是那个相交的曲面，但是在我们的图里面，
+     * 相交那个曲面是由很多三角形拼出来的"）。
+     */
+    expect(lateral.surface).toBeDefined()
+    expect(lateral.surface!.kind).toBe("cone")
+    expect(lateral.surface!.radius).toBeCloseTo(RADIUS, 9)
+    expect(lateral.surface!.height).toBeCloseTo(HEIGHT, 9)
+    expect(Math.abs(lateral.surface!.axis.z)).toBeCloseTo(1, 9)
+    expect(lateral.surface!.origin.z).toBeCloseTo(BASE_Z, 9)
+    // 平面区域没有"曲面"可言。
+    expect(disc.surface).toBeUndefined()
   })
 
   it("groups a cylinder whose axis is not the z axis (App 默认圆柱在 x=3)", () => {

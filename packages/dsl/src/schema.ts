@@ -1,4 +1,4 @@
-import type { GeometryDocument, PrimitiveSpec, ValidationResult } from "./types"
+import type { GeometryDocument, PrimitiveSpec, ValidationResult, Vector3 } from "./types"
 
 const workspaces = new Set(["calculus", "conics", "cad", "geometry3d"])
 const primitiveTypes = new Set(["point", "point3", "line", "line3", "segment", "segment3", "ray", "ray3", "polyline", "connection", "locus", "parabola", "ellipse", "hyperbola", "function", "derivative", "tangent", "normal", "secant", "integral", "analysisSet", "cube", "pyramid", "cylinder", "cone", "plane3", "circle3", "edge3", "face3", "polyhedron3", "section", "intersectionLine", "intersectionSolid", "intersectionFace", "intersectionPoint3", "circle", "arc", "intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection", "intersectionSet"])
@@ -516,6 +516,20 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>, parameter
       if (value.outerRingLength !== undefined && (!isFiniteNumber(value.outerRingLength) || !Number.isInteger(value.outerRingLength) || value.outerRingLength < 3)) errors.push("intersectionFace outerRingLength is invalid")
       // 极点是 `points` 里的下标（圆锥顶点那种"在曲面内部、不在边界环上"的点）：非负整数。
       if (value.poleIndex !== undefined && (!isFiniteNumber(value.poleIndex) || !Number.isInteger(value.poleIndex) || value.poleIndex < 0)) errors.push("intersectionFace poleIndex is invalid")
+      /**
+       * 解析曲面（圆柱 / 圆锥）：渲染方靠它把填充吸回真正的曲面上。
+       * 轴向必须是**有限且非零**的向量（零向量定不出曲面），半径与高必须是有限正数，`kind` 只认两种。
+       */
+      if (value.surface !== undefined) {
+        const surface = value.surface as { kind?: unknown; origin?: unknown; axis?: Vector3 | undefined; radius?: unknown; height?: unknown } | null
+        if (!surface || typeof surface !== "object" || (surface.kind !== "cylinder" && surface.kind !== "cone")) errors.push("intersectionFace surface kind is invalid")
+        else {
+          if (!isFiniteCoordinate3(surface.origin)) errors.push("intersectionFace surface origin is invalid")
+          if (!isFiniteCoordinate3(surface.axis) || Math.hypot(surface.axis?.x ?? 0, surface.axis?.y ?? 0, surface.axis?.z ?? 0) <= 0) errors.push("intersectionFace surface axis is invalid")
+          if (!isFiniteNumber(surface.radius) || surface.radius <= 0) errors.push("intersectionFace surface radius is invalid")
+          if (!isFiniteNumber(surface.height) || surface.height <= 0) errors.push("intersectionFace surface height is invalid")
+        }
+      }
       if (value.exactLoops !== undefined && !isCurvePieceLoops(value.exactLoops)) errors.push("intersectionFace exact loops are invalid")
     } else if (!isFiniteCoordinate3(value.position)) errors.push("intersectionPoint3 position is invalid")
   }

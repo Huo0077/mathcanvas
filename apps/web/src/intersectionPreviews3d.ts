@@ -1,4 +1,4 @@
-import type { GeometryDocument, PrimitiveSpec, Vector3 } from "@draw/dsl"
+import type { GeometryDocument, IntersectionSurfaceGeometry3, PrimitiveSpec, Vector3 } from "@draw/dsl"
 import { intersectConvexPolyhedra3, intersectFaceSets, mergeIntersectionSurfaces3, quadric3FromPrimitive } from "@draw/geometry-kernel"
 import { solidTopology3 } from "@draw/scene-graph"
 
@@ -42,6 +42,11 @@ export interface IntersectionPreview3d {
    * 填充必须绕它铺开，否则这张"圆锥面"会被填成底面圆盘。平面区域没有这个字段。
    */
   poleIndex?: number
+  /**
+   * 交面区域（曲面）：这块区域所在的**解析曲面**（圆柱 / 圆锥）。渲染方按屏幕误差把填充细分、
+   * 并把新顶点吸到真正的曲面上——画出来才是光滑曲面，而不是一圈平面三角形。
+   */
+  surface?: IntersectionSurfaceGeometry3
   /** 交面区域：区域法向（曲面区域是那张二次曲面的轴）、面积，以及"该被建成哪一面"的形心。 */
   normal: Vector3
   area: number
@@ -287,6 +292,7 @@ export function computeIntersectionPreviews3d(document: GeometryDocument, option
             points: region.points.map((point) => ({ ...point })),
             ...(region.outerRingLength ? { outerRingLength: region.outerRingLength } : {}),
             ...(region.poleIndex !== undefined ? { poleIndex: region.poleIndex } : {}),
+            ...(region.surface ? { surface: region.surface } : {}),
             normal: { ...region.normal },
             area: region.area,
             hint: { ...hint },

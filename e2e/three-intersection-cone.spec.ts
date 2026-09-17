@@ -44,4 +44,24 @@ test("turns 圆柱 ∩ 圆锥 into one 圆锥面 plus its base, instead of 48 tr
   await expect(inspector).toContainText("面积")
   await expect(inspector).toContainText("20.1")
   await expect(inspector).toContainText("数值近似")
+
+  /**
+   * (4) 它是**一张光滑曲面**，不是一圈平面三角形（用户口径："我需要的只是那个相交的曲面，
+   * 但是在我们的图里面，相交那个曲面是由很多三角形拼出来的"）。
+   *
+   * 填充按屏幕误差细分并吸回真正的圆锥面上：默认取景下只要 48 片（每片已远小于一个像素），
+   * 放大后必须**变多**——固定 48 片的网格做不到这一点。
+   */
+  const triangles = async () => Number(await scene.getAttribute("data-face-triangles"))
+  const coarse = await triangles()
+  expect(coarse).toBeGreaterThanOrEqual(48)
+
+  await page.evaluate(() => (document.querySelector('button[aria-label="自动取景"]') as HTMLButtonElement).click())
+  const box = (await scene.boundingBox())!
+  await expect.poll(async () => {
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+    await page.mouse.wheel(0, -300)
+    await page.waitForTimeout(60)
+    return triangles()
+  }, { timeout: 20000, message: "放大后曲面交面的填充应细分成更多三角形" }).toBeGreaterThan(coarse * 3)
 })

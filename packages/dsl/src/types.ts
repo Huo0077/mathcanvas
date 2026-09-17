@@ -605,11 +605,30 @@ export interface IntersectionFacePrimitive extends PrimitivePresentation {
    * 画布上既看不出这是曲面、点它还会认领到隔壁那张圆盘。有极点时 `points[0]` 就是它。
    */
   poleIndex?: number
+  /**
+   * 这块区域所在的**解析曲面**（圆柱 / 圆锥）——渲染方按屏幕误差把填充细分、并把新顶点吸到真正的曲面上，
+   * 于是"圆柱面 / 圆锥面"画出来是一条光滑曲面，而不是一圈平面三角形（旧文档没有这个字段）。
+   */
+  surface?: IntersectionSurfaceGeometry3
   hint: Vector3
   status: "valid" | "none" | "insufficient-data"
   diagnostic?: string
   /** 交面边界里的圆弧（圆柱 ∩ 立方体那种）：与截面同一套片段表示，旧文档没有这个字段。 */
   exactLoops?: CurvePiece3[][]
+}
+
+/**
+ * 一张**有限二次曲面**的定义：底圆心 + 轴向单位向量 + 底半径 + 轴向高。
+ *
+ * 圆柱：轴向任意高度处半径都是 `radius`；圆锥：半径随轴向线性收缩到 0（锥尖在 `origin + axis·height`）。
+ * 渲染方用它把交面的填充"吸"回真正的曲面上（径向距离按这个规则定），因此曲面上任意一点都可以精确算出来。
+ */
+export interface IntersectionSurfaceGeometry3 {
+  kind: "cylinder" | "cone"
+  origin: Vector3
+  axis: Vector3
+  radius: number
+  height: number
 }
 
 /**

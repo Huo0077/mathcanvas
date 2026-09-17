@@ -196,6 +196,40 @@ describe("已创建的交面 / 交点图元怎么画", () => {
     for (let vertex = 0; vertex < positions.count; vertex += 1) expect(Math.abs(positions.getZ(vertex))).toBeLessThan(1e-6)
   })
 
+  it("tessellates a curved region by screen error and snaps every vertex onto the true surface", () => {
+    /**
+     * 用户口径："我需要的只是那个相交的曲面，但是在我们的图里面，相交那个曲面是由很多三角形拼出来的。"
+     *
+     * 区域的多边形来自**网格**（默认 48 段），照它铺出来就是一圈平面三角形：默认缩放下能看出竖条纹、
+     * 放大后侧影是多边形。给了 `surface` + 屏幕误差容差之后，每个三角形按需均分、每个新顶点都吸到
+     * 真正的曲面上——弦高 ≤ 容差，画面上就是一条光滑曲面（与 A1 的"真圆"同一套思路）。
+     */
+    const cylinder = { kind: "cylinder" as const, origin: { x: 0, y: 0, z: -RING_HALF_HEIGHT }, axis: { x: 0, y: 0, z: 1 }, radius: RING_RADIUS, height: 2 * RING_HALF_HEIGHT }
+    const coarse = createIntersectionFaceGroup(bandFace(), false, 0.001)!
+    const smooth = createIntersectionFaceGroup({ ...bandFace(), surface: cylinder }, false, 0.001)!
+    const coarseTriangles = trianglesOf(roleOf(coarse, "intersection-face")[0] as THREE.Mesh)
+    const smoothTriangles = trianglesOf(roleOf(smooth, "intersection-face")[0] as THREE.Mesh)
+
+    // 容差 0.001、R=2：8 段的弦高 2(1−cos(π/8))≈0.152 ⇒ 需要 √(0.152/0.001)≈13 份 ⇒ 明显多于粗网格。
+    expect(smoothTriangles.length).toBeGreaterThan(coarseTriangles.length)
+    /**
+     * 关键性质：**每个顶点都落在真正的圆柱面上**（径向恰好 R）。粗网格的顶点本来也在圆上，但它的面片
+     * 是弦（中点离曲面 0.152 远）；细分之后每片都贴着曲面——这才是"不是由三角形拼出来的"。
+     */
+    for (const triangle of smoothTriangles) {
+      for (const vertex of triangle) expect(Math.abs(Math.hypot(vertex.x, vertex.y) - RING_RADIUS)).toBeLessThan(1e-6)
+    }
+    // 每片的最大弦高 ≤ 容差（这里按"面片质心吸回曲面后的偏差 ≤ 容差"等价量测）。
+    const worstSagitta = smoothTriangles.reduce((worst, triangle) => {
+      const centroid = { x: (triangle[0].x + triangle[1].x + triangle[2].x) / 3, y: (triangle[0].y + triangle[1].y + triangle[2].y) / 3, z: (triangle[0].z + triangle[1].z + triangle[2].z) / 3 }
+      const radial = Math.hypot(centroid.x, centroid.y)
+      return Math.max(worst, radial > 1e-9 ? Math.abs(radial - RING_RADIUS) : 0)
+    }, 0)
+    expect(worstSagitta).toBeLessThan(0.001)
+    // 没有曲面定义时保持原样的网格铺法（旧文档 / 平面区域行为不变）。
+    expect(coarseTriangles).toHaveLength(2 * RING_SEGMENTS)
+  })
+
   it("draws the created 交面's analytic boundary as real circles when the document carries exactLoops", () => {
     const loops = [RING_HALF_HEIGHT, -RING_HALF_HEIGHT].map((z) => {
       const conic = circleConic3({ x: 0, y: 0, z }, { x: 0, y: 0, z: 1 }, RING_RADIUS)!
