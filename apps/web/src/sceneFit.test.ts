@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import * as THREE from "three"
 
-import { FIT_MARGIN, fitCameraState, interpolateCameraState, isContentOutOfView, shouldAutoFit, type CameraState } from "./threeCamera"
+import { FIT_MARGIN, contentRadiusExcluding, fitCameraState, interpolateCameraState, isContentOutOfView, shouldAutoFit, type CameraState } from "./threeCamera"
 
 const camera = () => new THREE.PerspectiveCamera(42, 16 / 9, 0.1, 1000)
 const state = (overrides: Partial<CameraState> = {}): CameraState => ({ azimuth: 45, elevation: 30, distance: 16, target: { x: 0, y: 0, z: 0 }, ...overrides })
@@ -140,5 +140,38 @@ describe("auto-fit policy", () => {
 describe("fit margin constant", () => {
   it("is the documented 30%", () => {
     expect(FIT_MARGIN).toBeCloseTo(0.3, 10)
+  })
+})
+
+/**
+ * 平面片尺寸取自"内容半径"，而内容半径**必须能排除指定的对象**：
+ * 面片自己是按半径画出来的，沿用的旧面片还在场景里，算进去就会自我膨胀
+ * （实测：手动半边长恢复自动后，7.02 变成了 36.21）。
+ */
+describe("contentRadiusExcluding", () => {
+  const box = (size: number, exclude = false) => {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(size, size, size))
+    mesh.userData.excludeFromFit = exclude
+    return mesh
+  }
+
+  it("measures the diagonal half of the largest object that is not excluded", () => {
+    const scene = new THREE.Scene()
+    scene.add(box(4), box(40), box(100, true))
+
+    // 三个盒子同心：并集就是最大的那个没被排除的（40），不是被排除的 100。
+    expect(contentRadiusExcluding(scene, [])).toBeCloseTo(Math.hypot(40, 40, 40) / 2, 6)
+  })
+
+  it("leaves out the objects it is told to ignore", () => {
+    const scene = new THREE.Scene()
+    const plane = box(40)
+    scene.add(box(4), plane)
+
+    expect(contentRadiusExcluding(scene, [plane])).toBeCloseTo(Math.hypot(4, 4, 4) / 2, 6)
+  })
+
+  it("is zero for an empty scene", () => {
+    expect(contentRadiusExcluding(new THREE.Scene(), [])).toBe(0)
   })
 })

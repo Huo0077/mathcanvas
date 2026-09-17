@@ -1,4 +1,16 @@
-import { expect, test } from "@playwright/test"
+import { expect, test, type Locator } from "@playwright/test"
+
+import { projectWorldPoint } from "./helpers/projection"
+
+/** 上一次内容同步的读数：重建了几个、沿用几个、丢了几个，以及场景里现在有几个内容对象。 */
+async function readSync(scene: Locator) {
+  return {
+    created: Number(await scene.getAttribute("data-scene-created")),
+    reused: Number(await scene.getAttribute("data-scene-reused")),
+    removed: Number(await scene.getAttribute("data-scene-removed")),
+    content: Number(await scene.getAttribute("data-scene-content"))
+  }
+}
 
 /**
  * 3D 画布的渲染器必须活过一次挂载：编辑、选中、显示开关与展开动画都不许换 canvas，
@@ -67,6 +79,62 @@ test("does not rebuild or resync while a solid is being dragged", async ({ page 
 
   await page.mouse.up()
   await expect(scene).toHaveAttribute("data-scene-builds", "1")
+})
+
+/**
+ * 场景对象按图元增量同步：签名没变的对象必须**沿用**，不能每次同步全清全建。
+ *
+ * 选中一个空间点（它移到了 x=6，立方体旁边）再点回立方体：只有那个点的外观要变，
+ * 其余对象（立方体的 8 点 / 12 棱 / 6 面、栅格、坐标轴）都该原样留着。
+ * 旧实现每次同步都 `clearContent()` 重建全部，于是 created == 内容对象总数、reused == 0。
+ */
+test("rebuilds only the object whose selection changed", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "添加立方体" }).click()
+  await page.getByRole("button", { name: "添加空间点" }).click()
+
+  const scene = page.locator("[data-3d-scene]")
+  // 把点挪出立方体：否则它和实体在同一个位置，点选时说不清选中的是谁。
+  const xField = page.getByRole("spinbutton", { name: "坐标 X" })
+  await xField.fill("6")
+  await xField.blur()
+  const base = await readSync(scene)
+  expect(base.content).toBeGreaterThan(10)
+
+  // 点实体本体（世界原点是立方体的中心，屏幕投影处就是它的正面）：选中从"点"换到"立方体"
+  const centre = await projectWorldPoint(page, { x: 0, y: 0, z: 0 })
+  await page.mouse.click(centre.x, centre.y)
+
+  const after = await readSync(scene)
+  // 只有"失去选中的点"要重建；选中立方体会多出一个剖切面预览（内容 +1），所以给一点余量。
+  expect(after.created).toBeGreaterThanOrEqual(1)
+  expect(after.created).toBeLessThanOrEqual(3)
+  expect(after.reused).toBeGreaterThanOrEqual(base.content - 3)
+  // 关键断言：绝不是整场重建（旧实现这里是 created == 内容总数）
+  expect(after.created).toBeLessThan(base.content)
+  expect(after.removed).toBe(0)
+})
+
+/**
+ * 展开动画过去每帧重建整场（内容签名里带 `unfoldProgress`，而签名一变就全清全建）。
+ * 现在只有那张展开网随进度重建，点 / 栅格 / 坐标轴都沿用。
+ */
+test("keeps the rest of the scene while the unfold animation runs", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "添加立方体" }).click()
+
+  const scene = page.locator("[data-3d-scene]")
+  await page.getByRole("button", { name: "展开", exact: true }).click()
+  await expect(scene).toHaveAttribute("data-unfold-progress", "1.00")
+  // 展开确实发生了，避免"什么都没展开"式的假通过
+  expect(Number(await scene.getAttribute("data-unfold-faces"))).toBeGreaterThan(0)
+
+  const after = await readSync(scene)
+  expect(after.created).toBeLessThanOrEqual(2)
+  expect(after.reused).toBeGreaterThanOrEqual(8)
+  expect(after.created + after.reused).toBe(after.content)
 })
 
 /** 自动取景开关：默认开、可关闭、刷新后仍然记得；重新打开时立刻拟合一次。 */

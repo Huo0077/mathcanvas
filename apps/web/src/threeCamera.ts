@@ -191,6 +191,23 @@ export function contentBounds(scene: THREE.Object3D): THREE.Box3 {
   return bounds
 }
 
+/**
+ * 内容半径（包围盒对角线的一半），可以排除指定对象。
+ *
+ * 平面片的尺寸是"按内容半径画出来的"，而它的旧对象在增量同步里会被**沿用**、仍留在场景中：
+ * 把面片自己算进半径，尺寸就会一路自我膨胀（实测：手动半边长恢复自动之后 7.02 变成 36.21）。
+ */
+export function contentRadiusExcluding(scene: THREE.Object3D, excluded: readonly THREE.Object3D[]): number {
+  scene.updateMatrixWorld(true)
+  const skip = new Set(excluded)
+  const bounds = new THREE.Box3()
+  for (const child of scene.children) {
+    if (skip.has(child) || child.userData.excludeFromFit) continue
+    bounds.expandByObject(child)
+  }
+  return bounds.isEmpty() ? 0 : bounds.getSize(new THREE.Vector3()).length() / 2
+}
+
 /** Exported for the tests: the orbit camera is the one place the world up axis is decided. */
 export function applyCameraState(camera: THREE.PerspectiveCamera, state: CameraState): void {
   const azimuth = state.azimuth * Math.PI / 180

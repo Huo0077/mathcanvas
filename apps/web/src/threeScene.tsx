@@ -11,7 +11,9 @@ import { opacityFor, strokeFor } from "./primitiveStyle"
 import { loadViewPreference3d, saveViewPreference3d } from "./persistence/draftStorage"
 import { GRID_CELLS, gridPlacement } from "./sceneGrid"
 import { sceneContentKey, sceneSyncDecision } from "./sceneContentKey"
-import { applyCameraState, boxCorners, clampCameraTarget, contentBounds, createCameraState, FIT_ANIMATION_MS, fitCameraState, interpolateCameraState, isContentOutOfView, panCameraState, resetCameraState, rotateCameraState, shouldAutoFit, zoomCameraState, type CameraState } from "./threeCamera"
+import { createContentSigner } from "./sceneContentSignature"
+import { applyCameraState, boxCorners, clampCameraTarget, contentBounds, contentRadiusExcluding, createCameraState, FIT_ANIMATION_MS, fitCameraState, interpolateCameraState, isContentOutOfView, panCameraState, resetCameraState, rotateCameraState, shouldAutoFit, zoomCameraState, type CameraState } from "./threeCamera"
+import { loadRememberedCamera, rememberCamera } from "./cameraMemory"
 import type { ThreeScenePreview } from "./threeScenePreview"
 
 const scenePalette = {
@@ -854,7 +856,11 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
   const renderTargetRef = useRef<HTMLDivElement>(null)
   const measurementOverlayRef = useRef<HTMLDivElement>(null)
   const pointLabelOverlayRef = useRef<HTMLDivElement>(null)
-  const cameraStateRef = useRef<CameraState>(createCameraState())
+  /**
+   * 相机状态：优先用"上次离开这个文档时的视角"（见 `cameraMemory.ts`）。
+   * 组件是随工作区卸载重建的，不记的话切到平面几何再回来就回到默认视角。
+   */
+  const cameraStateRef = useRef<CameraState>(loadRememberedCamera(document.metadata.id) ?? createCameraState())
   const resetCameraRef = useRef<() => void>(() => undefined)
   const fitCameraRef = useRef<() => void>(() => undefined)
   const fittedDocumentRef = useRef<string | null>(null)
@@ -1045,18 +1051,19 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
      *
      * 说明：下面整段保持原有缩进以便与历史实现逐行对照，逻辑上它在 `syncContent()` 内部。
      */
-    let contentObjects: THREE.Object3D[] = []
-    const addContent = (object: THREE.Object3D) => {
-      contentObjects.push(object)
-      scene.add(object)
-    }
-    const clearContent = () => {
-      for (const object of contentObjects) {
-        scene.remove(object)
-        disposeObject(object)
-      }
-      contentObjects = []
-    }
+    /**
+     * 内容对象的记录表：key → { 对象, 签名 }。
+     *
+     * 以前这里是 `contentObjects: Object3D[]` + `clearContent()`：每次同步全清全建。
+     * 现在按签名增量（`sceneContentPlan.ts` 定的规则）：签名没变就**沿用原对象**，
+     * 只重建真的变了的那几个。展开动画过去每帧重建整场（内容签名里带 `unfoldProgress`），
+     * 现在每帧只重建那张展开网。
+     */
+    const contentRecords = new Map<string, { object: THREE.Object3D; signature: string }>()    /** 本次同步的重建/沿用/释放计数，写成 `data-scene-*` 读数（e2e 与排查都读它）。 */
+    let syncCounts = { created: 0, reused: 0, removed: 0 }
+    /** 本次同步重建了哪些 key：排查"为什么这个对象被重建了"时，比只数个数有用得多。 */
+    let createdKeys: string[] = []
+
     /** 同步时刷新的闭包变量：render() 与指针处理函数都读它们。 */
     let pointHandles: THREE.Mesh[] = []
     let visiblePointLabels: Point3Primitive[] = []
@@ -1079,9 +1086,49 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       previewKind: previewRef.current?.kind ?? null
     })
 
+    /**
+     * 取一个内容对象：签名没变就沿用原来的（连场景图里的位置都不动），否则重建它。
+     * `build` 是惰性的——沿用的时候**不许**构造，否则省下的只是内存拷贝、白算的还是白算。
+     */
+    const keepContent = (key: string, signature: string, build: () => THREE.Object3D | null, alive: Set<string>, order: string[]): THREE.Object3D | null => {
+      alive.add(key)
+      if (!order.includes(key)) order.push(key)
+      const previous = contentRecords.get(key)
+      if (previous && previous.signature === signature) {
+        syncCounts.reused += 1
+        return previous.object
+      }
+      if (previous) {
+        scene.remove(previous.object)
+        disposeObject(previous.object)
+        contentRecords.delete(key)
+      }
+      const object = build()
+      if (!object) {
+        // 这次没有这个对象（例如平面片退化）：算作释放，别把它记成"重建了一个"。
+        if (previous) syncCounts.removed += 1
+        return null
+      }
+      syncCounts.created += 1
+      createdKeys.push(key)
+      scene.add(object)
+      contentRecords.set(key, { object, signature })
+      return object
+    }
+
     const syncContent = () => {
     sceneSyncsRef.current += 1
-    clearContent()
+    /**
+     * 本次同步"活着"的 key（`alive`）与它们在场景里的顺序（`order`）。
+     *
+     * 两者刻意分开：顺序只能由"实际构造的顺序"决定，而 `alive` 需要**提前**把
+     * 平面片 / 预览 / 背景坐标系这些"后面才加进来"的 key 登记进去——否则释放过期对象时
+     * 会把它们当成过期删掉、这一轮再重建一次（实测：每次同步都重建栅格与坐标轴）。
+     */
+    const alive = new Set<string>()
+    const order: string[] = []
+    syncCounts = { created: 0, reused: 0, removed: 0 }
+    createdKeys = []
     pointHandles = []
     visiblePointLabels = []
     measurementVisuals = []
@@ -1092,6 +1139,7 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     const selectedIds = selectedIdsRef.current
     const { showHiddenEdges, showNormals, transparentFaces, unfoldProgress } = displayFlagsRef.current
     const preview = previewRef.current
+    const signer = createContentSigner(document)
     points = new Map(document.primitives.filter((primitive): primitive is Point3Primitive => primitive.type === "point3").map((primitive) => [primitive.id, primitive]))
     topologyOwners = templateTopologyOwners(document)
 
@@ -1101,41 +1149,49 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     const unfoldedChildIds = new Set(unfoldedPolyhedra.flatMap((polyhedron) => [...polyhedron.edgeIds, ...polyhedron.faceIds]))
     document.primitives.filter((primitive) => primitive.visible !== false).forEach((primitive) => {
       if (unfoldedChildIds.has(primitive.id)) return
-      const object = buildPointDrivenObject(primitive, points, selectedIds.includes(primitive.id))
+      const selected = selectedIds.includes(primitive.id)
+      const object = keepContent(`point:${primitive.id}`, signer.of(primitive.id, `sel:${selected}`), () => buildPointDrivenObject(primitive, points, selected), alive, order)
       if (!object) return
       if (primitive.type === "point3") pointHandles.push(object as THREE.Mesh)
       objectIndex.set(primitive.id, object)
-      addContent(object)
     })
 
     visibleSolids(document).forEach((primitive) => {
       const selected = selectedIds.includes(primitive.id)
-      addContent(createSolidGroup(primitive, selected, { showHiddenEdges, showNormals, transparentFaces, unfoldProgress }))
+      const flags = `sel:${selected};hidden:${showHiddenEdges};normals:${showNormals};transparent:${transparentFaces};unfold:${unfoldProgress > 0.001 ? unfoldProgress.toFixed(4) : "0"}`
+      keepContent(`solid:${primitive.id}`, signer.of(primitive.id, flags), () => createSolidGroup(primitive, selected, { showHiddenEdges, showNormals, transparentFaces, unfoldProgress }), alive, order)
     })
     document.primitives.filter((primitive): primitive is SectionPrimitive => primitive.type === "section" && primitive.visible !== false).forEach((primitive) => {
-      const mesh = createSectionMesh(primitive)
-      if (mesh) addContent(mesh)
+      const selected = selectedIds.includes(primitive.id)
+      // 面片尺寸取自来源实体的**物化拓扑**：拓扑变了面片也得跟着重算，所以把拓扑签名一并带上。
+      const topology = signer.topologyOf(primitive.sourceId)
+      const mesh = keepContent(`section:${primitive.id}`, signer.of(primitive.id, `topo:${topology}`), () => createSectionMesh(primitive), alive, order)
+      if (!mesh) return
       // 选中截面时把剖切面本身也画出来：只看到一圈交线的话，"刀口在哪、往哪边挪"都无从判断。
-      if (!selectedIds.includes(primitive.id)) return
-      const patch = createPlanePatch(primitive.plane, sectionSourceVertices(document, primitive.sourceId), { color: "#f97316", opacity: 0.1 })
-      if (!patch) return
-      // 剖切面片只是"刀口在哪"的指示物，不能参与拾取：它又大又正对相机，否则点击/拖动都会命中它
-      // 而不是截面本身（实测：拖它会平移面片，截面却没动）。
-      patch.traverse((child) => { child.raycast = () => undefined })
-      patch.userData.visualRole = "section-plane"
-      addContent(patch)
+      if (!selected) return
+      keepContent(`section-plane:${primitive.id}`, signer.of(primitive.id, `plane;topo:${topology}`), () => {
+        const patch = createPlanePatch(primitive.plane, sectionSourceVertices(document, primitive.sourceId), { color: "#f97316", opacity: 0.1 })
+        if (!patch) return null
+        // 剖切面片只是"刀口在哪"的指示物，不能参与拾取：它又大又正对相机，否则点击/拖动都会命中它
+        // 而不是截面本身（实测：拖它会平移面片，截面却没动）。
+        patch.traverse((child) => { child.raycast = () => undefined })
+        patch.userData.visualRole = "section-plane"
+        return patch
+      }, alive, order)
     })
     // 已持久化的截线：虚线，与"预览"用同一种视觉语言，但颜色更深、实心可选中。
     document.primitives.filter((primitive) => primitive.type === "intersectionLine" && primitive.visible !== false).forEach((primitive) => {
       if (primitive.type !== "intersectionLine") return
-      const points = primitive.segments.flatMap((segment) => [new THREE.Vector3(segment.a.x, segment.a.y, segment.a.z), new THREE.Vector3(segment.b.x, segment.b.y, segment.b.z)])
-      if (points.length < 2) return
-      const line = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(points), new THREE.LineDashedMaterial({ color: primitive.style?.stroke ?? "#dc2626", dashSize: 0.3, gapSize: 0.2 }))
-      line.computeLineDistances()
-      line.userData.primitiveId = primitive.id
-      line.userData.primitiveType = primitive.type
-      line.userData.visualRole = "intersection-line"
-      addContent(line)
+      keepContent(`intersection-line:${primitive.id}`, signer.of(primitive.id), () => {
+        const points = primitive.segments.flatMap((segment) => [new THREE.Vector3(segment.a.x, segment.a.y, segment.a.z), new THREE.Vector3(segment.b.x, segment.b.y, segment.b.z)])
+        if (points.length < 2) return null
+        const line = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(points), new THREE.LineDashedMaterial({ color: primitive.style?.stroke ?? "#dc2626", dashSize: 0.3, gapSize: 0.2 }))
+        line.computeLineDistances()
+        line.userData.primitiveId = primitive.id
+        line.userData.primitiveType = primitive.type
+        line.userData.visualRole = "intersection-line"
+        return line
+      }, alive, order)
     })
     let unfoldFaceCount = 0
     unfoldedPolyhedra.forEach((polyhedron) => {
@@ -1143,7 +1199,7 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       if (!topology) return
       const layout = unfoldPolyhedron3(topology.vertices, topology.faces, unfoldProgress, topology.rootFaceId)
       if (layout.status !== "ok") return
-      addContent(createUnfoldNetGroup(polyhedron.id, layout, selectedIds.includes(polyhedron.id)))
+      keepContent(`unfold:${polyhedron.id}`, signer.of(polyhedron.id, `unfold:${unfoldProgress.toFixed(4)};sel:${selectedIds.includes(polyhedron.id)}`), () => createUnfoldNetGroup(polyhedron.id, layout, selectedIds.includes(polyhedron.id)), alive, order)
       unfoldFaceCount += layout.faces.length
     })
     // 3D point labels: an HTML overlay above the canvas, so the classroom names A/B/C stay readable at any zoom.
@@ -1156,7 +1212,8 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       .forEach((measurement) => {
         const marker = resolveDihedralMarker3(document, measurement.id)
         if (!marker) return
-        addContent(createDihedralMarkerGroup(marker, measurement.sourceIds.every((id) => selectedIds.includes(id))))
+        const allSelected = measurement.sourceIds.every((id) => selectedIds.includes(id))
+        keepContent(`dihedral:${measurement.id}`, signer.ofReferences(measurement.sourceIds, `dihedral:${JSON.stringify(measurement)};sel:${allSelected}`), () => createDihedralMarkerGroup(marker, allSelected), alive, order)
         dihedralMarkerCount += 1
       })
     measurementVisuals = document.measurements
@@ -1164,28 +1221,59 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       .map((measurement) => resolveMeasurementVisual(document, measurement.id))
       .filter((visual): visual is NonNullable<ReturnType<typeof resolveMeasurementVisual>> => Boolean(visual))
     measurementVisuals.filter((visual) => visual.kind === "label").forEach((visual) => {
-      visual.segments.forEach((segment) => {
-        const geometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(segment.start.x, segment.start.y, segment.start.z), new THREE.Vector3(segment.end.x, segment.end.y, segment.end.z)])
-        const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: "#604fda", transparent: true, opacity: 0.75 }))
-        line.userData.measurementId = visual.id
-        line.userData.visualRole = "measurement-helper"
-        addContent(line)
+      const measurement = document.measurements.find((candidate) => candidate.id === visual.id)
+      const signature = signer.ofReferences(measurement?.sourceIds ?? [], `visual:${JSON.stringify(visual)}`)
+      visual.segments.forEach((segment, index) => {
+        keepContent(`measurement-helper:${visual.id}:${index}`, signature, () => {
+          const geometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(segment.start.x, segment.start.y, segment.start.z), new THREE.Vector3(segment.end.x, segment.end.y, segment.end.z)])
+          const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: "#604fda", transparent: true, opacity: 0.75 }))
+          line.userData.measurementId = visual.id
+          line.userData.visualRole = "measurement-helper"
+          return line
+        }, alive, order)
       })
     })
+    /**
+     * 先登记"后面几个阶段才会加进来"的 key，再释放过期对象。
+     *
+     * 顺序很关键：沿用的对象还留在场景里，而"上一份文档"的残留对象如果拖到后面才释放，
+     * 就会参与 `contentBounds` 的计算——实测打开新文件时相机取景会偏（target 0.48 而不是 0.50）。
+     * 但平面片 / 预览 / 背景坐标系要到下面几步才加进来，不先登记就会被误删再重建
+     *（实测：每次同步都重建栅格与坐标轴）。
+     */
+    alive.add("static:grid")
+    alive.add("static:axes")
+    if (preview && (preview.segments.length > 0 || preview.points.length >= 2)) alive.add("preview")
+    for (const primitive of document.primitives) {
+      if (primitive.type === "plane3" && primitive.visible !== false) alive.add(`plane:${primitive.id}`)
+    }
+    for (const [key, record] of contentRecords) {
+      if (alive.has(key)) continue
+      scene.remove(record.object)
+      disposeObject(record.object)
+      contentRecords.delete(key)
+      syncCounts.removed += 1
+    }
     // Planes are drawn last: their patch is sized from the figure they belong to, so the figure must exist first.
-    const contentRadius = contentBounds(scene).getSize(new THREE.Vector3()).length() / 2
+    /**
+     * 先把手柄按屏幕尺寸缩放**再**算包围盒：手柄的世界半径取决于相机距离，而
+     * 内容包围盒（相机取景）与面片自动尺寸都把它算在内。刚建出来的手柄还是初始尺寸，
+     * 不先缩放就会在同一份内容上算出偏小的包围盒（实测：三点建平面 7.02 vs 7.11）。
+     */
+    syncPointHandleScales()
+    // 面片尺寸要排除平面片自身：旧面片在"沿用"时还在场景里，算进去会自我膨胀
+    //（实测：手动半边长恢复自动之后，7.02 变成了 36.21）。
+    const contentRadius = contentRadiusExcluding(scene, [...contentRecords].filter(([key]) => key.startsWith("plane:")).map(([, record]) => record.object))
     const planeHalfSize = Math.max(Math.min(contentRadius * 1.6, 60), 1.2)
     document.primitives.filter((primitive): primitive is Plane3Primitive => primitive.type === "plane3" && primitive.visible !== false).forEach((primitive) => {
-      const plane = createPlane3Mesh(primitive, points, selectedIds.includes(primitive.id), planeHalfSize)
+      const plane = keepContent(`plane:${primitive.id}`, signer.of(primitive.id, `sel:${selectedIds.includes(primitive.id)};half:${planeHalfSize.toFixed(3)}`), () => createPlane3Mesh(primitive, points, selectedIds.includes(primitive.id), planeHalfSize), alive, order)
       if (!plane) return
-      addContent(plane)
       planeCount += 1
     })
     // 预览层最后加入：盖在实体之上，但仍用虚线表达"还没创建"。
     previewGroup = preview && (preview.segments.length > 0 || preview.points.length >= 2)
-      ? createPreviewGroup(preview, Boolean(previewHoverRef.current), (hovering) => previewHoverRef.current?.(hovering))
+      ? keepContent("preview", `kind:${preview.kind};${JSON.stringify(preview)}`, () => createPreviewGroup(preview, Boolean(previewHoverRef.current), (hovering) => previewHoverRef.current?.(hovering)), alive, order)
       : null
-    if (previewGroup) addContent(previewGroup)
     if (sceneShell) {
       sceneShell.dataset.intersectionPreview = previewGroup ? preview!.kind : "none"
       sceneShell.dataset.unfoldFaces = String(unfoldFaceCount)
@@ -1210,47 +1298,100 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     }
     // Grid and axes follow the figure: at a one-unit scale a fixed five-unit axes helper slashes straight
     // through the solid and a fourteen-unit grid turns into visual noise.
-    /** 背景坐标系：几何是单位尺寸，尺寸与位置每帧按"可见范围 + 内容到达范围"设置。 */
-    const grid = new THREE.GridHelper(GRID_CELLS, GRID_CELLS, scenePalette.grid, scenePalette.grid)
-    // Three.js builds its grid in the XZ plane, which is the floor only when Y is up. With Z up, the floor is XY.
-    grid.rotation.x = Math.PI / 2
-    grid.userData.excludeFromFit = true
-    gridHelper = grid
-    addContent(grid)
+    /** 背景坐标系：几何是单位尺寸，尺寸与位置每帧按"可见范围 + 内容到达范围"设置。
+     *  它们的签名是常量：只有首次同步才会建，之后一直沿用（放置每帧由 applyGridPlacement 负责）。 */
+    gridHelper = keepContent("static:grid", "grid", () => {
+      const grid = new THREE.GridHelper(GRID_CELLS, GRID_CELLS, scenePalette.grid, scenePalette.grid)
+      // Three.js builds its grid in the XZ plane, which is the floor only when Y is up. With Z up, the floor is XY.
+      grid.rotation.x = Math.PI / 2
+      grid.userData.excludeFromFit = true
+      return grid
+    }, alive, order) as THREE.GridHelper | null
     // AxesHelper already draws X/Y/Z along the world axes, so blue points up once Z is the vertical axis.
-    const axes = new THREE.AxesHelper(1)
-    axes.userData.excludeFromFit = true
-    axesHelper = axes
-    addContent(axes)
+    axesHelper = keepContent("static:axes", "axes", () => {
+      const axes = new THREE.AxesHelper(1)
+      axes.userData.excludeFromFit = true
+      return axes
+    }, alive, order) as THREE.AxesHelper | null
+
+    /**
+     * 内容顺序必须跟着本次同步的顺序走：被沿用的对象还停在原来的位置，新对象却追加在末尾。
+     * 顺序乱了会让透明面的叠加次序与同一射线上的命中排序跟着变，所以只在真的不一致时才重排。
+     * 这里同时补一次过期对象的清理：上面"先登记后释放"是为包围盒服务的，
+     * 若某个已登记的 key 最终没能构造出对象（例如平面片退化），它的旧记录要在这里收掉。
+     */
+    for (const [key, record] of contentRecords) {
+      if (alive.has(key)) continue
+      scene.remove(record.object)
+      disposeObject(record.object)
+      contentRecords.delete(key)
+      syncCounts.removed += 1
     }
-    syncContent()
+    const desired = order.flatMap((key) => {
+      const record = contentRecords.get(key)
+      return record ? [record.object] : []
+    })
+    const orderMatches = scene.children.length === desired.length && desired.every((object, index) => scene.children[index] === object)
+    if (!orderMatches) {
+      for (const object of desired) scene.remove(object)
+      for (const object of desired) scene.add(object)
+    }
+    if (sceneShell) {
+      sceneShell.dataset.sceneCreated = String(syncCounts.created)
+      sceneShell.dataset.sceneReused = String(syncCounts.reused)
+      sceneShell.dataset.sceneRemoved = String(syncCounts.removed)
+      sceneShell.dataset.sceneContent = String(contentRecords.size)
+      sceneShell.dataset.sceneCreatedKeys = createdKeys.join(",")
+    }
+    }
 
     /**
      * 只重建**一个**点驱动对象：拖动绑定点时用它让下游实时跟随。
      * 位置已经在 `points` 里按新参数写好，所以这里不需要重建整场、也不进撤销历史。
+     * 走的是与整场同步同一张记录表，所以拖完之后的整场同步不会把它当成"没见过的对象"再建一次。
      */
     const refreshPrimitiveObject = (id: string) => {
       const primitive = documentRef.current.primitives.find((candidate) => candidate.id === id)
       if (!primitive) return
       const previous = objectIndex.get(id)
-      const replacement = buildPointDrivenObject(primitive, points, selectedIdsRef.current.includes(id))
+      const selected = selectedIdsRef.current.includes(id)
+      const replacement = buildPointDrivenObject(primitive, points, selected)
       if (previous) {
         scene.remove(previous)
         disposeObject(previous)
-        const index = contentObjects.indexOf(previous)
-        if (index >= 0) contentObjects.splice(index, 1)
         if (previous instanceof THREE.Mesh) pointHandles = pointHandles.filter((handle) => handle !== previous)
       }
-      if (!replacement) return
-      addContent(replacement)
+      if (!replacement) {
+        contentRecords.delete(`point:${id}`)
+        objectIndex.delete(id)
+        return
+      }
+      scene.add(replacement)
+      contentRecords.set(`point:${id}`, { object: replacement, signature: createContentSigner(documentRef.current).of(id, `sel:${selected}`) })
       objectIndex.set(id, replacement)
       if (replacement instanceof THREE.Mesh && primitive.type === "point3") pointHandles.push(replacement)
     }
 
     let viewportHeight = height
     const syncPointHandleScales = () => {
-      for (const handle of pointHandles) handle.scale.setScalar(pointHandleWorldRadius(camera, camera.position.distanceTo(handle.position), viewportHeight))
+      /**
+       * 手柄的世界半径按**相机到视点中心的距离**统一取，而不是逐个手柄按各自深度取：
+       * 逐个取深度会让近处手柄小、远处手柄大，于是内容包围盒变得**不对称**——
+       * 而包围盒既驱动自动取景（中心就是相机的 target）又驱动平面片的自动尺寸，
+       * 中心会因此偏掉（实测立方体自动取景后 target 是 -0.01,-0.01,-0.00 而不是 0,0,0）。
+       * 统一取值同时还让"画出来的手柄"与"拾取容差"（下面 pickTolerance 用的是同一个量）一致。
+       */
+      const radius = pointHandleWorldRadius(camera, cameraStateRef.current.distance, viewportHeight)
+      for (const handle of pointHandles) handle.scale.setScalar(radius)
     }
+    /**
+     * 首次内容同步放在这里（而不是 `syncContent` 定义之后立刻调用）：同步里要用到
+     * `syncPointHandleScales` 把点手柄先按屏幕尺寸缩放，再算内容包围盒与面片尺寸——
+     * 否则"刚建出来的手柄"还是初始尺寸，同一份内容会算出一个偏小的包围盒
+     *（实测：三点建平面时自动半边长 7.02，而下一次同步同样内容算出 7.11）。
+     */
+    syncContent()
+
     /**
      * 栅格与坐标轴按当前相机与内容自动铺满可见范围。
      * 旧实现是"固定 14 格、以原点为中心、只按内容对角线取整"，于是内容离原点一远
@@ -1395,6 +1536,9 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     // re-framing while the user is working would fight their own camera moves.
     contentKeyRef.current = currentContentKey()
     const fittedId = documentRef.current.metadata.id
+    // 从别的视角回来的同一份文档不算"新文档"：记着视角就别再取景，否则用户转过的角度与缩放会被覆盖。
+    const remembered = loadRememberedCamera(fittedId) ? fittedId : null
+    if (remembered) fittedDocumentRef.current = remembered
     if (fittedDocumentRef.current !== fittedId) {
       fittedDocumentRef.current = fittedId
       fitToContent()
@@ -1724,6 +1868,8 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     renderer.domElement.addEventListener("wheel", handleWheel, { passive: false })
     renderer.domElement.addEventListener("contextmenu", handleContextMenu)
     return () => {
+      // 卸载前把视角记下来：工作区来回切换时才能回到用户离开时的样子。
+      rememberCamera(documentRef.current.metadata.id, cameraStateRef.current)
       resetCameraRef.current = () => undefined
       fitCameraRef.current = () => undefined
       runtimeRef.current = null

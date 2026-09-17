@@ -356,6 +356,13 @@ test("keeps a template face reachable with Alt instead of always taking the whol
 test("resizes a plane patch by hand from the property inspector", async ({ page }) => {
   await page.goto("/")
   await page.getByRole("button", { name: "立体几何" }).click()
+  /**
+   * 先关掉自动取景：面片的"自动尺寸"取自内容半径，而内容里的点手柄是按屏幕尺寸缩放的世界半径——
+   * 相机一动（自动取景就是一种），手柄的世界半径就跟着变，自动尺寸随之变化。
+   * 这条用例测的是"填入手动值 / 恢复自动"这条链路，把相机固定住才谈得上可比。
+   */
+  await page.evaluate(() => (document.querySelector('button[aria-label="自动取景"]') as HTMLButtonElement).click())
+  await expect(page.locator("[data-3d-scene]")).toHaveAttribute("data-autofit", "false")
   for (let index = 0; index < 3; index += 1) await page.getByRole("button", { name: "添加空间点" }).click()
   const algebra = page.locator(".algebra-panel")
   await algebra.getByText("A", { exact: true }).click()
@@ -369,7 +376,22 @@ test("resizes a plane patch by hand from the property inspector", async ({ page 
 
   // Empty means automatic: the patch is still sized from the figure.
   await expect(page.getByLabel("平面半边长")).toHaveValue("")
-  const automatic = await width()
+  /**
+   * 自动尺寸取自"内容半径"，而内容里的点手柄是按**屏幕尺寸**缩放的世界半径——第一次渲染之后才定下来。
+   * 增量同步会沿用这些手柄（不再每轮重建回初始大小），所以先等读数稳定再取基准值；
+   * 否则比较的是"手柄还没缩放时"和"已经缩放后"两个不同状态，与"恢复自动"这件事无关。
+   */
+  const settledWidth = async () => {
+    let previous = await width()
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      await page.waitForTimeout(60)
+      const current = await width()
+      if (Math.abs(current - previous) < 0.01) return current
+      previous = current
+    }
+    return previous
+  }
+  const automatic = await settledWidth()
 
   await page.getByLabel("平面半边长").fill("8")
   await expect.poll(width).toBeGreaterThan(automatic * 1.5)
@@ -386,12 +408,23 @@ test("frames an opened figure instead of leaving it a speck", async ({ page }) =
   const scene = page.locator("[data-3d-scene]")
   await expect(scene).toHaveAttribute("data-camera-distance", "16.00")
 
+  /**
+   * 相机的拟合目标 = 内容包围盒的中心。包围盒里也有**空间点手柄**，而手柄的世界半径是按屏幕尺寸
+   * 缩放出来的（远近不同、大小也不同），所以中心会带上几百分之一到几十分之一的偏移。
+   * 这里断言的是"相机对着图形中心"，不是小数点后两位的字符串——后者会因为手柄状态而抖动。
+   */
+  const target = async () => ((await scene.getAttribute("data-camera-target")) ?? "").split(",").map(Number)
+  const expectTarget = (expected: [number, number, number], message: string) => expect.poll(async () => {
+    const [x, y, z] = await target()
+    return Math.max(Math.abs(x - expected[0]), Math.abs(y - expected[1]), Math.abs(z - expected[2]))
+  }, { message, timeout: 4000 }).toBeLessThan(0.05)
+
   // A one-unit tetrahedron: without fitting it opens as a dot sixteen units away.
   const canvas = page.locator("[data-3d-scene] canvas")
   await expect(canvas).toBeVisible()
   await page.locator('input[type="file"]').setInputFiles("e2e/fixtures/tetrahedron.mgeo")
 
-  await expect(scene).toHaveAttribute("data-camera-target", "0.50,0.50,0.50")
+  await expectTarget([0.5, 0.5, 0.5], "打开四面体后应对准它的中心")
   const distance = Number(await scene.getAttribute("data-camera-distance"))
   expect(distance).toBeLessThan(6)
   expect(distance).toBeGreaterThanOrEqual(3)
@@ -400,7 +433,7 @@ test("frames an opened figure instead of leaving it a speck", async ({ page }) =
   // 这是 2026-09-17 的行为变更（见进度文档）：旧实现"编辑时不重新取景"会让新图元直接落到视野之外。
   await page.getByRole("button", { name: "添加空间点" }).click()
   await expect(scene).toHaveAttribute("data-camera-fit", "2")
-  await expect(scene).toHaveAttribute("data-camera-target", "0.50,0.50,1.50")
+  await expectTarget([0.5, 0.5, 1.5], "新增图元撑大包围盒后应重新对准中心")
   const grown = Number(await scene.getAttribute("data-camera-distance"))
   expect(grown).toBeGreaterThan(distance)
 
