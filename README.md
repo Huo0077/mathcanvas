@@ -167,7 +167,7 @@ npm run build
 npm run test:e2e
 ```
 
-当前验证基线（2026-09-17，提交 `1a38189` 实测）：`npm.cmd test` 为 73 个测试文件、933 个用例通过；4 个 workspace 类型检查通过；ESLint 0 个 error、52 条 warning；Web 生产构建通过（Vite 因此仍提示主 bundle 超过 500 KB）；Playwright Chromium 58/58 通过，覆盖 Ribbon、跨工作区操作、CAD 图纸填充与显式缩放、CAD 2D 绘图交互（命令条在图纸之外 / 固定坐标窗口 / 橡皮筋预览 / 端点与切点捕捉 / 栅格捕捉 / 夹点编辑 / 方向框选 / 坐标键入 / 线宽与命中带 / 偏移与修剪延伸）、工程制图的投影来源切换与投影、立体几何的截面虚线预览与点击创建截线，以及 1440px/768px/390px 视口。平面几何动点系统（曲线约束、依赖图拓扑重算、平面动态测量、轨迹分支切分、删除级联）当前由单测与 App 用例覆盖，本轮尚未补 e2e 用例。Vitest 的 jsdom 3D 测试仍会输出 WebGL context 未实现提示。首次运行需先执行 `npx playwright install chromium`，否则会报缺少浏览器可执行文件。
+当前验证基线（2026-09-17，提交 `79ebce5` 实测）：`npm.cmd test` 为 89 个测试文件、1021 个用例通过；4 个 workspace 类型检查通过；ESLint 0 个 error、42 条 warning；Web 生产构建通过（Vite 因此仍提示主 bundle 超过 500 KB）；Playwright Chromium 73/73 通过，覆盖 Ribbon、跨工作区操作、CAD 图纸填充与显式缩放、CAD 2D 绘图交互（命令条在图纸之外 / 固定坐标窗口 / 橡皮筋预览 / 端点与切点捕捉 / 栅格捕捉 / 夹点编辑 / 方向框选 / 坐标键入 / 线宽与命中带 / 偏移与修剪延伸）、工程制图的投影来源切换与投影、立体几何的截面虚线预览与点击创建截线、**3D 视口的渲染管道不重建（编辑 / 选择 / 展开 / 拖动期间 renderer 只建一次）、绑定点沿宿主拖动、自动取景（含"编辑时不抢视角"）、四个模板的默认截面与 45° 倾斜、画布尺寸在文案变化与窄屏下都不被压缩、背景栅格覆盖远处坐标**，以及 1440px/768px/390px 视口。平面几何动点系统（曲线约束、依赖图拓扑重算、平面动态测量、轨迹分支切分、删除级联）当前由单测与 App 用例覆盖，本轮尚未补 e2e 用例。Vitest 的 jsdom 3D 测试仍会输出 WebGL context 未实现提示。首次运行需先执行 `npx playwright install chromium`，否则会报缺少浏览器可执行文件。
 
 工程工作台 Task 1-7 的聚焦验证：`LayerTree`/`DrawingTree`/`CommandBar`/`EngineeringWorkbench`/`DrawingViewport`/`DrawingSheetView`/`EngineeringInspector` 等新增测试文件 7 个；DSL 与 Scene Graph 图层/图纸操作 3 个测试文件、41 个用例；`e2e/engineering-workbench.spec.ts` 覆盖旧文档迁移、2D 绘图写入活动图层、图层隐藏、刷新后布局保持、隐藏视图不导出、键盘操作、图纸填充与显式缩放（Task 14）。
 
