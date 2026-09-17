@@ -1210,6 +1210,8 @@ P7-1 至 P7-6 与工程工作台层次化改造 Task 1-7 均已完成；P4 Agent
 | 死代码 | `persistence/mgeoStorage.ts`（`saveMgeo`/`loadMgeo` 两个只转发的壳）全仓库**没有任何生产调用点**，只有它自己的测试 | 删掉模块；那 3 个有价值的往返用例改用真正的 `encodeMgeo`/`decodeMgeo`（新文件 `mgeoRoundTrip.test.ts`），覆盖不变 |
 | 体检结论 | 怀疑仓库里存在"PowerShell 文本管道"留下的乱码注释 | 写一次性脚本按字节扫描 280 个源文件 / 文档中的乱码特征字符：**没有任何文件命中**（此前看到的中文乱码是 `Get-Content` 的输出误解码，不是磁盘内容） |
 
+- **第二批的 RED 证据是实跑出来的**（不是推演）：把三个源文件临时切回修复前的提交再跑新用例，得到 `expected 45.00000000000001 to be close to 90`（角度顶点）、`expected true to be false`（弧终点在框外却被判全在框内）、`expected false to be true`（CSV 无 BOM），以及一个审计没提到的连带问题——**两条不相邻的棱旧实现会返回 `valid` 和一个毫无意义的度数**（新用例期望 `insufficient-data`）。随后 `git checkout HEAD --` 还原源码，三个文件 30 个用例全绿，工作区 clean。
+
 - **明确不修、只记录**（都写进 `docs/feature-catalog.md` 的"体检结论与已知限制"）：
   - 非凸实体不再提供"实体内"宿主（宁可报数据不足，也不伪造体外坐标）。
   - 退化直线上的约束被跳过并列入 `unsatisfiable`，但**不让求解失败**：`recomputeDerivedObjects` 在 `!converged` 时抛错，改了就会让"把一条被约束的线拖成一个点"整份文档报错，得不偿失。
