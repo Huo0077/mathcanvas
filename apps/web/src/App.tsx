@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 
 import { decodeMgeo, encodeMgeo, type AnnotationFeature, type DrawingSheetSpec, type EngineeringAnnotationKind, type Measurement3Metric, type PrimitiveSpec, type Vector3, type Workspace } from "@draw/dsl"
-import { buildSolidTemplate, createMeasurement3, evaluatePlanarMeasurement, selectPrimitivesInBox, type BoxSelectionMode, type PlanarMetric } from "@draw/geometry-kernel"
+import { buildSolidTemplate, createMeasurement3, evaluatePlanarMeasurement, host3FromPrimitive, selectPrimitivesInBox, type BoxSelectionMode, type PlanarMetric } from "@draw/geometry-kernel"
 import { deletionTargets, sectionMaterialization, sectionPivot, sectionPlaneThroughSource, sectionSourceVertices, validatePatch } from "@draw/scene-graph"
 import type { Alignment } from "@draw/scene-graph"
 
@@ -530,7 +530,47 @@ export function App() {
     setGuidance("已用该面作为剖切面：拖动截面或按方向键仍可沿新法向平移。")
   }
   /**
-   * 把截面物化成独立图元：每一环 → 点 / 棱 / 面，且**不写来源引用**，
+   * 把空间点物化/解绑到宿主：绑定参数取**点当前坐标在宿主上的最近点**（内核的 closestParameter），
+   * 所以"绑上去"这一步点不会跳，之后的移动完全由参数决定（参数是唯一真值）。
+   */
+  const bindPointToHost = (hostId: string | null) => {
+    if (selectedPrimitive?.type !== "point3") return
+    if (!hostId) {
+      apply({ op: "updatePrimitive", id: selectedPrimitive.id, patch: { binding3: { kind: "free" } } })
+      setGuidance("已解绑为自由点：坐标仍由你直接编辑。")
+      return
+    }
+    const host = document.primitives.find((primitive) => primitive.id === hostId)
+    const constraint = host ? host3FromPrimitive(host, document.primitives) : null
+    if (!host || !constraint) {
+      setFileError("这个图元不能作为宿主动点：只有空间直线 / 线段 / 射线 / 棱 / 面 / 圆柱与圆锥侧面可以。")
+      return
+    }
+    const projected = constraint.closestParameter(selectedPrimitive.position)
+    const binding3 = host.type === "face3"
+      ? { kind: "onFace" as const, faceId: hostId, uv: [projected.u, projected.v ?? 0] as [number, number] }
+      : host.type === "cylinder" || host.type === "cone"
+        ? { kind: "onSurface" as const, solidId: hostId, uv: [projected.u, projected.v ?? 0] as [number, number] }
+        : { kind: "onHost" as const, hostId, parameter: projected.u }
+    apply({ op: "updatePrimitive", id: selectedPrimitive.id, patch: { binding3 } })
+    setGuidance(`已绑定到「${host.label ?? host.id}」：点由宿主参数算出坐标，之后拖动或改参数都沿宿主滑动。`)
+  }
+  /** 改宿主参数：一维宿主只用 u；面与曲面用 (u, v)，只改一个维度时另一个沿用现值。 */
+  const setPointHostParameter = (u: number, v?: number) => {
+    if (selectedPrimitive?.type !== "point3") return
+    const binding = selectedPrimitive.binding
+    if (!binding) return
+    if (binding.kind === "onHost") {
+      if (!Number.isFinite(u)) return
+      apply({ op: "updatePrimitive", id: selectedPrimitive.id, patch: { binding3: { ...binding, parameter: u } } })
+      return
+    }
+    if (binding.kind !== "onFace" && binding.kind !== "onSurface") return
+    if (!Number.isFinite(u) || !Number.isFinite(v ?? binding.uv[1])) return
+    apply({ op: "updatePrimitive", id: selectedPrimitive.id, patch: { binding3: { ...binding, uv: [u, v ?? binding.uv[1]] } } })
+  }
+
+  /** 把截面物化成独立图元：每一环 → 点 / 棱 / 面，且**不写来源引用**，
    * 所以物化之后删掉宿主实体也不影响它们（这就是"可以获取截面图元"）。
    */
   const materializeSelectedSection = () => {
@@ -901,7 +941,18 @@ export function App() {
 
   const planarCanvas = <GraphicsView document={document} selectedIds={selectedIds} creationMode={creationMode} onSelect={updateSelection} onBoxSelect={selectBox} onCanvasClick={handleCanvasCreationClick} onCanvasDoubleClick={handleCanvasDoubleClick} onDragEnd={handleDragEnd} onCreateIntersection={createIntersectionFromPreview} onPointerCoordinate={setPointerCoordinate} />
 
-  const propertiesBarProps: PropertiesBarProps = { selectedPrimitive, selectedIds, selectedCount: selectedIds.length, selectedGroupId: selectedGroup?.id ?? null, allSelectedVisible, canCreateIntersection, onCreateGroup: createGroup, onDeleteGroup: deleteGroup, onCreateIntersection: createIntersection, onAlign: alignSelection, onToggleSelectedVisibility: () => selectedId && apply({ op: "toggleVisibility", id: selectedId, visible: selectedPrimitive?.visible === false }), onToggleSelectedLock: () => selectedId && apply({ op: "toggleLock", id: selectedId, locked: !selectedPrimitive?.locked }), onDeleteSelected: deleteSelected, onToggleBatchVisibility: () => apply({ op: "setPrimitivesVisible", ids: selectedIds, visible: !allSelectedVisible }), onUpdatePrimitive: (patch) => selectedId && apply({ op: "updatePrimitive", id: selectedId, patch }), onRotateSection: rotateSelectedSection, onMaterializeSection: materializeSelectedSection, onAddAnnotation: addAnnotation, onAddEngineeringAnnotation: addEngineeringAnnotation, onCreateMeasurement: addMeasurement, onDeleteMeasurement: deleteMeasurement, onCreateDerivative: (sourceId) => addFunctionAnalysis(sourceId, "derivative"), onCreateTangent: (sourceId) => addFunctionAnalysis(sourceId, "tangent"), onCreateIntegral: (sourceId) => addFunctionAnalysis(sourceId, "integral"), value: slope?.value ?? 0.5, min: slope?.min ?? 0.15, max: slope?.max ?? 0.85, step: slope?.step ?? 0.05, onChange: (value) => apply({ op: "setParameter", id: "slope", value }) }
+  /** 可作宿主的图元：空间直线 / 线段 / 射线 / 棱 / 面 / 圆柱与圆锥侧面。 */
+  const pointHostCandidates = useMemo(
+    () => document.primitives
+      .filter((primitive) => ["line3", "segment3", "ray3", "edge3", "face3", "cylinder", "cone"].includes(primitive.type))
+      .map((primitive) => {
+        const kindLabel = primitive.type === "edge3" ? "棱" : primitive.type === "face3" ? "面" : primitive.type === "line3" ? "直线" : primitive.type === "segment3" ? "线段" : primitive.type === "ray3" ? "射线" : primitive.type === "cylinder" ? "圆柱侧面" : "圆锥侧面"
+        return { id: primitive.id, label: `${primitive.label ?? primitive.id}（${kindLabel}）` }
+      }),
+    [document.primitives]
+  )
+
+  const propertiesBarProps: PropertiesBarProps = { selectedPrimitive, selectedIds, selectedCount: selectedIds.length, selectedGroupId: selectedGroup?.id ?? null, allSelectedVisible, canCreateIntersection, onCreateGroup: createGroup, onDeleteGroup: deleteGroup, onCreateIntersection: createIntersection, onAlign: alignSelection, onToggleSelectedVisibility: () => selectedId && apply({ op: "toggleVisibility", id: selectedId, visible: selectedPrimitive?.visible === false }), onToggleSelectedLock: () => selectedId && apply({ op: "toggleLock", id: selectedId, locked: !selectedPrimitive?.locked }), onDeleteSelected: deleteSelected, onToggleBatchVisibility: () => apply({ op: "setPrimitivesVisible", ids: selectedIds, visible: !allSelectedVisible }), onUpdatePrimitive: (patch) => selectedId && apply({ op: "updatePrimitive", id: selectedId, patch }), onRotateSection: rotateSelectedSection, onMaterializeSection: materializeSelectedSection, pointHostCandidates, onBindPointHost: bindPointToHost, onChangeHostParameter: setPointHostParameter, onAddAnnotation: addAnnotation, onAddEngineeringAnnotation: addEngineeringAnnotation, onCreateMeasurement: addMeasurement, onDeleteMeasurement: deleteMeasurement, onCreateDerivative: (sourceId) => addFunctionAnalysis(sourceId, "derivative"), onCreateTangent: (sourceId) => addFunctionAnalysis(sourceId, "tangent"), onCreateIntegral: (sourceId) => addFunctionAnalysis(sourceId, "integral"), value: slope?.value ?? 0.5, min: slope?.min ?? 0.15, max: slope?.max ?? 0.85, step: slope?.step ?? 0.05, onChange: (value) => apply({ op: "setParameter", id: "slope", value }) }
 
   const propertiesPanel = <PropertiesBar {...propertiesBarProps} />
 

@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, within } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { createEmptyDocument } from "@draw/dsl"
+import { host3FromPrimitive } from "@draw/geometry-kernel"
 
 import { App } from "./App"
 import { createDemoDocument } from "./demoDocument"
@@ -1447,6 +1448,39 @@ describe("MathCanvas workbench", () => {
     expect(new Set(points.map((point) => `${point.x},${point.y},${point.z}`))).toEqual(new Set(["-2,-2,0", "2,-2,0", "2,2,0", "-2,2,0"]))
     // 单一连通截面只有一环。
     expect(section?.type === "section" ? section.loops : []).toHaveLength(1)
+  })
+
+  it("binds a spatial point to a host and slides it along the host parameter", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加立方体" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
+
+    // 绑定到立方体的一条棱（模板实体生成了 12 条 edge3）。
+    const select = screen.getByRole("combobox", { name: "点宿主绑定" }) as HTMLSelectElement
+    const edgeOption = Array.from(select.options).find((option) => option.value.startsWith("cube-1-edge"))
+    expect(edgeOption).toBeTruthy()
+    fireEvent.change(select, { target: { value: edgeOption!.value } })
+
+    const readPoint = () => useSceneStore.getState().document.primitives.find((primitive) => primitive.type === "point3" && primitive.binding?.kind === "onHost") as Extract<ReturnType<typeof createEmptyDocument>["primitives"][number], { type: "point3" }> | undefined
+    const bound = readPoint()!
+    expect(bound).toBeTruthy()
+    const hostPrimitive = useSceneStore.getState().document.primitives.find((primitive) => primitive.id === edgeOption!.value)!
+    const host = host3FromPrimitive(hostPrimitive, useSceneStore.getState().document.primitives)!
+    // 绑定这一步不移动点：初始参数取的就是"点当前坐标在宿主上的最近点"。
+    expect(host.residual(bound.position)).toBeCloseTo(0, 6)
+
+    // 改宿主参数：点沿宿主滑动，而且**仍然精确落在宿主上**（参数是唯一真值）。
+    const parameterField = screen.getByRole("spinbutton", { name: "宿主参数" })
+    fireEvent.change(parameterField, { target: { value: "1" } })
+    const moved = readPoint()!
+    expect((moved.binding as { parameter: number }).parameter).toBeCloseTo(1, 6)
+    expect(host.residual(moved.position)).toBeCloseTo(0, 6)
+
+    // 解绑回到自由点：坐标字段重新可编辑，绑定被移除。
+    fireEvent.change(screen.getByRole("combobox", { name: "点宿主绑定" }), { target: { value: "" } })
+    const freed = useSceneStore.getState().document.primitives.find((primitive) => primitive.id === bound.id) as { binding?: { kind: string } }
+    expect(freed.binding?.kind).toBe("free")
   })
 
   it("materializes a section into independent primitives", () => {
