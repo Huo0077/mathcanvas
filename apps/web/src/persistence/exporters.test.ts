@@ -1,6 +1,7 @@
 import { createEmptyDocument } from "@draw/dsl"
 import { describe, expect, it } from "vitest"
 
+import { WORLD_BOUNDS, worldToSvg, rayToViewport } from "../viewport"
 import { exportCsv, exportSvg } from "./exporters"
 
 describe("document exporters", () => {
@@ -18,6 +19,31 @@ describe("document exporters", () => {
     expect(svg).toContain('fill="#3d5afe"')
     expect(svg).toContain('stroke="#172033"')
     expect(svg).not.toContain('cx="400" cy="320" r="6"')
+  })
+
+  /**
+   * 体检发现的真缺陷：导出侧的 `viewportRay` 自己重写了一遍射线裁剪，并且把 x 方向的限位写反了
+   *（`unit.x > 0` 却用 `minX`），于是"从左侧向右射出的射线"在导出文件里停在左边缘，
+   * 而画布上它是横穿视口的。导出必须复用画布那份 `rayToViewport`。
+   */
+  it("clips an exported ray with the same viewport rule as the canvas", () => {
+    const document = createEmptyDocument("calculus")
+    const ray = { id: "ray-1", type: "ray" as const, a: { x: -20, y: 0 }, b: { x: -19, y: 0 } }
+    document.primitives = [ray]
+
+    const shared = rayToViewport(ray, WORLD_BOUNDS)
+    // 画布上：向右的射线要一直画到视口右边界。
+    expect(shared.b.x).toBeCloseTo(WORLD_BOUNDS.maxX, 9)
+    const expectedX2 = worldToSvg({ x: shared.b.x, y: 0 }).x
+
+    const svg = exportSvg(document)
+    const start = worldToSvg({ x: ray.a.x, y: 0 })
+    // 起点在视口之外（x = -20），网格线不会从那里出发，所以这一段必然是这条射线。
+    const rayFragment = svg.split("<line").find((fragment) => fragment.startsWith(` x1="${start.x}" y1="${start.y}"`))
+
+    expect(rayFragment, "the exported ray segment is missing").toBeDefined()
+    // 旧实现在这里画到左边界（x2 ≈ 0），画布与导出因此不一致。
+    expect(rayFragment).toContain(`x2="${expectedX2}"`)
   })
 
   it("exports primitive metadata and escaped CSV data", () => {

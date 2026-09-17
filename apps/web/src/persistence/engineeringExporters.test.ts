@@ -48,6 +48,24 @@ describe("engineering drawing exporters", () => {
     expect(pdf.byteLength).toBeGreaterThan(500)
   })
 
+  /**
+   * 体检发现的真缺陷：PDF 用的是 `StandardFonts.Helvetica`（只有 WinAnsi 字符集），
+   * 而注释文本与**诊断信息是应用自己生成的中文**。只要图纸里有一条中文诊断（很常见），
+   * `drawText` 就抛 WinAnsi 编码错误，整个"导出 PDF"直接失败。
+   */
+  it("exports a PDF even when annotations and diagnostics contain text Helvetica cannot encode", async () => {
+    const chinese = drawing()
+    chinese[0] = {
+      ...chinese[0],
+      annotations: [{ ...chinese[0].annotations[0], text: "尺寸 1：5.000 毫米" }],
+      diagnostics: ["棱 ab 数据不足：缺少端点"]
+    }
+
+    const pdf = await exportEngineeringPdf(chinese)
+
+    expect(new TextDecoder().decode(pdf.slice(0, 5))).toBe("%PDF-")
+  })
+
   it("keeps engineering annotations and source ids out of a hidden view's export", () => {
     const views: DrawingViewSpec[] = [
       { id: "view-front", kind: "front", x: 0, y: 0, width: 10, height: 10, scale: 1, visible: false, showProjectionLines: false },

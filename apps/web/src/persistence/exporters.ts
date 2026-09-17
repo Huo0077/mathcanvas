@@ -4,7 +4,7 @@ import { adaptiveSampleFunctionSegments, evaluateParameterExpression, sampleElli
 import { svgStyleFor } from "../primitiveStyle"
 import { resolveAnnotationPoint } from "../annotations"
 import { clipFunctionSegmentsToBounds } from "../functionGraph"
-import { VIEWBOX, WORLD_BOUNDS, WORLD_SCALE, worldToSvg } from "../viewport"
+import { VIEWBOX, WORLD_BOUNDS, WORLD_SCALE, rayToViewport, worldToSvg } from "../viewport"
 
 const toX = (x: number) => worldToSvg({ x, y: 0 }).x
 const toY = (y: number) => worldToSvg({ x: 0, y }).y
@@ -22,12 +22,9 @@ function viewportLine(line: Extract<PrimitiveSpec, { type: "line" }>): { a: Coor
 }
 
 function viewportRay(ray: Extract<PrimitiveSpec, { type: "ray" }>): { a: Coordinate; b: Coordinate } {
-  const length = Math.hypot(ray.b.x - ray.a.x, ray.b.y - ray.a.y)
-  if (!Number.isFinite(length) || length === 0) return { a: ray.a, b: ray.b }
-  const unit = { x: (ray.b.x - ray.a.x) / length, y: (ray.b.y - ray.a.y) / length }
-  const limits = [unit.x > 0 ? (WORLD_BOUNDS.minX - ray.a.x) / unit.x : Infinity, unit.x < 0 ? (WORLD_BOUNDS.maxX - ray.a.x) / unit.x : Infinity, unit.y > 0 ? (WORLD_BOUNDS.minY - ray.a.y) / unit.y : Infinity, unit.y < 0 ? (WORLD_BOUNDS.maxY - ray.a.y) / unit.y : Infinity].filter((value) => value >= 0 && Number.isFinite(value))
-  const distance = Math.min(...limits, 20)
-  return { a: ray.a, b: { x: ray.a.x + unit.x * distance, y: ray.a.y + unit.y * distance } }
+  // 复用画布那份裁剪：旧实现是这里的一份**副本**，而且把 x 方向写反了（`unit.x > 0` 用了 minX），
+  // 于是"从左侧向右射出的射线"在导出文件里停在左边缘，和用户在画布上看到的不是一条线。
+  return rayToViewport(ray, WORLD_BOUNDS)
 }
 
 function sampledSegments(primitive: Extract<PrimitiveSpec, { type: "parabola" | "ellipse" | "hyperbola" | "function" | "derivative" | "tangent" | "normal" | "secant" | "integral" | "analysisSet" }>): Coordinate[][] {

@@ -12,7 +12,7 @@
     "build": "npm run build --workspaces",
     "typecheck": "npm run typecheck --workspaces",
     "test": "vitest run",
-    "test:e2e": "npm.cmd run build --workspace @draw/web && playwright test",
+    "test:e2e": "playwright test",
     "test:watch": "vitest",
     "lint": "eslint ."
   },

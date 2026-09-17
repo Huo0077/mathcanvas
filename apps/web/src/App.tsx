@@ -268,6 +268,15 @@ export function App() {
   const load = (serialized: string) => {
     try {
       replace(migrateLegacySolids(decodeMgeo(serialized)))
+      /**
+       * 换文档必须**清掉选中状态**：图元 id 是确定性的（每个文档都从 `point-1` 开始），
+       * 留着旧选中项会让属性栏继续编辑"打开来的同名对象"——用户下一次改属性就悄悄改了别人。
+       * 创建流程与活动图纸同理：它们描述的是上一份文档的操作状态。
+       */
+      setSelectedIds([])
+      setCreationStep(null)
+      setActiveSheetId(null)
+      setActiveViewId(null)
       setFileError(null)
     } catch (error) {
       setFileError(error instanceof Error ? error.message : "无法打开 .mgeo 文件")
@@ -359,8 +368,13 @@ export function App() {
     draftLoadedRef.current = true
     const workspace = loadActiveWorkspace()
     if (workspace && workspace !== document.workspace) switchWorkspace(workspace)
-    const draft = loadDraft(workspace ?? document.workspace)
-    if (draft) { skipNextDraftSaveRef.current = true; replace(migrateLegacySolids(draft)) }
+    // 读不出来的草稿会被**保留**在旁路键上（绝不静默删除用户的草稿），这里如实告诉用户发生了什么。
+    try {
+      const draft = loadDraft(workspace ?? document.workspace)
+      if (draft) { skipNextDraftSaveRef.current = true; replace(migrateLegacySolids(draft)) }
+    } catch (error) {
+      setFileError(error instanceof Error ? error.message : "无法恢复上次的草稿")
+    }
   }, [document.workspace, replace, switchWorkspace])
 
   useEffect(() => {

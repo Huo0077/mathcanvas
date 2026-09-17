@@ -71,18 +71,35 @@ export function gridStep(scale: number, minimumSpacing = 28): number {
   return steps.find((step) => step * scale >= minimumSpacing) ?? steps[steps.length - 1]
 }
 
+/**
+ * 把射线裁到世界视口矩形上（slab 法）。
+ *
+ * 旧实现取"到四条边界的最小正距离"，再和常数 20 取 min。起点在视口**之外**时，射线只画 20 个单位
+ * 就断了（实测：从 x = −20 向右射出的射线停在视口中间，没有横穿视口）；导出侧还有另一份副本，
+ * 把 x 方向写反。现在进入点与离开点一起算：起点在视口外也从整个视口穿过，完全打不到视口时退化成一点。
+ */
 export function rayToViewport(ray: { a: Coordinate; b: Coordinate }, bounds: WorldBounds): { a: Coordinate; b: Coordinate } {
   const length = Math.hypot(ray.b.x - ray.a.x, ray.b.y - ray.a.y)
   if (!Number.isFinite(length) || length === 0) return { a: ray.a, b: ray.b }
   const unit = { x: (ray.b.x - ray.a.x) / length, y: (ray.b.y - ray.a.y) / length }
-  const limits = [
-    unit.x > 0 ? (bounds.maxX - ray.a.x) / unit.x : Infinity,
-    unit.x < 0 ? (bounds.minX - ray.a.x) / unit.x : Infinity,
-    unit.y > 0 ? (bounds.maxY - ray.a.y) / unit.y : Infinity,
-    unit.y < 0 ? (bounds.minY - ray.a.y) / unit.y : Infinity
-  ].filter((value) => value >= 0 && Number.isFinite(value))
-  const distance = Math.min(...limits, 20)
-  return { a: ray.a, b: { x: ray.a.x + unit.x * distance, y: ray.a.y + unit.y * distance } }
+  let entry = 0
+  let exit = Number.POSITIVE_INFINITY
+  for (const [origin, direction, min, max] of [
+    [ray.a.x, unit.x, bounds.minX, bounds.maxX],
+    [ray.a.y, unit.y, bounds.minY, bounds.maxY]
+  ] as const) {
+    if (Math.abs(direction) <= 1e-12) {
+      // 与该轴平行：落在带外就永远进不去。
+      if (origin < min || origin > max) return { a: ray.a, b: ray.a }
+      continue
+    }
+    const first = (min - origin) / direction
+    const second = (max - origin) / direction
+    entry = Math.max(entry, Math.min(first, second))
+    exit = Math.min(exit, Math.max(first, second))
+  }
+  if (!(exit > entry)) return { a: ray.a, b: ray.a }
+  return { a: ray.a, b: { x: ray.a.x + unit.x * exit, y: ray.a.y + unit.y * exit } }
 }
 
 export const WORLD_SCALE = scale

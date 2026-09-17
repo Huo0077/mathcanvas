@@ -160,6 +160,23 @@ function drawPdfPrimitive(page: Awaited<ReturnType<PDFDocument["addPage"]>>, pri
   for (let index = 1; index < points.length; index += 1) page.drawLine({ start: points[index - 1], end: points[index], thickness: 1, color: rgb(0.16, 0.24, 0.5) })
 }
 
+/**
+ * PDF 的标准字体（Helvetica）只有 WinAnsi 字符集：中文注释、以及**应用自己生成的中文诊断**，
+ * 都会让 `drawText` 抛编码错误、整个 PDF 导出失败（实测很常见——只要图纸里有一条诊断就导不出来）。
+ *
+ * 真正的 CJK 需要内嵌字体（体积与许可证都要考虑），当前先把不可编码的字符替换成 `?`：
+ * 导出成功、内容如实标出"有字打不出来"，比整份文件导不出来强。
+ */
+export function winAnsiSafe(text: string): string {
+  let safe = ""
+  for (const character of text) {
+    const code = character.codePointAt(0)!
+    // 可打印 ASCII + Latin-1 补充区是 WinAnsi 的子集；C1 控制区与所有非拉丁字符一律替换。
+    safe += (code >= 0x20 && code <= 0x7e) || (code >= 0xa0 && code <= 0xff) ? character : "?"
+  }
+  return safe
+}
+
 export async function exportEngineeringPdf(drawings: ProjectedDrawing[]): Promise<Uint8Array> {
   const pdf = await PDFDocument.create()
   const font = await pdf.embedFont(StandardFonts.Helvetica)
@@ -168,7 +185,7 @@ export async function exportEngineeringPdf(drawings: ProjectedDrawing[]): Promis
   drawings.slice(0, 4).forEach((drawing) => {
     const page = pdf.addPage([width, height])
     const bounds = drawingBounds(drawing)
-    page.drawText(`${drawing.view} engineering view`, { x: 24, y: height - 28, size: 14, font, color: rgb(0.08, 0.13, 0.22) })
+    page.drawText(winAnsiSafe(`${drawing.view} engineering view`), { x: 24, y: height - 28, size: 14, font, color: rgb(0.08, 0.13, 0.22) })
     drawing.primitives.forEach((primitive) => drawPdfPrimitive(page, primitive, bounds, width, height))
     drawing.projectionLines.forEach((line) => {
       if (!finitePoint(line.from) || !finitePoint(line.to)) return
@@ -176,9 +193,9 @@ export async function exportEngineeringPdf(drawings: ProjectedDrawing[]): Promis
     })
     drawing.annotations.forEach((annotation) => {
       const position = annotation.position ? pdfPoint(annotation.position, bounds, width, height) : { x: 32, y: 32 }
-      page.drawText(annotation.text, { x: position.x, y: position.y, size: 9, font, color: annotation.status === "valid" ? rgb(0.08, 0.13, 0.22) : rgb(0.75, 0.3, 0.05) })
+      page.drawText(winAnsiSafe(annotation.text), { x: position.x, y: position.y, size: 9, font, color: annotation.status === "valid" ? rgb(0.08, 0.13, 0.22) : rgb(0.75, 0.3, 0.05) })
     })
-    drawing.diagnostics.forEach((diagnostic, index) => page.drawText(diagnostic, { x: 24, y: height - 48 - index * 12, size: 7, font, color: rgb(0.75, 0.3, 0.05) }))
+    drawing.diagnostics.forEach((diagnostic, index) => page.drawText(winAnsiSafe(diagnostic), { x: 24, y: height - 48 - index * 12, size: 7, font, color: rgb(0.75, 0.3, 0.05) }))
   })
   if (drawings.length === 0) pdf.addPage([width, height])
   return pdf.save()

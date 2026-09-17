@@ -1,7 +1,7 @@
 import { createDefaultCadLayout, createEmptyDocument } from "@draw/dsl"
-import { beforeEach, describe, expect, it } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { loadActiveWorkspace, loadDraft, loadWorkbenchPreferences, saveDraft, saveWorkbenchPreferences } from "./draftStorage"
+import { loadActiveWorkspace, loadDraft, loadWorkbenchPreferences, saveDraft, saveViewPreference3d, saveWorkbenchPreferences } from "./draftStorage"
 
 describe("draft storage", () => {
   beforeEach(() => localStorage.clear())
@@ -21,6 +21,32 @@ describe("draft storage", () => {
 
     expect(loadDraft("calculus")).toBeNull()
     expect(localStorage.getItem("mathcanvas:draft:calculus")).toBeNull()
+  })
+
+  /**
+   * 体检发现的真缺陷：只要 `decodeMgeo` 抛错就把草稿删掉。可**合法的 JSON 也可能解不出来**
+   * （旧版本字段、校验更严的新版本、手工改坏的文档）——那是用户的工作，删掉就是静默的数据丢失。
+   * 区分"根本不是 JSON"（垃圾，删）与"是文档但当前版本读不了"（保留）。
+   */
+  it("keeps a well-formed draft it cannot decode instead of deleting the user's work", () => {
+    const legacy = { format: "mgeo", formatVersion: "0.1", document: { ...createEmptyDocument("conics"), revision: -1 } }
+    localStorage.setItem("mathcanvas:draft:conics", JSON.stringify(legacy))
+
+    expect(() => loadDraft("conics")).toThrow()
+    // 原键挪到旁路键上保留：自动保存不会覆盖它，用户的工作还在。
+    expect(localStorage.getItem("mathcanvas:draft:conics")).toBeNull()
+    expect(JSON.parse(localStorage.getItem("mathcanvas:draft:conics:unreadable")!)).toEqual(legacy)
+  })
+
+  it("never throws out of a preference write when storage rejects the write", () => {
+    const spy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new DOMException("quota", "QuotaExceededError") })
+    try {
+      expect(() => saveWorkbenchPreferences({ treeTab: "layers", expandedIds: [] })).not.toThrow()
+      expect(() => saveViewPreference3d({ autoFit: false })).not.toThrow()
+      expect(() => saveDraft(createEmptyDocument("conics"))).not.toThrow()
+    } finally {
+      spy.mockRestore()
+    }
   })
 
   it("never reopens the retired calculus workspace from a stored preference", () => {

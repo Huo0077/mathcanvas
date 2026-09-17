@@ -1,7 +1,7 @@
-import { fireEvent, render, screen, within } from "@testing-library/react"
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { beforeEach, describe, expect, it } from "vitest"
 
-import { createEmptyDocument } from "@draw/dsl"
+import { createEmptyDocument, encodeMgeo } from "@draw/dsl"
 import { host3FromPrimitive } from "@draw/geometry-kernel"
 import { recomputeDerivedObjects } from "@draw/scene-graph"
 
@@ -1673,5 +1673,47 @@ describe("MathCanvas workbench", () => {
     fireEvent.click(screen.getByRole("button", { name: "重做" }))
     expect(useSceneStore.getState().document.primitives.some((primitive) => primitive.type === "cube")).toBe(true)
     expect(useSceneStore.getState().document.primitives.some((primitive) => primitive.type === "polyhedron3")).toBe(true)
+  })
+
+  /**
+   * 体检发现的真缺陷：打开 `.mgeo` 走 `replace()`，而 `replace()` 有意保留"当前工作区缓存"，
+   * 于是**选中状态**也被留了下来。图元 id 是确定性的（每个文档都从 `point-1` 开始），
+   * 所以打开一个同样含 `point-1` 的文件后，属性栏会继续编辑"打开来的那个对象"——
+   * 下一次改属性就悄悄改了别人。
+   */
+  it("clears the selection when another document is opened", async () => {
+    const current = createEmptyDocument("conics")
+    current.primitives = [{ id: "point-1", type: "point", x: 1, y: 1, label: "A" }]
+    useSceneStore.getState().replace(current)
+    render(<App />)
+    fireEvent.click(algebraRow("A"))
+    expect(screen.queryByText("未选择任何图元")).toBeNull()
+
+    const opened = createEmptyDocument("conics")
+    opened.metadata = { ...opened.metadata, name: "opened" }
+    opened.primitives = [{ id: "point-1", type: "point", x: 5, y: 5, label: "A" }]
+
+    // jsdom 的 File 还没有 `text()`（浏览器都有），用 FileReader 把这个 API 补上再走真实的打开路径。
+    const proto = File.prototype as unknown as { text?: () => Promise<string> }
+    const originalText = proto.text
+    proto.text = function readAsText(this: File) {
+      return new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(String(reader.result))
+        reader.onerror = () => reject(reader.error)
+        reader.readAsText(this)
+      })
+    }
+    try {
+      const input = globalThis.document.querySelector('input[type="file"]') as HTMLInputElement
+      Object.defineProperty(input, "files", { value: [new File([encodeMgeo(opened)], "opened.mgeo", { type: "application/json" })], configurable: true })
+      fireEvent.change(input)
+
+      await waitFor(() => expect(useSceneStore.getState().document.metadata.name).toBe("opened"))
+      expect(screen.getByText("未选择任何图元")).toBeTruthy()
+    } finally {
+      if (originalText) proto.text = originalText
+      else delete proto.text
+    }
   })
 })

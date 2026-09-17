@@ -30,6 +30,24 @@ describe("shared viewport mapping", () => {
 
     expect(rayToViewport({ a: { x: 0, y: 0 }, b: { x: 1, y: 0 } }, visible)).toEqual({ a: { x: 0, y: 0 }, b: { x: 10, y: 0 } })
   })
+
+  /**
+   * 体检发现的真缺陷：旧实现把"到边界的距离"和常数 20 取 min。起点在视口外时射线只画 20 个单位
+   * 就断了——从 x = −20 向右的射线停在视口中间；导出侧那份副本还把 x 方向写反，两边画得都不一样。
+   */
+  it("clips a ray whose origin is outside the viewport across the whole visible span", () => {
+    const visible = { minX: -10, maxX: 10, minY: -6, maxY: 6 }
+
+    expect(rayToViewport({ a: { x: -20, y: 0 }, b: { x: -19, y: 0 } }, visible)).toEqual({ a: { x: -20, y: 0 }, b: { x: 10, y: 0 } })
+    // 起点在视口外、斜着穿过：终点落在视口角上。
+    const diagonal = rayToViewport({ a: { x: -20, y: -20 }, b: { x: -19, y: -19 } }, visible)
+    expect(diagonal.b.x).toBeCloseTo(6, 9)
+    expect(diagonal.b.y).toBeCloseTo(6, 9)
+    // 背对视口 / 平行于某轴且在带外：什么都不画（退化成起点），而不是画一段视口外的假线。
+    expect(rayToViewport({ a: { x: -20, y: 0 }, b: { x: -21, y: 0 } }, visible)).toEqual({ a: { x: -20, y: 0 }, b: { x: -20, y: 0 } })
+    expect(rayToViewport({ a: { x: 0, y: 20 }, b: { x: 1, y: 20 } }, visible)).toEqual({ a: { x: 0, y: 20 }, b: { x: 0, y: 20 } })
+    expect(rayToViewport({ a: { x: 5, y: 5 }, b: { x: 5, y: 5 } }, visible)).toEqual({ a: { x: 5, y: 5 }, b: { x: 5, y: 5 } })
+  })
 })
 
 describe("canvas zoom", () => {
