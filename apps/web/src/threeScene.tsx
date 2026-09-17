@@ -20,8 +20,16 @@ import type { ThreeScenePreview } from "./threeScenePreview"
 
 import { dragWorldPoint, dragFamilyIds, offsetSceneObjects, applyDragOffsets } from "./threeDrag"
 import { PICK_TOLERANCE_PX, pointHandleWorldRadius, pickRaycastHit3, templateTopologyOwners, pickSectionAt, resolveSelectableHit, previewBeatsPick } from "./threePicking"
-import { sectionUnitNormal, createPlane3Mesh, createSectionMesh, createIntersectionSolidGroup, createIntersectionFaceGroup, createIntersectionPointGroup, createUnfoldNetGroup, createDihedralMarkerGroup, prefersReducedMotion, nextUnfoldProgress, createPlanePatch, createSolidGroup, visibleSolids, buildPointDrivenObject, disposeObject, disposeScene, createPreviewGroup, applyPreviewHighlight, hasDrawablePreview, createCurveLoops3 } from "./threePrimitives"
+import { sectionUnitNormal, createPlane3Mesh, createSectionMesh, createIntersectionSolidGroup, createIntersectionFaceGroup, createIntersectionPointGroup, createUnfoldNetGroup, createDihedralMarkerGroup, prefersReducedMotion, nextUnfoldProgress, createPlanePatch, createSolidGroup, visibleSolids, buildPointDrivenObject, disposeObject, disposeScene, createPreviewGroup, applyPreviewHighlight, hasDrawablePreview, createCurveLoops3, createRimCircles3 } from "./threePrimitives"
 import { curveToleranceFor, toleranceBucket } from "./conicSampling"
+import { collectRimCircles, rimChordEdgeIds } from "./rimCircles"
+import { defaultStrokeFor } from "./primitiveStyle"
+
+/**
+ * 边界圆沿用**棱**的颜色：它就是那两圈棱，只是改由解析圆来画。
+ * 用一条最小的 `edge3` 图元问 `defaultStrokeFor`，颜色只有一处定义（`primitiveStyle.ts`）。
+ */
+const RIM_CURVE_COLOR = defaultStrokeFor({ id: "rim-curve", type: "edge3", pointIds: ["rim-a", "rim-b"] })
 
 const scenePalette = {
   background: "#fbfcff",
@@ -383,6 +391,8 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     /** 解析曲线（真圆 / 圆锥曲线）的画布读数：个数与总段数。 */
     let exactCurveCount = 0
     let exactCurveSegments = 0
+    /** 圆类实体的边界圆（真圆）条数。 */
+    let rimCurveCount = 0
     previewGroups = new Map<string, THREE.Group>()
     previewByKey = new Map<string, ThreeScenePreview>()
     objectIndex = new Map<string, THREE.Object3D>()
@@ -399,6 +409,12 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     const bucket = curveToleranceBucketRef.current
     const curveTolerance = bucket > 0 ? bucket : curveToleranceFor(camera, cameraStateRef.current.distance, viewportSize().height)
     const curveToleranceFlag = `tol:${toleranceBucket(curveTolerance)}`
+    /**
+     * 圆类实体的**边界圆**：解析圆按屏幕误差细分来画，落在圆上的那些可见棱（弦）不再逐段画——
+     * 它们仍留在文档里（对象列表、拾取、面片要用），被选中时照旧画出来（选择反馈不能消失）。
+     */
+    const rimCircles = collectRimCircles(document)
+    const rimChordIds = rimChordEdgeIds(document)
     points = new Map(document.primitives.filter((primitive): primitive is Point3Primitive => primitive.type === "point3").map((primitive) => [primitive.id, primitive]))
     topologyOwners = templateTopologyOwners(document)
 
@@ -409,6 +425,8 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     document.primitives.filter(isUserVisiblePrimitive).forEach((primitive) => {
       if (unfoldedChildIds.has(primitive.id)) return
       const selected = selectedIds.includes(primitive.id)
+      // 边界圆上的弦由解析圆代替绘制（选中时例外：选择反馈必须看得见）。
+      if (!selected && rimChordIds.has(primitive.id)) return
       // 空间圆的细分数跟着缩放走，所以它要把容差档写进签名（其余图元与缩放无关）。
       const flags = primitive.type === "circle3" ? `sel:${selected};${curveToleranceFlag}` : `sel:${selected}`
       const object = keepContent(`point:${primitive.id}`, signer.of(primitive.id, flags), () => buildPointDrivenObject(primitive, points, selected, curveTolerance), alive, order)
@@ -425,6 +443,14 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       const selected = selectedIds.includes(primitive.id)
       const flags = `sel:${selected};hidden:${showHiddenEdges};normals:${showNormals};transparent:${transparentFaces};unfold:${unfoldProgress > 0.001 ? unfoldProgress.toFixed(4) : "0"}`
       keepContent(`solid:${primitive.id}`, signer.of(primitive.id, flags), () => createSolidGroup(primitive, selected, { showHiddenEdges, showNormals, transparentFaces, unfoldProgress }), alive, order)
+    })
+    rimCircles.forEach((entry) => {
+      const selected = selectedIds.includes(entry.id)
+      const group = keepContent(`rim:${entry.id}`, signer.of(entry.id, `rims:${entry.circles.length};${curveToleranceFlag}`), () => createRimCircles3(entry.id, entry.circles, curveTolerance, selected, RIM_CURVE_COLOR), alive, order)
+      if (!group || typeof group.userData.segmentCount !== "number") return
+      rimCurveCount += group.children.length
+      exactCurveCount += 1
+      exactCurveSegments += group.userData.segmentCount
     })
     document.primitives.filter((primitive): primitive is SectionPrimitive => primitive.type === "section" && primitive.visible !== false).forEach((primitive) => {
       const selected = selectedIds.includes(primitive.id)
@@ -602,6 +628,7 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       sceneShell.dataset.sectionExactStatus = firstSection?.status ?? ""
       sceneShell.dataset.exactCurves = String(exactCurveCount)
       sceneShell.dataset.exactCurveSegments = String(exactCurveSegments)
+      sceneShell.dataset.rimCurves = String(rimCurveCount)
     }
 
     sceneBounds = contentBounds(scene)

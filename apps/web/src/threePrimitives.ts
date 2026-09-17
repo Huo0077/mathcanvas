@@ -323,6 +323,28 @@ export function createConic3Line(primitiveId: string, conic: Conic3, tolerance: 
   return line
 }
 
+/**
+ * 圆类实体的**边界圆**：圆柱的上下底、圆锥的底，每个圆一条解析曲线（按屏幕误差细分）。
+ *
+ * 48 段近似下这两圈是 96 条弦，弦高偏差 `R(1 − cos(π/48))`，放大就出棱。
+ * 那些弦仍留在文档里（对象列表、拾取、面片要用），画布改由这里画真圆。
+ */
+export function createRimCircles3(primitiveId: string, circles: Conic3[], tolerance: number, selected: boolean, color?: string): THREE.Group | null {
+  const group = new THREE.Group()
+  let segments = 0
+  for (const circle of circles) {
+    const line = createConic3Line(primitiveId, circle, tolerance, selected, color)
+    if (!line) continue
+    segments += Number(line.userData.segmentCount ?? 0)
+    group.add(line)
+  }
+  if (group.children.length === 0) return null
+  group.userData.primitiveId = primitiveId
+  group.userData.visualRole = "rim-circles"
+  group.userData.segmentCount = segments
+  return group
+}
+
 /** 截面 / 交面的解析边界：每个闭合环一条折线（环由"圆锥曲线弧 + 端面弦"拼成）。 */
 export function createCurveLoops3(primitiveId: string, loops: CurvePiece3[][], tolerance: number, selected: boolean, color?: string): THREE.Group | null {
   const group = new THREE.Group()

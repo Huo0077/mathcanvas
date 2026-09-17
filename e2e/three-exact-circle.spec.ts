@@ -17,13 +17,17 @@ test("draws a section of a cylinder as an exact circle that gains detail when zo
   await page.getByRole("button", { name: "添加圆柱" }).click()
 
   const scene = page.locator("[data-3d-scene]")
+  // 圆柱的上下底圆就是两圈真圆（替代原来的 96 段弦）。
+  await expect(scene).toHaveAttribute("data-rim-curves", "2")
+
   await page.getByRole("button", { name: "创建截面" }).click()
   await expect(scene).toHaveAttribute("data-section-count", "1")
 
   // 默认剖切面过包围盒中心、法向 +Z，与圆柱轴垂直 ⇒ 精确的圆。
   await expect(scene).toHaveAttribute("data-section-exact-kind", "circle")
   await expect(scene).toHaveAttribute("data-section-exact-status", "exact")
-  await expect(scene).toHaveAttribute("data-exact-curves", "1")
+  // 两条解析曲线在画布上：圆柱的边界圆（一个组）+ 截面的真圆边界。
+  await expect(scene).toHaveAttribute("data-exact-curves", "2")
 
   // 检查器把解析结论摊开给用户看：半径与离心率（圆就是离心率 0），不是只能数折线点数。
   const inspector = page.locator(".panel.right")
