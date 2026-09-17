@@ -157,17 +157,24 @@ describe("Geometry DSL document layout schema", () => {
   })
 
   /**
-   * 圆类实体（圆柱 / 圆锥）的多边形近似顶点带 `tessellation` 标记：它们留在文档里参与面 / 棱 /
-   * 交线计算，但不展示。只允许布尔值，缺省表示普通的用户点（旧文档因此完全不受影响）。
+   * 圆类实体（圆柱 / 圆锥）的多边形近似顶点与母线带 `tessellation` 标记：它们留在文档里参与面 / 棱 /
+   * 交线计算，但不展示、不列出、点不到。只允许布尔值，缺省表示普通的用户对象（旧文档因此完全不受影响）。
    */
-  it("validates the tessellation flag on round-solid vertices", () => {
+  it("validates the tessellation flag on round-solid vertices and generatrices", () => {
     const document = { ...createEmptyDocument("geometry3d") }
     const point = (overrides: Record<string, unknown> = {}) => ({ id: "point-a", type: "point3", position: { x: 0, y: 0, z: 0 }, ...overrides })
+    // 棱必须引用真实存在的点，否则文档会因为"引用缺失"而整体无效，测不到 `tessellation` 这一条。
+    const endpoints = [point({ id: "point-a" }), point({ id: "point-b", position: { x: 1, y: 0, z: 0 } })]
+    const edge = (overrides: Record<string, unknown> = {}) => ({ id: "edge-a", type: "edge3", pointIds: ["point-a", "point-b"], ...overrides })
 
     expect(validateDocument({ ...document, primitives: [point({ tessellation: true })] }).valid).toBe(true)
     expect(validateDocument({ ...document, primitives: [point({ tessellation: false })] }).valid).toBe(true)
     expect(validateDocument({ ...document, primitives: [point()] }).valid).toBe(true)
     expect(validateDocument({ ...document, primitives: [point({ tessellation: "yes" })] }).valid).toBe(false)
+
+    expect(validateDocument({ ...document, primitives: [...endpoints, edge({ tessellation: true })] }).valid).toBe(true)
+    expect(validateDocument({ ...document, primitives: [...endpoints, edge()] }).valid).toBe(true)
+    expect(validateDocument({ ...document, primitives: [...endpoints, edge({ tessellation: 1 })] }).valid).toBe(false)
   })
 
   /**

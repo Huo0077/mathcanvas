@@ -424,8 +424,19 @@ function templateInput(primitive: TemplateSolidPrimitive): CubeInput | PyramidIn
   return { center: primitive.center, radius: primitive.radius, height: primitive.height, segments: primitive.segments }
 }
 
-function templatePointLabel(index: number): string {
+/**
+ * 模板顶点的**自动标签**：A…Z 之后接 P27、P28……
+ *
+ * 导出是因为"这个标签是自动生成的还是用户改过的"必须能判断：旧文档迁移时只有自动标签才允许重编
+ *（见 `apps/web/src/solidTemplates.ts`），否则会把用户自己起的名字覆盖掉。
+ */
+export function templatePointLabel(index: number): string {
   return index < 26 ? String.fromCharCode(65 + index) : `P${index + 1}`
+}
+
+/** 模板棱的自动标签（`棱 1` 起）。与 `templatePointLabel` 同理：迁移靠它区分自动标签与用户改名。 */
+export function templateEdgeLabel(index: number): string {
+  return `棱 ${index + 1}`
 }
 
 /**
@@ -446,18 +457,42 @@ export function quadrantVertexIndices(count: number, quadrantCount = 4): number[
 }
 
 /**
- * 圆类实体里"用户看得见的点"的 id 顺序：圆柱 = 下底 4 个 + 上底 4 个，圆锥 = 底面 4 个 + 顶点。
- * 其它实体（立方体 / 棱锥 / 棱柱 / 多面体）返回 `null`，表示**每个顶点都是用户点**（行为不变）。
+ * 圆类实体的**内部拓扑**：细分顶点（除象限点）与**母线**。
+ *
+ * 用户口径：①"圆相关的内容不要这么多标点，只需要四个点就够了"；②"有太多母线，用不上这些"。
+ * 因此这两类对象只留在文档里（面 / 棱 / 交线 / 布尔交集都要读坐标），但不展示、不列出、点不到。
+ * 判定按顶点 / 棱在物化序列里的位置做，纯函数、可单测；非圆类实体返回 `null`（全部可见）。
  */
-function roundSolidVisibleVertexIds(primitive: TemplateSolidPrimitive, vertexIds: string[]): string[] | null {
+export function roundSolidHiddenTopology(
+  primitive: TemplateSolidPrimitive,
+  vertexIds: readonly string[],
+  edges: readonly { id: string; pointIds: readonly string[] }[]
+): { hiddenVertexIds: ReadonlySet<string>; hiddenEdgeIds: ReadonlySet<string> } | null {
   if (primitive.type !== "cylinder" && primitive.type !== "cone") return null
-  const ring = quadrantVertexIndices(primitive.segments).map((index) => vertexIds[index]).filter((id): id is string => Boolean(id))
-  if (primitive.type === "cone") {
-    const apex = vertexIds[primitive.segments]
-    return apex ? [...ring, apex] : ring
+  const segments = primitive.segments
+  /** 物化顺序：[下底环, 上底环（仅圆柱）, 圆锥顶点]；只有环上的细分点会被隐藏，顶点永远可见。 */
+  const ringCount = primitive.type === "cylinder" ? segments * 2 : segments
+  /** 环内序号 → 是否象限点：上下两个环共用同一套象限序号（`index % segments`）。 */
+  const quadrantOffsets = new Set(quadrantVertexIndices(segments))
+  const hiddenVertexIds = new Set(
+    vertexIds.filter((_, index) => index < ringCount && !quadrantOffsets.has(index % segments))
+  )
+  const indexOf = new Map(vertexIds.map((id, index) => [id, index]))
+  const hiddenEdgeIds = new Set<string>()
+  for (const edge of edges) {
+    const first = indexOf.get(edge.pointIds[0] ?? "")
+    const second = indexOf.get(edge.pointIds[1] ?? "")
+    if (first === undefined || second === undefined) continue
+    /**
+     * 母线：圆柱是连接上下底的棱（一个端点在下底索引区间、另一个在上底），
+     * 圆锥是连接底面与顶点的棱。**两环自身的棱保留**——它们在屏幕上就是那两个圆。
+     */
+    const isGeneratrix = primitive.type === "cone"
+      ? first === segments || second === segments
+      : (first < segments) !== (second < segments)
+    if (isGeneratrix) hiddenEdgeIds.add(edge.id)
   }
-  const top = quadrantVertexIndices(primitive.segments).map((index) => vertexIds[primitive.segments + index]).filter((id): id is string => Boolean(id))
-  return [...ring, ...top]
+  return { hiddenVertexIds, hiddenEdgeIds }
 }
 
 export function buildSolidTemplate(primitive: TemplateSolidPrimitive, context: BuilderContext = createBuilderContext(primitive.id)): SolidBuildResult {
@@ -468,21 +503,26 @@ export function buildSolidTemplate(primitive: TemplateSolidPrimitive, context: B
   // rotation cannot invalidate the topology that was just validated.
   const rotation = primitive.rotation
   const pivot = rotation ? templatePivot(primitive) : null
-  /**
-   * 圆类实体只把**象限点**当用户点：其余是近似的细分顶点——它们仍留在文档里（面 / 棱 / 交线 /
-   * 布尔交集都要读它们的坐标），但标记 `tessellation` 且不给标签，画布与对象列表都不再展示。
-   */
-  const visibleVertexIds = roundSolidVisibleVertexIds(primitive, result.vertexIds) ?? result.vertexIds
-  const labelIndexById = new Map(visibleVertexIds.map((id, index) => [id, index]))
+  const rawEdges = result.primitives.filter((candidate): candidate is Extract<PrimitiveSpec, { type: "edge3" }> => candidate.type === "edge3").map((candidate) => ({ id: candidate.id, pointIds: candidate.pointIds }))
+  const hidden = roundSolidHiddenTopology(primitive, result.vertexIds, rawEdges)
+  const hiddenPoint = (id: string) => hidden?.hiddenVertexIds.has(id) ?? false
+  const hiddenEdge = (id: string) => hidden?.hiddenEdgeIds.has(id) ?? false
+  /** 标签只发给可见对象，并按**可见顺序**重新编号：圆柱顶点 A–H、棱 1–96（两环），圆锥顶点 A–E。 */
+  const visiblePointIndex = new Map(result.vertexIds.filter((id) => !hiddenPoint(id)).map((id, index) => [id, index]))
+  const visibleEdgeIndex = new Map(result.edgeIds.filter((id) => !hiddenEdge(id)).map((id, index) => [id, index]))
   const primitives = result.primitives.map((candidate) => {
     if (!topologyIds.has(candidate.id)) return candidate
     if (candidate.type === "point3") {
       const position = rotation && pivot ? rotateAboutPivot(candidate.position, pivot, rotation) : candidate.position
-      const labelIndex = labelIndexById.get(candidate.id)
+      const labelIndex = visiblePointIndex.get(candidate.id)
       if (labelIndex === undefined) return { ...candidate, position, style: primitive.style, tessellation: true, label: undefined }
       return { ...candidate, position, label: templatePointLabel(labelIndex), style: primitive.style }
     }
-    if (candidate.type === "edge3") return { ...candidate, label: `棱 ${result.edgeIds.indexOf(candidate.id) + 1}`, style: primitive.style }
+    if (candidate.type === "edge3") {
+      const labelIndex = visibleEdgeIndex.get(candidate.id)
+      if (labelIndex === undefined) return { ...candidate, style: primitive.style, tessellation: true, label: undefined }
+      return { ...candidate, label: templateEdgeLabel(labelIndex), style: primitive.style }
+    }
     if (candidate.type === "face3") return { ...candidate, label: `面 ${result.faceIds.indexOf(candidate.id) + 1}`, style: primitive.style }
     if (candidate.type === "polyhedron3") return { ...candidate, label: primitive.label, style: primitive.style, construction: { kind: "template" as const, templateId: primitive.type, sourceIds: [primitive.id, ...result.vertexIds, ...result.edgeIds, ...result.faceIds] } }
     return candidate

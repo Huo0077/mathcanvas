@@ -113,8 +113,9 @@ describe("status prompts", () => {
 
     const point = resolveIntersectionPreviewPrompt({ kind: "point", label: "交点" }, true)
     expect(point).toContain("点击即创建交点图元")
-    // 圆类实体的交点是沿光滑交线取出来的采样点，不能一律说成"拐点"。
-    expect(point).toContain("交线上的点")
+    // 光滑交线现在一个点都不标，能点到的圆点必定是交线的拐点——所以这里就该说"拐点"（用户口径：
+    // "曲线相交时交点太多了，完全不是我们需要的那种"）。
+    expect(point).toContain("拐点")
   })
 
   it("announces the automatically drawn intersections, because they no longer need a selection", () => {

@@ -289,29 +289,26 @@ export function computeIntersectionPreviews3d(document: GeometryDocument, option
 /** 交点标记的默认取法：转折 ≥ 18° 才算角点；一对来源最多标 12 个。 */
 export const MARKER_TURN_THRESHOLD_DEGREES = 18
 export const MAX_MARKERS_PER_PAIR = 12
-/** 光滑交线（没有角点）时沿交线均匀取的标记点数：正是用户要的"四个点"。 */
-export const MIN_MARKERS_PER_PAIR = 4
 
 /**
- * 交线折线上"值得标一个交点"的位置。
+ * 交线折线上"值得标一个交点"的位置：**只有真正的角点**。
  *
  * 旧实现把交线折线的**每个顶点**都标成一个交点：立方体↔立方体只是 8 个角（没问题），
  * 但圆柱 / 圆锥这类多边形近似的交线有几十上百个顶点，画布上就糊成一片点标记。
- * 用户口径是"当两个图形相交时…也要突出交线和交点的图元"——要标，但要标得少而有意义：
- *
- * 1. **角点**优先：相邻两段方向变化 ≥ `turnThresholdDegrees` 的顶点（立方体的 8 个角走这条，行为不变）；
- * 2. **悬挂端**（只连一段的顶点）与**分叉点**（连三段以上）也算角点；
- * 3. 一个角点都没有（光滑交线，例如圆柱↔圆柱）时，沿顶点顺序**均匀取 `minimumMarkers` 个点**，
- *    保证曲面相交也能点出交点图元，而不是只剩一条线可点；
- * 4. 结果按 `maxMarkers` 截断（调用方把超出的数量记进 `truncatedPoints`，状态栏如实说明）。
+ * 中间版本折中成"没有角点就沿交线均匀取 4 个"，用户随后否掉了它：
+ * "曲线相交时交点太多了，完全不是我们需要的那种"——光滑交线上等距取出来的采样点不是任何几何意义上的交点，
+ * 点出来的图元也解释不清。所以现在只标两类位置：
+ * 1. **角点**：相邻两段方向变化 ≥ `turnThresholdDegrees` 的顶点（立方体的 8 个角走这条）；
+ * 2. **悬挂端**（只连一段）与**分叉点**（连三段以上）——形状在这里确实变了。
+ * 光滑交线（圆柱↔圆柱一类）一个点都不标；交线与交面照旧突出、照旧可点。
+ * 结果按 `maxMarkers` 截断（调用方把超出的数量记进 `truncatedPoints`，状态栏如实说明）。
  */
 export function intersectionMarkerPoints(
   segments: { a: Vector3; b: Vector3 }[],
-  options: { turnThresholdDegrees?: number; minimumMarkers?: number; maxMarkers?: number } = {}
+  options: { turnThresholdDegrees?: number; maxMarkers?: number } = {}
 ): Vector3[] {
   const threshold = options.turnThresholdDegrees ?? MARKER_TURN_THRESHOLD_DEGREES
-  const minimum = Math.max(1, options.minimumMarkers ?? MIN_MARKERS_PER_PAIR)
-  const maximum = Math.max(minimum, options.maxMarkers ?? MAX_MARKERS_PER_PAIR)
+  const maximum = Math.max(1, options.maxMarkers ?? MAX_MARKERS_PER_PAIR)
   if (segments.length === 0) return []
 
   /** 按模型尺度量化端点，得到无重复的顶点表与邻接表（相邻线段共享端点）。 */
@@ -355,39 +352,8 @@ export function intersectionMarkerPoints(
     if (turnDegrees >= threshold) cornerKeys.push(key)
   }
 
-  const cornerMarkers = cornerKeys.map((key) => ({ ...vertices.get(key)! }))
-  // 角点够多（立方体一类）：只标角点，行为与旧实现一致。
-  if (cornerMarkers.length >= minimum) return cornerMarkers.slice(0, maximum)
-
-  /**
-   * 角点不足（光滑或近乎光滑的交线）：补齐到至少 `minimum` 个。
-   * 沿邻接顺序走一遍折线再等距取样，取到的是"交线上的点"而不是拐点（状态栏文案据此区分）。
-   */
-  const ordered: Vector3[] = []
-  const visited = new Set<string>()
-  for (const startKey of vertices.keys()) {
-    if (visited.has(startKey)) continue
-    let current: string | undefined = startKey
-    while (current !== undefined && !visited.has(current)) {
-      visited.add(current)
-      ordered.push({ ...vertices.get(current)! })
-      current = [...(neighbours.get(current) ?? [])].find((candidate) => !visited.has(candidate))
-    }
-  }
-  if (ordered.length === 0) return cornerMarkers.slice(0, maximum)
-  const wanted = Math.min(minimum, ordered.length)
-  const stride = ordered.length / wanted
-  const sampled = Array.from({ length: wanted }, (_, index) => ({ ...ordered[Math.min(ordered.length - 1, Math.floor(index * stride))] }))
-
-  const merged: Vector3[] = []
-  const seen = new Set<string>()
-  for (const point of [...cornerMarkers, ...sampled]) {
-    const key = keyOf(point)
-    if (seen.has(key)) continue
-    seen.add(key)
-    merged.push(point)
-  }
-  return merged.slice(0, maximum)
+  // 只有角点：一个都没有（光滑交线）时就返回空——不补采样点。
+  return cornerKeys.map((key) => ({ ...vertices.get(key)! })).slice(0, maximum)
 }
 
 function normalized(vector: Vector3): Vector3 | null {

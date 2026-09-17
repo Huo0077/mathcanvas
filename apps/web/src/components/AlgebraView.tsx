@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react"
 
 import type { Measurement3, ParameterSpec, Polyhedron3Primitive, PrimitiveSpec, Workspace } from "@draw/dsl"
 
-import { isTessellationVertex } from "../primitiveVisibility"
+import { isTessellationPrimitive } from "../primitiveVisibility"
 
 interface AlgebraViewProps {
   primitives: PrimitiveSpec[]
@@ -98,7 +98,7 @@ export function AlgebraView({ primitives, selectedIds, onSelect, onToggle, measu
   const renderGroup = (label: string, ids: string[]): ReactNode => {
     const children = ids
       .map((id) => byId.get(id))
-      .filter((primitive): primitive is PrimitiveSpec => primitive !== undefined && !isTessellationVertex(primitive))
+      .filter((primitive): primitive is PrimitiveSpec => primitive !== undefined && !isTessellationPrimitive(primitive))
     if (children.length === 0) return null
     return <div className="object-group" key={label}><div className="object-group-label">{label}</div>{children.map((child) => renderRow(child, 1))}</div>
   }

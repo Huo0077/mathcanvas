@@ -77,9 +77,10 @@ describe("automatic 3D intersection previews", () => {
   /**
    * 用户口径："当两个图形相交时，我们不仅需要能获取交面的图元，也要突出交线和交点的图元。"
    * 圆类实体（圆柱 / 圆锥）的交线是**光滑折线**（48 段近似），旧实现把每个顶点都标成一个交点，
-   * 一对圆柱会冒出上百个点标记；现在只标有意义的角点，光滑交线退化为沿交线均匀取 4 个点。
+   * 一对圆柱会冒出上百个点标记。用户后续拍板："只标真正的角点（转折 ≥ 18°），光滑交线不标点"——
+   * 于是这种交线只剩交线与交面可点，不再有"沿交线均匀取样"补出来的圆点。
    */
-  it("keeps 交点 markers few on a smooth round-solid crossing", () => {
+  it("leaves a smooth round-solid crossing without 交点 markers", () => {
     const result = computeIntersectionPreviews3d(cylinderDocument([
       { id: "cyl-a", center: { x: 0, y: 0, z: 0 } },
       { id: "cyl-b", center: { x: 0, y: 0, z: 0 }, rotation: { x: Math.PI / 2, y: 0, z: 0 } }
@@ -91,14 +92,15 @@ describe("automatic 3D intersection previews", () => {
     expect(line!.segments.length).toBeGreaterThan(20)
     expect(result.previews.some((preview) => preview.kind === "face")).toBe(true)
 
-    // 交点标记从"每个折线顶点一个"降到 4..12 个，而且都在交线附近。
+    // 一个采样点都没有：剩下的只有"交线拐到底面圆环上"的真角点，而且都落在圆柱底面圆的边上。
     const points = result.previews.filter((preview) => preview.kind === "point")
-    expect(points.length).toBeGreaterThanOrEqual(4)
-    expect(points.length).toBeLessThanOrEqual(12)
-    expect(points.every((preview) => preview.position && Number.isFinite(preview.position.x) && Number.isFinite(preview.position.y) && Number.isFinite(preview.position.z))).toBe(true)
+    expect(points.length).toBeLessThanOrEqual(4)
+    expect(points.every((preview) => Math.abs(Math.hypot(preview.position.x, preview.position.y) - 2) < 1e-6)).toBe(true)
+    // 截断计数同样不该把它算成"没画全"。
+    expect(result.truncatedPoints).toBe(0)
   })
 
-  it("marks the corners of a rectangular crossing and samples a smooth one", () => {
+  it("marks the corners of a crossing and nothing on a smooth one", () => {
     const ring = (count: number, radius: number, z: number) => Array.from({ length: count }, (_, index) => {
       const angle = index * Math.PI * 2 / count
       return { a: { x: radius * Math.cos(angle), y: radius * Math.sin(angle), z }, b: { x: radius * Math.cos(angle + Math.PI * 2 / count), y: radius * Math.sin(angle + Math.PI * 2 / count), z } }
@@ -115,11 +117,15 @@ describe("automatic 3D intersection previews", () => {
     expect(corners).toHaveLength(4)
     expect(corners.every((point) => (point.x === 0 || point.x === 2) && (point.y === 0 || point.y === 2))).toBe(true)
 
-    // 24 边形（每段转 15° < 18° 阈值）没有角点 → 沿交线均匀取 4 个。
-    expect(intersectionMarkerPoints(ring(24, 2, 0))).toHaveLength(4)
+    // 24 边形（每段转 15° < 18° 阈值）处处光滑 → 一个标记都不给。
+    expect(intersectionMarkerPoints(ring(24, 2, 0))).toEqual([])
+    // 48 段（圆柱 / 圆锥的默认精度，每段转 7.5°）同理。
+    expect(intersectionMarkerPoints(ring(48, 2, 0))).toEqual([])
     // 稀疏的六边形（每段转 60°）处处是角点 → 每个顶点都算，且受上限约束。
     expect(intersectionMarkerPoints(ring(6, 2, 0))).toHaveLength(6)
-    expect(intersectionMarkerPoints(ring(24, 2, 0), { minimumMarkers: 8 })).toHaveLength(8)
+    expect(intersectionMarkerPoints(ring(6, 2, 0), { maxMarkers: 4 })).toHaveLength(4)
+    // 阈值是参数：调到 5° 时 15° 的转折也算角点（上限同时放开）。
+    expect(intersectionMarkerPoints(ring(24, 2, 0), { turnThresholdDegrees: 5, maxMarkers: 100 })).toHaveLength(24)
     expect(intersectionMarkerPoints([])).toEqual([])
   })
 

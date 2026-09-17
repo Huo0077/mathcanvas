@@ -268,6 +268,54 @@ describe("solid builders", () => {
     expect(vertices.map((primitive) => primitive.label)).toEqual(["A", "B", "C", "D", "E", "F", "G", "H"])
   })
 
+  const edges3 = (result: ReturnType<typeof buildSolidTemplate>) => result.primitives.filter((primitive) => primitive.type === "edge3")
+
+  it("hides a cylinder's generatrices and keeps only the two rings", () => {
+    const cylinder = buildSolidTemplate({ id: "cylinder-edges", type: "cylinder", center: { x: 0, y: 0, z: 0 }, radius: 2, height: 3, segments: 48 })
+    const edges = edges3(cylinder)
+    const visible = edges.filter((primitive) => primitive.tessellation !== true)
+    const hidden = edges.filter((primitive) => primitive.tessellation === true)
+
+    // 48 段圆柱共有 3 × 48 条棱：下底环、上底环、以及 48 条母线。
+    expect(edges).toHaveLength(144)
+    // 用户要求"有太多母线，用不上这些"：母线只留在文档里（面 / 交线仍要读它），不展示、无标签。
+    expect(hidden).toHaveLength(48)
+    expect(hidden.every((primitive) => primitive.label === undefined)).toBe(true)
+    // 两个圆环保留，并**按可见顺序**重新编号，标签不留空洞。
+    expect(visible).toHaveLength(96)
+    expect(visible.map((primitive) => primitive.label)).toEqual(Array.from({ length: 96 }, (_, index) => `棱 ${index + 1}`))
+
+    const zByPointId = new Map(roundSolids.list(cylinder).map((primitive) => [primitive.id, primitive.position.z]))
+    expect(hidden.every((primitive) => zByPointId.get(primitive.pointIds[0]) !== zByPointId.get(primitive.pointIds[1]))).toBe(true)
+  })
+
+  it("hides every generatrix of a cone: base ring only", () => {
+    const cone = buildSolidTemplate({ id: "cone-edges", type: "cone", center: { x: 0, y: 0, z: 0 }, radius: 2, height: 3, segments: 48 })
+    const edges = edges3(cone)
+    const visible = edges.filter((primitive) => primitive.tessellation !== true)
+    const hidden = edges.filter((primitive) => primitive.tessellation === true)
+
+    expect(edges).toHaveLength(96)
+    expect(hidden).toHaveLength(48)
+    expect(visible).toHaveLength(48)
+    expect(visible.map((primitive) => primitive.label)).toEqual(Array.from({ length: 48 }, (_, index) => `棱 ${index + 1}`))
+
+    const apex = roundSolids.list(cone).find((primitive) => primitive.position.z === 3)
+    const zByPointId = new Map(roundSolids.list(cone).map((primitive) => [primitive.id, primitive.position.z]))
+    // 每条母线的端点里必有一个是顶点（z = 3），另一端点落在底面环上。
+    expect(apex).toBeDefined()
+    expect(hidden.every((primitive) => primitive.pointIds.includes(apex?.id ?? "") && zByPointId.get(primitive.pointIds[0]) !== zByPointId.get(primitive.pointIds[1]))).toBe(true)
+  })
+
+  it("marks no edge as tessellation on ordinary solids", () => {
+    const cube = buildSolidTemplate({ id: "cube-edges", type: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 2, z: 2 } })
+    const edges = edges3(cube)
+
+    expect(edges).toHaveLength(12)
+    expect(edges.every((primitive) => primitive.tessellation === undefined)).toBe(true)
+    expect(edges.every((primitive) => typeof primitive.label === "string" && primitive.label.startsWith("棱 "))).toBe(true)
+  })
+
   it("returns diagnostics for malformed template input without throwing", () => {
     expect(() => buildSolid("cube", undefined, createBuilderContext("invalid"))).not.toThrow()
     expect(buildSolid("cube", undefined, createBuilderContext("invalid")).diagnostics.map((diagnostic) => diagnostic.code)).toContain("invalid-input")

@@ -25,3 +25,23 @@ test("shows only the four quadrant points per circle on a cylinder", async ({ pa
   const vertexRows = algebra.locator('[data-object-type="point3"]')
   await expect(vertexRows).toHaveCount(8)
 })
+
+/**
+ * 用户反馈："圆锥中间还有好多点，我不需要这些。"
+ *
+ * 圆锥的"中间那些点"就是底面环上的 44 个细分顶点（48 段近似）：保留象限点 4 个 + 顶点，共 5 个。
+ */
+test("shows only the four quadrant points plus the apex on a cone", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "添加圆锥" }).click()
+
+  const scene = page.locator("[data-3d-scene]")
+  await expect(scene.locator(".three-point-label")).toHaveCount(5)
+  const labels = await scene.locator(".three-point-label").allTextContents()
+  expect(labels.sort()).toEqual(["A", "B", "C", "D", "E"])
+
+  const algebra = page.locator(".algebra-panel")
+  await algebra.getByRole("button", { name: /展开 .*拓扑 的子对象/ }).click()
+  await expect(algebra.locator('[data-object-type="point3"]')).toHaveCount(5)
+})

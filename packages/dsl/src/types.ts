@@ -175,6 +175,12 @@ export interface Edge3Primitive extends PrimitivePresentation {
   type: "edge3"
   pointIds: [string, string]
   faceIds?: string[]
+  /**
+   * 这是**圆类实体近似的母线**（圆柱连接上下底、圆锥连接底面与顶点）：属近似的内部细节，
+   * 用户要求"母线用不上这些"，因此不上画布、不进对象列表、也点不到——但仍留在文档里
+   * （剖切 / 交线 / 面环都要用它的顶点）。旧文档与其它实体不带该字段，行为不变。
+   */
+  tessellation?: boolean
 }
 
 export interface Face3Primitive extends PrimitivePresentation {

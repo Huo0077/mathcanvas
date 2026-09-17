@@ -70,7 +70,7 @@ describe("algebra view spatial tree", () => {
         id: "solid-cylinder-1",
         type: "polyhedron3",
         vertexIds: ["quad-a", "quad-b", "hidden-1", "hidden-2"],
-        edgeIds: ["edge-quad"],
+        edgeIds: ["edge-quad", "edge-generatrix"],
         faceIds: ["face-quad"],
         construction: { kind: "template", templateId: "cylinder", sourceIds: ["cylinder-1"] }
       },
@@ -79,6 +79,7 @@ describe("algebra view spatial tree", () => {
       { id: "hidden-1", type: "point3", position: { x: 1, y: 1, z: 0 }, tessellation: true },
       { id: "hidden-2", type: "point3", position: { x: -1, y: 1, z: 0 }, tessellation: true },
       { id: "edge-quad", type: "edge3", pointIds: ["quad-a", "quad-b"], label: "棱 1" },
+      { id: "edge-generatrix", type: "edge3", pointIds: ["quad-a", "hidden-1"], tessellation: true },
       { id: "face-quad", type: "face3", pointIds: ["quad-a", "quad-b", "hidden-1"], label: "面 1" }
     ]
     render(<AlgebraView primitives={tessellated} measurements={[]} workspace="geometry3d" selectedIds={[]} onSelect={() => {}} onToggle={() => {}} />)
@@ -89,6 +90,8 @@ describe("algebra view spatial tree", () => {
     expect(screen.getByText("B")).toBeTruthy()
     // 两个细分顶点既不在列表里，也不该留一个空壳分组。
     expect(globalThis.document.querySelectorAll('[data-object-type="point3"]')).toHaveLength(2)
+    // 母线同理："有太多母线，用不上这些"——48 段圆柱的 48 条母线一条都不该出现在列表里。
+    expect(globalThis.document.querySelectorAll('[data-object-type="edge3"]')).toHaveLength(1)
   })
 
   it("toggles visibility for the solid group itself", () => {

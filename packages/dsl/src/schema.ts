@@ -243,6 +243,8 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>, parameter
   if (type === "edge3") {
     if (!Array.isArray(value.pointIds) || value.pointIds.length !== 2 || value.pointIds[0] === value.pointIds[1] || !referencesTypes(byId, value.pointIds, new Set(["point3"]))) errors.push("edge3 references invalid points")
     if (value.faceIds !== undefined && (!isDistinctStringList(value.faceIds, 1) || !referencesTypes(byId, value.faceIds, new Set(["face3"])))) errors.push("edge3 references invalid faces")
+    // 母线标记（圆类实体近似的内部棱）：只允许布尔，缺省表示普通的用户棱。
+    if (value.tessellation !== undefined && typeof value.tessellation !== "boolean") errors.push("edge3 tessellation flag is invalid")
   }
   if (type === "face3") {
     const facePointIds = Array.isArray(value.pointIds) ? value.pointIds : []
