@@ -800,10 +800,11 @@ function recomputeIntersectionFace(
   /**
    * 解析字段是**派生**的：这一轮算不出解析边界就必须把它摘掉，
    * 否则会留下一份和现几何对不上的边界（来源移动后尤其明显）。
-   * `outerRingLength` 同理：它描述的是当前 `points` 里前导外环有多长，来源一动就可能对不上。
+   * `outerRingLength` / `poleIndex` 同理：它们描述的是当前 `points` 的填法（前导外环多长、极点在哪个下标），
+   * 来源一动就可能对不上。
    */
   const withoutAnalytic = (face: Extract<PrimitiveSpec, { type: "intersectionFace" }>) => {
-    const { exactLoops: _staleLoops, areaExact: _staleAreaExact, outerRingLength: _staleOuterRingLength, ...rest } = face
+    const { exactLoops: _staleLoops, areaExact: _staleAreaExact, outerRingLength: _staleOuterRingLength, poleIndex: _stalePoleIndex, ...rest } = face
     return rest
   }
   const sources = primitive.sourceIds.map((id) => primitiveMap.get(id))
@@ -841,6 +842,9 @@ function recomputeIntersectionFace(
       ...(region.exactLoops ? { exactLoops: region.exactLoops } : {}),
       // 曲面区域的 `points` 缝了不止一圈时才有前导外环长度：渲染方靠它做环向条带三角化。
       ...(region.outerRingLength ? { outerRingLength: region.outerRingLength } : {}),
+      // 圆锥侧面那类区域的极点（在曲面内部、不在边界环上）：渲染方靠它绕极点铺开填充。
+      // `0` 是合法下标，所以判的是 `!== undefined`。
+      ...(region.poleIndex !== undefined ? { poleIndex: region.poleIndex } : {}),
       hint: { ...centroid },
       status: "valid",
       visible: true,

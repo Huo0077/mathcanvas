@@ -176,6 +176,46 @@ test("keeps a round solid's rim circles glued to it while dragging", async ({ pa
   }).toBeGreaterThan(0.2)
 })
 
+test("carries the point labels along while a solid is being dragged", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "立体几何" }).click()
+
+  const scene = page.locator("[data-3d-scene]")
+  await page.getByRole("button", { name: "添加圆柱" }).click()
+  await expect(page.getByText("圆柱 1").first()).toBeVisible()
+  await page.getByRole("button", { name: "自由拖动" }).click()
+
+  /** 画布上那层 HTML 点标注（A/B/C…）的屏幕位置。 */
+  const labelPositions = async () => {
+    const labels = page.locator(".three-point-label")
+    const found: string[] = []
+    for (let index = 0; index < (await labels.count()); index += 1) {
+      const box = await labels.nth(index).boundingBox()
+      found.push(box ? `${Math.round(box.x)},${Math.round(box.y)}` : "-")
+    }
+    return found.join("|")
+  }
+
+  const centre = parseVector(await scene.getAttribute("data-content-bounds"))
+  const start = await projectWorldPoint(page, { x: centre[0], y: centre[1], z: centre[2] })
+  const before = await labelPositions()
+  expect(before.length).toBeGreaterThan(0)
+
+  await page.mouse.move(start.x, start.y)
+  await page.mouse.down()
+  await expect(scene).toHaveAttribute("data-drag-target", /->cylinder$/)
+  await page.mouse.move(start.x + 90, start.y + 36, { steps: 6 })
+  /**
+   * 用户实测反馈："现在圆柱上的点又不跟着动了。"
+   *
+   * 点手柄是画布对象、跟着临时偏移走了，但点标注此前按**文档坐标**投影——拖动期间文档不提交，
+   * 于是手把实体拖走了、字母还钉在原处。这里在**按住不放**的时候读标注位置：必须已经跟着走了
+   *（抬手之后才跟上是旧行为，读起来就是"点不跟手"）。
+   */
+  await expect.poll(labelPositions).not.toBe(before)
+  await page.mouse.up()
+})
+
 test("repaints the scene while a solid is being dragged", async ({ page }) => {
   await page.goto("/")
   await page.getByRole("button", { name: "立体几何" }).click()

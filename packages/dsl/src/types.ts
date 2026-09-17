@@ -597,6 +597,14 @@ export interface IntersectionFacePrimitive extends PrimitivePresentation {
    * 而扇形会把两圈之间的洞整块填掉（圆柱侧带会画成那张圆盘）。
    */
   outerRingLength?: number
+  /**
+   * 曲面区域的**极点**在 `points` 里的下标（可选；圆锥的侧面就是这种区域）。
+   *
+   * 极点待在曲面内部、**不在边界环上**：它的边界只是一圈（圆锥侧面 = 底面那圈圆），但填充必须绕极点铺开。
+   * 只按边界环铺的话，"圆锥面"会被填成底面那团圆盘、形心也落在底面圆心上（与真正的底面圆盘区域重合），
+   * 画布上既看不出这是曲面、点它还会认领到隔壁那张圆盘。有极点时 `points[0]` 就是它。
+   */
+  poleIndex?: number
   hint: Vector3
   status: "valid" | "none" | "insufficient-data"
   diagnostic?: string

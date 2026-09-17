@@ -410,6 +410,32 @@ describe("automatic 3D intersection previews", () => {
     expect(result.previews.filter((preview) => preview.kind === "face")).toHaveLength(3)
   })
 
+  it("gives 圆柱 ∩ 圆锥 one 圆锥面 preview instead of 48 triangle patches (user-reported)", () => {
+    /**
+     * 用户实测反馈："曲面交面相当乱，交出一大堆面，但是无法获取那个曲面。"
+     *
+     * 实测：圆锥整体落在圆柱里（两者同底同高）时，布尔交集就是圆锥自己——48 个侧面三角形 + 1 个底面圆盘。
+     * 修复前这 48 片**一片都认不出属于圆锥面**（锥尖在轴上：`radiusAt` 的 `ratio > 0` 把顶点判成"不在面上"，
+     * 而顶点的 `atan2(0,0)` 又把张角量成 93°…116°），于是画布上有 49 份"交面"预览，全是小三角，
+     * 点哪一块都拿不到那张曲面；修复后是 **2 份**：一张圆锥面 + 一个底面圆盘。
+     */
+    const document = createEmptyDocument("geometry3d")
+    const cylinder = { id: "cyl-a", type: "cylinder" as const, center: { x: 0, y: 0, z: 0 }, radius: 1.5, height: 4, segments: ROUND_SOLID_SEGMENTS }
+    const cone = { id: "cone-a", type: "cone" as const, center: { x: 0, y: 0, z: 0 }, radius: 1.5, height: 4, segments: ROUND_SOLID_SEGMENTS }
+    document.primitives = [cylinder, ...buildSolidTemplate(cylinder).primitives, cone, ...buildSolidTemplate(cone).primitives]
+
+    const result = computeIntersectionPreviews3d(document)
+    const faces = result.previews.filter((preview) => preview.kind === "face")
+
+    expect(faces).toHaveLength(2)
+    expect(faces[0].label).toContain("圆锥面")
+    expect(faces[0].label).toContain("网格近似")
+    expect(faces[1].label).toContain("48 边形")
+    // 曲面区域知道自己的前导外环有多长（渲染方靠它按环向条带填充）。
+    expect(faces[0].outerRingLength).toBeUndefined() // 圆锥这个区域的边界只有底面那一圈
+    expect(result.truncatedPairs).toBe(0)
+  })
+
   it("only treats top-level solids as candidates", () => {
     const document = cubeDocument(overlapPair)
     // 模板物化出来的 point3/edge3/face3/polyhedron3 与面、平面都不该参与自动求交：

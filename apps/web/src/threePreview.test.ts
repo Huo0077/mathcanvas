@@ -194,6 +194,38 @@ describe("虚线预览的画法", () => {
     expect(countRole(createPreviewGroup(bandPreview(), false, () => undefined), "intersection-preview-point")).toBe(0)
   })
 
+  it("fills a cone-like 交面 preview around its pole, and marks no vertices on it", () => {
+    /**
+     * 圆锥侧面那种区域：`points[0]` 是**极点**（锥尖，在曲面内部、不在边界环上）。预览面片就是命中区，
+     * 按边界环铺会把它填成底面那团圆盘——点圆锥侧面命中的是那张圆盘，曲面照样拿不到。
+     */
+    const hoop = Array.from({ length: BAND_SEGMENTS }, (_, index) => {
+      const angle = (index * Math.PI * 2) / BAND_SEGMENTS
+      return { x: BAND_RADIUS * Math.cos(angle), y: BAND_RADIUS * Math.sin(angle), z: -BAND_HALF }
+    })
+    const conePreview: ThreeScenePreview = {
+      ...bandPreview(),
+      key: "pair:cone-a|cyl-a:面0",
+      points: [{ x: 0, y: 0, z: BAND_HALF }, ...hoop],
+      poleIndex: 0,
+      outerRingLength: undefined,
+      label: "交面 · 圆锥面（面积 20.11，网格近似）"
+    }
+    const group = createPreviewGroup(conePreview, false, () => undefined)
+    const mesh = group.children.find((child) => child.userData.visualRole === "intersection-preview-face") as THREE.Mesh | undefined
+    const triangles = trianglesOf(mesh!)
+
+    // 每条底面边与极点围一片 ⇒ 8 片，且每片恰有一个顶点在极点上。
+    expect(triangles).toHaveLength(BAND_SEGMENTS)
+    for (const triangle of triangles) expect(triangle.filter((vertex) => Math.abs(vertex.z - BAND_HALF) < 1e-6)).toHaveLength(1)
+    // 曲面区域不标网格顶点（避免"密密麻麻的点"），极点也不算交点。
+    expect(countRole(group, "intersection-preview-point")).toBe(0)
+    // 虚线边界也不含极点：只有底面那 8 条边。
+    const edge = group.children.find((child) => child.userData.visualRole === "intersection-preview-edge") as THREE.LineSegments
+    const positions = edge.geometry.getAttribute("position")
+    for (let vertex = 0; vertex < positions.count; vertex += 1) expect(positions.getZ(vertex)).toBeCloseTo(-BAND_HALF, 6)
+  })
+
   it("draws one 交点 as a marker with its own hit area", () => {
     const group = createPreviewGroup(pointPreview(), false, () => undefined)
 

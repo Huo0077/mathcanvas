@@ -514,6 +514,8 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>, parameter
       if (value.areaExact !== undefined && typeof value.areaExact !== "boolean") errors.push("intersectionFace areaExact is invalid")
       // 前导外环的顶点数（曲面区域缝了不止一圈时才有）：必须是"≥3 的整数"，否则渲染方缝不出环向条带。
       if (value.outerRingLength !== undefined && (!isFiniteNumber(value.outerRingLength) || !Number.isInteger(value.outerRingLength) || value.outerRingLength < 3)) errors.push("intersectionFace outerRingLength is invalid")
+      // 极点是 `points` 里的下标（圆锥顶点那种"在曲面内部、不在边界环上"的点）：非负整数。
+      if (value.poleIndex !== undefined && (!isFiniteNumber(value.poleIndex) || !Number.isInteger(value.poleIndex) || value.poleIndex < 0)) errors.push("intersectionFace poleIndex is invalid")
       if (value.exactLoops !== undefined && !isCurvePieceLoops(value.exactLoops)) errors.push("intersectionFace exact loops are invalid")
     } else if (!isFiniteCoordinate3(value.position)) errors.push("intersectionPoint3 position is invalid")
   }

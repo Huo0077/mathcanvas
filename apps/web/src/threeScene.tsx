@@ -21,6 +21,7 @@ import type { ThreeScenePreview } from "./threeScenePreview"
 import { dragWorldPoint, dragFamilyIds, dragOffsetDrift, offsetSceneObjects, applyDragOffsets } from "./threeDrag"
 import { PICK_TOLERANCE_PX, pointHandleWorldRadius, pickRaycastHit3, templateTopologyOwners, pickSectionAt, resolveSelectableHit, previewBeatsPick } from "./threePicking"
 import { sectionUnitNormal, createPlane3Mesh, createSectionMesh, createIntersectionSolidGroup, createIntersectionFaceGroup, createIntersectionPointGroup, createUnfoldNetGroup, createDihedralMarkerGroup, prefersReducedMotion, nextUnfoldProgress, createPlanePatch, createSolidGroup, visibleSolids, buildPointDrivenObject, disposeObject, disposeScene, createPreviewGroup, applyPreviewHighlight, hasDrawablePreview, createCurveLoops3, createRimCircles3 } from "./threePrimitives"
+import { pointLabelPlacements } from "./pointLabels"
 import { curveToleranceFor, toleranceBucket } from "./conicSampling"
 import { collectRimCircles, rimChordEdgeIds } from "./rimCircles"
 import { defaultStrokeFor } from "./primitiveStyle"
@@ -848,19 +849,7 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       if (labelOverlay) {
         syncOverlay(
           labelOverlay,
-          visiblePointLabels.map((primitive) => {
-            const projected = new THREE.Vector3(primitive.position.x, primitive.position.y, primitive.position.z).project(camera)
-            const label = primitive.label ?? primitive.id
-            return {
-              key: primitive.id,
-              text: label,
-              visible: projected.z >= -1 && projected.z <= 1,
-              // 点标记的半径是固定像素，所以标注也按像素偏移，不随缩放漂移。
-              left: (projected.x * 0.5 + 0.5) * bounds.width + 10,
-              top: (-projected.y * 0.5 + 0.5) * bounds.height - 10,
-              dataset: { pointLabel: label, pointId: primitive.id }
-            }
-          }),
+          pointLabelPlacements(visiblePointLabels, (id) => objectIndex.get(id), camera, bounds),
           () => {
             const label = globalThis.document.createElement("span")
             label.className = "three-point-label"

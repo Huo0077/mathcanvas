@@ -158,6 +158,44 @@ describe("已创建的交面 / 交点图元怎么画", () => {
     expect(flat).toHaveLength(2)
   })
 
+  it("fills a cone-like region around its pole instead of painting its base disc", () => {
+    /**
+     * 圆锥侧面那种区域：边界只有底面那圈圆，**极点**（锥尖）在曲面内部、不在边界环上。
+     *
+     * 只按边界环扇形铺的话，这张"圆锥面"会被填成底面那团圆盘——用户反馈"交出一大堆面，但是无法获取
+     * 那个曲面"，一半的原因就在这里（另一半是内核压根没把这种区域分出来）。所以填充必须绕极点铺开。
+     */
+    const coneFace = (): IntersectionFacePrimitive => ({
+      ...face(),
+      id: "intersectionFace-cone",
+      points: [{ x: 0, y: 0, z: 2 }, ...hoop(0)],
+      poleIndex: 0,
+      normal: { x: 0, y: 0, z: 1 },
+      area: RING_SEGMENTS * 0.5 * 2 * RING_RADIUS * 2 * Math.sin(Math.PI / RING_SEGMENTS),
+      areaExact: false
+    })
+
+    const group = createIntersectionFaceGroup(coneFace(), false)!
+    const triangles = trianglesOf(roleOf(group, "intersection-face")[0] as THREE.Mesh)
+
+    // 8 条底面边各与极点围一片三角形（不是"从底圆第一点扇形铺开"的 6 片底面三角片）。
+    expect(triangles).toHaveLength(RING_SEGMENTS)
+    for (const triangle of triangles) {
+      // 每片都含极点（0,0,2），另两个顶点在底面上。
+      expect(triangle.some((vertex) => Math.hypot(vertex.x, vertex.y) < 1e-6 && Math.abs(vertex.z - 2) < 1e-6)).toBe(true)
+      expect(triangle.filter((vertex) => Math.abs(vertex.z) < 1e-6)).toHaveLength(2)
+    }
+    // 面积是**锥面**的面积（比底面圆盘大），不是底面圆盘那一块。
+    const meshLateral = triangles.reduce((sum, triangle) => sum + triangleArea(triangle), 0)
+    expect(meshLateral).toBeGreaterThan(Math.PI * RING_RADIUS * RING_RADIUS)
+
+    // 极点**不是边界上的点**：多边形兜底的边界只画底面那 8 条边。
+    const polygon = roleOf(createIntersectionFaceGroup({ ...coneFace(), poleIndex: 0 }, false)!, "intersection-face-edge")[0] as THREE.LineSegments
+    const positions = polygon.geometry.getAttribute("position")
+    expect(positions.count).toBe(RING_SEGMENTS * 2)
+    for (let vertex = 0; vertex < positions.count; vertex += 1) expect(Math.abs(positions.getZ(vertex))).toBeLessThan(1e-6)
+  })
+
   it("draws the created 交面's analytic boundary as real circles when the document carries exactLoops", () => {
     const loops = [RING_HALF_HEIGHT, -RING_HALF_HEIGHT].map((z) => {
       const conic = circleConic3({ x: 0, y: 0, z }, { x: 0, y: 0, z: 1 }, RING_RADIUS)!

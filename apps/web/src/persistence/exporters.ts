@@ -132,7 +132,7 @@ function primitiveData(primitive: PrimitiveSpec): string {
   if (primitive.type === "section") return JSON.stringify({ sourceId: primitive.sourceId, plane: primitive.plane, points: primitive.points, classification: primitive.classification, status: primitive.status })
   if (primitive.type === "intersectionLine") return JSON.stringify({ sourceIds: primitive.sourceIds, segments: primitive.segments, classification: primitive.classification, status: primitive.status })
   if (primitive.type === "intersectionSolid") return JSON.stringify({ sourceIds: primitive.sourceIds, vertices: primitive.vertices, faces: primitive.faces, volume: primitive.volume, area: primitive.area, status: primitive.status })
-  if (primitive.type === "intersectionFace") return JSON.stringify({ sourceIds: primitive.sourceIds, points: primitive.points, normal: primitive.normal, area: primitive.area, hint: primitive.hint, status: primitive.status })
+  if (primitive.type === "intersectionFace") return JSON.stringify({ sourceIds: primitive.sourceIds, points: primitive.points, normal: primitive.normal, area: primitive.area, areaExact: primitive.areaExact, outerRingLength: primitive.outerRingLength, poleIndex: primitive.poleIndex, hint: primitive.hint, status: primitive.status })
   if (primitive.type === "intersectionPoint3") return JSON.stringify({ sourceIds: primitive.sourceIds, position: primitive.position, hint: primitive.hint, status: primitive.status })
   if (primitive.type === "function") return JSON.stringify({ expression: primitive.expression, domain: primitive.domain, samples: primitive.samples })
   const unsupportedPrimitive: never = primitive

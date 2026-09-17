@@ -37,6 +37,11 @@ export interface IntersectionPreview3d {
    * 渲染方据此把填充三角化成环向条带（扇形会把两圈之间的洞整块填掉）。平面区域没有这个字段。
    */
   outerRingLength?: number
+  /**
+   * 交面区域（曲面）：**极点**在 `points` 里的下标（圆锥侧面）。极点待在曲面内部、不在边界环上，
+   * 填充必须绕它铺开，否则这张"圆锥面"会被填成底面圆盘。平面区域没有这个字段。
+   */
+  poleIndex?: number
   /** 交面区域：区域法向（曲面区域是那张二次曲面的轴）、面积，以及"该被建成哪一面"的形心。 */
   normal: Vector3
   area: number
@@ -281,6 +286,7 @@ export function computeIntersectionPreviews3d(document: GeometryDocument, option
             segments: [],
             points: region.points.map((point) => ({ ...point })),
             ...(region.outerRingLength ? { outerRingLength: region.outerRingLength } : {}),
+            ...(region.poleIndex !== undefined ? { poleIndex: region.poleIndex } : {}),
             normal: { ...region.normal },
             area: region.area,
             hint: { ...hint },

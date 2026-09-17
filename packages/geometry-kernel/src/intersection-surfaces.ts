@@ -44,6 +44,15 @@ export interface IntersectionSurfaceRegion {
    * `points` 退回 `largestFace` 时也不写（那只是一圈，别假装它缝过）。
    */
   outerRingLength?: number
+  /**
+   * 曲面区域的**极点**在 `points` 里的下标：它待在曲面内部、**不在任何边界环上**（圆锥的顶点）。
+   *
+   * 这种区域的边界只是一圈（圆锥侧面的边界就是底面那圈圆），但填充必须**绕极点铺开**：
+   * 只按边界环铺的话，一张"圆锥面"会被填成底面那团圆盘，形心也落在底面圆心上——与真正的底面圆盘区域
+   * 完全同一个形心，于是画布上既看不出这是一张曲面、点它认领到的还是隔壁那张圆盘
+   *（用户反馈："交出一大堆面，但是无法获取那个曲面"）。有极点时 `points[0]` 就是它。
+   */
+  poleIndex?: number
   /** 解析边界：曲面区域有；平面区域的边界来自二次曲面时也有。串不成闭合环时**不写**。 */
   exactLoops?: CurvePiece3[][]
   /** 平面区域：法向；曲面区域：该二次曲面的轴。 */
@@ -84,8 +93,15 @@ interface SurfaceFrame {
 interface SurfaceEntry {
   quadric: Quadric3
   frame: SurfaceFrame
-  /** 落在这张二次曲面上的交点顶点：键 → 绕轴角 / 轴向坐标。 */
-  onSurface: Map<string, { angle: number; axial: number }>
+  /** 落在这张二次曲面上的交点顶点：键 → 绕轴角 / 轴向坐标 / 到轴的径向距离。 */
+  onSurface: Map<string, SurfaceVertex>
+}
+
+/** 一个顶点在曲面帧里的三个量：绕轴角、轴向坐标、到轴的径向距离（径向 0 = 落在轴上，如锥尖）。 */
+interface SurfaceVertex {
+  angle: number
+  axial: number
+  radial: number
 }
 
 interface SourceFace {
@@ -169,13 +185,27 @@ function angleOf(frame: SurfaceFrame, point: Vector3): number {
   return Math.atan2(dotVector3(flattened, frame.frameV), dotVector3(flattened, frame.frameU))
 }
 
-/** 轴向坐标 `level` 处的半径（圆锥随高度线性收缩）。 */
+/** 到轴的**径向距离**：锥尖这类落在轴上的顶点径向为 0（它的角度没有意义，见 `isFacet`）。 */
+function radialOf(frame: SurfaceFrame, point: Vector3): number {
+  const radial = subtractVector3(point, frame.origin)
+  return lengthVector3(subtractVector3(radial, scaleVector3(frame.axis, dotVector3(radial, frame.axis))))
+}
+
+/**
+ * 轴向坐标 `level` 处的半径（圆锥随高度线性收缩）。
+ *
+ * `ratio === 0` 就是**锥尖**：那里半径本来就是 0，顶点**在曲面上**，不能判成"不在"。
+ * 曾经的 `ratio > 0` 把锥尖排除掉，于是圆锥侧面的每一个三角形（每个都带锥尖）都认不出属于这张曲面——
+ * 实测"圆柱 ∩ 圆锥"（圆锥整体落在圆柱里）因此退化成一个三角形一个区域（**49 个**），
+ * 点哪一块都只是一个小三角，拿不到"圆锥面"这张整曲面（用户反馈"交出一大堆面"）。
+ * 只有越过锥尖（`ratio < 0`）才如实返回 `null`：那已经不在有限圆锥上。
+ */
 function radiusAt(frame: SurfaceFrame, level: number): number | null {
   if (frame.radius === null) return null
   if (frame.kind === "cylinder") return frame.radius
   if (frame.height === null) return null
   const ratio = 1 - level / frame.height
-  return ratio > 0 ? frame.radius * ratio : null
+  return ratio >= 0 ? frame.radius * ratio : null
 }
 
 /**
@@ -552,10 +582,29 @@ function regionFromCandidate(candidate: RegionCandidate, pointOf: Map<string, Ve
      * 它就只是一圈（含退回 `largestFace` 的情形——那时 `outer` 根本不存在），渲染方照旧扇形填充。
      */
     const stitchedOuterRingLength = outer && points.length > outer.keys.length ? outer.keys.length : undefined
+    /**
+     * 曲面区域可能有一个**待在曲面内部、不在边界环上**的极点：圆锥的顶点就是它。
+     *
+     * 只给一圈底圆的话，"圆锥面"这块区域的多边形就是那张底面圆盘——填充填的是底面、形心也落在底面圆心
+     * （与真正的底面圆盘区域**完全同一个形心**），于是画布上既看不出这是一张曲面、点它认领到的还是隔壁
+     * 那张圆盘：用户反馈"交出一大堆面，但是无法获取那个曲面"说的就是这一类。把极点交出去，
+     * 渲染方才能绕着它铺开（`poleIndex`）。
+     *
+     * 判据从严：**恰好一个**不在任何边界环上的顶点，且它落在轴上（径向 ≈ 0）。多一个少一个都不猜——
+     * 说不清怎么填的区域就照旧按边界环铺。
+     */
+    const onBoundary = new Set(closed.flatMap((ring) => ring.keys))
+    const interior = [...new Set(candidate.faces.flatMap((face) => face.keys))].filter((key) => !onBoundary.has(key))
+    const poleKey = interior.length === 1 && candidate.frame && radialOf(candidate.frame, pointOf.get(interior[0]) as Vector3) <= RELATIVE_TOLERANCE * candidate.frame.scale ? interior[0] : null
+    // 极点排在最前面：只认 `outerRingLength` 的老消费方从 `points[0]` 扇形铺开时也正好铺对。
+    const withPole = poleKey ? [pointOf.get(poleKey) as Vector3, ...points] : points
     return {
       kind: candidate.kind,
-      points,
-      ...(stitchedOuterRingLength ? { outerRingLength: stitchedOuterRingLength } : {}),
+      points: withPole,
+      ...(poleKey ? { poleIndex: 0 } : {}),
+      // 极点与条带不会同时出现（有极点就只有一个边界环，没有第二圈可缝）；条带那套下标规则与
+      // "极点在最前面"不兼容，所以有极点时如实不写 `outerRingLength`（画布绕极点铺就是对的）。
+      ...(!poleKey && stitchedOuterRingLength ? { outerRingLength: stitchedOuterRingLength } : {}),
       ...(exactLoops ? { exactLoops } : {}),
       normal: { ...candidate.normal },
       // 曲面区域：网格面片面积求和，如实标近似。
@@ -629,18 +678,28 @@ export function mergeIntersectionSurfaces3(
   for (const entry of entries) {
     for (const [key, point] of pointOf) {
       if (!onSurfaceAt(entry.frame, point)) continue
-      entry.onSurface.set(key, { angle: angleOf(entry.frame, point), axial: axialOf(entry.frame, point) })
+      entry.onSurface.set(key, { angle: angleOf(entry.frame, point), axial: axialOf(entry.frame, point), radial: radialOf(entry.frame, point) })
     }
   }
 
-  /** 这个面是不是这张二次曲面上的一片（详见文件头的两条判据）。 */
+  /**
+   * 这个面是不是这张二次曲面上的一片（详见文件头的两条判据）。
+   *
+   * 角度只按**离开轴**的顶点量：锥尖落在轴上，`atan2(0, 0)` 没有意义（量出来是 0），
+   * 把锥尖一起量会把一张张开 7.5° 的侧面片量成 93°…116°，于是"一片最多张开 60°"的判据把它挡掉——
+   * 实测圆锥侧面的每一个三角形都带锥尖，结果 48 片一个都认不出来。轴上顶点本身仍是这张曲面上合法的点
+   *（"所有顶点都在曲面上"那条照旧要求它），只是不能用它来定张角。
+   */
   const isFacet = (face: SourceFace, entry: SurfaceEntry): boolean => {
     const vertices = face.keys.map((key) => entry.onSurface.get(key))
     if (vertices.some((vertex) => vertex === undefined)) return false
-    const angles = vertices.map((vertex) => (vertex as { angle: number }).angle)
-    const span = angularSpan(angles)
+    const measured = vertices as SurfaceVertex[]
+    const offAxis = measured.filter((vertex) => vertex.radial > RELATIVE_TOLERANCE * entry.frame.scale)
+    // 只有一个（或零个）离开轴的顶点时张角无从谈起：如实不当它是曲面片，绝不猜。
+    if (offAxis.length < 2) return false
+    const span = angularSpan(offAxis.map((vertex) => vertex.angle))
     if (!span || !(span.span > 0) || span.span > MAX_FACET_SPAN) return false
-    const axials = vertices.map((vertex) => (vertex as { axial: number }).axial)
+    const axials = measured.map((vertex) => vertex.axial)
     const lowest = Math.min(...axials)
     const highest = Math.max(...axials)
     const own = new Set(face.keys)

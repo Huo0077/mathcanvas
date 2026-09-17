@@ -437,15 +437,19 @@ export function createSectionMesh(primitive: SectionPrimitive, options: { omitBo
 /**
  * 区域多边形的**填充三角化**（位置数组，非索引几何）。
  *
- * 平面区域是凸多边形，扇形三角化就是对的。曲面区域不一样：内核给的 `points` 是"前导外环 + 其余环
- * **反向**缝合"的一条多边形（配对规则 `points[长度 − 1 − i] ↔ points[i]`，见 `outerRingLength`），
- * 对缝合带做扇形会把两圈之间那个"洞"整块填掉——实测立方体 ∩ 圆柱的侧带会画成"顶上一块圆盘 +
- * 几片横穿圆柱内部的三角形"，而不是一条管子上的带面。所以缝合带按**环向条带**三角化：
- * 每条外环边与后段对应边之间缝两片三角形，与内核算带面积用的是同一套配对。
+ * 三种形状，按"数据里带了什么"决定，缺省是"凸平面多边形的扇形"：
  *
- * 退化三角形（收尾处可能重合的点）直接跳过：写进去只会得到零面积片，法向也没意义。
+ * 1. **极点**（`poleIndex`，圆锥侧面就是）：极点待在曲面内部、不在边界环上，填充必须绕它铺开。
+ *    只按边界环铺的话，一张"圆锥面"会被填成底面那团圆盘（形心还和真正的底面圆盘区域重合）——
+ *    用户反馈的"交出一大堆面，但是无法获取那个曲面"，一半的原因就在这里。
+ * 2. **缝合带**（`outerRingLength`）：内核给的 `points` 是"前导外环 + 其余环**反向**缝合"的多边形
+ *   （配对规则 `points[长度 − 1 − i] ↔ points[i]`），对它做扇形会把两圈之间那个"洞"整块填掉——
+ *    实测立方体 ∩ 圆柱的侧带会画成"顶上一块圆盘 + 几片横穿圆柱内部的三角形"。所以按**环向条带**缝。
+ * 3. 其余（平面区域）：从第一点扇形铺开就行。
+ *
+ * 退化三角形（重合点）直接跳过：写进去只会得到零面积片，法向也没意义。
  */
-export function regionFillPositions(points: Vector3[], outerRingLength?: number): number[] {
+export function regionFillPositions(points: Vector3[], outerRingLength?: number, poleIndex?: number): number[] {
   const positions: number[] = []
   const push = (first: number, second: number, third: number) => {
     if (first === second || second === third || first === third) return
@@ -453,6 +457,12 @@ export function regionFillPositions(points: Vector3[], outerRingLength?: number)
       const point = points[index]
       positions.push(point.x, point.y, point.z)
     }
+  }
+  if (poleIndex !== undefined && poleIndex >= 0 && poleIndex < points.length && points.length >= 4) {
+    // 绕极点铺：每条边界边（去掉极点后首尾相接）与极点之间一片三角形。
+    const ring = points.map((_, index) => index).filter((index) => index !== poleIndex)
+    for (let index = 0; index < ring.length; index += 1) push(poleIndex, ring[index], ring[(index + 1) % ring.length])
+    return positions
   }
   if (outerRingLength !== undefined && outerRingLength >= 3 && points.length >= 2 * outerRingLength) {
     for (let index = 0; index < outerRingLength; index += 1) {
@@ -468,9 +478,13 @@ export function regionFillPositions(points: Vector3[], outerRingLength?: number)
   return positions
 }
 
-/** 区域多边形的**边界环**顶点（首尾不重复）：解析边界不可用时的多边形兜底。 */
-function ringVertices(points: Vector3[]): THREE.Vector3[] {
-  return points.map((point) => new THREE.Vector3(point.x, point.y, point.z))
+/**
+ * 区域多边形的**边界环**顶点（首尾不重复）：解析边界不可用时的多边形兜底。
+ *
+ * 极点（`poleIndex`）**不是边界上的点**：它待在曲面内部，画进边界会多出一圈"从极点出发的辐条"。
+ */
+function ringVertices(points: Vector3[], poleIndex?: number): THREE.Vector3[] {
+  return points.filter((_, index) => index !== poleIndex).map((point) => new THREE.Vector3(point.x, point.y, point.z))
 }
 
 /** Render a computed unfold layout as one filled mesh plus an outline per face, keeping pick metadata on each face. */
@@ -492,9 +506,9 @@ export function createIntersectionFaceGroup(
 ): THREE.Object3D | null {
   const ring = primitive.points
   if (ring.length < 3) return null
-  const positions = regionFillPositions(ring, primitive.outerRingLength)
+  const positions = regionFillPositions(ring, primitive.outerRingLength, primitive.poleIndex)
   if (positions.length < 9) return null
-  const vertices = ringVertices(ring)
+  const vertices = ringVertices(ring, primitive.poleIndex)
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3))
   geometry.computeVertexNormals()
@@ -909,9 +923,9 @@ function setOpacity(object: THREE.Mesh | THREE.Line | THREE.LineSegments, opacit
 function addFacePreview(group: THREE.Group, preview: ThreeScenePreview, highlighted: boolean, hitTargets: THREE.Object3D[]): void {
   const ring = preview.points
   if (ring.length < 3) return
-  const positions = regionFillPositions(ring, preview.outerRingLength)
+  const positions = regionFillPositions(ring, preview.outerRingLength, preview.poleIndex)
   if (positions.length < 9) return
-  const vertices = ring.map((point) => new THREE.Vector3(point.x, point.y, point.z))
+  const vertices = ringVertices(ring, preview.poleIndex)
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3))
   geometry.computeVertexNormals()
@@ -941,12 +955,12 @@ function addFacePreview(group: THREE.Group, preview: ThreeScenePreview, highligh
   /**
    * 顶点标记只给**平面**区域的拐角。
    *
-   * 曲面区域的 `points` 是网格多边形（48 段侧带 = 96 个顶点），那些点不是任何几何意义上的交点，
-   * 全标出来的话画布上就是两圈密密麻麻的点（与既有口径冲突："光滑交线一个采样点都不标"）；
-   * 缝合处那两个拐角也只是我们拼接多边形的接缝，不是几何特征。真正的交点标记由**交线**预览负责
-   *（`intersectionMarkerPoints`：只标转折 ≥ 18° 的角点）。
+   * 曲面区域（`outerRingLength` 缝合带 / `poleIndex` 带极点的圆锥面）的 `points` 是网格顶点，
+   * 那些点不是任何几何意义上的交点，全标出来的话画布上就是密密麻麻的点（与既有口径冲突：
+   * "光滑交线一个采样点都不标"）；缝合处的拐角也只是我们拼接多边形的接缝，不是几何特征。
+   * 真正的交点标记由**交线**预览负责（`intersectionMarkerPoints`：只标转折 ≥ 18° 的角点）。
    */
-  if (preview.outerRingLength !== undefined) return
+  if (preview.outerRingLength !== undefined || preview.poleIndex !== undefined) return
   for (const vertex of uniqueVertices(vertices)) {
     const marker = new THREE.Mesh(previewPointGeometry, previewPointMaterial)
     marker.position.copy(vertex)

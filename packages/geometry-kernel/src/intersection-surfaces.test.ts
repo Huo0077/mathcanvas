@@ -299,6 +299,65 @@ describe("mergeIntersectionSurfaces3", () => {
     expect(levels).toEqual([-2, 2])
   })
 
+  it("groups a cone's lateral surface when the apex sits on the axis (every facet touches it)", () => {
+    /**
+     * 用户实测反馈："曲面交面相当乱，交出一大堆面，但是无法获取那个曲面。"
+     *
+     * 实测场景：圆柱 ∩ 圆锥（圆锥完全落在圆柱里，交出来就是圆锥自己）→ **49 个区域**
+     * （48 个侧面三角形 + 1 个底面圆盘），点哪一块都只是一个小三角，拿不到"圆锥面"这张曲面。
+     *
+     * 根因两条，都在"这个面是不是这张曲面上的一片"的判据里：
+     * 1. `radiusAt` 用 `ratio > 0`，圆锥**顶点**（`ratio` 恰为 0、半径 0）被判成"不在曲面上"，
+     *    于是每个带顶点的三角形都被排除；
+     * 2. 顶点的 `atan2(0, 0)` 没有意义（量出来是 0），按**所有**顶点量角度会把 7.5° 的侧面片
+     *    量成 93°…116°，照样超过"一片最多张开 60°"的阈值。
+     */
+    const conePrimitive = { id: "cone-a", type: "cone" as const, center: { x: 0, y: 0, z: BASE_Z }, radius: RADIUS, height: HEIGHT, segments: SEGMENTS }
+    const intersection = intersectConvexPolyhedra3(conePolyhedron(), cylinderPolyhedron())
+    const regions = mergeIntersectionSurfaces3(intersection, [{}, { quadric: coneQuadric3(conePrimitive) }])
+
+    // 48 片三角形 + 1 个底面圆盘：一个侧面片都没被认出来。
+    expect(intersection.faces).toHaveLength(SEGMENTS + 1)
+    expect(regions.filter((region) => region.kind === "cone")).toHaveLength(1)
+    expect(regions.filter((region) => region.kind === "plane")).toHaveLength(1)
+    expect(regions).toHaveLength(2)
+
+    const lateral = regions.find((region) => region.kind === "cone")!
+    expect(lateral.areaExact).toBe(false)
+    // 侧面面积 ≈ πrl（48 段内接多边形，略小于真值），绝不是"48 个小三角各算一个区域"。
+    const trueLateral = Math.PI * RADIUS * Math.hypot(RADIUS, HEIGHT)
+    expect(Math.abs(lateral.area - trueLateral) / trueLateral).toBeLessThan(0.01)
+    expect(lateral.area).toBeLessThan(trueLateral)
+    // 不重不漏：曲面区域的面积**就是**那 48 片侧面三角形的面积和（底面圆盘不在其中）。
+    const meshTotal = intersection.faceAreas.reduce((sum, value) => sum + value, 0)
+    const discMeshArea = Math.max(...intersection.faceAreas)
+    expect(lateral.area).toBeCloseTo(meshTotal - discMeshArea, 9)
+    // 底面是整圆 ⇒ 平面区域用闭式 πr²，且如实标精确（比 48 边形略大）。
+    const disc = regions.find((region) => region.kind === "plane")!
+    expect(disc.areaExact).toBe(true)
+    expect(Math.abs(disc.area - Math.PI * RADIUS * RADIUS)).toBeLessThan(1e-9)
+
+    /**
+     * 侧面区域的边界只有底面那圈（锥尖不在边界上），所以必须把**极点**交出去：
+     * 否则渲染方按边界环铺出来的"圆锥面"是一张底面圆盘，形心还和真正的底面圆盘区域重合
+     * （实测两者都是 `(0, 0, 0)`）——点圆锥侧面认领到的会是那张圆盘，曲面照样拿不到。
+     */
+    expect(lateral.poleIndex).toBe(0)
+    expect(lateral.outerRingLength).toBeUndefined()
+    expect(lateral.points).toHaveLength(SEGMENTS + 1)
+    const pole = lateral.points[0]
+    // 极点 = 圆锥顶点：落在轴上（径向 0），高度 = 底面 z + 高。
+    expect(Math.hypot(pole.x, pole.y)).toBeLessThan(1e-9)
+    expect(pole.z).toBeCloseTo(BASE_Z + HEIGHT, 9)
+    // 极点确实**不在**边界环上（它不是那 48 个底面点中的任何一个）。
+    expect(lateral.points.slice(1).every((point) => Math.hypot(point.x - pole.x, point.y - pole.y, point.z - pole.z) > 1e-9)).toBe(true)
+    // 形心与底面圆盘的形心**不再重合**：预览的 hint 因此能分辨这两块区域。
+    const centroidOf = (points: { x: number; y: number; z: number }[]) => points.reduce((sum, point) => ({ x: sum.x + point.x / points.length, y: sum.y + point.y / points.length, z: sum.z + point.z / points.length }), { x: 0, y: 0, z: 0 })
+    const lateralCentroid = centroidOf(lateral.points)
+    const discCentroid = centroidOf(disc.points)
+    expect(Math.hypot(lateralCentroid.x - discCentroid.x, lateralCentroid.y - discCentroid.y, lateralCentroid.z - discCentroid.z)).toBeGreaterThan(0.05)
+  })
+
   it("groups a cylinder whose axis is not the z axis (App 默认圆柱在 x=3)", () => {
     /**
      * App 新建的圆柱在 `center:{x:3,y:0,z:0}`（App.tsx 的 `addDefaultSolid`），圆锥在 `{x:-3,y:0,z:3}`——

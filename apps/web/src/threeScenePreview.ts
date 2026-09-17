@@ -30,6 +30,11 @@ export interface ThreeScenePreview {
    * 渲染方据此把填充三角化成**环向条带**（扇形会把两圈之间的洞整块填掉）。平面区域没有这个字段。
    */
   outerRingLength?: number
+  /**
+   * 交面（曲面区域）：**极点**在 `points` 里的下标（圆锥的侧面就是这种区域）。它待在曲面内部、
+   * 不在边界环上，填充必须绕它铺开——否则"圆锥面"会被填成底面那团圆盘，形心还与底面圆盘区域重合。
+   */
+  poleIndex?: number
   /** 交点：位置。 */
   position?: Vector3
   /** 状态栏用它说明"这一份是什么、点下去创建什么"。 */
@@ -59,6 +64,7 @@ export function toScenePreview(preview: IntersectionPreview3d, selectedIds: stri
     area: preview.area,
     hint: preview.hint,
     outerRingLength: preview.outerRingLength,
+    poleIndex: preview.poleIndex,
     position: preview.position,
     label: preview.label,
     focused: preview.sourceIds.every((id) => selectedIds.includes(id))

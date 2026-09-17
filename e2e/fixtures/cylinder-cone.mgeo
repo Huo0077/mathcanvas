@@ -1,0 +1,45 @@
+{
+  "format": "mgeo",
+  "formatVersion": "0.1",
+  "document": {
+    "schemaVersion": "0.1",
+    "revision": 1,
+    "workspace": "geometry3d",
+    "coordinateSystems": [
+      "cartesian-3d"
+    ],
+    "parameters": {},
+    "primitives": [
+      {
+        "id": "cyl-a",
+        "type": "cylinder",
+        "center": { "x": 0, "y": 0, "z": 0 },
+        "radius": 1.5,
+        "height": 4,
+        "segments": 48,
+        "label": "圆柱"
+      },
+      {
+        "id": "cone-a",
+        "type": "cone",
+        "center": { "x": 0, "y": 0, "z": 0 },
+        "radius": 1.5,
+        "height": 4,
+        "segments": 48,
+        "label": "圆锥"
+      }
+    ],
+    "groups": [],
+    "constraints": [],
+    "dynamics": [],
+    "annotations": [],
+    "measurements": [],
+    "engineeringAnnotations": [],
+    "metadata": {
+      "id": "doc-cylinder-cone-fixture",
+      "name": "Cylinder and cone",
+      "createdAt": "2026-09-17T00:00:00.000Z",
+      "updatedAt": "2026-09-17T00:00:00.000Z"
+    }
+  }
+}
