@@ -141,7 +141,12 @@ export function calculateMeasurement3(measurement: Measurement3, context: Measur
       if (definition.kind === "pointNormal") {
         const origin = pointById(primitives, definition.pointId)
         if (!origin) return invalidMeasurement(measurement.id, measurement.sourceIds, "distance", "insufficient-data", "平面法向量来源点不存在，无法确定平面位置。")
+        /**
+         * 法向归一化失败（数量级过小）时必须报数据不足：零向量会让点积恒为 0，
+         * 于是"点到平面的距离"被算成 0——一个看着有效、其实毫无意义的读数。
+         */
         const normal = normalizeVector3(definition.normal)
+        if (lengthVector3(normal) <= EPSILON) return invalidMeasurement(measurement.id, measurement.sourceIds, "distance", "insufficient-data", "平面法向量退化（长度为零），无法确定平面方向。")
         return measureDistance3(measurement.id, measurement.sourceIds, Math.abs(dotVector3(normal, subtractVector3(firstPoint, origin))), `由点 ${measurement.sourceIds[0]} 到平面 ${measurement.sourceIds[1]} 的法向距离计算。`)
       }
       const planePoints = definition.pointIds.map((id) => pointById(primitives, id))

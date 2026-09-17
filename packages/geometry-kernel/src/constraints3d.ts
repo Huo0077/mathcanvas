@@ -56,7 +56,15 @@ function lineDirection(primitive: PrimitiveSpec | undefined, map: ReadonlyMap<st
 
 function planeNormal(primitive: Plane3Primitive | Face3Primitive, map: ReadonlyMap<string, PrimitiveSpec>): Vector3 | null {
   if (primitive.type === "plane3") {
-    if (primitive.definition.kind === "pointNormal") return normalizeVector3(primitive.definition.normal)
+    /**
+     * 法向必须**真的能归一化**：schema 只要求"非零"，于是 (1e-30,0,0) 这种数量级能存进文档，
+     * 而 `normalizeVector3` 对长度 < 1e-12 的输入返回零向量——此时任何点到平面的残差都算成 0，
+     * 得到一个"永远满足"的假约束。归一化失败就返回 null（调用方报数据不足）。
+     */
+    if (primitive.definition.kind === "pointNormal") {
+      const unit = normalizeVector3(primitive.definition.normal)
+      return lengthVector3(unit) > EPSILON ? unit : null
+    }
     const points = primitive.definition.pointIds.map((id) => point(map, id))
     return points.every(Boolean) ? planeFromPoints(points[0]!, points[1]!, points[2]!)?.normal ?? null : null
   }

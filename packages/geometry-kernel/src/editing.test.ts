@@ -48,6 +48,22 @@ describe("offset", () => {
   it("has no offset for a bare point", () => {
     expect(offsetPrimitive({ id: "pt", type: "point", x: 0, y: 0 } as never, 2)).toBeNull()
   })
+
+  /**
+   * 体检发现的真缺陷：折线的偏移对每一段都写了 `frame(...)!`，而 `frame` 对**重复顶点**返回 null
+   * （长度 < 1e-9 没有方向）——于是重复点的折线一偏移就抛 TypeError，而不是按约定返回 null。
+   * 末段那处一直有判空（说明作者知道会返回 null），中间与首段漏了。
+   */
+  it("refuses to offset a polyline with repeated vertices instead of throwing", () => {
+    const repeatedStart: PrimitiveSpec = { id: "p1", type: "polyline", points: [{ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 2, y: 0 }] }
+    const repeatedMiddle: PrimitiveSpec = { id: "p2", type: "polyline", points: [{ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 2, y: 0 }, { x: 4, y: 0 }] }
+    const repeatedEnd: PrimitiveSpec = { id: "p3", type: "polyline", points: [{ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 2, y: 0 }] }
+
+    for (const polyline of [repeatedStart, repeatedMiddle, repeatedEnd]) {
+      expect(() => offsetPrimitive(polyline as never, 2)).not.toThrow()
+      expect(offsetPrimitive(polyline as never, 2)).toBeNull()
+    }
+  })
 })
 
 describe("trim", () => {

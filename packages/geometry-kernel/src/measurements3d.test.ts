@@ -38,6 +38,22 @@ describe("3D measurements", () => {
     expect(area).toMatchObject({ value: 6, unit: "u²", status: "valid" })
   })
 
+  /**
+   * 同一次体检：平面法向数量级过小时 `normalizeVector3` 返回零向量，点积恒为 0，
+   * "点到平面的距离"被算成 0——一个看着有效、其实毫无意义的读数。必须报数据不足。
+   */
+  it("reports a degenerate plane normal instead of a zero distance", () => {
+    const tinyPlane: PrimitiveSpec = { id: "tiny-plane", type: "plane3", definition: { kind: "pointNormal", pointId: "a", normal: { x: 1e-30, y: 0, z: 0 } } }
+    const tiny = createMeasurement3("distance-tiny", "distance", ["d", "tiny-plane"], [...points, tinyPlane])
+    const scaledPlane: PrimitiveSpec = { id: "scaled-plane", type: "plane3", definition: { kind: "pointNormal", pointId: "a", normal: { x: 0, y: 0, z: 5 } } }
+    const scaled = createMeasurement3("distance-scaled", "distance", ["d", "scaled-plane"], [...points, scaledPlane])
+
+    expect(tiny.status).toBe("insufficient-data")
+    expect(tiny.value).toBeUndefined()
+    // 非单位但可归一化的法向照常工作：点 d 到 z=0 平面的距离是 2。
+    expect(scaled).toMatchObject({ value: 2, status: "valid" })
+  })
+
   it("returns insufficient data for missing sources", () => {
     const measurement = createMeasurement3("length-1", "length", ["missing"], points)
 

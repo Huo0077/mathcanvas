@@ -1165,7 +1165,7 @@ P7-1 至 P7-6 与工程工作台层次化改造 Task 1-7 均已完成；P4 Agent
 
 ## 验证证据
 
-> **当前基线（唯一权威，2026-09-17 在"全身大体检（六批）+ e2e 构建修复"之后实测）**：`npm.cmd test` **107 个测试文件、1187 个用例通过**；4 个 workspace 类型检查通过；ESLint **0 error、15 条 warning**；生产构建通过（Vite 仍提示主 bundle 超过 500 KB）；Playwright **83/83** 通过（**现在真的跑的是当前工作区的构建产物**，见下）。
+> **当前基线（唯一权威，2026-09-17 在"全身大体检（七批）+ e2e 构建修复"之后实测）**：`npm.cmd test` **107 个测试文件、1190 个用例通过**；4 个 workspace 类型检查通过；ESLint **0 error、15 条 warning**；生产构建通过（Vite 仍提示主 bundle 超过 500 KB）；Playwright **83/83** 通过（**现在真的跑的是当前工作区的构建产物**，见下）。
 > 下面按时间倒序列出各轮实测快照（数字是**当时**的取值，用于追溯与对比，不代表当前门禁）；例如 68 文件 / 698 用例与 Playwright 47/47 属于 2026-09-16 的 Task 15-18 那一轮。
 
 ### 全身大体检（2026-09-17）：并行只读审计 + 按严重度修复
@@ -1253,6 +1253,16 @@ P7-1 至 P7-6 与工程工作台层次化改造 Task 1-7 均已完成；P4 Agent
 
 - **第六批 RED 证据**：`pointOnRay` 大坐标 → `expected false to be true`；单点折线 → `expected Infinity to be close to 2`；`segments: 257` → `expected [ {…}, {…}, …(1543) ] to deeply equal []`（旧实现照样建出 1545 个图元）。
 - **性能项实测（记录，不改）**：审计说"每帧自动保存 `encodeMgeo` + 同步写 localStorage 会造成输入卡顿"。实测 `encodeMgeo` 单次开销：示例文档（3 图元）**0.029ms**、200 图元 **0.219ms**、3000 图元 **2.631ms**——课堂规模文档下可忽略，所以不为它引入防抖（防抖会削弱"刷新即恢复草稿"的既有保证）。同一条审计还说"一次按键一条撤销记录"：这是**既有测试明确钉住的行为**（`store.test.ts` 连续 101 次 `setParameter` 期望 100 条历史上限），属设计选择而非缺陷。
+
+**第七批（崩溃与"假满足"）**：
+
+| 类别 | 缺陷 | 修法 |
+| --- | --- | --- |
+| 内核 | `offsetPrimitive` 的折线分支对首段与中间段写了 `frame(...)!`，而 `frame` 对**重复顶点**返回 null（该段没有方向）→ 带重复点的折线一偏移就抛 `TypeError`，而不是按约定返回 null（末段那处一直有判空，说明作者知道会返回 null） | 先算全部段的 frame，任一段退化就返回 `null` |
+| 内核 | `constraints3d.planeNormal` / `measurements3d` 的点面距离：schema 只要求法向"非零"，`(1e-30,0,0)` 能存进文档，而 `normalizeVector3` 对长度 < 1e-12 的输入返回**零向量** → 点积恒为 0 → 约束"永远满足"、距离读数恒为 0 | 归一化失败时返回 null / 报 `insufficient-data`（诊断文案"平面法向量退化"），非单位但可归一化的法向照常工作 |
+
+- **第七批 RED 证据**：折线重复点 → `expected [Function] to not throw an error but 'TypeError: Cannot read properties of …' was thrown`；退化法向约束 → `expected +0 to be null`；退化法向距离测量 → `expected 'valid' to be 'insufficient-data'`。
+
 
 - **明确不修、只记录**（都写进 `docs/feature-catalog.md` 的"体检结论与已知限制"）：
   - 非凸实体不再提供"实体内"宿主（宁可报数据不足，也不伪造体外坐标）。

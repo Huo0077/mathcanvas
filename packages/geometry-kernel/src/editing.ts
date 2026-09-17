@@ -51,10 +51,18 @@ export function offsetPrimitive(primitive: PlanarSnapPrimitive, distance: number
   if (primitive.type === "polyline") {
     const points = primitive.points
     if (points.length < 2) return null
-    const shifted: Coordinate[] = [shift(points[0], frame(points[0], points[1])!.normal, distance)]
+    /**
+     * 每一段都必须有方向：重复顶点使这一段长度为 0，`frame` 因此返回 null。
+     * 旧实现只给**末段**判空，首段与中间段直接 `!` 解引用——带重复点的折线一偏移就抛 TypeError，
+     * 而不是按约定返回 null（末段那处判空说明作者本来就知道 `frame` 会返回 null）。
+     */
+    const frames = points.slice(1).map((point, index) => frame(points[index], point))
+    if (frames.some((entry) => entry === null)) return null
+    const segments = frames as { unit: Coordinate; normal: Coordinate; length: number }[]
+    const shifted: Coordinate[] = [shift(points[0], segments[0].normal, distance)]
     for (let index = 1; index < points.length - 1; index += 1) {
-      const previous = frame(points[index - 1], points[index])!
-      const next = frame(points[index], points[index + 1])!
+      const previous = segments[index - 1]
+      const next = segments[index]
       // 两条相邻偏移线的交点就是斜接点；平行（折返）时退回直接平移顶点。
       const miter = intersectLinesDetailed(
         { id: "prev", type: "line", a: shift(points[index - 1], previous.normal, distance), b: shift(points[index], previous.normal, distance) },
@@ -62,9 +70,7 @@ export function offsetPrimitive(primitive: PlanarSnapPrimitive, distance: number
       )
       shifted.push(miter.kind === "point" ? miter.point : shift(points[index], previous.normal, distance))
     }
-    const lastFrame = frame(points[points.length - 2], points[points.length - 1])
-    if (!lastFrame) return null
-    shifted.push(shift(points[points.length - 1], lastFrame.normal, distance))
+    shifted.push(shift(points[points.length - 1], segments[segments.length - 1].normal, distance))
     return { kind: "polyline", points: shifted }
   }
   return null
