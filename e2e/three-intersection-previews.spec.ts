@@ -81,7 +81,8 @@ test("creates a 交点 from the corner marker, and a 交线 from the crossing li
   const corner = await projectWorldPoint(page, { x: 2, y: 2, z: 2 })
   await page.mouse.move(corner.x, corner.y)
   await expect(scene).toHaveAttribute("data-preview-hover-key", /pair:cube-a\|cube-b:点\d/)
-  await expect(page.locator(".status-bar-prompt")).toContainText("拐点")
+  // 文案说"交线上的点"：圆类实体的标记可能是沿光滑交线取出来的采样点，不一律是拐点。
+  await expect(page.locator(".status-bar-prompt")).toContainText("交线上的点")
 
   await page.mouse.click(corner.x, corner.y)
   await expect(page.getByText("交点 1").first()).toBeVisible()

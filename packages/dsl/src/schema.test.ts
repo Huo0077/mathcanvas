@@ -157,6 +157,20 @@ describe("Geometry DSL document layout schema", () => {
   })
 
   /**
+   * 圆类实体（圆柱 / 圆锥）的多边形近似顶点带 `tessellation` 标记：它们留在文档里参与面 / 棱 /
+   * 交线计算，但不展示。只允许布尔值，缺省表示普通的用户点（旧文档因此完全不受影响）。
+   */
+  it("validates the tessellation flag on round-solid vertices", () => {
+    const document = { ...createEmptyDocument("geometry3d") }
+    const point = (overrides: Record<string, unknown> = {}) => ({ id: "point-a", type: "point3", position: { x: 0, y: 0, z: 0 }, ...overrides })
+
+    expect(validateDocument({ ...document, primitives: [point({ tessellation: true })] }).valid).toBe(true)
+    expect(validateDocument({ ...document, primitives: [point({ tessellation: false })] }).valid).toBe(true)
+    expect(validateDocument({ ...document, primitives: [point()] }).valid).toBe(true)
+    expect(validateDocument({ ...document, primitives: [point({ tessellation: "yes" })] }).valid).toBe(false)
+  })
+
+  /**
    * 同一次体检：`section.points` 有校验，`section.loops` 没有。`loops` 直接喂给 3D 预览的
    * 描边与三角化路径，非数组、环不是数组或坐标非有限都会让渲染层抛异常或画出 NaN 顶点。
    */

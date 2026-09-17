@@ -205,6 +205,69 @@ describe("solid builders", () => {
     expect(buildFrustum({ bottom: triangle, top: triangle.map((point) => ({ x: point.x, y: point.y, z: 2 })) }, createBuilderContext("frustum")).diagnostics).toEqual([])
   })
 
+  /**
+   * 用户反馈："立体里的圆相关的内容不要这么多标点啊，只需要四个点就够了。"
+   *
+   * 圆类实体是**多边形近似**：48 段会把 96 个细分顶点都物化成带标签的点（A…Z、P27…P96），
+   * 画布上就是 96 个小球 + 96 个标签。现在每个圆只保留 4 个象限点（0°/90°/180°/270°）可见，
+   * 其余细分顶点仍然存在于文档里（面 / 棱 / 交线 / 布尔交集要用它们的坐标），只是标记为 `tessellation`
+   * 且**不给标签**——画布与对象列表都不再展示它们。
+   */
+  const roundSolids = { list: (result: ReturnType<typeof buildSolidTemplate>) => result.primitives.filter((primitive) => primitive.type === "point3") } as const
+  const round = (value: number) => {
+    const rounded = Math.round(value * 1e6) / 1e6
+    // 归一化 -0：`cos(90°)` 那类浮点残差四舍五入后会是 -0，与 0 的深度比较不相等。
+    return rounded === 0 ? 0 : rounded
+  }
+
+  it("keeps only the four quadrant points of each circle visible on a cylinder", () => {
+    const cylinder = buildSolidTemplate({ id: "cylinder-1", type: "cylinder", center: { x: 0, y: 0, z: 0 }, radius: 2, height: 3, segments: 48 })
+    const vertices = roundSolids.list(cylinder)
+    const visible = vertices.filter((primitive) => primitive.tessellation !== true)
+
+    expect(vertices).toHaveLength(96)
+    expect(visible).toHaveLength(8)
+    expect(visible.map((primitive) => primitive.label)).toEqual(["A", "B", "C", "D", "E", "F", "G", "H"])
+    // 象限点就是精确的 0°/90°/180°/270°：下底四个 (2,0) (0,2) (-2,0) (0,-2)，上底同样四个、z = 3。
+    expect(visible.map((primitive) => [round(primitive.position.x), round(primitive.position.y), round(primitive.position.z)])).toEqual([
+      [2, 0, 0], [0, 2, 0], [-2, 0, 0], [0, -2, 0],
+      [2, 0, 3], [0, 2, 3], [-2, 0, 3], [0, -2, 3]
+    ])
+    const hidden = vertices.filter((primitive) => primitive.tessellation === true)
+    expect(hidden).toHaveLength(88)
+    expect(hidden.every((primitive) => primitive.label === undefined)).toBe(true)
+  })
+
+  it("keeps a cone's apex visible next to its four quadrant points", () => {
+    const cone = buildSolidTemplate({ id: "cone-1", type: "cone", center: { x: 0, y: 0, z: 0 }, radius: 2, height: 3, segments: 48 })
+    const visible = roundSolids.list(cone).filter((primitive) => primitive.tessellation !== true)
+
+    expect(visible).toHaveLength(5)
+    expect(visible.map((primitive) => primitive.label)).toEqual(["A", "B", "C", "D", "E"])
+    expect(visible[4].position).toEqual({ x: 0, y: 0, z: 3 })
+  })
+
+  it("picks the nearest distinct vertices when the segment count is not a multiple of four", () => {
+    const hexagon = buildSolidTemplate({ id: "cylinder-6", type: "cylinder", center: { x: 0, y: 0, z: 0 }, radius: 2, height: 1, segments: 6 })
+    const visible = roundSolids.list(hexagon).filter((primitive) => primitive.tessellation !== true)
+    // 六边形没有精确象限点：取最近的 4 个**互不相同**的顶点（0/2/3/5 号），上底同样 4 个。
+    expect(visible).toHaveLength(8)
+    expect(visible.map((primitive) => primitive.label)).toEqual(["A", "B", "C", "D", "E", "F", "G", "H"])
+
+    // 三角形的两个象限会落到同一个顶点上：去重之后每个环只有 3 个可见点（如实，不凑数）。
+    const triangle = buildSolidTemplate({ id: "cylinder-3", type: "cylinder", center: { x: 0, y: 0, z: 0 }, radius: 2, height: 1, segments: 3 })
+    expect(roundSolids.list(triangle).filter((primitive) => primitive.tessellation !== true)).toHaveLength(6)
+  })
+
+  it("leaves ordinary solids untouched: every vertex is a real, labelled point", () => {
+    const cube = buildSolidTemplate({ id: "cube-1", type: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 2, z: 2 } })
+    const vertices = roundSolids.list(cube)
+
+    expect(vertices).toHaveLength(8)
+    expect(vertices.every((primitive) => primitive.tessellation === undefined)).toBe(true)
+    expect(vertices.map((primitive) => primitive.label)).toEqual(["A", "B", "C", "D", "E", "F", "G", "H"])
+  })
+
   it("returns diagnostics for malformed template input without throwing", () => {
     expect(() => buildSolid("cube", undefined, createBuilderContext("invalid"))).not.toThrow()
     expect(buildSolid("cube", undefined, createBuilderContext("invalid")).diagnostics.map((diagnostic) => diagnostic.code)).toContain("invalid-input")

@@ -55,8 +55,12 @@ export function resolveIntersectionPreviewPrompt(preview: { kind: string; label:
       : `${preview.label}：把指针移到半透明面片上，点击即可创建为交面图元。`
   }
   if (preview.kind === "point") {
+    /**
+     * 文案只说"交线上的点"：圆类实体的交线是光滑折线，标记点可能是沿交线均匀取出来的采样点，
+     * 不一定是拐点（拐点只在立方体这类有棱角的来源上才成立）。
+     */
     return hovering
-      ? `${preview.label}：这个圆点是交线的拐点（两个表面的公共点），点击即创建交点图元；它会跟着两个来源重算。`
+      ? `${preview.label}：这个圆点是交线上的点（两个表面的公共点），点击即创建交点图元；它会跟着两个来源重算。`
       : `${preview.label}：把指针移到圆点上，点击即可创建为交点图元。`
   }
   return hovering ? `${preview.label}：点击即可创建为交线图元。` : `${preview.label}：把指针移到虚线上可创建为交线图元。`

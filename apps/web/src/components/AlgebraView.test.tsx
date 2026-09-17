@@ -58,6 +58,39 @@ describe("algebra view spatial tree", () => {
     expect(screen.queryByText("顶点")).toBeNull()
   })
 
+  /**
+   * 用户要求："立体里的圆相关的内容不要这么多标点啊，只需要四个点就够了。"
+   * 圆柱 / 圆锥近似的细分顶点（带 `tessellation` 标记）不是用户对象：它们仍在文档里支撑面 / 棱 /
+   * 交线计算，但对象列表不该把它们列出来——48 段圆柱会一次冒出 88 行。
+   */
+  it("keeps tessellation vertices of a round solid out of the object list", () => {
+    const tessellated: PrimitiveSpec[] = [
+      { id: "cylinder-1", type: "cylinder", center: { x: 0, y: 0, z: 0 }, radius: 2, height: 3, segments: 48, label: "圆柱 1" },
+      {
+        id: "solid-cylinder-1",
+        type: "polyhedron3",
+        vertexIds: ["quad-a", "quad-b", "hidden-1", "hidden-2"],
+        edgeIds: ["edge-quad"],
+        faceIds: ["face-quad"],
+        construction: { kind: "template", templateId: "cylinder", sourceIds: ["cylinder-1"] }
+      },
+      { id: "quad-a", type: "point3", position: { x: 2, y: 0, z: 0 }, label: "A" },
+      { id: "quad-b", type: "point3", position: { x: 0, y: 2, z: 0 }, label: "B" },
+      { id: "hidden-1", type: "point3", position: { x: 1, y: 1, z: 0 }, tessellation: true },
+      { id: "hidden-2", type: "point3", position: { x: -1, y: 1, z: 0 }, tessellation: true },
+      { id: "edge-quad", type: "edge3", pointIds: ["quad-a", "quad-b"], label: "棱 1" },
+      { id: "face-quad", type: "face3", pointIds: ["quad-a", "quad-b", "hidden-1"], label: "面 1" }
+    ]
+    render(<AlgebraView primitives={tessellated} measurements={[]} workspace="geometry3d" selectedIds={[]} onSelect={() => {}} onToggle={() => {}} />)
+
+    fireEvent.click(screen.getByRole("button", { name: "展开 圆柱 1 拓扑 的子对象" }))
+
+    expect(screen.getByText("A")).toBeTruthy()
+    expect(screen.getByText("B")).toBeTruthy()
+    // 两个细分顶点既不在列表里，也不该留一个空壳分组。
+    expect(globalThis.document.querySelectorAll('[data-object-type="point3"]')).toHaveLength(2)
+  })
+
   it("toggles visibility for the solid group itself", () => {
     const onToggle = vi.fn()
     render(<AlgebraView primitives={primitives} measurements={[]} workspace="geometry3d" selectedIds={[]} onSelect={() => {}} onToggle={onToggle} />)

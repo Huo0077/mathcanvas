@@ -117,6 +117,14 @@ export interface Point3Primitive extends PrimitivePresentation {
   type: "point3"
   position: Vector3
   binding?: Point3Binding
+  /**
+   * 这是**圆类实体近似的细分顶点**（圆柱 / 圆锥的多边形近似内部顶点），不是用户创建的点。
+   *
+   * 它仍然参与面 / 棱 / 交线 / 布尔交集的计算（坐标是真源），但画布与对象列表都不展示它：
+   * 用户要求"立体里的圆相关的内容不要这么多标点，只需要四个点就够了"，因此每个圆只保留象限点，
+   * 其余顶点带这个标记且没有标签。旧文档 / 普通实体不带该字段，行为不变。
+   */
+  tessellation?: boolean
 }
 
 export type Line3Definition =

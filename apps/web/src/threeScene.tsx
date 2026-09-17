@@ -9,6 +9,7 @@ import type { SceneControlMode } from "./statusPrompts"
 import { isFreeDraggable3, planeThroughPoints, resolveDihedralMarker3, resolvePolyhedronTopology, sectionSourceVertices, templateTopologyIds } from "@draw/scene-graph"
 
 import { loadViewPreference3d, saveViewPreference3d } from "./persistence/draftStorage"
+import { isUserVisiblePrimitive } from "./primitiveVisibility"
 import { GRID_MAJOR_EVERY, GRID_MIN_RADIUS, gridPlacement } from "./sceneGrid"
 import { buildGridGeometry, GRID_MAJOR_COLOR, GRID_MINOR_COLOR, gridLayerOpacity } from "./threeGrid"
 import { sceneContentKey, sceneSyncDecision } from "./sceneContentKey"
@@ -389,7 +390,7 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       ? document.primitives.filter((primitive): primitive is Polyhedron3Primitive => primitive.type === "polyhedron3" && primitive.visible !== false)
       : []
     const unfoldedChildIds = new Set(unfoldedPolyhedra.flatMap((polyhedron) => [...polyhedron.edgeIds, ...polyhedron.faceIds]))
-    document.primitives.filter((primitive) => primitive.visible !== false).forEach((primitive) => {
+    document.primitives.filter(isUserVisiblePrimitive).forEach((primitive) => {
       if (unfoldedChildIds.has(primitive.id)) return
       const selected = selectedIds.includes(primitive.id)
       const object = keepContent(`point:${primitive.id}`, signer.of(primitive.id, `sel:${selected}`), () => buildPointDrivenObject(primitive, points, selected), alive, order)
@@ -459,7 +460,7 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     })
     // 3D point labels: an HTML overlay above the canvas, so the classroom names A/B/C stay readable at any zoom.
     // The overlay never receives pointer events, so picking still goes through the renderer.
-    visiblePointLabels = document.primitives.filter((primitive): primitive is Point3Primitive => primitive.type === "point3" && primitive.visible !== false)
+    visiblePointLabels = document.primitives.filter((primitive): primitive is Point3Primitive => primitive.type === "point3" && isUserVisiblePrimitive(primitive))
     let dihedralMarkerCount = 0
     let planeCount = 0
     document.measurements

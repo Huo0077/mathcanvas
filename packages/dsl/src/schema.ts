@@ -200,6 +200,8 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>, parameter
   }
   if (type === "point3") {
     if (!isFiniteVector3(value.position)) errors.push("point3 position must be finite")
+    // 细分顶点标记（圆类实体近似的内部顶点）：只允许布尔，缺省表示"用户点"。
+    if (value.tessellation !== undefined && typeof value.tessellation !== "boolean") errors.push("point3 tessellation flag is invalid")
     if (value.binding !== undefined) {
       if (!isRecord(value.binding) || !["free", "onLine", "onPlane", "derived", "onHost", "onFace", "onSurface", "inSolid"].includes(String(value.binding.kind))) errors.push("point3 binding is invalid")
       else if (value.binding.kind === "onLine" && (typeof value.binding.lineId !== "string" || !["line3", "segment3", "ray3"].includes(referenceType(byId, value.binding.lineId) ?? "") || !isFiniteNumber(value.binding.parameter))) errors.push("point3 line binding is invalid")

@@ -428,6 +428,38 @@ function templatePointLabel(index: number): string {
   return index < 26 ? String.fromCharCode(65 + index) : `P${index + 1}`
 }
 
+/**
+ * 圆类实体近似的**可见象限点**：每个圆环只留 4 个离 0° / 90° / 180° / 270° 最近的、互不相同的顶点。
+ *
+ * 用户要求："立体里的圆相关的内容不要这么多标点啊，只需要四个点就够了。"
+ * `segments` 是 4 的倍数时就是**精确象限点**（48 段 → 0 / 12 / 24 / 36）；否则取最近的互异顶点，
+ * 顶点数不足 4（三角形近似）时如实返回更少的点，不凑数。返回值按顶点序升序（标签顺序因此是环序）。
+ */
+export function quadrantVertexIndices(count: number, quadrantCount = 4): number[] {
+  if (!Number.isInteger(count) || count < 3 || quadrantCount < 1) return []
+  const indices: number[] = []
+  for (let quadrant = 0; quadrant < quadrantCount; quadrant += 1) {
+    const index = Math.round((quadrant * count) / quadrantCount) % count
+    if (!indices.includes(index)) indices.push(index)
+  }
+  return indices.sort((first, second) => first - second)
+}
+
+/**
+ * 圆类实体里"用户看得见的点"的 id 顺序：圆柱 = 下底 4 个 + 上底 4 个，圆锥 = 底面 4 个 + 顶点。
+ * 其它实体（立方体 / 棱锥 / 棱柱 / 多面体）返回 `null`，表示**每个顶点都是用户点**（行为不变）。
+ */
+function roundSolidVisibleVertexIds(primitive: TemplateSolidPrimitive, vertexIds: string[]): string[] | null {
+  if (primitive.type !== "cylinder" && primitive.type !== "cone") return null
+  const ring = quadrantVertexIndices(primitive.segments).map((index) => vertexIds[index]).filter((id): id is string => Boolean(id))
+  if (primitive.type === "cone") {
+    const apex = vertexIds[primitive.segments]
+    return apex ? [...ring, apex] : ring
+  }
+  const top = quadrantVertexIndices(primitive.segments).map((index) => vertexIds[primitive.segments + index]).filter((id): id is string => Boolean(id))
+  return [...ring, ...top]
+}
+
 export function buildSolidTemplate(primitive: TemplateSolidPrimitive, context: BuilderContext = createBuilderContext(primitive.id)): SolidBuildResult {
   const result = buildSolid(primitive.type, templateInput(primitive), context)
   if (result.diagnostics.length > 0) return result
@@ -436,11 +468,19 @@ export function buildSolidTemplate(primitive: TemplateSolidPrimitive, context: B
   // rotation cannot invalidate the topology that was just validated.
   const rotation = primitive.rotation
   const pivot = rotation ? templatePivot(primitive) : null
+  /**
+   * 圆类实体只把**象限点**当用户点：其余是近似的细分顶点——它们仍留在文档里（面 / 棱 / 交线 /
+   * 布尔交集都要读它们的坐标），但标记 `tessellation` 且不给标签，画布与对象列表都不再展示。
+   */
+  const visibleVertexIds = roundSolidVisibleVertexIds(primitive, result.vertexIds) ?? result.vertexIds
+  const labelIndexById = new Map(visibleVertexIds.map((id, index) => [id, index]))
   const primitives = result.primitives.map((candidate) => {
     if (!topologyIds.has(candidate.id)) return candidate
     if (candidate.type === "point3") {
       const position = rotation && pivot ? rotateAboutPivot(candidate.position, pivot, rotation) : candidate.position
-      return { ...candidate, position, label: templatePointLabel(result.vertexIds.indexOf(candidate.id)), style: primitive.style }
+      const labelIndex = labelIndexById.get(candidate.id)
+      if (labelIndex === undefined) return { ...candidate, position, style: primitive.style, tessellation: true, label: undefined }
+      return { ...candidate, position, label: templatePointLabel(labelIndex), style: primitive.style }
     }
     if (candidate.type === "edge3") return { ...candidate, label: `棱 ${result.edgeIds.indexOf(candidate.id) + 1}`, style: primitive.style }
     if (candidate.type === "face3") return { ...candidate, label: `面 ${result.faceIds.indexOf(candidate.id) + 1}`, style: primitive.style }

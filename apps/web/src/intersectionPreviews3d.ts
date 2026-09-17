@@ -224,7 +224,7 @@ export function computeIntersectionPreviews3d(document: GeometryDocument, option
          * 交点 = 交线的**端点 / 拐点**（按模型尺度去重后每个都可以单独点一下建出来）。
          * 这里刻意不用布尔交集的顶点：完全包含时两个表面并不相交、交集却有顶点，那不是"交点"。
          */
-        const corners = dedupeCorners(crossing.segments.flatMap((segment) => [segment.a, segment.b]))
+        const corners = intersectionMarkerPoints(crossing.segments, { maxMarkers: Math.min(MAX_MARKERS_PER_PAIR, maxPointsPerPair) })
         corners.slice(0, maxPointsPerPair).forEach((corner, index) => {
           pairPreviews.push({
             key: `pair:${key}:点${index}`,
@@ -286,19 +286,113 @@ export function computeIntersectionPreviews3d(document: GeometryDocument, option
   return { previews, cache: { pairs }, candidates: candidates.length, computedPairs, reusedPairs, skippedPairs, truncatedPairs, droppedPairs, truncatedPoints }
 }
 
-/** 交线端点的去重（按模型尺度量化）：相邻线段会把同一个拐点各报一次。 */
-function dedupeCorners(points: Vector3[]): Vector3[] {
-  const extent = points.reduce((largest, point) => Math.max(largest, Math.abs(point.x), Math.abs(point.y), Math.abs(point.z)), 1)
+/** 交点标记的默认取法：转折 ≥ 18° 才算角点；一对来源最多标 12 个。 */
+export const MARKER_TURN_THRESHOLD_DEGREES = 18
+export const MAX_MARKERS_PER_PAIR = 12
+/** 光滑交线（没有角点）时沿交线均匀取的标记点数：正是用户要的"四个点"。 */
+export const MIN_MARKERS_PER_PAIR = 4
+
+/**
+ * 交线折线上"值得标一个交点"的位置。
+ *
+ * 旧实现把交线折线的**每个顶点**都标成一个交点：立方体↔立方体只是 8 个角（没问题），
+ * 但圆柱 / 圆锥这类多边形近似的交线有几十上百个顶点，画布上就糊成一片点标记。
+ * 用户口径是"当两个图形相交时…也要突出交线和交点的图元"——要标，但要标得少而有意义：
+ *
+ * 1. **角点**优先：相邻两段方向变化 ≥ `turnThresholdDegrees` 的顶点（立方体的 8 个角走这条，行为不变）；
+ * 2. **悬挂端**（只连一段的顶点）与**分叉点**（连三段以上）也算角点；
+ * 3. 一个角点都没有（光滑交线，例如圆柱↔圆柱）时，沿顶点顺序**均匀取 `minimumMarkers` 个点**，
+ *    保证曲面相交也能点出交点图元，而不是只剩一条线可点；
+ * 4. 结果按 `maxMarkers` 截断（调用方把超出的数量记进 `truncatedPoints`，状态栏如实说明）。
+ */
+export function intersectionMarkerPoints(
+  segments: { a: Vector3; b: Vector3 }[],
+  options: { turnThresholdDegrees?: number; minimumMarkers?: number; maxMarkers?: number } = {}
+): Vector3[] {
+  const threshold = options.turnThresholdDegrees ?? MARKER_TURN_THRESHOLD_DEGREES
+  const minimum = Math.max(1, options.minimumMarkers ?? MIN_MARKERS_PER_PAIR)
+  const maximum = Math.max(minimum, options.maxMarkers ?? MAX_MARKERS_PER_PAIR)
+  if (segments.length === 0) return []
+
+  /** 按模型尺度量化端点，得到无重复的顶点表与邻接表（相邻线段共享端点）。 */
+  const extent = segments.reduce((largest, segment) => Math.max(largest, Math.abs(segment.a.x), Math.abs(segment.a.y), Math.abs(segment.a.z), Math.abs(segment.b.x), Math.abs(segment.b.y), Math.abs(segment.b.z)), 1)
   const quantum = Math.max(extent * 1e-9, 1e-12)
+  const keyOf = (point: Vector3) => `${Math.round(point.x / quantum)},${Math.round(point.y / quantum)},${Math.round(point.z / quantum)}`
+  const vertices = new Map<string, Vector3>()
+  const neighbours = new Map<string, Set<string>>()
+  const link = (from: string, to: string) => {
+    const set = neighbours.get(from) ?? new Set<string>()
+    set.add(to)
+    neighbours.set(from, set)
+  }
+  for (const segment of segments) {
+    const first = keyOf(segment.a)
+    const second = keyOf(segment.b)
+    if (first === second) continue
+    if (!vertices.has(first)) vertices.set(first, { ...segment.a })
+    if (!vertices.has(second)) vertices.set(second, { ...segment.b })
+    link(first, second)
+    link(second, first)
+  }
+  if (vertices.size === 0) return []
+
+  const cornerKeys: string[] = []
+  for (const [key, adjacent] of neighbours) {
+    const list = [...adjacent]
+    if (list.length !== 2) {
+      // 悬挂端 / 分叉点：一定是"形状变了"的地方，值得标。
+      cornerKeys.push(key)
+      continue
+    }
+    const vertex = vertices.get(key)!
+    const first = vertices.get(list[0])!
+    const second = vertices.get(list[1])!
+    const u = normalized({ x: first.x - vertex.x, y: first.y - vertex.y, z: first.z - vertex.z })
+    const v = normalized({ x: second.x - vertex.x, y: second.y - vertex.y, z: second.z - vertex.z })
+    if (!u || !v) continue
+    const dot = Math.max(-1, Math.min(1, u.x * v.x + u.y * v.y + u.z * v.z))
+    const turnDegrees = 180 - Math.acos(dot) * 180 / Math.PI
+    if (turnDegrees >= threshold) cornerKeys.push(key)
+  }
+
+  const cornerMarkers = cornerKeys.map((key) => ({ ...vertices.get(key)! }))
+  // 角点够多（立方体一类）：只标角点，行为与旧实现一致。
+  if (cornerMarkers.length >= minimum) return cornerMarkers.slice(0, maximum)
+
+  /**
+   * 角点不足（光滑或近乎光滑的交线）：补齐到至少 `minimum` 个。
+   * 沿邻接顺序走一遍折线再等距取样，取到的是"交线上的点"而不是拐点（状态栏文案据此区分）。
+   */
+  const ordered: Vector3[] = []
+  const visited = new Set<string>()
+  for (const startKey of vertices.keys()) {
+    if (visited.has(startKey)) continue
+    let current: string | undefined = startKey
+    while (current !== undefined && !visited.has(current)) {
+      visited.add(current)
+      ordered.push({ ...vertices.get(current)! })
+      current = [...(neighbours.get(current) ?? [])].find((candidate) => !visited.has(candidate))
+    }
+  }
+  if (ordered.length === 0) return cornerMarkers.slice(0, maximum)
+  const wanted = Math.min(minimum, ordered.length)
+  const stride = ordered.length / wanted
+  const sampled = Array.from({ length: wanted }, (_, index) => ({ ...ordered[Math.min(ordered.length - 1, Math.floor(index * stride))] }))
+
+  const merged: Vector3[] = []
   const seen = new Set<string>()
-  const unique: Vector3[] = []
-  for (const point of points) {
-    const key = `${Math.round(point.x / quantum)},${Math.round(point.y / quantum)},${Math.round(point.z / quantum)}`
+  for (const point of [...cornerMarkers, ...sampled]) {
+    const key = keyOf(point)
     if (seen.has(key)) continue
     seen.add(key)
-    unique.push({ ...point })
+    merged.push(point)
   }
-  return unique
+  return merged.slice(0, maximum)
+}
+
+function normalized(vector: Vector3): Vector3 | null {
+  const length = Math.hypot(vector.x, vector.y, vector.z)
+  return length > 1e-12 ? { x: vector.x / length, y: vector.y / length, z: vector.z / length } : null
 }
 
 function centroidOfRing(points: Vector3[]): Vector3 {
