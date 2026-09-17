@@ -31,7 +31,8 @@
 - **RED→GREEN 证据**：`sceneFit.test.ts` 先在 8/10 处失败（`isContentOutOfView is not a function` 等），实现后 10/10；`viewPreference3d.test.ts` 3/3；e2e 新增开关用例（默认开 → 关闭 → 刷新仍是关 → 重新打开）。
 - **一处必须说明的行为变更（相对原计划收窄）**：原计划"增删图元也拟合"实测**打断了 7 条既有浏览器流程**（拖动实体时相机跟着实体走、移动截面时视角跳、按已知屏幕坐标点击顶点的用例全部失准）。用户的真实痛点是"图形太小 / 跑到视野外"，所以策略收窄为 `enabled && !dragging && (documentChanged || outOfView)`：**编辑过程中永不抢视角**，需求里的"增删时重置"以"增删后若内容越界就重置"的形式满足——这正是"新加的图元看不见"的解法。`AutoFitInputs` 因此去掉 `boundsChanged` / `cameraTouched`。
 - **测试侧配套改动**（行为变更导致，不是放宽断言）：`geometry3d.spec.ts` 的「frames an opened figure…」由"编辑时相机不动"改为断言自动取景生效；`geometry3d-drag.spec.ts` 的「drags only the solid under the pointer」在开头关掉自动取景（它依赖固定屏幕位移）；两处新按钮点击改用 DOM 派发（显示控制排换行会让 `locator.click()` 等"位置稳定"而超时，仓库里「取面」已有先例）。
-- **回归**：全量单测 **79 文件 / 974 用例通过**（起始 77/961）；`typecheck` 4 个 workspace 全过；`lint` 0 error、**56 条 warning**（起始 52，+4 全部来自 `threeScene.tsx` 新增纯函数导出触发的既有 `react-refresh/only-export-components` 规则）；生产构建通过；Playwright **61/61** 通过（起始 60）。
+- **用户报告的现象与量化复现（2026-09-17）**：用户反馈"点的坐标到 20 左右，图中就看不到了，会跑到图外面去"。根因不是渲染，而是**没有任何东西重新构图**——旧实现只在文档 id 变化（打开文件 / 切换工作区 / 恢复草稿）时取景，手工编辑出来的远处图元永远留在视野外（相机停在距离 16、视锥半高约 6，x=20 的点自然在画外）。新增 e2e `e2e/geometry3d-autofit.spec.ts` 刻意**自证**：把点的「坐标 X」设为 20 后，先关掉自动取景，用页面读数（`data-content-bounds` + `data-camera-*`）按与 `applyCameraState` 同一套基向量约定重算八个角的 NDC，实测最坏角落在 **2.29**（视野外，即用户看到的现象）；再打开自动取景，同样的读数在约 250ms 过渡后收敛到 **≤ 1**（点回到画面内），相机中心从 0 移到 x > 5。只看相机数字变化是不够的，这条用例证明的是"点确实回到画面里"。
+- **回归**：全量单测 **79 文件 / 974 用例通过**（起始 77/961）；`typecheck` 4 个 workspace 全过；`lint` 0 error、**56 条 warning**（起始 52，+4 全部来自 `threeScene.tsx` 新增纯函数导出触发的既有 `react-refresh/only-export-components` 规则）；生产构建通过；Playwright **62/62** 通过（起始 60）。
 - **边界**：相机状态仍不跨工作区保留（切到平面几何再回来会重置）；4 条新 warning 的根因是 `threeScene.tsx`（1755 行）混着组件与纯函数，正确做法是把相机与取景数学抽到独立模块，留作后续改动。
 
 ### 3D 动点宿主约束内核（切片 1A-2，2026-09-17 已完成）
