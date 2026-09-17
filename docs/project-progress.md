@@ -18,6 +18,14 @@
 
 **关键现场事实（带证据）**：3D 绑定点当前完全拖不动且无 UI 入口（`threeScene.tsx:1363`、`operations.ts:208-221`）；任何 App 重渲染都整场景重建并新建 `WebGLRenderer`（`threeScene.tsx:1543`、`App.tsx:393`）；模板实体存在三套几何两种朝上约定（`threeScene.tsx:531-574` / `operations.ts:271-304` / `solid-builders.ts:330-368`）；截面只保留一条环（`sections3d.ts:137`）；多选删除被逐个预校验卡死（`App.tsx:685-690`）；多解索引被 clamp 成 `0|1`（`App.tsx:537`、`types.ts:435/445/455`）。
 
+### 相机与取景数学抽出独立模块（结构收尾，2026-09-17 已完成）
+
+- **背景**：这条是 Auto-Fit 那一片留下的"边界"——`threeScene.tsx` 把 React 组件与一堆纯函数混在一个文件里（1985 行），既让 `react-refresh/only-export-components` 一路告警，也让这些纯函数只能跨组件文件测试。文档里写明的正确做法是"把相机与取景数学抽到独立模块"。
+- **做了什么**：新增 `apps/web/src/threeCamera.ts`（相机状态与轨道操作、`cameraBasis`、平移/缩放的视点夹取、AABB 八角拟合 `fitCameraState`、越界判定 `isContentOutOfView`、过渡插值、`shouldAutoFit` 策略、`contentBounds`、`applyCameraState`）。`threeScene.tsx` 只留下组件与场景装配，删掉 204 行、**没有改动任何一行**（`git diff --numstat` = `0 204`，所以不存在顺手改坏的逻辑）；`sceneFit.test.ts` 与 `threeScene.test.ts` 改为从新模块导入相机相关符号。
+- **一处必须记录的教训（我自己的操作失误）**：第一次删除用的是 PowerShell 的 `Get-Content` / `Set-Content`，而这个环境里是 **Windows PowerShell 5.1**（`Get-Content` 默认按 ANSI 解码），结果把整个文件里的中文注释写成了乱码。发现后立刻 `git checkout` 还原，改用 .NET 的 `UTF8Encoding` 显式读写完成删除，并用 `git diff --numstat`（只能看到删除、看不到任何"修改"）与乱码特征串搜索双重确认。**在这个仓库里改文件一律用编辑工具，不要用 PowerShell 的文本管道。**
+- **验证**：全量单测 **89 文件 / 1021 用例通过**；`typecheck` 4 个 workspace 全过；`lint` 从 **56 条 warning 降到 42 条**（0 error）；生产构建通过；Playwright **73/73** 通过。相机行为本身由既有的 `sceneFit.test.ts`（八角拟合、扁长盒、空场景、越界判定、过渡插值、`shouldAutoFit` 策略）与 e2e 的 Auto-Fit / 平移缩放 / 拖动用例继续守着，抽模块后一行断言都没改。
+- **仍未做（明确记录）**：`threeScene.tsx` 里剩下的告警来自那些**纯几何构造器**（网格/棱/面/截面/展开网、拾取、拖动工具），它们同样与 React 无关，合适的做法是按"图元构造 / 拾取 / 拖动"再拆两三个模块。这一片只处理了队列里点名的相机与取景数学，其余留作后续结构改动。
+
 ### 验收覆盖补齐：四个模板的默认截面（2026-09-17 已完成）
 
 - **来源**：设计文档 §8 的 e2e 验收项写着"截面：四个模板的默认截面都是 polygon 且点数 ≥3；转动到 45° 仍有效"，而当时只有立方体在 e2e 里被覆盖过（棱锥/圆柱/圆锥只在单测里验过刀口位置）。这是一条**验收项缺口**，不是新功能。
@@ -144,7 +152,7 @@
 - **测试侧配套改动**（行为变更导致，不是放宽断言）：`geometry3d.spec.ts` 的「frames an opened figure…」由"编辑时相机不动"改为断言自动取景生效；`geometry3d-drag.spec.ts` 的「drags only the solid under the pointer」在开头关掉自动取景（它依赖固定屏幕位移）；两处新按钮点击改用 DOM 派发（显示控制排换行会让 `locator.click()` 等"位置稳定"而超时，仓库里「取面」已有先例）。
 - **用户报告的现象与量化复现（2026-09-17）**：用户反馈"点的坐标到 20 左右，图中就看不到了，会跑到图外面去"。根因不是渲染，而是**没有任何东西重新构图**——旧实现只在文档 id 变化（打开文件 / 切换工作区 / 恢复草稿）时取景，手工编辑出来的远处图元永远留在视野外（相机停在距离 16、视锥半高约 6，x=20 的点自然在画外）。新增 e2e `e2e/geometry3d-autofit.spec.ts` 刻意**自证**：把点的「坐标 X」设为 20 后，先关掉自动取景，用页面读数（`data-content-bounds` + `data-camera-*`）按与 `applyCameraState` 同一套基向量约定重算八个角的 NDC，实测最坏角落在 **2.29**（视野外，即用户看到的现象）；再打开自动取景，同样的读数在约 250ms 过渡后收敛到 **≤ 1**（点回到画面内），相机中心从 0 移到 x > 5。只看相机数字变化是不够的，这条用例证明的是"点确实回到画面里"。
 - **回归**：全量单测 **79 文件 / 974 用例通过**（起始 77/961）；`typecheck` 4 个 workspace 全过；`lint` 0 error、**56 条 warning**（起始 52，+4 全部来自 `threeScene.tsx` 新增纯函数导出触发的既有 `react-refresh/only-export-components` 规则）；生产构建通过；Playwright **62/62** 通过（起始 60）。
-- **边界**：相机状态仍不跨工作区保留（切到平面几何再回来会重置）；4 条新 warning 的根因是 `threeScene.tsx`（1755 行）混着组件与纯函数，正确做法是把相机与取景数学抽到独立模块，留作后续改动。
+- **边界**：相机状态仍不跨工作区保留（切到平面几何再回来会重置）；本片新增的 warning 根因是 `threeScene.tsx` 混着组件与纯函数。**（2026-09-17 已处理相机与取景数学那一半：抽出 `threeCamera.ts`，lint 56 → 42 条；剩下的纯几何构造器见下文「相机与取景数学抽出独立模块」一节的"仍未做"。）**
 
 ### 3D 动点宿主约束内核（切片 1A-2，2026-09-17 已完成）
 

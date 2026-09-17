@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import * as THREE from "three"
 
-import { FIT_MARGIN, fitCameraState, interpolateCameraState, isContentOutOfView, shouldAutoFit, type CameraState } from "./threeScene"
+import { FIT_MARGIN, fitCameraState, interpolateCameraState, isContentOutOfView, shouldAutoFit, type CameraState } from "./threeCamera"
 
 const camera = () => new THREE.PerspectiveCamera(42, 16 / 9, 0.1, 1000)
 const state = (overrides: Partial<CameraState> = {}): CameraState => ({ azimuth: 45, elevation: 30, distance: 16, target: { x: 0, y: 0, z: 0 }, ...overrides })
