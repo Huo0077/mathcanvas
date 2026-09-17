@@ -7,6 +7,7 @@ import type { SceneControlMode } from "./statusPrompts"
 import { getDependencyIndex, isFreeDraggable3, planeThroughPoints, resolveDihedralMarker3, resolvePolyhedronTopology, sectionSourceVertices, templateTopologyIds } from "@draw/scene-graph"
 
 import { opacityFor, strokeFor } from "./primitiveStyle"
+import { sceneContentKey } from "./sceneContentKey"
 import type { ThreeScenePreview } from "./threeScenePreview"
 
 const scenePalette = {
@@ -794,13 +795,18 @@ function visibleSolids(document: GeometryDocument): SolidPrimitive[] {
   return document.primitives.filter((primitive): primitive is SolidPrimitive => ["cube", "pyramid", "cylinder", "cone"].includes(primitive.type) && primitive.visible !== false && !templateSources.has(primitive.id))
 }
 
-function disposeScene(scene: THREE.Scene): void {
-  scene.traverse((object) => {
+/** 释放一个对象子树的几何与材质。内容对象每次同步都会重建，必须逐个释放，否则显存会一路涨。 */
+function disposeObject(root: THREE.Object3D): void {
+  root.traverse((object) => {
     if (!(object instanceof THREE.Mesh) && !(object instanceof THREE.Line) && !(object instanceof THREE.LineSegments)) return
     object.geometry.dispose()
     const materials = Array.isArray(object.material) ? object.material : [object.material]
     materials.forEach((material) => material.dispose())
   })
+}
+
+function disposeScene(scene: THREE.Scene): void {
+  for (const child of [...scene.children]) disposeObject(child)
 }
 
 /** Pointer bookkeeping for one press; lives at component scope so a scene rebuild cannot end a drag. */
@@ -977,6 +983,29 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
   const previewHoverRef = useRef(onPreviewHover)
   previewHoverRef.current = onPreviewHover
   /**
+   * 场景内容的输入：文档 / 选择 / 显示开关 / 预览 / 选中回调。
+   * 挂载效应只读这些 ref，因此父组件重渲染不会再重建渲染器（见下面的挂载效应说明）。
+   */
+  const previewRef = useRef(preview)
+  previewRef.current = preview
+  const onSelectRef = useRef(onSelect)
+  onSelectRef.current = onSelect
+  /**
+   * 预览点击回调也必须走 ref：App 里的实现闭包着它自己那份 `document`，
+   * 直接调用首次渲染的函数会拿到空文档，点击虚线预览将什么都不创建（实测回归）。
+   */
+  const previewClickRef = useRef(onPreviewClick)
+  previewClickRef.current = onPreviewClick
+  const displayFlagsRef = useRef({ showHiddenEdges, showNormals, transparentFaces, unfoldProgress })
+  displayFlagsRef.current = { showHiddenEdges, showNormals, transparentFaces, unfoldProgress }
+  /** 场景运行时：挂载时创建一次，之后所有内容同步都走它。 */
+  const runtimeRef = useRef<{ syncContent: () => void } | null>(null)
+  /** 内容同步签名：同一个签名不重复同步（见 sceneContentKey）。 */
+  const contentKeyRef = useRef<string | null>(null)
+  /** 回归读数：本次挂载创建渲染器的次数（恒为 1）与内容同步次数。 */
+  const sceneBuildsRef = useRef(0)
+  const sceneSyncsRef = useRef(0)
+  /**
    * Which display switch was toggled last. Both can be on at once, so the shell's hint follows the most recent
    * user action instead of a hard-coded priority; toggling the last one off clears the hint.
    */
@@ -1061,47 +1090,105 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     renderer.domElement.setAttribute("aria-label", "3D 几何画布")
     renderer.domElement.dataset.sceneCanvas = "true"
     container.replaceChildren(renderer.domElement)
+    const sceneShell = containerRef.current
+    sceneBuildsRef.current += 1
+    if (sceneShell) {
+      sceneShell.dataset.sceneBuilds = String(sceneBuildsRef.current)
+      sceneShell.dataset.sceneSyncs = String(sceneSyncsRef.current)
+    }
 
     scene.add(new THREE.AmbientLight("#ffffff", 1.7))
     const keyLight = new THREE.DirectionalLight("#ffffff", 2.4)
     keyLight.position.set(6, 10, 8)
     scene.add(keyLight)
 
+    /**
+     * 场景内容：每次同步先释放再重建，但**渲染器与 canvas 不再重建**。
+     *
+     * 这段代码过去直接写在效应体内，而效应依赖含 `document` 与每次渲染都换身份的 `onSelect`，
+     * 于是任何一次父组件重渲染（悬停、提示、错误、展开动画的每一帧）都会
+     * `renderer.dispose()` + `new THREE.WebGLRenderer()` 并换掉 canvas —— 既是性能灾难
+     * （浏览器 WebGL 上下文数量有限），也让相机动画与拖动预览随时被打断。
+     *
+     * 说明：下面整段保持原有缩进以便与历史实现逐行对照，逻辑上它在 `syncContent()` 内部。
+     */
+    let contentObjects: THREE.Object3D[] = []
+    const addContent = (object: THREE.Object3D) => {
+      contentObjects.push(object)
+      scene.add(object)
+    }
+    const clearContent = () => {
+      for (const object of contentObjects) {
+        scene.remove(object)
+        disposeObject(object)
+      }
+      contentObjects = []
+    }
+    /** 同步时刷新的闭包变量：render() 与指针处理函数都读它们。 */
+    let pointHandles: THREE.Mesh[] = []
+    let visiblePointLabels: Point3Primitive[] = []
+    let measurementVisuals: NonNullable<ReturnType<typeof resolveMeasurementVisual>>[] = []
+    let previewGroup: THREE.Object3D | null = null
+    let sceneBounds = new THREE.Box3()
+    /** 空间点索引与"模板子元素归属模板实体"的映射：指针处理函数要用，必须随同步一起刷新。 */
+    let points = new Map<string, Point3Primitive>()
+    let topologyOwners = new Map<string, string>()
+
+    const currentContentKey = () => sceneContentKey({
+      document: documentRef.current,
+      selectedIds: selectedIdsRef.current,
+      ...displayFlagsRef.current,
+      previewKind: previewRef.current?.kind ?? null
+    })
+
+    const syncContent = () => {
+    sceneSyncsRef.current += 1
+    clearContent()
+    pointHandles = []
+    visiblePointLabels = []
+    measurementVisuals = []
+    previewGroup = null
+    if (sceneShell) sceneShell.dataset.sceneSyncs = String(sceneSyncsRef.current)
+    const document = documentRef.current
+    const selectedIds = selectedIdsRef.current
+    const { showHiddenEdges, showNormals, transparentFaces, unfoldProgress } = displayFlagsRef.current
+    const preview = previewRef.current
+    points = new Map(document.primitives.filter((primitive): primitive is Point3Primitive => primitive.type === "point3").map((primitive) => [primitive.id, primitive]))
+    topologyOwners = templateTopologyOwners(document)
+
     const unfoldedPolyhedra = unfoldProgress > 0.001
       ? document.primitives.filter((primitive): primitive is Polyhedron3Primitive => primitive.type === "polyhedron3" && primitive.visible !== false)
       : []
     const unfoldedChildIds = new Set(unfoldedPolyhedra.flatMap((polyhedron) => [...polyhedron.edgeIds, ...polyhedron.faceIds]))
-    const points = new Map(document.primitives.filter((primitive): primitive is Point3Primitive => primitive.type === "point3").map((primitive) => [primitive.id, primitive]))
-    const pointHandles: THREE.Mesh[] = []
     document.primitives.filter((primitive) => primitive.visible !== false).forEach((primitive) => {
       if (unfoldedChildIds.has(primitive.id)) return
       const selected = selectedIds.includes(primitive.id)
       if (primitive.type === "point3") {
         const handle = createPoint3Mesh(primitive, selected)
         pointHandles.push(handle)
-        scene.add(handle)
+        addContent(handle)
       }
       if (primitive.type === "line3" || primitive.type === "segment3" || primitive.type === "ray3") {
         const line = createPointDrivenLine(primitive, points, selected)
-        if (line) scene.add(line)
+        if (line) addContent(line)
       }
       if (primitive.type === "edge3") {
         const edge = createEdge3Line(primitive, points, selected)
-        if (edge) scene.add(edge)
+        if (edge) addContent(edge)
       }
       if (primitive.type === "face3") {
         const face = createFace3Mesh(primitive, points, selected)
-        if (face) scene.add(face)
+        if (face) addContent(face)
       }
     })
 
     visibleSolids(document).forEach((primitive) => {
       const selected = selectedIds.includes(primitive.id)
-      scene.add(createSolidGroup(primitive, selected, { showHiddenEdges, showNormals, transparentFaces, unfoldProgress }))
+      addContent(createSolidGroup(primitive, selected, { showHiddenEdges, showNormals, transparentFaces, unfoldProgress }))
     })
     document.primitives.filter((primitive): primitive is SectionPrimitive => primitive.type === "section" && primitive.visible !== false).forEach((primitive) => {
       const mesh = createSectionMesh(primitive)
-      if (mesh) scene.add(mesh)
+      if (mesh) addContent(mesh)
       // 选中截面时把剖切面本身也画出来：只看到一圈交线的话，"刀口在哪、往哪边挪"都无从判断。
       if (!selectedIds.includes(primitive.id)) return
       const patch = createPlanePatch(primitive.plane, sectionSourceVertices(document, primitive.sourceId), { color: "#f97316", opacity: 0.1 })
@@ -1110,7 +1197,7 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       // 而不是截面本身（实测：拖它会平移面片，截面却没动）。
       patch.traverse((child) => { child.raycast = () => undefined })
       patch.userData.visualRole = "section-plane"
-      scene.add(patch)
+      addContent(patch)
     })
     // 已持久化的截线：虚线，与"预览"用同一种视觉语言，但颜色更深、实心可选中。
     document.primitives.filter((primitive) => primitive.type === "intersectionLine" && primitive.visible !== false).forEach((primitive) => {
@@ -1122,7 +1209,7 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       line.userData.primitiveId = primitive.id
       line.userData.primitiveType = primitive.type
       line.userData.visualRole = "intersection-line"
-      scene.add(line)
+      addContent(line)
     })
     let unfoldFaceCount = 0
     unfoldedPolyhedra.forEach((polyhedron) => {
@@ -1130,13 +1217,12 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       if (!topology) return
       const layout = unfoldPolyhedron3(topology.vertices, topology.faces, unfoldProgress, topology.rootFaceId)
       if (layout.status !== "ok") return
-      scene.add(createUnfoldNetGroup(polyhedron.id, layout, selectedIds.includes(polyhedron.id)))
+      addContent(createUnfoldNetGroup(polyhedron.id, layout, selectedIds.includes(polyhedron.id)))
       unfoldFaceCount += layout.faces.length
     })
-    const sceneShell = containerRef.current
     // 3D point labels: an HTML overlay above the canvas, so the classroom names A/B/C stay readable at any zoom.
     // The overlay never receives pointer events, so picking still goes through the renderer.
-    const visiblePointLabels = document.primitives.filter((primitive): primitive is Point3Primitive => primitive.type === "point3" && primitive.visible !== false)
+    visiblePointLabels = document.primitives.filter((primitive): primitive is Point3Primitive => primitive.type === "point3" && primitive.visible !== false)
     let dihedralMarkerCount = 0
     let planeCount = 0
     document.measurements
@@ -1144,10 +1230,10 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       .forEach((measurement) => {
         const marker = resolveDihedralMarker3(document, measurement.id)
         if (!marker) return
-        scene.add(createDihedralMarkerGroup(marker, measurement.sourceIds.every((id) => selectedIds.includes(id))))
+        addContent(createDihedralMarkerGroup(marker, measurement.sourceIds.every((id) => selectedIds.includes(id))))
         dihedralMarkerCount += 1
       })
-    const measurementVisuals = document.measurements
+    measurementVisuals = document.measurements
       .filter((measurement) => measurement.sourceIds.some((id) => selectedIds.includes(id)))
       .map((measurement) => resolveMeasurementVisual(document, measurement.id))
       .filter((visual): visual is NonNullable<ReturnType<typeof resolveMeasurementVisual>> => Boolean(visual))
@@ -1157,7 +1243,7 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
         const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: "#604fda", transparent: true, opacity: 0.75 }))
         line.userData.measurementId = visual.id
         line.userData.visualRole = "measurement-helper"
-        scene.add(line)
+        addContent(line)
       })
     })
     // Planes are drawn last: their patch is sized from the figure they belong to, so the figure must exist first.
@@ -1166,14 +1252,14 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     document.primitives.filter((primitive): primitive is Plane3Primitive => primitive.type === "plane3" && primitive.visible !== false).forEach((primitive) => {
       const plane = createPlane3Mesh(primitive, points, selectedIds.includes(primitive.id), planeHalfSize)
       if (!plane) return
-      scene.add(plane)
+      addContent(plane)
       planeCount += 1
     })
     // 预览层最后加入：盖在实体之上，但仍用虚线表达"还没创建"。
-    const previewGroup = preview && (preview.segments.length > 0 || preview.points.length >= 2)
-      ? createPreviewGroup(preview, Boolean(onPreviewHover), (hovering) => previewHoverRef.current?.(hovering))
+    previewGroup = preview && (preview.segments.length > 0 || preview.points.length >= 2)
+      ? createPreviewGroup(preview, Boolean(previewHoverRef.current), (hovering) => previewHoverRef.current?.(hovering))
       : null
-    if (previewGroup) scene.add(previewGroup)
+    if (previewGroup) addContent(previewGroup)
     if (sceneShell) {
       sceneShell.dataset.intersectionPreview = previewGroup ? preview!.kind : "none"
       sceneShell.dataset.unfoldFaces = String(unfoldFaceCount)
@@ -1190,7 +1276,7 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       sceneShell.dataset.sectionPointCount = firstSection ? String(firstSection.points.length) : ""
     }
 
-    const sceneBounds = contentBounds(scene)
+    sceneBounds = contentBounds(scene)
     if (sceneShell) {
       const size = sceneBounds.getSize(new THREE.Vector3())
       const centre = sceneBounds.getCenter(new THREE.Vector3())
@@ -1205,11 +1291,13 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     // Three.js builds its grid in the XZ plane, which is the floor only when Y is up. With Z up, the floor is XY.
     grid.rotation.x = Math.PI / 2
     grid.userData.excludeFromFit = true
-    scene.add(grid)
+    addContent(grid)
     // AxesHelper already draws X/Y/Z along the world axes, so blue points up once Z is the vertical axis.
     const axes = new THREE.AxesHelper(hasContent ? Math.max(planeHalfSize * 0.7, 1.2) : 5)
     axes.userData.excludeFromFit = true
-    scene.add(axes)
+    addContent(axes)
+    }
+    syncContent()
 
     let viewportHeight = height
     const syncPointHandleScales = () => {
@@ -1283,8 +1371,10 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     fitCameraRef.current = fitToContent
     // Fit when a different document arrives (open file, switch workspace, restore draft), not on every edit:
     // re-framing while the user is working would fight their own camera moves.
-    if (fittedDocumentRef.current !== document.metadata.id) {
-      fittedDocumentRef.current = document.metadata.id
+    contentKeyRef.current = currentContentKey()
+    const fittedId = documentRef.current.metadata.id
+    if (fittedDocumentRef.current !== fittedId) {
+      fittedDocumentRef.current = fittedId
       fitToContent()
     }
     render()
@@ -1300,7 +1390,6 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     })
     resizeObserver?.observe(container)
 
-    const topologyOwners = templateTopologyOwners(document)
     /** 拖动期间的重画次数：拖动必须逐次跟手重画，否则画面会一格一格跳（见 handlePointerMove）。 */
     let dragFrames = 0
     /** 把这次拖动已经画上去的偏移补画到（可能是刚重建的）场景上，见 resumeDragVisualRef 的说明。 */
@@ -1310,6 +1399,24 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       if (session.slideNormal) offsetSceneObjects(scene, session.targetId, session.slideNormal.clone().multiplyScalar(session.visualApplied.dot(session.slideNormal)))
       else applyDragOffsets(scene, session.family, session.visualApplied.clone())
       render()
+    }
+    /**
+     * 场景运行时句柄：内容同步 + 补画进行中的拖动偏移 + 重画。
+     * 由"内容同步效应"在签名变化时调用；渲染器与事件监听都留在本次挂载里，不再重建。
+     */
+    runtimeRef.current = {
+      syncContent: () => {
+        syncContent()
+        // 打开文件 / 切换工作区 / 恢复草稿：文档换了就重新取景。
+        // 编辑同一个文档时不重跑（否则用户每次增删图元视角都会被拽走，见下面挂载效应里的说明）。
+        const fittedId = documentRef.current.metadata.id
+        if (fittedDocumentRef.current !== fittedId) {
+          fittedDocumentRef.current = fittedId
+          fitToContent()
+        }
+        resumeDragVisualRef.current()
+        render()
+      }
     }
     const pointFromEvent = (event: PointerEvent) => {
       const bounds = renderer.domElement.getBoundingClientRect()
@@ -1325,8 +1432,8 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       // 以面为剖切面：这一次点击只用来取面，取到就退出该模式。
       if (facePickModeRef.current && event.button === 0) {
         const hit = pickRaycastHit3(scene, camera, point, { tolerance: pickTolerance() })
-        const face = hit ? document.primitives.find((primitive) => primitive.id === hit.primitiveId) : undefined
-        const section = document.primitives.find((primitive): primitive is SectionPrimitive => primitive.type === "section" && selectedIdsRef.current.includes(primitive.id))
+        const face = hit ? documentRef.current.primitives.find((primitive) => primitive.id === hit.primitiveId) : undefined
+        const section = documentRef.current.primitives.find((primitive): primitive is SectionPrimitive => primitive.type === "section" && selectedIdsRef.current.includes(primitive.id))
         if (hit?.kind === "face" && face?.type === "face3" && section) {
           // 由面的点环求它所在的平面；不共面的环（例如曲面侧面）会被 planeThroughPoints 直接拒绝。
           const vertices = face.pointIds.map((id) => points.get(id)?.position).filter((position): position is Vector3 => Boolean(position))
@@ -1342,12 +1449,12 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       if (dragModeRef.current && event.button === 0) {
         const hit = pickRaycastHit3(scene, camera, point, { tolerance: pickTolerance() })
         const targetId = resolveSelectableHit(hit?.primitiveId ?? null, topologyOwners)
-        const target = targetId ? document.primitives.find((primitive) => primitive.id === targetId) : undefined
+        const target = targetId ? documentRef.current.primitives.find((primitive) => primitive.id === targetId) : undefined
         // 拖动排查用读数：这一次按下到底抓到了什么。
         if (sceneShell) sceneShell.dataset.dragTarget = `${hit?.kind ?? "none"}:${hit?.primitiveId ?? "-"}->${target?.type ?? "none"}`
         // 截面要单独判定：它画在实体内部，按深度永远排不到，但用户指向那圈线时就是要挪刀口。
         const sectionId = pickSectionAt(scene, camera, point, pickTolerance(), hit?.kind === "point" || hit?.kind === "edge")
-        const section = sectionId ? document.primitives.find((primitive) => primitive.id === sectionId) : undefined
+        const section = sectionId ? documentRef.current.primitives.find((primitive) => primitive.id === sectionId) : undefined
         if (section && section.type === "section") {
           // 拖动一个截面 = 沿法向平移剖切面。截面没有自己的实体几何，拖它就是挪刀口。
           const normal = sectionUnitNormal(section.plane.normal)
@@ -1360,10 +1467,10 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
               dragSessionRef.current = { targetId: section.id, family: new Set([section.id]), anchor, origin: anchor.clone(), total: new THREE.Vector3(), visualApplied: new THREE.Vector3(), applied: false, slideNormal: normal }
             }
           }
-        } else if (hit && target && isFreeDraggable3(target, points, templateTopologyIds(document))) {
+        } else if (hit && target && isFreeDraggable3(target, points, templateTopologyIds(documentRef.current))) {
           const anchor = new THREE.Vector3(hit.worldPoint.x, hit.worldPoint.y, hit.worldPoint.z)
           const origin = dragWorldPoint(camera, anchor, point) ?? anchor.clone()
-          dragSessionRef.current = { targetId: target.id, family: dragFamilyIds(document, target.id), anchor, origin, total: new THREE.Vector3(), visualApplied: new THREE.Vector3(), applied: false }
+          dragSessionRef.current = { targetId: target.id, family: dragFamilyIds(documentRef.current, target.id), anchor, origin, total: new THREE.Vector3(), visualApplied: new THREE.Vector3(), applied: false }
         }
       }
       renderer.domElement.setPointerCapture(event.pointerId)
@@ -1438,7 +1545,7 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
           else dragEndRef.current?.(session.targetId, session.total)
         }
         // 选中放在抬手：拖动本身不该因为高亮重建而多一次场景重建。
-        if (!selectedIdsRef.current.includes(session.targetId)) onSelect(session.targetId, false)
+        if (!selectedIdsRef.current.includes(session.targetId)) onSelectRef.current(session.targetId, false)
       } else if (!pointerState.moved && pointerState.button === 0) {
         /**
          * 点击优先级：**点 / 棱的拾取优先于"创建"**。
@@ -1455,8 +1562,8 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
         const previewHit = previewHitAt(point)
         const previewInFront = previewHit.depth === null || !hit || previewHit.depth <= hit.depth
         const sectionWins = previewKindRef.current === "section" && previewInFront
-        if (previewHit.hovering && onPreviewClick && (!precise || sectionWins)) onPreviewClick()
-        else onSelect(resolveSelectableHit(hit?.primitiveId ?? null, topologyOwners, event.altKey), event.shiftKey)
+        if (previewHit.hovering && previewClickRef.current && (!precise || sectionWins)) previewClickRef.current()
+        else onSelectRef.current(resolveSelectableHit(hit?.primitiveId ?? null, topologyOwners, event.altKey), event.shiftKey)
       }
       renderer.domElement.releasePointerCapture(event.pointerId)
       pointerStateRef.current = null
@@ -1526,6 +1633,8 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     return () => {
       resetCameraRef.current = () => undefined
       fitCameraRef.current = () => undefined
+      runtimeRef.current = null
+      contentKeyRef.current = null
       renderer.domElement.removeEventListener("pointerdown", handlePointerDown)
       renderer.domElement.removeEventListener("pointermove", handlePointerMove)
       renderer.domElement.removeEventListener("pointerup", handlePointerUp)
@@ -1540,7 +1649,29 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       renderer.dispose()
       if (container.contains(renderer.domElement)) container.removeChild(renderer.domElement)
     }
-  }, [document, onSelect, selectedIds, showHiddenEdges, showNormals, transparentFaces, unfoldProgress])
+    // 挂载期只建一次：文档、选择与显示开关都经 ref 读取，父组件的任何重渲染都不再重建渲染器。
+  }, [])
+
+  /**
+   * 内容同步：只在"场景内容签名"变化时跑。文档编辑、选中、显示开关、预览与展开进度会改变签名；
+   * 相机、指针、提示文案不会，因此悬停与提示不再触发任何场景工作。
+   */
+  useEffect(() => {
+    const runtime = runtimeRef.current
+    if (!runtime) return
+    const key = sceneContentKey({
+      document,
+      selectedIds,
+      showHiddenEdges,
+      showNormals,
+      transparentFaces,
+      unfoldProgress,
+      previewKind: preview?.kind ?? null
+    })
+    if (contentKeyRef.current === key) return
+    contentKeyRef.current = key
+    runtime.syncContent()
+  }, [document, selectedIds, showHiddenEdges, showNormals, transparentFaces, unfoldProgress, preview])
 
   const hasGeometry = document.primitives.some((primitive) => ["point3", "line3", "segment3", "ray3", "edge3", "face3", "polyhedron3", "cube", "pyramid", "cylinder", "cone"].includes(primitive.type) && primitive.visible !== false)
   /** 「以面为剖切面」需要有选中的截面作为目标。 */
