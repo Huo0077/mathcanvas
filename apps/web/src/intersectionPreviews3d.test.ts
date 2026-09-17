@@ -255,11 +255,75 @@ describe("automatic 3D intersection previews", () => {
     expect(result.truncatedPairs).toBe(1)
   })
 
-  it("keeps a 48-segment cylinder's intersection inside the face budget", () => {
+  it("groups a cylinder's 50 mesh patches into three clickable 交面 previews", () => {
     /**
-     * 圆柱是**多边形近似**：默认分段数（48）与预览的面数上限是一对约束——
-     * 上限比"48 个侧面 + 两个底面 + 切口面"还小时，用户会看到"交面没画全"，
-     * 但那不是配额用尽，而是配额本身定小了。这条用例把两者钉在一起。
+     * 本片存在的理由（A2）：立方体 ∩ 圆柱的布尔交集按网格面片铺预览是 **50 份**——
+     * 48 个侧面细条（法向各不相同，逐面预览既吃配额又让用户点不到"那一整块"）+ 2 个圆盘。
+     * 按支撑曲面分组之后只剩 **3 份**：一个圆柱侧带 + 两个端面圆盘。
+     */
+    const document = createEmptyDocument("geometry3d")
+    const cube = { id: "cube-a", type: "cube" as const, origin: { x: -2, y: -2, z: -2 }, size: { x: 4, y: 4, z: 4 } }
+    // 圆柱底面 z=-3、高 6（顶面 z=3）：立方体 z∈[-2,2] 正好从中间切出一段高 4 的侧带。
+    const cylinder = { id: "cyl-a", type: "cylinder" as const, center: { x: 0, y: 0, z: -3 }, radius: 2, height: 6, segments: ROUND_SOLID_SEGMENTS }
+    document.primitives = [cube, ...buildSolidTemplate(cube).primitives, cylinder, ...buildSolidTemplate(cylinder).primitives]
+
+    const result = computeIntersectionPreviews3d(document)
+    const faces = result.previews.filter((preview) => preview.kind === "face")
+
+    expect(faces).toHaveLength(3)
+    // 一个区域一份预览，key 仍是 `pair:<a>|<b>:面<i>`（i 是区域序号）。
+    expect(faces.map((preview) => preview.key)).toEqual(["pair:cube-a|cyl-a:面0", "pair:cube-a|cyl-a:面1", "pair:cube-a|cyl-a:面2"])
+    expect(result.truncatedPairs).toBe(0)
+    // 面积降序：曲面侧带最大（48 个网格面片求和 ≈ 50.23，如实标"网格近似"），两个圆盘各是精确的 π·2²。
+    expect(faces[0].label).toContain("圆柱面")
+    expect(faces[0].label).toContain("网格近似")
+    expect(Math.abs(faces[0].area - 2 * Math.PI * 2 * 4) / (2 * Math.PI * 2 * 4)).toBeLessThan(0.001)
+    for (const disc of faces.slice(1)) {
+      expect(Math.abs(disc.area - Math.PI * 4)).toBeLessThan(1e-9)
+      expect(Math.abs(disc.normal.z)).toBeCloseTo(1, 12)
+    }
+    // 每份都还是可点面片：顶点环参与填充与拾取（曲面区域是边界环，撑不起"一整条带"也照样能画能点）。
+    expect(faces.every((preview) => preview.points.length >= 3)).toBe(true)
+    expect(faces.every((preview) => preview.hint.x === preview.points.reduce((sum, point) => sum + point.x / preview.points.length, 0))).toBe(true)
+  })
+
+  it("counts the per-pair 交面 quota by regions, not by mesh patches", () => {
+    const document = createEmptyDocument("geometry3d")
+    const cube = { id: "cube-a", type: "cube" as const, origin: { x: -2, y: -2, z: -2 }, size: { x: 4, y: 4, z: 4 } }
+    const cylinder = { id: "cyl-a", type: "cylinder" as const, center: { x: 0, y: 0, z: -3 }, radius: 2, height: 6, segments: ROUND_SOLID_SEGMENTS }
+    document.primitives = [cube, ...buildSolidTemplate(cube).primitives, cylinder, ...buildSolidTemplate(cylinder).primitives]
+
+    // 这一对有 3 个区域，只允许画 2 个：多出来的那一块必须被如实报成"交面没画全"。
+    const result = computeIntersectionPreviews3d(document, { maxFacesPerPair: 2 })
+
+    expect(result.previews.filter((preview) => preview.kind === "face")).toHaveLength(2)
+    expect(result.truncatedPairs).toBe(1)
+  })
+
+  it("groups the App 默认圆柱（center x=3）as well, not only an origin-centered one", () => {
+    /**
+     * App 新建的圆柱是 `center:{x:3,y:0,z:0}`（`addDefaultSolid`），圆锥在 `{x:-3,y:0,z:3}`：
+     * 分组用的"顶点是否在二次曲面上"必须按**世界坐标的 bounds 帧**判，不能按 `quadric3FromPrimitive` 的矩阵
+     * （实测那是个局部矩阵：真曲面点 (4.5,0,1) 上 `quadricValueAt = 18` 而不是 0）。
+     */
+    const document = createEmptyDocument("geometry3d")
+    const cube = { id: "cube-a", type: "cube" as const, origin: { x: 1, y: -2, z: -2 }, size: { x: 4, y: 4, z: 4 } }
+    const cylinder = { id: "cyl-a", type: "cylinder" as const, center: { x: 3, y: 0, z: -3 }, radius: 2, height: 6, segments: ROUND_SOLID_SEGMENTS }
+    document.primitives = [cube, ...buildSolidTemplate(cube).primitives, cylinder, ...buildSolidTemplate(cylinder).primitives]
+
+    const faces = computeIntersectionPreviews3d(document).previews.filter((preview) => preview.kind === "face")
+
+    expect(faces).toHaveLength(3)
+    expect(faces[0].label).toContain("圆柱面")
+    // 侧带的兜底环仍然绕在 x=3 那根轴上（世界坐标）。
+    expect(faces[0].points.every((point) => Math.abs(Math.hypot(point.x - 3, point.y) - 2) < 1e-9)).toBe(true)
+  })
+
+  it("no longer lets a 48-segment cylinder's tessellation eat the 交面 budget", () => {
+    /**
+     * 圆柱是**多边形近似**：按网格面片铺预览时，默认分段数（48）直接决定预算——
+     * 上限比"48 个侧面 + 两个底面"还小时用户就会看到"交面没画全"。
+     * 按支撑曲面分组之后，分段数不再进预算：这一对只有 3 个区域（一个侧带 + 两个端面）。
      */
     const document = createEmptyDocument("geometry3d")
     const cube = { id: "cube-a", type: "cube" as const, origin: { x: -2, y: -2, z: -2 }, size: { x: 4, y: 4, z: 4 } }
@@ -270,8 +334,7 @@ describe("automatic 3D intersection previews", () => {
 
     expect(ROUND_SOLID_SEGMENTS).toBeGreaterThanOrEqual(48)
     expect(result.truncatedPairs).toBe(0)
-    // 圆柱侧面被立方体切出来的每一片都要在画布上：48 段时至少 48 个面。
-    expect(result.previews.filter((preview) => preview.kind === "face").length).toBeGreaterThanOrEqual(ROUND_SOLID_SEGMENTS)
+    expect(result.previews.filter((preview) => preview.kind === "face")).toHaveLength(3)
   })
 
   it("only treats top-level solids as candidates", () => {

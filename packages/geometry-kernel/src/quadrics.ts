@@ -125,10 +125,15 @@ function coneLocalMatrix(radius: number, height: number): number[] {
  */
 function buildSolidQuadric(kind: "cylinder" | "cone", matrix: number[], center: Vector3, radius: number, height: number, rotation: Vector3 | undefined): Quadric3 {
   const pivotLocal = { x: 0, y: 0, z: height / 2 }
-  if (!rotation || (rotation.x === 0 && rotation.y === 0 && rotation.z === 0)) {
-    return { kind, matrix, bounds: { axis: { x: 0, y: 0, z: 1 }, origin: { ...center }, height, radius } }
-  }
-  const linear = rotationMatrix(rotation)
+  /**
+   * **一律走刚体共轭这条路径**（没有旋转时 `M = I`）：局部矩阵必须搬到 `center` 去。
+   *
+   * 这里曾经有一个"无旋转就直接返回局部矩阵"的捷径，它让**平移到别处的**圆柱 / 圆锥的二次型
+   * 留在原点：实测 `center = (3,0,0)` 的圆柱，真正的表面点 `(5,0,1)` 代回去得 **21**（应为 0），
+   * 平面 `z=1` 切出来的圆心是 `(0,0,1)` 而不是 `(3,0,1)`——画布上那圈解析截面会画在离实体很远的地方。
+   * 而应用默认的圆柱就建在 `center=(3,0,0)`，所以这不是边角情形（A2 实现时由探针抓出）。
+   */
+  const linear = rotationMatrix(rotation ?? { x: 0, y: 0, z: 0 })
   const linearTransposed = [
     linear[0], linear[3], linear[6],
     linear[1], linear[4], linear[7],

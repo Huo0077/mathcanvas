@@ -1,5 +1,5 @@
 import type { GeometryDocument, PrimitiveSpec, Vector3 } from "@draw/dsl"
-import { intersectConvexPolyhedra3, intersectFaceSets } from "@draw/geometry-kernel"
+import { intersectConvexPolyhedra3, intersectFaceSets, mergeIntersectionSurfaces3, quadric3FromPrimitive } from "@draw/geometry-kernel"
 import { solidTopology3 } from "@draw/scene-graph"
 
 /**
@@ -23,16 +23,16 @@ export interface IntersectionPreview3d {
   key: string
   /**
    * - `intersection`：交线（两个表面的公共边界）；
-   * - `face`：**一个**交面（布尔交集的一个平面面片）；
+   * - `face`：**一个**交面区域（布尔交集按支撑曲面分组后的一块：平面区域或二次曲面区域）；
    * - `point`：一个交点（交线的端点 / 拐点）。
    */
   kind: "intersection" | "face" | "point"
   sourceIds: [string, string]
   /** 交线：两个表面的公共边界线段。 */
   segments: { a: Vector3; b: Vector3 }[]
-  /** 交面：这一面的有序顶点环（其余种类为空）。 */
+  /** 交面区域：区域边界的顶点环（首尾不重复，渲染兜底；其余种类为空）。 */
   points: Vector3[]
-  /** 交面：面法向（朝交集外）、面积，以及"该被建成哪一面"的形心。 */
+  /** 交面区域：区域法向（曲面区域是那张二次曲面的轴）、面积，以及"该被建成哪一面"的形心。 */
   normal: Vector3
   area: number
   hint: Vector3
@@ -65,7 +65,7 @@ export interface IntersectionPreview3dOptions {
   maxSources?: number
   /** 单次扫描最多算多少**对**来源的布尔交集（交线不受此限；交面按面展开，这一步最贵）。 */
   maxBooleanPairs?: number
-  /** 单对来源最多画多少个面（圆柱/圆锥的交集是按多边形近似的，面可能很多）。 */
+  /** 单对来源最多画多少个交面**区域**（区域 = 布尔交集按支撑曲面分组后的一块，配额按区域算）。 */
   maxFacesPerPair?: number
   /** 单对来源最多画多少个交点（一圈多边形的拐点）。 */
   maxPointsPerPair?: number
@@ -94,7 +94,7 @@ const CANDIDATE_TYPES = new Set<PrimitiveSpec["type"]>(["cube", "pyramid", "cyli
 const DEFAULT_MAX_SOURCES = 24
 /** 单次扫描的布尔交集配额（状态栏的说明文案也用这个数，所以导出而不是各写一份）。 */
 export const DEFAULT_MAX_BOOLEAN_PAIRS = 12
-/** 单对来源的面 / 交点上限：圆柱与圆锥的交集是按多边形近似的，48 段时面数约 56–98，得留出余量。 */
+/** 单对来源的区域 / 交点上限：按支撑曲面分组之后一对通常只有几块（圆柱 ∩ 立方体 = 3），96 是给"多块平面 + 几张曲面"的余量。 */
 export const DEFAULT_MAX_FACES_PER_PAIR = 96
 export const DEFAULT_MAX_POINTS_PER_PAIR = 64
 /** 实体多到两两组合失控时的硬上限：宁可少画，不要一次改动卡住画布。 */
@@ -243,8 +243,11 @@ export function computeIntersectionPreviews3d(document: GeometryDocument, option
         if (corners.length > maxPointsPerPair) truncatedPoints += corners.length - maxPointsPerPair
       }
       /**
-       * 交面：布尔交集，**每一面各自是一份可点预览**（用户口径："我需要的交面只是一个表面"）。
-       * 配额用尽（或面数超过单对上限）时这一对就算"交面没画全"，并**无条件**记进 `truncatedPairs`——
+       * 交面：布尔交集的**一个面片**在画布上各自是一份可点预览，但先按支撑曲面分组——
+       * 圆柱 ∩ 立方体的侧面本来会被切成 48 个细条（法向各不相同、逐面预览还吃满配额），
+       * `mergeIntersectionSurfaces3` 把它并成"平面区域 / 二次曲面区域"，**一个区域一份**预览
+       * （key 仍是 `pair:<a>|<b>:面<i>`，`i` 是区域序号）。
+       * 配额用尽（或区域数超过单对上限）时这一对就算"交面没画全"，并**无条件**记进 `truncatedPairs`——
        * 界面据此说明"还有 N 处交面没画全"；完全包含（没有交线）的那一类同样要说明，否则就是静默少画。
        */
       if (booleanPairs >= maxBooleanPairs) {
@@ -257,27 +260,32 @@ export function computeIntersectionPreviews3d(document: GeometryDocument, option
       booleanPairs += 1
       const intersection = intersectConvexPolyhedra3(first.topology, second.topology)
       if (intersection.status === "polyhedron" || (intersection.status === "flat" && intersection.area > 0)) {
-        const drawnFaces = intersection.faces.slice(0, maxFacesPerPair)
-        drawnFaces.forEach((face, index) => {
-          const ring = face.map((vertexIndex) => ({ ...intersection.vertices[vertexIndex] }))
-          if (ring.length < 3) return
-          const hint = centroidOfRing(ring)
-          const area = intersection.faceAreas[index] ?? 0
+        // 每一对的来源各自带上解析二次曲面（立方体 / 棱锥没有，函数返回 null）：分组靠它认"哪些面属于同一张曲面"。
+        const regions = mergeIntersectionSurfaces3(intersection, [
+          { quadric: quadric3FromPrimitive(first.primitive) ?? undefined },
+          { quadric: quadric3FromPrimitive(second.primitive) ?? undefined }
+        ])
+        const drawnRegions = regions.slice(0, maxFacesPerPair)
+        drawnRegions.forEach((region, index) => {
+          if (region.points.length < 3) return
+          const hint = centroidOfRing(region.points)
           pairPreviews.push({
             key: `pair:${key}:面${index}`,
             kind: "face",
             sourceIds,
             segments: [],
-            points: ring,
-            normal: intersection.faceNormals[index] ?? { x: 0, y: 0, z: 0 },
-            area,
+            points: region.points.map((point) => ({ ...point })),
+            normal: { ...region.normal },
+            area: region.area,
             hint: { ...hint },
             position: { x: 0, y: 0, z: 0 },
             classification: intersection.status,
-            label: `交面 · ${ring.length} 边形（面积 ${area.toFixed(2)}）`
+            label: region.kind === "plane"
+              ? `交面 · ${region.points.length} 边形（面积 ${region.area.toFixed(2)}）`
+              : `交面 · ${region.kind === "cylinder" ? "圆柱面" : "圆锥面"}（面积 ${region.area.toFixed(2)}，网格近似）`
           })
         })
-        if (intersection.faces.length > drawnFaces.length) truncatedPairs += 1
+        if (regions.length > drawnRegions.length) truncatedPairs += 1
       }
       previews.push(...pairPreviews)
       pairs[key] = { signature, previews: pairPreviews, truncated: false }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 
+import { sectionQuadric3 } from "./section-quadric"
 import { circleConic3, coneQuadric3, conic3Area, conic3FromCircle3, conic3Perimeter, conic3PointAt, cylinderQuadric3, intersectPlaneQuadric3, planeQuadric3, quadricScaleOf, quadricValueAt, rimCircles3, type Conic3 } from "./quadrics"
 
 const RADIUS = 2
@@ -171,6 +172,36 @@ describe("plane ∩ quadric (analytic)", () => {
     expect(turned[1].center!.y).toBeCloseTo(-1.5, 12)
     // 不是圆类实体就没有边界圆。
     expect(rimCircles3({ id: "cube-1", type: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 1, y: 1, z: 1 } })).toEqual([])
+  })
+
+  /**
+   * **平移到别处的圆柱 / 圆锥**：二次型必须把 `center` 算进去。
+   *
+   * 这一条是 A2 实现时被探针抓出来的 A1 真缺陷：非旋转分支当年直接返回**局部**矩阵
+   *（原点在 `center` 的坐标系里），于是"表面点代回去 ≠ 0"、"平面切出来的圆心在原点"——
+   * 画布上那圈解析截面边界会画在离实体很远的地方。应用默认的圆柱就建在 `center=(3,0,0)`，
+   * 所以这不是边角情形。
+   */
+  it("moves the quadric to the solid's own centre (translated solids)", () => {
+    const placed = { ...cylinder, center: { x: 3, y: 0, z: 0 } }
+    const quadric = cylinderQuadric3(placed)
+
+    // 真正的表面点：半径 2、z=1 ⇒ (5, 0, 1)。代回二次型必须是 0。
+    expect(Math.abs(quadricValueAt(quadric, { x: 5, y: 0, z: 1 }))).toBeLessThan(1e-9 * quadricScaleOf(quadric) ** 2)
+    expect(Math.abs(quadricValueAt(quadric, { x: 3, y: 2, z: 2 }))).toBeLessThan(1e-9 * quadricScaleOf(quadric) ** 2)
+    // 轴上的点不是表面点（半径 0 ≠ 2），残差必须远离 0——否则上面的断言可能只是恒真。
+    expect(Math.abs(quadricValueAt(quadric, { x: 3, y: 0, z: 1 }))).toBeGreaterThan(1)
+
+    const conic = intersectPlaneQuadric3(plane({ x: 0, y: 0, z: 1 }, -1), quadric)
+    expect(conic.kind).toBe("circle")
+    expect(conic.semiMajor).toBeCloseTo(RADIUS, 12)
+    expect(conic.center!.x).toBeCloseTo(3, 12)
+
+    // 截面边界也要落在实体所在的位置（这是 A2 分组的成员判定依赖的量）。
+    const section = sectionQuadric3(quadric, plane({ x: 0, y: 0, z: 1 }, -1))!
+    const conicPiece = section.loops[0].find((piece) => piece.kind === "conic")
+    expect(conicPiece).toBeDefined()
+    if (conicPiece?.kind === "conic") expect(conicPiece.conic.center!.x).toBeCloseTo(3, 12)
   })
 
   it("measures circles exactly and ellipses honestly", () => {
