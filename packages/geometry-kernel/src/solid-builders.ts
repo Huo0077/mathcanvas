@@ -367,6 +367,14 @@ function buildCone(input: RoundSolidInput, context: BuilderContext): SolidBuildR
   return buildFromPoints({ vertices: [...base, apex], faces }, context)
 }
 
+/**
+ * 圆近似分段数的上限。
+ *
+ * 与 DSL schema 的 `<type> geometry is invalid`（3..256）保持一致：内核是公开 API，
+ * 只卡下界会让 `buildSolid("cylinder", { segments: 1e9 })` 去分配十亿个顶点——浏览器直接卡死。
+ */
+export const MAX_SOLID_SEGMENTS = 256
+
 const solidBuilders = new Map<string, SolidBuilder<unknown>>([
   ["prism", { id: "prism", label: "棱柱", create: (input, context) => buildPrism(input as PrismInput, context) }],
   ["frustum", { id: "frustum", label: "棱台", create: (input, context) => buildFrustum(input as FrustumInput, context) }],
@@ -375,12 +383,12 @@ const solidBuilders = new Map<string, SolidBuilder<unknown>>([
   ["pyramid", { id: "pyramid", label: "棱锥", create: (input, context) => buildPyramid(input as PyramidInput, context) }],
   ["cylinder", { id: "cylinder", label: "圆柱近似", create: (input, context) => {
     const roundInput = input as RoundSolidInput
-    if (!roundInput || !Number.isInteger(roundInput.segments) || roundInput.segments < 3 || !isFiniteVector(roundInput.center) || !Number.isFinite(roundInput.radius) || roundInput.radius <= 0 || !Number.isFinite(roundInput.height) || roundInput.height <= 0) return emptyResult([diagnostic("invalid-input", "cylinder parameters are invalid")])
+    if (!roundInput || !Number.isInteger(roundInput.segments) || roundInput.segments < 3 || roundInput.segments > MAX_SOLID_SEGMENTS || !isFiniteVector(roundInput.center) || !Number.isFinite(roundInput.radius) || roundInput.radius <= 0 || !Number.isFinite(roundInput.height) || roundInput.height <= 0) return emptyResult([diagnostic("invalid-input", `cylinder parameters are invalid (segments must be an integer in 3..${MAX_SOLID_SEGMENTS})`)])
     return buildCylinder(roundInput, context)
   } }],
   ["cone", { id: "cone", label: "圆锥近似", create: (input, context) => {
     const roundInput = input as RoundSolidInput
-    if (!roundInput || !Number.isInteger(roundInput.segments) || roundInput.segments < 3 || !isFiniteVector(roundInput.center) || !Number.isFinite(roundInput.radius) || roundInput.radius <= 0 || !Number.isFinite(roundInput.height) || roundInput.height <= 0) return emptyResult([diagnostic("invalid-input", "cone parameters are invalid")])
+    if (!roundInput || !Number.isInteger(roundInput.segments) || roundInput.segments < 3 || roundInput.segments > MAX_SOLID_SEGMENTS || !isFiniteVector(roundInput.center) || !Number.isFinite(roundInput.radius) || roundInput.radius <= 0 || !Number.isFinite(roundInput.height) || roundInput.height <= 0) return emptyResult([diagnostic("invalid-input", `cone parameters are invalid (segments must be an integer in 3..${MAX_SOLID_SEGMENTS})`)])
     return buildCone(roundInput, context)
   } }]
 ])
@@ -400,8 +408,13 @@ export function buildSolid(builderId: string, input: unknown, context: BuilderCo
   if (!builder) return emptyResult([diagnostic("unsupported-builder", "unknown solid builder: " + builderId)])
   try {
     return builder.create(input, context)
-  } catch {
-    return emptyResult([diagnostic("invalid-input", "solid builder failed to create valid geometry")])
+  } catch (error) {
+    /**
+     * 输入不合法与**构造器内部崩溃**必须区分：`catch {}` 只说"输入不合法"会把我们自己的 bug
+     * 伪装成用户的问题（实测：任何一个 builder 内部抛错都得到同一句话）。原始消息如实带上。
+     */
+    const reason = error instanceof Error ? error.message : String(error)
+    return emptyResult([diagnostic("invalid-input", `solid builder failed to create valid geometry: ${reason}`)])
   }
 }
 

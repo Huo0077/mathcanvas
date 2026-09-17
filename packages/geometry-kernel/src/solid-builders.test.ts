@@ -231,6 +231,28 @@ describe("solid builders", () => {
     const result = buildSolid("failing-builder", {}, createBuilderContext("failing"))
     expect(result.primitives).toEqual([])
     expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain("invalid-input")
+    // 体检发现的真缺陷：`catch {}` 把**任何**内部异常都说成"输入不合法"，
+    // 真实原因（构造器内部崩溃）被吞掉。诊断必须带上原始消息。
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message).join(" ")).toContain("boom")
+  })
+
+  /**
+   * 同一次体检：`segments` 只有下界（< 3 才拒绝）。`buildSolid("cylinder", { segments: 1e9 })`
+   * 会去分配十亿个顶点数组——浏览器直接卡死 / 内存爆掉。schema 卡在 256，内核这一层也要卡住。
+   */
+  it("refuses an absurd segment count instead of allocating it", () => {
+    const input = { center: { x: 0, y: 0, z: 0 }, radius: 1, height: 2, segments: 257 }
+    const tooMany = buildSolid("cylinder", input, createBuilderContext("too-many-segments"))
+    expect(tooMany.primitives).toEqual([])
+    expect(tooMany.diagnostics[0].code).toBe("invalid-input")
+    expect(tooMany.diagnostics[0].message).toContain("256")
+
+    const absurd = buildSolid("cylinder", { ...input, segments: 1e9 }, createBuilderContext("absurd-segments"))
+    expect(absurd.primitives).toEqual([])
+    expect(absurd.diagnostics[0].message).toContain("256")
+
+    // 上限之内照常构建（默认的 48 段）。
+    expect(buildSolid("cylinder", { ...input, segments: 48 }, createBuilderContext("ok-segments")).primitives.length).toBeGreaterThan(0)
   })
 
   it("validates solids after translating large world coordinates", () => {

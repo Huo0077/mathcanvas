@@ -1165,7 +1165,7 @@ P7-1 至 P7-6 与工程工作台层次化改造 Task 1-7 均已完成；P4 Agent
 
 ## 验证证据
 
-> **当前基线（唯一权威，2026-09-17 在"全身大体检（五批）+ e2e 构建修复"之后实测）**：`npm.cmd test` **107 个测试文件、1184 个用例通过**；4 个 workspace 类型检查通过；ESLint **0 error、15 条 warning**；生产构建通过（Vite 仍提示主 bundle 超过 500 KB）；Playwright **83/83** 通过（**现在真的跑的是当前工作区的构建产物**，见下）。
+> **当前基线（唯一权威，2026-09-17 在"全身大体检（六批）+ e2e 构建修复"之后实测）**：`npm.cmd test` **107 个测试文件、1187 个用例通过**；4 个 workspace 类型检查通过；ESLint **0 error、15 条 warning**；生产构建通过（Vite 仍提示主 bundle 超过 500 KB）；Playwright **83/83** 通过（**现在真的跑的是当前工作区的构建产物**，见下）。
 > 下面按时间倒序列出各轮实测快照（数字是**当时**的取值，用于追溯与对比，不代表当前门禁）；例如 68 文件 / 698 用例与 Playwright 47/47 属于 2026-09-16 的 Task 15-18 那一轮。
 
 ### 全身大体检（2026-09-17）：并行只读审计 + 按严重度修复
@@ -1241,6 +1241,18 @@ P7-1 至 P7-6 与工程工作台层次化改造 Task 1-7 均已完成；P4 Agent
 | 可访问性 | `Tab` 在多个捕捉候选之间循环时无条件 `preventDefault()`，且不区分 Shift——**键盘用户走不出这个 SVG**（WCAG 2.1.2 键盘陷阱） | 只接管不带 Shift 的 `Tab`；Shift+Tab 交还浏览器（新用例断言事件未被取消、候选也不被换掉），无 Shift 的循环功能保留 |
 | 体检结论 | 审计说 `circle3`"没有重算分支、会留下旧几何" | **证伪**：`Circle3Primitive` 只有 `centerId`（引用）+ `normal` + `radius`，**不存圆心坐标的派生态**，因此没有东西会过期；`centerId` 的依赖边与删除保护都在 |
 | 体检结论 | 审计说 `DrawingSheetView` 有 observer churn | **证伪**：`ref={setWrapper}` 传的是 `useState` 的稳定 setter，`measure` 是 `useCallback([wrapper, paperWidth, paperHeight])`，ResizeObserver 只在节点 / 纸张变化时重建一次；`clientWidth/Height` 那个 effect 依赖不变也不会自激 |
+
+**第六批（内核 API 的容差与输入护栏）**：
+
+| 类别 | 缺陷 | 修法 |
+| --- | --- | --- |
+| 内核 | `polyline.pointOnRay` 用**绝对** 1e-9 比叉积残差（长度量纲）：~1e9 坐标上"确实在射线上"的点会被判成不在（与已修的 `intersections.onRay` 同一类） | 用 `scaledTolerance`（`tolerance` 仍是绝对下限，相对项 1e-11）；真在射线外 / 反向的点仍然被拒 |
+| 内核 | `distanceToPolyline` 对**只有一个点**的折线返回 `+Infinity`（退化成点却报"无穷远"） | 返回"到那个点"的距离；一个点都没有时才 `+Infinity` |
+| 内核 | `buildSolid` 的 `catch {}` 把**任何**内部异常都说成"输入不合法"，真实原因被吞掉 | 诊断带上原始消息（"solid builder failed to create valid geometry: <原因>"） |
+| 内核 | `segments` 只有下界（< 3 才拒）：`buildSolid("cylinder", { segments: 1e9 })` 会去分配十亿个顶点——浏览器卡死 | 新增 `MAX_SOLID_SEGMENTS = 256`（与 DSL schema 的上限一致）并在诊断里点名范围 |
+
+- **第六批 RED 证据**：`pointOnRay` 大坐标 → `expected false to be true`；单点折线 → `expected Infinity to be close to 2`；`segments: 257` → `expected [ {…}, {…}, …(1543) ] to deeply equal []`（旧实现照样建出 1545 个图元）。
+- **性能项实测（记录，不改）**：审计说"每帧自动保存 `encodeMgeo` + 同步写 localStorage 会造成输入卡顿"。实测 `encodeMgeo` 单次开销：示例文档（3 图元）**0.029ms**、200 图元 **0.219ms**、3000 图元 **2.631ms**——课堂规模文档下可忽略，所以不为它引入防抖（防抖会削弱"刷新即恢复草稿"的既有保证）。同一条审计还说"一次按键一条撤销记录"：这是**既有测试明确钉住的行为**（`store.test.ts` 连续 101 次 `setParameter` 期望 100 条历史上限），属设计选择而非缺陷。
 
 - **明确不修、只记录**（都写进 `docs/feature-catalog.md` 的"体检结论与已知限制"）：
   - 非凸实体不再提供"实体内"宿主（宁可报数据不足，也不伪造体外坐标）。
