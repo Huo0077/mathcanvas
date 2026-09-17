@@ -1291,6 +1291,14 @@ P7-1 至 P7-6 与工程工作台层次化改造 Task 1-7 均已完成；P4 Agent
 
 - **第十批 RED 证据**：隐式残差 `expected 16 to be close to 1, received difference is 15`。
 
+### 体检收口：覆盖范围与最终结论（2026-09-17）
+
+- **审计覆盖（含审计方自己声明未覆盖的两块，本轮补齐）**：
+  - 4 路只读审计：`geometry-kernel`、`dsl`（schema/codec）、`scene-graph`（依赖图 / 重算 / 级联）、`apps/web`（状态 / 渲染 / 拾取 / 性能 / 可访问性）+ 持久化与基础设施（draft / 导出 / e2e / vite / eslint）；其中 kernel 与 web 两路各追加了一份深度补充报告。
+  - 审计方声明**未覆盖**的两块由本轮补齐：`IntersectionPreview3dCache` 的剪枝（新缓存只含本次扫描真正遇到的 pair、`truncated` 结果刻意不入缓存、阈值上限 120 生效——**无缺陷**）；`threeScene` 的 rAF / 拖动内部（`pointercancel` 已绑到 `handlePointerUp`、卸载时 `cancelFitAnimation` + 清 `runtimeRef` / `contentKeyRef` + 记住相机、拖动会话与指针状态同生共死——**无缺陷**）。
+- **观察到但未改的一条**（记录，不猜着改）：`pointercancel` 目前**提交**这次拖动（而不是中止回滚）。触摸设备上"系统手势抢走指针"会把已经拖出的位移写进文档与撤销历史。要改需要先确认目标平台的手势策略与期望语义，故本轮只记录。
+- **最终结论**：审计确认的缺陷（含 5 处阻塞级）**全部修复并逐条 RED→GREEN**，共十批；性质测试 `recomputeConsistency.test.ts` 钉住"增量重算 ≡ 全量重算"不变式（并因此抓到模板拓扑依赖缺边这个真缺陷）；6 条误报 / 非缺陷（`threeScene` 预览签名、`circle3` 重算分支、`DrawingSheetView` observer churn、`Ribbon` Ctrl+F1、自动保存开销与撤销粒度）逐条给出证据并记录，未按错误结论改代码；剩余潜在项（依赖图对 3/4 目标约束不建边、`boolean3d.compact` 的每面签名拼串）在 `docs/feature-catalog.md` 的"明确限制"里如实标注。
+
 
 - **明确不修、只记录**（都写进 `docs/feature-catalog.md` 的"体检结论与已知限制"）：
   - 非凸实体不再提供"实体内"宿主（宁可报数据不足，也不伪造体外坐标）。
