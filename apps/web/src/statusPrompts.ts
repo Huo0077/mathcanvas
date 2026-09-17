@@ -68,7 +68,7 @@ export function resolveStatusPrompt({ mode, selectedCount, selectedLabel, hasCen
     if (pointBinding.hasPaths) {
       return `${name} 现在是自由点 · 在右侧「路径绑定」里选一条曲线或直线，它就成为动点，之后可以直接在画布上拖它`
     }
-    return `${name} 现在是自由点 · 先画一条路径（直线 / 圆 / 函数等工具），再在右侧「路径绑定」里选它，${name} 就能沿这条路径滑动`
+    return `${name} 现在是自由点 · 先画一条路径（直线 / 圆 / 函数等工具），再在右侧「路径绑定」里选它，${name} 就成为沿这条路径滑动的动点`
   }
   if (pathSelected) return `${selectedLabel ?? "这条曲线"} 可以当路径用 · 选中一个点后在它的「路径绑定」里选这条线，那个点就成为动点（可沿它拖动）`
   if (selectedCount > 0) return `已选中${selectedLabel ?? "图元"} · 拖动控制点调整形态，按 Delete 键删除`

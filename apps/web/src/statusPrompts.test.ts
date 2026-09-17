@@ -55,6 +55,8 @@ describe("status prompts", () => {
     const withoutPaths = resolveStatusPrompt({ ...base, pointBinding: { bound: false, hasPaths: false } })
     expect(withoutPaths).toContain("先画")
     expect(withoutPaths).toContain("路径绑定")
+    // 这条也要出现"动点"这个词：用户的原话就是"不知道如何把点变成动点"。
+    expect(withoutPaths).toContain("动点")
 
     // 已经绑定：说明三种等价用法（拖动 / 路径参数 / 记录轨迹）。
     const bound = resolveStatusPrompt({ ...base, pointBinding: { bound: true, hasPaths: true, pathLabel: "直线 1" } })
