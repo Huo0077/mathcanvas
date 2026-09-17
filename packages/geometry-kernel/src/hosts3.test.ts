@@ -2,10 +2,34 @@ import { describe, expect, it } from "vitest"
 
 import { createEmptyDocument } from "@draw/dsl"
 import { buildSolidTemplate } from "./solid-builders"
-import { coneSurfaceHost3, cylinderSurfaceHost3, faceHost3, host3FromPrimitive, lineHost3, planeHost3, solidVolumeHost3 } from "./hosts3"
+import { clampPointIntoSolid3, coneSurfaceHost3, cylinderSurfaceHost3, faceHost3, host3FromPrimitive, lineHost3, planeHost3, solidVolumeHost3 } from "./hosts3"
 
 const a = { x: 0, y: 0, z: 0 }
 const b = { x: 2, y: 0, z: 0 }
+
+/**
+ * L 形棱柱：xy 平面内的 L（右下角 (notch,notch)-(size,size) 那块被挖掉）沿 z 拉伸 `height`。
+ * 面环按"从外面看逆时针"给出，与 `buildSolidTemplate` 的绕向约定一致。
+ */
+function lPrism(size: number, notch: number, height: number): { vertices: { x: number; y: number; z: number }[]; faces: number[][] } {
+  const outline = [
+    { x: 0, y: 0 }, { x: size, y: 0 }, { x: size, y: notch },
+    { x: notch, y: notch }, { x: notch, y: size }, { x: 0, y: size }
+  ]
+  const count = outline.length
+  const vertices = [
+    ...outline.map((point) => ({ x: point.x, y: point.y, z: 0 })),
+    ...outline.map((point) => ({ x: point.x, y: point.y, z: height }))
+  ]
+  return {
+    vertices,
+    faces: [
+      Array.from({ length: count }, (_, index) => (count - index) % count),
+      Array.from({ length: count }, (_, index) => index + count),
+      ...Array.from({ length: count }, (_, index) => [index, (index + 1) % count, ((index + 1) % count) + count, index + count])
+    ]
+  }
+}
 
 describe("solid volume hosts", () => {
   /**
@@ -60,6 +84,45 @@ describe("solid volume hosts", () => {
   it("refuses a solid without usable faces instead of inventing a box", () => {
     expect(solidVolumeHost3(cube.vertices, [])).toBeNull()
     expect(solidVolumeHost3([{ x: 0, y: 0, z: 0 }], cube.faces)).toBeNull()
+  })
+
+  /**
+   * 体检发现的真缺陷：`clampPointIntoSolid3` 用**全体顶点的形心**判断面的朝向，而凹实体的形心
+   * 可能落在实体之外，于是内凹面的法向被翻反、"违反"判据看不到它，最后把点原样返回——
+   * 绑在实体内、却停在空气里的点会被当成"已满足"保存下来。宁可拒绝这个宿主（约束报数据不足），
+   * 也不能伪造一个体外的坐标。
+   */
+  it("refuses a non-convex solid instead of parking a bound point in its cavity", () => {
+    const l = lPrism(3, 1, 1)
+    expect(clampPointIntoSolid3(l.vertices, l.faces, { x: 3, y: 3, z: 0 })).toBeNull()
+    expect(solidVolumeHost3(l.vertices, l.faces)).toBeNull()
+  })
+
+  it("refuses a prism whose face rings are wound inconsistently", () => {
+    const flipped = { vertices: cube.vertices, faces: [cube.faces[0], [...cube.faces[1]].reverse(), ...cube.faces.slice(2)] }
+    expect(solidVolumeHost3(flipped.vertices, flipped.faces)).toBeNull()
+  })
+
+  /**
+   * 同一次体检的另一条：面法向的退化判据用的是**绝对** EPSILON（1e-12）去比 Newell 法向的模长
+   * （≈ 2×面面积），于是 1e-5 量级的实体所有面平面都算不出来，`clampPointIntoSolid3` 直接
+   * 在 `planes.length === 0` 处返回输入点——一个静默失效的宿主。容差必须随实体尺度缩放。
+   */
+  it("keeps clamping on a solid far smaller than the absolute epsilon", () => {
+    const scale = 1e-5
+    const tiny = {
+      vertices: cube.vertices.map((vertex) => ({ x: vertex.x * scale, y: vertex.y * scale, z: vertex.z * scale })),
+      faces: cube.faces
+    }
+    const host = solidVolumeHost3(tiny.vertices, tiny.faces)
+    expect(host).not.toBeNull()
+    // 立方体边长是 2，所以 u = 0.5 落在 x = 1×scale 上。
+    const inside = host!.evaluate({ u: 0.5, v: 0.5, w: 0.5 })
+    expect(inside.x / scale).toBeCloseTo(1, 9)
+    // 外面 2 倍远的点必须被夹回表面，而不是原样返回（旧实现在这里静默失效）。
+    const clamped = host!.project({ x: 4 * scale, y: scale, z: scale })
+    expect(clamped.point.x / scale).toBeCloseTo(2, 9)
+    expect(clamped.distance / scale).toBeCloseTo(2, 9)
   })
 })
 

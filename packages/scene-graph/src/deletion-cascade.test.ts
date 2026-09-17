@@ -53,8 +53,9 @@ describe("deletion cascade", () => {
     expect(removed.document.annotations).toEqual([])
     expect(removed.document.engineeringAnnotations).toEqual([])
     expect(removed.document.constraints).toEqual([])
-    // 分组是用户的容器：只摘掉被删成员，组本身保留。
-    expect(removed.document.groups).toEqual([{ id: "g-1", label: "一组", members: ["point-b"] }])
+    // 分组是用户的容器：只摘掉被删成员；但摘到只剩一个成员时组本身必须解散——
+    // schema 要求 `members.length >= 2`，留着空壳会让整份文档再也存不下去（体检发现的真缺陷）。
+    expect(removed.document.groups).toEqual([])
   })
 
   it("downgrades a point bound to the deleted host instead of deleting it", () => {
@@ -68,6 +69,24 @@ describe("deletion cascade", () => {
     expect(freed).toMatchObject({ type: "point3", binding: { kind: "free" } })
     // 位置保留：解绑不该把用户看得到的点挪走。
     expect(freed?.type === "point3" ? freed.position : null).toEqual(before.type === "point3" ? before.position : null)
+  })
+
+  /**
+   * 体检发现的真缺陷（审计报告写宽了，实际只漏了这一个分支）：空间点的 `derived` 绑定在宿主被删时
+   * 会降级为自由点，**平面点**的同名绑定却不会——留下一根指向已删对象的悬空引用。
+   * 依赖图从此找不到来源，点静默冻在原地（与 schema 注释里点名过的"悬空引用让点静默冻住"同一类坑）。
+   */
+  it("downgrades a planar point derived from a deleted source instead of leaving a dangling binding", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [
+      { id: "segment-1", type: "segment", a: { x: 0, y: 0 }, b: { x: 4, y: 0 } },
+      { id: "point-1", type: "point", x: 2, y: 0, binding: { kind: "derived", sourceId: "segment-1", feature: "midpoint" } }
+    ]
+
+    const removed = applyOperation(document, { op: "deleteObject", id: "segment-1" })
+
+    expect(removed.changed).toBe(true)
+    expect(removed.document.primitives).toEqual([{ id: "point-1", type: "point", x: 2, y: 0, binding: { kind: "free" } }])
   })
 
   it("cascades a section with the solid it cuts", () => {

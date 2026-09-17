@@ -234,19 +234,32 @@ export function coneSurfaceHost3(center: Vector3, radius: number, height: number
  * 因此参数取"包围盒内的比例" `uvw ∈ [0,1]³`：实体平移 / 缩放时参数不变、坐标跟着走
  *（参数仍然是唯一真值），而夹取保证结果永远落在实体里。
  *
- * 只对**凸**实体精确（用面平面逐个夹）；非凸实体上退化为"逐面夹取"的近似，不会给出体外的点。
+ * 只对**凸**实体成立（逐面夹取等价于"夹进半空间之交"）。凹实体的形心可能落在体外，
+ * 逐面夹取会停在空腔里、甚至把点留在空中，因此这类实体**不提供**宿主（返回 null，
+ * 上层据此报"数据不足"），而不是伪造一个体外坐标。绕向自相矛盾的拓扑同样被拒绝。
  */
 export function solidVolumeHost3(vertices: Vector3[], faces: number[][]): Host3 | null {
   if (vertices.length < 4 || faces.length < 4) return null
   const box = boundingBox3(vertices)
   if (!box) return null
   const size = { x: box.max.x - box.min.x, y: box.max.y - box.min.y, z: box.max.z - box.min.z }
-  if (size.x <= EPSILON || size.y <= EPSILON || size.z <= EPSILON) return null
+  const diagonal = Math.hypot(size.x, size.y, size.z)
+  if (!(diagonal > 0)) return null
+  // 构造期探针：拿包围盒中心试夹一次。夹不进去（凹 / 退化 / 绕向不一致）就说明这个实体
+  // 不能当体积宿主——返回 null 让上层报"数据不足"，而不是伪造一个体外坐标。
+  const anchor = clampPointIntoSolid3(vertices, faces, {
+    x: (box.min.x + box.max.x) / 2,
+    y: (box.min.y + box.max.y) / 2,
+    z: (box.min.z + box.max.z) / 2
+  })
+  if (!anchor) return null
+  // 实体几何在宿主构造之后不再变化，因此这里的兜底只在"理论上不会再失败"的前提下生效；
+  // 万一真的失败，退回探针点（一个已经验证过的内点），绝不放行体外坐标。
   const pointFor = (parameter: Host3Parameter): Vector3 => clampPointIntoSolid3(vertices, faces, {
     x: box.min.x + size.x * clampTo(parameter.u, [0, 1]),
     y: box.min.y + size.y * clampTo(parameter.v ?? 0, [0, 1]),
     z: box.min.z + size.z * clampTo(parameter.w ?? 0, [0, 1])
-  })
+  }) ?? anchor
   return wrapHost(
     "solid-volume",
     { u: [0, 1], v: [0, 1], w: [0, 1] },
@@ -269,22 +282,44 @@ function boundingBox3(vertices: Vector3[]): { min: Vector3; max: Vector3 } | nul
 }
 
 /**
- * 把一个点夹进凸多面体：在内部就原样返回，在外面就沿违反的面平面投影回去。
- *
- * 凸体的"最近点"本可以写成 QP，但对课堂尺度的实体，"逐个面夹取 + 迭代几轮"已经足够：
- * 每次投影都让点更靠近可行域，实测几轮内收敛；万一没收敛（非凸 / 退化输入），
- * 最后再按每个面判一次，把仍然在外的点贴到违反最严重的那个面上——**绝不返回体外的点**。
+ * 面法向的退化判据必须**随实体尺度缩放**：Newell 法向的模长约等于两倍面面积，
+ * 用绝对 EPSILON 去比，1e-5 量级的实体会被判成"所有面都退化"，体积宿主静默失效。
  */
-export function clampPointIntoSolid3(vertices: Vector3[], faces: number[][], point: Vector3): Vector3 {
-  const planes = faces.flatMap((face) => {
-    if (face.length < 3 || face.some((index) => index < 0 || index >= vertices.length)) return []
-    const normal = outwardNormal3(vertices, face)
-    return normal ? [normal] : []
-  })
-  if (planes.length === 0) return { ...point }
+const RELATIVE_EPSILON = 1e-9
+
+interface FacePlane3 {
+  normal: Vector3
+  constant: number
+}
+
+/**
+ * 把一个点夹进**凸**多面体：在内部就原样返回，在外面就沿违反的面平面投影回去。
+ *
+ * 凸体的"最近点"本可以写成 QP，但对课堂尺度的实体，"逐个面夹取 + 迭代几轮"已经足够。
+ * 收尾还有一道保证：迭代没收敛时，从**顶点形心**（凸体的形心必在体内）向当前点做一次二分，
+ * 取仍然满足全部半空间的最远点——于是返回值永远在实体内。
+ *
+ * 返回 `null` 表示"这个实体不能当凸体积用"：凹、退化、绕向自相矛盾或点非有限。
+ * 这种情况下**不能**返回任何坐标，否则绑定点会被停在空气里却报告"已满足"。
+ */
+export function clampPointIntoSolid3(vertices: Vector3[], faces: number[][], point: Vector3): Vector3 | null {
+  if (!Number.isFinite(point.x) || !Number.isFinite(point.y) || !Number.isFinite(point.z)) return null
+  const box = boundingBox3(vertices)
+  if (!box) return null
+  const diagonal = Math.hypot(box.max.x - box.min.x, box.max.y - box.min.y, box.max.z - box.min.z)
+  if (!(diagonal > 0)) return null
+  const tolerance = diagonal * RELATIVE_EPSILON
+  const planes = closedFacePlanes3(vertices, faces)
+  if (!planes) return null
+  // 凸性判据：凸实体的内部就是所有外法向半空间之交。只要有一个顶点落在某个面平面之外，
+  // 实体就是凹的，逐面夹取不再等价于"夹进实体"。
+  for (const vertex of vertices) {
+    if (planes.some((plane) => dotVector3(plane.normal, vertex) + plane.constant > tolerance)) return null
+  }
+  const inside = (candidate: Vector3) => planes.every((plane) => dotVector3(plane.normal, candidate) + plane.constant <= tolerance)
   let current = { ...point }
   for (let iteration = 0; iteration < 8; iteration += 1) {
-    const violated = planes.filter((plane) => dotVector3(plane.normal, current) + plane.constant > EPSILON)
+    const violated = planes.filter((plane) => dotVector3(plane.normal, current) + plane.constant > tolerance)
     if (violated.length === 0) return current
     for (const plane of violated) {
       const distance = dotVector3(plane.normal, current) + plane.constant
@@ -295,16 +330,58 @@ export function clampPointIntoSolid3(vertices: Vector3[], faces: number[][], poi
       }
     }
   }
-  return current
+  if (inside(current)) return current
+  // 兜底：从凸体内部的一点朝当前点二分，返回仍然合法的那个端点（一定落在实体边界上）。
+  const anchor = vertices.reduce((sum, vertex) => addVector3(sum, vertex), { x: 0, y: 0, z: 0 })
+  const reference = scaleVector3(anchor, 1 / vertices.length)
+  if (!inside(reference)) return null
+  let low = 0
+  let high = 1
+  for (let step = 0; step < 48; step += 1) {
+    const middle = (low + high) / 2
+    const candidate = {
+      x: reference.x + (current.x - reference.x) * middle,
+      y: reference.y + (current.y - reference.y) * middle,
+      z: reference.z + (current.z - reference.z) * middle
+    }
+    if (inside(candidate)) low = middle
+    else high = middle
+  }
+  const clamped = {
+    x: reference.x + (current.x - reference.x) * low,
+    y: reference.y + (current.y - reference.y) * low,
+    z: reference.z + (current.z - reference.z) * low
+  }
+  return inside(clamped) ? clamped : null
 }
 
-/** 面的平面（法向朝外、单位化）。用形心判断朝向，因此与顶点绕向无关。 */
-function outwardNormal3(vertices: Vector3[], face: number[]): { normal: Vector3; constant: number } | null {
-  const centre = vertices.reduce((sum, vertex) => ({
-    x: sum.x + vertex.x / vertices.length,
-    y: sum.y + vertex.y / vertices.length,
-    z: sum.z + vertex.z / vertices.length
-  }), { x: 0, y: 0, z: 0 })
+/**
+ * 闭合面环 → **朝外**的单位平面。
+ *
+ * 朝向不能用"全体顶点的形心"来定：凹实体的形心可能落在实体之外，内凹面的法向会被翻反，
+ * 于是"点在外面"的判据根本看不到那些面。改用**有符号体积**：闭合多面体按一致绕向
+ *（从外面看逆时针）给出时，各面 Newell 法向一致朝外，散度和（体积的 6 倍）为正；
+ * 为负说明整体绕向相反，全体翻转即可。体积退化说明绕向自相矛盾或实体塌陷——不猜，返回 null。
+ */
+function closedFacePlanes3(vertices: Vector3[], faces: number[][]): FacePlane3[] | null {
+  const usable = faces.filter((face) => face.length >= 3 && face.every((index) => Number.isInteger(index) && index >= 0 && index < vertices.length))
+  if (usable.length === 0) return null
+  const box = boundingBox3(vertices)
+  if (!box) return null
+  const diagonal = Math.hypot(box.max.x - box.min.x, box.max.y - box.min.y, box.max.z - box.min.z)
+  const raw = usable.map((face) => ({ face, normal: newellNormal3(vertices, face) }))
+  if (raw.some((entry) => !entry.normal || lengthVector3(entry.normal) <= diagonal * diagonal * RELATIVE_EPSILON)) return null
+  const volume6 = signedVolume6(vertices, usable)
+  if (Math.abs(volume6) <= Math.pow(diagonal, 3) * RELATIVE_EPSILON) return null
+  const flip = volume6 > 0 ? 1 : -1
+  return raw.map(({ face, normal }) => {
+    const unit = scaleVector3(normal!, flip / lengthVector3(normal!))
+    return { normal: unit, constant: -dotVector3(unit, vertices[face[0]]) }
+  })
+}
+
+/** 面环的 Newell 法向（未单位化，方向随绕向）；环塌成一条线时返回 null。 */
+function newellNormal3(vertices: Vector3[], face: number[]): Vector3 | null {
   let normal = { x: 0, y: 0, z: 0 }
   for (let index = 0; index < face.length; index += 1) {
     const current = vertices[face[index]]
@@ -315,12 +392,23 @@ function outwardNormal3(vertices: Vector3[], face: number[]): { normal: Vector3;
       z: normal.z + (current.x - next.x) * (current.y + next.y)
     }
   }
-  const length = lengthVector3(normal)
-  if (length < EPSILON) return null
-  const unit = scaleVector3(normal, 1 / length)
-  const anchor = vertices[face[0]]
-  const outward = dotVector3(unit, subtractVector3(centre, anchor)) > 0 ? scaleVector3(unit, -1) : unit
-  return { normal: outward, constant: -dotVector3(outward, anchor) }
+  return Number.isFinite(normal.x) && Number.isFinite(normal.y) && Number.isFinite(normal.z) ? normal : null
+}
+
+/** 闭合多面体的有符号体积 × 6（散度定理，逐面扇形三角化）。 */
+function signedVolume6(vertices: Vector3[], faces: number[][]): number {
+  let total = 0
+  for (const face of faces) {
+    const origin = vertices[face[0]]
+    for (let index = 1; index < face.length - 1; index += 1) {
+      const second = vertices[face[index]]
+      const third = vertices[face[index + 1]]
+      total += origin.x * (second.y * third.z - second.z * third.y)
+        - origin.y * (second.x * third.z - second.z * third.x)
+        + origin.z * (second.x * third.y - second.y * third.x)
+    }
+  }
+  return total
 }
 
 type HostContext = readonly PrimitiveSpec[] | ReadonlyMap<string, PrimitiveSpec>

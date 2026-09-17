@@ -390,6 +390,12 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>, parameter
     if (typeof value.sourceId !== "string" || !byId.has(value.sourceId) || !solidTypes.has(referenceType(byId, value.sourceId) ?? "")) errors.push("section references invalid solid")
     if (!isRecord(value.plane) || !isFiniteCoordinate3(value.plane.normal) || !isFiniteNumber(value.plane.constant)) errors.push("section plane is invalid")
     if (!Array.isArray(value.points) || value.points.some((point) => !isFiniteCoordinate3(point))) errors.push("section points are invalid")
+    /**
+     * `loops` 是可选的完整边界（带孔 / 分块的截面靠它），直接喂给 3D 预览的描边与三角化。
+     * 之前只校验了 `points`：`loops: "x"`、`loops: [点, "环"]` 或环里带 NaN 坐标都能存进来，
+     * 渲染层要么抛异常要么画出 NaN 顶点。
+     */
+    if (value.loops !== undefined && (!Array.isArray(value.loops) || value.loops.some((loop) => !Array.isArray(loop) || loop.some((point) => !isFiniteCoordinate3(point))))) errors.push("section loops are invalid")
     if (value.classification !== undefined && !["none", "point", "segment", "polygon", "insufficient-data"].includes(String(value.classification))) errors.push("section classification is invalid")
     if (!["approximate", "undefined", "failed"].includes(String(value.status))) errors.push("section status is invalid")
     if (value.diagnostic !== undefined && typeof value.diagnostic !== "string") errors.push("section diagnostic is invalid")
@@ -581,6 +587,11 @@ export function validateDocument(document: unknown): ValidationResult {
   if (document.drawingViews !== undefined && !Array.isArray(document.drawingViews)) errors.push("drawingViews must be an array")
   if (document.drawingSheets !== undefined && !Array.isArray(document.drawingSheets)) errors.push("drawingSheets must be an array")
   if (!isRecord(document.metadata) || typeof document.metadata.id !== "string" || !document.metadata.id) errors.push("metadata.id is required")
+  /**
+   * `metadata.name` 也要查：导出路径读 `metadata.name.replace(...)`（文件名），
+   * 缺字段的文档之前能通过校验，打开后一点"导出"就抛 TypeError。
+   */
+  else if (typeof document.metadata.name !== "string" || !document.metadata.name) errors.push("metadata.name is required")
 
   const layerIds = validateLayers(document.layers, errors)
   const drawingViewIds = validateDrawingViews(document.drawingViews, errors)
@@ -598,7 +609,31 @@ export function validateDocument(document: unknown): ValidationResult {
       primitiveById.set(primitive.id, primitive)
     }
   }
-  const parameterIds = isRecord(document.parameters) ? new Set(Object.keys(document.parameters)) : new Set<string>()
+  /**
+   * 参数条目**逐个**校验，而不只是"容器是对象"。
+   *
+   * 之前只查容器：`parameters: null` 能通过校验，随后 `App.tsx` 渲染时读 `document.parameters.slope`
+   * 直接白屏；`{ "area": { id: "other", … } }` 让按 key 的查找/删除找不到条目，编辑静默丢失；
+   * `value: "3"` 一路传进几何计算变成 NaN，而这样的文档再也存不回去（编码时校验失败）。
+   */
+  const parameterIds = new Set<string>()
+  if (isRecord(document.parameters)) {
+    for (const [key, parameter] of Object.entries(document.parameters)) {
+      if (!isRecord(parameter)) {
+        errors.push(`parameter must be an object: ${key}`)
+        continue
+      }
+      parameterIds.add(key)
+      if (parameter.id !== key) errors.push(`parameter id must match its key: ${key}`)
+      if (!isFiniteNumber(parameter.value)) errors.push(`parameter value must be a finite number: ${key}`)
+      if (parameter.expression !== undefined && typeof parameter.expression !== "string") errors.push(`parameter expression must be a string: ${key}`)
+      if (parameter.min !== undefined && !isFiniteNumber(parameter.min)) errors.push(`parameter min must be a finite number: ${key}`)
+      if (parameter.max !== undefined && !isFiniteNumber(parameter.max)) errors.push(`parameter max must be a finite number: ${key}`)
+      if (parameter.step !== undefined && (!isFiniteNumber(parameter.step) || parameter.step <= 0)) errors.push(`parameter step must be a positive finite number: ${key}`)
+      if (parameter.label !== undefined && typeof parameter.label !== "string") errors.push(`parameter label must be a string: ${key}`)
+      if (parameter.ownerId !== undefined && typeof parameter.ownerId !== "string") errors.push(`parameter ownerId must be a string: ${key}`)
+    }
+  }
   for (const primitive of primitives) {
     if (isRecord(primitive) && primitive.layerId !== undefined && (typeof primitive.layerId !== "string" || !layerIds.has(primitive.layerId))) errors.push(`primitive layer is missing: ${isRecord(primitive) && typeof primitive.id === "string" ? primitive.id : "unknown"}`)
     errors.push(...validatePrimitive(primitive, primitiveById, parameterIds))

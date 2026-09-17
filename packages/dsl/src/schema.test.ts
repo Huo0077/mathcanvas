@@ -109,4 +109,72 @@ describe("Geometry DSL document layout schema", () => {
     expect(result.valid).toBe(false)
     if (!result.valid) expect(result.errors).toContain("primitive layer is missing: point-1")
   })
+
+  /**
+   * 体检发现的真缺陷：`document.parameters` 只查了"是个对象"，条目本身从不校验。于是：
+   * `parameters: null` 会通过校验、渲染时读 `document.parameters.slope` 直接白屏；
+   * `{ "area": { id: "other", value: 1 } }` 让按 key 的查找 / 删除找不到条目，编辑静默丢失；
+   * `value: "3"` 一路传到几何计算里变成 NaN，而这样的文档再也存不回去。
+   */
+  it("validates every parameter entry, not just the container", () => {
+    const withParameters = (parameters: unknown) => validateDocument({ ...createEmptyDocument("conics"), parameters })
+    const spec = (overrides: Record<string, unknown> = {}) => ({ p: { id: "p", value: 1, ...overrides } })
+
+    expect(withParameters(spec()).valid).toBe(true)
+    expect(withParameters(spec({ expression: "2*pi", min: 0, max: 10, step: 0.5, label: "半径", ownerId: "point-1" })).valid).toBe(true)
+
+    expect(withParameters(null).valid).toBe(false)
+    expect(withParameters({ p: null }).valid).toBe(false)
+    expect(withParameters({ p: 3 }).valid).toBe(false)
+    // key 与 id 必须一致：不一致时按 key 找不到参数，编辑会被静默丢弃。
+    expect(withParameters(spec({ id: "other" })).valid).toBe(false)
+    expect(withParameters(spec({ id: "" })).valid).toBe(false)
+    expect(withParameters(spec({ value: "3" })).valid).toBe(false)
+    expect(withParameters(spec({ value: Number.NaN })).valid).toBe(false)
+    expect(withParameters(spec({ value: Number.POSITIVE_INFINITY })).valid).toBe(false)
+    expect(withParameters(spec({ expression: 3 })).valid).toBe(false)
+    expect(withParameters(spec({ min: "0" })).valid).toBe(false)
+    expect(withParameters(spec({ max: Number.NaN })).valid).toBe(false)
+    expect(withParameters(spec({ step: 0 })).valid).toBe(false)
+    expect(withParameters(spec({ label: 3 })).valid).toBe(false)
+    expect(withParameters(spec({ ownerId: 3 })).valid).toBe(false)
+  })
+
+  /**
+   * 同一次体检：`metadata` 只查了 `id`。`App.tsx` 的导出路径读 `metadata.name.replace(...)`
+   * 来生成文件名，一个缺 `name` 的文件能通过校验、打开后一按"导出"就抛 TypeError。
+   */
+  it("requires complete document metadata", () => {
+    const document = createEmptyDocument("conics")
+    const withMetadata = (metadata: unknown) => validateDocument({ ...document, metadata })
+
+    expect(withMetadata({ id: "doc-1", name: "示例" }).valid).toBe(true)
+    expect(withMetadata({ id: "doc-1" }).valid).toBe(false)
+    expect(withMetadata({ name: "示例" }).valid).toBe(false)
+    expect(withMetadata({ id: "doc-1", name: 3 }).valid).toBe(false)
+    expect(withMetadata({ id: "doc-1", name: "" }).valid).toBe(false)
+    expect(withMetadata(null).valid).toBe(false)
+  })
+
+  /**
+   * 同一次体检：`section.points` 有校验，`section.loops` 没有。`loops` 直接喂给 3D 预览的
+   * 描边与三角化路径，非数组、环不是数组或坐标非有限都会让渲染层抛异常或画出 NaN 顶点。
+   */
+  it("validates the optional section loops used by the 3D preview", () => {
+    const document = createDefaultCadLayout(createEmptyDocument("cad"))
+    const cube = { id: "cube-1", type: "cube", origin: { x: -1, y: -1, z: -1 }, size: { x: 2, y: 2, z: 2 } }
+    const valid = { x: 0, y: 0, z: 0 }
+    const section = (loops: unknown) => ({
+      id: "section-1", type: "section", sourceId: "cube-1",
+      plane: { normal: { x: 0, y: 0, z: 1 }, constant: 0 },
+      points: [valid], classification: "point", status: "approximate", loops
+    })
+
+    expect(validateDocument({ ...document, primitives: [cube, section([[valid]])] }).valid).toBe(true)
+    expect(validateDocument({ ...document, primitives: [cube, section(undefined)] }).valid).toBe(true)
+    expect(validateDocument({ ...document, primitives: [cube, section("loops")] }).valid).toBe(false)
+    expect(validateDocument({ ...document, primitives: [cube, section([valid])] }).valid).toBe(false)
+    expect(validateDocument({ ...document, primitives: [cube, section([[valid], "ring"])] }).valid).toBe(false)
+    expect(validateDocument({ ...document, primitives: [cube, section([[{ x: 0, y: Number.NaN, z: 0 }]])] }).valid).toBe(false)
+  })
 })

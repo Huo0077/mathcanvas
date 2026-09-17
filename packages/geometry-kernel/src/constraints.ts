@@ -3,6 +3,22 @@ import type { ConstraintSpec, LinePrimitive } from "@draw/dsl"
 export interface ConstraintSolveResult {
   lines: Map<string, LinePrimitive>
   converged: boolean
+  /**
+   * 无法满足、因而被跳过的约束 id：目标直线退化成一个点（`|b − a| ≈ 0`）时，
+   * 平行 / 垂直 / 共线在这条"线"上都**没有定义**——既投影不了，残差也量不出来。
+   *
+   * 旧实现在这里返回残差 0（"完美满足"），于是求解器第一轮就宣布收敛、几何一动不动，
+   * 却报告"约束已满足"：一个静默的空操作。现在这类约束被显式列出来，调用方据此给出准确的诊断，
+   * 而不是把"没做"伪装成"做到了"。
+   */
+  unsatisfiable: string[]
+}
+
+/** 退化直线（两端点重合）的判据：低于它就认为这条线没有方向。 */
+const DEGENERATE_LINE_EPSILON = 1e-12
+
+function isDegenerateLine(line: LinePrimitive): boolean {
+  return direction(line).length < DEGENERATE_LINE_EPSILON
 }
 
 function direction(line: LinePrimitive): { x: number; y: number; length: number } {
@@ -83,21 +99,28 @@ function activeConstraints(constraints: ConstraintSpec[], activeLineIds?: Readon
 export function solveLineConstraints(lines: Map<string, LinePrimitive>, constraints: ConstraintSpec[], maxIterations?: number, tolerance = 1e-8, activeLineIds?: ReadonlySet<string>, activeConstraintIds?: ReadonlySet<string>): ConstraintSolveResult {
   const projected = new Map(lines)
   const selectedConstraints = activeConstraints(constraints, activeLineIds, activeConstraintIds).filter((constraint) => ["parallel", "perpendicular", "coincident"].includes(constraint.type) && constraint.targets.every((target) => lines.has(target)))
-  const iterationLimit = maxIterations ?? Math.max(12, selectedConstraints.length + 1)
+  const unsatisfiable = selectedConstraints
+    .filter((constraint) => constraint.targets.length === 2 && constraint.targets.some((target) => {
+      const line = lines.get(target)
+      return line !== undefined && isDegenerateLine(line)
+    }))
+    .map((constraint) => constraint.id)
+  const solvable = selectedConstraints.filter((constraint) => !unsatisfiable.includes(constraint.id))
+  const iterationLimit = maxIterations ?? Math.max(12, solvable.length + 1)
   for (let iteration = 0; iteration < iterationLimit; iteration += 1) {
-    for (const constraint of selectedConstraints) {
+    for (const constraint of solvable) {
       if (constraint.targets.length !== 2) continue
       const first = projected.get(constraint.targets[0])
       const second = projected.get(constraint.targets[1])
       if (!first || !second) continue
       projected.set(second.id, projectLineConstraint(first, second, constraint.type))
     }
-    if (selectedConstraints.every((constraint) => {
+    if (solvable.every((constraint) => {
       if (constraint.targets.length !== 2) return true
       const first = projected.get(constraint.targets[0])
       const second = projected.get(constraint.targets[1])
       return !first || !second || constraintResidual(first, second, constraint.type) <= tolerance
-    })) return { lines: projected, converged: true }
+    })) return { lines: projected, converged: true, unsatisfiable }
   }
-  return { lines: projected, converged: false }
+  return { lines: projected, converged: false, unsatisfiable }
 }

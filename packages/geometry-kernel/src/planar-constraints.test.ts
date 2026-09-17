@@ -133,6 +133,62 @@ describe("circular constraints", () => {
     expect(arc.residual({ x: 2, y: 0 })).toBeCloseTo(1, 12)
   })
 
+  /**
+   * 体检发现的真缺陷：顺时针弧（`span < 0`，`inside` 判据明确支持）的投影返回
+   * `startAngle + delta`（delta ∈ [0, 2π)），于是参数落在弧**之外**、甚至超过 2π，
+   * 而 `parameterBounds` 又原样返回 `{min: startAngle, max: endAngle}` 这个反序区间。
+   * 下游 `DynamicPoint` 用 `clamp(parameter, min, max)` 归一化 → 参数被夹成 endAngle，
+   * 鼠标还没拖，点就先跳到弧的端点上；滑块拿到的也是倒过来的区间。
+   */
+  it("projects onto a clockwise arc with an in-domain parameter and sorted bounds", () => {
+    const startAngle = 0.5
+    const arc = arcConstraint("a", { x: 0, y: 0 }, 1, startAngle, startAngle - Math.PI)
+    const bounds = arc.parameterBounds()
+    expect(bounds.min).toBeLessThan(bounds.max)
+
+    // 角度 0.4 在弧内（从 0.5 顺时针走 0.1 弧度）：参数就该是 0.4 本身。
+    const projection = arc.project({ x: Math.cos(0.4), y: Math.sin(0.4) })
+    expect(projection?.clamped).toBe(false)
+    expect(projection?.parameter).toBeCloseTo(0.4, 9)
+    expect(projection!.parameter).toBeGreaterThanOrEqual(bounds.min)
+    expect(projection!.parameter).toBeLessThanOrEqual(bounds.max)
+    expect(projection?.point.x).toBeCloseTo(Math.cos(0.4), 9)
+    expect(projection?.distance).toBeCloseTo(0, 9)
+
+    // 参数域内的任意参数都必须映射回同一个角度（顺时针方向）。
+    for (const parameter of [bounds.min, (bounds.min + bounds.max) / 2, bounds.max]) {
+      const point = arc.evaluate(parameter)!
+      expect(arc.residual(point)).toBeCloseTo(0, 9)
+      expect(Math.atan2(point.y, point.x)).toBeCloseTo(parameter, 9)
+    }
+  })
+
+  it("returns a fresh bounds object so callers cannot corrupt the constraint", () => {
+    const arc = arcConstraint("a", { x: 0, y: 0 }, 1, 0, Math.PI / 2)
+    const bounds = arc.parameterBounds()
+    bounds.min = 999
+    expect(arc.parameterBounds().min).toBe(0)
+    const line = lineConstraint("l", { x: 0, y: 0 }, { x: 4, y: 0 })
+    const lineBounds = line.parameterBounds()
+    lineBounds.max = 0
+    expect(line.parameterBounds().max).toBe(Number.POSITIVE_INFINITY)
+  })
+
+  /**
+   * 同一次体检：`lineConstraint.project` 对非有限输入会原样算出 `Infinity` 参数与坐标并报
+   * `converged: true`（直线参数域本来就是 ±∞，clamp 拦不住）。动点只有一个"合法参数"的假象，
+   * 却把 ∞ 写进文档。投影失败必须显式返回 null，让 `DynamicPoint.moveTo` 走"未收敛、不移动"那条路。
+   */
+  it("refuses to project a non-finite request instead of returning an infinite point", () => {
+    const line = lineConstraint("l", { x: 0, y: 0 }, { x: 4, y: 0 })
+    expect(line.project({ x: Number.POSITIVE_INFINITY, y: 0 })).toBeNull()
+    expect(line.project({ x: 0, y: Number.NaN })).toBeNull()
+    const segment = segmentConstraint("s", { x: 0, y: 0 }, { x: 4, y: 0 })
+    expect(segment.project({ x: Number.POSITIVE_INFINITY, y: 0 })).toBeNull()
+    // 正常输入照旧。
+    expect(line.project({ x: 8, y: 3 })?.parameter).toBeCloseTo(2, 12)
+  })
+
   it("uses an arc-length normalised parameter for a polyline", () => {
     const polyline = polylineConstraint("pl", [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 1 }])
     // Half of the total length 11 is 5.5, which is inside the long first segment, not at the vertex.

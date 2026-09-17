@@ -1266,7 +1266,11 @@ export function recomputeDerivedObjects(document: GeometryDocument, changedIds?:
       .filter((constraint) => constraint.targets.length === 2 && constraint.targets.every((target) => affected.has(target)))
       .map((constraint) => constraint.id))
   const solved = solveLineConstraints(projectedLines, evaluatedDocument.constraints, undefined, undefined, changedIds === undefined ? undefined : activeLineIds, activeConstraintIds)
-  if (!solved.converged) throw new Error("constraint solving failed to converge")
+  // 退化直线（两端点重合）上的平行 / 垂直 / 共线无法求解，`unsatisfiable` 会列出这些约束：
+  // 求解失败时把原因说清楚，而不是笼统地报"未收敛"。
+  if (!solved.converged) throw new Error(solved.unsatisfiable.length > 0
+    ? `constraint solving failed: target line is degenerate (${solved.unsatisfiable.join(", ")})`
+    : "constraint solving failed to converge")
   const lines = solved.lines
   const primitiveIndexById = new Map(projectedPrimitives.map((primitive, index) => [primitive.id, index]))
   for (const [id, projected] of lines) {
@@ -1523,6 +1527,9 @@ function unbindDeletedHost(primitive: PrimitiveSpec, deleted: Set<string>): Prim
     if (sources.some((sourceId) => deleted.has(sourceId))) return { ...primitive, binding: { kind: "free" } }
   }
   if (primitive.type === "point" && primitive.binding?.kind === "onPath" && deleted.has(primitive.binding.pathId)) return { ...primitive, binding: { kind: "free" } }
+  // 平面点的 `derived` 绑定与空间点同理：来源没了就降级为自由点，绝不留悬空引用
+  //（悬空引用在重算里找不到来源，点会静默冻住；这与 schema 里点名过的坑是同一类）。
+  if (primitive.type === "point" && primitive.binding?.kind === "derived" && deleted.has(primitive.binding.sourceId)) return { ...primitive, binding: { kind: "free" } }
   return primitive
 }
 
@@ -1798,7 +1805,11 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
     if (plan.annotations.size > 0) next.annotations = next.annotations.filter((annotation) => !plan.annotations.has(annotation.id))
     if (plan.engineeringAnnotations.size > 0 && next.engineeringAnnotations) next.engineeringAnnotations = next.engineeringAnnotations.filter((annotation) => !plan.engineeringAnnotations.has(annotation.id))
     if (plan.constraints.size > 0) next.constraints = next.constraints.filter((constraint) => !plan.constraints.has(constraint.id))
-    if (plan.groupMembers.size > 0) next.groups = next.groups.map((group) => group.members.some((member) => plan.groupMembers.has(member)) ? { ...group, members: group.members.filter((member) => !plan.groupMembers.has(member)) } : group)
+    if (plan.groupMembers.size > 0) next.groups = next.groups
+      .map((group) => group.members.some((member) => plan.groupMembers.has(member)) ? { ...group, members: group.members.filter((member) => !plan.groupMembers.has(member)) } : group)
+      // 只剩一个成员（或空）的分组是无效数据：`validateDocument` 要求成员 ≥ 2，
+      // 留着它会让整份文档再也存不下去（`encodeMgeo` 抛 "group has invalid members"）。直接解散。
+      .filter((group) => group.members.length >= 2)
     /**
      * 回收"随对象自动生成"的驱动参数。判据是**孤儿**而不是"本次被删"：
      * 只要它带 `ownerId`（自动生成）、归属对象已经不在文档里、且没有任何图元引用它，就是垃圾。

@@ -133,6 +133,17 @@ export function sectionPolyhedron3(vertices: Vector3[], faces: number[][], plane
   const validFaces = faces.filter((face) => face.length >= 3 && face.every((index) => Number.isInteger(index) && index >= 0 && index < vertices.length))
   if (vertices.length < 4 || validFaces.length < 4) return { status: "insufficient-data", points: [], loops: [], explanation: "多面体拓扑不足：截面需要至少 4 个顶点和 4 个闭合面。" }
 
+  /**
+   * 剖切平面必须先校验：零法向（或相对模型尺度可以忽略的法向）意味着"方程" `0·p + c = 0`
+   * 与每个点都相容（`c = 0` 时恒真），逐面环首尾相连就能凑出一个**看起来正常的面**并把状态报成
+   * `"polygon"`——凭空造出一片几何；而 `c ≠ 0` 时同样的输入却报 `"none"`。法向退化只能报数据不足。
+   */
+  const normalLength = lengthVector3(plane.normal)
+  const extent = vertices.reduce((largest, vertex) => Math.max(largest, Math.abs(vertex.x), Math.abs(vertex.y), Math.abs(vertex.z)), 1)
+  if (!Number.isFinite(normalLength) || !Number.isFinite(plane.constant) || normalLength <= extent * 1e-9) {
+    return { status: "insufficient-data", points: [], loops: [], explanation: "剖切平面的法向退化（长度为零或不可用），无法确定剖切方向。" }
+  }
+
   const quantum = quantumFor(vertices)
   const unique = new Map<string, Vector3>()
   const segments: [Vector3, Vector3][] = []

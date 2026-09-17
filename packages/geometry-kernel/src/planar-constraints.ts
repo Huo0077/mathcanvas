@@ -244,15 +244,23 @@ export function linearConstraint(kind: "line" | "ray" | "segment", id: string, a
     kind,
     id,
     branchCount: 1,
-    parameterBounds: () => bounds,
+    // 每次都回一份新对象：调用方（滑块 / 动点）拿到的是自己的副本，改它不会污染约束本身。
+    parameterBounds: () => ({ ...bounds }),
     evaluate: (parameter) => finitePoint(evaluate(parameter)),
     project(desired, options) {
       if (degenerate) {
         return { parameter: 0, branch: 0, point: { x: a.x, y: a.y }, distance: pointDistance(a, desired), converged: true, iterations: 0, clamped: false }
       }
+      /**
+       * 非有限输入必须显式失败：直线的参数域本来就是整条实轴，`clamp(∞, −∞, +∞)` 拦不住它，
+       * 于是 `parameter = ∞`、坐标 `{∞, 0}` 会被当成 `converged: true` 的合法结果返回，
+       * 并写进动点参数（文档里出现 ∞）。返回 null 走 `moveTo` 的"未收敛、不移动"分支。
+       */
+      if (!Number.isFinite(desired.x) || !Number.isFinite(desired.y)) return null
       const raw = ((desired.x - a.x) * dx + (desired.y - a.y) * dy) / lengthSq
       const parameter = clamp(raw, bounds.min, bounds.max)
       const point = evaluate(parameter)
+      if (!Number.isFinite(parameter) || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return null
       void options
       // 只有射线/线段会截断；直线的参数域是整条实轴。
       const clamped = parameter !== raw || !Number.isFinite(raw)
@@ -291,9 +299,17 @@ export function rayConstraint(id: string, a: Coordinate, b: Coordinate): PlanarC
 function circularConstraint(kind: "circle" | "arc", id: string, center: Coordinate, radius: number, startAngle: number, endAngle: number): PlanarConstraint {
   const safeRadius = Math.abs(radius)
   const stable = safeRadius > EPSILON
+  const span = endAngle - startAngle
+  /**
+   * 圆弧的参数域必须**有序**：顺时针弧（`span < 0`）的 `[endAngle, startAngle]` 才是升序区间。
+   * 原样返回 `{min: startAngle, max: endAngle}` 会让下游 `clamp(parameter, min, max)` 得到一个
+   * 恒等于 max 的"夹取"，滑块窗口也会拿到倒过来的区间。
+   */
   const bounds: ParameterBounds = kind === "circle"
     ? { min: 0, max: TWO_PI, wrap: true }
-    : { min: startAngle, max: endAngle, wrap: false }
+    : span >= 0
+      ? { min: startAngle, max: endAngle, wrap: false }
+      : { min: endAngle, max: startAngle, wrap: false }
 
   const pointAt = (angle: number): Coordinate => ({ x: center.x + safeRadius * Math.cos(angle), y: center.y + safeRadius * Math.sin(angle) })
   const evaluate = (parameter: number): Coordinate | null => finitePoint(pointAt(parameter))
@@ -303,13 +319,16 @@ function circularConstraint(kind: "circle" | "arc", id: string, center: Coordina
    * 落在外面时不属于弧，此时最近点一定在某一端点上 —— 直接比两端的**欧氏距离**。
    * （不能比角度差：`delta` 在 [0, 2π) 上，弧外靠近起点的角度算出来是接近 2π 的大数，
    *   按数值比较会错误地吸附到终点。）
+   *
+   * 返回的参数必须落在**弧自身的角度区间**内：`delta` 只是"从起点顺时针走过的量"，
+   * 对顺时针弧要整体减一个 2π 才是弧上的角度，否则参数会跑到 `[endAngle, startAngle]` 之外
+   *（甚至超过 2π），下游夹取时点会跳回端点。
    */
   const projectArc = (desired: Coordinate): { parameter: number; clamped: boolean } => {
     const angle = Math.atan2(desired.y - center.y, desired.x - center.x)
-    const span = endAngle - startAngle
     const delta = normalizeAngle(angle - startAngle)
     const inside = span >= 0 ? delta <= span : delta - TWO_PI >= span
-    if (inside) return { parameter: startAngle + delta, clamped: false }
+    if (inside) return { parameter: span >= 0 ? startAngle + delta : startAngle + delta - TWO_PI, clamped: false }
     const startDistance = pointDistance(pointAt(startAngle), desired)
     const endDistance = pointDistance(pointAt(endAngle), desired)
     return startDistance <= endDistance ? { parameter: startAngle, clamped: true } : { parameter: endAngle, clamped: true }
@@ -319,9 +338,10 @@ function circularConstraint(kind: "circle" | "arc", id: string, center: Coordina
     kind,
     id,
     branchCount: 1,
-    parameterBounds: () => bounds,
+    parameterBounds: () => ({ ...bounds }),
     evaluate: (parameter) => evaluate(parameter),
     project(desired) {
+      if (!Number.isFinite(desired.x) || !Number.isFinite(desired.y)) return null
       if (!stable) {
         return { parameter: 0, branch: 0, point: { x: center.x, y: center.y }, distance: pointDistance(center, desired), converged: true, iterations: 0, clamped: false }
       }
@@ -336,7 +356,9 @@ function circularConstraint(kind: "circle" | "arc", id: string, center: Coordina
         parameter = resolved.parameter
         clamped = resolved.clamped
       }
+      if (!Number.isFinite(parameter)) return null
       const point = pointAt(parameter)
+      if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) return null
       return { parameter, branch: 0, point, distance: pointDistance(point, desired), converged: true, iterations: 1, clamped }
     },
     residual(point) {
@@ -1016,7 +1038,7 @@ export function implicitCurveConstraint(id: string, curve: ImplicitCurve, option
     kind: "implicitCurve",
     id,
     branchCount,
-    parameterBounds: bounds,
+    parameterBounds: (branch) => ({ ...bounds(branch ?? 0) }),
     evaluate: (parameter, branch) => (curve.parameterize ? finitePoint(curve.parameterize(parameter, branch ?? 0)) : null),
     project(desired, projectOptions) {
       const projection = projectToImplicitCurve(curve, desired, {

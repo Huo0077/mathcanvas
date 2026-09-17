@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { createEmptyDocument, validateDocument } from "@draw/dsl"
+import { createEmptyDocument, encodeMgeo, validateDocument } from "@draw/dsl"
 import { buildSolidTemplate } from "@draw/geometry-kernel"
 
 import { applyOperation, commitPatch, createFace3, createLine3, createPoint3, createPolyhedron3, getAffectedPrimitiveIds, getDependencyIndex, patchPoint3, recomputeDerivedObjects, resolvePolyhedronTopology, sectionPlaneThroughSource, topologicalRecomputeOrder, validatePatch } from "./index"
@@ -1073,6 +1073,30 @@ describe("scene graph operations", () => {
     expect(grouped.document.revision).toBe(1)
     expect(ungrouped.document.groups).toEqual([])
     expect(ungrouped.document.revision).toBe(2)
+  })
+
+  /**
+   * 体检发现的真缺陷：删对象时分组只"摘掉被删成员"，从不回收只剩一个成员的壳。
+   * 而 `validateDocument` 要求 `members.length >= 2`——于是删掉组里的一个对象之后，
+   * 文档**再也存不下去**（`encodeMgeo` 抛 "group has invalid members"）。
+   */
+  it("drops a group once a deletion leaves it with a single member", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [
+      { id: "point-1", type: "point", x: 1, y: 2 },
+      { id: "point-2", type: "point", x: 3, y: 4 },
+      { id: "point-3", type: "point", x: 5, y: 6 }
+    ]
+    const grouped = commitPatch(document, { op: "createGroup", group: { id: "group-1", members: ["point-1", "point-2", "point-3"] } })
+
+    const pruned = commitPatch(grouped.document, { op: "deleteObject", id: "point-3" })
+    expect(pruned.document.groups).toEqual([{ id: "group-1", members: ["point-1", "point-2"] }])
+    expect(encodeMgeo(pruned.document)).toContain("group-1")
+
+    const dissolved = commitPatch(pruned.document, { op: "deleteObject", id: "point-2" })
+    expect(dissolved.document.groups).toEqual([])
+    // 存得下去才是修好了：校验失败的文档在导出路径上会直接抛错。
+    expect(encodeMgeo(dissolved.document)).toContain("point-1")
   })
 
   it("aligns primitive bounds in one transaction", () => {

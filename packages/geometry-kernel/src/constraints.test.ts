@@ -83,6 +83,32 @@ describe("line constraint projection", () => {
     expect(result.lines.get(movable.id)).toEqual(movable)
   })
 
+  /**
+   * 体检发现：退化直线（a = b）没有方向，平行 / 垂直 / 共线在这些约束上都**无定义**，
+   * 但 `constraintResidual` 直接返回 0（"完美满足"），`projectLineConstraint` 又把第二条线原样返回，
+   * 于是求解器第一轮就宣布 `converged: true`——几何一动不动，却报告"约束已满足"，也没有任何诊断。
+   * 求解结果必须把这类约束**显式列出来**（`unsatisfiable`），而不是把"没做"伪装成"做到了"。
+   */
+  it("reports constraints that cannot be satisfied because a target line is degenerate", () => {
+    const degenerate = { id: "degenerate", type: "line" as const, a: { x: 0, y: 0 }, b: { x: 0, y: 0 } }
+    const movable = { id: "movable", type: "line" as const, a: { x: 1, y: 0 }, b: { x: 2, y: 1 } }
+    const healthy = { id: "healthy", type: "line" as const, a: { x: 0, y: 0 }, b: { x: 1, y: 0 } }
+    const result = solveLineConstraints(new Map([
+      [degenerate.id, degenerate],
+      [movable.id, movable],
+      [healthy.id, healthy]
+    ]), [
+      { id: "perpendicular-degenerate", type: "perpendicular", targets: [degenerate.id, movable.id] },
+      { id: "parallel-healthy", type: "parallel", targets: [healthy.id, movable.id] }
+    ])
+
+    expect(result.unsatisfiable).toEqual(["perpendicular-degenerate"])
+    expect(result.converged).toBe(true)
+    // 可解的约束照常生效；退化的那条不动几何（它没有可投影的方向）。
+    const solvedMovable = result.lines.get(movable.id)!
+    expect(Math.abs(solvedMovable.b.y - solvedMovable.a.y)).toBeCloseTo(0, 9)
+  })
+
   it("solves only the constraint component containing an active line", () => {
     const activeLine = { id: "active", type: "line" as const, a: { x: 0, y: 0 }, b: { x: 1, y: 1 } }
     const activeDependent = { id: "active-dependent", type: "line" as const, a: { x: 0, y: 2 }, b: { x: 1, y: 4 } }

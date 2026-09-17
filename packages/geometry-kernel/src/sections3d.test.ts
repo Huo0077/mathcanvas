@@ -76,6 +76,28 @@ describe("3D sections", () => {
     expect(section.status).toBe("insufficient-data")
   })
 
+  /**
+   * 体检发现的真缺陷：剖切平面**从不校验**（DSL 也只查"有限数"），于是 `{0,0,0}` 这个零法向会被当成
+   * 合法平面。零法向意味着"每个点都在平面上"（`|n·p + c| = 0 ≤ tol`），逐面环首尾相连后凑出一个
+   * 看起来正常的立方体面，状态报 `"polygon"`——**凭空造出了一片几何**。法向退化时必须报数据不足。
+   */
+  it("rejects a zero-normal cutting plane instead of fabricating a face", () => {
+    const zero = sectionPolyhedron3(cubeVertices, cubeFaces, { normal: { x: 0, y: 0, z: 0 }, constant: 0 })
+    expect(zero.status).toBe("insufficient-data")
+    expect(zero.points).toEqual([])
+    expect(zero.loops).toEqual([])
+
+    // 常数不为 0 时同样的输入会走另一条分支（逐面环为空 → none）：同一份输入给出两种结论本身就是缺陷。
+    const offset = sectionPolyhedron3(cubeVertices, cubeFaces, { normal: { x: 0, y: 0, z: 0 }, constant: 1 })
+    expect(offset.status).toBe("insufficient-data")
+    expect(offset.points).toEqual([])
+
+    // 极小的法向同样是退化（尺度相关的判据）：它和零法向没有可区分的几何意义。
+    const tiny = sectionPolyhedron3(cubeVertices, cubeFaces, { normal: { x: 1e-15, y: 0, z: 0 }, constant: 0 })
+    expect(tiny.status).toBe("insufficient-data")
+    expect(tiny.points).toEqual([])
+  })
+
   it("keeps section points on the cutting plane", () => {
     const plane: Plane3 = { normal: { x: 1, y: 1, z: 0 }, constant: -0.5 }
     const section = sectionPolyhedron3(cubeVertices, cubeFaces, plane)
