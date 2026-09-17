@@ -54,6 +54,8 @@ function formatNumber(value: number): string {
 /** 夹点捕捉半径（屏幕像素）与夹点视觉半径（按约 520px 宽的视口折算成窗口单位）。 */
 const DRAFT_GRIP_PIXELS = 8
 const DRAFT_GRIP_RADIUS_RATIO = 6 / 520
+/** 键盘移动夹点时的步长（绘图窗口的世界单位；Shift 加速 10 倍）。 */
+const DRAFT_KEYBOARD_STEP = 1
 
 /**
  * 2D 绘图的命令区由 DrawingViewport 持有状态，但**渲染在图纸之外**的工具栏里（见 `DraftControlsRow`）：
@@ -452,12 +454,46 @@ export function DrawingViewport({ view, sheetName, mode, document, selectedIds, 
     finishGripDrag(event)
   }
 
-  /** Tab 在命中的候选之间循环：多个特征点重叠时（端点压着交点）靠它选。 */
+  /**
+   * Tab 在命中的候选之间循环：多个特征点重叠时（端点压着交点）靠它选。
+   *
+   * 只接管**不带 Shift** 的 Tab：Shift+Tab 是键盘用户走出这个 SVG 的唯一退路，
+   * 连它一起 preventDefault 就成了键盘陷阱（WCAG 2.1.2）。
+   */
   const handleSvgKeyDown = (event: ReactKeyboardEvent<SVGSVGElement>) => {
-    if (mode !== "draft" || event.key !== "Tab" || !hover || hover.ranked.length < 2) return
+    if (mode !== "draft" || event.key !== "Tab" || event.shiftKey || !hover || hover.ranked.length < 2) return
     event.preventDefault()
     const index = (hover.index + 1) % hover.ranked.length
     setHover({ ...hover, index, point: hover.ranked[index].point, snap: hover.ranked[index].kind })
+  }
+
+  /** 键盘每次移动的**世界单位**步长（Shift 加速 10 倍）。 */
+  const keyboardMoveStep = (event: ReactKeyboardEvent<SVGElement>): { x: number; y: number } | null => {
+    const step = event.shiftKey ? DRAFT_KEYBOARD_STEP * 10 : DRAFT_KEYBOARD_STEP
+    if (event.key === "ArrowLeft") return { x: -step, y: 0 }
+    if (event.key === "ArrowRight") return { x: step, y: 0 }
+    // 世界坐标 y 朝上，方向键沿用屏幕直觉：↑ 增加 y。
+    if (event.key === "ArrowUp") return { x: 0, y: step }
+    if (event.key === "ArrowDown") return { x: 0, y: -step }
+    return null
+  }
+
+  /**
+   * 夹点的键盘通路。
+   *
+   * 夹点原来只是装饰用的 `<circle>`：键盘用户完全没法移动已选图元的端点（鼠标才行）。
+   * 这里让方向键走**与拖动同一条提交路径**（`createDragAction` + `onDragEnd`），
+   * 因此撤销粒度、几何约束、快照语义都与鼠标拖动完全一致。
+   */
+  const moveGripWithKeyboard = (event: ReactKeyboardEvent<SVGCircleElement>, primitive: PrimitiveSpec, handle: DragHandle) => {
+    if (mode !== "draft" || !onDragEnd) return
+    const delta = keyboardMoveStep(event)
+    if (!delta) return
+    event.preventDefault()
+    const origin = primitiveHandlePoints(primitive).find((entry) => entry.handle === handle)?.point
+    if (!origin) return
+    const action = createDragAction(primitive, handle, origin, { x: origin.x + delta.x, y: origin.y + delta.y })
+    if (action) onDragEnd(primitive.id, action)
   }
 
   /**
@@ -690,7 +726,7 @@ export function DrawingViewport({ view, sheetName, mode, document, selectedIds, 
       {/* 框选矩形：方向决定语义，视觉上也要能区分（窗口=实线，相交=虚线）。 */}
       {mode === "draft" && boxDrag && <rect className="engineering-drawing-box-select" data-draft-box={boxSelectionMode(boxDrag.anchor, boxDrag.current)} x={Math.min(boxDrag.anchor.x, boxDrag.current.x)} y={-Math.max(boxDrag.anchor.y, boxDrag.current.y)} width={Math.abs(boxDrag.current.x - boxDrag.anchor.x)} height={Math.abs(boxDrag.current.y - boxDrag.anchor.y)} />}
       {/* 夹点：只有选中且未锁定、并且宿主提供了拖动回调时才画。 */}
-      {mode === "draft" && onDragEnd && <g className="engineering-drawing-grips" aria-hidden="true">{draftPrimitives.filter((primitive) => selectedIds.includes(primitive.id)).flatMap((primitive) => primitiveHandlePoints(primitive).map(({ handle, point }) => <circle key={`${primitive.id}-${handle}`} data-draft-handle={handle} data-primitive-id={primitive.id} cx={point.x} cy={-point.y} r={span * DRAFT_GRIP_RADIUS_RATIO} onPointerDown={(event) => beginGripDrag(event, primitive, handle)} />))}</g>}
+      {mode === "draft" && onDragEnd && <g className="engineering-drawing-grips">{draftPrimitives.filter((primitive) => selectedIds.includes(primitive.id)).flatMap((primitive) => primitiveHandlePoints(primitive).map(({ handle, point }) => <circle key={`${primitive.id}-${handle}`} data-draft-handle={handle} data-primitive-id={primitive.id} cx={point.x} cy={-point.y} r={span * DRAFT_GRIP_RADIUS_RATIO} role="button" tabIndex={0} aria-label={`移动 ${primitive.label ?? primitive.id} 的夹点 ${handle}`} onPointerDown={(event) => beginGripDrag(event, primitive, handle)} onKeyDown={(event) => moveGripWithKeyboard(event, primitive, handle)} />))}</g>}
       {mode === "projection" && <g className="engineering-drawing-annotations">{(projectedDrawing?.annotations ?? []).map(renderAnnotation)}</g>}
     </svg>}
     {/* The drafting surface stays clickable while empty so the first 2D object can be placed. */}

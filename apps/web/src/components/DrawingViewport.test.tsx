@@ -356,6 +356,65 @@ describe("drawing viewport", () => {
     expect(onDragEnd).not.toHaveBeenCalled()
   })
 
+  /**
+   * 体检发现的真缺陷（可访问性）：夹点是纯装饰的 `<circle>`，没有角色 / 焦点 / 键盘操作，
+   * 键盘用户根本无法移动已选图元的端点——而且它们还挂在 `aria-hidden="true"` 的分组里，
+   * 屏幕阅读器连"有夹点"都读不到。现在它们是可聚焦的按钮，方向键按 1 个单位移动（Shift 加速 10 倍）。
+   */
+  it("lets the keyboard move a grip with the arrow keys", () => {
+    const onDragEnd = vi.fn()
+    render(<DrawingViewport view={draftView} sheetName="工程图纸" mode="draft" document={draftDocument()} selectedIds={["line-1"]} onSelect={() => {}} onDragEnd={onDragEnd} />)
+    const svg = screen.getByRole("img", { name: /模型视图/ })
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 400, height: 400, right: 400, bottom: 400, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect
+
+    const handleB = svg.querySelector<SVGCircleElement>('[data-draft-handle="b"]')!
+    expect(handleB.getAttribute("tabindex")).toBe("0")
+    expect(handleB.getAttribute("role")).toBe("button")
+    // 读给用户听的是对象的名字；程序化定位仍靠稳定 id。
+    expect(handleB.getAttribute("aria-label")).toContain("直线 1")
+    expect(handleB.getAttribute("data-primitive-id")).toBe("line-1")
+
+    // line-1 的 b 端点是 (2, 1)。
+    fireEvent.keyDown(handleB, { key: "ArrowRight" })
+    expect(onDragEnd).toHaveBeenLastCalledWith("line-1", { kind: "update", patch: { b: { x: 3, y: 1 } } })
+
+    fireEvent.keyDown(handleB, { key: "ArrowUp" })
+    expect(onDragEnd).toHaveBeenLastCalledWith("line-1", { kind: "update", patch: { b: { x: 2, y: 2 } } })
+
+    // Shift 加速 10 倍；其它键不动几何。
+    fireEvent.keyDown(handleB, { key: "ArrowLeft", shiftKey: true })
+    expect(onDragEnd).toHaveBeenLastCalledWith("line-1", { kind: "update", patch: { b: { x: -8, y: 1 } } })
+    const calls = onDragEnd.mock.calls.length
+    fireEvent.keyDown(handleB, { key: "Enter" })
+    expect(onDragEnd).toHaveBeenCalledTimes(calls)
+  })
+
+  /**
+   * 同一次体检：`Tab` 在多个候选之间循环时会 `preventDefault()`，而 Handler 不区分 Shift——
+   * 键盘用户**无法从这个 SVG 里走出去**（WCAG 2.1.2 键盘陷阱）。Shift+Tab 必须交还给浏览器。
+   */
+  it("leaves Shift+Tab to the browser instead of trapping focus", () => {
+    const document: GeometryDocument = {
+      ...createEmptyDocument("cad"),
+      primitives: [
+        { id: "s1", type: "segment", a: { x: 0, y: 0 }, b: { x: 30, y: 0 }, label: "线段 1" },
+        { id: "s2", type: "segment", a: { x: 0, y: -20 }, b: { x: 0, y: 20 }, label: "线段 2" }
+      ]
+    }
+    render(<DrawingViewport view={draftView} sheetName="工程图纸" mode="draft" document={document} selectedIds={[]} onSelect={() => {}} onCreateAt={() => {}} />)
+    const svg = screen.getByRole("img", { name: /模型视图/ })
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 400, height: 400, right: 400, bottom: 400, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect
+    fireEvent.pointerMove(svg, { clientX: 208, clientY: 192, pointerId: 1 })
+    const before = svg.querySelector("[data-draft-snap]")!.getAttribute("data-draft-snap")
+
+    // 未被取消（返回 true）→ 浏览器照常把焦点移出 SVG；候选也不该被换掉。
+    expect(fireEvent.keyDown(svg, { key: "Tab", shiftKey: true })).toBe(true)
+    expect(svg.querySelector("[data-draft-snap]")!.getAttribute("data-draft-snap")).toBe(before)
+
+    // 不带 Shift 的 Tab 仍然循环候选（既有功能保留）。
+    expect(fireEvent.keyDown(svg, { key: "Tab" })).toBe(false)
+  })
+
   it("does not offer draft handles when nothing is selected", () => {
     render(<DrawingViewport view={draftView} sheetName="工程图纸" mode="draft" document={draftDocument()} selectedIds={[]} onSelect={() => {}} onDragEnd={() => {}} />)
 

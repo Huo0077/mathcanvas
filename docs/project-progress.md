@@ -1165,7 +1165,7 @@ P7-1 至 P7-6 与工程工作台层次化改造 Task 1-7 均已完成；P4 Agent
 
 ## 验证证据
 
-> **当前基线（唯一权威，2026-09-17 在"全身大体检（四批）+ e2e 构建修复"之后实测）**：`npm.cmd test` **107 个测试文件、1182 个用例通过**；4 个 workspace 类型检查通过；ESLint **0 error、15 条 warning**；生产构建通过（Vite 仍提示主 bundle 超过 500 KB）；Playwright **83/83** 通过（**现在真的跑的是当前工作区的构建产物**，见下）。
+> **当前基线（唯一权威，2026-09-17 在"全身大体检（五批）+ e2e 构建修复"之后实测）**：`npm.cmd test` **107 个测试文件、1184 个用例通过**；4 个 workspace 类型检查通过；ESLint **0 error、15 条 warning**；生产构建通过（Vite 仍提示主 bundle 超过 500 KB）；Playwright **83/83** 通过（**现在真的跑的是当前工作区的构建产物**，见下）。
 > 下面按时间倒序列出各轮实测快照（数字是**当时**的取值，用于追溯与对比，不代表当前门禁）；例如 68 文件 / 698 用例与 Playwright 47/47 属于 2026-09-16 的 Task 15-18 那一轮。
 
 ### 全身大体检（2026-09-17）：并行只读审计 + 按严重度修复
@@ -1232,6 +1232,15 @@ P7-1 至 P7-6 与工程工作台层次化改造 Task 1-7 均已完成；P4 Agent
 | web | 投影视图的工程标注文本没有 `pointer-events: none`：SVG 文本默认吃指针事件，尺寸标注压在棱 / 点上时点击落不到图元（平面画布的标注一直是 `none`） | 标注分组加 `pointerEvents="none"`（标注本来就没有点击处理，只是读数） |
 
 - **第四批 RED 证据**：大体量布尔交集用例在旧实现下 `Test timed out in 5000ms`（新实现 6 次 96 段交集共 632ms）；相机记忆 `expected null to deeply equal { azimuth: 100, … }`；标注 `expected null to be 'none'`。
+
+**第五批（可访问性）**：
+
+| 类别 | 缺陷 | 修法 |
+| --- | --- | --- |
+| 可访问性 | 草稿模式的**夹点完全不可键盘操作**：它们是挂在 `aria-hidden="true"` 分组里的装饰 `<circle>`，没有角色、没有焦点、没有键盘通路——键盘用户根本无法移动已选图元的端点 | 夹点变成可聚焦的 `role="button"`（`tabIndex=0` + `aria-label` 读对象名、`data-primitive-id` 供程序化定位），方向键按 1 个世界单位移动、Shift 加速 10 倍；走的是**与拖动同一条提交路径**（`createDragAction` + `onDragEnd`），因此撤销粒度与几何约束完全一致 |
+| 可访问性 | `Tab` 在多个捕捉候选之间循环时无条件 `preventDefault()`，且不区分 Shift——**键盘用户走不出这个 SVG**（WCAG 2.1.2 键盘陷阱） | 只接管不带 Shift 的 `Tab`；Shift+Tab 交还浏览器（新用例断言事件未被取消、候选也不被换掉），无 Shift 的循环功能保留 |
+| 体检结论 | 审计说 `circle3`"没有重算分支、会留下旧几何" | **证伪**：`Circle3Primitive` 只有 `centerId`（引用）+ `normal` + `radius`，**不存圆心坐标的派生态**，因此没有东西会过期；`centerId` 的依赖边与删除保护都在 |
+| 体检结论 | 审计说 `DrawingSheetView` 有 observer churn | **证伪**：`ref={setWrapper}` 传的是 `useState` 的稳定 setter，`measure` 是 `useCallback([wrapper, paperWidth, paperHeight])`，ResizeObserver 只在节点 / 纸张变化时重建一次；`clientWidth/Height` 那个 effect 依赖不变也不会自激 |
 
 - **明确不修、只记录**（都写进 `docs/feature-catalog.md` 的"体检结论与已知限制"）：
   - 非凸实体不再提供"实体内"宿主（宁可报数据不足，也不伪造体外坐标）。
