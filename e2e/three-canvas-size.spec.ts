@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test"
 
+import { projectWorldPoint } from "./helpers/projection"
+
 /**
  * 用户报告："背景画布有时候太小了"。
  *
@@ -56,3 +58,84 @@ async function measure(page: import("@playwright/test").Page) {
     return { shell: shell.getBoundingClientRect().height, canvas: shell.querySelector("canvas")!.getBoundingClientRect().height }
   })
 }
+
+/**
+ * 用户报告"背景画布有时候太小了"的第二个来源：**画布会在交互中途被压矮**。
+ *
+ * 状态栏（页脚）原本是 `auto` 高、还被自动排进了左面板那一列（240px 宽），
+ * 一段提示被挤成 6~7 行、页脚 116px；指针一悬停到剖面预览上，提示变长、页脚涨到 150px，
+ * 画布从 532px 掉到 498px——同一个屏幕坐标不再对应同一个世界点，
+ * 于是 pointermove 报"命中预览"、pointerup 却报"落空"，点不中就是这么来的。
+ *
+ * 这里量的是布局不变量，不依赖具体像素：文案变了画布不能变。
+ */
+test("keeps the canvas size when the status text changes", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await page.goto("/")
+  await page.getByRole("button", { name: "立体几何" }).click()
+
+  const scene = page.locator("[data-3d-scene]")
+  await page.getByRole("button", { name: "添加立方体" }).click()
+  await expect(page.getByText("立方体 1").first()).toBeVisible()
+
+  const prompt = page.locator(".status-bar-prompt")
+  const before = await measure(page)
+  const textBefore = await prompt.textContent()
+
+  // 指到默认剖切面的边界线上：状态栏提示换成更长的那条
+  const point = await projectWorldPoint(page, { x: 2, y: 0, z: 0 })
+  await page.mouse.move(point.x, point.y)
+  await expect(scene).toHaveAttribute("data-preview-hovering", "true")
+  await expect(prompt).not.toHaveText(textBefore ?? "")
+
+  const after = await measure(page)
+  expect(after.shell).toBeCloseTo(before.shell, 0)
+  expect(after.canvas).toBeCloseTo(before.canvas, 0)
+
+  // 状态栏自己横跨工作台整宽，而不是被挤进第一列；文案放不下时它自己滚动，不外溢。
+  const bar = await page.evaluate(() => {
+    const element = document.querySelector(".workbench > .status-bar") as HTMLElement
+    const workbench = document.querySelector(".workbench") as HTMLElement
+    const barBox = element.getBoundingClientRect()
+    const workbenchBox = workbench.getBoundingClientRect()
+    return {
+      width: barBox.width,
+      workbenchWidth: workbenchBox.width,
+      overflow: element.scrollHeight - element.clientHeight,
+      workbenchOverflow: workbench.scrollHeight - workbenchBox.height
+    }
+  })
+  expect(bar.width).toBeGreaterThanOrEqual(bar.workbenchWidth - 2)
+  expect(bar.overflow).toBeLessThanOrEqual(1)
+  expect(bar.workbenchOverflow).toBeLessThanOrEqual(1)
+})
+
+/** 窄屏（右检查器整宽另起一行）时，检查器那一行必须有上界——否则它按内容长到 1700px，
+ *  把 `minmax(0, 1fr)` 的画布行压成 0，画布直接"消失"（实测 768×800 选中实体后高度就是 0）。 */
+test("keeps a usable canvas height at tablet widths", async ({ page }) => {
+  for (const width of [960, 900, 768, 700]) {
+    await page.setViewportSize({ width, height: 800 })
+    await page.goto("/")
+    await page.getByRole("button", { name: "立体几何" }).click()
+    await page.getByRole("button", { name: "添加立方体" }).click()
+    await expect(page.getByText("立方体 1").first()).toBeVisible()
+
+    const measured = await page.evaluate(() => {
+      const workbench = document.querySelector(".workbench") as HTMLElement
+      const shell = document.querySelector("[data-3d-scene]") as HTMLElement
+      const inspector = document.querySelector(".panel.right") as HTMLElement
+      return {
+        workbench: workbench.getBoundingClientRect().height,
+        shell: shell.getBoundingClientRect().height,
+        canvas: shell.querySelector("canvas")!.getBoundingClientRect().height,
+        inspectorScrolls: inspector.scrollHeight > inspector.clientHeight
+      }
+    })
+
+    expect(measured.canvas).toBeGreaterThanOrEqual(measured.shell - 1)
+    // 画布拿到的至少是工作台的 35%，而不是 0：属性多的对象也不能把画布挤没
+    expect(measured.shell).toBeGreaterThanOrEqual(measured.workbench * 0.35)
+    // 检查器超出部分由它自己滚动
+    expect(measured.inspectorScrolls).toBe(true)
+  }
+})

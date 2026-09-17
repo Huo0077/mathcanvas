@@ -12,7 +12,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .brand-mark { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: var(--color-accent); color: white; }
 .workspace-tabs { display: flex; gap: var(--space-2); }
 .workspace-tabs button[data-active="true"] { background: var(--color-accent-soft); color: var(--color-accent); border-color: transparent; }
-.workbench { display: grid; grid-template-columns: var(--panel-left-width) minmax(0, 1fr) var(--panel-right-width); grid-template-rows: minmax(0, 1fr) auto; min-height: 0; min-width: 0; }
+/* 状态栏那一行的高度是**常量**，不是 `auto`：3D 画布填满上面那一行（`minmax(0, 1fr)`），
+   所以页脚只要因为文案换行而变高，画布就会在交互中途被压矮。实测（1280×800，悬停剖面预览）：
+   状态栏 116px → 150px、画布 532px → 498px，同一个屏幕坐标不再对应同一个世界点，
+   于是 pointermove 报"命中预览"、pointerup 却报"落空"——点不中就是这么来的。
+   固定高度之后多出来的文案在自己那一行里滚动，画布不再受文案长度影响。 */
+.workbench { display: grid; grid-template-columns: var(--panel-left-width) minmax(0, 1fr) var(--panel-right-width); grid-template-rows: minmax(0, 1fr) var(--status-bar-height); min-height: 0; min-width: 0; }
 .toolbar { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: var(--space-2); padding: var(--space-3) var(--space-5); background: var(--color-panel); border-bottom: 1px solid var(--color-border); }
 .toolbar .primary { background: var(--color-accent); border-color: var(--color-accent); color: white; }
 .panel { background: var(--color-panel); border-right: 1px solid var(--color-border); min-height: 0; min-width: 0; }
@@ -226,7 +231,14 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .drawing-viewport-input-hint { font-size: 0.68rem; color: var(--color-muted); }
 .drawing-viewport-input-error { font-size: 0.7rem; color: var(--color-warning); font-weight: 600; }
 .footer-note { grid-column: 1 / -1; padding: var(--space-2) var(--space-5); font-size: 0.75rem; color: var(--color-muted); background: var(--color-panel); border-top: 1px solid var(--color-border); }
-@media (max-width: 960px) { .workbench { grid-template-columns: 200px minmax(0, 1fr); } .panel.right { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--color-border); } }
+/* 窄屏时右侧检查器会整宽另起一行。这一行必须是**有上界**的：`auto` 会按内容一直长
+   （检查器里堆满属性卡片时能要 1000px 以上），把上面 `minmax(0, 1fr)` 的画布行压成 0——
+   实测 768×800 下选中一个立方体后 3D 画布高度就是 0，画布"消失"了。
+   给它 45% 的上限，超出的内容由检查器自己滚动（`.panel.right` 本来就会滚）。 */
+@media (max-width: 960px) { .workbench { grid-template-columns: 200px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 45%) var(--status-bar-height); } .panel.right { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--color-border); } }
+/* 提示在更窄的宽度下要多占一行，状态栏那一行就跟着加高——但每个断点内仍是常量。
+   实测"最长提示 + 坐标/对象/工作区"需要的高度：>1100px 52、901~1100px 66、700~900px 83、≤640px 100。 */
+@media (max-width: 900px) { .workbench { --status-bar-height: 92px; } }
 @media (max-width: 680px) { .topbar { align-items: flex-start; flex-direction: column; } .workspace-tabs { width: 100%; overflow-x: auto; } .workbench { display: block; } .panel, .panel.right { border: 0; border-bottom: 1px solid var(--color-border); } .properties { padding-bottom: var(--space-3); } .properties > .primitive-properties, .properties > .batch-properties { margin-inline: var(--space-3); padding: var(--space-3); } .graphics { min-height: 55vh; padding: var(--space-3); } .toolbar { padding: var(--space-3); } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; } }
 
@@ -480,7 +492,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .workspace-tabs-bar .workspace-tabs button { padding-inline: var(--space-3); }
   .ribbon-body { padding-inline: var(--space-3); }
   .ribbon.is-floating { top: 72px; }
-  .app-shell > .workbench { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; position: relative; }
+  /* 手机上一行放不下提示（提示本身 + 坐标/对象/工作区会折成 3~4 行）：把这一行也定成常量
+     （宽屏 52px），否则同样的"悬停/拖动改文案 → 画布变矮"会在触屏上重现。
+     放不下的部分由状态栏自己滚动，不参与外层布局。 */
+  .app-shell > .workbench { --status-bar-height: 108px; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) var(--status-bar-height); position: relative; }
   .workbench-mobile-controls { grid-column: 1; grid-row: 1; display: flex; justify-content: flex-end; gap: var(--space-2); min-height: 44px; padding: var(--space-1) var(--space-2); background: var(--color-panel); border-bottom: 1px solid var(--color-border); }
   .workbench-mobile-controls button { min-height: 36px; padding-inline: var(--space-3); font-size: 0.76rem; }
   .app-shell > .workbench > .panel { display: none; position: absolute; z-index: 5; top: 44px; bottom: 48px; width: min(var(--panel-right-width), calc(100vw - 32px)); max-height: none; overflow: auto; border: 1px solid var(--color-border); box-shadow: var(--shadow-panel); }
@@ -505,7 +520,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .engineering-drawing-toolbar { padding: 0 var(--space-2); }
   .drawing-zoom-readout { font-size: 0.68rem; }
 }
-.status-bar { display: flex; flex-wrap: wrap; gap: var(--space-4); padding: var(--space-2) var(--space-5); color: var(--color-muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+/* 状态栏横跨工作台整宽：之前它被自动排进了第一列（左面板那一列，240px），
+   一段提示被挤成 6~7 行、页脚高 116px——既是画布被压矮的直接来源，也让提示很难读。
+   `safe center`：正常时文案垂直居中；万一真放不下（窄屏长提示），退回顶部对齐以免上沿被裁掉。 */
+.status-bar { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-content: safe center; align-items: center; gap: var(--space-4); overflow-y: auto; padding: var(--space-2) var(--space-5); color: var(--color-muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
 .status-bar-prompt { color: var(--color-ink); font-weight: 600; }
 .status-bar-item[data-has-diagnostics="true"] { color: var(--color-warning); font-weight: 600; }
 .workbench-diagnostics { margin: var(--space-3); padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-panel); }

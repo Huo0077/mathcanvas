@@ -40,4 +40,8 @@
   --panel-left-width: 240px;
   --panel-right-width: 292px;
   --control-height: 38px;
+  /* 状态栏那一行的**固定**高度（见 global.css `.workbench` 的注释）：这一行必须是常量，
+     否则文案换行会把画布压矮，屏幕坐标与世界坐标的对应关系会在交互中途改变。
+     取值按"实测最长的一条提示 + 状态项在该宽度下需要的行数"来定，窄屏另有更大的值。 */
+  --status-bar-height: 72px;
 }

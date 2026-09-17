@@ -212,6 +212,8 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
   const [expressionError, setExpressionError] = useState<string | null>(null)
   const [logBase, setLogBase] = useState("10")
   const formulaRef = useRef<HTMLTextAreaElement>(null)
+  /** 插入模板后要等一帧再定位光标：把这一帧记下来，面板卸载时取消，避免对着已经不在的输入框聚焦。 */
+  const formulaFocusFrameRef = useRef<number | null>(null)
   const [annotationText, setAnnotationText] = useState("")
   const beginPreview = useSceneStore((state) => state.beginPreview)
   const previewParameter = useSceneStore((state) => state.previewParameter)
@@ -279,6 +281,11 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
   useEffect(() => {
     setAnnotationText(selectedPrimitive ? selectedPrimitive.label ?? selectedPrimitive.id : "")
   }, [selectedPrimitive?.id, selectedPrimitive?.label])
+
+  useEffect(() => () => {
+    if (formulaFocusFrameRef.current !== null) window.cancelAnimationFrame(formulaFocusFrameRef.current)
+    formulaFocusFrameRef.current = null
+  }, [])
 
   useEffect(() => {
     if (!animationPlaying) animationRef.current = { ...animationRef.current, value: animationValue, mode: animationMode, playing: false, speed: Math.max((animationMaximum - animationMinimum) / 4, animationStep) }
@@ -460,7 +467,9 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
     } catch {
       setExpressionError("公式还需要补全")
     }
-    requestAnimationFrame(() => {
+    if (formulaFocusFrameRef.current !== null) window.cancelAnimationFrame(formulaFocusFrameRef.current)
+    formulaFocusFrameRef.current = window.requestAnimationFrame(() => {
+      formulaFocusFrameRef.current = null
       formulaRef.current?.focus()
       formulaRef.current?.setSelectionRange(insertion.cursorStart, insertion.cursorEnd)
     })

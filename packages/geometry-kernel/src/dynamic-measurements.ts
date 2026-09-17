@@ -12,6 +12,10 @@ import { createDependencyGraph, type DependencyGraph } from "./dependency-graph"
  *   2. UI 层只需要"拉"和"推"两个入口：`readings()` 拉全量，`subscribe()` 推增量。
  *      渲染层永远不自己算几何，只读读数，于是画布与面板不可能显示不一致的值。
  *
+ * 现状：纯函数部分（`evaluatePlanarMeasurement` 及下面那些几何量）是生产路径，
+ * 应用与场景图都在用；订阅引擎 `createMeasurementEngine` 尚未接线，
+ * 详见本文件"测量引擎"一节开头的说明。
+ *
  * 状态语义（与 3D 测量保持一致）：
  *   valid              有确定的值
  *   degenerate         几何退化（重合点、零向量、三点共线导致面积为零）
@@ -262,6 +266,22 @@ export function evaluatePlanarMeasurement(measurement: PlanarMeasurement, resolv
 // ---------------------------------------------------------------------------
 // 测量引擎（属性监听器）
 // ---------------------------------------------------------------------------
+/*
+ * ⚠️ 未接入的公开 API：`createMeasurementEngine` 目前**没有生产调用者**。
+ *
+ * 应用里的测量走的是场景图那条路：测量是依赖图的叶子，`recomputeDerivedObjects`
+ * 在每次改动后统一重算，读数由 `evaluatePlanarMeasurement` 算出
+ * （见 `packages/scene-graph/src/operations.ts` 的 `recomputeMeasurements` 与 `apps/web/src/App.tsx`）。
+ * 所以"测量会不会被漏算"由场景图的剪枝保证，不靠这里的订阅。
+ *
+ * 留着的理由：它提供的是另一条通道——**拉（`readings()`）推（`subscribe()`）**、
+ * 变化判定以"上一次对外报告的值"为基准（连续小幅漂移会累积到容差后上报，而不是被逐步吞掉）、
+ * 并且自带状态迁移（valid ↔ 退化）的区分。将来若要做"读数表实时刷新"或"离线导出读数序列"，
+ * 正确的接线方式是：把**同一个** `DependencyGraph` 通过 `options.graph` 传进来（不要各建一张图），
+ * 在几何改动后调用 `update(changedIds)`，UI 只处理 `changed` / `statusChanged`。
+ *
+ * 接线之前不要在两个地方各算一遍读数：那会让同一个测量出现两个真值来源。
+ */
 
 export interface MeasurementChangeSet {
   /** 本次重算涉及的全部读数（按测量定义顺序）。 */
@@ -301,6 +321,7 @@ export interface MeasurementEngineOptions {
   tolerance?: number
 }
 
+/** 建一个测量引擎。注意：**当前没有生产调用者**，接线方式见上方"未接入的公开 API"说明。 */
 export function createMeasurementEngine(options: MeasurementEngineOptions): MeasurementEngine {
   const graph = options.graph ?? createDependencyGraph()
   const tolerance = options.tolerance ?? 1e-9

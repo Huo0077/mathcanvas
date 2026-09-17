@@ -3,6 +3,7 @@ import * as THREE from "three"
 import type { ConePrimitive, CubePrimitive, Edge3Primitive, Face3Primitive, GeometryDocument, Line3Primitive, Plane3Primitive, Point3Primitive, Polyhedron3Primitive, PrimitiveSpec, PyramidPrimitive, CylinderPrimitive, Ray3Primitive, SectionPrimitive, Segment3Primitive, Vector3 } from "@draw/dsl"
 import { dihedralAngleDegrees, host3FromPrimitive, unfoldPolyhedron3, type DihedralMarker3, type Host3, type Host3Parameter, type UnfoldLayout3 } from "@draw/geometry-kernel"
 import { resolveMeasurementVisual } from "./measurementVisuals"
+import { syncOverlay } from "./overlaySync"
 import type { SceneControlMode } from "./statusPrompts"
 import { getDependencyIndex, isFreeDraggable3, planeThroughPoints, resolveDihedralMarker3, resolvePolyhedronTopology, sectionSourceVertices, templateTopologyIds } from "@draw/scene-graph"
 
@@ -1486,41 +1487,53 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     const render = () => {
       syncPointHandleScales()
       applyGridPlacement()
+      const bounds = renderer.domElement.getBoundingClientRect()
       const overlay = measurementOverlayRef.current
       if (overlay) {
-        overlay.replaceChildren()
-        const bounds = renderer.domElement.getBoundingClientRect()
-        for (const visual of measurementVisuals) {
-          const projected = new THREE.Vector3(visual.position.x, visual.position.y, visual.position.z).project(camera)
-          const visible = projected.z >= -1 && projected.z <= 1
-          if (!visible) continue
-          const label = globalThis.document.createElement("div")
-          label.className = "three-measurement-label"
-          label.dataset.measurementId = visual.id
-          label.setAttribute("role", "status")
-          label.textContent = visual.label
-          label.style.left = `${(projected.x * 0.5 + 0.5) * bounds.width}px`
-          label.style.top = `${(-projected.y * 0.5 + 0.5) * bounds.height}px`
-          overlay.appendChild(label)
-        }
+        syncOverlay(
+          overlay,
+          measurementVisuals.map((visual) => {
+            const projected = new THREE.Vector3(visual.position.x, visual.position.y, visual.position.z).project(camera)
+            return {
+              key: visual.id,
+              text: visual.label,
+              visible: projected.z >= -1 && projected.z <= 1,
+              left: (projected.x * 0.5 + 0.5) * bounds.width,
+              top: (-projected.y * 0.5 + 0.5) * bounds.height,
+              dataset: { measurementId: visual.id }
+            }
+          }),
+          () => {
+            const label = globalThis.document.createElement("div")
+            label.className = "three-measurement-label"
+            label.setAttribute("role", "status")
+            return label
+          }
+        )
       }
       const labelOverlay = pointLabelOverlayRef.current
       if (labelOverlay) {
-        labelOverlay.replaceChildren()
-        const bounds = renderer.domElement.getBoundingClientRect()
-        for (const primitive of visiblePointLabels) {
-          const projected = new THREE.Vector3(primitive.position.x, primitive.position.y, primitive.position.z).project(camera)
-          if (projected.z < -1 || projected.z > 1) continue
-          const label = globalThis.document.createElement("span")
-          label.className = "three-point-label"
-          label.dataset.pointLabel = primitive.label ?? primitive.id
-          label.dataset.pointId = primitive.id
-          label.textContent = primitive.label ?? primitive.id
-          // The marker radius is a constant pixel size, so the caption is offset in pixels too.
-          label.style.left = `${(projected.x * 0.5 + 0.5) * bounds.width + 10}px`
-          label.style.top = `${(-projected.y * 0.5 + 0.5) * bounds.height - 10}px`
-          labelOverlay.appendChild(label)
-        }
+        syncOverlay(
+          labelOverlay,
+          visiblePointLabels.map((primitive) => {
+            const projected = new THREE.Vector3(primitive.position.x, primitive.position.y, primitive.position.z).project(camera)
+            const label = primitive.label ?? primitive.id
+            return {
+              key: primitive.id,
+              text: label,
+              visible: projected.z >= -1 && projected.z <= 1,
+              // 点标记的半径是固定像素，所以标注也按像素偏移，不随缩放漂移。
+              left: (projected.x * 0.5 + 0.5) * bounds.width + 10,
+              top: (-projected.y * 0.5 + 0.5) * bounds.height - 10,
+              dataset: { pointLabel: label, pointId: primitive.id }
+            }
+          }),
+          () => {
+            const label = globalThis.document.createElement("span")
+            label.className = "three-point-label"
+            return label
+          }
+        )
       }
       if (sceneShell) {
         sceneShell.dataset.cameraDistance = cameraStateRef.current.distance.toFixed(2)

@@ -951,10 +951,18 @@ export function sectionMaterialization(document: GeometryDocument, sectionId: st
   return primitives
 }
 
-function syncTemplateTopology(primitives: PrimitiveSpec[]): void {
+/**
+ * 把模板实体生成的顶点位置同步回模板参数。
+ *
+ * `dirty` 给定时**只处理参数真的进了脏集的模板**：旧实现每次重算都无条件重跑
+ * `buildSolidTemplate` 并覆盖全部生成顶点——既让每次操作都付 O(模板面数) 的开销，
+ * 也会把任何绕过 `updatePrimitive` 的顶点位移静默抹掉。
+ */
+function syncTemplateTopology(primitives: PrimitiveSpec[], dirty?: Set<string>): void {
   const primitiveMap = new Map(primitives.map((primitive) => [primitive.id, primitive]))
   for (const polyhedron of primitives) {
     if (polyhedron.type !== "polyhedron3" || polyhedron.construction?.kind !== "template") continue
+    if (dirty && !polyhedron.construction.sourceIds.some((id) => dirty.has(id))) continue
     const source = polyhedron.construction.sourceIds.map((id) => primitiveMap.get(id)).find((candidate): candidate is TemplateSolidPrimitive => Boolean(candidate && ["cube", "pyramid", "cylinder", "cone"].includes(candidate.type)))
     if (!source || source.type !== polyhedron.construction.templateId) continue
     const result = buildSolidTemplate(source, createBuilderContext(source.id))
@@ -1018,7 +1026,7 @@ export function recomputeDerivedObjects(document: GeometryDocument, changedIds?:
   }
   // 受约束的 point3 不再需要"最多重跑 N 遍直到不动"的多趟循环：
   // 主重算按拓扑序走，且每算完一个对象就更新查找表，一趟即可收敛。
-  syncTemplateTopology(projectedPrimitives)
+  syncTemplateTopology(projectedPrimitives, changedIds === undefined ? undefined : new Set(changedIds))
   const circles = new Map(
     projectedPrimitives
       .filter((primitive): primitive is Extract<PrimitiveSpec, { type: "circle" }> => primitive.type === "circle")

@@ -48,12 +48,13 @@ test("explains the section preview and creates a section when it is clicked", as
   await expect(prompt).toContainText("默认剖切平面")
   await expect(prompt).toContainText("点击即创建截面")
   /**
-   * 点击前**按当前布局重新投影**：悬停会改状态栏文案，页脚可能因此变高一行，
+   * 就用**同一个**坐标按下去，不重新投影。以前不行：悬停会改状态栏文案，页脚因此变高一行，
    * 而 3D 画布是填满所在网格行的——画布一被压矮，同一个屏幕坐标就不再对应同一个世界点，
-   * 点击就会落到预览之外（实测：pointermove 说 hovering=true，pointerup 却是 off）。
+   * 点击必然落到预览之外（实测指针移动报 hovering=true、抬起却是 off）。
+   * 现在状态栏那一行是常量高度（`--status-bar-height`），
+   * 对应的不变量在 three-canvas-size.spec.ts 的"keeps the canvas size when the status text changes"里守着。
    */
-  const click = await grabPoint(page)
-  await page.mouse.click(click.x, click.y)
+  await page.mouse.click(start.x, start.y)
 
   await expect(scene).toHaveAttribute("data-section-count", "1")
   // 立方体边长 2，过中心的水平截面是 4 边形
