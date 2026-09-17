@@ -1,5 +1,7 @@
 # Dynamic Graphing Platform Implementation Plan
 
+> **状态（2026-09-17 复核）**：本计划范围内的功能**已交付**——表达式语言扩充（三角 / 双曲 / 对数 / 常数别名，`packages/geometry-kernel/src/expression.ts`）、函数预设目录与预设下拉、点标签 A/B/C 自动命名与重命名、引用联动（依赖图重算 + 删除级联）都已进入产品（见 `docs/feature-catalog.md` 的「函数预设」「点名与重命名」条目）。本文件没有逐条复选框；本仓库的**单一进度记录**是 [`docs/project-progress.md`](../../project-progress.md)。
+
 ## Goal
 
 Deliver the first usable slice of the approved dynamic graphing design: a richer safe expression language with function presets, then add persistent point labels and reference-aware interactions without breaking existing `.mgeo` files.

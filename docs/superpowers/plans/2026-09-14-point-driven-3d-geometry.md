@@ -1,5 +1,7 @@
 # Point-Driven 3D Geometry Implementation Plan
 
+> **状态（2026-09-17 复核）**：本计划的 **9 个切片全部完成**（每个切片下都有一行 `**Status:** [x] …` 完成标注）。后续同一方向又落地了：绑定宿主（`hosts3.ts`：线 / 棱 / 面 / 平面 / 圆柱与圆锥侧面 / **实体内**体积）、交面 · 交线 · 交点三个独立图元、自动取景与相机跨工作区记忆、按签名增量同步、以及**背景与平面网格一格恒为 1 个世界单位**。本仓库的**单一进度记录**是 [`docs/project-progress.md`](../../project-progress.md)。
+
 > **For agentic workers:** Follow the repository testing and review workflow. Complete one slice at a time; do not mark a slice complete without its focused tests and recorded verification evidence.
 
 **Goal:** 将 P6 从四种固定参数化实体升级为点、线、面、拓扑驱动的高中三维几何工作区，同时保留参数化实体快捷模板和 `schemaVersion: "0.1"` 兼容性。

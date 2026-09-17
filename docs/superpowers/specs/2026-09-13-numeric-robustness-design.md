@@ -1,7 +1,7 @@
 # Math Kernel Numeric Robustness Design
 
 **Date:** 2026-09-13  
-**Status:** Approved for planning  
+**Status:** Implemented (reviewed 2026-09-17) — scaled numeric comparisons, explicit intersection classification and robust orientation tests are on the production path; the follow-up audit also fixed the ray/polyline tolerances that were still absolute. See [`docs/project-progress.md`](../../project-progress.md) for the current gate.  
 **Scope:** `packages/geometry-kernel` and the Scene Graph integration that consumes geometry results
 
 ## Goal

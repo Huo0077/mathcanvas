@@ -57,7 +57,7 @@ npm run test:e2e
 - 创建、选择、拖动、框选、Shift 多选、删除、锁定、分组和对齐。
 - 支持点、直线、线段、射线、折线、圆、圆弧、抛物线、椭圆、双曲线和函数图像。
 - 支持拖动图元本体及控制点；移动端点后，使用点 ID 的关联图元会自动更新。
-- 画布横向填充工作区，支持撤销/重做、显隐控制和本地草稿自动保存；默认中心为 `(0, 0)`，可使用鼠标中键拖动或 `Space + 左键拖动` 平移到更远坐标，并支持滚轮以指针为中心缩放以及画布右下角的「放大 / 缩小 / 重置视图」按钮（0.05×～40×，网格步长随缩放自适应）。
+- 画布横向填充工作区，支持撤销/重做、显隐控制和本地草稿自动保存；默认中心为 `(0, 0)`，可使用鼠标中键拖动或 `Space + 左键拖动` 平移到更远坐标，并支持滚轮以指针为中心缩放以及画布右下角的「放大 / 缩小 / 重置视图」按钮（0.05×～40×）。**网格是固定尺寸的**：一格恒为 1 个世界单位、每 10 格一条主线，缩放只改变**可见范围**（与 3D 背景坐标系同一套语义，见 `apps/web/src/sceneGrid.ts`）。
 
 ### 属性检查器
 
@@ -144,13 +144,12 @@ npm run test:e2e
 - 投影几何继续复用 P7 的 renderer-neutral 描述；隐藏的视图不参与导出，也不会生成伪造几何。
 - 旧 `.mgeo` 文件在解码时迁移为默认几何/尺寸/辅助线/注释图层、默认 A4 横向图纸和四个 P7 视图。
 
-### 动态演变与导出
+### 导出与约束诊断
 
-- 支持参数播放、暂停、停止、单次、循环和往返模式。
-- 动画帧使用临时状态，不逐帧污染撤销记录；停止或确认后再提交几何参数。
-- 支持 `.mgeo`、SVG、CSV 和 PNG 导出，并提供导出失败反馈；CAD 工程制图工作区额外支持 SVG、DXF、PDF 矢量导出，立体几何工作区仍禁用 SVG/PNG 投影导出并说明原因。
-- CAD 工程制图提供主视图、俯视图、左视图和轴测图，四视图共享稳定源 ID 与选择状态；工程标注从点/棱来源计算线性尺寸、角度和公差，并在来源变化后自动重算。
-- 约束列表显示满足状态、冲突信息和数值误差诊断，异常 Patch 会回滚。
+- 参数变化、拖动与依赖重算都由依赖图的**拓扑增量重算**驱动；动点由画布拖动与属性栏「路径参数」输入框两条**等价**通路驱动——原「动效演示」栏的滑块与播放按钮已按用户要求删除，逐帧播放的界面入口不再存在（内核里的动画计算模块保留并有单测）。
+- 支持 `.mgeo`、SVG、CSV 和 PNG 导出，并提供导出失败反馈；CSV 以 UTF-8 BOM 开头（Excel 打开中文标签不再乱码）；CAD 工程制图工作区额外支持 SVG、DXF、PDF 矢量导出（**导出全部视图**，PDF 对 WinAnsi 之外的字符替换成 `?` 而不是整体失败），立体几何工作区仍禁用 SVG/PNG 投影导出并说明原因。
+- CAD 工程制图提供主视图、俯视图、左视图和轴测图，四视图共享稳定源 ID 与选择状态；工程标注从点 / 棱来源计算线性尺寸、角度和公差，并在来源变化后自动重算。
+- 约束的残差、冲突与退化诊断在**内核**里（`constraints3d` / `solveLineConstraints`，含 2026-09-17 新增的"退化目标列入 `unsatisfiable`"）并有测试覆盖；右侧的约束列表面板已按用户要求移除，界面上不再有约束列表入口。
 
 ## 包结构
 
@@ -168,23 +167,21 @@ npm run build
 npm run test:e2e
 ```
 
-当前验证基线（2026-09-17，全身大体检十批、e2e 构建修复与平面网格固定之后实测）：`npm.cmd test` 为 107 个测试文件、1194 个用例通过；4 个 workspace 类型检查通过；ESLint 0 个 error、14 条 warning；Web 生产构建通过（Vite 因此仍提示主 bundle 超过 500 KB）；Playwright Chromium 84/84 通过（global setup 现在**按当前工作区重新构建** `build-check/mathcanvas-current` 再预览，因此这份结果对应的是工作区源码，而不是该目录里上一次构建的产物），覆盖 Ribbon、跨工作区操作、CAD 图纸填充与显式缩放、CAD 2D 绘图交互（命令条在图纸之外 / 固定坐标窗口 / 橡皮筋预览 / 端点与切点捕捉 / 栅格捕捉 / 夹点编辑 / 方向框选 / 坐标键入 / 线宽与命中带 / 偏移与修剪延伸）、工程制图的投影来源切换与投影、立体几何的自动交点 / 交线 / 交面预览与点击创建对应图元（`e2e/three-intersection-previews.spec.ts`）、截面虚线预览（只画交线与交点，不铺大剖切面）、**3D 视口的渲染管道不重建（编辑 / 选择 / 展开 / 拖动期间 renderer 只建一次）、场景内容按签名增量同步（展开与选中不再整场重建）、相机跨工作区保留、绑定点沿宿主拖动、自动取景（含"编辑时不抢视角"）、背景网格严格 1 格 = 1 世界单位（缩放只改变覆盖范围）、圆柱与圆锥默认 48 段、动点绑定宿主与「实体内」约束（越界夹回表面）、实体移动时绑定点跟随、四个模板的默认截面与 45° 倾斜、画布尺寸在文案变化与窄屏下都不被压缩、平面画布拖动动点时交点预览走增量（拖动不再卡顿）**，以及 1440px/768px/390px 视口。平面几何动点系统（曲线约束、依赖图拓扑重算、平面动态测量、轨迹分支切分、删除级联）当前由单测与 App 用例覆盖，另有 `e2e/planar-drag-performance.spec.ts` 守住拖动增量、`e2e/planar-connected-point-drag.spec.ts` 守住"动点与连线相连时点仍然抓得住、拖轨道只带动动点"。Vitest 的 jsdom 3D 测试仍会输出 WebGL context 未实现提示。首次运行需先执行 `npx playwright install chromium`，否则会报缺少浏览器可执行文件。
+当前验证基线（2026-09-17，全身大体检十批、e2e 构建修复与平面网格固定之后实测）：`npm.cmd test` 为 107 个测试文件、1194 个用例通过；4 个 workspace 类型检查通过；ESLint 0 个 error、14 条 warning；Web 生产构建通过（Vite 因此仍提示主 bundle 超过 500 KB）；Playwright Chromium 84/84 通过（global setup 现在**按当前工作区重新构建** `build-check/mathcanvas-current` 再预览，因此这份结果对应的是工作区源码，而不是该目录里上一次构建的产物），覆盖 Ribbon、跨工作区操作、CAD 图纸填充与显式缩放、CAD 2D 绘图交互（命令条在图纸之外 / 固定坐标窗口 / 橡皮筋预览 / 端点与切点捕捉 / 栅格捕捉 / 夹点编辑 / 方向框选 / 坐标键入 / 线宽与命中带 / 偏移与修剪延伸）、工程制图的投影来源切换与投影、立体几何的自动交点 / 交线 / 交面预览与点击创建对应图元（`e2e/three-intersection-previews.spec.ts`）、截面虚线预览（只画交线与交点，不铺大剖切面）、**3D 视口的渲染管道不重建（编辑 / 选择 / 展开 / 拖动期间 renderer 只建一次）、场景内容按签名增量同步（展开与选中不再整场重建）、相机跨工作区保留、绑定点沿宿主拖动、自动取景（含"编辑时不抢视角"）、背景与平面网格严格 1 格 = 1 世界单位（缩放只改变覆盖范围；平面侧由 `e2e/planar-grid-cell.spec.ts` 在浏览器里量相邻网格线的世界间距恒为 1）、圆柱与圆锥默认 48 段、动点绑定宿主与「实体内」约束（越界夹回表面）、实体移动时绑定点跟随、四个模板的默认截面与 45° 倾斜、画布尺寸在文案变化与窄屏下都不被压缩、平面画布拖动动点时交点预览走增量（拖动不再卡顿）**，以及 1440px/768px/390px 视口。平面几何动点系统（曲线约束、依赖图拓扑重算、平面动态测量、轨迹分支切分、删除级联）当前由单测与 App 用例覆盖，另有 `e2e/planar-drag-performance.spec.ts` 守住拖动增量、`e2e/planar-connected-point-drag.spec.ts` 守住"动点与连线相连时点仍然抓得住、拖轨道只带动动点"。Vitest 的 jsdom 3D 测试仍会输出 WebGL context 未实现提示。首次运行需先执行 `npx playwright install chromium`，否则会报缺少浏览器可执行文件。
 
 工程工作台 Task 1-7 的聚焦验证：`LayerTree`/`DrawingTree`/`CommandBar`/`EngineeringWorkbench`/`DrawingViewport`/`DrawingSheetView`/`EngineeringInspector` 等新增测试文件 7 个；DSL 与 Scene Graph 图层/图纸操作 3 个测试文件、41 个用例；`e2e/engineering-workbench.spec.ts` 覆盖旧文档迁移、2D 绘图写入活动图层、图层隐藏、刷新后布局保持、隐藏视图不导出、键盘操作、图纸填充与显式缩放（Task 14）。
 
 ## 项目文档
 
-- [项目进度](docs/project-progress.md)：记录各阶段完成项、验证证据和下一步计划。
+- [项目进度](docs/project-progress.md)：**单一进度记录**——各阶段完成项、每轮 RED→GREEN 证据、验证数字、误报清单与下一步。
 - [功能目录](docs/feature-catalog.md)：记录当前可用能力、规划能力和明确限制。
+- [主实施计划](docs/multimodal-math-engine-implementation-plan.md)：P0–P8 的阶段划分与**逐阶段落地状态**（P4 / P5 已排除）。
 - [GitHub 调研](docs/research/graphing-tools.md)：记录对 GeoGebra、JSXGraph、function-plot 等同类项目的功能与架构调研。
-- [P6 v2 点驱动 3D 实施计划](docs/superpowers/plans/2026-09-14-point-driven-3d-geometry.md)：记录十个切片、接口、验证门槛和提交约定。
-- [P6 v2 点驱动 3D 设计规格](docs/superpowers/specs/2026-09-14-point-driven-3d-geometry-design.md)：记录点、线、面、拓扑和教学交互设计。
-- [P6 v3 测量质量设计规格](docs/superpowers/specs/2026-09-15-3d-measurement-quality-design.md)：记录测量可视化、二面角入口、撤销历史和验证门禁。
-- [工程工作台设计规格](docs/superpowers/specs/2026-09-15-engineering-workbench-design.md)：记录 2D/3D 混合 CAD 工作流、经典层次界面和文档模型。
-- [工程工作台层次化实施计划](docs/superpowers/plans/2026-09-15-engineering-workbench-hierarchy.md)：记录 Task 1-7 的接口、测试与验证门槛，以及 2026-09-16 的可用性修复（Task 15-18：绘图命令条出图纸、投影来源切换、截面/截线图元）。
-- [截面 / 截线图元交互设计](docs/superpowers/specs/2026-09-16-section-intersection-primitives-design.md)：记录截面与截线的两级预览、点击创建、`intersectionLine` 图元与面环求交的取舍（已实现）。
-- [Ribbon UI 设计规格](docs/superpowers/specs/2026-09-15-ribbon-ui-redesign.md)：记录共享 Ribbon 基线及后续平面几何、属性面板、CAD 画布和 3D 引导优化。
-- [Ribbon UI 实施计划](docs/superpowers/plans/2026-09-15-ribbon-ui-redesign.md)：Task 1-6 为已完成基线，Task 7-13 后续优化与 Task 14 工程制图视觉重做均已实现并验证。
+- [制图交互调研](docs/research/drafting-interaction-patterns.md)：记录 AutoCAD / 制图类工具的捕捉、夹点、命令流程等交互模式。
+- [第一周验收记录](docs/acceptance/2026-09-12-week-one.md)：2026-09-12 当周的历史验收快照（数字为当时值）。
+- **实施计划**（`docs/superpowers/plans/`，共 14 份，全部带 2026-09-17 复核状态）：MVP 基础、动态数学平台、公式画布、下一步数学平台、数值鲁棒性、P3+P6、点驱动 3D、3D 测量质量、工程工作台层次化、P7 工程制图、Ribbon UI、3D Auto-Fit、3D 动点宿主、3D 渲染管道去重建化。
+- **设计规格**（`docs/superpowers/specs/`，共 10 份，全部带 2026-09-17 复核状态）：动态绘图平台、数值鲁棒性、点驱动 3D、3D 测量质量、工程工作台、P7 工程制图、Ribbon UI、截面 / 截线图元、3D 视口与内核重构、平面动点系统。
+- 重点可以按需翻阅：[点驱动 3D 实施计划](docs/superpowers/plans/2026-09-14-point-driven-3d-geometry.md)、[工程工作台层次化实施计划](docs/superpowers/plans/2026-09-15-engineering-workbench-hierarchy.md)、[截面 / 截线图元交互设计](docs/superpowers/specs/2026-09-16-section-intersection-primitives-design.md)、[3D 视口与内核重构设计](docs/superpowers/specs/2026-09-17-3d-viewport-kernel-refactor-design.md)、[平面动点系统设计](docs/superpowers/specs/2026-09-17-dynamic-point-engine-design.md)。
 
 ## 协作约定
 
@@ -195,4 +192,9 @@ npm run test:e2e
 
 ## 下一步
 
-Ribbon 基线、2026-09-16 后续 UI 优化（Task 7-13）、工程制图视觉重做（Task 14）、CAD 2D 绘图交互重做与工程制图可用性修复（Task 15-18：2D 绘图命令条出图纸、投影来源切换、截面/截线虚线预览与点击创建）均已完成并通过当前自动化验证。下一批候选方向：剖切平面可调（法向量与偏移量）、等长/等角约束（需要先定角度表示）、圆/圆弧的修剪（拆成多段圆弧）、B-rep/DWG 导入与自动尺寸布局；这些尚未编码。P4 Agent 与 P5 题图解析仍在排除范围内。
+2026-09-17 的**全身大体检**（4 路只读审计 + 性质测试 + 十批修复 + 平面网格固定）已完成并通过当前自动化验证：确认的缺陷（含 5 处阻塞级）全部修复，误报逐条记录，详见 [`docs/project-progress.md`](docs/project-progress.md) 的「全身大体检」与「体检收口」两节。
+
+下一批候选方向：
+1. 剖切平面可调（法向量与偏移量）、等长 / 等角约束（需要先定角度表示）、圆与圆弧的修剪（拆成多段圆弧）、B-rep / DWG 导入与自动尺寸布局——这些尚未编码。
+2. 体检中"只记录未改"的三项：`pointercancel` 目前提交而非中止拖动（需先确认触摸平台的手势语义）；依赖图对 3/4 目标约束（共线 / 共面）不建边（属语义变更，会连带收紧"对齐锁定对象"的拒绝条件）；`boolean3d.compact` 每面一次 `sort + join` 的签名拼串（微小开销）。
+3. P4 Agent 与 P5 题图解析仍在排除范围内。

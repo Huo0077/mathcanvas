@@ -1,6 +1,6 @@
 # Engineering Workbench Hierarchy Design
 
-> Status: Implemented (Task 1-7 delivered and verified; the 2026-09-16 usability amendments are recorded in "Amendments" at the end of this document)
+> Status: Implemented (Task 1-7 delivered and verified; the 2026-09-16 usability amendments are recorded in "Amendments" at the end of this document). Reviewed 2026-09-17: the doc-set audit added engineering annotations (linear / angular / tolerance), full-view SVG / DXF / PDF export (no 4-view truncation) and keyboard-operable grips; see `docs/project-progress.md` for the current gate.
 >
 > This design follows the approved direction: 2D drafting and 3D-to-engineering-drawing workflows have equal priority, while the existing geometry and projection kernels remain reusable.
 

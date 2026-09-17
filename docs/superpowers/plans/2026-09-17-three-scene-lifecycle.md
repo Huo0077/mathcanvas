@@ -1,5 +1,7 @@
 # 3D 渲染管道去重建化 实施计划（切片 1A-1）
 
+> **状态（2026-09-17 复核）**：**已完成**（含紧随其后的 1A-1b）——渲染器在一次挂载内只建一次、内容同步签名抽成纯函数、`data-scene-builds` / `data-scene-syncs` 读数都在产品里；本片计划末尾列出的"D 组仍未做"三项（按图元增量同步、相机跨工作区保留、`threeScene.tsx` 按职责拆分）随后也逐项做完（见 `docs/project-progress.md` 的「场景增量同步与相机记忆」与「threeScene 按职责拆成独立模块」两节）。同方向最新进展：预览内容签名会带 `label` / `focused`，`cameraDragMode` 让 Shift 中途按下也能平移。本仓库的**单一进度记录**是 [`docs/project-progress.md`](../../project-progress.md)。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 让 3D 画布的 `WebGLRenderer`/canvas 在一次挂载内只创建一次，文档编辑、选中、拖动与展开动画都不再销毁重建渲染器；把"什么时候需要重新同步内容"变成可测的纯函数，并暴露 `data-scene-builds` / `data-scene-syncs` 读数。

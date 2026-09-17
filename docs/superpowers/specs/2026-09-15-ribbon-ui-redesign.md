@@ -1,7 +1,7 @@
 # MathCanvas Ribbon UI Redesign
 
 **Date:** 2026-09-15
-**Status:** Shared Ribbon baseline implemented and verified (2026-09-16); the 2026-09-16 follow-ups (Task 7-14, then the Task 15-18 CAD usability fixes recorded in `docs/superpowers/plans/2026-09-15-engineering-workbench-hierarchy.md`) are also implemented and verified. Unrelated planned UI work remains planned.
+**Status:** Shared Ribbon baseline implemented and verified (2026-09-16); the 2026-09-16 follow-ups (Task 7-14, then the Task 15-18 CAD usability fixes recorded in `docs/superpowers/plans/2026-09-15-engineering-workbench-hierarchy.md`) are also implemented and verified. Reviewed 2026-09-17: the constraint and agent panels were removed from the right column at the user's request (their data model is untouched), and the planar canvas grid is now a fixed one-world-unit grid. Unrelated planned UI work remains planned.
 
 ## Goal
 

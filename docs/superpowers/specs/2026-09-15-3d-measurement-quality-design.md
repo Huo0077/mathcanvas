@@ -1,5 +1,7 @@
 # 3D Measurement Visualization and Quality Baseline Design
 
+> **状态（2026-09-17 复核）**：**已实现**——ESLint 基线与确定性门禁、撤销历史上限、纯函数化的测量可视化、3D 标注与上下文引导都已进入产品（对应计划 [`2026-09-15-3d-measurement-quality.md`](../plans/2026-09-15-3d-measurement-quality.md)）。当前门禁见 [`docs/project-progress.md`](../../project-progress.md)。
+
 ## Goal
 
 完成当前 P6 v3 的三维教学测量可视化，同时修复上一轮审阅发现的质量门禁、Vite 启动和撤销历史风险。

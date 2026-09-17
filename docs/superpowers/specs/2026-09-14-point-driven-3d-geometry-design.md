@@ -1,7 +1,7 @@
 # 点驱动三维几何设计规格
 
 **日期：** 2026-09-14  
-**状态：** 方案 C 已确认，待分阶段实施  
+**状态：** 已全部实现（2026-09-17 复核）——9 个切片完成，另外追加了绑定宿主 / 实体内体积宿主、交面·交线·交点图元、自动取景与相机记忆、固定 1 单位网格。当前门禁见 [`docs/project-progress.md`](../../project-progress.md)。  
 **关联计划：** [`2026-09-14-point-driven-3d-geometry.md`](../plans/2026-09-14-point-driven-3d-geometry.md)  
 **关联调研：** [`graphing-tools.md`](../../research/graphing-tools.md)  
 **兼容目标：** Geometry DSL `schemaVersion: "0.1"`

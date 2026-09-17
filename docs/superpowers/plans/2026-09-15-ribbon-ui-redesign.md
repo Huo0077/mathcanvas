@@ -1,5 +1,7 @@
 # MathCanvas Ribbon UI Redesign Implementation Plan
 
+> **状态（2026-09-17 复核）**：本计划 **Task 1–14 全部完成**（统一 Ribbon、工作区 Tab Bar、可折叠 / 可固定、上下文 Inspector、动态状态栏、命名与 3D 引导优化），文件末尾记录的 **Task 15–18**（2D 绘图命令条出图纸、读数按视图单位定尺、投影来源、截面 / 截线创建）也已完成。**之后的变化**：右侧的约束面板与智能体面板按用户要求移除（数据保留），工程制图与 CAD 2D 绘图做了视觉与交互重做。本仓库的**单一进度记录**是 [`docs/project-progress.md`](../../project-progress.md)。
+
 > **For agentic workers:** Execute this plan task-by-task in the current session. Do not use subagent agents. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 将 MathCanvas 三个工作区统一为 40px Top Bar、32px Tab Bar、可折叠 Ribbon、100vh 三栏工作区、上下文 Inspector 和动态状态栏，并完成 2026-09-16 复核提出的命名、面板、工程画布及 3D 引导优化。

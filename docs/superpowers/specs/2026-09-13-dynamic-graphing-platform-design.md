@@ -1,7 +1,7 @@
 # 动态数学绘图平台设计规格
 
 **日期：** 2026-09-13  
-**状态：** 待用户审阅  
+**状态：** 已实现（2026-09-17 复核）——表达式语言扩充、函数预设、点标签与引用联动都已进入产品；**唯一没有落地的是本文里的「参数播放 / 暂停 / 停止 / 循环 / 往返」界面控制**：逐帧播放只剩首尾两帧可见，用户要求删除，2026-09-17 已把该面板与入口移除（内核算术模块保留并有单测），动点改由画布拖动与「路径参数」输入框驱动。对应计划 [`2026-09-13-dynamic-graphing-platform.md`](../plans/2026-09-13-dynamic-graphing-platform.md)。当前门禁见 [`docs/project-progress.md`](../../project-progress.md)。  
 **关联调研：** [`docs/research/graphing-tools.md`](../../research/graphing-tools.md)  
 **目标版本：** Geometry DSL `0.2`，兼容读取 `0.1`
 

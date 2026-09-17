@@ -1,5 +1,7 @@
 # P7 工程制图 MVP Implementation Plan
 
+> **状态（2026-09-17 复核）**：本计划的 **P7-1 〜 P7-6 全部完成**——投影内核（`projections3d.ts`）、renderer-neutral 的 `ProjectedDrawing`、四视图工作台、投影线与来源切换、工程标注（线性 / 角度 / 公差）、SVG / DXF / PDF 导出都已进入产品；工程工作台的层次化改造见 `2026-09-15-engineering-workbench-hierarchy.md`。两处后续变化：导出**不再截断到 4 个视图**，PDF 对 WinAnsi 之外的字符做替换而不是整体失败。本仓库的**单一进度记录**是 [`docs/project-progress.md`](../../project-progress.md)。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 为现有点驱动 3D 文档增加可同步、可选择、可导出的主视图、俯视图、左视图和轴测工程制图工作区。

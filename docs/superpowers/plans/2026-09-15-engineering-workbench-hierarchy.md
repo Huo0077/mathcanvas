@@ -1,5 +1,7 @@
 # Engineering Workbench Hierarchy Implementation Plan
 
+> **状态（2026-09-17 复核）**：本计划的 **Task 1–7 全部完成**——图层 / 图纸 / 视图文档模型、可撤销的图层与布局操作、工作台壳（CommandBar / StatusBar / EngineeringWorkbench）、模型树 · 图层树 · 图纸树、图纸视口与 2D 直接绘图、上下文 Inspector、迁移与 E2E 都在产品里；随后针对三条用户反馈补做的「Follow-up: CAD usability fixes」（2D 绘图命令组出图纸、投影来源切换、截面 / 截线虚线预览与点击创建）也已完成。**之后又追加**：工程标注（线性 / 角度 / 公差）、SVG / DXF / PDF 导出（现在导出全部视图）、夹点编辑与键盘操作。本仓库的**单一进度记录**是 [`docs/project-progress.md`](../../project-progress.md)。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 将 MathCanvas 的 CAD 工作区改造成同时支持 2D 直接绘图和 3D 投影制图的经典 CAD 分层工作台。
