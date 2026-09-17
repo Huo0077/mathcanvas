@@ -42,7 +42,7 @@ npm run build
 npm run test:e2e
 ```
 
-`test:e2e` 会构建 Web 应用，由 Playwright global setup 在同一 Node 进程中启动本地预览服务，测试结束后自动关闭。手动测试时，先运行 `npm run dev`，再在浏览器打开终端输出的地址。
+`test:e2e` 由 Playwright global setup **先按 `apps/web` 的 vite 配置重新构建** `build-check/mathcanvas-current`，再在同一 Node 进程中启动本地预览服务，测试结束后自动关闭——这样 e2e 验证的是当前工作区；手工验收时刷新 `127.0.0.1:4175` 上那份预览即可看到同一份产物。手动测试时，先运行 `npm run dev`，再在浏览器打开终端输出的地址。
 
 ### 文件保存与打开
 
@@ -168,7 +168,7 @@ npm run build
 npm run test:e2e
 ```
 
-当前验证基线（2026-09-17，动点与连线的命中顺序修复之后实测）：`npm.cmd test` 为 104 个测试文件、1139 个用例通过；4 个 workspace 类型检查通过；ESLint 0 个 error、15 条 warning；Web 生产构建通过（Vite 因此仍提示主 bundle 超过 500 KB）；Playwright Chromium 82/82 通过，覆盖 Ribbon、跨工作区操作、CAD 图纸填充与显式缩放、CAD 2D 绘图交互（命令条在图纸之外 / 固定坐标窗口 / 橡皮筋预览 / 端点与切点捕捉 / 栅格捕捉 / 夹点编辑 / 方向框选 / 坐标键入 / 线宽与命中带 / 偏移与修剪延伸）、工程制图的投影来源切换与投影、立体几何的自动交点 / 交线 / 交面预览与点击创建对应图元（`e2e/three-intersection-previews.spec.ts`）、截面虚线预览（只画交线与交点，不铺大剖切面）、**3D 视口的渲染管道不重建（编辑 / 选择 / 展开 / 拖动期间 renderer 只建一次）、场景内容按签名增量同步（展开与选中不再整场重建）、相机跨工作区保留、绑定点沿宿主拖动、自动取景（含"编辑时不抢视角"）、背景网格严格 1 格 = 1 世界单位（缩放只改变覆盖范围）、圆柱与圆锥默认 48 段、动点绑定宿主与「实体内」约束（越界夹回表面）、实体移动时绑定点跟随、四个模板的默认截面与 45° 倾斜、画布尺寸在文案变化与窄屏下都不被压缩、平面画布拖动动点时交点预览走增量（拖动不再卡顿）**，以及 1440px/768px/390px 视口。平面几何动点系统（曲线约束、依赖图拓扑重算、平面动态测量、轨迹分支切分、删除级联）当前由单测与 App 用例覆盖，另有 `e2e/planar-drag-performance.spec.ts` 守住拖动增量、`e2e/planar-connected-point-drag.spec.ts` 守住"动点与连线相连时点仍然抓得住、拖轨道只带动动点"。Vitest 的 jsdom 3D 测试仍会输出 WebGL context 未实现提示。首次运行需先执行 `npx playwright install chromium`，否则会报缺少浏览器可执行文件。
+当前验证基线（2026-09-17，全身大体检与 e2e 构建修复之后实测）：`npm.cmd test` 为 106 个测试文件、1164 个用例通过；4 个 workspace 类型检查通过；ESLint 0 个 error、15 条 warning；Web 生产构建通过（Vite 因此仍提示主 bundle 超过 500 KB）；Playwright Chromium 83/83 通过（global setup 现在**按当前工作区重新构建** `build-check/mathcanvas-current` 再预览，因此这份结果对应的是工作区源码，而不是该目录里上一次构建的产物），覆盖 Ribbon、跨工作区操作、CAD 图纸填充与显式缩放、CAD 2D 绘图交互（命令条在图纸之外 / 固定坐标窗口 / 橡皮筋预览 / 端点与切点捕捉 / 栅格捕捉 / 夹点编辑 / 方向框选 / 坐标键入 / 线宽与命中带 / 偏移与修剪延伸）、工程制图的投影来源切换与投影、立体几何的自动交点 / 交线 / 交面预览与点击创建对应图元（`e2e/three-intersection-previews.spec.ts`）、截面虚线预览（只画交线与交点，不铺大剖切面）、**3D 视口的渲染管道不重建（编辑 / 选择 / 展开 / 拖动期间 renderer 只建一次）、场景内容按签名增量同步（展开与选中不再整场重建）、相机跨工作区保留、绑定点沿宿主拖动、自动取景（含"编辑时不抢视角"）、背景网格严格 1 格 = 1 世界单位（缩放只改变覆盖范围）、圆柱与圆锥默认 48 段、动点绑定宿主与「实体内」约束（越界夹回表面）、实体移动时绑定点跟随、四个模板的默认截面与 45° 倾斜、画布尺寸在文案变化与窄屏下都不被压缩、平面画布拖动动点时交点预览走增量（拖动不再卡顿）**，以及 1440px/768px/390px 视口。平面几何动点系统（曲线约束、依赖图拓扑重算、平面动态测量、轨迹分支切分、删除级联）当前由单测与 App 用例覆盖，另有 `e2e/planar-drag-performance.spec.ts` 守住拖动增量、`e2e/planar-connected-point-drag.spec.ts` 守住"动点与连线相连时点仍然抓得住、拖轨道只带动动点"。Vitest 的 jsdom 3D 测试仍会输出 WebGL context 未实现提示。首次运行需先执行 `npx playwright install chromium`，否则会报缺少浏览器可执行文件。
 
 工程工作台 Task 1-7 的聚焦验证：`LayerTree`/`DrawingTree`/`CommandBar`/`EngineeringWorkbench`/`DrawingViewport`/`DrawingSheetView`/`EngineeringInspector` 等新增测试文件 7 个；DSL 与 Scene Graph 图层/图纸操作 3 个测试文件、41 个用例；`e2e/engineering-workbench.spec.ts` 覆盖旧文档迁移、2D 绘图写入活动图层、图层隐藏、刷新后布局保持、隐藏视图不导出、键盘操作、图纸填充与显式缩放（Task 14）。
 
