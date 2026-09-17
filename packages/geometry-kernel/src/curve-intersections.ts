@@ -7,10 +7,52 @@ import type { IntersectionResult } from "./types"
 
 export type SampledPrimitive = Extract<PrimitiveSpec, { type: "line" | "segment" | "ray" | "polyline" | "circle" | "arc" | "parabola" | "ellipse" | "hyperbola" | "function" }>
 
-function uniquePoints(points: Coordinate[], tolerance = 1e-4): Coordinate[] {
+/**
+ * 采样点云的尺度：并集包围盒对角线（图形有多大）与坐标量级（double 在该量级下的分辨率）。
+ */
+function cloudScale(clouds: readonly Coordinate[][]): { extent: number; magnitude: number } {
+  let minX = Number.POSITIVE_INFINITY
+  let minY = Number.POSITIVE_INFINITY
+  let maxX = Number.NEGATIVE_INFINITY
+  let maxY = Number.NEGATIVE_INFINITY
+  let magnitude = 0
+  for (const cloud of clouds) {
+    for (const point of cloud) {
+      if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) continue
+      minX = Math.min(minX, point.x)
+      maxX = Math.max(maxX, point.x)
+      minY = Math.min(minY, point.y)
+      maxY = Math.max(maxY, point.y)
+      magnitude = Math.max(magnitude, Math.abs(point.x), Math.abs(point.y))
+    }
+  }
+  if (!Number.isFinite(minX) || !Number.isFinite(minY)) return { extent: 0, magnitude: 0 }
+  return { extent: Math.hypot(maxX - minX, maxY - minY), magnitude }
+}
+
+/**
+ * 去重容差：**只跟图形自身有多大有关，与图形画在平面的哪里无关**。
+ *
+ * 旧实现是 `1e-4 * max(1, |x|, |y|)`，两个毛病都在实测里量到过：
+ *  1. 容差随"离原点多远"膨胀——半径 1 的圆放在原点附近容差 1e-4，平移到 x≈1000 之后变成 0.1，
+ *     于是用 y = √(1 − 0.025²) ≈ 0.999687 的割线去切时，两个相距 **0.0497** 的真实交点被并成一个。
+ *     用户把图形画到 20 以外就开始撞上这条比例。
+ *  2. 1e-4 这个**相对**容差本身太松：图形尺寸 2800（半径 1000 的圆）时绝对容差 0.1，
+ *     相距 0.05 的两个交点同样被并掉。
+ *
+ * 而"同一交点的重复候选"实测是**完全相等**的（交点落在采样顶点上时，相邻两条弦给出同一个 double，
+ * 间距 0.000e+0），所以容差只需要机器精度量级：图形尺寸 × 1e-9，
+ * 且不小于该坐标量级下 double 能分辨的最小间隔（EPSILON × |坐标| × 64）。
+ */
+export function intersectionDedupeTolerance(clouds: readonly Coordinate[][]): number {
+  const { extent, magnitude } = cloudScale(clouds)
+  return Math.max(extent * 1e-9, Math.max(1, magnitude) * Number.EPSILON * 64)
+}
+
+function uniquePoints(points: readonly Coordinate[], tolerance: number): Coordinate[] {
   const unique: Coordinate[] = []
   for (const point of points) {
-    if (!unique.some((candidate) => Math.hypot(candidate.x - point.x, candidate.y - point.y) <= tolerance * Math.max(1, Math.abs(point.x), Math.abs(point.y)))) unique.push(point)
+    if (!unique.some((candidate) => Math.hypot(candidate.x - point.x, candidate.y - point.y) <= tolerance)) unique.push(point)
   }
   return unique
 }
@@ -81,7 +123,7 @@ export function intersectSampledPrimitives(first: SampledPrimitive, second: Samp
       }
     }
   }
-  const unique = uniquePoints(points)
+  const unique = uniquePoints(points, intersectionDedupeTolerance([...firstPoints, ...secondPoints]))
   if (unique.length === 0) return { kind: "none", reason: "curves are disjoint" }
   if (unique.length === 1) return { kind: "point", point: unique[0] }
   return { kind: "points", points: unique.slice(0, MAX_CURVE_INTERSECTIONS) }
