@@ -101,6 +101,40 @@ function pieceEndpoints(piece: CurvePiece3): { x: number; y: number; z: number }
   return [conic3PointAt(piece.conic, piece.parameterRange[0])!, conic3PointAt(piece.conic, piece.parameterRange[1])!]
 }
 
+type Triple = { x: number; y: number; z: number }
+
+/**
+ * 缝合多边形的**有向带面积**。
+ *
+ * "外环在前、其余环反向接上"的意思就是：后半段的第 `i` 个点落在 `points[len − 1 − i]`。把这个拼接
+ * 三角化（每条环向边与下一圈对应边之间两片三角形）就是这个多边形张成的带面。
+ *
+ * 非平面的多环多边形没有唯一的"面积"；能说清的就是它张成的那条带面——圆柱侧带 = `2πRh′`。
+ * 圆柱轴是 z，所以"朝外"就是 `(x, y, 0)` 方向；符号用来说清这个多边形有没有缝反。
+ */
+function stitchedBandArea(points: Triple[], ringLength: number): number {
+  const cross = (first: Triple, second: Triple): Triple => ({ x: first.y * second.z - first.z * second.y, y: first.z * second.x - first.x * second.z, z: first.x * second.y - first.y * second.x })
+  const take = (from: Triple, to: Triple): Triple => ({ x: to.x - from.x, y: to.y - from.y, z: to.z - from.z })
+  const signed = (a: Triple, b: Triple, c: Triple): number => {
+    const normal = cross(take(a, b), take(a, c))
+    const length = Math.hypot(normal.x, normal.y, normal.z)
+    const radial = Math.hypot((a.x + b.x + c.x) / 3, (a.y + b.y + c.y) / 3)
+    if (length <= 0 || radial <= 0) return 0
+    const outward = (normal.x * (a.x + b.x + c.x) + normal.y * (a.y + b.y + c.y)) / (3 * radial)
+    return (outward >= 0 ? 1 : -1) * length / 2
+  }
+  let total = 0
+  for (let index = 0; index < ringLength; index += 1) {
+    const next = (index + 1) % ringLength
+    const first = points[index]
+    const second = points[next]
+    const inner = points[points.length - 1 - index]
+    const innerNext = points[points.length - 1 - next]
+    total += signed(first, second, innerNext) + signed(first, innerNext, inner)
+  }
+  return total
+}
+
 describe("mergeIntersectionSurfaces3", () => {
   it("turns the 50 mesh patches of 立方体 ∩ 圆柱 into three regions", () => {
     const intersection = cubeCylinderIntersection()
@@ -286,6 +320,45 @@ describe("mergeIntersectionSurfaces3", () => {
       for (const point of samplePiece(piece, 8)) {
         expect(Math.abs(Math.hypot(point.x - 3, point.y) - RADIUS)).toBeLessThan(1e-9)
       }
+    }
+  })
+
+  /**
+   * 侧带预览必须**点得到**：`points` 不能只是最大的那个环。
+   *
+   * 只给一圈圆的话，填充是一条很细的环（画布上几乎看不见），而且预览的形心（`hint`）落在圆心——
+   * 点侧带时"离 hint 最近"认领到的是隔壁那两个圆盘。外环 + 其余环**反向**缝成一条闭合多边形之后，
+   * 填充 / 拾取 / 形心全都对得上这条带；`exactLoops` 仍然是解析边界。
+   */
+  it("stitches the band's rings into one closed polygon that spans the whole 2πRh′ band", () => {
+    const stitched = bandOf(mergeIntersectionSurfaces3(cubeCylinderIntersection(), sources())).points
+    // 两圈各 48 个网格点：外环在前、另一圈反向在后（单环区域不做拼接，见下一条）。
+    expect(stitched).toHaveLength(2 * SEGMENTS)
+
+    /**
+     * 闭合。内核（与 DSL）的环约定是**首尾不重复**，所以"闭合"= 收尾那条边真的把两圈缝在一起，
+     * 也就是一条**母线**：两端落在同一环向角上（平面投影重合）、轴向相差一个带高。
+     * 只给一圈时这条边是一条弦（轴向差 0）——这条断言就是那样失败的。
+     */
+    const first = stitched[0]
+    const last = stitched[stitched.length - 1]
+    expect(Math.hypot(last.x - first.x, last.y - first.y)).toBeLessThan(1e-9)
+    expect(Math.abs(last.z - first.z)).toBeCloseTo(CUT_HEIGHT, 9)
+
+    // 有向带面积为正：外环在前、另一圈反向，缝出来的带面朝半径外侧。
+    const signed = stitchedBandArea(stitched, SEGMENTS)
+    const trueBand = 2 * Math.PI * RADIUS * CUT_HEIGHT
+    expect(signed).toBeGreaterThan(0)
+    // 48 段内接带面比真值小 0.07%（别处已钉过）；这里只要求"几个百分点"以内。
+    expect(Math.abs(signed - trueBand) / trueBand).toBeLessThan(0.03)
+  })
+
+  it("leaves a region with a single boundary ring exactly as it was", () => {
+    // 圆盘的边界本来就是一个闭环：点数不变、没有第二圈被缝进来、也没有复制一个首点收尾。
+    for (const disc of discsOf(mergeIntersectionSurfaces3(cubeCylinderIntersection(), sources()))) {
+      expect(disc.points).toHaveLength(SEGMENTS)
+      expect(disc.points[disc.points.length - 1]).not.toEqual(disc.points[0])
+      for (const point of disc.points) expect(Math.abs(Math.hypot(point.x, point.y) - RADIUS)).toBeLessThan(1e-9)
     }
   })
 

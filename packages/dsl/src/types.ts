@@ -560,6 +560,14 @@ export interface IntersectionFacePrimitive extends PrimitivePresentation {
   /** 面的法向（朝交集外部）与面积，用于读数与渲染。 */
   normal: Vector3
   area: number
+  /**
+   * 这个面的面积是不是**闭式精确**的（可选；旧文档没有这个字段）。
+   *
+   * - `true`：面积有闭式解——平面的多边形就是它自己的面积，边界是整圆时是 `πab`（圆盘 `πr²`）；
+   * - `false`：曲面区域（圆柱 / 圆锥侧面）的面积是**网格面片求和**，也就是数值近似，读数必须如实标出来；
+   * - 缺省：旧文档 / 还没算过的图元，不假装知道。
+   */
+  areaExact?: boolean
   hint: Vector3
   status: "valid" | "none" | "insufficient-data"
   diagnostic?: string

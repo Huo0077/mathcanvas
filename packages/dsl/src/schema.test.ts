@@ -200,6 +200,33 @@ describe("Geometry DSL document layout schema", () => {
   })
 
   /**
+   * 交面的**面积精度**标注（A2）。
+   *
+   * 平面区域（圆盘 / 多边形）的面积是闭式的——整圆 `πr²`、多边形就是它自己的面积；曲面区域
+   * （圆柱 / 圆锥侧面）的面积是网格面片求和，是**数值近似**。两者读数上必须分得清，
+   * 所以图元带一个显式的布尔标注。字段可选：旧文档没有它，行为不变。
+   */
+  it("validates the area-precision flag on an intersection face", () => {
+    const document = createEmptyDocument("geometry3d")
+    const cube = { id: "cube-1", type: "cube", origin: { x: -2, y: -2, z: -2 }, size: { x: 4, y: 4, z: 4 } }
+    const cylinder = { id: "cyl-1", type: "cylinder", center: { x: 0, y: 0, z: -2 }, radius: 1.5, height: 4, segments: 24 }
+    const face = (areaExact: unknown) => ({
+      id: "face-1", type: "intersectionFace", sourceIds: ["cube-1", "cyl-1"],
+      points: [{ x: 0, y: 0, z: 0 }], normal: { x: 0, y: 0, z: 1 }, area: 1, hint: { x: 0, y: 0, z: 0 },
+      status: "valid", areaExact
+    })
+    const withFlag = (areaExact: unknown) => validateDocument({ ...document, primitives: [cube, cylinder, face(areaExact)] })
+
+    expect(withFlag(true).valid).toBe(true)
+    expect(withFlag(false).valid).toBe(true)
+    // 旧文档：根本没有这个字段。
+    expect(withFlag(undefined).valid).toBe(true)
+    expect(withFlag("yes").valid).toBe(false)
+    expect(withFlag(1).valid).toBe(false)
+    expect(withFlag(null).valid).toBe(false)
+  })
+
+  /**
    * 解析截面（A1）：`section.exact` 里是**精确**圆锥曲线 + 片段环。系数是精确真源，
    * 非有限数或错长度必须被拦住；旧文档没有这个字段，行为不变。
    */

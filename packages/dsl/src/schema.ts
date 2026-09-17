@@ -494,6 +494,8 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>, parameter
       if (!Array.isArray(value.points) || value.points.some((point) => !isFiniteCoordinate3(point))) errors.push("intersectionFace points are invalid")
       if (!isFiniteCoordinate3(value.normal)) errors.push("intersectionFace normal is invalid")
       if (!isFiniteNumber(value.area) || value.area < 0) errors.push("intersectionFace area is invalid")
+      // 面积精度标注：闭式（平面 / 整圆 πab）还是网格求和（曲面区域）。可选，旧文档没有它。
+      if (value.areaExact !== undefined && typeof value.areaExact !== "boolean") errors.push("intersectionFace areaExact is invalid")
       if (value.exactLoops !== undefined && !isCurvePieceLoops(value.exactLoops)) errors.push("intersectionFace exact loops are invalid")
     } else if (!isFiniteCoordinate3(value.position)) errors.push("intersectionPoint3 position is invalid")
   }

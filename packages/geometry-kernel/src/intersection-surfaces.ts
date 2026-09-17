@@ -399,17 +399,105 @@ interface RegionCandidate {
   frame?: SurfaceFrame
 }
 
+/** 两个顶点之间的距离。 */
+function distanceOf(first: Vector3, second: Vector3): number {
+  return lengthVector3(subtractVector3(first, second))
+}
+
+/** 一片三角形的有向面积：法向离开轴（朝半径外侧）时为正。 */
+function signedTriangleArea(first: Vector3, second: Vector3, third: Vector3, frame: SurfaceFrame): number {
+  const normal = crossVector3(subtractVector3(second, first), subtractVector3(third, first))
+  const area = lengthVector3(normal) / 2
+  if (!(area > 0)) return 0
+  const centroid = scaleVector3(addVector3(addVector3(first, second), third), 1 / 3)
+  const radial = subtractVector3(subtractVector3(centroid, frame.origin), scaleVector3(frame.axis, axialOf(frame, centroid)))
+  return dotVector3(normal, radial) >= 0 ? area : -area
+}
+
+/**
+ * 缝合带面的有向面积：外环第 `i` 条环向边与后半段（反向接上的那一圈）的对应边之间缝两片三角形。
+ *
+ * 非平面的多环多边形没有唯一的"面积"；能说清的是它张成的那条带面（圆柱侧带就是 `2πRh′`）。
+ * 这个量的**符号**用来说清 `points` 的走向：为正表示缝出来的带面朝半径外侧，与网格面片的朝外法向一致。
+ */
+function stitchedBandArea(ringLength: number, points: Vector3[], frame: SurfaceFrame): number {
+  if (ringLength < 3 || points.length < 2 * ringLength) return 0
+  let total = 0
+  for (let index = 0; index < ringLength; index += 1) {
+    const next = (index + 1) % ringLength
+    const outer = points[index]
+    const outerNext = points[next]
+    // 后半段是**反向**接上来的环：它正序的第 index 个点落在末尾往前的第 index 个位置。
+    const inner = points[points.length - 1 - index]
+    const innerNext = points[points.length - 1 - next]
+    total += signedTriangleArea(outer, outerNext, innerNext, frame) + signedTriangleArea(outer, innerNext, inner, frame)
+  }
+  return total
+}
+
+/** 一个环绕二次曲面轴的**有向面积**：符号就是它的绕行方向（用来判断两个环是不是反向走）。 */
+function windingOf(keys: string[], pointOf: Map<string, Vector3>, frame: SurfaceFrame): number {
+  let total = 0
+  for (let index = 0; index < keys.length; index += 1) {
+    const first = subtractVector3(pointOf.get(keys[index]) as Vector3, frame.origin)
+    const second = subtractVector3(pointOf.get(keys[(index + 1) % keys.length]) as Vector3, frame.origin)
+    total += dotVector3(crossVector3(first, second), frame.axis)
+  }
+  return total
+}
+
+/**
+ * 曲面区域的多边形：外环 + 其余环**反向**接上（环的约定首尾不重复，收尾的那条边把它封住）。
+ *
+ * 只给最大的那个环（旧行为）时，侧带预览是一条很细的环：填充几乎看不见，形心（预览的 `hint`）还落在
+ * 圆心，于是"点侧带"认领到的是隔壁的圆盘。缝成一条多边形之后，填充 / 拾取 / 形心都对得上这条带。
+ *
+ * "反向"按**绕行方向**算，不是把点表读一遍反过来：网格给出的两个环本来就是一正一反（它们是有向带面的
+ * 两条边界），再翻一次就变成同向走两圈——实测那样缝出来的环首尾错开一个网格步，配对全乱、带面积塌成 0。
+ * 所以：绕行方向与外环相同的环先翻过来，再转到"离外环起点最近的那个点在最后"，
+ * 收尾边因此是一条**母线**（真的把两圈缝住）。
+ *
+ * 缝出来的带面必须朝半径外侧；为负说明方向整体反了，那就把整条多边形翻过来。
+ */
+function stitchedCurvedPoints(rings: MergedRing[], outer: MergedRing, pointOf: Map<string, Vector3>, frame: SurfaceFrame): Vector3[] {
+  const keys = [...outer.keys]
+  const anchor = pointOf.get(keys[0]) as Vector3
+  const outerWinding = Math.sign(windingOf(outer.keys, pointOf, frame))
+  for (const ring of rings) {
+    if (ring === outer) continue
+    const sameDirection = Math.sign(windingOf(ring.keys, pointOf, frame)) === outerWinding
+    let ordered = sameDirection ? [...ring.keys].reverse() : [...ring.keys]
+    let nearest = 0
+    for (let index = 1; index < ordered.length; index += 1) {
+      if (distanceOf(pointOf.get(ordered[index]) as Vector3, anchor) < distanceOf(pointOf.get(ordered[nearest]) as Vector3, anchor)) nearest = index
+    }
+    ordered = [...ordered.slice(nearest + 1), ...ordered.slice(0, nearest + 1)]
+    for (const key of ordered) if (keys[keys.length - 1] !== key) keys.push(key)
+  }
+  let points = ringPointsOf(keys, pointOf)
+  // 只有一个环：本来就闭合，什么都不做（旧行为逐位不变）。
+  if (points.length === outer.keys.length) return points
+  if (stitchedBandArea(outer.keys.length, points, frame) < 0) points = [...points].reverse()
+  return points
+}
+
+function ringPointsOf(keys: string[], pointOf: Map<string, Vector3>): Vector3[] {
+  return keys.map((key) => ({ ...(pointOf.get(key) as Vector3) }))
+}
+
 function regionFromCandidate(candidate: RegionCandidate, pointOf: Map<string, Vector3>, hoopEdges: Map<string, SurfaceFrame>): IntersectionSurfaceRegion {
   const referenceNormal = candidate.kind === "plane" ? candidate.normal : null
   const faceRings = candidate.faces.map((face) => face.keys)
   const merged = mergeBoundaryRings(faceRings, pointOf, referenceNormal)
   const closed = merged.rings.filter((ring) => ring.keys.length >= 3)
-  const ringPoints = (keys: string[]) => keys.map((key) => ({ ...(pointOf.get(key) as Vector3) }))
 
-  // 曲面区域装不下"一整条带"（`points` 只有一个环）：取边界里最大的那条环当渲染兜底。
   const outer = [...closed].sort((first, second) => second.area - first.area)[0]
   const largestFace = [...candidate.faces].sort((first, second) => second.area - first.area)[0]
-  const points = outer ? ringPoints(outer.keys) : largestFace ? ringPoints(largestFace.keys) : []
+  const points = outer
+    ? candidate.kind === "plane" || !candidate.frame
+      ? ringPointsOf(outer.keys, pointOf)
+      : stitchedCurvedPoints(closed, outer, pointOf, candidate.frame)
+    : largestFace ? ringPointsOf(largestFace.keys, pointOf) : []
 
   let exactLoops: CurvePiece3[][] | undefined
   if (merged.complete && closed.length > 0) {

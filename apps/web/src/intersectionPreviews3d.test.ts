@@ -1,3 +1,4 @@
+import * as THREE from "three"
 import { describe, expect, it } from "vitest"
 
 import { createEmptyDocument, type GeometryDocument, type Vector3 } from "@draw/dsl"
@@ -5,6 +6,8 @@ import { buildSolidTemplate } from "@draw/geometry-kernel"
 
 import { computeIntersectionPreviews3d, intersectionMarkerPoints } from "./intersectionPreviews3d"
 import { ROUND_SOLID_SEGMENTS } from "./solidDefaults"
+import { toScenePreview } from "./threeScenePreview"
+import { createPreviewGroup } from "./threePrimitives"
 
 /** 一份"实体源 + 物化拓扑"一起进文档的文档：与 App 创建实体的方式一致。 */
 function cubeDocument(solids: { id: string; origin: Vector3; size?: Vector3 }[]): GeometryDocument {
@@ -282,9 +285,79 @@ describe("automatic 3D intersection previews", () => {
       expect(Math.abs(disc.area - Math.PI * 4)).toBeLessThan(1e-9)
       expect(Math.abs(disc.normal.z)).toBeCloseTo(1, 12)
     }
-    // 每份都还是可点面片：顶点环参与填充与拾取（曲面区域是边界环，撑不起"一整条带"也照样能画能点）。
+    // 每份都还是可点面片：顶点环参与填充与拾取（曲面区域是**整条带**的缝合多边形，两圈首尾相接）。
     expect(faces.every((preview) => preview.points.length >= 3)).toBe(true)
     expect(faces.every((preview) => preview.hint.x === preview.points.reduce((sum, point) => sum + point.x / preview.points.length, 0))).toBe(true)
+  })
+
+  it("keeps the browser fixture (cube + contained cylinder) at three 交面 previews", () => {
+    /**
+     * `e2e/three-intersection-previews.spec.ts` 用的文档：立方体 4×4×4 + 完全落在它里面的圆柱（R=1.5, h=4）。
+     * 浏览器那边读的是 `data-preview-face-count`；把"应该是 3"先钉在单元测试里，
+     * e2e 就只是在核验同一件事在真实画布上没有被渲染层改掉。
+     */
+    const document = createEmptyDocument("geometry3d")
+    const cube = { id: "cube-a", type: "cube" as const, origin: { x: -2, y: -2, z: -2 }, size: { x: 4, y: 4, z: 4 } }
+    const cylinder = { id: "cyl-a", type: "cylinder" as const, center: { x: 0, y: 0, z: -2 }, radius: 1.5, height: 4, segments: ROUND_SOLID_SEGMENTS }
+    document.primitives = [cube, ...buildSolidTemplate(cube).primitives, cylinder, ...buildSolidTemplate(cylinder).primitives]
+
+    const faces = computeIntersectionPreviews3d(document).previews.filter((preview) => preview.kind === "face")
+
+    expect(faces).toHaveLength(3)
+    expect(faces.map((preview) => preview.key)).toEqual(["pair:cube-a|cyl-a:面0", "pair:cube-a|cyl-a:面1", "pair:cube-a|cyl-a:面2"])
+    // 侧带是**整条带**的多边形（两圈各 48 个点），形心落在侧带中腰而不是圆心——这正是"点侧带建出整条带"的前提。
+    expect(faces[0].points).toHaveLength(2 * ROUND_SOLID_SEGMENTS)
+    expect(faces[0].hint.z).toBeCloseTo(0, 9)
+    expect(Math.abs(faces[0].hint.x) + Math.abs(faces[0].hint.y)).toBeLessThan(1e-9)
+    expect(Math.abs(faces[0].area - 2 * Math.PI * 1.5 * 4) / (2 * Math.PI * 1.5 * 4)).toBeLessThan(0.001)
+  })
+
+  it("makes the lateral band preview clickable from ordinary viewpoints, unlike a single hoop", () => {
+    /**
+     * "点得到"这件事要**测出来**，不能只靠读代码推理。
+     *
+     * 用画布同一套 `createPreviewGroup` 把侧带那份预览建成真正的网格（命中区就是它的面片），再从一台普通
+     * 透视相机朝侧带表面上的世界点打射线（与画布拾取同一套射线：只打命中区）。对照组是修复前的行为——
+     * `points` 只有最大的那一圈环。
+     */
+    const document = createEmptyDocument("geometry3d")
+    const cube = { id: "cube-a", type: "cube" as const, origin: { x: -2, y: -2, z: -2 }, size: { x: 4, y: 4, z: 4 } }
+    const cylinder = { id: "cyl-a", type: "cylinder" as const, center: { x: 0, y: 0, z: -2 }, radius: 1.5, height: 4, segments: ROUND_SOLID_SEGMENTS }
+    document.primitives = [cube, ...buildSolidTemplate(cube).primitives, cylinder, ...buildSolidTemplate(cylinder).primitives]
+
+    const band = computeIntersectionPreviews3d(document).previews.filter((preview) => preview.kind === "face")[0]
+
+    /** 多少个"相机方位 × 侧带上的世界点"真的能点到这份预览的命中区。 */
+    const clickHits = (points: Vector3[]): number => {
+      const group = createPreviewGroup(toScenePreview({ ...band, points }, []), false, () => undefined)
+      const targets = (group.userData.hitTargets as THREE.Object3D[] | undefined) ?? []
+      if (targets.length === 0) return 0
+      const raycaster = new THREE.Raycaster()
+      let hits = 0
+      for (let step = 0; step < 12; step += 1) {
+        const azimuth = step * Math.PI / 6
+        const eye = new THREE.Vector3(Math.cos(azimuth) * 10, Math.sin(azimuth) * 10, 5)
+        // 只试朝向相机那一侧的点（背面的点本来就被实体挡住，不参与"点得到"的判定）。
+        for (const offset of [-1, -0.5, 0, 0.5, 1]) {
+          for (const z of [-1, 0, 1]) {
+            const angle = azimuth + offset * Math.PI / 6
+            const target = new THREE.Vector3(1.5 * Math.cos(angle), 1.5 * Math.sin(angle), z)
+            raycaster.set(eye, target.clone().sub(eye).normalize())
+            if (raycaster.intersectObjects(targets, false).length > 0) hits += 1
+          }
+        }
+      }
+      return hits
+    }
+
+    const total = 12 * 5 * 3
+    const stitched = clickHits(band.points)
+    const hoopOnly = clickHits(band.points.slice(0, ROUND_SOLID_SEGMENTS))
+
+    // 缝合后的侧带多边形在大多数视角下都点得到（实测 122/180）；只给一圈环则大多点不到、命中数只有它的一半
+    //（实测 60/180——它的填充是那一圈弦围出来的圆盘，覆盖不到侧带中腰）。
+    expect(stitched).toBeGreaterThan(hoopOnly)
+    expect(stitched).toBeGreaterThanOrEqual(total / 2)
   })
 
   it("counts the per-pair 交面 quota by regions, not by mesh patches", () => {

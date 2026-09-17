@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { createEmptyDocument } from "@draw/dsl"
+import type { PrimitiveSpec } from "@draw/dsl"
 import { buildSolidTemplate } from "@draw/geometry-kernel"
 
 import { applyOperation, commitPatch, getDependencyIndex, recomputeDerivedObjects } from "./index"
@@ -157,6 +158,121 @@ describe("intersection face and point primitives", () => {
     const deleted = commitPatch(withBoth, { op: "deleteObject", id: "cube-b" })
     expect(deleted.changed).toBe(true)
     expect(deleted.document.primitives.some((primitive) => primitive.id === "face-1" || primitive.id === "point-1")).toBe(false)
+  })
+})
+
+describe("intersection face primitive (A2 support-surface regions)", () => {
+  const RADIUS = 2
+  const CUT_HEIGHT = 4
+  const TRUE_BAND = 2 * Math.PI * RADIUS * CUT_HEIGHT
+
+  type Face = Extract<PrimitiveSpec, { type: "intersectionFace" }>
+
+  /** 立方体(4×4×4) 与一个模板圆柱（`center` 是底面中心）：布尔交集被切成 50 片的那一对。 */
+  function cubeAndCylinder(cylinder: { center: { x: number; y: number; z: number }; height: number }) {
+    const document = createEmptyDocument("geometry3d")
+    const cube = { id: "cube-a", type: "cube" as const, origin: { x: -2, y: -2, z: -2 }, size: { x: 4, y: 4, z: 4 } }
+    // 底面 z=-3、高 6：立方体（z∈[-2,2]）从中间切出一段高 4 的侧带，两个圆盘半径正好是 R。
+    const solid = { id: "cyl-a", type: "cylinder" as const, center: cylinder.center, radius: RADIUS, height: cylinder.height, segments: 48 }
+    document.primitives = [cube, ...buildSolidTemplate(cube).primitives, solid, ...buildSolidTemplate(solid).primitives]
+    return document
+  }
+
+  /** 重算后的交面图元（找不到就抛，免得断言全落在 undefined 上）。 */
+  function faceOf(document: ReturnType<typeof cubeAndCylinder>, id = "face-1"): Face {
+    const face = recomputeDerivedObjects(document).primitives.find((primitive) => primitive.id === id)
+    if (face?.type !== "intersectionFace") throw new Error("expected intersectionFace")
+    return face
+  }
+
+  /** 解析边界上每圈圆弧所在的轴向高度（sorted、去重）：来源一动它必须跟着动。 */
+  function hoopLevels(face: Face): number[] {
+    const levels = (face.exactLoops ?? []).flatMap((loop) => loop.flatMap((piece) => piece.kind === "conic" && piece.conic.center ? [Math.round(piece.conic.center.z)] : []))
+    return [...new Set(levels)].sort((first, second) => first - second)
+  }
+
+  it("materialises the whole lateral band (one region) when the hint sits on the band", () => {
+    // 画布上的侧带预览给出的 hint 就是缝合多边形的形心 (0,0,0)——点它现在必须建出**整条带**。
+    const face = withPending(cubeAndCylinder({ center: { x: 0, y: 0, z: -3 }, height: 6 }), pendingFace(["cube-a", "cyl-a"], { x: 0, y: 0, z: 0 }))
+    if (face?.type !== "intersectionFace") throw new Error("expected intersectionFace")
+
+    expect(face.status).toBe("valid")
+    // 曲面区域的面积是网格面片求和：如实标近似，且落在真值 2πRh′ 的 1% 以内。
+    expect(face.areaExact).toBe(false)
+    expect(Math.abs(face.area - TRUE_BAND) / TRUE_BAND).toBeLessThan(0.01)
+    // 解析边界：两圈圆弧（这正是"一个表面"的样子，而不是一个网格小片）。
+    expect(face.exactLoops).toHaveLength(2)
+    for (const loop of face.exactLoops!) {
+      for (const piece of loop) {
+        expect(piece.kind).toBe("conic")
+        if (piece.kind !== "conic") continue
+        expect(piece.conic.kind).toBe("circle")
+        expect(piece.conic.semiMajor).toBeCloseTo(RADIUS, 9)
+      }
+    }
+    expect(hoopLevels(face)).toEqual([-2, 2])
+    // 多边形是两圈首尾相接的整条带（96 个网格点），不是 48 个点的一圈细环。
+    expect(face.points).toHaveLength(96)
+    expect(face.hint.x).toBeCloseTo(0, 6)
+    expect(face.hint.z).toBeCloseTo(0, 6)
+  })
+
+  it("materialises the exact disc (closed-form area) when the hint sits on a disc", () => {
+    // 圆盘预览的 hint 就是圆盘形心 (0,0,2)；它认领到的是平面上那块圆盘，不是侧带。
+    const face = withPending(cubeAndCylinder({ center: { x: 0, y: 0, z: -3 }, height: 6 }), pendingFace(["cube-a", "cyl-a"], { x: 0, y: 0, z: 2 }))
+    if (face?.type !== "intersectionFace") throw new Error("expected intersectionFace")
+
+    expect(face.status).toBe("valid")
+    // 边界是整圆 ⇒ 面积有闭式 πr²，读数必须说精确。
+    expect(face.areaExact).toBe(true)
+    expect(Math.abs(face.area - Math.PI * RADIUS * RADIUS)).toBeLessThan(1e-9)
+    expect(Math.abs(face.normal.z)).toBeCloseTo(1, 9)
+    // 那一圈解析边界就是这个圆：半径 r、圆心在 (0,0,2)。
+    expect(face.exactLoops).toHaveLength(1)
+    const piece = face.exactLoops![0][0]
+    expect(piece.kind).toBe("conic")
+    if (piece.kind !== "conic") return
+    expect(piece.conic.kind).toBe("circle")
+    expect(piece.conic.semiMajor).toBeCloseTo(RADIUS, 9)
+    expect(piece.conic.center?.z).toBeCloseTo(2, 9)
+    expect(face.points).toHaveLength(48)
+  })
+
+  it("recomputes both the area and the analytic boundary when the source moves (no stale boundary)", () => {
+    // 圆柱高 2（z∈[-1,1]）整个落在立方体里：交面就是圆柱自己——侧带高 2、两圈在 z=±1。
+    const document = cubeAndCylinder({ center: { x: 0, y: 0, z: -1 }, height: 2 })
+    const withFace = applyOperation(document, { op: "addPrimitive", primitive: pendingFace(["cube-a", "cyl-a"], { x: 0, y: 0, z: 0 }) as never }).document
+    const initial = faceOf(withFace)
+    const initialArea = 2 * Math.PI * RADIUS * 2
+
+    expect(initial.areaExact).toBe(false)
+    expect(Math.abs(initial.area - initialArea) / initialArea).toBeLessThan(0.01)
+    expect(hoopLevels(initial)).toEqual([-1, 1])
+
+    // 把圆柱加高（高 2 → 3，顶面 z=2 正好贴着立方体顶面）：侧带变高、面积 ×1.5，
+    // 上圈圆弧必须从 z=1 挪到 z=2——旧的解析边界留在这里就会读出"面积变了、边界没变"的鬼话。
+    const edited = applyOperation(withFace, { op: "updatePrimitive", id: "cyl-a", patch: { height: 3 } }).document
+    const moved = faceOf(edited)
+
+    expect(moved.areaExact).toBe(false)
+    expect(Math.abs(moved.area - initial.area * 1.5) / (initial.area * 1.5)).toBeLessThan(0.01)
+    expect(hoopLevels(moved)).toEqual([-1, 2])
+  })
+
+  it("clears a stale analytic boundary when the region no longer exists", () => {    const document = cubeAndCylinder({ center: { x: 0, y: 0, z: -3 }, height: 6 })
+    const withFace = applyOperation(document, { op: "addPrimitive", primitive: pendingFace(["cube-a", "cyl-a"], { x: 0, y: 0, z: 0 }) as never }).document
+    const initial = faceOf(withFace)
+    expect(initial.exactLoops).toBeDefined()
+    expect(initial.areaExact).toBeDefined()
+
+    // 圆柱整块挪出立方体：交面不存在了，上一轮的解析边界与精度标注都不许留下。
+    const moved = applyOperation(withFace, { op: "translatePrimitive3", id: "cyl-a", delta: { x: 40, y: 0, z: 0 } }).document
+    const gone = faceOf(moved)
+
+    expect(gone.status).toBe("none")
+    expect(gone.points).toEqual([])
+    expect(gone.exactLoops).toBeUndefined()
+    expect(gone.areaExact).toBeUndefined()
   })
 })
 

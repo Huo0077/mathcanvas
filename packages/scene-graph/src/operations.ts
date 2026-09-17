@@ -1,5 +1,5 @@
 import type { AnnotationSpec, ConstraintSpec, Coordinate, DrawingSheetSpec, DrawingViewSpec, EngineeringAnnotation, GeometryDocument, GroupSpec, LayerSpec, Measurement3, Point3Binding, Point3Primitive, PointBinding, PrimitiveSpec, Section3Classification, Vector3 } from "@draw/dsl"
-import { createDependencyGraph, adaptiveSampleFunctionSegments, arcConstraint, buildSolidTemplate, calculateMeasurement3, circleConstraint, createBuilderContext, dihedralMarker3, ellipseConstraint, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, evaluatePlanarMeasurement, findExtrema, findInflectionPoints, findZeros, functionGraphConstraint, host3FromPrimitive, hyperbolaConstraint, intersectCirclesDetailed, intersectConvexPolyhedra3, intersectFaceSets, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, lineConstraint, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, orderSectionPoints3, parabolaConstraint, polylineConstraint, quadric3FromPrimitive, rayConstraint, sectionConvexPolyhedron, sectionPolyhedron3, sectionQuadric3, segmentConstraint, sharedRingEdge3, solidVolumeHost3, solveLineConstraints, type Conic3Kind, type CurvePiece3, type DihedralMarker3, type FaceRing3, type Host3, type IntersectionResult, type PlanarConstraint, type PlanarMetric, type SampledPrimitive, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
+import { createDependencyGraph, adaptiveSampleFunctionSegments, arcConstraint, buildSolidTemplate, calculateMeasurement3, circleConstraint, createBuilderContext, dihedralMarker3, ellipseConstraint, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, evaluatePlanarMeasurement, findExtrema, findInflectionPoints, findZeros, functionGraphConstraint, host3FromPrimitive, hyperbolaConstraint, intersectCirclesDetailed, intersectConvexPolyhedra3, intersectFaceSets, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, lineConstraint, mergeIntersectionSurfaces3, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, orderSectionPoints3, parabolaConstraint, polylineConstraint, quadric3FromPrimitive, rayConstraint, sectionConvexPolyhedron, sectionPolyhedron3, sectionQuadric3, segmentConstraint, sharedRingEdge3, solidVolumeHost3, solveLineConstraints, type Conic3Kind, type CurvePiece3, type DihedralMarker3, type FaceRing3, type Host3, type IntersectionResult, type IntersectionSurfaceRegion, type PlanarConstraint, type PlanarMetric, type SampledPrimitive, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
 
 export type DomainOperation =
   | { op: "addPrimitive"; primitive: PrimitiveSpec }
@@ -704,22 +704,68 @@ function explainOutcome(outcome: Extract<SolidIntersectionOutcome, { ok: false }
 }
 
 /**
- * 交面图元 = 布尔交集的**一个平面面片**（用户口径："我需要的交面只是一个表面，而不是所有相交的表面"）。
+ * 交面图元 = 布尔交集的**一个区域**（按支撑曲面分组后的一块）：平面区域或二次曲面区域。
  *
- * 交集的每一个面在画布上分开显示、分开可点，点哪块就建哪一块；这里按"离 `hint` 最近的形心"认领那一面，
- * 所以来源一动，它跟着变但不会跳到对面去（面序变了也不会张冠李戴）。法向与上一面同向时会打破平局。
+ * 用户口径："我需要的交面只是一个表面，而不是所有相交的表面"。分组之前，布尔交集把圆柱侧面切成 48 个
+ * 细条（法向各不相同），"点一块建一块"点出来的永远是一个小片；分组之后一块区域就是**一个表面**，
+ * 所以这里认领的是区域（与画布上那份预览同一个东西），把它的多边形 / 解析边界 / 面积如实写回。
+ *
+ * 认领方式与逐面时代同一套：按"离 `hint` 最近的区域形心"（`hint` 就是预览给出的区域形心），
+ * 距离在容差内打平时才看区域法向与上一轮的取向。
  */
 function recomputeIntersectionFace(
   primitive: Extract<PrimitiveSpec, { type: "intersectionFace" }>,
   primitiveMap: Map<string, PrimitiveSpec>
 ): Extract<PrimitiveSpec, { type: "intersectionFace" }> {
-  const outcome = resolveSolidIntersection(primitive.sourceIds.map((id) => primitiveMap.get(id)), primitiveMap)
+  /**
+   * 解析字段是**派生**的：这一轮算不出解析边界就必须把它摘掉，
+   * 否则会留下一份和现几何对不上的边界（来源移动后尤其明显）。
+   */
+  const withoutAnalytic = (face: Extract<PrimitiveSpec, { type: "intersectionFace" }>) => {
+    const { exactLoops: _staleLoops, areaExact: _staleAreaExact, ...rest } = face
+    return rest
+  }
+  const sources = primitive.sourceIds.map((id) => primitiveMap.get(id))
+  const outcome = resolveSolidIntersection(sources, primitiveMap)
   const empty = { points: [], normal: { x: 0, y: 0, z: 0 }, area: 0 }
-  if (!outcome.ok) return { ...primitive, ...empty, status: "insufficient-data", visible: false, diagnostic: explainOutcome(outcome) }
+  if (!outcome.ok) return { ...withoutAnalytic(primitive), ...empty, status: "insufficient-data", visible: false, diagnostic: explainOutcome(outcome) }
   const { result } = outcome
   if (result.status === "none" || result.faces.length === 0) {
-    return { ...primitive, ...empty, status: "none", visible: false, diagnostic: result.explanation || "两个实体没有重叠区域。" }
+    return { ...withoutAnalytic(primitive), ...empty, status: "none", visible: false, diagnostic: result.explanation || "两个实体没有重叠区域。" }
   }
+
+  // 来源各自的解析二次曲面（立方体 / 棱锥没有，函数返回 null）：分组靠它认"哪些面属于同一张曲面"。
+  const regions = mergeIntersectionSurfaces3(result, sources.map((source) => ({ quadric: source ? quadric3FromPrimitive(source) ?? undefined : undefined })))
+  const tolerance = Math.max(extentOf(result.vertices) * 1e-9, 1e-12)
+  let bestRegion: { region: IntersectionSurfaceRegion; centroid: Vector3; distance: number; alignment: number } | null = null
+  for (const region of regions) {
+    if (region.points.length < 3) continue
+    const centroid = centroidOfPoints(region.points)
+    const distance = distanceBetween(centroid, primitive.hint)
+    const alignment = dotBetween(region.normal, primitive.normal)
+    // 主序是距离（"上一轮那一块还是同一块"），只有距离在容差内打平时才用法向取向打破平局。
+    if (!bestRegion || distance < bestRegion.distance - tolerance || (Math.abs(distance - bestRegion.distance) <= tolerance && alignment > bestRegion.alignment)) {
+      bestRegion = { region, centroid, distance, alignment }
+    }
+  }
+  if (bestRegion) {
+    const { region, centroid } = bestRegion
+    return {
+      ...withoutAnalytic(primitive),
+      points: region.points,
+      normal: region.normal,
+      area: region.area,
+      // 面积精度随区域如实标注（曲面区域是网格求和），解析边界有就写、没有就不写。
+      areaExact: region.areaExact,
+      ...(region.exactLoops ? { exactLoops: region.exactLoops } : {}),
+      hint: { ...centroid },
+      status: "valid",
+      visible: true,
+      diagnostic: undefined
+    }
+  }
+
+  // 分组一个区域都没给（退化输入）而原始面片还在：退回逐面认领，而不是把这一面判成失败。
   let best: { points: Vector3[]; normal: Vector3; area: number; centroid: Vector3; distance: number; alignment: number } | null = null
   result.faces.forEach((face, index) => {
     const points = face.map((vertexIndex) => ({ ...result.vertices[vertexIndex] }))
@@ -731,15 +777,13 @@ function recomputeIntersectionFace(
     const distance = distanceBetween(centroid, primitive.hint)
     const alignment = dotBetween(normal, primitive.normal)
     if (!best) { best = { points, normal, area, centroid, distance, alignment }; return }
-    // 主序是距离（"上一次那一面还是同一面"），只有距离在容差内打平时才用法向取向打破平局。
-    const tolerance = Math.max(extentOf(result.vertices) * 1e-9, 1e-12)
     if (distance < best.distance - tolerance || (Math.abs(distance - best.distance) <= tolerance && alignment > best.alignment)) {
       best = { points, normal, area, centroid, distance, alignment }
     }
   })
-  if (!best) return { ...primitive, ...empty, status: "none", visible: false, diagnostic: "交集没有可用的面。" }
+  if (!best) return { ...withoutAnalytic(primitive), ...empty, status: "none", visible: false, diagnostic: "交集没有可用的面。" }
   const claimed = best as { points: Vector3[]; normal: Vector3; area: number; centroid: Vector3 }
-  return { ...primitive, points: claimed.points, normal: claimed.normal, area: claimed.area, hint: { ...claimed.centroid }, status: "valid", visible: true, diagnostic: undefined }
+  return { ...withoutAnalytic(primitive), points: claimed.points, normal: claimed.normal, area: claimed.area, hint: { ...claimed.centroid }, status: "valid", visible: true, diagnostic: undefined }
 }
 
 /**
