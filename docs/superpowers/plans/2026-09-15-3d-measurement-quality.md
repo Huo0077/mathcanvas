@@ -1,5 +1,7 @@
 # 3D Measurement Visualization and Quality Baseline Implementation Plan
 
+> **状态（2026-09-17 复核）**：本计划范围内的功能**已交付**——ESLint 基线与确定性的 Vite/预览命令、撤销历史上限、纯函数化的测量可视化描述、3D 画布测量标注与上下文引导、以及全量验证与文档都已落地（见 `docs/feature-catalog.md` 的「测量二面角 / 3D 标注」条目与 `docs/project-progress.md` 的 P6 v3 各节）。下面的复选框保留历史原貌（未逐条勾选）；本仓库的**单一进度记录**是 [`docs/project-progress.md`](../../project-progress.md)。
+
 > **For agentic workers:** Implement task-by-task with a test-first cycle. Do not commit unless the user explicitly requests it.
 
 **Goal:** Complete the P6 v3 measurement UX and make lint, build, E2E startup, and undo history reliable.

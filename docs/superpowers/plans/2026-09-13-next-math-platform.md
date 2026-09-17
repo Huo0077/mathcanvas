@@ -1,5 +1,7 @@
 # Next Math Platform Implementation Plan
 
+> **状态（2026-09-17 复核）**：本计划范围内的功能**已交付**——射线/折线的创建、选择、持久化与端点编辑，抛物线/椭圆/双曲线的校验与序列化，以及工作区切换与采样渲染都已进入产品（见 `docs/feature-catalog.md` 的「当前已实现」）。下面的复选框保留历史原貌（未逐条勾选）；本仓库的**单一进度记录**是 [`docs/project-progress.md`](../../project-progress.md)。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Harden the current geometry kernel, add ray/polyline intersections and editing, then deliver a minimal conics/calculus workspace slice with performance evidence.

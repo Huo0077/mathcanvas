@@ -1,5 +1,7 @@
 # 多模态数理与工程交互绘图引擎 MVP Foundation Implementation Plan
 
+> **状态（2026-09-17 复核）**：本计划范围内的功能**已交付**——工作台 + 双直线与交点、参数滑块驱动重算、`.mgeo` 保存/恢复、补丁校验与撤销/重做都已进入产品。下面的复选框保留历史原貌（未逐条勾选）；本仓库的**单一进度记录**是 [`docs/project-progress.md`](../../project-progress.md)，交付证据与门禁数字以它为准（对应「P0 技术验证」「P1 数学内核」两节）。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use TDD for each behavior and verification-before-completion before claiming a milestone is complete.
 
 **Goal:** Deliver the first-week vertical slice described in the implementation plan: a React/Vite workbench that creates two lines, computes their intersection, updates it from a parameter slider, persists/restores a `.mgeo` document, and records UI changes as validated domain patches.

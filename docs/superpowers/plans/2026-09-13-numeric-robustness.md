@@ -1,5 +1,7 @@
 # Math Kernel Numeric Robustness Implementation Plan
 
+> **状态（2026-09-17 复核）**：本计划范围内的功能**已交付**——尺度化数值比较、显式交点分类与鲁棒的朝向判定都已进入内核并在生产路径上使用（见 `docs/project-progress.md` 的「P1 数学内核」与 `packages/geometry-kernel` 的既有测试）。本文件只剩最后一条「提交验证与文档」未勾选，属历史原貌；本仓库的**单一进度记录**是 [`docs/project-progress.md`](../../project-progress.md)。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add scale-aware numeric comparisons, explicit intersection classifications, and robust orientation predicates while preserving the existing intersection API and transactional Scene Graph behavior.
