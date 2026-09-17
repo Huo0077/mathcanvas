@@ -60,7 +60,12 @@
 
 ## 4. 不在本次范围
 
-- **A2：二次曲面 ∩ 二次曲面**（圆柱↔圆柱那类）。需要"特殊情形解析分类 + 一般情形追踪 + 牛顿修正"，另立 spec。**本次只留接口**：`intersectionLine` 增加可选解析字段的位置，以及内核里 `intersectQuadricQuadric3` 的签名占位由 A2 决定，A1 不写空壳。
+- **A2：二次曲面 ∩ 二次曲面**（圆柱↔圆柱那类）。另立 spec，但调研已经把路线摸清（记档在 `docs/research/quadric-intersection-algorithms.md`）：
+  - **闭式可解的情形**（课程里真的会出现的那些）：平行/同轴圆柱对 → 0/1/2 条直线、重合、空；**等半径且轴相交 → 恰好两条平面椭圆**（半轴 `R/sin(A/2)` 与 `R/cos(A/2)`；正交时退化为 `z = ±x`）；**垂直且异半径 → 闭式参数化 `x = a cos t, y = a sin t, z = ±√(b²−a²sin²t)`**（两支、周期）；共轴回转体 → 圆；球∩球 → 根轴平面上的圆。
+  - **剩下的异半径斜交是四次空间曲线**（曲线非平面，不是圆锥曲线），只能追踪或走解析代数；OCCT 有解析类（`IntAna_IntQuadQuad`，最多 12 条参数曲线）与数值追踪（`IntPatch_ImpImpIntersection`），但前者是多周量级的移植。
+  - **最便宜的一条**：先追踪，再**吸附**成精确圆锥曲线（BRL-CAD `curve_fitting()` 的做法：取 6 点解圆锥曲线 + 全部采样点在容差内才提升为精确椭圆，否则如实退回折线）。这条能把用户看到的折线几乎清干净，而不必移植四次代数。
+  - A2 的诚实状态词要按 OCCT 的 `IntAna_ResultType` 设计（`Empty / Same / Point / Line / Conic(...) / Traced(...)`），并保留一个"**已知有解、但拒绝猜**"的显式状态（对应 `IntAna_NoGeometricSolution`）。
+  - **本次只留接口**：`intersectionLine` 增加可选解析字段的位置；内核 `intersectQuadricQuadric3` 的签名由 A2 决定，A1 不写空壳。
 - **A3：逐像素光线求交（POV-Ray 式）**、GPU 曲面细分着色器。理由见 §5.6 与 §10。
 - **删除 `segments` 字段或取消多边形物化**：那是 C 方案（B-rep 重写），明确不做。
 - **球 / 环面等新实体**：DSL 暂无这些实体，不新增。
@@ -130,7 +135,7 @@ export function intersectPlaneQuadric3(plane: Plane3, quadric: Quadric3): Conic3
 
 **分类规则**（写死，不许含糊）：
 
-设 `δ = B² − 4AC`（二次部判别式）、`Δ = det(3×3 系数矩阵)`。
+设二次部判别式 `δ = B² − 4AC`（与经典不变量表里的 `J = AC − B²/4` 同号，`δ = −4J`）、`Δ = det(3×3 系数矩阵)`（经典表里的 `Δ`）。下表与 [MathWorld 的二次曲线不变量表](https://mathworld.wolfram.com/QuadraticCurve.html)（Beyer 1987）一致，只是把 `J` 换成了同号的 `δ`。
 
 | 条件 | 结论 |
 | --- | --- |
@@ -142,7 +147,8 @@ export function intersectPlaneQuadric3(plane: Plane3, quadric: Quadric3): Conic3
 | `δ > 0` 且 `Δ ≠ 0` | 双曲线 |
 | `δ > 0` 且 `Δ = 0` | 两条相交直线 |
 
-**零判定一律按模型尺度**：`δ` / `Δ` 与输入矩阵同量纲，先按 `Q` 的最大绝对值 `s` 归一化（`δ/s²`、`Δ/s³`），再与 `1e-12` 比较；不使用绝对阈值（与仓库既有的 `quantumFor` 尺度约定一致）。
+**零判定一律按模型尺度**：`δ` / `Δ` 与输入矩阵同量纲，先按 `Q` 的最大绝对值 `s` 归一化（`δ/s²`、`Δ/s³`），再与 `1e-12` 比较；不使用绝对阈值（与仓库既有的 `quantumFor` 尺度约定一致）。三条一手先例支持这个做法：GeoGebra 的 `classifyQuadric()` 把 3×3 主子式与 `max³ · STANDARD_PRECISION_CUBE` 比较（三次量用立方缩放）；OCCT 平面∩圆柱用**半径缩放**的 `sint < Tol/radius` 区分圆与椭圆；OCCT 圆柱∩圆柱用**相对**半径差 `|R1−R2|/max(R1,R2) ≤ 1e-13`。反例同样明确：OCCT 的 `InitTolerances()` 用绝对容差（`1e-14`、`Precision::Confusion()`），那是建立在"CAGD 模型在归一化单位空间"的前提上——学生在一个作图里建半径 1000、另一个里建 0.01，绝对容差必然失效，所以不能照抄。
+（若将来发现边界情形仍在闪，备选是 Eberly 的 Geometric Tools 做法：**精确有理数 + 笛卡尔符号法则**做分类、完全不用 epsilon，Boost 1.0 许可可移植，代价是引入一个小的 `BigInt` 有理数层——A1 先不上，记在 `docs/research/quadric-intersection-algorithms.md` §9.3。）
 
 **"圆"的判定阈值必须写死并测边界**：`kind: "circle"` 要求 `|A − C| ≤ ε·max(|A|,|C|)` 且 `|B| ≤ ε·max(|A|,|C|)`，`ε = 1e-9`。这意味着"两个半轴在 9 位有效数字内相等"才算圆——**故意倾斜 1e-3° 的切面必须报椭圆**（写进测试）。判定不通过时如实报 `ellipse` 并给出 `eccentricity`，不四舍五入成圆。
 
@@ -172,6 +178,7 @@ export function sectionQuadric3(source: Quadric3, plane: Plane3): { kind: Conic3
 - **圆锥**：底端面 + 顶点；过顶点的退化情形直接给 `point` / `lines`。
 - **球**：不实现（DSL 里没有球实体，本次不新增实体类型）。
 - 返回 `null` 表示"这个来源不是二次曲面实体"（例如 `polyhedron3`），调用方回退到既有多边形路径。返回的 `kind` 已按 §5.4 的规则处理过"无界相交非空、但有限实体截出来是空"这一情形。
+- **外部同款**：GeoGebra 的 `AlgoIntersectPlaneQuadricLimited` 用同一条思路（先拿精确圆锥曲线，再与上下端面圆求交，把结果压成四个路径参数），退化分支有 `setSinglePoint` / `setUndefined` / NaN 参数，且有按对象自身尺寸的相对容差 `isEpsilonToX(min − parameter, max − min)`。它的**诚实缺口**是 `default: // degenerate conics not handled`（退化圆锥曲线 + 有限实体不处理）；我们的片段环表示能覆盖到退化情形，但要在 `feature-catalog` 里写清我们覆盖到哪、哪里仍走回退。
 
 ### 5.4 DSL 变更（保持最小）
 
@@ -207,7 +214,7 @@ export function sectionQuadric3(source: Quadric3, plane: Plane3): { kind: Conic3
 ### 5.6 渲染政策
 
 - **模型层永不读 `BufferGeometry`**：求交、包含、相切、测量、捕捉一律走 §5.1-5.3 的闭式。加一条测试断言：解析路径不 import 任何 three.js 模块。
-- **曲线按屏幕误差细分**：`segmentsForCircle(R, tol) = max(3, ceil(π / acos(1 − tol/R)))`，`tol = 0.5px × 世界单位每像素`。曲线总长超过阈值时用 `ceil(总段数)` 上限保护（上限 `8192`，超出时如实标注）。
+- **曲线按屏幕误差细分**：`segmentsForCircle(R, tol) = max(3, ceil(π / acos(1 − tol/R)))`，`tol = 0.5px × 世界单位每像素`。曲线总长超过阈值时用 `ceil(总段数)` 上限保护（上限 `8192`，超出时如实标注）。**外部同款**：GeoGebra 的 `DrawConic3D` 按类型分发到解析绘制器（`arcEllipse` / `circle` / `hyperbolaBranch` / `parabola`），圆的段数就是 `brush.calcArcLongitudesNeeded(e1, π, getView3D().getScale())`——段数由当前视图尺度算出，既不固定也不烘进几何。
 - **描边**用 three.js `Line2` + `LineMaterial`（圆帽与 AA 在 r186 源码里是真实现；`worldUnits = true` 给透视正确粗细）。注意它**不重采样**，采样点由我们给。
 - **滞回**：相机缩放（世界单位每像素）变化超过 2× 才重算细分，不逐帧重建。
 - **填充圆盘**用 SDF quad（`sdCircle(p, r) = length(p) − r` + `fwidth` 一像素 AA，自己写 `ShaderMaterial`）。A1 里只用于"圆盘 / 圆环"这类真实例；曲线描边走上面的 `Line2` 路径。
@@ -291,9 +298,9 @@ operations.recomputeSection
 
 ---
 
-## 10. 外部参考与取舍（三份调研的结论）
+## 10. 外部参考与取舍（三份调研 + 一份补充的结论）
 
-1. **GeoGebra 也只做到"平面 ∩ 二次曲面"**：`AlgoIntersectPlaneQuadric.intersectPlaneQuadric()` 就是 `cm = Pᵀ·Q·P`，输出带 3×3 圆锥曲线矩阵的 `GeoConic3D`（[IntersectPath 命令](https://geogebra.github.io/docs/manual/en/commands/IntersectPath/)）；二次曲面互交只实现了球∩球，其它组合直接 `setUndefined()`（[IntersectConic](https://geogebra.github.io/docs/manual/en/commands/IntersectConic/)）；二次曲面分类用特征分解（`GeoQuadric3D.classifyQuadric()`）。**结论：A1 的做法与教学软件的成熟做法一致；A2 没有现成实现可抄**，参考 Trocado / Gonzalez-Vega / dos Santos, *Intersecting Two Quadrics with GeoGebra*（CAI 2019，DOI 10.1007/978-3-030-21363-3_20，[zbMATH](https://zbmath.org/1434.68718)）。
+1. **GeoGebra 也只做到"平面 ∩ 二次曲面"**：`AlgoIntersectPlaneQuadric.intersectPlaneQuadric()` 就是 `cm = Pᵀ·Q·P`，输出带 3×3 圆锥曲线矩阵的 `GeoConic3D`（[IntersectPath 命令](https://geogebra.github.io/docs/manual/en/commands/IntersectPath/)）；**有限实体的裁剪也是精确的**（`AlgoIntersectPlaneQuadricLimited`：圆锥曲线与上下端面圆求交，存成四个路径参数；它自己的缺口是 `default: // degenerate conics not handled`）；**渲染的段数由视图尺度算**（`DrawConic3D.updateCircle` → `brush.calcArcLongitudesNeeded(e1, π, getView3D().getScale())`）——A1 的 §5.3 与 §5.6 都有同款外部实现；二次曲面互交只实现了球∩球，其余组合 `setUndefined()`（[IntersectConic](https://geogebra.github.io/docs/manual/en/commands/IntersectConic/)）。**结论：A1 的做法与教学软件的成熟做法一致。** A2 的路线与参考见 `docs/research/quadric-intersection-algorithms.md`（含 Trocado / Gonzalez-Vega / dos Santos, *Intersecting Two Quadrics with GeoGebra*，CAI 2019，DOI 10.1007/978-3-030-21363-3_20，[zbMATH](https://zbmath.org/1434.68718)——正文付费，未读到，不得当作算法依据）。
 2. **网格 CSG 一律排除**：`manifold`（541 KB）的 API 自己就是 `circularSegments`，`three-bvh-csg` 输出 `intersectionEdges: Line3[]`（线段汤）——**按构造就没有真圆**。
 3. **OCCT-WASM 家族能给真圆，但代价明确**：`occt-wasm` 的 `.wasm` 实测 **22.0 MB**（README 声称 brotli 约 4.5 MB，属厂商口径）、**LGPL-2.1**、要求 WASM SIMD + tail calls（Chrome/Edge 114+、Safari 17.2+、Firefox 121+）、异步初始化 + 句柄手动 `release()`；且**OCCT 没有展开实体的 API**，文档格式也必须停止存多边形。**结论：只有连对象模型一起换成 B-rep（C 方案）才划算，本次不做。**
 4. **渲染**：three.js r186 的 `Curve` **没有误差驱动采样**（`getPoints(divisions)` 是按参数均分）；`Line2`/`LineMaterial` 的圆帽与 AA 是真实现（每段 6 个三角形，48 段 = 288 个三角形）但不重采样；SDF 圆的精确公式与 `fwidth` AA 有据可依；WebGL2 无几何/曲面细分阶段。**结论：解析模型 + 我们自己的误差驱动采样 + `Line2` 描边 + SDF 填充是浏览器里的标准答案。**
@@ -326,4 +333,4 @@ operations.recomputeSection
 7. **导出与框选/捕捉**：SVG `<ellipse>` / `<circle>`；解析框选判定。
 8. **签名与回归收尾**：签名并入解析字段、旧档回归、文档与门禁、提交推送。
 
-> 下一份 spec（A2：二次曲面互交）在本轮验收通过后开始；第三份调研（OCCT `IntAna_QuadQuadGeo` 的分类与追踪文献）落回后先记入 `docs/research/`，作为 A2 的输入。
+> 下一份 spec（A2：二次曲面互交）在本轮验收通过后开始。**三份调研（含一份补充）已全部归档**在 `docs/research/quadric-intersection-algorithms.md`（GeoGebra 源码级结论、OCCT 三层结构与 `IntAna_IntQuadQuad` 更正、BRL-CAD 的圆锥曲线吸附、Eberly 的精确有理数分类、openNURBS 闭式例程、负面结果清单、未确认清单），A2 直接以它为输入。
