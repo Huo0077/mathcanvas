@@ -938,10 +938,15 @@ export function projectToImplicitCurve(
   options: { seeds?: readonly Coordinate[]; maxIterations?: number; tolerance?: number } = {}
 ): ConstraintProjection | null {
   const tolerance = options.tolerance ?? 1e-12
-  const maxIterations = options.maxIterations ?? 40
+  /**
+   * 调用方给的迭代上限必须归一化：`maxIterations: 0`（或负数 / NaN）会让内层循环一次都不跑，
+   * 于是要么把**种子点**当成投影返回（一个没迭代过的"投影"），要么直接返回 null 让拖拽卡住。
+   * 0 / 负数 / 非有限值都视为"没有有效偏好"，用默认 40；正的有限值照旧尊重（哪怕是 1）。
+   */
+  const requestedIterations = options.maxIterations
+  const maxIterations = Number.isFinite(requestedIterations) && (requestedIterations as number) >= 1 ? Math.floor(requestedIterations as number) : 40
   const seeds = options.seeds && options.seeds.length > 0 ? options.seeds : [desired]
   let best: ConstraintProjection | null = null
-  let totalIterations = 0
 
   for (const seed of seeds) {
     let x = seed.x
@@ -995,7 +1000,6 @@ export function projectToImplicitCurve(
       if (!accepted) break
     }
 
-    totalIterations += iterations
     const point = { x, y }
     const distance = pointDistance(point, desired)
     if (!Number.isFinite(distance)) continue

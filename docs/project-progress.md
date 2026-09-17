@@ -1165,7 +1165,7 @@ P7-1 至 P7-6 与工程工作台层次化改造 Task 1-7 均已完成；P4 Agent
 
 ## 验证证据
 
-> **当前基线（唯一权威，2026-09-17 在"全身大体检（八批）+ e2e 构建修复"之后实测）**：`npm.cmd test` **107 个测试文件、1192 个用例通过**；4 个 workspace 类型检查通过；ESLint **0 error、15 条 warning**；生产构建通过（Vite 仍提示主 bundle 超过 500 KB）；Playwright **83/83** 通过（**现在真的跑的是当前工作区的构建产物**，见下）。
+> **当前基线（唯一权威，2026-09-17 在"全身大体检（九批）+ e2e 构建修复"之后实测）**：`npm.cmd test` **107 个测试文件、1193 个用例通过**；4 个 workspace 类型检查通过；ESLint **0 error、14 条 warning**；生产构建通过（Vite 仍提示主 bundle 超过 500 KB）；Playwright **83/83** 通过（**现在真的跑的是当前工作区的构建产物**，见下）。
 > 下面按时间倒序列出各轮实测快照（数字是**当时**的取值，用于追溯与对比，不代表当前门禁）；例如 68 文件 / 698 用例与 Playwright 47/47 属于 2026-09-16 的 Task 15-18 那一轮。
 
 ### 全身大体检（2026-09-17）：并行只读审计 + 按严重度修复
@@ -1271,6 +1271,16 @@ P7-1 至 P7-6 与工程工作台层次化改造 Task 1-7 均已完成；P4 Agent
 | 内核 | 公开的 `sampleFunctionSegments` **不校验** `steps`（同文件的 `adaptiveSampleFunctionSegments` 与 `numericalDerivative` 都校验）：`steps = 0` 算出 `x = NaN`、采样全被丢掉 → 空结果；负数 / NaN 同样静默为空；`steps = 1e9` 会真的跑十亿次求值 | 归一化到 `1..4096`（非有限值用默认 128）；定义域不是有限区间时返回空，不产生 NaN 坐标 |
 
 - **第八批 RED 证据**：`steps=0: expected 0 to be greater than 1`（空采样）、`arcSteps=NaN: expected 0 to be greater than 2`（空弧）。
+
+**第九批（隐式投影的迭代上限 + 死代码）**：
+
+| 类别 | 缺陷 | 修法 |
+| --- | --- | --- |
+| 内核 | `projectToImplicitCurve` 直接采信调用方的 `maxIterations`：传 `0`（或负数 / NaN）时内层循环一次都不跑，`converged` 恒为 false，而"残差够小就接受"的分支既不会接受种子点、也没有任何迭代结果 → 返回 `null`，动点拖拽直接卡住 | 0 / 负数 / 非有限值统一视为"没有有效偏好"用默认 40；正的有限值照旧尊重（哪怕是 1） |
+| 死代码 | 同函数里的 `totalIterations` 只写不读（lint 里那条 `no-unused-vars` 警告就是它） | 删掉；lint warning **15 → 14** |
+
+- **第九批 RED 证据**：`maxIterations=0: expected null not to be null`。
+- **看过后判定"不是缺陷"的一条**（记录）：审计提到 `Ribbon.tsx:55-61` 的 Ctrl+F1 分支。实际语义是自洽的——折叠时**必须**清掉 `activeTab`，否则 `visible = expanded \|\| activeTab !== null` 会让面板留在展开态；再展开时 `activeTab` 为 null 只是回到"显示全部组"的默认视图，并非空面板。未改动。
 
 
 - **明确不修、只记录**（都写进 `docs/feature-catalog.md` 的"体检结论与已知限制"）：

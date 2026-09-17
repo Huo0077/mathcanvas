@@ -468,6 +468,26 @@ describe("dynamic points", () => {
     expect(point.state.parameter).toBeCloseTo(0.5, 12)
   })
 
+  /**
+   * 体检发现的真缺陷：隐式投影的 `maxIterations` 直接取调用方的值。`0`（或负数 / NaN）会让内层循环
+   * 一次都不跑，`converged` 恒为 false，而"残差够小就接受"的分支仍可能把**种子点**当成投影返回——
+   * 一个没迭代过的"投影"。上限必须归一化（非有限值用默认 40）。
+   */
+  it("normalises the implicit-projection iteration cap instead of accepting the seed", () => {
+    const coefficients = conicCoefficients(ellipse)
+    const constraint = implicitConicConstraint("ie", coefficients)
+    // (6, 0) 在椭圆外：真正迭代过之后才会落到 (4, 0)。
+    const desired = { x: 6, y: 0 }
+
+    for (const maxIterations of [0, -5, Number.NaN, Number.NEGATIVE_INFINITY]) {
+      const projection = constraint.project(desired, { maxIterations })
+      expect(projection, `maxIterations=${maxIterations}`).not.toBeNull()
+      expect(projection!.point.x, `maxIterations=${maxIterations}`).toBeCloseTo(4, 6)
+      expect(projection!.point.y, `maxIterations=${maxIterations}`).toBeCloseTo(0, 6)
+      expect(projection!.converged).toBe(true)
+    }
+  })
+
   it("re-derives the coordinate from a re-evaluated constraint on refresh", () => {
     let scale = 1
     const graph = functionGraphConstraint("g", (x) => scale * x, [0, 10])
