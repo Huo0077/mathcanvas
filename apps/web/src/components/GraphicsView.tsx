@@ -7,7 +7,7 @@ import type { BoxSelectionMode } from "@draw/geometry-kernel"
 import { createDragAction, getDragHandle, primitiveHandlePoints, type DragAction, type DragHandle } from "../interaction"
 import { resolveAnnotationPoint } from "../annotations"
 import { clipFunctionSegmentsToBounds } from "../functionGraph"
-import { getIntersectionPreviews, type IntersectionPreview } from "../intersectionPreview"
+import { getIntersectionPreviews, nearestPreview, PREVIEW_HIT_RADIUS, type IntersectionPreview } from "../intersectionPreview"
 import { dashFor, fillFor, opacityFor, strokeFor, strokeWidthFor } from "../primitiveStyle"
 import { DEFAULT_VIEWPORT, VIEWBOX, gridStep, rayToViewport, svgToWorld, visibleWorldBounds, worldToSvg, zoomViewport, zoomViewportAt, type Viewport } from "../viewport"
 
@@ -269,7 +269,26 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
     const labelPoint = { x: point.x + offset.x, y: point.y + offset.y }
     return <g key={annotation.id} data-annotation-id={annotation.id} className="annotation-marker" pointerEvents="none"><line x1={toX(point.x)} y1={toY(point.y)} x2={toX(labelPoint.x)} y2={toY(labelPoint.y)} /><circle cx={toX(point.x)} cy={toY(point.y)} r="3" /><text x={toX(labelPoint.x) + 5} y={toY(labelPoint.y) - 5}>{annotation.text}</text></g>
   })
-  const renderIntersectionPreviews = () => intersectionPreviews.map((preview) => <g key={`${preview.objectA}-${preview.objectB}-${preview.solutionIndex}`} data-auto-intersection="true" onClick={(event) => { event.stopPropagation(); onCreateIntersection(preview) }}><circle data-hit-target="true" cx={toX(preview.point.x)} cy={toY(preview.point.y)} r="14" fill="transparent" pointerEvents="all" /><circle cx={toX(preview.point.x)} cy={toY(preview.point.y)} r="4" fill="var(--color-panel)" stroke="var(--color-warning)" strokeWidth="2" strokeDasharray="3 2" /></g>)
+  /**
+   * 点预览创建交点：**按屏幕像素距离就近取解**。
+   * 两个解挨得近时，命中谁不再由 SVG 绘制顺序决定（后画的会吃掉点击）。
+   * 没有布局信息的环境（jsdom 里 `getScreenCTM()` 返回 null）退回"被点到的那个"。
+   */
+  const handlePreviewClick = (event: React.MouseEvent<SVGGElement>, preview: IntersectionPreview) => {
+    event.stopPropagation()
+    const svg = event.currentTarget.ownerSVGElement
+    // jsdom 的 SVG 元素没有 `getScreenCTM` / `DOMPoint`：那里退回"被点到的那个"，
+    // 浏览器里才用 CTM 把光标换算进 SVG 坐标系做就近判定。
+    const matrix = typeof svg?.getScreenCTM === "function" ? svg.getScreenCTM() : null
+    if (!svg || !matrix || typeof DOMPoint === "undefined") {
+      onCreateIntersection(preview)
+      return
+    }
+    const local = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse())
+    const nearest = nearestPreview(intersectionPreviews, local, (point) => ({ x: toX(point.x), y: toY(point.y) }))
+    onCreateIntersection(nearest ?? preview)
+  }
+  const renderIntersectionPreviews = () => intersectionPreviews.map((preview) => <g key={`${preview.objectA}-${preview.objectB}-${preview.solutionIndex}`} data-auto-intersection="true" onClick={(event) => handlePreviewClick(event, preview)}><circle data-hit-target="true" cx={toX(preview.point.x)} cy={toY(preview.point.y)} r={PREVIEW_HIT_RADIUS} fill="transparent" pointerEvents="all" /><circle cx={toX(preview.point.x)} cy={toY(preview.point.y)} r="4" fill="var(--color-panel)" stroke="var(--color-warning)" strokeWidth="2" strokeDasharray="3 2" /></g>)
 
   const step = gridStep(viewport.scale)
   const firstGridX = Math.ceil(worldBounds.minX / step) * step

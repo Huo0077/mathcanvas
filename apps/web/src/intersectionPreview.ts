@@ -28,6 +28,30 @@ function calculateIntersection(first: SampledPrimitive, second: SampledPrimitive
   return { points: intersectionPoints(intersectSampledPrimitives(first, second)), approximate: true }
 }
 
+/** 预览的命中半径（SVG 用户单位；画布 viewBox 固定，所以约等于屏幕像素）。 */
+export const PREVIEW_HIT_RADIUS = 14
+
+/**
+ * 在多个预览里按**屏幕像素距离**就近取一个：两个解挨得很近（或完全重合）时，
+ * 选中谁不再由 DOM 绘制顺序决定，而是"离光标最近的那个"。
+ * `project` 由调用方提供（视口的 world → screen 换算），容差之外返回 null。
+ */
+export function nearestPreview<T extends { point: { x: number; y: number } }>(
+  previews: T[],
+  click: { x: number; y: number },
+  project: (point: { x: number; y: number }) => { x: number; y: number },
+  radius = PREVIEW_HIT_RADIUS
+): T | null {
+  let best: { preview: T; distance: number } | null = null
+  for (const preview of previews) {
+    const screen = project(preview.point)
+    const distance = Math.hypot(screen.x - click.x, screen.y - click.y)
+    if (distance > radius) continue
+    if (!best || distance < best.distance) best = { preview, distance }
+  }
+  return best?.preview ?? null
+}
+
 export function getIntersectionPreviews(document: GeometryDocument): IntersectionPreview[] {
   const candidates = document.primitives.filter((primitive): primitive is SampledPrimitive => primitive.visible !== false && isSampledPrimitive(primitive))
   const previews: IntersectionPreview[] = []

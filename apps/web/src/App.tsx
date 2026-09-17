@@ -589,19 +589,21 @@ export function App() {
     const second = document.primitives.find((primitive) => primitive.id === preview.objectB)
     if (!first || !second) return
     const id = nextPrimitiveId(document, "intersection")
-    const solutionIndex = Math.min(1, Math.max(0, Math.floor(preview.solutionIndex))) as 0 | 1
+    const solutionIndex = Math.max(0, Math.floor(preview.solutionIndex))
+    // hint = 用户点的那个解：重算按"离它最近的解"匹配，解的数量或顺序变化时不会串位。
+    const hint = { x: preview.point.x, y: preview.point.y }
     const label = `交点 ${id.split("-").at(-1)}`
     let primitive: PrimitiveSpec
     if (first.type === "line" && second.type === "line") {
       primitive = { id, type: "intersection", lineA: first.id, lineB: second.id, x: preview.point.x, y: preview.point.y, label }
     } else if (first.type === "line" && second.type === "circle") {
-      primitive = { id, type: "lineCircleIntersection", lineId: first.id, circleId: second.id, solutionIndex, x: preview.point.x, y: preview.point.y, label }
+      primitive = { id, type: "lineCircleIntersection", lineId: first.id, circleId: second.id, solutionIndex, hint, x: preview.point.x, y: preview.point.y, label }
     } else if (first.type === "circle" && second.type === "line") {
-      primitive = { id, type: "lineCircleIntersection", lineId: second.id, circleId: first.id, solutionIndex, x: preview.point.x, y: preview.point.y, label }
+      primitive = { id, type: "lineCircleIntersection", lineId: second.id, circleId: first.id, solutionIndex, hint, x: preview.point.x, y: preview.point.y, label }
     } else if (first.type === "circle" && second.type === "circle") {
-      primitive = { id, type: "circleIntersection", circleA: first.id, circleB: second.id, solutionIndex, x: preview.point.x, y: preview.point.y, label }
+      primitive = { id, type: "circleIntersection", circleA: first.id, circleB: second.id, solutionIndex, hint, x: preview.point.x, y: preview.point.y, label }
     } else {
-      primitive = { id, type: "curveIntersection", objectA: first.id, objectB: second.id, solutionIndex, x: preview.point.x, y: preview.point.y, label }
+      primitive = { id, type: "curveIntersection", objectA: first.id, objectB: second.id, solutionIndex, hint, x: preview.point.x, y: preview.point.y, label }
     }
     apply({ op: "addPrimitive", primitive })
     setSelectedIds([id])

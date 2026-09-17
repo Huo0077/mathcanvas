@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { createEmptyDocument } from "@draw/dsl"
 import { host3FromPrimitive } from "@draw/geometry-kernel"
+import { recomputeDerivedObjects } from "@draw/scene-graph"
 
 import { App } from "./App"
 import { createDemoDocument } from "./demoDocument"
@@ -1326,6 +1327,34 @@ describe("MathCanvas workbench", () => {
     expect(useSceneStore.getState().document.primitives.some((primitive) => primitive.type === "point3" && primitive.label === "A")).toBe(false)
     // 另一个点不受影响。
     expect(useSceneStore.getState().document.primitives.some((primitive) => primitive.type === "point3" && primitive.label === "B")).toBe(true)
+  })
+
+  it("creates the very solution the user clicked on a pair with more than two crossings", () => {
+    const document = recomputeDerivedObjects({
+      ...createEmptyDocument("conics"),
+      primitives: [
+        { id: "line-1", type: "line", a: { x: -10, y: 0 }, b: { x: 10, y: 0 } },
+        { id: "function-1", type: "function", expression: "sin(x)", domain: [-10, 10], samples: 400 }
+      ]
+    })
+    useSceneStore.setState({ document, workspaceDocuments: { [document.workspace]: document }, history: [], future: [], previewBase: null, error: null, treeTab: "model", expandedIds: [], filterQuery: "" })
+    render(<App />)
+
+    const previews = () => Array.from(globalThis.document.querySelectorAll("[data-auto-intersection]"))
+    expect(previews().length).toBeGreaterThan(4)
+
+    // 点第 5 个解：旧实现把索引 clamp 成 0|1，于是建出来的点落到第 2 个解上。
+    fireEvent.click(previews()[4])
+    const created = useSceneStore.getState().document.primitives.filter((primitive) => primitive.type === "curveIntersection") as { solutionIndex?: number; hint?: { x: number }; x: number }[]
+    expect(created).toHaveLength(1)
+    expect(created[0].solutionIndex).toBe(4)
+    expect(created[0].hint?.x).toBeCloseTo(created[0].x, 9)
+
+    // 再点另一个解：得到的是**另一个**点（每个解一个独立实体）。
+    fireEvent.click(previews()[1])
+    const all = useSceneStore.getState().document.primitives.filter((primitive) => primitive.type === "curveIntersection") as { x: number }[]
+    expect(all).toHaveLength(2)
+    expect(all[0].x).not.toBeCloseTo(all[1].x, 3)
   })
 
   it("shows a small bottom-left guide when a feature button is clicked", () => {

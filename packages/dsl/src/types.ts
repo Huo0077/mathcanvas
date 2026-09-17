@@ -447,7 +447,13 @@ export interface LineCircleIntersectionPrimitive extends PrimitivePresentation {
   type: "lineCircleIntersection"
   lineId: string
   circleId: string
-  solutionIndex?: 0 | 1
+  /**
+   * 第几个解（非负整数）。**不设上界**——采样曲线（函数、圆锥曲线）的交点可能有任意多个，
+   * 旧类型写死 `0 | 1`，第三个及以后的解会被折叠到第 2 个上（实测缺陷）。
+   */
+  solutionIndex?: number
+  /** 用户点选时那个解的坐标：重算按"离它最近的解"匹配，解的数量或顺序变化时不会串位。 */
+  hint?: Coordinate
   x: number
   y: number
 }
@@ -457,7 +463,8 @@ export interface CircleCircleIntersectionPrimitive extends PrimitivePresentation
   type: "circleIntersection"
   circleA: string
   circleB: string
-  solutionIndex?: 0 | 1
+  solutionIndex?: number
+  hint?: Coordinate
   x: number
   y: number
 }
@@ -467,7 +474,8 @@ export interface CurveIntersectionPrimitive extends PrimitivePresentation {
   type: "curveIntersection"
   objectA: string
   objectB: string
-  solutionIndex?: 0 | 1
+  solutionIndex?: number
+  hint?: Coordinate
   x: number
   y: number
 }

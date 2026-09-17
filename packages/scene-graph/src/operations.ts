@@ -1031,7 +1031,31 @@ export function recomputeDerivedObjects(document: GeometryDocument, changedIds?:
    * 抽成函数是为了让主循环按**拓扑序**遍历，并在每算完一个对象后立刻更新 `primitiveMap` ——
    * 这样下游读到的是刚刚算出来的上游值，而不是本趟开始前的那份快照。
    */
-  const recomputePrimitive = (primitive: PrimitiveSpec): PrimitiveSpec | undefined => {
+  /**
+ * 从多解里挑一个：
+ * - 有 `hint` 时取**离 hint 最近的解**——解的数量或顺序随形状变化时不会串位（吸引域语义，与 SolveSpace 一致）；
+ * - 没有 hint 时退回下标；下标越界取最后一个，而不是静默回到第 0 个。
+ * 调用方会把选中的解写回 `hint`，于是下一次重算继续跟着它。
+ */
+function pickSolution<T extends { x: number; y: number }>(points: T[], solutionIndex: number | undefined, hint: { x: number; y: number } | undefined): T | null {
+  if (points.length === 0) return null
+  if (hint) {
+    let best = points[0]
+    let bestDistance = Math.hypot(best.x - hint.x, best.y - hint.y)
+    for (const candidate of points.slice(1)) {
+      const distance = Math.hypot(candidate.x - hint.x, candidate.y - hint.y)
+      if (distance < bestDistance) {
+        best = candidate
+        bestDistance = distance
+      }
+    }
+    return best
+  }
+  const index = Number.isInteger(solutionIndex) && (solutionIndex ?? 0) >= 0 ? (solutionIndex as number) : 0
+  return points[Math.min(index, points.length - 1)]
+}
+
+const recomputePrimitive = (primitive: PrimitiveSpec): PrimitiveSpec | undefined => {
     if (primitive.type === "point3" && primitive.binding) {
       const position = resolveBoundPoint3(primitive, primitiveMap)
       return position ? { ...primitive, position } : undefined
@@ -1080,16 +1104,19 @@ export function recomputeDerivedObjects(document: GeometryDocument, changedIds?:
       if (result.kind === "degenerate") throw new Error(`degenerate curve intersection: ${result.reason}`)
       if (result.kind === "none" || result.kind === "coincident") return { ...primitive, visible: false }
       if (result.kind === "point" || result.kind === "tangent") return { ...primitive, x: result.point.x, y: result.point.y, visible: true }
-      const point = result.points[primitive.solutionIndex ?? 0]
-      return { ...primitive, x: point.x, y: point.y, visible: true }
+      const point = pickSolution(result.points, primitive.solutionIndex, primitive.hint)
+      return point ? { ...primitive, x: point.x, y: point.y, hint: { x: point.x, y: point.y }, visible: true } : { ...primitive, visible: false }
     }
     if (primitive.type !== "intersection" && primitive.type !== "lineCircleIntersection" && primitive.type !== "circleIntersection") return undefined
     const result = resolveIntersection(primitive, lines, circles)
     if (result.kind === "degenerate") throw new Error(`degenerate intersection: ${result.reason}`)
     if (result.kind === "none" || result.kind === "coincident") return { ...primitive, visible: false }
     if (result.kind === "point" || result.kind === "tangent") return { ...primitive, x: result.point.x, y: result.point.y, visible: true }
-    const point = result.points[primitive.type === "intersection" ? 0 : primitive.solutionIndex ?? 0]
-    return { ...primitive, x: point.x, y: point.y, visible: true }
+    const point = primitive.type === "intersection" ? result.points[0] : pickSolution(result.points, primitive.solutionIndex, primitive.hint)
+    if (!point) return { ...primitive, visible: false }
+    return primitive.type === "intersection"
+      ? { ...primitive, x: point.x, y: point.y, visible: true }
+      : { ...primitive, x: point.x, y: point.y, hint: { x: point.x, y: point.y }, visible: true }
   }
   const primitives = [...projectedPrimitives]
   for (const id of topologicalRecomputeOrder(evaluatedDocument, changedIds)) {

@@ -116,6 +116,16 @@ function isFiniteUvPair(value: unknown): boolean {
   return Array.isArray(value) && value.length === 2 && value.every(isFiniteNumber)
 }
 
+/**
+ * 交点的"解引用"：`solutionIndex` 必须是非负整数（**不设上界**：采样曲线可以有任意多个解），
+ * `hint` 必须是有限坐标（它是按最近解匹配的锚点）。
+ */
+function isValidSolutionRef(value: Record<string, unknown>): boolean {
+  if (value.solutionIndex !== undefined && (!isFiniteNumber(value.solutionIndex) || !Number.isInteger(value.solutionIndex) || value.solutionIndex < 0)) return false
+  if (value.hint !== undefined && !(isRecord(value.hint) && isFiniteNumber(value.hint.x) && isFiniteNumber(value.hint.y))) return false
+  return true
+}
+
 function hasClosedFaceBoundary(byId: Map<string, unknown>, pointIds: unknown, edgeIds: unknown): boolean {
   if (!Array.isArray(pointIds) || !Array.isArray(edgeIds) || pointIds.length !== edgeIds.length) return false
   const pointSet = new Set(pointIds.filter((id): id is string => typeof id === "string"))
@@ -403,14 +413,17 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>, parameter
   if (type === "lineCircleIntersection") {
     if (referenceType(byId, value.lineId) !== "line" || referenceType(byId, value.circleId) !== "circle") errors.push("line-circle intersection references invalid objects")
     if (!isFiniteNumber(value.x) || !isFiniteNumber(value.y)) errors.push("intersection coordinates must be finite")
+    if (!isValidSolutionRef(value)) errors.push("intersection solution reference is invalid")
   }
   if (type === "circleIntersection") {
     if (referenceType(byId, value.circleA) !== "circle" || referenceType(byId, value.circleB) !== "circle" || value.circleA === value.circleB) errors.push("circle intersection references invalid circles")
     if (!isFiniteNumber(value.x) || !isFiniteNumber(value.y)) errors.push("intersection coordinates must be finite")
+    if (!isValidSolutionRef(value)) errors.push("intersection solution reference is invalid")
   }
   if (type === "curveIntersection") {
     if (value.objectA === value.objectB || !sampledTypes.has(referenceType(byId, value.objectA) ?? "") || !sampledTypes.has(referenceType(byId, value.objectB) ?? "")) errors.push("curve intersection references invalid objects")
     if (!isFiniteNumber(value.x) || !isFiniteNumber(value.y)) errors.push("intersection coordinates must be finite")
+    if (!isValidSolutionRef(value)) errors.push("intersection solution reference is invalid")
   }
   if (type === "intersectionSet") {
     if (value.objectA === value.objectB || !sampledTypes.has(referenceType(byId, value.objectA) ?? "") || !sampledTypes.has(referenceType(byId, value.objectB) ?? "")) errors.push("intersection set references invalid objects")
