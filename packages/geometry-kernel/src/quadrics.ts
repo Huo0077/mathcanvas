@@ -10,50 +10,12 @@
  *
  * 本模块是纯函数、零依赖（不引 three.js）：模型层不许读渲染几何。
  */
-import type { ConePrimitive, CylinderPrimitive, PrimitiveSpec } from "@draw/dsl"
+import type { ConePrimitive, Conic3, Conic3Coefficients, Conic3Frame, Conic3Kind, Conic3Line, CylinderPrimitive, PrimitiveSpec } from "@draw/dsl"
 
 import { addVector3, crossVector3, dotVector3, normalizeVector3, scaleVector3, subtractVector3, type Plane3, type Vector3 } from "./geometry3d"
 
-/** 圆锥曲线的退化类型：`line` 是一条（重根 / 相切），`lines` 是两条（可能平行、也可能相交）。 */
-export type Conic3Kind = "circle" | "ellipse" | "parabola" | "hyperbola" | "line" | "lines" | "point" | "empty" | "insufficient-data"
-
-/** 平面内二次曲线 `A s² + B s t + C t² + D s + E t + F = 0` 的六个系数（`s` 沿 `u`、`t` 沿 `v`）。 */
-export type Conic3Coefficients = [number, number, number, number, number, number]
-
-export interface Conic3Frame {
-  /** 平面上离世界原点最近的点。 */
-  origin: Vector3
-  u: Vector3
-  v: Vector3
-  normal: Vector3
-}
-
-/** 帧内的一条直线（帧坐标是正交单位基，因此就是度量坐标）。 */
-export interface Conic3Line {
-  through: { s: number; t: number }
-  direction: { s: number; t: number }
-}
-
-export interface Conic3 {
-  kind: Conic3Kind
-  frame: Conic3Frame
-  /** 平面内系数——**精确真源**（`PᵀQP` 的结果）。 */
-  coefficients: Conic3Coefficients
-  /** 以下是从系数解出的规范数据，供界面与渲染使用。 */
-  center?: Vector3
-  semiMajor?: number
-  semiMinor?: number
-  /** 抛物线：顶点到焦点的距离 `p`。 */
-  focalParameter?: number
-  eccentricity?: number
-  foci?: Vector3[]
-  vertex?: Vector3
-  /** 平面内的主轴方向（世界坐标、正交单位）：`major` 配 `semiMajor`、`minor` 配 `semiMinor`。 */
-  axes?: { major: Vector3; minor: Vector3 }
-  lines?: Conic3Line[]
-  point?: Vector3
-  closed: boolean
-}
+/** 圆锥曲线的文档类型定义在 DSL 里（内核依赖 DSL，反向依赖会破坏分层）；这里再导出，内核 API 保持不变。 */
+export type { Conic3, Conic3Coefficients, Conic3Frame, Conic3Kind, Conic3Line }
 
 export interface Quadric3Bounds {
   /** 轴向单位向量（局部 +z 经旋转后的世界方向）。 */

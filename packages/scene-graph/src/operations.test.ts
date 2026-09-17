@@ -444,3 +444,53 @@ describe("function analysis deletion", () => {
     expect(result.document.primitives.map((primitive) => primitive.id)).not.toContain("derivative-1")
   })
 })
+
+/**
+ * 解析截面（A1 第 2 片）：源是圆柱 / 圆锥时，`recomputeSection` 除了照旧写多边形边界，
+ * 还要写**精确**的圆锥曲线片段环（`section.exact`）并把状态升为 `exact`——弯曲边界已经精确，
+ * 不该再说"数值近似"。多边形字段继续写，拾取与旧消费方仍读它。
+ */
+describe("analytic section of round solids", () => {
+  const cylinder = { id: "cylinder-1", type: "cylinder" as const, center: { x: 0, y: 0, z: 0 }, radius: 2, height: 3, segments: 48 }
+  const cube = { id: "cube-1", type: "cube" as const, origin: { x: -1, y: -1, z: -1 }, size: { x: 2, y: 2, z: 2 } }
+
+  function documentWithSection(source: { id: string; type: "cylinder" | "cube" }, plane: { normal: { x: number; y: number; z: number }; constant: number }) {
+    const document = createEmptyDocument("geometry3d")
+    const solid = source.type === "cylinder" ? cylinder : cube
+    const withSolid = commitPatch(document, { op: "addPrimitives", primitives: [solid, ...buildSolidTemplate(solid).primitives] }).document
+    return commitPatch(withSolid, { op: "addPrimitive", primitive: { id: "section-1", type: "section", sourceId: source.id, plane, points: [], classification: "none", status: "undefined" } }).document
+  }
+
+  const sectionOf = (document: ReturnType<typeof documentWithSection>) => document.primitives.find((candidate) => candidate.id === "section-1") as Extract<PrimitiveSpec, { type: "section" }>
+
+  it("writes the exact circle for a perpendicular cut and keeps the polygon boundary too", () => {
+    const section = sectionOf(documentWithSection(cylinder, { normal: { x: 0, y: 0, z: 1 }, constant: -1 }))
+
+    expect(section.exact?.kind).toBe("circle")
+    expect(section.exact?.loops).toHaveLength(1)
+    expect(section.status).toBe("exact")
+    // 多边形路径照旧：拾取与旧消费方仍读 points / classification。
+    expect(section.classification).toBe("polygon")
+    expect(section.points.length).toBeGreaterThanOrEqual(3)
+  })
+
+  it("turns the exact boundary into an ellipse when the plane is tilted", () => {
+    const degrees = (value: number) => (value * Math.PI) / 180
+    const withCircle = documentWithSection(cylinder, { normal: { x: 0, y: 0, z: 1 }, constant: -1 })
+    const theta = degrees(30)
+    const tilted = commitPatch(withCircle, { op: "setSectionPlane", id: "section-1", normal: { x: Math.sin(theta), y: 0, z: Math.cos(theta) }, constant: -1.2 * Math.cos(theta) }).document
+    const section = sectionOf(tilted)
+
+    expect(section.exact?.kind).toBe("ellipse")
+    expect(section.exact?.loops[0].length).toBeGreaterThanOrEqual(1)
+    expect(section.status).toBe("exact")
+  })
+
+  it("leaves a polygon source without an analytic boundary", () => {
+    const section = sectionOf(documentWithSection(cube, { normal: { x: 0, y: 0, z: 1 }, constant: 0 }))
+
+    expect(section.exact).toBeUndefined()
+    expect(section.status).toBe("approximate")
+    expect(section.classification).toBe("polygon")
+  })
+})

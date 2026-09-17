@@ -5,6 +5,50 @@ const primitiveTypes = new Set(["point", "point3", "line", "line3", "segment", "
 const sampledTypes = new Set(["line", "segment", "ray", "polyline", "circle", "arc", "parabola", "ellipse", "hyperbola", "function"])
 const solidTypes = new Set(["cube", "pyramid", "cylinder", "cone", "polyhedron3"])
 const annotationFeatures = new Set(["point", "center", "focus", "vertex", "intersection", "start", "end"])
+const conic3Kinds = new Set(["circle", "ellipse", "parabola", "hyperbola", "line", "lines", "point", "empty", "insufficient-data"])
+
+/** 帧内的一条直线（过点 + 方向）。 */
+function isConic3Line(value: unknown): boolean {
+  if (!isRecord(value)) return false
+  const through = value.through
+  const direction = value.direction
+  return isRecord(through) && Number.isFinite(through.s) && Number.isFinite(through.t)
+    && isRecord(direction) && Number.isFinite(direction.s) && Number.isFinite(direction.t)
+}
+
+/** 解析圆锥曲线：`coefficients` 是精确真源（六个有限数必须齐），规范数据是可选的派生值。 */
+function isConic3(value: unknown): boolean {
+  if (!isRecord(value)) return false
+  if (!conic3Kinds.has(String(value.kind)) || typeof value.closed !== "boolean") return false
+  const frame = value.frame
+  if (!isRecord(frame) || !isFiniteCoordinate3(frame.origin) || !isFiniteCoordinate3(frame.u) || !isFiniteCoordinate3(frame.v) || !isFiniteCoordinate3(frame.normal)) return false
+  if (!Array.isArray(value.coefficients) || value.coefficients.length !== 6 || value.coefficients.some((entry) => !Number.isFinite(entry))) return false
+  if (value.center !== undefined && !isFiniteCoordinate3(value.center)) return false
+  if (value.point !== undefined && !isFiniteCoordinate3(value.point)) return false
+  if (value.vertex !== undefined && !isFiniteCoordinate3(value.vertex)) return false
+  if (value.foci !== undefined && (!Array.isArray(value.foci) || value.foci.some((focus) => !isFiniteCoordinate3(focus)))) return false
+  if (value.axes !== undefined && (!isRecord(value.axes) || !isFiniteCoordinate3(value.axes.major) || !isFiniteCoordinate3(value.axes.minor))) return false
+  if (value.lines !== undefined && (!Array.isArray(value.lines) || value.lines.some((line) => !isConic3Line(line)))) return false
+  return true
+}
+
+/**
+ * 片段环：`[[{kind:"conic",…} | {kind:"segment",…}, …], …]`。
+ *
+ * 参数区间**不要求升序**：把片段串成环时会翻转片段方向（反向遍历是合法表示）。
+ */
+function isCurvePieceLoops(value: unknown): boolean {
+  if (!Array.isArray(value)) return false
+  return value.every((loop) => Array.isArray(loop) && loop.every((piece) => {
+    if (!isRecord(piece)) return false
+    if (piece.kind === "segment") return isFiniteCoordinate3(piece.a) && isFiniteCoordinate3(piece.b)
+    if (piece.kind !== "conic") return false
+    if (!isConic3(piece.conic)) return false
+    if (!Array.isArray(piece.parameterRange) || piece.parameterRange.length !== 2 || piece.parameterRange.some((entry) => !Number.isFinite(entry))) return false
+    if (piece.branch !== undefined && (!Number.isInteger(piece.branch) || (piece.branch as number) < 0)) return false
+    return true
+  }))
+}
 
 type RecordValue = Record<string, unknown>
 
@@ -400,8 +444,12 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>, parameter
      * 渲染层要么抛异常要么画出 NaN 顶点。
      */
     if (value.loops !== undefined && (!Array.isArray(value.loops) || value.loops.some((loop) => !Array.isArray(loop) || loop.some((point) => !isFiniteCoordinate3(point))))) errors.push("section loops are invalid")
+    if (value.exact !== undefined) {
+      const exact = value.exact
+      if (!isRecord(exact) || !conic3Kinds.has(String(exact.kind)) || !isCurvePieceLoops(exact.loops)) errors.push("section exact boundary is invalid")
+    }
     if (value.classification !== undefined && !["none", "point", "segment", "polygon", "insufficient-data"].includes(String(value.classification))) errors.push("section classification is invalid")
-    if (!["approximate", "undefined", "failed"].includes(String(value.status))) errors.push("section status is invalid")
+    if (!["approximate", "exact", "undefined", "failed"].includes(String(value.status))) errors.push("section status is invalid")
     if (value.diagnostic !== undefined && typeof value.diagnostic !== "string") errors.push("section diagnostic is invalid")
   }
   if (type === "intersectionLine") {
@@ -446,6 +494,7 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>, parameter
       if (!Array.isArray(value.points) || value.points.some((point) => !isFiniteCoordinate3(point))) errors.push("intersectionFace points are invalid")
       if (!isFiniteCoordinate3(value.normal)) errors.push("intersectionFace normal is invalid")
       if (!isFiniteNumber(value.area) || value.area < 0) errors.push("intersectionFace area is invalid")
+      if (value.exactLoops !== undefined && !isCurvePieceLoops(value.exactLoops)) errors.push("intersectionFace exact loops are invalid")
     } else if (!isFiniteCoordinate3(value.position)) errors.push("intersectionPoint3 position is invalid")
   }
   if (type === "circle" || type === "arc") {

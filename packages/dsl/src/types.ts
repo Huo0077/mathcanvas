@@ -411,6 +411,63 @@ export interface ConePrimitive extends PrimitivePresentation {
   rotation?: SolidRotation
 }
 
+/**
+ * 平面与二次曲面（圆柱 / 圆锥）相交得到的**圆锥曲线**。
+ *
+ * 这是**文档数据**：由内核的解析层算出、写进 `section.exact`，所以类型定义放在 DSL 里（内核依赖 DSL，
+ * 反向依赖会破坏分层）。`coefficients` 是精确真源（`PᵀQP` 的结果），其余是从它解出的规范数据，
+ * 供界面与渲染使用。用户口径："我不要一个逼近的圆，我需要一个真的圆。"
+ */
+export type Conic3Kind = "circle" | "ellipse" | "parabola" | "hyperbola" | "line" | "lines" | "point" | "empty" | "insufficient-data"
+
+/** 平面内二次曲线 `A s² + B s t + C t² + D s + E t + F = 0`（`s` 沿 `u`、`t` 沿 `v`）。 */
+export type Conic3Coefficients = [number, number, number, number, number, number]
+
+export interface Conic3Frame {
+  /** 平面上离世界原点最近的点。 */
+  origin: Vector3
+  u: Vector3
+  v: Vector3
+  normal: Vector3
+}
+
+/** 帧内的一条直线（帧坐标是正交单位基，因此就是度量坐标）。 */
+export interface Conic3Line {
+  through: { s: number; t: number }
+  direction: { s: number; t: number }
+}
+
+export interface Conic3 {
+  kind: Conic3Kind
+  frame: Conic3Frame
+  /** 平面内系数——**精确真源**。 */
+  coefficients: Conic3Coefficients
+  /** 以下是从系数解出的规范数据。 */
+  center?: Vector3
+  semiMajor?: number
+  semiMinor?: number
+  /** 抛物线：顶点到焦点的距离 `p`。 */
+  focalParameter?: number
+  eccentricity?: number
+  foci?: Vector3[]
+  vertex?: Vector3
+  /** 平面内的主轴方向（世界坐标、正交单位）：`major` 配 `semiMajor`、`minor` 配 `semiMinor`。 */
+  axes?: { major: Vector3; minor: Vector3 }
+  /** `lines`：一对直线（平行或相交，靠"过点是否相同"区分）；`line`：一条直线。 */
+  lines?: Conic3Line[]
+  point?: Vector3
+  /** 闭合曲线（圆 / 椭圆）为 `true`，参数域 `[0, 2π)`。 */
+  closed: boolean
+}
+
+/**
+ * 截面 / 交面边界的一段：圆锥曲线的参数区间（双曲线要用 `branch` 指明哪一支），或者一条直线段。
+ * 有限实体的截面会被端面裁掉，所以边界是"曲线弧 + 端面弦"拼成的闭合环，而不是单条曲线。
+ */
+export type CurvePiece3 =
+  | { kind: "conic"; conic: Conic3; parameterRange: [number, number]; branch?: number }
+  | { kind: "segment"; a: Vector3; b: Vector3 }
+
 /** Ordered-boundary classification of a plane/polyhedron section. */
 export type Section3Classification = "none" | "point" | "segment" | "polygon" | "insufficient-data"
 
@@ -427,8 +484,16 @@ export interface SectionPrimitive extends PrimitivePresentation {
    */
   loops?: Vector3[][]
   classification: Section3Classification
-  status: "approximate" | "undefined" | "failed"
+  /** `exact` 表示边界是解析圆锥曲线（圆柱 / 圆锥），其余仍是多边形的数值近似。 */
+  status: "approximate" | "exact" | "undefined" | "failed"
   diagnostic?: string
+  /**
+   * **解析结论与解析边界**（源是圆柱 / 圆锥时写入）。旧文档没有这个字段，行为完全不变。
+   *
+   * 与 `classification` 的分工：后者描述的是**多边形边界**的形态（`codec` 与 `scene-graph` 都会按点数
+   * 重新推导它），解析结论一律从这里读，避免两者的推导打架（见 spec §5.4）。
+   */
+  exact?: { kind: Conic3Kind; loops: CurvePiece3[][] }
 }
 
 /**
@@ -498,6 +563,8 @@ export interface IntersectionFacePrimitive extends PrimitivePresentation {
   hint: Vector3
   status: "valid" | "none" | "insufficient-data"
   diagnostic?: string
+  /** 交面边界里的圆弧（圆柱 ∩ 立方体那种）：与截面同一套片段表示，旧文档没有这个字段。 */
+  exactLoops?: CurvePiece3[][]
 }
 
 /**

@@ -198,4 +198,50 @@ describe("Geometry DSL document layout schema", () => {
     expect(validateDocument({ ...document, primitives: [cube, section([[valid], "ring"])] }).valid).toBe(false)
     expect(validateDocument({ ...document, primitives: [cube, section([[{ x: 0, y: Number.NaN, z: 0 }]])] }).valid).toBe(false)
   })
+
+  /**
+   * 解析截面（A1）：`section.exact` 里是**精确**圆锥曲线 + 片段环。系数是精确真源，
+   * 非有限数或错长度必须被拦住；旧文档没有这个字段，行为不变。
+   */
+  it("validates the exact analytic boundary written for round solids", () => {
+    const document = createDefaultCadLayout(createEmptyDocument("cad"))
+    const cube = { id: "cube-1", type: "cube", origin: { x: -1, y: -1, z: -1 }, size: { x: 2, y: 2, z: 2 } }
+    const conic = (overrides: Record<string, unknown> = {}) => ({
+      kind: "circle",
+      frame: { origin: { x: 0, y: 0, z: 1 }, u: { x: 0, y: -1, z: 0 }, v: { x: 1, y: 0, z: 0 }, normal: { x: 0, y: 0, z: 1 } },
+      coefficients: [1, 0, 1, 0, 0, -4],
+      center: { x: 0, y: 0, z: 1 },
+      semiMajor: 2,
+      semiMinor: 2,
+      eccentricity: 0,
+      axes: { major: { x: 1, y: 0, z: 0 }, minor: { x: 0, y: 1, z: 0 } },
+      closed: true,
+      ...overrides
+    })
+    const piece = { kind: "conic", conic: conic(), parameterRange: [0, Math.PI * 2] }
+    const segment = { kind: "segment", a: { x: 0, y: 0, z: 0 }, b: { x: 1, y: 0, z: 0 } }
+    const section = (exact: unknown) => ({
+      id: "section-1", type: "section", sourceId: "cube-1",
+      plane: { normal: { x: 0, y: 0, z: 1 }, constant: -1 },
+      points: [{ x: 0, y: 0, z: 1 }], classification: "polygon", status: "approximate", exact
+    })
+    const withExact = (exact: unknown) => validateDocument({ ...document, primitives: [cube, section(exact)] }).valid
+
+    expect(withExact({ kind: "circle", loops: [[piece]] })).toBe(true)
+    expect(withExact({ kind: "ellipse", loops: [[piece, segment]] })).toBe(true)
+    // 反向片段（把环接起来时会翻转方向）必须合法：参数区间不要求升序。
+    expect(withExact({ kind: "ellipse", loops: [[{ kind: "conic", conic: conic(), parameterRange: [2, 1] }, segment]] })).toBe(true)
+    expect(withExact({ kind: "hyperbola", loops: [[{ kind: "conic", conic: conic({ kind: "hyperbola" }), parameterRange: [0, 1], branch: 1 }]] })).toBe(true)
+    // 旧文档：没有这个字段。
+    expect(section(undefined) && validateDocument({ ...document, primitives: [cube, section(undefined)] }).valid).toBe(true)
+
+    expect(withExact({ kind: "spiral", loops: [[piece]] })).toBe(false)
+    expect(withExact({ kind: "circle", loops: "ring" })).toBe(false)
+    expect(withExact({ kind: "circle", loops: [[segment, { kind: "arc", a: { x: 0, y: 0, z: 0 }, b: { x: 1, y: 0, z: 0 } }]] })).toBe(false)
+    expect(withExact({ kind: "circle", loops: [[{ kind: "conic", conic: conic({ coefficients: [1, 0, 1, 0, 0] }), parameterRange: [0, 1] }]] })).toBe(false)
+    expect(withExact({ kind: "circle", loops: [[{ kind: "conic", conic: conic({ coefficients: [1, 0, 1, 0, 0, Number.NaN] }), parameterRange: [0, 1] }]] })).toBe(false)
+    expect(withExact({ kind: "circle", loops: [[{ kind: "conic", conic: conic(), parameterRange: [0] }]] })).toBe(false)
+    expect(withExact({ kind: "circle", loops: [[{ kind: "conic", conic: conic(), parameterRange: [0, 1], branch: -1 }]] })).toBe(false)
+    expect(withExact({ kind: "circle", loops: [[segment, { kind: "segment", a: { x: 0, y: 0, z: Number.NaN }, b: { x: 1, y: 0, z: 0 } }]] })).toBe(false)
+  })
 })
