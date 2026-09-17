@@ -878,6 +878,33 @@ describe("scene graph operations", () => {
     expect(pyramidPlane.constant).toBeCloseTo(-2, 10)
   })
 
+  it("cuts every template solid with its default plane", () => {
+    // 四个模板的**默认刀口**（过包围盒中高处的水平面）都必须真的切出一个多边形：
+    // 棱锥/圆柱/圆锥的默认几何曾经还是 Y-up 的旧约定，刀口会切在边界甚至切空（切片 1B 修掉）。
+    const templates = [
+      { id: "cube-1", type: "cube", origin: { x: -1, y: -1, z: -1 }, size: { x: 2, y: 2, z: 2 } },
+      { id: "pyramid-1", type: "pyramid", baseCenter: { x: 0, y: 0, z: 0 }, baseSize: { x: 4, y: 4 }, height: 4 },
+      { id: "cylinder-1", type: "cylinder", center: { x: 0, y: 0, z: 0 }, radius: 2, height: 4, segments: 32 },
+      { id: "cone-1", type: "cone", center: { x: 0, y: 0, z: 0 }, radius: 2, height: 4, segments: 32 }
+    ] as const
+
+    for (const template of templates) {
+      const document = createEmptyDocument("geometry3d")
+      document.primitives = [template]
+      const plane = sectionPlaneThroughSource(document, template.id)
+      expect(plane, template.id).not.toBeNull()
+      if (!plane) continue
+      const withSection = structuredClone(document)
+      withSection.primitives = [...document.primitives, { id: "section-1", type: "section", sourceId: template.id, plane, points: [], classification: "none" as const, status: "undefined" as const }]
+
+      const section = recomputeDerivedObjects(withSection).primitives.find((primitive) => primitive.id === "section-1")
+      if (section?.type !== "section") throw new Error(`section missing for ${template.id}`)
+      expect(section.classification, template.id).toBe("polygon")
+      expect(section.points.length, template.id).toBeGreaterThanOrEqual(3)
+      expect((section.loops ?? []).length, template.id).toBeGreaterThanOrEqual(1)
+    }
+  })
+
   it("recomputes an intersection set with every sampled solution", () => {
     const document = createEmptyDocument("calculus")
     document.primitives = [

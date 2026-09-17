@@ -156,6 +156,34 @@ test("uses a face of the solid as the cutting plane", async ({ page }) => {
   await expect.poll(async () => Number(await scene.getAttribute("data-section-point-count"))).toBeGreaterThanOrEqual(3)
 })
 
+/**
+ * 四个模板的**默认刀口**都必须真的切出多边形，而且转到 45° 仍然成立。
+ * 棱锥 / 圆柱 / 圆锥的默认几何一度还是 Y-up 的旧约定，刀口切在边界甚至切空（切片 1B 修掉），
+ * 这条用例把"四个模板都切得出来"钉在 e2e 层。
+ */
+for (const template of ["立方体", "棱锥", "圆柱", "圆锥"]) {
+  test(`cuts the default section of a ${template} and survives a 45° tilt`, async ({ page }) => {
+    await page.goto("/")
+    await page.getByRole("button", { name: "立体几何" }).click()
+
+    const scene = page.locator("[data-3d-scene]")
+    await page.getByRole("button", { name: `添加${template}` }).click()
+    await page.getByRole("button", { name: "创建截面" }).click()
+    await expect(scene).toHaveAttribute("data-section-count", "1")
+
+    const pointCount = async () => Number(await scene.getAttribute("data-section-point-count"))
+    const sectionPoints = expect.poll(pointCount, { message: `${template} 的默认截面` })
+    await sectionPoints.toBeGreaterThanOrEqual(3)
+
+    // 绕 X 轴三次 +15°：法向转到 45°，截面仍要有边界（不是切空、也没退化成一条棱）
+    for (let step = 0; step < 3; step += 1) await page.getByRole("button", { name: "绕 X 轴旋转剖切面 +15°" }).click()
+    const tilted = (await scene.getAttribute("data-section-plane-normal"))!.split(",").map(Number)
+    expect(Math.abs(tilted[1]), template).toBeCloseTo(Math.sin(Math.PI / 4), 2)
+    expect(tilted[2], template).toBeCloseTo(Math.cos(Math.PI / 4), 2)
+    await expect.poll(pointCount, { message: `${template} 倾斜 45° 后` }).toBeGreaterThanOrEqual(3)
+  })
+}
+
 test("moves the drawing section when dragged while free dragging is on", async ({ page }) => {
   await page.goto("/")
   await page.getByRole("button", { name: "立体几何" }).click()
