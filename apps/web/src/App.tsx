@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 
 import { decodeMgeo, encodeMgeo, type AnnotationFeature, type DrawingSheetSpec, type EngineeringAnnotationKind, type Measurement3Metric, type PrimitiveSpec, type Vector3, type Workspace } from "@draw/dsl"
 import { buildSolidTemplate, createMeasurement3, evaluatePlanarMeasurement, host3FromPrimitive, selectPrimitivesInBox, type BoxSelectionMode, type PlanarMetric } from "@draw/geometry-kernel"
-import { deletionTargets, sectionMaterialization, sectionPivot, sectionPlaneThroughSource, sectionSourceVertices, validateDeletion, validatePatch } from "@draw/scene-graph"
+import { deletionTargets, sectionMaterialization, sectionPivot, sectionPlaneThroughSource, sectionSourceVertices, solidVolumeHostFor, validateDeletion, validatePatch } from "@draw/scene-graph"
 import type { Alignment } from "@draw/scene-graph"
 
 import { AlgebraView } from "./components/AlgebraView"
@@ -33,6 +33,8 @@ import { exportCsv, exportSvg } from "./persistence/exporters"
 import { exportEngineeringDxf, exportEngineeringPdf, exportEngineeringSvg, selectExportableDrawings } from "./persistence/engineeringExporters"
 import { defaultDraftView, drawingViewLabels, resolveProjectedDrawing } from "./projectionVisuals"
 import { migrateLegacySolids } from "./solidTemplates"
+import { pointHostOptions, parsePointHostValue } from "./pointHostOptions"
+import { ROUND_SOLID_SEGMENTS } from "./solidDefaults"
 import { point3ToolAvailability } from "./spatialTools"
 import { resolveStatusPrompt, resolveIntersectionPreviewPrompt, resolvePreviewInventoryPrompt, type SceneControlMode } from "./statusPrompts"
 import { computeIntersectionPreviews3d, type IntersectionPreview3dCache } from "./intersectionPreviews3d"
@@ -487,8 +489,8 @@ export function App() {
     const primitive = type === "pyramid"
       ? { id, type, baseCenter: { x: -2, y: 0, z: -2 }, baseSize: { x: 4, y: 4 }, height: 4, label: `棱锥 ${id.split("-").at(-1)}` }
       : type === "cylinder"
-        ? { id, type, center: { x: 3, y: 0, z: 0 }, radius: 1.5, height: 3, segments: 24, label: `圆柱 ${id.split("-").at(-1)}` }
-        : { id, type, center: { x: -3, y: 0, z: 3 }, radius: 1.5, height: 3, segments: 24, label: `圆锥 ${id.split("-").at(-1)}` }
+        ? { id, type, center: { x: 3, y: 0, z: 0 }, radius: 1.5, height: 3, segments: ROUND_SOLID_SEGMENTS, label: `圆柱 ${id.split("-").at(-1)}` }
+        : { id, type, center: { x: -3, y: 0, z: 3 }, radius: 1.5, height: 3, segments: ROUND_SOLID_SEGMENTS, label: `圆锥 ${id.split("-").at(-1)}` }
     addSolidTemplate(primitive)
   }
   const addSolidTemplate = (primitive: Extract<PrimitiveSpec, { type: "cube" | "pyramid" | "cylinder" | "cone" }>) => {
@@ -608,36 +610,56 @@ export function App() {
    * 把空间点物化/解绑到宿主：绑定参数取**点当前坐标在宿主上的最近点**（内核的 closestParameter），
    * 所以"绑上去"这一步点不会跳，之后的移动完全由参数决定（参数是唯一真值）。
    */
-  const bindPointToHost = (hostId: string | null) => {
+  /**
+   * 把选中的空间点绑到宿主上。下拉的值是 `<模式>:<图元 id>`（见 `pointHostOptions`）：
+   * - `host` 一维宿主（直线 / 线段 / 射线 / 棱）：存参数 `u`；
+   * - `face` / `surface` 二维宿主（面 / 圆柱与圆锥侧面）：存 `uv`；
+   * - `solid` **实体内**：存包围盒内的三个比例 `uvw`，越界会被夹回实体表面。
+   *
+   * 绑定的一刻先做一次反投影，所以"绑上去"这一步点不会跳，之后的移动完全由参数决定（参数是唯一真值）。
+   */
+  const bindPointToHost = (value: string | null) => {
     if (selectedPrimitive?.type !== "point3") return
-    if (!hostId) {
+    const target = value ? parsePointHostValue(value) : null
+    if (!target) {
       apply({ op: "updatePrimitive", id: selectedPrimitive.id, patch: { binding3: { kind: "free" } } })
       setGuidance("已解绑为自由点：坐标仍由你直接编辑。")
       return
     }
-    const host = document.primitives.find((primitive) => primitive.id === hostId)
-    const constraint = host ? host3FromPrimitive(host, document.primitives) : null
+    const host = document.primitives.find((primitive) => primitive.id === target.primitiveId)
+    const constraint = host
+      ? host3FromPrimitive(host, document.primitives) ?? (target.mode === "solid" ? solidVolumeHostFor(new Map(document.primitives.map((primitive) => [primitive.id, primitive])), host.id) : null)
+      : null
     if (!host || !constraint) {
-      setFileError("这个图元不能作为宿主动点：只有空间直线 / 线段 / 射线 / 棱 / 面 / 圆柱与圆锥侧面可以。")
+      setFileError("这个图元不能作为宿主动点：只有空间直线 / 线段 / 射线 / 棱 / 面 / 圆柱与圆锥侧面，以及实体的内部可以。")
       return
     }
     const projected = constraint.closestParameter(selectedPrimitive.position)
-    const binding3 = host.type === "face3"
-      ? { kind: "onFace" as const, faceId: hostId, uv: [projected.u, projected.v ?? 0] as [number, number] }
-      : host.type === "cylinder" || host.type === "cone"
-        ? { kind: "onSurface" as const, solidId: hostId, uv: [projected.u, projected.v ?? 0] as [number, number] }
-        : { kind: "onHost" as const, hostId, parameter: projected.u }
+    const binding3 = target.mode === "face"
+      ? { kind: "onFace" as const, faceId: host.id, uv: [projected.u, projected.v ?? 0] as [number, number] }
+      : target.mode === "surface"
+        ? { kind: "onSurface" as const, solidId: host.id, uv: [projected.u, projected.v ?? 0] as [number, number] }
+        : target.mode === "solid"
+          ? { kind: "inSolid" as const, solidId: host.id, uvw: [projected.u, projected.v ?? 0, projected.w ?? 0] as [number, number, number] }
+          : { kind: "onHost" as const, hostId: host.id, parameter: projected.u }
     apply({ op: "updatePrimitive", id: selectedPrimitive.id, patch: { binding3 } })
-    setGuidance(`已绑定到「${host.label ?? host.id}」：点由宿主参数算出坐标，之后拖动或改参数都沿宿主滑动。`)
+    setGuidance(target.mode === "solid"
+      ? `已绑定到「${host.label ?? host.id}」的**内部**：点可以在实体内自由移动，但出不去——拖到外面会被夹回表面，实体移动时它跟着走。`
+      : `已绑定到「${host.label ?? host.id}」：点由宿主参数算出坐标，之后拖动或改参数都沿宿主滑动。`)
   }
-  /** 改宿主参数：一维宿主只用 u；面与曲面用 (u, v)，只改一个维度时另一个沿用现值。 */
-  const setPointHostParameter = (u: number, v?: number) => {
+  /** 改宿主参数：一维宿主只用 u；面与曲面用 (u, v)；实体内用 (u, v, w)，只改给出的维度。 */
+  const setPointHostParameter = (u: number, v?: number, w?: number) => {
     if (selectedPrimitive?.type !== "point3") return
     const binding = selectedPrimitive.binding
     if (!binding) return
     if (binding.kind === "onHost") {
       if (!Number.isFinite(u)) return
       apply({ op: "updatePrimitive", id: selectedPrimitive.id, patch: { binding3: { ...binding, parameter: u } } })
+      return
+    }
+    if (binding.kind === "inSolid") {
+      if (!Number.isFinite(u)) return
+      apply({ op: "updatePrimitive", id: selectedPrimitive.id, patch: { binding3: { ...binding, uvw: [u, v ?? binding.uvw[1], w ?? binding.uvw[2]] } } })
       return
     }
     if (binding.kind !== "onFace" && binding.kind !== "onSurface") return
@@ -1049,14 +1071,12 @@ export function App() {
 
   const planarCanvas = <GraphicsView document={document} selectedIds={selectedIds} creationMode={creationMode} onSelect={updateSelection} onBoxSelect={selectBox} onCanvasClick={handleCanvasCreationClick} onCanvasDoubleClick={handleCanvasDoubleClick} onDragEnd={handleDragEnd} onCreateIntersection={createIntersectionFromPreview} onPointerCoordinate={setPointerCoordinate} />
 
-  /** 可作宿主的图元：空间直线 / 线段 / 射线 / 棱 / 面 / 圆柱与圆锥侧面。 */
+  /**
+   * 可作宿主的图元：空间直线 / 线段 / 射线 / 棱 / 面 / 圆柱与圆锥侧面，以及**实体的内部**
+   *（用户要求："动点的约束应该可以在立方体内"）。列什么与取值编码见 `pointHostOptions`。
+   */
   const pointHostCandidates = useMemo(
-    () => document.primitives
-      .filter((primitive) => ["line3", "segment3", "ray3", "edge3", "face3", "cylinder", "cone"].includes(primitive.type))
-      .map((primitive) => {
-        const kindLabel = primitive.type === "edge3" ? "棱" : primitive.type === "face3" ? "面" : primitive.type === "line3" ? "直线" : primitive.type === "segment3" ? "线段" : primitive.type === "ray3" ? "射线" : primitive.type === "cylinder" ? "圆柱侧面" : "圆锥侧面"
-        return { id: primitive.id, label: `${primitive.label ?? primitive.id}（${kindLabel}）` }
-      }),
+    () => pointHostOptions(document.primitives).map((option) => ({ id: option.value, label: option.label })),
     [document.primitives]
   )
 
@@ -1197,6 +1217,8 @@ export function App() {
         // 只提交参数：坐标由重算从参数算出，所以点永远精确落在宿主上。
         if (primitive.binding.kind === "onHost") apply({ op: "updatePrimitive", id, patch: { binding3: { ...primitive.binding, parameter: parameter.u } } })
         else if (primitive.binding.kind === "onFace" || primitive.binding.kind === "onSurface") apply({ op: "updatePrimitive", id, patch: { binding3: { ...primitive.binding, uv: [parameter.u, parameter.v ?? primitive.binding.uv[1]] } } })
+        // 实体内：三个比例都提交（拖动时夹取已经把点限制在体内，提交的参数就是夹取后的位置）。
+        else if (primitive.binding.kind === "inSolid") apply({ op: "updatePrimitive", id, patch: { binding3: { ...primitive.binding, uvw: [parameter.u, parameter.v ?? primitive.binding.uvw[1], parameter.w ?? primitive.binding.uvw[2]] } } })
       }} onPickSectionFace={applySectionFace} /> : planarCanvas}
       {inspectorPanel}
       <div className="status-bar" role="status" aria-live="polite" aria-label="操作提示"><span className="status-bar-prompt">{statusPrompt}</span><span className="status-bar-item">{pointerCoordinate ? `坐标 (${pointerCoordinate.x.toFixed(2)}, ${pointerCoordinate.y.toFixed(2)})` : "坐标 —"}</span><span className="status-bar-item">对象 {document.primitives.length}</span><span className="status-bar-item">工作区 {document.workspace}</span></div>

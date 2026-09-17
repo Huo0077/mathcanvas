@@ -31,6 +31,14 @@ export type Point3Binding =
   | { kind: "onFace"; faceId: string; uv: [number, number] }
   /** 绑到圆柱 / 圆锥的**侧面**：`uv` 是 (方位角, 轴向比例)，轴线沿世界 +Z。 */
   | { kind: "onSurface"; solidId: string; uv: [number, number] }
+  /**
+   * 绑到一个**实体的内部**（用户要求："动点的约束应该可以在立方体内"）。
+   *
+   * `uvw` 是实体包围盒内的轴向比例（各维都在 [0,1]）：点可以在体内自由移动，但出不去——
+   * 参数越界时被夹回实体表面。与线上 / 面上 / 曲面上的绑定一样，**参数是唯一真值**：
+   * 实体平移或缩放时参数不变、坐标跟着走。
+   */
+  | { kind: "inSolid"; solidId: string; uvw: [number, number, number] }
 
 export interface PrimitiveStyle {
   stroke?: string

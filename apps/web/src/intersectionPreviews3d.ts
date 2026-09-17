@@ -94,9 +94,9 @@ const CANDIDATE_TYPES = new Set<PrimitiveSpec["type"]>(["cube", "pyramid", "cyli
 const DEFAULT_MAX_SOURCES = 24
 /** 单次扫描的布尔交集配额（状态栏的说明文案也用这个数，所以导出而不是各写一份）。 */
 export const DEFAULT_MAX_BOOLEAN_PAIRS = 12
-/** 单对来源的面 / 交点上限：圆柱与圆锥的交集是按多边形近似的，面数可能几十个。 */
-export const DEFAULT_MAX_FACES_PER_PAIR = 64
-export const DEFAULT_MAX_POINTS_PER_PAIR = 32
+/** 单对来源的面 / 交点上限：圆柱与圆锥的交集是按多边形近似的，48 段时面数约 56–98，得留出余量。 */
+export const DEFAULT_MAX_FACES_PER_PAIR = 96
+export const DEFAULT_MAX_POINTS_PER_PAIR = 64
 /** 实体多到两两组合失控时的硬上限：宁可少画，不要一次改动卡住画布。 */
 export const MAX_PAIRS = 120
 

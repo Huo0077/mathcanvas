@@ -1,5 +1,5 @@
 import type { AnnotationSpec, ConstraintSpec, Coordinate, DrawingSheetSpec, DrawingViewSpec, EngineeringAnnotation, GeometryDocument, GroupSpec, LayerSpec, Measurement3, Point3Binding, Point3Primitive, PointBinding, PrimitiveSpec, Section3Classification, Vector3 } from "@draw/dsl"
-import { createDependencyGraph, adaptiveSampleFunctionSegments, arcConstraint, buildSolidTemplate, calculateMeasurement3, circleConstraint, createBuilderContext, dihedralMarker3, ellipseConstraint, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, evaluatePlanarMeasurement, findExtrema, findInflectionPoints, findZeros, functionGraphConstraint, host3FromPrimitive, hyperbolaConstraint, intersectCirclesDetailed, intersectConvexPolyhedra3, intersectFaceSets, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, lineConstraint, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, orderSectionPoints3, parabolaConstraint, polylineConstraint, rayConstraint, sectionConvexPolyhedron, sectionPolyhedron3, segmentConstraint, sharedRingEdge3, solveLineConstraints, type DihedralMarker3, type FaceRing3, type IntersectionResult, type PlanarConstraint, type PlanarMetric, type SampledPrimitive, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
+import { createDependencyGraph, adaptiveSampleFunctionSegments, arcConstraint, buildSolidTemplate, calculateMeasurement3, circleConstraint, createBuilderContext, dihedralMarker3, ellipseConstraint, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, evaluatePlanarMeasurement, findExtrema, findInflectionPoints, findZeros, functionGraphConstraint, host3FromPrimitive, hyperbolaConstraint, intersectCirclesDetailed, intersectConvexPolyhedra3, intersectFaceSets, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, lineConstraint, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, orderSectionPoints3, parabolaConstraint, polylineConstraint, rayConstraint, sectionConvexPolyhedron, sectionPolyhedron3, segmentConstraint, sharedRingEdge3, solidVolumeHost3, solveLineConstraints, type DihedralMarker3, type FaceRing3, type Host3, type IntersectionResult, type PlanarConstraint, type PlanarMetric, type SampledPrimitive, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
 
 export type DomainOperation =
   | { op: "addPrimitive"; primitive: PrimitiveSpec }
@@ -236,8 +236,14 @@ function translatePrimitive3(primitive: PrimitiveSpec, delta: Vector3): { primit
   return { primitive, movedIds: managedPointIds(primitive) }
 }
 
-function primitiveDependencies(primitive: PrimitiveSpec): string[] {
+function primitiveDependencies(primitive: PrimitiveSpec, templateOwners?: Map<string, string>): string[] {
   const dependencies: string[] = []
+  /**
+   * 模板物化出来的点 / 棱 / 面 / 多面体是**由实体算出来的**：实体一动它们就跟着重算。
+   * 少了这条边，绑定在"实体的某个面 / 棱"上的点就不会随实体移动（实测缺陷）。
+   */
+  const owner = templateOwners?.get(primitive.id)
+  if (owner && owner !== primitive.id) dependencies.push(owner)
   if (primitive.type === "point" && primitive.binding) {
     if (primitive.binding.kind === "onPath") dependencies.push(primitive.binding.pathId, ...(primitive.binding.parameterId ? [primitive.binding.parameterId] : []))
     if (primitive.binding.kind === "derived") dependencies.push(primitive.binding.sourceId)
@@ -250,6 +256,8 @@ function primitiveDependencies(primitive: PrimitiveSpec): string[] {
     if (primitive.binding.kind === "onHost") dependencies.push(primitive.binding.hostId)
     if (primitive.binding.kind === "onFace") dependencies.push(primitive.binding.faceId)
     if (primitive.binding.kind === "onSurface") dependencies.push(primitive.binding.solidId)
+    // 实体内：点跟着实体的拓扑走（实体一动，点的坐标就按参数重算）。
+    if (primitive.binding.kind === "inSolid") dependencies.push(primitive.binding.solidId)
   }
   if (primitive.type === "line") dependencies.push(...(primitive.slopeParameter ? [primitive.slopeParameter] : []))
   if (primitive.type === "line3") dependencies.push(...(primitive.definition.kind === "throughPoints" ? primitive.definition.pointIds : [primitive.definition.pointId]))
@@ -965,10 +973,33 @@ function recomputeAnalysisSet(primitive: Extract<PrimitiveSpec, { type: "analysi
     : { ...primitive, results: [], status: "undefined" as const, diagnostic: "source function is undefined across the analysis domain" }
 }
 
+/**
+ * 模板实体物化出来的子对象 → 它属于哪个实体（多面体自身、以及它的点 / 棱 / 面）。
+ *
+ * **为什么需要它**：依赖图原先只有"多面体依赖它的点 / 棱 / 面 + 模板源"这一个方向，
+ * 于是"实体 → 子对象"这一条边根本不存在——从实体出发的闭包只到多面体就断了。
+ * 后果是实测到的真缺陷：把点绑在立方体的某个面上，然后移动立方体，**绑定点留在原地**
+ *（`getAffectedPrimitiveIds(["cube-a"])` 只有 `cube-a` 与多面体，到不了那个面，更到不了点）。
+ */
+function templateChildOwners(document: GeometryDocument): Map<string, string> {
+  const owners = new Map<string, string>()
+  for (const primitive of document.primitives) {
+    if (primitive.type !== "polyhedron3" || !primitive.construction) continue
+    const construction = primitive.construction
+    // 参数化模板记在 `sourceIds[0]`；按数值编辑过顶点的翻成 `fromFaces`，归属记在 `sourceId`。
+    const owner = construction.kind === "template" ? construction.sourceIds[0] : construction.kind === "fromFaces" ? construction.sourceId : undefined
+    if (!owner) continue
+    owners.set(primitive.id, owner)
+    for (const childId of [...primitive.vertexIds, ...primitive.edgeIds, ...primitive.faceIds]) owners.set(childId, owner)
+  }
+  return owners
+}
+
 export function getDependencyIndex(document: GeometryDocument): Map<string, Set<string>> {
   const dependents = new Map<string, Set<string>>()
+  const owners = templateChildOwners(document)
   for (const primitive of document.primitives) {
-    for (const dependency of primitiveDependencies(primitive)) {
+    for (const dependency of primitiveDependencies(primitive, owners)) {
       const primitiveDependents = dependents.get(dependency) ?? new Set<string>()
       primitiveDependents.add(primitive.id)
       dependents.set(dependency, primitiveDependents)
@@ -1017,8 +1048,9 @@ export function getAffectedPrimitiveIds(document: GeometryDocument, changedIds: 
 export function topologicalRecomputeOrder(document: GeometryDocument, changedIds?: string[]): string[] {
   const graph = createDependencyGraph()
   const primitiveIds = new Set(document.primitives.map((primitive) => primitive.id))
+  const owners = templateChildOwners(document)
   for (const primitive of document.primitives) {
-    graph.addNode(primitive.id, primitiveDependencies(primitive).filter((dependency) => primitiveIds.has(dependency)))
+    graph.addNode(primitive.id, primitiveDependencies(primitive, owners).filter((dependency) => primitiveIds.has(dependency)))
   }
   const affected = changedIds === undefined ? primitiveIds : getAffectedPrimitiveIds(document, changedIds)
   const ordered = graph.topologicalOrder().filter((id) => affected.has(id))
@@ -1058,6 +1090,14 @@ function clampHostParameter(value: number, domain: readonly [number, number]): n
   return Math.min(Math.max(value, domain[0]), domain[1])
 }
 
+/** 实体内约束的宿主：由实体的**物化拓扑**（顶点 + 面环）构造，解析不出来时返回 null。 */
+export function solidVolumeHostFor(primitives: Map<string, PrimitiveSpec>, solidId: string): Host3 | null {
+  const source = primitives.get(solidId)
+  if (!source) return null
+  const topology = solidTopology3(source, primitives)
+  return topology ? solidVolumeHost3(topology.vertices, topology.faces) : null
+}
+
 function resolveBoundPoint3(primitive: Extract<PrimitiveSpec, { type: "point3" }>, primitives: Map<string, PrimitiveSpec>): Vector3 | null {
   const binding = primitive.binding
   if (!binding || binding.kind === "free") return null
@@ -1078,7 +1118,14 @@ function resolveBoundPoint3(primitive: Extract<PrimitiveSpec, { type: "point3" }
    * 宿主绑定：坐标完全由参数算出（参数是唯一真值）。
    * 宿主解析不了时返回 null，调用方会保留点上一次的坐标——不静默把点挪到别处。
    */
-  if (binding.kind === "onHost" || binding.kind === "onFace" || binding.kind === "onSurface") {
+  if (binding.kind === "onHost" || binding.kind === "onFace" || binding.kind === "onSurface" || binding.kind === "inSolid") {
+    const solidHost = binding.kind === "inSolid" ? solidVolumeHostFor(primitives, binding.solidId) : null
+    if (binding.kind === "inSolid") {
+      // 实体内：参数是三个 [0,1] 比例；越界会被夹回实体表面（`solidVolumeHost3` 负责）。
+      const [u, v, w] = binding.uvw
+      if (!solidHost || !Number.isFinite(u) || !Number.isFinite(v) || !Number.isFinite(w)) return null
+      return solidHost.evaluate({ u, v, w })
+    }
     const sourceId = binding.kind === "onHost" ? binding.hostId : binding.kind === "onFace" ? binding.faceId : binding.solidId
     const source = primitives.get(sourceId)
     const host = source ? host3FromPrimitive(source, primitives) : null
@@ -1450,7 +1497,7 @@ export function deletionPlan(document: GeometryDocument, ids: string[]): Deletio
 function unbindDeletedHost(primitive: PrimitiveSpec, deleted: Set<string>): PrimitiveSpec {
   if (primitive.type === "point3" && primitive.binding && primitive.binding.kind !== "free") {
     const binding = primitive.binding
-    const hostId = binding.kind === "onLine" ? binding.lineId : binding.kind === "onPlane" ? binding.planeId : binding.kind === "onHost" ? binding.hostId : binding.kind === "onFace" ? binding.faceId : binding.kind === "onSurface" ? binding.solidId : null
+    const hostId = binding.kind === "onLine" ? binding.lineId : binding.kind === "onPlane" ? binding.planeId : binding.kind === "onHost" ? binding.hostId : binding.kind === "onFace" ? binding.faceId : binding.kind === "onSurface" || binding.kind === "inSolid" ? binding.solidId : null
     const sources = binding.kind === "derived" ? binding.sourceIds : hostId ? [hostId] : []
     if (sources.some((sourceId) => deleted.has(sourceId))) return { ...primitive, binding: { kind: "free" } }
   }

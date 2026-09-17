@@ -2,10 +2,66 @@ import { describe, expect, it } from "vitest"
 
 import { createEmptyDocument } from "@draw/dsl"
 import { buildSolidTemplate } from "./solid-builders"
-import { coneSurfaceHost3, cylinderSurfaceHost3, faceHost3, host3FromPrimitive, lineHost3, planeHost3 } from "./hosts3"
+import { coneSurfaceHost3, cylinderSurfaceHost3, faceHost3, host3FromPrimitive, lineHost3, planeHost3, solidVolumeHost3 } from "./hosts3"
 
 const a = { x: 0, y: 0, z: 0 }
 const b = { x: 2, y: 0, z: 0 }
+
+describe("solid volume hosts", () => {
+  /**
+   * 用户要求："动点的约束应该可以在立方体内"。
+   *
+   * 体积宿主与线 / 面宿主是**两种**约束：线 / 面是"投影到低维宿主上"，
+   * 而实体内是"已经在里面就别动，跑到外面就夹回边界"——所以 `residual` 在里面必须是 0，
+   * 参数域的边界就是实体的表面。
+   */
+  const cube = { vertices: [
+    { x: 0, y: 0, z: 0 }, { x: 2, y: 0, z: 0 }, { x: 2, y: 2, z: 0 }, { x: 0, y: 2, z: 0 },
+    { x: 0, y: 0, z: 2 }, { x: 2, y: 0, z: 2 }, { x: 2, y: 2, z: 2 }, { x: 0, y: 2, z: 2 }
+  ], faces: [[0, 3, 2, 1], [4, 5, 6, 7], [0, 1, 5, 4], [1, 2, 6, 5], [2, 3, 7, 6], [3, 0, 4, 7]] }
+
+  it("maps uvw through the bounding box and keeps the point inside the solid", () => {
+    const host = solidVolumeHost3(cube.vertices, cube.faces)!
+    expect(host.kind).toBe("solid-volume")
+    expect(host.domain.u).toEqual([0, 1])
+    expect(host.domain.v).toEqual([0, 1])
+    expect(host.domain.w).toEqual([0, 1])
+    // 参数到坐标：uvw 是**包围盒**内的比例。
+    expect(host.evaluate({ u: 0, v: 0, w: 0 })).toEqual({ x: 0, y: 0, z: 0 })
+    expect(host.evaluate({ u: 0.5, v: 0.5, w: 0.5 })).toEqual({ x: 1, y: 1, z: 1 })
+    expect(host.evaluate({ u: 1, v: 1, w: 1 })).toEqual({ x: 2, y: 2, z: 2 })
+  })
+
+  it("leaves an interior point alone and clamps an exterior one onto the surface", () => {
+    const host = solidVolumeHost3(cube.vertices, cube.faces)!
+    // 里面：残差 0，project 不动它（这就是"可以自由地在体内移动"）。
+    expect(host.residual({ x: 1, y: 1, z: 1 })).toBeCloseTo(0, 9)
+    expect(host.project({ x: 1, y: 0.5, z: 1.5 }).point).toEqual({ x: 1, y: 0.5, z: 1.5 })
+    // 外面：夹回表面（最近的那个面），残差就是到表面的距离。
+    const outside = host.project({ x: 5, y: 1, z: 1 })
+    expect(outside.point.x).toBeCloseTo(2, 9)
+    expect(outside.point.y).toBeCloseTo(1, 9)
+    expect(outside.point.z).toBeCloseTo(1, 9)
+    expect(outside.distance).toBeCloseTo(3, 9)
+    expect(host.residual({ x: 1, y: -4, z: 1 })).toBeCloseTo(4, 9)
+  })
+
+  it("round-trips a point through closestParameter and evaluate", () => {
+    const host = solidVolumeHost3(cube.vertices, cube.faces)!
+    const inside = { x: 0.5, y: 1.5, z: 1 }
+    const parameter = host.closestParameter(inside)
+    expect(parameter.u).toBeCloseTo(0.25, 9)
+    expect(parameter.v).toBeCloseTo(0.75, 9)
+    expect(parameter.w).toBeCloseTo(0.5, 9)
+    // 参数是唯一真值：由参数算回来的坐标就是它自己（体内不夹）。
+    expect(host.evaluate(parameter)).toEqual(inside)
+  })
+
+  it("refuses a solid without usable faces instead of inventing a box", () => {
+    expect(solidVolumeHost3(cube.vertices, [])).toBeNull()
+    expect(solidVolumeHost3([{ x: 0, y: 0, z: 0 }], cube.faces)).toBeNull()
+  })
+})
 
 describe("line hosts", () => {
   it("evaluates the affine parameter and reports its domain", () => {

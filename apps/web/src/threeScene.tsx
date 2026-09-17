@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react"
 import * as THREE from "three"
 import type { GeometryDocument, IntersectionFacePrimitive, IntersectionPoint3Primitive, IntersectionSolidPrimitive, Plane3Primitive, Point3Primitive, Polyhedron3Primitive, SectionPrimitive, Vector3 } from "@draw/dsl"
 import { dihedralAngleDegrees, host3FromPrimitive, unfoldPolyhedron3, type Host3, type Host3Parameter } from "@draw/geometry-kernel"
+import { solidVolumeHostFor } from "@draw/scene-graph"
 import { resolveMeasurementVisual } from "./measurementVisuals"
 import { syncOverlay } from "./overlaySync"
 import type { SceneControlMode } from "./statusPrompts"
@@ -955,9 +956,13 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
            * （不像自由拖动那样"叠加屏幕位移"，拖久了也不会漂离）。拖动期间只更新参数与受影响对象。
            */
           const binding = target.binding
-          const hostId = binding.kind === "onHost" ? binding.hostId : binding.kind === "onFace" ? binding.faceId : binding.kind === "onSurface" ? binding.solidId : null
+          const hostId = binding.kind === "onHost" ? binding.hostId : binding.kind === "onFace" ? binding.faceId : binding.kind === "onSurface" || binding.kind === "inSolid" ? binding.solidId : null
           const hostPrimitive = hostId ? documentRef.current.primitives.find((candidate) => candidate.id === hostId) : undefined
-          const hostConstraint = hostPrimitive ? host3FromPrimitive(hostPrimitive, documentRef.current.primitives) : null
+          // 实体内不是"投影到低维宿主"，而是体积约束：由实体的物化拓扑构造（见 `solidVolumeHostFor`）。
+          const hostConstraint = hostPrimitive
+            ? host3FromPrimitive(hostPrimitive, documentRef.current.primitives)
+              ?? (binding.kind === "inSolid" ? solidVolumeHostFor(new Map(documentRef.current.primitives.map((primitive) => [primitive.id, primitive])), hostPrimitive.id) : null)
+            : null
           if (hostConstraint) {
             const anchor = new THREE.Vector3(hit.worldPoint.x, hit.worldPoint.y, hit.worldPoint.z)
             const origin = dragWorldPoint(camera, anchor, point) ?? anchor.clone()

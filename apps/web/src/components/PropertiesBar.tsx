@@ -2,10 +2,11 @@ import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "r
 import { dynamicPointPaths } from "../dynamicPointPaths"
 import type { AnnotationFeature, EngineeringAnnotationKind, Measurement3Metric, PrimitiveSpec, SolidRotation, Vector3 } from "@draw/dsl"
 import { measurementOptionsFor } from "../spatialTools"
-import { adaptiveSampleFunctionSegments, advanceAnimation, evaluateParameterExpression, functionPresets, getFunctionPreset, parseExpression, type AnimationMode, type AnimationState } from "@draw/geometry-kernel"
+import { adaptiveSampleFunctionSegments, evaluateParameterExpression, functionPresets, getFunctionPreset, parseExpression } from "@draw/geometry-kernel"
 import { parameterWindow, type Alignment, type PrimitiveUpdatePatch } from "@draw/scene-graph"
 
 import { defaultStrokeFor } from "../primitiveStyle"
+import { pointHostValue } from "../pointHostOptions"
 import { annotationFeatureOptions } from "../annotations"
 import { insertFormulaTemplate } from "../formulaEditor"
 import { FormulaKeyboard } from "./FormulaKeyboard"
@@ -36,9 +37,9 @@ export interface PropertiesBarProps {
   /** 空间点可以绑定的宿主（空间直线 / 棱 / 面 / 圆柱与圆锥侧面）。 */
   pointHostCandidates?: { id: string; label: string }[]
   /** 绑定到宿主（传 null = 解绑为自由点）。 */
-  onBindPointHost?: (hostId: string | null) => void
+  onBindPointHost?: (hostValue: string | null) => void
   /** 改宿主参数：一维宿主只用 u，面与曲面用 (u, v)。 */
-  onChangeHostParameter?: (u: number, v?: number) => void
+  onChangeHostParameter?: (u: number, v?: number, w?: number) => void
   onToggleSelectedVisibility: () => void
   onToggleSelectedLock: () => void
   onCreateGroup: () => void
@@ -205,6 +206,8 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
   const toggleSection = (section: InspectorSection) => setOpenSections((current) => ({ ...current, [section]: !current[section] }))
   const selectedPoint = selectedPrimitive?.type === "point" ? selectedPrimitive : null
   const selectedPoint3 = selectedPrimitive?.type === "point3" ? selectedPrimitive : null
+  /** 取成 const 是为了让下面那几段 JSX 里的箭头函数也能保住类型收窄（直接读 `selectedPoint3.binding` 收窄不了）。 */
+  const point3Binding = selectedPoint3?.binding
   const selectedLinear = selectedPrimitive?.type === "line" || selectedPrimitive?.type === "segment" || selectedPrimitive?.type === "ray" ? selectedPrimitive : null
   const selectedPolyline = selectedPrimitive?.type === "polyline" ? selectedPrimitive : null
   const selectedParabola = selectedPrimitive?.type === "parabola" ? selectedPrimitive : null
@@ -234,9 +237,6 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
   /** 插入模板后要等一帧再定位光标：把这一帧记下来，面板卸载时取消，避免对着已经不在的输入框聚焦。 */
   const formulaFocusFrameRef = useRef<number | null>(null)
   const [annotationText, setAnnotationText] = useState("")
-  const beginPreview = useSceneStore((state) => state.beginPreview)
-  const previewParameter = useSceneStore((state) => state.previewParameter)
-  const commitPreview = useSceneStore((state) => state.commitPreview)
   const sceneDocument = useSceneStore((state) => state.document)
   const applySceneOperation = useSceneStore((state) => state.apply)
   const annotationOptions = selectedPrimitive ? annotationFeatureOptions(selectedPrimitive) : []
@@ -248,33 +248,16 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
    * （绑定时就写入，用户可以在「参数域」里改），双曲线还要记录分支以免拖动时跳支。
    */
   const pathPrimitives = dynamicPointPaths(sceneDocument.primitives)
-  const [animationMode, setAnimationMode] = useState<AnimationMode>("loop")
-  const [animationPlaying, setAnimationPlaying] = useState(false)
-  const [animationOpen, setAnimationOpen] = useState(false)
-  const animationRef = useRef<AnimationState>({ value, direction: 1, mode: "loop", playing: false, speed: 0.2 })
   const selectedPointBinding = selectedPoint?.binding?.kind === "onPath" ? selectedPoint.binding : null
   /**
    * 选中动点所在曲线的自然参数窗口：有界曲线用它自己的参数域，抛物线/双曲线用绑定里的 `domain`。
-   * 它同时供给「路径参数」输入框和动画滑块，所以编辑「参数域」后两者都会立刻跟着变。
+   * 它供给「路径参数」输入框，所以编辑「参数域」后输入框会立刻跟着变。
    */
   const selectedPointWindow = (() => {
     if (!selectedPointBinding) return null
     const path = sceneDocument.primitives.find((primitive) => primitive.id === selectedPointBinding.pathId)
     return path ? parameterWindow(path, sceneDocument.parameters, selectedPointBinding.domain) : null
   })()
-  /**
-   * 动画与滑块的驱动目标：优先驱动**选中动点自己的参数**（绑定产生的 `t-<点id>`），
-   * 否则退回直线斜率参数。之前动画目标写死成 `"slope"`，所以在圆锥曲线工作区里选中一个动点
-   * 按「播放」，动的是那条无关的直线，点本身纹丝不动。
-   */
-  const boundPointParameter = selectedPointBinding?.parameterId
-    ? sceneDocument.parameters[selectedPointBinding.parameterId]
-    : undefined
-  const animationParameterId = boundPointParameter ? boundPointParameter.id : showSlopeParameter ? "slope" : null
-  const animationMinimum = boundPointParameter ? selectedPointWindow?.min ?? 0 : min
-  const animationMaximum = boundPointParameter ? selectedPointWindow?.max ?? 1 : max
-  const animationStep = boundPointParameter ? (selectedPointWindow ? (selectedPointWindow.max - selectedPointWindow.min) / 100 : 0.01) : step
-  const animationValue = boundPointParameter ? boundPointParameter.value : value
   const selected3dPrimitives = selectedIds.map((id) => sceneDocument.primitives.find((primitive) => primitive.id === id)).filter((primitive): primitive is PrimitiveSpec => Boolean(primitive))
   const measurementOptions = measurementOptionsFor(sceneDocument.workspace, selected3dPrimitives)
   const selectedFacePair = selected3dPrimitives.length === 2 && selected3dPrimitives.every((primitive) => primitive.type === "face3")
@@ -305,24 +288,6 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
     if (formulaFocusFrameRef.current !== null) window.cancelAnimationFrame(formulaFocusFrameRef.current)
     formulaFocusFrameRef.current = null
   }, [])
-
-  useEffect(() => {
-    if (!animationPlaying) animationRef.current = { ...animationRef.current, value: animationValue, mode: animationMode, playing: false, speed: Math.max((animationMaximum - animationMinimum) / 4, animationStep) }
-  }, [animationPlaying, animationMode, animationMaximum, animationMinimum, animationStep, animationValue])
-
-  useEffect(() => {
-    if (!animationPlaying || !animationParameterId) return
-    const timer = window.setInterval(() => {
-      const next = advanceAnimation(animationRef.current, 0.05, [animationMinimum, animationMaximum])
-      animationRef.current = next
-      previewParameter(animationParameterId, next.value)
-      if (!next.playing) {
-        setAnimationPlaying(false)
-        commitPreview()
-      }
-    }, 50)
-    return () => window.clearInterval(timer)
-  }, [animationParameterId, animationPlaying, animationMaximum, animationMinimum, commitPreview, previewParameter])
 
   const updatePoint = (axis: "x" | "y", next: number) => selectedPoint && editable && onUpdatePrimitive({ [axis]: next })
   const updatePoint3 = (axis: keyof Vector3, next: number) => selectedPoint3 && editable && onUpdatePrimitive({ position3: { ...selectedPoint3.position, [axis]: next } })
@@ -493,25 +458,6 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
       formulaRef.current?.setSelectionRange(insertion.cursorStart, insertion.cursorEnd)
     })
   }
-  const toggleAnimation = () => {
-    if (animationPlaying) {
-      setAnimationPlaying(false)
-      animationRef.current = { ...animationRef.current, playing: false }
-      commitPreview()
-      return
-    }
-    if (!animationParameterId) return
-    beginPreview()
-    animationRef.current = { value: animationValue, direction: 1, mode: animationMode, playing: true, speed: Math.max((animationMaximum - animationMinimum) / 4, animationStep) }
-    setAnimationPlaying(true)
-  }
-  const stopAnimation = () => {
-    if (!animationPlaying) return
-    setAnimationPlaying(false)
-    animationRef.current = { ...animationRef.current, playing: false, value: animationMinimum }
-    if (animationParameterId) previewParameter(animationParameterId, animationMinimum)
-    commitPreview()
-  }
   const functionMetrics = selectedFunction ? (() => {
     try {
       const segments = adaptiveSampleFunctionSegments((x) => evaluateParameterExpression(selectedFunction.expression, { x }), selectedFunction.domain, { initialSteps: selectedFunction.samples ?? 128, maxSteps: Math.max(selectedFunction.samples ?? 128, 2048) })
@@ -531,24 +477,10 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
       <InspectorAccordion title="几何参数" open={openSections.data} onToggle={() => toggleSection("data")} />
       <InspectorAccordion title="外观样式" open={openSections.appearance} onToggle={() => toggleSection("appearance")} />
     </>}
-    {selectedPrimitive && <InspectorAccordion title="动效演示" open={animationOpen} onToggle={() => setAnimationOpen((open) => !open)}>
-      <div className="animation-controls" aria-label="动态控制">
-        <span className="properties-label"><strong>动画演示</strong></span>
-        <div className="property-actions">
-          <button type="button" aria-label={animationPlaying ? "暂停动画" : "播放动画"} onClick={toggleAnimation} disabled={!editable || !animationParameterId}>{animationPlaying ? "暂停" : "播放"}</button>
-          <button type="button" aria-label="停止动画" onClick={stopAnimation} disabled={!animationPlaying}>停止</button>
-          <select aria-label="动画模式" value={animationMode} onChange={(event) => setAnimationMode(event.target.value as AnimationMode)}>
-            <option value="loop">循环</option>
-            <option value="once">单次</option>
-            <option value="pingPong">往返</option>
-          </select>
-        </div>
-        {animationParameterId && <input aria-label="动画参数" type="range" min={animationMinimum} max={animationMaximum} step={animationStep} value={animationValue} disabled={!editable} onChange={(event) => applySceneOperation({ op: "setParameter", id: animationParameterId, value: numberValue(event) })} />}
-      </div>
-    </InspectorAccordion>}
+    {/* 「动效演示」栏已按用户要求删除（2026-09-17）：播放时只看得到起始与结束两帧，与其修不如去掉。 */}
     {/* 重命名放在默认可见的「几何参数」区，避免必须先展开外观页签才能改名。 */}
     {shows("data") && selectedPrimitive && <div className="primitive-properties"><h3>图元名称</h3><Field label="名称"><input aria-label="图元名称" type="text" value={selectedPrimitive.label ?? ""} placeholder={selectedPrimitive.id} onChange={(event) => onUpdatePrimitive({ label: event.target.value })} /></Field><p className="footer-note">名称只影响显示，不改动对象 ID 或几何数据。</p></div>}
-    {shows("data") && selectedPoint3 && <div className="primitive-properties"><h3>空间点坐标</h3><Vector3Fields prefix="坐标" value={selectedPoint3.position} disabled={!editable || selectedPoint3.binding?.kind !== "free"} onChange={updatePoint3} /><Field label="宿主绑定"><select aria-label="点宿主绑定" disabled={!editable} value={selectedPoint3.binding?.kind === "onHost" ? selectedPoint3.binding.hostId : selectedPoint3.binding?.kind === "onFace" ? selectedPoint3.binding.faceId : selectedPoint3.binding?.kind === "onSurface" ? selectedPoint3.binding.solidId : ""} onChange={(event) => onBindPointHost?.(event.target.value === "" ? null : event.target.value)}><option value="">自由点</option>{(pointHostCandidates ?? []).map((host) => <option key={host.id} value={host.id}>{host.label}</option>)}</select></Field>{selectedPoint3.binding?.kind === "onHost" && <Field label="宿主参数"><input aria-label="宿主参数" type="number" step="0.01" disabled={!editable} value={selectedPoint3.binding.parameter} onChange={(event) => onChangeHostParameter?.(numberValue(event))} /></Field>}{(selectedPoint3.binding?.kind === "onFace" || selectedPoint3.binding?.kind === "onSurface") && <><Field label="面上参数 u"><input aria-label="面上参数 u" type="number" step="0.1" disabled={!editable} value={selectedPoint3.binding.uv[0]} onChange={(event) => onChangeHostParameter?.(numberValue(event), selectedPoint3.binding?.kind === "onFace" ? selectedPoint3.binding.uv[1] : selectedPoint3.binding?.kind === "onSurface" ? selectedPoint3.binding.uv[1] : 0)} /></Field><Field label="面上参数 v"><input aria-label="面上参数 v" type="number" step="0.1" disabled={!editable} value={selectedPoint3.binding.uv[1]} onChange={(event) => onChangeHostParameter?.(selectedPoint3.binding?.kind === "onFace" ? selectedPoint3.binding.uv[0] : selectedPoint3.binding?.kind === "onSurface" ? selectedPoint3.binding.uv[0] : 0, numberValue(event))} /></Field></>}<p className="footer-note">点位置是空间构造的真源；线、面和实体通过点引用联动。绑定到宿主（空间直线 / 棱 / 面 / 圆柱与圆锥侧面）之后，点由**宿主参数**算出坐标，永远贴住宿主。</p></div>}
+    {shows("data") && selectedPoint3 && <div className="primitive-properties"><h3>空间点坐标</h3><Vector3Fields prefix="坐标" value={selectedPoint3.position} disabled={!editable || point3Binding?.kind !== "free"} onChange={updatePoint3} /><Field label="宿主绑定"><select aria-label="点宿主绑定" disabled={!editable} value={pointHostValue(point3Binding)} onChange={(event) => onBindPointHost?.(event.target.value === "" ? null : event.target.value)}><option value="">自由点</option>{(pointHostCandidates ?? []).map((host) => <option key={host.id} value={host.id}>{host.label}</option>)}</select></Field>{point3Binding?.kind === "onHost" && <Field label="宿主参数"><input aria-label="宿主参数" type="number" step="0.01" disabled={!editable} value={point3Binding.parameter} onChange={(event) => onChangeHostParameter?.(numberValue(event))} /></Field>}{(point3Binding?.kind === "onFace" || point3Binding?.kind === "onSurface") && <><Field label="面上参数 u"><input aria-label="面上参数 u" type="number" step="0.1" disabled={!editable} value={point3Binding.uv[0]} onChange={(event) => onChangeHostParameter?.(numberValue(event), point3Binding.uv[1])} /></Field><Field label="面上参数 v"><input aria-label="面上参数 v" type="number" step="0.1" disabled={!editable} value={point3Binding.uv[1]} onChange={(event) => onChangeHostParameter?.(point3Binding.uv[0], numberValue(event))} /></Field></>}{point3Binding?.kind === "inSolid" && <><Field label="体内参数 u"><input aria-label="体内参数 u" type="number" min="0" max="1" step="0.05" disabled={!editable} value={point3Binding.uvw[0]} onChange={(event) => onChangeHostParameter?.(numberValue(event), point3Binding.uvw[1], point3Binding.uvw[2])} /></Field><Field label="体内参数 v"><input aria-label="体内参数 v" type="number" min="0" max="1" step="0.05" disabled={!editable} value={point3Binding.uvw[1]} onChange={(event) => onChangeHostParameter?.(point3Binding.uvw[0], numberValue(event), point3Binding.uvw[2])} /></Field><Field label="体内参数 w"><input aria-label="体内参数 w" type="number" min="0" max="1" step="0.05" disabled={!editable} value={point3Binding.uvw[2]} onChange={(event) => onChangeHostParameter?.(point3Binding.uvw[0], point3Binding.uvw[1], numberValue(event))} /></Field></>}<p className="footer-note">点位置是空间构造的真源；线、面和实体通过点引用联动。绑定到宿主（空间直线 / 棱 / 面 / 圆柱与圆锥侧面）之后，点由**宿主参数**算出坐标，永远贴住宿主；绑定到**实体内**则可以在体内自由移动，出不去（拖到外面会被夹回表面）。</p></div>}
     {shows("data") && selectedSolid && <div className="primitive-properties"><h3>立体几何属性</h3>{selectedSolid.type === "cube" && <><Vector3Fields prefix="原点" value={selectedSolid.origin} disabled={!editable} onChange={(axis, next) => onUpdatePrimitive({ origin3: { ...selectedSolid.origin, [axis]: next } })} /><Vector3Fields prefix="尺寸" value={selectedSolid.size} disabled={!editable} onChange={(axis, next) => onUpdatePrimitive({ size3: { ...selectedSolid.size, [axis]: Math.max(0.01, next) } })} /></>}{selectedSolid.type === "pyramid" && <><Vector3Fields prefix="底面中心" value={selectedSolid.baseCenter} disabled={!editable} onChange={(axis, next) => onUpdatePrimitive({ baseCenter3: { ...selectedSolid.baseCenter, [axis]: next } })} /><CoordinateField label="底面尺寸 X" value={selectedSolid.baseSize.x} disabled={!editable} onChange={(next) => onUpdatePrimitive({ baseSize3: { ...selectedSolid.baseSize, x: Math.max(0.01, next) } })} /><CoordinateField label="底面尺寸 Y" value={selectedSolid.baseSize.y} disabled={!editable} onChange={(next) => onUpdatePrimitive({ baseSize3: { ...selectedSolid.baseSize, y: Math.max(0.01, next) } })} /><CoordinateField label="高度" value={selectedSolid.height} disabled={!editable} onChange={(next) => onUpdatePrimitive({ height: Math.max(0.01, next) })} /></>}{(selectedSolid.type === "cylinder" || selectedSolid.type === "cone") && <><Vector3Fields prefix="中心" value={selectedSolid.center} disabled={!editable} onChange={(axis, next) => onUpdatePrimitive({ center3: { ...selectedSolid.center, [axis]: next } })} /><CoordinateField label="半径 3D" value={selectedSolid.radius} disabled={!editable} onChange={(next) => onUpdatePrimitive({ radius3: Math.max(0.01, next) })} /><CoordinateField label="高度" value={selectedSolid.height} disabled={!editable} onChange={(next) => onUpdatePrimitive({ height: Math.max(0.01, next) })} /><Field label="分段数"><input aria-label="分段数" type="number" min="3" max="256" step="1" disabled={!editable} value={selectedSolid.segments} onChange={(event) => onUpdatePrimitive({ segments: Math.max(3, Math.min(256, Math.round(numberValue(event)))) })} /></Field></>}</div>}
     {shows("data") && selectedSolid && <div className="primitive-properties"><h3>朝向</h3><SolidRotationFields rotation={selectedSolid.rotation} disabled={!editable} onChange={(rotation) => onUpdatePrimitive({ rotation3: rotation })} /></div>}
     {shows("data") && selectedPlane3 && <div className="primitive-properties"><h3>平面大小</h3><Field label="半边长（世界单位）"><input aria-label="平面半边长" type="number" min="0.1" step="0.5" placeholder="自动" disabled={!editable} value={selectedPlane3.halfSize ?? ""} onChange={(event) => onUpdatePrimitive({ halfSize: event.target.value === "" ? null : Math.max(0.1, numberValue(event)) })} /></Field><div className="property-actions" aria-label="平面大小操作"><button type="button" disabled={!editable || selectedPlane3.halfSize === undefined} onClick={() => onUpdatePrimitive({ halfSize: null })}>恢复自动</button></div><p className="footer-note">留空表示仍按场景自动适配；填入数值后，平面画出的范围由该半边长决定。</p></div>}

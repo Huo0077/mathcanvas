@@ -201,7 +201,7 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>, parameter
   if (type === "point3") {
     if (!isFiniteVector3(value.position)) errors.push("point3 position must be finite")
     if (value.binding !== undefined) {
-      if (!isRecord(value.binding) || !["free", "onLine", "onPlane", "derived", "onHost", "onFace", "onSurface"].includes(String(value.binding.kind))) errors.push("point3 binding is invalid")
+      if (!isRecord(value.binding) || !["free", "onLine", "onPlane", "derived", "onHost", "onFace", "onSurface", "inSolid"].includes(String(value.binding.kind))) errors.push("point3 binding is invalid")
       else if (value.binding.kind === "onLine" && (typeof value.binding.lineId !== "string" || !["line3", "segment3", "ray3"].includes(referenceType(byId, value.binding.lineId) ?? "") || !isFiniteNumber(value.binding.parameter))) errors.push("point3 line binding is invalid")
       else if (value.binding.kind === "onPlane" && (typeof value.binding.planeId !== "string" || referenceType(byId, value.binding.planeId) !== "plane3" || !Array.isArray(value.binding.coordinates) || value.binding.coordinates.length !== 2 || !value.binding.coordinates.every(isFiniteNumber) || !isValidPlaneFrame(value.binding.frame))) errors.push("point3 plane binding is invalid")
       else if (value.binding.kind === "derived" && (!Array.isArray(value.binding.sourceIds) || value.binding.sourceIds.length === 0 || value.binding.sourceIds.some((sourceId) => typeof sourceId !== "string" || !byId.has(sourceId)) || typeof value.binding.feature !== "string")) errors.push("point3 derived binding is invalid")
@@ -209,6 +209,8 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>, parameter
       else if (value.binding.kind === "onHost" && (typeof value.binding.hostId !== "string" || !["line3", "segment3", "ray3", "edge3"].includes(referenceType(byId, value.binding.hostId) ?? "") || !isFiniteNumber(value.binding.parameter))) errors.push("point3 host binding is invalid")
       else if (value.binding.kind === "onFace" && (typeof value.binding.faceId !== "string" || referenceType(byId, value.binding.faceId) !== "face3" || !isFiniteUvPair(value.binding.uv))) errors.push("point3 face binding is invalid")
       else if (value.binding.kind === "onSurface" && (typeof value.binding.solidId !== "string" || !["cylinder", "cone"].includes(referenceType(byId, value.binding.solidId) ?? "") || !isFiniteUvPair(value.binding.uv))) errors.push("point3 surface binding is invalid")
+      // 实体内：宿主必须是**实体**（点要有体积才谈得上"在里面"），参数是三个 [0,1] 比例。
+      else if (value.binding.kind === "inSolid" && (typeof value.binding.solidId !== "string" || !solidTypes.has(referenceType(byId, value.binding.solidId) ?? "") || !Array.isArray(value.binding.uvw) || value.binding.uvw.length !== 3 || !value.binding.uvw.every(isFiniteNumber))) errors.push("point3 solid binding is invalid")
     }
   }
   if (type === "line3") {

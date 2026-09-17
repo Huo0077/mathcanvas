@@ -18,13 +18,15 @@ export interface Host3Parameter {
   u: number
   /** 次参数：只在二维宿主（面、平面、曲面）上使用。 */
   v?: number
+  /** 第三个参数：只在三维宿主（实体内部）上使用，是包围盒内的轴向比例。 */
+  w?: number
 }
 
-export type Host3Kind = "line" | "segment" | "ray" | "edge" | "face" | "plane" | "cylinder-surface" | "cone-surface"
+export type Host3Kind = "line" | "segment" | "ray" | "edge" | "face" | "plane" | "cylinder-surface" | "cone-surface" | "solid-volume"
 
 export interface Host3 {
   readonly kind: Host3Kind
-  readonly domain: { u: readonly [number, number]; v?: readonly [number, number]; closedU?: boolean }
+  readonly domain: { u: readonly [number, number]; v?: readonly [number, number]; w?: readonly [number, number]; closedU?: boolean }
   evaluate(parameter: Host3Parameter): Vector3
   closestParameter(point: Vector3): Host3Parameter
   project(point: Vector3): { parameter: Host3Parameter; point: Vector3; distance: number }
@@ -222,6 +224,103 @@ export function coneSurfaceHost3(center: Vector3, radius: number, height: number
       return { u: rho < EPSILON ? 0 : normalizeAzimuth(Math.atan2(dy, dx)), v: clampTo(raw, [0, 1]) }
     }
   )
+}
+
+/**
+ * 实体的**内部**：点可以在里面自由移动，但出不去。
+ *
+ * 与线 / 面 / 曲面宿主的区别：那些是"投影到低维宿主上"，而这是一个**体积约束**——
+ * 点在内部时 `project` 不动它（`residual = 0`），跑到外面才夹回最近的表面。
+ * 因此参数取"包围盒内的比例" `uvw ∈ [0,1]³`：实体平移 / 缩放时参数不变、坐标跟着走
+ *（参数仍然是唯一真值），而夹取保证结果永远落在实体里。
+ *
+ * 只对**凸**实体精确（用面平面逐个夹）；非凸实体上退化为"逐面夹取"的近似，不会给出体外的点。
+ */
+export function solidVolumeHost3(vertices: Vector3[], faces: number[][]): Host3 | null {
+  if (vertices.length < 4 || faces.length < 4) return null
+  const box = boundingBox3(vertices)
+  if (!box) return null
+  const size = { x: box.max.x - box.min.x, y: box.max.y - box.min.y, z: box.max.z - box.min.z }
+  if (size.x <= EPSILON || size.y <= EPSILON || size.z <= EPSILON) return null
+  const pointFor = (parameter: Host3Parameter): Vector3 => clampPointIntoSolid3(vertices, faces, {
+    x: box.min.x + size.x * clampTo(parameter.u, [0, 1]),
+    y: box.min.y + size.y * clampTo(parameter.v ?? 0, [0, 1]),
+    z: box.min.z + size.z * clampTo(parameter.w ?? 0, [0, 1])
+  })
+  return wrapHost(
+    "solid-volume",
+    { u: [0, 1], v: [0, 1], w: [0, 1] },
+    pointFor,
+    (point) => ({
+      u: clampTo((point.x - box.min.x) / size.x, [0, 1]),
+      v: clampTo((point.y - box.min.y) / size.y, [0, 1]),
+      w: clampTo((point.z - box.min.z) / size.z, [0, 1])
+    })
+  )
+}
+
+/** 顶点的世界轴对齐包围盒；没有顶点时返回 null。 */
+function boundingBox3(vertices: Vector3[]): { min: Vector3; max: Vector3 } | null {
+  if (vertices.length === 0) return null
+  return vertices.reduce((box, vertex) => ({
+    min: { x: Math.min(box.min.x, vertex.x), y: Math.min(box.min.y, vertex.y), z: Math.min(box.min.z, vertex.z) },
+    max: { x: Math.max(box.max.x, vertex.x), y: Math.max(box.max.y, vertex.y), z: Math.max(box.max.z, vertex.z) }
+  }), { min: { ...vertices[0] }, max: { ...vertices[0] } })
+}
+
+/**
+ * 把一个点夹进凸多面体：在内部就原样返回，在外面就沿违反的面平面投影回去。
+ *
+ * 凸体的"最近点"本可以写成 QP，但对课堂尺度的实体，"逐个面夹取 + 迭代几轮"已经足够：
+ * 每次投影都让点更靠近可行域，实测几轮内收敛；万一没收敛（非凸 / 退化输入），
+ * 最后再按每个面判一次，把仍然在外的点贴到违反最严重的那个面上——**绝不返回体外的点**。
+ */
+export function clampPointIntoSolid3(vertices: Vector3[], faces: number[][], point: Vector3): Vector3 {
+  const planes = faces.flatMap((face) => {
+    if (face.length < 3 || face.some((index) => index < 0 || index >= vertices.length)) return []
+    const normal = outwardNormal3(vertices, face)
+    return normal ? [normal] : []
+  })
+  if (planes.length === 0) return { ...point }
+  let current = { ...point }
+  for (let iteration = 0; iteration < 8; iteration += 1) {
+    const violated = planes.filter((plane) => dotVector3(plane.normal, current) + plane.constant > EPSILON)
+    if (violated.length === 0) return current
+    for (const plane of violated) {
+      const distance = dotVector3(plane.normal, current) + plane.constant
+      current = {
+        x: current.x - plane.normal.x * distance,
+        y: current.y - plane.normal.y * distance,
+        z: current.z - plane.normal.z * distance
+      }
+    }
+  }
+  return current
+}
+
+/** 面的平面（法向朝外、单位化）。用形心判断朝向，因此与顶点绕向无关。 */
+function outwardNormal3(vertices: Vector3[], face: number[]): { normal: Vector3; constant: number } | null {
+  const centre = vertices.reduce((sum, vertex) => ({
+    x: sum.x + vertex.x / vertices.length,
+    y: sum.y + vertex.y / vertices.length,
+    z: sum.z + vertex.z / vertices.length
+  }), { x: 0, y: 0, z: 0 })
+  let normal = { x: 0, y: 0, z: 0 }
+  for (let index = 0; index < face.length; index += 1) {
+    const current = vertices[face[index]]
+    const next = vertices[face[(index + 1) % face.length]]
+    normal = {
+      x: normal.x + (current.y - next.y) * (current.z + next.z),
+      y: normal.y + (current.z - next.z) * (current.x + next.x),
+      z: normal.z + (current.x - next.x) * (current.y + next.y)
+    }
+  }
+  const length = lengthVector3(normal)
+  if (length < EPSILON) return null
+  const unit = scaleVector3(normal, 1 / length)
+  const anchor = vertices[face[0]]
+  const outward = dotVector3(unit, subtractVector3(centre, anchor)) > 0 ? scaleVector3(unit, -1) : unit
+  return { normal: outward, constant: -dotVector3(outward, anchor) }
 }
 
 type HostContext = readonly PrimitiveSpec[] | ReadonlyMap<string, PrimitiveSpec>

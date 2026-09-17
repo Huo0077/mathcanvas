@@ -1,5 +1,5 @@
-import { act, fireEvent, render, screen, within } from "@testing-library/react"
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { fireEvent, render, screen, within } from "@testing-library/react"
+import { beforeEach, describe, expect, it } from "vitest"
 
 import { createEmptyDocument } from "@draw/dsl"
 import { host3FromPrimitive } from "@draw/geometry-kernel"
@@ -790,47 +790,38 @@ describe("MathCanvas workbench", () => {
   })
 
   /**
-   * 动画必须驱动**选中动点自己的参数**。之前动画目标写死成 `"slope"`，
-   * 所以在圆锥曲线工作区里选中一个动点按「播放」，动的是那条无关的直线。
+   * 「动效演示」栏已按用户要求**删除**（原话："我觉得可以把动态演示的栏目删掉"）：
+   * 播放时只看得到起始与结束两帧，与其修不如去掉。删掉之后动点仍然由三条通路驱动，
+   * 这条用例钉住"面板确实没了"，并确认剩下的驱动通路仍然打在**动点自己的参数**上
+   *（不是那条无关的直线）。
    */
-  it("animates the selected dynamic point instead of the slope line", () => {
-    vi.useFakeTimers()
-    try {
-      render(<App />)
-      fireEvent.click(screen.getByRole("button", { name: "添加点" }))
-      fireEvent.click(pointObjectRows().at(-1)!)
-      const pathSelect = screen.getByRole("combobox", { name: "点路径绑定" }) as HTMLSelectElement
-      fireEvent.change(pathSelect, { target: { value: Array.from(pathSelect.options).find((option) => option.value)!.value } })
+  it("has no animation panel, and still drives the dynamic point from its own parameter", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(pointObjectRows().at(-1)!)
+    const pathSelect = screen.getByRole("combobox", { name: "点路径绑定" }) as HTMLSelectElement
+    fireEvent.change(pathSelect, { target: { value: Array.from(pathSelect.options).find((option) => option.value)!.value } })
 
-      const document = () => useSceneStore.getState().document
-      const pointBefore = document().primitives.find((primitive) => primitive.type === "point")
-      if (pointBefore?.type !== "point" || pointBefore.binding?.kind !== "onPath") throw new Error("binding missing")
-      const parameterId = pointBefore.binding.parameterId!
-      const slopeBefore = document().parameters.slope.value
+    const document = () => useSceneStore.getState().document
+    const pointBefore = document().primitives.find((primitive) => primitive.type === "point")
+    if (pointBefore?.type !== "point" || pointBefore.binding?.kind !== "onPath") throw new Error("binding missing")
+    const parameterId = pointBefore.binding.parameterId!
+    const slopeBefore = document().parameters.slope.value
 
-      // Open the animation panel and scrub its slider: it targets the point's own parameter.
-      fireEvent.click(screen.getByRole("button", { name: "动效演示" }))
-      const scrub = screen.getByRole("slider", { name: "动画参数" }) as HTMLInputElement
-      expect(scrub.value).toBeCloseTo(document().parameters[parameterId].value, 6)
-      fireEvent.change(scrub, { target: { value: "0.9" } })
-      const pointAfterScrub = document().primitives.find((primitive) => primitive.type === "point")
-      if (pointAfterScrub?.type !== "point") throw new Error("point missing")
-      expect(pointAfterScrub.x).not.toBeCloseTo(pointBefore.x, 6)
-      expect(document().parameters.slope.value).toBeCloseTo(slopeBefore, 9)
+    // 面板与它的三个控件都不在了。
+    expect(screen.queryByRole("button", { name: "动效演示" })).toBeNull()
+    expect(screen.queryByRole("button", { name: "播放动画" })).toBeNull()
+    expect(screen.queryByRole("button", { name: "停止动画" })).toBeNull()
+    expect(screen.queryByRole("slider", { name: "动画参数" })).toBeNull()
 
-      // Playing advances that same parameter and leaves the slope alone.
-      const beforePlay = document().parameters[parameterId].value
-      fireEvent.click(screen.getByRole("button", { name: "播放动画" }))
-      act(() => {
-        vi.advanceTimersByTime(400)
-      })
-      expect(document().parameters[parameterId].value).not.toBeCloseTo(beforePlay, 6)
-      expect(document().parameters.slope.value).toBeCloseTo(slopeBefore, 9)
-
-      fireEvent.click(screen.getByRole("button", { name: "停止动画" }))
-    } finally {
-      vi.useRealTimers()
-    }
+    // 剩下的驱动通路仍然改**这个动点自己的参数**：改「路径参数」即可，直线斜率不受影响。
+    const slider = screen.getByLabelText("路径参数") as HTMLInputElement
+    expect(Number(slider.value)).toBeCloseTo(document().parameters[parameterId].value, 6)
+    fireEvent.change(slider, { target: { value: "0.9" } })
+    const pointAfter = document().primitives.find((primitive) => primitive.type === "point")
+    if (pointAfter?.type !== "point") throw new Error("point missing")
+    expect(pointAfter.x).not.toBeCloseTo(pointBefore.x, 6)
+    expect(document().parameters.slope.value).toBeCloseTo(slopeBefore, 9)
   })
 
   /**
@@ -891,12 +882,11 @@ describe("MathCanvas workbench", () => {
     if (point?.type !== "point" || point.binding?.kind !== "onPath") throw new Error("binding missing")
     expect(point.binding.domain).toBeTruthy()
 
-    // Widening the domain must widen the animation slider too, otherwise the window edit is cosmetic.
+    // Widening the domain must widen the point's own parameter input too, otherwise the window edit is cosmetic.
     fireEvent.change(upper, { target: { value: "12" } })
     const widened = useSceneStore.getState().document.primitives.find((primitive) => primitive.id === point.id)
     expect(widened?.type === "point" && widened.binding?.kind === "onPath" ? widened.binding.domain?.[1] : null).toBe(12)
-    fireEvent.click(screen.getByRole("button", { name: "动效演示" }))
-    expect((screen.getByRole("slider", { name: "动画参数" }) as HTMLInputElement).max).toBe("12")
+    expect((screen.getByLabelText("路径参数") as HTMLInputElement).max).toBe("12")
   })
 
   /**
@@ -1125,17 +1115,17 @@ describe("MathCanvas workbench", () => {
     expect(line.parentElement?.getAttribute("opacity")).toBe("0.5")
   })
 
-  it("exposes play, pause, stop, and animation mode controls", () => {
+  it("no longer exposes play, pause, stop, or animation mode controls", () => {
+    // 用户要求删掉这一栏（见上一条用例的说明）：这里显式钉住"确实没有了"，
+    // 免得以后有人看到 store 里还留着预览原语就把面板加回来。
     render(<App />)
     fireEvent.click(screen.getAllByText("参数直线")[0])
-    openInspectorSection("动效演示")
 
-    fireEvent.click(screen.getByRole("button", { name: "播放动画" }))
-    expect(screen.getByRole("button", { name: "暂停动画" })).toBeTruthy()
-    fireEvent.change(screen.getByRole("combobox", { name: "动画模式" }), { target: { value: "pingPong" } })
-    fireEvent.click(screen.getByRole("button", { name: "暂停动画" }))
-    expect(screen.getByRole("button", { name: "播放动画" })).toBeTruthy()
-    expect((screen.getByRole("button", { name: "停止动画" }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.queryByRole("button", { name: "动效演示" })).toBeNull()
+    expect(screen.queryByRole("button", { name: "播放动画" })).toBeNull()
+    expect(screen.queryByRole("button", { name: "暂停动画" })).toBeNull()
+    expect(screen.queryByRole("button", { name: "停止动画" })).toBeNull()
+    expect(screen.queryByRole("combobox", { name: "动画模式" })).toBeNull()
   })
 
   it("shows pointer coordinates and creates a persistent intersection on click", () => {
@@ -1503,16 +1493,16 @@ describe("MathCanvas workbench", () => {
     fireEvent.click(screen.getByRole("button", { name: "添加立方体" }))
     fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
 
-    // 绑定到立方体的一条棱（模板实体生成了 12 条 edge3）。
+    // 绑定到立方体的一条棱（模板实体生成了 12 条 edge3）。下拉的值是 `<模式>:<图元 id>`。
     const select = screen.getByRole("combobox", { name: "点宿主绑定" }) as HTMLSelectElement
-    const edgeOption = Array.from(select.options).find((option) => option.value.startsWith("cube-1-edge"))
+    const edgeOption = Array.from(select.options).find((option) => option.value.startsWith("host:cube-1-edge"))
     expect(edgeOption).toBeTruthy()
     fireEvent.change(select, { target: { value: edgeOption!.value } })
 
     const readPoint = () => useSceneStore.getState().document.primitives.find((primitive) => primitive.type === "point3" && primitive.binding?.kind === "onHost") as Extract<ReturnType<typeof createEmptyDocument>["primitives"][number], { type: "point3" }> | undefined
     const bound = readPoint()!
     expect(bound).toBeTruthy()
-    const hostPrimitive = useSceneStore.getState().document.primitives.find((primitive) => primitive.id === edgeOption!.value)!
+    const hostPrimitive = useSceneStore.getState().document.primitives.find((primitive) => primitive.id === edgeOption!.value.slice("host:".length))!
     const host = host3FromPrimitive(hostPrimitive, useSceneStore.getState().document.primitives)!
     // 绑定这一步不移动点：初始参数取的就是"点当前坐标在宿主上的最近点"。
     expect(host.residual(bound.position)).toBeCloseTo(0, 6)
@@ -1528,6 +1518,52 @@ describe("MathCanvas workbench", () => {
     fireEvent.change(screen.getByRole("combobox", { name: "点宿主绑定" }), { target: { value: "" } })
     const freed = useSceneStore.getState().document.primitives.find((primitive) => primitive.id === bound.id) as { binding?: { kind: string } }
     expect(freed.binding?.kind).toBe("free")
+  })
+
+  /**
+   * 用户要求："动点的约束应该可以在立方体内"。
+   *
+   * 这里走的是完整链路：下拉里选「实体内」→ 绑定写成 `inSolid` + 包围盒比例 `uvw` →
+   * 点落在立方体里 → 把参数改到越界，点被**夹回实体表面**（而不是跑到盒子外面去）。
+   */
+  it("constrains a spatial point inside a cube", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加立方体" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
+
+    const select = screen.getByRole("combobox", { name: "点宿主绑定" }) as HTMLSelectElement
+    const volumeOption = Array.from(select.options).find((option) => option.value === "solid:cube-1")
+    expect(volumeOption).toBeTruthy()
+    expect(volumeOption!.textContent).toContain("实体内")
+    fireEvent.change(select, { target: { value: volumeOption!.value } })
+
+    const readPoint = () => useSceneStore.getState().document.primitives.find((primitive) => primitive.type === "point3" && primitive.binding?.kind === "inSolid")
+    const bound = readPoint()
+    if (bound?.type !== "point3" || bound.binding?.kind !== "inSolid") throw new Error("expected an inSolid binding")
+    // 默认立方体是 (-2..2)³：绑定之后点必须在里面。
+    expect(Math.abs(bound.position.x)).toBeLessThanOrEqual(2 + 1e-9)
+    expect(Math.abs(bound.position.y)).toBeLessThanOrEqual(2 + 1e-9)
+    expect(Math.abs(bound.position.z)).toBeLessThanOrEqual(2 + 1e-9)
+
+    // 三个体内参数都在（u / v / w）。
+    for (const label of ["体内参数 u", "体内参数 v", "体内参数 w"]) expect(screen.getByRole("spinbutton", { name: label })).toBeTruthy()
+
+    // 参数越界：点被夹回表面，而不是跑到立方体外面。
+    fireEvent.change(screen.getByRole("spinbutton", { name: "体内参数 u" }), { target: { value: "9" } })
+    const clamped = readPoint()
+    if (clamped?.type !== "point3") throw new Error("expected the bound point")
+    expect(clamped.position.x).toBeLessThanOrEqual(2 + 1e-9)
+    expect(clamped.position.x).toBeGreaterThanOrEqual(-2 - 1e-9)
+
+    // 立方体整体平移：点跟着走（参数不变，坐标随之更新）。
+    const before = clamped.position
+    fireEvent.click(algebraRow("立方体 1"))
+    const originX = screen.getByRole("spinbutton", { name: "原点 X" }) as HTMLInputElement
+    fireEvent.change(originX, { target: { value: String(Number(originX.value) + 4) } })
+    const moved = readPoint()
+    if (moved?.type !== "point3") throw new Error("expected the bound point")
+    expect(moved.position.x - before.x).toBeCloseTo(4, 6)
   })
 
   it("materializes a section into independent primitives", () => {

@@ -4,6 +4,7 @@ import { createEmptyDocument, type GeometryDocument, type Vector3 } from "@draw/
 import { buildSolidTemplate } from "@draw/geometry-kernel"
 
 import { computeIntersectionPreviews3d } from "./intersectionPreviews3d"
+import { ROUND_SOLID_SEGMENTS } from "./solidDefaults"
 
 /** 一份"实体源 + 物化拓扑"一起进文档的文档：与 App 创建实体的方式一致。 */
 function cubeDocument(solids: { id: string; origin: Vector3; size?: Vector3 }[]): GeometryDocument {
@@ -187,6 +188,25 @@ describe("automatic 3D intersection previews", () => {
 
     expect(result.previews).toEqual([])
     expect(result.truncatedPairs).toBe(1)
+  })
+
+  it("keeps a 48-segment cylinder's intersection inside the face budget", () => {
+    /**
+     * 圆柱是**多边形近似**：默认分段数（48）与预览的面数上限是一对约束——
+     * 上限比"48 个侧面 + 两个底面 + 切口面"还小时，用户会看到"交面没画全"，
+     * 但那不是配额用尽，而是配额本身定小了。这条用例把两者钉在一起。
+     */
+    const document = createEmptyDocument("geometry3d")
+    const cube = { id: "cube-a", type: "cube" as const, origin: { x: -2, y: -2, z: -2 }, size: { x: 4, y: 4, z: 4 } }
+    const cylinder = { id: "cyl-a", type: "cylinder" as const, center: { x: 0, y: 0, z: -1 }, radius: 1.5, height: 2, segments: ROUND_SOLID_SEGMENTS }
+    document.primitives = [cube, ...buildSolidTemplate(cube).primitives, cylinder, ...buildSolidTemplate(cylinder).primitives]
+
+    const result = computeIntersectionPreviews3d(document)
+
+    expect(ROUND_SOLID_SEGMENTS).toBeGreaterThanOrEqual(48)
+    expect(result.truncatedPairs).toBe(0)
+    // 圆柱侧面被立方体切出来的每一片都要在画布上：48 段时至少 48 个面。
+    expect(result.previews.filter((preview) => preview.kind === "face").length).toBeGreaterThanOrEqual(ROUND_SOLID_SEGMENTS)
   })
 
   it("only treats top-level solids as candidates", () => {
