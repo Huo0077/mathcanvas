@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test"
 
+import { projectWorldPoint } from "./helpers/projection"
+
 /**
  * 剖切面的可发现性与可移动性（立体几何）。
  * 旧的失败模式：选中实体后画布上出现一圈红色虚线，但状态栏只说"已选中…拖动控制点"，点它也没有任何反应。
@@ -10,10 +12,19 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => localStorage.clear())
 })
 
-/** 截面边界在实体表面之内，所以抓取点要落在可见的那圈线上（画布中心的实体面会先被命中）。 */
+/**
+ * 创建截面用的抓取点：必须是剖切面那圈**边界线**上的一点（预览的命中区只有边界线）。
+ * 默认截面（法向 +Y、过立方体中心）的环是 x∈[-2,2] × z∈[-1,1] @ y=0，
+ * 世界点 (2, 0, 0) 落在它的 x=2 这条边上、且被实体表面遮挡（于是点选不会抢走这次点击）。
+ * 用相机读数投影出来，而不是写死像素偏移——那会随画布尺寸与比例失效（实测过）。
+ */
 async function grabPoint(page: import("@playwright/test").Page) {
-  const box = (await page.locator("[data-3d-scene] canvas").boundingBox())!
-  return { x: box.x + box.width * 0.5, y: box.y + box.height * 0.5 - 20 }
+  return projectWorldPoint(page, { x: 2, y: 0, z: 0 })
+}
+
+/** 拖动截面用的抓取点：必须落在截面**填充**多边形内部（截面本体是那圈填充，边界线不参与拾取）。 */
+async function grabSectionBody(page: import("@playwright/test").Page) {
+  return projectWorldPoint(page, { x: 0, y: 0, z: 0 })
 }
 
 test("explains the section preview and creates a section when it is clicked", async ({ page }) => {
@@ -147,7 +158,7 @@ test("moves the drawing section when dragged while free dragging is on", async (
 
   // 横向拖动：默认法向是 +Y，相机的屏幕右向量带 +Y 分量，所以横向拖才会真的推动这个剖切面
   // （竖直拖动几乎与该法向相切，按设计不应该移动它）。
-  const start = await grabPoint(page)
+  const start = await grabSectionBody(page)
   await page.mouse.move(start.x, start.y)
   await page.mouse.down()
   await page.mouse.move(start.x + 40, start.y, { steps: 4 })

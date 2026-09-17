@@ -8,6 +8,7 @@ import { getDependencyIndex, isFreeDraggable3, planeThroughPoints, resolveDihedr
 
 import { opacityFor, strokeFor } from "./primitiveStyle"
 import { loadViewPreference3d, saveViewPreference3d } from "./persistence/draftStorage"
+import { GRID_CELLS, gridPlacement } from "./sceneGrid"
 import { sceneContentKey, sceneSyncDecision } from "./sceneContentKey"
 import type { ThreeScenePreview } from "./threeScenePreview"
 
@@ -233,14 +234,6 @@ export function contentBounds(scene: THREE.Object3D): THREE.Box3 {
     bounds.expandByObject(child)
   }
   return bounds
-}
-
-/** A round helper size (1/2/5 x 10^n) so the grid keeps readable cells at any scene scale. */
-export function niceGridStep(value: number): number {
-  if (!Number.isFinite(value) || value <= 0) return 1
-  const magnitude = 10 ** Math.floor(Math.log10(value))
-  const normalized = value / magnitude
-  return (normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10) * magnitude
 }
 
 /** Exported for the tests: the orbit camera is the one place the world up axis is decided. */
@@ -1235,6 +1228,9 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     /** 空间点索引与"模板子元素归属模板实体"的映射：指针处理函数要用，必须随同步一起刷新。 */
     let points = new Map<string, Point3Primitive>()
     let topologyOwners = new Map<string, string>()
+    /** 背景坐标系：单位尺寸的栅格与坐标轴，真实大小与位置每帧按可见范围设置。 */
+    let gridHelper: THREE.GridHelper | null = null
+    let axesHelper: THREE.AxesHelper | null = null
 
     const currentContentKey = () => sceneContentKey({
       document: documentRef.current,
@@ -1386,17 +1382,17 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     }
     // Grid and axes follow the figure: at a one-unit scale a fixed five-unit axes helper slashes straight
     // through the solid and a fourteen-unit grid turns into visual noise.
-    const hasContent = !sceneBounds.isEmpty()
-    const helperSpan = hasContent ? Math.max(sceneBounds.getSize(new THREE.Vector3()).length(), 4) : 14
-    const gridStep = niceGridStep(helperSpan / 14)
-    const grid = new THREE.GridHelper(gridStep * 14, 14, scenePalette.grid, scenePalette.grid)
+    /** 背景坐标系：几何是单位尺寸，尺寸与位置每帧按"可见范围 + 内容到达范围"设置。 */
+    const grid = new THREE.GridHelper(GRID_CELLS, GRID_CELLS, scenePalette.grid, scenePalette.grid)
     // Three.js builds its grid in the XZ plane, which is the floor only when Y is up. With Z up, the floor is XY.
     grid.rotation.x = Math.PI / 2
     grid.userData.excludeFromFit = true
+    gridHelper = grid
     addContent(grid)
     // AxesHelper already draws X/Y/Z along the world axes, so blue points up once Z is the vertical axis.
-    const axes = new THREE.AxesHelper(hasContent ? Math.max(planeHalfSize * 0.7, 1.2) : 5)
+    const axes = new THREE.AxesHelper(1)
     axes.userData.excludeFromFit = true
+    axesHelper = axes
     addContent(axes)
     }
     syncContent()
@@ -1405,8 +1401,39 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     const syncPointHandleScales = () => {
       for (const handle of pointHandles) handle.scale.setScalar(pointHandleWorldRadius(camera, camera.position.distanceTo(handle.position), viewportHeight))
     }
+    /**
+     * 栅格与坐标轴按当前相机与内容自动铺满可见范围。
+     * 旧实现是"固定 14 格、以原点为中心、只按内容对角线取整"，于是内容离原点一远
+     * （用户报告：点的坐标到 20 左右）就落在坐标面之外的空白里。
+     */
+    const applyGridPlacement = () => {
+      if (!gridHelper && !axesHelper) return
+      const state = cameraStateRef.current
+      const span = sceneBounds.isEmpty() ? 0 : sceneBounds.getSize(new THREE.Vector3()).length()
+      const reach = sceneBounds.isEmpty() ? 0 : Math.max(...boxCorners(sceneBounds).map((corner) => Math.hypot(corner.x, corner.y)))
+      const placement = gridPlacement({
+        distance: state.distance,
+        fovDegrees: camera.fov,
+        aspect: camera.aspect,
+        target: state.target,
+        contentSpan: span,
+        contentReach: reach
+      })
+      if (gridHelper) {
+        gridHelper.scale.setScalar(placement.cell)
+        gridHelper.position.set(placement.centre.x, placement.centre.y, 0)
+      }
+      if (axesHelper) axesHelper.scale.setScalar(placement.axesLength)
+      if (sceneShell) {
+        sceneShell.dataset.gridCell = String(placement.cell)
+        sceneShell.dataset.gridCentre = `${placement.centre.x},${placement.centre.y}`
+        sceneShell.dataset.gridExtent = String(placement.extent)
+        sceneShell.dataset.axesLength = String(placement.axesLength)
+      }
+    }
     const render = () => {
       syncPointHandleScales()
+      applyGridPlacement()
       const overlay = measurementOverlayRef.current
       if (overlay) {
         overlay.replaceChildren()
