@@ -9,6 +9,11 @@ export interface SceneContentInputs {
   unfoldProgress: number
   /** 画布上现有的预览（`key:kind` 列表）：它们也是场景内容的一部分。 */
   previewKeys: string
+  /**
+   * 解析曲线的细分档位（世界单位容差量化成 2 的幂）。缩放会改它，于是**只有跨过一档**
+   * 才重新采样真圆——相机状态本身不在签名里（否则每帧都要重建全部几何）。
+   */
+  curveToleranceBucket?: number
 }
 
 /**
@@ -28,7 +33,8 @@ export function sceneContentKey(inputs: SceneContentInputs): string {
     inputs.showHiddenEdges ? "1" : "0",
     inputs.showNormals ? "1" : "0",
     inputs.transparentFaces ? "1" : "0",
-    inputs.previewKeys || "-"
+    inputs.previewKeys || "-",
+    inputs.curveToleranceBucket ? inputs.curveToleranceBucket.toPrecision(6) : "-"
   ].join("|")
 }
 

@@ -5,8 +5,9 @@
  * 组件文件也不再混着一堆非组件导出（react-refresh 的告警就是这么来的）。
  */
 import * as THREE from "three"
-import type { ConePrimitive, CubePrimitive, CylinderPrimitive, Edge3Primitive, Face3Primitive, GeometryDocument, Line3Primitive, Plane3Primitive, Point3Primitive, PrimitiveSpec, PyramidPrimitive, Ray3Primitive, SectionPrimitive, Segment3Primitive, Vector3 } from "@draw/dsl"
-import { type DihedralMarker3, type UnfoldLayout3 } from "@draw/geometry-kernel"
+import type { ConePrimitive, Conic3, CubePrimitive, CurvePiece3, CylinderPrimitive, Edge3Primitive, Face3Primitive, GeometryDocument, Line3Primitive, Plane3Primitive, Point3Primitive, PrimitiveSpec, PyramidPrimitive, Ray3Primitive, SectionPrimitive, Segment3Primitive, Vector3 } from "@draw/dsl"
+import { conic3FromCircle3, type DihedralMarker3, type UnfoldLayout3 } from "@draw/geometry-kernel"
+import { sampleClosedConic, sampleCurvePieces } from "./conicSampling"
 import { opacityFor, strokeFor } from "./primitiveStyle"
 import type { ThreeScenePreview } from "./threeScenePreview"
 
@@ -301,7 +302,60 @@ function normalVisuals(mesh: THREE.Mesh): THREE.ArrowHelper[] {
   })
 }
 
-export function createSectionMesh(primitive: SectionPrimitive): THREE.Object3D | null {
+/**
+ * 解析圆锥曲线的渲染：按**屏幕误差**细分（`tolerance` 是世界单位），所以放大不看出棱、缩远不浪费。
+ *
+ * 用户口径："我不要一个逼近的圆，我需要一个真的圆。" 曲线本身是解析的，只有"画出来"这一步要离散化。
+ * 描边用 `THREE.Line`（与既有棱线、截面边界同一套 1px 线宽语言）：本轮要解决的是**曲线形状**，
+ * 不是描边宽度；真要按像素宽画粗线时再上 `Line2`（它也不替你重采样，点还是这里算的）。
+ */
+export function createConic3Line(primitiveId: string, conic: Conic3, tolerance: number, selected: boolean, color?: string): THREE.Line | null {
+  if (!conic.closed) return null
+  const sampled = sampleClosedConic(conic, tolerance)
+  if (sampled.length < 3) return null
+  const line = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints(sampled.map((point) => new THREE.Vector3(point.x, point.y, point.z))),
+    new THREE.LineBasicMaterial({ color: selected ? "#4c3ac7" : color ?? "#0f766e" })
+  )
+  line.userData.primitiveId = primitiveId
+  line.userData.visualRole = "exact-curve"
+  line.userData.segmentCount = sampled.length - 1
+  return line
+}
+
+/** 截面 / 交面的解析边界：每个闭合环一条折线（环由"圆锥曲线弧 + 端面弦"拼成）。 */
+export function createCurveLoops3(primitiveId: string, loops: CurvePiece3[][], tolerance: number, selected: boolean, color?: string): THREE.Group | null {
+  const group = new THREE.Group()
+  let segments = 0
+  loops.forEach((loop, loopIndex) => {
+    const sampled = sampleCurvePieces(loop, tolerance)
+    if (sampled.length < 2) return
+    const line = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(sampled.map((point) => new THREE.Vector3(point.x, point.y, point.z))),
+      new THREE.LineBasicMaterial({ color: selected ? "#4c3ac7" : color ?? "#f97316" })
+    )
+    line.userData.visualRole = "exact-curve"
+    line.userData.sectionLoopIndex = loopIndex
+    segments += sampled.length - 1
+    group.add(line)
+  })
+  if (group.children.length === 0) return null
+  group.userData.primitiveId = primitiveId
+  group.userData.visualRole = "exact-curve-group"
+  group.userData.segmentCount = segments
+  return group
+}
+
+/** DSL 的空间圆图元：解析圆的真曲线。 */
+export function createCircle3Line(primitive: Extract<PrimitiveSpec, { type: "circle3" }>, points: Map<string, Point3Primitive>, tolerance: number, selected: boolean): THREE.Line | null {
+  const conic = conic3FromCircle3(primitive, points)
+  if (!conic) return null
+  const line = createConic3Line(primitive.id, conic, tolerance, selected, strokeFor(primitive))
+  if (line) line.userData.primitiveType = primitive.type
+  return line
+}
+
+export function createSectionMesh(primitive: SectionPrimitive, options: { omitBoundary?: boolean } = {}): THREE.Object3D | null {
   // A cut that misses the solid (points moved past a face) has nothing to draw; drawing a fabricated
   // placeholder would make "moved the plane off the solid" look like a real section.
   if (primitive.points.length < 2) return null
@@ -338,13 +392,15 @@ export function createSectionMesh(primitive: SectionPrimitive): THREE.Object3D |
       mesh.userData.primitiveType = primitive.type
     }
     mesh.userData.visualRole = "section"
+    group.add(mesh)
+    // 解析可用时边界交给真曲线（`createCurveLoops3`）：这里只画填充，否则会同时出现一圈多边形弦。
+    if (options.omitBoundary) return
     // Section points are ordered along the boundary, so the closed loop reflects the real cut outline.
     const boundaryPoints = [...loop, loop[0]].map((point) => new THREE.Vector3(point.x, point.y, point.z))
     const boundary = new THREE.Line(new THREE.BufferGeometry().setFromPoints(boundaryPoints), new THREE.LineBasicMaterial({ color: sectionColor }))
     boundary.userData.visualRole = "section-boundary"
     boundary.userData.sectionLoopIndex = loopIndex
     mesh.add(boundary)
-    group.add(mesh)
   })
   return group.children.length > 0 ? group : null
 }
@@ -621,11 +677,12 @@ export function visibleSolids(document: GeometryDocument): SolidPrimitive[] {
  * 由点驱动的对象：点手柄、以及引用点的直线 / 线段 / 射线 / 棱 / 面。
  * 抽成函数是为了拖动绑定点时能**只重建受影响的对象**（下游实时跟随），而不是整场重建。
  */
-export function buildPointDrivenObject(primitive: PrimitiveSpec, points: Map<string, Point3Primitive>, selected: boolean): THREE.Object3D | null {
+export function buildPointDrivenObject(primitive: PrimitiveSpec, points: Map<string, Point3Primitive>, selected: boolean, tolerance = 0.005): THREE.Object3D | null {
   if (primitive.type === "point3") return createPoint3Mesh(primitive, selected)
   if (primitive.type === "line3" || primitive.type === "segment3" || primitive.type === "ray3") return createPointDrivenLine(primitive, points, selected)
   if (primitive.type === "edge3") return createEdge3Line(primitive, points, selected)
   if (primitive.type === "face3") return createFace3Mesh(primitive, points, selected)
+  if (primitive.type === "circle3") return createCircle3Line(primitive, points, tolerance, selected)
   return null
 }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { coneQuadric3, conic3PointAt, cylinderQuadric3, intersectPlaneQuadric3, planeQuadric3, quadricScaleOf, quadricValueAt } from "./quadrics"
+import { circleConic3, coneQuadric3, conic3FromCircle3, conic3PointAt, cylinderQuadric3, intersectPlaneQuadric3, planeQuadric3, quadricScaleOf, quadricValueAt, rimCircles3 } from "./quadrics"
 
 const RADIUS = 2
 const HEIGHT = 3
@@ -141,5 +141,46 @@ describe("plane ∩ quadric (analytic)", () => {
     const conic = intersectPlaneQuadric3(plane({ x: 0, y: 0, z: 1 }, -1), planeQuadric3(plane({ x: 0, y: 0, z: 1 }, 0)))
     // 平面 ∩ 平面是两条重合的平面（不是这里支持的实体求交）：系数退化，如实报退化类型，绝不编折线。
     expect(["line", "lines", "insufficient-data"]).toContain(conic.kind)
+  })
+
+  it("builds an exact circle directly and reports the rim circles of round solids", () => {
+    const circle = circleConic3({ x: 0, y: 0, z: 1 }, { x: 0, y: 0, z: 1 }, 2)!
+    expect(circle.kind).toBe("circle")
+    expect(circle.semiMajor).toBe(2)
+    expect(circle.eccentricity).toBe(0)
+    // 圆上的采样点必须落在圆上（性质检查，不靠肉眼）。
+    for (let index = 0; index < 16; index += 1) {
+      const point = conic3PointAt(circle, (index / 16) * Math.PI * 2)!
+      expect(Math.hypot(point.x, point.y)).toBeCloseTo(2, 12)
+      expect(point.z).toBeCloseTo(1, 12)
+    }
+    expect(circleConic3({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 1 }, 0)).toBeNull()
+    expect(circleConic3({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 1 }, Number.NaN)).toBeNull()
+
+    // 圆柱两个边界圆、圆锥一个。
+    const rims = rimCircles3(cylinder)
+    expect(rims).toHaveLength(2)
+    expect(rims.map((conic) => conic.center!.z).sort((first, second) => first - second)).toEqual([0, HEIGHT])
+    expect(rims.every((conic) => conic.semiMajor === RADIUS)).toBe(true)
+    expect(rimCircles3(cone)).toHaveLength(1)
+    // 旋转过的圆柱：边界圆跟着走到旋转后的位置。
+    const turned = rimCircles3({ ...cylinder, rotation: { x: degrees(90), y: 0, z: 0 } })
+    expect(turned).toHaveLength(2)
+    expect(turned[0].center!.z).toBeCloseTo(1.5, 12)
+    expect(turned[0].center!.y).toBeCloseTo(1.5, 12)
+    expect(turned[1].center!.y).toBeCloseTo(-1.5, 12)
+    // 不是圆类实体就没有边界圆。
+    expect(rimCircles3({ id: "cube-1", type: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 1, y: 1, z: 1 } })).toEqual([])
+  })
+
+  it("turns a document circle3 into an analytic circle through its centre point", () => {
+    const points = new Map([["point-a", { position: { x: 1, y: 2, z: 3 } }]])
+    const conic = conic3FromCircle3({ id: "circle3-1", type: "circle3", centerId: "point-a", normal: { x: 0, y: 1, z: 0 }, radius: 1.5 }, points)!
+    expect(conic.kind).toBe("circle")
+    expect(conic.center).toEqual({ x: 1, y: 2, z: 3 })
+    expect(conic.semiMajor).toBe(1.5)
+    expect(conic.frame.normal.y).toBeCloseTo(1, 12)
+    // 圆心点不存在时如实返回 null。
+    expect(conic3FromCircle3({ id: "circle3-2", type: "circle3", centerId: "missing", normal: { x: 0, y: 0, z: 1 }, radius: 1 }, points)).toBeNull()
   })
 })

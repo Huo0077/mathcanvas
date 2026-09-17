@@ -20,7 +20,8 @@ import type { ThreeScenePreview } from "./threeScenePreview"
 
 import { dragWorldPoint, dragFamilyIds, offsetSceneObjects, applyDragOffsets } from "./threeDrag"
 import { PICK_TOLERANCE_PX, pointHandleWorldRadius, pickRaycastHit3, templateTopologyOwners, pickSectionAt, resolveSelectableHit, previewBeatsPick } from "./threePicking"
-import { sectionUnitNormal, createPlane3Mesh, createSectionMesh, createIntersectionSolidGroup, createIntersectionFaceGroup, createIntersectionPointGroup, createUnfoldNetGroup, createDihedralMarkerGroup, prefersReducedMotion, nextUnfoldProgress, createPlanePatch, createSolidGroup, visibleSolids, buildPointDrivenObject, disposeObject, disposeScene, createPreviewGroup, applyPreviewHighlight, hasDrawablePreview } from "./threePrimitives"
+import { sectionUnitNormal, createPlane3Mesh, createSectionMesh, createIntersectionSolidGroup, createIntersectionFaceGroup, createIntersectionPointGroup, createUnfoldNetGroup, createDihedralMarkerGroup, prefersReducedMotion, nextUnfoldProgress, createPlanePatch, createSolidGroup, visibleSolids, buildPointDrivenObject, disposeObject, disposeScene, createPreviewGroup, applyPreviewHighlight, hasDrawablePreview, createCurveLoops3 } from "./threePrimitives"
+import { curveToleranceFor, toleranceBucket } from "./conicSampling"
 
 const scenePalette = {
   background: "#fbfcff",
@@ -135,6 +136,10 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
    */
   const resumeDragVisualRef = useRef<() => void>(() => undefined)
   const [showHiddenEdges, setShowHiddenEdges] = useState(false)
+  /** 解析曲线的细分档位（2 的幂）。相机缩放只改它，再由同步依赖触发重建——见 `syncCurveToleranceBucket`。 */
+  const [curveToleranceBucket, setCurveToleranceBucket] = useState<number | null>(null)
+  /** 渲染器只在挂载期建一次，`syncContent` 里的实时值一律经 ref 读——容差也一样。 */
+  const curveToleranceBucketRef = useRef(0)
   const [showNormals, setShowNormals] = useState(false)
   const [transparentFaces, setTransparentFaces] = useState(false)
   const [unfolded, setUnfolded] = useState(false)
@@ -375,6 +380,9 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     pointHandles = []
     visiblePointLabels = []
     measurementVisuals = []
+    /** 解析曲线（真圆 / 圆锥曲线）的画布读数：个数与总段数。 */
+    let exactCurveCount = 0
+    let exactCurveSegments = 0
     previewGroups = new Map<string, THREE.Group>()
     previewByKey = new Map<string, ThreeScenePreview>()
     objectIndex = new Map<string, THREE.Object3D>()
@@ -383,6 +391,14 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     const selectedIds = selectedIdsRef.current
     const { showHiddenEdges, showNormals, transparentFaces, unfoldProgress } = displayFlagsRef.current
     const signer = createContentSigner(document)
+    /**
+     * 曲线的屏幕误差容差（世界单位）：`0.5px × 世界单位每像素`，再量化成 2 的幂档做**滞回**——
+     * 相机连续缩放时容差每帧都变，直接当签名会让曲线每帧重新采样；量化后跨过一档才重建。
+     */
+    // 档位经 ref 读（渲染器只建一次，这里是同一个闭包）；还没算过时按当前相机现算一次。
+    const bucket = curveToleranceBucketRef.current
+    const curveTolerance = bucket > 0 ? bucket : curveToleranceFor(camera, cameraStateRef.current.distance, viewportSize().height)
+    const curveToleranceFlag = `tol:${toleranceBucket(curveTolerance)}`
     points = new Map(document.primitives.filter((primitive): primitive is Point3Primitive => primitive.type === "point3").map((primitive) => [primitive.id, primitive]))
     topologyOwners = templateTopologyOwners(document)
 
@@ -393,9 +409,15 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     document.primitives.filter(isUserVisiblePrimitive).forEach((primitive) => {
       if (unfoldedChildIds.has(primitive.id)) return
       const selected = selectedIds.includes(primitive.id)
-      const object = keepContent(`point:${primitive.id}`, signer.of(primitive.id, `sel:${selected}`), () => buildPointDrivenObject(primitive, points, selected), alive, order)
+      // 空间圆的细分数跟着缩放走，所以它要把容差档写进签名（其余图元与缩放无关）。
+      const flags = primitive.type === "circle3" ? `sel:${selected};${curveToleranceFlag}` : `sel:${selected}`
+      const object = keepContent(`point:${primitive.id}`, signer.of(primitive.id, flags), () => buildPointDrivenObject(primitive, points, selected, curveTolerance), alive, order)
       if (!object) return
       if (primitive.type === "point3") pointHandles.push(object as THREE.Mesh)
+      if (typeof object.userData.segmentCount === "number") {
+        exactCurveCount += 1
+        exactCurveSegments += object.userData.segmentCount
+      }
       objectIndex.set(primitive.id, object)
     })
 
@@ -408,8 +430,20 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       const selected = selectedIds.includes(primitive.id)
       // 面片尺寸取自来源实体的**物化拓扑**：拓扑变了面片也得跟着重算，所以把拓扑签名一并带上。
       const topology = signer.topologyOf(primitive.sourceId)
-      const mesh = keepContent(`section:${primitive.id}`, signer.of(primitive.id, `topo:${topology}`), () => createSectionMesh(primitive), alive, order)
+      /**
+       * 源是圆柱 / 圆锥时文档里带着**精确**圆锥曲线片段环（`section.exact`）：填充照旧用多边形
+       *（面积与拾取要它），但边界改画真曲线，否则同一圈会出现两套边界——一套是弦、一套是真曲线。
+       */
+      const exactLoops = primitive.exact && primitive.exact.loops.length > 0 ? primitive.exact.loops : null
+      const mesh = keepContent(`section:${primitive.id}`, signer.of(primitive.id, `topo:${topology};boundary:${exactLoops ? "exact" : "polygon"}`), () => createSectionMesh(primitive, { omitBoundary: Boolean(exactLoops) }), alive, order)
       if (!mesh) return
+      if (exactLoops) {
+        const curve = keepContent(`section-exact:${primitive.id}`, signer.of(primitive.id, `exact:${primitive.exact?.kind ?? "none"};${curveToleranceFlag}`), () => createCurveLoops3(primitive.id, exactLoops, curveTolerance, selected), alive, order)
+        if (curve && typeof curve.userData.segmentCount === "number") {
+          exactCurveCount += 1
+          exactCurveSegments += curve.userData.segmentCount
+        }
+      }
       // 选中截面时把剖切面本身也画出来：只看到一圈交线的话，"刀口在哪、往哪边挪"都无从判断。
       if (!selected) return
       keepContent(`section-plane:${primitive.id}`, signer.of(primitive.id, `plane;topo:${topology}`), () => {
@@ -563,6 +597,11 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       sceneShell.dataset.sectionPlaneConstant = firstSection ? firstSection.plane.constant.toFixed(3) : ""
       sceneShell.dataset.sectionPlaneNormal = firstSection ? `${firstSection.plane.normal.x.toFixed(3)},${firstSection.plane.normal.y.toFixed(3)},${firstSection.plane.normal.z.toFixed(3)}` : ""
       sceneShell.dataset.sectionPointCount = firstSection ? String(firstSection.points.length) : ""
+      // 解析曲线的读数：截面是不是真圆、真曲线的细分点有多少——"放大不看出棱"靠这两个数断言。
+      sceneShell.dataset.sectionExactKind = firstSection?.exact?.kind ?? ""
+      sceneShell.dataset.sectionExactStatus = firstSection?.status ?? ""
+      sceneShell.dataset.exactCurves = String(exactCurveCount)
+      sceneShell.dataset.exactCurveSegments = String(exactCurveSegments)
     }
 
     sceneBounds = contentBounds(scene)
@@ -656,6 +695,17 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     }
 
     let viewportHeight = height
+    /**
+     * 曲线细分档位：`0.5px × 世界单位每像素` 量化成 2 的幂。
+     *
+     * 相机缩放**不会**触发内容同步（同步只认文档 / 选中 / 显示开关 / 预览），所以"放大后真圆的细分点变多"
+     * 必须靠这个状态把缩放带进同步依赖里；量化成 2 的幂就是滞回——跨过一档才重建，不是每帧重建。
+     */
+    const syncCurveToleranceBucket = () => {
+      const bucket = toleranceBucket(curveToleranceFor(camera, cameraStateRef.current.distance, viewportHeight))
+      curveToleranceBucketRef.current = bucket
+      setCurveToleranceBucket((previous) => (previous === bucket ? previous : bucket))
+    }
     const syncPointHandleScales = () => {
       /**
        * 手柄的世界半径按**相机到视点中心的距离**统一取，而不是逐个手柄按各自深度取：
@@ -729,6 +779,8 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     }
     const render = () => {
       syncPointHandleScales()
+      // 缩放会改变曲线的误差容差：档位一变就让同步重算（跨不到一档就不重建）。
+      syncCurveToleranceBucket()
       applyGridPlacement()
       const bounds = renderer.domElement.getBoundingClientRect()
       const overlay = measurementOverlayRef.current
@@ -1273,6 +1325,12 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
   useEffect(() => {
     const runtime = runtimeRef.current
     if (!runtime) return
+    /**
+     * 只有画布上**真的存在解析曲线**（空间圆 / 带解析边界的截面）时，缩放才需要重新采样。
+     * 否则把容差档写进签名会让"只有立方体"的文档在每次缩放时白跑一次同步——那既浪费，
+     * 又可能顺手触发自动取景重新构图（实测：相交预览用例预先算好的投影点因此失效）。
+     */
+    const wantsExactCurves = document.primitives.some((primitive) => primitive.type === "circle3" || (primitive.type === "section" && primitive.exact !== undefined))
     const key = sceneContentKey({
       document,
       selectedIds,
@@ -1280,12 +1338,13 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       showNormals,
       transparentFaces,
       unfoldProgress,
-      previewKeys: previews.map((item) => `${item.key}:${item.kind}`).join("|")
+      previewKeys: previews.map((item) => `${item.key}:${item.kind}`).join("|"),
+      curveToleranceBucket: wantsExactCurves ? curveToleranceBucket ?? 0 : 0
     })
     if (!sceneSyncDecision(contentKeyRef.current, key)) return
     contentKeyRef.current = key
     runtime.syncContent()
-  }, [document, selectedIds, showHiddenEdges, showNormals, transparentFaces, unfoldProgress, previews])
+  }, [document, selectedIds, showHiddenEdges, showNormals, transparentFaces, unfoldProgress, previews, curveToleranceBucket])
 
   const hasGeometry = document.primitives.some((primitive) => ["point3", "line3", "segment3", "ray3", "edge3", "face3", "polyhedron3", "cube", "pyramid", "cylinder", "cone"].includes(primitive.type) && primitive.visible !== false)
   /** 「以面为剖切面」需要有选中的截面作为目标。 */

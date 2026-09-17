@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import { cylinderQuadric3, intersectPlaneQuadric3 } from "@draw/geometry-kernel"
 
-import { MAX_CURVE_SEGMENTS, sampleClosedConic, sampleCurvePieces, sampleOpenCurve, segmentsForSagitta } from "./conicSampling"
+import { MAX_CURVE_SEGMENTS, curveToleranceFor, sampleClosedConic, sampleCurvePieces, sampleOpenCurve, segmentsForSagitta, toleranceBucket } from "./conicSampling"
 
 const cylinder = { id: "cylinder-1", type: "cylinder" as const, center: { x: 0, y: 0, z: 0 }, radius: 2, height: 3, segments: 48 }
 const plane = (normal: { x: number; y: number; z: number }, constant: number) => ({ normal, constant })
@@ -93,5 +93,23 @@ describe("screen-error driven curve sampling", () => {
     expect(sampleClosedConic({ ...intersectPlaneQuadric3(plane({ x: 0, y: 1, z: 0 }, -3), cylinderQuadric3(cylinder)), kind: "empty", closed: false }, 0.01)).toEqual([])
     expect(sampleOpenCurve(() => null, [0, 1], 0.01)).toEqual([])
     expect(sampleCurvePieces([{ kind: "segment", a: { x: 0, y: 0, z: 0 }, b: { x: 1, y: 1, z: 1 } }], 0.01)).toEqual([{ x: 0, y: 0, z: 0 }, { x: 1, y: 1, z: 1 }])
+  })
+
+  it("converts the pixel tolerance into world units and quantises it for hysteresis", () => {
+    // fov 60°、距离 10、视口高 1000：每像素 2·10·tan30°/1000 = 0.011547 世界单位 ⇒ 0.5px = 0.0057735。
+    expect(curveToleranceFor({ fov: 60 }, 10, 1000)).toBeCloseTo(0.5 * 2 * 10 * Math.tan(Math.PI / 6) / 1000, 12)
+    // 拉远一倍 ⇒ 容差翻倍；拉近 ⇒ 变小。这正是"段数跟着缩放走"的来源。
+    expect(curveToleranceFor({ fov: 60 }, 20, 1000)).toBeCloseTo(2 * curveToleranceFor({ fov: 60 }, 10, 1000), 12)
+    expect(curveToleranceFor({ fov: 60 }, 5, 1000)).toBeLessThan(curveToleranceFor({ fov: 60 }, 10, 1000))
+    // 视口为 0 或距离非有限时不返回 NaN/0。
+    expect(curveToleranceFor({ fov: 60 }, 10, 0)).toBeGreaterThan(0)
+    expect(curveToleranceFor({ fov: 60 }, Number.NaN, 1000)).toBeGreaterThan(0)
+
+    // 滞回：容差量化到 2 的幂，缩放不到一档就不触发重建。
+    // 2^-8 = 0.00390625 这一档覆盖 (0.001953125, 0.00390625]：0.002 与 0.0035 同档；0.02 落到 2^-5。
+    expect(toleranceBucket(0.002)).toBe(toleranceBucket(0.0035))
+    expect(toleranceBucket(0.002)).toBeLessThan(toleranceBucket(0.02))
+    expect(toleranceBucket(0)).toBe(1)
+    expect(toleranceBucket(Number.NaN)).toBe(1)
   })
 })

@@ -436,3 +436,66 @@ export function conic3PointAt(conic: Conic3, parameter: number, branch = 0): Vec
 export function conic3Plane(conic: Conic3): Plane3 {
   return { normal: { ...conic.frame.normal }, constant: -dotVector3(conic.frame.normal, conic.frame.origin) }
 }
+
+/** 平面标架：与 `planeFrame3` 同一套约定，但原点由调用方给定（圆心 / 已知点）。 */
+function frameThroughPoint(normal: Vector3, origin: Vector3): Conic3Frame {
+  const unit = normalizeVector3(normal)
+  const safeNormal = lengthOf(unit) > 0.5 ? unit : { x: 0, y: 0, z: 1 }
+  const helper = Math.abs(safeNormal.x) < 0.9 ? { x: 1, y: 0, z: 0 } : { x: 0, y: 1, z: 0 }
+  const u = normalizeVector3(crossVector3(helper, safeNormal))
+  return { origin: { ...origin }, u, v: crossVector3(safeNormal, u), normal: safeNormal }
+}
+
+function lengthOf(vector: Vector3): number {
+  return Math.hypot(vector.x, vector.y, vector.z)
+}
+
+/**
+ * 直接构造一个**精确圆**（不走 `PᵀQP`）：圆柱 / 圆锥的边界圆与 DSL 的 `circle3` 都用它。
+ *
+ * 半径非有限或 ≤ 0 时返回 `null`——不编一个"看着像"的圆。
+ */
+export function circleConic3(center: Vector3, normal: Vector3, radius: number): Conic3 | null {
+  if (!Number.isFinite(radius) || radius <= 0) return null
+  if (![center.x, center.y, center.z, normal.x, normal.y, normal.z].every((value) => Number.isFinite(value))) return null
+  const frame = frameThroughPoint(normal, center)
+  return {
+    kind: "circle",
+    frame,
+    // 帧内 `s² + t² = R²`。
+    coefficients: [1, 0, 1, 0, 0, -radius * radius],
+    center: { ...center },
+    semiMajor: radius,
+    semiMinor: radius,
+    eccentricity: 0,
+    axes: { major: frame.u, minor: frame.v },
+    closed: true
+  }
+}
+
+/**
+ * 圆类实体的**边界圆**：圆柱两个（上下底），圆锥一个（底）。
+ *
+ * 画布用它们画真圆，替代 48 段折线——多边形环棱仍留在文档里（手柄 / 面片 / 拾取要它）。
+ */
+export function rimCircles3(primitive: PrimitiveSpec): Conic3[] {
+  const quadric = quadric3FromPrimitive(primitive)
+  const bounds = quadric?.bounds
+  if (!bounds) return []
+  const circles: Conic3[] = []
+  const base = circleConic3(bounds.origin, bounds.axis, bounds.radius)
+  if (base) circles.push(base)
+  if (quadric.kind === "cylinder") {
+    const topCenter = addVector3(bounds.origin, scaleVector3(bounds.axis, bounds.height))
+    const top = circleConic3(topCenter, bounds.axis, bounds.radius)
+    if (top) circles.push(top)
+  }
+  return circles
+}
+
+/** DSL 的空间圆图元 → 解析圆（圆心由点表解析）。 */
+export function conic3FromCircle3(primitive: Extract<PrimitiveSpec, { type: "circle3" }>, points: Map<string, { position: Vector3 }>): Conic3 | null {
+  const center = points.get(primitive.centerId)?.position
+  if (!center) return null
+  return circleConic3(center, primitive.normal, primitive.radius)
+}

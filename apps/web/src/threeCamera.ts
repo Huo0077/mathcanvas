@@ -106,6 +106,17 @@ function clampFitDistance(value: number): number {
   return Math.max(FIT_MIN_DISTANCE, Math.min(FIT_MAX_DISTANCE, value))
 }
 
+/**
+ * 一个世界单位在屏幕上占多少像素的倒数：**每像素多少世界单位**。
+ *
+ * 透视相机的屏幕高度对应 `2·d·tan(fov/2)` 个世界单位，所以
+ * `世界单位/像素 = 2·d·tan(fov/2) / 视口高度`。点手柄的屏幕恒定大小与曲线的屏幕误差容差
+ * 都基于它——单一来源，避免两处各写一份三角函数而慢慢分叉。
+ */
+export function worldUnitsPerPixel(camera: { fov: number }, distance: number, viewportHeight: number): number {
+  return 2 * Math.max(distance, 0) * Math.tan((camera.fov * Math.PI) / 360) / Math.max(viewportHeight, 1)
+}
+
 /** AABB 的八个角，用于投影检验与越界判定。 */
 export function boxCorners(bounds: THREE.Box3): THREE.Vector3[] {
   const corners: THREE.Vector3[] = []

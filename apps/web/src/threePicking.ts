@@ -8,6 +8,7 @@ import * as THREE from "three"
 import type { GeometryDocument, Vector3 } from "@draw/dsl"
 
 import type { ThreeScenePreview } from "./threeScenePreview"
+import { worldUnitsPerPixel } from "./threeCamera"
 
 /**
  * Vertex handles are editor affordances, not geometry: they are sized in screen space so a fine mesh (a
@@ -25,8 +26,7 @@ const DEFAULT_PICK_TOLERANCE = 0.05
 
 /** World radius that projects to a constant pixel radius at `distance` from a camera. */
 export function pointHandleWorldRadius(camera: THREE.PerspectiveCamera, distance: number, viewportHeight: number, radiusPx = POINT_HANDLE_RADIUS_PX): number {
-  const worldPerPixel = 2 * Math.max(distance, 0) * Math.tan(camera.fov * Math.PI / 360) / Math.max(viewportHeight, 1)
-  return radiusPx * worldPerPixel
+  return radiusPx * worldUnitsPerPixel(camera, distance, viewportHeight)
 }
 
 export interface RaycastPickOptions {

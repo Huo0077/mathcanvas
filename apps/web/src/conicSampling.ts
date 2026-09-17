@@ -13,10 +13,38 @@
 import type { Conic3, CurvePiece3, Vector3 } from "@draw/dsl"
 import { conic3PointAt } from "@draw/geometry-kernel"
 
+import { worldUnitsPerPixel } from "./threeCamera"
+
 /** 段数上限：再密也不会有人看出差别，但会拖慢渲染。 */
 export const MAX_CURVE_SEGMENTS = 8192
 /** 闭合曲线的最低段数。 */
 export const MIN_CURVE_SEGMENTS = 3
+/** 曲线的屏幕误差容差（像素）：亚像素即可，0.5px 是业界常用的默认。 */
+export const CURVE_PIXEL_TOLERANCE = 0.5
+
+/**
+ * 屏幕误差容差 → 世界单位容差：`tol_px × 世界单位每像素`。
+ *
+ * 相机拉远时每像素代表更多世界单位，容差自动变大（段数变少）；拉近则反过来——这就是
+ * "放大不看出棱、缩远不浪费"的机制。
+ */
+export function curveToleranceFor(camera: { fov: number }, distance: number, viewportHeight: number, pixelTolerance = CURVE_PIXEL_TOLERANCE): number {
+  const value = pixelTolerance * worldUnitsPerPixel(camera, distance, viewportHeight)
+  // 相机状态非有限（或距离为负）时给一个保守的小容差：曲线会多采一些点，但绝不会得到 NaN 几何。
+  if (!Number.isFinite(value) || value <= 0) return 0.001
+  return Math.max(value, 1e-9)
+}
+
+/**
+ * 容差**滞回档**：量化到 2 的幂。
+ *
+ * 相机连续缩放时容差每帧都在变，若把它直接当作重建签名，曲线每帧都要重新采样上传。
+ * 量化成 2 的幂之后，只有缩放跨过一档（不到 2×）才重建——视觉上分辨不出、开销却少一个数量级。
+ */
+export function toleranceBucket(tolerance: number): number {
+  if (!Number.isFinite(tolerance) || tolerance <= 0) return 1
+  return 2 ** Math.ceil(Math.log2(tolerance))
+}
 
 /**
  * `n` 段折线的最大弦高是 `R(1 − cos(π/n))`；解 `h ≤ tolerance` 得段数（[MathWorld sagitta](https://mathworld.wolfram.com/Sagitta.html)）。

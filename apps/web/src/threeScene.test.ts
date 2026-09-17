@@ -3,10 +3,10 @@ import * as THREE from "three"
 
 import type { GeometryDocument, Point3Primitive, PrimitiveSpec, SectionPrimitive } from "@draw/dsl"
 import { createEmptyDocument } from "@draw/dsl"
-import { buildSolidTemplate, dihedralMarker3, unfoldPolyhedron3 } from "@draw/geometry-kernel"
+import { buildSolidTemplate, circleConic3, dihedralMarker3, unfoldPolyhedron3 } from "@draw/geometry-kernel"
 import { POINT_HANDLE_RADIUS_PX, pickPrimitiveAt, pickRaycastHit3, pointHandleWorldRadius, resolveSelectableHit, templateTopologyOwners } from "./threePicking"
 import { applyDragOffsets, dragFamilyIds, dragWorldPoint } from "./threeDrag"
-import { createCubeMesh, createDihedralMarkerGroup, createEdge3Line, createFace3Mesh, createPlane3Mesh, createPlanePatch, createPoint3Mesh, createPointDrivenLine, createSectionMesh, createSolidGroup, createSolidMesh, createUnfoldNetGroup, cubeUnfoldCenters, nextUnfoldProgress, prefersReducedMotion, sectionUnitNormal } from "./threePrimitives"
+import { createCircle3Line, createConic3Line, createCubeMesh, createCurveLoops3, createDihedralMarkerGroup, createEdge3Line, createFace3Mesh, createPlane3Mesh, createPlanePatch, createPoint3Mesh, createPointDrivenLine, createSectionMesh, createSolidGroup, createSolidMesh, createUnfoldNetGroup, cubeUnfoldCenters, nextUnfoldProgress, prefersReducedMotion, sectionUnitNormal } from "./threePrimitives"
 import { applyCameraState, cameraBasis, clampCameraTarget, createCameraState, fitCameraState, panCameraState, resetCameraState, rotateCameraState, zoomCameraState } from "./threeCamera"
 import { sceneSyncDecision } from "./sceneContentKey"
 
@@ -862,5 +862,72 @@ describe("scene sync decision", () => {
   it("syncs on the first run and on any change", () => {
     expect(sceneSyncDecision(null, "geometry3d-1|1|")).toBe(true)
     expect(sceneSyncDecision("geometry3d-1|1|", "geometry3d-1|2|")).toBe(true)
+  })
+})
+
+/**
+ * A1 第 3 片：解析曲线的渲染。
+ *
+ * 用户口径："我不要一个逼近的圆，我需要一个真的圆。" 曲线本身是解析的，只有"画出来"这一步要离散化——
+ * 段数由屏幕误差决定，所以放大时点会变多，而不是把 48 段的棱一起放大。
+ */
+describe("exact curve rendering", () => {
+  const circleConic = () => circleConic3({ x: 0, y: 0, z: 1 }, { x: 0, y: 0, z: 1 }, 2)!
+  const countRole = (root: { traverse: (callback: (object: { userData: Record<string, unknown> }) => void) => void }, role: string) => {
+    let count = 0
+    root.traverse((object) => { if (object.userData.visualRole === role) count += 1 })
+    return count
+  }
+
+  it("samples an exact circle from the tolerance and re-samples when the tolerance tightens", () => {
+    const loose = createConic3Line("circle3-1", circleConic(), 0.01, false)!
+    const tight = createConic3Line("circle3-1", circleConic(), 0.001, false)!
+
+    expect(loose.userData.visualRole).toBe("exact-curve")
+    expect(loose.userData.segmentCount).toBe(32)                       // R=2、tol=0.01
+    expect(tight.userData.segmentCount).toBeGreaterThan(loose.userData.segmentCount)
+    expect(loose.userData.primitiveId).toBe("circle3-1")
+    // 半径非有限的圆不画，而不是画一个假的。
+    expect(createConic3Line("bad", { ...circleConic(), semiMajor: 0 }, 0.01, false)).toBeNull()
+  })
+
+  it("draws every loop of an exact section boundary and closes it", () => {
+    const conic = circleConic()
+    const loops = [[{ kind: "conic" as const, conic, parameterRange: [0, Math.PI] as [number, number] }], [{ kind: "segment" as const, a: { x: 0, y: 0, z: 0 }, b: { x: 1, y: 0, z: 0 } }]]
+    const group = createCurveLoops3("section-1", loops, 0.01, false)!
+
+    expect(group.userData.primitiveId).toBe("section-1")
+    expect(group.userData.segmentCount).toBeGreaterThan(0)
+    expect(countRole(group, "exact-curve")).toBe(2)
+    // 空环不给对象（不编一条零长度的线）。
+    expect(createCurveLoops3("section-2", [], 0.01, false)).toBeNull()
+  })
+
+  it("hands the section boundary to the exact curve instead of the polygon chords", () => {
+    const section = {
+      id: "section-1", type: "section" as const, sourceId: "cylinder-1",
+      plane: { normal: { x: 0, y: 0, z: 1 }, constant: -1 },
+      points: [{ x: 2, y: 0, z: 1 }, { x: 0, y: 2, z: 1 }, { x: -2, y: 0, z: 1 }, { x: 0, y: -2, z: 1 }],
+      loops: [[{ x: 2, y: 0, z: 1 }, { x: 0, y: 2, z: 1 }, { x: -2, y: 0, z: 1 }, { x: 0, y: -2, z: 1 }]],
+      classification: "polygon" as const, status: "exact" as const,
+      exact: { kind: "circle" as const, loops: [[{ kind: "conic" as const, conic: circleConic(), parameterRange: [0, Math.PI * 2] as [number, number] }]] }
+    }
+
+    const withChords = createSectionMesh(section)!
+    const exactOnly = createSectionMesh(section, { omitBoundary: true })!
+
+    expect(countRole(withChords, "section-boundary")).toBe(1)
+    expect(countRole(exactOnly, "section-boundary")).toBe(0)   // 边界交给真曲线，不留一圈弦
+  })
+
+  it("renders a document circle3 as a true curve", () => {
+    const points = new Map([["point-a", { id: "point-a", type: "point3" as const, position: { x: 0, y: 0, z: 0 } }]])
+    const line = createCircle3Line({ id: "circle3-1", type: "circle3", centerId: "point-a", normal: { x: 0, y: 0, z: 1 }, radius: 1 }, points, 0.01, false)!
+
+    expect(line.userData.visualRole).toBe("exact-curve")
+    expect(line.userData.primitiveType).toBe("circle3")
+    expect(line.userData.segmentCount).toBeGreaterThanOrEqual(16)
+    // 圆心点不存在时如实不画。
+    expect(createCircle3Line({ id: "circle3-2", type: "circle3", centerId: "missing", normal: { x: 0, y: 0, z: 1 }, radius: 1 }, points, 0.01, false)).toBeNull()
   })
 })
