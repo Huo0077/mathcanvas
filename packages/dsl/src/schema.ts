@@ -201,6 +201,20 @@ function hasClosedFaceBoundary(byId: Map<string, unknown>, pointIds: unknown, ed
   return visited.size === pointSet.size
 }
 
+/**
+ * 绕定点旋转：定点要么是一个有限的固定坐标，要么指向一个真实存在的点图元；
+ * 转角必须是有限弧度，基准圆心必须是有限坐标（缺了它重算就会把结果当基准、越转越偏）。
+ */
+function isCurveRotation(byId: Map<string, unknown>, value: unknown): boolean {
+  if (!isRecord(value)) return false
+  if (!isFiniteNumber(value.angle) || !isFiniteCoordinate(value.baseCenter)) return false
+  const pivot = value.pivot
+  if (!isRecord(pivot)) return false
+  if (pivot.kind === "coordinate") return isFiniteCoordinate(pivot)
+  if (pivot.kind === "primitive") return typeof pivot.primitiveId === "string" && referenceType(byId, pivot.primitiveId) === "point"
+  return false
+}
+
 function validatePresentation(value: RecordValue, errors: string[]): void {
   if (value.label !== undefined && typeof value.label !== "string") errors.push("primitive label is invalid")
   if (value.visible !== undefined && typeof value.visible !== "boolean") errors.push("primitive visibility is invalid")
@@ -377,6 +391,8 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>, parameter
   if (type === "ellipse" || type === "hyperbola") {
     if (!isFiniteCoordinate(value.center) || !isFiniteNumber(value.radiusX) || !isFiniteNumber(value.radiusY) || value.radiusX <= 0 || value.radiusY <= 0 || (value.rotation !== undefined && !isFiniteNumber(value.rotation))) errors.push(`${type} geometry is invalid`)
     if (type === "hyperbola" && !["x", "y"].includes(String(value.axis))) errors.push("hyperbola axis is invalid")
+    // 只有椭圆支持绕定点旋转：双曲线不封闭，"过一个定点"对它的两支没有这种含义。
+    if (value.rotationAbout !== undefined && (type !== "ellipse" || !isCurveRotation(byId, value.rotationAbout))) errors.push(`${type} rotation about a fixed point is invalid`)
   }
   if (type === "function") {
     if (typeof value.expression !== "string" || !value.expression.trim()) errors.push("function expression is required")
@@ -502,6 +518,9 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>, parameter
   if (type === "circle" || type === "arc") {
     if (!isFiniteCoordinate(value.center) || !isFiniteNumber(value.radius) || value.radius <= 0) errors.push(`${type} geometry is invalid`)
     if (type === "arc" && (!isFiniteNumber(value.startAngle) || !isFiniteNumber(value.endAngle))) errors.push("arc angles must be finite")
+    // 圆可以绕定点旋转（这是用户要的那类题）；弧不是封闭曲线，不给这个能力。
+    if (value.rotation !== undefined && !isFiniteNumber(value.rotation)) errors.push(`${type} rotation is invalid`)
+    if (value.rotationAbout !== undefined && (type !== "circle" || !isCurveRotation(byId, value.rotationAbout))) errors.push(`${type} rotation about a fixed point is invalid`)
   }
   if (type === "intersection") {
     if (typeof value.lineA !== "string" || typeof value.lineB !== "string" || !byId.has(value.lineA) || !byId.has(value.lineB)) errors.push("intersection references missing line")

@@ -54,6 +54,25 @@ function isVector3(value: unknown): value is { x: number; y: number; z: number }
   return Boolean(isCoordinate(value) && Number.isFinite((value as { z?: unknown }).z))
 }
 
+/**
+ * 绕定点旋转的补丁校验。定点引用必须是文档里**真实存在的点图元**：
+ * 悬空引用会让曲线悄悄不再经过那个定点（画得出来、但性质已经没了），必须在写入前拦住。
+ * `baseCenter` 也必须在：它是"基准几何"，缺了它重算就会把转过的位置当基准、越转越偏。
+ */
+function isCurveRotationPatch(document: GeometryDocument, value: unknown): boolean {
+  if (!value || typeof value !== "object") return false
+  const candidate = value as { pivot?: unknown; angle?: unknown; baseCenter?: unknown }
+  if (!Number.isFinite(candidate.angle) || !isCoordinate(candidate.baseCenter)) return false
+  if (!candidate.pivot || typeof candidate.pivot !== "object") return false
+  const pivot = candidate.pivot as { kind?: unknown; x?: unknown; y?: unknown; primitiveId?: unknown }
+  if (pivot.kind === "coordinate") return Number.isFinite(pivot.x) && Number.isFinite(pivot.y)
+  if (pivot.kind === "primitive") {
+    return typeof pivot.primitiveId === "string"
+      && document.primitives.some((primitive) => primitive.id === pivot.primitiveId && primitive.type === "point")
+  }
+  return false
+}
+
 function isLayer(value: unknown): value is NonNullable<GeometryDocument["layers"]>[number] {
   if (!value || typeof value !== "object") return false
   const layer = value as Record<string, unknown>
@@ -249,6 +268,10 @@ export function validatePatch(document: GeometryDocument, operation: DomainOpera
     if (operation.patch.radius3 !== undefined && (!Number.isFinite(operation.patch.radius3) || operation.patch.radius3 <= 0 || !["cylinder", "cone"].includes(primitive?.type ?? ""))) errors.push(["cylinder", "cone"].includes(primitive?.type ?? "") ? "3D radius must be positive" : "only cylinders and cones support radius")
     if (operation.patch.segments !== undefined && (!Number.isInteger(operation.patch.segments) || operation.patch.segments < 3 || operation.patch.segments > 256 || !["cylinder", "cone"].includes(primitive?.type ?? ""))) errors.push(["cylinder", "cone"].includes(primitive?.type ?? "") ? "segment count is invalid" : "only cylinders and cones support segments")
     if (operation.patch.rotation !== undefined && !Number.isFinite(operation.patch.rotation)) errors.push("rotation must be finite")
+    if (operation.patch.rotationAbout !== undefined) {
+      if (!["circle", "ellipse"].includes(primitive?.type ?? "")) errors.push("only circles and ellipses support rotation about a fixed point")
+      else if (!isCurveRotationPatch(document, operation.patch.rotationAbout)) errors.push("rotation about a fixed point must reference an existing point")
+    }
     if (operation.patch.rotation3 !== undefined) {
       const isTemplate = ["cube", "pyramid", "cylinder", "cone"].includes(primitive?.type ?? "")
       if (!isTemplate) errors.push("only template solids support orientation")
@@ -386,6 +409,22 @@ export function validatePatch(document: GeometryDocument, operation: DomainOpera
   if (operation.op === "deleteGroup" && !document.groups.some((group) => group.id === operation.id)) errors.push("group not found")
   if (operation.op === "alignPrimitives" || operation.op === "setPrimitivesVisible" || operation.op === "setPrimitivesLocked") {
     if (!operation.ids.length || new Set(operation.ids).size !== operation.ids.length || operation.ids.some((id) => !ids.has(id))) errors.push("selection has invalid objects")
+  }
+  if (operation.op === "setPrimitivesStyle") {
+    if (!operation.ids.length || new Set(operation.ids).size !== operation.ids.length || operation.ids.some((id) => !ids.has(id))) errors.push("selection has invalid objects")
+    else if (Object.keys(operation.style).length === 0) errors.push("style patch is empty")
+    else {
+      /**
+       * 逐项校验到与 `updatePrimitive` 同样的严格度：批量入口不能成为**绕过校验**的后门
+       * （单条改色会被拦住的非法值，批量也必须被拦住，否则文档会存进渲染层读不懂的颜色）。
+       */
+      const { stroke, fill, dash, strokeWidth, opacity } = operation.style
+      if (stroke !== undefined && typeof stroke !== "string") errors.push("stroke is invalid")
+      if (fill !== undefined && typeof fill !== "string") errors.push("fill is invalid")
+      if (dash !== undefined && typeof dash !== "string") errors.push("dash is invalid")
+      if (strokeWidth !== undefined && (!Number.isFinite(strokeWidth) || strokeWidth <= 0)) errors.push("stroke width must be positive")
+      if (opacity !== undefined && (!Number.isFinite(opacity) || opacity < 0 || opacity > 1)) errors.push("opacity must be between 0 and 1")
+    }
   }
   if (operation.op === "alignPrimitives") {
     if (!["left", "right", "top", "bottom", "horizontalCenter", "verticalCenter"].includes(operation.alignment)) errors.push("alignment is invalid")

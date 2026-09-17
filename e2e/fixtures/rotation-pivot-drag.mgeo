@@ -1,0 +1,47 @@
+{
+  "format": "mgeo",
+  "formatVersion": "0.1",
+  "document": {
+    "schemaVersion": "0.1",
+    "revision": 1,
+    "workspace": "conics",
+    "coordinateSystems": [
+      "cartesian-2d"
+    ],
+    "parameters": {},
+    "primitives": [
+      {
+        "id": "circle-1",
+        "type": "circle",
+        "center": { "x": 0, "y": 0 },
+        "radius": 3,
+        "rotation": 0,
+        "label": "圆 c",
+        "rotationAbout": {
+          "pivot": { "kind": "primitive", "primitiveId": "point-p" },
+          "angle": 0.6,
+          "baseCenter": { "x": 0, "y": 0 }
+        }
+      },
+      {
+        "id": "point-p",
+        "type": "point",
+        "x": 3,
+        "y": 0,
+        "label": "P"
+      }
+    ],
+    "groups": [],
+    "constraints": [],
+    "dynamics": [],
+    "annotations": [],
+    "measurements": [],
+    "engineeringAnnotations": [],
+    "metadata": {
+      "id": "doc-rotation-pivot-drag-fixture",
+      "name": "Rotation pivot drag",
+      "createdAt": "2026-09-17T00:00:00.000Z",
+      "updatedAt": "2026-09-17T00:00:00.000Z"
+    }
+  }
+}

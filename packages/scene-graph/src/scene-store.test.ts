@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest"
 import { createEmptyDocument, encodeMgeo, validateDocument } from "@draw/dsl"
 import { buildSolidTemplate } from "@draw/geometry-kernel"
 
-import { applyOperation, commitPatch, createFace3, createLine3, createPoint3, createPolyhedron3, getAffectedPrimitiveIds, getDependencyIndex, patchPoint3, recomputeDerivedObjects, resolvePolyhedronTopology, sectionPlaneThroughSource, topologicalRecomputeOrder, validatePatch } from "./index"
+import { applyOperation, commitPatch, createFace3, createLine3, createPoint3, createPolyhedron3, deletionTargets, getAffectedPrimitiveIds, getDependencyIndex, patchPoint3, recomputeDerivedObjects, resolvePolyhedronTopology, sectionPlaneThroughSource, topologicalRecomputeOrder, validateDeletion, validatePatch } from "./index"
 
 describe("scene graph operations", () => {
   it("recomputes template topology when legacy solid parameters change", () => {
@@ -168,6 +168,149 @@ describe("scene graph operations", () => {
       expect(point.x).toBeCloseTo(1)
       expect(point.y).toBeCloseTo(5)
     }
+  })
+
+  /**
+   * 封闭曲线绕定点旋转：`rotationAbout.pivot` 是那个**定点**，曲线转过任意角度都要仍然过它。
+   *
+   * 这四条钉住的是完整链路——依赖图（点 → 曲线）、几何求解（constraint 用放置后的圆心）、
+   * 以及"转一整圈回到原处"（放置是纯函数，不累积漂移）。
+   */
+  it("keeps a curve passing through its fixed point at every angle", () => {
+    const document = createEmptyDocument("conics")
+    const angle = (value: number) => ({
+      ...document,
+      primitives: [
+        { id: "circle-1", type: "circle" as const, center: { x: 0, y: 0 }, radius: 3, rotationAbout: { pivot: { kind: "coordinate" as const, x: 3, y: 0 }, angle: value, baseCenter: { x: 0, y: 0 } } },
+        { id: "pivot-1", type: "point" as const, x: 3, y: 0, binding: { kind: "onPath" as const, pathId: "circle-1", parameter: 0 } }
+      ]
+    })
+
+    for (const value of [0, Math.PI / 5, Math.PI / 2, Math.PI, 5.6]) {
+      const recomputed = recomputeDerivedObjects(angle(value))
+      const circle = recomputed.primitives.find((primitive) => primitive.id === "circle-1")
+      const pivot = recomputed.primitives.find((primitive) => primitive.id === "pivot-1")
+      expect(circle?.type).toBe("circle")
+      expect(pivot?.type).toBe("point")
+      if (circle?.type !== "circle" || pivot?.type !== "point") continue
+      // 定点画在圆上：到圆心的距离就是半径（用户口径里的"过一个定点"）。
+      expect(Math.hypot(pivot.x - circle.center.x, pivot.y - circle.center.y)).toBeCloseTo(3, 9)
+    }
+
+    // 一整圈回到原处：不会因为反复重算而漂移。
+    const full = recomputeDerivedObjects(angle(2 * Math.PI)).primitives.find((primitive) => primitive.id === "circle-1")
+    expect(full?.type === "circle" && full.center.x).toBeCloseTo(0, 9)
+    expect(full?.type === "circle" && full.center.y).toBeCloseTo(0, 9)
+  })
+
+  /**
+   * 幂等：重算从 `baseCenter` 出发，所以再算一遍不会把曲线又转一次。
+   * 这是真实缺陷的回归保护——第一版把结果烧进 `center` 且不存基准，
+   * 第二次重算就把圆心从 (1.5,-2.6) 推到 (4.5,-2.6)、曲线离开定点。
+   */
+  it("does not drift when the same document is recomputed repeatedly", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [
+      { id: "circle-1", type: "circle", center: { x: 0, y: 0 }, radius: 3, rotationAbout: { pivot: { kind: "coordinate", x: 3, y: 0 }, angle: Math.PI / 3, baseCenter: { x: 0, y: 0 } } }
+    ]
+
+    let current = recomputeDerivedObjects(document)
+    const first = current.primitives[0]
+    if (first?.type !== "circle") throw new Error("expected a circle")
+    for (let pass = 0; pass < 5; pass += 1) {
+      current = recomputeDerivedObjects(current)
+      const circle = current.primitives[0]
+      if (circle?.type !== "circle") throw new Error("expected a circle")
+      expect(circle.center.x).toBeCloseTo(first.center.x, 9)
+      expect(circle.center.y).toBeCloseTo(first.center.y, 9)
+      expect(Math.hypot(circle.center.x - 3, circle.center.y)).toBeCloseTo(3, 9)
+    }
+  })
+
+  it("moves the whole curve when the fixed point moves", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [
+      // 定点是文档里的一个点图元。基准圆心在原点、转角 90°，于是圆心被转到 (0,-3) 一侧。
+      { id: "pivot-1", type: "point", x: 3, y: 0 },
+      { id: "circle-1", type: "circle", center: { x: 0, y: 0 }, radius: 3, rotationAbout: { pivot: { kind: "primitive", primitiveId: "pivot-1" }, angle: Math.PI / 2, baseCenter: { x: 0, y: 0 } } },
+      { id: "glider", type: "point", x: 0, y: 0, binding: { kind: "onPath", pathId: "circle-1", parameter: 0 } }
+    ]
+
+    const recomputed = recomputeDerivedObjects(document)
+    const circle = recomputed.primitives.find((primitive) => primitive.id === "circle-1")
+    const glider = recomputed.primitives.find((primitive) => primitive.id === "glider")
+    // 绕 (3,0) 转 90°：圆心 (0,0) → (3,0) + R(90°)·(-3,0) = (3,-3)。
+    expect(circle?.type === "circle" && circle.center.x).toBeCloseTo(3, 9)
+    expect(circle?.type === "circle" && circle.center.y).toBeCloseTo(-3, 9)
+    // 圆上的动点跟着圆走：绑定参数不变，坐标由放置后的曲线算出（参数 0 = 圆心 +(r,0)）。
+    expect(glider?.type === "point" && glider.x).toBeCloseTo(6, 9)
+    expect(glider?.type === "point" && glider.y).toBeCloseTo(-3, 9)
+
+    // 定点挪动后整条曲线跟着重算：这是"定点是动点"的那条通路（依赖图 + 脏集）。
+    const moved = { ...document, primitives: document.primitives.map((primitive) => primitive.id === "pivot-1" ? { ...primitive, x: 0, y: -3 } : primitive) }
+    const afterMove = recomputeDerivedObjects(moved, ["pivot-1"]).primitives.find((primitive) => primitive.id === "circle-1")
+    // 绕 (0,-3) 转 90°：圆心 (0,0) → (0,-3) + R(90°)·(0,3) = (-3,-3)。
+    expect(afterMove?.type === "circle" && afterMove.center.x).toBeCloseTo(-3, 9)
+    expect(afterMove?.type === "circle" && afterMove.center.y).toBeCloseTo(-3, 9)
+  })
+
+  it("lists the fixed point as a dependency of the curve that turns about it", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [
+      { id: "pivot-1", type: "point", x: 3, y: 0 },
+      { id: "circle-1", type: "circle", center: { x: 0, y: 0 }, radius: 3, rotationAbout: { pivot: { kind: "primitive", primitiveId: "pivot-1" }, angle: 0.2, baseCenter: { x: 0, y: 0 } } }
+    ]
+
+    // 定点动了，曲线（以及绑定在曲线上的点）必须进脏集；反过来曲线动不该带动定点。
+    expect([...getAffectedPrimitiveIds(document, ["pivot-1"])].sort()).toEqual(["circle-1", "pivot-1"])
+    expect([...getAffectedPrimitiveIds(document, ["circle-1"])].sort()).toEqual(["circle-1"])
+  })
+
+  /**
+   * 删掉定点，以它为定点的曲线**一起消失**（用户口径："在删除定点后，这个动圆也会跟着消失"）。
+   *
+   * 这是级联、不是"被引用所以拒绝删除"：曲线的圆心正是由定点 + 半径算出来的，
+   * 定点一走它就没有独立存在的意义。反过来删曲线不影响定点。
+   */
+  it("deletes a curve together with the fixed point it turns about", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [
+      { id: "pivot-1", type: "point", x: 3, y: 0 },
+      { id: "circle-1", type: "circle", center: { x: 0, y: 0 }, radius: 3, rotationAbout: { pivot: { kind: "primitive", primitiveId: "pivot-1" }, angle: 0.2, baseCenter: { x: 0, y: 0 } } },
+      { id: "keep-me", type: "point", x: -2, y: 1 }
+    ]
+
+    // 级联目标里包含曲线，而且删除**被允许**（不是拿"被别的对象引用"来挡）。
+    expect([...deletionTargets(document, "pivot-1")].sort()).toEqual(["circle-1", "pivot-1"])
+    expect(validateDeletion(document, ["pivot-1"])).toEqual({ valid: true })
+
+    const deleted = commitPatch(document, { op: "deleteObject", id: "pivot-1" }).document
+    expect(deleted.primitives.map((primitive) => primitive.id)).toEqual(["keep-me"])
+
+    // 反过来：删曲线不该带走定点。
+    const curveDeleted = commitPatch(document, { op: "deleteObject", id: "circle-1" }).document
+    expect(curveDeleted.primitives.map((primitive) => primitive.id).sort()).toEqual(["keep-me", "pivot-1"])
+  })
+
+  it("carries the fixed point along when the curve is translated", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [
+      { id: "circle-1", type: "circle", center: { x: 0, y: 0 }, radius: 3, rotationAbout: { pivot: { kind: "coordinate", x: 3, y: 0 }, angle: Math.PI / 2, baseCenter: { x: 0, y: 0 } } }
+    ]
+
+    const moved = applyOperation(document, { op: "translatePrimitive", id: "circle-1", delta: { x: 2, y: -1 } })
+    const circle = moved.document.primitives[0]
+    expect(circle?.type).toBe("circle")
+    if (circle?.type !== "circle" || !circle.rotationAbout || circle.rotationAbout.pivot.kind !== "coordinate") throw new Error("expected a placed circle")
+    // 定点与基准圆心一起平移，因此"绕定点转了 90°"这件事一点没变。
+    expect(circle.rotationAbout.pivot.x).toBeCloseTo(5)
+    expect(circle.rotationAbout.pivot.y).toBeCloseTo(-1)
+    expect(circle.rotationAbout.baseCenter.x).toBeCloseTo(2)
+    expect(circle.rotationAbout.baseCenter.y).toBeCloseTo(-1)
+    // 圆心 = 基准绕定点转 90°：(2,-1) → (5,-1) + R(90°)·(-3,0) = (5,-4)。
+    expect(circle.center.x).toBeCloseTo(5)
+    expect(circle.center.y).toBeCloseTo(-4)
+    expect(Math.hypot(circle.center.x - 5, circle.center.y - -1)).toBeCloseTo(3, 9)
   })
 
   /**

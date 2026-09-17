@@ -8,6 +8,22 @@
   --color-accent: #6c5ce7;
   --color-accent-strong: #5949d0;
   --color-accent-soft: #efedff;
+  /**
+   * **草稿纸**（平面几何画布）。用户口径："让平面几何区的画布变成有淡淡的黄色的'草稿纸的质感'"。
+   *
+   * 纸比面板略暖、略深一点点，格子是暖灰黄而不是冷蓝灰 —— 这样"纸"与"界面"一眼分得开，
+   * 但饱和度压得很低，长期作图不刺眼（这是草稿纸，不是便利贴）。
+   */
+  --color-graph-paper: #fdfbf3;
+  --color-graph-paper-edge: #ece7d5;
+  /* 格线必须**看得见**：草稿纸的质感主要就来自这一层淡淡的方格，太浅就等于没有纸。 */
+  --color-graph-grid-minor: #e8dfc2;
+  --color-graph-grid-major: #d5c79f;
+  --color-graph-axis: #ab9d7c;
+  /* 界面文字的整体字号（用户要求"边框的字体略微调大"）。基准 16px 下 0.8125rem = 13px。 */
+  --font-ui: 0.8125rem;
+  --font-ui-sm: 0.75rem;
+  --font-ui-lg: 0.875rem;
   --color-success: #159a88;
   --color-warning: #e39a48;
   --color-warning-soft: #fff8ed;

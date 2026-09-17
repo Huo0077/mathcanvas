@@ -66,8 +66,44 @@ describe("status prompts", () => {
     expect(bound).toContain("记录轨迹")
   })
 
-  it("points at the path binding when a curve that can host a point is selected", () => {
-    const prompt = resolveStatusPrompt({ mode: null, selectedCount: 1, selectedLabel: "直线 1", hasCenter: false, hasStart: false, pointCount: 0, pathSelected: true })
+  /**
+   * 绕定点旋转是纯几何能力，藏在功能区里；不说出来用户不会知道它存在
+   * （与路径绑定当初的缺口同一个问题）。三个状态都要有话说：
+   * 两样都选中（命令可用）、文档里两样都有（给操作步骤）、什么都没有（不多嘴）。
+   */
+  it("explains how to make a curve rotate about a fixed point", () => {
+    const base = { mode: null, selectedCount: 0, selectedLabel: null, hasCenter: false, hasStart: false, pointCount: 0 } as const
+
+    const ready = resolveStatusPrompt({ ...base, selectedCount: 2, rotationAnchor: { ready: true, available: true } })
+    expect(ready).toContain("绕定点旋转")
+    expect(ready).toContain("过这个定点")
+
+    const available = resolveStatusPrompt({ ...base, rotationAnchor: { ready: false, available: true } })
+    // 主入口是「创建动圆」（点一个点 → 右侧按钮），所以提示要指向它。
+    expect(available).toContain("创建动圆")
+
+    // 没有可用组合时不提这件事：否则提示会变成噪音。
+    const unavailable = resolveStatusPrompt({ ...base, rotationAnchor: { ready: false, available: false } })
+    expect(unavailable).not.toContain("绕定点旋转")
+    expect(unavailable).not.toContain("创建动圆")
+    // 缺省（旧调用方不传这个字段）行为不变。
+    expect(resolveStatusPrompt(base)).not.toContain("绕定点旋转")
+
+    // 两样都选中时，这条提示要压过"路径绑定"提示 —— 此刻用户要办的是定旋转中心。
+    const both = resolveStatusPrompt({ ...base, selectedCount: 1, rotationAnchor: { ready: true, available: true }, pointBinding: { bound: false, hasPaths: true } })
+    expect(both).toContain("绕定点旋转")
+
+    /**
+     * 选中一条**动圆**时：它同时也是合法的路径宿主（`pathSelected` 也为真），
+     * 但用户此刻关心的是"怎么转、半径在哪改"，所以这条要压过路径绑定提示。
+     */
+    const moving = resolveStatusPrompt({ ...base, selectedCount: 1, selectedLabel: "动圆 1", pathSelected: true, movingCircleSelected: true })
+    expect(moving).toContain("动圆")
+    expect(moving).toContain("半径")
+    expect(moving).not.toContain("路径绑定")
+  })
+
+  it("points at the path binding when a curve that can host a point is selected", () => {    const prompt = resolveStatusPrompt({ mode: null, selectedCount: 1, selectedLabel: "直线 1", hasCenter: false, hasStart: false, pointCount: 0, pathSelected: true })
 
     expect(prompt).toContain("路径绑定")
     expect(prompt).toContain("动点")

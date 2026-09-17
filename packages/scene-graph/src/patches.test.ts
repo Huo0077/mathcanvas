@@ -4,6 +4,7 @@ import { createEmptyDocument, validateDocument } from "@draw/dsl"
 import { buildSolidTemplate } from "@draw/geometry-kernel"
 
 import { commitPatch, validatePatch } from "./patches"
+import { recomputeDerivedObjects } from "./operations"
 
 /** A cube the way the 3D workspace builds one: the parameter row plus its generated topology. */
 function templateCubeDocument() {
@@ -520,5 +521,120 @@ describe("domain patches", () => {
       expect(() => validatePatch(document, operation)).not.toThrow()
       expect(validatePatch(document, operation).valid).toBe(false)
     }
+  })
+
+  /**
+   * 绕定点旋转的补丁。校验要点有两个：
+   * 定点引用必须指向**真实存在的点**（悬空引用等于曲线悄悄不再过定点），
+   * 以及只有圆 / 椭圆能接受这个补丁（弧、双曲线不是封闭曲线）。
+   */
+  it("validates rotation-about-a-fixed-point patches", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [
+      { id: "point-1", type: "point", x: 3, y: 0 },
+      { id: "circle-1", type: "circle", center: { x: 0, y: 0 }, radius: 3 },
+      { id: "ellipse-1", type: "ellipse", center: { x: 0, y: 0 }, radiusX: 4, radiusY: 2 },
+      { id: "hyperbola-1", type: "hyperbola", center: { x: 0, y: 0 }, radiusX: 3, radiusY: 2, axis: "x" }
+    ]
+    const placement = { pivot: { kind: "coordinate" as const, x: 3, y: 0 }, angle: Math.PI / 3, baseCenter: { x: 0, y: 0 } }
+    const patch = (id: string, rotationAbout: unknown) => validatePatch(document, { op: "updatePrimitive", id, patch: { rotationAbout } as never })
+
+    expect(patch("circle-1", placement)).toEqual({ valid: true })
+    expect(patch("ellipse-1", placement)).toEqual({ valid: true })
+    expect(patch("circle-1", { pivot: { kind: "primitive", primitiveId: "point-1" }, angle: 0, baseCenter: { x: 0, y: 0 } })).toEqual({ valid: true })
+
+    // 补丁本身非法：定点坐标 / 转角 / 基准圆心不是有限数，或者定点引用不存在、不是点。
+    expect(patch("circle-1", { pivot: { kind: "coordinate", x: Number.NaN, y: 0 }, angle: 0, baseCenter: { x: 0, y: 0 } }).valid).toBe(false)
+    expect(patch("circle-1", { pivot: { kind: "coordinate", x: 3, y: 0 }, angle: 0, baseCenter: { x: Number.NaN, y: 0 } }).valid).toBe(false)
+    expect(patch("circle-1", { pivot: { kind: "coordinate", x: 3, y: 0 }, angle: 0 }).valid).toBe(false)
+    expect(patch("circle-1", { pivot: { kind: "coordinate", x: 3, y: 0 }, baseCenter: { x: 0, y: 0 } }).valid).toBe(false)
+    expect(patch("circle-1", { pivot: { kind: "primitive", primitiveId: "missing" }, angle: 0, baseCenter: { x: 0, y: 0 } }).valid).toBe(false)
+    expect(patch("circle-1", { pivot: { kind: "primitive", primitiveId: "circle-1" }, angle: 0, baseCenter: { x: 0, y: 0 } }).valid).toBe(false)
+    // 曲线类型不支持：双曲线不封闭。
+    expect(patch("hyperbola-1", placement).valid).toBe(false)
+
+    // 通过补丁真的能写上，并且**同一次提交**里就把放置算好了：
+    // `applyOperation` 末尾会调用 `recomputeDerivedObjects`（`operations.ts` 收尾那段），
+    // 所以外面不要再算一遍 —— 测试里重复调用只会掩盖真实契约。
+    const fresh = createEmptyDocument("conics")
+    fresh.primitives = [
+      { id: "point-1", type: "point", x: 3, y: 0 },
+      { id: "circle-1", type: "circle", center: { x: 0, y: 0 }, radius: 3 }
+    ]
+    const committed = commitPatch(fresh, { op: "updatePrimitive", id: "circle-1", patch: { rotationAbout: placement } })
+    expect(committed.changed).toBe(true)
+    const stored = committed.document.primitives.find((primitive) => primitive.id === "circle-1")
+    expect(stored?.type === "circle" && stored.rotationAbout).toEqual(placement)
+
+    expect(stored?.type).toBe("circle")
+    if (stored?.type !== "circle") throw new Error("expected a circle")
+    // 绕 (3,0) 转 60°：圆心 (0,0) → (3,0) + R(60°)·(-3,0) = (1.5, -3√3/2)。
+    expect(stored.center.x).toBeCloseTo(1.5, 9)
+    expect(stored.center.y).toBeCloseTo((-3 * Math.sqrt(3)) / 2, 9)
+    // 最重要的一条：定点仍在圆上（"过一个定点"）。
+    expect(Math.hypot(stored.center.x - 3, stored.center.y)).toBeCloseTo(3, 9)
+
+    // 重算必须**幂等**：再算一遍不能把曲线又转一次。
+    // （实测过：一旦放置被应用两遍，圆心会从 (1.5,-2.6) 跳到 (4.5,-2.6) —— 曲线离开定点。）
+    const again = recomputeDerivedObjects(committed.document).primitives.find((primitive) => primitive.id === "circle-1")
+    expect(again?.type).toBe("circle")
+    if (again?.type !== "circle") throw new Error("expected a circle")
+    expect(again.center.x).toBeCloseTo(1.5, 9)
+    expect(again.center.y).toBeCloseTo((-3 * Math.sqrt(3)) / 2, 9)
+    expect(Math.hypot(again.center.x - 3, again.center.y)).toBeCloseTo(3, 9)
+  })
+
+  /**
+   * 批量改外观：**一次提交改完整批**。
+   *
+   * 之前多选时检查器里改颜色只作用于主选中那一个 —— 用户以为全改了，其实没有（而且五个对象要五次撤销）。
+   * 这一组钉住：整批都改到、`undefined` 表示"清除这一项回到默认"、锁定对象不动、一次提交只加一个版本号。
+   */
+  it("restyles a whole selection in one commit", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [
+      { id: "a", type: "circle", center: { x: 0, y: 0 }, radius: 1 },
+      { id: "b", type: "segment", a: { x: 0, y: 0 }, b: { x: 1, y: 1 } },
+      { id: "c", type: "point", x: 2, y: 2, locked: true }
+    ]
+    const styleOf = (doc: typeof document, id: string) => doc.primitives.find((primitive) => primitive.id === id)?.style
+
+    const painted = commitPatch(document, { op: "setPrimitivesStyle", ids: ["a", "b", "c"], style: { stroke: "#dc2626", strokeWidth: 6 } })
+    expect(painted.changed).toBe(true)
+    expect(styleOf(painted.document, "a")).toEqual({ stroke: "#dc2626", strokeWidth: 6 })
+    expect(styleOf(painted.document, "b")).toEqual({ stroke: "#dc2626", strokeWidth: 6 })
+    // 锁定对象不参与批量改外观（与其它批量操作同一套语义）。
+    expect(styleOf(painted.document, "c")).toBeUndefined()
+    // 整批一次提交：版本号只加一 —— 这就是"批量"相对"逐条提交"的实际好处（撤销也只要一步）。
+    expect(painted.document.revision).toBe(document.revision + 1)
+
+    // `undefined` 是**有意义的赋值**：清除这一项、回到默认，而不是被忽略。
+    const cleared = commitPatch(painted.document, { op: "setPrimitivesStyle", ids: ["a"], style: { stroke: undefined } })
+    expect(styleOf(cleared.document, "a")).toEqual({ strokeWidth: 6 })
+    // 清空最后一项之后 `style` 整个去掉，不留一个空对象。
+    const bare = commitPatch(cleared.document, { op: "setPrimitivesStyle", ids: ["a"], style: { strokeWidth: undefined } })
+    expect(styleOf(bare.document, "a")).toBeUndefined()
+  })
+
+  /** 批量入口不能成为**绕过校验**的后门：单条会被拦住的非法值，批量同样要拦住。 */
+  it("validates batch style patches as strictly as single-primitive ones", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [
+      { id: "a", type: "circle", center: { x: 0, y: 0 }, radius: 1 },
+      { id: "b", type: "circle", center: { x: 3, y: 0 }, radius: 1 }
+    ]
+    const style = (patch: unknown) => validatePatch(document, { op: "setPrimitivesStyle", ids: ["a", "b"], style: patch } as never)
+
+    expect(style({ stroke: "#123456" })).toEqual({ valid: true })
+    expect(style({ fill: "#ffffff" })).toEqual({ valid: true })
+
+    expect(style({}).valid).toBe(false)
+    expect(style({ stroke: 5 }).valid).toBe(false)
+    expect(style({ fill: "#fff", opacity: 2 }).valid).toBe(false)
+    expect(style({ strokeWidth: 0 }).valid).toBe(false)
+    expect(style({ strokeWidth: Number.NaN }).valid).toBe(false)
+    // 选中集本身也要合法。
+    expect(validatePatch(document, { op: "setPrimitivesStyle", ids: [], style: { stroke: "#123456" } } as never).valid).toBe(false)
+    expect(validatePatch(document, { op: "setPrimitivesStyle", ids: ["missing"], style: { stroke: "#123456" } } as never).valid).toBe(false)
   })
 })

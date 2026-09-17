@@ -13,6 +13,7 @@ const emptyContext: RibbonCommandContext = {
   canCreateFace3: false,
   canCreateLinearAnnotation: false,
   canCreateAngularAnnotation: false,
+  canAnchorRotation: false,
   diagnosticVisible: false
 }
 

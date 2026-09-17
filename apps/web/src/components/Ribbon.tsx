@@ -41,6 +41,7 @@ function RibbonGlyph({ name }: { name: RibbonIcon }): ReactNode {
     image: <><rect x="4" y="5" width="16" height="14" rx="2" /><circle cx="9" cy="10" r="1.5" /><path d="m5 17 4-4 3 3 2-2 5 4" /></>,
     delete: <><path d="M5 7h14M10 4h4l1 3H9Z" /><path d="M7 7v13h10V7M10 10v7M14 10v7" /></>,
     lock: <><rect x="6" y="10" width="12" height="10" rx="2" /><path d="M9 10V7a3 3 0 0 1 6 0v3" /></>,
+    rotate: <><path d="M20 12a8 8 0 1 1-3-6.2" /><path d="M21 4v5h-5" /><circle cx="12" cy="12" r="1.5" /></>,
     svg: <><path d="M7 4h8l3 3v13H7Z" /><path d="M15 4v4h4M10 14l2 2 4-5" /></>,
     csv: <><path d="M5 4h14v16H5Z" /><path d="M5 9h14M10 9v11M15 9v11" /></>,
     png: <><rect x="4" y="5" width="16" height="14" rx="2" /><circle cx="9" cy="10" r="1.5" /><path d="m5 17 4-4 3 3 2-2 5 4" /></>

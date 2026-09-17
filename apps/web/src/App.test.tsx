@@ -971,12 +971,13 @@ describe("MathCanvas workbench", () => {
     fireEvent.click(canvas, { clientX: 508, clientY: 140 })
 
     expect(screen.getAllByText("圆 1")).toHaveLength(3)
-    expect(canvas.querySelectorAll('g[data-primitive-type="circle"] > circle:not([data-hit-target="true"])')).toHaveLength(1)
+    // `[data-shape-centre]` 是圆心那个小圆点（不是曲线本体），数曲线时要排掉它。
+    expect(canvas.querySelectorAll('g[data-primitive-type="circle"] > circle:not([data-hit-target="true"]):not([data-shape-centre])')).toHaveLength(1)
     fireEvent.change(screen.getByRole("spinbutton", { name: "半径" }), { target: { value: "4" } })
     expect((screen.getByRole("spinbutton", { name: "半径" }) as HTMLInputElement).value).toBe("4")
     openInspectorSection("外观样式")
     fireEvent.change(screen.getByLabelText("线条颜色"), { target: { value: "#ff0000" } })
-    expect(canvas.querySelector('g[data-primitive-type="circle"] > circle:not([data-hit-target="true"])')?.getAttribute("stroke")).toBe("#ff0000")
+    expect(canvas.querySelector('g[data-primitive-type="circle"] > circle:not([data-hit-target="true"]):not([data-shape-centre])')?.getAttribute("stroke")).toBe("#ff0000")
   })
 
   it("creates an arc from center, start, and end clicks", () => {
@@ -1206,7 +1207,8 @@ describe("MathCanvas workbench", () => {
     fireEvent.click(screen.getByRole("button", { name: "添加圆" }))
     fireEvent.click(canvas, { clientX: 400, clientY: 220 })
     fireEvent.click(canvas, { clientX: 466, clientY: 220 })
-    const radiusOf = () => Number(canvas.querySelector('[data-primitive-type="circle"] circle:not([data-hit-target="true"])')!.getAttribute("r"))
+    // 排掉 `[data-shape-centre]`（圆心那个小圆点，半径固定 3px，不随缩放变化）。
+    const radiusOf = () => Number(canvas.querySelector('[data-primitive-type="circle"] circle:not([data-hit-target="true"]):not([data-shape-centre])')!.getAttribute("r"))
     const before = radiusOf()
 
     fireEvent.click(screen.getByRole("button", { name: "放大画布" }))
@@ -1715,5 +1717,142 @@ describe("MathCanvas workbench", () => {
       if (originalText) proto.text = originalText
       else delete proto.text
     }
+  })
+
+  /**
+   * 绕定点旋转的完整链路：选一个点 + 一条圆 → 点「绕定点旋转」→ 曲线从此过这个定点。
+   *
+   * 这条测试把四层串起来：DSL 的 `rotationAbout`、scene-graph 的依赖与重算、
+   * 画布上的定点标记与旋转手柄、检查器里的定点 / 转角读数。
+   * 断言用的是**不变量**（定点到圆心的距离 = 半径），不是某个中间坐标。
+   */
+  it("anchors a circle on a selected point so it rotates about that fixed point", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [
+      { id: "circle-1", type: "circle", center: { x: 0, y: 0 }, radius: 3, label: "圆 c" },
+      // 点故意**不在**圆上：命令要把它投影到曲线上，而不是拒绝。
+      { id: "point-1", type: "point", x: 5, y: 0, label: "定点 P" }
+    ]
+    useSceneStore.setState({ document, workspaceDocuments: { [document.workspace]: document }, history: [], future: [], error: null })
+    render(<App />)
+
+    // 命令在"没选中合适组合"时是禁用的，并给出理由。
+    const command = screen.getByRole("button", { name: "绕定点旋转" }) as HTMLButtonElement
+    expect(command.disabled).toBe(true)
+    expect(command.title).toContain("一个点和一个圆")
+
+    fireEvent.click(algebraRow("定点 P"))
+    fireEvent.click(algebraRow("圆 c"), { shiftKey: true })
+    expect((screen.getByRole("button", { name: "绕定点旋转" }) as HTMLButtonElement).disabled).toBe(false)
+    fireEvent.click(screen.getByRole("button", { name: "绕定点旋转" }))
+
+    const circle = useSceneStore.getState().document.primitives.find((primitive) => primitive.id === "circle-1")
+    expect(circle?.type).toBe("circle")
+    if (circle?.type !== "circle") throw new Error("expected a circle")
+    // 定点被拉到圆上（原来在 (5,0)，投影到 (3,0)），并且写成了点图元引用。
+    expect(circle.rotationAbout?.pivot).toEqual({ kind: "primitive", primitiveId: "point-1" })
+    expect(circle.rotationAbout?.angle).toBeCloseTo(0, 9)
+    expect(Math.hypot(circle.center.x - 3, circle.center.y)).toBeCloseTo(3, 9)
+
+    // 画布上有定点标记；圆不再单独给旋转手柄（拖圆本身就是绕定点转），但半径手柄在定点那一侧。
+    const canvas = screen.getByRole("img", { name: "几何画布" })
+    expect(canvas.querySelector('[data-rotation-anchor="circle-1"]')).toBeTruthy()
+    expect(canvas.querySelector('[data-drag-handle="rotate"]')).toBeNull()
+    expect(canvas.querySelector('[data-drag-handle="radius"]')).toBeTruthy()
+    // 以定点为基准的圆不画圆心小圆点（用户要求"不需要标出圆心"）。
+    expect(canvas.querySelector('[data-shape-centre="circle-1"]')).toBeNull()
+
+    // 检查器给出定点与转角（标题与 Ribbon 按钮同名，所以按读数定位而不是按文字）。
+    expect(screen.getByRole("spinbutton", { name: "绕定点转角" })).toBeTruthy()
+    expect(screen.getByText(/定点：point-1/)).toBeTruthy()
+
+    // 改转角之后曲线仍过定点：这是整件事的不变量。
+    fireEvent.change(screen.getByRole("spinbutton", { name: "绕定点转角" }), { target: { value: "90" } })
+    const turned = useSceneStore.getState().document.primitives.find((primitive) => primitive.id === "circle-1")
+    if (turned?.type !== "circle") throw new Error("expected a circle")
+    const pivot = useSceneStore.getState().document.primitives.find((primitive) => primitive.id === "point-1")
+    if (pivot?.type !== "point") throw new Error("expected a point")
+    expect(Math.hypot(turned.center.x - pivot.x, turned.center.y - pivot.y)).toBeCloseTo(3, 9)
+    expect(turned.rotationAbout?.angle).toBeCloseTo(Math.PI / 2, 9)
+  })
+
+  /**
+   * 拖动**定点所在的点**：整条曲线跟着一起搬，形状与转角都不变。
+   *
+   * 这是一处真实缺陷的回归（由 Playwright 验收抓到）：定点是点图元引用，而重算是拿
+   * "新定点 + 旧基准中心"重新解一次，只让点动、基准不动的话曲线形状就变了 ——
+   * 实测圆被拖成一个不再过定点的圆（定点落进圆内部，到圆心的距离只剩半径的 0.47 倍）。
+   *
+   * 这条测试在**单元层**把同一个缺陷钉住：单元层跑得快，e2e 只留一条浏览器事实核对。
+   */
+  it("carries the curve along when the fixed point itself is dragged", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [
+      // 曲线已经定型：绕 P 转 0.6，基准中心在原点。
+      { id: "circle-1", type: "circle", center: { x: 0, y: 0 }, radius: 3, rotation: 0.6, rotationAbout: { pivot: { kind: "primitive", primitiveId: "point-p" }, angle: 0.6, baseCenter: { x: 0, y: 0 } } },
+      { id: "point-p", type: "point", x: 3, y: 0, label: "P" }
+    ]
+    useSceneStore.setState({ document, workspaceDocuments: { [document.workspace]: document }, history: [], future: [], error: null })
+    render(<App />)
+
+    const canvas = screen.getByRole("img", { name: "几何画布" })
+    const pointHit = canvas.querySelector<SVGCircleElement>('[data-primitive-type="point"] [data-hit-target="true"]')
+    expect(pointHit).toBeTruthy()
+    // 直接派发指针事件：`handleDragEnd` 拿的是拖完之后的 store，所以这里也照这条路走。
+    fireEvent.pointerDown(pointHit!, { clientX: 420, clientY: 260, pointerId: 1 })
+    fireEvent.pointerMove(canvas, { clientX: 380, clientY: 300, pointerId: 1 })
+    fireEvent.pointerUp(canvas, { clientX: 380, clientY: 300, pointerId: 1 })
+
+    const after = useSceneStore.getState().document
+    const circle = after.primitives.find((primitive) => primitive.id === "circle-1")
+    const point = after.primitives.find((primitive) => primitive.id === "point-p")
+    if (circle?.type !== "circle" || point?.type !== "point") throw new Error("expected a placed circle and its pivot point")
+    // 半径不变、转角不变：跟着走的是位置，不是形状。
+    expect(circle.radius).toBeCloseTo(3, 9)
+    expect(circle.rotationAbout?.angle).toBeCloseTo(0.6, 9)
+    // 基准中心确实跟着搬了（修复前它留在原点不动，于是曲线被重新解成一个不过定点的圆）。
+    const baseCenter = circle.rotationAbout!.baseCenter
+    expect(Math.hypot(baseCenter.x - 0, baseCenter.y - 0)).toBeGreaterThan(0.5)
+    // 不变量：定点到基准中心的距离 = 半径，且定点到**解出来的**圆心距离也 = 半径。
+    expect(Math.hypot(baseCenter.x - point.x, baseCenter.y - point.y)).toBeCloseTo(3, 9)
+    expect(Math.hypot(circle.center.x - point.x, circle.center.y - point.y)).toBeCloseTo(3, 9)
+  })
+
+  /**
+   * 用户口径（第二次修正）：「创建一个定点后，点击定点，右侧应该出现选择创建一个"动圆"，
+   * 这个动圆不需要标出圆心，但需要能够修改半径。在删除定点后，这个动圆也会跟着消失」。
+   *
+   * 入口因此不再依赖"选中点 + Shift 选曲线"，而是：**选中一个点 → 右侧出现「创建动圆」**。
+   * 这条把整条链路钉住：入口 → 曲线以该点为基准生成 → 不画圆心 → 半径可改（定点仍在圆上）→ 删点则曲线消失。
+   */
+  it("creates a moving circle through the selected point, without a centre marker", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [{ id: "point-1", type: "point", x: 2, y: 1, label: "P" }]
+    useSceneStore.setState({ document, workspaceDocuments: { [document.workspace]: document }, history: [], future: [], error: null })
+    render(<App />)
+
+    // 选中这个点：右侧出现「创建动圆」入口。
+    fireEvent.click(algebraRow("P"))
+    const create = screen.getByRole("button", { name: "创建动圆" })
+    fireEvent.click(create)
+
+    const circle = useSceneStore.getState().document.primitives.find((primitive) => primitive.type === "circle")
+    expect(circle?.type).toBe("circle")
+    if (circle?.type !== "circle") throw new Error("expected a circle")
+    // 以这个点为基准：定点落在圆上。
+    expect(circle.radius).toBeGreaterThan(0)
+    expect(Math.hypot(circle.center.x - 2, circle.center.y - 1)).toBeCloseTo(circle.radius, 9)
+
+    // 半径可改，而且改完定点仍在圆上。
+    fireEvent.change(screen.getByRole("spinbutton", { name: "半径" }), { target: { value: "5" } })
+    const resized = useSceneStore.getState().document.primitives.find((primitive) => primitive.id === circle.id)
+    if (resized?.type !== "circle") throw new Error("expected a circle")
+    expect(resized.radius).toBeCloseTo(5, 9)
+    expect(Math.hypot(resized.center.x - 2, resized.center.y - 1)).toBeCloseTo(5, 9)
+
+    // 删除定点：动圆跟着消失（不留孤儿）。走 Ribbon 的「删除对象」，与用户实际动作一致。
+    fireEvent.click(algebraRow("P"))
+    fireEvent.click(screen.getByRole("button", { name: "删除对象" }))
+    expect(useSceneStore.getState().document.primitives.filter((primitive) => primitive.type === "circle")).toEqual([])
   })
 })

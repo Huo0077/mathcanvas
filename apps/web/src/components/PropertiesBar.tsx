@@ -12,6 +12,8 @@ import { insertFormulaTemplate } from "../formulaEditor"
 import { FormulaKeyboard } from "./FormulaKeyboard"
 import { useSceneStore } from "../store"
 import { exactConicOf, sectionConicMetrics } from "../conicMetrics"
+import { placementPivot, resizedPlacement } from "../curveRotation"
+import { FILL_PALETTE, NO_FILL, PLANAR_PALETTE, isActiveColour, normalizeColour, supportsFill } from "../palette"
 
 /** Inspector tabs stay a pure filter: every field update still flows through PropertiesBar's own callbacks. */
 export type InspectorSection = "data" | "appearance" | "constraints" | "engineering"
@@ -52,6 +54,10 @@ export interface PropertiesBarProps {
   onAddEngineeringAnnotation: (kind: EngineeringAnnotationKind) => void
   onCreateMeasurement: (metric: Measurement3Metric, dihedralKind?: "interior" | "exterior") => void
   onDeleteMeasurement: (id: string) => void
+  /** 以选中的点为定点创建一条"动圆"（曲线始终过这个点，半径可改，删点即消失）。 */
+  onCreateMovingCircle?: () => void
+  /** 批量改外观：一次提交改完所有选中对象（多选时检查器里改色只打主选中那一个是老问题）。 */
+  onUpdateSelectionStyle?: (style: { stroke?: string; fill?: string; dash?: string; strokeWidth?: number; opacity?: number }) => void
   onDeleteSelected?: () => void
   /** Calculus entry points: a function curve in the planar workspace can grow a derivative, a tangent and an area. */
   onCreateDerivative: (sourceId: string) => void
@@ -137,6 +143,12 @@ function rotationDegrees(rotation = 0): number {
   return rotation * 180 / Math.PI
 }
 
+/** 绕定点的转角读数：折算成 0°..360°，负角折回正区间。 */
+function placementDegrees(angle = 0): number {
+  const degrees = (angle * 180 / Math.PI) % 360
+  return degrees < 0 ? degrees + 360 : degrees
+}
+
 function rotationRadians(degrees: number): number {
   return degrees * Math.PI / 180
 }
@@ -206,7 +218,67 @@ function SolidRotationFields({ rotation, disabled, onChange }: { rotation: Solid
   </>
 }
 
-export function PropertiesBar({ value, min, max, step, onChange, selectedPrimitive, selectedIds, selectedCount, selectedGroupId, allSelectedVisible, canCreateIntersection, onUpdatePrimitive, onRotateSection, onMaterializeSection, pointHostCandidates, onBindPointHost, onChangeHostParameter, onToggleSelectedVisibility, onToggleSelectedLock, onDeleteSelected, onCreateGroup, onDeleteGroup, onCreateIntersection, onAlign, onToggleBatchVisibility, onAddAnnotation, onAddEngineeringAnnotation, onCreateMeasurement, onDeleteMeasurement, onCreateDerivative, onCreateTangent, onCreateIntegral, sections = allInspectorSections }: PropertiesBarProps) {
+/**
+ * 颜色选择：**一排可点的色板** ＋ 一个自定义取色框。
+ *
+ * 为什么不是只留原生 `<input type="color">`：那个控件只有一个窄方块，用户既看不出"这里能换颜色"，
+ * 也得先点开系统取色器才能挑 —— 用户反馈的"功能藏得深"说的就是这种。色板把常用色摊开，
+ * 自定义那一格保留原生的完整能力（并且保留原来的 `aria-label`）。
+ */
+function ColourField({ label, customLabel, palette, value, fallback, disabled, batch = false, onChange }: {
+  label: string
+  customLabel: string
+  palette: typeof PLANAR_PALETTE
+  value: string | undefined
+  fallback: string
+  disabled: boolean
+  /**
+   * 批量模式：这一排色块是"命令"而不是"当前值"。
+   *
+   * 它必须显式区分开，不能靠 `fallback` 传空串糊过去 —— 空串正好会与色板里的空值相等，
+   * 于是第一个色块会被误显示成"已选中"（看起来像这一批都是那个颜色）。
+   */
+  batch?: boolean
+  onChange: (value: string) => void
+}) {
+  const current = batch ? "" : value ?? fallback
+  const isNone = !batch && normalizeColour(current) === NO_FILL
+  /**
+   * 色板分组与色块的**可访问名刻意不含** `线条颜色` / `填充颜色` 这两个串。
+   *
+   * 原因不是审美，是"名字必须能唯一定位"：`填充颜色色板`、`填充颜色 红` 都包含 `填充颜色`，
+   * 于是按名字找取色框会一次命中十几个元素（实测让 3D 交面的 e2e 直接变红，无障碍工具同样会失准）。
+   * 归属改由分组名交代（`线条预设` / `填充预设` / `批量改色预设`），色块自己只报颜色名。
+   */
+  const groupLabel = batch ? "批量改色预设" : label === "线条颜色" ? "线条预设" : "填充预设"
+  return <div className="colour-field">
+    <span className="properties-label"><span>{label}</span></span>
+    <div className="colour-swatches" role="group" aria-label={groupLabel}>
+      {palette.map((entry) => <button
+        key={entry.value}
+        type="button"
+        className={`colour-swatch${entry.value === NO_FILL ? " is-none" : ""}`}
+        data-colour={entry.value}
+        aria-label={entry.label}
+        aria-pressed={batch ? undefined : isActiveColour(entry.value, value, fallback)}
+        title={entry.label}
+        disabled={disabled}
+        style={entry.value === NO_FILL ? undefined : { background: entry.value }}
+        onClick={() => onChange(entry.value)}
+      />)}
+      <input
+        className="colour-custom"
+        aria-label={customLabel}
+        type="color"
+        disabled={disabled}
+        value={isNone ? "#ffffff" : (batch ? "#ffffff" : current)}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </div>
+  </div>
+}
+
+export function PropertiesBar({ value, min, max, step, onChange, selectedPrimitive, selectedIds, selectedCount, selectedGroupId, allSelectedVisible, canCreateIntersection, onUpdatePrimitive, onRotateSection, onMaterializeSection, pointHostCandidates, onBindPointHost, onChangeHostParameter, onToggleSelectedVisibility, onToggleSelectedLock, onDeleteSelected, onCreateGroup, onDeleteGroup, onCreateIntersection, onAlign, onToggleBatchVisibility, onAddAnnotation, onAddEngineeringAnnotation, onCreateMeasurement, onDeleteMeasurement, onCreateMovingCircle, onUpdateSelectionStyle, onCreateDerivative, onCreateTangent, onCreateIntegral, sections = allInspectorSections }: PropertiesBarProps) {
   const [openSections, setOpenSections] = useState<Record<InspectorSection, boolean>>({ data: true, appearance: false, constraints: false, engineering: true })
   const usesExternalSections = sections.length < allInspectorSections.length
   const shows = (section: InspectorSection) => sections.includes(section) && (usesExternalSections || openSections[section])
@@ -221,6 +293,8 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
   const selectedEllipseOrHyperbola = selectedPrimitive?.type === "ellipse" || selectedPrimitive?.type === "hyperbola" ? selectedPrimitive : null
   const selectedFunction = selectedPrimitive?.type === "function" ? selectedPrimitive : null
   const selectedCircleOrArc = selectedPrimitive?.type === "circle" || selectedPrimitive?.type === "arc" ? selectedPrimitive : null
+  /** 已经定了绕哪个定点旋转的圆 / 椭圆：检查器多出一块"绕定点旋转"。 */
+  const selectedPlacedCurve = selectedPrimitive && (selectedPrimitive.type === "circle" || selectedPrimitive.type === "ellipse") && selectedPrimitive.rotationAbout ? selectedPrimitive : null
   const selectedSolid = selectedPrimitive && ["cube", "pyramid", "cylinder", "cone"].includes(selectedPrimitive.type) ? selectedPrimitive as SolidPrimitive : null
   const selectedPlane3 = selectedPrimitive?.type === "plane3" ? selectedPrimitive : null
   const selectedSection = selectedPrimitive?.type === "section" ? selectedPrimitive : null
@@ -246,6 +320,14 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
   const [annotationText, setAnnotationText] = useState("")
   const sceneDocument = useSceneStore((state) => state.document)
   const applySceneOperation = useSceneStore((state) => state.apply)
+  /**
+   * 这个点是不是已经被某条曲线当作**定点**了：是的话就不再提供「创建动圆」，避免重复创建。
+   * 判断放在这里（`sceneDocument` 之后），因为它要读文档。
+   */
+  const pointHasMovingCircle = selectedPoint !== null && sceneDocument.primitives.some((primitive) =>
+    (primitive.type === "circle" || primitive.type === "ellipse")
+    && primitive.rotationAbout?.pivot.kind === "primitive"
+    && primitive.rotationAbout.pivot.primitiveId === selectedPoint?.id)
   const annotationOptions = selectedPrimitive ? annotationFeatureOptions(selectedPrimitive) : []
   const selectedAnnotations = selectedPrimitive ? sceneDocument.annotations.filter((annotation) => annotation.target === selectedPrimitive.id || (annotation.anchor?.kind === "primitive" && annotation.anchor.primitiveId === selectedPrimitive.id)) : []
   /**
@@ -400,6 +482,48 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
   const updateConicCenter = (axis: "x" | "y", next: number) => selectedEllipseOrHyperbola && editable && onUpdatePrimitive({ center: { ...selectedEllipseOrHyperbola.center, [axis]: next } })
   const updateParabolaVertex = (axis: "x" | "y", next: number) => selectedParabola && editable && onUpdatePrimitive({ vertex: { ...selectedParabola.vertex, [axis]: next } })
   const updateRotation = (next: number) => editable && onUpdatePrimitive({ rotation: rotationRadians(next) })
+  /**
+   * 绕定点旋转的两项编辑：
+   * - 改转角只换 `angle`（基准 `baseCenter` 不动，所以重算幂等、不会越转越偏）；
+   * - 改定点把**整条曲线平移过去**：定点与基准中心搬同一个位移，
+   *   于是"曲线过这个定点、已经转了多少度"两件事在平移前后完全一致（与拖动本体同一条规则）。
+   *
+   * 这里刻意**不重算基准**：重算基准会改变"参数 0 在哪"，同一个 `angle` 读数对应的姿态就变了，
+   * 用户改一下定点坐标会看到曲线莫名其妙转了个角度。
+   */
+  const updatePlacementAngle = (next: number) => {
+    if (!editable || !selectedPlacedCurve?.rotationAbout) return
+    const angle = rotationRadians(next)
+    onUpdatePrimitive({ rotationAbout: { ...selectedPlacedCurve.rotationAbout, angle }, rotation: angle })
+  }
+  const updatePlacementPivot = (axis: "x" | "y", next: number) => {
+    if (!editable || !selectedPlacedCurve?.rotationAbout) return
+    const current = selectedPlacedCurve.rotationAbout.pivot
+    if (current.kind !== "coordinate") return
+    const dx = axis === "x" ? next - current.x : 0
+    const dy = axis === "y" ? next - current.y : 0
+    onUpdatePrimitive({
+      center: { x: selectedPlacedCurve.center.x + dx, y: selectedPlacedCurve.center.y + dy },
+      rotationAbout: {
+        ...selectedPlacedCurve.rotationAbout,
+        pivot: { kind: "coordinate", x: current.x + dx, y: current.y + dy },
+        baseCenter: { x: selectedPlacedCurve.rotationAbout.baseCenter.x + dx, y: selectedPlacedCurve.rotationAbout.baseCenter.y + dy }
+      }
+    })
+  }
+  /**
+   * 改半径：必须**同时**把基准圆心摆到离定点恰好一个新半径处，否则曲线就不再过那个定点。
+   *
+   * 定点是点图元引用时这里拿不到它的坐标（要读文档），所以走 `placementPivot` 现查一次。
+   */
+  const updateMovingRadius = (radius: number) => {
+    const curve = selectedPlacedCurve
+    if (!editable || !curve?.rotationAbout) return
+    const next = Math.max(0.01, radius)
+    const pivot = placementPivot(curve, (id) => sceneDocument.primitives.find((primitive) => primitive.id === id))
+    const placement = pivot ? resizedPlacement(curve, next, pivot) : undefined
+    onUpdatePrimitive(placement ? { radius: next, rotationAbout: placement } : { radius: next })
+  }
   const parabolaFocus = (conic: Extract<ConicPrimitive, { type: "parabola" }>) => {
     const distance = conic.focalParameter / 2
     return rotatePoint(conic.vertex, conic.axis === "x" ? distance : 0, conic.axis === "y" ? distance : 0, conic.rotation ?? 0)
@@ -505,8 +629,31 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
         <button type="button" onClick={onToggleSelectedVisibility}>{selectedPrimitive.visible === false ? "显示图元" : "隐藏图元"}</button>
         <button type="button" onClick={onToggleSelectedLock}>{selectedPrimitive.locked ? "解锁图元" : "锁定图元"}</button>
       </div>
-      <Field label="线条颜色"><input aria-label="线条颜色" type="color" disabled={!editable} value={selectedPrimitive.style?.stroke ?? defaultStrokeFor(selectedPrimitive)} onChange={(event) => onUpdatePrimitive({ style: { stroke: event.target.value } })} /></Field>
-      {(["point", "circle", "ellipse", "intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection", "intersectionSet", "face3", "plane3", "polyhedron3", "section", "intersectionFace", "intersectionSolid", "cube", "pyramid", "cylinder", "cone"] as PrimitiveSpec["type"][]).includes(selectedPrimitive.type) && <Field label="填充颜色"><input aria-label="填充颜色" type="color" disabled={!editable} value={selectedPrimitive.style?.fill ?? "#ffffff"} onChange={(event) => onUpdatePrimitive({ style: { fill: event.target.value } })} /></Field>}
+      {/**
+        * 颜色：**色板 + 自定义取色**。
+        *
+        * 用户反馈"增加让平面几何的元素可以让用户选择不同颜色的功能" —— 能力本来就在，
+        * 但一个窄窄的原生取色框既看不出有颜色可选、也点不出想要的颜色。摊成色板之后一眼就能选。
+        * 自定义那一格的 `aria-label` 仍是「线条颜色」/「填充颜色」（既有测试与肌肉记忆都认这个名字）。
+        */}
+      <ColourField
+        label="线条颜色"
+        customLabel="线条颜色"
+        palette={PLANAR_PALETTE}
+        value={selectedPrimitive.style?.stroke}
+        fallback={defaultStrokeFor(selectedPrimitive)}
+        disabled={!editable}
+        onChange={(stroke) => onUpdatePrimitive({ style: { stroke } })}
+      />
+      {supportsFill(selectedPrimitive) && <ColourField
+        label="填充颜色"
+        customLabel="填充颜色"
+        palette={FILL_PALETTE}
+        value={selectedPrimitive.style?.fill}
+        fallback={NO_FILL}
+        disabled={!editable}
+        onChange={(fill) => onUpdatePrimitive({ style: { fill: fill === NO_FILL ? undefined : fill } })}
+      />}
       <Field label="线宽"><input aria-label="线宽" type="number" disabled={!editable} min="0.5" max="20" step="0.5" value={selectedPrimitive.style?.strokeWidth ?? 3} onChange={(event) => onUpdatePrimitive({ style: { strokeWidth: Math.max(0.5, numberValue(event)) } })} /></Field>
       <Field label="透明度"><input aria-label="透明度" type="number" disabled={!editable} min="0" max="1" step="0.05" value={selectedPrimitive.style?.opacity ?? 1} onChange={(event) => onUpdatePrimitive({ style: { opacity: Math.min(1, Math.max(0, numberValue(event))) } })} /></Field>
       <Field label="线型"><select aria-label="线型" disabled={!editable} value={selectedPrimitive.style?.dash ?? "solid"} onChange={(event) => onUpdatePrimitive({ style: { dash: event.target.value === "solid" ? undefined : event.target.value } })}><option value="solid">实线</option><option value="8 6">虚线</option><option value="2 5">点线</option></select></Field>
@@ -515,19 +662,67 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
     {shows("engineering") && engineeringAnnotationOptions.length > 0 && <div className="primitive-properties"><h3>工程标注</h3><p className="footer-note">标注保留空间来源，并在四视图中随来源对象自动重算。</p><div className="property-actions" aria-label="工程标注工具">{engineeringAnnotationOptions.map((option) => <button key={option.kind} type="button" aria-label={option.ariaLabel} onClick={() => onAddEngineeringAnnotation(option.kind)}>{option.label}</button>)}</div></div>}
     {shows("data") && selectedIds.length === 1 && sceneDocument.measurements.filter((measurement) => measurement.sourceIds.includes(selectedIds[0])).map((measurement) => <div className="primitive-properties" key={measurement.id}><h3>{measurement.metric === "dihedral" ? (measurement.dihedralKind === "exterior" ? "二面角外角" : "二面角内角") : `${measurement.metric}测量`}</h3><p className="footer-note">来源：{measurement.sourceIds.join("、")} · {measurement.precision === "numeric-approximation" ? "数值近似" : "输入精确"}</p><div className="metric-grid"><span>结果<strong>{measurement.value === undefined ? "—" : `${measurement.value.toFixed(3)} ${measurement.unit ?? ""}`}</strong></span><span>状态<strong>{measurement.status}</strong></span></div><p className="footer-note">{measurement.explanation}</p><div className="property-actions"><button type="button" aria-label={`删除测量 ${measurement.id}`} onClick={() => onDeleteMeasurement(measurement.id)}>删除测量</button></div></div>)}
      {shows("data") && showSlopeParameter && <div className="primitive-properties"><label className="properties-label" htmlFor="selected-slope-slider"><span>直线斜率参数</span><strong className="metric">{value.toFixed(2)}</strong></label><input id="selected-slope-slider" aria-label="选中直线斜率" type="range" disabled={!editable} min={min} max={max} step={step} value={value} onChange={(event) => onChange(numberValue(event))} /></div>}
-     {shows("data") && selectedPoint && <div className="primitive-properties"><h3>点坐标</h3><CoordinateField label="点 X" value={selectedPoint.x} disabled={!editable || selectedPoint.binding?.kind === "onPath"} onChange={(next) => updatePoint("x", next)} /><CoordinateField label="点 Y" value={selectedPoint.y} disabled={!editable || selectedPoint.binding?.kind === "onPath"} onChange={(next) => updatePoint("y", next)} /><Field label="路径绑定"><select aria-label="点路径绑定" disabled={!editable} value={selectedPoint.binding?.kind === "onPath" ? selectedPoint.binding.pathId : ""} onChange={(event) => updatePointBinding(event.target.value)}><option value="">自由点</option>{pathPrimitives.map((path) => <option key={path.id} value={path.id}>{path.label ?? path.id}</option>)}</select></Field><p className="footer-note">把点变成动点：在上面的「路径绑定」里选一条曲线或直线，这个点就会<strong>严格沿它滑动</strong>——可以直接在画布上拖它，也可以改「路径参数」精确摆位；绑定后还能点「记录轨迹」画出它的运动轨迹。</p>{selectedPoint.binding?.kind === "onPath" && <><Field label="路径参数"><input aria-label="路径参数" type="number" min={selectedPointWindow?.min ?? 0} max={selectedPointWindow?.max ?? 1} step={selectedPointWindow ? (selectedPointWindow.max - selectedPointWindow.min) / 100 : 0.01} disabled={!editable} value={selectedPoint.binding.parameterId && sceneDocument.parameters[selectedPoint.binding.parameterId] ? sceneDocument.parameters[selectedPoint.binding.parameterId].value : selectedPoint.binding.parameter} onChange={(event) => updatePointParameter(numberValue(event))} /></Field><button type="button" aria-label="记录轨迹" disabled={!editable} onClick={createLocus}>记录轨迹</button>{selectedPointBinding?.domain && <><Field label="参数域起"><input aria-label="参数域起" type="number" step="0.1" disabled={!editable} value={selectedPointBinding.domain[0]} onChange={(event) => onUpdatePrimitive({ binding: { ...selectedPointBinding, domain: [numberValue(event), selectedPointBinding.domain![1]] } })} /></Field><Field label="参数域止"><input aria-label="参数域止" type="number" step="0.1" disabled={!editable} value={selectedPointBinding.domain[1]} onChange={(event) => onUpdatePrimitive({ binding: { ...selectedPointBinding, domain: [selectedPointBinding.domain![0], numberValue(event)] } })} /></Field></>}{selectedPointBinding?.branch !== undefined && <Field label="分支"><select aria-label="圆锥曲线分支" disabled={!editable} value={selectedPointBinding.branch} onChange={(event) => onUpdatePrimitive({ binding: { ...selectedPointBinding, branch: Number(event.target.value) as 0 | 1 } })}><option value="0">第一支</option><option value="1">第二支</option></select></Field>}</>}</div>}
+     {shows("data") && selectedPoint && <div className="primitive-properties"><h3>点坐标</h3>
+       {/**
+         * 把点做成"动圆"的基准（用户口径）：点一下这个按钮，曲线就以这个点为定点生成，
+         * 不画圆心、半径可改、删掉这个点动圆也跟着消失。
+         */}
+       <div className="property-actions">
+         <button type="button" aria-label="创建动圆" disabled={!editable || pointHasMovingCircle} onClick={() => onCreateMovingCircle?.()}>{pointHasMovingCircle ? "已有动圆" : "创建动圆"}</button>
+       </div>
+       <p className="footer-note">创建动圆：以这个点为<strong>定点</strong>生成一条圆——圆始终过这个点，可以在画布上直接拖着转，半径在右侧改；删掉这个点，动圆会一起消失。</p>
+       <CoordinateField label="点 X" value={selectedPoint.x} disabled={!editable || selectedPoint.binding?.kind === "onPath"} onChange={(next) => updatePoint("x", next)} /><CoordinateField label="点 Y" value={selectedPoint.y} disabled={!editable || selectedPoint.binding?.kind === "onPath"} onChange={(next) => updatePoint("y", next)} /><Field label="路径绑定"><select aria-label="点路径绑定" disabled={!editable} value={selectedPoint.binding?.kind === "onPath" ? selectedPoint.binding.pathId : ""} onChange={(event) => updatePointBinding(event.target.value)}><option value="">自由点</option>{pathPrimitives.map((path) => <option key={path.id} value={path.id}>{path.label ?? path.id}</option>)}</select></Field><p className="footer-note">把点变成动点：在上面的「路径绑定」里选一条曲线或直线，这个点就会<strong>严格沿它滑动</strong>——可以直接在画布上拖它，也可以改「路径参数」精确摆位；绑定后还能点「记录轨迹」画出它的运动轨迹。</p>{selectedPoint.binding?.kind === "onPath" && <><Field label="路径参数"><input aria-label="路径参数" type="number" min={selectedPointWindow?.min ?? 0} max={selectedPointWindow?.max ?? 1} step={selectedPointWindow ? (selectedPointWindow.max - selectedPointWindow.min) / 100 : 0.01} disabled={!editable} value={selectedPoint.binding.parameterId && sceneDocument.parameters[selectedPoint.binding.parameterId] ? sceneDocument.parameters[selectedPoint.binding.parameterId].value : selectedPoint.binding.parameter} onChange={(event) => updatePointParameter(numberValue(event))} /></Field><button type="button" aria-label="记录轨迹" disabled={!editable} onClick={createLocus}>记录轨迹</button>{selectedPointBinding?.domain && <><Field label="参数域起"><input aria-label="参数域起" type="number" step="0.1" disabled={!editable} value={selectedPointBinding.domain[0]} onChange={(event) => onUpdatePrimitive({ binding: { ...selectedPointBinding, domain: [numberValue(event), selectedPointBinding.domain![1]] } })} /></Field><Field label="参数域止"><input aria-label="参数域止" type="number" step="0.1" disabled={!editable} value={selectedPointBinding.domain[1]} onChange={(event) => onUpdatePrimitive({ binding: { ...selectedPointBinding, domain: [selectedPointBinding.domain![0], numberValue(event)] } })} /></Field></>}{selectedPointBinding?.branch !== undefined && <Field label="分支"><select aria-label="圆锥曲线分支" disabled={!editable} value={selectedPointBinding.branch} onChange={(event) => onUpdatePrimitive({ binding: { ...selectedPointBinding, branch: Number(event.target.value) as 0 | 1 } })}><option value="0">第一支</option><option value="1">第二支</option></select></Field>}</>}</div>}
+     {/**
+       * 绕定点旋转：定点与转角都摆在这里。
+       *
+       * 定点是另一个点图元时不提供坐标输入（那个点有自己的属性栏），只说明"绕哪个点"；
+       * 圆绕定点转时外形不变、只有参数基准在转，所以补一句提示，避免用户以为"没生效"。
+       */}
+     {shows("data") && selectedPlacedCurve?.rotationAbout && <div className="primitive-properties"><h3>绕定点旋转</h3>
+       {selectedPlacedCurve.rotationAbout.pivot.kind === "coordinate"
+         ? <><CoordinateField label="定点 X" value={selectedPlacedCurve.rotationAbout.pivot.x} disabled={!editable} onChange={(next) => updatePlacementPivot("x", next)} /><CoordinateField label="定点 Y" value={selectedPlacedCurve.rotationAbout.pivot.y} disabled={!editable} onChange={(next) => updatePlacementPivot("y", next)} /></>
+         : <p className="footer-note">定点：{selectedPlacedCurve.rotationAbout.pivot.primitiveId}（拖动那个点，曲线跟着绕它转）</p>}
+       <Field label="绕定点转角（度）"><input aria-label="绕定点转角" type="number" disabled={!editable} step="1" value={placementDegrees(selectedPlacedCurve.rotationAbout.angle)} onChange={(event) => updatePlacementAngle(numberValue(event))} /></Field>
+       {selectedPlacedCurve.type === "circle" && <p className="footer-note">圆绕定点转不改变外形（圆没有朝向）：转的是曲线自己的参数基准，周长、面积与到定点的距离都不变。</p>}
+     </div>}
      {shows("data") && selectedLinear && <div className="primitive-properties"><h3>斜率特征</h3><div className="metric-grid"><span>倾角<strong>{lineAngle(selectedLinear).toFixed(2)}°</strong></span><span>长度<strong>{lineLength(selectedLinear).toFixed(2)}</strong></span><span>方向向量<strong>({(selectedLinear.b.x - selectedLinear.a.x).toFixed(2)}, {(selectedLinear.b.y - selectedLinear.a.y).toFixed(2)})</strong></span><span>截距<strong>{selectedSlope === null ? "垂直线" : (selectedLinear.a.y - selectedSlope * selectedLinear.a.x).toFixed(2)}</strong></span></div>{selectedSlope === null ? <button type="button" disabled={!editable} onClick={() => updateSlope(0)}>设为水平线</button> : <Field label="斜率"><input aria-label="选中直线斜率值" type="number" step="0.1" value={selectedSlope} readOnly={showSlopeParameter} disabled={!editable} onChange={(event) => updateSlope(numberValue(event))} /></Field>}{(["a", "b"] as const).map((endpoint) => <div key={endpoint} className="endpoint-group"><strong>{selectedLinear.type === "ray" && endpoint === "a" ? "起点 A" : selectedLinear.type === "ray" && endpoint === "b" ? "方向点 B" : `端点 ${endpoint.toUpperCase()}`}</strong><CoordinateField label={`${selectedLinear.type === "ray" ? endpoint === "a" ? "起点" : "方向点" : "端点"} ${endpoint.toUpperCase()} X`} value={selectedLinear[endpoint].x} disabled={!editable} onChange={(next) => updateEndpoint(endpoint, "x", next)} /><CoordinateField label={`${selectedLinear.type === "ray" ? endpoint === "a" ? "起点" : "方向点" : "端点"} ${endpoint.toUpperCase()} Y`} value={selectedLinear[endpoint].y} disabled={!editable || (selectedLinear.type === "line" && Boolean(selectedLinear.slopeParameter) && endpoint === "b")} onChange={(next) => updateEndpoint(endpoint, "y", next)} /></div>)}</div>}
      {shows("data") && selectedPolyline && <div className="primitive-properties"><h3>折线属性</h3><p className="footer-note">共 {selectedPolyline.points.length} 个顶点</p>{selectedPolyline.points.map((point, index) => <div key={`${selectedPolyline.id}-${index}`} className="endpoint-group"><strong>顶点 {index + 1}</strong><CoordinateField label={`顶点 ${index + 1} X`} value={point.x} disabled={!editable} onChange={(next) => updatePolylinePoint(index, "x", next)} /><CoordinateField label={`顶点 ${index + 1} Y`} value={point.y} disabled={!editable} onChange={(next) => updatePolylinePoint(index, "y", next)} /></div>)}</div>}
      {shows("data") && selectedParabola && <div className="primitive-properties"><h3>抛物线属性</h3><CoordinateField label="顶点 X" value={selectedParabola.vertex.x} disabled={!editable} onChange={(next) => updateParabolaVertex("x", next)} /><CoordinateField label="顶点 Y" value={selectedParabola.vertex.y} disabled={!editable} onChange={(next) => updateParabolaVertex("y", next)} /><Field label="焦参数"><input aria-label="焦参数" type="number" disabled={!editable} step="0.1" value={selectedParabola.focalParameter} onChange={(event) => onUpdatePrimitive({ focalParameter: numberValue(event) })} /></Field><Field label="轴向"><select aria-label="抛物线轴向" disabled={!editable} value={selectedParabola.axis} onChange={(event) => onUpdatePrimitive({ axis: event.target.value as "x" | "y" })}><option value="x">横轴</option><option value="y">纵轴</option></select></Field><Field label="旋转角度（度）"><input aria-label="抛物线旋转角度" type="number" disabled={!editable} step="1" value={rotationDegrees(selectedParabola.rotation)} onChange={(event) => updateRotation(numberValue(event))} /></Field><p className="footer-note">焦点：{(() => { const focus = parabolaFocus(selectedParabola); return `(${focus.x.toFixed(2)}, ${focus.y.toFixed(2)})` })()}</p></div>}
      {shows("data") && selectedEllipseOrHyperbola && <div className="primitive-properties"><h3>{selectedEllipseOrHyperbola.type === "ellipse" ? "椭圆属性" : "双曲线属性"}</h3><CoordinateField label="中心 X" value={selectedEllipseOrHyperbola.center.x} disabled={!editable} onChange={(next) => updateConicCenter("x", next)} /><CoordinateField label="中心 Y" value={selectedEllipseOrHyperbola.center.y} disabled={!editable} onChange={(next) => updateConicCenter("y", next)} /><Field label="横向半径"><input aria-label="横向半径" type="number" disabled={!editable} min="0.01" step="0.1" value={selectedEllipseOrHyperbola.radiusX} onChange={(event) => onUpdatePrimitive({ radiusX: Math.max(0.01, numberValue(event)) })} /></Field><Field label="纵向半径"><input aria-label="纵向半径" type="number" disabled={!editable} min="0.01" step="0.1" value={selectedEllipseOrHyperbola.radiusY} onChange={(event) => onUpdatePrimitive({ radiusY: Math.max(0.01, numberValue(event)) })} /></Field>{selectedEllipseOrHyperbola.type === "hyperbola" && <Field label="轴向"><select aria-label="双曲线轴向" disabled={!editable} value={selectedEllipseOrHyperbola.axis} onChange={(event) => onUpdatePrimitive({ axis: event.target.value as "x" | "y" })}><option value="x">横轴</option><option value="y">纵轴</option></select></Field>}<Field label="旋转角度（度）"><input aria-label={`${selectedEllipseOrHyperbola.type === "ellipse" ? "椭圆" : "双曲线"}旋转角度`} type="number" disabled={!editable} step="1" value={rotationDegrees(selectedEllipseOrHyperbola.rotation)} onChange={(event) => updateRotation(numberValue(event))} /></Field><p className="footer-note">焦点：{(() => { const focus = conicFoci(selectedEllipseOrHyperbola); return `(${focus.first.x.toFixed(2)}, ${focus.first.y.toFixed(2)}) / (${focus.second.x.toFixed(2)}, ${focus.second.y.toFixed(2)})` })()}</p>{ellipseMetrics && <div className="metric-grid"><span>长半轴<strong>{ellipseMetrics.major.toFixed(2)}</strong></span><span>短半轴<strong>{ellipseMetrics.minor.toFixed(2)}</strong></span><span>离心率<strong>{ellipseMetrics.eccentricity.toFixed(3)}</strong></span><span>面积<strong>{(Math.PI * selectedEllipseOrHyperbola.radiusX * selectedEllipseOrHyperbola.radiusY).toFixed(2)}</strong></span></div>}{hyperbolaMetrics && <div className="metric-grid"><span>离心率<strong>{hyperbolaMetrics.eccentricity.toFixed(3)}</strong></span><span>渐近线角<strong>{hyperbolaMetrics.asymptoteAngle.toFixed(2)}°</strong></span></div>}</div>}
      {shows("data") && selectedFunction && <div className="primitive-properties function-properties"><h3>函数图像属性</h3><Field label="常用函数预设"><select aria-label="函数预设" disabled={!editable} value={selectedFunctionPresetId} onChange={(event) => applyFunctionPreset(event.target.value)}><option value="">自定义</option>{functionPresets.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}</select></Field><Field label="公式"><textarea ref={formulaRef} aria-label="函数表达式" rows={2} placeholder="例如：y = e^x 或 sin(ln(x))" disabled={!editable} value={expressionDraft} onChange={(event) => updateFunctionExpression(event.target.value)} /></Field><FormulaKeyboard logBase={logBase} onLogBaseChange={setLogBase} onInsert={insertFunctionTemplate} />{expressionError && <p className="footer-note" role="alert">{expressionError}</p>}<CoordinateField label="定义域起点" value={selectedFunction.domain[0]} disabled={!editable} onChange={(next) => updateFunctionDomain(0, next)} /><CoordinateField label="定义域终点" value={selectedFunction.domain[1]} disabled={!editable} onChange={(next) => updateFunctionDomain(1, next)} /><Field label="采样点数"><input aria-label="采样点数" type="number" disabled={!editable} min="2" max="2048" step="1" value={selectedFunction.samples ?? 128} onChange={(event) => onUpdatePrimitive({ samples: numberValue(event) })} /></Field><p className="footer-note">定义域 [{selectedFunction.domain[0]}, {selectedFunction.domain[1]}] · {selectedFunction.samples ?? 128} 个采样点</p>{functionMetrics && <p className="footer-note">值域 [{functionMetrics.min.toFixed(2)}, {functionMetrics.max.toFixed(2)}]</p>}<div className="property-actions" aria-label="函数分析"><button type="button" aria-label="创建导函数" disabled={!editable} onClick={() => onCreateDerivative(selectedFunction.id)}>创建导函数</button><button type="button" aria-label="创建切线" disabled={!editable} onClick={() => onCreateTangent(selectedFunction.id)}>创建切线</button><button type="button" aria-label="创建积分区域" disabled={!editable} onClick={() => onCreateIntegral(selectedFunction.id)}>创建积分区域</button></div></div>}
-     {shows("data") && selectedCircleOrArc && <div className="primitive-properties"><h3>{selectedCircleOrArc.type === "circle" ? "圆属性" : "圆弧属性"}</h3><CoordinateField label="圆心 X" value={selectedCircleOrArc.center.x} disabled={!editable} onChange={(next) => updateCenter("x", next)} /><CoordinateField label="圆心 Y" value={selectedCircleOrArc.center.y} disabled={!editable} onChange={(next) => updateCenter("y", next)} /><Field label="半径"><input aria-label="半径" type="number" disabled={!editable} min="0.01" step="0.1" value={selectedCircleOrArc.radius} onChange={(event) => onUpdatePrimitive({ radius: Math.max(0.01, numberValue(event)) })} /></Field>{selectedCircleOrArc.type === "arc" && <><Field label="起始角（度）"><input aria-label="起始角" type="number" disabled={!editable} step="1" value={rotationDegrees(selectedCircleOrArc.startAngle)} onChange={(event) => onUpdatePrimitive({ startAngle: rotationRadians(numberValue(event)) })} /></Field><Field label="结束角（度）"><input aria-label="结束角" type="number" disabled={!editable} step="1" value={rotationDegrees(selectedCircleOrArc.endAngle)} onChange={(event) => onUpdatePrimitive({ endAngle: rotationRadians(numberValue(event)) })} /></Field></>}{selectedCircleOrArc.type === "circle" ? <div className="metric-grid"><span>周长<strong>{(2 * Math.PI * selectedCircleOrArc.radius).toFixed(2)}</strong></span><span>面积<strong>{(Math.PI * selectedCircleOrArc.radius ** 2).toFixed(2)}</strong></span></div> : <div className="metric-grid"><span>圆心角<strong>{(arcAngle * 180 / Math.PI).toFixed(2)}°</strong></span><span>弧长<strong>{(arcAngle * selectedCircleOrArc.radius).toFixed(2)}</strong></span></div>}</div>}
+     {shows("data") && selectedCircleOrArc && <div className="primitive-properties"><h3>{selectedCircleOrArc.type === "circle" ? "圆属性" : "圆弧属性"}</h3>{selectedCircleOrArc.type === "circle" && selectedCircleOrArc.rotationAbout
+        ? <p className="footer-note">动圆：圆心由定点与半径算出，不单独编辑（定点可以单独选中、也可以在画布上直接拖）。</p>
+        : <><CoordinateField label="圆心 X" value={selectedCircleOrArc.center.x} disabled={!editable} onChange={(next) => updateCenter("x", next)} /><CoordinateField label="圆心 Y" value={selectedCircleOrArc.center.y} disabled={!editable} onChange={(next) => updateCenter("y", next)} /></>}<Field label="半径"><input aria-label="半径" type="number" disabled={!editable} min="0.01" step="0.1" value={selectedCircleOrArc.radius} onChange={(event) => selectedCircleOrArc.type === "circle" && selectedCircleOrArc.rotationAbout ? updateMovingRadius(numberValue(event)) : onUpdatePrimitive({ radius: Math.max(0.01, numberValue(event)) })} /></Field>{selectedCircleOrArc.type === "arc" && <><Field label="起始角（度）"><input aria-label="起始角" type="number" disabled={!editable} step="1" value={rotationDegrees(selectedCircleOrArc.startAngle)} onChange={(event) => onUpdatePrimitive({ startAngle: rotationRadians(numberValue(event)) })} /></Field><Field label="结束角（度）"><input aria-label="结束角" type="number" disabled={!editable} step="1" value={rotationDegrees(selectedCircleOrArc.endAngle)} onChange={(event) => onUpdatePrimitive({ endAngle: rotationRadians(numberValue(event)) })} /></Field></>}{selectedCircleOrArc.type === "circle" ? <div className="metric-grid"><span>周长<strong>{(2 * Math.PI * selectedCircleOrArc.radius).toFixed(2)}</strong></span><span>面积<strong>{(Math.PI * selectedCircleOrArc.radius ** 2).toFixed(2)}</strong></span></div> : <div className="metric-grid"><span>圆心角<strong>{(arcAngle * 180 / Math.PI).toFixed(2)}°</strong></span><span>弧长<strong>{(arcAngle * selectedCircleOrArc.radius).toFixed(2)}</strong></span></div>}</div>}
      {shows("data") && selectedPrimitive?.type === "derivative" && <div className="primitive-properties"><h3>导函数分析</h3><p className="footer-note">来源：{selectedPrimitive.sourceId} · {selectedPrimitive.order} 阶 · 采样近似</p><p className="footer-note">状态：{selectedPrimitive.status}{selectedPrimitive.diagnostic ? ` · ${selectedPrimitive.diagnostic}` : ""}</p></div>}
      {shows("data") && (selectedPrimitive?.type === "tangent" || selectedPrimitive?.type === "normal" || selectedPrimitive?.type === "secant") && <div className="primitive-properties"><h3>{primitiveTypeLabels[selectedPrimitive.type]}分析</h3><p className="footer-note">来源：{selectedPrimitive.sourceId} · 状态：{selectedPrimitive.status}</p><div className="metric-grid"><span>斜率<strong>{selectedPrimitive.vertical ? "垂直" : selectedPrimitive.slope.toFixed(3)}</strong></span><span>计算点<strong>{selectedDerivedPoint ? `(${selectedDerivedPoint.x.toFixed(2)}, ${selectedDerivedPoint.y.toFixed(2)})` : "—"}</strong></span></div>{selectedPrimitive.diagnostic && <p className="footer-note">{selectedPrimitive.diagnostic}</p>}</div>}
      {shows("data") && selectedPrimitive?.type === "integral" && <div className="primitive-properties"><h3>积分区域</h3><p className="footer-note">来源：{selectedPrimitive.sourceId} · 区间 [{selectedPrimitive.domain[0]}, {selectedPrimitive.domain[1]}]</p><p className="footer-note">状态：{selectedPrimitive.status}{selectedPrimitive.diagnostic ? ` · ${selectedPrimitive.diagnostic}` : ""}</p><div className="metric-grid"><span>面积<strong>{selectedPrimitive.area === null ? "—" : selectedPrimitive.area.toFixed(4)}</strong></span><span>步数<strong>{selectedPrimitive.steps}</strong></span></div></div>}
      {shows("data") && selectedPrimitive?.type === "analysisSet" && <div className="primitive-properties"><h3>分析结果集合</h3><p className="footer-note">来源：{selectedPrimitive.sourceId} · 状态：{selectedPrimitive.status}</p><div className="metric-grid"><span>结果数量<strong>{selectedPrimitive.results.length}</strong></span></div>{selectedPrimitive.diagnostic && <p className="footer-note">{selectedPrimitive.diagnostic}</p>}</div>}
       {shows("data") && selectedIntersection && <div className="primitive-properties"><h3>{selectedIntersection.type === "intersectionSet" ? "交点集合" : "派生交点"}</h3>{selectedIntersection.type === "intersectionSet" ? <><p className="footer-note">共 {selectedIntersection.points.length} 个交点；位置会随来源图元更新。</p>{selectedIntersection.points.map((point, index) => <div className="metric-grid" key={`${selectedIntersection.id}-point-${index}`}><span>交点 {index + 1}<strong>({point.x.toFixed(2)}, {point.y.toFixed(2)})</strong></span></div>)}</> : <><p className="footer-note">该点由其他图元计算，不可直接拖动。</p><CoordinateField label="交点 X" value={selectedIntersection.x} readOnly onChange={() => undefined} /><CoordinateField label="交点 Y" value={selectedIntersection.y} readOnly onChange={() => undefined} /></>}</div>}
-    {shows("data") && selectedCount > 1 && <div className="batch-properties"><h3>批量编辑 · {selectedCount} 个对象</h3><div className="batch-actions">{canCreateIntersection && (selectedPrimitive?.type === "point" ? <button aria-label={selectedCount === 3 ? "创建三点抛物线" : "连接选中点"} onClick={onCreateIntersection}>{selectedCount === 3 ? "创建三点抛物线" : "连接选中点"}</button> : <button aria-label="添加交点" onClick={onCreateIntersection}>添加交点</button>)}<button aria-label={selectedGroupId ? "取消分组" : "创建分组"} onClick={selectedGroupId ? onDeleteGroup : onCreateGroup}>{selectedGroupId ? "取消分组" : "创建分组"}</button><button aria-label={allSelectedVisible ? "批量隐藏" : "批量显示"} onClick={onToggleBatchVisibility}>{allSelectedVisible ? "批量隐藏" : "批量显示"}</button>{alignments.map((alignment) => <button key={alignment.value} aria-label={alignment.label} onClick={() => onAlign(alignment.value)}>{alignment.label}</button>)}</div></div>}
+    {shows("data") && selectedCount > 1 && <div className="batch-properties"><h3>批量编辑 · {selectedCount} 个对象</h3><div className="batch-actions">{canCreateIntersection && (selectedPrimitive?.type === "point" ? <button aria-label={selectedCount === 3 ? "创建三点抛物线" : "连接选中点"} onClick={onCreateIntersection}>{selectedCount === 3 ? "创建三点抛物线" : "连接选中点"}</button> : <button aria-label="添加交点" onClick={onCreateIntersection}>添加交点</button>)}<button aria-label={selectedGroupId ? "取消分组" : "创建分组"} onClick={selectedGroupId ? onDeleteGroup : onCreateGroup}>{selectedGroupId ? "取消分组" : "创建分组"}</button><button aria-label={allSelectedVisible ? "批量隐藏" : "批量显示"} onClick={onToggleBatchVisibility}>{allSelectedVisible ? "批量隐藏" : "批量显示"}</button>{alignments.map((alignment) => <button key={alignment.value} aria-label={alignment.label} onClick={() => onAlign(alignment.value)}>{alignment.label}</button>)}</div>{/**
+         * 批量改色。
+         *
+         * 之前多选时检查器里改颜色只作用于**主选中**那一个 —— 用户以为全改了，其实没有。
+         * 这一块把"整批一起改"做成明确的一件事，走 `setPrimitivesStyle`：一次提交、一次撤销。
+         */}
+      {onUpdateSelectionStyle && <ColourField
+        label="批量线条颜色"
+        customLabel="批量线条颜色"
+        palette={PLANAR_PALETTE}
+        value={undefined}
+        fallback=""
+        disabled={!editable}
+        batch
+        onChange={(stroke) => onUpdateSelectionStyle({ stroke })}
+      />}{onUpdateSelectionStyle && <ColourField
+        label="批量填充颜色"
+        customLabel="批量填充颜色"
+        palette={FILL_PALETTE}
+        value={undefined}
+        fallback=""
+        disabled={!editable}
+        batch
+        onChange={(fill) => onUpdateSelectionStyle({ fill: fill === NO_FILL ? undefined : fill })}
+      />}</div>}
     {shows("engineering") && selectedPrimitive && <div className="primitive-properties annotation-properties"><h3>图元标注</h3><Field label="标注文本"><input aria-label="标注文本" type="text" value={annotationText} onChange={(event) => setAnnotationText(event.target.value)} /></Field><div className="property-actions">{annotationOptions.map((option) => <button key={`${option.feature}-${option.index ?? "default"}`} type="button" aria-label={`添加${option.label}标注`} disabled={!editable} onClick={() => onAddAnnotation(option.feature, option.index, annotationText)}>{`添加${option.label}`}</button>)}</div>{selectedAnnotations.length > 0 && <div className="annotation-list" aria-label="当前图元标注">{selectedAnnotations.map((annotation) => <div className="annotation-row" key={annotation.id}><span>{annotation.text}</span><button type="button" aria-label={`删除标注 ${annotation.text}`} onClick={() => applySceneOperation({ op: "deleteAnnotation", id: annotation.id })}>删除</button></div>)}</div>}</div>}
   </section>
 }

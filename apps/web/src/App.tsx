@@ -23,6 +23,8 @@ import { LayerTree } from "./components/LayerTree"
 import { PropertiesBar, type PropertiesBarProps } from "./components/PropertiesBar"
 import { StatusBar } from "./components/StatusBar"
 import { createRibbonGroups } from "./ribbonCommands"
+import { anchoredCurve } from "./curveRotation"
+import { PaperTexture } from "./components/PaperTexture"
 import { resolveIntersectionPreview } from "./intersectionPreview3d"
 import { ThreeSceneView } from "./threeScene"
 import type { RibbonTabId } from "./uiState"
@@ -75,6 +77,11 @@ function nextMeasurementId(document: ReturnType<typeof useSceneStore.getState>["
   while (document.measurements.some((measurement) => measurement.id === `measurement3-${index}`)) index += 1
   return `measurement3-${index}`
 }
+
+/**
+ * 新建"动圆"的默认半径（世界单位）。与画布默认取景相称：够大能看清，又不至于一出来就超出视野。
+ */
+const DEFAULT_MOVING_CIRCLE_RADIUS = 2
 
 /**
  * Planar points use the classroom labels A…Z; after Z the counter falls back to a running number so a
@@ -380,6 +387,19 @@ export function App() {
   useEffect(() => {
     if (skipNextDraftSaveRef.current) { skipNextDraftSaveRef.current = false; return }
     try { saveDraft(document) } catch (error) { reportFileError(error, "无法自动保存草稿") }
+  }, [document])
+
+  /**
+   * 新建出来的对象要**自动选中**，否则用户点完按钮什么都看不到（检查器里还是上一个对象）。
+   * 放在 effect 里做：`apply` 之后 `document` 才会更新，`selectedPrimitive` 也才认得出这个新 id。
+   */
+  const pendingSelectionRef = useRef<string | null>(null)
+  useEffect(() => {
+    const pending = pendingSelectionRef.current
+    if (!pending) return
+    if (!document.primitives.some((primitive) => primitive.id === pending)) return
+    pendingSelectionRef.current = null
+    setSelectedIds([pending])
   }, [document])
 
   /**
@@ -845,8 +865,110 @@ export function App() {
     apply({ op: "deleteMeasurement", id })
     setFileError(null)
   }
+  /**
+   * 拖动之后的提交。两件事：
+   *
+   * 1. 照旧把这次拖动写进文档（平移或补丁）。
+   * 2. **拖动的是某个曲线的定点时，把那条曲线整体搬同样的位移**。
+   *    定点是点图元引用，只让点动、基准中心不动的话，下一趟重算会拿"新定点 + 旧基准"重新解一次，
+   *    曲线形状就变了 —— 实测：圆被拖成一个不再过定点的圆（定点落进圆内部，距离只剩半径的 0.47 倍）。
+   *    整体平移才符合"定点是曲线自己的属性"：曲线跟着定点走，转了多少度、半径多大都不变。
+   */
   const handleDragEnd = (id: string, action: import("./interaction").DragAction) => {
-    apply(action.kind === "translate" ? { op: "translatePrimitive", id, delta: action.delta } : { op: "updatePrimitive", id, patch: action.patch })
+    if (action.kind === "translate") apply({ op: "translatePrimitive", id, delta: action.delta })
+    else apply({ op: "updatePrimitive", id, patch: action.patch })
+    // 位移取自"这次拖动之后"的文档：点已经被搬过去了，差值就是它实际走的位移。
+    const after = useSceneStore.getState().document
+    const moved = after.primitives.find((primitive) => primitive.id === id)
+    if (moved?.type !== "point" || (action.kind === "translate" && action.delta.x === 0 && action.delta.y === 0)) return
+    const before = document.primitives.find((primitive) => primitive.id === id)
+    if (before?.type !== "point") return
+    const delta = { x: moved.x - before.x, y: moved.y - before.y }
+    if (delta.x === 0 && delta.y === 0) return
+    const affected = after.primitives.flatMap((primitive) => {
+      if (primitive.type !== "circle" && primitive.type !== "ellipse") return []
+      const placement = primitive.rotationAbout
+      return placement?.pivot.kind === "primitive" && placement.pivot.primitiveId === id ? [{ curve: primitive, placement }] : []
+    })
+    for (const { curve, placement } of affected) {
+      apply({
+        op: "updatePrimitive",
+        id: curve.id,
+        patch: {
+          center: { x: curve.center.x + delta.x, y: curve.center.y + delta.y },
+          rotationAbout: {
+            ...placement,
+            baseCenter: { x: placement.baseCenter.x + delta.x, y: placement.baseCenter.y + delta.y }
+          }
+        }
+      })
+    }
+  }
+  /**
+   * 以选中的点为**定点**创建一条"动圆"（用户口径）。
+   *
+   * 和"选中点 + Shift 选曲线 → 绕定点旋转"是同一个几何（曲线始终过这个定点），
+   * 区别在入口与默认值：这里是一条新曲线，定点是它的基准，圆心不画、半径可改。
+   * 圆心摆成"离定点恰好一个默认半径"，于是曲线一开始就过定点。
+   */
+  const createMovingCircle = () => {
+    const point = rotationAnchor?.point ?? (selectedPrimitive?.type === "point" ? selectedPrimitive : null)
+    if (!point || point.type !== "point") return
+    const radius = DEFAULT_MOVING_CIRCLE_RADIUS
+    const id = nextPrimitiveId(document, "circle")
+    // 基准圆心放在定点的正右方一个半径处：参数 0 落在定点上，于是"过定点"从第一帧就成立。
+    const baseCenter = { x: point.x + radius, y: point.y }
+    apply({
+      op: "addPrimitive",
+      primitive: {
+        id,
+        type: "circle",
+        center: baseCenter,
+        radius,
+        rotation: 0,
+        label: `动圆 ${id.split("-").at(-1)}`,
+        rotationAbout: { pivot: { kind: "primitive", primitiveId: point.id }, angle: 0, baseCenter }
+      }
+    })
+    // 新曲线自动选中：用户马上就能在检查器里改半径。
+    pendingSelectionRef.current = id
+  }
+  /**
+   * 把选中的点定为选中曲线上那个**定点**：曲线从此绕它旋转，转过任意角度都仍然过它。
+   *
+   * 两件事都要做，少一件这条性质就不成立：
+   * 1. **点本身要挪到曲线上**（`anchored.pivot`）。定点是点图元引用，曲线只保证过"那个坐标"；
+   *    点若留在原地（实测：点在 (5,0)、曲线被摆到过 (3,0)），用户看到的仍然不是"过这个定点"。
+   * 2. 曲线的基准中心摆到"离定点恰好一个半轴"处，于是放置出来的曲线确实经过它。
+   *
+   * 用点图元引用而不是把坐标拷下来：这样定点还是一个活的点（可以继续拖动、可以约束），
+   * "在曲线上取一个动点再让它当旋转中心"那类做法才成立。
+   */
+  const anchorRotation = () => {
+    if (!rotationAnchor) return
+    const { point, curve } = rotationAnchor
+    // 定点必须落在曲线上：点不在曲线上时先投影上去，而不是拒绝用户。
+    const anchored = anchoredCurve(curve, { x: point.x, y: point.y })
+    if (!anchored) {
+      setFileError("这个点无法作为旋转中心：它落在曲线中心，没有确定的方向。")
+      return
+    }
+    // 两次补丁：定点先落到位，曲线再摆到"过它"的位置。分开写是因为每一步都要过校验，而
+    // `addPrimitives` 这类"新增"操作对已存在的 id 会被拒绝；两次更新各自重算，结果一致。
+    apply({ op: "updatePrimitive", id: point.id, patch: { x: anchored.pivot.x, y: anchored.pivot.y } })
+    apply({
+      op: "updatePrimitive",
+      id: curve.id,
+      patch: {
+        center: anchored.curve.center,
+        rotation: anchored.curve.rotation,
+        rotationAbout: {
+          pivot: { kind: "primitive", primitiveId: point.id },
+          angle: 0,
+          baseCenter: anchored.rotationAbout.baseCenter
+        }
+      }
+    })
   }
   const deleteSelected = () => {
     if (!selectedIds.length) return
@@ -900,6 +1022,17 @@ export function App() {
   const cadEdge3SourceCount = cadAnnotationSources.filter((id) => document.primitives.find((primitive) => primitive.id === id)?.type === "edge3").length
   const canCreateLinearAnnotation = cadPoint3SourceCount === 2 || cadEdge3SourceCount === 1
   const canCreateAngularAnnotation = cadPoint3SourceCount === 3 || cadEdge3SourceCount === 2
+  /**
+   * "绕定点旋转"要先有一个点、再有一条封闭曲线（圆 / 椭圆）。
+   * 顺序无所谓：命令自己会把点投影到曲线上，所以用户点一个近处的点也能用。
+   */
+  const rotationAnchor = (() => {
+    const selected = selectedIds.map((id) => document.primitives.find((primitive) => primitive.id === id)).filter((primitive): primitive is PrimitiveSpec => Boolean(primitive))
+    const point = selected.find((primitive) => primitive.type === "point")
+    const curve = selected.find((primitive) => primitive.type === "circle" || primitive.type === "ellipse")
+    return point?.type === "point" && curve && (curve.type === "circle" || curve.type === "ellipse") ? { point, curve } : null
+  })()
+  const canAnchorRotation = rotationAnchor !== null && !rotationAnchor.curve.locked
 
   const ribbonGroups = createRibbonGroups({
     workspace: document.workspace,
@@ -912,6 +1045,7 @@ export function App() {
     canCreateFace3,
     canCreateLinearAnnotation,
     canCreateAngularAnnotation,
+    canAnchorRotation,
     diagnosticVisible: showProjectionDiagnostics
   })
 
@@ -990,6 +1124,7 @@ export function App() {
       case "create-section": addSection(); break
       case "modify-delete": deleteSelected(); break
       case "modify-lock": toggleLock(); break
+      case "modify-anchor-rotation": anchorRotation(); break
       case "modify-hide": apply({ op: "setPrimitivesVisible", ids: selectedIds, visible: false }); break
       case "modify-show": apply({ op: "setPrimitivesVisible", ids: selectedIds, visible: true }); break
       case "modify-group": createGroup(); break
@@ -1048,7 +1183,19 @@ export function App() {
       }
     : null
   const promptPathSelected = document.workspace !== "cad" && selectedIds.length === 1 && Boolean(selectedPrimitive && isDynamicPointPath(selectedPrimitive))
-  const basePrompt = resolveStatusPrompt({ mode: creationMode, selectedCount: selectedIds.length, selectedLabel: selectedPrimitive?.label ?? selectedPrimitive?.id ?? null, hasCenter: Boolean(creationStep?.center), hasStart: Boolean(creationStep?.start), pointCount: creationStep?.points?.length ?? 0, sceneControl, pointBinding: promptPointBinding, pathSelected: promptPathSelected })
+  /** 选中的是一条"动圆"（以某个点为定点的曲线）：提示它怎么转、半径在哪改。 */
+  const promptMovingCircle = document.workspace !== "cad" && selectedIds.length === 1
+    && Boolean(selectedPrimitive && (selectedPrimitive.type === "circle" || selectedPrimitive.type === "ellipse") && selectedPrimitive.rotationAbout)
+  /**
+   * 绕定点旋转的提示：`ready` 是"两样都选中了、命令可用"，`available` 是"文档里两样都有、只是还没选中组合"。
+   * 没有这条提示，用户不会知道这个能力存在（与路径绑定当初的缺口同一个问题）。
+   */
+  const promptRotationAnchor = document.workspace === "cad" ? null : {
+    ready: canAnchorRotation,
+    available: document.primitives.some((primitive) => primitive.type === "point")
+      && document.primitives.some((primitive) => primitive.type === "circle" || primitive.type === "ellipse")
+  }
+  const basePrompt = resolveStatusPrompt({ mode: creationMode, selectedCount: selectedIds.length, selectedLabel: selectedPrimitive?.label ?? selectedPrimitive?.id ?? null, hasCenter: Boolean(creationStep?.center), hasStart: Boolean(creationStep?.start), pointCount: creationStep?.points?.length ?? 0, sceneControl, pointBinding: promptPointBinding, pathSelected: promptPathSelected, rotationAnchor: promptRotationAnchor, movingCircleSelected: promptMovingCircle })
   const previewPrompt = document.workspace === "geometry3d" && !sceneControl && previewStatus && previewStatus.kind !== "none"
     ? resolveIntersectionPreviewPrompt(previewStatus, hoveredPreview !== null)
     : null
@@ -1083,7 +1230,21 @@ export function App() {
     apply({ op: "setParameter", id, value: patch.value ?? current.value, min: patch.min ?? current.min, max: patch.max ?? current.max, step: patch.step ?? current.step, label: patch.label ?? current.label, ownerId: current.ownerId })
   }} onDeleteParameter={(id) => apply({ op: "deleteParameter", id })} onAddParameter={addParameter} />
 
-  const planarCanvas = <GraphicsView document={document} selectedIds={selectedIds} creationMode={creationMode} onSelect={updateSelection} onBoxSelect={selectBox} onCanvasClick={handleCanvasCreationClick} onCanvasDoubleClick={handleCanvasDoubleClick} onDragEnd={handleDragEnd} onCreateIntersection={createIntersectionFromPreview} onPointerCoordinate={setPointerCoordinate} />
+  /**
+   * 空白画布上"快速开始"那一行按钮。
+   *
+   * 与功能区按钮走**同一条路**（`runRibbonCommand`）：从画布上点一下与从功能区点一下永远不会变成两套行为。
+   * 用户的反馈是"很多功能藏得很深"，而空白画布是唯一一个用户一定看到的地方。
+   * 按钮文案与功能区**不同名**（见 `GraphicsView` 里的说明），避免屏幕上出现两个同名按钮。
+   */
+  const runQuickStart = (action: "point" | "circle" | "line" | "function") => {
+    if (action === "point") runRibbonCommand("create-point")
+    else if (action === "circle") runRibbonCommand("create-circle")
+    else if (action === "line") runRibbonCommand("create-line")
+    else runRibbonCommand("create-function")
+  }
+
+  const planarCanvas = <GraphicsView document={document} selectedIds={selectedIds} creationMode={creationMode} onSelect={updateSelection} onBoxSelect={selectBox} onCanvasClick={handleCanvasCreationClick} onCanvasDoubleClick={handleCanvasDoubleClick} onDragEnd={handleDragEnd} onCreateIntersection={createIntersectionFromPreview} onPointerCoordinate={setPointerCoordinate} onQuickStart={runQuickStart} />
 
   /**
    * 可作宿主的图元：空间直线 / 线段 / 射线 / 棱 / 面 / 圆柱与圆锥侧面，以及**实体的内部**
@@ -1094,7 +1255,7 @@ export function App() {
     [document.primitives]
   )
 
-  const propertiesBarProps: PropertiesBarProps = { selectedPrimitive, selectedIds, selectedCount: selectedIds.length, selectedGroupId: selectedGroup?.id ?? null, allSelectedVisible, canCreateIntersection, onCreateGroup: createGroup, onDeleteGroup: deleteGroup, onCreateIntersection: createIntersection, onAlign: alignSelection, onToggleSelectedVisibility: () => selectedId && apply({ op: "toggleVisibility", id: selectedId, visible: selectedPrimitive?.visible === false }), onToggleSelectedLock: () => selectedId && apply({ op: "toggleLock", id: selectedId, locked: !selectedPrimitive?.locked }), onDeleteSelected: deleteSelected, onToggleBatchVisibility: () => apply({ op: "setPrimitivesVisible", ids: selectedIds, visible: !allSelectedVisible }), onUpdatePrimitive: (patch) => selectedId && apply({ op: "updatePrimitive", id: selectedId, patch }), onRotateSection: rotateSelectedSection, onMaterializeSection: materializeSelectedSection, pointHostCandidates, onBindPointHost: bindPointToHost, onChangeHostParameter: setPointHostParameter, onAddAnnotation: addAnnotation, onAddEngineeringAnnotation: addEngineeringAnnotation, onCreateMeasurement: addMeasurement, onDeleteMeasurement: deleteMeasurement, onCreateDerivative: (sourceId) => addFunctionAnalysis(sourceId, "derivative"), onCreateTangent: (sourceId) => addFunctionAnalysis(sourceId, "tangent"), onCreateIntegral: (sourceId) => addFunctionAnalysis(sourceId, "integral"), value: slope?.value ?? 0.5, min: slope?.min ?? 0.15, max: slope?.max ?? 0.85, step: slope?.step ?? 0.05, onChange: (value) => apply({ op: "setParameter", id: "slope", value }) }
+  const propertiesBarProps: PropertiesBarProps = { selectedPrimitive, selectedIds, selectedCount: selectedIds.length, selectedGroupId: selectedGroup?.id ?? null, allSelectedVisible, canCreateIntersection, onCreateGroup: createGroup, onDeleteGroup: deleteGroup, onCreateIntersection: createIntersection, onAlign: alignSelection, onToggleSelectedVisibility: () => selectedId && apply({ op: "toggleVisibility", id: selectedId, visible: selectedPrimitive?.visible === false }), onToggleSelectedLock: () => selectedId && apply({ op: "toggleLock", id: selectedId, locked: !selectedPrimitive?.locked }), onDeleteSelected: deleteSelected, onToggleBatchVisibility: () => apply({ op: "setPrimitivesVisible", ids: selectedIds, visible: !allSelectedVisible }), onUpdatePrimitive: (patch) => selectedId && apply({ op: "updatePrimitive", id: selectedId, patch }), onRotateSection: rotateSelectedSection, onMaterializeSection: materializeSelectedSection, pointHostCandidates, onBindPointHost: bindPointToHost, onChangeHostParameter: setPointHostParameter, onAddAnnotation: addAnnotation, onAddEngineeringAnnotation: addEngineeringAnnotation, onCreateMeasurement: addMeasurement, onDeleteMeasurement: deleteMeasurement, onCreateMovingCircle: createMovingCircle, onUpdateSelectionStyle: (style) => apply({ op: "setPrimitivesStyle", ids: selectedIds, style }), onCreateDerivative: (sourceId) => addFunctionAnalysis(sourceId, "derivative"), onCreateTangent: (sourceId) => addFunctionAnalysis(sourceId, "tangent"), onCreateIntegral: (sourceId) => addFunctionAnalysis(sourceId, "integral"), value: slope?.value ?? 0.5, min: slope?.min ?? 0.15, max: slope?.max ?? 0.85, step: slope?.step ?? 0.05, onChange: (value) => apply({ op: "setParameter", id: "slope", value }) }
 
   const propertiesPanel = <PropertiesBar {...propertiesBarProps} />
 
@@ -1218,6 +1379,9 @@ export function App() {
   />
 
   return <div className="app-shell">
+    {/* 纸纹滤镜的定义。放在 App 里（而不是只放在入口）是因为整个界面的 CSS 都引用 `#paper-grain`，
+        任何渲染 App 的地方（含测试与嵌入）都必须有这份定义，否则纹理层会渲染成空白。 */}
+    <PaperTexture />
     <AppChrome activeWorkspace={document.workspace} onWorkspaceChange={(workspace: Workspace) => { setSelectedIds([]); setCreationStep(null); setGuidance(workspace === "geometry3d" ? guidanceFor({ kind: "point3Tool", tool: "line", outcome: "blocked", point3Count: 0 }) : null); setMobileDock(null); setActiveCommand(null); switchWorkspace(workspace) }} ribbonGroups={ribbonGroups} activeRibbonTab={activeRibbonTab} ribbonExpanded={ribbonExpanded} ribbonPinned={ribbonPinned} onRibbonTabChange={setActiveRibbonTab} onRibbonCommand={runRibbonCommand} onRibbonExpandedChange={setRibbonExpanded} onRibbonPinnedChange={setRibbonPinned} onUndo={undo} onRedo={redo} canUndo={canUndo} canRedo={canRedo} onSave={save} onOpen={() => fileInputRef.current?.click()} />
     {document.workspace === "cad" ? cadWorkbench : <div className="workbench">
       <div className="workbench-mobile-controls" role="toolbar" aria-label="画布面板">

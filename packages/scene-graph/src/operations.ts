@@ -1,5 +1,52 @@
-import type { AnnotationSpec, ConstraintSpec, Coordinate, DrawingSheetSpec, DrawingViewSpec, EngineeringAnnotation, GeometryDocument, GroupSpec, LayerSpec, Measurement3, Point3Binding, Point3Primitive, PointBinding, PrimitiveSpec, Section3Classification, Vector3 } from "@draw/dsl"
-import { createDependencyGraph, adaptiveSampleFunctionSegments, arcConstraint, buildSolidTemplate, calculateMeasurement3, circleConstraint, createBuilderContext, dihedralMarker3, ellipseConstraint, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, evaluatePlanarMeasurement, findExtrema, findInflectionPoints, findZeros, functionGraphConstraint, host3FromPrimitive, hyperbolaConstraint, intersectCirclesDetailed, intersectConvexPolyhedra3, intersectFaceSets, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, lineConstraint, mergeIntersectionSurfaces3, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, orderSectionPoints3, parabolaConstraint, polylineConstraint, quadric3FromPrimitive, rayConstraint, sectionConvexPolyhedron, sectionPolyhedron3, sectionQuadric3, segmentConstraint, sharedRingEdge3, solidVolumeHost3, solveLineConstraints, type Conic3Kind, type CurvePiece3, type DihedralMarker3, type FaceRing3, type Host3, type IntersectionResult, type IntersectionSurfaceRegion, type PlanarConstraint, type PlanarMetric, type SampledPrimitive, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
+import type { AnnotationSpec, ConstraintSpec, Coordinate, CurveRotation, DrawingSheetSpec, DrawingViewSpec, EngineeringAnnotation, GeometryDocument, GroupSpec, LayerSpec, Measurement3, Point3Binding, Point3Primitive, PointBinding, PrimitiveSpec, Section3Classification, Vector3 } from "@draw/dsl"
+import { createDependencyGraph, adaptiveSampleFunctionSegments, arcConstraint, buildSolidTemplate, calculateMeasurement3, circleConstraint, createBuilderContext, dihedralMarker3, ellipseConstraint, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, evaluatePlanarMeasurement, findExtrema, findInflectionPoints, findZeros, functionGraphConstraint, host3FromPrimitive, hyperbolaConstraint, intersectCirclesDetailed, intersectConvexPolyhedra3, intersectFaceSets, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, lineConstraint, mergeIntersectionSurfaces3, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, orderSectionPoints3, parabolaConstraint, placedConic, polylineConstraint, quadric3FromPrimitive, rayConstraint, sectionConvexPolyhedron, sectionPolyhedron3, sectionQuadric3, segmentConstraint, sharedRingEdge3, solidVolumeHost3, solveLineConstraints, type Conic3Kind, type ConicPlacement, type CurvePiece3, type DihedralMarker3, type FaceRing3, type Host3, type IntersectionResult, type IntersectionSurfaceRegion, type PlanarConstraint, type PlanarMetric, type PlaceableConic, type SampledPrimitive, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
+
+/**
+ * 曲线的"绕定点旋转"约定：`pivot` 是那个**定点**，`angle` 是绕它的转角（弧度）。
+ * 几何本身由内核的 `placedConic` 落地，这一层只负责把文档里的两种定点写法喂给它。
+ */
+function curveRotationOf(primitive: PrimitiveSpec): CurveRotation | undefined {
+  return primitive.type === "circle" || primitive.type === "ellipse" ? primitive.rotationAbout : undefined
+}
+
+/** 可以绕定点旋转的封闭曲线：圆与椭圆（弧 / 抛物线 / 双曲线不是封闭曲线，没有这个能力）。 */
+export function isPlaceableConic(primitive: PrimitiveSpec): primitive is Extract<PrimitiveSpec, { type: "circle" | "ellipse" }> {
+  return primitive.type === "circle" || primitive.type === "ellipse"
+}
+
+/**
+ * 把一个定点解析成世界坐标。
+ *
+ * 两种写法都支持：固定坐标（经典题型里那个定点），以及**点图元引用**
+ * （先在曲线上放一个点、再让曲线绕它转）。引用悬空时返回 `undefined`，
+ * 调用方按"没有放置"处理——曲线仍在原地画得出来，不会因为定点丢了就静默消失。
+ *
+ * `baseCenter` 一并带上：重算永远从基准几何出发，所以反复重算不会累积旋转（幂等）。
+ */
+export function resolveCurveRotation(
+  primitive: PrimitiveSpec,
+  lookup: (id: string) => PrimitiveSpec | undefined
+): ConicPlacement | undefined {
+  const rotation = curveRotationOf(primitive)
+  if (!rotation) return undefined
+  const baseCenter = { x: rotation.baseCenter.x, y: rotation.baseCenter.y }
+  if (rotation.pivot.kind === "coordinate") return { pivot: { x: rotation.pivot.x, y: rotation.pivot.y }, angle: rotation.angle, baseCenter }
+  const point = lookup(rotation.pivot.primitiveId)
+  if (point?.type !== "point") return undefined
+  return { pivot: { x: point.x, y: point.y }, angle: rotation.angle, baseCenter }
+}
+
+/** 这一层到处都要用：把"定点"解析器绑到某张图元查找表上。 */
+function placementResolver(primitives: readonly PrimitiveSpec[]): (primitive: PrimitiveSpec) => ConicPlacement | undefined {
+  const byId = new Map(primitives.map((primitive) => [primitive.id, primitive]))
+  return (primitive) => resolveCurveRotation(primitive, (id) => byId.get(id))
+}
+
+/** 曲线绕的定点是不是一个**点图元**；是的话返回它的 id（依赖图与平移都要用）。 */
+export function curveRotationPivotId(primitive: PrimitiveSpec): string | null {
+  const rotation = curveRotationOf(primitive)
+  return rotation && rotation.pivot.kind === "primitive" ? rotation.pivot.primitiveId : null
+}
 
 export type DomainOperation =
   | { op: "addPrimitive"; primitive: PrimitiveSpec }
@@ -24,6 +71,11 @@ export type DomainOperation =
   | { op: "alignPrimitives"; ids: string[]; alignment: Alignment }
   | { op: "setPrimitivesLocked"; ids: string[]; locked: boolean }
   | { op: "setPrimitivesVisible"; ids: string[]; visible: boolean }
+  /**
+   * 批量改外观。`style` 里出现的键才生效，值给 `undefined` 表示"清除这一项、回到默认"。
+   * 与 `updatePrimitive` 的样式部分同一套字段，只是作用在整批选中对象上。
+   */
+  | { op: "setPrimitivesStyle"; ids: string[]; style: { stroke?: string; fill?: string; dash?: string; strokeWidth?: number; opacity?: number } }
   | { op: "addLayer"; layer: LayerSpec }
   | { op: "updateLayer"; id: string; patch: LayerUpdatePatch }
   | { op: "deleteLayer"; id: string; reassignTo?: string }
@@ -75,6 +127,8 @@ export interface PrimitiveUpdatePatch {
   domain?: [number, number]
   samples?: number
   rotation?: number
+  /** 绕定点旋转：整块替换（定点与转角一起写，避免"转了一半"的中间态）。 */
+  rotationAbout?: CurveRotation
   label?: string
   style?: { stroke?: string; fill?: string; strokeWidth?: number; opacity?: number; dash?: string }
   origin3?: Vector3
@@ -145,6 +199,11 @@ function primitiveBounds(primitive: PrimitiveSpec): PrimitiveBounds | null {
   return null
 }
 
+/**
+ * 平移一个图元。带"绕定点旋转"的曲线要连**定点与基准圆心一起搬**：
+ * 只搬结果不搬基准，下一次重算就会用旧基准把曲线拉回去（实测过）。
+ * 定点是点图元时不动它 —— 它是独立图元，由它自己的平移负责。
+ */
 function translatePrimitive(primitive: PrimitiveSpec, x: number, y: number): PrimitiveSpec {
   if (primitive.type === "point") return { ...primitive, x: primitive.x + x, y: primitive.y + y }
   if (primitive.type === "line" || primitive.type === "segment" || primitive.type === "ray") return {
@@ -153,10 +212,26 @@ function translatePrimitive(primitive: PrimitiveSpec, x: number, y: number): Pri
     b: { x: primitive.b.x + x, y: primitive.b.y + y }
   }
   if (primitive.type === "polyline") return { ...primitive, points: primitive.points.map((point) => ({ x: point.x + x, y: point.y + y })) }
-  if (primitive.type === "circle" || primitive.type === "arc") return { ...primitive, center: { x: primitive.center.x + x, y: primitive.center.y + y } }
+  if (primitive.type === "circle" || primitive.type === "arc") return { ...primitive, center: { x: primitive.center.x + x, y: primitive.center.y + y }, ...shiftedRotationAbout(primitive, x, y) }
   if (primitive.type === "parabola") return { ...primitive, vertex: { x: primitive.vertex.x + x, y: primitive.vertex.y + y } }
-  if (primitive.type === "ellipse" || primitive.type === "hyperbola") return { ...primitive, center: { x: primitive.center.x + x, y: primitive.center.y + y } }
+  if (primitive.type === "ellipse" || primitive.type === "hyperbola") return { ...primitive, center: { x: primitive.center.x + x, y: primitive.center.y + y }, ...shiftedRotationAbout(primitive, x, y) }
   return primitive
+}
+
+/**
+ * 平移时同步搬动旋转的基准：基准圆心总是跟着走；定点是固定坐标时也一起搬
+ * （这样"绕这个定点转了多少度"在平移前后完全一致），定点是点图元时保持原样。
+ */
+function shiftedRotationAbout(primitive: PrimitiveSpec, x: number, y: number): { rotationAbout?: CurveRotation } {
+  const rotation = curveRotationOf(primitive)
+  if (!rotation) return {}
+  const baseCenter = { x: rotation.baseCenter.x + x, y: rotation.baseCenter.y + y }
+  // 两种定点分开构造：合并写法会让 `pivot` 联合类型对不上（TS 的辨识联合不做隐式收窄）。
+  return {
+    rotationAbout: rotation.pivot.kind === "coordinate"
+      ? { pivot: { kind: "coordinate", x: rotation.pivot.x + x, y: rotation.pivot.y + y }, angle: rotation.angle, baseCenter }
+      : { pivot: rotation.pivot, angle: rotation.angle, baseCenter }
+  }
 }
 
 function signedOffset(value: number): string {
@@ -265,6 +340,11 @@ function primitiveDependencies(primitive: PrimitiveSpec, relations?: { owners: M
   if (primitive.type === "ray3") dependencies.push(primitive.originId, primitive.throughId)
   if (primitive.type === "plane3") dependencies.push(...(primitive.definition.kind === "throughPoints" ? primitive.definition.pointIds : [primitive.definition.pointId]))
   if (primitive.type === "circle3") dependencies.push(primitive.centerId)
+  // 绕定点旋转的封闭曲线依赖那个定点（定点是点图元时）。定点一动，整条曲线跟着重算。
+  if (isPlaceableConic(primitive)) {
+    const pivotId = curveRotationPivotId(primitive)
+    if (pivotId) dependencies.push(pivotId)
+  }
   if (primitive.type === "edge3") dependencies.push(...primitive.pointIds, ...(primitive.faceIds ?? []))
   if (primitive.type === "face3") dependencies.push(...primitive.pointIds, ...(primitive.edgeIds ?? []), ...(primitive.planeId ? [primitive.planeId] : []))
   if (primitive.type === "polyhedron3") dependencies.push(...primitive.vertexIds, ...primitive.edgeIds, ...primitive.faceIds, ...(primitive.construction?.sourceIds ?? []), ...(primitive.construction?.kind === "template" ? (primitive.construction.parameterIds ?? []) : []))
@@ -1316,9 +1396,35 @@ export function recomputeDerivedObjects(document: GeometryDocument, changedIds?:
     parameters,
     primitives: document.primitives.map((primitive) => primitive.type === "line" ? evaluateLineParameters({ ...document, parameters }, primitive) : primitive)
   }
+  /**
+   * 把"绕定点旋转"落进曲线自己的几何，**在取快照之前**做一次。
+   *
+   * 这样做的好处是：后面所有消费者（路径约束、采样、包围盒、平移）读到的都是放置后的曲线，
+   * 于是它们一行都不用改 —— "圆过定点"对它们就是一个普通的圆。
+   * `evaluatedDocument` 是本次重算的工作副本（`...document` 的新对象），改它不会碰到调用方那份。
+   */
+  const placementOf = placementResolver(evaluatedDocument.primitives)
+  for (let index = 0; index < evaluatedDocument.primitives.length; index += 1) {
+    const primitive = evaluatedDocument.primitives[index]
+    if (!isPlaceableConic(primitive)) continue
+    evaluatedDocument.primitives[index] = placedConic(primitive as PlaceableConic, placementOf(primitive))
+  }
   const affected = changedIds === undefined
     ? new Set(document.primitives.map((primitive) => primitive.id))
     : getAffectedPrimitiveIds(document, changedIds)
+  /**
+   * 定点是**点图元**时，定点动了 = 曲线动了。
+   *
+   * 这条边不能只写在依赖图里：`recomputeDerivedObjects(document, ["pivot-1"])` 的脏集来自
+   * `getAffectedPrimitiveIds`，曲线不在里面就不会被重建一次，放置也就永远不会刷新。
+   */
+  if (changedIds !== undefined) {
+    const changed = new Set(changedIds)
+    for (const primitive of document.primitives) {
+      const pivotId = curveRotationPivotId(primitive)
+      if (pivotId && changed.has(pivotId)) affected.add(primitive.id)
+    }
+  }
   const projectedPrimitives = [...evaluatedDocument.primitives]
   const projectedLines = new Map(
     projectedPrimitives
@@ -1553,6 +1659,13 @@ function cascadeSources(primitive: PrimitiveSpec): string[] {
   if (primitive.type === "intersectionSolid") return primitive.sourceIds
   if (primitive.type === "intersectionFace") return primitive.sourceIds
   if (primitive.type === "intersectionPoint3") return primitive.sourceIds
+  /**
+   * 以某个点为**定点**的曲线（"动圆"）：定点在，它才谈得上"过这个定点"。
+   *
+   * 用户口径："在删除定点后，这个动圆也会跟着消失"。所以这是级联、不是"被引用所以拒绝删除"：
+   * 定点一走，曲线的存在意义就没了（它的圆心正是由定点 + 半径算出来的）。
+   */
+  if (isPlaceableConic(primitive) && primitive.rotationAbout?.pivot.kind === "primitive") return [primitive.rotationAbout.pivot.primitiveId]
   const analysisSource = functionAnalysisSourceId(primitive)
   return analysisSource === null ? [] : [analysisSource]
 }
@@ -1710,6 +1823,7 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
       if (operation.patch.radiusY !== undefined) primitive.radiusY = operation.patch.radiusY
       if (primitive.type === "hyperbola" && operation.patch.axis !== undefined) primitive.axis = operation.patch.axis
       if (operation.patch.rotation !== undefined) primitive.rotation = operation.patch.rotation
+      if (primitive.type === "ellipse" && operation.patch.rotationAbout !== undefined) primitive.rotationAbout = operation.patch.rotationAbout
     }
     if (primitive.type === "function") {
       if (operation.patch.expression !== undefined) primitive.expression = operation.patch.expression
@@ -1719,6 +1833,10 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
     if (primitive.type === "circle" || primitive.type === "arc") {
       if (operation.patch.center) primitive.center = { ...primitive.center, ...operation.patch.center }
       if (operation.patch.radius !== undefined) primitive.radius = operation.patch.radius
+      // 圆现在也有朝向（`rotation`）与"绕定点旋转"（`rotationAbout`）：见 DSL 的 `CurveRotation`。
+      // 写成"整块替换"而不是只改 angle —— 定点与转角必须一起落，中间态会让曲线短暂地不再过定点。
+      if (primitive.type === "circle" && operation.patch.rotation !== undefined) primitive.rotation = operation.patch.rotation
+      if (primitive.type === "circle" && operation.patch.rotationAbout !== undefined) primitive.rotationAbout = operation.patch.rotationAbout
     }
     if (primitive.type === "arc") {
       if (operation.patch.startAngle !== undefined) primitive.startAngle = operation.patch.startAngle
@@ -1919,6 +2037,26 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
     for (const primitive of next.primitives) if (operation.ids.includes(primitive.id)) primitive.locked = operation.locked
   } else if (operation.op === "setPrimitivesVisible") {
     for (const primitive of next.primitives) if (operation.ids.includes(primitive.id)) primitive.visible = operation.visible
+  } else if (operation.op === "setPrimitivesStyle") {
+    /**
+     * 批量改外观（颜色 / 线宽 / 透明度 / 线型）。
+     *
+     * 为什么需要它：逐条 `updatePrimitive` 只能一条条提交，"选中五个对象一起改成红色"会变成五次撤销步骤，
+     * 而且多选时检查器里改颜色以前只作用于**主选中**那一个（用户以为全改了，其实没有）。
+     * 这里一次提交改完所有选中对象，撤销也只要一步。
+     * `undefined` 表示"清除这一项、回到默认"，所以是显式赋值而不是合并。
+     */
+    for (const primitive of next.primitives) {
+      if (!operation.ids.includes(primitive.id) || primitive.locked) continue
+      const style = { ...primitive.style }
+      // 逐项显式处理（不用 `as` 绕类型）：`undefined` 是**有意义的赋值**——清除这一项、回到默认。
+      if ("stroke" in operation.style) { if (operation.style.stroke === undefined) delete style.stroke; else style.stroke = operation.style.stroke }
+      if ("fill" in operation.style) { if (operation.style.fill === undefined) delete style.fill; else style.fill = operation.style.fill }
+      if ("dash" in operation.style) { if (operation.style.dash === undefined) delete style.dash; else style.dash = operation.style.dash }
+      if ("strokeWidth" in operation.style) { if (operation.style.strokeWidth === undefined) delete style.strokeWidth; else style.strokeWidth = operation.style.strokeWidth }
+      if ("opacity" in operation.style) { if (operation.style.opacity === undefined) delete style.opacity; else style.opacity = operation.style.opacity }
+      primitive.style = Object.keys(style).length > 0 ? style : undefined
+    }
   } else if (operation.op === "alignPrimitives") {
     const selected = next.primitives.filter((primitive) => operation.ids.includes(primitive.id))
     const bounds = selected.map((primitive) => primitiveBounds(primitive)!)

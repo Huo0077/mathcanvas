@@ -271,4 +271,60 @@ describe("Geometry DSL document layout schema", () => {
     expect(withExact({ kind: "circle", loops: [[{ kind: "conic", conic: conic(), parameterRange: [0, 1], branch: -1 }]] })).toBe(false)
     expect(withExact({ kind: "circle", loops: [[segment, { kind: "segment", a: { x: 0, y: 0, z: Number.NaN }, b: { x: 1, y: 0, z: 0 } }]] })).toBe(false)
   })
+
+  /**
+   * 封闭曲线绕定点旋转（圆 / 椭圆）。
+   *
+   * 校验要点是**定点必须落在文档里**：引用一个不存在的点、引用一个不是点的图元、或者坐标里带 NaN，
+   * 都会让"曲线过定点"这条性质静默失效（曲线照画，就是不经过那个点），必须在保存前拦住。
+   */
+  it("validates a closed curve rotating about a fixed point", () => {
+    const build = (curve: Record<string, unknown>) => {
+      const document = createEmptyDocument("conics")
+      document.primitives = [
+        { id: "point-1", type: "point", x: 3, y: 0 },
+        { id: "circle-1", type: "circle", center: { x: 0, y: 0 }, radius: 3, ...curve }
+      ]
+      return validateDocument(document).valid
+    }
+    const fixed = (pivot: unknown, angle: unknown = Math.PI / 6) => ({ pivot, angle, baseCenter: { x: 0, y: 0 } })
+
+    expect(build({ rotationAbout: fixed({ kind: "coordinate", x: 3, y: 0 }) })).toBe(true)
+    expect(build({ rotationAbout: fixed({ kind: "primitive", primitiveId: "point-1" }) })).toBe(true)
+    expect(build({ rotation: 0.4, rotationAbout: fixed({ kind: "coordinate", x: 3, y: 0 }) })).toBe(true)
+    // 没有放置信息仍然是合法的：旧文档行为必须逐位不变。
+    expect(build({})).toBe(true)
+
+    expect(build({ rotationAbout: fixed({ kind: "coordinate", x: Number.NaN, y: 0 }) })).toBe(false)
+    expect(build({ rotationAbout: fixed({ kind: "coordinate", x: 3 }) })).toBe(false)
+    expect(build({ rotationAbout: fixed({ kind: "primitive", primitiveId: "missing" }) })).toBe(false)
+    expect(build({ rotationAbout: fixed({ kind: "primitive", primitiveId: "circle-1" }) })).toBe(false)
+    expect(build({ rotationAbout: fixed({ kind: "coordinate", x: 3, y: 0 }, Number.POSITIVE_INFINITY) })).toBe(false)
+    expect(build({ rotationAbout: fixed({ kind: "coordinate", x: 3, y: 0 }, "half") })).toBe(false)
+    expect(build({ rotationAbout: { pivot: { kind: "coordinate", x: 3, y: 0 } } })).toBe(false)
+    expect(build({ rotationAbout: null })).toBe(false)
+    expect(build({ rotation: "tilted" })).toBe(false)
+    // 基准圆心是必需项：缺了它重算就会把"转过的位置"当基准，越转越偏。
+    expect(build({ rotationAbout: { pivot: { kind: "coordinate", x: 3, y: 0 }, angle: 0 } })).toBe(false)
+    expect(build({ rotationAbout: { pivot: { kind: "coordinate", x: 3, y: 0 }, angle: 0, baseCenter: { x: Number.NaN, y: 0 } } })).toBe(false)
+    expect(build({ rotationAbout: { pivot: { kind: "coordinate", x: 3, y: 0 }, angle: 0, baseCenter: { x: 0 } } })).toBe(false)
+  })
+
+  /** 双曲线 / 圆弧都**不支持**绕定点旋转：它们不是封闭曲线，这个字段必须被拒绝而不是被忽略。 */
+  it("rejects rotation about a fixed point on the curves that are not closed", () => {
+    const document = createEmptyDocument("conics")
+    const placement = { pivot: { kind: "coordinate", x: 1, y: 0 }, angle: 0.5 }
+
+    const hyperbola = validateDocument({
+      ...document,
+      primitives: [{ id: "h", type: "hyperbola", center: { x: 0, y: 0 }, radiusX: 3, radiusY: 2, axis: "x", rotationAbout: placement }]
+    })
+    const arc = validateDocument({
+      ...document,
+      primitives: [{ id: "a", type: "arc", center: { x: 0, y: 0 }, radius: 2, startAngle: 0, endAngle: 1, rotationAbout: placement }]
+    })
+
+    expect(hyperbola.valid).toBe(false)
+    expect(arc.valid).toBe(false)
+  })
 })

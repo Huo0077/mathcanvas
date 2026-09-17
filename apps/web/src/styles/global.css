@@ -185,8 +185,14 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .engineering-drawing-diagnostics { color: var(--color-muted); font-size: 0.75rem; line-height: 1.45; }
 .engineering-drawing-diagnostics summary { cursor: pointer; color: var(--color-warning); }
 .engineering-drawing-diagnostics ul { margin: var(--space-2) 0 0; padding-left: var(--space-4); }
-.drag-handles circle { fill: var(--color-panel); stroke: var(--color-accent); stroke-width: 2; cursor: grab; }
-.drag-handles circle:hover { fill: var(--color-accent-soft); }
+/**
+ * 控制点：**虚线圈**，与数据点（实心圆）在形状上就不同。
+ *
+ * 用户反馈过一个真实的误读：圆的半径手柄画成实心感的空心圆、位置又落在横向轴线上，
+ * 看上去就像"这里有一个点 / 圆心被标出来了"。虚线环让它在任何位置都一眼是"可拖的控制点"。
+ */
+.drag-handles circle { fill: var(--color-panel); stroke: var(--color-accent); stroke-width: 2; stroke-dasharray: 2.5 2; cursor: grab; }
+.drag-handles circle:hover { fill: var(--color-accent-soft); stroke-dasharray: none; }
 .properties-label { display: flex; justify-content: space-between; gap: var(--space-3); font-size: 0.875rem; }
 .properties input[type="range"] { width: 100%; accent-color: var(--color-accent); }
 .metric { color: var(--color-accent); font-variant-numeric: tabular-nums; }
@@ -328,8 +334,125 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .row-lock-icon { width: 13px; height: 13px; color: #e39a48; }
 .lock-badge { display: inline-flex; align-items: center; }
 .graphics { padding: 18px; background: #f4f4f8; }
+
+/**
+ * **纸纹 / 磨砂质感**（用户口径："画布增加一点磨砂质感"）。
+ *
+ * 做法：每个表面叠一层**伪元素**，那层只负责纹理 —— `background: #fff; filter: url(#paper-grain)`。
+ * 关键在于**不能**把 `filter` 直接加在画布卡片上：`filter` 会把整棵子树的渲染结果一起处理，
+ * 网格与图形也会被糊掉。伪元素是独立的绘制层，噪点只影响自己那一层，图形照旧锐利。
+ *
+ * 纹理来自 `#paper-grain`（见 `components/PaperTexture.tsx`，`feTurbulence` 程序生成，不占体积）。
+ * 强度靠 `--paper-grain-opacity` 控制：纸面稍明显、面板更淡 —— 面板只是"同一种材质"，不该抢内容。
+ */
+:root { --paper-grain-opacity: 0.55; }
+
+.graphics[data-canvas-surface="graph-paper"] .canvas-card,
+.panel,
+.status-bar { position: relative; }
+
+.graphics[data-canvas-surface="graph-paper"] .canvas-card::before,
+.panel::before,
+.status-bar::before {
+  content: ""; position: absolute; pointer-events: none; z-index: 0;
+  background: #fff; filter: url(#paper-grain); opacity: var(--paper-grain-opacity);
+  /* 与 `mix-blend-mode: multiply` 配合：噪点是浅灰，乘上去等于"纸面微起伏"，不会把底色漂白。 */
+  mix-blend-mode: multiply;
+}
+.graphics[data-canvas-surface="graph-paper"] .canvas-card::before { inset: 10px; border-radius: var(--radius-sm); opacity: 0.7; }
+.panel::before { inset: 0; --paper-grain-opacity: 0.4; }
+.status-bar::before { inset: 0; --paper-grain-opacity: 0.35; }
+/* 纹理层在下、内容在上：面板的三个直接子元素都要抬起来，否则会被那层盖住。 */
+.panel > * { position: relative; z-index: 1; }
+
+/**
+ * 右上角那枚 `∑` 水印原先挂在 `.canvas-card::after` 上，现在卡片多了一个 `::before` 纹理层，
+ * 水印的层级要一起交代清楚（`::after` 默认在 `::before` 之后、仍在内容之下）。
+ */
+.graphics[data-canvas-surface="graph-paper"] .canvas-card::after { z-index: 1; }
+
+
+/**
+ * 界面文字整体略调大（用户口径："整体的UI边框的字体略微调大"）。
+ *
+ * 改的是**功能界面**那一圈字号（功能区、状态栏、检查器、对象列表），画布内的几何标注不动 ——
+ * 那些是图形的一部分，跟着纸面比例走。统一走 `--font-ui*` 令牌，免得以后又散成各写各的 px。
+ */
+.ribbon-command { font-size: var(--font-ui-sm); }
+.ribbon-group-label { font-size: 0.7rem; }
+.ribbon-control { font-size: var(--font-ui); }
+.workspace-tabs-bar .workspace-tabs button { font-size: var(--font-ui); }
+.status-bar { font-size: var(--font-ui); }
+.inspector-accordion-trigger { font-size: var(--font-ui); }
+.property-kicker, .property-subheading { font-size: var(--font-ui-sm); }
+.property-type-badge { font-size: var(--font-ui-sm); }
+.properties > .primitive-properties h3, .properties > .batch-properties h3 { font-size: 1rem; }
+.properties > .primitive-properties label, .properties > .batch-properties label { font-size: var(--font-ui); }
+.object-row .object-name { font-size: var(--font-ui); }
+.panel-title { font-size: var(--font-ui); }
+
+/**
+ * 简约装饰：分区标题前一枚浅色数学符号（π / ∠）。
+ *
+ * 只挂在**分区标题**上，不是每个控件都加 —— 装饰一多就又显得廉价了。
+ */
+.panel-title::before { content: "π"; margin-right: var(--space-2); color: var(--color-accent); opacity: 0.5; font-weight: 700; }
+.properties > .panel-title::before { content: "∠"; }
+.canvas-viewport-controls .zoom-readout { font-size: var(--font-ui-sm); }
+.coordinate-readout { font-size: var(--font-ui-sm); }
+
 .canvas-card { position: relative; top: 0; padding: 10px; border-color: #e6e3ee; border-radius: 18px; box-shadow: 0 15px 35px rgb(47 42 78 / 7%); }
 .canvas-card svg { background: #fcfcfd; }
+
+/**
+ * 平面几何的**草稿纸**（用户口径："让平面几何区的画布变成有淡淡的黄色的'草稿纸的质感'"）。
+ *
+ * 三件事叠出"纸"的感觉，都不靠图片：
+ * 1. 纸底色比面板暖、比白纸略黄（`--color-graph-paper`），格线换成暖灰黄（令牌在 tokens.css）；
+ * 2. 卡片内沿一圈极淡的暖色投影，像纸压在桌面上；
+ * 3. 卡片外的工作台背景也跟着暖一点，纸与背景的边界才不突兀。
+ *
+ * 立体几何 / 工程制图仍是原来的冷色工作台：只有 `data-canvas-surface="graph-paper"` 命中时才换色。
+ */
+.graphics[data-canvas-surface="graph-paper"] { background: linear-gradient(180deg, #f6f4ea, #f2f0e6); }
+.graphics[data-canvas-surface="graph-paper"] .canvas-card { border-color: var(--color-graph-paper-edge); box-shadow: inset 0 0 0 1px rgb(255 255 255 / 70%), 0 1px 2px rgb(120 106 64 / 8%), 0 18px 38px rgb(120 106 64 / 10%); }
+.graphics[data-canvas-surface="graph-paper"] .canvas-card svg { background: var(--color-graph-paper); }
+/* 纸右上角一枚极淡的数学水印：装饰，不参与命中。层级要**高过 SVG**，否则会被不透明的纸面盖住。 */
+.graphics[data-canvas-surface="graph-paper"] .canvas-card::after { content: "∑"; position: absolute; right: 18px; top: 10px; z-index: 1; color: rgb(180 166 120 / 22%); font-size: 26px; line-height: 1; pointer-events: none; }
+.graphics[data-canvas-surface="graph-paper"] .canvas-card .canvas-viewport-controls { border-color: var(--color-graph-paper-edge); background: rgb(255 253 245 / 94%); }
+
+/**
+ * 颜色选择：色板 ＋ 自定义取色框。
+ *
+ * 色板是"让选颜色这件事看得见"的关键：一排可点的色块，比一个窄窄的原生取色框直观得多。
+ * 选中态用**外圈**表示（`box-shadow`），不再往里加边框 —— 边框会改变色块的实际观感尺寸。
+ */
+.colour-field { grid-column: 1 / -1; display: grid; gap: var(--space-1); min-width: 0; }
+.colour-swatches { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); }
+.colour-swatch { width: 24px; min-height: 24px; height: 24px; padding: 0; border: 1px solid rgb(23 32 51 / 14%); border-radius: 7px; cursor: pointer; }
+.colour-swatch:hover { transform: translateY(-1px); }
+.colour-swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--color-panel), 0 0 0 4px var(--color-accent); }
+.colour-swatch:disabled { cursor: not-allowed; opacity: 0.5; }
+/* "无填充"画成斜杠格：它不是一个颜色，是一个状态。 */
+.colour-swatch.is-none { background: repeating-linear-gradient(135deg, #fff 0 5px, #e6e3ee 5px 10px); }
+.colour-custom { width: 30px; min-height: 24px; height: 24px; padding: 0 2px; border: 1px solid var(--color-border); border-radius: 7px; background: var(--color-panel); cursor: pointer; }
+.colour-custom:disabled { cursor: not-allowed; opacity: 0.5; }
+
+
+/**
+ * 空白画布上的「快速开始」：把藏得深的入口搬到用户一定会看到的地方。
+ *
+ * 用户反馈"我们很多功能藏得很深，用户很难发现"。空白画布是唯一一个**用户一定会看到**的界面，
+ * 所以它承担"教一遍"的职责：四个最常用的起点 + 一句"动圆"的提示。
+ */
+.canvas-empty-hint { position: absolute; left: 50%; top: 44%; z-index: 1; display: grid; justify-items: center; gap: var(--space-3); width: min(470px, calc(100% - 48px)); transform: translate(-50%, -50%); padding: var(--space-5) var(--space-4); text-align: center; pointer-events: none; }
+.canvas-empty-hint-title { display: inline-flex; align-items: center; gap: var(--space-2); color: #6b6144; font-size: var(--font-ui-lg); font-weight: 750; letter-spacing: 0.01em; }
+.canvas-empty-hint-title span[aria-hidden="true"] { display: grid; place-items: center; width: 26px; height: 26px; border: 1px solid var(--color-graph-grid-major); border-radius: 8px; background: rgb(255 255 255 / 85%); color: #8a7f5c; font-size: 0.9rem; }
+.canvas-empty-hint-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--space-2); pointer-events: auto; }
+.canvas-empty-hint-actions button { min-height: 36px; border-color: var(--color-graph-grid-major); background: rgb(255 255 255 / 92%); color: #584f38; font-size: var(--font-ui-sm); font-weight: 650; }
+.canvas-empty-hint-actions button:hover { border-color: var(--color-accent); background: #fff; color: var(--color-accent-strong); }
+.canvas-empty-hint-note { max-width: 380px; color: #857a58; font-size: var(--font-ui-sm); line-height: 1.55; }
+
 /* 高度交给所在的网格行（`.workbench` 的画布行是 minmax(0, 1fr)）：写死 `calc(100vh - 420px)`
    会让画布比容器矮一截（实测 800px 高的窗口里矮 150px），下面留一条空白，而且那个 420 跟真实的
    工具栏/页脚高度无关——窗口一变就"画布太小"。 */

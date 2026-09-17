@@ -1,4 +1,5 @@
 import { createEmptyDocument } from "@draw/dsl"
+import { recomputeDerivedObjects } from "@draw/scene-graph"
 import { describe, expect, it } from "vitest"
 
 import { WORLD_BOUNDS, WORLD_SCALE, worldToSvg, rayToViewport } from "../viewport"
@@ -195,5 +196,38 @@ describe("document exporters", () => {
     document.primitives = [{ id: "function-1", type: "function", expression: "1/x", domain: [-1, 1], samples: 128 }]
 
     expect(exportSvg(document).match(/<polyline/g)).toHaveLength(2)
+  })
+
+  /**
+   * 绕定点旋转的曲线导出的是**放置之后**的几何。
+   *
+   * 导出器读的就是 store 里那份文档，而 `applyOperation` 末尾会重算，所以放置已经烧进 `center`；
+   * 这条测试把"导出与画布一致"钉住（否则导出的会是没转过的那个圆）。
+   */
+  it("exports a curve at its placed position after rotating about a fixed point", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [
+      { id: "circle-1", type: "circle", center: { x: 0, y: 0 }, radius: 3, rotationAbout: { pivot: { kind: "coordinate", x: 3, y: 0 }, angle: Math.PI / 2, baseCenter: { x: 0, y: 0 } } }
+    ]
+
+    const placed = recomputeDerivedObjects(document).primitives[0]
+    if (placed?.type !== "circle") throw new Error("expected a circle")
+    // 重算把放置算进了 `center`：圆心从 (0,0) 转到 (3,-3)。
+    expect(placed.center.x).toBeCloseTo(3, 9)
+    expect(placed.center.y).toBeCloseTo(-3, 9)
+
+    // 导出用的是重算后的文档，所以圆画在放置后的位置。
+    const svg = exportSvg(recomputeDerivedObjects(document))
+    // 半径按画布比例换算（见 "uses the canvas scale when exporting circles"）。
+    expect(svg).toContain(`r="${(3 * 100 / 3).toString()}"`)
+    /**
+     * 定点在导出图里"过不过"，用导出器自己那套换算来判断：
+     * `cx` / `cy` 里带着视口平移与 Y 翻转，手写一个期望值只会把测试写死成实现细节。
+     */
+    const circle = /<circle[^>]+cx="([-\d.]+)"[^>]+cy="([-\d.]+)"[^>]+r="([-\d.]+)"/.exec(svg)
+    expect(circle).not.toBeNull()
+    const [centerX, centerY, radius] = [Number(circle![1]), Number(circle![2]), Number(circle![3])]
+    const pivot = worldToSvg({ x: 3, y: 0 })
+    expect(Math.hypot(centerX - pivot.x, centerY - pivot.y)).toBeCloseTo(radius, 9)
   })
 })

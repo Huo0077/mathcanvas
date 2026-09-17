@@ -14,6 +14,8 @@ export interface RibbonCommandContext {
   canCreateFace3: boolean
   canCreateLinearAnnotation: boolean
   canCreateAngularAnnotation: boolean
+  /** 选中的是不是"一个点 + 一条圆/椭圆"——只有这种组合才谈得上把曲线定在过该点的旋转上。 */
+  canAnchorRotation: boolean
   diagnosticVisible: boolean
 }
 
@@ -67,6 +69,11 @@ export function createRibbonGroups(context: RibbonCommandContext): RibbonGroup[]
   const editCommands = [
     command("modify-delete", "删除对象", "delete", { disabled: !hasSelection || allSelectedLocked, disabledReason: allSelectedLocked ? "选中的对象已锁定" : "请先选择要删除的对象" }),
     command("modify-lock", context.allSelectedLocked ? "解锁对象" : "锁定对象", "lock", { disabled: !hasSelection, disabledReason: selectionReason }),
+    ...(planar ? [command("modify-anchor-rotation", "绕定点旋转", "rotate", {
+      prompt: "先选一个点、再选一个圆或椭圆，曲线就定成绕这个定点旋转（转过任意角度都仍然过它）",
+      disabled: !context.canAnchorRotation,
+      disabledReason: "请同时选中一个点和一个圆 / 椭圆"
+    })] : []),
     ...engineeringCommands
   ]
 

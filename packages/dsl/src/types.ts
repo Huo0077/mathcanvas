@@ -272,6 +272,24 @@ export interface ParabolaPrimitive extends PrimitivePresentation {
   rotation?: number
 }
 
+/**
+ * **封闭曲线绕一个定点旋转**（用户口径："圆，椭圆过一个定点"）。
+ *
+ * `pivot` 就是那个定点：曲线转过任意角度都仍然过它 —— 定点在曲线上的参数角从 θ₀ 变成 θ₀ + angle，
+ * 这种"过定点"的性质与转角无关。`angle` 是绕定点的转角（弧度，逆时针为正）。
+ *
+ * `baseCenter` 是**基准图形的中心**（没转时圆心在哪）；图元的 `center` 是它的派生值。
+ * 之所以要把基准单独存下来：`center` 每趟重算都会被结果覆盖，只留结果就分不清"这是基准还是转过的位置"，
+ * 下一趟重算会把曲线再转一次、直接推离定点（实测缺陷）。基准与结果分开存，重算才幂等。
+ *
+ * 定点在文档里有两种存在方式：
+ * - `coordinate`：定死在某个世界坐标（经典题型里那个定点通常在坐标轴上）；
+ * - `primitiveId`：引用一个**点图元**，于是定点随手拖动（"在圆上取一个动点，圆绕它转动"）。
+ */
+export type CurveRotation =
+  | { pivot: { kind: "coordinate"; x: number; y: number }; angle: number; baseCenter: Coordinate }
+  | { pivot: { kind: "primitive"; primitiveId: string }; angle: number; baseCenter: Coordinate }
+
 export interface EllipsePrimitive extends PrimitivePresentation {
   id: string
   type: "ellipse"
@@ -279,6 +297,8 @@ export interface EllipsePrimitive extends PrimitivePresentation {
   radiusX: number
   radiusY: number
   rotation?: number
+  /** 绕定点旋转（缺省表示不绕任何定点，旧文档行为逐位不变）。 */
+  rotationAbout?: CurveRotation
 }
 
 export interface HyperbolaPrimitive extends PrimitivePresentation {
@@ -595,6 +615,14 @@ export interface CirclePrimitive extends PrimitivePresentation {
   type: "circle"
   center: Coordinate
   radius: number
+  /**
+   * 圆自己的朝向。圆本身看不出朝向，这个角只在**绕定点旋转**时才有意义：
+   * 它记录"曲线自然参数（极角）的基准"，于是"定点在曲线上的参数"在反复旋转之后依然可算。
+   * 没有放置信息时它保持缺省，旧文档不受影响。
+   */
+  rotation?: number
+  /** 绕定点旋转（见 `CurveRotation`）。 */
+  rotationAbout?: CurveRotation
 }
 
 export interface ArcPrimitive extends PrimitivePresentation {

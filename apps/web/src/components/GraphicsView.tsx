@@ -4,7 +4,8 @@ import { adaptiveSampleFunctionSegments, evaluateParameterExpression, sampleElli
 import { applyOperation, getAffectedPrimitiveIds, recomputeDerivedObjects, type DomainOperation } from "@draw/scene-graph"
 import type { BoxSelectionMode } from "@draw/geometry-kernel"
 
-import { createDragAction, getDragHandle, primitiveHandlePoints, type DragAction, type DragHandle } from "../interaction"
+import { createDragAction, getDragHandle, primitiveHandlePoints, type DragAction, type DragHandle, type DragRotationTarget } from "../interaction"
+import { isRotatableCurve, placementPivot } from "../curveRotation"
 import { CONNECTION_HIT_INSET_PX, insetSegment } from "../connectionHitBand"
 import { resolveAnnotationPoint } from "../annotations"
 import { clipFunctionSegmentsToBounds } from "../functionGraph"
@@ -14,6 +15,15 @@ import { DEFAULT_VIEWPORT, VIEWBOX, gridLinePositions, rayToViewport, svgToWorld
 import { GRID_CELL, GRID_MAJOR_EVERY } from "../sceneGrid"
 
 type CreationMode = "line" | "segment" | "ray" | "polyline" | "circle" | "arc" | null
+
+/**
+ * 点的可见半径（屏幕像素）。
+ *
+ * 用户反馈："平面几何部分中的点的模型都过大了，改小一些"。原来 6（直径 12px），
+ * 加上标注文字 14px，密一点的作图里点会把图形盖住。收到 4（直径 8px）：既能看清又不抢主体。
+ * 命中区**不跟着缩** —— 那决定的是"点不点得中"，不是"看起来多大"。
+ */
+const POINT_MARKER_RADIUS = 4
 
 interface GraphicsViewProps {
   document: GeometryDocument
@@ -26,6 +36,11 @@ interface GraphicsViewProps {
   onDragEnd: (id: string, action: DragAction) => void
   onCreateIntersection: (preview: IntersectionPreview) => void
   onPointerCoordinate?: (coordinate: Coordinate | null) => void
+  /**
+   * 空白画布上"快速开始"那一行按钮要执行的动作。
+   * 它等价于点功能区对应的按钮 —— 空白画布是用户一定会看到的地方，用它来暴露藏得深的功能。
+   */
+  onQuickStart?: (action: "point" | "circle" | "line" | "function") => void
 }
 
 /** Pointer position in the SVG's own coordinate system, which is fixed by `viewBox` and independent of zoom. */
@@ -74,7 +89,8 @@ function pointsAttribute(points: Coordinate[], viewport: Viewport): string {
   return points.map((point) => `${worldToSvg({ x: point.x, y: 0 }, viewport).x},${worldToSvg({ x: 0, y: point.y }, viewport).y}`).join(" ")
 }
 
-export function GraphicsView({ document, selectedIds, creationMode, onSelect, onCanvasClick, onCanvasDoubleClick, onBoxSelect, onDragEnd, onCreateIntersection, onPointerCoordinate }: GraphicsViewProps) {
+export function GraphicsView({ document, selectedIds, creationMode, onSelect, onCanvasClick, onCanvasDoubleClick, onBoxSelect, onDragEnd, onCreateIntersection, onPointerCoordinate, onQuickStart }: GraphicsViewProps) {
+  const workspace = document.workspace
   const [viewport, setViewport] = useState<Viewport>(DEFAULT_VIEWPORT)
   const [dragStart, setDragStart] = useState<Coordinate | null>(null)
   const [dragCurrent, setDragCurrent] = useState<Coordinate | null>(null)
@@ -84,6 +100,14 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
   const [hoverCoordinate, setHoverCoordinate] = useState<Coordinate | null>(null)
   const [hoverPrimitiveType, setHoverPrimitiveType] = useState<string | null>(null)
   const suppressClick = useRef(false)
+  /**
+   * 这一次指针按下已经在 `beginDrag` 里处理过选择了，随后的 `click` 不要**再处理一遍**。
+   *
+   * 用户反馈："选中一个点 → Shift 选中一个圆或椭圆 → 点「绕定点旋转」无法实现"。
+   * 探针读代数区的选中行发现：`pointerDown` 按加选把圆加进去，紧接着 `click` 又按加选处理一次，
+   * 而"加选"的语义是**切换** —— 同一个对象被加了又删，选择最终变成空集，命令一直禁用。
+   */
+  const selectionHandled = useRef(false)
   const svgRef = useRef<SVGSVGElement>(null)
   /** 上一次算出的交点（含被"已保存交点"过滤掉的那些），作为拖动时增量计算的基准。 */
   const previousPreviewsRef = useRef<IntersectionPreview[]>([])
@@ -92,11 +116,28 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
   const worldBounds = visibleWorldBounds(viewport)
   const toX = (x: number) => worldToSvg({ x, y: 0 }, viewport).x
   const toY = (y: number) => worldToSvg({ x: 0, y }, viewport).y
+  /**
+   * 曲线绕的定点与基准中心（拖动、手柄、拖动预览都要用）。
+   *
+   * 定点的两种写法都在这里解析掉：固定坐标直接用；点图元引用去文档里取当前位置，
+   * 于是"在圆上取一个动点、让圆绕它转"时定点随手拖动，而曲线始终过它。
+   */
+  const rotationTargetOf = (primitive: PrimitiveSpec, source: readonly PrimitiveSpec[]): DragRotationTarget | null => {
+    if (!isRotatableCurve(primitive) || !primitive.rotationAbout) return null
+    const pivot = placementPivot(primitive, (id) => source.find((candidate) => candidate.id === id))
+    if (!pivot) return null
+    return {
+      pivot,
+      baseCenter: { x: primitive.rotationAbout.baseCenter.x, y: primitive.rotationAbout.baseCenter.y },
+      pivotPrimitiveId: primitive.rotationAbout.pivot.kind === "primitive" ? primitive.rotationAbout.pivot.primitiveId : null,
+      angle: primitive.rotationAbout.angle
+    }
+  }
   const previewDocument = useMemo(() => {
     if (!dragState || !dragCurrent) return document
     const primitive = document.primitives.find((candidate) => candidate.id === dragState.id)
     if (!primitive) return document
-    const action = createDragAction(primitive, dragState.handle, dragState.origin, dragCurrent)
+    const action = createDragAction(primitive, dragState.handle, dragState.origin, dragCurrent, rotationTargetOf(primitive, document.primitives) ?? undefined)
     if (!action) return document
     const operation: DomainOperation = action.kind === "translate"
       ? { op: "translatePrimitive", id: primitive.id, delta: action.delta }
@@ -208,7 +249,15 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
   const functionSegments = (primitive: Extract<PrimitiveSpec, { type: "function" }>) => {
     try { return clipFunctionSegmentsToBounds(adaptiveSampleFunctionSegments((x) => evaluateParameterExpression(primitive.expression, { x }), primitive.domain, { initialSteps: primitive.samples ?? 128, maxSteps: Math.max(primitive.samples ?? 128, 2048) }), worldBounds) } catch { return [] }
   }
-  const handleObjectClick = (event: ReactMouseEvent<SVGElement>, id: string) => { event.stopPropagation(); if (creationMode) onCanvasClick(eventToWorld(event, viewport)); else onSelect(id, event.shiftKey) }
+  const handleObjectClick = (event: ReactMouseEvent<SVGElement>, id: string) => {
+    event.stopPropagation()
+    if (creationMode) { onCanvasClick(eventToWorld(event, viewport)); return }
+    // 按下时已经选过了：这里再按"加选=切换"处理一次会把刚加进来的对象又删掉。
+    if (selectionHandled.current) { selectionHandled.current = false; return }
+    // 拖动（而不是点击）结束时不改选择：`finishDrag` 已经判定过这次手势是拖动。
+    if (suppressClick.current) return
+    onSelect(id, event.shiftKey)
+  }
   const beginDrag = (event: ReactPointerEvent<SVGElement>, id: string) => {
     if (event.button === 1 || (event.button === 0 && spacePressed)) return
     event.stopPropagation()
@@ -216,7 +265,8 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
     const primitive = document.primitives.find((candidate) => candidate.id === id)
     if (!primitive) return
     onSelect(id, event.shiftKey)
-    const handle = getDragHandle(primitive, eventToWorld(event, viewport))
+    selectionHandled.current = true
+    const handle = getDragHandle(primitive, eventToWorld(event, viewport), 0.35, rotationTargetOf(primitive, document.primitives) ?? undefined, selectedIds.includes(id))
     if (!handle) return
     event.currentTarget.setPointerCapture?.(event.pointerId)
     setDragState({ id, handle, origin: eventToWorld(event, viewport), pointerId: event.pointerId })
@@ -256,7 +306,7 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
     if (dragState && event.pointerId === dragState.pointerId) {
       const primitive = document.primitives.find((candidate) => candidate.id === dragState.id)
       const current = eventToWorld(event, viewport)
-      const action = primitive && createDragAction(primitive, dragState.handle, dragState.origin, current)
+      const action = primitive && createDragAction(primitive, dragState.handle, dragState.origin, current, rotationTargetOf(primitive, document.primitives) ?? undefined)
       if (primitive && action && Math.hypot(current.x - dragState.origin.x, current.y - dragState.origin.y) > 0.01) { suppressClick.current = true; onDragEnd(primitive.id, action) }
       setDragState(null)
       setDragCurrent(null)
@@ -297,9 +347,29 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
   const renderHandles = (primitive: PrimitiveSpec) => {
     if (!selectedIds.includes(primitive.id) || primitive.locked) return null
     // 控制点几何与 CAD 2D 绘图共用 interaction.ts 的定义，两个视口不再各写一份。
-    const handles = primitiveHandlePoints(primitive)
-    return <g className="drag-handles" aria-hidden="true">{handles.map(({ handle, point }) => <circle key={handle} data-drag-handle={handle} cx={toX(point.x)} cy={toY(point.y)} r="6" onPointerDown={(event) => beginDrag(event, primitive.id)} />)}</g>
+    const handles = primitiveHandlePoints(primitive, rotationTargetOf(primitive, displayPrimitives) ?? undefined)
+    return <g className="drag-handles" aria-hidden="true">{handles.map(({ handle, point }) => <circle key={handle} data-drag-handle={handle} cx={toX(point.x)} cy={toY(point.y)} r="5" onPointerDown={(event) => beginDrag(event, primitive.id)} />)}</g>
   }
+  /**
+   * 定点的标记：一个空心小圈 + 十字。它**不可拖动**（定点是参数，靠拖曲线或改数值来动），
+   * 只负责回答"曲线正绕哪个点转"，所以 `pointerEvents="none"`。
+   *
+   * **只在选中这条曲线时出现**（用户口径："这个动圆不需要标出圆心"）。
+   * 选中时它是"定点在哪"的唯一说明；未选中时画布上不留任何多余标记 ——
+   * 定点本身通常就是一个可见的点图元，再叠一个红圈只会被当成"圆心又被画出来了"。
+   */
+  const renderRotationAnchors = () => displayPrimitives.flatMap((primitive) => {
+    if (!selectedIds.includes(primitive.id)) return []
+    const target = rotationTargetOf(primitive, displayPrimitives)
+    if (!target) return []
+    const x = toX(target.pivot.x)
+    const y = toY(target.pivot.y)
+    return [<g key={`anchor-${primitive.id}`} className="rotation-anchor" data-rotation-anchor={primitive.id} pointerEvents="none">
+      <circle cx={x} cy={y} r="5" fill="none" stroke="#d94a4a" strokeWidth="2" />
+      <line x1={x - 8} y1={y} x2={x + 8} y2={y} stroke="#d94a4a" strokeWidth="1.5" />
+      <line x1={x} y1={y - 8} x2={x} y2={y + 8} stroke="#d94a4a" strokeWidth="1.5" />
+    </g>]
+  })
   const renderAnnotations = () => previewDocument.annotations.filter((annotation) => annotation.visible !== false).map((annotation) => {
     const point = resolveAnnotationPoint(annotation, displayPrimitives)
     if (!point) return null
@@ -337,10 +407,39 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
   const isMajorGridLine = (value: number) => Math.abs(value % GRID_MAJOR_EVERY) < 1e-9
   const zoomFactor = viewport.scale / DEFAULT_VIEWPORT.scale
   const zoomPercentage = `${Math.round(zoomFactor * 100)}%`
-  return <main className="graphics"><div className="canvas-card">{hoverCoordinate && <div className="coordinate-readout" data-coordinate-readout="true" role="presentation">{hoverPrimitiveType ? `${hoverPrimitiveType} · ` : ""}({hoverCoordinate.x.toFixed(2)}, {hoverCoordinate.y.toFixed(2)})</div>}<div className="canvas-viewport-controls" role="group" aria-label="画布缩放"><button type="button" aria-label="缩小画布" title="缩小画布（滚轮向下）" onClick={() => setViewport((current) => zoomViewport(current, 1 / 1.25))}>−</button><span className="zoom-readout" data-zoom-readout="true" aria-live="polite">{zoomPercentage}</span><button type="button" aria-label="放大画布" title="放大画布（滚轮向上）" onClick={() => setViewport((current) => zoomViewport(current, 1.25))}>＋</button><button type="button" aria-label="重置视图" title="重置视图（居中并恢复默认缩放）" onClick={() => setViewport(DEFAULT_VIEWPORT)}>重置</button></div><svg ref={svgRef} className={panState ? "is-panning" : dragState ? "is-dragging" : undefined} data-viewport-center={`${viewport.center.x},${viewport.center.y}`} data-viewport-scale={viewport.scale} data-grid-cell={GRID_CELL} data-grid-major={GRID_MAJOR_EVERY} viewBox={`0 0 ${VIEWBOX.width} ${VIEWBOX.height}`} role="img" aria-label="几何画布" onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerLeave={() => { setHoverCoordinate(null); setHoverPrimitiveType(null); onPointerCoordinate?.(null) }} onPointerUp={finishDrag} onPointerCancel={finishDrag} onDoubleClick={(event) => creationMode === "polyline" && onCanvasDoubleClick(eventToWorld(event, viewport))} onClick={(event) => { if (suppressClick.current) { suppressClick.current = false; return }; if (creationMode) onCanvasClick(eventToWorld(event, viewport)); else if (!dragStart) onSelect(null) }}>
-    <g data-grid-layer="minor" stroke="#e6eaf2" strokeWidth="1">{verticalGrid.filter((x) => !isMajorGridLine(x)).map((x) => <line key={`v-${x}`} x1={toX(x)} y1={VIEWBOX.top} x2={toX(x)} y2={VIEWBOX.bottom} />)}{horizontalGrid.filter((y) => !isMajorGridLine(y)).map((y) => <line key={`h-${y}`} x1={VIEWBOX.left} y1={toY(y)} x2={VIEWBOX.right} y2={toY(y)} />)}</g>
-    <g data-grid-layer="major" stroke="#d3dbea" strokeWidth="1">{verticalGrid.filter(isMajorGridLine).map((x) => <line key={`vm-${x}`} x1={toX(x)} y1={VIEWBOX.top} x2={toX(x)} y2={VIEWBOX.bottom} />)}{horizontalGrid.filter(isMajorGridLine).map((y) => <line key={`hm-${y}`} x1={VIEWBOX.left} y1={toY(y)} x2={VIEWBOX.right} y2={toY(y)} />)}</g>
-    <line x1={VIEWBOX.left} y1={toY(0)} x2={VIEWBOX.right} y2={toY(0)} stroke="#9aa6bd" strokeWidth="1.5" /><line x1={toX(0)} y1={VIEWBOX.top} x2={toX(0)} y2={VIEWBOX.bottom} stroke="#9aa6bd" strokeWidth="1.5" />
+  /**
+   * 平面几何的画布是**草稿纸**（淡黄底 + 暖色格线），立体几何 / 工程制图仍是原来的冷色工作台。
+   *
+   * 用 `data-canvas-surface` 把这件事交给 CSS：SVG 内部的底与格线用行内属性（它们是 SVG），
+   * 纸张底纹、卡片边框、控制条那层用 CSS。两处都读同一组 `--color-graph-*` 令牌。
+   */
+  const graphPaper = workspace === "conics" || workspace === "calculus"
+  const gridStroke = graphPaper
+    ? { minor: "var(--color-graph-grid-minor)", major: "var(--color-graph-grid-major)", axis: "var(--color-graph-axis)" }
+    : { minor: "#e6eaf2", major: "#d3dbea", axis: "#9aa6bd" }
+  return <main className="graphics" data-canvas-surface={graphPaper ? "graph-paper" : "workbench"}><div className="canvas-card">{hoverCoordinate && <div className="coordinate-readout" data-coordinate-readout="true" role="presentation">{hoverPrimitiveType ? `${hoverPrimitiveType} · ` : ""}({hoverCoordinate.x.toFixed(2)}, {hoverCoordinate.y.toFixed(2)})</div>}{/**
+     * 画布上没有任何内容时给**可点的一行起点**，而不是一句"点击图元查看属性"。
+     *
+     * 用户反馈"很多功能藏得很深" —— 空白画布是唯一一个用户一定会看到的界面，
+     * 把它用起来比在文档里写说明有用得多。点一下等于点了功能区对应的按钮。
+     */}
+  {displayPrimitives.length === 0 && <div className="canvas-empty-hint" data-canvas-empty-hint="true" role="group" aria-label="快速开始">
+    <span className="canvas-empty-hint-title"><span aria-hidden="true">√</span> 从这三件事开始</span>
+    <div className="canvas-empty-hint-actions">
+      {/**
+        * 文案刻意与功能区不同（那里是"添加点 / 添加圆"）：屏幕上同时出现两个同名按钮既让人分不清，
+        * 也会让"按名字找按钮"的查询（含无障碍工具）命中两个元素。这里用的是画布上的说法。
+        */}
+      <button type="button" onClick={() => onQuickStart?.("point")}>放一个点</button>
+      <button type="button" onClick={() => onQuickStart?.("circle")}>画一个圆</button>
+      <button type="button" onClick={() => onQuickStart?.("line")}>画一条直线</button>
+      <button type="button" onClick={() => onQuickStart?.("function")}>画一个函数</button>
+    </div>
+    <span className="canvas-empty-hint-note">先放一个点，再点右侧「创建动圆」，曲线就绕着那个定点转。</span>
+  </div>}<div className="canvas-viewport-controls" role="group" aria-label="画布缩放"><button type="button" aria-label="缩小画布" title="缩小画布（滚轮向下）" onClick={() => setViewport((current) => zoomViewport(current, 1 / 1.25))}>−</button><span className="zoom-readout" data-zoom-readout="true" aria-live="polite">{zoomPercentage}</span><button type="button" aria-label="放大画布" title="放大画布（滚轮向上）" onClick={() => setViewport((current) => zoomViewport(current, 1.25))}>＋</button><button type="button" aria-label="重置视图" title="重置视图（居中并恢复默认缩放）" onClick={() => setViewport(DEFAULT_VIEWPORT)}>重置</button></div><svg ref={svgRef} className={panState ? "is-panning" : dragState ? "is-dragging" : undefined} data-viewport-center={`${viewport.center.x},${viewport.center.y}`} data-viewport-scale={viewport.scale} data-grid-cell={GRID_CELL} data-grid-major={GRID_MAJOR_EVERY} viewBox={`0 0 ${VIEWBOX.width} ${VIEWBOX.height}`} role="img" aria-label="几何画布" onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerLeave={() => { setHoverCoordinate(null); setHoverPrimitiveType(null); onPointerCoordinate?.(null) }} onPointerUp={finishDrag} onPointerCancel={finishDrag} onDoubleClick={(event) => creationMode === "polyline" && onCanvasDoubleClick(eventToWorld(event, viewport))} onClick={(event) => { if (suppressClick.current) { suppressClick.current = false; return }; if (creationMode) onCanvasClick(eventToWorld(event, viewport)); else if (!dragStart) onSelect(null) }}>
+    <g data-grid-layer="minor" stroke={gridStroke.minor} strokeWidth="1">{verticalGrid.filter((x) => !isMajorGridLine(x)).map((x) => <line key={`v-${x}`} x1={toX(x)} y1={VIEWBOX.top} x2={toX(x)} y2={VIEWBOX.bottom} />)}{horizontalGrid.filter((y) => !isMajorGridLine(y)).map((y) => <line key={`h-${y}`} x1={VIEWBOX.left} y1={toY(y)} x2={VIEWBOX.right} y2={toY(y)} />)}</g>
+    <g data-grid-layer="major" stroke={gridStroke.major} strokeWidth="1">{verticalGrid.filter(isMajorGridLine).map((x) => <line key={`vm-${x}`} x1={toX(x)} y1={VIEWBOX.top} x2={toX(x)} y2={VIEWBOX.bottom} />)}{horizontalGrid.filter(isMajorGridLine).map((y) => <line key={`hm-${y}`} x1={VIEWBOX.left} y1={toY(y)} x2={VIEWBOX.right} y2={toY(y)} />)}</g>
+    <line x1={VIEWBOX.left} y1={toY(0)} x2={VIEWBOX.right} y2={toY(0)} stroke={gridStroke.axis} strokeWidth="1.5" /><line x1={toX(0)} y1={VIEWBOX.top} x2={toX(0)} y2={VIEWBOX.bottom} stroke={gridStroke.axis} strokeWidth="1.5" />
     {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "line" }> => primitive.type === "line" && primitive.visible !== false).map((line) => { const visible = viewportLine(line); return <g key={line.id} data-primitive-type="line" opacity={opacityFor(line)} onPointerDown={(event) => beginDrag(event, line.id)} onClick={(event) => handleObjectClick(event, line.id)}><line data-hit-target="true" x1={toX(visible.a.x)} y1={toY(visible.a.y)} x2={toX(visible.b.x)} y2={toY(visible.b.y)} stroke="transparent" strokeWidth="18" pointerEvents="stroke" /><line x1={toX(visible.a.x)} y1={toY(visible.a.y)} x2={toX(visible.b.x)} y2={toY(visible.b.y)} stroke={strokeFor(line)} strokeWidth={strokeWidthFor(line, selectedIds.includes(line.id))} strokeDasharray={dashFor(line)} />{renderHandles(line)}</g> })}
     {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "ray" }> => primitive.type === "ray" && primitive.visible !== false).map((ray) => { const visible = rayToViewport(ray, worldBounds); return <g key={ray.id} data-primitive-type="ray" opacity={opacityFor(ray)} onPointerDown={(event) => beginDrag(event, ray.id)} onClick={(event) => handleObjectClick(event, ray.id)}><line data-hit-target="true" x1={toX(visible.a.x)} y1={toY(visible.a.y)} x2={toX(visible.b.x)} y2={toY(visible.b.y)} stroke="transparent" strokeWidth="18" pointerEvents="stroke" /><line x1={toX(visible.a.x)} y1={toY(visible.a.y)} x2={toX(visible.b.x)} y2={toY(visible.b.y)} stroke={strokeFor(ray)} strokeWidth={strokeWidthFor(ray, selectedIds.includes(ray.id))} strokeDasharray={dashFor(ray)} />{renderHandles(ray)}</g> })}
     {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "segment" }> => primitive.type === "segment" && primitive.visible !== false).map((segment) => <g key={segment.id} data-primitive-type="segment" opacity={opacityFor(segment)} onPointerDown={(event) => beginDrag(event, segment.id)} onClick={(event) => handleObjectClick(event, segment.id)}><line data-hit-target="true" x1={toX(segment.a.x)} y1={toY(segment.a.y)} x2={toX(segment.b.x)} y2={toY(segment.b.y)} stroke="transparent" strokeWidth="18" pointerEvents="stroke" /><line x1={toX(segment.a.x)} y1={toY(segment.a.y)} x2={toX(segment.b.x)} y2={toY(segment.b.y)} stroke={strokeFor(segment)} strokeWidth={strokeWidthFor(segment, selectedIds.includes(segment.id))} strokeDasharray={dashFor(segment)} />{renderHandles(segment)}</g>)}
@@ -353,9 +452,18 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
     {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "tangent" | "normal" | "secant" }> => ["tangent", "normal", "secant"].includes(primitive.type) && primitive.visible !== false).map((primitive) => <g key={primitive.id} data-primitive-type={primitive.type} opacity={opacityFor(primitive)} onClick={(event) => handleObjectClick(event, primitive.id)}><line data-hit-target="true" x1={toX(primitive.a.x)} y1={toY(primitive.a.y)} x2={toX(primitive.b.x)} y2={toY(primitive.b.y)} stroke="transparent" strokeWidth="18" pointerEvents="stroke" /><line x1={toX(primitive.a.x)} y1={toY(primitive.a.y)} x2={toX(primitive.b.x)} y2={toY(primitive.b.y)} stroke={strokeFor(primitive)} strokeWidth={strokeWidthFor(primitive, selectedIds.includes(primitive.id))} strokeDasharray={dashFor(primitive)} /></g>)}
     {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "integral" }> => primitive.type === "integral" && primitive.visible !== false && primitive.points.length > 1).map((primitive) => <g key={primitive.id} data-primitive-type="integral" opacity={opacityFor(primitive)} onClick={(event) => handleObjectClick(event, primitive.id)}><polygon points={pointsAttribute([{ x: primitive.domain[0], y: 0 }, ...primitive.points, { x: primitive.domain[1], y: 0 }], viewport)} fill={fillFor(primitive)} fillOpacity="0.25" stroke={strokeFor(primitive)} strokeWidth={strokeWidthFor(primitive, selectedIds.includes(primitive.id))} /></g>)}
     {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "analysisSet" }> => primitive.type === "analysisSet" && primitive.visible !== false).map((primitive) => <g key={primitive.id} data-primitive-type="analysisSet" opacity={opacityFor(primitive)} onClick={(event) => handleObjectClick(event, primitive.id)}>{primitive.results.map((result, index) => <g key={`${primitive.id}-${result.kind}-${index}`} data-analysis-kind={result.kind}><circle cx={toX(result.x)} cy={toY(result.y)} r="6" fill={fillFor(primitive)} stroke={strokeFor(primitive)} strokeWidth="2" /><text x={toX(result.x) + 8} y={toY(result.y) - 8} fill={strokeFor(primitive)} fontSize="12" fontWeight="700">{result.kind}</text></g>)}</g>)}
-    {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "circle" }> => primitive.type === "circle" && primitive.visible !== false).map((circle) => <g key={circle.id} data-primitive-type="circle" opacity={opacityFor(circle)} onPointerDown={(event) => beginDrag(event, circle.id)} onClick={(event) => handleObjectClick(event, circle.id)}><circle data-hit-target="true" cx={toX(circle.center.x)} cy={toY(circle.center.y)} r={circle.radius * viewport.scale} fill="none" stroke="transparent" strokeWidth="18" pointerEvents="stroke" /><circle cx={toX(circle.center.x)} cy={toY(circle.center.y)} r={circle.radius * viewport.scale} fill={fillFor(circle)} stroke={strokeFor(circle)} strokeWidth={strokeWidthFor(circle, selectedIds.includes(circle.id))} strokeDasharray={dashFor(circle)} /><text x={toX(circle.center.x) + circle.radius * viewport.scale + 8} y={toY(circle.center.y)} fill="#172033" fontSize="14" fontWeight="700">{circle.label ?? circle.id}</text>{renderHandles(circle)}</g>)}
+    {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "circle" }> => primitive.type === "circle" && primitive.visible !== false).map((circle) => {
+      /**
+       * 以某个点为**定点**的曲线（动圆）不画那个小圆心标记，也不把标签钉在圆心旁。
+       *
+       * 用户口径："这个动圆不需要标出圆心"。圆心在这里是派生量（由定点 + 半径 + 转角算出），
+       * 标出来反而会和定点标记打架、也让人以为圆心是个可以抓的对象。
+       */
+      const anchored = Boolean(circle.rotationAbout)
+      return <g key={circle.id} data-primitive-type="circle" opacity={opacityFor(circle)} onPointerDown={(event) => beginDrag(event, circle.id)} onClick={(event) => handleObjectClick(event, circle.id)}><circle data-hit-target="true" cx={toX(circle.center.x)} cy={toY(circle.center.y)} r={circle.radius * viewport.scale} fill="none" stroke="transparent" strokeWidth="18" pointerEvents="stroke" />{!anchored && <circle data-shape-centre={circle.id} cx={toX(circle.center.x)} cy={toY(circle.center.y)} r="3" fill="#172033" />}<circle cx={toX(circle.center.x)} cy={toY(circle.center.y)} r={circle.radius * viewport.scale} fill={fillFor(circle)} stroke={strokeFor(circle)} strokeWidth={strokeWidthFor(circle, selectedIds.includes(circle.id))} strokeDasharray={dashFor(circle)} />{!anchored && <text x={toX(circle.center.x) + circle.radius * viewport.scale + 8} y={toY(circle.center.y)} fill="#172033" fontSize="14" fontWeight="700">{circle.label ?? circle.id}</text>}{anchored && <text x={toX(circle.center.x) + circle.radius * viewport.scale + 8} y={toY(circle.center.y)} fill="#2f6f4f" fontSize="13" fontWeight="700">{circle.label ?? circle.id}</text>}{renderHandles(circle)}</g>
+    })}
     {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "arc" }> => primitive.type === "arc" && primitive.visible !== false).map((arc) => { const path = `M ${toX(arc.center.x + arc.radius * Math.cos(arc.startAngle))} ${toY(arc.center.y + arc.radius * Math.sin(arc.startAngle))} A ${arc.radius * viewport.scale} ${arc.radius * viewport.scale} 0 ${Math.abs(arc.endAngle - arc.startAngle) > Math.PI ? 1 : 0} ${arc.endAngle >= arc.startAngle ? 0 : 1} ${toX(arc.center.x + arc.radius * Math.cos(arc.endAngle))} ${toY(arc.center.y + arc.radius * Math.sin(arc.endAngle))}`; return <g key={arc.id} data-primitive-type="arc" opacity={opacityFor(arc)} onPointerDown={(event) => beginDrag(event, arc.id)} onClick={(event) => handleObjectClick(event, arc.id)}><path data-hit-target="true" d={path} fill="none" stroke="transparent" strokeWidth="18" pointerEvents="stroke" /><path d={path} fill="none" stroke={strokeFor(arc)} strokeWidth={strokeWidthFor(arc, selectedIds.includes(arc.id))} strokeDasharray={dashFor(arc)} />{renderHandles(arc)}</g> })}
-    {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "point" }> => primitive.type === "point" && primitive.visible !== false).map((point) => <g key={point.id} data-primitive-type="point" opacity={opacityFor(point)} onPointerDown={(event) => beginDrag(event, point.id)} onClick={(event) => handleObjectClick(event, point.id)}><circle data-hit-target="true" cx={toX(point.x)} cy={toY(point.y)} r="14" fill="transparent" pointerEvents="all" /><circle cx={toX(point.x)} cy={toY(point.y)} r="6" fill={fillFor(point)} stroke={strokeFor(point)} strokeWidth={strokeWidthFor(point, selectedIds.includes(point.id))} strokeDasharray={dashFor(point)} /><text x={toX(point.x) + 12} y={toY(point.y) + 5} fill="#172033" fontSize="14" fontWeight="700">{point.label ?? point.id}</text></g>)}
+    {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "point" }> => primitive.type === "point" && primitive.visible !== false).map((point) => <g key={point.id} data-primitive-type="point" opacity={opacityFor(point)} onPointerDown={(event) => beginDrag(event, point.id)} onClick={(event) => handleObjectClick(event, point.id)}><circle data-hit-target="true" cx={toX(point.x)} cy={toY(point.y)} r="12" fill="transparent" pointerEvents="all" /><circle cx={toX(point.x)} cy={toY(point.y)} r={POINT_MARKER_RADIUS} fill={fillFor(point)} stroke={strokeFor(point)} strokeWidth={strokeWidthFor(point, selectedIds.includes(point.id))} strokeDasharray={dashFor(point)} /><text x={toX(point.x) + 10} y={toY(point.y) + 4} fill="#172033" fontSize="13" fontWeight="700">{point.label ?? point.id}</text></g>)}
     {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "intersection" | "lineCircleIntersection" | "circleIntersection" | "curveIntersection" }> => ["intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection"].includes(primitive.type) && primitive.visible !== false).map((primitive) => { const selected = selectedIds.includes(primitive.id); return <g key={primitive.id} data-primitive-type={primitive.type} opacity={opacityFor(primitive)} onClick={(event) => handleObjectClick(event, primitive.id)}><circle data-hit-target="true" cx={toX(primitive.x)} cy={toY(primitive.y)} r="14" fill="transparent" pointerEvents="all" /><circle cx={toX(primitive.x)} cy={toY(primitive.y)} r={selected ? 5 : 4} fill={fillFor(primitive)} stroke={strokeFor(primitive)} strokeWidth={strokeWidthFor(primitive, selected)} strokeDasharray={dashFor(primitive)} />{selected && <text data-intersection-info="true" x={toX(primitive.x) + 9} y={toY(primitive.y) - 9} fill="#172033" fontSize="11" fontWeight="600">{primitive.label ?? "交点 P"} ({primitive.x.toFixed(2)}, {primitive.y.toFixed(2)})</text>}</g> })}
     {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "intersectionSet" }> => primitive.type === "intersectionSet" && primitive.visible !== false).map((primitive) => { const selected = selectedIds.includes(primitive.id); return <g key={primitive.id} data-primitive-type="intersectionSet" opacity={opacityFor(primitive)} onClick={(event) => handleObjectClick(event, primitive.id)}>{primitive.points.map((point, index) => <g key={`${primitive.id}-point-${index}`}><circle data-hit-target="true" cx={toX(point.x)} cy={toY(point.y)} r="14" fill="transparent" pointerEvents="all" /><circle cx={toX(point.x)} cy={toY(point.y)} r={selected ? 5 : 4} fill={fillFor(primitive)} stroke={strokeFor(primitive)} strokeWidth={strokeWidthFor(primitive, selected)} strokeDasharray={dashFor(primitive)} />{selected && <text data-intersection-info="true" x={toX(point.x) + 9} y={toY(point.y) - 9} fill="#172033" fontSize="11" fontWeight="600">{primitive.label ?? "交点集合"} {index + 1} ({point.x.toFixed(2)}, {point.y.toFixed(2)})</text>}</g>)}</g> })}
     {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "parabola" | "ellipse" | "hyperbola" }> => selectedIds.includes(primitive.id) && ["parabola", "ellipse", "hyperbola"].includes(primitive.type) && primitive.visible !== false).map((primitive) => <g key={`${primitive.id}-features`} data-feature-marker="true">{conicFeatures(primitive).map((feature) => <g key={`${primitive.id}-${feature.label}`}><circle cx={toX(feature.point.x)} cy={toY(feature.point.y)} r="5" fill="#ffffff" stroke="#f04f5f" strokeWidth="2" /><text x={toX(feature.point.x) + 9} y={toY(feature.point.y) - 9} fill="#f04f5f" fontSize="13" fontWeight="700">{feature.label}</text></g>)}</g>)}
@@ -364,6 +472,8 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
     {/* 轨迹画在点**之前**：动点永远落在自己的轨迹上，轨迹若压在点的命中区之上，点就再也拖不动了。 */}
     {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "locus" }> => primitive.type === "locus" && primitive.visible !== false).map((locus) => <g key={locus.id} data-primitive-type="locus" opacity={opacityFor(locus)} onClick={(event) => handleObjectClick(event, locus.id)}>{locusSegments(locus).map((points, index) => <polyline key={`${locus.id}-${index}`} points={pointsAttribute(points, viewport)} fill="none" stroke={strokeFor(locus)} strokeWidth={strokeWidthFor(locus, selectedIds.includes(locus.id))} strokeDasharray={dashFor(locus)} />)}</g>)}
     {renderAnnotations()}
+    {/* 定点标记：告诉用户"曲线正绕哪个点转"，它本身不接指针事件。 */}
+    {renderRotationAnchors()}
     {/* 交点预览画在曲线之上、但在**点之下**：预览的命中圆同样是 14px，若画在最后会把点抢走。 */}
     {renderIntersectionPreviews()}
     {/**
@@ -378,7 +488,7 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
        * 与其把整层绘制顺序倒过来（连线 / 轨迹 / 交点预览自身仍要能被点选），
        * 不如把点的命中区补在最上面：点始终赢，派生曲线与预览中段照旧可选。
        */}
-    {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "point" }> => primitive.type === "point" && primitive.visible !== false).map((point) => <circle key={`${point.id}-hit-top`} data-primitive-type="point" data-point-hit="top" data-hit-target="true" cx={toX(point.x)} cy={toY(point.y)} r="14" fill="transparent" pointerEvents="all" onPointerDown={(event) => beginDrag(event, point.id)} onClick={(event) => handleObjectClick(event, point.id)} />)}
+    {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "point" }> => primitive.type === "point" && primitive.visible !== false).map((point) => <circle key={`${point.id}-hit-top`} data-primitive-type="point" data-point-hit="top" data-hit-target="true" cx={toX(point.x)} cy={toY(point.y)} r="12" fill="transparent" pointerEvents="all" onPointerDown={(event) => beginDrag(event, point.id)} onClick={(event) => handleObjectClick(event, point.id)} />)}
     {selectionRect && <rect className="selection-rect" data-selection-mode={selectionRect.mode} x={selectionRect.x} y={selectionRect.y} width={selectionRect.width} height={selectionRect.height} />}
   </svg></div></main>
 }

@@ -21,6 +21,21 @@ interface StatusPromptState {
   pointBinding?: { bound: boolean; hasPaths: boolean; pathLabel?: string | null } | null
   /** 选中的是一条**能当路径**的曲线/直线：提示用户"再选一个点，把它绑到这条线上"。 */
   pathSelected?: boolean
+  /**
+   * 绕定点旋转的提示状态。
+   *
+   * `ready` 表示"点 + 圆/椭圆"都已经选中（Ribbon 的「绕定点旋转」此刻可用）；
+   * `available` 表示文档里既有可当定点的点、又有封闭曲线，只是还没两样都选中。
+   * 这是个纯几何能力，不说出来用户不会知道它存在——与路径绑定当初的缺口一模一样。
+   */
+  rotationAnchor?: { ready: boolean; available: boolean } | null
+  /**
+   * 选中的是一条**以某个点为定点的曲线**（"动圆"）。
+   *
+   * 它同时也是一个合法的路径宿主（`pathSelected` 也为真），但用户此刻关心的是"它在绕谁转、半径多大"，
+   * 而不是"把别的点绑到它上面"，所以这条要压过路径绑定提示。
+   */
+  movingCircleSelected?: boolean
 }
 
 /**
@@ -89,7 +104,7 @@ export function resolvePreviewInventoryPrompt(inventory: { lines: number; points
   return [drawn, ...notes.map((note) => `${note}。`)].join("")
 }
 
-export function resolveStatusPrompt({ mode, selectedCount, selectedLabel, hasCenter, hasStart, pointCount, sceneControl = null, pointBinding = null, pathSelected = false }: StatusPromptState): string {
+export function resolveStatusPrompt({ mode, selectedCount, selectedLabel, hasCenter, hasStart, pointCount, sceneControl = null, pointBinding = null, pathSelected = false, rotationAnchor = null, movingCircleSelected = false }: StatusPromptState): string {
   if (mode === "line") return hasCenter ? "第2步：点击确定直线的第二个点（按住 Shift 锁定水平/垂直）" : "第1步：点击确定直线的第一个点"
   if (mode === "segment") return hasCenter ? "第2步：点击确定线段的终点" : "第1步：点击确定线段的起点"
   if (mode === "ray") return hasCenter ? "第2步：点击确定射线的经过点" : "第1步：点击确定射线的起点"
@@ -100,6 +115,13 @@ export function resolveStatusPrompt({ mode, selectedCount, selectedLabel, hasCen
     return hasStart ? "第3步：点击确定圆弧终点" : "第2步：点击确定圆弧起点"
   }
   if (sceneControl) return resolveSceneControlPrompt(sceneControl)
+  /**
+   * 动圆：它是**曲线**，所以 `pointBinding` / `pathSelected` 都不适用 —— 用户此刻要的是
+   * "拖它绕定点转、改半径、或换一个定点"，说清这三件事。
+   */
+  if (movingCircleSelected) return `${selectedLabel ?? "这条曲线"} 是动圆 · 直接拖曲线就是绕定点转；「半径」在右侧改；删掉那个定点，它会一起消失`
+  // 绕定点旋转优先于路径绑定提示：两样都选中时用户此刻要办的就是"把曲线定在这个定点上"。
+  if (rotationAnchor?.ready) return "已选中一个点与一条封闭曲线 · 点功能区的「绕定点旋转」，曲线就定成绕这个定点转，转过任意角度都仍然过这个定点"
   if (pointBinding) {
     const name = selectedLabel ?? "这个点"
     if (pointBinding.bound) {
@@ -112,5 +134,6 @@ export function resolveStatusPrompt({ mode, selectedCount, selectedLabel, hasCen
   }
   if (pathSelected) return `${selectedLabel ?? "这条曲线"} 可以当路径用 · 选中一个点后在它的「路径绑定」里选这条线，那个点就成为动点（可沿它拖动）`
   if (selectedCount > 0) return `已选中${selectedLabel ?? "图元"} · 拖动控制点调整形态，按 Delete 键删除`
+  if (rotationAnchor?.available) return "想画「过定点的旋转曲线」？选中一个点，再点右侧的「创建动圆」，曲线就绕着它转"
   return "点击图元查看属性，或在画布中拖拽框选多个对象"
 }
