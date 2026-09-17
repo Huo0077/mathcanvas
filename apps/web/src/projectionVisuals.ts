@@ -1,5 +1,5 @@
 import type { DrawingSheetSpec, DrawingViewSpec, GeometryDocument, PrimitiveSpec } from "@draw/dsl"
-import { projectVector3, resolveEngineeringAnnotation, type DrawingView, type ProjectedPoint } from "@draw/geometry-kernel"
+import { conic3FromCircle3, projectConic3, projectVector3, resolveEngineeringAnnotation, type DrawingView, type ProjectedConic2, type ProjectedPoint, type Vector3 } from "@draw/geometry-kernel"
 
 export type { DrawingView, ProjectedPoint } from "@draw/geometry-kernel"
 
@@ -105,6 +105,56 @@ function uniqueIds(ids: string[]): string[] {
   return [...new Set(ids)]
 }
 
+/** 投影椭圆的相对弦高容差与段数夹取范围（见 `projectedEllipseSegments`）。 */
+const PROJECTED_CURVE_RELATIVE_TOLERANCE = 1e-3
+const MIN_PROJECTED_CURVE_SEGMENTS = 12
+const MAX_PROJECTED_CURVE_SEGMENTS = 1024
+
+type ProjectedEllipse2 = Extract<ProjectedConic2, { kind: "ellipse" }>
+
+/**
+ * 投影椭圆的采样段数：解弦高不等式 `R(1 − cos(π/n)) ≤ tol`
+ * （[MathWorld sagitta](https://mathworld.wolfram.com/Sagitta.html)，与 `conicSampling.segmentsForSagitta` 同一判据）。
+ *
+ * 容差取**相对量** `tol = 1e-3·R`：投影视图按内容自适应取景（`DrawingViewport.viewBounds`），
+ * 屏幕上椭圆的半径与它的世界尺寸成正比，于是世界半径 300 px 时弦高 ≤ 0.3 px，满足 §5.6 的"屏幕误差 < 0.5 px"。
+ * 曲率半径取 `a²/b`——椭圆在短轴端弯得最厉害，用 `a` 会低估弦高（与 `sampleClosedConic` 同一理由）。
+ */
+function projectedEllipseSegments(semiMajor: number, semiMinor: number): number {
+  const curvatureRadius = semiMinor > 0 ? (semiMajor * semiMajor) / semiMinor : semiMajor
+  const radius = Math.max(curvatureRadius, semiMajor)
+  if (!Number.isFinite(radius) || radius <= 0) return MIN_PROJECTED_CURVE_SEGMENTS
+  const tolerance = radius * PROJECTED_CURVE_RELATIVE_TOLERANCE
+  const needed = Math.ceil(Math.PI / Math.acos(1 - tolerance / radius))
+  if (!Number.isFinite(needed)) return MAX_PROJECTED_CURVE_SEGMENTS
+  return Math.max(MIN_PROJECTED_CURVE_SEGMENTS, Math.min(MAX_PROJECTED_CURVE_SEGMENTS, needed))
+}
+
+/**
+ * 从**解析椭圆**采样：`center + a·cos t·major + b·sin t·minor`，`major = (cos rotation, sin rotation)`。
+ *
+ * 首尾放**同一个点**（不是重算 `t = 2π`：`sin 2π = −2.45e-16`，重算会在闭合处留下一道浮点缝）；
+ * 深度一律取圆心的深度——解析记录只带一个中心深度，整条曲线按它参与前后排序。
+ */
+function sampleProjectedEllipse(ellipse: ProjectedEllipse2): ProjectedPoint[] {
+  const segments = projectedEllipseSegments(ellipse.semiMajor, ellipse.semiMinor)
+  const major = { x: Math.cos(ellipse.rotation), y: Math.sin(ellipse.rotation) }
+  const minor = { x: -Math.sin(ellipse.rotation), y: Math.cos(ellipse.rotation) }
+  const points: ProjectedPoint[] = []
+  for (let index = 0; index < segments; index += 1) {
+    const parameter = (index / segments) * Math.PI * 2
+    const alongMajor = ellipse.semiMajor * Math.cos(parameter)
+    const alongMinor = ellipse.semiMinor * Math.sin(parameter)
+    points.push({
+      x: ellipse.center.x + alongMajor * major.x + alongMinor * minor.x,
+      y: ellipse.center.y + alongMajor * major.y + alongMinor * minor.y,
+      depth: ellipse.center.depth
+    })
+  }
+  points.push({ ...points[0] })
+  return points
+}
+
 const projectionTargets: DrawingView[] = ["front", "top", "left", "axonometric"]
 
 function resolveProjectionLines(document: GeometryDocument, originView: DrawingView): ProjectionLine[] {
@@ -152,6 +202,12 @@ export function resolveProjectedDrawing(document: GeometryDocument, view: Drawin
   const templateSourceIds = new Set(document.primitives.flatMap((primitive) => primitive.type === "polyhedron3" && primitive.construction?.kind === "template" ? primitive.construction.sourceIds : []))
   const diagnostics: string[] = []
   const primitives: ProjectedPrimitive[] = []
+
+  /** 空间圆的圆心要从点表里解析（`circle3` 只存 `centerId`）。 */
+  const pointPositions = new Map<string, { position: Vector3 }>()
+  document.primitives.forEach((primitive) => {
+    if (primitive.type === "point3") pointPositions.set(primitive.id, primitive)
+  })
 
   const addDiagnostic = (sourceId: string, message: string) => {
     const diagnostic = `${sourceId}: ${message}`
@@ -230,6 +286,34 @@ export function resolveProjectedDrawing(document: GeometryDocument, view: Drawin
         return
       }
       primitives.push({ kind: "polygon", sourceId: primitive.id, points: [...points, points[0]], depth: averageDepth(points) })
+      return
+    }
+    if (primitive.type === "circle3") {
+      /**
+       * 空间圆投影成**真椭圆**：先经解析层把圆投影成椭圆（`projectConic3`），再从这里采样。
+       * 采样结果是既有的 `polyline` 图元，所以三个消费方（`DrawingViewport` / `engineeringExporters`）
+       * 完全不用改；`sourceId` 仍是这个 `circle3`，选中与高亮照旧。
+       */
+      const conic = conic3FromCircle3(primitive, pointPositions)
+      if (!conic) {
+        addDiagnostic(primitive.id, `missing point3 reference ${primitive.centerId}`)
+        return
+      }
+      const projected = projectConic3(conic, view)
+      if (!projected) {
+        addDiagnostic(primitive.id, "circle cannot be projected")
+        return
+      }
+      if (projected.kind === "segment") {
+        // 边视：真椭圆退化成一条线段，如实投影（不是零面积椭圆、也不是干脆不画）。
+        if (!isFiniteProjectedPoint(projected.a) || !isFiniteProjectedPoint(projected.b) || sameScreenPoint(projected.a, projected.b)) {
+          addDiagnostic(primitive.id, "projected circle is degenerate")
+          return
+        }
+        primitives.push({ kind: "polyline", sourceId: primitive.id, points: [projected.a, projected.b], closed: false })
+        return
+      }
+      primitives.push({ kind: "polyline", sourceId: primitive.id, points: sampleProjectedEllipse(projected), closed: true })
       return
     }
     if (primitive.type === "polyhedron3") resolvePolyhedronReferences(primitive)

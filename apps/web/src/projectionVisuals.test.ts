@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { createEmptyDocument, type GeometryDocument, type PrimitiveSpec } from "@draw/dsl"
-import { buildSolidTemplate } from "@draw/geometry-kernel"
+import { buildSolidTemplate, conic3FromCircle3, projectConic3, projectionBasis } from "@draw/geometry-kernel"
 
 import { resolveProjectedDrawing, defaultDraftView, drawingViewLabels, projectedDrawingForView } from "./projectionVisuals"
 
@@ -161,5 +161,82 @@ describe("drawing view metadata", () => {
 
     expect(projectedDrawingForView(document, modelView)).toBeNull()
     expect(projectedDrawingForView(document, frontView)?.primitives).toHaveLength(1)
+  })
+})
+
+describe("analytic circle3 projection", () => {
+  const center = { x: 0, y: 0, z: 0 }
+  const circle: Extract<PrimitiveSpec, { type: "circle3" }> = { id: "circle-rim", type: "circle3", centerId: "point-center", normal: { x: 0, y: 0, z: 1 }, radius: 2 }
+  const circleDocument = (primitive: PrimitiveSpec) => topologyDocument([{ id: "point-center", type: "point3", position: center }, primitive])
+
+  it("projects a circle3 as a dense polyline that lies on the analytic ellipse", () => {
+    const drawing = resolveProjectedDrawing(circleDocument(circle), "axonometric")
+    const projected = drawing.primitives.find((primitive) => primitive.sourceId === circle.id)
+
+    // 空间圆必须真的投影出来（以前完全没投影），而且沿用既有的 polyline 图元：不新增图元种类，
+    // 三个消费方（DrawingViewport / engineeringExporters）因此不用改。
+    expect(projected?.kind).toBe("polyline")
+    if (projected?.kind !== "polyline") throw new Error("circle3 must project to a polyline")
+    expect(projected.closed).toBe(true)
+    // 采样要够密（"放大不看出棱"），且首尾重合——不依赖消费方是否读 `closed`（SVG 的 polyline 不会自己闭合）。
+    expect(projected.points.length).toBeGreaterThan(64)
+    expect(projected.points.at(-1)).toEqual(projected.points[0])
+
+    // 采样点必须落在内核给出的那条**解析椭圆**上（1e-6）。
+    const conic = conic3FromCircle3(circle, new Map([["point-center", { position: center }]]))
+    expect(conic).not.toBeNull()
+    const analytic = projectConic3(conic!, "axonometric")
+    expect(analytic?.kind).toBe("ellipse")
+    if (analytic?.kind !== "ellipse") throw new Error("an obliquely viewed circle must project to an ellipse")
+    const majorAxis = { x: Math.cos(analytic.rotation), y: Math.sin(analytic.rotation) }
+    const minorAxis = { x: -Math.sin(analytic.rotation), y: Math.cos(analytic.rotation) }
+    projected.points.forEach((point) => {
+      const dx = point.x - analytic.center.x
+      const dy = point.y - analytic.center.y
+      const alongMajor = (dx * majorAxis.x + dy * majorAxis.y) / analytic.semiMajor
+      const alongMinor = (dx * minorAxis.x + dy * minorAxis.y) / analytic.semiMinor
+      expect(Math.hypot(alongMajor, alongMinor)).toBeCloseTo(1, 6)
+    })
+
+    /**
+     * 独立校验（不读 `rotation` 与半轴）：在圆平面内任取正交单位基，取 `A = r·P(u)`、`B = r·P(v)`，
+     * 投影像就是 `{proj(C) + A cos t + B sin t}`，即隐式方程 `qᵀM⁻¹q = 1`（`M = A·Aᵀ + B·Bᵀ`）。
+     * 两条路径都同意，才能说"采样的确实是那条真投影曲线"，而不是恰好落在一个自洽的错椭圆上。
+     */
+    const basis = projectionBasis("axonometric")
+    const inPlane = [{ x: 0, y: -1, z: 0 }, { x: 1, y: 0, z: 0 }]
+    const image = inPlane.map((direction) => ({
+      x: circle.radius * (direction.x * basis.horizontal.x + direction.y * basis.horizontal.y + direction.z * basis.horizontal.z),
+      y: circle.radius * (direction.x * basis.vertical.x + direction.y * basis.vertical.y + direction.z * basis.vertical.z)
+    }))
+    const m11 = image[0].x ** 2 + image[1].x ** 2
+    const m12 = image[0].x * image[0].y + image[1].x * image[1].y
+    const m22 = image[0].y ** 2 + image[1].y ** 2
+    const determinant = m11 * m22 - m12 * m12
+    expect(determinant).toBeGreaterThan(0)
+    projected.points.forEach((point) => {
+      const quadratic = (m22 * point.x * point.x - 2 * m12 * point.x * point.y + m11 * point.y * point.y) / determinant
+      expect(quadratic).toBeCloseTo(1, 6)
+    })
+  })
+
+  it("collapses an edge-on circle3 to its projected segment", () => {
+    const edgeOn: Extract<PrimitiveSpec, { type: "circle3" }> = { ...circle, normal: { x: 1, y: 0, z: 0 } }
+    const drawing = resolveProjectedDrawing(circleDocument(edgeOn), "front")
+    const projected = drawing.primitives.find((primitive) => primitive.sourceId === circle.id)
+
+    // 边视是**线段**（长度 = 直径）：既不是零面积椭圆，也不是"干脆不画"。
+    expect(projected?.kind).toBe("polyline")
+    if (projected?.kind !== "polyline") throw new Error("an edge-on circle3 must project to a segment polyline")
+    expect(projected.closed).toBe(false)
+    expect(projected.points).toHaveLength(2)
+    expect(Math.hypot(projected.points[0].x - projected.points[1].x, projected.points[0].y - projected.points[1].y)).toBeCloseTo(4, 9)
+  })
+
+  it("reports a circle3 whose centre reference is missing", () => {
+    const drawing = resolveProjectedDrawing(topologyDocument([{ ...circle, centerId: "missing-point" }]), "front")
+
+    expect(drawing.primitives.some((primitive) => primitive.sourceId === circle.id)).toBe(false)
+    expect(drawing.diagnostics).toEqual(expect.arrayContaining([expect.stringContaining(circle.id)]))
   })
 })
