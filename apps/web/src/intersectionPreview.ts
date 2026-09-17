@@ -52,13 +52,68 @@ export function nearestPreview<T extends { point: { x: number; y: number } }>(
   return best?.preview ?? null
 }
 
-export function getIntersectionPreviews(document: GeometryDocument): IntersectionPreview[] {
+export interface IntersectionPreviewResult {
+  previews: IntersectionPreview[]
+  /** 本次真正重算的图元对数量（增量时远小于全量）。 */
+  recomputedPairs: number
+  /** 直接从 `previous` 沿用的交点数。 */
+  reusedPreviews: number
+}
+
+export interface IntersectionPreviewOptions {
+  /**
+   * 只有与这些 id 相关的图元对需要重算，其余从 `previous` 里沿用。
+   *
+   * 拖动一个动点时用 `getAffectedPrimitiveIds(document, [拖动的 id])` 作为这个集合：
+   * 一次 pointermove 里最贵的就是全文档两两求交（实测 52 个图元 / 6 条采样曲线 = 48.8ms，
+   * 而拖动预览的其它步骤加起来不到 0.5ms）。拖动只改一个图元，其余交点带上一次的结果即可。
+   */
+  recomputeFor?: ReadonlySet<string>
+  /** 上一次的结果（增量模式的基准）。 */
+  previous?: readonly IntersectionPreview[]
+}
+
+/**
+ * 算出当前文档里所有可点击的交点预览。
+ *
+ * 给了 `recomputeFor` + `previous` 时走**增量**：与改动无关的图元对直接沿用上一次的交点，
+ * 只有与改动相关的对才重新采样求交。没给就是全量计算。
+ */
+export function computeIntersectionPreviews(document: GeometryDocument, options: IntersectionPreviewOptions = {}): IntersectionPreviewResult {
   const candidates = document.primitives.filter((primitive): primitive is SampledPrimitive => primitive.visible !== false && isSampledPrimitive(primitive))
+  const recomputeFor = options.recomputeFor
+  const incremental = Boolean(recomputeFor && options.previous)
+  /**
+   * 增量模式：把上一次的交点按"图元对"归好，逐对决定沿用还是重算。
+   * 这样输出顺序与全量计算完全一致（便于断言与稳定渲染），
+   * 而且隐藏/删除掉的图元对会自然消失——不会留下过期的交点。
+   */
+  const keptByPair = new Map<string, IntersectionPreview[]>()
+  const pairKey = (first: string, second: string) => (first < second ? `${first}::${second}` : `${second}::${first}`)
+  if (incremental) {
+    for (const preview of options.previous!) {
+      const key = pairKey(preview.objectA, preview.objectB)
+      const kept = keptByPair.get(key)
+      if (kept) kept.push(preview)
+      else keptByPair.set(key, [preview])
+    }
+  }
   const previews: IntersectionPreview[] = []
+  let recomputedPairs = 0
+  let reusedPreviews = 0
   for (let firstIndex = 0; firstIndex < candidates.length; firstIndex += 1) {
     for (let secondIndex = firstIndex + 1; secondIndex < candidates.length; secondIndex += 1) {
       const first = candidates[firstIndex]
       const second = candidates[secondIndex]
+      if (incremental && !recomputeFor!.has(first.id) && !recomputeFor!.has(second.id)) {
+        const kept = keptByPair.get(pairKey(first.id, second.id))
+        if (kept) {
+          previews.push(...kept)
+          reusedPreviews += kept.length
+        }
+        continue
+      }
+      recomputedPairs += 1
       try {
         const result = calculateIntersection(first, second)
         result.points.forEach((point, solutionIndex) => {
@@ -71,5 +126,9 @@ export function getIntersectionPreviews(document: GeometryDocument): Intersectio
       }
     }
   }
-  return previews
+  return { previews, recomputedPairs, reusedPreviews }
+}
+
+export function getIntersectionPreviews(document: GeometryDocument): IntersectionPreview[] {
+  return computeIntersectionPreviews(document).previews
 }

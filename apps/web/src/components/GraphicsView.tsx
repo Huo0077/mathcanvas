@@ -1,13 +1,13 @@
 import { type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react"
 import type { Coordinate, GeometryDocument, PrimitiveSpec } from "@draw/dsl"
 import { adaptiveSampleFunctionSegments, evaluateParameterExpression, sampleEllipse, sampleHyperbolaBranches, sampleLocus, sampleParabola } from "@draw/geometry-kernel"
-import { applyOperation, recomputeDerivedObjects, type DomainOperation } from "@draw/scene-graph"
+import { applyOperation, getAffectedPrimitiveIds, recomputeDerivedObjects, type DomainOperation } from "@draw/scene-graph"
 import type { BoxSelectionMode } from "@draw/geometry-kernel"
 
 import { createDragAction, getDragHandle, primitiveHandlePoints, type DragAction, type DragHandle } from "../interaction"
 import { resolveAnnotationPoint } from "../annotations"
 import { clipFunctionSegmentsToBounds } from "../functionGraph"
-import { getIntersectionPreviews, nearestPreview, PREVIEW_HIT_RADIUS, type IntersectionPreview } from "../intersectionPreview"
+import { computeIntersectionPreviews, nearestPreview, PREVIEW_HIT_RADIUS, type IntersectionPreview } from "../intersectionPreview"
 import { dashFor, fillFor, opacityFor, strokeFor, strokeWidthFor } from "../primitiveStyle"
 import { DEFAULT_VIEWPORT, VIEWBOX, gridStep, rayToViewport, svgToWorld, visibleWorldBounds, worldToSvg, zoomViewport, zoomViewportAt, type Viewport } from "../viewport"
 
@@ -81,6 +81,10 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
   const [hoverPrimitiveType, setHoverPrimitiveType] = useState<string | null>(null)
   const suppressClick = useRef(false)
   const svgRef = useRef<SVGSVGElement>(null)
+  /** 上一次算出的交点（含被"已保存交点"过滤掉的那些），作为拖动时增量计算的基准。 */
+  const previousPreviewsRef = useRef<IntersectionPreview[]>([])
+  /** 最近一次交点评算的读数：重算了几对、沿用了几个（e2e 与排查都读它）。 */
+  const previewStatsRef = useRef({ recomputedPairs: 0, reusedPreviews: 0 })
   const worldBounds = visibleWorldBounds(viewport)
   const toX = (x: number) => worldToSvg({ x, y: 0 }, viewport).x
   const toY = (y: number) => worldToSvg({ x: 0, y }, viewport).y
@@ -100,7 +104,25 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
   /**
    * A saved intersection must hide only the solution it captured. Filtering the whole pair instead dropped the
    * sibling crossing of a line and a circle the moment one of them became a persistent point.
+   *
+   * 拖动时走**增量**：只有一个图元（及它的下游闭包）会变，其余图元对的交点沿用上一次的结果。
+   * 全量两两求交在一次 pointermove 里要 ~49ms（52 个图元 / 6 条采样曲线实测），
+   * 这正是"动点拖起来不流畅"的根源；拖动时那一步现在只重算与改动相关的对。
    */
+  const previewResult = useMemo(() => {
+    const affected = dragState ? getAffectedPrimitiveIds(previewDocument, [dragState.id]) : null
+    return computeIntersectionPreviews(previewDocument, affected ? { recomputeFor: affected, previous: previousPreviewsRef.current } : {})
+  }, [previewDocument, dragState])
+  // 缓存要在渲染之后写入：useMemo 里写 ref 在并发渲染下可能被丢弃。
+  useEffect(() => {
+    previousPreviewsRef.current = previewResult.previews
+    previewStatsRef.current = { recomputedPairs: previewResult.recomputedPairs, reusedPreviews: previewResult.reusedPreviews }
+    const svg = svgRef.current
+    if (!svg) return
+    svg.dataset.previewPairs = String(previewResult.recomputedPairs)
+    svg.dataset.previewReused = String(previewResult.reusedPreviews)
+    svg.dataset.previewCount = String(previewResult.previews.length)
+  }, [previewResult])
   const intersectionPreviews = useMemo(() => {
     const savedPairs = new Set<string>()
     const savedPoints = new Set<string>()
@@ -113,12 +135,12 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
       if (primitive.type === "circleIntersection") savedPoints.add(key(primitive.x, primitive.y))
       if (primitive.type === "curveIntersection") savedPoints.add(key(primitive.x, primitive.y))
     }
-    return getIntersectionPreviews(previewDocument).filter((preview) => {
+    return previewResult.previews.filter((preview) => {
       const pair = [preview.objectA, preview.objectB].sort().join("::")
       if (savedPairs.has(pair)) return false
       return !savedPoints.has(key(preview.point.x, preview.point.y))
     })
-  }, [previewDocument])
+  }, [previewDocument, previewResult])
   const pointById = new Map(displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "point" }> => primitive.type === "point").map((point) => [point.id, point]))
   const connectionEndpoints = (connection: Extract<PrimitiveSpec, { type: "connection" }>) => {
     const start = pointById.get(connection.startPointId)

@@ -1,0 +1,64 @@
+{
+  "format": "mgeo",
+  "formatVersion": "0.1",
+  "document": {
+    "schemaVersion": "0.1",
+    "revision": 1,
+    "workspace": "conics",
+    "coordinateSystems": [
+      "cartesian-2d"
+    ],
+    "parameters": {},
+    "primitives": [
+      {
+        "id": "line-axis",
+        "type": "line",
+        "a": { "x": -8, "y": 0 },
+        "b": { "x": 8, "y": 0 },
+        "label": "y = 0"
+      },
+      {
+        "id": "circle-a",
+        "type": "circle",
+        "center": { "x": -2, "y": 0 },
+        "radius": 2,
+        "label": "圆 1"
+      },
+      {
+        "id": "circle-b",
+        "type": "circle",
+        "center": { "x": 2, "y": 0 },
+        "radius": 2,
+        "label": "圆 2"
+      },
+      {
+        "id": "function-sin",
+        "type": "function",
+        "expression": "sin(x)",
+        "domain": [-6, 6],
+        "samples": 256,
+        "label": "y = sin(x)"
+      },
+      {
+        "id": "point-bound",
+        "type": "point",
+        "x": 0,
+        "y": 2,
+        "label": "A",
+        "binding": { "kind": "onPath", "pathId": "circle-b", "parameter": 1.5707963267948966 }
+      }
+    ],
+    "groups": [],
+    "constraints": [],
+    "dynamics": [],
+    "annotations": [],
+    "measurements": [],
+    "engineeringAnnotations": [],
+    "metadata": {
+      "id": "doc-drag-cost-fixture",
+      "name": "Drag cost scene",
+      "createdAt": "2026-09-17T00:00:00.000Z",
+      "updatedAt": "2026-09-17T00:00:00.000Z"
+    }
+  }
+}
