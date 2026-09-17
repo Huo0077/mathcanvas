@@ -41,15 +41,26 @@ function drawingPoints(drawing: ProjectedDrawing) {
   ].filter(finitePoint)
 }
 
+/**
+ * 投影内容的包围盒。
+ *
+ * 用循环求极值而不是 `Math.min(...points.map(...))`：展开实参在点数多时会直接
+ * `RangeError: Maximum call stack size exceeded`，整份导出失败（与图纸内容无关，纯粹是点数）。
+ */
 function drawingBounds(drawing: ProjectedDrawing): DrawingBounds {
   const points = drawingPoints(drawing)
   if (points.length === 0) return { minX: -4, maxX: 4, minY: -4, maxY: 4 }
-  return {
-    minX: Math.min(...points.map((point) => point.x)),
-    maxX: Math.max(...points.map((point) => point.x)),
-    minY: Math.min(...points.map((point) => point.y)),
-    maxY: Math.max(...points.map((point) => point.y))
+  let minX = points[0].x
+  let maxX = points[0].x
+  let minY = points[0].y
+  let maxY = points[0].y
+  for (const point of points) {
+    if (point.x < minX) minX = point.x
+    if (point.x > maxX) maxX = point.x
+    if (point.y < minY) minY = point.y
+    if (point.y > maxY) maxY = point.y
   }
+  return { minX, maxX, minY, maxY }
 }
 
 function worldTransform(drawing: ProjectedDrawing, cellX: number, cellY: number): string {
@@ -92,12 +103,19 @@ function svgAnnotation(annotation: ProjectedAnnotation): string {
 function svgDrawing(drawing: ProjectedDrawing, index: number): string {
   const cellX = index % 2 * viewCellWidth
   const cellY = Math.floor(index / 2) * viewCellHeight
-  const diagnostics = drawing.diagnostics.map((diagnostic) => `<text class="diagnostic" x="-3.8" y="${-3.5 - drawing.diagnostics.indexOf(diagnostic) * 0.2}">${escapeXml(diagnostic)}</text>`).join("")
+  // 行号取 map 的下标：用 `indexOf` 求行号时重复的诊断会全部落在第一行（互相覆盖），而且整体是 O(n²)。
+  const diagnostics = drawing.diagnostics.map((diagnostic, line) => `<text class="diagnostic" x="-3.8" y="${-3.5 - line * 0.2}">${escapeXml(diagnostic)}</text>`).join("")
   return `<g data-drawing-view="${drawing.view}" transform="${worldTransform(drawing, cellX, cellY)}"><rect x="-3.9" y="-3.9" width="7.8" height="7.8" fill="#fbfcff" stroke="#c8d0df" stroke-width="0.02" /><g class="projection-lines">${drawing.projectionLines.map(svgProjectionLine).join("")}</g><g class="primitives">${drawing.primitives.map(svgPrimitive).join("")}</g><g class="annotations">${drawing.annotations.map(svgAnnotation).join("")}</g><g class="diagnostics">${diagnostics}</g></g>`
 }
 
+/**
+ * 导出**全部**视图，不再 `slice(0, 4)`：`addDrawingView` 允许文档拥有更多视图，
+ * 静默丢掉第 5 张之后的内容是一种数据丢失（导出文件里少了几张图，没有任何提示）。
+ * 画布高度按行数增长（每行两个视口），多出来的视图照旧按网格摆放。
+ */
 export function exportEngineeringSvg(drawings: ProjectedDrawing[]): string {
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${svgWidth} ${svgHeight}" role="img" aria-label="Engineering drawing export"><rect width="${svgWidth}" height="${svgHeight}" fill="#eef2f8" />${drawings.slice(0, 4).map(svgDrawing).join("")}</svg>`
+  const height = Math.max(svgHeight, Math.ceil(drawings.length / 2) * viewCellHeight)
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${svgWidth} ${height}" role="img" aria-label="Engineering drawing export"><rect width="${svgWidth}" height="${height}" fill="#eef2f8" />${drawings.map(svgDrawing).join("")}</svg>`
 }
 
 function dxfNumber(value: number): string {
@@ -134,7 +152,7 @@ function dxfText(drawing: ProjectedDrawing, annotation: ProjectedAnnotation): st
 }
 
 export function exportEngineeringDxf(drawings: ProjectedDrawing[]): string {
-  const entities = drawings.slice(0, 4).map((drawing) => [
+  const entities = drawings.map((drawing) => [
     ...drawing.primitives.map((primitive) => dxfPrimitive(drawing, primitive)),
     ...drawing.projectionLines.map((line) => dxfLine(drawing, line)),
     ...drawing.annotations.map((annotation) => dxfText(drawing, annotation)),
@@ -182,7 +200,7 @@ export async function exportEngineeringPdf(drawings: ProjectedDrawing[]): Promis
   const font = await pdf.embedFont(StandardFonts.Helvetica)
   const width = 720
   const height = 540
-  drawings.slice(0, 4).forEach((drawing) => {
+  drawings.forEach((drawing) => {
     const page = pdf.addPage([width, height])
     const bounds = drawingBounds(drawing)
     page.drawText(winAnsiSafe(`${drawing.view} engineering view`), { x: 24, y: height - 28, size: 14, font, color: rgb(0.08, 0.13, 0.22) })

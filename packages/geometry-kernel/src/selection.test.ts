@@ -42,6 +42,23 @@ describe("window selection (left → right: only fully enclosed objects)", () =>
     // 圆心在框内但半径越界：按"完全包含"语义不算选中（旧实现只看圆心，这里刻意收紧）。
     expect(primitiveInSelectionBox({ id: "c2", type: "circle", center: { x: 0, y: 0 }, radius: 15 }, box)).toBe(false)
   })
+
+  /**
+   * 体检发现的真缺陷：圆弧只检查了每条采样弦的**起点**，弧的终点从不参与判定。
+   * 于是终点戳出框外的弧仍被判为"完全在框内"（误差可达一个弦长 = 张角/24）。
+   */
+  it("tests an arc's end point, not only the start of each sampled chord", () => {
+    const arc = { id: "arc", type: "arc" as const, center: { x: 0, y: 0 }, radius: 1, startAngle: 0, endAngle: Math.PI / 2 + 0.1 }
+    const tight = { minX: -0.05, minY: -0.05, maxX: 1.1, maxY: 1.1 }
+
+    // 弧的终点是 (-0.0998, 0.995)，在框外（minX = -0.05）。
+    expect(pointInSelectionBox({ x: 1 * Math.cos(arc.endAngle), y: 1 * Math.sin(arc.endAngle) }, tight)).toBe(false)
+    expect(primitiveInSelectionBox(arc, tight)).toBe(false)
+
+    // 收进框内后照常选中。
+    const roomy = { minX: -0.2, minY: -0.2, maxX: 1.2, maxY: 1.2 }
+    expect(primitiveInSelectionBox(arc, roomy)).toBe(true)
+  })
 })
 
 describe("crossing selection (right → left: anything the box touches)", () => {

@@ -26,6 +26,19 @@ export function rotateCameraState(state: CameraState, azimuthDelta: number, elev
   return { ...state, azimuth: state.azimuth + azimuthDelta, elevation: Math.max(-85, Math.min(85, state.elevation + elevationDelta)) }
 }
 
+/**
+ * 相机拖动模式：Ctrl/Cmd = 沿视线前后平移，中键 / Shift / 平移模式 = 屏幕平面平移，其余 = 旋转。
+ *
+ * 修饰键必须取**每一次移动事件**的状态，不能只读 pointerdown 那一刻的快照：
+ * 用户"先按住左键、再想起按 Shift"是最自然的顺序，快照语义下 Shift 完全不生效
+ * （实测的交互缺陷）。反过来，拖动中松开 Shift 就立刻回到旋转，与画布上其它修饰键一致。
+ */
+export function cameraDragMode(event: { button: number; shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }, panMode: boolean): "depth-pan" | "screen-pan" | "rotate" {
+  if (event.ctrlKey || event.metaKey) return "depth-pan"
+  if (event.button === 1 || event.shiftKey || panMode) return "screen-pan"
+  return "rotate"
+}
+
 /** How far the orbit centre may travel from the figure, as a multiple of the figure's radius. */
 const PAN_RANGE_FACTOR = 3
 /** Orbit-centre limit used before the scene has any geometry to anchor to. */

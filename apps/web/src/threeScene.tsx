@@ -13,7 +13,7 @@ import { GRID_MAJOR_EVERY, GRID_MIN_RADIUS, gridPlacement } from "./sceneGrid"
 import { buildGridGeometry, GRID_MAJOR_COLOR, GRID_MINOR_COLOR, gridLayerOpacity } from "./threeGrid"
 import { sceneContentKey, sceneSyncDecision } from "./sceneContentKey"
 import { createContentSigner } from "./sceneContentSignature"
-import { applyCameraState, boxCorners, clampCameraTarget, contentBounds, contentRadiusExcluding, createCameraState, FIT_ANIMATION_MS, fitCameraState, interpolateCameraState, isContentOutOfView, panCameraState, resetCameraState, rotateCameraState, shouldAutoFit, zoomCameraState, type CameraState } from "./threeCamera"
+import { applyCameraState, boxCorners, cameraDragMode, clampCameraTarget, contentBounds, contentRadiusExcluding, createCameraState, FIT_ANIMATION_MS, fitCameraState, interpolateCameraState, isContentOutOfView, panCameraState, resetCameraState, rotateCameraState, shouldAutoFit, zoomCameraState, type CameraState } from "./threeCamera"
 import { loadRememberedCamera, rememberCamera } from "./cameraMemory"
 import type { ThreeScenePreview } from "./threeScenePreview"
 
@@ -35,7 +35,6 @@ interface PointerState {
   lastY: number
   button: number
   moved: boolean
-  shiftKey: boolean
 }
 
 /**
@@ -909,7 +908,7 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       if (event.button !== 0 && event.button !== 1) return
       event.preventDefault()
       const point = pointFromEvent(event)
-      pointerStateRef.current = { pointerId: event.pointerId, x: point.x, y: point.y, lastX: point.x, lastY: point.y, button: event.button, moved: false, shiftKey: event.shiftKey }
+      pointerStateRef.current = { pointerId: event.pointerId, x: point.x, y: point.y, lastX: point.x, lastY: point.y, button: event.button, moved: false }
       dragSessionRef.current = null
       if (sceneShell) sceneShell.dataset.dragTarget = ""
       // 以面为剖切面：这一次点击只用来取面，取到就退出该模式。
@@ -1063,12 +1062,11 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       }
       const state = cameraStateRef.current
       const scale = state.distance * 1.5
-      // Ctrl drags along the view axis; middle drag, Shift+drag and the pan mode drag across the screen plane.
-      const depthPan = event.ctrlKey || event.metaKey
-      const screenPan = pointerState.button === 1 || pointerState.shiftKey || panModeRef.current
-      const moved = depthPan
+      // 修饰键取**当前**事件的状态：先按住左键再按 Shift 也要能平移（pointerdown 的快照会漏掉这种顺序）。
+      const mode = cameraDragMode(event, panModeRef.current)
+      const moved = mode === "depth-pan"
         ? panCameraState(state, 0, 0, deltaY * scale)
-        : screenPan ? panCameraState(state, -deltaX * scale, deltaY * scale, 0) : rotateCameraState(state, deltaX * 140, deltaY * 140)
+        : mode === "screen-pan" ? panCameraState(state, -deltaX * scale, deltaY * scale, 0) : rotateCameraState(state, deltaX * 140, deltaY * 140)
       pointerState.lastX = point.x
       pointerState.lastY = point.y
       setCameraState({ ...moved, target: clampCameraTarget(moved.target, sceneBounds) })

@@ -33,6 +33,19 @@ function boxCorners(box: SelectionBox): [Coordinate, Coordinate][] {
   return [[{ x: minX, y: minY }, { x: maxX, y: minY }], [{ x: maxX, y: minY }, { x: maxX, y: maxY }], [{ x: maxX, y: maxY }, { x: minX, y: maxY }], [{ x: minX, y: maxY }, { x: minX, y: minY }]]
 }
 
+/**
+ * 圆弧的采样点（与画布同样的密度）。
+ *
+ * **必须包含终点**（索引 0..ARC_SAMPLES）：框选判"完全在框内"时若只看每条弦的起点，
+ * 弧的末端就从不参与判定——实测终点戳出框外 0.1 的弧仍被报成"完全在框内"（误差可达一个弦长）。
+ */
+function arcSamplePoints(arc: Extract<PlanarSnapPrimitive, { type: "arc" }>): Coordinate[] {
+  return Array.from({ length: ARC_SAMPLES + 1 }, (_, index) => {
+    const angle = arc.startAngle + (arc.endAngle - arc.startAngle) * (index / ARC_SAMPLES)
+    return { x: arc.center.x + arc.radius * Math.cos(angle), y: arc.center.y + arc.radius * Math.sin(angle) }
+  })
+}
+
 function segmentsOf(primitive: PlanarSnapPrimitive): [Coordinate, Coordinate][] {
   if (primitive.type === "segment") return [[primitive.a, primitive.b]]
   if (primitive.type === "polyline") {
@@ -41,16 +54,8 @@ function segmentsOf(primitive: PlanarSnapPrimitive): [Coordinate, Coordinate][] 
     return segments
   }
   if (primitive.type === "arc") {
-    const segments: [Coordinate, Coordinate][] = []
-    for (let index = 0; index < ARC_SAMPLES; index += 1) {
-      const first = primitive.startAngle + (primitive.endAngle - primitive.startAngle) * (index / ARC_SAMPLES)
-      const second = primitive.startAngle + (primitive.endAngle - primitive.startAngle) * ((index + 1) / ARC_SAMPLES)
-      segments.push([
-        { x: primitive.center.x + primitive.radius * Math.cos(first), y: primitive.center.y + primitive.radius * Math.sin(first) },
-        { x: primitive.center.x + primitive.radius * Math.cos(second), y: primitive.center.y + primitive.radius * Math.sin(second) }
-      ])
-    }
-    return segments
+    const points = arcSamplePoints(primitive)
+    return points.slice(1).map((point, index) => [points[index], point] as [Coordinate, Coordinate])
   }
   return []
 }
@@ -88,7 +93,7 @@ export function primitiveInSelectionBox(primitive: PrimitiveSpec, box: Selection
       && primitive.center.y - primitive.radius >= box.minY - EPSILON
       && primitive.center.y + primitive.radius <= box.maxY + EPSILON
   }
-  if (primitive.type === "arc") return segmentsOf(primitive).every((segment) => pointInSelectionBox(segment[0], box))
+  if (primitive.type === "arc") return arcSamplePoints(primitive).every((point) => pointInSelectionBox(point, box))
   return false
 }
 

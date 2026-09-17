@@ -128,6 +128,12 @@ function primitiveData(primitive: PrimitiveSpec): string {
   return JSON.stringify(unsupportedPrimitive)
 }
 
+/**
+ * CSV 导出。
+ *
+ * 开头带 UTF-8 BOM：标签与诊断里大量是中文，而 Excel（Windows）在没有 BOM 时会按本地 ANSI 解码，
+ * 打开就是乱码——"导出 CSV 给同事看"恰恰是最常见的用法。
+ */
 export function exportCsv(document: GeometryDocument): string {
   const rows = [
     ["id", "type", "label", "visible", "locked", "data"],
@@ -142,5 +148,5 @@ export function exportCsv(document: GeometryDocument): string {
       JSON.stringify({ sourceIds: measurement.sourceIds, metric: measurement.metric, dihedralKind: measurement.dihedralKind, value: measurement.value, unit: measurement.unit, precision: measurement.precision, status: measurement.status, explanation: measurement.explanation })
     ])
   ]
-  return `${rows.map((row) => row.map(csvCell).join(",")).join("\r\n")}\r\n`
+  return `\uFEFF${rows.map((row) => row.map(csvCell).join(",")).join("\r\n")}\r\n`
 }

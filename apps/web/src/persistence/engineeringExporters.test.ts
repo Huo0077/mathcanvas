@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest"
 
+import { PDFDocument } from "pdf-lib"
+
 import type { DrawingViewSpec } from "@draw/dsl"
 
 import { exportEngineeringDxf, exportEngineeringPdf, exportEngineeringSvg, selectExportableDrawings } from "./engineeringExporters"
@@ -83,5 +85,52 @@ describe("engineering drawing exporters", () => {
 
   it("keeps every projected view when the document has no persisted layout", () => {
     expect(selectExportableDrawings(drawing(), [])).toHaveLength(1)
+  })
+
+  /**
+   * 体检发现的真缺陷：SVG / DXF / PDF 三个导出器都硬写 `slice(0, 4)`，而 `addDrawingView`
+   * 允许文档拥有超过四个视图——第 5 个之后的视图会被**静默丢掉**（导出文件里少了几张图，没有任何提示）。
+   */
+  it("exports every view instead of silently dropping the fifth one", async () => {
+    const views = ["front", "top", "left", "axonometric", "front"] as const
+    const drawings: ProjectedDrawing[] = views.map((view, index) => ({ ...drawing()[0], view, primitives: [{ kind: "point", sourceId: `point-${index}`, point: { x: index, y: index, depth: 0 } }] }))
+
+    const svg = exportEngineeringSvg(drawings)
+    expect(svg.match(/data-drawing-view=/g)).toHaveLength(5)
+    // 第 5 张排在第三行，画布必须跟着长高，否则它落在视口之外等于没导出。
+    expect(Number(/viewBox="0 0 1000 (\d+)"/.exec(svg)?.[1])).toBeGreaterThan(700)
+
+    const dxf = exportEngineeringDxf(drawings)
+    for (let index = 0; index < views.length; index += 1) expect(dxf).toContain(`point-${index}`)
+
+    const pdf = await PDFDocument.load(await exportEngineeringPdf(drawings))
+    expect(pdf.getPageCount()).toBe(5)
+  })
+
+  /**
+   * 同一次体检：`drawingBounds` 用 `Math.min(...points.map(...))` 展开实参，点数一多就
+   * `RangeError: Maximum call stack size exceeded`——导出直接失败（而且和图纸内容无关，纯粹是点数）。
+   */
+  it("computes bounds for a very large drawing without blowing the argument stack", () => {
+    const points = Array.from({ length: 300_000 }, (_, index) => ({ x: index % 1000, y: -index, depth: 0 }))
+    const huge: ProjectedDrawing[] = [{ ...drawing()[0], primitives: [{ kind: "polyline", sourceId: "edge-huge", points, closed: false }] }]
+
+    expect(() => exportEngineeringSvg(huge)).not.toThrow()
+    const svg = exportEngineeringSvg(huge)
+    expect(svg).toContain('data-source-id="edge-huge"')
+  })
+
+  /**
+   * 同一次体检：诊断文本的行号用 `diagnostics.indexOf(diagnostic)` 求，重复的诊断会全部落到
+   * 第一行（互相覆盖），而且整体是 O(n²)。
+   */
+  it("stacks repeated diagnostics on separate lines", () => {
+    const repeated: ProjectedDrawing[] = [{ ...drawing()[0], diagnostics: ["同名诊断", "同名诊断", "同名诊断"] }]
+
+    const svg = exportEngineeringSvg(repeated)
+    const ys = [...svg.matchAll(/class="diagnostic" x="-3.8" y="([-\d.]+)"/g)].map((match) => Number(match[1]))
+
+    expect(ys).toHaveLength(3)
+    expect(new Set(ys).size).toBe(3)
   })
 })

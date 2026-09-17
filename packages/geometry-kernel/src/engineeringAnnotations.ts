@@ -44,6 +44,12 @@ function resolveLinearSources(primitives: Map<string, PrimitiveSpec>, sourceIds:
   return sourceIds.length === 1 ? edgeById(primitives, sourceIds[0]) : null
 }
 
+/** 两个点是否重合（相对尺度判定：毫米级与米级文档用同一套阈值）。 */
+function samePoint(first: Vector3, second: Vector3): boolean {
+  const scale = Math.max(1, Math.abs(first.x), Math.abs(first.y), Math.abs(first.z), Math.abs(second.x), Math.abs(second.y), Math.abs(second.z))
+  return distanceVector3(first, second) <= EPSILON * scale
+}
+
 function resolveAngleSources(primitives: Map<string, PrimitiveSpec>, sourceIds: string[]): [Vector3, Vector3, Vector3] | null {
   if (sourceIds.length === 3) {
     const first = pointById(primitives, sourceIds[0])
@@ -55,7 +61,24 @@ function resolveAngleSources(primitives: Map<string, PrimitiveSpec>, sourceIds: 
     const first = edgeById(primitives, sourceIds[0])
     const second = edgeById(primitives, sourceIds[1])
     if (!first || !second) return null
-    return [first[1], first[0], second[1]]
+    /**
+     * 角度必须在两条棱的**公共端点**处量。
+     *
+     * 旧实现固定把第一条棱的起点当顶点、取两条棱的终点当两条边——折线拐角（一条棱的终点正好是
+     * 另一条棱的起点）这种最常见的用法量出来就是错的角：A=(0,0,0)-(1,0,0) 与 B=(1,0,0)-(1,1,0)
+     * 在公共端点处是 90°，旧实现给 45°。没有公共端点（或完全重合）时没有可量的角，报数据不足。
+     */
+    const candidates: [Vector3, Vector3, Vector3][] = []
+    for (const firstEndpoint of first) {
+      for (const secondEndpoint of second) {
+        if (!samePoint(firstEndpoint, secondEndpoint)) continue
+        const armA = samePoint(first[0], firstEndpoint) ? first[1] : first[0]
+        const armB = samePoint(second[0], secondEndpoint) ? second[1] : second[0]
+        candidates.push([armA, firstEndpoint, armB])
+      }
+    }
+    // 没有公共端点（两条棱不相邻）或两个端点都重合（两条棱完全重合）时，没有唯一可量的角。
+    return candidates.length === 1 ? candidates[0] : null
   }
   return null
 }
@@ -71,7 +94,7 @@ export function resolveEngineeringAnnotation(document: GeometryDocument, annotat
   }
   if (annotation.kind === "angular") {
     const points = resolveAngleSources(primitives, annotation.sourceIds)
-    if (!points) return result(annotation, "insufficient-data", "需要三个空间点或两条空间棱")
+    if (!points) return result(annotation, "insufficient-data", "需要三个空间点，或两条共端点的空间棱")
     const first = { x: points[0].x - points[1].x, y: points[0].y - points[1].y, z: points[0].z - points[1].z }
     const second = { x: points[2].x - points[1].x, y: points[2].y - points[1].y, z: points[2].z - points[1].z }
     if (distanceVector3(points[0], points[1]) <= EPSILON || distanceVector3(points[2], points[1]) <= EPSILON) return result(annotation, "degenerate", "角度来源向量长度为零")

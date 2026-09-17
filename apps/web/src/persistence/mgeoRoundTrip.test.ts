@@ -1,19 +1,25 @@
 import { describe, expect, it } from "vitest"
 
-import { createEmptyDocument } from "@draw/dsl"
+import { createEmptyDocument, decodeMgeo, encodeMgeo } from "@draw/dsl"
 import { applyOperation, recomputeDerivedObjects } from "@draw/scene-graph"
 
 import { createDemoDocument } from "../demoDocument"
-import { loadMgeo, saveMgeo } from "./mgeoStorage"
 
-describe("mgeo storage helpers", () => {
+/**
+ * `.mgeo` 往返的集成用例。
+ *
+ * 之前这些用例经由 `persistence/mgeoStorage.ts`（`saveMgeo` / `loadMgeo` 两个只转发
+ * `encodeMgeo` / `decodeMgeo` 的壳）执行，而那个模块在全仓库**没有任何生产调用点**——
+ * 死代码删掉了，用例直接测真正的编解码入口，覆盖不变。
+ */
+describe("mgeo round trip", () => {
   it("round-trips the workbench document", () => {
-    const restored = loadMgeo(saveMgeo(createDemoDocument()))
+    const restored = decodeMgeo(encodeMgeo(createDemoDocument()))
     expect(restored.primitives.some((primitive) => primitive.id === "intersection-main")).toBe(true)
   })
 
   /**
-   * 动点必须能存下来再打开，而且打开之后**还是动点** —— 光断言字段还在不够，
+   * 动点必须能存下来再打开，而且打开之后**还是动点**——光断言字段还在不够：
    * 要证明重新加载的文档拖一下仍然沿曲线滑动（也就是约束、驱动参数、轨迹都还活着）。
    */
   it("reloads a bound dynamic point that can still be dragged along its curve", () => {
@@ -27,7 +33,7 @@ describe("mgeo storage helpers", () => {
     ]
     const saved = recomputeDerivedObjects(document)
 
-    const restored = loadMgeo(saveMgeo(saved))
+    const restored = decodeMgeo(encodeMgeo(saved))
     // The binding, its driver parameter and the locus all survive the round trip.
     const point = restored.primitives.find((primitive) => primitive.id === "point-1")
     expect(point?.type === "point" ? point.binding : null).toEqual({
@@ -58,7 +64,7 @@ describe("mgeo storage helpers", () => {
       { id: "point-1", type: "point", x: 0, y: -2, binding: { kind: "onPath", pathId: "hyperbola-1", parameter: 0, branch: 1, domain: [-6, 6] } }
     ]
 
-    const restored = loadMgeo(saveMgeo(recomputeDerivedObjects(document)))
+    const restored = decodeMgeo(encodeMgeo(recomputeDerivedObjects(document)))
     const point = restored.primitives.find((primitive) => primitive.id === "point-1")
     expect(point?.type === "point" ? point.binding : null).toMatchObject({ branch: 1, domain: [-6, 6] })
     // Still pinned to the lower branch after a reload.

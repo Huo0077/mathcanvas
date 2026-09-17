@@ -57,6 +57,17 @@ describe("document exporters", () => {
     expect(csv).toContain('"{""x"":2,""y"":1}"')
   })
 
+  /**
+   * 体检发现的真缺陷：CSV 带中文标签却没有 BOM。Excel（Windows）会按本地 ANSI 解码，
+   * 打开就是乱码——这正是"导出 CSV 给同事看"最常见的用法。
+   */
+  it("starts the CSV with a byte-order mark so spreadsheet apps read Chinese labels correctly", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [{ id: "point-1", type: "point", x: 2, y: 1, label: "测试点" }]
+
+    expect(exportCsv(document).startsWith("\uFEFF")).toBe(true)
+  })
+
   it("exports point-driven 3D data without presentation fields", () => {
     const document = createEmptyDocument("geometry3d")
     document.primitives = [{ id: "point3-1", type: "point3", position: { x: 1, y: 2, z: 3 }, binding: { kind: "free" }, label: "A", visible: false }]
