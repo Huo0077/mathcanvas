@@ -30,3 +30,13 @@ export function sceneContentKey(inputs: SceneContentInputs): string {
     inputs.previewKind ?? "-"
   ].join("|")
 }
+
+/**
+ * 签名变了（或首次）才需要重新同步场景内容。
+ *
+ * 抽成独立的纯函数，是为了让"不该同步就不许同步"这件事能被单测钉住：
+ * 每次父组件重渲染都重建全部几何，正是这条流水线最贵的开销。
+ */
+export function sceneSyncDecision(previousKey: string | null, nextKey: string): boolean {
+  return previousKey !== nextKey
+}

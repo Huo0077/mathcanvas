@@ -7,7 +7,7 @@ import type { SceneControlMode } from "./statusPrompts"
 import { getDependencyIndex, isFreeDraggable3, planeThroughPoints, resolveDihedralMarker3, resolvePolyhedronTopology, sectionSourceVertices, templateTopologyIds } from "@draw/scene-graph"
 
 import { opacityFor, strokeFor } from "./primitiveStyle"
-import { sceneContentKey } from "./sceneContentKey"
+import { sceneContentKey, sceneSyncDecision } from "./sceneContentKey"
 import type { ThreeScenePreview } from "./threeScenePreview"
 
 const scenePalette = {
@@ -1668,7 +1668,7 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       unfoldProgress,
       previewKind: preview?.kind ?? null
     })
-    if (contentKeyRef.current === key) return
+    if (!sceneSyncDecision(contentKeyRef.current, key)) return
     contentKeyRef.current = key
     runtime.syncContent()
   }, [document, selectedIds, showHiddenEdges, showNormals, transparentFaces, unfoldProgress, preview])

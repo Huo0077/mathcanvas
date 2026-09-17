@@ -438,17 +438,30 @@ git commit -m "test(three): pin that dragging and unfolding never rebuild the re
 
 ---
 
-## Self-Review
+## 执行记录（2026-09-17 完成）
+
+| 任务 | 状态 | 提交 | 证据 |
+| --- | --- | --- | --- |
+| Task 1 内容同步签名 | 完成 | `2210d21` | RED：`Failed to resolve import "./sceneContentKey"`；GREEN：5/5。过程中发现**测试自身写错**（`base()` 每次新建文档 → `metadata.id` 不同），改为复用同一份文档 |
+| Task 2 渲染器只建一次 | 完成 | `ef50ee8` | RED：`data-scene-builds` 为 `null`；GREEN：`keeps one renderer alive across edits, selection and unfold` |
+| Task 3 同步决策纯函数 | 完成 | 本片收尾提交 | RED：`sceneSyncDecision is not a function`；GREEN：`threeScene.test.ts` 49/49 |
+| Task 4 拖动期间不重建/不同步 | 完成 | 本片收尾提交 | 新 e2e `does not rebuild or resync while a solid is being dragged`；采样点放在抬手之前（抬手提交会同步一次，属预期） |
+
+**Task 2 过程中抓到并修掉的两处真实回归（都是"闭包过期"）**：
+1. `onPreviewClick` 仍用首次渲染的闭包，而 App 里的实现闭包着它自己那份 `document` → 点击虚线预览创建不出截线（既有 e2e「creates an intersection line by clicking the dashed preview」失败）。改为经 `previewClickRef` 调用。
+2. 换文档时的自动取景留在挂载效应里 → 打开 `.mgeo` 不再取景（既有 e2e「frames an opened figure instead of leaving it a speck」期望 `0.50,0.50,0.50`、实际 `0.00,0.00,0.00`）。改为在运行时 `syncContent()` 里判断文档 id 变化后取景。
+
+**偏离计划的一处决定**：`sceneSyncDecision` 原本放在 `threeScene.tsx`，但该文件同时导出组件，多一个非组件导出会让 `react-refresh/only-export-components` 多一条 warning（52 → 53）。已挪到 `sceneContentKey.ts`（同类纯逻辑），warning 回到 52。
+
+**本片门禁（实测）**：单测 **74 文件 / 940 用例**（起始 74/938，+2）；typecheck 4 workspace；lint 0 error / **52 warning**；生产构建通过；Playwright **60/60**（起始 59，+1）。
+
+## Self-Review（回填）
 
 **Spec coverage（对照 spec 第 3.4 节）**
-1. "renderer / canvas / ResizeObserver 只在挂载时创建一次" → Task 2。
-2. "依赖数组去掉 `document` 与 `onSelect` 的函数身份" → Task 2 Step 3.2 + Task 3 Step 3。
-3. "`syncScene` 按 `primitiveId` 做增删改" → **不在本计划**，明确留给切片 1A-1b（本计划只做"常驻 renderer + 命令式同步"），已在 Task 4 Step 5 的文档要求里写明边界。
-4. "`unfoldProgress` 不再进依赖数组" → 本计划**未实现**：它仍参与同步签名（否则展开不动）。真正"展开动画不重建"需要 1A-1b 的增量更新；本计划只保证**不重建 renderer**（Task 2 的 e2e 已覆盖这一点）。这是与 spec 的差异，必须在 1A-1b 里收回。
-5. "新增 `data-scene-rebuilds` 计数" → 以 `data-scene-builds` 命名实现（Task 2）。
+1. "renderer / canvas / ResizeObserver 只在挂载时创建一次" → 完成（Task 2）。
+2. "依赖数组去掉 `document` 与 `onSelect` 的函数身份" → 完成（Task 2 + Task 3）。
+3. "`syncScene` 按 `primitiveId` 做增删改" → **仍未做**，留给切片 1A-1b；本片只做"常驻 renderer + 命令式同步"。
+4. "`unfoldProgress` 不再进依赖数组" → **仍未做**：它仍参与同步签名（否则展开不动）。
+5. "新增 `data-scene-rebuilds` 计数" → 以 `data-scene-builds` 命名完成。
 
-**Placeholder scan:** 无 TBD/TODO；每个代码步骤都给了可执行代码或明确的机械指令。
-
-**Type consistency:** `SceneContentInputs` / `sceneContentKey` / `sceneSyncDecision` / `runtimeRef` / `data-scene-builds` / `data-scene-syncs` 的命名在 Task 1-4 中一致。
-
-**已知缺口（显式记录，不掩盖）:** 本计划结束时，内容对象仍是"清空重建"，因此展开动画每帧仍会重建几何（只是不再重建 WebGL 上下文）。切片 1A-1b 负责消除它。
+**已知缺口（显式记录，不掩盖）**: 内容对象仍是"清空后重建"，展开动画每帧仍会重建几何（只是不再重建 WebGL 上下文与 canvas）。切片 1A-1b 负责消除它。

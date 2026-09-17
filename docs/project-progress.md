@@ -18,6 +18,22 @@
 
 **关键现场事实（带证据）**：3D 绑定点当前完全拖不动且无 UI 入口（`threeScene.tsx:1363`、`operations.ts:208-221`）；任何 App 重渲染都整场景重建并新建 `WebGLRenderer`（`threeScene.tsx:1543`、`App.tsx:393`）；模板实体存在三套几何两种朝上约定（`threeScene.tsx:531-574` / `operations.ts:271-304` / `solid-builders.ts:330-368`）；截面只保留一条环（`sections3d.ts:137`）；多选删除被逐个预校验卡死（`App.tsx:685-690`）；多解索引被 clamp 成 `0|1`（`App.tsx:537`、`types.ts:435/445/455`）。
 
+### 3D 渲染管道去重建化（切片 1A-1，2026-09-17 已完成）
+
+- **需求**：3D 画布每次父组件重渲染都会销毁并新建 `WebGLRenderer`——挂载效应依赖数组含 `document` 与每次渲染都换身份的 `onSelect`，重建时 `renderer.dispose()` + `new THREE.WebGLRenderer()` 并替换 canvas。于是悬停、提示、错误、展开动画的每一帧都在换画布（浏览器 WebGL 上下文数量有限），也让相机动画与拖动预览随时被打断。这是后续所有实时拖拽与视角动画的前置障碍。
+- **修复**（方案 A 第一步，计划见 `docs/superpowers/plans/2026-09-17-three-scene-lifecycle.md`）：
+  - 挂载效应依赖改为 `[]`：文档 / 选择 / 显示开关 / 预览 / 选中回调 / 预览点击回调一律经 ref 读取（新增 `displayFlagsRef`、`previewRef`、`onSelectRef`、`previewClickRef`）。
+  - 内容构建整段搬进 `syncContent()`：内容对象经 `addContent()` 登记、`clearContent()` 逐个释放（新增 `disposeObject`）；渲染器、canvas、事件监听留在挂载期。
+  - 新增内容同步效应：只有 `sceneContentKey` 签名变化才调 `runtimeRef.current.syncContent()`；换文档时在该运行时里重新取景。
+  - 新增读数 `data-scene-builds`（本次挂载创建渲染器的次数，恒为 1）与 `data-scene-syncs`（内容同步次数）。
+- **RED→GREEN 证据**：
+  - `sceneContentKey.test.ts` 先因模块不存在整体失败（`Failed to resolve import "./sceneContentKey"`），实现后 5/5；过程中发现**测试自身写错**（每次新建文档导致 `metadata.id` 不同），改为复用同一份文档。
+  - `sceneSyncDecision` 先在 `threeScene.test.ts` 失败（`sceneSyncDecision is not a function`），实现后该文件 49/49。
+  - 新增 `e2e/geometry3d-scene-lifecycle.spec.ts`：编辑 / 显示开关 / 新增图元 / 展开动画之后 `data-scene-builds` 仍为 `"1"` 且 canvas 节点未被替换；拖动过程中（**抬手前**采样）`data-scene-syncs` 不增长、`data-drag-frames` 增长。旧实现下这两条必然失败（实测 `data-scene-builds` 为 `null`）。
+- **过程中抓到并修掉的两处既有回归**（都是"闭包过期"）：`onPreviewClick` 用首次渲染的闭包（App 的实现闭包着它自己那份 `document`）导致点击虚线预览创建不出截线；换文档时的自动取景留在挂载效应里导致打开 `.mgeo` 不再取景（既有 e2e 期望 `0.50,0.50,0.50`、实际 `0.00,0.00,0.00`）。
+- **回归**：全量单测 **74 文件 / 940 用例通过**（起始 74/938）；`typecheck` 4 个 workspace 全过；`lint` 0 error、**52 条 warning**（与基线持平——`sceneSyncDecision` 特意放在纯函数模块而不是组件模块，避免多一条 `react-refresh` warning）；生产构建通过；Playwright **60/60** 通过（起始 59）。
+- **边界（明确未做，交给切片 1A-1b）**：内容对象仍是"清空后重建"，展开动画每帧仍会重建几何，只是不再重建 WebGL 上下文与 canvas；按 `primitiveId` 的增量 diff 尚未落地。
+
 ### 平面几何动点系统（2026-09-17）
 
 **需求**：引入在特定约束（直线、圆锥曲线、函数图像）上自由运动的点，并处理由动点驱动的复杂几何关系与轨迹求解，先做平面几何。

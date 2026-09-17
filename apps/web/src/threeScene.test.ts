@@ -5,6 +5,7 @@ import type { GeometryDocument, Point3Primitive, PrimitiveSpec, SectionPrimitive
 import { createEmptyDocument } from "@draw/dsl"
 import { buildSolidTemplate, dihedralMarker3, unfoldPolyhedron3 } from "@draw/geometry-kernel"
 import { POINT_HANDLE_RADIUS_PX, applyCameraState, applyDragOffsets, cameraBasis, clampCameraTarget, createCameraState, createCubeMesh, createDihedralMarkerGroup, createEdge3Line, createFace3Mesh, createPlane3Mesh, createPlanePatch, createPoint3Mesh, createPointDrivenLine, createSectionMesh, createSolidGroup, createSolidMesh, createUnfoldNetGroup, cubeUnfoldCenters, dragFamilyIds, dragWorldPoint, fitCameraState, nextUnfoldProgress, panCameraState, pickPrimitiveAt, pickRaycastHit3, pointHandleWorldRadius, prefersReducedMotion, resetCameraState, resolveSelectableHit, rotateCameraState, sectionUnitNormal, templateTopologyOwners, zoomCameraState } from "./threeScene"
+import { sceneSyncDecision } from "./sceneContentKey"
 
 describe("Three.js geometry scene", () => {
   it("converges an unfold animation to its target within a short render window", () => {
@@ -819,5 +820,21 @@ describe("section cutting plane", () => {
 
     for (let index = 0; index < positions.count; index += 1) expect(positions.getY(index)).toBeCloseTo(1, 10)
     dispose(lifted)
+  })
+})
+
+describe("scene sync decision", () => {
+  /**
+   * 这条纯函数决定"内容签名变化时要不要重新同步场景内容"。
+   * 它必须跳过重复同步（否则每次父组件重渲染都会重建全部几何），
+   * 但首次与任何变化都必须同步。
+   */
+  it("skips the sync when the content signature is unchanged", () => {
+    expect(sceneSyncDecision("geometry3d-1|1|", "geometry3d-1|1|")).toBe(false)
+  })
+
+  it("syncs on the first run and on any change", () => {
+    expect(sceneSyncDecision(null, "geometry3d-1|1|")).toBe(true)
+    expect(sceneSyncDecision("geometry3d-1|1|", "geometry3d-1|2|")).toBe(true)
   })
 })
