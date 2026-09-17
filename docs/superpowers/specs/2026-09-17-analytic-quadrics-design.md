@@ -240,7 +240,7 @@ export function sectionQuadric3(source: Quadric3, plane: Plane3): { kind: Conic3
 
 - **模型层永不读 `BufferGeometry`**：求交、包含、相切、测量、捕捉一律走 §5.1-5.3 的闭式。加一条测试断言：解析路径不 import 任何 three.js 模块。
 - **曲线按屏幕误差细分**：`segmentsForCircle(R, tol) = max(3, ceil(π / acos(1 − tol/R)))`，`tol = 0.5px × 世界单位每像素`。曲线总长超过阈值时用 `ceil(总段数)` 上限保护（上限 `8192`，超出时如实标注）。**外部同款**：GeoGebra 的 `DrawConic3D` 按类型分发到解析绘制器（`arcEllipse` / `circle` / `hyperbolaBranch` / `parabola`），圆的段数就是 `brush.calcArcLongitudesNeeded(e1, π, getView3D().getScale())`——段数由当前视图尺度算出，既不固定也不烘进几何。
-- **描边**用 three.js `Line2` + `LineMaterial`（圆帽与 AA 在 r186 源码里是真实现；`worldUnits = true` 给透视正确粗细）。注意它**不重采样**，采样点由我们给。
+- **描边**：**A1 实现用的是 `THREE.Line`，不是本节原先写的 `Line2` + `LineMaterial`**（2026-09-17 实施记录）。理由：本片要交付的是**曲线形状**（真圆 vs 折线），不是描边宽度；`THREE.Line` 与既有棱线、截面边界是同一套 1px 线宽语言，换成 `Line2` 会同时改动三件事——`resolution` 要随画布尺寸逐帧同步、拾取语义会变（现在点到边界圆选中的是弦那条 `edge3`，换成 `Line2` 组以后会选中实体本身）、以及 `dispose` 路径的回归，收益却只是圆帽与按像素加粗。**`Line2` 留作后续项**：真要做时按 r186 的 `Line2` + `LineMaterial`（`worldUnits = true` 给透视正确粗细；它**不重采样**，采样点仍由我们按屏幕误差算），并补齐"resolution 同步 + 拾取语义 + dispose"三处回归。
 - **滞回**：相机缩放（世界单位每像素）变化超过 2× 才重算细分，不逐帧重建。
 - **填充圆盘**用 SDF quad（`sdCircle(p, r) = length(p) − r` + `fwidth` 一像素 AA，自己写 `ShaderMaterial`）。A1 里只用于"圆盘 / 圆环"这类真实例；曲线描边走上面的 `Line2` 路径。
 - **拾取**：优先解析判定（`|p − center| ≤ r`，与缩放无关，`threePicking.ts` 已有命中优先级结构）；确需逐像素时再上 GPU ID 拾取（`RGBA32I` + `setViewOffset` + `readRenderTargetPixelsAsync`），A1 不预先实现。
