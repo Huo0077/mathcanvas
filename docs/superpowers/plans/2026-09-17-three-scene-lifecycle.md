@@ -34,7 +34,7 @@
   - `export interface SceneContentInputs { document: GeometryDocument; selectedIds: string[]; showHiddenEdges: boolean; showNormals: boolean; transparentFaces: boolean; unfoldProgress: number; previewKind: string | null }`
   - `export function sceneContentKey(inputs: SceneContentInputs): string` —— 只要这个字符串不变，内容同步就可以跳过。
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // apps/web/src/sceneContentKey.test.ts
@@ -84,12 +84,13 @@ describe("scene content key", () => {
 })
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npm.cmd test -- apps/web/src/sceneContentKey.test.ts`
 Expected: FAIL —— `Failed to resolve import "./sceneContentKey"`（模块不存在）。
+实测：`FAIL apps/web/src/sceneContentKey.test.ts` / `Failed to resolve import "./sceneContentKey"`。
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```ts
 // apps/web/src/sceneContentKey.ts
@@ -126,17 +127,20 @@ export function sceneContentKey(inputs: SceneContentInputs): string {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npm.cmd test -- apps/web/src/sceneContentKey.test.ts`
 Expected: PASS（5 个用例）。
+实测：第一版**测试自身写错**——`base()` 每次都新建文档，`metadata.id` 不同导致"稳定"用例失败；改为复用同一份文档后 5/5 通过。这正是"先看 RED 再改"要抓的东西。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/web/src/sceneContentKey.ts apps/web/src/sceneContentKey.test.ts
 git commit -m "feat(three): add a scene content signature so unchanged content is not resynced"
 ```
+
+实测提交：`2210d21`（`typecheck` 4 workspace 通过）。
 
 ---
 
