@@ -18,6 +18,22 @@
 
 **关键现场事实（带证据）**：3D 绑定点当前完全拖不动且无 UI 入口（`threeScene.tsx:1363`、`operations.ts:208-221`）；任何 App 重渲染都整场景重建并新建 `WebGLRenderer`（`threeScene.tsx:1543`、`App.tsx:393`）；模板实体存在三套几何两种朝上约定（`threeScene.tsx:531-574` / `operations.ts:271-304` / `solid-builders.ts:330-368`）；截面只保留一条环（`sections3d.ts:137`）；多选删除被逐个预校验卡死（`App.tsx:685-690`）；多解索引被 clamp 成 `0|1`（`App.tsx:537`、`types.ts:435/445/455`）。
 
+### 3D 视口 Auto-Fit（区块二，2026-09-17 已完成）
+
+- **需求**：按可见图元的世界坐标 AABB 动态计算最佳视锥与相机距离；在图元加载、增删或越界时平滑重置视角并保留 30% 安全边距；彻底解决 3D 画布初始尺寸过小、图元显示受限的问题。
+- **取景数学重写**（`threeScene.tsx`，全部是纯函数、可单测）：
+  - `fitCameraState` 改为**逐角点**求解：对 AABB 的八个角各算"它要落在视锥内所需的最小距离" `|投影| / tan - 纵深`，取最大值，再除以 `1 - FIT_MARGIN`（0.3）留出安全边距。旧实现是"包围球 × 1.25"，对长条盒会把相机推得远远的；逐角点后 4×4×2 的盒子从只填 55% 提升到接近 70%。
+  - **近远平面随距离缩放**（`near = distance × 0.01`，`far = max(distance × 100, 1000)`）：固定 `near = 0.1` 会让"0.01 单位的小模型凑近看"整块被近平面裁掉——这是"小图形框不满"的另一半原因。
+  - 距离夹取从 `[3, 60]` 放宽到 `[0.005, 1e4]`（与滚轮缩放共用同一组边界，否则拟合到 0.02 之后一滚轮就被夹回 3）。
+  - 新增 `isContentOutOfView`（八角投影是否越出视锥）、`interpolateCameraState`（过渡插值）、`shouldAutoFit`（策略纯函数）。
+- **触发与过渡**：打开文件 / 切换工作区 / 恢复草稿 → 拟合；内容跑出视锥 → 拟合；拟合走约 250ms 的 ease-out 插值（`prefersReducedMotion` 时直接跳变），读数 `data-camera-fit` 记录次数。
+- **开关与持久化**：画布新增「自动取景」按钮（`aria-pressed` + `data-autofit`），偏好存 `mathcanvas:3d-view`，跨刷新保留；重新打开开关会立刻拟合一次。
+- **RED→GREEN 证据**：`sceneFit.test.ts` 先在 8/10 处失败（`isContentOutOfView is not a function` 等），实现后 10/10；`viewPreference3d.test.ts` 3/3；e2e 新增开关用例（默认开 → 关闭 → 刷新仍是关 → 重新打开）。
+- **一处必须说明的行为变更（相对原计划收窄）**：原计划"增删图元也拟合"实测**打断了 7 条既有浏览器流程**（拖动实体时相机跟着实体走、移动截面时视角跳、按已知屏幕坐标点击顶点的用例全部失准）。用户的真实痛点是"图形太小 / 跑到视野外"，所以策略收窄为 `enabled && !dragging && (documentChanged || outOfView)`：**编辑过程中永不抢视角**，需求里的"增删时重置"以"增删后若内容越界就重置"的形式满足——这正是"新加的图元看不见"的解法。`AutoFitInputs` 因此去掉 `boundsChanged` / `cameraTouched`。
+- **测试侧配套改动**（行为变更导致，不是放宽断言）：`geometry3d.spec.ts` 的「frames an opened figure…」由"编辑时相机不动"改为断言自动取景生效；`geometry3d-drag.spec.ts` 的「drags only the solid under the pointer」在开头关掉自动取景（它依赖固定屏幕位移）；两处新按钮点击改用 DOM 派发（显示控制排换行会让 `locator.click()` 等"位置稳定"而超时，仓库里「取面」已有先例）。
+- **回归**：全量单测 **79 文件 / 974 用例通过**（起始 77/961）；`typecheck` 4 个 workspace 全过；`lint` 0 error、**56 条 warning**（起始 52，+4 全部来自 `threeScene.tsx` 新增纯函数导出触发的既有 `react-refresh/only-export-components` 规则）；生产构建通过；Playwright **61/61** 通过（起始 60）。
+- **边界**：相机状态仍不跨工作区保留（切到平面几何再回来会重置）；4 条新 warning 的根因是 `threeScene.tsx`（1755 行）混着组件与纯函数，正确做法是把相机与取景数学抽到独立模块，留作后续改动。
+
 ### 3D 动点宿主约束内核（切片 1A-2，2026-09-17 已完成）
 
 - **需求**：让动点能严格"贴"在宿主上滑动——宿主覆盖线段 / 射线 / 直线 / 棱 / 面 / 平面 / 圆柱与圆锥侧面；坐标由参数算出，而不是每帧叠加位移。

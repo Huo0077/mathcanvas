@@ -7,6 +7,7 @@ import type { SceneControlMode } from "./statusPrompts"
 import { getDependencyIndex, isFreeDraggable3, planeThroughPoints, resolveDihedralMarker3, resolvePolyhedronTopology, sectionSourceVertices, templateTopologyIds } from "@draw/scene-graph"
 
 import { opacityFor, strokeFor } from "./primitiveStyle"
+import { loadViewPreference3d, saveViewPreference3d } from "./persistence/draftStorage"
 import { sceneContentKey, sceneSyncDecision } from "./sceneContentKey"
 import type { ThreeScenePreview } from "./threeScenePreview"
 
@@ -116,26 +117,111 @@ export function clampCameraTarget(target: CameraState["target"], bounds: THREE.B
 }
 
 export function zoomCameraState(state: CameraState, factor: number): CameraState {
-  return { ...state, distance: Math.max(3, Math.min(60, state.distance * factor)) }
+  return { ...state, distance: Math.max(FIT_MIN_DISTANCE, Math.min(FIT_MAX_DISTANCE, state.distance * factor)) }
 }
 
 export function resetCameraState(): CameraState {
   return createCameraState()
 }
 
+/** 自动取景与缩放共用的距离范围。旧实现夹在 `[3, 60]`，于是 1 单位的小图形永远凑不近、大图形永远框不全。 */
+export const FIT_MIN_DISTANCE = 0.005
+export const FIT_MAX_DISTANCE = 1e4
+/** 构图安全边距：图形最多占满视锥的 70%，剩下 30% 留白。 */
+export const FIT_MARGIN = 0.3
+/** 自动取景的过渡时长（毫秒）。`prefersReducedMotion()` 为真时不做过渡、直接跳变。 */
+export const FIT_ANIMATION_MS = 250
+
+function clampFitDistance(value: number): number {
+  if (!Number.isFinite(value)) return createCameraState().distance
+  return Math.max(FIT_MIN_DISTANCE, Math.min(FIT_MAX_DISTANCE, value))
+}
+
+/** AABB 的八个角，用于投影检验与越界判定。 */
+export function boxCorners(bounds: THREE.Box3): THREE.Vector3[] {
+  const corners: THREE.Vector3[] = []
+  for (const x of [bounds.min.x, bounds.max.x]) for (const y of [bounds.min.y, bounds.max.y]) for (const z of [bounds.min.z, bounds.max.z]) corners.push(new THREE.Vector3(x, y, z))
+  return corners
+}
+
 /**
- * Frame a set of bounds: keep the viewing angles, move the target to the centre and pull back until the whole
- * figure fits the tighter screen axis. Without this a one-unit tetrahedron opens as a speck in a sixteen-unit
- * view, which is exactly how "the figure is there but you cannot see it" happens.
+ * 用**包围盒八角在相机三轴上的投影**求距离，而不是"包围球 × 系数"。
+ *
+ * 对每个角点算"它要落在视锥内所需的最小距离" `|投影| / tan - 纵深`，取八个角的最大值，
+ * 再除以 `1 - FIT_MARGIN` 留出安全边距。比"沿三轴各取半宽相加"更紧：后者假设最偏的角
+ * 同时最靠近相机，对斜视角的盒子偏保守。长条盒（20×0.2×0.2）用包围球会被推得远远的，
+ * AABB 逐角点则贴合得多——这是本次改动的意义。
+ *
+ * 视角角度保持不变，只挪视点中心与距离；空场景回默认视角而不是把相机压扁。
  */
 export function fitCameraState(state: CameraState, bounds: THREE.Box3, camera: THREE.PerspectiveCamera): CameraState {
   if (bounds.isEmpty()) return { ...state, target: { x: 0, y: 0, z: 0 }, distance: createCameraState().distance }
   const centre = bounds.getCenter(new THREE.Vector3())
-  const radius = Math.max(bounds.getSize(new THREE.Vector3()).length() / 2, 0.35)
+  const basis = cameraBasis(state)
   const vertical = camera.fov * Math.PI / 360
   const horizontal = Math.atan(Math.tan(vertical) * Math.max(camera.aspect, 0.1))
-  const distance = Math.max(radius / Math.sin(vertical), radius / Math.sin(horizontal)) * 1.25
-  return { ...state, target: { x: centre.x, y: centre.y, z: centre.z }, distance: Math.max(3, Math.min(60, distance)) }
+  const tanVertical = Math.tan(vertical)
+  const tanHorizontal = Math.tan(horizontal)
+  // 逐个角点求"这个角要落在视锥内所需的最小距离"：`d ≥ |投影| / tan - 纵深`，
+  // 取八个角的最大值。这比"沿三轴各取半宽再相加"更紧——后者假设最偏的角同时最靠近相机，对斜视角的盒子偏保守。
+  let needed = 0
+  for (const corner of boxCorners(bounds)) {
+    const offset = corner.sub(centre)
+    const up = offset.dot(basis.up)
+    const right = offset.dot(basis.right)
+    const depth = offset.dot(basis.forward)
+    needed = Math.max(needed, Math.abs(up) / tanVertical - depth, Math.abs(right) / tanHorizontal - depth)
+  }
+  return { ...state, target: { x: centre.x, y: centre.y, z: centre.z }, distance: clampFitDistance(needed / (1 - FIT_MARGIN)) }
+}
+
+/** 图元是否已经跑到视锥之外（含纵深方向）。空包围盒不算越界。 */
+export function isContentOutOfView(state: CameraState, bounds: THREE.Box3, camera: THREE.PerspectiveCamera, padding = 0): boolean {
+  if (bounds.isEmpty()) return false
+  const probe = camera.clone()
+  applyCameraState(probe, state)
+  probe.updateMatrixWorld(true)
+  probe.updateProjectionMatrix()
+  return boxCorners(bounds).some((corner) => {
+    const projected = corner.clone().project(probe)
+    if (projected.z < -1 || projected.z > 1) return true
+    return Math.abs(projected.x) > 1 + padding || Math.abs(projected.y) > 1 + padding
+  })
+}
+
+/** 相机过渡插值：`t` 夹到 `[0,1]`，所以调用方不必自己防越界。 */
+export function interpolateCameraState(from: CameraState, to: CameraState, t: number): CameraState {
+  const ratio = Math.min(1, Math.max(0, t))
+  const mix = (first: number, second: number) => first + (second - first) * ratio
+  return {
+    azimuth: mix(from.azimuth, to.azimuth),
+    elevation: mix(from.elevation, to.elevation),
+    distance: mix(from.distance, to.distance),
+    target: { x: mix(from.target.x, to.target.x), y: mix(from.target.y, to.target.y), z: mix(from.target.z, to.target.z) }
+  }
+}
+
+export interface AutoFitInputs {
+  enabled: boolean
+  dragging: boolean
+  documentChanged: boolean
+  outOfView: boolean
+}
+
+/**
+ * 什么时候允许自动重置视角。
+ *
+ * 刻意**不**包含"内容 AABB 变了就拟合"：那正是"用户一边编辑、相机一边跟着跑"的来源——
+ * 实测它会毁掉 7 条既有浏览器流程（拖动实体时相机跟着实体走、移动截面时视角跳、按已知
+ * 屏幕坐标点击顶点的用例全部失准）。用户的真实痛点是"图形太小/跑到视野外"，而不是
+ * "编辑时视角必须回到中心"，所以策略收窄为：
+ * - 换了文档（打开文件 / 切换工作区 / 恢复草稿）→ 拟合；
+ * - 内容跑出视锥 → 拟合（这就是"增删后看不见新图元"的解法）；
+ * - 拖动进行中、或开关关掉 → 一律不拟合。
+ */
+export function shouldAutoFit(inputs: AutoFitInputs): boolean {
+  if (!inputs.enabled || inputs.dragging) return false
+  return inputs.documentChanged || inputs.outOfView
 }
 
 /** World-space bounds of everything drawn, ignoring the grid and axes so they never drive the framing. */
@@ -171,6 +257,15 @@ export function applyCameraState(camera: THREE.PerspectiveCamera, state: CameraS
     state.target.z + state.distance * Math.sin(elevation)
   )
   camera.lookAt(state.target.x, state.target.y, state.target.z)
+  // 近远平面随距离缩放：固定 near 0.1 会让"0.01 单位的小模型凑近看"整块被裁掉，
+  // 固定 far 1000 又会让超大模型被截断。这是"小图形框不满、大图形框不全"的另一半原因。
+  const near = Math.max(state.distance * 0.01, 1e-4)
+  const far = Math.max(state.distance * 100, 1000)
+  if (camera.near !== near || camera.far !== far) {
+    camera.near = near
+    camera.far = far
+    camera.updateProjectionMatrix()
+  }
 }
 
 /**
@@ -1005,6 +1100,13 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
   /** 回归读数：本次挂载创建渲染器的次数（恒为 1）与内容同步次数。 */
   const sceneBuildsRef = useRef(0)
   const sceneSyncsRef = useRef(0)
+  /** 自动取景：开关、用户是否动过相机（动过就不再抢视角）、已自动取景的次数、上一次的内容 AABB。 */
+  const [autoFit, setAutoFit] = useState(() => loadViewPreference3d().autoFit)
+  const autoFitRef = useRef(autoFit)
+  autoFitRef.current = autoFit
+  const cameraFitRef = useRef(0)
+  /** 重新打开「自动取景」时立刻拟合一次。 */
+  const fitWithoutTouchRef = useRef<() => void>(() => undefined)
   /**
    * Which display switch was toggled last. Both can be on at once, so the shell's hint follows the most recent
    * user action instead of a hard-coded priority; toggling the last one off clears the hint.
@@ -1344,6 +1446,8 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       if (sceneShell) {
         sceneShell.dataset.cameraDistance = cameraStateRef.current.distance.toFixed(2)
         sceneShell.dataset.cameraTarget = `${cameraStateRef.current.target.x.toFixed(2)},${cameraStateRef.current.target.y.toFixed(2)},${cameraStateRef.current.target.z.toFixed(2)}`
+        // 自动取景开关的状态：e2e 与排查都靠它读，不靠肉眼。
+        sceneShell.dataset.autofit = autoFitRef.current ? "true" : "false"
         // 视角角度的读数：旋转不改变视点中心，所以"有没有转"只能从这里看出来。
         sceneShell.dataset.cameraAzimuth = cameraStateRef.current.azimuth.toFixed(2)
         sceneShell.dataset.cameraElevation = cameraStateRef.current.elevation.toFixed(2)
@@ -1364,11 +1468,40 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     }
     resetCameraRef.current = () => setCameraState(resetCameraState())
     const fitToContent = () => {
-      cameraStateRef.current = fitCameraState(cameraStateRef.current, sceneBounds, camera)
-      applyCameraState(camera, cameraStateRef.current)
-      render()
+      setCameraState(fitCameraState(cameraStateRef.current, sceneBounds, camera))
     }
     fitCameraRef.current = fitToContent
+    fitWithoutTouchRef.current = () => animateToFit()
+    /**
+     * 自动取景的过渡：约 250ms 的 ease-out 插值，`prefersReducedMotion` 时直接跳变。
+     * 直接写 `cameraStateRef` 而不走 `setCameraState`，因为自动取景不该把自己标记成"用户动过相机"。
+     */
+    let fitAnimation: number | null = null
+    const cancelFitAnimation = () => {
+      if (fitAnimation !== null) cancelAnimationFrame(fitAnimation)
+      fitAnimation = null
+    }
+    const animateToFit = () => {
+      const fitted = fitCameraState(cameraStateRef.current, sceneBounds, camera)
+      cancelFitAnimation()
+      if (prefersReducedMotion()) {
+        cameraStateRef.current = fitted
+        applyCameraState(camera, fitted)
+        render()
+        return
+      }
+      const from = cameraStateRef.current
+      const started = performance.now()
+      const step = () => {
+        const ratio = Math.min(1, (performance.now() - started) / FIT_ANIMATION_MS)
+        const eased = 1 - (1 - ratio) ** 3
+        cameraStateRef.current = interpolateCameraState(from, fitted, eased)
+        applyCameraState(camera, cameraStateRef.current)
+        render()
+        fitAnimation = ratio < 1 ? requestAnimationFrame(step) : null
+      }
+      fitAnimation = requestAnimationFrame(step)
+    }
     // Fit when a different document arrives (open file, switch workspace, restore draft), not on every edit:
     // re-framing while the user is working would fight their own camera moves.
     contentKeyRef.current = currentContentKey()
@@ -1407,15 +1540,27 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     runtimeRef.current = {
       syncContent: () => {
         syncContent()
-        // 打开文件 / 切换工作区 / 恢复草稿：文档换了就重新取景。
-        // 编辑同一个文档时不重跑（否则用户每次增删图元视角都会被拽走，见下面挂载效应里的说明）。
-        const fittedId = documentRef.current.metadata.id
-        if (fittedDocumentRef.current !== fittedId) {
-          fittedDocumentRef.current = fittedId
-          fitToContent()
-        }
+        /**
+         * 自动取景的决策：文档换了或内容越界一定要拟合；内容变了但用户没动过相机也拟合；
+         * 用户一旦手动调过视角，就只有"内容越界"才允许再抢（见 shouldAutoFit）。
+         */
+        const documentId = documentRef.current.metadata.id
+        const documentChanged = fittedDocumentRef.current !== documentId
+        const outOfView = isContentOutOfView(cameraStateRef.current, sceneBounds, camera)
+        const shouldFit = shouldAutoFit({
+          enabled: autoFitRef.current,
+          dragging: dragSessionRef.current !== null,
+          documentChanged,
+          outOfView
+        })
+        fittedDocumentRef.current = documentId
         resumeDragVisualRef.current()
         render()
+        if (shouldFit) {
+          cameraFitRef.current += 1
+          if (sceneShell) sceneShell.dataset.cameraFit = String(cameraFitRef.current)
+          animateToFit()
+        }
       }
     }
     const pointFromEvent = (event: PointerEvent) => {
@@ -1635,6 +1780,7 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       fitCameraRef.current = () => undefined
       runtimeRef.current = null
       contentKeyRef.current = null
+      cancelFitAnimation()
       renderer.domElement.removeEventListener("pointerdown", handlePointerDown)
       renderer.domElement.removeEventListener("pointermove", handlePointerMove)
       renderer.domElement.removeEventListener("pointerup", handlePointerUp)
@@ -1651,6 +1797,12 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     }
     // 挂载期只建一次：文档、选择与显示开关都经 ref 读取，父组件的任何重渲染都不再重建渲染器。
   }, [])
+
+  /** 开关的状态立刻反映到 DOM 读数上：切换开关不会重建场景，所以不能只靠 render() 去写。 */
+  useEffect(() => {
+    const shell = containerRef.current
+    if (shell) shell.dataset.autofit = autoFit ? "true" : "false"
+  }, [autoFit])
 
   /**
    * 内容同步：只在"场景内容签名"变化时跑。文档编辑、选中、显示开关、预览与展开进度会改变签名；
@@ -1677,5 +1829,5 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
   /** 「以面为剖切面」需要有选中的截面作为目标。 */
   const hasSelectedSection = selectedIds.some((id) => document.primitives.some((primitive) => primitive.id === id && primitive.type === "section"))
   const angle = dihedralAngleDegrees({ x: 1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 })
-  return <div className="three-canvas-shell" ref={containerRef} data-3d-scene="true" data-pan-mode={panMode ? "true" : "false"} data-drag-mode={dragMode ? "true" : "false"} aria-label="3D 几何场景"><div className="three-render-target" ref={renderTargetRef} /><div className="three-measurement-overlay" ref={measurementOverlayRef} aria-label="三维测量标注" /><div className="three-point-label-overlay" ref={pointLabelOverlayRef} aria-label="三维点标注" />{webglAvailable && <div className="three-scene-controls" aria-label="3D显示控制"><button type="button" aria-pressed={transparentFaces} onClick={() => setTransparentFaces((visible) => !visible)}>透明面</button><button type="button" aria-pressed={showHiddenEdges} onClick={() => setShowHiddenEdges((visible) => !visible)}>隐藏边</button><button type="button" aria-pressed={showNormals} onClick={toggleNormals}>法向量</button><button type="button" aria-pressed={unfolded} onClick={() => setUnfolded((visible) => !visible)}>{unfolded ? "折叠" : "展开"}</button><button type="button" aria-pressed={showAngle} onClick={toggleAngleDemo}>测量二面角</button><button type="button" aria-label="以面为剖切面" aria-pressed={facePickMode} title="点一下这个按钮，再点实体上的某个面，该面就成为选中截面的剖切面" disabled={!hasSelectedSection} onClick={() => setFacePickMode((active) => !active)}>取面</button></div>}{webglAvailable && <div className="three-camera-controls" aria-label="3D视角控制"><button type="button" aria-label="自由拖动" aria-pressed={dragMode} title="开启后左键按住图形即整体拖动：实体、点、以及由点驱动的棱/线/面/平面都会跟着指针在屏幕平面内移动，其它对象不受影响" onClick={() => enterMode("drag")}>自由拖动</button><button type="button" aria-label="平移视角" aria-pressed={panMode} title="开启后左键拖动画布即平移视角，按 Ctrl 拖动沿视线前后移动" onClick={() => enterMode("pan")}>平移视角</button><button type="button" aria-label="适应视图" title="把视角调整到刚好框住当前图形，并把视角中心移回图形" onClick={() => fitCameraRef.current()}>适应视图</button><button type="button" aria-label="重置3D视角" title="回到默认视角" onClick={() => resetCameraRef.current()}>重置视角</button></div>}{webglAvailable && <p className="three-camera-hint" data-camera-hint="true">{dragMode ? "自由拖动已开启：左键按住图形整体移动 · 关掉按钮后左键拖动恢复为旋转视角 · 滚轮缩放" : panMode ? "平移视角已开启：左键拖动平移 · 按 Ctrl 拖动沿视线前后移动 · 滚轮缩放" : "左键拖动旋转 · 中键或 Shift+左键拖动平移 · Ctrl+拖动沿视线前后移动 · 滚轮缩放"}</p>}{showAngle && webglAvailable && <div className="three-angle-readout" role="status">二面角：{angle.toFixed(1)}°（示例法向量 X/Y）</div>}{!webglAvailable && <div className="three-scene-status" role="status">当前浏览器不支持 WebGL，无法显示 3D 场景。</div>}{webglAvailable && !hasGeometry && <div className="three-scene-status" role="status">添加点、线或面开始探索三维空间。</div>}</div>
+  return <div className="three-canvas-shell" ref={containerRef} data-3d-scene="true" data-pan-mode={panMode ? "true" : "false"} data-drag-mode={dragMode ? "true" : "false"} aria-label="3D 几何场景"><div className="three-render-target" ref={renderTargetRef} /><div className="three-measurement-overlay" ref={measurementOverlayRef} aria-label="三维测量标注" /><div className="three-point-label-overlay" ref={pointLabelOverlayRef} aria-label="三维点标注" />{webglAvailable && <div className="three-scene-controls" aria-label="3D显示控制"><button type="button" aria-pressed={transparentFaces} onClick={() => setTransparentFaces((visible) => !visible)}>透明面</button><button type="button" aria-pressed={showHiddenEdges} onClick={() => setShowHiddenEdges((visible) => !visible)}>隐藏边</button><button type="button" aria-pressed={showNormals} onClick={toggleNormals}>法向量</button><button type="button" aria-pressed={unfolded} onClick={() => setUnfolded((visible) => !visible)}>{unfolded ? "折叠" : "展开"}</button><button type="button" aria-pressed={showAngle} onClick={toggleAngleDemo}>测量二面角</button><button type="button" aria-label="自动取景" aria-pressed={autoFit} title="开启后，加载文件、增删图元或内容跑出视野时会自动把视角调整到框住全部可见图元（保留 30% 安全边距）；你手动转动过视角之后就不再主动抢" onClick={() => { const next = !autoFit; setAutoFit(next); saveViewPreference3d({ autoFit: next }); if (next) fitWithoutTouchRef.current() }}>自动取景</button><button type="button" aria-label="以面为剖切面" aria-pressed={facePickMode} title="点一下这个按钮，再点实体上的某个面，该面就成为选中截面的剖切面" disabled={!hasSelectedSection} onClick={() => setFacePickMode((active) => !active)}>取面</button></div>}{webglAvailable && <div className="three-camera-controls" aria-label="3D视角控制"><button type="button" aria-label="自由拖动" aria-pressed={dragMode} title="开启后左键按住图形即整体拖动：实体、点、以及由点驱动的棱/线/面/平面都会跟着指针在屏幕平面内移动，其它对象不受影响" onClick={() => enterMode("drag")}>自由拖动</button><button type="button" aria-label="平移视角" aria-pressed={panMode} title="开启后左键拖动画布即平移视角，按 Ctrl 拖动沿视线前后移动" onClick={() => enterMode("pan")}>平移视角</button><button type="button" aria-label="适应视图" title="把视角调整到刚好框住当前图形，并把视角中心移回图形" onClick={() => fitCameraRef.current()}>适应视图</button><button type="button" aria-label="重置3D视角" title="回到默认视角" onClick={() => resetCameraRef.current()}>重置视角</button></div>}{webglAvailable && <p className="three-camera-hint" data-camera-hint="true">{dragMode ? "自由拖动已开启：左键按住图形整体移动 · 关掉按钮后左键拖动恢复为旋转视角 · 滚轮缩放" : panMode ? "平移视角已开启：左键拖动平移 · 按 Ctrl 拖动沿视线前后移动 · 滚轮缩放" : "左键拖动旋转 · 中键或 Shift+左键拖动平移 · Ctrl+拖动沿视线前后移动 · 滚轮缩放"}</p>}{showAngle && webglAvailable && <div className="three-angle-readout" role="status">二面角：{angle.toFixed(1)}°（示例法向量 X/Y）</div>}{!webglAvailable && <div className="three-scene-status" role="status">当前浏览器不支持 WebGL，无法显示 3D 场景。</div>}{webglAvailable && !hasGeometry && <div className="three-scene-status" role="status">添加点、线或面开始探索三维空间。</div>}</div>
 }

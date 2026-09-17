@@ -81,6 +81,10 @@ test("returns left-drag to orbiting when the toggle is off", async ({ page }) =>
 test("drags only the solid under the pointer", async ({ page }) => {
   await page.goto("/")
   await page.getByRole("button", { name: "立体几何" }).click()
+  // 这个用例按**固定屏幕位移**拖动，依赖相机稳定：关掉自动取景（把第一个立方体挪到 (8,8,0)
+  // 会让内容越界，自动取景会重新构图，于是下面那次固定位移的拖动就落空了）。
+  // 用 DOM 派发点击：显示控制那一排在窄视口下会换行，locator.click 会等"位置稳定"而超时。
+  await page.evaluate(() => (document.querySelector('button[aria-label="自动取景"]') as HTMLButtonElement).click())
 
   await page.getByRole("button", { name: "添加立方体" }).click()
   await expect(page.getByText("立方体 1").first()).toBeVisible()

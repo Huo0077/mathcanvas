@@ -57,3 +57,29 @@ export function loadActiveWorkspace(): Workspace | null {
   // "calculus" is deliberately absent: the workspace is retired, so an old draft must not reopen it.
   return workspace === "conics" || workspace === "cad" || workspace === "geometry3d" ? workspace : null
 }
+
+const viewPreference3dKey = "mathcanvas:3d-view"
+
+/** 3D 视口的显示偏好。目前只有"自动取景"：关掉之后相机永不被自动重置。 */
+export interface ViewPreference3d {
+  autoFit: boolean
+}
+
+export function loadViewPreference3d(): ViewPreference3d {
+  if (typeof localStorage === "undefined") return { autoFit: true }
+  const serialized = localStorage.getItem(viewPreference3dKey)
+  if (!serialized) return { autoFit: true }
+  try {
+    const parsed = JSON.parse(serialized) as Partial<ViewPreference3d>
+    // 只有显式存成 false 才算关掉：旧数据 / 缺字段都按默认（开）处理。
+    return { autoFit: parsed.autoFit !== false }
+  } catch {
+    localStorage.removeItem(viewPreference3dKey)
+    return { autoFit: true }
+  }
+}
+
+export function saveViewPreference3d(preference: ViewPreference3d): void {
+  if (typeof localStorage === "undefined") return
+  localStorage.setItem(viewPreference3dKey, JSON.stringify({ autoFit: preference.autoFit }))
+}

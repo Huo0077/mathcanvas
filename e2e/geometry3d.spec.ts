@@ -393,19 +393,23 @@ test("frames an opened figure instead of leaving it a speck", async ({ page }) =
   expect(distance).toBeLessThan(6)
   expect(distance).toBeGreaterThanOrEqual(3)
 
-  // The camera must stay where the user put it while they keep editing.
+  // 新点落在 (0,0,3)，把 AABB 从 1×1×1 撑到 1×1×3：相机自动跟上。
+  // 这是 2026-09-17 的行为变更（见进度文档）：旧实现"编辑时不重新取景"会让新图元直接落到视野之外。
   await page.getByRole("button", { name: "添加空间点" }).click()
-  await expect(scene).toHaveAttribute("data-camera-distance", distance.toFixed(2))
+  await expect(scene).toHaveAttribute("data-camera-fit", "2")
+  await expect(scene).toHaveAttribute("data-camera-target", "0.50,0.50,1.50")
+  const grown = Number(await scene.getAttribute("data-camera-distance"))
+  expect(grown).toBeGreaterThan(distance)
 
-  // And the explicit control reframes on demand — the figure grew by a point, so it pulls back a little.
+  // 手动缩放与「适应视图」仍然照常工作。
   await page.locator("[data-3d-scene] canvas").hover()
   await page.mouse.wheel(0, -600)
   const zoomed = Number(await scene.getAttribute("data-camera-distance"))
-  expect(zoomed).toBeLessThan(distance)
+  expect(zoomed).toBeLessThan(grown)
   await page.getByRole("button", { name: "适应视图" }).click()
   const refitted = Number(await scene.getAttribute("data-camera-distance"))
   expect(refitted).toBeGreaterThan(zoomed)
-  expect(refitted).toBeLessThan(8)
+  expect(refitted).toBeLessThan(12)
 })
 
 test("unfolds point-driven topology into a flat net and folds it back", async ({ page }) => {

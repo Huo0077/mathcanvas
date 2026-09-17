@@ -68,3 +68,29 @@ test("does not rebuild or resync while a solid is being dragged", async ({ page 
   await page.mouse.up()
   await expect(scene).toHaveAttribute("data-scene-builds", "1")
 })
+
+/** 自动取景开关：默认开、可关闭、刷新后仍然记得；重新打开时立刻拟合一次。 */
+test("exposes the auto-fit toggle and remembers it across reloads", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "立体几何" }).click()
+
+  const scene = page.locator("[data-3d-scene]")
+  await expect(scene).toHaveAttribute("data-autofit", "true")
+
+  /**
+   * 用 DOM 派发点击而不是 `locator.click()`：显示控制那一排在窄一点的视口下会换行，
+   * 按钮位置随之变化，Playwright 会一直等"位置稳定"从而超时（仓库里「取面」按钮
+   * 已经踩过同一个坑，注释见 e2e/geometry3d-section.spec.ts）。这里测的是开关语义本身。
+   */
+  const toggleAutoFit = () => page.evaluate(() => (document.querySelector('button[aria-label="自动取景"]') as HTMLButtonElement).click())
+
+  await toggleAutoFit()
+  await expect(scene).toHaveAttribute("data-autofit", "false")
+
+  await page.reload()
+  await page.getByRole("button", { name: "立体几何" }).click()
+  await expect(page.locator("[data-3d-scene]")).toHaveAttribute("data-autofit", "false")
+
+  await toggleAutoFit()
+  await expect(page.locator("[data-3d-scene]")).toHaveAttribute("data-autofit", "true")
+})
