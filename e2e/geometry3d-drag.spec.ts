@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test"
 
+import { projectWorldPoint } from "./helpers/projection"
+
 /**
  * 自由拖动（立体几何）：开启「自由拖动」后，左键按住图形即可整体移动。
  * 断言读取画布自己暴露的真实读数（`data-content-bounds` / `data-camera-*`）与属性栏数值，而不是凭肉眼。
@@ -136,6 +138,42 @@ test("keeps pan mode and drag mode from being on at once", async ({ page }) => {
   await dragButton.click()
   await expect(dragButton).toHaveAttribute("aria-pressed", "true")
   await expect(panButton).toHaveAttribute("aria-pressed", "false")
+})
+
+test("keeps a round solid's rim circles glued to it while dragging", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "立体几何" }).click()
+
+  const scene = page.locator("[data-3d-scene]")
+  await page.getByRole("button", { name: "添加圆柱" }).click()
+  await expect(page.getByText("圆柱 1").first()).toBeVisible()
+  // 圆柱的上下底由**解析圆**画（`createRimCircles3`），它们是画布上另一份对象、不在实体网格里。
+  await expect(scene).toHaveAttribute("data-rim-curves", "2")
+
+  await page.getByRole("button", { name: "自由拖动" }).click()
+  // 从"内容包围盒中心"那个世界点按下：它落在圆柱自己身上（不是顶点手柄），拖动族里才有这两圈圆。
+  const centre = parseVector(await scene.getAttribute("data-content-bounds"))
+  const start = await projectWorldPoint(page, { x: centre[0], y: centre[1], z: centre[2] })
+  await page.mouse.move(start.x, start.y)
+  await page.mouse.down()
+  await expect(scene).toHaveAttribute("data-drag-target", /->cylinder$/)
+  await page.mouse.move(start.x + 60, start.y + 24, { steps: 6 })
+  await page.mouse.up()
+
+  /**
+   * 用户实测反馈："自由移动圆锥圆柱时，底部圆的动画单独跑掉了，不跟手一起。"
+   *
+   * 拖动期间**文档不提交**，画面全靠临时偏移，所以"偏移被重复画了一层"在文档里看不出来：边界圆是
+   * "组 + 每圈线"两层都挂着同一个 `primitiveId`，两边各加一次 ⇒ 圆以两倍速度飞出去。
+   * `data-drag-offset-drift` 就是抬手时量出来的最大偏差（0 = 画面与位移完全一致）：
+   * 修之前这里读到的是那段拖动位移（跟着手指的距离），修之后是 0。
+   */
+  await expect(scene).toHaveAttribute("data-drag-offset-drift", "0.0000")
+  // 拖动确实生效了（不是"没抓到手"所以偏差为 0 的假通过）：圆柱中心离开了原位。
+  await expect.poll(async () => {
+    const after = parseVector(await scene.getAttribute("data-content-bounds"))
+    return distance(after.slice(0, 3), centre.slice(0, 3))
+  }).toBeGreaterThan(0.2)
 })
 
 test("repaints the scene while a solid is being dragged", async ({ page }) => {

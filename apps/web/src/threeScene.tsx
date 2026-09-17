@@ -18,7 +18,7 @@ import { applyCameraState, boxCorners, cameraDragMode, clampCameraTarget, conten
 import { loadRememberedCamera, rememberCamera } from "./cameraMemory"
 import type { ThreeScenePreview } from "./threeScenePreview"
 
-import { dragWorldPoint, dragFamilyIds, offsetSceneObjects, applyDragOffsets } from "./threeDrag"
+import { dragWorldPoint, dragFamilyIds, dragOffsetDrift, offsetSceneObjects, applyDragOffsets } from "./threeDrag"
 import { PICK_TOLERANCE_PX, pointHandleWorldRadius, pickRaycastHit3, templateTopologyOwners, pickSectionAt, resolveSelectableHit, previewBeatsPick } from "./threePicking"
 import { sectionUnitNormal, createPlane3Mesh, createSectionMesh, createIntersectionSolidGroup, createIntersectionFaceGroup, createIntersectionPointGroup, createUnfoldNetGroup, createDihedralMarkerGroup, prefersReducedMotion, nextUnfoldProgress, createPlanePatch, createSolidGroup, visibleSolids, buildPointDrivenObject, disposeObject, disposeScene, createPreviewGroup, applyPreviewHighlight, hasDrawablePreview, createCurveLoops3, createRimCircles3 } from "./threePrimitives"
 import { curveToleranceFor, toleranceBucket } from "./conicSampling"
@@ -1169,6 +1169,14 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       const session = dragSessionRef.current
       if (session) {
         dragSessionRef.current = null
+        /**
+         * 抬手前先量一次"画面与位移是否一致"：拖动期间文档不提交，画面全靠临时偏移，
+         * 偏移被重复画一层（组 + 子对象同 id）在文档里看不出来、只能看画布。读数 0 表示一致。
+         */
+        if (sceneShell && session.applied) {
+          const appliedOffset = session.slideNormal ? session.slideNormal.clone().multiplyScalar(session.total.dot(session.slideNormal)) : session.visualApplied
+          sceneShell.dataset.dragOffsetDrift = dragOffsetDrift(scene, session.family, appliedOffset).toFixed(4)
+        }
         // 拖动期间一次都没提交，所以这里的一次提交就是整次拖动唯一的一步撤销。
         if (session.hostConstraint && session.hostParameter && session.applied) {
           // 绑定点：提交的是**宿主参数**；坐标由重算派生，所以点不会因为浮点累积而漂离宿主。

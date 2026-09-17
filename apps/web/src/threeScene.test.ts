@@ -3,12 +3,27 @@ import * as THREE from "three"
 
 import type { GeometryDocument, Point3Primitive, PrimitiveSpec, SectionPrimitive } from "@draw/dsl"
 import { createEmptyDocument } from "@draw/dsl"
-import { buildSolidTemplate, circleConic3, dihedralMarker3, unfoldPolyhedron3 } from "@draw/geometry-kernel"
+import { buildSolidTemplate, circleConic3, dihedralMarker3, rimCircles3, unfoldPolyhedron3 } from "@draw/geometry-kernel"
 import { POINT_HANDLE_RADIUS_PX, pickPrimitiveAt, pickRaycastHit3, pointHandleWorldRadius, resolveSelectableHit, templateTopologyOwners } from "./threePicking"
-import { applyDragOffsets, dragFamilyIds, dragWorldPoint } from "./threeDrag"
-import { createCircle3Line, createConic3Line, createCubeMesh, createCurveLoops3, createDihedralMarkerGroup, createEdge3Line, createFace3Mesh, createPlane3Mesh, createPlanePatch, createPoint3Mesh, createPointDrivenLine, createSectionMesh, createSolidGroup, createSolidMesh, createUnfoldNetGroup, cubeUnfoldCenters, nextUnfoldProgress, prefersReducedMotion, sectionUnitNormal } from "./threePrimitives"
+import { applyDragOffsets, dragFamilyIds, dragOffsetDrift, dragWorldPoint, offsetSceneObjects } from "./threeDrag"
+import { createCircle3Line, createConic3Line, createCubeMesh, createCurveLoops3, createDihedralMarkerGroup, createEdge3Line, createFace3Mesh, createPlane3Mesh, createPlanePatch, createPoint3Mesh, createPointDrivenLine, createRimCircles3, createSectionMesh, createSolidGroup, createSolidMesh, createUnfoldNetGroup, cubeUnfoldCenters, disposeObject, nextUnfoldProgress, prefersReducedMotion, sectionUnitNormal } from "./threePrimitives"
 import { applyCameraState, cameraBasis, clampCameraTarget, createCameraState, fitCameraState, panCameraState, resetCameraState, rotateCameraState, zoomCameraState } from "./threeCamera"
 import { sceneSyncDecision } from "./sceneContentKey"
+
+/**
+ * 场景里所有属于这个图元的对象的世界位置。
+ *
+ * 同一个图元可能在"组 + 子对象"两层都挂着 `primitiveId`（边界圆、截面、交面都这样），
+ * 所以拖动偏移必须按**世界位置**核验：只比较"每个对象自己加了多少"看不出子树被加了两次。
+ */
+const worldPositionsOf = (scene: THREE.Scene, primitiveId: string): { object: THREE.Object3D; position: THREE.Vector3 }[] => {
+  const found: { object: THREE.Object3D; position: THREE.Vector3 }[] = []
+  scene.traverse((object) => {
+    if (object.userData.primitiveId !== primitiveId) return
+    found.push({ object, position: object.getWorldPosition(new THREE.Vector3()) })
+  })
+  return found
+}
 
 describe("Three.js geometry scene", () => {
   it("converges an unfold animation to its target within a short render window", () => {
@@ -469,6 +484,38 @@ describe("Three.js geometry scene", () => {
     expect(new Set(unfolded.map((face) => `${face.center.x},${face.center.y},${face.center.z}`)).size).toBe(6)
   })
 
+  it("moves every object of a dragged section by the same offset, fill and boundary together", () => {
+    /**
+     * 拖动剖切面走的是**另一条**偏移路径（`offsetSceneObjects`，按单个图元的 id 遍历）。
+     * 截面同样是"组 + 每环网格"两层都挂 id：修边界圆那个"两倍位移"的 bug 时，这条路径必须一起守住，
+     * 否则就是"填充跟手、边界圆不跟手"的同一类问题换个对象复发。
+     */
+    const section: SectionPrimitive = {
+      id: "section-1",
+      type: "section",
+      sourceId: "solid-1",
+      plane: { normal: { x: 0, y: 1, z: 0 }, constant: 0 },
+      points: [{ x: -1, y: 0, z: -1 }, { x: 1, y: 0, z: -1 }, { x: 1, y: 0, z: 1 }, { x: -1, y: 0, z: 1 }],
+      classification: "polygon",
+      status: "approximate"
+    }
+    const scene = new THREE.Scene()
+    scene.add(createSectionMesh(section)!)
+
+    const before = worldPositionsOf(scene, section.id)
+    // 组的填充网格 + 边界线（边界是网格的子对象，跟着一起走）。
+    expect(before.length).toBeGreaterThanOrEqual(2)
+
+    offsetSceneObjects(scene, section.id, new THREE.Vector3(0, 1, 0))
+
+    for (const { object, position } of before) {
+      const after = object.getWorldPosition(new THREE.Vector3())
+      expect({ role: object.userData.visualRole ?? object.type, dy: after.y - position.y }).toEqual({ role: object.userData.visualRole ?? object.type, dy: 1 })
+    }
+
+    disposeObject(scene)
+  })
+
   it("draws a closed boundary over an ordered section polygon", () => {
     const section: SectionPrimitive = {
       id: "section-1",
@@ -784,6 +831,64 @@ describe("free 3D drag", () => {
         ;(object.material as THREE.Material).dispose()
       }
     })
+  })
+
+  it("moves a round solid's rim circles exactly as far as the solid itself, not twice", () => {
+    /**
+     * 用户实测反馈："自由移动圆锥圆柱时，底部圆的动画单独跑掉了，不跟手一起。"
+     *
+     * 根因：边界圆是"组 + 每圈线"两层都挂着同一个 `primitiveId`（`createRimCircles3` 给组挂一次、
+     * `createConic3Line` 给每圈线又挂一次），而拖动偏移是**按 primitiveId 遍历**加在 `position` 上的
+     * （`applyDragOffsets`）：组加一次、线再加一次，圆就按**两倍**位移跑掉了。实体的网格 / 棱只有一层，
+     * 所以"实体跟着手、圆自己飞"。拖动期间文档不提交（画面全靠这些临时偏移），所以只有看得见的那一下会错。
+     */
+    const cylinder = { id: "cyl-a", type: "cylinder" as const, center: { x: 0, y: 0, z: 0 }, radius: 1, height: 2, segments: 12 }
+    const scene = new THREE.Scene()
+    scene.add(createSolidGroup(cylinder, false))
+    const rims = createRimCircles3(cylinder.id, rimCircles3(cylinder), 0.01, false)
+    expect(rims).not.toBeNull()
+    scene.add(rims!)
+
+    const before = worldPositionsOf(scene, cylinder.id)
+    // 圆柱的网格 / 棱 / 两圈边界圆都在场景里（否则这条用例是空的）。
+    expect(before.length).toBeGreaterThanOrEqual(3)
+
+    applyDragOffsets(scene, new Set([cylinder.id]), new THREE.Vector3(1, 0, 0))
+
+    for (const { object, position } of before) {
+      const after = object.getWorldPosition(new THREE.Vector3())
+      expect({ role: object.userData.visualRole ?? object.type, dx: after.x - position.x }).toEqual({ role: object.userData.visualRole ?? object.type, dx: 1 })
+    }
+
+    disposeObject(scene)
+  })
+
+  it("reports zero drift when the picture agrees with the drag offset, and catches a doubled one", () => {
+    /**
+     * 抬手时写进画布读数的 `data-drag-offset-drift` 就是这条不变量：family 里每个对象由"自己 + 祖先"
+     * 累计的临时偏移，必须恰好等于本次拖动画上去的位移。它必须**真的有分辨力**——手搭一个"组与子对象
+     * 各加一次"的子树，读数就得报出那个偏差，否则这条读数只是装饰。
+     */
+    const scene = new THREE.Scene()
+    const group = new THREE.Group()
+    group.userData.primitiveId = "obj-1"
+    const child = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1))
+    child.userData.primitiveId = "obj-1"
+    group.add(child)
+    scene.add(group)
+
+    const applied = new THREE.Vector3(2, 0, 0)
+    applyDragOffsets(scene, new Set(["obj-1"]), applied.clone())
+    expect(dragOffsetDrift(scene, new Set(["obj-1"]), applied)).toBe(0)
+
+    // 手搭出"重复画了一层"的坏画面：子对象再被加一次 ⇒ 读数报出偏差（等于多出来的那一份位移）。
+    child.position.add(applied)
+    child.userData.dragOffset = applied.clone()
+    expect(dragOffsetDrift(scene, new Set(["obj-1"]), applied)).toBeCloseTo(applied.length(), 9)
+    // 不在 family 里的图元一概不算。
+    expect(dragOffsetDrift(scene, new Set(["other"]), applied)).toBe(0)
+
+    disposeObject(scene)
   })
 
   it("describes the drag direction with the camera basis the scene already pans along", () => {
