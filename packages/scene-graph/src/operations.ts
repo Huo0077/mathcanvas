@@ -236,13 +236,13 @@ function translatePrimitive3(primitive: PrimitiveSpec, delta: Vector3): { primit
   return { primitive, movedIds: managedPointIds(primitive) }
 }
 
-function primitiveDependencies(primitive: PrimitiveSpec, templateOwners?: Map<string, string>): string[] {
+function primitiveDependencies(primitive: PrimitiveSpec, relations?: { owners: Map<string, string>; topologies: Map<string, string> }): string[] {
   const dependencies: string[] = []
   /**
    * 模板物化出来的点 / 棱 / 面 / 多面体是**由实体算出来的**：实体一动它们就跟着重算。
    * 少了这条边，绑定在"实体的某个面 / 棱"上的点就不会随实体移动（实测缺陷）。
    */
-  const owner = templateOwners?.get(primitive.id)
+  const owner = relations?.owners.get(primitive.id)
   if (owner && owner !== primitive.id) dependencies.push(owner)
   if (primitive.type === "point" && primitive.binding) {
     if (primitive.binding.kind === "onPath") dependencies.push(primitive.binding.pathId, ...(primitive.binding.parameterId ? [primitive.binding.parameterId] : []))
@@ -280,6 +280,19 @@ function primitiveDependencies(primitive: PrimitiveSpec, templateOwners?: Map<st
   if (primitive.type === "intersectionFace") dependencies.push(...primitive.sourceIds)
   if (primitive.type === "intersectionPoint3") dependencies.push(...primitive.sourceIds)
   if (primitive.type === "derivative" || primitive.type === "tangent" || primitive.type === "normal" || primitive.type === "secant" || primitive.type === "integral" || primitive.type === "analysisSet" || primitive.type === "section") dependencies.push(primitive.sourceId)
+  /**
+   * 依赖一个**实体**时，同时依赖它的物化拓扑。
+   *
+   * 实体的几何（顶点、面环）全在拓扑里，而截面 / 交线 / 交面 / 交点的来源写的是实体本身；
+   * 只声明"依赖实体"的话，**按数值改一个顶点**（改的正是拓扑里的 point3）到不了它们，
+   * 增量扫描会留下一份旧截面 / 旧交面（`recomputeConsistency.test.ts` 实测抓到）。
+   */
+  if (relations) {
+    for (const dependency of [...dependencies]) {
+      const topologyId = relations.topologies.get(dependency)
+      if (topologyId && topologyId !== primitive.id) dependencies.push(topologyId)
+    }
+  }
   return [...new Set(dependencies)]
 }
 
@@ -974,15 +987,22 @@ function recomputeAnalysisSet(primitive: Extract<PrimitiveSpec, { type: "analysi
 }
 
 /**
- * 模板实体物化出来的子对象 → 它属于哪个实体（多面体自身、以及它的点 / 棱 / 面）。
+ * 模板实体的两类关系：
+ * - `owners`：物化出来的子对象（多面体自身、以及它的点 / 棱 / 面）→ 它属于哪个实体；
+ * - `topologies`：实体 → 它的物化拓扑（那个多面体）。
  *
- * **为什么需要它**：依赖图原先只有"多面体依赖它的点 / 棱 / 面 + 模板源"这一个方向，
- * 于是"实体 → 子对象"这一条边根本不存在——从实体出发的闭包只到多面体就断了。
- * 后果是实测到的真缺陷：把点绑在立方体的某个面上，然后移动立方体，**绑定点留在原地**
+ * **为什么两样都要**：依赖图原先只有"多面体依赖它的点 / 棱 / 面 + 模板源"这一个方向，
+ * 于是"实体 → 子对象"这条边根本不存在——从实体出发的闭包只到多面体就断了。
+ * 后果是实测到的真缺陷：把点绑在立方体的某个面上再移动立方体，**绑定点留在原地**
  *（`getAffectedPrimitiveIds(["cube-a"])` 只有 `cube-a` 与多面体，到不了那个面，更到不了点）。
+ *
+ * 反过来，`topologies` 补的是另一条实测缺陷：截面 / 交面 / 交线的来源写的是**实体本身**，
+ * 而实体的几何全在物化拓扑里。只声明依赖实体的话，**按数值改一个顶点**（改的是拓扑里的 point3）
+ * 无法让它们重算——增量扫描后面会留下一份旧截面（`recomputeConsistency.test.ts` 抓到过）。
  */
-function templateChildOwners(document: GeometryDocument): Map<string, string> {
+function templateRelations(document: GeometryDocument): { owners: Map<string, string>; topologies: Map<string, string> } {
   const owners = new Map<string, string>()
+  const topologies = new Map<string, string>()
   for (const primitive of document.primitives) {
     if (primitive.type !== "polyhedron3" || !primitive.construction) continue
     const construction = primitive.construction
@@ -990,16 +1010,17 @@ function templateChildOwners(document: GeometryDocument): Map<string, string> {
     const owner = construction.kind === "template" ? construction.sourceIds[0] : construction.kind === "fromFaces" ? construction.sourceId : undefined
     if (!owner) continue
     owners.set(primitive.id, owner)
+    topologies.set(owner, primitive.id)
     for (const childId of [...primitive.vertexIds, ...primitive.edgeIds, ...primitive.faceIds]) owners.set(childId, owner)
   }
-  return owners
+  return { owners, topologies }
 }
 
 export function getDependencyIndex(document: GeometryDocument): Map<string, Set<string>> {
   const dependents = new Map<string, Set<string>>()
-  const owners = templateChildOwners(document)
+  const relations = templateRelations(document)
   for (const primitive of document.primitives) {
-    for (const dependency of primitiveDependencies(primitive, owners)) {
+    for (const dependency of primitiveDependencies(primitive, relations)) {
       const primitiveDependents = dependents.get(dependency) ?? new Set<string>()
       primitiveDependents.add(primitive.id)
       dependents.set(dependency, primitiveDependents)
@@ -1048,9 +1069,9 @@ export function getAffectedPrimitiveIds(document: GeometryDocument, changedIds: 
 export function topologicalRecomputeOrder(document: GeometryDocument, changedIds?: string[]): string[] {
   const graph = createDependencyGraph()
   const primitiveIds = new Set(document.primitives.map((primitive) => primitive.id))
-  const owners = templateChildOwners(document)
+  const relations = templateRelations(document)
   for (const primitive of document.primitives) {
-    graph.addNode(primitive.id, primitiveDependencies(primitive, owners).filter((dependency) => primitiveIds.has(dependency)))
+    graph.addNode(primitive.id, primitiveDependencies(primitive, relations).filter((dependency) => primitiveIds.has(dependency)))
   }
   const affected = changedIds === undefined ? primitiveIds : getAffectedPrimitiveIds(document, changedIds)
   const ordered = graph.topologicalOrder().filter((id) => affected.has(id))

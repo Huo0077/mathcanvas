@@ -360,6 +360,8 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
     {/* 轨迹画在点**之前**：动点永远落在自己的轨迹上，轨迹若压在点的命中区之上，点就再也拖不动了。 */}
     {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "locus" }> => primitive.type === "locus" && primitive.visible !== false).map((locus) => <g key={locus.id} data-primitive-type="locus" opacity={opacityFor(locus)} onClick={(event) => handleObjectClick(event, locus.id)}>{locusSegments(locus).map((points, index) => <polyline key={`${locus.id}-${index}`} points={pointsAttribute(points, viewport)} fill="none" stroke={strokeFor(locus)} strokeWidth={strokeWidthFor(locus, selectedIds.includes(locus.id))} strokeDasharray={dashFor(locus)} />)}</g>)}
     {renderAnnotations()}
+    {/* 交点预览画在曲线之上、但在**点之下**：预览的命中圆同样是 14px，若画在最后会把点抢走。 */}
+    {renderIntersectionPreviews()}
     {/**
        * 点的命中区在**最上面再画一遍**（透明，只接指针事件）。
        *
@@ -369,11 +371,10 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
        * 指针按下落在它们身上——它们是派生对象、`getDragHandle` 返回 null，拖动根本不成立，
        * 还会退化成框选：点看起来"抓不住"，连带定点也拖不动。
        *
-       * 与其把整层绘制顺序倒过来（连线 / 轨迹自身仍要能点选），不如把点的命中区补在最上面：
-       * 点始终赢，派生曲线中段照旧可选。
+       * 与其把整层绘制顺序倒过来（连线 / 轨迹 / 交点预览自身仍要能被点选），
+       * 不如把点的命中区补在最上面：点始终赢，派生曲线与预览中段照旧可选。
        */}
     {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "point" }> => primitive.type === "point" && primitive.visible !== false).map((point) => <circle key={`${point.id}-hit-top`} data-primitive-type="point" data-point-hit="top" data-hit-target="true" cx={toX(point.x)} cy={toY(point.y)} r="14" fill="transparent" pointerEvents="all" onPointerDown={(event) => beginDrag(event, point.id)} onClick={(event) => handleObjectClick(event, point.id)} />)}
-    {renderIntersectionPreviews()}
     {selectionRect && <rect className="selection-rect" data-selection-mode={selectionRect.mode} x={selectionRect.x} y={selectionRect.y} width={selectionRect.width} height={selectionRect.height} />}
   </svg></div></main>
 }
