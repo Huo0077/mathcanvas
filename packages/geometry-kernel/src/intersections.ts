@@ -22,8 +22,16 @@ function segmentParameter(segment: { a: Coordinate; b: Coordinate }, point: Coor
   return ((point.x - segment.a.x) * dx + (point.y - segment.a.y) * dy) / (length * length)
 }
 
-function inUnitInterval(value: number | null, tolerance = 1e-9): boolean {
-  return value !== null && value >= -tolerance && value <= 1 + tolerance
+/**
+ * 参数是否落在 `[0, 1]` 内。
+ *
+ * 参数是**无量纲**的（线段上的比例），所以这里用固定的参数容差，而不是 `NumericPolicy` 的
+ * 长度容差：把随坐标缩放的长度容差当参数容差用，在长线段上会把端点之外很远的点也算成"在段内"。
+ */
+const PARAMETER_TOLERANCE = 1e-12
+
+function inUnitInterval(value: number | null): boolean {
+  return value !== null && value >= -PARAMETER_TOLERANCE && value <= 1 + PARAMETER_TOLERANCE
 }
 
 /**
@@ -97,7 +105,7 @@ export function intersectPolylineLineDetailed(polyline: PolylinePrimitive, line:
   for (let index = 1; index < polyline.points.length; index += 1) {
     const segment = { id: `${polyline.id}-segment-${index}`, type: "line" as const, a: polyline.points[index - 1], b: polyline.points[index] }
     const result = intersectLinesDetailed(segment, line, policy)
-    if (result.kind === "point" && inUnitInterval(segmentParameter(segment, result.point), policy.absoluteTolerance)) points.push(result.point)
+    if (result.kind === "point" && inUnitInterval(segmentParameter(segment, result.point))) points.push(result.point)
     if (result.kind === "coincident") coincident = true
   }
   const unique = uniquePoints(points, policy.absoluteTolerance)
@@ -112,9 +120,9 @@ export function intersectPolylineCircleDetailed(polyline: PolylinePrimitive, cir
     const segment = { id: `${polyline.id}-segment-${index}`, type: "line" as const, a: polyline.points[index - 1], b: polyline.points[index] }
     const result = intersectLineCircleDetailed(segment, circle, policy)
     if (result.kind === "point" || result.kind === "tangent") {
-      if (inUnitInterval(segmentParameter(segment, result.point), policy.absoluteTolerance)) points.push(result.point)
+      if (inUnitInterval(segmentParameter(segment, result.point))) points.push(result.point)
     } else if (result.kind === "points") {
-      for (const point of result.points) if (inUnitInterval(segmentParameter(segment, point), policy.absoluteTolerance)) points.push(point)
+      for (const point of result.points) if (inUnitInterval(segmentParameter(segment, point))) points.push(point)
     }
   }
   const unique = uniquePoints(points, policy.absoluteTolerance)

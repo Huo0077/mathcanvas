@@ -406,6 +406,19 @@ describe("implicit conic form agrees with the parameterisation", () => {
     expect(constraint.project({ x: 6, y: 0 })!.distance).toBeCloseTo(2, 6)
   })
 
+  /**
+   * 体检发现的真缺陷：梯度为零时 `|F| / |∇F|` 不成立，旧实现退回 `|F|`——那是 F 的**量纲**，不是距离。
+   * 椭圆中心实测得到 16（F 的缩放值），而真实距离是短半轴 1。这种点改成用精确投影的距离。
+   */
+  it("returns the true distance when the gradient vanishes instead of the raw curve value", () => {
+    const constraint = implicitConicConstraint("ie", conicCoefficients(ellipse))
+
+    // 中心：F = -16、∇F = 0 → 旧实现给 16；真实距离是短半轴（radiusY = 1）。
+    expect(constraint.residual({ x: 0, y: 0 })).toBeCloseTo(1, 6)
+    // 投影仍然给出同一个数，两条通路自洽。
+    expect(constraint.project({ x: 0, y: 0 })!.distance).toBeCloseTo(1, 6)
+  })
+
   it("keeps the named conic constraint and the implicit one on the same curve", () => {
     const named = conicConstraint("e", ellipse)
     const implicit = implicitConicConstraint("ie", conicCoefficients(ellipse))

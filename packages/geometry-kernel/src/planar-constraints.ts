@@ -1072,7 +1072,14 @@ export function implicitCurveConstraint(id: string, curve: ImplicitCurve, option
       const slope = Math.hypot(gradient.x, gradient.y)
       const value = curve.value(point)
       // F 的梯度模长就是"F 随距离的变化率"，用它把 F 值换算成近似欧氏距离。
-      return slope > 1e-12 ? Math.abs(value) / slope : Math.abs(value)
+      if (slope > 1e-12) return Math.abs(value) / slope
+      /**
+       * 梯度为零时上式不成立：`|F|` 的量纲**不是**距离（椭圆中心会得到 F 的缩放值，例如 16，
+       * 而真实距离是短半轴 1）。这种点用精确投影的距离——投影只读 `value` / `gradient` / `hessian`，
+       * 不会回到 `residual`，因此这里不会递归。
+       */
+      const projection = projectToImplicitCurve(curve, point, { seeds: seedsFor(point), tolerance: options.tolerance })
+      return projection ? projection.distance : Math.abs(value)
     },
     tangent(parameter, branch) {
       if (!curve.parameterize) return null
