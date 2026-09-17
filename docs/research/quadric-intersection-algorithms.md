@@ -106,10 +106,13 @@
 - 沿整条曲线相切（`∇f × ∇g ≡ 0`）——追踪器最坏情形。
 - 曲线上的孤立奇点（两梯度在该点平行）。
 - 追踪病态：分支在非边界处交叉（经典跳支）、闭环必须闭合且不能追两遍、开曲线止于边界、一对种子出多个连通分量、近相切处收紧或停下并如实报告。
+- **退化的权威目录**：Farouki, *Automatic parsing of degenerate quadric-surface intersections*, ACM TOG 8(3):174, 1989, DOI [10.1145/77055.77058](https://doi.org/10.1145/77055.77058)——A2 写退化清单时应以它为准（未读到全文，只作目录指引）。
 
 ## 8. 未确认清单（**不得当作事实引用**）
 
-CAI 2019 论文正文；`ria.ua.pt` 两条；Patrikalakis & Maekawa 全文；Bajaj 1988 / Grandine 1997 / Sarraga 1983 / Miller 1987 / Sederberg & Meyers 1988 / Levin 1976 全文（仅经索引确认存在）；Hohmeyer 1991 的出处（只有 dblp 作者索引）；MathBox（无证据）；three.js CSG 插件的源码级结论（只有二手页）；"二次曲面束 `det(Q1 + λQ2) = 0` 的退化成员"这一手（数学上是标准的，但本次没有读到来源）；Trocado 的工作是否曾进入 GeoGebra 主线（已发布内核的证据说没有通用算法，但不能排除插件）。
+补充调研 2 落回后，本清单已大幅缩短（见 §10.1 的三条更正）：
+- CAI 2019 论文正文（Springer/ACM 挡住）；`ria.ua.pt` 两条页面打不开；MathBox（未读源码）；three.js CSG 插件"按构造是网格/BSP"（只有二手页，未读源码）；Trocado 的工作是否曾进入 GeoGebra 主线（已发布内核的证据说没有通用算法，但不能排除插件）；维基百科 *Matrix representation of conic sections*（DNS 打不开，只经镜像确认存在）；二次曲面束那句话的**具体措辞**（只见过搜索片段）。
+- **"epsilon 必须随模型尺度缩放"这条通则没有找到明文来源**——见 §10.5 的诚实处理。
 
 ## 9. 补充调研（同日第二份，四改三补）
 
@@ -154,3 +157,49 @@ openNURBS / Rhino `opennurbs_intersect.cpp`（[raw](https://raw.githubuserconten
 - **轴相交、等半径 → 恰好两条平面椭圆**（OCCT `IntAna_Ellipse` ×2，半轴 `R/sin(A/2)` 与 `R/cos(A/2)`）；正交时 `x = a cos t, y = a sin t, z = ±√(b²−a²sin²t)` 退化为 `z = ±x`，仍是两条圆锥曲线。
 - **异半径 → 曲线不是圆锥曲线**：`z` 不是 `x,y` 的线性函数，曲线非平面，是四次空间曲线（MathWorld 的异半径 Steinmetz 体积要用完全椭圆积分）。精确处理只存在于 OCCT（`IntAna_IntQuadQuad` 解析 / `IntPatch` 数值）。
 - **对推荐的影响**：第 1-5 阶段不变；第 6 阶段多了一个更便宜的选项——先只做 (a)-(e) 闭式情形 + **§9.2 的吸附**，就能把用户看到的折线几乎清干净，而不必移植任何四次代数。
+
+## 10. 补充调研 2（同日第三份）：三条更正 + 具名规格 + 一条诚实缺口
+
+### 10.1 三条更正
+
+1. **Patrikalakis–Maekawa(–Cho) 免费在线版是活的，我上一版说"404"是错的**（我用的 URL 少了第三作者 Cho）。正确入口：[目录](https://web.mit.edu/hyperbook/Patrikalakis-Maekawa-Cho/node2.html)、[§5.8 曲面/曲面求交](https://web.mit.edu/hyperbook/Patrikalakis-Maekawa-Cho/node100.html)、[§5.8.1.2 追踪法](https://web.mit.edu/hyperbook/Patrikalakis-Maekawa-Cho/node102.html)、[§5.8.2.3 marching](https://web.mit.edu/hyperbook/Patrikalakis-Maekawa-Cho/node109.html)、[§5.8.3 隐式/隐式](https://web.mit.edu/hyperbook/Patrikalakis-Maekawa-Cho/node110.html)、[§6.3.1 切向方向](https://web.mit.edu/hyperbook/Patrikalakis-Maekawa-Cho/node118.html)。node102 已亲自核验（HTTP 200，"December 2009"）。印刷版 Springer 2002, DOI 10.1007/978-3-642-04074-0。
+2. **二次曲面束现在有据了**（上一版标 `NOT CONFIRMED`）：`Q(λ) = Q1 + λQ2` 是 4×4，`det(Q(λ))` 是 λ 的四次式，其实根恰是束中的**奇异/退化成员**；退化类型由**秩字典**给出——秩 3 = 圆锥面、**秩 2 = 一对平面**、秩 1 = 重平面。**若束中存在秩 2 成员，四次曲线就裂成两条平面分支，每条都是"平面 ∩ 二次曲面"的圆锥曲线**（即 §9.6 的等半径双圆柱为什么是两条椭圆）。来源：[MathWorld Quadratic Surface](https://mathworld.wolfram.com/QuadraticSurface.html)（同时给出"二次曲面与任何平面相交都是圆锥曲线"与"一般交线是四次曲线"的论证）、[Encyclopedia of Mathematics "Quadric"](https://encyclopediaofmath.org/wiki/Quadric)；构造见 §10.3 的 Dupont 等。（转述的诚实提醒：我想要的某句原文只在搜索片段里见过，那句措辞按未证实处理。）
+3. **Hohmeyer 1991 已确认**：M. E. Hohmeyer, *A surface intersection algorithm based on loop detection*, SMA '91, pp. 197–207, DOI [10.1145/112515.112543](https://doi.org/10.1145/112515.112543)（摘要未收录，方法无法从记录概括，但引用是真的）。Sederberg & Meyers 也已 DOI 确认：CAGD 5(2):161–171, 1988, DOI [10.1016/0167-8396(88)90029-5](https://doi.org/10.1016/0167-8396(88)90029-5)。
+
+### 10.2 A1（平面 ∩ 自然二次曲面）的具名规格
+
+- **J. K. Johnstone, C.-K. Shene, *Computing the intersection of a plane and a natural quadric*, Computers & Graphics 16(2):179–186, 1992, DOI [10.1016/0097-8493(92)90045-W](https://doi.org/10.1016/0097-8493(92)90045-W)** —— **这就是 A1 第 1-2 片要照着实现的算法**（Crossref 确认存在；正文付费，未读到，**只能当规格、不能当引文**）。
+- **R. N. Goldman, J. R. Miller, *Combining algebraic rigor with geometric robustness for the detection and calculation of conic sections in the intersection of two natural quadric surfaces*, SMA '91, pp. 221–231, DOI [10.1145/112515.112545](https://doi.org/10.1145/112515.112545)** —— "代数严谨 + 几何稳健"这一框架的出处，正是我们分类步骤要的态度。
+- **J. R. Miller, *Using Tangent Balls to Find Plane Sections of Natural Quadric Surfaces*, IEEE CG&A 12(2):68, 1992, DOI [10.1109/38.124290](https://doi.org/10.1109/38.124290)** —— 不走矩阵的几何路线，可作为我们分类结果的交叉校验。
+
+### 10.3 A2（二次曲面互交）的具名清单与天花板
+
+- **J. R. Miller, R. N. Goldman, *Geometric Algorithms for Detecting and Calculating All Conic Sections in the Intersection of Any 2 Natural Quadric Surfaces*, GMIP 57(1):55–66, 1995, DOI [10.1006/gmip.1995.1006](https://doi.org/10.1006/gmip.1995.1006)** —— **所有自然二次曲面配对里"交线是圆锥曲线"的完整目录**。A2 用它当检查表：逐条确认我们枚举全了，并据此**证明**残余情形确实不是圆锥曲线。
+- C.-K. Shene, *On the lower degree intersections of two natural quadrics*, ACM TOG 13(4):400, 1994, DOI [10.1145/195826.197316](https://doi.org/10.1145/195826.197316)。
+- **精确参数化的天花板**（若哪天真要做"精确而非追踪"）：Dupont / Lazard / Lazard / Petitjean, *Near-optimal parameterization of the intersection of quadrics: I. The generic algorithm*, JSC 43(3):168–191, 2008, DOI [10.1016/j.jsc.2007.10.006](https://doi.org/10.1016/j.jsc.2007.10.006)（II 束的分类 / III 奇异交线的参数化是 INRIA RR 5668/5669, 2005）；Lazard, Peñaranda & Petitjean, *Intersecting quadrics: An efficient and exact implementation*, CGTA 35(1–2):74–99, DOI [10.1016/j.comgeo.2005.10.004](https://doi.org/10.1016/j.comgeo.2005.10.004)；Keyser 等 *ESOLID: A system for exact boundary evaluation*, CAD 36(2):175, 2004, DOI [10.1016/S0010-4485(03)00060-5](https://doi.org/10.1016/S0010-4485(03)00060-5)。**"束的分类 + 奇异交线参数化"值得专门写三篇论文**，这就是"通用二次曲面互交 = 研究级"的具体理由。
+- 圆锥曲线本身的**秩判据**（与 Δ/J/I/K 表互为交叉校验）：`rank(C) = 2` ⇒ 非退化圆锥曲线；`rank(C) = 1` 且增广矩阵秩为 2 ⇒ 一对相异直线；秩相等 ⇒ 重合直线或一个点。（维基百科 *Matrix representation of conic sections* 本次**两次都打不开**——DNS 策略问题，只经镜像/存档确认存在，**该页仍未直接读到**。）
+- 束分类背后的同时对角化：Uhlig, Linear Algebra Appl. 14:189, 1976, DOI [10.1016/0024-3795(76)90066-5](https://doi.org/10.1016/0024-3795(76)90066-5)。
+
+### 10.4 经典文献现已全部 DOI 确认，其中两句可直接引用的摘要
+
+- **Levin 1976**, CACM 19(10):555–563, DOI [10.1145/360349.360355](https://doi.org/10.1145/360349.360355)（标题措辞的疑问已解决）。摘要可引："Each quadric surface intersection curve (QSIC) is represented as a set of coefficients and parameter limits. Each value of the parameter represents at most two points … This scheme can find the coordinates of points of even quartic (fourth-order) intersection curves, using equations of no more than second order."
+- **Miller 1987**, ACM TOG 6(4):274–307, DOI [10.1145/35039.35041](https://doi.org/10.1145/35039.35041)。摘要可引，而且**正是我们整套策略的文献背书**："An algebraic approach originally developed by Levin meets these needs but is **numerically sensitive and based on solutions to fourth-degree polynomial equations**. In this paper we develop **geometric approaches that are robust and efficient, and do not require solutions to polynomials of degree higher than 2**."
+- Sarraga 1983, CVGIP 22(2):222–238, DOI [10.1016/0734-189X(83)90066-X](https://doi.org/10.1016/0734-189X(83)90066-X)；Bajaj / Hoffmann / **Lynch / Hopcroft** 1988, CAGD 5(4):285–307, DOI [10.1016/0167-8396(88)90010-6](https://doi.org/10.1016/0167-8396(88)90010-6)（作者顺序已更正）；Grandine & Klein 1997, CAGD 14(2):111–134, DOI [10.1016/0167-8396(96)00024-6](https://doi.org/10.1016/0167-8396(96)00024-6)——hyperbook §5.8.2.3 描述其做法：**先解决交线拓扑（含闭环），再数值追踪**，每轮把方程归一到 `[−1,1]`、节点向量归一到 `[0,1]`，理由是"该区间浮点数更密，数值更稳"。
+- **这些都付费，上面的引文来自**已收录的摘要**，不是正文——转述时要说明。
+
+### 10.5 诚实缺口：容差缩放这条通则**没有**明文来源
+
+- 上一版我写过"按模型尺度缩放容差"并给了三条一手先例（GeoGebra 的 `max³·STANDARD_PRECISION_CUBE`、OCCT 的 `Tol/radius`、相对半径差）。**先例仍然成立，但"epsilon 必须随模型尺度缩放"这条通则本身没有找到明文来源。**
+- 有来源的做法是**先把系统归一化再比行列式**：Grandine–Klein 的 `[−1,1]`/`[0,1]` 归一化（§10.4），以及 hyperbook §5.8.1.1 的说明——"若上述代入用浮点做，系数…会带上误差，可能显著改变所解的问题；为避免这种误差可用有理数运算"。**理由很实际：4×4 行列式的元素量级一大就会溢出/下溢，秩与 `Δ` 判定随之失去意义。**
+- 因此本仓库的口径：**我们的"按 `Q` 最大绝对值归一化再比较"属工程实践，不声称有文献依据**；引文只引上面那三条具体先例 + 系统归一化。
+
+### 10.6 分支枚举与稳健性（有来源）
+
+- **必须先把每条分支都播种**。node109："marching methods … are by themselves incomplete in that they require starting points for every branch of the solution. In order to identify all connected components of the intersection curve, a set of important points on the intersection curve (characteristic points) can be defined … such a set may include border, turning and singular points." node105：转向点 = 两元非线性方程组，奇点 = 三元超定方程组。
+- **闭环检测 = 共线法向点**。node109：Sederberg 等首先认识到共线法向点对检测闭环的作用——"points on the two parametric surfaces at which the normal vectors are collinear"；并且"这些早期方法需要以精确算术或 RIA（圆整区间算术）实现才能保证稳健"。**这句正是"可用的稳健追踪器 = 研究级"的来源依据。**
+- **切向交线**：node118——交线切向量 = 两曲面单位法向的叉积；**两法向平行时叉积无法确定切向**，必须另作处理（对应我们 §7 的"沿整条曲线相切"与孤立奇点两条）。
+- **为什么不用结式（现在有来源）**：hyperbook §5.6.5.1 把椭圆与圆的消元写出来，指出**相切处 epsilon 扰动会把二重实根变成一对虚根**，"no real roots exist … missing an intersection solution, leading to a robustness problem"；加上 Miller 1987 摘要的"numerically sensitive and based on solutions to fourth-degree polynomial equations"。两条合起来就是"不用结式"的可引用理由。
+
+### 10.7 对推荐的影响
+
+第 1-6 阶段不变，只是**引用与实现依据变具体了**：A1 第 2 片照着 Johnstone & Shene 1992 实现、分类用 MathWorld 的 Δ/J/I/K 表（已亲自读过）、稳健性框架引 Goldman & Miller 1991；A2 的圆锥曲线情形用 Miller & Goldman 1995 当检查表、退化目录用 Farouki 1989、精确天花板引 Dupont 等与 ESOLID；整套策略的一句话理由直接引 Miller 1987 的摘要。

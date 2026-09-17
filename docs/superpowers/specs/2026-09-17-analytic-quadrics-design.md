@@ -64,6 +64,9 @@
   - **闭式可解的情形**（课程里真的会出现的那些）：平行/同轴圆柱对 → 0/1/2 条直线、重合、空；**等半径且轴相交 → 恰好两条平面椭圆**（半轴 `R/sin(A/2)` 与 `R/cos(A/2)`；正交时退化为 `z = ±x`）；**垂直且异半径 → 闭式参数化 `x = a cos t, y = a sin t, z = ±√(b²−a²sin²t)`**（两支、周期）；共轴回转体 → 圆；球∩球 → 根轴平面上的圆。
   - **剩下的异半径斜交是四次空间曲线**（曲线非平面，不是圆锥曲线），只能追踪或走解析代数；OCCT 有解析类（`IntAna_IntQuadQuad`，最多 12 条参数曲线）与数值追踪（`IntPatch_ImpImpIntersection`），但前者是多周量级的移植。
   - **最便宜的一条**：先追踪，再**吸附**成精确圆锥曲线（BRL-CAD `curve_fitting()` 的做法：取 6 点解圆锥曲线 + 全部采样点在容差内才提升为精确椭圆，否则如实退回折线）。这条能把用户看到的折线几乎清干净，而不必移植四次代数。
+  - **为什么闭式情形成立（代数理由，已有来源）**：二次曲面束 `Q(λ) = Q1 + λQ2` 的 4×4 行列式是 λ 的四次式，其实根对应束中的退化成员；**秩 2 成员 = 一对平面**。束里一旦有秩 2 成员，四次曲线就裂成两条平面分支，每条都是"平面 ∩ 二次曲面"的圆锥曲线——这正是等半径双圆柱给两条椭圆的代数原因（[MathWorld Quadratic Surface](https://mathworld.wolfram.com/QuadraticSurface.html)、[Encyclopedia of Mathematics "Quadric"](https://encyclopediaofmath.org/wiki/Quadric)）。
+  - **枚举检查表**：Miller & Goldman 1995, *Geometric Algorithms for Detecting and Calculating All Conic Sections in the Intersection of Any 2 Natural Quadric Surfaces*, GMIP 57(1):55–66, DOI 10.1006/gmip.1995.1006——用它逐条确认圆锥曲线情形没漏，并据此**证明**残余情形确实不是圆锥曲线。退化配置的权威目录是 Farouki 1989, *Automatic parsing of degenerate quadric-surface intersections*, ACM TOG 8(3):174, DOI 10.1145/77055.77058。
+  - **策略依据**：Miller 1987 的摘要（ACM TOG 6(4):274–307, DOI 10.1145/35039.35041）自己写明——代数路线"numerically sensitive and based on solutions to fourth-degree polynomial equations"，而几何路线"do not require solutions to polynomials of degree higher than 2"。**"不碰四次、停在二次"这句话有文献背书，不是我们的偏好。**
   - A2 的诚实状态词要按 OCCT 的 `IntAna_ResultType` 设计（`Empty / Same / Point / Line / Conic(...) / Traced(...)`），并保留一个"**已知有解、但拒绝猜**"的显式状态（对应 `IntAna_NoGeometricSolution`）。
   - **本次只留接口**：`intersectionLine` 增加可选解析字段的位置；内核 `intersectQuadricQuadric3` 的签名由 A2 决定，A1 不写空壳。
 - **A3：逐像素光线求交（POV-Ray 式）**、GPU 曲面细分着色器。理由见 §5.6 与 §10。
@@ -129,7 +132,10 @@ export interface Conic3 {
   closed: boolean
 }
 
-/** 平面 ∩ 二次曲面：直接把圆锥曲线矩阵算成 `Pᵀ · Q · P`（`P` 是平面的 3×4 参数矩阵）。 */
+**具名规格**：Johnstone & Shene 1992, *Computing the intersection of a plane and a natural quadric*, Computers & Graphics 16(2):179–186, DOI 10.1016/0097-8493(92)90045-W（**A1 第 1-2 片照它实现**；正文付费未读到，只当规格不当引文）；稳健性框架引 Goldman & Miller 1991, SMA '91, pp. 221–231, DOI 10.1145/112515.112545（"代数严谨 + 几何稳健"）；分类表引 [MathWorld 的 Δ/J/I/K 不变量表](https://mathworld.wolfram.com/QuadraticCurve.html)（已直接读过）。
+
+```ts
+/** 平面 ∩ 二次曲面：把圆锥曲线矩阵算成 `Pᵀ · Q · P`（`P` 是平面的 3×4 参数矩阵）。 */
 export function intersectPlaneQuadric3(plane: Plane3, quadric: Quadric3): Conic3
 ```
 
@@ -147,8 +153,10 @@ export function intersectPlaneQuadric3(plane: Plane3, quadric: Quadric3): Conic3
 | `δ > 0` 且 `Δ ≠ 0` | 双曲线 |
 | `δ > 0` 且 `Δ = 0` | 两条相交直线 |
 
-**零判定一律按模型尺度**：`δ` / `Δ` 与输入矩阵同量纲，先按 `Q` 的最大绝对值 `s` 归一化（`δ/s²`、`Δ/s³`），再与 `1e-12` 比较；不使用绝对阈值（与仓库既有的 `quantumFor` 尺度约定一致）。三条一手先例支持这个做法：GeoGebra 的 `classifyQuadric()` 把 3×3 主子式与 `max³ · STANDARD_PRECISION_CUBE` 比较（三次量用立方缩放）；OCCT 平面∩圆柱用**半径缩放**的 `sint < Tol/radius` 区分圆与椭圆；OCCT 圆柱∩圆柱用**相对**半径差 `|R1−R2|/max(R1,R2) ≤ 1e-13`。反例同样明确：OCCT 的 `InitTolerances()` 用绝对容差（`1e-14`、`Precision::Confusion()`），那是建立在"CAGD 模型在归一化单位空间"的前提上——学生在一个作图里建半径 1000、另一个里建 0.01，绝对容差必然失效，所以不能照抄。
-（若将来发现边界情形仍在闪，备选是 Eberly 的 Geometric Tools 做法：**精确有理数 + 笛卡尔符号法则**做分类、完全不用 epsilon，Boost 1.0 许可可移植，代价是引入一个小的 `BigInt` 有理数层——A1 先不上，记在 `docs/research/quadric-intersection-algorithms.md` §9.3。）
+**零判定一律按模型尺度**：`δ` / `Δ` 与输入矩阵同量纲，先按 `Q` 的最大绝对值 `s` 归一化（`δ/s²`、`Δ/s³`），再与 `1e-12` 比较；不使用绝对阈值（与仓库既有的 `quantumFor` 尺度约定一致）。
+**归因要诚实**：三条一手先例支持的是"**按被比较对象的自然尺度缩放**"这一**具体做法**——GeoGebra 的 `classifyQuadric()` 把 3×3 主子式与 `max³ · STANDARD_PRECISION_CUBE` 比较（三次量用立方缩放）；OCCT 平面∩圆柱用**半径缩放**的 `sint < Tol/radius` 区分圆与椭圆；OCCT 圆柱∩圆柱用**相对**半径差 `|R1−R2|/max(R1,R2) ≤ 1e-13`。反例同样明确：OCCT 的 `InitTolerances()` 用绝对容差（`1e-14`、`Precision::Confusion()`），那是建立在"CAGD 模型在归一化单位空间"的前提上——学生在一个作图里建半径 1000、另一个里建 0.01，绝对容差必然失效，所以不能照抄。
+但"**epsilon 必须随模型尺度缩放**"这条通则**没有找到明文来源**（调研专门查过，记为诚实缺口）：本仓库把它记为**工程实践**，不声称有文献依据。有文献依据的做法是**先把系统归一化再比行列式**——Grandine & Klein 每轮把方程归一到 `[−1,1]`、节点向量归一到 `[0,1]`；hyperbook §5.8.1.1 建议用有理数运算避免代入误差。理由是实际的：4×4 行列式的元素量级一大就会溢出/下溢，秩与 `Δ` 判定随之失去意义。因此本实现**先做系统归一化，再做尺度归一化的零判定**。
+（若边界情形仍在闪，备选是 Eberly 的 Geometric Tools 做法：**精确有理数 + 笛卡尔符号法则**做分类、完全不用 epsilon，Boost 1.0 许可可移植，代价是引入一个小的 `BigInt` 有理数层——A1 先不上，记在 `docs/research/quadric-intersection-algorithms.md` §9.3。）
 
 **"圆"的判定阈值必须写死并测边界**：`kind: "circle"` 要求 `|A − C| ≤ ε·max(|A|,|C|)` 且 `|B| ≤ ε·max(|A|,|C|)`，`ε = 1e-9`。这意味着"两个半轴在 9 位有效数字内相等"才算圆——**故意倾斜 1e-3° 的切面必须报椭圆**（写进测试）。判定不通过时如实报 `ellipse` 并给出 `eccentricity`，不四舍五入成圆。
 
@@ -304,6 +312,8 @@ operations.recomputeSection
 2. **网格 CSG 一律排除**：`manifold`（541 KB）的 API 自己就是 `circularSegments`，`three-bvh-csg` 输出 `intersectionEdges: Line3[]`（线段汤）——**按构造就没有真圆**。
 3. **OCCT-WASM 家族能给真圆，但代价明确**：`occt-wasm` 的 `.wasm` 实测 **22.0 MB**（README 声称 brotli 约 4.5 MB，属厂商口径）、**LGPL-2.1**、要求 WASM SIMD + tail calls（Chrome/Edge 114+、Safari 17.2+、Firefox 121+）、异步初始化 + 句柄手动 `release()`；且**OCCT 没有展开实体的 API**，文档格式也必须停止存多边形。**结论：只有连对象模型一起换成 B-rep（C 方案）才划算，本次不做。**
 4. **渲染**：three.js r186 的 `Curve` **没有误差驱动采样**（`getPoints(divisions)` 是按参数均分）；`Line2`/`LineMaterial` 的圆帽与 AA 是真实现（每段 6 个三角形，48 段 = 288 个三角形）但不重采样；SDF 圆的精确公式与 `fwidth` AA 有据可依；WebGL2 无几何/曲面细分阶段。**结论：解析模型 + 我们自己的误差驱动采样 + `Line2` 描边 + SDF 填充是浏览器里的标准答案。**
+5. **算法文献（具名规格，付费正文未读，只当规格）**：A1 的平面∩二次曲面 = Johnstone & Shene 1992（C&G 16(2):179–186）；稳健性框架 = Goldman & Miller 1991（SMA '91）；A2 的圆锥曲线情形检查表 = Miller & Goldman 1995（GMIP 57(1):55–66）；退化目录 = Farouki 1989（TOG 8(3):174）；"不碰四次"的文献背书 = Miller 1987（TOG 6(4):274–307）。**追踪算法的免费可引一手来源**：Patrikalakis–Maekawa–Cho 在线版（[§5.8.1.2 追踪法](https://web.mit.edu/hyperbook/Patrikalakis-Maekawa-Cho/node102.html) 等，本次已核验可访问），其中写明追踪法"必须先把每条分支的起点都准备好"、步长过大会"straying or looping"、穿越奇点"problematic"，以及闭环检测靠**共线法向点**且"需要精确算术或圆整区间算术才能保证"。**精确参数化的天花板**（= 通用二次曲面互交属研究级的依据）：Dupont/Lazard/Lazard/Petitjean JSC 2008 三篇 + ESOLID。
+6. **一处诚实缺口（调研专门查证）**：没有任何来源把"epsilon 必须随模型尺度缩放"立为通则；有来源的是"先把系统归一再比行列式"。本 spec 据此标注见 §5.2。
 
 ---
 
