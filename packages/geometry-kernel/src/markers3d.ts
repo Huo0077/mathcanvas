@@ -1,6 +1,9 @@
 import type { Plane3, Vector3 } from "./geometry3d"
 import { addVector3, crossVector3, dotVector3, lengthVector3, normalizeVector3, scaleVector3, subtractVector3 } from "./geometry3d"
 
+/** 二面角弧的步数上限：超过这个数只是浪费顶点（弧早就看不出折线了）。 */
+const MAX_ARC_STEPS = 720
+
 /** Explainable dihedral measurement for two faces that share a common edge. */
 export interface DihedralDetail3 {
   /** Angle inside the solid, measured in the plane perpendicular to the common edge. */
@@ -119,7 +122,13 @@ export function dihedralMarker3(first: Vector3[], second: Vector3[], hingeStart:
   const secondInward = detail ? inwardPerpendicular(second, hingeStart, detail.hingeAxis) : null
   if (!detail || !firstInward || !secondInward) return null
   const radius = options.radius ?? 0.6
-  const steps = Math.max(2, Math.floor(options.arcSteps ?? 12))
+  /**
+   * 步数必须归一化：`Math.max(2, Math.floor(NaN))` 仍是 NaN，于是 `for (step = 0; step <= NaN; …)`
+   * 一次都不执行——标记照常返回、`arc` 却是空数组（画布上画不出弧）。
+   * 荒谬的巨大步数（例如 1e9）同样要夹住，否则一次分配十亿个点。
+   */
+  const requestedSteps = options.arcSteps
+  const steps = Number.isFinite(requestedSteps) ? Math.max(2, Math.min(MAX_ARC_STEPS, Math.floor(requestedSteps as number))) : 12
   const midpoint = scaleVector3(addVector3(hingeStart, hingeEnd), 0.5)
   const sweep = Math.acos(Math.min(1, Math.max(-1, dotVector3(firstInward, secondInward))))
   const direction = dotVector3(crossVector3(firstInward, secondInward), detail.hingeAxis) < 0 ? -1 : 1

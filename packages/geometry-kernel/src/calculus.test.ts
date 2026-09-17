@@ -32,6 +32,31 @@ describe("calculus numerical MVP", () => {
     expect(segments).toHaveLength(1)
   })
 
+  /**
+   * 体检发现的真缺陷：公开的 `sampleFunctionSegments` **不校验** `steps`（同一个文件里的
+   * `adaptiveSampleFunctionSegments` 与 `numericalDerivative` 都校验）。`steps = 0` 会算出 `x = NaN`、
+   * 采样全被丢掉 → 返回空（"这条函数没有图像"而不是"采样参数不对"）；负数 / NaN 同样静默返回空；
+   * 而 `steps = 1e9` 会真的跑十亿次求值。
+   */
+  it("normalises the step count instead of returning NaN samples or looping forever", () => {
+    const line = (x: number) => x
+
+    for (const steps of [0, -5, Number.NaN, 0.4]) {
+      const segments = sampleFunctionSegments(line, [0, 1], steps)
+      const points = segments.flat()
+      expect(points.length, `steps=${steps}`).toBeGreaterThan(1)
+      expect(points.every((point) => Number.isFinite(point.x) && Number.isFinite(point.y))).toBe(true)
+      expect(points[0].x).toBe(0)
+      expect(points.at(-1)!.x).toBe(1)
+    }
+
+    // 荒谬的巨大步数被夹到上限（不会真的去跑十亿次求值）。
+    expect(sampleFunctionSegments(line, [0, 1], 1e9).flat().length).toBeLessThanOrEqual(4097)
+    // 非有限定义域：明确的空结果，不产生 NaN 坐标。
+    expect(sampleFunctionSegments(line, [Number.NaN, 1], 4)).toEqual([])
+    expect(sampleFunction(line, [0, 1], 0).length).toBeGreaterThan(1)
+  })
+
   it("adds samples around a narrow feature without inventing a discontinuity", () => {
     const segments = adaptiveSampleFunctionSegments((x) => 10 * Math.exp(-10000 * (x - 0.0625) ** 2), [0, 0.5], { initialSteps: 4, maxSteps: 64 })
 

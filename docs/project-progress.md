@@ -1165,7 +1165,7 @@ P7-1 至 P7-6 与工程工作台层次化改造 Task 1-7 均已完成；P4 Agent
 
 ## 验证证据
 
-> **当前基线（唯一权威，2026-09-17 在"全身大体检（七批）+ e2e 构建修复"之后实测）**：`npm.cmd test` **107 个测试文件、1190 个用例通过**；4 个 workspace 类型检查通过；ESLint **0 error、15 条 warning**；生产构建通过（Vite 仍提示主 bundle 超过 500 KB）；Playwright **83/83** 通过（**现在真的跑的是当前工作区的构建产物**，见下）。
+> **当前基线（唯一权威，2026-09-17 在"全身大体检（八批）+ e2e 构建修复"之后实测）**：`npm.cmd test` **107 个测试文件、1192 个用例通过**；4 个 workspace 类型检查通过；ESLint **0 error、15 条 warning**；生产构建通过（Vite 仍提示主 bundle 超过 500 KB）；Playwright **83/83** 通过（**现在真的跑的是当前工作区的构建产物**，见下）。
 > 下面按时间倒序列出各轮实测快照（数字是**当时**的取值，用于追溯与对比，不代表当前门禁）；例如 68 文件 / 698 用例与 Playwright 47/47 属于 2026-09-16 的 Task 15-18 那一轮。
 
 ### 全身大体检（2026-09-17）：并行只读审计 + 按严重度修复
@@ -1262,6 +1262,15 @@ P7-1 至 P7-6 与工程工作台层次化改造 Task 1-7 均已完成；P4 Agent
 | 内核 | `constraints3d.planeNormal` / `measurements3d` 的点面距离：schema 只要求法向"非零"，`(1e-30,0,0)` 能存进文档，而 `normalizeVector3` 对长度 < 1e-12 的输入返回**零向量** → 点积恒为 0 → 约束"永远满足"、距离读数恒为 0 | 归一化失败时返回 null / 报 `insufficient-data`（诊断文案"平面法向量退化"），非单位但可归一化的法向照常工作 |
 
 - **第七批 RED 证据**：折线重复点 → `expected [Function] to not throw an error but 'TypeError: Cannot read properties of …' was thrown`；退化法向约束 → `expected +0 to be null`；退化法向距离测量 → `expected 'valid' to be 'insufficient-data'`。
+
+**第八批（未校验的数值选项）**：
+
+| 类别 | 缺陷 | 修法 |
+| --- | --- | --- |
+| 内核 | `markers3d` 的二面角弧步数：`Math.max(2, Math.floor(NaN))` 仍是 NaN → 循环一次都不跑 → 标记照常返回但 `arc` 是**空数组**（画布上画不出弧）；`arcSteps: 1e9` 还会去分配十亿个点 | 非有限值退回默认 12；并夹到 `MAX_ARC_STEPS = 720` |
+| 内核 | 公开的 `sampleFunctionSegments` **不校验** `steps`（同文件的 `adaptiveSampleFunctionSegments` 与 `numericalDerivative` 都校验）：`steps = 0` 算出 `x = NaN`、采样全被丢掉 → 空结果；负数 / NaN 同样静默为空；`steps = 1e9` 会真的跑十亿次求值 | 归一化到 `1..4096`（非有限值用默认 128）；定义域不是有限区间时返回空，不产生 NaN 坐标 |
+
+- **第八批 RED 证据**：`steps=0: expected 0 to be greater than 1`（空采样）、`arcSteps=NaN: expected 0 to be greater than 2`（空弧）。
 
 
 - **明确不修、只记录**（都写进 `docs/feature-catalog.md` 的"体检结论与已知限制"）：

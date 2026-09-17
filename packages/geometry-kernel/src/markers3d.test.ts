@@ -43,6 +43,25 @@ describe("3D dihedral detail", () => {
     expect(dihedralAngleDetail3([v0, v1, v2], [v0, v1, v3], v0, v0)).toBeNull()
     expect(dihedralAngleDetail3([v0, v1, v2], [{ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0 }], v0, v1)).toBeNull()
   })
+
+  /**
+   * 体检发现的真缺陷：`Math.max(2, Math.floor(NaN))` 还是 NaN，于是 `for (step = 0; step <= NaN; …)`
+   * 一次都不执行——标记照常返回，但 `arc` 是**空数组**（画布上什么弧都画不出来）。
+   * 同一次体检：`arcSteps: 1e9` 会去分配十亿个点，也要夹住。
+   */
+  it("falls back to a sane arc when the requested step count is unusable", () => {
+    const first: Vector3[] = [{ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, { x: 1, y: 0, z: 1 }, { x: 0, y: 0, z: 1 }]
+    const second: Vector3[] = [{ x: 0, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }, { x: 0, y: 1, z: 1 }, { x: 0, y: 0, z: 1 }]
+    const build = (arcSteps: number) => dihedralMarker3(first, second, { x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 1 }, { arcSteps })
+
+    for (const arcSteps of [Number.NaN, Number.POSITIVE_INFINITY, 0, -3]) {
+      const marker = build(arcSteps)
+      expect(marker, `arcSteps=${arcSteps}`).not.toBeNull()
+      expect(marker!.arc.length, `arcSteps=${arcSteps}`).toBeGreaterThan(2)
+      expect(marker!.arc.every((point) => Number.isFinite(point.x) && Number.isFinite(point.y) && Number.isFinite(point.z))).toBe(true)
+    }
+    expect(build(1e9)!.arc.length).toBeLessThanOrEqual(722)
+  })
 })
 
 describe("dihedral markers", () => {

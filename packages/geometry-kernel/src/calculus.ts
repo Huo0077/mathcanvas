@@ -14,6 +14,9 @@ export type NumericalAnalysisKind = "zero" | "maximum" | "minimum" | "inflection
 
 export type NumericalStatus = "approximate" | "undefined" | "failed"
 
+/** 等距采样的步数上限（与自适应采样一致：4096 段 = 4097 个采样点）。 */
+const MAX_FUNCTION_STEPS = 4096
+
 export interface NumericalIntegralResult {
   value: number | null
   status: NumericalStatus
@@ -58,10 +61,20 @@ function segmentsFromSamples(functionValue: (x: number) => number, samples: Arra
   return segments
 }
 
+/**
+ * 等距采样函数图像。
+ *
+ * `steps` 必须**归一化**（与同文件的 `adaptiveSampleFunctionSegments` / `numericalDerivative` 一致）：
+ * `steps = 0` 会算出 `x = NaN`、采样点全被丢掉 → 返回空数组（调用方只会以为"这条函数没有图像"）；
+ * 负数 / NaN 同样静默返回空；`steps = 1e9` 则会真的跑十亿次求值。
+ * 定义域不是有限区间时返回空——不产生 NaN 坐标。
+ */
 export function sampleFunctionSegments(functionValue: (x: number) => number, domain: [number, number], steps = 128): FunctionSamplePoint[][] {
+  if (!Number.isFinite(domain[0]) || !Number.isFinite(domain[1])) return []
+  const totalSteps = Number.isFinite(steps) ? Math.max(1, Math.min(MAX_FUNCTION_STEPS, Math.floor(steps))) : 128
   const samples: Array<FunctionSamplePoint | null> = []
-  for (let index = 0; index <= steps; index += 1) {
-    const x = domain[0] + (domain[1] - domain[0]) * index / steps
+  for (let index = 0; index <= totalSteps; index += 1) {
+    const x = domain[0] + (domain[1] - domain[0]) * index / totalSteps
     const y = functionValue(x)
     samples.push(Number.isFinite(y) ? { x, y } : null)
   }
