@@ -1,5 +1,7 @@
 import type { Coordinate } from "@draw/dsl"
 
+import { GRID_CELL } from "./sceneGrid"
+
 export const VIEWBOX = { width: 800, height: 440, left: 40, right: 760, top: 20, bottom: 420 }
 export const WORLD_BOUNDS = { minX: -10, maxX: 10, minY: -6, maxY: 6 }
 const scale = Math.min(
@@ -64,11 +66,29 @@ export function zoomViewport(viewport: Viewport, factor: number, anchorSvg: Coor
   return zoomViewportAt(viewport, factor, anchorSvg)
 }
 
-/** Grid lines every `step` world units, with the step growing as the canvas zooms out so the grid never
- * collapses into a solid block (roughly one line per 28 screen pixels or more). */
-export function gridStep(scale: number, minimumSpacing = 28): number {
-  const steps = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000]
-  return steps.find((step) => step * scale >= minimumSpacing) ?? steps[steps.length - 1]
+/** 平面画布网格线的条数上限：极端缩小理论上会要求上万条线，超过就干脆不画（宁可没有网格，
+ * 也不要把画布冻住）。在当前缩放范围（0.05×～40×）内远达不到这个数。 */
+export const MAX_GRID_LINES = 4000
+
+/**
+ * 网格线位置：`[min, max]` 之间所有 `step` 的整数倍（**世界坐标**）。
+ *
+ * 用户要求："平面缩放也会导致网格大小变化，我需要固定网格大小"。
+ * 因此平面画布的格子**恒为 `GRID_CELL`（= 1）个世界单位**，缩放只改变**可见范围**
+ * （看到更多 / 更少的格），与 3D 背景网格完全同一套语义（见 `sceneGrid.ts`）。
+ *
+ * 旧实现按屏幕像素挑一个"好读"的步长（0.1 / 0.2 / 0.5 / 1 / 2 / 5 / …），于是缩放时
+ * **格子本身在变**，网格就不再是一把可靠的尺子。
+ *
+ * 这里刻意不接受缩放比例：位置只由世界坐标区间与格边长决定，因此"格边长不随缩放变化"
+ * 是结构性的，而不是靠约定维持。
+ */
+export function gridLinePositions(min: number, max: number, step = GRID_CELL): number[] {
+  if (!Number.isFinite(min) || !Number.isFinite(max) || !Number.isFinite(step) || step <= 0 || max < min) return []
+  const first = Math.ceil(min / step) * step
+  const count = Math.floor((max - first) / step) + 1
+  if (!Number.isFinite(count) || count <= 0 || count > MAX_GRID_LINES) return []
+  return Array.from({ length: count }, (_, index) => first + index * step)
 }
 
 /**

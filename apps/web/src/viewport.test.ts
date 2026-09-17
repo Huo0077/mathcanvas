@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
-import { DEFAULT_VIEWPORT, MAX_ZOOM, MIN_ZOOM, WORLD_SCALE, gridStep, rayToViewport, svgToWorld, worldToSvg, zoomViewport, zoomViewportAt } from "./viewport"
+import { DEFAULT_VIEWPORT, MAX_GRID_LINES, MAX_ZOOM, MIN_ZOOM, WORLD_SCALE, gridLinePositions, rayToViewport, svgToWorld, visibleWorldBounds, worldToSvg, zoomViewport, zoomViewportAt } from "./viewport"
+import { GRID_CELL } from "./sceneGrid"
 
 describe("shared viewport mapping", () => {
   it("round-trips world coordinates", () => {
@@ -78,9 +79,31 @@ describe("canvas zoom", () => {
     expect(zoomViewport(viewport, 2).scale).toBeCloseTo(WORLD_SCALE * 2)
   })
 
-  it("widens the grid step as the canvas zooms out so the grid stays readable", () => {
-    expect(gridStep(WORLD_SCALE)).toBe(1)
-    expect(gridStep(WORLD_SCALE * 0.1)).toBe(10)
-    expect(gridStep(WORLD_SCALE * 10)).toBe(0.1)
+  /**
+   * 用户要求："平面缩放也会导致网格大小变化，我需要固定网格大小。"
+   * 因此格边长恒为 1 个世界单位（与 3D 背景网格同一套语义），缩放只改变可见范围。
+   * 这个函数刻意不接缩放参数——"不随缩放变化"是结构性的。
+   */
+  it("keeps the grid at one world unit per cell instead of widening the step with zoom", () => {
+    expect(GRID_CELL).toBe(1)
+
+    const spacing = (positions: number[]) => positions.slice(1).map((value, index) => Number((value - positions[index]).toFixed(9)))
+
+    // 缩到最远（0.05×，可见范围约 ±216 格）与放到最大（40×，可见范围不到一格）：
+    // 格边长都还是 1。
+    const wide = visibleWorldBounds(zoomViewport(DEFAULT_VIEWPORT, MIN_ZOOM))
+    const close = visibleWorldBounds(zoomViewport(DEFAULT_VIEWPORT, MAX_ZOOM))
+    const widePositions = gridLinePositions(wide.minX, wide.maxX)
+    expect(new Set(spacing(widePositions))).toEqual(new Set([GRID_CELL]))
+    expect(widePositions.every((value) => Number.isInteger(value))).toBe(true)
+    expect(close.maxX - close.minX).toBeLessThan(1)
+    expect(gridLinePositions(close.minX, close.maxX).every(Number.isInteger)).toBe(true)
+
+    // 平移到非整数中心也一样锚在整格上（线不会跟着指针爬）。
+    expect(gridLinePositions(-2.4, 2.4).slice(0, 3)).toEqual([-2, -1, 0])
+    // 退化输入与"要画上万条线"的极端情况都返回空数组，而不是抛出或冻住画布。
+    expect(gridLinePositions(5, 5, 0)).toEqual([])
+    expect(gridLinePositions(Number.NaN, 1)).toEqual([])
+    expect(gridLinePositions(0, MAX_GRID_LINES * 2)).toEqual([])
   })
 })
