@@ -1,5 +1,5 @@
 import type { Coordinate, GeometryDocument, PrimitiveSpec } from "@draw/dsl"
-import { adaptiveSampleFunctionSegments, evaluateParameterExpression, sampleEllipse, sampleHyperbolaBranches, sampleParabola } from "@draw/geometry-kernel"
+import { adaptiveSampleFunctionSegments, evaluateParameterExpression, sampleHyperbolaBranches, sampleParabola } from "@draw/geometry-kernel"
 
 import { svgStyleFor } from "../primitiveStyle"
 import { resolveAnnotationPoint } from "../annotations"
@@ -27,10 +27,9 @@ function viewportRay(ray: Extract<PrimitiveSpec, { type: "ray" }>): { a: Coordin
   return rayToViewport(ray, WORLD_BOUNDS)
 }
 
-function sampledSegments(primitive: Extract<PrimitiveSpec, { type: "parabola" | "ellipse" | "hyperbola" | "function" | "derivative" | "tangent" | "normal" | "secant" | "integral" | "analysisSet" }>): Coordinate[][] {
+function sampledSegments(primitive: Extract<PrimitiveSpec, { type: "parabola" | "hyperbola" | "function" | "derivative" | "tangent" | "normal" | "secant" | "integral" | "analysisSet" }>): Coordinate[][] {
   try {
     if (primitive.type === "parabola") return [sampleParabola(primitive, [WORLD_BOUNDS.minX, WORLD_BOUNDS.maxX], 128)]
-    if (primitive.type === "ellipse") return [sampleEllipse(primitive, 160)]
     if (primitive.type === "hyperbola") {
       return sampleHyperbolaBranches(primitive, [WORLD_BOUNDS.minX, WORLD_BOUNDS.maxX], 128)
     }
@@ -62,8 +61,20 @@ function primitiveSvg(primitive: PrimitiveSpec): string {
   if (primitive.type === "cube" || primitive.type === "pyramid" || primitive.type === "cylinder" || primitive.type === "cone" || primitive.type === "point3" || primitive.type === "line3" || primitive.type === "segment3" || primitive.type === "ray3" || primitive.type === "plane3" || primitive.type === "circle3" || primitive.type === "edge3" || primitive.type === "face3" || primitive.type === "polyhedron3" || primitive.type === "section" || primitive.type === "intersectionLine" || primitive.type === "intersectionSolid" || primitive.type === "intersectionFace" || primitive.type === "intersectionPoint3") return ""
   if (primitive.type === "circle") return `<circle cx="${toX(primitive.center.x)}" cy="${toY(primitive.center.y)}" r="${radiusToSvg(primitive.radius)}" ${svgStyleFor(primitive)} />`
   if (primitive.type === "arc") return `<path d="M ${toX(primitive.center.x + primitive.radius * Math.cos(primitive.startAngle))} ${toY(primitive.center.y + primitive.radius * Math.sin(primitive.startAngle))} A ${radiusToSvg(primitive.radius)} ${radiusToSvg(primitive.radius)} 0 ${Math.abs(primitive.endAngle - primitive.startAngle) > Math.PI ? 1 : 0} ${primitive.endAngle >= primitive.startAngle ? 0 : 1} ${toX(primitive.center.x + primitive.radius * Math.cos(primitive.endAngle))} ${toY(primitive.center.y + primitive.radius * Math.sin(primitive.endAngle))}" ${svgStyleFor(primitive)} />`
+  // SVG 有 `<ellipse>`，能**精确**表示（可旋转的）椭圆，所以这里不做任何采样：旧实现把椭圆写成 160 段
+  // 折线，那是"逼近的圆"，放大就出棱——用户的原话是"我不要一个逼近的圆，我需要一个真的圆"。
+  // `rotation` 在文档里是弧度，而 `rotate()` 吃角度；屏幕坐标顺时针为正，恰好等于世界坐标的逆时针为正，
+  // 因此直接换算、不取负。旋转中心就是椭圆自己的圆心，所以没有旋转（0）时不写 `transform`。
+  if (primitive.type === "ellipse") {
+    const rotationDegrees = (primitive.rotation ?? 0) * 180 / Math.PI
+    const transform = rotationDegrees === 0 ? "" : ` transform="rotate(${rotationDegrees} ${toX(primitive.center.x)} ${toY(primitive.center.y)})"`
+    return `<ellipse cx="${toX(primitive.center.x)}" cy="${toY(primitive.center.y)}" rx="${radiusToSvg(primitive.radiusX)}" ry="${radiusToSvg(primitive.radiusY)}"${transform} ${svgStyleFor(primitive)} />`
+  }
   if (primitive.type === "point") return `<circle cx="${toX(primitive.x)}" cy="${toY(primitive.y)}" r="6" ${svgStyleFor(primitive)} />`
   if (primitive.type === "intersection" || primitive.type === "lineCircleIntersection" || primitive.type === "circleIntersection" || primitive.type === "curveIntersection") return `<circle cx="${toX(primitive.x)}" cy="${toY(primitive.y)}" r="4" ${svgStyleFor(primitive)} />`
+  // 抛物线与双曲线**没有**精确的 SVG 元素：`<path>` 的 `A` 命令画的是圆弧，不是圆锥曲线，
+  // 硬套上去只会得到一条错误但看起来"精确"的曲线。它们如实继续用采样折线导出——
+  // 宁可承认是逼近，也不要假装精确（椭圆不同，见上面的 `<ellipse>`）。
   const segments = sampledSegments(primitive)
   return segments.map((points) => `<polyline points="${pointsAttribute(points)}" ${svgStyleFor(primitive)} />`).join("")
 }

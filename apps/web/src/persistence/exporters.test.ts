@@ -1,7 +1,7 @@
 import { createEmptyDocument } from "@draw/dsl"
 import { describe, expect, it } from "vitest"
 
-import { WORLD_BOUNDS, worldToSvg, rayToViewport } from "../viewport"
+import { WORLD_BOUNDS, WORLD_SCALE, worldToSvg, rayToViewport } from "../viewport"
 import { exportCsv, exportSvg } from "./exporters"
 
 describe("document exporters", () => {
@@ -94,12 +94,89 @@ describe("document exporters", () => {
     expect(csv).toContain('""value"":60,""unit"":""°""')
   })
 
-  it("uses the canvas scale when exporting circles", () => {
+  it("uses the canvas scale when exporting circles and true ellipse elements", () => {
     const document = createEmptyDocument("calculus")
-    document.primitives = [{ id: "circle-1", type: "circle", center: { x: 0, y: 0 }, radius: 1 }]
+    document.primitives = [
+      { id: "circle-1", type: "circle", center: { x: 0, y: 0 }, radius: 1 },
+      { id: "ellipse-1", type: "ellipse", center: { x: 0, y: 0 }, radiusX: 1, radiusY: 1 }
+    ]
 
-    expect(exportSvg(document)).toMatch(/<circle[^>]+r="33\.333333333333[0-9]+"/)
-    expect(exportSvg(document)).not.toContain("<ellipse")
+    const svg = exportSvg(document)
+
+    expect(svg).toMatch(/<circle[^>]+r="33\.333333333333[0-9]+"/)
+    // 行为**有意改变**，这一片要交付的就是它：旧断言是 `not.toContain("<ellipse")`，
+    // 它把"椭圆导出成 160 段折线（近似）"钉成了正确行为。SVG 的 `<ellipse>` 能精确表示椭圆，
+    // 所以要求现在反过来——导出里必须出现真曲线元素。圆本身仍是 `<circle>`（上一条断言守着）。
+    expect(svg).toContain("<ellipse")
+  })
+
+  /**
+   * 用户的原话："我不要一个逼近的圆，我需要一个真的圆。"
+   *
+   * 旧实现把椭圆交给 `sampleEllipse(primitive, 160)` 再写成 `<polyline>`：160 段弦在默认缩放下
+   * 看着像椭圆，放大就是多边形。SVG 的 `<ellipse>` 能**精确**表示（可旋转的）椭圆，
+   * 因此这里不该有任何采样：`cx/cy` 走画布同一套坐标映射，`rx/ry` 走同一个比例尺。
+   */
+  it("exports an ellipse as a true SVG ellipse element", () => {
+    const document = createEmptyDocument("calculus")
+    const ellipse = { id: "ellipse-1", type: "ellipse" as const, center: { x: 2, y: -1 }, radiusX: 3, radiusY: 2 }
+    document.primitives = [ellipse]
+
+    const svg = exportSvg(document)
+
+    const expectedCx = worldToSvg({ x: ellipse.center.x, y: 0 }).x
+    const expectedCy = worldToSvg({ x: 0, y: ellipse.center.y }).y
+    expect(svg).toContain(`<ellipse cx="${expectedCx}" cy="${expectedCy}" rx="${ellipse.radiusX * WORLD_SCALE}" ry="${ellipse.radiusY * WORLD_SCALE}"`)
+    // 样式仍然走 `svgStyleFor`，与圆/弧一致（椭圆默认描边色）。
+    expect(svg).toContain('stroke="#0891b2"')
+    // 真曲线不是采样曲线：这份文档里不该再有折线。
+    expect(svg).not.toContain("<polyline")
+  })
+
+  it("rotates the exported ellipse by the document rotation in degrees", () => {
+    const document = createEmptyDocument("calculus")
+    const ellipse = { id: "ellipse-1", type: "ellipse" as const, center: { x: 1, y: 2 }, radiusX: 3, radiusY: 2, rotation: Math.PI / 4 }
+    document.primitives = [ellipse]
+
+    const svg = exportSvg(document)
+
+    // 文档里的 `rotation` 是弧度，SVG 的 `rotate()` 吃角度；屏幕坐标顺时针为正，
+    // 恰好等于世界坐标的逆时针为正，所以直接换算、不需要取负。
+    const degrees = (ellipse.rotation * 180) / Math.PI
+    const expectedCx = worldToSvg({ x: ellipse.center.x, y: 0 }).x
+    const expectedCy = worldToSvg({ x: 0, y: ellipse.center.y }).y
+    expect(svg).toContain(`transform="rotate(${degrees} ${expectedCx} ${expectedCy})"`)
+    // 双保险：角度确实是 45°（而不是随手写死的常数）。
+    expect(Number(svg.match(/transform="rotate\(([-0-9.]+) /)?.[1])).toBeCloseTo(45, 9)
+  })
+
+  it("omits the rotation transform on an unrotated ellipse", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [{ id: "ellipse-1", type: "ellipse", center: { x: 0, y: 0 }, radiusX: 2, radiusY: 1 }]
+
+    const element = exportSvg(document).match(/<ellipse[^>]*\/>/)?.[0]
+
+    expect(element, "the exported ellipse element is missing").toBeDefined()
+    expect(element).not.toContain("transform")
+  })
+
+  /**
+   * 诚实的边界：SVG 没有圆锥曲线元素。`<path>` 的 `A` 命令画的是**圆弧**，
+   * 画不出抛物线或双曲线，所以这两种曲线继续用采样折线导出——
+   * 宁可承认它是逼近，也不要假装精确。
+   */
+  it("keeps parabola and hyperbola branches as polylines because SVG has no conic element", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [
+      { id: "parabola-1", type: "parabola", vertex: { x: 0, y: 0 }, focalParameter: 2, axis: "x" },
+      { id: "hyperbola-1", type: "hyperbola", center: { x: 0, y: 0 }, radiusX: 2, radiusY: 1, axis: "x" }
+    ]
+
+    const svg = exportSvg(document)
+
+    // 抛物线 1 条 + 双曲线 2 支 = 3 条折线，且一个 `<ellipse>` 都不该有。
+    expect(svg.match(/<polyline/g)).toHaveLength(3)
+    expect(svg).not.toContain("<ellipse")
   })
 
   it("exports visible annotations at their anchored positions", () => {
