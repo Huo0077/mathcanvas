@@ -1165,8 +1165,44 @@ P7-1 至 P7-6 与工程工作台层次化改造 Task 1-7 均已完成；P4 Agent
 
 ## 验证证据
 
-> **当前基线（唯一权威，2026-09-17 在"动点与连线命中顺序修复"之后实测）**：`npm.cmd test` **104 个测试文件、1139 个用例通过**；4 个 workspace 类型检查通过；ESLint **0 error、15 条 warning**；生产构建通过（Vite 仍提示主 bundle 超过 500 KB）；Playwright **83/83** 通过。
+> **当前基线（唯一权威，2026-09-17 在"全身大体检 + e2e 构建修复"之后实测）**：`npm.cmd test` **106 个测试文件、1164 个用例通过**；4 个 workspace 类型检查通过；ESLint **0 error、15 条 warning**；生产构建通过（Vite 仍提示主 bundle 超过 500 KB）；Playwright **83/83** 通过（**现在真的跑的是当前工作区的构建产物**，见下）。
 > 下面按时间倒序列出各轮实测快照（数字是**当时**的取值，用于追溯与对比，不代表当前门禁）；例如 68 文件 / 698 用例与 Playwright 47/47 属于 2026-09-16 的 Task 15-18 那一轮。
+
+### 全身大体检（2026-09-17）：并行只读审计 + 按严重度修复
+
+- **做法**：4 路只读审计分头覆盖 `geometry-kernel`、`dsl`（schema/codec）、`scene-graph`（依赖图 / 重算 / 级联）、`apps/web`（状态 / 渲染 / 拾取）与持久化 / 基础设施，逐条给出 `文件:行号` 证据；随后我自己补一条**性质测试**把"增量重算 ≡ 全量重算"这条不变式钉死，凡审计与性质测试确认的缺陷一律**先写失败用例（RED）再修（GREEN）**，不确认的只记录不猜改。
+- **性质测试先抓到一个真缺陷**（已修，提交 `e6a1e77`）：`primitiveDependencies` 漏掉"依赖图元的**已物化拓扑**"，数值改顶点后 `section` / `intersectionFace` 残留旧几何。`packages/scene-graph/src/recomputeConsistency.test.ts` 用 12 条平面 + 10 条空间编辑断言 `commitPatch` 后再做一次全量重算**不改变任何字段**；同一提交顺带修掉"交点预览画在点的命中层之上"（预览 14px 命中圆抢走动点 pointerdown）与预览被重复渲染两次的问题。
+- **本轮修复的缺陷（都带 RED→GREEN）**：
+
+| 类别 | 缺陷 | 修法 |
+| --- | --- | --- |
+| 内核 | `parameters.ts` 存在**第二套求值器**，只认 6 个函数，其余函数名落到 `Math.tan` 兜底（`ln(2)` → `tan(2)`），错值还会写进 `parameter.value` 存盘 | 删掉副本，统一走 `expression.ts` 的求值器（变量用 Proxy 惰性解析，循环引用与未定义变量语义不变） |
+| 内核 | `clampPointIntoSolid3` 用**全体顶点形心**定面朝向，凹实体形心在体外时会翻反内凹面法向，把点留在空气里还报"已满足" | 改用**有符号体积**定朝向；先判凸性，凹 / 退化 / 绕向自相矛盾的实体返回 `null`（宿主不存在 → 上层报数据不足），收尾再用"顶点形心 → 当前点"二分兜底 |
+| 内核 | 面法向退化判据用**绝对** EPSILON 比 Newell 法向模长（≈2×面面积），1e-5 量级实体所有面都算不出来、夹取静默失效 | 全部改为**随实体尺度**的相对容差 |
+| 内核 | `sectionPolyhedron3` 从不校验剖切平面，零法向（每个点都"在平面上"）会**凭空造出一片立方体面**并报 `polygon` | 法向零 / 非有限 / 相对尺度可忽略时返回 `insufficient-data` |
+| 内核 | 顺时针圆弧的投影参数超出参数域（`startAngle + delta`，可达 2π 以上）而 `parameterBounds` 返回**反序区间**，动点一拖就跳到端点、滑块区间也是倒的 | 顺时针弧返回 `startAngle + delta − 2π`，参数域按 `[endAngle, startAngle]` 升序 |
+| 内核 | `lineConstraint.project` 对非有限输入返回 `parameter: ∞`、坐标 `{∞, 0}` 且 `converged: true` | 输入或结果非有限时返回 `null`（`DynamicPoint.moveTo` 已有"未收敛、不移动"分支） |
+| 内核 | `parameterBounds()` 返回**同一个可变对象**，调用方改一下就会污染约束 | 一律返回副本 |
+| 内核 | 退化直线上的平行 / 垂直 / 共线约束残差返回 0（"完美满足"）、`converged: true`、几何一动不动也无诊断 | `ConstraintSolveResult` 增加 `unsatisfiable: string[]`，退化目标被显式列出；`operations.ts` 在求解失败时用它们给出准确诊断 |
+| DSL | `document.parameters` 只校验"容器是对象"：`null` 会白屏，`id !== key` 让编辑静默丢失，非数字 `value` 变 NaN 且文档再也存不回去 | 逐条校验 `id === key`、有限 `value`、`expression`/`label`/`ownerId` 类型、`min`/`max`/`step` 有限且 `step > 0` |
+| DSL | `metadata` 只校验 `id`，缺 `name` 的文件打开后一按导出就抛 TypeError | 要求 `metadata.name` 为非空字符串 |
+| DSL | `section.loops` 从不校验，直接进 3D 预览的描边 / 三角化路径（非数组或 NaN 坐标） | 校验为"点数组的数组"且坐标有限 |
+| scene-graph | 删除对象时分组只摘成员、不回收空壳，剩 1 个成员的分组让 `validateDocument` 失败 → 文档**再也存不回去** | 摘到成员 < 2 时解散该分组 |
+| scene-graph | 平面点的 `derived` 绑定在来源被删后留下悬空引用（空间点早有降级，平面点漏了） | `unbindDeletedHost` 一并降级为自由点 |
+| web | 打开 `.mgeo` 不清选中状态：id 是确定性的（`point-1`），属性栏会继续编辑"打开来的同名对象" | `load()` 清空选中 / 创建流程 / 活动图纸与视图 |
+| web | 导出 SVG 的射线裁剪是**画布那份的副本**且 x 限位写反，导出与画布画得不一样 | 复用 `rayToViewport`；顺带把裁剪改成真正的矩形 slab 裁剪（旧实现与常数 20 取 min，起点在视口外时射线停在视口中间） |
+| web | PDF 用 WinAnsi-only 的 Helvetica 画**应用自己生成的中文诊断**，只要有一条诊断整个 PDF 导出就失败 | 抽出 `winAnsiSafe()` 把不可编码字符替换成 `?`（真正的 CJK 需内嵌字体，已记入功能目录限制） |
+| web | 读不出来的草稿被 `removeItem` **静默删除**（旧版本字段 / 手工改坏的文档都是用户的工作） | 区分"不是 JSON"（垃圾，删）与"是文档但读不出来"（挪到 `:unreadable` 旁路键保留并抛出，启动时如实提示） |
+| web | `saveWorkbenchPreferences` / `saveViewPreference3d` / `saveDraft` 无 try/catch，配额溢出时从点击处理里抛错，界面半更新 | 三处都吞掉写入失败（视图偏好存不下是可接受降级） |
+| 基础设施 | `test:e2e` 先构建 `apps/web/dist`，而 `e2e/global-setup.mjs` **preview 的是 `build-check/mathcanvas-current`** ——实测那份产物是 9/14 的旧 bundle，Playwright 全绿与当前源码无关 | global setup 改为按 `apps/web` 自己的 vite 配置**重新构建**同一个目录再 preview；`test:e2e` 不再做无用构建 |
+
+- **明确不修、只记录**（都写进 `docs/feature-catalog.md` 的"体检结论与已知限制"）：
+  - 非凸实体不再提供"实体内"宿主（宁可报数据不足，也不伪造体外坐标）。
+  - 退化直线上的约束被跳过并列入 `unsatisfiable`，但**不让求解失败**：`recomputeDerivedObjects` 在 `!converged` 时抛错，改了就会让"把一条被约束的线拖成一个点"整份文档报错，得不偿失。
+  - 隐式约束的残差在梯度退化时退回 `|F|`（数值量纲不是距离）；仓库里没有生产代码构造隐式约束，属潜在问题。
+  - 草稿的多标签页/打开文件覆盖仍无版本比对（需要 `storage` 监听 + 修订号语义，留作后续）。
+  - `boolean3d` 的 `O(V²)` 键重建、`threeScene` 的 Shift 中途按下不再生效等性能 / 交互项，已记录待办。
+- **回填过程事故记录（第 2 次栽在同一个坑）**：这一轮我又用 PowerShell 的 `Get-Content -Raw` + `Set-Content` 改仓库文件，`Get-Content` 在中文文件上按 ANSI 解码，把 `schema.test.ts` 与 `App.tsx` 的中文注释写成了乱码并加了 BOM；两次都用 `git checkout` 还原并改用编辑工具重做（`App.tsx` 那次还顺带拿到了"清除选中"用例的真实 RED 证据）。**结论不变：仓库文件一律用编辑工具或显式 .NET `UTF8Encoding` 读写，绝不走 PowerShell 文本管道。**
 
 - **动点与连线：命中顺序修复（2026-09-17）**：用户报告"把动点放在轨道上、动点又和另一个定点连了线，移动轨道会把设定好的定点一起带走"。取证（Playwright 读 `elementFromPoint`）查出真正的问题是**指针归属**：连线与轨迹都画在点之后，连线的可见线正好穿过两端点、轨迹必然穿过动点自己，于是"点正中心"那一下落在派生曲线上——派生对象拖不动，还会退化成框选，**动点及其相连的定点都抓不住**；而"拖轨道带走定点"本身没复现（实测定点坐标逐位不变）。修法：连线命中带两端缩进 16px（`insetSegment` + 单测），并把**点的命中区在所有派生曲线之上再画一遍**。本轮起始 **103 文件 / 1136 用例** → **104 文件 / 1139 用例**；Playwright **82/82 → 83/83**（新增 `e2e/planar-connected-point-drag.spec.ts`）；lint 0 error / 15 warning（持平）；`typecheck` 4 个 workspace 与生产构建全绿。
 
