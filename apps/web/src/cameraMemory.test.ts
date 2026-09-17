@@ -59,4 +59,32 @@ describe("camera memory", () => {
 
     expect(loadRememberedCamera("doc-1")).toBeNull()
   })
+
+  /**
+   * 体检发现的真缺陷：记忆只有一个槽位。交替打开两个 3D 文档时，后者的相机会把前者的覆盖掉，
+   * 切回第一个文档就只能重新取景（用户转过的角度、缩放、视点全丢）。
+   */
+  it("keeps a camera per document when two documents alternate", () => {
+    const first = { ...createCameraState(), azimuth: 100, distance: 5 }
+    const second = { ...createCameraState(), azimuth: -40, distance: 9 }
+    rememberCamera("doc-1", first)
+    rememberCamera("doc-2", second)
+
+    expect(loadRememberedCamera("doc-1")).toEqual(first)
+    expect(loadRememberedCamera("doc-2")).toEqual(second)
+
+    // 切回 doc-1 再写回：两个都还在（后写的不会挤掉前者）。
+    rememberCamera("doc-1", { ...first, distance: 6 })
+    expect(loadRememberedCamera("doc-2")).toEqual(second)
+    expect(loadRememberedCamera("doc-1")?.distance).toBe(6)
+  })
+
+  it("bounds how many documents it remembers", () => {
+    for (let index = 0; index < 6; index += 1) rememberCamera(`doc-${index}`, { ...createCameraState(), azimuth: index })
+
+    // 最近访问的必须还在；最早的会被淘汰（内存不随文档数无限增长）。
+    expect(loadRememberedCamera("doc-5")?.azimuth).toBe(5)
+    expect(loadRememberedCamera("doc-4")?.azimuth).toBe(4)
+    expect(loadRememberedCamera("doc-0")).toBeNull()
+  })
 })

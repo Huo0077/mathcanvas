@@ -190,7 +190,11 @@ function renderProjectedPrimitive(primitive: ProjectedPrimitive, bounds: Drawing
 
 function renderAnnotation(annotation: ProjectedDrawing["annotations"][number]) {
   if (!annotation.position) return null
-  return <g key={annotation.id} className={`engineering-drawing-annotation engineering-drawing-annotation-${annotation.status}`} data-testid="engineering-annotation" data-annotation-id={annotation.id} data-status={annotation.status} data-source-ids={annotation.sourceIds.join(",")}><text x={annotation.position.x} y={-annotation.position.y}>{annotation.text}</text></g>
+  /**
+   * 标注只是**读数**，不参与交互：它没有自己的点击处理，但 SVG 文本默认会吃掉指针事件，
+   * 压在某个图元上时那一下点击就落不到图元上（平面画布的标注一直是 `pointerEvents="none"`）。
+   */
+  return <g key={annotation.id} className={`engineering-drawing-annotation engineering-drawing-annotation-${annotation.status}`} data-testid="engineering-annotation" data-annotation-id={annotation.id} data-status={annotation.status} data-source-ids={annotation.sourceIds.join(",")} pointerEvents="none"><text x={annotation.position.x} y={-annotation.position.y}>{annotation.text}</text></g>
 }
 
 function renderInvalidAnnotation(annotation: ProjectedDrawing["annotations"][number]) {

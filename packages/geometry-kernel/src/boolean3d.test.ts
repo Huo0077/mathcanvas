@@ -156,4 +156,43 @@ describe("intersectConvexPolyhedra3", () => {
 
     expect(result.status).toBe("insufficient-data")
   })
+
+  /**
+   * 大体量输入（96 段圆柱近似 = 192 顶点 / 98 面）必须既算得对、又算得完。
+   *
+   * 体检发现 `clipByPlane` 的顶点索引是"每次插入都线性扫描 + 重建字符串键"（O(F·V) 次键构造）：
+   * 两个 48 段圆柱一次交集的实测开销是 137ms，96 段到 1025ms。改成一次建表（键 → 下标）之后
+   * 同样三次是 27ms / 83ms，体积逐位一致。这里跑 6 次：旧实现在默认 5s 测试超时下就完不成，
+   * 因此这条用例同时也是**性能回归的软守卫**（正确性由体积与顶点约束断言）。
+   */
+  it("intersects large tessellated cylinders within a sane budget", () => {
+    const cylinder = (centreX: number) => {
+      const segments = 96
+      const ring = (z: number) => Array.from({ length: segments }, (_, index) => {
+        const angle = index * Math.PI * 2 / segments
+        return { x: centreX + Math.cos(angle), y: Math.sin(angle), z }
+      })
+      const vertices = [...ring(-1), ...ring(1)]
+      const faces: number[][] = [
+        Array.from({ length: segments }, (_, index) => index),
+        Array.from({ length: segments }, (_, index) => segments + index)
+      ]
+      for (let index = 0; index < segments; index += 1) {
+        const next = (index + 1) % segments
+        faces.push([index, next, segments + next, segments + index])
+      }
+      return { vertices, faces }
+    }
+    const first = cylinder(0)
+    const second = cylinder(1)
+
+    let result = intersectConvexPolyhedra3(first, second)
+    for (let repeat = 1; repeat < 6; repeat += 1) result = intersectConvexPolyhedra3(first, second)
+
+    expect(result.status).toBe("polyhedron")
+    expect(insideAll(result, first)).toBe(true)
+    expect(insideAll(result, second)).toBe(true)
+    // 两个 96 边形棱柱各错开 1 个单位：交集体积稳定在 2.4537…（离散化决定，纯函数）。
+    expect(result.volume).toBeCloseTo(2.4537, 3)
+  })
 })

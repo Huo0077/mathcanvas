@@ -54,6 +54,29 @@ describe("drawing viewport", () => {
     expect(screen.queryByRole("img")).toBeNull()
   })
 
+  /**
+   * 体检发现的真缺陷：投影视图里的标注文本没有 `pointer-events: none`，SVG 文本默认吃指针事件——
+   * 尺寸标注压在某个棱 / 点上时，点那一下落不到图元上（平面画布的标注一直是 none）。
+   */
+  it("keeps engineering annotation labels out of the pointer path", () => {
+    const document = pointDocument()
+    const projected = {
+      ...resolveProjectedDrawing(document, "front"),
+      annotations: [{
+        id: "dimension-1",
+        sourceIds: ["point3-1"],
+        kind: "linear" as const,
+        text: "尺寸 1",
+        position: { x: 1, y: 1, depth: 0 },
+        explanation: "",
+        status: "valid" as const
+      }]
+    }
+    render(<DrawingViewport view={projectionView} sheetName="工程图纸" mode="projection" document={document} selectedIds={[]} projectedDrawing={projected} onSelect={() => {}} />)
+
+    expect(screen.getByTestId("engineering-annotation").getAttribute("pointer-events")).toBe("none")
+  })
+
   it("reports scale and visibility changes with the view id", () => {
     const onLayoutChange = vi.fn()
     render(<DrawingViewport view={projectionView} sheetName="工程图纸" mode="projection" document={pointDocument()} selectedIds={[]} onSelect={() => {}} onLayoutChange={onLayoutChange} />)

@@ -111,14 +111,6 @@ function dedupePoints(points: Vector3[], quantum: number): Vector3[] {
   return unique
 }
 
-function indexOfVertex(vertices: Vector3[], point: Vector3, quantum: number): number {
-  const key = pointKey(point, quantum)
-  const existing = vertices.findIndex((vertex) => pointKey(vertex, quantum) === key)
-  if (existing >= 0) return existing
-  vertices.push(point)
-  return vertices.length - 1
-}
-
 /**
  * 去掉环上相邻（含首尾）重复的点。
  *
@@ -141,6 +133,26 @@ function clipByPlane(polyhedron: Polyhedron3Input, plane: FacePlane, quantum: nu
   const signed = (point: Vector3) => dotVector3(plane.normal, point) + plane.constant
   const tolerance = quantum
   const vertices = [...polyhedron.vertices]
+  /**
+   * 顶点索引表（键 → 下标）。
+   *
+   * 旧实现每次插入都 `findIndex` 线性扫描并**重建字符串键**：一次裁剪是 O(F·V) 次键构造，
+   * 两个 48 段圆柱的近似（各约 100 顶点、50 面）就已经到几十毫秒，96 段更是秒级。
+   * 这里一次建表、之后 O(1) 查，语义完全不变（键相同时仍取**最早**的那个下标）。
+   */
+  const indexByKey = new Map<string, number>()
+  vertices.forEach((vertex, index) => {
+    const key = pointKey(vertex, quantum)
+    if (!indexByKey.has(key)) indexByKey.set(key, index)
+  })
+  const vertexIndex = (point: Vector3): number => {
+    const key = pointKey(point, quantum)
+    const existing = indexByKey.get(key)
+    if (existing !== undefined) return existing
+    const next = vertices.push(point) - 1
+    indexByKey.set(key, next)
+    return next
+  }
   const faces: number[][] = []
   const cutPoints: Vector3[] = []
   for (const face of polyhedron.faces) {
@@ -162,7 +174,7 @@ function clipByPlane(polyhedron: Polyhedron3Input, plane: FacePlane, quantum: nu
         cutPoints.push(crossing)
       }
     }
-    const indices = dedupeRing(clipped, quantum).map((point) => indexOfVertex(vertices, point, quantum))
+    const indices = dedupeRing(clipped, quantum).map(vertexIndex)
     if (new Set(indices).size >= 3) faces.push(indices)
   }
   if (cutPoints.length >= 3) {
@@ -172,7 +184,7 @@ function clipByPlane(polyhedron: Polyhedron3Input, plane: FacePlane, quantum: nu
      * 实测：包含关系的两立方体算成体积 0.88、面里出现 `[6,7,0,2,6,3,5]` 这种重复顶点的形状。
      */
     const ordered = orderSectionPoints3(dedupePoints(cutPoints, quantum), plane)
-    if (ordered.length >= 3) faces.push(ordered.map((point) => indexOfVertex(vertices, point, quantum)))
+    if (ordered.length >= 3) faces.push(ordered.map(vertexIndex))
   }
   return { vertices, faces }
 }
