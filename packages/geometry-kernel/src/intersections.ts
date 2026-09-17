@@ -26,7 +26,14 @@ function inUnitInterval(value: number | null, tolerance = 1e-9): boolean {
   return value !== null && value >= -tolerance && value <= 1 + tolerance
 }
 
-function onRay(ray: RayPrimitive, point: Coordinate, tolerance = 1e-9): boolean {
+/**
+ * 交点是否落在射线的**前向半线**上。
+ *
+ * 垂直距离是长度量纲，判据必须随坐标尺度缩放：在 ~1e6 的坐标上，交点本身由浮点算出来就带着
+ * ~1e-10 的残差，用绝对 1e-12 去比会把"确实相交"误判成"在起点之后"（实测：射线方向 (1, 0.001)、
+ * 起点 (1e6, 1e6)、竖直直线在 x = 1e6 + 0.0005 处相交 → 旧实现返回 `none`）。
+ */
+function onRay(ray: RayPrimitive, point: Coordinate, policy: NumericPolicy = defaultNumericPolicy): boolean {
   const dx = ray.b.x - ray.a.x
   const dy = ray.b.y - ray.a.y
   const length = Math.hypot(dx, dy)
@@ -35,6 +42,7 @@ function onRay(ray: RayPrimitive, point: Coordinate, tolerance = 1e-9): boolean 
   const uy = dy / length
   const offsetX = point.x - ray.a.x
   const offsetY = point.y - ray.a.y
+  const tolerance = scaledTolerance([point.x, point.y, ray.a.x, ray.a.y, ray.b.x, ray.b.y], policy)
   return Math.abs(ux * offsetY - uy * offsetX) <= tolerance && ux * offsetX + uy * offsetY >= -tolerance
 }
 
@@ -69,15 +77,15 @@ export function intersectLines(first: LinePrimitive, second: LinePrimitive): Coo
 
 export function intersectRayLineDetailed(ray: RayPrimitive, line: LinePrimitive, policy: NumericPolicy = defaultNumericPolicy): IntersectionResult {
   const result = intersectLinesDetailed({ id: `${ray.id}-support`, type: "line", a: ray.a, b: ray.b }, line, policy)
-  if (result.kind === "point") return onRay(ray, result.point, policy.absoluteTolerance) ? result : { kind: "none", reason: "intersection lies behind ray origin" }
+  if (result.kind === "point") return onRay(ray, result.point, policy) ? result : { kind: "none", reason: "intersection lies behind ray origin" }
   return result
 }
 
 export function intersectRayCircleDetailed(ray: RayPrimitive, circle: CirclePrimitive, policy: NumericPolicy = defaultNumericPolicy): IntersectionResult {
   const result = intersectLineCircleDetailed({ id: `${ray.id}-support`, type: "line", a: ray.a, b: ray.b }, circle, policy)
-  if (result.kind === "point" || result.kind === "tangent") return onRay(ray, result.point, policy.absoluteTolerance) ? result : { kind: "none", reason: "intersection lies behind ray origin" }
+  if (result.kind === "point" || result.kind === "tangent") return onRay(ray, result.point, policy) ? result : { kind: "none", reason: "intersection lies behind ray origin" }
   if (result.kind !== "points") return result
-  const points = result.points.filter((point) => onRay(ray, point, policy.absoluteTolerance))
+  const points = result.points.filter((point) => onRay(ray, point, policy))
   if (points.length === 0) return { kind: "none", reason: "intersection lies behind ray origin" }
   if (points.length === 1) return { kind: "point", point: points[0] }
   return { kind: "points", points: [points[0], points[1]] }

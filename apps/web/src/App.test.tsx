@@ -31,7 +31,7 @@ describe("MathCanvas workbench", () => {
     localStorage.clear()
     // `replace` deliberately keeps other workspaces' documents, so tests need a full store reset.
     const document = createDemoDocument()
-    useSceneStore.setState({ document, workspaceDocuments: { [document.workspace]: document }, history: [], future: [], previewBase: null, error: null, treeTab: "model", expandedIds: ["sheet-1"], filterQuery: "" })
+    useSceneStore.setState({ document, workspaceDocuments: { [document.workspace]: document }, history: [], future: [], error: null, treeTab: "model", expandedIds: ["sheet-1"], filterQuery: "" })
   })
 
   it("renders each workspace command from the shared Ribbon only once", () => {
@@ -1349,7 +1349,7 @@ describe("MathCanvas workbench", () => {
         { id: "function-1", type: "function", expression: "sin(x)", domain: [-10, 10], samples: 400 }
       ]
     })
-    useSceneStore.setState({ document, workspaceDocuments: { [document.workspace]: document }, history: [], future: [], previewBase: null, error: null, treeTab: "model", expandedIds: [], filterQuery: "" })
+    useSceneStore.setState({ document, workspaceDocuments: { [document.workspace]: document }, history: [], future: [], error: null, treeTab: "model", expandedIds: [], filterQuery: "" })
     render(<App />)
 
     const previews = () => Array.from(globalThis.document.querySelectorAll("[data-auto-intersection]"))

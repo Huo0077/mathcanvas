@@ -24,6 +24,29 @@ describe("line intersections", () => {
     expect(intersectRayLineDetailed(ray, { id: "line", type: "line", a: { x: -2, y: -1 }, b: { x: -2, y: 1 } })).toEqual({ kind: "none", reason: "intersection lies behind ray origin" })
   })
 
+  /**
+   * 体检发现的真缺陷：`onRay` 的垂距判据用的是**绝对**容差（1e-12）。
+   * 垂距是长度量纲，在 ~1e6 的坐标上光浮点残差就有 ~1e-10，于是"射线与直线确实相交"
+   * 会被判成 `none`，理由还是错的——"交点在射线起点之后"。
+   * 下面这组数是实跑出来的：修复前 scale = 1e6 就已经误判。
+   */
+  it("keeps a ray crossing at large coordinates instead of claiming it lies behind the origin", () => {
+    const scale = 1_000_000
+    const ray: RayPrimitive = { id: "ray", type: "ray", a: { x: scale, y: scale }, b: { x: scale + 1, y: scale + 0.001 } }
+    const line = { id: "line", type: "line" as const, a: { x: scale + 0.0005, y: scale - 10 }, b: { x: scale + 0.0005, y: scale + 10 } }
+
+    const result = intersectRayLineDetailed(ray, line)
+
+    expect(result.kind).toBe("point")
+    if (result.kind === "point") {
+      expect(result.point.x).toBeCloseTo(scale + 0.0005, 9)
+      expect(result.point.y).toBeCloseTo(scale + 0.0000005, 9)
+    }
+    // 真正在起点之后的交点仍然要被挡掉（容差不能松到把反向的解放进来）。
+    const behind = { id: "line", type: "line" as const, a: { x: scale - 0.5, y: scale - 10 }, b: { x: scale - 0.5, y: scale + 10 } }
+    expect(intersectRayLineDetailed(ray, behind)).toEqual({ kind: "none", reason: "intersection lies behind ray origin" })
+  })
+
   it("filters ray-circle intersections and deduplicates polyline vertices", () => {
     const ray: RayPrimitive = { id: "ray", type: "ray", a: { x: 0, y: 0 }, b: { x: 1, y: 0 } }
     expect(intersectRayCircleDetailed(ray, { id: "circle", type: "circle", center: { x: 2, y: 0 }, radius: 1 })).toMatchObject({ kind: "points" })

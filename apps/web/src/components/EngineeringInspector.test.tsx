@@ -68,7 +68,7 @@ function renderInspector(options: { activeTab?: "data" | "appearance" | "enginee
 describe("engineering inspector", () => {
   beforeEach(() => {
     const document = createEmptyDocument("cad")
-    useSceneStore.setState({ document, workspaceDocuments: { cad: document }, history: [], future: [], previewBase: null, error: null })
+    useSceneStore.setState({ document, workspaceDocuments: { cad: document }, history: [], future: [], error: null })
   })
 
   it("shows sheet, view and layer context when nothing is selected", () => {

@@ -1165,7 +1165,7 @@ P7-1 至 P7-6 与工程工作台层次化改造 Task 1-7 均已完成；P4 Agent
 
 ## 验证证据
 
-> **当前基线（唯一权威，2026-09-17 在"全身大体检（两批）+ e2e 构建修复"之后实测）**：`npm.cmd test` **107 个测试文件、1175 个用例通过**；4 个 workspace 类型检查通过；ESLint **0 error、15 条 warning**；生产构建通过（Vite 仍提示主 bundle 超过 500 KB）；Playwright **83/83** 通过（**现在真的跑的是当前工作区的构建产物**，见下）。
+> **当前基线（唯一权威，2026-09-17 在"全身大体检（三批）+ e2e 构建修复"之后实测）**：`npm.cmd test` **107 个测试文件、1178 个用例通过**；4 个 workspace 类型检查通过；ESLint **0 error、15 条 warning**；生产构建通过（Vite 仍提示主 bundle 超过 500 KB）；Playwright **83/83** 通过（**现在真的跑的是当前工作区的构建产物**，见下）。
 > 下面按时间倒序列出各轮实测快照（数字是**当时**的取值，用于追溯与对比，不代表当前门禁）；例如 68 文件 / 698 用例与 Playwright 47/47 属于 2026-09-16 的 Task 15-18 那一轮。
 
 ### 全身大体检（2026-09-17）：并行只读审计 + 按严重度修复
@@ -1211,6 +1211,17 @@ P7-1 至 P7-6 与工程工作台层次化改造 Task 1-7 均已完成；P4 Agent
 | 体检结论 | 怀疑仓库里存在"PowerShell 文本管道"留下的乱码注释 | 写一次性脚本按字节扫描 280 个源文件 / 文档中的乱码特征字符：**没有任何文件命中**（此前看到的中文乱码是 `Get-Content` 的输出误解码，不是磁盘内容） |
 
 - **第二批的 RED 证据是实跑出来的**（不是推演）：把三个源文件临时切回修复前的提交再跑新用例，得到 `expected 45.00000000000001 to be close to 90`（角度顶点）、`expected true to be false`（弧终点在框外却被判全在框内）、`expected false to be true`（CSV 无 BOM），以及一个审计没提到的连带问题——**两条不相邻的棱旧实现会返回 `valid` 和一个毫无意义的度数**（新用例期望 `insufficient-data`）。随后 `git checkout HEAD --` 还原源码，三个文件 30 个用例全绿，工作区 clean。
+
+**第三批（同一轮体检的继续）**：
+
+| 类别 | 缺陷 | 修法 |
+| --- | --- | --- |
+| 内核 | `onRay` 用**绝对**容差（1e-12）判"交点在射线的前向半线上"，而垂距是长度量纲：在 ~1e6 的坐标上光浮点残差就有 ~1e-10，确实相交也被判成 `none`，理由还错写成"交点在射线起点之后" | 改用 `scaledTolerance`（随坐标尺度）；真在起点之后的解仍然被挡掉（新用例两侧都钉住） |
+| 内核 | `ringNormal` 取**前三个点的叉积**：环上前三点共线是合法多边形（五边形底面从一条边的中间点开始），叉积为零 → `flatteningAngle` 把展开角当成 0 度 → 侧面留在折合姿态而 `status` 报 `ok` | 法向改用整个环的 **Newell**（只有环真的零面积才返回 null）；`flatteningAngle` 返回 `number \| null`，环没有法向时给出诊断并返回 `insufficient-data`，不再静默按 0 度展开 |
+| 死代码 | `store.ts` 的预览三件套（`beginPreview` / `previewParameter` / `commitPreview`）与 `cancelPreview` 全仓库**没有任何调用点**（连测试都没有），`previewBase` 只被它们读；而且 `apply` 会把 `previewBase` 清空，预览中途再改一次就再也回不到基线 | 一并删除（连同 5 处 `previewBase: null` 赋值与 3 个测试里的初始化字段），`typecheck` 4 个 workspace 通过 |
+
+- **第三批的 RED 证据同样是实跑出来的**：`onRay` → `expected 'none' to be 'point'`；展开（共线根环）→ `expected +0 to be close to 1`（侧面没被摊平）；展开（零面积环）→ `expected 'ok' to be 'insufficient-data'`。
+- **审计里被证伪的一条**（记录，不改）：报告说 `threeScene.tsx:538` 的内容签名漏了 `focused` / `label`，会留下过期的预览分组。实际签名是 `` `kind:${item.kind};${JSON.stringify(item)}` ``，而 `ThreeScenePreview` 本身就带 `label` 与 `focused` 两个字段，JSON 里都包含——**不会过期**，属误报。
 
 - **明确不修、只记录**（都写进 `docs/feature-catalog.md` 的"体检结论与已知限制"）：
   - 非凸实体不再提供"实体内"宿主（宁可报数据不足，也不伪造体外坐标）。

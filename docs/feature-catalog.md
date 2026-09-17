@@ -214,6 +214,9 @@ P7 的详细设计与切片验收见 [`2026-09-15-p7-engineering-drawing-design.
 - **导出 CSV 带 UTF-8 BOM**：Excel（Windows）在没有 BOM 时会按本地 ANSI 解码，中文标签会变成乱码。
 - **`persistence/mgeoStorage.ts` 已删除**：它只是 `encodeMgeo` / `decodeMgeo` 的转发壳，全仓库没有生产调用点；原先经它执行的 3 个往返用例改为直接调用真实编解码入口（`mgeoRoundTrip.test.ts`），覆盖不变。
 - **仓库无乱码注释**：体检时按字节扫描了 280 个源文件与文档的乱码特征字符，没有任何命中（此前在终端里看到的中文乱码是 `Get-Content` 按 ANSI 解码的**输出**问题，不是磁盘内容；仓库改文件仍一律用编辑工具）。
+- **射线交点判据随坐标尺度**：`onRay` 的垂距容差改为 `scaledTolerance`，在 ~1e6 的坐标上不再把"确实相交"误判成"交点在射线起点之后"（真正落在起点之后的解仍然被挡掉）。
+- **展开（`unfoldPolyhedron3`）的面法向用整个环的 Newell 法向**：环上前三点共线是合法多边形，旧实现取前三点叉积会得到零向量、把展开角当成 0 度、让侧面留在折合姿态却报 `ok`；现在只有环真的零面积才失败，并且是**明确报数据不足 + 诊断**（"环无法确定法向（面积为 0），展开角不可解"），不再静默折合。
+- **死代码清理：`store.ts` 的预览三件套已删除**（`beginPreview` / `previewParameter` / `commitPreview` / `cancelPreview` 与 `previewBase` 全仓库没有调用点，且 `apply` 会清掉 `previewBase`，预览中途再改一次永远回不到基线）。
 
 ## 参考来源
 

@@ -45,9 +45,25 @@ function clamp01(value: number): number {
   return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0
 }
 
+/**
+ * 面环的法向（Newell，用整个环）。
+ *
+ * 不能用"前三个点叉积"：环上前三点共线是**完全合法**的多边形（例如矩形面从一条边的中间点开始），
+ * 叉积会给出零向量，于是这个面在展开里被静默留在折合姿态、状态还报 `ok`。
+ * 只有整个环真的塌陷（零面积）时才返回 null。
+ */
 function ringNormal(points: Vector3[]): Vector3 | null {
   if (points.length < 3) return null
-  const normal = crossVector3(subtractVector3(points[1], points[0]), subtractVector3(points[2], points[0]))
+  let normal = { x: 0, y: 0, z: 0 }
+  for (let index = 0; index < points.length; index += 1) {
+    const current = points[index]
+    const next = points[(index + 1) % points.length]
+    normal = {
+      x: normal.x + (current.y - next.y) * (current.z + next.z),
+      y: normal.y + (current.z - next.z) * (current.x + next.x),
+      z: normal.z + (current.x - next.x) * (current.y + next.y)
+    }
+  }
   return lengthVector3(normal) > EPSILON ? normalizeVector3(normal) : null
 }
 
@@ -85,11 +101,14 @@ function perpendicularOffset(point: Vector3, origin: Vector3, axis: Vector3): Ve
  * Rotation that flattens a child face into its parent plane. Both hinge rotations by `θ` and `θ + π` flatten the
  * face, so the side is chosen geometrically: an unfolded net always lays the child on the far side of the hinge
  * from the parent body. This keeps the result independent of the ring winding order.
+ *
+ * 返回 `null` 表示**算不出来**（某个环没有法向，即环塌陷）：调用方必须说明并放弃这次展开，
+ * 不能当成 0 度（那会把面留在折合姿态却报告成功）。
  */
-function flatteningAngle(parentPositions: Vector3[], childPositions: Vector3[], origin: Vector3, axis: Vector3): number {
+function flatteningAngle(parentPositions: Vector3[], childPositions: Vector3[], origin: Vector3, axis: Vector3): number | null {
   const parentNormal = ringNormal(parentPositions)
   const childNormal = ringNormal(childPositions)
-  if (!parentNormal || !childNormal) return 0
+  if (!parentNormal || !childNormal) return null
   const flatten = Math.atan2(dotVector3(crossVector3(childNormal, parentNormal), axis), dotVector3(childNormal, parentNormal))
   const parentOffset = perpendicularOffset(centroid(parentPositions), origin, axis)
   const childOffset = perpendicularOffset(centroid(childPositions), origin, axis)
@@ -185,6 +204,14 @@ export function unfoldPolyhedron3(vertices: Record<string, Vector3>, faces: Face
         const parentPositions = currentFace.pointIds.map((pointId) => applySteps(vertices[pointId], currentSteps))
         const childPositions = faces[neighbour].pointIds.map((pointId) => applySteps(vertices[pointId], currentSteps))
         const angle = flatteningAngle(parentPositions, childPositions, origin, axis)
+        if (angle === null) {
+          /**
+           * 环塌陷（零面积）时没有可用的展开角：旧实现当成 0 度，于是这一面留在折合姿态、
+           * 状态却报 `ok`。这里如实报结构问题并中止展开，与其它拓扑问题同一套语义。
+           */
+          diagnostics.push(`面 ${faces[neighbour].id} 的环无法确定法向（面积为 0），展开角不可解。`)
+          return { rootFaceId: root.id, faces: [], diagnostics, status: "insufficient-data" }
+        }
         visited.add(neighbour)
         stepsByFace.set(neighbour, [...currentSteps, { origin, axis, angle: angle * fold }])
         parentByFace.set(neighbour, { parent: current, hinge: [id, nextId] })
