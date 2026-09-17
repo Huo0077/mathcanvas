@@ -2,7 +2,7 @@
 
 > 这份文件是项目的单一进度记录。每完成一个可验证的切片，就更新“已完成”和“下一步”，并附上验证证据。
 
-**最后更新：** 2026-09-17（**3D 视口与几何内核重构全部完成，包括收尾的三项**：渲染管道去重建化、3D 动点宿主约束与拖动、截面真实闭合环与「转为图元」、Auto-Fit、删除级联与多解就近吸附，共 10 个切片；收尾补齐 ①`syncScene` 按图元增量同步（展开动画不再每帧重建整场）②相机状态跨工作区保留 ③`threeScene.tsx` 按"图元构造 / 拾取 / 拖动"拆成独立模块；另含 F15 采样求交去重尺度、四个模板默认截面的验收覆盖。上一条主线是同日完成的**平面几何动点系统**：约束模型与自然参数、依赖图拓扑重算接入主流程、平面动态测量、轨迹采样与分支切分、结式消元求隐式方程）
+**最后更新：** 2026-09-17（**平面画布拖动动点不再卡顿**：交点预览改为增量（全文档两两求交从 76.5ms/次 降到 0.12ms/次，浏览器实测 60fps），并记录了"交面/交线作为独立图元、UI 参考平面"的现状与待确认项。同日更早：浏览器实测反馈的三处修正（剖面预览只画交线与交点、动点绑定提示、网格严格 1:1）、3D 视口与几何内核重构（10 个切片 + 收尾三项）、平面几何动点系统）
 **当前阶段：** P0-P6 与 P7 工程制图已完成；MathCanvas 统一 Ribbon UI 基线、2026-09-16 后续 UI 优化（Task 7-13）、**工程制图视觉重做（Task 14）**、**工程制图可用性修复（Task 15-18）**、**圆锥曲线四项修复**、**功能键操作指引浮层**、**CAD 2D 绘图交互重做**、2026-09-17 的**平面几何动点系统**（设计文档 `docs/superpowers/specs/2026-09-17-dynamic-point-engine-design.md`）与**3D 视口与几何内核重构**（设计文档 `docs/superpowers/specs/2026-09-17-3d-viewport-kernel-refactor-design.md`）均已完成。平面动点系统按四个维度交付：①约束模型与参数化映射 ②依赖图 DAG 与增量拓扑重算 ③动态测量监听器 ④轨迹采样与消元法隐式化；3D 重构按四个区块交付：①动点宿主约束与渲染管道 ②截面几何 ③Auto-Fit ④生命周期与多解；四者与三区块**全部接进主流程**（不只是内核可用）。P4 Agent 与 P5 题图解析仍在排除范围内。
 **总体状态：** 开发中
 
@@ -25,6 +25,32 @@
 **对需求原文的一处纠正**：测绘逐点核对后确认，测量/标注**不存在**循环引用，也没有未注销的监听器；真实问题是测量/标注**阻止删除宿主**、`dynamic-measurements.ts` 的订阅引擎是死代码、3D overlay 每帧重建全部 label。重构按真实问题实施。
 
 **关键现场事实（带证据）**：3D 绑定点当前完全拖不动且无 UI 入口（`threeScene.tsx:1363`、`operations.ts:208-221`）；任何 App 重渲染都整场景重建并新建 `WebGLRenderer`（`threeScene.tsx:1543`、`App.tsx:393`）；模板实体存在三套几何两种朝上约定（`threeScene.tsx:531-574` / `operations.ts:271-304` / `solid-builders.ts:330-368`）；截面只保留一条环（`sections3d.ts:137`）；多选删除被逐个预校验卡死（`App.tsx:685-690`）；多解索引被 clamp 成 `0|1`（`App.tsx:537`、`types.ts:435/445/455`）。
+
+### 拖动动点不再卡顿：交点预览改为增量（2026-09-17 已完成）
+
+- **用户反馈**：「动点的流畅度还需要优化」。
+- **先量后改**（临时基准探针，测完即删）：造一份 52 个图元、含 6 条采样曲线（3 圆 + 3 函数）的文档，量一次 pointermove 的各步骤：
+  | 步骤 | 耗时 |
+  | --- | --- |
+  | `structuredClone(document)` | 0.15 ms |
+  | `applyOperation(updatePrimitive)` | 0.54 ms |
+  | `recomputeDerivedObjects(增量)` | 0.17 ms |
+  | **`getIntersectionPreviews(全量)`** | **76.5 ms** |
+  即：拖动只有 ~13fps，而且**唯一的原因**是全文档两两求交（采样曲线两两组合很贵），其余步骤加起来不到 1ms。
+- **改法**：`computeIntersectionPreviews(document, { recomputeFor, previous })` 支持**增量**——只重算与"被拖动对象的下游闭包"相关的图元对，其余交点整段沿用（输出顺序与全量一致，隐藏/删除掉的图元对会自然消失）。`GraphicsView` 在拖动时用 `getAffectedPrimitiveIds(previewDocument, [dragId])` 作为 `recomputeFor`，并新增读数 `data-preview-pairs`（本次重算了几对）/`data-preview-reused`（沿用了几个）/`data-preview-count`（当前交点数）。
+- **实测对比**（同一份 52 图元文档）：
+  | 路径 | 每次 pointermove |
+  | --- | --- |
+  | 全量（旧） | **76.5 ms** |
+  | 增量：拖一个**点** | **0.12 ms** |
+  | 增量：拖一条**曲线**（重算 5 对） | 9.58 ms |
+  真实浏览器里（部署实例、`e2e/fixtures/planar-drag-cost.mgeo` 的两条直线 + 两圆 + 一条函数、40 步拖动）：**帧间隔中位数 16.7ms（60fps）、p95 18.1ms、最差 31.6ms**。
+- **RED→GREEN 证据**：
+  - `intersectionPreview.test.ts` 新增 4 例增量语义，先全部失败（`computeIntersectionPreviews is not a function`）：不相关的图元对**必须沿用**（改了几何也不许重算）、相关的对必须重算（与全量结果一致）、`recomputedPairs`/`reusedPreviews` 计数正确、全部标脏时与全量结果完全相同。
+  - 新增 `e2e/planar-drag-performance.spec.ts` 2 例（配 `e2e/fixtures/planar-drag-cost.mgeo`）：①拖动动点时 `data-preview-pairs` 为 **0**、`reused` 为 12（旧实现每次都是全量 6 对）；②怕"只沿用不重算"变成 bug，另有一条：拖动直线的端点时 `pairs > 0` 且**交点标记的坐标真的跟着动**。
+- **顺带记录的两个交互事实**（探针发现，不是本轮改的）：平面画布上拖动一个图元**本体**（圆/线的轮廓）时，如果那一处压着交点预览标记，点击会落到预览上（标记命中区 r=14 且在上层）；圆的半径手柄在 `(0,0)`，恰好被圆与圆的交点标记压住。这属于"预览优先于手柄"的既有取舍，若要改需要单独设计。
+- **回归**：全量单测 **95 文件 / 1063 用例通过**（起始 95/1059）；`typecheck` 4 个 workspace 全过；`lint` 0 error、16 条 warning（持平）；生产构建通过；Playwright **79/79** 通过（起始 77，新增 2）。
+- **仍未做（用户本轮同时提出，等确认交互模型）**：「交面 / 交线作为单独的图元，UI 操作逻辑参考平面」。现状：截线（`intersectionLine`）**已经是**独立图元（点击虚线预览创建、进对象列表、随来源重算），截面（`section`）也是独立图元并带「转为图元」；差距在于 ①交线预览**必须正好选中两个对象**才出现（平面画布是"有交点就一直可点"），②`intersectionLine` 在检查器里**没有属性块**（看不到来源与段数）。②是无争议的小改动，①需要确认"是否要像平面那样自动显示所有两两交线（以及两实体共面时的交面）"。
 
 ### 浏览器实测反馈的三处修正（2026-09-17 已完成）
 
@@ -1061,7 +1087,7 @@ P7-1 至 P7-6 与工程工作台层次化改造 Task 1-7 均已完成；P4 Agent
 
 ## 验证证据
 
-> **当前基线（唯一权威，2026-09-17 在 `a409894` 上实测）**：`npm.cmd test` **92 个测试文件、1042 个用例通过**；4 个 workspace 类型检查通过；ESLint **0 error、16 条 warning**（按规则：13 条 `@typescript-eslint/no-unused-vars`、3 条 `react-hooks/exhaustive-deps`；`react-refresh/only-export-components` 已随 `threeScene.tsx` 拆分清零）；生产构建通过（Vite 仍提示主 bundle 超过 500 KB）；Playwright **76/76** 通过。
+> **当前基线（唯一权威，2026-09-17 在拖动优化后实测）**：`npm.cmd test` **95 个测试文件、1063 个用例通过**；4 个 workspace 类型检查通过；ESLint **0 error、16 条 warning**（按规则：13 条 `@typescript-eslint/no-unused-vars`、3 条 `react-hooks/exhaustive-deps`；`react-refresh/only-export-components` 已随 `threeScene.tsx` 拆分清零）；生产构建通过（Vite 仍提示主 bundle 超过 500 KB）；Playwright **79/79** 通过。
 > 下面按时间倒序列出各轮实测快照（数字是**当时**的取值，用于追溯与对比，不代表当前门禁）；例如 68 文件 / 698 用例与 Playwright 47/47 属于 2026-09-16 的 Task 15-18 那一轮。
 
 - **3D 视口与几何内核重构收尾三项（2026-09-17，提交 `0d901d1` / `a409894`）**：①场景内容改为按签名增量同步——展开动画每帧从重建整场变成只重建那张展开网（created 1 / reused 11），切换选中从重建 29 个变成 created 1；顺带修掉三个由探针定位的缺陷（后加的 key 被当过期删掉、上一份文档的残留参与包围盒导致取景偏 0.02、面片自动尺寸把旧面片算进半径导致 7.02 → 36.21）。②相机状态跨工作区保留（`cameraMemory.ts`：卸载写回、挂载恢复并跳过首次取景）。③`threeScene.tsx` 1927 → 1129 行，抽出 `threePrimitives`（550）/`threePicking`（114）/`threeDrag`（81），组件文件只导出组件，`react-refresh` 告警清零。本轮起始 **89 文件 / 1021 用例** → **92 文件 / 1042 用例**；lint 0 error，warning **42 → 16**；Playwright **73/73 → 76/76**；`typecheck` 4 个 workspace 与生产构建全绿。
