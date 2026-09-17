@@ -112,6 +112,9 @@ export type Conic3Kind =
 /** 平面内二次曲线：`A x² + B xy + C y² + D x + E y + F = 0`（`[A,B,C,D,E,F]`）。 */
 export type Conic3Coefficients = [number, number, number, number, number, number]
 
+/** 帧内的一条直线：过 `through`、方向为 `direction`（帧坐标是正交单位基，因此就是度量坐标）。 */
+export interface Conic3Line { through: { s: number; t: number }; direction: { s: number; t: number } }
+
 export interface Conic3 {
   kind: Conic3Kind
   frame: Conic3Frame
@@ -125,8 +128,11 @@ export interface Conic3 {
   eccentricity?: number   // 圆 0、椭圆 (0,1)、抛物线 1、双曲线 > 1
   foci?: Vector3[]        // 椭圆/双曲线两个，抛物线一个
   vertex?: Vector3        // 抛物线顶点
-  /** `lines`：两条平行线的平面内法向偏移；`line`：单条直线偏移；`point`：那个点。 */
-  lines?: { offset: number }[]
+  /**
+   * `lines`：一对直线（**平行**或**相交**都可能，靠"过点是否相同"区分）；`line`：一条直线（重根 / 相切）。
+   * 用"过点 + 方向"而不是"偏移数字"，是因为偏移量说不清这两类。
+   */
+  lines?: Conic3Line[]
   point?: Vector3
   /** 闭合曲线（圆 / 椭圆）为 `true`，参数域 `[0, 2π)`；抛物线 / 双曲线 / 直线为 `false`。 */
   closed: boolean
@@ -158,14 +164,18 @@ export function intersectPlaneQuadric3(plane: Plane3, quadric: Quadric3): Conic3
 但"**epsilon 必须随模型尺度缩放**"这条通则**没有找到明文来源**（调研专门查过，记为诚实缺口）：本仓库把它记为**工程实践**，不声称有文献依据。有文献依据的做法是**先把系统归一化再比行列式**——Grandine & Klein 每轮把方程归一到 `[−1,1]`、节点向量归一到 `[0,1]`；hyperbook §5.8.1.1 建议用有理数运算避免代入误差。理由是实际的：4×4 行列式的元素量级一大就会溢出/下溢，秩与 `Δ` 判定随之失去意义。因此本实现**先做系统归一化，再做尺度归一化的零判定**。
 （若边界情形仍在闪，备选是 Eberly 的 Geometric Tools 做法：**精确有理数 + 笛卡尔符号法则**做分类、完全不用 epsilon，Boost 1.0 许可可移植，代价是引入一个小的 `BigInt` 有理数层——A1 先不上，记在 `docs/research/quadric-intersection-algorithms.md` §9.3。）
 
-**"圆"的判定阈值必须写死并测边界**：`kind: "circle"` 要求 `|A − C| ≤ ε·max(|A|,|C|)` 且 `|B| ≤ ε·max(|A|,|C|)`，`ε = 1e-9`。这意味着"两个半轴在 9 位有效数字内相等"才算圆——**故意倾斜 1e-3° 的切面必须报椭圆**（写进测试）。判定不通过时如实报 `ellipse` 并给出 `eccentricity`，不四舍五入成圆。
+**"圆"的判定阈值必须写死并测边界**：判据用**半轴的相对差**——`kind: "circle"` 当且仅当 `(a − b) ≤ ε · a`，`ε = 1e-12`（含义是"两个半轴在 12 位有效数字内相等就按圆报告"）。判定不通过时如实报 `ellipse` 并给出 `eccentricity`，不四舍五入成圆。
+
+**为什么不是 `|A − C| ≤ ε`（写计划时算出来的更正）**：在半轴正交的平面标架里，斜切圆柱得到 `A = cos²θ`、`C = 1`（`θ` 是平面法向与轴夹角），于是 `|A − C| = sin²θ`。`ε = 1e-9` 作用在 `|A − C|` 上等于对 `θ` 的判别力只有 `√ε ≈ 3.2e-5`（约 **0.0018°**）——那么"倾斜 1e-3°"这条边界用例（`sin²θ = 3.05e-10 < 1e-9`）反而会被报成**圆**，与"不许把椭圆说成圆"直接冲突。改用半轴相对差后判别力是 `θ ≈ √(2ε) ≈ 1.4e-6`（约 **8e-5°**）：倾斜 1e-3° 报椭圆（离心率 `1.745e-5`），而由旋转矩阵合成的"正交"切面（浮点残差约 1e-16）仍报圆，两边都被测试钉住。
 
 参数化（渲染与采样共用；闭合曲线参数域 `[0, 2π)`）：
 
 - 圆 / 椭圆：`p(t) = origin + a·cos(t)·u + b·sin(t)·v`
 - 抛物线：`p(t) = vertex + (t²/(2p))·u + t·v`（`u` 指向开口方向）
 - 双曲线：两支 `p±(t) = center ± (a·cosh t)·u + (b·sinh t)·v`
-- 直线 / 平行线：`p(t) = origin + offset·u + t·v`
+- 直线：`p(τ) = origin + (through.s + τ·direction.s)·u + (through.t + τ·direction.t)·v`
+
+**平面标架的构造规则写死**（否则测试没法断言退化直线的过点与方向）：与仓库既有的 `planeBasisFrom`（`threePrimitives.ts`）同一套约定——`n` 归一化后，`helper = |n.x| < 0.9 ? (1,0,0) : (0,1,0)`、`u = normalize(cross(helper, n))`、`v = cross(n, u)`、`origin` 取平面上离世界原点最近的点（`n·(−constant)/|n|²`）。
 
 ### 5.3 有限实体的裁剪：`section` 的解析边界
 
@@ -285,7 +295,7 @@ operations.recomputeSection
 纪律沿用仓库既有做法：**先写失败用例（RED，跑出真实失败信息）→ 实现 → GREEN**，不确认的缺陷只记录不猜改。
 
 1. **分类与参数（内核，逐情形一例，断言精确值）**：上表每一行一个用例，断言半径 / 半轴 / 离心率 / 中心 / 所在平面；`empty` 与 `insufficient-data` 断言不给几何。
-2. **圆判定的边界**：`ε = 1e-9` 的两侧各一例——正切（`B = 0`、`A = C`）报 `circle`；倾斜 1e-3° 报 `ellipse` 且离心率 > 0。
+2. **圆判定的边界**：`ε = 1e-12`（半轴相对差）的两侧各一例——正交切面（含由旋转矩阵合成的、带 1e-16 级残差的）报 `circle`；倾斜 1e-3° 报 `ellipse` 且离心率 = `1.745e-5`。
 3. **性质测试（两条，把"确实更准"钉住）**：
    - 解析曲线参数化点上代回 `Quadric3` 隐式方程，残差 `< 1e-9 · scale²`；
    - 解析曲线与同参数 48 边形折线的最大偏差 `< R·(1 − cos(π/48))·1.05`（即确实不超过弦高上界）。
