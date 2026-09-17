@@ -2,13 +2,21 @@
 
 > 这份文件是项目的单一进度记录。每完成一个可验证的切片，就更新“已完成”和“下一步”，并附上验证证据。
 
-**最后更新：** 2026-09-17（**平面几何动点系统**：约束模型与自然参数、依赖图拓扑重算接入主流程、平面动态测量、轨迹采样与分支切分、结式消元求隐式方程；并含四轮用户反馈驱动修复：动点活动范围过小、椭圆只能在上半部分运动、删除图形需先删交点、驱动参数可见性与生命周期）
-**当前阶段：** P0-P6 与 P7 工程制图已完成；MathCanvas 统一 Ribbon UI 基线、2026-09-16 后续 UI 优化（Task 7-13）、**工程制图视觉重做（Task 14）**、**工程制图可用性修复（Task 15-18）**、**圆锥曲线四项修复**、**功能键操作指引浮层**、**CAD 2D 绘图交互重做**，以及 2026-09-17 的**平面几何动点系统**（设计文档 `docs/superpowers/specs/2026-09-17-dynamic-point-engine-design.md`）均已完成。动点系统按四个维度交付：①约束模型与参数化映射 ②依赖图 DAG 与增量拓扑重算 ③动态测量监听器 ④轨迹采样与消元法隐式化；四者**全部接进主流程**（不只是内核可用）：重算按拓扑序、测量走平面求值器、轨迹在视图层按分支绘制。P4 Agent 与 P5 题图解析仍在排除范围内。
+**最后更新：** 2026-09-17（**3D 视口与几何内核重构全部完成**：渲染管道去重建化、3D 动点宿主约束与拖动、截面真实闭合环与「转为图元」、Auto-Fit、删除级联与多解就近吸附，共 10 个切片；另补齐 F15 采样求交去重尺度、四个模板默认截面的验收覆盖、相机与取景数学抽成独立模块。上一条主线是同日完成的**平面几何动点系统**：约束模型与自然参数、依赖图拓扑重算接入主流程、平面动态测量、轨迹采样与分支切分、结式消元求隐式方程）
+**当前阶段：** P0-P6 与 P7 工程制图已完成；MathCanvas 统一 Ribbon UI 基线、2026-09-16 后续 UI 优化（Task 7-13）、**工程制图视觉重做（Task 14）**、**工程制图可用性修复（Task 15-18）**、**圆锥曲线四项修复**、**功能键操作指引浮层**、**CAD 2D 绘图交互重做**、2026-09-17 的**平面几何动点系统**（设计文档 `docs/superpowers/specs/2026-09-17-dynamic-point-engine-design.md`）与**3D 视口与几何内核重构**（设计文档 `docs/superpowers/specs/2026-09-17-3d-viewport-kernel-refactor-design.md`）均已完成。平面动点系统按四个维度交付：①约束模型与参数化映射 ②依赖图 DAG 与增量拓扑重算 ③动态测量监听器 ④轨迹采样与消元法隐式化；3D 重构按四个区块交付：①动点宿主约束与渲染管道 ②截面几何 ③Auto-Fit ④生命周期与多解；四者与三区块**全部接进主流程**（不只是内核可用）。P4 Agent 与 P5 题图解析仍在排除范围内。
 **总体状态：** 开发中
 
-### 3D 视口与几何内核重构（2026-09-17 设计完成，分片实施中）
+### 3D 视口与几何内核重构（2026-09-17 设计与实施全部完成）
+
+**收尾状态（2026-09-17）**：设计文档切分的 **10 片全部完成**（0 设计文档 / 1A-1 渲染管道去重建化 / 1A-2 `hosts3.ts` 与绑定 DSL / 1A-3 拖动状态机与绑定 UI / 1B 截面几何·多环·「转为图元」 / 2 Auto-Fit / 3-1 删除级联 / 3-2 求值层清理与画布尺寸稳定性 / 3-3 多解实体与就近吸附），并在队列之外补齐了三项排查阶段发现的问题：**F15 采样求交的去重尺度**、**验收项缺口（四个模板的默认截面）**、**相机与取景数学抽出独立模块**（另有背景坐标系自适应与"画布填满所在行"，来自同一批用户反馈，见下文对应小节）。三项用户需求逐条对照见本节末尾。
 
 **需求**（用户提出，三项）：①重写 3D 动点的射线拾取与参数约束投影，使其严格沿宿主线段/曲面滑动、拖拽实时驱动下游重绘；截面改为真实截交闭合多边形，只渲染轮廓与半透明填充，并可「获取截面图元」。②3D 视口 Auto-Fit：按可见图元世界 AABB 计算视锥与相机距离，加载/增删/越界时平滑重置并保留 30% 安全边距。③重构图元生命周期与 DAG：删除宿主时级联注销测量、杜绝"图元无法删除"；多实根各自独立成实体，并按屏幕像素距离就近吸附。
+
+**需求对照（逐条，均有测试证据）**
+- ① **动点沿宿主滑动**：DSL 新增 `onHost / onFace / onSurface` 绑定（参数是唯一真值、坐标由参数派生），内核 `hosts3.ts` 给出线/面/平面/圆柱与圆锥侧面的 `evaluate / project / residual / domain`；属性栏「宿主绑定」下拉 + 参数输入，画布拖动时把指针落点投影回宿主参数再反算坐标（`e2e/geometry3d-host-drag.spec.ts` 断言拖动期间残差 ≈ 0、一次 Ctrl+Z 精确复位）。
+- ① **截面**：内核按面边界求交后沿相邻面连成**闭合环**，**保留全部环**（带孔/分成多块不再丢几何），渲染外环半透明填充 + 内环轮廓；默认剖切面是过包围盒中高处的水平面（法向 `(0,0,1)`）；「转为图元」把每一环物化成点/棱/面并与来源解耦。
+- ② **Auto-Fit**：AABB 八角逐个求"落进视锥所需的最小距离"再留 30% 边距，距离范围从 `[3,60]` 放宽到 `[0.005,1e4]`，近远平面随距离缩放；触发时机为"换文档"或"内容跑出视锥"，**编辑过程中永不抢视角**；画布上有「自动取景」开关且偏好跨刷新保留。
+- ③ **生命周期与多解**：删除宿主时**级联**注销测量 / 2D 标注 / 工程标注 / 约束，分组只摘掉被删成员，锁定时仍拒绝；批量删除按**并集**校验（"点 + 依赖它的线"能一次删掉）；宿主消失时绑定点**降级为自由点并保留位置**。多解用任意非负整数 `solutionIndex` 各自独立成实体，`hint` 按最近解匹配，预览点击按**屏幕像素距离**就近吸附。
 
 **已完成**：设计文档 `docs/superpowers/specs/2026-09-17-3d-viewport-kernel-refactor-design.md`（含调研结论、19 条现场事实、四区块设计与验收标准、10 片提交切分）。前期做了两路只读代码测绘与一路 GitHub/OSS 调研（three.js DragControls、JSXGraph Glider、trimesh 截面退化分类与成环、CGAL slicer 定向、FreeCAD `breakDependency`、SolveSpace 多解吸引域、tldraw/Excalidraw 像素容差）。
 
@@ -995,13 +1003,17 @@ P7-1 至 P7-6 与工程工作台层次化改造 Task 1-7 均已完成；P4 Agent
 - 每次推送前都先 `git fetch origin` 并核对 divergence（另一会话会并发推送同一仓库）；推送后用 `git rev-parse HEAD` 与 `git ls-remote origin refs/heads/main` 对比确认两端 ref 相同，工作区 clean。
 - **平面几何动点系统（2026-09-17）推送记录**：`92509bd`（`feat(planar): dynamic points constrained to curves, functions and conics`，30 个文件 / +7041 −123）与 `1a38189`（`docs: record the planar dynamic point engine round`）由另一会话推送。本地 `git fetch` 发现落后 2 个提交后以 `git pull --ff-only` 快进到 `1a38189`，无冲突、无本地改动被覆盖；核验 `git rev-parse HEAD` = `origin/main` = `git ls-remote origin refs/heads/main` = `1a38189d99eed919f815d50677df0cfce28ebd94`，工作区 clean。该批次未改 `package.json` / `package-lock.json`，因此无需重跑 `npm install`。
 - **该批次在本机复跑门禁（2026-09-17）**：`typecheck` 4 个 workspace、单测 73 文件 / 933 用例、`lint` 0 error / 52 warning、生产构建、Playwright 58/58 全部通过（exit 0）。即推送方的记录已在本机独立复现，而不只是转抄。
+- **3D 视口与几何内核重构推送记录（2026-09-17）**：`4f793a5`（设计文档）→ `2210d21`/`9427296`（1A-1 渲染管道去重建化）→ `f23ba72`/`5b2702b`（1A-2 `hosts3.ts` 与绑定 DSL）→ `859741a`/`27236bf`（2 Auto-Fit）→ `17e8964`（背景坐标系自适应与画布填满所在行）→ `18babf7`（1B 截面几何）→ `659dbc2`/`9acd7ee`（1A-3 绑定 UI 与拖动）→ `97e13e1`（3-1 删除级联）→ `eb26b83`（3-3 多解与就近吸附）→ `57d3b2a`（3-2 求值层清理与画布尺寸稳定性）→ `1671289`（F15 去重尺度）→ `6f1c144`（四模板默认截面验收）→ `79ebce5`（相机与取景数学抽模块）→ `be731b9`（README 基线）。每一片都是"先写失败用例（RED）→ 实现后转 GREEN → 更新 `docs/project-progress.md` 与 `docs/feature-catalog.md` → 跑全套门禁 → `git fetch` 核验 divergence → 提交推送 → 用 `git rev-parse HEAD` / `git ls-remote` 核验两端 ref 一致"。
+- **重构期间的两个过程记录（都写进了提交信息）**：①3-2 定位"状态栏文案变化压缩画布"时，顺带查出窄屏（≤960px）下检查器那一行没有上界、把画布行压成 0 的第二个缺陷；②抽出相机模块时第一次用 PowerShell 的 `Get-Content`/`Set-Content` 删行，而本机是 Windows PowerShell 5.1（`Get-Content` 默认按 ANSI 解码），把文件里的中文注释写成了乱码；已 `git checkout` 还原并改用 .NET `UTF8Encoding` 显式读写完成，随后用 `git diff --numstat`（只有删除、没有修改）与乱码特征串全仓库扫描双重确认——**本仓库改文件一律用编辑工具，不要走 PowerShell 文本管道**。
 
-下一步：由用户在本地浏览器验收**平面几何动点系统**（曲线上的动点拖动、路径参数与动效演示、轨迹与分支、平面测量、参数分组与孤儿回收）与工程制图可用性修复（2D 绘图命令条出图纸、投影来源切换、截面/截线虚线预览与点击创建）、UI 优化、工程制图视觉重做与 CAD 2D 绘图交互；P4 Agent 与 P5 题图解析保持排除。
+下一步：由用户在本地浏览器验收**3D 视口与几何内核重构**（选中空间点后在属性栏「宿主绑定」里选宿主并拖动，点应严格沿宿主滑动且一次 Ctrl+Z 精确复位；选中实体创建截面，检查闭合环与「转为图元」；把图形移到 x≈20 以外确认背景坐标系与交点数量；窄窗口下确认检查器变长不会压缩 3D 画布）、**平面几何动点系统**（曲线上的动点拖动、路径参数与动效演示、轨迹与分支、平面测量、参数分组与孤儿回收）与工程制图可用性修复（2D 绘图命令条出图纸、投影来源切换、截面/截线虚线预览与点击创建）、UI 优化、工程制图视觉重做与 CAD 2D 绘图交互；P4 Agent 与 P5 题图解析保持排除。
 
 ## 验证证据
 
-> **当前基线（唯一权威，2026-09-17 在 `1a38189` 上实测）**：`npm.cmd test` **73 个测试文件、933 个用例通过**；4 个 workspace 类型检查通过；ESLint **0 error、52 条 warning**（按规则：37 条 `react-refresh/only-export-components`、12 条 `@typescript-eslint/no-unused-vars`、3 条 `react-hooks/exhaustive-deps`）；生产构建通过（Vite 仍提示主 bundle 超过 500 KB）；Playwright **58/58** 通过。
+> **当前基线（唯一权威，2026-09-17 在 `be731b9` 上实测）**：`npm.cmd test` **89 个测试文件、1021 个用例通过**；4 个 workspace 类型检查通过；ESLint **0 error、42 条 warning**（按规则：26 条 `react-refresh/only-export-components`、13 条 `@typescript-eslint/no-unused-vars`、3 条 `react-hooks/exhaustive-deps`）；生产构建通过（Vite 仍提示主 bundle 超过 500 KB）；Playwright **73/73** 通过。
 > 下面按时间倒序列出各轮实测快照（数字是**当时**的取值，用于追溯与对比，不代表当前门禁）；例如 68 文件 / 698 用例与 Playwright 47/47 属于 2026-09-16 的 Task 15-18 那一轮。
+
+- **3D 视口与几何内核重构收尾（2026-09-17，收尾提交 `be731b9`）**：设计文档切分的 10 片全部落地（1A-1 渲染管道去重建化、1A-2 `hosts3.ts` 与绑定 DSL、1A-3 拖动状态机与绑定 UI、1B 截面、2 Auto-Fit、3-1 删除级联、3-2 求值层清理与画布尺寸稳定性、3-3 多解就近吸附），队列之外另补齐三项（F15 采样求交去重尺度、四个模板默认截面的验收覆盖、相机与取景数学抽成 `threeCamera.ts`），同批用户反馈还修掉了背景坐标系自适应与"画布填满所在行"。本轮起始 **73 文件 / 933 用例** → **89 文件 / 1021 用例**；lint 0 error，warning **52 → 42**（抽走相机数学后 `react-refresh/only-export-components` 从 37 条降到 26 条）；Playwright **58/58 → 73/73**；`typecheck` 4 个 workspace 与生产构建全绿。逐片证据见上文各小节（每节都有 RED→GREEN 记录）。
 
 - **工程制图可用性修复（Task 15-18，2026-09-16）**：切片 A/A2/B/C1-C4 全部落地并逐片跑门禁；本轮起始 64 文件 / 670 用例 → **68 文件 / 698 用例**，E2E 43/43 → **47/47**，类型检查 4 个 workspace 通过，lint 0 error / 39 条既有 warning，生产构建通过。
 - **审查复核与修复（2026-09-16）**：在 `b6d31f5` 上重新逐项核验——typecheck 0 error、lint 0 error、生产构建通过、Playwright 43/43、`git status` clean 且与 `origin/main` 一致。按符号核对了文档声明的 15 个绘图 API（`draftWindow` / `clientToDraft` / `rankDraftSnaps` / `boxSelectionMode` / `SnapKind` / `primitiveHandlePoints` / `resolveGeometryEdit` / `offsetPrimitive` / `trimPrimitive` / `extendPrimitive` / `selectPrimitivesInBox` / `tangentPointsOnPrimitive` / `parseDraftCoordinate` / `applyDistance` / `applyAngle`）**全部存在**，非测试源码无 TODO/FIXME。据审查结果修掉四处问题：① 功能目录里"约束界面可创建"的过时表述 → 改为明确说明三维约束当前**无任何 UI 入口**（数据/校验/编解码保留，恢复方式已写入文档）；② 删除 Task 9 遗留的死代码 `ConstraintPanel.tsx` 及其测试、以及随之孤立的两处 CSS 块（`.constraint-*`、`.empty-state`、`.agent-*`、`.agent-chip`、`.status-dot.pending`），删除前用全仓库 `className` 检索确证零引用；③ 本小节改为「当前基线 + 按时间倒序的历史快照」，消除"最新证据其实是旧数字"的误导；④ bundle 数字与门禁计数改为实测值。

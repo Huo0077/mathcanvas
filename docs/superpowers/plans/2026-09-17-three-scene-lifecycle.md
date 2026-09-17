@@ -154,7 +154,7 @@ git commit -m "feat(three): add a scene content signature so unchanged content i
 - Consumes: `sceneContentKey`（Task 1）。
 - Produces: `runtimeRef`（`{ syncContent(): void; scene: THREE.Scene; render(): void }`）；DOM 读数 `data-scene-builds`（每次挂载创建渲染器的次数，恒为 `"1"`）与 `data-scene-syncs`（内容同步次数）。
 
-- [ ] **Step 1: Write the failing e2e test**
+- [x] **Step 1: Write the failing e2e test**
 
 ```ts
 // e2e/geometry3d-scene-lifecycle.spec.ts
@@ -199,12 +199,12 @@ test("keeps one renderer alive across edits, selection, drag and unfold", async 
 })
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npm.cmd run test:e2e -- e2e/geometry3d-scene-lifecycle.spec.ts`
 Expected: FAIL —— `data-scene-builds` 属性不存在（`Received: null`），或 canvas 已被替换。
 
-- [ ] **Step 3: Split the effect and count builds/syncs**
+- [x] **Step 3: Split the effect and count builds/syncs**
 
 在 `threeScene.tsx` 中：
 
@@ -295,17 +295,17 @@ function disposeObject(root: THREE.Object3D): void {
 
 7. 挂载效应内先调用一次 `syncContent()` 完成首帧（并把签名写入 `contentKeyRef.current`），再 `render()`。
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npm.cmd run test:e2e -- e2e/geometry3d-scene-lifecycle.spec.ts`
 Expected: PASS。
 
-- [ ] **Step 5: Run the full gate**
+- [x] **Step 5: Run the full gate**
 
 Run: `npm.cmd run typecheck && npm.cmd test && npm.cmd run lint && npm.cmd run build && npm.cmd run test:e2e`
 Expected: 全绿；e2e 用例数 58 → 59。
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/web/src/threeScene.tsx e2e/geometry3d-scene-lifecycle.spec.ts
@@ -324,7 +324,7 @@ git commit -m "refactor(three): keep one WebGL renderer per mount and sync conte
 - Consumes: Task 2 的 `runtimeRef` / `syncContent`。
 - Produces: `export function sceneSyncDecision(previousKey: string | null, nextKey: string): boolean` —— 纯函数，`true` 表示需要同步。用它替换 Task 2 里内联的比较，便于单测。
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // 追加到 apps/web/src/threeScene.test.ts
@@ -340,12 +340,12 @@ describe("scene sync decision", () => {
 })
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npm.cmd test -- apps/web/src/threeScene.test.ts -t "scene sync decision"`
 Expected: FAIL —— `sceneSyncDecision is not a function`。
 
-- [ ] **Step 3: Implement and wire it**
+- [x] **Step 3: Implement and wire it**
 
 ```tsx
 /** 只有签名变化（或首次）才需要同步场景内容。抽成纯函数是为了让"不该同步"这件事可被单测钉住。 */
@@ -363,12 +363,12 @@ export function sceneSyncDecision(previousKey: string | null, nextKey: string): 
   useEffect(() => { onSelectRef.current = onSelect }, [onSelect])
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `npm.cmd test -- apps/web/src/threeScene.test.ts && npm.cmd run test:e2e -- e2e/geometry3d-scene-lifecycle.spec.ts e2e/geometry3d.spec.ts`
 Expected: PASS（含既有 22 个 `geometry3d` 用例不变）。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/web/src/threeScene.tsx apps/web/src/threeScene.test.ts
@@ -387,7 +387,7 @@ git commit -m "refactor(three): decide content syncs from a signature instead of
 - Consumes: Task 2 的 `data-scene-builds` / `data-scene-syncs`、既有 `data-drag-frames`。
 - Produces: 无新接口，只有回归证据。
 
-- [ ] **Step 1: Write the failing assertions**
+- [x] **Step 1: Write the failing assertions**
 
 在 `e2e/geometry3d-scene-lifecycle.spec.ts` 追加：
 
@@ -413,21 +413,21 @@ test("does not rebuild or resync while a solid is being dragged", async ({ page 
 })
 ```
 
-- [ ] **Step 2: Run to verify it fails or exposes a real resync**
+- [x] **Step 2: Run to verify it fails or exposes a real resync**
 
 Run: `npm.cmd run test:e2e -- e2e/geometry3d-scene-lifecycle.spec.ts`
 Expected: 若拖动提交后退手会同步一次，`data-scene-syncs` 会在抬手后增长 —— 这是**允许**的（抬手要提交文档）。因此断言放在 `mouse.up()` **之前**采样，或在 Step 3 中把采样点移到拖动过程中。按实际行为二选一并在注释里写明理由，不得靠放宽断言蒙过去。
 
-- [ ] **Step 3: Make the assertion honest**
+- [x] **Step 3: Make the assertion honest**
 
 拖动过程中（`mouse.up()` 之前）采样 `data-scene-syncs`，抬手后只断言 `data-scene-builds` 仍为 `1`；并在测试注释里写明"抬手提交文档会同步一次内容，这是预期"。
 
-- [ ] **Step 4: Run the full gate and record evidence**
+- [x] **Step 4: Run the full gate and record evidence**
 
 Run: `npm.cmd run typecheck && npm.cmd test && npm.cmd run lint && npm.cmd run build && npm.cmd run test:e2e`
 Expected: 全绿；把实测数字（单测文件/用例数、e2e 用例数、lint warning 数、构建结果）写进 Step 5 的提交信息与进度文档。
 
-- [ ] **Step 5: Update docs and commit**
+- [x] **Step 5: Update docs and commit**
 
 在 `docs/project-progress.md` 新增小节「3D 渲染管道去重建化（切片 1A-1，已完成）」，写明：需求、根因（`threeScene.tsx:1543` 依赖含 `onSelect` 与 `document`，重建会 `renderer.dispose()` + `new WebGLRenderer`）、RED→GREEN 证据、门禁数字、边界（内容对象仍是"清空后重建"，按 `primitiveId` 的增量 diff 留给切片 1A-1b）。
 
@@ -460,8 +460,8 @@ git commit -m "test(three): pin that dragging and unfolding never rebuild the re
 **Spec coverage（对照 spec 第 3.4 节）**
 1. "renderer / canvas / ResizeObserver 只在挂载时创建一次" → 完成（Task 2）。
 2. "依赖数组去掉 `document` 与 `onSelect` 的函数身份" → 完成（Task 2 + Task 3）。
-3. "`syncScene` 按 `primitiveId` 做增删改" → **仍未做**，留给切片 1A-1b；本片只做"常驻 renderer + 命令式同步"。
-4. "`unfoldProgress` 不再进依赖数组" → **仍未做**：它仍参与同步签名（否则展开不动）。
+3. "`syncScene` 按 `primitiveId` 做增删改" → **仍未做（1A-1b 未开工）**，但**拖动那条路已经是按图元增量的**：1A-3 的宿主拖动每帧只重建被拖的点和它的下游对象（`refreshPrimitiveObject`，复用与整场同步完全相同的构造器 `buildPointDrivenObject`），所以"拖动时整场重建"这个最贵的场景已经消失；整体同步（增删图元、切换显示开关、展开）仍是清空后重建。
+4. "`unfoldProgress` 不再进依赖数组" → **仍未做**：它仍参与同步签名（`sceneContentKey` 里带 `unfoldProgress.toFixed(4)`，否则展开不动），所以展开动画每帧仍会重建几何——与下面的已知缺口是同一件事。
 5. "新增 `data-scene-rebuilds` 计数" → 以 `data-scene-builds` 命名完成。
 
-**已知缺口（显式记录，不掩盖）**: 内容对象仍是"清空后重建"，展开动画每帧仍会重建几何（只是不再重建 WebGL 上下文与 canvas）。切片 1A-1b 负责消除它。
+**已知缺口（显式记录，不掩盖）**: 内容对象仍是"清空后重建"，展开动画每帧仍会重建几何（只是不再重建 WebGL 上下文与 canvas）。切片 1A-1b 负责消除它——**截至 2026-09-17 的收尾仍未做**；唯一被增量化的路径是拖动（见上一条）。

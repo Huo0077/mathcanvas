@@ -44,7 +44,7 @@
 - 参数语义：`evaluate(0) = first`、`evaluate(1) = second`；线段域 `[0,1]`、射线域 `[0,+∞)`、直线域 `(-∞,+∞)`（用 `Number.NEGATIVE_INFINITY` / `POSITIVE_INFINITY` 表示）。
 - `closestParameter` 把 `u = dot(p-first, d)/|d|²` 夹到域内；`residual` = `|p - evaluate(closestParameter(p))|`。
 
-- [ ] **Step 1: 写失败测试**（`hosts3.test.ts`）
+- [x] **Step 1: 写失败测试**（`hosts3.test.ts`）
 
 ```ts
 import { describe, expect, it } from "vitest"
@@ -85,13 +85,13 @@ describe("line hosts", () => {
 })
 ```
 
-- [ ] **Step 2: 跑测试确认 RED** — `npm.cmd test -- packages/geometry-kernel/src/hosts3.test.ts`，期望 `Failed to resolve import "./hosts3"`。
+- [x] **Step 2: 跑测试确认 RED** — `npm.cmd test -- packages/geometry-kernel/src/hosts3.test.ts`，期望 `Failed to resolve import "./hosts3"`。
 
-- [ ] **Step 3: 实现**（按 Interfaces 的语义；退化时返回 `null`）。
+- [x] **Step 3: 实现**（按 Interfaces 的语义；退化时返回 `null`）。
 
-- [ ] **Step 4: 跑测试确认 GREEN** — 同上命令，期望 4/4。
+- [x] **Step 4: 跑测试确认 GREEN** — 同上命令，期望 4/4。
 
-- [ ] **Step 5: 提交** — `feat(kernel): add line hosts for 3D point constraints`
+- [x] **Step 5: 提交** — `feat(kernel): add line hosts for 3D point constraints`
 
 ---
 
@@ -106,11 +106,11 @@ describe("line hosts", () => {
 - 平面宿主：域为无穷大，`closestParameter` 就是正交投影。**共面容差按点集尺寸归一**（沿用 `planeThroughPoints` 的既有做法）。
 - 环内判定用 uv 空间的射线法（奇偶规则），边界上的点算在内。
 
-- [ ] **Step 1: 写失败测试** — 覆盖：正方形面内点投影到自身（残差 0）；面外点被夹到最近的边（对角外侧夹到最近顶点）；非共面环返回 null；平面宿主的无界投影；`domain` 是 uv 包围盒。
-- [ ] **Step 2: 跑测试确认 RED**
-- [ ] **Step 3: 实现**
-- [ ] **Step 4: 跑测试确认 GREEN**
-- [ ] **Step 5: 提交** — `feat(kernel): add face and plane hosts`
+- [x] **Step 1: 写失败测试** — 覆盖：正方形面内点投影到自身（残差 0）；面外点被夹到最近的边（对角外侧夹到最近顶点）；非共面环返回 null；平面宿主的无界投影；`domain` 是 uv 包围盒。
+- [x] **Step 2: 跑测试确认 RED**
+- [x] **Step 3: 实现**
+- [x] **Step 4: 跑测试确认 GREEN**
+- [x] **Step 5: 提交** — `feat(kernel): add face and plane hosts`
 
 ---
 
@@ -130,11 +130,11 @@ describe("line hosts", () => {
     `v = (h·dz - r·(ρ - r)) / (r² + h²)`，再夹到 `[0,1]`；`u` 同上（`ρ ≈ 0` 时取 `u = 0`）。
 - 退化（`radius <= 0`、`|height| < 1e-9`）返回 `null`。
 
-- [ ] **Step 1: 写失败测试** — 覆盖：圆柱侧面上的点残差为 0；内侧点沿半径投影到最近的侧面点且 `v` 被夹取；`z` 超出高度时 `v` 夹到 0/1；圆锥顶点附近与母线上点的投影；`closedU` 与 `u` 折回（`-0.1` 弧度等价于 `2π-0.1`）。
-- [ ] **Step 2: 跑测试确认 RED**
-- [ ] **Step 3: 实现**
-- [ ] **Step 4: 跑测试确认 GREEN**
-- [ ] **Step 5: 提交** — `feat(kernel): add cylinder and cone lateral-surface hosts`
+- [x] **Step 1: 写失败测试** — 覆盖：圆柱侧面上的点残差为 0；内侧点沿半径投影到最近的侧面点且 `v` 被夹取；`z` 超出高度时 `v` 夹到 0/1；圆锥顶点附近与母线上点的投影；`closedU` 与 `u` 折回（`-0.1` 弧度等价于 `2π-0.1`）。
+- [x] **Step 2: 跑测试确认 RED**
+- [x] **Step 3: 实现**
+- [x] **Step 4: 跑测试确认 GREEN**
+- [x] **Step 5: 提交** — `feat(kernel): add cylinder and cone lateral-surface hosts`
 
 ---
 
@@ -148,11 +148,11 @@ describe("line hosts", () => {
 - 分派：`line3`（两种 definition）→ 直线；`segment3` → 线段；`ray3` → 射线；`edge3` → 线段；`face3` → 面；`plane3`（两种 definition）→ 平面；`cylinder` / `cone` → 侧面；其余返回 `null`。
 - 端点解析复用 `constraints3d.ts` 的同一套规则（`pointDirection` 用 `point + direction` 造第二点）。
 
-- [ ] **Step 1: 写失败测试** — 用 `createEmptyDocument` + `buildSolidTemplate` 造真实文档，断言：模板圆柱的 `polyhedron3` 不是宿主（返回 null）、`cylinder` 是侧面宿主、`edge3`/`face3` 能解析、缺失引用返回 null。
-- [ ] **Step 2: 跑测试确认 RED**
-- [ ] **Step 3: 实现**
-- [ ] **Step 4: 跑测试确认 GREEN**
-- [ ] **Step 5: 提交** — `feat(kernel): resolve hosts from DSL primitives`
+- [x] **Step 1: 写失败测试** — 用 `createEmptyDocument` + `buildSolidTemplate` 造真实文档，断言：模板圆柱的 `polyhedron3` 不是宿主（返回 null）、`cylinder` 是侧面宿主、`edge3`/`face3` 能解析、缺失引用返回 null。
+- [x] **Step 2: 跑测试确认 RED**
+- [x] **Step 3: 实现**
+- [x] **Step 4: 跑测试确认 GREEN**
+- [x] **Step 5: 提交** — `feat(kernel): resolve hosts from DSL primitives`
 
 ---
 
@@ -174,19 +174,19 @@ describe("line hosts", () => {
 - `resolveBoundPoint3` 的三个新分支一律"由参数算坐标"：`host.evaluate(参数)`；宿主解析失败时返回 `null`（保持点的旧坐标，不静默挪动）。
 - `primitiveDependencies` 为 `point3` 增加 `onHost → hostId`、`onFace → faceId`、`onSurface → solidId`，保证拓扑序重算与删除保护都覆盖新引用。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
   - schema：合法绑定通过；`hostId` 指向不存在的图元 / 指向 `point3` / `parameter` 非有限数 → 报错；旧文档（无新字段）仍通过。
   - scene-graph：造"线段 + 绑到它的点"，参数 0.25 → 点落在 `a + 0.25(b-a)`；移动线段端点（改 point3 位置）后，重算让绑定点跟着走；圆锥侧面绑定的 `uv` 变化 → 点落在侧面解析位置上。
-- [ ] **Step 2: 跑测试确认 RED**
-- [ ] **Step 3: 实现**
-- [ ] **Step 4: 跑测试确认 GREEN**
-- [ ] **Step 5: 全量门禁 + 文档 + 提交** — `feat(dsl,scene): bind 3D points to host geometry by natural parameter`；提交前更新 `docs/project-progress.md`（含 RED→GREEN 证据与门禁数字），推送并核验两端 ref。
+- [x] **Step 2: 跑测试确认 RED**
+- [x] **Step 3: 实现**
+- [x] **Step 4: 跑测试确认 GREEN**
+- [x] **Step 5: 全量门禁 + 文档 + 提交** — `feat(dsl,scene): bind 3D points to host geometry by natural parameter`；提交前更新 `docs/project-progress.md`（含 RED→GREEN 证据与门禁数字），推送并核验两端 ref。
 
 ---
 
 ## Self-Review
 
-**Spec coverage（对照 spec 第 3.1–3.3 节）**：绑定变体（Task 5）、宿主求值/投影/残差（Task 1–3）、从图元解析宿主（Task 4）、重算与依赖（Task 5）。**未覆盖**：绑定 UI 与拖动状态机（1A-3）、删除宿主时降级为 `free`（区块三）。
+**Spec coverage（对照 spec 第 3.1–3.3 节）**：绑定变体（Task 5）、宿主求值/投影/残差（Task 1–3）、从图元解析宿主（Task 4）、重算与依赖（Task 5）。**未覆盖**：绑定 UI 与拖动状态机（1A-3）、删除宿主时降级为 `free`（区块三）。**两处都已补齐**：1A-3 交付了属性栏「宿主绑定」下拉 + 参数输入 + 沿宿主滑动的拖动状态机（`e2e/geometry3d-host-drag.spec.ts`）；区块三（3-1）把"绑定挡住宿主删除"改成**级联 / 降级为自由点并保留位置**。
 
 **Placeholder scan:** 无 TBD/TODO；每个任务的测试点与算法都写成了可执行描述，解析解公式已给出。
 
@@ -205,8 +205,8 @@ describe("line hosts", () => {
 1. **参数域夹取放在重算层而不是 `evaluate`**：`evaluate` 保持纯粹的正向映射，`resolveBoundPoint3` 用 `clampHostParameter` 把参数夹进宿主域。理由是 `project` 依赖"先夹参数再求值"的顺序，若 `evaluate` 自己也夹，夹取语义会藏在两处、无法单测。
 2. **`edge3` 的宿主 `kind` 是 `"edge"` 而不是 `"segment"`**：参数域与线段相同（`[0,1]`），但保留来源信息更有用。第一版测试期望写成 `"segment"`，实现后按实现改正——**这是测试写错、不是实现错**。
 3. **共面容差按点集尺寸缩放**（`tolerance * extent`）：大坐标下顶点的绝对误差更大，固定 1e-9 会把真实的面误判成非共面。
-4. **删除保护同步补齐**：`patches.ts` 的 `isReferenced` 增加 `onHost / onFace / onSurface` 三种引用，否则宿主被删掉后点的绑定会悬空、文档过不了 schema（这是仓库里已经踩过的坑）。**注意**：这条保护与需求 ③"杜绝图元无法删除"方向相反，会在区块三里改成"级联 / 降级为 free"。
+4. **删除保护同步补齐**：`patches.ts` 的 `isReferenced` 增加 `onHost / onFace / onSurface` 三种引用，否则宿主被删掉后点的绑定会悬空、文档过不了 schema（这是仓库里已经踩过的坑）。**注意**：这条保护与需求 ③"杜绝图元无法删除"方向相反，会在区块三里改成"级联 / 降级为 free"。**（2026-09-17 已在切片 3-1 兑现：`validateDeletion` + `deletionPlan` 把一次要删的 id 当"自己人"做并集校验，宿主消失时绑定点降级为自由点且位置保留。）**
 
 **本片门禁（实测）**：单测 **77 文件 / 961 用例**（起始 74/940，+3 文件 21 用例）；typecheck 4 workspace；lint 0 error / **52 warning**（持平）；生产构建通过；Playwright **60/60**。
 
-**本片结束时的边界（刻意）**：功能仍**不可从界面触达**——绑定入口、拖动状态机与下游实时重绘都在 1A-3；`isFreeDraggable3` 也仍然只放行 `free`。
+**本片结束时的边界（刻意）**：功能仍**不可从界面触达**——绑定入口、拖动状态机与下游实时重绘都在 1A-3；`isFreeDraggable3` 也仍然只放行 `free`。**（绑定 UI 与拖动都在 1A-3 补齐：属性栏「宿主绑定」下拉 + 参数输入，画布上拖动时把指针落点投影回宿主参数、由参数反算坐标，所以点不会漂离宿主。注意 `isFreeDraggable3` 至今仍刻意拒绝绑定点与派生点——它们不走"自由拖动"那条通道，而是走宿主参数通道；见进度文档的 1A-3 与 3-1 两节。）**

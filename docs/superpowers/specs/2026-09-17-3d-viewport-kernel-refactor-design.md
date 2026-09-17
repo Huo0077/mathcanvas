@@ -227,6 +227,26 @@ export function projectPointOntoHost3(host: Host3, p: Vector3): { uv: [number, n
 
 每片结束：更新 `docs/project-progress.md`（含 RED→GREEN 证据与实测数字）与 `docs/feature-catalog.md`，跑全套门禁，`git fetch` 后提交并推送，核验两端 ref 一致。
 
+### 9.1 实施状态（2026-09-17：全部完成）
+
+| 片 | 状态 | 提交 |
+| --- | --- | --- |
+| 0 设计文档 | 完成 | `4f793a5` |
+| 1A-1 渲染管道去重建化 | 完成 | `2210d21`、`9427296` |
+| 1A-2 `hosts3.ts` + 绑定 DSL/schema | 完成 | `f23ba72`、`5b2702b` |
+| 1A-3 拖动状态机与绑定 UI | 完成 | `659dbc2`、`9acd7ee` |
+| 1B 截面（Z-up / 多环 / 「转为图元」） | 完成 | `18babf7` |
+| 2 Auto-Fit | 完成 | `859741a`、`27236bf` |
+| 3-1 删除级联与批量并集校验 | 完成 | `97e13e1` |
+| 3-2 求值层清理与画布尺寸稳定性 | 完成 | `57d3b2a` |
+| 3-3 多解实体与就近吸附 | 完成 | `eb26b83` |
+
+**队列之外补齐的四项**（排查与实测阶段发现，均已提交）：F15 采样求交去重尺度改为"只看图形自身尺寸"（`1671289`）；设计第 8 节要求的"四个模板默认截面"验收覆盖（`6f1c144`）；相机与取景数学抽到 `apps/web/src/threeCamera.ts`（`79ebce5`，lint 56 → 42 条 warning）；背景坐标系随内容与相机自适应、3D 画布填满所在网格行（`17e8964`，用户报告的"背景坐标系太小 / 画布太小"）。
+
+**收尾时的实测门禁**：单测 **89 文件 / 1021 用例**；`typecheck` 4 个 workspace；`lint` 0 error / 42 warning；生产构建通过；Playwright **73/73**。
+
+**仍未做（明确记录）**：①`syncScene` 按 `primitiveId` 的整场增量 diff（1A-1b）——只有拖动路径已增量（`refreshPrimitiveObject`），展开动画每帧仍重建几何；②相机状态不跨工作区保留；③`threeScene.tsx` 里那些纯几何构造器（网格/拾取/拖动工具）仍与组件同文件，可再拆模块。
+
 ## 10. 风险与回滚
 
 | 风险 | 缓解 |
