@@ -1,0 +1,43 @@
+{
+  "format": "mgeo",
+  "formatVersion": "0.1",
+  "document": {
+    "schemaVersion": "0.1",
+    "revision": 1,
+    "workspace": "geometry3d",
+    "coordinateSystems": [
+      "cartesian-3d"
+    ],
+    "parameters": {},
+    "primitives": [
+      {
+        "id": "cube-a",
+        "type": "cube",
+        "origin": { "x": -2, "y": -2, "z": -2 },
+        "size": { "x": 4, "y": 4, "z": 4 },
+        "label": "立方体"
+      },
+      {
+        "id": "cyl-a",
+        "type": "cylinder",
+        "center": { "x": 0, "y": 0, "z": -3 },
+        "radius": 2,
+        "height": 6,
+        "segments": 48,
+        "label": "圆柱"
+      }
+    ],
+    "groups": [],
+    "constraints": [],
+    "dynamics": [],
+    "annotations": [],
+    "measurements": [],
+    "engineeringAnnotations": [],
+    "metadata": {
+      "id": "doc-cube-cylinder-fixture",
+      "name": "Cube and cylinder",
+      "createdAt": "2026-09-17T00:00:00.000Z",
+      "updatedAt": "2026-09-17T00:00:00.000Z"
+    }
+  }
+}

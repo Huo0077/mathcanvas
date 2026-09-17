@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import * as THREE from "three"
 
 import type { IntersectionFacePrimitive, IntersectionPoint3Primitive, IntersectionSolidPrimitive } from "@draw/dsl"
+import { circleConic3 } from "@draw/geometry-kernel"
 
 import { createIntersectionFaceGroup, createIntersectionPointGroup, createIntersectionSolidGroup } from "./threePrimitives"
 
@@ -84,6 +85,110 @@ describe("已创建的交面 / 交点图元怎么画", () => {
 
   it("draws nothing for a 交面 without a usable ring instead of a placeholder", () => {
     expect(createIntersectionFaceGroup({ ...face(), points: [] }, false)).toBeNull()
+  })
+
+  /**
+   * 曲面区域（圆柱 / 圆锥侧带）的多边形：外环在前、其余环**反向**缝合在后，配对规则是
+   * `points[长度 − 1 − i] ↔ points[i]`（内核 `outerRingLength` 就是前导外环的顶点数）。
+   *
+   * 这里用 8 段的两个圆环做一个最小可算的样本：上环（z=+1）逆着角度递增走一圈，下环（z=−1）反向
+   * 缝在后面（`tail[j] = bottom[L − 1 − j]`，最后一个点与 `points[0]` 同一个环向角 ⇒ 收尾边是一条母线）。
+   */
+  const RING_SEGMENTS = 8
+  const RING_RADIUS = 2
+  const RING_HALF_HEIGHT = 1
+  const hoop = (z: number): { x: number; y: number; z: number }[] => Array.from({ length: RING_SEGMENTS }, (_, index) => {
+    const angle = (index * Math.PI * 2) / RING_SEGMENTS
+    return { x: RING_RADIUS * Math.cos(angle), y: RING_RADIUS * Math.sin(angle), z }
+  })
+  const bandPoints = (): { x: number; y: number; z: number }[] => {
+    const top = hoop(RING_HALF_HEIGHT)
+    const bottom = hoop(-RING_HALF_HEIGHT)
+    return [...top, ...Array.from({ length: RING_SEGMENTS }, (_, index) => bottom[RING_SEGMENTS - 1 - index])]
+  }
+  const bandFace = (): IntersectionFacePrimitive => ({
+    ...face(),
+    id: "intersectionFace-band",
+    points: bandPoints(),
+    outerRingLength: RING_SEGMENTS,
+    normal: { x: 0, y: 0, z: 1 },
+    area: 2 * Math.PI * RING_RADIUS * (2 * RING_HALF_HEIGHT),
+    areaExact: false
+  })
+
+  /** 网格的三角形顶点（非索引几何，三个一组）。 */
+  const trianglesOf = (mesh: THREE.Mesh): { x: number; y: number; z: number }[][] => {
+    const attribute = mesh.geometry.getAttribute("position")
+    const triangles: { x: number; y: number; z: number }[][] = []
+    for (let index = 0; index + 2 < attribute.count; index += 3) {
+      triangles.push([0, 1, 2].map((offset) => ({ x: attribute.getX(index + offset), y: attribute.getY(index + offset), z: attribute.getZ(index + offset) })))
+    }
+    return triangles
+  }
+
+  const triangleArea = (triangle: { x: number; y: number; z: number }[]): number => {
+    const [first, second, third] = triangle
+    const ab = { x: second.x - first.x, y: second.y - first.y, z: second.z - first.z }
+    const ac = { x: third.x - first.x, y: third.y - first.y, z: third.z - first.z }
+    return Math.hypot(ab.y * ac.z - ab.z * ac.y, ab.z * ac.x - ab.x * ac.z, ab.x * ac.y - ab.y * ac.x) / 2
+  }
+
+  it("fills a merged curved region as a ring strip between its two hoops, not as a fan across the hole", () => {
+    const group = createIntersectionFaceGroup(bandFace(), false, 0.001)!
+    const patches = roleOf(group, "intersection-face")
+    expect(patches).toHaveLength(1)
+    const triangles = trianglesOf(patches[0] as THREE.Mesh)
+
+    // 8 段两个环 ⇒ 8 条环向边各缝两片三角形。
+    expect(triangles).toHaveLength(2 * RING_SEGMENTS)
+    /**
+     * 条带的**每一片都跨在两圈之间**（z 跨满 −1…+1）。扇形三角化里绝大多数片只落在一圈上
+     * （z 跨度为 0），还会横穿圆柱内部——这条断言就是那样失败的。
+     */
+    for (const triangle of triangles) {
+      const zs = triangle.map((vertex) => vertex.z)
+      expect(Math.max(...zs) - Math.min(...zs)).toBeCloseTo(2 * RING_HALF_HEIGHT, 6)
+    }
+    // 面积 = 内接多边形的侧带面积（周长 × 高），与文档里的网格近似面积同一口径。
+    const stripArea = 2 * RING_RADIUS * Math.sin(Math.PI / RING_SEGMENTS) * RING_SEGMENTS * 2 * RING_HALF_HEIGHT
+    expect(triangles.reduce((sum, triangle) => sum + triangleArea(triangle), 0)).toBeCloseTo(stripArea, 4)
+
+    // 平面区域（凸多边形，没有拼接）仍然走扇形：4 边形 = 2 片三角形。
+    const flat = trianglesOf(roleOf(createIntersectionFaceGroup(face(), false)!, "intersection-face")[0] as THREE.Mesh)
+    expect(flat).toHaveLength(2)
+  })
+
+  it("draws the created 交面's analytic boundary as real circles when the document carries exactLoops", () => {
+    const loops = [RING_HALF_HEIGHT, -RING_HALF_HEIGHT].map((z) => {
+      const conic = circleConic3({ x: 0, y: 0, z }, { x: 0, y: 0, z: 1 }, RING_RADIUS)!
+      return [{ kind: "conic" as const, conic, parameterRange: [0, Math.PI * 2] as [number, number] }]
+    })
+    const group = createIntersectionFaceGroup({ ...bandFace(), exactLoops: loops }, false, 0.001)!
+
+    const edges = roleOf(group, "intersection-face-edge")
+    // 两圈各一条**真曲线**（`THREE.Line`），不是一圈 8 段弦（`LineSegments`）。
+    expect(edges).toHaveLength(2)
+    for (const [index, edge] of edges.entries()) {
+      expect(edge).toBeInstanceOf(THREE.Line)
+      expect(edge).not.toBeInstanceOf(THREE.LineSegments)
+      const attribute = (edge as THREE.Line).geometry.getAttribute("position")
+      // R=2、tol=0.001 ⇒ 100 段：远多于原来那 8 段弦，而且每个顶点都**落在圆上**（弦的端点也在圆上，
+      // 所以关键是多出来的那些点全都在半径 2 上）。
+      expect(attribute.count).toBeGreaterThan(RING_SEGMENTS * 2)
+      expect(edge.userData.segmentCount).toBe(attribute.count - 1)
+      for (let vertex = 0; vertex < attribute.count; vertex += 1) {
+        expect(Math.abs(Math.hypot(attribute.getX(vertex), attribute.getY(vertex)) - RING_RADIUS)).toBeLessThan(1e-6)
+        expect(attribute.getZ(vertex)).toBeCloseTo(loops[index][0].conic.center!.z, 6)
+      }
+    }
+    // 填色照旧在：解析边界只换**边界**，不换填充（填充仍是网格多边形，拾取/面积要它）。
+    expect(roleOf(group, "intersection-face")).toHaveLength(1)
+
+    // 没给容差（或容差不可用）时如实退回多边形边界：绝不拿 NaN / 无穷去采样。
+    const polygon = roleOf(createIntersectionFaceGroup({ ...bandFace(), exactLoops: loops }, false)!, "intersection-face-edge")
+    expect(polygon).toHaveLength(1)
+    expect(polygon[0]).toBeInstanceOf(THREE.LineSegments)
+    expect(roleOf(createIntersectionFaceGroup({ ...bandFace(), exactLoops: loops }, false, Number.NaN)!, "intersection-face-edge")[0]).toBeInstanceOf(THREE.LineSegments)
   })
 
   it("draws one 交点 as a pickable handle-sized marker", () => {

@@ -25,6 +25,11 @@ export interface ThreeScenePreview {
   normal?: Vector3
   area?: number
   hint?: Vector3
+  /**
+   * 交面（曲面区域）：`points` 是"前导外环 + 其余环反向缝合"的多边形，这里是前导外环的顶点数。
+   * 渲染方据此把填充三角化成**环向条带**（扇形会把两圈之间的洞整块填掉）。平面区域没有这个字段。
+   */
+  outerRingLength?: number
   /** 交点：位置。 */
   position?: Vector3
   /** 状态栏用它说明"这一份是什么、点下去创建什么"。 */
@@ -53,6 +58,7 @@ export function toScenePreview(preview: IntersectionPreview3d, selectedIds: stri
     normal: preview.normal,
     area: preview.area,
     hint: preview.hint,
+    outerRingLength: preview.outerRingLength,
     position: preview.position,
     label: preview.label,
     focused: preview.sourceIds.every((id) => selectedIds.includes(id))

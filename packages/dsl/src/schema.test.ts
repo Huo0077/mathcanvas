@@ -227,6 +227,34 @@ describe("Geometry DSL document layout schema", () => {
   })
 
   /**
+   * 曲面区域的 `points` 是"外环 + 其余环反向缝合"的多边形（A2）：前导外环的顶点数是**渲染三角化**的依据——
+   * 按环向条带缝，而不是从 `points[0]` 扇形铺开（扇形会把两根环之间的洞整块填掉）。
+   *
+   * 只收 ≥ 3 的整数：小于 3 缝不出条带，小数不是顶点数（字符串更不是）。字段可选，旧文档没有它。
+   */
+  it("validates the leading outer ring length on an intersection face", () => {
+    const document = createEmptyDocument("geometry3d")
+    const cube = { id: "cube-1", type: "cube", origin: { x: -2, y: -2, z: -2 }, size: { x: 4, y: 4, z: 4 } }
+    const cylinder = { id: "cyl-1", type: "cylinder", center: { x: 0, y: 0, z: -2 }, radius: 1.5, height: 4, segments: 48 }
+    const face = (outerRingLength: unknown) => ({
+      id: "face-1", type: "intersectionFace", sourceIds: ["cube-1", "cyl-1"],
+      points: [{ x: 0, y: 0, z: 0 }], normal: { x: 0, y: 0, z: 1 }, area: 1, hint: { x: 0, y: 0, z: 0 },
+      status: "valid", outerRingLength
+    })
+    const withLength = (outerRingLength: unknown) => validateDocument({ ...document, primitives: [cube, cylinder, face(outerRingLength)] })
+
+    expect(withLength(48).valid).toBe(true)
+    // 旧文档没有这个字段（平面区域也永远不会写它）：`valid` 为真就等价于 `errors` 为空。
+    expect(withLength(undefined).valid).toBe(true)
+    // 0 / 2.5 / "48" 都不是"≥3 的整数顶点数"，必须各自报出同一条错。
+    for (const invalid of [0, 2.5, "48"]) {
+      const result = withLength(invalid)
+      expect(result.valid).toBe(false)
+      if (!result.valid) expect(result.errors).toContain("intersectionFace outerRingLength is invalid")
+    }
+  })
+
+  /**
    * 解析截面（A1）：`section.exact` 里是**精确**圆锥曲线 + 片段环。系数是精确真源，
    * 非有限数或错长度必须被拦住；旧文档没有这个字段，行为不变。
    */

@@ -345,8 +345,14 @@ export function createRimCircles3(primitiveId: string, circles: Conic3[], tolera
   return group
 }
 
-/** 截面 / 交面的解析边界：每个闭合环一条折线（环由"圆锥曲线弧 + 端面弦"拼成）。 */
-export function createCurveLoops3(primitiveId: string, loops: CurvePiece3[][], tolerance: number, selected: boolean, color?: string): THREE.Group | null {
+/**
+ * 截面 / 交面的解析边界：每个闭合环一条折线（环由"圆锥曲线弧 + 端面弦"拼成）。
+ *
+ * `role` 让调用方保留自己的视觉角色（截面是默认的 `exact-curve`、交面是 `intersection-face-edge`）：
+ * 画布读数与 e2e 都按角色找对象，边界换了画法不该把角色也换掉。整圈的片段由 `sampleCurvePieces`
+ * 交给闭式段数公式（见 `conicSampling.ts`），所以这里给出的点列一定落在**真曲线**上。
+ */
+export function createCurveLoops3(primitiveId: string, loops: CurvePiece3[][], tolerance: number, selected: boolean, color?: string, role = "exact-curve"): THREE.Group | null {
   const group = new THREE.Group()
   let segments = 0
   loops.forEach((loop, loopIndex) => {
@@ -356,14 +362,15 @@ export function createCurveLoops3(primitiveId: string, loops: CurvePiece3[][], t
       new THREE.BufferGeometry().setFromPoints(sampled.map((point) => new THREE.Vector3(point.x, point.y, point.z))),
       new THREE.LineBasicMaterial({ color: selected ? "#4c3ac7" : color ?? "#f97316" })
     )
-    line.userData.visualRole = "exact-curve"
+    line.userData.visualRole = role
     line.userData.sectionLoopIndex = loopIndex
+    line.userData.segmentCount = sampled.length - 1
     segments += sampled.length - 1
     group.add(line)
   })
   if (group.children.length === 0) return null
   group.userData.primitiveId = primitiveId
-  group.userData.visualRole = "exact-curve-group"
+  group.userData.visualRole = `${role}-group`
   group.userData.segmentCount = segments
   return group
 }
@@ -427,22 +434,67 @@ export function createSectionMesh(primitive: SectionPrimitive, options: { omitBo
   return group.children.length > 0 ? group : null
 }
 
+/**
+ * 区域多边形的**填充三角化**（位置数组，非索引几何）。
+ *
+ * 平面区域是凸多边形，扇形三角化就是对的。曲面区域不一样：内核给的 `points` 是"前导外环 + 其余环
+ * **反向**缝合"的一条多边形（配对规则 `points[长度 − 1 − i] ↔ points[i]`，见 `outerRingLength`），
+ * 对缝合带做扇形会把两圈之间那个"洞"整块填掉——实测立方体 ∩ 圆柱的侧带会画成"顶上一块圆盘 +
+ * 几片横穿圆柱内部的三角形"，而不是一条管子上的带面。所以缝合带按**环向条带**三角化：
+ * 每条外环边与后段对应边之间缝两片三角形，与内核算带面积用的是同一套配对。
+ *
+ * 退化三角形（收尾处可能重合的点）直接跳过：写进去只会得到零面积片，法向也没意义。
+ */
+export function regionFillPositions(points: Vector3[], outerRingLength?: number): number[] {
+  const positions: number[] = []
+  const push = (first: number, second: number, third: number) => {
+    if (first === second || second === third || first === third) return
+    for (const index of [first, second, third]) {
+      const point = points[index]
+      positions.push(point.x, point.y, point.z)
+    }
+  }
+  if (outerRingLength !== undefined && outerRingLength >= 3 && points.length >= 2 * outerRingLength) {
+    for (let index = 0; index < outerRingLength; index += 1) {
+      const next = (index + 1) % outerRingLength
+      const inner = points.length - 1 - index
+      const innerNext = points.length - 1 - next
+      push(index, next, innerNext)
+      push(index, innerNext, inner)
+    }
+    return positions
+  }
+  for (let index = 1; index < points.length - 1; index += 1) push(0, index, index + 1)
+  return positions
+}
+
+/** 区域多边形的**边界环**顶点（首尾不重复）：解析边界不可用时的多边形兜底。 */
+function ringVertices(points: Vector3[]): THREE.Vector3[] {
+  return points.map((point) => new THREE.Vector3(point.x, point.y, point.z))
+}
+
 /** Render a computed unfold layout as one filled mesh plus an outline per face, keeping pick metadata on each face. */
 /**
- * 交面图元：布尔交集的**一个平面面片**（用户口径："我需要的交面只是一个表面"）。
+ * 交面图元：布尔交集的**一个支撑曲面区域**（用户口径："我需要的交面只是一个表面"）。
  *
  * 填色跟着图元样式走——用户要的就是"交面内部填充颜色可以更改"：`style.fill` 原样使用
  *（包括用户特意选的白色），只在完全没设过时才给一个默认的红色系；`style.opacity` 与
  * `style.stroke` 同样照办，否则检查器里那几个控件就是摆设。
+ *
+ * `tolerance` 是曲线的**屏幕误差容差**（世界单位，见 `conicSampling.ts`）：文档里带着解析边界
+ *（`exactLoops`）且容差可用时，边界画成**真曲线**（按屏幕误差细分，放大不看出棱）；容差不可用时
+ * 如实退回多边形弦，绝不拿 NaN / 无穷去采样。
  */
-export function createIntersectionFaceGroup(primitive: Extract<PrimitiveSpec, { type: "intersectionFace" }>, selected: boolean): THREE.Object3D | null {
+export function createIntersectionFaceGroup(
+  primitive: Extract<PrimitiveSpec, { type: "intersectionFace" }>,
+  selected: boolean,
+  tolerance?: number
+): THREE.Object3D | null {
   const ring = primitive.points
   if (ring.length < 3) return null
-  const positions: number[] = []
-  for (let index = 1; index < ring.length - 1; index += 1) {
-    for (const point of [ring[0], ring[index], ring[index + 1]]) positions.push(point.x, point.y, point.z)
-  }
-  const vertices = ring.map((point) => new THREE.Vector3(point.x, point.y, point.z))
+  const positions = regionFillPositions(ring, primitive.outerRingLength)
+  if (positions.length < 9) return null
+  const vertices = ringVertices(ring)
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3))
   geometry.computeVertexNormals()
@@ -461,17 +513,28 @@ export function createIntersectionFaceGroup(primitive: Extract<PrimitiveSpec, { 
   mesh.userData.visualRole = "intersection-face"
   group.add(mesh)
 
-  const edgePoints: THREE.Vector3[] = []
-  for (let index = 0; index < vertices.length; index += 1) {
-    edgePoints.push(vertices[index].clone(), vertices[(index + 1) % vertices.length].clone())
+  const exactLoops = primitive.exactLoops && primitive.exactLoops.length > 0 ? primitive.exactLoops : null
+  const stroke = selected ? "#4c3ac7" : strokeFor(primitive)
+  const exact = exactLoops && tolerance !== undefined && Number.isFinite(tolerance) && tolerance > 0
+    ? createCurveLoops3(primitive.id, exactLoops, tolerance, selected, stroke, "intersection-face-edge")
+    : null
+  if (exact) {
+    group.add(exact)
+    // 画布读数按"这个对象上有多少段解析曲线"统计：边界是真曲线时才报段数。
+    if (typeof exact.userData.segmentCount === "number") group.userData.segmentCount = exact.userData.segmentCount
+  } else {
+    const edgePoints: THREE.Vector3[] = []
+    for (let index = 0; index < vertices.length; index += 1) {
+      edgePoints.push(vertices[index].clone(), vertices[(index + 1) % vertices.length].clone())
+    }
+    const edge = new THREE.LineSegments(
+      new THREE.BufferGeometry().setFromPoints(edgePoints),
+      new THREE.LineBasicMaterial({ color: stroke, transparent: opacity < 1, opacity })
+    )
+    edge.userData.primitiveId = primitive.id
+    edge.userData.visualRole = "intersection-face-edge"
+    group.add(edge)
   }
-  const edge = new THREE.LineSegments(
-    new THREE.BufferGeometry().setFromPoints(edgePoints),
-    new THREE.LineBasicMaterial({ color: selected ? "#4c3ac7" : strokeFor(primitive), transparent: opacity < 1, opacity })
-  )
-  edge.userData.primitiveId = primitive.id
-  edge.userData.visualRole = "intersection-face-edge"
-  group.add(edge)
   group.userData.primitiveId = primitive.id
   group.userData.primitiveType = primitive.type
   return group
@@ -846,10 +909,8 @@ function setOpacity(object: THREE.Mesh | THREE.Line | THREE.LineSegments, opacit
 function addFacePreview(group: THREE.Group, preview: ThreeScenePreview, highlighted: boolean, hitTargets: THREE.Object3D[]): void {
   const ring = preview.points
   if (ring.length < 3) return
-  const positions: number[] = []
-  for (let index = 1; index < ring.length - 1; index += 1) {
-    for (const vertex of [ring[0], ring[index], ring[index + 1]]) positions.push(vertex.x, vertex.y, vertex.z)
-  }
+  const positions = regionFillPositions(ring, preview.outerRingLength)
+  if (positions.length < 9) return
   const vertices = ring.map((point) => new THREE.Vector3(point.x, point.y, point.z))
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3))
@@ -877,6 +938,15 @@ function addFacePreview(group: THREE.Group, preview: ThreeScenePreview, highligh
   edge.userData.visualRole = "intersection-preview-edge"
   group.add(edge)
 
+  /**
+   * 顶点标记只给**平面**区域的拐角。
+   *
+   * 曲面区域的 `points` 是网格多边形（48 段侧带 = 96 个顶点），那些点不是任何几何意义上的交点，
+   * 全标出来的话画布上就是两圈密密麻麻的点（与既有口径冲突："光滑交线一个采样点都不标"）；
+   * 缝合处那两个拐角也只是我们拼接多边形的接缝，不是几何特征。真正的交点标记由**交线**预览负责
+   *（`intersectionMarkerPoints`：只标转折 ≥ 18° 的角点）。
+   */
+  if (preview.outerRingLength !== undefined) return
   for (const vertex of uniqueVertices(vertices)) {
     const marker = new THREE.Mesh(previewPointGeometry, previewPointMaterial)
     marker.position.copy(vertex)

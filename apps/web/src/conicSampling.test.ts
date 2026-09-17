@@ -89,6 +89,39 @@ describe("screen-error driven curve sampling", () => {
     expect(Math.max(...gaps)).toBeGreaterThan(Math.min(...gaps))
   })
 
+  it("samples a full-turn closed conic piece by the sagitta formula instead of subdividing a degenerate chord", () => {
+    /**
+     * 交面侧带的解析边界就是这样一个片段：`piecesFromRing` 把整圈网格顶点合成**一个** conic 片段、
+     * 参数区间恰好是 `[0, 2π]`（见内核 `intersection-surfaces.ts`）。
+     *
+     * 这种片段不能走开曲线的自适应二分：首尾是同一点，弦是**退化的**（长度 0），采样点离这条弦
+     * 差不多一整个半径 ⇒ 平坦度判据永远不满足，只能一路二分下去，而二分只能给出 **2 的幂**段数：
+     * 弦高公式要 40 段时它给 64 段（多 60% 的点，参数间隔还不均匀）。闭曲线有闭式段数公式，直接用。
+     */
+    const circle = intersectPlaneQuadric3(plane({ x: 0, y: 0, z: 1 }, -1), cylinderQuadric3(cylinder))
+    // tol = R(1 − cos(π/40)) ⇒ 公式正好要 40 段；二分只能给 2 的幂。
+    const tolerance = 2 * (1 - Math.cos(Math.PI / 40))
+    expect(segmentsForSagitta(2, tolerance)).toBe(40)
+
+    const points = sampleCurvePieces([{ kind: "conic", conic: circle, parameterRange: [0, Math.PI * 2] }], tolerance)
+
+    // 40 段、41 个点（首尾重合），一个都不多。
+    expect(points).toHaveLength(41)
+    expect(Math.hypot(points[0].x - points[points.length - 1].x, points[0].y - points[points.length - 1].y, points[0].z - points[points.length - 1].z)).toBeLessThan(1e-12)
+    for (const point of points) {
+      expect(Math.abs(Math.hypot(point.x, point.y) - 2)).toBeLessThan(1e-12)
+      expect(point.z).toBeCloseTo(1, 12)
+    }
+
+    // 半圈（不是整圈）的片段仍然走自适应采样：开曲线的曲率沿参数变，固定段数不划算。
+    const half = sampleCurvePieces([{ kind: "conic", conic: circle, parameterRange: [0, Math.PI] }], 0.01)
+    expect(half.length).toBeGreaterThan(2)
+    // 这半圈真的跨到**对径点**（相距 2R = 4），中途每个点都落在半径 2 上。
+    // （末尾那个点是 `sampleCurvePieces` 给闭合环补的环首点，所以取所有点到起点的最大距离。）
+    expect(Math.max(...half.map((point) => Math.hypot(point.x - half[0].x, point.y - half[0].y, point.z - half[0].z)))).toBeCloseTo(4, 9)
+    for (const point of half) expect(Math.abs(Math.hypot(point.x, point.y) - 2)).toBeLessThan(1e-9)
+  })
+
   it("reports nothing for degenerate inputs instead of inventing points", () => {
     expect(sampleClosedConic({ ...intersectPlaneQuadric3(plane({ x: 0, y: 1, z: 0 }, -3), cylinderQuadric3(cylinder)), kind: "empty", closed: false }, 0.01)).toEqual([])
     expect(sampleOpenCurve(() => null, [0, 1], 0.01)).toEqual([])

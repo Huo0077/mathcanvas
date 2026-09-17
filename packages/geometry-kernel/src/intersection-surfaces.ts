@@ -31,6 +31,19 @@ export interface IntersectionSurfaceRegion {
   kind: IntersectionSurfaceKind
   /** 平面区域：合并后的外环；曲面区域：边界里最大的那条顶点环（渲染兜底）。 */
   points: Vector3[]
+  /**
+   * `points` 里**前导外环**的顶点数；只有"缝合了不止一圈"的曲面区域才写。
+   *
+   * 曲面区域缝了不止一圈时 `points` 是"外环在前、其余环反向接在后"的多边形（见 `stitchedCurvedPoints`），
+   * 配对约定是第 `i` 个点配 `points[points.length - 1 - i]`（`i ∈ [0, outerRingLength)`）。
+   * 渲染方用它把填充三角化成**环向条带**；不知道前导外环多长就只能从 `points[0]` 扇形铺开，
+   * 那会把两圈之间的洞整块填掉（圆柱侧带会被画成那张圆盘）。因此只在
+   * `points.length > outerRingLength`（真的缝了第二圈）时写它。
+   *
+   * 平面区域的 `points` 就是合并后的外环本身（没有第二圈可缝），**不写**；
+   * `points` 退回 `largestFace` 时也不写（那只是一圈，别假装它缝过）。
+   */
+  outerRingLength?: number
   /** 解析边界：曲面区域有；平面区域的边界来自二次曲面时也有。串不成闭合环时**不写**。 */
   exactLoops?: CurvePiece3[][]
   /** 平面区域：法向；曲面区域：该二次曲面的轴。 */
@@ -171,12 +184,14 @@ function radiusAt(frame: SurfaceFrame, level: number): number | null {
  * 判据用的是二次曲面的**几何定义**（与 spec §3.1 规则 2 的写法一致）：圆柱 `|径向 − R| ≤ 容差`、
  * 圆锥 `|径向 − R(1 − 轴向/h)| ≤ 容差`；有 `bounds` 的有限实体还要求轴向落在 `[0, h]` 内。
  *
- * 为什么不用 `quadricValueAt(quadric, point)`（任务书里的那条）：`quadric3FromPrimitive` 对**未旋转**的
+ * 为什么不用 `quadricValueAt(quadric, point)`：当初 A2 第 1 轮时 `quadric3FromPrimitive` 对**未旋转**的
  * 图元返回的是**局部**矩阵（底面在 z=0、径向中心在世界原点），并没有搬到 `center` 去。实测：
  * App 默认圆柱 `center:{x:3,y:0,z:0}` 的真曲面点 (4.5,0,1) 上 `quadricValueAt = 18`（应为 0），
- * `intersectPlaneQuadric3` 也把截面圆心算成 (0,0,1) 而不是 (3,0,1)。**平移过的图元矩阵不可信，
- * `bounds` 帧才是世界坐标**（`rimCircles3` 与端面裁剪都读它，旋转过的图元两种口径本来也一致）。
- * 这条差异在报告里单独说明：`quadrics.ts` 的 `buildSolidQuadric` 非旋转分支需要把局部矩阵搬到 `center`。
+ * `intersectPlaneQuadric3` 也把截面圆心算成 (0,0,1) 而不是 (3,0,1)。
+ * 那条差异**已经在 A2 第 2 轮修掉**（`quadrics.ts` 的 `buildSolidQuadric` 改成一律做刚体共轭
+ * `Q_world = Tᵀ·Q_local·T`，见提交 `a1bf4b9`），现在两条口径一致。这里仍走 `bounds` 帧：
+ * 它是**实体自己的**轴 / 底面 / 高（有限实体的轴向范围只能从它读），而二次曲面矩阵不带 `bounds` 里的高。
+ *（`rimCircles3` 与端面裁剪也读 `bounds` 帧。）
  */
 function onSurfaceAt(frame: SurfaceFrame, point: Vector3): boolean {
   const axial = axialOf(frame, point)
@@ -532,9 +547,15 @@ function regionFromCandidate(candidate: RegionCandidate, pointOf: Map<string, Ve
   }
 
   if (candidate.kind !== "plane") {
+    /**
+     * 只有"缝了不止一圈"的曲面区域才报前导外环长度：`points.length === outer.keys.length` 时
+     * 它就只是一圈（含退回 `largestFace` 的情形——那时 `outer` 根本不存在），渲染方照旧扇形填充。
+     */
+    const stitchedOuterRingLength = outer && points.length > outer.keys.length ? outer.keys.length : undefined
     return {
       kind: candidate.kind,
       points,
+      ...(stitchedOuterRingLength ? { outerRingLength: stitchedOuterRingLength } : {}),
       ...(exactLoops ? { exactLoops } : {}),
       normal: { ...candidate.normal },
       // 曲面区域：网格面片面积求和，如实标近似。

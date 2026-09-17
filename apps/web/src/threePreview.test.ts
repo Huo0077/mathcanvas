@@ -72,6 +72,45 @@ const pointPreview = (): ThreeScenePreview => ({
   label: "交点"
 })
 
+/**
+ * 曲面区域（圆柱侧带）的交面预览：`points` 是"外环 + 另一圈**反向**缝合"的多边形，
+ * `outerRingLength` 是前导外环的顶点数。这里用 8 段的两个圆环做一个最小可算的样本
+ * （上环 z=+1 逆着角度递增走一圈，下环 z=−1 反向缝在后面）。
+ */
+const BAND_SEGMENTS = 8
+const BAND_RADIUS = 2
+const BAND_HALF = 1
+
+const bandPreview = (): ThreeScenePreview => {
+  const hoop = (z: number) => Array.from({ length: BAND_SEGMENTS }, (_, index) => {
+    const angle = (index * Math.PI * 2) / BAND_SEGMENTS
+    return { x: BAND_RADIUS * Math.cos(angle), y: BAND_RADIUS * Math.sin(angle), z }
+  })
+  const bottom = hoop(-BAND_HALF)
+  return {
+    key: "pair:cube-a|cyl-a:面2",
+    kind: "face",
+    sourceIds: ["cube-a", "cyl-a"],
+    segments: [],
+    points: [...hoop(BAND_HALF), ...Array.from({ length: BAND_SEGMENTS }, (_, index) => bottom[BAND_SEGMENTS - 1 - index])],
+    outerRingLength: BAND_SEGMENTS,
+    normal: { x: 0, y: 0, z: 1 },
+    area: 2 * Math.PI * BAND_RADIUS * (2 * BAND_HALF),
+    hint: { x: 0, y: 0, z: 0 },
+    label: "交面 · 圆柱面（面积 50.27，网格近似）"
+  }
+}
+
+/** 面片网格的三角形顶点（非索引几何，三个一组）。 */
+const trianglesOf = (mesh: THREE.Mesh): { x: number; y: number; z: number }[][] => {
+  const attribute = mesh.geometry.getAttribute("position")
+  const triangles: { x: number; y: number; z: number }[][] = []
+  for (let index = 0; index + 2 < attribute.count; index += 3) {
+    triangles.push([0, 1, 2].map((offset) => ({ x: attribute.getX(index + offset), y: attribute.getY(index + offset), z: attribute.getZ(index + offset) })))
+  }
+  return triangles
+}
+
 /** 取第一个带该角色的材质的透明度（用来断言面片是半透明的，不是一块挡视线的实心面）。 */
 const opacityOfRole = (group: THREE.Object3D, role: string): number | null => {
   let opacity: number | null = null
@@ -120,6 +159,39 @@ describe("虚线预览的画法", () => {
     expect(group.userData.excludeFromFit).toBe(true)
     // 面片本身就是命中区：点"这一块面"即创建这一面的交面图元。
     expect((group.userData.hitTargets as THREE.Object3D[]).length).toBe(1)
+  })
+
+  it("fills a curved 交面 preview as a ring strip between its hoops, not as a fan across the hole", () => {
+    /**
+     * 曲面区域的预览面片就是**命中区**：扇形三角化会把两圈之间的洞整块填掉，于是"鼠标落在洞上"
+     * 也算落在这块交面上——高亮的位置和使用者看到的那条带子对不上。所以和创建出来的交面一样，
+     * 缝合带必须按环向条带三角化（同一套配对规则）。
+     */
+    const group = createPreviewGroup(bandPreview(), false, () => undefined)
+    const mesh = group.children.find((child) => child.userData.visualRole === "intersection-preview-face") as THREE.Mesh | undefined
+    expect(mesh).toBeTruthy()
+
+    const triangles = trianglesOf(mesh!)
+    // 8 条环向边各缝两片，且**每一片都跨在两圈之间**（z 跨满 −1…+1）。
+    expect(triangles).toHaveLength(2 * BAND_SEGMENTS)
+    for (const triangle of triangles) {
+      const zs = triangle.map((vertex) => vertex.z)
+      expect(Math.max(...zs) - Math.min(...zs)).toBeCloseTo(2 * BAND_HALF, 6)
+    }
+  })
+
+  it("marks the corners of a planar 交面 preview but no mesh vertex of a curved one", () => {
+    /**
+     * 平面区域：预览的顶点就是这一面的拐角，四个都标出来（与既有行为一致）。
+     */
+    expect(countRole(createPreviewGroup(facePreview(), false, () => undefined), "intersection-preview-point")).toBe(4)
+
+    /**
+     * 曲面区域（缝合带）：`points` 是网格多边形（48 段侧带 = 96 个顶点），那些点**不是**任何几何意义上的
+     * 交点——把每个网格顶点都标成点，画布上就是两圈密密麻麻的点（与既有口径冲突："光滑交线一个采样点
+     * 都不标"），缝合处那两个拐角也只是我们拼接多边形的接缝。真正的交点标记由**交线**预览负责。
+     */
+    expect(countRole(createPreviewGroup(bandPreview(), false, () => undefined), "intersection-preview-point")).toBe(0)
   })
 
   it("draws one 交点 as a marker with its own hit area", () => {

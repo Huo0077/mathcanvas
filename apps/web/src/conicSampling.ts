@@ -155,5 +155,13 @@ function sampleConicRange(conic: Conic3, range: [number, number], tolerance: num
     const end = conic3PointAt(conic, range[1], branch)
     return start && end ? [start, end] : []
   }
+  /**
+   * **整圈**的闭曲线片段用闭式段数公式（`sampleClosedConic`），不走自适应二分。
+   *
+   * 整圈的片段首尾是同一点，那根弦是退化的（长度 0），采样点离它差不多一整个半径——平坦度判据永远
+   * 不满足，只能一路二分，而二分只给 **2 的幂**段数：实测弦高公式要 40 段时它给 64 段（65 个点对 41 个），
+   * 参数间隔还不均匀。闭曲线有闭式解，没有理由去逼近它。
+   */
+  if (conic.closed && Math.abs(range[1] - range[0]) >= Math.PI * 2 - 1e-9) return sampleClosedConic(conic, tolerance)
   return sampleOpenCurve((parameter) => conic3PointAt(conic, parameter, branch), range, tolerance)
 }

@@ -588,6 +588,15 @@ export interface IntersectionFacePrimitive extends PrimitivePresentation {
    * - 缺省：旧文档 / 还没算过的图元，不假装知道。
    */
   areaExact?: boolean
+  /**
+   * 曲面区域的 `points` 是"外环 + 其余环反向缝合"的多边形，这个字段是**前导外环的顶点数**
+   * （可选；旧文档 / 平面区域没有这个字段）。
+   *
+   * 缝了不止一圈时 `points` 的第 `i` 个点与 `points[points.length - 1 - i]` 配对（`i ∈ [0, outerRingLength)`），
+   * 渲染方因此能把它三角化成**环向条带**；不写这个字段就只能从 `points[0]` 扇形铺开，
+   * 而扇形会把两圈之间的洞整块填掉（圆柱侧带会画成那张圆盘）。
+   */
+  outerRingLength?: number
   hint: Vector3
   status: "valid" | "none" | "insufficient-data"
   diagnostic?: string

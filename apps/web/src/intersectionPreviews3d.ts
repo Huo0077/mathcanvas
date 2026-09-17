@@ -32,6 +32,11 @@ export interface IntersectionPreview3d {
   segments: { a: Vector3; b: Vector3 }[]
   /** 交面区域：区域边界的顶点环（首尾不重复，渲染兜底；其余种类为空）。 */
   points: Vector3[]
+  /**
+   * 交面区域（曲面）：`points` 是"前导外环 + 其余环反向缝合"的多边形，这里是前导外环的顶点数；
+   * 渲染方据此把填充三角化成环向条带（扇形会把两圈之间的洞整块填掉）。平面区域没有这个字段。
+   */
+  outerRingLength?: number
   /** 交面区域：区域法向（曲面区域是那张二次曲面的轴）、面积，以及"该被建成哪一面"的形心。 */
   normal: Vector3
   area: number
@@ -275,6 +280,7 @@ export function computeIntersectionPreviews3d(document: GeometryDocument, option
             sourceIds,
             segments: [],
             points: region.points.map((point) => ({ ...point })),
+            ...(region.outerRingLength ? { outerRingLength: region.outerRingLength } : {}),
             normal: { ...region.normal },
             area: region.area,
             hint: { ...hint },

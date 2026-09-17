@@ -496,9 +496,20 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
         return line
       }, alive, order)
     })
-    // 已创建的交面：**一个**平面面片（填色可改）；已创建的交点：交线的拐点。
+    // 已创建的交面：**一个支撑曲面区域**（填色可改，曲面区域按环向条带填充）；已创建的交点：交线的拐点。
     document.primitives.filter((primitive): primitive is IntersectionFacePrimitive => primitive.type === "intersectionFace" && primitive.visible !== false).forEach((primitive) => {
-      keepContent(`intersection-face:${primitive.id}`, signer.of(primitive.id, `sel:${selectedIds.includes(primitive.id)}`), () => createIntersectionFaceGroup(primitive, selectedIds.includes(primitive.id)), alive, order)
+      const selected = selectedIds.includes(primitive.id)
+      /**
+       * 文档里带着解析边界（`exactLoops`：圆柱 / 圆锥区域的两圈圆弧）时，边界画成**真曲线**，
+       * 所以它和空间圆一样要跟着缩放走——容差档必须进签名，否则放大后边界还是旧的细分。
+       */
+      const exactBoundary = Boolean(primitive.exactLoops && primitive.exactLoops.length > 0)
+      const flags = `sel:${selected};boundary:${exactBoundary ? `exact;${curveToleranceFlag}` : "polygon"}`
+      const face = keepContent(`intersection-face:${primitive.id}`, signer.of(primitive.id, flags), () => createIntersectionFaceGroup(primitive, selected, curveTolerance), alive, order)
+      if (face && typeof face.userData.segmentCount === "number") {
+        exactCurveCount += 1
+        exactCurveSegments += face.userData.segmentCount
+      }
     })
     document.primitives.filter((primitive): primitive is IntersectionPoint3Primitive => primitive.type === "intersectionPoint3" && primitive.visible !== false).forEach((primitive) => {
       const marker = keepContent(`intersection-point:${primitive.id}`, signer.of(primitive.id, `sel:${selectedIds.includes(primitive.id)}`), () => createIntersectionPointGroup(primitive, selectedIds.includes(primitive.id)), alive, order)
@@ -1353,11 +1364,15 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     const runtime = runtimeRef.current
     if (!runtime) return
     /**
-     * 只有画布上**真的存在解析曲线**（空间圆 / 带解析边界的截面）时，缩放才需要重新采样。
+     * 只有画布上**真的存在解析曲线**（空间圆 / 带解析边界的截面 / 带解析边界的交面）时，缩放才需要重新采样。
      * 否则把容差档写进签名会让"只有立方体"的文档在每次缩放时白跑一次同步——那既浪费，
      * 又可能顺手触发自动取景重新构图（实测：相交预览用例预先算好的投影点因此失效）。
      */
-    const wantsExactCurves = document.primitives.some((primitive) => primitive.type === "circle3" || (primitive.type === "section" && primitive.exact !== undefined))
+    const wantsExactCurves = document.primitives.some((primitive) =>
+      primitive.type === "circle3" ||
+      (primitive.type === "section" && primitive.exact !== undefined) ||
+      (primitive.type === "intersectionFace" && primitive.exactLoops !== undefined && primitive.exactLoops.length > 0)
+    )
     const key = sceneContentKey({
       document,
       selectedIds,

@@ -274,6 +274,60 @@ describe("intersection face primitive (A2 support-surface regions)", () => {
     expect(gone.exactLoops).toBeUndefined()
     expect(gone.areaExact).toBeUndefined()
   })
+  /**
+   * 曲面区域的 `points` 是"外环 + 其余环反向缝合"的多边形（A2）：渲染方要知道**前导外环**有多长，
+   * 才能把它三角化成环向条带。从 `points[0]` 扇形铺开的话，48 段的侧带会被画成那张圆盘——中间的洞整块被填掉。
+   */
+  it("writes the leading outer ring length for the claimed lateral band", () => {
+    const face = withPending(cubeAndCylinder({ center: { x: 0, y: 0, z: -3 }, height: 6 }), pendingFace(["cube-a", "cyl-a"], { x: 0, y: 0, z: 0 }))
+    if (face?.type !== "intersectionFace") throw new Error("expected intersectionFace")
+
+    expect(face.status).toBe("valid")
+    // 48 段的侧带缝成 96 个点，前导外环是其中 48 个。
+    expect(face.outerRingLength).toBe(48)
+    expect(face.points).toHaveLength(96)
+    expect(face.points).toHaveLength(2 * face.outerRingLength!)
+  })
+
+  it("leaves outerRingLength unset when the claimed region is planar", () => {
+    // 圆盘：边界只有一圈，`points` 就是那个环本身。
+    const disc = withPending(cubeAndCylinder({ center: { x: 0, y: 0, z: -3 }, height: 6 }), pendingFace(["cube-a", "cyl-a"], { x: 0, y: 0, z: 2 }))
+    if (disc?.type !== "intersectionFace") throw new Error("expected intersectionFace")
+    expect(disc.status).toBe("valid")
+    expect(disc.points).toHaveLength(48)
+    expect(disc.outerRingLength).toBeUndefined()
+
+    // 两个交叠立方体的交面全是平面区域：一个都不许带这个字段。
+    const plane = withPending(overlappingCubes(), pendingFace(["cube-a", "cube-b"], { x: 1, y: -2, z: 0 }))
+    if (plane?.type !== "intersectionFace") throw new Error("expected intersectionFace")
+    expect(plane.status).toBe("valid")
+    expect(plane.points).toHaveLength(4)
+    expect(plane.outerRingLength).toBeUndefined()
+  })
+
+  /**
+   * 陈旧字段必须被摘掉：`outerRingLength` 与 `exactLoops` / `areaExact` 一样是**派生**的
+   * （这一轮算什么就写什么），来源一动它就可能对不上当前几何。留着它，渲染方会把一块**平面多边形**
+   * 当成环向条带缝——填充直接画错。
+   *
+   * 这里没法走"先认领侧带、再改来源让它改认平面"的路径：交面是派生图元，`patches.ts` 的
+   * `editable` 列表不接受它的 `sourceIds` 补丁。所以直接按契约把上一轮的字段种在待重算的图元上。
+   */
+  it("clears a stale outerRingLength when the claimed region is planar", () => {
+    const document = cubeAndCylinder({ center: { x: 0, y: 0, z: -3 }, height: 6 })
+    const stale = { ...pendingFace(["cube-a", "cyl-a"], { x: 0, y: 0, z: 0 }), outerRingLength: 48 }
+    const withFace = applyOperation(document, { op: "addPrimitive", primitive: stale as never }).document
+    // 先按契约自证：侧带那一轮确实会写这个字段（否则下面清掉的可能是本来就没有的东西）。
+    expect(faceOf(withFace).outerRingLength).toBe(48)
+
+    // 换成两只立方体：同一个面此刻认领的是平面区域 x=0（形心 (0,0,0)，正好还是 hint）。
+    const cubes = overlappingCubes()
+    const planeFace = withPending(cubes, { ...pendingFace(["cube-a", "cube-b"], { x: 1, y: -2, z: 0 }), outerRingLength: 48 })
+    if (planeFace?.type !== "intersectionFace") throw new Error("expected intersectionFace")
+    expect(planeFace.status).toBe("valid")
+    expect(planeFace.normal.y).toBeCloseTo(-1, 6)
+    expect(planeFace.outerRingLength).toBeUndefined()
+  })
 })
 
 describe("intersection solid primitive", () => {

@@ -353,6 +353,32 @@ describe("mergeIntersectionSurfaces3", () => {
     expect(Math.abs(signed - trueBand) / trueBand).toBeLessThan(0.03)
   })
 
+  /**
+   * 缝合多边形的**前导外环**有多少个顶点（`outerRingLength`）。
+   *
+   * 渲染方按 `points` 三角化填充：曲面的 `points` 是"外环在前、其余环反向缝在后"的整条带，用**扇形**
+   * （从 `points[0]` 出发）三角化会把中间的洞整块填掉——48 段的侧带会画成那张圆盘。要知道前导外环多长，
+   * 才能把它当**环向条带**（第 `i` 个点配 `points[length−1−i]`）三角化。
+   */
+  it("reports the leading outer ring's vertex count for the stitched band", () => {
+    const band = bandOf(mergeIntersectionSurfaces3(cubeCylinderIntersection(), sources()))
+
+    expect(band.outerRingLength).toBe(SEGMENTS)
+    // 缝合后正好是"外环 + 另一圈"，两圈各 SEGMENTS 个点。
+    expect(band.points).toHaveLength(2 * band.outerRingLength!)
+  })
+
+  it("leaves outerRingLength unset for planar regions", () => {
+    const regions = mergeIntersectionSurfaces3(cubeCylinderIntersection(), sources())
+    // 平面区域的 `points` 就是合并后的外环本身：没有"第二圈"可缝，渲染方照旧扇形填充。
+    for (const disc of discsOf(regions)) expect(disc.outerRingLength).toBeUndefined()
+
+    // 立方体 ∩ 立方体：全是平面区域，一个都不许带这个字段。
+    const cubeCube = mergeIntersectionSurfaces3(intersectConvexPolyhedra3(cubePolyhedron(), cubePolyhedron({ x: 0, y: -2, z: -2 })), sources(undefined))
+    expect(cubeCube).toHaveLength(6)
+    for (const plane of cubeCube) expect(plane.outerRingLength).toBeUndefined()
+  })
+
   it("leaves a region with a single boundary ring exactly as it was", () => {
     // 圆盘的边界本来就是一个闭环：点数不变、没有第二圈被缝进来、也没有复制一个首点收尾。
     for (const disc of discsOf(mergeIntersectionSurfaces3(cubeCylinderIntersection(), sources()))) {

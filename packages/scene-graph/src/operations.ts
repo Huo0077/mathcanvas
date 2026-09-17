@@ -800,9 +800,10 @@ function recomputeIntersectionFace(
   /**
    * 解析字段是**派生**的：这一轮算不出解析边界就必须把它摘掉，
    * 否则会留下一份和现几何对不上的边界（来源移动后尤其明显）。
+   * `outerRingLength` 同理：它描述的是当前 `points` 里前导外环有多长，来源一动就可能对不上。
    */
   const withoutAnalytic = (face: Extract<PrimitiveSpec, { type: "intersectionFace" }>) => {
-    const { exactLoops: _staleLoops, areaExact: _staleAreaExact, ...rest } = face
+    const { exactLoops: _staleLoops, areaExact: _staleAreaExact, outerRingLength: _staleOuterRingLength, ...rest } = face
     return rest
   }
   const sources = primitive.sourceIds.map((id) => primitiveMap.get(id))
@@ -838,6 +839,8 @@ function recomputeIntersectionFace(
       // 面积精度随区域如实标注（曲面区域是网格求和），解析边界有就写、没有就不写。
       areaExact: region.areaExact,
       ...(region.exactLoops ? { exactLoops: region.exactLoops } : {}),
+      // 曲面区域的 `points` 缝了不止一圈时才有前导外环长度：渲染方靠它做环向条带三角化。
+      ...(region.outerRingLength ? { outerRingLength: region.outerRingLength } : {}),
       hint: { ...centroid },
       status: "valid",
       visible: true,
