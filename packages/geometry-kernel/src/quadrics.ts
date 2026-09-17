@@ -499,3 +499,51 @@ export function conic3FromCircle3(primitive: Extract<PrimitiveSpec, { type: "cir
   if (!center) return null
   return circleConic3(center, primitive.normal, primitive.radius)
 }
+
+/** 一个读数：数值 + **它是不是精确的**。两者必须一起给，否则调用方只能猜。 */
+export interface Conic3Measure {
+  value: number
+  /** `true` 表示闭式解（圆周长 `2πr`、圆/椭圆面积 `πab`）；`false` 表示数值近似（椭圆周长）。 */
+  exact: boolean
+}
+
+/**
+ * 圆 / 椭圆的面积：`πab`（**精确**）。抛物线与双曲线不封闭、退化的没有面积，一律返回 `null`。
+ */
+export function conic3Area(conic: Conic3): Conic3Measure | null {
+  if (conic.kind !== "circle" && conic.kind !== "ellipse") return null
+  const semiMajor = conic.semiMajor
+  const semiMinor = conic.semiMinor
+  if (semiMajor === undefined || semiMinor === undefined || !(semiMajor > 0) || !(semiMinor > 0)) return null
+  return { value: Math.PI * semiMajor * semiMinor, exact: true }
+}
+
+/**
+ * 圆 / 椭圆的周长。
+ *
+ * 圆是**精确**的 `2πr`；椭圆没有初等闭式，用第二类完全椭圆积分的级数
+ * `p = 2πa[1 − Σ ((2n−1)!!/(2n)!!)² e^{2n}/(2n−1)]` 算，并如实标 `exact: false`——
+ * 绝不把级数结果说成精确值。级数在近圆时收敛很快；`e → 1`（压扁的椭圆）收敛慢，所以给项数上限。
+ */
+export function conic3Perimeter(conic: Conic3): Conic3Measure | null {
+  if (conic.kind !== "circle" && conic.kind !== "ellipse") return null
+  const semiMajor = conic.semiMajor
+  const semiMinor = conic.semiMinor
+  if (semiMajor === undefined || semiMinor === undefined || !(semiMajor > 0) || !(semiMinor > 0)) return null
+  if (conic.kind === "circle" || Math.abs(semiMajor - semiMinor) <= CIRCLE_RELATIVE_TOLERANCE * semiMajor) {
+    return { value: 2 * Math.PI * semiMajor, exact: true }
+  }
+  const eccentricitySquared = Math.max(0, 1 - (semiMinor / semiMajor) ** 2)
+  let term = 1        // ((2n−1)!!/(2n)!!)² · e^{2n} 的比值累积
+  let power = 1       // e^{2n}
+  let sum = 0
+  for (let n = 1; n <= 64; n += 1) {
+    const ratio = (2 * n - 1) / (2 * n)
+    term *= ratio * ratio
+    power *= eccentricitySquared
+    const contribution = (term * power) / (2 * n - 1)
+    sum += contribution
+    if (contribution <= 1e-17) break
+  }
+  return { value: 2 * Math.PI * semiMajor * (1 - sum), exact: false }
+}

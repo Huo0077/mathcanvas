@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import type { Point3Primitive, PrimitiveSpec } from "@draw/dsl"
 
-import { createMeasurement3, measureAngle3 } from "./measurements3d"
+import { calculateMeasurement3, createMeasurement3, measureAngle3 } from "./measurements3d"
 
 const points: Point3Primitive[] = [
   { id: "a", type: "point3", position: { x: 0, y: 0, z: 0 } },
@@ -26,6 +26,43 @@ describe("3D measurements", () => {
 
     expect(angle.status).toBe("degenerate")
     expect(angle.value).toBeUndefined()
+  })
+
+  /**
+   * A1 第 5 片：`precision` 的语义是"读数是不是**闭式**给的"。
+   *
+   * 圆柱 `πr²h`、圆锥 `πr²h/3`、立方体 / 棱锥体积、空间圆面积 `πr²`、平面多边形面积都是闭式，
+   * 标 `"exact-input"`；多面体体积是**网格求和**（对 48 边形的圆柱 / 圆锥就是不精确的），
+   * 距离 / 长度 / 角度 / 二面角由坐标推出，保持 `"numeric-approximation"`——不许把近似说成精确。
+   */
+  it("marks closed-form readings exact and mesh sums approximate", () => {
+    const cylinder: PrimitiveSpec = { id: "cylinder", type: "cylinder", center: { x: 0, y: 0, z: 0 }, radius: 2, height: 3, segments: 48 }
+    const cone: PrimitiveSpec = { id: "cone", type: "cone", center: { x: 0, y: 0, z: 0 }, radius: 2, height: 3, segments: 48 }
+    const cube: PrimitiveSpec = { id: "cube", type: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 3, z: 4 } }
+    const circle3: PrimitiveSpec = { id: "circle3", type: "circle3", centerId: "point-a", normal: { x: 0, y: 0, z: 1 }, radius: 2 }
+    const primitives = [cylinder, cone, cube, circle3]
+
+    const measure = (metric: "volume" | "area", sourceIds: string[]) =>
+      calculateMeasurement3({ id: "m", kind: "measurement3", sourceIds, metric, precision: "numeric-approximation", status: "valid", explanation: "" }, primitives)
+
+    const cylinderVolume = measure("volume", ["cylinder"])
+    expect(cylinderVolume.value).toBeCloseTo(Math.PI * 4 * 3, 12)
+    expect(cylinderVolume.precision).toBe("exact-input")
+
+    const coneVolume = measure("volume", ["cone"])
+    expect(coneVolume.value).toBeCloseTo((Math.PI * 4 * 3) / 3, 12)
+    expect(coneVolume.precision).toBe("exact-input")
+
+    expect(measure("volume", ["cube"]).precision).toBe("exact-input")
+    expect(measure("volume", ["cube"]).value).toBe(24)
+
+    const circleArea = measure("area", ["circle3"])
+    expect(circleArea.value).toBeCloseTo(Math.PI * 4, 12)
+    expect(circleArea.precision).toBe("exact-input")
+
+    // 多面体（网格集合）体积保持近似：48 边形的圆柱体积**不是** πr²h。
+    const polyhedron: PrimitiveSpec = { id: "poly", type: "polyhedron3", vertexIds: ["p0", "p1", "p2", "p3"], edgeIds: [], faceIds: ["f0", "f1", "f2", "f3"] }
+    expect(calculateMeasurement3({ id: "m2", kind: "measurement3", sourceIds: ["poly"], metric: "volume", precision: "numeric-approximation", status: "valid", explanation: "" }, [polyhedron]).precision).toBe("numeric-approximation")
   })
 
   it("calculates solid volumes and polygon areas", () => {

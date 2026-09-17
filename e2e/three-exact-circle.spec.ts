@@ -30,6 +30,10 @@ test("draws a section of a cylinder as an exact circle that gains detail when zo
   await expect(inspector).toContainText("解析截面")
   await expect(inspector).toContainText("半径")
   await expect(inspector).toContainText("离心率")
+  // 整圆没被端面裁切 ⇒ 面积 / 周长都有闭式，并如实标"精确"。
+  await expect(inspector).toContainText("面积")
+  await expect(inspector).toContainText("πab 精确")
+  await expect(inspector).toContainText("周长")
 
   const segments = async () => Number(await scene.getAttribute("data-exact-curve-segments"))
   const initial = await segments()

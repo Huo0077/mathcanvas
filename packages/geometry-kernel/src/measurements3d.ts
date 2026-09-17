@@ -13,9 +13,17 @@ function primitiveMap(primitives: MeasurementContext3): ReadonlyMap<string, Prim
   return primitives as ReadonlyMap<string, PrimitiveSpec>
 }
 
-function result(id: string, sourceIds: string[], metric: Measurement3["metric"], value: number, unit: string, explanation: string): Measurement3 {
+/**
+ * 装配一条测量结果。
+ *
+ * `precision` 的语义是"这个读数是不是**闭式**给的"：圆柱体积 `πr²h`、圆锥体积 `πr²h/3`、
+ * 立方体 / 棱锥体积、空间圆面积 `πr²`、平面多边形的三角剖分面积都是闭式，标 `"exact-input"`；
+ * 由网格求和（多面体体积）或由坐标推出来的量（距离 / 长度 / 角度 / 二面角）保持
+ * `"numeric-approximation"`——48 边形的体积**不能**说成精确。
+ */
+function result(id: string, sourceIds: string[], metric: Measurement3["metric"], value: number, unit: string, explanation: string, precision: Measurement3["precision"] = "numeric-approximation"): Measurement3 {
   if (!Number.isFinite(value)) return invalidMeasurement(id, sourceIds, metric, "numeric-failure", "计算结果不是有限数值。")
-  return { id, kind: "measurement3", sourceIds: [...sourceIds], metric, value, unit, precision: "numeric-approximation", status: "valid", explanation }
+  return { id, kind: "measurement3", sourceIds: [...sourceIds], metric, value, unit, precision, status: "valid", explanation }
 }
 
 function invalidMeasurement(id: string, sourceIds: string[], metric: Measurement3["metric"], status: Measurement3["status"], explanation: string): Measurement3 {
@@ -109,13 +117,13 @@ export function measureAngle3(id: string, sourceIds: string[], first: Vector3, s
   return result(id, sourceIds, "angle", Math.acos(cosine) * 180 / Math.PI, "°", `由 ${sourceIds.join("、")} 的方向向量计算夹角。`)
 }
 
-export function measureArea3(id: string, sourceIds: string[], points: Vector3[]): Measurement3 {
+export function measureArea3(id: string, sourceIds: string[], points: Vector3[], precision: Measurement3["precision"] = "numeric-approximation"): Measurement3 {
   const value = polygonArea(points)
-  return value > EPSILON ? result(id, sourceIds, "area", value, "u²", `由 ${sourceIds.join("、")} 的有序面顶点三角剖分计算面积。`) : invalidMeasurement(id, sourceIds, "area", "degenerate", "面顶点共线或数据不足，无法形成面积。")
+  return value > EPSILON ? result(id, sourceIds, "area", value, "u²", `由 ${sourceIds.join("、")} 的有序面顶点三角剖分计算面积。`, precision) : invalidMeasurement(id, sourceIds, "area", "degenerate", "面顶点共线或数据不足，无法形成面积。")
 }
 
-export function measureVolume3(id: string, sourceIds: string[], value: number): Measurement3 {
-  return value > EPSILON ? result(id, sourceIds, "volume", value, "u³", `由 ${sourceIds.join("、")} 的闭合面边界计算体积。`) : invalidMeasurement(id, sourceIds, "volume", "degenerate", "实体体积为零或拓扑退化。")
+export function measureVolume3(id: string, sourceIds: string[], value: number, precision: Measurement3["precision"] = "numeric-approximation"): Measurement3 {
+  return value > EPSILON ? result(id, sourceIds, "volume", value, "u³", `由 ${sourceIds.join("、")} 的闭合面边界计算体积。`, precision) : invalidMeasurement(id, sourceIds, "volume", "degenerate", "实体体积为零或拓扑退化。")
 }
 
 export function calculateMeasurement3(measurement: Measurement3, context: MeasurementContext3): Measurement3 {
@@ -177,22 +185,24 @@ export function calculateMeasurement3(measurement: Measurement3, context: Measur
     const source = sources[0]
     if (source?.type === "face3") {
       const points = facePoints(source, primitives)
-      return points ? measureArea3(measurement.id, measurement.sourceIds, points) : invalidMeasurement(measurement.id, measurement.sourceIds, "area", "insufficient-data", "无法解析面的顶点。")
+      // 面是**平面多边形**（schema 强制共面）：三角剖分面积是闭式，标精确。
+      return points ? measureArea3(measurement.id, measurement.sourceIds, points, "exact-input") : invalidMeasurement(measurement.id, measurement.sourceIds, "area", "insufficient-data", "无法解析面的顶点。")
     }
-    if (source?.type === "circle3") return result(measurement.id, measurement.sourceIds, "area", Math.PI * source.radius ** 2, "u²", `由空间圆 ${source.id} 的半径计算圆面积。`)
+    if (source?.type === "circle3") return result(measurement.id, measurement.sourceIds, "area", Math.PI * source.radius ** 2, "u²", `由空间圆 ${source.id} 的半径计算圆面积。`, "exact-input")
     const points = measurement.sourceIds.map((id) => pointById(primitives, id))
-    return points.length >= 3 && points.every(Boolean) ? measureArea3(measurement.id, measurement.sourceIds, points as Vector3[]) : invalidMeasurement(measurement.id, measurement.sourceIds, "area", "insufficient-data", "面积需要一个空间面、空间圆或有序顶点。")
+    return points.length >= 3 && points.every(Boolean) ? measureArea3(measurement.id, measurement.sourceIds, points as Vector3[], "exact-input") : invalidMeasurement(measurement.id, measurement.sourceIds, "area", "insufficient-data", "面积需要一个空间面、空间圆或有序顶点。")
   }
   if (measurement.metric === "volume") {
     const source = sources[0]
     if (source?.type === "polyhedron3") {
       const volume = volumeOfPolyhedron(source, primitives)
+      // 多面体体积是**网格求和**：对立方体精确，对圆柱 / 圆锥的 48 边形近似就不精确了——一律如实标近似。
       return volume === null ? invalidMeasurement(measurement.id, measurement.sourceIds, "volume", "insufficient-data", "无法从多面体面引用解析体积。") : measureVolume3(measurement.id, measurement.sourceIds, volume)
     }
-    if (source?.type === "cube") return measureVolume3(measurement.id, measurement.sourceIds, source.size.x * source.size.y * source.size.z)
-    if (source?.type === "pyramid") return measureVolume3(measurement.id, measurement.sourceIds, source.baseSize.x * source.baseSize.y * source.height / 3)
-    if (source?.type === "cylinder") return measureVolume3(measurement.id, measurement.sourceIds, Math.PI * source.radius ** 2 * source.height)
-    if (source?.type === "cone") return measureVolume3(measurement.id, measurement.sourceIds, Math.PI * source.radius ** 2 * source.height / 3)
+    if (source?.type === "cube") return measureVolume3(measurement.id, measurement.sourceIds, source.size.x * source.size.y * source.size.z, "exact-input")
+    if (source?.type === "pyramid") return measureVolume3(measurement.id, measurement.sourceIds, source.baseSize.x * source.baseSize.y * source.height / 3, "exact-input")
+    if (source?.type === "cylinder") return measureVolume3(measurement.id, measurement.sourceIds, Math.PI * source.radius ** 2 * source.height, "exact-input")
+    if (source?.type === "cone") return measureVolume3(measurement.id, measurement.sourceIds, Math.PI * source.radius ** 2 * source.height / 3, "exact-input")
     return invalidMeasurement(measurement.id, measurement.sourceIds, "volume", "insufficient-data", "体积需要一个多面体或参数化实体。")
   }
   const faces = sources.filter((source): source is Face3Primitive => source?.type === "face3")

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { circleConic3, coneQuadric3, conic3FromCircle3, conic3PointAt, cylinderQuadric3, intersectPlaneQuadric3, planeQuadric3, quadricScaleOf, quadricValueAt, rimCircles3 } from "./quadrics"
+import { circleConic3, coneQuadric3, conic3Area, conic3FromCircle3, conic3Perimeter, conic3PointAt, cylinderQuadric3, intersectPlaneQuadric3, planeQuadric3, quadricScaleOf, quadricValueAt, rimCircles3, type Conic3 } from "./quadrics"
 
 const RADIUS = 2
 const HEIGHT = 3
@@ -171,6 +171,35 @@ describe("plane ∩ quadric (analytic)", () => {
     expect(turned[1].center!.y).toBeCloseTo(-1.5, 12)
     // 不是圆类实体就没有边界圆。
     expect(rimCircles3({ id: "cube-1", type: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 1, y: 1, z: 1 } })).toEqual([])
+  })
+
+  it("measures circles exactly and ellipses honestly", () => {
+    const circle = circleConic3({ x: 0, y: 0, z: 1 }, { x: 0, y: 0, z: 1 }, 2)!
+    const circleArea = conic3Area(circle)!
+    const circlePerimeter = conic3Perimeter(circle)!
+    expect(circleArea.value).toBeCloseTo(Math.PI * 4, 12)
+    expect(circleArea.exact).toBe(true)
+    expect(circlePerimeter.value).toBeCloseTo(2 * Math.PI * 2, 12)
+    expect(circlePerimeter.exact).toBe(true)
+
+    // 椭圆：面积 πab 精确；周长没有初等闭式 → 级数 + 如实标近似。
+    // a=2、b=1 的周长是公开参考值 9.688448220547675。
+    const ellipse: Conic3 = { ...circle, kind: "ellipse", semiMajor: 2, semiMinor: 1, eccentricity: Math.sqrt(0.75) }
+    const ellipseArea = conic3Area(ellipse)!
+    const ellipsePerimeter = conic3Perimeter(ellipse)!
+    expect(ellipseArea.value).toBeCloseTo(2 * Math.PI, 12)
+    expect(ellipseArea.exact).toBe(true)
+    expect(ellipsePerimeter.value).toBeCloseTo(9.688448220547675, 8)
+    expect(ellipsePerimeter.exact).toBe(false)
+    // 周长必须落在 2πb 与 2πa 之间（不靠参考值也知道它合理）。
+    expect(ellipsePerimeter.value).toBeGreaterThan(2 * Math.PI * 1)
+    expect(ellipsePerimeter.value).toBeLessThan(2 * Math.PI * 2)
+
+    // 开曲线与退化情形没有面积/周长，绝不编数字。
+    const parabola = intersectPlaneQuadric3(plane({ x: Math.sin(Math.atan(1.5)), y: 0, z: Math.cos(Math.atan(1.5)) }, -Math.cos(Math.atan(1.5))), coneQuadric3(cone))
+    expect(conic3Area(parabola)).toBeNull()
+    expect(conic3Perimeter(parabola)).toBeNull()
+    expect(conic3Area({ ...circle, semiMajor: 0 })).toBeNull()
   })
 
   it("turns a document circle3 into an analytic circle through its centre point", () => {
