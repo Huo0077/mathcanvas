@@ -18,6 +18,25 @@
 
 **关键现场事实（带证据）**：3D 绑定点当前完全拖不动且无 UI 入口（`threeScene.tsx:1363`、`operations.ts:208-221`）；任何 App 重渲染都整场景重建并新建 `WebGLRenderer`（`threeScene.tsx:1543`、`App.tsx:393`）；模板实体存在三套几何两种朝上约定（`threeScene.tsx:531-574` / `operations.ts:271-304` / `solid-builders.ts:330-368`）；截面只保留一条环（`sections3d.ts:137`）；多选删除被逐个预校验卡死（`App.tsx:685-690`）；多解索引被 clamp 成 `0|1`（`App.tsx:537`、`types.ts:435/445/455`）。
 
+### 3D 动点宿主约束内核（切片 1A-2，2026-09-17 已完成）
+
+- **需求**：让动点能严格"贴"在宿主上滑动——宿主覆盖线段 / 射线 / 直线 / 棱 / 面 / 平面 / 圆柱与圆锥侧面；坐标由参数算出，而不是每帧叠加位移。
+- **新增内核** `packages/geometry-kernel/src/hosts3.ts`（与 2D `planar-constraints.ts` 同构）：
+  - `Host3` 只回答三件事：`evaluate(参数)` 正向映射、`closestParameter(点)` 反向映射（结果一定在域内）、`residual(点)` 违反度；`domain` 声明参数域（线段与棱 `[0,1]`、射线 `[0,∞)`、直线无界、圆柱/圆锥侧面 `u ∈ [0,2π)` 闭合 + `v ∈ [0,1]`）。
+  - **唯一不变式**：参数是唯一真值、坐标只是派生缓存（借鉴 JSXGraph 的 Glider 语义），所以连续拖动不会漂离宿主。
+  - 面宿主会把环外的点**夹到环边界**（否则"绑到三角形面上的点"可以停在面外的虚空里）；平面宿主无界。
+  - 圆锥的最近点是**解析解**：绕轴对称 ⇒ 只需最小化 `(ρ - r + r·v)² + (dz - h·v)²`，驻点 `v = (h·dz - r·(ρ - r)) / (r² + h²)`，不做数值搜索。
+  - `host3FromPrimitive` 从 DSL 图元解析宿主（`line3` 两种定义 / `segment3` / `ray3` / `edge3` / `face3` / `plane3` 两种定义 / `cylinder` / `cone`），退化输入与缺失引用一律返回 `null`。
+- **数据模型**：`Point3Binding` 新增 `onHost{hostId, parameter}` / `onFace{faceId, uv}` / `onSurface{solidId, uv}`；`schemaVersion` 仍为 `"0.1"`，旧变体与旧文档行为不变。schema 校验**引用存在性与类型**（悬空宿主会让点静默冻住却仍能保存，这是仓库里踩过的坑）。
+- **重算接入**：`resolveBoundPoint3` 由参数算出坐标（宿主解析失败时返回 `null`、保留点上一次坐标，不静默挪动）；参数在重算层夹进宿主域；`primitiveDependencies` 登记宿主 ⇒ 拓扑序与删除保护自动覆盖。
+- **RED→GREEN 证据**：
+  - `hosts3.test.ts` 先因模块不存在整体失败（`Failed to resolve import "./hosts3"`），实现后 **12/12**。
+  - `point3HostBindings.test.ts`（dsl）先在合法绑定上报 3 条校验错误，实现后 **3/3**。
+  - `point3HostBindings.test.ts`（scene-graph）先有 5 处失败（点没跟着参数走、端点移动后没跟着变、参数越域没夹取、曲面与面绑定不生效），实现后 **6/6**。
+- **回归**：全量单测 **77 文件 / 961 用例通过**（起始 74/940）；`typecheck` 4 个 workspace 全过；`lint` 0 error、**52 条 warning**（持平）；生产构建通过；Playwright **60/60** 通过。
+- **过程中的两个决定**：①参数夹取放在重算层而不是 `evaluate`（保持 `evaluate` 是纯正向映射，夹取语义只在一处、可单测）；②`edge3` 的宿主 `kind` 记为 `"edge"` 而不是 `"segment"`（保留来源信息，参数域相同）——第一版测试期望写错，按实现改正。
+- **边界（明确未做，交给切片 1A-3 与区块三）**：本片结束时功能**不可从界面触达**——绑定入口、拖动状态机与"拖动时实时重绘下游"都在 1A-3；`isFreeDraggable3` 仍只放行 `free`；删除宿主时把点降级为 `free` 也在区块三（当前是拒绝删除以保文档合法）。
+
 ### 3D 渲染管道去重建化（切片 1A-1，2026-09-17 已完成）
 
 - **需求**：3D 画布每次父组件重渲染都会销毁并新建 `WebGLRenderer`——挂载效应依赖数组含 `document` 与每次渲染都换身份的 `onSelect`，重建时 `renderer.dispose()` + `new THREE.WebGLRenderer()` 并替换 canvas。于是悬停、提示、错误、展开动画的每一帧都在换画布（浏览器 WebGL 上下文数量有限），也让相机动画与拖动预览随时被打断。这是后续所有实时拖拽与视角动画的前置障碍。

@@ -22,6 +22,15 @@ export type Point3Binding =
   | { kind: "onLine"; lineId: string; parameter: number }
   | { kind: "onPlane"; planeId: string; coordinates: [number, number]; frame: PlaneFrame }
   | { kind: "derived"; sourceIds: string[]; feature: string }
+  /**
+   * 绑到一维宿主（直线 / 线段 / 射线 / 棱）：`parameter` 是该宿主的**自然参数**
+   * （线段与棱是 [0,1]、射线是 [0,∞)、直线无界）。坐标由参数算出，不单独存储。
+   */
+  | { kind: "onHost"; hostId: string; parameter: number }
+  /** 绑到一个面（`face3`）：`uv` 是该面自身平面内的直角坐标（环外会被夹回边界）。 */
+  | { kind: "onFace"; faceId: string; uv: [number, number] }
+  /** 绑到圆柱 / 圆锥的**侧面**：`uv` 是 (方位角, 轴向比例)，轴线沿世界 +Z。 */
+  | { kind: "onSurface"; solidId: string; uv: [number, number] }
 
 export interface PrimitiveStyle {
   stroke?: string

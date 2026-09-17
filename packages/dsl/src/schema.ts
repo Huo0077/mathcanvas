@@ -111,6 +111,11 @@ function isValidPlaneFrame(value: unknown): boolean {
   return isRecord(value) && isFiniteVector3(value.origin) && areIndependentVectors3(value.u, value.v)
 }
 
+/** 二维参数对（面的 uv、曲面的 (方位角, 轴向比例)）：必须是恰好两个有限数。 */
+function isFiniteUvPair(value: unknown): boolean {
+  return Array.isArray(value) && value.length === 2 && value.every(isFiniteNumber)
+}
+
 function hasClosedFaceBoundary(byId: Map<string, unknown>, pointIds: unknown, edgeIds: unknown): boolean {
   if (!Array.isArray(pointIds) || !Array.isArray(edgeIds) || pointIds.length !== edgeIds.length) return false
   const pointSet = new Set(pointIds.filter((id): id is string => typeof id === "string"))
@@ -186,10 +191,14 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>, parameter
   if (type === "point3") {
     if (!isFiniteVector3(value.position)) errors.push("point3 position must be finite")
     if (value.binding !== undefined) {
-      if (!isRecord(value.binding) || !["free", "onLine", "onPlane", "derived"].includes(String(value.binding.kind))) errors.push("point3 binding is invalid")
+      if (!isRecord(value.binding) || !["free", "onLine", "onPlane", "derived", "onHost", "onFace", "onSurface"].includes(String(value.binding.kind))) errors.push("point3 binding is invalid")
       else if (value.binding.kind === "onLine" && (typeof value.binding.lineId !== "string" || !["line3", "segment3", "ray3"].includes(referenceType(byId, value.binding.lineId) ?? "") || !isFiniteNumber(value.binding.parameter))) errors.push("point3 line binding is invalid")
       else if (value.binding.kind === "onPlane" && (typeof value.binding.planeId !== "string" || referenceType(byId, value.binding.planeId) !== "plane3" || !Array.isArray(value.binding.coordinates) || value.binding.coordinates.length !== 2 || !value.binding.coordinates.every(isFiniteNumber) || !isValidPlaneFrame(value.binding.frame))) errors.push("point3 plane binding is invalid")
       else if (value.binding.kind === "derived" && (!Array.isArray(value.binding.sourceIds) || value.binding.sourceIds.length === 0 || value.binding.sourceIds.some((sourceId) => typeof sourceId !== "string" || !byId.has(sourceId)) || typeof value.binding.feature !== "string")) errors.push("point3 derived binding is invalid")
+      // 宿主绑定的引用必须存在且类型正确：悬空引用会让点静默冻住，而且文档依然能保存（实测过的坑）。
+      else if (value.binding.kind === "onHost" && (typeof value.binding.hostId !== "string" || !["line3", "segment3", "ray3", "edge3"].includes(referenceType(byId, value.binding.hostId) ?? "") || !isFiniteNumber(value.binding.parameter))) errors.push("point3 host binding is invalid")
+      else if (value.binding.kind === "onFace" && (typeof value.binding.faceId !== "string" || referenceType(byId, value.binding.faceId) !== "face3" || !isFiniteUvPair(value.binding.uv))) errors.push("point3 face binding is invalid")
+      else if (value.binding.kind === "onSurface" && (typeof value.binding.solidId !== "string" || !["cylinder", "cone"].includes(referenceType(byId, value.binding.solidId) ?? "") || !isFiniteUvPair(value.binding.uv))) errors.push("point3 surface binding is invalid")
     }
   }
   if (type === "line3") {

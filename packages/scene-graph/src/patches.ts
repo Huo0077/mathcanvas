@@ -86,7 +86,7 @@ function isReferenced(document: GeometryDocument, id: string, ignoredReferrers: 
     (primitive.type === "circleIntersection" && (primitive.circleA === id || primitive.circleB === id)) ||
     (primitive.type === "curveIntersection" && (primitive.objectA === id || primitive.objectB === id))
      || (primitive.type === "intersectionSet" && (primitive.objectA === id || primitive.objectB === id))
-     || (primitive.type === "point3" && primitive.binding && ((primitive.binding.kind === "onLine" && primitive.binding.lineId === id) || (primitive.binding.kind === "onPlane" && primitive.binding.planeId === id) || (primitive.binding.kind === "derived" && primitive.binding.sourceIds.includes(id))))
+     || (primitive.type === "point3" && primitive.binding && ((primitive.binding.kind === "onLine" && primitive.binding.lineId === id) || (primitive.binding.kind === "onPlane" && primitive.binding.planeId === id) || (primitive.binding.kind === "derived" && primitive.binding.sourceIds.includes(id)) || (primitive.binding.kind === "onHost" && primitive.binding.hostId === id) || (primitive.binding.kind === "onFace" && primitive.binding.faceId === id) || (primitive.binding.kind === "onSurface" && primitive.binding.solidId === id)))
      // 二维动点绑定：删掉它所在的曲线会留下悬空的 pathId，点会静默冻住。
      || (primitive.type === "point" && primitive.binding?.kind === "onPath" && primitive.binding.pathId === id)
      // 轨迹追踪的源点：删掉它留下的悬空引用会让文档**过不了校验**，于是根本存不下去。

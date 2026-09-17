@@ -191,3 +191,22 @@ describe("line hosts", () => {
 **Placeholder scan:** 无 TBD/TODO；每个任务的测试点与算法都写成了可执行描述，解析解公式已给出。
 
 **Type consistency:** `Host3` / `Host3Parameter` / `lineHost3` / `faceHost3` / `planeHost3` / `cylinderSurfaceHost3` / `coneSurfaceHost3` / `host3FromPrimitive` 在 Task 1–5 中命名一致；DSL 变体名 `onHost` / `onFace` / `onSurface` 与 spec 第 3.1 节一致。
+
+---
+
+## 执行记录（2026-09-17 完成）
+
+| 任务 | 状态 | 提交 | 证据 |
+| --- | --- | --- | --- |
+| Task 1–4 宿主内核（线 / 面 / 平面 / 圆柱与圆锥侧面 / 从图元解析） | 完成 | `f23ba72` | RED：`Failed to resolve import "./hosts3"`；GREEN：`hosts3.test.ts` 12/12 |
+| Task 5 绑定数据模型与重算接入 | 完成 | 本片收尾提交 | RED：schema 2 处 + scene-graph 5 处失败（共 6）；GREEN：`point3HostBindings.test.ts` 3/3 + 6/6 |
+
+**实现要点与偏离计划之处**
+1. **参数域夹取放在重算层而不是 `evaluate`**：`evaluate` 保持纯粹的正向映射，`resolveBoundPoint3` 用 `clampHostParameter` 把参数夹进宿主域。理由是 `project` 依赖"先夹参数再求值"的顺序，若 `evaluate` 自己也夹，夹取语义会藏在两处、无法单测。
+2. **`edge3` 的宿主 `kind` 是 `"edge"` 而不是 `"segment"`**：参数域与线段相同（`[0,1]`），但保留来源信息更有用。第一版测试期望写成 `"segment"`，实现后按实现改正——**这是测试写错、不是实现错**。
+3. **共面容差按点集尺寸缩放**（`tolerance * extent`）：大坐标下顶点的绝对误差更大，固定 1e-9 会把真实的面误判成非共面。
+4. **删除保护同步补齐**：`patches.ts` 的 `isReferenced` 增加 `onHost / onFace / onSurface` 三种引用，否则宿主被删掉后点的绑定会悬空、文档过不了 schema（这是仓库里已经踩过的坑）。**注意**：这条保护与需求 ③"杜绝图元无法删除"方向相反，会在区块三里改成"级联 / 降级为 free"。
+
+**本片门禁（实测）**：单测 **77 文件 / 961 用例**（起始 74/940，+3 文件 21 用例）；typecheck 4 workspace；lint 0 error / **52 warning**（持平）；生产构建通过；Playwright **60/60**。
+
+**本片结束时的边界（刻意）**：功能仍**不可从界面触达**——绑定入口、拖动状态机与下游实时重绘都在 1A-3；`isFreeDraggable3` 也仍然只放行 `free`。

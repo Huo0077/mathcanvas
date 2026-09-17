@@ -1,5 +1,5 @@
 import type { AnnotationSpec, ConstraintSpec, Coordinate, DrawingSheetSpec, DrawingViewSpec, EngineeringAnnotation, GeometryDocument, GroupSpec, LayerSpec, Measurement3, Point3Binding, Point3Primitive, PointBinding, PrimitiveSpec, Section3Classification, Vector3 } from "@draw/dsl"
-import { createDependencyGraph, adaptiveSampleFunctionSegments, arcConstraint, buildSolidTemplate, calculateMeasurement3, circleConstraint, createBuilderContext, dihedralMarker3, ellipseConstraint, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, evaluatePlanarMeasurement, findExtrema, findInflectionPoints, findZeros, functionGraphConstraint, hyperbolaConstraint, intersectCirclesDetailed, intersectFaceSets, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, lineConstraint, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, orderSectionPoints3, parabolaConstraint, polylineConstraint, rayConstraint, sectionConvexPolyhedron, sectionPolyhedron3, segmentConstraint, sharedRingEdge3, solveLineConstraints, type DihedralMarker3, type FaceRing3, type IntersectionResult, type PlanarConstraint, type PlanarMetric, type SampledPrimitive, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
+import { createDependencyGraph, adaptiveSampleFunctionSegments, arcConstraint, buildSolidTemplate, calculateMeasurement3, circleConstraint, createBuilderContext, dihedralMarker3, ellipseConstraint, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, evaluatePlanarMeasurement, findExtrema, findInflectionPoints, findZeros, functionGraphConstraint, host3FromPrimitive, hyperbolaConstraint, intersectCirclesDetailed, intersectFaceSets, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, lineConstraint, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, orderSectionPoints3, parabolaConstraint, polylineConstraint, rayConstraint, sectionConvexPolyhedron, sectionPolyhedron3, segmentConstraint, sharedRingEdge3, solveLineConstraints, type DihedralMarker3, type FaceRing3, type IntersectionResult, type PlanarConstraint, type PlanarMetric, type SampledPrimitive, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
 
 export type DomainOperation =
   | { op: "addPrimitive"; primitive: PrimitiveSpec }
@@ -246,6 +246,10 @@ function primitiveDependencies(primitive: PrimitiveSpec): string[] {
     if (primitive.binding.kind === "onLine") dependencies.push(primitive.binding.lineId)
     if (primitive.binding.kind === "onPlane") dependencies.push(primitive.binding.planeId)
     if (primitive.binding.kind === "derived") dependencies.push(...primitive.binding.sourceIds)
+    // 宿主绑定：宿主先算，绑定点后算（拓扑序因此自动正确）。
+    if (primitive.binding.kind === "onHost") dependencies.push(primitive.binding.hostId)
+    if (primitive.binding.kind === "onFace") dependencies.push(primitive.binding.faceId)
+    if (primitive.binding.kind === "onSurface") dependencies.push(primitive.binding.solidId)
   }
   if (primitive.type === "line") dependencies.push(...(primitive.slopeParameter ? [primitive.slopeParameter] : []))
   if (primitive.type === "line3") dependencies.push(...(primitive.definition.kind === "throughPoints" ? primitive.definition.pointIds : [primitive.definition.pointId]))
@@ -847,6 +851,11 @@ function resolveLine3Endpoints(primitive: Extract<PrimitiveSpec, { type: "line3"
   return { first: point.position, second: { x: point.position.x + primitive.definition.direction.x, y: point.position.y + primitive.definition.direction.y, z: point.position.z + primitive.definition.direction.z } }
 }
 
+/** 宿主参数一律夹到宿主声明的域内：否则"参数 2"在 [0,1] 的线段上会把点扔到线段之外。 */
+function clampHostParameter(value: number, domain: readonly [number, number]): number {
+  return Math.min(Math.max(value, domain[0]), domain[1])
+}
+
 function resolveBoundPoint3(primitive: Extract<PrimitiveSpec, { type: "point3" }>, primitives: Map<string, PrimitiveSpec>): Vector3 | null {
   const binding = primitive.binding
   if (!binding || binding.kind === "free") return null
@@ -862,6 +871,24 @@ function resolveBoundPoint3(primitive: Extract<PrimitiveSpec, { type: "point3" }
     const plane = primitives.get(binding.planeId)
     if (!plane || plane.type !== "plane3") return null
     return { x: binding.frame.origin.x + binding.coordinates[0] * binding.frame.u.x + binding.coordinates[1] * binding.frame.v.x, y: binding.frame.origin.y + binding.coordinates[0] * binding.frame.u.y + binding.coordinates[1] * binding.frame.v.y, z: binding.frame.origin.z + binding.coordinates[0] * binding.frame.u.z + binding.coordinates[1] * binding.frame.v.z }
+  }
+  /**
+   * 宿主绑定：坐标完全由参数算出（参数是唯一真值）。
+   * 宿主解析不了时返回 null，调用方会保留点上一次的坐标——不静默把点挪到别处。
+   */
+  if (binding.kind === "onHost" || binding.kind === "onFace" || binding.kind === "onSurface") {
+    const sourceId = binding.kind === "onHost" ? binding.hostId : binding.kind === "onFace" ? binding.faceId : binding.solidId
+    const source = primitives.get(sourceId)
+    const host = source ? host3FromPrimitive(source, primitives) : null
+    if (!host) return null
+    if (binding.kind === "onHost") {
+      if (!Number.isFinite(binding.parameter)) return null
+      return host.evaluate({ u: clampHostParameter(binding.parameter, host.domain.u) })
+    }
+    const [u, v] = binding.uv
+    if (!Number.isFinite(u) || !Number.isFinite(v)) return null
+    const vDomain = host.domain.v ?? [Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY]
+    return host.evaluate({ u: clampHostParameter(u, host.domain.u), v: clampHostParameter(v, vDomain) })
   }
   if (binding.feature === "midpoint" && binding.sourceIds.length >= 2) {
     const first = point3Position(primitives.get(binding.sourceIds[0]), points)
