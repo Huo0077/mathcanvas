@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
-import { createEmptyDocument, type GeometryDocument } from "@draw/dsl"
+import { createEmptyDocument, type CurvePiece3, type GeometryDocument } from "@draw/dsl"
+import { circleConic3 } from "@draw/geometry-kernel"
 
 import { createContentSigner } from "./sceneContentSignature"
 
@@ -77,5 +78,46 @@ describe("createContentSigner", () => {
 
     expect(signer.topologyOf("cube-1")).toContain("solid-1")
     expect(createContentSigner(createEmptyDocument("geometry3d")).topologyOf("cube-1")).toBe("")
+  })
+
+  /**
+   * A1 第 8 片：解析字段（`section.exact` / `intersectionFace.exactLoops`）必须进签名。
+   *
+   * 这条**不需要改代码**——签名用的是 `JSON.stringify(primitive)`，解析字段本来就在里面；
+   * 需要的是把它**钉住**：以后若有人为了省字符串而"优化"成只列几何字段，真曲线就会画成过期的那一条。
+   * （钉住它的价值用变异检查证明过：把 `exact` 从签名里摘掉，这条用例立刻失败。）
+   */
+  it("carries the analytic fields, so an exact boundary change rebuilds the curve", () => {
+    const circle = circleConic3({ x: 0, y: 0, z: 1 }, { x: 0, y: 0, z: 1 }, 2)!
+    const sectionOf = (kind: "circle" | "ellipse", semiMajor: number) => ({
+      id: "section-1", type: "section" as const, sourceId: "cylinder-1",
+      plane: { normal: { x: 0, y: 0, z: 1 }, constant: -1 },
+      points: [], classification: "polygon" as const, status: "exact" as const,
+      exact: { kind, loops: [[{ kind: "conic" as const, conic: { ...circle, kind, semiMajor }, parameterRange: [0, Math.PI * 2] as [number, number] }]] }
+    })
+    const withSection = (section: ReturnType<typeof sectionOf>) => {
+      const document = createEmptyDocument("geometry3d")
+      document.primitives = [section]
+      return document
+    }
+    const circleSigner = createContentSigner(withSection(sectionOf("circle", 2)))
+    const ellipseSigner = createContentSigner(withSection(sectionOf("ellipse", 2.5)))
+
+    // 只有解析结论变了（多边形字段一模一样）⇒ 签名必须变，否则画布会留着旧的真曲线。
+    expect(ellipseSigner.of("section-1")).not.toBe(circleSigner.of("section-1"))
+
+    // 交面边界同理。
+    const faceWith = (loops: CurvePiece3[][]) => {
+      const document = createEmptyDocument("geometry3d")
+      document.primitives = [{
+        id: "face-1", type: "intersectionFace", sourceIds: ["cube-a", "cube-b"],
+        points: [{ x: 0, y: 0, z: 0 }], normal: { x: 0, y: 0, z: 1 }, area: 1,
+        hint: { x: 0, y: 0, z: 0 }, status: "valid", exactLoops: loops
+      }]
+      return document
+    }
+    const withLoops = createContentSigner(faceWith([[{ kind: "segment", a: { x: 0, y: 0, z: 0 }, b: { x: 1, y: 0, z: 0 } }]]))
+    const withoutLoops = createContentSigner(faceWith([]))
+    expect(withLoops.of("face-1")).not.toBe(withoutLoops.of("face-1"))
   })
 })
