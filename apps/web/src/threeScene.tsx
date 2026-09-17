@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import * as THREE from "three"
-import type { ConePrimitive, CubePrimitive, Edge3Primitive, Face3Primitive, GeometryDocument, Line3Primitive, Plane3Primitive, Point3Primitive, Polyhedron3Primitive, PyramidPrimitive, CylinderPrimitive, Ray3Primitive, SectionPrimitive, Segment3Primitive, Vector3 } from "@draw/dsl"
-import { dihedralAngleDegrees, unfoldPolyhedron3, type DihedralMarker3, type UnfoldLayout3 } from "@draw/geometry-kernel"
+import type { ConePrimitive, CubePrimitive, Edge3Primitive, Face3Primitive, GeometryDocument, Line3Primitive, Plane3Primitive, Point3Primitive, Polyhedron3Primitive, PrimitiveSpec, PyramidPrimitive, CylinderPrimitive, Ray3Primitive, SectionPrimitive, Segment3Primitive, Vector3 } from "@draw/dsl"
+import { dihedralAngleDegrees, host3FromPrimitive, unfoldPolyhedron3, type DihedralMarker3, type Host3, type Host3Parameter, type UnfoldLayout3 } from "@draw/geometry-kernel"
 import { resolveMeasurementVisual } from "./measurementVisuals"
 import type { SceneControlMode } from "./statusPrompts"
 import { getDependencyIndex, isFreeDraggable3, planeThroughPoints, resolveDihedralMarker3, resolvePolyhedronTopology, sectionSourceVertices, templateTopologyIds } from "@draw/scene-graph"
@@ -900,6 +900,18 @@ function visibleSolids(document: GeometryDocument): SolidPrimitive[] {
 }
 
 /** 释放一个对象子树的几何与材质。内容对象每次同步都会重建，必须逐个释放，否则显存会一路涨。 */
+/**
+ * 由点驱动的对象：点手柄、以及引用点的直线 / 线段 / 射线 / 棱 / 面。
+ * 抽成函数是为了拖动绑定点时能**只重建受影响的对象**（下游实时跟随），而不是整场重建。
+ */
+function buildPointDrivenObject(primitive: PrimitiveSpec, points: Map<string, Point3Primitive>, selected: boolean): THREE.Object3D | null {
+  if (primitive.type === "point3") return createPoint3Mesh(primitive, selected)
+  if (primitive.type === "line3" || primitive.type === "segment3" || primitive.type === "ray3") return createPointDrivenLine(primitive, points, selected)
+  if (primitive.type === "edge3") return createEdge3Line(primitive, points, selected)
+  if (primitive.type === "face3") return createFace3Mesh(primitive, points, selected)
+  return null
+}
+
 function disposeObject(root: THREE.Object3D): void {
   root.traverse((object) => {
     if (!(object instanceof THREE.Mesh) && !(object instanceof THREE.Line) && !(object instanceof THREE.LineSegments)) return
@@ -942,6 +954,13 @@ interface DragSessionState {
   applied: boolean
   /** 拖动截面时：把屏幕位移投影到该法向上，得到剖切面要走的世界距离。 */
   slideNormal?: THREE.Vector3
+  /**
+   * 拖动**绑定点**时：宿主约束（evaluate / closestParameter / residual）、它的下游对象 id，
+   * 以及这次拖动最新的宿主参数。参数是唯一真值——每帧只更新参数与受影响对象，抬手才提交文档。
+   */
+  hostConstraint?: Host3
+  hostDependents?: string[]
+  hostParameter?: Host3Parameter
 }
 
 export interface ThreeSceneViewProps {  document: GeometryDocument
@@ -962,6 +981,8 @@ export interface ThreeSceneViewProps {  document: GeometryDocument
   onDragEnd?: (id: string, delta: Vector3) => void
   /** 选中截面时，把拖动/键盘微调解释为"沿法向平移剖切面"的世界距离。 */
   onMoveSection?: (id: string, distance: number) => void
+  /** 拖动绑定点结束：提交宿主参数（点 / 面 / 曲面的自然参数）。 */
+  onHostDragEnd?: (pointId: string, parameter: Host3Parameter) => void
   /** 开启"以面为剖切面"后，点到的那个面就成为截面 `<id>` 的剖切面。 */
   onPickSectionFace?: (id: string, plane: { normal: Vector3; constant: number }) => void
 }
@@ -1030,7 +1051,7 @@ function createPreviewGroup(
   return group
 }
 
-export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPromptChange, preview = null, onPreviewHover, onPreviewClick, onDragEnd, onMoveSection, onPickSectionFace }: ThreeSceneViewProps) {
+export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPromptChange, preview = null, onPreviewHover, onPreviewClick, onDragEnd, onMoveSection, onHostDragEnd, onPickSectionFace }: ThreeSceneViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const renderTargetRef = useRef<HTMLDivElement>(null)
   const measurementOverlayRef = useRef<HTMLDivElement>(null)
@@ -1057,6 +1078,9 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
   /** 移动剖切面（沿法向的世界位移），与拖动回调解耦，方便键盘微调共用。 */
   const moveSectionRef = useRef(onMoveSection)
   moveSectionRef.current = onMoveSection
+  /** 拖动绑定点结束：提交宿主参数（点/面/曲面的自然参数）。 */
+  const hostDragEndRef = useRef(onHostDragEnd)
+  hostDragEndRef.current = onHostDragEnd
   /** 以面为剖切面的回调，以及"正在等待拾取"的开关。 */
   const pickSectionFaceRef = useRef(onPickSectionFace)
   pickSectionFaceRef.current = onPickSectionFace
@@ -1247,6 +1271,8 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     /** 背景坐标系：单位尺寸的栅格与坐标轴，真实大小与位置每帧按可见范围设置。 */
     let gridHelper: THREE.GridHelper | null = null
     let axesHelper: THREE.AxesHelper | null = null
+    /** 点驱动对象的索引：拖动绑定点时按 id 就地重建受影响的那些。 */
+    let objectIndex = new Map<string, THREE.Object3D>()
 
     const currentContentKey = () => sceneContentKey({
       document: documentRef.current,
@@ -1262,6 +1288,7 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     visiblePointLabels = []
     measurementVisuals = []
     previewGroup = null
+    objectIndex = new Map<string, THREE.Object3D>()
     if (sceneShell) sceneShell.dataset.sceneSyncs = String(sceneSyncsRef.current)
     const document = documentRef.current
     const selectedIds = selectedIdsRef.current
@@ -1276,24 +1303,11 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     const unfoldedChildIds = new Set(unfoldedPolyhedra.flatMap((polyhedron) => [...polyhedron.edgeIds, ...polyhedron.faceIds]))
     document.primitives.filter((primitive) => primitive.visible !== false).forEach((primitive) => {
       if (unfoldedChildIds.has(primitive.id)) return
-      const selected = selectedIds.includes(primitive.id)
-      if (primitive.type === "point3") {
-        const handle = createPoint3Mesh(primitive, selected)
-        pointHandles.push(handle)
-        addContent(handle)
-      }
-      if (primitive.type === "line3" || primitive.type === "segment3" || primitive.type === "ray3") {
-        const line = createPointDrivenLine(primitive, points, selected)
-        if (line) addContent(line)
-      }
-      if (primitive.type === "edge3") {
-        const edge = createEdge3Line(primitive, points, selected)
-        if (edge) addContent(edge)
-      }
-      if (primitive.type === "face3") {
-        const face = createFace3Mesh(primitive, points, selected)
-        if (face) addContent(face)
-      }
+      const object = buildPointDrivenObject(primitive, points, selectedIds.includes(primitive.id))
+      if (!object) return
+      if (primitive.type === "point3") pointHandles.push(object as THREE.Mesh)
+      objectIndex.set(primitive.id, object)
+      addContent(object)
     })
 
     visibleSolids(document).forEach((primitive) => {
@@ -1412,6 +1426,28 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     addContent(axes)
     }
     syncContent()
+
+    /**
+     * 只重建**一个**点驱动对象：拖动绑定点时用它让下游实时跟随。
+     * 位置已经在 `points` 里按新参数写好，所以这里不需要重建整场、也不进撤销历史。
+     */
+    const refreshPrimitiveObject = (id: string) => {
+      const primitive = documentRef.current.primitives.find((candidate) => candidate.id === id)
+      if (!primitive) return
+      const previous = objectIndex.get(id)
+      const replacement = buildPointDrivenObject(primitive, points, selectedIdsRef.current.includes(id))
+      if (previous) {
+        scene.remove(previous)
+        disposeObject(previous)
+        const index = contentObjects.indexOf(previous)
+        if (index >= 0) contentObjects.splice(index, 1)
+        if (previous instanceof THREE.Mesh) pointHandles = pointHandles.filter((handle) => handle !== previous)
+      }
+      if (!replacement) return
+      addContent(replacement)
+      objectIndex.set(id, replacement)
+      if (replacement instanceof THREE.Mesh && primitive.type === "point3") pointHandles.push(replacement)
+    }
 
     let viewportHeight = height
     const syncPointHandleScales = () => {
@@ -1655,6 +1691,32 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
               dragSessionRef.current = { targetId: section.id, family: new Set([section.id]), anchor, origin: anchor.clone(), total: new THREE.Vector3(), visualApplied: new THREE.Vector3(), applied: false, slideNormal: normal }
             }
           }
+        } else if (hit && target && target.type === "point3" && target.binding && target.binding.kind !== "free") {
+          /**
+           * 绑定点的拖动：指针位置投影回**宿主的参数域**，点由参数算出坐标，所以永远贴住宿主
+           * （不像自由拖动那样"叠加屏幕位移"，拖久了也不会漂离）。拖动期间只更新参数与受影响对象。
+           */
+          const binding = target.binding
+          const hostId = binding.kind === "onHost" ? binding.hostId : binding.kind === "onFace" ? binding.faceId : binding.kind === "onSurface" ? binding.solidId : null
+          const hostPrimitive = hostId ? documentRef.current.primitives.find((candidate) => candidate.id === hostId) : undefined
+          const hostConstraint = hostPrimitive ? host3FromPrimitive(hostPrimitive, documentRef.current.primitives) : null
+          if (hostConstraint) {
+            const anchor = new THREE.Vector3(hit.worldPoint.x, hit.worldPoint.y, hit.worldPoint.z)
+            const origin = dragWorldPoint(camera, anchor, point) ?? anchor.clone()
+            const dependents = dragFamilyIds(documentRef.current, target.id)
+            dependents.delete(target.id)
+            dragSessionRef.current = {
+              targetId: target.id,
+              family: new Set([target.id]),
+              anchor,
+              origin,
+              total: new THREE.Vector3(),
+              visualApplied: new THREE.Vector3(),
+              applied: false,
+              hostConstraint,
+              hostDependents: [...dependents].filter((id) => ["line3", "segment3", "ray3", "edge3", "face3"].includes(documentRef.current.primitives.find((candidate) => candidate.id === id)?.type ?? ""))
+            }
+          }
         } else if (hit && target && isFreeDraggable3(target, points, templateTopologyIds(documentRef.current))) {
           const anchor = new THREE.Vector3(hit.worldPoint.x, hit.worldPoint.y, hit.worldPoint.z)
           const origin = dragWorldPoint(camera, anchor, point) ?? anchor.clone()
@@ -1674,6 +1736,34 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       if (session) {
         const world = dragDeltaFor(session, point)
         if (world) {
+          if (session.hostConstraint) {
+            /**
+             * 绑定点：把指针在世界平面上的落点**投影回宿主参数域**，再由参数算出坐标。
+             * 每帧只重建这个点与它的下游对象（不整场重建、不进撤销历史），抬手才提交参数。
+             */
+            const worldPoint = session.origin.clone().add(world)
+            const parameter = session.hostConstraint.closestParameter({ x: worldPoint.x, y: worldPoint.y, z: worldPoint.z })
+            const projected = session.hostConstraint.evaluate(parameter)
+            session.hostParameter = parameter
+            session.applied = true
+            const current = points.get(session.targetId)
+            if (current) points.set(session.targetId, { ...current, position: projected })
+            refreshPrimitiveObject(session.targetId)
+            for (const dependentId of session.hostDependents ?? []) refreshPrimitiveObject(dependentId)
+            pointerState.lastX = point.x
+            pointerState.lastY = point.y
+            render()
+            dragFrames += 1
+            if (sceneShell) {
+              sceneShell.dataset.dragFrames = String(dragFrames)
+              sceneShell.dataset.dragParameter = parameter.v === undefined ? parameter.u.toFixed(4) : `${parameter.u.toFixed(4)},${parameter.v.toFixed(4)}`
+              // 残差应当恒为 0：坐标就是从参数算出来的（这条读数是"严格贴住宿主"的直接证据）。
+              sceneShell.dataset.hostResidual = session.hostConstraint.residual(projected).toFixed(6)
+              // 这次拖动里有多少下游对象跟着重建（0 表示这个点还没有下游）。
+              sceneShell.dataset.hostDependents = String(session.hostDependents?.length ?? 0)
+            }
+            return
+          }
           // 截面只认法向分量：屏幕位移先投影到法向，切向拖动不会让剖切面乱跑。
           if (session.slideNormal) session.total.copy(session.slideNormal).multiplyScalar(world.dot(session.slideNormal))
           else session.total.copy(world)
@@ -1728,7 +1818,10 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       if (session) {
         dragSessionRef.current = null
         // 拖动期间一次都没提交，所以这里的一次提交就是整次拖动唯一的一步撤销。
-        if (session.applied && session.total.lengthSq() > 1e-8) {
+        if (session.hostConstraint && session.hostParameter && session.applied) {
+          // 绑定点：提交的是**宿主参数**；坐标由重算派生，所以点不会因为浮点累积而漂离宿主。
+          hostDragEndRef.current?.(session.targetId, session.hostParameter)
+        } else if (session.applied && session.total.lengthSq() > 1e-8) {
           if (session.slideNormal) moveSectionRef.current?.(session.targetId, session.total.dot(session.slideNormal))
           else dragEndRef.current?.(session.targetId, session.total)
         }
