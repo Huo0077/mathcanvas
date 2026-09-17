@@ -1,0 +1,48 @@
+{
+  "format": "mgeo",
+  "formatVersion": "0.1",
+  "document": {
+    "schemaVersion": "0.1",
+    "revision": 1,
+    "workspace": "geometry3d",
+    "coordinateSystems": [
+      "cartesian-3d"
+    ],
+    "parameters": {},
+    "primitives": [
+      {
+        "id": "cube-a",
+        "type": "cube",
+        "origin": { "x": -2, "y": -2, "z": -2 },
+        "size": { "x": 4, "y": 4, "z": 4 },
+        "label": "立方体 A"
+      },
+      {
+        "id": "cube-b",
+        "type": "cube",
+        "origin": { "x": 0, "y": -2, "z": -2 },
+        "size": { "x": 4, "y": 4, "z": 4 },
+        "label": "立方体 B"
+      },
+      {
+        "id": "cube-far",
+        "type": "cube",
+        "origin": { "x": 14, "y": -2, "z": -2 },
+        "size": { "x": 4, "y": 4, "z": 4 },
+        "label": "远处的立方体"
+      }
+    ],
+    "groups": [],
+    "constraints": [],
+    "dynamics": [],
+    "annotations": [],
+    "measurements": [],
+    "engineeringAnnotations": [],
+    "metadata": {
+      "id": "doc-overlapping-cubes-fixture",
+      "name": "Overlapping cubes",
+      "createdAt": "2026-09-17T00:00:00.000Z",
+      "updatedAt": "2026-09-17T00:00:00.000Z"
+    }
+  }
+}

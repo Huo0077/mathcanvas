@@ -67,9 +67,18 @@ type LinearPrimitive = Extract<PrimitiveSpec, { type: "line" | "segment" | "ray"
 type ConicPrimitive = Extract<PrimitiveSpec, { type: "parabola" | "ellipse" | "hyperbola" }>
 type SolidPrimitive = Extract<PrimitiveSpec, { type: "cube" | "pyramid" | "cylinder" | "cone" }>
 
-const primitiveTypeLabels: Record<PrimitiveSpec["type"], string> = {
-  point: "点",
-  point3: "空间点",
+/** 交线 / 交面的状态读数：给用户看的说法，不是内核里的枚举名。 */
+const intersectionLineStatusLabels: Record<string, string> = { valid: "有交线", degenerate: "无交线", "insufficient-data": "数据不足" }
+const intersectionSolidStatusLabels: Record<string, string> = {
+  polyhedron: "有体积的公共区域",
+  flat: "只有一块公共平面（体积 0）",
+  segment: "只沿一条线段相接",
+  point: "只在一个点相接",
+  none: "没有公共区域",
+  "insufficient-data": "数据不足"
+}
+
+const primitiveTypeLabels: Record<PrimitiveSpec["type"], string> = {  point: "点",  point3: "空间点",
   line: "直线",
   line3: "空间直线",
   segment: "线段",
@@ -100,6 +109,7 @@ const primitiveTypeLabels: Record<PrimitiveSpec["type"], string> = {
   polyhedron3: "多面体",
   section: "截面",
   intersectionLine: "截线",
+  intersectionSolid: "交面",
   circle: "圆",
   arc: "圆弧",
   intersection: "直线交点",
@@ -202,6 +212,10 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
   const selectedSolid = selectedPrimitive && ["cube", "pyramid", "cylinder", "cone"].includes(selectedPrimitive.type) ? selectedPrimitive as SolidPrimitive : null
   const selectedPlane3 = selectedPrimitive?.type === "plane3" ? selectedPrimitive : null
   const selectedSection = selectedPrimitive?.type === "section" ? selectedPrimitive : null
+  const selectedIntersectionLine = selectedPrimitive?.type === "intersectionLine" ? selectedPrimitive : null
+  const selectedIntersectionSolid = selectedPrimitive?.type === "intersectionSolid" ? selectedPrimitive : null
+  /** 交线 / 交面的来源在检查器里要显示成用户认得出的名字，而不是 id。 */
+  const sourceLabel = (id: string) => sceneDocument.primitives.find((primitive) => primitive.id === id)?.label ?? id
   const selectedDerivedPoint = selectedPrimitive && (selectedPrimitive.type === "tangent" || selectedPrimitive.type === "normal" || selectedPrimitive.type === "secant") ? ("point" in selectedPrimitive ? selectedPrimitive.point : selectedPrimitive.points[0]) : null
   const selectedIntersection = selectedPrimitive && ["intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection", "intersectionSet"].includes(selectedPrimitive.type) ? selectedPrimitive as Extract<PrimitiveSpec, { type: "intersection" | "lineCircleIntersection" | "circleIntersection" | "curveIntersection" | "intersectionSet" }> : null
   const selectedSlope = selectedLinear ? lineSlope(selectedLinear) : null
@@ -535,6 +549,8 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
     {shows("data") && selectedSolid && <div className="primitive-properties"><h3>朝向</h3><SolidRotationFields rotation={selectedSolid.rotation} disabled={!editable} onChange={(rotation) => onUpdatePrimitive({ rotation3: rotation })} /></div>}
     {shows("data") && selectedPlane3 && <div className="primitive-properties"><h3>平面大小</h3><Field label="半边长（世界单位）"><input aria-label="平面半边长" type="number" min="0.1" step="0.5" placeholder="自动" disabled={!editable} value={selectedPlane3.halfSize ?? ""} onChange={(event) => onUpdatePrimitive({ halfSize: event.target.value === "" ? null : Math.max(0.1, numberValue(event)) })} /></Field><div className="property-actions" aria-label="平面大小操作"><button type="button" disabled={!editable || selectedPlane3.halfSize === undefined} onClick={() => onUpdatePrimitive({ halfSize: null })}>恢复自动</button></div><p className="footer-note">留空表示仍按场景自动适配；填入数值后，平面画出的范围由该半边长决定。</p></div>}
     {shows("data") && selectedSection && <div className="primitive-properties"><h3>剖切面</h3><p className="footer-note">截面 = 一个平面切一个实体。剖切面可以沿法向平移（自由拖动模式下拖动截面或按方向键），也可以在这里摆斜。</p><div className="property-actions" aria-label="剖切面旋转">{(["x", "y", "z"] as const).map((axis) => <span key={axis}><button type="button" aria-label={`绕 ${axis.toUpperCase()} 轴旋转剖切面 -15°`} disabled={!editable || !onRotateSection} onClick={() => onRotateSection?.(axis, -15)}>{axis.toUpperCase()} −15°</button><button type="button" aria-label={`绕 ${axis.toUpperCase()} 轴旋转剖切面 +15°`} disabled={!editable || !onRotateSection} onClick={() => onRotateSection?.(axis, 15)}>{axis.toUpperCase()} +15°</button></span>)}</div><div className="metric-grid"><span>法向量<strong>({selectedSection.plane.normal.x.toFixed(2)}, {selectedSection.plane.normal.y.toFixed(2)}, {selectedSection.plane.normal.z.toFixed(2)})</strong></span><span>截面点数<strong>{selectedSection.points.length}</strong></span><span>分类<strong>{selectedSection.classification === "polygon" ? "多边形" : selectedSection.classification === "segment" ? "线段" : selectedSection.classification === "point" ? "一点" : selectedSection.classification === "none" ? "无交线" : "数据不足"}</strong></span>{(selectedSection.loops?.length ?? 0) > 1 && <span>独立边界<strong>{selectedSection.loops!.length} 环</strong></span>}</div><div className="property-actions"><button type="button" aria-label="转为图元" disabled={!editable || selectedSection.points.length < 3} title="把截面的每一环物化成独立的点 / 棱 / 面图元：之后它们不再随来源实体变化，可以单独移动、求交与测量" onClick={() => onMaterializeSection?.()}>转为图元</button></div><p className="footer-note">要用某个面当剖切面，点画布左上角的「以面为剖切面」，再点实体上的那个面；曲面侧边（点不共面）会被拒绝。</p></div>}
+    {shows("data") && selectedIntersectionLine && <div className="primitive-properties"><h3>交线</h3><p className="footer-note">交线 = 两个对象表面的公共边界（几个实体同时相交时，画布上每一对都有自己的交线，点一下即可各自创建）。</p><div className="metric-grid"><span>来源 A<strong>{sourceLabel(selectedIntersectionLine.sourceIds[0])}</strong></span><span>来源 B<strong>{sourceLabel(selectedIntersectionLine.sourceIds[1])}</strong></span><span>段数<strong>{selectedIntersectionLine.segments.length}</strong></span><span>总长度<strong>{selectedIntersectionLine.segments.reduce((total, segment) => total + Math.hypot(segment.b.x - segment.a.x, segment.b.y - segment.a.y, segment.b.z - segment.a.z), 0).toFixed(3)}</strong></span><span>状态<strong>{intersectionLineStatusLabels[selectedIntersectionLine.status] ?? selectedIntersectionLine.status}</strong></span></div>{selectedIntersectionLine.diagnostic && <p className="footer-note">{selectedIntersectionLine.diagnostic}</p>}<p className="footer-note">两个来源一移动，交线就跟着重算；删掉任一来源，它会一起注销。</p></div>}
+    {shows("data") && selectedIntersectionSolid && <div className="primitive-properties"><h3>交面</h3><p className="footer-note">交面 = 两个实体公共区域的**整体表面**（布尔交集），不是"一刀切出来的截面"。</p><div className="metric-grid"><span>来源 A<strong>{sourceLabel(selectedIntersectionSolid.sourceIds[0])}</strong></span><span>来源 B<strong>{sourceLabel(selectedIntersectionSolid.sourceIds[1])}</strong></span><span>体积<strong>{selectedIntersectionSolid.volume.toFixed(3)}</strong></span><span>表面积<strong>{selectedIntersectionSolid.area.toFixed(3)}</strong></span><span>面数<strong>{selectedIntersectionSolid.faces.length}</strong></span><span>顶点数<strong>{selectedIntersectionSolid.vertices.length}</strong></span><span>状态<strong>{intersectionSolidStatusLabels[selectedIntersectionSolid.status] ?? selectedIntersectionSolid.status}</strong></span></div>{selectedIntersectionSolid.diagnostic && <p className="footer-note">{selectedIntersectionSolid.diagnostic}</p>}<p className="footer-note">来源一移动，交面就跟着重算；删掉任一来源，它会一起注销。</p></div>}
     {shows("appearance") && selectedPrimitive && <div className="primitive-properties">
       <div className="property-card-heading"><div><span className="property-kicker">当前图元</span><h3>{selectedPrimitive.label ?? selectedPrimitive.id}</h3></div><span className="property-type-badge">{primitiveTypeLabels[selectedPrimitive.type]}</span></div>
       <h3 className="property-subheading">外观</h3>

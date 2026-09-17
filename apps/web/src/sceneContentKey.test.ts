@@ -11,7 +11,7 @@ const base = (overrides: Partial<SceneContentInputs> = {}): SceneContentInputs =
   showNormals: false,
   transparentFaces: false,
   unfoldProgress: 0,
-  previewKind: null,
+  previewKeys: "",
   ...overrides
 })
 
@@ -38,9 +38,9 @@ describe("scene content key", () => {
     expect(sceneContentKey(base({ showHiddenEdges: true }))).not.toBe(sceneContentKey(base()))
   })
 
-  it("distinguishes a running unfold from a static one, and preview kinds", () => {
+  it("distinguishes a running unfold from a static one, and the preview set", () => {
     expect(sceneContentKey(base({ unfoldProgress: 0.5 }))).not.toBe(sceneContentKey(base()))
-    expect(sceneContentKey(base({ previewKind: "section" }))).not.toBe(sceneContentKey(base()))
-    expect(sceneContentKey(base({ previewKind: "section" }))).not.toBe(sceneContentKey(base({ previewKind: "intersection" })))
+    expect(sceneContentKey(base({ previewKeys: "pair:a|b:线:intersection" }))).not.toBe(sceneContentKey(base()))
+    expect(sceneContentKey(base({ previewKeys: "pair:a|b:线:intersection" }))).not.toBe(sceneContentKey(base({ previewKeys: "pair:a|b:面:solid" })))
   })
 })

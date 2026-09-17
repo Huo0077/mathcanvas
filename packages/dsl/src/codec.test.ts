@@ -185,6 +185,38 @@ describe("Geometry DSL codec", () => {
     expect(invalid({ id: "x", type: "intersectionLine", sourceIds: ["cube-a", "cube-b"], segments: [], status: "wrong" }).valid).toBe(false)
   })
 
+  it("round-trips an intersection-solid primitive and rejects invalid ones", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      { id: "cube-a", type: "cube", origin: { x: -2, y: -2, z: -2 }, size: { x: 4, y: 4, z: 4 } },
+      { id: "cube-b", type: "cube", origin: { x: 0, y: -2, z: -2 }, size: { x: 4, y: 4, z: 4 } },
+      {
+        id: "solid-1",
+        type: "intersectionSolid",
+        sourceIds: ["cube-a", "cube-b"],
+        vertices: [{ x: 0, y: -2, z: -2 }, { x: 2, y: -2, z: -2 }, { x: 2, y: 2, z: -2 }, { x: 0, y: 2, z: -2 }, { x: 0, y: -2, z: 2 }, { x: 2, y: -2, z: 2 }, { x: 2, y: 2, z: 2 }, { x: 0, y: 2, z: 2 }],
+        faces: [[0, 3, 2, 1], [4, 5, 6, 7], [0, 1, 5, 4], [1, 2, 6, 5], [2, 3, 7, 6], [3, 0, 4, 7]],
+        volume: 16,
+        area: 40,
+        status: "polyhedron"
+      }
+    ]
+
+    const restored = decodeMgeo(encodeMgeo(document))
+    expect(restored.primitives).toEqual(document.primitives)
+
+    // 校验必须拦住：来源不足两个、来源相同、来源缺失、顶点非有限、面环越界、体积非有限、状态非法。
+    const invalid = (primitive: Record<string, unknown>) => validateDocument({ ...document, primitives: [document.primitives[0], document.primitives[1], primitive as never] })
+    const valid = document.primitives[2] as unknown as Record<string, unknown>
+    expect(invalid({ ...valid, sourceIds: ["cube-a"] }).valid).toBe(false)
+    expect(invalid({ ...valid, sourceIds: ["cube-a", "cube-a"] }).valid).toBe(false)
+    expect(invalid({ ...valid, sourceIds: ["cube-a", "missing"] }).valid).toBe(false)
+    expect(invalid({ ...valid, vertices: [{ x: Number.NaN, y: 0, z: 0 }] }).valid).toBe(false)
+    expect(invalid({ ...valid, faces: [[0, 1, 9]] }).valid).toBe(false)
+    expect(invalid({ ...valid, volume: Number.POSITIVE_INFINITY }).valid).toBe(false)
+    expect(invalid({ ...valid, status: "wrong" }).valid).toBe(false)
+  })
+
   it("round-trips a versioned document with stable metadata", () => {
     const document = createEmptyDocument("calculus")
     const restored = decodeMgeo(encodeMgeo(document))

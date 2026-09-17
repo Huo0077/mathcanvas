@@ -33,6 +33,7 @@ const defaultStrokes: Record<PrimitiveSpec["type"], string> = {
   polyhedron3: "#9333ea",
   section: "#f97316",
   intersectionLine: "#f04f5f",
+  intersectionSolid: "#d92b3a",
   circle: "#0f8a63",
   arc: "#f08a24",
   intersection: "#f04f5f",

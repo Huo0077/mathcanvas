@@ -34,7 +34,9 @@ import { exportEngineeringDxf, exportEngineeringPdf, exportEngineeringSvg, selec
 import { defaultDraftView, drawingViewLabels, resolveProjectedDrawing } from "./projectionVisuals"
 import { migrateLegacySolids } from "./solidTemplates"
 import { point3ToolAvailability } from "./spatialTools"
-import { resolveStatusPrompt, resolveIntersectionPreviewPrompt, type SceneControlMode } from "./statusPrompts"
+import { resolveStatusPrompt, resolveIntersectionPreviewPrompt, resolvePreviewInventoryPrompt, type SceneControlMode } from "./statusPrompts"
+import { computeIntersectionPreviews3d, type IntersectionPreview3dCache } from "./intersectionPreviews3d"
+import { toScenePreview, toSectionScenePreview, toSelectionLineScenePreview, type ThreeScenePreview } from "./threeScenePreview"
 import { dynamicPointPaths, isDynamicPointPath } from "./dynamicPointPaths"
 import { useSceneStore } from "./store"
 
@@ -150,21 +152,47 @@ export function App() {
    * 这里允许显式切换成投影立体几何文档，而不是让他去猜"为什么四个视图都是空的"。
    */
   const [projectionSource, setProjectionSource] = useState<ProjectionSource>("cad")
-  /** 3D 画布的虚线预览（选中一个实体给截面，选中两个对象给面交线）与指针是否落在预览上。 */
-  const [previewHovered, setPreviewHovered] = useState(false)
-  const intersectionPreview = useMemo(
+  /** 指针当前落在哪一份 3D 预览上（状态栏据此说"这一份是什么、点下去创建什么"）。 */
+  const [hoveredPreview, setHoveredPreview] = useState<ThreeScenePreview | null>(null)
+  /**
+   * 3D 预览 = **自动**枚举出的所有两两交线 / 交面（与平面画布一致：交点一直在那儿，点一下就创建），
+   * 外加"单个实体选中时的默认剖切平面截面"这一份既有预览。
+   *
+   * 求交结果按来源几何签名缓存：拖动一个实体时只有与它相关的那几对重算，其余沿用上一次的结论。
+   */
+  const previewCacheRef = useRef<IntersectionPreview3dCache | null>(null)
+  const previewSweep = useMemo(() => {
+    if (document.workspace !== "geometry3d") return null
+    const sweep = computeIntersectionPreviews3d(document, { previous: previewCacheRef.current ?? undefined })
+    previewCacheRef.current = sweep.cache
+    return sweep
+  }, [document])
+  /**
+   * 选择驱动的预览只保留"单个实体 → 默认剖切平面截面"，同时承担"为什么这里没有交线"的解释责任
+   *（`insufficient` 的 `reason` 就是状态栏要说的话）。
+   */
+  const selectionPreview = useMemo(
     () => (document.workspace === "geometry3d" ? resolveIntersectionPreview(document, selectedIds) : null),
     [document, selectedIds]
   )
-  /** 只有真正可画的两类才交给 3D 场景；`none` / `insufficient` 由状态栏解释原因。 */
-  const drawablePreview = intersectionPreview?.kind === "intersection" || intersectionPreview?.kind === "section"
-    ? { kind: intersectionPreview.kind, segments: intersectionPreview.segments, points: intersectionPreview.points, label: intersectionPreview.label, plane: intersectionPreview.plane, sourceId: intersectionPreview.sourceId }
-    : null
+  const scenePreviews = useMemo(() => {
+    const list = (previewSweep?.previews ?? []).map((preview) => toScenePreview(preview, selectedIds))
+    const keys = new Set(list.map((item) => item.key))
+    /**
+     * 自动枚举只覆盖顶层实体；用户选中两个**面 / 平面**时，交线预览回到选择驱动的老路径。
+     * 按 key 去重：同一对（两个实体都选中）不会画两遍。
+     */
+    const selectionLine = toSelectionLineScenePreview(selectionPreview)
+    if (selectionLine && !keys.has(selectionLine.key)) list.push(selectionLine)
+    const section = toSectionScenePreview(selectionPreview)
+    if (section) list.push(section)
+    return list
+  }, [previewSweep, selectionPreview, selectedIds])
   /**
-   * 截面预览同样要进状态栏：它指向既有的「创建截面」按钮，而"画布上这条虚线是什么"必须说出来，
-   * 否则用户看到一个不明所以的红色虚线圈。
+   * 状态栏要说的是**指针下这一份**；没有悬停时退回到选择解释（例如"两个平面没有有界交线"）。
+   * 画布上自动铺开的交线 / 交面也必须被说出来，否则用户看到一堆虚线却不知道能点。
    */
-  const previewStatus = intersectionPreview
+  const previewStatus = hoveredPreview ?? selectionPreview
   const [activeRibbonTab, setActiveRibbonTab] = useState<RibbonTabId | null>("home")
   const [ribbonExpanded, setRibbonExpanded] = useState(true)
   const [ribbonPinned, setRibbonPinned] = useState(false)
@@ -469,19 +497,40 @@ export function App() {
   const solidTypes = ["cube", "pyramid", "cylinder", "cone", "polyhedron3"] as const
   const canCreateSection = selectedPrimitive !== null && solidTypes.includes(selectedPrimitive.type as typeof solidTypes[number])
   /**
-   * 点击 3D 虚线预览即创建图元（C4）：
-   * - 截线：新建 `intersectionLine`，来源是当前选中的两个对象；内核会在同一事务里算出 segments；
+   * 点击 3D 预览即创建图元（与平面画布同一套心智：看到什么就创建什么）：
+   * - 交面：新建 `intersectionSolid`，来源是两个实体；布尔交集由内核在同一事务里算好；
+   * - 交线：新建 `intersectionLine`，来源是两个对象，`segments` 同样在同一事务里重算；
    * - 截面：单个实体的默认剖切平面，走既有 `addSection`。
    * 创建后把选择切到新图元，与"保存交点"的心智模型一致。
    */
-  const createFromIntersectionPreview = () => {
-    if (!intersectionPreview) return
-    if (intersectionPreview.kind === "section") {
+  const createFromPreview = (preview: ThreeScenePreview) => {
+    if (preview.kind === "section") {
       addSection()
       return
     }
-    if (intersectionPreview.kind !== "intersection" || intersectionPreview.sourceIds.length !== 2) return
-    const [firstId, secondId] = intersectionPreview.sourceIds
+    const [firstId, secondId] = preview.sourceIds
+    if (!firstId || !secondId) return
+    if (preview.kind === "solid") {
+      const id = nextPrimitiveId(document, "intersectionSolid")
+      apply({
+        op: "addPrimitive",
+        primitive: {
+          id,
+          type: "intersectionSolid",
+          sourceIds: [firstId, secondId],
+          // 几何留空：`addPrimitive` 会在同一事务里按来源重算，界面上看不到"先空后有"的一帧。
+          vertices: [],
+          faces: [],
+          volume: 0,
+          area: 0,
+          status: "none",
+          label: `交面 ${id.split("-").at(-1)}`
+        }
+      })
+      setSelectedIds([id])
+      setLayerNotice("已创建交面图元")
+      return
+    }
     const id = nextPrimitiveId(document, "intersectionLine")
     apply({
       op: "addPrimitive",
@@ -489,8 +538,8 @@ export function App() {
         id,
         type: "intersectionLine",
         sourceIds: [firstId, secondId],
-        segments: intersectionPreview.segments,
-        classification: intersectionPreview.classification === "segment" ? "segment" : "polyline",
+        segments: preview.segments,
+        classification: preview.segments.length > 1 ? "polyline" : "segment",
         status: "valid",
         label: `截线 ${id.split("-").at(-1)}`
       }
@@ -940,9 +989,20 @@ export function App() {
   const promptPathSelected = document.workspace !== "cad" && selectedIds.length === 1 && Boolean(selectedPrimitive && isDynamicPointPath(selectedPrimitive))
   const basePrompt = resolveStatusPrompt({ mode: creationMode, selectedCount: selectedIds.length, selectedLabel: selectedPrimitive?.label ?? selectedPrimitive?.id ?? null, hasCenter: Boolean(creationStep?.center), hasStart: Boolean(creationStep?.start), pointCount: creationStep?.points?.length ?? 0, sceneControl, pointBinding: promptPointBinding, pathSelected: promptPathSelected })
   const previewPrompt = document.workspace === "geometry3d" && !sceneControl && previewStatus && previewStatus.kind !== "none"
-    ? resolveIntersectionPreviewPrompt(previewStatus, previewHovered)
+    ? resolveIntersectionPreviewPrompt(previewStatus, hoveredPreview !== null)
     : null
-  const statusPrompt = previewPrompt ?? basePrompt
+  /**
+   * 没有悬停也没有选择时，仍要把"画布上这些虚线 / 面片是什么、能点什么"说清楚——
+   * 用户反馈过"画布上有东西却完全没有任何提示"。
+   */
+  const previewInventoryPrompt = document.workspace === "geometry3d" && !sceneControl && !previewPrompt
+    ? resolvePreviewInventoryPrompt({
+        lines: scenePreviews.filter((item) => item.kind === "intersection").length,
+        solids: scenePreviews.filter((item) => item.kind === "solid").length,
+        truncated: previewSweep?.truncatedPairs ?? 0
+      })
+    : null
+  const statusPrompt = previewPrompt ?? previewInventoryPrompt ?? basePrompt
 
   const activeCommandPrompt = ribbonGroups
     .flatMap((group) => group.commands)
@@ -1104,7 +1164,7 @@ export function App() {
         <button type="button" aria-controls="properties-dock" aria-expanded={mobileDock === "properties"} onClick={() => setMobileDock((current) => current === "properties" ? null : "properties")}>属性检查器</button>
       </div>
       {algebraPanel}
-      {document.workspace === "geometry3d" ? <ThreeSceneView document={document} selectedIds={selectedIds} onSelect={updateSelection} onStatusPromptChange={setSceneControl} preview={drawablePreview} onPreviewHover={setPreviewHovered} onPreviewClick={createFromIntersectionPreview} onDragEnd={(id, delta) => apply({ op: "translatePrimitive3", id, delta })} onMoveSection={(id, distance) => apply({ op: "moveSectionPlane", id, distance })} onHostDragEnd={(id, parameter) => {
+      {document.workspace === "geometry3d" ? <ThreeSceneView document={document} selectedIds={selectedIds} onSelect={updateSelection} onStatusPromptChange={setSceneControl} previews={scenePreviews} onPreviewHover={(hovering, preview) => setHoveredPreview(hovering ? preview : null)} onPreviewClick={createFromPreview} onDragEnd={(id, delta) => apply({ op: "translatePrimitive3", id, delta })} onMoveSection={(id, distance) => apply({ op: "moveSectionPlane", id, distance })} onHostDragEnd={(id, parameter) => {
         const primitive = document.primitives.find((candidate) => candidate.id === id)
         if (primitive?.type !== "point3" || !primitive.binding) return
         // 只提交参数：坐标由重算从参数算出，所以点永远精确落在宿主上。

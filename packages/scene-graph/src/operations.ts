@@ -1,5 +1,5 @@
 import type { AnnotationSpec, ConstraintSpec, Coordinate, DrawingSheetSpec, DrawingViewSpec, EngineeringAnnotation, GeometryDocument, GroupSpec, LayerSpec, Measurement3, Point3Binding, Point3Primitive, PointBinding, PrimitiveSpec, Section3Classification, Vector3 } from "@draw/dsl"
-import { createDependencyGraph, adaptiveSampleFunctionSegments, arcConstraint, buildSolidTemplate, calculateMeasurement3, circleConstraint, createBuilderContext, dihedralMarker3, ellipseConstraint, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, evaluatePlanarMeasurement, findExtrema, findInflectionPoints, findZeros, functionGraphConstraint, host3FromPrimitive, hyperbolaConstraint, intersectCirclesDetailed, intersectFaceSets, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, lineConstraint, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, orderSectionPoints3, parabolaConstraint, polylineConstraint, rayConstraint, sectionConvexPolyhedron, sectionPolyhedron3, segmentConstraint, sharedRingEdge3, solveLineConstraints, type DihedralMarker3, type FaceRing3, type IntersectionResult, type PlanarConstraint, type PlanarMetric, type SampledPrimitive, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
+import { createDependencyGraph, adaptiveSampleFunctionSegments, arcConstraint, buildSolidTemplate, calculateMeasurement3, circleConstraint, createBuilderContext, dihedralMarker3, ellipseConstraint, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, evaluatePlanarMeasurement, findExtrema, findInflectionPoints, findZeros, functionGraphConstraint, host3FromPrimitive, hyperbolaConstraint, intersectCirclesDetailed, intersectConvexPolyhedra3, intersectFaceSets, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, lineConstraint, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, orderSectionPoints3, parabolaConstraint, polylineConstraint, rayConstraint, sectionConvexPolyhedron, sectionPolyhedron3, segmentConstraint, sharedRingEdge3, solveLineConstraints, type DihedralMarker3, type FaceRing3, type IntersectionResult, type PlanarConstraint, type PlanarMetric, type SampledPrimitive, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
 
 export type DomainOperation =
   | { op: "addPrimitive"; primitive: PrimitiveSpec }
@@ -268,6 +268,7 @@ function primitiveDependencies(primitive: PrimitiveSpec): string[] {
   if (primitive.type === "curveIntersection") dependencies.push(primitive.objectA, primitive.objectB)
   if (primitive.type === "intersectionSet") dependencies.push(primitive.objectA, primitive.objectB)
   if (primitive.type === "intersectionLine") dependencies.push(...primitive.sourceIds)
+  if (primitive.type === "intersectionSolid") dependencies.push(...primitive.sourceIds)
   if (primitive.type === "derivative" || primitive.type === "tangent" || primitive.type === "normal" || primitive.type === "secant" || primitive.type === "integral" || primitive.type === "analysisSet" || primitive.type === "section") dependencies.push(primitive.sourceId)
   return [...new Set(dependencies)]
 }
@@ -592,6 +593,53 @@ function recomputeIntersectionLine(
     visible: true,
     diagnostic: result.diagnostics.length > 0 ? result.diagnostics.join(" ") : undefined
   }
+}
+
+/**
+ * 交面（布尔交集）随来源重算：两个实体的公共区域整体表面。
+ *
+ * 与 `recomputeIntersectionLine` 的区别：交线只写回"公共边界"的线段，交面写回**面集合**与体积/表面积。
+ * 形态不完整时（不重叠、只贴面/贴线/贴点、来源不是实体、非凸被内核拒绝）一律给诊断而不是硬画，
+ * 其中"贴面"（`flat`）仍有面积，值得画出来，所以保持可见。
+ */
+function recomputeIntersectionSolid(
+  primitive: Extract<PrimitiveSpec, { type: "intersectionSolid" }>,
+  primitiveMap: Map<string, PrimitiveSpec>
+): Extract<PrimitiveSpec, { type: "intersectionSolid" }> {
+  const sources = primitive.sourceIds.map((id) => primitiveMap.get(id))
+  if (sources.some((source) => !source)) {
+    return { ...primitive, vertices: [], faces: [], volume: 0, area: 0, status: "insufficient-data", visible: false, diagnostic: "交面来源对象不存在。" }
+  }
+  const topologies = sources.map((source) => solidTopology3(source!, primitiveMap))
+  if (topologies.some((topology) => !topology)) {
+    return { ...primitive, vertices: [], faces: [], volume: 0, area: 0, status: "insufficient-data", visible: false, diagnostic: "交面来源必须是实体（立方体 / 棱锥 / 圆柱 / 圆锥 / 多面体），面与平面没有体积。" }
+  }
+  const result = intersectConvexPolyhedra3(topologies[0]!, topologies[1]!)
+  if (result.status === "insufficient-data") {
+    return { ...primitive, vertices: [], faces: [], volume: 0, area: 0, status: "insufficient-data", visible: false, diagnostic: [result.explanation, ...result.diagnostics].filter(Boolean).join(" ") }
+  }
+  if (result.status === "none") {
+    return { ...primitive, vertices: [], faces: [], volume: 0, area: 0, status: "none", visible: false, diagnostic: result.explanation }
+  }
+  // 贴面（flat）有面积、看得见；贴线 / 贴点只是一条线或一个点，交给交线图元更合适。
+  const visible = result.status === "polyhedron" || result.status === "flat"
+  return {
+    ...primitive,
+    vertices: result.vertices,
+    faces: result.faces,
+    volume: result.volume,
+    area: result.area,
+    status: result.status,
+    visible,
+    diagnostic: result.diagnostics.length > 0 ? [result.explanation, ...result.diagnostics].join(" ") : undefined
+  }
+}
+
+/** 实体的索引化拓扑（顶点数组 + 面环下标）；非实体或拓扑未物化时返回 null。 */
+export function solidTopology3(source: PrimitiveSpec, primitiveMap: Map<string, PrimitiveSpec>): { vertices: Vector3[]; faces: number[][] } | null {
+  const polyhedron = source.type === "polyhedron3" ? source : templateTopology(source.id, primitiveMap)
+  if (!polyhedron) return null
+  return polyhedronSectionTopology(polyhedron, primitiveMap)
 }
 
 /**
@@ -1093,6 +1141,7 @@ const recomputePrimitive = (primitive: PrimitiveSpec): PrimitiveSpec | undefined
       return recomputeSection(primitive, source, primitiveMap)
     }
     if (primitive.type === "intersectionLine") return recomputeIntersectionLine(primitive, primitiveMap)
+    if (primitive.type === "intersectionSolid") return recomputeIntersectionSolid(primitive, primitiveMap)
     if (primitive.type === "line") return lines.get(primitive.id)
     if (primitive.type === "intersectionSet") {
       const first = sampledSource(primitive.objectA, primitiveMap)
@@ -1226,6 +1275,7 @@ function cascadeSources(primitive: PrimitiveSpec): string[] {
   // 截面与截线同样是**纯派生**对象：删掉来源实体时用户不该先手动清掉它们。
   if (primitive.type === "section") return [primitive.sourceId]
   if (primitive.type === "intersectionLine") return primitive.sourceIds
+  if (primitive.type === "intersectionSolid") return primitive.sourceIds
   const analysisSource = functionAnalysisSourceId(primitive)
   return analysisSource === null ? [] : [analysisSource]
 }

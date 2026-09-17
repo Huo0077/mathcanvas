@@ -532,7 +532,7 @@ test("creates an intersection line by clicking the dashed preview", async ({ pag
   const scene = page.locator("[data-3d-scene]")
   await expect(scene).toHaveAttribute("data-intersection-preview", "intersection")
   const status = page.getByRole("status", { name: "操作提示" })
-  await expect(status).toContainText("面交线")
+  await expect(status).toContainText("交线")
 
   // 指针移到虚线上：用 NDC 命中点（实测这条交线在 (-0.10, 0.20) 附近可命中），
   // 比"投影某条棱再取中点"可靠，因为相机取景与默认姿态并不完全一致。

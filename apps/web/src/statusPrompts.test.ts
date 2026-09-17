@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { resolveIntersectionPreviewPrompt, resolveStatusPrompt } from "./statusPrompts"
+import { resolveIntersectionPreviewPrompt, resolvePreviewInventoryPrompt, resolveStatusPrompt } from "./statusPrompts"
 
 describe("status prompts", () => {
   it("describes the default selection workflow", () => {
@@ -95,5 +95,28 @@ describe("status prompts", () => {
     expect(resolveIntersectionPreviewPrompt({ kind: "insufficient", label: "", reason: "两组面之间没有交线。" }, false)).toBe("两组面之间没有交线。")
     expect(resolveIntersectionPreviewPrompt({ kind: "none", label: "" }, false)).toBeNull()
     expect(resolveIntersectionPreviewPrompt(null, false)).toBeNull()
+  })
+
+  it("explains a 交面 preview as the boolean intersection, not as a cut", () => {
+    // 交面是"两个实体公共区域的整体表面"，说法必须与截面（一刀切出来的）区分开。
+    const idle = resolveIntersectionPreviewPrompt({ kind: "solid", label: "交面 · 6 面" }, false)
+    expect(idle).toContain("交面")
+    expect(idle).toContain("面片")
+
+    const hovered = resolveIntersectionPreviewPrompt({ kind: "solid", label: "交面 · 6 面" }, true)
+    expect(hovered).toContain("布尔交集")
+    expect(hovered).toContain("点击即创建交面图元")
+    // 交面预览上那条边就是交线、顶点就是交点：用户要的三样东西一次说全。
+    expect(hovered).toContain("交线")
+    expect(hovered).toContain("交点")
+  })
+
+  it("announces the automatically drawn intersections, because they no longer need a selection", () => {
+    // 自动枚举之后，画布上有没有交线不再取决于选择：不说明就只剩一堆没人认识的虚线。
+    expect(resolvePreviewInventoryPrompt({ lines: 2, solids: 1, truncated: 0 })).toBe("已自动标出 2 处交线、1 处交面：点虚线创建交线图元，点半透明面片创建交面图元。")
+    expect(resolvePreviewInventoryPrompt({ lines: 3, solids: 0, truncated: 0 })).toContain("3 处交线")
+    expect(resolvePreviewInventoryPrompt({ lines: 1, solids: 2, truncated: 4 })).toContain("另有 4 处只画了交线")
+    // 没有交线 / 交面就不打扰（否则每次进 3D 工作区都多一句废话）。
+    expect(resolvePreviewInventoryPrompt({ lines: 0, solids: 0, truncated: 0 })).toBeNull()
   })
 })

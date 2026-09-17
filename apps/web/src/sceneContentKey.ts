@@ -7,7 +7,8 @@ export interface SceneContentInputs {
   showNormals: boolean
   transparentFaces: boolean
   unfoldProgress: number
-  previewKind: string | null
+  /** 画布上现有的预览（`key:kind` 列表）：它们也是场景内容的一部分。 */
+  previewKeys: string
 }
 
 /**
@@ -27,7 +28,7 @@ export function sceneContentKey(inputs: SceneContentInputs): string {
     inputs.showHiddenEdges ? "1" : "0",
     inputs.showNormals ? "1" : "0",
     inputs.transparentFaces ? "1" : "0",
-    inputs.previewKind ?? "-"
+    inputs.previewKeys || "-"
   ].join("|")
 }
 

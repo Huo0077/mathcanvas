@@ -74,7 +74,7 @@ export function resolveIntersectionPreview(document: GeometryDocument, selectedI
       segments: result.segments,
       points: [],
       classification: result.classification,
-      label: result.classification === "segment" ? "面交线 · 1 段" : `面交线 · ${result.segments.length} 段`,
+      label: result.classification === "segment" ? "交线 · 1 段" : `交线 · ${result.segments.length} 段`,
       reason: result.diagnostics.length > 0 ? result.diagnostics.join(" ") : undefined
     }
   }

@@ -24,7 +24,7 @@ describe("3D intersection preview", () => {
     expect(preview.kind).toBe("intersection")
     expect(preview.sourceIds).toEqual(["cube-a", "cube-b"])
     expect(preview.segments.length).toBeGreaterThan(0)
-    expect(preview.label).toContain("面交线")
+    expect(preview.label).toContain("交线")
   })
 
   it("previews the default section for a single solid", () => {

@@ -350,6 +350,58 @@ export function createSectionMesh(primitive: SectionPrimitive): THREE.Object3D |
 }
 
 /** Render a computed unfold layout as one filled mesh plus an outline per face, keeping pick metadata on each face. */
+/**
+ * 交面图元：布尔交集的多面体表面。
+ * - 面：半透明填充（可拾取：点它就是选中这个交面图元）；
+ * - 棱：实线描边，让"公共区域长什么样"一眼看得出；
+ * - 顶点不单独画：交面的顶点就是交线的端点，交线图元已经在画它们了。
+ */
+export function createIntersectionSolidGroup(primitive: Extract<PrimitiveSpec, { type: "intersectionSolid" }>, selected: boolean): THREE.Object3D | null {
+  if (primitive.faces.length === 0 || primitive.vertices.length < 3) return null
+  const group = new THREE.Group()
+  group.userData.primitiveId = primitive.id
+  group.userData.primitiveType = primitive.type
+  group.userData.visualRole = "intersection-solid"
+  group.userData.faceCount = primitive.faces.length
+  // 填色跟着图元样式走；用户没设过 fill（默认白）时用交面自己的红色系，别在画布上变成一块白板。
+  const fill = primitive.style?.fill && primitive.style.fill !== "#ffffff" ? primitive.style.fill : "#f04f5f"
+  const stroke = primitive.style?.stroke ?? "#b91c1c"
+  primitive.faces.forEach((face, faceIndex) => {
+    const positions: number[] = []
+    for (let index = 1; index < face.length - 1; index += 1) {
+      for (const vertexIndex of [face[0], face[index], face[index + 1]]) {
+        const vertex = primitive.vertices[vertexIndex]
+        if (vertex) positions.push(vertex.x, vertex.y, vertex.z)
+      }
+    }
+    if (positions.length < 9) return
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3))
+    geometry.computeVertexNormals()
+    const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: fill, transparent: true, opacity: selected ? 0.42 : 0.28, side: THREE.DoubleSide, depthWrite: false }))
+    mesh.userData.primitiveId = primitive.id
+    mesh.userData.primitiveType = primitive.type
+    mesh.userData.visualRole = "intersection-solid"
+    mesh.userData.faceIndex = faceIndex
+    group.add(mesh)
+  })
+  const edgePoints: THREE.Vector3[] = []
+  for (const face of primitive.faces) {
+    for (let index = 0; index < face.length; index += 1) {
+      const current = primitive.vertices[face[index]]
+      const next = primitive.vertices[face[(index + 1) % face.length]]
+      if (current && next) edgePoints.push(new THREE.Vector3(current.x, current.y, current.z), new THREE.Vector3(next.x, next.y, next.z))
+    }
+  }
+  if (edgePoints.length >= 2) {
+    const edge = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(edgePoints), new THREE.LineBasicMaterial({ color: stroke, transparent: true, opacity: selected ? 1 : 0.8 }))
+    edge.userData.visualRole = "intersection-solid-edge"
+    edge.userData.primitiveId = primitive.id
+    group.add(edge)
+  }
+  return group.children.length > 0 ? group : null
+}
+
 export function createUnfoldNetGroup(polyhedronId: string, layout: UnfoldLayout3, selected: boolean): THREE.Group {
   const group = new THREE.Group()
   group.userData.primitiveId = polyhedronId
@@ -520,10 +572,15 @@ export function disposeScene(scene: THREE.Scene): void {
   for (const child of [...scene.children]) disposeObject(child)
 }
 
-/** 虚线预览：低不透明度 + 虚线的交线/截面，明确区别于用户已创建的图元。 */
+/**
+ * 虚线预览：低不透明度 + 虚线的交线/截面，明确区别于用户已创建的图元。
+ *
+ * `highlighted` 只影响**画法**（指针落在上面时更实一点），不影响命中区：
+ * 命中区必须一直在，否则"原地点击"（浏览器不保证先发 pointermove）会命中不了自己的预览。
+ */
 export function createPreviewGroup(
   preview: ThreeScenePreview,
-  interactive: boolean,
+  highlighted: boolean,
   onHoverChange: (hovering: boolean) => void
 ): THREE.Group {
   const group = new THREE.Group()
@@ -532,13 +589,15 @@ export function createPreviewGroup(
   group.userData.excludeFromFit = true
   /**
    * 拾取用的子对象集合单独放在一个子组里：预览的可见线是 1px 虚线，按像素去点它是"找针"，
-   * 所以命中判定用更宽的对象——交线用不可见的加粗线，截面用它那圈边界线的加粗副本。
+   * 所以命中判定用更宽的对象——交线用不可见的加粗线，截面用它那圈边界线的加粗副本，
+   * 交面用它自己的面片。
    */
   const hitTargets: THREE.Object3D[] = []
-  /** 命中区按种类分：交线用加粗不可见线；截面只用它那圈边界线。 */
   const lineHitTargets: THREE.Object3D[] = []
   const points: THREE.Vector3[] = []
-  if (preview.kind === "intersection") {
+  if (preview.kind === "solid") {
+    addSolidPreview(group, preview, highlighted, hitTargets)
+  } else if (preview.kind === "intersection") {
     for (const segment of preview.segments) {
       points.push(new THREE.Vector3(segment.a.x, segment.a.y, segment.a.z), new THREE.Vector3(segment.b.x, segment.b.y, segment.b.z))
     }
@@ -557,27 +616,30 @@ export function createPreviewGroup(
   if (points.length >= 2) {
     // 截面用闭合折线（Line），交线用线段集合（LineSegments）：前者是一圈边界，后者是若干条交线。
     const geometry = new THREE.BufferGeometry().setFromPoints(points)
-    const material = new THREE.LineDashedMaterial({ color: "#f04f5f", dashSize: 0.35, gapSize: 0.25, transparent: true, opacity: 0.85 })
+    const material = new THREE.LineDashedMaterial({ color: "#f04f5f", dashSize: 0.35, gapSize: 0.25, transparent: true, opacity: highlighted ? 1 : 0.85 })
     const line = preview.kind === "section" ? new THREE.Line(geometry, material) : new THREE.LineSegments(geometry, material)
     line.computeLineDistances()
     line.userData.visualRole = "intersection-preview-line"
     group.add(line)
-    if (interactive) {
-      // 命中带：用一根不可见但更粗的线承担拾取，避免用户必须点到 1px 宽的虚线上。
-      const hit = preview.kind === "section"
-        ? new THREE.Line(geometry.clone(), new THREE.LineBasicMaterial({ transparent: true, opacity: 0 }))
-        : new THREE.LineSegments(geometry.clone(), new THREE.LineBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }))
-      hit.userData.visualRole = "intersection-preview-hit"
-      group.add(hit)
-      hitTargets.push(hit)
-      if (preview.kind === "section") lineHitTargets.push(hit)
-    }
-    // 交点：截面是环上的顶点、交线是每段的端点（共享端点只标一次）。用户要看的"交点"就是它们。
-    for (const vertex of uniqueVertices(points)) {
+    // 命中带：用一根不可见但更粗的线承担拾取，避免用户必须点到 1px 宽的虚线上。
+    const hit = preview.kind === "section"
+      ? new THREE.Line(geometry.clone(), new THREE.LineBasicMaterial({ transparent: true, opacity: 0 }))
+      : new THREE.LineSegments(geometry.clone(), new THREE.LineBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }))
+    hit.userData.visualRole = "intersection-preview-hit"
+    group.add(hit)
+    hitTargets.push(hit)
+    if (preview.kind === "section") lineHitTargets.push(hit)
+  }
+  if (points.length >= 2 || preview.kind === "solid") {
+    // 交点：截面是环上的顶点、交线是每段的端点、交面是交集的顶点（共享端点只标一次）。
+    const vertices = preview.kind === "solid"
+      ? (preview.vertices ?? []).map((vertex) => new THREE.Vector3(vertex.x, vertex.y, vertex.z))
+      : points
+    for (const vertex of uniqueVertices(vertices)) {
       const marker = new THREE.Mesh(previewPointGeometry, previewPointMaterial)
       marker.position.copy(vertex)
       marker.userData.visualRole = "intersection-preview-point"
-      // 交点标记只是画给人看的，不能参与拾取（点击由上面那条不可见命中带负责）。
+      // 交点标记只是画给人看的，不能参与拾取（点击由命中区负责）。
       marker.raycast = () => undefined
       group.add(marker)
     }
@@ -590,6 +652,88 @@ export function createPreviewGroup(
   group.userData.lineHitTargets = lineHitTargets
   group.userData.onHoverChange = onHoverChange
   return group
+}
+
+/** 这份预览有没有东西可画：交线要有线段，截面要有边界点，交面要有面。 */
+export function hasDrawablePreview(preview: ThreeScenePreview): boolean {
+  if (preview.kind === "solid") return (preview.faces ?? []).length > 0 && (preview.vertices ?? []).length >= 3
+  if (preview.kind === "intersection") return preview.segments.length > 0
+  return preview.points.length >= 2
+}
+
+/**
+ * 就地切换预览的高亮：悬停只是"更实一点"，不该触发内容重建。
+ * 交线的透明度、交面片的不透明度都按 `highlighted` 给两档。
+ */
+export function applyPreviewHighlight(group: THREE.Object3D, highlighted: boolean): void {
+  group.traverse((object) => {
+    const role = object.userData.visualRole
+    const renderable = object as THREE.Mesh | THREE.Line | THREE.LineSegments
+    if (role === "intersection-preview-line") setOpacity(renderable, highlighted ? 1 : 0.85)
+    else if (role === "intersection-preview-face") setOpacity(renderable, highlighted ? 0.34 : 0.18)
+    else if (role === "intersection-preview-edge") setOpacity(renderable, highlighted ? 0.95 : 0.6)
+  })
+}
+
+function setOpacity(object: THREE.Mesh | THREE.Line | THREE.LineSegments, opacity: number): void {
+  const materials = Array.isArray(object.material) ? object.material : [object.material]
+  materials.forEach((material) => { material.transparent = true; material.opacity = opacity })
+}
+
+/**
+ * 交面预览：把布尔交集的每个面画成一块半透明面片（扇形三角化，凸面足够），
+ * 再补一圈面环线。面片本身就是命中区——点"这一块重叠区域"即创建交面图元。
+ *
+ * 不透明度刻意压得很低：画布上可能同时有好几个交面，任何一块都不该挡住别的东西；
+ * 指针落上去时（`highlighted`）才加一点，让"点下去会创建哪一块"一目了然。
+ */
+function addSolidPreview(group: THREE.Group, preview: ThreeScenePreview, highlighted: boolean, hitTargets: THREE.Object3D[]): void {
+  const vertices = preview.vertices ?? []
+  const faces = preview.faces ?? []
+  const material = new THREE.MeshBasicMaterial({
+    color: "#f04f5f",
+    transparent: true,
+    opacity: highlighted ? 0.34 : 0.18,
+    side: THREE.DoubleSide,
+    // 交面预览不参与深度写入：它只是提示，不能把后面的实体挡掉。
+    depthWrite: false
+  })
+  for (const face of faces) {
+    if (face.length < 3) continue
+    const positions: number[] = []
+    for (let index = 1; index < face.length - 1; index += 1) {
+      for (const vertexIndex of [face[0], face[index], face[index + 1]]) {
+        const vertex = vertices[vertexIndex]
+        if (!vertex) continue
+        positions.push(vertex.x, vertex.y, vertex.z)
+      }
+    }
+    if (positions.length < 9) continue
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3))
+    geometry.computeVertexNormals()
+    const mesh = new THREE.Mesh(geometry, material)
+    mesh.userData.visualRole = "intersection-preview-face"
+    group.add(mesh)
+    hitTargets.push(mesh)
+  }
+  const edgePoints: THREE.Vector3[] = []
+  for (const face of faces) {
+    for (let index = 0; index < face.length; index += 1) {
+      const current = vertices[face[index]]
+      const next = vertices[face[(index + 1) % face.length]]
+      if (!current || !next) continue
+      edgePoints.push(new THREE.Vector3(current.x, current.y, current.z), new THREE.Vector3(next.x, next.y, next.z))
+    }
+  }
+  if (edgePoints.length >= 2) {
+    const edge = new THREE.LineSegments(
+      new THREE.BufferGeometry().setFromPoints(edgePoints),
+      new THREE.LineBasicMaterial({ color: "#d92b3a", transparent: true, opacity: highlighted ? 0.95 : 0.6 })
+    )
+    edge.userData.visualRole = "intersection-preview-edge"
+    group.add(edge)
+  }
 }
 
 /** 预览的交点标记：一份共享几何与材质，避免每个顶点各建一套。 */

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import * as THREE from "three"
-import type { GeometryDocument, Plane3Primitive, Point3Primitive, Polyhedron3Primitive, SectionPrimitive, Vector3 } from "@draw/dsl"
+import type { GeometryDocument, IntersectionSolidPrimitive, Plane3Primitive, Point3Primitive, Polyhedron3Primitive, SectionPrimitive, Vector3 } from "@draw/dsl"
 import { dihedralAngleDegrees, host3FromPrimitive, unfoldPolyhedron3, type Host3, type Host3Parameter } from "@draw/geometry-kernel"
 import { resolveMeasurementVisual } from "./measurementVisuals"
 import { syncOverlay } from "./overlaySync"
@@ -18,7 +18,7 @@ import type { ThreeScenePreview } from "./threeScenePreview"
 
 import { dragWorldPoint, dragFamilyIds, offsetSceneObjects, applyDragOffsets } from "./threeDrag"
 import { PICK_TOLERANCE_PX, pointHandleWorldRadius, pickRaycastHit3, templateTopologyOwners, pickSectionAt, resolveSelectableHit } from "./threePicking"
-import { sectionUnitNormal, createPlane3Mesh, createSectionMesh, createUnfoldNetGroup, createDihedralMarkerGroup, prefersReducedMotion, nextUnfoldProgress, createPlanePatch, createSolidGroup, visibleSolids, buildPointDrivenObject, disposeObject, disposeScene, createPreviewGroup } from "./threePrimitives"
+import { sectionUnitNormal, createPlane3Mesh, createSectionMesh, createIntersectionSolidGroup, createUnfoldNetGroup, createDihedralMarkerGroup, prefersReducedMotion, nextUnfoldProgress, createPlanePatch, createSolidGroup, visibleSolids, buildPointDrivenObject, disposeObject, disposeScene, createPreviewGroup, applyPreviewHighlight, hasDrawablePreview } from "./threePrimitives"
 
 const scenePalette = {
   background: "#fbfcff",
@@ -69,13 +69,13 @@ export interface ThreeSceneViewProps {  document: GeometryDocument
   /** Reports which display switch is on so the shell can explain what it draws; null when both are off. */
   onStatusPromptChange?: (sceneControl: SceneControlMode | null) => void
   /**
-   * 虚线预览内容（截面 / 截线）。传 null 表示当前选择没有可预览对象。
-   * `interactive` 为真时指针落在预览上会高亮并上报，App 据此把点击解释为"创建图元"。
+   * 画布上要画的全部预览（自动交线 / 交面 / 截面）。每一份由 `key` 标识，
+   * 场景按 key 增量同步：只重建变了的那一份，其余原样沿用。
    */
-  preview?: ThreeScenePreview | null
-  onPreviewHover?: (hovering: boolean) => void
-  /** 指针正落在虚线预览上时点击：交给 App 创建图元，而不是重新选择来源对象。 */
-  onPreviewClick?: () => void
+  previews?: ThreeScenePreview[]
+  onPreviewHover?: (hovering: boolean, preview: ThreeScenePreview) => void
+  /** 指针正落在某一份预览上时点击：交给 App 创建那一个图元，而不是重新选择来源对象。 */
+  onPreviewClick?: (preview: ThreeScenePreview) => void
   /** 拖动结束时上报这次拖动的总位移（屏幕平面内的世界向量）。只在抬手时回调一次：拖动期间文档不提交，
    * 这样一次拖动就是一步撤销。拖动过程中的画面由场景自己按帧平移，不经过文档。 */
   onDragEnd?: (id: string, delta: Vector3) => void
@@ -87,7 +87,7 @@ export interface ThreeSceneViewProps {  document: GeometryDocument
   onPickSectionFace?: (id: string, plane: { normal: Vector3; constant: number }) => void
 }
 
-export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPromptChange, preview = null, onPreviewHover, onPreviewClick, onDragEnd, onMoveSection, onHostDragEnd, onPickSectionFace }: ThreeSceneViewProps) {
+export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPromptChange, previews = [], onPreviewHover, onPreviewClick, onDragEnd, onMoveSection, onHostDragEnd, onPickSectionFace }: ThreeSceneViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const renderTargetRef = useRef<HTMLDivElement>(null)
   const measurementOverlayRef = useRef<HTMLDivElement>(null)
@@ -110,10 +110,12 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
   /** The drag callback, read through a ref so a parent re-render never restarts the scene. */
   const dragEndRef = useRef(onDragEnd)
   dragEndRef.current = onDragEnd
-  /** 当前预览的种类与场景组：截面预览要抢在实体拾取之前，交线预览不抢（见 handlePointerUp 的说明）。 */
-  const previewKindRef = useRef<ThreeScenePreview["kind"] | null>(preview?.kind ?? null)
-  previewKindRef.current = preview?.kind ?? null
-  /** 预览组的深度（离相机多远）：用来判断"点手柄"和"点剖切面"哪个才是用户真正指到的东西。 */
+  /**
+   * 指针落在哪一份预览上（key）。点击时要**按点击位置重新判定**，这个 ref 只用于画高亮与状态栏；
+   * 高亮是就地改材质，不进内容签名——否则每次悬停都要重建一遍场景内容。
+   */
+  const previewHoverKeyRef = useRef<string | null>(null)
+  /** 预览组的深度（离相机多远）：用来判断"点手柄"和"点预览"哪个才是用户真正指到的东西。 */
   const previewDepthRef = useRef<number | null>(null)
   /** 移动剖切面（沿法向的世界位移），与拖动回调解耦，方便键盘微调共用。 */
   const moveSectionRef = useRef(onMoveSection)
@@ -154,8 +156,8 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
    * 场景内容的输入：文档 / 选择 / 显示开关 / 预览 / 选中回调。
    * 挂载效应只读这些 ref，因此父组件重渲染不会再重建渲染器（见下面的挂载效应说明）。
    */
-  const previewRef = useRef(preview)
-  previewRef.current = preview
+  const previewsRef = useRef(previews)
+  previewsRef.current = previews
   const onSelectRef = useRef(onSelect)
   onSelectRef.current = onSelect
   /**
@@ -304,7 +306,7 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     let pointHandles: THREE.Mesh[] = []
     let visiblePointLabels: Point3Primitive[] = []
     let measurementVisuals: NonNullable<ReturnType<typeof resolveMeasurementVisual>>[] = []
-    let previewGroup: THREE.Object3D | null = null
+    let previewGroups = new Map<string, THREE.Group>()
     let sceneBounds = new THREE.Box3()
     /** 空间点索引与"模板子元素归属模板实体"的映射：指针处理函数要用，必须随同步一起刷新。 */
     let points = new Map<string, Point3Primitive>()
@@ -322,7 +324,8 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       document: documentRef.current,
       selectedIds: selectedIdsRef.current,
       ...displayFlagsRef.current,
-      previewKind: previewRef.current?.kind ?? null
+      // 预览由文档与选择派生，这里只把"有哪些预览"写进签名，便于排查"为什么内容没同步"。
+      previewKeys: previewsRef.current.map((item) => `${item.key}:${item.kind}`).join("|")
     })
 
     /**
@@ -371,13 +374,12 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     pointHandles = []
     visiblePointLabels = []
     measurementVisuals = []
-    previewGroup = null
+    previewGroups = new Map<string, THREE.Group>()
     objectIndex = new Map<string, THREE.Object3D>()
     if (sceneShell) sceneShell.dataset.sceneSyncs = String(sceneSyncsRef.current)
     const document = documentRef.current
     const selectedIds = selectedIdsRef.current
     const { showHiddenEdges, showNormals, transparentFaces, unfoldProgress } = displayFlagsRef.current
-    const preview = previewRef.current
     const signer = createContentSigner(document)
     points = new Map(document.primitives.filter((primitive): primitive is Point3Primitive => primitive.type === "point3").map((primitive) => [primitive.id, primitive]))
     topologyOwners = templateTopologyOwners(document)
@@ -432,6 +434,10 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
         return line
       }, alive, order)
     })
+    // 已创建的交面：布尔交集的面集合，半透明填充 + 实线描边。与交线、截面同一条视觉语言：深色 = 已创建。
+    document.primitives.filter((primitive): primitive is IntersectionSolidPrimitive => primitive.type === "intersectionSolid" && primitive.visible !== false).forEach((primitive) => {
+      keepContent(`intersection-solid:${primitive.id}`, signer.of(primitive.id, `sel:${selectedIds.includes(primitive.id)}`), () => createIntersectionSolidGroup(primitive, selectedIds.includes(primitive.id)), alive, order)
+    })
     let unfoldFaceCount = 0
     unfoldedPolyhedra.forEach((polyhedron) => {
       const topology = resolvePolyhedronTopology(document, polyhedron.id)
@@ -483,7 +489,9 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     alive.add("static:grid")
     alive.add("static:grid-major")
     alive.add("static:axes")
-    if (preview && (preview.segments.length > 0 || preview.points.length >= 2)) alive.add("preview")
+    for (const item of previewsRef.current) {
+      if (hasDrawablePreview(item)) alive.add(`preview:${item.key}`)
+    }
     for (const primitive of document.primitives) {
       if (primitive.type === "plane3" && primitive.visible !== false) alive.add(`plane:${primitive.id}`)
     }
@@ -510,12 +518,25 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       if (!plane) return
       planeCount += 1
     })
-    // 预览层最后加入：盖在实体之上，但仍用虚线表达"还没创建"。
-    previewGroup = preview && (preview.segments.length > 0 || preview.points.length >= 2)
-      ? keepContent("preview", `kind:${preview.kind};${JSON.stringify(preview)}`, () => createPreviewGroup(preview, Boolean(previewHoverRef.current), (hovering) => previewHoverRef.current?.(hovering)), alive, order)
-      : null
+    /**
+     * 预览层最后加入：盖在实体之上，但仍用虚线 / 半透明表达"还没创建"。
+     * 每一份预览按自己的 key 增量同步——改了其中一个实体，只有与它相关的那几份重建。
+     */
+    const previews = previewsRef.current.filter(hasDrawablePreview)
+    for (const item of previews) {
+      const group = keepContent(`preview:${item.key}`, `kind:${item.kind};${JSON.stringify(item)}`, () => createPreviewGroup(item, previewHoverKeyRef.current === item.key, (hovering) => previewHoverRef.current?.(hovering, item)), alive, order)
+      if (!group) continue
+      previewGroups.set(item.key, group as THREE.Group)
+    }
+    // 悬停的那一份可能已经不存在了（来源被删 / 挪开）：清掉高亮状态，别让读数指向空气。
+    if (previewHoverKeyRef.current && !previewGroups.has(previewHoverKeyRef.current)) previewHoverKeyRef.current = null
     if (sceneShell) {
-      sceneShell.dataset.intersectionPreview = previewGroup ? preview!.kind : "none"
+      const focused = previews.find((item) => item.focused) ?? null
+      sceneShell.dataset.intersectionPreview = focused ? focused.kind : "none"
+      sceneShell.dataset.previewCount = String(previews.length)
+      sceneShell.dataset.previewSolidCount = String(previews.filter((item) => item.kind === "solid").length)
+      sceneShell.dataset.previewKeys = previews.map((item) => item.key).join(",")
+      sceneShell.dataset.previewHoverKey = previewHoverKeyRef.current ?? ""
       sceneShell.dataset.unfoldFaces = String(unfoldFaceCount)
       sceneShell.dataset.unfoldProgress = unfoldProgress.toFixed(2)
       sceneShell.dataset.dihedralMarkers = String(dihedralMarkerCount)
@@ -1066,49 +1087,94 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
         // 按点击位置重新判定预览（不能用 pointermove 留下的标志：原地点击可能根本没有移动事件）。
         const previewHit = previewHitAt(point)
         const previewInFront = previewHit.depth === null || !hit || previewHit.depth <= hit.depth
-        const sectionWins = previewKindRef.current === "section" && previewInFront
+        const sectionWins = previewHit.preview?.kind === "section" && previewInFront
+        /**
+         * 只有**顶点手柄**优先于预览，棱不优先。
+         *
+         * 手柄是可以拖的交互控件，被一块交面盖住时用户仍然是在抓手柄（实测回归：点顶点手柄变成创建截线）。
+         * 而棱只是可选中的几何：预览的命中区就是画布上真画出来的那份几何（交线的加粗命中带、交面的面片），
+         * 指针落在它上面就是"要创建它"——只是投影上恰好有一条棱从旁边穿过时，不该把点击判给那条棱
+         *（实测：点交面正中，粗拾取命中了一条经过的棱，于是"点一下创建交面"完全没反应）。
+         */
+        const previewWins = previewHit.preview !== null && (!(hit?.kind === "point") || sectionWins)
         // 排查读数：这一次点击到底被哪条规则拦下（粗拾取到了什么、预览有没有命中、谁更靠前）。
         if (sceneShell) sceneShell.dataset.pickReadout = `${hit?.kind ?? "none"}|${hit?.primitiveId ?? "-"}|${precise ? "precise" : "coarse"}|${previewHit.hovering ? "hover" : "off"}|${previewInFront ? "front" : "behind"}`
-        if (previewHit.hovering && previewClickRef.current && (!precise || sectionWins)) previewClickRef.current()
+        if (previewWins && previewClickRef.current) previewClickRef.current(previewHit.preview!)
         else onSelectRef.current(resolveSelectableHit(hit?.primitiveId ?? null, topologyOwners, event.altKey), event.shiftKey)
       }
       renderer.domElement.releasePointerCapture(event.pointerId)
       pointerStateRef.current = null
     }
     /**
-     * 指针落在虚线预览上了吗？用射线与预览命中区求交，阈值按屏幕像素给（与实体拾取同一套思路），
+     * 指针落在哪一份预览上？用射线与预览命中区求交，阈值按屏幕像素给（与实体拾取同一套思路），
      * 这样"点击创建"只在真的指向预览时生效，不会抢走普通选择。
      * 独立成函数是因为 **点击时必须按点击位置重新判定一次**：浏览器不需要在 pointerdown 之前先发
      * pointermove，只靠 pointermove 维护的标志会让"原地点击"读到过期状态（实测：剖切面确实在指针下、
      * 却因为标志是 false 而创建不了截面）。
+     *
+     * 多份预览叠在一起时（交面片 + 它的交线轮廓）取**最近**的一份；距离几乎相同时优先交线：
+     * 交线是细目标，用户特意指到那条线上，多半是想创建交线而不是交面。
      */
-    const previewHitAt = (normalizedPoint: { x: number; y: number }) => {
-      if (!previewGroup) return { hovering: false, depth: null as number | null }
+    const previewHitAt = (normalizedPoint: { x: number; y: number }): { hovering: boolean; depth: number | null; preview: ThreeScenePreview | null } => {
+      const lookup = new Map<THREE.Object3D, ThreeScenePreview>()
+      for (const [key, group] of previewGroups) {
+        const preview = previewsRef.current.find((item) => item.key === key)
+        if (!preview) continue
+        for (const target of (group.userData.hitTargets as THREE.Object3D[] | undefined) ?? []) lookup.set(target, preview)
+      }
+      if (lookup.size === 0) return { hovering: false, depth: null, preview: null }
       const raycaster = new THREE.Raycaster()
       raycaster.params.Line = { threshold: pickTolerance() }
       raycaster.setFromCamera(new THREE.Vector2(normalizedPoint.x * 2 - 1, -(normalizedPoint.y * 2 - 1)), camera)
-      const hitTargets = (previewGroup.userData.hitTargets as THREE.Object3D[] | undefined) ?? previewGroup.children
-      const hits = raycaster.intersectObjects(hitTargets, false)
-      return { hovering: hits.length > 0, depth: hits.length > 0 ? hits[0].distance : null }
+      const hits = raycaster.intersectObjects([...lookup.keys()], false)
+      let best: { distance: number; preview: ThreeScenePreview } | null = null
+      for (const hit of hits) {
+        const preview = lookup.get(hit.object)
+        if (!preview) continue
+        if (!best) { best = { distance: hit.distance, preview }; continue }
+        const tolerance = Math.max(1e-3, hit.distance * 0.02)
+        if (hit.distance < best.distance - tolerance) { best = { distance: hit.distance, preview }; continue }
+        if (Math.abs(hit.distance - best.distance) <= tolerance && preview.kind === "intersection" && best.preview.kind !== "intersection") best = { distance: hit.distance, preview }
+      }
+      return { hovering: best !== null, depth: best?.distance ?? null, preview: best?.preview ?? null }
+    }
+    /** 高亮是**就地改材质**：悬停不该触发内容重建（一次重建要重算整场几何）。 */
+    const setPreviewHoverKey = (key: string | null) => {
+      if (previewHoverKeyRef.current === key) return
+      const previous = previewHoverKeyRef.current ? previewGroups.get(previewHoverKeyRef.current) : null
+      previewHoverKeyRef.current = key
+      if (previous) applyPreviewHighlight(previous, false)
+      const next = key ? previewGroups.get(key) : null
+      if (next) applyPreviewHighlight(next, true)
+      if (sceneShell) sceneShell.dataset.previewHoverKey = key ?? ""
     }
     const updatePreviewHover = (event: PointerEvent) => {
-      if (!previewGroup || !onPreviewHover) return
       const point = pointFromEvent(event)
-      const { hovering, depth } = previewHitAt(point)
+      const { hovering, depth, preview } = previewHitAt(point)
       previewDepthRef.current = depth
       if (sceneShell) sceneShell.dataset.previewHovering = hovering ? "true" : "false"
-      if (hovering !== previewHovering) {
-        previewHovering = hovering
-        onPreviewHover(hovering)
+      setPreviewHoverKey(preview?.key ?? null)
+      // 状态栏要跟着指针换：从一份预览滑到另一份时，"这一份是什么、点下去创建什么"必须重新说一遍。
+      if (preview && preview.key !== lastPreview?.key) {
+        lastPreview = preview
+        previewHoverRef.current?.(true, preview)
+        previewHovering = true
+        return
       }
+      if (hovering === previewHovering) return
+      previewHovering = hovering
+      if (hovering && preview) previewHoverRef.current?.(true, preview)
+      else if (lastPreview) previewHoverRef.current?.(false, lastPreview)
     }
     let previewHovering = false
+    let lastPreview: ThreeScenePreview | null = null
     const handlePointerMoveForPreview = (event: PointerEvent) => updatePreviewHover(event)
     const handlePointerLeaveForPreview = () => {
       previewDepthRef.current = null
+      setPreviewHoverKey(null)
       if (!previewHovering) return
       previewHovering = false
-      onPreviewHover?.(false)
+      if (lastPreview) previewHoverRef.current?.(false, lastPreview)
     }
     renderer.domElement.addEventListener("pointermove", handlePointerMoveForPreview)
     renderer.domElement.addEventListener("pointerleave", handlePointerLeaveForPreview)
@@ -1182,12 +1248,12 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       showNormals,
       transparentFaces,
       unfoldProgress,
-      previewKind: preview?.kind ?? null
+      previewKeys: previews.map((item) => `${item.key}:${item.kind}`).join("|")
     })
     if (!sceneSyncDecision(contentKeyRef.current, key)) return
     contentKeyRef.current = key
     runtime.syncContent()
-  }, [document, selectedIds, showHiddenEdges, showNormals, transparentFaces, unfoldProgress, preview])
+  }, [document, selectedIds, showHiddenEdges, showNormals, transparentFaces, unfoldProgress, previews])
 
   const hasGeometry = document.primitives.some((primitive) => ["point3", "line3", "segment3", "ray3", "edge3", "face3", "polyhedron3", "cube", "pyramid", "cylinder", "cone"].includes(primitive.type) && primitive.visible !== false)
   /** 「以面为剖切面」需要有选中的截面作为目标。 */

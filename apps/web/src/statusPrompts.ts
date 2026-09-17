@@ -46,8 +46,32 @@ export function resolveIntersectionPreviewPrompt(preview: { kind: string; label:
     if (hovering) return `${preview.label}：一圈虚线是这一刀的交线、圆点是交点，点击即创建截面（交面）；创建后选中截面，在自由拖动模式下拖动或按方向键可移动剖切面。`
     return null
   }
+  if (preview.kind === "solid") {
+    // 交面 = 两个实体公共区域的**整体表面**（布尔交集），不是"一刀切出来的截面"：说法必须区分开。
+    return hovering
+      ? `${preview.label}：这块半透明面片是两个实体的公共区域（布尔交集），点击即创建交面图元；它的边就是交线、顶点就是交点。`
+      : `${preview.label}：把指针移到半透明面片上，点击即可创建为交面图元。`
+  }
   return hovering ? `${preview.label}：点击即可创建为截线（交线）图元。` : `${preview.label}：把指针移到虚线上可创建为截线图元。`
 }
+
+/**
+ * 画布上"自动铺开的交线 / 交面有多少"的状态提示。
+ *
+ * 用户反馈过："画布上有东西，但完全没有任何提示"。自动枚举意味着预览不再依赖选择，
+ * 所以只要画布上真画了交线或交面，就必须在状态栏说明它们是什么、点下去会创建什么。
+ */
+export function resolvePreviewInventoryPrompt(inventory: { lines: number; solids: number; truncated: number }): string | null {
+  const parts: string[] = []
+  if (inventory.lines > 0) parts.push(`${inventory.lines} 处交线`)
+  if (inventory.solids > 0) parts.push(`${inventory.solids} 处交面`)
+  if (parts.length === 0) return null
+  const truncation = inventory.truncated > 0 ? `（另有 ${inventory.truncated} 处只画了交线：交面一次最多算 ${PREVIEW_SOLID_BUDGET} 处）` : ""
+  return `已自动标出 ${parts.join("、")}：点虚线创建交线图元，点半透明面片创建交面图元${truncation}。`
+}
+
+/** 单次扫描最多算多少个布尔交集（与 `intersectionPreviews3d` 的默认配额一致）。 */
+const PREVIEW_SOLID_BUDGET = 12
 
 export function resolveStatusPrompt({ mode, selectedCount, selectedLabel, hasCenter, hasStart, pointCount, sceneControl = null, pointBinding = null, pathSelected = false }: StatusPromptState): string {
   if (mode === "line") return hasCenter ? "第2步：点击确定直线的第二个点（按住 Shift 锁定水平/垂直）" : "第1步：点击确定直线的第一个点"

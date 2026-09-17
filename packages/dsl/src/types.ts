@@ -417,6 +417,35 @@ export interface IntersectionLinePrimitive extends PrimitivePresentation {
   diagnostic?: string
 }
 
+/** 布尔交集（交面）的形态分类，与内核 `intersectConvexPolyhedra3` 的 status 一一对应。 */
+export type IntersectionSolidStatus = "polyhedron" | "flat" | "point" | "segment" | "none" | "insufficient-data"
+
+/**
+ * 两个实体的公共部分（布尔交集）作为**独立图元**。
+ *
+ * 与 `intersectionLine` 的分工：交线只给出两个对象的公共**边界**，交面给出公共**区域整体表面**。
+ * 与 `section` 的分工：截面是"一个平面切实体"（半空间裁剪，结果一定带平面切口），
+ * 交面是"两个实体求交"（结果的两个方向都是来源自己的表面）。
+ *
+ * `vertices` / `faces` / `volume` / `area` 全部由来源重算生成，界面里不给手改；
+ * 来源一动，这份几何就跟着动（与截线、截面同一套依赖与级联语义）。
+ */
+export interface IntersectionSolidPrimitive extends PrimitivePresentation {
+  id: string
+  type: "intersectionSolid"
+  sourceIds: [string, string]
+  /** 交集的顶点表；`faces` 里的下标指向它。 */
+  vertices: Vector3[]
+  /** 交集各面的顶点下标环（首尾不重复）。 */
+  faces: number[][]
+  /** 交集体积（`polyhedron` 状态下 > 0；共面/共线/共点时按序退化为面积/长度/点）。 */
+  volume: number
+  /** 交集表面积。 */
+  area: number
+  status: IntersectionSolidStatus
+  diagnostic?: string
+}
+
 export interface CirclePrimitive extends PrimitivePresentation {
   id: string
   type: "circle"
@@ -522,6 +551,7 @@ export type PrimitiveSpec =
   | Polyhedron3Primitive
   | SectionPrimitive
   | IntersectionLinePrimitive
+  | IntersectionSolidPrimitive
   | CirclePrimitive
   | ArcPrimitive
   | IntersectionPrimitive

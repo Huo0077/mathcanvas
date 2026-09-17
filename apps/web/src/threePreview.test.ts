@@ -25,7 +25,9 @@ const roles = (group: THREE.Object3D): string[] => {
 const countRole = (group: THREE.Object3D, role: string): number => roles(group).filter((value) => value === role).length
 
 const sectionPreview = (): ThreeScenePreview => ({
+  key: "section:cube-1",
   kind: "section",
+  sourceIds: ["cube-1"],
   segments: [],
   points: [{ x: -2, y: 0, z: 0 }, { x: 2, y: 0, z: 0 }, { x: 2, y: 0, z: 2 }],
   label: "默认剖切平面截面 · 3 边形",
@@ -34,7 +36,9 @@ const sectionPreview = (): ThreeScenePreview => ({
 })
 
 const intersectionPreview = (): ThreeScenePreview => ({
+  key: "pair:cube-a|cube-b:线",
   kind: "intersection",
+  sourceIds: ["cube-a", "cube-b"],
   segments: [
     { a: { x: 0, y: 0, z: 0 }, b: { x: 1, y: 0, z: 0 } },
     { a: { x: 1, y: 0, z: 0 }, b: { x: 1, y: 0, z: 1 } }
@@ -42,6 +46,35 @@ const intersectionPreview = (): ThreeScenePreview => ({
   points: [],
   label: "面交线 · 2 段"
 })
+
+/** 两个交叠立方体的布尔交集：x∈[0,2]、y∈[-2,2]、z∈[-2,2] 的长方体。 */
+const solidPreview = (): ThreeScenePreview => ({
+  key: "pair:cube-a|cube-b:面",
+  kind: "solid",
+  sourceIds: ["cube-a", "cube-b"],
+  segments: [],
+  points: [],
+  vertices: [
+    { x: 0, y: -2, z: -2 }, { x: 2, y: -2, z: -2 }, { x: 2, y: 2, z: -2 }, { x: 0, y: 2, z: -2 },
+    { x: 0, y: -2, z: 2 }, { x: 2, y: -2, z: 2 }, { x: 2, y: 2, z: 2 }, { x: 0, y: 2, z: 2 }
+  ],
+  faces: [[0, 3, 2, 1], [4, 5, 6, 7], [0, 1, 5, 4], [1, 2, 6, 5], [2, 3, 7, 6], [3, 0, 4, 7]],
+  volume: 32,
+  area: 64,
+  label: "交面 · 6 面"
+})
+
+/** 取第一个带该角色的材质的透明度（用来断言面片是半透明的，不是一块挡视线的实心面）。 */
+const opacityOfRole = (group: THREE.Object3D, role: string): number | null => {
+  let opacity: number | null = null
+  group.traverse((object) => {
+    if (object.userData.visualRole !== role || opacity !== null) return
+    const mesh = object as THREE.Mesh
+    const material = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material
+    if (material) opacity = material.opacity
+  })
+  return opacity
+}
 
 describe("虚线预览的画法", () => {
   it("draws the cut boundary and its vertices, and no filled cut plane", () => {
@@ -60,6 +93,34 @@ describe("虚线预览的画法", () => {
     expect(countRole(group, "intersection-preview-line")).toBe(1)
     // 两段共享一个端点 → 3 个交点
     expect(countRole(group, "intersection-preview-point")).toBe(3)
+  })
+
+  it("fills an intersection solid as a translucent patch with its own edges and vertices", () => {
+    const group = createPreviewGroup(solidPreview(), false, () => undefined)
+
+    // 交面预览画的是**重叠区域本身**：半透明面片 + 面环 + 顶点（交点）。
+    expect(countRole(group, "intersection-preview-face")).toBe(6)
+    expect(countRole(group, "intersection-preview-edge")).toBeGreaterThan(0)
+    expect(countRole(group, "intersection-preview-point")).toBe(8)
+    const opacity = opacityOfRole(group, "intersection-preview-face")
+    expect(opacity).not.toBeNull()
+    // 半透明：交面是"还没创建"的提示，不能像创建出来的实体那样挡住图形。
+    expect(opacity!).toBeLessThan(0.5)
+    expect(group.userData.excludeFromFit).toBe(true)
+  })
+
+  it("highlights the patch under the pointer and keeps it clickable either way", () => {
+    const idle = createPreviewGroup(solidPreview(), false, () => undefined)
+    const hovered = createPreviewGroup(solidPreview(), true, () => undefined)
+
+    // 指针落在交面上时更实一点，但仍然不是不透明（其余交面还在底下要看得到）。
+    expect(opacityOfRole(hovered, "intersection-preview-face")!).toBeGreaterThan(opacityOfRole(idle, "intersection-preview-face")!)
+    /**
+     * 命中区与悬停状态解耦：点击时**按点击位置重新判定**，如果命中区只在"已经悬停"时才存在，
+     * 就变成先有鸡还是先有蛋——原地点击（没有 pointermove）永远命中不了。
+     */
+    expect((idle.userData.hitTargets as THREE.Object3D[]).length).toBe(6)
+    expect((hovered.userData.hitTargets as THREE.Object3D[]).length).toBe(6)
   })
 
   it("keeps the preview out of picking and out of the fit bounds", () => {
