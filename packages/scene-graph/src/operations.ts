@@ -283,26 +283,46 @@ function solidSectionGeometry(primitive: Extract<PrimitiveSpec, { type: "cube" |
   }
   if (primitive.type === "pyramid") {
     const halfX = primitive.baseSize.x / 2
-    const halfZ = primitive.baseSize.y / 2
+    const halfY = primitive.baseSize.y / 2
     const { baseCenter } = primitive
-    const vertices = [{ x: baseCenter.x - halfX, y: baseCenter.y, z: baseCenter.z - halfZ }, { x: baseCenter.x + halfX, y: baseCenter.y, z: baseCenter.z - halfZ }, { x: baseCenter.x + halfX, y: baseCenter.y, z: baseCenter.z + halfZ }, { x: baseCenter.x - halfX, y: baseCenter.y, z: baseCenter.z + halfZ }, { x: baseCenter.x, y: baseCenter.y + primitive.height, z: baseCenter.z }]
+    // 世界是 Z 轴朝上（与 `buildSolidTemplate` 一致）：底面铺在 XY 平面、顶点沿 +Z。
+    // 旧实现把底面放在 XZ、顶点沿 +Y，于是"默认剖切面取包围盒中心的 y"算到了实体之外——
+    // 上一轮实测的"棱锥/圆柱/圆锥默认截面错位"就是这个坐标系不一致。
+    const vertices = [
+      { x: baseCenter.x - halfX, y: baseCenter.y - halfY, z: baseCenter.z },
+      { x: baseCenter.x + halfX, y: baseCenter.y - halfY, z: baseCenter.z },
+      { x: baseCenter.x + halfX, y: baseCenter.y + halfY, z: baseCenter.z },
+      { x: baseCenter.x - halfX, y: baseCenter.y + halfY, z: baseCenter.z },
+      { x: baseCenter.x, y: baseCenter.y, z: baseCenter.z + primitive.height }
+    ]
     return { vertices, edges: [[0, 1], [1, 2], [2, 3], [3, 0], [0, 4], [1, 4], [2, 4], [3, 4]] }
   }
-  const vertices: Vector3[] = []
-  const halfHeight = primitive.height / 2
-  for (const y of [-halfHeight, halfHeight]) for (let index = 0; index < primitive.segments; index += 1) {
+  const ring = (z: number) => Array.from({ length: primitive.segments }, (_, index) => {
     const angle = index * Math.PI * 2 / primitive.segments
-    vertices.push({ x: primitive.center.x + primitive.radius * Math.cos(angle), y: primitive.center.y + halfHeight + y, z: primitive.center.z + primitive.radius * Math.sin(angle) })
+    return { x: primitive.center.x + primitive.radius * Math.cos(angle), y: primitive.center.y + primitive.radius * Math.sin(angle), z }
+  })
+  const edgesBetween = (offset: number): [number, number][] => {
+    const edges: [number, number][] = []
+    for (let index = 0; index < primitive.segments; index += 1) {
+      const next = (index + 1) % primitive.segments
+      edges.push([offset + index, offset + next])
+      if (offset > 0) edges.push([index, offset + index])
+    }
+    return edges
   }
+  if (primitive.type === "cylinder") {
+    const bottom = ring(primitive.center.z)
+    const top = ring(primitive.center.z + primitive.height)
+    const vertices = [...bottom, ...top]
+    return { vertices, edges: [...edgesBetween(0), ...edgesBetween(primitive.segments).slice(primitive.segments)] }
+  }
+  // 圆锥：只有一个底面圆 + 顶点。旧实现建了上下两个同半径的环、顶点又落在上环高度上，
+  // 等于"顶面被扇形封口的圆柱"——任何未被物化的圆锥文档其截面与面环都是错的。
+  const vertices = [...ring(primitive.center.z), { x: primitive.center.x, y: primitive.center.y, z: primitive.center.z + primitive.height }]
+  const apex = primitive.segments
   const edges: [number, number][] = []
   for (let index = 0; index < primitive.segments; index += 1) {
-    const next = (index + 1) % primitive.segments
-    edges.push([index, next], [primitive.segments + index, primitive.segments + next], [index, primitive.segments + index])
-  }
-  if (primitive.type === "cone") {
-    const apex = vertices.length
-    vertices.push({ x: primitive.center.x, y: primitive.center.y + primitive.height, z: primitive.center.z })
-    for (let index = 0; index < primitive.segments; index += 1) edges.push([primitive.segments + index, apex])
+    edges.push([index, (index + 1) % primitive.segments], [index, apex])
   }
   return { vertices, edges }
 }
@@ -491,15 +511,16 @@ export function resolveDihedralMarker3(document: GeometryDocument, measurementId
   return dihedralMarker3(firstPoints, secondPoints, { ...hingeStart.position }, { ...hingeEnd.position })
 }
 
-/** Default cutting plane: horizontal through the source's bounding-box center. Returns null when the source
- * vertices cannot be resolved, so callers never persist a fabricated plane. */
+/** Default cutting plane: the **horizontal** plane (normal +Z, world is Z-up) through the source's
+ * bounding-box centre. Returns null when the source vertices cannot be resolved, so callers never
+ * persist a fabricated plane. */
 export function sectionPlaneThroughSource(document: GeometryDocument, sourceId: string): { normal: Vector3; constant: number } | null {
   const primitiveMap = new Map(document.primitives.map((primitive) => [primitive.id, primitive]))
   const source = primitiveMap.get(sourceId)
   const vertices = source ? sourceVertices(source, primitiveMap) : []
   if (vertices.length === 0) return null
-  const heights = vertices.map((vertex) => vertex.y)
-  return { normal: { x: 0, y: 1, z: 0 }, constant: -(Math.min(...heights) + Math.max(...heights)) / 2 }
+  const heights = vertices.map((vertex) => vertex.z)
+  return { normal: { x: 0, y: 0, z: 1 }, constant: -(Math.min(...heights) + Math.max(...heights)) / 2 }
 }
 
 function recomputeSection(primitive: Extract<PrimitiveSpec, { type: "section" }>, source: PrimitiveSpec, primitiveMap: Map<string, PrimitiveSpec>): Extract<PrimitiveSpec, { type: "section" }> {
@@ -507,14 +528,14 @@ function recomputeSection(primitive: Extract<PrimitiveSpec, { type: "section" }>
   const topology = polyhedron ? polyhedronSectionTopology(polyhedron, primitiveMap) : null
   if (topology) {
     const result = sectionPolyhedron3(topology.vertices, topology.faces, primitive.plane)
-    if (result.status === "none") return { ...primitive, points: [], classification: "none", status: "undefined", visible: false, diagnostic: result.explanation }
-    if (result.status === "insufficient-data") return { ...primitive, points: [], classification: "insufficient-data", status: "failed", visible: false, diagnostic: result.explanation }
-    return { ...primitive, points: result.points, classification: result.status, status: "approximate", visible: result.status !== "point", diagnostic: result.status === "polygon" ? undefined : result.explanation }
+    if (result.status === "none") return { ...primitive, points: [], loops: [], classification: "none", status: "undefined", visible: false, diagnostic: result.explanation }
+    if (result.status === "insufficient-data") return { ...primitive, points: [], loops: [], classification: "insufficient-data", status: "failed", visible: false, diagnostic: result.explanation }
+    return { ...primitive, points: result.points, loops: result.loops, classification: result.status, status: "approximate", visible: result.status !== "point", diagnostic: result.status === "polygon" ? undefined : result.explanation }
   }
-  if (!["cube", "pyramid", "cylinder", "cone"].includes(source.type)) return { ...primitive, points: [], classification: "insufficient-data", status: "failed", visible: false, diagnostic: "截面来源不是可剖切的实体。" }
+  if (!["cube", "pyramid", "cylinder", "cone"].includes(source.type)) return { ...primitive, points: [], loops: [], classification: "insufficient-data", status: "failed", visible: false, diagnostic: "截面来源不是可剖切的实体。" }
   const geometry = solidSectionGeometry(source as Extract<PrimitiveSpec, { type: "cube" | "pyramid" | "cylinder" | "cone" }>)
   const points = orderSectionPoints3(sectionConvexPolyhedron(geometry.vertices, geometry.edges, primitive.plane), primitive.plane)
-  return { ...primitive, points, classification: classifySectionPoints(points), status: points.length > 0 ? "approximate" : "undefined", visible: points.length > 0, diagnostic: points.length >= 3 ? undefined : "剖切平面与模板实体相切或沿棱相交。" }
+  return { ...primitive, points, loops: points.length >= 3 ? [points] : [], classification: classifySectionPoints(points), status: points.length > 0 ? "approximate" : "undefined", visible: points.length > 0, diagnostic: points.length >= 3 ? undefined : "剖切平面与模板实体相切或沿棱相交。" }
 }
 
 /**
@@ -896,6 +917,38 @@ function resolveBoundPoint3(primitive: Extract<PrimitiveSpec, { type: "point3" }
     if (first && second) return { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2, z: (first.z + second.z) / 2 }
   }
   return null
+}
+
+/**
+ * 把一个截面物化成**独立图元**：每一环生成 point3 + edge3 + face3。
+ *
+ * 刻意不写 `sourceId`——物化出来的几何与来源解耦：删掉宿主不影响它们，
+ * 它们也能被移动、求交、测量（这正是"可以获取截面图元"的含义）。
+ * 返回的数组顺序是"点 → 棱 → 面"，调用方用一条 `addPrimitives` 提交即可。
+ */
+export function sectionMaterialization(document: GeometryDocument, sectionId: string): PrimitiveSpec[] | null {
+  const section = document.primitives.find((primitive) => primitive.id === sectionId)
+  if (section?.type !== "section") return null
+  const loops = (section.loops && section.loops.length > 0 ? section.loops : [section.points]).filter((loop) => loop.length >= 3)
+  if (loops.length === 0) return null
+  const label = section.label ?? section.id
+  const stroke = section.style?.stroke ?? "#f97316"
+  const primitives: PrimitiveSpec[] = []
+  loops.forEach((loop, loopIndex) => {
+    const suffix = loops.length > 1 ? ` ${loopIndex + 1}` : ""
+    const pointIds = loop.map((point, pointIndex) => {
+      const id = `${section.id}-p${loopIndex + 1}-${pointIndex + 1}`
+      primitives.push({ id, type: "point3", position: { ...point }, binding: { kind: "free" }, label: `${label} 顶点${suffix}-${pointIndex + 1}`, style: { stroke, fill: stroke } })
+      return id
+    })
+    const edgeIds = loop.map((_, pointIndex) => {
+      const id = `${section.id}-e${loopIndex + 1}-${pointIndex + 1}`
+      primitives.push({ id, type: "edge3", pointIds: [pointIds[pointIndex], pointIds[(pointIndex + 1) % loop.length]], label: `${label} 棱${suffix}-${pointIndex + 1}`, style: { stroke } })
+      return id
+    })
+    primitives.push({ id: `${section.id}-f${loopIndex + 1}`, type: "face3", pointIds, edgeIds, label: `${label} 面${suffix}`, style: { stroke, fill: `${stroke}33` } })
+  })
+  return primitives
 }
 
 function syncTemplateTopology(primitives: PrimitiveSpec[]): void {

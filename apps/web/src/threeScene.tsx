@@ -711,7 +711,9 @@ export function createSectionMesh(primitive: SectionPrimitive): THREE.Object3D |
   // placeholder would make "moved the plane off the solid" look like a real section.
   if (primitive.points.length < 2) return null
   const sectionColor = primitive.style?.stroke ?? "#f97316"
-  if (primitive.points.length === 2) {
+  // 截面的全部闭合环：带孔或分成多块的截面在 `loops` 里保留完整几何，旧文档只有 `points`。
+  const loops = primitive.loops && primitive.loops.length > 0 ? primitive.loops : [primitive.points]
+  if (primitive.points.length === 2 && loops.every((loop) => loop.length < 3)) {
     // A vertex-tangent or edge-coincident cut is a segment, not an area.
     const segment = new THREE.Line(new THREE.BufferGeometry().setFromPoints(primitive.points.map((point) => new THREE.Vector3(point.x, point.y, point.z))), new THREE.LineBasicMaterial({ color: sectionColor }))
     segment.userData.primitiveId = primitive.id
@@ -719,23 +721,37 @@ export function createSectionMesh(primitive: SectionPrimitive): THREE.Object3D |
     segment.userData.visualRole = "section"
     return segment
   }
-  const positions = primitive.points.flatMap((point) => [point.x, point.y, point.z])
-  const indices: number[] = []
-  for (let index = 1; index < primitive.points.length - 1; index += 1) indices.push(0, index, index + 1)
-  const geometry = new THREE.BufferGeometry()
-  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3))
-  geometry.setIndex(indices)
-  geometry.computeVertexNormals()
-  const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: primitive.style?.fill ?? "#f97316", transparent: true, opacity: 0.42, side: THREE.DoubleSide, depthWrite: false }))
-  mesh.userData.primitiveId = primitive.id
-  mesh.userData.primitiveType = primitive.type
-  mesh.userData.visualRole = "section"
-  // Section points are ordered along the boundary, so the closed loop reflects the real cut outline.
-  const boundaryPoints = [...primitive.points, primitive.points[0]].map((point) => new THREE.Vector3(point.x, point.y, point.z))
-  const boundary = new THREE.Line(new THREE.BufferGeometry().setFromPoints(boundaryPoints), new THREE.LineBasicMaterial({ color: sectionColor }))
-  boundary.userData.visualRole = "section-boundary"
-  mesh.add(boundary)
-  return mesh
+  const group = new THREE.Group()
+  group.userData.primitiveId = primitive.id
+  group.userData.primitiveType = primitive.type
+  group.userData.visualRole = "section"
+  group.userData.sectionLoopCount = loops.length
+  loops.forEach((loop, loopIndex) => {
+    if (loop.length < 3) return
+    const positions = loop.flatMap((point) => [point.x, point.y, point.z])
+    const indices: number[] = []
+    for (let index = 1; index < loop.length - 1; index += 1) indices.push(0, index, index + 1)
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3))
+    geometry.setIndex(indices)
+    geometry.computeVertexNormals()
+    // 每一环都有自己的半透明填充；只有外环（面积最大）保留拾取用的 primitiveId，
+    // 这样"点截面"仍然命中一次，而不是每加一环就多一个可拖动对象。
+    const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: primitive.style?.fill ?? "#f97316", transparent: true, opacity: loopIndex === 0 ? 0.42 : 0, side: THREE.DoubleSide, depthWrite: false }))
+    if (loopIndex === 0) {
+      mesh.userData.primitiveId = primitive.id
+      mesh.userData.primitiveType = primitive.type
+    }
+    mesh.userData.visualRole = "section"
+    // Section points are ordered along the boundary, so the closed loop reflects the real cut outline.
+    const boundaryPoints = [...loop, loop[0]].map((point) => new THREE.Vector3(point.x, point.y, point.z))
+    const boundary = new THREE.Line(new THREE.BufferGeometry().setFromPoints(boundaryPoints), new THREE.LineBasicMaterial({ color: sectionColor }))
+    boundary.userData.visualRole = "section-boundary"
+    boundary.userData.sectionLoopIndex = loopIndex
+    mesh.add(boundary)
+    group.add(mesh)
+  })
+  return group.children.length > 0 ? group : null
 }
 
 /** Render a computed unfold layout as one filled mesh plus an outline per face, keeping pick metadata on each face. */
@@ -1734,6 +1750,8 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
         const previewHit = previewHitAt(point)
         const previewInFront = previewHit.depth === null || !hit || previewHit.depth <= hit.depth
         const sectionWins = previewKindRef.current === "section" && previewInFront
+        // 排查读数：这一次点击到底被哪条规则拦下（粗拾取到了什么、预览有没有命中、谁更靠前）。
+        if (sceneShell) sceneShell.dataset.pickReadout = `${hit?.kind ?? "none"}|${hit?.primitiveId ?? "-"}|${precise ? "precise" : "coarse"}|${previewHit.hovering ? "hover" : "off"}|${previewInFront ? "front" : "behind"}`
         if (previewHit.hovering && previewClickRef.current && (!precise || sectionWins)) previewClickRef.current()
         else onSelectRef.current(resolveSelectableHit(hit?.primitiveId ?? null, topologyOwners, event.altKey), event.shiftKey)
       }

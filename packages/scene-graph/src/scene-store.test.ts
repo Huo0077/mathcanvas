@@ -804,7 +804,7 @@ describe("scene graph operations", () => {
     expect(sectionPlaneThroughSource(document, "solid-broken")).toBeNull()
     expect(sectionPlaneThroughSource(document, "absent")).toBeNull()
     const cubePlane = sectionPlaneThroughSource(document, "cube-1")
-    expect(cubePlane?.normal).toEqual({ x: 0, y: 1, z: 0 })
+    expect(cubePlane?.normal).toEqual({ x: 0, y: 0, z: 1 })
     expect(cubePlane?.constant).toBeCloseTo(0)
   })
 
@@ -866,8 +866,16 @@ describe("scene graph operations", () => {
       { id: "pyramid-1", type: "pyramid", baseCenter: { x: 0, y: 0, z: 0 }, baseSize: { x: 4, y: 4 }, height: 4 }
     ]
 
-    expect(sectionPlaneThroughSource(document, "cube-1")).toEqual({ normal: { x: 0, y: 1, z: 0 }, constant: 2 })
-    expect(sectionPlaneThroughSource(document, "pyramid-1")).toEqual({ normal: { x: 0, y: 1, z: 0 }, constant: -2 })
+    // 世界是 Z 轴朝上，所以"水平剖切面"的法向是 +Z、常数取包围盒 z 范围的中点。
+    const cubePlane = sectionPlaneThroughSource(document, "cube-1")!
+    expect(cubePlane.normal).toEqual({ x: 0, y: 0, z: 1 })
+    expect(cubePlane.constant).toBeCloseTo(0, 10)
+
+    // 棱锥：底面在 z = 0、顶点在 z = 4（Z-up），所以默认剖切面是 z = 2 ⇒ constant = -2。
+    // 旧实现用的是 Y-up 的回退几何，算出来的刀口落在实体之外（已修）。
+    const pyramidPlane = sectionPlaneThroughSource(document, "pyramid-1")!
+    expect(pyramidPlane.normal).toEqual({ x: 0, y: 0, z: 1 })
+    expect(pyramidPlane.constant).toBeCloseTo(-2, 10)
   })
 
   it("recomputes an intersection set with every sampled solution", () => {

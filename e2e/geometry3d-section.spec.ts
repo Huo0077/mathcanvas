@@ -47,7 +47,13 @@ test("explains the section preview and creates a section when it is clicked", as
   await expect(scene).toHaveAttribute("data-preview-hovering", "true")
   await expect(prompt).toContainText("默认剖切平面")
   await expect(prompt).toContainText("点击即创建截面")
-  await page.mouse.click(start.x, start.y)
+  /**
+   * 点击前**按当前布局重新投影**：悬停会改状态栏文案，页脚可能因此变高一行，
+   * 而 3D 画布是填满所在网格行的——画布一被压矮，同一个屏幕坐标就不再对应同一个世界点，
+   * 点击就会落到预览之外（实测：pointermove 说 hovering=true，pointerup 却是 off）。
+   */
+  const click = await grabPoint(page)
+  await page.mouse.click(click.x, click.y)
 
   await expect(scene).toHaveAttribute("data-section-count", "1")
   // 立方体边长 2，过中心的水平截面是 4 边形
@@ -96,15 +102,16 @@ test("tilts the cutting plane from the properties panel", async ({ page }) => {
 
   const normal = async () => (await scene.getAttribute("data-section-plane-normal")) ?? ""
   const start = await normal()
-  // 默认剖切面是水平的：法向 (0,1,0)
-  expect(start).toBe("0.000,1.000,0.000")
+  // 默认剖切面是水平的（世界 Z 轴朝上）：法向 (0,0,1)
+  expect(start).toBe("0.000,0.000,1.000")
 
-  // 绕 X 轴倾斜 15°：法向转到 (0, cos15, sin15) 一带，截面必须重新算出来
+  // 绕 X 轴倾斜 15°：法向转到 (0, -sin15, cos15)，截面必须重新算出来
   await page.getByRole("button", { name: "绕 X 轴旋转剖切面 +15°" }).click()
   await expect.poll(normal).not.toBe(start)
   const tilted = (await normal()).split(",").map(Number)
   expect(tilted[0]).toBeCloseTo(0, 3)
-  expect(tilted[1]).toBeLessThan(1)
+  expect(Math.abs(tilted[1])).toBeCloseTo(Math.sin(Math.PI / 12), 3)
+  expect(tilted[2]).toBeCloseTo(Math.cos(Math.PI / 12), 3)
   expect(Math.hypot(tilted[0], tilted[1], tilted[2])).toBeCloseTo(1, 3)
   // 绕实体中心倾斜，所以刀口仍在实体内：截面还有多边形
   await expect.poll(async () => Number(await scene.getAttribute("data-section-point-count"))).toBeGreaterThanOrEqual(3)
@@ -133,12 +140,17 @@ test("uses a face of the solid as the cutting plane", async ({ page }) => {
   await expect(facePick).toBeEnabled()
   await facePick.evaluate((button) => (button as HTMLButtonElement).click())
   await expect(facePick).toHaveAttribute("aria-pressed", "true")
-  const box = (await page.locator("[data-3d-scene] canvas").boundingBox())!
-  await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.45)
+  // 点立方体 +X 那个面的中心（世界点 (2,0,0) 投影到屏幕）：
+  // 默认剖切面法向是 +Z，只有选了**侧面**才能看出"取面"真的换了平面。
+  const face = await projectWorldPoint(page, { x: 2, y: 0, z: 0 })
+  await page.mouse.click(face.x, face.y)
 
-  // 取到面之后剖切面变成该面所在平面：法向不再是水平方向，且截面仍有边界
+  // 取到面之后剖切面变成该面所在平面：法向变成 ±X，且截面仍有边界
   await expect.poll(normal).not.toBe(start)
   const used = (await normal()).split(",").map(Number)
+  expect(Math.abs(used[0])).toBeCloseTo(1, 3)
+  expect(used[1]).toBeCloseTo(0, 3)
+  expect(used[2]).toBeCloseTo(0, 3)
   expect(Math.hypot(used[0], used[1], used[2])).toBeCloseTo(1, 3)
   await expect.poll(async () => Number(await scene.getAttribute("data-section-point-count"))).toBeGreaterThanOrEqual(3)
 })
@@ -156,13 +168,13 @@ test("moves the drawing section when dragged while free dragging is on", async (
   const planeConstant = async () => Number(await scene.getAttribute("data-section-plane-constant"))
   const before = await planeConstant()
 
-  // 横向拖动：默认法向是 +Y，相机的屏幕右向量带 +Y 分量，所以横向拖才会真的推动这个剖切面
-  // （竖直拖动几乎与该法向相切，按设计不应该移动它）。
+  // 竖直拖动：默认法向是 +Z，相机自身的"上"向量带 +Z 分量，所以竖直拖才会真的推动这个剖切面
+  // （横向拖动与 +Z 法向相切，按设计不应该移动它）。
   const start = await grabSectionBody(page)
   await page.mouse.move(start.x, start.y)
   await page.mouse.down()
-  await page.mouse.move(start.x + 40, start.y, { steps: 4 })
-  await page.mouse.move(start.x + 80, start.y, { steps: 4 })
+  await page.mouse.move(start.x, start.y - 40, { steps: 4 })
+  await page.mouse.move(start.x, start.y - 80, { steps: 4 })
   await page.mouse.up()
 
   await expect.poll(planeConstant).not.toBe(before)

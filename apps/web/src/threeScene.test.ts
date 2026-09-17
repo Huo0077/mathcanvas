@@ -478,10 +478,33 @@ describe("Three.js geometry scene", () => {
     }
 
     const object = createSectionMesh(section)
-    const boundary = object?.children.find((child) => child.userData.visualRole === "section-boundary") as THREE.Line | undefined
+    // 截面网格现在是"每一环一个 Group 子项"（带孔/多环截面要求），所以边界要在子树里找。
+    const boundaries: THREE.Object3D[] = []
+    object?.traverse((child) => {
+      if (child.userData.visualRole === "section-boundary") boundaries.push(child)
+    })
+    const boundary = boundaries[0] as THREE.Line | undefined
 
     expect(boundary).toBeTruthy()
     expect((boundary?.geometry.getAttribute("position") as THREE.BufferAttribute).count).toBe(5)
+    // 单环截面只画一圈边界。
+    expect(boundaries).toHaveLength(1)
+
+    // 带孔截面：两环都要画出来，外层填充、内环只画轮廓（不覆盖孔洞）。
+    const holed: SectionPrimitive = {
+      ...section,
+      loops: [
+        [{ x: -2, y: -2, z: 0 }, { x: 2, y: -2, z: 0 }, { x: 2, y: 2, z: 0 }, { x: -2, y: 2, z: 0 }],
+        [{ x: -1, y: -1, z: 0 }, { x: 1, y: -1, z: 0 }, { x: 1, y: 1, z: 0 }, { x: -1, y: 1, z: 0 }]
+      ]
+    }
+    const holedObject = createSectionMesh(holed)
+    const holedBoundaries: THREE.Object3D[] = []
+    holedObject?.traverse((child) => {
+      if (child.userData.visualRole === "section-boundary") holedBoundaries.push(child)
+    })
+    expect(holedBoundaries).toHaveLength(2)
+    expect(holedObject?.userData.sectionLoopCount).toBe(2)
 
     object?.traverse((child) => {
       if (child instanceof THREE.Mesh || child instanceof THREE.Line) child.geometry.dispose()

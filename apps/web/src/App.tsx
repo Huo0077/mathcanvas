@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 
 import { decodeMgeo, encodeMgeo, type AnnotationFeature, type DrawingSheetSpec, type EngineeringAnnotationKind, type Measurement3Metric, type PrimitiveSpec, type Vector3, type Workspace } from "@draw/dsl"
 import { buildSolidTemplate, createMeasurement3, evaluatePlanarMeasurement, selectPrimitivesInBox, type BoxSelectionMode, type PlanarMetric } from "@draw/geometry-kernel"
-import { deletionTargets, sectionPivot, sectionPlaneThroughSource, sectionSourceVertices, validatePatch } from "@draw/scene-graph"
+import { deletionTargets, sectionMaterialization, sectionPivot, sectionPlaneThroughSource, sectionSourceVertices, validatePatch } from "@draw/scene-graph"
 import type { Alignment } from "@draw/scene-graph"
 
 import { AlgebraView } from "./components/AlgebraView"
@@ -529,6 +529,21 @@ export function App() {
     apply({ op: "setSectionPlane", id, normal: plane.normal, constant: plane.constant })
     setGuidance("已用该面作为剖切面：拖动截面或按方向键仍可沿新法向平移。")
   }
+  /**
+   * 把截面物化成独立图元：每一环 → 点 / 棱 / 面，且**不写来源引用**，
+   * 所以物化之后删掉宿主实体也不影响它们（这就是"可以获取截面图元"）。
+   */
+  const materializeSelectedSection = () => {
+    if (selectedPrimitive?.type !== "section") return
+    const primitives = sectionMaterialization(document, selectedPrimitive.id)
+    if (!primitives || primitives.length === 0) {
+      setGuidance("这个截面没有可物化的闭合边界：它只是相切的一点或一段。")
+      return
+    }
+    apply({ op: "addPrimitives", primitives })
+    setSelectedIds(primitives.filter((primitive) => primitive.type === "face3").map((primitive) => primitive.id))
+    setGuidance(`已把截面物化为 ${primitives.length} 个独立图元（点 / 棱 / 面），它们不再随来源变化。`)
+  }
   const createIntersectionFromPreview = (preview: IntersectionPreview) => {
     const first = document.primitives.find((primitive) => primitive.id === preview.objectA)
     const second = document.primitives.find((primitive) => primitive.id === preview.objectB)
@@ -886,7 +901,7 @@ export function App() {
 
   const planarCanvas = <GraphicsView document={document} selectedIds={selectedIds} creationMode={creationMode} onSelect={updateSelection} onBoxSelect={selectBox} onCanvasClick={handleCanvasCreationClick} onCanvasDoubleClick={handleCanvasDoubleClick} onDragEnd={handleDragEnd} onCreateIntersection={createIntersectionFromPreview} onPointerCoordinate={setPointerCoordinate} />
 
-  const propertiesBarProps: PropertiesBarProps = { selectedPrimitive, selectedIds, selectedCount: selectedIds.length, selectedGroupId: selectedGroup?.id ?? null, allSelectedVisible, canCreateIntersection, onCreateGroup: createGroup, onDeleteGroup: deleteGroup, onCreateIntersection: createIntersection, onAlign: alignSelection, onToggleSelectedVisibility: () => selectedId && apply({ op: "toggleVisibility", id: selectedId, visible: selectedPrimitive?.visible === false }), onToggleSelectedLock: () => selectedId && apply({ op: "toggleLock", id: selectedId, locked: !selectedPrimitive?.locked }), onDeleteSelected: deleteSelected, onToggleBatchVisibility: () => apply({ op: "setPrimitivesVisible", ids: selectedIds, visible: !allSelectedVisible }), onUpdatePrimitive: (patch) => selectedId && apply({ op: "updatePrimitive", id: selectedId, patch }), onRotateSection: rotateSelectedSection, onAddAnnotation: addAnnotation, onAddEngineeringAnnotation: addEngineeringAnnotation, onCreateMeasurement: addMeasurement, onDeleteMeasurement: deleteMeasurement, onCreateDerivative: (sourceId) => addFunctionAnalysis(sourceId, "derivative"), onCreateTangent: (sourceId) => addFunctionAnalysis(sourceId, "tangent"), onCreateIntegral: (sourceId) => addFunctionAnalysis(sourceId, "integral"), value: slope?.value ?? 0.5, min: slope?.min ?? 0.15, max: slope?.max ?? 0.85, step: slope?.step ?? 0.05, onChange: (value) => apply({ op: "setParameter", id: "slope", value }) }
+  const propertiesBarProps: PropertiesBarProps = { selectedPrimitive, selectedIds, selectedCount: selectedIds.length, selectedGroupId: selectedGroup?.id ?? null, allSelectedVisible, canCreateIntersection, onCreateGroup: createGroup, onDeleteGroup: deleteGroup, onCreateIntersection: createIntersection, onAlign: alignSelection, onToggleSelectedVisibility: () => selectedId && apply({ op: "toggleVisibility", id: selectedId, visible: selectedPrimitive?.visible === false }), onToggleSelectedLock: () => selectedId && apply({ op: "toggleLock", id: selectedId, locked: !selectedPrimitive?.locked }), onDeleteSelected: deleteSelected, onToggleBatchVisibility: () => apply({ op: "setPrimitivesVisible", ids: selectedIds, visible: !allSelectedVisible }), onUpdatePrimitive: (patch) => selectedId && apply({ op: "updatePrimitive", id: selectedId, patch }), onRotateSection: rotateSelectedSection, onMaterializeSection: materializeSelectedSection, onAddAnnotation: addAnnotation, onAddEngineeringAnnotation: addEngineeringAnnotation, onCreateMeasurement: addMeasurement, onDeleteMeasurement: deleteMeasurement, onCreateDerivative: (sourceId) => addFunctionAnalysis(sourceId, "derivative"), onCreateTangent: (sourceId) => addFunctionAnalysis(sourceId, "tangent"), onCreateIntegral: (sourceId) => addFunctionAnalysis(sourceId, "integral"), value: slope?.value ?? 0.5, min: slope?.min ?? 0.15, max: slope?.max ?? 0.85, step: slope?.step ?? 0.05, onChange: (value) => apply({ op: "setParameter", id: "slope", value }) }
 
   const propertiesPanel = <PropertiesBar {...propertiesBarProps} />
 

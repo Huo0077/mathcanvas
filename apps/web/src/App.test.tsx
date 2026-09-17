@@ -1443,7 +1443,36 @@ describe("MathCanvas workbench", () => {
     const section = useSceneStore.getState().document.primitives.find((primitive) => primitive.type === "section")
     expect(section).toMatchObject({ classification: "polygon", status: "approximate", visible: true })
     const points = section?.type === "section" ? section.points : []
-    expect(new Set(points.map((point) => `${point.x},${point.y},${point.z}`))).toEqual(new Set(["-2,0,-1", "2,0,-1", "2,0,1", "-2,0,1"]))
+    // 默认剖切面是过中心的水平面（世界 Z 轴朝上）：立方体原点 (-2,-2,-1)、尺寸 4×4×2 ⇒ 切在 z = 0。
+    expect(new Set(points.map((point) => `${point.x},${point.y},${point.z}`))).toEqual(new Set(["-2,-2,0", "2,-2,0", "2,2,0", "-2,2,0"]))
+    // 单一连通截面只有一环。
+    expect(section?.type === "section" ? section.loops : []).toHaveLength(1)
+  })
+
+  it("materializes a section into independent primitives", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加立方体" }))
+    fireEvent.click(algebraRow("立方体 1 拓扑"))
+    fireEvent.click(screen.getByRole("button", { name: "创建截面" }))
+
+    fireEvent.click(screen.getByRole("button", { name: "转为图元" }))
+
+    // 只统计物化出来的那些（模板立方体自己就带 6 个 face3，不能按类型总数断言）。
+    const isMaterialized = (primitive: { id: string }) => primitive.id.startsWith("section-1-")
+    const materialized = useSceneStore.getState().document.primitives.filter(isMaterialized)
+    expect(materialized.filter((primitive) => primitive.type === "face3")).toHaveLength(1)
+    expect(materialized.filter((primitive) => primitive.type === "edge3")).toHaveLength(4)
+    expect(materialized.filter((primitive) => primitive.type === "point3")).toHaveLength(4)
+
+    // 与来源解耦：删掉截面之后物化出来的几何仍然在。
+    fireEvent.click(algebraRow("截面 1"))
+    fireEvent.keyDown(window, { key: "Delete" })
+    const after = useSceneStore.getState().document.primitives
+    expect(after.some((primitive) => primitive.type === "section")).toBe(false)
+    const kept = after.filter(isMaterialized)
+    expect(kept.filter((primitive) => primitive.type === "face3")).toHaveLength(1)
+    expect(kept.filter((primitive) => primitive.type === "edge3")).toHaveLength(4)
   })
 
   it("keeps a point-driven 3D document while switching workspaces", () => {

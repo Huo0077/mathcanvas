@@ -390,7 +390,13 @@ export interface SectionPrimitive extends PrimitivePresentation {
   type: "section"
   sourceId: string
   plane: { normal: Vector3; constant: number }
+  /** 周长最大的一环（外轮廓）。 */
   points: Vector3[]
+  /**
+   * 全部闭合环，按面积降序。带孔或分成多块的截面靠它保留完整几何；
+   * 旧文档没有这个字段时按 `[points]` 处理。
+   */
+  loops?: Vector3[][]
   classification: Section3Classification
   status: "approximate" | "undefined" | "failed"
   diagnostic?: string

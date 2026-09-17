@@ -202,8 +202,8 @@ describe("section plane", () => {
   it("starts as the horizontal plane through the solid's middle", () => {
     const document = withSection()
 
-    // The cube spans y = -1..1, so the default cut sits at y = 0 and the section is a square.
-    expect(sectionOf(document).plane).toEqual({ normal: { x: 0, y: 1, z: 0 }, constant: -0 })
+    // 世界是 Z 轴朝上：默认剖切面是过实体中心的**水平面**（法向 +Z），立方体 y 跨度 -1..1、z 跨度 -1..1。
+    expect(sectionOf(document).plane).toEqual({ normal: { x: 0, y: 0, z: 1 }, constant: -0 })
     expect(sectionOf(document).classification).toBe("polygon")
     expect(sectionOf(document).points).toHaveLength(4)
   })
@@ -217,7 +217,7 @@ describe("section plane", () => {
     expect(moved.changed).toBe(true)
     expect(sectionPlaneOffset(sectionOf(moved.document).plane) - before).toBeCloseTo(0.5, 10)
     // Same square, shifted up: every section point must carry the new height, not the old one.
-    for (const point of sectionOf(moved.document).points) expect(point.y).toBeCloseTo(0.5, 6)
+    for (const point of sectionOf(moved.document).points) expect(point.z).toBeCloseTo(0.5, 6)
   })
 
   it("shows a smaller section as the plane approaches a face, and hides it once it is past the solid", () => {
@@ -293,14 +293,16 @@ describe("section plane", () => {
 
     const after = sectionOf(turned.document)
     // The orientation is exactly what was asked for, and the plane still passes through the pivot.
+    // 默认法向是 +Z，绕 X 轴转 90° 之后变成 ±Y —— 也就是从水平剖切面变成竖直剖切面。
     expect(after.plane.normal.x).toBeCloseTo(0, 10)
-    expect(after.plane.normal.y).toBeCloseTo(0, 10)
-    expect(Math.abs(after.plane.normal.z)).toBeCloseTo(1, 10)
+    expect(Math.abs(after.plane.normal.y)).toBeCloseTo(1, 10)
+    expect(after.plane.normal.z).toBeCloseTo(0, 10)
     expect(sectionDistanceToPlane(after.plane, { x: 0, y: 0, z: 0 })).toBeCloseTo(0, 10)
-    // KNOWN LIMITATION: a cut whose normal lands exactly on a coordinate axis comes back unresolved from
-    // `chainSectionLoops` (same plane written by hand behaves identically, so this is not the rotation).
-    // Every non-axis-aligned tilt resolves, which is what the UI's 15° steps avoid hitting.
-    expect(after.status === "approximate" || after.status === "failed").toBe(true)
+    // 轴对齐法向曾经在这里解析失败：旋转出来的法向带 ~1e-17 的残差，同一个交点在不同面上算出的
+    // 坐标差几个 ulp，固定小数位的键分不开它们，于是"连不成闭合边界"。点键改成按模型尺度量化后
+    // 轴对齐也能正常成环——这条断言就是那个悬崖的回归。
+    expect(after.status).toBe("approximate")
+    expect(after.points).toHaveLength(4)
   })
 
   it("derives a pivot at the centre of a point set", () => {
