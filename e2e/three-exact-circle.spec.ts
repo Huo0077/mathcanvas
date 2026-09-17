@@ -25,6 +25,12 @@ test("draws a section of a cylinder as an exact circle that gains detail when zo
   await expect(scene).toHaveAttribute("data-section-exact-status", "exact")
   await expect(scene).toHaveAttribute("data-exact-curves", "1")
 
+  // 检查器把解析结论摊开给用户看：半径与离心率（圆就是离心率 0），不是只能数折线点数。
+  const inspector = page.locator(".panel.right")
+  await expect(inspector).toContainText("解析截面")
+  await expect(inspector).toContainText("半径")
+  await expect(inspector).toContainText("离心率")
+
   const segments = async () => Number(await scene.getAttribute("data-exact-curve-segments"))
   const initial = await segments()
   expect(initial).toBeGreaterThan(8)
