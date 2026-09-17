@@ -269,6 +269,8 @@ function primitiveDependencies(primitive: PrimitiveSpec): string[] {
   if (primitive.type === "intersectionSet") dependencies.push(primitive.objectA, primitive.objectB)
   if (primitive.type === "intersectionLine") dependencies.push(...primitive.sourceIds)
   if (primitive.type === "intersectionSolid") dependencies.push(...primitive.sourceIds)
+  if (primitive.type === "intersectionFace") dependencies.push(...primitive.sourceIds)
+  if (primitive.type === "intersectionPoint3") dependencies.push(...primitive.sourceIds)
   if (primitive.type === "derivative" || primitive.type === "tangent" || primitive.type === "normal" || primitive.type === "secant" || primitive.type === "integral" || primitive.type === "analysisSet" || primitive.type === "section") dependencies.push(primitive.sourceId)
   return [...new Set(dependencies)]
 }
@@ -619,21 +621,11 @@ function recomputeIntersectionSolid(
   primitive: Extract<PrimitiveSpec, { type: "intersectionSolid" }>,
   primitiveMap: Map<string, PrimitiveSpec>
 ): Extract<PrimitiveSpec, { type: "intersectionSolid" }> {
-  const sources = primitive.sourceIds.map((id) => primitiveMap.get(id))
-  if (sources.some((source) => !source)) {
-    return { ...primitive, vertices: [], faces: [], volume: 0, area: 0, status: "insufficient-data", visible: false, diagnostic: "交面来源对象不存在。" }
-  }
-  const topologies = sources.map((source) => solidTopology3(source!, primitiveMap))
-  if (topologies.some((topology) => !topology)) {
-    return { ...primitive, vertices: [], faces: [], volume: 0, area: 0, status: "insufficient-data", visible: false, diagnostic: "交面来源必须是实体（立方体 / 棱锥 / 圆柱 / 圆锥 / 多面体），面与平面没有体积。" }
-  }
-  const result = intersectConvexPolyhedra3(topologies[0]!, topologies[1]!)
-  if (result.status === "insufficient-data") {
-    return { ...primitive, vertices: [], faces: [], volume: 0, area: 0, status: "insufficient-data", visible: false, diagnostic: [result.explanation, ...result.diagnostics].filter(Boolean).join(" ") }
-  }
-  if (result.status === "none") {
-    return { ...primitive, vertices: [], faces: [], volume: 0, area: 0, status: "none", visible: false, diagnostic: result.explanation }
-  }
+  const outcome = resolveSolidIntersection(primitive.sourceIds.map((id) => primitiveMap.get(id)), primitiveMap)
+  const empty = { vertices: [], faces: [], volume: 0, area: 0 }
+  if (!outcome.ok) return { ...primitive, ...empty, status: "insufficient-data", visible: false, diagnostic: explainOutcome(outcome) }
+  const { result } = outcome
+  if (result.status === "none") return { ...primitive, ...empty, status: "none", visible: false, diagnostic: result.explanation }
   // 贴面（flat）有面积、看得见；贴线 / 贴点只是一条线或一个点，交给交线图元更合适。
   const visible = result.status === "polyhedron" || result.status === "flat"
   return {
@@ -647,6 +639,134 @@ function recomputeIntersectionSolid(
     diagnostic: result.diagnostics.length > 0 ? [result.explanation, ...result.diagnostics].join(" ") : undefined
   }
 }
+
+/** 两个来源的布尔交集：来源缺失 / 不是实体 / 内核拒绝非凸时给出诊断，而不是硬算。 */
+type SolidIntersectionOutcome =
+  | { ok: true; result: ReturnType<typeof intersectConvexPolyhedra3> }
+  | { ok: false; explanation: string; diagnostics: string[] }
+
+function resolveSolidIntersection(sources: (PrimitiveSpec | undefined)[], primitiveMap: Map<string, PrimitiveSpec>): SolidIntersectionOutcome {
+  if (sources.some((source) => !source)) return { ok: false, explanation: "来源对象不存在。", diagnostics: [] }
+  const topologies = sources.map((source) => solidTopology3(source!, primitiveMap))
+  if (topologies.some((topology) => !topology)) return { ok: false, explanation: "来源必须是实体（立方体 / 棱锥 / 圆柱 / 圆锥 / 多面体）：面与平面没有体积。", diagnostics: [] }
+  const result = intersectConvexPolyhedra3(topologies[0]!, topologies[1]!)
+  if (result.status === "insufficient-data") return { ok: false, explanation: result.explanation, diagnostics: result.diagnostics }
+  return { ok: true, result }
+}
+
+function explainOutcome(outcome: Extract<SolidIntersectionOutcome, { ok: false }>): string {
+  return [outcome.explanation, ...outcome.diagnostics].filter(Boolean).join(" ")
+}
+
+/**
+ * 交面图元 = 布尔交集的**一个平面面片**（用户口径："我需要的交面只是一个表面，而不是所有相交的表面"）。
+ *
+ * 交集的每一个面在画布上分开显示、分开可点，点哪块就建哪一块；这里按"离 `hint` 最近的形心"认领那一面，
+ * 所以来源一动，它跟着变但不会跳到对面去（面序变了也不会张冠李戴）。法向与上一面同向时会打破平局。
+ */
+function recomputeIntersectionFace(
+  primitive: Extract<PrimitiveSpec, { type: "intersectionFace" }>,
+  primitiveMap: Map<string, PrimitiveSpec>
+): Extract<PrimitiveSpec, { type: "intersectionFace" }> {
+  const outcome = resolveSolidIntersection(primitive.sourceIds.map((id) => primitiveMap.get(id)), primitiveMap)
+  const empty = { points: [], normal: { x: 0, y: 0, z: 0 }, area: 0 }
+  if (!outcome.ok) return { ...primitive, ...empty, status: "insufficient-data", visible: false, diagnostic: explainOutcome(outcome) }
+  const { result } = outcome
+  if (result.status === "none" || result.faces.length === 0) {
+    return { ...primitive, ...empty, status: "none", visible: false, diagnostic: result.explanation || "两个实体没有重叠区域。" }
+  }
+  let best: { points: Vector3[]; normal: Vector3; area: number; centroid: Vector3; distance: number; alignment: number } | null = null
+  result.faces.forEach((face, index) => {
+    const points = face.map((vertexIndex) => ({ ...result.vertices[vertexIndex] }))
+    if (points.length < 3) return
+    const centroid = centroidOfPoints(points)
+    // 法向与面积由内核给出（与 `faces` 一一对应）：这里不再自己写一份 Newell 法向。
+    const normal = result.faceNormals[index] ?? { x: 0, y: 0, z: 0 }
+    const area = result.faceAreas[index] ?? 0
+    const distance = distanceBetween(centroid, primitive.hint)
+    const alignment = dotBetween(normal, primitive.normal)
+    if (!best) { best = { points, normal, area, centroid, distance, alignment }; return }
+    // 主序是距离（"上一次那一面还是同一面"），只有距离在容差内打平时才用法向取向打破平局。
+    const tolerance = Math.max(extentOf(result.vertices) * 1e-9, 1e-12)
+    if (distance < best.distance - tolerance || (Math.abs(distance - best.distance) <= tolerance && alignment > best.alignment)) {
+      best = { points, normal, area, centroid, distance, alignment }
+    }
+  })
+  if (!best) return { ...primitive, ...empty, status: "none", visible: false, diagnostic: "交集没有可用的面。" }
+  const claimed = best as { points: Vector3[]; normal: Vector3; area: number; centroid: Vector3 }
+  return { ...primitive, points: claimed.points, normal: claimed.normal, area: claimed.area, hint: { ...claimed.centroid }, status: "valid", visible: true, diagnostic: undefined }
+}
+
+/**
+ * 交点图元 = 交线的一个端点 / 拐点。
+ *
+ * 不用布尔交集的顶点：完全包含时两个表面并不相交、交集却有顶点——那不是"交点"。这里取的是
+ * **公共边界线段的端点**（去重后），所以"有没有交点"与"有没有交线"永远一致；同样按 `hint` 最近认领。
+ */
+function recomputeIntersectionPoint3(
+  primitive: Extract<PrimitiveSpec, { type: "intersectionPoint3" }>,
+  primitiveMap: Map<string, PrimitiveSpec>
+): Extract<PrimitiveSpec, { type: "intersectionPoint3" }> {
+  const sources = primitive.sourceIds.map((id) => primitiveMap.get(id))
+  if (sources.some((source) => !source)) {
+    return { ...primitive, status: "insufficient-data", visible: false, diagnostic: "交点来源对象不存在。" }
+  }
+  const rings = sources.map((source) => intersectionFaceRings(source!, primitiveMap))
+  if (rings.some((ring) => !ring)) {
+    return { ...primitive, status: "insufficient-data", visible: false, diagnostic: "交点来源缺少可用的面环（平面没有边界，模板需要已物化的拓扑）。" }
+  }
+  const result = intersectFaceSets(rings[0]!, rings[1]!)
+  if (result.classification === "insufficient-data") {
+    return { ...primitive, status: "insufficient-data", visible: false, diagnostic: result.explanation }
+  }
+  const corners = dedupePoints3(result.segments.flatMap((segment) => [segment.a, segment.b]))
+  if (corners.length === 0) {
+    const detail = [result.explanation, ...result.diagnostics].filter(Boolean).join(" ")
+    return { ...primitive, status: "none", visible: false, diagnostic: `没有交点：两个表面不相交。${detail}`.trim() }
+  }
+  let nearest = corners[0]
+  let nearestDistance = distanceBetween(nearest, primitive.hint)
+  for (const corner of corners.slice(1)) {
+    const distance = distanceBetween(corner, primitive.hint)
+    if (distance < nearestDistance) { nearest = corner; nearestDistance = distance }
+  }
+  return { ...primitive, position: { ...nearest }, hint: { ...nearest }, status: "valid", visible: true, diagnostic: undefined }
+}
+
+/** 去重（按模型尺度量化）：交线端点会被相邻线段各报一次。 */
+function dedupePoints3(points: Vector3[]): Vector3[] {
+  const quantum = Math.max(extentOf(points) * 1e-9, 1e-12)
+  const seen = new Set<string>()
+  const unique: Vector3[] = []
+  for (const point of points) {
+    const key = `${Math.round(point.x / quantum)},${Math.round(point.y / quantum)},${Math.round(point.z / quantum)}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    unique.push({ ...point })
+  }
+  return unique
+}
+
+function centroidOfPoints(points: Vector3[]): Vector3 {
+  const count = Math.max(points.length, 1)
+  return points.reduce((sum, point) => ({ x: sum.x + point.x / count, y: sum.y + point.y / count, z: sum.z + point.z / count }), { x: 0, y: 0, z: 0 })
+}
+
+function extentOf(points: Vector3[]): number {
+  let extent = 0
+  for (const point of points) extent = Math.max(extent, Math.abs(point.x), Math.abs(point.y), Math.abs(point.z))
+  return Math.max(extent, 1)
+}
+
+function distanceBetween(first: Vector3, second: Vector3): number {
+  return Math.hypot(first.x - second.x, first.y - second.y, first.z - second.z)
+}
+
+function dotBetween(first: Vector3, second: Vector3): number {
+  return first.x * second.x + first.y * second.y + first.z * second.z
+}
+
+/** 平面的 Newell 法向与面积由内核随交集一起给出（`faceNormals` / `faceAreas`），这里不再复刻。 */
 
 /** 实体的索引化拓扑（顶点数组 + 面环下标）；非实体或拓扑未物化时返回 null。 */
 export function solidTopology3(source: PrimitiveSpec, primitiveMap: Map<string, PrimitiveSpec>): { vertices: Vector3[]; faces: number[][] } | null {
@@ -1155,6 +1275,8 @@ const recomputePrimitive = (primitive: PrimitiveSpec): PrimitiveSpec | undefined
     }
     if (primitive.type === "intersectionLine") return recomputeIntersectionLine(primitive, primitiveMap)
     if (primitive.type === "intersectionSolid") return recomputeIntersectionSolid(primitive, primitiveMap)
+    if (primitive.type === "intersectionFace") return recomputeIntersectionFace(primitive, primitiveMap)
+    if (primitive.type === "intersectionPoint3") return recomputeIntersectionPoint3(primitive, primitiveMap)
     if (primitive.type === "line") return lines.get(primitive.id)
     if (primitive.type === "intersectionSet") {
       const first = sampledSource(primitive.objectA, primitiveMap)
@@ -1289,6 +1411,8 @@ function cascadeSources(primitive: PrimitiveSpec): string[] {
   if (primitive.type === "section") return [primitive.sourceId]
   if (primitive.type === "intersectionLine") return primitive.sourceIds
   if (primitive.type === "intersectionSolid") return primitive.sourceIds
+  if (primitive.type === "intersectionFace") return primitive.sourceIds
+  if (primitive.type === "intersectionPoint3") return primitive.sourceIds
   const analysisSource = functionAnalysisSourceId(primitive)
   return analysisSource === null ? [] : [analysisSource]
 }

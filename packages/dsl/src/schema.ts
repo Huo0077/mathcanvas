@@ -1,7 +1,7 @@
 import type { GeometryDocument, PrimitiveSpec, ValidationResult } from "./types"
 
 const workspaces = new Set(["calculus", "conics", "cad", "geometry3d"])
-const primitiveTypes = new Set(["point", "point3", "line", "line3", "segment", "segment3", "ray", "ray3", "polyline", "connection", "locus", "parabola", "ellipse", "hyperbola", "function", "derivative", "tangent", "normal", "secant", "integral", "analysisSet", "cube", "pyramid", "cylinder", "cone", "plane3", "circle3", "edge3", "face3", "polyhedron3", "section", "intersectionLine", "intersectionSolid", "circle", "arc", "intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection", "intersectionSet"])
+const primitiveTypes = new Set(["point", "point3", "line", "line3", "segment", "segment3", "ray", "ray3", "polyline", "connection", "locus", "parabola", "ellipse", "hyperbola", "function", "derivative", "tangent", "normal", "secant", "integral", "analysisSet", "cube", "pyramid", "cylinder", "cone", "plane3", "circle3", "edge3", "face3", "polyhedron3", "section", "intersectionLine", "intersectionSolid", "intersectionFace", "intersectionPoint3", "circle", "arc", "intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection", "intersectionSet"])
 const sampledTypes = new Set(["line", "segment", "ray", "polyline", "circle", "arc", "parabola", "ellipse", "hyperbola", "function"])
 const solidTypes = new Set(["cube", "pyramid", "cylinder", "cone", "polyhedron3"])
 const annotationFeatures = new Set(["point", "center", "focus", "vertex", "intersection", "start", "end"])
@@ -417,6 +417,24 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>, parameter
     if (!isFiniteNumber(value.area) || value.area < 0) errors.push("intersectionSolid area is invalid")
     if (!["polyhedron", "flat", "point", "segment", "none", "insufficient-data"].includes(String(value.status))) errors.push("intersectionSolid status is invalid")
     if (value.diagnostic !== undefined && typeof value.diagnostic !== "string") errors.push("intersectionSolid diagnostic is invalid")
+  }
+  if (type === "intersectionFace" || type === "intersectionPoint3") {
+    const sources = value.sourceIds
+    const kindLabel = type === "intersectionFace" ? "intersectionFace" : "intersectionPoint3"
+    if (!Array.isArray(sources) || sources.length !== 2 || sources.some((id) => typeof id !== "string")) errors.push(`${kindLabel} needs exactly two source ids`)
+    else if (sources[0] === sources[1]) errors.push(`${kindLabel} sources must differ`)
+    else if (sources.some((id) => !byId.has(id as string))) errors.push(`${kindLabel} references a missing source`)
+    // 交面是**布尔交集的一个面**：只有实体才有面可言；交点是交线的端点，面 / 平面也能给（平面没有边界，重算时会报诊断）。
+    else if (type === "intersectionFace" && !sources.every((id) => solidTypes.has(referenceType(byId, id as string) ?? ""))) errors.push("intersectionFace sources must be solids")
+    else if (type === "intersectionPoint3" && !sources.every((id) => solidTypes.has(referenceType(byId, id as string) ?? "") || ["face3", "plane3"].includes(referenceType(byId, id as string) ?? ""))) errors.push("intersectionPoint3 sources must be solids, faces or planes")
+    if (!isFiniteCoordinate3(value.hint)) errors.push(`${kindLabel} hint is invalid`)
+    if (!["valid", "none", "insufficient-data"].includes(String(value.status))) errors.push(`${kindLabel} status is invalid`)
+    if (value.diagnostic !== undefined && typeof value.diagnostic !== "string") errors.push(`${kindLabel} diagnostic is invalid`)
+    if (type === "intersectionFace") {
+      if (!Array.isArray(value.points) || value.points.some((point) => !isFiniteCoordinate3(point))) errors.push("intersectionFace points are invalid")
+      if (!isFiniteCoordinate3(value.normal)) errors.push("intersectionFace normal is invalid")
+      if (!isFiniteNumber(value.area) || value.area < 0) errors.push("intersectionFace area is invalid")
+    } else if (!isFiniteCoordinate3(value.position)) errors.push("intersectionPoint3 position is invalid")
   }
   if (type === "circle" || type === "arc") {
     if (!isFiniteCoordinate(value.center) || !isFiniteNumber(value.radius) || value.radius <= 0) errors.push(`${type} geometry is invalid`)

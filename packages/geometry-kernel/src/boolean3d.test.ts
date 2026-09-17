@@ -65,6 +65,33 @@ describe("intersectConvexPolyhedra3", () => {
     expect(result.vertices).toHaveLength(8)
   })
 
+  it("reports each face's own normal and area, so callers never re-derive them", () => {
+    // 交面图元要的是**一个面**：它得知道"这一面多大、朝哪边"。
+    // 这份读数由内核给出（与 `faces` 一一对应），避免调用方各写一份 Newell 法向与面积。
+    const result = intersectConvexPolyhedra3(cube({ x: 0, y: 0, z: 0 }, 2), cube({ x: 1, y: 0, z: 0 }, 2))
+
+    expect(result.status).toBe("polyhedron")
+    expect(result.faceAreas).toHaveLength(result.faces.length)
+    expect(result.faceNormals).toHaveLength(result.faces.length)
+    // 交叠区间是 1×2×2：两个 2×2 的切口面（4）与四个 1×2 的侧面（2）。
+    expect([...result.faceAreas].sort((first, second) => first - second)).toEqual([2, 2, 2, 2, 4, 4])
+    expect(result.faceAreas.reduce((total, area) => total + area, 0)).toBeCloseTo(result.area, 9)
+    // 法向是**朝外**的单位向量：每个面都与它自己的顶点环同向（点积为正）。
+    expect(result.faceNormals.every((normal) => Math.abs(Math.hypot(normal.x, normal.y, normal.z) - 1) < 1e-9)).toBe(true)
+    const centre = result.vertices.reduce((sum, vertex) => ({ x: sum.x + vertex.x / result.vertices.length, y: sum.y + vertex.y / result.vertices.length, z: sum.z + vertex.z / result.vertices.length }), { x: 0, y: 0, z: 0 })
+    result.faces.forEach((face, index) => {
+      const centroid = face.reduce((sum, vertexIndex) => {
+        const vertex = result.vertices[vertexIndex]
+        return { x: sum.x + vertex.x / face.length, y: sum.y + vertex.y / face.length, z: sum.z + vertex.z / face.length }
+      }, { x: 0, y: 0, z: 0 })
+      const outward = { x: centroid.x - centre.x, y: centroid.y - centre.y, z: centroid.z - centre.z }
+      const normal = result.faceNormals[index]
+      expect(normal.x * outward.x + normal.y * outward.y + normal.z * outward.z).toBeGreaterThan(0)
+    })
+    // 没有交集 / 退化输入时这两个数组是空的，调用方不必特判 undefined。
+    expect(intersectConvexPolyhedra3(cube({ x: 0, y: 0, z: 0 }, 1), cube({ x: 5, y: 0, z: 0 }, 1)).faceAreas).toEqual([])
+  })
+
   it("returns every intersection vertex inside both solids", () => {
     const first = cube({ x: 0, y: 0, z: 0 }, 2)
     const second = cube({ x: 1, y: 0.5, z: 0.5 }, 2)

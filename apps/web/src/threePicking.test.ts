@@ -15,25 +15,47 @@ import { previewBeatsPick } from "./threePicking"
  */
 const tolerance = 0.1
 
+const decision = (overrides: Partial<Parameters<typeof previewBeatsPick>[0]> = {}): Parameters<typeof previewBeatsPick>[0] => ({
+  previewKind: "face",
+  previewInFront: true,
+  hitKind: null,
+  hitDistanceToRay: Number.POSITIVE_INFINITY,
+  tolerance,
+  ...overrides
+})
+
 describe("预览与几何拾取的取舍", () => {
   it("lets the preview win over a surface, and when nothing else was hit", () => {
-    expect(previewBeatsPick({ hitKind: "face", hitDistanceToRay: 0, tolerance, sectionInFront: false })).toBe(true)
-    expect(previewBeatsPick({ hitKind: "solid", hitDistanceToRay: 0, tolerance, sectionInFront: false })).toBe(true)
-    expect(previewBeatsPick({ hitKind: null, hitDistanceToRay: Number.POSITIVE_INFINITY, tolerance, sectionInFront: false })).toBe(true)
+    expect(previewBeatsPick(decision({ hitKind: "face", hitDistanceToRay: 0 }))).toBe(true)
+    expect(previewBeatsPick(decision({ hitKind: "solid", hitDistanceToRay: 0 }))).toBe(true)
+    expect(previewBeatsPick(decision())).toBe(true)
   })
 
   it("keeps vertex handles first, because they are the thing the user drags", () => {
-    expect(previewBeatsPick({ hitKind: "point", hitDistanceToRay: 0, tolerance, sectionInFront: false })).toBe(false)
+    expect(previewBeatsPick(decision({ hitKind: "point", hitDistanceToRay: 0, previewKind: "intersection" }))).toBe(false)
+    expect(previewBeatsPick(decision({ hitKind: "point", hitDistanceToRay: 0, previewKind: "face" }))).toBe(false)
     // 截面预览是例外：它的边界落在实体内部，不抢就永远点不到（既有行为）。
-    expect(previewBeatsPick({ hitKind: "point", hitDistanceToRay: 0, tolerance, sectionInFront: true })).toBe(true)
+    expect(previewBeatsPick(decision({ hitKind: "point", hitDistanceToRay: 0, previewKind: "section" }))).toBe(true)
   })
 
-  it("lets an edge win only when the pointer is really on it", () => {
-    // 指针正压在棱上：用户要的是这条棱。
-    expect(previewBeatsPick({ hitKind: "edge", hitDistanceToRay: 0, tolerance, sectionInFront: false })).toBe(false)
-    expect(previewBeatsPick({ hitKind: "edge", hitDistanceToRay: tolerance * 0.1, tolerance, sectionInFront: false })).toBe(false)
+  it("lets a 交点 marker win over the handle it is drawn on top of", () => {
+    /**
+     * 交线的拐点常常就是来源实体的顶点：交点标记与顶点手柄**共心**，
+     * 此时指针在两者之上，用户点的是画出来的那个交点（否则"点交点建交点图元"永远做不到）。
+     */
+    expect(previewBeatsPick(decision({ hitKind: "point", hitDistanceToRay: 0, previewKind: "point" }))).toBe(true)
+    // 但标记明显在更靠后的位置时，用户点的是前面那个手柄。
+    expect(previewBeatsPick(decision({ hitKind: "point", hitDistanceToRay: 0, previewKind: "point", previewInFront: false }))).toBe(false)
+  })
+
+  it("decides edges by depth: a 交线 drawn on the edge wins, a nearer edge does not", () => {
+    // 交线的命中带就画在那条棱上（两个立方体的公共边界落在来源的棱上）→ 预览赢。
+    expect(previewBeatsPick(decision({ hitKind: "edge", hitDistanceToRay: 0, previewKind: "intersection" }))).toBe(true)
+    // 棱明显在预览前面且指针确实压在它上面 → 用户要的是那条棱。
+    expect(previewBeatsPick(decision({ hitKind: "edge", hitDistanceToRay: 0, previewInFront: false }))).toBe(false)
+    expect(previewBeatsPick(decision({ hitKind: "edge", hitDistanceToRay: tolerance * 0.1, previewInFront: false }))).toBe(false)
     // 只是"在容差内擦过"（实测：点交面正中，射线与一条棱相距约 0.6 个容差）：预览赢。
-    expect(previewBeatsPick({ hitKind: "edge", hitDistanceToRay: tolerance * 0.6, tolerance, sectionInFront: false })).toBe(true)
-    expect(previewBeatsPick({ hitKind: "line", hitDistanceToRay: tolerance, tolerance, sectionInFront: false })).toBe(true)
+    expect(previewBeatsPick(decision({ hitKind: "edge", hitDistanceToRay: tolerance * 0.6, previewInFront: false }))).toBe(true)
+    expect(previewBeatsPick(decision({ hitKind: "line", hitDistanceToRay: tolerance, previewInFront: false }))).toBe(true)
   })
 })

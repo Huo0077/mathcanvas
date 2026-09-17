@@ -453,6 +453,46 @@ export interface IntersectionSolidPrimitive extends PrimitivePresentation {
   diagnostic?: string
 }
 
+/**
+ * 两个实体公共区域上的**一个平面面片** —— 也就是"交面"。
+ *
+ * 为什么是"一个面"而不是整个交集表面：用户要的是**一个表面**（"我需要的交面只是一个表面，
+ * 而不是所有相交的表面"）。布尔交集是一只封闭多面体（两个交叠立方体就是 6 个面），
+ * 教学上要讲的是"公共部分的这一面在这里"；所以画布上把每一面分开显示、分开可点，
+ * 点哪块就建哪一块。
+ *
+ * `hint` 是"这一面在上一次算出来时的形心"：来源一动，面的顺序可能变，按**离它最近的形心**
+ * 重新认领同一个面，而不是按下标硬套（与平面画布多解交点的 `hint` 同一套思路）。
+ */
+export interface IntersectionFacePrimitive extends PrimitivePresentation {
+  id: string
+  type: "intersectionFace"
+  sourceIds: [string, string]
+  /** 这一面的有序顶点环（首尾不重复），由来源重算写入。 */
+  points: Vector3[]
+  /** 面的法向（朝交集外部）与面积，用于读数与渲染。 */
+  normal: Vector3
+  area: number
+  hint: Vector3
+  status: "valid" | "none" | "insufficient-data"
+  diagnostic?: string
+}
+
+/**
+ * 两个对象相交处的**一个交点**：交线的端点 / 拐点（曲面相交处那些"转弯"的地方）。
+ *
+ * 完全包含的两个实体表面并不相交，所以那时**没有交点**（交线也没有）——这是数学事实，不是缺省。
+ */
+export interface IntersectionPoint3Primitive extends PrimitivePresentation {
+  id: string
+  type: "intersectionPoint3"
+  sourceIds: [string, string]
+  position: Vector3
+  hint: Vector3
+  status: "valid" | "none" | "insufficient-data"
+  diagnostic?: string
+}
+
 export interface CirclePrimitive extends PrimitivePresentation {
   id: string
   type: "circle"
@@ -559,6 +599,8 @@ export type PrimitiveSpec =
   | SectionPrimitive
   | IntersectionLinePrimitive
   | IntersectionSolidPrimitive
+  | IntersectionFacePrimitive
+  | IntersectionPoint3Primitive
   | CirclePrimitive
   | ArcPrimitive
   | IntersectionPrimitive

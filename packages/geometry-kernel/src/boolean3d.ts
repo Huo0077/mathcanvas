@@ -27,6 +27,10 @@ export interface SolidIntersectionResult {
   vertices: Vector3[]
   /** 交集的面：按顺序排列的顶点索引。 */
   faces: number[][]
+  /** 每个面**朝外**的单位法向，与 `faces` 一一对应（交面图元要"这一面朝哪边"）。 */
+  faceNormals: Vector3[]
+  /** 每个面的面积，与 `faces` 一一对应（交面图元要"这一面多大"）。 */
+  faceAreas: number[]
   /** 交集体积（`flat` / `point` / `segment` / `none` 时为 0）。 */
   volume: number
   /** 交集表面积（各面多边形面积之和）。 */
@@ -270,7 +274,7 @@ function classify(polyhedron: Polyhedron3Input, tolerance: number): SolidInterse
   return rankOf(polyhedron.vertices, tolerance) <= 1 ? "segment" : "flat"
 }
 
-export function intersectConvexPolyhedra3(first: Polyhedron3Input, second: Polyhedron3Input): SolidIntersectionResult {  const failed = (explanation: string, diagnostics: string[]): SolidIntersectionResult => ({ status: "insufficient-data", vertices: [], faces: [], volume: 0, area: 0, explanation, diagnostics })
+export function intersectConvexPolyhedra3(first: Polyhedron3Input, second: Polyhedron3Input): SolidIntersectionResult {  const failed = (explanation: string, diagnostics: string[]): SolidIntersectionResult => ({ status: "insufficient-data", vertices: [], faces: [], faceNormals: [], faceAreas: [], volume: 0, area: 0, explanation, diagnostics })
   if (first.vertices.length < 4 || first.faces.length < 4 || second.vertices.length < 4 || second.faces.length < 4) {
     return failed("求交需要两个至少有四个面的多面体。", ["输入实体不完整"])
   }
@@ -288,20 +292,56 @@ export function intersectConvexPolyhedra3(first: Polyhedron3Input, second: Polyh
   for (const plane of secondPlanes) {
     current = clipByPlane(current, plane, quantum)
     if (current.vertices.length === 0 || current.faces.length === 0) {
-      return { status: "none", vertices: [], faces: [], volume: 0, area: 0, explanation: "两个实体没有重叠区域。", diagnostics: [] }
+      return { status: "none", vertices: [], faces: [], faceNormals: [], faceAreas: [], volume: 0, area: 0, explanation: "两个实体没有重叠区域。", diagnostics: [] }
     }
   }
   current = compact(current)
   const status = classify(current, quantum * 100)
   const volume = volumeOf(current)
   const area = areaOf(current)
+  const normals = faceNormalsOf(current)
+  const faceAreas = current.faces.map((face) => ringAreaOf(current.vertices, face))
   if (status === "polyhedron") {
-    return { status, vertices: current.vertices, faces: current.faces, volume, area, explanation: `交集是 ${current.faces.length} 个面的多面体。`, diagnostics: [] }
+    return { status, vertices: current.vertices, faces: current.faces, faceNormals: normals, faceAreas, volume, area, explanation: `交集是 ${current.faces.length} 个面的多面体。`, diagnostics: [] }
   }
   const explanation = status === "flat"
     ? "两个实体只在一个平面区域上相接（交集没有体积）。"
     : status === "segment"
       ? "两个实体只沿一条线段相接。"
       : "两个实体只在一个点相接。"
-  return { status, vertices: current.vertices, faces: current.faces, volume, area, explanation, diagnostics: [status] }
+  return { status, vertices: current.vertices, faces: current.faces, faceNormals: normals, faceAreas, volume, area, explanation, diagnostics: [status] }
+}
+
+/** 每个面**朝外**的单位法向（用交集形心判断朝向，因此与顶点绕向无关）。退化面给零向量。 */
+function faceNormalsOf(polyhedron: Polyhedron3Input): Vector3[] {
+  const centre = centroidOf(polyhedron.vertices)
+  return polyhedron.faces.map((face) => {
+    const unit = newellNormal(polyhedron.vertices, face)
+    if (!unit) return { x: 0, y: 0, z: 0 }
+    const centroid = faceCentroidOf(polyhedron.vertices, face)
+    return dotVector3(unit, subtractVector3(centroid, centre)) < 0 ? { x: -unit.x, y: -unit.y, z: -unit.z } : unit
+  })
+}
+
+function faceCentroidOf(vertices: Vector3[], face: number[]): Vector3 {
+  const count = Math.max(face.length, 1)
+  return face.reduce((sum, index) => {
+    const vertex = vertices[index]
+    return { x: sum.x + vertex.x / count, y: sum.y + vertex.y / count, z: sum.z + vertex.z / count }
+  }, { x: 0, y: 0, z: 0 })
+}
+
+/** 单个面的面积（Newell 向量长度的一半）：交面图元的面积读数就是它。 */
+function ringAreaOf(vertices: Vector3[], face: number[]): number {
+  let accumulated = { x: 0, y: 0, z: 0 }
+  for (let index = 0; index < face.length; index += 1) {
+    const current = vertices[face[index]]
+    const next = vertices[face[(index + 1) % face.length]]
+    accumulated = {
+      x: accumulated.x + (current.y * next.z - current.z * next.y),
+      y: accumulated.y + (current.z * next.x - current.x * next.z),
+      z: accumulated.z + (current.x * next.y - current.y * next.x)
+    }
+  }
+  return lengthVector3(accumulated) / 2
 }

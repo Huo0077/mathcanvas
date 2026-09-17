@@ -1,4 +1,4 @@
-import { DEFAULT_MAX_SOLID_PREVIEWS, MAX_PAIRS } from "./intersectionPreviews3d"
+import { DEFAULT_MAX_BOOLEAN_PAIRS, DEFAULT_MAX_FACES_PER_PAIR, MAX_PAIRS } from "./intersectionPreviews3d"
 
 export type PromptCreationMode = "line" | "segment" | "ray" | "polyline" | "circle" | "arc" | null
 
@@ -48,35 +48,40 @@ export function resolveIntersectionPreviewPrompt(preview: { kind: string; label:
     if (hovering) return `${preview.label}：一圈虚线是这一刀的交线、圆点是交点，点击即创建截面（交面）；创建后选中截面，在自由拖动模式下拖动或按方向键可移动剖切面。`
     return null
   }
-  if (preview.kind === "solid") {
-    // 交面 = 两个实体公共区域的**整体表面**（布尔交集），不是"一刀切出来的截面"：说法必须区分开。
+  if (preview.kind === "face") {
+    // 交面 = **一个**平面面片（用户口径："我需要的交面只是一个表面"），不是"一刀切出来的截面"。
     return hovering
-      ? `${preview.label}：这块半透明面片是两个实体的公共区域（布尔交集），点击即创建交面图元；它的边就是交线、顶点就是交点。`
+      ? `${preview.label}：这一块半透明面片是两个实体公共区域的一个面，点击即创建这一面的交面图元；它的边就是交线、顶点就是交点。`
       : `${preview.label}：把指针移到半透明面片上，点击即可创建为交面图元。`
   }
-  return hovering ? `${preview.label}：点击即可创建为截线（交线）图元。` : `${preview.label}：把指针移到虚线上可创建为截线图元。`
+  if (preview.kind === "point") {
+    return hovering
+      ? `${preview.label}：这个圆点是交线的拐点（两个表面的公共点），点击即创建交点图元；它会跟着两个来源重算。`
+      : `${preview.label}：把指针移到圆点上，点击即可创建为交点图元。`
+  }
+  return hovering ? `${preview.label}：点击即可创建为交线图元。` : `${preview.label}：把指针移到虚线上可创建为交线图元。`
 }
 
 /**
- * 画布上"自动铺开的交线 / 交面有多少、哪些这次没算"的状态提示。
+ * 画布上"自动铺开的交线 / 交点 / 交面有多少、哪些没画全"的状态提示。
  *
  * 用户反馈过："画布上有东西，但完全没有任何提示"。自动枚举意味着预览不再依赖选择，
- * 所以只要画布上真画了交线或交面、或者本来该画却没算出来，就必须在状态栏说明。
+ * 所以只要画布上真画了交点 / 交线 / 交面、或者本来该画却没画出来，就必须在状态栏说明。
  *
  * 两种"没画出来"要分开说，因为它们的原因和后果不同：
- * - `truncated`：这一对确实相交，但布尔交集配额用尽，所以这次没有交面片（可能连交线都没有——
- *   完全包含的两个实体本来就不相交于表面）。说"只画了交线"是错的。
+ * - `truncated`：这一对确实相交，但布尔交集配额用尽（或面数超过单对上限），所以这次交面没画全。
  * - `dropped`：实体对多到超过单次扫描上限，这一对连交线都没算。
  */
-export function resolvePreviewInventoryPrompt(inventory: { lines: number; solids: number; truncated: number; dropped: number }): string | null {
+export function resolvePreviewInventoryPrompt(inventory: { lines: number; points: number; faces: number; truncated: number; dropped: number; truncatedPoints?: number }): string | null {
   const parts: string[] = []
   if (inventory.lines > 0) parts.push(`${inventory.lines} 处交线`)
-  if (inventory.solids > 0) parts.push(`${inventory.solids} 处交面`)
+  if (inventory.points > 0) parts.push(`${inventory.points} 处交点`)
+  if (inventory.faces > 0) parts.push(`${inventory.faces} 个交面`)
   const notes: string[] = []
-  if (inventory.truncated > 0) notes.push(`另有 ${inventory.truncated} 处这次没算交面（交面一次最多算 ${DEFAULT_MAX_SOLID_PREVIEWS} 处，改动来源后会补上）`)
+  if (inventory.truncated > 0) notes.push(`另有 ${inventory.truncated} 对来源的交面没画全（一次最多算 ${DEFAULT_MAX_BOOLEAN_PAIRS} 对、每对最多 ${DEFAULT_MAX_FACES_PER_PAIR} 个面，改动来源后会补上）`)
   if (inventory.dropped > 0) notes.push(`另有 ${inventory.dropped} 处相交对超出单次扫描上限（最多 ${MAX_PAIRS} 对），这次连交线都没画`)
   if (parts.length === 0 && notes.length === 0) return null
-  const drawn = parts.length > 0 ? `已自动标出 ${parts.join("、")}：点虚线创建交线图元，点半透明面片创建交面图元。` : ""
+  const drawn = parts.length > 0 ? `已自动标出 ${parts.join("、")}：点虚线创建交线，点圆点创建交点，点面片创建交面。` : ""
   return [drawn, ...notes.map((note) => `${note}。`)].join("")
 }
 

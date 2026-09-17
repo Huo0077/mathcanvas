@@ -16,16 +16,17 @@ import type { IntersectionPreview } from "./intersectionPreview3d"
  */
 export interface ThreeScenePreview {
   key: string
-  kind: "intersection" | "solid" | "section"
+  kind: "intersection" | "face" | "point" | "section"
   /** 预览涉及的对象 ID（点击创建时的来源）。 */
   sourceIds: string[]
   segments: { a: Vector3; b: Vector3 }[]
   points: Vector3[]
-  /** 交面的面环顶点与索引（`kind === "solid"` 时非空）。 */
-  vertices?: Vector3[]
-  faces?: number[][]
-  volume?: number
+  /** 交面：这一面的法向、面积与形心（形心既是读数，也是创建图元时的 `hint`）。 */
+  normal?: Vector3
   area?: number
+  hint?: Vector3
+  /** 交点：位置。 */
+  position?: Vector3
   /** 状态栏用它说明"这一份是什么、点下去创建什么"。 */
   label: string
   /**
@@ -48,11 +49,11 @@ export function toScenePreview(preview: IntersectionPreview3d, selectedIds: stri
     kind: preview.kind,
     sourceIds: preview.sourceIds,
     segments: preview.segments,
-    points: [],
-    vertices: preview.vertices,
-    faces: preview.faces,
-    volume: preview.volume,
+    points: preview.points,
+    normal: preview.normal,
     area: preview.area,
+    hint: preview.hint,
+    position: preview.position,
     label: preview.label,
     focused: preview.sourceIds.every((id) => selectedIds.includes(id))
   }

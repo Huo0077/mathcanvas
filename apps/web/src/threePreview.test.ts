@@ -44,24 +44,32 @@ const intersectionPreview = (): ThreeScenePreview => ({
     { a: { x: 1, y: 0, z: 0 }, b: { x: 1, y: 0, z: 1 } }
   ],
   points: [],
-  label: "面交线 · 2 段"
+  label: "交线 · 2 段"
 })
 
-/** 两个交叠立方体的布尔交集：x∈[0,2]、y∈[-2,2]、z∈[-2,2] 的长方体。 */
-const solidPreview = (): ThreeScenePreview => ({
-  key: "pair:cube-a|cube-b:面",
-  kind: "solid",
+/** 交集的**一个面**（y=-2 那一面，4 个顶点、面积 8）——交面预览就是"一个表面"，不是整只盒子。 */
+const facePreview = (): ThreeScenePreview => ({
+  key: "pair:cube-a|cube-b:面0",
+  kind: "face",
+  sourceIds: ["cube-a", "cube-b"],
+  segments: [],
+  points: [{ x: 0, y: -2, z: -2 }, { x: 2, y: -2, z: -2 }, { x: 2, y: -2, z: 2 }, { x: 0, y: -2, z: 2 }],
+  normal: { x: 0, y: -1, z: 0 },
+  area: 8,
+  hint: { x: 1, y: -2, z: 0 },
+  label: "交面 · 4 边形（面积 8.00）"
+})
+
+/** 交线的拐点（交点预览）。 */
+const pointPreview = (): ThreeScenePreview => ({
+  key: "pair:cube-a|cube-b:点0",
+  kind: "point",
   sourceIds: ["cube-a", "cube-b"],
   segments: [],
   points: [],
-  vertices: [
-    { x: 0, y: -2, z: -2 }, { x: 2, y: -2, z: -2 }, { x: 2, y: 2, z: -2 }, { x: 0, y: 2, z: -2 },
-    { x: 0, y: -2, z: 2 }, { x: 2, y: -2, z: 2 }, { x: 2, y: 2, z: 2 }, { x: 0, y: 2, z: 2 }
-  ],
-  faces: [[0, 3, 2, 1], [4, 5, 6, 7], [0, 1, 5, 4], [1, 2, 6, 5], [2, 3, 7, 6], [3, 0, 4, 7]],
-  volume: 32,
-  area: 64,
-  label: "交面 · 6 面"
+  position: { x: 2, y: -2, z: 2 },
+  hint: { x: 2, y: -2, z: 2 },
+  label: "交点"
 })
 
 /** 取第一个带该角色的材质的透明度（用来断言面片是半透明的，不是一块挡视线的实心面）。 */
@@ -95,23 +103,40 @@ describe("虚线预览的画法", () => {
     expect(countRole(group, "intersection-preview-point")).toBe(3)
   })
 
-  it("fills an intersection solid as a translucent patch with its own edges and vertices", () => {
-    const group = createPreviewGroup(solidPreview(), false, () => undefined)
+  it("fills one 交面 as a single translucent patch with its own edges and vertices", () => {
+    const group = createPreviewGroup(facePreview(), false, () => undefined)
 
-    // 交面预览画的是**重叠区域本身**：半透明面片 + 面环 + 顶点（交点）。
-    expect(countRole(group, "intersection-preview-face")).toBe(6)
-    expect(countRole(group, "intersection-preview-edge")).toBeGreaterThan(0)
-    expect(countRole(group, "intersection-preview-point")).toBe(8)
+    /**
+     * 交面预览画的是**一个表面**（用户口径："我需要的交面只是一个表面，而不是所有相交的表面"）：
+     * 一块半透明面片 + 它自己那圈边 + 4 个顶点，而不是整只交集的 6 个面。
+     */
+    expect(countRole(group, "intersection-preview-face")).toBe(1)
+    expect(countRole(group, "intersection-preview-edge")).toBe(1)
+    expect(countRole(group, "intersection-preview-point")).toBe(4)
     const opacity = opacityOfRole(group, "intersection-preview-face")
     expect(opacity).not.toBeNull()
     // 半透明：交面是"还没创建"的提示，不能像创建出来的实体那样挡住图形。
     expect(opacity!).toBeLessThan(0.5)
     expect(group.userData.excludeFromFit).toBe(true)
+    // 面片本身就是命中区：点"这一块面"即创建这一面的交面图元。
+    expect((group.userData.hitTargets as THREE.Object3D[]).length).toBe(1)
   })
 
-  it("highlights the patch under the pointer and keeps it clickable either way", () => {
-    const idle = createPreviewGroup(solidPreview(), false, () => undefined)
-    const hovered = createPreviewGroup(solidPreview(), true, () => undefined)
+  it("draws one 交点 as a marker with its own hit area", () => {
+    const group = createPreviewGroup(pointPreview(), false, () => undefined)
+
+    expect(countRole(group, "intersection-preview-point")).toBe(1)
+    // 只有一个点，按像素点它太小：命中区要更宽一点（不可见的球），否则"点交点"是在找针。
+    expect(countRole(group, "intersection-preview-hit")).toBe(1)
+    expect((group.userData.hitTargets as THREE.Object3D[]).length).toBe(1)
+    // 标记本身不参与拾取。
+    const marker = group.children.find((child) => child.userData.visualRole === "intersection-preview-point")
+    expect(marker?.raycast({} as never, [] as never)).toBeUndefined()
+  })
+
+  it("highlights the patch and the marker under the pointer, and keeps them clickable either way", () => {
+    const idle = createPreviewGroup(facePreview(), false, () => undefined)
+    const hovered = createPreviewGroup(facePreview(), true, () => undefined)
 
     // 指针落在交面上时更实一点，但仍然不是不透明（其余交面还在底下要看得到）。
     expect(opacityOfRole(hovered, "intersection-preview-face")!).toBeGreaterThan(opacityOfRole(idle, "intersection-preview-face")!)
@@ -119,8 +144,13 @@ describe("虚线预览的画法", () => {
      * 命中区与悬停状态解耦：点击时**按点击位置重新判定**，如果命中区只在"已经悬停"时才存在，
      * 就变成先有鸡还是先有蛋——原地点击（没有 pointermove）永远命中不了。
      */
-    expect((idle.userData.hitTargets as THREE.Object3D[]).length).toBe(6)
-    expect((hovered.userData.hitTargets as THREE.Object3D[]).length).toBe(6)
+    expect((idle.userData.hitTargets as THREE.Object3D[]).length).toBe(1)
+    expect((hovered.userData.hitTargets as THREE.Object3D[]).length).toBe(1)
+
+    // 交点标记的高亮靠放大：小圆点变实心很难分辨，放大一圈更直观。
+    const idleMarker = createPreviewGroup(pointPreview(), false, () => undefined).children.find((child) => child.userData.visualRole === "intersection-preview-point")
+    const hoveredMarker = createPreviewGroup(pointPreview(), true, () => undefined).children.find((child) => child.userData.visualRole === "intersection-preview-point")
+    expect(hoveredMarker!.scale.x).toBeGreaterThan(idleMarker!.scale.x)
   })
 
   it("keeps the preview out of picking and out of the fit bounds", () => {

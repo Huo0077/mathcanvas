@@ -7,6 +7,8 @@
 import * as THREE from "three"
 import type { GeometryDocument, Vector3 } from "@draw/dsl"
 
+import type { ThreeScenePreview } from "./threeScenePreview"
+
 /**
  * Vertex handles are editor affordances, not geometry: they are sized in screen space so a fine mesh (a
  * 24-segment cylinder base has 48 vertices only 11px apart) does not turn into a string of beads, and so
@@ -127,26 +129,37 @@ export function resolveSelectableHit(primitiveId: string | null, owners: Map<str
 /**
  * 指针落在预览上时，这一次点击算"创建图元"还是算"选中几何"？
  *
- * 用户的模型是**看到什么就创建什么**（交线、交面一直在画布上，点一下就建），所以指针确实落在预览
- * 画出来的几何上时预览应当赢。两个例外：
- * - **顶点手柄**永远优先：它是可拖的交互控件，被一块交面盖住时用户仍然是在抓手柄（实测回归：
- *   点顶点手柄变成了创建截线）。只有截面预览另说——它的边界落在实体内部，不抢就永远点不到。
- * - **棱**只有在指针确实压在它上面时才赢：棱命中是"按像素容差"给的，指针可以离那条棱好几个像素
- *   仍算命中。实测：点交面正中央时射线擦过一条棱（`data-pick-readout` 读出 `edge|…|behind`），
- *   整类一刀切地让棱优先会让"点一下创建交面"完全没反应。
+ * 用户的模型是**看到什么就创建什么**（交点、交线、交面一直在画布上，点一下就建），所以指针确实落在
+ * 预览画出来的几何上时预览应当赢。三个例外：
+ * - **顶点手柄**默认优先：它是可拖的交互控件，被交面 / 交线盖住时用户仍然是在抓手柄（实测回归：
+ *   点顶点手柄变成了创建交线）。两个例外：截面预览的边界落在实体内部，不抢就永远点不到；
+ *   以及**交点标记**——交线的拐点常常就是来源实体的顶点，两者共心，用户点的是画出来的那个交点。
+ * - **棱**要看深度与"是不是擦过"：预览在棱前面（或同一深度）时预览赢——交线的命中带就画在那条棱上
+ *（两个立方体的公共边界恰好落在来源的棱上），用户点的是那条虚线；预览明显在后面、而指针确实压在
+ *   棱上时，用户要的才是那条棱。另外，只是"在容差内擦过"的棱从不该赢：实测点交面正中央时射线擦过
+ *   一条棱（`data-pick-readout` 读出 `edge|…|behind`），整类一刀切地让棱优先会让"点一下创建交面"毫无反应。
  */
 export function previewBeatsPick(decision: {
+  previewKind: ThreeScenePreview["kind"]
+  /** 预览的命中点是否在粗拾取的前面（同一深度也算；容差由调用方给）。 */
+  previewInFront: boolean
   hitKind: RaycastHit3["kind"] | null
   /** 粗拾取命中的点离指针射线多远（世界单位）；没有命中时给正无穷。 */
   hitDistanceToRay: number
   /** 屏幕像素换算过来的拾取容差（世界单位）。 */
   tolerance: number
-  /** 截面预览的那圈边界是否在粗拾取的前面（沿用既有判断）。 */
-  sectionInFront: boolean
 }): boolean {
   const kind = decision.hitKind
   if (kind === null) return true
-  if (kind === "point") return decision.sectionInFront
-  if (kind === "edge" || kind === "line") return decision.hitDistanceToRay > decision.tolerance * 0.25
+  if (kind === "point") {
+    if (decision.previewKind === "point") return decision.previewInFront
+    return decision.previewKind === "section" && decision.previewInFront
+  }
+  /**
+   * 棱：预览在它前面（或同一深度）时预览赢——交线的命中带**就画在那条棱上**（两个立方体的公共边界
+   * 恰好落在来源的棱上），此时用户点的是那条虚线；只有预览明显在后面、且指针确实压在棱上时，
+   * 用户要的才是那条棱。
+   */
+  if (kind === "edge" || kind === "line") return decision.previewInFront || decision.hitDistanceToRay > decision.tolerance * 0.25
   return true
 }

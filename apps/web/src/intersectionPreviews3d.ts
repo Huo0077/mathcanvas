@@ -21,15 +21,23 @@ import { solidTopology3 } from "@draw/scene-graph"
 export interface IntersectionPreview3d {
   /** 稳定 key：`pair:<a>|<b>:线` / `pair:<a>|<b>:面`，增量同步与点击回传都用它。 */
   key: string
-  kind: "intersection" | "solid"
+  /**
+   * - `intersection`：交线（两个表面的公共边界）；
+   * - `face`：**一个**交面（布尔交集的一个平面面片）；
+   * - `point`：一个交点（交线的端点 / 拐点）。
+   */
+  kind: "intersection" | "face" | "point"
   sourceIds: [string, string]
   /** 交线：两个表面的公共边界线段。 */
   segments: { a: Vector3; b: Vector3 }[]
-  /** 交面：布尔交集的顶点与面环（`kind === "solid"` 时非空）。 */
-  vertices: Vector3[]
-  faces: number[][]
-  volume: number
+  /** 交面：这一面的有序顶点环（其余种类为空）。 */
+  points: Vector3[]
+  /** 交面：面法向（朝交集外）、面积，以及"该被建成哪一面"的形心。 */
+  normal: Vector3
   area: number
+  hint: Vector3
+  /** 交点：位置（与 `hint` 相同；分开命名只是为了读起来直白）。 */
+  position: Vector3
   classification: string
   label: string
 }
@@ -38,7 +46,7 @@ interface PairRecord {
   signature: string
   previews: IntersectionPreview3d[]
   /**
-   * 这一对是在配额用尽时算的（只有交线、或缺交面）。
+   * 这一对的交面没画全（配额用尽，或面数超过单对上限）。
    *
    * 受限结果**不算完整结果**：不能按签名长期沿用，否则配额腾出来之后它也永远补不上交面
    *（实测：13 对挤掉第 13 对后，删掉前面任一对也回不来，除非移动它的来源）。
@@ -55,8 +63,12 @@ export interface IntersectionPreview3dOptions {
   previous?: IntersectionPreview3dCache
   /** 参与求交的顶层实体上限（超出按文档顺序截断）。 */
   maxSources?: number
-  /** 单次扫描最多算多少个布尔交集（交线不受此限）。 */
-  maxSolidPreviews?: number
+  /** 单次扫描最多算多少**对**来源的布尔交集（交线不受此限；交面按面展开，这一步最贵）。 */
+  maxBooleanPairs?: number
+  /** 单对来源最多画多少个面（圆柱/圆锥的交集是按多边形近似的，面可能很多）。 */
+  maxFacesPerPair?: number
+  /** 单对来源最多画多少个交点（一圈多边形的拐点）。 */
+  maxPointsPerPair?: number
 }
 
 export interface IntersectionPreview3dSweep {
@@ -70,16 +82,21 @@ export interface IntersectionPreview3dSweep {
   reusedPairs: number
   /** 被包围盒筛掉的对数。 */
   skippedPairs: number
-  /** 这一对相交了、但配额用尽没算交面的对数（每次扫描都会重新报）。 */
+  /** 交面没算 / 没画全的对数（每次扫描都会重新报）。 */
   truncatedPairs: number
   /** 实体对多到超过单次扫描上限、连交线都没算的对数。 */
   droppedPairs: number
+  /** 因为单对上限没画出来的交点数。 */
+  truncatedPoints: number
 }
 
 const CANDIDATE_TYPES = new Set<PrimitiveSpec["type"]>(["cube", "pyramid", "cylinder", "cone", "polyhedron3"])
 const DEFAULT_MAX_SOURCES = 24
 /** 单次扫描的布尔交集配额（状态栏的说明文案也用这个数，所以导出而不是各写一份）。 */
-export const DEFAULT_MAX_SOLID_PREVIEWS = 12
+export const DEFAULT_MAX_BOOLEAN_PAIRS = 12
+/** 单对来源的面 / 交点上限：圆柱与圆锥的交集是按多边形近似的，面数可能几十个。 */
+export const DEFAULT_MAX_FACES_PER_PAIR = 64
+export const DEFAULT_MAX_POINTS_PER_PAIR = 32
 /** 实体多到两两组合失控时的硬上限：宁可少画，不要一次改动卡住画布。 */
 export const MAX_PAIRS = 120
 
@@ -126,7 +143,6 @@ interface Candidate {
 export function computeIntersectionPreviews3d(document: GeometryDocument, options: IntersectionPreview3dOptions = {}): IntersectionPreview3dSweep {
   const primitiveMap = new Map(document.primitives.map((primitive) => [primitive.id, primitive]))
   const maxSources = options.maxSources ?? DEFAULT_MAX_SOURCES
-  const maxSolidPreviews = options.maxSolidPreviews ?? DEFAULT_MAX_SOLID_PREVIEWS
   const candidates: Candidate[] = []
   for (const primitive of document.primitives) {
     if (candidates.length >= maxSources) break
@@ -145,6 +161,9 @@ export function computeIntersectionPreviews3d(document: GeometryDocument, option
     })
   }
 
+  const maxBooleanPairs = options.maxBooleanPairs ?? DEFAULT_MAX_BOOLEAN_PAIRS
+  const maxFacesPerPair = options.maxFacesPerPair ?? DEFAULT_MAX_FACES_PER_PAIR
+  const maxPointsPerPair = options.maxPointsPerPair ?? DEFAULT_MAX_POINTS_PER_PAIR
   const previews: IntersectionPreview3d[] = []
   const pairs: Record<string, PairRecord> = {}
   let computedPairs = 0
@@ -152,7 +171,8 @@ export function computeIntersectionPreviews3d(document: GeometryDocument, option
   let skippedPairs = 0
   let truncatedPairs = 0
   let droppedPairs = 0
-  let solidPreviews = 0
+  let truncatedPoints = 0
+  let booleanPairs = 0
   let considered = 0
   for (let firstIndex = 0; firstIndex < candidates.length; firstIndex += 1) {
     for (let secondIndex = firstIndex + 1; secondIndex < candidates.length; secondIndex += 1) {
@@ -173,15 +193,16 @@ export function computeIntersectionPreviews3d(document: GeometryDocument, option
         reusedPairs += 1
         // 沿用的交面同样占配额：这样"哪几对分到交面"在多次扫描之间是稳定的，
         // 截断说明也就能每一次扫描都如实报出来（而不是只有首扫可见）。
-        solidPreviews += cached.previews.reduce((total, item) => total + (item.kind === "solid" ? 1 : 0), 0)
+        if (cached.previews.some((item) => item.kind === "face")) booleanPairs += 1
         continue
       }
       if (considered > MAX_PAIRS) {
-        // 连交线都没算：既不缓存，也不混进 `truncatedPairs`（那个计数说的是"少了交面"）。
+        // 连交线都没算：既不缓存，也不混进 `truncatedPairs`（那个计数说的是"交面没画出来"）。
         droppedPairs += 1
         continue
       }
       computedPairs += 1
+      const sourceIds: [string, string] = [first.primitive.id, second.primitive.id]
       const pairPreviews: IntersectionPreview3d[] = []
       // 交线：两个表面的公共边界。相交而不穿透（完全包含）时这里是空的，那是对的。
       const crossing = intersectFaceSets(first.rings, second.rings)
@@ -189,48 +210,100 @@ export function computeIntersectionPreviews3d(document: GeometryDocument, option
         pairPreviews.push({
           key: `pair:${key}:线`,
           kind: "intersection",
-          sourceIds: [first.primitive.id, second.primitive.id],
+          sourceIds,
           segments: crossing.segments.map((segment) => ({ a: { ...segment.a }, b: { ...segment.b } })),
-          vertices: [],
-          faces: [],
-          volume: 0,
+          points: [],
+          normal: { x: 0, y: 0, z: 0 },
           area: 0,
+          hint: { x: 0, y: 0, z: 0 },
+          position: { x: 0, y: 0, z: 0 },
           classification: crossing.classification,
           label: `交线 · ${crossing.segments.length} 段`
         })
+        /**
+         * 交点 = 交线的**端点 / 拐点**（按模型尺度去重后每个都可以单独点一下建出来）。
+         * 这里刻意不用布尔交集的顶点：完全包含时两个表面并不相交、交集却有顶点，那不是"交点"。
+         */
+        const corners = dedupeCorners(crossing.segments.flatMap((segment) => [segment.a, segment.b]))
+        corners.slice(0, maxPointsPerPair).forEach((corner, index) => {
+          pairPreviews.push({
+            key: `pair:${key}:点${index}`,
+            kind: "point",
+            sourceIds,
+            segments: [],
+            points: [],
+            normal: { x: 0, y: 0, z: 0 },
+            area: 0,
+            hint: { ...corner },
+            position: { ...corner },
+            classification: crossing.classification,
+            label: "交点"
+          })
+        })
+        if (corners.length > maxPointsPerPair) truncatedPoints += corners.length - maxPointsPerPair
       }
       /**
-       * 交面：布尔交集。配额用尽时只保留交线（完全包含时连交线都没有），并**无条件**记进 `truncatedPairs`——
-       * 界面据此说明"还有 N 处没画交面"；没有交线的那一类同样要说明，否则就是静默少画。
+       * 交面：布尔交集，**每一面各自是一份可点预览**（用户口径："我需要的交面只是一个表面"）。
+       * 配额用尽（或面数超过单对上限）时这一对就算"交面没画全"，并**无条件**记进 `truncatedPairs`——
+       * 界面据此说明"还有 N 处交面没画全"；完全包含（没有交线）的那一类同样要说明，否则就是静默少画。
        */
-      if (solidPreviews >= maxSolidPreviews) {
+      if (booleanPairs >= maxBooleanPairs) {
         truncatedPairs += 1
         previews.push(...pairPreviews)
         // 受限结果标记成 `truncated`：下次扫描（哪怕几何没变）会重新尝试，配额腾出来就能补上。
         pairs[key] = { signature, previews: pairPreviews, truncated: true }
         continue
       }
+      booleanPairs += 1
       const intersection = intersectConvexPolyhedra3(first.topology, second.topology)
       if (intersection.status === "polyhedron" || (intersection.status === "flat" && intersection.area > 0)) {
-        solidPreviews += 1
-        pairPreviews.push({
-          key: `pair:${key}:面`,
-          kind: "solid",
-          sourceIds: [first.primitive.id, second.primitive.id],
-          segments: [],
-          vertices: intersection.vertices.map((vertex) => ({ ...vertex })),
-          faces: intersection.faces.map((face) => [...face]),
-          volume: intersection.volume,
-          area: intersection.area,
-          classification: intersection.status,
-          label: intersection.status === "flat" ? `交面 · 平板（面积 ${intersection.area.toFixed(2)}）` : `交面 · ${intersection.faces.length} 面`
+        const drawnFaces = intersection.faces.slice(0, maxFacesPerPair)
+        drawnFaces.forEach((face, index) => {
+          const ring = face.map((vertexIndex) => ({ ...intersection.vertices[vertexIndex] }))
+          if (ring.length < 3) return
+          const hint = centroidOfRing(ring)
+          const area = intersection.faceAreas[index] ?? 0
+          pairPreviews.push({
+            key: `pair:${key}:面${index}`,
+            kind: "face",
+            sourceIds,
+            segments: [],
+            points: ring,
+            normal: intersection.faceNormals[index] ?? { x: 0, y: 0, z: 0 },
+            area,
+            hint: { ...hint },
+            position: { x: 0, y: 0, z: 0 },
+            classification: intersection.status,
+            label: `交面 · ${ring.length} 边形（面积 ${area.toFixed(2)}）`
+          })
         })
+        if (intersection.faces.length > drawnFaces.length) truncatedPairs += 1
       }
       previews.push(...pairPreviews)
       pairs[key] = { signature, previews: pairPreviews, truncated: false }
     }
   }
-  return { previews, cache: { pairs }, candidates: candidates.length, computedPairs, reusedPairs, skippedPairs, truncatedPairs, droppedPairs }
+  return { previews, cache: { pairs }, candidates: candidates.length, computedPairs, reusedPairs, skippedPairs, truncatedPairs, droppedPairs, truncatedPoints }
+}
+
+/** 交线端点的去重（按模型尺度量化）：相邻线段会把同一个拐点各报一次。 */
+function dedupeCorners(points: Vector3[]): Vector3[] {
+  const extent = points.reduce((largest, point) => Math.max(largest, Math.abs(point.x), Math.abs(point.y), Math.abs(point.z)), 1)
+  const quantum = Math.max(extent * 1e-9, 1e-12)
+  const seen = new Set<string>()
+  const unique: Vector3[] = []
+  for (const point of points) {
+    const key = `${Math.round(point.x / quantum)},${Math.round(point.y / quantum)},${Math.round(point.z / quantum)}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    unique.push({ ...point })
+  }
+  return unique
+}
+
+function centroidOfRing(points: Vector3[]): Vector3 {
+  const count = Math.max(points.length, 1)
+  return points.reduce((sum, point) => ({ x: sum.x + point.x / count, y: sum.y + point.y / count, z: sum.z + point.z / count }), { x: 0, y: 0, z: 0 })
 }
 
 function boundsExtent(bounds: Bounds): number {

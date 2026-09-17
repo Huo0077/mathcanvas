@@ -21,39 +21,61 @@ describe("automatic 3D intersection previews", () => {
   it("enumerates every overlapping pair without any selection", () => {
     const result = computeIntersectionPreviews3d(cubeDocument([...overlapPair, { id: "cube-far", origin: { x: 40, y: -2, z: -2 } }]))
 
-    const solid = result.previews.find((preview) => preview.kind === "solid")
-    expect(solid?.sourceIds).toEqual(["cube-a", "cube-b"])
-    expect(solid?.volume).toBeCloseTo(32, 6)
+    // 交叠区间是 x∈[0,2]、y∈[-2,2]、z∈[-2,2]：交集的每一面都各自是一份可点预览。
+    const faces = result.previews.filter((preview) => preview.kind === "face")
+    expect(faces.length).toBeGreaterThan(0)
+    expect(faces.every((preview) => preview.sourceIds.join() === "cube-a,cube-b")).toBe(true)
     // 离得远的那一对不该出现在画布上：它是噪声，且会白白算一遍布尔交集。
     expect(result.previews.some((preview) => preview.sourceIds.includes("cube-far"))).toBe(false)
     expect(result.candidates).toBe(3)
   })
 
-  it("gives a crossing pair both a 交面 and a 交线 preview", () => {
+  it("gives a crossing pair a 交线 preview plus one clickable preview per 交面 and per 交点", () => {
     const result = computeIntersectionPreviews3d(cubeDocument(overlapPair))
 
-    const solid = result.previews.find((preview) => preview.kind === "solid")
     const line = result.previews.find((preview) => preview.kind === "intersection")
-    expect(solid?.sourceIds).toEqual(["cube-a", "cube-b"])
     expect(line?.sourceIds).toEqual(["cube-a", "cube-b"])
-    // 两个图元各自独立：它们的 key 不同，点击时分别创建交面与交线。
-    expect(solid?.key).not.toBe(line?.key)
     expect(line?.segments.length).toBeGreaterThan(0)
-    expect(solid?.faces.length).toBeGreaterThan(0)
-    expect(solid?.label).toContain("交面")
     expect(line?.label).toContain("交线")
+
+    /**
+     * 交面是**一个表面**（用户口径："我需要的交面只是一个表面，而不是所有相交的表面"）：
+     * 交集的每一面各自是一份可点预览，而不是整只半透明盒子。
+     * 交叠区间是 2×4×4：两个 4×4 的切口面（16）与四个 2×4 的侧面（8），面积和 = 64。
+     */
+    const faces = result.previews.filter((preview) => preview.kind === "face")
+    expect(faces).toHaveLength(6)
+    expect(faces.map((preview) => preview.points.length)).toEqual([4, 4, 4, 4, 4, 4])
+    expect(faces.reduce((total, preview) => total + preview.area, 0)).toBeCloseTo(64, 6)
+    expect(faces.some((preview) => Math.abs(preview.area - 16) < 1e-6)).toBe(true)
+    expect(faces.some((preview) => Math.abs(preview.area - 8) < 1e-6)).toBe(true)
+    // 每份面预览都带着"我该被建成哪一面"的形心（点击创建时写进 `hint`），key 也各自独立。
+    const bottom = faces.find((preview) => Math.abs(preview.area - 8) < 1e-6 && preview.points.every((point) => Math.abs(point.y + 2) < 1e-6))
+    expect(bottom?.hint.y).toBeCloseTo(-2, 6)
+    expect(faces.every((preview) => preview.key.startsWith("pair:cube-a|cube-b:面"))).toBe(true)
+
+    // 交点是交线的拐点：交叠区那一圈矩形有 8 个拐点（x=0 与 x=2 各 4 个）。
+    const points = result.previews.filter((preview) => preview.kind === "point")
+    expect(points).toHaveLength(8)
+    expect(points.every((preview) => preview.label === "交点")).toBe(true)
+    for (const point of points) {
+      expect(Math.abs(point.position.x) < 1e-6 || Math.abs(point.position.x - 2) < 1e-6).toBe(true)
+    }
   })
 
-  it("reports a contained solid as a 交面 without inventing a 交线", () => {
+  it("reports a contained solid as 交面 previews without inventing a 交线 or a 交点", () => {
     const result = computeIntersectionPreviews3d(cubeDocument([
       { id: "cube-outer", origin: { x: -2, y: -2, z: -2 } },
       { id: "cube-inner", origin: { x: -1, y: -1, z: -1 }, size: { x: 2, y: 2, z: 2 } }
     ]))
 
-    const solid = result.previews.find((preview) => preview.kind === "solid")
-    expect(solid?.volume).toBeCloseTo(8, 6)
-    // 包含关系下两个表面根本不相交，所以只能给交面，不能编一条交线出来。
+    // 公共部分是里面那个立方体：它的 6 个面都可见可点（面积 6×4 = 24）。
+    const faces = result.previews.filter((preview) => preview.kind === "face")
+    expect(faces).toHaveLength(6)
+    expect(faces.reduce((total, preview) => total + preview.area, 0)).toBeCloseTo(24, 6)
+    // 但两个表面根本不相交：不能编出交线，也不能编出交点。
     expect(result.previews.filter((preview) => preview.kind === "intersection")).toEqual([])
+    expect(result.previews.filter((preview) => preview.kind === "point")).toEqual([])
   })
 
   it("skips pairs whose boxes do not touch", () => {
@@ -81,7 +103,10 @@ describe("automatic 3D intersection previews", () => {
     const moved = cubeDocument([overlapPair[0], { id: "cube-b", origin: { x: -1, y: -2, z: -2 } }])
     const third = computeIntersectionPreviews3d(moved, { previous: second.cache })
     expect(third.computedPairs).toBe(1)
-    expect(third.previews.find((preview) => preview.kind === "solid")?.volume).toBeCloseTo(48, 6)
+    // 交叠区间变成 3×4×4：4×4 的切口面变成 16，2×4 的侧面变成 3×4 = 12。
+    const areas = third.previews.filter((preview) => preview.kind === "face").map((preview) => preview.area)
+    expect(areas.filter((area) => Math.abs(area - 16) < 1e-6)).toHaveLength(2)
+    expect(areas.filter((area) => Math.abs(area - 12) < 1e-6)).toHaveLength(4)
 
     // 彻底挪开：预览消失（包围盒先筛掉，连交线都不用算）。
     const apart = cubeDocument([overlapPair[0], { id: "cube-b", origin: { x: 40, y: -2, z: -2 } }])
@@ -97,12 +122,21 @@ describe("automatic 3D intersection previews", () => {
       { id: "cube-b", origin: { x: 0, y: -2, z: -2 } },
       { id: "cube-c", origin: { x: 1, y: -2, z: -2 } }
     ])
-    const result = computeIntersectionPreviews3d(document, { maxSolidPreviews: 1 })
+    const result = computeIntersectionPreviews3d(document, { maxBooleanPairs: 1 })
 
-    expect(result.previews.filter((preview) => preview.kind === "solid")).toHaveLength(1)
+    // 只有第一对拿到了"算布尔交集"的配额，所以只有它的 6 个面出现在画布上。
+    expect(result.previews.filter((preview) => preview.kind === "face")).toHaveLength(6)
     expect(result.truncatedPairs).toBe(2)
     // 交线不受封顶影响：它是"哪里相交"的基本信息，画出来很便宜。
     expect(result.previews.filter((preview) => preview.kind === "intersection").length).toBeGreaterThan(1)
+  })
+
+  it("caps the faces of a single pair and says that pair was cut short", () => {
+    const result = computeIntersectionPreviews3d(cubeDocument(overlapPair), { maxFacesPerPair: 2 })
+
+    // 一个立方体对立方体的交集有 6 个面，只画前 2 个；"这一对没画全"必须能被说出来。
+    expect(result.previews.filter((preview) => preview.kind === "face")).toHaveLength(2)
+    expect(result.truncatedPairs).toBe(1)
   })
 
   it("gives a capped pair its 交面 back as soon as the budget allows", () => {
@@ -112,16 +146,16 @@ describe("automatic 3D intersection previews", () => {
       { id: "cube-b", origin: { x: 0, y: -2, z: -2 } },
       { id: "cube-c", origin: { x: 1, y: -2, z: -2 } }
     ])
-    const first = computeIntersectionPreviews3d(document, { maxSolidPreviews: 1 })
-    expect(first.previews.filter((preview) => preview.kind === "solid")).toHaveLength(1)
+    const first = computeIntersectionPreviews3d(document, { maxBooleanPairs: 1 })
+    expect(first.previews.filter((preview) => preview.kind === "face")).toHaveLength(6)
     expect(first.truncatedPairs).toBe(2)
 
     /**
      * 换一次配额再扫：被挤掉的那两对必须能补上。
      * 受限的结果一旦按"完整结果"缓存下来，它们就会**永久**只剩交线——即使配额腾出来了也回不来。
      */
-    const second = computeIntersectionPreviews3d(document, { previous: first.cache, maxSolidPreviews: 3 })
-    expect(second.previews.filter((preview) => preview.kind === "solid")).toHaveLength(3)
+    const second = computeIntersectionPreviews3d(document, { previous: first.cache, maxBooleanPairs: 3 })
+    expect(second.previews.filter((preview) => preview.kind === "face")).toHaveLength(18)
     expect(second.truncatedPairs).toBe(0)
   })
 
@@ -131,13 +165,13 @@ describe("automatic 3D intersection previews", () => {
       { id: "cube-b", origin: { x: 0, y: -2, z: -2 } },
       { id: "cube-c", origin: { x: 1, y: -2, z: -2 } }
     ])
-    const first = computeIntersectionPreviews3d(document, { maxSolidPreviews: 2 })
-    expect(first.previews.filter((preview) => preview.kind === "solid")).toHaveLength(2)
+    const first = computeIntersectionPreviews3d(document, { maxBooleanPairs: 2 })
+    expect(first.previews.filter((preview) => preview.kind === "face")).toHaveLength(12)
 
     // 第二次扫描（文档没变）：沿用的交面同样占配额，因此结果与第一次逐字节一致，
     // 截断说明也必须**每次都报**——不然用户看到"有一对相交却没有面片"却没有任何解释。
-    const second = computeIntersectionPreviews3d(document, { previous: first.cache, maxSolidPreviews: 2 })
-    expect(second.previews.filter((preview) => preview.kind === "solid")).toHaveLength(2)
+    const second = computeIntersectionPreviews3d(document, { previous: first.cache, maxBooleanPairs: 2 })
+    expect(second.previews.filter((preview) => preview.kind === "face")).toHaveLength(12)
     expect(second.truncatedPairs).toBe(1)
     expect(second.previews).toEqual(first.previews)
   })
@@ -149,7 +183,7 @@ describe("automatic 3D intersection previews", () => {
       { id: "cube-outer", origin: { x: -2, y: -2, z: -2 } },
       { id: "cube-inner", origin: { x: -1, y: -1, z: -1 }, size: { x: 2, y: 2, z: 2 } }
     ])
-    const result = computeIntersectionPreviews3d(document, { maxSolidPreviews: 0 })
+    const result = computeIntersectionPreviews3d(document, { maxBooleanPairs: 0 })
 
     expect(result.previews).toEqual([])
     expect(result.truncatedPairs).toBe(1)

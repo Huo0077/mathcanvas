@@ -502,8 +502,10 @@ export function App() {
   const canCreateSection = selectedPrimitive !== null && solidTypes.includes(selectedPrimitive.type as typeof solidTypes[number])
   /**
    * 点击 3D 预览即创建图元（与平面画布同一套心智：看到什么就创建什么）：
-   * - 交面：新建 `intersectionSolid`，来源是两个实体；布尔交集由内核在同一事务里算好；
-   * - 交线：新建 `intersectionLine`，来源是两个对象，`segments` 同样在同一事务里重算；
+   * - 交面：新建 `intersectionFace`，来源是两个实体 + 这一面的形心 `hint`——**点哪块建哪块**，
+   *   重算时按"离 hint 最近的面"继续认领同一面；
+   * - 交点：新建 `intersectionPoint3`，来源是两个对象 + 那个拐点的位置 `hint`；
+   * - 交线：新建 `intersectionLine`，来源是两个对象，`segments` 由内核在同一事务里重算；
    * - 截面：单个实体的默认剖切平面，走既有 `addSection`。
    * 创建后把选择切到新图元，与"保存交点"的心智模型一致。
    */
@@ -514,25 +516,44 @@ export function App() {
     }
     const [firstId, secondId] = preview.sourceIds
     if (!firstId || !secondId) return
-    if (preview.kind === "solid") {
-      const id = nextPrimitiveId(document, "intersectionSolid")
+    if (preview.kind === "face") {
+      const id = nextPrimitiveId(document, "intersectionFace")
       apply({
         op: "addPrimitive",
         primitive: {
           id,
-          type: "intersectionSolid",
+          type: "intersectionFace",
           sourceIds: [firstId, secondId],
           // 几何留空：`addPrimitive` 会在同一事务里按来源重算，界面上看不到"先空后有"的一帧。
-          vertices: [],
-          faces: [],
-          volume: 0,
+          points: [],
+          normal: { x: 0, y: 0, z: 0 },
           area: 0,
+          hint: preview.hint ?? { x: 0, y: 0, z: 0 },
           status: "none",
           label: `交面 ${id.split("-").at(-1)}`
         }
       })
       setSelectedIds([id])
       setLayerNotice("已创建交面图元")
+      return
+    }
+    if (preview.kind === "point") {
+      const id = nextPrimitiveId(document, "intersectionPoint3")
+      const hint = preview.position ?? preview.hint ?? { x: 0, y: 0, z: 0 }
+      apply({
+        op: "addPrimitive",
+        primitive: {
+          id,
+          type: "intersectionPoint3",
+          sourceIds: [firstId, secondId],
+          position: { ...hint },
+          hint: { ...hint },
+          status: "none",
+          label: `交点 ${id.split("-").at(-1)}`
+        }
+      })
+      setSelectedIds([id])
+      setLayerNotice("已创建交点图元")
       return
     }
     const id = nextPrimitiveId(document, "intersectionLine")
@@ -545,11 +566,11 @@ export function App() {
         segments: preview.segments,
         classification: preview.segments.length > 1 ? "polyline" : "segment",
         status: "valid",
-        label: `截线 ${id.split("-").at(-1)}`
+        label: `交线 ${id.split("-").at(-1)}`
       }
     })
     setSelectedIds([id])
-    setLayerNotice("已创建截线图元")
+    setLayerNotice("已创建交线图元")
   }
   const addSection = () => {
     if (!selectedPrimitive || !solidTypes.includes(selectedPrimitive.type as typeof solidTypes[number])) return
@@ -1002,7 +1023,8 @@ export function App() {
   const previewInventoryPrompt = document.workspace === "geometry3d" && !sceneControl && !previewPrompt
     ? resolvePreviewInventoryPrompt({
         lines: scenePreviews.filter((item) => item.kind === "intersection").length,
-        solids: scenePreviews.filter((item) => item.kind === "solid").length,
+        points: scenePreviews.filter((item) => item.kind === "point").length,
+        faces: scenePreviews.filter((item) => item.kind === "face").length,
         truncated: previewSweep?.truncatedPairs ?? 0,
         dropped: previewSweep?.droppedPairs ?? 0
       })

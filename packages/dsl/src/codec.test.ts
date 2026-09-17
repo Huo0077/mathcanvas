@@ -217,6 +217,54 @@ describe("Geometry DSL codec", () => {
     expect(invalid({ ...valid, status: "wrong" }).valid).toBe(false)
   })
 
+  it("round-trips an intersection face and an intersection point, and rejects invalid ones", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      { id: "cube-a", type: "cube", origin: { x: -2, y: -2, z: -2 }, size: { x: 4, y: 4, z: 4 } },
+      { id: "cube-b", type: "cube", origin: { x: 0, y: -2, z: -2 }, size: { x: 4, y: 4, z: 4 } },
+      {
+        id: "face-1",
+        type: "intersectionFace",
+        sourceIds: ["cube-a", "cube-b"],
+        points: [{ x: 0, y: -2, z: -2 }, { x: 2, y: -2, z: -2 }, { x: 2, y: 2, z: -2 }, { x: 0, y: 2, z: -2 }],
+        normal: { x: 0, y: 0, z: -1 },
+        area: 16,
+        hint: { x: 1, y: 0, z: -2 },
+        status: "valid"
+      },
+      {
+        id: "point-1",
+        type: "intersectionPoint3",
+        sourceIds: ["cube-a", "cube-b"],
+        position: { x: 0, y: -2, z: -2 },
+        hint: { x: 0, y: -2, z: -2 },
+        status: "valid"
+      }
+    ]
+
+    const restored = decodeMgeo(encodeMgeo(document))
+    expect(restored.primitives).toEqual(document.primitives)
+
+    // 校验必须拦住：来源不足两个 / 相同 / 缺失 / 类型不对、顶点或法向非有限、面积非有限、
+    // 位置非有限、状态非法。
+    const invalid = (primitive: Record<string, unknown>) => validateDocument({ ...document, primitives: [document.primitives[0], document.primitives[1], primitive as never] })
+    const face = document.primitives[2] as unknown as Record<string, unknown>
+    const point = document.primitives[3] as unknown as Record<string, unknown>
+    expect(invalid({ ...face, sourceIds: ["cube-a"] }).valid).toBe(false)
+    expect(invalid({ ...face, sourceIds: ["cube-a", "cube-a"] }).valid).toBe(false)
+    expect(invalid({ ...face, sourceIds: ["cube-a", "missing"] }).valid).toBe(false)
+    expect(invalid({ ...face, points: [{ x: Number.NaN, y: 0, z: 0 }] }).valid).toBe(false)
+    expect(invalid({ ...face, normal: { x: Number.NaN, y: 0, z: 0 } }).valid).toBe(false)
+    expect(invalid({ ...face, area: Number.POSITIVE_INFINITY }).valid).toBe(false)
+    expect(invalid({ ...face, hint: { x: 0, y: Number.NaN, z: 0 } }).valid).toBe(false)
+    expect(invalid({ ...face, status: "wrong" }).valid).toBe(false)
+    expect(invalid({ ...point, sourceIds: ["cube-a", "cube-a"] }).valid).toBe(false)
+    expect(invalid({ ...point, position: { x: Number.NaN, y: 0, z: 0 } }).valid).toBe(false)
+    expect(invalid({ ...point, status: "wrong" }).valid).toBe(false)
+    // 交面必须是两个**实体**：面和平面没有体积可言（交点是交线的端点，面/平面可以）。
+    expect(invalid({ ...face, sourceIds: ["cube-a", "point-1"] }).valid).toBe(false)
+  })
+
   it("round-trips a versioned document with stable metadata", () => {
     const document = createEmptyDocument("calculus")
     const restored = decodeMgeo(encodeMgeo(document))

@@ -97,41 +97,46 @@ describe("status prompts", () => {
     expect(resolveIntersectionPreviewPrompt(null, false)).toBeNull()
   })
 
-  it("explains a 交面 preview as the boolean intersection, not as a cut", () => {
-    // 交面是"两个实体公共区域的整体表面"，说法必须与截面（一刀切出来的）区分开。
-    const idle = resolveIntersectionPreviewPrompt({ kind: "solid", label: "交面 · 6 面" }, false)
+  it("explains a 交面 preview as one surface of the overlap, and a 交点 preview as a corner of the 交线", () => {
+    // 交面是"公共区域的**一个面**"（用户口径："我需要的交面只是一个表面"），
+    // 说法必须与截面（一刀切出来的）区分开。
+    const idle = resolveIntersectionPreviewPrompt({ kind: "face", label: "交面 · 4 边形（面积 8.00）" }, false)
     expect(idle).toContain("交面")
     expect(idle).toContain("面片")
 
-    const hovered = resolveIntersectionPreviewPrompt({ kind: "solid", label: "交面 · 6 面" }, true)
-    expect(hovered).toContain("布尔交集")
-    expect(hovered).toContain("点击即创建交面图元")
+    const hovered = resolveIntersectionPreviewPrompt({ kind: "face", label: "交面 · 4 边形（面积 8.00）" }, true)
+    expect(hovered).toContain("公共区域的一个面")
+    expect(hovered).toContain("点击即创建这一面的交面图元")
     // 交面预览上那条边就是交线、顶点就是交点：用户要的三样东西一次说全。
     expect(hovered).toContain("交线")
     expect(hovered).toContain("交点")
+
+    const point = resolveIntersectionPreviewPrompt({ kind: "point", label: "交点" }, true)
+    expect(point).toContain("点击即创建交点图元")
+    expect(point).toContain("拐点")
   })
 
   it("announces the automatically drawn intersections, because they no longer need a selection", () => {
-    // 自动枚举之后，画布上有没有交线不再取决于选择：不说明就只剩一堆没人认识的虚线。
-    expect(resolvePreviewInventoryPrompt({ lines: 2, solids: 1, truncated: 0, dropped: 0 })).toBe("已自动标出 2 处交线、1 处交面：点虚线创建交线图元，点半透明面片创建交面图元。")
-    expect(resolvePreviewInventoryPrompt({ lines: 3, solids: 0, truncated: 0, dropped: 0 })).toContain("3 处交线")
-    // 没有交线 / 交面就不打扰（否则每次进 3D 工作区都多一句废话）。
-    expect(resolvePreviewInventoryPrompt({ lines: 0, solids: 0, truncated: 0, dropped: 0 })).toBeNull()
+    // 自动枚举之后，画布上有没有交点/交线/交面不再取决于选择：不说明就只剩一堆没人认识的虚线。
+    expect(resolvePreviewInventoryPrompt({ lines: 2, points: 8, faces: 6, truncated: 0, dropped: 0 })).toBe("已自动标出 2 处交线、8 处交点、6 个交面：点虚线创建交线，点圆点创建交点，点面片创建交面。")
+    expect(resolvePreviewInventoryPrompt({ lines: 3, points: 0, faces: 0, truncated: 0, dropped: 0 })).toContain("3 处交线")
+    // 什么都没有就不打扰（否则每次进 3D 工作区都多一句废话）。
+    expect(resolvePreviewInventoryPrompt({ lines: 0, points: 0, faces: 0, truncated: 0, dropped: 0 })).toBeNull()
   })
 
   it("says what the sweep could not compute, and does not pretend a missing 交面 is a drawn 交线", () => {
     // 截断说明必须与事实相符：被配额挤掉的那一对可能**连交线都没有**（完全包含），
-    // 所以不能说"只画了交线"——它只是"这次没算交面"。
-    const capped = resolvePreviewInventoryPrompt({ lines: 2, solids: 1, truncated: 3, dropped: 0 })
-    expect(capped).toContain("另有 3 处这次没算交面")
+    // 所以不能说"只画了交线"——它只是"交面没画全"。
+    const capped = resolvePreviewInventoryPrompt({ lines: 2, points: 4, faces: 1, truncated: 3, dropped: 0 })
+    expect(capped).toContain("另有 3 对来源的交面没画全")
     expect(capped).not.toContain("只画了交线")
 
-    // 连交线都没有、但确实少了一处交面：也必须说，不能静默。
-    const onlyTruncated = resolvePreviewInventoryPrompt({ lines: 0, solids: 0, truncated: 1, dropped: 0 })
-    expect(onlyTruncated).toContain("另有 1 处这次没算交面")
+    // 连交线都没有、但确实少了几块交面：也必须说，不能静默。
+    const onlyTruncated = resolvePreviewInventoryPrompt({ lines: 0, points: 0, faces: 0, truncated: 1, dropped: 0 })
+    expect(onlyTruncated).toContain("另有 1 对来源的交面没画全")
 
     // 超出单次扫描对数上限是另一回事：那几对连交线都没画，措辞要分开。
-    const dropped = resolvePreviewInventoryPrompt({ lines: 4, solids: 2, truncated: 0, dropped: 5 })
+    const dropped = resolvePreviewInventoryPrompt({ lines: 4, points: 2, faces: 6, truncated: 0, dropped: 5 })
     expect(dropped).toContain("5 处相交对超出单次扫描上限")
   })
 })

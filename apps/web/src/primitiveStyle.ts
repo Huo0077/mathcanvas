@@ -34,6 +34,8 @@ const defaultStrokes: Record<PrimitiveSpec["type"], string> = {
   section: "#f97316",
   intersectionLine: "#f04f5f",
   intersectionSolid: "#d92b3a",
+  intersectionFace: "#e0453f",
+  intersectionPoint3: "#b91c1c",
   circle: "#0f8a63",
   arc: "#f08a24",
   intersection: "#f04f5f",

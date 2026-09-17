@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import * as THREE from "three"
-import type { GeometryDocument, IntersectionSolidPrimitive, Plane3Primitive, Point3Primitive, Polyhedron3Primitive, SectionPrimitive, Vector3 } from "@draw/dsl"
+import type { GeometryDocument, IntersectionFacePrimitive, IntersectionPoint3Primitive, IntersectionSolidPrimitive, Plane3Primitive, Point3Primitive, Polyhedron3Primitive, SectionPrimitive, Vector3 } from "@draw/dsl"
 import { dihedralAngleDegrees, host3FromPrimitive, unfoldPolyhedron3, type Host3, type Host3Parameter } from "@draw/geometry-kernel"
 import { resolveMeasurementVisual } from "./measurementVisuals"
 import { syncOverlay } from "./overlaySync"
@@ -18,7 +18,7 @@ import type { ThreeScenePreview } from "./threeScenePreview"
 
 import { dragWorldPoint, dragFamilyIds, offsetSceneObjects, applyDragOffsets } from "./threeDrag"
 import { PICK_TOLERANCE_PX, pointHandleWorldRadius, pickRaycastHit3, templateTopologyOwners, pickSectionAt, resolveSelectableHit, previewBeatsPick } from "./threePicking"
-import { sectionUnitNormal, createPlane3Mesh, createSectionMesh, createIntersectionSolidGroup, createUnfoldNetGroup, createDihedralMarkerGroup, prefersReducedMotion, nextUnfoldProgress, createPlanePatch, createSolidGroup, visibleSolids, buildPointDrivenObject, disposeObject, disposeScene, createPreviewGroup, applyPreviewHighlight, hasDrawablePreview } from "./threePrimitives"
+import { sectionUnitNormal, createPlane3Mesh, createSectionMesh, createIntersectionSolidGroup, createIntersectionFaceGroup, createIntersectionPointGroup, createUnfoldNetGroup, createDihedralMarkerGroup, prefersReducedMotion, nextUnfoldProgress, createPlanePatch, createSolidGroup, visibleSolids, buildPointDrivenObject, disposeObject, disposeScene, createPreviewGroup, applyPreviewHighlight, hasDrawablePreview } from "./threePrimitives"
 
 const scenePalette = {
   background: "#fbfcff",
@@ -435,7 +435,16 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
         return line
       }, alive, order)
     })
-    // 已创建的交面：布尔交集的面集合，半透明填充 + 实线描边。与交线、截面同一条视觉语言：深色 = 已创建。
+    // 已创建的交面：**一个**平面面片（填色可改）；已创建的交点：交线的拐点。
+    document.primitives.filter((primitive): primitive is IntersectionFacePrimitive => primitive.type === "intersectionFace" && primitive.visible !== false).forEach((primitive) => {
+      keepContent(`intersection-face:${primitive.id}`, signer.of(primitive.id, `sel:${selectedIds.includes(primitive.id)}`), () => createIntersectionFaceGroup(primitive, selectedIds.includes(primitive.id)), alive, order)
+    })
+    document.primitives.filter((primitive): primitive is IntersectionPoint3Primitive => primitive.type === "intersectionPoint3" && primitive.visible !== false).forEach((primitive) => {
+      const marker = keepContent(`intersection-point:${primitive.id}`, signer.of(primitive.id, `sel:${selectedIds.includes(primitive.id)}`), () => createIntersectionPointGroup(primitive, selectedIds.includes(primitive.id)), alive, order)
+      // 与空间点手柄一起按屏幕尺寸缩放：远看近看都一样大、都好点。
+      if (marker instanceof THREE.Mesh) pointHandles.push(marker)
+    })
+    // 已创建的交面（整体）：布尔交集的多面体表面（旧文档里可能存在，仍然要画得出来）。
     document.primitives.filter((primitive): primitive is IntersectionSolidPrimitive => primitive.type === "intersectionSolid" && primitive.visible !== false).forEach((primitive) => {
       keepContent(`intersection-solid:${primitive.id}`, signer.of(primitive.id, `sel:${selectedIds.includes(primitive.id)}`), () => createIntersectionSolidGroup(primitive, selectedIds.includes(primitive.id)), alive, order)
     })
@@ -536,7 +545,9 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       const focused = previews.find((item) => item.focused) ?? null
       sceneShell.dataset.intersectionPreview = focused ? focused.kind : "none"
       sceneShell.dataset.previewCount = String(previews.length)
-      sceneShell.dataset.previewSolidCount = String(previews.filter((item) => item.kind === "solid").length)
+      sceneShell.dataset.previewFaceCount = String(previews.filter((item) => item.kind === "face").length)
+      sceneShell.dataset.previewPointCount = String(previews.filter((item) => item.kind === "point").length)
+      sceneShell.dataset.previewLineCount = String(previews.filter((item) => item.kind === "intersection").length)
       sceneShell.dataset.previewKeys = previews.map((item) => item.key).join(",")
       sceneShell.dataset.previewHoverKey = previewHoverKeyRef.current ?? ""
       sceneShell.dataset.unfoldFaces = String(unfoldFaceCount)
@@ -1089,18 +1100,18 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
         // 按点击位置重新判定预览（不能用 pointermove 留下的标志：原地点击可能根本没有移动事件）。
         const pointerRay = raycasterAt(point)
         const previewHit = previewHitAt(point)
-        const previewInFront = previewHit.depth === null || !hit || previewHit.depth <= hit.depth
-        const sectionWins = previewHit.preview?.kind === "section" && previewInFront
         /**
-         * 这次点击算创建还是算选中，交给 `previewBeatsPick` 判（那里有完整理由与单测）：
-         * 顶点手柄优先于预览；棱只在指针**确实压在它上面**时才优先——粗拾取的棱命中是按像素容差给的，
-         * 实测点交面正中时射线擦过一条棱，整类优先会让"点一下创建交面"完全没反应。
+         * "预览在前面"带一个拾取容差的余量：交点标记与来源实体的顶点手柄常常**共心**
+         *（交线的拐点就是那个顶点），半径不同会让大一点的那个在深度上先被命中——
+         * 差在一个容差之内就算"同一深度"，由 `previewBeatsPick` 决定该听谁的。
          */
+        const previewInFront = previewHit.depth === null || !hit || previewHit.depth <= hit.depth + pickTolerance()
         const previewWins = previewHit.preview !== null && previewBeatsPick({
+          previewKind: previewHit.preview.kind,
+          previewInFront,
           hitKind: hit?.kind ?? null,
           hitDistanceToRay: hit ? pointerRay.ray.distanceToPoint(new THREE.Vector3(hit.worldPoint.x, hit.worldPoint.y, hit.worldPoint.z)) : Number.POSITIVE_INFINITY,
-          tolerance: pickTolerance(),
-          sectionInFront: sectionWins
+          tolerance: pickTolerance()
         })
         // 排查读数：这一次点击到底被哪条规则拦下（粗拾取到了什么、预览有没有命中、谁更靠前）。
         if (sceneShell) sceneShell.dataset.pickReadout = `${hit?.kind ?? "none"}|${hit?.primitiveId ?? "-"}|${precise ? "precise" : "coarse"}|${previewHit.hovering ? "hover" : "off"}|${previewInFront ? "front" : "behind"}`
@@ -1127,6 +1138,12 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       raycaster.setFromCamera(new THREE.Vector2(normalizedPoint.x * 2 - 1, -(normalizedPoint.y * 2 - 1)), camera)
       return raycaster
     }
+    /**
+     * 同一处同时命中好几份预览时，取**更具体**的那一份：点 > 线 > 面。
+     * 交线的拐点上同时压着交点标记、交线命中带和它两边的交面片，用户点的是那个点；
+     * 交线的边上压着交面片，点的是那条线；只有面片中间没有更具体的东西，才归交面。
+     */
+    const previewSpecificity = (kind: ThreeScenePreview["kind"]): number => kind === "point" ? 3 : kind === "intersection" ? 2 : kind === "face" ? 1 : 0
     const previewHitAt = (normalizedPoint: { x: number; y: number }): { hovering: boolean; depth: number | null; preview: ThreeScenePreview | null } => {
       const lookup = new Map<THREE.Object3D, ThreeScenePreview>()
       for (const [key, group] of previewGroups) {
@@ -1144,7 +1161,10 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
         if (!best) { best = { distance: hit.distance, preview }; continue }
         const tolerance = Math.max(1e-3, hit.distance * 0.02)
         if (hit.distance < best.distance - tolerance) { best = { distance: hit.distance, preview }; continue }
-        if (Math.abs(hit.distance - best.distance) <= tolerance && preview.kind === "intersection" && best.preview.kind !== "intersection") best = { distance: hit.distance, preview }
+        // 距离几乎相同（同一处同时命中好几份预览）时取**更具体**的那一份：点 > 线 > 面。
+        if (Math.abs(hit.distance - best.distance) <= tolerance && previewSpecificity(preview.kind) > previewSpecificity(best.preview.kind)) {
+          best = { distance: hit.distance, preview }
+        }
       }
       return { hovering: best !== null, depth: best?.distance ?? null, preview: best?.preview ?? null }
     }

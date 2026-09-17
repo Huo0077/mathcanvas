@@ -549,10 +549,10 @@ test("creates an intersection line by clicking the dashed preview", async ({ pag
   await page.mouse.click(...Object.values(toScreen(-0.1, 0.2)) as [number, number])
 
   // 新图元进入文档、进入代数区，并且可撤销。
-  await expect(algebra.getByText("截线 1", { exact: true })).toBeVisible()
+  await expect(algebra.getByText("交线 1", { exact: true })).toBeVisible()
   await expect(page.getByRole("button", { name: "撤销" })).toBeEnabled()
   await page.getByRole("button", { name: "撤销" }).click()
-  await expect(algebra.getByText("截线 1", { exact: true })).toHaveCount(0)
+  await expect(algebra.getByText("交线 1", { exact: true })).toHaveCount(0)
 })
 
 test("previews the section of a selected solid as a dashed overlay", async ({ page }) => {

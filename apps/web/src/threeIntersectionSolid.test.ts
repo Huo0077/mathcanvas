@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest"
 import * as THREE from "three"
 
-import type { IntersectionSolidPrimitive } from "@draw/dsl"
+import type { IntersectionFacePrimitive, IntersectionPoint3Primitive, IntersectionSolidPrimitive } from "@draw/dsl"
 
-import { createIntersectionSolidGroup } from "./threePrimitives"
+import { createIntersectionFaceGroup, createIntersectionPointGroup, createIntersectionSolidGroup } from "./threePrimitives"
 
 /** 两个交叠立方体的布尔交集：x∈[0,2]、y∈[-2,2]、z∈[-2,2] 的长方体。 */
 const solid = (): IntersectionSolidPrimitive => ({
@@ -35,7 +35,72 @@ const opacityOf = (group: THREE.Object3D): number => {
   return (Array.isArray(material) ? material[0] : material).opacity
 }
 
-describe("已创建的交面图元怎么画", () => {
+describe("已创建的交面 / 交点图元怎么画", () => {
+  const face = (): IntersectionFacePrimitive => ({
+    id: "intersectionFace-1",
+    type: "intersectionFace",
+    sourceIds: ["cube-a", "cube-b"],
+    points: [{ x: 0, y: -2, z: -2 }, { x: 2, y: -2, z: -2 }, { x: 2, y: -2, z: 2 }, { x: 0, y: -2, z: 2 }],
+    normal: { x: 0, y: -1, z: 0 },
+    area: 8,
+    hint: { x: 1, y: -2, z: 0 },
+    status: "valid",
+    label: "交面 1"
+  })
+
+  const point = (): IntersectionPoint3Primitive => ({
+    id: "intersectionPoint3-1",
+    type: "intersectionPoint3",
+    sourceIds: ["cube-a", "cube-b"],
+    position: { x: 2, y: -2, z: 2 },
+    hint: { x: 2, y: -2, z: 2 },
+    status: "valid",
+    label: "交点 1"
+  })
+
+  const roleOf = (object: THREE.Object3D, role: string): THREE.Object3D[] => {
+    const found: THREE.Object3D[] = []
+    object.traverse((child) => { if (child.userData.visualRole === role) found.push(child) })
+    return found
+  }
+
+  it("draws one 交面 as a filled patch plus its outline, and honours the user's fill colour", () => {
+    const group = createIntersectionFaceGroup(face(), false)!
+
+    const patches = roleOf(group, "intersection-face")
+    expect(patches).toHaveLength(1)
+    expect(patches[0].userData.primitiveId).toBe("intersectionFace-1")
+    expect(roleOf(group, "intersection-face-edge")).toHaveLength(1)
+
+    // 用户反馈："我需要一个交面内部填充颜色可以更改的功能"——填色必须真的来自图元样式。
+    const styled = createIntersectionFaceGroup({ ...face(), style: { fill: "#22cc88", opacity: 0.5, stroke: "#0044ff" } }, false)!
+    const patch = roleOf(styled, "intersection-face")[0] as THREE.Mesh
+    const material = (Array.isArray(patch.material) ? patch.material[0] : patch.material) as THREE.MeshBasicMaterial
+    expect(material.color.getHexString()).toBe("22cc88")
+    expect(material.opacity).toBeCloseTo(0.5, 6)
+    const edge = roleOf(styled, "intersection-face-edge")[0] as THREE.LineSegments
+    expect((edge.material as THREE.LineBasicMaterial).color.getHexString()).toBe("0044ff")
+  })
+
+  it("draws nothing for a 交面 without a usable ring instead of a placeholder", () => {
+    expect(createIntersectionFaceGroup({ ...face(), points: [] }, false)).toBeNull()
+  })
+
+  it("draws one 交点 as a pickable handle-sized marker", () => {
+    const group = createIntersectionPointGroup(point(), false)!
+
+    expect(group.userData.primitiveId).toBe("intersectionPoint3-1")
+    expect(group.userData.primitiveType).toBe("intersectionPoint3")
+    expect(group.position.x).toBeCloseTo(2, 6)
+    expect(group.position.y).toBeCloseTo(-2, 6)
+    expect(group.position.z).toBeCloseTo(2, 6)
+    // 选中时换个颜色，和空间点手柄同一套视觉语言。
+    const selected = createIntersectionPointGroup(point(), true)!
+    expect((selected.material as THREE.MeshBasicMaterial).color.getHexString()).not.toBe(((group.material) as THREE.MeshBasicMaterial).color.getHexString())
+  })
+})
+
+describe("已创建的交集整体（旧文档仍要画得出来）", () => {
   it("draws every face of the boolean intersection, pickable and translucent", () => {
     const group = createIntersectionSolidGroup(solid(), false)!
 
