@@ -5,6 +5,7 @@ import { applyOperation, getAffectedPrimitiveIds, recomputeDerivedObjects, type 
 import type { BoxSelectionMode } from "@draw/geometry-kernel"
 
 import { createDragAction, getDragHandle, primitiveHandlePoints, type DragAction, type DragHandle } from "../interaction"
+import { CONNECTION_HIT_INSET_PX, insetSegment } from "../connectionHitBand"
 import { resolveAnnotationPoint } from "../annotations"
 import { clipFunctionSegmentsToBounds } from "../functionGraph"
 import { computeIntersectionPreviews, nearestPreview, PREVIEW_HIT_RADIUS, type IntersectionPreview } from "../intersectionPreview"
@@ -46,6 +47,8 @@ function eventToWorld(event: ReactMouseEvent<SVGElement> | ReactPointerEvent<SVG
 function rotateFeature(center: Coordinate, x: number, y: number, rotation: number): Coordinate {
   return { x: center.x + x * Math.cos(rotation) - y * Math.sin(rotation), y: center.y + x * Math.sin(rotation) + y * Math.cos(rotation) }
 }
+
+/** 连线命中带在两端各让出的屏幕像素（几何在 `connectionHitBand.ts`，见那里的说明）。 */
 
 function conicFeatures(primitive: Extract<PrimitiveSpec, { type: "parabola" | "ellipse" | "hyperbola" }>): Array<{ label: string; point: Coordinate }> {
   if (primitive.type === "parabola") {
@@ -148,6 +151,18 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
     return start && end ? { start, end } : null
   }
   const connectionControl = (connection: Extract<PrimitiveSpec, { type: "connection" }>) => connection.control?.thirdPointId ? pointById.get(connection.control.thirdPointId) : undefined
+
+  /**
+   * 连线的命中带要从两端**缩进**一段，别把端点盖住。
+   *
+   * 用户反馈："把动点放在轨道上、动点又和另一个定点连了线，移动轨道会带着定点一起移动"。
+   * 取证发现真正的毛病在这里：连线在点**之后**渲染，而它的命中带是 18px 宽（±9px），
+   * 于是端点（动点 / 连着的定点）正中心的那一下指针按下落在**连线**上；连线是派生对象、
+   * `getDragHandle` 返回 null，拖动直接不成立，还会退化成框选——点看起来"抓不住"。
+   * 命中带缩进 `CONNECTION_HIT_INSET_PX` 之后，端点那一小块归还给点本身，
+   * 连线中段照旧好点好选（短连线至少保留一半长度可点）。
+   */
+  const connectionHitInset = (scale: number) => Math.max(0.02, CONNECTION_HIT_INSET_PX / Math.max(scale, 1e-6))
   /**
    * 轨迹采样交给内核的 `sampleLocus`。相对之前的实现有两点关键差别：
    *
@@ -340,10 +355,24 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
     {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "intersection" | "lineCircleIntersection" | "circleIntersection" | "curveIntersection" }> => ["intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection"].includes(primitive.type) && primitive.visible !== false).map((primitive) => { const selected = selectedIds.includes(primitive.id); return <g key={primitive.id} data-primitive-type={primitive.type} opacity={opacityFor(primitive)} onClick={(event) => handleObjectClick(event, primitive.id)}><circle data-hit-target="true" cx={toX(primitive.x)} cy={toY(primitive.y)} r="14" fill="transparent" pointerEvents="all" /><circle cx={toX(primitive.x)} cy={toY(primitive.y)} r={selected ? 5 : 4} fill={fillFor(primitive)} stroke={strokeFor(primitive)} strokeWidth={strokeWidthFor(primitive, selected)} strokeDasharray={dashFor(primitive)} />{selected && <text data-intersection-info="true" x={toX(primitive.x) + 9} y={toY(primitive.y) - 9} fill="#172033" fontSize="11" fontWeight="600">{primitive.label ?? "交点 P"} ({primitive.x.toFixed(2)}, {primitive.y.toFixed(2)})</text>}</g> })}
     {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "intersectionSet" }> => primitive.type === "intersectionSet" && primitive.visible !== false).map((primitive) => { const selected = selectedIds.includes(primitive.id); return <g key={primitive.id} data-primitive-type="intersectionSet" opacity={opacityFor(primitive)} onClick={(event) => handleObjectClick(event, primitive.id)}>{primitive.points.map((point, index) => <g key={`${primitive.id}-point-${index}`}><circle data-hit-target="true" cx={toX(point.x)} cy={toY(point.y)} r="14" fill="transparent" pointerEvents="all" /><circle cx={toX(point.x)} cy={toY(point.y)} r={selected ? 5 : 4} fill={fillFor(primitive)} stroke={strokeFor(primitive)} strokeWidth={strokeWidthFor(primitive, selected)} strokeDasharray={dashFor(primitive)} />{selected && <text data-intersection-info="true" x={toX(point.x) + 9} y={toY(point.y) - 9} fill="#172033" fontSize="11" fontWeight="600">{primitive.label ?? "交点集合"} {index + 1} ({point.x.toFixed(2)}, {point.y.toFixed(2)})</text>}</g>)}</g> })}
     {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "parabola" | "ellipse" | "hyperbola" }> => selectedIds.includes(primitive.id) && ["parabola", "ellipse", "hyperbola"].includes(primitive.type) && primitive.visible !== false).map((primitive) => <g key={`${primitive.id}-features`} data-feature-marker="true">{conicFeatures(primitive).map((feature) => <g key={`${primitive.id}-${feature.label}`}><circle cx={toX(feature.point.x)} cy={toY(feature.point.y)} r="5" fill="#ffffff" stroke="#f04f5f" strokeWidth="2" /><text x={toX(feature.point.x) + 9} y={toY(feature.point.y) - 9} fill="#f04f5f" fontSize="13" fontWeight="700">{feature.label}</text></g>)}</g>)}
-    {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "connection" }> => primitive.type === "connection" && primitive.kind !== "parabola" && primitive.visible !== false).map((connection) => { const endpoints = connectionEndpoints(connection); if (!endpoints) return null; return <g key={connection.id} data-primitive-type="connection" opacity={opacityFor(connection)} onClick={(event) => handleObjectClick(event, connection.id)}><line data-hit-target="true" x1={toX(endpoints.start.x)} y1={toY(endpoints.start.y)} x2={toX(endpoints.end.x)} y2={toY(endpoints.end.y)} stroke="transparent" strokeWidth="18" pointerEvents="stroke" /><line x1={toX(endpoints.start.x)} y1={toY(endpoints.start.y)} x2={toX(endpoints.end.x)} y2={toY(endpoints.end.y)} stroke={strokeFor(connection)} strokeWidth={strokeWidthFor(connection, selectedIds.includes(connection.id))} strokeDasharray={dashFor(connection)} /></g> })}
+    {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "connection" }> => primitive.type === "connection" && primitive.kind !== "parabola" && primitive.visible !== false).map((connection) => { const endpoints = connectionEndpoints(connection); if (!endpoints) return null; const hit = insetSegment(endpoints, connectionHitInset(viewport.scale)); return <g key={connection.id} data-primitive-type="connection" opacity={opacityFor(connection)} onClick={(event) => handleObjectClick(event, connection.id)}><line data-hit-target="true" x1={toX(hit.start.x)} y1={toY(hit.start.y)} x2={toX(hit.end.x)} y2={toY(hit.end.y)} stroke="transparent" strokeWidth="18" pointerEvents="stroke" /><line x1={toX(endpoints.start.x)} y1={toY(endpoints.start.y)} x2={toX(endpoints.end.x)} y2={toY(endpoints.end.y)} stroke={strokeFor(connection)} strokeWidth={strokeWidthFor(connection, selectedIds.includes(connection.id))} strokeDasharray={dashFor(connection)} /></g> })}
     {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "connection" }> => primitive.type === "connection" && primitive.kind === "parabola" && primitive.visible !== false).map((connection) => { const endpoints = connectionEndpoints(connection); const control = connectionControl(connection); if (!endpoints || !control) return null; const path = `M ${toX(endpoints.start.x)} ${toY(endpoints.start.y)} Q ${toX(control.x)} ${toY(control.y)} ${toX(endpoints.end.x)} ${toY(endpoints.end.y)}`; return <g key={connection.id} data-primitive-type="connection" data-connection-kind="parabola" opacity={opacityFor(connection)} onClick={(event) => handleObjectClick(event, connection.id)}><path data-hit-target="true" d={path} fill="none" stroke="transparent" strokeWidth="18" pointerEvents="stroke" /><path d={path} fill="none" stroke={strokeFor(connection)} strokeWidth={strokeWidthFor(connection, selectedIds.includes(connection.id))} strokeDasharray={dashFor(connection)} /></g> })}
+    {/* 轨迹画在点**之前**：动点永远落在自己的轨迹上，轨迹若压在点的命中区之上，点就再也拖不动了。 */}
     {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "locus" }> => primitive.type === "locus" && primitive.visible !== false).map((locus) => <g key={locus.id} data-primitive-type="locus" opacity={opacityFor(locus)} onClick={(event) => handleObjectClick(event, locus.id)}>{locusSegments(locus).map((points, index) => <polyline key={`${locus.id}-${index}`} points={pointsAttribute(points, viewport)} fill="none" stroke={strokeFor(locus)} strokeWidth={strokeWidthFor(locus, selectedIds.includes(locus.id))} strokeDasharray={dashFor(locus)} />)}</g>)}
     {renderAnnotations()}
+    {/**
+       * 点的命中区在**最上面再画一遍**（透明，只接指针事件）。
+       *
+       * 用户反馈："把动点放在轨道上，动点又和另一个定点连了线，那我移动轨道会带着设置好的定点一起移动"。
+       * 取证（Playwright 读 `elementFromPoint`）发现真正的问题是：连线与轨迹都画在点**之后**，
+       * 而连线那根可见线正好从两端点穿过（轨迹更是必然穿过动点自己），于是"点正中心"的那一下
+       * 指针按下落在它们身上——它们是派生对象、`getDragHandle` 返回 null，拖动根本不成立，
+       * 还会退化成框选：点看起来"抓不住"，连带定点也拖不动。
+       *
+       * 与其把整层绘制顺序倒过来（连线 / 轨迹自身仍要能点选），不如把点的命中区补在最上面：
+       * 点始终赢，派生曲线中段照旧可选。
+       */}
+    {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "point" }> => primitive.type === "point" && primitive.visible !== false).map((point) => <circle key={`${point.id}-hit-top`} data-primitive-type="point" data-point-hit="top" data-hit-target="true" cx={toX(point.x)} cy={toY(point.y)} r="14" fill="transparent" pointerEvents="all" onPointerDown={(event) => beginDrag(event, point.id)} onClick={(event) => handleObjectClick(event, point.id)} />)}
     {renderIntersectionPreviews()}
     {selectionRect && <rect className="selection-rect" data-selection-mode={selectionRect.mode} x={selectionRect.x} y={selectionRect.y} width={selectionRect.width} height={selectionRect.height} />}
   </svg></div></main>

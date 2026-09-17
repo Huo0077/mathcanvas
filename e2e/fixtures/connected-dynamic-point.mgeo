@@ -1,0 +1,57 @@
+{
+  "format": "mgeo",
+  "formatVersion": "0.1",
+  "document": {
+    "schemaVersion": "0.1",
+    "revision": 1,
+    "workspace": "conics",
+    "coordinateSystems": [
+      "cartesian-2d"
+    ],
+    "parameters": {},
+    "primitives": [
+      {
+        "id": "line-path",
+        "type": "line",
+        "a": { "x": -6, "y": -3 },
+        "b": { "x": 6, "y": 3 },
+        "label": "轨道"
+      },
+      {
+        "id": "point-a",
+        "type": "point",
+        "x": 0,
+        "y": 0,
+        "label": "A",
+        "binding": { "kind": "onPath", "pathId": "line-path", "parameter": 0.5 }
+      },
+      {
+        "id": "point-b",
+        "type": "point",
+        "x": 4,
+        "y": 4,
+        "label": "B"
+      },
+      {
+        "id": "conn-ab",
+        "type": "connection",
+        "kind": "segment",
+        "startPointId": "point-a",
+        "endPointId": "point-b",
+        "label": "AB"
+      }
+    ],
+    "groups": [],
+    "constraints": [],
+    "dynamics": [],
+    "annotations": [],
+    "measurements": [],
+    "engineeringAnnotations": [],
+    "metadata": {
+      "id": "doc-connected-point-fixture",
+      "name": "Connected dynamic point",
+      "createdAt": "2026-09-17T00:00:00.000Z",
+      "updatedAt": "2026-09-17T00:00:00.000Z"
+    }
+  }
+}
