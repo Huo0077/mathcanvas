@@ -89,23 +89,21 @@ describe("intersection line primitive", () => {
     expect(noRings.diagnostic).toContain("面环")
   })
 
-  it("protects the sources from deletion while an intersection line references them", () => {
+  it("deletes the intersection line together with its sources", () => {
     const document = overlappingCubes()
     const withLine = applyOperation(document, {
       op: "addPrimitive",
       primitive: { id: "line-1", type: "intersectionLine", sourceIds: ["cube-a", "cube-b"], segments: [], classification: "none", status: "degenerate" }
     }).document
 
-    // 来源被交线引用时不能删除：依赖索引要认得 `sourceIds`。
+    // 依赖索引要认得 `sourceIds`：交线是 cube-a 的下游。
     const index = getDependencyIndex(withLine)
     expect(index.get("cube-a")).toContain("line-1")
-    const blocked = commitPatch(withLine, { op: "deleteObject", id: "cube-a" })
-    expect(blocked.changed).toBe(false)
-    expect(blocked.error).toContain("referenced")
-
-    // 先删交线，来源随之可删。
-    const withoutLine = applyOperation(withLine, { op: "deleteObject", id: "line-1" }).document
-    expect(commitPatch(withoutLine, { op: "deleteObject", id: "cube-a" }).changed).toBe(true)
+    // 交线是纯派生对象：删来源时它随来源一起注销（不再要求用户先手动删交线）。
+    const deleted = commitPatch(withLine, { op: "deleteObject", id: "cube-a" })
+    expect(deleted.changed).toBe(true)
+    expect(deleted.document.primitives.some((primitive) => primitive.id === "line-1")).toBe(false)
+    expect(deleted.document.primitives.some((primitive) => primitive.id === "cube-b")).toBe(true)
   })
 
   it("rejects a patch that swaps in an unusable source list", () => {

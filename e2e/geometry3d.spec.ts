@@ -188,18 +188,21 @@ test("deletes a solid together with the topology it generated", async ({ page })
   await expect(algebra.getByText("A", { exact: true })).toBeVisible()
 })
 
-test("still refuses to delete a solid another object depends on", async ({ page }) => {
+test("deletes a solid together with the section that cuts it", async ({ page }) => {
   await page.goto("/")
   await page.getByRole("button", { name: "立体几何" }).click()
   await page.getByRole("button", { name: "添加立方体" }).click()
   await page.getByRole("button", { name: "创建截面" }).click()
+  await expect(page.locator("[data-3d-scene]")).toHaveAttribute("data-section-count", "1")
 
+  // 截面是纯派生对象：删实体时随它一起注销（不再要求用户先手动删截面）。
   const algebra = page.locator(".algebra-panel")
   await algebra.getByText("立方体 1", { exact: true }).first().click()
   await page.keyboard.press("Delete")
 
-  await expect(page.getByRole("alert")).toContainText("object is referenced by another object")
-  await expect(algebra.getByText("立方体 1", { exact: true })).toBeVisible()
+  await expect(algebra.getByText("立方体 1", { exact: true })).toHaveCount(0)
+  await expect(algebra.getByText("截面 1", { exact: true })).toHaveCount(0)
+  await expect(page.locator("[data-3d-scene]")).toHaveAttribute("data-section-count", "0")
 })
 
 test("builds a visible plane from three selected points", async ({ page }) => {

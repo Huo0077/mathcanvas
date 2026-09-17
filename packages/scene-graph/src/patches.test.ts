@@ -68,14 +68,17 @@ describe("domain patches", () => {
    * 删掉动点所绑定的曲线会留下一个悬空的 pathId：点会静默冻住，用户完全看不出为什么。
    * `isReferenced` 原来只覆盖了 point3 的绑定，二维点被漏掉了。
    */
-  it("rejects deleting the curve a dynamic point is bound to", () => {
+  it("unbinds a dynamic point when the curve it was bound to is deleted", () => {
     const document = createEmptyDocument("conics")
     document.primitives = [
       { id: "parabola-1", type: "parabola", vertex: { x: 0, y: 0 }, focalParameter: 2, axis: "y" },
       { id: "point-1", type: "point", x: 0, y: 0, binding: { kind: "onPath", pathId: "parabola-1", parameter: 0, domain: [-4, 4] } }
     ]
 
-    expect(validatePatch(document, { op: "deleteObject", id: "parabola-1" })).toEqual({ valid: false, errors: ["object is referenced by another object"] })
+    // 宿主可以被删：绑定点降级为自由点（位置保留），而不是留下悬空的 pathId 让文档存不下去。
+    expect(validatePatch(document, { op: "deleteObject", id: "parabola-1" })).toEqual({ valid: true })
+    const deleted = commitPatch(document, { op: "deleteObject", id: "parabola-1" }).document
+    expect(deleted.primitives.find((primitive) => primitive.id === "point-1")).toMatchObject({ type: "point", binding: { kind: "free" } })
     // A free point is still deletable on its own.
     expect(validatePatch(document, { op: "deleteObject", id: "point-1" }).valid).toBe(true)
   })
@@ -236,7 +239,7 @@ describe("domain patches", () => {
    * （注释 / 分组 / 测量 / 约束），删除仍会被拒绝 —— 那些是既有测试保护的刻意行为，
    * 不能因为"要删交点"就顺手把用户写的内容一起抹掉。
    */
-  it("still asks the user to clean up their own annotations on the intersection first", () => {
+  it("takes the user's own annotation down with the object it points at", () => {
     const document = createEmptyDocument("conics")
     document.primitives = [
       { id: "line-a", type: "line", a: { x: 0, y: 0 }, b: { x: 1, y: 1 } },
@@ -245,28 +248,23 @@ describe("domain patches", () => {
     ]
     document.annotations = [{ id: "note", text: "交点", target: "intersection" }]
 
-    expect(validatePatch(document, { op: "deleteObject", id: "line-a" })).toEqual({ valid: false, errors: ["object is referenced by another object"] })
-    // Removing the note (or deleting the intersection directly) unblocks it.
-    const withoutNote = { ...document, annotations: [] }
-    expect(validatePatch(withoutNote, { op: "deleteObject", id: "line-a" })).toEqual({ valid: true })
+    // 标注挂在对象上：删对象时一起注销（用户确认的语义），不留悬空引用。
+    expect(validatePatch(document, { op: "deleteObject", id: "line-a" })).toEqual({ valid: true })
+    const deleted = commitPatch(document, { op: "deleteObject", id: "line-a" }).document
+    expect(deleted.primitives.map((primitive) => primitive.id)).toEqual(["line-b"])
+    expect(deleted.annotations).toEqual([])
+    expect(validateDocument(deleted).valid).toBe(true)
   })
 
-  it("still protects the object the user explicitly deleted when they annotated it", () => {
+  it("deletes the annotation together with the point it annotates", () => {
     const document = createEmptyDocument("conics")
     document.primitives = [{ id: "point-1", type: "point", x: 1, y: 1 }]
     document.annotations = [{ id: "note", text: "顶点", target: "point-1" }]
 
-    // A note the user wrote themselves is not silently thrown away; remove it first.
-    expect(validatePatch(document, { op: "deleteObject", id: "point-1" })).toEqual({ valid: false, errors: ["object is referenced by another object"] })
-  })
-
-  it("still protects the object the user explicitly deleted when they annotated it", () => {
-    const document = createEmptyDocument("conics")
-    document.primitives = [{ id: "point-1", type: "point", x: 1, y: 1 }]
-    document.annotations = [{ id: "note", text: "顶点", target: "point-1" }]
-
-    // A note the user wrote themselves is not silently thrown away; remove it first.
-    expect(validatePatch(document, { op: "deleteObject", id: "point-1" })).toEqual({ valid: false, errors: ["object is referenced by another object"] })
+    const deleted = commitPatch(document, { op: "deleteObject", id: "point-1" }).document
+    expect(deleted.primitives).toEqual([])
+    expect(deleted.annotations).toEqual([])
+    expect(validateDocument(deleted).valid).toBe(true)
   })
 
   it("creates and protects a sampled curve intersection", () => {
@@ -374,12 +372,16 @@ describe("domain patches", () => {
     expect(deleted.document.engineeringAnnotations).toEqual([])
   })
 
-  it("protects primitives referenced by annotations", () => {
+  it("deletes an annotation anchored to the object it was attached to", () => {
     const document = createEmptyDocument("calculus")
     document.primitives = [{ id: "line-a", type: "line", a: { x: 0, y: 0 }, b: { x: 1, y: 1 } }]
     const annotated = commitPatch(document, { op: "addAnnotation", annotation: { id: "annotation-1", text: "A", anchor: { kind: "primitive", primitiveId: "line-a" } } } as never)
 
-    expect(validatePatch(annotated.document, { op: "deleteObject", id: "line-a" })).toEqual({ valid: false, errors: ["object is referenced by another object"] })
+    expect(validatePatch(annotated.document, { op: "deleteObject", id: "line-a" })).toEqual({ valid: true })
+    const deleted = commitPatch(annotated.document, { op: "deleteObject", id: "line-a" }).document
+    expect(deleted.primitives).toEqual([])
+    expect(deleted.annotations).toEqual([])
+    expect(validateDocument(deleted).valid).toBe(true)
   })
 
   it("translates a function through one domain operation", () => {
@@ -416,7 +418,7 @@ describe("domain patches", () => {
     expect(validatePatch(document, { op: "addConstraint", constraint: { id: "collinear-1", type: "collinear", targets: ["point-a", "point-b"] } })).toEqual({ valid: false, errors: ["constraint has invalid targets"] })
   })
 
-  it("adds and deletes a 3D measurement transactionally and protects its sources", () => {
+  it("adds and deletes a 3D measurement transactionally and unregisters it with its sources", () => {
     const document = createEmptyDocument("geometry3d")
     document.primitives = [
       { id: "point-a", type: "point3", position: { x: 0, y: 0, z: 0 } },
@@ -428,20 +430,27 @@ describe("domain patches", () => {
     expect(added.changed).toBe(true)
     expect(added.document.measurements).toHaveLength(1)
     expect(added.document.measurements[0]).toMatchObject({ id: "measurement3-1", metric: "distance", status: "valid", value: 5 })
-    expect(validatePatch(added.document, { op: "deleteObject", id: "point-a" })).toEqual({ valid: false, errors: ["object is referenced by another object"] })
+    // 删除被测量的点时测量随宿主一起注销，不再要求用户"先手动删测量"。
+    expect(validatePatch(added.document, { op: "deleteObject", id: "point-a" })).toEqual({ valid: true })
+    const withoutPoint = commitPatch(added.document, { op: "deleteObject", id: "point-a" }).document
+    expect(withoutPoint.measurements).toEqual([])
+    expect(validateDocument(withoutPoint).valid).toBe(true)
     expect(validatePatch(added.document, { op: "addMeasurement", measurement })).toEqual({ valid: false, errors: ["duplicate measurement id"] })
     expect(validatePatch(added.document, { op: "addMeasurement", measurement: { ...measurement, id: "measurement3-2", sourceIds: ["missing"] } })).toEqual({ valid: false, errors: ["measurement has invalid sources"] })
     expect(commitPatch(added.document, { op: "deleteMeasurement", id: measurement.id }).document.measurements).toEqual([])
   })
 
-  it("protects a solid referenced by a section", () => {
+  it("deletes a section together with the solid it cuts", () => {
     const document = createEmptyDocument("geometry3d")
     document.primitives = [
       { id: "cube-1", type: "cube", origin: { x: -1, y: -1, z: -1 }, size: { x: 2, y: 2, z: 2 } },
       { id: "section-1", type: "section", sourceId: "cube-1", plane: { normal: { x: 0, y: 0, z: 1 }, constant: 0 }, points: [], classification: "none", status: "undefined" }
     ]
 
-    expect(validatePatch(document, { op: "deleteObject", id: "cube-1" })).toEqual({ valid: false, errors: ["object is referenced by another object"] })
+    expect(validatePatch(document, { op: "deleteObject", id: "cube-1" })).toEqual({ valid: true })
+    const deleted = commitPatch(document, { op: "deleteObject", id: "cube-1" }).document
+    expect(deleted.primitives).toEqual([])
+    expect(validateDocument(deleted).valid).toBe(true)
   })
 
   it("deletes a template solid together with the topology it generated", () => {
@@ -476,19 +485,26 @@ describe("domain patches", () => {
     expect(validateDocument(result.document).valid).toBe(true)
   })
 
-  it("still protects a template solid that another object depends on", () => {
+  it("deletes a section together with its template solid, keeping the document valid", () => {
     const { document } = templateCubeDocument()
     document.primitives.push({ id: "section-1", type: "section", sourceId: "cube-1", plane: { normal: { x: 0, y: 0, z: 1 }, constant: 0 }, points: [], classification: "none", status: "undefined" })
 
-    expect(validatePatch(document, { op: "deleteObject", id: "cube-1" })).toEqual({ valid: false, errors: ["object is referenced by another object"] })
+    expect(validatePatch(document, { op: "deleteObject", id: "cube-1" })).toEqual({ valid: true })
+    const deleted = commitPatch(document, { op: "deleteObject", id: "cube-1" }).document
+    expect(deleted.primitives).toEqual([])
+    expect(validateDocument(deleted).valid).toBe(true)
   })
 
-  it("still protects a generated face that a measurement depends on", () => {
+  it("deletes a generated face together with the measurement on it", () => {
     const { document, built } = templateCubeDocument()
     document.measurements = [{ id: "measurement3-1", kind: "measurement3", metric: "area", sourceIds: [built.faceIds[0]], precision: "numeric-approximation", status: "valid", explanation: "面积" }]
 
-    expect(validatePatch(document, { op: "deleteObject", id: "cube-1" })).toEqual({ valid: false, errors: ["object is referenced by another object"] })
-    expect(validatePatch(document, { op: "deleteObject", id: built.faceIds[0] })).toEqual({ valid: false, errors: ["object is referenced by another object"] })
+    // 生成的面属于模板实体（删面 = 删整族），测量随它一起注销。
+    expect(validatePatch(document, { op: "deleteObject", id: built.faceIds[0] })).toEqual({ valid: true })
+    const deleted = commitPatch(document, { op: "deleteObject", id: "cube-1" }).document
+    expect(deleted.primitives).toEqual([])
+    expect(deleted.measurements).toEqual([])
+    expect(validateDocument(deleted).valid).toBe(true)
   })
 
   it("rejects malformed measurement patches without throwing", () => {

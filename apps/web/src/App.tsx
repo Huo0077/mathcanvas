@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 
 import { decodeMgeo, encodeMgeo, type AnnotationFeature, type DrawingSheetSpec, type EngineeringAnnotationKind, type Measurement3Metric, type PrimitiveSpec, type Vector3, type Workspace } from "@draw/dsl"
 import { buildSolidTemplate, createMeasurement3, evaluatePlanarMeasurement, host3FromPrimitive, selectPrimitivesInBox, type BoxSelectionMode, type PlanarMetric } from "@draw/geometry-kernel"
-import { deletionTargets, sectionMaterialization, sectionPivot, sectionPlaneThroughSource, sectionSourceVertices, validatePatch } from "@draw/scene-graph"
+import { deletionTargets, sectionMaterialization, sectionPivot, sectionPlaneThroughSource, sectionSourceVertices, validateDeletion, validatePatch } from "@draw/scene-graph"
 import type { Alignment } from "@draw/scene-graph"
 
 import { AlgebraView } from "./components/AlgebraView"
@@ -737,10 +737,13 @@ export function App() {
   }
   const deleteSelected = () => {
     if (!selectedIds.length) return
-    const validations = selectedIds.map((id) => validatePatch(document, { op: "deleteObject", id }))
-    const invalid = validations.find((validation) => !validation.valid)
-    if (invalid && !invalid.valid) {
-      setFileError(invalid.errors.join(", "))
+    /**
+     * **并集校验**：一次选中要删的全部 id 一起算作"自己人"。
+     * 逐个 id 校验会让"点 + 依赖它的线"互相挡——实测两个都删不掉。
+     */
+    const validation = validateDeletion(document, selectedIds)
+    if (!validation.valid) {
+      setFileError(validation.errors.join(", "))
       return
     }
     // A solid and its generated topology are one object, so a selection covering both must delete it once.
@@ -750,6 +753,7 @@ export function App() {
       for (const target of deletionTargets(document, id)) removed.add(target)
       apply({ op: "deleteObject", id })
     }
+    // 中间失败不再被静默吞掉：一次删除里的最后一次错误由 `operationError` 渲染出来。
     setSelectedIds([])
     setFileError(null)
   }

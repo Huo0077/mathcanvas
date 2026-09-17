@@ -1188,8 +1188,52 @@ function cascadeSources(primitive: PrimitiveSpec): string[] {
   if (primitive.type === "intersectionSet") return [primitive.objectA, primitive.objectB]
   if (primitive.type === "locus") return [primitive.sourcePointId]
   if (primitive.type === "connection") return [primitive.startPointId, primitive.endPointId, ...(primitive.control?.thirdPointId ? [primitive.control.thirdPointId] : [])]
+  // 截面与截线同样是**纯派生**对象：删掉来源实体时用户不该先手动清掉它们。
+  if (primitive.type === "section") return [primitive.sourceId]
+  if (primitive.type === "intersectionLine") return primitive.sourceIds
   const analysisSource = functionAnalysisSourceId(primitive)
   return analysisSource === null ? [] : [analysisSource]
+}
+
+/**
+ * 一次删除要连带处理的东西。
+ *
+ * 语义（用户已确认）：**派生与标注随宿主一起注销**，用户自己搭出来的构造引用仍然拒绝删除
+ * （除非一起选中——那条路由 `validateDeletion` 做并集校验）。
+ * 绑定点不删：宿主没了就把它**降级为自由点**并保留位置，不静默吞掉用户的内容。
+ */
+export interface DeletionPlan {
+  primitives: Set<string>
+  measurements: Set<string>
+  annotations: Set<string>
+  engineeringAnnotations: Set<string>
+  constraints: Set<string>
+  groupMembers: Set<string>
+}
+
+export function deletionPlan(document: GeometryDocument, ids: string[]): DeletionPlan {
+  const primitives = new Set(ids.flatMap((id) => [...deletionTargets(document, id)]))
+  return {
+    primitives,
+    measurements: new Set(document.measurements.filter((measurement) => measurement.sourceIds.some((sourceId) => primitives.has(sourceId))).map((measurement) => measurement.id)),
+    annotations: new Set(document.annotations.filter((annotation) => (typeof annotation.target === "string" && primitives.has(annotation.target)) || (annotation.anchor?.kind === "primitive" && primitives.has(annotation.anchor.primitiveId))).map((annotation) => annotation.id)),
+    engineeringAnnotations: new Set((document.engineeringAnnotations ?? []).filter((annotation) => annotation.sourceIds.some((sourceId) => primitives.has(sourceId))).map((annotation) => annotation.id)),
+    constraints: new Set(document.constraints.filter((constraint) => constraint.targets.some((target) => primitives.has(target))).map((constraint) => constraint.id)),
+    // 分组是用户的容器：只把被删成员摘掉，空分组保留（不替用户丢东西）。
+    groupMembers: new Set(document.groups.flatMap((group) => group.members).filter((member) => primitives.has(member)))
+  }
+}
+
+/** 宿主被删除时把引用它的点降级为自由点（位置保留），避免悬空引用让文档存不下去。 */
+function unbindDeletedHost(primitive: PrimitiveSpec, deleted: Set<string>): PrimitiveSpec {
+  if (primitive.type === "point3" && primitive.binding && primitive.binding.kind !== "free") {
+    const binding = primitive.binding
+    const hostId = binding.kind === "onLine" ? binding.lineId : binding.kind === "onPlane" ? binding.planeId : binding.kind === "onHost" ? binding.hostId : binding.kind === "onFace" ? binding.faceId : binding.kind === "onSurface" ? binding.solidId : null
+    const sources = binding.kind === "derived" ? binding.sourceIds : hostId ? [hostId] : []
+    if (sources.some((sourceId) => deleted.has(sourceId))) return { ...primitive, binding: { kind: "free" } }
+  }
+  if (primitive.type === "point" && primitive.binding?.kind === "onPath" && deleted.has(primitive.binding.pathId)) return { ...primitive, binding: { kind: "free" } }
+  return primitive
 }
 
 /**
@@ -1448,10 +1492,18 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
     next.constraints.push(operation.constraint)
     changedIds = operation.constraint.targets
   } else if (operation.op === "deleteObject") {
-    const targets = deletionTargets(next, operation.id)
+    const plan = deletionPlan(next, [operation.id])
+    const targets = plan.primitives
     const before = next.primitives.length
-    next.primitives = next.primitives.filter((primitive) => !targets.has(primitive.id))
+    // 先"解绑"再过滤：宿主被删掉的点降级为自由点（保留位置），不留悬空引用。
+    next.primitives = next.primitives.map((primitive) => unbindDeletedHost(primitive, targets)).filter((primitive) => !targets.has(primitive.id))
     if (before === next.primitives.length) return { document, changed: false, error: "object not found" }
+    // 测量 / 注释 / 工程标注 / 约束随宿主一起注销；分组只摘掉被删成员。
+    if (plan.measurements.size > 0) next.measurements = next.measurements.filter((measurement) => !plan.measurements.has(measurement.id))
+    if (plan.annotations.size > 0) next.annotations = next.annotations.filter((annotation) => !plan.annotations.has(annotation.id))
+    if (plan.engineeringAnnotations.size > 0 && next.engineeringAnnotations) next.engineeringAnnotations = next.engineeringAnnotations.filter((annotation) => !plan.engineeringAnnotations.has(annotation.id))
+    if (plan.constraints.size > 0) next.constraints = next.constraints.filter((constraint) => !plan.constraints.has(constraint.id))
+    if (plan.groupMembers.size > 0) next.groups = next.groups.map((group) => group.members.some((member) => plan.groupMembers.has(member)) ? { ...group, members: group.members.filter((member) => !plan.groupMembers.has(member)) } : group)
     /**
      * 回收"随对象自动生成"的驱动参数。判据是**孤儿**而不是"本次被删"：
      * 只要它带 `ownerId`（自动生成）、归属对象已经不在文档里、且没有任何图元引用它，就是垃圾。

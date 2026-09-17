@@ -1308,7 +1308,7 @@ describe("MathCanvas workbench", () => {
     expect(screen.getByRole("alert").textContent).toContain("selection contains locked object")
   })
 
-  it("creates and deletes a spatial measurement so its sources become deletable again", () => {
+  it("deletes a spatial point together with the measurement that depends on it", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
     fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
@@ -1318,18 +1318,14 @@ describe("MathCanvas workbench", () => {
     fireEvent.click(screen.getByRole("button", { name: "距离" }))
 
     expect(useSceneStore.getState().document.measurements).toHaveLength(1)
-    const measurementId = useSceneStore.getState().document.measurements[0].id
 
+    // 测量随宿主一起注销：不再要求用户"先删测量再删点"（用户确认的级联语义）。
     fireEvent.click(algebraRow("A"))
     fireEvent.keyDown(window, { key: "Delete" })
-    expect(screen.getByRole("alert").textContent).toContain("object is referenced by another object")
-
-    fireEvent.click(screen.getByRole("button", { name: `删除测量 ${measurementId}` }))
     expect(useSceneStore.getState().document.measurements).toHaveLength(0)
-
-    fireEvent.click(algebraRow("A"))
-    fireEvent.keyDown(window, { key: "Delete" })
     expect(useSceneStore.getState().document.primitives.some((primitive) => primitive.type === "point3" && primitive.label === "A")).toBe(false)
+    // 另一个点不受影响。
+    expect(useSceneStore.getState().document.primitives.some((primitive) => primitive.type === "point3" && primitive.label === "B")).toBe(true)
   })
 
   it("shows a small bottom-left guide when a feature button is clicked", () => {

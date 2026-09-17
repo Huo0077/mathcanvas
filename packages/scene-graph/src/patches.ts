@@ -79,34 +79,41 @@ function isDrawingSheet(value: unknown): value is NonNullable<GeometryDocument["
  * 注释 / 分组 / 约束 / 测量仍然**一律阻塞**删除 —— 它们是用户自己写下的内容，
  * 不该因为删一个图形就被默默抹掉（这条有既有测试保护，不要顺手放宽）。
  */
+/**
+ * 删除保护只覆盖"用户自己搭出来的**构造**引用"：点被线 / 面 / 多面体引用。
+ *
+ * 派生对象（交点、轨迹、连接、截面、截线、函数分析族）、测量、注释、约束、分组与被绑定的宿主
+ * **都不再阻止删除**——它们随来源一起注销或降级（见 `deletionPlan`），这就是"删除宿主时级联注销"。
+ * 唯一还拒绝删除的理由是对象被**锁定**。
+ */
 function isReferenced(document: GeometryDocument, id: string, ignoredReferrers: Set<string> = new Set()): boolean {
-  return document.groups.some((group) => group.members.includes(id)) || document.constraints.some((constraint) => constraint.targets.includes(id)) || document.measurements.some((measurement) => measurement.sourceIds.includes(id)) || (document.engineeringAnnotations ?? []).some((annotation) => annotation.sourceIds.includes(id)) || document.annotations.some((annotation) => annotation.target === id || (annotation.anchor?.kind === "primitive" && annotation.anchor.primitiveId === id)) || document.primitives.some((primitive) => !ignoredReferrers.has(primitive.id) && (
-    (primitive.type === "intersection" && (primitive.lineA === id || primitive.lineB === id)) ||
-    (primitive.type === "lineCircleIntersection" && (primitive.lineId === id || primitive.circleId === id)) ||
-    (primitive.type === "circleIntersection" && (primitive.circleA === id || primitive.circleB === id)) ||
-    (primitive.type === "curveIntersection" && (primitive.objectA === id || primitive.objectB === id))
-     || (primitive.type === "intersectionSet" && (primitive.objectA === id || primitive.objectB === id))
-     || (primitive.type === "point3" && primitive.binding && ((primitive.binding.kind === "onLine" && primitive.binding.lineId === id) || (primitive.binding.kind === "onPlane" && primitive.binding.planeId === id) || (primitive.binding.kind === "derived" && primitive.binding.sourceIds.includes(id)) || (primitive.binding.kind === "onHost" && primitive.binding.hostId === id) || (primitive.binding.kind === "onFace" && primitive.binding.faceId === id) || (primitive.binding.kind === "onSurface" && primitive.binding.solidId === id)))
-     // 二维动点绑定：删掉它所在的曲线会留下悬空的 pathId，点会静默冻住。
-     || (primitive.type === "point" && primitive.binding?.kind === "onPath" && primitive.binding.pathId === id)
-     // 轨迹追踪的源点：删掉它留下的悬空引用会让文档**过不了校验**，于是根本存不下去。
-     || (primitive.type === "locus" && primitive.sourcePointId === id)
-     // 连接引用的端点同理。正常路径由 `deletionTargets` 级联删除连接，这里是兜底。
-     || (primitive.type === "connection" && (primitive.startPointId === id || primitive.endPointId === id || primitive.control?.thirdPointId === id))
-     || (primitive.type === "line3" && (primitive.definition.kind === "throughPoints" ? primitive.definition.pointIds.includes(id) : primitive.definition.pointId === id))
-     || (primitive.type === "segment3" && primitive.pointIds.includes(id))
-     || (primitive.type === "ray3" && (primitive.originId === id || primitive.throughId === id))
-     || (primitive.type === "plane3" && (primitive.definition.kind === "throughPoints" ? primitive.definition.pointIds.includes(id) : primitive.definition.pointId === id))
-     || (primitive.type === "circle3" && primitive.centerId === id)
-     || (primitive.type === "edge3" && (primitive.pointIds.includes(id) || primitive.faceIds?.includes(id)))
-     || (primitive.type === "face3" && (primitive.pointIds.includes(id) || primitive.edgeIds?.includes(id) || primitive.planeId === id))
-     || (primitive.type === "polyhedron3" && (primitive.vertexIds.includes(id) || primitive.edgeIds.includes(id) || primitive.faceIds.includes(id) || primitive.construction?.sourceIds.includes(id)))
-     || (primitive.type === "derivative" && primitive.sourceId === id)
-    || ((primitive.type === "tangent" || primitive.type === "normal" || primitive.type === "secant") && primitive.sourceId === id)
-    || ((primitive.type === "integral" || primitive.type === "analysisSet") && primitive.sourceId === id)
-    || (primitive.type === "section" && primitive.sourceId === id)
-    || (primitive.type === "intersectionLine" && primitive.sourceIds.includes(id))
+  return document.primitives.some((primitive) => !ignoredReferrers.has(primitive.id) && (
+    (primitive.type === "line3" && (primitive.definition.kind === "throughPoints" ? primitive.definition.pointIds.includes(id) : primitive.definition.pointId === id))
+    || (primitive.type === "segment3" && primitive.pointIds.includes(id))
+    || (primitive.type === "ray3" && (primitive.originId === id || primitive.throughId === id))
+    || (primitive.type === "plane3" && (primitive.definition.kind === "throughPoints" ? primitive.definition.pointIds.includes(id) : primitive.definition.pointId === id))
+    || (primitive.type === "circle3" && primitive.centerId === id)
+    || (primitive.type === "edge3" && (primitive.pointIds.includes(id) || primitive.faceIds?.includes(id)))
+    || (primitive.type === "face3" && (primitive.pointIds.includes(id) || primitive.edgeIds?.includes(id) || primitive.planeId === id))
+    || (primitive.type === "polyhedron3" && (primitive.vertexIds.includes(id) || primitive.edgeIds.includes(id) || primitive.faceIds.includes(id) || primitive.construction?.sourceIds.includes(id)))
   ))
+}
+
+/**
+ * 批量删除的**并集校验**：一次要删掉的所有 id 一起算作"自己人"。
+ *
+ * 逐个 id 校验会让"点 + 依赖它的线"互相挡——实测两个都删不掉，而"一起删"既合法又显然是用户意图。
+ * 单删时的拒绝语义不变（那条路走 `validatePatch`，仍然按构造引用保护）。
+ */
+export function validateDeletion(document: GeometryDocument, ids: string[]): PatchValidationResult {
+  for (const id of ids) {
+    const primitive = document.primitives.find((candidate) => candidate.id === id)
+    if (!primitive) return { valid: false, errors: [`object not found: ${id}`] }
+    if (primitive.locked) return { valid: false, errors: ["object is locked"] }
+  }
+  const targets = new Set(ids.flatMap((id) => [...deletionTargets(document, id)]))
+  const blocked = [...targets].filter((target) => isReferenced(document, target, targets))
+  return blocked.length === 0 ? { valid: true } : { valid: false, errors: blocked.map((target) => `object is referenced by another object: ${target}`) }
 }
 
 export function validatePatch(document: GeometryDocument, operation: DomainOperation): PatchValidationResult {
