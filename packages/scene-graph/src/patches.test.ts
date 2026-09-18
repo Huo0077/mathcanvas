@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { createEmptyDocument, validateDocument } from "@draw/dsl"
+import { MEASUREMENT_METRICS, createEmptyDocument, validateDocument } from "@draw/dsl"
 import { buildSolidTemplate } from "@draw/geometry-kernel"
 
 import { commitPatch, validatePatch } from "./patches"
@@ -484,6 +484,20 @@ describe("domain patches", () => {
     expect(validatePatch(added.document, { op: "addMeasurement", measurement })).toEqual({ valid: false, errors: ["duplicate measurement id"] })
     expect(validatePatch(added.document, { op: "addMeasurement", measurement: { ...measurement, id: "measurement3-2", sourceIds: ["missing"] } })).toEqual({ valid: false, errors: ["measurement has invalid sources"] })
     expect(commitPatch(added.document, { op: "deleteMeasurement", id: measurement.id }).document.measurements).toEqual([])
+  })
+
+  /**
+   * 度量名的白名单在 scene-graph 这一层**又抄了一份**（漏了周长 / 半径），于是界面上点了「周长」
+   * 会被这里拒掉、报 `measurement is invalid`，而 DSL 校验其实是放行的 —— 用户看到的只是"点了没反应"。
+   * 这一条把"patch 层与 DSL 用同一份名单"钉住。
+   */
+  it("accepts every metric the DSL allows, including perimeter and radius", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [{ id: "circle-1", type: "circle", center: { x: 0, y: 0 }, radius: 2 }]
+    for (const metric of MEASUREMENT_METRICS) {
+      const measurement = { id: `m-${metric}`, kind: "measurement3" as const, sourceIds: ["circle-1"], metric, value: 1, unit: "u", precision: "numeric-approximation" as const, status: "valid" as const, explanation: "" }
+      expect({ metric, result: validatePatch(document, { op: "addMeasurement", measurement }) }).toEqual({ metric, result: { valid: true } })
+    }
   })
 
   it("deletes a section together with the solid it cuts", () => {

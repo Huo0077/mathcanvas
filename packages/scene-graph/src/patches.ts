@@ -1,4 +1,4 @@
-﻿import { validateDocument, type AnnotationSpec, type ConstraintSpec, type EngineeringAnnotation, type GeometryDocument, type Measurement3, type PrimitiveSpec } from "@draw/dsl"
+import { MEASUREMENT_METRICS, validateDocument, type AnnotationSpec, type ConstraintSpec, type EngineeringAnnotation, type GeometryDocument, type Measurement3, type PrimitiveSpec } from "@draw/dsl"
 import { parseExpression } from "@draw/geometry-kernel"
 
 import { applyOperation, deletionTargets, EDITABLE_GEOMETRY_TYPES, isFreeDraggable3, isRotatable3, layerDescendantIds, templateTopologyIds, type DomainOperation } from "./operations"
@@ -29,7 +29,9 @@ function isMeasurement(value: unknown): value is Measurement3 {
   return typeof candidate.id === "string" && candidate.id.length > 0
     && candidate.kind === "measurement3"
     && Array.isArray(candidate.sourceIds)
-    && ["length", "distance", "angle", "area", "volume", "dihedral"].includes(String(candidate.metric))
+    // 名单来自 `@draw/dsl` 的 `MEASUREMENT_METRICS`：这里以前抄了一份副本，漏了周长 / 半径，
+    // 于是界面上点「周长」会被 patch 层拒掉（DSL 校验却放行）—— 又是一次副本漂移。
+    && (MEASUREMENT_METRICS as readonly string[]).includes(String(candidate.metric))
     && ["exact-input", "numeric-approximation"].includes(String(candidate.precision))
     && ["valid", "degenerate", "insufficient-data", "numeric-failure"].includes(String(candidate.status))
     && typeof candidate.explanation === "string"
