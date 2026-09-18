@@ -11,6 +11,7 @@ import { resolveAnnotationPoint } from "../annotations"
 import { clipFunctionSegmentsToBounds } from "../functionGraph"
 import { computeIntersectionPreviews, nearestPreview, PREVIEW_HIT_RADIUS, type IntersectionPreview } from "../intersectionPreview"
 import { dashFor, fillFor, opacityFor, strokeFor, strokeWidthFor } from "../primitiveStyle"
+import { planarMeasurementVisuals } from "../planarMeasurementVisuals"
 import { DEFAULT_VIEWPORT, VIEWBOX, gridLinePositions, rayToViewport, svgToWorld, visibleWorldBounds, worldToSvg, zoomViewport, zoomViewportAt, type Viewport } from "../viewport"
 import { GRID_CELL, GRID_MAJOR_EVERY } from "../sceneGrid"
 
@@ -414,6 +415,8 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
    * 纸张底纹、卡片边框、控制条那层用 CSS。两处都读同一组 `--color-graph-*` 令牌。
    */
   const graphPaper = workspace === "conics" || workspace === "calculus"
+  /** 常驻的测量数字：纯函数算位置与文本（`pointer-events: none`，不参与拾取）。 */
+  const measurementLabels = planarMeasurementVisuals(document, selectedIds)
   const gridStroke = graphPaper
     ? { minor: "var(--color-graph-grid-minor)", major: "var(--color-graph-grid-major)", axis: "var(--color-graph-axis)" }
     : { minor: "#e6eaf2", major: "#d3dbea", axis: "#9aa6bd" }
@@ -436,7 +439,7 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
       <button type="button" onClick={() => onQuickStart?.("function")}>画一个函数</button>
     </div>
     <span className="canvas-empty-hint-note">先放一个点，再点右侧「创建动圆」，曲线就绕着那个定点转。</span>
-  </div>}<div className="canvas-viewport-controls" role="group" aria-label="画布缩放"><button type="button" aria-label="缩小画布" title="缩小画布（滚轮向下）" onClick={() => setViewport((current) => zoomViewport(current, 1 / 1.25))}>−</button><span className="zoom-readout" data-zoom-readout="true" aria-live="polite">{zoomPercentage}</span><button type="button" aria-label="放大画布" title="放大画布（滚轮向上）" onClick={() => setViewport((current) => zoomViewport(current, 1.25))}>＋</button><button type="button" aria-label="重置视图" title="重置视图（居中并恢复默认缩放）" onClick={() => setViewport(DEFAULT_VIEWPORT)}>重置</button></div><svg ref={svgRef} className={panState ? "is-panning" : dragState ? "is-dragging" : undefined} data-viewport-center={`${viewport.center.x},${viewport.center.y}`} data-viewport-scale={viewport.scale} data-grid-cell={GRID_CELL} data-grid-major={GRID_MAJOR_EVERY} viewBox={`0 0 ${VIEWBOX.width} ${VIEWBOX.height}`} role="img" aria-label="几何画布" onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerLeave={() => { setHoverCoordinate(null); setHoverPrimitiveType(null); onPointerCoordinate?.(null) }} onPointerUp={finishDrag} onPointerCancel={finishDrag} onDoubleClick={(event) => creationMode === "polyline" && onCanvasDoubleClick(eventToWorld(event, viewport))} onClick={(event) => { if (suppressClick.current) { suppressClick.current = false; return }; if (creationMode) onCanvasClick(eventToWorld(event, viewport)); else if (!dragStart) onSelect(null) }}>
+  </div>}<div className="canvas-viewport-controls" role="group" aria-label="画布缩放"><button type="button" aria-label="缩小画布" title="缩小画布（滚轮向下）" onClick={() => setViewport((current) => zoomViewport(current, 1 / 1.25))}>−</button><span className="zoom-readout" data-zoom-readout="true" aria-live="polite">{zoomPercentage}</span><button type="button" aria-label="放大画布" title="放大画布（滚轮向上）" onClick={() => setViewport((current) => zoomViewport(current, 1.25))}>＋</button><button type="button" aria-label="重置视图" title="重置视图（居中并恢复默认缩放）" onClick={() => setViewport(DEFAULT_VIEWPORT)}>重置</button></div><svg ref={svgRef} className={panState ? "is-panning" : dragState ? "is-dragging" : undefined} data-viewport-center={`${viewport.center.x},${viewport.center.y}`} data-viewport-scale={viewport.scale} data-grid-cell={GRID_CELL} data-grid-major={GRID_MAJOR_EVERY} data-measurement-labels={measurementLabels.length} viewBox={`0 0 ${VIEWBOX.width} ${VIEWBOX.height}`} role="img" aria-label="几何画布" onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerLeave={() => { setHoverCoordinate(null); setHoverPrimitiveType(null); onPointerCoordinate?.(null) }} onPointerUp={finishDrag} onPointerCancel={finishDrag} onDoubleClick={(event) => creationMode === "polyline" && onCanvasDoubleClick(eventToWorld(event, viewport))} onClick={(event) => { if (suppressClick.current) { suppressClick.current = false; return }; if (creationMode) onCanvasClick(eventToWorld(event, viewport)); else if (!dragStart) onSelect(null) }}>
     <g data-grid-layer="minor" stroke={gridStroke.minor} strokeWidth="1">{verticalGrid.filter((x) => !isMajorGridLine(x)).map((x) => <line key={`v-${x}`} x1={toX(x)} y1={VIEWBOX.top} x2={toX(x)} y2={VIEWBOX.bottom} />)}{horizontalGrid.filter((y) => !isMajorGridLine(y)).map((y) => <line key={`h-${y}`} x1={VIEWBOX.left} y1={toY(y)} x2={VIEWBOX.right} y2={toY(y)} />)}</g>
     <g data-grid-layer="major" stroke={gridStroke.major} strokeWidth="1">{verticalGrid.filter(isMajorGridLine).map((x) => <line key={`vm-${x}`} x1={toX(x)} y1={VIEWBOX.top} x2={toX(x)} y2={VIEWBOX.bottom} />)}{horizontalGrid.filter(isMajorGridLine).map((y) => <line key={`hm-${y}`} x1={VIEWBOX.left} y1={toY(y)} x2={VIEWBOX.right} y2={toY(y)} />)}</g>
     <line x1={VIEWBOX.left} y1={toY(0)} x2={VIEWBOX.right} y2={toY(0)} stroke={gridStroke.axis} strokeWidth="1.5" /><line x1={toX(0)} y1={VIEWBOX.top} x2={toX(0)} y2={VIEWBOX.bottom} stroke={gridStroke.axis} strokeWidth="1.5" />
@@ -490,5 +493,14 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
        */}
     {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "point" }> => primitive.type === "point" && primitive.visible !== false).map((point) => <circle key={`${point.id}-hit-top`} data-primitive-type="point" data-point-hit="top" data-hit-target="true" cx={toX(point.x)} cy={toY(point.y)} r="12" fill="transparent" pointerEvents="all" onPointerDown={(event) => beginDrag(event, point.id)} onClick={(event) => handleObjectClick(event, point.id)} />)}
     {selectionRect && <rect className="selection-rect" data-selection-mode={selectionRect.mode} x={selectionRect.x} y={selectionRect.y} width={selectionRect.width} height={selectionRect.height} />}
+    {/**
+      * 测量数字**常驻画布**（最上层，压在图形之上）：不需要选中任何对象就能看到有效测量的数值。
+      *
+      * 用户口径："我希望数学测量的结果能在图中浮现一个数字，而不是非要去看右侧属性栏。"
+      * 文本与右侧属性栏是**同一份**（`planarMeasurementVisuals.planarMeasurementText`），
+      * 位置按度量类型算（中点 / 垂足中点 / 角平分线 / 形心），算不出位置就不画。
+      * 这一层 `pointer-events: none`（见 CSS），所以拾取行为一字不变。
+      */}
+    {measurementLabels.map((label) => <text key={label.id} className="planar-measurement-label" data-measurement-label={label.id} data-selected={label.selected ? "true" : "false"} x={toX(label.position.x)} y={toY(label.position.y)} textAnchor="middle">{label.text}</text>)}
   </svg></div></main>
 }

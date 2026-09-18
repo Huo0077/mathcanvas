@@ -66,6 +66,20 @@ export function measurementLabelScale(cameraDistance: number, viewportHeight: nu
   return Math.min(2, Math.max(0.35, cameraDistance / viewportHeight * 12))
 }
 
+/**
+ * 画布上**常驻**的测量数字：不再要求"来源被选中"。
+ *
+ * 用户口径："我希望数学测量的结果能在图中浮现一个数字，而不是非要去看右侧属性栏（这一点无论是平面几何
+ * 还是立体几何都要优化）。" "不画假数字"这条规则在 `resolveMeasurementVisual` 那一层（退化 / 值非有限
+ * 一律 `null`），所以这里不再额外过滤——**没有选中任何对象时也照画**。
+ * 辅助线段与二面角标记仍按选中显示（见 `threeScene.tsx`：那是引导线，几十条一起铺会把画布刷满）。
+ */
+export function measurementVisualsForDocument(document: GeometryDocument): MeasurementVisual[] {
+  return document.measurements
+    .map((measurement) => resolveMeasurementVisual(document, measurement.id))
+    .filter((visual): visual is MeasurementVisual => visual !== null)
+}
+
 export function measurementSegmentMidpoint(segment: { start: Vector3; end: Vector3 }): Vector3 {
   return midpoint(segment.start, segment.end)
 }

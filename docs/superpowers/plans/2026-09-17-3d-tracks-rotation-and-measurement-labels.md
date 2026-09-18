@@ -45,10 +45,10 @@ npx playwright test
 
 ## Slice 5：测量数字常驻（2D + 3D）
 
-- [ ] 3D：`threeScene.tsx` 的 `measurementVisuals` 过滤条件改成"有效且值有限"；标签常驻、选中时高亮；辅助线与二面角标记保持按选中显示；读数 `data-measurement-labels`。
-- [ ] 2D：新增 `apps/web/src/planarMeasurementVisuals.ts`（纯函数：长度 / 距离 / 角度 / 面积的位置与文本，退化不产出）+ `GraphicsView.tsx` 的 `<text>` 渲染（白描边、`pointer-events: none`）+ `data-measurement-labels`。
-- [ ] 单测：`planarMeasurementVisuals.test.ts`（四类位置与退化）；`threeScene.test.ts`（不选中任何对象时仍有标签、退化测量无标签）。
-- [ ] e2e：新用例断言**不选中任何对象**时两个画布都出现数字（2D：`e2e/planar-measurement-labels.spec.ts`；3D：并入既有 3D 测量用例或新建）。
+- [x] 3D：`threeScene.tsx` 的 `measurementVisuals` 过滤条件改成"有效且值有限"；标签常驻、选中时高亮；辅助线与二面角标记保持按选中显示；读数 `data-measurement-labels`。**落点**：过滤抽成 `measurementVisuals.ts` 的 `measurementVisualsForDocument(document)`（**没有选择参数**，所以"常驻"不靠调用方自觉），退化/无值仍在 `resolveMeasurementVisual` 拦；标签加 `dataset.selected` + CSS `[data-selected="true"]`；旧读数 `data-measurement-label-count` 保留。
+- [x] 2D：新增 `apps/web/src/planarMeasurementVisuals.ts`（纯函数：长度 / 距离 / 角度 / 面积的位置与文本，退化不产出）+ `GraphicsView.tsx` 的 `<text>` 渲染（白描边、`pointer-events: none`）+ `data-measurement-labels`。**与计划的差异**：角度标签的位置取"顶点沿角平分线外偏 `max(0.2, 0.25·min(边长))`"，平角（角平分线退化为零向量）时改取该边的法向——两种情形都如实算，不产出 `NaN` 坐标。
+- [x] 单测：`planarMeasurementVisuals.test.ts`（四类位置与退化）；`threeScene.test.ts`（不选中任何对象时仍有标签、退化测量无标签）。**落点**：3D 那条放进了 `measurementVisuals.test.ts`（`threeScene.test.ts` 不挂载组件，纯函数才是这里能断言的东西）。
+- [x] e2e：新用例断言**不选中任何对象**时两个画布都出现数字（2D：`e2e/planar-measurement-labels.spec.ts`；3D：并入既有 3D 测量用例或新建）。**落点**：两条合成一个文件 `e2e/measurement-labels.spec.ts`——都走"建测量 → 读数字 → **点空白清空选择** → 数字仍在 → 改几何数字跟着变"，2D 那条还断言标签落在两点中点对应的屏幕区间。
 
 ## Slice 6：UI 令牌对齐（立体几何 ↔ 平面几何）
 

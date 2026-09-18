@@ -3,7 +3,7 @@ import * as THREE from "three"
 import type { GeometryDocument, IntersectionFacePrimitive, IntersectionPoint3Primitive, IntersectionSolidPrimitive, Plane3Primitive, Point3Primitive, Polyhedron3Primitive, SectionPrimitive, Vector3 } from "@draw/dsl"
 import { dihedralAngleDegrees, host3FromPrimitive, unfoldPolyhedron3, type Host3, type Host3Parameter } from "@draw/geometry-kernel"
 import { solidVolumeHostFor } from "@draw/scene-graph"
-import { resolveMeasurementVisual } from "./measurementVisuals"
+import { measurementVisualsForDocument, resolveMeasurementVisual } from "./measurementVisuals"
 import { syncOverlay } from "./overlaySync"
 import type { SceneControlMode } from "./statusPrompts"
 import { isFreeDraggable3, planeThroughPoints, resolveDihedralMarker3, resolvePolyhedronTopology, sectionSourceVertices, templateTopologyIds } from "@draw/scene-graph"
@@ -564,11 +564,18 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
         keepContent(`dihedral:${measurement.id}`, signer.ofReferences(measurement.sourceIds, `dihedral:${JSON.stringify(measurement)};sel:${allSelected}`), () => createDihedralMarkerGroup(marker, allSelected), alive, order)
         dihedralMarkerCount += 1
       })
-    measurementVisuals = document.measurements
-      .filter((measurement) => measurement.sourceIds.some((id) => selectedIds.includes(id)))
-      .map((measurement) => resolveMeasurementVisual(document, measurement.id))
-      .filter((visual): visual is NonNullable<ReturnType<typeof resolveMeasurementVisual>> => Boolean(visual))
-    measurementVisuals.filter((visual) => visual.kind === "label").forEach((visual) => {
+    /**
+     * 测量数字**常驻画布**：不再要求"来源被选中"。
+     *
+     * 用户口径："我希望数学测量的结果能在图中浮现一个数字，而不是非要去看右侧属性栏（这一点无论是平面几何
+     * 还是立体几何都要优化）。" `resolveMeasurementVisual` 自己就会挡住"退化 / 数据不足 / 值非有限"的情况，
+     * 所以这里不再额外过滤——**不画假数字**这条规则在那一层（有单测）。
+     *
+     * 但**辅助线与二面角标记仍按选中显示**：那是引导线，几十条一起铺会把画布刷满，
+     * 而数字本身才是用户要的东西。
+     */
+    measurementVisuals = measurementVisualsForDocument(document)
+    measurementVisuals.filter((visual) => visual.kind === "label" && visual.sourceIds.some((id) => selectedIds.includes(id))).forEach((visual) => {
       const measurement = document.measurements.find((candidate) => candidate.id === visual.id)
       const signature = signer.ofReferences(measurement?.sourceIds ?? [], `visual:${JSON.stringify(visual)}`)
       visual.segments.forEach((segment, index) => {
@@ -675,6 +682,8 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       sceneShell.dataset.dihedralMarkers = String(dihedralMarkerCount)
       sceneShell.dataset.planeCount = String(planeCount)
       sceneShell.dataset.measurementLabelCount = String(measurementVisuals.length)
+      // 常驻测量数字的条数（`data-measurement-labels` 是这一条的正式名字，`…LabelCount` 保留给旧断言）。
+      sceneShell.dataset.measurementLabels = String(measurementVisuals.length)
       // 剖切面的读数：剖面有没有真的动、动到哪，靠这几个数看，不靠肉眼。
       const sections = document.primitives.filter((primitive): primitive is SectionPrimitive => primitive.type === "section")
       const firstSection = sections[0]
@@ -892,7 +901,8 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
               visible: projected.z >= -1 && projected.z <= 1,
               left: (projected.x * 0.5 + 0.5) * bounds.width,
               top: (-projected.y * 0.5 + 0.5) * bounds.height,
-              dataset: { measurementId: visual.id }
+              // 选中这条测量时标签高亮：常驻之后"我选中的是哪一条"必须还看得出（`data-selected` 由 CSS 用）。
+              dataset: { measurementId: visual.id, selected: String(visual.sourceIds.some((id) => selectedIdsRef.current.includes(id))) }
             }
           }),
           () => {

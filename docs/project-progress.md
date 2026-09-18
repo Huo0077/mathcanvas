@@ -40,6 +40,14 @@
   - **RED→GREEN / 证据**：新单测文件 `apps/web/src/threeRotation.test.ts`（13 条）先全部因 `(0 , rotationHandleGeometry) is not a function` 等失败，实现后全绿；浏览器新用例 `e2e/three-rotation-handle.spec.ts` 四条——①拖 X 环到 90°，`data-rotation-degrees` 读 **90.00**、属性栏「绕 X 轴旋转角度」= **90**、Y/Z 仍为 0，一次 Ctrl+Z 回到 0；②按住 Alt 时读数精确落在 **−25°**（吸附开着会变 −30°，所以这一条真的在分辨"有没有量化"）；③在画布空白处按下不产生旋转（`data-rotation-axis` 为空、朝向仍为 0）；④多选两个对象时环收起（`data-rotation-handles` = 0）。
   - **两处自己的测试写错并已修正（都是真问题）**：①抓取点原本取"环上 ±Y 那一点"，而 X 环与 Z 环**正好在 ±Y 处相交**——从那里按下时"抓住的是哪个环"取决于深度排序，实测同一段脚本一会儿给 x、一会儿给 z；改成取 45° 处（只有 X 环经过），命中唯一。②断言"`data-camera-distance` 一定会变"是错的：滚轮缩放是**异步**的，改成 `expect.poll` 等它变。
   - **门禁（切片 4 后实跑）**：typecheck 4 workspace 通过；单测 **120 文件 / 1412 用例**通过（+13）；lint **0 error / 14 warning**（基线；新用例最初多出一条 `'Page' is defined but never used` 的 warning，已去掉未用导入）；生产构建通过；Playwright **99/99**（+4）。
+- **切片 5（测量数字常驻画布：2D + 3D）已完成**：不用选中任何对象，有效测量的数值就画在图上。
+  - **3D**：测量数字的过滤条件从"来源被选中"改成"**有效且值有限**"。这条规则仍在 `resolveMeasurementVisual` 那一层（退化 / 数据不足 / 值非有限一律 `null`），并抽成纯函数 `measurementVisualsForDocument(document)`——**它压根没有选择参数**，所以"常驻"不是靠调用方记得别过滤。**辅助线段与二面角标记仍按选中显示**（那是引导线，几十条一起铺会把画布刷满），标签在选中时加 `data-selected` 高亮（数字常驻之后"我选中的是哪一条"必须还看得出）。读数 `data-measurement-labels`（旧的 `data-measurement-label-count` 保留）。
+  - **2D**：新增纯函数模块 `apps/web/src/planarMeasurementVisuals.ts`——文本与右侧属性栏**同一份**（`值 + 单位`，3 位小数，一个测量只有一个数），位置按度量类型算：长度 = 两点中点；距离 = **垂足与第三点的中点**（两点情形就是两点中点）；角度 = 顶点沿**角平分线**外偏一点（不压在顶点、也不压住某条边；平角时角平分线退化，改取该边的法向）；面积 = 三个来源点的**形心**。位置算不出来（点重合 / 直线退化）或状态不是 `valid`、来源点缺失 → **不产出**（不猜位置、不画假数字）。`GraphicsView` 用 `<text class="planar-measurement-label">` 渲染，白描边 halo 叠在曲线上也读得清，`pointer-events: none` 让拾取行为一字不变；画布 `data-measurement-labels` 给出条数。
+  - **RED→GREEN / 证据**：3D 侧 `measurementVisuals.test.ts` 新增"不选中任何对象也要有标签、退化一个都不画"（`measurementVisualsForDocument` 没有选择参数就是这条断言的证据）；2D 侧新文件 `planarMeasurementVisuals.test.ts` 7 条（四类位置 + 缺失来源 / 退化 / 值缺失不产出 + 选中高亮）；浏览器新用例 `e2e/measurement-labels.spec.ts` 两条——平面画布建出长度 3 的数字（位置落在两点中点对应的屏幕区间）→ **点空白清空选择** → 数字仍在 → 改一个点的 X 后数字实时变成 5.000；3D 画布同一条路径（距离 3.000u）并断言属性栏是同一个数。
+  - **2D 模块的 RED 落空，改用变异实验补证（如实记录）**：这次模块与用例是一起写的，第一次跑就 7/7 全绿，没有"先红"。于是做了两次变异并还原：①把距离的"垂足中点"换成"第三个点自己" ⇒ 两条用例报 `expected 3 to be close to 1.5`、`expected { x: 5, y: 5 } to be null`；②把 `status !== "valid"` 这道门去掉 ⇒ 报 `expected '长度：0.000u' to be null`。两条断言都真的有分辨力。
+  - **一处测试自己的错并已修正**：平面用例最初直接"连点两次添加点"，而新建的点都落在**同一处**——两个重合点的长度是**退化**的（内核如实报 degenerate），于是没有任何数字可画。改成先把两个点摆到 (0,0) 与 (3,0)。另一个坑：功能区每点一次命令就自动收起，第二次点「添加点」会命中收起状态下的另一份节点（`strict mode violation`），改成先「固定功能区」并在功能区范围内取按钮。
+  - **一处如实记下的不一致**：平面角的 `value` 存的是**弧度**、单位 "rad"（内核 `evaluatePlanarMeasurement` 的约定），所以 2D 画布上的角度数字与属性栏一样是 `1.571rad`；3D 的角度存的是**度**、单位 "°"。两边各自自洽（画布与属性栏永远同一个数），但没有统一——改成度要动内核读数契约，不在这一轮范围内，**记在这里与 spec 的诚实表里**。
+  - **门禁（切片 5 后实跑）**：typecheck 4 workspace 通过；单测 **121 文件 / 1420 用例**通过（+8）；lint **0 error / 14 warning**（基线）；生产构建通过；Playwright **101/101**（+2）。
 
 ### 解析二次曲面与真圆（A1）+ 交面分组与真曲面（A2）（2026-09-17 全部完成）
 
