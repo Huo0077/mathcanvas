@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react"
+import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react"
 import { dynamicPointPaths } from "../dynamicPointPaths"
 import { isTangentSource, tangentAnchorLabel } from "../curveTangents"
 import type { AnnotationFeature, EngineeringAnnotationKind, Measurement3Metric, PrimitiveSpec, SolidRotation, Vector3 } from "@draw/dsl"
@@ -887,8 +887,8 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
         {selectedCurveTangent.anchor?.kind === "point"
           ? <Field label="切点跟随"><select aria-label="切点跟随动点" disabled={!editable} value={selectedCurveTangent.anchor.pointId} onChange={(event) => updateTangentAnchorPoint(event.target.value)}>{tangentAnchorPoints.map((point) => <option key={point.id} value={point.id}>{point.label ?? point.id}</option>)}</select></Field>
           : <Field label="切点参数"><input aria-label="切点参数" type="number" disabled={!editable} min={tangentAnchorParameters?.min ?? 0} max={tangentAnchorParameters?.max ?? 1} step={tangentAnchorParameters ? (tangentAnchorParameters.max - tangentAnchorParameters.min) / 100 : 0.01} value={selectedCurveTangent.anchor?.kind === "parameter" ? selectedCurveTangent.anchor.parameter : 0} onChange={(event) => updateTangentParameter(numberValue(event))} /></Field>}
-        <Field label="切线半长"><input aria-label="切线半长" type="number" min="0.01" step="0.5" disabled={!editable} value={selectedCurveTangent.halfLength ?? ""} placeholder="自动（按曲线大小）" onChange={(event) => updateTangentLength(numberValue(event))} /></Field>
-        <p className="footer-note">「跟随动点」时切点永远在那个点的当前位置上：拖动它，切线沿轨道跟着转（那个点要在「点坐标」面板里绑定到这条曲线）。留空半长表示按曲线自身大小自动决定。</p>
+        <Field label="切线半长（留空＝无限长）"><input aria-label="切线半长" type="number" min="0.01" step="0.5" disabled={!editable} value={selectedCurveTangent.halfLength ?? ""} placeholder="无限长" onChange={(event) => updateTangentLength(numberValue(event))} /></Field>
+        <p className="footer-note">「跟随动点」时切点永远在那个点的当前位置上：拖动它，切线沿轨道跟着转（那个点要在「点坐标」面板里绑定到这条曲线）。留空半长表示**无限长**（画到视野之外）；填一个值就把切线修剪成以切点为中心的那一段。</p>
       </div>}
      {shows("data") && selectedPrimitive?.type === "integral" && <div className="primitive-properties"><h3>积分区域</h3><p className="footer-note">来源：{selectedPrimitive.sourceId} · 区间 [{selectedPrimitive.domain[0]}, {selectedPrimitive.domain[1]}]</p><p className="footer-note">状态：{selectedPrimitive.status}{selectedPrimitive.diagnostic ? ` · ${selectedPrimitive.diagnostic}` : ""}</p><div className="metric-grid"><span>面积<strong>{selectedPrimitive.area === null ? "—" : selectedPrimitive.area.toFixed(4)}</strong></span><span>步数<strong>{selectedPrimitive.steps}</strong></span></div></div>}
      {shows("data") && selectedPrimitive?.type === "analysisSet" && <div className="primitive-properties"><h3>分析结果集合</h3><p className="footer-note">来源：{selectedPrimitive.sourceId} · 状态：{selectedPrimitive.status}</p><div className="metric-grid"><span>结果数量<strong>{selectedPrimitive.results.length}</strong></span></div>{selectedPrimitive.diagnostic && <p className="footer-note">{selectedPrimitive.diagnostic}</p>}</div>}

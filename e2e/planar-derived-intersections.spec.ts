@@ -48,6 +48,27 @@ test("intersects a tangent with a line and measures the angle and the circle's a
   await page.getByRole("button", { name: "创建切线" }).click()
   await expect(algebra.getByText("切线 1", { exact: true })).toBeVisible()
 
+  /**
+   * 切线是"无限长"（用户口径"切线长度最好是无限长"）：它在画布上的**视口跨度**必须远超画布本身，
+   * 而不是恰好与圆相称的一小段。视图框是固定 800×440，所以拿渲染出来的 `<line>` 端点量：
+   * 有界切线约 2·r·scale ≈ 130 个单位，无限长则成千上万。
+   */
+  const tangentSpan = await page.evaluate(() => {
+    const group = document.querySelector('[data-primitive-type="tangent"]')
+    if (!group) return null
+    const lines = Array.from(group.querySelectorAll("line"))
+    const spans = lines.map((line) => {
+      const x1 = Number(line.getAttribute("x1"))
+      const y1 = Number(line.getAttribute("y1"))
+      const x2 = Number(line.getAttribute("x2"))
+      const y2 = Number(line.getAttribute("y2"))
+      return Math.hypot(x2 - x1, y2 - y1)
+    })
+    return spans.length > 0 ? Math.max(...spans) : null
+  })
+  expect(tangentSpan).not.toBeNull()
+  expect(tangentSpan!).toBeGreaterThan(5000)
+
   // 直线 1：改成水平 y=2.5，从 x=-5 到 x=5。
   // 刻意选 2.5 而不是 1：它**穿过切线**（切线半长 3，覆盖 y∈[-3,3]）但**不穿过圆**（半径 2），
   // 于是"画布上有交点"这件事只可能由切线产生 —— 切线不支持求交时这个计数必然是 0。
