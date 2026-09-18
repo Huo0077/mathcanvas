@@ -1,8 +1,8 @@
 import type { GeometryDocument, PrimitiveSpec, ValidationResult, Vector3 } from "./types"
+import { isSampledPrimitiveType } from "./sampledTypes"
 
 const workspaces = new Set(["calculus", "conics", "cad", "geometry3d"])
 const primitiveTypes = new Set(["point", "point3", "line", "line3", "segment", "segment3", "ray", "ray3", "polyline", "connection", "locus", "parabola", "ellipse", "hyperbola", "function", "derivative", "tangent", "normal", "secant", "integral", "analysisSet", "cube", "pyramid", "cylinder", "cone", "plane3", "circle3", "edge3", "face3", "polyhedron3", "section", "intersectionLine", "intersectionSolid", "intersectionFace", "intersectionPoint3", "circle", "arc", "intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection", "intersectionSet"])
-const sampledTypes = new Set(["line", "segment", "ray", "polyline", "circle", "arc", "parabola", "ellipse", "hyperbola", "function"])
 /**
  * 能长出切线的来源曲线。
  *
@@ -597,12 +597,12 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>, parameter
     if (!isValidSolutionRef(value)) errors.push("intersection solution reference is invalid")
   }
   if (type === "curveIntersection") {
-    if (value.objectA === value.objectB || !sampledTypes.has(referenceType(byId, value.objectA) ?? "") || !sampledTypes.has(referenceType(byId, value.objectB) ?? "")) errors.push("curve intersection references invalid objects")
+    if (value.objectA === value.objectB || !isSampledPrimitiveType(referenceType(byId, value.objectA) ?? "") || !isSampledPrimitiveType(referenceType(byId, value.objectB) ?? "")) errors.push("curve intersection references invalid objects")
     if (!isFiniteNumber(value.x) || !isFiniteNumber(value.y)) errors.push("intersection coordinates must be finite")
     if (!isValidSolutionRef(value)) errors.push("intersection solution reference is invalid")
   }
   if (type === "intersectionSet") {
-    if (value.objectA === value.objectB || !sampledTypes.has(referenceType(byId, value.objectA) ?? "") || !sampledTypes.has(referenceType(byId, value.objectB) ?? "")) errors.push("intersection set references invalid objects")
+    if (value.objectA === value.objectB || !isSampledPrimitiveType(referenceType(byId, value.objectA) ?? "") || !isSampledPrimitiveType(referenceType(byId, value.objectB) ?? "")) errors.push("intersection set references invalid objects")
     if (!Array.isArray(value.points) || value.points.some((point) => !isFiniteCoordinate(point))) errors.push("intersection set points are invalid")
     if (value.selectedIndex !== undefined && (!isFiniteNumber(value.selectedIndex) || !Number.isInteger(value.selectedIndex) || value.selectedIndex < 0)) errors.push("intersection set selection is invalid")
   }
