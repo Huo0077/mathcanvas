@@ -8,10 +8,13 @@ import {
   createMeasurementEngine,
   evaluatePlanarMeasurement,
   lengthBetween,
+  pointEntityResolver,
   polygonPerimeter,
   signedDistanceToLine,
   signedPolygonArea,
-  type PlanarMeasurement
+  type MeasurableEntity,
+  type PlanarMeasurement,
+  type PlanarMetric
 } from "./dynamic-measurements"
 
 /** A mutable coordinate table plus a resolver over it, mirroring how the canvas exposes geometry. */
@@ -25,6 +28,53 @@ function table(entries: Record<string, Coordinate>) {
     resolve: (id: string) => positions.get(id) ?? null
   }
 }
+
+describe("entity-aware planar measurements", () => {
+  /**
+   * 用户口径："由动点引申出来的图元（如切线，动圆）也需要具有正常图元的基本功能"。
+   * 平面测量以前只认点，所以"切线与直线的夹角""动圆的面积"根本量不了。
+   *
+   * 半径取 3（不是 2）：`πr²` 与 `2πr` 在 r=2 时都是 4π，那样的断言分不出"面积算成了周长"。
+   */
+  const entities: Record<string, MeasurableEntity> = {
+    l1: { kind: "line", a: { x: 0, y: 0 }, b: { x: 1, y: 0 } },
+    l2: { kind: "line", a: { x: 0, y: 0 }, b: { x: 1, y: 1 } },
+    l3: { kind: "line", a: { x: 0, y: 3 }, b: { x: 1, y: 3 } },
+    p1: { kind: "point", position: { x: 0, y: 5 } },
+    c1: { kind: "circle", center: { x: 0, y: 0 }, radius: 3 },
+    c0: { kind: "circle", center: { x: 0, y: 0 }, radius: 0 }
+  }
+  const resolve = (id: string) => entities[id] ?? null
+  const measure = (metric: PlanarMetric, sourceIds: string[]) => evaluatePlanarMeasurement({ id: "m", metric, sourceIds }, resolve)
+
+  it("measures the acute angle between two lines", () => {
+    expect(measure("angle", ["l1", "l2"]).value).toBeCloseTo(Math.PI / 4, 9)
+    // 平行（含反向）都是 0，不是 π。
+    expect(measure("angle", ["l1", "l3"]).value).toBeCloseTo(0, 9)
+    expect(measure("angle", ["l1", "l2"]).unit).toBe("rad")
+  })
+
+  it("measures the distance from a point to a line", () => {
+    expect(measure("distance", ["p1", "l1"]).value).toBeCloseTo(5, 9)
+  })
+
+  it("measures a circle's area, perimeter and radius", () => {
+    expect(measure("area", ["c1"]).value).toBeCloseTo(Math.PI * 9, 9)
+    expect(measure("area", ["c1"]).unit).toBe("u²")
+    expect(measure("perimeter", ["c1"]).value).toBeCloseTo(Math.PI * 6, 9)
+    expect(measure("radius", ["c1"]).value).toBeCloseTo(3, 9)
+  })
+
+  it("refuses a degenerate circle instead of reporting zero", () => {
+    expect(measure("area", ["c0"]).status).toBe("degenerate")
+    expect(measure("perimeter", ["c0"]).status).toBe("degenerate")
+  })
+
+  it("still accepts a point-only resolver, so existing callers keep working", () => {
+    const positions = new Map([["a", { x: 0, y: 0 }], ["b", { x: 3, y: 0 }]])
+    expect(evaluatePlanarMeasurement({ id: "m", metric: "length", sourceIds: ["a", "b"] }, pointEntityResolver(positions)).value).toBe(3)
+  })
+})
 
 describe("planar geometry primitives", () => {
   it("measures the distance between two points", () => {

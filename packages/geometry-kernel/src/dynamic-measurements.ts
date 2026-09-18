@@ -77,6 +77,48 @@ export interface MeasurementReading {
 
 export type CoordinateResolver = (id: string) => Coordinate | null
 
+/**
+ * 可测量的实体。
+ *
+ * 平面测量原来是"纯点式"的：`sourceIds` 逐个过解析器变成**坐标**，于是"切线与直线的夹角"
+ * "动圆的面积"这类根本表达不出来 —— 夹角取决于两条线的方向，面积取决于圆的半径，
+ * 都不是几个点能替代的。
+ *
+ * 变体刻意只有三种：点、线（含线段 / 射线 / 切线 / 法线 / 割线）、圆（含弧 / 动圆）。
+ * 再多就该由内核给出更细的分类，而不是在这里堆种类。
+ */
+export type MeasurableEntity =
+  | { kind: "point"; position: Coordinate }
+  | { kind: "line"; a: Coordinate; b: Coordinate }
+  | { kind: "circle"; center: Coordinate; radius: number }
+
+export type EntityResolver = (id: string) => MeasurableEntity | null
+
+/** 兼容旧的调用点：点表 → 实体解析器（`evaluatePlanarMeasurement` 同时接受两者）。 */
+export function pointEntityResolver(positions: Map<string, Coordinate>): EntityResolver {
+  return (id) => {
+    const position = positions.get(id)
+    return position ? { kind: "point", position } : null
+  }
+}
+
+/**
+ * 两条直线的**锐角**夹角，`[0, π/2]`。
+ *
+ * 与三点角度（`angleBetween`，`[0, π]`）是**两套语义**，所以界面上分别叫"夹角（两条线）"
+ * 与"角度（第二个点作顶点）"。任一条线退化成零长度时返回 `null`，由调用方如实报退化。
+ */
+export function acuteAngleBetweenLines(first: { a: Coordinate; b: Coordinate }, second: { a: Coordinate; b: Coordinate }): number | null {
+  const firstDirection = { x: first.b.x - first.a.x, y: first.b.y - first.a.y }
+  const secondDirection = { x: second.b.x - second.a.x, y: second.b.y - second.a.y }
+  const firstLength = Math.hypot(firstDirection.x, firstDirection.y)
+  const secondLength = Math.hypot(secondDirection.x, secondDirection.y)
+  if (!(firstLength > 1e-12) || !(secondLength > 1e-12)) return null
+  // 取绝对值 ⇒ 方向相反的平行线夹角是 0 而不是 π，这正是"两条直线的夹角"该有的样子。
+  const cosine = Math.abs((firstDirection.x * secondDirection.x + firstDirection.y * secondDirection.y) / (firstLength * secondLength))
+  return Math.acos(Math.min(1, cosine))
+}
+
 // ---------------------------------------------------------------------------
 // 基础几何量的纯函数实现
 // ---------------------------------------------------------------------------
@@ -163,10 +205,21 @@ function formatValue(value: number, precision: number | undefined): string {
  * 求一个测量的读数。纯函数：只依赖 `resolve` 给出的点坐标，不持有任何状态。
  * 因此它同时可以用于"画布上实时显示"和"离线导出读数表"。
  */
-export function evaluatePlanarMeasurement(measurement: PlanarMeasurement, resolve: CoordinateResolver): MeasurementReading {
+export function evaluatePlanarMeasurement(measurement: PlanarMeasurement, resolve: CoordinateResolver | EntityResolver): MeasurementReading {
   const { metric, sourceIds } = measurement
-  const points: (Coordinate | null)[] = sourceIds.map((id) => resolve(id))
-  const missing = points.some((point) => !point)
+  /**
+   * 两种解析器都接受：老调用点传的是"点表 → 坐标"，新调用点传的是"图元 → 实体"。
+   * 归一化判据是**有没有 `kind` 字段**（`Coordinate` 只有 x/y），于是已有分支一字不用改。
+   */
+  const entities: (MeasurableEntity | null)[] = sourceIds.map((id) => {
+    const resolved = (resolve as EntityResolver)(id) as MeasurableEntity | Coordinate | null
+    if (!resolved) return null
+    return "kind" in resolved ? resolved : { kind: "point", position: resolved }
+  })
+  const points: (Coordinate | null)[] = entities.map((entity) => (entity?.kind === "point" ? entity.position : null))
+  const lines = entities.filter((entity): entity is Extract<MeasurableEntity, { kind: "line" }> => entity?.kind === "line")
+  const circles = entities.filter((entity): entity is Extract<MeasurableEntity, { kind: "circle" }> => entity?.kind === "circle")
+  const missing = points.some((point) => !point) && lines.length === 0 && circles.length === 0
   if (missing && metric !== "coordinate") {
     return invalid(measurement, "insufficient-data", "引用的几何对象不存在或坐标无定义。")
   }
@@ -196,7 +249,14 @@ export function evaluatePlanarMeasurement(measurement: PlanarMeasurement, resolv
       return succeed(distance, "u")
     }
     case "distance": {
-      if (points.length < 2) return invalid(measurement, "insufficient-data", "距离需要一个点与一条由两点定义的直线。")
+      // 点 + 线类：点到直线的垂距（"切线与某点的距离"就是这条）。
+      if (entities.length === 2 && points.filter(Boolean).length === 1 && lines.length === 1) {
+        const target = points.find((point): point is Coordinate => Boolean(point))!
+        const distance = signedDistanceToLine(lines[0].a, lines[0].b, target)
+        if (distance === null) return invalid(measurement, "degenerate", "作为基准的直线退化为零长度。")
+        return succeed(Math.abs(distance), "u")
+      }
+      if (points.length < 2) return invalid(measurement, "insufficient-data", "距离需要一个点与一条直线，或两个点。")
       if (points.length === 2 && points[0] && points[1]) {
         const distance = lengthBetween(points[0], points[1])
         if (distance <= 1e-12) return invalid(measurement, "degenerate", "两个点重合，距离为 0。")
@@ -209,7 +269,12 @@ export function evaluatePlanarMeasurement(measurement: PlanarMeasurement, resolv
       return succeed(Math.abs(distance), "u")
     }
     case "angle": {
-      if (points.length < 3) return invalid(measurement, "insufficient-data", "角度需要三个点 [A, V, B]。")
+      // 两条线类：**锐角**夹角。这是"切线与直线的夹角"唯一说得通的读法（切线没有顶点）。
+      if (entities.length === 2 && lines.length === 2) {
+        const radians = acuteAngleBetweenLines(lines[0], lines[1])
+        return radians === null ? invalid(measurement, "degenerate", "作为夹角一边的直线退化为零长度。") : succeed(radians, "rad", radians * 180 / Math.PI)
+      }
+      if (points.length < 3) return invalid(measurement, "insufficient-data", "角度需要三个点 [A, V, B]，或两条直线。")
       const index = Math.min(Math.max(measurement.vertexIndex ?? 1, 0), points.length - 1)
       const vertex = points[index]
       const others = solid().filter((point) => point !== vertex)
@@ -226,6 +291,12 @@ export function evaluatePlanarMeasurement(measurement: PlanarMeasurement, resolv
     }
     case "area":
     case "signedArea": {
+      // 单个圆类：πr²（"动圆的面积"）。有符号面积对圆没有意义，所以两种情况都返回正值。
+      if (entities.length === 1 && circles.length === 1) {
+        const circle = circles[0]
+        if (!(circle.radius > 1e-12)) return invalid(measurement, "degenerate", "圆半径为 0，没有面积。")
+        return succeed(Math.PI * circle.radius * circle.radius, "u²")
+      }
       const polygon = solid()
       if (polygon.length < 3) return invalid(measurement, "insufficient-data", "面积至少需要三个点。")
       const area = signedPolygonArea(polygon)
@@ -233,12 +304,23 @@ export function evaluatePlanarMeasurement(measurement: PlanarMeasurement, resolv
       return succeed(metric === "signedArea" ? area : Math.abs(area), "u²")
     }
     case "perimeter": {
+      // 单个圆类：周长 2πr（"动圆的周长"）。
+      if (entities.length === 1 && circles.length === 1) {
+        const circle = circles[0]
+        if (!(circle.radius > 1e-12)) return invalid(measurement, "degenerate", "圆半径为 0，没有周长。")
+        return succeed(2 * Math.PI * circle.radius, "u")
+      }
       const polygon = solid()
       if (polygon.length < 3) return invalid(measurement, "insufficient-data", "周长至少需要三个点。")
       return succeed(polygonPerimeter(polygon), "u")
     }
     case "radius": {
-      if (!points[0]) return invalid(measurement, "insufficient-data", "半径需要一个圆或一个圆心加一个圆上点。")
+      // 单个圆类：直接读它的半径（比"圆心 + 圆上一点"更直接，也是动圆最自然的读数）。
+      if (entities.length === 1 && circles.length === 1) {
+        const circle = circles[0]
+        return circle.radius > 1e-12 ? succeed(circle.radius, "u") : invalid(measurement, "degenerate", "圆的半径为 0。")
+      }
+      if (!points[0]) return invalid(measurement, "insufficient-data", "半径需要一个圆、或一个圆心加一个圆上点。")
       if (points.length >= 2 && points[1]) {
         const radius = lengthBetween(points[0], points[1])
         return radius <= 1e-12 ? invalid(measurement, "degenerate", "圆心与圆上点重合。") : succeed(radius, "u")
