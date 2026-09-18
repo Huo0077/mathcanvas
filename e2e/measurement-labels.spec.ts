@@ -60,6 +60,35 @@ test("keeps a planar measurement number on the canvas without any selection", as
   await algebra.getByText("B", { exact: true }).click()
   await page.getByRole("spinbutton", { name: "点 X" }).fill("5")
   await expect(label).toHaveText(/长度：5\.000u/)
+
+  /**
+   * 数值转换重新加回来（2026-09-19，用户口径："这个近似不那么好用，手稍微偏一偏分数就没了……
+   * 我们要将数据往常见整数和分数上面靠"）：读数上直接挂精确 / 近似形式。
+   *
+   * 0.667023 是**拖动出来的全精度浮点**（旧实现的松容差按"十进制末位的半个单位"算，只有 5e-7，
+   * 于是 2/3 被拒、掉回 0.67）；现在吸附到 2/3，并且带 ≈ 说明它是认出来的近似。
+   */
+  await page.getByRole("spinbutton", { name: "点 X" }).fill("0.667023")
+  await expect(label).toHaveText(/长度：0\.667u · ≈ 2\/3/)
+
+  // 精确值不带 ≈：单位正方形的对角线就是 √2（"能准确计算时还是保留精度"）。
+  await page.getByRole("spinbutton", { name: "点 X" }).fill("1")
+  await page.getByRole("spinbutton", { name: "点 Y" }).fill("1")
+  await expect(label).toHaveText(/长度：1\.414u · √2/)
+
+  // 整数不加后缀（"5.000u" 已经把 5 说清楚了，再挂一个 "· 5" 是噪声）。
+  await page.getByRole("spinbutton", { name: "点 Y" }).fill("0")
+  await expect(label).toHaveText(/长度：1\.000u$/)
+
+  /**
+   * 常量族也包括 **e**（用户口径 2026-09-19 当天追加："e 也需要有"）。
+   * 它以前会被吸到 `≈ 27/10`（差 0.67%）：既不是常见分数、也不在常量的窄带里。
+   */
+  await page.getByRole("spinbutton", { name: "点 X" }).fill("2.718281828459045")
+  await expect(label).toHaveText(/长度：2\.718u · e$/)
+  // 拖偏一点点仍然是 e，并且如实带 ≈。
+  await page.getByRole("spinbutton", { name: "点 X" }).fill("2.7183")
+  await expect(label).toHaveText(/长度：2\.718u · ≈ e$/)
 })
 
 test("keeps a spatial measurement number on the 3D canvas without any selection", async ({ page }) => {

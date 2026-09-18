@@ -23,8 +23,10 @@ describe("3D measurement visuals", () => {
     const visual = resolveMeasurementVisual(tetrahedronDocument(), "dihedral-1")
 
     expect(visual?.kind).toBe("dihedral")
-    // 标签用的就是文档里存的那个数与单位（角度一律弧度，见 `measurements3d`）。
+    // 标签用的就是文档里存的那个数与单位（角度一律弧度，见 `measurements3d`），
+    // 后面再挂上它的精确形式（π/2）—— 两个画布共用同一份格式化，见 `measurementForms.ts`。
     expect(visual?.label).toContain("1.571rad")
+    expect(visual?.label).toContain("· π/2")
     expect(visual?.sourceIds).toEqual(["face-abc", "face-abd"])
     expect(visual?.arc?.length).toBeGreaterThan(2)
     expect(visual?.segments).toHaveLength(3)

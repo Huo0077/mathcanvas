@@ -215,6 +215,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .metric-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
 .metric-grid span { display: grid; gap: var(--space-1); padding: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-muted); font-size: 0.75rem; }
 .metric-grid strong { color: var(--color-ink); font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+/* 读数的精确 / 近似形式（`· ≈ 2/3`）：窄面板里 `0.667 u · ≈ 2/3` 会在 ≈ 与分数之间折行，
+   把 `≈` 和它修饰的分数拆成两行读起来像两个东西。形式整体不折行，分隔符 ` · ` 仍可折。 */
+.metric-form { white-space: nowrap; }
 .batch-properties { display: grid; gap: var(--space-2); margin-top: var(--space-4); }
 .batch-properties h3 { margin: 0; font-size: 0.9rem; }
 .batch-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }

@@ -42,7 +42,7 @@ describe("planar measurement labels for line and circle sources", () => {
 
     const labels = planarMeasurementVisuals(document)
 
-    expect(labels.map((label) => label.text)).toEqual(["面积：28.274u²", "周长：18.850u"])
+    expect(labels.map((label) => label.text)).toEqual(["面积：28.274u² · 9π", "周长：18.850u · 6π"])
     // 圆的读数摆在圆心，不是随便飘着。
     expect(labels[0].position).toEqual({ x: 2, y: -1 })
   })
@@ -53,7 +53,7 @@ describe("planar measurement labels for line and circle sources", () => {
     const labels = planarMeasurementVisuals(document)
 
     expect(labels).toHaveLength(1)
-    expect(labels[0].text).toBe("角度：1.571rad")
+    expect(labels[0].text).toBe("角度：1.571rad · π/2")
     expect(Number.isFinite(labels[0].position.x) && Number.isFinite(labels[0].position.y)).toBe(true)
   })
 
@@ -69,11 +69,25 @@ describe("planar measurement labels", () => {
     const document = documentWith([point("a", 0, 0), point("b", 4, 0)], [measurement("length", ["a", "b"], 4, "u")])
 
     const [label] = planarMeasurementVisuals(document)
-    // 与属性栏同一份文本（一个测量只有一个数）。
+    // 与属性栏同一份文本（一个测量只有一个数）。整数的精确形式与小数读数重复，所以不挂后缀。
     expect(label.text).toBe("长度：4.000u")
     expect(label.position.x).toBeCloseTo(2, 12)
     expect(label.position.y).toBeCloseTo(0, 12)
     expect(label.selected).toBe(false)
+  })
+
+  /**
+   * 用户口径（2026-09-19）："这个近似不那么好用，手稍微偏一偏分数就没了……我们要将数据往常见
+   * 整数和分数上面靠。" 画布数字是拖动时眼睛所在的地方，所以"分数掉没掉"必须在这里就能看见。
+   */
+  it("hangs the common form on the canvas number, marked when it was snapped", () => {
+    // 0.667023 是拖动出来的全精度浮点：吸附层认出 2/3，带 ≈。
+    const dragged = documentWith([point("a", 0, 0), point("b", 1, 0)], [measurement("length", ["a", "b"], 0.667023, "u")])
+    expect(planarMeasurementVisuals(dragged)[0].text).toBe("长度：0.667u · ≈ 2/3")
+
+    // 精确值的 3-4-5 斜边：整数 ⇒ 不加后缀（读数自己就是 5.000）。
+    const exact = documentWith([point("a", 0, 0), point("b", 3, 0), point("c", 0, 4)], [measurement("distance", ["b", "a", "c"], 5, "u")])
+    expect(planarMeasurementVisuals(exact)[0].text).toBe("距离：5.000u")
   })
 
   it("puts a point-to-line distance between the foot of the perpendicular and the point", () => {
@@ -97,8 +111,8 @@ describe("planar measurement labels", () => {
     const document = documentWith([point("a", 2, 0), point("v", 0, 0), point("b", 0, 2)], [measurement("angle", ["a", "v", "b"], Math.PI / 2, "rad")])
 
     const [label] = planarMeasurementVisuals(document)
-    // 平面角的单位也是**弧度**（两边统一，见 `measurements3d` 的说明）。
-    expect(label.text).toBe("角度：1.571rad")
+    // 平面角的单位也是**弧度**（两边统一，见 `measurements3d` 的说明），后缀是它的精确形式。
+    expect(label.text).toBe("角度：1.571rad · π/2")
     expect(label.position.x).toBeGreaterThan(0)
     expect(label.position.y).toBeGreaterThan(0)
     // 落在角平分线上（x == y），而且离顶点有一段距离（不压在顶点上）。

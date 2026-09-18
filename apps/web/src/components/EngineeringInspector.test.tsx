@@ -146,6 +146,38 @@ describe("engineering inspector", () => {
     expect(globalThis.document.querySelector(".panel-title")).toBeTruthy()
   })
 
+  it("hangs the common form on the measurement card, with a copy button", () => {
+    /**
+     * 用户口径（2026-09-19）：把数值转换重新加回来，但不要再做那块"把所有测量再列一遍"的置顶面板 ——
+     * 分数就贴在数字已经在的地方（画布读数 + 这张测量卡片）。拖动出来的值认成常见值时带 ≈；
+     * 精确值不带。
+     */
+    const document = createEmptyDocument("conics")
+    const circle: PrimitiveSpec = { id: "circle-1", type: "circle", center: { x: 0, y: 0 }, radius: 2 }
+    document.primitives = [circle]
+    document.measurements = [
+      // 拖动出来的全精度浮点 ⇒ 吸附到 2/3（带 ≈）。
+      { id: "m-length", kind: "measurement3", sourceIds: ["circle-1"], metric: "length", value: 0.667023, unit: "u", precision: "numeric-approximation", status: "valid", explanation: "" },
+      // 精确的整数 ⇒ 不加后缀（避免 "5.000 u · 5" 这种重复）。
+      { id: "m-radius", kind: "measurement3", sourceIds: ["circle-1"], metric: "radius", value: 2, unit: "u", precision: "numeric-approximation", status: "valid", explanation: "" }
+    ]
+    useSceneStore.setState({ document, workspaceDocuments: { conics: document }, history: [], future: [], error: null })
+    renderInspector({ properties: { selectedPrimitive: circle, selectedIds: ["circle-1"], selectedCount: 1 } })
+
+    const grids = Array.from(globalThis.document.querySelectorAll(".primitive-properties .metric-grid")).map((node) => node.textContent ?? "")
+    expect(grids.some((value) => value.includes("0.667 u · ≈ 2/3"))).toBe(true)
+    expect(grids.some((value) => value.includes("2.000 u"))).toBe(true)
+    // 整数那条不加后缀：不要在 "2.000 u" 后面再挂一个 "· 2"。
+    expect(grids.some((value) => value.includes("2.000 u ·"))).toBe(false)
+    // 老师要把它贴进文档：精确形式单独给一个复制入口（只复制形式，不复制整个读数）。
+    const copy = screen.getByLabelText("复制精确形式 长度测量")
+    expect(copy).toBeTruthy()
+    // 复制的就是形式本身（带 ≈，不伪装成精确值）。
+    expect(copy.getAttribute("data-exact-form-text")).toBe("≈ 2/3")
+    // 整数那条没有可复制的形式，就不给按钮。
+    expect(screen.queryByLabelText("复制精确形式 半径测量")).toBeNull()
+  })
+
   it("keeps supported measurement actions reachable from the data tab", () => {
     const document = {
       ...createEmptyDocument("geometry3d"),

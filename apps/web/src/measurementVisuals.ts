@@ -2,6 +2,7 @@ import type { GeometryDocument, Measurement3, PrimitiveSpec, Vector3 } from "@dr
 import { resolveDihedralMarker3 } from "@draw/scene-graph"
 
 import { measurementMetricLabel } from "./measurementLabels"
+import { measurementFormSuffix } from "./measurementForms"
 
 export interface MeasurementVisual {
   id: string
@@ -40,8 +41,9 @@ function pointPositions(document: GeometryDocument, primitive: PrimitiveSpec): V
   return []
 }
 
+/** 立体几何画布的读数：数值 + 单位 + 精确 / 近似形式（与平面画布、属性栏同一份格式化）。 */
 function measurementLabel(measurement: Measurement3): string {
-  return `${measurementMetricLabel(measurement)}：${measurement.value?.toFixed(3) ?? "—"}${measurement.unit ?? ""}`
+  return `${measurementMetricLabel(measurement)}：${measurement.value?.toFixed(3) ?? "—"}${measurement.unit ?? ""}${measurementFormSuffix(measurement)}`
 }
 
 export function resolveMeasurementVisual(document: GeometryDocument, measurementId: string): MeasurementVisual | null {

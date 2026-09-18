@@ -2,6 +2,7 @@ import type { Coordinate, GeometryDocument, Measurement3 } from "@draw/dsl"
 import { entityResolverFor, type MeasurableEntity } from "@draw/geometry-kernel"
 
 import { measurementMetricLabel } from "./measurementLabels"
+import { measurementFormSuffix } from "./measurementForms"
 
 /**
  * 平面（2D）画布上的**常驻测量数字**。
@@ -22,10 +23,15 @@ export interface PlanarMeasurementLabel {
   selected: boolean
 }
 
-/** 与属性栏同一份文本；退化 / 无值时返回 `null`（不画假数字）。 */
+/**
+ * 与属性栏同一份文本；退化 / 无值时返回 `null`（不画假数字）。
+ *
+ * 数值后面挂的是它的**精确 / 近似形式**（`· π/2`、`· ≈ 2/3`），与属性栏共用
+ * `measurementForms` 那一份格式化 —— 拖动时"分数掉没掉"在最显眼的地方就该看得见。
+ */
 export function planarMeasurementText(measurement: Measurement3): string | null {
   if (measurement.status !== "valid" || measurement.value === undefined || !Number.isFinite(measurement.value)) return null
-  return `${measurementMetricLabel(measurement)}：${measurement.value.toFixed(3)}${measurement.unit ?? ""}`
+  return `${measurementMetricLabel(measurement)}：${measurement.value.toFixed(3)}${measurement.unit ?? ""}${measurementFormSuffix(measurement)}`
 }
 
 const midpoint = (first: Coordinate, second: Coordinate): Coordinate => ({ x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 })

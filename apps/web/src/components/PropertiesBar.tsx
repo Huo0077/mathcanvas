@@ -10,6 +10,8 @@ import { defaultStrokeFor } from "../primitiveStyle"
 import { pointHostValue } from "../pointHostOptions"
 import { annotationFeatureOptions } from "../annotations"
 import { insertFormulaTemplate } from "../formulaEditor"
+import { measurementMetricLabel } from "../measurementLabels"
+import { measurementFormText } from "../measurementForms"
 import { FormulaKeyboard } from "./FormulaKeyboard"
 import { useSceneStore } from "../store"
 import { exactConicOf, sectionConicMetrics } from "../conicMetrics"
@@ -822,7 +824,19 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
     </div>}
     {shows("data") && visibleMeasurementOptions.length > 0 && <div className="primitive-properties"><h3>教学测量</h3><p className="footer-note">结果会保留来源对象，并在点移动后自动重算。</p>{selectedFacePair && <p className="measurement-guidance">已选两个面：二面角内角读实体内部夹角，外角读它的补角。</p>}{sceneDocument.workspace !== "geometry3d" && <p className="measurement-guidance">平面测量：选 2 个点量长度；选 3 个点可量角度（第二个点为顶点）、面积，以及第三个点到前两点连线的垂距。</p>}<div className="property-actions" aria-label={sceneDocument.workspace === "geometry3d" ? "三维测量工具" : "平面测量工具"}>{visibleMeasurementOptions.map((option) => <button key={`${option.metric}-${option.dihedralKind ?? "default"}`} type="button" onClick={() => onCreateMeasurement(option.metric, option.dihedralKind)}>{option.label}</button>)}</div></div>}
     {shows("engineering") && engineeringAnnotationOptions.length > 0 && <div className="primitive-properties"><h3>工程标注</h3><p className="footer-note">标注保留空间来源，并在四视图中随来源对象自动重算。</p><div className="property-actions" aria-label="工程标注工具">{engineeringAnnotationOptions.map((option) => <button key={option.kind} type="button" aria-label={option.ariaLabel} onClick={() => onAddEngineeringAnnotation(option.kind)}>{option.label}</button>)}</div></div>}
-    {shows("data") && selectedIds.length === 1 && sceneDocument.measurements.filter((measurement) => measurement.sourceIds.includes(selectedIds[0])).map((measurement) => <div className="primitive-properties" key={measurement.id}><h3>{measurement.metric === "dihedral" ? (measurement.dihedralKind === "exterior" ? "二面角外角" : "二面角内角") : `${measurement.metric}测量`}</h3><p className="footer-note">来源：{measurement.sourceIds.join("、")} · {measurement.precision === "numeric-approximation" ? "数值近似" : "输入精确"}</p><div className="metric-grid"><span>结果<strong>{measurement.value === undefined ? "—" : `${measurement.value.toFixed(3)} ${measurement.unit ?? ""}`}</strong></span><span>状态<strong>{measurement.status}</strong></span></div><p className="footer-note">{measurement.explanation}</p><div className="property-actions"><button type="button" aria-label={`删除测量 ${measurement.id}`} onClick={() => onDeleteMeasurement(measurement.id)}>删除测量</button></div></div>)}
+    {shows("data") && selectedIds.length === 1 && sceneDocument.measurements.filter((measurement) => measurement.sourceIds.includes(selectedIds[0])).map((measurement) => {
+      /**
+       * 「数值转换」重新加回来了（2026-09-19，用户口径："根据现在已有的 ui，重新优化再加上去"），
+       * 但**不再**做那块"把所有测量再列一遍"的置顶面板（它正是当初被判"没什么用"的形态）：
+       * 分数就贴在数字已经在的地方 —— 下面这个结果读数自己，以及画布上的常驻数字。
+       *
+       * 标题顺手统一到 `measurementMetricLabel`：这里以前用的是英文度量 key（"length测量"），
+       * 而对象列表用的是中文（"长度测量"）—— 同一份名单的第二处副本，正是本仓库反复吃过的亏。
+       */
+      const title = measurement.metric === "dihedral" ? measurementMetricLabel(measurement) : `${measurementMetricLabel(measurement)}测量`
+      const form = measurementFormText(measurement)
+      return <div className="primitive-properties" key={measurement.id}><h3>{title}</h3><p className="footer-note">来源：{measurement.sourceIds.join("、")} · {measurement.precision === "numeric-approximation" ? "数值近似" : "输入精确"}</p><div className="metric-grid"><span>结果<strong>{measurement.value === undefined ? "—" : `${measurement.value.toFixed(3)} ${measurement.unit ?? ""}`}{form === null ? null : <>{` · `}<span className="metric-form">{form}</span></>}</strong></span><span>状态<strong>{measurement.status}</strong></span></div><p className="footer-note">{measurement.explanation}</p><div className="property-actions">{form === null ? null : <button type="button" aria-label={`复制精确形式 ${title}`} data-exact-form-text={form} onClick={() => { void navigator.clipboard?.writeText(form) }}>复制 {form}</button>}<button type="button" aria-label={`删除测量 ${measurement.id}`} onClick={() => onDeleteMeasurement(measurement.id)}>删除测量</button></div></div>
+    })}
      {shows("data") && showSlopeParameter && <div className="primitive-properties"><label className="properties-label" htmlFor="selected-slope-slider"><span>直线斜率参数</span><strong className="metric">{value.toFixed(2)}</strong></label><input id="selected-slope-slider" aria-label="选中直线斜率" type="range" disabled={!editable} min={min} max={max} step={step} value={value} onChange={(event) => onChange(numberValue(event))} /></div>}
      {shows("data") && selectedPoint && <div className="primitive-properties"><h3>点坐标</h3>
        {/**
