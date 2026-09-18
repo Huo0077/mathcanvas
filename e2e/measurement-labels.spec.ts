@@ -64,7 +64,7 @@ test("keeps a planar measurement number on the canvas without any selection", as
 
 test("keeps a spatial measurement number on the 3D canvas without any selection", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
   await page.getByRole("button", { name: "添加空间点" }).click()
@@ -86,8 +86,8 @@ test("keeps a spatial measurement number on the 3D canvas without any selection"
   await expect(scene).toHaveAttribute("data-measurement-labels", "1")
 
   // 读数与属性栏是同一个数（选中来源时属性栏给出同一条测量）。
-  // 用 `.metric-grid strong` 收窄：属性栏最上方的「精确形式」面板也会显示同一个数，
-  // 直接 getByText 会同时命中面板那一行（strict mode violation），而这里要断言的是**测量卡片**的读数。
+  // 用 `.metric-grid strong` 收窄到**测量卡片**：属性栏里可能还有别的读数（历史上最上方那块
+  // 「精确形式」面板已按用户要求删除，但收窄查询本身就说明了"要断言的是哪一处数字"）。
   await algebra.getByText("A", { exact: true }).click()
   await expect(page.locator(".properties .metric-grid strong").getByText("3.000 u")).toBeVisible()
 })
@@ -100,7 +100,7 @@ test("keeps a spatial measurement number on the 3D canvas without any selection"
  */
 test("reads a spatial angle in radians, the same unit the planar canvas uses", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
   const algebra = page.locator(".algebra-panel")
@@ -125,7 +125,7 @@ test("reads a spatial angle in radians, the same unit the planar canvas uses", a
   await expect(page.locator(".three-measurement-label")).toHaveText(/角度：1\.571rad/)
 
   // 属性栏是同一个数（一个测量只有一个数），单位不再是度。
-  // 同样收窄到测量卡片：最上方的「精确形式」面板也会显示这个数（还会把它转成 π/2）。
+  // 同样收窄到测量卡片（理由同上一条：断言的落点是那张卡片）。
   await algebra.getByText("B", { exact: true }).click()
   await expect(page.locator(".properties .metric-grid strong").getByText("1.571 rad")).toBeVisible()
 })

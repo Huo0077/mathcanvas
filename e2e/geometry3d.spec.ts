@@ -4,7 +4,7 @@ import { projectWorldPoint } from "./helpers/projection"
 
 test("opens the 3D workspace and adds a parameterized cube", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
   await expect(scene).toBeVisible()
@@ -47,7 +47,7 @@ test("opens the 3D workspace and adds a parameterized cube", async ({ page }) =>
 
 test("picks spatial points and turns them into a teaching measurement", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
   await page.getByRole("button", { name: "添加空间点" }).click()
   await page.getByRole("button", { name: "添加空间点" }).click()
 
@@ -66,7 +66,7 @@ test("picks spatial points and turns them into a teaching measurement", async ({
 
 test("nests spatial topology under an expandable algebra row", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
   await page.getByRole("button", { name: "添加立方体" }).click()
 
   const algebra = page.locator(".algebra-panel")
@@ -81,7 +81,7 @@ test("nests spatial topology under an expandable algebra row", async ({ page }) 
 
 test("cuts point-driven topology into a visible section", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
   await page.getByRole("button", { name: "添加立方体" }).click()
 
   const algebra = page.locator(".algebra-panel")
@@ -101,7 +101,7 @@ const cubeStyle = (page: import("@playwright/test").Page, prefix: string) => pag
 
 test("selects a solid by clicking its body and recolours it repeatedly", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
   await page.getByRole("button", { name: "添加立方体" }).click()
 
   // A template solid is drawn through its generated topology, so the canvas used to have no way back to the solid.
@@ -127,7 +127,7 @@ test("selects a solid by clicking its body and recolours it repeatedly", async (
 
 test("picks the vertex under the cursor instead of one hidden behind the solid", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
   await page.getByRole("button", { name: "添加立方体" }).click()
   // 把立方体钉在一个**明确**的位置上（不依赖模板默认落点），再用**当前相机读数**投影它的两个角。
   for (const [axis, value] of [["X", "-2"], ["Y", "-2"], ["Z", "0"]] as const) await page.getByRole("spinbutton", { name: `原点 ${axis}` }).fill(value)
@@ -153,7 +153,7 @@ test("picks the vertex under the cursor instead of one hidden behind the solid",
 
 test("deletes a solid together with the topology it generated", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
   await page.getByRole("button", { name: "添加立方体" }).click()
 
   const algebra = page.locator(".algebra-panel")
@@ -179,7 +179,7 @@ test("deletes a solid together with the topology it generated", async ({ page })
 
 test("deletes a solid together with the section that cuts it", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
   await page.getByRole("button", { name: "添加立方体" }).click()
   await page.getByRole("button", { name: "创建截面" }).click()
   await expect(page.locator("[data-3d-scene]")).toHaveAttribute("data-section-count", "1")
@@ -196,7 +196,7 @@ test("deletes a solid together with the section that cuts it", async ({ page }) 
 
 test("builds a visible plane from three selected points", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
   const planeCommand = page.getByRole("button", { name: "由选中点创建空间平面" })
@@ -225,7 +225,7 @@ test("builds a visible plane from three selected points", async ({ page }) => {
 
 test("pans the 3D view along the camera axes within a bounded range", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
   await page.getByRole("button", { name: "添加立方体" }).click()
 
   const scene = page.locator("[data-3d-scene]")
@@ -279,7 +279,7 @@ test("pans the 3D view along the camera axes within a bounded range", async ({ p
 
 test("takes over left drag in pan mode and documents every view gesture", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
   await page.getByRole("button", { name: "添加立方体" }).click()
 
   const scene = page.locator("[data-3d-scene]")
@@ -307,7 +307,7 @@ test("takes over left drag in pan mode and documents every view gesture", async 
 
 test("reorients a cone from the property inspector with precise angles", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
   await page.getByRole("button", { name: "添加圆锥" }).click()
 
   const scene = page.locator("[data-3d-scene]")
@@ -333,7 +333,7 @@ test("reorients a cone from the property inspector with precise angles", async (
 
 test("keeps a template face reachable with Alt instead of always taking the whole solid", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
   await page.getByRole("button", { name: "添加立方体" }).click()
 
   const canvas = page.locator("[data-3d-scene] canvas")
@@ -353,7 +353,7 @@ test("keeps a template face reachable with Alt instead of always taking the whol
 
 test("resizes a plane patch by hand from the property inspector", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
   /**
    * 先关掉自动取景：面片的"自动尺寸"取自内容半径，而内容里的点手柄是按屏幕尺寸缩放的世界半径——
    * 相机一动（自动取景就是一种），手柄的世界半径就跟着变，自动尺寸随之变化。
@@ -401,7 +401,7 @@ test("resizes a plane patch by hand from the property inspector", async ({ page 
 
 test("frames an opened figure instead of leaving it a speck", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
   await expect(scene).toHaveAttribute("data-camera-distance", "16.00")
@@ -448,7 +448,7 @@ test("frames an opened figure instead of leaving it a speck", async ({ page }) =
 
 test("unfolds point-driven topology into a flat net and folds it back", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
   await page.getByRole("button", { name: "添加立方体" }).click()
 
   const scene = page.locator("[data-3d-scene]")
@@ -467,7 +467,7 @@ test("unfolds point-driven topology into a flat net and folds it back", async ({
 
 test("explains a dihedral angle with its common edge and canvas markers", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
   await page.getByRole("button", { name: "添加立方体" }).click()
 
   const algebra = page.locator(".algebra-panel")
@@ -488,7 +488,7 @@ test("explains a dihedral angle with its common edge and canvas markers", async 
 
 test("explains the normal and sample-angle controls in the status bar", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
   await page.getByRole("button", { name: "添加立方体" }).click()
 
   const status = page.getByRole("status", { name: "操作提示" })
@@ -515,7 +515,7 @@ test("explains the normal and sample-angle controls in the status bar", async ({
 
 test("creates an intersection line by clicking the dashed preview", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
 
   // 两个 4×4×4 的立方体错开 2：交叠 2×4×4，公共交线是 x=2 处的一圈矩形（12 条棱的公共部分）。
   // 三个坐标都**显式钉住**，这样用例不依赖模板默认落点。
@@ -557,7 +557,7 @@ test("creates an intersection line by clicking the dashed preview", async ({ pag
 
 test("previews the section of a selected solid as a dashed overlay", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
   await page.getByRole("button", { name: "添加立方体" }).click()
 
   const scene = page.locator("[data-3d-scene]")
@@ -572,7 +572,7 @@ test("previews the section of a selected solid as a dashed overlay", async ({ pa
 
 test("labels 3D points with their classroom names inside the scene", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
   await page.getByRole("button", { name: "添加空间点" }).click()
   await page.getByRole("button", { name: "添加空间点" }).click()
 
@@ -594,7 +594,7 @@ test("labels 3D points with their classroom names inside the scene", async ({ pa
 
 test("shows a small bottom-left guide only after a feature button is clicked", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
   await page.getByRole("button", { name: "添加立方体" }).click()
 
   const algebra = page.locator(".algebra-panel")

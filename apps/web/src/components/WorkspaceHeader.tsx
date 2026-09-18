@@ -1,37 +1,51 @@
 import type { Workspace } from "@draw/dsl"
 
-function HeaderIcon({ name }: { name: "grid" | "curve" | "integral" | "cube" | "search" | "settings" | "user" }) {
-  const paths = {
-    grid: <><rect x="4" y="4" width="6" height="6" rx="1" /><rect x="14" y="4" width="6" height="6" rx="1" /><rect x="4" y="14" width="6" height="6" rx="1" /><rect x="14" y="14" width="6" height="6" rx="1" /></>,
-    curve: <><path d="M4 17c3-8 6-10 9-5s5 4 7-5" /><path d="M4 20h16" /></>,
-    integral: <path d="M16 4c-4 0-3 4-3 8s1 8-3 8M10 4h8M7 20h8" />,
-    cube: <><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z" /><path d="M4.5 7.8 12 12l7.5-4.2M12 12v9" /></>,
-    search: <><circle cx="10.8" cy="10.8" r="6.3" /><path d="m16 16 4 4" /></>,
-    settings: <><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z" /><path d="m19.4 15 .1.1a2 2 0 0 1-2.8 2.8l-.1-.1a2 2 0 0 0-3.4 1.4v.2a2 2 0 0 1-4 0v-.2a2 2 0 0 0-3.4-1.4l-.1.1A2 2 0 0 1 3 15.1l.1-.1A2 2 0 0 0 1.7 11.6h-.2a2 2 0 0 1 0-4h.2A2 2 0 0 0 3.1 4.2L3 4.1A2 2 0 0 1 5.8 1.3l.1.1a2 2 0 0 0 3.4-1.4v-.2a2 2 0 0 1 4 0V0a2 2 0 0 0 3.4 1.4l.1-.1A2 2 0 0 1 19.6 4l-.1.1a2 2 0 0 0 1.4 3.4h.2a2 2 0 0 1 0 4h-.2a2 2 0 0 0-1.5 3.5Z" transform="translate(0 3) scale(.72)" /></>,
-    user: <><circle cx="12" cy="8" r="3.3" /><path d="M5.5 20c.7-3.5 2.8-5.2 6.5-5.2s5.8 1.7 6.5 5.2" /></>
-  }
-  return <svg className="ui-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>
-}
+import { BRAND_TEXT, brandParticles } from "../brandParticles"
 
+/**
+ * 顶部导航栏。
+ *
+ * 2026-09-18 按用户口径重排：
+ * - 「把顶部的 MathCanvas 一栏中图片的内容放到下面一栏（平面几何、立体几何）的右端」
+ *   —— 文件命令、搜索、设置原来都在这里，现在全部下沉到 `WorkspaceTabs` 的右端，
+ *   顶栏只剩品牌一件事；
+ * - 「把右侧的光标删除」—— 高亮的「用户中心」按钮已移除；
+ * - 「把动态粒子效果加入到 MathCanvas 一栏，光标中的文字就是 MathCanvas」
+ *   —— 品牌字样带打字动画与方块光标（顶栏因此只有一个视觉焦点）。
+ */
 interface WorkspaceHeaderProps {
   activeWorkspace?: Workspace
   onWorkspaceChange?: (workspace: Workspace) => void
-  /** File and history commands belong to the global shell, not to a geometry toolbar. */
-  onUndo?: () => void
-  onRedo?: () => void
-  onSave?: () => void
-  onOpen?: () => void
-  /** False greys the button out, so "nothing to undo" is visible instead of a click that does nothing. */
-  canUndo?: boolean
-  canRedo?: boolean
 }
 
-export function WorkspaceHeader({ onUndo, onRedo, onSave, onOpen, canUndo, canRedo }: WorkspaceHeaderProps) {
+export function WorkspaceHeader(_props: WorkspaceHeaderProps) {
   return <header className="topbar">
-    <div className="topbar-leading">
-      <div className="brand"><span className="brand-mark" aria-hidden="true">∑</span><span>MathCanvas</span></div>
-      <div className="model-status" aria-label="模型状态：最佳"><span className="health-dot" aria-hidden="true" /><span><small>模型状态</small><strong>最佳</strong></span></div>
+    <div className="brand">
+      {/* 粒子只在品牌两侧的留白里漂，`aria-hidden` 因为它是纯装饰。
+          行内只写"每颗粒子自己的"那几项（位置 / 大小 / 基础不透明度 / 节奏），
+          位移与缩放交给 CSS 关键帧 —— 见 `global.css` 的 `brand-particle-float`。 */}
+      <span className="brand-particles" aria-hidden="true">
+        {brandParticles().map((particle, index) => <i
+          key={index}
+          style={{
+            left: `${particle.left}%`,
+            top: `${particle.top}%`,
+            width: `${particle.size}px`,
+            height: `${particle.size}px`,
+            opacity: particle.opacity,
+            animationDelay: `${particle.delay}s`,
+            animationDuration: `${particle.duration}s`,
+            // 每颗粒子的浮动幅度不同：位移交给关键帧，幅度通过这个变量传进去。
+            "--particle-rise": `${particle.rise}px`
+          } as never}
+        />)}
+      </span>
+      <span className="brand-mark" aria-hidden="true">∑</span>
+      {/* 打字 + 方块光标：宽度按字符数推进，光标跟在可见字符之后。 */}
+      <span className="brand-type" aria-label={BRAND_TEXT}>
+        <span className="brand-text" aria-hidden="true">{BRAND_TEXT}</span>
+        <span className="brand-cursor" aria-hidden="true" />
+      </span>
     </div>
-    <div className="topbar-actions"><div className="topbar-commands" role="group" aria-label="文件与历史">{onOpen && <button type="button" onClick={onOpen}>打开 .mgeo</button>}{onSave && <button type="button" onClick={onSave}>保存 .mgeo</button>}{onUndo && <button type="button" onClick={onUndo} disabled={canUndo === false} title={canUndo === false ? "没有可撤销的操作（Ctrl+Z）" : "撤销 (Ctrl+Z)"}>撤销</button>}{onRedo && <button type="button" onClick={onRedo} disabled={canRedo === false} title={canRedo === false ? "没有可重做的操作（Ctrl+Y）" : "重做 (Ctrl+Y)"}>重做</button>}</div><label className="search-box"><HeaderIcon name="search" /><input aria-label="搜索" placeholder="搜索工具、命令或定理..." /></label><button className="topbar-icon" type="button" aria-label="设置"><HeaderIcon name="settings" /></button><button className="topbar-icon profile-button" type="button" aria-label="用户中心"><HeaderIcon name="user" /></button></div>
   </header>
 }

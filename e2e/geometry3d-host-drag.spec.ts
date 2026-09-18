@@ -12,7 +12,7 @@ import { projectWorldPoint } from "./helpers/projection"
  */
 test("drags a host-bound point along its host", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
   await page.getByRole("button", { name: "添加立方体" }).click()
   await page.getByRole("button", { name: "添加空间点" }).click()
 

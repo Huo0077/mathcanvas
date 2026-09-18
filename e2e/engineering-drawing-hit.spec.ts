@@ -8,7 +8,7 @@ import { expect, test } from "@playwright/test"
 test("draft geometry is visible and has a forgiving hit band", async ({ page }) => {
   await page.goto("/")
   await page.locator('input[type="file"]').setInputFiles("e2e/fixtures/cad-point.mgeo")
-  await page.getByRole("button", { name: "工程制图" }).click()
+  await page.getByRole("button", { name: "跳转到工程制图" }).click()
   await page.getByRole("button", { name: "2D 绘图" }).click()
 
   const surface = page.getByRole("img", { name: /模型视图/ })

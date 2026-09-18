@@ -13,7 +13,7 @@ test.use({ viewport: { width: 1280, height: 900 } })
  */
 test("draws a section of a cylinder as an exact circle that gains detail when zooming in", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
   await page.getByRole("button", { name: "添加圆柱" }).click()
 
   const scene = page.locator("[data-3d-scene]")

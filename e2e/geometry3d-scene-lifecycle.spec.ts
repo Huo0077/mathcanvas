@@ -22,7 +22,7 @@ async function readSync(scene: Locator) {
  */
 test("keeps one renderer alive across edits, selection and unfold", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
   await page.getByRole("button", { name: "添加立方体" }).click()
 
   const scene = page.locator("[data-3d-scene]")
@@ -59,7 +59,7 @@ test("keeps one renderer alive across edits, selection and unfold", async ({ pag
  */
 test("does not rebuild or resync while a solid is being dragged", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
   await page.getByRole("button", { name: "添加立方体" }).click()
   await page.getByRole("button", { name: "自由拖动" }).click()
 
@@ -90,7 +90,7 @@ test("does not rebuild or resync while a solid is being dragged", async ({ page 
  */
 test("rebuilds only the object whose selection changed", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
   await page.getByRole("button", { name: "添加立方体" }).click()
   await page.getByRole("button", { name: "添加空间点" }).click()
 
@@ -122,7 +122,7 @@ test("rebuilds only the object whose selection changed", async ({ page }) => {
  */
 test("keeps the rest of the scene while the unfold animation runs", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
   await page.getByRole("button", { name: "添加立方体" }).click()
 
   const scene = page.locator("[data-3d-scene]")
@@ -140,7 +140,7 @@ test("keeps the rest of the scene while the unfold animation runs", async ({ pag
 /** 自动取景开关：默认开、可关闭、刷新后仍然记得；重新打开时立刻拟合一次。 */
 test("exposes the auto-fit toggle and remembers it across reloads", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
   await expect(scene).toHaveAttribute("data-autofit", "true")
@@ -156,7 +156,7 @@ test("exposes the auto-fit toggle and remembers it across reloads", async ({ pag
   await expect(scene).toHaveAttribute("data-autofit", "false")
 
   await page.reload()
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
   await expect(page.locator("[data-3d-scene]")).toHaveAttribute("data-autofit", "false")
 
   await toggleAutoFit()

@@ -14,7 +14,7 @@ import { projectWorldPoint } from "./helpers/projection"
  */
 test("scales the track by dragging its radius handle, keeping bound points on the rim", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
   const algebra = page.locator(".algebra-panel")
@@ -107,7 +107,7 @@ test("scales the track by dragging its radius handle, keeping bound points on th
  */
 test("turns the track with the world-axis rings, keeping its centre", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
   const algebra = page.locator(".algebra-panel")
@@ -164,7 +164,7 @@ test("turns the track with the world-axis rings, keeping its centre", async ({ p
 /** 没抓到手柄时行为必须一字不变：指针在圆心附近按下不会改半径。 */
 test("leaves the radius alone when the pointer is not on the handle", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
   const algebra = page.locator(".algebra-panel")

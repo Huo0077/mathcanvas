@@ -5,7 +5,7 @@ import { expect, test } from "@playwright/test"
 test("drafts on a new layer, hides it, and keeps the layout after a refresh", async ({ page }) => {
   await page.goto("/")
   await page.locator('input[type="file"]').setInputFiles("e2e/fixtures/cad-point.mgeo")
-  await page.getByRole("button", { name: "工程制图" }).click()
+  await page.getByRole("button", { name: "跳转到工程制图" }).click()
 
   // A legacy .mgeo document is migrated to the default layer, sheet and four-view layout.
   await page.getByRole("tab", { name: "图层树" }).click()
@@ -38,7 +38,7 @@ test("drafts on a new layer, hides it, and keeps the layout after a refresh", as
   await page.reload()
 
   // The CAD workspace, the active tree tab, the hidden layer and the view scale all survive the refresh.
-  await expect(page.getByRole("button", { name: "工程制图" })).toHaveAttribute("aria-pressed", "true")
+  await expect(page.getByRole("button", { name: "跳转到工程制图" })).toHaveAttribute("aria-pressed", "true")
   await expect(page.getByRole("tab", { name: "图层树" })).toHaveAttribute("aria-selected", "true")
   await expect(page.getByRole("button", { name: "显示 图层 1" })).toBeVisible()
   await page.locator('.drawing-viewport[data-view-id="view-front"]').hover()
@@ -48,7 +48,7 @@ test("drafts on a new layer, hides it, and keeps the layout after a refresh", as
 test("drafts with a fixed window, live preview and object snap", async ({ page }) => {
   await page.goto("/")
   await page.locator('input[type="file"]').setInputFiles("e2e/fixtures/cad-point.mgeo")
-  await page.getByRole("button", { name: "工程制图" }).click()
+  await page.getByRole("button", { name: "跳转到工程制图" }).click()
   await page.getByRole("button", { name: "2D 绘图" }).click()
 
   const surface = page.getByRole("img", { name: /模型视图/ })
@@ -87,7 +87,7 @@ test("drafts with a fixed window, live preview and object snap", async ({ page }
 test("edits a draft primitive by dragging its grip", async ({ page }) => {
   await page.goto("/")
   await page.locator('input[type="file"]').setInputFiles("e2e/fixtures/cad-point.mgeo")
-  await page.getByRole("button", { name: "工程制图" }).click()
+  await page.getByRole("button", { name: "跳转到工程制图" }).click()
   await page.getByRole("button", { name: "2D 绘图" }).click()
 
   const surface = page.getByRole("img", { name: /模型视图/ })
@@ -119,7 +119,7 @@ test("edits a draft primitive by dragging its grip", async ({ page }) => {
 test("box-selects draft geometry with the drag direction deciding the mode", async ({ page }) => {
   await page.goto("/")
   await page.locator('input[type="file"]').setInputFiles("e2e/fixtures/cad-point.mgeo")
-  await page.getByRole("button", { name: "工程制图" }).click()
+  await page.getByRole("button", { name: "跳转到工程制图" }).click()
   await page.getByRole("button", { name: "2D 绘图" }).click()
 
   const surface = page.getByRole("img", { name: /模型视图/ })
@@ -152,7 +152,7 @@ test("box-selects draft geometry with the drag direction deciding the mode", asy
 test("places drafting points from typed coordinates", async ({ page }) => {
   await page.goto("/")
   await page.locator('input[type="file"]').setInputFiles("e2e/fixtures/cad-point.mgeo")
-  await page.getByRole("button", { name: "工程制图" }).click()
+  await page.getByRole("button", { name: "跳转到工程制图" }).click()
   await page.getByRole("button", { name: "2D 绘图" }).click()
 
   const surface = page.getByRole("img", { name: /模型视图/ })
@@ -182,7 +182,7 @@ test("places drafting points from typed coordinates", async ({ page }) => {
 test("offsets, trims and extends selected draft geometry", async ({ page }) => {
   await page.goto("/")
   await page.locator('input[type="file"]').setInputFiles("e2e/fixtures/cad-point.mgeo")
-  await page.getByRole("button", { name: "工程制图" }).click()
+  await page.getByRole("button", { name: "跳转到工程制图" }).click()
   await page.getByRole("button", { name: "2D 绘图" }).click()
 
   const surface = page.getByRole("img", { name: /模型视图/ })
@@ -248,7 +248,7 @@ test("offsets, trims and extends selected draft geometry", async ({ page }) => {
 
 test("undoes and redoes from both the buttons and the keyboard", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "工程制图" }).click()
+  await page.getByRole("button", { name: "跳转到工程制图" }).click()
 
   const workbench = page.locator(".engineering-workbench")
   const revision = async () => Number(await workbench.getAttribute("data-revision"))
@@ -284,7 +284,7 @@ test("undoes and redoes from both the buttons and the keyboard", async ({ page }
 test("keeps hidden views out of the exported SVG", async ({ page }) => {
   await page.goto("/")
   await page.locator('input[type="file"]').setInputFiles("e2e/fixtures/cad-dimension.mgeo")
-  await page.getByRole("button", { name: "工程制图" }).click()
+  await page.getByRole("button", { name: "跳转到工程制图" }).click()
 
   await page.getByRole("tab", { name: "图纸树" }).click()
   const tree = page.getByRole("region", { name: "模型与图纸树" })
@@ -302,7 +302,7 @@ test("keeps hidden views out of the exported SVG", async ({ page }) => {
 test("supports keyboard selection, command entry, cancellation and inspector tabs", async ({ page }) => {
   await page.goto("/")
   await page.locator('input[type="file"]').setInputFiles("e2e/fixtures/cad-point.mgeo")
-  await page.getByRole("button", { name: "工程制图" }).click()
+  await page.getByRole("button", { name: "跳转到工程制图" }).click()
 
   const source = page.getByRole("main", { name: "工程制图视图" }).locator('[data-source-id="point3-1"]').first()
   await source.focus()
@@ -327,7 +327,7 @@ test("supports keyboard selection, command entry, cancellation and inspector tab
 
 test("fills the drafting area with the sheet and keeps an explicit display scale", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "工程制图" }).click()
+  await page.getByRole("button", { name: "跳转到工程制图" }).click()
   await page.waitForSelector(".drawing-sheet")
   // The measured fit arrives after the first paint, so wait for the scale to settle away from the 1:1 default.
   await expect.poll(async () => page.locator(".drawing-sheet").getAttribute("data-sheet-scale")).not.toBe("1.000")
@@ -389,9 +389,9 @@ test("projects the spatial workspace model instead of claiming there is nothing 
   await page.goto("/")
 
   // 在立体几何里建一个立方体：工作区文档是独立的，工程制图默认看不到它。
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
   await page.getByRole("button", { name: "添加立方体" }).click()
-  await page.getByRole("button", { name: "工程制图" }).click()
+  await page.getByRole("button", { name: "跳转到工程制图" }).click()
 
   // 空状态要说明原因，而不是只说"暂无可投影的空间对象"。
   await expect(page.getByText("本图纸没有可投影对象；立体几何里已有模型").first()).toBeVisible()
@@ -411,7 +411,7 @@ test("projects the spatial workspace model instead of claiming there is nothing 
 
 test("keeps the 2D drafting commands on the toolbar, off the drawing surface", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "工程制图" }).click()
+  await page.getByRole("button", { name: "跳转到工程制图" }).click()
   await page.getByRole("button", { name: "2D 绘图" }).click()
   await page.waitForSelector(".drawing-sheet")
   await expect(page.getByLabel("坐标输入")).toBeVisible()

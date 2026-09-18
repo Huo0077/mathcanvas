@@ -11,7 +11,7 @@ test.use({ viewport: { width: 1280, height: 900 } })
  */
 test("keeps the planar grid at one world unit per cell while zooming", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "平面几何" }).click()
+  await page.getByRole("button", { name: "跳转到平面几何" }).click()
   const canvas = page.getByRole("img", { name: "几何画布" })
   await expect(canvas).toHaveAttribute("data-grid-cell", "1")
   await expect(canvas).toHaveAttribute("data-grid-major", "10")

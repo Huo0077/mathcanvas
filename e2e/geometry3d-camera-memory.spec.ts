@@ -9,7 +9,7 @@ import { expect, test, type Page } from "@playwright/test"
  */
 test("returns to the 3D workspace with the camera the user left", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
   await page.getByRole("button", { name: "添加立方体" }).click()
 
   const scene = page.locator("[data-3d-scene]")
@@ -30,9 +30,9 @@ test("returns to the 3D workspace with the camera the user left", async ({ page 
   expect(turned.distance).not.toBeCloseTo(16, 0)
 
   // 切到平面几何，再切回来
-  await page.getByRole("button", { name: "平面几何" }).click()
+  await page.getByRole("button", { name: "跳转到平面几何" }).click()
   await expect(page.locator("[data-3d-scene]")).toHaveCount(0)
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
 
   const restored = page.locator("[data-3d-scene]")
   await expect(restored).toBeVisible()

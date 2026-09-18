@@ -16,7 +16,7 @@ test.use({ viewport: { width: 1280, height: 800 } })
 
 test("fills the canvas row instead of a viewport-height guess", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
 
   const measured = await page.evaluate(() => {
     const workbench = document.querySelector(".workbench")!
@@ -40,7 +40,7 @@ test("fills the canvas row instead of a viewport-height guess", async ({ page })
 
 test("keeps filling the row after a viewport resize", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
 
   await page.setViewportSize({ width: 1280, height: 560 })
   const short = await measure(page)
@@ -72,7 +72,7 @@ async function measure(page: import("@playwright/test").Page) {
 test("keeps the canvas size when the status text changes", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 })
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
   await page.getByRole("button", { name: "添加立方体" }).click()
@@ -118,7 +118,7 @@ test("keeps a usable canvas height at tablet widths", async ({ page }) => {
   for (const width of [960, 900, 768, 700]) {
     await page.setViewportSize({ width, height: 800 })
     await page.goto("/")
-    await page.getByRole("button", { name: "立体几何" }).click()
+    await page.getByRole("button", { name: "跳转到立体几何" }).click()
     await page.getByRole("button", { name: "添加立方体" }).click()
     await expect(page.getByText("立方体 1").first()).toBeVisible()
 

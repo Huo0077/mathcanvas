@@ -11,7 +11,7 @@ test.use({ viewport: { width: 1280, height: 900 } })
  */
 test("shows only the four quadrant points per circle on a cylinder", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
   await page.getByRole("button", { name: "添加圆柱" }).click()
 
   const scene = page.locator("[data-3d-scene]")
@@ -33,7 +33,7 @@ test("shows only the four quadrant points per circle on a cylinder", async ({ pa
  */
 test("shows only the four quadrant points plus the apex on a cone", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
   await page.getByRole("button", { name: "添加圆锥" }).click()
 
   const scene = page.locator("[data-3d-scene]")

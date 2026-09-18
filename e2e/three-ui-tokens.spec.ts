@@ -18,7 +18,7 @@ test("dresses the 3D canvas in the planar paper tokens", async ({ page }) => {
   const gridMinorToken = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--color-graph-grid-minor").trim())
   const gridMajorToken = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--color-graph-grid-major").trim())
 
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
   const scene = page.locator("[data-3d-scene]")
   // 同一个标记名：两侧共用一套 CSS 规则，而不是各写一份"看起来差不多"的颜色。
   await expect(scene).toHaveAttribute("data-canvas-surface", "graph-paper")
@@ -27,13 +27,14 @@ test("dresses the 3D canvas in the planar paper tokens", async ({ page }) => {
   // 栅格色 = 平面几何的格线令牌（一字不差）。
   await expect(scene).toHaveAttribute("data-grid-colors", `${gridMinorToken},${gridMajorToken}`)
 
-  // 纸色也确实落到了画布上：外壳的背景是暖色（红分量 > 蓝分量），不是原来的冷色工作台。
+  // 纸色也确实落到了画布上：外壳的背景是**冷色**（蓝分量 ≥ 红分量），与 #F8FAFC / #E2E8F0 的那套冷调一致
+  //（2026-09-18 视觉重构之前这里断言的是"暖色草稿纸"，本轮按用户口径整体转冷，断言方向随之翻转）。
   const shellBackground = await page.locator(".three-canvas-shell").evaluate((element) => getComputedStyle(element).backgroundImage + getComputedStyle(element).backgroundColor)
-  const warmth = await page.locator(".three-canvas-shell").evaluate((element) => {
+  const coolness = await page.locator(".three-canvas-shell").evaluate((element) => {
     const renderTarget = element.querySelector(".three-render-target") as HTMLElement | null
     const [red, , blue] = getComputedStyle(renderTarget ?? element).backgroundColor.match(/\d+/g)?.map(Number) ?? [0, 0, 0]
-    return red - blue
+    return blue - red
   })
   expect(shellBackground).toContain("gradient")
-  expect(warmth).toBeGreaterThan(0)
+  expect(coolness).toBeGreaterThanOrEqual(0)
 })

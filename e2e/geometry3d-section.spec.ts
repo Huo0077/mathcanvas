@@ -41,7 +41,7 @@ async function grabSectionBody(page: import("@playwright/test").Page) {
 
 test("explains the section preview and creates a section when it is clicked", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
   await addPinnedCube(page)
@@ -75,7 +75,7 @@ test("explains the section preview and creates a section when it is clicked", as
 
 test("moves the cutting plane with the arrow keys while free dragging is on", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
   await addPinnedCube(page)
@@ -106,7 +106,7 @@ test("moves the cutting plane with the arrow keys while free dragging is on", as
 
 test("tilts the cutting plane from the properties panel", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
   await addPinnedCube(page)
@@ -136,7 +136,7 @@ test("tilts the cutting plane from the properties panel", async ({ page }) => {
 
 test("uses a face of the solid as the cutting plane", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
   await addPinnedCube(page)
@@ -176,7 +176,7 @@ test("uses a face of the solid as the cutting plane", async ({ page }) => {
 for (const template of ["立方体", "棱锥", "圆柱", "圆锥"]) {
   test(`cuts the default section of a ${template} and survives a 45° tilt`, async ({ page }) => {
     await page.goto("/")
-    await page.getByRole("button", { name: "立体几何" }).click()
+    await page.getByRole("button", { name: "跳转到立体几何" }).click()
 
     const scene = page.locator("[data-3d-scene]")
     await page.getByRole("button", { name: `添加${template}` }).click()
@@ -198,7 +198,7 @@ for (const template of ["立方体", "棱锥", "圆柱", "圆锥"]) {
 
 test("moves the drawing section when dragged while free dragging is on", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
   await addPinnedCube(page)

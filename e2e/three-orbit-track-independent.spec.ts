@@ -13,7 +13,7 @@ import { projectWorldPoint } from "./helpers/projection"
  */
 test("moves the track by itself and leaves the construction points alone", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
 
   const algebra = page.locator(".algebra-panel")
   const placePoint = async (label: string, position: [string, string, string]) => {
@@ -57,7 +57,7 @@ test("moves the track by itself and leaves the construction points alone", async
 
 test("lets the point that used to define the centre be deleted, and keeps the editable centre", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
 
   const algebra = page.locator(".algebra-panel")
   await page.getByRole("button", { name: "添加空间点" }).click()

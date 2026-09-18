@@ -29,7 +29,7 @@ const MESH_BAND = SEGMENTS * 2 * RADIUS * Math.sin(Math.PI / SEGMENTS) * CUT_HEI
 
 test("merges 圆柱 ∩ 立方体 into one band patch, and draws its boundary as true circles", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
   await page.locator('input[type="file"]').setInputFiles("e2e/fixtures/cube-cylinder.mgeo")
   const scene = page.locator("[data-3d-scene]")
 

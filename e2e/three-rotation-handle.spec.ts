@@ -14,7 +14,7 @@ import { projectWorldPoint } from "./helpers/projection"
  */
 test("rotates a solid by dragging the X ring, in one undoable step", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
   await page.getByRole("button", { name: "添加圆柱" }).click()
@@ -94,7 +94,7 @@ async function readRotationDegrees(scene: import("@playwright/test").Locator): P
  */
 test("follows the pointer exactly while Alt is held", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
   await page.getByRole("button", { name: "添加圆柱" }).click()
@@ -140,7 +140,7 @@ test("follows the pointer exactly while Alt is held", async ({ page }) => {
 /** 环外的按下不算旋转：不选环、不开会话，也不会把实体转到别处去。 */
 test("does not start a rotation when the pointer is off the rings", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
   await page.getByRole("button", { name: "添加圆柱" }).click()
@@ -160,7 +160,7 @@ test("does not start a rotation when the pointer is off the rings", async ({ pag
 /** 多选时"绕谁转"没有唯一答案，所以不给环（与域操作"只转一个对象"的语义一致）。 */
 test("offers no rings when more than one object is selected", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
   await page.getByRole("button", { name: "添加圆柱" }).click()

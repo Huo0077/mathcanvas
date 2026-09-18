@@ -14,7 +14,7 @@ import { projectWorldPoint } from "./helpers/projection"
  */
 test("creates a circle track and slides a bound point along it", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
 
   // 两个空间点：第一个当圆心，第二个当圆周上的点。
   await page.getByRole("button", { name: "添加空间点" }).click()
@@ -73,7 +73,7 @@ test("creates a circle track and slides a bound point along it", async ({ page }
  */
 test("shows the bound point moving while the pointer is still down", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
   const scene = page.locator("[data-3d-scene]")
   // 先把相机钉死：下面要把世界坐标投影成抓取点，取景动画一跑就抓空了。
   await page.evaluate(() => (document.querySelector('button[aria-label="自动取景"]') as HTMLButtonElement | null)?.click())
@@ -136,7 +136,7 @@ async function settleCamera(scene: import("@playwright/test").Locator) {
  */
 test("connects a point that rides the track with a fixed point by a line", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
   const algebra = page.locator(".algebra-panel")
 
   // 定点 A（圆心）+ 圆周点 B ⇒ 半径 3 的轨道。

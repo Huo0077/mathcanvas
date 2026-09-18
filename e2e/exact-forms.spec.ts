@@ -1,24 +1,27 @@
 import { expect, test } from "@playwright/test"
 
 /**
- * 数值转换面板（用户口径："旁边增加一个数据转换功能，能够识别到图中的小数，并且在功能内输出分数形式，
- * 无理数也能输出，该功能入口在右侧属性栏最高处"）。
+ * 「精确形式」面板**已按用户要求删除**（2026-09-18，用户口径：「删除右侧的"精确形式"，似乎没什么用」）。
  *
- * 这条用例走一遍真实路径：画一个半径 2 的圆 → 量它的面积 → 属性栏最上方的面板里出现 `4π`。
- * 为什么 4π 是个好例子：它是**无理数**（π 的有理倍数），所以这一条同时证明"无理数也能输出"，
- * 而不只是"小数变分数"。
+ * 这份用例保住了删除的**边界**：面板整块不再存在（标签、行、空状态文案都没有），
+ * 而"量一个圆的面积"这条主路径照旧可用、读数照旧常驻画布。
+ * 之所以不删掉整个文件：它原本就是唯一走完整路径的浏览器用例（画圆 → 改半径 → 量面积），
+ * 删掉面板的展示不该顺手丢掉这段覆盖。
  */
-test("converts a measured value into its exact form at the top of the inspector", async ({ page }) => {
+test("no longer shows the exact-form panel, while measuring still works", async ({ page }) => {
   await page.goto("/")
   const ribbon = page.getByRole("region", { name: "功能区" })
   await page.getByRole("button", { name: "固定功能区" }).click()
   const algebra = page.locator(".algebra-panel")
   const canvas = page.locator("svg[aria-label='几何画布']")
 
-  // 面板一开始就在（不需要选中任何东西），只是还空着。
-  const panel = page.locator('[aria-label="数值转换"]')
-  await expect(panel).toBeVisible()
-  await expect(panel).toContainText("还没有测量")
+  // 面板整块不存在：不选中任何东西时也没有，量完之后也没有。
+  await expect(page.locator('[aria-label="数值转换"]')).toHaveCount(0)
+  await expect(page.locator("[data-exact-form-panel], [data-exact-form-row]")).toHaveCount(0)
+  await expect(page.getByText("还没有测量：先在画布上量一个长度、角度或面积。")).toHaveCount(0)
+  // 属性栏仍然从自己的标题开始（删掉的只是那块只读展示）。
+  // 收窄到 `.properties`：左侧对象列表面板里也有一个 `.panel-title`。
+  await expect(page.locator(".properties .panel-title")).toHaveText("属性面板")
 
   // 半径 2 的圆。
   const box = (await canvas.boundingBox())!
@@ -30,17 +33,11 @@ test("converts a measured value into its exact form at the top of the inspector"
   await page.getByRole("spinbutton", { name: "圆心 Y" }).fill("0")
   await page.getByRole("spinbutton", { name: "半径" }).fill("2")
 
-  // 量面积：π·2² = 4π ≈ 12.566。
+  // 量面积：π·2² = 4π ≈ 12.566 —— 测量本身照旧，读数照旧常驻画布。
   await page.locator('[aria-label="平面测量工具"]').getByRole("button", { name: "面积", exact: true }).click()
+  await expect(canvas).toContainText("12.566")
 
-  const row = panel.locator("[data-exact-form-row]").first()
-  await expect(row).toHaveAttribute("data-exact-form-kind", "pi-multiple")
-  await expect(row).toHaveAttribute("data-exact-form-text", "4π")
-  await expect(row).toContainText("面积")
-  await expect(row).toContainText("12.566")
-
-  // 再量周长：2πr = 4π —— 与面积同值不同名字，于是面板上是**两行**（按行列出，不去重）。
-  await page.locator('[aria-label="平面测量工具"]').getByRole("button", { name: "周长", exact: true }).click()
-  await expect(panel.locator("[data-exact-form-row]")).toHaveCount(2)
-  await expect(panel).toContainText("周长")
+  // 量完之后面板依然不在（这一条防的是"面板只是被藏起来、又慢慢长回来"）。
+  await expect(page.locator('[aria-label="数值转换"]')).toHaveCount(0)
+  await expect(page.locator("[data-exact-form-row]")).toHaveCount(0)
 })

@@ -14,7 +14,7 @@ test.use({ viewport: { width: 1280, height: 900 } })
 
 test("turns 圆柱 ∩ 圆锥 into one 圆锥面 plus its base, instead of 48 triangle patches", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
   await page.locator('input[type="file"]').setInputFiles("e2e/fixtures/cylinder-cone.mgeo")
   const scene = page.locator("[data-3d-scene]")
 

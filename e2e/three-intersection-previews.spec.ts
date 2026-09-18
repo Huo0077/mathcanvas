@@ -19,7 +19,7 @@ test.use({ viewport: { width: 1280, height: 900 } })
  */
 async function loadFixture(page: import("@playwright/test").Page) {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
   await page.locator('input[type="file"]').setInputFiles("e2e/fixtures/overlapping-cubes.mgeo")
   const scene = page.locator("[data-3d-scene]")
   await expect(scene).toHaveAttribute("data-preview-face-count", "6")

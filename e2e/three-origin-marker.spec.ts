@@ -13,7 +13,7 @@ import { expect, test } from "@playwright/test"
  */
 test("keeps the origin marker at the world origin while the grid follows the content", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
   await page.getByRole("button", { name: "添加立方体" }).click()

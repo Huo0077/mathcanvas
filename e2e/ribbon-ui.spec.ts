@@ -3,8 +3,8 @@ import { expect, test } from "@playwright/test"
 test("keeps workspace navigation in the tab bar and supports Ribbon fold, popup and pin", async ({ page }) => {
   await page.goto("/")
 
-  await expect(page.getByRole("button", { name: "平面几何" })).toHaveAttribute("aria-pressed", "true")
-  await expect(page.getByRole("banner").getByRole("button", { name: "立体几何" })).toHaveCount(0)
+  await expect(page.getByRole("button", { name: "跳转到平面几何" })).toHaveAttribute("aria-pressed", "true")
+  await expect(page.getByRole("banner").getByRole("button", { name: "跳转到立体几何" })).toHaveCount(0)
 
   const ribbon = page.getByRole("region", { name: "功能区" })
   await expect(ribbon).toHaveAttribute("data-ribbon-expanded", "true")
@@ -12,7 +12,7 @@ test("keeps workspace navigation in the tab bar and supports Ribbon fold, popup 
   await expect(ribbon).toHaveAttribute("data-ribbon-expanded", "false")
   await expect(ribbon.getByRole("button", { name: "添加点" })).toHaveCount(0)
 
-  await page.getByRole("button", { name: "平面几何" }).click()
+  await page.getByRole("button", { name: "跳转到平面几何" }).click()
   await expect(ribbon.getByRole("button", { name: "添加点" })).toBeVisible()
   await page.getByRole("button", { name: "添加点" }).click()
   await expect(ribbon.getByRole("button", { name: "添加点" })).toHaveCount(0)
@@ -21,7 +21,7 @@ test("keeps workspace navigation in the tab bar and supports Ribbon fold, popup 
   await expect(ribbon).toHaveAttribute("data-ribbon-expanded", "true")
 
   await page.getByRole("button", { name: "收起功能区" }).click()
-  await page.getByRole("button", { name: "平面几何" }).click()
+  await page.getByRole("button", { name: "跳转到平面几何" }).click()
   await page.getByRole("button", { name: "固定功能区" }).click()
   await page.getByRole("button", { name: "添加点" }).click()
   await expect(ribbon.getByRole("button", { name: "添加点" })).toBeVisible()
@@ -75,7 +75,7 @@ test("keeps the workbench content within the viewport at desktop, tablet and pho
   expect((inspectorBounds?.y ?? 900) + (inspectorBounds?.height ?? 0)).toBeLessThanOrEqual(900)
 
   await page.setViewportSize({ width: 390, height: 900 })
-  await page.getByRole("button", { name: "工程制图" }).click()
+  await page.getByRole("button", { name: "跳转到工程制图" }).click()
   const cadMetrics = await page.evaluate(() => {
     const shell = document.querySelector(".app-shell")!
     const workbench = document.querySelector(".engineering-workbench")!

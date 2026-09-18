@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test"
 
 test("opens the CAD workspace with four accessible engineering views", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "工程制图" }).click()
+  await page.getByRole("button", { name: "跳转到工程制图" }).click()
 
   const engineeringDrawing = page.getByRole("main", { name: "工程制图视图" })
   await expect(engineeringDrawing).toBeVisible()
@@ -17,7 +17,7 @@ test("opens the CAD workspace with four accessible engineering views", async ({ 
 test("links CAD views with temporary projection lines and shared source selection", async ({ page }) => {
   await page.goto("/")
   await page.locator('input[type="file"]').setInputFiles("e2e/fixtures/cad-point.mgeo")
-  await page.getByRole("button", { name: "工程制图" }).click()
+  await page.getByRole("button", { name: "跳转到工程制图" }).click()
 
   const engineeringDrawing = page.getByRole("main", { name: "工程制图视图" })
   const source = engineeringDrawing.locator('[data-source-id="point3-1"]')
@@ -38,7 +38,7 @@ test("links CAD views with temporary projection lines and shared source selectio
 test("creates a linear engineering annotation from selected CAD sources", async ({ page }) => {
   await page.goto("/")
   await page.locator('input[type="file"]').setInputFiles("e2e/fixtures/cad-dimension.mgeo")
-  await page.getByRole("button", { name: "工程制图" }).click()
+  await page.getByRole("button", { name: "跳转到工程制图" }).click()
 
   const engineeringDrawing = page.getByRole("main", { name: "工程制图视图" })
   await engineeringDrawing.locator('[data-source-id="point3-1"]').first().click()
@@ -53,7 +53,7 @@ test("creates a linear engineering annotation from selected CAD sources", async 
 test("exports CAD views as SVG, DXF, and PDF", async ({ page }) => {
   await page.goto("/")
   await page.locator('input[type="file"]').setInputFiles("e2e/fixtures/cad-dimension.mgeo")
-  await page.getByRole("button", { name: "工程制图" }).click()
+  await page.getByRole("button", { name: "跳转到工程制图" }).click()
   for (const [label, extension] of [["导出 SVG", ".svg"], ["导出 DXF", ".dxf"], ["导出 PDF", ".pdf"]] as const) {
     const download = page.waitForEvent("download")
     await page.getByRole("button", { name: label, exact: true }).click()

@@ -41,7 +41,7 @@ test("opens and restores an mgeo document through the file input", async ({ page
 
   await expect(page.getByText("恢复点").first()).toBeVisible()
   const save = page.waitForEvent("download")
-  await page.getByRole("banner").getByRole("button", { name: "保存 .mgeo" }).click()
+  await page.getByRole("navigation", { name: "工作模式" }).getByRole("button", { name: "保存 .mgeo" }).click()
   const savedPath = await (await save).path()
   const savedDocument = JSON.parse(await readFile(savedPath!, "utf8")) as { document: { revision: number } }
   expect(savedDocument.document.revision).toBe(7)
@@ -51,11 +51,11 @@ test("switches workspaces and exports SVG and CSV files", async ({ page }) => {
   await page.goto("/")
 
   // A fresh session opens on 平面几何 (the internal `conics` workspace) and 微积分 is not offered at all.
-  await expect(page.getByRole("button", { name: "平面几何" })).toHaveAttribute("aria-pressed", "true")
+  await expect(page.getByRole("button", { name: "跳转到平面几何" })).toHaveAttribute("aria-pressed", "true")
   await expect(page.getByRole("button", { name: "微积分" })).toHaveCount(0)
 
-  await page.getByRole("button", { name: "平面几何" }).click()
-  await expect(page.getByRole("button", { name: "平面几何" })).toHaveAttribute("aria-pressed", "true")
+  await page.getByRole("button", { name: "跳转到平面几何" }).click()
+  await expect(page.getByRole("button", { name: "跳转到平面几何" })).toHaveAttribute("aria-pressed", "true")
 
   const svgDownload = page.waitForEvent("download")
   await page.getByRole("button", { name: "导出 SVG" }).click()
@@ -71,7 +71,7 @@ test("switches workspaces and exports SVG and CSV files", async ({ page }) => {
 
   // The retired calculus workspace must not come back as a tab; 立体几何 is the other planar-free workspace.
   await expect(page.getByRole("button", { name: "微积分" })).toHaveCount(0)
-  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
   await expect(page.locator("[data-3d-scene]")).toBeVisible()
 })
 
@@ -106,7 +106,7 @@ test("keeps constraint data in the document without a constraint panel", async (
 
   // 保存出来的文件里约束记录仍在：撤掉的是界面，不是文档数据。
   const save = page.waitForEvent("download")
-  await page.getByRole("banner").getByRole("button", { name: "保存 .mgeo" }).click()
+  await page.getByRole("navigation", { name: "工作模式" }).getByRole("button", { name: "保存 .mgeo" }).click()
   const savedPath = await (await save).path()
   const saved = JSON.parse(await readFile(savedPath!, "utf8")) as { document: { constraints: unknown[] } }
   expect(saved.document.constraints).toHaveLength(1)
@@ -114,7 +114,7 @@ test("keeps constraint data in the document without a constraint panel", async (
 
 test("restores the latest workspace draft after reload", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "平面几何" }).click()
+  await page.getByRole("button", { name: "跳转到平面几何" }).click()
   await page.getByRole("button", { name: "添加点" }).click()
   await expect(page.getByText("A", { exact: true }).first()).toBeVisible()
   await page.reload()
@@ -124,7 +124,7 @@ test("restores the latest workspace draft after reload", async ({ page }) => {
 
 test("zooms the conics canvas and keeps every crossing of a line and a curve", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "平面几何" }).click()
+  await page.getByRole("button", { name: "跳转到平面几何" }).click()
   const canvas = page.getByRole("img", { name: "几何画布" })
   const scale = async () => Number(await canvas.getAttribute("data-viewport-scale"))
   const initial = await scale()
