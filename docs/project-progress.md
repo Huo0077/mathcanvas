@@ -14,6 +14,14 @@
   - **RED→GREEN**：4 条新用例先全部因 `TypeError: (0 , circleHost3) is not a function` 失败；实现后 25/25 通过（内核 474 用例）。
   - **变异检查**（执行后还原）：把 `closestParameter` 的 `normalizeAzimuth` 去掉 ⇒ 两条用例报 `expected -1.883… to be close to 4.4`、`expected -1.383… to be close to 4.9`（差恰好 2π）——证明"折回 `[0, 2π)`"这条断言不是空的。
   - **一处自己的测试写错并已修正**：最初按**世界 xy 角度**（3π/2）断言参数值，而宿主帧是它自己的基（法向 +z 时参数 0 落在 y 负方向）——改成断言"参数 0 就是 `conic3PointAt(circleConic3(...), 0)` 那个点"，并把"宿主参数与解析圆参数逐点重合"单独立一条用例。
+- **切片 2（圆轨道图元落地）已完成**：轨迹从"内核能当宿主"接到"用户建得出来、绑得上去、拖得动"。
+  - **场景图**：`managedPointIds` 加 `circle3 → [centerId]`、`isFreeDraggable3` 允许 `circle3`（平移圆 = 移动圆心那个点，圆自己不存坐标副本）；`radius3` 补丁扩展到 `circle3`（校验与圆柱 / 圆锥同一套："正数、有限"，别的图元借这个字段会被拒并说明）。
+  - **顺手修掉一处真缺陷（两份清单漂移）**：允许改几何的图元类型在**校验**（`patches.ts`）与**应用**（`operations.ts`）里各写了一份，`circle3` 只加进一份 ⇒ 实测 `validatePatch` 说 valid、`commitPatch` 却报 `object is not editable`（最难受的那种失败）。现在抽成 `EDITABLE_GEOMETRY_TYPES` 单一来源，两处共用（注释里写明为什么）。
+  - **创建入口**：Ribbon 立体几何新增「添加空间圆轨道」——选 1 个空间点 = 圆心（法向 +Z、半径默认 1.5）、2 个点 = 圆心 + 圆周点（半径 = 两点距离）、3 个点 = 三点定平面（法向 = 三点平面法向）。**三点共线 / 两点重合如实拒绝并说明**（`planeThroughPoints` 返回 null 就不猜），绝不退回 +Z 假装成功。`point3ToolAvailability` 增 `circle`（1–3 个点；超过 3 个不给入口，因为那没有唯一的圆），指引文案同步。
+  - **能当轨道**：`pointHostOptions` 把 `circle3` 列进一维宿主（标签写「圆轨道」），选中点 → 宿主下拉 → 拖它就沿圆周滑动。
+  - **检查器**：新增「空间圆轨道」块——半径可改（写 `radius3`）、圆心名字与坐标读数、法向读数；并说明"圆心跟着那个空间点走"。
+  - **RED→GREEN / 证据**：`operations.test.ts` 的"平移圆轨道"先报 `expected false to be true`；`patches.test.ts` 的半径补丁先失败（并暴露了上面那处两份清单漂移）；`pointHostOptions.test.ts` 的"圆轨道条目"先失败；浏览器新用例 `e2e/three-orbit-tracks.spec.ts`：两个点建出半径 3 的轨道 → 下拉里选中「圆轨道」→ 拖点（`data-host-residual ≈ 0`、参数落在 `[0, 2π)`）→ 抬手后点到圆心距离仍精确等于 3。
+  - **门禁（切片 2 后实跑）**：typecheck 4 workspace 通过；单测 **118 文件 / 1380 用例**通过（+5）；lint **0 error / 14 warning**（基线）；生产构建通过；Playwright **95/95**（+1）。
 
 ### 解析二次曲面与真圆（A1）+ 交面分组与真曲面（A2）（2026-09-17 全部完成）
 

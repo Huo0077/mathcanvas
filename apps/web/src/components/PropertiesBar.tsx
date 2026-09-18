@@ -319,6 +319,10 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
   const formulaFocusFrameRef = useRef<number | null>(null)
   const [annotationText, setAnnotationText] = useState("")
   const sceneDocument = useSceneStore((state) => state.document)
+  /** 空间圆轨道：圆心是引用（`centerId`），所以这里把圆心坐标与法向都读出来给用户看。 */
+  const selectedCircle3 = selectedPrimitive?.type === "circle3" ? selectedPrimitive : null
+  const circle3Centre = selectedCircle3 ? sceneDocument.primitives.find((primitive) => primitive.id === selectedCircle3.centerId) : undefined
+  const circle3CentrePosition = circle3Centre?.type === "point3" ? circle3Centre.position : null
   const applySceneOperation = useSceneStore((state) => state.apply)
   /**
    * 这个点是不是已经被某条曲线当作**定点**了：是的话就不再提供「创建动圆」，避免重复创建。
@@ -621,6 +625,19 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
     {shows("data") && selectedIntersectionSolid && <div className="primitive-properties"><h3>交面</h3><p className="footer-note">交面 = 两个实体公共区域的**整体表面**（布尔交集），不是"一刀切出来的截面"。</p><div className="metric-grid"><span>来源 A<strong>{sourceLabel(selectedIntersectionSolid.sourceIds[0])}</strong></span><span>来源 B<strong>{sourceLabel(selectedIntersectionSolid.sourceIds[1])}</strong></span><span>体积<strong>{selectedIntersectionSolid.volume.toFixed(3)}</strong></span><span>表面积<strong>{selectedIntersectionSolid.area.toFixed(3)}</strong></span><span>面数<strong>{selectedIntersectionSolid.faces.length}</strong></span><span>顶点数<strong>{selectedIntersectionSolid.vertices.length}</strong></span><span>状态<strong>{intersectionSolidStatusLabels[selectedIntersectionSolid.status] ?? selectedIntersectionSolid.status}</strong></span></div>{selectedIntersectionSolid.diagnostic && <p className="footer-note">{selectedIntersectionSolid.diagnostic}</p>}<p className="footer-note">来源一移动，交面就跟着重算；删掉任一来源，它会一起注销。</p></div>}
     {shows("data") && selectedIntersectionFace && <div className="primitive-properties"><h3>交面</h3><p className="footer-note">交面 = 两个实体公共区域的**一个面**（点哪块建哪块）。填色就是这一面的内部颜色。</p><div className="metric-grid"><span>来源 A<strong>{sourceLabel(selectedIntersectionFace.sourceIds[0])}</strong></span><span>来源 B<strong>{sourceLabel(selectedIntersectionFace.sourceIds[1])}</strong></span><span>面积<strong>{selectedIntersectionFace.area.toFixed(3)}</strong></span><span>面积精度<strong>{intersectionFaceAreaPrecisionLabels[String(selectedIntersectionFace.areaExact)] ?? "未标注"}</strong></span><span>顶点数<strong>{selectedIntersectionFace.points.length}</strong></span><span>法向量<strong>({selectedIntersectionFace.normal.x.toFixed(2)}, {selectedIntersectionFace.normal.y.toFixed(2)}, {selectedIntersectionFace.normal.z.toFixed(2)})</strong></span><span>状态<strong>{selectedIntersectionFace.status === "valid" ? "有效" : selectedIntersectionFace.status === "none" ? "两个实体没有公共面" : "数据不足"}</strong></span></div>{selectedIntersectionFace.areaExact === false && <p className="footer-note">面积是**数值近似**：曲面区域按面片求和，比真值略小；平面区域与整圆边界才有闭式解。</p>}{selectedIntersectionFace.areaExact === true && <p className="footer-note">面积是**闭式精确**值：平面区域就是它自己的面积，边界是整圆时用 πab（圆盘 πr²）。</p>}{selectedIntersectionFace.diagnostic && <p className="footer-note">{selectedIntersectionFace.diagnostic}</p>}<p className="footer-note">来源一移动，这一面就跟着重算（按离它最近的区域形心继续认领同一块，解析边界与面积精度一起更新）；删掉任一来源，它会一起注销。</p></div>}
     {shows("data") && selectedIntersectionPoint && <div className="primitive-properties"><h3>交点</h3><p className="footer-note">交点 = 交线的端点 / 拐点，也就是两个表面的公共点。位置由来源算出，不能直接拖。</p><div className="metric-grid"><span>来源 A<strong>{sourceLabel(selectedIntersectionPoint.sourceIds[0])}</strong></span><span>来源 B<strong>{sourceLabel(selectedIntersectionPoint.sourceIds[1])}</strong></span><span>X<strong>{selectedIntersectionPoint.position.x.toFixed(3)}</strong></span><span>Y<strong>{selectedIntersectionPoint.position.y.toFixed(3)}</strong></span><span>Z<strong>{selectedIntersectionPoint.position.z.toFixed(3)}</strong></span><span>状态<strong>{selectedIntersectionPoint.status === "valid" ? "有效" : selectedIntersectionPoint.status === "none" ? "两个表面不相交" : "数据不足"}</strong></span></div>{selectedIntersectionPoint.diagnostic && <p className="footer-note">{selectedIntersectionPoint.diagnostic}</p>}<p className="footer-note">来源一移动，它就跟着重算（按离它最近的那个交点继续认领）；删掉任一来源，它会一起注销。</p></div>}
+    {shows("data") && selectedCircle3 && <div className="primitive-properties">
+      <h3>空间圆轨道</h3>
+      <p className="footer-note">圆轨道 = 一条**空间圆**：把空间点绑到它上面（选中点 → 右侧「宿主绑定」选它），点就只能沿这个圈滑动；也可以直接拖它平移、用画布上的旋转手柄摆斜。</p>
+      <Field label="半径"><input aria-label="圆轨道半径" type="number" min="0.01" step="0.1" disabled={!editable} value={selectedCircle3.radius} onChange={(event) => onUpdatePrimitive({ radius3: Math.max(0.01, numberValue(event)) })} /></Field>
+      <div className="metric-grid">
+        <span>圆心<strong>{sourceLabel(selectedCircle3.centerId)}</strong></span>
+        <span>圆心 X<strong>{circle3CentrePosition ? circle3CentrePosition.x.toFixed(3) : "—"}</strong></span>
+        <span>圆心 Y<strong>{circle3CentrePosition ? circle3CentrePosition.y.toFixed(3) : "—"}</strong></span>
+        <span>圆心 Z<strong>{circle3CentrePosition ? circle3CentrePosition.z.toFixed(3) : "—"}</strong></span>
+        <span>法向量<strong>({selectedCircle3.normal.x.toFixed(2)}, {selectedCircle3.normal.y.toFixed(2)}, {selectedCircle3.normal.z.toFixed(2)})</strong></span>
+      </div>
+      <p className="footer-note">{circle3CentrePosition ? "圆心跟着那个空间点走：改点的坐标或拖点，整条轨道一起平移。" : "圆心点已不存在：这条轨道暂时算不出位置。"}</p>
+    </div>}
     {shows("appearance") && selectedPrimitive && <div className="primitive-properties">
       <div className="property-card-heading"><div><span className="property-kicker">当前图元</span><h3>{selectedPrimitive.label ?? selectedPrimitive.id}</h3></div><span className="property-type-badge">{primitiveTypeLabels[selectedPrimitive.type]}</span></div>
       <h3 className="property-subheading">外观</h3>

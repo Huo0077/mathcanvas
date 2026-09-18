@@ -24,6 +24,8 @@ function hostLabel(primitive: PrimitiveSpec): string {
   if (primitive.type === "line3") return "直线"
   if (primitive.type === "segment3") return "线段"
   if (primitive.type === "ray3") return "射线"
+  // 圆轨道与棱同为**一维**宿主（参数就是圆周角 / 仿射比例）：用户靠这个名字认出自己建的那个圈。
+  if (primitive.type === "circle3") return "圆轨道"
   return MODE_LABELS.host
 }
 
@@ -37,7 +39,7 @@ export function pointHostOptions(primitives: PrimitiveSpec[]): PointHostOption[]
   const options: PointHostOption[] = []
   for (const primitive of primitives) {
     const label = primitive.label ?? primitive.id
-    if (["line3", "segment3", "ray3", "edge3"].includes(primitive.type)) {
+    if (["line3", "segment3", "ray3", "edge3", "circle3"].includes(primitive.type)) {
       options.push({ value: `host:${primitive.id}`, primitiveId: primitive.id, mode: "host", label: `${label}（${hostLabel(primitive)}）` })
       continue
     }

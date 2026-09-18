@@ -1,7 +1,7 @@
 import { validateDocument, type AnnotationSpec, type ConstraintSpec, type EngineeringAnnotation, type GeometryDocument, type Measurement3, type PrimitiveSpec } from "@draw/dsl"
 import { parseExpression } from "@draw/geometry-kernel"
 
-import { applyOperation, deletionTargets, isFreeDraggable3, layerDescendantIds, templateTopologyIds, type DomainOperation } from "./operations"
+import { applyOperation, deletionTargets, EDITABLE_GEOMETRY_TYPES, isFreeDraggable3, layerDescendantIds, templateTopologyIds, type DomainOperation } from "./operations"
 
 export type PatchValidationResult =
   | { valid: true }
@@ -227,10 +227,9 @@ export function validatePatch(document: GeometryDocument, operation: DomainOpera
   }
   if (operation.op === "updatePrimitive") {
     const primitive = document.primitives.find((candidate) => candidate.id === operation.id)
-    const editable = ["point", "point3", "line", "segment", "ray", "polyline", "parabola", "ellipse", "hyperbola", "function", "circle", "arc", "cube", "pyramid", "cylinder", "cone", "plane3"]
-    // Style and label are presentation, so any unlocked object may change them even when its geometry is derived.
+    // 与 `operations.ts` 的 `EDITABLE_GEOMETRY_TYPES` **同一份**清单（两份不同步会导致"校验通过、提交被拒"）。
     const geometryPatchKeys = Object.keys(operation.patch).filter((key) => key !== "style" && key !== "label")
-    if (!primitive || (geometryPatchKeys.length > 0 && !editable.includes(primitive.type))) errors.push("object is not editable")
+    if (!primitive || (geometryPatchKeys.length > 0 && !(EDITABLE_GEOMETRY_TYPES as readonly string[]).includes(primitive.type))) errors.push("object is not editable")
     if (primitive?.locked) errors.push("object is locked")
     if (operation.patch.a && !isCoordinate(operation.patch.a)) errors.push("line start must be finite")
     if (operation.patch.b && !isCoordinate(operation.patch.b)) errors.push("line end must be finite")
@@ -265,7 +264,12 @@ export function validatePatch(document: GeometryDocument, operation: DomainOpera
     if (operation.patch.baseSize3 !== undefined && (!operation.patch.baseSize3 || !Number.isFinite(operation.patch.baseSize3.x) || !Number.isFinite(operation.patch.baseSize3.y) || primitive?.type !== "pyramid" || operation.patch.baseSize3.x <= 0 || operation.patch.baseSize3.y <= 0)) errors.push(primitive?.type === "pyramid" ? "pyramid base size must be positive" : "only pyramids support base size")
     if (operation.patch.center3 !== undefined && (!isVector3(operation.patch.center3) || !["cylinder", "cone"].includes(primitive?.type ?? ""))) errors.push(["cylinder", "cone"].includes(primitive?.type ?? "") ? "center must be finite" : "only cylinders and cones support center")
     if (operation.patch.height !== undefined && (!Number.isFinite(operation.patch.height) || operation.patch.height <= 0 || !["pyramid", "cylinder", "cone"].includes(primitive?.type ?? ""))) errors.push(["pyramid", "cylinder", "cone"].includes(primitive?.type ?? "") ? "height must be positive" : "only solids with height support height")
-    if (operation.patch.radius3 !== undefined && (!Number.isFinite(operation.patch.radius3) || operation.patch.radius3 <= 0 || !["cylinder", "cone"].includes(primitive?.type ?? ""))) errors.push(["cylinder", "cone"].includes(primitive?.type ?? "") ? "3D radius must be positive" : "only cylinders and cones support radius")
+    /**
+     * 半径：圆柱 / 圆锥的底面半径，或**空间圆轨道**（`circle3`）的半径——同义字段，同一套"正数、有限"校验。
+     * 别的图元没有半径可改，如实拒绝（不静默忽略）。
+     */
+    const radiusTypes = ["cylinder", "cone", "circle3"]
+    if (operation.patch.radius3 !== undefined && (!Number.isFinite(operation.patch.radius3) || operation.patch.radius3 <= 0 || !radiusTypes.includes(primitive?.type ?? ""))) errors.push(radiusTypes.includes(primitive?.type ?? "") ? "3D radius must be positive" : "only cylinders, cones and circle tracks support radius")
     if (operation.patch.segments !== undefined && (!Number.isInteger(operation.patch.segments) || operation.patch.segments < 3 || operation.patch.segments > 256 || !["cylinder", "cone"].includes(primitive?.type ?? ""))) errors.push(["cylinder", "cone"].includes(primitive?.type ?? "") ? "segment count is invalid" : "only cylinders and cones support segments")
     if (operation.patch.rotation !== undefined && !Number.isFinite(operation.patch.rotation)) errors.push("rotation must be finite")
     if (operation.patch.rotationAbout !== undefined) {

@@ -105,18 +105,29 @@ describe("spatial constraint options", () => {
 
 describe("create-from-selected-points tools", () => {
   it("gates each tool on a selection made only of spatial points", () => {
-    expect(point3ToolAvailability(2, 2)).toEqual({ line: true, plane: false, face: false })
-    expect(point3ToolAvailability(3, 3)).toEqual({ line: false, plane: true, face: true })
-    expect(point3ToolAvailability(4, 4)).toEqual({ line: false, plane: false, face: true })
+    expect(point3ToolAvailability(2, 2)).toEqual({ line: true, plane: false, face: false, circle: true })
+    expect(point3ToolAvailability(3, 3)).toEqual({ line: false, plane: true, face: true, circle: true })
+    expect(point3ToolAvailability(4, 4)).toEqual({ line: false, plane: false, face: true, circle: false })
     // A face picked alongside the points must not silently satisfy the tool.
-    expect(point3ToolAvailability(2, 3)).toEqual({ line: false, plane: false, face: false })
-    expect(point3ToolAvailability(0, 0)).toEqual({ line: false, plane: false, face: false })
+    expect(point3ToolAvailability(2, 3)).toEqual({ line: false, plane: false, face: false, circle: false })
+    expect(point3ToolAvailability(0, 0)).toEqual({ line: false, plane: false, face: false, circle: false })
+  })
+
+  /**
+   * 圆轨道的三条路：1 个点定圆心（法向默认 +Z）、2 个点再定半径、3 个点顺带定平面。
+   * 超过 3 个点就没有唯一的圆可言了——如实不给入口，而不是拿前三个凑一个。
+   */
+  it("offers the circle track for one to three spatial points only", () => {
+    expect(point3ToolAvailability(1, 1).circle).toBe(true)
+    expect(point3ToolAvailability(3, 3).circle).toBe(true)
+    expect(point3ToolAvailability(4, 4).circle).toBe(false)
   })
 
   it("spells out the shift-click requirement until the selection qualifies", () => {
     expect(point3ToolHint(0)).toContain("Shift")
-    expect(point3ToolHint(1)).toContain("再选 1 个")
+    expect(point3ToolHint(1)).toContain("圆轨道")
     expect(point3ToolHint(2)).toContain("直线")
+    expect(point3ToolHint(2)).toContain("圆轨道")
     expect(point3ToolHint(2)).not.toContain("平面")
     expect(point3ToolHint(3)).toContain("平面")
     expect(point3ToolHint(3)).toContain("空间面")

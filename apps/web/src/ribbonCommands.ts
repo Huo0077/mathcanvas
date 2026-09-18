@@ -12,6 +12,7 @@ export interface RibbonCommandContext {
   canCreateLine3: boolean
   canCreatePlane3: boolean
   canCreateFace3: boolean
+  canCreateCircle3: boolean
   canCreateLinearAnnotation: boolean
   canCreateAngularAnnotation: boolean
   /** 选中的是不是"一个点 + 一条圆/椭圆"——只有这种组合才谈得上把曲线定在过该点的旋转上。 */
@@ -49,6 +50,11 @@ export function createRibbonGroups(context: RibbonCommandContext): RibbonGroup[]
       command("create-line3", "由选中点创建空间直线", "line", { prompt: "按住 Shift 依次点选两个空间点", disabled: !context.canCreateLine3, disabledReason: "请先按住 Shift 依次点选 2 个空间点" }),
       command("create-plane3", "由选中点创建空间平面", "segment", { prompt: "按住 Shift 点选三个不共线空间点", disabled: !context.canCreatePlane3, disabledReason: "请先按住 Shift 点选 3 个不共线的空间点" }),
       command("create-face3", "由选中点创建空间面", "polyline", { prompt: "按住 Shift 点选三个以上空间点", disabled: !context.canCreateFace3, disabledReason: "请先按住 Shift 点选 3 个以上的空间点" }),
+      /**
+       * 圆轨道：选 1 个点建以它为圆心的水平圆、2 个点用第二点定半径、3 个点用三点平面定朝向。
+       * 它同时是**动点的约束轨道**（绑定下拉里会出现"圆轨道"那一项）。
+       */
+      command("create-circle3-track", "添加空间圆轨道", "circle", { prompt: "按住 Shift 点选 1–3 个空间点", disabled: !context.canCreateCircle3, disabledReason: "请先按住 Shift 点选 1 至 3 个空间点" }),
       command("create-cube", "添加立方体", "line", { prompt: "添加参数化立方体" }),
       command("create-pyramid", "添加棱锥", "line", { prompt: "添加参数化棱锥" }),
       command("create-cylinder", "添加圆柱", "circle", { prompt: "添加参数化圆柱" }),

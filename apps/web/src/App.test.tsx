@@ -388,6 +388,51 @@ describe("MathCanvas workbench", () => {
     expect(useSceneStore.getState().document.primitives.filter((primitive) => primitive.type === "point3").at(-1)).toMatchObject({ position: { x: 4 } })
   })
 
+  /**
+   * 空间圆轨道：**选几个点决定它长什么样**——1 个点定圆心（水平、默认半径）、2 个点用第二点定半径、
+   * 3 个点用三点平面定朝向。它是"约束轨道"：建好之后能当动点的宿主（见 `pointHostOptions`）。
+   */
+  it("creates a circle track from one or two selected space points", () => {
+    const circleTracks = () => useSceneStore.getState().document.primitives.filter((primitive) => primitive.type === "circle3")
+    const points = () => useSceneStore.getState().document.primitives.filter((primitive): primitive is Extract<ReturnType<typeof useSceneStore.getState>["document"]["primitives"][number], { type: "point3" }> => primitive.type === "point3")
+
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+
+    // 1 个点：以它为圆心的水平圆（法向 +Z），半径取默认值。
+    fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
+    fireEvent.click(screen.getAllByText("A")[0])
+    fireEvent.click(screen.getByRole("button", { name: "添加空间圆轨道" }))
+
+    expect(circleTracks()).toHaveLength(1)
+    const single = circleTracks()[0] as { centerId: string; radius: number; normal: { x: number; y: number; z: number } }
+    expect(single.centerId).toBe(points()[0].id)
+    expect(single.normal).toEqual({ x: 0, y: 0, z: 1 })
+    expect(single.radius).toBeCloseTo(1.5, 6)
+
+    // 检查器里能改半径：轨道半径就是它的参数。
+    expect(screen.getByText("空间圆轨道")).toBeTruthy()
+    fireEvent.change(screen.getByRole("spinbutton", { name: "圆轨道半径" }), { target: { value: "2.5" } })
+    expect((circleTracks()[0] as { radius: number }).radius).toBeCloseTo(2.5, 6)
+
+    // 撤销粒度：一次回到改半径之前，再一次整条轨道消失。
+    fireEvent.click(screen.getByRole("button", { name: "撤销" }))
+    expect((circleTracks()[0] as { radius: number }).radius).toBeCloseTo(1.5, 6)
+    fireEvent.click(screen.getByRole("button", { name: "撤销" }))
+    expect(circleTracks()).toHaveLength(0)
+
+    // 2 个点：第二点当圆周上的点，半径 = 两点距离。
+    fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
+    fireEvent.click(screen.getAllByText("A")[0])
+    fireEvent.click(screen.getAllByText("B")[0], { shiftKey: true })
+    fireEvent.click(screen.getByRole("button", { name: "添加空间圆轨道" }))
+
+    const [centre, rim] = points()
+    const track = circleTracks()[0] as { centerId: string; radius: number }
+    expect(track.centerId).toBe(centre.id)
+    expect(track.radius).toBeCloseTo(Math.hypot(rim.position.x - centre.position.x, rim.position.y - centre.position.y, rim.position.z - centre.position.z), 9)
+  })
+
   it("shows the selected line slope characteristics in the properties panel", () => {
     render(<App />)
     fireEvent.click(screen.getAllByText("参数直线")[0])

@@ -19,7 +19,7 @@ export type GuidanceAction =
   | { kind: "selectSolid" }
   | { kind: "measurement"; metric: Measurement3Metric; outcome: "created" | "blocked"; dihedralKind?: "interior" | "exterior" }
   | { kind: "constraint"; type: ConstraintType; outcome?: "created" | "blocked" }
-  | { kind: "point3Tool"; tool: "line" | "plane" | "face"; outcome: "created" | "blocked"; point3Count?: number }
+  | { kind: "point3Tool"; tool: "line" | "plane" | "face" | "circle"; outcome: "created" | "blocked"; point3Count?: number }
 
 const creationGuidance: Record<PlanarCreationMode, string> = {
   line: "直线：先点起点，再点终点；按 Esc 取消",
@@ -71,8 +71,8 @@ const constraintGuidance: Record<ConstraintType, string> = {
   fixedDistance: "固定距离需要 2 个空间点或 2 个实体"
 }
 
-const point3ToolName: Record<"line" | "plane" | "face", string> = { line: "空间直线", plane: "空间平面", face: "空间面" }
-const point3ToolRequirement: Record<"line" | "plane" | "face", string> = { line: "2 个空间点", plane: "3 个空间点", face: "3 个以上空间点" }
+const point3ToolName: Record<"line" | "plane" | "face" | "circle", string> = { line: "空间直线", plane: "空间平面", face: "空间面", circle: "圆轨道" }
+const point3ToolRequirement: Record<"line" | "plane" | "face" | "circle", string> = { line: "2 个空间点", plane: "3 个空间点", face: "3 个以上空间点", circle: "1 至 3 个空间点" }
 
 export function guidanceFor(action: GuidanceAction): string {
   switch (action.kind) {

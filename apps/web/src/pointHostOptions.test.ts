@@ -67,7 +67,28 @@ describe("point host options", () => {
 
     expect(parsePointHostValue("solid:cube-a")).toEqual({ mode: "solid", primitiveId: "cube-a" })
     expect(parsePointHostValue("host:edge-1")).toEqual({ mode: "host", primitiveId: "edge-1" })
+    expect(parsePointHostValue("host:orbit-1")).toEqual({ mode: "host", primitiveId: "orbit-1" })
     expect(parsePointHostValue("")).toBeNull()
     expect(parsePointHostValue("nonsense")).toBeNull()
+  })
+
+  /**
+   * 空间圆轨道（`circle3`）与空间面（`face3`）都要出现在"宿主绑定"下拉里——它们就是**约束轨道**：
+   * 把动点绑上去，拖它就只能沿轨道滑动。名字要写清楚是"圆轨道"，不然用户认不出这是自己建的那个圈。
+   */
+  it("offers circle tracks and polygons as constraint tracks", () => {
+    const withTracks: PrimitiveSpec[] = [
+      { id: "p-c", type: "point3", position: { x: 0, y: 0, z: 0 } },
+      { id: "orbit-1", type: "circle3", centerId: "p-c", normal: { x: 0, y: 0, z: 1 }, radius: 2, label: "圆轨道 1" },
+      { id: "face-1", type: "face3", pointIds: ["p-c", "p-b", "p-d"], label: "空间面 1" }
+    ]
+    const options = pointHostOptions(withTracks)
+    const orbit = options.find((option) => option.primitiveId === "orbit-1")!
+    expect(orbit.mode).toBe("host")
+    expect(orbit.value).toBe("host:orbit-1")
+    expect(orbit.label).toContain("圆轨道")
+    const polygon = options.find((option) => option.primitiveId === "face-1")!
+    expect(polygon.mode).toBe("face")
+    expect(polygon.value).toBe("face:face-1")
   })
 })

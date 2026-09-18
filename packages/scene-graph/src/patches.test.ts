@@ -171,6 +171,29 @@ describe("domain patches", () => {
     expect(result.document.primitives[0]).toMatchObject({ rotation: Math.PI / 4, label: "旋转椭圆" })
   })
 
+  /**
+   * 空间圆轨道（`circle3`）的半径要能在属性栏里改——"约束轨道"的用处就是圈出一个可调的轨道。
+   * 校验与圆柱 / 圆锥同一套：正数、有限；别的图元不许借这个字段改半径。
+   */
+  it("validates and edits a circle track's radius", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      { id: "p-c", type: "point3", position: { x: 0, y: 0, z: 0 }, binding: { kind: "free" } },
+      { id: "orbit-1", type: "circle3", centerId: "p-c", normal: { x: 0, y: 0, z: 1 }, radius: 1.5 }
+    ]
+
+    const edited = commitPatch(document, { op: "updatePrimitive", id: "orbit-1", patch: { radius3: 3 } })
+    expect(edited.changed).toBe(true)
+    expect((edited.document.primitives.find((primitive) => primitive.id === "orbit-1") as { radius: number }).radius).toBe(3)
+
+    // 0 / 负数 / 非有限一律拒绝，且报的还是"半径必须是正数"。
+    for (const radius3 of [0, -2, Number.NaN]) {
+      expect(validatePatch(document, { op: "updatePrimitive", id: "orbit-1", patch: { radius3 } })).toEqual({ valid: false, errors: ["3D radius must be positive"] })
+    }
+    // 半径字段不给别的图元用。
+    expect(validatePatch(document, { op: "updatePrimitive", id: "p-c", patch: { radius3: 2 } })).toEqual({ valid: false, errors: ["only cylinders, cones and circle tracks support radius"] })
+  })
+
   it("rejects invalid style patch values", () => {
     const document = createEmptyDocument("calculus")
     document.primitives = [{ id: "point-1", type: "point", x: 0, y: 0 }]

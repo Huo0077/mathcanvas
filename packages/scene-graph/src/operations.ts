@@ -251,13 +251,25 @@ function point3Index(document: GeometryDocument): Map<string, Point3Primitive> {
   return new Map(document.primitives.filter((candidate): candidate is Point3Primitive => candidate.type === "point3").map((point) => [point.id, point]))
 }
 
-/** Point-driven objects only reference their points; those points are what a drag has to move. */
+/**
+ * 允许改**几何**字段的图元类型（style / label 不受此限，任何未锁定对象都能改）。
+ *
+ * 为什么抽成一处：校验（`patches.ts`）与应用（本文件）各写过一份，两份一旦不同步就会出现
+ * "校验通过、提交却被拒"这种最难受的失败——实测就是这么撞上的（`circle3` 只加进了一份）。
+ */
+export const EDITABLE_GEOMETRY_TYPES = ["point", "point3", "line", "segment", "ray", "polyline", "parabola", "ellipse", "hyperbola", "function", "circle", "arc", "cube", "pyramid", "cylinder", "cone", "plane3", "circle3"] as const
+
+/**
+ * Point-driven objects only reference their points; those points are what a drag has to move.
+ */
 function managedPointIds(primitive: PrimitiveSpec): string[] {
   if (primitive.type === "line3") return primitive.definition.kind === "throughPoints" ? [...primitive.definition.pointIds] : [primitive.definition.pointId]
   if (primitive.type === "segment3" || primitive.type === "edge3") return [...primitive.pointIds]
   if (primitive.type === "ray3") return [primitive.originId, primitive.throughId]
   if (primitive.type === "plane3") return primitive.definition.kind === "throughPoints" ? [...primitive.definition.pointIds] : [primitive.definition.pointId]
   if (primitive.type === "face3") return [...primitive.pointIds]
+  // 空间圆轨道只存圆心引用（不存坐标副本）：平移它就是移动圆心那个点。
+  if (primitive.type === "circle3") return [primitive.centerId]
   if (primitive.type === "polyhedron3") return [...primitive.vertexIds]
   return []
 }
@@ -285,7 +297,7 @@ export function isFreeDraggable3(primitive: PrimitiveSpec, points: Map<string, P
   if (generated.has(primitive.id)) return false
   if (primitive.type === "point3") return !primitive.binding || primitive.binding.kind === "free"
   if (primitive.type === "cube" || primitive.type === "pyramid" || primitive.type === "cylinder" || primitive.type === "cone") return true
-  if (!["line3", "segment3", "ray3", "plane3", "face3", "polyhedron3", "edge3"].includes(primitive.type)) return false
+  if (!["line3", "segment3", "ray3", "plane3", "face3", "circle3", "polyhedron3", "edge3"].includes(primitive.type)) return false
   const owned = managedPointIds(primitive)
   if (owned.length === 0) return false
   return owned.every((id) => {
@@ -1792,9 +1804,8 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
     changedIds = operation.primitives.map((primitive) => primitive.id)
   } else if (operation.op === "updatePrimitive") {
     const primitive = next.primitives.find((candidate) => candidate.id === operation.id)
-    const editableGeometry = ["point", "point3", "line", "segment", "ray", "polyline", "parabola", "ellipse", "hyperbola", "function", "circle", "arc", "cube", "pyramid", "cylinder", "cone", "plane3"]
     const geometryPatchKeys = Object.keys(operation.patch).filter((key) => key !== "style" && key !== "label")
-    if (!primitive || (geometryPatchKeys.length > 0 && !editableGeometry.includes(primitive.type)) || primitive.locked) return { document, changed: false, error: primitive?.locked ? "object is locked" : "object is not editable" }
+    if (!primitive || (geometryPatchKeys.length > 0 && !(EDITABLE_GEOMETRY_TYPES as readonly string[]).includes(primitive.type)) || primitive.locked) return { document, changed: false, error: primitive?.locked ? "object is locked" : "object is not editable" }
     if (primitive.type === "point") {
       if (operation.patch.x !== undefined) primitive.x = operation.patch.x
       if (operation.patch.y !== undefined) primitive.y = operation.patch.y
@@ -1874,6 +1885,8 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
       if (operation.patch.segments !== undefined) primitive.segments = operation.patch.segments
       if (operation.patch.rotation3) primitive.rotation = { ...(primitive.rotation ?? { x: 0, y: 0, z: 0 }), ...operation.patch.rotation3 }
     }
+    // 空间圆轨道：半径是它自己的参数（圆心是引用，法向由旋转操作改）。
+    if (primitive.type === "circle3" && operation.patch.radius3 !== undefined) primitive.radius = operation.patch.radius3
     if (operation.patch.label !== undefined) primitive.label = operation.patch.label
     // A template solid paints its generated point/edge/face children, so a template style change recolours them too.
     if (operation.patch.style !== undefined && ["cube", "pyramid", "cylinder", "cone"].includes(primitive.type)) {

@@ -123,6 +123,27 @@ describe("free 3D drag", () => {
     expect(positionOf(moved.document, "p-b")).toEqual({ x: 2, y: 1, z: 2 })
   })
 
+  /**
+   * 空间圆轨道（`circle3`）只存 `centerId`（引用）+ 法向 + 半径：平移它就是移动圆心那个点。
+   * 用户口径："增加一些可以旋转，平移的平面图元……主要作用是作为约束轨道。"
+   */
+  it("moves a circle track by moving its centre point", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      { id: "p-centre", type: "point3", position: { x: 1, y: 2, z: 3 }, binding: { kind: "free" } },
+      { id: "orbit-1", type: "circle3", centerId: "p-centre", normal: { x: 0, y: 0, z: 1 }, radius: 2 }
+    ]
+
+    const moved = commitPatch(document, { op: "translatePrimitive3", id: "orbit-1", delta: { x: 0, y: -1, z: 4 } })
+
+    expect(moved.changed).toBe(true)
+    expect(positionOf(moved.document, "p-centre")).toEqual({ x: 1, y: 1, z: 7 })
+    // 圆自己不存圆心坐标，只有引用：半径与法向原样不动。
+    const orbit = primitiveById(moved.document, "orbit-1") as unknown as { radius: number; normal: { x: number; y: number; z: number } }
+    expect(orbit.radius).toBe(2)
+    expect(orbit.normal).toEqual({ x: 0, y: 0, z: 1 })
+  })
+
   it("moves a point-driven line's endpoints so the line follows", () => {
     const document = createEmptyDocument("geometry3d")
     document.primitives = [

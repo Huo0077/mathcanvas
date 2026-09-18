@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 
 import { decodeMgeo, encodeMgeo, type AnnotationFeature, type DrawingSheetSpec, type EngineeringAnnotationKind, type Measurement3Metric, type PrimitiveSpec, type Vector3, type Workspace } from "@draw/dsl"
 import { buildSolidTemplate, createMeasurement3, evaluatePlanarMeasurement, host3FromPrimitive, selectPrimitivesInBox, type BoxSelectionMode, type PlanarMetric } from "@draw/geometry-kernel"
-import { deletionTargets, sectionMaterialization, sectionPivot, sectionPlaneThroughSource, sectionSourceVertices, solidVolumeHostFor, validateDeletion, validatePatch } from "@draw/scene-graph"
+import { deletionTargets, planeThroughPoints, sectionMaterialization, sectionPivot, sectionPlaneThroughSource, sectionSourceVertices, solidVolumeHostFor, validateDeletion, validatePatch } from "@draw/scene-graph"
 import type { Alignment } from "@draw/scene-graph"
 
 import { AlgebraView } from "./components/AlgebraView"
@@ -82,6 +82,12 @@ function nextMeasurementId(document: ReturnType<typeof useSceneStore.getState>["
  * 新建"动圆"的默认半径（世界单位）。与画布默认取景相称：够大能看清，又不至于一出来就超出视野。
  */
 const DEFAULT_MOVING_CIRCLE_RADIUS = 2
+
+/**
+ * 新建**空间圆轨道**的默认半径（世界单位）。只选了一个点时用它：与默认取景相称，
+ * 用户随后可以在属性栏改成想要的圈。
+ */
+const DEFAULT_CIRCLE3_TRACK_RADIUS = 1.5
 
 /**
  * Planar points use the classroom labels A…Z; after Z the counter falls back to a running number so a
@@ -454,6 +460,7 @@ export function App() {
   const canCreateLine3 = point3ToolState.line
   const canCreatePlane3 = point3ToolState.plane
   const canCreateFace3 = point3ToolState.face
+  const canCreateCircle3 = point3ToolState.circle
   const canCreatePointConnection = (selectedIds.length === 2 || selectedIds.length === 3) && selectedPointIds.length === selectedIds.length
   const canCreateIntersection = canCreatePointConnection || (selectedIds.length === 2 && selectedIds.every((id) => intersectionTypes.includes(document.primitives.find((primitive) => primitive.id === id)?.type as typeof intersectionTypes[number])))
   const allSelectedLocked = selectedIds.length > 0 && selectedIds.every((id) => document.primitives.find((primitive) => primitive.id === id)?.locked)
@@ -780,6 +787,42 @@ export function App() {
     setSelectedIds([id])
     setGuidance(guidanceFor({ kind: "point3Tool", tool: "face", outcome: "created" }))
   }
+  /**
+   * 空间圆轨道（`circle3`）：三种选点法都有确定的几何含义，绝不靠猜——
+   * 1 个点 = 圆心（法向默认 +Z 水平放置，半径默认 1.5，属性栏可改）；
+   * 2 个点 = 圆心 + 圆周上一点（半径 = 两点距离）；
+   * 3 个点 = 三点定平面（法向 = 三点平面法向、圆心 = 第一个点、半径 = 到第二个点的距离）。
+   *
+   * 三点共线时平面法向没有定义：如实拒绝并说明，而不是退回 +Z 假装成功。
+   */
+  function addCircle3Track() {
+    if (!canCreateCircle3) return
+    const centres = selectedPoint3Ids
+      .map((id) => document.primitives.find((primitive) => primitive.id === id))
+      .filter((primitive): primitive is Extract<PrimitiveSpec, { type: "point3" }> => primitive?.type === "point3")
+    const center = centres[0]
+    if (!center) return
+    // 三个点时法向取三点平面；`planeThroughPoints` 对共线输入返回 null——那就不猜，如实拒绝。
+    const plane = centres.length === 3 ? planeThroughPoints(centres.map((point) => point.position)) : null
+    if (centres.length === 3 && !plane) {
+      setFileError("三个点共线，定不出圆轨道所在的平面：请换一个不共线的点")
+      return
+    }
+    const normal = plane ? plane.normal : { x: 0, y: 0, z: 1 }
+    const rim = centres[1]
+    // 半径优先取"圆心到第二个点的距离"：用户点两个点就是想要那么大一个圈。
+    const delta = rim ? { x: rim.position.x - center.position.x, y: rim.position.y - center.position.y, z: rim.position.z - center.position.z } : null
+    const radius = delta ? Math.hypot(delta.x, delta.y, delta.z) : DEFAULT_CIRCLE3_TRACK_RADIUS
+    if (!(radius > 1e-6)) {
+      setFileError("圆心与圆周点重合，定不出半径：请让两点分开")
+      return
+    }
+    const id = nextPrimitiveId(document, "circle3")
+    apply({ op: "addPrimitive", primitive: { id, type: "circle3", centerId: center.id, normal, radius, label: `圆轨道 ${id.split("-").at(-1)}` } })
+    setSelectedIds([id])
+    setFileError(null)
+    setGuidance(guidanceFor({ kind: "point3Tool", tool: "circle", outcome: "created" }))
+  }
   const addAnnotation = (feature: AnnotationFeature, index?: number, text?: string) => {
     if (!selectedPrimitive) return
     const id = nextAnnotationId(document)
@@ -1043,6 +1086,7 @@ export function App() {
     canCreateLine3,
     canCreatePlane3,
     canCreateFace3,
+    canCreateCircle3,
     canCreateLinearAnnotation,
     canCreateAngularAnnotation,
     canAnchorRotation,
@@ -1064,6 +1108,7 @@ export function App() {
       case "create-line3": addLine3(); break
       case "create-plane3": addPlane3(); break
       case "create-face3": addFace3(); break
+      case "create-circle3-track": addCircle3Track(); break
       case "create-point": addPoint(); break
       case "create-line": startCreation("line"); break
       case "create-segment": startCreation("segment"); break
@@ -1106,6 +1151,7 @@ export function App() {
       case "create-line3": addLine3(); break
       case "create-plane3": addPlane3(); break
       case "create-face3": addFace3(); break
+      case "create-circle3-track": addCircle3Track(); break
       case "create-point": addPoint(); break
       case "create-line": startCreation("line"); break
       case "create-segment": startCreation("segment"); break
