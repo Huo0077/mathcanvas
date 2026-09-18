@@ -194,6 +194,28 @@ describe("domain patches", () => {
     expect(validatePatch(document, { op: "updatePrimitive", id: "p-c", patch: { radius3: 2 } })).toEqual({ valid: false, errors: ["only cylinders, cones and circle tracks support radius"] })
   })
 
+  /**
+   * 拖动旋转的域操作必须在**写入前**就把非法输入拦下来：轴名拼错、角度是 NaN、枢轴不是有限向量。
+   * 这些值进到文档里会变成"画布上一片空白、但保存成功"的静默损坏。
+   */
+  it("validates drag-rotation patches before they are written", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      { id: "p-c", type: "point3", position: { x: 0, y: 0, z: 0 }, binding: { kind: "free" } },
+      { id: "orbit-1", type: "circle3", centerId: "p-c", normal: { x: 0, y: 0, z: 1 }, radius: 1.5 },
+      { id: "orbit-locked", type: "circle3", centerId: "p-c", normal: { x: 0, y: 0, z: 1 }, radius: 1, locked: true }
+    ]
+
+    expect(validatePatch(document, { op: "rotatePrimitive3", id: "orbit-1", axis: "z", degrees: 45 })).toEqual({ valid: true })
+    expect(validatePatch(document, { op: "rotatePrimitive3", id: "missing", axis: "z", degrees: 45 })).toEqual({ valid: false, errors: ["object not found"] })
+    expect(validatePatch(document, { op: "rotatePrimitive3", id: "orbit-1", axis: "w" as "x", degrees: 45 })).toEqual({ valid: false, errors: ["rotation axis is invalid"] })
+    expect(validatePatch(document, { op: "rotatePrimitive3", id: "orbit-1", axis: "z", degrees: Number.NaN })).toEqual({ valid: false, errors: ["rotation angle must be finite"] })
+    expect(validatePatch(document, { op: "rotatePrimitive3", id: "orbit-1", axis: "z", degrees: 45, pivot: { x: 0, y: 0, z: Number.NaN } })).toEqual({ valid: false, errors: ["rotation pivot must be finite"] })
+    // 一个孤立的点没有朝向可转（要绕定点摆它请用平移），如实拒绝而不是静默不动。
+    expect(validatePatch(document, { op: "rotatePrimitive3", id: "p-c", axis: "z", degrees: 45 })).toEqual({ valid: false, errors: ["object has no orientation to rotate"] })
+    expect(validatePatch(document, { op: "rotatePrimitive3", id: "orbit-locked", axis: "z", degrees: 45 })).toEqual({ valid: false, errors: ["object is locked"] })
+  })
+
   it("rejects invalid style patch values", () => {
     const document = createEmptyDocument("calculus")
     document.primitives = [{ id: "point-1", type: "point", x: 0, y: 0 }]

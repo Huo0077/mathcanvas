@@ -433,6 +433,38 @@ describe("MathCanvas workbench", () => {
     expect(track.radius).toBeCloseTo(Math.hypot(rim.position.x - centre.position.x, rim.position.y - centre.position.y, rim.position.z - centre.position.z), 9)
   })
 
+  /**
+   * 检查器里的「朝向」：空间面与圆轨道没有存欧拉角，所以给的是**相对**旋转（选轴 + 角度 + 应用），
+   * 读数（当前法向）随后刷新。用户口径："也可以在右侧属性栏设置为 90 度。"
+   */
+  it("rotates a circle track from the inspector in one undoable step", () => {
+    const trackNormal = () => (useSceneStore.getState().document.primitives.find((primitive) => primitive.type === "circle3") as { normal: { x: number; y: number; z: number } }).normal
+
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
+    fireEvent.click(screen.getAllByText("A")[0])
+    fireEvent.click(screen.getByRole("button", { name: "添加空间圆轨道" }))
+
+    // 读数一开始就是文档里的值：水平圆（法向 +Z）。
+    expect(screen.getByText("当前法向").parentElement?.textContent).toContain("(0.00, 0.00, 1.00)")
+
+    fireEvent.change(screen.getByRole("combobox", { name: "旋转轴" }), { target: { value: "x" } })
+    fireEvent.change(screen.getByRole("spinbutton", { name: "再转角度" }), { target: { value: "90" } })
+    fireEvent.click(screen.getByRole("button", { name: "应用旋转" }))
+
+    const turned = trackNormal()
+    expect(turned.x).toBeCloseTo(0, 9)
+    expect(turned.y).toBeCloseTo(-1, 9)
+    expect(turned.z).toBeCloseTo(0, 9)
+    // 读数跟着文档走（不是某一帧的局部状态）。
+    expect(screen.getByText("当前法向").parentElement?.textContent).toContain("(0.00, -1.00, 0.00)")
+
+    // 一次旋转 = 一步撤销：退回水平，而不是退回"圆没了"。
+    fireEvent.click(screen.getByRole("button", { name: "撤销" }))
+    expect(trackNormal()).toEqual({ x: 0, y: 0, z: 1 })
+  })
+
   it("shows the selected line slope characteristics in the properties panel", () => {
     render(<App />)
     fireEvent.click(screen.getAllByText("参数直线")[0])

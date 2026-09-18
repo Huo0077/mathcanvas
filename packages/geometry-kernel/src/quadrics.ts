@@ -13,6 +13,7 @@
 import type { ConePrimitive, Conic3, Conic3Coefficients, Conic3Frame, Conic3Kind, Conic3Line, CylinderPrimitive, PrimitiveSpec } from "@draw/dsl"
 
 import { addVector3, crossVector3, dotVector3, normalizeVector3, scaleVector3, subtractVector3, type Plane3, type Vector3 } from "./geometry3d"
+import { eulerRotationMatrix3 } from "./rotation3d"
 
 /** 圆锥曲线的文档类型定义在 DSL 里（内核依赖 DSL，反向依赖会破坏分层）；这里再导出，内核 API 保持不变。 */
 export type { Conic3, Conic3Coefficients, Conic3Frame, Conic3Kind, Conic3Line }
@@ -78,18 +79,6 @@ function transpose4(matrix: number[]): number[] {
   return result
 }
 
-/** 绕 pivot 的 X→Y→Z 欧拉旋转矩阵（与 `solid-builders.ts` 的 `rotateAboutPivot` 逐行同源）。 */
-function rotationMatrix(rotation: Vector3): number[] {
-  const [cx, sx] = [Math.cos(rotation.x), Math.sin(rotation.x)]
-  const [cy, sy] = [Math.cos(rotation.y), Math.sin(rotation.y)]
-  const [cz, sz] = [Math.cos(rotation.z), Math.sin(rotation.z)]
-  return [
-    cy * cz, sx * sy * cz - cx * sz, cx * sy * cz + sx * sz,
-    cy * sz, sx * sy * sz + cx * cz, cx * sy * sz - sx * cz,
-    -sy, sx * cy, cx * cy
-  ]
-}
-
 function applyMatrix(matrix: number[], vector: Vector3): Vector3 {
   return {
     x: matrix[0] * vector.x + matrix[1] * vector.y + matrix[2] * vector.z,
@@ -133,7 +122,7 @@ function buildSolidQuadric(kind: "cylinder" | "cone", matrix: number[], center: 
    * 平面 `z=1` 切出来的圆心是 `(0,0,1)` 而不是 `(3,0,1)`——画布上那圈解析截面会画在离实体很远的地方。
    * 而应用默认的圆柱就建在 `center=(3,0,0)`，所以这不是边角情形（A2 实现时由探针抓出）。
    */
-  const linear = rotationMatrix(rotation ?? { x: 0, y: 0, z: 0 })
+  const linear = eulerRotationMatrix3(rotation ?? { x: 0, y: 0, z: 0 })
   const linearTransposed = [
     linear[0], linear[3], linear[6],
     linear[1], linear[4], linear[7],

@@ -1,5 +1,5 @@
 import type { AnnotationSpec, ConstraintSpec, Coordinate, CurveRotation, DrawingSheetSpec, DrawingViewSpec, EngineeringAnnotation, GeometryDocument, GroupSpec, LayerSpec, Measurement3, Point3Binding, Point3Primitive, PointBinding, PrimitiveSpec, Section3Classification, Vector3 } from "@draw/dsl"
-import { createDependencyGraph, adaptiveSampleFunctionSegments, arcConstraint, buildSolidTemplate, calculateMeasurement3, circleConstraint, createBuilderContext, dihedralMarker3, ellipseConstraint, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, evaluatePlanarMeasurement, findExtrema, findInflectionPoints, findZeros, functionGraphConstraint, host3FromPrimitive, hyperbolaConstraint, intersectCirclesDetailed, intersectConvexPolyhedra3, intersectFaceSets, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, lineConstraint, mergeIntersectionSurfaces3, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, orderSectionPoints3, parabolaConstraint, placedConic, polylineConstraint, quadric3FromPrimitive, rayConstraint, sectionConvexPolyhedron, sectionPolyhedron3, sectionQuadric3, segmentConstraint, sharedRingEdge3, solidVolumeHost3, solveLineConstraints, type Conic3Kind, type ConicPlacement, type CurvePiece3, type DihedralMarker3, type FaceRing3, type Host3, type IntersectionResult, type IntersectionSurfaceRegion, type PlanarConstraint, type PlanarMetric, type PlaceableConic, type SampledPrimitive, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
+import { createDependencyGraph, adaptiveSampleFunctionSegments, arcConstraint, buildSolidTemplate, calculateMeasurement3, circleConstraint, composeEuler3, createBuilderContext, dihedralMarker3, ellipseConstraint, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, evaluatePlanarMeasurement, findExtrema, findInflectionPoints, findZeros, functionGraphConstraint, host3FromPrimitive, hyperbolaConstraint, intersectCirclesDetailed, intersectConvexPolyhedra3, intersectFaceSets, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, lineConstraint, mergeIntersectionSurfaces3, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, orderSectionPoints3, parabolaConstraint, placedConic, polylineConstraint, quadric3FromPrimitive, rayConstraint, rotatePointAboutAxis3, rotateVectorAboutAxis3, sectionConvexPolyhedron, sectionPolyhedron3, sectionQuadric3, segmentConstraint, sharedRingEdge3, solidVolumeHost3, solveLineConstraints, templateSolidPivot, type Conic3Kind, type ConicPlacement, type CurvePiece3, type DihedralMarker3, type FaceRing3, type Host3, type IntersectionResult, type IntersectionSurfaceRegion, type PlanarConstraint, type PlanarMetric, type PlaceableConic, type SampledPrimitive, type TemplateSolidPrimitive, type WorldAxis3 } from "@draw/geometry-kernel"
 
 /**
  * 曲线的"绕定点旋转"约定：`pivot` 是那个**定点**，`angle` 是绕它的转角（弧度）。
@@ -91,6 +91,15 @@ export type DomainOperation =
    * 由点驱动的对象平移它自己的点，模板实体平移自己的定位参数，生成拓扑由重算跟随。
    */
   | { op: "translatePrimitive3"; id: string; delta: Vector3 }
+  /**
+   * 绕**世界轴**整体旋转一个空间对象（"拖着转"与属性栏的角度输入共用）。
+   *
+   * 点驱动的对象（空间面 / 空间线 / 圆轨道 / 多面体）转的是它拥有的点，枢轴缺省 = 这些点的**形心**
+   * （面的重心、线段中点、圆轨道的圆心），所以"绕自己转"永远不用调用方先算一次中心；
+   * 模板实体写自己的欧拉角（`R_axis · R_euler`，与 `buildSolidTemplate` 同源），给 `pivot` 时连锚点一起
+   * 挪，实体才会绕着那个点公转而不是原地自转。
+   */
+  | { op: "rotatePrimitive3"; id: string; axis: WorldAxis3; degrees: number; pivot?: Vector3 }
   /**
    * 沿自身法向平移剖切面（截面专用）。`distance` 为世界单位的有符号位移，正值朝法向方向。
    * 截面点由 `recomputeSection` 在同一事务里重算，所以"移动剖切面"和"截面形状更新"永远一致。
@@ -321,6 +330,76 @@ function translatePrimitive3(primitive: PrimitiveSpec, delta: Vector3): { primit
   if (primitive.type === "pyramid") return { primitive: { ...primitive, baseCenter: shiftedPoint(primitive.baseCenter, delta) }, movedIds: [primitive.id] }
   if (primitive.type === "cylinder" || primitive.type === "cone") return { primitive: { ...primitive, center: shiftedPoint(primitive.center, delta) }, movedIds: [primitive.id] }
   return { primitive, movedIds: managedPointIds(primitive) }
+}
+
+/**
+ * 哪些对象**有朝向可转**。与"能不能拖"同一套边界（锁定、物化拓扑、绑定的点都排除在外），
+ * 只多一条：孤立的 `point3` 没有朝向——转一个点绕它自己等于没转，真要绕定点摆它请用平移。
+ */
+export function isRotatable3(primitive: PrimitiveSpec, points: Map<string, Point3Primitive>, generated: Set<string> = new Set()): boolean {
+  if (primitive.type === "point3") return false
+  return isFreeDraggable3(primitive, points, generated)
+}
+
+/** 点驱动对象的旋转枢轴缺省值：它拥有那些点的**形心**（面的重心、线段中点、圆轨道的圆心）。 */
+function centroidOfOwnedPoints(primitive: PrimitiveSpec, points: Map<string, Point3Primitive>): Vector3 | null {
+  const positions: Vector3[] = []
+  for (const id of managedPointIds(primitive)) {
+    const position = points.get(id)?.position
+    if (!position || !Number.isFinite(position.x) || !Number.isFinite(position.y) || !Number.isFinite(position.z)) return null
+    positions.push(position)
+  }
+  if (positions.length === 0) return null
+  const total = positions.reduce<Vector3>((sum, position) => ({ x: sum.x + position.x, y: sum.y + position.y, z: sum.z + position.z }), { x: 0, y: 0, z: 0 })
+  return { x: total.x / positions.length, y: total.y / positions.length, z: total.z / positions.length }
+}
+
+/**
+ * 把对象**存在文档里**的朝向向量一起转过去。
+ *
+ * 只转参考点是不够的：`circle3` 的法向、`pointNormal` 平面的法向、`pointDirection` 直线的方向都是
+ * 独立存下来的——漏掉哪个，哪个就会"读数说转了、画面上还指着原来那边"。面的法向不在这里，
+ * 它是从点算出来的，点转了它自然跟着转。
+ */
+function rotatedOrientationVectors(primitive: PrimitiveSpec, axis: WorldAxis3, radians: number): Partial<PrimitiveSpec> {
+  if (primitive.type === "circle3") return { normal: rotateVectorAboutAxis3(primitive.normal, axis, radians) }
+  if (primitive.type === "line3" && primitive.definition.kind === "pointDirection") return { definition: { ...primitive.definition, direction: rotateVectorAboutAxis3(primitive.definition.direction, axis, radians) } }
+  if (primitive.type === "plane3" && primitive.definition.kind === "pointNormal") return { definition: { ...primitive.definition, normal: rotateVectorAboutAxis3(primitive.definition.normal, axis, radians) } }
+  return {}
+}
+
+/**
+ * 绕世界轴转过 `degrees`（右手法则）。返回值里 `movedPoints` 是"这次旋转动了哪些点、动到哪儿"，
+ * 既是依赖重算的入口，也是撤销粒度的依据——一次拖动就是一次操作、一个撤销步骤。
+ *
+ * 返回 `null` 表示"这个对象没有可转的几何"（缺参考点、图形退化），调用方如实报错而不是写一个空改动。
+ */
+function rotatePrimitive3(primitive: PrimitiveSpec, points: Map<string, Point3Primitive>, axis: WorldAxis3, degrees: number, pivot?: Vector3): { primitive: PrimitiveSpec; movedPoints: { id: string; position: Vector3 }[] } | null {
+  const radians = (degrees * Math.PI) / 180
+  /**
+   * 模板实体：只写欧拉角 + 挪锚点，物化出来的顶点由 `buildSolidTemplate` 按新角度重算
+   * （与属性栏改 `rotation3` 走同一条路，所以两种入口画出来必然一致）。
+   */
+  if (primitive.type === "cube" || primitive.type === "pyramid" || primitive.type === "cylinder" || primitive.type === "cone") {
+    const centre = templateSolidPivot(primitive)
+    const target = pivot ?? centre
+    const turnedCentre = rotatePointAboutAxis3(centre, target, axis, radians)
+    const shift = { x: turnedCentre.x - centre.x, y: turnedCentre.y - centre.y, z: turnedCentre.z - centre.z }
+    const rotation = composeEuler3(primitive.rotation ?? { x: 0, y: 0, z: 0 }, axis, radians)
+    const moved = primitive.type === "cube"
+      ? { ...primitive, origin: shiftedPoint(primitive.origin, shift) }
+      : primitive.type === "pyramid"
+        ? { ...primitive, baseCenter: shiftedPoint(primitive.baseCenter, shift) }
+        : { ...primitive, center: shiftedPoint(primitive.center, shift) }
+    return { primitive: { ...moved, rotation }, movedPoints: [] }
+  }
+  const owned = managedPointIds(primitive)
+  const target = pivot ?? centroidOfOwnedPoints(primitive, points)
+  if (!target || owned.length === 0) return null
+  return {
+    primitive: { ...primitive, ...rotatedOrientationVectors(primitive, axis, radians) } as PrimitiveSpec,
+    movedPoints: owned.map((id) => ({ id, position: rotatePointAboutAxis3(points.get(id)!.position, target, axis, radians) }))
+  }
 }
 
 function primitiveDependencies(primitive: PrimitiveSpec, relations?: { owners: Map<string, string>; topologies: Map<string, string> }): string[] {
@@ -1939,6 +2018,23 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
     // re-derive its own cuts explicitly, or the drawn section would keep the old shape while the solid moves.
     const cutIds = next.primitives.filter((candidate): candidate is Extract<PrimitiveSpec, { type: "section" }> => candidate.type === "section" && candidate.sourceId === operation.id).map((section) => section.id)
     changedIds = [...movedIds, operation.id, ...cutIds]
+  } else if (operation.op === "rotatePrimitive3") {
+    const primitive = next.primitives.find((candidate) => candidate.id === operation.id)
+    if (!primitive) return { document, changed: false, error: "object not found" }
+    const points = point3Index(next)
+    if (!isRotatable3(primitive, points, templateTopologyIds(next))) return { document, changed: false, error: "object is not rotatable" }
+    const turned = rotatePrimitive3(primitive, points, operation.axis, operation.degrees, operation.pivot)
+    if (!turned) return { document, changed: false, error: "object has no geometry to rotate" }
+    const turnedPoints = new Map(turned.movedPoints.map((moved) => [moved.id, moved.position]))
+    next.primitives = next.primitives.map((candidate) => {
+      if (candidate.id === operation.id) return turned.primitive
+      // 点驱动的对象由它的点带着转；模板实体的物化拓扑由 `buildSolidTemplate` 重算。
+      if (candidate.type === "point3" && turnedPoints.has(candidate.id)) return { ...candidate, position: turnedPoints.get(candidate.id)! }
+      return candidate
+    })
+    // 截面按 id 记来源、不在依赖索引里：实体转了，它的截面必须同一次提交里重算，否则刀口与形状对不上。
+    const cutIds = next.primitives.filter((candidate): candidate is Extract<PrimitiveSpec, { type: "section" }> => candidate.type === "section" && candidate.sourceId === operation.id).map((section) => section.id)
+    changedIds = [operation.id, ...turnedPoints.keys(), ...cutIds]
   } else if (operation.op === "moveSectionPlane") {
     const primitive = next.primitives.find((candidate) => candidate.id === operation.id)
     if (!primitive || primitive.type !== "section") return { document, changed: false, error: "section not found" }

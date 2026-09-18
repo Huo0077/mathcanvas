@@ -76,8 +76,12 @@ export interface RoundSolidInput {
 
 export type TemplateSolidPrimitive = CubePrimitive | PyramidPrimitive | CylinderPrimitive | ConePrimitive
 
-/** The point a template solid turns about: its box centre, or the midpoint of its axis. */
-function templatePivot(primitive: TemplateSolidPrimitive): Vector3 {
+/**
+ * The point a template solid turns about: its box centre, or the midpoint of its axis.
+ *
+ * 导出给 `scene-graph` 的拖动旋转用：属主中心只有这一处定义，两边各写一份就会"拖的时候绕一点、画的时候绕另一点"。
+ */
+export function templateSolidPivot(primitive: TemplateSolidPrimitive): Vector3 {
   if (primitive.type === "cube") return { x: primitive.origin.x + primitive.size.x / 2, y: primitive.origin.y + primitive.size.y / 2, z: primitive.origin.z + primitive.size.z / 2 }
   if (primitive.type === "pyramid") return { x: primitive.baseCenter.x, y: primitive.baseCenter.y, z: primitive.baseCenter.z + primitive.height / 2 }
   return { x: primitive.center.x, y: primitive.center.y, z: primitive.center.z + primitive.height / 2 }
@@ -502,7 +506,7 @@ export function buildSolidTemplate(primitive: TemplateSolidPrimitive, context: B
   // Orientation is applied to the finished vertices: one place covers all four templates, and a rigid
   // rotation cannot invalidate the topology that was just validated.
   const rotation = primitive.rotation
-  const pivot = rotation ? templatePivot(primitive) : null
+  const pivot = rotation ? templateSolidPivot(primitive) : null
   const rawEdges = result.primitives.filter((candidate): candidate is Extract<PrimitiveSpec, { type: "edge3" }> => candidate.type === "edge3").map((candidate) => ({ id: candidate.id, pointIds: candidate.pointIds }))
   const hidden = roundSolidHiddenTopology(primitive, result.vertexIds, rawEdges)
   const hiddenPoint = (id: string) => hidden?.hiddenVertexIds.has(id) ?? false

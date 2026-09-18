@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { createDefaultCadLayout, createEmptyDocument, type PrimitiveSpec } from "@draw/dsl"
-import { buildSolidTemplate } from "@draw/geometry-kernel"
+import { axisRotationMatrix3, buildSolidTemplate, composeEuler3, eulerRotationMatrix3, multiplyRotationMatrix3, rotatePointAboutAxis3, templateSolidPivot } from "@draw/geometry-kernel"
 
 import { commitPatch } from "./patches"
 import { planeThroughPoints, sectionDistanceToPlane, sectionPivot, sectionPlaneOffset, sectionPlaneThroughSource } from "./operations"
@@ -199,6 +199,208 @@ describe("free 3D drag", () => {
     // A drag is dispatched as one operation, so the previous document is the whole undo step.
     expect((primitiveById(moved, "cube-1") as { origin: { x: number } }).origin.x).toBe(0)
     expect((primitiveById(document, "cube-1") as { origin: { x: number } }).origin.x).toBe(-1)
+  })
+})
+
+/**
+ * 拖动旋转（用户口径："我希望能给立体图形增加旋转功能，就像我想要一个横着的圆柱，可以在图中拖着圆柱旋转，
+ * 也可以在右侧属性栏设置为 90 度。"）。
+ *
+ * 一条不变量贯穿所有用例：**半径 / 边长 / 大小这些"物体自身量"不能被旋转改掉**——转了之后量变了就是实现错了。
+ */
+describe("3D rotation", () => {
+  const positionOfVector = (document: { primitives: PrimitiveSpec[] }, id: string) => (document.primitives.find((primitive) => primitive.id === id) as unknown as { position: { x: number; y: number; z: number } }).position
+  const normalOf = (vector: { x: number; y: number; z: number }) => {
+    const length = Math.hypot(vector.x, vector.y, vector.z)
+    return { x: vector.x / length, y: vector.y / length, z: vector.z / length }
+  }
+
+  function trackDocument() {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      { id: "p-centre", type: "point3", position: { x: 1, y: 2, z: 3 }, binding: { kind: "free" } },
+      // 法向沿 +X：圆轨道立在 y-z 平面里，绕 Z 转过 90° 就该指向 +Y —— 一个一眼能看出来的变化。
+      { id: "orbit-1", type: "circle3", centerId: "p-centre", normal: { x: 1, y: 0, z: 0 }, radius: 2 }
+    ]
+    return document
+  }
+
+  it("turns a circle track about its own centre, leaving centre, radius and normal length alone", () => {
+    const rotated = commitPatch(trackDocument(), { op: "rotatePrimitive3", id: "orbit-1", axis: "z", degrees: 90 })
+
+    expect(rotated.changed).toBe(true)
+    // 枢轴缺省 = 它拥有的点的形心；圆只有一个圆心点，所以圆心不动。
+    const centre = positionOfVector(rotated.document, "p-centre")
+    expect(centre.x).toBeCloseTo(1, 12)
+    expect(centre.y).toBeCloseTo(2, 12)
+    expect(centre.z).toBeCloseTo(3, 12)
+    const orbit = rotated.document.primitives.find((primitive) => primitive.id === "orbit-1") as unknown as { normal: { x: number; y: number; z: number }; radius: number }
+    expect(orbit.radius).toBe(2)
+    expect(orbit.normal.x).toBeCloseTo(0, 12)
+    expect(orbit.normal.y).toBeCloseTo(1, 12)
+    expect(orbit.normal.z).toBeCloseTo(0, 12)
+  })
+
+  it("turns a spatial face about its centroid, preserving the centroid, the side lengths and the normal's turn", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      { id: "p-a", type: "point3", position: { x: 0, y: 0, z: 0 }, binding: { kind: "free" } },
+      { id: "p-b", type: "point3", position: { x: 2, y: 0, z: 0 }, binding: { kind: "free" } },
+      { id: "p-c", type: "point3", position: { x: 0, y: 2, z: 0 }, binding: { kind: "free" } },
+      { id: "face-abc", type: "face3", pointIds: ["p-a", "p-b", "p-c"] }
+    ]
+    const centroidBefore = { x: 2 / 3, y: 2 / 3, z: 0 }
+    const sideBefore = Math.hypot(2, 0, 0)
+
+    const rotated = commitPatch(document, { op: "rotatePrimitive3", id: "face-abc", axis: "x", degrees: 90 })
+
+    expect(rotated.changed).toBe(true)
+    const [a, b, c] = ["p-a", "p-b", "p-c"].map((id) => positionOfVector(rotated.document, id))
+    const centroidAfter = { x: (a.x + b.x + c.x) / 3, y: (a.y + b.y + c.y) / 3, z: (a.z + b.z + c.z) / 3 }
+    expect(centroidAfter.x).toBeCloseTo(centroidBefore.x, 12)
+    expect(centroidAfter.y).toBeCloseTo(centroidBefore.y, 12)
+    expect(centroidAfter.z).toBeCloseTo(centroidBefore.z, 12)
+    // 边长是物体自身量：旋转是刚体变换，边长必须一字不差地保留。
+    expect(Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z)).toBeCloseTo(sideBefore, 12)
+    expect(Math.hypot(c.x - a.x, c.y - a.y, c.z - a.z)).toBeCloseTo(sideBefore, 12)
+    // 面的法向是**算出来的**（点变它就变），这里按定义重算一次，确认它真的转过了 90°。
+    const edge1 = { x: b.x - a.x, y: b.y - a.y, z: b.z - a.z }
+    const edge2 = { x: c.x - a.x, y: c.y - a.y, z: c.z - a.z }
+    const normal = normalOf({ x: edge1.y * edge2.z - edge1.z * edge2.y, y: edge1.z * edge2.x - edge1.x * edge2.z, z: edge1.x * edge2.y - edge1.y * edge2.x })
+    expect(normal.x).toBeCloseTo(0, 12)
+    expect(normal.y).toBeCloseTo(-1, 12)
+    expect(normal.z).toBeCloseTo(0, 12)
+  })
+
+  it("turns a point-normal plane's stored normal so the drawn plane follows", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      { id: "p-0", type: "point3", position: { x: 1, y: 0, z: 0 }, binding: { kind: "free" } },
+      { id: "plane-0", type: "plane3", definition: { kind: "pointNormal", pointId: "p-0", normal: { x: 1, y: 0, z: 0 } } }
+    ]
+
+    const rotated = commitPatch(document, { op: "rotatePrimitive3", id: "plane-0", axis: "z", degrees: 90 })
+
+    expect(rotated.changed).toBe(true)
+    const plane = rotated.document.primitives.find((primitive) => primitive.id === "plane-0") as unknown as { definition: { normal: { x: number; y: number; z: number } } }
+    // 只转参考点、不转存下来的法向，画出来的平面就会"读数说转了、画面没转"。
+    expect(plane.definition.normal.x).toBeCloseTo(0, 12)
+    expect(plane.definition.normal.y).toBeCloseTo(1, 12)
+    expect(positionOfVector(rotated.document, "p-0").x).toBeCloseTo(1, 12)
+  })
+
+  it("turns a point-driven line by turning both of its points", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      { id: "p-a", type: "point3", position: { x: -1, y: 0, z: 0 }, binding: { kind: "free" } },
+      { id: "p-b", type: "point3", position: { x: 1, y: 0, z: 0 }, binding: { kind: "free" } },
+      { id: "line-ab", type: "line3", definition: { kind: "throughPoints", pointIds: ["p-a", "p-b"] } }
+    ]
+
+    const rotated = commitPatch(document, { op: "rotatePrimitive3", id: "line-ab", axis: "z", degrees: 90 })
+
+    expect(rotated.changed).toBe(true)
+    const a = positionOfVector(rotated.document, "p-a")
+    const b = positionOfVector(rotated.document, "p-b")
+    expect(Math.hypot(a.x, a.y)).toBeCloseTo(1, 12)
+    expect(Math.hypot(b.x, b.y)).toBeCloseTo(1, 12)
+    // 直线绕自身中点转：中点不动、方向从 X 变成 Y。
+    expect(b.y - a.y).toBeCloseTo(2, 12)
+  })
+
+  describe("template solids", () => {
+    const cylinder = { id: "cyl-1", type: "cylinder" as const, center: { x: 0, y: 0, z: 0 }, radius: 1, height: 4, segments: 8 }
+
+    function cylinderDocument() {
+      const document = createEmptyDocument("geometry3d")
+      return commitPatch(document, { op: "addPrimitives", primitives: [cylinder, ...buildSolidTemplate(cylinder).primitives] }).document
+    }
+
+    const solidOf = (document: ReturnType<typeof cylinderDocument>) => document.primitives.find((primitive) => primitive.id === "cyl-1") as unknown as { center: { x: number; y: number; z: number }; radius: number; height: number; rotation?: { x: number; y: number; z: number } }
+    const solidPrimitive = (document: ReturnType<typeof cylinderDocument>) => document.primitives.find((primitive) => primitive.id === "cyl-1") as Extract<PrimitiveSpec, { type: "cylinder" }>
+
+    it("writes the euler field for a solid that had never been turned", () => {
+      const rotated = commitPatch(cylinderDocument(), { op: "rotatePrimitive3", id: "cyl-1", axis: "x", degrees: 90 })
+
+      expect(rotated.changed).toBe(true)
+      const solid = solidOf(rotated.document)
+      expect(solid.rotation?.x).toBeCloseTo(Math.PI / 2, 12)
+      expect(solid.rotation?.y ?? 0).toBeCloseTo(0, 12)
+      expect(solid.rotation?.z ?? 0).toBeCloseTo(0, 12)
+      // 绕自身中心转：定位锚点不动，半径与高也不动。
+      expect(solid.center).toEqual({ x: 0, y: 0, z: 0 })
+      expect(solid.radius).toBe(1)
+      expect(solid.height).toBe(4)
+    })
+
+    it("carries the generated topology with the new orientation", () => {
+      const document = cylinderDocument()
+      const polyhedron = document.primitives.find((primitive) => primitive.type === "polyhedron3") as unknown as { vertexIds: string[] }
+      // 顶环上的顶点：转 90° 之后竖直的轴该躺成 −Y 方向，这个点最能说明问题。
+      const vertexId = polyhedron.vertexIds.find((id) => positionOfVector(document, id).z > 3)!
+
+      const rotated = commitPatch(document, { op: "rotatePrimitive3", id: "cyl-1", axis: "x", degrees: 90 })
+
+      // 画布上真正画出来的是这些物化顶点：它们不跟过来，用户看到的圆柱就"没转"。
+      const before = positionOfVector(document, vertexId)
+      const after = positionOfVector(rotated.document, vertexId)
+      expect(after.x).toBeCloseTo(before.x, 9)
+      expect(after.y).toBeCloseTo(-2, 9)
+      expect(after.z).toBeCloseTo(2, 9)
+    })
+
+    /**
+     * 组合矩阵等价性：**先按原朝向摆好、再绕世界轴转**（`R_axis · R_euler`），不是把角度直接加到某个字段上。
+     * 这条是"拖着转"和属性栏角度共用的语义，写错了在连续两次旋转时会露馅。
+     */
+    it("composes with the existing orientation instead of replacing it", () => {
+      const leaned = commitPatch(cylinderDocument(), { op: "rotatePrimitive3", id: "cyl-1", axis: "x", degrees: 90 }).document
+      const turned = commitPatch(leaned, { op: "rotatePrimitive3", id: "cyl-1", axis: "z", degrees: 90 })
+
+      const solid = solidOf(turned.document)
+      const expected = multiplyRotationMatrix3(axisRotationMatrix3("z", Math.PI / 2), eulerRotationMatrix3({ x: Math.PI / 2, y: 0, z: 0 }))
+      const actual = eulerRotationMatrix3(solid.rotation ?? { x: 0, y: 0, z: 0 })
+      for (let index = 0; index < 9; index += 1) expect(actual[index]).toBeCloseTo(expected[index], 9)
+      // 与 `composeEuler3` 同一份实现：读数与矩阵不会各说各话。
+      expect(solid.rotation?.x).toBeCloseTo(composeEuler3({ x: Math.PI / 2, y: 0, z: 0 }, "z", Math.PI / 2).x, 12)
+    })
+
+    it("orbits the solid around an explicit pivot", () => {
+      const document = cylinderDocument()
+      const pivot = { x: 0, y: 4, z: 0 }
+      const centreBefore = templateSolidPivot(solidPrimitive(document))
+
+      const rotated = commitPatch(document, { op: "rotatePrimitive3", id: "cyl-1", axis: "x", degrees: 90, pivot })
+
+      const solid = solidOf(rotated.document)
+      const centreAfter = templateSolidPivot(solidPrimitive(rotated.document))
+      const expected = rotatePointAboutAxis3(centreBefore, pivot, "x", Math.PI / 2)
+      expect(centreAfter.x).toBeCloseTo(expected.x, 12)
+      expect(centreAfter.y).toBeCloseTo(expected.y, 12)
+      expect(centreAfter.z).toBeCloseTo(expected.z, 12)
+      // 中心真的挪了位置（不是"读数转了、实体还杵在原地"）。
+      expect(Math.hypot(centreAfter.y - centreBefore.y, centreAfter.z - centreBefore.z)).toBeGreaterThan(1)
+      expect(solid.rotation?.x).toBeCloseTo(Math.PI / 2, 12)
+    })
+
+    it("refuses generated topology, a locked solid and a non-finite angle", () => {
+      const document = cylinderDocument()
+      const polyhedronId = (document.primitives.find((primitive) => primitive.type === "polyhedron3") as { id: string }).id
+      expect(commitPatch(document, { op: "rotatePrimitive3", id: polyhedronId, axis: "x", degrees: 90 }).changed).toBe(false)
+      expect(commitPatch(document, { op: "rotatePrimitive3", id: "cyl-1", axis: "w" as "x", degrees: 90 }).changed).toBe(false)
+      expect(commitPatch(document, { op: "rotatePrimitive3", id: "cyl-1", axis: "x", degrees: Number.NaN }).changed).toBe(false)
+
+      const locked = commitPatch(document, { op: "toggleLock", id: "cyl-1", locked: true }).document
+      expect(commitPatch(locked, { op: "rotatePrimitive3", id: "cyl-1", axis: "x", degrees: 90 }).changed).toBe(false)
+    })
+
+    it("is one undoable step per committed rotation", () => {
+      const document = cylinderDocument()
+      const rotated = commitPatch(document, { op: "rotatePrimitive3", id: "cyl-1", axis: "x", degrees: 90 }).document
+      // 一次拖动 = 一次操作：撤销只要退回上一个文档。
+      expect(solidOf(document).rotation).toBeUndefined()
+      expect(solidOf(rotated).rotation?.x).toBeCloseTo(Math.PI / 2, 12)
+    })
   })
 })
 

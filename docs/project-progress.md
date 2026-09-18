@@ -22,6 +22,14 @@
   - **检查器**：新增「空间圆轨道」块——半径可改（写 `radius3`）、圆心名字与坐标读数、法向读数；并说明"圆心跟着那个空间点走"。
   - **RED→GREEN / 证据**：`operations.test.ts` 的"平移圆轨道"先报 `expected false to be true`；`patches.test.ts` 的半径补丁先失败（并暴露了上面那处两份清单漂移）；`pointHostOptions.test.ts` 的"圆轨道条目"先失败；浏览器新用例 `e2e/three-orbit-tracks.spec.ts`：两个点建出半径 3 的轨道 → 下拉里选中「圆轨道」→ 拖点（`data-host-residual ≈ 0`、参数落在 `[0, 2π)`）→ 抬手后点到圆心距离仍精确等于 3。
   - **门禁（切片 2 后实跑）**：typecheck 4 workspace 通过；单测 **118 文件 / 1380 用例**通过（+5）；lint **0 error / 14 warning**（基线）；生产构建通过；Playwright **95/95**（+1）。
+- **切片 3（`rotatePrimitive3`：绕世界轴转一个空间对象）已完成**：拖动旋转与属性栏角度**共用同一个域操作**，一次旋转 = 一次操作 = 一步撤销。
+  - **单一真源 `rotation3d.ts`（内核）**：`eulerRotationMatrix3`（X→Y→Z，`R = Rz·Ry·Rx`，行主序）、`axisRotationMatrix3`、`applyRotationMatrix3`、`multiplyRotationMatrix3`、`rotateVectorAboutAxis3`、`rotatePointAboutAxis3`、`eulerFromRotationMatrix3`、`composeEuler3`。**顺手消掉一处两份实现**：A1 的 `quadrics.ts` 里那份私有 `rotationMatrix` 删掉、改用它（"读数说转了 90°、画面却没转"这类不一致的根就是矩阵约定各写一份）。万向锁（`y = ±90°`）单独一支并**如实记在函数的注释里**：`x` 与 `z` 只以 `x ∓ z` 的组合出现，取 `z = 0`，旋转本身分毫不差、只是表示不唯一。
+  - **域操作**：`{ op: "rotatePrimitive3", id, axis: "x"|"y"|"z", degrees, pivot? }`。**枢轴缺省 = 它拥有的点的形心**（面的重心、线段中点、圆轨道的圆心），所以"绕自己转"永远不用调用方先算一次中心；给 `pivot` 时对象才绕着那个世界点公转。点驱动对象转的是它拥有的点，**并且**把存在文档里的朝向向量一起转过去（`circle3.normal`、`pointNormal` 平面的法向、`pointDirection` 直线的方向）——漏掉哪个，哪个就会"读数转了、画面还指着原来那边"；面的法向不在这里，它是从点算出来的、点转它自然转。模板实体只写欧拉角 `composeEuler3(旧朝向, axis, θ)`（`R_axis · R_euler`，与 `buildSolidTemplate` 同源），带 `pivot` 时连锚点一起挪（`templateSolidPivot` 从内核导出，属主中心只有这一处定义）。
+  - **边界与校验（`patches.ts` 写入前拦下）**：轴名非法 → `rotation axis is invalid`；角度非有限 → `rotation angle must be finite`；枢轴非有限向量 → `rotation pivot must be finite`；孤立 `point3` → `object has no orientation to rotate`（转一个点绕它自己等于没转，如实拒绝而不是静默不动）；物化拓扑 / 绑定的点 / 锁定对象一律拒绝（与"能不能拖"同一套边界，`isRotatable3` 复用 `isFreeDraggable3`）。
+  - **检查器「朝向」**：空间面与圆轨道**没有存欧拉角**（面朝向由点算、圆轨道存的是法向），所以这里不能像模板实体那样把三个角绑到字段上——那样输入框会永远读回 0、用户以为没生效。改成"选轴 + 填角度 + 应用"的**相对**旋转（每应用一次一步撤销），下面是实时读数（当前法向 + 与 +Z 夹角，`data-object-orientation`）。法向读数与"点在不在面内"的判定共用内核 `polygonNormal3`（Newell，从 `closedFacePlanes3` 里抽出来导出，不再各写一份）。
+  - **RED→GREEN / 证据**：`operations.test.ts` 新增 9 条（圆轨道圆心不动 / 法向转 90° / 半径不变；空间面形心不动 / 边长一字不差 / 法向转过 90°；`pointNormal` 平面的法向跟着转；点驱动直线两端点跟着转；模板实体写欧拉角、物化顶点跟过来、与 `composeEuler3` 矩阵等价、给枢轴时中心真的绕过去、拒绝退化输入、一次撤销）先全部失败（`expected 1 to be close to +0`、`(0, templateSolidPivot) is not a function`、`expected { valid: true } to deeply equal { valid: false, … }` 等 10 条），实现后 **231/231** 通过；`patches.test.ts` 的 7 条校验断言同批红转绿；`App.test.tsx` 新增"检查器里转圆轨道、一步撤销"；`hosts3.test.ts` 新增 `polygonNormal3` 2 条（斜环单位法向 + 绕向反向 + 退化拒绝）。
+  - **一处自己的测试写错并已修正**：断言模板实体的物化顶点按"绕原点"转过 90°（`after.y ≈ -before.z`），实际是绕**实体中心** `(0,0,2)` 转（`after.y ≈ 2 - before.z`）——实现是对的、断言是错的；改成断言真实几何事实"竖直的轴躺成 −Y 方向"（顶环落到 `y = -2, z = 2`）。
+  - **门禁（切片 3 后实跑）**：typecheck 4 workspace 通过；单测 **119 文件 / 1399 用例**通过（+19）；lint **0 error / 14 warning**（基线）；生产构建通过；Playwright **95/95**。
 
 ### 解析二次曲面与真圆（A1）+ 交面分组与真曲面（A2）（2026-09-17 全部完成）
 

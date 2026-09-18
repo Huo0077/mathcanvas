@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import { createEmptyDocument } from "@draw/dsl"
 import { buildSolidTemplate } from "./solid-builders"
-import { clampPointIntoSolid3, circleHost3, coneSurfaceHost3, cylinderSurfaceHost3, faceHost3, host3FromPrimitive, lineHost3, planeHost3, solidVolumeHost3 } from "./hosts3"
+import { clampPointIntoSolid3, circleHost3, coneSurfaceHost3, cylinderSurfaceHost3, faceHost3, host3FromPrimitive, lineHost3, planeHost3, polygonNormal3, solidVolumeHost3 } from "./hosts3"
 import { circleConic3, conic3PointAt } from "./quadrics"
 
 const a = { x: 0, y: 0, z: 0 }
@@ -398,5 +398,29 @@ describe("host resolution from primitives", () => {
     expect(host3FromPrimitive(track, new Map([[track.id, track]]) as never)).toBeNull()
     expect(host3FromPrimitive({ ...track, radius: 0 }, map as never)).toBeNull()
     expect(host3FromPrimitive({ ...track, normal: { x: 0, y: 0, z: 0 } }, map as never)).toBeNull()
+  })
+})
+
+/**
+ * 多边形法向：属性栏「当前法向」读数与 `closedFacePlanes3` 的"点在里面/在外面"用的是**同一个** Newell 实现。
+ * 两份实现漂移过一次（"校验说行、应用说不行"），所以这里既测数值也测"退化就如实说不知道"。
+ */
+describe("polygon normal", () => {
+  it("returns the unit normal of a tilted ring, following the winding", () => {
+    const square = [{ x: 0, y: 0, z: 0 }, { x: 2, y: 0, z: 0 }, { x: 2, y: 2, z: 2 }, { x: 0, y: 2, z: 2 }]
+    const normal = polygonNormal3(square)!
+    // 平面 z = y 的法向是 (0, −1, 1)/√2（绕向 +x → +y）。
+    expect(Math.hypot(normal.x, normal.y, normal.z)).toBeCloseTo(1, 12)
+    expect(normal.x).toBeCloseTo(0, 12)
+    expect(normal.y).toBeCloseTo(-1 / Math.SQRT2, 12)
+    expect(normal.z).toBeCloseTo(1 / Math.SQRT2, 12)
+    // 反向绕向 = 反向法向。
+    const reversed = polygonNormal3([...square].reverse())!
+    expect(reversed.y).toBeCloseTo(1 / Math.SQRT2, 12)
+  })
+
+  it("refuses a ring that is not a surface", () => {
+    expect(polygonNormal3([{ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }])).toBeNull()
+    expect(polygonNormal3([{ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, { x: 2, y: 0, z: 0 }])).toBeNull()
   })
 })

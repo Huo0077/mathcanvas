@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "r
 import { dynamicPointPaths } from "../dynamicPointPaths"
 import type { AnnotationFeature, EngineeringAnnotationKind, Measurement3Metric, PrimitiveSpec, SolidRotation, Vector3 } from "@draw/dsl"
 import { measurementOptionsFor } from "../spatialTools"
-import { adaptiveSampleFunctionSegments, evaluateParameterExpression, functionPresets, getFunctionPreset, parseExpression } from "@draw/geometry-kernel"
+import { adaptiveSampleFunctionSegments, evaluateParameterExpression, functionPresets, getFunctionPreset, normalizeVector3, parseExpression, polygonNormal3 } from "@draw/geometry-kernel"
 import { parameterWindow, type Alignment, type PrimitiveUpdatePatch } from "@draw/scene-graph"
 
 import { defaultStrokeFor } from "../primitiveStyle"
@@ -35,6 +35,11 @@ export interface PropertiesBarProps {
   onUpdatePrimitive: (patch: PrimitiveUpdatePatch) => void
   /** 剖切面的朝向调整：绕世界轴旋转，枢轴取实体中心（界面上由 App 计算并传入）。 */
   onRotateSection?: (axis: "x" | "y" | "z", degrees: number) => void
+  /**
+   * 对象朝向的**相对**旋转：空间面 / 圆轨道没有存欧拉角，所以属性栏给的是"再绕世界轴转多少度"，
+   * 由 `rotatePrimitive3` 提交（一次操作 = 一步撤销）。模板实体仍走上面那三个绝对角度字段。
+   */
+  onRotate3?: (axis: "x" | "y" | "z", degrees: number) => void
   /** 把截面物化成独立的点/棱/面图元（与来源解耦）。 */
   onMaterializeSection?: () => void
   /** 空间点可以绑定的宿主（空间直线 / 棱 / 面 / 圆柱与圆锥侧面）。 */
@@ -219,6 +224,34 @@ function SolidRotationFields({ rotation, disabled, onChange }: { rotation: Solid
 }
 
 /**
+ * 「朝向」——空间面 / 圆轨道版。
+ *
+ * 这两类对象**没有存欧拉角**：面的朝向由它的点算出来、圆轨道存的是一个法向。所以这里不能像模板实体那样
+ * 把三个角绑到字段上（输入框会永远读回 0，用户以为没生效）。改成"选轴 + 填角度 + 应用"的相对旋转：
+ * 每应用一次就是一次 `rotatePrimitive3`、一步撤销，下面那行法向读数随后刷新——**看到的就是文档里的值**。
+ */
+function ObjectRotationFields({ normal, disabled, onRotate }: { normal: Vector3 | null; disabled: boolean; onRotate?: (axis: "x" | "y" | "z", degrees: number) => void }) {
+  const [axis, setAxis] = useState<"x" | "y" | "z">("z")
+  const [degrees, setDegrees] = useState(15)
+  const axes = ["x", "y", "z"] as const
+  const blocked = disabled || !onRotate
+  const tilt = normal ? Number((Math.acos(Math.min(1, Math.max(-1, normal.z))) * 180 / Math.PI).toFixed(2)) : null
+  return <>
+    <Field label="旋转轴"><select aria-label="旋转轴" disabled={blocked} value={axis} onChange={(event) => setAxis(event.target.value as "x" | "y" | "z")}>{axes.map((value) => <option key={value} value={value}>{value.toUpperCase()} 轴</option>)}</select></Field>
+    <Field label="再转角度（度）"><input aria-label="再转角度" type="number" step="15" disabled={blocked} value={degrees} onChange={(event) => setDegrees(numberValue(event))} /></Field>
+    <div className="property-actions" aria-label="旋转朝向">
+      <button type="button" aria-label="应用旋转" disabled={blocked || degrees === 0} onClick={() => onRotate?.(axis, degrees)}>旋转</button>
+      {axes.map((value) => <button key={value} type="button" aria-label={`绕 ${value.toUpperCase()} 轴加 90 度`} disabled={blocked} onClick={() => onRotate?.(value, 90)}>{value.toUpperCase()} +90°</button>)}
+    </div>
+    <div className="metric-grid" data-object-orientation={normal ? `${normal.x.toFixed(3)},${normal.y.toFixed(3)},${normal.z.toFixed(3)}` : "none"}>
+      <span>当前法向<strong>{normal ? `(${normal.x.toFixed(2)}, ${normal.y.toFixed(2)}, ${normal.z.toFixed(2)})` : "—"}</strong></span>
+      <span>与 +Z 夹角<strong>{tilt === null ? "—" : `${tilt.toFixed(2)}°`}</strong></span>
+    </div>
+    <p className="footer-note">空间面与圆轨道的朝向由它们的点 / 法向决定，不能像实体那样"存三个角"，所以这里是**相对**旋转：选轴、填角度、点「旋转」执行一次（一次撤销），快捷按钮每次 90°。法向是文档里的实时读数。</p>
+  </>
+}
+
+/**
  * 颜色选择：**一排可点的色板** ＋ 一个自定义取色框。
  *
  * 为什么不是只留原生 `<input type="color">`：那个控件只有一个窄方块，用户既看不出"这里能换颜色"，
@@ -278,7 +311,7 @@ function ColourField({ label, customLabel, palette, value, fallback, disabled, b
   </div>
 }
 
-export function PropertiesBar({ value, min, max, step, onChange, selectedPrimitive, selectedIds, selectedCount, selectedGroupId, allSelectedVisible, canCreateIntersection, onUpdatePrimitive, onRotateSection, onMaterializeSection, pointHostCandidates, onBindPointHost, onChangeHostParameter, onToggleSelectedVisibility, onToggleSelectedLock, onDeleteSelected, onCreateGroup, onDeleteGroup, onCreateIntersection, onAlign, onToggleBatchVisibility, onAddAnnotation, onAddEngineeringAnnotation, onCreateMeasurement, onDeleteMeasurement, onCreateMovingCircle, onUpdateSelectionStyle, onCreateDerivative, onCreateTangent, onCreateIntegral, sections = allInspectorSections }: PropertiesBarProps) {
+export function PropertiesBar({ value, min, max, step, onChange, selectedPrimitive, selectedIds, selectedCount, selectedGroupId, allSelectedVisible, canCreateIntersection, onUpdatePrimitive, onRotateSection, onRotate3, onMaterializeSection, pointHostCandidates, onBindPointHost, onChangeHostParameter, onToggleSelectedVisibility, onToggleSelectedLock, onDeleteSelected, onCreateGroup, onDeleteGroup, onCreateIntersection, onAlign, onToggleBatchVisibility, onAddAnnotation, onAddEngineeringAnnotation, onCreateMeasurement, onDeleteMeasurement, onCreateMovingCircle, onUpdateSelectionStyle, onCreateDerivative, onCreateTangent, onCreateIntegral, sections = allInspectorSections }: PropertiesBarProps) {
   const [openSections, setOpenSections] = useState<Record<InspectorSection, boolean>>({ data: true, appearance: false, constraints: false, engineering: true })
   const usesExternalSections = sections.length < allInspectorSections.length
   const shows = (section: InspectorSection) => sections.includes(section) && (usesExternalSections || openSections[section])
@@ -323,6 +356,15 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
   const selectedCircle3 = selectedPrimitive?.type === "circle3" ? selectedPrimitive : null
   const circle3Centre = selectedCircle3 ? sceneDocument.primitives.find((primitive) => primitive.id === selectedCircle3.centerId) : undefined
   const circle3CentrePosition = circle3Centre?.type === "point3" ? circle3Centre.position : null
+  /** 空间面：朝向要现算（法向是从点环 Newell 出来的，不是存下来的字段）。 */
+  const selectedFace3 = selectedPrimitive?.type === "face3" ? selectedPrimitive : null
+  const face3Normal = selectedFace3
+    ? polygonNormal3(selectedFace3.pointIds.map((id) => {
+      const point = sceneDocument.primitives.find((primitive) => primitive.id === id)
+      return point?.type === "point3" ? point.position : null
+    }).filter((position): position is Vector3 => position !== null))
+    : null
+  const objectOrientationNormal = selectedCircle3 ? normalizeVector3(selectedCircle3.normal) : face3Normal
   const applySceneOperation = useSceneStore((state) => state.apply)
   /**
    * 这个点是不是已经被某条曲线当作**定点**了：是的话就不再提供「创建动圆」，避免重复创建。
@@ -638,6 +680,7 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
       </div>
       <p className="footer-note">{circle3CentrePosition ? "圆心跟着那个空间点走：改点的坐标或拖点，整条轨道一起平移。" : "圆心点已不存在：这条轨道暂时算不出位置。"}</p>
     </div>}
+    {shows("data") && (selectedCircle3 || selectedFace3) && <div className="primitive-properties"><h3>朝向</h3><ObjectRotationFields normal={objectOrientationNormal} disabled={!editable} onRotate={onRotate3} /></div>}
     {shows("appearance") && selectedPrimitive && <div className="primitive-properties">
       <div className="property-card-heading"><div><span className="property-kicker">当前图元</span><h3>{selectedPrimitive.label ?? selectedPrimitive.id}</h3></div><span className="property-type-badge">{primitiveTypeLabels[selectedPrimitive.type]}</span></div>
       <h3 className="property-subheading">外观</h3>

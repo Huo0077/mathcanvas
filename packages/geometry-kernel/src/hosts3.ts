@@ -418,6 +418,21 @@ function closedFacePlanes3(vertices: Vector3[], faces: number[][]): FacePlane3[]
   })
 }
 
+/**
+ * 多边形点环的**单位**法向（Newell，方向随绕向）。点少于 3 个或环塌成一条线时返回 `null`。
+ *
+ * 导出给界面显示「当前朝向」用：属性栏要显示的正是这个法向，自己再写一份 Newell 就会和这一份漂移
+ *（这份是 `closedFacePlanes3` 判"点在里面/在外面"用的，绝不是只给显示看的近似）。
+ */
+export function polygonNormal3(points: Vector3[]): Vector3 | null {
+  if (points.length < 3) return null
+  const raw = newellNormal3(points, points.map((_, index) => index))
+  if (!raw) return null
+  const length = lengthVector3(raw)
+  if (!Number.isFinite(length) || length <= EPSILON) return null
+  return scaleVector3(raw, 1 / length)
+}
+
 /** 面环的 Newell 法向（未单位化，方向随绕向）；环塌成一条线时返回 null。 */
 function newellNormal3(vertices: Vector3[], face: number[]): Vector3 | null {
   let normal = { x: 0, y: 0, z: 0 }

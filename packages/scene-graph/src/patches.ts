@@ -1,7 +1,7 @@
 import { validateDocument, type AnnotationSpec, type ConstraintSpec, type EngineeringAnnotation, type GeometryDocument, type Measurement3, type PrimitiveSpec } from "@draw/dsl"
 import { parseExpression } from "@draw/geometry-kernel"
 
-import { applyOperation, deletionTargets, EDITABLE_GEOMETRY_TYPES, isFreeDraggable3, layerDescendantIds, templateTopologyIds, type DomainOperation } from "./operations"
+import { applyOperation, deletionTargets, EDITABLE_GEOMETRY_TYPES, isFreeDraggable3, isRotatable3, layerDescendantIds, templateTopologyIds, type DomainOperation } from "./operations"
 
 export type PatchValidationResult =
   | { valid: true }
@@ -348,6 +348,19 @@ export function validatePatch(document: GeometryDocument, operation: DomainOpera
       if (!isFreeDraggable3(primitive, points, templateTopologyIds(document))) errors.push("object is not draggable")
     }
     if (!isVector3(operation.delta)) errors.push("translation must be finite")
+  }
+  if (operation.op === "rotatePrimitive3") {
+    const primitive = document.primitives.find((candidate) => candidate.id === operation.id)
+    if (!primitive) errors.push("object not found")
+    else if (primitive.locked) errors.push("object is locked")
+    else if (!["x", "y", "z"].includes(operation.axis)) errors.push("rotation axis is invalid")
+    else if (!Number.isFinite(operation.degrees)) errors.push("rotation angle must be finite")
+    else if (operation.pivot !== undefined && !isVector3(operation.pivot)) errors.push("rotation pivot must be finite")
+    else if (primitive.type === "point3") errors.push("object has no orientation to rotate")
+    else {
+      const points = new Map(document.primitives.filter((candidate): candidate is Extract<PrimitiveSpec, { type: "point3" }> => candidate.type === "point3").map((point) => [point.id, point]))
+      if (!isRotatable3(primitive, points, templateTopologyIds(document))) errors.push("object is not rotatable")
+    }
   }
   if (operation.op === "moveSectionPlane") {
     const primitive = document.primitives.find((candidate) => candidate.id === operation.id)

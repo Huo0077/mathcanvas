@@ -32,9 +32,9 @@ npx playwright test
 
 ## Slice 3：`rotatePrimitive3`（场景图 + 属性栏）
 
-- [ ] 域操作 `rotatePrimitive3 { id, axis, degrees, pivot? }`：点驱动图元旋转其拥有的点（枢轴缺省 = 形心）；模板实体按组合矩阵反解 X→Y→Z 写 `rotation`；`patches.ts` 校验角度有限、轴合法。
-- [ ] 单测（`operations.test.ts` / `intersectionSolid` 同族或新建 `rotation3d.test.ts`）：旋转圆 → 圆心不动、法向转过 90°、半径不变；旋转空间面 → 形心不动、边长不变、法向转过 90°；旋转实体 → `rotation` 字段与手算一致（从未旋转状态绕 X 90° ⇒ `x = π/2`）；一次操作一步撤销。
-- [ ] 属性栏：`circle3` / `face3` 的「朝向」角度输入（写 `rotatePrimitive3`），并把当前取向（法向）显示成读数。
+- [x] 域操作 `rotatePrimitive3 { id, axis, degrees, pivot? }`：点驱动图元旋转其拥有的点（枢轴缺省 = 形心）；模板实体按组合矩阵反解 X→Y→Z 写 `rotation`；`patches.ts` 校验角度有限、轴合法。**实现要点（与计划的差异，均已落地）**：旋转统一走内核 `rotation3d.ts`（`eulerRotationMatrix3` / `composeEuler3` / `eulerFromRotationMatrix3`），模板实体写的是 `composeEuler3(旧朝向, axis, θ)` 而不是"反解后直接覆盖某个字段"；点驱动对象**额外**把文档里存的朝向向量（`circle3.normal`、`pointNormal`、`pointDirection`）一起转过去（只转点不转法向 = 画面不跟手）；带 `pivot` 时模板实体连锚点一起挪（`templateSolidPivot` 从内核导出，属主中心单一来源）；孤立 `point3` 无朝向可转、如实拒绝。
+- [x] 单测（`operations.test.ts` + `patches.test.ts` + `App.test.tsx` + `hosts3.test.ts`）：旋转圆 → 圆心不动、法向转过 90°、半径不变；旋转空间面 → 形心不动、边长不变、法向转过 90°；旋转实体 → `rotation` 字段与手算一致（从未旋转状态绕 X 90° ⇒ `x = π/2`）、与 `composeEuler3` 矩阵等价、给枢轴时中心真的绕过去、物化顶点跟过来；一次操作一步撤销。**RED 证据**：10 条断言先红（`expected 1 to be close to +0`、`(0 , templateSolidPivot) is not a function`、`expected { valid: true } to deeply equal { valid: false, … }`…）。
+- [x] 属性栏：`circle3` / `face3` 的「朝向」角度输入（写 `rotatePrimitive3`），并把当前取向（法向）显示成读数（`data-object-orientation`；用法向与内核判定共用 `polygonNormal3`）。**与计划的差异**：这两类对象没存欧拉角，"绝对角度输入"会永远读回 0，所以做成"选轴 + 填角度 + 应用"的相对旋转（每次一步撤销），并在注释与页脚说明里写清为什么。
 
 ## Slice 4：画布旋转手柄（三色环 + 拖动 + 吸附）
 
