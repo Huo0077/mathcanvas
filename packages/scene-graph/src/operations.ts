@@ -270,8 +270,11 @@ export const EDITABLE_GEOMETRY_TYPES = ["point", "point3", "line", "segment", "r
 
 /**
  * Point-driven objects only reference their points; those points are what a drag has to move.
+ *
+ * 导出给画布用：旋转手柄的枢轴（"它拥有的点的形心"）与域操作必须是**同一份**点清单，
+ * 两份各写一次就会出现"环画在 A、转的是 B"。
  */
-function managedPointIds(primitive: PrimitiveSpec): string[] {
+export function managedPointIds(primitive: PrimitiveSpec): string[] {
   if (primitive.type === "line3") return primitive.definition.kind === "throughPoints" ? [...primitive.definition.pointIds] : [primitive.definition.pointId]
   if (primitive.type === "segment3" || primitive.type === "edge3") return [...primitive.pointIds]
   if (primitive.type === "ray3") return [primitive.originId, primitive.throughId]

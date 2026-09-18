@@ -38,10 +38,10 @@ npx playwright test
 
 ## Slice 4：画布旋转手柄（三色环 + 拖动 + 吸附）
 
-- [ ] `threePrimitives.ts`：`createRotationHandles(center, size, activeAxis)` —— 三个环（X/Y/Z 轴色，`visualRole: "rotation-handle"`、`userData.rotationAxis`、`excludeFromFit`）。
-- [ ] `threeScene.tsx`：选中**恰好一个**可转对象（模板实体 / `circle3` / `face3`）时画环；`pointerdown` 命中环进入旋转会话（轴、枢轴、起始角）；`pointermove` 累加角度并按 15° 量化（Alt 不量化），画面用临时旋转；`pointerup` 提交 `rotatePrimitive3`；读数 `data-rotation-handles` / `data-rotation-axis` / `data-rotation-degrees`。
-- [ ] `threeDrag.ts`：旋转会话的纯函数（指针 → 绕轴角度、量化、临时旋转矩阵应用）单独成函数并单测；`threeScene.test.ts` 覆盖"命中环才开会话""量化到 15°""无位移不提交"。
-- [ ] e2e：`e2e/three-rotation-handle.spec.ts` —— 选圆柱 → 断言三个环 → 拖 X 环到 ~90° → 断言 `rotation.x ≈ π/2`（属性栏读数与文档）且一次撤销回到 0。
+- [x] `threePrimitives.ts`：`createRotationHandles(center, size, activeAxis)` —— 三个环（X/Y/Z 轴色，`visualRole: "rotation-handle"`、`userData.rotationAxis`、`excludeFromFit`）。**实现要点**：环不挂 `primitiveId`（按 id 遍历的逻辑必须跳过它）、`depthTest: false` + 高 `renderOrder`（被实体挡住的半圈也要看得见抓得到）、环平面与轴垂直；另加 `ROTATION_AXIS_COLORS` / `ROTATION_HANDLE_ROLE` 两个常量；手柄几何（环心 + 半径）由 `threeDrag.ts` 的 `rotationHandleGeometry` 算（模板实体取 `templateSolidPivot`、点驱动对象取拥有点的形心，与域操作的枢轴规则同源）。
+- [x] `threeScene.tsx`：选中**恰好一个**可转对象（模板实体 / `circle3` / `face3`）时画环；`pointerdown` 命中环进入旋转会话（轴、枢轴、起始角）；`pointermove` 累加角度并按 15° 量化（Alt 不量化），画面用临时旋转；`pointerup` 提交 `rotatePrimitive3`；读数 `data-rotation-handles` / `data-rotation-axis` / `data-rotation-degrees`。**实现要点**：环的优先级最高且**不需要先开「自由拖动」**；抬手先撤销临时旋转再提交（否则提交后重建的场景会再转一次）；没真正转过不提交；平移拖动时环的位置跟着图形走（朝向不变——它是世界轴的参照）。另加读数 `data-rotation-handle-pivot` / `data-rotation-handle-radius` / `data-rotation-frames`。
+- [x] `threeDrag.ts`：旋转会话的纯函数（指针 → 绕轴角度、量化、临时旋转矩阵应用）单独成函数并单测；`threeScene.test.ts` 覆盖"命中环才开会话""量化到 15°""无位移不提交"。**落在哪里**：纯函数与它们的用例集中在新的 `apps/web/src/threeRotation.test.ts`（13 条，覆盖手柄几何 / 环命中 / 角度基与右手法则 / 最短弧 / 15° 吸附与 Alt / 无位移不提交 / 临时旋转的撤销与"组+子对象只转一次"），组件那一层只做接线。
+- [x] e2e：`e2e/three-rotation-handle.spec.ts` —— 选圆柱 → 断言三个环 → 拖 X 环到 ~90° → 断言 `rotation.x ≈ π/2`（属性栏读数与文档）且一次撤销回到 0。**实际四条**：拖 X 环到 90°（读数 90.00 / 属性栏 90 / 一次撤销回 0）、Alt 不吸附（−25° 而不是 −30°）、环外按下不旋转、多选时不给环。**两处测试自身的错**已修正并记在 spec §8：抓取点原本落在两个环的**交点**上（命中谁取决于深度排序，实测不稳定）；滚轮缩放的断言没有等待异步生效。
 
 ## Slice 5：测量数字常驻（2D + 3D）
 

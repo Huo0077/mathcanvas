@@ -6,7 +6,8 @@
  */
 import * as THREE from "three"
 import type { GeometryDocument } from "@draw/dsl"
-import { getDependencyIndex } from "@draw/scene-graph"
+import { getDependencyIndex, isRotatable3, managedPointIds, templateTopologyIds } from "@draw/scene-graph"
+import { templateSolidPivot } from "@draw/geometry-kernel"
 
 /**
  * 自由拖动：被拖对象在屏幕平面上的落点。
@@ -107,6 +108,183 @@ function recordDragOffset(object: THREE.Object3D, delta: THREE.Vector3): void {
   const applied = (object.userData.dragOffset as THREE.Vector3 | undefined) ?? new THREE.Vector3()
   applied.add(delta)
   object.userData.dragOffset = applied
+}
+
+/* ------------------------------------------------------------------ *
+ * 拖动旋转：三色环 + 绕世界轴的角度 + 15° 吸附 + 临时旋转
+ *
+ * 用户口径："我希望能给立体图形增加旋转功能，就像我想要一个横着的圆柱，可以在图中拖着圆柱旋转。"
+ * 语义与属性栏的 `rotatePrimitive3` **完全同一套**：绕世界轴、右手法则、枢轴取对象自己的中心，
+ * 所以"拖出来的角度"与"文档里写的欧拉角"说的是同一件事（读数 `data-rotation-degrees` 与属性栏能对上）。
+ * ------------------------------------------------------------------ */
+
+/** 旋转手柄的三个世界轴（与属性栏「朝向」那三个字段同名，避免两套叫法）。 */
+export const ROTATION_AXES = ["x", "y", "z"] as const
+
+/** 拖动旋转的吸附步长（度）：15° 正好覆盖课堂上的 30 / 45 / 60 / 90，按住 Alt 则不吸附。 */
+export const ROTATION_SNAP_DEGREES = 15
+
+/** 世界轴单位向量。 */
+export function rotationAxisVector(axis: "x" | "y" | "z"): THREE.Vector3 {
+  return axis === "x" ? new THREE.Vector3(1, 0, 0) : axis === "y" ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, 1)
+}
+
+/**
+ * 垂直于该轴的平面里用的参考基：`u` 取右手循环里的下一个轴（X→Y→Z→X），`v = axis × u`。
+ *
+ * 于是"把 u 转到 v"恰好是该轴右手法则的 +90°（绕 X：ŷ → ẑ）。参考基的**手性**决定了拖动的符号，
+ * 取反了就会"往上拖、读数往下转"——这一条是拖动手感与数值一致的关键，不是随便挑的两个向量。
+ */
+export function rotationPlaneBasis(axis: "x" | "y" | "z"): { u: THREE.Vector3; v: THREE.Vector3 } {
+  const u = rotationAxisVector(axis === "x" ? "y" : axis === "y" ? "z" : "x")
+  return { u, v: rotationAxisVector(axis).cross(u) }
+}
+
+/** 两个角度之间的**最短弧**增量（弧度）：跨过 ±π 时不会跳一整圈。 */
+export function shortestAngleDelta(from: number, to: number): number {
+  const raw = to - from
+  return Math.atan2(Math.sin(raw), Math.cos(raw))
+}
+
+/**
+ * 指针指向的"绕该轴转了多少"：把指针射线与**过枢轴、以该轴为法向**的平面求交，取交点在平面内的极角。
+ *
+ * 这与圆环所在的那个平面是同一个平面，所以"指针落在环上的哪一点"就是转角本身；
+ * 射线与该平面平行（正对着环看）时返回 `null`——那时候指针位置没有意义，不该猜一个角度出来。
+ */
+export function rotationAngleAt(camera: THREE.Camera, pivot: THREE.Vector3, axis: "x" | "y" | "z", normalizedPoint: { x: number; y: number }): number | null {
+  const raycaster = new THREE.Raycaster()
+  raycaster.setFromCamera(new THREE.Vector2(normalizedPoint.x * 2 - 1, -(normalizedPoint.y * 2 - 1)), camera)
+  const normal = rotationAxisVector(axis)
+  const hit = raycaster.ray.intersectPlane(new THREE.Plane().setFromNormalAndCoplanarPoint(normal, pivot), new THREE.Vector3())
+  if (!hit) return null
+  const offset = hit.sub(pivot)
+  const { u, v } = rotationPlaneBasis(axis)
+  return Math.atan2(offset.dot(v), offset.dot(u))
+}
+
+/** 一次拖动旋转的会话状态：`raw` 是累计的原始角度，`applied` 是已经画进画面的（可能吸附过的）角度。 */
+export interface RotationDragState {
+  axis: "x" | "y" | "z"
+  pivot: THREE.Vector3
+  lastAngle: number
+  raw: number
+  applied: number
+}
+
+export function beginRotationDrag(axis: "x" | "y" | "z", pivot: THREE.Vector3, angle: number): RotationDragState {
+  return { axis, pivot: pivot.clone(), lastAngle: angle, raw: 0, applied: 0 }
+}
+
+/**
+ * 指针动了一步：累加最短弧增量，按当前**累计值**吸附（不是每步增量各自吸附，否则误差会一路累积），
+ * 返回这一步该画进画面的角度增量（`step`，弧度）与当前累计角度（`radians`）。
+ *
+ * `snapRadians` 传 `null` 表示不吸附（按住 Alt）。
+ */
+export function advanceRotationDrag(state: RotationDragState, angle: number, snapRadians: number | null): { state: RotationDragState; step: number; radians: number } {
+  const raw = state.raw + shortestAngleDelta(state.lastAngle, angle)
+  const applied = snapRadians === null || snapRadians <= 0 ? raw : Math.round(raw / snapRadians) * snapRadians
+  return { state: { ...state, lastAngle: angle, raw, applied }, step: applied - state.applied, radians: applied }
+}
+
+/** 这次拖动当前转过的角度（度）——提交给文档的就是它，画面与文档说的是同一个数。 */
+export function rotationDragDegrees(state: RotationDragState): number {
+  return (state.applied * 180) / Math.PI
+}
+
+/** 真的转过吗？没转过就不提交（一次误触不该多出一步撤销）。 */
+export function hasRotationMovement(state: RotationDragState, tolerance = 1e-9): boolean {
+  return Math.abs(state.applied) > tolerance
+}
+
+/**
+ * 把一次临时旋转画到场景里（拖动期间文档不提交）。
+ *
+ * 位移那条路踩过一次坑：一个图元可能是"组 + 子对象"两层都挂着同一个 `primitiveId`，两层各画一次
+ * 就等于转了**两倍**角度。这里与 `applyDragOffsets` 共用同一条"只落在最外层"的规则；
+ * 组转了会带着子树一起转，子对象再转一次就是两倍角度。
+ *
+ * 传负角度即撤销这些临时旋转，把画面交还给文档。
+ */
+export function applyRotationSkew(scene: THREE.Scene, family: Set<string>, pivot: THREE.Vector3, axis: "x" | "y" | "z", radians: number): void {
+  if (Math.abs(radians) < 1e-12) return
+  const rotation = new THREE.Quaternion().setFromAxisAngle(rotationAxisVector(axis), radians)
+  scene.traverse((object) => {
+    const objectId = object.userData.primitiveId
+    if (typeof objectId !== "string" || !family.has(objectId) || !isOutermostForPrimitive(object)) return
+    object.position.sub(pivot).applyQuaternion(rotation).add(pivot)
+    object.quaternion.premultiply(rotation)
+  })
+}
+
+/**
+ * 选中**恰好一个**可转对象时给出它的 id：多选时"绕谁转"没有唯一答案，所以不给手柄。
+ * 可转的判据与域操作同源（`isRotatable3`），画布上能拖的与文档肯接受的永远一致。
+ */
+export function rotationHandleTarget(document: GeometryDocument, selectedIds: string[]): string | null {
+  const ids = [...new Set(selectedIds)]
+  if (ids.length !== 1) return null
+  return rotationHandleGeometry(document, ids[0]) ? ids[0] : null
+}
+
+/** 一个可转对象的手柄位置与大小；不可以转（点 / 物化拓扑 / 锁定）时返回 `null`。 */
+export function rotationHandleGeometry(document: GeometryDocument, id: string): { center: THREE.Vector3; radius: number } | null {
+  const primitive = document.primitives.find((candidate) => candidate.id === id)
+  if (!primitive) return null
+  const points = new Map(document.primitives.filter((candidate): candidate is Extract<typeof candidate, { type: "point3" }> => candidate.type === "point3").map((point) => [point.id, point]))
+  if (!isRotatable3(primitive, points, templateTopologyIds(document))) return null
+  if (primitive.type === "cube" || primitive.type === "pyramid" || primitive.type === "cylinder" || primitive.type === "cone") {
+    const center = templateSolidPivot(primitive)
+    // 半径取"离中心最远的那个物化顶点"，也就是画面上真正画出来的那个范围。
+    const vertices = templateVertices(document, primitive.id)
+    const reach = vertices.reduce((worst, vertex) => Math.max(worst, Math.hypot(vertex.x - center.x, vertex.y - center.y, vertex.z - center.z)), fallbackReach(primitive))
+    return { center: new THREE.Vector3(center.x, center.y, center.z), radius: handleRadius(reach) }
+  }
+  const owned = managedPointIds(primitive).map((pointId) => points.get(pointId)?.position).filter((position): position is { x: number; y: number; z: number } => Boolean(position))
+  if (owned.length === 0) return null
+  const center = owned.reduce((sum, position) => ({ x: sum.x + position.x / owned.length, y: sum.y + position.y / owned.length, z: sum.z + position.z / owned.length }), { x: 0, y: 0, z: 0 })
+  const ownReach = owned.reduce((worst, position) => Math.max(worst, Math.hypot(position.x - center.x, position.y - center.y, position.z - center.z)), 0)
+  // 圆轨道只有一个圆心点，"它有多大"得看半径；空间面看离重心最远的那个顶点。
+  const reach = Math.max(ownReach, primitive.type === "circle3" ? primitive.radius : 0)
+  return { center: new THREE.Vector3(center.x, center.y, center.z), radius: handleRadius(reach) }
+}
+
+/** 环要圈住对象才好抓，也不能离题太远。 */
+function handleRadius(reach: number): number {
+  return Math.max(reach * 1.25 + 0.3, 1.2)
+}
+
+/** 模板实体的物化顶点（画面上真正画出来的那些点）。 */
+function templateVertices(document: GeometryDocument, solidId: string): { x: number; y: number; z: number }[] {
+  const polyhedron = document.primitives.find((primitive) => primitive.type === "polyhedron3" && primitive.construction?.kind === "template" && primitive.construction.sourceIds[0] === solidId)
+  if (!polyhedron || polyhedron.type !== "polyhedron3") return []
+  const points = new Map(document.primitives.filter((primitive): primitive is Extract<typeof primitive, { type: "point3" }> => primitive.type === "point3").map((point) => [point.id, point]))
+  return polyhedron.vertexIds.map((vertexId) => points.get(vertexId)?.position).filter((position): position is { x: number; y: number; z: number } => Boolean(position))
+}
+
+/** 没有物化拓扑时的兜底范围（手工搭出来的文档）：按尺寸参数估一个。 */
+function fallbackReach(primitive: { type: string; size?: { x: number; y: number; z: number }; baseSize?: { x: number; y: number }; radius?: number; height?: number }): number {
+  if (primitive.type === "cube" && primitive.size) return Math.hypot(primitive.size.x, primitive.size.y, primitive.size.z) / 2
+  if (primitive.type === "pyramid" && primitive.baseSize) return Math.max(Math.hypot(primitive.baseSize.x, primitive.baseSize.y) / 2, (primitive.height ?? 0) / 2)
+  return Math.max(primitive.radius ?? 0, (primitive.height ?? 0) / 2, 1)
+}
+
+/**
+ * 指针命中了哪个环？只有命中环才开旋转会话——否则在图形本体上按下也会转起来。
+ *
+ * 只对环做射线求交（不管挡在前面的实体）：手柄是**显式**的操作面，被实体挡住的那半圈也得能抓，
+ * 这是所有三维软件的惯例，也是"环看得见却点不中"这种困惑的来源。
+ */
+export function rotationHandleAxisAt(handles: THREE.Object3D, camera: THREE.Camera, normalizedPoint: { x: number; y: number }): "x" | "y" | "z" | null {
+  handles.updateMatrixWorld(true)
+  const raycaster = new THREE.Raycaster()
+  raycaster.setFromCamera(new THREE.Vector2(normalizedPoint.x * 2 - 1, -(normalizedPoint.y * 2 - 1)), camera)
+  for (const hit of raycaster.intersectObjects(handles.children, false)) {
+    const axis = hit.object.userData.rotationAxis
+    if (axis === "x" || axis === "y" || axis === "z") return axis
+  }
+  return null
 }
 
 /**

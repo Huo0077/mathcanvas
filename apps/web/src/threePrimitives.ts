@@ -908,6 +908,51 @@ export function buildPointDrivenObject(primitive: PrimitiveSpec, points: Map<str
   return null
 }
 
+/** 三个世界轴的环色：与坐标轴同一套语义（X 红 / Y 绿 / Z 蓝），用户拖哪个环就是绕哪个轴转。 */
+export const ROTATION_AXIS_COLORS: Record<"x" | "y" | "z", string> = { x: "#dc2626", y: "#16a34a", z: "#2563eb" }
+
+/** 旋转手柄的语义标记：画布上"哪些对象是手柄"的唯一判据（它不是图形内容、也没有 `primitiveId`）。 */
+export const ROTATION_HANDLE_ROLE = "rotation-handle"
+
+/**
+ * 三个世界轴上的旋转环（选中**恰好一个**可转对象时画）。
+ *
+ * 几条刻意的选择：
+ * - 环**不挂** `primitiveId`：它们不是图元，偏移 / 临时旋转那些按 id 遍历的逻辑必须跳过它们；
+ * - `excludeFromFit`：手柄不该把"适应视图"的包围盒撑大；
+ * - `depthTest: false` + 高 `renderOrder`：被实体挡住的那半圈也要看得见、抓得到——
+ *   实体内部的环只画一半，用户根本不知道能往那边拖；
+ * - 环的平面与轴垂直（`TorusGeometry` 的轴是 +Z，另外两个各转 90°）。
+ */
+export function createRotationHandles(center: Vector3, radius: number, activeAxis: "x" | "y" | "z" | null = null): THREE.Group | null {
+  if (!Number.isFinite(radius) || radius <= 0) return null
+  const group = new THREE.Group()
+  group.userData.visualRole = ROTATION_HANDLE_ROLE
+  group.userData.excludeFromFit = true
+  group.position.set(center.x, center.y, center.z)
+  const tube = Math.max(radius * 0.02, 0.02)
+  for (const axis of ["x", "y", "z"] as const) {
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(radius, tube, 8, 96),
+      new THREE.MeshBasicMaterial({
+        color: ROTATION_AXIS_COLORS[axis],
+        transparent: true,
+        // 正在拖的那个轴更实，其余淡下去：多环同时存在时"我在转哪个"必须一眼看得出。
+        opacity: activeAxis === null || activeAxis === axis ? 0.9 : 0.35,
+        depthTest: false,
+        depthWrite: false
+      })
+    )
+    if (axis === "x") ring.rotation.y = Math.PI / 2
+    if (axis === "y") ring.rotation.x = Math.PI / 2
+    ring.renderOrder = 30
+    ring.userData.visualRole = ROTATION_HANDLE_ROLE
+    ring.userData.rotationAxis = axis
+    group.add(ring)
+  }
+  return group
+}
+
 export function disposeObject(root: THREE.Object3D): void {
   root.traverse((object) => {
     if (!(object instanceof THREE.Mesh) && !(object instanceof THREE.Line) && !(object instanceof THREE.LineSegments)) return

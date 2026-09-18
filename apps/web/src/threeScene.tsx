@@ -18,9 +18,9 @@ import { applyCameraState, boxCorners, cameraDragMode, clampCameraTarget, conten
 import { loadRememberedCamera, rememberCamera } from "./cameraMemory"
 import type { ThreeScenePreview } from "./threeScenePreview"
 
-import { dragWorldPoint, dragFamilyIds, dragOffsetDrift, offsetSceneObjects, applyDragOffsets } from "./threeDrag"
+import { advanceRotationDrag, applyRotationSkew, applyDragOffsets, beginRotationDrag, dragFamilyIds, dragOffsetDrift, dragWorldPoint, hasRotationMovement, offsetSceneObjects, rotationAngleAt, rotationDragDegrees, rotationHandleAxisAt, rotationHandleGeometry, rotationHandleTarget, ROTATION_SNAP_DEGREES, type RotationDragState } from "./threeDrag"
 import { PICK_TOLERANCE_PX, pointHandleWorldRadius, pickRaycastHit3, templateTopologyOwners, pickSectionAt, resolveSelectableHit, previewBeatsPick } from "./threePicking"
-import { sectionUnitNormal, createPlane3Mesh, createSectionMesh, createIntersectionSolidGroup, createIntersectionFaceGroup, createIntersectionPointGroup, createUnfoldNetGroup, createDihedralMarkerGroup, prefersReducedMotion, nextUnfoldProgress, createPlanePatch, createSolidGroup, visibleSolids, buildPointDrivenObject, disposeObject, disposeScene, createPreviewGroup, applyPreviewHighlight, hasDrawablePreview, createCurveLoops3, createRimCircles3 } from "./threePrimitives"
+import { sectionUnitNormal, createPlane3Mesh, createSectionMesh, createIntersectionSolidGroup, createIntersectionFaceGroup, createIntersectionPointGroup, createUnfoldNetGroup, createDihedralMarkerGroup, prefersReducedMotion, nextUnfoldProgress, createPlanePatch, createRotationHandles, createSolidGroup, visibleSolids, buildPointDrivenObject, disposeObject, disposeScene, createPreviewGroup, applyPreviewHighlight, hasDrawablePreview, createCurveLoops3, createRimCircles3 } from "./threePrimitives"
 import { pointLabelPlacements } from "./pointLabels"
 import { curveToleranceFor, toleranceBucket } from "./conicSampling"
 import { collectRimCircles, rimChordEdgeIds } from "./rimCircles"
@@ -72,6 +72,11 @@ interface DragSessionState {
   hostConstraint?: Host3
   hostDependents?: string[]
   hostParameter?: Host3Parameter
+  /**
+   * 拖动**旋转环**：这次转的是哪根世界轴、枢轴在哪、已经转到哪儿，以及画面上要跟着转的族。
+   * 与平移共用同一个会话（一次拖动仍然只提交一步），只是几何含义不同。
+   */
+  rotation?: { state: RotationDragState; family: Set<string> }
 }
 
 export interface ThreeSceneViewProps {  document: GeometryDocument
@@ -94,11 +99,13 @@ export interface ThreeSceneViewProps {  document: GeometryDocument
   onMoveSection?: (id: string, distance: number) => void
   /** 拖动绑定点结束：提交宿主参数（点 / 面 / 曲面的自然参数）。 */
   onHostDragEnd?: (pointId: string, parameter: Host3Parameter) => void
+  /** 拖动旋转环结束：提交绕世界轴转过的角度（度）。一次拖动只回调一次，所以一次旋转就是一步撤销。 */
+  onRotateEnd?: (id: string, axis: "x" | "y" | "z", degrees: number) => void
   /** 开启"以面为剖切面"后，点到的那个面就成为截面 `<id>` 的剖切面。 */
   onPickSectionFace?: (id: string, plane: { normal: Vector3; constant: number }) => void
 }
 
-export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPromptChange, previews = [], onPreviewHover, onPreviewClick, onDragEnd, onMoveSection, onHostDragEnd, onPickSectionFace }: ThreeSceneViewProps) {
+export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPromptChange, previews = [], onPreviewHover, onPreviewClick, onDragEnd, onMoveSection, onHostDragEnd, onRotateEnd, onPickSectionFace }: ThreeSceneViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const renderTargetRef = useRef<HTMLDivElement>(null)
   const measurementOverlayRef = useRef<HTMLDivElement>(null)
@@ -132,6 +139,14 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
   /** 拖动绑定点结束：提交宿主参数（点/面/曲面的自然参数）。 */
   const hostDragEndRef = useRef(onHostDragEnd)
   hostDragEndRef.current = onHostDragEnd
+  /** 拖动旋转环结束：提交绕世界轴转过的角度（度）。 */
+  const rotateEndRef = useRef(onRotateEnd)
+  rotateEndRef.current = onRotateEnd
+  /**
+   * 当前选中的可转对象与它的手柄几何（环心 / 半径）。指针按下与拖动都要读它，
+   * 但它随选中变化——放 ref 里，指针处理函数就不必因为选择变化而重新订阅。
+   */
+  const rotationHandleRef = useRef<{ id: string; center: THREE.Vector3; radius: number; group: THREE.Group } | null>(null)
   /** 以面为剖切面的回调，以及"正在等待拾取"的开关。 */
   const pickSectionFaceRef = useRef(onPickSectionFace)
   pickSectionFaceRef.current = onPickSectionFace
@@ -567,6 +582,27 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       })
     })
     /**
+     * 旋转手柄（三色环）：选中**恰好一个**可转对象时出现。
+     *
+     * 登记在释放循环之前，所以"取消选中 / 换了对象"时旧环会被正常释放；
+     * 环本身带 `excludeFromFit` 且不挂 `primitiveId`，既不参与取景，也不会被偏移 / 临时旋转那些按 id 遍历的逻辑碰到。
+     */
+    const rotationTargetId = rotationHandleTarget(document, selectedIds)
+    const rotationGeometry = rotationTargetId ? rotationHandleGeometry(document, rotationTargetId) : null
+    const rotationGroup = rotationGeometry
+      ? keepContent(
+        "rotation-handles",
+        `target:${rotationTargetId};c:${rotationGeometry.center.x.toFixed(4)},${rotationGeometry.center.y.toFixed(4)},${rotationGeometry.center.z.toFixed(4)};r:${rotationGeometry.radius.toFixed(4)}`,
+        () => createRotationHandles(rotationGeometry.center, rotationGeometry.radius),
+        alive,
+        order
+      ) as THREE.Group | null
+      : null
+    rotationHandleRef.current = rotationGroup && rotationTargetId && rotationGeometry
+      ? { id: rotationTargetId, center: rotationGeometry.center.clone(), radius: rotationGeometry.radius, group: rotationGroup }
+      : null
+
+    /**
      * 先登记"后面几个阶段才会加进来"的 key，再释放过期对象。
      *
      * 顺序很关键：沿用的对象还留在场景里，而"上一份文档"的残留对象如果拖到后面才释放，
@@ -654,6 +690,15 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       sceneShell.dataset.rimCurves = String(rimCurveCount)
       // 交面填充的三角形总数：曲面区域按屏幕误差细分，放大时它必须变大（"曲面不是由几个三角形拼的"）。
       sceneShell.dataset.faceTriangles = String(faceTriangles)
+      /**
+       * 旋转手柄的读数：有几个环、环心与半径（e2e 要靠这两个数算出"环上某个世界点"再拖它，
+       * 而不是写死像素偏移），以及本次拖动正在绕哪根轴、转了多少度。
+       */
+      sceneShell.dataset.rotationHandles = String(rotationGroup?.children.length ?? 0)
+      sceneShell.dataset.rotationHandlePivot = rotationGeometry
+        ? `${rotationGeometry.center.x.toFixed(3)},${rotationGeometry.center.y.toFixed(3)},${rotationGeometry.center.z.toFixed(3)}`
+        : ""
+      sceneShell.dataset.rotationHandleRadius = rotationGeometry ? rotationGeometry.radius.toFixed(3) : ""
     }
 
     sceneBounds = contentBounds(scene)
@@ -955,12 +1000,36 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
 
     /** 拖动期间的重画次数：拖动必须逐次跟手重画，否则画面会一格一格跳（见 handlePointerMove）。 */
     let dragFrames = 0
+    /** 旋转拖动期间的临时旋转帧数（与平移同一个读数思路：画面有没有真的跟手）。 */
+    let rotationFrames = 0
+    /**
+     * 平移拖动时手柄跟着图形走。
+     *
+     * 环画在**世界轴**上（所以旋转时它不能跟着转，那是它的意义所在），但它的**位置**必须跟着对象，
+     * 否则拖着拖着环就落在原地、实体自己走了。提交后内容同步会按新中心重建手柄。
+     */
+    const moveRotationHandles = (delta: THREE.Vector3) => {
+      const handle = rotationHandleRef.current
+      if (handle) handle.group.position.add(delta)
+    }
     /** 把这次拖动已经画上去的偏移补画到（可能是刚重建的）场景上，见 resumeDragVisualRef 的说明。 */
     resumeDragVisualRef.current = () => {
       const session = dragSessionRef.current
-      if (!session?.applied || session.visualApplied.lengthSq() < 1e-12) return
+      if (!session?.applied) return
+      /**
+       * 旋转：场景被重建（选中变化 / 尺寸变化）后，新对象回到文档里的姿态，临时旋转就丢了。
+       * 这里按**累计角度**一次补画回去（与逐帧增量等价：同一根轴上的旋转可以直接相加）。
+       * 它用 `applied` 而不是 `visualApplied` 判断——旋转根本不走位移那条账。
+       */
+      if (session.rotation) {
+        if (Math.abs(session.rotation.state.applied) > 1e-12) applyRotationSkew(scene, session.rotation.family, session.rotation.state.pivot, session.rotation.state.axis, session.rotation.state.applied)
+        render()
+        return
+      }
+      if (session.visualApplied.lengthSq() < 1e-12) return
       if (session.slideNormal) offsetSceneObjects(scene, session.targetId, session.slideNormal.clone().multiplyScalar(session.visualApplied.dot(session.slideNormal)))
       else applyDragOffsets(scene, session.family, session.visualApplied.clone())
+      moveRotationHandles(session.visualApplied)
       render()
     }
     /**
@@ -1020,6 +1089,35 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
         }
         renderer.domElement.releasePointerCapture(event.pointerId)
         return
+      }
+      /**
+       * 旋转环的优先级**最高**，而且不需要先开「自由拖动」：
+       * 用户抓住了那个环，意图没有第二种解释（环本身就是显式手柄，不是图形的一部分）。
+       * 判定只对三个环做射线求交，所以被实体挡住的那半圈也抓得到。
+       */
+      const handle = rotationHandleRef.current
+      if (event.button === 0 && handle) {
+        const axis = rotationHandleAxisAt(handle.group, camera, point)
+        const angle = axis ? rotationAngleAt(camera, handle.center, axis, point) : null
+        if (axis && angle !== null) {
+          const family = dragFamilyIds(documentRef.current, handle.id)
+          dragSessionRef.current = {
+            targetId: handle.id,
+            family: new Set([handle.id]),
+            anchor: handle.center.clone(),
+            origin: handle.center.clone(),
+            total: new THREE.Vector3(),
+            visualApplied: new THREE.Vector3(),
+            applied: false,
+            rotation: { state: beginRotationDrag(axis, handle.center, angle), family }
+          }
+          if (sceneShell) {
+            sceneShell.dataset.rotationAxis = axis
+            sceneShell.dataset.rotationDegrees = "0.00"
+          }
+          renderer.domElement.setPointerCapture(event.pointerId)
+          return
+        }
       }
       if (dragModeRef.current && event.button === 0) {
         const hit = pickRaycastHit3(scene, camera, point, { tolerance: pickTolerance() })
@@ -1089,6 +1187,33 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       pointerState.moved ||= Math.hypot(point.x - pointerState.x, point.y - pointerState.y) > 0.008
       const session = dragSessionRef.current
       if (session) {
+        /**
+         * 拖动旋转环：指针位置 → 绕该世界轴的角度，累计后按 15° 吸附（按住 Alt 不吸附）。
+         * 拖动期间**不提交文档**，画面由临时旋转负责——一次拖动因此就是一步撤销，
+         * 与平移走的是同一条会话与同一条"抬手才提交"的规则。
+         */
+        if (session.rotation) {
+          const handle = rotationHandleRef.current
+          const angle = handle ? rotationAngleAt(camera, handle.center, session.rotation.state.axis, point) : null
+          if (angle !== null) {
+            const advanced = advanceRotationDrag(session.rotation.state, angle, event.altKey ? null : (ROTATION_SNAP_DEGREES * Math.PI) / 180)
+            session.rotation.state = advanced.state
+            if (Math.abs(advanced.step) > 1e-12) {
+              applyRotationSkew(scene, session.rotation.family, advanced.state.pivot, advanced.state.axis, advanced.step)
+              session.applied = true
+              render()
+              rotationFrames += 1
+            }
+            if (sceneShell) {
+              sceneShell.dataset.rotationAxis = advanced.state.axis
+              sceneShell.dataset.rotationDegrees = rotationDragDegrees(advanced.state).toFixed(2)
+              sceneShell.dataset.rotationFrames = String(rotationFrames)
+            }
+          }
+          pointerState.lastX = point.x
+          pointerState.lastY = point.y
+          return
+        }
         const world = dragDeltaFor(session, point)
         if (world) {
           if (session.hostConstraint) {
@@ -1132,6 +1257,8 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
             } else {
               applyDragOffsets(scene, session.family, step)
             }
+            // 手柄的位置跟着图形走（环的**朝向**不变：它是世界轴的参照）。
+            moveRotationHandles(session.slideNormal ? session.slideNormal.clone().multiplyScalar(step.dot(session.slideNormal)) : step)
             session.visualApplied.copy(session.total)
             session.applied = true
             /**
@@ -1180,7 +1307,20 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
           sceneShell.dataset.dragOffsetDrift = dragOffsetDrift(scene, session.family, appliedOffset).toFixed(4)
         }
         // 拖动期间一次都没提交，所以这里的一次提交就是整次拖动唯一的一步撤销。
-        if (session.hostConstraint && session.hostParameter && session.applied) {
+        if (session.rotation) {
+          const rotation = session.rotation.state
+          /**
+           * 先把画面上的临时旋转**撤掉**，再把角度交给文档。少了这一步，提交后场景按新朝向重建，
+           * 而临时旋转还挂在对象上——用户会看到实体转了**两倍**。
+           */
+          if (Math.abs(rotation.applied) > 1e-12) {
+            applyRotationSkew(scene, session.rotation.family, rotation.pivot, rotation.axis, -rotation.applied)
+            render()
+          }
+          if (sceneShell) sceneShell.dataset.rotationDegrees = rotationDragDegrees(rotation).toFixed(2)
+          // 没转过（吸附回 0°）就不提交：一次误触不该多出一步撤销。
+          if (hasRotationMovement(rotation)) rotateEndRef.current?.(session.targetId, rotation.axis, rotationDragDegrees(rotation))
+        } else if (session.hostConstraint && session.hostParameter && session.applied) {
           // 绑定点：提交的是**宿主参数**；坐标由重算派生，所以点不会因为浮点累积而漂离宿主。
           hostDragEndRef.current?.(session.targetId, session.hostParameter)
         } else if (session.applied && session.total.lengthSq() > 1e-8) {
