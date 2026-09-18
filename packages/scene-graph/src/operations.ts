@@ -280,8 +280,7 @@ export function managedPointIds(primitive: PrimitiveSpec): string[] {
   if (primitive.type === "ray3") return [primitive.originId, primitive.throughId]
   if (primitive.type === "plane3") return primitive.definition.kind === "throughPoints" ? [...primitive.definition.pointIds] : [primitive.definition.pointId]
   if (primitive.type === "face3") return [...primitive.pointIds]
-  // 空间圆轨道只存圆心引用（不存坐标副本）：平移它就是移动圆心那个点。
-  if (primitive.type === "circle3") return [primitive.centerId]
+  // 空间圆轨道**自带圆心坐标**，不引用任何点：它一个点都不"拥有"（点是乘客，不是它的定义）。
   if (primitive.type === "polyhedron3") return [...primitive.vertexIds]
   return []
 }
@@ -309,7 +308,9 @@ export function isFreeDraggable3(primitive: PrimitiveSpec, points: Map<string, P
   if (generated.has(primitive.id)) return false
   if (primitive.type === "point3") return !primitive.binding || primitive.binding.kind === "free"
   if (primitive.type === "cube" || primitive.type === "pyramid" || primitive.type === "cylinder" || primitive.type === "cone") return true
-  if (!["line3", "segment3", "ray3", "plane3", "face3", "circle3", "polyhedron3", "edge3"].includes(primitive.type)) return false
+  // 轨道圆与模板实体同类：几何是**它自己的**（圆心坐标 / 半径 / 法向），不依赖任何点能不能动。
+  if (primitive.type === "circle3") return true
+  if (!["line3", "segment3", "ray3", "plane3", "face3", "polyhedron3", "edge3"].includes(primitive.type)) return false
   const owned = managedPointIds(primitive)
   if (owned.length === 0) return false
   return owned.every((id) => {
@@ -332,6 +333,8 @@ function translatePrimitive3(primitive: PrimitiveSpec, delta: Vector3): { primit
   if (primitive.type === "cube") return { primitive: { ...primitive, origin: shiftedPoint(primitive.origin, delta) }, movedIds: [primitive.id] }
   if (primitive.type === "pyramid") return { primitive: { ...primitive, baseCenter: shiftedPoint(primitive.baseCenter, delta) }, movedIds: [primitive.id] }
   if (primitive.type === "cylinder" || primitive.type === "cone") return { primitive: { ...primitive, center: shiftedPoint(primitive.center, delta) }, movedIds: [primitive.id] }
+  // 轨道圆平移的是**它自己的圆心**（不引用点，所以不会把任何点带走）。
+  if (primitive.type === "circle3") return { primitive: { ...primitive, center: shiftedPoint(primitive.center, delta) }, movedIds: [primitive.id] }
   return { primitive, movedIds: managedPointIds(primitive) }
 }
 
@@ -396,6 +399,17 @@ function rotatePrimitive3(primitive: PrimitiveSpec, points: Map<string, Point3Pr
         : { ...primitive, center: shiftedPoint(primitive.center, shift) }
     return { primitive: { ...moved, rotation }, movedPoints: [] }
   }
+  /**
+   * 轨道圆：几何是它自己的（圆心 + 法向 + 半径），所以绕轴转就是**转它自己的法向**；
+   * 默认枢轴就是它自己的圆心（绕自己转时圆心不动），给了 `pivot` 时圆心绕那个世界点公转。
+   */
+  if (primitive.type === "circle3") {
+    const target = pivot ?? primitive.center
+    return {
+      primitive: { ...primitive, center: rotatePointAboutAxis3(primitive.center, target, axis, radians), normal: rotateVectorAboutAxis3(primitive.normal, axis, radians) },
+      movedPoints: []
+    }
+  }
   const owned = managedPointIds(primitive)
   const target = pivot ?? centroidOfOwnedPoints(primitive, points)
   if (!target || owned.length === 0) return null
@@ -433,7 +447,6 @@ function primitiveDependencies(primitive: PrimitiveSpec, relations?: { owners: M
   if (primitive.type === "segment3") dependencies.push(...primitive.pointIds)
   if (primitive.type === "ray3") dependencies.push(primitive.originId, primitive.throughId)
   if (primitive.type === "plane3") dependencies.push(...(primitive.definition.kind === "throughPoints" ? primitive.definition.pointIds : [primitive.definition.pointId]))
-  if (primitive.type === "circle3") dependencies.push(primitive.centerId)
   // 绕定点旋转的封闭曲线依赖那个定点（定点是点图元时）。定点一动，整条曲线跟着重算。
   if (isPlaceableConic(primitive)) {
     const pivotId = curveRotationPivotId(primitive)
@@ -1967,8 +1980,11 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
       if (operation.patch.segments !== undefined) primitive.segments = operation.patch.segments
       if (operation.patch.rotation3) primitive.rotation = { ...(primitive.rotation ?? { x: 0, y: 0, z: 0 }), ...operation.patch.rotation3 }
     }
-    // 空间圆轨道：半径是它自己的参数（圆心是引用，法向由旋转操作改）。
-    if (primitive.type === "circle3" && operation.patch.radius3 !== undefined) primitive.radius = operation.patch.radius3
+    // 空间圆轨道：圆心、半径都是它自己的参数（法向由旋转操作改）。
+    if (primitive.type === "circle3") {
+      if (operation.patch.center3) primitive.center = { ...primitive.center, ...operation.patch.center3 }
+      if (operation.patch.radius3 !== undefined) primitive.radius = operation.patch.radius3
+    }
     if (operation.patch.label !== undefined) primitive.label = operation.patch.label
     // A template solid paints its generated point/edge/face children, so a template style change recolours them too.
     if (operation.patch.style !== undefined && ["cube", "pyramid", "cylinder", "cone"].includes(primitive.type)) {

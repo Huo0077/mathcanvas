@@ -518,8 +518,8 @@ export function host3FromPrimitive(primitive: PrimitiveSpec, context: HostContex
     return vertices ? faceHost3(vertices) : null
   }
   if (primitive.type === "circle3") {
-    const center = point(primitive.centerId)
-    return center ? circleHost3(center, primitive.normal, primitive.radius) : null
+    // 圆心是图元自己的字段（圆是独立对象，不引用点）——`circleHost3` 本来就收坐标圆心。
+    return circleHost3(primitive.center, primitive.normal, primitive.radius)
   }
   if (primitive.type === "plane3") {
     if (primitive.definition.kind === "pointNormal") {

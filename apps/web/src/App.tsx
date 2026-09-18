@@ -826,7 +826,11 @@ export function App() {
       return
     }
     const id = nextPrimitiveId(document, "circle3")
-    apply({ op: "addPrimitive", primitive: { id, type: "circle3", centerId: center.id, normal, radius, label: `圆轨道 ${id.split("-").at(-1)}` } })
+    /**
+     * **取一次坐标就脱钩**：选中的点只用来量出圆心 / 半径 / 平面，圆自己不引用任何点。
+     * 用户口径："我要的轨道圆是点在圆上而不是圆跟着点走"——所以建完之后拖那些点不会动这条轨道。
+     */
+    apply({ op: "addPrimitive", primitive: { id, type: "circle3", center: { ...center.position }, normal, radius, label: `圆轨道 ${id.split("-").at(-1)}` } })
     setSelectedIds([id])
     setFileError(null)
     setGuidance(guidanceFor({ kind: "point3Tool", tool: "circle", outcome: "created" }))

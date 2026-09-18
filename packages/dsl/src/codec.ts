@@ -87,6 +87,39 @@ function withSectionClassification(primitives: unknown): unknown {
   })
 }
 
+/**
+ * 旧文档的轨道圆：`circle3` 曾经存 `centerId`（引用一个点当圆心），现在是**自带** `center`。
+ *
+ * 必须在 `validateDocument` **之前**做——`decodeMgeo` 对不合法文档是 `throw`，顺序反了旧文件会因为
+ * "字段不合法"直接打不开（那不是少一个功能，是用户的文件打不开）。codec 里已有同款先例：
+ * `withSectionClassification` 也是在校验前给旧截面补字段。
+ *
+ * 引用的点不存在时（只有手改过的文件才会出现；旧版本的引用保护挡着 UI 删除）**丢掉这一条轨道**：
+ * 它的圆心无从得知，宁可少一条，也不能让整份文件打不开。
+ */
+function withCircleTrackCenter(primitives: unknown): unknown {
+  if (!Array.isArray(primitives)) return primitives
+  const positions = new Map<string, unknown>()
+  for (const primitive of primitives) {
+    const point = primitive as { id?: unknown; type?: unknown; position?: unknown } | null
+    if (point && typeof point === "object" && point.type === "point3" && typeof point.id === "string") positions.set(point.id, point.position)
+  }
+  const migrated: unknown[] = []
+  for (const primitive of primitives) {
+    const track = primitive as { type?: unknown; centerId?: unknown; center?: unknown } | null
+    // 已经是新形状（或根本不是轨道圆）就原样放行——这条保证迁移**幂等**。
+    if (!track || typeof track !== "object" || track.type !== "circle3" || track.center !== undefined) {
+      migrated.push(primitive)
+      continue
+    }
+    const center = typeof track.centerId === "string" ? positions.get(track.centerId) : undefined
+    if (center === undefined) continue
+    const { centerId: _legacy, ...rest } = track as Record<string, unknown>
+    migrated.push({ ...rest, center })
+  }
+  return migrated
+}
+
 export function decodeMgeo(serialized: string): GeometryDocument {
   let parsed: unknown
   try {
@@ -101,7 +134,7 @@ export function decodeMgeo(serialized: string): GeometryDocument {
       groups: "groups" in rawCandidate ? (rawCandidate as { groups: unknown }).groups : [],
       measurements: "measurements" in rawCandidate ? (rawCandidate as { measurements: unknown }).measurements : [],
       engineeringAnnotations: "engineeringAnnotations" in rawCandidate ? (rawCandidate as { engineeringAnnotations: unknown }).engineeringAnnotations : [],
-      primitives: withSectionClassification((rawCandidate as { primitives?: unknown }).primitives)
+      primitives: withCircleTrackCenter(withSectionClassification((rawCandidate as { primitives?: unknown }).primitives))
     }
     : rawCandidate
   const migrated = candidate && typeof candidate === "object"

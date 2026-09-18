@@ -43,9 +43,11 @@
 
 ---
 
-## Slice 1：圆自带圆心（模型 + 全部调用点 + 旧文档迁移）
+## Slice 1：圆自带圆心（模型 + 全部调用点 + 旧文档迁移）**（已完成，提交 `5f9f1f5` 前的本地工作）**
 
 **交付物**：`circle3` 不再引用点——拖圆心点圆不动、拖圆才移动圆、圆心点可以删；检查器能改圆心；旧 `.mgeo` 与 localStorage 草稿照常打开。
+
+**实测结果**：RED 三条全部真跑出来（`Invalid geometry document: circle3 geometry is invalid` / `expected false to be true` / `Cannot read properties of null (reading 'center')`）；实现后单测 **121 文件 / 1427 用例**、lint 0 error / 14 warning、Playwright **105/105**。**顺带修掉一个真缺陷**：`circleConic3` 会把零法向兜成 +z，`conic3FromCircle3` 现在显式挡住它。**一处流程失误**：改 `patches.test.ts` 时用 PowerShell 文本替换把中文注释写坏了，已 `git checkout` 还原并用编辑工具重做。
 
 **Files:**
 - Modify: `packages/dsl/src/types.ts:165-171`、`packages/dsl/src/schema.ts:298-300`、`packages/dsl/src/codec.ts:79-113`

@@ -352,10 +352,8 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
   const formulaFocusFrameRef = useRef<number | null>(null)
   const [annotationText, setAnnotationText] = useState("")
   const sceneDocument = useSceneStore((state) => state.document)
-  /** 空间圆轨道：圆心是引用（`centerId`），所以这里把圆心坐标与法向都读出来给用户看。 */
+  /** 空间圆轨道：圆心、半径、法向都是它**自己**的几何（不再引用点），所以三项都可读可编。 */
   const selectedCircle3 = selectedPrimitive?.type === "circle3" ? selectedPrimitive : null
-  const circle3Centre = selectedCircle3 ? sceneDocument.primitives.find((primitive) => primitive.id === selectedCircle3.centerId) : undefined
-  const circle3CentrePosition = circle3Centre?.type === "point3" ? circle3Centre.position : null
   /** 空间面：朝向要现算（法向是从点环 Newell 出来的，不是存下来的字段）。 */
   const selectedFace3 = selectedPrimitive?.type === "face3" ? selectedPrimitive : null
   const face3Normal = selectedFace3
@@ -669,16 +667,13 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
     {shows("data") && selectedIntersectionPoint && <div className="primitive-properties"><h3>交点</h3><p className="footer-note">交点 = 交线的端点 / 拐点，也就是两个表面的公共点。位置由来源算出，不能直接拖。</p><div className="metric-grid"><span>来源 A<strong>{sourceLabel(selectedIntersectionPoint.sourceIds[0])}</strong></span><span>来源 B<strong>{sourceLabel(selectedIntersectionPoint.sourceIds[1])}</strong></span><span>X<strong>{selectedIntersectionPoint.position.x.toFixed(3)}</strong></span><span>Y<strong>{selectedIntersectionPoint.position.y.toFixed(3)}</strong></span><span>Z<strong>{selectedIntersectionPoint.position.z.toFixed(3)}</strong></span><span>状态<strong>{selectedIntersectionPoint.status === "valid" ? "有效" : selectedIntersectionPoint.status === "none" ? "两个表面不相交" : "数据不足"}</strong></span></div>{selectedIntersectionPoint.diagnostic && <p className="footer-note">{selectedIntersectionPoint.diagnostic}</p>}<p className="footer-note">来源一移动，它就跟着重算（按离它最近的那个交点继续认领）；删掉任一来源，它会一起注销。</p></div>}
     {shows("data") && selectedCircle3 && <div className="primitive-properties">
       <h3>空间圆轨道</h3>
-      <p className="footer-note">圆轨道 = 一条**空间圆**：把空间点绑到它上面（选中点 → 右侧「宿主绑定」选它），点就只能沿这个圈滑动；也可以直接拖它平移、用画布上的旋转手柄摆斜。</p>
+      <p className="footer-note">圆轨道 = 一条**空间圆**：把空间点绑到它上面（选中点 → 右侧「宿主绑定」选它），点就只能沿这个圈滑动。**圆心、半径、法向都是它自己的几何**——拖圆本体平移、拖圆上的半径手柄缩放、用画布上的三色环摆斜，都不会牵动任何点。</p>
       <Field label="半径"><input aria-label="圆轨道半径" type="number" min="0.01" step="0.1" disabled={!editable} value={selectedCircle3.radius} onChange={(event) => onUpdatePrimitive({ radius3: Math.max(0.01, numberValue(event)) })} /></Field>
+      <Vector3Fields prefix="圆心" value={selectedCircle3.center} disabled={!editable} onChange={(axis, next) => onUpdatePrimitive({ center3: { ...selectedCircle3.center, [axis]: next } })} />
       <div className="metric-grid">
-        <span>圆心<strong>{sourceLabel(selectedCircle3.centerId)}</strong></span>
-        <span>圆心 X<strong>{circle3CentrePosition ? circle3CentrePosition.x.toFixed(3) : "—"}</strong></span>
-        <span>圆心 Y<strong>{circle3CentrePosition ? circle3CentrePosition.y.toFixed(3) : "—"}</strong></span>
-        <span>圆心 Z<strong>{circle3CentrePosition ? circle3CentrePosition.z.toFixed(3) : "—"}</strong></span>
         <span>法向量<strong>({selectedCircle3.normal.x.toFixed(2)}, {selectedCircle3.normal.y.toFixed(2)}, {selectedCircle3.normal.z.toFixed(2)})</strong></span>
       </div>
-      <p className="footer-note">{circle3CentrePosition ? "圆心跟着那个空间点走：改点的坐标或拖点，整条轨道一起平移。" : "圆心点已不存在：这条轨道暂时算不出位置。"}</p>
+      <p className="footer-note">建轨道时用选中的点量出圆心 / 半径 / 平面，**建完就与那些点无关**：拖点、改点的坐标、删掉那个点，这条轨道都留在原地。</p>
     </div>}
     {shows("data") && (selectedCircle3 || selectedFace3) && <div className="primitive-properties"><h3>朝向</h3><ObjectRotationFields normal={objectOrientationNormal} disabled={!editable} onRotate={onRotate3} /></div>}
     {shows("appearance") && selectedPrimitive && <div className="primitive-properties">

@@ -11,7 +11,7 @@ const pointD: PrimitiveSpec = { id: "point-d", type: "point3", position: { x: 0,
 const line: PrimitiveSpec = { id: "line-ab", type: "line3", definition: { kind: "throughPoints", pointIds: ["point-a", "point-b"] } }
 const plane: PrimitiveSpec = { id: "plane-abc", type: "plane3", definition: { kind: "throughPoints", pointIds: ["point-a", "point-b", "point-c"] } }
 const face: PrimitiveSpec = { id: "face-abc", type: "face3", pointIds: ["point-a", "point-b", "point-c"] }
-const circle: PrimitiveSpec = { id: "circle-a", type: "circle3", centerId: "point-a", normal: { x: 0, y: 0, z: 1 }, radius: 2 }
+const circle: PrimitiveSpec = { id: "circle-a", type: "circle3", center: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 0, z: 1 }, radius: 2 }
 const polyhedron: PrimitiveSpec = { id: "solid", type: "polyhedron3", vertexIds: ["point-a"], edgeIds: [], faceIds: ["face-abc"] }
 const cube: PrimitiveSpec = { id: "cube-1", type: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 1, y: 1, z: 1 } }
 

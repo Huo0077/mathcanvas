@@ -487,11 +487,17 @@ export function rimCircles3(primitive: PrimitiveSpec): Conic3[] {
   return circles
 }
 
-/** DSL 的空间圆图元 → 解析圆（圆心由点表解析）。 */
-export function conic3FromCircle3(primitive: Extract<PrimitiveSpec, { type: "circle3" }>, points: Map<string, { position: Vector3 }>): Conic3 | null {
-  const center = points.get(primitive.centerId)?.position
-  if (!center) return null
-  return circleConic3(center, primitive.normal, primitive.radius)
+/** DSL 的空间圆图元 → 解析圆（圆心是图元**自己**的字段，不再从点表解析）。 */
+export function conic3FromCircle3(primitive: Extract<PrimitiveSpec, { type: "circle3" }>): Conic3 | null {
+  const finite = (vector: Vector3) => Number.isFinite(vector.x) && Number.isFinite(vector.y) && Number.isFinite(vector.z)
+  /**
+   * 零法向必须**在这里**挡住：`circleConic3` 为渲染稳健会把零法向兜成 +z（那是给"画得出来"用的），
+   * 而解析层不能替用户编一个朝向——一个"法向为零的圆"解出来会是一个凭空朝 +z 的圆。
+   * `hosts3` 的 `circleHost3` 也是同一条口径。
+   */
+  const normalLength = Math.hypot(primitive.normal.x, primitive.normal.y, primitive.normal.z)
+  if (!finite(primitive.center) || !finite(primitive.normal) || !(normalLength > 1e-12) || !(primitive.radius > 0)) return null
+  return circleConic3(primitive.center, primitive.normal, primitive.radius)
 }
 
 /** 一个读数：数值 + **它是不是精确的**。两者必须一起给，否则调用方只能猜。 */

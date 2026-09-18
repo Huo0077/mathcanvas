@@ -382,22 +382,21 @@ describe("host resolution from primitives", () => {
   })
 
   /**
-   * 空间圆轨道：**要能当宿主**才有"约束轨道"可言。`circle3` 只存 `centerId`（引用），
-   * 所以宿主要从点表里解析圆心；圆心缺失或法向/半径退化时如实返回 `null`。
+   * 空间圆轨道：**要能当宿主**才有"约束轨道"可言。圆心是图元**自己**的字段（`center`），
+   * 不再从点表解析；法向 / 半径退化时如实返回 `null`。
    */
   it("resolves a circle3 track as a host, and refuses a broken one", () => {
-    const center = { id: "p-center", type: "point3" as const, position: { x: 1, y: 2, z: 3 } }
-    const track = { id: "orbit-1", type: "circle3" as const, centerId: "p-center", normal: { x: 0, y: 0, z: 1 }, radius: 2 }
-    const map = new Map<string, unknown>([[center.id, center], [track.id, track]])
-    const host = host3FromPrimitive(track, map as never)!
+    const track = { id: "orbit-1", type: "circle3" as const, center: { x: 1, y: 2, z: 3 }, normal: { x: 0, y: 0, z: 1 }, radius: 2 }
+    // 宿主只认图元自己的字段：即使点表是空的，也能给出宿主（圆不依赖任何点）。
+    const host = host3FromPrimitive(track, new Map([[track.id, track]]) as never)!
     expect(host.kind).toBe("circle")
     expect(host.domain.closedU).toBe(true)
     expect(host.residual({ x: 1, y: 4, z: 3 })).toBeLessThan(1e-12)
 
-    // 圆心点缺失 / 半径为 0 / 法向为零：都不给宿主。
-    expect(host3FromPrimitive(track, new Map([[track.id, track]]) as never)).toBeNull()
-    expect(host3FromPrimitive({ ...track, radius: 0 }, map as never)).toBeNull()
-    expect(host3FromPrimitive({ ...track, normal: { x: 0, y: 0, z: 0 } }, map as never)).toBeNull()
+    // 半径为 0 / 法向为零 / 圆心非有限：都不给宿主。
+    expect(host3FromPrimitive({ ...track, radius: 0 }, new Map() as never)).toBeNull()
+    expect(host3FromPrimitive({ ...track, normal: { x: 0, y: 0, z: 0 } }, new Map() as never)).toBeNull()
+    expect(host3FromPrimitive({ ...track, center: { x: Number.NaN, y: 0, z: 0 } }, new Map() as never)).toBeNull()
   })
 })
 

@@ -111,7 +111,7 @@ function isReferenced(document: GeometryDocument, id: string, ignoredReferrers: 
     || (primitive.type === "segment3" && primitive.pointIds.includes(id))
     || (primitive.type === "ray3" && (primitive.originId === id || primitive.throughId === id))
     || (primitive.type === "plane3" && (primitive.definition.kind === "throughPoints" ? primitive.definition.pointIds.includes(id) : primitive.definition.pointId === id))
-    || (primitive.type === "circle3" && primitive.centerId === id)
+    // 轨道圆**不在**这里：它自带圆心坐标，不引用任何点，所以圆心点可以随便删。
     || (primitive.type === "edge3" && (primitive.pointIds.includes(id) || primitive.faceIds?.includes(id)))
     || (primitive.type === "face3" && (primitive.pointIds.includes(id) || primitive.edgeIds?.includes(id) || primitive.planeId === id))
     || (primitive.type === "polyhedron3" && (primitive.vertexIds.includes(id) || primitive.edgeIds.includes(id) || primitive.faceIds.includes(id) || primitive.construction?.sourceIds.includes(id)))
@@ -262,7 +262,12 @@ export function validatePatch(document: GeometryDocument, operation: DomainOpera
     if (operation.patch.size3 !== undefined && (!isVector3(operation.patch.size3) || primitive?.type !== "cube" || operation.patch.size3.x <= 0 || operation.patch.size3.y <= 0 || operation.patch.size3.z <= 0)) errors.push(primitive?.type === "cube" ? "cube size must be positive" : "only cubes support size")
     if (operation.patch.baseCenter3 !== undefined && (!isVector3(operation.patch.baseCenter3) || primitive?.type !== "pyramid")) errors.push(primitive?.type === "pyramid" ? "base center must be finite" : "only pyramids support base center")
     if (operation.patch.baseSize3 !== undefined && (!operation.patch.baseSize3 || !Number.isFinite(operation.patch.baseSize3.x) || !Number.isFinite(operation.patch.baseSize3.y) || primitive?.type !== "pyramid" || operation.patch.baseSize3.x <= 0 || operation.patch.baseSize3.y <= 0)) errors.push(primitive?.type === "pyramid" ? "pyramid base size must be positive" : "only pyramids support base size")
-    if (operation.patch.center3 !== undefined && (!isVector3(operation.patch.center3) || !["cylinder", "cone"].includes(primitive?.type ?? ""))) errors.push(["cylinder", "cone"].includes(primitive?.type ?? "") ? "center must be finite" : "only cylinders and cones support center")
+    /**
+     * `center3`：圆柱 / 圆锥的中心，或**轨道圆自己的圆心**（圆是独立对象，圆心是它的字段而不是引用）。
+     * 两处语义相同（都是"这个对象自己的中心坐标"），所以共用同一个补丁字段。
+     */
+    const center3Types = ["cylinder", "cone", "circle3"]
+    if (operation.patch.center3 !== undefined && (!isVector3(operation.patch.center3) || !center3Types.includes(primitive?.type ?? ""))) errors.push(center3Types.includes(primitive?.type ?? "") ? "center must be finite" : "only cylinders, cones and circle tracks support center")
     if (operation.patch.height !== undefined && (!Number.isFinite(operation.patch.height) || operation.patch.height <= 0 || !["pyramid", "cylinder", "cone"].includes(primitive?.type ?? ""))) errors.push(["pyramid", "cylinder", "cone"].includes(primitive?.type ?? "") ? "height must be positive" : "only solids with height support height")
     /**
      * 半径：圆柱 / 圆锥的底面半径，或**空间圆轨道**（`circle3`）的半径——同义字段，同一套"正数、有限"校验。

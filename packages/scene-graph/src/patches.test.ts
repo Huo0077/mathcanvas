@@ -179,7 +179,7 @@ describe("domain patches", () => {
     const document = createEmptyDocument("geometry3d")
     document.primitives = [
       { id: "p-c", type: "point3", position: { x: 0, y: 0, z: 0 }, binding: { kind: "free" } },
-      { id: "orbit-1", type: "circle3", centerId: "p-c", normal: { x: 0, y: 0, z: 1 }, radius: 1.5 }
+      { id: "orbit-1", type: "circle3", center: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 0, z: 1 }, radius: 1.5 }
     ]
 
     const edited = commitPatch(document, { op: "updatePrimitive", id: "orbit-1", patch: { radius3: 3 } })
@@ -202,8 +202,8 @@ describe("domain patches", () => {
     const document = createEmptyDocument("geometry3d")
     document.primitives = [
       { id: "p-c", type: "point3", position: { x: 0, y: 0, z: 0 }, binding: { kind: "free" } },
-      { id: "orbit-1", type: "circle3", centerId: "p-c", normal: { x: 0, y: 0, z: 1 }, radius: 1.5 },
-      { id: "orbit-locked", type: "circle3", centerId: "p-c", normal: { x: 0, y: 0, z: 1 }, radius: 1, locked: true }
+      { id: "orbit-1", type: "circle3", center: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 0, z: 1 }, radius: 1.5 },
+      { id: "orbit-locked", type: "circle3", center: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 0, z: 1 }, radius: 1, locked: true }
     ]
 
     expect(validatePatch(document, { op: "rotatePrimitive3", id: "orbit-1", axis: "z", degrees: 45 })).toEqual({ valid: true })

@@ -241,13 +241,15 @@ export function rotationHandleGeometry(document: GeometryDocument, id: string): 
     const reach = vertices.reduce((worst, vertex) => Math.max(worst, Math.hypot(vertex.x - center.x, vertex.y - center.y, vertex.z - center.z)), fallbackReach(primitive))
     return { center: new THREE.Vector3(center.x, center.y, center.z), radius: handleRadius(reach) }
   }
+  // 轨道圆自带圆心坐标与半径：环心就是它自己的圆心、reach 就是半径（不再走"取它拥有的点的形心"，
+  // 那条路在轨道圆不再拥有点之后会返回 null ⇒ 三个旋转环会**静默消失**）。
+  if (primitive.type === "circle3") return { center: new THREE.Vector3(primitive.center.x, primitive.center.y, primitive.center.z), radius: handleRadius(primitive.radius) }
   const owned = managedPointIds(primitive).map((pointId) => points.get(pointId)?.position).filter((position): position is { x: number; y: number; z: number } => Boolean(position))
   if (owned.length === 0) return null
   const center = owned.reduce((sum, position) => ({ x: sum.x + position.x / owned.length, y: sum.y + position.y / owned.length, z: sum.z + position.z / owned.length }), { x: 0, y: 0, z: 0 })
   const ownReach = owned.reduce((worst, position) => Math.max(worst, Math.hypot(position.x - center.x, position.y - center.y, position.z - center.z)), 0)
-  // 圆轨道只有一个圆心点，"它有多大"得看半径；空间面看离重心最远的那个顶点。
-  const reach = Math.max(ownReach, primitive.type === "circle3" ? primitive.radius : 0)
-  return { center: new THREE.Vector3(center.x, center.y, center.z), radius: handleRadius(reach) }
+  // 点驱动对象（空间面 / 线 / 棱 / 多边形）：环要圈住离重心最远的那个顶点。
+  return { center: new THREE.Vector3(center.x, center.y, center.z), radius: handleRadius(ownReach) }
 }
 
 /** 环要圈住对象才好抓，也不能离题太远。 */

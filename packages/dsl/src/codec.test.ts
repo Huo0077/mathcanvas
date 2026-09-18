@@ -20,6 +20,53 @@ describe("Geometry DSL codec", () => {
     expect((restored.primitives[0] as { rotation?: unknown }).rotation).toBeUndefined()
   })
 
+  /**
+   * 轨道圆改成**自带圆心**之后，旧文档里的 `centerId`（引用一个点当圆心）必须在**校验之前**搬成 `center`。
+   *
+   * 顺序反了旧文件会因为"字段不合法"直接打不开（`decodeMgeo` 对不合法文档是 `throw`），
+   * 这不是"少一个功能"，而是"用户的文件打不开"。
+   */
+  it("migrates a legacy circle track that referenced a point, and is idempotent", () => {
+    const legacy = JSON.stringify({
+      format: "mgeo",
+      formatVersion: "0.1",
+      document: {
+        ...createEmptyDocument("geometry3d"),
+        primitives: [
+          { id: "point-a", type: "point3", position: { x: 1, y: 2, z: 3 }, binding: { kind: "free" } },
+          { id: "orbit-1", type: "circle3", centerId: "point-a", normal: { x: 0, y: 0, z: 1 }, radius: 2 }
+        ]
+      }
+    })
+
+    const document = decodeMgeo(legacy)
+    const track = document.primitives.find((primitive) => primitive.id === "orbit-1") as { center?: { x: number; y: number; z: number }; centerId?: string }
+    expect(track.center).toEqual({ x: 1, y: 2, z: 3 })
+    expect("centerId" in track).toBe(false)
+
+    // 幂等：已经搬好的文档再解一次不变（导出再导入也一样）。
+    const again = decodeMgeo(encodeMgeo(document))
+    expect(again.primitives.find((primitive) => primitive.id === "orbit-1")).toMatchObject({ center: { x: 1, y: 2, z: 3 } })
+    expect(again.primitives).toHaveLength(2)
+  })
+
+  it("drops only the track whose centre point is missing, keeping the rest of the file loadable", () => {
+    const legacy = JSON.stringify({
+      format: "mgeo",
+      formatVersion: "0.1",
+      document: {
+        ...createEmptyDocument("geometry3d"),
+        primitives: [
+          { id: "point-a", type: "point3", position: { x: 0, y: 0, z: 0 }, binding: { kind: "free" } },
+          { id: "orbit-broken", type: "circle3", centerId: "gone", normal: { x: 0, y: 0, z: 1 }, radius: 2 }
+        ]
+      }
+    })
+
+    // 宁可少一条轨道，也不能让整份文件打不开。
+    expect(decodeMgeo(legacy).primitives.map((primitive) => primitive.id)).toEqual(["point-a"])
+  })
+
   it("rejects an orientation that is not three finite radians", () => {
     const document = createEmptyDocument("geometry3d")
     document.primitives = [{ id: "cone-1", type: "cone", center: { x: 0, y: 0, z: 0 }, radius: 1, height: 2, segments: 24, rotation: { x: Number.NaN, y: 0, z: 0 } }]
@@ -494,7 +541,7 @@ describe("Geometry DSL codec", () => {
       { id: "segment-ab", type: "segment3", pointIds: ["point-a", "point-b"] },
       { id: "ray-ac", type: "ray3", originId: "point-a", throughId: "point-c" },
       { id: "plane-abc", type: "plane3", definition: { kind: "throughPoints", pointIds: ["point-a", "point-b", "point-c"] } },
-      { id: "circle-abc", type: "circle3", centerId: "point-a", normal: { x: 0, y: 0, z: 1 }, radius: 2 },
+      { id: "circle-abc", type: "circle3", center: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 0, z: 1 }, radius: 2 },
       { id: "edge-ab", type: "edge3", pointIds: ["point-a", "point-b"], faceIds: ["face-abc", "face-abd"] },
       { id: "edge-ac", type: "edge3", pointIds: ["point-a", "point-c"], faceIds: ["face-abc", "face-acd"] },
       { id: "edge-ad", type: "edge3", pointIds: ["point-a", "point-d"], faceIds: ["face-abd", "face-acd"] },

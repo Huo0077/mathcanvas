@@ -6,6 +6,29 @@
 **当前阶段：** P0-P6 与 P7 工程制图已完成；MathCanvas 统一 Ribbon UI 基线、后续 UI 优化（Task 7-13）、工程制图视觉重做（Task 14）、工程制图可用性修复（Task 15-18）、圆锥曲线四项修复、功能键操作指引浮层、CAD 2D 绘图交互重做、平面几何动点系统、3D 视口与几何内核重构、封闭曲线绕定点旋转、UI 优化（草稿纸画布）与平面几何元素选颜色均已完成。**2026-09-17 新增两条解析几何交付线并已全部落地**：**A1 解析二次曲面与"真圆"**（8 片；设计 `docs/superpowers/specs/2026-09-17-analytic-quadrics-design.md`）与 **A2 交面按支撑曲面分组 + 真曲面**（5 轮；设计 `docs/superpowers/specs/2026-09-17-intersection-face-grouping-design.md`）——用户口径从"我不要一个逼近的圆，我需要一个真的圆"一路推到"我需要的只是那个相交的曲面，而不是由很多三角形拼出来的"。**随后"立体几何最后一轮"四件事也已全部交付**（7 片；设计 `docs/superpowers/specs/2026-09-17-3d-tracks-rotation-and-measurement-labels-design.md`）：约束轨道（`circle3` 当动点宿主）、拖动旋转（世界轴三色环 + 15° 吸附 + 属性栏角度）、测量数字常驻画布（2D + 3D）、立体几何 UI 与平面几何同一套令牌。平面动点系统按四个维度交付：①约束模型与参数化映射 ②依赖图 DAG 与增量拓扑重算 ③动态测量监听器 ④轨迹采样与消元法隐式化；3D 重构按四个区块交付：①动点宿主约束与渲染管道 ②截面几何 ③Auto-Fit ④生命周期与多解；四者与三区块**全部接进主流程**（不只是内核可用）。P4 Agent 与 P5 题图解析仍在排除范围内。
 **总体状态：** 开发中
 
+### 轨道圆改成独立对象：点在圆上，不在圆跟着点（2026-09-17 进行中）
+
+用户口径（对上一轮交付的直接否定）："**轨道圆的内容做的很差，根本不是我要的那种，我要的轨道圆是点在圆上而不是圆跟着点走，而且圆要可以缩放旋转**"。设计与切片见 `docs/superpowers/specs/2026-09-17-orbit-track-independent-circle-design.md` 与 `docs/superpowers/plans/2026-09-17-orbit-track-independent-circle.md`。
+
+**根因是数据模型选错了主从**：`Circle3Primitive` 存的是 `centerId: string`（引用一个点当圆心），于是圆是那个点的派生物。改动前用一次性探针实测（探针跑完即删，不进仓库）：
+
+| 现象 | 实测证据 |
+| --- | --- |
+| 圆跟着点走 | 拖圆心点：点坐标 X `0 → -0.9588`，同时轨道「圆心 X」= `-0.959`；检查器页脚自己写着"圆心跟着那个空间点走" |
+| 圆心点删不掉 | 删除该点得到 `object is referenced by another object: point3-1` |
+| 画布上不能缩放 | 从圆周往外拖 70px，半径稳定在 `3`；同一时刻 `data-rotation-handles = 3`（环有、缩放手柄无） |
+
+- **切片 1（圆自带圆心：模型 + 全部调用点 + 旧文档迁移）已完成**：`centerId: string` → `center: Vector3`，`circle3` 从"点驱动对象"改判为"自带几何的对象"。
+  - **内核**：`conic3FromCircle3(primitive)` **不再需要点表**（签名里那个参数整个删掉）；`host3FromPrimitive` 的 `circle3` 分支直接读图元自己的 `center`，宿主的域 / `closedU` / 退化拒绝都不变（`circleHost3(center, normal, radius)` 签名本来就是坐标圆心）。**顺手补上一个真缺陷**：`circleConic3` 为渲染稳健会把**零法向**兜成 `+z`，于是"法向为零的圆"会被解析成一条凭空朝 +z 的圆——自己的新用例 `expected { kind: 'circle', … } to be null` 抓到了它，现在 `conic3FromCircle3` 显式挡住零法向（与 `circleHost3` 同一条口径：解析层不替用户编朝向）。
+  - **迁移（在 `validateDocument` 之前）**：`codec.ts` 新增 `withCircleTrackCenter`，与既有的 `withSectionClassification` 同形；引用的点不存在时**只丢掉那一条轨道**（宁可少一条，也不能让整份文件打不开）。`.mgeo` 的 `schemaVersion` 仍是 `"0.1"`，加载与 localStorage 草稿恢复两条路都走 `decodeMgeo`，所以只改一处。**幂等**有单测。
+  - **场景图**：`managedPointIds` 不再返回 `[centerId]`；`isFreeDraggable3` 把 `circle3` 挪到"自带几何"那一类；`translatePrimitive3` 平移它自己的 `center`；`rotatePrimitive3` 给它单独一支（转 `normal`，默认枢轴就是它自己的圆心，所以绕自己转时圆心不动）；`primitiveDependencies` 去掉圆心依赖；`patches.ts` 的 `isReferenced` 删掉 `circle3.centerId` 那条引用保护 ⇒ **圆心点从此可以随便删**。
+  - **画布与检查器**：`createCircle3Line` 不再需要点表；`projectionVisuals`（工程图投影）读 `primitive.center`，那条"圆心点缺失"的诊断随之删掉；检查器的 `圆心 X/Y/Z` 从只读读数改成**可编辑的真实字段**（写新增的 `center3` 补丁，与圆柱 / 圆锥同名同义），并删掉"圆心跟着那个空间点走"那句；创建入口改成"**取一次坐标就脱钩**"，指引文案同步说明。
+  - **RED→GREEN / 证据（三条都是真跑出来的失败）**：`Invalid geometry document: circle3 geometry is invalid`（迁移还没写 ⇒ **旧文件会打不开**，这正是我担心的那条风险）；`expected false to be true`（平移 / 旋转对轨道返回 `changed: false`）；`Cannot read properties of null (reading 'center')`（`rotationHandleGeometry` 对轨道返回 `null` ⇒ **三个旋转环会静默消失**，这条用例就是专门守它的）。实现后 **1427 用例全绿**。
+  - **浏览器级证据**：新用例 `e2e/three-orbit-track-independent.spec.ts` 两条——①拖**圆本体**之后两个点的坐标**逐字未变**，而圆心读数已经变了（"点在圆上，不是圆跟着点走"的两半都断言了）；②检查器把圆心 X 改成 4 生效，然后**删掉当初定圆心的那个点**：点没了、轨道还在、圆心仍是 4、半径仍是 1.5。
+  - **一处自己犯的流程错误（如实记）**：改 `patches.test.ts` 的夹具时我图快用了 PowerShell 文本替换，把文件里的中文注释写成了乱码（`Set-Content` 那一步编码没对齐）。立刻 `git checkout --` 还原，改用编辑工具重做同样的两处改动。仓库纪律里"不要走 PowerShell 文本管道"这条是有原因的。
+  - **门禁（切片 1 后实跑）**：typecheck 4 workspace 通过；单测 **121 文件 / 1427 用例**通过（+6）；lint **0 error / 14 warning**（基线；新 e2e 起初多出一条 `'scene' is assigned a value but never used`，已清）；生产构建通过；Playwright **105/105**（+2）。
+- **切片 2（画布半径手柄：缩放）待做**；**切片 3（文档收尾）待做**。
+
 ### 立体几何最后一轮：约束轨道 / 拖动旋转 / 测量数字 / UI 对齐（2026-09-17 全部完成）
 
 用户口径："对于立体，我们再做最后一步优化"——四件事：①可旋转可平移的**平面图元**（只要圆与多边形）当**约束轨道**；②给立体图形**拖动旋转**（"我想要一个横着的圆柱"，也能在属性栏填 90°）；③**测量数值常驻画布**（平面几何与立体几何都要）；④**立体几何 UI 参照平面几何**。设计与切片见 `docs/superpowers/specs/2026-09-17-3d-tracks-rotation-and-measurement-labels-design.md` 与 `docs/superpowers/plans/2026-09-17-3d-tracks-rotation-and-measurement-labels.md`（提交 `27d37b8`）。**一处按建议调整并获用户确认**：旋转手柄用**世界轴三色环**（X 红 / Y 绿 / Z 蓝）而不是"屏幕法向 / 水平 / 竖直"，理由是拖红环就是"X = 90°"、与属性栏三个角度字段一一对应。

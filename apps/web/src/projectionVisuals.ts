@@ -294,9 +294,10 @@ export function resolveProjectedDrawing(document: GeometryDocument, view: Drawin
        * 采样结果是既有的 `polyline` 图元，所以三个消费方（`DrawingViewport` / `engineeringExporters`）
        * 完全不用改；`sourceId` 仍是这个 `circle3`，选中与高亮照旧。
        */
-      const conic = conic3FromCircle3(primitive, pointPositions)
+      const conic = conic3FromCircle3(primitive)
       if (!conic) {
-        addDiagnostic(primitive.id, `missing point3 reference ${primitive.centerId}`)
+        // 圆心是图元自己的字段：算不出来只可能是退化输入（半径非正 / 法向为零 / 坐标非有限）。
+        addDiagnostic(primitive.id, "circle track geometry is degenerate")
         return
       }
       const projected = projectConic3(conic, view)

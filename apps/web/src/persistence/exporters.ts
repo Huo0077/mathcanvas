@@ -125,7 +125,7 @@ function primitiveData(primitive: PrimitiveSpec): string {
   if (primitive.type === "segment3") return JSON.stringify({ pointIds: primitive.pointIds })
   if (primitive.type === "ray3") return JSON.stringify({ originId: primitive.originId, throughId: primitive.throughId })
   if (primitive.type === "plane3") return JSON.stringify(primitive.definition)
-  if (primitive.type === "circle3") return JSON.stringify({ centerId: primitive.centerId, normal: primitive.normal, radius: primitive.radius })
+  if (primitive.type === "circle3") return JSON.stringify({ center: primitive.center, normal: primitive.normal, radius: primitive.radius })
   if (primitive.type === "edge3") return JSON.stringify({ pointIds: primitive.pointIds, faceIds: primitive.faceIds ?? [] })
   if (primitive.type === "face3") return JSON.stringify({ pointIds: primitive.pointIds, edgeIds: primitive.edgeIds ?? [], planeId: primitive.planeId })
   if (primitive.type === "polyhedron3") return JSON.stringify({ vertexIds: primitive.vertexIds, edgeIds: primitive.edgeIds, faceIds: primitive.faceIds, construction: primitive.construction })

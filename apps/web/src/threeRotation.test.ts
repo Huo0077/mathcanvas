@@ -61,10 +61,30 @@ describe("rotation handle geometry", () => {
     expect(spec.radius).toBeLessThan(reach * 2)
   })
 
+  it("uses a circle track's own centre and radius for its rotation rings", () => {
+    /**
+     * 这条守的是一个**会静默消失**的坑：轨道圆改成"自带圆心"之后，它在场景图里不再拥有任何点，
+     * 而 `rotationHandleGeometry` 原本对 `circle3` 走的是"取它拥有的点的形心"那条路——
+     * 那条路会返回 `null`，于是选中轨道时三个旋转环**一个都不出现**，用户完全不知道为什么转不了。
+     * 所以它必须有自己的一支：环心 = 圆自己的圆心、reach = 半径。
+     */
+    const track = document3d([
+      { id: "p-c", type: "point3", position: { x: -5, y: -5, z: -5 }, binding: { kind: "free" } },
+      { id: "orbit-1", type: "circle3", center: { x: 1, y: 2, z: 3 }, normal: { x: 0, y: 0, z: 1 }, radius: 2 }
+    ])
+    const spec = rotationHandleGeometry(track, "orbit-1")!
+    expect(spec.center.x).toBeCloseTo(1, 12)
+    expect(spec.center.y).toBeCloseTo(2, 12)
+    expect(spec.center.z).toBeCloseTo(3, 12)
+    expect(spec.radius).toBeGreaterThan(2)
+    // 与"被引用点"无关：那个点在哪都不影响环（轨道已经不引用它了）。
+    expect(rotationHandleTarget(track, ["orbit-1"])).toBe("orbit-1")
+  })
+
   it("uses a circle track's centre and a face's centroid", () => {
     const track = document3d([
       { id: "p-c", type: "point3", position: { x: 1, y: 2, z: 3 }, binding: { kind: "free" } },
-      { id: "orbit-1", type: "circle3", centerId: "p-c", normal: { x: 0, y: 0, z: 1 }, radius: 2 }
+      { id: "orbit-1", type: "circle3", center: { x: 1, y: 2, z: 3 }, normal: { x: 0, y: 0, z: 1 }, radius: 2 }
     ])
     expect(rotationHandleGeometry(track, "orbit-1")!.center).toMatchObject({ x: 1, y: 2, z: 3 })
     expect(rotationHandleGeometry(track, "orbit-1")!.radius).toBeGreaterThan(2)

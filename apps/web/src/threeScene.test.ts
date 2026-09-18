@@ -1026,13 +1026,12 @@ describe("exact curve rendering", () => {
   })
 
   it("renders a document circle3 as a true curve", () => {
-    const points = new Map([["point-a", { id: "point-a", type: "point3" as const, position: { x: 0, y: 0, z: 0 } }]])
-    const line = createCircle3Line({ id: "circle3-1", type: "circle3", centerId: "point-a", normal: { x: 0, y: 0, z: 1 }, radius: 1 }, points, 0.01, false)!
+    const line = createCircle3Line({ id: "circle3-1", type: "circle3", center: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 0, z: 1 }, radius: 1 }, 0.01, false)!
 
     expect(line.userData.visualRole).toBe("exact-curve")
     expect(line.userData.primitiveType).toBe("circle3")
     expect(line.userData.segmentCount).toBeGreaterThanOrEqual(16)
-    // 圆心点不存在时如实不画。
-    expect(createCircle3Line({ id: "circle3-2", type: "circle3", centerId: "missing", normal: { x: 0, y: 0, z: 1 }, radius: 1 }, points, 0.01, false)).toBeNull()
+    // 退化输入（半径非正 / 零法向 / 坐标非有限）如实不画。
+    expect(createCircle3Line({ id: "circle3-2", type: "circle3", center: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 0, z: 1 }, radius: 0 }, 0.01, false)).toBeNull()
   })
 })

@@ -296,7 +296,9 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>, parameter
     else if (definition.kind === "pointNormal" && (typeof definition.pointId !== "string" || referenceType(byId, definition.pointId) !== "point3" || !isNonZeroVector3(definition.normal))) errors.push("plane3 point-normal definition is invalid")
   }
   if (type === "circle3") {
-    if (typeof value.centerId !== "string" || referenceType(byId, value.centerId) !== "point3" || !isNonZeroVector3(value.normal) || !isFiniteNumber(value.radius) || value.radius <= 0) errors.push("circle3 geometry is invalid")
+    // 圆自带圆心（不再引用点）：坐标有限、法向非零、半径正。旧文档的 `centerId` 在 `decodeMgeo`
+    // 里就已经搬成 `center` 了（见 codec 的 `withCircleTrackCenter`），所以这里看不到那种形状。
+    if (!isFiniteVector3(value.center) || !isNonZeroVector3(value.normal) || !isFiniteNumber(value.radius) || value.radius <= 0) errors.push("circle3 geometry is invalid")
   }
   if (type === "edge3") {
     if (!Array.isArray(value.pointIds) || value.pointIds.length !== 2 || value.pointIds[0] === value.pointIds[1] || !referencesTypes(byId, value.pointIds, new Set(["point3"]))) errors.push("edge3 references invalid points")

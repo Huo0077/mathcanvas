@@ -405,8 +405,13 @@ describe("MathCanvas workbench", () => {
     fireEvent.click(screen.getByRole("button", { name: "添加空间圆轨道" }))
 
     expect(circleTracks()).toHaveLength(1)
-    const single = circleTracks()[0] as { centerId: string; radius: number; normal: { x: number; y: number; z: number } }
-    expect(single.centerId).toBe(points()[0].id)
+    const single = circleTracks()[0] as { center: { x: number; y: number; z: number }; radius: number; normal: { x: number; y: number; z: number } }
+    /**
+     * 圆**自带圆心坐标**、不引用那个点：建的时候只取一次坐标（用户口径："我要的轨道圆是点在圆上
+     * 而不是圆跟着点走"）。所以这里断言坐标相等，而不是断言引用了它的 id。
+     */
+    expect(single.center).toEqual(points()[0].position)
+    expect("centerId" in single).toBe(false)
     expect(single.normal).toEqual({ x: 0, y: 0, z: 1 })
     expect(single.radius).toBeCloseTo(1.5, 6)
 
@@ -428,9 +433,31 @@ describe("MathCanvas workbench", () => {
     fireEvent.click(screen.getByRole("button", { name: "添加空间圆轨道" }))
 
     const [centre, rim] = points()
-    const track = circleTracks()[0] as { centerId: string; radius: number }
-    expect(track.centerId).toBe(centre.id)
+    const track = circleTracks()[0] as { center: { x: number; y: number; z: number }; radius: number }
+    expect(track.center).toEqual(centre.position)
     expect(track.radius).toBeCloseTo(Math.hypot(rim.position.x - centre.position.x, rim.position.y - centre.position.y, rim.position.z - centre.position.z), 9)
+  })
+
+  /**
+   * 轨道圆改成自带圆心之后，检查器里的圆心 X/Y/Z 就是**可编辑的真实字段**（写 `center3`）。
+   * 顺带守住那条用户口径：拖点 / 删点都不再影响这条轨道。
+   */
+  it("edits a circle track's own centre and leaves the construction points free", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
+    fireEvent.click(screen.getAllByText("A")[0])
+    fireEvent.click(screen.getByRole("button", { name: "添加空间圆轨道" }))
+
+    const track = () => useSceneStore.getState().document.primitives.find((primitive) => primitive.type === "circle3") as { center: { x: number; y: number; z: number } }
+    fireEvent.change(screen.getByRole("spinbutton", { name: "圆心 X" }), { target: { value: "4" } })
+    expect(track().center.x).toBeCloseTo(4, 6)
+
+    // 删掉那个点：轨道还在（它不再引用谁）。
+    fireEvent.click(screen.getAllByText("A")[0])
+    fireEvent.click(screen.getByRole("button", { name: "快速删除对象" }))
+    expect(useSceneStore.getState().document.primitives.some((primitive) => primitive.type === "circle3")).toBe(true)
+    expect(useSceneStore.getState().document.primitives.some((primitive) => primitive.type === "point3")).toBe(false)
   })
 
   /**

@@ -63,13 +63,7 @@ async function readPointPosition(page: Page): Promise<number[]> {
   return Promise.all(["X", "Y", "Z"].map(async (axis) => Number(await page.getByRole("spinbutton", { name: `坐标 ${axis}` }).inputValue())))
 }
 
-/** 选中圆轨道后检查器里的圆心坐标读数。 */
+/** 选中圆轨道后检查器里的圆心坐标读数（圆心现在是可编辑的**真实字段**）。 */
 async function readCircleCentre(page: Page): Promise<number[]> {
-  const values: number[] = []
-  for (const axis of ["X", "Y", "Z"]) {
-    const grid = page.locator(".panel.right .metric-grid")
-    const text = await grid.locator(`span:has-text("圆心 ${axis}")`).first().innerText()
-    values.push(Number(text.replace(/[^\d.-]/g, "")))
-  }
-  return values
+  return Promise.all(["X", "Y", "Z"].map(async (axis) => Number(await page.getByRole("spinbutton", { name: `圆心 ${axis}` }).inputValue())))
 }

@@ -166,7 +166,7 @@ describe("drawing view metadata", () => {
 
 describe("analytic circle3 projection", () => {
   const center = { x: 0, y: 0, z: 0 }
-  const circle: Extract<PrimitiveSpec, { type: "circle3" }> = { id: "circle-rim", type: "circle3", centerId: "point-center", normal: { x: 0, y: 0, z: 1 }, radius: 2 }
+  const circle: Extract<PrimitiveSpec, { type: "circle3" }> = { id: "circle-rim", type: "circle3", center, normal: { x: 0, y: 0, z: 1 }, radius: 2 }
   const circleDocument = (primitive: PrimitiveSpec) => topologyDocument([{ id: "point-center", type: "point3", position: center }, primitive])
 
   it("projects a circle3 as a dense polyline that lies on the analytic ellipse", () => {
@@ -182,8 +182,8 @@ describe("analytic circle3 projection", () => {
     expect(projected.points.length).toBeGreaterThan(64)
     expect(projected.points.at(-1)).toEqual(projected.points[0])
 
-    // 采样点必须落在内核给出的那条**解析椭圆**上（1e-6）。
-    const conic = conic3FromCircle3(circle, new Map([["point-center", { position: center }]]))
+    // 采样点必须落在内核给出的那条**解析椭圆**上（1e-6）。圆心是图元自己的字段，解析不再需要点表。
+    const conic = conic3FromCircle3(circle)
     expect(conic).not.toBeNull()
     const analytic = projectConic3(conic!, "axonometric")
     expect(analytic?.kind).toBe("ellipse")
@@ -233,8 +233,9 @@ describe("analytic circle3 projection", () => {
     expect(Math.hypot(projected.points[0].x - projected.points[1].x, projected.points[0].y - projected.points[1].y)).toBeCloseTo(4, 9)
   })
 
-  it("reports a circle3 whose centre reference is missing", () => {
-    const drawing = resolveProjectedDrawing(topologyDocument([{ ...circle, centerId: "missing-point" }]), "front")
+  it("reports a circle3 with degenerate geometry instead of drawing something", () => {
+    // 圆心是图元自己的字段：算不出解析圆的唯一原因是**输入退化**（半径非正 / 法向为零 / 坐标非有限）。
+    const drawing = resolveProjectedDrawing(topologyDocument([{ ...circle, radius: 0 }]), "front")
 
     expect(drawing.primitives.some((primitive) => primitive.sourceId === circle.id)).toBe(false)
     expect(drawing.diagnostics).toEqual(expect.arrayContaining([expect.stringContaining(circle.id)]))

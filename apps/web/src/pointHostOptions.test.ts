@@ -79,7 +79,7 @@ describe("point host options", () => {
   it("offers circle tracks and polygons as constraint tracks", () => {
     const withTracks: PrimitiveSpec[] = [
       { id: "p-c", type: "point3", position: { x: 0, y: 0, z: 0 } },
-      { id: "orbit-1", type: "circle3", centerId: "p-c", normal: { x: 0, y: 0, z: 1 }, radius: 2, label: "圆轨道 1" },
+      { id: "orbit-1", type: "circle3", center: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 0, z: 1 }, radius: 2, label: "圆轨道 1" },
       { id: "face-1", type: "face3", pointIds: ["p-c", "p-b", "p-d"], label: "空间面 1" }
     ]
     const options = pointHostOptions(withTracks)

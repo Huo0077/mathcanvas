@@ -375,9 +375,9 @@ export function createCurveLoops3(primitiveId: string, loops: CurvePiece3[][], t
   return group
 }
 
-/** DSL 的空间圆图元：解析圆的真曲线。 */
-export function createCircle3Line(primitive: Extract<PrimitiveSpec, { type: "circle3" }>, points: Map<string, Point3Primitive>, tolerance: number, selected: boolean): THREE.Line | null {
-  const conic = conic3FromCircle3(primitive, points)
+/** DSL 的空间圆图元：解析圆的真曲线（圆心是图元自己的字段，不需要点表）。 */
+export function createCircle3Line(primitive: Extract<PrimitiveSpec, { type: "circle3" }>, tolerance: number, selected: boolean): THREE.Line | null {
+  const conic = conic3FromCircle3(primitive)
   if (!conic) return null
   const line = createConic3Line(primitive.id, conic, tolerance, selected, strokeFor(primitive))
   if (line) line.userData.primitiveType = primitive.type
@@ -904,7 +904,7 @@ export function buildPointDrivenObject(primitive: PrimitiveSpec, points: Map<str
   if (primitive.type === "line3" || primitive.type === "segment3" || primitive.type === "ray3") return createPointDrivenLine(primitive, points, selected)
   if (primitive.type === "edge3") return createEdge3Line(primitive, points, selected)
   if (primitive.type === "face3") return createFace3Mesh(primitive, points, selected)
-  if (primitive.type === "circle3") return createCircle3Line(primitive, points, tolerance, selected)
+  if (primitive.type === "circle3") return createCircle3Line(primitive, tolerance, selected)
   return null
 }
 

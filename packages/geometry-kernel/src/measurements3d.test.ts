@@ -47,7 +47,7 @@ describe("3D measurements", () => {
     const cylinder: PrimitiveSpec = { id: "cylinder", type: "cylinder", center: { x: 0, y: 0, z: 0 }, radius: 2, height: 3, segments: 48 }
     const cone: PrimitiveSpec = { id: "cone", type: "cone", center: { x: 0, y: 0, z: 0 }, radius: 2, height: 3, segments: 48 }
     const cube: PrimitiveSpec = { id: "cube", type: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 3, z: 4 } }
-    const circle3: PrimitiveSpec = { id: "circle3", type: "circle3", centerId: "point-a", normal: { x: 0, y: 0, z: 1 }, radius: 2 }
+    const circle3: PrimitiveSpec = { id: "circle3", type: "circle3", center: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 0, z: 1 }, radius: 2 }
     const primitives = [cylinder, cone, cube, circle3]
 
     const measure = (metric: "volume" | "area", sourceIds: string[]) =>

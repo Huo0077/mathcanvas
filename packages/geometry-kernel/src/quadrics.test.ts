@@ -233,14 +233,16 @@ describe("plane ∩ quadric (analytic)", () => {
     expect(conic3Area({ ...circle, semiMajor: 0 })).toBeNull()
   })
 
-  it("turns a document circle3 into an analytic circle through its centre point", () => {
-    const points = new Map([["point-a", { position: { x: 1, y: 2, z: 3 } }]])
-    const conic = conic3FromCircle3({ id: "circle3-1", type: "circle3", centerId: "point-a", normal: { x: 0, y: 1, z: 0 }, radius: 1.5 }, points)!
+  it("turns a document circle3 into an analytic circle at its own centre", () => {
+    // 圆心是图元自己的字段：解析圆不再需要点表（签名里也没有它了）。
+    const conic = conic3FromCircle3({ id: "circle3-1", type: "circle3", center: { x: 1, y: 2, z: 3 }, normal: { x: 0, y: 1, z: 0 }, radius: 1.5 })!
     expect(conic.kind).toBe("circle")
     expect(conic.center).toEqual({ x: 1, y: 2, z: 3 })
     expect(conic.semiMajor).toBe(1.5)
     expect(conic.frame.normal.y).toBeCloseTo(1, 12)
-    // 圆心点不存在时如实返回 null。
-    expect(conic3FromCircle3({ id: "circle3-2", type: "circle3", centerId: "missing", normal: { x: 0, y: 0, z: 1 }, radius: 1 }, points)).toBeNull()
+    // 退化输入如实返回 null：非有限圆心、零法向、非正半径。
+    expect(conic3FromCircle3({ id: "circle3-2", type: "circle3", center: { x: Number.NaN, y: 0, z: 0 }, normal: { x: 0, y: 0, z: 1 }, radius: 1 })).toBeNull()
+    expect(conic3FromCircle3({ id: "circle3-3", type: "circle3", center: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 0, z: 0 }, radius: 1 })).toBeNull()
+    expect(conic3FromCircle3({ id: "circle3-4", type: "circle3", center: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 0, z: 1 }, radius: 0 })).toBeNull()
   })
 })

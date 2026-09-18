@@ -165,7 +165,14 @@ export interface Plane3Primitive extends PrimitivePresentation {
 export interface Circle3Primitive extends PrimitivePresentation {
   id: string
   type: "circle3"
-  centerId: string
+  /**
+   * 圆心坐标**自己存**：轨道圆是一个独立对象，不引用任何点。
+   *
+   * 用户口径："我要的轨道圆是点在圆上而不是圆跟着点走，而且圆要可以缩放旋转"。
+   * 早期实现存的是 `centerId`（引用一个点当圆心），于是圆成了那个点的派生物——拖点圆就跟着走、
+   * 点还删不掉。点与圆的关系现在只有一条：点**绑**到圆上，沿圆周滑动。
+   */
+  center: Vector3
   normal: Vector3
   radius: number
 }

@@ -124,24 +124,58 @@ describe("free 3D drag", () => {
   })
 
   /**
-   * 空间圆轨道（`circle3`）只存 `centerId`（引用）+ 法向 + 半径：平移它就是移动圆心那个点。
-   * 用户口径："增加一些可以旋转，平移的平面图元……主要作用是作为约束轨道。"
+   * 轨道圆（`circle3`）**自带圆心坐标**，是一个独立对象。
+   *
+   * 用户口径："我要的轨道圆是点在圆上而不是圆跟着点走，而且圆要可以缩放旋转。"
+   * 早期实现存的是 `centerId`（引用一个点当圆心）——拖那个点圆就跟着走、点还删不掉（实测删除得到
+   * `object is referenced by another object: point3-1`）。现在圆自己走自己的。
    */
-  it("moves a circle track by moving its centre point", () => {
+  it("moves a circle track by moving its own centre, and leaves every point alone", () => {
     const document = createEmptyDocument("geometry3d")
     document.primitives = [
       { id: "p-centre", type: "point3", position: { x: 1, y: 2, z: 3 }, binding: { kind: "free" } },
-      { id: "orbit-1", type: "circle3", centerId: "p-centre", normal: { x: 0, y: 0, z: 1 }, radius: 2 }
+      { id: "orbit-1", type: "circle3", center: { x: 1, y: 2, z: 3 }, normal: { x: 0, y: 0, z: 1 }, radius: 2 }
     ]
 
     const moved = commitPatch(document, { op: "translatePrimitive3", id: "orbit-1", delta: { x: 0, y: -1, z: 4 } })
 
     expect(moved.changed).toBe(true)
-    expect(positionOf(moved.document, "p-centre")).toEqual({ x: 1, y: 1, z: 7 })
-    // 圆自己不存圆心坐标，只有引用：半径与法向原样不动。
-    const orbit = primitiveById(moved.document, "orbit-1") as unknown as { radius: number; normal: { x: number; y: number; z: number } }
-    expect(orbit.radius).toBe(2)
-    expect(orbit.normal).toEqual({ x: 0, y: 0, z: 1 })
+    expect((moved.document.primitives.find((primitive) => primitive.id === "orbit-1") as { center: { x: number; y: number; z: number } }).center).toEqual({ x: 1, y: 1, z: 7 })
+    // 圆不引用任何点：拖圆不会把点也带走（这正是"点在圆上而不是圆跟着点走"的另一半）。
+    expect(positionOf(moved.document, "p-centre")).toEqual({ x: 1, y: 2, z: 3 })
+  })
+
+  it("turns a circle track's normal without moving its centre", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      { id: "p-centre", type: "point3", position: { x: 1, y: 2, z: 3 }, binding: { kind: "free" } },
+      { id: "orbit-1", type: "circle3", center: { x: 1, y: 2, z: 3 }, normal: { x: 1, y: 0, z: 0 }, radius: 2 }
+    ]
+
+    const rotated = commitPatch(document, { op: "rotatePrimitive3", id: "orbit-1", axis: "z", degrees: 90 })
+
+    expect(rotated.changed).toBe(true)
+    const orbit = rotated.document.primitives.find((primitive) => primitive.id === "orbit-1") as { center: { x: number; y: number; z: number }; normal: { x: number; y: number; z: number } }
+    // 绕自己转：圆心不动、法向转过 90°（+X → +Y）。
+    expect(orbit.center).toEqual({ x: 1, y: 2, z: 3 })
+    expect(orbit.normal.x).toBeCloseTo(0, 12)
+    expect(orbit.normal.y).toBeCloseTo(1, 12)
+    expect(positionOf(rotated.document, "p-centre")).toEqual({ x: 1, y: 2, z: 3 })
+  })
+
+  it("lets the point that used to be the centre be deleted, because the track no longer references it", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      { id: "p-centre", type: "point3", position: { x: 0, y: 0, z: 0 }, binding: { kind: "free" } },
+      { id: "orbit-1", type: "circle3", center: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 0, z: 1 }, radius: 2 }
+    ]
+
+    const deleted = commitPatch(document, { op: "deleteObject", id: "p-centre" })
+
+    expect(deleted.changed).toBe(true)
+    // 圆自己的几何还在（它不再挂在那个点上）。
+    expect(deleted.document.primitives.some((primitive) => primitive.id === "orbit-1")).toBe(true)
+    expect(deleted.document.primitives.some((primitive) => primitive.id === "p-centre")).toBe(false)
   })
 
   it("moves a point-driven line's endpoints so the line follows", () => {
@@ -220,7 +254,7 @@ describe("3D rotation", () => {
     document.primitives = [
       { id: "p-centre", type: "point3", position: { x: 1, y: 2, z: 3 }, binding: { kind: "free" } },
       // 法向沿 +X：圆轨道立在 y-z 平面里，绕 Z 转过 90° 就该指向 +Y —— 一个一眼能看出来的变化。
-      { id: "orbit-1", type: "circle3", centerId: "p-centre", normal: { x: 1, y: 0, z: 0 }, radius: 2 }
+      { id: "orbit-1", type: "circle3", center: { x: 1, y: 2, z: 3 }, normal: { x: 1, y: 0, z: 0 }, radius: 2 }
     ]
     return document
   }
