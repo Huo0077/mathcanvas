@@ -59,6 +59,72 @@ test("creates a circle track and slides a bound point along it", async ({ page }
   expect(Math.hypot(after[0] - centre[0], after[1] - centre[1], after[2] - centre[2])).toBeCloseTo(3, 6)
 })
 
+/**
+ * 拖动**绑在轨道上的点**时，必须看得见它此刻走到哪了。
+ *
+ * 用户反馈："动点移动的动画没有了，就是动点移动的时候我只能看到在拖动但是拖到哪里了根本不知道，
+ * 直到松手才能看到位置。"
+ *
+ * 实测根因（探针读数）：参数确实在实时走（`data-host-residual` = 0、`data-drag-parameter` 从 π 一路变），
+ * 但**画面上那个点没被重建到新坐标**——`refreshPrimitiveObject` 是按**文档里的图元**重建的，
+ * 而拖动预览只把新坐标写进了内存里的 `points` 表，于是重建出来的是**旧位置**的球；
+ * 抬手提交文档，点才"跳"过去。点标注投的正是那个球（`pointLabels.ts`），
+ * 所以"拖的时候字母不动"和"点手柄不动"是同一件事。
+ */
+test("shows the bound point moving while the pointer is still down", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "立体几何" }).click()
+  const scene = page.locator("[data-3d-scene]")
+  // 先把相机钉死：下面要把世界坐标投影成抓取点，取景动画一跑就抓空了。
+  await page.evaluate(() => (document.querySelector('button[aria-label="自动取景"]') as HTMLButtonElement | null)?.click())
+  await page.getByRole("button", { name: "重置3D视角" }).click()
+  await settleCamera(scene)
+
+  await page.getByRole("button", { name: "添加空间点" }).click()
+  await page.getByRole("button", { name: "添加空间点" }).click()
+  await page.getByText("A", { exact: true }).first().click()
+  await page.getByText("B", { exact: true }).first().click({ modifiers: ["Shift"] })
+  await page.getByRole("button", { name: "添加空间圆轨道" }).click()
+
+  // 第三个点 C 绑到这条轨道上，它就是要被拖的动点。
+  await page.getByRole("button", { name: "添加空间点" }).click()
+  const select = page.getByRole("combobox", { name: "点宿主绑定" })
+  const orbitValue = await select.locator("option").filter({ hasText: "圆轨道" }).first().getAttribute("value")
+  await select.selectOption(orbitValue!)
+
+  const label = page.locator('.three-point-label[data-point-label="C"]')
+  const labelBefore = await label.boundingBox()
+  expect(labelBefore).not.toBeNull()
+  const before = await readPointPosition(page)
+
+  await page.getByRole("button", { name: "自由拖动" }).click()
+  const start = await projectWorldPoint(page, { x: before[0], y: before[1], z: before[2] })
+  await page.mouse.move(start.x, start.y)
+  await page.mouse.down()
+  // 抓的必须是这个点（不是旁边的棱或面），否则下面量的是别的东西。
+  await expect(scene).toHaveAttribute("data-drag-target", /^point:/)
+  await page.mouse.move(start.x + 48, start.y - 36, { steps: 8 })
+
+  // **手还没松**：参数已经变了，画面上这个点也必须已经在别处了。
+  const parameterMid = await scene.getAttribute("data-drag-parameter")
+  expect(parameterMid).not.toBeNull()
+  const labelMid = await label.boundingBox()
+  expect(labelMid).not.toBeNull()
+  const moved = Math.hypot(labelMid!.x - labelBefore!.x, labelMid!.y - labelBefore!.y)
+  expect(moved).toBeGreaterThan(4)
+})
+
+/** 等相机**停稳**（连续两次读数一致）再投影；判据不依赖动画时长。 */
+async function settleCamera(scene: import("@playwright/test").Locator) {
+  let previous = ""
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const current = `${await scene.getAttribute("data-camera-azimuth")}|${await scene.getAttribute("data-camera-elevation")}|${await scene.getAttribute("data-camera-distance")}|${await scene.getAttribute("data-camera-target")}`
+    if (current === previous) return
+    previous = current
+    await scene.page().waitForTimeout(120)
+  }
+}
+
 async function readPointPosition(page: Page): Promise<number[]> {
   return Promise.all(["X", "Y", "Z"].map(async (axis) => Number(await page.getByRole("spinbutton", { name: `坐标 ${axis}` }).inputValue())))
 }

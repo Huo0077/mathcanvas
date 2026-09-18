@@ -463,6 +463,45 @@ describe("MathCanvas workbench", () => {
   })
 
   /**
+   * 用户反馈："圆轨道上的动点无法与定点建立直线连接"。
+   *
+   * 根因是 schema 的 `onHost` 允许类型里漏了 `circle3`：把点绑到轨道之后**整份文档**都算不合法，
+   * 而 `addPrimitive`（加点、建线……）写入前要校验整份文档——于是轨道上有了动点之后，
+   * **后续什么新对象都加不进来**（实测报 `point3 host binding is invalid`），
+   * 用户看到的就是"无法与定点建立直线连接"。
+   */
+  it("still adds points and lines after a point is bound to a circle track", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
+    fireEvent.click(screen.getAllByText("A")[0])
+    fireEvent.click(screen.getAllByText("B")[0], { shiftKey: true })
+    fireEvent.click(screen.getByRole("button", { name: "添加空间圆轨道" }))
+
+    // 第三个点绑到轨道上（宿主下拉里那条写着「圆轨道」）。
+    fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
+    const hostSelect = screen.getByRole("combobox", { name: "点宿主绑定" }) as HTMLSelectElement
+    const orbitOption = Array.from(hostSelect.options).find((option) => option.textContent?.includes("圆轨道"))
+    expect(orbitOption).toBeTruthy()
+    fireEvent.change(hostSelect, { target: { value: orbitOption!.value } })
+
+    const point3s = () => useSceneStore.getState().document.primitives.filter((primitive) => primitive.type === "point3")
+    expect(point3s()).toHaveLength(3)
+
+    // 关键：绑定之后**还能**再添加一个定点（绑定之前这段是通的，绑定之后就全被拒了）。
+    fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
+    expect(point3s()).toHaveLength(4)
+
+    // 而且"动点 + 定点"真的能建出空间直线。
+    fireEvent.click(screen.getAllByText("C")[0])
+    fireEvent.click(screen.getAllByText("D")[0], { shiftKey: true })
+    fireEvent.click(screen.getByRole("button", { name: "由选中点创建空间直线" }))
+    expect(useSceneStore.getState().document.primitives.filter((primitive) => primitive.type === "line3")).toHaveLength(1)
+    expect(screen.queryByRole("alert")).toBeNull()
+  })
+
+  /**
    * 检查器里的「朝向」：空间面与圆轨道没有存欧拉角，所以给的是**相对**旋转（选轴 + 角度 + 应用），
    * 读数（当前法向）随后刷新。用户口径："也可以在右侧属性栏设置为 90 度。"
    */

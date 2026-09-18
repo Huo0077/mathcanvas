@@ -290,7 +290,14 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>, parameter
       else if (value.binding.kind === "onPlane" && (typeof value.binding.planeId !== "string" || referenceType(byId, value.binding.planeId) !== "plane3" || !Array.isArray(value.binding.coordinates) || value.binding.coordinates.length !== 2 || !value.binding.coordinates.every(isFiniteNumber) || !isValidPlaneFrame(value.binding.frame))) errors.push("point3 plane binding is invalid")
       else if (value.binding.kind === "derived" && (!Array.isArray(value.binding.sourceIds) || value.binding.sourceIds.length === 0 || value.binding.sourceIds.some((sourceId) => typeof sourceId !== "string" || !byId.has(sourceId)) || typeof value.binding.feature !== "string")) errors.push("point3 derived binding is invalid")
       // 宿主绑定的引用必须存在且类型正确：悬空引用会让点静默冻住，而且文档依然能保存（实测过的坑）。
-      else if (value.binding.kind === "onHost" && (typeof value.binding.hostId !== "string" || !["line3", "segment3", "ray3", "edge3"].includes(referenceType(byId, value.binding.hostId) ?? "") || !isFiniteNumber(value.binding.parameter))) errors.push("point3 host binding is invalid")
+      /**
+       * 一维宿主：线 / 线段 / 射线 / 棱，以及**空间圆轨道**（`circle3`，参数就是圆周角）。
+       *
+       * 漏掉 `circle3` 的后果比"这条绑定不合法"严重得多：校验是**整份文档**级别的，而 `addPrimitive`
+       * 写入前要过它——于是轨道上只要有动点，后续加点 / 建线 / 建面全部被拒（实测报
+       * `point3 host binding is invalid`），用户看到的是"圆轨道上的动点无法与定点建立直线连接"。
+       */
+      else if (value.binding.kind === "onHost" && (typeof value.binding.hostId !== "string" || !["line3", "segment3", "ray3", "edge3", "circle3"].includes(referenceType(byId, value.binding.hostId) ?? "") || !isFiniteNumber(value.binding.parameter))) errors.push("point3 host binding is invalid")
       else if (value.binding.kind === "onFace" && (typeof value.binding.faceId !== "string" || referenceType(byId, value.binding.faceId) !== "face3" || !isFiniteUvPair(value.binding.uv))) errors.push("point3 face binding is invalid")
       else if (value.binding.kind === "onSurface" && (typeof value.binding.solidId !== "string" || !["cylinder", "cone"].includes(referenceType(byId, value.binding.solidId) ?? "") || !isFiniteUvPair(value.binding.uv))) errors.push("point3 surface binding is invalid")
       // 实体内：宿主必须是**实体**（点要有体积才谈得上"在里面"），参数是三个 [0,1] 比例。

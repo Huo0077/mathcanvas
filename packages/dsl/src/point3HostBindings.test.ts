@@ -41,6 +41,32 @@ describe("3D point host bindings", () => {
     expect(validateDocument(notFinite).valid).toBe(false)
   })
 
+  it("accepts a circle track as a host, like any other one-dimensional host", () => {
+    /**
+     * 空间圆轨道（`circle3`）是一维宿主（参数就是圆周角），用户会把动点绑到它上面。
+     *
+     * 这条不是"锦上添花"：schema 漏了 `circle3` 之后，绑上去的点会让**整份文档**校验失败，
+     * 而 `addPrimitive`（加点、建线、建面……）是先校验整份文档再写入的——于是"轨道上的动点"
+     * 会导致后续**什么新对象都加不进来**（实测报 `point3 host binding is invalid`），
+     * 用户看到的就是"圆轨道上的动点无法与定点建立直线连接"。
+     */
+    const document = hostDocument()
+    document.primitives.push(
+      { id: "orbit-1", type: "circle3", center: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 0, z: 1 }, radius: 2 },
+      { id: "on-orbit", type: "point3", position: { x: 2, y: 0, z: 0 }, binding: { kind: "onHost", hostId: "orbit-1", parameter: 0 } }
+    )
+
+    expect(validateDocument(document)).toEqual({ valid: true })
+
+    // 反过来仍要挡住真正的错引用：绑到一个**点**上不是合法宿主。
+    const wrongHost = hostDocument()
+    wrongHost.primitives.push(
+      { id: "orbit-1", type: "circle3", center: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 0, z: 1 }, radius: 2 },
+      { id: "on-orbit", type: "point3", position: { x: 2, y: 0, z: 0 }, binding: { kind: "onHost", hostId: "a", parameter: 0 } }
+    )
+    expect(validateDocument(wrongHost).valid).toBe(false)
+  })
+
   it("rejects a surface binding that points at something that is not a round solid", () => {
     const wrongSolid = hostDocument()
     bindingOf(wrongSolid, "on-surface").solidId = "face-abc"

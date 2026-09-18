@@ -59,6 +59,10 @@ test("scales the track by dragging its radius handle, keeping bound points on th
   const outward = { x: handle.x - centreOnScreen.x, y: handle.y - centreOnScreen.y }
   const outwardLength = Math.hypot(outward.x, outward.y)
   const step = { x: (outward.x / outwardLength) * 70, y: (outward.y / outwardLength) * 70 }
+  // 乘客点 C 的画面位置：手还没松时它必须已经在往外走（下面 (1) 里核验）。
+  const passenger = page.locator('.three-point-label[data-point-label="C"]')
+  const passengerBefore = await passenger.boundingBox()
+  expect(passengerBefore).not.toBeNull()
   await page.mouse.move(handle.x, handle.y)
   await page.mouse.down()
   await page.mouse.move(handle.x + step.x / 2, handle.y + step.y / 2, { steps: 3 })
@@ -67,6 +71,15 @@ test("scales the track by dragging its radius handle, keeping bound points on th
   // (1) 拖动**期间**半径已经变了（不是抬手才跳），而且绑定点仍然贴在圆周上。
   const during = Number(await scene.getAttribute("data-track-radius"))
   expect(during).toBeGreaterThan(3)
+
+  /**
+   * 用户口径里的"动画"：**手还没松**，画面上那个乘客点就已经跟着新半径往外走了。
+   * 只断言"抬手后坐标对"是不够的——实测过这一条：坐标确实对，但拖动期间点手柄画的还是旧半径上的位置
+   * （`refreshPrimitiveObject` 按文档重建，而预览半径只写在内存里），于是整段拖动看起来是"点没动，松手才跳"。
+   */
+  const passengerMid = await passenger.boundingBox()
+  expect(passengerMid).not.toBeNull()
+  expect(Math.hypot(passengerMid!.x - passengerBefore!.x, passengerMid!.y - passengerBefore!.y)).toBeGreaterThan(4)
 
   await page.mouse.up()
 
@@ -148,7 +161,8 @@ test("turns the track with the world-axis rings, keeping its centre", async ({ p
   await expect(orientation).toHaveAttribute("data-object-orientation", "0.000,0.000,1.000")
 })
 
-/** 没抓到手柄时行为必须一字不变：指针在圆心附近按下不会改半径。 */test("leaves the radius alone when the pointer is not on the handle", async ({ page }) => {
+/** 没抓到手柄时行为必须一字不变：指针在圆心附近按下不会改半径。 */
+test("leaves the radius alone when the pointer is not on the handle", async ({ page }) => {
   await page.goto("/")
   await page.getByRole("button", { name: "立体几何" }).click()
 

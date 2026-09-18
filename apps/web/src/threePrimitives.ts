@@ -901,7 +901,20 @@ export function visibleSolids(document: GeometryDocument): SolidPrimitive[] {
  * 抽成函数是为了拖动绑定点时能**只重建受影响的对象**（下游实时跟随），而不是整场重建。
  */
 export function buildPointDrivenObject(primitive: PrimitiveSpec, points: Map<string, Point3Primitive>, selected: boolean, tolerance = 0.005): THREE.Object3D | null {
-  if (primitive.type === "point3") return createPoint3Mesh(primitive, selected)
+  /**
+   * 点手柄画在 `points` 里的坐标上，**不是**文档里的坐标。
+   *
+   * 拖动期间文档不提交，新坐标只写在 `points` 里（绑定点沿宿主滑动、点跟着轨道半径手柄缩放都是这样）。
+   * 按文档坐标重建，画面上就是"拖了半天那个点还钉在原地，松手才跳过去"——用户实测反馈
+   * "动点移动的时候我只能看到在拖动但是拖到哪里了根本不知道，直到松手才能看到位置"。
+   *
+   * 整场同步时 `points` 就是按文档重建的（`threeScene.tsx` 里同步开头那一句），两者恒等，
+   * 所以这里优先取 `points` 不改变整场同步的结果。
+   */
+  if (primitive.type === "point3") {
+    const live = points.get(primitive.id)
+    return createPoint3Mesh(live ? { ...primitive, position: live.position } : primitive, selected)
+  }
   if (primitive.type === "line3" || primitive.type === "segment3" || primitive.type === "ray3") return createPointDrivenLine(primitive, points, selected)
   if (primitive.type === "edge3") return createEdge3Line(primitive, points, selected)
   if (primitive.type === "face3") return createFace3Mesh(primitive, points, selected)

@@ -6,7 +6,7 @@ import { createEmptyDocument } from "@draw/dsl"
 import { buildSolidTemplate, circleConic3, dihedralMarker3, rimCircles3, unfoldPolyhedron3 } from "@draw/geometry-kernel"
 import { POINT_HANDLE_RADIUS_PX, pickPrimitiveAt, pickRaycastHit3, pointHandleWorldRadius, resolveSelectableHit, templateTopologyOwners } from "./threePicking"
 import { applyDragOffsets, dragFamilyIds, dragOffsetDrift, dragWorldPoint, offsetSceneObjects } from "./threeDrag"
-import { createCircle3Line, createConic3Line, createCubeMesh, createCurveLoops3, createDihedralMarkerGroup, createEdge3Line, createFace3Mesh, createPlane3Mesh, createPlanePatch, createPoint3Mesh, createPointDrivenLine, createRimCircles3, createSectionMesh, createSolidGroup, createSolidMesh, createUnfoldNetGroup, cubeUnfoldCenters, disposeObject, nextUnfoldProgress, prefersReducedMotion, sectionUnitNormal } from "./threePrimitives"
+import { buildPointDrivenObject, createCircle3Line, createConic3Line, createCubeMesh, createCurveLoops3, createDihedralMarkerGroup, createEdge3Line, createFace3Mesh, createPlane3Mesh, createPlanePatch, createPoint3Mesh, createPointDrivenLine, createRimCircles3, createSectionMesh, createSolidGroup, createSolidMesh, createUnfoldNetGroup, cubeUnfoldCenters, disposeObject, nextUnfoldProgress, prefersReducedMotion, sectionUnitNormal } from "./threePrimitives"
 import { applyCameraState, cameraBasis, clampCameraTarget, createCameraState, fitCameraState, panCameraState, resetCameraState, rotateCameraState, zoomCameraState } from "./threeCamera"
 import { sceneSyncDecision } from "./sceneContentKey"
 
@@ -41,6 +41,23 @@ describe("Three.js geometry scene", () => {
 
     mesh.geometry.dispose()
     ;(mesh.material as THREE.Material).dispose()
+  })
+
+  /**
+   * 拖动期间文档不提交，新坐标只写在 `points` 表里；重建出来的点必须画在**表里**的坐标上。
+   * 按文档坐标画就是用户反馈的"拖到哪儿了根本不知道，直到松手才能看到位置"。
+   */
+  it("draws a rebuilt point where the live points map says, not where the document says", () => {
+    const primitive: Point3Primitive = { id: "point3-live", type: "point3", position: { x: 0, y: 0, z: 0 } }
+    const live = new Map<string, Point3Primitive>([["point3-live", { ...primitive, position: { x: 2, y: 0, z: 0 } }]])
+
+    const mesh = buildPointDrivenObject(primitive, live, false)
+    expect(mesh).toBeInstanceOf(THREE.Mesh)
+    expect((mesh as THREE.Mesh).position.toArray()).toEqual([2, 0, 0])
+
+    // 表里没有这个点（还没同步）时如实退回文档坐标，不把点画到别处去。
+    const fallback = buildPointDrivenObject({ ...primitive, position: { x: 1, y: 1, z: 1 } }, new Map(), false)
+    expect((fallback as THREE.Mesh).position.toArray()).toEqual([1, 1, 1])
   })
 
   it("renders a line3 from stable point references", () => {
