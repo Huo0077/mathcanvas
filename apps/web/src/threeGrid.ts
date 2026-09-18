@@ -37,9 +37,18 @@ export function buildGridGeometry(radius: number, options: GridGeometryOptions =
   return geometry
 }
 
-/** 栅格两层的颜色与"每格占多少像素才看得清"的淡出曲线。 */
-export const GRID_MINOR_COLOR = "#e2e6ef"
-export const GRID_MAJOR_COLOR = "#aeb8cf"
+/**
+ * 栅格两层的颜色与"每格占多少像素才看得清"的淡出曲线。
+ *
+ * **两端同源**：平面几何的草稿纸格线走 CSS 令牌 `--color-graph-grid-minor` / `--color-graph-grid-major`
+ * （见 `styles/tokens.css`），three.js 这边读不到 CSS 变量，只能各写一份**同样的值**。
+ * 改一处就要改两处——`threeGrid.test.ts` 会盯着这组值，别让它悄悄漂回去。
+ */
+export const GRID_MINOR_COLOR = "#e8dfc2"
+export const GRID_MAJOR_COLOR = "#d5c79f"
+
+/** 与 `--color-graph-grid-*` 的对应关系（供测试与文档核对，避免"改了这里忘了那边"）。 */
+export const GRAPH_PAPER_GRID_TOKENS = { minor: "--color-graph-grid-minor", major: "--color-graph-grid-major" } as const
 
 export function gridLayerOpacity(pixelsPerCell: number): number {
   // 一格小于 1.5px 时完全看不见、大于 4.5px 时完全可见：中间线性过渡，避免远处糊成一片灰。

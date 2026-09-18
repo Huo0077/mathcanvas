@@ -428,6 +428,34 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .graphics[data-canvas-surface="graph-paper"] .canvas-card .canvas-viewport-controls { border-color: var(--color-graph-paper-edge); background: rgb(255 253 245 / 94%); }
 
 /**
+ * 立体几何与平面几何**同一套视觉令牌**（slice 6）。
+ *
+ * 用户口径："优化立体几何的 ui 设计，主要参考平面几何的 ui 设计。"
+ *
+ * 只换视觉、不动布局（e2e 依赖现有的位置与分组）：工作台底色变暖、画布透出同一张纸、
+ * 内沿一圈暖色投影、纸纹与右上角水印照搬。立体几何的画布是 WebGL canvas，所以"纸"由外壳与
+ * `three-render-target` 提供（three.js 那边把 `scene.background` 留空，让它透出来——纸色只有一处定义）。
+ *
+ * 纸纹强度与平面同级（同一个 `--paper-grain-opacity`）；水印用 `∴`（立体几何的记号）而不是 `∑`。
+ */
+.three-canvas-shell[data-canvas-surface="graph-paper"] { background: linear-gradient(180deg, #f6f4ea, #f2f0e6); }
+.three-canvas-shell[data-canvas-surface="graph-paper"] .three-render-target { background: var(--color-graph-paper); box-shadow: inset 0 0 0 1px rgb(255 255 255 / 70%), 0 1px 2px rgb(120 106 64 / 8%), 0 18px 38px rgb(120 106 64 / 10%); }
+.three-canvas-shell[data-canvas-surface="graph-paper"]::before {
+  content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none;
+  background: #fff; filter: url(#paper-grain); opacity: var(--paper-grain-opacity);
+  mix-blend-mode: multiply;
+}
+.three-canvas-shell[data-canvas-surface="graph-paper"]::after {
+  content: "∴"; position: absolute; right: 18px; top: 8px; z-index: 2; pointer-events: none;
+  color: rgb(180 166 120 / 22%); font-size: 26px; line-height: 1;
+}
+/* 控件与平面几何对齐：同一套圆角 / 边框 / 纸底，位置与分组不动。 */
+.three-canvas-shell[data-canvas-surface="graph-paper"] .three-scene-controls button,
+.three-canvas-shell[data-canvas-surface="graph-paper"] .three-camera-controls button { border-color: var(--color-graph-paper-edge); background: rgb(255 253 245 / 94%); }
+.three-canvas-shell[data-canvas-surface="graph-paper"] .three-scene-controls button:hover,
+.three-canvas-shell[data-canvas-surface="graph-paper"] .three-camera-controls button:hover { background: #fff; }
+
+/**
  * 颜色选择：色板 ＋ 自定义取色框。
  *
  * 色板是"让选颜色这件事看得见"的关键：一排可点的色块，比一个窄窄的原生取色框直观得多。

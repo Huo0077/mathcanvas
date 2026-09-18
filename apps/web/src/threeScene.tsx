@@ -32,10 +32,10 @@ import { defaultStrokeFor } from "./primitiveStyle"
  */
 const RIM_CURVE_COLOR = defaultStrokeFor({ id: "rim-curve", type: "edge3", pointIds: ["rim-a", "rim-b"] })
 
-const scenePalette = {
-  background: "#fbfcff",
-  grid: "#d9deea"
-} as const
+/**
+ * 3D 画布**不再自带底色**：纸底色由 CSS 令牌 `--color-graph-paper` 一处定义（见 `scene.background = null`
+ * 那里的说明）。这里刻意不留一份 JS 的颜色副本——留了就是第二个真源。
+ */
 
 /** Pointer bookkeeping for one press; lives at component scope so a scene rebuild cannot end a drag. */
 interface PointerState {
@@ -273,7 +273,15 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     if (!container) return
 
     const scene = new THREE.Scene()
-    scene.background = new THREE.Color(scenePalette.background)
+    /**
+     * 背景交给 CSS，不在这里填色。
+     *
+     * 用户要求"优化立体几何的 ui 设计，主要参考平面几何的 ui 设计"：纸底色、内沿阴影、纸纹与右上角水印
+     * 都是**一条** CSS 规则（`data-canvas-surface="graph-paper"`，见 `styles/global.css`）。
+     * 渲染器本来就是 `alpha: true`，把 `scene.background` 留空，画布就透出后面那层纸——
+     * 纸色只有一处定义，改 CSS 就等于改了两边；在这里再填一个 `#fdfbf3` 就是第二个真源。
+     */
+    scene.background = null
     // The shell owns the viewport height, so measure it exactly: clamping here would desync the drawing
     // buffer from the CSS box and stretch the projection.
     const viewportSize = () => ({ width: Math.max(container.clientWidth, 1), height: Math.max(container.clientHeight, 1) })
@@ -881,6 +889,12 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
         sceneShell.dataset.gridCentre = `${placement.centre.x},${placement.centre.y}`
         sceneShell.dataset.gridExtent = String(placement.extent)
         sceneShell.dataset.axesLength = String(placement.axesLength)
+        /**
+         * 栅格颜色读数：立体几何的格线色与平面几何的 CSS 令牌**两端同源**（`--color-graph-grid-minor/major`）。
+         * three.js 读不到 CSS 变量，所以颜色各写了一份——把这个值暴露出来，e2e 才能拿它与
+         * `getComputedStyle` 读到的令牌值逐字比对，而不是靠肉眼看两张截图。
+         */
+        sceneShell.dataset.gridColors = `${GRID_MINOR_COLOR},${GRID_MAJOR_COLOR}`
       }
     }
     const render = () => {
@@ -1553,5 +1567,5 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
   /** 「以面为剖切面」需要有选中的截面作为目标。 */
   const hasSelectedSection = selectedIds.some((id) => document.primitives.some((primitive) => primitive.id === id && primitive.type === "section"))
   const angle = dihedralAngleDegrees({ x: 1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 })
-  return <div className="three-canvas-shell" ref={containerRef} data-3d-scene="true" data-pan-mode={panMode ? "true" : "false"} data-drag-mode={dragMode ? "true" : "false"} aria-label="3D 几何场景"><div className="three-render-target" ref={renderTargetRef} /><div className="three-measurement-overlay" ref={measurementOverlayRef} aria-label="三维测量标注" /><div className="three-point-label-overlay" ref={pointLabelOverlayRef} aria-label="三维点标注" />{webglAvailable && <div className="three-scene-controls" aria-label="3D显示控制"><button type="button" aria-pressed={transparentFaces} onClick={() => setTransparentFaces((visible) => !visible)}>透明面</button><button type="button" aria-pressed={showHiddenEdges} onClick={() => setShowHiddenEdges((visible) => !visible)}>隐藏边</button><button type="button" aria-pressed={showNormals} onClick={toggleNormals}>法向量</button><button type="button" aria-pressed={unfolded} onClick={() => setUnfolded((visible) => !visible)}>{unfolded ? "折叠" : "展开"}</button><button type="button" aria-pressed={showAngle} onClick={toggleAngleDemo}>测量二面角</button><button type="button" aria-label="自动取景" aria-pressed={autoFit} title="开启后，加载文件、增删图元或内容跑出视野时会自动把视角调整到框住全部可见图元（保留 30% 安全边距）；你手动转动过视角之后就不再主动抢" onClick={() => { const next = !autoFit; setAutoFit(next); saveViewPreference3d({ autoFit: next }); if (next) fitWithoutTouchRef.current() }}>自动取景</button><button type="button" aria-label="以面为剖切面" aria-pressed={facePickMode} title="点一下这个按钮，再点实体上的某个面，该面就成为选中截面的剖切面" disabled={!hasSelectedSection} onClick={() => setFacePickMode((active) => !active)}>取面</button></div>}{webglAvailable && <div className="three-camera-controls" aria-label="3D视角控制"><button type="button" aria-label="自由拖动" aria-pressed={dragMode} title="开启后左键按住图形即整体拖动：实体、点、以及由点驱动的棱/线/面/平面都会跟着指针在屏幕平面内移动，其它对象不受影响" onClick={() => enterMode("drag")}>自由拖动</button><button type="button" aria-label="平移视角" aria-pressed={panMode} title="开启后左键拖动画布即平移视角，按 Ctrl 拖动沿视线前后移动" onClick={() => enterMode("pan")}>平移视角</button><button type="button" aria-label="适应视图" title="把视角调整到刚好框住当前图形，并把视角中心移回图形" onClick={() => fitCameraRef.current()}>适应视图</button><button type="button" aria-label="重置3D视角" title="回到默认视角" onClick={() => resetCameraRef.current()}>重置视角</button></div>}{webglAvailable && <p className="three-camera-hint" data-camera-hint="true">{dragMode ? "自由拖动已开启：左键按住图形整体移动 · 关掉按钮后左键拖动恢复为旋转视角 · 滚轮缩放" : panMode ? "平移视角已开启：左键拖动平移 · 按 Ctrl 拖动沿视线前后移动 · 滚轮缩放" : "左键拖动旋转 · 中键或 Shift+左键拖动平移 · Ctrl+拖动沿视线前后移动 · 滚轮缩放"}</p>}{showAngle && webglAvailable && <div className="three-angle-readout" role="status">二面角：{angle.toFixed(1)}°（示例法向量 X/Y）</div>}{!webglAvailable && <div className="three-scene-status" role="status">当前浏览器不支持 WebGL，无法显示 3D 场景。</div>}{webglAvailable && !hasGeometry && <div className="three-scene-status" role="status">添加点、线或面开始探索三维空间。</div>}</div>
+  return <div className="three-canvas-shell" ref={containerRef} data-3d-scene="true" data-canvas-surface="graph-paper" data-pan-mode={panMode ? "true" : "false"} data-drag-mode={dragMode ? "true" : "false"} aria-label="3D 几何场景"><div className="three-render-target" ref={renderTargetRef} /><div className="three-measurement-overlay" ref={measurementOverlayRef} aria-label="三维测量标注" /><div className="three-point-label-overlay" ref={pointLabelOverlayRef} aria-label="三维点标注" />{webglAvailable && <div className="three-scene-controls" aria-label="3D显示控制"><button type="button" aria-pressed={transparentFaces} onClick={() => setTransparentFaces((visible) => !visible)}>透明面</button><button type="button" aria-pressed={showHiddenEdges} onClick={() => setShowHiddenEdges((visible) => !visible)}>隐藏边</button><button type="button" aria-pressed={showNormals} onClick={toggleNormals}>法向量</button><button type="button" aria-pressed={unfolded} onClick={() => setUnfolded((visible) => !visible)}>{unfolded ? "折叠" : "展开"}</button><button type="button" aria-pressed={showAngle} onClick={toggleAngleDemo}>测量二面角</button><button type="button" aria-label="自动取景" aria-pressed={autoFit} title="开启后，加载文件、增删图元或内容跑出视野时会自动把视角调整到框住全部可见图元（保留 30% 安全边距）；你手动转动过视角之后就不再主动抢" onClick={() => { const next = !autoFit; setAutoFit(next); saveViewPreference3d({ autoFit: next }); if (next) fitWithoutTouchRef.current() }}>自动取景</button><button type="button" aria-label="以面为剖切面" aria-pressed={facePickMode} title="点一下这个按钮，再点实体上的某个面，该面就成为选中截面的剖切面" disabled={!hasSelectedSection} onClick={() => setFacePickMode((active) => !active)}>取面</button></div>}{webglAvailable && <div className="three-camera-controls" aria-label="3D视角控制"><button type="button" aria-label="自由拖动" aria-pressed={dragMode} title="开启后左键按住图形即整体拖动：实体、点、以及由点驱动的棱/线/面/平面都会跟着指针在屏幕平面内移动，其它对象不受影响" onClick={() => enterMode("drag")}>自由拖动</button><button type="button" aria-label="平移视角" aria-pressed={panMode} title="开启后左键拖动画布即平移视角，按 Ctrl 拖动沿视线前后移动" onClick={() => enterMode("pan")}>平移视角</button><button type="button" aria-label="适应视图" title="把视角调整到刚好框住当前图形，并把视角中心移回图形" onClick={() => fitCameraRef.current()}>适应视图</button><button type="button" aria-label="重置3D视角" title="回到默认视角" onClick={() => resetCameraRef.current()}>重置视角</button></div>}{webglAvailable && <p className="three-camera-hint" data-camera-hint="true">{dragMode ? "自由拖动已开启：左键按住图形整体移动 · 关掉按钮后左键拖动恢复为旋转视角 · 滚轮缩放" : panMode ? "平移视角已开启：左键拖动平移 · 按 Ctrl 拖动沿视线前后移动 · 滚轮缩放" : "左键拖动旋转 · 中键或 Shift+左键拖动平移 · Ctrl+拖动沿视线前后移动 · 滚轮缩放"}</p>}{showAngle && webglAvailable && <div className="three-angle-readout" role="status">二面角：{angle.toFixed(1)}°（示例法向量 X/Y）</div>}{!webglAvailable && <div className="three-scene-status" role="status">当前浏览器不支持 WebGL，无法显示 3D 场景。</div>}{webglAvailable && !hasGeometry && <div className="three-scene-status" role="status">添加点、线或面开始探索三维空间。</div>}</div>
 }

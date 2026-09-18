@@ -52,10 +52,10 @@ npx playwright test
 
 ## Slice 6：UI 令牌对齐（立体几何 ↔ 平面几何）
 
-- [ ] `threeScene.tsx`：3D 外壳加 `data-canvas-surface="graph-paper"`（或 `graph-paper-3d`，二者取一并在 CSS 里统一）。
-- [ ] `styles/global.css`：把 `graph-paper` 选择器扩到 3D 外壳（底色 / 内沿阴影 / 纸纹 `::before` / 水印），控件样式与平面几何对齐；纸纹强度与平面同级或略淡。
-- [ ] `threeScene.tsx`：`GridHelper` / `AxesHelper` 颜色换成与 `--color-graph-grid-minor/major` 对齐的暖色常量，并注明"两端同源"。
-- [ ] 验收：截图对照（平面 vs 立体）+ e2e 断言主题标记；既有 e2e 全部保持通过（布局未动）。
+- [x] `threeScene.tsx`：3D 外壳加 `data-canvas-surface="graph-paper"`（或 `graph-paper-3d`，二者取一并在 CSS 里统一）。**落点**：用与平面**同名**的 `graph-paper`（规则直接复用，不新增一套）；另外把 `scene.background` 改成 `null`，让画布透出 CSS 的纸色——原来 three.js 里的 `#fbfcff` 与 CSS 令牌是两个真源。
+- [x] `styles/global.css`：把 `graph-paper` 选择器扩到 3D 外壳（底色 / 内沿阴影 / 纸纹 `::before` / 水印），控件样式与平面几何对齐；纸纹强度与平面同级或略淡。**落点**：底色与工作台渐变搬同一组值，`.three-render-target` 承担平面 `.canvas-card` 的角色（纸色 + 内沿暖色投影），纸纹与平面同级（同一个 `--paper-grain-opacity`），水印 `∴`；控件只改边框与底色，位置与分组不动。
+- [x] `threeScene.tsx`：`GridHelper` / `AxesHelper` 颜色换成与 `--color-graph-grid-minor/major` 对齐的暖色常量，并注明"两端同源"。**一处按理由偏离**：只换**栅格**（`#e8dfc2` / `#d5c79f`，与令牌逐字相同），**坐标轴保留 X 红 / Y 绿 / Z 蓝**——那是语义，与切片 4 的旋转环一一对应，暖化成灰会让"轴的颜色"与"环的颜色"对不上（平面几何的轴本来也没有三色语义）。"两端同源"由 `threeGrid.test.ts` + 浏览器读数 `data-grid-colors`（e2e 与 `getComputedStyle` 逐字比对）守卫。
+- [x] 验收：截图对照（平面 vs 立体）+ e2e 断言主题标记；既有 e2e 全部保持通过（布局未动）。**落点**：`e2e/three-ui-tokens.spec.ts`（主题标记 + 栅格色与令牌逐字相同 + 纸色确实是暖色）；截图对照人工看过两张（`build-check/paper-planar.png` / `paper-spatial.png`）。顺带修掉一条既有 e2e 抖动（自动取景动画与投影抢时间，已抓出真因并固定相机）。
 
 ## Slice 7：文档收尾
 

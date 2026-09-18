@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { buildGridGeometry } from "./threeGrid"
+import { buildGridGeometry, GRAPH_PAPER_GRID_TOKENS, GRID_MAJOR_COLOR, GRID_MINOR_COLOR } from "./threeGrid"
 
 /**
  * 背景栅格的几何：**1 格 = 1 个世界单位**（用户要求"网格大小要严格对应一比一"）。
@@ -45,5 +45,22 @@ describe("background grid geometry", () => {
     expect(positionsOf(major)).toHaveLength(7 * 2 * 2 * 3)
     const xs = [...new Set(positionsOf(major).filter((_, index) => index % 3 === 0))]
     expect(xs.sort((left, right) => left - right)).toEqual([-30, -20, -10, 0, 10, 20, 30])
+  })
+
+  /**
+   * 立体几何的 UI 令牌与平面几何对齐（slice 6）：栅格换成草稿纸的**暖色**格线。
+   *
+   * three.js 读不到 CSS 变量，颜色只能各写一份，所以这里把"两端同源"钉成断言：
+   * 立体几何的栅格色必须与 `styles/tokens.css` 里 `--color-graph-grid-minor/major` 的值**逐字相同**。
+   * 忘了同步时，先红的是这条用例，而不是用户的眼睛。
+   */
+  it("uses the same warm grid colours as the planar paper tokens", () => {
+    expect(GRAPH_PAPER_GRID_TOKENS).toEqual({ minor: "--color-graph-grid-minor", major: "--color-graph-grid-major" })
+    expect(GRID_MINOR_COLOR.toLowerCase()).toBe("#e8dfc2")
+    expect(GRID_MAJOR_COLOR.toLowerCase()).toBe("#d5c79f")
+    // 暖色 = 红分量最高、蓝分量最低（灰蓝的旧值正好相反）。
+    const warmth = (hex: string) => Number.parseInt(hex.slice(1, 3), 16) - Number.parseInt(hex.slice(5, 7), 16)
+    expect(warmth(GRID_MINOR_COLOR)).toBeGreaterThan(0)
+    expect(warmth(GRID_MAJOR_COLOR)).toBeGreaterThan(0)
   })
 })

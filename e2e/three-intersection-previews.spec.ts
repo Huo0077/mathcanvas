@@ -23,9 +23,44 @@ async function loadFixture(page: import("@playwright/test").Page) {
   await page.locator('input[type="file"]').setInputFiles("e2e/fixtures/overlapping-cubes.mgeo")
   const scene = page.locator("[data-3d-scene]")
   await expect(scene).toHaveAttribute("data-preview-face-count", "6")
-  // 重置视角同时让自动取景不再抢镜头：之后的世界点投影是稳定的。
+  /**
+   * **关掉自动取景**再重置视角：这一条是防抖的真根因。
+   *
+   * 取景是动画，而且会在**文档变化之后**再次触发（这个用例中途还要创建交点/交线）。
+   * 于是"投影一次 → 移动指针 → 断言"这段时间里相机可能又飘走，指针就落到旁边的面片上了。
+   * 实测（`--repeat-each=3`）：`data-preview-hover-key` 期望 `…:线`、实际 `…:面5`，而失败那次读数里
+   * 带着 `data-camera-fit="2"`（取景跑过第二轮）——不是纯偶发，是取景与断言抢时间。
+   *
+   * 用 DOM 派发点击而不是 `locator.click()`：**「显示控制」那一排的最后一个按钮会被「视角控制」那一排
+   * 盖住**（窄一点的画布上两排在中线相撞，实测 `自由拖动` 拦截了 `自动取景` 的指针事件，
+   * 见 `geometry3d-drag.spec.ts` 里的同款注释）。这是既有布局问题，不属于本轮改动，这里绕开它。
+   */
+  await page.evaluate(() => (document.querySelector('button[aria-label="自动取景"]') as HTMLButtonElement | null)?.click())
+  const autoFit = page.getByRole("button", { name: "自动取景" })
+  await expect(autoFit).toHaveAttribute("aria-pressed", "false")
+  // 重置视角：之后的世界点投影是稳定的（相机不会再被取景抢走）。
   await page.getByRole("button", { name: "重置3D视角" }).click()
+  await settleCamera(scene)
   return scene
+}
+
+/**
+ * 等相机**停稳**再投影。
+ *
+ * 取景是**动画**（几百毫秒），读数在这段时间里一帧一变；投影用的是"这一刻"的相机，
+ * 于是指针落点会随动画漂走——细目标（一条交线）就会漂到旁边的面片上。
+ * 实测过一次真实抖动：`data-preview-hover-key` 期望 `…:线`、实际是 `…:面5`，
+ * 而当时的读数里 `data-camera-fit="2"` 说明取景还在跑（那次是全量跑里唯一一条失败，重跑三次都没复现）。
+ * 判据取"连续两次采样完全一致"，不依赖具体动画时长。
+ */
+async function settleCamera(scene: import("@playwright/test").Locator) {
+  let previous = ""
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const current = `${await scene.getAttribute("data-camera-azimuth")}|${await scene.getAttribute("data-camera-elevation")}|${await scene.getAttribute("data-camera-distance")}|${await scene.getAttribute("data-camera-target")}`
+    if (current === previous) return
+    previous = current
+    await scene.page().waitForTimeout(120)
+  }
 }
 
 test("marks every overlapping pair without selecting anything", async ({ page }) => {
