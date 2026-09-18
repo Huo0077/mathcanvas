@@ -936,10 +936,23 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
         ;(gridMajorHelper.material as THREE.LineBasicMaterial).opacity = gridLayerOpacity(pixelsPerUnit * placement.majorEvery)
       }
       if (axesHelper) {
+        /**
+         * **只缩放，不挪位置。** 坐标轴就是"世界原点在哪"的标记：栅格可以跟着内容走（覆盖范围要够），
+         * 但零点只有一个，而且它不动。
+         *
+         * 实测过一走就错：内容挪到 (8,8) 后自动取景把视点中心带到 (10,10)，曾经这里跟着写了一句
+         * `position.set(placement.centre...)`，于是坐标轴被画在 (10,10,0)——离真正的原点 **191 像素**，
+         * 用户看到的就是"原点位置错了、图有点怪"（`e2e/three-origin-marker.spec.ts` 守这条不变量）。
+         */
         axesHelper.scale.setScalar(placement.axesLength)
-        axesHelper.position.set(placement.centre.x, placement.centre.y, 0)
       }
       if (sceneShell) {
+        /**
+         * 坐标轴对象的**世界位置**读数。它必须恒为世界原点 `0,0,0`——坐标轴就是"原点在哪"的标记，
+         * 跟着栅格中心跑就等于告诉用户一个错的零点（实测：内容挪到 (8,8) 之后坐标轴离真正的原点
+         * **191 像素**）。把它交出来，这条不变量才能被断言。
+         */
+        sceneShell.dataset.axesOrigin = axesHelper ? `${axesHelper.position.x.toFixed(3)},${axesHelper.position.y.toFixed(3)},${axesHelper.position.z.toFixed(3)}` : ""
         sceneShell.dataset.gridCell = String(placement.cell)
         sceneShell.dataset.gridMajor = String(placement.majorEvery)
         sceneShell.dataset.gridCentre = `${placement.centre.x},${placement.centre.y}`
