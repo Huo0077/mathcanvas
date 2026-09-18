@@ -1,11 +1,11 @@
-import type { Coordinate, PrimitiveSpec } from "@draw/dsl"
+import type { Coordinate, PrimitiveSpec, SampledPrimitiveType } from "@draw/dsl"
 
 import { sampleEllipse, sampleHyperbolaBranches, sampleParabola } from "./conics"
 import { adaptiveSampleFunctionSegments } from "./calculus"
 import { evaluateParameterExpression } from "./parameters"
 import type { IntersectionResult } from "./types"
 
-export type SampledPrimitive = Extract<PrimitiveSpec, { type: "line" | "segment" | "ray" | "polyline" | "circle" | "arc" | "parabola" | "ellipse" | "hyperbola" | "function" }>
+export type SampledPrimitive = Extract<PrimitiveSpec, { type: SampledPrimitiveType }>
 
 /**
  * 采样点云的尺度：并集包围盒对角线（图形有多大）与坐标量级（double 在该量级下的分辨率）。
@@ -87,6 +87,23 @@ function samplePrimitive(primitive: SampledPrimitive): Coordinate[][] {
     return [[primitive.a, { x: primitive.a.x + unit.x * 100, y: primitive.a.y + unit.y * 100 }]]
   }
   if (primitive.type === "polyline") return [primitive.points]
+  /**
+   * 由其它图元引申出来的直线类（切线 / 法线 / 割线）：它们**画出来就是 `a→b` 这一段**，
+   * 所以采样也只取这一段 —— 交点必须落在用户看得见的那截线上。
+   *
+   * 状态不是 `approximate` 的一律不采样：`a/b` 是上一次成功重算留下的残值，
+   * 拿它求交会凭空造出交点（一个"算不出来的切线"在最上面那条用例里正是这样）。
+   */
+  if (primitive.type === "tangent" || primitive.type === "normal" || primitive.type === "secant") {
+    if (primitive.status !== "approximate") return []
+    const length = Math.hypot(primitive.b.x - primitive.a.x, primitive.b.y - primitive.a.y)
+    return Number.isFinite(length) && length > 1e-12 ? [[primitive.a, primitive.b]] : []
+  }
+  /** 导函数与积分区域自带采样点；积分只用区域的**上边界**（填充是装饰，不参与求交）。 */
+  if (primitive.type === "derivative" || primitive.type === "integral") {
+    if (primitive.status !== "approximate") return []
+    return primitive.points.length >= 2 ? [primitive.points] : []
+  }
   if (primitive.type === "circle") return [Array.from({ length: 257 }, (_, index) => { const angle = Math.PI * 2 * index / 256; return { x: primitive.center.x + primitive.radius * Math.cos(angle), y: primitive.center.y + primitive.radius * Math.sin(angle) } })]
   if (primitive.type === "arc") return [Array.from({ length: 129 }, (_, index) => { const angle = primitive.startAngle + (primitive.endAngle - primitive.startAngle) * index / 128; return { x: primitive.center.x + primitive.radius * Math.cos(angle), y: primitive.center.y + primitive.radius * Math.sin(angle) } })]
   if (primitive.type === "parabola") return [sampleParabola(primitive, [-12, 12], 256)]
@@ -94,7 +111,13 @@ function samplePrimitive(primitive: SampledPrimitive): Coordinate[][] {
   if (primitive.type === "hyperbola") {
     return sampleHyperbolaBranches(primitive, [-12, 12], 256)
   }
-  return adaptiveSampleFunctionSegments((x) => evaluateParameterExpression(primitive.expression, { x }), primitive.domain, { initialSteps: primitive.samples ?? 256, maxSteps: Math.max(primitive.samples ?? 256, 2048) })
+  if (primitive.type === "function") return adaptiveSampleFunctionSegments((x) => evaluateParameterExpression(primitive.expression, { x }), primitive.domain, { initialSteps: primitive.samples ?? 256, maxSteps: Math.max(primitive.samples ?? 256, 2048) })
+  /**
+   * 穷尽性检查：往 `SAMPLED_PRIMITIVE_TYPES` 里加了类型却忘了在这里写采样，**编译就会失败**。
+   * 以前这条名单有五份副本，漏一处只会在运行期表现为"这个图元没有交点"——切线就是这么被漏掉的。
+   */
+  const exhaustive: never = primitive
+  return exhaustive
 }
 
 /** Two sampled curves can cross more than twice; clipping the list to the first pair silently hid real
