@@ -1,6 +1,6 @@
 # 由动点引申出来的图元：成为一等图元（2026-09-18）
 
-> **状态**：设计已与用户确认（2026-09-18，三处选择：范围 **B**、测量 **A**、"可以"）。待实施；实施切片见 `docs/superpowers/plans/2026-09-18-derived-primitive-intersections.md`。
+> **状态**：**已交付**（2026-09-18，8 个 TDD 切片逐片提交）。设计经用户确认（三处选择：范围 **B**、测量 **A**、"可以"）；逐片 RED→GREEN 证据、一处我自己写错的测试与门禁数字见 `docs/project-progress.md` 的「由动点引申出来的图元：成为一等图元」一节。实施计划：`docs/superpowers/plans/2026-09-18-derived-primitive-intersections.md`。
 
 用户口径（原文，三句）：
 

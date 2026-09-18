@@ -1,5 +1,7 @@
 # 派生图元成为一等图元：实施计划
 
+> **状态（2026-09-18）**：**9 个任务全部完成并推送**（8 个实现/测试任务 + 文档收口）。逐任务的实测数字与两处如实偏差（e2e 最初没有真正验证切线、顺手修掉一个非法 UTF-8 字节）见 `docs/project-progress.md` 的对应小节；最终门禁：单测 125 文件 / 1500 用例、lint 0 error / 14 warning、生产构建通过、Playwright 112/112。
+>
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 让切线 / 法线 / 割线 / 导函数 / 积分区域能与其它图元求交，让平面测量接受"线类 / 圆类"来源（夹角、点到直线距离、圆的面积/周长/半径），并把切线缺省画长一点。
