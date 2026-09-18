@@ -152,6 +152,30 @@ describe("engineering inspector", () => {
     expect(screen.getByLabelText("数值转换").textContent).toContain("还没有测量")
   })
 
+  /**
+   * 用户反馈（2026-09-18）："为什么会显示未识别为精确形式" —— 根因是量出来的值常常是
+   * **简单分数的六位小数写法**（坐标 0.333333 ⇒ 长度 0.666667），紧容差会拒绝它。
+   * 现在这种情况显示 `≈ 2/3`，认不出精确形式的显示两位小数，**"未识别"这句话不再出现**。
+   */
+  it("recovers a fraction from a rounded decimal measurement and falls back to two decimals otherwise", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [{ id: "line-1", type: "line", a: { x: 0, y: 0 }, b: { x: 1, y: 0 } }]
+    document.measurements = [
+      { id: "m-approx", kind: "measurement3", sourceIds: ["line-1"], metric: "length", value: 0.666667, unit: "u", precision: "numeric-approximation", status: "valid", explanation: "" },
+      { id: "m-decimals", kind: "measurement3", sourceIds: ["line-1"], metric: "angle", value: 0.6435, unit: "rad", precision: "numeric-approximation", status: "valid", explanation: "" }
+    ]
+    useSceneStore.setState({ document, workspaceDocuments: { conics: document }, history: [], future: [], error: null })
+    renderInspector()
+
+    const panel = screen.getByLabelText("数值转换")
+    const rows = panel.querySelectorAll("[data-exact-form-row]")
+    expect(rows).toHaveLength(2)
+    expect(rows[0].getAttribute("data-exact-form-text")).toBe("≈ 2/3")
+    expect(rows[0].getAttribute("data-exact-form-certainty")).toBe("approximate")
+    expect(rows[1].getAttribute("data-exact-form-text")).toBe("≈ 0.64")
+    expect(panel.textContent).not.toContain("未识别为精确形式")
+  })
+
   it("keeps supported measurement actions reachable from the data tab", () => {
     const document = {
       ...createEmptyDocument("geometry3d"),
