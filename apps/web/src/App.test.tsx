@@ -39,10 +39,10 @@ describe("MathCanvas workbench", () => {
 
     expect(screen.getAllByRole("button", { name: "添加点" })).toHaveLength(1)
 
-    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到立体几何" }))
     expect(screen.getAllByRole("button", { name: "添加立方体" })).toHaveLength(1)
 
-    fireEvent.click(screen.getByRole("button", { name: "工程制图" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到工程制图" }))
     expect(screen.getAllByRole("button", { name: "导出 SVG" })).toHaveLength(1)
   })
 
@@ -90,7 +90,7 @@ describe("MathCanvas workbench", () => {
     expect(screen.queryByText("智能体 (Agent)")).toBeNull()
     expect(screen.queryByLabelText("智能体指令")).toBeNull()
 
-    fireEvent.click(screen.getByRole("button", { name: "工程制图" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到工程制图" }))
     expect(screen.queryByRole("tab", { name: "约束" })).toBeNull()
     expect(screen.queryByText("智能体 (Agent)")).toBeNull()
     // 约束数据仍在文档模型里：旧 .mgeo 打开后不会丢数据。
@@ -99,7 +99,7 @@ describe("MathCanvas workbench", () => {
 
   it("routes the CAD workspace to four engineering drawing views", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "工程制图" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到工程制图" }))
 
     const engineeringDrawing = screen.getByRole("main", { name: "工程制图视图" })
     expect(engineeringDrawing).toBeTruthy()
@@ -152,7 +152,7 @@ describe("MathCanvas workbench", () => {
     expect(screen.queryByRole("button", { name: "微积分" })).toBeNull()
 
     // The workspace stays retired, but 平面几何 keeps a function entry so simple functions remain reachable there.
-    fireEvent.click(screen.getByRole("button", { name: "平面几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到平面几何" }))
     expect(screen.getByRole("button", { name: "添加函数" })).toBeTruthy()
     expect(screen.getByRole("button", { name: "添加抛物线" })).toBeTruthy()
     expect(screen.getByRole("button", { name: "添加椭圆" })).toBeTruthy()
@@ -174,7 +174,7 @@ describe("MathCanvas workbench", () => {
 
   it("undoes and redoes with the keyboard, the way most people expect", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "工程制图" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到工程制图" }))
     fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
     expect(useSceneStore.getState().document.primitives).toHaveLength(1)
 
@@ -225,7 +225,7 @@ describe("MathCanvas workbench", () => {
 
   it("creates and activates layers from the CAD layer tree", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "工程制图" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到工程制图" }))
     fireEvent.click(screen.getByRole("tab", { name: "图层树" }))
 
     expect(screen.getByRole("button", { name: "几何" })).toBeTruthy()
@@ -239,7 +239,7 @@ describe("MathCanvas workbench", () => {
 
   it("selects a sheet view from the CAD drawing tree and toggles its visibility", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "工程制图" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到工程制图" }))
     fireEvent.click(screen.getByRole("tab", { name: "图纸树" }))
 
     const tree = screen.getByRole("region", { name: "模型与图纸树" })
@@ -252,7 +252,7 @@ describe("MathCanvas workbench", () => {
 
   it("scales a projection viewport and persists the layout on the document", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "工程制图" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到工程制图" }))
 
     fireEvent.click(screen.getByRole("button", { name: "放大 主视图" }))
 
@@ -261,7 +261,7 @@ describe("MathCanvas workbench", () => {
 
   it("drafts 2D geometry into the active layer and hides it with that layer", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "工程制图" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到工程制图" }))
     fireEvent.click(screen.getByRole("button", { name: "2D 绘图" }))
     fireEvent.click(screen.getByRole("button", { name: "添加点" }))
 
@@ -276,7 +276,7 @@ describe("MathCanvas workbench", () => {
 
   it("refuses to draft on a hidden layer and explains the rejection in the status bar", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "工程制图" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到工程制图" }))
     fireEvent.click(screen.getByRole("tab", { name: "图层树" }))
     fireEvent.click(screen.getByRole("button", { name: "隐藏 几何" }))
     fireEvent.click(screen.getByRole("button", { name: "2D 绘图" }))
@@ -288,16 +288,16 @@ describe("MathCanvas workbench", () => {
 
   it("switches workspaces without losing each workspace document", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "平面几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到平面几何" }))
     fireEvent.click(screen.getByRole("button", { name: "添加点" }))
     expect(screen.getAllByText("A", { selector: ".object-name" })).toHaveLength(1)
 
-    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到立体几何" }))
     expect(screen.queryByRole("img", { name: "几何画布" })).toBeNull()
-    fireEvent.click(screen.getByRole("button", { name: "平面几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到平面几何" }))
     expect(screen.getAllByText("A", { selector: ".object-name" })).toHaveLength(1)
-    expect(screen.getByRole("button", { name: "平面几何" }).getAttribute("aria-pressed")).toBe("true")
-    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    expect(screen.getByRole("button", { name: "跳转到平面几何" }).getAttribute("aria-pressed")).toBe("true")
+    fireEvent.click(screen.getByRole("button", { name: "跳转到立体几何" }))
   })
 
   it("shows the default intersection and updates it from the slope slider", () => {
@@ -315,7 +315,7 @@ describe("MathCanvas workbench", () => {
 
   it("creates and edits a 3D solid from the workspace property inspector", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到立体几何" }))
     fireEvent.click(screen.getByRole("button", { name: "添加立方体" }))
     // 这个用例断言的是"改尺寸之后**物化顶点**跟着重算"，所以先把原点钉住（默认落点会变，见 addDefaultCube）。
     fireEvent.change(screen.getByRole("spinbutton", { name: "原点 X" }), { target: { value: "-2" } })
@@ -333,7 +333,7 @@ describe("MathCanvas workbench", () => {
 
   it("creates point-driven 3D geometry from selected classroom points", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到立体几何" }))
     fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
     fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
 
@@ -347,7 +347,7 @@ describe("MathCanvas workbench", () => {
 
   it("edits the source coordinates of a selected space point", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到立体几何" }))
     fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
 
     fireEvent.change(screen.getByRole("spinbutton", { name: "坐标 X" }), { target: { value: "4" } })
@@ -357,7 +357,7 @@ describe("MathCanvas workbench", () => {
 
   it("creates and edits a 3D solid from the workspace property inspector", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到立体几何" }))
     fireEvent.click(screen.getByRole("button", { name: "添加立方体" }))
 
     expect(screen.getAllByText("立方体 1")[0]).toBeTruthy()
@@ -368,7 +368,7 @@ describe("MathCanvas workbench", () => {
 
   it("creates point-driven 3D geometry from selected classroom points", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到立体几何" }))
     fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
     fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
 
@@ -382,7 +382,7 @@ describe("MathCanvas workbench", () => {
 
   it("edits the source coordinates of a selected space point", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到立体几何" }))
     fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
 
     fireEvent.change(screen.getByRole("spinbutton", { name: "坐标 X" }), { target: { value: "4" } })
@@ -399,7 +399,7 @@ describe("MathCanvas workbench", () => {
     const points = () => useSceneStore.getState().document.primitives.filter((primitive): primitive is Extract<ReturnType<typeof useSceneStore.getState>["document"]["primitives"][number], { type: "point3" }> => primitive.type === "point3")
 
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到立体几何" }))
 
     // 1 个点：以它为圆心的水平圆（法向 +Z），半径取默认值。
     fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
@@ -446,7 +446,7 @@ describe("MathCanvas workbench", () => {
    */
   it("edits a circle track's own centre and leaves the construction points free", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到立体几何" }))
     fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
     fireEvent.click(screen.getAllByText("A")[0])
     fireEvent.click(screen.getByRole("button", { name: "添加空间圆轨道" }))
@@ -472,7 +472,7 @@ describe("MathCanvas workbench", () => {
    */
   it("still adds points and lines after a point is bound to a circle track", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到立体几何" }))
     fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
     fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
     fireEvent.click(screen.getAllByText("A")[0])
@@ -509,7 +509,7 @@ describe("MathCanvas workbench", () => {
     const trackNormal = () => (useSceneStore.getState().document.primitives.find((primitive) => primitive.type === "circle3") as { normal: { x: number; y: number; z: number } }).normal
 
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到立体几何" }))
     fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
     fireEvent.click(screen.getAllByText("A")[0])
     fireEvent.click(screen.getByRole("button", { name: "添加空间圆轨道" }))
@@ -1014,7 +1014,7 @@ describe("MathCanvas workbench", () => {
    */
   it("places every default template on the ground, with no horizontal overlap", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到立体几何" }))
     for (const name of ["添加立方体", "添加棱锥", "添加圆柱", "添加圆锥"]) fireEvent.click(screen.getByRole("button", { name }))
 
     const primitives = useSceneStore.getState().document.primitives
@@ -1516,7 +1516,7 @@ describe("MathCanvas workbench", () => {
 
   it("deletes a spatial point together with the measurement that depends on it", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到立体几何" }))
     fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
     fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
     fireEvent.click(algebraRow("A"))
@@ -1564,7 +1564,7 @@ describe("MathCanvas workbench", () => {
 
   it("shows a small bottom-left guide when a feature button is clicked", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "平面几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到平面几何" }))
 
     expect(screen.queryByRole("status", { name: "操作指引" })).toBeNull()
 
@@ -1576,7 +1576,7 @@ describe("MathCanvas workbench", () => {
 
   it("replaces the guide on the next feature click and closes it on demand", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "平面几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到平面几何" }))
     fireEvent.click(screen.getByRole("button", { name: "添加折线" }))
     expect(screen.getByRole("status", { name: "操作指引" }).textContent).toContain("双击")
 
@@ -1589,7 +1589,7 @@ describe("MathCanvas workbench", () => {
 
   it("dismisses the guide with Escape and clears it once a creation finishes", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "平面几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到平面几何" }))
     const canvas = screen.getByRole("img", { name: "几何画布" })
 
     fireEvent.click(screen.getByRole("button", { name: "添加直线" }))
@@ -1605,7 +1605,7 @@ describe("MathCanvas workbench", () => {
 
   it("clears the selection with Escape once nothing needs cancelling", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "平面几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到平面几何" }))
     fireEvent.click(screen.getByRole("button", { name: "添加点" }))
     fireEvent.click(algebraRow("A"))
     const deleteButton = () => screen.getByRole("button", { name: "删除对象" }) as HTMLButtonElement
@@ -1626,7 +1626,7 @@ describe("MathCanvas workbench", () => {
 
   it("explains the dihedral workflow instead of only naming the measurement", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到立体几何" }))
     fireEvent.click(screen.getByRole("button", { name: "添加立方体" }))
     fireEvent.click(screen.getByRole("button", { name: "展开 立方体 1 拓扑 的子对象" }))
     fireEvent.click(algebraRow("面 1"))
@@ -1641,7 +1641,7 @@ describe("MathCanvas workbench", () => {
 
   it("confirms an added space point and points at the Shift multi-select", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到立体几何" }))
     fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
 
     expect(screen.getByRole("status", { name: "操作指引" }).textContent).toContain("Shift")
@@ -1651,7 +1651,7 @@ describe("MathCanvas workbench", () => {
 
   it("explains the two dihedral angle choices for selected faces", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到立体几何" }))
     fireEvent.click(screen.getByRole("button", { name: "添加立方体" }))
     fireEvent.click(screen.getByRole("button", { name: "展开 立方体 1 拓扑 的子对象" }))
     fireEvent.click(algebraRow("面 1"))
@@ -1666,7 +1666,7 @@ describe("MathCanvas workbench", () => {
 
   it("cuts point-driven topology with an ordered section boundary", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到立体几何" }))
     fireEvent.click(screen.getByRole("button", { name: "添加立方体" }))
     // 断言里的角坐标是按这个立方体算的（默认落点会变），所以把原点钉住。
     for (const [axis, value] of [["X", "-2"], ["Y", "-2"], ["Z", "-1"]] as const) fireEvent.change(screen.getByRole("spinbutton", { name: `原点 ${axis}` }), { target: { value } })
@@ -1684,7 +1684,7 @@ describe("MathCanvas workbench", () => {
 
   it("binds a spatial point to a host and slides it along the host parameter", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到立体几何" }))
     fireEvent.click(screen.getByRole("button", { name: "添加立方体" }))
     fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
 
@@ -1723,7 +1723,7 @@ describe("MathCanvas workbench", () => {
    */
   it("constrains a spatial point inside a cube", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到立体几何" }))
     fireEvent.click(screen.getByRole("button", { name: "添加立方体" }))
     // 下面断言的是"点被夹在 (±2, ±2, ±2) 这个盒子里"，所以把立方体钉回那个位置（默认落点会变）。
     for (const [axis, value] of [["X", "-2"], ["Y", "-2"], ["Z", "-1"]] as const) fireEvent.change(screen.getByRole("spinbutton", { name: `原点 ${axis}` }), { target: { value } })
@@ -1765,7 +1765,7 @@ describe("MathCanvas workbench", () => {
 
   it("materializes a section into independent primitives", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到立体几何" }))
     fireEvent.click(screen.getByRole("button", { name: "添加立方体" }))
     fireEvent.click(algebraRow("立方体 1 拓扑"))
     fireEvent.click(screen.getByRole("button", { name: "创建截面" }))
@@ -1791,13 +1791,13 @@ describe("MathCanvas workbench", () => {
 
   it("keeps a point-driven 3D document while switching workspaces", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到立体几何" }))
     fireEvent.click(screen.getByRole("button", { name: "添加立方体" }))
     fireEvent.click(algebraRow("立方体 1 拓扑"))
     fireEvent.click(screen.getByRole("button", { name: "创建截面" }))
 
-    fireEvent.click(screen.getByRole("button", { name: "平面几何" }))
-    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到平面几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到立体几何" }))
 
     const primitives = useSceneStore.getState().document.primitives
     expect(useSceneStore.getState().document.workspace).toBe("geometry3d")
@@ -1808,26 +1808,26 @@ describe("MathCanvas workbench", () => {
 
   it("shows a WebGL fallback state instead of a silent blank 3D canvas", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到立体几何" }))
 
     expect(screen.getByText(/不支持 WebGL/)).toBeTruthy()
   })
 
   it("disables projected exports in the 3D workspace and keeps them in planar workspaces", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到立体几何" }))
 
     expect((screen.getByRole("button", { name: "导出 SVG" }) as HTMLButtonElement).disabled).toBe(true)
     expect((screen.getByRole("button", { name: "导出 PNG" }) as HTMLButtonElement).disabled).toBe(true)
     expect((screen.getByRole("button", { name: "导出 CSV" }) as HTMLButtonElement).disabled).toBe(false)
 
-    fireEvent.click(screen.getByRole("button", { name: "平面几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到平面几何" }))
     expect((screen.getByRole("button", { name: "导出 SVG" }) as HTMLButtonElement).disabled).toBe(false)
   })
 
   it("explains an invalid spatial construction instead of creating objects", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到立体几何" }))
     const command = screen.getByRole("button", { name: "由选中点创建空间直线" }) as HTMLButtonElement
 
     expect(command.disabled).toBe(true)
@@ -1843,7 +1843,7 @@ describe("MathCanvas workbench", () => {
 
   it("recolours a 3D solid and its generated topology from the property inspector", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到立体几何" }))
     fireEvent.click(screen.getByRole("button", { name: "添加立方体" }))
     openInspectorSection("外观样式")
 
@@ -1860,7 +1860,7 @@ describe("MathCanvas workbench", () => {
 
   it("undoes and redoes one 3D construction step at a time", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "跳转到立体几何" }))
     fireEvent.click(screen.getByRole("button", { name: "添加立方体" }))
     expect(useSceneStore.getState().document.primitives.some((primitive) => primitive.type === "cube")).toBe(true)
 
@@ -2257,5 +2257,68 @@ describe("MathCanvas workbench", () => {
     expect(Math.hypot(tangent.point.x, tangent.point.y)).toBeCloseTo(3, 6)
     expect(tangent.vertical).toBe(false)
     expect(tangent.a.y).toBeCloseTo(tangent.b.y, 6)
+  })
+})
+
+/**
+ * 顶级模块骨架：模块 A（传统工作区）是默认界面，模块 B（Agent 工作区）从左侧导航栏进入。
+ * 这一组用例只钉住"两个板块的边界"——谁在什么条件下渲染、切换会不会丢掉画布内容。
+ */
+describe("top-level modules", () => {
+  beforeEach(() => {
+    localStorage.clear()
+    const document = createDemoDocument()
+    useSceneStore.setState({ document, workspaceDocuments: { [document.workspace]: document }, history: [], future: [], error: null, treeTab: "model", expandedIds: ["sheet-1"], filterQuery: "" })
+  })
+
+  it("opens on the traditional workspace and keeps the Agent area out of the DOM", () => {
+    render(<App />)
+
+    expect(globalThis.document.querySelector(".app-shell")?.getAttribute("data-app-module")).toBe("traditional")
+    expect(screen.getByRole("button", { name: "传统工作区" }).getAttribute("aria-pressed")).toBe("true")
+    // 模块 A：画布、Ribbon、三个工作区入口都在；模块 B 的输入框一个都不该被渲染出来。
+    expect(screen.getByRole("img", { name: "几何画布" })).toBeTruthy()
+    expect(screen.getByRole("region", { name: "功能区" })).toBeTruthy()
+    expect(screen.queryByRole("textbox", { name: "对话输入" })).toBeNull()
+    expect(screen.queryByRole("log", { name: "对话记录" })).toBeNull()
+  })
+
+  it("switches to the Agent workspace from the rail and back again", () => {
+    render(<App />)
+
+    fireEvent.click(screen.getByRole("button", { name: "Agent 工作区" }))
+
+    expect(globalThis.document.querySelector(".app-shell")?.getAttribute("data-app-module")).toBe("agent")
+    expect(screen.getByRole("textbox", { name: "对话输入" })).toBeTruthy()
+    // 模块 B 里没有 Ribbon，也没有几何画布：两块界面不会互相串场。
+    expect(screen.queryByRole("region", { name: "功能区" })).toBeNull()
+    expect(screen.queryByRole("img", { name: "几何画布" })).toBeNull()
+
+    fireEvent.click(screen.getByRole("button", { name: "返回画布" }))
+
+    expect(globalThis.document.querySelector(".app-shell")?.getAttribute("data-app-module")).toBe("traditional")
+    expect(screen.getByRole("img", { name: "几何画布" })).toBeTruthy()
+  })
+
+  it("keeps the geometry document untouched while visiting the Agent workspace", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    const before = useSceneStore.getState().document.primitives.length
+
+    fireEvent.click(screen.getByRole("button", { name: "Agent 工作区" }))
+    fireEvent.click(screen.getByRole("button", { name: "返回画布" }))
+
+    expect(useSceneStore.getState().document.primitives.length).toBe(before)
+    expect(screen.getByRole("img", { name: "几何画布" }).querySelectorAll('[data-primitive-type="point"]').length).toBeGreaterThan(0)
+  })
+
+  it("switches workspaces from the rail without leaving the traditional module", () => {
+    render(<App />)
+
+    fireEvent.click(screen.getByRole("button", { name: "跳转到立体几何" }))
+
+    expect(useSceneStore.getState().document.workspace).toBe("geometry3d")
+    expect(globalThis.document.querySelector(".app-shell")?.getAttribute("data-app-module")).toBe("traditional")
+    expect(screen.getByRole("button", { name: "跳转到立体几何" }).getAttribute("aria-pressed")).toBe("true")
   })
 })

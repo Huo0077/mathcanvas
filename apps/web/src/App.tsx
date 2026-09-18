@@ -25,6 +25,10 @@ import { StatusBar } from "./components/StatusBar"
 import { createRibbonGroups } from "./ribbonCommands"
 import { anchoredCurve } from "./curveRotation"
 import { PaperTexture } from "./components/PaperTexture"
+import { ModuleRail } from "./components/ModuleRail"
+import { WorkspaceHeader } from "./components/WorkspaceHeader"
+import { AgentWorkspace } from "./components/agent/AgentWorkspace"
+import { DEFAULT_APP_MODULE, type AppModuleId } from "./shellModules"
 import { resolveIntersectionPreview } from "./intersectionPreview3d"
 import { ThreeSceneView } from "./threeScene"
 import type { RibbonTabId } from "./uiState"
@@ -222,6 +226,14 @@ export function App() {
   const [activeRibbonTab, setActiveRibbonTab] = useState<RibbonTabId | null>("home")
   const [ribbonExpanded, setRibbonExpanded] = useState(true)
   const [ribbonPinned, setRibbonPinned] = useState(false)
+  /**
+   * 顶级模块：A「传统工作区」（画布：CAD / 平面几何 / 立体几何）与 B「Agent 工作区」。
+   *
+   * 刻意**不持久化**、默认回到 A：用户口径里 A 就是默认界面；把它落到 localStorage 之后，
+   * 上一次退出时停在 Agent 区会让刷新后"画布不见了"，排查成本远大于那一次点击。
+   * 切模块时把文档草稿、工作区文档原样留着，所以来回切换不会丢任何几何内容。
+   */
+  const [activeModule, setActiveModule] = useState<AppModuleId>(DEFAULT_APP_MODULE)
   const selectedId = selectedIds.at(-1) ?? null
   const slope = document.parameters.slope
   const slopeLine = useMemo(() => document.primitives.find((primitive) => primitive.id === "line-slope"), [document.primitives])
@@ -1351,6 +1363,24 @@ export function App() {
     setLayerNotice(null)
   }
 
+  /**
+   * 切换工作区（平面几何 / 立体几何 / 工程制图）。顶栏标签、左侧模块栏、Agent 区的「返回画布」
+   * 三个入口都走这一个函数：选择、创建步骤、指引与移动端抽屉统统要按**新画布**清空，
+   * 否则切过去之后属性栏还在编辑上一个工作区的图元 id。
+   *
+   * Ribbon 折叠时顺带把它**临时呼出**（与标签栏点击同一行为）：从左侧栏切工作区的人
+   * 接下来多半就是要用命令，留一个空白的命令区只会让他以为切换失败了。
+   */
+  const handleWorkspaceChange = (workspace: Workspace) => {
+    setSelectedIds([])
+    setCreationStep(null)
+    setGuidance(workspace === "geometry3d" ? guidanceFor({ kind: "point3Tool", tool: "line", outcome: "blocked", point3Count: 0 }) : null)
+    setMobileDock(null)
+    setActiveCommand(null)
+    if (!ribbonExpanded) setActiveRibbonTab("home")
+    switchWorkspace(workspace)
+  }
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const shortcut = historyShortcut(event)
@@ -1579,31 +1609,48 @@ export function App() {
     statusBar={<StatusBar commandPrompt={cadStatusPrompt} activeLayerName={activeLayerName} unit="mm" scale={activeSheetScale} diagnosticCount={cadDiagnosticCount} notice={layerNotice} />}
   />
 
-  return <div className="app-shell">
+  return <div className="app-shell" data-app-module={activeModule}>
     {/* 纸纹滤镜的定义。放在 App 里（而不是只放在入口）是因为整个界面的 CSS 都引用 `#paper-grain`，
         任何渲染 App 的地方（含测试与嵌入）都必须有这份定义，否则纹理层会渲染成空白。 */}
     <PaperTexture />
-    <AppChrome activeWorkspace={document.workspace} onWorkspaceChange={(workspace: Workspace) => { setSelectedIds([]); setCreationStep(null); setGuidance(workspace === "geometry3d" ? guidanceFor({ kind: "point3Tool", tool: "line", outcome: "blocked", point3Count: 0 }) : null); setMobileDock(null); setActiveCommand(null); switchWorkspace(workspace) }} ribbonGroups={ribbonGroups} activeRibbonTab={activeRibbonTab} ribbonExpanded={ribbonExpanded} ribbonPinned={ribbonPinned} onRibbonTabChange={setActiveRibbonTab} onRibbonCommand={runRibbonCommand} onRibbonExpandedChange={setRibbonExpanded} onRibbonPinnedChange={setRibbonPinned} onUndo={undo} onRedo={redo} canUndo={canUndo} canRedo={canRedo} onSave={save} onOpen={() => fileInputRef.current?.click()} />
-    {document.workspace === "cad" ? cadWorkbench : <div className="workbench">
-      <div className="workbench-mobile-controls" role="toolbar" aria-label="画布面板">
-        <button type="button" aria-controls="algebra-dock" aria-expanded={mobileDock === "objects"} onClick={() => setMobileDock((current) => current === "objects" ? null : "objects")}>对象列表</button>
-        <button type="button" aria-controls="properties-dock" aria-expanded={mobileDock === "properties"} onClick={() => setMobileDock((current) => current === "properties" ? null : "properties")}>属性检查器</button>
-      </div>
-      {algebraPanel}
-      {document.workspace === "geometry3d" ? <ThreeSceneView document={document} selectedIds={selectedIds} onSelect={updateSelection} onStatusPromptChange={setSceneControl} previews={scenePreviews} onPreviewHover={(hovering, preview) => setHoveredPreviewKey(hovering ? preview.key : null)} onPreviewClick={createFromPreview} onDragEnd={(id, delta) => apply({ op: "translatePrimitive3", id, delta })} onMoveSection={(id, distance) => apply({ op: "moveSectionPlane", id, distance })} onHostDragEnd={(id, parameter) => {
-        const primitive = document.primitives.find((candidate) => candidate.id === id)
-        if (primitive?.type !== "point3" || !primitive.binding) return
-        // 只提交参数：坐标由重算从参数算出，所以点永远精确落在宿主上。
-        if (primitive.binding.kind === "onHost") apply({ op: "updatePrimitive", id, patch: { binding3: { ...primitive.binding, parameter: parameter.u } } })
-        else if (primitive.binding.kind === "onFace" || primitive.binding.kind === "onSurface") apply({ op: "updatePrimitive", id, patch: { binding3: { ...primitive.binding, uv: [parameter.u, parameter.v ?? primitive.binding.uv[1]] } } })
-        // 实体内：三个比例都提交（拖动时夹取已经把点限制在体内，提交的参数就是夹取后的位置）。
-        else if (primitive.binding.kind === "inSolid") apply({ op: "updatePrimitive", id, patch: { binding3: { ...primitive.binding, uvw: [parameter.u, parameter.v ?? primitive.binding.uvw[1], parameter.w ?? primitive.binding.uvw[2]] } } })
-      }} onRotateEnd={(id, axis, degrees) => apply({ op: "rotatePrimitive3", id, axis, degrees })} onTrackRadiusEnd={(id, radius) => apply({ op: "updatePrimitive", id, patch: { radius3: radius } })} onPickSectionFace={applySectionFace} /> : planarCanvas}
-      {inspectorPanel}
-      <div className="status-bar" role="status" aria-live="polite" aria-label="操作提示"><span className="status-bar-prompt">{statusPrompt}</span><span className="status-bar-item">{pointerCoordinate ? `坐标 (${pointerCoordinate.x.toFixed(2)}, ${pointerCoordinate.y.toFixed(2)})` : "坐标 —"}</span><span className="status-bar-item">对象 {document.primitives.length}</span><span className="status-bar-item">工作区 {document.workspace}</span></div>
+    {/* 顶级导航：模块 A 传统工作区 / 模块 B Agent 工作区。它常驻在最左侧（两个模块都在），
+        所以"现在在哪个大板块、怎么换回去"永远看得见，而不是藏在 Agent 区内部的一个按钮里。 */}
+    <ModuleRail
+      activeModule={activeModule}
+      onModuleChange={setActiveModule}
+      activeWorkspace={document.workspace}
+      onWorkspaceChange={handleWorkspaceChange}
+    />
+    {activeModule === "traditional" ? <div className="app-module" data-module="traditional">
+      {/* 顶栏只剩品牌（含动态粒子与打字光标）；文件命令 / 搜索 / 设置下沉到标签栏右端。 */}
+      <WorkspaceHeader />
+      <AppChrome activeWorkspace={document.workspace} onWorkspaceChange={handleWorkspaceChange} ribbonGroups={ribbonGroups} activeRibbonTab={activeRibbonTab} ribbonExpanded={ribbonExpanded} ribbonPinned={ribbonPinned} onRibbonTabChange={setActiveRibbonTab} onRibbonCommand={runRibbonCommand} onRibbonExpandedChange={setRibbonExpanded} onRibbonPinnedChange={setRibbonPinned} onUndo={undo} onRedo={redo} canUndo={canUndo} canRedo={canRedo} onSave={save} onOpen={() => fileInputRef.current?.click()} />
+      {document.workspace === "cad" ? cadWorkbench : <div className="workbench">
+        <div className="workbench-mobile-controls" role="toolbar" aria-label="画布面板">
+          <button type="button" aria-controls="algebra-dock" aria-expanded={mobileDock === "objects"} onClick={() => setMobileDock((current) => current === "objects" ? null : "objects")}>对象列表</button>
+          <button type="button" aria-controls="properties-dock" aria-expanded={mobileDock === "properties"} onClick={() => setMobileDock((current) => current === "properties" ? null : "properties")}>属性检查器</button>
+        </div>
+        {algebraPanel}
+        {document.workspace === "geometry3d" ? <ThreeSceneView document={document} selectedIds={selectedIds} onSelect={updateSelection} onStatusPromptChange={setSceneControl} previews={scenePreviews} onPreviewHover={(hovering, preview) => setHoveredPreviewKey(hovering ? preview.key : null)} onPreviewClick={createFromPreview} onDragEnd={(id, delta) => apply({ op: "translatePrimitive3", id, delta })} onMoveSection={(id, distance) => apply({ op: "moveSectionPlane", id, distance })} onHostDragEnd={(id, parameter) => {
+          const primitive = document.primitives.find((candidate) => candidate.id === id)
+          if (primitive?.type !== "point3" || !primitive.binding) return
+          // 只提交参数：坐标由重算从参数算出，所以点永远精确落在宿主上。
+          if (primitive.binding.kind === "onHost") apply({ op: "updatePrimitive", id, patch: { binding3: { ...primitive.binding, parameter: parameter.u } } })
+          else if (primitive.binding.kind === "onFace" || primitive.binding.kind === "onSurface") apply({ op: "updatePrimitive", id, patch: { binding3: { ...primitive.binding, uv: [parameter.u, parameter.v ?? primitive.binding.uv[1]] } } })
+          // 实体内：三个比例都提交（拖动时夹取已经把点限制在体内，提交的参数就是夹取后的位置）。
+          else if (primitive.binding.kind === "inSolid") apply({ op: "updatePrimitive", id, patch: { binding3: { ...primitive.binding, uvw: [parameter.u, parameter.v ?? primitive.binding.uvw[1], parameter.w ?? primitive.binding.uvw[2]] } } })
+        }} onRotateEnd={(id, axis, degrees) => apply({ op: "rotatePrimitive3", id, axis, degrees })} onTrackRadiusEnd={(id, radius) => apply({ op: "updatePrimitive", id, patch: { radius3: radius } })} onPickSectionFace={applySectionFace} /> : planarCanvas}
+        {inspectorPanel}
+        <div className="status-bar" role="status" aria-live="polite" aria-label="操作提示"><span className="status-bar-prompt">{statusPrompt}</span><span className="status-bar-item">{pointerCoordinate ? `坐标 (${pointerCoordinate.x.toFixed(2)}, ${pointerCoordinate.y.toFixed(2)})` : "坐标 —"}</span><span className="status-bar-item">对象 {document.primitives.length}</span><span className="status-bar-item">工作区 {document.workspace}</span></div>
+      </div>}
+      {(fileError || operationError) && <div role="alert" className="footer-note">{fileError ?? operationError}</div>}
+      {document.workspace !== "cad" && guidance && <GuidanceHint text={guidance} onDismiss={() => setGuidance(null)} />}
+    </div> : <div className="app-module" data-module="agent">
+      {/* 模块 B 不含任何从几何文档派生的 UI（Ribbon / 画布 / 检查器），所以文档一步都不订阅，
+          切进 Agent 区不会因为画布重渲染而卡一下。 */}
+      <AgentWorkspace onBackToWorkspace={() => setActiveModule(DEFAULT_APP_MODULE)} />
+      {(fileError || operationError) && <div role="alert" className="footer-note">{fileError ?? operationError}</div>}
     </div>}
-    {(fileError || operationError) && <div role="alert" className="footer-note">{fileError ?? operationError}</div>}
-    {document.workspace !== "cad" && guidance && <GuidanceHint text={guidance} onDismiss={() => setGuidance(null)} />}
     <input ref={fileInputRef} hidden aria-label="加载 .mgeo 文件" type="file" accept=".mgeo,application/json" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; file.text().then(load).catch(() => setFileError("无法读取 .mgeo 文件")); event.target.value = "" }} />
   </div>
 }
