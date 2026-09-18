@@ -125,6 +125,43 @@ async function settleCamera(scene: import("@playwright/test").Locator) {
   }
 }
 
+/**
+ * 用户口径的原话就是这一条："**圆轨道上的动点无法与定点建立直线连接**"。
+ *
+ * 根因是 `point3` 的 `onHost` 宿主白名单漏了 `circle3`，而校验是**整份文档**级别的、
+ * `addPrimitive` 写入前必过——于是轨道上只要有动点，**之后加点 / 建线 / 建面全部被拒**
+ * （实测报 `point3 host binding is invalid`），用户看到的就是"连不出直线"。
+ *
+ * 这条在浏览器里把用户的动作原样走一遍：轨道 → 动点绑上去 → 选动点与定点 → 建空间直线。
+ */
+test("connects a point that rides the track with a fixed point by a line", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "立体几何" }).click()
+  const algebra = page.locator(".algebra-panel")
+
+  // 定点 A（圆心）+ 圆周点 B ⇒ 半径 3 的轨道。
+  await page.getByRole("button", { name: "添加空间点" }).click()
+  await page.getByRole("button", { name: "添加空间点" }).click()
+  await algebra.getByText("A", { exact: true }).click()
+  await algebra.getByText("B", { exact: true }).click({ modifiers: ["Shift"] })
+  await page.getByRole("button", { name: "添加空间圆轨道" }).click()
+
+  // 动点 C 绑到轨道上（这一步以前会让后续所有新建失效）。
+  await page.getByRole("button", { name: "添加空间点" }).click()
+  const select = page.getByRole("combobox", { name: "点宿主绑定" })
+  const orbitValue = await select.locator("option").filter({ hasText: "圆轨道" }).first().getAttribute("value")
+  await select.selectOption(orbitValue!)
+  await expect(page.getByRole("spinbutton", { name: "宿主参数" })).toBeVisible()
+
+  // 动点 + 定点 ⇒ 空间直线：真的建出来了（被拒时这里一行都不会有）。
+  await algebra.getByText("C", { exact: true }).click()
+  await algebra.getByText("A", { exact: true }).click({ modifiers: ["Shift"] })
+  await page.getByRole("button", { name: "由选中点创建空间直线" }).click()
+  await expect(algebra.getByText("空间直线 1", { exact: true })).toBeVisible()
+  // 如实断言"没有报错"：宿主绑定校验失败时会往这里写一句话。
+  await expect(page.locator(".status-bar-prompt")).not.toContainText("host binding")
+})
+
 async function readPointPosition(page: Page): Promise<number[]> {
   return Promise.all(["X", "Y", "Z"].map(async (axis) => Number(await page.getByRole("spinbutton", { name: `坐标 ${axis}` }).inputValue())))
 }
