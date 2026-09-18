@@ -600,6 +600,35 @@ describe("scene graph operations", () => {
       expect(recomputed.measurements[0].unit).toBe("u")
     })
 
+    /**
+     * 界面上的"夹角（两条线）""面积 / 周长 / 半径"按钮必须真的算得出数来。
+     * 这条在**重算路径**上钉住它：来源是切线与直线、以及一个动圆，都不是点。
+     */
+    it("evaluates a tangent-line angle and a circle's metrics", () => {
+      const document = createEmptyDocument("conics")
+      document.primitives = [
+        { id: "circle-1", type: "circle", center: { x: 0, y: 0 }, radius: 3 },
+        { id: "line-1", type: "line", a: { x: 0, y: 0 }, b: { x: 4, y: 0 } },
+        { id: "tangent-1", type: "tangent", sourceId: "circle-1", x: 0, point: { x: 3, y: 0 }, slope: 0, a: { x: 3, y: -3 }, b: { x: 3, y: 3 }, status: "approximate", anchor: { kind: "parameter", parameter: 0 } }
+      ]
+      document.measurements = [
+        { id: "m-angle", kind: "measurement3", sourceIds: ["line-1", "tangent-1"], metric: "angle", value: 0, unit: "rad", precision: "numeric-approximation", status: "valid", explanation: "" },
+        { id: "m-area", kind: "measurement3", sourceIds: ["circle-1"], metric: "area", value: 0, unit: "u²", precision: "numeric-approximation", status: "valid", explanation: "" },
+        { id: "m-perimeter", kind: "measurement3", sourceIds: ["circle-1"], metric: "perimeter", value: 0, unit: "u", precision: "numeric-approximation", status: "valid", explanation: "" },
+        { id: "m-radius", kind: "measurement3", sourceIds: ["circle-1"], metric: "radius", value: 0, unit: "u", precision: "numeric-approximation", status: "valid", explanation: "" }
+      ]
+
+      const recomputed = recomputeDerivedObjects(document)
+      const reading = (id: string) => recomputed.measurements.find((measurement) => measurement.id === id)!
+
+      // 切线竖直、直线水平 ⇒ 夹角 90°。
+      expect(reading("m-angle").value).toBeCloseTo(Math.PI / 2, 9)
+      expect(reading("m-angle").status).toBe("valid")
+      expect(reading("m-area").value).toBeCloseTo(Math.PI * 9, 9)
+      expect(reading("m-perimeter").value).toBeCloseTo(Math.PI * 6, 9)
+      expect(reading("m-radius").value).toBeCloseTo(3, 9)
+    })
+
     it("follows a dynamic point as it slides along its curve", () => {
       const dragged = applyOperation(measuredDocument(), { op: "translatePrimitive", id: "p2", delta: { x: 4, y: 0 } })
       // desired = (5,0) + (4,0) = (9,0) → t = 0.9, so the length becomes 9.

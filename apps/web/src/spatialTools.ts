@@ -23,12 +23,29 @@ const everyIs = (selection: PrimitiveSpec[], predicate: (primitive: PrimitiveSpe
  *
  * 角的顶点约定：`sourceIds` 的第 2 个（下标 1）是顶点，所以提示里写明"按 Shift 选择时先点边上一点"。
  * 距离取"第 3 个点到前两点确定的直线"的垂距。
+ *
+ * 线类与圆类（含切线 / 动圆）的来源是 2026-09-18 补的：用户口径"由动点引申出来的图元
+ * 也需要具有正常图元的基本功能"，而当时平面测量只认点。
  */
+function isLineLike2d(primitive: PrimitiveSpec): boolean {
+  return ["line", "segment", "ray", "tangent", "normal", "secant"].includes(primitive.type)
+}
+
+function isCircleLike2d(primitive: PrimitiveSpec): boolean {
+  return primitive.type === "circle" || primitive.type === "arc"
+}
+
 function planarMeasurementOptions(selection: PrimitiveSpec[]): MeasurementOption[] {
   const points = selection.filter(isPoint)
   const allPoints = points.length === selection.length
   const options: MeasurementOption[] = []
   if (selection.length === 2 && allPoints) options.push({ metric: "length", label: "长度" })
+  // 两条线类 ⇒ 锐角夹角（"切线与某条直线的夹角"就是这个入口）。
+  if (selection.length === 2 && everyIs(selection, isLineLike2d)) options.push({ metric: "angle", label: "夹角（两条线）" })
+  // 一个点 + 一条线类 ⇒ 点到直线的垂距。
+  if (selection.length === 2 && points.length === 1 && selection.some(isLineLike2d)) options.push({ metric: "distance", label: "距离（点到直线）" })
+  // 一个圆类 ⇒ 面积 / 周长 / 半径（动圆最自然的三个读数）。
+  if (selection.length === 1 && isCircleLike2d(selection[0])) options.push({ metric: "area", label: "面积" }, { metric: "perimeter", label: "周长" }, { metric: "radius", label: "半径" })
   if (selection.length === 3 && allPoints) {
     options.push(
       { metric: "angle", label: "角度（第二个点作顶点）", dihedralKind: "interior" },

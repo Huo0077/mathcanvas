@@ -37,6 +37,27 @@ describe("planar measurement options", () => {
     expect(measurementOptionsFor("conics", [a, b, line])).toEqual([])
   })
 
+  /**
+   * 用户口径："由动点引申出来的图元（如切线，动圆）也需要具有正常图元的基本功能"。
+   * 平面测量以前只认点，所以"切线与直线的夹角""动圆的面积"在界面上根本没有入口。
+   */
+  it("offers an angle for two line-like objects and circle metrics for a circle", () => {
+    const line: PrimitiveSpec = { id: "l1", type: "line", a: { x: 0, y: 0 }, b: { x: 1, y: 0 } }
+    const tangent: PrimitiveSpec = { id: "t1", type: "tangent", sourceId: "circle-x", x: 0, point: { x: 0, y: 0 }, slope: 0, a: { x: 0, y: 0 }, b: { x: 1, y: 1 }, status: "approximate" }
+    const circle: PrimitiveSpec = { id: "c1", type: "circle", center: { x: 0, y: 0 }, radius: 3 }
+
+    expect(measurementOptionsFor("conics", [line, tangent]).map((option) => option.metric)).toEqual(["angle"])
+    expect(measurementOptionsFor("conics", [circle]).map((option) => option.metric)).toEqual(["area", "perimeter", "radius"])
+    // 切线自己不给"长度"：它的 a/b 是绘制长度，量出来是个由绘制参数决定的假数字。
+    expect(measurementOptionsFor("conics", [tangent]).map((option) => option.metric)).toEqual([])
+    // 一个点 + 一条线 = 点到直线的距离。
+    expect(measurementOptionsFor("conics", [a, line]).map((option) => option.metric)).toEqual(["distance"])
+    // 两条线夹角的按钮文案要区别于三点角度。
+    const angle = measurementOptionsFor("conics", [line, tangent]).find((option) => option.metric === "angle")
+    expect(angle?.label).toContain("夹角")
+    expect(angle?.label).toContain("两条线")
+  })
+
   it("states the angle-vertex convention in the button label", () => {
     const angle = measurementOptionsFor("conics", [a, b, c]).find((option) => option.metric === "angle")
     expect(angle?.label).toContain("顶点")

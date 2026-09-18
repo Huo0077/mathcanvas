@@ -28,6 +28,42 @@ const measurement = (metric: Measurement3["metric"], sourceIds: string[], value:
   explanation: ""
 })
 
+describe("planar measurement labels for line and circle sources", () => {
+  /**
+   * 用户口径："由动点引申出来的图元（如切线，动圆）也需要具有正常图元的基本功能"。
+   * 画布数字以前只画点类测量：圆的面积、两线夹角这类测量在画布上**没有数字**。
+   */
+  const circle: PrimitiveSpec = { id: "c1", type: "circle", center: { x: 2, y: -1 }, radius: 3 }
+  const line: PrimitiveSpec = { id: "l1", type: "line", a: { x: 0, y: 0 }, b: { x: 2, y: 0 } }
+  const tangent: PrimitiveSpec = { id: "t1", type: "tangent", sourceId: "c1", x: 0, point: { x: 5, y: -1 }, slope: 0, a: { x: 5, y: -1 }, b: { x: 5, y: 1 }, status: "approximate" }
+
+  it("labels a circle's area and perimeter with the right units, at the centre", () => {
+    const document = documentWith([circle], [measurement("area", ["c1"], Math.PI * 9, "u²"), measurement("perimeter", ["c1"], Math.PI * 6, "u")])
+
+    const labels = planarMeasurementVisuals(document)
+
+    expect(labels.map((label) => label.text)).toEqual(["面积：28.274u²", "周长：18.850u"])
+    // 圆的读数摆在圆心，不是随便飘着。
+    expect(labels[0].position).toEqual({ x: 2, y: -1 })
+  })
+
+  it("labels the angle between a tangent and a line", () => {
+    const document = documentWith([line, tangent], [measurement("angle", ["l1", "t1"], Math.PI / 2, "rad")])
+
+    const labels = planarMeasurementVisuals(document)
+
+    expect(labels).toHaveLength(1)
+    expect(labels[0].text).toBe("角度：1.571rad")
+    expect(Number.isFinite(labels[0].position.x) && Number.isFinite(labels[0].position.y)).toBe(true)
+  })
+
+  it("still draws nothing when a source disappears", () => {
+    const document = documentWith([circle], [measurement("area", ["c-missing"], Math.PI * 9, "u²")])
+
+    expect(planarMeasurementVisuals(document)).toEqual([])
+  })
+})
+
 describe("planar measurement labels", () => {
   it("shows the same text the inspector shows, and places a length at the midpoint", () => {
     const document = documentWith([point("a", 0, 0), point("b", 4, 0)], [measurement("length", ["a", "b"], 4, "u")])

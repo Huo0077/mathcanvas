@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 
 import { decodeMgeo, encodeMgeo, isSampledPrimitiveType, type AnnotationFeature, type DrawingSheetSpec, type EngineeringAnnotationKind, type Measurement3Metric, type PrimitiveSpec, type Vector3, type Workspace } from "@draw/dsl"
-import { buildSolidTemplate, createMeasurement3, evaluatePlanarMeasurement, host3FromPrimitive, selectPrimitivesInBox, type BoxSelectionMode, type PlanarMetric } from "@draw/geometry-kernel"
+import { buildSolidTemplate, createMeasurement3, entityResolverFor, evaluatePlanarMeasurement, host3FromPrimitive, selectPrimitivesInBox, type BoxSelectionMode, type PlanarMetric } from "@draw/geometry-kernel"
 import { deletionTargets, planeThroughPoints, sectionMaterialization, sectionPivot, sectionPlaneThroughSource, sectionSourceVertices, solidVolumeHostFor, validateDeletion, validatePatch } from "@draw/scene-graph"
 import type { Alignment } from "@draw/scene-graph"
 
@@ -992,13 +992,16 @@ export function App() {
      * 与空间分支"来源不够就提示要选什么"的行为保持一致。
      */
     if (document.workspace !== "geometry3d") {
-      const positions = new Map(document.primitives.filter((primitive) => primitive.type === "point").map((point) => [point.id, { x: point.x, y: point.y }]))
+      /**
+       * 与 scene-graph 的重算**用同一个实体解析器**（点 / 线 / 圆），否则这里预检会把
+       * "切线与直线的夹角"当成无意义的来源直接拒掉 —— 按钮点了没反应。
+       */
       const reading = evaluatePlanarMeasurement({
         id,
         metric: metric as PlanarMetric,
         sourceIds: selectedIds,
         angleKind: dihedralKind === "exterior" ? "exterior" : "interior"
-      }, (sourceId) => positions.get(sourceId) ?? null)
+      }, entityResolverFor(document.primitives))
       if (reading.status === "insufficient-data" || reading.status === "degenerate") {
         setGuidance(guidanceFor({ kind: "measurement", metric, outcome: "blocked" }))
         return

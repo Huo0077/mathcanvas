@@ -1,4 +1,5 @@
-import type { Coordinate, GeometryDocument, Measurement3, PrimitiveSpec } from "@draw/dsl"
+import type { Coordinate, GeometryDocument, Measurement3 } from "@draw/dsl"
+import { entityResolverFor, type MeasurableEntity } from "@draw/geometry-kernel"
 
 /**
  * 平面（2D）画布上的**常驻测量数字**。
@@ -87,17 +88,52 @@ export function planarMeasurementPosition(measurement: Measurement3, points: Coo
   return null
 }
 
+/**
+ * 实体版的标签位置。
+ *
+ * 与点版的区别只在新来源上：
+ * - 单个圆类（面积 / 周长 / 半径）⇒ 摆在**圆心**；
+ * - 两条线类（夹角）⇒ 摆在两条线中点连线的中点（两线平行时那是中间地带，相交时也在交点附近）；
+ * - 其余情形仍然走点版逻辑（点 + 线类的垂距沿用三点那套垂足）。
+ */
+export function planarMeasurementPositionFor(measurement: Measurement3, entities: MeasurableEntity[]): Coordinate | null {
+  if (entities.length === 1 && entities[0].kind === "circle") return entities[0].center
+  const lines = entities.filter((entity): entity is Extract<MeasurableEntity, { kind: "line" }> => entity.kind === "line")
+  if (measurement.metric === "angle" && entities.length === 2 && lines.length === 2) {
+    return midpoint(midpoint(lines[0].a, lines[0].b), midpoint(lines[1].a, lines[1].b))
+  }
+  if (measurement.metric === "distance" && lines.length === 1) {
+    const target = entities.find((entity) => entity.kind === "point")
+    if (target?.kind === "point") {
+      const { a, b } = lines[0]
+      const dx = b.x - a.x
+      const dy = b.y - a.y
+      const lengthSquared = dx * dx + dy * dy
+      if (!(lengthSquared > 1e-24)) return null
+      const ratio = ((target.position.x - a.x) * dx + (target.position.y - a.y) * dy) / lengthSquared
+      return midpoint({ x: a.x + dx * ratio, y: a.y + dy * ratio }, target.position)
+    }
+  }
+  // 点类来源：交回既有实现（它同时负责三点角度与垂距的摆法）。
+  const points = entities.filter((entity) => entity.kind === "point").map((entity) => entity.position)
+  return planarMeasurementPosition(measurement, points)
+}
+
 /** 画布上要画的全部测量数字（按文档顺序）。 */
 export function planarMeasurementVisuals(document: GeometryDocument, selectedIds: readonly string[] = []): PlanarMeasurementLabel[] {
-  const points = new Map(document.primitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "point" }> => primitive.type === "point").map((point) => [point.id, { x: point.x, y: point.y }]))
+  /**
+   * 来源解析成**实体**：以前只认点，于是"圆的面积""两线夹角"这类测量在画布上根本没有数字
+   * （用户口径里的"常驻数字"只对点类测量成立）。
+   */
+  const resolve = entityResolverFor(document.primitives)
   const labels: PlanarMeasurementLabel[] = []
   for (const measurement of document.measurements) {
     const text = planarMeasurementText(measurement)
     if (!text) continue
-    // 来源点缺失就不产出：位置无从谈起，硬摆一个会指向空气。
-    const positions = measurement.sourceIds.map((id) => points.get(id))
-    if (positions.some((position) => !position)) continue
-    const position = planarMeasurementPosition(measurement, positions as Coordinate[])
+    // 来源缺失就不产出：位置无从谈起，硬摆一个会指向空气。
+    const entities = measurement.sourceIds.map((id) => resolve(id))
+    if (entities.some((entity) => !entity)) continue
+    const position = planarMeasurementPositionFor(measurement, entities as MeasurableEntity[])
     if (!position || !Number.isFinite(position.x) || !Number.isFinite(position.y)) continue
     labels.push({ id: measurement.id, text, position, selected: measurement.sourceIds.some((id) => selectedIds.includes(id)) })
   }

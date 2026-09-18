@@ -103,6 +103,46 @@ export function pointEntityResolver(positions: Map<string, Coordinate>): EntityR
 }
 
 /**
+ * 图元 → 可测量实体。**这是唯一的映射**：文档重算、界面预检、画布数字三处都调它，
+ * 免得"哪一类图元算线、哪一类算圆"又各写一遍（可求交类型名单就是这么漂移出缺陷的）。
+ *
+ * 刻意收得比较紧：
+ * - 线类只收自带走两个端点的（直线 / 线段 / 射线 / 切线 / 法线 / 割线）。`connection` 只存两个点 id，
+ *   要在场景图那一层解析成端点，这里不猜；
+ * - 圆类只收有 `center` + `radius` 的（圆 / 弧）；椭圆与双曲线有半轴，不是"圆"，不进这个变体；
+ * - 其余一律 `null`（量不了就是量不了，不硬凑一个）。
+ */
+/** 足以判定实体种类的最小形状：任何图元都满足（真实字段在函数里按需读取并校验）。 */
+export interface MeasurablePrimitiveLike {
+  id: string
+  type: string
+}
+
+export function measurableEntityOf(primitive: MeasurablePrimitiveLike): MeasurableEntity | null {
+  const candidate = primitive as unknown as { x?: unknown; y?: unknown; a?: Coordinate; b?: Coordinate; center?: Coordinate; radius?: unknown }
+  if (primitive.type === "point") {
+    return typeof candidate.x === "number" && typeof candidate.y === "number" ? { kind: "point", position: { x: candidate.x, y: candidate.y } } : null
+  }
+  if (["line", "segment", "ray", "tangent", "normal", "secant"].includes(primitive.type)) {
+    return candidate.a && candidate.b ? { kind: "line", a: candidate.a, b: candidate.b } : null
+  }
+  if (primitive.type === "circle" || primitive.type === "arc") {
+    return candidate.center && typeof candidate.radius === "number" ? { kind: "circle", center: candidate.center, radius: candidate.radius } : null
+  }
+  return null
+}
+
+/** 由图元表构造实体解析器（场景图重算与界面预检共用）。 */
+export function entityResolverFor(primitives: Iterable<MeasurablePrimitiveLike>): EntityResolver {
+  const byId = new Map<string, MeasurableEntity>()
+  for (const primitive of primitives) {
+    const entity = measurableEntityOf(primitive)
+    if (entity) byId.set(primitive.id, entity)
+  }
+  return (id) => byId.get(id) ?? null
+}
+
+/**
  * 两条直线的**锐角**夹角，`[0, π/2]`。
  *
  * 与三点角度（`angleBetween`，`[0, π]`）是**两套语义**，所以界面上分别叫"夹角（两条线）"

@@ -1,5 +1,5 @@
 import { isSampledPrimitiveType, type AnnotationSpec, type CircleRadiusRule, type ConstraintSpec, type Coordinate, type CurveRotation, type DrawingSheetSpec, type DrawingViewSpec, type EngineeringAnnotation, type GeometryDocument, type GroupSpec, type LayerSpec, type Measurement3, type Point3Binding, type Point3Primitive, type PointBinding, type PrimitiveSpec, type Section3Classification, type TangentAnchor, type Vector3 } from "@draw/dsl"
-import { createDependencyGraph, adaptiveSampleFunctionSegments, arcConstraint, buildSolidTemplate, calculateMeasurement3, circleConstraint, composeEuler3, constraintTangentAt, createBuilderContext, dihedralMarker3, ellipseConstraint, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, evaluatePlanarMeasurement, findExtrema, findInflectionPoints, findZeros, functionGraphConstraint, host3FromPrimitive, hyperbolaConstraint, intersectCirclesDetailed, intersectConvexPolyhedra3, intersectFaceSets, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, lineConstraint, mergeIntersectionSurfaces3, normalFromTangent, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, orderSectionPoints3, parabolaConstraint, placedConic, polylineConstraint, quadric3FromPrimitive, rayConstraint, rotatePointAboutAxis3, rotateVectorAboutAxis3, sectionConvexPolyhedron, sectionPolyhedron3, sectionQuadric3, segmentConstraint, sharedRingEdge3, solidVolumeHost3, solveLineConstraints, tangentSegment, templateSolidPivot, type Conic3Kind, type ConicPlacement, type CurvePiece3, type CurveTangent, type DihedralMarker3, type FaceRing3, type Host3, type IntersectionResult, type IntersectionSurfaceRegion, type PlanarConstraint, type PlanarMetric, type PlaceableConic, type SampledPrimitive, type TemplateSolidPrimitive, type WorldAxis3 } from "@draw/geometry-kernel"
+import { createDependencyGraph, adaptiveSampleFunctionSegments, arcConstraint, buildSolidTemplate, calculateMeasurement3, circleConstraint, composeEuler3, constraintTangentAt, createBuilderContext, dihedralMarker3, ellipseConstraint, entityResolverFor, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, evaluatePlanarMeasurement, findExtrema, findInflectionPoints, findZeros, functionGraphConstraint, host3FromPrimitive, hyperbolaConstraint, intersectCirclesDetailed, intersectConvexPolyhedra3, intersectFaceSets, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, lineConstraint, mergeIntersectionSurfaces3, normalFromTangent, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, orderSectionPoints3, parabolaConstraint, placedConic, polylineConstraint, quadric3FromPrimitive, rayConstraint, rotatePointAboutAxis3, rotateVectorAboutAxis3, sectionConvexPolyhedron, sectionPolyhedron3, sectionQuadric3, segmentConstraint, sharedRingEdge3, solidVolumeHost3, solveLineConstraints, tangentSegment, templateSolidPivot, type Conic3Kind, type ConicPlacement, type CurvePiece3, type CurveTangent, type DihedralMarker3, type FaceRing3, type Host3, type IntersectionResult, type IntersectionSurfaceRegion, type PlanarConstraint, type PlanarMetric, type PlaceableConic, type SampledPrimitive, type TemplateSolidPrimitive, type WorldAxis3 } from "@draw/geometry-kernel"
 
 /**
  * 曲线的"绕定点旋转"约定：`pivot` 是那个**定点**，`angle` 是绕它的转角（弧度）。
@@ -1851,16 +1851,26 @@ const recomputePrimitive = (primitive: PrimitiveSpec): PrimitiveSpec | undefined
  * - 平面量的值都是数值计算的，所以 `precision` 固定为 `numeric-approximation`。
  */
 function calculatePlanarMeasurement(measurement: Measurement3, primitives: PrimitiveSpec[]): Measurement3 {
-  const positions = new Map<string, Coordinate>()
-  for (const primitive of primitives) {
-    if (primitive.type === "point") positions.set(primitive.id, { x: primitive.x, y: primitive.y })
-  }
+  /**
+   * 来源解析成**实体**（点 / 线 / 圆），不再只喂点表：平面测量要能算"切线与直线的夹角""动圆的面积"。
+   * `connection` 只存两个点 id，先补成一条真实线段再交给内核。
+   */
+  const primitiveMap = new Map(primitives.map((primitive) => [primitive.id, primitive]))
+  const resolve = entityResolverFor(
+    primitives.map((primitive) => {
+      if (primitive.type !== "connection") return primitive
+      const start = primitiveMap.get(primitive.startPointId)
+      const end = primitiveMap.get(primitive.endPointId)
+      if (start?.type !== "point" || end?.type !== "point") return primitive
+      return { id: primitive.id, type: "segment" as const, a: { x: start.x, y: start.y }, b: { x: end.x, y: end.y } }
+    })
+  )
   const reading = evaluatePlanarMeasurement({
     id: measurement.id,
     metric: measurement.metric as PlanarMetric,
     sourceIds: measurement.sourceIds,
     angleKind: measurement.dihedralKind === "exterior" ? "exterior" : "interior"
-  }, (id) => positions.get(id) ?? null)
+  }, resolve)
   return {
     ...measurement,
     value: reading.value ?? undefined,
