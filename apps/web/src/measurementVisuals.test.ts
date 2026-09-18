@@ -14,7 +14,7 @@ function tetrahedronDocument(): GeometryDocument {
     { id: "face-abc", type: "face3", pointIds: ["point-a", "point-b", "point-c"] },
     { id: "face-abd", type: "face3", pointIds: ["point-a", "point-b", "point-d"] }
   ]
-  document.measurements = [{ id: "dihedral-1", kind: "measurement3", sourceIds: ["face-abc", "face-abd"], metric: "dihedral", dihedralKind: "interior", value: 90, unit: "°", precision: "numeric-approximation", status: "valid", explanation: "二面角测试" }]
+  document.measurements = [{ id: "dihedral-1", kind: "measurement3", sourceIds: ["face-abc", "face-abd"], metric: "dihedral", dihedralKind: "interior", value: Math.PI / 2, unit: "rad", precision: "numeric-approximation", status: "valid", explanation: "二面角测试" }]
   return document
 }
 
@@ -23,7 +23,8 @@ describe("3D measurement visuals", () => {
     const visual = resolveMeasurementVisual(tetrahedronDocument(), "dihedral-1")
 
     expect(visual?.kind).toBe("dihedral")
-    expect(visual?.label).toContain("90.000°")
+    // 标签用的就是文档里存的那个数与单位（角度一律弧度，见 `measurements3d`）。
+    expect(visual?.label).toContain("1.571rad")
     expect(visual?.sourceIds).toEqual(["face-abc", "face-abd"])
     expect(visual?.arc?.length).toBeGreaterThan(2)
     expect(visual?.segments).toHaveLength(3)

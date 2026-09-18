@@ -18,7 +18,15 @@ describe("3D measurements", () => {
 
     expect(distance).toMatchObject({ metric: "distance", value: 5, unit: "u", status: "valid", precision: "numeric-approximation" })
     expect(distance.explanation).toContain("两个空间点")
-    expect(angle).toMatchObject({ metric: "angle", value: 90, unit: "°", status: "valid" })
+    /**
+     * **角度一律用弧度**（2026-09-17 用户决定："改成弧度"）。
+     *
+     * 平面测量的角本来就是弧度（内核 `evaluatePlanarMeasurement` 的约定），立体这边原来是度 ⇒
+     * 同一个应用里两种角的单位，画布上的数与导出都跟着分裂。现在两边统一到弧度：
+     * `value` 是弧度、`unit` 是 `"rad"`，画布标签与属性栏显示的就是这个数（一个测量只有一个数）。
+     */
+    expect(angle).toMatchObject({ metric: "angle", value: Math.PI / 2, unit: "rad", status: "valid" })
+    expect(angle.value).toBeCloseTo(Math.PI / 2, 12)
   })
 
   it("reports degenerate angles instead of inventing a result", () => {
@@ -125,11 +133,16 @@ describe("3D measurements", () => {
 
     expect(measurement.status).toBe("valid")
     expect(measurement.dihedralKind).toBe("interior")
-    expect(measurement.value).toBeCloseTo(120, 5)
+    // 弧度（与平面测量同一套单位）：120° = 2π/3，补角 60° = π/3。
+    expect(measurement.value).toBeCloseTo((2 * Math.PI) / 3, 9)
+    expect(measurement.unit).toBe("rad")
     expect(measurement.explanation).toContain("补角")
+    // 说明文字里的数必须与 `value` 同一个单位，否则读数与解释自相矛盾。
+    expect(measurement.explanation).toContain("rad")
+    expect(measurement.explanation).not.toContain("°")
     expect(measurement.explanation).toContain("公共棱：a、b")
-    expect(exterior).toMatchObject({ dihedralKind: "exterior", status: "valid" })
-    expect(exterior.value).toBeCloseTo(60, 5)
+    expect(exterior).toMatchObject({ dihedralKind: "exterior", status: "valid", unit: "rad" })
+    expect(exterior.value).toBeCloseTo(Math.PI / 3, 9)
   })
 
   it("reports insufficient data when the two faces do not share an edge", () => {

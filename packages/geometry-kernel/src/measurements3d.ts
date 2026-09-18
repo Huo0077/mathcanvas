@@ -114,7 +114,14 @@ export function measureAngle3(id: string, sourceIds: string[], first: Vector3, s
   const secondLength = lengthVector3(secondVector)
   if (firstLength <= EPSILON || secondLength <= EPSILON) return invalidMeasurement(id, sourceIds, "angle", "degenerate", "角的两条边中至少有一条退化。")
   const cosine = Math.min(1, Math.max(-1, dotVector3(firstVector, secondVector) / (firstLength * secondLength)))
-  return result(id, sourceIds, "angle", Math.acos(cosine) * 180 / Math.PI, "°", `由 ${sourceIds.join("、")} 的方向向量计算夹角。`)
+  /**
+   * 角一律给**弧度**、单位 `"rad"`（2026-09-17 用户决定："改成弧度"）。
+   *
+   * 平面测量的角本来就是弧度（`evaluatePlanarMeasurement` 的约定），立体这边原来是度 ⇒
+   * 同一个应用里两种角的单位：属性栏、画布标签与导出各说各话。统一到弧度之后，两边的显示路径
+   * （`measurementVisuals` / `planarMeasurementVisuals`）都不需要知道单位差异，直接印 `value + unit`。
+   */
+  return result(id, sourceIds, "angle", Math.acos(cosine), "rad", `由 ${sourceIds.join("、")} 的方向向量计算夹角（弧度）。`)
 }
 
 export function measureArea3(id: string, sourceIds: string[], points: Vector3[], precision: Measurement3["precision"] = "numeric-approximation"): Measurement3 {
@@ -216,8 +223,22 @@ export function calculateMeasurement3(measurement: Measurement3, context: Measur
   const detail = dihedralAngleDetail3(firstPoints, secondPoints, hingeStart, hingeEnd)
   if (!detail) return invalidMeasurement(measurement.id, measurement.sourceIds, "dihedral", "degenerate", "二面角来源面退化，无法确定公共棱和面内方向。")
   const kind = measurement.dihedralKind ?? "interior"
-  const value = kind === "exterior" ? detail.exteriorDegrees : detail.interiorDegrees
-  return { ...result(measurement.id, measurement.sourceIds, "dihedral", value, "°", `${detail.explanation}公共棱：${hinge.join("、")}。`), dihedralKind: kind }
+  /**
+   * 二面角同样给**弧度**（与平面测量、与上面的夹角同一套单位）。
+   *
+   * `dihedralAngleDetail3` 交出来的是度（它自己的字段就叫 `interiorDegrees`，标记绘制与它的单测都按度读），
+   * 这里做一次**精确的线性换算**：源头只有一个余弦值，换成弧度不会引入第二份真值。
+   *
+   * **说明文字也要跟着换算**：读数写着 2.094 而解释里写"内角为 120.000°"，同一个测量卡里两个数
+   * 就会互相打脸（实测口径："画布上的数与属性栏必须一致"的同类问题）。所以这里自己拼说明，
+   * 不再复用 `detail.explanation` 那段按度写的文本。
+   */
+  const toRadians = (degrees: number) => (degrees * Math.PI) / 180
+  const interior = toRadians(detail.interiorDegrees)
+  const exterior = toRadians(detail.exteriorDegrees)
+  const value = kind === "exterior" ? exterior : interior
+  const explanation = `以公共棱为轴，取两个面内垂直于公共棱的方向，二面角内角为 ${interior.toFixed(3)} rad，外角（补角）为 ${exterior.toFixed(3)} rad。公共棱：${hinge.join("、")}。`
+  return { ...result(measurement.id, measurement.sourceIds, "dihedral", value, "rad", explanation), dihedralKind: kind }
 }
 
 export function createMeasurement3(id: string, metric: Measurement3["metric"], sourceIds: string[], context: MeasurementContext3, dihedralKind?: Measurement3["dihedralKind"]): Measurement3 {

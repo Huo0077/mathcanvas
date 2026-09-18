@@ -89,3 +89,40 @@ test("keeps a spatial measurement number on the 3D canvas without any selection"
   await algebra.getByText("A", { exact: true }).click()
   await expect(page.locator(".properties").getByText("3.000 u")).toBeVisible()
 })
+
+/**
+ * 角的单位**两个画布统一到弧度**（2026-09-17 用户决定："改成弧度"）。
+ *
+ * 原来立体几何的角是度、平面几何的角是弧度，两边各自自洽却彼此不一致；统一之后
+ * 画布标签、属性栏与导出说的是同一个数、同一个单位。
+ */
+test("reads a spatial angle in radians, the same unit the planar canvas uses", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "立体几何" }).click()
+
+  const scene = page.locator("[data-3d-scene]")
+  const algebra = page.locator(".algebra-panel")
+  const placePoint = async (label: string, position: [string, string, string]) => {
+    await page.getByRole("button", { name: "添加空间点" }).click()
+    await algebra.getByText(label, { exact: true }).click()
+    for (const [axis, value] of [["X", position[0]], ["Y", position[1]], ["Z", position[2]]] as const) {
+      await page.getByRole("spinbutton", { name: `坐标 ${axis}` }).fill(value)
+    }
+  }
+  // 顶点是**第二个**选中的点 B：BA ⊥ BC ⇒ 90° = π/2 ≈ 1.571 rad。
+  await placePoint("A", ["0", "0", "0"])
+  await placePoint("B", ["3", "0", "0"])
+  await placePoint("C", ["3", "3", "0"])
+
+  await algebra.getByText("A", { exact: true }).click()
+  await algebra.getByText("B", { exact: true }).click({ modifiers: ["Shift"] })
+  await algebra.getByText("C", { exact: true }).click({ modifiers: ["Shift"] })
+  await page.locator('[aria-label="三维测量工具"]').getByRole("button", { name: "角度", exact: true }).click()
+
+  await expect(scene).toHaveAttribute("data-measurement-labels", "1")
+  await expect(page.locator(".three-measurement-label")).toHaveText(/角度：1\.571rad/)
+
+  // 属性栏是同一个数（一个测量只有一个数），单位不再是度。
+  await algebra.getByText("B", { exact: true }).click()
+  await expect(page.locator(".properties").getByText("1.571 rad")).toBeVisible()
+})

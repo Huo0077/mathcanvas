@@ -61,6 +61,8 @@ describe("planar measurement labels", () => {
     const document = documentWith([point("a", 2, 0), point("v", 0, 0), point("b", 0, 2)], [measurement("angle", ["a", "v", "b"], Math.PI / 2, "rad")])
 
     const [label] = planarMeasurementVisuals(document)
+    // 平面角的单位也是**弧度**（两边统一，见 `measurements3d` 的说明）。
+    expect(label.text).toBe("角度：1.571rad")
     expect(label.position.x).toBeGreaterThan(0)
     expect(label.position.y).toBeGreaterThan(0)
     // 落在角平分线上（x == y），而且离顶点有一段距离（不压在顶点上）。
