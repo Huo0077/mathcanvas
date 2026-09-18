@@ -28,7 +28,11 @@
 - **与 2026-09-18 那一轮合并（诚实记录）**：我这条提交在推送时被远端拒绝（远端已有另一端推上来的切线一轮 `af78ce5` + `66ea9de`），改用 rebase 接在它后面；冲突只在**本文件的头部两行**，取远端版本后把我的新章节插回来。
 - **合并后跑门禁，抓到切线一轮留下的一个回归（不是我这边的，但由我修）**：`af78ce5` 重排平面画布那个 `<svg>` 标签时**把 `data-measurement-labels` 读数删掉了**（`git show af78ce5 -- apps/web/src/components/GraphicsView.tsx` 里这个属性只出现在 `-` 行）。功能本身没坏——Playwright 失败现场的无障碍快照里画布上确实有 `长度：3.000u`，**坏的只是那条读数**，而 `e2e/measurement-labels.spec.ts` 正是按它断言的：实跑 `Expected: "1"  Received: ""`（连跑两次都稳定复现；合并前这条用例是过的）。已把读数补回，用例转绿。这正是"上一轮自己文档里写明**Playwright 本轮未运行**"的代价——浏览器级门禁一跑就露出来了。
 - **门禁（合并后实跑）**：typecheck 4 workspace 通过；单测 **124 文件 / 1480 用例**全部通过；lint **0 error / 14 warning**（基线）；生产构建通过；Playwright **111/111**。
-- **如实记录一个门禁瑕疵（与代码无关）**：合并后 `npx vitest run` 会有 **1 个 unhandled error**，内容是 vitest 自己的 `[vitest-worker]: Timeout calling "onTaskUpdate"`（工作进程心跳超时），因此**命令退码 1，但 1480 条用例 0 失败**。合并前（1434 条）同一条命令退码 0，所以是套件变大之后在本机负载下越过阈值的表现，不是产品缺陷；同一套件加 `--maxWorkers=2` 复跑 **0 error、退码 0**。我没有改测试配置去掩盖它（那会改变 CI 上的并行度），先如实记下来。
+- **门禁瑕疵已修（vitest 3.x 自身缺陷，升级到 4.x 根治）**：合并后 `npx vitest run` 会报 **1 个 unhandled error** —— `[vitest-worker]: Timeout calling "onTaskUpdate"`，命令**退码 1 而 1480 条用例 0 失败**（实测连跑 3 次都复现；加 `--maxWorkers=2` 则退码 0）。
+  - **根因（先查、再改，不是猜）**：读 `node_modules/vitest` 打进来的 birpc 源码，`const DEFAULT_TIMEOUT = 6e4` —— 主进程与工作进程之间那条 RPC 有**写死的 60 秒超时**，且**与 `testTimeout` 无关**。用 JSON reporter 量了 124 个文件的耗时：`App.test.tsx` 单文件占住一个工作进程 **25.8 秒**（第二名 0.7 秒），而整场 `environment` 累计约 2500 秒（jsdom 每文件 ~20 秒，31 个工作进程抢 32 个逻辑核）。所以只要某个工作进程被同步代码卡住够久，心跳计时器照样触发 —— 超时是**假阳性**，不是测试慢。
+  - **上游口径（本次按用户要求调研了上游）**：这是 vitest 3.x 的已知缺陷，上游 PR [`vitest-dev/vitest#8297`](https://github.com/vitest-dev/vitest/pull/8297)「prevent rpc timeout on slow thread blocking synchronous methods」修掉，4.0.0-beta.4 起可用；另有仓库把「升级 3.x → 4.x」直接当作该 flake 的修复（如 [`IntersectMBO/evolution-sdk#176`](https://github.com/IntersectMBO/evolution-sdk/issues/176)）。**结论：不该用限并发去掩盖，该升级运行器。**
+  - **改法**：`vitest` `^3.2.4` → **`^4.1.11`**（只动 devDependency；根 `package.json` 与 `package-lock.json`）。选 4.x 而不是 5.x：上游文档的修复目标是 4.x，且 5.0.1 当时才发布两天。
+  - **验证（实跑）**：升级前同一条命令**连跑 3 次全失败**；升级后 **连跑 3 次全绿**（1480/1480、退码 0、无 unhandled error），**并额外在「Playwright 同时跑」的负载下再跑一次**（这正是最初触发它的场景）同样 0 error、退码 0。门禁其余部分不变：typecheck 4 workspace 通过、lint 0 error/14 warning、生产构建通过、Playwright 111/111。
 
 ### 修复：四类模板的默认落点（2026-09-17）
 
@@ -1479,7 +1483,7 @@ P7-1 至 P7-6 与工程工作台层次化改造 Task 1-7 均已完成；P4 Agent
 
 > **当前基线（唯一权威，2026-09-18 在"平面几何切线 + 动点扩展 + 切点拖动 + 画布收细"之后实测）**：`npx vitest run` **124 个测试文件、1477 个用例通过**（把上游那 22 个提交一起并进来之后重跑；本轮自己的 37 条全部在内）；4 个 workspace 类型检查通过；ESLint 对改动文件 **0 error**（仓库既有 5 条 warning 与本轮无关）；dev server 逐个模块转译通过。**Playwright 本轮未运行**（需另起构建产物端口与安装 Chromium）—— 界面交互由 `App.test.tsx` 的真实 DOM 与指针事件覆盖，浏览器级门禁待补。
 >
-> **后续回填（2026-09-18，轨道动点两处修复合并且浏览器级门禁补跑之后，本文件顶部那一节）**：同一棵树实测 **124 个测试文件 / 1480 个用例**（+3：`point3HostBindings.test.ts` 1 条、`App.test.tsx` 1 条、`threeScene.test.ts` 1 条）；**Playwright 110/110 通过**（补上了上一条"待补"的缺口，并因此抓到切线一轮误删的平面画布读数 `data-measurement-labels`，已修；随后又加了 1 条浏览器用例复刻"动点与定点连线"，合计 **111/111**）；`npm.cmd test` 会报 1 个 vitest 工作进程心跳超时的 unhandled error（1480 条 0 失败，`--maxWorkers=2` 退码 0）。**上一条的 1477 与本条 1480 不矛盾**：1477 是那一轮自己的重跑，1480 是合并我这 3 条之后的读数。
+> **后续回填（2026-09-18，轨道动点两处修复合并且浏览器级门禁补跑之后，本文件顶部那一节）**：同一棵树实测 **124 个测试文件 / 1480 个用例**（+3：`point3HostBindings.test.ts` 1 条、`App.test.tsx` 1 条、`threeScene.test.ts` 1 条）；**Playwright 110/110 通过**（补上了上一条"待补"的缺口，并因此抓到切线一轮误删的平面画布读数 `data-measurement-labels`，已修；随后又加了 1 条浏览器用例复刻"动点与定点连线"，合计 **111/111**）；`npm.cmd test` 当时会报 1 个 vitest 工作进程心跳超时的 unhandled error（1480 条 0 失败，`--maxWorkers=2` 退码 0）——**该瑕疵随后已根治：`vitest` ^3.2.4 → ^4.1.11**（上游 `vitest-dev/vitest#8297`），升级后 4 次实跑（含一次与 Playwright 并发）全部 0 error、退码 0。**上一条的 1477 与本条 1480 不矛盾**：1477 是那一轮自己的重跑，1480 是合并我这 3 条之后的读数。
 > **上一轮基线（2026-09-17 在"全身大体检（十批）+ e2e 构建修复 + 平面网格固定 + 圆上四个点 + 母线不画 + 交点只标角点"之后实测）**：`npm.cmd test` **108 个测试文件、1210 个用例通过**；4 个 workspace 类型检查通过；ESLint **0 error、14 条 warning**；生产构建通过（Vite 仍提示主 bundle 超过 500 KB）；Playwright **86/86** 通过（**现在真的跑的是当前工作区的构建产物**，见下）。
 > 下面按时间倒序列出各轮实测快照（数字是**当时**的取值，用于追溯与对比，不代表当前门禁）；例如 68 文件 / 698 用例与 Playwright 47/47 属于 2026-09-16 的 Task 15-18 那一轮。
 ### 平面几何切线 + 动点扩展（2026-09-18，用户要求）
