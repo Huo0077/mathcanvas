@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import * as THREE from "three"
-import type { GeometryDocument, IntersectionFacePrimitive, IntersectionPoint3Primitive, IntersectionSolidPrimitive, Plane3Primitive, Point3Primitive, Polyhedron3Primitive, SectionPrimitive, Vector3 } from "@draw/dsl"
+import type { GeometryDocument, IntersectionFacePrimitive, IntersectionPoint3Primitive, IntersectionSolidPrimitive, Plane3Primitive, Point3Primitive, Polyhedron3Primitive, PrimitiveSpec, SectionPrimitive, Vector3 } from "@draw/dsl"
 import { dihedralAngleDegrees, host3FromPrimitive, unfoldPolyhedron3, type Host3, type Host3Parameter } from "@draw/geometry-kernel"
 import { solidVolumeHostFor } from "@draw/scene-graph"
 import { measurementVisualsForDocument, resolveMeasurementVisual } from "./measurementVisuals"
@@ -18,9 +18,9 @@ import { applyCameraState, boxCorners, cameraDragMode, clampCameraTarget, conten
 import { loadRememberedCamera, rememberCamera } from "./cameraMemory"
 import type { ThreeScenePreview } from "./threeScenePreview"
 
-import { advanceRotationDrag, applyRotationSkew, applyDragOffsets, beginRotationDrag, dragFamilyIds, dragOffsetDrift, dragWorldPoint, hasRotationMovement, offsetSceneObjects, rotationAngleAt, rotationDragDegrees, rotationHandleAxisAt, rotationHandleGeometry, rotationHandleTarget, ROTATION_SNAP_DEGREES, type RotationDragState } from "./threeDrag"
+import { advanceRotationDrag, applyRotationSkew, applyDragOffsets, beginRotationDrag, circleRadiusHandlePoint, dragFamilyIds, dragOffsetDrift, dragWorldPoint, hasRotationMovement, offsetSceneObjects, rotationAngleAt, rotationDragDegrees, rotationHandleAxisAt, rotationHandleGeometry, rotationHandleRadius, rotationHandleTarget, ROTATION_SNAP_DEGREES, trackRadiusAt, trackRadiusHandleHit, type RotationDragState } from "./threeDrag"
 import { PICK_TOLERANCE_PX, pointHandleWorldRadius, pickRaycastHit3, templateTopologyOwners, pickSectionAt, resolveSelectableHit, previewBeatsPick } from "./threePicking"
-import { sectionUnitNormal, createPlane3Mesh, createSectionMesh, createIntersectionSolidGroup, createIntersectionFaceGroup, createIntersectionPointGroup, createUnfoldNetGroup, createDihedralMarkerGroup, prefersReducedMotion, nextUnfoldProgress, createPlanePatch, createRotationHandles, createSolidGroup, visibleSolids, buildPointDrivenObject, disposeObject, disposeScene, createPreviewGroup, applyPreviewHighlight, hasDrawablePreview, createCurveLoops3, createRimCircles3 } from "./threePrimitives"
+import { sectionUnitNormal, createPlane3Mesh, createSectionMesh, createIntersectionSolidGroup, createIntersectionFaceGroup, createIntersectionPointGroup, createUnfoldNetGroup, createDihedralMarkerGroup, prefersReducedMotion, nextUnfoldProgress, createPlanePatch, createRotationHandles, createTrackRadiusHandle, createSolidGroup, visibleSolids, buildPointDrivenObject, disposeObject, disposeScene, createPreviewGroup, applyPreviewHighlight, hasDrawablePreview, createCurveLoops3, createRimCircles3 } from "./threePrimitives"
 import { pointLabelPlacements } from "./pointLabels"
 import { curveToleranceFor, toleranceBucket } from "./conicSampling"
 import { collectRimCircles, rimChordEdgeIds } from "./rimCircles"
@@ -77,6 +77,11 @@ interface DragSessionState {
    * 与平移共用同一个会话（一次拖动仍然只提交一步），只是几何含义不同。
    */
   rotation?: { state: RotationDragState; family: Set<string> }
+  /**
+   * 拖**半径手柄**（缩放轨道圆）：这次把半径拉到多少。拖动期间只改画面（预览），抬手才提交一次
+   * `radius3`——与平移 / 旋转同一条"一次拖动 = 一步撤销"的规则。
+   */
+  scale?: { id: string; original: number; current: number }
 }
 
 export interface ThreeSceneViewProps {  document: GeometryDocument
@@ -101,11 +106,13 @@ export interface ThreeSceneViewProps {  document: GeometryDocument
   onHostDragEnd?: (pointId: string, parameter: Host3Parameter) => void
   /** 拖动旋转环结束：提交绕世界轴转过的角度（度）。一次拖动只回调一次，所以一次旋转就是一步撤销。 */
   onRotateEnd?: (id: string, axis: "x" | "y" | "z", degrees: number) => void
+  /** 拖动轨道圆的半径手柄结束：提交新的半径（正数）。同样一次拖动只回调一次。 */
+  onTrackRadiusEnd?: (id: string, radius: number) => void
   /** 开启"以面为剖切面"后，点到的那个面就成为截面 `<id>` 的剖切面。 */
   onPickSectionFace?: (id: string, plane: { normal: Vector3; constant: number }) => void
 }
 
-export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPromptChange, previews = [], onPreviewHover, onPreviewClick, onDragEnd, onMoveSection, onHostDragEnd, onRotateEnd, onPickSectionFace }: ThreeSceneViewProps) {
+export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPromptChange, previews = [], onPreviewHover, onPreviewClick, onDragEnd, onMoveSection, onHostDragEnd, onRotateEnd, onTrackRadiusEnd, onPickSectionFace }: ThreeSceneViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const renderTargetRef = useRef<HTMLDivElement>(null)
   const measurementOverlayRef = useRef<HTMLDivElement>(null)
@@ -142,11 +149,21 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
   /** 拖动旋转环结束：提交绕世界轴转过的角度（度）。 */
   const rotateEndRef = useRef(onRotateEnd)
   rotateEndRef.current = onRotateEnd
+  /** 拖动半径手柄结束：提交新的半径。 */
+  const trackRadiusEndRef = useRef(onTrackRadiusEnd)
+  trackRadiusEndRef.current = onTrackRadiusEnd
   /**
    * 当前选中的可转对象与它的手柄几何（环心 / 半径）。指针按下与拖动都要读它，
    * 但它随选中变化——放 ref 里，指针处理函数就不必因为选择变化而重新订阅。
    */
   const rotationHandleRef = useRef<{ id: string; center: THREE.Vector3; radius: number; group: THREE.Group } | null>(null)
+  /** 当前选中轨道的**半径手柄**（缩放用）。 */
+  const trackRadiusHandleRef = useRef<{ id: string; radius: number; group: THREE.Group; point: THREE.Vector3 } | null>(null)
+  /**
+   * 缩放拖动期间的**半径预览**。文档在整次拖动期间不提交，画面靠它重建：
+   * `refreshPrimitiveObject` 会用它替换半径再建那个圆，绑在圆上的点也按同一个半径重算坐标。
+   */
+  const circleRadiusPreviewRef = useRef<{ id: string; radius: number } | null>(null)
   /** 以面为剖切面的回调，以及"正在等待拾取"的开关。 */
   const pickSectionFaceRef = useRef(onPickSectionFace)
   pickSectionFaceRef.current = onPickSectionFace
@@ -618,6 +635,25 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       : null
 
     /**
+     * **半径手柄**（缩放）：选中恰好一个轨道圆时出现，画在圆周上（宿主参数 0 处）并带一条虚线半径。
+     * 与旋转环同样的登记时机（释放循环之前），所以取消选中 / 换对象时它会被正常释放。
+     */
+    const trackPrimitive = rotationTargetId ? document.primitives.find((primitive) => primitive.id === rotationTargetId) : undefined
+    const track = trackPrimitive?.type === "circle3" ? trackPrimitive : null
+    const trackRadiusGroup = track
+      ? keepContent(
+        "track-radius-handle",
+        `target:${track.id};c:${track.center.x.toFixed(4)},${track.center.y.toFixed(4)},${track.center.z.toFixed(4)};n:${track.normal.x.toFixed(4)},${track.normal.y.toFixed(4)},${track.normal.z.toFixed(4)};r:${track.radius.toFixed(4)}`,
+        () => createTrackRadiusHandle(track.center, track.normal, track.radius),
+        alive,
+        order
+      ) as THREE.Group | null
+      : null
+    trackRadiusHandleRef.current = trackRadiusGroup && track
+      ? { id: track.id, radius: track.radius, group: trackRadiusGroup, point: (trackRadiusGroup.userData.handlePoint as THREE.Vector3 | undefined) ?? new THREE.Vector3() }
+      : null
+
+    /**
      * 先登记"后面几个阶段才会加进来"的 key，再释放过期对象。
      *
      * 顺序很关键：沿用的对象还留在场景里，而"上一份文档"的残留对象如果拖到后面才释放，
@@ -716,6 +752,17 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
         ? `${rotationGeometry.center.x.toFixed(3)},${rotationGeometry.center.y.toFixed(3)},${rotationGeometry.center.z.toFixed(3)}`
         : ""
       sceneShell.dataset.rotationHandleRadius = rotationGeometry ? rotationGeometry.radius.toFixed(3) : ""
+      /** 轨道圆半径读数：拖动期间给**预览值**，所以 e2e 能断言"拖着的时候半径已经变了"。 */
+      sceneShell.dataset.trackRadius = track
+        ? (circleRadiusPreviewRef.current?.id === track.id ? circleRadiusPreviewRef.current.radius : track.radius).toFixed(4)
+        : ""
+      /**
+       * 半径手柄的**世界坐标**。宿主参数 0 落在哪个方向由 `circleHost3` 自己的帧决定
+       * （法向 +z 时它是 −y，不是 +x），所以 e2e 不该去猜——把这个点交出来，与旋转环交出
+       * `data-rotation-handle-pivot` 是同一个理由。
+       */
+      const handlePoint = trackRadiusHandleRef.current?.point
+      sceneShell.dataset.trackHandle = handlePoint ? `${handlePoint.x.toFixed(3)},${handlePoint.y.toFixed(3)},${handlePoint.z.toFixed(3)}` : ""
     }
 
     sceneBounds = contentBounds(scene)
@@ -787,11 +834,20 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
      * 走的是与整场同步同一张记录表，所以拖完之后的整场同步不会把它当成"没见过的对象"再建一次。
      */
     const refreshPrimitiveObject = (id: string) => {
-      const primitive = documentRef.current.primitives.find((candidate) => candidate.id === id)
-      if (!primitive) return
+      const found = documentRef.current.primitives.find((candidate) => candidate.id === id)
+      if (!found) return
+      /**
+       * 缩放预览：拖动期间文档不提交，所以半径从 `circleRadiusPreviewRef` 取。
+       * 只影响这一个对象的**画面**，`documentRef.current` 一个字都不动（抬手才提交）。
+       */
+      const preview = circleRadiusPreviewRef.current
+      const primitive = preview && preview.id === id && found.type === "circle3" ? { ...found, radius: preview.radius } : found
       const previous = objectIndex.get(id)
       const selected = selectedIdsRef.current.includes(id)
-      const replacement = buildPointDrivenObject(primitive, points, selected)
+      const tolerance = curveToleranceBucketRef.current > 0
+        ? curveToleranceBucketRef.current
+        : curveToleranceFor(camera, cameraStateRef.current.distance, viewportSize().height)
+      const replacement = buildPointDrivenObject(primitive, points, selected, tolerance)
       if (previous) {
         scene.remove(previous)
         disposeObject(previous)
@@ -1026,6 +1082,49 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
     let dragFrames = 0
     /** 旋转拖动期间的临时旋转帧数（与平移同一个读数思路：画面有没有真的跟手）。 */
     let rotationFrames = 0
+    /** 缩放拖动期间的重画帧数（同上）。 */
+    let scaleFrames = 0
+    /**
+     * 把"预览半径"画出来（拖动期间文档不提交，画面全靠这里）：
+     * ①圆本体按预览半径重建；②绑在它上面的点用**同一个半径**重算坐标并重建（参数是唯一真源，
+     * 所以点始终贴在新的圆周上，不会等抬手才跳过去）；③半径手柄移到新圆周；④三色环按比例整体缩放
+     * （比例用构建时的轨道半径算同一个 `rotationHandleRadius`，避免逐帧累积）。
+     */
+    const applyTrackRadiusPreview = (id: string, trackPrimitive: Extract<PrimitiveSpec, { type: "circle3" }>, radius: number) => {
+      refreshPrimitiveObject(id)
+      const host = host3FromPrimitive({ ...trackPrimitive, radius }, documentRef.current.primitives)
+      if (host) {
+        for (const candidate of documentRef.current.primitives) {
+          if (candidate.type !== "point3" || candidate.binding?.kind !== "onHost" || candidate.binding.hostId !== id) continue
+          points.set(candidate.id, { ...candidate, position: host.evaluate({ u: candidate.binding.parameter }) })
+          refreshPrimitiveObject(candidate.id)
+        }
+      }
+      const handle = trackRadiusHandleRef.current
+      if (handle && handle.id === id) {
+        const point = circleRadiusHandlePoint(trackPrimitive.center, trackPrimitive.normal, radius)
+        handle.point.copy(point)
+        handle.group.userData.handlePoint = point.clone()
+        for (const target of (handle.group.userData.hitTargets as THREE.Object3D[] | undefined) ?? []) target.position.copy(point)
+        for (const child of handle.group.children) {
+          if (!(child instanceof THREE.Line)) continue
+          child.geometry.dispose()
+          child.geometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(trackPrimitive.center.x, trackPrimitive.center.y, trackPrimitive.center.z), point])
+          child.computeLineDistances()
+          const material = child.material as THREE.LineDashedMaterial
+          material.dashSize = Math.max(0.08, radius * 0.08)
+          material.gapSize = Math.max(0.05, radius * 0.05)
+        }
+      }
+      const rings = rotationHandleRef.current
+      if (rings && handle && handle.id === id && handle.radius > 0) rings.group.scale.setScalar(rotationHandleRadius(radius) / rotationHandleRadius(handle.radius))
+    }
+    /** 抬手时把预览交还给文档：清掉预览并把圆与它的动点按文档里的值重建一次。 */
+    const clearTrackRadiusPreview = (id: string) => {
+      circleRadiusPreviewRef.current = null
+      const trackPrimitive = documentRef.current.primitives.find((candidate) => candidate.id === id)
+      if (trackPrimitive?.type === "circle3") applyTrackRadiusPreview(id, trackPrimitive, trackPrimitive.radius)
+    }
     /**
      * 平移拖动时手柄跟着图形走。
      *
@@ -1047,6 +1146,15 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
        */
       if (session.rotation) {
         if (Math.abs(session.rotation.state.applied) > 1e-12) applyRotationSkew(scene, session.rotation.family, session.rotation.state.pivot, session.rotation.state.axis, session.rotation.state.applied)
+        render()
+        return
+      }
+      /**
+       * 缩放：场景被重建（窗口尺寸变化等）后手柄与圆都回到文档里的半径，这里按预览值补画一次。
+       */
+      if (session.scale) {
+        const trackPrimitive = documentRef.current.primitives.find((candidate) => candidate.id === session.targetId)
+        if (trackPrimitive?.type === "circle3") applyTrackRadiusPreview(session.targetId, trackPrimitive, session.scale.current)
         render()
         return
       }
@@ -1113,6 +1221,29 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
         }
         renderer.domElement.releasePointerCapture(event.pointerId)
         return
+      }
+      /**
+       * **半径手柄的优先级最高**：它压在圆周上，而"拖圆周"也可以解释成平移——手柄是更具体的靶子
+       * （与拾取哲学一致：点 > 棱 > 面 > 线）。抓到手柄就是"改半径"，不需要先开「自由拖动」。
+       */
+      const radiusHandle = trackRadiusHandleRef.current
+      if (event.button === 0 && radiusHandle && trackRadiusHandleHit(radiusHandle.group, camera, point)) {
+        const trackPrimitive = documentRef.current.primitives.find((candidate) => candidate.id === radiusHandle.id)
+        if (trackPrimitive?.type === "circle3") {
+          dragSessionRef.current = {
+            targetId: radiusHandle.id,
+            family: new Set([radiusHandle.id]),
+            anchor: new THREE.Vector3(trackPrimitive.center.x, trackPrimitive.center.y, trackPrimitive.center.z),
+            origin: new THREE.Vector3(trackPrimitive.center.x, trackPrimitive.center.y, trackPrimitive.center.z),
+            total: new THREE.Vector3(),
+            visualApplied: new THREE.Vector3(),
+            applied: false,
+            scale: { id: radiusHandle.id, original: trackPrimitive.radius, current: trackPrimitive.radius }
+          }
+          if (sceneShell) sceneShell.dataset.trackRadius = trackPrimitive.radius.toFixed(4)
+          renderer.domElement.setPointerCapture(event.pointerId)
+          return
+        }
       }
       /**
        * 旋转环的优先级**最高**，而且不需要先开「自由拖动」：
@@ -1211,6 +1342,32 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
       pointerState.moved ||= Math.hypot(point.x - pointerState.x, point.y - pointerState.y) > 0.008
       const session = dragSessionRef.current
       if (session) {
+        /**
+         * 拖**半径手柄**（缩放）：指针落在圆所在平面上的点到圆心的距离。拖动期间**不提交文档**——
+         * 只改画面（预览半径），一次拖动因此仍然是"抬手提交一次 = 一步撤销"。
+         */
+        if (session.scale) {
+          const trackPrimitive = documentRef.current.primitives.find((candidate) => candidate.id === session.targetId)
+          if (trackPrimitive?.type === "circle3") {
+            const center = new THREE.Vector3(trackPrimitive.center.x, trackPrimitive.center.y, trackPrimitive.center.z)
+            const radius = trackRadiusAt(camera, center, new THREE.Vector3(trackPrimitive.normal.x, trackPrimitive.normal.y, trackPrimitive.normal.z), point)
+            if (radius !== null && Math.abs(radius - session.scale.current) > 1e-9) {
+              session.scale.current = radius
+              circleRadiusPreviewRef.current = { id: session.targetId, radius }
+              applyTrackRadiusPreview(session.targetId, trackPrimitive, radius)
+              session.applied = true
+              render()
+              scaleFrames += 1
+              if (sceneShell) {
+                sceneShell.dataset.trackRadius = radius.toFixed(4)
+                sceneShell.dataset.trackRadiusFrames = String(scaleFrames)
+              }
+            }
+          }
+          pointerState.lastX = point.x
+          pointerState.lastY = point.y
+          return
+        }
         /**
          * 拖动旋转环：指针位置 → 绕该世界轴的角度，累计后按 15° 吸附（按住 Alt 不吸附）。
          * 拖动期间**不提交文档**，画面由临时旋转负责——一次拖动因此就是一步撤销，
@@ -1331,7 +1488,15 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
           sceneShell.dataset.dragOffsetDrift = dragOffsetDrift(scene, session.family, appliedOffset).toFixed(4)
         }
         // 拖动期间一次都没提交，所以这里的一次提交就是整次拖动唯一的一步撤销。
-        if (session.rotation) {
+        if (session.scale) {
+          const radius = session.scale.current
+          // 先把画面交还给文档（清预览 + 按文档值重建），再提交——否则提交后重建会把预览半径叠一次。
+          clearTrackRadiusPreview(session.targetId)
+          render()
+          if (sceneShell) sceneShell.dataset.trackRadius = radius.toFixed(4)
+          // 半径真的变了才提交：一次误触不该多出一步撤销。
+          if (Math.abs(radius - session.scale.original) > 1e-9) trackRadiusEndRef.current?.(session.targetId, radius)
+        } else if (session.rotation) {
           const rotation = session.rotation.state
           /**
            * 先把画面上的临时旋转**撤掉**，再把角度交给文档。少了这一步，提交后场景按新朝向重建，

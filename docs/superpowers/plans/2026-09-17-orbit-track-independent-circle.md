@@ -269,9 +269,9 @@ git push origin main
 
 ---
 
-## Slice 2：画布上的半径手柄（缩放）
+## Slice 2：画布上的半径手柄（缩放）**（已完成）**
 
-**交付物**：选中轨道时圆上出现一个半径手柄，拖着它改半径；拖动期间圆与绑在上面的点**一起**跟着预览走，抬手提交一次（一步撤销）。旋转沿用已有的三色环。
+**实测结果**：RED 三条（`(0 , circleRadiusHandlePoint) is not a function` 等）→ 实现后又抓到 `expected 10 to be null`：three 的 `Ray.intersectPlane` 在"平行且共面"时返回**射线原点**，于是相机落在圆平面里会读出一个假半径；`trackRadiusAt` 与上一轮的 `rotationAngleAt` 都改成自己挡平行。浏览器两条用例（拖着时读数已变 + 绑定点落在新圆周 + 一步撤销；没抓手柄时半径不动）通过；单测 **121 文件 / 1430 用例**、Playwright **107/107**、lint 0 error / 14 warning。**一处认知修正**：宿主参数 0 对法向 +z 的圆落在 **−y**（不是 +x），所以画布额外交出 `data-track-handle` 让测试不猜。
 
 **Files:**
 - Modify: `apps/web/src/threeDrag.ts`（新增 `trackRadiusAt`）、`apps/web/src/threePrimitives.ts`（新增 `createTrackRadiusHandle`）、`apps/web/src/threeScene.tsx`（手柄创建 / 命中 / 预览 / 提交 / 读书数）

@@ -7,7 +7,7 @@
 import * as THREE from "three"
 import type { GeometryDocument } from "@draw/dsl"
 import { getDependencyIndex, isRotatable3, managedPointIds, templateTopologyIds } from "@draw/scene-graph"
-import { templateSolidPivot } from "@draw/geometry-kernel"
+import { circleHost3, templateSolidPivot } from "@draw/geometry-kernel"
 
 /**
  * 自由拖动：被拖对象在屏幕平面上的落点。
@@ -156,7 +156,13 @@ export function rotationAngleAt(camera: THREE.Camera, pivot: THREE.Vector3, axis
   const raycaster = new THREE.Raycaster()
   raycaster.setFromCamera(new THREE.Vector2(normalizedPoint.x * 2 - 1, -(normalizedPoint.y * 2 - 1)), camera)
   const normal = rotationAxisVector(axis)
-  const hit = raycaster.ray.intersectPlane(new THREE.Plane().setFromNormalAndCoplanarPoint(normal, pivot), new THREE.Vector3())
+  const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, pivot)
+  /**
+   * 与 `trackRadiusAt` 同一条：平行时 three 会在"共面"情形下把**射线原点**当交点返回，
+   * 那样会读出一个凭空的角度。平行就没有唯一交点，如实返回 `null`。
+   */
+  if (Math.abs(plane.normal.dot(raycaster.ray.direction)) < 1e-9) return null
+  const hit = raycaster.ray.intersectPlane(plane, new THREE.Vector3())
   if (!hit) return null
   const offset = hit.sub(pivot)
   const { u, v } = rotationPlaneBasis(axis)
@@ -239,21 +245,26 @@ export function rotationHandleGeometry(document: GeometryDocument, id: string): 
     // 半径取"离中心最远的那个物化顶点"，也就是画面上真正画出来的那个范围。
     const vertices = templateVertices(document, primitive.id)
     const reach = vertices.reduce((worst, vertex) => Math.max(worst, Math.hypot(vertex.x - center.x, vertex.y - center.y, vertex.z - center.z)), fallbackReach(primitive))
-    return { center: new THREE.Vector3(center.x, center.y, center.z), radius: handleRadius(reach) }
+    return { center: new THREE.Vector3(center.x, center.y, center.z), radius: rotationHandleRadius(reach) }
   }
   // 轨道圆自带圆心坐标与半径：环心就是它自己的圆心、reach 就是半径（不再走"取它拥有的点的形心"，
   // 那条路在轨道圆不再拥有点之后会返回 null ⇒ 三个旋转环会**静默消失**）。
-  if (primitive.type === "circle3") return { center: new THREE.Vector3(primitive.center.x, primitive.center.y, primitive.center.z), radius: handleRadius(primitive.radius) }
+  if (primitive.type === "circle3") return { center: new THREE.Vector3(primitive.center.x, primitive.center.y, primitive.center.z), radius: rotationHandleRadius(primitive.radius) }
   const owned = managedPointIds(primitive).map((pointId) => points.get(pointId)?.position).filter((position): position is { x: number; y: number; z: number } => Boolean(position))
   if (owned.length === 0) return null
   const center = owned.reduce((sum, position) => ({ x: sum.x + position.x / owned.length, y: sum.y + position.y / owned.length, z: sum.z + position.z / owned.length }), { x: 0, y: 0, z: 0 })
   const ownReach = owned.reduce((worst, position) => Math.max(worst, Math.hypot(position.x - center.x, position.y - center.y, position.z - center.z)), 0)
   // 点驱动对象（空间面 / 线 / 棱 / 多边形）：环要圈住离重心最远的那个顶点。
-  return { center: new THREE.Vector3(center.x, center.y, center.z), radius: handleRadius(ownReach) }
+  return { center: new THREE.Vector3(center.x, center.y, center.z), radius: rotationHandleRadius(ownReach) }
 }
 
-/** 环要圈住对象才好抓，也不能离题太远。 */
-function handleRadius(reach: number): number {
+/**
+ * 环要圈住对象才好抓，也不能离题太远。
+ *
+ * 导出给"拖半径时环跟着缩"用：缩放比例要用**同一个公式**算构建时与预览时的环半径，
+ * 否则环的尺寸会在拖动中漂（逐帧累积）或在抬手时跳一下。
+ */
+export function rotationHandleRadius(reach: number): number {
   return Math.max(reach * 1.25 + 0.3, 1.2)
 }
 
@@ -287,6 +298,61 @@ export function rotationHandleAxisAt(handles: THREE.Object3D, camera: THREE.Came
     if (axis === "x" || axis === "y" || axis === "z") return axis
   }
   return null
+}
+
+/* ------------------------------------------------------------------ *
+ * 轨道圆的半径手柄（缩放）
+ *
+ * 用户口径："我要的轨道圆是点在圆上而不是圆跟着点走，而且圆要可以缩放旋转。"
+ * 旋转由上面的三色环负责，缩放由这里的手柄负责：抓住圆上的那个点往外拉，半径跟着变。
+ * ------------------------------------------------------------------ */
+
+/**
+ * 半径手柄放在**宿主参数 0** 处。
+ *
+ * 为什么用宿主参数而不是另挑一个方向：`circleHost3` 的参数 0 就是"绑到这条轨道上的动点参数 0"
+ * 所在的那一点（两者共用同一套帧）。于是"手柄在哪"与"点在圆上的哪儿"是同一件事，
+ * 不需要第二份基，也就不会出现两处各转各的。
+ */
+export function circleRadiusHandlePoint(center: { x: number; y: number; z: number }, normal: { x: number; y: number; z: number }, radius: number): THREE.Vector3 {
+  const host = circleHost3(center, normal, radius)
+  const point = host ? host.evaluate({ u: 0 }) : center
+  return new THREE.Vector3(point.x, point.y, point.z)
+}
+
+/**
+ * 拖半径手柄：指针射线与**圆所在的平面**求交，半径 = 交点到圆心的距离。
+ *
+ * 两条如实边界：
+ * - 射线与平面平行（正对着圆看）时没有唯一交点 ⇒ 返回 `null`（不猜一个值出来）；
+ * - 下限 **0.01**，与属性栏那个输入框的下限一致（零半径的圆是退化图形，宿主也会拒绝）。
+ */
+export function trackRadiusAt(camera: THREE.Camera, center: THREE.Vector3, normal: THREE.Vector3, normalizedPoint: { x: number; y: number }): number | null {
+  const normalLength = normal.length()
+  if (!Number.isFinite(normalLength) || normalLength < 1e-9) return null
+  const raycaster = new THREE.Raycaster()
+  raycaster.setFromCamera(new THREE.Vector2(normalizedPoint.x * 2 - 1, -(normalizedPoint.y * 2 - 1)), camera)
+  const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal.clone().normalize(), center)
+  /**
+   * 平行必须**自己挡**：three 的 `Ray.intersectPlane` 在"射线与平面平行**且共面**"时返回的是
+   * **射线原点**（`distanceToPlane` 对共面情形返回 0），那不是交点——实测"相机正好落在圆所在平面里"
+   * 时会读出一个等于相机距离的假半径（10 而不是 null）。视线与圆平面平行时指针位置本来就没有唯一
+   * 含义，如实返回 `null`，不猜。
+   */
+  if (Math.abs(plane.normal.dot(raycaster.ray.direction)) < 1e-9) return null
+  const hit = raycaster.ray.intersectPlane(plane, new THREE.Vector3())
+  if (!hit) return null
+  return Math.max(0.01, hit.distanceTo(center))
+}
+
+/** 指针是不是压在这个半径手柄上？只有压上才开缩放会话（否则行为一字不变）。 */
+export function trackRadiusHandleHit(handle: THREE.Object3D, camera: THREE.Camera, normalizedPoint: { x: number; y: number }): boolean {
+  handle.updateMatrixWorld(true)
+  const targets = (handle.userData.hitTargets as THREE.Object3D[] | undefined) ?? handle.children
+  if (targets.length === 0) return false
+  const raycaster = new THREE.Raycaster()
+  raycaster.setFromCamera(new THREE.Vector2(normalizedPoint.x * 2 - 1, -(normalizedPoint.y * 2 - 1)), camera)
+  return raycaster.intersectObjects(targets, false).length > 0
 }
 
 /**

@@ -8,6 +8,7 @@ import * as THREE from "three"
 import type { ConePrimitive, Conic3, CubePrimitive, CurvePiece3, CylinderPrimitive, Edge3Primitive, Face3Primitive, GeometryDocument, Line3Primitive, Plane3Primitive, Point3Primitive, PrimitiveSpec, PyramidPrimitive, Ray3Primitive, SectionPrimitive, Segment3Primitive, Vector3 } from "@draw/dsl"
 import { conic3FromCircle3, type DihedralMarker3, type UnfoldLayout3 } from "@draw/geometry-kernel"
 import { sampleClosedConic, sampleCurvePieces } from "./conicSampling"
+import { circleRadiusHandlePoint } from "./threeDrag"
 import { opacityFor, strokeFor } from "./primitiveStyle"
 import type { ThreeScenePreview } from "./threeScenePreview"
 
@@ -950,6 +951,47 @@ export function createRotationHandles(center: Vector3, radius: number, activeAxi
     ring.userData.rotationAxis = axis
     group.add(ring)
   }
+  return group
+}
+
+/**
+ * 轨道圆的**半径手柄**：圆周上一个小球 ＋ 从圆心到它的虚线半径。
+ *
+ * 用户口径："圆要可以缩放旋转"。旋转有世界轴三色环，缩放就是这个手柄：抓住小球往外拉，半径跟着变。
+ * 几条与旋转环一致的选择：
+ * - 不参与取景（`excludeFromFit`）：手柄不是图形内容；
+ * - 命中区**只算那个小球**（`userData.hitTargets`）——虚线半径横跨圆内部，若把它也算进命中，
+ *   "拖圆本体平移"就会时不时变成"改半径"；
+ * - `depthTest: false` ＋ 高 `renderOrder`：被实体挡住也要看得见、抓得到；
+ * - 手柄尺寸是**世界尺寸**、跟着轨道半径走（与三色环同一套约定），不是屏幕恒定大小。
+ */
+export function createTrackRadiusHandle(center: Vector3, normal: Vector3, radius: number): THREE.Group | null {
+  if (!Number.isFinite(radius) || radius <= 0) return null
+  const normalLength = Math.hypot(normal.x, normal.y, normal.z)
+  if (!Number.isFinite(normalLength) || normalLength < 1e-9) return null
+  const rim = circleRadiusHandlePoint(center, normal, radius)
+  const group = new THREE.Group()
+  group.userData.visualRole = "track-radius-handle"
+  group.userData.excludeFromFit = true
+  const dotRadius = Math.max(0.06, Math.min(0.16, radius * 0.06))
+  const dot = new THREE.Mesh(
+    new THREE.SphereGeometry(dotRadius, 16, 12),
+    new THREE.MeshBasicMaterial({ color: "#0f766e", transparent: true, opacity: 0.95, depthTest: false, depthWrite: false })
+  )
+  dot.position.copy(rim)
+  dot.renderOrder = 31
+  dot.userData.visualRole = "track-radius-handle"
+  const spoke = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(center.x, center.y, center.z), rim]),
+    new THREE.LineDashedMaterial({ color: "#0f766e", dashSize: Math.max(0.08, radius * 0.08), gapSize: Math.max(0.05, radius * 0.05), transparent: true, opacity: 0.75, depthTest: false })
+  )
+  spoke.computeLineDistances()
+  spoke.renderOrder = 30
+  spoke.userData.visualRole = "track-radius-spoke"
+  group.add(spoke, dot)
+  // 命中只认小球（见上面第 2 条）。
+  group.userData.hitTargets = [dot]
+  group.userData.handlePoint = rim
   return group
 }
 

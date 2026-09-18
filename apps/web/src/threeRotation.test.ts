@@ -2,21 +2,24 @@ import { describe, expect, it } from "vitest"
 import * as THREE from "three"
 
 import { createEmptyDocument, type GeometryDocument, type PrimitiveSpec } from "@draw/dsl"
-import { buildSolidTemplate } from "@draw/geometry-kernel"
+import { buildSolidTemplate, circleHost3 } from "@draw/geometry-kernel"
 
 import {
   advanceRotationDrag,
   applyRotationSkew,
   beginRotationDrag,
+  circleRadiusHandlePoint,
   hasRotationMovement,
   rotationAngleAt,
   rotationDragDegrees,
   rotationHandleAxisAt,
   rotationHandleGeometry,
   rotationHandleTarget,
-  shortestAngleDelta
+  shortestAngleDelta,
+  trackRadiusAt,
+  trackRadiusHandleHit
 } from "./threeDrag"
-import { createRotationHandles } from "./threePrimitives"
+import { createRotationHandles, createTrackRadiusHandle } from "./threePrimitives"
 
 /**
  * 画布旋转手柄（slice 4）：三色环、绕世界轴的拖动角度、15° 吸附、拖动期间的临时旋转。
@@ -182,6 +185,13 @@ describe("rotation drag session", () => {
     expect(angleAt(new THREE.Vector3(0, 0, 1), "x")).toBeCloseTo(Math.PI / 2, 9)
     expect(angleAt(new THREE.Vector3(0, 0, 1), "y")).toBeCloseTo(0, 9)
     expect(angleAt(new THREE.Vector3(1, 0, 0), "y")).toBeCloseTo(Math.PI / 2, 9)
+    /**
+     * 相机正好**落在环所在的平面里**（这里是 z = 0）时，视线与该平面平行、指针位置没有唯一含义。
+     * three 的 `intersectPlane` 对这种"平行且共面"的情形返回的是**射线原点**，若直接用就会读出一个
+     * 凭空的角度（实测半径那一路就是这样读出了 10）——所以两处都自己挡平行，返回 `null`。
+     */
+    const inPlane = cameraAt(new THREE.Vector3(10, 0, 0))
+    expect(rotationAngleAt(inPlane, center, "z", pointerAt(new THREE.Vector3(1, 1, 0), inPlane))).toBeNull()
   })
 
   it("takes the shortest way round when the angle crosses ±π", () => {
@@ -229,6 +239,55 @@ describe("rotation drag session", () => {
     const nudged = advanceRotationDrag(state, (2 * Math.PI) / 180, (15 * Math.PI) / 180)
     expect(hasRotationMovement(nudged.state)).toBe(false)
     expect(hasRotationMovement(advanceRotationDrag(state, (20 * Math.PI) / 180, (15 * Math.PI) / 180).state)).toBe(true)
+  })
+})
+
+describe("track radius handle (scaling)", () => {
+  const centre = new THREE.Vector3(1, 2, 3)
+  const normal = new THREE.Vector3(0, 0, 1)
+
+  /**
+   * 半径手柄落在**宿主参数 0** 处：与"绑上去的动点参数 0"是同一个点。
+   * 这样"拖手柄"和"点在圆上的哪儿"说的是同一套参数，不另写一份基（也就不会两处漂移）。
+   */
+  it("puts the handle exactly where the host says parameter 0 is", () => {
+    const handle = circleRadiusHandlePoint(centre, normal, 2)
+    const atZero = circleHost3({ x: 1, y: 2, z: 3 }, { x: 0, y: 0, z: 1 }, 2)!.evaluate({ u: 0 })
+    expect(handle.x).toBeCloseTo(atZero.x, 12)
+    expect(handle.y).toBeCloseTo(atZero.y, 12)
+    expect(handle.z).toBeCloseTo(atZero.z, 12)
+    // 它就在圆周上（离圆心正好一个半径）。
+    expect(handle.distanceTo(centre)).toBeCloseTo(2, 12)
+  })
+
+  it("reads a dragged radius off the circle's own plane, with a floor and no guessing", () => {
+    const camera = cameraAt(new THREE.Vector3(6, 4, 7))
+    const onRim = pointerAt(new THREE.Vector3(3, 0, 0), camera)
+    // 指针落在圆周上 ⇒ 半径就是到圆心的距离（圆在 z=0 平面里，圆心在原点）。
+    expect(trackRadiusAt(camera, new THREE.Vector3(0, 0, 0), normal, onRim)).toBeCloseTo(3, 6)
+    // 指针落在圆心 ⇒ 夹到下限 0.01（零半径的圆是退化图形，属性栏的下限也是 0.01）。
+    expect(trackRadiusAt(camera, new THREE.Vector3(0, 0, 0), normal, pointerAt(new THREE.Vector3(0, 0, 0), camera))).toBeCloseTo(0.01, 9)
+    // 视线与圆所在平面平行（正对着圆看）⇒ 没有唯一交点，不猜：返回 null。
+    const edgeOn = cameraAt(new THREE.Vector3(0, 10, 0))
+    expect(trackRadiusAt(edgeOn, new THREE.Vector3(0, 0, 0), normal, { x: 0.5, y: 0.5 })).toBeNull()
+    // 零法向同样不猜。
+    expect(trackRadiusAt(camera, new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 0), onRim)).toBeNull()
+  })
+
+  it("only starts a scale session when the pointer is actually on the handle", () => {
+    const handle = createTrackRadiusHandle({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 1 }, 2)!
+    const scene = new THREE.Scene()
+    scene.add(handle)
+    const camera = cameraAt(new THREE.Vector3(6, 4, 7))
+    const onHandle = circleRadiusHandlePoint({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 1 }, 2)
+
+    expect(trackRadiusHandleHit(handle, camera, pointerAt(onHandle, camera))).toBe(true)
+    // 圆心与远处都不算命中：没抓住手柄时行为必须一字不变（仍走平移 / 选择）。
+    expect(trackRadiusHandleHit(handle, camera, pointerAt(new THREE.Vector3(0, 0, 0), camera))).toBe(false)
+    expect(trackRadiusHandleHit(handle, camera, pointerAt(new THREE.Vector3(9, 9, 0), camera))).toBe(false)
+    // 手柄不是图形内容：不参与取景，也不该挂 primitiveId 以外的东西。
+    expect(handle.userData.excludeFromFit).toBe(true)
+    expect(handle.userData.visualRole).toBe("track-radius-handle")
   })
 })
 
