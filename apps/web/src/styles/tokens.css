@@ -1,43 +1,79 @@
 :root {
-  --color-ink: #25223a;
-  --color-muted: #74718a;
-  --color-canvas: #f4f4f8;
-  --color-panel: #ffffff;
-  --color-surface-subtle: #f8f7fc;
-  --color-border: #e8e6ef;
-  --color-accent: #6c5ce7;
-  --color-accent-strong: #5949d0;
-  --color-accent-soft: #efedff;
   /**
-   * **草稿纸**（平面几何画布）。用户口径："让平面几何区的画布变成有淡淡的黄色的'草稿纸的质感'"。
+   * **冷色调高级感**（2026-09-18 视觉重构）。用户口径：
+   * "整体采用高级冷色调。冷白色背景（#F8FAFC），极浅的灰色（#E2E8F0）用于面板边缘和分割，
+   * 文字和图标使用深板岩蓝（#2C3E50）"。
    *
-   * 纸比面板略暖、略深一点点，格子是暖灰黄而不是冷蓝灰 —— 这样"纸"与"界面"一眼分得开，
-   * 但饱和度压得很低，长期作图不刺眼（这是草稿纸，不是便利贴）。
+   * 三条硬约定，改界面时不要随手破坏：
+   * 1. **不再有生硬的边框线**：分割只保留极浅的 `--color-border`，层级主要靠**弥散阴影**表达
+   *    （见下面的 `--shadow-*`：大模糊半径、低不透明度，这是微拟物化的全部要点）；
+   * 2. **文字只有三档**：深板岩蓝（正文）/ 板岩灰（次要）/ 浅板岩（提示），不再出现紫调灰；
+   * 3. 强调色收敛到**板岩蓝**一系，紫色只留在品牌标记上（见 `global.css` 的 `.brand-mark`）。
    */
-  --color-graph-paper: #fdfbf3;
-  --color-graph-paper-edge: #ece7d5;
-  /* 格线必须**看得见**：草稿纸的质感主要就来自这一层淡淡的方格，太浅就等于没有纸。 */
-  --color-graph-grid-minor: #e8dfc2;
-  --color-graph-grid-major: #d5c79f;
-  --color-graph-axis: #ab9d7c;
-  /* 界面文字的整体字号（用户要求"边框的字体略微调大"）。基准 16px 下 0.8125rem = 13px。 */
+  --color-ink: #2c3e50;
+  --color-muted: #64748b;
+  --color-canvas: #f8fafc;
+  --color-panel: #ffffff;
+  --color-surface-subtle: #f1f5f9;
+  --color-border: #e2e8f0;
+  --color-accent: #3d5a80;
+  --color-accent-strong: #2c4a6e;
+  --color-accent-soft: #eef2f7;
+  /**
+   * 平面几何的画布（用户口径："居中为宽阔的绘图区（带有极浅极细的坐标网格线）"）。
+   *
+   * 从"淡黄草稿纸"改成**冷白纸**：这是本轮视觉重构的一部分 —— 冷白画布 + 极浅冷灰格线
+   * 才能和 #F8FAFC 的界面、#E2E8F0 的分割线成一套。格线仍然必须**看得见**（太浅等于没有网格），
+   * 但比面板分割线更浅，所以画布读起来是"纸"，不是"表格"。
+   */
+  --color-graph-paper: #ffffff;
+  --color-graph-paper-edge: #e2e8f0;
+  --color-graph-grid-minor: #eef2f7;
+  --color-graph-grid-major: #e2e8f0;
+  --color-graph-axis: #cbd5e1;
+  /** 画布内文字（点名 P1、直线名 l1、圆心名 c1、交点读数）的墨色，与 `--color-ink` 同一支冷色。 */
+  --color-drawing-ink: #2c3e50;
+  /**
+   * 字体：**界面无衬线、画布数学符号衬线**（用户口径："UI 使用现代无衬线字体…
+   * 画布上的数学符号（如 P1, l1, c1）使用优雅的数学衬线字体"）。
+   * 画布那一路用 `--font-math`：Cambria Math / Latin Modern 这类带数学字形血统的衬线字体在前，
+   * 退到 Georgia / 通用 serif，中文标签再退到宋体（P1、l1 这类拉丁符号仍走衬线）。
+   */
   --font-ui: 0.8125rem;
   --font-ui-sm: 0.75rem;
   --font-ui-lg: 0.875rem;
-  --color-success: #159a88;
-  --color-warning: #e39a48;
-  --color-warning-soft: #fff8ed;
+  --font-sans: Inter, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+  --font-math: "Cambria Math", "Latin Modern Math", "STIX Two Math", Cambria, Georgia, "Songti SC", "SimSun", serif;
+  --font-mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Consolas, monospace;
+  --color-success: #2f7d6b;
+  --color-warning: #b4763a;
+  --color-warning-soft: #fdf6ec;
   /* Drafting surface: a cool slate the white paper sits on, so the sheet is the focal surface instead of
      blending into the app background. The grid is a faint workbench texture, never a competing pattern. */
-  --color-drafting-surface: #e6e9f1;
-  --color-drafting-grid: #dde1ec;
+  --color-drafting-surface: #eef2f7;
+  --color-drafting-grid: #e5eaf1;
   --color-paper: #ffffff;
   --color-paper-tint: #fbfcfe;
-  --color-hairline: #c6ccdb;
-  --color-hairline-strong: #a3abc0;
+  --color-hairline: #cbd5e1;
+  --color-hairline-strong: #94a3b8;
   /* Chrome that lives inside the paper is authored in paper units; these are its own minimum sizes. */
   --sheet-panel-padding: 12px;
   --sheet-panel-gap: 10px;
+  /**
+   * **深色 chrome**（左侧模块栏与顶部品牌栏）。
+   *
+   * 用户口径："顶部的 MathCanvas一栏也换成左边框的颜色" —— 于是两者共用同一组令牌，
+   * 不再各写一份渐变。顶栏也因此成为整个界面的暗色顶边，与冷白画布形成深浅对比。
+   *
+   * 取值是 **slate-800 → slate-900**（而不是最初那份带紫调的 `#211d33 → #1a1728`）：
+   * 整套界面已经收敛到板岩蓝系（`--color-ink` / `--color-accent` 都是 slate 家族），
+   * chrome 再留紫味就成了唯一跑出体系的那一处；换掉之后色相统一、暗度不变。
+   */
+  --color-chrome-top: #1e293b;
+  --color-chrome-bottom: #0f172a;
+  /* chrome 上的文字：同样是 slate 家族，只是明度高得多（深底上的正文与次要文字）。 */
+  --color-chrome-ink: #e2e8f0;
+  --color-chrome-ink-dim: #94a3b8;
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
@@ -47,9 +83,14 @@
   --radius-sm: 10px;
   --radius-md: 16px;
   --radius-lg: 20px;
-  --shadow-panel: 0 16px 40px rgb(47 42 78 / 8%);
-  --shadow-card: 0 8px 24px rgb(47 42 78 / 6%);
-  --shadow-sheet: 0 1px 2px rgb(30 36 56 / 6%), 0 18px 42px rgb(30 36 56 / 14%);
+  /**
+   * 微拟物化的分层：**非常柔和、弥散的阴影**（大模糊 + 低不透明度 + 冷色阴影而非黑色）。
+   * `--shadow-panel` 给"浮在内容之上的面板/卡片"，`--shadow-card` 给"面板内部的模块化卡片"，
+   * `--shadow-sheet` 只给制图纸张（它要像真的压在台面上，所以多一层贴地的短线）。
+   */
+  --shadow-panel: 0 24px 60px -28px rgb(44 62 80 / 22%), 0 2px 10px -4px rgb(44 62 80 / 8%);
+  --shadow-card: 0 12px 30px -20px rgb(44 62 80 / 20%), 0 1px 3px rgb(44 62 80 / 4%);
+  --shadow-sheet: 0 1px 2px rgb(44 62 80 / 6%), 0 24px 56px -26px rgb(44 62 80 / 26%);
   --topbar-height: 40px;
   --tabbar-height: 32px;
   --ribbon-height: 80px;

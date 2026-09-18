@@ -48,19 +48,21 @@ describe("background grid geometry", () => {
   })
 
   /**
-   * 立体几何的 UI 令牌与平面几何对齐（slice 6）：栅格换成草稿纸的**暖色**格线。
+   * 立体几何的 UI 令牌与平面几何对齐：两侧共用**同一组格线色**。
    *
    * three.js 读不到 CSS 变量，颜色只能各写一份，所以这里把"两端同源"钉成断言：
    * 立体几何的栅格色必须与 `styles/tokens.css` 里 `--color-graph-grid-minor/major` 的值**逐字相同**。
    * 忘了同步时，先红的是这条用例，而不是用户的眼睛。
+   *
+   * 2026-09-18 视觉重构：两个画布整体转冷，格线从暖灰黄换成极浅冷灰（断言从"暖"翻成"冷"）。
    */
-  it("uses the same warm grid colours as the planar paper tokens", () => {
+  it("uses the same cool grid colours as the canvas tokens", () => {
     expect(GRAPH_PAPER_GRID_TOKENS).toEqual({ minor: "--color-graph-grid-minor", major: "--color-graph-grid-major" })
-    expect(GRID_MINOR_COLOR.toLowerCase()).toBe("#e8dfc2")
-    expect(GRID_MAJOR_COLOR.toLowerCase()).toBe("#d5c79f")
-    // 暖色 = 红分量最高、蓝分量最低（灰蓝的旧值正好相反）。
-    const warmth = (hex: string) => Number.parseInt(hex.slice(1, 3), 16) - Number.parseInt(hex.slice(5, 7), 16)
-    expect(warmth(GRID_MINOR_COLOR)).toBeGreaterThan(0)
-    expect(warmth(GRID_MAJOR_COLOR)).toBeGreaterThan(0)
+    expect(GRID_MINOR_COLOR.toLowerCase()).toBe("#eef2f7")
+    expect(GRID_MAJOR_COLOR.toLowerCase()).toBe("#e2e8f0")
+    // 冷色 = 蓝分量不低于红分量（旧的暖灰黄正好相反）。
+    const coolness = (hex: string) => Number.parseInt(hex.slice(5, 7), 16) - Number.parseInt(hex.slice(1, 3), 16)
+    expect(coolness(GRID_MINOR_COLOR)).toBeGreaterThanOrEqual(0)
+    expect(coolness(GRID_MAJOR_COLOR)).toBeGreaterThanOrEqual(0)
   })
 })

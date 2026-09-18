@@ -40,12 +40,15 @@ export function buildGridGeometry(radius: number, options: GridGeometryOptions =
 /**
  * 栅格两层的颜色与"每格占多少像素才看得清"的淡出曲线。
  *
- * **两端同源**：平面几何的草稿纸格线走 CSS 令牌 `--color-graph-grid-minor` / `--color-graph-grid-major`
+ * **两端同源**：平面几何的画布格线走 CSS 令牌 `--color-graph-grid-minor` / `--color-graph-grid-major`
  * （见 `styles/tokens.css`），three.js 这边读不到 CSS 变量，只能各写一份**同样的值**。
- * 改一处就要改两处——`threeGrid.test.ts` 会盯着这组值，别让它悄悄漂回去。
+ * 改一处就要改两处 —— `threeGrid.test.ts` 与 `e2e/three-ui-tokens.spec.ts` 都会盯着这组值。
+ *
+ * 2026-09-18 视觉重构把两个画布整体转成冷色调（画布由淡黄草稿纸改成冷白纸），
+ * 这两个值随之从暖灰黄（`#e8dfc2` / `#d5c79f`）换成极浅的冷灰 —— 与令牌逐字相同。
  */
-export const GRID_MINOR_COLOR = "#e8dfc2"
-export const GRID_MAJOR_COLOR = "#d5c79f"
+export const GRID_MINOR_COLOR = "#eef2f7"
+export const GRID_MAJOR_COLOR = "#e2e8f0"
 
 /** 与 `--color-graph-grid-*` 的对应关系（供测试与文档核对，避免"改了这里忘了那边"）。 */
 export const GRAPH_PAPER_GRID_TOKENS = { minor: "--color-graph-grid-minor", major: "--color-graph-grid-major" } as const

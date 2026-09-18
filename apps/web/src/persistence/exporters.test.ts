@@ -2,6 +2,7 @@ import { createEmptyDocument } from "@draw/dsl"
 import { recomputeDerivedObjects } from "@draw/scene-graph"
 import { describe, expect, it } from "vitest"
 
+import { DRAWING_INK } from "../primitiveStyle"
 import { WORLD_BOUNDS, WORLD_SCALE, worldToSvg, rayToViewport } from "../viewport"
 import { exportCsv, exportSvg } from "./exporters"
 
@@ -17,9 +18,29 @@ describe("document exporters", () => {
     const svg = exportSvg(document)
 
     expect(svg).toContain('<svg xmlns="http://www.w3.org/2000/svg"')
-    expect(svg).toContain('fill="#3d5afe"')
-    expect(svg).toContain('stroke="#172033"')
+    // 点的默认色仍走 `fillFor`（点用描边色填充）；颜色本身由 `primitiveStyle` 定义，
+    // 这里不重复钉具体色值 —— 换配色时不该让导出的结构用例跟着一起改。
+    expect(svg).toMatch(/<circle[^>]*fill="#[0-9a-f]{6}"/i)
+    // 样式仍然走 `svgStyleFor`：这里的点用**自己的**描边色填充（`fillFor` 对点返回描边色）。
+    expect(svg).toContain('fill="#2f4a68"')
+    expect(svg).not.toContain("var(--color-")
     expect(svg).not.toContain('cx="400" cy="320" r="6"')
+  })
+
+  /**
+   * 画布内的文字（点注记 P1 / 标签）导出时必须是**具体色值**：`.svg` 是一份独立文件，
+   * 没有 `:root` 令牌可以继承，写 `var(--color-drawing-ink)` 导出出去就是"没有颜色"。
+   */
+  it("writes annotation text with a concrete colour instead of a CSS variable", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [{ id: "point-1", type: "point", x: 1, y: 1, label: "P1" }]
+    document.annotations = [{ id: "annotation-1", target: "point-1", text: "P1" }]
+
+    const svg = exportSvg(document)
+
+    expect(svg).toContain(`fill="${DRAWING_INK}"`)
+    expect(svg).toContain('font-family="Cambria Math, Georgia, serif"')
+    expect(svg).not.toContain("var(--color-")
   })
 
   /**
@@ -128,8 +149,9 @@ describe("document exporters", () => {
     const expectedCx = worldToSvg({ x: ellipse.center.x, y: 0 }).x
     const expectedCy = worldToSvg({ x: 0, y: ellipse.center.y }).y
     expect(svg).toContain(`<ellipse cx="${expectedCx}" cy="${expectedCy}" rx="${ellipse.radiusX * WORLD_SCALE}" ry="${ellipse.radiusY * WORLD_SCALE}"`)
-    // 样式仍然走 `svgStyleFor`，与圆/弧一致（椭圆默认描边色）。
-    expect(svg).toContain('stroke="#0891b2"')
+    // 样式仍然走 `svgStyleFor`，与圆/弧一致（这里只钉"用的是椭圆自己的默认描边色"，
+    // 具体色值由 `primitiveStyle` 定义 —— 换配色不该让导出的结构用例跟着改）。
+    expect(svg).toMatch(/<ellipse[^>]*stroke="#[0-9a-f]{6}"/i)
     // 真曲线不是采样曲线：这份文档里不该再有折线。
     expect(svg).not.toContain("<polyline")
   })

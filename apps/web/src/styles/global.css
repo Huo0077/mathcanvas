@@ -1,11 +1,11 @@
-﻿@import "./tokens.css";
+@import "./tokens.css";
 
 * { box-sizing: border-box; }
-body { margin: 0; min-width: 320px; background: var(--color-canvas); color: var(--color-ink); font-family: Inter, "Noto Sans SC", ui-sans-serif, system-ui, sans-serif; }
+body { margin: 0; min-width: 320px; background: var(--color-canvas); color: var(--color-ink); font-family: var(--font-sans); }
 button, input, select, textarea { font: inherit; }
 button { min-height: 44px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-panel); color: var(--color-ink); cursor: pointer; padding: 0 var(--space-3); transition: border-color 120ms ease, background-color 120ms ease, color 120ms ease, box-shadow 120ms ease; }
 button:hover { border-color: var(--color-accent); }
-button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid rgb(61 90 254 / 30%); outline-offset: 2px; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid rgb(61 90 128 / 30%); outline-offset: 2px; }
 .app-shell { min-height: 100vh; display: grid; grid-template-rows: auto 1fr; }
 .topbar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-3) var(--space-5); background: var(--color-panel); border-bottom: 1px solid var(--color-border); }
 .brand { display: flex; align-items: center; gap: var(--space-3); font-weight: 750; letter-spacing: -0.02em; }
@@ -49,8 +49,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .properties > .primitive-properties input, .properties > .primitive-properties select, .properties > .primitive-properties textarea { min-height: var(--control-height); }
 .properties > .primitive-properties input[type="color"] { min-height: var(--control-height); }
 .properties > .primitive-properties input:disabled, .properties > .primitive-properties select:disabled, .properties > .primitive-properties textarea:disabled { cursor: not-allowed; opacity: 0.55; }
-.properties > .function-properties { border-color: rgb(61 90 254 / 35%); }
-.formula-keyboard { display: grid; gap: var(--space-2); padding: var(--space-3); background: var(--color-accent-soft); border: 1px solid rgb(61 90 254 / 18%); border-radius: var(--radius-md); }
+.properties > .function-properties { border-color: rgb(61 90 128 / 30%); }
+.formula-keyboard { display: grid; gap: var(--space-2); padding: var(--space-3); background: var(--color-accent-soft); border: 1px solid rgb(61 90 128 / 18%); border-radius: var(--radius-md); }
 .formula-keyboard-header { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); color: var(--color-ink); font-size: 0.8rem; font-weight: 700; }
 .formula-keyboard-header small { color: var(--color-muted); font-size: 0.7rem; font-weight: 500; }
 .formula-keyboard-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: var(--space-1); }
@@ -221,7 +221,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .batch-actions button { min-width: 0; padding-inline: var(--space-2); }
 .endpoint-group { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); padding-top: var(--space-2); border-top: 1px solid var(--color-border); }
 .endpoint-group > strong { grid-column: 1 / -1; font-size: 0.78rem; }
-.selection-rect { fill: rgb(61 90 254 / 12%); stroke: var(--color-accent); stroke-dasharray: 6 4; pointer-events: none; }
+.selection-rect { fill: rgb(61 90 128 / 12%); stroke: var(--color-accent); stroke-dasharray: 6 4; pointer-events: none; }
 /**
  * 平面画布上的常驻测量数字：白描边（halo）让它叠在曲线或格线上也读得清，
  * 位置由纯函数给出（`planarMeasurementVisuals`），`pointer-events: none` 保证拾取行为一字不变。
@@ -231,7 +231,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 /* 框选方向要一眼可辨：窗口选择（左→右）实线，相交选择（右→左）虚线绿色。 */
 .selection-rect[data-selection-mode="window"] { stroke-dasharray: none; }
 .selection-rect[data-selection-mode="crossing"] { fill: rgb(21 154 136 / 12%); stroke: var(--color-success); }
-.engineering-drawing-box-select { fill: rgb(108 92 231 / 12%); stroke: var(--color-accent); stroke-width: 1; vector-effect: non-scaling-stroke; pointer-events: none; }
+.engineering-drawing-box-select { fill: rgb(61 90 128 / 12%); stroke: var(--color-accent); stroke-width: 1; vector-effect: non-scaling-stroke; pointer-events: none; }
 .engineering-drawing-box-select[data-draft-box="crossing"] { fill: rgb(21 154 136 / 14%); stroke: var(--color-success); stroke-dasharray: 6 4; }
 /* 命令行与动态输入：贴在视口工具栏下方，输入框保持紧凑。 */
 .drawing-viewport-input { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); padding: 0 var(--space-3) var(--space-2); }
@@ -252,69 +252,69 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 @media (max-width: 680px) { .topbar { align-items: flex-start; flex-direction: column; } .workspace-tabs { width: 100%; overflow-x: auto; } .workbench { display: block; } .panel, .panel.right { border: 0; border-bottom: 1px solid var(--color-border); } .properties { padding-bottom: var(--space-3); } .properties > .primitive-properties, .properties > .batch-properties { margin-inline: var(--space-3); padding: var(--space-3); } .graphics { min-height: 55vh; padding: var(--space-3); } .toolbar { padding: var(--space-3); } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; } }
 
-body { background: #f4f4f8; font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif; }
-button { border-color: #e7e4ef; border-radius: 11px; box-shadow: none; }
-button:hover { border-color: #b9aff7; background: #faf9ff; }
-button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline-color: rgb(108 92 231 / 32%); }
-.topbar { min-height: 72px; padding: 0 28px; gap: 24px; border-bottom-color: #e8e6ef; }
+body { background: var(--color-canvas); font-family: var(--font-sans); }
+button { border-color: var(--color-border); border-radius: 11px; box-shadow: none; }
+button:hover { border-color: var(--color-accent); background: var(--color-accent-soft); }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline-color: rgb(61 90 128 / 32%); }
+.topbar { min-height: 72px; padding: 0 28px; gap: 24px; border-bottom-color: var(--color-border); }
 .topbar-leading { display: flex; align-items: center; gap: 24px; min-width: max-content; }
-.brand { gap: 10px; color: #28243f; font-size: 1.05rem; }
-.brand-mark { width: 38px; height: 38px; border-radius: 12px; background: linear-gradient(145deg, #7868ee, #5d4bd5); box-shadow: 0 8px 16px rgb(108 92 231 / 23%); font-size: 1.15rem; }
-.model-status { display: flex; align-items: center; gap: 9px; padding-left: 20px; border-left: 1px solid #ebe9f1; color: #625e75; }
+.brand { gap: 10px; color: var(--color-ink); font-size: 1.05rem; }
+.brand-mark { width: 38px; height: 38px; border-radius: 12px; background: linear-gradient(145deg, #4a6b96, #2c3e50); box-shadow: 0 8px 16px rgb(44 62 80 / 24%); font-size: 1.15rem; }
+.model-status { display: flex; align-items: center; gap: 9px; padding-left: 20px; border-left: 1px solid #ebe9f1; color: var(--color-muted); }
 .model-status span:last-child { display: grid; gap: 1px; }
-.model-status small { font-size: 0.68rem; color: #9995a8; }
+.model-status small { font-size: 0.68rem; color: var(--color-muted); }
 .model-status strong { font-size: 0.78rem; font-weight: 700; color: #258e81; }
 .health-dot, .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #21ae9a; box-shadow: 0 0 0 4px rgb(33 174 154 / 12%); }
 .workspace-tabs { flex: 1; justify-content: center; gap: 4px; }
-.workspace-tabs button { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px; border-color: transparent; background: transparent; color: #77738b; font-size: 0.82rem; white-space: nowrap; }
-.workspace-tabs button[data-active="true"] { background: #efedff; color: #604fda; border-color: transparent; box-shadow: inset 0 0 0 1px rgb(108 92 231 / 8%); }
-.workspace-tabs button:hover { background: #f7f5ff; }
+.workspace-tabs button { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px; border-color: transparent; background: transparent; color: var(--color-muted); font-size: 0.82rem; white-space: nowrap; }
+.workspace-tabs button[data-active="true"] { background: var(--color-accent-soft); color: var(--color-accent-strong); border-color: transparent; box-shadow: inset 0 0 0 1px rgb(61 90 128 / 8%); }
+.workspace-tabs button:hover { background: var(--color-accent-soft); }
 .ui-icon { width: 17px; height: 17px; flex: 0 0 auto; }
 .topbar-actions { display: flex; align-items: center; gap: 8px; min-width: max-content; }
-.search-box { display: flex; align-items: center; gap: 8px; width: 168px; height: 38px; padding: 0 11px; border: 1px solid #e7e4ef; border-radius: 11px; color: #a19daf; background: #faf9fc; }
-.search-box:focus-within { border-color: #b9aff7; box-shadow: 0 0 0 3px rgb(108 92 231 / 10%); }
-.search-box input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: #28243f; }
-.search-box input::placeholder { color: #aaa6b7; }
-.topbar-icon { display: grid; place-items: center; width: 38px; min-height: 38px; padding: 0; border-color: transparent; background: transparent; color: #77738b; }
-.profile-button { color: #604fda; background: #f0edff; }
-.workbench { background: #f4f4f8; }
-.toolbar { align-items: stretch; gap: 10px; padding: 12px 20px; background: #fbfbfd; border-bottom-color: #e8e6ef; }
-.toolbar-group { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 10px; border: 1px solid #e9e7f0; border-radius: 15px; background: #fff; box-shadow: 0 5px 18px rgb(47 42 78 / 4%); }
+.search-box { display: flex; align-items: center; gap: 8px; width: 168px; height: 38px; padding: 0 11px; border: 1px solid var(--color-border); border-radius: 11px; color: var(--color-muted); background: var(--color-surface-subtle); }
+.search-box:focus-within { border-color: var(--color-accent); box-shadow: 0 0 0 3px rgb(61 90 128 / 10%); }
+.search-box input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--color-ink); }
+.search-box input::placeholder { color: var(--color-muted); }
+.topbar-icon { display: grid; place-items: center; width: 38px; min-height: 38px; padding: 0; border-color: transparent; background: transparent; color: var(--color-muted); }
+.profile-button { color: var(--color-accent-strong); background: #f0edff; }
+.workbench { background: var(--color-canvas); }
+.toolbar { align-items: stretch; gap: 10px; padding: 12px 20px; background: var(--color-surface-subtle); border-bottom-color: var(--color-border); }
+.toolbar-group { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 10px; border: 1px solid var(--color-border); border-radius: 15px; background: #fff; box-shadow: 0 5px 18px rgb(44 62 80 / 6%); }
 .object-tools { flex: 1 1 640px; }
 .multimodal-tools { flex: 0 1 245px; }
 .editing-tools { flex: 0 1 255px; }
 .export-tools { flex: 0 1 265px; }
 .toolbar-group-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 22px; }
 .toolbar-group-heading > div { display: flex; align-items: baseline; gap: 8px; }
-.toolbar-group-heading strong { color: #363148; font-size: 0.78rem; }
-.toolbar-kicker, .panel-kicker { color: #a09bad; font-size: 0.64rem; font-weight: 700; letter-spacing: 0.08em; }
-.toolbar-expand { min-height: 25px; width: 27px; padding: 0; border: 0; color: #7469bd; background: #f1efff; }
+.toolbar-group-heading strong { color: var(--color-ink); font-size: 0.78rem; }
+.toolbar-kicker, .panel-kicker { color: var(--color-muted); font-size: 0.64rem; font-weight: 700; letter-spacing: 0.08em; }
+.toolbar-expand { min-height: 25px; width: 27px; padding: 0; border: 0; color: var(--color-accent-strong); background: #f1efff; }
 .object-tool-grid { display: grid; grid-template-columns: repeat(6, minmax(58px, 1fr)); gap: 5px; }
 .toolbar-inline-actions { display: flex; flex-wrap: wrap; gap: 5px; align-items: stretch; }
-.tool-button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: 34px; padding: 0 8px; border-color: transparent; color: #68637b; background: #f8f7fb; font-size: 0.72rem; white-space: nowrap; }
-.tool-button:hover { background: #f0edff; color: #604fda; }
-.tool-button[data-active="true"] { background: #efedff; color: #604fda; border-color: #dcd6ff; }
-.tool-button.primary { background: #6c5ce7; color: #fff; border-color: #6c5ce7; box-shadow: 0 6px 12px rgb(108 92 231 / 18%); }
-.tool-button.primary:hover { background: #5d4bd5; color: #fff; }
+.tool-button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: 34px; padding: 0 8px; border-color: transparent; color: var(--color-muted); background: var(--color-surface-subtle); font-size: 0.72rem; white-space: nowrap; }
+.tool-button:hover { background: #f0edff; color: var(--color-accent-strong); }
+.tool-button[data-active="true"] { background: var(--color-accent-soft); color: var(--color-accent-strong); border-color: var(--color-accent-soft); }
+.tool-button.primary { background: var(--color-accent); color: #fff; border-color: var(--color-accent); box-shadow: 0 6px 12px rgb(61 90 128 / 18%); }
+.tool-button.primary:hover { background: var(--color-accent-strong); color: #fff; }
 .tool-button:disabled { opacity: 0.45; cursor: not-allowed; }
 .object-tools:not(.is-open) .object-tool-grid { display: none; }
 .toolbar-icon { width: 15px; height: 15px; flex: 0 0 auto; }
-.panel { border-right-color: #e8e6ef; }
-.panel-section { padding: 18px 16px; border-bottom-color: #e8e6ef; }
+.panel { border-right-color: var(--color-border); }
+.panel-section { padding: 18px 16px; border-bottom-color: var(--color-border); }
 .panel-heading, .inspector-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .panel-heading > div, .inspector-heading > div { display: grid; gap: 4px; }
-.panel-title { margin: 0; color: #39344e; font-size: 0.94rem; font-weight: 750; letter-spacing: -0.02em; text-transform: none; }
-.object-count { display: inline-grid; place-items: center; min-width: 24px; height: 24px; padding: 0 7px; border-radius: 999px; color: #6b5bdd; background: #efedff; font-size: 0.7rem; font-weight: 750; }
+.panel-title { margin: 0; color: var(--color-ink); font-size: 0.94rem; font-weight: 750; letter-spacing: -0.02em; text-transform: none; }
+.object-count { display: inline-grid; place-items: center; min-width: 24px; height: 24px; padding: 0 7px; border-radius: 999px; color: var(--color-accent-strong); background: var(--color-accent-soft); font-size: 0.7rem; font-weight: 750; }
 .algebra-panel { height: 100%; padding-top: 20px; background: #fff; }
 .object-list { display: grid; gap: 3px; margin-top: 16px; }
 .object-row { min-height: 42px; padding: 5px 6px 5px 9px; border: 1px solid transparent; }
-.object-row:hover { background: #faf9ff; }
+.object-row:hover { background: var(--color-accent-soft); }
 .object-row.selected { border-color: #ded9ff; background: #f1efff; }
-.object-dot { width: 8px; height: 8px; background: #6c5ce7; box-shadow: 0 0 0 4px rgb(108 92 231 / 10%); }
+.object-dot { width: 8px; height: 8px; background: var(--color-accent); box-shadow: 0 0 0 4px rgb(61 90 128 / 10%); }
 .object-tree { display: grid; gap: 2px; }
-.object-subtree { display: grid; gap: 2px; margin: 2px 0 6px 12px; padding-left: 8px; border-left: 2px solid #eeecfb; }
+.object-subtree { display: grid; gap: 2px; margin: 2px 0 6px 12px; padding-left: 8px; border-left: 2px solid var(--color-border); }
 .object-group { display: grid; gap: 2px; }
-.object-group-label { padding: 2px 0 2px 6px; color: #8b86a3; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em; }
+.object-group-label { padding: 2px 0 2px 6px; color: var(--color-muted); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em; }
 .object-row-child { min-height: 36px; }
 .row-expand { width: 22px; min-height: 22px; font-size: 0.7rem; }
 .measurement-row { align-items: flex-start; flex-direction: column; gap: 2px; cursor: default; }
@@ -322,7 +322,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .measurement-status { margin-left: auto; padding: 1px 6px; border-radius: 999px; color: #4a4a68; background: #f1effa; font-size: 0.66rem; font-weight: 700; }
 .measurement-status[data-status="valid"] { color: #1c7a5e; background: #e6f7f0; }
 .measurement-status[data-status="degenerate"], .measurement-status[data-status="numeric-failure"] { color: #a14b2c; background: #fdefe8; }
-.measurement-source, .measurement-explanation { color: #8b86a3; font-size: 0.7rem; line-height: 1.4; }
+.measurement-source, .measurement-explanation { color: var(--color-muted); font-size: 0.7rem; line-height: 1.4; }
 /* 参数面板：动点自动生成的驱动参数带归属标签，字段一行内可编辑。 */
 .parameter-row { align-items: flex-start; flex-direction: column; gap: var(--space-2); cursor: default; }
 .parameter-row .object-meta { width: 100%; }
@@ -330,16 +330,16 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .parameter-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); gap: var(--space-2); width: 100%; }
 .parameter-fields label { display: grid; gap: 2px; color: var(--color-muted); font-size: 0.68rem; }
 .parameter-fields input { min-width: 0; padding: 2px 4px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); font-size: 0.74rem; font-variant-numeric: tabular-nums; }
-.object-empty { padding: var(--space-2); color: #8b86a3; font-size: 0.72rem; line-height: 1.5; }
-.object-dot[data-object-type="measurement3"] { background: #8b86a3; box-shadow: 0 0 0 4px rgb(139 134 163 / 12%); }
+.object-empty { padding: var(--space-2); color: var(--color-muted); font-size: 0.72rem; line-height: 1.5; }
+.object-dot[data-object-type="measurement3"] { background: var(--color-muted); box-shadow: 0 0 0 4px rgb(139 134 163 / 12%); }
 .object-dot[data-object-type="line"], .object-dot[data-object-type="segment"], .object-dot[data-object-type="ray"] { background: #21a794; box-shadow: 0 0 0 4px rgb(33 167 148 / 10%); }
 .object-dot[data-object-type="point"], .object-dot[data-object-type="intersection"] { background: #e39a48; box-shadow: 0 0 0 4px rgb(227 154 72 / 12%); }
 .icon-button { display: grid; place-items: center; width: 30px; min-height: 30px; border: 0; color: #9d99aa; background: transparent; }
-.icon-button:hover { color: #604fda; background: #fff; }
+.icon-button:hover { color: var(--color-accent-strong); background: #fff; }
 .row-icon { width: 17px; height: 17px; }
 .row-lock-icon { width: 13px; height: 13px; color: #e39a48; }
 .lock-badge { display: inline-flex; align-items: center; }
-.graphics { padding: 18px; background: #f4f4f8; }
+.graphics { padding: 18px; background: var(--color-canvas); }
 
 /**
  * **纸纹 / 磨砂质感**（用户口径："画布增加一点磨砂质感"）。
@@ -351,7 +351,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
  * 纹理来自 `#paper-grain`（见 `components/PaperTexture.tsx`，`feTurbulence` 程序生成，不占体积）。
  * 强度靠 `--paper-grain-opacity` 控制：纸面稍明显、面板更淡 —— 面板只是"同一种材质"，不该抢内容。
  */
-:root { --paper-grain-opacity: 0.55; }
+:root { --paper-grain-opacity: 0.06; }
 
 .graphics[data-canvas-surface="graph-paper"] .canvas-card,
 .panel,
@@ -366,8 +366,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   mix-blend-mode: multiply;
 }
 .graphics[data-canvas-surface="graph-paper"] .canvas-card::before { inset: 10px; border-radius: var(--radius-sm); opacity: 0.7; }
-.panel::before { inset: 0; --paper-grain-opacity: 0.4; }
-.status-bar::before { inset: 0; --paper-grain-opacity: 0.35; }
+.panel::before { inset: 0; --paper-grain-opacity: 0.04; }
+.status-bar::before { inset: 0; --paper-grain-opacity: 0.03; }
 /* 纹理层在下、内容在上：面板的三个直接子元素都要抬起来，否则会被那层盖住。 */
 .panel > * { position: relative; z-index: 1; }
 
@@ -407,7 +407,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .canvas-viewport-controls .zoom-readout { font-size: var(--font-ui-sm); }
 .coordinate-readout { font-size: var(--font-ui-sm); }
 
-.canvas-card { position: relative; top: 0; padding: 10px; border-color: #e6e3ee; border-radius: 18px; box-shadow: 0 15px 35px rgb(47 42 78 / 7%); }
+.canvas-card { position: relative; top: 0; padding: 10px; border-color: var(--color-border); border-radius: 18px; box-shadow: 0 15px 35px rgb(44 62 80 / 10%); }
 .canvas-card svg { background: #fcfcfd; }
 
 /**
@@ -420,12 +420,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
  *
  * 立体几何 / 工程制图仍是原来的冷色工作台：只有 `data-canvas-surface="graph-paper"` 命中时才换色。
  */
-.graphics[data-canvas-surface="graph-paper"] { background: linear-gradient(180deg, #f6f4ea, #f2f0e6); }
-.graphics[data-canvas-surface="graph-paper"] .canvas-card { border-color: var(--color-graph-paper-edge); box-shadow: inset 0 0 0 1px rgb(255 255 255 / 70%), 0 1px 2px rgb(120 106 64 / 8%), 0 18px 38px rgb(120 106 64 / 10%); }
+.graphics[data-canvas-surface="graph-paper"] { background: linear-gradient(180deg, #f4f6f9, #eef2f7); }
+.graphics[data-canvas-surface="graph-paper"] .canvas-card { border-color: var(--color-graph-paper-edge); box-shadow: inset 0 0 0 1px rgb(255 255 255 / 70%), 0 1px 2px rgb(44 62 80 / 6%), 0 24px 48px -30px rgb(44 62 80 / 22%); }
 .graphics[data-canvas-surface="graph-paper"] .canvas-card svg { background: var(--color-graph-paper); }
 /* 纸右上角一枚极淡的数学水印：装饰，不参与命中。层级要**高过 SVG**，否则会被不透明的纸面盖住。 */
-.graphics[data-canvas-surface="graph-paper"] .canvas-card::after { content: "∑"; position: absolute; right: 18px; top: 10px; z-index: 1; color: rgb(180 166 120 / 22%); font-size: 26px; line-height: 1; pointer-events: none; }
-.graphics[data-canvas-surface="graph-paper"] .canvas-card .canvas-viewport-controls { border-color: var(--color-graph-paper-edge); background: rgb(255 253 245 / 94%); }
+.graphics[data-canvas-surface="graph-paper"] .canvas-card::after { content: "∑"; position: absolute; right: 18px; top: 10px; z-index: 1; color: rgb(44 62 80 / 12%); font-size: 26px; line-height: 1; pointer-events: none; }
+.graphics[data-canvas-surface="graph-paper"] .canvas-card .canvas-viewport-controls { border-color: var(--color-graph-paper-edge); background: rgb(255 255 255 / 94%); }
 
 /**
  * 立体几何与平面几何**同一套视觉令牌**（slice 6）。
@@ -438,8 +438,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
  *
  * 纸纹强度与平面同级（同一个 `--paper-grain-opacity`）；水印用 `∴`（立体几何的记号）而不是 `∑`。
  */
-.three-canvas-shell[data-canvas-surface="graph-paper"] { background: linear-gradient(180deg, #f6f4ea, #f2f0e6); }
-.three-canvas-shell[data-canvas-surface="graph-paper"] .three-render-target { background: var(--color-graph-paper); box-shadow: inset 0 0 0 1px rgb(255 255 255 / 70%), 0 1px 2px rgb(120 106 64 / 8%), 0 18px 38px rgb(120 106 64 / 10%); }
+.three-canvas-shell[data-canvas-surface="graph-paper"] { background: linear-gradient(180deg, #f4f6f9, #eef2f7); }
+.three-canvas-shell[data-canvas-surface="graph-paper"] .three-render-target { background: var(--color-graph-paper); box-shadow: inset 0 0 0 1px rgb(255 255 255 / 70%), 0 1px 2px rgb(44 62 80 / 6%), 0 24px 48px -30px rgb(44 62 80 / 22%); }
 .three-canvas-shell[data-canvas-surface="graph-paper"]::before {
   content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none;
   background: #fff; filter: url(#paper-grain); opacity: var(--paper-grain-opacity);
@@ -447,11 +447,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 .three-canvas-shell[data-canvas-surface="graph-paper"]::after {
   content: "∴"; position: absolute; right: 18px; top: 8px; z-index: 2; pointer-events: none;
-  color: rgb(180 166 120 / 22%); font-size: 26px; line-height: 1;
+  color: rgb(44 62 80 / 12%); font-size: 26px; line-height: 1;
 }
 /* 控件与平面几何对齐：同一套圆角 / 边框 / 纸底，位置与分组不动。 */
 .three-canvas-shell[data-canvas-surface="graph-paper"] .three-scene-controls button,
-.three-canvas-shell[data-canvas-surface="graph-paper"] .three-camera-controls button { border-color: var(--color-graph-paper-edge); background: rgb(255 253 245 / 94%); }
+.three-canvas-shell[data-canvas-surface="graph-paper"] .three-camera-controls button { border-color: var(--color-graph-paper-edge); background: rgb(255 255 255 / 94%); }
 .three-canvas-shell[data-canvas-surface="graph-paper"] .three-scene-controls button:hover,
 .three-canvas-shell[data-canvas-surface="graph-paper"] .three-camera-controls button:hover { background: #fff; }
 
@@ -468,7 +468,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .colour-swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--color-panel), 0 0 0 4px var(--color-accent); }
 .colour-swatch:disabled { cursor: not-allowed; opacity: 0.5; }
 /* "无填充"画成斜杠格：它不是一个颜色，是一个状态。 */
-.colour-swatch.is-none { background: repeating-linear-gradient(135deg, #fff 0 5px, #e6e3ee 5px 10px); }
+.colour-swatch.is-none { background: repeating-linear-gradient(135deg, #fff 0 5px, var(--color-border) 5px 10px); }
 .colour-custom { width: 30px; min-height: 24px; height: 24px; padding: 0 2px; border: 1px solid var(--color-border); border-radius: 7px; background: var(--color-panel); cursor: pointer; }
 .colour-custom:disabled { cursor: not-allowed; opacity: 0.5; }
 
@@ -496,27 +496,36 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .three-canvas-shell[data-pan-mode="true"] canvas:active { cursor: grabbing; }
 .three-canvas-shell[data-drag-mode="true"] canvas { cursor: move; }
 .three-canvas-shell[data-drag-mode="true"] canvas:active { cursor: grabbing; }
+/* 窄画布时两排顶部控件会互相压住（README 里"自动取景点不到"就是这一条）：左右两排都是
+   绝对定位，画布一窄，左侧那排的按钮就铺到右侧那排身上，把它的指针事件吃掉。
+   修法：窄宽度下各让出一半宽度，放不下时**各自换行**，而不是横向压过去。
+   半个画布是硬上限，所以这个断点同时覆盖 1280px 桌面（左侧栏 72px + 两块 240/292px 面板之后
+   画布只剩约 600px）与更宽的窗口（此时两排各自一行就够，规则不生效）。 */
+@media (max-width: 1500px) {
+  .three-scene-controls,
+  .three-camera-controls { max-width: calc(50% - var(--space-4)); }
+}
 .toolbar-hint { margin: var(--space-2) 0 0; color: var(--color-muted); font-size: 0.78rem; line-height: 1.4; }
 .three-scene-controls { position: absolute; z-index: 2; top: var(--space-3); left: var(--space-3); display: flex; flex-wrap: wrap; gap: var(--space-1); }
 .three-scene-controls button { min-height: 44px; padding-inline: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-muted); background: rgb(255 255 255 / 92%); box-shadow: var(--shadow-card); white-space: nowrap; }
 .three-scene-controls button[aria-pressed="true"] { border-color: var(--color-accent); color: var(--color-accent); background: var(--color-accent-soft); }
 .three-angle-readout { position: absolute; z-index: 2; right: var(--space-3); bottom: var(--space-3); padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-ink); background: rgb(255 255 255 / 92%); box-shadow: var(--shadow-card); font-size: 0.78rem; }
-.coordinate-readout { top: 18px; left: 18px; border-color: #e7e4ef; border-radius: 10px; color: #68637b; background: rgb(255 255 255 / 90%); }
-.panel.right { background: #f8f7fb; border-left-color: #e8e6ef; }
-.panel-section.properties { gap: 12px; padding: 20px 0 18px; background: #f8f7fb; }
+.coordinate-readout { top: 18px; left: 18px; border-color: var(--color-border); border-radius: 10px; color: var(--color-muted); background: rgb(255 255 255 / 90%); }
+.panel.right { background: var(--color-surface-subtle); border-left-color: var(--color-border); }
+.panel-section.properties { gap: 12px; padding: 20px 0 18px; background: var(--color-surface-subtle); }
 .properties > .inspector-heading { padding: 0 18px 4px; }
-.inspector-indicator { width: 8px; height: 8px; margin-top: 7px; border-radius: 50%; background: #6c5ce7; box-shadow: 0 0 0 5px rgb(108 92 231 / 12%); }
-.inspector-tabs { display: flex; gap: 3px; padding: 0 18px 10px; border-bottom: 1px solid #e9e7f0; }
+.inspector-indicator { width: 8px; height: 8px; margin-top: 7px; border-radius: 50%; background: var(--color-accent); box-shadow: 0 0 0 5px rgb(61 90 128 / 12%); }
+.inspector-tabs { display: flex; gap: 3px; padding: 0 18px 10px; border-bottom: 1px solid var(--color-border); }
 .inspector-tabs button { min-height: 34px; padding: 0 13px; border: 0; border-radius: 8px; color: #8a859b; background: transparent; font-size: 0.78rem; }
-.inspector-tabs button[data-active="true"] { color: #604fda; background: #efedff; font-weight: 700; }
+.inspector-tabs button[data-active="true"] { color: var(--color-accent-strong); background: var(--color-accent-soft); font-weight: 700; }
 .properties-label small { color: #aaa5b6; font-size: 0.68rem; }
-.properties > .primitive-properties, .properties > .batch-properties { margin: 0 18px; padding: 14px; border-color: #e8e6ef; border-radius: 15px; box-shadow: 0 6px 18px rgb(47 42 78 / 4%); }
-.property-type-badge { background: #efedff; color: #604fda; }
+.properties > .primitive-properties, .properties > .batch-properties { margin: 0 18px; padding: 14px; border-color: var(--color-border); border-radius: 15px; box-shadow: 0 6px 18px rgb(44 62 80 / 6%); }
+.property-type-badge { background: var(--color-accent-soft); color: var(--color-accent-strong); }
 .property-kicker, .property-subheading { color: #9691a3; }
 .property-subheading { border-bottom-color: #eceaf1; }
-.metric { color: #604fda; }
-.properties input[type="range"] { accent-color: #6c5ce7; }
-.footer-note { color: #928da0; background: transparent; border-top-color: #e8e6ef; }
+.metric { color: var(--color-accent-strong); }
+.properties input[type="range"] { accent-color: var(--color-accent); }
+.footer-note { color: var(--color-muted); background: transparent; border-top-color: var(--color-border); }
 
 @media (max-width: 1200px) {
   .topbar { padding-inline: 18px; }
@@ -576,17 +585,41 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 /* Multi-column: the canvas column is a viewport, and 100% is what hands its height down to the sheet. */
 @media (min-width: 981px) { .workbench-canvas-slot { height: 100%; } }
 .workbench-dock { min-width: 0; min-height: 0; overflow: auto; background: var(--color-panel); border-right: 1px solid var(--color-border); }
-.workbench-dock-right { border-right: 0; border-left: 1px solid var(--color-border); background: #f8f7fb; }
+.workbench-dock-right { border-right: 0; border-left: 1px solid var(--color-border); background: var(--color-surface-subtle); }
 .workbench-status-region { background: var(--color-panel); border-top: 1px solid var(--color-border); }
 
-.app-shell { height: 100vh; min-height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-.app-shell > .topbar { flex: 0 0 var(--topbar-height); height: var(--topbar-height); min-height: var(--topbar-height); position: relative; padding: 0 var(--space-4); }
-.app-shell > .topbar .brand-mark { width: 30px; height: 30px; border-radius: 9px; box-shadow: none; font-size: 0.95rem; }
-.app-shell > .topbar .model-status { gap: var(--space-2); padding-left: var(--space-3); }
-.app-shell > .topbar .model-status small { display: none; }
-.app-shell > .topbar .topbar-actions { margin-left: auto; }
-.app-shell > .topbar .topbar-commands button { min-height: 32px; padding-inline: var(--space-2); font-size: 0.72rem; }
-.app-shell > .topbar .search-box { position: absolute; left: 50%; width: min(360px, 34vw); height: 30px; transform: translateX(-50%); }
+/* 顶级骨架：左侧常驻导航栏（模块切换 + 模块 A 的工作区入口）+ 右侧当前模块。
+   模块 A 那一列仍然是"上顶栏 / 标签栏 / Ribbon / 工作台"的纵向排列，所以下面这些
+   原本写成 `.app-shell > …` 的规则改成 `.app-module > …`：多包一层之后，选择器必须跟着走，
+   否则顶栏高度、浮动 Ribbon 的定位、手机端的单列版式会一起失效。 */
+.app-shell { height: 100vh; min-height: 100vh; display: flex; flex-direction: row; overflow: hidden; }
+.app-module { position: relative; display: flex; flex: 1 1 auto; flex-direction: column; min-width: 0; min-height: 0; height: 100%; }
+.app-module > .topbar { flex: 0 0 var(--topbar-height); height: var(--topbar-height); min-height: var(--topbar-height); position: relative; padding: 0 var(--space-4); }
+
+/* ---------- 顶级模块导航栏 ---------- */
+/* 宽度令牌放在 `.app-shell` 上：窄屏只留图标，右侧画布列还能保住最小可用宽度。 */
+.app-shell { --rail-width: 72px; }
+.app-rail { flex: 0 0 var(--rail-width); display: flex; flex-direction: column; align-items: center; gap: var(--space-3); padding: var(--space-3) 6px; overflow-y: auto; background: linear-gradient(180deg, var(--color-chrome-top), var(--color-chrome-bottom)); }
+.app-rail-mark { display: grid; place-items: center; width: 32px; height: 32px; flex: 0 0 auto; border-radius: 10px; background: linear-gradient(145deg, #4a6b96, #2c3e50); color: #fff; font-size: 1rem; font-weight: 700; }
+.app-rail-modules, .app-rail-workspaces ul { display: grid; gap: var(--space-1); margin: 0; padding: 0; width: 100%; list-style: none; }
+.app-rail-button { display: grid; justify-items: center; gap: 3px; width: 100%; min-height: 56px; padding: var(--space-2) 2px; border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: #94a3b8; font-size: 0.66rem; font-weight: 650; }
+.app-rail-button:hover { border-color: transparent; background: rgb(255 255 255 / 8%); color: #fff; }
+.app-rail-button[data-active="true"] { border-color: rgb(255 255 255 / 14%); background: rgb(255 255 255 / 13%); color: #fff; }
+.app-rail-icon { width: 20px; height: 20px; }
+/* 侧栏按钮的**可见**文案与读屏名字分开：可见的只有两三个字，读屏拿到的是完整名字（见 ModuleRail）。 */
+.app-rail-hint { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+.app-rail-workspaces { display: grid; gap: var(--space-2); width: 100%; padding-top: var(--space-3); border-top: 1px solid rgb(255 255 255 / 10%); }
+.app-rail-label { color: #64748b; font-size: 0.6rem; font-weight: 700; letter-spacing: 0.08em; text-align: center; text-transform: uppercase; }
+.app-rail-workspace { width: 100%; min-height: 30px; padding: 0 2px; border-color: transparent; border-radius: 8px; background: transparent; color: #94a3b8; font-size: 0.68rem; font-weight: 600; }
+.app-rail-workspace:hover { border-color: transparent; background: rgb(255 255 255 / 8%); color: #fff; }
+.app-rail-workspace[data-active="true"] { background: rgb(255 255 255 / 15%); color: #fff; }
+.app-rail-footnote { margin: 0; color: #64748b; font-size: 0.62rem; line-height: 1.5; text-align: center; }
+.app-module > .topbar .brand-mark { width: 30px; height: 30px; border-radius: 9px; box-shadow: none; font-size: 0.95rem; }
+.app-module > .topbar .model-status { gap: var(--space-2); padding-left: var(--space-3); }
+.app-module > .topbar .model-status small { display: none; }
+.app-module > .topbar .topbar-actions { margin-left: auto; }
+.app-module > .topbar .topbar-commands button { min-height: 32px; padding-inline: var(--space-2); font-size: 0.72rem; }
+.app-module > .topbar .search-box { position: absolute; left: 50%; width: min(360px, 34vw); height: 30px; transform: translateX(-50%); }
 .workspace-tabs-bar { flex: 0 0 var(--tabbar-height); height: var(--tabbar-height); display: flex; align-items: stretch; justify-content: space-between; gap: var(--space-3); padding: 0 var(--space-4); background: var(--color-panel); border-bottom: 1px solid var(--color-border); }
 .workspace-tabs-bar .workspace-tabs { display: flex; align-items: stretch; justify-content: flex-start; gap: 0; min-width: 0; }
 .workspace-tabs-bar .workspace-tabs button { min-height: var(--tabbar-height); height: var(--tabbar-height); padding: 0 var(--space-4); border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--color-muted); font-size: 0.76rem; font-weight: 650; }
@@ -598,6 +631,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .ribbon { position: relative; z-index: 4; flex: 0 0 auto; min-height: var(--ribbon-height); height: var(--ribbon-height); background: var(--color-panel); border-bottom: 1px solid var(--color-border); transition: height 160ms ease, min-height 160ms ease, opacity 160ms ease; }
 .ribbon.is-collapsed { min-height: 0; height: 0; overflow: visible; border-bottom: 0; opacity: 0; pointer-events: none; }
 .ribbon.is-floating { position: absolute; top: calc(var(--topbar-height) + var(--tabbar-height)); left: 0; right: 0; height: var(--ribbon-height); min-height: var(--ribbon-height); opacity: 1; pointer-events: auto; border: 1px solid var(--color-border); box-shadow: var(--shadow-panel); }
+/* 浮动 Ribbon 的定位父级是**模块**（`.app-module` 带 position: relative），
+   所以 `left/right: 0` 只铺满画布那一列，不会盖住最左侧的模块导航栏；`top` 仍是同一个算式。 */
+.app-module .ribbon.is-floating { left: 0; right: 0; }
 .ribbon-body { height: 100%; display: flex; align-items: stretch; overflow-x: auto; overflow-y: hidden; padding: var(--space-2) var(--space-4) 0; }
 .ribbon-group { display: flex; flex: 0 0 auto; flex-direction: column; justify-content: space-between; min-width: 0; padding: 0 var(--space-3); border-right: 1px solid var(--color-border); }
 .ribbon-group:first-child { padding-left: 0; }
@@ -611,42 +647,46 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .ribbon-controls { position: absolute; z-index: 2; top: var(--space-2); right: var(--space-3); display: flex; gap: var(--space-1); }
 .ribbon-control { display: grid; place-items: center; width: 28px; min-height: 28px; height: 28px; padding: 0; border: 0; border-radius: var(--radius-sm); background: var(--color-surface-subtle); color: var(--color-muted); }
 .ribbon-control:hover, .ribbon-control.is-active { background: var(--color-accent-soft); color: var(--color-accent-strong); }
-.app-shell > .workbench, .app-shell > .engineering-workbench { flex: 1 1 auto; min-height: 0; }
-.app-shell > .workbench { overflow: hidden; }
-.app-shell > .engineering-workbench { overflow: hidden; }
+.app-module > .workbench, .app-module > .engineering-workbench { flex: 1 1 auto; min-height: 0; }
+.app-module > .workbench { overflow: hidden; }
+.app-module > .engineering-workbench { overflow: hidden; }
 .workbench-mobile-controls { display: none; }
 
 @media (max-width: 900px) {
-  .app-shell > .topbar .search-box { width: min(300px, 32vw); }
+  .app-module > .topbar .search-box { width: min(300px, 32vw); }
   .ribbon-group { padding-inline: var(--space-2); }
   .ribbon-command { min-width: 48px; padding-inline: var(--space-1); }
 }
 
 @media (max-width: 680px) {
-  .app-shell > .topbar { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto; flex: 0 0 auto; height: auto; min-height: var(--topbar-height); gap: var(--space-2); padding: var(--space-2) var(--space-3); }
-  .app-shell > .topbar .topbar-leading { width: 100%; justify-content: space-between; }
-  .app-shell > .topbar .topbar-actions { display: grid; grid-template-columns: minmax(0, 1fr) 32px 32px; align-items: center; flex: initial; width: 100%; min-width: 0; margin: 0; gap: var(--space-2); }
-  .app-shell > .topbar .topbar-commands { display: none; }
-  .app-shell > .topbar .search-box { position: static; width: 100%; min-width: 0; transform: none; }
-  .app-shell > .topbar .topbar-icon { width: 32px; min-height: 32px; }
+  .app-module > .topbar { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto; flex: 0 0 auto; height: auto; min-height: var(--topbar-height); gap: var(--space-2); padding: var(--space-2) var(--space-3); }
+  .app-module > .topbar .topbar-leading { width: 100%; justify-content: space-between; }
+  .app-module > .topbar .topbar-actions { display: grid; grid-template-columns: minmax(0, 1fr) 32px 32px; align-items: center; flex: initial; width: 100%; min-width: 0; margin: 0; gap: var(--space-2); }
+  .app-module > .topbar .topbar-commands { display: none; }
+  .app-module > .topbar .search-box { position: static; width: 100%; min-width: 0; transform: none; }
+  .app-module > .topbar .topbar-icon { width: 32px; min-height: 32px; }
   .workspace-tabs-bar { padding-inline: var(--space-2); }
   .workspace-tabs-bar .workspace-tabs button { padding-inline: var(--space-3); }
+  /* 手机上导航栏收窄并省掉工作区那一段的竖排留白，把宽度让给画布（工作区入口仍然可用）。 */
+  .app-shell { --rail-width: 58px; }
+  .app-rail { padding-inline: 3px; }
+  .app-rail-button { min-height: 50px; font-size: 0.62rem; }
   .ribbon-body { padding-inline: var(--space-3); }
   .ribbon.is-floating { top: 72px; }
   /* 手机上一行放不下提示（提示本身 + 坐标/对象/工作区会折成 3~4 行）：把这一行也定成常量
      （宽屏 52px），否则同样的"悬停/拖动改文案 → 画布变矮"会在触屏上重现。
      放不下的部分由状态栏自己滚动，不参与外层布局。 */
-  .app-shell > .workbench { --status-bar-height: 108px; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) var(--status-bar-height); position: relative; }
+  .app-module > .workbench { --status-bar-height: 108px; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) var(--status-bar-height); position: relative; }
   .workbench-mobile-controls { grid-column: 1; grid-row: 1; display: flex; justify-content: flex-end; gap: var(--space-2); min-height: 44px; padding: var(--space-1) var(--space-2); background: var(--color-panel); border-bottom: 1px solid var(--color-border); }
   .workbench-mobile-controls button { min-height: 36px; padding-inline: var(--space-3); font-size: 0.76rem; }
-  .app-shell > .workbench > .panel { display: none; position: absolute; z-index: 5; top: 44px; bottom: 48px; width: min(var(--panel-right-width), calc(100vw - 32px)); max-height: none; overflow: auto; border: 1px solid var(--color-border); box-shadow: var(--shadow-panel); }
-  .app-shell > .workbench > .panel.is-mobile-open { display: block; }
-  .app-shell > .workbench > .panel:not(.right) { left: 0; }
-  .app-shell > .workbench > .panel.right { right: 0; border-left: 1px solid var(--color-border); }
-  .app-shell > .workbench > .graphics, .app-shell > .workbench > .three-canvas-shell { grid-column: 1; grid-row: 2; width: 100%; height: 100%; min-height: 0; overflow: auto; }
-  .app-shell > .workbench > .graphics { padding: var(--space-2); align-content: start; }
-  .app-shell > .workbench > .three-canvas-shell { overflow: hidden; border-radius: 0; }
-  .app-shell > .workbench > .status-bar { grid-column: 1; grid-row: 3; min-height: 48px; padding: var(--space-2) var(--space-3); }
+  .app-module > .workbench > .panel { display: none; position: absolute; z-index: 5; top: 44px; bottom: 48px; width: min(var(--panel-right-width), calc(100vw - 32px)); max-height: none; overflow: auto; border: 1px solid var(--color-border); box-shadow: var(--shadow-panel); }
+  .app-module > .workbench > .panel.is-mobile-open { display: block; }
+  .app-module > .workbench > .panel:not(.right) { left: 0; }
+  .app-module > .workbench > .panel.right { right: 0; border-left: 1px solid var(--color-border); }
+  .app-module > .workbench > .graphics, .app-module > .workbench > .three-canvas-shell { grid-column: 1; grid-row: 2; width: 100%; height: 100%; min-height: 0; overflow: auto; }
+  .app-module > .workbench > .graphics { padding: var(--space-2); align-content: start; }
+  .app-module > .workbench > .three-canvas-shell { overflow: hidden; border-radius: 0; }
+  .app-module > .workbench > .status-bar { grid-column: 1; grid-row: 3; min-height: 48px; padding: var(--space-2) var(--space-3); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -739,7 +779,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .guidance-hint-close:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
 
 /* Context inspector: tab chrome, no-selection context and projection source diagnostics. */
-.engineering-inspector { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; background: #f8f7fb; }
+.engineering-inspector { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; background: var(--color-surface-subtle); }
 .inspector-panel { min-height: 0; overflow-y: auto; }
 .inspector-panel > .properties { padding-top: var(--space-3); }
 .inspector-context, .inspector-sources { padding: var(--space-3) 18px; border-bottom: 1px solid var(--color-border); }
@@ -751,3 +791,218 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .inspector-context li small { color: var(--color-muted); font-size: 0.7rem; }
 .inspector-sources li { flex-direction: column; align-items: flex-start; }
 .inspector-source-missing { color: var(--color-warning); font-size: 0.72rem; font-weight: 650; }
+
+/* ============================================================================
+   冷色调视觉重构（2026-09-18）
+   ----------------------------------------------------------------------------
+   用户口径："整体采用高级冷色调。冷白色背景（#F8FAFC），极浅的灰色（#E2E8F0）用于面板边缘
+   和分割，文字和图标使用深板岩蓝（#2C3E50）…画布上的几何图形使用克制的色彩（直线用深红褐色，
+   圆用板岩蓝）…画布上的数学符号（如 P1, l1, c1）使用优雅的数学衬线字体。"
+
+   这一节刻意放在文件最末：上面的规则是历史层积（草稿纸、暖色工作台、卡片阴影各写成一轮），
+   与其把它们逐条改回去，不如在末尾用**一层冷色覆盖**收口 —— 顺序即优先级，读起来也只有一处
+   需要维护。画布底与格线已在 tokens.css 的 `--color-graph-*` 里改成冷色，颜色本身不再有第二份。
+   ============================================================================ */
+
+/* 画布：宽阔的冷白纸 + 极浅极细的网格（网格线由 GraphicsView 的行内 stroke 负责，这里给底与卡片）。 */
+.graphics { background: var(--color-canvas); }
+.graphics[data-canvas-surface="graph-paper"] { background: var(--color-surface-subtle); }
+.graphics[data-canvas-surface="graph-paper"] .canvas-card { border-color: transparent; box-shadow: var(--shadow-panel); }
+.graphics[data-canvas-surface="graph-paper"] .canvas-card svg { background: var(--color-graph-paper); }
+/* 草稿纸时代的暖色水印去掉：冷色调版式里它读成一团脏斑，而不是装饰。 */
+.graphics[data-canvas-surface="graph-paper"] .canvas-card::after { display: none; }
+.graphics[data-canvas-surface="graph-paper"] .canvas-card .canvas-viewport-controls { border-color: transparent; background: rgb(255 255 255 / 96%); box-shadow: var(--shadow-card); }
+
+/* 画布内的数学符号：点 P1、直线 l1、圆 c1、交点读数一律走数学衬线字体。 */
+.canvas-card svg text { font-family: var(--font-math); }
+
+/* 面板与卡片：**去掉生硬边框、改用柔和弥散阴影**分层（微拟物化的全部要点）。 */
+.panel { border-color: transparent; }
+.panel.right { background: var(--color-canvas); border-left-color: transparent; box-shadow: -18px 0 40px -32px rgb(44 62 80 / 24%); }
+.panel:not(.right) { box-shadow: 18px 0 40px -32px rgb(44 62 80 / 20%); }
+.panel-section { border-bottom-color: var(--color-border); }
+.properties > .primitive-properties, .properties > .batch-properties { border-color: transparent; box-shadow: var(--shadow-card); }
+.properties > .panel-title { border-bottom-color: transparent; }
+.properties > .function-properties { border-color: rgb(61 90 128 / 24%); }
+.inspector-selected-heading { border-color: transparent; box-shadow: var(--shadow-card); }
+.formula-keyboard { border-color: transparent; }
+
+/* 顶栏 / 标签栏 / 功能区：分割线压到最浅，浮起来靠阴影。 */
+.app-module > .topbar { border-bottom-color: var(--color-border); box-shadow: 0 10px 30px -26px rgb(44 62 80 / 30%); }
+.workspace-tabs-bar { border-bottom-color: var(--color-border); }
+.ribbon { border-bottom-color: var(--color-border); box-shadow: 0 14px 34px -30px rgb(44 62 80 / 26%); }
+.ribbon-group { border-right-color: var(--color-border); }
+.toolbar { background: var(--color-canvas); border-bottom-color: transparent; }
+.toolbar-group { border-color: transparent; box-shadow: var(--shadow-card); }
+.footer-note { border-top-color: var(--color-border); }
+.status-bar { border-top-color: transparent; }
+
+/* 控件：Material 风格的极简按钮 —— 常态无边框、悬停才浮现极浅底色。 */
+button { border-color: var(--color-border); background: var(--color-panel); }
+button:hover { border-color: var(--color-accent); background: var(--color-accent-soft); }
+.topbar-icon, .ribbon-command, .tool-button, .canvas-viewport-controls button, .inspector-accordion-trigger { border-color: transparent; }
+.topbar-icon, .topbar-icon:hover { border-color: transparent; }
+.search-box { border-color: transparent; background: var(--color-surface-subtle); }
+.search-box:focus-within { border-color: var(--color-accent); box-shadow: 0 0 0 3px rgb(61 90 128 / 12%); }
+.tool-button { background: var(--color-surface-subtle); }
+.tool-button[data-active="true"] { border-color: rgb(61 90 128 / 22%); }
+.object-count { color: var(--color-accent-strong); background: var(--color-accent-soft); }
+.property-type-badge { background: var(--color-accent-soft); color: var(--color-accent-strong); }
+.object-dot { background: var(--color-accent); box-shadow: 0 0 0 4px rgb(61 90 128 / 10%); }
+.inspector-indicator { background: var(--color-accent); box-shadow: 0 0 0 5px rgb(61 90 128 / 12%); }
+.properties input[type="range"] { accent-color: var(--color-accent); }
+
+/* 左侧对象树：层级规范 + 留白充足 + 极简可见性指示器。 */
+.algebra-panel { background: var(--color-panel); }
+.panel-section { padding: 20px 18px; }
+.object-list { gap: 2px; margin-top: 14px; }
+.object-row { min-height: 44px; border-radius: var(--radius-sm); }
+.object-row.selected { border-color: transparent; background: var(--color-accent-soft); }
+.object-tree { gap: 2px; }
+.object-subtree { border-left-color: var(--color-border); }
+
+/* 输入框与数值表：对齐整齐（Material 的 filled field 观感）。 */
+.properties input, .properties select, .properties textarea, .primitive-properties input, .primitive-properties select, .primitive-properties textarea { border-color: transparent; background: var(--color-surface-subtle); }
+.properties input:focus, .properties select:focus, .properties textarea:focus { border-color: var(--color-accent); background: var(--color-panel); }
+.metric-grid strong { color: var(--color-ink); font-variant-numeric: tabular-nums; }
+.metric-grid span { border-color: transparent; background: var(--color-surface-subtle); }
+
+/* 状态栏与浮层：同样只留极浅分割。 */
+.guidance-hint { border-color: transparent; border-left-color: var(--color-accent); box-shadow: var(--shadow-panel); }
+.canvas-card { border-color: transparent; }
+.coordinate-readout { border-color: transparent; box-shadow: var(--shadow-card); }
+.canvas-viewport-controls { border-color: transparent; box-shadow: var(--shadow-card); }
+/* ============================================================================
+   布局：居中品牌顶栏 / 极细线性图标 / 对象树 / 宽阔绘图区（2026-09-18）
+   ----------------------------------------------------------------------------
+   用户口径："包含极简的顶部导航栏（居中显示"MathCanvas"品牌字样，下方为间距宽敞的单色极细
+   线性工具图标，如点、线、圆等）；左侧为清晰的对象树列表面板（带极简可见性指示器，层级规范，
+   留白充足）；居中为宽阔的绘图区（带有极浅极细的坐标网格线）；右侧为模块化的折叠属性卡片面板。"
+
+   只改**观感与排布**，不改结构：所有按钮的无障碍名字与 DOM 层级保持原样，因此 177 处
+   `getByRole("button", { name })` 的查询（单测 + e2e）不受影响。
+   ============================================================================ */
+
+/* ---------- 顶栏：三列 grid，品牌落在正中间 ---------- */
+/* 顶栏：品牌**绝对居中**，命令组靠右。
+   试过三列 grid（`1fr auto 1fr`），实测品牌中线偏左 83px：第一列是空元素（模型状态已隐藏），
+   它的 `1fr` 与第三列内容宽度无关，`auto` 列因此不在顶栏正中。绝对定位才是与两侧内容**无关**的做法。
+   顶栏本身仍是 `flex`（见上面的基础规则），品牌脱离文档流后命令组自然靠右，不需要额外改动。 */
+/* 顶栏与左侧模块栏**同一套深色 chrome**（用户口径："顶部的 MathCanvas一栏也换成左边框的颜色"）。
+   两者共用 `--color-chrome-*` 令牌，不再各写一份渐变；顶栏因此成为界面顶部的暗色边框。 */
+.app-module > .topbar { position: relative; padding: 0 var(--space-5); background: linear-gradient(180deg, var(--color-chrome-top), var(--color-chrome-bottom)); border-bottom: 1px solid rgb(255 255 255 / 6%); box-shadow: 0 12px 28px -24px rgb(0 0 0 / 60%); }
+.app-module > .topbar .topbar-leading { display: none; }
+/* 品牌：深色底上的浅色字样，顶栏唯一的焦点；它同时是粒子层的定位父级。 */
+.app-module > .topbar .brand { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); color: var(--color-chrome-ink); font-size: 0.98rem; font-weight: 650; letter-spacing: 0.02em; }
+/* 粒子层向外扩一圈，让粒子落在**文字两侧的留白**里，而不是压在字母上
+   （用户口径"整体保持干净、不杂乱"对粒子同样成立）。 */
+.app-module > .topbar .brand-particles { position: absolute; top: -8px; bottom: -8px; left: -56px; right: -56px; overflow: hidden; pointer-events: none; }
+/* 粒子本体：深色底上要"清晰" —— 亮青的径向光点 + 一层光晕，单次动画 2.8–4.6s，
+   浮动 ±16px 并缩放 0.9↔1.25；`steps` 都不设，交给 `ease-in-out` 才"流畅"。 */
+.app-module > .topbar .brand-particles i {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgb(205 224 245 / 100%) 0%, rgb(125 170 215 / 60%) 38%, rgb(125 170 215 / 0%) 72%);
+  filter: drop-shadow(0 0 4px rgb(140 190 235 / 45%));
+  animation-name: brand-particle-float;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+}
+/* 打字与方块光标。
+   **不能用 `clip-path`**：实测把裁切放在容器右侧时，光标（`left: 9ch` → x846）落在可见边界
+   （784）之外，被整块裁掉 —— `clip-path` 裁掉的部分不可能再显示光标。
+   改成**动画容器宽度**：宽度从 0 逐字增长（`steps(9, jump-none)` 给出 0…9ch 九个档位），
+   `overflow: hidden` 让文字在容器外沿被切断，而光标 `left: 100%` 始终紧贴当前可见末尾、
+   且作为溢出内容照常显示。
+   容器终宽 **11ch 而不是 9ch**：实测当前字体 `1ch = 9.25px`，而 "MathCanvas" 的自然宽度是
+   **96px（≈10.4ch）**，按 9ch 收窄会把尾巴截掉（截图里只剩 "MathCanva"）。留到 11ch 还有余量。 */
+.app-module > .topbar .brand-type { position: relative; display: inline-block; width: 11ch; overflow: hidden; white-space: nowrap; animation: brand-type 3.4s steps(9, jump-none) 240ms both; }
+.app-module > .topbar .brand-text { display: block; color: var(--color-chrome-ink); letter-spacing: 0.01em; }
+/* 光标在深色底上换成浅青（原来用板岩蓝 `--color-accent-strong`，在深底上偏暗、不够清晰）。 */
+.app-module > .topbar .brand-cursor {
+  position: absolute;
+  left: calc(100% + 1px);
+  top: 0;
+  width: 0.5ch;
+  height: 1.05em;
+  background: #cfe0f5;
+  box-shadow: 0 0 8px rgb(160 200 240 / 65%);
+  animation: brand-blink 1.1s steps(1, end) 3.4s infinite;
+}
+@keyframes brand-type {
+  from { width: 0; }
+  to { width: 11ch; }
+}
+@keyframes brand-blink {
+  0%, 52% { opacity: 1; }
+  53%, 100% { opacity: 0; }
+}
+/* 浮动：**不透明度交给行内样式**（每颗粒子各有基础透明度），关键帧只管位移与缩放 ——
+   这样"整组一起闪"的观感就没了，粒子各自按自己的节奏浮沉（用户口径"更清晰流畅"）。
+   两端各留一段透明的"休息区"，粒子在边缘处不会硬闪。 */
+@keyframes brand-particle-float {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(0.9); }
+  18%, 82% { opacity: 1; }
+  50% { transform: translate3d(3px, var(--particle-rise, -14px), 0) scale(1.25); }
+}
+.app-module > .topbar .brand-mark { width: 28px; height: 28px; border-radius: 9px; font-size: 0.86rem; }
+
+/* ---------- 标签栏右端：命令组（原顶栏那一组，按用户口径下沉到这里） ---------- */
+.workspace-tabs-bar .workspace-tabs-actions { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.workspace-tabs-bar .workspace-tabs-actions .search-box { position: static; left: auto; width: min(200px, 18vw); height: 26px; transform: none; }
+.workspace-tabs-bar .workspace-tabs-actions .topbar-commands button { min-height: 26px; padding-inline: var(--space-2); font-size: 0.72rem; }
+.workspace-tabs-bar .workspace-tabs-actions .topbar-icon { width: 28px; min-height: 28px; }
+/* 窄屏优先保住标签本身：搜索与文件命令先让位，功能区开关始终留着。 */
+@media (max-width: 1240px) { .workspace-tabs-bar .workspace-tabs-actions .search-box { display: none; } }
+@media (max-width: 1000px) { .workspace-tabs-bar .workspace-tabs-actions .topbar-commands { display: none; } }
+
+/* 手机上顶栏只剩品牌一件事（命令组已经不在顶栏了），所以居中即可，不必再折两行。 */
+@media (max-width: 680px) {
+  .app-module > .topbar .brand-particles { display: none; }
+  .workspace-tabs-bar .workspace-tabs-actions .search-box,
+  .workspace-tabs-bar .workspace-tabs-actions .topbar-commands { display: none; }
+}
+
+/* ---------- 极细单色线性图标：间距宽敞、常态无边框 ---------- */
+.ribbon-command { min-width: 60px; padding: var(--space-1) var(--space-2); gap: 5px; border-radius: 12px; }
+.ribbon-group-commands { gap: var(--space-2); }
+.ribbon-group { padding-inline: var(--space-4); }
+.ribbon-icon { width: 22px; height: 22px; }
+/* 图标本身是 SVG，`stroke-width` 是元素属性，只能用 CSS 覆盖；1.35 在 22px 下读作极细线条。 */
+.ribbon-icon, .ui-icon, .row-icon, .row-lock-icon, .header-icon, .rail-icon { stroke-width: 1.35; }
+.ribbon-command:hover { border-color: transparent; background: var(--color-accent-soft); }
+.topbar-commands button { min-height: 32px; border-color: transparent; background: transparent; color: var(--color-muted); font-weight: 600; }
+.topbar-commands button:hover { border-color: transparent; background: var(--color-accent-soft); color: var(--color-accent-strong); }
+.topbar-icon { color: var(--color-muted); }
+
+/* ---------- 左侧对象树：极简可见性指示器、层级规范、留白充足 ---------- */
+.object-row { min-height: 46px; padding: 6px 8px 6px 10px; }
+.object-row:hover { background: var(--color-surface-subtle); }
+.object-row.selected { background: var(--color-accent-soft); }
+/* 可见性指示器：由"实心彩点"改成**细环**——颜色仍按类型区分，但不再抢视觉。 */
+.object-dot { width: 9px; height: 9px; background: transparent; border: 1.5px solid currentColor; box-shadow: none; color: var(--color-accent); }
+.object-dot[data-object-type="measurement3"], .object-dot[data-object-type="parameter"] { border-style: dashed; }
+.object-row.selected .object-dot { background: currentColor; }
+.object-name { font-size: 0.8rem; font-weight: 560; letter-spacing: 0.01em; }
+.object-group-label { color: var(--color-muted); font-size: 0.68rem; font-weight: 700; letter-spacing: 0.1em; padding: 8px 0 4px 8px; }
+.object-subtree { margin: 4px 0 8px 14px; padding-left: 10px; border-left: 1px solid var(--color-border); }
+.object-list { gap: 3px; }
+.row-expand { color: var(--color-muted); }
+
+/* ---------- 绘图区：宽阔、呼吸感 ---------- */
+/* `.graphics` 是 `display: grid; align-items: stretch; justify-items: stretch`，
+   但文件更早处给 `.canvas-card` 写了 `align-self: start` —— 那会让卡片在**行**方向收缩成内容尺寸，
+   于是画布在宽阔的工作台里只占中间一小块（实测截图里左右各空着约 170px）。
+   这里显式拉满：卡片占满绘图区宽度，SVG 再把卡片填满，`height: auto` 由 viewBox 的 800:440 定高。 */
+.canvas-card { align-self: stretch; justify-self: stretch; width: 100%; margin: 0; }
+.canvas-card svg { width: 100%; }
+.graphics { padding: var(--space-5); }
+.canvas-card { padding: var(--space-3); border-radius: var(--radius-lg); box-shadow: var(--shadow-panel); }
+.canvas-card svg { border-radius: var(--radius-md); }
+@media (max-width: 900px) { .graphics { padding: var(--space-3); } }
+
+/* ---------- 右侧：模块化折叠属性卡片 ---------- */
+.properties .primitive-properties, .properties .batch-properties { border-radius: var(--radius-md); }
+.inspector-accordion-trigger { color: var(--color-ink); font-weight: 620; letter-spacing: 0.01em; }
+.inspector-accordion { border-bottom-color: var(--color-border); }

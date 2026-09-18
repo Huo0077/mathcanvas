@@ -1,7 +1,7 @@
 import type { Coordinate, GeometryDocument, PrimitiveSpec } from "@draw/dsl"
 import { adaptiveSampleFunctionSegments, evaluateParameterExpression, sampleHyperbolaBranches, sampleParabola } from "@draw/geometry-kernel"
 
-import { svgStyleFor } from "../primitiveStyle"
+import { DRAWING_INK, svgStyleFor } from "../primitiveStyle"
 import { resolveAnnotationPoint } from "../annotations"
 import { clipFunctionSegmentsToBounds } from "../functionGraph"
 import { VIEWBOX, WORLD_BOUNDS, WORLD_SCALE, rayToViewport, worldToSvg } from "../viewport"
@@ -86,7 +86,7 @@ function annotationSvg(annotation: GeometryDocument["annotations"][number], prim
   const offset = annotation.offset ?? { x: 0.25, y: 0.25 }
   const labelPoint = { x: point.x + offset.x, y: point.y + offset.y }
   const escape = (value: string) => value.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
-  return `<g data-annotation-id="${escape(annotation.id)}"><line x1="${toX(point.x)}" y1="${toY(point.y)}" x2="${toX(labelPoint.x)}" y2="${toY(labelPoint.y)}" stroke="#3d5afe" stroke-width="1.25" stroke-dasharray="3 3" /><circle cx="${toX(point.x)}" cy="${toY(point.y)}" r="3" fill="#ffffff" stroke="#3d5afe" stroke-width="1.5" /><text x="${toX(labelPoint.x) + 5}" y="${toY(labelPoint.y) - 5}" fill="#172033" font-size="13" font-weight="700">${escape(annotation.text)}</text></g>`
+  return `<g data-annotation-id="${escape(annotation.id)}"><line x1="${toX(point.x)}" y1="${toY(point.y)}" x2="${toX(labelPoint.x)}" y2="${toY(labelPoint.y)}" stroke="#8aa0b8" stroke-width="1.25" stroke-dasharray="3 3" /><circle cx="${toX(point.x)}" cy="${toY(point.y)}" r="3" fill="#ffffff" stroke="#8aa0b8" stroke-width="1.5" /><text x="${toX(labelPoint.x) + 5}" y="${toY(labelPoint.y) - 5}" fill="${DRAWING_INK}" font-size="13" font-weight="700" font-family="Cambria Math, Georgia, serif">${escape(annotation.text)}</text></g>`
 }
 
 export function exportSvg(document: GeometryDocument): string {
@@ -94,7 +94,7 @@ export function exportSvg(document: GeometryDocument): string {
   const horizontalGrid = Array.from({ length: 13 }, (_, index) => { const y = toY(WORLD_BOUNDS.minY + index); return `<line x1="${VIEWBOX.left}" y1="${y}" x2="${VIEWBOX.right}" y2="${y}" />` }).join("")
   const primitives = document.primitives.map(primitiveSvg).join("")
   const annotations = document.annotations.map((annotation) => annotationSvg(annotation, document.primitives)).join("")
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${VIEWBOX.width} ${VIEWBOX.height}" role="img" aria-label="MathCanvas 导出"><rect width="${VIEWBOX.width}" height="${VIEWBOX.height}" fill="#fbfcff" /><g stroke="#e6eaf2" stroke-width="1">${grid}${horizontalGrid}</g><line x1="${VIEWBOX.left}" y1="${toY(0)}" x2="${VIEWBOX.right}" y2="${toY(0)}" stroke="#9aa6bd" stroke-width="1.5" /><line x1="${toX(0)}" y1="${VIEWBOX.top}" x2="${toX(0)}" y2="${VIEWBOX.bottom}" stroke="#9aa6bd" stroke-width="1.5" />${primitives}${annotations}</svg>`
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${VIEWBOX.width} ${VIEWBOX.height}" role="img" aria-label="MathCanvas 导出"><rect width="${VIEWBOX.width}" height="${VIEWBOX.height}" fill="#ffffff" /><g stroke="#eef2f7" stroke-width="1">${grid}${horizontalGrid}</g><line x1="${VIEWBOX.left}" y1="${toY(0)}" x2="${VIEWBOX.right}" y2="${toY(0)}" stroke="#cbd5e1" stroke-width="1.5" /><line x1="${toX(0)}" y1="${VIEWBOX.top}" x2="${toX(0)}" y2="${VIEWBOX.bottom}" stroke="#cbd5e1" stroke-width="1.5" />${primitives}${annotations}</svg>`
 }
 
 function csvCell(value: string | number | boolean): string {
