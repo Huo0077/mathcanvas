@@ -88,8 +88,67 @@ test("scales the track by dragging its radius handle, keeping bound points on th
   await expect(page.getByRole("spinbutton", { name: "圆轨道半径" })).toHaveValue("3")
 })
 
-/** 没抓到手柄时行为必须一字不变：指针在圆心附近按下不会改半径。 */
-test("leaves the radius alone when the pointer is not on the handle", async ({ page }) => {
+/**
+ * 轨道圆的**旋转**（"圆要可以缩放旋转"的另一半）：选中轨道时同样出世界轴三色环，拖 X 环把轨道摆斜——
+ * 圆心不动、法向转 90°，一次撤销回到原来的朝向。
+ */
+test("turns the track with the world-axis rings, keeping its centre", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "立体几何" }).click()
+
+  const scene = page.locator("[data-3d-scene]")
+  const algebra = page.locator(".algebra-panel")
+  const placePoint = async (label: string, position: [string, string, string]) => {
+    await page.getByRole("button", { name: "添加空间点" }).click()
+    await algebra.getByText(label, { exact: true }).click()
+    for (const [axis, value] of [["X", position[0]], ["Y", position[1]], ["Z", position[2]]] as const) {
+      await page.getByRole("spinbutton", { name: `坐标 ${axis}` }).fill(value)
+    }
+  }
+  await placePoint("A", ["0", "0", "0"])
+  await placePoint("B", ["3", "0", "0"])
+  await algebra.getByText("A", { exact: true }).click()
+  await algebra.getByText("B", { exact: true }).click({ modifiers: ["Shift"] })
+  await page.getByRole("button", { name: "添加空间圆轨道" }).click()
+  await algebra.getByText("圆轨道 1", { exact: true }).click()
+
+  // 圆轨道是**可转对象**：三个环照旧出现（它不再拥有点，环的几何按它自己的圆心与半径算）。
+  await expect(scene).toHaveAttribute("data-rotation-handles", "3")
+  const orientation = page.locator("[data-object-orientation]")
+  await expect(orientation).toHaveAttribute("data-object-orientation", "0.000,0.000,1.000")
+
+  // 先缩小一档，保证环上那两个抓取点落在画布内（环半径 = 1.25R + 0.3 = 4.05）。
+  const box = (await page.locator("[data-3d-scene] canvas").boundingBox())!
+  const distanceBefore = await scene.getAttribute("data-camera-distance")
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await page.mouse.wheel(0, 300)
+  await expect.poll(async () => scene.getAttribute("data-camera-distance")).not.toBe(distanceBefore)
+
+  const pivot = (await scene.getAttribute("data-rotation-handle-pivot"))!.split(",").map(Number)
+  const ringRadius = Number(await scene.getAttribute("data-rotation-handle-radius"))
+  // 绕 X 转 +90°：从环上 45° 处（只有 X 环经过）拖到 135° 处。
+  const diagonal = ringRadius / Math.SQRT2
+  const from = await projectWorldPoint(page, { x: pivot[0], y: pivot[1] + diagonal, z: pivot[2] + diagonal })
+  const to = await projectWorldPoint(page, { x: pivot[0], y: pivot[1] - diagonal, z: pivot[2] + diagonal })
+  await page.mouse.move(from.x, from.y)
+  await page.mouse.down()
+  await expect(scene).toHaveAttribute("data-rotation-axis", "x")
+  for (let step = 1; step <= 8; step += 1) await page.mouse.move(from.x + ((to.x - from.x) * step) / 8, from.y + ((to.y - from.y) * step) / 8)
+  await expect(scene).toHaveAttribute("data-rotation-degrees", "90.00")
+  await page.mouse.up()
+
+  // 法向从 +Z 转到 −Y（绕 +X 转 90° 的右手结果），**圆心一动不动**。
+  await expect(orientation).toHaveAttribute("data-object-orientation", "0.000,-1.000,0.000")
+  expect(await page.getByRole("spinbutton", { name: "圆心 X" }).inputValue()).toBe("0")
+  expect(await page.getByRole("spinbutton", { name: "圆心 Y" }).inputValue()).toBe("0")
+  expect(await page.getByRole("spinbutton", { name: "圆心 Z" }).inputValue()).toBe("0")
+
+  // 一次拖动 = 一步撤销：回到水平。
+  await page.keyboard.press("Control+z")
+  await expect(orientation).toHaveAttribute("data-object-orientation", "0.000,0.000,1.000")
+})
+
+/** 没抓到手柄时行为必须一字不变：指针在圆心附近按下不会改半径。 */test("leaves the radius alone when the pointer is not on the handle", async ({ page }) => {
   await page.goto("/")
   await page.getByRole("button", { name: "立体几何" }).click()
 
