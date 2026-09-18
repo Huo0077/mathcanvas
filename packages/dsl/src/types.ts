@@ -833,7 +833,12 @@ export interface ConstraintSpec {
   enabled?: boolean
 }
 
-export type Measurement3Metric = "length" | "angle" | "area" | "volume" | "distance" | "dihedral"
+/**
+ * 度量名 —— 与可求交类型同理，**只在这里定义一次**：文档校验、读数名、画布文本都从它派生。
+ * 以前校验那边自己抄了一份字面量列表，于是"内核能算"与"文档能存"是两件事（周长 / 半径就是这么缺的）。
+ */
+export const MEASUREMENT_METRICS = ["length", "angle", "area", "volume", "distance", "dihedral", "perimeter", "radius"] as const
+export type Measurement3Metric = (typeof MEASUREMENT_METRICS)[number]
 export type Measurement3Status = "valid" | "degenerate" | "insufficient-data" | "numeric-failure"
 
 export interface Measurement3 {

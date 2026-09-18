@@ -39,7 +39,7 @@ function pointPositions(document: GeometryDocument, primitive: PrimitiveSpec): V
 }
 
 function measurementLabel(measurement: Measurement3): string {
-  const names: Record<Measurement3["metric"], string> = { length: "长度", distance: "距离", angle: "角度", area: "面积", volume: "体积", dihedral: measurement.dihedralKind === "exterior" ? "二面角外角" : "二面角内角" }
+  const names: Record<Measurement3["metric"], string> = { length: "长度", distance: "距离", angle: "角度", area: "面积", volume: "体积", perimeter: "周长", radius: "半径", dihedral: measurement.dihedralKind === "exterior" ? "二面角外角" : "二面角内角" }
   return `${names[measurement.metric]}：${measurement.value?.toFixed(3) ?? "—"}${measurement.unit ?? ""}`
 }
 

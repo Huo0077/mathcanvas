@@ -1,4 +1,5 @@
 import type { GeometryDocument, PrimitiveSpec, ValidationResult, Vector3 } from "./types"
+import { MEASUREMENT_METRICS } from "./types"
 import { isSampledPrimitiveType } from "./sampledTypes"
 
 const workspaces = new Set(["calculus", "conics", "cad", "geometry3d"])
@@ -854,7 +855,7 @@ export function validateDocument(document: unknown): ValidationResult {
       if (measurementIds.has(measurement.id)) errors.push(`duplicate measurement id: ${measurement.id}`)
       measurementIds.add(measurement.id)
       if (!Array.isArray(measurement.sourceIds) || measurement.sourceIds.length === 0 || measurement.sourceIds.some((sourceId) => typeof sourceId !== "string" || !primitiveIds.has(sourceId))) errors.push(`measurement has invalid sources: ${measurement.id}`)
-      if (!["length", "angle", "area", "volume", "distance", "dihedral"].includes(String(measurement.metric))) errors.push(`measurement metric is invalid: ${measurement.id}`)
+      if (!(MEASUREMENT_METRICS as readonly string[]).includes(String(measurement.metric))) errors.push(`measurement metric is invalid: ${measurement.id}`)
       if (measurement.dihedralKind !== undefined && !["interior", "exterior"].includes(String(measurement.dihedralKind))) errors.push(`measurement dihedral kind is invalid: ${measurement.id}`)
       if (!["exact-input", "numeric-approximation"].includes(String(measurement.precision))) errors.push(`measurement precision is invalid: ${measurement.id}`)
       if (!["valid", "degenerate", "insufficient-data", "numeric-failure"].includes(String(measurement.status))) errors.push(`measurement status is invalid: ${measurement.id}`)

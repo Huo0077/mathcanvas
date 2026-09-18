@@ -355,4 +355,26 @@ describe("Geometry DSL document layout schema", () => {
     expect(hyperbola.valid).toBe(false)
     expect(arc.valid).toBe(false)
   })
+
+  /**
+   * 动圆要能量面积 / 周长 / 半径，这三个度量名必须能存进文档。
+   * 度量名以前也是一处写死的字面量列表（校验一处、读数名一处），所以这里同时钉住"名单是共用的"。
+   */
+  it("accepts the perimeter and radius metrics", () => {
+    const document = createEmptyDocument("conics")
+    const withMeasurements = {
+      ...document,
+      primitives: [{ id: "circle-1", type: "circle" as const, center: { x: 0, y: 0 }, radius: 3 }],
+      measurements: [
+        { id: "m-1", kind: "measurement3" as const, sourceIds: ["circle-1"], metric: "perimeter" as const, value: 6 * Math.PI, unit: "u", precision: "numeric-approximation" as const, status: "valid" as const, explanation: "" },
+        { id: "m-2", kind: "measurement3" as const, sourceIds: ["circle-1"], metric: "radius" as const, value: 3, unit: "u", precision: "numeric-approximation" as const, status: "valid" as const, explanation: "" }
+      ]
+    }
+    const result = validateDocument(withMeasurements)
+    expect(result.valid ? [] : result.errors.filter((error) => error.includes("metric"))).toEqual([])
+
+    // 名单之外的名字仍然要被拒绝（这条名单不是"什么都收"）。
+    const bogus = validateDocument({ ...withMeasurements, measurements: [{ ...withMeasurements.measurements[0], metric: "circumference" }] })
+    expect(bogus.valid).toBe(false)
+  })
 })

@@ -19,7 +19,7 @@ export interface PlanarMeasurementLabel {
   selected: boolean
 }
 
-const METRIC_NAMES: Record<Measurement3["metric"], string> = { length: "长度", distance: "距离", angle: "角度", area: "面积", volume: "体积", dihedral: "二面角" }
+const METRIC_NAMES: Record<Measurement3["metric"], string> = { length: "长度", distance: "距离", angle: "角度", area: "面积", volume: "体积", perimeter: "周长", radius: "半径", dihedral: "二面角" }
 
 /** 与属性栏同一份文本；退化 / 无值时返回 `null`（不画假数字）。 */
 export function planarMeasurementText(measurement: Measurement3): string | null {

@@ -83,6 +83,8 @@ const measurementCreatedGuidance: Record<Measurement3Metric, string> = {
   angle: "角度已创建：三点中中间点为顶点，属性栏显示角度值",
   area: "面积已创建：结果为数值近似，来源变化后自动重算",
   volume: "体积已创建：结果为数值近似，来源变化后自动重算",
+  perimeter: "周长已创建：圆的周长随半径自动重算",
+  radius: "半径已创建：圆的半径随图形自动重算",
   dihedral: "二面角已创建"
 }
 
@@ -92,6 +94,8 @@ const measurementBlockedGuidance: Record<Measurement3Metric, string> = {
   angle: "角度需要 2 条线，或 3 个空间点（中间点为顶点）",
   area: "面积需要 1 个面或空间圆，或 3 个以上空间点",
   volume: "体积需要 1 个实体：立方体、棱锥、圆柱、圆锥或多面体",
+  perimeter: "周长需要选中 1 个圆（或圆轨道）",
+  radius: "半径需要选中 1 个圆（或圆轨道）",
   dihedral: "二面角需要两个面：按住 Alt 点实体表面单独选面，Shift 加选第二个面"
 }
 
