@@ -1252,16 +1252,27 @@ function recomputeTangent(primitive: Extract<PrimitiveSpec, { type: "tangent" | 
 const MIN_DYNAMIC_CIRCLE_RADIUS = 1e-3
 
 /**
+ * 曲线来源切线的缺省半长系数。
+ *
+ * `1` 时切线恰好"与曲线相称"，但圆上看起来偏短；用户口径"把切线画长一点点"，
+ * 取 `1.5` —— 明显长出曲线之外，又不会横贯整个视野。
+ */
+const CURVE_TANGENT_LENGTH_FACTOR = 1.5
+
+/**
  * 切线的默认绘制半长：按**来源曲线自己的尺度**取。
  *
  * 于是"圆上一点的切线"画出来与圆相称，而不是横贯整个视野；用户可以在右侧改写 `halfLength`。
+ *
+ * **函数来源不乘系数**：它的半长 = 定义域半宽，乘 1.5 会让切线画到定义域之外，
+ * 看起来像把图画错了。显式写了 `halfLength` 的一律优先（在调用处 `??`）。
  */
 function curveTangentHalfLength(source: PrimitiveSpec): number {
-  if (source.type === "circle" || source.type === "arc") return Math.max(source.radius, 1)
-  if (source.type === "ellipse" || source.type === "hyperbola") return Math.max(Math.abs(source.radiusX), Math.abs(source.radiusY), 1)
-  if (source.type === "parabola") return Math.max(Math.abs(source.focalParameter) * 2, 1)
+  if (source.type === "circle" || source.type === "arc") return Math.max(source.radius, 1) * CURVE_TANGENT_LENGTH_FACTOR
+  if (source.type === "ellipse" || source.type === "hyperbola") return Math.max(Math.abs(source.radiusX), Math.abs(source.radiusY), 1) * CURVE_TANGENT_LENGTH_FACTOR
+  if (source.type === "parabola") return Math.max(Math.abs(source.focalParameter) * 2, 1) * CURVE_TANGENT_LENGTH_FACTOR
   if (source.type === "function") return Math.max((source.domain[1] - source.domain[0]) / 2, 1)
-  return 2
+  return 2 * CURVE_TANGENT_LENGTH_FACTOR
 }
 
 /**

@@ -43,8 +43,7 @@ function curveDocument(): GeometryDocument {
   return document
 }
 
-/** 参数定位的切线：`anchor` 就是这个圆锥曲线的自然参数。 */
-function parameterTangent(id: string, sourceId: string, parameter: number) {
+/** 参数定位的切线：`anchor` 就是这个圆锥曲线的自然参数。 */function parameterTangent(id: string, sourceId: string, parameter: number) {
   return { id, type: "tangent" as const, sourceId, x: parameter, point: { x: 0, y: 0 }, slope: 0, a: { x: 0, y: 0 }, b: { x: 0, y: 0 }, status: "approximate" as const, anchor: { kind: "parameter" as const, parameter } }
 }
 
@@ -86,8 +85,9 @@ describe("curve tangents in the document", () => {
     const settled = recomputeDerivedObjects(document)
     const tangent = find(settled, "tangent-circle")
     if (tangent.type !== "tangent") throw new Error("expected a tangent")
-    // 默认半长取自圆的半径：线段总长 = 直径。
-    expect(Math.hypot(tangent.b.x - tangent.a.x, tangent.b.y - tangent.a.y)).toBeCloseTo(6, 9)
+    // 默认半长取自圆的半径，再乘曲线来源的加长系数 1.5：半径 3 ⇒ 线段总长 = 9（原来是 6）。
+    // 这条期望是**有意改的**：用户口径"把切线画长一点点"（见 CURVE_TANGENT_LENGTH_FACTOR）。
+    expect(Math.hypot(tangent.b.x - tangent.a.x, tangent.b.y - tangent.a.y)).toBeCloseTo(9, 9)
 
     const longer = commitPatch(settled, { op: "updatePrimitive", id: "tangent-circle", patch: { halfLength: 10 } })
     expect(longer.changed).toBe(true)
@@ -402,5 +402,37 @@ describe("the new fields survive the archive format", () => {
 
     // 纵坐标仍然只给点：切线的高度是算出来的。
     expect(commitPatch(settled, { op: "updatePrimitive", id: "tan-legacy", patch: { y: 3 } }).changed).toBe(false)
+  })
+
+  /**
+   * 用户口径："同时我们把切线画长一点点"。
+   *
+   * 曲线来源的缺省半长乘 1.5（圆上切线从"与圆相称"变成明显长出圆外），
+   * 但**函数来源不乘**（它的半长是定义域半宽，乘了会画到定义域之外），显式 `halfLength` 一律优先。
+   */
+  it("draws a curve tangent half again as long by default, and never overrides an explicit half length", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [
+      { id: "circle-1", type: "circle", center: { x: 0, y: 0 }, radius: 2 },
+      parameterTangent("tan-default", "circle-1", 0),
+      { ...parameterTangent("tan-fixed", "circle-1", 0), halfLength: 1 },
+      { id: "fn-1", type: "function", expression: "x", domain: [-2, 2], samples: 32 },
+      { id: "tan-fn", type: "tangent", sourceId: "fn-1", x: 0, point: { x: 0, y: 0 }, slope: 1, a: { x: -2, y: -2 }, b: { x: 2, y: 2 }, status: "approximate" }
+    ]
+
+    const settled = recomputeDerivedObjects(document)
+    const span = (id: string) => {
+      const tangent = find(settled, id)
+      if (tangent.type !== "tangent") throw new Error("expected a tangent")
+      return Math.hypot(tangent.b.x - tangent.a.x, tangent.b.y - tangent.a.y)
+    }
+
+    // 半径 2 的圆：半长 2 ⇒ 全长 4；×1.5 ⇒ 6。
+    expect(span("tan-default")).toBeCloseTo(6, 6)
+    // 显式 halfLength = 1 的照旧（全长 2）。
+    expect(span("tan-fixed")).toBeCloseTo(2, 6)
+    // 函数来源：定义域半宽 = 2，**不乘** 1.5 —— 乘了会画出 [-3,3]，超出定义域 [-2,2]。
+    // 注意函数来源的 `halfLength` 是沿 **x** 量的（斜率 1 时线段全长 = 2·halfLength·√2）。
+    expect(span("tan-fn")).toBeCloseTo(4 * Math.SQRT2, 6)
   })
 })
