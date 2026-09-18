@@ -953,9 +953,9 @@ button:hover { border-color: var(--color-accent); background: var(--color-accent
    两端各留一段透明的休止区（10% 与 76%），粒子在边界处不会硬闪；
    幅度由每颗粒子自己的 `--particle-rise` 决定，整组因此不是一个节奏。 */
 @keyframes brand-particle-rise {
-  0% { transform: translate3d(var(--px, 0), var(--py, 0), 0) scale(0.85); opacity: 0; }
-  10%, 76% { opacity: 1; }
-  100% { transform: translate3d(calc(var(--px, 0) + 6px), calc(var(--py, 0) - var(--particle-rise, -14px)), 0) scale(1.2); opacity: 0; }
+  0% { transform: translate3d(var(--px, 0), var(--py, 0), 0) scale(0.9); opacity: 0; }
+  8%, 84% { opacity: 1; }
+  100% { transform: translate3d(calc(var(--px, 0) + 2px), calc(var(--py, 0) - var(--particle-rise, -8px)), 0) scale(1.08); opacity: 0; }
 }
 .app-module > .topbar .brand-mark { width: 28px; height: 28px; border-radius: 9px; font-size: 0.86rem; }
 
