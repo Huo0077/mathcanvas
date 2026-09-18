@@ -71,7 +71,7 @@ describe("brand particles", () => {
 
     for (const particle of particles) {
       expect(particle.size).toBeGreaterThanOrEqual(2)
-      expect(particle.size).toBeLessThanOrEqual(4.2)
+      expect(particle.size).toBeLessThanOrEqual(4.8)
       expect(particle.opacity).toBeGreaterThanOrEqual(0.4)
       expect(particle.opacity).toBeLessThanOrEqual(0.8)
       expect(particle.left).toBeGreaterThanOrEqual(0)

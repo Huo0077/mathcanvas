@@ -42,7 +42,7 @@ export function brandParticles(count = 20, seed = 7): BrandParticle[] {
       left: Math.round(a * 1000) / 10,
       top: Math.round(18 + b * 64),
       // 颗粒更大：原来 1.4–3.6px 在深色底上几乎看不见（用户口径"让粒子效果更清晰"）。
-      size: Math.round((2 + c * 2.2) * 10) / 10,
+      size: Math.round((2.4 + c * 2.4) * 10) / 10,
       delay: Math.round(c * 30) / 10,
       // 周期更短（3.6–7.4s，原来 5.5–11.5s）：浮动更容易被眼睛捕捉到，也就是"更流畅"。
       duration: Math.round((3.6 + d * 3.8) * 10) / 10,

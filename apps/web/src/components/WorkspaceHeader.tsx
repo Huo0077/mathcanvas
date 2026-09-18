@@ -22,23 +22,31 @@ export function WorkspaceHeader(_props: WorkspaceHeaderProps) {
   return <header className="topbar">
     <div className="brand">
       {/* 粒子只在品牌两侧的留白里漂，`aria-hidden` 因为它是纯装饰。
-          行内只写"每颗粒子自己的"那几项（位置 / 大小 / 基础不透明度 / 节奏），
-          位移与缩放交给 CSS 关键帧 —— 见 `global.css` 的 `brand-particle-float`。 */}
+          位置写成 **`--px` / `--py`（`translate3d` 的基准偏移，单位 px）而不是 `left` / `top`**：
+          后两者逐帧触发**布局**，动画就只能跑在主线程上；换成 transform 之后整条动画
+          都能在合成器线程完成（用户反馈"帧率很低"，这是主因之一）。
+          百分比 → px 的换算用粒子层的固定尺寸（品牌约 96px + 左右各 56px / 高 56px），
+          常量写死是为了让这一层不依赖测量；偏差只影响粒子落在留白里的具体位置，不影响观感。 */}
       <span className="brand-particles" aria-hidden="true">
-        {brandParticles().map((particle, index) => <i
-          key={index}
-          style={{
-            left: `${particle.left}%`,
-            top: `${particle.top}%`,
-            width: `${particle.size}px`,
-            height: `${particle.size}px`,
-            opacity: particle.opacity,
-            animationDelay: `${particle.delay}s`,
-            animationDuration: `${particle.duration}s`,
-            // 每颗粒子的浮动幅度不同：位移交给关键帧，幅度通过这个变量传进去。
-            "--particle-rise": `${particle.rise}px`
-          } as never}
-        />)}
+        {brandParticles().map((particle, index) => {
+          const size = Math.round(particle.size * 10) / 10
+          const x = Math.round(((particle.left / 100) * 208 - size / 2) * 10) / 10
+          const y = Math.round(((particle.top / 100) * 56 - size / 2) * 10) / 10
+          return <i
+            key={index}
+            style={{
+              width: `${size}px`,
+              height: `${size}px`,
+              opacity: particle.opacity,
+              animationDelay: `${particle.delay}s`,
+              animationDuration: `${particle.duration}s`,
+              // 每颗粒子的浮动幅度不同：幅度通过这个变量传进关键帧。
+              "--particle-rise": `${particle.rise}px`,
+              "--px": `${x}px`,
+              "--py": `${y}px`
+            } as never}
+          />
+        })}
       </span>
       <span className="brand-mark" aria-hidden="true">∑</span>
       {/* 打字 + 方块光标：宽度按字符数推进，光标跟在可见字符之后。 */}

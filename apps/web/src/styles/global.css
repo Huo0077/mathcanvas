@@ -895,19 +895,29 @@ button:hover { border-color: var(--color-accent); background: var(--color-accent
 /* 品牌：深色底上的浅色字样，顶栏唯一的焦点；它同时是粒子层的定位父级。 */
 .app-module > .topbar .brand { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); color: var(--color-chrome-ink); font-size: 0.98rem; font-weight: 650; letter-spacing: 0.02em; }
 /* 粒子层向外扩一圈，让粒子落在**文字两侧的留白**里，而不是压在字母上
-   （用户口径"整体保持干净、不杂乱"对粒子同样成立）。 */
-.app-module > .topbar .brand-particles { position: absolute; top: -8px; bottom: -8px; left: -56px; right: -56px; overflow: hidden; pointer-events: none; }
-/* 粒子本体：深色底上要"清晰" —— 亮青的径向光点 + 一层光晕，单次动画 2.8–4.6s，
-   浮动 ±16px 并缩放 0.9↔1.25；`steps` 都不设，交给 `ease-in-out` 才"流畅"。 */
+   （用户口径"整体保持干净、不杂乱"对粒子同样成立）。
+   `translateZ(0)` 把这一层提升为独立合成层：整层（含 20 颗子元素）只 raster 一次，
+   动画期间不再触发重绘。 */
+.app-module > .topbar .brand-particles { position: absolute; top: -8px; bottom: -8px; left: -56px; right: -56px; overflow: hidden; pointer-events: none; transform: translateZ(0); }
+/* 粒子本体。按用户反馈"帧率很低"重做，四条硬约定都在这里：
+   1. **不用 `filter`**：`drop-shadow` 每帧都要对每颗粒子重做一次模糊，20 颗就是 20 次滤镜绘制。
+      光晕改用径向渐变里多加一段色标表达（观感接近，代价为 0）；
+   2. **不用 `left` / `top` 动画**：那两个属性逐帧触发**布局**，动画只能跑在主线程。
+      位置改成 `translate3d` 的基准偏移（`--px` / `--py`），关键帧只动 `transform` —— 合成器即可完成；
+   3. **不用 `animation-direction: alternate`**：往返在端点处会"顿一下"，看起来就是抖。
+      改成单调上浮 + 两端淡出（`brand-particle-rise`）；
+   4. 每颗粒子显式分层（`will-change`），避免动画中途才提升图层造成首帧跳变。 */
 .app-module > .topbar .brand-particles i {
   position: absolute;
+  top: 0;
+  left: 0;
   border-radius: 50%;
-  background: radial-gradient(circle, rgb(205 224 245 / 100%) 0%, rgb(125 170 215 / 60%) 38%, rgb(125 170 215 / 0%) 72%);
-  filter: drop-shadow(0 0 4px rgb(140 190 235 / 45%));
-  animation-name: brand-particle-float;
-  animation-timing-function: ease-in-out;
+  transform: translate3d(var(--px, 0), var(--py, 0), 0);
+  background: radial-gradient(circle, rgb(226 240 252 / 100%) 0%, rgb(170 205 240 / 80%) 28%, rgb(130 175 220 / 26%) 52%, rgb(130 175 220 / 0%) 68%);
+  will-change: transform, opacity;
+  animation-name: brand-particle-rise;
+  animation-timing-function: linear;
   animation-iteration-count: infinite;
-  animation-direction: alternate;
 }
 /* 打字与方块光标。
    **不能用 `clip-path`**：实测把裁切放在容器右侧时，光标（`left: 9ch` → x846）落在可见边界
@@ -938,13 +948,14 @@ button:hover { border-color: var(--color-accent); background: var(--color-accent
   0%, 52% { opacity: 1; }
   53%, 100% { opacity: 0; }
 }
-/* 浮动：**不透明度交给行内样式**（每颗粒子各有基础透明度），关键帧只管位移与缩放 ——
-   这样"整组一起闪"的观感就没了，粒子各自按自己的节奏浮沉（用户口径"更清晰流畅"）。
-   两端各留一段透明的"休息区"，粒子在边缘处不会硬闪。 */
-@keyframes brand-particle-float {
-  0%, 100% { transform: translate3d(0, 0, 0) scale(0.9); }
-  18%, 82% { opacity: 1; }
-  50% { transform: translate3d(3px, var(--particle-rise, -14px), 0) scale(1.25); }
+/* 上浮 + 淡入淡出。**被动画的属性只有 `transform` 与 `opacity`** —— 两者都能在合成器上完成，
+   主线程（布局 / 绘制）不参与，所以 20 颗粒子同时跑也不会挤掉帧。
+   两端各留一段透明的休止区（10% 与 76%），粒子在边界处不会硬闪；
+   幅度由每颗粒子自己的 `--particle-rise` 决定，整组因此不是一个节奏。 */
+@keyframes brand-particle-rise {
+  0% { transform: translate3d(var(--px, 0), var(--py, 0), 0) scale(0.85); opacity: 0; }
+  10%, 76% { opacity: 1; }
+  100% { transform: translate3d(calc(var(--px, 0) + 6px), calc(var(--py, 0) - var(--particle-rise, -14px)), 0) scale(1.2); opacity: 0; }
 }
 .app-module > .topbar .brand-mark { width: 28px; height: 28px; border-radius: 9px; font-size: 0.86rem; }
 
