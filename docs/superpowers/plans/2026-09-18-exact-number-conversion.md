@@ -1,5 +1,7 @@
 # 无限长切线 + 数值精确形式转换：实施计划
 
+> **状态（2026-09-18）**：**8 个任务全部完成并推送**（A 两片 + B 六片）。两处实施过程中的偏离都已在进度文档写明：①二次无理数那一层原本按 spec 的"有界枚举"实现，**实测最坏 114.9 ms/值**，改为反解 n 后 0.561 ms；②浏览器用例抓到 patch 层第五份度量名副本（漏周长/半径，按钮点了没反应），已修并补了防漂移的用例。最终门禁：单测 126 文件 / 1511 用例、lint 0 error / 14 warning、生产构建通过、Playwright 113/113。
+>
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 让切线默认画成无限长并按无界直线求交；在右侧属性栏最上方加一个「精确形式」面板，把文档里每个有效测量的数值转成分数 / π 的有理倍数 / 二次无理数。
