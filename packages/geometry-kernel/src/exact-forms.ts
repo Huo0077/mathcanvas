@@ -44,6 +44,60 @@ export function formatPiMultiple(numerator: number, denominator: number): string
   return denominator === 1 ? `${sign}${coefficient}` : `${sign}${coefficient}/${denominator}`
 }
 
+/**
+ * 二次无理数 `(a + b√n)/c` 的搜索边界。
+ *
+ * 这些数字不是随便取的：n 取到 99 覆盖课堂会遇到的 √2…√99；c ≤ 12 覆盖 /2、/3、/4 这类分母；
+ * a、b 取小整数。
+ *
+ * **不枚举 n，而是解出 n**：由 `(a + b√n)/c = input` 得 `√n = (c·input − a)/b`，
+ * 于是 `n = ((c·input − a)/b)²` —— 只需检查它是不是 [2, 99] 内的平方自由整数。
+ * 第一版是按 n 枚举的（约 70 万个候选），**实测最坏情况 114.9 ms**，对一个渲染时调用的面板
+ * 完全不可接受（见进度文档的耗时读数）；改成解 n 之后候选量降到约 1.4 万个，且与 n 的范围无关。
+ */
+const MAX_SURD_RADICAND = 99
+const MAX_SURD_DENOMINATOR = 12
+const MAX_SURD_COEFFICIENT = 12
+const MAX_SURD_INTEGER = 24
+
+function isSquareFree(value: number): boolean {
+  for (let factor = 2; factor * factor <= value; factor += 1) {
+    if (value % (factor * factor) === 0) return false
+  }
+  return true
+}
+
+/** 候选表在模块加载时算一次：放进循环里会让每次枚举重新分配数组（耗时读数会骗人）。 */
+const SURD_INTEGERS = Array.from({ length: MAX_SURD_INTEGER * 2 + 1 }, (_, index) => index - MAX_SURD_INTEGER)
+
+/** `(a + b√n)/c` 的文本：`√2`、`3√2`、`√2/2`、`-√3/2`、`2+√3`、`(1+√5)/2`。 */
+export function formatQuadraticSurd(a: number, b: number, radicand: number, divisor: number): string {
+  const root = `√${radicand}`
+  const radicalPart = Math.abs(b) === 1 ? root : `${Math.abs(b)}${root}`
+  if (a === 0) {
+    const signed = b < 0 ? `-${radicalPart}` : radicalPart
+    return divisor === 1 ? signed : `${signed}/${divisor}`
+  }
+  const body = b === 0 ? `${a}` : `${a}${b > 0 ? "+" : "-"}${radicalPart}`
+  return divisor === 1 ? body : `(${body})/${divisor}`
+}
+
+/**
+ * 由 `(a + b√n)/c = input` 反解出 `n`，返回 `[n]`（是 [2, 99] 内的平方自由整数时）或 `null`。
+ *
+ * 整数判定用了一点相对容差（1e-6）：输入本身是浮点，反解出的 n 会有末位误差；
+ * 但**最终是否命中仍由 `hit()` 用紧容差把关**，所以放宽这一步不会造成误报。
+ */
+function radicandFrom(input: number, whole: number, coefficient: number, divisor: number): number | null {
+  const rootCandidate = (divisor * input - whole) / coefficient
+  if (!(rootCandidate > 0)) return null
+  const radicand = rootCandidate * rootCandidate
+  if (radicand < 2 || radicand > MAX_SURD_RADICAND) return null
+  const rounded = Math.round(radicand)
+  if (Math.abs(radicand - rounded) > Math.max(1e-9, rounded * 1e-6)) return null
+  return isSquareFree(rounded) ? rounded : null
+}
+
 function toleranceFor(input: number, tolerance?: number): number {
   if (tolerance !== undefined) return tolerance
   return Math.max(DEFAULT_ABSOLUTE_TOLERANCE, Math.abs(input) * DEFAULT_RELATIVE_TOLERANCE)
@@ -115,6 +169,36 @@ export function exactFormOf(input: number, tolerance?: number): ExactFormReading
     const value = (numerator / denominator) * Math.PI
     const piHit = hit(input, value, { kind: "pi-multiple", text: formatPiMultiple(numerator, denominator) }, limit)
     if (piHit) return piHit
+  }
+
+  /**
+   * 二次无理数 `(a + b√n)/c`：课堂上的 √2、√2/2、(1+√5)/2、2+√3 都在这一族里。
+   *
+   * 先扫 `a = 0` 的**纯根式**（最常见），再扫带整数部分的一般情形；
+   * 两者都按"分母小 → 系数小 → 整数部分小"的顺序扫，于是命中的是**最简**的那个形式。
+   */
+  for (let divisor = 1; divisor <= MAX_SURD_DENOMINATOR; divisor += 1) {
+    for (let coefficient = -MAX_SURD_COEFFICIENT; coefficient <= MAX_SURD_COEFFICIENT; coefficient += 1) {
+      if (coefficient === 0) continue
+      const radicand = radicandFrom(input, 0, coefficient, divisor)
+      if (radicand === null) continue
+      const value = (coefficient * Math.sqrt(radicand)) / divisor
+      const surdHit = hit(input, value, { kind: "surd", text: formatQuadraticSurd(0, coefficient, radicand, divisor) }, limit)
+      if (surdHit) return surdHit
+    }
+  }
+  for (let divisor = 1; divisor <= MAX_SURD_DENOMINATOR; divisor += 1) {
+    for (let coefficient = -MAX_SURD_COEFFICIENT; coefficient <= MAX_SURD_COEFFICIENT; coefficient += 1) {
+      if (coefficient === 0) continue
+      for (const wholePart of SURD_INTEGERS) {
+        if (wholePart === 0) continue
+        const radicand = radicandFrom(input, wholePart, coefficient, divisor)
+        if (radicand === null) continue
+        const value = (wholePart + coefficient * Math.sqrt(radicand)) / divisor
+        const surdHit = hit(input, value, { kind: "surd", text: formatQuadraticSurd(wholePart, coefficient, radicand, divisor) }, limit)
+        if (surdHit) return surdHit
+      }
+    }
   }
 
   return unrecognisedForm(input)

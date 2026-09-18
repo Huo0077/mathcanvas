@@ -53,3 +53,31 @@ describe("exact form recognition: rational multiples of pi", () => {
     expect(exactFormOf(Math.PI / 100).form.kind).toBe("unrecognised")
   })
 })
+
+/**
+ * 二次无理数 `(a + b√n)/c` —— 用户选的是"这一层也要认"（深度 B）。
+ * 课堂上的 √2、√2/2、(1+√5)/2、2+√3 都在这一族里。
+ */
+describe("exact form recognition: quadratic surds", () => {
+  it("recognises the surds a teaching canvas produces", () => {
+    expect(exactFormOf(Math.SQRT2).form).toMatchObject({ kind: "surd", text: "√2" })
+    expect(exactFormOf(Math.SQRT2 / 2).form).toMatchObject({ kind: "surd", text: "√2/2" })
+    expect(exactFormOf(2 + Math.sqrt(3)).form).toMatchObject({ kind: "surd", text: "2+√3" })
+    expect(exactFormOf((1 + Math.sqrt(5)) / 2).form).toMatchObject({ kind: "surd", text: "(1+√5)/2" })
+    expect(exactFormOf(-Math.sqrt(3) / 2).form).toMatchObject({ kind: "surd", text: "-√3/2" })
+    expect(exactFormOf(3 * Math.sqrt(2)).form).toMatchObject({ kind: "surd", text: "3√2" })
+  })
+
+  it("refuses transcendentals and long decimals", () => {
+    expect(exactFormOf(Math.E).form.kind).toBe("unrecognised")
+    expect(exactFormOf(0.1234567).form.kind).toBe("unrecognised")
+  })
+
+  it("keeps the residual inside the tolerance for every family", () => {
+    for (const value of [0.75, 1 / 3, Math.PI / 4, Math.SQRT2, (1 + Math.sqrt(5)) / 2]) {
+      const reading = exactFormOf(value)
+      expect(reading.form.kind).not.toBe("unrecognised")
+      expect(Math.abs(reading.residual!)).toBeLessThanOrEqual(Math.max(1e-12, Math.abs(value) * 1e-9))
+    }
+  })
+})

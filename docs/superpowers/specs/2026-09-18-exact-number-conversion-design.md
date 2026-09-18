@@ -111,7 +111,7 @@ export function exactFormOf(input: number, tolerance?: number): ExactFormReading
 - 结构：
   - 标题「精确形式（数值转换）」+ 说明「按容差识别文档里每个有效测量的值；识别不出就如实标未识别。」
   - 表格：每行 = `测量名（来源 id 列表）` · `数值 + 单位（3 位小数）` · `精确形式` · `差值`；行尾一个「复制」按钮。例：`面积（circle-1）· 12.566 u² · 4π · 差值 1.5e-8`。
-  - **测量名不在面板里再抄一份**：`Measurement3["metric"] → 中文名` 目前在 `planarMeasurementVisuals.ts`（`METRIC_NAMES`）与 `AlgebraView.tsx`（`measurementLabels`）各有一份，面板会把它提到共享模块 `apps/web/src/measurementLabels.ts` 并让这三处都从那里取 —— 否则这一轮就会造出第三份副本（本仓库刚刚因为"类型名单五处副本"吃过一次亏）。
+  - **测量名不在面板里再抄一份**：`Measurement3["metric"] → 中文名` 目前有**三份**副本（`planarMeasurementVisuals.ts` 的 `METRIC_NAMES`、`components/AlgebraView.tsx` 的 `measurementLabels`、`measurementVisuals.ts`（3D 测量标注）的 `names`），面板会把它提到共享模块 `apps/web/src/measurementLabels.ts` 并让这四处都从那里取 —— 否则这一轮就会造出**第四份**副本（本仓库刚刚因为"类型名单五处副本"吃过一次亏）。
   - 空状态：「还没有测量：先量一个长度 / 角度 / 面积。」
   - 读数（给 e2e 与排查用）：容器 `data-exact-form-panel="true"`，每行 `data-exact-form-row`，行上带 `data-exact-form-kind`（`rational` / `pi-multiple` / `surd` / `integer` / `unrecognised`）与 `data-exact-form-text`。
 - 数据来源：`document.measurements` 里 `status === "valid"` 且 `typeof value === "number"` 且有限的项。**不**读图元几何。
@@ -168,7 +168,7 @@ document.measurements ──filter(valid & finite)──► 每行
 ## 6. 风险与边界
 
 - **误报比漏报更糟**：`exactFormOf` 的容差取得紧（相对 1e-9），并且**族的顺序**保证"能当分数就不当无理数"。反例测试专门守这条。
-- **枚举开销**：二次无理数那一层是有界枚举；实施时用真实耗时读数回填（若 > 5ms/值再考虑先按 `input²` 筛）。
+- **枚举开销（原设计在此处被实测推翻，已改）**：本节最初写"有界枚举、应为毫秒级"。实测**最坏情况 114.9 ms/值**（`Math.E` 这类未识别的值会把约 70 万个候选全扫一遍），对一个每次重渲染都调用的面板完全不可接受。**改法：不枚举 n，而是由 `(a + b√n)/c = input` 反解 `n = ((c·input − a)/b)²`**，只需检查它是不是 [2, 99] 内的平方自由整数 —— 候选量降到约 1.4 万，且与 n 的范围无关。**改后实测最坏情况 0.561 ms、命中 0.006 ms**（同一台机器、同一探针；探针跑完即删）。最终是否命中仍由紧容差 `hit()` 把关，所以反解步骤里那点相对容差不会造成误报。
 - **π 倍数与分数会不会打架**：`3.14159…` 的最佳分数逼近在分母 ≤ 64 内不成立，所以分数层不会先抢走 π；但 `π/4 ≈ 0.785398` 的某个分数逼近（例如 11/14）可能落在容差内 —— **实现顺序必须是"先 π 倍数再一般分数"**吗？不：0.785398 的最佳分数在分母 ≤ 64 内误差 ~1e-5 > 容差，所以顺序无关；测试里保留 `Math.PI / 4 → π/4` 一条以固定这个结论。
 - **无限长切线 + 求交**：切线变成无限长后，与其它曲线的交点数会变多（以前落在可视段外的交点现在会出现）。这是"无限长"的定义使然，属于**有意**的行为变化，要在功能目录里写明。
 - **旧文档**：`halfLength` 缺省的切线全部变成无限长（用户要的），逐位字段不变；`halfLength` 有值的文档一个字不变。
