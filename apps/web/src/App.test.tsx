@@ -317,6 +317,8 @@ describe("MathCanvas workbench", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
     fireEvent.click(screen.getByRole("button", { name: "添加立方体" }))
+    // 这个用例断言的是"改尺寸之后**物化顶点**跟着重算"，所以先把原点钉住（默认落点会变，见 addDefaultCube）。
+    fireEvent.change(screen.getByRole("spinbutton", { name: "原点 X" }), { target: { value: "-2" } })
 
     expect(screen.getAllByText("立方体 1")[0]).toBeTruthy()
     expect(screen.getByText("立体几何属性")).toBeTruthy()
@@ -963,6 +965,48 @@ describe("MathCanvas workbench", () => {
   })
 
   /**
+   * 新建实体的默认落点：四个模板**都坐在地面上**（底面正好在 z = 0、整体不低于地面），
+   * 而且四个的**水平足迹互不重叠**。
+   *
+   * 用户反馈："你的立体几何内容好像原点位置错了，图有点怪。" 一量就发现四个模板各用一套约定：
+   * 立方体 / 棱锥"中心在原点"（于是**一半埋在地面下**），圆柱躺在地面上，圆锥还**悬空** 3 格；
+   * 而且立方体与棱锥的水平足迹本来就**互相重叠**（x ∈ [−2,0] 相交），先后添加两个会直接穿在一起。
+   * 这里断的是**性质**（在地面上、互不重叠），不是某个具体坐标——以后调整默认位置也不会假红。
+   */
+  it("places every default template on the ground, with no horizontal overlap", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    for (const name of ["添加立方体", "添加棱锥", "添加圆柱", "添加圆锥"]) fireEvent.click(screen.getByRole("button", { name }))
+
+    const primitives = useSceneStore.getState().document.primitives
+    type Solid = (typeof primitives)[number]
+    const footprint = (solid: Solid | undefined) => {
+      if (!solid) return null
+      if (solid.type === "cube") return { minZ: solid.origin.z, maxZ: solid.origin.z + solid.size.z, minX: solid.origin.x, maxX: solid.origin.x + solid.size.x, minY: solid.origin.y, maxY: solid.origin.y + solid.size.y }
+      if (solid.type === "pyramid") return { minZ: solid.baseCenter.z, maxZ: solid.baseCenter.z + solid.height, minX: solid.baseCenter.x - solid.baseSize.x / 2, maxX: solid.baseCenter.x + solid.baseSize.x / 2, minY: solid.baseCenter.y - solid.baseSize.y / 2, maxY: solid.baseCenter.y + solid.baseSize.y / 2 }
+      if (solid.type === "cylinder" || solid.type === "cone") return { minZ: solid.center.z, maxZ: solid.center.z + solid.height, minX: solid.center.x - solid.radius, maxX: solid.center.x + solid.radius, minY: solid.center.y - solid.radius, maxY: solid.center.y + solid.radius }
+      return null
+    }
+
+    const boxes = (["cube", "pyramid", "cylinder", "cone"] as const).map((type) => footprint(primitives.find((candidate) => candidate.type === type)))
+    expect(boxes.every(Boolean)).toBe(true)
+    for (const box of boxes) {
+      // 底面落在地面上、整体在地面之上（不埋进地板，也不悬空）。
+      expect(box!.minZ).toBeCloseTo(0, 9)
+      expect(box!.maxZ).toBeGreaterThan(0)
+    }
+    // 两两不重叠：否则"先加一个立方体再加一个棱锥"会直接穿在一起。
+    for (let first = 0; first < boxes.length; first += 1) {
+      for (let second = first + 1; second < boxes.length; second += 1) {
+        const a = boxes[first]!
+        const b = boxes[second]!
+        const overlaps = Math.min(a.maxX, b.maxX) > Math.max(a.minX, b.minX) && Math.min(a.maxY, b.maxY) > Math.max(a.minY, b.minY)
+        expect({ pair: `${first}-${second}`, overlaps }).toEqual({ pair: `${first}-${second}`, overlaps: false })
+      }
+    }
+  })
+
+  /**
    * 抛物线与双曲线的轴向参数是无界的，所以绑定自带一个可编辑的「参数域」作为扫描窗口。
    * 之前这两类曲线根本不在下拉里（选了也不会动），这一条验证入口 + 域编辑 + 窗口联动。
    */
@@ -1581,6 +1625,8 @@ describe("MathCanvas workbench", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
     fireEvent.click(screen.getByRole("button", { name: "添加立方体" }))
+    // 断言里的角坐标是按这个立方体算的（默认落点会变），所以把原点钉住。
+    for (const [axis, value] of [["X", "-2"], ["Y", "-2"], ["Z", "-1"]] as const) fireEvent.change(screen.getByRole("spinbutton", { name: `原点 ${axis}` }), { target: { value } })
     fireEvent.click(algebraRow("立方体 1 拓扑"))
     fireEvent.click(screen.getByRole("button", { name: "创建截面" }))
 
@@ -1636,6 +1682,8 @@ describe("MathCanvas workbench", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
     fireEvent.click(screen.getByRole("button", { name: "添加立方体" }))
+    // 下面断言的是"点被夹在 (±2, ±2, ±2) 这个盒子里"，所以把立方体钉回那个位置（默认落点会变）。
+    for (const [axis, value] of [["X", "-2"], ["Y", "-2"], ["Z", "-1"]] as const) fireEvent.change(screen.getByRole("spinbutton", { name: `原点 ${axis}` }), { target: { value } })
     fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
 
     const select = screen.getByRole("combobox", { name: "点宿主绑定" }) as HTMLSelectElement

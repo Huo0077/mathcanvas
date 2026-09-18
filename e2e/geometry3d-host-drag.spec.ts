@@ -16,11 +16,21 @@ test("drags a host-bound point along its host", async ({ page }) => {
   await page.getByRole("button", { name: "添加立方体" }).click()
   await page.getByRole("button", { name: "添加空间点" }).click()
 
-  // 绑定到立方体的一条棱（下拉里第一项就是第一条棱）。
+  /**
+   * 绑定到立方体的**一条棱**上（下拉里那一项的标签带「棱」），然后把**宿主参数**设到 0.5。
+   *
+   * 两处都不能省：
+   * - 默认空间点在原点，宿主解析取的是"离它最近的宿主点"——省略参数设置会让它落在离原点最近的那个**顶点**上，
+   *   与模板物化出来的顶点重合，拾取命中的是那个"不能单独拖动"的生成顶点（实测 `data-drag-target` 报
+   *   `point:cube-1-point-6`、`data-drag-parameter` 为 null）；0.5 让它落在棱的**正中**，不与任何顶点重合。
+   * - 也不能绑到「实体内」：那样点落在实体**内部**，指针射线先打到实体表面（实测 `dragTarget` 报
+   *   `face:cube-1-face-10`），而这条用例要测的是"沿宿主（棱）滑动"。
+   */
   const select = page.getByRole("combobox", { name: "点宿主绑定" })
-  const edge = await select.locator("option").nth(1).getAttribute("value")
+  const edge = await select.locator("option").filter({ hasText: "棱" }).first().getAttribute("value")
   expect(edge).toBeTruthy()
   await select.selectOption(edge!)
+  await page.getByRole("spinbutton", { name: "宿主参数" }).fill("0.5")
 
   const before = await readPointPosition(page)
   await page.getByRole("button", { name: "自由拖动" }).click()

@@ -521,17 +521,25 @@ export function App() {
     setSelectedIds([id])
   }
 
+  /**
+   * 四类模板的默认落点：**都坐在地面上**（底面 z = 0），并分在四个象限里**互不重叠**。
+   *
+   * 用户反馈："你的立体几何内容好像原点位置错了，图有点怪。" 量出来是四套互相矛盾的约定：
+   * 立方体 / 棱锥"中心在原点"（一半埋在地面下）、圆柱躺在地面上、圆锥悬空 3 格；而且立方体与棱锥的
+   * 水平足迹本来就相交（x ∈ [−2,0]），先后添加两个会直接穿在一起。现在统一成"实体放在桌上"：
+   * 网格是地板，底面落在 z = 0 上，四个象限各一个（±5），原点正好落在它们中间。
+   */
   const addDefaultCube = () => {
     const id = nextPrimitiveId(document, "cube")
-    addSolidTemplate({ id, type: "cube", origin: { x: -2, y: -2, z: -1 }, size: { x: 4, y: 4, z: 2 }, label: `立方体 ${id.split("-").at(-1)}` })
+    addSolidTemplate({ id, type: "cube", origin: { x: -7, y: 3, z: 0 }, size: { x: 4, y: 4, z: 2 }, label: `立方体 ${id.split("-").at(-1)}` })
   }
   const addDefaultSolid = (type: "pyramid" | "cylinder" | "cone") => {
     const id = nextPrimitiveId(document, type)
     const primitive = type === "pyramid"
-      ? { id, type, baseCenter: { x: -2, y: 0, z: -2 }, baseSize: { x: 4, y: 4 }, height: 4, label: `棱锥 ${id.split("-").at(-1)}` }
+      ? { id, type, baseCenter: { x: 5, y: 5, z: 0 }, baseSize: { x: 4, y: 4 }, height: 4, label: `棱锥 ${id.split("-").at(-1)}` }
       : type === "cylinder"
-        ? { id, type, center: { x: 3, y: 0, z: 0 }, radius: 1.5, height: 3, segments: ROUND_SOLID_SEGMENTS, label: `圆柱 ${id.split("-").at(-1)}` }
-        : { id, type, center: { x: -3, y: 0, z: 3 }, radius: 1.5, height: 3, segments: ROUND_SOLID_SEGMENTS, label: `圆锥 ${id.split("-").at(-1)}` }
+        ? { id, type, center: { x: 5, y: -5, z: 0 }, radius: 1.5, height: 3, segments: ROUND_SOLID_SEGMENTS, label: `圆柱 ${id.split("-").at(-1)}` }
+        : { id, type, center: { x: -5, y: -5, z: 0 }, radius: 1.5, height: 3, segments: ROUND_SOLID_SEGMENTS, label: `圆锥 ${id.split("-").at(-1)}` }
     addSolidTemplate(primitive)
   }
   const addSolidTemplate = (primitive: Extract<PrimitiveSpec, { type: "cube" | "pyramid" | "cylinder" | "cone" }>) => {

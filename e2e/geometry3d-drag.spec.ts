@@ -97,10 +97,20 @@ test("drags only the solid under the pointer", async ({ page }) => {
   // 新建的实体就是当前选中对象，所以可以直接拖它，不必经由对象树
   await page.getByRole("button", { name: "添加立方体" }).click()
   await expect(page.getByText("立方体 2").first()).toBeVisible()
-  expect(await cubeOrigin(page)).toEqual([-2, -2, -1])
+  // 默认落点：坐在地面上、在 (−7, 3) 那个象限（见 `addDefaultCube`）。
+  expect(await cubeOrigin(page)).toEqual([-7, 3, 0])
   await page.getByRole("button", { name: "自由拖动" }).click()
-  await dragBy(page, 70, 25)
-  expect(await cubeOrigin(page)).not.toEqual([-2, -2, -1])
+  /**
+   * 从**立方体自己身上**按下（默认落点不在画布正中，所以不能再用固定屏幕位移）：
+   * 原点 + 尺寸的一半就是它的中心，用实时相机读数投影过去。
+   */
+  const [originX, originY, originZ] = await cubeOrigin(page)
+  const grab = await projectWorldPoint(page, { x: originX + 2, y: originY + 2, z: originZ + 1 })
+  await page.mouse.move(grab.x, grab.y)
+  await page.mouse.down()
+  await page.mouse.move(grab.x + 70, grab.y + 25, { steps: 6 })
+  await page.mouse.up()
+  expect(await cubeOrigin(page)).not.toEqual([-7, 3, 0])
 
   // 再选第一个立方体：原点仍是拖动前设的读数，说明拖动没有波及无关对象
   await page.getByText("立方体 1").first().click()

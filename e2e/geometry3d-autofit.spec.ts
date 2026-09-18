@@ -35,9 +35,15 @@ test("brings a point set to x = 20 back inside the view", async ({ page }) => {
 
   // 打开自动取景：内容越界是允许重置视角的条件，点必须回到画面里。
   // 取景有约 250ms 的缓出过渡，所以轮询等它稳定下来，而不是立刻读一次数字。
+  const fitsBefore = Number((await scene.getAttribute("data-camera-fit")) ?? 0)
   await toggleAutoFit()
   await expect(scene).toHaveAttribute("data-autofit", "true")
-  await expect(scene).toHaveAttribute("data-camera-fit", "1")
+  /**
+   * 这里**不**断言"取景计数恰好是 1"：那个计数只在内容同步里累加，而新建实体自己就可能触发一次
+   *（模板默认落点不在初始取景范围内时是必然的）——写死 1 会在默认落点变化后假红（实测就是这样）。
+   * 这条用例真正要守的是**内容回到视野内**（下面的 poll），计数只做"没有炸掉"的下界检查。
+   */
+  await expect.poll(async () => Number((await scene.getAttribute("data-camera-fit")) ?? 0)).toBeGreaterThanOrEqual(fitsBefore)
   await expect
     .poll(async () => {
       const view = await readView(page)

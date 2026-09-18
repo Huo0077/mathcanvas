@@ -13,6 +13,18 @@ test.beforeEach(async ({ page }) => {
 })
 
 /**
+ * 这个文件里的世界坐标（截面环上的 (2,0,0)、环内的 (0,0,0)、面上的 (2,0,0)…）都是**按这个立方体**算的：
+ * 原点 (−2,−2,−1)、尺寸 4×4×2 ⇒ x∈[−2,2]、y∈[−2,2]、z∈[−1,1]，默认剖切面（法向 +Y）过中心 z=0。
+ *
+ * 模板的**默认落点**改成"坐在地面上、分四个象限"之后（用户反馈"图有点怪"），新建的立方体不再在这个位置，
+ * 所以这些用例把自己依赖的几何**显式钉住**——它们测的是剖切与拾取，不该跟着默认落点漂。
+ */
+async function addPinnedCube(page: import("@playwright/test").Page) {
+  await page.getByRole("button", { name: "添加立方体" }).click()
+  for (const [axis, value] of [["X", "-2"], ["Y", "-2"], ["Z", "-1"]] as const) await page.getByRole("spinbutton", { name: `原点 ${axis}` }).fill(value)
+}
+
+/**
  * 创建截面用的抓取点：必须是剖切面那圈**边界线**上的一点（预览的命中区只有边界线）。
  * 默认截面（法向 +Y、过立方体中心）的环是 x∈[-2,2] × z∈[-1,1] @ y=0，
  * 世界点 (2, 0, 0) 落在它的 x=2 这条边上、且被实体表面遮挡（于是点选不会抢走这次点击）。
@@ -32,7 +44,7 @@ test("explains the section preview and creates a section when it is clicked", as
   await page.getByRole("button", { name: "立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
-  await page.getByRole("button", { name: "添加立方体" }).click()
+  await addPinnedCube(page)
   await expect(page.getByText("立方体 1").first()).toBeVisible()
 
   // 未指向剖切面时，状态栏要保留"已选中…"这条信息；指向它时才解释这圈虚线是什么。
@@ -66,7 +78,7 @@ test("moves the cutting plane with the arrow keys while free dragging is on", as
   await page.getByRole("button", { name: "立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
-  await page.getByRole("button", { name: "添加立方体" }).click()
+  await addPinnedCube(page)
   await page.getByRole("button", { name: "创建截面" }).click()
   await expect(scene).toHaveAttribute("data-section-count", "1")
 
@@ -97,7 +109,7 @@ test("tilts the cutting plane from the properties panel", async ({ page }) => {
   await page.getByRole("button", { name: "立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
-  await page.getByRole("button", { name: "添加立方体" }).click()
+  await addPinnedCube(page)
   await page.getByRole("button", { name: "创建截面" }).click()
   await expect(scene).toHaveAttribute("data-section-count", "1")
 
@@ -127,7 +139,7 @@ test("uses a face of the solid as the cutting plane", async ({ page }) => {
   await page.getByRole("button", { name: "立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
-  await page.getByRole("button", { name: "添加立方体" }).click()
+  await addPinnedCube(page)
   await page.getByRole("button", { name: "创建截面" }).click()
   await expect(scene).toHaveAttribute("data-section-count", "1")
 
@@ -189,7 +201,7 @@ test("moves the drawing section when dragged while free dragging is on", async (
   await page.getByRole("button", { name: "立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
-  await page.getByRole("button", { name: "添加立方体" }).click()
+  await addPinnedCube(page)
   await page.getByRole("button", { name: "创建截面" }).click()
   await expect(scene).toHaveAttribute("data-section-count", "1")
 

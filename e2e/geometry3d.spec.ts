@@ -1,18 +1,6 @@
 import { expect, test } from "@playwright/test"
-import * as THREE from "three"
 
-/** Project a world point through the default 3D camera so a test can click exactly on it. */
-function projectDefaultCamera(box: { x: number; y: number; width: number; height: number }, point: THREE.Vector3) {
-  const camera = new THREE.PerspectiveCamera(42, box.width / box.height, 0.1, 1000)
-  // Mirrors applyCameraState: azimuth 45, elevation 30, and world Z as the up axis.
-  const horizontal = 16 * Math.cos(30 * Math.PI / 180)
-  camera.up.set(0, 0, 1)
-  camera.position.set(horizontal * Math.cos(Math.PI / 4), horizontal * Math.sin(Math.PI / 4), 16 * Math.sin(30 * Math.PI / 180))
-  camera.lookAt(0, 0, 0)
-  camera.updateMatrixWorld(true)
-  const projected = point.clone().project(camera)
-  return { x: box.x + (projected.x * 0.5 + 0.5) * box.width, y: box.y + (0.5 - projected.y * 0.5) * box.height }
-}
+import { projectWorldPoint } from "./helpers/projection"
 
 test("opens the 3D workspace and adds a parameterized cube", async ({ page }) => {
   await page.goto("/")
@@ -141,12 +129,13 @@ test("picks the vertex under the cursor instead of one hidden behind the solid",
   await page.goto("/")
   await page.getByRole("button", { name: "立体几何" }).click()
   await page.getByRole("button", { name: "添加立方体" }).click()
+  // 把立方体钉在一个**明确**的位置上（不依赖模板默认落点），再用**当前相机读数**投影它的两个角。
+  for (const [axis, value] of [["X", "-2"], ["Y", "-2"], ["Z", "0"]] as const) await page.getByRole("spinbutton", { name: `原点 ${axis}` }).fill(value)
 
   const heading = page.locator(".inspector-selected-heading h3")
-  const box = (await page.locator("[data-3d-scene] canvas").boundingBox())!
 
-  // The camera looks from (+x, +y, +z), so this corner is the nearest one and its handle is reachable.
-  const nearest = projectDefaultCamera(box, new THREE.Vector3(2, 2, 1))
+  // 相机从 (+x, +y, +z) 看过来，所以 (2,2,2) 是最近的角、它的手柄够得着。
+  const nearest = await projectWorldPoint(page, { x: 2, y: 2, z: 2 })
   await page.mouse.click(nearest.x, nearest.y)
   await expect(heading).toHaveText(/^[A-H]$/)
 
@@ -155,7 +144,7 @@ test("picks the vertex under the cursor instead of one hidden behind the solid",
   await expect(heading).toHaveText("立方体 1")
 
   // The opposite corner is hidden behind the solid: the click must stay on the solid rather than reach through it.
-  const hidden = projectDefaultCamera(box, new THREE.Vector3(-2, -2, -1))
+  const hidden = await projectWorldPoint(page, { x: -2, y: -2, z: 0 })
   await page.mouse.click(hidden.x, hidden.y)
   await expect(heading).toHaveText("立方体 1")
 
@@ -253,15 +242,20 @@ test("pans the 3D view along the camera axes within a bounded range", async ({ p
     await page.keyboard.up(modifier)
   }
 
-  expect(await target()).toEqual([0, 0, 0])
+  // 起始视点中心 = 内容的包围盒中心（自动取景的结论）；不写死原点，默认落点变了也不假红。
+  const boundsCentre = (await scene.getAttribute("data-content-bounds"))!.split(" size ")[0].split(",").map(Number)
+  const [startX, startY, startZ] = await target()
+  expect(startX).toBeCloseTo(boundsCentre[0], 1)
+  expect(startY).toBeCloseTo(boundsCentre[1], 1)
+  expect(startZ).toBeCloseTo(boundsCentre[2], 1)
 
   // The camera opens at azimuth 45 with Z up, so a sideways pan moves world X and Y together and leaves Z alone.
   await drag(140, 0, "Shift")
   const [x, y, z] = await target()
-  expect(Math.abs(x)).toBeGreaterThan(1)
-  expect(Math.abs(y)).toBeGreaterThan(1)
-  expect(Math.abs(x)).toBeCloseTo(Math.abs(y), 1)
-  expect(z).toBe(0)
+  expect(Math.abs(x - startX)).toBeGreaterThan(1)
+  expect(Math.abs(y - startY)).toBeGreaterThan(1)
+  expect(Math.abs(x - startX)).toBeCloseTo(Math.abs(y - startY), 1)
+  expect(z).toBeCloseTo(startZ, 6)
 
   // Ctrl drags along the view axis, which is the only way to centre a figure that is offset in depth.
   const beforeDepth = await target()
@@ -276,7 +270,11 @@ test("pans the 3D view along the camera axes within a bounded range", async ({ p
   for (const value of await target()) expect(Math.abs(value)).toBeLessThan(15)
 
   await page.getByRole("button", { name: "适应视图" }).click()
-  expect(await target()).toEqual([0, 0, 0])
+  // 适应视图把视点中心带回**内容中心**（不是世界原点：默认立方体坐在地面上、在某个象限里）。
+  const refit = await target()
+  expect(refit[0]).toBeCloseTo(boundsCentre[0], 1)
+  expect(refit[1]).toBeCloseTo(boundsCentre[1], 1)
+  expect(refit[2]).toBeCloseTo(boundsCentre[2], 1)
 })
 
 test("takes over left drag in pan mode and documents every view gesture", async ({ page }) => {
@@ -520,10 +518,11 @@ test("creates an intersection line by clicking the dashed preview", async ({ pag
   await page.getByRole("button", { name: "立体几何" }).click()
 
   // 两个 4×4×4 的立方体错开 2：交叠 2×4×4，公共交线是 x=2 处的一圈矩形（12 条棱的公共部分）。
+  // 三个坐标都**显式钉住**，这样用例不依赖模板默认落点。
   await page.getByRole("button", { name: "添加立方体" }).click()
-  await page.getByLabel("原点 X").fill("-2")
+  for (const [axis, value] of [["X", "-2"], ["Y", "0"], ["Z", "0"]] as const) await page.getByLabel(`原点 ${axis}`).fill(value)
   await page.getByRole("button", { name: "添加立方体" }).click()
-  await page.getByLabel("原点 X").fill("0")
+  for (const [axis, value] of [["X", "0"], ["Y", "0"], ["Z", "0"]] as const) await page.getByLabel(`原点 ${axis}`).fill(value)
 
   const algebra = page.locator(".algebra-panel")
   await algebra.getByText("立方体 1", { exact: true }).click()
@@ -534,19 +533,20 @@ test("creates an intersection line by clicking the dashed preview", async ({ pag
   const status = page.getByRole("status", { name: "操作提示" })
   await expect(status).toContainText("交线")
 
-  // 指针移到虚线上：用 NDC 命中点（实测这条交线在 (-0.10, 0.20) 附近可命中），
-  // 比"投影某条棱再取中点"可靠，因为相机取景与默认姿态并不完全一致。
-  const box = (await page.locator("[data-3d-scene] canvas").boundingBox())!
-  const toScreen = (ndcX: number, ndcY: number) => ({ x: box.x + (ndcX * 0.5 + 0.5) * box.width, y: box.y + (0.5 - ndcY * 0.5) * box.height })
+  /**
+   * 指针移到虚线上：那条线是 x = 2 处那圈矩形的边界，把**线上一点**用当前相机读数投影出来直接指过去
+   * （投影用实时相机参数，所以取景怎么变都指得准；写死 NDC 的老写法在默认落点变化后就落空了）。
+   * 投影点允许几像素误差，所以就近再试一圈候选点。
+   */
+  const onLine = await projectWorldPoint(page, { x: 2, y: 2, z: 0 })
   let hit = false
-  for (const [ndcX, ndcY] of [[-0.1, 0.2], [-0.2, 0.1], [-0.1, 0.1], [0, 0.2], [-0.2, 0.2]]) {
-    const point = toScreen(ndcX, ndcY)
-    await page.mouse.move(point.x, point.y)
+  for (const [dx, dy] of [[0, 0], [0, -4], [0, 4], [-4, 0], [4, 0], [0, -8], [0, 8]]) {
+    await page.mouse.move(onLine.x + dx, onLine.y + dy)
     await page.waitForTimeout(120)
     if ((await status.textContent())?.includes("点击即可创建")) { hit = true; break }
   }
   expect(hit).toBe(true)
-  await page.mouse.click(...Object.values(toScreen(-0.1, 0.2)) as [number, number])
+  await page.mouse.click(onLine.x, onLine.y)
 
   // 新图元进入文档、进入代数区，并且可撤销。
   await expect(algebra.getByText("交线 1", { exact: true })).toBeVisible()

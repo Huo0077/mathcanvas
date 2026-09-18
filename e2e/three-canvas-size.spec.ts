@@ -76,6 +76,8 @@ test("keeps the canvas size when the status text changes", async ({ page }) => {
 
   const scene = page.locator("[data-3d-scene]")
   await page.getByRole("button", { name: "添加立方体" }).click()
+  // 这个用例按"立方面上的固定世界点"指过去，所以把立方体**显式钉住**（模板默认落点会变）。
+  for (const [axis, value] of [["X", "-2"], ["Y", "-2"], ["Z", "-1"]] as const) await page.getByRole("spinbutton", { name: `原点 ${axis}` }).fill(value)
   await expect(page.getByText("立方体 1").first()).toBeVisible()
 
   const prompt = page.locator(".status-bar-prompt")
