@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest"
 
 import { createEmptyDocument } from "@draw/dsl"
 import { buildSolidTemplate } from "./solid-builders"
-import { clampPointIntoSolid3, coneSurfaceHost3, cylinderSurfaceHost3, faceHost3, host3FromPrimitive, lineHost3, planeHost3, solidVolumeHost3 } from "./hosts3"
+import { clampPointIntoSolid3, circleHost3, coneSurfaceHost3, cylinderSurfaceHost3, faceHost3, host3FromPrimitive, lineHost3, planeHost3, solidVolumeHost3 } from "./hosts3"
+import { circleConic3, conic3PointAt } from "./quadrics"
 
 const a = { x: 0, y: 0, z: 0 }
 const b = { x: 2, y: 0, z: 0 }
@@ -248,6 +249,109 @@ describe("surface hosts", () => {
   })
 })
 
+describe("circle orbit host", () => {
+  const center = { x: 1, y: 0, z: 2 }
+
+  /**
+   * 用户要求："增加一些可以旋转，平移的平面图元……主要作用是作为约束轨道。"
+   *
+   * 空间圆轨道是**一维闭合宿主**：参数是圆周角、首尾相接。与线段/棱宿主的关键差别就是"闭合"，
+   * 所以参数必须归一到 `[0, 2π)`——否则拖过一整圈之后参数会一直涨，读数与数值输入都会失控。
+   */
+  it("maps the angle onto the circle and back, closed on itself", () => {
+    const host = circleHost3(center, { x: 0, y: 0, z: 1 }, 2)!
+    expect(host.kind).toBe("circle")
+    expect(host.domain.u).toEqual([0, Math.PI * 2])
+    expect(host.domain.closedU).toBe(true)
+
+    // 每个参数点都落在圆上（圆心 (1,0,2)、半径 2、法向 +z）。
+    for (const u of [0, 0.7, Math.PI / 2, Math.PI, 5.9, Math.PI * 2]) {
+      const point = host.evaluate({ u })
+      expect(Math.abs(Math.hypot(point.x - center.x, point.y - center.y) - 2)).toBeLessThan(1e-12)
+      expect(point.z).toBeCloseTo(center.z, 12)
+    }
+    // 闭合：`2π` 与 `0` 是同一个点。
+    const start = host.evaluate({ u: 0 })
+    const end = host.evaluate({ u: Math.PI * 2 })
+    expect(Math.hypot(end.x - start.x, end.y - start.y, end.z - start.z)).toBeLessThan(1e-12)
+
+    // 圆上的点：残差 0、参数可逆。
+    for (const u of [0.3, 2.1, 4.4]) {
+      const point = host.evaluate({ u })
+      expect(host.residual(point)).toBeLessThan(1e-12)
+      expect(host.closestParameter(point).u).toBeCloseTo(u, 9)
+    }
+  })
+
+  it("projects an off-circle point onto the rim and folds the parameter into [0, 2π)", () => {
+    const host = circleHost3(center, { x: 0, y: 0, z: 1 }, 2)!
+
+    // 圆内的点：投影到圆周，距离 = 2 − 到圆心的距离。
+    const inside = host.project({ x: 1, y: 0, z: 2 })
+    expect(inside.distance).toBeCloseTo(2, 10)
+    expect(Math.abs(Math.hypot(inside.point.x - 1, inside.point.y) - 2)).toBeLessThan(1e-12)
+
+    // 圆外的点：距离 = 到圆心的距离 − 2。
+    const outside = host.project({ x: 5, y: 0, z: 2 })
+    expect(outside.distance).toBeCloseTo(2, 10)
+
+    // 轴上的点（正上方）：投影到任一半径都等价，但参数必须落在域内且有限。
+    const onAxis = host.project({ x: 1, y: 0, z: 9 })
+    expect(onAxis.parameter.u).toBeGreaterThanOrEqual(0)
+    expect(onAxis.parameter.u).toBeLessThan(Math.PI * 2)
+    expect(Number.isFinite(onAxis.parameter.u)).toBe(true)
+    expect(onAxis.distance).toBeCloseTo(Math.hypot(2, 7), 10)
+
+    // 参数 0 落在**圆自己的**参数 0 上（帧与 `circleConic3` 同源）：法向 +z 时它是 y 负方向那一点。
+    const conic = circleConic3(center, { x: 0, y: 0, z: 1 }, 2)!
+    const parameterZero = conic3PointAt(conic, 0)!
+    const hostZero = host.evaluate({ u: 0 })
+    expect(Math.hypot(hostZero.x - parameterZero.x, hostZero.y - parameterZero.y, hostZero.z - parameterZero.z)).toBeLessThan(1e-12)
+
+    // −y 方向的点正好在参数 0 上；负角度一侧也要折回 `[0, 2π)`。
+    const behind = host.project({ x: 1, y: -3, z: 2 })
+    expect(behind.point.x).toBeCloseTo(parameterZero.x, 9)
+    expect(behind.point.y).toBeCloseTo(parameterZero.y, 9)
+    expect(behind.distance).toBeCloseTo(1, 10)
+    expect(behind.parameter.u).toBeGreaterThanOrEqual(0)
+    expect(behind.parameter.u).toBeLessThan(Math.PI * 2)
+    expect(behind.parameter.u).toBeCloseTo(0, 9)
+  })
+
+  it("shares one parameterisation with the analytic circle it draws", () => {
+    const conic = circleConic3(center, { x: 1, y: 2, z: 2 }, 1.5)!
+    const host = circleHost3(center, { x: 1, y: 2, z: 2 }, 1.5)!
+
+    // 宿主参数与解析圆的参数逐点重合：读数、输入框、圆上的点说的是同一件事。
+    for (const u of [0, 0.4, 1.7, 3.1, 4.9, 6.2]) {
+      const fromHost = host.evaluate({ u })
+      const fromConic = conic3PointAt(conic, u)!
+      expect(Math.hypot(fromHost.x - fromConic.x, fromHost.y - fromConic.y, fromHost.z - fromConic.z)).toBeLessThan(1e-12)
+      expect(host.closestParameter(fromConic).u).toBeCloseTo(u, 9)
+    }
+  })
+
+  it("refuses a degenerate circle instead of inventing an orbit", () => {
+    // 零法向 / 负半径 / 非有限半径都不给出宿主。
+    expect(circleHost3(center, { x: 0, y: 0, z: 0 }, 2)).toBeNull()
+    expect(circleHost3(center, { x: 0, y: 0, z: 1 }, 0)).toBeNull()
+    expect(circleHost3(center, { x: 0, y: 0, z: 1 }, -1)).toBeNull()
+    expect(circleHost3(center, { x: 0, y: 0, z: 1 }, Number.NaN)).toBeNull()
+    expect(circleHost3(center, { x: 0, y: 0, z: 1 }, Number.POSITIVE_INFINITY)).toBeNull()
+  })
+
+  it("works with a tilted normal (the circle can be rotated by the handle)", () => {
+    // 法向沿 +x ⇒ 圆落在 yz 平面内。
+    const host = circleHost3({ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, 3)!
+    for (const u of [0.2, 1.9, 4.4]) {
+      const point = host.evaluate({ u })
+      expect(Math.abs(point.x)).toBeLessThan(1e-12)
+      expect(Math.hypot(point.y, point.z)).toBeCloseTo(3, 10)
+    }
+    expect(host.residual({ x: 0, y: 3, z: 0 })).toBeLessThan(1e-12)
+  })
+})
+
 describe("host resolution from primitives", () => {
   const cylinder = { id: "cylinder-1", type: "cylinder" as const, center: { x: 0, y: 0, z: 0 }, radius: 2, height: 4, segments: 8 }
 
@@ -275,5 +379,24 @@ describe("host resolution from primitives", () => {
     const map = new Map([[dangling.id, dangling]])
     expect(host3FromPrimitive(dangling, document.primitives)).toBeNull()
     expect(host3FromPrimitive(dangling, map)).toBeNull()
+  })
+
+  /**
+   * 空间圆轨道：**要能当宿主**才有"约束轨道"可言。`circle3` 只存 `centerId`（引用），
+   * 所以宿主要从点表里解析圆心；圆心缺失或法向/半径退化时如实返回 `null`。
+   */
+  it("resolves a circle3 track as a host, and refuses a broken one", () => {
+    const center = { id: "p-center", type: "point3" as const, position: { x: 1, y: 2, z: 3 } }
+    const track = { id: "orbit-1", type: "circle3" as const, centerId: "p-center", normal: { x: 0, y: 0, z: 1 }, radius: 2 }
+    const map = new Map<string, unknown>([[center.id, center], [track.id, track]])
+    const host = host3FromPrimitive(track, map as never)!
+    expect(host.kind).toBe("circle")
+    expect(host.domain.closedU).toBe(true)
+    expect(host.residual({ x: 1, y: 4, z: 3 })).toBeLessThan(1e-12)
+
+    // 圆心点缺失 / 半径为 0 / 法向为零：都不给宿主。
+    expect(host3FromPrimitive(track, new Map([[track.id, track]]) as never)).toBeNull()
+    expect(host3FromPrimitive({ ...track, radius: 0 }, map as never)).toBeNull()
+    expect(host3FromPrimitive({ ...track, normal: { x: 0, y: 0, z: 0 } }, map as never)).toBeNull()
   })
 })

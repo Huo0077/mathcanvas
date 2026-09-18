@@ -1,6 +1,7 @@
 import type { PrimitiveSpec, Vector3 } from "@draw/dsl"
 
 import { addVector3, areCoplanar, crossVector3, distanceVector3, dotVector3, lengthVector3, normalizeVector3, scaleVector3, subtractVector3 } from "./geometry3d"
+import { circleConic3 } from "./quadrics"
 
 /**
  * 3D 宿主约束：一个一维或二维的参数域 + 正反映射 + 违反度。
@@ -22,7 +23,7 @@ export interface Host3Parameter {
   w?: number
 }
 
-export type Host3Kind = "line" | "segment" | "ray" | "edge" | "face" | "plane" | "cylinder-surface" | "cone-surface" | "solid-volume"
+export type Host3Kind = "line" | "segment" | "ray" | "edge" | "face" | "plane" | "circle" | "cylinder-surface" | "cone-surface" | "solid-volume"
 
 export interface Host3 {
   readonly kind: Host3Kind
@@ -167,6 +168,43 @@ export function planeHost3(origin: Vector3, u: Vector3, v: Vector3): Host3 | nul
     (point) => {
       const offset = subtractVector3(point, origin)
       return { u: dotVector3(offset, axisU), v: dotVector3(offset, orthoV) }
+    }
+  )
+}
+
+/**
+ * 圆轨道（空间圆）：**一维闭合宿主**，参数是圆周角 `[0, 2π)`。
+ *
+ * 用户口径："增加一些可以旋转，平移的平面图元……主要作用是作为约束轨道。"
+ *
+ * 与线段 / 棱宿主的关键差别只有一处：`closedU: true`——首尾相接，所以参数必须折回声明域
+ *（`normalizeAzimuth` 就是给这种宿主准备的），否则拖过一整圈之后参数会一直涨。
+ *
+ * 帧**直接复用解析圆那一套**（`circleConic3` → `frameThroughPoint` → 与 `planeFrame3` 同一约定：
+ * 取与法向最不对齐的世界轴当种子、`u = normalize(cross(helper, normal))`、`v = cross(normal, u)`）。
+ * 于是"点沿轨道的参数 0 在哪"和"圆上参数 0 在哪"是**同一个点**——宿主参数、圆上读数、法向输入框
+ * 说的都是同一件事，不会各说各话（用例里用 `conic3PointAt(circleConic3(...), u)` 逐点钉住）。
+ * 退化输入（零法向、半径非正或非有限）如实返回 `null`：不编一条轨道出来。
+ */
+export function circleHost3(center: Vector3, normal: Vector3, radius: number): Host3 | null {
+  if (!Number.isFinite(radius) || radius <= EPSILON) return null
+  /**
+   * 零法向**在这里必须拒绝**（`circleConic3` 为渲染稳健会把它兜成 +z，但宿主不能这么兜：
+   * 用户给的圆没有朝向时说"它躺在 +z 平面上"是编出来的）。所以先自己判一次。
+   */
+  const unit = normalizeVector3(normal)
+  if (![unit.x, unit.y, unit.z].every((value) => Number.isFinite(value)) || lengthVector3(unit) < 0.5) return null
+  const conic = circleConic3(center, normal, radius)
+  if (!conic) return null
+  const { u: axisU, v: axisV } = conic.frame
+  const pointAt = (angle: number): Vector3 => addVector3(center, addVector3(scaleVector3(axisU, radius * Math.cos(angle)), scaleVector3(axisV, radius * Math.sin(angle))))
+  return wrapHost(
+    "circle",
+    { u: [0, TAU], closedU: true },
+    (parameter) => pointAt(parameter.u),
+    (point) => {
+      const offset = subtractVector3(point, center)
+      return { u: normalizeAzimuth(Math.atan2(dotVector3(offset, axisV), dotVector3(offset, axisU))) }
     }
   )
 }
@@ -463,6 +501,10 @@ export function host3FromPrimitive(primitive: PrimitiveSpec, context: HostContex
   if (primitive.type === "face3") {
     const vertices = ring(primitive.pointIds)
     return vertices ? faceHost3(vertices) : null
+  }
+  if (primitive.type === "circle3") {
+    const center = point(primitive.centerId)
+    return center ? circleHost3(center, primitive.normal, primitive.radius) : null
   }
   if (primitive.type === "plane3") {
     if (primitive.definition.kind === "pointNormal") {
