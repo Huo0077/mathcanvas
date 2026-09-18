@@ -338,10 +338,30 @@ export interface DerivativePrimitive extends PrimitivePresentation {
   diagnostic?: string
 }
 
+/**
+ * 切线的**定位方式** —— 也就是"这条切线切在来源曲线的哪一点上"。
+ *
+ * - `parameter`：由曲线自己的自然参数定位。用户点一下曲线、右侧点「创建切线」得到的就是这种，
+ *   之后可以在右侧拖动参数把切点沿曲线滑动。参数语义由内核约束定义（圆/椭圆是极角，抛物线/双曲线是轴向参数 u）。
+ * - `point`：由**一个点图元**定位 —— 点画在哪，切线就切在哪；点动，切线跟着动。
+ *   这正是"动点在轨道上画切线"的实现：动点自己沿曲线滑动，切线永远落在它当前的位置上。
+ *
+ * 注意"点的坐标"只是**派生缓存**：真正决定切点的是动点绑定里的那个参数。所以重算时优先读参数、
+ * 只有在点没有绑定到这条曲线上时才退化成"把坐标投影到曲线"。
+ */
+export type TangentAnchor =
+  | { kind: "parameter"; parameter: number; branch?: number }
+  | { kind: "point"; pointId: string }
+
 export interface TangentPrimitive extends PrimitivePresentation {
   id: string
   type: "tangent"
+  /**
+   * 来源曲线。历史上只有函数图像；现在也接受圆 / 圆弧 / 抛物线 / 椭圆 / 双曲线。
+   * 缺省 `anchor` 时沿用"函数 + `x`"的旧语义，旧文档逐位不变。
+   */
   sourceId: string
+  /** 函数来源时是切点的横坐标；曲线来源时是切点横坐标的派生缓存（真值在 `anchor` 里）。 */
   x: number
   point: Coordinate
   slope: number
@@ -350,6 +370,10 @@ export interface TangentPrimitive extends PrimitivePresentation {
   status: "approximate" | "undefined" | "failed"
   vertical?: boolean
   diagnostic?: string
+  /** 曲线来源的定位方式；缺省表示来源是函数（或者旧文档里"用 x 定位"的切线）。 */
+  anchor?: TangentAnchor
+  /** 切线的绘制半长（世界单位）。缺省按来源曲线自己的尺度自适应。 */
+  halfLength?: number
 }
 
 export interface NormalPrimitive extends Omit<TangentPrimitive, "type"> {
@@ -653,6 +677,20 @@ export interface IntersectionPoint3Primitive extends PrimitivePresentation {
   diagnostic?: string
 }
 
+/**
+ * 圆的半径由一个**点图元**驱动：r = |圆心 → 那个点| × `factor`。
+ *
+ * 用户口径："第二动点能够作为圆心作圆，圆的半径能够调节，也能够根据动点位置进行动态变化。" ——
+ * `centerPointId` 负责"点是圆心"，这条规则负责"半径随动点走"：把另一个动点选成驱动点，
+ * 圆就始终过它，它沿轨道滑动时圆的大小随之变化。`factor`（缺省 1）是留给"半径 = 2 倍距离"这类题目的倍率。
+ *
+ * `radius` 字段仍然是圆的**派生缓存**：重算时按这条规则写回去，于是渲染、求交、测量全都无需改动。
+ */
+export interface CircleRadiusRule {
+  pointId: string
+  factor: number
+}
+
 export interface CirclePrimitive extends PrimitivePresentation {
   id: string
   type: "circle"
@@ -666,6 +704,13 @@ export interface CirclePrimitive extends PrimitivePresentation {
   rotation?: number
   /** 绕定点旋转（见 `CurveRotation`）。 */
   rotationAbout?: CurveRotation
+  /**
+   * **圆心跟随一个点图元**：用户口径"第二动点作为圆心作圆"。圆心不再是死坐标，点一动圆心就跟着动。
+   * 与 `rotationAbout` 是两件事，不要同时用：`rotationAbout` 是"曲线绕定点转"，这里是"圆心就是那个点"。
+   */
+  centerPointId?: string
+  /** 半径由另一个点图元驱动（见 `CircleRadiusRule`）。缺省表示半径就是 `radius` 字段、可在右侧直接改。 */
+  radiusFrom?: CircleRadiusRule
 }
 
 export interface ArcPrimitive extends PrimitivePresentation {

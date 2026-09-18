@@ -48,7 +48,7 @@ function expectFixpoint(document: GeometryDocument, operation: DomainOperation, 
   expect(diffPrimitives(incremental.primitives, settled.primitives), `${label}: 增量漏算了这些字段`).toEqual([])
 }
 
-/** 2D 场景：直线 + 圆 + 交点、函数 + 切线、动点（绑在圆上）+ 轨迹、两点 + 连线 + 长度测量 + 分组。 */
+/** 2D 场景：直线 + 圆 + 交点、函数 + 切线、动点（绑在圆上）+ 轨迹、两点 + 连线 + 长度测量 + 分组 + 曲线切线 + 动圆。 */
 function planarDocument(): GeometryDocument {
   const document = createEmptyDocument("conics")
   const circle = { id: "circle-1", type: "circle" as const, center: { x: 0, y: 0 }, radius: 3 }
@@ -62,7 +62,13 @@ function planarDocument(): GeometryDocument {
     { id: "cross-1", type: "curveIntersection", objectA: "line-1", objectB: "circle-1", solutionIndex: 0, x: 3, y: 0 },
     { id: "fn-1", type: "function", expression: "x^2", domain: [-3, 3], samples: 32 },
     // 与 App 的「切线」入口同一份字段：切线由来源函数的重算算出来，不手写几何。
-    { id: "tan-1", type: "tangent", sourceId: "fn-1", x: 0, point: { x: 0, y: 0 }, slope: 0, a: { x: -3, y: 0 }, b: { x: 3, y: 0 }, status: "approximate" }
+    { id: "tan-1", type: "tangent", sourceId: "fn-1", x: 0, point: { x: 0, y: 0 }, slope: 0, a: { x: -3, y: 0 }, b: { x: 3, y: 0 }, status: "approximate" },
+    // 曲线切线（参数定位）："点一下曲线就能作切线"。
+    { id: "tan-curve", type: "tangent", sourceId: "circle-1", x: 0, point: { x: 3, y: 0 }, slope: 0, a: { x: 3, y: -3 }, b: { x: 3, y: 3 }, status: "approximate", anchor: { kind: "parameter", parameter: 0 } },
+    // 曲线切线（动点定位）：切点跟着动点走 —— 依赖边从这里来。
+    { id: "tan-point", type: "tangent", sourceId: "circle-1", x: 3, point: { x: 3, y: 0 }, slope: 0, a: { x: 3, y: -3 }, b: { x: 3, y: 3 }, status: "approximate", anchor: { kind: "point", pointId: "point-a" } },
+    // 以动点为圆心、半径随另一个动点变化的圆：两条新的依赖边（圆心点、驱动点）。
+    { id: "circle-dyn", type: "circle", center: { x: 4, y: 2 }, radius: 1, centerPointId: "point-b", radiusFrom: { pointId: "point-a", factor: 1 } }
   ]
   document.parameters = { "t-point-a": { id: "t-point-a", value: 0, min: 0, max: 6.28, step: 0.05, label: "驱动 A", ownerId: "point-a" } }
   document.measurements = [{ id: "m-1", kind: "measurement3", metric: "length", sourceIds: ["point-a", "point-b"], value: 0, precision: "numeric-approximation", status: "valid", explanation: "两点距离" }]
@@ -112,10 +118,22 @@ describe("incremental recompute is a fixpoint of the full recompute", () => {
       ["拖动点", { op: "translatePrimitive", id: "point-b", delta: { x: -1, y: 3 } }],
       ["拖动绑定在圆上的动点", { op: "translatePrimitive", id: "point-a", delta: { x: 0.5, y: 1 } }],
       ["改驱动参数", { op: "setParameter", id: "t-point-a", value: 1.2 }],
+      /**
+       * 新增的动态链路各来一次编辑。这几条正是"缺一条依赖边就慢一帧 / 停住不动"的高危区：
+       * 曲线切线的切点由动点定位、动圆的圆心与半径由两个点定位，任何一条边丢了都会被这里抓到。
+       */
+      ["滑动曲线切线的参数", { op: "updatePrimitive", id: "tan-curve", patch: { anchor: { kind: "parameter", parameter: 1.9 } } }],
+      ["改切线长度", { op: "updatePrimitive", id: "tan-curve", patch: { halfLength: 5 } }],
+      ["把切线改成动点定位", { op: "updatePrimitive", id: "tan-curve", patch: { anchor: { kind: "point", pointId: "point-b" } } }],
+      ["移动切线的定位动点", { op: "translatePrimitive", id: "point-a", delta: { x: -1, y: 1 } }],
+      ["拖动静止的切点锚点（自由点）", { op: "translatePrimitive", id: "point-b", delta: { x: 2, y: 1 } }],
+      ["改动圆的半径倍率", { op: "updatePrimitive", id: "circle-dyn", patch: { radiusFrom: { pointId: "point-a", factor: 2.5 } } }],
+      ["换动圆的圆心点", { op: "updatePrimitive", id: "circle-dyn", patch: { centerPointId: "point-a" } }],
+      ["去掉动圆的半径规则", { op: "updatePrimitive", id: "circle-dyn", patch: { radiusFrom: null } }],
       ["改函数表达式", { op: "updatePrimitive", id: "fn-1", patch: { expression: "x^3" } }],
       ["隐藏图元", { op: "toggleVisibility", id: "point-b", visible: false }],
       ["删除连线", { op: "deleteObject", id: "conn-ab" }],
-      ["删除动点（连带轨迹）", { op: "deleteObject", id: "point-a" }],
+      ["删除动点（连带轨迹与它的切线）", { op: "deleteObject", id: "point-a" }],
       ["新增点", { op: "addPrimitive", primitive: { id: "point-c", type: "point", x: 1, y: 1 } }]
     ]
     for (const [label, operation] of cases) expectFixpoint(document, operation, label)

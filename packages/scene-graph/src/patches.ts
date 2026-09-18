@@ -1,4 +1,4 @@
-import { validateDocument, type AnnotationSpec, type ConstraintSpec, type EngineeringAnnotation, type GeometryDocument, type Measurement3, type PrimitiveSpec } from "@draw/dsl"
+﻿import { validateDocument, type AnnotationSpec, type ConstraintSpec, type EngineeringAnnotation, type GeometryDocument, type Measurement3, type PrimitiveSpec } from "@draw/dsl"
 import { parseExpression } from "@draw/geometry-kernel"
 
 import { applyOperation, deletionTargets, EDITABLE_GEOMETRY_TYPES, isFreeDraggable3, isRotatable3, layerDescendantIds, templateTopologyIds, type DomainOperation } from "./operations"
@@ -71,6 +71,38 @@ function isCurveRotationPatch(document: GeometryDocument, value: unknown): boole
       && document.primitives.some((primitive) => primitive.id === pivot.primitiveId && primitive.type === "point")
   }
   return false
+}
+
+/**
+ * 曲线切线的定位补丁校验。
+ *
+ * `parameter` 只要求有限（圆锥曲线的自然参数可以是无界的），`point` 必须是文档里真实存在的点图元 ——
+ * 悬空引用会让切线悄悄停在一个固定的旧位置上，"随动点动态变化"这条性质就没了，必须在写入前拦住。
+ */
+function isTangentAnchorPatch(document: GeometryDocument, value: unknown): boolean {
+  if (!value || typeof value !== "object") return false
+  const anchor = value as { kind?: unknown; parameter?: unknown; branch?: unknown; pointId?: unknown }
+  if (anchor.kind === "parameter") return Number.isFinite(anchor.parameter) && (anchor.branch === undefined || anchor.branch === 0 || anchor.branch === 1)
+  if (anchor.kind === "point") {
+    return typeof anchor.pointId === "string"
+      && document.primitives.some((primitive) => primitive.id === anchor.pointId && primitive.type === "point")
+  }
+  return false
+}
+
+/** 半径驱动规则的补丁校验：驱动点必须真实存在，倍率必须是正有限数。 */
+function isCircleRadiusRulePatch(document: GeometryDocument, value: unknown): boolean {
+  if (!value || typeof value !== "object") return false
+  const rule = value as { pointId?: unknown; factor?: unknown }
+  return typeof rule.pointId === "string"
+    && document.primitives.some((primitive) => primitive.id === rule.pointId && primitive.type === "point")
+    && Number.isFinite(rule.factor)
+    && (rule.factor as number) > 0
+}
+
+/** 圆心点引用的补丁校验：必须是文档里真实存在的点图元。 */
+function isPointReferencePatch(document: GeometryDocument, value: unknown): boolean {
+  return typeof value === "string" && document.primitives.some((primitive) => primitive.id === value && primitive.type === "point")
 }
 
 function isLayer(value: unknown): value is NonNullable<GeometryDocument["layers"]>[number] {
@@ -228,6 +260,7 @@ export function validatePatch(document: GeometryDocument, operation: DomainOpera
   if (operation.op === "updatePrimitive") {
     const primitive = document.primitives.find((candidate) => candidate.id === operation.id)
     // 与 `operations.ts` 的 `EDITABLE_GEOMETRY_TYPES` **同一份**清单（两份不同步会导致"校验通过、提交被拒"）。
+    // Style and label are presentation, so any unlocked object may change them even when its geometry is derived.
     const geometryPatchKeys = Object.keys(operation.patch).filter((key) => key !== "style" && key !== "label")
     if (!primitive || (geometryPatchKeys.length > 0 && !(EDITABLE_GEOMETRY_TYPES as readonly string[]).includes(primitive.type))) errors.push("object is not editable")
     if (primitive?.locked) errors.push("object is locked")
@@ -247,7 +280,9 @@ export function validatePatch(document: GeometryDocument, operation: DomainOpera
     if (operation.patch.endAngle !== undefined && !Number.isFinite(operation.patch.endAngle)) errors.push("end angle must be finite")
     if (primitive?.type === "circle" && (operation.patch.startAngle !== undefined || operation.patch.endAngle !== undefined)) errors.push("circle does not support arc angles")
     if (primitive && !["line", "segment", "ray"].includes(primitive.type) && (operation.patch.a !== undefined || operation.patch.b !== undefined)) errors.push("only lines, segments, and rays support endpoints")
-    if (primitive?.type !== "point" && (operation.patch.x !== undefined || operation.patch.y !== undefined)) errors.push("only points support coordinates")
+    if (primitive?.type !== "point" && (primitive?.type !== "tangent" && primitive?.type !== "normal") && (operation.patch.x !== undefined || operation.patch.y !== undefined)) errors.push("only points support coordinates")
+    // 函数来源的切线用横坐标定位：沿函数图像拖动切线就是改这个 `x`。纵坐标仍然不支持（它是算出来的）。
+    if (operation.patch.y !== undefined && primitive?.type !== "point") errors.push("only points support a Y coordinate")
     if (operation.patch.center && primitive && !["circle", "arc", "ellipse", "hyperbola"].includes(primitive.type)) errors.push("only circles and conics support center")
     if (operation.patch.points !== undefined && primitive?.type !== "polyline") errors.push("only polylines support vertices")
     if (operation.patch.expression !== undefined) {
@@ -280,6 +315,34 @@ export function validatePatch(document: GeometryDocument, operation: DomainOpera
     if (operation.patch.rotationAbout !== undefined) {
       if (!["circle", "ellipse"].includes(primitive?.type ?? "")) errors.push("only circles and ellipses support rotation about a fixed point")
       else if (!isCurveRotationPatch(document, operation.patch.rotationAbout)) errors.push("rotation about a fixed point must reference an existing point")
+    }
+    /**
+     * 切线 / 法线的定位与长度。
+     *
+     * 只有**曲线来源**的切线才有可编辑的 `anchor`（函数来源靠 `x` 定位，旧路径不变）；
+     * 定位点、半长都必须先在写入前校验，否则一条悬空的切线不会报错，只会静静地不再跟着动点走。
+     */
+    if (operation.patch.anchor !== undefined) {
+      if (primitive?.type !== "tangent" && primitive?.type !== "normal") errors.push("only tangents and normals carry an anchor")
+      else if (!isTangentAnchorPatch(document, operation.patch.anchor)) errors.push("tangent anchor must reference an existing point or a finite parameter")
+    }
+    if (operation.patch.halfLength !== undefined) {
+      if (primitive?.type !== "tangent" && primitive?.type !== "normal") errors.push("only tangents and normals carry a half length")
+      else if (!Number.isFinite(operation.patch.halfLength) || (operation.patch.halfLength as number) <= 0) errors.push("tangent half length must be positive")
+    }
+    /**
+     * 圆心点 / 半径驱动规则。
+     *
+     * 这两条引用都是"活的"：悬空引用不会报错，只会让圆悄悄失去"跟着动点走"的性质，
+     * 所以引用必须指向真实存在的点图元。`null` 是"去掉这条规则"（半径 / 圆心恢复成可直接编辑）。
+     */
+    if (operation.patch.centerPointId !== undefined) {
+      if (primitive?.type !== "circle") errors.push("only circles support a centre point")
+      else if (operation.patch.centerPointId !== null && !isPointReferencePatch(document, operation.patch.centerPointId)) errors.push("circle centre must reference an existing point")
+    }
+    if (operation.patch.radiusFrom !== undefined) {
+      if (primitive?.type !== "circle") errors.push("only circles support a radius rule")
+      else if (operation.patch.radiusFrom !== null && !isCircleRadiusRulePatch(document, operation.patch.radiusFrom)) errors.push("circle radius rule must reference an existing point with a positive factor")
     }
     if (operation.patch.rotation3 !== undefined) {
       const isTemplate = ["cube", "pyramid", "cylinder", "cone"].includes(primitive?.type ?? "")

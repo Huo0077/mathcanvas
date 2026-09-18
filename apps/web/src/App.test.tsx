@@ -1289,7 +1289,11 @@ describe("MathCanvas workbench", () => {
     const preview = canvas.querySelector('[data-auto-intersection]')
     expect(preview).toBeTruthy()
     expect(preview?.querySelector('[data-hit-target="true"]')?.getAttribute("r")).toBe("14")
-    expect(preview?.querySelector('circle:not([data-hit-target="true"])')?.getAttribute("r")).toBe("4")
+    /**
+     * 预览标记的半径从 4 改成了 3（用户反馈"平面画布中的线都太粗了，点也还是过大"，整块一起缩小）。
+     * 这里钉住的仍然是**命中区与可见标记分开**这件事：命中圆保持 14，可见标记跟着整体视觉走。
+     */
+    expect(preview?.querySelector('circle:not([data-hit-target="true"])')?.getAttribute("r")).toBe("3")
     expect(preview?.querySelector('[data-intersection-info="true"]')).toBeNull()
     fireEvent.click(preview!)
 
@@ -2006,5 +2010,213 @@ describe("MathCanvas workbench", () => {
     fireEvent.click(algebraRow("P"))
     fireEvent.click(screen.getByRole("button", { name: "删除对象" }))
     expect(useSceneStore.getState().document.primitives.filter((primitive) => primitive.type === "circle")).toEqual([])
+  })
+
+  /**
+   * 用户口径 1：「创建一条曲线后，可以点击这条曲线，右侧功能栏里应有一个选项是创建一条在这个曲线上的切线。
+   * 曲线包括抛物线，双曲线，圆，椭圆。」
+   *
+   * 这条把入口到几何整条链路钉住：选中曲线 → 右侧出现「创建切线」→ 点下去真的得到一条切线，
+   * 而且它的切点**确实在曲线上**（不是随便画一条线）。四条曲线各来一次。
+   */
+  it("creates a tangent on every curve type the user named, from the inspector entry point", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [
+      { id: "circle-1", type: "circle", center: { x: 0, y: 0 }, radius: 3, label: "圆 C" },
+      { id: "ellipse-1", type: "ellipse", center: { x: 0, y: 0 }, radiusX: 4, radiusY: 2, label: "椭圆 E" },
+      { id: "hyperbola-1", type: "hyperbola", center: { x: 0, y: 0 }, radiusX: 3, radiusY: 2, axis: "x", label: "双曲线 H" },
+      { id: "parabola-1", type: "parabola", vertex: { x: 0, y: 0 }, focalParameter: 2, axis: "y", label: "抛物线 P" }
+    ]
+    useSceneStore.setState({ document, workspaceDocuments: { [document.workspace]: document }, history: [], future: [], error: null })
+    render(<App />)
+
+    for (const [label, id] of [["圆 C", "circle-1"], ["椭圆 E", "ellipse-1"], ["双曲线 H", "hyperbola-1"], ["抛物线 P", "parabola-1"]] as const) {
+      fireEvent.click(algebraRow(label))
+      const create = screen.getByRole("button", { name: "创建切线" })
+      expect(create, label).toBeTruthy()
+      fireEvent.click(create)
+      const tangents = useSceneStore.getState().document.primitives.filter((primitive) => primitive.type === "tangent")
+      const tangent = tangents.at(-1)
+      if (tangent?.type !== "tangent") throw new Error(`expected a tangent on ${label}`)
+      expect(tangent.sourceId, label).toBe(id)
+      expect(tangent.anchor, label).toEqual({ kind: "parameter", parameter: 0, branch: 0 })
+      // 重算写出的几何：切点在曲线上，切线是一条真的线段。
+      expect(tangent.status, label).toBe("approximate")
+      expect(Math.hypot(tangent.b.x - tangent.a.x, tangent.b.y - tangent.a.y), label).toBeGreaterThan(0)
+      expect((tangent.a.x + tangent.b.x) / 2, label).toBeCloseTo(tangent.point.x, 9)
+    }
+    // 圆上参数 0 的切点是 (3, 0)，切线竖直 —— 这是"切线"最容易被写错的那种情形。
+    const circleTangent = useSceneStore.getState().document.primitives.find((primitive) => primitive.type === "tangent" && primitive.sourceId === "circle-1")
+    if (circleTangent?.type !== "tangent") throw new Error("expected the circle tangent")
+    expect(circleTangent.point.x).toBeCloseTo(3, 9)
+    expect(circleTangent.point.y).toBeCloseTo(0, 9)
+    expect(circleTangent.vertical).toBe(true)
+  })
+
+  /**
+   * 用户口径 2 的前半：「动点在轨道上能够在动点位置画切线，同时切线能根据动点位置进行动态变化。」
+   *
+   * 关键是**动态**：不是"按当时的位置画一条静态切线"，而是"切线跟着动点走"。
+   * 所以这条用例在创建之后继续改「路径参数」，断言切线跟着挪。
+   */
+  it("draws a tangent at a dynamic point and keeps it there while the point slides along its track", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [
+      { id: "circle-1", type: "circle", center: { x: 0, y: 0 }, radius: 3, label: "圆 C" },
+      { id: "point-a", type: "point", x: 3, y: 0, label: "A", binding: { kind: "onPath", pathId: "circle-1", parameter: 0, parameterId: "t-point-a" } }
+    ]
+    document.parameters = { "t-point-a": { id: "t-point-a", value: 0, min: 0, max: 6.28, step: 0.05, label: "驱动 A", ownerId: "point-a" } }
+    useSceneStore.setState({ document, workspaceDocuments: { [document.workspace]: document }, history: [], future: [], error: null })
+    render(<App />)
+
+    fireEvent.click(algebraRow("A"))
+    const create = screen.getByRole("button", { name: "在动点处作切线" })
+    // 按钮必须可用：A 已经绑在圆上，这正是用户口径描述的场景。
+    expect((create as HTMLButtonElement).disabled).toBe(false)
+    fireEvent.click(create)
+
+    const created = useSceneStore.getState().document.primitives.find((primitive) => primitive.type === "tangent")
+    if (created?.type !== "tangent") throw new Error("expected a tangent")
+    expect(created.anchor).toEqual({ kind: "point", pointId: "point-a" })
+    expect(created.point.x).toBeCloseTo(3, 9)
+
+    // 沿轨道滑动动点：切线必须跟着走，并始终切在动点身上。
+    // 新切线会被自动选中，所以先回到 A 的属性面板（「路径参数」在点那一栏里）。
+    fireEvent.click(algebraRow("A"))
+    fireEvent.change(screen.getByRole("spinbutton", { name: "路径参数" }), { target: { value: "1.2" } })
+    const after = useSceneStore.getState().document.primitives
+    const point = after.find((primitive) => primitive.id === "point-a")
+    const tangent = after.find((primitive) => primitive.type === "tangent")
+    if (point?.type !== "point" || tangent?.type !== "tangent") throw new Error("unexpected types")
+    expect(point.x).not.toBeCloseTo(3, 3)
+    expect(tangent.point.x).toBeCloseTo(point.x, 9)
+    expect(tangent.point.y).toBeCloseTo(point.y, 9)
+    // 切点仍在圆上，切向仍与半径垂直。
+    expect(Math.hypot(tangent.point.x, tangent.point.y)).toBeCloseTo(3, 9)
+    expect(point.x * (tangent.b.x - tangent.a.x) + point.y * (tangent.b.y - tangent.a.y)).toBeCloseTo(0, 9)
+
+    // 右侧还能把切点从"跟随动点"切回"曲线参数"：切换那一刻切线必须**留在原地**
+    // （参数取的是当前切点在曲线上的投影，不是切点的横坐标 —— 后者会让切线跳到别处）。
+    fireEvent.click(algebraRow(tangent.label ?? tangent.id))
+    fireEvent.change(screen.getByRole("combobox", { name: "切点定位方式" }), { target: { value: "parameter" } })
+    const switched = useSceneStore.getState().document.primitives.find((primitive) => primitive.id === tangent.id)
+    if (switched?.type !== "tangent") throw new Error("expected the tangent")
+    expect(switched.anchor?.kind).toBe("parameter")
+    expect(switched.point.x).toBeCloseTo(tangent.point.x, 6)
+    expect(switched.point.y).toBeCloseTo(tangent.point.y, 6)
+
+    // 然后就能把切点参数直接摆到别处（用户口径 1 里"之后可以挪切点"的那一步）。
+    fireEvent.change(screen.getByRole("spinbutton", { name: "切点参数" }), { target: { value: "3.1" } })
+    const moved = useSceneStore.getState().document.primitives.find((primitive) => primitive.id === tangent.id)
+    if (moved?.type !== "tangent") throw new Error("expected the tangent")
+    expect(moved.anchor?.kind).toBe("parameter")
+    // 参数就是圆自己的极角：参数 3.1 的切点 = (3cos3.1, 3sin3.1)。
+    expect(moved.point.x).toBeCloseTo(3 * Math.cos(3.1), 9)
+    expect(moved.point.y).toBeCloseTo(3 * Math.sin(3.1), 9)
+  })
+
+  /**
+   * 用户口径 2 的后半：「第二动点能够作为圆心作圆，圆的半径能够调节，
+   * 也能够根据动点位置进行动态变化。」
+   *
+   * 三个阶段各断言一次：点为圆心 → 半径可改 → 半径改由另一个动点驱动（圆始终过它）。
+   */
+  it("builds a circle on a second dynamic point and lets its radius follow the first one", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [
+      { id: "circle-track", type: "circle", center: { x: 0, y: 0 }, radius: 3, label: "圆 C" },
+      { id: "point-a", type: "point", x: 3, y: 0, label: "A", binding: { kind: "onPath", pathId: "circle-track", parameter: 0, parameterId: "t-point-a" } },
+      { id: "point-b", type: "point", x: -2, y: 0, label: "B" }
+    ]
+    document.parameters = { "t-point-a": { id: "t-point-a", value: 0, min: 0, max: 6.28, step: 0.05, label: "驱动 A", ownerId: "point-a" } }
+    useSceneStore.setState({ document, workspaceDocuments: { [document.workspace]: document }, history: [], future: [], error: null })
+    render(<App />)
+
+    // 1. 第二动点 B 作为圆心。
+    fireEvent.click(algebraRow("B"))
+    fireEvent.click(screen.getByRole("button", { name: "以点为圆心作圆" }))
+    const created = useSceneStore.getState().document.primitives.find((primitive) => primitive.type === "circle" && primitive.id !== "circle-track")
+    if (created?.type !== "circle") throw new Error("expected a circle at the point")
+    expect(created.centerPointId).toBe("point-b")
+    expect(created.center).toEqual({ x: -2, y: 0 })
+
+    // 2. 半径能直接改。
+    fireEvent.change(screen.getByRole("spinbutton", { name: "半径" }), { target: { value: "2.5" } })
+    const resized = useSceneStore.getState().document.primitives.find((primitive) => primitive.id === created.id)
+    if (resized?.type !== "circle") throw new Error("expected the circle")
+    expect(resized.radius).toBeCloseTo(2.5, 9)
+    // 圆心仍然由那个点给出。
+    expect(resized.center).toEqual({ x: -2, y: 0 })
+
+    // 3. 让半径跟随动点 A：圆从此始终过 A，A 一动半径就变。
+    fireEvent.change(screen.getByRole("combobox", { name: "半径随动点" }), { target: { value: "point-a" } })
+    const driven = useSceneStore.getState().document.primitives.find((primitive) => primitive.id === created.id)
+    if (driven?.type !== "circle") throw new Error("expected the circle")
+    expect(driven.radiusFrom).toEqual({ pointId: "point-a", factor: 1 })
+    expect(Math.hypot(3 - driven.center.x, 0 - driven.center.y)).toBeCloseTo(driven.radius, 9)
+
+    // A 沿轨道滑动 → 半径跟着变，而且圆**始终经过 A**。
+    // 「路径参数」在点 A 的属性栏里，所以先把选中切回 A（上一句选的是圆）。
+    fireEvent.click(algebraRow("A"))
+    fireEvent.change(screen.getByRole("spinbutton", { name: "路径参数" }), { target: { value: "2.2" } })
+    const settled = useSceneStore.getState().document.primitives
+    const point = settled.find((primitive) => primitive.id === "point-a")
+    const circle = settled.find((primitive) => primitive.id === created.id)
+    if (point?.type !== "point" || circle?.type !== "circle") throw new Error("unexpected types")
+    expect(Math.hypot(point.x - circle.center.x, point.y - circle.center.y)).toBeCloseTo(circle.radius, 9)
+    expect(circle.radius).not.toBeCloseTo(2.5, 3)
+
+    // 倍率：半径 = 2 × 距离。（回到圆自己的面板）
+    fireEvent.click(algebraRow(created.label ?? created.id))
+    fireEvent.change(screen.getByRole("spinbutton", { name: "半径倍率" }), { target: { value: "2" } })
+    const doubled = useSceneStore.getState().document.primitives.find((primitive) => primitive.id === created.id)
+    if (doubled?.type !== "circle") throw new Error("expected the circle")
+    expect(doubled.radius).toBeCloseTo(2 * Math.hypot(point.x - doubled.center.x, point.y - doubled.center.y), 9)
+  })
+
+  /**
+   * 用户反馈："切线不能在曲线上自由拖动"。
+   *
+   * 两个根因都在这一条里钉住：
+   *  1. 画布上切线那一组**根本没有 `onPointerDown`** —— 只能点选，指针按下时拖动根本不成立；
+   *  2. 就算起拖了，平移一条**算出来的**切线也是空操作（切点由 `anchor` 决定，平移会立刻被重算覆盖）。
+   *
+   * 这里走真实手势：在切线上按下 → 移到圆上另一点 → 抬手，断言切点真的沿着圆滑过去了。
+   * jsdom 里 `getBoundingClientRect()` 全为 0，于是 client 坐标**一一对应** SVG 坐标
+   * （`pointToSvg` 的宽高回退到 VIEWBOX 800×440、left/top 为 0）；
+   * 默认取景下世界原点在 (400, 220)，`scale = 100/3`，所以：
+   *   世界 (3, 0) → client (500, 220)：圆上参数 0，切线默认的切点
+   *   世界 (0, 3) → client (400, 120)：圆上参数 π/2
+   */
+  it("drags a curve tangent along its curve on the canvas", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [
+      { id: "circle-1", type: "circle", center: { x: 0, y: 0 }, radius: 3, label: "圆 C" },
+      { id: "tangent-1", type: "tangent", sourceId: "circle-1", x: 0, point: { x: 3, y: 0 }, slope: 0, a: { x: 3, y: -3 }, b: { x: 3, y: 3 }, status: "approximate", vertical: true, anchor: { kind: "parameter", parameter: 0, branch: 0 }, label: "切线 1" }
+    ]
+    useSceneStore.setState({ document, workspaceDocuments: { [document.workspace]: document }, history: [], future: [], error: null })
+    render(<App />)
+
+    const canvas = screen.getByRole("img", { name: "几何画布" })
+    const tangentGroup = canvas.querySelector('[data-primitive-type="tangent"]')
+    expect(tangentGroup, "切线必须画在画布上").toBeTruthy()
+
+    fireEvent.pointerDown(tangentGroup!, { clientX: 500, clientY: 220, pointerId: 1 })
+    fireEvent.pointerMove(canvas, { clientX: 400, clientY: 120, pointerId: 1 })
+    fireEvent.pointerUp(canvas, { clientX: 400, clientY: 120, pointerId: 1 })
+
+    const tangent = useSceneStore.getState().document.primitives.find((primitive) => primitive.id === "tangent-1")
+    if (tangent?.type !== "tangent") throw new Error("expected the tangent")
+    expect(tangent.status).toBe("approximate")
+    // 切点真的沿圆滑到了参数 π/2 处 —— 也就是世界坐标 (0, 3)。
+    expect(tangent.point.x).toBeCloseTo(0, 6)
+    expect(tangent.point.y).toBeCloseTo(3, 6)
+    expect(tangent.point.x).toBeCloseTo(3 * Math.cos(Math.PI / 2), 9)
+    // 定位方式仍然是"曲线参数"，没有被悄悄改成别的。
+    expect(tangent.anchor?.kind).toBe("parameter")
+    // 切点仍在圆上，而且切线在这一点是**水平**的（参数 π/2 处切向沿 x 轴）。
+    expect(Math.hypot(tangent.point.x, tangent.point.y)).toBeCloseTo(3, 6)
+    expect(tangent.vertical).toBe(false)
+    expect(tangent.a.y).toBeCloseTo(tangent.b.y, 6)
   })
 })

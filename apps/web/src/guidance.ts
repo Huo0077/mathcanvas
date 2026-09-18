@@ -14,6 +14,12 @@ export type GuidanceAction =
   | { kind: "conic"; type: "parabola" | "ellipse" | "hyperbola" }
   | { kind: "function" }
   | { kind: "functionAnalysis"; analysis: "derivative" | "tangent" | "integral" }
+  /** 在一条曲线（圆 / 圆弧 / 抛物线 / 椭圆 / 双曲线 / 函数图像）上作切线。 */
+  | { kind: "curveTangent"; source: string }
+  /** 在一个**动点**处作切线：切线随动点沿轨道滑动。 */
+  | { kind: "pointTangent"; point: string }
+  /** 以一个点图元为圆心作圆。 */
+  | { kind: "circleAtPoint"; point: string }
   | { kind: "solid"; solid: "cube" | "pyramid" | "cylinder" | "cone" }
   | { kind: "section" }
   | { kind: "selectSolid" }
@@ -40,6 +46,35 @@ const functionAnalysisGuidance: Record<"derivative" | "tangent" | "integral", st
   derivative: "已创建导函数：由来源函数数值求导，改公式后自动重算",
   tangent: "已创建切线：切点取定义域中点，属性栏可看斜率",
   integral: "已创建积分区域：属性栏显示面积，改定义域后重新积分"
+}
+
+/**
+ * 曲线切线的指引。
+ *
+ * 用户口径是"点一下曲线就能作切线"，所以这句话必须回答**两个**紧接着会冒出来的问题：
+ * 切点现在在哪（默认在顶点），以及怎么把它挪走（右侧的切点参数 / 跟随动点）。
+ * 只说"已创建切线"等于让用户自己去找。
+ */
+const curveTangentSourceName: Record<string, string> = {
+  circle: "圆",
+  arc: "圆弧",
+  parabola: "抛物线",
+  ellipse: "椭圆",
+  hyperbola: "双曲线",
+  function: "函数图像"
+}
+
+function curveTangentGuidance(source: string): string {
+  const name = curveTangentSourceName[source] ?? "曲线"
+  return `已在${name}上创建切线：切点默认落在顶点，右侧可拖「切点参数」沿曲线滑动，或改成「跟随动点」`
+}
+
+function pointTangentGuidance(point: string): string {
+  return `已在动点 ${point} 处作切线：拖动${point}，切线会沿轨道跟着它动`
+}
+
+function circleAtPointGuidance(point: string): string {
+  return `已以 ${point} 为圆心作圆：右侧可改半径，也可以让半径跟随另一个动点变化`
 }
 
 const measurementCreatedGuidance: Record<Measurement3Metric, string> = {
@@ -88,6 +123,12 @@ export function guidanceFor(action: GuidanceAction): string {
       return "已添加函数：右侧可选常用预设（e^x、sin(x)）或直接改公式"
     case "functionAnalysis":
       return functionAnalysisGuidance[action.analysis]
+    case "curveTangent":
+      return curveTangentGuidance(action.source)
+    case "pointTangent":
+      return pointTangentGuidance(action.point)
+    case "circleAtPoint":
+      return circleAtPointGuidance(action.point)
     case "solid":
       return "模板实体：属性栏可改尺寸与三轴朝向；Alt 点棱面可单独选中"
     case "section":

@@ -1,12 +1,16 @@
-import type { AnnotationSpec, ConstraintSpec, Coordinate, CurveRotation, DrawingSheetSpec, DrawingViewSpec, EngineeringAnnotation, GeometryDocument, GroupSpec, LayerSpec, Measurement3, Point3Binding, Point3Primitive, PointBinding, PrimitiveSpec, Section3Classification, Vector3 } from "@draw/dsl"
-import { createDependencyGraph, adaptiveSampleFunctionSegments, arcConstraint, buildSolidTemplate, calculateMeasurement3, circleConstraint, composeEuler3, createBuilderContext, dihedralMarker3, ellipseConstraint, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, evaluatePlanarMeasurement, findExtrema, findInflectionPoints, findZeros, functionGraphConstraint, host3FromPrimitive, hyperbolaConstraint, intersectCirclesDetailed, intersectConvexPolyhedra3, intersectFaceSets, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, lineConstraint, mergeIntersectionSurfaces3, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, orderSectionPoints3, parabolaConstraint, placedConic, polylineConstraint, quadric3FromPrimitive, rayConstraint, rotatePointAboutAxis3, rotateVectorAboutAxis3, sectionConvexPolyhedron, sectionPolyhedron3, sectionQuadric3, segmentConstraint, sharedRingEdge3, solidVolumeHost3, solveLineConstraints, templateSolidPivot, type Conic3Kind, type ConicPlacement, type CurvePiece3, type DihedralMarker3, type FaceRing3, type Host3, type IntersectionResult, type IntersectionSurfaceRegion, type PlanarConstraint, type PlanarMetric, type PlaceableConic, type SampledPrimitive, type TemplateSolidPrimitive, type WorldAxis3 } from "@draw/geometry-kernel"
+﻿import type { AnnotationSpec, CircleRadiusRule, ConstraintSpec, Coordinate, CurveRotation, DrawingSheetSpec, DrawingViewSpec, EngineeringAnnotation, GeometryDocument, GroupSpec, LayerSpec, Measurement3, Point3Binding, Point3Primitive, PointBinding, PrimitiveSpec, Section3Classification, TangentAnchor, Vector3 } from "@draw/dsl"
+import { createDependencyGraph, adaptiveSampleFunctionSegments, arcConstraint, buildSolidTemplate, calculateMeasurement3, circleConstraint, composeEuler3, constraintTangentAt, createBuilderContext, dihedralMarker3, ellipseConstraint, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, evaluatePlanarMeasurement, findExtrema, findInflectionPoints, findZeros, functionGraphConstraint, host3FromPrimitive, hyperbolaConstraint, intersectCirclesDetailed, intersectConvexPolyhedra3, intersectFaceSets, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, lineConstraint, mergeIntersectionSurfaces3, normalFromTangent, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, orderSectionPoints3, parabolaConstraint, placedConic, polylineConstraint, quadric3FromPrimitive, rayConstraint, rotatePointAboutAxis3, rotateVectorAboutAxis3, sectionConvexPolyhedron, sectionPolyhedron3, sectionQuadric3, segmentConstraint, sharedRingEdge3, solidVolumeHost3, solveLineConstraints, tangentSegment, templateSolidPivot, type Conic3Kind, type ConicPlacement, type CurvePiece3, type CurveTangent, type DihedralMarker3, type FaceRing3, type Host3, type IntersectionResult, type IntersectionSurfaceRegion, type PlanarConstraint, type PlanarMetric, type PlaceableConic, type SampledPrimitive, type TemplateSolidPrimitive, type WorldAxis3 } from "@draw/geometry-kernel"
 
 /**
  * 曲线的"绕定点旋转"约定：`pivot` 是那个**定点**，`angle` 是绕它的转角（弧度）。
  * 几何本身由内核的 `placedConic` 落地，这一层只负责把文档里的两种定点写法喂给它。
+ *
+ * "圆心是一个点图元"的圆（`centerPointId`）**不参与**这套放置：它的圆心由那个点直接给出，
+ * 再叠一次刚体转动只会让圆心在两个来源之间打架。两种能力各自独立，这里明确二选一。
  */
 function curveRotationOf(primitive: PrimitiveSpec): CurveRotation | undefined {
-  return primitive.type === "circle" || primitive.type === "ellipse" ? primitive.rotationAbout : undefined
+  if (primitive.type === "circle") return primitive.centerPointId ? undefined : primitive.rotationAbout
+  return primitive.type === "ellipse" ? primitive.rotationAbout : undefined
 }
 
 /** 可以绕定点旋转的封闭曲线：圆与椭圆（弧 / 抛物线 / 双曲线不是封闭曲线，没有这个能力）。 */
@@ -138,6 +142,14 @@ export interface PrimitiveUpdatePatch {
   rotation?: number
   /** 绕定点旋转：整块替换（定点与转角一起写，避免"转了一半"的中间态）。 */
   rotationAbout?: CurveRotation
+  /** 曲线切线的定位；`null` 表示去掉（切点回到读 `x`）。 */
+  anchor?: TangentAnchor | null
+  /** 切线的绘制半长。 */
+  halfLength?: number
+  /** 圆心跟随的点图元；`null` 表示去掉（圆心变回可编辑的坐标）。 */
+  centerPointId?: string | null
+  /** 半径随动点变化的规则；`null` 表示去掉（半径变回可编辑的数字）。 */
+  radiusFrom?: CircleRadiusRule | null
   label?: string
   style?: { stroke?: string; fill?: string; strokeWidth?: number; opacity?: number; dash?: string }
   origin3?: Vector3
@@ -266,7 +278,7 @@ function point3Index(document: GeometryDocument): Map<string, Point3Primitive> {
  * 为什么抽成一处：校验（`patches.ts`）与应用（本文件）各写过一份，两份一旦不同步就会出现
  * "校验通过、提交却被拒"这种最难受的失败——实测就是这么撞上的（`circle3` 只加进了一份）。
  */
-export const EDITABLE_GEOMETRY_TYPES = ["point", "point3", "line", "segment", "ray", "polyline", "parabola", "ellipse", "hyperbola", "function", "circle", "arc", "cube", "pyramid", "cylinder", "cone", "plane3", "circle3"] as const
+export const EDITABLE_GEOMETRY_TYPES = ["point", "point3", "line", "segment", "ray", "polyline", "parabola", "ellipse", "hyperbola", "function", "circle", "arc", "tangent", "normal", "cube", "pyramid", "cylinder", "cone", "plane3", "circle3"] as const
 
 /**
  * Point-driven objects only reference their points; those points are what a drag has to move.
@@ -467,6 +479,20 @@ function primitiveDependencies(primitive: PrimitiveSpec, relations?: { owners: M
   if (primitive.type === "intersectionFace") dependencies.push(...primitive.sourceIds)
   if (primitive.type === "intersectionPoint3") dependencies.push(...primitive.sourceIds)
   if (primitive.type === "derivative" || primitive.type === "tangent" || primitive.type === "normal" || primitive.type === "secant" || primitive.type === "integral" || primitive.type === "analysisSet" || primitive.type === "section") dependencies.push(primitive.sourceId)
+  /**
+   * 曲线切线如果由**一个动点**定位，就依赖那个点：动点一动，切线跟着重算。
+   * 少了这条边，切点会停在旧位置 —— 而"切线随动点动态变化"正是用户要的那个性质。
+   */
+  if ((primitive.type === "tangent" || primitive.type === "normal") && primitive.anchor?.kind === "point") dependencies.push(primitive.anchor.pointId)
+  /**
+   * "以动点为圆心"与"半径随动点走"的圆依赖那两个点。
+   * 这两条边是整条动态链路的关键：圆心点 / 驱动点一动，`center` 与 `radius` 的派生缓存就过期，
+   * 依赖图必须把它们重新算出来，否则圆会停在一个已经过时的位置和大小上。
+   */
+  if (primitive.type === "circle") {
+    if (primitive.centerPointId) dependencies.push(primitive.centerPointId)
+    if (primitive.radiusFrom) dependencies.push(primitive.radiusFrom.pointId)
+  }
   /**
    * 依赖一个**实体**时，同时依赖它的物化拓扑。
    *
@@ -1221,6 +1247,81 @@ function recomputeTangent(primitive: Extract<PrimitiveSpec, { type: "tangent" | 
   }
 }
 
+/** 驱动的半径退化成 0 时圆会消失（schema 也要求 radius > 0）；给一个可视的下限而不是拒绝重算。 */
+const MIN_DYNAMIC_CIRCLE_RADIUS = 1e-3
+
+/**
+ * 切线的默认绘制半长：按**来源曲线自己的尺度**取。
+ *
+ * 于是"圆上一点的切线"画出来与圆相称，而不是横贯整个视野；用户可以在右侧改写 `halfLength`。
+ */
+function curveTangentHalfLength(source: PrimitiveSpec): number {
+  if (source.type === "circle" || source.type === "arc") return Math.max(source.radius, 1)
+  if (source.type === "ellipse" || source.type === "hyperbola") return Math.max(Math.abs(source.radiusX), Math.abs(source.radiusY), 1)
+  if (source.type === "parabola") return Math.max(Math.abs(source.focalParameter) * 2, 1)
+  if (source.type === "function") return Math.max((source.domain[1] - source.domain[0]) / 2, 1)
+  return 2
+}
+
+/**
+ * **曲线来源**的切线 / 法线（圆、圆弧、抛物线、椭圆、双曲线）。
+ *
+ * 与函数来源的 `recomputeTangent` 是同一件事的两种来源，但定位方式完全不同：
+ * 函数用横坐标 `x` 定位（那是它唯一的自然参数），曲线用 `anchor` 定位 ——
+ * 要么是曲线自己的自然参数，要么是**一个点图元**（动点在哪就切在哪）。
+ *
+ * 动点锚点优先读**它绑定里的参数**，而不是它的坐标：坐标是派生缓存、参数才是真值。
+ * 读坐标会在拖动那一帧上落后半步（缓存还没刷完），用户看到的就是"切线追着点跑"。
+ *
+ * 几何由内核 `constraintTangentAt` 给出（点 + 单位方向），并用 `tangentSegment` 展开成可见线段。
+ * 之所以不用斜截式：圆的左右顶点切线是**竖直**的，斜率在那里是无穷大。
+ */
+function recomputeCurveTangent(
+  primitive: Extract<PrimitiveSpec, { type: "tangent" | "normal" }>,
+  source: PrimitiveSpec,
+  primitiveMap: Map<string, PrimitiveSpec>,
+  parameters: GeometryDocument["parameters"]
+): Extract<PrimitiveSpec, { type: "tangent" | "normal" }> {
+  const anchor = primitive.anchor
+  const constraint = pathConstraint(source, parameters)
+  if (!anchor || !constraint) return { ...primitive, status: "failed" as const, diagnostic: "切线来源曲线不支持参数化" }
+  const lastBranch = Math.max(0, constraint.branchCount - 1)
+  const clampBranch = (branch: number | undefined) => Math.min(Math.max(branch ?? 0, 0), lastBranch)
+  const target = ((): { parameter: number; branch: number } | null => {
+    if (anchor.kind === "parameter") return { parameter: anchor.parameter, branch: clampBranch(anchor.branch) }
+    const point = primitiveMap.get(anchor.pointId)
+    if (point?.type !== "point") return null
+    const binding = point.binding?.kind === "onPath" && point.binding.pathId === source.id ? point.binding : null
+    if (binding) {
+      const parameter = binding.parameterId ? parameters[binding.parameterId]?.value ?? binding.parameter : binding.parameter
+      return { parameter, branch: clampBranch(binding.branch) }
+    }
+    // 锚点没有绑在这条曲线上（自由点 / 绑在别处）：把它的坐标投影上来，取离它最近的切点。
+    // 这比拒绝用户有用得多 —— "在曲线附近放一个点，再在它那里作切线"是完全合理的用法。
+    const projection = constraint.project({ x: point.x, y: point.y })
+    return projection ? { parameter: projection.parameter, branch: projection.branch } : null
+  })()
+  if (!target) return { ...primitive, status: "failed" as const, diagnostic: "切线的定位点不存在" }
+  const raw = constraintTangentAt(constraint, target.parameter, target.branch)
+  if (!raw) return { ...primitive, status: "undefined" as const, diagnostic: "这条曲线在该位置没有切线" }
+  const tangent: CurveTangent = primitive.type === "normal" ? normalFromTangent(raw) : raw
+  const { a, b } = tangentSegment(tangent, primitive.halfLength ?? curveTangentHalfLength(source))
+  // 竖直切线的斜率写成 0 而不是 Infinity：`slope` 在 schema 里必须有限，
+  // 竖直这件事实由 `vertical` 单独表达（与函数切线的约定一致）。
+  const vertical = Math.abs(tangent.direction.x) <= 1e-9
+  return {
+    ...primitive,
+    x: tangent.point.x,
+    point: tangent.point,
+    slope: vertical ? 0 : tangent.direction.y / tangent.direction.x,
+    vertical,
+    a,
+    b,
+    status: "approximate" as const,
+    diagnostic: undefined
+  }
+}
+
 function recomputeSecant(primitive: Extract<PrimitiveSpec, { type: "secant" }>, source: Extract<PrimitiveSpec, { type: "function" }>, parameters: GeometryDocument["parameters"]): Extract<PrimitiveSpec, { type: "secant" }> {
   try {
     const first = { x: primitive.x1, y: evaluateSource(source, primitive.x1, parameters) }
@@ -1489,7 +1590,7 @@ function syncTemplateTopology(primitives: PrimitiveSpec[], dirty?: Set<string>):
   }
 }
 
-function resolveIntersection(primitive: Extract<PrimitiveSpec, { type: "intersection" | "lineCircleIntersection" | "circleIntersection" }>, lines: Map<string, Extract<PrimitiveSpec, { type: "line" }>>, circles: Map<string, Extract<PrimitiveSpec, { type: "circle" }>>): IntersectionResult {
+function resolveIntersection(primitive: Extract<PrimitiveSpec, { type: "intersection" | "lineCircleIntersection" | "circleIntersection" }>, lines: Map<string, Extract<PrimitiveSpec, { type: "line" }>>, circleOf: (id: string) => Extract<PrimitiveSpec, { type: "circle" }> | undefined): IntersectionResult {
   if (primitive.type === "intersection") {
     const first = lines.get(primitive.lineA)
     const second = lines.get(primitive.lineB)
@@ -1497,11 +1598,11 @@ function resolveIntersection(primitive: Extract<PrimitiveSpec, { type: "intersec
   }
   if (primitive.type === "lineCircleIntersection") {
     const line = lines.get(primitive.lineId)
-    const circle = circles.get(primitive.circleId)
+    const circle = circleOf(primitive.circleId)
     return line && circle ? intersectLineCircleDetailed(line, circle) : { kind: "degenerate", reason: "line-circle intersection references missing object" }
   }
-  const first = circles.get(primitive.circleA)
-  const second = circles.get(primitive.circleB)
+  const first = circleOf(primitive.circleA)
+  const second = circleOf(primitive.circleB)
   return first && second ? intersectCirclesDetailed(first, second) : { kind: "degenerate", reason: "circle intersection references missing circle" }
 }
 
@@ -1570,12 +1671,18 @@ export function recomputeDerivedObjects(document: GeometryDocument, changedIds?:
   // 受约束的 point3 不再需要"最多重跑 N 遍直到不动"的多趟循环：
   // 主重算按拓扑序走，且每算完一个对象就更新查找表，一趟即可收敛。
   syncTemplateTopology(projectedPrimitives, changedIds === undefined ? undefined : new Set(changedIds))
-  const circles = new Map(
-    projectedPrimitives
-      .filter((primitive): primitive is Extract<PrimitiveSpec, { type: "circle" }> => primitive.type === "circle")
-      .map((circle) => [circle.id, circle])
-  )
   const primitiveMap = new Map(projectedPrimitives.map((primitive) => [primitive.id, primitive]))
+  /**
+   * 圆的查找是**活引用**而不是快照。
+   *
+   * 圆心 / 半径现在可以由点图元驱动（见 `recomputePrimitive` 里的圆分支），于是圆会在主循环**当中**被改写。
+   * 快照地图会让"直线与这个圆的交点"读到改写之前的旧圆 —— 用户看到的就是交点慢一帧、甚至粘在旧位置上。
+   * 判据是拓扑序里圆一定排在它的驱动点之后，因此这里读到的永远是刚算出来的那一份。
+   */
+  const circleOf = (id: string): Extract<PrimitiveSpec, { type: "circle" }> | undefined => {
+    const candidate = primitiveMap.get(id)
+    return candidate?.type === "circle" ? candidate : undefined
+  }
   /**
    * 重算单个对象。返回 `undefined` 表示这个类型不参与本趟重算。
    *
@@ -1615,6 +1722,28 @@ const recomputePrimitive = (primitive: PrimitiveSpec): PrimitiveSpec | undefined
       const point = resolveBoundPoint(primitive.binding, primitiveMap, parameters)
       return point ? { ...primitive, x: point.x, y: point.y } : undefined
     }
+    /**
+     * 以点图元为圆心 / 半径随点图元变化的圆。
+     *
+     * 用户口径："第二动点能够作为圆心作圆，圆的半径能够调节，也能够根据动点位置进行动态变化。"
+     * `center` 与 `radius` 在这里是**派生缓存**，真值是那两个点图元（`centerPointId` / `radiusFrom`）。
+     *
+     * 写在主循环里、而不是像"绕定点旋转"那样放在预扫描里，是因为它必须读到**刚算出来的**点坐标：
+     * 预扫描读的是本趟开始前的快照，拖动时会慢一帧，用户看到圆心追着点跑。
+     * 依赖图里已经声明了"点 → 圆"这条边，所以拓扑序保证点一定排在圆前面。
+     */
+    if (primitive.type === "circle" && (primitive.centerPointId || primitive.radiusFrom)) {
+      const centerPoint = primitive.centerPointId ? primitiveMap.get(primitive.centerPointId) : undefined
+      const center = centerPoint?.type === "point" ? { x: centerPoint.x, y: centerPoint.y } : primitive.center
+      const driver = primitive.radiusFrom ? primitiveMap.get(primitive.radiusFrom.pointId) : undefined
+      // 驱动点与圆心重合时半径会变成 0（圆消失），但 schema 要求 radius > 0：
+      // 给一个不可见的下限，宁可画出一个极小的圆，也不要让文档存不下去。
+      const radius = driver?.type === "point" && primitive.radiusFrom
+        ? Math.max(MIN_DYNAMIC_CIRCLE_RADIUS, Math.hypot(driver.x - center.x, driver.y - center.y) * primitive.radiusFrom.factor)
+        : primitive.radius
+      if (center.x === primitive.center.x && center.y === primitive.center.y && radius === primitive.radius) return primitive
+      return { ...primitive, center, radius }
+    }
     if (primitive.type === "derivative") {
       const source = primitiveMap.get(primitive.sourceId)
       if (source?.type !== "function") return { ...primitive, points: [], status: "failed" as const, diagnostic: "derivative source function is missing" }
@@ -1622,8 +1751,23 @@ const recomputePrimitive = (primitive: PrimitiveSpec): PrimitiveSpec | undefined
     }
     if (primitive.type === "tangent" || primitive.type === "normal" || primitive.type === "secant") {
       const source = primitiveMap.get(primitive.sourceId)
-      if (source?.type !== "function") return { ...primitive, status: "failed" as const, diagnostic: "derived line source function is missing" }
-      return primitive.type === "secant" ? recomputeSecant(primitive, source, parameters) : recomputeTangent(primitive, source, parameters)
+      /**
+       * **有 `anchor` 就走曲线路径，与来源是不是函数无关。**
+       *
+       * 这一点很容易写错：函数图像也是动点可以绑定的轨道（`dynamicPointPaths` 里就有它），
+       * 所以"在动点处作切线"完全可能落在一个函数图像上。如果按"来源是函数"优先分派，
+       * 那条切线会被当成旧的横坐标定位切线，`anchor` 被静默忽略 ——
+       * 表现就是"切出来了，但拖不动点，切线不动"。
+       *
+       * 判据必须写成 `type !== "secant"`（先按判别式收窄）而不是 `type === "tangent" || ...`：
+       * `SecantPrimitive` 没有 `anchor` 这个字段，直接读它连类型都过不了。
+       */
+      if (source && primitive.type !== "secant" && primitive.anchor) return recomputeCurveTangent(primitive, source, primitiveMap, parameters)
+      if (source?.type === "function") {
+        return primitive.type === "secant" ? recomputeSecant(primitive, source, parameters) : recomputeTangent(primitive, source, parameters)
+      }
+      // 曲线来源（圆 / 圆弧 / 抛物线 / 椭圆 / 双曲线）没有 `anchor` 时无从确定切点，只能如实报错。
+      return { ...primitive, status: "failed" as const, diagnostic: "derived line source curve is missing" }
     }
     if (primitive.type === "integral" || primitive.type === "analysisSet") {
       const source = primitiveMap.get(primitive.sourceId)
@@ -1662,7 +1806,7 @@ const recomputePrimitive = (primitive: PrimitiveSpec): PrimitiveSpec | undefined
       return point ? { ...primitive, x: point.x, y: point.y, hint: { x: point.x, y: point.y }, visible: true } : { ...primitive, visible: false }
     }
     if (primitive.type !== "intersection" && primitive.type !== "lineCircleIntersection" && primitive.type !== "circleIntersection") return undefined
-    const result = resolveIntersection(primitive, lines, circles)
+    const result = resolveIntersection(primitive, lines, circleOf)
     if (result.kind === "degenerate") throw new Error(`degenerate intersection: ${result.reason}`)
     if (result.kind === "none" || result.kind === "coincident") return { ...primitive, visible: false }
     if (result.kind === "point" || result.kind === "tangent") return { ...primitive, x: result.point.x, y: result.point.y, visible: true }
@@ -1782,6 +1926,17 @@ function cascadeSources(primitive: PrimitiveSpec): string[] {
    * 定点一走，曲线的存在意义就没了（它的圆心正是由定点 + 半径算出来的）。
    */
   if (isPlaceableConic(primitive) && primitive.rotationAbout?.pivot.kind === "primitive") return [primitive.rotationAbout.pivot.primitiveId]
+  /**
+   * "以动点为圆心的圆"：圆心点一走，圆就没有圆心了 —— 与"动圆"同一个判据（派生随宿主注销）。
+   * 但**半径驱动点**不同：它只是"半径读多少"的来源，圆心还在、圆还有意义，
+   * 所以它走 `unbindDeletedHost` 那条路（丢掉规则、保留最后的半径），而不是级联删除。
+   */
+  if (primitive.type === "circle" && primitive.centerPointId) return [primitive.centerPointId]
+  /**
+   * 切线的定位点：用户口径是"动点在哪就在哪作切线"。
+   * 动点没了，切线就不知道该切在哪 —— 它是纯派生的，随点一起注销，而不是留一条悬空的旧切线。
+   */
+  if ((primitive.type === "tangent" || primitive.type === "normal") && primitive.anchor?.kind === "point") return [primitive.anchor.pointId]
   const analysisSource = functionAnalysisSourceId(primitive)
   return analysisSource === null ? [] : [analysisSource]
 }
@@ -1824,6 +1979,12 @@ function unbindDeletedHost(primitive: PrimitiveSpec, deleted: Set<string>): Prim
     if (sources.some((sourceId) => deleted.has(sourceId))) return { ...primitive, binding: { kind: "free" } }
   }
   if (primitive.type === "point" && primitive.binding?.kind === "onPath" && deleted.has(primitive.binding.pathId)) return { ...primitive, binding: { kind: "free" } }
+  /**
+   * 半径的驱动点被删掉时，圆**不消失**：圆心还在、半径也还有最后一次的值，圆的含义仍然完整。
+   * 丢掉那条规则（半径从此变回可以直接编辑的数字），比静默留下一个悬空引用好得多
+   * —— 悬空引用在重算里找不到来源，半径会冻在最后一个值上，用户改都改不动。
+   */
+  if (primitive.type === "circle" && primitive.radiusFrom && deleted.has(primitive.radiusFrom.pointId)) return { ...primitive, radiusFrom: undefined }
   // 平面点的 `derived` 绑定与空间点同理：来源没了就降级为自由点，绝不留悬空引用
   //（悬空引用在重算里找不到来源，点会静默冻住；这与 schema 里点名过的坑是同一类）。
   if (primitive.type === "point" && primitive.binding?.kind === "derived" && deleted.has(primitive.binding.sourceId)) return { ...primitive, binding: { kind: "free" } }
@@ -1899,6 +2060,7 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
     changedIds = operation.primitives.map((primitive) => primitive.id)
   } else if (operation.op === "updatePrimitive") {
     const primitive = next.primitives.find((candidate) => candidate.id === operation.id)
+
     const geometryPatchKeys = Object.keys(operation.patch).filter((key) => key !== "style" && key !== "label")
     if (!primitive || (geometryPatchKeys.length > 0 && !(EDITABLE_GEOMETRY_TYPES as readonly string[]).includes(primitive.type)) || primitive.locked) return { document, changed: false, error: primitive?.locked ? "object is locked" : "object is not editable" }
     if (primitive.type === "point") {
@@ -1952,6 +2114,41 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
       // 写成"整块替换"而不是只改 angle —— 定点与转角必须一起落，中间态会让曲线短暂地不再过定点。
       if (primitive.type === "circle" && operation.patch.rotation !== undefined) primitive.rotation = operation.patch.rotation
       if (primitive.type === "circle" && operation.patch.rotationAbout !== undefined) primitive.rotationAbout = operation.patch.rotationAbout
+      /**
+       * 圆心点 / 半径驱动规则。`null` 是"去掉这条规则"：删字段而不是写 null，
+       * 因为 schema 与导出都把缺省当成"没有这条规则"，留一个 `null` 会让校验与往返都多出一个特例。
+       * 圆心被点接管后 `rotationAbout` 就没有意义了（两者会争夺同一个 `center`），一并清掉。
+       */
+      if (primitive.type === "circle" && operation.patch.centerPointId !== undefined) {
+        if (operation.patch.centerPointId === null) delete primitive.centerPointId
+        else {
+          primitive.centerPointId = operation.patch.centerPointId
+          delete primitive.rotationAbout
+        }
+      }
+      if (primitive.type === "circle" && operation.patch.radiusFrom !== undefined) {
+        if (operation.patch.radiusFrom === null) delete primitive.radiusFrom
+        else primitive.radiusFrom = operation.patch.radiusFrom
+      }
+    }
+    /**
+     * 切线 / 法线：曲线来源的定位方式与绘制半长。
+     *
+     * 这是"在曲线上作切线"之后唯一需要用户调的两件事：切点沿曲线滑到哪里（`anchor`）、
+     * 以及画多长（`halfLength`）。函数来源的旧切线不带 `anchor`，因此完全不受影响。
+     */
+    if (primitive.type === "tangent" || primitive.type === "normal") {
+      if (operation.patch.anchor !== undefined) {
+        if (operation.patch.anchor === null) delete primitive.anchor
+        else primitive.anchor = operation.patch.anchor
+      }
+      if (operation.patch.halfLength !== undefined) primitive.halfLength = operation.patch.halfLength
+      /**
+       * 函数来源的旧切线用横坐标定位：沿函数图像拖动切线就是改这个 `x`。
+       * **带 `anchor` 的曲线切线不在这里**——它的切点由 `anchor` 决定，写 `x` 只会被下一趟重算覆盖掉，
+       * 那种切线的拖动走 `anchor.parameter`（见 `interaction.ts` 的 `createDragAction`）。
+       */
+      if (!primitive.anchor && operation.patch.x !== undefined) primitive.x = operation.patch.x
     }
     if (primitive.type === "arc") {
       if (operation.patch.startAngle !== undefined) primitive.startAngle = operation.patch.startAngle

@@ -57,8 +57,19 @@ export function fillFor(primitive: PrimitiveSpec): string {
   return primitive.style?.fill ?? (primitive.type === "point" || primitive.type.endsWith("Intersection") || primitive.type === "intersection" ? strokeFor(primitive) : "none")
 }
 
+/**
+ * 平面画布上图元的默认线宽。
+ *
+ * 用户反馈（第二轮）："平面画布中的线都太粗了"。原来是 `选中 5 / 未选中 3`（px），
+ * 与 1px 的网格线放在一起时，图形像用马克笔画的、网格像草稿纸，主次关系也不对。
+ * 现在收到 `2.5 / 1.5`：仍然明显比网格（1px）重，但不再压掉图形本身的结构
+ * （圆锥曲线的两支、切线贴曲线的位置都更容易看清）。
+ *
+ * 这里同时管着 SVG 导出（`svgStyleFor`），所以导出的图与屏幕是一致的。
+ * 用户显式设过 `style.strokeWidth` 的对象不受影响 —— 自定义永远优先。
+ */
 export function strokeWidthFor(primitive: PrimitiveSpec, selected: boolean): number {
-  return primitive.style?.strokeWidth ?? (selected ? 5 : 3)
+  return primitive.style?.strokeWidth ?? (selected ? 2.5 : 1.5)
 }
 
 export function opacityFor(primitive: PrimitiveSpec): number {

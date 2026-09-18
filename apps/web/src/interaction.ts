@@ -19,6 +19,23 @@ export interface DragRotationTarget {
   angle: number
 }
 
+/**
+ * 拖动**曲线切线**本体时需要的东西：把指针位置投影回来源曲线。
+ *
+ * 切线的几何完全是算出来的（切点 + 切向都由定位方式决定），所以"拖它"不能像普通图元那样平移坐标，
+ * 只能把**切点沿来源曲线滑到别处**——也就是改 `anchor.parameter`。这与"拖动动点写回它绑定里的参数"
+ * 是同一条不变式：参数是唯一真值，坐标由重算求出。
+ *
+ * `parameterOffset` 是按下那一刻的"切点参数 − 指针投影参数"。拖动时保持这个差值，
+ * 切点才不会一上来就跳到指针脚下 —— 与动点的 `beginDrag` 记偏移量是同一个理由。
+ *
+ * 同样由界面解析好传进来（`interaction.ts` 不读文档；投影交给内核）。
+ */
+export interface DragTangentTarget {
+  parameterAt: (point: Coordinate) => { parameter: number; branch: number } | null
+  parameterOffset: number
+}
+
 // 连接（connection）不含自己的坐标，完全由两个端点定义：拖它没有意义，要拖的是端点。
 const derivedTypes = new Set(["intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection", "intersectionSet", "connection"])
 
@@ -111,9 +128,27 @@ export function primitiveHandlePoints(primitive: PrimitiveSpec, rotation?: DragR
   const handles: { handle: DragHandle; point: { x: number; y: number } }[] = []
   if (primitive.type === "line" || primitive.type === "segment" || primitive.type === "ray") handles.push({ handle: "a", point: primitive.a }, { handle: "b", point: primitive.b })
   if (primitive.type === "polyline") primitive.points.forEach((point, index) => handles.push({ handle: `vertex-${index}`, point }))
+  /**
+   * 参数定位的曲线切线：在**切点**上摆一个手柄。
+   *
+   * 切线的本体（那条线段）在画布上整条都能拖，但"这条线可以拖着沿曲线滑"不是一个看得出来的性质；
+   * 在切点上放一个小圆点，用户一眼就知道该抓哪里（与其他图元的控制点是同一套视觉语言）。
+   * 跟随动点的切线不摆：那种切线的切点就是那个动点本身，它有自己的手柄与命中区。
+   */
+  if (primitive.type === "tangent" || primitive.type === "normal") {
+    if (primitive.anchor?.kind === "parameter") handles.push({ handle: "body", point: primitive.point })
+  }
   const frame = handleFrame(primitive)
   if (frame.type === "parabola") handles.push({ handle: "vertex", point: frame.vertex }, { handle: "rotation", point: rotationHandlePointFor(frame) })
   if (frame.type === "circle") {
+    /**
+     * 半径由**另一个动点**驱动的圆（`radiusFrom`）不摆半径手柄。
+     *
+     * 那种情况下半径是算出来的：手柄拖出来的 `radius` 补丁会在下一趟重算里被距离覆盖回去，
+     * 用户看到的只是"手柄拖不动"。宁可少一个手柄，也不要留一个假控件
+     *（半径在检查器里是明确禁用并写清了原因的）。
+     */
+    if (primitive.type === "circle" && primitive.radiusFrom) return handles
     /**
      * 以某个点为**定点**的动圆：半径手柄摆在**定点**上，而不是基准圆心右侧。
      *
@@ -165,11 +200,25 @@ export function createDragAction(
   handle: DragHandle,
   origin: { x: number; y: number },
   current: { x: number; y: number },
-  rotation?: DragRotationTarget
+  rotation?: DragRotationTarget,
+  tangent?: DragTangentTarget
 ): DragAction | null {
   if (derivedTypes.has(primitive.type) || primitive.locked) return null
   if (handle === "body") {
     const delta = { x: current.x - origin.x, y: current.y - origin.y }
+    /*
+     * 曲线切线：拖它就是**把切点沿来源曲线滑动**。
+     *
+     * 只有"参数定位"的切线走这里；"跟随动点"的切线由上层把拖动转给那个点（见 App 的 `handleDragEnd`）。
+     * 判据必须写成 `type === "tangent" || type === "normal"` 这种**正向**收窄：这里没有外层判别式，
+     * 写 `type !== "secant"` 只会把 secant 排除掉，剩下三十几个类型一样没有 `anchor` 字段。
+     */
+    if (tangent && (primitive.type === "tangent" || primitive.type === "normal") && primitive.anchor?.kind === "parameter") {
+      const projected = tangent.parameterAt(current)
+      if (projected) {
+        return { kind: "update", patch: { anchor: { kind: "parameter", parameter: projected.parameter + tangent.parameterOffset, branch: projected.branch } } }
+      }
+    }
     /*
      * 动圆（定点是**点图元**）：拖它就是**绕那个定点转**。
      *

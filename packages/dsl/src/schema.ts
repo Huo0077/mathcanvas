@@ -3,6 +3,13 @@ import type { GeometryDocument, PrimitiveSpec, ValidationResult, Vector3 } from 
 const workspaces = new Set(["calculus", "conics", "cad", "geometry3d"])
 const primitiveTypes = new Set(["point", "point3", "line", "line3", "segment", "segment3", "ray", "ray3", "polyline", "connection", "locus", "parabola", "ellipse", "hyperbola", "function", "derivative", "tangent", "normal", "secant", "integral", "analysisSet", "cube", "pyramid", "cylinder", "cone", "plane3", "circle3", "edge3", "face3", "polyhedron3", "section", "intersectionLine", "intersectionSolid", "intersectionFace", "intersectionPoint3", "circle", "arc", "intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection", "intersectionSet"])
 const sampledTypes = new Set(["line", "segment", "ray", "polyline", "circle", "arc", "parabola", "ellipse", "hyperbola", "function"])
+/**
+ * 能长出切线的来源曲线。
+ *
+ * 函数图像是历史来源（切线由数值导数算出）；圆 / 圆弧 / 抛物线 / 椭圆 / 双曲线是解析来源，
+ * 切线由内核约束的解析切向给出。直线 / 折线不在列：它们处处是自身，再"作切线"没有数学含义。
+ */
+const tangentSourceTypes = new Set(["function", "circle", "arc", "parabola", "ellipse", "hyperbola"])
 const solidTypes = new Set(["cube", "pyramid", "cylinder", "cone", "polyhedron3"])
 const annotationFeatures = new Set(["point", "center", "focus", "vertex", "intersection", "start", "end"])
 const conic3Kinds = new Set(["circle", "ellipse", "parabola", "hyperbola", "line", "lines", "point", "empty", "insufficient-data"])
@@ -215,6 +222,23 @@ function isCurveRotation(byId: Map<string, unknown>, value: unknown): boolean {
   return false
 }
 
+/**
+ * 切线的定位方式：要么是曲线自己的自然参数，要么引用一个真实存在的点图元（"动点在哪就切在哪"）。
+ * 参数只要求有限（圆锥曲线的自然参数可以是无界的），分支只允许 0 / 1（双曲线两支）。
+ */
+function isTangentAnchor(byId: Map<string, unknown>, value: unknown): boolean {
+  if (!isRecord(value)) return false
+  if (value.kind === "parameter") return isFiniteNumber(value.parameter) && (value.branch === undefined || value.branch === 0 || value.branch === 1)
+  if (value.kind === "point") return typeof value.pointId === "string" && referenceType(byId, value.pointId) === "point"
+  return false
+}
+
+/** 半径随动点变化的规则：驱动点必须是一个真实存在的点图元，倍率必须是正有限数。 */
+function isCircleRadiusRule(byId: Map<string, unknown>, value: unknown): boolean {
+  if (!isRecord(value)) return false
+  return typeof value.pointId === "string" && referenceType(byId, value.pointId) === "point" && isFiniteNumber(value.factor) && value.factor > 0
+}
+
 function validatePresentation(value: RecordValue, errors: string[]): void {
   if (value.label !== undefined && typeof value.label !== "string") errors.push("primitive label is invalid")
   if (value.visible !== undefined && typeof value.visible !== "boolean") errors.push("primitive visibility is invalid")
@@ -411,11 +435,16 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>, parameter
     if (value.diagnostic !== undefined && typeof value.diagnostic !== "string") errors.push("derivative diagnostic is invalid")
   }
   if (type === "tangent" || type === "normal") {
-    if (referenceType(byId, value.sourceId) !== "function") errors.push(`${type} references invalid function`)
+    const sourceType = referenceType(byId, value.sourceId)
+    if (!sourceType || !tangentSourceTypes.has(sourceType)) errors.push(`${type} references an unsupported source curve`)
     if (!isFiniteNumber(value.x) || !isFiniteCoordinate(value.point) || !isFiniteNumber(value.slope) || !isFiniteCoordinate(value.a) || !isFiniteCoordinate(value.b)) errors.push(`${type} geometry is invalid`)
     if (value.vertical !== undefined && typeof value.vertical !== "boolean") errors.push(`${type} vertical state is invalid`)
     if (!["approximate", "undefined", "failed"].includes(String(value.status))) errors.push(`${type} status is invalid`)
     if (value.diagnostic !== undefined && typeof value.diagnostic !== "string") errors.push(`${type} diagnostic is invalid`)
+    if (value.anchor !== undefined && !isTangentAnchor(byId, value.anchor)) errors.push(`${type} anchor is invalid`)
+    if (value.halfLength !== undefined && (!isFiniteNumber(value.halfLength) || value.halfLength <= 0)) errors.push(`${type} half length must be positive`)
+    // 曲线来源**必须**自带定位：光有 `x` 分不清"切点的横坐标"和"自然参数"，那是个会静默切错地方的歧义。
+    if (sourceType !== undefined && sourceType !== "function" && value.anchor === undefined) errors.push(`${type} on a curve needs an anchor`)
   }
   if (type === "secant") {
     if (referenceType(byId, value.sourceId) !== "function") errors.push("secant references invalid function")
@@ -541,6 +570,9 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>, parameter
     // 圆可以绕定点旋转（这是用户要的那类题）；弧不是封闭曲线，不给这个能力。
     if (value.rotation !== undefined && !isFiniteNumber(value.rotation)) errors.push(`${type} rotation is invalid`)
     if (value.rotationAbout !== undefined && (type !== "circle" || !isCurveRotation(byId, value.rotationAbout))) errors.push(`${type} rotation about a fixed point is invalid`)
+    // "以某个动点为圆心"与"半径随某个动点变化"都只给圆：弧还多着两个端点角，那两件事叠加起来没有用户口径。
+    if (value.centerPointId !== undefined && (type !== "circle" || referenceType(byId, value.centerPointId) !== "point")) errors.push(`${type} center point is invalid`)
+    if (value.radiusFrom !== undefined && (type !== "circle" || !isCircleRadiusRule(byId, value.radiusFrom))) errors.push(`${type} radius rule is invalid`)
   }
   if (type === "intersection") {
     if (typeof value.lineA !== "string" || typeof value.lineB !== "string" || !byId.has(value.lineA) || !byId.has(value.lineB)) errors.push("intersection references missing line")

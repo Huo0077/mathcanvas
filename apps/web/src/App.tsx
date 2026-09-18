@@ -42,6 +42,7 @@ import { resolveStatusPrompt, resolveIntersectionPreviewPrompt, resolvePreviewIn
 import { computeIntersectionPreviews3d, type IntersectionPreview3dCache } from "./intersectionPreviews3d"
 import { toScenePreview, toSectionScenePreview, toSelectionLineScenePreview, type ThreeScenePreview } from "./threeScenePreview"
 import { dynamicPointPaths, isDynamicPointPath } from "./dynamicPointPaths"
+import { defaultTangentAnchor, isTangentSource } from "./curveTangents"
 import { useSceneStore } from "./store"
 
 type CreationMode = "line" | "segment" | "ray" | "polyline" | "circle" | "arc" | null
@@ -88,6 +89,12 @@ const DEFAULT_MOVING_CIRCLE_RADIUS = 2
  * 用户随后可以在属性栏改成想要的圈。
  */
 const DEFAULT_CIRCLE3_TRACK_RADIUS = 1.5
+
+/**
+ * "以点为圆心作圆"的默认半径。比动圆小一点：它是一个真正的圆（要标圆心），
+ * 摆在点的正右侧一个半径处，视觉上不会一出来就压住旁边的图形。
+ */
+const DEFAULT_CENTERED_CIRCLE_RADIUS = 1.5
 
 /**
  * Planar points use the classroom labels A…Z; after Z the counter falls back to a running number so a
@@ -452,6 +459,101 @@ export function App() {
     apply({ op: "addPrimitive", primitive })
     setSelectedIds([id])
     setGuidance(guidanceFor({ kind: "functionAnalysis", analysis: kind }))
+  }
+  /**
+   * 在一条**曲线**上作切线（用户口径 1：「创建一条曲线后，可以点击这条曲线，右侧功能栏里应有一个选项
+   * 是创建一条在这个曲线上的切线。曲线包括抛物线，双曲线，圆，椭圆」）。
+   *
+   * 切点落在曲线的**自然参数原点**上 —— 四条曲线的参数 0 都恰好是它们的一个顶点
+   * （圆的右顶点、椭圆的长轴端点、双曲线的顶点、抛物线的顶点），因此这是"教科书上那条切线"。
+   * 之后用户可以在右侧拖「切点参数」把它沿曲线滑到任意位置，或者改用「跟随动点」。
+   *
+   * 几何不在这里算：只写 `anchor` + 一个占位几何，重算会立刻把真正的切点与切向填进去
+   * （与函数切线同一条路径，见 `addFunctionAnalysis`）。
+   */
+  const addCurveTangent = (sourceId: string) => {
+    const source = document.primitives.find((primitive) => primitive.id === sourceId)
+    if (!isTangentSource(source)) return
+    const id = nextPrimitiveId(document, "tangent")
+    apply({
+      op: "addPrimitive",
+      primitive: {
+        id,
+        type: "tangent",
+        sourceId,
+        x: 0,
+        point: { x: 0, y: 0 },
+        slope: 0,
+        a: { x: 0, y: 0 },
+        b: { x: 0, y: 0 },
+        status: "approximate",
+        anchor: defaultTangentAnchor(),
+        label: `切线 ${id.split("-").at(-1)}`
+      }
+    })
+    setSelectedIds([id])
+    setGuidance(guidanceFor({ kind: "curveTangent", source: source.type }))
+  }
+  /**
+   * 在**动点**处作切线（用户口径 2 的前半：「动点在轨道上能够在动点位置画切线，同时切线能根据动点位置
+   * 进行动态变化」）。
+   *
+   * 定位写成 `{ kind: "point", pointId }` 而不是把当前参数抄下来：抄下来的是一次性的快照，
+   * 动点再动切线就不跟了。写成引用之后，"点动 → 切线动"由依赖图保证（见 `primitiveDependencies`）。
+   * 动点必须已经绑在一条曲线轨道上 —— 没有轨道就没有"在它那里作切线"这回事。
+   */
+  const addPointTangent = (pointId: string) => {
+    const point = document.primitives.find((primitive) => primitive.id === pointId)
+    // 收窄先落到局部常量上：`point.binding!.pathId` 这种写法过不了类型检查（`!` 不参与辨识联合的收窄）。
+    const binding = point?.type === "point" ? point.binding : undefined
+    if (point?.type !== "point" || binding?.kind !== "onPath") return
+    const source = document.primitives.find((primitive) => primitive.id === binding.pathId)
+    if (!isTangentSource(source)) return
+    const id = nextPrimitiveId(document, "tangent")
+    apply({
+      op: "addPrimitive",
+      primitive: {
+        id,
+        type: "tangent",
+        sourceId: source.id,
+        x: point.x,
+        point: { x: point.x, y: point.y },
+        slope: 0,
+        a: { x: point.x, y: point.y },
+        b: { x: point.x, y: point.y },
+        status: "approximate",
+        anchor: { kind: "point", pointId },
+        label: `切线 ${id.split("-").at(-1)}`
+      }
+    })
+    setSelectedIds([id])
+    setGuidance(guidanceFor({ kind: "pointTangent", point: point.label ?? point.id }))
+  }
+  /**
+   * 以选中的点为**圆心**作圆（用户口径 2 的后半：「第二动点能够作为圆心作圆，圆的半径能够调节，
+   * 也能够根据动点位置进行动态变化」）。
+   *
+   * 只写 `centerPointId`，半径先给一个默认值 —— 「半径是否随动点走」是用户下一步的选择：
+   * 想固定就在右侧改数字，想跟随就选一个驱动点（`radiusFrom`）。圆心一开始就摆在点上，
+   * 所以第一帧起"圆心就是这个点"就成立。
+   */
+  const createCircleAtPoint = (pointId: string) => {
+    const point = document.primitives.find((primitive) => primitive.id === pointId)
+    if (point?.type !== "point") return
+    const id = nextPrimitiveId(document, "circle")
+    apply({
+      op: "addPrimitive",
+      primitive: {
+        id,
+        type: "circle",
+        center: { x: point.x, y: point.y },
+        radius: DEFAULT_CENTERED_CIRCLE_RADIUS,
+        centerPointId: point.id,
+        label: `圆 ${id.split("-").at(-1)}`
+      }
+    })
+    setSelectedIds([id])
+    setGuidance(guidanceFor({ kind: "circleAtPoint", point: point.label ?? point.id }))
   }
   const intersectionTypes = ["point", "line", "segment", "ray", "polyline", "circle", "arc", "parabola", "ellipse", "hyperbola", "function"] as const
   const selectedPointIds = selectedIds.filter((id) => document.primitives.find((primitive) => primitive.id === id)?.type === "point")
@@ -938,6 +1040,38 @@ export function App() {
    *    整体平移才符合"定点是曲线自己的属性"：曲线跟着定点走，转了多少度、半径多大都不变。
    */
   const handleDragEnd = (id: string, action: import("./interaction").DragAction) => {
+    /**
+     * 拖动"以动点为圆心"的圆 = 拖动那个圆心点。
+     *
+     * 直接把位移写进圆的 `center` 会被下一趟重算覆盖回去（圆心是那个点图元的派生缓存），
+     * 用户看到的是"拖了没反应"。把位移转给圆心点，圆自然跟着走 —— 这与"定点是曲线自己的属性、
+     * 曲线跟着定点走"是同一条设计（见下面的动圆分支）。
+     */
+    const dragged = document.primitives.find((primitive) => primitive.id === id)
+    if (action.kind === "translate" && dragged?.type === "circle" && dragged.centerPointId) {
+      apply({ op: "translatePrimitive", id: dragged.centerPointId, delta: action.delta })
+      return
+    }
+    /**
+     * 拖动"跟随动点"的切线 = 拖动那个定位动点。
+     *
+     * 切线的几何是算出来的，平移它自己没有意义（`translatePrimitive` 对切线是空操作，拖了等于没拖）。
+     * 把位移转给定位点，点沿它的轨道滑动、切线自然跟着走 —— 复用已经跑通的"拖动动点"那条路。
+     */
+    if (action.kind === "translate" && (dragged?.type === "tangent" || dragged?.type === "normal") && dragged.anchor?.kind === "point") {
+      apply({ op: "translatePrimitive", id: dragged.anchor.pointId, delta: action.delta })
+      return
+    }
+    /**
+     * 函数来源的**旧切线**（没有 `anchor`）：横向拖动改切点的横坐标。
+     *
+     * 它的切点由 `x` 定位，所以"沿函数图像滑动"就是把指针的横向位移加到 `x` 上。
+     * 纵向不动 —— 切点的纵坐标是算出来的，跟着指针走会让切线离开曲线。
+     */
+    if (action.kind === "translate" && (dragged?.type === "tangent" || dragged?.type === "normal") && !dragged.anchor && action.delta.x !== 0) {
+      apply({ op: "updatePrimitive", id, patch: { x: dragged.x + action.delta.x } })
+      return
+    }
     if (action.kind === "translate") apply({ op: "translatePrimitive", id, delta: action.delta })
     else apply({ op: "updatePrimitive", id, patch: action.patch })
     // 位移取自"这次拖动之后"的文档：点已经被搬过去了，差值就是它实际走的位移。
@@ -1297,20 +1431,12 @@ export function App() {
   }} onDeleteParameter={(id) => apply({ op: "deleteParameter", id })} onAddParameter={addParameter} />
 
   /**
-   * 空白画布上"快速开始"那一行按钮。
-   *
-   * 与功能区按钮走**同一条路**（`runRibbonCommand`）：从画布上点一下与从功能区点一下永远不会变成两套行为。
-   * 用户的反馈是"很多功能藏得很深"，而空白画布是唯一一个用户一定看到的地方。
-   * 按钮文案与功能区**不同名**（见 `GraphicsView` 里的说明），避免屏幕上出现两个同名按钮。
+   * 空白画布上**不再有任何**说明文字或快捷按钮（用户口径：中间那块文字与四个按钮都去掉）。
+   * 之前这里有一个 `runQuickStart`，把画布上的快捷按钮转发到功能区命令；
+   * 入口撤掉之后它没有任何调用者，因此一并删除 —— 功能区那四个按钮仍然照旧工作。
    */
-  const runQuickStart = (action: "point" | "circle" | "line" | "function") => {
-    if (action === "point") runRibbonCommand("create-point")
-    else if (action === "circle") runRibbonCommand("create-circle")
-    else if (action === "line") runRibbonCommand("create-line")
-    else runRibbonCommand("create-function")
-  }
 
-  const planarCanvas = <GraphicsView document={document} selectedIds={selectedIds} creationMode={creationMode} onSelect={updateSelection} onBoxSelect={selectBox} onCanvasClick={handleCanvasCreationClick} onCanvasDoubleClick={handleCanvasDoubleClick} onDragEnd={handleDragEnd} onCreateIntersection={createIntersectionFromPreview} onPointerCoordinate={setPointerCoordinate} onQuickStart={runQuickStart} />
+  const planarCanvas = <GraphicsView document={document} selectedIds={selectedIds} creationMode={creationMode} onSelect={updateSelection} onBoxSelect={selectBox} onCanvasClick={handleCanvasCreationClick} onCanvasDoubleClick={handleCanvasDoubleClick} onDragEnd={handleDragEnd} onCreateIntersection={createIntersectionFromPreview} onPointerCoordinate={setPointerCoordinate} />
 
   /**
    * 可作宿主的图元：空间直线 / 线段 / 射线 / 棱 / 面 / 圆柱与圆锥侧面，以及**实体的内部**
@@ -1321,7 +1447,7 @@ export function App() {
     [document.primitives]
   )
 
-  const propertiesBarProps: PropertiesBarProps = { selectedPrimitive, selectedIds, selectedCount: selectedIds.length, selectedGroupId: selectedGroup?.id ?? null, allSelectedVisible, canCreateIntersection, onCreateGroup: createGroup, onDeleteGroup: deleteGroup, onCreateIntersection: createIntersection, onAlign: alignSelection, onToggleSelectedVisibility: () => selectedId && apply({ op: "toggleVisibility", id: selectedId, visible: selectedPrimitive?.visible === false }), onToggleSelectedLock: () => selectedId && apply({ op: "toggleLock", id: selectedId, locked: !selectedPrimitive?.locked }), onDeleteSelected: deleteSelected, onToggleBatchVisibility: () => apply({ op: "setPrimitivesVisible", ids: selectedIds, visible: !allSelectedVisible }), onUpdatePrimitive: (patch) => selectedId && apply({ op: "updatePrimitive", id: selectedId, patch }), onRotateSection: rotateSelectedSection, onRotate3: rotateSelected3, onMaterializeSection: materializeSelectedSection, pointHostCandidates, onBindPointHost: bindPointToHost, onChangeHostParameter: setPointHostParameter, onAddAnnotation: addAnnotation, onAddEngineeringAnnotation: addEngineeringAnnotation, onCreateMeasurement: addMeasurement, onDeleteMeasurement: deleteMeasurement, onCreateMovingCircle: createMovingCircle, onUpdateSelectionStyle: (style) => apply({ op: "setPrimitivesStyle", ids: selectedIds, style }), onCreateDerivative: (sourceId) => addFunctionAnalysis(sourceId, "derivative"), onCreateTangent: (sourceId) => addFunctionAnalysis(sourceId, "tangent"), onCreateIntegral: (sourceId) => addFunctionAnalysis(sourceId, "integral"), value: slope?.value ?? 0.5, min: slope?.min ?? 0.15, max: slope?.max ?? 0.85, step: slope?.step ?? 0.05, onChange: (value) => apply({ op: "setParameter", id: "slope", value }) }
+  const propertiesBarProps: PropertiesBarProps = { selectedPrimitive, selectedIds, selectedCount: selectedIds.length, selectedGroupId: selectedGroup?.id ?? null, allSelectedVisible, canCreateIntersection, onCreateGroup: createGroup, onDeleteGroup: deleteGroup, onCreateIntersection: createIntersection, onAlign: alignSelection, onToggleSelectedVisibility: () => selectedId && apply({ op: "toggleVisibility", id: selectedId, visible: selectedPrimitive?.visible === false }), onToggleSelectedLock: () => selectedId && apply({ op: "toggleLock", id: selectedId, locked: !selectedPrimitive?.locked }), onDeleteSelected: deleteSelected, onToggleBatchVisibility: () => apply({ op: "setPrimitivesVisible", ids: selectedIds, visible: !allSelectedVisible }), onUpdatePrimitive: (patch) => selectedId && apply({ op: "updatePrimitive", id: selectedId, patch }), onRotateSection: rotateSelectedSection, onRotate3: rotateSelected3, onMaterializeSection: materializeSelectedSection, pointHostCandidates, onBindPointHost: bindPointToHost, onChangeHostParameter: setPointHostParameter, onAddAnnotation: addAnnotation, onAddEngineeringAnnotation: addEngineeringAnnotation, onCreateMeasurement: addMeasurement, onDeleteMeasurement: deleteMeasurement, onCreateMovingCircle: createMovingCircle, onCreateCircleAtPoint: createCircleAtPoint, onCreateCurveTangent: addCurveTangent, onCreatePointTangent: addPointTangent, onUpdateSelectionStyle: (style) => apply({ op: "setPrimitivesStyle", ids: selectedIds, style }), onCreateDerivative: (sourceId) => addFunctionAnalysis(sourceId, "derivative"), onCreateTangent: (sourceId) => addFunctionAnalysis(sourceId, "tangent"), onCreateIntegral: (sourceId) => addFunctionAnalysis(sourceId, "integral"), value: slope?.value ?? 0.5, min: slope?.min ?? 0.15, max: slope?.max ?? 0.85, step: slope?.step ?? 0.05, onChange: (value) => apply({ op: "setParameter", id: "slope", value }) }
 
   const propertiesPanel = <PropertiesBar {...propertiesBarProps} />
 

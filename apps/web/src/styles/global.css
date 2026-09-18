@@ -1,4 +1,4 @@
-@import "./tokens.css";
+﻿@import "./tokens.css";
 
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; background: var(--color-canvas); color: var(--color-ink); font-family: Inter, "Noto Sans SC", ui-sans-serif, system-ui, sans-serif; }
@@ -472,20 +472,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .colour-custom { width: 30px; min-height: 24px; height: 24px; padding: 0 2px; border: 1px solid var(--color-border); border-radius: 7px; background: var(--color-panel); cursor: pointer; }
 .colour-custom:disabled { cursor: not-allowed; opacity: 0.5; }
 
-
-/**
- * 空白画布上的「快速开始」：把藏得深的入口搬到用户一定会看到的地方。
- *
- * 用户反馈"我们很多功能藏得很深，用户很难发现"。空白画布是唯一一个**用户一定会看到**的界面，
- * 所以它承担"教一遍"的职责：四个最常用的起点 + 一句"动圆"的提示。
- */
-.canvas-empty-hint { position: absolute; left: 50%; top: 44%; z-index: 1; display: grid; justify-items: center; gap: var(--space-3); width: min(470px, calc(100% - 48px)); transform: translate(-50%, -50%); padding: var(--space-5) var(--space-4); text-align: center; pointer-events: none; }
-.canvas-empty-hint-title { display: inline-flex; align-items: center; gap: var(--space-2); color: #6b6144; font-size: var(--font-ui-lg); font-weight: 750; letter-spacing: 0.01em; }
-.canvas-empty-hint-title span[aria-hidden="true"] { display: grid; place-items: center; width: 26px; height: 26px; border: 1px solid var(--color-graph-grid-major); border-radius: 8px; background: rgb(255 255 255 / 85%); color: #8a7f5c; font-size: 0.9rem; }
-.canvas-empty-hint-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--space-2); pointer-events: auto; }
-.canvas-empty-hint-actions button { min-height: 36px; border-color: var(--color-graph-grid-major); background: rgb(255 255 255 / 92%); color: #584f38; font-size: var(--font-ui-sm); font-weight: 650; }
-.canvas-empty-hint-actions button:hover { border-color: var(--color-accent); background: #fff; color: var(--color-accent-strong); }
-.canvas-empty-hint-note { max-width: 380px; color: #857a58; font-size: var(--font-ui-sm); line-height: 1.55; }
 
 /* 高度交给所在的网格行（`.workbench` 的画布行是 minmax(0, 1fr)）：写死 `calc(100vh - 420px)`
    会让画布比容器矮一截（实测 800px 高的窗口里矮 150px），下面留一条空白，而且那个 420 跟真实的

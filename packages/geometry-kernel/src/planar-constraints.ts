@@ -1109,3 +1109,73 @@ export function implicitConicConstraint(id: string, coefficients: ConicCoefficie
 export function primitiveConicConstraint(id: string, primitive: ConicPrimitive): PlanarConstraint {
   return conicConstraint(id, primitive)
 }
+
+// ---------------------------------------------------------------------------
+// 曲线切线
+// ---------------------------------------------------------------------------
+
+/** 周期参数折叠到 [min, max)，避免长时间动画后参数无限增大而丢精度。 */
+function wrapIntoDomain(parameter: number, min: number, max: number): number {
+  const span = max - min
+  if (!(span > 0) || !Number.isFinite(span)) return parameter
+  const offset = (parameter - min) % span
+  return min + (offset < 0 ? offset + span : offset)
+}
+
+export interface CurveTangent {
+  /** 切点，**严格落在曲线上**（由 `evaluate` 求得，不是从切向推出来的）。 */
+  point: Coordinate
+  /** 单位切向。 */
+  direction: Coordinate
+  /** 实际使用的参数（周期曲线的参数会被折回参数域）。 */
+  parameter: number
+  branch: number
+}
+
+/**
+ * 曲线在某个参数处的切线：**一个点 + 一个单位方向**。
+ *
+ * 这个抽象刻意不返回"斜截式"：曲线切线存在**竖直**的情形（圆的左右顶点、抛物线顶端在横轴朝向下），
+ * 斜率在那里是无穷大，`y = kx + b` 会直接坏掉。点 + 方向对竖直/水平一视同仁。
+ *
+ * 切点必须由 `evaluate` 求出、而不是从切向积分回去 —— 后者会累积漂移，切点会慢慢离开曲线，
+ * 这正是动态几何软件最经典的数值缺陷（与 `dynamic-points.ts` 是同一条原则）。
+ *
+ * 参数无定义（函数间断点、退化的圆锥曲线）或切向退化时返回 null，调用方据此报告"无法作切线"。
+ */
+export function constraintTangentAt(constraint: PlanarConstraint, parameter: number, branch = 0): CurveTangent | null {
+  if (!Number.isFinite(parameter)) return null
+  const safeBranch = clamp(Math.round(branch), 0, Math.max(0, constraint.branchCount - 1))
+  const bounds = constraint.parameterBounds(safeBranch)
+  // 周期曲线的参数折叠回参数域：圆上转过十圈之后参数是 20π，切向仍然对，
+  // 但读数与"参数滑块"会一路飘走（同一个切点在滑块上显示成完全不同的数字）。
+  const normalized = bounds.wrap && Number.isFinite(bounds.min) && Number.isFinite(bounds.max)
+    ? wrapIntoDomain(parameter, bounds.min, bounds.max)
+    : parameter
+  const point = constraint.evaluate(normalized, safeBranch)
+  if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return null
+  const tangent = constraint.tangent(normalized, safeBranch)
+  if (!tangent) return null
+  const length = Math.hypot(tangent.x, tangent.y)
+  if (!Number.isFinite(length) || length <= EPSILON) return null
+  return { point, direction: { x: tangent.x / length, y: tangent.y / length }, parameter: normalized, branch: safeBranch }
+}
+
+/**
+ * 把切线表示成一段可视的线段：以切点为中心、沿单位方向向两侧各伸出 `halfLength`。
+ *
+ * 用线段（而不是无界直线）是刻意的：可见范围由调用方按曲线尺度给出，
+ * 于是"圆上一点的切线"画出来和圆的直径差不多长，而不是横贯整个视野。
+ */
+export function tangentSegment(tangent: CurveTangent, halfLength: number): { a: Coordinate; b: Coordinate } {
+  const half = Number.isFinite(halfLength) && halfLength > 0 ? halfLength : 1
+  return {
+    a: { x: tangent.point.x - tangent.direction.x * half, y: tangent.point.y - tangent.direction.y * half },
+    b: { x: tangent.point.x + tangent.direction.x * half, y: tangent.point.y + tangent.direction.y * half }
+  }
+}
+
+/** 法线：把切向转 90°。与切线共享同一份"点 + 方向"契约，因此竖直/水平同样一视同仁。 */
+export function normalFromTangent(tangent: CurveTangent): CurveTangent {
+  return { ...tangent, direction: { x: -tangent.direction.y, y: tangent.direction.x } }
+}

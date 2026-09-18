@@ -189,4 +189,69 @@ describe("grip handle points", () => {
       })
     })
   })
+
+  /**
+   * 用户反馈："切线不能在曲线上自由拖动"。
+   *
+   * 根因有两个，都在这一组里钉住：
+   *  1. 画布上切线那一组**根本没有 `onPointerDown`**（只能选中、不能起拖）—— 那是 `GraphicsView` 的事，
+   *     由 App 层的渲染测试覆盖；
+   *  2. 就算起拖了，`createDragAction` 对切线只会走 `translate`，而平移一条**算出来的**切线是空操作。
+   *     这里验证它现在改的是 `anchor.parameter`（切点沿曲线滑动）。
+   */
+  describe("dragging a curve tangent slides its tangency point along the curve", () => {
+    const tangent: PrimitiveSpec = { id: "tangent-1", type: "tangent", sourceId: "circle-1", x: 3, point: { x: 3, y: 0 }, slope: 0, a: { x: 3, y: -3 }, b: { x: 3, y: 3 }, status: "approximate", vertical: true, anchor: { kind: "parameter", parameter: 0, branch: 0 } }
+
+    it("rewrites the anchor parameter instead of translating the line", () => {
+      // 指针从 (3,0)（参数 0）挪到 (0,3)（参数 π/2）。
+      const parameterAt = (point: { x: number; y: number }) => ({ parameter: Math.atan2(point.y, point.x), branch: 0 })
+      const action = createDragAction(tangent, "body", { x: 3, y: 0 }, { x: 0, y: 3 }, undefined, { parameterAt, parameterOffset: 0 })
+      expect(action?.kind).toBe("update")
+      if (action?.kind !== "update") throw new Error("expected an update")
+      expect(action.patch.anchor).toEqual({ kind: "parameter", parameter: Math.PI / 2, branch: 0 })
+      // 关键：绝不是 translate —— 平移对切线是空操作，用户看到的会是"拖不动"。
+      expect(action.kind).not.toBe("translate")
+    })
+
+    it("keeps the grab offset, so the tangency point does not jump under the pointer", () => {
+      /**
+       * 用户在离切点很远的地方抓住这条线（指针在 (3,3)，投影参数 π/4；切点参数是 0）。
+       * 偏移 = 0 − π/4 = −π/4。指针再往 (0,3)（参数 π/2）挪，切点应当只走到 π/2 − π/4 = π/4，
+       * 而不是直接跳到 π/2 —— 没有这个偏移的话，一按下切点就会瞬移到指针脚下。
+       */
+      const parameterAt = (point: { x: number; y: number }) => ({ parameter: Math.atan2(point.y, point.x), branch: 0 })
+      const grabOrigin = { x: 3, y: 3 }
+      const offset = 0 - parameterAt(grabOrigin).parameter
+      expect(offset).toBeCloseTo(-Math.PI / 4, 12)
+      const action = createDragAction(tangent, "body", grabOrigin, { x: 0, y: 3 }, undefined, { parameterAt, parameterOffset: offset })
+      if (action?.kind !== "update") throw new Error("expected an update")
+      expect(action.patch.anchor).toEqual({ kind: "parameter", parameter: Math.PI / 4, branch: 0 })
+    })
+
+    it("leaves a point-anchored tangent to the caller, so its anchor point does the moving", () => {
+      // 跟随动点的切线：`createDragAction` 不该自作主张把它改成参数定位（那会悄悄断开与动点的联系）。
+      const following: PrimitiveSpec = { ...tangent, anchor: { kind: "point", pointId: "point-1" } } as PrimitiveSpec
+      const parameterAt = () => ({ parameter: 1, branch: 0 })
+      const action = createDragAction(following, "body", { x: 3, y: 0 }, { x: 1, y: 1 }, undefined, { parameterAt, parameterOffset: 0 })
+      expect(action).toEqual({ kind: "translate", delta: { x: -2, y: 1 } })
+    })
+
+    it("falls back to a plain translate when the curve cannot be projected", () => {
+      const parameterAt = () => null
+      const action = createDragAction(tangent, "body", { x: 3, y: 0 }, { x: 1, y: 1 }, undefined, { parameterAt, parameterOffset: 0 })
+      expect(action).toEqual({ kind: "translate", delta: { x: -2, y: 1 } })
+    })
+
+    it("offers a grab handle at the tangency point, and none for a point-anchored tangent", () => {
+      // 手柄是"这条线可以拖着滑"的唯一可见线索。
+      expect(primitiveHandlePoints(tangent, undefined).some((entry) => entry.point.x === 3 && entry.point.y === 0)).toBe(true)
+      const following: PrimitiveSpec = { ...tangent, anchor: { kind: "point", pointId: "point-1" } } as PrimitiveSpec
+      expect(primitiveHandlePoints(following, undefined)).toEqual([])
+    })
+
+    it("is grabbable anywhere along the line, not only on the handle", () => {
+      // 中点也要能给到 "body"（画布整条都能拖），否则用户只能正好点在手柄上。
+      expect(getDragHandle(tangent, { x: 3, y: 1.8 })).toBe("body")
+    })
+  })
 })
