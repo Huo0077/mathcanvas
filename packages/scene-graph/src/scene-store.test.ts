@@ -853,6 +853,37 @@ describe("scene graph operations", () => {
       }
     })
 
+    /**
+     * 用户口径："由动点引申出来的图元（切线、动圆）也需要能够反映和其他图元的交点"。
+     * 切线由动点定位；动点一动，持久化的交点必须跟着重算，而不是留着上一次的结果。
+     */
+    it("keeps an intersection set live when its source is a tangent driven by a point", () => {
+      const document = createEmptyDocument("conics")
+      document.primitives = [
+        { id: "circle-src", type: "circle", center: { x: 0, y: 0 }, radius: 2 },
+        { id: "point-a", type: "point", x: 2, y: 0, binding: { kind: "onPath", pathId: "circle-src", parameter: 0, parameterId: "t-a" } },
+        { id: "line-1", type: "line", a: { x: -6, y: 1 }, b: { x: 10, y: 1 } },
+        { id: "tangent-1", type: "tangent", sourceId: "circle-src", x: 0, point: { x: 2, y: 0 }, slope: 0, a: { x: 2, y: -2 }, b: { x: 2, y: 2 }, status: "approximate", anchor: { kind: "point", pointId: "point-a" } },
+        { id: "hits", type: "intersectionSet", objectA: "tangent-1", objectB: "line-1", points: [] }
+      ]
+      document.parameters = { "t-a": { id: "t-a", value: 0, min: 0, max: 6.28, step: 0.05, ownerId: "point-a" } }
+
+      // 参数 0：切点在 (2,0)，切线竖直 x=2 ⇒ 与 y=1 交于 (2,1)。
+      const atZero = recomputeDerivedObjects(document)
+      const hitsAtZero = atZero.primitives.find((primitive) => primitive.id === "hits")
+      if (hitsAtZero?.type !== "intersectionSet") throw new Error("intersection set missing")
+      expect(hitsAtZero.points).toHaveLength(1)
+      expect(hitsAtZero.points[0].x).toBeCloseTo(2, 6)
+      expect(hitsAtZero.points[0].y).toBeCloseTo(1, 6)
+
+      // 参数转到 90°：切点走到 (0,2)，切线变成水平 y=2 ⇒ 与 y=1 不再相交。
+      // 留旧结果的实现会仍然报一个 (2,1)，所以"变成 0 个"正是这条用例要钉的性质。
+      const turned = applyOperation(atZero, { op: "setParameter", id: "t-a", value: Math.PI / 2 })
+      const hitsTurned = turned.document.primitives.find((primitive) => primitive.id === "hits")
+      if (hitsTurned?.type !== "intersectionSet") throw new Error("intersection set missing")
+      expect(hitsTurned.points).toEqual([])
+    })
+
     it("keeps the intersection live when the dynamic endpoint slides", () => {
       const document = createEmptyDocument("conics")
       document.primitives = [

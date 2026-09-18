@@ -1,4 +1,5 @@
 import type { GeometryDocument, PrimitiveSpec } from "@draw/dsl"
+import { isSampledPrimitiveType } from "@draw/dsl"
 import { intersectCirclesDetailed, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, type IntersectionResult, type SampledPrimitive } from "@draw/geometry-kernel"
 
 export interface IntersectionPreview {
@@ -9,10 +10,8 @@ export interface IntersectionPreview {
   approximate: boolean
 }
 
-const sampledTypes = new Set<PrimitiveSpec["type"]>(["line", "segment", "ray", "polyline", "circle", "arc", "parabola", "ellipse", "hyperbola", "function"])
-
 function isSampledPrimitive(primitive: PrimitiveSpec): primitive is SampledPrimitive {
-  return sampledTypes.has(primitive.type)
+  return isSampledPrimitiveType(primitive.type)
 }
 
 function intersectionPoints(result: IntersectionResult): { x: number; y: number }[] {

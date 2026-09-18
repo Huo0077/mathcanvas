@@ -5,6 +5,23 @@ import { createEmptyDocument, type PrimitiveSpec } from "@draw/dsl"
 import { computeIntersectionPreviews, getIntersectionPreviews } from "./intersectionPreview"
 
 describe("live intersection previews", () => {
+  /**
+   * 用户口径："由动点引申出来的图元（如切线，动圆）也需要能够反映和其他图元的交点"。
+   * 切线在预览里一个图元对都不参与（实测 0 个），这条用例钉住它真的参与。
+   */
+  it("enumerates the pair when one source is a tangent", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [
+      { id: "circle-src", type: "circle", center: { x: 0, y: 6 }, radius: 2 },
+      { id: "line-1", type: "line", a: { x: -6, y: 4 }, b: { x: 10, y: 4 } },
+      { id: "tangent-1", type: "tangent", sourceId: "circle-src", x: 4, point: { x: 0, y: 4 }, slope: 0, a: { x: -3, y: 4 }, b: { x: 3, y: 4 }, status: "approximate", anchor: { kind: "parameter", parameter: 0 } }
+    ]
+
+    const previews = getIntersectionPreviews(document)
+
+    expect(previews.some((preview) => preview.objectA === "tangent-1" || preview.objectB === "tangent-1")).toBe(true)
+  })
+
   it("finds a line intersection without creating a primitive", () => {
     const document = createEmptyDocument("calculus")
     document.primitives = [

@@ -1,4 +1,4 @@
-﻿import type { AnnotationSpec, CircleRadiusRule, ConstraintSpec, Coordinate, CurveRotation, DrawingSheetSpec, DrawingViewSpec, EngineeringAnnotation, GeometryDocument, GroupSpec, LayerSpec, Measurement3, Point3Binding, Point3Primitive, PointBinding, PrimitiveSpec, Section3Classification, TangentAnchor, Vector3 } from "@draw/dsl"
+import { isSampledPrimitiveType, type AnnotationSpec, type CircleRadiusRule, type ConstraintSpec, type Coordinate, type CurveRotation, type DrawingSheetSpec, type DrawingViewSpec, type EngineeringAnnotation, type GeometryDocument, type GroupSpec, type LayerSpec, type Measurement3, type Point3Binding, type Point3Primitive, type PointBinding, type PrimitiveSpec, type Section3Classification, type TangentAnchor, type Vector3 } from "@draw/dsl"
 import { createDependencyGraph, adaptiveSampleFunctionSegments, arcConstraint, buildSolidTemplate, calculateMeasurement3, circleConstraint, composeEuler3, constraintTangentAt, createBuilderContext, dihedralMarker3, ellipseConstraint, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, evaluatePlanarMeasurement, findExtrema, findInflectionPoints, findZeros, functionGraphConstraint, host3FromPrimitive, hyperbolaConstraint, intersectCirclesDetailed, intersectConvexPolyhedra3, intersectFaceSets, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, lineConstraint, mergeIntersectionSurfaces3, normalFromTangent, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, orderSectionPoints3, parabolaConstraint, placedConic, polylineConstraint, quadric3FromPrimitive, rayConstraint, rotatePointAboutAxis3, rotateVectorAboutAxis3, sectionConvexPolyhedron, sectionPolyhedron3, sectionQuadric3, segmentConstraint, sharedRingEdge3, solidVolumeHost3, solveLineConstraints, tangentSegment, templateSolidPivot, type Conic3Kind, type ConicPlacement, type CurvePiece3, type CurveTangent, type DihedralMarker3, type FaceRing3, type Host3, type IntersectionResult, type IntersectionSurfaceRegion, type PlanarConstraint, type PlanarMetric, type PlaceableConic, type SampledPrimitive, type TemplateSolidPrimitive, type WorldAxis3 } from "@draw/geometry-kernel"
 
 /**
@@ -1184,7 +1184,8 @@ function resolveBoundPoint(binding: PointBinding, primitives: Map<string, Primit
 }
 
 function isSampledPrimitive(primitive: PrimitiveSpec | undefined): primitive is SampledPrimitive {
-  return Boolean(primitive && ["line", "segment", "ray", "polyline", "circle", "arc", "parabola", "ellipse", "hyperbola", "function"].includes(primitive.type))
+  /** 名单来自 `@draw/dsl` 的 `SAMPLED_PRIMITIVE_TYPES`：这里以前抄的是一份会漂移的副本。 */
+  return Boolean(primitive && isSampledPrimitiveType(primitive.type))
 }
 
 /**
