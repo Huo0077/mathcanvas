@@ -119,61 +119,31 @@ describe("engineering inspector", () => {
   })
 
   /**
-   * 用户口径："旁边增加一个数据转换功能，能够识别到图中的小数，并且在功能内输出分数形式，
-   * 无理数也能输出，该功能入口在右侧属性栏最高处"。
+   * 「精确形式」面板已按用户要求删除（2026-09-18：「删除右侧的"精确形式"，似乎没什么用」）。
+   *
+   * 这条用例反过来钉住**删除的边界**：面板、它的行、它的空状态文案都不再出现；
+   * 但测量数据本身一点没动（内核里的 `exactFormOf` 与 `.mgeo` 里的 `measurements` 都保留），
+   * 而且属性面板自己的入口仍然在——删掉的是一块只读展示，不是测量能力。
    */
-  it("lists an exact form for every valid measurement, above everything else", () => {
+  it("no longer renders the exact-form panel, while keeping the measurements themselves", () => {
     const document = createEmptyDocument("conics")
     document.primitives = [{ id: "circle-1", type: "circle", center: { x: 0, y: 0 }, radius: 2 }]
     document.measurements = [
       { id: "m-area", kind: "measurement3", sourceIds: ["circle-1"], metric: "area", value: Math.PI * 4, unit: "u²", precision: "numeric-approximation", status: "valid", explanation: "" },
-      // 退化测量不该出行（与"常驻数字不画假数字"同一条纪律）。
-      { id: "m-degenerate", kind: "measurement3", sourceIds: ["circle-1"], metric: "perimeter", value: undefined, unit: "u", precision: "numeric-approximation", status: "degenerate", explanation: "" }
+      { id: "m-length", kind: "measurement3", sourceIds: ["circle-1"], metric: "length", value: 0.666667, unit: "u", precision: "numeric-approximation", status: "valid", explanation: "" }
     ]
     useSceneStore.setState({ document, workspaceDocuments: { conics: document }, history: [], future: [], error: null })
     renderInspector()
 
-    const panel = screen.getByLabelText("数值转换")
-    const rows = panel.querySelectorAll("[data-exact-form-row]")
-    expect(rows).toHaveLength(1)
-    expect(rows[0].getAttribute("data-exact-form-kind")).toBe("pi-multiple")
-    expect(rows[0].getAttribute("data-exact-form-text")).toBe("4π")
-    expect(panel.textContent).toContain("面积")
-    expect(panel.textContent).toContain("12.566")
+    expect(screen.queryByLabelText("数值转换")).toBeNull()
+    expect(screen.queryByText("精确形式")).toBeNull()
+    expect(screen.queryByText("还没有测量：先在画布上量一个长度、角度或面积。")).toBeNull()
+    expect(globalThis.document.querySelectorAll("[data-exact-form-panel], [data-exact-form-row]")).toHaveLength(0)
 
-    // 入口在**最高处**：它必须排在属性面板自己的标题之前。
-    const panelTitle = globalThis.document.querySelector(".panel-title")!
-    expect(panel.compareDocumentPosition(panelTitle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-  })
-
-  it("says there is nothing to convert when the document has no measurements", () => {
-    renderInspector()
-
-    expect(screen.getByLabelText("数值转换").textContent).toContain("还没有测量")
-  })
-
-  /**
-   * 用户反馈（2026-09-18）："为什么会显示未识别为精确形式" —— 根因是量出来的值常常是
-   * **简单分数的六位小数写法**（坐标 0.333333 ⇒ 长度 0.666667），紧容差会拒绝它。
-   * 现在这种情况显示 `≈ 2/3`，认不出精确形式的显示两位小数，**"未识别"这句话不再出现**。
-   */
-  it("recovers a fraction from a rounded decimal measurement and falls back to two decimals otherwise", () => {
-    const document = createEmptyDocument("conics")
-    document.primitives = [{ id: "line-1", type: "line", a: { x: 0, y: 0 }, b: { x: 1, y: 0 } }]
-    document.measurements = [
-      { id: "m-approx", kind: "measurement3", sourceIds: ["line-1"], metric: "length", value: 0.666667, unit: "u", precision: "numeric-approximation", status: "valid", explanation: "" },
-      { id: "m-decimals", kind: "measurement3", sourceIds: ["line-1"], metric: "angle", value: 0.6435, unit: "rad", precision: "numeric-approximation", status: "valid", explanation: "" }
-    ]
-    useSceneStore.setState({ document, workspaceDocuments: { conics: document }, history: [], future: [], error: null })
-    renderInspector()
-
-    const panel = screen.getByLabelText("数值转换")
-    const rows = panel.querySelectorAll("[data-exact-form-row]")
-    expect(rows).toHaveLength(2)
-    expect(rows[0].getAttribute("data-exact-form-text")).toBe("≈ 2/3")
-    expect(rows[0].getAttribute("data-exact-form-certainty")).toBe("approximate")
-    expect(rows[1].getAttribute("data-exact-form-text")).toBe("≈ 0.64")
-    expect(panel.textContent).not.toContain("未识别为精确形式")
+    // 测量数据还在文档里（面板删的是展示，不是数据）。
+    expect(useSceneStore.getState().document.measurements).toHaveLength(2)
+    expect(screen.getByLabelText("属性检查器")).toBeTruthy()
+    expect(globalThis.document.querySelector(".panel-title")).toBeTruthy()
   })
 
   it("keeps supported measurement actions reachable from the data tab", () => {

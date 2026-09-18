@@ -3,13 +3,12 @@ import { dynamicPointPaths } from "../dynamicPointPaths"
 import { isTangentSource, tangentAnchorLabel } from "../curveTangents"
 import type { AnnotationFeature, EngineeringAnnotationKind, Measurement3Metric, PrimitiveSpec, SolidRotation, Vector3 } from "@draw/dsl"
 import { measurementOptionsFor } from "../spatialTools"
-import { adaptiveSampleFunctionSegments, evaluateParameterExpression, exactFormOf, functionPresets, getFunctionPreset, normalizeVector3, parseExpression, polygonNormal3 } from "@draw/geometry-kernel"
+import { adaptiveSampleFunctionSegments, evaluateParameterExpression, functionPresets, getFunctionPreset, normalizeVector3, parseExpression, polygonNormal3 } from "@draw/geometry-kernel"
 import { parameterWindow, pathConstraint, type Alignment, type PrimitiveUpdatePatch } from "@draw/scene-graph"
 
 import { defaultStrokeFor } from "../primitiveStyle"
 import { pointHostValue } from "../pointHostOptions"
 import { annotationFeatureOptions } from "../annotations"
-import { measurementMetricLabel } from "../measurementLabels"
 import { insertFormulaTemplate } from "../formulaEditor"
 import { FormulaKeyboard } from "./FormulaKeyboard"
 import { useSceneStore } from "../store"
@@ -393,21 +392,6 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
     : null
   const objectOrientationNormal = selectedCircle3 ? normalizeVector3(selectedCircle3.normal) : face3Normal
   const applySceneOperation = useSceneStore((state) => state.apply)
-  /**
-   * 「精确形式」面板的行：**只取有效测量**（状态有效、值有限）。
-   * 无效测量不出行 —— 与"常驻数字不画假数字"同一条纪律；`exactFormOf` 是纯函数、对非有限输入
-   * 返回"未识别"，所以这里不会抛异常把整个属性栏带崩。
-   */
-  const exactFormRows = sceneDocument.measurements
-    .filter((measurement) => measurement.status === "valid" && typeof measurement.value === "number" && Number.isFinite(measurement.value))
-    .map((measurement) => ({
-      id: measurement.id,
-      name: measurementMetricLabel(measurement),
-      sources: measurement.sourceIds,
-      value: measurement.value as number,
-      unit: measurement.unit ?? "",
-      reading: exactFormOf(measurement.value as number)
-    }))
 
   /**
    * 这个点是不是已经被某条曲线当作**定点**了：是的话就不再提供「创建动圆」，避免重复创建。
@@ -766,19 +750,8 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
   })() : null
 
   return <section className="panel-section properties" aria-label="属性检查器">
-    {/**
-      * 数值转换（用户口径："旁边增加一个数据转换功能，能够识别到图中的小数，并且在功能内输出分数形式，
-      * 无理数也能输出，该功能入口在右侧属性栏最高处"）。
-      *
-      * 只读**测量值**：不碰图元几何、不改文档、不进撤销历史。放在最上面，所以不依赖当前选中什么。
-      */}
-    <div className="primitive-properties" aria-label="数值转换" data-exact-form-panel="true">
-      <h3>精确形式</h3>
-      <p className="footer-note">识别文档里每个有效测量的数值：整数 / 分数 / π 的有理倍数 / 二次无理数（如 √2、√2/2、(1+√5)/2）。带 <strong>≈</strong> 的表示"按容差认出来的近似形式"（例如 `≈ 2/3` —— 你填的坐标是六位小数，量出来就是它的四舍五入写法）；认不出精确形式时保留**两位小数**（`≈ 0.64`），并如实给出差值。</p>
-      {exactFormRows.length === 0
-        ? <p className="footer-note">还没有测量：先在画布上量一个长度、角度或面积。</p>
-        : <div className="metric-grid">{exactFormRows.map((row) => <span key={row.id} data-exact-form-row="true" data-exact-form-kind={row.reading.form.kind} data-exact-form-certainty={row.reading.certainty} data-exact-form-text={row.reading.form.text}>{row.name}（{row.sources.join("、")}）· {row.value.toFixed(3)} {row.unit} · <strong>{row.reading.form.text}</strong>{row.reading.residual === null ? null : <small> · 差值 {row.reading.residual.toExponential(1)}</small>}<button type="button" aria-label={`复制精确形式 ${row.name}`} onClick={() => { void navigator.clipboard?.writeText(row.reading.form.text) }}>复制</button></span>)}</div>}
-    </div>
+    {/* 「精确形式」只读面板已按用户要求删除（2026-09-18：「删除右侧的"精确形式"，似乎没什么用」）。
+        内核里的 `exactFormOf` 与文档里的 `measurements` 都保留 —— 删掉的是一块展示，不是测量能力。 */}
     <div className="inspector-heading"><div><span className="panel-kicker">选中对象</span><h2 className="panel-title">属性面板</h2></div><span className="inspector-indicator" aria-hidden="true" /></div>
     {selectedPrimitive && <div className="inspector-selected-heading"><div><span className="panel-kicker">当前图元</span><h3>{selectedPrimitive.label ?? selectedPrimitive.id}</h3></div><span className="property-type-badge">{primitiveTypeLabels[selectedPrimitive.type]}</span><div className="inspector-quick-actions"><button type="button" aria-label={selectedPrimitive.locked ? "解锁图元" : "锁定图元"} onClick={onToggleSelectedLock}>{selectedPrimitive.locked ? "解锁" : "锁定"}</button><button type="button" aria-label="快速删除对象" disabled={selectedPrimitive.locked} onClick={onDeleteSelected}>删除</button></div></div>}
     {!selectedPrimitive && <div className="inspector-empty-state"><div className="inspector-empty-icon" aria-hidden="true">⌁</div><strong>未选择任何图元</strong><span>在画布中点击点、直线或椭圆即可配置几何参数与外观参数</span></div>}
