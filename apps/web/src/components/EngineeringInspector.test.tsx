@@ -118,6 +118,40 @@ describe("engineering inspector", () => {
     expect(screen.queryByText("智能体 (Agent)")).toBeNull()
   })
 
+  /**
+   * 用户口径："旁边增加一个数据转换功能，能够识别到图中的小数，并且在功能内输出分数形式，
+   * 无理数也能输出，该功能入口在右侧属性栏最高处"。
+   */
+  it("lists an exact form for every valid measurement, above everything else", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [{ id: "circle-1", type: "circle", center: { x: 0, y: 0 }, radius: 2 }]
+    document.measurements = [
+      { id: "m-area", kind: "measurement3", sourceIds: ["circle-1"], metric: "area", value: Math.PI * 4, unit: "u²", precision: "numeric-approximation", status: "valid", explanation: "" },
+      // 退化测量不该出行（与"常驻数字不画假数字"同一条纪律）。
+      { id: "m-degenerate", kind: "measurement3", sourceIds: ["circle-1"], metric: "perimeter", value: undefined, unit: "u", precision: "numeric-approximation", status: "degenerate", explanation: "" }
+    ]
+    useSceneStore.setState({ document, workspaceDocuments: { conics: document }, history: [], future: [], error: null })
+    renderInspector()
+
+    const panel = screen.getByLabelText("数值转换")
+    const rows = panel.querySelectorAll("[data-exact-form-row]")
+    expect(rows).toHaveLength(1)
+    expect(rows[0].getAttribute("data-exact-form-kind")).toBe("pi-multiple")
+    expect(rows[0].getAttribute("data-exact-form-text")).toBe("4π")
+    expect(panel.textContent).toContain("面积")
+    expect(panel.textContent).toContain("12.566")
+
+    // 入口在**最高处**：它必须排在属性面板自己的标题之前。
+    const panelTitle = globalThis.document.querySelector(".panel-title")!
+    expect(panel.compareDocumentPosition(panelTitle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it("says there is nothing to convert when the document has no measurements", () => {
+    renderInspector()
+
+    expect(screen.getByLabelText("数值转换").textContent).toContain("还没有测量")
+  })
+
   it("keeps supported measurement actions reachable from the data tab", () => {
     const document = {
       ...createEmptyDocument("geometry3d"),
