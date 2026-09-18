@@ -32,3 +32,24 @@ describe("exact form recognition: integers and fractions", () => {
     expect(exactFormOf(Number.NaN).residual).toBeNull()
   })
 })
+
+/**
+ * 两个画布的角都统一到弧度了，所以 **π 的有理倍数**是角的读数最常见的精确形式
+ *（π/2、π/3、2π/3…）。这一族只有角会用到，但它同时是"分数与无理数别打架"的试金石。
+ */
+describe("exact form recognition: rational multiples of pi", () => {
+  it("recognises the angles a teaching canvas actually produces", () => {
+    expect(exactFormOf(Math.PI).form).toMatchObject({ kind: "pi-multiple", text: "π" })
+    expect(exactFormOf(Math.PI / 4).form).toMatchObject({ kind: "pi-multiple", text: "π/4" })
+    expect(exactFormOf(2 * Math.PI).form).toMatchObject({ kind: "pi-multiple", text: "2π" })
+    expect(exactFormOf(-3 * Math.PI / 2).form).toMatchObject({ kind: "pi-multiple", text: "-3π/2" })
+    expect(exactFormOf(Math.PI / 6).form).toMatchObject({ kind: "pi-multiple", text: "π/6" })
+  })
+
+  it("does not mistake a plain fraction for a pi multiple, nor invent one", () => {
+    // 0.75 必须仍是 3/4：π/4 ≈ 0.785398 差得远。
+    expect(exactFormOf(0.75).form).toMatchObject({ kind: "rational", text: "3/4" })
+    // 分母超过上限的 π 倍数应当如实未识别（1e-9 的容差下它也不可能被当成分数）。
+    expect(exactFormOf(Math.PI / 100).form.kind).toBe("unrecognised")
+  })
+})

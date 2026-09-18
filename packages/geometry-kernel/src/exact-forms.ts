@@ -33,6 +33,16 @@ const DEFAULT_RELATIVE_TOLERANCE = 1e-9
 const DEFAULT_ABSOLUTE_TOLERANCE = 1e-12
 /** 教学场景里够用的分母上限；再大就该认为它本来不是分数。 */
 const MAX_DENOMINATOR = 64
+/** π 的有理倍数的分母上限：覆盖 π/12 的整数倍（15°、30°、45°、60°、90°…）。 */
+const MAX_PI_DENOMINATOR = 12
+
+/** π 的有理倍数文本：`π`、`-π`、`2π`、`π/4`、`-3π/2`。 */
+export function formatPiMultiple(numerator: number, denominator: number): string {
+  const sign = numerator < 0 ? "-" : ""
+  const magnitude = Math.abs(numerator)
+  const coefficient = magnitude === 1 ? "π" : `${magnitude}π`
+  return denominator === 1 ? `${sign}${coefficient}` : `${sign}${coefficient}/${denominator}`
+}
 
 function toleranceFor(input: number, tolerance?: number): number {
   if (tolerance !== undefined) return tolerance
@@ -92,6 +102,19 @@ export function exactFormOf(input: number, tolerance?: number): ExactFormReading
     const value = Number(fraction.numerator) / Number(fraction.denominator)
     const rationalHit = hit(input, value, { kind: "rational", text: rationalToString(fraction) }, limit)
     if (rationalHit) return rationalHit
+  }
+
+  /**
+   * π 的有理倍数。放在分数**之后**是安全的：π 的有理倍数是无理数，任何分母 ≤ 64 的分数
+   * 与它的差都远大于 1e-9（例如 π/4 ≈ 0.785398 最近的是 11/14，差 1.4e-3），所以不会互相抢。
+   */
+  const piFraction = bestRational(input / Math.PI, MAX_PI_DENOMINATOR)
+  if (piFraction && piFraction.numerator !== 0n) {
+    const numerator = Number(piFraction.numerator)
+    const denominator = Number(piFraction.denominator)
+    const value = (numerator / denominator) * Math.PI
+    const piHit = hit(input, value, { kind: "pi-multiple", text: formatPiMultiple(numerator, denominator) }, limit)
+    if (piHit) return piHit
   }
 
   return unrecognisedForm(input)
