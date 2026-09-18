@@ -1242,7 +1242,8 @@ function recomputeTangent(primitive: Extract<PrimitiveSpec, { type: "tangent" | 
     if (!Number.isFinite(y) || !Number.isFinite(derivative)) return { ...primitive, point: { x: primitive.x, y: 0 }, status: "undefined" as const, diagnostic: "source function is undefined at the selected x" }
     const vertical = primitive.type === "normal" && Math.abs(derivative) < 1e-8
     const slope = primitive.type === "normal" ? (vertical ? 0 : -1 / derivative) : derivative
-    return { ...primitive, point: { x: primitive.x, y }, slope, vertical, ...lineEndpoints({ x: primitive.x, y }, slope, source.domain, vertical), status: "approximate" as const, diagnostic: undefined }
+    // 缺省无限长；显式填了 halfLength 的才修剪（见 INFINITE_TANGENT_EXTENT）。
+    return { ...primitive, point: { x: primitive.x, y }, slope, vertical, ...extendedTangentEndpoints({ x: primitive.x, y }, slope, vertical, primitive.halfLength ?? INFINITE_TANGENT_EXTENT), status: "approximate" as const, diagnostic: undefined }
   } catch (error) {
     return { ...primitive, point: { x: primitive.x, y: 0 }, status: "failed" as const, diagnostic: error instanceof Error ? error.message : "line evaluation failed" }
   }
@@ -1252,27 +1253,34 @@ function recomputeTangent(primitive: Extract<PrimitiveSpec, { type: "tangent" | 
 const MIN_DYNAMIC_CIRCLE_RADIUS = 1e-3
 
 /**
- * 曲线来源切线的缺省半长系数。
+ * 缺省切线的"无限长"延伸量（世界单位，沿切向两侧各伸这么远）。
  *
- * `1` 时切线恰好"与曲线相称"，但圆上看起来偏短；用户口径"把切线画长一点点"，
- * 取 `1.5` —— 明显长出曲线之外，又不会横贯整个视野。
+ * 用户口径（2026-09-18）："切线长度还要增长一点，**最好是无限长**"。
+ * 真写一个无穷大进文档没有意义 —— 导出、检查器、既有代码都按线段读 `a/b` —— 所以用
+ * **固定的大长度**表达"无限"：1e4 世界单位远大于任何实际视野（默认 1 格 = 1 世界单位），
+ * 画面外那部分由画布的 viewBox 自然裁掉。
+ *
+ * **刻意不按视口算**：视口一变就改文档，缩放与取景会污染脏状态、撤销历史与"保存过没有"。
  */
-const CURVE_TANGENT_LENGTH_FACTOR = 1.5
+const INFINITE_TANGENT_EXTENT = 10000
 
 /**
- * 切线的默认绘制半长：按**来源曲线自己的尺度**取。
+ * 以 `point` 为中心、沿单位方向两侧各伸 `extent` 的线段。
  *
- * 于是"圆上一点的切线"画出来与圆相称，而不是横贯整个视野；用户可以在右侧改写 `halfLength`。
- *
- * **函数来源不乘系数**：它的半长 = 定义域半宽，乘 1.5 会让切线画到定义域之外，
- * 看起来像把图画错了。显式写了 `halfLength` 的一律优先（在调用处 `??`）。
+ * 用单位方向（而不是按定义域给 x 范围）是为了让端点坐标与斜率无关地保持有界：
+ * 斜率很大时按 x 延伸会把 y 甩到 1e10 量级。
  */
-function curveTangentHalfLength(source: PrimitiveSpec): number {
-  if (source.type === "circle" || source.type === "arc") return Math.max(source.radius, 1) * CURVE_TANGENT_LENGTH_FACTOR
-  if (source.type === "ellipse" || source.type === "hyperbola") return Math.max(Math.abs(source.radiusX), Math.abs(source.radiusY), 1) * CURVE_TANGENT_LENGTH_FACTOR
-  if (source.type === "parabola") return Math.max(Math.abs(source.focalParameter) * 2, 1) * CURVE_TANGENT_LENGTH_FACTOR
-  if (source.type === "function") return Math.max((source.domain[1] - source.domain[0]) / 2, 1)
-  return 2 * CURVE_TANGENT_LENGTH_FACTOR
+function extendedTangentEndpoints(point: Coordinate, slope: number, vertical: boolean, extent: number): { a: Coordinate; b: Coordinate } {
+  const direction = vertical
+    ? { x: 0, y: 1 }
+    : (() => {
+        const length = Math.hypot(1, slope)
+        return { x: 1 / length, y: slope / length }
+      })()
+  return {
+    a: { x: point.x - direction.x * extent, y: point.y - direction.y * extent },
+    b: { x: point.x + direction.x * extent, y: point.y + direction.y * extent }
+  }
 }
 
 /**
@@ -1317,7 +1325,8 @@ function recomputeCurveTangent(
   const raw = constraintTangentAt(constraint, target.parameter, target.branch)
   if (!raw) return { ...primitive, status: "undefined" as const, diagnostic: "这条曲线在该位置没有切线" }
   const tangent: CurveTangent = primitive.type === "normal" ? normalFromTangent(raw) : raw
-  const { a, b } = tangentSegment(tangent, primitive.halfLength ?? curveTangentHalfLength(source))
+  // 缺省无限长；显式填了 halfLength 的才修剪（见 INFINITE_TANGENT_EXTENT）。
+  const { a, b } = tangentSegment(tangent, primitive.halfLength ?? INFINITE_TANGENT_EXTENT)
   // 竖直切线的斜率写成 0 而不是 Infinity：`slope` 在 schema 里必须有限，
   // 竖直这件事实由 `vertical` 单独表达（与函数切线的约定一致）。
   const vertical = Math.abs(tangent.direction.x) <= 1e-9

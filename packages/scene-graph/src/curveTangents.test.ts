@@ -79,15 +79,10 @@ describe("curve tangents in the document", () => {
     expect(circleResidual({ center: { x: 0, y: 0 }, radius: 3 }, circleTangent.point)).toBeCloseTo(0, 9)
   })
 
-  it("scales the drawn tangent to the source curve, and honours an explicit half length", () => {
+  it("honours an explicit half length, leaving the tangent point alone", () => {
     const document = curveDocument()
     document.primitives = [...document.primitives, parameterTangent("tangent-circle", "circle-1", 0)]
     const settled = recomputeDerivedObjects(document)
-    const tangent = find(settled, "tangent-circle")
-    if (tangent.type !== "tangent") throw new Error("expected a tangent")
-    // 默认半长取自圆的半径，再乘曲线来源的加长系数 1.5：半径 3 ⇒ 线段总长 = 9（原来是 6）。
-    // 这条期望是**有意改的**：用户口径"把切线画长一点点"（见 CURVE_TANGENT_LENGTH_FACTOR）。
-    expect(Math.hypot(tangent.b.x - tangent.a.x, tangent.b.y - tangent.a.y)).toBeCloseTo(9, 9)
 
     const longer = commitPatch(settled, { op: "updatePrimitive", id: "tangent-circle", patch: { halfLength: 10 } })
     expect(longer.changed).toBe(true)
@@ -97,6 +92,42 @@ describe("curve tangents in the document", () => {
     // 拉长不改切点。
     expect(resized.point.x).toBeCloseTo(3, 9)
     expect(resized.point.y).toBeCloseTo(0, 9)
+  })
+
+  /**
+   * 用户口径（2026-09-18）："切线长度还要增长一点，**最好是无限长**"。
+   *
+   * 这条取代了上一轮的"缺省半长 = 1.5 × 曲线尺度"：没有显式 `halfLength` 的切线 / 法线
+   * 现在是**无限长**（用 ±10000 世界单位表达，见 `INFINITE_TANGENT_EXTENT`），
+   * 显式填了半长的仍然被修剪。函数来源同样无限长（教科书里的切线本来就是一条直线）。
+   */
+  it("draws a tangent as an infinite line unless an explicit half length trims it", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [
+      { id: "circle-1", type: "circle", center: { x: 0, y: 0 }, radius: 2 },
+      parameterTangent("tan-infinite", "circle-1", 0),
+      { ...parameterTangent("tan-trimmed", "circle-1", 0), halfLength: 1 },
+      { id: "fn-1", type: "function", expression: "x", domain: [-2, 2], samples: 32 },
+      { id: "tan-fn", type: "tangent", sourceId: "fn-1", x: 0, point: { x: 0, y: 0 }, slope: 1, a: { x: -2, y: -2 }, b: { x: 2, y: 2 }, status: "approximate" }
+    ]
+
+    const settled = recomputeDerivedObjects(document)
+    const span = (id: string) => {
+      const tangent = find(settled, id)
+      if (tangent.type !== "tangent") throw new Error("expected a tangent")
+      return Math.hypot(tangent.b.x - tangent.a.x, tangent.b.y - tangent.a.y)
+    }
+
+    // 缺省无限长：圆来源与函数来源都是。
+    expect(span("tan-infinite")).toBeGreaterThan(19000)
+    expect(span("tan-fn")).toBeGreaterThan(19000)
+    // 显式 halfLength 仍然是"修剪"：半长 1 ⇒ 全长 2。
+    expect(span("tan-trimmed")).toBeCloseTo(2, 6)
+    // 无限长仍然以切点为中心（不能偏到一边去）。
+    const infinite = find(settled, "tan-infinite")
+    if (infinite.type !== "tangent") throw new Error("expected a tangent")
+    expect((infinite.a.y + infinite.b.y) / 2).toBeCloseTo(0, 6)
+    expect((infinite.a.x + infinite.b.x) / 2).toBeCloseTo(2, 6)
   })
 
   it("anchors a tangent to a dynamic point, and the tangent follows when the point moves", () => {
@@ -402,37 +433,5 @@ describe("the new fields survive the archive format", () => {
 
     // 纵坐标仍然只给点：切线的高度是算出来的。
     expect(commitPatch(settled, { op: "updatePrimitive", id: "tan-legacy", patch: { y: 3 } }).changed).toBe(false)
-  })
-
-  /**
-   * 用户口径："同时我们把切线画长一点点"。
-   *
-   * 曲线来源的缺省半长乘 1.5（圆上切线从"与圆相称"变成明显长出圆外），
-   * 但**函数来源不乘**（它的半长是定义域半宽，乘了会画到定义域之外），显式 `halfLength` 一律优先。
-   */
-  it("draws a curve tangent half again as long by default, and never overrides an explicit half length", () => {
-    const document = createEmptyDocument("conics")
-    document.primitives = [
-      { id: "circle-1", type: "circle", center: { x: 0, y: 0 }, radius: 2 },
-      parameterTangent("tan-default", "circle-1", 0),
-      { ...parameterTangent("tan-fixed", "circle-1", 0), halfLength: 1 },
-      { id: "fn-1", type: "function", expression: "x", domain: [-2, 2], samples: 32 },
-      { id: "tan-fn", type: "tangent", sourceId: "fn-1", x: 0, point: { x: 0, y: 0 }, slope: 1, a: { x: -2, y: -2 }, b: { x: 2, y: 2 }, status: "approximate" }
-    ]
-
-    const settled = recomputeDerivedObjects(document)
-    const span = (id: string) => {
-      const tangent = find(settled, id)
-      if (tangent.type !== "tangent") throw new Error("expected a tangent")
-      return Math.hypot(tangent.b.x - tangent.a.x, tangent.b.y - tangent.a.y)
-    }
-
-    // 半径 2 的圆：半长 2 ⇒ 全长 4；×1.5 ⇒ 6。
-    expect(span("tan-default")).toBeCloseTo(6, 6)
-    // 显式 halfLength = 1 的照旧（全长 2）。
-    expect(span("tan-fixed")).toBeCloseTo(2, 6)
-    // 函数来源：定义域半宽 = 2，**不乘** 1.5 —— 乘了会画出 [-3,3]，超出定义域 [-2,2]。
-    // 注意函数来源的 `halfLength` 是沿 **x** 量的（斜率 1 时线段全长 = 2·halfLength·√2）。
-    expect(span("tan-fn")).toBeCloseTo(4 * Math.SQRT2, 6)
   })
 })

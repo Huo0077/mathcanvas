@@ -1164,8 +1164,9 @@ export function constraintTangentAt(constraint: PlanarConstraint, parameter: num
 /**
  * 把切线表示成一段可视的线段：以切点为中心、沿单位方向向两侧各伸出 `halfLength`。
  *
- * 用线段（而不是无界直线）是刻意的：可见范围由调用方按曲线尺度给出，
- * 于是"圆上一点的切线"画出来和圆的直径差不多长，而不是横贯整个视野。
+ * **可见长度由调用方决定**：缺省取 `INFINITE_TANGENT_EXTENT`（"无限长"，用户口径
+ * "切线长度最好是无限长"），只有用户显式填了「切线半长」时才修剪成一个短线段。
+ * 这里刻意不自己决定长度 —— 内核只负责按给定半长展开，画多长是产品口径。
  */
 export function tangentSegment(tangent: CurveTangent, halfLength: number): { a: Coordinate; b: Coordinate } {
   const half = Number.isFinite(halfLength) && halfLength > 0 ? halfLength : 1
