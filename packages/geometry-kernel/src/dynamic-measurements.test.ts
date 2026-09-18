@@ -270,7 +270,7 @@ describe("measurement engine", () => {
   it("backfills a measurement that has never been computed", () => {
     const { geometry, engine } = setup()
     engine.define({ id: "ac", metric: "length", sourceIds: ["a", "c"] })
-    // "unrelated" is not in the graph, so nothing is dirty â€?the new measurement is still computed.
+    // "unrelated" is not in the graph, so nothing is dirty â€” the new measurement is still computed.
     const change = engine.update(["unrelated"])
     expect(change.readings.map((reading) => reading.id)).toContain("ac")
     expect(engine.read("ac")?.value).toBeCloseTo(4, 12)
