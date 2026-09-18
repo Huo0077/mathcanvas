@@ -3,6 +3,7 @@ import { useState, type ReactNode } from "react"
 import type { Measurement3, ParameterSpec, Polyhedron3Primitive, PrimitiveSpec, Workspace } from "@draw/dsl"
 
 import { isTessellationPrimitive } from "../primitiveVisibility"
+import { MEASUREMENT_METRIC_LABELS } from "../measurementLabels"
 
 interface AlgebraViewProps {
   primitives: PrimitiveSpec[]
@@ -21,7 +22,7 @@ interface AlgebraViewProps {
   onAddParameter?: () => void
 }
 
-const measurementLabels: Record<Measurement3["metric"], string> = { length: "长度", distance: "距离", angle: "角度", area: "面积", volume: "体积", perimeter: "周长", radius: "半径", dihedral: "二面角" }
+const measurementLabels = MEASUREMENT_METRIC_LABELS
 
 function VisibilityIcon({ visible }: { visible: boolean }) {
   return <svg className="row-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{visible ? <><path d="M3 12s3.2-5 9-5 9 5 9 5-3.2 5-9 5-9-5-9-5Z" /><circle cx="12" cy="12" r="2" /></> : <><path d="m4 4 16 16M10.6 6.9A10.8 10.8 0 0 1 12 7c5.8 0 9 5 9 5a16.7 16.7 0 0 1-3.2 3.4M6.4 6.4C4.2 7.7 3 10 3 12c0 0 3.2 5 9 5 1.1 0 2.1-.2 3-.5" /></>}</svg>

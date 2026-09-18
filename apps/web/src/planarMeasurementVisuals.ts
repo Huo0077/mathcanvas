@@ -1,6 +1,8 @@
 import type { Coordinate, GeometryDocument, Measurement3 } from "@draw/dsl"
 import { entityResolverFor, type MeasurableEntity } from "@draw/geometry-kernel"
 
+import { measurementMetricLabel } from "./measurementLabels"
+
 /**
  * 平面（2D）画布上的**常驻测量数字**。
  *
@@ -20,15 +22,10 @@ export interface PlanarMeasurementLabel {
   selected: boolean
 }
 
-const METRIC_NAMES: Record<Measurement3["metric"], string> = { length: "长度", distance: "距离", angle: "角度", area: "面积", volume: "体积", perimeter: "周长", radius: "半径", dihedral: "二面角" }
-
 /** 与属性栏同一份文本；退化 / 无值时返回 `null`（不画假数字）。 */
 export function planarMeasurementText(measurement: Measurement3): string | null {
   if (measurement.status !== "valid" || measurement.value === undefined || !Number.isFinite(measurement.value)) return null
-  const name = measurement.metric === "dihedral"
-    ? (measurement.dihedralKind === "exterior" ? "二面角外角" : "二面角内角")
-    : METRIC_NAMES[measurement.metric]
-  return `${name}：${measurement.value.toFixed(3)}${measurement.unit ?? ""}`
+  return `${measurementMetricLabel(measurement)}：${measurement.value.toFixed(3)}${measurement.unit ?? ""}`
 }
 
 const midpoint = (first: Coordinate, second: Coordinate): Coordinate => ({ x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 })

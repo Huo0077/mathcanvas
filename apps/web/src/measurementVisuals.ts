@@ -1,6 +1,8 @@
 import type { GeometryDocument, Measurement3, PrimitiveSpec, Vector3 } from "@draw/dsl"
 import { resolveDihedralMarker3 } from "@draw/scene-graph"
 
+import { measurementMetricLabel } from "./measurementLabels"
+
 export interface MeasurementVisual {
   id: string
   kind: "label" | "dihedral"
@@ -39,8 +41,7 @@ function pointPositions(document: GeometryDocument, primitive: PrimitiveSpec): V
 }
 
 function measurementLabel(measurement: Measurement3): string {
-  const names: Record<Measurement3["metric"], string> = { length: "长度", distance: "距离", angle: "角度", area: "面积", volume: "体积", perimeter: "周长", radius: "半径", dihedral: measurement.dihedralKind === "exterior" ? "二面角外角" : "二面角内角" }
-  return `${names[measurement.metric]}：${measurement.value?.toFixed(3) ?? "—"}${measurement.unit ?? ""}`
+  return `${measurementMetricLabel(measurement)}：${measurement.value?.toFixed(3) ?? "—"}${measurement.unit ?? ""}`
 }
 
 export function resolveMeasurementVisual(document: GeometryDocument, measurementId: string): MeasurementVisual | null {
