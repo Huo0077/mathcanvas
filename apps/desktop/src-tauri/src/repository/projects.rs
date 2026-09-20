@@ -16,6 +16,7 @@
 use std::path::Path;
 
 use rusqlite::{Connection, OptionalExtension};
+use serde::{Deserialize, Serialize};
 
 use super::migrations::migrate;
 
@@ -45,7 +46,10 @@ impl std::fmt::Display for RepositoryError {
 impl std::error::Error for RepositoryError {}
 
 /// 一份文档快照。**内容与它的身份一起读出来**，这样调用方不需要"再查一次"。
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// Serialize 是给 IPC 用的（Tauri 命令的返回类型必须能序列化）；camelCase 与前端一致。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DocumentSnapshot {
     pub project_id: String,
     pub document_id: String,
@@ -79,7 +83,11 @@ pub struct CommitRequest {
 /// `changed: false` 的两种情形（内容没变 / 幂等重放）**必须分开报**：
 /// 前者是"这次没什么要做的"，后者是"这件事之前已经做过了"——
 /// 界面上这两句话完全不同。
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// `tag = "kind"` 让 IPC 上的形状是 `{ "kind": "committed", "generation": 2, … }` ——
+/// **判别字段必须在**，否则前端拿到的是一个没有形状的对象，只能靠"有没有那个字段"去猜。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "kind")]
 pub enum CommitOutcome {
     /// 真的写进去了。
     Committed { generation: i64, content_hash: String },
@@ -89,7 +97,8 @@ pub enum CommitOutcome {
     Replayed { generation: i64, content_hash: String },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CommitReceipt {
     pub idempotency_key: String,
     pub outcome: CommitOutcome,

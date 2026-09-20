@@ -28,6 +28,7 @@ pub mod repository;
 /// 密钥库（Task 1.2）。**明文没有出口** —— 见 `secrets/mod.rs` 的三条设计决定。
 pub mod secrets;
 
+use repository::projects::{CommitReceipt, CommitRequest, DocumentSnapshot, ProjectRepository};
 use repository::provider_profiles::{ProviderHealth, ProviderProfile, ProviderProfileStore, StoreError};
 use secrets::{SecretState, SecretStore, Store};
 use std::sync::Mutex;
@@ -35,6 +36,17 @@ use tauri::Manager;
 
 /// 密钥库在 Tauri 托管状态里的包装。
 struct SecretStoreState(Store);
+
+/**
+ * 项目仓储在 Tauri 托管状态里的包装（Task 1.6）。
+ *
+ * `Mutex`：`commit` 需要 `&mut`（它开一个事务），而 IPC 命令可能在任意线程上跑。
+ * 与 provider 配置同理，用 `std::sync::Mutex` 而不是 tokio 的 —— 这些是同步的
+ * SQLite 调用，快且不阻塞在 IO 上（本地文件）。
+ */
+pub struct RepositoryState {
+    repository: Mutex<ProjectRepository>,
+}
 
 /// Provider 配置存储 + 它所在的配置文件路径。
 ///
@@ -137,6 +149,104 @@ fn has_secret(app: tauri::AppHandle, profile_id: String) -> Result<bool, String>
     state.0.has(&profile_id).map_err(|error| error.to_string())
 }
 
+// ---------------------------------------------------------------- 项目仓储（Task 1.6）
+
+/// **读一份文档的 head**。找不到时**如实报错**，不回一份空文档 ——
+/// 空文档会让前端以为"这份文档是空的"，而不是"它还不存在"。
+#[tauri::command]
+fn read_document_head(app: tauri::AppHandle, project_id: String, document_id: String) -> Result<DocumentSnapshot, String> {
+    let state = app.try_state::<RepositoryState>().ok_or("the project repository is not initialised")?;
+    let repository = state.repository.lock().map_err(|_| "the project repository is poisoned".to_string())?;
+    repository.read_head(&project_id, &document_id).map_err(|error| error.to_string())
+}
+
+/// **建一份文档**（首次写入）。
+///
+/// 内容哈希**由前端算好传进来**：规则在 `scene-graph` 的 `contentFingerprint` 里
+///（要剔掉 `revision` / `updatedAt`、把 `visible: true` 视同缺省）。
+/// 在 Rust 里再实现一遍必然分叉，而分叉的后果是**同一份文档有两个哈希** ——
+/// CAS 会永远失败，且看起来像"并发冲突"。
+#[tauri::command]
+fn create_document(app: tauri::AppHandle, project_id: String, document_id: String, epoch: String, content: String, content_hash: String) -> Result<DocumentSnapshot, String> {
+    let state = app.try_state::<RepositoryState>().ok_or("the project repository is not initialised")?;
+    let mut repository = state.repository.lock().map_err(|_| "the project repository is poisoned".to_string())?;
+    repository.create(&project_id, &document_id, &epoch, &content, &content_hash).map_err(|error| error.to_string())
+}
+
+/// **提交一次改动**（CAS + 幂等 + 原子写三张表）。
+///
+/// `idempotency_key` 由调用方给：这样"网络重试"与"用户点了两次"都会落到同一条记录上，
+/// 而不会推进两次 generation。
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+fn commit_document(
+    app: tauri::AppHandle,
+    idempotency_key: String,
+    project_id: String,
+    document_id: String,
+    expected_epoch: String,
+    expected_generation: i64,
+    expected_content_hash: String,
+    content: String,
+    content_hash: String,
+    actions: usize
+) -> Result<CommitReceipt, String> {
+    let state = app.try_state::<RepositoryState>().ok_or("the project repository is not initialised")?;
+    let mut repository = state.repository.lock().map_err(|_| "the project repository is poisoned".to_string())?;
+    repository
+        .commit(CommitRequest {
+            idempotency_key,
+            project_id,
+            document_id,
+            expected_epoch,
+            expected_generation,
+            expected_content_hash,
+            content,
+            content_hash,
+            actions
+        })
+        .map_err(|error| error.to_string())
+}
+
+/// **按幂等键查提交状态**（"DB 已提交、响应丢了"那条路径）。
+#[tauri::command]
+fn lookup_commit(app: tauri::AppHandle, idempotency_key: String) -> Result<Option<CommitReceipt>, String> {
+    let state = app.try_state::<RepositoryState>().ok_or("the project repository is not initialised")?;
+    let repository = state.repository.lock().map_err(|_| "the project repository is poisoned".to_string())?;
+    repository.lookup_commit(&idempotency_key).map_err(|error| error.to_string())
+}
+
+/// 读历史里某一版的内容（撤销 / 重做靠它）。
+#[tauri::command]
+fn read_document_snapshot(app: tauri::AppHandle, project_id: String, document_id: String, generation: i64) -> Result<DocumentSnapshot, String> {
+    let state = app.try_state::<RepositoryState>().ok_or("the project repository is not initialised")?;
+    let repository = state.repository.lock().map_err(|_| "the project repository is poisoned".to_string())?;
+    repository.read_snapshot(&project_id, &document_id, generation).map_err(|error| error.to_string())
+}
+
+/// 历史里有多少版（含 head）。
+#[tauri::command]
+fn document_history_length(app: tauri::AppHandle, project_id: String, document_id: String) -> Result<i64, String> {
+    let state = app.try_state::<RepositoryState>().ok_or("the project repository is not initialised")?;
+    let repository = state.repository.lock().map_err(|_| "the project repository is poisoned".to_string())?;
+    repository.history_length(&project_id, &document_id).map_err(|error| error.to_string())
+}
+
+/// **换一世**：导入 / 打开文件之后，把 head 的 epoch 换掉并写入新内容。
+///
+/// 为什么这是一个**独立**的原语，而不是"删掉再建"或"当成一次普通提交"：
+/// - 删掉再建会**丢掉历史** —— 而"打开文件之后还能撤销回上一次"是这条路径的应有之义；
+/// - 当成普通提交则该不了 epoch，于是**在途的旧保存仍然能写进来**
+///   （它携带的期望与新 head 匹配）—— 用户刚打开的文档会被上一次编辑覆盖。
+///
+/// epoch 一变，所有在途请求的 CAS 立刻失败。这正是它存在的意义。
+#[tauri::command]
+fn replace_document_epoch(app: tauri::AppHandle, project_id: String, document_id: String, epoch: String, content: String, content_hash: String) -> Result<DocumentSnapshot, String> {
+    let state = app.try_state::<RepositoryState>().ok_or("the project repository is not initialised")?;
+    let mut repository = state.repository.lock().map_err(|_| "the project repository is poisoned".to_string())?;
+    repository.replace_epoch(&project_id, &document_id, &epoch, &content, &content_hash).map_err(|error| error.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -160,6 +270,16 @@ pub fn run() {
                 .join("providers.json");
             let store = ProviderProfileStore::open(&path).map_err(|error| format!("cannot open the provider configuration at {}: {error}", path.display()))?;
             app.manage(ProfileStoreState { store: Mutex::new(store) });
+            // 项目仓储放在应用数据根下的 `projects.db`（Task 1.6）。
+            // **打不开就如实失败**：前端会退回到"只在会话内保存"，并在界面上说明原因 ——
+            // 那比"以为存住了、关掉才发现没了"好得多。
+            let database = app
+                .path()
+                .app_data_dir()
+                .map_err(|error| format!("cannot resolve the app data directory: {error}"))?
+                .join("projects.db");
+            let repository = ProjectRepository::open(&database).map_err(|error| format!("cannot open the project repository at {}: {error}", database.display()))?;
+            app.manage(RepositoryState { repository: Mutex::new(repository) });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -170,10 +290,18 @@ pub fn run() {
             list_provider_profiles,
             upsert_provider_profile,
             remove_provider_profile,
-            provider_health
+            provider_health,
+            read_document_head,
+            create_document,
+            commit_document,
+            lookup_commit,
+            read_document_snapshot,
+            document_history_length,
+            replace_document_epoch
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
+
 
 

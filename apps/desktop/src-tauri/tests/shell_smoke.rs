@@ -118,11 +118,38 @@ fn keeps_the_capability_set_minimal() {
 fn exposes_only_named_ipc_commands_and_no_generic_one() {
     let lib = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/lib.rs")).expect("read lib.rs");
 
-    let named = ["get_runtime_info", "save_secret", "remove_secret", "has_secret", "list_provider_profiles", "upsert_provider_profile", "remove_provider_profile", "provider_health"];
-    assert!(
-        lib.contains("tauri::generate_handler![\n            get_runtime_info,\n            save_secret,\n            remove_secret,\n            has_secret,\n            list_provider_profiles,\n            upsert_provider_profile,\n            remove_provider_profile,\n            provider_health\n        ]"),
-        "the command list must stay explicit (one name per line): {lib}"
-    );
+    let named = [
+        "get_runtime_info",
+        "save_secret",
+        "remove_secret",
+        "has_secret",
+        "list_provider_profiles",
+        "upsert_provider_profile",
+        "remove_provider_profile",
+        "provider_health",
+        "read_document_head",
+        "create_document",
+        "commit_document",
+        "lookup_commit",
+        "read_document_snapshot",
+        "document_history_length",
+        "replace_document_epoch"
+    ];
+
+    /**
+     * 注册块的内容按**顺序**逐字核对。
+     *
+     * 第一版把整个多行文本硬写成一个字面量，于是每次加命令都要改那一大段缩进 ——
+     * 而"改断言"这件事本身会让人放松警惕。现在改成从 `generate_handler![…]` 里
+     * **抽出名字并比对列表**：既保留了"逐字列出"的意图，又只要求改那份 `named` 数组。
+     */
+    let block = lib
+        .split_once("tauri::generate_handler![")
+        .and_then(|(_, rest)| rest.split_once(']'))
+        .map(|(inside, _)| inside.to_string())
+        .expect("the invoke handler must be present");
+    let registered: Vec<&str> = block.split(',').map(str::trim).filter(|name| !name.is_empty()).collect();
+    assert_eq!(registered, named, "the registered command list changed; update `named` deliberately");
     assert_eq!(lib.matches("generate_handler!").count(), 1, "exactly one invoke handler");
     // 每个注册过的命令都要有一个 `#[tauri::command]` 函数。
     for command in named {
@@ -187,3 +214,4 @@ fn the_shell_lives_inside_this_repository() {
     assert!(root.join("package.json").is_file(), "expected the monorepo root at {}", root.display());
     assert!(root.join("apps/web/src/App.tsx").is_file(), "expected the web app at {}", root.display());
 }
+
