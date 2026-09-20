@@ -175,6 +175,14 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
           summary: event.detail || PHASE_SUMMARY[event.phase] || event.phase,
           at: event.at
         })
+        /**
+         * **另一层读者**：开发者详细视图（默认关着）。
+         *
+         * 只取账本已有的字段（用哪个阶段、从哪个阶段来、那句详情、第几步），
+         * **不额外收集任何东西** —— 计划要求遥测不含模型推理与图像字节，而"只搬已有字段"
+         * 是这条约束在实现层最省事的落法：这里根本没有可以塞进去的位置。
+         */
+        useAgentStore.getState().recordDiagnostic(`${event.sequence}. ${event.from} → ${event.phase}: ${event.detail}`)
       }
 
       const phase = runtime.coordinator.phase()

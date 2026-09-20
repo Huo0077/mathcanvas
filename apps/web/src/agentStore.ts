@@ -25,6 +25,14 @@ export interface AgentTraceEntry {
   status: "ok" | "warning" | "error"
   summary: string
   at: number
+  /**
+   * 阶段来自哪里（`from`）与耗时。**可选**：它们是给"开发者详细视图"用的，
+   * 而不是给用户读的第一信息 —— 所以缺了也不影响主视图。
+   */
+  from?: string
+  durationMs?: number
+  /** 这一步用到的工具名（有工具调用时才有）。 */
+  toolId?: string
 }
 
 /**
@@ -79,6 +87,18 @@ export interface AgentMessage {
   commit?: AgentCommitView
   /** 失败原因（人话），供界面显示可执行的下一步。 */
   failure?: { code: string; message: string; retryable: boolean }
+  /**
+   * **开发者详细视图**用的账本导出（Task 2.6 Step 4）。
+   *
+   * 计划原文把遥测分成两层："Render a user-facing trace with short summaries;
+   * keep detailed diagnostics behind an **opt-in** developer view."
+   * 所以这里存的是与 `trace` **不同的东西**：`trace` 是"给用户的一句话"，
+   * 这里是"排障要看的原始行"。两层都在消息上，但界面**默认只显示前者**。
+   *
+   * 同样的纪律：里面**只有文本**，不许出现候选文档、密钥、模型推理或图像字节
+   * （入口在 `agentRunner`，它只从账本取 `phase` / `from` / `detail` / 时间）。
+   */
+  diagnostics?: string[]
 }
 
 export interface AgentConversation {
@@ -140,6 +160,14 @@ interface AgentState {
   resolvePendingReply: (text: string) => AgentMessage | undefined
   /** 记一条运行轨迹（追加，不替换）。 */
   recordRunEvent: (entry: AgentTraceEntry) => void
+  /**
+   * 记**一行开发者诊断**（追加）。与 `recordRunEvent` 分开，是因为它服务的是另一层读者：
+   * 计划要求详细诊断**默认关着**，所以它不能混进用户可见的轨迹里。
+   *
+   * 传进来的内容必须**已经脱敏**（`agentRunner` 只取账本的 `phase`/`from`/`detail`/时间，
+   * 不含候选文档、密钥、模型推理或图像字节）。这里不再二次处理，也不落任何结构化对象。
+   */
+  recordDiagnostic: (line: string) => void
   /** 记下已暂存的草稿**视图**。 */
   recordDraft: (draft: AgentDraftView) => void
   /** 记下提交结果；`committed` / `no_change` 都算结束。 */
@@ -275,6 +303,9 @@ export const useAgentStore = create<AgentState>((set, get) => ({
    */
   recordRunEvent: (entry) => updatePending(get, set, (message) => message.pending
     ? { ...message, trace: [...(message.trace ?? []), entry] }
+    : message),
+  recordDiagnostic: (line) => updatePending(get, set, (message) => message.pending
+    ? { ...message, diagnostics: [...(message.diagnostics ?? []), line] }
     : message),
   recordDraft: (draft) => updatePending(get, set, (message) => message.pending ? { ...message, draft, pending: false } : message),
   recordReceipt: (receipt) => {

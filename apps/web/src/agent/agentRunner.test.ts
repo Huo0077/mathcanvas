@@ -199,6 +199,25 @@ describe("the confirm and commit cycle", () => {
     expect(phases).toContain("compiling")
     expect(phases.at(-1)).toBe("awaiting_confirmation")
   })
+
+  /**
+   * **开发者详细视图有东西可看**（Task 2.6 Step 4）。
+   *
+   * `ToolTracePanel` 的 `<details>` 默认关着，而"关着"只有在**真有内容**时才是"opt-in"；
+   * 没有内容就是一块永远空的折叠区。这条用例钉住"运行确实往那一层写了行"，
+   * 并且写的是**账本字段**（阶段 / 来源阶段 / 详情 / 序号），不是别的东西。
+   */
+  it("also records a developer-facing diagnostic trace behind the collapsed view", async () => {
+    const runner = createAgentRunner()
+    await runAndWait(runner, "建一个棱长 3 的立方体")
+
+    const assistant = useAgentStore.getState().activeConversation!.messages.at(-1)!
+    const diagnostics = assistant.diagnostics ?? []
+
+    expect(diagnostics.length).toBeGreaterThan(0)
+    expect(diagnostics.some((line) => line.includes("preflight"))).toBe(true)
+    expect(diagnostics.some((line) => line.includes("planning"))).toBe(true)
+  })
 })
 
 describe("stop and retry", () => {

@@ -1,4 +1,5 @@
-import type { AgentCommitView, AgentMessage, AgentTraceEntry } from "../../agentStore"
+import type { AgentCommitView, AgentMessage } from "../../agentStore"
+import { ToolTracePanel } from "./ToolTracePanel"
 
 /**
  * **运行状态卡**（Task 2.5 Step 3/4）。
@@ -48,9 +49,10 @@ const PHASE_LABELS: Record<string, string> = {
 }
 
 /**
- * 状态文字。**颜色之外必须有一个词** —— 这是"不靠颜色"那条要求的落点。
+ * 状态文字（`成功 / 注意 / 失败`）与轨迹的渲染一起搬到了 `ToolTracePanel` ——
+ * 那一层要给每条状态一个**词**（而不是只有颜色），并且自己负责"详细视图默认关着"。
+ * 这里不再留一份副本：两份状态文案迟早会分叉。
  */
-const STATUS_LABELS: Record<AgentTraceEntry["status"], string> = { ok: "成功", warning: "注意", error: "失败" }
 
 function phaseLabel(phase: string): string {
   return PHASE_LABELS[phase] ?? phase
@@ -77,8 +79,6 @@ export function RunStatus({ message, onRetry, onRevise, onStop }: RunStatusProps
   const progress = progressOf(message)
   if (!progress) return null
 
-  const trace = message.trace ?? []
-
   return <section className="agent-run-status" aria-label="运行状态" data-status={message.failure ? "error" : message.pending ? "running" : "done"}>
     <header className="agent-run-head">
       {/* 文字状态永远是第一信息；颜色只是装饰。 */}
@@ -87,14 +87,13 @@ export function RunStatus({ message, onRetry, onRevise, onStop }: RunStatusProps
       {message.pending && onStop && <button type="button" className="agent-run-stop" onClick={onStop}>停止</button>}
     </header>
 
-    {trace.length > 0 && <ol className="agent-run-trace" aria-label="运行轨迹">
-      {trace.map((entry, index) => <li key={`${entry.phase}-${index}`} data-status={entry.status}>
-        <span className="agent-trace-phase">{phaseLabel(entry.phase)}</span>
-        <span className="agent-trace-summary">{entry.summary}</span>
-        {/* 每条也带文字状态，而不是只给一个色点。 */}
-        <span className="agent-trace-status">{STATUS_LABELS[entry.status]}</span>
-      </li>)}
-    </ol>}
+    {/**
+      * 用户可见的轨迹 + **默认关着**的开发者详细视图，一起归 `ToolTracePanel`（Task 2.6 Step 4）。
+      *
+      * 这一段原先就地渲染一个 `<ol>`。抽出去的理由不是"少写几行"，而是"opt-in 的详细视图"
+      * 需要一个**有状态的**容器（原生 `<details>`），而状态卡本身是无状态的展示组件。
+      */}
+    <ToolTracePanel trace={message.trace} diagnostics={message.diagnostics} />
 
     {/**
       * 这里**不再**渲染草稿摘要。

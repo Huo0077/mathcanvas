@@ -6,6 +6,21 @@
 **当前阶段：** P0-P6 与 P7 工程制图已完成；MathCanvas 统一 Ribbon UI 基线、后续 UI 优化（Task 7-13）、工程制图视觉重做（Task 14）、工程制图可用性修复（Task 15-18）、圆锥曲线四项修复、功能键操作指引浮层、CAD 2D 绘图交互重做、平面几何动点系统、3D 视口与几何内核重构、封闭曲线绕定点旋转、UI 优化（草稿纸画布）与平面几何元素选颜色均已完成。**2026-09-17 新增两条解析几何交付线并已全部落地**：**A1 解析二次曲面与"真圆"**（8 片；设计 `docs/superpowers/specs/2026-09-17-analytic-quadrics-design.md`）与 **A2 交面按支撑曲面分组 + 真曲面**（5 轮；设计 `docs/superpowers/specs/2026-09-17-intersection-face-grouping-design.md`）——用户口径从"我不要一个逼近的圆，我需要一个真的圆"一路推到"我需要的只是那个相交的曲面，而不是由很多三角形拼出来的"。**随后"立体几何最后一轮"四件事也已全部交付**（7 片；设计 `docs/superpowers/specs/2026-09-17-3d-tracks-rotation-and-measurement-labels-design.md`）：约束轨道（`circle3` 当动点宿主）、拖动旋转（世界轴三色环 + 15° 吸附 + 属性栏角度）、测量数字常驻画布（2D + 3D）、立体几何 UI 与平面几何同一套令牌。平面动点系统按四个维度交付：①约束模型与参数化映射 ②依赖图 DAG 与增量拓扑重算 ③动态测量监听器 ④轨迹采样与消元法隐式化；3D 重构按四个区块交付：①动点宿主约束与渲染管道 ②截面几何 ③Auto-Fit ④生命周期与多解；四者与三区块**全部接进主流程**（不只是内核可用）。**2026-09-18 又完成平面几何切线**（抛物线 / 双曲线 / 圆 / 椭圆的曲线切线，切点可沿曲线拖动或跟随动点）**与动点扩展**（在动点处作切线、以动点为圆心作圆、半径可调且可随动点位置动态变化），并修掉"切线不能拖动"这一现场反馈。P4 Agent 与 P5 题图解析仍在排除范围内。
 **总体状态：** 开发中
 
+### G2 第二十六批：用户可见轨迹 + **默认关着**的开发者详细视图（`ToolTracePanel`，Task 2.6 Step 4）（2026-09-21）
+
+- **计划原文**："Render a user-facing trace with short summaries; keep detailed diagnostics behind an **opt-in** developer view."
+- **为什么是两层而不是"一层加个折叠"**：用户要的是"走到哪一步了"，排障要的是"从哪个阶段来、第几步、那句详情"。混成一层会两头不讨好：用户被账本术语淹掉，或者排障时缺字段。所以 `ToolTracePanel` 收两个独立入参：`trace`（短摘要，永远可见）与 `diagnostics`（原始行，**默认不展开**）。
+- **新增 `components/agent/ToolTracePanel.tsx`（5 例）**，四条纪律各有用例：
+  1. 每条轨迹带一个**文字**状态（成功 / 注意 / 失败）—— 颜色只是装饰，灰度截图与色觉障碍下必须仍读得出来；
+  2. 详细视图用**原生 `<details>`**，`open` 属性**默认不存在**（这就是 "opt-in" 的全部含义），而内容仍在 DOM 里，页内查找与屏幕阅读器都能发现；
+  3. 没有诊断行时**那一节整块不渲染**（一块永远空的折叠区不是"开发者视图"）；
+  4. 没有轨迹时**整个面板不渲染** —— 一个空的"运行轨迹"会被读成"跑了但什么都没发生"，而真实情况是我们还不知道。
+- **接线**：`RunStatus` 原先就地渲染的那个 `<ol>` 交给 `ToolTracePanel`（**保留 `.agent-run-trace` 类名**，样式与既有选择器都还指着它）；`AgentMessage` 增加 `diagnostics?: string[]`；`agentStore.recordDiagnostic(line)` 与 `recordRunEvent` 分开 —— 它服务的是另一层读者，不能混进用户可见的轨迹；`agentRunner` 在事件循环里写诊断行，**只搬账本已有的字段**（`sequence.from → phase: detail`）。这条"只搬已有字段"是"遥测不含模型推理与图像字节"在实现层最省事的落法：这里根本没有可以塞进去的位置。
+- **RED→GREEN**：`ToolTracePanel.test.tsx` 5 例；`agentRunner.test.ts` +1（运行确实往那一层写了行，且含 `preflight` / `planning`）。过程中 `RunStatus.test.tsx` 那条"列出整条轨迹"**真的红了一次** —— 因为我把 `<ol>` 的结构移进了新组件；修法是让新组件**沿用 `.agent-run-trace`**，而不是去改那条既有断言（选择器没坏，是实现搬了家）。
+- **如实标注**：`trace` 的 `from` / `durationMs` / `toolId` 目前**只有 `phase`/`summary`/`status`/`at` 被填**，其余三个字段是给真实 provider 的工具调用留的位置（现在没有工具调用，填不了就不填）。
+
+**验证证据（本批）**：单测 **178 文件 / 1989 用例全通过（零跳过）**、typecheck exit 0、lint 0 error / 14 warning（基线）、生产构建通过、e2e **119/119**。
+
 ### G2 第二十五批：把"工具"从声明接到可执行（`ToolCallRequest` 补形状 + `toolDispatch`）（2026-09-21）
 
 - **缺口**：`ToolPort` 早就定义、`ToolCallRequest` 也早就存在，但它只有 `run` / `toolCallId` / `actionCount` / `signal` —— **没有工具名，也没有参数**。也就是说"接上 ToolPort"此前是一句空话：端口拿到请求也不知道要执行哪个工具。工具目录（`toolRegistry.ts`）声明了*模型能看到什么*，`sceneTools.ts` 实现了*真正怎么读场景*，而**从名字到实现的这一段**从来不存在。
