@@ -21,6 +21,8 @@
 pub mod runtime;
 /// Provider 协议适配器（Task 1.4）：请求拼装与事件归一化（不含 HTTP —— 那属于 Task 1.5 的代理）。
 pub mod providers;
+/// 回环代理（Task 1.5）：传输安全的判据层。
+pub mod proxy;
 /// 仓储（Task 1.3 起：provider 配置；Task 1.6 会在这里加 SQLite 项目仓储）。
 pub mod repository;
 /// 密钥库（Task 1.2）。**明文没有出口** —— 见 `secrets/mod.rs` 的三条设计决定。
@@ -173,4 +175,5 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
+
 

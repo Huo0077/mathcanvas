@@ -6,6 +6,27 @@
 **当前阶段：** P0-P6 与 P7 工程制图已完成；MathCanvas 统一 Ribbon UI 基线、后续 UI 优化（Task 7-13）、工程制图视觉重做（Task 14）、工程制图可用性修复（Task 15-18）、圆锥曲线四项修复、功能键操作指引浮层、CAD 2D 绘图交互重做、平面几何动点系统、3D 视口与几何内核重构、封闭曲线绕定点旋转、UI 优化（草稿纸画布）与平面几何元素选颜色均已完成。**2026-09-17 新增两条解析几何交付线并已全部落地**：**A1 解析二次曲面与"真圆"**（8 片；设计 `docs/superpowers/specs/2026-09-17-analytic-quadrics-design.md`）与 **A2 交面按支撑曲面分组 + 真曲面**（5 轮；设计 `docs/superpowers/specs/2026-09-17-intersection-face-grouping-design.md`）——用户口径从"我不要一个逼近的圆，我需要一个真的圆"一路推到"我需要的只是那个相交的曲面，而不是由很多三角形拼出来的"。**随后"立体几何最后一轮"四件事也已全部交付**（7 片；设计 `docs/superpowers/specs/2026-09-17-3d-tracks-rotation-and-measurement-labels-design.md`）：约束轨道（`circle3` 当动点宿主）、拖动旋转（世界轴三色环 + 15° 吸附 + 属性栏角度）、测量数字常驻画布（2D + 3D）、立体几何 UI 与平面几何同一套令牌。平面动点系统按四个维度交付：①约束模型与参数化映射 ②依赖图 DAG 与增量拓扑重算 ③动态测量监听器 ④轨迹采样与消元法隐式化；3D 重构按四个区块交付：①动点宿主约束与渲染管道 ②截面几何 ③Auto-Fit ④生命周期与多解；四者与三区块**全部接进主流程**（不只是内核可用）。**2026-09-18 又完成平面几何切线**（抛物线 / 双曲线 / 圆 / 椭圆的曲线切线，切点可沿曲线拖动或跟随动点）**与动点扩展**（在动点处作切线、以动点为圆心作圆、半径可调且可随动点位置动态变化），并修掉"切线不能拖动"这一现场反馈。P4 Agent 与 P5 题图解析仍在排除范围内。
 **总体状态：** 开发中
 
+### G1 第五批：回环代理的传输安全判据（Task 1.5）（2026-09-21）
+
+- **交付**：`apps/desktop/src-tauri/src/proxy/security.rs` + `tests/proxy.rs`（**16 例**，计划 Step 1 点名的**九种情形一条不少**）+ `apps/web/src/services/modelClient.ts`（11 例）。
+- **为什么判据是纯函数、而且这一批**没有起真服务器**（如实标注）：计划 Step 1 要求九种拒绝理由各有测试 —— 而"起一个服务器再打它"的写法测这九种要起九次服务器，于是**没人会写全**，每条安全规则都会退化成"大概拦住了"。抽成纯函数之后每一条都能被确定性地钉住；`bind(127.0.0.1:0)` + 路由分发需要异步运行时（tokio/hyper），属于同一任务的下一步。**先写服务器再补判据，安全组件尤其不该那么做。**
+- **九种情形逐条落地**：
+  1. **missing token** —— 回环地址**不是**授权：任何本机进程都能连 127.0.0.1。
+  2. **wrong token** —— 16 字节随机、**常数时间比较**（不在第一个不同字节处提前返回，否则"前几位对了"会通过耗时泄露出去）。
+  3. **wrong Origin** —— 含**通配符 `*`**：CORS 通配 + 回环代理是经典组合漏洞。
+  4. **wrong Host** —— **精确匹配**：`127.0.0.1.evil.com` 这种"包含"式判据会被骗过去。
+  5. **oversize body** —— 上限 1 MiB。
+  6. **stale profile revision** —— 配置改过之后旧证据不该继续被采信（与 `isCapabilityVerified` 同一条判据）；不声明修订号的请求不算过期。
+  7. **arbitrary URL** —— `Route` 这个 enum 的**存在本身**就是那条约束：**没有任何变体接受上游 URL**。想加"转发到任意地址"的能力必须先加一个变体，而那是一次看得见的改动。带 `?url=` 的查询参数直接拒绝（不是"反正我不用它"，而是"这个代理没有这种能力"）。
+  8. **redirect to another host** —— 只有**同 scheme 同 host** 才允许继续带凭据；一个 302 到 `evil.com` 就能把 `Authorization` 送出去，而那是代理类组件最经典的漏洞形状。
+  9. **SSRF** —— `cloud` 策略下禁止私网与元数据地址（`169.254.169.254` 最出名）且必须 HTTPS；`local`/`lan` 放宽，但**协议仍然只允许 http/https**（`file://` 在有些客户端上能读本地文件）。
+- **脱敏**：令牌与四种认证头一律抹掉，但**保留头名**（只整行删掉会让"这个头出现过"这个信息也没了），与安全无关的内容原样保留（脱敏过度会让日志没用）。
+- **前端一半（`modelClient.ts`）**：三条纪律 —— ①**密钥永远不到前端来**（这个文件的类型里**没有**任何能装密钥的参数，有用例逐字扫 IPC 参数）；②**网络失败映射到错误契约并带 `retryable`**（"没有桌面外壳"**不是**可重试失败：重试一百次也还是浏览器；代理的准入拒绝也不该重试 —— 换个时机还是同样的规则）；③**取消之后不再产出事件**（用与 Rust 侧同一套 `stopAfterCancel` 语义）。回环地址与令牌**每次现取、不缓存**（缓存会把会话令牌变成一份长期凭据，而它本该随会话结束失效）。
+
+**验证证据（本批）**：单测 **186 文件 / 2090 用例全通过（零跳过）**、typecheck exit 0、lint 0 error / 14 warning（基线）、Rust **72 例通过 + 1 例 `#[ignore]`**（单元 8 + provider_profiles 14 + providers 17 + proxy 16 + secrets 8 + shell_smoke 9）。
+
+**仍未做（如实）**：代理的**真服务器**（绑定回环 + 路由分发 + 流式转发）与 `ProviderAdapter` trait 本体；`proxy_session` / `model_run` / `model_cancel` 三个 IPC 命令；能力证据探针（计划 Step 5 的 "record declared/verified/failed per model/profile revision"）—— 数据结构与判据（`ProviderCapabilityEvidence` / `isCapabilityVerified`）已就位，缺的是"真的发一次探测请求"。
+
 ### G1 第四批：Provider 适配器与事件归一化（Task 1.4）（2026-09-21）
 
 - **交付**：`packages/agent-core/src/modelEvents.ts`（8 例）+ `apps/desktop/src-tauri/src/providers/`（`events.rs` / `request.rs` / `normalize.rs`）+ `tests/providers.rs`（**17 例**）+ `test-fixtures/providers/`（9 份样本）。
