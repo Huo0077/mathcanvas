@@ -14,6 +14,17 @@ import type { DraftStore } from "./draftStore"
  * - 同意**一次性**（nonce 消费即失效）且**会过期**。
  *
  * 这四条各有一条用例，且每条都断言"真文档没有被替换"——**过期授权绝不能写入**。
+ *
+ * ## "不可伪造"原先只是注释（2026-09-21 修）
+ *
+ * 上面那句"由宿主创建"原先是**靠没人调别的路径**成立的，而不是靠代码：`commit` 只看
+ * nonce 是否已消费、`runId` 是否相同、是否过期、`previewHash` 是否与当前草稿一致 ——
+ * 这四条**调用方自己就能凑齐**（`preview()` 是公开的，`previewHash` 随手可读，
+ * `expiresAt` 填一个未来时间即可）。也就是说：任何能调到 `commit` 的代码都能**自带一份"同意"**，
+ * 而 `ConsentToken` 的注释却写着"协调器既不能伪造它，也不能从模型输出里读出一个来"。
+ *
+ * 现在桥里记着**自己铸造过的 nonce**（`minted`），`commit` 拒绝任何没铸造过的 nonce，
+ * 消费时同时从 `minted` 里删掉 —— 注释里那句话这才真的成立。
  */
 
 export interface ConsentRecord {
@@ -51,7 +62,7 @@ export type PreviewResult = { ok: true; artifact: PreviewArtifact } | { ok: fals
 
 export type ConsentResult = { ok: true; record: ConsentRecord } | { ok: false; reason: "unknown_draft" }
 
-export type CommitReason = "missing_consent" | "consumed_consent" | "wrong_run" | "expired_consent" | "stale_preview" | "unknown_draft" | "stale_source" | "commit_rejected" | "no_change"
+export type CommitReason = "missing_consent" | "consumed_consent" | "unminted_consent" | "wrong_run" | "expired_consent" | "stale_preview" | "unknown_draft" | "stale_source" | "commit_rejected" | "no_change"
 
 export type CommitReceiptResult = { ok: true; receipt: { changed: boolean; draftId: string } } | { ok: false; reason: CommitReason; detail?: string }
 
@@ -92,6 +103,14 @@ export function createHostBridge(dependencies: HostBridgeDependencies): HostBrid
   const ttl = dependencies.consentTtlMs ?? 60_000
   /** 已消费的 nonce：一次性语义就靠它。 */
   const consumed = new Set<string>()
+  /**
+   * **本桥铸造过的 nonce**："不可伪造"靠它。
+   *
+   * 只在 `requestConsent` 里加、只在 `commit` 成功时删（消费即失效），
+   * 因此 `minted` 与 `consumed` 是两个不同的问题：前者是"你有没有这份授权"，
+   * 后者是"这份授权用过没有"。
+   */
+  const minted = new Set<string>()
 
   return {
     live: dependencies.live,
@@ -121,6 +140,9 @@ export function createHostBridge(dependencies: HostBridgeDependencies): HostBrid
       const current = dependencies.live()
       if (!artifact || !current) return { ok: false, reason: "unknown_draft" }
       const handle = current.handle
+      const nonce = mintNonce(runId)
+      // 记下来：只有这里铸造过的 nonce 才会被 `commit` 认。
+      minted.add(nonce)
       return {
         ok: true,
         record: {
@@ -131,15 +153,17 @@ export function createHostBridge(dependencies: HostBridgeDependencies): HostBrid
           expectedHandles: { target: handle, sources: [] },
           allowedEffects: [`${artifact.stageCount} action(s) applied to ${handle.documentId}`],
           expiresAt: now() + ttl,
-          nonce: mintNonce(runId)
+          nonce
         }
       }
     },
 
     commit(draftId, consent) {
-      // 顺序即"拒绝理由的优先级"：先看有没有授权，再看它是否还能用。
+      // 顺序即"拒绝理由的优先级"：先看有没有授权，再看它是不是**我们发的**，然后才看还能不能用。
       if (!consent) return { ok: false, reason: "missing_consent" }
       if (consumed.has(consent.nonce)) return { ok: false, reason: "consumed_consent" }
+      // 没铸造过 = 伪造的（或者别的桥发的）。这一条原先缺失，那时"不可伪造"只是注释。
+      if (!minted.has(consent.nonce)) return { ok: false, reason: "unminted_consent" }
       if (consent.runId !== runId) return { ok: false, reason: "wrong_run" }
       if (consent.expiresAt <= now()) return { ok: false, reason: "expired_consent" }
 
@@ -170,6 +194,7 @@ export function createHostBridge(dependencies: HostBridgeDependencies): HostBrid
 
       // 消费 nonce 之后才替换真文档：失败路径一个字节都不写。
       consumed.add(consent.nonce)
+      minted.delete(consent.nonce)
       dependencies.replace(result.document)
       return { ok: true, receipt: { changed: true, draftId } }
     }

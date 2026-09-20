@@ -202,9 +202,9 @@ npm run build
 npm run test:e2e
 ```
 
-当前验证基线（**2026-09-21，G2 第二十三批之后实测**）：`npm.cmd test` 为 **176 个测试文件、1971 个用例全部通过（零跳过）**；**5 个 workspace** 类型检查通过；ESLint **0 error / 14 warning**（14 条为既有基线）；Web 生产构建通过（Vite 仍提示主 bundle 超过 500 KB）；Playwright Chromium **119/119** 通过（global setup **按当前工作区重新构建** `build-check/mathcanvas-current` 再预览，因此结果对应工作区源码，而不是该目录里上一次构建的产物）。
+当前验证基线（**2026-09-21，G2 第二十四批之后实测**）：`npm.cmd test` 为 **176 个测试文件、1973 个用例全部通过（零跳过）**；**5 个 workspace** 类型检查通过；ESLint **0 error / 14 warning**（14 条为既有基线）；Web 生产构建通过（Vite 仍提示主 bundle 超过 500 KB）；Playwright Chromium **119/119** 通过（global setup **按当前工作区重新构建** `build-check/mathcanvas-current` 再预览，因此结果对应工作区源码，而不是该目录里上一次构建的产物）。
 
-**最新一批（2026-09-21）交付与修复**：①**传输层与动作层的引用形状不一致**（`object.update_inputs` / `dynamic.bind_point` / `dynamic.bind_curve` 三个动作此前**不存在任何一种能同时通过校验并被正确编译的输入**）已修，并由 `packages/agent-core/src/planToCompile.seam.test.ts` 用**已校验的输出**钉住整条接缝；②`draftStore.previewHash` 换成真 SHA-256（`canonicalContentHash`）；③**补上"假设"这一节的数据面**：计划信封新增可选 `assumptions`，经 `onPlanParsed` → 运行时 → 运行器 → 草稿视图 → 确认面板贯通，新增 `AssumptionList.tsx`。此前 `ConfirmationPanel` 的 `assumptions` prop **没有任何地方会传值**，那一节在整条链上永远是空的。
+**最新一批（2026-09-21）交付与修复**：①**传输层与动作层的引用形状不一致**（`object.update_inputs` / `dynamic.bind_point` / `dynamic.bind_curve` 三个动作此前**不存在任何一种能同时通过校验并被正确编译的输入**）已修，并由 `packages/agent-core/src/planToCompile.seam.test.ts` 用**已校验的输出**钉住整条接缝；②`draftStore.previewHash` 换成真 SHA-256（`canonicalContentHash`）；③**补上"假设"这一节的数据面**：计划信封新增可选 `assumptions`，经 `onPlanParsed` → 运行时 → 运行器 → 草稿视图 → 确认面板贯通，新增 `AssumptionList.tsx`（此前 `ConfirmationPanel` 的 `assumptions` prop **没有任何地方会传值**，那一节永远是空的）；④**让"同意不可伪造"从注释变成代码**：`HostBridge` 原先只检查 nonce 未消费 / `runId` / 是否过期 / `previewHash` —— 这四条调用方自己就能凑齐，于是**手搓一份同意也能提交**；现在桥里记着自己铸造过的 nonce（`minted`），没铸造过的一律 `unminted_consent`。
 
 **Agent 相关的验证重点**：`e2e/agent-flow.spec.ts` 三条 —— ①**一句话 → 草稿预览 → 确认前画布为空 → 确认 → 画布出现对象 → `Ctrl+Z` 一步撤销回空**；②丢弃草稿后文档与历史都不动；③认不出时给"需要补充信息"而不是编一段回答。单测侧另有：`agentRunner.test.ts`（暂存阶段不动文档 / 确认后恰好一步历史 / 拒绝二次提交）、`agentRuntime.test.ts`（**一个替身都不用**：真草稿存储 + 真宿主桥 + 真协调器）、`pipeline.test.ts`（G0.5 四条 Gate 端到端）。
 

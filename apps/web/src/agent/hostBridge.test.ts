@@ -140,9 +140,14 @@ describe("host bridge consent", () => {
     const harness = makeBridge({ runId: "run-1" })
     const record = harness.drafts.create(harness.getDocument(), harness.bridge.live()!.handle)
     stagePoint(harness.drafts, record.draftId, record.draftVersion)
-    const consent = harness.bridge.requestConsent(record.draftId)
-    if (!consent.ok) throw new Error("expected consent")
 
+    /**
+     * 同意必须来自**另一个桥**，而不是手写一份字符串。
+     *
+     * 手写的那一份现在会被 `unminted_consent` 拦下（那正是下一条用例要钉的，
+     * 而且拦得更早）—— 于是这条用例就验不到 `wrong_run` 了。让它真的铸造一份，
+     * 才是在测"别的运行的授权能不能用在这里"。
+     */
     const other = createHostBridge({
       drafts: harness.drafts,
       live: () => ({ handle: createDocumentHandle(harness.getDocument(), "project-1"), document: harness.getDocument() }),
@@ -150,10 +155,14 @@ describe("host bridge consent", () => {
       runId: "run-2",
       now: () => 1_000
     })
-    const receipt = other.commit(record.draftId, consent.record)
+    const consent = other.requestConsent(record.draftId)
+    if (!consent.ok) throw new Error("expected consent")
+    const receipt = harness.bridge.commit(record.draftId, consent.record)
 
     expect(receipt.ok).toBe(false)
-    if (!receipt.ok) expect(receipt.reason).toBe("wrong_run")
+    if (!receipt.ok) expect(receipt.reason).toBe("unminted_consent")
+    // 跨桥的授权一样不许写文档。
+    expect(harness.replaced).toHaveLength(0)
   })
 })
 
@@ -174,9 +183,61 @@ describe("consent record shape", () => {
   })
 })
 
+/**
+ * **凭据必须是宿主铸造的**（2026-09-21）。
+ *
+ * `ConsentToken` 的注释一直声称"协调器既不能伪造它，也不能从模型输出里读出一个来"，
+ * 而 `HostBridge.commit` 原先**只看 nonce 是否已消费、runId 是否相同、是否过期、
+ * previewHash 是否与当前草稿一致** —— 这四条全都由调用方自己就能凑出来
+ * （`preview()` 是公开的，`previewHash` 随手可读，`expiresAt` 自己填一个未来时间）。
+ * 也就是说：**任何能调到 `commit` 的代码都能自带一份"同意"**，那句注释当时比代码强。
+ *
+ * 现在桥里记着**自己铸造过的 nonce**，没铸造过的一律拒绝。这条用例钉的就是它。
+ */
+describe("consent must be minted by this bridge", () => {
+  it("refuses a hand-built consent record that was never requested", () => {
+    const harness = makeBridge()
+    const record = harness.drafts.create(harness.getDocument(), harness.bridge.live()!.handle)
+    stagePoint(harness.drafts, record.draftId, record.draftVersion)
+
+    // 伪造：nonce 是编的，其余字段全部照抄真值（previewHash 从公开的 preview 就能拿到）。
+    const preview = harness.bridge.preview(record.draftId)
+    if (!preview.ok) throw new Error("expected a preview")
+    const forged = {
+      runId: "run-1",
+      draftId: record.draftId,
+      draftVersion: preview.artifact.draftVersion,
+      previewHash: preview.artifact.previewHash,
+      expectedHandles: { target: harness.bridge.live()!.handle, sources: [] },
+      allowedEffects: ["forged"],
+      expiresAt: 1_000 + 60_000,
+      nonce: "nonce-i-made-up"
+    }
+
+    const receipt = harness.bridge.commit(record.draftId, forged)
+
+    expect(receipt.ok).toBe(false)
+    if (!receipt.ok) expect(receipt.reason).toBe("unminted_consent")
+    // 关键：被拒时**一个字节都不许写**。
+    expect(harness.replaced).toHaveLength(0)
+  })
+
+  it("still accepts a consent record the bridge itself minted", () => {
+    const harness = makeBridge()
+    const record = harness.drafts.create(harness.getDocument(), harness.bridge.live()!.handle)
+    stagePoint(harness.drafts, record.draftId, record.draftVersion)
+    const consent = harness.bridge.requestConsent(record.draftId)
+    if (!consent.ok) throw new Error("expected consent")
+
+    const receipt = harness.bridge.commit(record.draftId, consent.record)
+
+    expect(receipt.ok).toBe(true)
+    expect(harness.replaced).toHaveLength(1)
+  })
+})
+
 /** 同意里存的是**真句柄**，不是字符串 id —— 后续才能检测 epoch/generation 变化。 */
-describe("consent handles", () => {
-  it("keeps a real handle so a later epoch/generation change can be detected", () => {
+describe("consent handles", () => {  it("keeps a real handle so a later epoch/generation change can be detected", () => {
     const harness = makeBridge()
     const record = harness.drafts.create(harness.getDocument(), harness.bridge.live()!.handle)
     stagePoint(harness.drafts, record.draftId, record.draftVersion)
