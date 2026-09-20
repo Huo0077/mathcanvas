@@ -2,7 +2,7 @@ import { createEmptyDocument, type GeometryDocument } from "@draw/dsl"
 import { contentFingerprint } from "@draw/scene-graph"
 import { describe, expect, it, vi } from "vitest"
 
-import type { PlanEnvelope, PlannerPort } from "@draw/agent-core"
+import type { PlanEnvelope, PlannerPort, PlanRequest } from "@draw/agent-core"
 
 import { createAgentRuntime } from "./agentRuntime"
 import type { ExportPreflightPort } from "@draw/agent-core"
@@ -62,13 +62,19 @@ function makeRuntime(options: { envelope?: PlanEnvelope; document?: GeometryDocu
   return { runtime, written, current: () => current }
 }
 
-function runContext() {
-  const document = geometryDocument()
+/**
+ * 运行上下文。
+ *
+ * 可以给一份**具体文档**：句柄里的 `documentId` 必须与它一致，否则测的就不是这条链上的
+ * "模型看到的手柄是不是我给它那份文档的手柄"（第一版这里自己新建一份空文档，
+ * 于是断言拿到的是另一个 id —— 那正是这条用例想抓的东西）。
+ */
+function runContext(document: GeometryDocument = geometryDocument()) {
   return {
     runId: "run-1",
     conversationId: "conv-1",
     promptMessageId: "msg-1",
-    target: { projectId, documentId: document.metadata.id, workspace: "geometry3d" as const, epoch: `epoch:${document.metadata.id}`, generation: 0, contentHash: contentFingerprint(document) },
+    target: { projectId, documentId: document.metadata.id, workspace: "geometry3d" as const, epoch: `epoch:${document.metadata.id}`, generation: document.revision, contentHash: contentFingerprint(document) },
     sources: [],
     textProfileId: "profile-1",
     capabilityRevision: "2026-09-21.1",
@@ -198,5 +204,41 @@ describe("the assembled runtime actually runs", () => {
     document.primitives.push({ id: "point-2", type: "point3", label: "B", position: { x: 1, y: 0, z: 0 } } as never)
 
     expect(runtime.callTool("scene.inspect", { documentId: document.metadata.id }).payload).toHaveLength(1)
+  })
+
+  /**
+   * **组装好的运行时也把上下文交给规划器**（2026-09-21）。
+   *
+   * 协调器那一层的接线有自己的用例（`coordinatorContext.test.ts`），但"接线在**组装之后**
+   * 是否仍然成立"是另一回事：真实运行时注入的是它自己的观察者与句柄。这条用例抓的是
+   * `PlanRequest.model` 在整条链上**落地**，而不只是"组件本身能跑"。
+   */
+  it("hands the assembled planner a context carrying the live handle", async () => {
+    const document = geometryDocument()
+    const seen: PlanRequest[] = []
+    const planner: PlannerPort = {
+      plan: async (request) => {
+        seen.push(request)
+        return { plan: planEnvelope(), requestId: "req-1", attemptId: "attempt-1" }
+      }
+    }
+    const runtime = createAgentRuntime({
+      readDocument: () => document,
+      writeDocument: () => {},
+      readSceneDocuments: () => [{ handle: { projectId, documentId: document.metadata.id, workspace: "geometry3d", epoch: `epoch:${document.metadata.id}`, generation: document.revision, contentHash: contentFingerprint(document) }, document }],
+      planner,
+      exportPreflight: exportPreflight(),
+      projectId,
+      runId: "run-1",
+      now: () => 1_000
+    })
+
+    await drive(runtime.coordinator, { run: runContext(document), userMessage: "建个立方体" })
+
+    expect(seen).toHaveLength(1)
+    expect(seen[0].model.context.handles.target.documentId).toBe(document.metadata.id)
+    expect(seen[0].model.context.workspace).toBe("geometry3d")
+    // 规划阶段的工具已按阶段发布（这条链上不能出现提交工具）。
+    expect(seen[0].model.tools.every((tool) => tool.effect !== "commit")).toBe(true)
   })
 })

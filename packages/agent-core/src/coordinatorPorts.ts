@@ -1,7 +1,9 @@
 import type { DocumentHandle, PlanEnvelope, RunContext, ToolResult } from "./contracts"
 import type { DraftAction } from "@draw/scene-graph"
 import type { Budget } from "./budget"
+import type { ModelContext } from "./contextBuilder"
 import type { RunEvent } from "./runState"
+import type { ToolDescriptor } from "./toolRegistry"
 
 /**
  * **协调器的四组端口**（Task 2.1）。
@@ -26,6 +28,27 @@ export interface PlanRequest {
   userMessage: string
   budget: Budget
   signal: AbortSignal
+  /**
+   * **模型这一次能看到的一切**（Task 2.2 Step 4 + Task 2.3）。
+   *
+   * 计划 Task 2.2 Step 4 与 Task 2.3 都要求模型看到"live handles, confirmed facts,
+   * selected ordered refs, warnings"并按阶段拿到工具；而在此之前 `PlanRequest` 只有
+   * `run` / `userMessage` / `budget` / `signal` —— **一个 provider 适配器拿不到任何场景信息**，
+   * 只能自己再造一份。这正是 `contextBuilder` 与 `toolRegistry` 一直是
+   * "有实现、有测试、没有生产调用方"的根因。
+   *
+   * 谁组装、为什么是协调器：上下文与工具都来自 `agent-core` 自己的部件
+   * （`buildContext` + `createToolRegistry`），而协调器是唯一知道"现在是哪个阶段"的地方。
+   * 让适配器自己组装，等于把"哪个阶段能看到什么"这条安全边界搬到 app 侧去。
+   *
+   * **做成一个整体字段而不是两个平铺字段**：它们是同一个问题的两面
+   *（"这次生成允许看到什么"），平铺会让将来新增一项时又要改一次端口形状。
+   */
+  model: {
+    context: ModelContext
+    /** 当前阶段发布的工具。只读阶段没有写入工具，观察阶段连计划工具都没有。 */
+    tools: readonly ToolDescriptor[]
+  }
 }
 
 export interface PlanOutcome {
@@ -49,6 +72,21 @@ export interface Observation {
   factIds: string[]
   /** 供模型使用的场景摘要（有界）。 */
   summary: string
+  /**
+   * 事实的**文本与来源**（可选，但给了就会被带进模型上下文）。
+   *
+   * ## 为什么要加这两个字段
+   *
+   * `buildContext` 的 `Fact` 有 `text` 与 `origin`（用户明说 / 视觉推断 / 系统假设），
+   * 而观察端口原先**只有 id 列表**。也就是说：即使把 `buildContext` 接上，
+   * 上下文里的事实也只有一串 id —— 模型看得到"有一个事实 fact-1"，
+   * 却看不到"fact-1 是**点 A 在原点**"。
+   *
+   * 这是"接口缺字段"这一类缺口里最容易被漏掉的一种：**两边各自都能自洽**，
+   * 只有把两个类型摆在一起才发现接不上。`factIds` 仍然保留，因为协调器用它做
+   * "计划引用的都是已确认事实"那道检查，而那道检查不需要文本。
+   */
+  facts?: readonly { id: string; text: string; origin: "user" | "inferred" | "assumed" }[]
 }
 
 export interface ObserverPort {

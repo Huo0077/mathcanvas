@@ -90,9 +90,33 @@ describe("worker request contract", () => {
 })
 
 describe("worker response contract", () => {
+  /**
+   * 一份**完整**的成功响应。
+   *
+   * 三个信封（`changed` / `diff` / `artifact`）现在是**必需**的 —— 缺一个就拒绝，
+   * 因为少了它们调用方无法回答"改了什么 / 查过了吗 / 这是哪一版草稿"。
+   * 所以夹具也必须是完整的：拿一份残缺的消息去测"requestId 对不对"，测到的是别的东西。
+   */
+  function successResponse(overrides: Record<string, unknown> = {}) {
+    return {
+      kind: "geometry.compile.result",
+      schemaVersion: WORKER_SCHEMA_VERSION,
+      requestId: "req-1",
+      operations: [],
+      document: createEmptyDocument("conics"),
+      changed: false,
+      diff: { added: [], removed: [], updated: [] },
+      checked: true,
+      problems: [],
+      beforeHash: "before",
+      afterHash: "before",
+      artifact: { runId: "run-1", draftId: "draft_1", draftVersion: 2, requestId: "req-1" },
+      ...overrides
+    }
+  }
+
   it("accepts a result for the request the caller is waiting on", () => {
-    const document = createEmptyDocument("conics")
-    const parsed = parseWorkerResponse({ kind: "geometry.compile.result", schemaVersion: WORKER_SCHEMA_VERSION, requestId: "req-1", operations: [], document }, "req-1")
+    const parsed = parseWorkerResponse(successResponse(), "req-1")
 
     expect(parsed.ok).toBe(true)
     if (parsed.ok) expect(parsed.message.requestId).toBe("req-1")
@@ -100,11 +124,21 @@ describe("worker response contract", () => {
 
   it("rejects a stale result that answers a different request", () => {
     // "迟到结果"唯一的识别手段就是 requestId；这条必须在边界上强制，而不是靠调用点自觉。
-    const document = createEmptyDocument("conics")
-    const parsed = parseWorkerResponse({ kind: "geometry.compile.result", schemaVersion: WORKER_SCHEMA_VERSION, requestId: "req-old", operations: [], document }, "req-1")
+    const parsed = parseWorkerResponse(successResponse({ requestId: "req-old" }), "req-1")
 
     expect(parsed.ok).toBe(false)
     if (!parsed.ok) expect(parsed.diagnostic.code).toBe("unexpected_request_id")
+  })
+
+  it("refuses a result that omits the diff / check / artifact envelopes", () => {
+    // 缺一个就拒绝，而不是给个默认值糊过去：这三样决定调用方能不能正确理解产物。
+    for (const field of ["changed", "diff", "artifact"] as const) {
+      const message = successResponse() as unknown as Record<string, unknown>
+      delete message[field]
+
+      const parsed = parseWorkerResponse(message, "req-1")
+      expect(parsed.ok, `${field} should be required`).toBe(false)
+    }
   })
 
   it("accepts a failure response and clamps its detail", () => {

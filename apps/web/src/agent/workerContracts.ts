@@ -49,12 +49,40 @@ export interface GeometryCheckRequest extends WorkerMessageEnvelope {
 
 export type GeometryWorkerRequest = GeometryCompileRequest | GeometryCheckRequest
 
+/**
+ * **产物信封**（Task 2.4 Step 4："return **diff/check/artifact envelopes**"）。
+ *
+ * 在它之前，成功响应只有"操作列表 + 结果文档"。那对调用方是不够的，缺的正好是三件事：
+ *
+ * - **diff**：改了什么。自己比两份文档也能得到，但两份文档可能很大，而且"比出来的差异"
+ *   与"事务自己算出来的差异"一旦不一致，调用方就没法判断该信谁。差异只有一处真相。
+ * - **check**：这批操作是被校验过的吗、校验有没有全过。走 `check` 路径的调用方尤其需要
+ *   这句话 —— 它问的就是"能不能落"，所以回答里必须有"检查过了"而不是"看起来没报错"。
+ * - **artifact**：这份产物是哪一版草稿、哪一次请求、哪个运行算出来的。用户确认的必须是
+ *   **他看过的那一份**，所以这三个标识要随产物一起回带，而不是靠调用方自己记。
+ *
+ * 另外补一个 `changed`：语义上没有变化的批次要如实说"没改"，否则撤销栈里会多出一个空步
+ * （`commitTransaction` 已经在语义层做了这件事，这里只是把它**报出来**）。
+ */
 export interface WorkerSuccess {
   kind: "geometry.compile.result"
   schemaVersion: string
   requestId: string
   operations: DomainOperation[]
   document: GeometryDocument
+  /** 语义上有没有真的改动（`false` = 这批操作是空操作，调用方不该把它当成一次改动）。 */
+  changed: boolean
+  /** 事务算出的差异；没有变化时三个数组都空。 */
+  diff: { added: string[]; removed: string[]; updated: string[] }
+  /** 校验是否全部通过（只有全过才会走到成功响应）。 */
+  checked: boolean
+  /** 校验发现的问题文本（成功时为空数组；失败走 `geometry.error`）。 */
+  problems: string[]
+  /** 前后内容指纹，供调用方核对"这份产物是从我给的那份算出来的"。 */
+  beforeHash: string
+  afterHash: string
+  /** 产物归属：信封的四个标识逐字回带（`schemaVersion` 在顶层，不重复塞进这里）。 */
+  artifact: { runId: string; draftId: string; draftVersion: number; requestId: string }
 }
 
 export interface WorkerFailure {
@@ -171,7 +199,33 @@ export function parseWorkerResponse(input: unknown, expectedRequestId?: string):
 
   if (!isRecord(input.document)) return rejected("missing_document", "a result must carry the resulting document")
   if (!Array.isArray(input.operations)) return rejected("invalid_operations", "a result must carry the compiled operations")
-  return { ok: true, message: { kind, schemaVersion: WORKER_SCHEMA_VERSION, requestId, operations: input.operations as DomainOperation[], document: input.document as unknown as GeometryDocument } }
+  /**
+   * 三个信封（diff / check / artifact）是**必需的**，不是可选装饰。
+   *
+   * 判据是"少了它调用方还能不能正确工作"：没有 `artifact` 就无法回答"这份产物是哪一版草稿的"
+   *（而用户确认的必须是看过的那一份）；没有 `changed` 就会把空操作当成一次改动；
+   * 没有 `diff` 就只能自己比文档。所以缺一个就拒绝，而不是给个默认值糊过去。
+   */
+  if (typeof input.changed !== "boolean") return rejected("missing_changed_flag", "a result must say whether anything changed")
+  if (!isRecord(input.diff)) return rejected("missing_diff", "a result must carry the transaction diff")
+  if (!isRecord(input.artifact)) return rejected("missing_artifact", "a result must say which draft it came from")
+  return {
+    ok: true,
+    message: {
+      kind,
+      schemaVersion: WORKER_SCHEMA_VERSION,
+      requestId,
+      operations: input.operations as DomainOperation[],
+      document: input.document as unknown as GeometryDocument,
+      changed: input.changed,
+      diff: input.diff as WorkerSuccess["diff"],
+      checked: input.checked === true,
+      problems: Array.isArray(input.problems) ? (input.problems as string[]) : [],
+      beforeHash: typeof input.beforeHash === "string" ? input.beforeHash : "",
+      afterHash: typeof input.afterHash === "string" ? input.afterHash : "",
+      artifact: input.artifact as unknown as WorkerSuccess["artifact"]
+    }
+  }
 }
 
 /** 构造一条请求：把五个信封字段填在一处，调用方不会漏填。 */

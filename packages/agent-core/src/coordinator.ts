@@ -1,8 +1,10 @@
 import type { Budget } from "./budget"
+import { buildContext, type Fact } from "./contextBuilder"
 import { parsePlanEnvelope } from "./schemas"
 import type { PlanEnvelope, RunContext } from "./contracts"
 import type { CancelReason, CancelResult, CommitterPort, ConsentToken, ObserverPort, PlannerPort, ToolPort } from "./coordinatorPorts"
 import { createBudget, type BudgetLimits } from "./budget"
+import { createToolRegistry, type ToolRegistry } from "./toolRegistry"
 import { createRunLedger, type RunEvent, type RunLedger } from "./runState"
 
 /**
@@ -28,9 +30,34 @@ export interface CoordinatorDependencies {
   observer: ObserverPort
   committer: CommitterPort
   tools?: ToolPort
+  /**
+   * 模型技能的请求列表（`buildContext` 会去技能目录校验并按哈希加载）。
+   *
+   * 缺省为空：**没有请求的技能就不进上下文**。技能是"这次允许模型用哪些做法"的声明，
+   * 而"什么都没声明"与"声明的都加载失败"是两回事 —— 后者会在上下文的 `warnings` 里留痕。
+   */
+  requestedSkillIds?: readonly string[]
+  /**
+   * 只读阶段可用的动作名（来自能力注册表 / 技能清单）。
+   *
+   * 为什么由调用方给而不是协调器自己算：动作名的**可用性**判据在能力注册表里，
+   * 而注册表是"这一版软件能做什么"的事实，可能随环境变化；协调器只管把它原样放进上下文。
+   */
+  availableActions?: readonly string[]
+  /** 上下文条数上限（只能**收紧**，`buildContext` 内部另有硬上限）。 */
+  contextLimits?: { facts?: number; refs?: number }
+  /**
+   * 有序的选中引用。
+   *
+   * 函数而不是数组：引用带内容哈希，而哈希必须**现取**才准（缓存会让"过期"永远检测不到，
+   * 与句柄那条纪律同一理由）。
+   */
+  selectedRefs?: () => Parameters<typeof buildContext>[0]["selectedRefs"]
   /** 已由宿主创建的同意凭据；没有它就只能停在 `awaiting_confirmation`。 */
   consent?: ConsentToken
   limits?: Partial<BudgetLimits>
+  /** 可替换的工具注册表（测试用；缺省用真实目录）。 */
+  toolRegistry?: ToolRegistry
   now?: () => number
   /** 每次运行拿到的预算；默认按 `limits` 新建。注入点供测试观察用量。 */
   budget?: Budget
@@ -110,6 +137,35 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
       if (cancelled) return
       ledger.record(`observed ${observation.factIds.length} confirmed fact(s)`, { requestId: null })
 
+      // ---- 组装模型这一次能看到的一切（上下文 + 按阶段发布的工具） --------------
+      /**
+       * 两件事都在**发请求之前**做，而且**只做一次**：两次尝试（含那次修复）必须看到
+       * 同一份上下文与同一批工具 —— 否则"第二次机会"其实换了题目，事后没法判断是模型改好了
+       * 还是条件变了。
+       *
+       * 为什么放在 agent-core 而不是让 app 侧适配器自己组装（见 `PlanRequest.model` 的注释）：
+       * `buildContext` 与 `createToolRegistry` 都是这个包自己的部件，而"哪个阶段发布什么工具"
+       * 是安全边界，不该搬到 app 侧去。
+       */
+      const registry: ToolRegistry = dependencies.toolRegistry ?? createToolRegistry()
+      const modelContext = buildContext({
+        run: request.run,
+        // 观察端口给的事实文本与来源原样带进去（只有 `factIds` 时，上下文里的事实就只剩一串 id）。
+        observation: { facts: (observation.facts ?? []).map((fact): Fact => ({ id: fact.id, text: fact.text, origin: fact.origin })), summary: observation.summary },
+        requestedSkillIds: dependencies.requestedSkillIds ?? [],
+        selectedRefs: dependencies.selectedRefs?.() ?? [],
+        availableActions: dependencies.availableActions ?? [],
+        budget,
+        limits: dependencies.contextLimits
+      })
+      const phaseTools = registry.forPhase("planning", {
+        workspace: request.run.target.workspace,
+        // 规划阶段还没有确认：提交工具在这个阶段根本不该出现（注册表自己保证）。
+        confirmed: false,
+        capabilityRevision: request.run.capabilityRevision
+      })
+      ledger.record(`context ready: ${modelContext.facts.length} fact(s), ${phaseTools.length} tool(s)`, { requestId: null })
+
       // ---- 向模型要计划 ------------------------------------------------
       if (!spend(budget, "generation")) return yield* stop("budget_generation")
       if (!spend(budget, "network")) return yield* stop("budget_network")
@@ -129,7 +185,7 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
           // 第二次尝试是**可见的修复**：它花掉的是同一份预算的另一个名额。
           if (!spend(budget, "generation") || !spend(budget, "network")) return yield* stop("budget_repair")
         }
-        const outcome = await dependencies.planner.plan({ run: request.run, userMessage: request.userMessage, budget, signal })
+        const outcome = await dependencies.planner.plan({ run: request.run, userMessage: request.userMessage, budget, signal, model: { context: modelContext, tools: phaseTools } })
         if (cancelled) return
         lastAttemptIds = { requestId: outcome.requestId, attemptId: outcome.attemptId }
         ledger.record(`plan attempt ${attempt} returned`, lastAttemptIds)

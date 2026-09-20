@@ -89,4 +89,58 @@ describe("geometry worker runtime", () => {
     expect(response.kind).toBe("geometry.error")
     if (response.kind === "geometry.error") expect(["patch_invalid", "commit_rejected"]).toContain(response.code)
   })
+
+  /**
+   * **diff / check / artifact 信封**（Task 2.4 Step 4）。
+   *
+   * 计划原文："Connect the geometry worker to the existing compiler and return
+   * **diff/check/artifact envelopes**."
+   *
+   * 在这三样之前，响应只说"操作列表 + 结果文档"—— 那对调用方是不够的：
+   * - 它没法回答"**到底改了什么**"，只能自己把两份文档对着比（而两份文档可能很大）；
+   * - 它没法回答"这批操作**检查过了吗**"（走的是哪条路径、校验有没有全过）；
+   * - 它没法回答"**产物是哪一份**"（哪一版草稿、拿哪个基准算出来的），
+   *   而这三件事恰恰是"用户确认的是不是我给他看的那一份"要用的。
+   */
+  it("returns a diff envelope so the caller can say what actually changed", () => {
+    const response = handleGeometryRequest(compileRequest())
+
+    if (response.kind !== "geometry.compile.result") throw new Error("expected a result")
+    expect(response.changed).toBe(true)
+    expect(response.diff.added).toHaveLength(1)
+    expect(response.diff.removed).toEqual([])
+    expect(response.diff.updated).toEqual([])
+    // 前后指纹：调用方靠它判断"这份产物是不是从我给的那份算出来的"。
+    expect(response.beforeHash).not.toBe(response.afterHash)
+    expect(response.beforeHash.length).toBeGreaterThan(0)
+  })
+
+  it("returns a check envelope that says whether the batch was validated", () => {
+    const response = handleGeometryRequest(compileRequest())
+
+    if (response.kind !== "geometry.compile.result") throw new Error("expected a result")
+    expect(response.checked).toBe(true)
+    expect(response.problems).toEqual([])
+  })
+
+  it("returns an artifact envelope tying the result to the draft it came from", () => {
+    const response = handleGeometryRequest(compileRequest())
+
+    if (response.kind !== "geometry.compile.result") throw new Error("expected a result")
+    // 信封的五个字段来自请求，逐字回带 —— "这份产物是哪一版草稿的"必须能对上。
+    expect(response.artifact).toEqual({ runId: "run-1", draftId: "draft_1", draftVersion: 1, requestId: "req-1" })
+  })
+
+  it("reports a no-op batch as unchanged instead of pretending something happened", () => {
+    // 把可见性设成它已经是的值：语义没有变化。
+    const base = createEmptyDocument("conics")
+    base.primitives.push({ id: "point-1", type: "point", x: 1, y: 0 } as never)
+    const request = createWorkerRequest("geometry.check", envelope, { base, operations: [{ op: "toggleVisibility", id: "point-1", visible: true }] })
+
+    const response = handleGeometryRequest(request)
+
+    if (response.kind !== "geometry.compile.result") throw new Error("expected a result")
+    expect(response.changed).toBe(false)
+    expect(response.diff).toEqual({ added: [], removed: [], updated: [] })
+  })
 })

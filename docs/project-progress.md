@@ -6,6 +6,30 @@
 **当前阶段：** P0-P6 与 P7 工程制图已完成；MathCanvas 统一 Ribbon UI 基线、后续 UI 优化（Task 7-13）、工程制图视觉重做（Task 14）、工程制图可用性修复（Task 15-18）、圆锥曲线四项修复、功能键操作指引浮层、CAD 2D 绘图交互重做、平面几何动点系统、3D 视口与几何内核重构、封闭曲线绕定点旋转、UI 优化（草稿纸画布）与平面几何元素选颜色均已完成。**2026-09-17 新增两条解析几何交付线并已全部落地**：**A1 解析二次曲面与"真圆"**（8 片；设计 `docs/superpowers/specs/2026-09-17-analytic-quadrics-design.md`）与 **A2 交面按支撑曲面分组 + 真曲面**（5 轮；设计 `docs/superpowers/specs/2026-09-17-intersection-face-grouping-design.md`）——用户口径从"我不要一个逼近的圆，我需要一个真的圆"一路推到"我需要的只是那个相交的曲面，而不是由很多三角形拼出来的"。**随后"立体几何最后一轮"四件事也已全部交付**（7 片；设计 `docs/superpowers/specs/2026-09-17-3d-tracks-rotation-and-measurement-labels-design.md`）：约束轨道（`circle3` 当动点宿主）、拖动旋转（世界轴三色环 + 15° 吸附 + 属性栏角度）、测量数字常驻画布（2D + 3D）、立体几何 UI 与平面几何同一套令牌。平面动点系统按四个维度交付：①约束模型与参数化映射 ②依赖图 DAG 与增量拓扑重算 ③动态测量监听器 ④轨迹采样与消元法隐式化；3D 重构按四个区块交付：①动点宿主约束与渲染管道 ②截面几何 ③Auto-Fit ④生命周期与多解；四者与三区块**全部接进主流程**（不只是内核可用）。**2026-09-18 又完成平面几何切线**（抛物线 / 双曲线 / 圆 / 椭圆的曲线切线，切点可沿曲线拖动或跟随动点）**与动点扩展**（在动点处作切线、以动点为圆心作圆、半径可调且可随动点位置动态变化），并修掉"切线不能拖动"这一现场反馈。P4 Agent 与 P5 题图解析仍在排除范围内。
 **总体状态：** 开发中
 
+### G2 第二十七批：worker 的 diff / check / artifact 信封（Task 2.4 Step 4）（2026-09-21）
+
+- **计划原文**："Connect the geometry worker to the existing compiler and return **diff/check/artifact envelopes**."
+- **在它之前，成功响应只有"操作列表 + 结果文档"** —— 对调用方缺的正好是三件事：**改了什么**（自己比两份文档也能得到，但两份文档可能很大，而且"自己比的"与"事务算的"一旦不一致就没法判断该信谁）、**查过了吗**（走 `check` 路径的调用方问的就是"能不能落"，回答里必须有这句话，而不是靠"没报错"推断）、**这是哪一版草稿的产物**（用户确认的必须是**他看过的那一份**）。
+- **`WorkerSuccess` 增加五个字段**：`changed`（语义上有没有真变化 —— `commitTransaction` 早就在语义层做了这件事，这里只是把它**报出来**，否则调用方会把空操作当成一次改动）、`diff`（事务算出的增/删/改）、`checked` + `problems`、`beforeHash` / `afterHash`（供调用方核对"这份产物是从我给的那份算出来的"）、`artifact`（信封的四个标识逐字回带）。
+- **`parseWorkerResponse` 也收紧**：`changed` / `diff` / `artifact` **缺一个就拒绝**，不给默认值糊过去。判据是"少了它调用方还能不能正确工作"。
+- **RED→GREEN**：`workerRuntime.test.ts` +4（diff 信封 / check 信封 / artifact 归属 / 空操作如实报 `changed: false`），修前 4 红（`expected undefined to be true` 等）。`workerContracts.test.ts` 里那条既有用例的夹具**必须补全**才测得到它本来要测的东西（`requestId` 对不对）—— 顺带补了一条"缺 diff/check/artifact 一律拒绝"的用例。**没有放宽任何断言**。
+- **顺带一条判断（如实记录，没做）**：`geometry.worker.ts` / `agent.worker.ts` 仍**没有任何 `new Worker(`**。本轮**刻意没有**去实例化它们：真正要接的是 `DraftStore.stage`，而它是**同步**的，而 worker 只能异步；为了"让 worker 看起来被用上"而把暂存改成异步，会动到用户确认链路的核心而没有任何调用方受益。规则那一半已经是纯函数并且有测试（`workerRuntime.test.ts`），接线等真有异步调用方（G1 的 provider 通道）时再做。
+
+**验证证据（本批）**：两批一起跑的全量结果是单测 **179 文件 / 1999 用例全通过（零跳过）**、typecheck exit 0、lint 0 error / 14 warning（基线）、生产构建通过、e2e **119/119**。
+
+### G2 第二十八批：把上下文与工具真正交给规划器（Task 2.2 Step 4 / Task 2.3 的接线）（2026-09-21）
+
+- **缺口（审查早就点名的那条）**：`buildContext` 与 `createToolRegistry` 有实现、有测试，但**没有任何生产调用方**。根因在端口形状上：`PlanRequest` 只有 `run` / `userMessage` / `budget` / `signal` —— **一个 provider 适配器拿不到任何场景信息**，只能自己再造一份。
+- **修法**：`PlanRequest` 增加**一个整体字段** `model: { context: ModelContext; tools: readonly ToolDescriptor[] }`（做成整体而不是两个平铺字段：它们是同一个问题的两面，平铺会让将来新增一项时又要改一次端口形状）。协调器在**观察之后、发请求之前**组装两者，并且**只组装一次** —— 两次尝试（含那次可见的修复）必须看到同一份上下文与同一批工具，否则"第二次机会"其实换了题目，事后无法判断是模型改好了还是条件变了。
+- **谁组装、为什么是协调器**：两者都来自 `agent-core` 自己的部件，而协调器是唯一知道"现在是哪个阶段"的地方。让适配器自己组装，等于把"哪个阶段能看到什么"这条**安全边界**搬到 app 侧去。
+- **顺带补上一个"接口缺字段"型缺口**：`buildContext` 的 `Fact` 有 `text` 与 `origin`（用户明说 / 视觉推断 / 系统假设），而观察端口原先**只有 id 列表**。也就是说：即使把 `buildContext` 接上，上下文里的事实也只剩一串 id —— 模型看得到"有一个事实 fact-1"，看不到"fact-1 是**点 A 在原点**"。所以 `Observation` 增加可选 `facts?: { id; text; origin }[]`（`factIds` 保留，因为"计划引用的都是已确认事实"那道检查不需要文本）。这类缺口两边各自都自洽，**只有把两个类型摆在一起才发现接不上**。
+- **RED→GREEN**：新增 `packages/agent-core/src/coordinatorContext.test.ts`（4 例）：上下文事实带文本与来源 / 规划阶段**没有任何写文档的工具** / 两次尝试拿到按值相同的上下文与相同的工具 / 事实超限时截断并留 `truncated_facts` 警告。`agentRuntime.test.ts` +1（组装之后的运行时里，规划器拿到的上下文带着**真实活跃文档**的手柄）。**变异检验**：把 `model:` 参数删掉后 4 例全红（`Cannot read properties of undefined`），恢复后绿。
+- **写这条用例时改掉的一处自家夹具错误**：`runContext()` 原先自己新建一份空文档填句柄，于是断言里拿到的 `documentId` 是**另一份文档**的 —— 这条用例要测的恰恰是"模型看到的手柄是不是我给它那份文档的"，夹具不对就测不到。已改为可以传入具体文档。
+
+**验证证据（本批）**：两批一起跑的全量结果是单测 **179 文件 / 1999 用例全通过（零跳过）**、typecheck exit 0、lint 0 error / 14 warning（基线）、生产构建通过、e2e **119/119**。
+
+**仍未做（明确记下）**：`agentRuntime` 注入的那个观察者**还没有产出 `facts` 文本**（它目前只把实体 id 当事实 id、并返回 `summary`），所以真实链路上的上下文事实仍只有 id —— 补它要同时决定"事实 id 用实体 id 还是标签"，属独立切片；`requestedSkillIds` / `availableActions` 目前是空数组（技能清单与能力注册表还没接进来）；`ToolPort` 仍未被协调器在运行中调用（分发器与运行时方法已就绪，缺的是真实 provider 的 tool-call 通道）；G1 仍被 Rust 工具链缺失挡着。
+
 ### G2 第二十六批：用户可见轨迹 + **默认关着**的开发者详细视图（`ToolTracePanel`，Task 2.6 Step 4）（2026-09-21）
 
 - **计划原文**："Render a user-facing trace with short summaries; keep detailed diagnostics behind an **opt-in** developer view."
