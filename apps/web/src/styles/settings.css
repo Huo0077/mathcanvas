@@ -1,0 +1,213 @@
+/**
+ * 模型服务（模块 C）的版式。
+ *
+ * 与 `agent.css` 同一个口径：**只用语义令牌与中性色**，不引入新的调色板 ——
+ * 设置界面是"配置表单"，它不需要品牌表达，需要的是**可读、可聚焦、可扫描**：
+ * - 标签在输入框**上方**（不是 placeholder 当标签），表单扫下来是一列"标签 + 输入"；
+ * - 错误紧挨着出错的字段，并且带 `role="alert"`（读屏会读到，视觉上也不会跑丢）；
+ * - 能力徽章用**文字状态**（已验证 / 未验证）而不是只靠颜色。
+ */
+
+.provider-settings {
+  --settings-panel: #ffffff;
+  --settings-muted: #6b6b80;
+  --settings-line: #ecebf2;
+  --settings-field: #f6f6fa;
+  --settings-danger: #b3261e;
+  --settings-ok: #1f6f43;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+  padding: 24px 28px 48px;
+  background: #fbfbfd;
+  color: #2c3e50;
+}
+
+.provider-settings-head h3 {
+  margin: 0 0 4px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.provider-settings-hint {
+  margin: 0;
+  color: var(--settings-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.provider-settings-unavailable {
+  margin: 12px 0 0;
+  padding: 8px 10px;
+  border: 1px solid var(--settings-line);
+  border-radius: 6px;
+  background: var(--settings-field);
+  font-size: 12px;
+}
+
+.provider-settings-error {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin: 12px 0;
+  padding: 8px 10px;
+  border: 1px solid var(--settings-danger);
+  border-radius: 6px;
+  color: var(--settings-danger);
+  font-size: 12px;
+}
+
+/* ---------- 已配置列表 ---------- */
+
+.provider-settings-list {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.provider-settings-list > li {
+  display: grid;
+  grid-template-columns: minmax(120px, 200px) minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid var(--settings-line);
+  border-radius: 6px;
+  background: var(--settings-panel);
+}
+
+.provider-settings-list > li[data-selected="true"] {
+  border-color: #3d5a80;
+}
+
+.provider-settings-empty {
+  grid-template-columns: 1fr;
+  color: var(--settings-muted);
+  font-size: 12px;
+}
+
+.provider-settings-pick {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  color: #2c3e50;
+}
+
+.provider-settings-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--settings-muted);
+}
+
+.provider-settings-badges [data-badge] {
+  padding: 2px 6px;
+  border: 1px solid var(--settings-line);
+  border-radius: 999px;
+  background: var(--settings-field);
+  white-space: nowrap;
+}
+
+/* 状态词本身就是信息，颜色只是冗余的一层（灰度截图里仍然读得出来）。 */
+.provider-settings-badges [data-badge="key"][data-present="true"] { color: var(--settings-ok); }
+.provider-settings-badges [data-badge="health"][data-health="failed"] { color: var(--settings-danger); }
+.provider-settings-badges [data-badge="capability"][data-verified="true"] { color: var(--settings-ok); }
+
+/* ---------- 表单 ---------- */
+
+.provider-settings-form {
+  margin-top: 24px;
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.provider-settings-form h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* 标签在输入框上方：扫下来是一列"标签 + 输入"，而不是靠占位符暗示。 */
+.provider-settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+}
+
+.provider-settings-field label {
+  font-size: 12px;
+  color: #2c3e50;
+}
+
+.provider-settings-field input,
+.provider-settings-field select {
+  padding: 6px 8px;
+  border: 1px solid var(--settings-line);
+  border-radius: 6px;
+  background: var(--settings-field);
+  font: inherit;
+  font-size: 13px;
+  color: #2c3e50;
+}
+
+.provider-settings-field input:focus-visible,
+.provider-settings-field select:focus-visible,
+.provider-settings-actions button:focus-visible,
+.provider-settings-pick:focus-visible {
+  outline: 2px solid #3d5a80;
+  outline-offset: 1px;
+}
+
+.provider-settings-field input[aria-invalid="true"] {
+  border-color: var(--settings-danger);
+}
+
+.provider-settings-field-error {
+  font-size: 11px;
+  color: var(--settings-danger);
+}
+
+.provider-settings-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.provider-settings-actions button,
+.provider-settings-list button {
+  padding: 6px 12px;
+  border: 1px solid var(--settings-line);
+  border-radius: 6px;
+  background: var(--settings-panel);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  color: #2c3e50;
+}
+
+.provider-settings-actions button[type="submit"] {
+  border-color: #3d5a80;
+  background: #3d5a80;
+  color: #ffffff;
+}
+
+.provider-settings-actions button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.provider-settings-status {
+  margin: 0;
+  font-size: 12px;
+  color: var(--settings-muted);
+}

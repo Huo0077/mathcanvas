@@ -1,10 +1,14 @@
 import type { Workspace } from "@draw/dsl"
 
 /**
- * 两个**顶级模块**的标识。它们与 `Workspace`（`conics` / `geometry3d` / `cad`）是两层不同的概念：
+ * 三个**顶级模块**的标识。它们与 `Workspace`（`conics` / `geometry3d` / `cad`）是两层不同的概念：
  * 模块决定整个应用的骨架（有没有 Ribbon、有没有对话区），工作区只决定传统工作区里放哪一块画布。
+ *
+ * `settings` 是随 G1 Task 1.3 加进来的第三个：provider 配置与密钥是**应用级**的东西
+ * （不属于任何一个工作区，也不属于对话区）。在那之前它没有入口 ——
+ * `ProviderSettings.tsx` 做得再完整，用户也看不到它。
  */
-export type AppModuleId = "traditional" | "agent"
+export type AppModuleId = "traditional" | "agent" | "settings"
 
 export const DEFAULT_APP_MODULE: AppModuleId = "traditional"
 
@@ -12,12 +16,13 @@ export interface AppModuleDefinition {
   id: AppModuleId
   label: string
   hint: string
-  icon: "drafting" | "agent"
+  icon: "drafting" | "agent" | "settings"
 }
 
 export const APP_MODULES: AppModuleDefinition[] = [
   { id: "traditional", label: "传统工作区", hint: "画布与制图", icon: "drafting" },
-  { id: "agent", label: "Agent 工作区", hint: "对话式作图", icon: "agent" }
+  { id: "agent", label: "Agent 工作区", hint: "对话式作图", icon: "agent" },
+  { id: "settings", label: "模型服务", hint: "provider 与密钥", icon: "settings" }
 ]
 
 export type WorkspaceId = Extract<Workspace, "conics" | "geometry3d" | "cad">

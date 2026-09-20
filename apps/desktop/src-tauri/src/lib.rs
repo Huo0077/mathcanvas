@@ -19,14 +19,72 @@
 //! 且 `get_runtime_info` 与三个密钥命令看到的是**同一个**后端。
 
 pub mod runtime;
+/// 仓储（Task 1.3 起：provider 配置；Task 1.6 会在这里加 SQLite 项目仓储）。
+pub mod repository;
 /// 密钥库（Task 1.2）。**明文没有出口** —— 见 `secrets/mod.rs` 的三条设计决定。
 pub mod secrets;
 
+use repository::provider_profiles::{ProviderHealth, ProviderProfile, ProviderProfileStore, StoreError};
 use secrets::{SecretState, SecretStore, Store};
+use std::sync::Mutex;
 use tauri::Manager;
 
 /// 密钥库在 Tauri 托管状态里的包装。
 struct SecretStoreState(Store);
+
+/// Provider 配置存储 + 它所在的配置文件路径。
+///
+/// `Mutex`：IPC 命令可能在任意线程上跑，而 `&mut` 只能有一个。
+/// 用 `std::sync::Mutex` 而不是 tokio 的：这些操作都是**同步的文件 IO**，
+/// 而配置文件只有几 KB —— 为它引入异步锁是把简单问题复杂化。
+struct ProfileStoreState {
+    store: Mutex<ProviderProfileStore>,
+}
+
+fn store_error(error: StoreError) -> String {
+    error.to_string()
+}
+
+/// **列出全部 provider 配置**（不含密钥 —— 它只有引用）。
+#[tauri::command]
+fn list_provider_profiles(app: tauri::AppHandle) -> Result<Vec<ProviderProfile>, String> {
+    let state = app.try_state::<ProfileStoreState>().ok_or("the provider store is not initialised")?;
+    let store = state.store.lock().map_err(|_| "the provider store is poisoned".to_string())?;
+    Ok(store.list())
+}
+
+/**
+ * **新增或更新一份 provider 配置**。
+ *
+ * 收的是**原始 JSON** 而不是 `ProviderProfile`：Tauri 反序列化会**忽略未知字段**，
+ * 于是一个带着 `apiKey` 的对象会被悄悄削成合法的 profile —— 而"悄悄削掉"正是
+ * 最危险的那种处理（调用方以为密钥存进去了）。所以先看原始值，再谈转换。
+ *
+ * `expectedRevision` 是乐观并发：两个设置窗口同时开着时，后写的会拿到错误而不是覆盖前一个。
+ */
+#[tauri::command]
+fn upsert_provider_profile(app: tauri::AppHandle, profile: serde_json::Value, expected_revision: Option<u32>) -> Result<ProviderProfile, String> {
+    let prepared = repository::provider_profiles::prepare_profile(&profile).map_err(store_error)?;
+    let state = app.try_state::<ProfileStoreState>().ok_or("the provider store is not initialised")?;
+    let mut store = state.store.lock().map_err(|_| "the provider store is poisoned".to_string())?;
+    store.upsert(prepared, expected_revision).map_err(store_error)
+}
+
+/// **删除一份 provider 配置**（健康记录一并删除）。
+#[tauri::command]
+fn remove_provider_profile(app: tauri::AppHandle, profile_id: String) -> Result<(), String> {
+    let state = app.try_state::<ProfileStoreState>().ok_or("the provider store is not initialised")?;
+    let mut store = state.store.lock().map_err(|_| "the provider store is poisoned".to_string())?;
+    store.remove(&profile_id).map_err(store_error)
+}
+
+/// 读一份 profile 的健康记录（**带上它对应的 revision**）。
+#[tauri::command]
+fn provider_health(app: tauri::AppHandle, profile_id: String) -> Result<Option<ProviderHealth>, String> {
+    let state = app.try_state::<ProfileStoreState>().ok_or("the provider store is not initialised")?;
+    let store = state.store.lock().map_err(|_| "the provider store is poisoned".to_string())?;
+    Ok(store.health(&profile_id))
+}
 
 /// **唯一的自述命令**（Task 1.1 Step 4）。
 ///
@@ -88,9 +146,28 @@ pub fn run() {
             }
             // **只初始化一次**：Windows 上这一步会去碰系统凭据管理器。
             app.manage(SecretStoreState(secrets::create_store()));
+            // Provider 配置放在应用数据根下的 `providers.json`（Task 1.3）。
+            // 打不开时**如实失败**：设置界面的所有写入都会因此报错，
+            // 而不是让用户以为"存好了"。
+            let path = app
+                .path()
+                .app_data_dir()
+                .map_err(|error| format!("cannot resolve the app data directory: {error}"))?
+                .join("providers.json");
+            let store = ProviderProfileStore::open(&path).map_err(|error| format!("cannot open the provider configuration at {}: {error}", path.display()))?;
+            app.manage(ProfileStoreState { store: Mutex::new(store) });
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_runtime_info, save_secret, remove_secret, has_secret])
+        .invoke_handler(tauri::generate_handler![
+            get_runtime_info,
+            save_secret,
+            remove_secret,
+            has_secret,
+            list_provider_profiles,
+            upsert_provider_profile,
+            remove_provider_profile,
+            provider_health
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

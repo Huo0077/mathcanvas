@@ -119,14 +119,12 @@ pub fn build_runtime_info(app_version: &str, data_root: &Path, secret_store_read
         runtime: "webview".to_string(),
         webview_version: detect_webview2_version(),
         data_root: data_root_name,
-        /**
-         * 密钥库的状态**如实报告**（G1 Task 1.2 之后它不再是写死的 `not_implemented`）。
-         *
-         * 两条路径都要能出现：Windows 凭据管理器可用 → `ready`；
-         * 退到内存后端 → `not_implemented`（界面据此告诉用户"这次会话有效，重启要重填"）。
-         * 把它们压成一个布尔是刻意的：界面**不需要**知道用的是哪个库，
-         * 只需要知道"关掉应用之后还在不在"。
-         */
+        // 密钥库的状态**如实报告**（G1 Task 1.2 之后它不再是写死的 `not_implemented`）。
+        //
+        // 两条路径都要能出现：Windows 凭据管理器可用 → `ready`；
+        // 退到内存后端 → `not_implemented`（界面据此告诉用户"这次会话有效，重启要重填"）。
+        // 把它们压成一个布尔是刻意的：界面**不需要**知道用的是哪个库，
+        // 只需要知道"关掉应用之后还在不在"。
         secret_store: if secret_store_ready { DesktopComponentHealth::Ready } else { DesktopComponentHealth::NotImplemented },
         // 这两个仍是后续任务（1.6 仓储 / 1.5 回环代理）的落点。**如实标 `not_implemented`** ——
         // 声称 `ready` 而实际没有，会让前端把"没有"当成"有"，那比缺失更危险。

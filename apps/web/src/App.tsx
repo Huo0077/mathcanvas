@@ -28,6 +28,8 @@ import { PaperTexture } from "./components/PaperTexture"
 import { ModuleRail } from "./components/ModuleRail"
 import { WorkspaceHeader } from "./components/WorkspaceHeader"
 import { AgentWorkspace } from "./components/agent/AgentWorkspace"
+import { ProviderSettings } from "./components/settings/ProviderSettings"
+import { readDesktopRuntime, type DesktopRuntimeInfo } from "./services/desktopRuntime"
 import { agentRunner } from "./agent/agentRunner"
 import { useAgentStore } from "./agentStore"
 import { DEFAULT_APP_MODULE, type AppModuleId } from "./shellModules"
@@ -240,6 +242,22 @@ export function App() {
    * 切模块时把文档草稿、工作区文档原样留着，所以来回切换不会丢任何几何内容。
    */
   const [activeModule, setActiveModule] = useState<AppModuleId>(DEFAULT_APP_MODULE)
+  /**
+   * 桌面自述（G1 Task 1.1/1.2）。
+   *
+   * 在浏览器里读回来的是 `desktop: false` —— 那**不是错误**，而是"这个功能需要桌面版"的
+   * 事实依据。模型服务界面据此如实说明，而不是让用户填完才发现存不下。
+   * 读不到（IPC 失败）时同样留 `null`，界面会说"没问到"，不会编一份。
+   */
+  const [desktopInfo, setDesktopInfo] = useState<DesktopRuntimeInfo | null>(null)
+  useEffect(() => {
+    let alive = true
+    void readDesktopRuntime().then((result) => {
+      if (alive && result.ok && result.desktop) setDesktopInfo(result.info)
+    })
+    return () => { alive = false }
+  }, [])
+  const desktopRuntimeHint = desktopInfo ? undefined : "密钥保存在 Windows 凭据管理器里，需要桌面版（Windows 应用）；当前在浏览器里运行，配置无法保存。"
   const selectedId = selectedIds.at(-1) ?? null
   const slope = document.parameters.slope
   const slopeLine = useMemo(() => document.primitives.find((primitive) => primitive.id === "line-slope"), [document.primitives])
@@ -1713,7 +1731,7 @@ export function App() {
       </div>}
       {(fileError || operationError) && <div role="alert" className="footer-note">{fileError ?? operationError}</div>}
       {document.workspace !== "cad" && guidance && <GuidanceHint text={guidance} onDismiss={() => setGuidance(null)} />}
-    </div> : <div className="app-module" data-module="agent">
+    </div> : activeModule === "agent" ? <div className="app-module" data-module="agent">
       {/* 模块 B 不含任何从几何文档派生的 UI（Ribbon / 画布 / 检查器），所以文档一步都不订阅，
           切进 Agent 区不会因为画布重渲染而卡一下。 */}
       <AgentWorkspace
@@ -1725,6 +1743,12 @@ export function App() {
         onRetry={retryLastPrompt}
       />
       {(fileError || operationError) && <div role="alert" className="footer-note">{fileError ?? operationError}</div>}
+    </div> : <div className="app-module" data-module="settings">
+      {/* 模块 C **模型服务**（G1 Task 1.3）：provider 配置与密钥是**应用级**的东西 ——
+          不属于任何一个工作区，也不属于对话区。
+          在桌面外壳里它是真的能存的地方；在浏览器里如实说明"需要桌面版"，
+          而不是让用户填完才发现存不下。 */}
+      <ProviderSettings unavailableReason={desktopRuntimeHint} />
     </div>}
     <input ref={fileInputRef} hidden aria-label="加载 .mgeo 文件" type="file" accept=".mgeo,application/json" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; file.text().then(load).catch(() => setFileError("无法读取 .mgeo 文件")); event.target.value = "" }} />
   </div>

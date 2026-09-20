@@ -118,10 +118,10 @@ fn keeps_the_capability_set_minimal() {
 fn exposes_only_named_ipc_commands_and_no_generic_one() {
     let lib = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/lib.rs")).expect("read lib.rs");
 
-    let named = ["get_runtime_info", "save_secret", "remove_secret", "has_secret"];
+    let named = ["get_runtime_info", "save_secret", "remove_secret", "has_secret", "list_provider_profiles", "upsert_provider_profile", "remove_provider_profile", "provider_health"];
     assert!(
-        lib.contains("tauri::generate_handler![get_runtime_info, save_secret, remove_secret, has_secret]"),
-        "the command list must stay explicit: {lib}"
+        lib.contains("tauri::generate_handler![\n            get_runtime_info,\n            save_secret,\n            remove_secret,\n            has_secret,\n            list_provider_profiles,\n            upsert_provider_profile,\n            remove_provider_profile,\n            provider_health\n        ]"),
+        "the command list must stay explicit (one name per line): {lib}"
     );
     assert_eq!(lib.matches("generate_handler!").count(), 1, "exactly one invoke handler");
     // 每个注册过的命令都要有一个 `#[tauri::command]` 函数。
