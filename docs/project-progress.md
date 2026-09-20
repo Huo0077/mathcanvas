@@ -2188,6 +2188,7 @@
 - P4 / P5：**由用户明确排除**（Agent 与 Provider Router、题图解析），不在当前范围
 - P6：立体几何已完成（v1 四类模板 → v2 点驱动通用拓扑 → v3 可用性修复），并叠加 **A1 解析二次曲面与真圆**、**A2 交面分组与真曲面**
 - P7：工程制图已完成（四视图、投影线联动、工程标注、SVG / DXF / PDF 导出、图纸与图层树）
+- **G0 / G0.5 / G1 / G2**（桌面 Agent 实施计划）：G0 与 G0.5 的 Gate 全部满足；**G2 主体已实现**（本地确定性规划器 + 真协调器 + 隔离草稿 + 一次性同意 + 运行账本/预算）；**G1 六个任务全部动手** —— 1.1 桌面外壳 / 1.2 SecretStore / 1.3 provider 配置 / 1.4 适配器与**真实转发** / 1.5 回环代理（真服务器 + 判据）/ 1.6 SQLite 仓储**全部完成**，1.6 尚缺 `.mcanvas` 打包与附件。**G1 阶段状态表**在本文件顶部，是 G1 的唯一真源。
 
 - [x] P1：表达式 AST 最小能力（数字、变量、加减乘除、括号）
 - [x] 将表达式求值接入参数环境，为后续函数图像和导数做基础
@@ -2544,7 +2545,9 @@ P7-1 至 P7-6 与工程工作台层次化改造 Task 1-7 均已完成；P4 Agent
 
 ## 验证证据
 
-> **当前基线（唯一权威，2026-09-18 在"平面几何切线 + 动点扩展 + 切点拖动 + 画布收细"之后实测）**：`npx vitest run` **124 个测试文件、1477 个用例通过**（把上游那 22 个提交一起并进来之后重跑；本轮自己的 37 条全部在内）；4 个 workspace 类型检查通过；ESLint 对改动文件 **0 error**（仓库既有 5 条 warning 与本轮无关）；dev server 逐个模块转译通过。**Playwright 本轮未运行**（需另起构建产物端口与安装 Chromium）—— 界面交互由 `App.test.tsx` 的真实 DOM 与指针事件覆盖，浏览器级门禁待补。
+> **当前基线（唯一权威，2026-09-21 在「G1 第九批：provider 真的会发请求了」之后实测）**：`npm.cmd test` **188 个测试文件、2115 个用例全部通过（零跳过）**；6 个 workspace（含 `@draw/desktop`）类型检查通过；ESLint **0 error / 14 warning**（14 条为既有基线）；`cargo clippy --all-targets` **零警告**；`npm.cmd run build` exit 0（含 `tauri build --no-bundle`，产出可运行的 `mathcanvas-desktop.exe`）；**Rust 测试 120 例通过 + 1 例 `#[ignore]`**（单元 8 + project_repository 16 + **provider_adapter 16** + provider_profiles 14 + providers 17 + proxy 16 + **proxy_server 16** + secrets 8 + shell_smoke 9）；Playwright Chromium **119/119** 通过。逐批证据见「G1 第一批 … 第九批」各节。
+
+> **上一轮基线（2026-09-18 在"平面几何切线 + 动点扩展 + 切点拖动 + 画布收细"之后实测）**：`npx vitest run` **124 个测试文件、1477 个用例通过**（把上游那 22 个提交一起并进来之后重跑；本轮自己的 37 条全部在内）；4 个 workspace 类型检查通过；ESLint 对改动文件 **0 error**（仓库既有 5 条 warning 与本轮无关）；dev server 逐个模块转译通过。**Playwright 本轮未运行**（需另起构建产物端口与安装 Chromium）—— 界面交互由 `App.test.tsx` 的真实 DOM 与指针事件覆盖，浏览器级门禁待补。
 >
 > **后续回填（2026-09-18，轨道动点两处修复合并且浏览器级门禁补跑之后，本文件顶部那一节）**：同一棵树实测 **124 个测试文件 / 1480 个用例**（+3：`point3HostBindings.test.ts` 1 条、`App.test.tsx` 1 条、`threeScene.test.ts` 1 条）；**Playwright 110/110 通过**（补上了上一条"待补"的缺口，并因此抓到切线一轮误删的平面画布读数 `data-measurement-labels`，已修；随后又加了 1 条浏览器用例复刻"动点与定点连线"，合计 **111/111**）；`npm.cmd test` 当时会报 1 个 vitest 工作进程心跳超时的 unhandled error（1480 条 0 失败，`--maxWorkers=2` 退码 0）——**该瑕疵随后已根治：`vitest` ^3.2.4 → ^4.1.11**（上游 `vitest-dev/vitest#8297`），升级后 4 次实跑（含一次与 Playwright 并发）全部 0 error、退码 0。**上一条的 1477 与本条 1480 不矛盾**：1477 是那一轮自己的重跑，1480 是合并我这 3 条之后的读数。
 > **上一轮基线（2026-09-17 在"全身大体检（十批）+ e2e 构建修复 + 平面网格固定 + 圆上四个点 + 母线不画 + 交点只标角点"之后实测）**：`npm.cmd test` **108 个测试文件、1210 个用例通过**；4 个 workspace 类型检查通过；ESLint **0 error、14 条 warning**；生产构建通过（Vite 仍提示主 bundle 超过 500 KB）；Playwright **86/86** 通过（**现在真的跑的是当前工作区的构建产物**，见下）。
