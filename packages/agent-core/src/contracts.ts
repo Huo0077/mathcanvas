@@ -119,10 +119,23 @@ export type ScopedReference = DraftScopeRef | SceneScopeRef
 export type { DraftAction } from "@draw/scene-graph"
 import type { DraftAction } from "@draw/scene-graph"
 
+/**
+ * **规划器替你做的假设**（人话，每条一句），例如"把「直径 6」读作半径 3"。
+ *
+ * 为什么它在**信封**上，而不是由界面从计划里猜：
+ * 一个自然语言计划必然包含"我替你定了"的部分（半径、边长、取哪个分支）。这些不是错误，
+ * 但用户必须**看见**它们才能谈得上确认 —— 否则他确认的是一件自己没看过的事。
+ * 界面（`AssumptionList` / `ConfirmationPanel`）与宿主共用这一份声明，不许各写一套。
+ *
+ * 可选：不声明假设与"没有假设"是同一件事（`undefined`），**不要**用空数组表示
+ * "我检查过、确实没有" —— 那两句话的语义不同，而线上只能承载一种。
+ */
+export type EnvelopeAssumptions = string[]
+
 export type PlanEnvelope =
-  | { schemaVersion: string; kind: "plan"; goal: string; factIds: string[]; actions: DraftAction[] }
-  | { schemaVersion: string; kind: "clarification"; goal: string; factIds: string[]; questions: string[] }
-  | { schemaVersion: string; kind: "answer"; goal: string; factIds: string[]; answer: string; toolResultRefs: string[] }
+  | { schemaVersion: string; kind: "plan"; goal: string; factIds: string[]; assumptions?: EnvelopeAssumptions; actions: DraftAction[] }
+  | { schemaVersion: string; kind: "clarification"; goal: string; factIds: string[]; assumptions?: EnvelopeAssumptions; questions: string[] }
+  | { schemaVersion: string; kind: "answer"; goal: string; factIds: string[]; assumptions?: EnvelopeAssumptions; answer: string; toolResultRefs: string[] }
 
 export interface ParseError {
   code: string

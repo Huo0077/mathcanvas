@@ -1,4 +1,4 @@
-import { CAPABILITY_REGISTRY_REVISION, type CommitOutcome, type DocumentHandle, type PlanEnvelope, type RunContext } from "@draw/agent-core"
+import { CAPABILITY_REGISTRY_REVISION, type CommitOutcome, type DocumentHandle, type PlanEnvelope, type PlannerPort, type RunContext } from "@draw/agent-core"
 import type { GeometryDocument } from "@draw/dsl"
 import { contentFingerprint } from "@draw/scene-graph"
 
@@ -108,7 +108,18 @@ function prepareWorkspaceFor(plan: PlanEnvelope): { ok: true } | { ok: false; de
   return { ok: true }
 }
 
-export function createAgentRunner(): AgentRunner {
+/**
+ * 运行器的可替换依赖。
+ *
+ * `planner` 可注入的**唯一**理由是测试：要验证"规划器声明的假设真的走到确认界面上"，
+ * 就得有一个会说假设的规划器，而本地确定性规划器**从不声明假设**（它产出的是固定动作）。
+ * 生产路径不传它，用的仍是本地规划器。
+ */
+export interface AgentRunnerDependencies {
+  planner?: PlannerPort
+}
+
+export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): AgentRunner {
   let runtime: AgentRuntime | null = null
   let sequence = 0
 
@@ -126,7 +137,7 @@ export function createAgentRunner(): AgentRunner {
           return [{ handle: handleOf(live), document: live }]
         },
         // 真实 provider 接进来时只换这一行 —— 这也是 `PlannerPort` 存在的理由。
-        planner: createLocalPlanner(),
+        planner: dependencies.planner ?? createLocalPlanner(),
         /**
          * 编译之前把工作区切到这条计划需要的那个。
          *
@@ -180,7 +191,9 @@ export function createAgentRunner(): AgentRunner {
           stageCount: preview.ok ? preview.artifact.stageCount : 0,
           undoesInOneStep: true,
           counts: preview.ok ? preview.artifact.counts : undefined,
-          baseCounts: preview.ok ? preview.artifact.baseCounts : undefined
+          baseCounts: preview.ok ? preview.artifact.baseCounts : undefined,
+          // 假设在**计划解析成功那一刻**就知道，而草稿是运行结束之后才拿到的 —— 中间没有第二条路。
+          assumptions: runtime.assumptions()
         })
         return { phase, draftId }
       }

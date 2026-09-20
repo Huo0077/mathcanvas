@@ -85,6 +85,17 @@ export interface AgentRuntime {
   /** 这次运行正在用的草稿 id（没有则为 null）。界面靠它去取预览。 */
   draftId(): string | null
   /**
+   * **规划器替用户做的假设**（已通过校验的计划里声明的那些）。
+   *
+   * 为什么由运行时保管而不是让界面自己找：假设在**计划解析成功那一刻**就知道，
+   * 而界面是在运行**结束之后**才拿到草稿。中间隔着"编译 → 校验 → 等确认"，
+   * 界面没有第二条路能拿到它 —— 除非再问一次规划器，那等于把模型跑两遍。
+   *
+   * 没有草稿的只读运行也会拿到假设（例如"我按直角理解这张图"），所以界面**不能**
+   * 假设"有假设就一定有草稿"。
+   */
+  assumptions(): string[] | undefined
+  /**
    * 用户点了确认之后**真正落盘**。
    *
    * 两步都必须走宿主桥：先 `requestConsent` 铸造一次性凭据，再 `commit` 提交。
@@ -185,11 +196,19 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
 
   const committer = createCommitterAdapter({ drafts, host, live })
 
+  /**
+   * 规划器声明的假设，由协调器在**计划通过校验**时交过来（见 `onPlanParsed`）。
+   *
+   * 每次运行新建一个运行时，所以这里不需要清理 —— 上一轮的假设不会漏到这一轮。
+   */
+  let declaredAssumptions: string[] | undefined
+
   const coordinator = createCoordinator({
     planner: dependencies.planner,
     observer,
     committer,
     prepare: dependencies.prepare,
+    onPlanParsed: (plan) => { declaredAssumptions = plan.assumptions },
     consent: undefined // 同意凭据由宿主在用户确认后创建，协调器不构造它。
   })
 
@@ -201,6 +220,7 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
     committer,
     scene: createSceneTools(createSceneObservation(dependencies.readSceneDocuments())),
     draftId: () => committer.draftIdFor(),
+    assumptions: () => declaredAssumptions,
     confirmDraft() {
       const id = committer.draftIdFor()
       if (!id) return { status: "rejected" as const, detail: "there is no staged draft to confirm" }

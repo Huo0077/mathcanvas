@@ -129,6 +129,50 @@ describe("draft action parsing", () => {
   })
 })
 
+describe("envelope assumptions", () => {
+  /**
+   * `AssumptionList` 与 `ConfirmationPanel` 都要求"把系统替你做的假设列出来"，但**线上一直没有这个字段** ——
+   * 于是那一节永远是空的：组件做完了、数据没有。这里补上数据面。
+   *
+   * 为什么要由**计划自己**声明假设：一个自然语言计划里必然有"我替你定了"的部分
+   * （"直径 6" → 半径 3；"正方形" → 边长取 4）。这些不是错误，但用户必须**看见**它们才能确认，
+   * 否则他确认的是一件自己没看过的事。
+   */
+  it("carries the assumptions the planner made, so the confirmation panel can list them", () => {
+    const plan = validPlan() as Record<string, unknown>
+    plan.assumptions = ["把「直径 6」读作半径 3", "正方形的边长取 4"]
+
+    const result = parsePlanEnvelope(plan)
+
+    expect(result.ok).toBe(true)
+    if (result.ok && result.value.kind === "plan") {
+      expect(result.value.assumptions).toEqual(["把「直径 6」读作半径 3", "正方形的边长取 4"])
+    }
+  })
+
+  it("treats a plan without assumptions as having none declared", () => {
+    const result = parsePlanEnvelope(validPlan())
+    expect(result.ok).toBe(true)
+    if (result.ok && result.value.kind === "plan") expect(result.value.assumptions).toBeUndefined()
+  })
+
+  it("rejects an assumption that is not a bounded non-empty string", () => {
+    const plan = validPlan() as Record<string, unknown>
+    plan.assumptions = [""]
+    expectRejected(parsePlanEnvelope(plan), "empty_string")
+
+    const numeric = validPlan() as Record<string, unknown>
+    numeric.assumptions = [42]
+    expectRejected(parsePlanEnvelope(numeric), "invalid_type")
+  })
+
+  it("rejects more assumptions than the envelope budget allows", () => {
+    const plan = validPlan() as Record<string, unknown>
+    plan.assumptions = Array.from({ length: 64 }, (_, index) => `assumption ${index}`)
+    expectRejected(parsePlanEnvelope(plan), "array_too_long")
+  })
+})
+
 describe("deterministic ids and hashes", () => {
   it("mints distinct, prefixed ids", () => {
     const runIds = new Set(Array.from({ length: 50 }, () => newRunId()))

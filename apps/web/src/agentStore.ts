@@ -46,6 +46,14 @@ export interface AgentDraftView {
   counts?: DraftObjectCounts
   /** 基础文档的对象计数，用来显示"这次会多出/少掉多少"。 */
   baseCounts?: DraftObjectCounts
+  /**
+   * **规划器替用户做的假设**（"我按直径 6 读作半径 3"）。
+   *
+   * 放在草稿视图上而不是另开一个字段，是因为它只有与这份草稿一起看才有意义：
+   * 用户确认的是这份草稿，而假设正是"这份草稿为什么长这样"的说明。
+   * 计划信封里可以声明它（`EnvelopeAssumptions`），界面只负责显示，不负责猜。
+   */
+  assumptions?: string[]
 }
 
 /** 提交回执：成功与否、有没有真的改动、失败原因。 */

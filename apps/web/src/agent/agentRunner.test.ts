@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest"
 
 import { createEmptyDocument } from "@draw/dsl"
+import type { PlannerPort } from "@draw/agent-core"
 
 import { useAgentStore } from "../agentStore"
 import { useSceneStore } from "../store"
@@ -92,8 +93,58 @@ describe("the confirm and commit cycle", () => {
     expect(useSceneStore.getState().document.primitives.length).toBeGreaterThan(0)
   })
 
-  it("does not change the document when the user never confirms", async () => {
+  /**
+   * **规划器声明的假设必须走到确认界面上**（`AssumptionList` / `ConfirmationPanel` 的那一节）。
+   *
+   * 这一节此前**永远是空的**：组件做完了、数据没有 —— 计划信封里根本没有 `assumptions` 字段。
+   * 现在信封有了（`EnvelopeAssumptions`），需要证明它真的**贯穿**：
+   * 规划器 → 协调器（`onPlanParsed`）→ 运行时 → 运行器 → 界面草稿视图 → 确认面板。
+   *
+   * 用可注入的规划器，是因为本地确定性规划器**从不声明假设**（它产出固定动作）；
+   * 真实 provider 接进来时，"模型声明了什么假设"正是这条链要传的东西。
+   */
+  it("carries the planner's declared assumptions all the way to the confirmation view", async () => {
+    const planner: PlannerPort = {
+      async plan() {
+        return {
+          requestId: "req-assumptions",
+          attemptId: "attempt-assumptions",
+          plan: {
+            schemaVersion: "mathcanvas.plan.v1",
+            kind: "plan",
+            goal: "建一个立方体",
+            factIds: [],
+            assumptions: ["把「棱长 3」读作边长 3", "底面默认落在地面上"],
+            actions: [{
+              actionId: "solid.create_template",
+              actionKey: "cube",
+              factIds: [],
+              inputs: { alias: "cube", template: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 3, y: 3, z: 3 } }
+            }]
+          }
+        }
+      }
+    }
+    const runner = createAgentRunner({ planner })
+
+    const result = await runAndWait(runner, "建一个立方体")
+
+    expect(result.phase).toBe("awaiting_confirmation")
+    const assistant = useAgentStore.getState().activeConversation!.messages.at(-1)!
+    expect(assistant.draft?.assumptions).toEqual(["把「棱长 3」读作边长 3", "底面默认落在地面上"])
+    // 假设只是**说明**，它不许顺手把文档改掉 —— 提交仍然要用户点。
+    expect(useSceneStore.getState().document.primitives).toHaveLength(0)
+  })
+
+  it("leaves the assumptions empty when the planner declares none", async () => {
     const runner = createAgentRunner()
+    await runAndWait(runner, "建一个棱长 3 的立方体")
+
+    const assistant = useAgentStore.getState().activeConversation!.messages.at(-1)!
+    expect(assistant.draft?.assumptions).toBeUndefined()
+  })
+
+  it("does not change the document when the user never confirms", async () => {    const runner = createAgentRunner()
     await runAndWait(runner, "建一个棱长 3 的立方体")
 
     // 什么都不点：文档保持原样，历史也没有多一步。

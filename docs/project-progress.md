@@ -6,6 +6,25 @@
 **当前阶段：** P0-P6 与 P7 工程制图已完成；MathCanvas 统一 Ribbon UI 基线、后续 UI 优化（Task 7-13）、工程制图视觉重做（Task 14）、工程制图可用性修复（Task 15-18）、圆锥曲线四项修复、功能键操作指引浮层、CAD 2D 绘图交互重做、平面几何动点系统、3D 视口与几何内核重构、封闭曲线绕定点旋转、UI 优化（草稿纸画布）与平面几何元素选颜色均已完成。**2026-09-17 新增两条解析几何交付线并已全部落地**：**A1 解析二次曲面与"真圆"**（8 片；设计 `docs/superpowers/specs/2026-09-17-analytic-quadrics-design.md`）与 **A2 交面按支撑曲面分组 + 真曲面**（5 轮；设计 `docs/superpowers/specs/2026-09-17-intersection-face-grouping-design.md`）——用户口径从"我不要一个逼近的圆，我需要一个真的圆"一路推到"我需要的只是那个相交的曲面，而不是由很多三角形拼出来的"。**随后"立体几何最后一轮"四件事也已全部交付**（7 片；设计 `docs/superpowers/specs/2026-09-17-3d-tracks-rotation-and-measurement-labels-design.md`）：约束轨道（`circle3` 当动点宿主）、拖动旋转（世界轴三色环 + 15° 吸附 + 属性栏角度）、测量数字常驻画布（2D + 3D）、立体几何 UI 与平面几何同一套令牌。平面动点系统按四个维度交付：①约束模型与参数化映射 ②依赖图 DAG 与增量拓扑重算 ③动态测量监听器 ④轨迹采样与消元法隐式化；3D 重构按四个区块交付：①动点宿主约束与渲染管道 ②截面几何 ③Auto-Fit ④生命周期与多解；四者与三区块**全部接进主流程**（不只是内核可用）。**2026-09-18 又完成平面几何切线**（抛物线 / 双曲线 / 圆 / 椭圆的曲线切线，切点可沿曲线拖动或跟随动点）**与动点扩展**（在动点处作切线、以动点为圆心作圆、半径可调且可随动点位置动态变化），并修掉"切线不能拖动"这一现场反馈。P4 Agent 与 P5 题图解析仍在排除范围内。
 **总体状态：** 开发中
 
+### G2 第二十三批：把"假设"从数据面接通到界面（`AssumptionList`），补上那条一直是空的一节（2026-09-21）
+
+- **发现的缺口**：`ConfirmationPanel` 有 `assumptions` 这个 prop、`DraftPreview` 也有，计划 Step 4 逐字点名要列出 assumptions —— 但**计划信封里根本没有这个字段**，也没有任何地方会传值。**组件做完了、数据没有**，于是那一节在整条链上永远是空的。这类"看起来做完了"的缺口比缺失的组件更危险：读代码只能看到"已实现"。
+
+- **数据面**：`PlanEnvelope` 三个分支各加可选 `assumptions?: string[]`（`contracts.ts` 的 `EnvelopeAssumptions`），由 `parsePlanEnvelope` 严格校验（非空、有界字符串、数组上限，与 `factIds` 同一条通道）。**归一规则**：字段缺失、显式 `undefined`、空数组**都是"没有假设"** —— 线上只承载一种语义，免得下游出现"`length > 0` 与 `!== undefined` 哪个才算真"的分叉。
+  - 失败用例先写好：`assumptions: [""]` → `empty_string`、`[42]` → `invalid_type`、64 条 → `array_too_long`、带假设的计划 → 原样带出、不带 → `undefined`。
+
+- **传递链路**：假设在**计划解析成功那一刻**就知道，而界面是运行**结束之后**才拿到草稿的，中间隔着"编译 → 校验 → 等确认"，界面没有第二条路。所以给协调器加了 `onPlanParsed?: (plan: PlanEnvelope) => void` 通知点（传的是**已校验的值**，解析失败的计划不会走到这里），运行时把它存进闭包并暴露 `assumptions()`，运行器写进草稿视图，`AgentMessageList` 传给确认面板。
+
+- **界面**：新增 `components/agent/AssumptionList.tsx`（4 例）。抽出来而不是留在面板里，理由是**它有自己的可读性要求**（用户要一条一条判断"这条我认不认"）、**会被不止一处用到**（`DraftPreview` 与确认面板都要这一节），以及**"空清单不渲染"值得单独钉住** —— 一个永远显示的"系统替你做的假设：（空）"会被读成"它检查过了，确实没有"，而那是我们**不知道**的事。
+
+- **RED→GREEN**：`agentRunner.test.ts` 新增 2 例（规划器声明的假设一路走到草稿视图 / 没声明时是 `undefined`）。为了能用"会说假设的规划器"跑这条链，`createAgentRunner` 增加可选 `planner` 依赖（本地确定性规划器从不声明假设，它产出固定动作）；生产路径不传，仍是本地规划器。**做了变异检验**：把 `agentRuntime` 里的 `onPlanParsed` 接线删掉后该用例**确实失败**（`expected undefined to deeply equal [...]`），恢复后绿 —— 证明它钉住的是真的接线，不是同义反复。顺带钉住一条纪律：**有假设不等于改了文档**，确认前 `primitives` 仍为 0。
+
+- **过程中踩到的一个测试环境细节（记下来）**：我第一版用了 `toBeEmptyDOMElement` / `toBeInTheDocument`，本仓库**没有装 jest-dom**（`test-setup.ts` 只补 storage 与 PointerEvent），于是直接报 "Invalid Chai property" —— 看起来像断言失败、其实是断言不存在。已改为原生 matcher，并把这条写进该文件的注释。
+
+**验证证据（本批）**：单测 **176 文件 / 1971 用例全通过（零跳过）**、typecheck exit 0、lint 0 error / 14 warning（基线）、生产构建通过、e2e **119/119**。
+
+**仍未做（明确记下）**：`ToolPort` 仍未接线（且 `ToolCallRequest` **没有工具名与参数**，接线前要先补这个形状）；`ToolTracePanel.tsx` 未写（计划 Task 2.6 Step 4 的"用户可见轨迹 + 可选开发者详细视图"）；两个 worker 仍无 `new Worker` 调用方；G1 仍被 Rust 工具链缺失挡着。
+
 ### G2 第二十二批：修掉"传输层 → 动作层"接缝上的真实缺陷（`object.update_inputs` / `dynamic.bind_point` / `dynamic.bind_curve` 全都走不通），并把 `previewHash` 换成真哈希（2026-09-21）
 
 - **来源**：一次对当前进度的独立审查。审查不是读文档，而是**实测**：单测 174 文件 / 1957 用例、e2e 119/119、typecheck exit 0、lint 0 error / 14 warning —— 数字全部复现，**但写了一个临时探针把"已校验的计划"喂进编译器，当场红了**。

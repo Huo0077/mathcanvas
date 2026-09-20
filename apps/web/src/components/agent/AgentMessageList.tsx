@@ -67,7 +67,7 @@ export function AgentMessageList({ conversation, onRetry, onRevise, onStop, onCo
             {message.role === "assistant" && <RunStatus message={message} onRetry={onRetry} onRevise={onRevise} onStop={onStop} onConfirm={onConfirm} onDiscard={onDiscard} />}
             {/* 有草稿时再给一块**确认面板**：它比状态卡里的摘要详细得多（精确计数、来源与目标、
                 假设、近似、导出省略、一步撤销声明）。计划把它与状态卡分开列，这里也分开渲染。 */}
-            {message.role === "assistant" && message.draft && <ConfirmationPanel draft={message.draft} onConfirm={onConfirm} onDiscard={onDiscard} />}
+            {message.role === "assistant" && message.draft && <ConfirmationPanel draft={message.draft} assumptions={message.draft.assumptions} onConfirm={onConfirm} onDiscard={onDiscard} />}
             {/* 在途消息在气泡里**仍然**留一句带 `role="status"` 的短标签：屏幕阅读器靠它播报，
                 而状态卡负责说明"走到哪一步"。两者不重复，也不互相替代。 */}
             <div className="agent-bubble">

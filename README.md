@@ -182,7 +182,8 @@ npm run test:e2e
 - **没有模型服务时不会编答案**：用的是**本地确定性规划器**，只认几条固定指令；认不出就**问用户**（运行进入"等待补充信息"），绝不生成一段看起来像回答的文字。计划里那句"生产路径不再有演示回复"已兑现——原来的 `composeDemoReply` 已删除。
 - **对模型的能力边界是代码里的表，不是提示词**：能力注册表（42 图元 / 39 操作，不可用的显式标出）、按阶段发布的工具（观察阶段**没有任何写入工具**；提交工具只在"等你确认"且你已确认时存在）、技能清单（哈希校验后才加载）。
 - **失败会如实说**：认证 / 权限 / 几何 / 事实矛盾这四类**一律不自动重试**；输出解析**绝不从散文里抠 JSON、绝不修补字段**；运行遥测默认拒绝式脱敏（`Authorization`、`sk-` 前缀、长随机串一律替换），账本**拒绝存模型推理与图像字节**。
-- 仍未接入真实模型服务：provider 调用属 G1（需要 Rust 工具链，见「下一步」）；`PlannerPort` 就是将来替换本地规划器的位置。
+- **假设要摆在台面上**（2026-09-21 补）：计划信封可选声明 `assumptions`（"把「直径 6」读作半径 3"），经协调器的 `onPlanParsed` → 运行时 → 运行器一路带到确认面板的「系统替你做的假设」一节（`AssumptionList.tsx`）。**没有声明就整节不渲染** —— 显示一个空的"确实没有假设"会被读成"它检查过了"，而那是我们不知道的事。
+- **当前边界（如实）**：真实 provider 仍未接入（属 G1，需要 Rust 工具链，见「下一步」）；`PlannerPort` 就是将来替换本地规划器的位置。此外这些部件已经有实现与测试、但**还没有生产调用方**：`buildContext`、`createToolRegistry`、`ToolPort`、`toolRegistry` 的阶段过滤，以及 `agent.worker.ts` / `geometry.worker.ts`（全仓没有任何 `new Worker(`）。
 
 ## 包结构
 
@@ -201,9 +202,9 @@ npm run build
 npm run test:e2e
 ```
 
-当前验证基线（**2026-09-21，G2 第二十二批之后实测**）：`npm.cmd test` 为 **175 个测试文件、1961 个用例全部通过（零跳过）**；**5 个 workspace** 类型检查通过；ESLint **0 error / 14 warning**（14 条为既有基线）；Web 生产构建通过（Vite 仍提示主 bundle 超过 500 KB）；Playwright Chromium **119/119** 通过（global setup **按当前工作区重新构建** `build-check/mathcanvas-current` 再预览，因此结果对应工作区源码，而不是该目录里上一次构建的产物）。
+当前验证基线（**2026-09-21，G2 第二十三批之后实测**）：`npm.cmd test` 为 **176 个测试文件、1971 个用例全部通过（零跳过）**；**5 个 workspace** 类型检查通过；ESLint **0 error / 14 warning**（14 条为既有基线）；Web 生产构建通过（Vite 仍提示主 bundle 超过 500 KB）；Playwright Chromium **119/119** 通过（global setup **按当前工作区重新构建** `build-check/mathcanvas-current` 再预览，因此结果对应工作区源码，而不是该目录里上一次构建的产物）。
 
-**最新一批修掉的两个真实缺陷（2026-09-21）**：①**传输层与动作层对"引用"的形状定义不一致** —— `schemas.ts` 产出 `{scope:"scene",ref:{documentId,entityId}}`，而动作编译器读扁平的 `inputs.target.documentId`，于是 `object.update_inputs` / `dynamic.bind_point` / `dynamic.bind_curve` **不存在任何一种能同时通过校验并被正确编译的输入**；两侧测试各自只喂自己那一半的形状，所以单测全绿而缝是空的。现在传输层摊平成动作层的 `SceneReference`（**未放宽任何校验**），并由新增的 `packages/agent-core/src/planToCompile.seam.test.ts` 用**已校验的输出**钉住这条接缝（含一条"跨文档引用仍被拒"的反向用例）。②`draftStore.previewHash` 原先是**整份候选文档的 JSON 字符串**（`contentFingerprint`），现已换成真 SHA-256（`canonicalContentHash`）。
+**最新一批（2026-09-21）交付与修复**：①**传输层与动作层的引用形状不一致**（`object.update_inputs` / `dynamic.bind_point` / `dynamic.bind_curve` 三个动作此前**不存在任何一种能同时通过校验并被正确编译的输入**）已修，并由 `packages/agent-core/src/planToCompile.seam.test.ts` 用**已校验的输出**钉住整条接缝；②`draftStore.previewHash` 换成真 SHA-256（`canonicalContentHash`）；③**补上"假设"这一节的数据面**：计划信封新增可选 `assumptions`，经 `onPlanParsed` → 运行时 → 运行器 → 草稿视图 → 确认面板贯通，新增 `AssumptionList.tsx`。此前 `ConfirmationPanel` 的 `assumptions` prop **没有任何地方会传值**，那一节在整条链上永远是空的。
 
 **Agent 相关的验证重点**：`e2e/agent-flow.spec.ts` 三条 —— ①**一句话 → 草稿预览 → 确认前画布为空 → 确认 → 画布出现对象 → `Ctrl+Z` 一步撤销回空**；②丢弃草稿后文档与历史都不动；③认不出时给"需要补充信息"而不是编一段回答。单测侧另有：`agentRunner.test.ts`（暂存阶段不动文档 / 确认后恰好一步历史 / 拒绝二次提交）、`agentRuntime.test.ts`（**一个替身都不用**：真草稿存储 + 真宿主桥 + 真协调器）、`pipeline.test.ts`（G0.5 四条 Gate 端到端）。
 

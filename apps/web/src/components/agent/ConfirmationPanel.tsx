@@ -1,4 +1,5 @@
 import type { AgentDraftView } from "../../agentStore"
+import { AssumptionList } from "./AssumptionList"
 import { countDeltas, removedObjectCount, summarizeDraftScale } from "./confirmationCounts"
 
 /**
@@ -85,10 +86,7 @@ export function ConfirmationPanel({ draft, assumptions = [], approximationNotes 
       （`canonicalContentHash`）之后再把它露出来。详见 `docs/project-progress.md`。
     */}
 
-    {assumptions.length > 0 && <div className="agent-confirmation-assumptions">
-      <h4>系统替你做的假设</h4>
-      <ul>{assumptions.map((note) => <li key={note}>{note}</li>)}</ul>
-    </div>}
+    {assumptions.length > 0 && <AssumptionList assumptions={assumptions} />}
 
     {approximationNotes.length > 0 && <div className="agent-confirmation-approximation">
       <h4>近似说明</h4>

@@ -340,10 +340,10 @@ export function parsePlanEnvelope(input: unknown): ParseResult<PlanEnvelope> {
   }
 
   const allowed = kind === "plan"
-    ? ["schemaVersion", "kind", "goal", "factIds", "actions"]
+    ? ["schemaVersion", "kind", "goal", "factIds", "assumptions", "actions"]
     : kind === "clarification"
-      ? ["schemaVersion", "kind", "goal", "factIds", "questions"]
-      : ["schemaVersion", "kind", "goal", "factIds", "answer", "toolResultRefs"]
+      ? ["schemaVersion", "kind", "goal", "factIds", "assumptions", "questions"]
+      : ["schemaVersion", "kind", "goal", "factIds", "assumptions", "answer", "toolResultRefs"]
   rejectUnknownFields(input, allowed, "envelope", errors)
 
   if (input.schemaVersion !== PLAN_SCHEMA_VERSION) {
@@ -351,6 +351,19 @@ export function parsePlanEnvelope(input: unknown): ParseResult<PlanEnvelope> {
   }
   const goal = boundedString(input.goal, "envelope.goal", errors)
   const factIds = readStringArray(input.factIds, "envelope.factIds", errors)
+
+  /**
+   * `assumptions` 是**三个分支共用**的可选字段：无论"要作图 / 要问 / 只回答"，
+   * 规划器都替用户定了一些东西，而那些东西都要能被看见（见 `contracts.ts` 的 `EnvelopeAssumptions`）。
+   *
+   * 两种写法都当"没有假设"：字段缺失、显式 `undefined`、以及空数组。
+   * "没有假设"与"我检查过、确实没有"在线上只承载一种语义，所以空数组**归一为 `undefined`**，
+   * 免得下游出现"`length > 0` 与 `!== undefined` 哪一个才是真"这种分叉。
+   */
+  const rawAssumptions = "assumptions" in input && input.assumptions !== undefined
+    ? readStringArray(input.assumptions, "envelope.assumptions", errors)
+    : undefined
+  const assumptions = !rawAssumptions || rawAssumptions.length === 0 ? undefined : rawAssumptions
 
   if (kind === "plan") {
     const rawActions = boundedArray(input.actions, "envelope.actions", errors)
@@ -369,20 +382,20 @@ export function parsePlanEnvelope(input: unknown): ParseResult<PlanEnvelope> {
       actions.push(parsed.value)
     }
     if (errors.length > 0) return { ok: false, errors }
-    return { ok: true, value: { schemaVersion: PLAN_SCHEMA_VERSION, kind, goal: goal as string, factIds: factIds as string[], actions } }
+    return { ok: true, value: { schemaVersion: PLAN_SCHEMA_VERSION, kind, goal: goal as string, factIds: factIds as string[], assumptions, actions } }
   }
 
   if (kind === "clarification") {
     const questions = readStringArray(input.questions, "envelope.questions", errors)
     if (questions && questions.length === 0) errors.push(fail("empty_questions", "envelope.questions", "ask at least one concrete question"))
     if (errors.length > 0) return { ok: false, errors }
-    return { ok: true, value: { schemaVersion: PLAN_SCHEMA_VERSION, kind, goal: goal as string, factIds: factIds as string[], questions: questions as string[] } }
+    return { ok: true, value: { schemaVersion: PLAN_SCHEMA_VERSION, kind, goal: goal as string, factIds: factIds as string[], assumptions, questions: questions as string[] } }
   }
 
   const answer = boundedString(input.answer, "envelope.answer", errors, { allowEmpty: true })
   const toolResultRefs = readStringArray(input.toolResultRefs, "envelope.toolResultRefs", errors)
   if (errors.length > 0) return { ok: false, errors }
-  return { ok: true, value: { schemaVersion: PLAN_SCHEMA_VERSION, kind, goal: goal as string, factIds: factIds as string[], answer: answer as string, toolResultRefs: toolResultRefs as string[] } }
+  return { ok: true, value: { schemaVersion: PLAN_SCHEMA_VERSION, kind, goal: goal as string, factIds: factIds as string[], assumptions, answer: answer as string, toolResultRefs: toolResultRefs as string[] } }
 }
 
 // ---------------------------------------------------------------- 确定性 ID

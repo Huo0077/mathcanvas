@@ -35,6 +35,17 @@ export interface CoordinatorDependencies {
   /** 每次运行拿到的预算；默认按 `limits` 新建。注入点供测试观察用量。 */
   budget?: Budget
   /**
+   * **已校验的计划**到手时的通知点（可选）。
+   *
+   * 存在的理由：计划里有几样东西协调器自己**用不到**，但宿主必须看得见 ——
+   * 最典型的是 `assumptions`（"我替你定了半径 3"）。它们既不该塞进 `RunEvent.detail`
+   * （那是给日志看的一句话），也不该让宿主再去问一次规划器（那就等于跑两遍模型）。
+   *
+   * 传的是**已校验的值**（`parsePlanEnvelope` 的输出），所以接收方可以放心读字段；
+   * 解析失败的计划**不会**走到这里。
+   */
+  onPlanParsed?: (plan: PlanEnvelope) => void
+  /**
    * **编译之前**的一次准备机会（例如把工作区切到这条计划需要的那个）。
    *
    * 为什么需要它：动作编译器会拒绝"工作区不匹配"的动作（`solid.create_template` 在
@@ -137,6 +148,9 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
         if (failed.ok) yield failed.event
         return
       }
+
+      // 计划已通过校验：把它交给宿主（假设、以及其他协调器自己用不上的东西都从这里出去）。
+      dependencies.onPlanParsed?.(parsed)
 
       // ---- 缺事实 → 等用户补充（不是失败） --------------------------------
       const known = new Set(observation.factIds)
