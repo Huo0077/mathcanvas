@@ -23,6 +23,9 @@ serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
 tauri = { version = "2.11.6", features = [] }
 tauri-plugin-log = "2"
+# 项目仓储（Task 1.6）。`bundled` 把 SQLite 源码一起编进来 ——
+# 不依赖用户机器上有没有 sqlite3.dll，也不需要 MSVC 之外的构建工具。
+rusqlite = { version = "0.37", features = ["bundled"] }
 
 # WebView2 版本只有注册表知道真值。**只在 Windows 上编**：这个依赖的存在本身就是
 # "我们不假装知道别的平台"的落点（`runtime.rs` 里的非 Windows 分支直接回 `unknown`）。

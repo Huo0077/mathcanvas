@@ -6,6 +6,23 @@
 **当前阶段：** P0-P6 与 P7 工程制图已完成；MathCanvas 统一 Ribbon UI 基线、后续 UI 优化（Task 7-13）、工程制图视觉重做（Task 14）、工程制图可用性修复（Task 15-18）、圆锥曲线四项修复、功能键操作指引浮层、CAD 2D 绘图交互重做、平面几何动点系统、3D 视口与几何内核重构、封闭曲线绕定点旋转、UI 优化（草稿纸画布）与平面几何元素选颜色均已完成。**2026-09-17 新增两条解析几何交付线并已全部落地**：**A1 解析二次曲面与"真圆"**（8 片；设计 `docs/superpowers/specs/2026-09-17-analytic-quadrics-design.md`）与 **A2 交面按支撑曲面分组 + 真曲面**（5 轮；设计 `docs/superpowers/specs/2026-09-17-intersection-face-grouping-design.md`）——用户口径从"我不要一个逼近的圆，我需要一个真的圆"一路推到"我需要的只是那个相交的曲面，而不是由很多三角形拼出来的"。**随后"立体几何最后一轮"四件事也已全部交付**（7 片；设计 `docs/superpowers/specs/2026-09-17-3d-tracks-rotation-and-measurement-labels-design.md`）：约束轨道（`circle3` 当动点宿主）、拖动旋转（世界轴三色环 + 15° 吸附 + 属性栏角度）、测量数字常驻画布（2D + 3D）、立体几何 UI 与平面几何同一套令牌。平面动点系统按四个维度交付：①约束模型与参数化映射 ②依赖图 DAG 与增量拓扑重算 ③动态测量监听器 ④轨迹采样与消元法隐式化；3D 重构按四个区块交付：①动点宿主约束与渲染管道 ②截面几何 ③Auto-Fit ④生命周期与多解；四者与三区块**全部接进主流程**（不只是内核可用）。**2026-09-18 又完成平面几何切线**（抛物线 / 双曲线 / 圆 / 椭圆的曲线切线，切点可沿曲线拖动或跟随动点）**与动点扩展**（在动点处作切线、以动点为圆心作圆、半径可调且可随动点位置动态变化），并修掉"切线不能拖动"这一现场反馈。P4 Agent 与 P5 题图解析仍在排除范围内。
 **总体状态：** 开发中
 
+### G1 第六批：SQLite 项目仓储 —— 迁移 / CAS / 幂等 / 崩溃恢复（Task 1.6 前半）（2026-09-21）
+
+- **交付**：`apps/desktop/src-tauri/src/repository/{migrations,projects}.rs` + `tests/project_repository.rs`（**16 例**，用**真临时库文件**而不是内存库 —— WAL、崩溃恢复、"重开之后还在"这三条只有碰真文件才测得出来）。
+- **迁移**：`user_version` 记版本号，**每一步各自一个事务**（`BEGIN` → SQL → 推版本号 → `COMMIT`）。这样失败时**已经成功的那几步留在库里**，失败那一步整个回滚 —— 库永远处于"某个完整的版本"上。
+  - 计划 Step 1 要求 "**inject a failed migration**; assert the old DB remains usable"。**第一版的注入手法是错的**：伪造一个同名表去撞，而 `CREATE TABLE IF NOT EXISTS` 会**静默跳过** —— 那条"注入的失败"根本没失败，用例在断言处才崩。改成把迁移列表做成参数（`migrate_with`）并**真的注入一条拼错的 SQL**，于是三件事都能确定性地证明：如实报错（带出错那一步的名字）/ **版本号不推进** / **旧库仍可写可查**。
+- **CAS 用三个字段一起判**（epoch / generation / content_hash）。三条各自的理由：只判 generation 会漏掉"同一版号被换成另一份内容"；只判 hash 会漏掉 **ABA**（内容回到原样但中间被人动过）；不判 epoch 会让**换过文档之后在途的请求**还能写进来（有一条用例专门覆盖"generation 对得上、epoch 是旧的"）。
+- **幂等**：同一把键 + **同一份候选** = 回放当时的回执（**不再查 CAS**）；同一把键 + **不同候选** = `IdempotencyConflict`（静默按幂等处理会让第二次改动**悄无声息地丢掉**，而调用方拿到的是一张"成功"回执）。
+  - **这里有一处被测试抓出来的顺序错误，值得记下来**：第一版把幂等检查放在 CAS **之后**，理由听起来也对（"不能因为键见过就跳过并发检查"）。但那样的话**真正的网络重试会失败** —— 第一次提交把 head 推进到 generation 2，重试携带的期望仍是 generation 1，CAS 判它过期，于是"重试"永远拿不到它本该拿到的那张回执。**那条路径正是幂等键存在的理由，却被顺序挡掉了。** 安全性没有变松：只有内容哈希逐字相同才走重放。
+  - 另有一条 `lookup_commit(key)`（计划 Step 2 的 "crash between DB commit and UI response"）：客户端重试前先查这里，查到就直接用。
+- **`Unchanged` 与 `Replayed` 是两种结果**，不是一种：前者是"这次没什么要做的"，后者是"这件事之前已经做过了"—— 界面按这两种类型说不同的话（"已保存" vs "这件事之前已经做过了"），合并成一种会让重试看起来像"又保存了一次"。
+- **内容没变不推进 generation、不写快照**（否则撤销栈里会多一个空步），但**仍然记一条提交记录** —— 否则同一把幂等键会被误判成"没用过"。
+- **`replace_epoch` 保留历史**：导入 / 切换项目之后旧历史仍要能一路读回去（撤销用）。
+
+**验证证据（本批）**：Rust **88 例通过 + 1 例 `#[ignore]`**（单元 8 + project_repository 16 + provider_profiles 14 + providers 17 + proxy 16 + secrets 8 + shell_smoke 9）、typecheck exit 0、lint 0 error / 14 warning（基线）、单测 186 文件 / 2090 用例全通过。
+
+**仍未做（如实）**：`.mcanvas` 打包导出/导入（Task 1.6 Step 5）、附件的两阶段写与孤儿回收（Step 4 —— 表已经建好，缺的是 blob 目录那一半）、`documentService` 接到这个仓储（现在前端仍用自己的内存 store）、以及"Windows 重启恢复烟雾测试"。
+
 ### G1 第五批：回环代理的传输安全判据（Task 1.5）（2026-09-21）
 
 - **交付**：`apps/desktop/src-tauri/src/proxy/security.rs` + `tests/proxy.rs`（**16 例**，计划 Step 1 点名的**九种情形一条不少**）+ `apps/web/src/services/modelClient.ts`（11 例）。

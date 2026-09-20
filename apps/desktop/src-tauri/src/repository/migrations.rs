@@ -1,0 +1,144 @@
+//! **迁移**（Task 1.6 Step 1）。
+//!
+//! ## 一条纪律：迁移是**只向前**的，而且**每一步各自是一个事务**
+//!
+//! "失败就停在旧版本上继续可用"比"自动回滚到更早的版本"务实得多：
+//! 回滚要写双份 schema（向前 + 向后），而两份里只要有一份写错，用户的库就处于
+//! 一个**没人测过**的状态。只向前 + 每步一个事务的代价是"旧版本应用打不开新库"
+//!（那条路径会给出可执行的错误，见下），换来的是"任何一次失败都不会留下半个 schema"。
+//!
+//! ## 为什么不用迁移库（`refinery` / `sqlx::migrate`）
+//!
+//! 这里一共两条迁移。引一个库意味着多一份要跟着升级、要审的东西，
+//! 而它们的价值（多后端、宏、CLI）在这里都用不上。
+//! `user_version` 是 SQLite 自带的整数字段，用它记版本号就够了。
+
+use rusqlite::Connection;
+
+use super::projects::RepositoryError;
+
+/// 一条迁移：一个版本号 + 一段 SQL。
+pub struct Migration {
+    pub version: i64,
+    pub name: &'static str,
+    pub sql: &'static str,
+}
+
+pub const MIGRATIONS: [Migration; 2] = [
+    Migration {
+        version: 1,
+        name: "documents-and-commits",
+        sql: "
+            CREATE TABLE IF NOT EXISTS documents (
+                project_id   TEXT NOT NULL,
+                document_id  TEXT NOT NULL,
+                epoch        TEXT NOT NULL,
+                generation   INTEGER NOT NULL,
+                content_hash TEXT NOT NULL,
+                content      TEXT NOT NULL,
+                updated_at   INTEGER NOT NULL,
+                PRIMARY KEY (project_id, document_id)
+            );
+            -- 历史：每次提交一份快照。当前 head 之外的历史靠这张表。
+            CREATE TABLE IF NOT EXISTS snapshots (
+                project_id   TEXT NOT NULL,
+                document_id  TEXT NOT NULL,
+                generation   INTEGER NOT NULL,
+                content_hash TEXT NOT NULL,
+                content      TEXT NOT NULL,
+                created_at   INTEGER NOT NULL,
+                PRIMARY KEY (project_id, document_id, generation)
+            );
+            -- 提交记录：幂等键是主键 —— 同一把键写第二次会撞主键，而不是再写一份。
+            CREATE TABLE IF NOT EXISTS commits (
+                idempotency_key TEXT PRIMARY KEY,
+                project_id      TEXT NOT NULL,
+                document_id     TEXT NOT NULL,
+                epoch           TEXT NOT NULL,
+                generation      INTEGER NOT NULL,
+                content_hash    TEXT NOT NULL,
+                actions         INTEGER NOT NULL,
+                created_at      INTEGER NOT NULL
+            );
+            -- 运行事件：只追加，按 event_id 幂等（Task 2.6 的账本落点）。
+            CREATE TABLE IF NOT EXISTS run_events (
+                event_id   TEXT PRIMARY KEY,
+                run_id     TEXT NOT NULL,
+                payload    TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+            );
+        ",
+    },
+    Migration {
+        version: 2,
+        name: "attachments",
+        sql: "
+            -- 附件：**只有引用与哈希**，字节在磁盘上的 blob 目录里（两阶段写，见 Task 1.6 Step 4）。
+            CREATE TABLE IF NOT EXISTS attachments (
+                content_hash TEXT PRIMARY KEY,
+                byte_size    INTEGER NOT NULL,
+                media_type   TEXT NOT NULL,
+                created_at   INTEGER NOT NULL
+            );
+            -- 快照引用了哪些附件。删除快照时可以据此判断有没有孤儿 blob。
+            CREATE TABLE IF NOT EXISTS snapshot_attachments (
+                project_id   TEXT NOT NULL,
+                document_id  TEXT NOT NULL,
+                generation   INTEGER NOT NULL,
+                content_hash TEXT NOT NULL,
+                PRIMARY KEY (project_id, document_id, generation, content_hash)
+            );
+        ",
+    }
+];
+
+/// 这个构建理解的**最新** schema 版本。
+pub fn latest_version() -> i64 {
+    MIGRATIONS.iter().map(|migration| migration.version).max().unwrap_or(0)
+}
+
+/// 把库迁到最新版本。返回**实际执行了哪几步**（空表示本来就在最新版）。
+///
+/// 每一步各自 `BEGIN` / `COMMIT`：中途失败时，**已经成功的那几步留在库里**，
+/// 失败的那一步整个回滚 —— 于是库永远处于"某个完整的版本"上。
+pub fn migrate(connection: &mut Connection) -> Result<Vec<i64>, RepositoryError> {
+    migrate_with(connection, &MIGRATIONS)
+}
+
+/**
+ * 用**给定的迁移列表**迁到最新版本。
+ *
+ * 为什么把列表做成参数：计划 Step 1 要求"**inject a failed migration**; assert the old DB
+ * remains usable"，而"注入一条会失败的迁移"如果只能靠伪造表名去撞，
+ * 测到的其实是 SQLite 的建表语义，不是**我们的迁移器**在失败时的行为。
+ * 注入一条明确的坏迁移，才能确定性地证明三件事：**如实报错 / 版本号不推进 / 旧库仍可用**。
+ */
+pub fn migrate_with(connection: &mut Connection, migrations: &[Migration]) -> Result<Vec<i64>, RepositoryError> {
+    let current: i64 = connection
+        .query_row("PRAGMA user_version", [], |row| row.get(0))
+        .map_err(|error| RepositoryError::Io { detail: format!("cannot read the schema version: {error}") })?;
+    let latest = migrations.iter().map(|migration| migration.version).max().unwrap_or(0);
+    if current > latest {
+        // 未来版本写的库：**认出来并说清楚**，而不是当作空库（那会静默丢掉用户的文档）。
+        return Err(RepositoryError::Io {
+            detail: format!("this database was written by a newer version (schema {current}); this build understands {latest}")
+        });
+    }
+
+    let mut applied = Vec::new();
+    for migration in migrations.iter().filter(|migration| migration.version > current) {
+        let transaction = connection
+            .transaction()
+            .map_err(|error| RepositoryError::Io { detail: format!("cannot start the migration transaction: {error}") })?;
+        transaction
+            .execute_batch(migration.sql)
+            .map_err(|error| RepositoryError::Io { detail: format!("migration {} ({}) failed: {error}", migration.version, migration.name) })?;
+        // `user_version` **在同一个事务里**推进：否则会留下"schema 变了、版本号没变"的库。
+        transaction
+            .pragma_update(None, "user_version", migration.version)
+            .map_err(|error| RepositoryError::Io { detail: format!("cannot record the schema version: {error}") })?;
+        transaction.commit().map_err(|error| RepositoryError::Io { detail: format!("cannot commit migration {}: {error}", migration.version) })?;
+        applied.push(migration.version);
+    }
+    Ok(applied)
+}

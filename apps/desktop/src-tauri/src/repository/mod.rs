@@ -1,9 +1,13 @@
-//! **仓储**（Task 1.3 起；Task 1.6 会在这里加 SQLite 项目仓储）。
+//! **仓储**（Task 1.3 / 1.6）。
 //!
-//! 目前只有 provider 配置一件事 —— 它用**文件**而不是数据库，理由如实写在这里：
-//! 计划 Task 1.3 只要求"settings storage"，而项目仓储（快照 / 历史 / CAS / 崩溃恢复）
-//! 是 Task 1.6 的事，那时才需要一个真正的数据库。把配置也塞进那个数据库会让
-//! "改一次设置"依赖数据库的迁移状态 —— 而设置是**重启后必须能读到**的东西，
-//! 它不该被一个还没做出来的组件拖住。
+//! 两个子模块，用**不同的存储形态**，理由写在各自的开头：
+//! - `provider_profiles`：**文件**。配置是"重启后必须能读到"的东西，
+//!   它不该被一个还在长的数据库拖住（Task 1.3 时数据库还不存在）。
+//! - `projects`：**SQLite**。文档、历史、提交记录、幂等键需要**事务** ——
+//!   断电时不能留下半个文档。
 
+pub mod migrations;
+pub mod projects;
 pub mod provider_profiles;
+
+pub use projects::{CommitOutcome, CommitReceipt, CommitRequest, DocumentSnapshot, ProjectRepository, RepositoryError};
