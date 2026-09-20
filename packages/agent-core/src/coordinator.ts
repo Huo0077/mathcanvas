@@ -2,8 +2,9 @@ import type { Budget } from "./budget"
 import { buildContext, type Fact } from "./contextBuilder"
 import { parsePlanEnvelope } from "./schemas"
 import type { PlanEnvelope, RunContext } from "./contracts"
-import type { CancelReason, CancelResult, CommitterPort, ConsentToken, ObserverPort, PlannerPort, ToolPort } from "./coordinatorPorts"
+import type { CancelReason, CancelResult, CommitterPort, ConsentToken, ObserverPort, PlannerPort, PlanRequest, ToolPort } from "./coordinatorPorts"
 import { createBudget, type BudgetLimits } from "./budget"
+import { describeRepairPrompt } from "./outputParser"
 import { createToolRegistry, type ToolRegistry } from "./toolRegistry"
 import { createRunLedger, type RunEvent, type RunLedger } from "./runState"
 
@@ -180,12 +181,19 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
        * 这样"哪个请求、哪次尝试产生了这份计划"始终可查 —— 计划 Step 4 要的正是这个。
        */
       let lastAttemptIds: { requestId: string; attemptId: string } | null = null
+      /**
+       * 上一次尝试的失败，供**第二次尝试**带上（Task 2.3 Step 5："Include exact JSON path
+       * errors in the second prompt"）。
+       *
+       * 没有它，"一次性修复"只是把同一份请求再发一遍 —— 模型没有任何理由换个答案。
+       */
+      let repair: PlanRequest["repair"]
       for (let attempt = 1; attempt <= MAX_PLAN_ATTEMPTS && parsed === null; attempt += 1) {
         if (attempt > 1) {
           // 第二次尝试是**可见的修复**：它花掉的是同一份预算的另一个名额。
           if (!spend(budget, "generation") || !spend(budget, "network")) return yield* stop("budget_repair")
         }
-        const outcome = await dependencies.planner.plan({ run: request.run, userMessage: request.userMessage, budget, signal, model: { context: modelContext, tools: phaseTools } })
+        const outcome = await dependencies.planner.plan({ run: request.run, userMessage: request.userMessage, budget, signal, model: { context: modelContext, tools: phaseTools }, repair })
         if (cancelled) return
         lastAttemptIds = { requestId: outcome.requestId, attemptId: outcome.attemptId }
         ledger.record(`plan attempt ${attempt} returned`, lastAttemptIds)
@@ -196,6 +204,19 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
           break
         }
         lastDetail = result.errors.map((error) => `${error.code}@${error.path}`).join(", ").slice(0, 512)
+        /**
+         * 组装**下一次**要用的修复提示。
+         *
+         * `describeRepairPrompt` 收的是 `EnvelopeParseFailure`；协调器这一层拿到的是
+         * `parsePlanEnvelope` 的错误列表。`reason` 用 `schema_invalid`（两边同名），
+         * `channel` 给 `fenced_text` —— 那是**最宽松**的通道（一次外层围栏 + 围栏内只有 JSON），
+         * 所以在"不知道对方用哪个通道"时说它不会给出错误的格式建议。
+         */
+        repair = {
+          reason: "schema_invalid",
+          errors: result.errors,
+          hint: describeRepairPrompt({ ok: false, reason: "schema_invalid", errors: result.errors, payload: "", channel: "fenced_text" })
+        }
         ledger.record(`plan attempt ${attempt} was rejected: ${lastDetail}`)
       }
 

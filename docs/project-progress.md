@@ -6,6 +6,17 @@
 **当前阶段：** P0-P6 与 P7 工程制图已完成；MathCanvas 统一 Ribbon UI 基线、后续 UI 优化（Task 7-13）、工程制图视觉重做（Task 14）、工程制图可用性修复（Task 15-18）、圆锥曲线四项修复、功能键操作指引浮层、CAD 2D 绘图交互重做、平面几何动点系统、3D 视口与几何内核重构、封闭曲线绕定点旋转、UI 优化（草稿纸画布）与平面几何元素选颜色均已完成。**2026-09-17 新增两条解析几何交付线并已全部落地**：**A1 解析二次曲面与"真圆"**（8 片；设计 `docs/superpowers/specs/2026-09-17-analytic-quadrics-design.md`）与 **A2 交面按支撑曲面分组 + 真曲面**（5 轮；设计 `docs/superpowers/specs/2026-09-17-intersection-face-grouping-design.md`）——用户口径从"我不要一个逼近的圆，我需要一个真的圆"一路推到"我需要的只是那个相交的曲面，而不是由很多三角形拼出来的"。**随后"立体几何最后一轮"四件事也已全部交付**（7 片；设计 `docs/superpowers/specs/2026-09-17-3d-tracks-rotation-and-measurement-labels-design.md`）：约束轨道（`circle3` 当动点宿主）、拖动旋转（世界轴三色环 + 15° 吸附 + 属性栏角度）、测量数字常驻画布（2D + 3D）、立体几何 UI 与平面几何同一套令牌。平面动点系统按四个维度交付：①约束模型与参数化映射 ②依赖图 DAG 与增量拓扑重算 ③动态测量监听器 ④轨迹采样与消元法隐式化；3D 重构按四个区块交付：①动点宿主约束与渲染管道 ②截面几何 ③Auto-Fit ④生命周期与多解；四者与三区块**全部接进主流程**（不只是内核可用）。**2026-09-18 又完成平面几何切线**（抛物线 / 双曲线 / 圆 / 椭圆的曲线切线，切点可沿曲线拖动或跟随动点）**与动点扩展**（在动点处作切线、以动点为圆心作圆、半径可调且可随动点位置动态变化），并修掉"切线不能拖动"这一现场反馈。P4 Agent 与 P5 题图解析仍在排除范围内。
 **总体状态：** 开发中
 
+### G2 第三十二批：一次性修复真的把"上一次错在哪"告诉规划器（Task 2.3 Step 5）（2026-09-21）
+
+- **缺口**：协调器**确实**会再问一次（`MAX_PLAN_ATTEMPTS = 2`），但**不告诉规划器上一次错在哪** —— 第二次尝试只是把同一份请求原样再发一遍，模型没有任何理由换个答案。也就是说计划里那句 "Implement visible one-time schema repair" 实际退化成"重试一次"。修复提示的构造函数 `outputParser.describeRepairPrompt` **早就写好并有测试，只是没人调它** —— 又一处"有实现、没接上"。
+- **修法**：`PlanRequest` 增加可选 `repair: { reason, errors, hint }`。协调器在每次解析失败后组装它（`hint` 由**已注册的** `describeRepairPrompt` 生成），下一次尝试带上；第一次尝试没有 `repair`。
+  - `reason` 用 `schema_invalid`（与解析器同名）；`channel` 给 `fenced_text` —— 那是**最宽松**的通道（一次外层围栏 + 围栏内只有 JSON），在"不知道对方用哪个通道"时说它不会给出错误的格式建议。
+  - `hint` **绝不回显模型的原话**（`describeRepairPrompt` 的设计如此）：把散文再送回去会形成自我强化的循环。
+- **RED→GREEN**：`coordinatorContext.test.ts` +1。用例先给一个 `actions: []` 的计划（解析器报 `empty_actions`），再给合法计划，然后断言：第一次 `repair` 为 `undefined`；第二次的 `errors` 含 `empty_actions`、**路径具体到 `envelope.actions`**，且 `hint` 里也带着这个路径 —— 这正是计划原文要求的 "include exact JSON path errors in the second prompt"。
+- **顺带一提**：这条与上一批那个 `prepare` 缺口是**同一类**问题的两面 —— 上一批我判定"修复往返"还没有消费者而把重算撤掉了；这一批把修复往返本身接上了，于是"上下文在 prepare 之后重算"开始**有了读者**（下一次往返能看到正确的目标）。它现在是明确的下一步。
+
+**验证证据（本批）**：单测 **179 文件 / 2010 用例全通过（零跳过）**、typecheck exit 0、lint 0 error / 14 warning（基线）、生产构建通过、e2e **119/119**。
+
 ### G2 第三十一批：把"`prepare` 换掉目标文档"这件事钉成用例（已知缺口，本批**只记录不改**）（2026-09-21）
 
 - **发现**：真实的 `prepareWorkspaceFor` 会在**规划之后、编译之前**把工作区切到计划需要的那个（用户在平面几何里说"建一个立方体"，它切到立体几何）。而上下文是在**规划之前**组装好的 —— 于是**模型看到的是文档 A 的场景，动作却被编译到文档 B 上**。`context.handles.target` 与 `context.workspace` 都是旧的。

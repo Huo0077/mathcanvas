@@ -111,8 +111,38 @@ describe("the coordinator assembles what the model may see", () => {
     expect(seen[1].model.tools.map((tool) => tool.id)).toEqual(seen[0].model.tools.map((tool) => tool.id))
   })
 
-  it("keeps the context bounded and says so when facts are dropped", async () => {
-    const many: Observation = {
+  /**
+   * **一次性修复必须告诉规划器上一次错在哪**（Task 2.3 Step 5 / Task 2.1 Step 1 的 "invalid output"）。
+   *
+   * 在接线之前，协调器**确实**会再问一次（`MAX_PLAN_ATTEMPTS = 2`），但**不告诉规划器上一次错在哪** ——
+   * 于是第二次尝试只会把同一份请求原样再发一遍，模型没有任何理由换个答案，
+   * "一次性修复"实际上退化成"重试一次"。
+   *
+   * 修复提示的构造函数（`outputParser.describeRepairPrompt`）早就写好并有测试，只是没人调它 ——
+   * 又一处"有实现、没接上"。
+   */
+  it("tells the second attempt exactly what was wrong with the first", async () => {
+    const { coordinator, seen } = harness([
+      // 缺 `actions` 的计划：解析器会给 `empty_actions` + 具体路径。
+      () => ({ schemaVersion: "mathcanvas.plan.v1", kind: "plan", goal: "空计划", factIds: [], actions: [] } as unknown as PlanEnvelope),
+      planEnvelope
+    ])
+
+    await drive(coordinator)
+
+    // 第一次尝试没有"上一次"可讲。
+    expect(seen[0].repair).toBeUndefined()
+    // 第二次带上原因、逐条错误与可执行的修复提示。
+    const repair = seen[1].repair
+    expect(repair).toBeDefined()
+    expect(repair!.reason).toBe("schema_invalid")
+    expect(repair!.errors.map((error) => error.code)).toContain("empty_actions")
+    // 计划原文要求 "include exact JSON path errors" —— 路径必须具体到字段。
+    expect(repair!.hint).toContain("envelope.actions")
+    expect(repair!.errors.some((error) => error.path === "envelope.actions")).toBe(true)
+  })
+
+  it("keeps the context bounded and says so when facts are dropped", async () => {    const many: Observation = {
       factIds: Array.from({ length: 20 }, (_, index) => `f-${index}`),
       summary: "twenty points",
       facts: Array.from({ length: 20 }, (_, index) => ({ id: `f-${index}`, text: `点 ${index}`, origin: "user" as const }))

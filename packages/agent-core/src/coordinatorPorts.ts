@@ -49,6 +49,28 @@ export interface PlanRequest {
     /** 当前阶段发布的工具。只读阶段没有写入工具，观察阶段连计划工具都没有。 */
     tools: readonly ToolDescriptor[]
   }
+  /**
+   * **上一次尝试为什么没被接受**（只有第二次尝试才有）。
+   *
+   * 计划 Task 2.3 Step 5 与 Task 2.1 Step 1 都点名了这件事："Implement visible one-time schema
+   * repair. Include exact JSON path errors in the second prompt" / "invalid output"。
+   *
+   * 在它之前，协调器**确实**会再问一次（`MAX_PLAN_ATTEMPTS = 2`），但**不告诉规划器上一次错在哪** ——
+   * 于是第二次尝试只会把同一份请求原样再发一遍，模型没有任何理由换个答案，
+   * "一次性修复"实际上退化成"重试一次"。这正是"有实现、没接上"的一类缺口：
+   * 修复提示的构造函数（`outputParser.describeRepairPrompt`）早就写好并有测试，只是没人调它。
+   *
+   * `hint` 由**已注册的** `describeRepairPrompt` 生成，所以它按通道给格式建议、
+   * 且**绝不回显模型的原话**（避免把散文再送回去形成自我强化的循环）。
+   */
+  repair?: {
+    /** 上一次尝试的失败原因码（例如 `schema_invalid` / `unexpected_prose`）。 */
+    reason: string
+    /** 解析器给出的逐条错误（字段路径 + 原因）。 */
+    errors: readonly { code: string; path: string; detail: string }[]
+    /** 可直接拼进下一次提示的可执行修复建议（来自 `describeRepairPrompt`）。 */
+    hint: string
+  }
 }
 
 export interface PlanOutcome {

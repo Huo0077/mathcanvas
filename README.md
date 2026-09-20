@@ -1,4 +1,4 @@
-# MathCanvas
+﻿# MathCanvas
 
 MathCanvas 是一个面向数学与工程场景的 2D 交互绘图工作台原型。项目采用 React、TypeScript 和 Vite 构建，并将 Geometry DSL、数值几何内核、Scene Graph 与 SVG 工作台分层，便于持续扩展和多人协作。
 
@@ -202,7 +202,7 @@ npm run build
 npm run test:e2e
 ```
 
-当前验证基线（**2026-09-21，G2 第三十一批之后实测**）：`npm.cmd test` 为 **179 个测试文件、2009 个用例全部通过（零跳过）**；**5 个 workspace** 类型检查通过；ESLint **0 error / 14 warning**（14 条为既有基线）；Web 生产构建通过（Vite 仍提示主 bundle 超过 500 KB）；Playwright Chromium **119/119** 通过（global setup **按当前工作区重新构建** `build-check/mathcanvas-current` 再预览，因此结果对应工作区源码，而不是该目录里上一次构建的产物）。
+当前验证基线（**2026-09-21，G2 第三十二批之后实测**）：`npm.cmd test` 为 **179 个测试文件、2010 个用例全部通过（零跳过）**；**5 个 workspace** 类型检查通过；ESLint **0 error / 14 warning**（14 条为既有基线）；Web 生产构建通过（Vite 仍提示主 bundle 超过 500 KB）；Playwright Chromium **119/119** 通过（global setup **按当前工作区重新构建** `build-check/mathcanvas-current` 再预览，因此结果对应工作区源码，而不是该目录里上一次构建的产物）。
 
 **最新一轮（2026-09-21）交付与修复**：①**传输层与动作层的引用形状不一致**（`object.update_inputs` / `dynamic.bind_point` / `dynamic.bind_curve` 三个动作此前**不存在任何一种能同时通过校验并被正确编译的输入**）已修，并由 `packages/agent-core/src/planToCompile.seam.test.ts` 用**已校验的输出**钉住整条接缝；②`draftStore.previewHash` 换成真 SHA-256（`canonicalContentHash`）；③**补上"假设"这一节的数据面**：计划信封新增可选 `assumptions`，经 `onPlanParsed` → 运行时 → 运行器 → 草稿视图 → 确认面板贯通，新增 `AssumptionList.tsx`；④**让"同意不可伪造"从注释变成代码**：`HostBridge` 原先只检查 nonce 未消费 / `runId` / 是否过期 / `previewHash` —— 这四条调用方自己就能凑齐，于是**手搓一份同意也能提交**；现在桥里记着自己铸造过的 nonce（`minted`），没铸造过的一律 `unminted_consent`；⑤**把"工具"从声明接到可执行**：`ToolCallRequest` 原先**没有工具名也没有参数**（所以"接上 ToolPort"是空话），现在补上 `toolId`/`input`，新增 `toolDispatch.ts` 做名字→实现的那一段，`AgentRuntime.callTool` 是宿主入口；⑥**新增 `ToolTracePanel.tsx`**：用户可见的短摘要轨迹 + **默认关着**的开发者详细诊断；⑦**worker 的 diff / check / artifact 信封**（`WorkerSuccess` 必须带齐 `changed` / `diff` / `check` / `artifact`，缺一个就拒绝）；⑧**上下文与工具真正交给规划器**：`PlanRequest` 增加 `model: { context, tools }`，协调器在观察之后、发请求之前组装（且两次尝试看到同一份）；⑨**观察者交出事实文本**（它从第一版起就在算那个数组，只是没放进返回值 —— 是变异检验抓出来的，因为既有用例都是空文档）**+ 技能清单成为可用动作的唯一来源**（调用方说请求哪些技能，运行时去清单取动作，而不是让调用方直接给动作名）。
 
@@ -246,3 +246,4 @@ npm run test:e2e
    - **G1 是当前唯一的硬阻塞，而且是环境问题不是设计问题**：本机 `rustc` / `cargo` / `rustup` **都不存在**（`node v24.15.0`、`npm 11.12.1`、**WebView2 153.0.4234.32** 与 `winget` 都在），所以 Tauri 外壳、SecretStore（Windows 凭据管理器）、provider 适配器、Rust 回环代理与 SQLite 仓储**一个都没法动手**（连"先跑失败测试"都做不到，`cargo test` 起不来）。解除方式：`winget install Rustlang.Rustup` 或 rustup.rs 官方安装器，装完确认 `cargo --version` 可执行。**没有自动安装**——那是往用户机器上装整套工具链并改 `PATH`，应由用户决定。
    - **G2 剩余（不依赖 Rust）**：`AssumptionList.tsx` / `ToolTracePanel.tsx`（假设清单与可选的开发者详细视图）、`ToolPort` 接线、worker 的 diff/check/artifact 信封。
    - **一处待办**：`apps/web/src/agent/draftStore.ts` 的 `previewHash` 目前存的是**规范 JSON 字符串**（`contentFingerprint`）而不是哈希；它与 `apps/web` 侧 `createDocumentHandle` 的 `contentHash` 同源，要**一起改成 `canonicalContentHash` 并一起复验 Compare-and-Swap**，所以没有夹带在 UI 批次里。
+
