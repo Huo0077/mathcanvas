@@ -1,0 +1,3 @@
+data: {"model":"gpt-5","choices":[{"delta":{"content":"开头"},"index":0}]}
+
+data: {"choices":[{"delta":{"content":"后

@@ -6,6 +6,22 @@
 **当前阶段：** P0-P6 与 P7 工程制图已完成；MathCanvas 统一 Ribbon UI 基线、后续 UI 优化（Task 7-13）、工程制图视觉重做（Task 14）、工程制图可用性修复（Task 15-18）、圆锥曲线四项修复、功能键操作指引浮层、CAD 2D 绘图交互重做、平面几何动点系统、3D 视口与几何内核重构、封闭曲线绕定点旋转、UI 优化（草稿纸画布）与平面几何元素选颜色均已完成。**2026-09-17 新增两条解析几何交付线并已全部落地**：**A1 解析二次曲面与"真圆"**（8 片；设计 `docs/superpowers/specs/2026-09-17-analytic-quadrics-design.md`）与 **A2 交面按支撑曲面分组 + 真曲面**（5 轮；设计 `docs/superpowers/specs/2026-09-17-intersection-face-grouping-design.md`）——用户口径从"我不要一个逼近的圆，我需要一个真的圆"一路推到"我需要的只是那个相交的曲面，而不是由很多三角形拼出来的"。**随后"立体几何最后一轮"四件事也已全部交付**（7 片；设计 `docs/superpowers/specs/2026-09-17-3d-tracks-rotation-and-measurement-labels-design.md`）：约束轨道（`circle3` 当动点宿主）、拖动旋转（世界轴三色环 + 15° 吸附 + 属性栏角度）、测量数字常驻画布（2D + 3D）、立体几何 UI 与平面几何同一套令牌。平面动点系统按四个维度交付：①约束模型与参数化映射 ②依赖图 DAG 与增量拓扑重算 ③动态测量监听器 ④轨迹采样与消元法隐式化；3D 重构按四个区块交付：①动点宿主约束与渲染管道 ②截面几何 ③Auto-Fit ④生命周期与多解；四者与三区块**全部接进主流程**（不只是内核可用）。**2026-09-18 又完成平面几何切线**（抛物线 / 双曲线 / 圆 / 椭圆的曲线切线，切点可沿曲线拖动或跟随动点）**与动点扩展**（在动点处作切线、以动点为圆心作圆、半径可调且可随动点位置动态变化），并修掉"切线不能拖动"这一现场反馈。P4 Agent 与 P5 题图解析仍在排除范围内。
 **总体状态：** 开发中
 
+### G1 第四批：Provider 适配器与事件归一化（Task 1.4）（2026-09-21）
+
+- **交付**：`packages/agent-core/src/modelEvents.ts`（8 例）+ `apps/desktop/src-tauri/src/providers/`（`events.rs` / `request.rs` / `normalize.rs`）+ `tests/providers.rs`（**17 例**）+ `test-fixtures/providers/`（9 份样本）。
+- **一次真实的失败与它的收获（本批最有价值的一条）**：第一版把三家 provider **都按 SSE** 处理，于是 Ollama 的 fixtures **一行事件都解析不出来** —— 而"没有事件"在界面上表现为"**模型什么都没说**"，看起来像模型的问题、不像解析的问题。Ollama 原生是 **NDJSON**（一行一个完整 JSON，没有 `data:` 前缀），现在按协议分流。这条正好说明为什么 fixtures 值得先写：真实调用时这个 bug 会以"本地模型不会说话"的形式出现，而排查方向会被完全带偏。
+- **三家形状的差异被收在适配器里**（协调器只认六种事件）：增量文本分别在 `choices[0].delta.content` / `content_block_delta.delta.text` / `message.content`；工具调用分别在 `delta.tool_calls[]` / `content_block_start(tool_use)` / `message.tool_calls[]`；用量分别在 `usage` / `message_delta.usage` / `prompt_eval_count`；结束标记分别是 `[DONE]` / `message_stop` / `done:true`。漏认任何一家的结束标记都会让 UI 一直转圈。
+- **三条纪律，逐条有用例**：
+  1. **`reasoning` 只作诊断元数据**（计划 Step 4 原文）：它进 `metadata`，**绝不**拼进 `Delta.text`。有用例断言"文本里只有答案，推理在 metadata 里"——否则模型的自述会变成"内容"。
+  2. **畸形 JSON 是 `MalformedOutput` 而不是 panic**：网络切断时半截数据是常态。有用例用**真的截断 fixture** 断言"前面完整的那一块仍然被读出来"（用户已经看到的东西不该被丢掉），同时给出分类失败。
+  3. **重试策略读分类、不读状态码**：`401/403/429/5xx` 的映射只有一处（`classify_http_failure`），三家共用 —— 每个适配器各写一遍必然分叉，而分叉的后果是"换一家 provider，重试策略就变了"。认证与权限**绝不**自动重试。
+- **`ProviderRequest` 的形状是安全边界**：`endpoint` 由 `base_url` + **常量路径**拼出（调用方给不了整条 URL），header 只有两份白名单（**没有"额外 header"这个口子**），**认证头留空值** —— 密钥由调用方在发送那一刻借出（`authorize`），`build_request` 的产物里逐字不含密钥（有用例断言）。
+- **方言决定"能发什么形状"**：`generic_compatible` **默认不带工具 schema** —— 那正是计划 Step 3 "Do not assume every compatible service supports the same tools, JSON, vision, or streaming shape" 的落点。而且**两个前置条件都要满足**：方言支持 **且** 调用方按**已验证证据**放行（有用例同时覆盖这两种否定）。
+- **如实标注（本批不含 HTTP）**：这一批交付的是"**发请求之前**（拼装）与**之后**（归一化）"两半，**连接 / 超时 / 重定向 / TLS / 取消**属于 Task 1.5 的回环代理 —— 那里才有"绑定回环 + 临时令牌 + 精确 Origin/Host"的整套约束。这么切的好处是直接的：Task 1.5 接上真实传输时，需要新写的只有"怎么把字节搬回来"，而**协议解释与错误分类已经是被测过的纯函数**。
+- **另一个如实标注**：`ProviderAdapter` trait 本体（计划里的 `send(...) -> Stream<ModelEvent>`）**还没有写** —— 它的形状取决于传输层（`Stream` 从哪来、取消怎么表达），先定形状再实现会返工。等 Task 1.5 把传输定下来，这个 trait 就是一层薄薄的转发。
+
+**验证证据（本批）**：单测 **185 文件 / 2079 用例全通过（零跳过）**、typecheck exit 0、lint 0 error / 14 warning（基线）、Rust **56 例通过 + 1 例 `#[ignore]`**（单元 8 + provider_profiles 14 + providers 17 + secrets 8 + shell_smoke 9）。
+
 ### G1 第三批：Provider 配置契约 + 设置存储 + 设置界面（Task 1.3）（2026-09-21）
 
 - **交付四块**：`packages/agent-core/src/providerContracts.ts`（纯校验，20 例）、`apps/desktop/src-tauri/src/repository/provider_profiles.rs`（文件存储，14 例）、`apps/web/src/services/providerProfileClient.ts`（13 例）、`apps/web/src/components/settings/ProviderSettings.tsx`（13 例）。

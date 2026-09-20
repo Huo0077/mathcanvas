@@ -1,0 +1,8 @@
+data: {"model":"deepseek-reasoner","choices":[{"delta":{"reasoning_content":"先算 2+2"},"index":0}]}
+
+data: {"choices":[{"delta":{"content":"答案是 4"},"index":0}]}
+
+data: {"choices":[{"delta":{},"finish_reason":"stop","index":0}]}
+
+data: [DONE]
+

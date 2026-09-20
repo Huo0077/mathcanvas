@@ -1,0 +1,2 @@
+{"model":"llama3.2","message":{"role":"assistant","content":"","tool_calls":[{"function":{"name":"scene.inspect","arguments":{"documentId":"doc-1"}}}]},"done":false}
+{"model":"llama3.2","message":{"role":"assistant","content":""},"done":true,"done_reason":"stop","prompt_eval_count":20,"eval_count":9}

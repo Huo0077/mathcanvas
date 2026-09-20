@@ -1,0 +1,6 @@
+data: {"model":"gpt-5","choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"scene.inspect","arguments":"{\"documentId\":\"doc-1\"}"}}]},"index":0}]}
+
+data: {"choices":[{"delta":{},"finish_reason":"tool_calls","index":0}]}
+
+data: [DONE]
+

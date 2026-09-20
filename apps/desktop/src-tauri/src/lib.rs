@@ -1,4 +1,4 @@
-//! **MathCanvas 桌面外壳**（Task 1.1 / 1.2）。
+﻿//! **MathCanvas 桌面外壳**（Task 1.1 / 1.2）。
 //!
 //! 这一层只做几件事，且每件都必须能被审出来：
 //! 1. **起窗口、加载既有的 web 应用**（`tauri.conf.json` 的 `frontendDist` 指向
@@ -19,6 +19,8 @@
 //! 且 `get_runtime_info` 与三个密钥命令看到的是**同一个**后端。
 
 pub mod runtime;
+/// Provider 协议适配器（Task 1.4）：请求拼装与事件归一化（不含 HTTP —— 那属于 Task 1.5 的代理）。
+pub mod providers;
 /// 仓储（Task 1.3 起：provider 配置；Task 1.6 会在这里加 SQLite 项目仓储）。
 pub mod repository;
 /// 密钥库（Task 1.2）。**明文没有出口** —— 见 `secrets/mod.rs` 的三条设计决定。
@@ -171,3 +173,4 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
+
