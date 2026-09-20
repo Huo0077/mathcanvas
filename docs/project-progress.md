@@ -6,6 +6,20 @@
 **当前阶段：** P0-P6 与 P7 工程制图已完成；MathCanvas 统一 Ribbon UI 基线、后续 UI 优化（Task 7-13）、工程制图视觉重做（Task 14）、工程制图可用性修复（Task 15-18）、圆锥曲线四项修复、功能键操作指引浮层、CAD 2D 绘图交互重做、平面几何动点系统、3D 视口与几何内核重构、封闭曲线绕定点旋转、UI 优化（草稿纸画布）与平面几何元素选颜色均已完成。**2026-09-17 新增两条解析几何交付线并已全部落地**：**A1 解析二次曲面与"真圆"**（8 片；设计 `docs/superpowers/specs/2026-09-17-analytic-quadrics-design.md`）与 **A2 交面按支撑曲面分组 + 真曲面**（5 轮；设计 `docs/superpowers/specs/2026-09-17-intersection-face-grouping-design.md`）——用户口径从"我不要一个逼近的圆，我需要一个真的圆"一路推到"我需要的只是那个相交的曲面，而不是由很多三角形拼出来的"。**随后"立体几何最后一轮"四件事也已全部交付**（7 片；设计 `docs/superpowers/specs/2026-09-17-3d-tracks-rotation-and-measurement-labels-design.md`）：约束轨道（`circle3` 当动点宿主）、拖动旋转（世界轴三色环 + 15° 吸附 + 属性栏角度）、测量数字常驻画布（2D + 3D）、立体几何 UI 与平面几何同一套令牌。平面动点系统按四个维度交付：①约束模型与参数化映射 ②依赖图 DAG 与增量拓扑重算 ③动态测量监听器 ④轨迹采样与消元法隐式化；3D 重构按四个区块交付：①动点宿主约束与渲染管道 ②截面几何 ③Auto-Fit ④生命周期与多解；四者与三区块**全部接进主流程**（不只是内核可用）。**2026-09-18 又完成平面几何切线**（抛物线 / 双曲线 / 圆 / 椭圆的曲线切线，切点可沿曲线拖动或跟随动点）**与动点扩展**（在动点处作切线、以动点为圆心作圆、半径可调且可随动点位置动态变化），并修掉"切线不能拖动"这一现场反馈。P4 Agent 与 P5 题图解析仍在排除范围内。
 **总体状态：** 开发中
 
+### G1 第二批：SecretStore（Task 1.2）—— 凭据管理器真的存住了一次（2026-09-21）
+
+- **交付**：`apps/desktop/src-tauri/src/secrets/`（`mod.rs` 语义 + `memory.rs` + `windows.rs`）+ 4 个具名 IPC 命令 + 前端 `apps/web/src/services/secretClient.ts`。
+- **三条设计决定，逐条有理由**：
+  1. **明文没有出口**。`put` 返回 `SecretState`（三态枚举）、`has` 返回 `bool`、`remove` 返回 `()`、`with_secret` 收一个闭包 —— **没有任何返回值的位置能装下明文**。这比"记得不要返回它"可靠：将来有人想加 `get_secret`，必须**先改这些类型**，而那是一次看得见的改动。有一条**文本断言**专门守这个形状（`the_secret_commands_have_no_plaintext_exit`）：谁把返回值改成 `String` 或加一个读明文的命令，它立刻红。
+  2. **没有后端时不假装成功**。内存后端住在**生产代码**里（不是 `#[cfg(test)]` 后面），因为非 Windows、或凭据管理器被企业策略禁用时它**就是真的后端** —— 只不过进程一退就没了。`backend()` 如实回 `"memory"`，`get_runtime_info` 据此把 `secretStore` 报成 `not_implemented`，界面就能提醒"这次会话有效，重启要重填"。**如果它在测试后面，"没有后端时会怎样"这条路径就从来没有代码走过。**
+  3. **空 id / 空密钥当场拒**。空 profile id 会让两个 provider 抢同一格；空密钥会把"没填"变成"存了一个空密钥"，于是界面显示已配置而请求必然 401。前端也在本地先拦（**一次 IPC 都不发**，有断言）—— 否则用户看到的是一次"失败"，而真正的意思是"你还没填"。
+- **一次真实的编译失败与它的收获**：`SecretStore` 第一版用 `Box<dyn SecretStore>`，编译不过 —— `with_secret<T>` 是泛型方法，让 trait 失去 dyn 兼容性（`E0038`）。两条出路：把泛型挪走（那会让"借出明文"变成两步，明文在两步之间存在于调用方手里），或者用 `enum Store` 做**静态分派**。选后者：闭包形态正是"明文没有出口"那条性质的落点，不能为了 dyn 牺牲它。副作用是好的 —— `match` 必须穷尽，新增后端时编译器会逼你把每个方法都实现一遍。
+- **真的往凭据管理器里存了一次**（计划 Step 5："Verify the Windows backend on a real user profile"）：`the_windows_backend_really_stores_and_deletes_a_credential` 默认 `#[ignore]`（它会在开发者真实凭据库里写一条），用**一眼能认出是测试**的 `__probe__` profile，并用 `Drop` 保证**即使断言炸了也会删掉**。本轮**显式跑过一次，通过**（存 → 查 → 轮换 → 读回新值 → 删 → 删第二次不报错）。这一条补上了最要紧的空白：上面所有常规用例走的都是内存后端，"生产后端到底能不能用"此前没有任何测试碰过 —— 而它恰恰是最可能失败的一环（企业策略禁用、`keyring` 初始化失败、服务名规则不符预期）。
+- **顺带修正一处自述失真**：`build_runtime_info` 原先**写死** `secret_store: not_implemented`，密钥库做完了它也不会变。现在该参数由调用方传入（函数保持纯函数，`ready` / `not_implemented` 两条路径都能被测试），`get_runtime_info` **现问后端**。加了一条用例盯住"可用时必须报 ready"——"可用却说不可用"与"不可用却说可用"一样是自述失真。
+- **安全边界没有放宽**：`tests/shell_smoke.rs` 里那条"只暴露具名命令"的断言改成**逐字列出四个命令名**（不是数一个数）：新增命令时它会逼你在这里写下名字 —— 那一刻就是一次**有意的**决定。
+
+**验证证据（本批）**：Rust `cargo test` **25 例通过 + 1 例 `#[ignore]`**（单元 8 + secrets 8 + shell_smoke 9），其中忽略的那一例**已显式跑过并通过**；单测 181 文件 / 2025 用例全通过（零跳过）；typecheck exit 0；lint 0 error / 14 warning（基线）；`npm run build` 通过并产出新的 exe；e2e 119/119。
+
 ### G1 第一批：**解除唯一的外部阻塞**（装好 Rust 工具链）+ Task 1.1 桌面外壳落地（2026-09-21）
 
 - **解除阻塞（这一步是纯环境操作，但它是 G1 全部六个任务的前置）**：`winget install --id Rustlang.Rustup --exact --silent --accept-package-agreements --accept-source-agreements --disable-interactivity` → **`rustup 1.29.1` / `cargo 1.98.1` / `rustc 1.98.1`（`stable-x86_64-pc-windows-msvc`）**。装完直接跑 `npx tauri info`，六项前置全绿：

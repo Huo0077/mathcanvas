@@ -42,6 +42,20 @@ interface TauriInternals {
   invoke(command: string, args?: Record<string, unknown>): Promise<unknown>
 }
 
+/**
+ * **在浏览器里调了只属于桌面外壳的命令**。
+ *
+ * 做成一个类而不是返回 `null`，是为了让调用方能**区分**两件完全不同的事：
+ * "没有原生侧"（正常状态，界面该显示"这个功能需要桌面版"）与"IPC 调用失败"
+ *（真的出错了，该显示原因）。把它们混成一个 `Error` 会让界面只能给一句模糊的失败。
+ */
+export class NoDesktopShellError extends Error {
+  constructor(command: string) {
+    super(`no desktop shell is available for ${command}; this build runs in a browser`)
+    this.name = "NoDesktopShellError"
+  }
+}
+
 function internals(): TauriInternals | null {
   const candidate = (globalThis as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__
   if (!candidate || typeof candidate !== "object") return null
@@ -52,6 +66,19 @@ function internals(): TauriInternals | null {
 /** 现在是不是跑在桌面外壳里。**只看注入的 IPC 入口**。 */
 export function isDesktopShell(): boolean {
   return internals() !== null
+}
+
+/**
+ * 调一个**具名**桌面命令。没有原生侧时抛 `NoDesktopShellError`。
+ *
+ * 与 `readDesktopRuntime` 的分工：那边是"问自述"，失败也要**如实回一个结果对象**
+ *（因为自述读不到本身就是一种要显示给用户的状态）；这里是"做一件事"，
+ * 失败就该抛给调用方去决定怎么显示。
+ */
+export async function invokeDesktop<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+  const ipc = internals()
+  if (!ipc) throw new NoDesktopShellError(command)
+  return (await ipc.invoke(command, args)) as T
 }
 
 export async function readDesktopRuntime(): Promise<DesktopRuntimeResult> {

@@ -97,12 +97,17 @@ pub fn detect_webview2_version() -> String {
     "unknown".to_string()
 }
 
-/// 组装自述。**纯函数**：给定版本与数据根目录名，输出只由它们决定。
+/// 组装自述。
+///
+/// `secret_store_ready` 由调用方传入而不是这里现算：这个函数要保持**纯函数**
+///（同样的输入给同样的输出），而"密钥库到底可不可用"要么需要碰系统凭据管理器、
+/// 要么需要一个能被替换的探针。传进来之后，`ready` / `not_implemented` 两条路径
+/// 都能被测试直接钉住 —— 而不是只能测其中一条。
 ///
 /// `data_root` 只接受**目录名**：调用方传进来的如果是绝对路径，这里会取它的最后一段。
 /// 这样做是刻意的 —— 即便某天有人图省事把绝对路径传进来，"绝对路径不出边界"这条性质
 /// 也不会被破坏（会有一条测试专门盯它）。
-pub fn build_runtime_info(app_version: &str, data_root: &Path) -> DesktopRuntimeInfo {
+pub fn build_runtime_info(app_version: &str, data_root: &Path, secret_store_ready: bool) -> DesktopRuntimeInfo {
     let data_root_name = data_root
         .file_name()
         .map(|name| name.to_string_lossy().into_owned())
@@ -114,9 +119,17 @@ pub fn build_runtime_info(app_version: &str, data_root: &Path) -> DesktopRuntime
         runtime: "webview".to_string(),
         webview_version: detect_webview2_version(),
         data_root: data_root_name,
-        // 下面三个是 G1 后续任务（1.2 / 1.6 / 1.5）的落点。**如实标 `not_implemented`** ——
+        /**
+         * 密钥库的状态**如实报告**（G1 Task 1.2 之后它不再是写死的 `not_implemented`）。
+         *
+         * 两条路径都要能出现：Windows 凭据管理器可用 → `ready`；
+         * 退到内存后端 → `not_implemented`（界面据此告诉用户"这次会话有效，重启要重填"）。
+         * 把它们压成一个布尔是刻意的：界面**不需要**知道用的是哪个库，
+         * 只需要知道"关掉应用之后还在不在"。
+         */
+        secret_store: if secret_store_ready { DesktopComponentHealth::Ready } else { DesktopComponentHealth::NotImplemented },
+        // 这两个仍是后续任务（1.6 仓储 / 1.5 回环代理）的落点。**如实标 `not_implemented`** ——
         // 声称 `ready` 而实际没有，会让前端把"没有"当成"有"，那比缺失更危险。
-        secret_store: DesktopComponentHealth::NotImplemented,
         repository: DesktopComponentHealth::NotImplemented,
         transport: DesktopComponentHealth::NotImplemented,
     }
@@ -128,7 +141,7 @@ mod tests {
 
     #[test]
     fn reports_the_platform_and_the_requested_version_instead_of_guessing_them() {
-        let info = build_runtime_info("0.1.0", Path::new("/home/someone/.mathcanvas"));
+        let info = build_runtime_info("0.1.0", Path::new("/home/someone/.mathcanvas"), true);
 
         // 平台来自 `std::env::consts::OS`，版本来自调用方 —— 两样都不是这里的字面量。
         assert_eq!(info.platform, std::env::consts::OS);
@@ -139,7 +152,7 @@ mod tests {
     /// **唯一允许出现的路径**是应用数据根，而且只以**最后一段目录名**出现。
     #[test]
     fn never_leaks_a_filesystem_path_beyond_the_data_root_directory_name() {
-        let info = build_runtime_info("0.1.0", Path::new(r"C:\Users\someone\AppData\Roaming\com.mathcanvas.app"));
+        let info = build_runtime_info("0.1.0", Path::new(r"C:\Users\someone\AppData\Roaming\com.mathcanvas.app"), true);
         let json = serde_json::to_string(&info).expect("serialize");
 
         assert_eq!(info.data_root, "com.mathcanvas.app");
@@ -151,9 +164,23 @@ mod tests {
     /// 三部件在 G1 完成之前必须**如实**说"还没实现"，不许声称可用。
     #[test]
     fn does_not_claim_components_that_do_not_exist_yet() {
-        let info = build_runtime_info("0.1.0", Path::new("/tmp/app"));
+        let info = build_runtime_info("0.1.0", Path::new("/tmp/app"), false);
 
         assert_eq!(info.secret_store, DesktopComponentHealth::NotImplemented);
+        assert_eq!(info.repository, DesktopComponentHealth::NotImplemented);
+        assert_eq!(info.transport, DesktopComponentHealth::NotImplemented);
+    }
+
+    /// 密钥库可用时**必须**报 `ready`。
+    ///
+    /// "可用却说不可用"与"不可用却说可用"一样是自述失真：前者会让界面一直提醒用户
+    /// "重启要重填"（而实际能存住），后者会让用户在重启后才发现密钥没了。
+    #[test]
+    fn reports_a_working_secret_store_as_ready() {
+        let info = build_runtime_info("0.1.0", Path::new("/tmp/app"), true);
+
+        assert_eq!(info.secret_store, DesktopComponentHealth::Ready);
+        // 其余两个仍然如实说"还没做" —— 一个部件就绪不代表别的也就绪。
         assert_eq!(info.repository, DesktopComponentHealth::NotImplemented);
         assert_eq!(info.transport, DesktopComponentHealth::NotImplemented);
     }
@@ -169,7 +196,7 @@ mod tests {
     /// 2. **值里没有密钥的形状**（没有 `sk-` 前缀、没有长随机串、没有 Authorization 之类）。
     #[test]
     fn carries_only_version_strings_status_enums_and_a_directory_name() {
-        let info = build_runtime_info("0.1.0", Path::new("/tmp/app"));
+        let info = build_runtime_info("0.1.0", Path::new("/tmp/app"), false);
         let value: serde_json::Value = serde_json::to_value(&info).expect("serialize");
         let object = value.as_object().expect("an object");
 
@@ -205,7 +232,7 @@ mod tests {
     /// 前端拿到的键名是 camelCase（与 `apps/web/src/services/desktopRuntime.ts` 的接口一致）。
     #[test]
     fn serialises_with_the_camel_case_keys_the_web_layer_expects() {
-        let info = build_runtime_info("0.1.0", Path::new("/tmp/app"));
+        let info = build_runtime_info("0.1.0", Path::new("/tmp/app"), false);
         let value: serde_json::Value = serde_json::to_value(&info).expect("serialize");
 
         for key in ["platform", "appVersion", "runtime", "webviewVersion", "dataRoot", "secretStore", "repository", "transport"] {

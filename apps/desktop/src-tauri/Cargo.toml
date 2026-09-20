@@ -28,3 +28,6 @@ tauri-plugin-log = "2"
 # "我们不假装知道别的平台"的落点（`runtime.rs` 里的非 Windows 分支直接回 `unknown`）。
 [target.'cfg(windows)'.dependencies]
 winreg = "0.55"
+# Windows 凭据管理器后端（Task 1.2 的生产后端）。`v1` 是它的兼容模式（默认开启）：
+# `Entry::new(service, user)` + set/get/delete_password。
+keyring = "4.2.0"

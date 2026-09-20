@@ -103,24 +103,33 @@ fn keeps_the_capability_set_minimal() {
 }
 
 /// **Rust 侧不许有通用命令**（计划原文："no generic command accepting JavaScript or shell text"）。
+///
+/// ## 这条断言的形状改过两次，两次都是"断言写得太糙"
+///
+/// 1. 第一版用裸子串扫**整个文件**，被注释里那句"没有、也不会有 `eval` / `run_shell`…"
+///    判红 —— 无法区分"代码里有"与"注释里提到"。
+/// 2. 于是改成先剔注释行再扫。**注释里点名这些词是好事**（说明作者知道这条边界），
+///    不该被断言当成违规。
+///
+/// 命令**清单**是逐字列出来的，不是"数一个数"：这样新增一个命令时，这条用例会逼你
+/// 在这里写下它的名字 —— 那一刻就是一次**有意的**决定（"这个命令该不该给前端"），
+/// 而不是一个悄悄变大的数字。
 #[test]
 fn exposes_only_named_ipc_commands_and_no_generic_one() {
     let lib = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/lib.rs")).expect("read lib.rs");
 
-    // 有且只有这一个命令被注册。
-    assert!(lib.contains("tauri::generate_handler![get_runtime_info]"), "the command list must stay explicit: {lib}");
+    let named = ["get_runtime_info", "save_secret", "remove_secret", "has_secret"];
+    assert!(
+        lib.contains("tauri::generate_handler![get_runtime_info, save_secret, remove_secret, has_secret]"),
+        "the command list must stay explicit: {lib}"
+    );
     assert_eq!(lib.matches("generate_handler!").count(), 1, "exactly one invoke handler");
+    // 每个注册过的命令都要有一个 `#[tauri::command]` 函数。
+    for command in named {
+        assert!(lib.contains(&format!("fn {command}(")), "no function found for the registered command {command}");
+    }
+    assert_eq!(lib.matches("#[tauri::command]").count(), named.len(), "every registered command must be declared as a command, and nothing else");
 
-    /**
-     * 几条**通用命令**的判据。两次修这条断言的过程值得记下来：
-     *
-     * 1. 第一版用裸子串（`lib.contains("eval")`）扫**整个文件**，被注释里那句
-     *    "没有、也不会有 `eval` / `run_shell` …" 判红 —— 断言无法区分"代码里有"与"注释里提到"。
-     * 2. 于是改成"只看**代码**"：先剔掉注释行再扫。注释里点名这些词是**好事**
-     *    （它说明作者知道这条边界），不该被断言当成违规。
-     *
-     * 判据收窄到两个真问题：命令名有没有被注册、代码里有没有真的去执行进程。
-     */
     let code: String = lib
         .lines()
         .filter(|line| !line.trim_start().starts_with("//"))
@@ -130,6 +139,26 @@ fn exposes_only_named_ipc_commands_and_no_generic_one() {
     for forbidden in ["run_shell", "read_file", "write_file", "std::process::Command", "Command::new", "\"eval\""] {
         assert!(!code.contains(forbidden), "the shell must not expose or use `{forbidden}`");
     }
+}
+
+/// **密钥命令的返回类型里没有位置能装下明文**（Task 1.2 的核心性质）。
+///
+/// 这一条用**文本断言**而不是行为断言，是因为它要守的是**接口形状**：
+/// 只要有人把返回值改成 `String`（包含明文）或加一个 `get_secret`，这里就会红。
+/// 行为层面（存/取/删走通）由 `tests/secrets.rs` 覆盖，那一层可以造假后端；
+/// 而"接口有没有出口"必须在源头看。
+#[test]
+fn the_secret_commands_have_no_plaintext_exit() {
+    let lib = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/lib.rs")).expect("read lib.rs");
+
+    // 没有"读回明文"的命令。
+    for forbidden in ["get_secret", "read_secret", "reveal_secret", "show_secret"] {
+        assert!(!lib.contains(forbidden), "a command that returns the plaintext secret must not exist: {forbidden}");
+    }
+    // 三个密钥命令的签名：保存回状态枚举、查询回布尔、删除回单元。
+    assert!(lib.contains("fn save_secret(app: tauri::AppHandle, profile_id: String, secret: String) -> Result<SecretState, String>"));
+    assert!(lib.contains("fn has_secret(app: tauri::AppHandle, profile_id: String) -> Result<bool, String>"));
+    assert!(lib.contains("fn remove_secret(app: tauri::AppHandle, profile_id: String) -> Result<(), String>"));
 }
 
 /// 前端产物与桌面外壳指向**同一份** web 应用 —— 这是"不重复一份 store"的落点。
