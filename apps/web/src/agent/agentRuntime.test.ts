@@ -3,6 +3,7 @@ import { contentFingerprint } from "@draw/scene-graph"
 import { describe, expect, it, vi } from "vitest"
 
 import type { PlanEnvelope, PlannerPort, PlanRequest } from "@draw/agent-core"
+import { SKILL_CATALOGUE_REVISION } from "@draw/agent-core"
 
 import { createAgentRuntime } from "./agentRuntime"
 import type { ExportPreflightPort } from "@draw/agent-core"
@@ -69,7 +70,7 @@ function makeRuntime(options: { envelope?: PlanEnvelope; document?: GeometryDocu
  * "模型看到的手柄是不是我给它那份文档的手柄"（第一版这里自己新建一份空文档，
  * 于是断言拿到的是另一个 id —— 那正是这条用例想抓的东西）。
  */
-function runContext(document: GeometryDocument = geometryDocument()) {
+function runContext(document: GeometryDocument = geometryDocument(), capabilityRevision = "2026-09-21.1") {
   return {
     runId: "run-1",
     conversationId: "conv-1",
@@ -77,7 +78,7 @@ function runContext(document: GeometryDocument = geometryDocument()) {
     target: { projectId, documentId: document.metadata.id, workspace: "geometry3d" as const, epoch: `epoch:${document.metadata.id}`, generation: document.revision, contentHash: contentFingerprint(document) },
     sources: [],
     textProfileId: "profile-1",
-    capabilityRevision: "2026-09-21.1",
+    capabilityRevision,
     policyRevision: "policy-1"
   }
 }
@@ -240,5 +241,113 @@ describe("the assembled runtime actually runs", () => {
     expect(seen[0].model.context.workspace).toBe("geometry3d")
     // 规划阶段的工具已按阶段发布（这条链上不能出现提交工具）。
     expect(seen[0].model.tools.every((tool) => tool.effect !== "commit")).toBe(true)
+  })
+
+  /**
+   * **技能清单是可用动作的唯一来源**（Task 2.2 Step 2/4）。
+   *
+   * 在接线之前 `requestedSkillIds` 与 `availableActions` 都是空数组 —— 也就是说
+   * 模型看到的上下文里**一个可用动作都没有**，九个签入的清单一次都没被用过。
+   *
+   * 关键设计：调用方说"请求哪些技能"，运行时去清单里取动作，**而不是让调用方直接给一串动作名**。
+   * 后者等于绕开清单（调用方可以声明任何名字），而清单正是"这次允许用哪一小撮"那份声明。
+   */
+  it("carries the requested skill and the actions it declares into the context", async () => {
+    const seen: PlanRequest[] = []
+    const planner: PlannerPort = {
+      plan: async (request) => {
+        seen.push(request)
+        return { plan: planEnvelope(), requestId: "req-1", attemptId: "attempt-1" }
+      }
+    }
+    const document = geometryDocument()
+    const runtime = createAgentRuntime({
+      readDocument: () => document,
+      writeDocument: () => {},
+      readSceneDocuments: () => [{ handle: { projectId, documentId: document.metadata.id, workspace: "geometry3d", epoch: `epoch:${document.metadata.id}`, generation: document.revision, contentHash: contentFingerprint(document) }, document }],
+      planner,
+      exportPreflight: exportPreflight(),
+      projectId,
+      runId: "run-1",
+      now: () => 1_000,
+      requestedSkillIds: ["spatial-modeling"]
+    })
+
+    await drive(runtime.coordinator, { run: runContext(document, SKILL_CATALOGUE_REVISION), userMessage: "建个立方体" })
+
+    const context = seen[0].model.context
+    expect(context.skills.map((skill) => skill.id)).toEqual(["spatial-modeling"])
+    // 清单声明的动作就是上下文里的可用动作（`spatial-modeling` 只声明 solid.create_template）。
+    expect([...context.availableActions]).toEqual(["solid.create_template"])
+    // 没有请求的技能不该出现，而且**不该**变成一条"未登记"警告（那是给清单本身有问题用的）。
+    expect(context.warnings).toEqual([])
+  })
+
+  /**
+   * **观察者必须把事实的文本交出去**（2026-09-21）。
+   *
+   * 上一批给 `Observation` 补了 `facts?: { id; text; origin }[]`，理由是"只有 id 的话，
+   * 模型看得到『有一个事实 point-1』，看不到『point-1 是点 A』"。
+   * 但补了形状不等于补了数据：运行时的观察者从第一版起就在算那个数组，
+   * **只是没有把它放进返回值** —— 于是上下文里的事实仍然是空/只有 id。
+   *
+   * 这条用例是**变异检验抓出来的**：把 `facts` 从返回值里去掉，全量用例仍然全绿
+   *（因为既有用例的场景都是空文档，根本没有事实）。补上这条之后再去掉就会红。
+   */
+  it("hands the planner the fact text, not just entity ids", async () => {
+    const document = geometryDocument()
+    document.primitives.push({ id: "point-1", type: "point3", label: "点 A", position: { x: 0, y: 0, z: 0 } } as never)
+    const seen: PlanRequest[] = []
+    const planner: PlannerPort = {
+      plan: async (request) => {
+        seen.push(request)
+        return { plan: planEnvelope(), requestId: "req-1", attemptId: "attempt-1" }
+      }
+    }
+    const runtime = createAgentRuntime({
+      readDocument: () => document,
+      writeDocument: () => {},
+      readSceneDocuments: () => [{ handle: { projectId, documentId: document.metadata.id, workspace: "geometry3d", epoch: `epoch:${document.metadata.id}`, generation: document.revision, contentHash: contentFingerprint(document) }, document }],
+      planner,
+      exportPreflight: exportPreflight(),
+      projectId,
+      runId: "run-1",
+      now: () => 1_000
+    })
+
+    await drive(runtime.coordinator, { run: runContext(document), userMessage: "建个立方体" })
+
+    const facts = seen[0].model.context.facts
+    expect(facts).toHaveLength(1)
+    expect(facts[0].id).toBe("point-1")
+    // 文本是重点：只有 id 的话模型等于看不到这个对象是什么。
+    expect(facts[0].text).toBe("点 A")
+    expect(facts[0].origin).toBe("user")
+  })
+
+  it("drops a skill id that is not in the catalogue instead of warning about it", async () => {    const seen: PlanRequest[] = []
+    const planner: PlannerPort = {
+      plan: async (request) => {
+        seen.push(request)
+        return { plan: planEnvelope(), requestId: "req-1", attemptId: "attempt-1" }
+      }
+    }
+    const document = geometryDocument()
+    const runtime = createAgentRuntime({
+      readDocument: () => document,
+      writeDocument: () => {},
+      readSceneDocuments: () => [{ handle: { projectId, documentId: document.metadata.id, workspace: "geometry3d", epoch: `epoch:${document.metadata.id}`, generation: document.revision, contentHash: contentFingerprint(document) }, document }],
+      planner,
+      exportPreflight: exportPreflight(),
+      projectId,
+      runId: "run-1",
+      now: () => 1_000,
+      requestedSkillIds: ["no-such-skill"]
+    })
+
+    await drive(runtime.coordinator, { run: runContext(document), userMessage: "建个立方体" })
+
+    expect(seen[0].model.context.skills).toEqual([])
+    expect(seen[0].model.context.warnings).toEqual([])
   })
 })

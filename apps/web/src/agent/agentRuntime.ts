@@ -4,6 +4,7 @@ import {
   createSceneObservation,
   createSceneTools,
   createToolDispatcher,
+  SKILL_MANIFESTS,
   type AgentCoordinator,
   type CommitOutcome,
   type CommitterPort,
@@ -18,7 +19,6 @@ import {
   type SkillCatalog,
   type ToolResult
 } from "@draw/agent-core"
-
 import type { GeometryDocument } from "@draw/dsl"
 import { contentFingerprint } from "@draw/scene-graph"
 
@@ -67,6 +67,16 @@ export interface AgentRuntimeDependencies {
   runId: string
   consentTtlMs?: number
   now?: () => number
+  /**
+   * **这次运行请求哪些技能**（`SKILL_MANIFESTS` 里的 id）。
+   *
+   * 缺省为空：**没有请求的技能就不进上下文**。技能是"这次允许模型用哪一小撮动作"的声明
+   *（见 `skills/manifest.ts`），所以它必须由**知道用户想干什么**的那一层给出来，
+   * 而不是由运行时把所有九个都塞进去 —— 把整张菜单摊开正是清单要解决的问题。
+   *
+   * 给了之后，清单里声明的 `actionIds` 会成为上下文里**唯一**的可用动作列表（见下）。
+   */
+  requestedSkillIds?: readonly string[]
   /**
    * 编译**之前**的一次准备机会，用来把工作区切到这条计划需要的那个。
    *
@@ -204,11 +214,37 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
         // 可确认的事实就是"场景里确实存在的对象"，逐条带上来源文档，供计划引用。
         for (const entity of inspected.payload) facts.push({ id: entity.entityId, text: entity.label, origin: "user" })
       }
-      return { factIds: facts.map((fact) => fact.id), summary }
+      /**
+       * **`facts` 必须一起交出去**（2026-09-21 补）。
+       *
+       * 上面那个数组从第一版起就在算，但**没有进返回值** —— 于是协调器组装上下文时
+       * `observation.facts` 是 `undefined`，模型看到的事实只剩一串实体 id
+       *（"有一个事实 point-1"），看不到它的文本（"点 A"）。
+       *
+       * 这类缺口很难在代码评审里发现：数组本身写得对、类型也对，只是**没被交出去**，
+       * 而"没有事实文本"在界面上没有任何症状 —— 只有在接上模型之后才会表现为
+       * "它总是问用户这是什么对象"。是给 `Observation.facts` 补形状时顺出来的。
+       */
+      return { factIds: facts.map((fact) => fact.id), summary, facts }
     }
   }
 
   const committer = createCommitterAdapter({ drafts, host, live })
+
+  /**
+   * **技能 → 可用动作**（Task 2.2 Step 2/4 的接线）。
+   *
+   * 为什么在运行时这一层做，而不是让调用方给一串 `availableActions`：
+   * 调用方给字符串数组就等于**绕过了清单**（它可以声明任何动作名），而清单正是
+   * "这次允许用哪一小撮"的那份声明。这里改成"调用方说请求哪些技能，运行时去清单里取动作"，
+   * 于是动作集合**只能**来自签入的清单。
+   *
+   * 未登记的技能 id 在这里就被丢掉（不进 `requestedSkillIds`），因此不会在上下文里
+   * 变成一条 `skill_unregistered` 警告 —— 那类警告是给"清单本身有问题"用的，
+   * 不该由调用方打错一个 id 触发。
+   */
+  const requestedSkillIds = (dependencies.requestedSkillIds ?? []).filter((id) => SKILL_MANIFESTS.some((manifest) => manifest.id === id))
+  const availableActions = [...new Set(SKILL_MANIFESTS.filter((manifest) => requestedSkillIds.includes(manifest.id)).flatMap((manifest) => manifest.actionIds))]
 
   /**
    * 规划器声明的假设，由协调器在**计划通过校验**时交过来（见 `onPlanParsed`）。
@@ -223,6 +259,8 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
     committer,
     prepare: dependencies.prepare,
     onPlanParsed: (plan) => { declaredAssumptions = plan.assumptions },
+    requestedSkillIds,
+    availableActions,
     consent: undefined // 同意凭据由宿主在用户确认后创建，协调器不构造它。
   })
 
