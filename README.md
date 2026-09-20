@@ -8,7 +8,14 @@ MathCanvas 是一个面向数学与工程场景的 2D 交互绘图工作台原�
 
 **2026-09-17 起立体几何再叠一层解析几何，并以"最后一轮优化"收束**：用户口径从"我不要一个逼近的圆，我需要一个真的圆"一路推到"我需要的只是那个相交的曲面，而不是由很多三角形拼出来的"，据此交付了两条线——**A1 解析二次曲面与真圆**（平面 ∩ 二次曲面给精确圆锥曲线；圆柱 / 圆锥的边界圆、截面边界、空间圆 `circle3` 都按**屏幕误差**细分成真曲线，放大时点变多；读数 / 测量 / 工程图投影 / SVG 导出 / 框选全部适配解析结论）与 **A2 交面分组 + 真曲面**（交面按**支撑曲面**分组：立方体 ∩ 圆柱从 **50 片 → 3 个区域**、圆柱 ∩ 圆锥从 **49 片 → 2 个区域**；边界是真曲线；曲面区域按屏幕误差把填充**吸到真正的曲面上**，画出来是一条光滑曲面），并修掉三个用户实测缺陷（自由拖动时边界圆被画了两倍位移、"点不跟手"；拖动时 HTML 点标注不跟手；曲面 ∩ 曲面拿不到那张曲面）。**随后"立体几何最后一轮"四件事全部交付**（同一份设计与切片计划，2026-09-17）：**约束轨道**（空间圆 `circle3` 建得出来、能当动点宿主、拖点严格沿圆周滑动）、**拖动旋转**（世界轴三色环 + 15° 吸附 + 属性栏角度输入，一次拖动一步撤销）、**测量数字常驻画布**（2D 与 3D 都不用选中就能看到数值）、**立体几何 UI 与平面几何对齐**（同一套纸色 / 纸纹 / 栅格令牌）。设计与逐轮证据见 [`docs/superpowers/specs/2026-09-17-analytic-quadrics-design.md`](./docs/superpowers/specs/2026-09-17-analytic-quadrics-design.md)、[`docs/superpowers/specs/2026-09-17-intersection-face-grouping-design.md`](./docs/superpowers/specs/2026-09-17-intersection-face-grouping-design.md) 与 [`docs/superpowers/specs/2026-09-17-3d-tracks-rotation-and-measurement-labels-design.md`](./docs/superpowers/specs/2026-09-17-3d-tracks-rotation-and-measurement-labels-design.md)。
 
-**2026-09-18 再把界面拆成两个顶级模块**：模块 A「传统工作区」（默认，保留 CAD / 平面几何 / 立体几何全部现有功能）与模块 B「Agent 工作区」（左侧会话栏 + 对话结果与代码展示区 + 页面正中的多行输入框，参考 DSH / Codex 的干净版式），切换入口是最左侧常驻的模块导航栏。Agent 区**当前只有交互骨架**，未接入模型服务（发送后是本地占位回复），P4 Agent 仍在排除范围内。同日按用户要求**删除右侧的「精确形式」面板**（用户口径「似乎没什么用」）：删的是那块只读展示，文档里的测量数据、常驻画布的读数与内核的 `exactFormOf` 全部保留。
+**2026-09-18 再把界面拆成两个顶级模块**：模块 A「传统工作区」（默认，保留 CAD / 平面几何 / 立体几何全部现有功能）与模块 B「Agent 工作区」（左侧会话栏 + 对话结果展示区 + 页面正中的多行输入框，参考 DSH / Codex 的干净版式），切换入口是最左侧常驻的模块导航栏。Agent 区当时只有交互骨架，未接入模型服务。同日按用户要求**删除右侧的「精确形式」面板**（用户口径「似乎没什么用」）：删的是那块只读展示，文档里的测量数据、常驻画布的读数与内核的 `exactFormOf` 全部保留。
+
+**2026-09-19 Agent 按实施计划真正建起来了（G0 / G0.5 / G2）**：设计依据是 [`docs/superpowers/plans/2026-09-18-desktop-agent-implementation-plan.md`](./docs/superpowers/plans/2026-09-18-desktop-agent-implementation-plan.md)。这一轮交付的是**可信执行底座 + 来源上下文与草稿 + 文本 Agent**，三条 Gate 都已通过并逐条留证（见 [`docs/project-progress.md`](./docs/project-progress.md)）：
+- **G0 可信执行底座**：新增 `@draw/agent-core`（能力注册表：42 个图元类型与 39 个操作变体全覆盖或显式阻止；传输契约与运行时 schema：未知字段 / 未知 action / 非有限数 / 未作用域引用一律拒绝）；`scene-graph` 堵住 unknown-operation 与 false-change 两个洞，并加了原子事务与顺序无关的批量删除（整批只占一步撤销）；把原先散在 `App.tsx` / `PropertiesBar.tsx` 里的作图逻辑抽成 12 族动作编译器——**界面按钮与 Agent 走同一条编译路径**。
+- **G0.5 来源上下文 · 草稿 · 预览**：作用域来源上下文（顺手修掉两个真实缺陷：切到"投影立体几何"后**显示立方体却导出空图纸**；空间来源被图纸树误报"来源已删除"）；所有写入走 Compare-and-Swap（过期候选永远不落盘）；隔离草稿 + 一次性同意（nonce 一次性、绑定预览哈希、会过期、绑定运行 id）；worker 消息边界（五个信封字段缺一即拒，未知消息类型**丢弃并诊断**而不是抛异常）；导出预检（会略过什么、哪些字会被写坏、哪种格式被阻止）。
+- **G2 文本 Agent**：运行账本（显式状态机，非法转移返回"允许的下一步"）、运行预算（4 次生成 / 6 次网络 / 24 次工具 / 每次暂存 32 个动作 / 整次 128 个，**先判后扣**）、协调器与四组注入端口、场景观察（按文档解析、**重名标签不猜**、内部细分细节不暴露给模型）、九个技能清单（哈希校验后才加载）、输出解析（两个可区分通道，**绝不从散文里抠 JSON、绝不修补字段**）、有界恢复策略（**认证 / 权限 / 几何 / 事实矛盾一律不自动重试**）、运行遥测与脱敏（默认拒绝式脱敏、账本只追加且按事件 id 幂等、**拒绝存模型推理与图像字节**）、确认面板（精确计数、来源与目标、假设、近似、删除警告、一步撤销声明）。
+- **浏览器里已经能跑通整条链**：在 Agent 工作区说"建一个棱长 3 的立方体" → 真实协调器读取场景、规划、编译成隔离草稿 → 面板显示"会新增 1 个对象"并可确认 → **确认后画布上真的出现对象（并自动切到对应工作区）→ `Ctrl+Z` 一步撤销回原样**；丢弃草稿则文档一个字节不动。**演示回复已从生产路径删除** —— 没有接入模型服务时用的是**本地确定性规划器**（只认几条固定指令，认不出就**问用户**，绝不编一个答案）。
+- **尚未接入真实模型服务**：provider 调用、Tauri 外壳、SecretStore、SQLite 仍属 G1，而 G1 需要 Rust 工具链（见「下一步」）。当前的规划器是本地那一份，`PlannerPort` 就是将来替换它的位置。
 
 **2026-09-19 数值转换以"内联"的形式回来了，内核识别口径同时重写**：用户口径是「根据现在已有的 ui，重新优化再加上去」＋「这个近似不那么好用，手稍微偏一偏分数就没了，我们不需要那么精确，我们要将数据往常见整数和分数上面靠」＋「坐标是整数或分数时，能够准确计算时，还是保留精度」。因此**没有恢复那块"把所有测量再列一遍"的置顶只读面板**，而是把形式贴在数字已经在的地方：画布常驻读数（平面与立体）与属性栏测量卡片的「结果」显示成 `长度：0.667u · ≈ 2/3`、`角度：1.571rad · π/2`，卡片另给一个「复制 ≈ 2/3」按钮；三处共用 `apps/web/src/measurementForms.ts` 一份格式化。内核（`packages/geometry-kernel/src/exact-forms.ts`）改成三层：**精确层不动**（紧容差，不带 `≈`；手输的 `0.0625` 仍是 `1/16`、`0.66` 仍是 `33/50`）→ **吸附层只在常见形式里找**（整数与分母 ≤ 12 的常见分数带 2%；π 的有理倍数与纯根式 `b√n/c` 带 0.3%，命中带 `≈`）→ 两位小数兜底。这一层修掉的正是用户抱怨的两件事：拖出来的全精度浮点（`0.667023`）以前被旧松容差判成 `≈ 0.67`，而一有余量时又会给出 `33/50`、`20/29`、`(11-4√7)/5`、`(5+4√39)/10` 这类教学上没用的形式。同日**追加 `e`**（用户口径：「e 也需要有」）：常量族在 π 的有理倍数、纯根式之外再收 **e 的整数倍**（`e`、`2e`、`-e`…，只认整数倍是因为 e 在这个画布上没有"分数倍"的自然来源，放开分母会让约 7% 的数轴被怪形式认领），所以 `e` 现在读作 `e`、拖偏一点读作 `≈ e`，不再被吸到 `≈ 27/10`。同一次追加还改了吸附层的取舍规则：常量族与常见分数族**各自取最近的，再比残差、谁近谁赢** —— 用例当场抓出"常量优先"会把 `2.5001` 判成 `≈ 2√14/3`（差 0.22%），而它离 `5/2` 只差 0.004%。
 
@@ -18,7 +25,7 @@ MathCanvas 是一个面向数学与工程场景的 2D 交互绘图工作台原�
 - **顶栏 / 标签栏分工（2026-09-18 按用户口径再调）**：顶栏只剩品牌一件事 —— 「MathCanvas」带**动态粒子**与**打字 + 方块光标**效果（光标"里"就是品牌名）；文件命令（打开 / 保存 .mgeo）、撤销重做、搜索框与设置**下沉到工作区标签栏的右端**；原先高亮的「用户中心」按钮已删除。（右侧属性面板底部曾嵌入一块「动态打字终端卡片」，按用户口径**已移除** —— 它在深色底上体量偏重，与极简版式冲突。）
 - **两级结构**：应用分成两个**顶级模块**——模块 A「传统工作区」（默认）与模块 B「Agent 工作区」，切换入口是最左侧常驻的模块导航栏（`ModuleRail`）。模块决定骨架，工作区（平面几何 / 立体几何 / 工程制图）只是模块 A 里的画布选择。
 - 模块 A 内顶部采用约 40px 系统栏、32px 工作区标签栏和约 80px Word 风格 Ribbon；平面（显示为「平面几何」，内部 ID 为 `conics`）、立体几何与工程制图共享命令分组，避免重复的旧工具栏。多模态组只保留「文字转换」与「图片转换」两个入口，转换服务尚未接入，因此两个入口保持禁用并说明原因。
-- 模块 B 参考 DSH / Codex 的版式：左侧会话列表，中间是对话结果与代码输出展示区，**页面正中**是一条支持多行输入的输入框（Enter 发送、Shift + Enter 换行，中文输入法组合期间的 Enter 不会误发）。围栏代码单独成栏显示并可一键复制。当前**未接入模型服务**，发送后给的是本地占位回复；对话记录持久化在浏览器本地，不写进 `.mgeo`。
+- 模块 B 参考 DSH / Codex 的版式：左侧会话列表，中间是对话结果展示区（含**运行状态卡**与**确认面板**），**页面正中**是一条支持多行输入的输入框（Enter 发送、Shift + Enter 换行，中文输入法组合期间的 Enter 不会误发）。围栏代码单独成栏显示并可一键复制。**已接真实协调器**（2026-09-19）：发送后走的是"观察 → 规划 → 编译成隔离草稿 → 等你确认 → 提交"这条真实链路，提交必须经宿主的一次性同意；**没有模型服务时用本地确定性规划器**，认不出就问你而不会编答案。运行状态不只靠颜色（每条阶段都带"成功 / 注意 / 失败"文字），失败会给出原因码与"重试 / 改一改"。对话记录持久化在浏览器本地，不写进 `.mgeo`。
 - Ribbon 支持按钮或 `Ctrl + F1` 折叠、标签临时呼出、图钉固定；右侧 Inspector 根据选择状态展示属性，并在无选择时保持精简。右侧面板不再显示几何约束与智能体（Agent）；约束数据、校验与 `.mgeo` 编码保持不变，教学测量入口位于默认可见的数据区。测量卡片上挂着测量的**精确 / 近似形式**（`结果 0.667 u · ≈ 2/3`，见上文 2026-09-19 那一条）—— 这里曾先后是「精确形式」置顶面板（2026-09-18 删除）与它的空位，现在是"贴在数字自己身上"的内联形态。
 - 工作区限制在 `100vh`；390px 手机视口提供对象列表和属性检查器抽屉，画布与状态栏保持在视口内。底部提示随工具和创建步骤变化。
 
@@ -168,12 +175,22 @@ npm run test:e2e
 - CAD 工程制图提供主视图、俯视图、左视图和轴测图，四视图共享稳定源 ID 与选择状态；工程标注从点 / 棱来源计算线性尺寸、角度和公差，并在来源变化后自动重算。
 - 约束的残差、冲突与退化诊断在**内核**里（`constraints3d` / `solveLineConstraints`，含 2026-09-17 新增的"退化目标列入 `unsatisfiable`"）并有测试覆盖；右侧的约束列表面板已按用户要求移除，界面上不再有约束列表入口。
 
+### Agent 工作区（模块 B，2026-09-19）
+
+- **一句自然语言 → 隔离草稿 → 你确认 → 落盘 → 一步撤销**。已在浏览器里跑通：说"建一个棱长 3 的立方体"，协调器会读场景、规划、把计划编译成隔离草稿并给出确认面板（写明"会新增 1 个对象"、来源与目标、删除警告、一步撤销声明）；**确认之前画布一个字节都不动**，确认之后对象出现，`Ctrl+Z` 一步回原样；丢弃草稿则文档与历史都不动。
+- **提交不是模型能自己做的事**：写入只能经 `HostBridge`，且必须带**用户同意凭据**（一次性、绑定预览哈希、会过期、绑定运行 id）+ Compare-and-Swap。界面那一层拿不到 `commit`，也造不出凭据。
+- **没有模型服务时不会编答案**：用的是**本地确定性规划器**，只认几条固定指令；认不出就**问用户**（运行进入"等待补充信息"），绝不生成一段看起来像回答的文字。计划里那句"生产路径不再有演示回复"已兑现——原来的 `composeDemoReply` 已删除。
+- **对模型的能力边界是代码里的表，不是提示词**：能力注册表（42 图元 / 39 操作，不可用的显式标出）、按阶段发布的工具（观察阶段**没有任何写入工具**；提交工具只在"等你确认"且你已确认时存在）、技能清单（哈希校验后才加载）。
+- **失败会如实说**：认证 / 权限 / 几何 / 事实矛盾这四类**一律不自动重试**；输出解析**绝不从散文里抠 JSON、绝不修补字段**；运行遥测默认拒绝式脱敏（`Authorization`、`sk-` 前缀、长随机串一律替换），账本**拒绝存模型推理与图像字节**。
+- 仍未接入真实模型服务：provider 调用属 G1（需要 Rust 工具链，见「下一步」）；`PlannerPort` 就是将来替换本地规划器的位置。
+
 ## 包结构
 
 - `packages/dsl`：版本化 Geometry Document、图元类型、校验和 `.mgeo` 编解码。
 - `packages/geometry-kernel`：数值策略、约束、交点、射线/折线、圆锥曲线和微积分计算。
-- `packages/scene-graph`：Domain Operation、Patch 校验、依赖传播和事务回滚。
-- `apps/web`：工作台 UI、SVG/Three.js 画布、交互状态、属性检查器和文件导入导出；`ModuleRail` + `shellModules.ts` 是顶级模块骨架，`components/agent/` 与 `styles/agent.css` 是模块 B 的 Agent 区（对话状态在 `agentStore.ts`，与几何文档完全分离）。
+- `packages/scene-graph`：Domain Operation、Patch 校验、依赖传播、事务、**动作编译器**（12 族）与**作用域来源上下文**。
+- `packages/agent-core`：**Agent 的纯逻辑层**（不依赖 UI、也没有任何网络代码）：能力注册表、传输契约与运行时 schema、动作 id 规范清单、运行账本与预算、协调器与其四组注入端口、场景观察、技能清单与哈希校验目录、观察 / 草稿 / 交互三组工具、输出解析、恢复策略、网关通道选择、运行遥测与脱敏。依赖只有 `@draw/dsl` 与 `@draw/scene-graph`。
+- `apps/web`：工作台 UI、SVG/Three.js 画布、交互状态、属性检查器和文件导入导出；`ModuleRail` + `shellModules.ts` 是顶级模块骨架。模块 B 的 Agent 区在 `components/agent/`（状态卡、确认面板、草稿预览）与 `styles/agent.css`，对话状态在 `agentStore.ts`（与几何文档完全分离）；`agent/` 目录是宿主接线：`agentRuntime.ts`（把各部件装到一起）、`agentRunner.ts`（运行 → 确认 → 提交 → 撤销）、`localPlanner.ts`（离线时的确定性规划器）、`draftStore.ts` / `hostBridge.ts`（隔离草稿与一次性同意）、`agent.worker.ts` / `geometry.worker.ts`（消息边界）。
 
 ## 验证命令
 
@@ -184,21 +201,26 @@ npm run build
 npm run test:e2e
 ```
 
-当前验证基线（2026-09-18，A1「解析二次曲面与真圆」8 片 + A2 交面分组五轮 + 立体几何最后一轮 7 片 + 角的单位统一到弧度 + 轨道圆改成独立对象并可缩放 + 原点标记与默认落点两处修复 + 平面几何切线一轮 + 轨道动点"连线被拒"与"拖动不跟手"两处修复 + 由动点引申出来的图元成为一等图元 + **无限长切线与数值精确形式转换** + **顶级双模块骨架与 Agent 交互区** + **极简主义视觉重构（冷色调 / 微拟物化分层 / 居中品牌顶栏）**，全部合并后实测）：`npm.cmd test` 为 132 个测试文件、1549 个用例全部通过（**注意**：合并后曾出现 vitest 自己的工作进程心跳超时 `Timeout calling "onTaskUpdate"`——vitest 3.x 与 birpc 之间那条 RPC 写死 60 秒超时、与 `testTimeout` 无关，工作进程被同步代码卡住就会假阳性报错并让命令退码 1（用例 0 失败）。**已按上游口径根治**：`vitest` 由 `^3.2.4` 升到 **`^4.1.11`**，即上游 [`vitest-dev/vitest#8297`](https://github.com/vitest-dev/vitest/pull/8297) 的修复；升级前连跑 3 次全失败、升级后连跑 3 次全绿，并在"Playwright 同时跑"的负载下（最初触发它的场景）复跑一次同样干净）；4 个 workspace 类型检查通过；ESLint 0 个 error、14 条 warning；Web 生产构建通过（Vite 因此仍提示主 bundle 超过 500 KB）；Playwright Chromium 115/115 通过（global setup 现在**按当前工作区重新构建** `build-check/mathcanvas-current` 再预览，因此这份结果对应的是工作区源码，而不是该目录里上一次构建的产物），覆盖**两个顶级模块的切换与边界、回到画布后几何内容不丢（`e2e/app-modules.spec.ts`）**、Ribbon、跨工作区操作、CAD 图纸填充与显式缩放、CAD 2D 绘图交互（命令条在图纸之外 / 固定坐标窗口 / 橡皮筋预览 / 端点与切点捕捉 / 栅格捕捉 / 夹点编辑 / 方向框选 / 坐标键入 / 线宽与命中带 / 偏移与修剪延伸）、工程制图的投影来源切换与投影、立体几何的自动交点 / 交线 / 交面预览与点击创建对应图元（`e2e/three-intersection-previews.spec.ts`）、**圆柱 ∩ 立方体的交面合成一条侧带并在画布上按环向条带填充、边界画成真圆（`e2e/three-intersection-band.spec.ts`，夹具 `e2e/fixtures/cube-cylinder.mgeo`）、曲面 ∩ 曲面（圆柱 ∩ 圆锥）归成一张圆锥面 + 一个底面圆盘而不是 48 个三角形（`e2e/three-intersection-cone.spec.ts`，夹具 `e2e/fixtures/cylinder-cone.mgeo`）、曲面交面按屏幕误差吸到真曲面上画成光滑曲面（放大后细分三角形数从 48 涨到 432，读数 `data-face-triangles`）、拖动实体时点标注跟着走（`e2e/geometry3d-drag.spec.ts`）**、截面虚线预览（只画交线与交点，不铺大剖切面）、**空间圆轨道（建轨道 → 绑点 → 拖点沿圆周滑动，`e2e/three-orbit-tracks.spec.ts`；同文件还守住两件用户实测反馈：**手还没松，那个动点就必须已经在动**——"动点移动的动画没有了……直到松手才能看到位置"就是这个；以及"**动点与定点能建出空间直线**"——轨道上绑了动点之后仍然可以继续构造；`e2e/three-orbit-track-handles.spec.ts` 另外守住拖半径手柄时绑在轨道上的乘客点也实时跟到新圆周上）、拖动旋转（拖 X 环到 90° 后属性栏读 90°、一次撤销回 0；Alt 不吸附；环外按下不旋转；多选不给环，`e2e/three-rotation-handle.spec.ts`）、测量数字常驻两个画布（`e2e/measurement-labels.spec.ts`，含 3D 角度读数按弧度 `1.571rad` 与属性栏一致）、立体几何与平面几何同一套纸令牌（`e2e/three-ui-tokens.spec.ts`）**、**3D 视口的渲染管道不重建（编辑 / 选择 / 展开 / 拖动期间 renderer 只建一次）、场景内容按签名增量同步（展开与选中不再整场重建）、相机跨工作区保留、绑定点沿宿主拖动、自动取景（含"编辑时不抢视角"）、背景与平面网格严格 1 格 = 1 世界单位（缩放只改变覆盖范围；平面侧由 `e2e/planar-grid-cell.spec.ts` 在浏览器里量相邻网格线的世界间距恒为 1）、**圆柱 / 圆锥的圆上只保留 4 个象限点（48 段近似不再冒出 96 个点标记，`e2e/three-round-solid-points.spec.ts` 断言圆柱点标签恰好 8 个、圆锥恰好 5 个（含顶点），对象列表行数一致）、母线不再画出来、交点标记只标转折 ≥ 18° 的角点（光滑交线一个采样点都不补）**、圆柱与圆锥默认 48 段、动点绑定宿主与「实体内」约束（越界夹回表面）、实体移动时绑定点跟随、四个模板的默认截面与 45° 倾斜、画布尺寸在文案变化与窄屏下都不被压缩、平面画布拖动动点时交点预览走增量（拖动不再卡顿）**，以及 1440px/768px/390px 视口。平面几何动点系统（曲线约束、依赖图拓扑重算、平面动态测量、轨迹分支切分、删除级联）当前由单测与 App 用例覆盖，另有 `e2e/planar-drag-performance.spec.ts` 守住拖动增量、`e2e/planar-connected-point-drag.spec.ts` 守住"动点与连线相连时点仍然抓得住、拖轨道只带动动点"。Vitest 的 jsdom 3D 测试仍会输出 WebGL context 未实现提示。首次运行需先执行 `npx playwright install chromium`，否则会报缺少浏览器可执行文件。
+当前验证基线（**2026-09-19，Agent G0 / G0.5 / G2 落地后实测**）：`npm.cmd test` 为 **174 个测试文件、1957 个用例全部通过（零跳过）**；**5 个 workspace** 类型检查通过；ESLint **0 error / 14 warning**（14 条为既有基线）；Web 生产构建通过（Vite 仍提示主 bundle 超过 500 KB）；Playwright Chromium **119/119** 通过（global setup **按当前工作区重新构建** `build-check/mathcanvas-current` 再预览，因此结果对应工作区源码，而不是该目录里上一次构建的产物）。
+
+**Agent 相关的验证重点**：`e2e/agent-flow.spec.ts` 三条 —— ①**一句话 → 草稿预览 → 确认前画布为空 → 确认 → 画布出现对象 → `Ctrl+Z` 一步撤销回空**；②丢弃草稿后文档与历史都不动；③认不出时给"需要补充信息"而不是编一段回答。单测侧另有：`agentRunner.test.ts`（暂存阶段不动文档 / 确认后恰好一步历史 / 拒绝二次提交）、`agentRuntime.test.ts`（**一个替身都不用**：真草稿存储 + 真宿主桥 + 真协调器）、`pipeline.test.ts`（G0.5 四条 Gate 端到端）。
+
+更早的基线（A1「解析二次曲面与真圆」8 片 + A2 交面分组五轮 + 立体几何最后一轮 7 片，2026-09-18）为 **132 个文件 / 1549 用例**、Playwright **115/115**；其覆盖内容（Ribbon、跨工作区、CAD 2D 绘图交互、工程制图投影来源切换、立体几何自动交点 / 交线 / 交面与点击创建、圆柱 ∩ 立方体的侧带与真圆边界、曲面 ∩ 曲面归成一张圆锥面、曲面交面按屏幕误差吸到真曲面、约束轨道、拖动旋转、测量数字常驻两画布、两画布同一套纸令牌等）仍在回归中。当时的 vitest 假阳性超时（vitest 3.x 与 birpc 之间写死 60 秒的 RPC 心跳，与 `testTimeout` 无关）已按上游口径升到 `vitest@^4.1.11` 根治。
 
 工程工作台 Task 1-7 的聚焦验证：`LayerTree`/`DrawingTree`/`CommandBar`/`EngineeringWorkbench`/`DrawingViewport`/`DrawingSheetView`/`EngineeringInspector` 等新增测试文件 7 个；DSL 与 Scene Graph 图层/图纸操作 3 个测试文件、41 个用例；`e2e/engineering-workbench.spec.ts` 覆盖旧文档迁移、2D 绘图写入活动图层、图层隐藏、刷新后布局保持、隐藏视图不导出、键盘操作、图纸填充与显式缩放（Task 14）。
 
 ## 项目文档
 
 - [项目进度](docs/project-progress.md)：**单一进度记录**——各阶段完成项、每轮 RED→GREEN 证据、验证数字、误报清单与下一步。
+- [**桌面 Agent 实施计划**](docs/superpowers/plans/2026-09-18-desktop-agent-implementation-plan.md)：G0 / G0.5 / G1 / G2 / P5 / G5 的任务与 Gate。**当前进度：G0 与 G0.5 的 Gate 全部满足；G2 主体已实现；G1 未开始（本机无 Rust 工具链）。** 每个任务标题下有复核状态行，写明与计划原文的差异与未完成项。
 - [功能目录](docs/feature-catalog.md)：记录当前可用能力、规划能力和明确限制。
 - [主实施计划](docs/multimodal-math-engine-implementation-plan.md)：P0–P8 的阶段划分与**逐阶段落地状态**（P4 / P5 已排除）。
 - [GitHub 调研](docs/research/graphing-tools.md)：记录对 GeoGebra、JSXGraph、function-plot 等同类项目的功能与架构调研。
 - [制图交互调研](docs/research/drafting-interaction-patterns.md)：记录 AutoCAD / 制图类工具的捕捉、夹点、命令流程等交互模式。
 - [第一周验收记录](docs/acceptance/2026-09-12-week-one.md)：2026-09-12 当周的历史验收快照（数字为当时值）。
-- **实施计划**（`docs/superpowers/plans/`，共 **16** 份，全部带复核状态）：MVP 基础、动态数学平台、公式画布、下一步数学平台、数值鲁棒性、P3+P6、点驱动 3D、3D 测量质量、工程工作台层次化、P7 工程制图、Ribbon UI、3D Auto-Fit、**解析二次曲面 A1**、3D 动点宿主、3D 渲染管道去重建化、**立体几何最后一轮（约束轨道 / 拖动旋转 / 测量数字 / UI 对齐，7 片）**。
+- **实施计划**（`docs/superpowers/plans/`，共 **17** 份，全部带复核状态）：MVP 基础、动态数学平台、公式画布、下一步数学平台、数值鲁棒性、P3+P6、点驱动 3D、3D 测量质量、工程工作台层次化、P7 工程制图、Ribbon UI、3D Auto-Fit、**解析二次曲面 A1**、3D 动点宿主、3D 渲染管道去重建化、**立体几何最后一轮（约束轨道 / 拖动旋转 / 测量数字 / UI 对齐，7 片）**、**[桌面 Agent（G0 / G0.5 / G1 / G2 / P5 / G5，逐任务带复核状态）](docs/superpowers/plans/2026-09-18-desktop-agent-implementation-plan.md)**。
 - **设计规格**（`docs/superpowers/specs/`，共 **13** 份，全部带复核状态）：动态绘图平台、数值鲁棒性、点驱动 3D、3D 测量质量、工程工作台、P7 工程制图、Ribbon UI、截面 / 截线图元、3D 视口与内核重构、**解析二次曲面与真圆（A1）**、**交面按支撑曲面分组（A2）**、平面动点系统、**立体几何最后一轮（约束轨道 / 拖动旋转 / 测量数字 / UI 对齐）**。
-- 重点可以按需翻阅：[点驱动 3D 实施计划](docs/superpowers/plans/2026-09-14-point-driven-3d-geometry.md)、[工程工作台层次化实施计划](docs/superpowers/plans/2026-09-15-engineering-workbench-hierarchy.md)、[截面 / 截线图元交互设计](docs/superpowers/specs/2026-09-16-section-intersection-primitives-design.md)、[解析二次曲面与真圆设计](docs/superpowers/specs/2026-09-17-analytic-quadrics-design.md)、[交面分组与真曲面设计](docs/superpowers/specs/2026-09-17-intersection-face-grouping-design.md)、[3D 视口与内核重构设计](docs/superpowers/specs/2026-09-17-3d-viewport-kernel-refactor-design.md)、[平面动点系统设计](docs/superpowers/specs/2026-09-17-dynamic-point-engine-design.md)、[立体几何最后一轮设计](docs/superpowers/specs/2026-09-17-3d-tracks-rotation-and-measurement-labels-design.md)。
+- **重点可以按需翻阅**：[点驱动 3D 实施计划](docs/superpowers/plans/2026-09-14-point-driven-3d-geometry.md)、[工程工作台层次化实施计划](docs/superpowers/plans/2026-09-15-engineering-workbench-hierarchy.md)、[**桌面 Agent 实施计划**](docs/superpowers/plans/2026-09-18-desktop-agent-implementation-plan.md)、[截面 / 截线图元交互设计](docs/superpowers/specs/2026-09-16-section-intersection-primitives-design.md)、[解析二次曲面与真圆设计](docs/superpowers/specs/2026-09-17-analytic-quadrics-design.md)、[交面分组与真曲面设计](docs/superpowers/specs/2026-09-17-intersection-face-grouping-design.md)、[3D 视口与内核重构设计](docs/superpowers/specs/2026-09-17-3d-viewport-kernel-refactor-design.md)、[平面动点系统设计](docs/superpowers/specs/2026-09-17-dynamic-point-engine-design.md)、[立体几何最后一轮设计](docs/superpowers/specs/2026-09-17-3d-tracks-rotation-and-measurement-labels-design.md)。
 
 ## 协作约定
 
@@ -217,4 +239,7 @@ npm run test:e2e
 3. **剖切平面的数值输入**（现在能拖动 / 方向键平移、也能「以面为剖切面」，但没有直接键入法向量与偏移量的输入框）、等长 / 等角约束（需要先定角度表示）、圆与圆弧的修剪（拆成多段圆弧）、B-rep / DWG 导入与自动尺寸布局——这些尚未编码。
 4. **解析几何线上仍挂着的两项**（都带明确理由，不是漏做）：A1 spec §5.6 的 `Line2` 按像素描边（要同时改 `resolution` 同步 / 拾取语义 / `dispose` 三处，收益只是圆帽与加粗）、以及圆柱 / 圆锥的**解析展开**（多边形版与解析版宽度只差 0.07%）；另外二次曲面**互交**的精确交线（圆柱∩圆柱那类四次曲线）仍走网格近似，曲面区域的**面积**仍是网格求和（如实标数值近似）。
 5. 体检中"只记录未改"的三项：`pointercancel` 目前提交而非中止拖动（需先确认触摸平台的手势语义）；依赖图对 3/4 目标约束（共线 / 共面）不建边（属语义变更，会连带收紧"对齐锁定对象"的拒绝条件）；`boolean3d.compact` 每面一次 `sort + join` 的签名拼串（微小开销）。
-6. P4 Agent 与 P5 题图解析仍在排除范围内。
+6. **Agent 的下一段路**（P4 已按用户要求开工，不再是排除项）：按 [`桌面 Agent 实施计划`](docs/superpowers/plans/2026-09-18-desktop-agent-implementation-plan.md)——
+   - **G1 是当前唯一的硬阻塞，而且是环境问题不是设计问题**：本机 `rustc` / `cargo` / `rustup` **都不存在**（`node v24.15.0`、`npm 11.12.1`、**WebView2 153.0.4234.32** 与 `winget` 都在），所以 Tauri 外壳、SecretStore（Windows 凭据管理器）、provider 适配器、Rust 回环代理与 SQLite 仓储**一个都没法动手**（连"先跑失败测试"都做不到，`cargo test` 起不来）。解除方式：`winget install Rustlang.Rustup` 或 rustup.rs 官方安装器，装完确认 `cargo --version` 可执行。**没有自动安装**——那是往用户机器上装整套工具链并改 `PATH`，应由用户决定。
+   - **G2 剩余（不依赖 Rust）**：`AssumptionList.tsx` / `ToolTracePanel.tsx`（假设清单与可选的开发者详细视图）、`ToolPort` 接线、worker 的 diff/check/artifact 信封。
+   - **一处待办**：`apps/web/src/agent/draftStore.ts` 的 `previewHash` 目前存的是**规范 JSON 字符串**（`contentFingerprint`）而不是哈希；它与 `apps/web` 侧 `createDocumentHandle` 的 `contentHash` 同源，要**一起改成 `canonicalContentHash` 并一起复验 Compare-and-Swap**，所以没有夹带在 UI 批次里。
