@@ -75,7 +75,8 @@ function runContext(document: GeometryDocument = geometryDocument(), capabilityR
     runId: "run-1",
     conversationId: "conv-1",
     promptMessageId: "msg-1",
-    target: { projectId, documentId: document.metadata.id, workspace: "geometry3d" as const, epoch: `epoch:${document.metadata.id}`, generation: document.revision, contentHash: contentFingerprint(document) },
+    // 工作区取自**这份文档**，而不是写死：句柄说的必须就是这份文档。
+    target: { projectId, documentId: document.metadata.id, workspace: document.workspace as "conics" | "geometry3d", epoch: `epoch:${document.metadata.id}`, generation: document.revision, contentHash: contentFingerprint(document) },
     sources: [],
     textProfileId: "profile-1",
     capabilityRevision,
@@ -349,5 +350,53 @@ describe("the assembled runtime actually runs", () => {
 
     expect(seen[0].model.context.skills).toEqual([])
     expect(seen[0].model.context.warnings).toEqual([])
+  })
+
+  /**
+   * **`prepare` 换掉目标文档这件事必须如实记录**（2026-09-21 审查发现，本批只写用例不改流程）。
+   *
+   * 真实场景：用户在平面几何里说"建一个立方体"，规划器给出空间动作，`prepare` 把工作区切到
+   * 立体几何 —— 于是**目标文档换了一份**。而上下文是在**规划之前**组装好的，里面还写着旧的
+   * `target` 手柄与旧的事实。也就是说：**模型看到的是文档 A 的场景，而动作会被编译到文档 B 上**。
+   *
+   * 为什么本批不改：能让模型看到正确目标的那次生成发生在【第 N+1 次往返】（例如 schema 修复），
+   * 而一次成功的运行只有一次生成 —— 所以"在 prepare 之后重算上下文"在当前流程里**是没有读者的**。
+   * 与其塞一段"看起来修好了"但没人读的代码，不如把现状钉成用例：它现在确实是错的，
+   * 修它属于 Task 2.3 那条"修复往返"接上之后的独立切片。
+   *
+   * 这条用例的价值在于：**它记录的是事实，不是期望** —— 谁哪天把这个行为改对了，它会立刻红，
+   * 从而逼出一次有意的决定（而不是悄悄变化）。
+   */
+  it("records that a workspace switch happens after the context was built (known gap)", async () => {
+    const planar = createEmptyDocument("conics")
+    const spatial = createEmptyDocument("geometry3d")
+    let live = planar
+    const seen: PlanRequest[] = []
+    const planner: PlannerPort = {
+      plan: async (request) => {
+        seen.push(request)
+        return { plan: planEnvelope(), requestId: "req-1", attemptId: "attempt-1" }
+      }
+    }
+    const runtime = createAgentRuntime({
+      readDocument: () => live,
+      writeDocument: () => {},
+      readSceneDocuments: () => [{ handle: { projectId, documentId: live.metadata.id, workspace: live.workspace as "conics" | "geometry3d", epoch: `epoch:${live.metadata.id}`, generation: live.revision, contentHash: contentFingerprint(live) }, document: live }],
+      planner,
+      exportPreflight: exportPreflight(),
+      projectId,
+      runId: "run-1",
+      now: () => 1_000,
+      // 模拟真实的 `prepareWorkspaceFor`：把工作区切到计划需要的那个。
+      prepare: () => { live = spatial; return { ok: true } }
+    })
+
+    await drive(runtime.coordinator, { run: runContext(planar), userMessage: "建个立方体" })
+
+    // 模型看到的是**切换之前**的那份文档 —— 这是已知缺口，不是期望行为。
+    expect(seen[0].model.context.handles.target.documentId).toBe(planar.metadata.id)
+    expect(seen[0].model.context.workspace).toBe("conics")
+    // 而真正被编译的目标已经是切换之后的那份。
+    expect(live.metadata.id).toBe(spatial.metadata.id)
   })
 })
