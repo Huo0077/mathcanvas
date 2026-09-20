@@ -36,10 +36,9 @@
 | 1.3 provider 配置与设置存储 | ✅ | — |
 | 1.4 provider 适配器与事件归一 | 🟡 | **`ProviderAdapter` trait 本体未写**（形状取决于 Task 1.5 的传输层，而传输层现在已经有了）；能力证据探针未写 |
 | 1.5 回环代理与传输安全 | 🟡 | **真服务器已落地**（绑回环 + 路由 + 判据 + 取消句柄 + 11 例）；**缺**：把请求真正转给 provider 并把流搬回来（`model` / `events` 两条路由目前**如实回 501**，有一条断言在哨兵那个状态） |
-| 1.6 SQLite 仓储 / CAS / 崩溃恢复 | 🟡 | `.mcanvas` 打包导出/导入；附件两阶段写与孤儿回收（表已建好，blob 目录那一半没写）；附件表已经建好但 blob 目录那一半未写 |
+| 1.6 SQLite 仓储 / CAS / 崩溃恢复 | 🟡 | `.mcanvas` 打包导出/导入；附件的两阶段写与孤儿回收（**表已建好**，缺的是 blob 目录那一半与孤儿回收） |
 
-**一句话结论**：G1 的**六个任务主体都在且都被测透**（Rust **99 例** + 单测 2113 例），**Gate ①②③④⑤ 里 ①②③④⑤ 已满足 4 条**（②仍差手动重启验证）；离"完成"还差两件实质工作：**provider 转发（含 `ProviderAdapter` trait）+ 能力证据探针**、**`.mcanvas`/附件**。
-
+**一句话结论**：G1 的**六个任务主体都在且都被测透**（Rust **99 例** + 单测 2113 例）；**Gate 五条里已满足四条**（②仍差手动重启验证）；离"完成"还差两件实质工作：**provider 转发（含 `ProviderAdapter` trait）+ 能力证据探针**、**`.mcanvas` 打包与附件**。
 ### G1 第七批：项目仓储真的接上了 —— 关掉再打开文档还在（Task 1.6 收口的前半）（2026-09-21）
 
 - **交付**：Rust 侧 7 个仓储 IPC 命令（`read_document_head` / `create_document` / `commit_document` / `lookup_commit` / `read_document_snapshot` / `document_history_length` / `replace_document_epoch`）+ `apps/web/src/services/documentRepository.ts`（10 例）+ `documentPersistence.ts`（13 例）+ **`App.tsx` 真的接上了**。
