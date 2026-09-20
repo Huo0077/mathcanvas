@@ -127,6 +127,8 @@ fn exposes_only_named_ipc_commands_and_no_generic_one() {
         "upsert_provider_profile",
         "remove_provider_profile",
         "provider_health",
+        "provider_run",
+        "provider_cancel",
         "read_document_head",
         "create_document",
         "commit_document",

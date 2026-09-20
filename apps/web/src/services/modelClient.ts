@@ -39,9 +39,10 @@ export type ModelClientStart = { ok: true; events: ModelEvent[] } | ModelClientF
 /**
  * 把**任何**失败映射到错误契约。
  *
- * 三种来源：没有桌面外壳（网页版）、IPC 失败、代理明确拒绝。三者对调用方来说
- * 都是"这次跑不成"，但只有 IPC 失败与 429/5xx 才值得重试 —— 所以 `retryable` 必须由
- * **分类**决定，而不是由"是不是抛了异常"决定。
+ * 四种来源：没有桌面外壳（网页版）、IPC 失败、代理明确拒绝、**Rust 侧给回的
+ * 带分类的失败**（`{ kind: "failed", failure, retryable }`）。四者对调用方来说
+ * 都是"这次跑不成"，但只有 transport / rate_limited / server_error 才值得重试 ——
+ * 所以 `retryable` 必须由**分类**决定，而不是由"是不是抛了异常"决定。
  */
 export function asFailure(error: unknown): ModelClientFailure {
   const message = error instanceof Error ? error.message : String(error)
@@ -55,6 +56,25 @@ export function asFailure(error: unknown): ModelClientFailure {
     return { ok: false, failure: "permission", message, retryable: false }
   }
   return { ok: false, failure: "transport", message, retryable: true }
+}
+
+/**
+ * **把 Rust 侧那条带分类的失败读回来**。
+ *
+ * Tauri 会把命令的 `Err` 值原样交给前端。Rust 侧刻意把它做成 `ModelEvent` 的
+ * `failed` 形状，而不是一句话 —— 因为**重试策略只认 `retryable`**，
+ * 而"从一句话里认分类"是一次必然会漏的判断。
+ */
+export function failureFromErrorValue(value: unknown): ModelClientFailure | null {
+  if (typeof value !== "object" || value === null) return null
+  const candidate = value as { kind?: unknown; failure?: unknown; message?: unknown; retryable?: unknown }
+  if (candidate.kind !== "failed" || typeof candidate.message !== "string") return null
+  return {
+    ok: false,
+    failure: typeof candidate.failure === "string" ? candidate.failure : "unknown",
+    message: candidate.message,
+    retryable: candidate.retryable === true
+  }
 }
 
 /**
@@ -72,27 +92,32 @@ export async function startModelRun(
   }
 ): Promise<ModelClientStart> {
   try {
-    const raw = await dependencies.invoke("model_run", {
+    const raw = await dependencies.invoke("provider_run", {
       runId: request.runId,
       profileId: request.profileId,
       profileRevision: request.profileRevision,
       messages: request.messages,
       stream: request.stream ?? true
     })
+    // Rust 侧把"失败"做成一条带分类的事件（见 `provider_run`）：那条**不是**事件，
+    // 是错误契约 —— 混进事件列表会让协调器把它当成模型说的话。
+    const failure = failureFromErrorValue(raw)
+    if (failure) return failure
     const events = Array.isArray(raw) ? (raw as ModelEvent[]) : []
     // 取消之后不再产出事件：模型可能已经拿着半截结果去下判断。
     const isCancelled = dependencies.isCancelled ?? (() => false)
     const filtered = dependencies.stopAfterCancel ? dependencies.stopAfterCancel(events, isCancelled) : events
     return { ok: true, events: filtered }
   } catch (error) {
-    return asFailure(error)
+    // 命令的 `Err` 会以异常形式到达；先看它是不是那条带分类的失败。
+    return failureFromErrorValue(error) ?? asFailure(error)
   }
 }
 
 /** 取消一次运行。**幂等**：重复取消不是错误（用户可能点了两次）。 */
 export async function cancelModelRun(runId: string, invoke: (command: string, args?: Record<string, unknown>) => Promise<unknown>): Promise<boolean> {
   try {
-    await invoke("model_cancel", { runId })
+    await invoke("provider_cancel", { runId })
     return true
   } catch {
     return false

@@ -13,12 +13,15 @@
 //! - **方言决定形状**：`generic_compatible` 默认**不带工具**（计划 Step 3："Do not assume
 //!   every compatible service supports the same tools, JSON, vision, or streaming shape."）。
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::repository::provider_profiles::ProviderProfile;
 
 /// 一条归一化消息。三家 provider 的"消息"只有这两种角色，差异在适配器里处理。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+///
+/// `Deserialize` 是给 IPC 用的：前端**只发消息**，密钥与端点都不在参数里
+///（它们由 Rust 侧从 profile 与凭据库取）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChatMessage {
     /// `system` / `user` / `assistant`。

@@ -1,4 +1,4 @@
-//! **三家协议的 fixtures 测试**（Task 1.4 Step 1/2/6）。
+﻿//! **三家协议的 fixtures 测试**（Task 1.4 Step 1/2/6）。
 //!
 //! 计划原文："Add fixture tests for successful text, streaming chunks, tool calls, usage, 401,
 //! 429, 5xx, and disconnect **for each protocol**."
@@ -51,7 +51,7 @@ fn kinds(events: &[ModelEvent]) -> Vec<&'static str> {
 
 #[test]
 fn openai_stream_accumulates_the_text_and_reports_usage() {
-    let events = normalize_response("openai_compatible", &fixture("openai-stream.sse"), true);
+    let events = normalize_response("openai_compatible", &fixture("openai-stream.sse"), None, true);
 
     assert_eq!(joined_text(&events), "你好，世界");
     assert!(kinds(&events).contains(&"started"), "the model name must be reported");
@@ -61,7 +61,7 @@ fn openai_stream_accumulates_the_text_and_reports_usage() {
 
 #[test]
 fn openai_tool_call_parses_the_arguments_json() {
-    let events = normalize_response("openai_compatible", &fixture("openai-tool-call.sse"), true);
+    let events = normalize_response("openai_compatible", &fixture("openai-tool-call.sse"), None, true);
     let call = events.iter().find_map(|event| match event {
         ModelEvent::ToolCall { tool_id, input, .. } => Some((tool_id.clone(), input.clone())),
         _ => None,
@@ -77,7 +77,7 @@ fn openai_tool_call_parses_the_arguments_json() {
 #[test]
 fn openai_non_streaming_body_is_understood_too() {
     // 有些网关对 `stream: true` 也回一整份 JSON。认不出来就会得到"模型什么都没说"。
-    let events = normalize_response("openai_compatible", &fixture("openai-non-streaming.json"), false);
+    let events = normalize_response("openai_compatible", &fixture("openai-non-streaming.json"), None, false);
 
     assert_eq!(joined_text(&events), "一整段回答");
     assert!(kinds(&events).contains(&"usage"));
@@ -85,7 +85,7 @@ fn openai_non_streaming_body_is_understood_too() {
 
 #[test]
 fn openai_reasoning_fields_stay_metadata_and_never_become_content() {
-    let events = normalize_response("openai_compatible", &fixture("openai-reasoning.sse"), true);
+    let events = normalize_response("openai_compatible", &fixture("openai-reasoning.sse"), None, true);
 
     // 计划 Step 4：推理字段**只作诊断元数据**，不许被当成内容或工具结果。
     assert_eq!(joined_text(&events), "答案是 4");
@@ -100,7 +100,7 @@ fn openai_reasoning_fields_stay_metadata_and_never_become_content() {
 
 #[test]
 fn anthropic_stream_reads_named_events_and_deltas() {
-    let events = normalize_response("anthropic", &fixture("anthropic-stream.sse"), true);
+    let events = normalize_response("anthropic", &fixture("anthropic-stream.sse"), None, true);
 
     assert_eq!(joined_text(&events), "切线方程是 y=2x");
     assert!(kinds(&events).contains(&"started"));
@@ -110,7 +110,7 @@ fn anthropic_stream_reads_named_events_and_deltas() {
 
 #[test]
 fn anthropic_tool_use_block_becomes_a_tool_call() {
-    let events = normalize_response("anthropic", &fixture("anthropic-tool-call.sse"), true);
+    let events = normalize_response("anthropic", &fixture("anthropic-tool-call.sse"), None, true);
     let call = events.iter().find_map(|event| match event {
         ModelEvent::ToolCall { tool_id, .. } => Some(tool_id.clone()),
         _ => None,
@@ -121,7 +121,7 @@ fn anthropic_tool_use_block_becomes_a_tool_call() {
 
 #[test]
 fn anthropic_thinking_stays_metadata() {
-    let events = normalize_response("anthropic", &fixture("anthropic-thinking.sse"), true);
+    let events = normalize_response("anthropic", &fixture("anthropic-thinking.sse"), None, true);
 
     assert_eq!(joined_text(&events), "结果如上");
     let thinking = events.iter().find_map(|event| match event {
@@ -135,7 +135,7 @@ fn anthropic_thinking_stays_metadata() {
 
 #[test]
 fn ollama_reads_one_json_per_line_and_stops_on_done() {
-    let events = normalize_response("ollama", &fixture("ollama-stream.ndjson"), true);
+    let events = normalize_response("ollama", &fixture("ollama-stream.ndjson"), None, true);
 
     assert_eq!(joined_text(&events), "2 + 2 = 4");
     assert!(kinds(&events).contains(&"usage"));
@@ -144,7 +144,7 @@ fn ollama_reads_one_json_per_line_and_stops_on_done() {
 
 #[test]
 fn ollama_tool_calls_are_normalised() {
-    let events = normalize_response("ollama", &fixture("ollama-tool-call.ndjson"), true);
+    let events = normalize_response("ollama", &fixture("ollama-tool-call.ndjson"), None, true);
     let call = events.iter().find_map(|event| match event {
         ModelEvent::ToolCall { tool_id, input, .. } => Some((tool_id.clone(), input.clone())),
         _ => None,
@@ -160,7 +160,7 @@ fn ollama_tool_calls_are_normalised() {
 #[test]
 fn a_truncated_stream_reports_malformed_output_instead_of_panicking() {
     // 网络切断时半截 JSON 是常态。**崩掉进程**与"这一块没解析出来"是完全不同的两件事。
-    let events = normalize_response("openai_compatible", &fixture("openai-truncated.sse"), true);
+    let events = normalize_response("openai_compatible", &fixture("openai-truncated.sse"), None, true);
 
     // 前面完整的那一块仍然被读出来了（用户已经看到的东西不该被丢掉）。
     assert_eq!(joined_text(&events), "开头");
@@ -190,7 +190,7 @@ fn every_protocol_maps_the_shared_http_status_codes_the_same_way() {
 
 #[test]
 fn a_non_json_body_is_malformed_output_not_a_panic() {
-    let events = normalize_response("openai_compatible", "<html>502 Bad Gateway</html>", false);
+    let events = normalize_response("openai_compatible", "<html>502 Bad Gateway</html>", None, false);
 
     assert!(matches!(events.first(), Some(ModelEvent::Failed { failure: FailureKind::MalformedOutput, .. })));
 }
@@ -267,7 +267,7 @@ fn anthropic_puts_the_system_prompt_at_the_top_level() {
 
 #[test]
 fn events_carry_the_attempt_identity_when_serialised_for_the_frontend() {
-    let json = normalize_to_json("openai_compatible", &fixture("openai-non-streaming.json"), false, &ids());
+    let json = normalize_to_json("openai_compatible", &fixture("openai-non-streaming.json"), None, false, &ids());
 
     assert!(!json.is_empty());
     for event in &json {

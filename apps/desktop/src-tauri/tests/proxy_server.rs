@@ -17,7 +17,7 @@
 use std::io::{Read, Write};
 use std::net::TcpStream;
 
-use mathcanvas_desktop_lib::proxy::server::{ProxyHandle, start};
+use mathcanvas_desktop_lib::proxy::server::{ProxyHandle, MAX_RUN_EVENTS, MAX_TRACKED_RUNS, start};
 
 /// 一次原始的 HTTP/1.1 请求。`extra_headers` 用来伪造 Host / Origin / Authorization。
 fn raw_request(handle: &ProxyHandle, method: &str, path: &str, extra_headers: &[(&str, &str)], body: &str) -> (u16, String) {
@@ -213,6 +213,81 @@ fn an_unknown_route_is_refused() {
         // 未知路径一律拒绝（404 由 axum 给），**不转发、不猜**。
         assert_eq!(status, 404);
     });
+}
+
+#[test]
+fn a_run_can_be_recorded_and_read_back_through_the_handle() {
+    // `/v1/runs/{runId}/events` 要能回"这次运行产出了什么"。运行本身由
+    // `ProviderAdapter` 在命令线程上跑（凭据库的同步闭包约束，见 `providers::adapter`），
+    // 而**流式轮询的端点还在代理上** —— 所以运行记录得挂在代理状态里。
+    with_handle(|handle| {
+        assert!(!handle.run_recorded("run-1"), "no record before the run reports anything");
+
+        handle.record_events("run-1", &[serde_json::json!({ "kind": "delta", "text": "一" })], false);
+        handle.record_events("run-1", &[serde_json::json!({ "kind": "delta", "text": "二" })], false);
+        handle.record_events("run-1", &[serde_json::json!({ "kind": "completed" })], true);
+
+        assert!(handle.run_recorded("run-1"));
+        let view = handle.run_events("run-1").expect("the record must exist");
+        assert_eq!(view.events.len(), 3, "every recorded event must be readable");
+        assert!(view.finished, "the run must report that it stopped producing");
+        assert!(!view.truncated);
+        assert_eq!(view.events[0]["text"], "一");
+        assert_eq!(view.events[2]["kind"], "completed");
+        // 令牌**不在**运行记录里（它只走 header）。
+        assert!(!serde_json::to_string(&view).expect("serialise").contains(handle.token()));
+    });
+}
+
+#[test]
+fn an_unrecorded_run_is_reported_as_missing_instead_of_as_an_empty_run() {
+    with_handle(|handle| {
+        // "没有记录"与"记录里有零条事件"是两件不同的事：前者是"不知道这个 run"，
+        // 后者是"这个 run 什么都没说"。混起来会让界面把前者显示成后者。
+        assert!(handle.run_events("never-started").is_none());
+    });
+}
+
+#[test]
+fn a_run_that_produces_endlessly_is_bounded_and_says_so() {
+    with_handle(|handle| {
+        for index in 0..(MAX_RUN_EVENTS + 25) {
+            handle.record_events("run-flood", &[serde_json::json!({ "kind": "delta", "text": index.to_string() })], false);
+        }
+
+        let view = handle.run_events("run-flood").expect("the record must exist");
+        // 上限是**留档**的上限（前端要能回看这一轮），不是流本身的上限：
+        // 一个不封顶的记录会随着运行时长一直长下去。
+        assert!(view.events.len() <= MAX_RUN_EVENTS, "the record must be bounded, got {}", view.events.len());
+        assert!(view.truncated, "a bounded record must say that it dropped events");
+    });
+}
+
+#[test]
+fn the_oldest_run_records_are_evicted_so_the_map_cannot_grow_without_bound() {
+    with_handle(|handle| {
+        for index in 0..(MAX_TRACKED_RUNS + 4) {
+            handle.record_events(&format!("run-{index}"), &[serde_json::json!({ "kind": "started" })], true);
+        }
+
+        assert!(handle.run_events("run-0").is_none(), "the oldest record must be evicted");
+        assert!(handle.run_events(&format!("run-{}", MAX_TRACKED_RUNS + 3)).is_some());
+    });
+}
+
+#[test]
+fn a_shut_down_proxy_remembers_nothing_about_its_runs() {
+    // 运行记录随会话消失：它是**这一次运行**的留档，不是历史。
+    // 重启之后旧 run 的记录不该还在（那会让界面显示上一轮的输出）。
+    let runtime = tokio::runtime::Runtime::new().expect("runtime");
+    let first = runtime.block_on(start()).expect("start");
+    first.record_events("run-1", &[serde_json::json!({ "kind": "delta", "text": "旧" })], true);
+    assert!(first.run_recorded("run-1"));
+    first.shutdown();
+
+    let second = runtime.block_on(start()).expect("start");
+    assert!(!second.run_recorded("run-1"), "a new session must not inherit the previous run records");
+    second.shutdown();
 }
 
 #[test]

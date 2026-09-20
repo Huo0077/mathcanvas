@@ -1,3 +1,4 @@
+import { stopAfterCancel as filterCancelled } from "@draw/agent-core"
 import type { ModelEvent } from "@draw/agent-core"
 import { describe, expect, it, vi } from "vitest"
 
@@ -39,7 +40,33 @@ describe("starting a model run", () => {
 
     expect(result.ok).toBe(true)
     if (result.ok) expect(result.events.map((event) => event.kind)).toEqual(["started", "delta", "tool_call", "completed"])
-    expect(invoke).toHaveBeenCalledWith("model_run", expect.objectContaining({ runId: "r1", profileId: "openai", profileRevision: 3 }))
+    expect(invoke).toHaveBeenCalledWith("provider_run", expect.objectContaining({ runId: "r1", profileId: "openai", profileRevision: 3 }))
+  })
+
+  it("keeps the failure classification Rust sent back instead of re-deriving it from a message", async () => {
+    // Rust 侧把失败做成 `ModelEvent` 的 `failed` 形状（见 `provider_run`）：
+    // 分类与可重试性都在里面。前端**照抄**它 —— 从一句话里重新猜分类必然分叉。
+    const invoke = invokeReturning({ kind: "failed", failure: "rate_limited", message: "the provider is rate limiting (429)", retryable: true })
+
+    const result = await startModelRun({ runId: "r1", profileId: "openai", profileRevision: 1, messages: [] }, { invoke })
+
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.failure).toBe("rate_limited")
+    expect(result.retryable).toBe(true)
+  })
+
+  it("does not let a classified failure leak into the event list", async () => {
+    // 混进事件列表会让协调器把"这次失败了"当成"模型说了这句话"。
+    const invoke = invokeReturning({ kind: "failed", failure: "auth", message: "no credential stored", retryable: false })
+
+    const result = await startModelRun({ runId: "r1", profileId: "openai", profileRevision: 1, messages: [] }, { invoke })
+
+    // 类型上 `ModelClientFailure` 里**没有** `events` 这个位置 —— 这正是这条用例要说的：
+    // 失败那一支压根装不下事件。所以这里按 `unknown` 看一眼，证明它确实没有。
+    const asUnknown = result as unknown as { events?: unknown }
+    expect(result.ok).toBe(false)
+    expect(asUnknown.events).toBeUndefined()
   })
 
   it("never sends a secret — there is no parameter that could carry one", async () => {
@@ -63,10 +90,17 @@ describe("starting a model run", () => {
      * 而不是"判定本身会翻转"（后者是 `modelEvents.test.ts` 的事）。
      */
     const neverCancelled = (): boolean => false
-    // 换个名字：原先这里解构出 `stopAfterCancel`，而注入的回调参数**也叫** `stopAfterCancel` ——
-    // 闭包里那一行 `stopAfterCancel(incoming, …)` 调用的是**参数**（它自己），于是无限递归、
-    // 用例偶发超时（实测 5013ms 撞上 5s 上限）。能跑的那几次是因为时序刚好。
-    const { stopAfterCancel: filterCancelled } = await import("@draw/agent-core")
+    /**
+     * 这个过滤器**静态导入**（而不是 `await import(..)`）。
+     *
+     * 这里踩过两个坑，都记下来：
+     * 1. **闭包里的名字撞了**：原先解构出 `stopAfterCancel`，而注入的回调参数**也叫**
+     *    `stopAfterCancel` —— 闭包那一行调用的是**参数**（它自己），于是无限递归、
+     *    用例偶发超时。现在静态导入的名字是 `filterCancelled`，与参数不可能撞。
+     * 2. **动态导入在整轮测试里很贵**：单跑这个文件时它花 3.2 秒，而整轮 `npm test`
+     *    里那次模块转换正好顶到 5 秒上限（实测超时）。整个文件里只用到它一次，
+     *    没有理由为它付一次运行时导入。
+     */
     /** 记下客户端到底把什么交给了过滤器 —— 这条接缝比"过滤函数本身对不对"更容易被漏掉。 */
     const handed: { events: number; hasCancellation: boolean } = { events: -1, hasCancellation: false }
 
@@ -99,7 +133,7 @@ describe("starting a model run", () => {
 describe("failures map to the error contract", () => {
   it("reports a browser as a non-retryable transport failure", async () => {
     // 没有桌面外壳**不是**可重试的失败：重试一百次也还是浏览器。
-    const error = new Error("no desktop shell is available for model_run")
+    const error = new Error("no desktop shell is available for provider_run")
     error.name = "NoDesktopShellError"
 
     const failure = asFailure(error)

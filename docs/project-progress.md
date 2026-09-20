@@ -2,7 +2,7 @@
 
 > 这份文件是项目的单一进度记录。每完成一个可验证的切片，就更新“已完成”和“下一步”，并附上验证证据。
 
-**最后更新：** 2026-09-21（**G1 第七批：项目仓储真的接上了 —— 关掉再打开文档还在**。这是 G1 第一条**端到端可验证**的链路：内容变化 → CAS 提交 → 关掉应用 → 再打开还在。交付 Rust 侧 7 个仓储 IPC 命令 + `documentRepository.ts`（10 例）+ `documentPersistence.ts`（13 例），并把 `App.tsx` 真正接上 —— `documentService` 从"只写 zustand store"变成"写进 SQLite 的原子事务"。**本批抓到四个真实缺陷，全部是被测试/探针抓出来的**：①`reset`（打开文件＝换一世）把普通提交当成换世，而普通提交**改不了 epoch**，于是在途的旧自动保存仍能写进来（用例挂死到超时）—— 修法是补上 `replace_document_epoch` 这个独立原语；②恢复的结果会盖掉用户刚做的事；③**守卫的基准取错了**（取的是切换工作区**之前**的 revision，于是"切回上次工作区"自己就被判成"用户动过手"，刷新后**永远不恢复草稿**）—— 这才是那 3 条 e2e 红的真正原因；④**最隐蔽的一个**：自动保存 effect 在挂载时就把上一轮的草稿覆盖了（探针证据：刷新前后 `mathcanvas:draft:cad` 从 3044 → 2663 字符、`图层 1` 消失，而**页面上没有任何报错**）—— 加 `restoreSettledRef` 闸修复。单测 **188 文件 / 2113 用例全通过（零跳过）**、Rust **88 例 + 1 例 `#[ignore]`**、typecheck exit 0、lint 0 error / 14 warning（基线）、**e2e 119/119**（修复前 116/119）。同日更早的 G1 各批（1.1 外壳 / 1.2 密钥库 / 1.3 provider 配置 / 1.4 适配器 / 1.5 代理判据 / 1.6 仓储内核）逐条见下方「G1 第一批 … 第七批」。同日更早的 G2 各批（第二十二批至第二十七批：接缝修复 / previewHash 真哈希 / 假设贯通 / 同意不可伪造 / 工具可执行 / 轨迹面板 / worker 信封 / 上下文交给规划器 / 观察者事实文本 / 技能清单 / prepare 已知缺口 / 一次性修复往返）见下方「G2 第二十七批」及更早各节。
+**最后更新：** 2026-09-21（**G1 第九批：provider 真的会发请求了**。上一批那两条路由还如实回 501（"转发没接"），这一批把"把请求真正转给 provider 并把流搬回来"做完了：`ProviderAdapter`（借凭据 → 出站判据 → 拼请求 → 现场算认证头 → 边到边解码、可取消）+ `HttpTransport`（不跟随重定向、不用环境代理、rustls、限长限时）+ `provider_run` / `provider_cancel` 两个 IPC 命令 + 前端 `modelClient.ts` 接上真实命令。**动作接在 IPC 上、运行记录放进代理**，理由写在「G1 第九批」里。**四个坑是这一批的手写 HTTP 测试服务器踩出来的**（冒号后多一空格、header 段少一个换行、只读一次就关连接、回完不关连接），**一个真实协议缺陷是新增的增量解码用例抓出来的**（Anthropic 的 `event:` 行不传下去则文本增量一条都解析不出来），**一个真实环境问题也是测试抓出来的**（本机配着 `HTTPS_PROXY`，回环请求被代理回了 502 —— 于是显式 `no_proxy()`）。**验证**：Rust **120 例 + 1 例 `#[ignore]`**、单测 **188 文件 / 2115 用例**、typecheck exit 0、lint 0 error / 14 warning、`cargo clippy --all-targets` **零警告**、`npm run build` exit 0、**e2e 119/119**。同日更早的 G1 各批（1.1 外壳 / 1.2 密钥库 / 1.3 provider 配置 / 1.4 适配器 / 1.5 代理判据 / 1.6 仓储内核）逐条见下方「G1 第一批 … 第八批」。同日更早的 G2 各批（第二十二批至第二十七批：接缝修复 / previewHash 真哈希 / 假设贯通 / 同意不可伪造 / 工具可执行 / 轨迹面板 / worker 信封 / 上下文交给规划器 / 观察者事实文本 / 技能清单 / prepare 已知缺口 / 一次性修复往返）见下方「G2 第二十七批」及更早各节。
 **当前阶段：** P0-P6 与 P7 工程制图已完成；MathCanvas 统一 Ribbon UI 基线、后续 UI 优化（Task 7-13）、工程制图视觉重做（Task 14）、工程制图可用性修复（Task 15-18）、圆锥曲线四项修复、功能键操作指引浮层、CAD 2D 绘图交互重做、平面几何动点系统、3D 视口与几何内核重构、封闭曲线绕定点旋转、UI 优化（草稿纸画布）与平面几何元素选颜色均已完成。**2026-09-17 新增两条解析几何交付线并已全部落地**：**A1 解析二次曲面与"真圆"**（8 片；设计 `docs/superpowers/specs/2026-09-17-analytic-quadrics-design.md`）与 **A2 交面按支撑曲面分组 + 真曲面**（5 轮；设计 `docs/superpowers/specs/2026-09-17-intersection-face-grouping-design.md`）——用户口径从"我不要一个逼近的圆，我需要一个真的圆"一路推到"我需要的只是那个相交的曲面，而不是由很多三角形拼出来的"。**随后"立体几何最后一轮"四件事也已全部交付**（7 片；设计 `docs/superpowers/specs/2026-09-17-3d-tracks-rotation-and-measurement-labels-design.md`）：约束轨道（`circle3` 当动点宿主）、拖动旋转（世界轴三色环 + 15° 吸附 + 属性栏角度）、测量数字常驻画布（2D + 3D）、立体几何 UI 与平面几何同一套令牌。平面动点系统按四个维度交付：①约束模型与参数化映射 ②依赖图 DAG 与增量拓扑重算 ③动态测量监听器 ④轨迹采样与消元法隐式化；3D 重构按四个区块交付：①动点宿主约束与渲染管道 ②截面几何 ③Auto-Fit ④生命周期与多解；四者与三区块**全部接进主流程**（不只是内核可用）。**2026-09-18 又完成平面几何切线**（抛物线 / 双曲线 / 圆 / 椭圆的曲线切线，切点可沿曲线拖动或跟随动点）**与动点扩展**（在动点处作切线、以动点为圆心作圆、半径可调且可随动点位置动态变化），并修掉"切线不能拖动"这一现场反馈。P4 Agent 与 P5 题图解析仍在排除范围内。
 **总体状态：** 开发中
 
@@ -26,7 +26,7 @@
 | ① Tauri 在 Windows 上用 WebView2 起窗 + 既有工作台 | ✅ | `tauri build` exit 0；**真的启动过 exe**（6 秒后仍在运行＝窗口起来、WebView2 加载成功） |
 | ② 云端 profile 的密钥**只**经凭据管理器存取；项目与 localStorage 里没有密钥 | 🟡 一半 | 凭据管理器后端**真的存过一次**（`__probe__`：存→查→轮换→读回→删）；**手动重启验证（存→重启→检测→轮换→删）未做** |
 | ③ 三家 mock 流归一化成同一个 `ModelEvent` 契约 | ✅ | `tests/providers.rs` 17 例，三家各有 fixtures |
-| ④ 代理安全测试拒绝 cross-origin / 任意 URL / 过期 profile / 超大 body | ✅ | 判据层 16 例 + **真服务器 11 例**（真的起 socket，伪造 Host/Origin/Token 打它）；**且服务器已挂进应用**（常驻运行时 + `proxy_session` / `proxy_cancel` 两个命令） |
+| ④ 代理安全测试拒绝 cross-origin / 任意 URL / 过期 profile / 超大 body | ✅ | 判据层 16 例 + **真服务器 16 例**（真的起 socket，伪造 Host/Origin/Token 打它）+ **出站判据也在转发路径上过一遍**（手改过的 `baseUrl` 变不成 SSRF，2 例） |
 | ⑤ 提交快照跨重启存活；重复请求同一回执；过期提交不动 head | ✅ | `tests/project_repository.rs` 16 例（真临时库文件）；**且 App 已真的接上**（关掉再打开文档还在） |
 
 | G1 任务 | 代码 | 缺口 |
@@ -34,11 +34,30 @@
 | 1.1 桌面外壳 | ✅ | `tauri dev` 热重载未实测 |
 | 1.2 SecretStore | ✅ | 手动重启验证（Gate ②） |
 | 1.3 provider 配置与设置存储 | ✅ | — |
-| 1.4 provider 适配器与事件归一 | 🟡 | **`ProviderAdapter` trait 本体未写**（形状取决于 Task 1.5 的传输层，而传输层现在已经有了）；能力证据探针未写 |
-| 1.5 回环代理与传输安全 | 🟡 | **真服务器已落地**（绑回环 + 路由 + 判据 + 取消句柄 + 11 例）；**缺**：把请求真正转给 provider 并把流搬回来（`model` / `events` 两条路由目前**如实回 501**，有一条断言在哨兵那个状态） |
+| 1.4 provider 适配器与事件归一 | ✅ | 能力证据探针（Step 5）未写 —— 它是"哪些能力**已验证**"的唯一来源 |
+| 1.5 回环代理与传输安全 | ✅ | **转发已走通**（`ProviderAdapter` + `HttpTransport`，真回环 socket 测过）；`/v1/runs/{runId}/model` 这条 HTTP 路由**故意仍回 501** —— 动作在 IPC 上，运行记录在代理里（理由见「G1 第九批」） |
 | 1.6 SQLite 仓储 / CAS / 崩溃恢复 | 🟡 | `.mcanvas` 打包导出/导入；附件的两阶段写与孤儿回收（**表已建好**，缺的是 blob 目录那一半与孤儿回收） |
 
-**一句话结论**：G1 的**六个任务主体都在且都被测透**（Rust **99 例** + 单测 2113 例）；**Gate 五条里已满足四条**（②仍差手动重启验证）；离"完成"还差两件实质工作：**provider 转发（含 `ProviderAdapter` trait）+ 能力证据探针**、**`.mcanvas` 打包与附件**。
+**一句话结论**：G1 的**六个任务主体都在且都被测透**（Rust **120 例** + 单测 2115 例）；**Gate 五条里已满足四条**（②仍差手动重启验证）；离"完成"还差两件实质工作：**能力证据探针**、**`.mcanvas` 打包与附件**。
+
+### G1 第九批：provider **真的会发请求了**（Task 1.4 收尾 + Task 1.5 另一半）（2026-09-21）
+
+- **交付**：`apps/desktop/src-tauri/src/providers/adapter.rs`（`ProviderAdapter` + `HttpTransport` + `run_with_profile` + `SendOutcome` / `ProviderError`，**16 例**）+ `proxy/server.rs` 的 `RunRegistry`（**5 例**）+ 两个 IPC 命令（`provider_run` / `provider_cancel`）+ 前端 `modelClient.ts` 接上真实命令（**13 例**）。
+- **哪条性质被兑现了**：上一批这两个路由**如实回 501**（"转发没接"）。这一批把"把请求真正转给 provider 并把流搬回来"做完了 —— 但**接在 IPC 上而不是 HTTP 路由上**，理由见下一条。
+- **一个必须先说清的判断**：`ProviderAdapter` 是"缝"，不是"新逻辑"。拼请求（`request.rs`）、解释响应（`normalize.rs`）、借凭据（`secrets`）都已经是被测过的纯函数；这一层只负责**顺序**：①出站判据 → ②借密钥 → ③拼请求（认证头为空）→ ④现场算出认证头 → ⑤边到边解码、取消一置位就停手。
+- **为什么没有让 `/v1/runs/{runId}/model` 去转发**：真正发请求的是 Tauri 命令，因为凭据库借出明文用的是**同步闭包**（`with_secret` 的价值就在"明文只在闭包执行期间存在"），而那条约束让整个发送不能被拆成若干次 `await`。若代理那一侧再转发一次，就会**有两个地方各持一份"这次运行在跑什么"**，而它们必然分叉。所以这一批把**动作**接在 IPC 上，把**运行记录**放进代理的 `RunRegistry`（`/v1/runs/{runId}/events` 因此看得到这一轮产出了什么）。那条 501 的哨兵断言**仍然保留**，注释改成"数据在这里，动作不在这里"。
+- **密钥的窗口在类型与断言两处都被钉住**：`send` 里唯一能碰明文的地方是 `with_secret` 的闭包，闭包一返回 `&str` 就没了；`ProviderRequest` 里那个认证头**永远是空值**，认证头由 `authorize(..)` **现场算出来**再交给传输层。用例同时断言了"认证头真的上了线"与"请求本体里没有它"。
+- **取消是每次运行一枚句柄**（`RunCancel`）：用代理那枚全局的 `is_cancelled` 只能回答"有没有人按过停止"，而按下之后新开的一次运行会被上一次的停止立刻掐掉。`Stop` 同时提供同步的 `cancelled()`（每块之前查一次）与异步的 `wait()`（等下一块时怎么醒），后者**先查标志再等通知** —— 只等通知会在"置位与等待之间"漏掉那次取消，表现是"用户按了停止、界面一直转圈"。
+- **一个必须自己写的解码器**（`RunStream`）：TCP 不认识 SSE 帧，一块 JSON 落在两个 chunk 的边界上是**常态**。按"一个 chunk 一帧"解析会在真实网络下**随机丢事件**，而那看起来像"模型偶尔不说话"。两种分隔都要认：SSE 用 `\n\n`、Ollama 原生 NDJSON 用 `\n`；尾部没有空行的半帧要 `flush` 出去（那不是畸形，只是对方没补空行）。
+- **一个真实的协议缺陷被补上**：SSE 的命名事件（Anthropic 的 `content_block_delta`）在 `event:` 行里。增量解码时若只把 `data:` 交给归一化器，`content_block_delta` 与 `content_block_start` 会被看成同一个东西 —— 于是 **Anthropic 的文本增量一条都解析不出来**。`normalize` 因此多了一对纯函数（`sse_event_name` / `strip_sse_event_lines`），`normalize_response` 与 `normalize_to_json` 各多一个 `event` 参数。
+- **`HttpTransport` 的四个刻意选择**（都写进了注释）：①**不跟随重定向**（跟着走就会把认证头送给 `Location` 指的那个地方 —— "代理"这类组件最经典的漏洞形状；302 于是如实变成一次 HTTP 失败）；②**不用系统/环境里配的代理**（一个 `HTTPS_PROXY` 不该悄悄把我们带着凭据的请求改道；**这一条是测试抓出来的** —— 本机环境里配着代理，回环请求被代理回了 502）；③rustls 而不是系统 TLS；④连接超时 15 秒、总超时 120 秒，响应体限长（与入站同一个常量）。
+- **测试是两条腿**：一半用可编程的替身（`FakeTransport` / `NeverCalled` / `CancelsAfterFirstChunk`）钉住语义与失败分类；一半**真起一个回环 socket**（手写 HTTP）证明 `reqwest` 那一半真的把字节搬回来了 —— 端点路径、认证头有没有上线、状态码怎么读、302 跟不跟。**四个坑是这一批踩出来的**：手写报文冒号后多一个空格（hyper 报 `Header(Token)`）、header 段少一个换行、只 `read()` 一次就在客户端还在写时关连接（`IncompleteMessage`）、以及回完不关连接（测试跑了 120 秒才超时）。
+- **命令那一层也被抽出来测了**：`provider_run` 的签名绑着 `AppHandle`（造一个要真的起 Tauri 应用），所以"查配置 → 对修订号 → 借凭据发请求"抽成 `run_with_profile`。于是"缺密钥要说清是哪个 profile""修订号不符要**先拒、再碰密钥**"这两条判据用内存凭据库就能确定性跑。
+- **失败必须带分类到前端**：命令的 `Err` 值就是 `ModelEvent` 的 `failed` 形状（`kind` / `failure` / `message` / `retryable`）。前端**照抄**它，而不是从一句话里重新猜 —— 从文本里认分类是一次必然会漏的判断（新增两例盯着这条）。
+- **顺手修掉两条测试脆弱性**（都不是产品缺陷，但都会让人误判）：①`modelClient.test.ts` 里那条例用 `await import("@draw/agent-core")`，单跑这个文件 3.2 秒、整轮 `npm test` 里正好顶到 5 秒上限而**超时**——改成静态导入；②同一处的注释把"为什么改名"讲清楚了（原先注入的回调参数与解构出来的名字撞了，闭包调用的是参数自己，于是无限递归）。
+
+**验证证据（本批）**：Rust **120 例通过 + 1 例 `#[ignore]`**（单元 8 + project_repository 16 + provider_adapter 16 + provider_profiles 14 + providers 17 + proxy 16 + proxy_server 16 + secrets 8 + shell_smoke 9）、单测 **188 文件 / 2115 用例全通过（零跳过）**、typecheck exit 0、lint 0 error / 14 warning（基线）、`cargo clippy --all-targets` **零警告**、`npm run build` exit 0（含 `tauri build --no-bundle`）、**e2e 119/119**。
+
 ### G1 第七批：项目仓储真的接上了 —— 关掉再打开文档还在（Task 1.6 收口的前半）（2026-09-21）
 
 - **交付**：Rust 侧 7 个仓储 IPC 命令（`read_document_head` / `create_document` / `commit_document` / `lookup_commit` / `read_document_snapshot` / `document_history_length` / `replace_document_epoch`）+ `apps/web/src/services/documentRepository.ts`（10 例）+ `documentPersistence.ts`（13 例）+ **`App.tsx` 真的接上了**。
@@ -76,7 +95,7 @@
 
 **验证证据（本批）**：Rust **88 例通过 + 1 例 `#[ignore]`**（单元 8 + project_repository 16 + provider_profiles 14 + providers 17 + proxy 16 + secrets 8 + shell_smoke 9）、typecheck exit 0、lint 0 error / 14 warning（基线）、单测 186 文件 / 2090 用例全通过。
 
-**仍未做（如实）**：`.mcanvas` 打包导出/导入（Task 1.6 Step 5）、附件的两阶段写与孤儿回收（Step 4 —— 表已经建好，缺的是 blob 目录那一半）、`documentService` 接到这个仓储（现在前端仍用自己的内存 store）、以及"Windows 重启恢复烟雾测试"。
+**仍未做（如实）**：`.mcanvas` 打包导出/导入（Task 1.6 Step 5）、附件的两阶段写与孤儿回收（Step 4 —— 表已经建好，缺的是 blob 目录那一半）、以及"Windows 重启恢复烟雾测试"。（**注**：这里原先列的"`documentService` 接到这个仓储"已在「G1 第七批」完成。）
 
 ### G1 第五批：回环代理的传输安全判据（Task 1.5）（2026-09-21）
 
@@ -98,6 +117,8 @@
 **验证证据（本批）**：单测 **186 文件 / 2090 用例全通过（零跳过）**、typecheck exit 0、lint 0 error / 14 warning（基线）、Rust **72 例通过 + 1 例 `#[ignore]`**（单元 8 + provider_profiles 14 + providers 17 + proxy 16 + secrets 8 + shell_smoke 9）。
 
 **仍未做（如实）**：代理的**真服务器**（绑定回环 + 路由分发 + 流式转发）与 `ProviderAdapter` trait 本体；`proxy_session` / `model_run` / `model_cancel` 三个 IPC 命令；能力证据探针（计划 Step 5 的 "record declared/verified/failed per model/profile revision"）—— 数据结构与判据（`ProviderCapabilityEvidence` / `isCapabilityVerified`）已就位，缺的是"真的发一次探测请求"。
+
+> **后续进展（2026-09-21，同日）**：真服务器已在「G1 第八批」落地；`ProviderAdapter` 本体与真实转发已在「G1 第九批」落地 —— 命令名最后定为 `provider_run` / `provider_cancel`（不是这里写的 `model_run` / `model_cancel`），前端 `modelClient.ts` 已接上。上面那句里的**能力证据探针仍未做**。
 
 ### G1 第四批：Provider 适配器与事件归一化（Task 1.4）（2026-09-21）
 

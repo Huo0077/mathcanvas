@@ -1,4 +1,4 @@
-﻿# MathCanvas
+# MathCanvas
 
 MathCanvas 是一个面向数学与工程场景的 2D 交互绘图工作台原型。项目采用 React、TypeScript 和 Vite 构建，并将 Geometry DSL、数值几何内核、Scene Graph 与 SVG 工作台分层，便于持续扩展和多人协作。
 
@@ -202,21 +202,25 @@ npm run build
 npm run test:e2e
 ```
 
-当前验证基线（**2026-09-21，G1 第八批之后实测**）：`npm.cmd test` 为 **188 个测试文件、2113 个用例全部通过（零跳过）**；**6 个 workspace**（含 `@draw/desktop`）类型检查通过；ESLint **0 error / 14 warning**（14 条为既有基线）；Web 生产构建通过（Vite 仍提示主 bundle 超过 500 KB）；桌面外壳 `tauri build --no-bundle` 通过并产出可运行的 `mathcanvas-desktop.exe`；**Rust 测试 99 例全过 + 1 例 `#[ignore]`**（已显式跑过并通过）；Playwright Chromium **119/119** 通过（global setup **按当前工作区重新构建** `build-check/mathcanvas-current` 再预览，因此结果对应工作区源码，而不是该目录里上一次构建的产物）。
+当前验证基线（**2026-09-21，G1 第九批之后实测**）：`npm.cmd test` 为 **188 个测试文件、2115 个用例全部通过（零跳过）**；**6 个 workspace**（含 `@draw/desktop`）类型检查通过；ESLint **0 error / 14 warning**（14 条为既有基线）；`cargo clippy --all-targets` **零警告**；Web 生产构建通过（Vite 仍提示主 bundle 超过 500 KB）；桌面外壳 `tauri build --no-bundle` 通过并产出可运行的 `mathcanvas-desktop.exe`；**Rust 测试 120 例全过 + 1 例 `#[ignore]`**（已显式跑过并通过）；Playwright Chromium **119/119** 通过（global setup **按当前工作区重新构建** `build-check/mathcanvas-current` 再预览，因此结果对应工作区源码，而不是该目录里上一次构建的产物）。
 
-### 桌面外壳与密钥库（G1 第一批 / 第二批，2026-09-21）
+### 桌面外壳、密钥库、provider 转发与仓储（G1，2026-09-21）
 
 **唯一的外部阻塞已解除**：Rust 工具链装好了（`rustup 1.29.1` / `cargo 1.98.1` / `rustc 1.98.1`，`stable-x86_64-pc-windows-msvc`），`npx tauri info` 六项前置全绿（Windows 10.0.26100 · WebView2 153.0.4234.48 · MSVC Visual Studio Community 2026 · rustc · cargo · rustup）。winget 写的是**用户级 PATH**，所以安装前就开着的终端看不到 `cargo` / `npm` —— `scripts/toolchain.mjs` 在**子进程的 PATH** 里补上它们，`npm run test:rust` 与桌面构建都走它。
 
 - `apps/desktop/`：Tauri 2 外壳，**前端仍是 `apps/web` 那一份**（`frontendDist` 指向 `build-check/mathcanvas-current`，构建命令走 `npm run … --workspace @draw/web`），这个包里**没有任何前端源码** —— 复制一份 store 是这类项目最难挽回的错。
-- **只有四个具名 IPC 命令**：`get_runtime_info` / `save_secret` / `remove_secret` / `has_secret`（计划要求 "no generic command accepting JavaScript or shell text"）。用例**逐字列出**这四个名字 —— 新增命令时会逼你在断言里写下它，那一刻就是一次有意的决定。
-- **密钥的明文没有出口**（Task 1.2）：`save_secret` 回状态枚举、`has_secret` 回布尔、`remove_secret` 回单元，**没有任何返回值的位置能装下明文**；也没有任何"读回明文"的命令（有一条文本断言专门守这个形状）。要用密钥就走 Rust 侧（将来 Task 1.5 的回环代理），密钥根本不需要到前端来。
+- **只有具名 IPC 命令**（计划要求 "no generic command accepting JavaScript or shell text"）：密钥三个（`save_secret` / `remove_secret` / `has_secret`）、provider 配置四个、模型运行两个（`provider_run` / `provider_cancel`）、仓储七个、代理两个（`proxy_session` / `proxy_cancel`）、自述一个。用例**逐字列出**这些名字 —— 新增命令时会逼你在断言里写下它，那一刻就是一次有意的决定。
+- **密钥的明文没有出口**（Task 1.2）：`save_secret` 回状态枚举、`has_secret` 回布尔、`remove_secret` 回单元，**没有任何返回值的位置能装下明文**；也没有任何"读回明文"的命令（有一条文本断言专门守这个形状）。`provider_run` 的参数里**只有 `profileId`** —— 密钥在 Rust 侧由 `ProviderAdapter` 借出，借出窗口只覆盖那一次 HTTP。
+- **provider 真的会发请求了**（Task 1.4 / 1.5）：`ProviderAdapter` 把"出站判据 → 借密钥 → 拼请求（认证头为空）→ 现场算出认证头 → 边到边解码、取消一置位就停手"串起来；`HttpTransport` **不跟随重定向**（跟着走会把认证头送给 `Location` 指的地方）、**不用环境/系统代理**（本机配着 `HTTPS_PROXY`，回环请求被代理回了 502 —— 是测试抓出来的）、rustls 而非系统 TLS、连接 15 秒 / 总 120 秒超时、响应体限长。SSE 帧会被 TCP 切成任意大小，所以解码器**跨 chunk 拼帧**（按"一个 chunk 一帧"解析会随机丢事件，看起来像"模型偶尔不说话"）；`event:` 行（Anthropic 的 `content_block_delta`）也传下去，否则 Anthropic 的文本增量一条都解析不出来。
+- **取消是每次运行一枚句柄**：全局信号只能回答"有没有人按过停止"，按下之后新开的一次运行会被上一次的停止掐掉。`Stop` 同时给同步的"每块之前查一次"与异步的"等下一块时怎么醒"，后者**先查标志再等通知**（只等通知会漏掉"置位与等待之间"的那次取消，表现是"按了停止、界面一直转圈"）。
+- **动作在 IPC 上、运行记录在代理里**：真正发请求的是命令线程（凭据库借出明文用的是同步闭包，那条约束让发送不能拆成若干次 `await`），所以 `/v1/runs/{runId}/model` 这条 HTTP 路由**故意仍回 501** —— 让两侧各持一份"这次运行在跑什么"必然分叉。运行记录放在代理的 `RunRegistry` 里（有界：最多 16 次运行 × 64 条事件，截断了会**说出来**），`/v1/runs/{runId}/events` 因此看得到这一轮产出了什么。
+- **失败也带分类**：`provider_run` 的 `Err` 值就是 `ModelEvent` 的 `failed` 形状（`kind` / `failure` / `message` / `retryable`），前端**照抄**它而不是从一句话里重新猜分类 —— 从文本里认分类是一次必然会漏的判断。
 - **没有后端时不假装成功**：内存后端住在**生产代码**里（非 Windows、或凭据管理器被策略禁用时它就是真的后端），`backend()` 如实回 `"memory"`，自述据此把 `secretStore` 报成 `not_implemented`，界面提醒"这次会话有效，重启要重填"。
-- 自述**不带密钥、不带数据根之外的路径**：`data_root` 只输出目录名。密钥库状态**现问后端**（可用时报 `ready`），仓储 / 回环代理仍如实标 `not_implemented`。
+- 自述**不带密钥、不带数据根之外的路径**：`data_root` 只输出目录名。密钥库状态**现问后端**（可用时报 `ready`）。
 - CSP 不再是脚手架的 `null`；能力清单保持最小集（只有 `core:default`）；`identifier` 改为 `com.mathcanvas.desktop`；窗口 1280×860（最小 900×600）。
-- 前端在 `apps/web/src/services/desktopRuntime.ts` + `secretClient.ts`：**在浏览器里跑是正常状态**（不是错误），且**"没有桌面外壳"与"IPC 失败"分开报**（前者正常、后者要给原因）；**缺字段一律当"还没实现"**（危险的那种默认值是"缺字段当可用"）。
-- 实测：Rust 25 例通过；**Windows 凭据管理器真的存过一次**（`__probe__` profile，存 → 查 → 轮换 → 读回新值 → 删 → 删第二次不报错，`Drop` 保证即使失败也删掉；该用例默认 `#[ignore]`，因为它会写开发者的真实凭据库）；`tauri build --no-bundle` exit 0；**真的启动了产出的 exe**（6 秒后仍在运行 = 窗口起来、WebView2 加载成功），随后清理无残留。
-- **未做（如实）**：`tauri dev` 热重载路径未实测；打包安装器（`tauri build` 带 bundle）属 Task 5.4；图标仍是脚手架默认；密钥的**手动重启验证**（存 → 重启 → 检测 → 轮换 → 删除）尚未做；真实 IPC 往返没有在真窗口里断言过（前端那一半用假的 `__TAURI_INTERNALS__` 覆盖了各条路径）。
+- 前端在 `apps/web/src/services/`：`desktopRuntime.ts` / `secretClient.ts` / `providerProfileClient.ts` / `documentRepository.ts` / `documentPersistence.ts` / `modelClient.ts` —— **在浏览器里跑是正常状态**（不是错误），且**"没有桌面外壳"与"IPC 失败"分开报**（前者正常、后者要给原因）；**缺字段一律当"还没实现"**（危险的那种默认值是"缺字段当可用"）。
+- 实测：**Windows 凭据管理器真的存过一次**（`__probe__` profile，存 → 查 → 轮换 → 读回新值 → 删 → 删第二次不报错，`Drop` 保证即使失败也删掉；该用例默认 `#[ignore]`，因为它会写开发者的真实凭据库）；`tauri build --no-bundle` exit 0；**真的启动了产出的 exe**（6 秒后仍在运行 = 窗口起来、WebView2 加载成功），随后清理无残留；**关掉再打开文档还在**（内容变化 → CAS 提交 → 重启 → 恢复）。
+- **未做（如实）**：`tauri dev` 热重载路径未实测；打包安装器（`tauri build` 带 bundle）属 Task 5.4；图标仍是脚手架默认；密钥的**手动重启验证**（存 → 重启 → 检测 → 轮换 → 删除）尚未做；**能力证据探针**（Step 5）未写 —— 它是"哪些能力已验证"的唯一来源，没有它 `isVerified` 永远只能是假；`.mcanvas` 打包导出/导入与附件的两阶段写、孤儿回收未做；真实 IPC 往返没有在真窗口里断言过（前端那一半用假的 `__TAURI_INTERNALS__` 覆盖了各条路径）。
 
 **最新一轮（2026-09-21）交付与修复**：①**传输层与动作层的引用形状不一致**（`object.update_inputs` / `dynamic.bind_point` / `dynamic.bind_curve` 三个动作此前**不存在任何一种能同时通过校验并被正确编译的输入**）已修，并由 `packages/agent-core/src/planToCompile.seam.test.ts` 用**已校验的输出**钉住整条接缝；②`draftStore.previewHash` 换成真 SHA-256（`canonicalContentHash`）；③**补上"假设"这一节的数据面**：计划信封新增可选 `assumptions`，经 `onPlanParsed` → 运行时 → 运行器 → 草稿视图 → 确认面板贯通，新增 `AssumptionList.tsx`；④**让"同意不可伪造"从注释变成代码**：`HostBridge` 原先只检查 nonce 未消费 / `runId` / 是否过期 / `previewHash` —— 这四条调用方自己就能凑齐，于是**手搓一份同意也能提交**；现在桥里记着自己铸造过的 nonce（`minted`），没铸造过的一律 `unminted_consent`；⑤**把"工具"从声明接到可执行**：`ToolCallRequest` 原先**没有工具名也没有参数**（所以"接上 ToolPort"是空话），现在补上 `toolId`/`input`，新增 `toolDispatch.ts` 做名字→实现的那一段，`AgentRuntime.callTool` 是宿主入口；⑥**新增 `ToolTracePanel.tsx`**：用户可见的短摘要轨迹 + **默认关着**的开发者详细诊断；⑦**worker 的 diff / check / artifact 信封**（`WorkerSuccess` 必须带齐 `changed` / `diff` / `check` / `artifact`，缺一个就拒绝）；⑧**上下文与工具真正交给规划器**：`PlanRequest` 增加 `model: { context, tools }`，协调器在观察之后、发请求之前组装（且两次尝试看到同一份）；⑨**观察者交出事实文本**（它从第一版起就在算那个数组，只是没放进返回值 —— 是变异检验抓出来的，因为既有用例都是空文档）**+ 技能清单成为可用动作的唯一来源**（调用方说请求哪些技能，运行时去清单取动作，而不是让调用方直接给动作名）。
 

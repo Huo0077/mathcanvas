@@ -71,11 +71,22 @@ impl ModelEvent {
 
     /// 转成前端认的 JSON 形状（带 `requestId` / `attemptId` / `kind`）。
     pub fn to_json(&self, ids: &EventIds) -> serde_json::Value {
-        let mut value = serde_json::json!({
-            "kind": self.kind(),
-            "requestId": ids.request_id,
-            "attemptId": ids.attempt_id
-        });
+        let mut value = self.to_json_plain();
+        let object = value.as_object_mut().expect("object");
+        object.insert("requestId".into(), serde_json::json!(ids.request_id));
+        object.insert("attemptId".into(), serde_json::json!(ids.attempt_id));
+        value
+    }
+
+    /**
+     * 转成前端认的 JSON 形状，**不带身份**。
+     *
+     * 身份（`requestId` / `attemptId`）由**协调器**决定，而不是由适配器决定：
+     * 一次请求可能重试若干次，每次尝试的身份只有协调器知道。适配器只回答
+     * "provider 说了什么"，所以它产出的形状里没有这两项。
+     */
+    pub fn to_json_plain(&self) -> serde_json::Value {
+        let mut value = serde_json::json!({ "kind": self.kind() });
         let object = value.as_object_mut().expect("object");
         match self {
             ModelEvent::Started { model, metadata } => {

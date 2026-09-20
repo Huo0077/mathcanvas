@@ -211,7 +211,11 @@ pub fn ollama_line(payload: &Value) -> Normalized {
 ///
 /// `stream` 为真时按 SSE 拆帧（`data:` 行），否则按整份 JSON 解释。
 /// 两种都走同一批 `*_chunk` 函数 —— 因为"流式与非流式的形状差异"已经在那些函数里吃掉了。
-pub fn normalize_response(protocol: &str, body: &str, stream: bool) -> Vec<ModelEvent> {
+///
+/// `event` 是 SSE 的 `event:` 行（Anthropic 用它区分 `content_block_delta`
+/// 与 `content_block_start`）。传 `None` 时退到 payload 里的 `type` 字段 ——
+/// 两条路都要留，因为有的实现只给其中一个。
+pub fn normalize_response(protocol: &str, body: &str, event: Option<&str>, stream: bool) -> Vec<ModelEvent> {
     let mut events = Vec::new();
 
     // **Ollama 原生不是 SSE**：它一行一个完整 JSON（NDJSON），没有 `data:` 前缀。
@@ -235,7 +239,7 @@ pub fn normalize_response(protocol: &str, body: &str, stream: bool) -> Vec<Model
     }
 
     if stream {
-        let mut current_event: Option<String> = None;
+        let mut current_event: Option<String> = event.map(str::to_string);
         for line in body.lines() {
             match super::events::parse_sse_line(line) {
                 super::events::SseLine::Event(name) => current_event = Some(name),
@@ -270,7 +274,7 @@ pub fn normalize_response(protocol: &str, body: &str, stream: bool) -> Vec<Model
     match serde_json::from_str::<Value>(body) {
         Ok(parsed) => {
             let normalized = match protocol {
-                "anthropic" => anthropic_chunk(None, &parsed),
+                "anthropic" => anthropic_chunk(event, &parsed),
                 "ollama" => ollama_line(&parsed),
                 _ => openai_chunk(&parsed),
             };
@@ -281,7 +285,29 @@ pub fn normalize_response(protocol: &str, body: &str, stream: bool) -> Vec<Model
     events
 }
 
+/**
+ * 从一帧 SSE 里取出 `event:` 行的值。
+ *
+ * ## 为什么要单独一个函数（而不是让归一化器自己扫）
+ *
+ * 因为**增量解码**发生在 `providers::adapter` 里：它按 `\n\n` 拆帧，然后要么把整帧
+ * 交给 `normalize_response`（那里会自己扫 `event:` 行），要么把帧拆成
+ * "名字 + 数据"两半再交。两种用法都要成立，所以"怎么取名字"这件事只有一处实现。
+ */
+pub fn sse_event_name(frame: &str) -> Option<String> {
+    frame.lines().find_map(|line| line.trim().strip_prefix("event:").map(|rest| rest.trim().to_string()))
+}
+
+/// 去掉一帧里的 `event:` 行，只留 `data:` 那部分。SSE 的其它字段（`id:` / `retry:`）一律忽略。
+pub fn strip_sse_event_lines(frame: &str) -> String {
+    frame.lines().filter(|line| !line.trim_start().starts_with("event:")).collect::<Vec<_>>().join("\n")
+}
+
+
 /// **给前端用的一次解释**：带上 `requestId` / `attemptId`。
-pub fn normalize_to_json(protocol: &str, body: &str, stream: bool, ids: &EventIds) -> Vec<Value> {
-    normalize_response(protocol, body, stream).iter().map(|event| event.to_json(ids)).collect()
+///
+/// 参数顺序与 `normalize_response` **逐字一致** —— 两个函数做的是同一件事，
+/// 只是这一个多带一份身份。顺序不一致会让"复制粘贴一个调用再改名字"变成一次静默的错位。
+pub fn normalize_to_json(protocol: &str, body: &str, event: Option<&str>, stream: bool, ids: &EventIds) -> Vec<Value> {
+    normalize_response(protocol, body, event, stream).iter().map(|event| event.to_json(ids)).collect()
 }

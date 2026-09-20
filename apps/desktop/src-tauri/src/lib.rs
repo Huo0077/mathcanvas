@@ -1,4 +1,4 @@
-//! **MathCanvas 桌面外壳**（Task 1.1 / 1.2）。
+//! **MathCanvas 桌面外壳**（Task 1.1 / 1.2 / 1.4 / 1.5 / 1.6）。
 //!
 //! 这一层只做几件事，且每件都必须能被审出来：
 //! 1. **起窗口、加载既有的 web 应用**（`tauri.conf.json` 的 `frontendDist` 指向
@@ -6,10 +6,11 @@
 //! 2. **只暴露具名 IPC 命令**。计划原文："Rust exposes only named IPC commands;
 //!    no generic command accepting JavaScript or shell text." 所以这里
 //!    **没有、也不会有** `eval` / `run_shell` / `read_file` 这类命令。
-//!    目前一共四个，全部是具名且窄的：`get_runtime_info` / `save_secret` /
-//!    `remove_secret` / `has_secret`；
+//!    命令清单**逐字列在** `tests/shell_smoke.rs` 里：新增一个命令会逼你在那里
+//!    写下它的名字 —— 那一刻就是一次有意的决定；
 //! 3. **密钥的明文没有出口**：三个密钥命令的返回类型里**没有位置**能装下明文
-//!   （见 `secrets/mod.rs` 的三条设计决定）。
+//!    （见 `secrets/mod.rs` 的三条设计决定），而 `provider_run` 的参数里
+//!    只有 `profileId` —— 密钥在 Rust 侧借出，借出窗口只覆盖那一次 HTTP。
 //!
 //! ## 为什么密钥库挂在 `App` 的托管状态上
 //!
@@ -19,7 +20,7 @@
 //! 且 `get_runtime_info` 与三个密钥命令看到的是**同一个**后端。
 
 pub mod runtime;
-/// Provider 协议适配器（Task 1.4）：请求拼装与事件归一化（不含 HTTP —— 那属于 Task 1.5 的代理）。
+/// Provider 协议适配器（Task 1.4 + Task 1.5）：请求拼装、事件归一化、凭据借出、真实转发。
 pub mod providers;
 /// 回环代理（Task 1.5）：传输安全的判据层。
 pub mod proxy;
@@ -69,7 +70,112 @@ pub struct ProxyState {
  * 挂进托管状态 = 生命周期跟着应用走。
  */
 pub struct ProxyRuntime {
-    _runtime: tokio::runtime::Runtime,
+    #[allow(dead_code)]
+    runtime: tokio::runtime::Runtime,
+}
+
+/// **用某个 profile 发一次模型请求**（Task 1.4 Step 3/4 + Task 1.5 Step 3/5）。
+///
+/// ## 取消为什么要一枚**独立**的句柄
+///
+/// 而不是用代理那枚全局的 `is_cancelled`：全局信号只能回答"有没有人按过停止"，
+/// 而按下之后新开的一次运行会被上一次的停止立刻掐掉。每次运行一枚句柄，
+/// 才让"取消这一次"这个语义立得住。句柄本体留在代理的 `RunRegistry` 里
+///（那是权威的那一份），`provider_run` 与 `provider_cancel` 都从那里取 ——
+/// 于是"谁在跑"与"谁在问"看到的是同一枚信号。
+///
+/// ## 返回的是**归一化事件**，不是 provider 的原始响应
+///
+/// 前端拿到的是 `kind: "delta" | "usage" | "completed" | "failed" …` 那一套
+/// （与 `packages/agent-core/src/modelEvents.ts` 同一个形状）。三家的形状差异
+/// 在 `providers::normalize` 里被吃掉了；**失败被映射到错误契约**
+/// （`failure` + `retryable`），而不是抛一个裸错误 —— 调用方要按 `retryable` 决定重试与否。
+///
+/// ## 三条纪律在这条命令上的落点
+///
+/// 1. **密钥不到前端来**。参数里只有 `profileId`；密钥在 Rust 侧由 `ProviderAdapter`
+///    从凭据库借出，借出窗口只覆盖那一次 HTTP。
+/// 2. **修订号要对得上**。`profileRevision` 与当前 profile 不符时**当场拒绝**：
+///    那不是"用旧配置跑一次"，而是"界面拿的是另一份配置"，跑出来的结果没法解释。
+/// 3. **失败是 `Err` 且带分类**。回一个空数组会让"什么都没说"看起来像"模型没说话"；
+///    只回一句话则会让前端丢掉 `retryable`，而那是重试策略**唯一**的判据。
+///
+/// ## 为什么它是**同步**命令
+///
+/// 因为它必须阻塞：凭据库借出明文用的是同步闭包（见 `providers::adapter` 的模块头），
+/// 而那条约束让这次发送不能被打断成若干次 await。Tauri 的同步命令跑在线程池上，
+/// 阻塞它不会卡住界面 —— 而把它写成 `async` 再在里面阻塞，才会真的占住异步线程。
+#[tauri::command]
+fn provider_run(
+    app: tauri::AppHandle,
+    run_id: String,
+    profile_id: String,
+    profile_revision: u32,
+    messages: Vec<providers::request::ChatMessage>,
+    stream: Option<bool>,
+) -> Result<Vec<serde_json::Value>, serde_json::Value> {
+    let proxy = app.try_state::<ProxyState>().ok_or_else(|| missing_state("the proxy"))?;
+    // 锁**一直持有到这次发送结束**：它保护的是 `ProxyHandle` 的生命周期，
+    // 而句柄正是这次转发的凭据来源。放开锁会让"代理被关掉"与"正在用它的令牌"重叠。
+    let session = proxy.session.lock().map_err(|_| missing_state("the proxy state is poisoned"))?;
+    // 取消句柄从代理的注册表里取（那里是权威的那一份）。没有代理时给一枚孤立句柄：
+    // 它永远不会被置位，于是那次运行会照常跑完 —— 这比"永远取消不了"要好。
+    let cancel = session.as_ref().map(|handle| handle.cancel_handle(&run_id)).unwrap_or_default();
+
+    let profile = {
+        let state = app.try_state::<ProfileStoreState>().ok_or_else(|| missing_state("the provider store"))?;
+        let store = state.store.lock().map_err(|_| missing_state("the provider store is poisoned"))?;
+        store.get(&profile_id).ok_or_else(|| providers::adapter::ProviderError::NotFound { profile_id: profile_id.clone() }.to_json())?
+    };
+
+    let secrets = app.try_state::<SecretStoreState>().ok_or_else(|| missing_state("the secret store"))?;
+    let transport = providers::adapter::HttpTransport::new();
+    // 查配置 → 对修订号 → 借凭据发请求。**这一段住在 `providers::adapter` 里**
+    // 而不是在这里，因为那里能测（见 `run_with_profile` 的说明）。
+    let outcome = providers::adapter::run_with_profile(&secrets.0, &transport, profile, profile_revision, messages, stream.unwrap_or(true), cancel.as_ref())
+        .map_err(|error| error.to_json())?;
+    let events: Vec<serde_json::Value> = match outcome {
+        providers::adapter::SendOutcome::Completed(events) | providers::adapter::SendOutcome::Cancelled(events) => {
+            events.iter().map(providers::events::ModelEvent::to_json_plain).collect()
+        }
+    };
+
+    // 留档：`/v1/runs/{runId}/events` 要看得到这一轮产出了什么。
+    if let Some(handle) = session.as_ref() {
+        handle.record_events(&run_id, &events, true);
+    }
+
+    Ok(events)
+}
+
+/// **取消一次运行**。幂等：重复取消不是错误（用户可能点了两次）。
+///
+/// `runId` 指的是**某一次**运行，而不是"所有运行"：取消全部会让
+/// "上一轮点了停止、这一轮刚开就被掐掉"。
+#[tauri::command]
+fn provider_cancel(app: tauri::AppHandle, run_id: String) -> Result<bool, String> {
+    let proxy = app.try_state::<ProxyState>().ok_or("the proxy is not initialised")?;
+    let session = proxy.session.lock().map_err(|_| "the proxy state is poisoned".to_string())?;
+    match session.as_ref() {
+        Some(handle) => {
+            handle.cancel_handle(&run_id).cancel();
+            Ok(true)
+        }
+        None => Ok(false),
+    }
+}
+
+/// 一句**能被前端读懂**的失败（`ModelEvent` 的 `failed` 形状）。
+///
+/// 命令的 `Err` 类型用它而不是 `String`：前端要靠 `retryable` 决定重试与否，
+/// 而"把分类塞进一句话里"必然会在某次重试里丢。
+fn missing_state(detail: &str) -> serde_json::Value {
+    serde_json::json!({
+        "kind": "failed",
+        "failure": "unknown",
+        "message": detail,
+        "retryable": false
+    })
 }
 
 /// **把回环代理的地址与令牌交给前端**（计划 Step 3："pass it over trusted IPC"）。
@@ -345,7 +451,7 @@ pub fn run() {
             let session = runtime.block_on(proxy::server::start());
             app.manage(ProxyState { session: Mutex::new(session.ok()) });
             // 运行时自己要被**持有住**，否则它一 drop 服务器就停了。
-            app.manage(ProxyRuntime { _runtime: runtime });
+            app.manage(ProxyRuntime { runtime });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -357,6 +463,8 @@ pub fn run() {
             upsert_provider_profile,
             remove_provider_profile,
             provider_health,
+            provider_run,
+            provider_cancel,
             read_document_head,
             create_document,
             commit_document,
