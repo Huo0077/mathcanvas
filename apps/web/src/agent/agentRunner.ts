@@ -5,7 +5,7 @@ import { contentFingerprint } from "@draw/scene-graph"
 import { useAgentStore } from "../agentStore"
 import { useSceneStore } from "../store"
 import { createAgentRuntime, type AgentRuntime } from "./agentRuntime"
-import { createLocalPlanner } from "./localPlanner"
+import { createLocalPlanner, localIntentSkillIds } from "./localPlanner"
 
 /**
  * **Agent 运行器**（Task 2.5 Step 2 的另一半）。
@@ -138,6 +138,17 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
         },
         // 真实 provider 接进来时只换这一行 —— 这也是 `PlannerPort` 存在的理由。
         planner: dependencies.planner ?? createLocalPlanner(),
+        /**
+         * **这条指令要用到的技能**（决定上下文里的可用动作）。
+         *
+         * 必须在**建运行时之前**算出来：上下文是发请求前组装的，而它一旦定下来就决定了
+         * 模型能看到哪几个动作。确定性规划器能精确知道自己要用哪份清单
+         *（`localIntentSkillIds`），所以这里问它 —— 而不是把九个清单全塞进去。
+         *
+         * 认不出的指令拿空数组：运行会走到"问用户"，不该顺带给一个用不上的动作菜单。
+         * 真实 provider 接进来时，这一层换成"由模型/意图判断选技能"。
+         */
+        requestedSkillIds: dependencies.planner ? undefined : localIntentSkillIds(prompt),
         /**
          * 编译之前把工作区切到这条计划需要的那个。
          *

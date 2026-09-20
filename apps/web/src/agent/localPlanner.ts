@@ -31,6 +31,15 @@ export interface LocalIntent {
   all: readonly string[]
   /** 至少出现一个（缺省表示不需要）。 */
   any?: readonly string[]
+  /**
+   * 这条指令**用到的技能清单 id**（`SKILL_MANIFESTS` 里那些）。
+   *
+   * 为什么规划器要声明它：运行时的 `requestedSkillIds` 会决定模型上下文里
+   * "可用动作有哪几个"，而**必须在建运行时之前就知道**（上下文是发请求前组装的）。
+   * 确定性规划器能精确知道自己要用哪份清单，所以它在命中指令的那一刻就说出来 ——
+   * 这比"给所有技能"或"给个猜的集合"都诚实。
+   */
+  skillIds: readonly string[]
   build: (input: LocalIntentInput) => PlanEnvelope
 }
 
@@ -89,12 +98,36 @@ const COUNT_ANSWER = (): PlanEnvelope => ({
  * 顺序有意义：**先匹配更具体的**（"立方体"在"体"之前）。
  */
 export const LOCAL_INTENTS: readonly LocalIntent[] = [
-  { all: ["立方体"], build: (input) => CUBE({ ...input, size: sizeFrom(input.prompt, 2) }) },
-  { all: ["正方体"], build: (input) => CUBE({ ...input, size: sizeFrom(input.prompt, 2) }) },
-  { all: ["cube"], build: (input) => CUBE({ ...input, size: sizeFrom(input.prompt, 2) }) },
-  { all: ["点"], any: ["画", "作", "建", "添加"], build: (input) => PLANAR_POINT({ ...input, size: sizeFrom(input.prompt, 1) }) },
-  { all: ["有什么"], build: () => COUNT_ANSWER() }
+  { all: ["立方体"], skillIds: ["spatial-modeling"], build: (input) => CUBE({ ...input, size: sizeFrom(input.prompt, 2) }) },
+  { all: ["正方体"], skillIds: ["spatial-modeling"], build: (input) => CUBE({ ...input, size: sizeFrom(input.prompt, 2) }) },
+  { all: ["cube"], skillIds: ["spatial-modeling"], build: (input) => CUBE({ ...input, size: sizeFrom(input.prompt, 2) }) },
+  { all: ["点"], any: ["画", "作", "建", "添加"], skillIds: ["planar-basics"], build: (input) => PLANAR_POINT({ ...input, size: sizeFrom(input.prompt, 1) }) },
+  // 只读提问不产生动作，因此**不请求任何技能** —— 上下文里不该出现用不上的动作菜单。
+  { all: ["有什么"], skillIds: [], build: () => COUNT_ANSWER() }
 ]
+
+/** 找出这条指令命中的那一条（认不出返回 `null`）。**匹配规则只有这一处**。 */
+export function matchLocalIntent(prompt: string): LocalIntent | null {
+  const normalized = prompt.toLowerCase()
+  for (const intent of LOCAL_INTENTS) {
+    if (!intent.all.every((token) => normalized.includes(token.toLowerCase()))) continue
+    if (intent.any && !intent.any.some((token) => normalized.includes(token.toLowerCase()))) continue
+    return intent
+  }
+  return null
+}
+
+/**
+ * 这条指令要用到的技能清单 id。
+ *
+ * 运行器在**建运行时之前**调它（`requestedSkillIds` 必须那时候就定），所以它必须与
+ * `plan()` 里的匹配**完全一致** —— 因此两边共用 `matchLocalIntent`，而不是各写一遍
+ * "包含哪些词"的判断（两份判断一旦分叉，就会出现"上下文里没有这个技能，但规划器产出了
+ * 它的动作"，表现为莫名其妙的编译失败）。
+ */
+export function localIntentSkillIds(prompt: string): readonly string[] {
+  return matchLocalIntent(prompt)?.skillIds ?? []
+}
 
 export interface LocalPlannerOptions {
   /** 命中指令表之外的输入时是否给出"认不出"的回答（缺省 true）。 */
@@ -116,13 +149,10 @@ export function createLocalPlanner(options: LocalPlannerOptions = {}): PlannerPo
       sequence += 1
       const requestId = `local-request-${sequence}`
       const attemptId = `local-attempt-${sequence}`
-      const normalized = userMessage.toLowerCase()
 
-      for (const intent of LOCAL_INTENTS) {
-        if (!intent.all.every((token) => normalized.includes(token.toLowerCase()))) continue
-        if (intent.any && !intent.any.some((token) => normalized.includes(token.toLowerCase()))) continue
-        return { plan: intent.build({ prompt: userMessage, size: 0 }), requestId, attemptId }
-      }
+      // 与 `localIntentSkillIds` **共用同一个匹配函数**（两份判断会分叉）。
+      const intent = matchLocalIntent(userMessage)
+      if (intent) return { plan: intent.build({ prompt: userMessage, size: 0 }), requestId, attemptId }
 
       if (!explainRefusal) {
         return { plan: { schemaVersion: PLAN_SCHEMA_VERSION, kind: "clarification", goal: "无法识别", factIds: [], questions: ["请把要求说得更具体一些，或者直接用界面上的作图工具。"] }, requestId, attemptId }

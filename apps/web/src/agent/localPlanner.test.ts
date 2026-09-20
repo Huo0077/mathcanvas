@@ -1,7 +1,7 @@
-import { parsePlanEnvelope } from "@draw/agent-core"
+import { parsePlanEnvelope, SKILL_MANIFESTS } from "@draw/agent-core"
 import { describe, expect, it } from "vitest"
 
-import { createLocalPlanner, LOCAL_INTENTS } from "./localPlanner"
+import { createLocalPlanner, LOCAL_INTENTS, localIntentSkillIds, matchLocalIntent } from "./localPlanner"
 
 /**
  * 本地确定性规划器的性质。
@@ -93,5 +93,61 @@ describe("local planner never invents an answer", () => {
     const second = await plan("未知指令")
 
     expect(JSON.stringify(first)).toBe(JSON.stringify(second))
+  })
+})
+
+/**
+ * **指令 → 技能清单**。
+ *
+ * 运行器必须在**建运行时之前**知道这条指令要用哪些技能（`requestedSkillIds` 决定上下文里
+ * 的可用动作，而上下文是发请求前组装的）。所以有 `localIntentSkillIds` 这一层。
+ *
+ * 最要紧的一条性质：它与 `plan()` 的匹配**必须一致** —— 两边各写一遍"包含哪些词"的判断
+ * 一旦分叉，就会出现"上下文里没有这个技能、但规划器产出了它的动作"，
+ * 表现为莫名其妙的编译失败。所以两者共用 `matchLocalIntent`，这里把这条钉住。
+ */
+describe("the local planner declares which skills an instruction needs", () => {
+  it("asks for the spatial skill when the instruction is about a solid", () => {
+    expect(localIntentSkillIds("建一个棱长 3 的立方体")).toEqual(["spatial-modeling"])
+  })
+
+  it("asks for the planar skill when the instruction is about a planar point", () => {
+    expect(localIntentSkillIds("画一个点")).toEqual(["planar-basics"])
+  })
+
+  it("asks for nothing when the instruction only reads the scene", () => {
+    // 只读提问不产生动作，给一个用不上的动作菜单只会误导模型。
+    expect(localIntentSkillIds("现在有什么")).toEqual([])
+  })
+
+  it("asks for nothing when it does not recognise the instruction", () => {
+    expect(localIntentSkillIds("帮我算一下这个三角形的重心")).toEqual([])
+  })
+
+  it("declares the skills of the very intent the planner will actually use", async () => {
+    // 一致性：`plan()` 与 `localIntentSkillIds()` 必须落在**同一条**指令上。
+    for (const prompt of ["建一个棱长 3 的立方体", "画一个点", "现在有什么"]) {
+      const intent = matchLocalIntent(prompt)
+      expect(intent, prompt).not.toBeNull()
+      expect(localIntentSkillIds(prompt)).toEqual(intent!.skillIds)
+
+      /**
+       * 更有用的一条：**产出的动作必须真的在声明的技能里**。
+       *
+       * 否则上下文会告诉模型"你可以用这几个动作"，而计划里却出现一个没声明的动作 ——
+       * 那正是"清单与实际不符"，也是两边判断分叉后最先出现的症状。
+       */
+      const envelope = await plan(prompt)
+      if (envelope.kind !== "plan") continue
+      const declared = new Set(SKILL_MANIFESTS.filter((manifest) => intent!.skillIds.includes(manifest.id)).flatMap((manifest) => manifest.actionIds))
+      for (const action of envelope.actions) expect(declared.has(action.actionId), `${prompt} → ${action.actionId}`).toBe(true)
+    }
+  })
+
+  it("keeps the skill ids it names inside the shipped catalogue", () => {
+    const catalogue = new Set(SKILL_MANIFESTS.map((manifest) => manifest.id))
+    for (const intent of LOCAL_INTENTS) {
+      for (const skillId of intent.skillIds) expect(catalogue.has(skillId), `${intent.all.join("+")} → ${skillId}`).toBe(true)
+    }
   })
 })
