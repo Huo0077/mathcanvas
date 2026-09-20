@@ -1,4 +1,4 @@
-﻿# MathCanvas
+# MathCanvas
 
 MathCanvas 是一个面向数学与工程场景的 2D 交互绘图工作台原型。项目采用 React、TypeScript 和 Vite 构建，并将 Geometry DSL、数值几何内核、Scene Graph 与 SVG 工作台分层，便于持续扩展和多人协作。
 
@@ -202,7 +202,19 @@ npm run build
 npm run test:e2e
 ```
 
-当前验证基线（**2026-09-21，G2 第三十二批之后实测**）：`npm.cmd test` 为 **179 个测试文件、2010 个用例全部通过（零跳过）**；**5 个 workspace** 类型检查通过；ESLint **0 error / 14 warning**（14 条为既有基线）；Web 生产构建通过（Vite 仍提示主 bundle 超过 500 KB）；Playwright Chromium **119/119** 通过（global setup **按当前工作区重新构建** `build-check/mathcanvas-current` 再预览，因此结果对应工作区源码，而不是该目录里上一次构建的产物）。
+当前验证基线（**2026-09-21，G1 第一批之后实测**）：`npm.cmd test` 为 **180 个测试文件、2017 个用例全部通过（零跳过）**；**6 个 workspace**（新增 `@draw/desktop`）类型检查通过；ESLint **0 error / 14 warning**（14 条为既有基线）；Web 生产构建通过（Vite 仍提示主 bundle 超过 500 KB）；桌面外壳 `tauri build --no-bundle` 通过并产出可运行的 `mathcanvas-desktop.exe`；**`npm run test:rust` 13 例全过**；Playwright Chromium **119/119** 通过（global setup **按当前工作区重新构建** `build-check/mathcanvas-current` 再预览，因此结果对应工作区源码，而不是该目录里上一次构建的产物）。
+
+### 桌面外壳（G1 第一批，2026-09-21）
+
+**唯一的外部阻塞已解除**：Rust 工具链装好了（`rustup 1.29.1` / `cargo 1.98.1` / `rustc 1.98.1`，`stable-x86_64-pc-windows-msvc`），`npx tauri info` 六项前置全绿（Windows 10.0.26100 · WebView2 153.0.4234.48 · MSVC Visual Studio Community 2026 · rustc · cargo · rustup）。winget 写的是**用户级 PATH**，所以安装前就开着的终端看不到 `cargo` —— `npm run test:rust` 走 `scripts/cargo.mjs` 兜住这个坑。
+
+- `apps/desktop/`：Tauri 2 外壳，**前端仍是 `apps/web` 那一份**（`frontendDist` 指向 `build-check/mathcanvas-current`，构建命令走 `npm run … --workspace @draw/web`），这个包里**没有任何前端源码** —— 复制一份 store 是这类项目最难挽回的错。
+- **只有一个具名 IPC 命令** `get_runtime_info`（计划要求 "no generic command accepting JavaScript or shell text"）；有用例剔掉注释后扫 `run_shell` / `read_file` / `write_file` / `std::process::Command`。
+- 自述**不带密钥、不带数据根之外的路径**：`data_root` 只输出目录名。三个部件（密钥库 / 回环代理 / 项目仓库）目前**如实标 `not_implemented`**，而不是声称可用。
+- CSP 不再是脚手架的 `null`；能力清单保持最小集（只有 `core:default`）；`identifier` 改为 `com.mathcanvas.desktop`；窗口 1280×860（最小 900×600）。
+- 前端一半在 `apps/web/src/services/desktopRuntime.ts`：**在浏览器里跑是正常状态**（不是错误），IPC 失败如实报 `runtime_info_failed`，**缺字段一律当"还没实现"**（危险的那种默认值是"缺字段当可用"）。
+- 实测：`cargo test` 13/13；`tauri build --no-bundle` exit 0；**真的启动了产出的 exe**（6 秒后仍在运行 = 窗口起来、WebView2 加载成功），随后清理无残留。
+- **未做（如实）**：`tauri dev` 热重载路径未实测；打包安装器（`tauri build` 带 bundle）属 Task 5.4；图标仍是脚手架默认；`get_runtime_info` 的真实 IPC 往返没有在真窗口里断言过（前端那一半用假的 `__TAURI_INTERNALS__` 覆盖了三种结果）。
 
 **最新一轮（2026-09-21）交付与修复**：①**传输层与动作层的引用形状不一致**（`object.update_inputs` / `dynamic.bind_point` / `dynamic.bind_curve` 三个动作此前**不存在任何一种能同时通过校验并被正确编译的输入**）已修，并由 `packages/agent-core/src/planToCompile.seam.test.ts` 用**已校验的输出**钉住整条接缝；②`draftStore.previewHash` 换成真 SHA-256（`canonicalContentHash`）；③**补上"假设"这一节的数据面**：计划信封新增可选 `assumptions`，经 `onPlanParsed` → 运行时 → 运行器 → 草稿视图 → 确认面板贯通，新增 `AssumptionList.tsx`；④**让"同意不可伪造"从注释变成代码**：`HostBridge` 原先只检查 nonce 未消费 / `runId` / 是否过期 / `previewHash` —— 这四条调用方自己就能凑齐，于是**手搓一份同意也能提交**；现在桥里记着自己铸造过的 nonce（`minted`），没铸造过的一律 `unminted_consent`；⑤**把"工具"从声明接到可执行**：`ToolCallRequest` 原先**没有工具名也没有参数**（所以"接上 ToolPort"是空话），现在补上 `toolId`/`input`，新增 `toolDispatch.ts` 做名字→实现的那一段，`AgentRuntime.callTool` 是宿主入口；⑥**新增 `ToolTracePanel.tsx`**：用户可见的短摘要轨迹 + **默认关着**的开发者详细诊断；⑦**worker 的 diff / check / artifact 信封**（`WorkerSuccess` 必须带齐 `changed` / `diff` / `check` / `artifact`，缺一个就拒绝）；⑧**上下文与工具真正交给规划器**：`PlanRequest` 增加 `model: { context, tools }`，协调器在观察之后、发请求之前组装（且两次尝试看到同一份）；⑨**观察者交出事实文本**（它从第一版起就在算那个数组，只是没放进返回值 —— 是变异检验抓出来的，因为既有用例都是空文档）**+ 技能清单成为可用动作的唯一来源**（调用方说请求哪些技能，运行时去清单取动作，而不是让调用方直接给动作名）。
 

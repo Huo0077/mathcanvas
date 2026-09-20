@@ -6,6 +6,36 @@
 **当前阶段：** P0-P6 与 P7 工程制图已完成；MathCanvas 统一 Ribbon UI 基线、后续 UI 优化（Task 7-13）、工程制图视觉重做（Task 14）、工程制图可用性修复（Task 15-18）、圆锥曲线四项修复、功能键操作指引浮层、CAD 2D 绘图交互重做、平面几何动点系统、3D 视口与几何内核重构、封闭曲线绕定点旋转、UI 优化（草稿纸画布）与平面几何元素选颜色均已完成。**2026-09-17 新增两条解析几何交付线并已全部落地**：**A1 解析二次曲面与"真圆"**（8 片；设计 `docs/superpowers/specs/2026-09-17-analytic-quadrics-design.md`）与 **A2 交面按支撑曲面分组 + 真曲面**（5 轮；设计 `docs/superpowers/specs/2026-09-17-intersection-face-grouping-design.md`）——用户口径从"我不要一个逼近的圆，我需要一个真的圆"一路推到"我需要的只是那个相交的曲面，而不是由很多三角形拼出来的"。**随后"立体几何最后一轮"四件事也已全部交付**（7 片；设计 `docs/superpowers/specs/2026-09-17-3d-tracks-rotation-and-measurement-labels-design.md`）：约束轨道（`circle3` 当动点宿主）、拖动旋转（世界轴三色环 + 15° 吸附 + 属性栏角度）、测量数字常驻画布（2D + 3D）、立体几何 UI 与平面几何同一套令牌。平面动点系统按四个维度交付：①约束模型与参数化映射 ②依赖图 DAG 与增量拓扑重算 ③动态测量监听器 ④轨迹采样与消元法隐式化；3D 重构按四个区块交付：①动点宿主约束与渲染管道 ②截面几何 ③Auto-Fit ④生命周期与多解；四者与三区块**全部接进主流程**（不只是内核可用）。**2026-09-18 又完成平面几何切线**（抛物线 / 双曲线 / 圆 / 椭圆的曲线切线，切点可沿曲线拖动或跟随动点）**与动点扩展**（在动点处作切线、以动点为圆心作圆、半径可调且可随动点位置动态变化），并修掉"切线不能拖动"这一现场反馈。P4 Agent 与 P5 题图解析仍在排除范围内。
 **总体状态：** 开发中
 
+### G1 第一批：**解除唯一的外部阻塞**（装好 Rust 工具链）+ Task 1.1 桌面外壳落地（2026-09-21）
+
+- **解除阻塞（这一步是纯环境操作，但它是 G1 全部六个任务的前置）**：`winget install --id Rustlang.Rustup --exact --silent --accept-package-agreements --accept-source-agreements --disable-interactivity` → **`rustup 1.29.1` / `cargo 1.98.1` / `rustc 1.98.1`（`stable-x86_64-pc-windows-msvc`）**。装完直接跑 `npx tauri info`，六项前置全绿：
+  - OS Windows 10.0.26100 x64 · **WebView2 153.0.4234.48** · **MSVC Visual Studio Community 2026** · rustc ✔ · cargo ✔ · rustup ✔ · toolchain `stable-x86_64-pc-windows-msvc (default)`。
+  - **一个坑记下来**：winget 写的是**用户级 PATH**（`C:\Users\Huo\.cargo\bin`），所以**已经开着的进程看不到 `cargo`** —— `npx tauri info` 第一次报 "rustc: not installed!"，但直接调 `%USERPROFILE%\.cargo\bin\cargo.exe --version` 是好的。新开的进程（包括用户自己开的终端）会自动有。以后每一轮都要在每个 pwsh 调用里显式拼一次 PATH。
+  - 安装体积与影响范围如实告知过用户（数百 MB + 需要 MSVC，而 MSVC 本机已有），用户批准后才执行。
+
+- **Task 1.1 桌面外壳（`apps/desktop`）落地**，按计划接口逐条对齐：
+  - **前端不复制一份**（计划原文："imports the existing `apps/web` application **without duplicating the geometry store**"）：`tauri.conf.json` 的 `frontendDist` 直接指向 `build-check/mathcanvas-current`，`beforeDevCommand` / `beforeBuildCommand` 走 `npm run … --workspace @draw/web`。`apps/desktop` 里**没有任何前端源码**（有一条用例专门断言这件事）。
+  - **只暴露具名 IPC 命令**（原文："no generic command accepting JavaScript or shell text"）：整个外壳**只有一个**命令 `get_runtime_info`，且有一条用例剔掉注释后扫 `run_shell` / `read_file` / `write_file` / `std::process::Command` / `Command::new`。
+  - **`get_runtime_info` 的安全性质**：不带密钥、不带数据根之外的路径。`build_runtime_info` 是**纯函数**（版本与目录由调用方传入），所以这些性质可以在单元测试里直接钉住，不需要起真窗口。`data_root` 只输出**目录名**——即便有人图省事把绝对路径传进来，取最后一段的写法也不会泄露它。
+  - **三部件如实标 `not_implemented`**：SecretStore（1.2）/ 回环代理（1.5）/ SQLite 仓储（1.6）都还没做，自述里就写 `not_implemented`（枚举三态：`ready` / `missing` / `not_implemented`，而不是布尔——布尔分不清"没有"与"还没做"）。
+  - **CSP 不再是脚手架的 `null`**：改成 `default-src 'self'; … object-src 'none'; base-uri 'none'; frame-ancestors 'none'`；能力清单保持**最小集**（只有 `core:default`），有用例点名禁止 `shell:` / `fs:` / `opener:` / `http:`。
+  - **标识与窗口**：`identifier` 从脚手架的 `com.tauri.dev` 改成 `com.mathcanvas.desktop`；窗口 1280×860（最小 900×600）——脚手架的 800×600 装不下三栏工作台。
+
+- **前端的另一半**：新增 `apps/web/src/services/desktopRuntime.ts`（7 例）。它明确区分三件事：①**在浏览器里跑是正常状态**（`invoke` 不存在 → 如实回 `null`，不抛异常——同一个 web 产物既要能当网页开、也要能在 Tauri 里跑）；②**在桌面里但自述没取回来** → 回 `runtime_info_failed` 并带原因，而不是编一份显示出来；③**缺字段一律当 `not_implemented`**（危险的那种默认值是"缺字段当可用"，前端会以为密钥库在，然后走一条不存在的路）。
+
+- **RED→GREEN 与两次自纠**（都记在测试注释里）：
+  1. Rust 那条"自述里没有密钥形状字段"的用例，**第一版用裸子串扫 `secret`，被自家字段名 `secretStore` 判红** —— 断言无法区分"名字里有 secret 的**状态字段**"与"真的装着密钥的字段"。改成两条能区分的检查：**字段集合闭集** + **值里没有密钥形状**（`sk-` / `ghp_` / `Bearer ` / 32 位以上无空格随机串）。
+  2. "不许有通用命令"那条，**第二版又被注释里那句"没有、也不会有 `eval` / `run_shell`…"判红**。改成先剔注释行再扫——注释里点名这些词是**好事**，不该被断言当成违规。
+  —— 两次都是"断言写得太糙"，不是实现有问题；两次都把教训写进了用例注释。
+
+- **实测证据（本机）**：
+  - `cargo test` **13 例全过**（`runtime.rs` 5 例单元 + `tests/shell_smoke.rs` 8 例集成）。
+  - `npx tauri build --no-bundle` **exit 0**，产出 `apps/desktop/src-tauri/target/release/mathcanvas-desktop.exe`（9,195,520 字节，release 2m43s）。
+  - **真的启动了它**：`Start-Process` 起进程 → 等 6 秒 → 进程**仍在运行**（pid 30588，说明窗口起来了、WebView2 加载成功、没有立刻崩），随后 force kill，无残留进程。
+  - 单元 179 文件 / 2010 用例、typecheck、lint、e2e 的结果见下（加入 `@draw/desktop` workspace 之后重跑）。
+
+**如实标注（未做）**：`tauri dev` 的热重载路径**没有实测**（它要开一个长驻开发窗口）；打包（`tauri build` 带 bundle，产出安装器）**没有做** —— 计划把它放在 Task 5.4；图标仍是脚手架默认（换品牌图标属 Task 5.4）；`get_runtime_info` 的**真实 IPC 往返**没有在真窗口里断言过（前端那一半用假的 `__TAURI_INTERNALS__` 覆盖了它的三种结果）。
+
 ### G2 第三十二批：一次性修复真的把"上一次错在哪"告诉规划器（Task 2.3 Step 5）（2026-09-21）
 
 - **缺口**：协调器**确实**会再问一次（`MAX_PLAN_ATTEMPTS = 2`），但**不告诉规划器上一次错在哪** —— 第二次尝试只是把同一份请求原样再发一遍，模型没有任何理由换个答案。也就是说计划里那句 "Implement visible one-time schema repair" 实际退化成"重试一次"。修复提示的构造函数 `outputParser.describeRepairPrompt` **早就写好并有测试，只是没人调它** —— 又一处"有实现、没接上"。

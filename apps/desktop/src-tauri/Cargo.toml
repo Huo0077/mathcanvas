@@ -1,0 +1,30 @@
+[package]
+name = "mathcanvas-desktop"
+version = "0.1.0"
+description = "MathCanvas desktop shell (Tauri 2)"
+authors = ["MathCanvas"]
+license = ""
+repository = ""
+edition = "2021"
+rust-version = "1.77.2"
+
+# `lib` 与 `main` 分开是 Tauri 的约定：移动端入口要能作为库被调用，
+# 而桌面端由 `main.rs` 薄薄地包一层。
+[lib]
+name = "mathcanvas_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.6.3", features = [] }
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+log = "0.4"
+tauri = { version = "2.11.6", features = [] }
+tauri-plugin-log = "2"
+
+# WebView2 版本只有注册表知道真值。**只在 Windows 上编**：这个依赖的存在本身就是
+# "我们不假装知道别的平台"的落点（`runtime.rs` 里的非 Windows 分支直接回 `unknown`）。
+[target.'cfg(windows)'.dependencies]
+winreg = "0.55"

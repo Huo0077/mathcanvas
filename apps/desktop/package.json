@@ -1,0 +1,20 @@
+{
+  "name": "@draw/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "MathCanvas 桌面外壳（Tauri 2）—— 前端仍是 apps/web 那一份，不重复实现",
+  "scripts": {
+    "dev": "node ../../scripts/toolchain.mjs tauri dev",
+    "build": "node ../../scripts/toolchain.mjs tauri build --no-bundle",
+    "bundle": "node ../../scripts/toolchain.mjs tauri build",
+    "typecheck": "tsc -p tsconfig.json",
+    "test:rust": "node ../../scripts/toolchain.mjs cargo test --manifest-path src-tauri/Cargo.toml"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.5"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.11.1"
+  }
+}

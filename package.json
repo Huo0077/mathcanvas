@@ -13,12 +13,13 @@
     "typecheck": "npm run typecheck --workspaces",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "test:watch": "vitest",
+    "test:rust": "node scripts/toolchain.mjs cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml",    "test:watch": "vitest",
     "lint": "eslint ."
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.63.0",
+    "@tauri-apps/cli": "^2.11.5",
     "@vitejs/plugin-react": "^5.0.2",
     "eslint": "^10.10.0",
     "eslint-plugin-react-hooks": "^7.1.1",
