@@ -1,8 +1,8 @@
 import type { GeometryDocument } from "@draw/dsl"
+import { canonicalContentHash } from "@draw/agent-core"
 import {
   applyOperation,
   compileActions,
-  contentFingerprint,
   createIdAllocator,
   validatePatch,
   type DocumentHandle,
@@ -19,6 +19,20 @@ import type { DraftAction, IdAllocator } from "@draw/scene-graph"
  * - **任何草稿操作都不更新 `useSceneStore`** —— 谁都不能在草稿阶段改到真文档；
  * - `stage` 必须带**期望草稿版本**：拿旧版本号再暂存会被拒（否则会静默覆盖更新的暂存）；
  * - 预览哈希随内容变化，它是后续 consent 的绑定对象（Task 0.8）。
+ *
+ * ## `previewHash` 用哪一个哈希（2026-09-21 修正）
+ *
+ * 原先这里是 `contentFingerprint(候选文档)` —— 那个函数返回的是**规范化 JSON 字符串**，
+ * 不是哈希。它被当成哈希用之后有两条后果：契约（`ConsentRecord.previewHash`）与实际不符；
+ * 以及确认面板第一版把它渲染出来时**整份候选文档被打在界面上**（见 `ConfirmationPanel.tsx`）。
+ * 现在改用 `@draw/agent-core` 的 `canonicalContentHash`（SHA-256，64 位十六进制）。
+ *
+ * **与 `contentFingerprint` 的分工仍然保留**，两者不是重复实现：
+ * - `contentFingerprint` 是 scene-graph 内部的**语义等价**判据（递归剔掉 `revision` / `updatedAt`、
+ *   把 `visible: true` 视同缺省），用于 `SourceContext` 的"来源是否过期"与 CAS 比较；
+ *   它住在 scene-graph 里是因为 agent-core 依赖 scene-graph，反向导入会成环。
+ * - `canonicalContentHash` 是给**对外契约**用的真哈希（排序键 + 剔除视图/时间字段 + SHA-256），
+ *   任何要"写进凭据、写进记录、或必须固定长度"的地方都用它。
  */
 
 export interface DraftRecord {
@@ -90,7 +104,7 @@ export function createDraftStore(allocatorFactory: () => IdAllocator = createIdA
     draftId: record.draftId,
     draftVersion: record.draftVersion,
     candidate: cloneDocument(record.candidate),
-    previewHash: contentFingerprint(record.candidate),
+    previewHash: canonicalContentHash(record.candidate),
     stageCount: record.operations.length,
     operations: [...record.compiledOperations]
   })

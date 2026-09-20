@@ -5,7 +5,10 @@ import type { DomainOperation } from "@draw/scene-graph"
  * **能力注册表**：Agent 能做什么、不能做什么的单一事实来源。
  *
  * 计划（`docs/superpowers/plans/2026-09-18-desktop-agent-implementation-plan.md` Task 0.1）的硬要求：
- * 把当前 **42 个图元类型**与 **38 个 `DomainOperation` 变体**全部映射到"可用处理器"或**显式阻止状态**。
+ * 把当前 **42 个图元类型**与 **39 个 `DomainOperation` 变体**全部映射到"可用处理器"或**显式阻止状态**。
+ *
+ * （这里原写作"38 个变体"，是计划正文自己的一处笔误：`DOMAIN_OPERATION_NAMES` 与
+ * `capabilities.test.ts` 的断言都是 **39**；`G2 Gate` 里那行"42/38"同样按 39 读。）
  *
  * 三条纪律：
  * 1. 可用性**只能来自这张签入的描述符表**，不许从模型回答或界面标签里推断；
@@ -32,7 +35,7 @@ export interface CapabilityRegistry {
   byId: Record<string, CapabilityDescriptor>
   /** 每个图元类型 → 它的能力（42 个键，一个不少）。 */
   byPrimitiveType: Record<string, CapabilityDescriptor>
-  /** 每个操作变体 → 负责它的能力（38 个键，一个不少）。 */
+  /** 每个操作变体 → 负责它的能力（39 个键，一个不少）。 */
   byOperation: Record<string, CapabilityDescriptor>
 }
 

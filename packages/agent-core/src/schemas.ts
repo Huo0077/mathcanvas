@@ -97,8 +97,32 @@ function readVector3(value: unknown, path: string, errors: ParseError[]): { x: n
 
 // ---------------------------------------------------------------- 作用域引用
 
-/** 新对象用 `{scope:"draft",alias}`；既有对象用 `{scope:"scene",ref:{documentId,entityId}}`。 */
-function readScopedReference(value: unknown, path: string, errors: ParseError[]): Record<string, unknown> | null {
+/**
+ * 新对象用 `{scope:"draft",alias}`；既有对象用 `{scope:"scene",ref:{documentId,entityId}}`。
+ *
+ * ## 为什么返回值有两种形状（这不是笔误）
+ *
+ * **输入**只有上面那一种写法 —— 只给 `entityId` 的裸引用一律 `unscoped_reference`，
+ * 因为"名字不是 ID"（设计规格 §6）。**输出**必须与**动作层真正读的字段**逐字一致，
+ * 而动作层在这两类引用上是不同的：
+ *
+ * - `scope:"draft"` 的别名不在 `inputs` 里解析，而是由编译器经 `idAllocator` 换成真 id，
+ *   所以别名**原样带过去**（`{scope:"draft",alias}`）。
+ * - `scope:"scene"` 的既有对象引用，动作层 `SceneReference` 就是**扁平**的
+ *   `{documentId,entityId}`（`packages/scene-graph/src/actions/types.ts`），
+ *   编译器读的是 `inputs.target.documentId`。所以这里必须**摊平**成那个形状。
+ *
+ * 摊平之前这里返回 `{scope:"scene",ref:{…}}`，而编译器读 `inputs.target.documentId`
+ * ——于是 `object.update_inputs` / `dynamic.bind_point` / `dynamic.bind_curve`
+ * **不存在任何一种能同时通过校验并被正确编译的输入**：传输层唯一接受的形状让编译器
+ * 读到 `undefined`，编译器真正需要的形状被传输层判 `unscoped_reference`。
+ * 缝没有被发现，是因为两侧的测试各自只喂自己那一半的形状
+ * （见 `planToCompile.seam.test.ts`，那里现在用**已校验的输出**钉住这条接缝）。
+ *
+ * 注意这里**没有放宽任何校验**：形状、字段白名单、`documentId`/`entityId` 的边界
+ * 与去重都照旧执行，变的只是"交给下一层时写哪个形状"。
+ */
+function readScopedReference(value: unknown, path: string, errors: ParseError[]): unknown | null {
   if (!isPlainObject(value)) {
     errors.push(fail("invalid_type", path, "expected an object"))
     return null
@@ -118,7 +142,8 @@ function readScopedReference(value: unknown, path: string, errors: ParseError[])
     rejectUnknownFields(value.ref, ["documentId", "entityId"], `${path}.ref`, errors)
     const documentId = boundedString(value.ref.documentId, `${path}.ref.documentId`, errors)
     const entityId = boundedString(value.ref.entityId, `${path}.ref.entityId`, errors)
-    return documentId === null || entityId === null ? null : { scope: "scene", ref: { documentId, entityId } }
+    // 摊平成动作层的 `SceneReference`（见函数头注释）：编译器读的就是这两个字段。
+    return documentId === null || entityId === null ? null : { documentId, entityId }
   }
   // 缺 scope（或 scope 不认识）= 未加作用域的引用：只给 alias 或只给 entityId 都不算数。
   errors.push(fail("unscoped_reference", path, "a reference must declare scope: 'draft' (alias) or 'scene' (ref)"))

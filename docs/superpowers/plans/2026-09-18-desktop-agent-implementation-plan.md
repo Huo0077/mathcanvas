@@ -1,5 +1,28 @@
 # MathCanvas Desktop Agent Implementation Plan
 
+> **进度真源不是这份文件里的复选框。** 下面每个任务标题下的 `> 状态（…）` 批注才是，
+> 而**汇总**在 [`docs/project-progress.md`](../../project-progress.md)。
+> 复选框从这份计划写下起就没有被批量勾过，因此**它既不代表"没做"，也不代表"做了"** ——
+> 2026-09-21 的一次审查里，这一条正是最容易被误读的地方（计划正文显示"全部未开始"，
+> 而 README 与进度文档显示 G0/G0.5 已完成、G2 主体已落地）。
+>
+> **当前真实状态（2026-09-21，见 `docs/project-progress.md` 第二十二批）**：
+>
+> | 阶段 | 状态 |
+> | --- | --- |
+> | G0（Task 0.1–0.5） | ✅ 完成，Gate 满足 |
+> | G0.5（Task 0.6–0.8） | ✅ 完成，Gate 满足（浏览器里的取消 / 切工作区两条路径仍由单测覆盖） |
+> | G1（Task 1.1–1.6） | ⛔ **未开始 —— 本机没有 Rust 工具链**（`rustc` / `cargo` / `rustup` 均不存在）。这是唯一的外部阻塞，解除条件见下方 G1 批注 |
+> | G2（Task 2.1–2.6） | 🟡 **主体已落地**：协调器、预算、观察、上下文、技能、工具、解析、恢复、网关通道、草稿/确认/提交/撤销、确认面板、遥测脱敏全部有实现与测试；**仍未接线**的是 `ToolPort`、`buildContext` 与 `createToolRegistry` 的生产调用方、两个 worker 的 diff/check/artifact 信封；`AssumptionList.tsx` / `ToolTracePanel.tsx` 未写 |
+> | P5（Task 3.x / 4.x） | ⛔ 未开始（依赖 G1 的真实多模态 provider） |
+> | G5（Task 5.1–5.5） | ⛔ 未开始（依赖 G1 的打包与仓库） |
+>
+> **G2 当前能被浏览器验证到什么程度**（避免误读）：一句话 → 草稿预览 → 确认前画布为空 →
+> 确认 → 对象出现 → `Ctrl+Z` 一步撤销，这条链**已经能跑通**，但规划来自**本地确定性规划器**
+> （只认"建立方体 / 建点 / 只读问答"，认不出就**问用户**），**没有任何真实 provider 调用**。
+> `packages/agent-core` 里所有"发请求之前"的部件（通道选择、输出解析、恢复策略、预算、
+> 上下文组装、工具发布）都已实现并有测试，但**还没有调用方** —— 接真模型时要补的是"谁调用它们"。
+
 > **For agentic workers:** Read `docs/superpowers/specs/2026-09-18-desktop-geometry-agent-design.md` first. Execute tasks in order, keep each task independently testable, and stop at every gate before starting the next stage.
 
 **Goal:** Deliver a Windows-first Tauri desktop MathCanvas whose user-configured cloud/local models can safely understand, preview, and apply the existing 2D, 3D, and CAD capabilities, including planar and solid-geometry image input.
@@ -483,7 +506,7 @@ Stop here for a Windows review and credential/security review before connecting 
 
 ### Task 2.4: Connect typed tools to draft compilation
 
-> **状态（2026-09-19，前置已完成，主体未开始）**：
+> **状态（2026-09-21 复核，覆盖下面所有旧的"未开始/未完成"措辞）**：三组工具（`sceneTools` / `draftTools` / `interactionTools`）与宿主组装**都已实现**；下面几条批注是按批次追加的，早期的"主体未开始""Agent 工作区仍是演示回复"**已被后续批次取代**，保留原文只为留下批次顺序。
 > - **前置（第八批）已完成**：`toolRegistry` 的 `ToolEnvironment.workspace` 与 `capabilityRevision` 原先**声明了却没用**（模型在平面几何里也能看到空间建模与制图工具）。现在 `ToolDescriptor.workspaces` 是**必需**字段并真正参与过滤，`describeEnvironmentMismatch()` 让修订号漂移可见。
 > - **主体仍未开始**：`tools/sceneTools.ts` / `draftTools.ts` / `interactionTools.ts`、把 `CommitterPort` 接到 G0.5 的 `DraftStore` + `HostBridge`、worker 的 diff/check/artifact 信封、以及 Step 1/2 点名的测试（有效动作只产生草稿与非法动作不改草稿版本、标签歧义、锁定拓扑、缺来源文档、不支持的动作）。
 > - **上半（第九批）已完成**：`tools/draftTools.ts`（12 例）与 `tools/sceneTools.ts`（8 例）。草稿工具只带**草稿工件**、绝不返回假的 `changed: true`（计划原句有用例钉住：六条路径的结果全部序列化后断言不含 `"changed"`），失败后草稿必须原样未动，旧版本号不合并、空批次不到存储层。场景工具做到**重名标签绝不猜**（`ambiguous_label` + 让模型去问用户），并把 `entity_not_found` 与 `document_not_in_context` 分开。

@@ -201,7 +201,9 @@ npm run build
 npm run test:e2e
 ```
 
-当前验证基线（**2026-09-19，Agent G0 / G0.5 / G2 落地后实测**）：`npm.cmd test` 为 **174 个测试文件、1957 个用例全部通过（零跳过）**；**5 个 workspace** 类型检查通过；ESLint **0 error / 14 warning**（14 条为既有基线）；Web 生产构建通过（Vite 仍提示主 bundle 超过 500 KB）；Playwright Chromium **119/119** 通过（global setup **按当前工作区重新构建** `build-check/mathcanvas-current` 再预览，因此结果对应工作区源码，而不是该目录里上一次构建的产物）。
+当前验证基线（**2026-09-21，G2 第二十二批之后实测**）：`npm.cmd test` 为 **175 个测试文件、1961 个用例全部通过（零跳过）**；**5 个 workspace** 类型检查通过；ESLint **0 error / 14 warning**（14 条为既有基线）；Web 生产构建通过（Vite 仍提示主 bundle 超过 500 KB）；Playwright Chromium **119/119** 通过（global setup **按当前工作区重新构建** `build-check/mathcanvas-current` 再预览，因此结果对应工作区源码，而不是该目录里上一次构建的产物）。
+
+**最新一批修掉的两个真实缺陷（2026-09-21）**：①**传输层与动作层对"引用"的形状定义不一致** —— `schemas.ts` 产出 `{scope:"scene",ref:{documentId,entityId}}`，而动作编译器读扁平的 `inputs.target.documentId`，于是 `object.update_inputs` / `dynamic.bind_point` / `dynamic.bind_curve` **不存在任何一种能同时通过校验并被正确编译的输入**；两侧测试各自只喂自己那一半的形状，所以单测全绿而缝是空的。现在传输层摊平成动作层的 `SceneReference`（**未放宽任何校验**），并由新增的 `packages/agent-core/src/planToCompile.seam.test.ts` 用**已校验的输出**钉住这条接缝（含一条"跨文档引用仍被拒"的反向用例）。②`draftStore.previewHash` 原先是**整份候选文档的 JSON 字符串**（`contentFingerprint`），现已换成真 SHA-256（`canonicalContentHash`）。
 
 **Agent 相关的验证重点**：`e2e/agent-flow.spec.ts` 三条 —— ①**一句话 → 草稿预览 → 确认前画布为空 → 确认 → 画布出现对象 → `Ctrl+Z` 一步撤销回空**；②丢弃草稿后文档与历史都不动；③认不出时给"需要补充信息"而不是编一段回答。单测侧另有：`agentRunner.test.ts`（暂存阶段不动文档 / 确认后恰好一步历史 / 拒绝二次提交）、`agentRuntime.test.ts`（**一个替身都不用**：真草稿存储 + 真宿主桥 + 真协调器）、`pipeline.test.ts`（G0.5 四条 Gate 端到端）。
 

@@ -77,4 +77,28 @@ describe("isolated drafts", () => {
     // 预览哈希必须随内容变化 —— 它是 consent 的绑定对象。
     expect(after).not.toBe(before)
   })
+
+  /**
+   * 2026-09-21 修掉的真实缺陷：`previewHash` 曾经填的是 `contentFingerprint(候选文档)`，
+   * 而那个函数返回的是**整份候选文档的规范化 JSON 字符串**，不是哈希。
+   *
+   * 后果有两条，第二条才是真正被用户看到的：
+   * 1. 契约里写的是"哈希"（`ConsentRecord.previewHash`、`DraftPreview.previewHash`），
+   *    实现给的是一份全文；
+   * 2. 确认面板第一版把这个字段直接渲染出来，于是**整份候选文档被打在界面上**
+   *    （`ConfirmationPanel.tsx` 里记着这次发现），而这违反"草稿在界面里只是视图"。
+   *
+   * 这里钉住的是**形状**：64 位十六进制 SHA-256（`canonicalContentHash`），
+   * 且**不含**大括号 —— 只要有人把它换回某种"文档字符串"，这两条断言就会红。
+   */
+  it("binds the preview to a real SHA-256 hash, not to the document's JSON text", () => {
+    const store = createDraftStore()
+    const record = store.create(baseDocument())
+    store.stage(record.draftId, [{ actionId: "planar.create_point", actionKey: "a", factIds: [], inputs: { alias: "p", points: [{ x: 3, y: 4 }] } }], record.draftVersion)
+
+    const previewHash = store.getPreview(record.draftId)!.previewHash
+
+    expect(previewHash).toMatch(/^[0-9a-f]{64}$/)
+    expect(previewHash).not.toContain("{")
+  })
 })
