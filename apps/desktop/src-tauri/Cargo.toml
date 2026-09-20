@@ -27,6 +27,24 @@ tauri-plugin-log = "2"
 # 不依赖用户机器上有没有 sqlite3.dll，也不需要 MSVC 之外的构建工具。
 rusqlite = { version = "0.37", features = ["bundled"] }
 
+# 回环代理（Task 1.5）。三件事各要一个库，而且都跑不掉：
+# - `tokio`：异步运行时。代理要同时持有"入站请求"与"出站流式响应"两条生命周期，
+#   还得能被取消 —— 同步模型里做不到这件事；
+# - `axum`：路由与提取器。**固定路由**（`Route` enum）需要它，"没有任意 URL"那条约束
+#   才有地方落；
+# - `reqwest` + `rustls-tls`：出站 HTTP。**刻意不用系统 TLS**（native-tls）：
+#   那会依赖机器上的 OpenSSL/SChannel，而"云端必须 HTTPS 且要验证证书"这条判据
+#   不该随用户机器的 TLS 配置变化。rustls 把这份实现编进二进制里。
+tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "time", "macros"] }
+axum = { version = "0.8", features = ["json"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream", "json"] }
+futures-util = "0.3"
+tower = "0.5"
+# 会话令牌需要**密码学随机**。`rand` 已经在依赖树里（tauri 带进来的），
+# 显式依赖它而不是自己写 LCG：令牌的不可猜测性是这条边界的地基，
+# 而"为什么这个随机数够随机"这件事不该由我来论证。
+rand = "0.9"
+
 # WebView2 版本只有注册表知道真值。**只在 Windows 上编**：这个依赖的存在本身就是
 # "我们不假装知道别的平台"的落点（`runtime.rs` 里的非 Windows 分支直接回 `unknown`）。
 [target.'cfg(windows)'.dependencies]

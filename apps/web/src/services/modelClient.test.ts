@@ -63,7 +63,10 @@ describe("starting a model run", () => {
      * 而不是"判定本身会翻转"（后者是 `modelEvents.test.ts` 的事）。
      */
     const neverCancelled = (): boolean => false
-    const { stopAfterCancel } = await import("@draw/agent-core")
+    // 换个名字：原先这里解构出 `stopAfterCancel`，而注入的回调参数**也叫** `stopAfterCancel` ——
+    // 闭包里那一行 `stopAfterCancel(incoming, …)` 调用的是**参数**（它自己），于是无限递归、
+    // 用例偶发超时（实测 5013ms 撞上 5s 上限）。能跑的那几次是因为时序刚好。
+    const { stopAfterCancel: filterCancelled } = await import("@draw/agent-core")
     /** 记下客户端到底把什么交给了过滤器 —— 这条接缝比"过滤函数本身对不对"更容易被漏掉。 */
     const handed: { events: number; hasCancellation: boolean } = { events: -1, hasCancellation: false }
 
@@ -73,12 +76,12 @@ describe("starting a model run", () => {
         invoke,
         isCancelled: neverCancelled,
         // 与 Rust 侧同一套语义：取消之后一个工具事件都不许出去。
-        stopAfterCancel: (incoming, isCancelled) => {
+        stopAfterCancel: (incoming, cancelled) => {
           handed.events = incoming.length
-          handed.hasCancellation = typeof isCancelled === "function"
+          handed.hasCancellation = typeof cancelled === "function"
           // 让"取消"在第一个 delta 之后发生 —— 模拟用户按下停止的那一刻。
           let seen = 0
-          return [...stopAfterCancel(incoming, () => (seen++ > 1 ? true : isCancelled()))]
+          return [...filterCancelled(incoming, () => seen++ > 1)]
         }
       }
     )

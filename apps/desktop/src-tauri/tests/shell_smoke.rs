@@ -133,16 +133,16 @@ fn exposes_only_named_ipc_commands_and_no_generic_one() {
         "lookup_commit",
         "read_document_snapshot",
         "document_history_length",
-        "replace_document_epoch"
+        "replace_document_epoch",
+        "proxy_session",
+        "proxy_cancel"
     ];
 
-    /**
-     * 注册块的内容按**顺序**逐字核对。
-     *
-     * 第一版把整个多行文本硬写成一个字面量，于是每次加命令都要改那一大段缩进 ——
-     * 而"改断言"这件事本身会让人放松警惕。现在改成从 `generate_handler![…]` 里
-     * **抽出名字并比对列表**：既保留了"逐字列出"的意图，又只要求改那份 `named` 数组。
-     */
+    // 注册块的内容按**顺序**逐字核对。
+    //
+    // 第一版把整个多行文本硬写成一个字面量，于是每次加命令都要改那一大段缩进 ——
+    // 而"改断言"这件事本身会让人放松警惕。现在改成从 `generate_handler![…]` 里
+    // **抽出名字并比对列表**：既保留了"逐字列出"的意图，又只要求改那份 `named` 数组。
     let block = lib
         .split_once("tauri::generate_handler![")
         .and_then(|(_, rest)| rest.split_once(']'))
@@ -214,4 +214,5 @@ fn the_shell_lives_inside_this_repository() {
     assert!(root.join("package.json").is_file(), "expected the monorepo root at {}", root.display());
     assert!(root.join("apps/web/src/App.tsx").is_file(), "expected the web app at {}", root.display());
 }
+
 

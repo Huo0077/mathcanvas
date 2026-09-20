@@ -202,7 +202,7 @@ npm run build
 npm run test:e2e
 ```
 
-当前验证基线（**2026-09-21，G1 第七批之后实测**）：`npm.cmd test` 为 **188 个测试文件、2113 个用例全部通过（零跳过）**；**6 个 workspace**（含 `@draw/desktop`）类型检查通过；ESLint **0 error / 14 warning**（14 条为既有基线）；Web 生产构建通过（Vite 仍提示主 bundle 超过 500 KB）；桌面外壳 `tauri build --no-bundle` 通过并产出可运行的 `mathcanvas-desktop.exe`；**Rust 测试 88 例全过 + 1 例 `#[ignore]`**（已显式跑过并通过）；Playwright Chromium **119/119** 通过（global setup **按当前工作区重新构建** `build-check/mathcanvas-current` 再预览，因此结果对应工作区源码，而不是该目录里上一次构建的产物）。
+当前验证基线（**2026-09-21，G1 第八批之后实测**）：`npm.cmd test` 为 **188 个测试文件、2113 个用例全部通过（零跳过）**；**6 个 workspace**（含 `@draw/desktop`）类型检查通过；ESLint **0 error / 14 warning**（14 条为既有基线）；Web 生产构建通过（Vite 仍提示主 bundle 超过 500 KB）；桌面外壳 `tauri build --no-bundle` 通过并产出可运行的 `mathcanvas-desktop.exe`；**Rust 测试 99 例全过 + 1 例 `#[ignore]`**（已显式跑过并通过）；Playwright Chromium **119/119** 通过（global setup **按当前工作区重新构建** `build-check/mathcanvas-current` 再预览，因此结果对应工作区源码，而不是该目录里上一次构建的产物）。
 
 ### 桌面外壳与密钥库（G1 第一批 / 第二批，2026-09-21）
 
@@ -260,6 +260,7 @@ npm run test:e2e
    - **G1 是当前唯一的硬阻塞，而且是环境问题不是设计问题**：本机 `rustc` / `cargo` / `rustup` **都不存在**（`node v24.15.0`、`npm 11.12.1`、**WebView2 153.0.4234.32** 与 `winget` 都在），所以 Tauri 外壳、SecretStore（Windows 凭据管理器）、provider 适配器、Rust 回环代理与 SQLite 仓储**一个都没法动手**（连"先跑失败测试"都做不到，`cargo test` 起不来）。解除方式：`winget install Rustlang.Rustup` 或 rustup.rs 官方安装器，装完确认 `cargo --version` 可执行。**没有自动安装**——那是往用户机器上装整套工具链并改 `PATH`，应由用户决定。
    - **G2 剩余（不依赖 Rust）**：`AssumptionList.tsx` / `ToolTracePanel.tsx`（假设清单与可选的开发者详细视图）、`ToolPort` 接线、worker 的 diff/check/artifact 信封。
    - **一处待办**：`apps/web/src/agent/draftStore.ts` 的 `previewHash` 目前存的是**规范 JSON 字符串**（`contentFingerprint`）而不是哈希；它与 `apps/web` 侧 `createDocumentHandle` 的 `contentHash` 同源，要**一起改成 `canonicalContentHash` 并一起复验 Compare-and-Swap**，所以没有夹带在 UI 批次里。
+
 
 
 
