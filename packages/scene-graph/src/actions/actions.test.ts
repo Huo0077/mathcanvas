@@ -1,0 +1,235 @@
+import { createEmptyDocument } from "@draw/dsl"
+import { describe, expect, it } from "vitest"
+
+import { compileActions } from "./index"
+import type { ActionContext, DraftAction, IdAllocator } from "./types"
+
+/**
+ * Task 0.5 的**回调 → handler → 测试**对照表（计划 Step 1）。
+ *
+ * 表里每一行都是"手工 UI 里确实存在的一个回调"，handler 是它的共用实现，
+ * 最后一列是覆盖它的用例。**手工按钮与 Agent 必须走同一份 handler**（设计规格 §7.4），
+ * 所以这张表也是"还有哪些回调没被抽出来"的清单。
+ *
+ * | 手工回调（App / PropertiesBar） | handler（`actions/`） | 覆盖用例 |
+ * | --- | --- | --- |
+ * | 添加点 / 添加直线…（`addPoint`、`startCreation`） | `planar.create_point` 等 | `planar family` 两条 |
+ * | 添加立方体 / 棱锥 / 圆柱 / 圆锥（`addDefaultCube`、`addDefaultSolid`） | `solid.create_template` | `solid family` 两条 |
+ * | 删除选中（`deleteSelected`） | `object.delete_many` | `object family` 两条 |
+ * | 属性栏改名 / 显隐等（`updatePrimitive`） | `object.update_inputs` | `object family` 一条 |
+ * | 绑定动点到宿主（`bindPointToHost`） | `dynamic.bind_point` | `dynamic family` 两条 |
+ * | 在点处作切线（`addPointTangent`） | `function.create_tangent` | `dynamic family` 一条 |
+ * | 建截面（`addSection`） | `section.create` | `section family` 两条 |
+ * | 物化截面（`materializeSelectedSection`） | `section.materialize` | `section family` 一条 |
+ * | 导数 / 切线 / 积分（`addFunctionAnalysis`） | `function.analyze` | `families` 三条 |
+ * | 曲线切线 + 跟随动点（`addCurveTangent`、`addPointTangent`） | `function.create_tangent`（`anchor`） | `families` 三条 |
+ * | 点到曲线绑定（`PropertiesBar` 的路径绑定） | `dynamic.bind_curve` | `families` 三条 |
+ * | 半径随动点变化（半径驱动点选择） | `dynamic.set_radius_rule` | `families` 两条 |
+ * | 参数值 / 参数表达式（参数分组） | `parameter.set` / `parameter.set_expression` | `families` 三条 |
+ *
+ * 仍未抽出（后续批次）：相交预览持久化、CAD 来源与导出提议、`style.set` 批量样式、
+ * `dynamic.anchor_rotation`（动圆绕定点旋转）—— 见进度文档的 G0 第三批记录。
+ */
+
+/** 幂等分配器：同一 alias 永远拿同一个 id（重试安全）。 */
+function makeAllocator(): IdAllocator {
+  const known = new Map<string, string>()
+  let counter = 0
+  return {
+    allocate(kind, alias) {
+      const key = `${kind}:${alias}`
+      const existing = known.get(key)
+      if (existing) return existing
+      counter += 1
+      const id = `${kind}-${counter}`
+      known.set(key, id)
+      return id
+    }
+  }
+}
+
+function contextWith(document = createEmptyDocument("conics"), orderedSelection: string[] = []): ActionContext {
+  return { targetDocument: document, targetWorkspace: document.workspace, orderedSelection, capabilityRevision: "test.1", idAllocator: makeAllocator() }
+}
+
+function point3Document() {
+  const document = createEmptyDocument("geometry3d")
+  document.primitives = [
+    { id: "point3-1", type: "point3", position: { x: 0, y: 0, z: 0 }, label: "A" },
+    { id: "point3-2", type: "point3", position: { x: 2, y: 0, z: 0 }, label: "B" }
+  ]
+  return document
+}
+
+function action(partial: Record<string, unknown>): DraftAction {
+  // 判别联合无法从部分字段构造，测试里统一走 `unknown` 中转（生产代码不需要这种构造）。
+  return { actionKey: "k1", factIds: [], ...partial } as unknown as DraftAction
+}
+
+describe("action compiler", () => {
+  it("never mutates the input document", () => {
+    const document = createEmptyDocument("conics")
+    const before = JSON.stringify(document)
+
+    compileActions(document, [action({ actionId: "planar.create_point", inputs: { alias: "a", points: [{ x: 1, y: 2 }] } })], contextWith(document))
+
+    expect(JSON.stringify(document)).toBe(before)
+  })
+
+  it("mints stable ids so retrying the same draft does not duplicate objects", () => {
+    const document = createEmptyDocument("conics")
+    const context = contextWith(document)
+    const actions = [action({ actionId: "planar.create_point", inputs: { alias: "a", points: [{ x: 1, y: 2 }] } })]
+
+    const first = compileActions(document, actions, context)
+    const second = compileActions(document, actions, context)
+
+    expect(first.operations).toHaveLength(1)
+    // 同一个 allocator 上重试：id 必须一致，否则重试会在文档里留下两个点。
+    expect(second.operations[0]).toEqual(first.operations[0])
+    expect(first.aliasToId.a).toBe("point-1")
+  })
+})
+
+describe("planar family", () => {
+  it("creates a point from an alias", () => {
+    const document = createEmptyDocument("conics")
+    const result = compileActions(document, [action({ actionId: "planar.create_point", inputs: { alias: "a", points: [{ x: 3, y: 4 }] } })], contextWith(document))
+
+    expect(result.diagnostics).toEqual([])
+    expect(result.operations).toEqual([{ op: "addPrimitive", primitive: { id: "point-1", type: "point", x: 3, y: 4 } }])
+  })
+
+  it("refuses a line with fewer than two distinct points", () => {
+    const document = createEmptyDocument("conics")
+    const result = compileActions(document, [action({ actionId: "planar.create_line", inputs: { alias: "l", points: [{ x: 1, y: 1 }, { x: 1, y: 1 }] } })], contextWith(document))
+
+    expect(result.operations).toHaveLength(0)
+    expect(result.diagnostics[0].code).toBe("degenerate_line")
+  })
+
+  it("refuses a circle without a positive finite radius", () => {
+    const document = createEmptyDocument("conics")
+    const result = compileActions(document, [action({ actionId: "planar.create_circle", inputs: { alias: "c", center: { x: 0, y: 0 }, radius: 0 } })], contextWith(document))
+
+    expect(result.operations).toHaveLength(0)
+    expect(result.diagnostics[0].code).toBe("invalid_radius")
+  })
+})
+
+describe("solid family", () => {
+  it("creates a cube template in the solid workspace", () => {
+    const document = createEmptyDocument("geometry3d")
+    const result = compileActions(document, [action({ actionId: "solid.create_template", inputs: { alias: "s", template: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 2, z: 2 } } })], contextWith(document))
+
+    expect(result.diagnostics).toEqual([])
+    expect(result.operations).toHaveLength(1)
+    expect(result.operations[0]).toMatchObject({ op: "addPrimitive", primitive: { id: "solid-1", type: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 2, z: 2 } } })
+  })
+
+  it("refuses a flat or negative-sized cube instead of fabricating a solid", () => {
+    const document = createEmptyDocument("geometry3d")
+    const result = compileActions(document, [action({ actionId: "solid.create_template", inputs: { alias: "s", template: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 2, z: 0 } } })], contextWith(document))
+
+    expect(result.operations).toHaveLength(0)
+    expect(result.diagnostics[0].code).toBe("invalid_size")
+  })
+
+  it("refuses a cube in the planar workspace", () => {
+    const document = createEmptyDocument("conics")
+    const result = compileActions(document, [action({ actionId: "solid.create_template", inputs: { alias: "s", template: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 2, z: 2 } } })], contextWith(document))
+
+    expect(result.operations).toHaveLength(0)
+    expect(result.diagnostics[0].code).toBe("workspace_mismatch")
+  })
+})
+
+describe("dynamic family", () => {
+  it("binds a spatial point to a host with an explicit parameter", () => {
+    const document = point3Document()
+    const result = compileActions(document, [action({
+      actionId: "dynamic.bind_point",
+      inputs: { target: { documentId: document.metadata.id, entityId: "point3-1" }, host: { documentId: document.metadata.id, entityId: "point3-2" }, parameter: 0.5 }
+    })], contextWith(document))
+
+    expect(result.diagnostics).toEqual([])
+    expect(result.operations).toEqual([{ op: "updatePrimitive", id: "point3-1", patch: { binding3: { kind: "onHost", hostId: "point3-2", parameter: 0.5 } } }])
+  })
+
+  it("refuses a binding whose target does not exist", () => {
+    const document = point3Document()
+    const result = compileActions(document, [action({
+      actionId: "dynamic.bind_point",
+      inputs: { target: { documentId: document.metadata.id, entityId: "missing" }, host: { documentId: document.metadata.id, entityId: "point3-2" } }
+    })], contextWith(document))
+
+    expect(result.operations).toHaveLength(0)
+    expect(result.diagnostics[0].code).toBe("target_not_found")
+  })
+
+  it("refuses a binding that reaches across documents", () => {
+    const document = point3Document()
+    const result = compileActions(document, [action({
+      actionId: "dynamic.bind_point",
+      inputs: { target: { documentId: document.metadata.id, entityId: "point3-1" }, host: { documentId: "another-document", entityId: "point3-2" } }
+    })], contextWith(document))
+
+    expect(result.operations).toHaveLength(0)
+    expect(result.diagnostics[0].code).toBe("cross_document_reference")
+  })
+})
+
+describe("section family", () => {
+  it("creates a section through a selected solid", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [{ id: "cube-1", type: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 2, z: 2 } }]
+    const result = compileActions(document, [action({ actionId: "section.create", inputs: { alias: "cut", sourceId: "cube-1" } })], contextWith(document))
+
+    expect(result.diagnostics).toEqual([])
+    expect(result.operations[0]).toMatchObject({ op: "addPrimitive", primitive: { id: "section-1", type: "section", sourceId: "cube-1" } })
+  })
+
+  it("refuses a section whose source is not a solid", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [{ id: "point3-1", type: "point3", position: { x: 0, y: 0, z: 0 } }]
+    const result = compileActions(document, [action({ actionId: "section.create", inputs: { alias: "cut", sourceId: "point3-1" } })], contextWith(document))
+
+    expect(result.operations).toHaveLength(0)
+    expect(result.diagnostics[0].code).toBe("source_not_solid")
+  })
+})
+
+describe("object family", () => {
+  it("deletes a batch as one union", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [
+      { id: "point-1", type: "point", x: 0, y: 0 },
+      { id: "point-2", type: "point", x: 1, y: 0 }
+    ]
+    const result = compileActions(document, [action({ actionId: "object.delete_many", inputs: { targets: ["point-2", "point-1"] } })], contextWith(document))
+
+    expect(result.diagnostics).toEqual([])
+    // 一整批一个操作：顺序无关由 deleteObjects 保证。
+    expect(result.operations).toEqual([{ op: "deleteObjects", ids: ["point-2", "point-1"] }])
+  })
+
+  it("refuses an empty delete batch", () => {
+    const document = createEmptyDocument("conics")
+    const result = compileActions(document, [action({ actionId: "object.delete_many", inputs: { targets: [] } })], contextWith(document))
+
+    expect(result.operations).toHaveLength(0)
+    expect(result.diagnostics[0].code).toBe("empty_batch")
+  })
+
+  it("updates a registered input field but refuses an unknown one", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [{ id: "point-1", type: "point", x: 0, y: 0 }]
+
+    const ok = compileActions(document, [action({ actionId: "object.update_inputs", inputs: { target: { documentId: document.metadata.id, entityId: "point-1" }, patch: { label: "B" } } })], contextWith(document))
+    expect(ok.operations).toEqual([{ op: "updatePrimitive", id: "point-1", patch: { label: "B" } }])
+
+    const bad = compileActions(document, [action({ actionId: "object.update_inputs", inputs: { target: { documentId: document.metadata.id, entityId: "point-1" }, patch: { area: 12 } } })], contextWith(document))
+    expect(bad.operations).toHaveLength(0)
+    expect(bad.diagnostics[0].code).toBe("unregistered_input")
+  })
+})

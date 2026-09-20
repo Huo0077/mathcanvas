@@ -2,6 +2,7 @@ import { MEASUREMENT_METRICS, validateDocument, type AnnotationSpec, type Constr
 import { parseExpression } from "@draw/geometry-kernel"
 
 import { applyOperation, deletionTargets, EDITABLE_GEOMETRY_TYPES, isFreeDraggable3, isRotatable3, layerDescendantIds, templateTopologyIds, type DomainOperation } from "./operations"
+import { isDomainOperation } from "./operationNames"
 
 export type PatchValidationResult =
   | { valid: true }
@@ -170,6 +171,14 @@ export function validateDeletion(document: GeometryDocument, ids: string[]): Pat
 }
 
 export function validatePatch(document: GeometryDocument, operation: DomainOperation): PatchValidationResult {
+  /**
+   * 未知操作**先拒**。下面全是逐条 `if (operation.op === "...")` 的检查，没有任何分支覆盖的 op
+   * 会静默通过并返回 valid —— 这正是 Task 0.3 要堵的洞（TypeScript 被绕过时唯一还站得住的防线）。
+   */
+  if (!isDomainOperation(operation)) {
+    const op = (operation as { op?: unknown } | null | undefined)?.op
+    return { valid: false, errors: [`unknown operation: ${typeof op === "string" ? op : String(op)}`] }
+  }
   const ids = primitiveIds(document)
   const errors: string[] = []
   if (operation.op === "addLayer") {
@@ -487,6 +496,23 @@ export function validatePatch(document: GeometryDocument, operation: DomainOpera
     // References that come from the object's own generated topology do not protect it.
     const targets = deletionTargets(document, operation.id)
     if ([...targets].some((target) => isReferenced(document, target, targets))) errors.push("object is referenced by another object")
+  }
+  if (operation.op === "deleteObjects") {
+    /**
+     * 批量删除（Task 0.4）：**先整批存在性/锁定检查，再按并集算一次闭包**。
+     *
+     * 顺序无关来自"闭包算一次"：references 只要落在这一批的闭包内就不算阻塞，
+     * 于是"点 A 与依赖它的直线"一起删是合法的 —— 逐项删除时这个组合谁先谁后都会失败。
+     */
+    for (const id of operation.ids) {
+      const primitive = document.primitives.find((candidate) => candidate.id === id)
+      if (!primitive) errors.push(`object not found: ${id}`)
+      else if (primitive.locked) errors.push("object is locked")
+    }
+    if (errors.length === 0) {
+      const targets = new Set(operation.ids.flatMap((id) => [...deletionTargets(document, id)]))
+      if ([...targets].some((target) => isReferenced(document, target, targets))) errors.push("object is referenced by another object")
+    }
   }
   if (operation.op === "createGroup") {
     if (document.groups.some((group) => group.id === operation.group.id)) errors.push("duplicate group id")

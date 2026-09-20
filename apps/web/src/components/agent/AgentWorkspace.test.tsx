@@ -92,3 +92,66 @@ describe("agent workspace", () => {
     expect(back).toBe(1)
   })
 })
+
+/**
+ * Task 2.5 Step 2：**生产路径上不再有演示回复**。
+ *
+ * 组件早先自己挂 `setTimeout` 调 `composeDemoReply` 造一段常量文本。现在它只负责
+ * "发起 + 显示"：谁去跑由注入的 `onRun` 决定。下面这几条守住这条边界。
+ */
+describe("the workspace never invents a reply", () => {
+  beforeEach(() => {
+    localStorage.clear()
+    resetAgentStore()
+  })
+
+  it("hands the prompt and the prompt message id to the injected runner", () => {
+    // `promptMessageId` 是运行账本与界面消息对应的依据（计划原句）。
+    const runs: { prompt: string; promptMessageId: string }[] = []
+    render(<AgentWorkspace onBackToWorkspace={() => {}} onRun={(prompt, promptMessageId) => { runs.push({ prompt, promptMessageId }) }} />)
+
+    fireEvent.change(screen.getByRole("textbox", { name: "对话输入" }), { target: { value: "建一个立方体" } })
+    fireEvent.click(screen.getByRole("button", { name: "发送" }))
+
+    expect(runs).toHaveLength(1)
+    expect(runs[0].prompt).toBe("建一个立方体")
+    // 必须是**那条用户消息的 id**，而不是随便一个字符串。
+    const conversation = useAgentStore.getState().activeConversation!
+    const userMessage = conversation.messages.find((message) => message.role === "user")!
+    expect(runs[0].promptMessageId).toBe(userMessage.id)
+  })
+
+  it("shows the running state instead of a fabricated answer", () => {
+    render(<AgentWorkspace onBackToWorkspace={() => {}} onRun={() => {}} />)
+
+    fireEvent.change(screen.getByRole("textbox", { name: "对话输入" }), { target: { value: "建一个立方体" } })
+    fireEvent.click(screen.getByRole("button", { name: "发送" }))
+
+    const log = screen.getByRole("log", { name: "对话记录" })
+    // 有用户消息与在途助手消息，但**没有任何**编造出来的回答文本。
+    expect(log.querySelectorAll("[data-message-role]")).toHaveLength(2)
+    expect(log.textContent).not.toContain("本地占位")
+    expect(log.textContent).not.toContain("还没有接入模型服务")
+  })
+
+  it("runs each prompt exactly once even though the effect re-renders", () => {
+    // StrictMode 的二次挂载、以及 store 更新引起的重渲染，都不能让同一轮跑两遍。
+    let runs = 0
+    const { rerender } = render(<AgentWorkspace onBackToWorkspace={() => {}} onRun={() => { runs += 1 }} />)
+
+    fireEvent.change(screen.getByRole("textbox", { name: "对话输入" }), { target: { value: "建一个立方体" } })
+    fireEvent.click(screen.getByRole("button", { name: "发送" }))
+    rerender(<AgentWorkspace onBackToWorkspace={() => {}} onRun={() => { runs += 1 }} />)
+
+    expect(runs).toBe(1)
+  })
+
+  it("works without a runner at all, so the shell cannot crash", () => {
+    // 没有注入 runner 时界面仍然可用（只是不会跑）—— 不该抛错。
+    render(<AgentWorkspace onBackToWorkspace={() => {}} />)
+
+    fireEvent.change(screen.getByRole("textbox", { name: "对话输入" }), { target: { value: "建一个立方体" } })
+    expect(() => fireEvent.click(screen.getByRole("button", { name: "发送" }))).not.toThrow()
+    expect(screen.getByRole("log", { name: "对话记录" }).textContent).toContain("建一个立方体")
+  })
+})

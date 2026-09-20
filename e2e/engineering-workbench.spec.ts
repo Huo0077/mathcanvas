@@ -299,6 +299,44 @@ test("keeps hidden views out of the exported SVG", async ({ page }) => {
   expect(svg).not.toContain('data-drawing-view="front"')
 })
 
+/**
+ * Task 0.6 Step 5 要求的 App 级"来源切换"用例。
+ *
+ * 这里的断言对象是**导出文件的内容**，不是眼前的画布：上一批修掉的真实缺陷正是
+ * "四个视图里显示立方体、导出的 SVG 里却是本图纸那份（通常是空的）"。
+ * 只断言显示侧的话，这条缺陷会原样通过——所以必须把下载下来的文件读回来看。
+ */
+test("exports the switched projection source instead of the drawing's own document", async ({ page }) => {
+  await page.goto("/")
+
+  // 先在立体几何里建一个立方体：两个工作区的文档相互独立，工程制图默认看不到它。
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "添加立方体" }).click()
+  await page.getByRole("button", { name: "跳转到工程制图" }).click()
+
+  await expect(page.getByText("本图纸没有可投影对象；立体几何里已有模型").first()).toBeVisible()
+  await expect(page.locator(".engineering-drawing-primitive")).toHaveCount(0)
+
+  // 来源仍是"本图纸"时，导出的 SVG 里除了四个视图分组不该有任何图元。
+  const emptyDownload = page.waitForEvent("download")
+  await page.getByRole("button", { name: "导出 SVG", exact: true }).click()
+  const emptySvg = await readFile(await (await emptyDownload).path(), "utf8")
+  expect((emptySvg.match(/data-drawing-view=/g) ?? []).length).toBe(4)
+  expect(emptySvg).not.toContain("data-source-id=")
+
+  // 切到"立体几何"来源：显示侧先出现投影。
+  await page.getByRole("button", { name: "改为投影立体几何的模型" }).first().click()
+  await expect(page.getByRole("button", { name: /投影来源：立体几何/ })).toBeVisible()
+  await expect.poll(() => page.locator(".engineering-drawing-primitive").count()).toBeGreaterThan(0)
+
+  // **导出必须跟着来源走**：文件里要出现只有空间文档才有的立方体投影来源。
+  const spatialDownload = page.waitForEvent("download")
+  await page.getByRole("button", { name: "导出 SVG", exact: true }).click()
+  const spatialSvg = await readFile(await (await spatialDownload).path(), "utf8")
+  expect((spatialSvg.match(/data-source-id=/g) ?? []).length).toBeGreaterThan(0)
+  expect(spatialSvg).toMatch(/data-source-id="(cube|point3|line3|polyhedron3)[^"]*"/)
+})
+
 test("supports keyboard selection, command entry, cancellation and inspector tabs", async ({ page }) => {
   await page.goto("/")
   await page.locator('input[type="file"]').setInputFiles("e2e/fixtures/cad-point.mgeo")

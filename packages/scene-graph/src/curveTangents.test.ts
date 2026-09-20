@@ -424,8 +424,13 @@ describe("the new fields survive the archive format", () => {
     expect(slid.slope).toBeCloseTo(5, 6)
 
     // 锚定的切线上写 `x` 会被重算覆盖：补丁本身合法，但几何不会跟着走。
+    //
+    // 契约变更（Task 0.3）：既然**重算把这次补丁完全抹掉了**，它就不算一次语义改动，
+    // `changed` 必须是 `false`（以前无条件 `true`，于是撤销栈里会留下一个什么都没变的空步）。
+    // 注意它**不是错误**：补丁被接受了，只是结论是"没有变化"。
     const anchored = commitPatch(moved.document, { op: "updatePrimitive", id: "tan-anchored", patch: { x: 2.5 } })
-    expect(anchored.changed).toBe(true)
+    expect(anchored.changed).toBe(false)
+    expect((anchored as { error?: string }).error).toBeUndefined()
     const still = find(anchored.document, "tan-anchored")
     if (still.type !== "tangent") throw new Error("expected a tangent")
     expect(still.point.x).toBeCloseTo(0, 9)

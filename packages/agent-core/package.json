@@ -1,0 +1,16 @@
+{
+  "name": "@draw/agent-core",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@draw/dsl": "0.1.0",
+    "@draw/scene-graph": "0.1.0"
+  }
+}

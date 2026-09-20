@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest"
 
+import { createEmptyDocument } from "@draw/dsl"
+
 import { createDemoDocument } from "./demoDocument"
 import { MAX_HISTORY_ENTRIES, useSceneStore, withDocumentLayout } from "./store"
 
@@ -73,5 +75,37 @@ describe("scene store document replacement", () => {
 
     expect(useSceneStore.getState().history).toHaveLength(0)
     expect(useSceneStore.getState().document.parameters.slope?.value).toBeCloseTo(0.15)
+  })
+})
+
+/** Task 0.4：整批提交必须**只占一步撤销**，且批量删除与顺序无关。 */
+describe("batch transactions", () => {
+  it("keeps one undo step for a whole batch and deletes a union in any order", () => {
+    const document = createEmptyDocument("conics")
+    useSceneStore.setState({ document, workspaceDocuments: { [document.workspace]: document }, history: [], future: [], error: null })
+
+    useSceneStore.getState().applyBatch([
+      { op: "addPrimitive", primitive: { id: "point-1", type: "point", x: 0, y: 0 } },
+      { op: "addPrimitive", primitive: { id: "point-2", type: "point", x: 1, y: 0 } }
+    ])
+    // 整批 → 历史只多一步（以前循环 apply 会压两步）
+    expect(useSceneStore.getState().history).toHaveLength(1)
+    expect(useSceneStore.getState().document.primitives).toHaveLength(2)
+
+    useSceneStore.getState().applyBatch([{ op: "deleteObjects", ids: ["point-2", "point-1"] }])
+    expect(useSceneStore.getState().document.primitives).toHaveLength(0)
+
+    useSceneStore.getState().undo()
+    expect(useSceneStore.getState().document.primitives).toHaveLength(2)
+  })
+
+  it("leaves history untouched when the batch changes nothing", () => {
+    const document = createEmptyDocument("conics")
+    const withPoint = { ...document, primitives: [{ id: "point-1", type: "point" as const, x: 0, y: 0 }] }
+    useSceneStore.setState({ document: withPoint, workspaceDocuments: { [withPoint.workspace]: withPoint }, history: [], future: [], error: null })
+
+    // 本来就是可见的：整批没有语义变化，不该占一步撤销。
+    useSceneStore.getState().applyBatch([{ op: "toggleVisibility", id: "point-1", visible: true }])
+    expect(useSceneStore.getState().history).toHaveLength(0)
   })
 })

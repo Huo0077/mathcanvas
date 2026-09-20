@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 
 import { decodeMgeo, encodeMgeo, isSampledPrimitiveType, type AnnotationFeature, type DrawingSheetSpec, type EngineeringAnnotationKind, type Measurement3Metric, type PrimitiveSpec, type Vector3, type Workspace } from "@draw/dsl"
 import { buildSolidTemplate, createMeasurement3, entityResolverFor, evaluatePlanarMeasurement, host3FromPrimitive, selectPrimitivesInBox, type BoxSelectionMode, type PlanarMetric } from "@draw/geometry-kernel"
-import { deletionTargets, planeThroughPoints, sectionMaterialization, sectionPivot, sectionPlaneThroughSource, sectionSourceVertices, solidVolumeHostFor, validateDeletion, validatePatch } from "@draw/scene-graph"
+import { compileActions, createIdAllocator, planeThroughPoints, sectionMaterialization, sectionPivot, sectionPlaneThroughSource, sectionSourceVertices, solidVolumeHostFor, validateDeletion, validatePatch } from "@draw/scene-graph"
 import type { Alignment } from "@draw/scene-graph"
 
 import { AlgebraView } from "./components/AlgebraView"
@@ -28,6 +28,8 @@ import { PaperTexture } from "./components/PaperTexture"
 import { ModuleRail } from "./components/ModuleRail"
 import { WorkspaceHeader } from "./components/WorkspaceHeader"
 import { AgentWorkspace } from "./components/agent/AgentWorkspace"
+import { agentRunner } from "./agent/agentRunner"
+import { useAgentStore } from "./agentStore"
 import { DEFAULT_APP_MODULE, type AppModuleId } from "./shellModules"
 import { resolveIntersectionPreview } from "./intersectionPreview3d"
 import { ThreeSceneView } from "./threeScene"
@@ -38,6 +40,7 @@ import { resolveGeometryEdit, type GeometryEditRequest } from "./draftEditing"
 import { exportCsv, exportSvg } from "./persistence/exporters"
 import { exportEngineeringDxf, exportEngineeringPdf, exportEngineeringSvg, selectExportableDrawings } from "./persistence/engineeringExporters"
 import { defaultDraftView, drawingViewLabels, resolveProjectedDrawing } from "./projectionVisuals"
+import { resolveProjectionSource, resolveProjectionSourceEntity } from "./projectionSource"
 import { migrateLegacySolids } from "./solidTemplates"
 import { pointHostOptions, parsePointHostValue } from "./pointHostOptions"
 import { ROUND_SOLID_SEGMENTS } from "./solidDefaults"
@@ -47,6 +50,7 @@ import { computeIntersectionPreviews3d, type IntersectionPreview3dCache } from "
 import { toScenePreview, toSectionScenePreview, toSelectionLineScenePreview, type ThreeScenePreview } from "./threeScenePreview"
 import { dynamicPointPaths, isDynamicPointPath } from "./dynamicPointPaths"
 import { defaultTangentAnchor, isTangentSource } from "./curveTangents"
+import { CAPABILITY_REGISTRY_REVISION } from "@draw/agent-core"
 import { useSceneStore } from "./store"
 
 type CreationMode = "line" | "segment" | "ray" | "polyline" | "circle" | "arc" | null
@@ -137,6 +141,8 @@ function historyShortcut(event: KeyboardEvent): "undo" | "redo" | null {
 export function App() {
   const document = useSceneStore((state) => state.document)
   const apply = useSceneStore((state) => state.apply)
+  // 整批提交（Task 0.4）：批量删除走它，整批只占一步撤销。
+  const applyBatch = useSceneStore((state) => state.applyBatch)
   const undo = useSceneStore((state) => state.undo)
   const redo = useSceneStore((state) => state.redo)
   const switchWorkspace = useSceneStore((state) => state.switchWorkspace)
@@ -238,7 +244,17 @@ export function App() {
   const slope = document.parameters.slope
   const slopeLine = useMemo(() => document.primitives.find((primitive) => primitive.id === "line-slope"), [document.primitives])
   // Projection geometry is derived once per revision and shared by the four viewports and every exporter.
-  const engineeringDrawings = useMemo(() => engineeringDrawingViews.map((view) => resolveProjectedDrawing(document, view)), [document])
+  /**
+   * **显示与导出必须解析同一个来源**（Task 0.6 Step 3，计划点名的"display and export use the
+   * same scoped source context"）。
+   *
+   * 实测到的真实缺陷：`EngineeringDrawingView` 按 `projectionSource` 选文档
+   *（`geometry3d` → 空间文档，否则本图纸），而这里过去**永远**用 `document`。
+   * 于是切到"投影立体几何"之后，四个视图显示的是立方体，**导出的 SVG/DXF/PDF 里却是本图纸
+   * 那份（往往是空的）内容** —— 用户拿到一个和眼前不一样的模型。
+   */
+  const projectionSourceDocument = resolveProjectionSource(projectionSource, document, workspaceDocuments.geometry3d ?? null)
+  const engineeringDrawings = useMemo(() => engineeringDrawingViews.map((view) => resolveProjectedDrawing(projectionSourceDocument, view)), [projectionSourceDocument])
   // Hidden sheet views are dropped from exports instead of being replaced with fabricated geometry.
   const exportableEngineeringDrawings = useMemo(() => selectExportableDrawings(engineeringDrawings, document.drawingViews ?? []), [engineeringDrawings, document.drawingViews])
   const cadDiagnosticCount = engineeringDrawings.reduce((total, drawing) => total + drawing.diagnostics.length, 0)
@@ -384,6 +400,36 @@ export function App() {
   const handleCanvasCreationClick = (coordinate: { x: number; y: number }) => {
     handleCanvasClick(coordinate)
   }
+
+  /**
+   * **跑一轮真实运行**（Task 2.5 Step 2）。
+   *
+   * 逻辑全在 `agentRunner` 里（它持有运行时，因为"确认并提交"发生在运行之后，
+   * 那时必须还能拿到同一份草稿）。这里只做转发 —— App 不该再有一份自己的运行实现，
+   * 否则界面行为与 `agentRunner` 的测试会慢慢分叉。
+   */
+  const runAgentPrompt = async (prompt: string, promptMessageId: string) => {
+    await agentRunner.run(prompt, promptMessageId)
+  }
+
+  /**
+   * 重试：用**上一句话**再跑一轮。
+   *
+   * 取的是那条失败消息之前最近的一条用户消息 —— 判据与自动运行完全一样（都在消息列表里找），
+   * 所以不会出现"重试了另一句话"的情况。找不到就什么都不做（而不是编一个空 prompt 去跑）。
+   */
+  const retryLastPrompt = () => {
+    const messages = useAgentStore.getState().activeConversation?.messages ?? []
+    const lastUser = [...messages].reverse().find((message) => message.role === "user")
+    if (!lastUser) return
+    // 新的一轮要有自己的用户消息与在途助手消息，所以走 `sendPrompt` 再交给运行器。
+    useAgentStore.getState().sendPrompt(lastUser.text)
+    const after = useAgentStore.getState()
+    const userMessage = [...(after.activeConversation?.messages ?? [])].reverse().find((message) => message.role === "user")
+    if (!userMessage) return
+    void agentRunner.retry(userMessage.text, userMessage.id)
+  }
+
   const handleCanvasDoubleClick = (coordinate: { x: number; y: number }) => {
     if (!creationStep || creationStep.mode !== "polyline") return
     const points = creationStep.points ?? []
@@ -1191,22 +1237,35 @@ export function App() {
   const deleteSelected = () => {
     if (!selectedIds.length) return
     /**
-     * **并集校验**：一次选中要删的全部 id 一起算作"自己人"。
-     * 逐个 id 校验会让"点 + 依赖它的线"互相挡——实测两个都删不掉。
+     * **一次批量删除**（Task 0.4）：整批当作并集提交，所以与选择顺序无关，
+     * 而且只占**一步撤销**。以前是逐个 `apply({op:"deleteObject"})` ——
+     * 虽然已经用 `validateDeletion` 做过并集校验，但 N 个对象会留下 N 步撤销。
+     *
+     * `validateDeletion` 仍然先行：它给出的是**用户可读**的拒绝理由
+     *（"对象被另一个对象引用"），而事务的 `errors` 是给 run 记录看的实现细节。
      */
     const validation = validateDeletion(document, selectedIds)
     if (!validation.valid) {
       setFileError(validation.errors.join(", "))
       return
     }
-    // A solid and its generated topology are one object, so a selection covering both must delete it once.
-    const removed = new Set<string>()
-    for (const id of [...selectedIds].reverse()) {
-      if (removed.has(id)) continue
-      for (const target of deletionTargets(document, id)) removed.add(target)
-      apply({ op: "deleteObject", id })
+    /**
+     * 手工按钮与 Agent 走**同一份动作编译器**（设计规格 §7.4：不复制一份 Agent 专用语义）。
+     * `validateDeletion` 仍然先行，因为它给的是**用户可读**的拒绝理由（"对象被另一个对象引用"）；
+     * 编译器的诊断是给 run 记录与模型修复路径看的，措辞面向执行而非面向人。
+     */
+    const compiled = compileActions(document, [{ actionId: "object.delete_many", actionKey: "manual-delete", factIds: [], inputs: { targets: [...selectedIds] } }], {
+      targetDocument: document,
+      targetWorkspace: document.workspace,
+      orderedSelection: [...selectedIds],
+      capabilityRevision: CAPABILITY_REGISTRY_REVISION,
+      idAllocator: createIdAllocator()
+    })
+    if (compiled.diagnostics.length > 0) {
+      setFileError(compiled.diagnostics.map((entry) => entry.message).join("；"))
+      return
     }
-    // 中间失败不再被静默吞掉：一次删除里的最后一次错误由 `operationError` 渲染出来。
+    applyBatch(compiled.operations)
     setSelectedIds([])
     setFileError(null)
   }
@@ -1502,18 +1561,27 @@ export function App() {
   const draftViewSpec = defaultDraftView(currentSheet, drawingViews)
   const activeLayerName = cadActiveLayer?.name ?? "几何"
   const activeSheetScale = currentSheet?.scale ?? 1
-  const sourceLabels = Object.fromEntries(document.primitives.map((primitive) => [primitive.id, primitive.label ?? primitive.id]))
+  /**
+   * 来源标签与检查器的"投影来源"解析**必须在两份文档里找**（Task 0.6 Step 3 后半）。
+   * 过去两者都只查布局文档，于是切到"投影立体几何"之后，看得见的空间对象会被标成"来源已删除"。
+   * 同 id 同时存在于两份文档时，以**当前显示的那一份**（`projectionSourceDocument`）为准。
+   */
+  /** 引用稳定：它是 `cadInspectorSources` 的依赖，每次渲染新建对象会让那个 memo 白做。 */
+  const sourceDocuments = useMemo(
+    () => ({ layoutDocument: document, spatialDocument: workspaceDocuments.geometry3d ?? null }),
+    [document, workspaceDocuments.geometry3d]
+  )
 
   // Sources referenced by engineering annotations and drawing views; deleted ones stay visible as diagnostics.
   const cadInspectorSources: InspectorSource[] = useMemo(() => {
     const ids = new Set<string>()
     for (const annotation of document.engineeringAnnotations ?? []) for (const id of annotation.sourceIds) ids.add(id)
     for (const view of document.drawingViews ?? []) for (const id of view.sourceIds ?? []) ids.add(id)
-    return [...ids].map((id) => {
-      const primitive = document.primitives.find((candidate) => candidate.id === id)
-      return { id, label: primitive?.label ?? id, missing: !primitive }
-    })
-  }, [document])
+    return [...ids].map((id) => ({ id, ...resolveProjectionSourceEntity(id, projectionSourceDocument, sourceDocuments) }))
+  }, [document, projectionSourceDocument, sourceDocuments])
+
+  /** 图纸树用的标签表：与检查器同一批 id、同一套解析，避免两处各写一份查找。 */
+  const sourceLabels = useMemo(() => Object.fromEntries(cadInspectorSources.map((source) => [source.id, source.label])), [cadInspectorSources])
 
   const activeViewLabel = activeViewId ? drawingViewLabels[drawingViews.find((view) => view.id === activeViewId)?.kind ?? "front"] : null
   const cadInspector = <EngineeringInspector
@@ -1648,7 +1716,14 @@ export function App() {
     </div> : <div className="app-module" data-module="agent">
       {/* 模块 B 不含任何从几何文档派生的 UI（Ribbon / 画布 / 检查器），所以文档一步都不订阅，
           切进 Agent 区不会因为画布重渲染而卡一下。 */}
-      <AgentWorkspace onBackToWorkspace={() => setActiveModule(DEFAULT_APP_MODULE)} />
+      <AgentWorkspace
+        onBackToWorkspace={() => setActiveModule(DEFAULT_APP_MODULE)}
+        onRun={runAgentPrompt}
+        onConfirm={() => { agentRunner.confirm() }}
+        onDiscard={() => { agentRunner.discard() }}
+        onStop={() => { agentRunner.stop() }}
+        onRetry={retryLastPrompt}
+      />
       {(fileError || operationError) && <div role="alert" className="footer-note">{fileError ?? operationError}</div>}
     </div>}
     <input ref={fileInputRef} hidden aria-label="加载 .mgeo 文件" type="file" accept=".mgeo,application/json" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; file.text().then(load).catch(() => setFileError("无法读取 .mgeo 文件")); event.target.value = "" }} />

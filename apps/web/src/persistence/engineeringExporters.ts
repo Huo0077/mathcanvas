@@ -1,5 +1,6 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib"
 
+import { winAnsiSafe as agentWinAnsiSafe } from "@draw/agent-core"
 import type { DrawingViewSpec } from "@draw/dsl"
 
 import type { ProjectedAnnotation, ProjectedDrawing, ProjectedPrimitive } from "../projectionVisuals"
@@ -182,18 +183,13 @@ function drawPdfPrimitive(page: Awaited<ReturnType<PDFDocument["addPage"]>>, pri
  * PDF 的标准字体（Helvetica）只有 WinAnsi 字符集：中文注释、以及**应用自己生成的中文诊断**，
  * 都会让 `drawText` 抛编码错误、整个 PDF 导出失败（实测很常见——只要图纸里有一条诊断就导不出来）。
  *
- * 真正的 CJK 需要内嵌字体（体积与许可证都要考虑），当前先把不可编码的字符替换成 `?`：
+ * 真正的 CJK 需要内嵌字体（体积与许可证都要考虑），当前先把不可编码的字符替换成 `？`：
  * 导出成功、内容如实标出"有字打不出来"，比整份文件导不出来强。
+ *
+ * **规则本身已移到 `@draw/agent-core`**：导出预检（Agent 侧提出导出建议时）也要报同一条损失，
+ * 两处各写一份必然分叉。这里保留同名导出只是为了不动 PDF 那几处调用点。
  */
-export function winAnsiSafe(text: string): string {
-  let safe = ""
-  for (const character of text) {
-    const code = character.codePointAt(0)!
-    // 可打印 ASCII + Latin-1 补充区是 WinAnsi 的子集；C1 控制区与所有非拉丁字符一律替换。
-    safe += (code >= 0x20 && code <= 0x7e) || (code >= 0xa0 && code <= 0xff) ? character : "?"
-  }
-  return safe
-}
+export const winAnsiSafe = agentWinAnsiSafe
 
 export async function exportEngineeringPdf(drawings: ProjectedDrawing[]): Promise<Uint8Array> {
   const pdf = await PDFDocument.create()

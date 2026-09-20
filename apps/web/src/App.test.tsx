@@ -7,7 +7,7 @@ import { recomputeDerivedObjects } from "@draw/scene-graph"
 
 import { App } from "./App"
 import { createDemoDocument } from "./demoDocument"
-import { useSceneStore } from "./store"
+import { useSceneStore, withDocumentLayout } from "./store"
 
 /** Algebra View rows are the closest user-facing handle on a document object; scope by row label to stay unambiguous. */
 function algebraRow(label: string): HTMLElement {
@@ -109,6 +109,47 @@ describe("MathCanvas workbench", () => {
     expect(screen.getByRole("region", { name: "工程状态栏" }).textContent).toContain("工程制图根据当前文档的 3D 点、棱和面显示四个视图。")
 
     expect((screen.getByRole("button", { name: "导出 SVG" }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  /**
+   * Task 0.6 Step 3 的后半：**来源解析必须在两份文档里找**。
+   *
+   * 真实缺陷：工程制图的来源标签与检查器"投影来源"列表过去**只查布局文档**
+   *（`sourceLabels` / `cadInspectorSources` 都基于 `document.primitives`），
+   * 于是切到"投影立体几何"之后，明明看得见的空间对象会被标成**"来源已删除"**。
+   * 源 id 落在哪一份文档由来源上下文决定，不能假定它就是布局文档。
+   */
+  it("resolves engineering sources in the projected document instead of calling them deleted", () => {
+    const layout = withDocumentLayout({
+      ...createEmptyDocument("cad"),
+      // 图纸视图记录来源 id —— 这在"先建空间模型、再在图纸里标注"的正常流程里必然发生。
+      drawingViews: [{ id: "view-front", kind: "front" as const, x: 0, y: 0, width: 100, height: 80, scale: 1, visible: true, showProjectionLines: false, sourceIds: ["point3-1"] }]
+    })
+    const spatial = {
+      ...createEmptyDocument("geometry3d"),
+      primitives: [{ id: "point3-1", type: "point3" as const, position: { x: 2, y: 3, z: 4 }, label: "空间点 A" }]
+    }
+    useSceneStore.setState({
+      document: layout,
+      workspaceDocuments: { cad: layout, geometry3d: spatial },
+      history: [],
+      future: [],
+      error: null,
+      treeTab: "drawings",
+      expandedIds: ["sheet-1"],
+      filterQuery: ""
+    })
+    render(<App />)
+
+    // 布局文档里没有这个 id —— 缺陷状态下这里显示的是裸 id「来源 point3-1」。
+    expect(screen.getByRole("region", { name: "模型与图纸树" }).textContent).toContain("空间点 A")
+
+    // 切到"立体几何"来源之后，检查器必须仍认识这个来源，而不是宣称它被删了。
+    fireEvent.click(screen.getByRole("button", { name: "改为投影立体几何的模型" }))
+    fireEvent.click(screen.getByRole("tab", { name: "数据" }))
+    const sources = screen.getByRole("region", { name: "工程属性检查器" }).querySelector(".inspector-sources")
+    expect(sources?.textContent).toContain("空间点 A")
+    expect(sources?.querySelector('[data-source-id="point3-1"]')?.getAttribute("data-missing")).toBe("false")
   })
 
   it("routes CAD source selection back through the shared application state", () => {

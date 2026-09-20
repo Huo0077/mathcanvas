@@ -1,3 +1,4 @@
+import { DERIVED_PRIMITIVE_TYPES } from "@draw/agent-core"
 import type { Coordinate, PrimitiveSpec } from "@draw/dsl"
 import type { PrimitiveUpdatePatch } from "@draw/scene-graph"
 
@@ -37,7 +38,9 @@ export interface DragTangentTarget {
 }
 
 // 连接（connection）不含自己的坐标，完全由两个端点定义：拖它没有意义，要拖的是端点。
-const derivedTypes = new Set(["intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection", "intersectionSet", "connection"])
+// 清单本身放在 `derivedPrimitives.ts`：草稿预览要按同一份判据数"有多少个我改不了的对象"，
+// 两处各写一份一定会分叉。
+const derivedTypes = DERIVED_PRIMITIVE_TYPES
 
 function distance(first: { x: number; y: number }, second: { x: number; y: number }): number {
   return Math.hypot(first.x - second.x, first.y - second.y)

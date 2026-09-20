@@ -225,6 +225,42 @@
 .agent-send:hover:not(:disabled) { border-color: var(--color-accent-strong); background: var(--color-accent-strong); }
 .agent-send:disabled { border-color: var(--agent-line); background: var(--agent-field); color: var(--agent-faint); cursor: not-allowed; }
 
+/* ---------- 草稿预览（Task 0.8 Step 4） ---------- */
+
+/* 这块面板是"确认前的最后一道说明"，所以它比普通消息更醒目：
+   顶部一条强调色，把"还没有写进文档"这件事说在最前面。 */
+.agent-draft-preview {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--agent-line);
+  border-top: 2px solid var(--color-accent);
+  border-radius: var(--radius-md);
+  background: var(--agent-panel);
+}
+.agent-draft-head { display: grid; gap: 2px; }
+.agent-draft-head h3 { margin: 0; color: var(--color-ink); font-size: 0.9rem; font-weight: 700; }
+.agent-draft-scale { margin: 0; color: var(--agent-muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+
+/* 计数横排：三四个短数字竖排会白白占掉一屏高度。 */
+.agent-draft-counts { display: flex; flex-wrap: wrap; gap: var(--space-3); margin: 0; }
+.agent-draft-counts > div { display: grid; gap: 1px; }
+.agent-draft-counts dt { color: var(--agent-faint); font-size: 0.68rem; }
+.agent-draft-counts dd { margin: 0; color: var(--color-ink); font-size: 0.78rem; font-weight: 650; font-variant-numeric: tabular-nums; }
+
+.agent-draft-preview h4 { margin: 0 0 var(--space-1); color: var(--agent-muted); font-size: 0.72rem; font-weight: 650; }
+.agent-draft-preview ul { display: grid; gap: 2px; margin: 0; padding-left: 1.1em; color: var(--color-ink); font-size: 0.78rem; line-height: 1.6; }
+/* 近似与省略是"不利信息"，用暖色提醒而不是灰掉 —— 灰掉等于藏起来。 */
+.agent-draft-approximation li, .agent-draft-omissions li { color: var(--color-warning); }
+
+.agent-draft-undo { margin: 0; padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); background: var(--agent-field); color: var(--agent-muted); font-size: 0.75rem; }
+.agent-draft-actions { display: flex; gap: var(--space-2); justify-content: flex-end; }
+.agent-draft-confirm, .agent-draft-cancel { padding: var(--space-2) var(--space-4); border: 1px solid var(--agent-line); border-radius: 999px; font-size: 0.78rem; font-weight: 650; cursor: pointer; }
+.agent-draft-confirm { border-color: var(--color-accent); background: var(--color-accent); color: #fff; }
+.agent-draft-confirm:hover { border-color: var(--color-accent-strong); background: var(--color-accent-strong); }
+.agent-draft-cancel { background: var(--agent-panel); color: var(--agent-muted); }
+.agent-draft-cancel:hover { border-color: var(--color-accent); color: var(--color-accent-strong); }
+
 /* ---------- 窄屏 ---------- */
 
 @media (max-width: 1024px) {

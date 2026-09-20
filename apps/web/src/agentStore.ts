@@ -1,5 +1,7 @@
 import { create } from "zustand"
 
+import type { DraftObjectCounts } from "@draw/agent-core"
+
 import { deriveConversationTitle } from "./agentTranscript"
 
 /**
@@ -12,6 +14,46 @@ import { deriveConversationTitle } from "./agentTranscript"
 
 export type AgentMessageRole = "user" | "assistant"
 
+/**
+ * 运行轨迹里的一条（**给用户看的**简短摘要）。
+ *
+ * 刻意**不是** `RunEvent`：那个类型来自 `@draw/agent-core`，带九个标识与三方版本，是账本用的；
+ * 界面只要"阶段 + 一句人话 + 状态"。两者分开，界面就不会因为账本加字段而跟着改。
+ */
+export interface AgentTraceEntry {
+  phase: string
+  status: "ok" | "warning" | "error"
+  summary: string
+  at: number
+}
+
+/**
+ * 草稿在界面上的**视图**。
+ *
+ * 这里**只有**标识与计数 —— **没有候选文档、没有操作列表**。
+ * 草稿的候选文档只存在于宿主侧的 `DraftStore` 里，界面拿到的是"将要发生什么"的说明。
+ * 把候选文档放进 store 会有两个后果：① 它会被持久化进 localStorage（用户文档的副本出现在聊天记录里）；
+ * ② 界面就成了第二份真相。有一条用例专门断言存下来的消息里**没有**文档字段。
+ */
+export interface AgentDraftView {
+  draftId: string
+  draftVersion: number
+  previewHash: string
+  stageCount: number
+  /** 确认之后整批只占一步撤销（计划要求的"exact one-undo statement"）。 */
+  undoesInOneStep: boolean
+  /** 候选文档的对象计数（**由宿主侧从真实文档算出**，界面不自己估）。 */
+  counts?: DraftObjectCounts
+  /** 基础文档的对象计数，用来显示"这次会多出/少掉多少"。 */
+  baseCounts?: DraftObjectCounts
+}
+
+/** 提交回执：成功与否、有没有真的改动、失败原因。 */
+export interface AgentCommitView {
+  status: "committed" | "no_change" | "failed"
+  detail?: string
+}
+
 export interface AgentMessage {
   id: string
   role: AgentMessageRole
@@ -19,6 +61,16 @@ export interface AgentMessage {
   createdAt: number
   /** 等待回复中的助手消息：界面据此显示"思考中"，而不是一条空气泡。 */
   pending?: boolean
+  /** 这条消息对应的运行 id（用户消息与它的助手回复共用，便于按 runId 订阅）。 */
+  runId?: string
+  /** 运行轨迹：按到达顺序追加，界面据此显示阶段进度。 */
+  trace?: AgentTraceEntry[]
+  /** 已暂存的草稿（**只是视图**，见 `AgentDraftView`）。 */
+  draft?: AgentDraftView
+  /** 提交结果。 */
+  commit?: AgentCommitView
+  /** 失败原因（人话），供界面显示可执行的下一步。 */
+  failure?: { code: string; message: string; retryable: boolean }
 }
 
 export interface AgentConversation {
@@ -46,6 +98,26 @@ export function createAgentConversation(title = NEW_CONVERSATION_TITLE): AgentCo
   return { id: nextId("conversation"), title, createdAt: now, updatedAt: now, messages: [] }
 }
 
+/**
+ * 对**在途助手消息**做一次不可变更新。
+ *
+ * 没有在途消息时**什么都不做**：迟到的运行事件不该凭空造出一条消息
+ *（那正是"停了之后界面又冒出一段"这类 bug 的来源）。
+ */
+function updatePending(
+  get: () => AgentState,
+  set: (partial: Partial<AgentState>) => void,
+  update: (message: AgentMessage) => AgentMessage
+): void {
+  const pendingId = get().pendingReplyId
+  if (!pendingId) return
+  const conversations = get().conversations.map((conversation) => conversation.messages.some((message) => message.id === pendingId)
+    ? { ...conversation, updatedAt: Date.now(), messages: conversation.messages.map((message) => (message.id === pendingId ? update(message) : message)) }
+    : conversation)
+  persist(conversations)
+  set({ conversations, activeConversation: resolveActive(conversations, get().activeConversationId) })
+}
+
 interface AgentState {
   conversations: AgentConversation[]
   /** `null` = 跟随最近一次改动的那条对话。 */
@@ -58,11 +130,18 @@ interface AgentState {
   deleteConversation: (id: string) => void
   sendPrompt: (prompt: string) => void
   resolvePendingReply: (text: string) => AgentMessage | undefined
+  /** 记一条运行轨迹（追加，不替换）。 */
+  recordRunEvent: (entry: AgentTraceEntry) => void
+  /** 记下已暂存的草稿**视图**。 */
+  recordDraft: (draft: AgentDraftView) => void
+  /** 记下提交结果；`committed` / `no_change` 都算结束。 */
+  recordReceipt: (receipt: AgentCommitView) => void
+  /** 运行失败：保留原因与"能不能重试"，而不是给一条空回复。 */
+  failPendingReply: (failure: { code: string; message: string; retryable: boolean }) => void
   clearAll: () => void
 }
 
-function persist(conversations: AgentConversation[]): void {
-  if (typeof localStorage === "undefined") return
+function persist(conversations: AgentConversation[]): void {  if (typeof localStorage === "undefined") return
   // 与 `draftStorage` 同一口径：配额溢出 / 隐私模式下存不进去，也不能让点击崩掉。
   try {
     localStorage.setItem(AGENT_STORAGE_KEY, JSON.stringify(conversations))
@@ -176,6 +255,37 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     persist(conversations)
     set({ conversations, activeConversation: resolveActive(conversations, get().activeConversationId), pendingReplyId: null })
     return reply
+  },
+  /**
+   * 轨迹 / 草稿 / 回执三类更新共用一个内部实现：它们都是"改**那条在途助手消息**"。
+   *
+   * 抽出来不是为了少写几行，而是为了让三条规则只有一处：
+   * ① 没有在途消息时**什么都不做**（不要凭空造一条消息）；
+   * ② 终态（收到回执 / 失败）之后 `pendingReplyId` 清空，因此**迟到的事件会被丢弃** ——
+   *    这正是计划 Step 1 点名的 "late response" 场景；
+   * ③ 每次都持久化。
+   */
+  recordRunEvent: (entry) => updatePending(get, set, (message) => message.pending
+    ? { ...message, trace: [...(message.trace ?? []), entry] }
+    : message),
+  recordDraft: (draft) => updatePending(get, set, (message) => message.pending ? { ...message, draft, pending: false } : message),
+  recordReceipt: (receipt) => {
+    const pendingId = get().pendingReplyId
+    if (!pendingId) return
+    const conversations = get().conversations.map((conversation) => conversation.messages.some((message) => message.id === pendingId)
+      ? { ...conversation, updatedAt: Date.now(), messages: conversation.messages.map((message) => (message.id === pendingId ? { ...message, pending: false, commit: receipt, text: receipt.status === "committed" ? "已按确认提交。" : receipt.status === "no_change" ? "这次没有需要改动的地方。" : "" } : message)) }
+      : conversation)
+    persist(conversations)
+    set({ conversations, activeConversation: resolveActive(conversations, get().activeConversationId), pendingReplyId: null })
+  },
+  failPendingReply: (failure) => {
+    const pendingId = get().pendingReplyId
+    if (!pendingId) return
+    const conversations = get().conversations.map((conversation) => conversation.messages.some((message) => message.id === pendingId)
+      ? { ...conversation, updatedAt: Date.now(), messages: conversation.messages.map((message) => (message.id === pendingId ? { ...message, pending: false, failure, text: "" } : message)) }
+      : conversation)
+    persist(conversations)
+    set({ conversations, activeConversation: resolveActive(conversations, get().activeConversationId), pendingReplyId: null })
   },
   clearAll: () => {
     const conversation = createAgentConversation()

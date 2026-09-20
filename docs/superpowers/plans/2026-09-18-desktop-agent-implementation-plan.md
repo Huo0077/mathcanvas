@@ -71,9 +71,9 @@ Release gates (depends on every stage)
 - `CapabilityStatus = "available" | "unsupported" | "legacy_readonly" | "temporarily_unavailable"`.
 - `CapabilityDescriptor { id: string; status: CapabilityStatus; workspaces: Workspace[]; primitiveTypes: string[]; operationIds: string[]; preconditions: string[]; testIds: string[]; registryRevision: string }`.
 - `getCapabilityRegistry(environment): CapabilityRegistry` returns a deterministic, sorted registry.
-- The registry must map all 42 current primitive types and all 38 current `DomainOperation` variants to an available handler or an explicit blocked status.
+- The registry must map all 42 current primitive types and all 39 current `DomainOperation` variants to an available handler or an explicit blocked status.
 
-- [ ] **Step 1: Write the failing registry coverage test.** Assert the registry contains the 42 types from `packages/dsl/src/types.ts` and the 38 operation IDs from `packages/scene-graph/src/operations.ts`; assert every entry has status, workspace, preconditions, and at least one test ID.
+- [ ] **Step 1: Write the failing registry coverage test.** Assert the registry contains the 42 types from `packages/dsl/src/types.ts` and the 39 operation IDs from `packages/scene-graph/src/operations.ts`; assert every entry has status, workspace, preconditions, and at least one test ID.
 - [ ] **Step 2: Run the focused test.** Run `npm.cmd test -- packages/agent-core/src/capabilities.test.ts`; expect failure because the workspace and registry do not exist.
 - [ ] **Step 3: Add the package and registry implementation.** Build the registry from a checked-in descriptor table; do not infer availability from a model response or from a UI label.
 - [ ] **Step 4: Add blocked entries explicitly.** Mark `intersectionSolid` as legacy-readonly, 3D constraint solving as diagnosis-only, unsupported direct 3D SVG/PNG as unsupported, and any type without an action handler as temporarily unavailable.
@@ -164,7 +164,7 @@ Release gates (depends on every stage)
 - [ ] `npm.cmd test -- packages/agent-core packages/scene-graph` passes.
 - [ ] Runtime unknown operations are rejected; no-op commits do not increment revision.
 - [ ] Batch deletion is atomic and order independent; manual UI still has one-step undo.
-- [ ] A registry coverage test reports 42/42 primitive types and 38/38 operation variants mapped or explicitly blocked.
+- [ ] A registry coverage test reports 42/42 primitive types and 39/39 operation variants mapped or explicitly blocked.
 - [ ] No Agent or model network code has been added yet; only local deterministic contracts and shared action handlers exist.
 
 Stop here for review. Do not start Tauri or model work if any G0 condition fails.
@@ -172,6 +172,8 @@ Stop here for review. Do not start Tauri or model work if any G0 condition fails
 ## G0.5 — Source Context, Drafts, and Preview
 
 ### Task 0.6: Add scoped source contexts and CAD preflight
+
+> **状态（2026-09-19 复核）：Step 1–5 全部完成。** Step 1 的第二句（同名 ID 必须可区分）成立并已由 `sourceContext.ts` 落地；第一句（显示与导出源计数一致）**实测本来就一致**，如实记在进度文档里。Step 3 的来源传播以 `resolveProjectionSource` 收敛为唯一一处（同时修掉"显示是立方体、导出却是空图纸"这个真实缺陷），**来源解析**再以 `resolveProjectionSourceEntity` 收敛（修掉第二个真实缺陷：图纸树与检查器只查布局文档，把空间来源误报成"来源已删除"）。Step 5 的 App 级来源切换用例已补齐：`e2e/engineering-workbench.spec.ts` 的 `exports the switched projection source instead of the drawing's own document` —— 它**读回下载的 SVG** 断言图元来源，并已做过 RED 验证（把 `App.tsx` 的来源解析改回 `document` 后该用例失败，导出里 `data-source-id` 计数为 0 而画布仍显示立方体）。**仍差**：`SourceContext.viewId` 未参与解析；"选择"侧仍是裸 id 集合，两份文档同 id 时会同时高亮（与 `SourceContext` 的目标仍有差距，留待 G0.6 与草稿/句柄一起处理）。
 
 **Files**
 - Create: `packages/scene-graph/src/sourceContext.ts`, `packages/scene-graph/src/sourceContext.test.ts`
@@ -212,6 +214,12 @@ Stop here for review. Do not start Tauri or model work if any G0 condition fails
 
 ### Task 0.8: Add the HostBridge, worker message boundary, and consent record
 
+> **状态（2026-09-19 复核）：Step 1–3 完成，Step 4 组件层完成，Step 5 部分完成。**
+> - Step 1/2/3：`hostBridge.ts` 8 例（缺失/过期/已消费同意、预览过期、别的 run、合法确认各一条），另有 `pipeline.test.ts` 5 例把真 store 串进来。同意创建留在宿主/UI 侧，`commit` 不作为模型可见工具。
+> - Step 4：`components/agent/DraftPreview.tsx`（7 例）+ `agent/draftCounts.ts`（5 例）已实现并覆盖计划点名的那份清单。**但组件尚未挂进 `AgentWorkspace`** —— 接上真实的 preview/consent/commit 属于 Task 2.5 的范围（那里才有真实 `runId` 与草稿可预览）。
+> - Step 5：**部分**。`编辑真文档 → 草稿过期 → 不能覆盖新头` 这条路径已由 `pipeline.test.ts` 在 store 级端到端走通；浏览器里的取消/切换工作区/确认预览路径**仍未走**，因为预览面板还没有可点的宿主界面（属 Task 2.5）。
+> - **worker 边界已完成（2026-09-19 第十批）**：`workerContracts.ts`（12 例）逐字实现"五个信封字段 always"与"unknown kinds dropped and diagnosed"；`workerRuntime.ts`（5 例）承载可测规则；`geometry.worker.ts` / `agent.worker.ts` 只做接线。**两点如实标注**：① worker 目前**没有任何调用方**（真正的调用来自 Task 2.4）；② `agent.worker.ts` 只回 `agent.unavailable`，真正的协调器属 Task 2.1 —— 刻意不先写一个假循环，否则替换时还得先拆掉一套假的运行语义。
+
 **Files**
 - Create: `apps/web/src/agent/hostBridge.ts`, `apps/web/src/agent/hostBridge.test.ts`
 - Create: `apps/web/src/agent/agent.worker.ts`, `apps/web/src/agent/geometry.worker.ts`, `apps/web/src/agent/workerContracts.ts`
@@ -231,6 +239,10 @@ Stop here for review. Do not start Tauri or model work if any G0 condition fails
 
 ### G0.5 Gate
 
+> **状态（2026-09-19 复核）：四条 Gate 条件全部满足**，逐条证据见 `docs/project-progress.md` 的「G0.5 Gate 对账」（每条都有用例名与读数）。其中第 4 条的"不能由助手文本生成"是**结构性**保证而不是行为测试：`ConsentRecord` 全仓库只出现在 `hostBridge.ts` 与其测试里，`requestConsent` 需真实例且实例只由宿主代码产出，`@draw/agent-core` 依赖只有 `@draw/dsl` 与 `@draw/scene-graph`。
+>
+> **本阶段尚未交付完毕的部分**（Gate 通过 ≠ 阶段收尾）：`agent.worker.ts` / `geometry.worker.ts` 与 `DraftPreview.tsx` 仍未实现（依赖 G1 的 Tauri 运行时形态），因此 Task 0.8 Step 5 的"在 Playwright 里手工走一遍取消 / 编辑真文档 / 切工作区 / 确认预览"**只走完了 store 级的那条路径**，浏览器里还没有可点的预览面板。
+
 - [ ] A model-shaped action can only create an isolated draft.
 - [ ] Display and export use the same scoped source context.
 - [ ] A manual edit after preview makes the draft stale; it cannot overwrite the newer head.
@@ -239,6 +251,12 @@ Stop here for review. Do not start Tauri or model work if any G0 condition fails
 Stop here for review. The rest of the plan depends on these document and preview guarantees.
 
 ## G1 — Tauri Desktop, Providers, Secrets, and Persistence
+
+> **状态（2026-09-19 实测）：未开始 —— 环境缺 Rust 工具链。**
+> 本机实测：`rustc` / `cargo` / `rustup` **均不存在**（`C:\Users\73246\.cargo\bin\cargo.exe` 不存在、`C:\Program Files` 下无 Rust 目录、`PATH` 里没有 cargo/rust 项）；`node v24.15.0` / `npm 11.12.1` 可用；**WebView2 已装**（`153.0.4234.32`）；`winget` 可用。
+> 因此 G1 的六个任务（Tauri 外壳、SecretStore、provider 适配器、Rust 回环代理、SQLite 仓储）**全部无法执行**，连"先跑失败测试再实现"这条纪律都做不到（`cargo test` 根本跑不起来）。**这不是"暂时跳过"，而是缺前置条件**：计划 Execution Rules 第 4 条要求"at a gate, record command output and stop if a required condition fails"，所以这里如实停下并记录，而不是用 TypeScript 假装实现一遍 Rust 侧的边界。
+> **解除条件**：装好 Rust（`winget install Rustlang.Rustup` 或 rustup.rs 官方安装器）并确认 `cargo --version` 可执行。**我没有自动安装**：那是往用户机器上装整套工具链（数百 MB、需要 MSVC 生成工具），属于会影响用户环境的操作，应当由用户决定。
+> **在等待期间照计划继续 G2**：Task 2.1–2.3、2.6 是纯 TypeScript（`packages/agent-core`），只依赖 G0/G0.5 已完成的底座，不需要 Rust。Task 2.4/2.5 的 worker 接线与界面也不需要 Rust；只有"真实 provider 调用"要等 G1 的回环代理。
 
 ### Task 1.1: Scaffold the Tauri 2 desktop shell
 
@@ -377,6 +395,14 @@ Stop here for a Windows review and credential/security review before connecting 
 
 ### Task 2.1: Implement the coordinator state machine and run ledger
 
+> **状态（2026-09-19 完成）**：`runState.ts`（17 例）、`budget.ts`（10 例）、`coordinatorPorts.ts`、`coordinator.ts`（19 例）全部落地，Step 1–6 都有对应证据。计划 Step 1 点名的九个场景逐条有用例。**两处与计划原文的差异，如实记录**：
+> 1. 新增显式状态 **`answering`**：计划给的路径表里只读回答与草稿提交都会落到 `completed`，那样两种性质完全不同的运行会留下**同一条事件序列**，事后无法区分"回答完了"与"提交完了"。故只读路径改为 `planning → answering → completed`。
+> 2. `validating → committing` **不是**合法边：即使调用方已带 `confirmed`，也必须先经过 `awaiting_confirmation`。原因是确认状态是账本要留下的记录，跳过它就无法区分"用户确认过"与"调用方直接调了提交"。（我第一版写了这条捷径，被转移表当场拒绝。）
+>
+> **Step 4/5 的落点**：七个标识（`runId` / `promptMessageId` / `requestId` / `attemptId` / `toolCallId` / `draftVersion` / `handle`）在每条事件上都是**必填**；取消通过贯穿所有端口的 `AbortSignal` 传播，取消后不再发事件、终态 `record()` 丢弃迟到结果。
+>
+> **尚未接线（属后续任务）**：`ToolPort` 已定义但协调器还没调用（只读工具注册属 Task 2.2）；`CommitterPort` 的真实实现还没接到 G0.5 的 `HostBridge`（属 Task 2.4）；`agent.worker.ts` 还没接上协调器。
+
 **Files**
 - Create: `packages/agent-core/src/coordinator.ts`, `packages/agent-core/src/coordinator.test.ts`
 - Create: `packages/agent-core/src/runState.ts`, `packages/agent-core/src/runState.test.ts`
@@ -399,6 +425,17 @@ Stop here for a Windows review and credential/security review before connecting 
 
 ### Task 2.2: Implement context assembly, skills, and entity observation
 
+> **状态（2026-09-19，已完成）**：
+> - **Step 3（观察工具）已完成**：`sceneObservation.ts` + 14 例，覆盖 `scene.inspect` / `scene.search_entities` / `scene.describe_entities` / `scene.dependencies` 四个的能力面（`scene.measure` / `scene.check_relations` / `scene.capabilities` 仍是后面的事）。Step 1 点名的五件事（document scoping、duplicate labels、hidden tessellation omission、stale summary rejection、pagination）逐条有例。
+> - **前置缺陷已修（第四批）**：`schemas.ts` 的 `ACTIONS` 只登记 4 个动作而动作层有 20 个，导致**十几个合法动作从模型输出一律被拒**且报错为 `unknown_action`。现在传输层与动作层由**编译期双向守卫**钉住（`actionIds.ts` 的 `satisfies` + `Record<DraftActionId, true>`，运行期另有 5 例核对），登记表按 `actions/types.ts` 的真实形状重写，并明确区分"作用域引用"与"裸 id"两种引用语义。
+> - **Step 2（九个技能清单）已完成（第五批）**：`skills/manifest.ts` + `skills/catalog.ts`（11 例），九个清单各带 actionIds / limits / 成功案例 / 拒绝案例；`SkillCatalog.load` 做哈希校验、动作名存在性校验、修订号匹配与未注册 id 拒绝。清单是**纯声明式**内容，不含可执行片段。另加 `CAPABILITY_FOR_ACTION` 翻译表（注册表按 `DomainOperation` 编号、清单按 `family.verb`，两套名字必须显式对应，漏登记即编译失败）。
+> - **顺带修掉一个隐蔽缺陷（第五批）**：`sceneObservation` 自拼的内容指纹与句柄里的 `contentFingerprint` **永不相等**（过期检测恒真/恒假），而当时的测试复制了同一个错指纹所以是绿的 —— 一个自洽的错误。两边现在共用 `contentFingerprint`。
+> - **与计划的一处结构性差异（已落地）**：计划把观察工具写成"call real document/source services"，但 `@draw/agent-core` 的依赖只能是 `@draw/dsl` 与 `@draw/scene-graph`（G0 Gate 第 5 条），**不能依赖 app 侧服务**。所以观察是**注入的文档快照**（`SceneDocumentSnapshot[]`），工具只读它们；app 侧的接线属 Task 2.4。这与协调器的四组端口是同一手法。
+> - **顺带的判据去重**：派生素型清单与 `isTessellationPrimitive` 原先在 `apps/web`，现移到 `@draw/agent-core`（`derivedPrimitives.ts`），app 侧删除并从 agent-core 导入。理由是"画不画"与"给不给模型看"必须是同一判据，两处各写一份必然分叉。
+> - **Step 3（发布面）与 Step 4（上下文组装）已完成（第六批）**：`toolRegistry.ts`（12 例）与 `contextBuilder.ts`（12 例）。工具按阶段发布：观察/规划阶段**没有任何写入工具**；提交工具只在 `awaiting_confirmation` **且用户已确认**时出现。上下文把"绝不包含凭据 / 工具实现 / 思维链"落成**结构事实**（入参里就没有这些东西，用例钉住 `BuildContextInput` 的键），过期引用不进列表而进警告，上限只能收紧不能放宽。
+> - **一处分类修正（诚实记录）**：第一版把 `plan.set_plan`（只提议计划、产生隔离草稿）与 `draft.confirm_commit`（唯一写文档）一起归为"写入类"，于是"规划阶段不许有写入工具"把提议计划也挡掉了。修法是**把分类做细**（`none` / `propose_plan` / `stage_actions` / `commit`），而不是放宽纪律。
+> - **Task 2.2 至此完成**。**如实标注**：`toolRegistry` 只发布**描述符**，真正的执行（接到编译器与宿主）属 Task 2.4；`buildContext` 还没有调用方（协调器目前不构造上下文）。
+
 **Files**
 - Create: `packages/agent-core/src/contextBuilder.ts`, `contextBuilder.test.ts`
 - Create: `packages/agent-core/src/skills/manifest.ts`, `skills/catalog.ts`, `skills/*.json`
@@ -418,6 +455,12 @@ Stop here for a Windows review and credential/security review before connecting 
 - [ ] **Step 5: Run `npm.cmd test -- packages/agent-core/src/contextBuilder.test.ts packages/agent-core/src/toolRegistry.test.ts` and typecheck.
 
 ### Task 2.3: Implement model output channels and bounded recovery
+
+> **状态（2026-09-19，纯 TypeScript 部分完成）**：
+> - **解析器**：`outputParser.ts`（19 例）做成**两个可区分通道**，逐字实现 "permits one outer JSON fence removal, never arbitrary substring extraction or field repair"。散文里带 JSON 一律拒绝（**不抠取**）；数字以字符串到达、多一个字段一律拒绝（**不修补**）。修复提示带精确字段路径、按通道给格式建议、不回显模型自己的散文。
+> - **恢复策略**：`recovery.ts`（19 例）实现 `decide(error, state)`，逐字实现 "Retry only transport 429/5xx/connectivity within the shared budget; never retry auth, geometry, permission, or contradictory-fact failures automatically"。schema 修复**一次性**（Step 5），流损坏走 `refresh_context`，每条决定带理由与预算代价。
+> - **通道选择**：`modelGateway.ts`（12 例）实现 "Do not send a tool schema to providers that failed capability verification" 与 `CAPABILITY_UNAVAILABLE`。只依据**已验证**证据（`declared` 不算），视觉单独判（"a successful text ping must not mark vision verified"）。
+> - **如实标注（Step 3/6 未完成的部分）**：真正的 `ModelGateway.generate(...): AsyncIterable<ModelEvent>` 调用、`apps/web/src/services/modelClient.ts` 的修改、以及协议 fixture 集成测试**都依赖 G1 的回环代理与 provider 适配器**，而 G1 被 Rust 工具链缺失挡着。本轮交付的是**发请求之前**的通道与能力计划（纯函数、可测，且能挡住"不该发的 schema 发出去了"与"没验证视觉却带了图"）。**没有伪造 provider 调用**。
 
 **Files**
 - Create: `packages/agent-core/src/modelGateway.ts`, `modelGateway.test.ts`
@@ -440,6 +483,14 @@ Stop here for a Windows review and credential/security review before connecting 
 
 ### Task 2.4: Connect typed tools to draft compilation
 
+> **状态（2026-09-19，前置已完成，主体未开始）**：
+> - **前置（第八批）已完成**：`toolRegistry` 的 `ToolEnvironment.workspace` 与 `capabilityRevision` 原先**声明了却没用**（模型在平面几何里也能看到空间建模与制图工具）。现在 `ToolDescriptor.workspaces` 是**必需**字段并真正参与过滤，`describeEnvironmentMismatch()` 让修订号漂移可见。
+> - **主体仍未开始**：`tools/sceneTools.ts` / `draftTools.ts` / `interactionTools.ts`、把 `CommitterPort` 接到 G0.5 的 `DraftStore` + `HostBridge`、worker 的 diff/check/artifact 信封、以及 Step 1/2 点名的测试（有效动作只产生草稿与非法动作不改草稿版本、标签歧义、锁定拓扑、缺来源文档、不支持的动作）。
+> - **上半（第九批）已完成**：`tools/draftTools.ts`（12 例）与 `tools/sceneTools.ts`（8 例）。草稿工具只带**草稿工件**、绝不返回假的 `changed: true`（计划原句有用例钉住：六条路径的结果全部序列化后断言不含 `"changed"`），失败后草稿必须原样未动，旧版本号不合并、空批次不到存储层。场景工具做到**重名标签绝不猜**（`ambiguous_label` + 让模型去问用户），并把 `entity_not_found` 与 `document_not_in_context` 分开。
+> - **中段（第十批）已完成**：`tools/interactionTools.ts`（11 例）。三个工具（`ask_clarification` / `propose_view` / `propose_export`）**只提议不执行**；`propose_export` 刻意**消费**导出预检而不是自己算（再算一遍必然导致"建议与执行不一致"），干净 / 有损失需接受 / 被阻止三种结局分开，预检自身失败时如实报错而不编一个看起来能导出的提议，损失列表每类最多 6 条且截断有诊断。顺带把 `winAnsiSafe` 与 `collectWinAnsiLoss` 归一到 `agent-core/src/winAnsi.ts`（导出预检与 PDF 导出器原先各有一份，分叉症状是"界面说有损失、Agent 说没有"），并按原文去重。
+> - **仍未完成（覆盖上面那条"主体仍未开始"）**：① `CommitterPort` 接到 G0.5 的 `DraftStore` + `HostBridge`（app 侧接线）；② worker 的 diff/check/artifact 信封（Step 4）；③ Step 5 的 Playwright"只产生草稿不提交"场景；④ Step 2 的"锁定模板拓扑"要等宿主接线后由真实的 `validatePatch` 路径覆盖。
+> - **组装（第十二批）已完成**：`apps/web/src/agent/agentRuntime.ts`（7 例）把协调器、草稿存储、宿主桥、提交适配器、观察层、工具、导出预检装到一起。**它的测试一个替身都不用**（只有模型调用是脚本化的，因为真实调用被 G1 的 Rust 缺失挡着），并断言了三条关键性质：规划运行后真文档一个字节没变、只读运行走通组装好的观察层、**不注入同意凭据就提交不了**（带 `confirmed: true` 也停在 `awaiting_confirmation`）、工具与提交器共用同一个草稿存储。**仍未完成**：① 这条运行时尚未接到 UI（Agent 工作区仍是演示回复，属 Task 2.5）；② worker 的 diff/check/artifact 信封（Step 4）；③ Step 5 的 Playwright"只产生草稿不提交"场景；④ Step 2 的"锁定模板拓扑"要由真实 `validatePatch` 路径覆盖。
+
 **Files**
 - Create: `packages/agent-core/src/tools/sceneTools.ts`, `draftTools.ts`, `interactionTools.ts`
 - Modify: `packages/scene-graph/src/actions/types.ts`, `packages/scene-graph/src/actions/index.ts`
@@ -458,6 +509,25 @@ Stop here for a Windows review and credential/security review before connecting 
 - [ ] **Step 5: Verify focused tools/worker tests and a Playwright draft-without-commit scenario.
 
 ### Task 2.5: Replace the demo Agent workspace with real runs
+
+> **状态（2026-09-19）：Step 2 已完成（演示回复已删除）。**
+> - **已完成（第十四/十五批）**：① `agentStore.ts` 消息模型扩展（`runId` / `trace` / `draft` / `commit` / `failure`）与 `components/agent/RunStatus.tsx`（12 例）；② **删除 `agentDemoReply.ts`**，`AgentWorkspace` 改为注入 `onRun(prompt, promptMessageId)`，组件里**不再有"没有模型就编一段"的分支**；③ 新增**本地确定性规划器** `apps/web/src/agent/localPlanner.ts`（10 例）—— 它产出的动作走真实的编译/草稿/确认链路，认不出时**问用户**而不是编答案；④ `App.tsx` 接上真实 `createAgentRuntime`，把每一步阶段回流到状态卡；⑤ e2e 断言从"演示回复里有代码块"改成"运行真的发生了"。
+> - **关键性质有独立用例**：草稿在界面里只是视图（持久化内容不含 `primitives`/`candidate`）、迟到事件被丢弃、状态不只靠颜色、失败给原因码与可执行动作、同一轮只发起一次。
+> - **仍未完成**：① `ConfirmationPanel.tsx` / `AssumptionList.tsx` / `ToolTracePanel.tsx`；② `ToolPort` 未接线；③ `stop` / `retry` 按钮尚未接上协调器的取消与重试。
+> - **Step 5：已完成（第十八批）**。`e2e/agent-flow.spec.ts` 三条全绿：**完整链路**（一句话 → 草稿预览 → 确认前画布为空 → 确认 → "已提交" → 回画布对象出现 → `Ctrl+Z` 一步撤销回空）、**丢弃草稿**、**认不出时问用户**。上一批那条红的根因是**我自己的 store 逻辑**：`recordDraft` 保留了 `pending: true`，于是运行停在"等你确认"而界面一直显示"进行中"（`RunStatus` 判据是 pending 优先）；修为记草稿时清掉 pending。
+>   - **两处被实测推翻的诊断（留下教训）**：① "Playwright 服务旧 bundle"不成立（`global-setup.mjs` 每次运行都重新 build）；② 把超时从 5s 提到 30s 仍失败（61 次轮询全是"进行中"），从而排除"慢"。"控制台没有输出"的真因是**生产构建会摇掉 `console.log`** —— 换 `page.evaluate` 读 DOM 才拿到决定性事实。**在构建产物里不要用日志做诊断。**
+>   - 另有一条既有 e2e（`app-modules.spec.ts`）的前提被 `prepare` 的工作区切换改变，已**如实改写并注明原因**（不再断言平面命令「添加点」，改为断言 3D 工作区命令可用），而不是放宽断言。
+> - **顺带修掉一个真实设计缺口（第十七批）**：编译器会拒"工作区不匹配"的动作（实测 `solid.create_template` 在平面几何里返回 `workspace_mismatch`），而用户在 Agent 里说"建一个立方体"时画布可能停在平面几何。给协调器加 `prepare(plan)`，在**编译之前**调用，运行器据此切工作区；**工程制图不参与自动切换**（直接切走会让用户图纸上下文消失，如实拒绝更尊重用户）。
+> - **Step 4（确认并提交）已完成（第十六批）**：`apps/web/src/agent/agentRunner.ts`（8 例）把"运行 → 确认 → 提交 → 撤销"走通。运行器**跨"运行结束 → 用户点确认"活着**（协调器按运行建，确认发生在运行之后），做成模块级单例；界面唯一能触达提交的地方只调 `HostBridge.requestConsent` + `commit`。用例逐环覆盖 G2 Gate 那条链（暂存不动文档 → 确认后真的变且恰好一步历史 → 一步撤销 → 拒绝二次提交 → 丢弃不动文档）。**顺带修掉转移表一个真实缺口**：`answering → waiting` 漏了，"问澄清问题"永远停不到 `waiting`。**仍未完成**：浏览器里的"点确认 → 画布出现对象 → 撤销一步"e2e（单测已覆盖同一路径）。
+
+> - **stop / retry 已完成（第十九批）**：`agentRunner.stop()` 走协调器的**真实取消**（cancel 置位 + abort 各端口信号 + 账本收尾到 `cancelled`），只在确实成功时返回 true；**取消后草稿一并作废**（有用例断言"停止后再点确认必须被拒"），文案说清"没有改动文档"；`retry()` 用同一句话跑新一轮。**如实标注**：本地规划器一轮只要几百毫秒而停止按钮只存在于 pending 期间，**浏览器里点它必然是抖的**，所以停止/重试由单测覆盖、不写成 e2e；cancel / switch-workspace 两条 Playwright 路径同理，等真实 provider 让单轮变成秒级再补。
+> - **仍未完成**：② `ToolPort` 未接线。
+> - **`ConfirmationPanel.tsx` 已完成（第二十一批）**：逐条实现 Step 4 点名的六样东西（精确计数、假设、来源与目标、近似、删除警告、一步撤销声明）。计数**由宿主侧从真实文档算出**（第二十批的地基），组件不自己数；只列真有变化的类别；"看不见"（隐藏/内部细节）与"不存在"分开说；净删除 > 0 时出 `role="alert"` 并说明只能靠撤销恢复。
+>   - **修掉一处重复渲染**：`RunStatus` 原本自带一份草稿摘要，与新面板各给一个「确认并提交」，页面上出现两个同名按钮（e2e 立刻报"找到多个按钮"）—— 草稿 UI 已完全归 `ConfirmationPanel`。
+>   - **顺带抓到一个真实的数据暴露**：面板第一个版本把"预览指纹"打在界面上，而 `draftStore` 用 `contentFingerprint`（返回**规范 JSON 字符串**）填该字段 → **整份候选文档被渲染出来**，违反"草稿在界面里只是视图"这条不变量；**是 e2e 读出来才发现的**。现已不显示，并把"面板不含 primitives"写成正式断言。
+>   - **新增待办**：`draftStore.previewHash` 应改用 `canonicalContentHash`（真哈希）；它与 `apps/web` 侧 `createDocumentHandle` 的 `contentHash` 同源问题需**一起改一起验证 CAS**，故未夹带在 UI 批次里。
+> - **仍未完成**：`AssumptionList.tsx` / `ToolTracePanel.tsx`。
+> - **确认面板的地基已完成（第二十批）**：计划 Step 4 要求 "exact changed IDs/counts"，而数字**必须来自真实候选文档**。`countDraftObjects` 已从 `apps/web` 移到 `@draw/agent-core`（宿主侧与界面侧共用同一个函数），`PreviewArtifact` 增加 `counts` / `baseCounts` 并由 `preview()` **现取**基础文档。
 
 **Files**
 - Modify: `apps/web/src/components/agent/AgentWorkspace.tsx`
@@ -739,7 +809,7 @@ Stop here for a product review with real configured models before image work.
 - [ ] `npm.cmd run typecheck` and `npm.cmd run lint` pass; `npm.cmd run build` produces the documented web and desktop artifacts.
 - [ ] `npm.cmd run test:e2e` passes the manual, Agent text, Agent image, CAD source, export, security, and recovery suites on the supported Windows environment.
 - [ ] `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml` passes; native install/restart/key/proxy/repository smoke tests pass.
-- [ ] Registry coverage remains 42/42 primitive types and 38/38 operation variants mapped or explicitly blocked.
+- [ ] Registry coverage remains 42/42 primitive types and 39/39 operation variants mapped or explicitly blocked.
 - [ ] Eval report meets the design target: pass@1 ≥ 90%, pass@3 ≥ 97% on the supported task set, 100% confirmed-fact safety for committed image tasks, zero unauthorized head mutations, and zero known-key artifact leaks.
 - [ ] Unsupported/approximate/unknown provider capabilities are displayed honestly; no provider brand is called fully supported without model/profile evidence.
 - [ ] Release artifacts, hashes, migration backup behavior, rollback instructions, and known limitations are documented.

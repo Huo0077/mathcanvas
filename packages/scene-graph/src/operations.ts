@@ -69,6 +69,12 @@ export type DomainOperation =
   | { op: "addMeasurement"; measurement: Measurement3 }
   | { op: "deleteMeasurement"; id: string }
   | { op: "deleteObject"; id: string }
+  /**
+   * **批量删除**（Task 0.4）：整批当作**并集**校验与级联，因此与选择顺序无关。
+   * 逐项 `deleteObject` 的循环做不到这一点 —— "点 A 与依赖它的直线 AB"一起选中时，
+   * 先删点会被"仍被引用"拒绝、先删线又会把点留下，谁先谁后都不对。
+   */
+  | { op: "deleteObjects"; ids: string[] }
   | { op: "toggleVisibility"; id: string; visible: boolean }
   | { op: "createGroup"; group: GroupSpec }
   | { op: "deleteGroup"; id: string }
@@ -166,6 +172,99 @@ export interface PrimitiveUpdatePatch {
   segments?: number
   position3?: Vector3
   binding3?: Point3Binding
+}
+
+/**
+ * 一份文档与另一份是否**在语义上不同**（Task 0.3：no-op 不该把 revision 推高）。
+ *
+ * 比较时把时间戳钉成常量：`updatedAt` 每次都变，不排除的话"没改动"永远会被判成"改动了"。
+ * 其余字段一律参与比较 —— 包括重算出来的派生几何，所以"显式字段没变但交点因此重算"仍算改动。
+ */
+/**
+ * 语义规范化：把"写法不同、含义相同"的差异抹平。
+ *
+ * 实测发现的真实差异（诊断脚本打印）：`addPrimitive` 时没写 `visible`，事后 `toggleVisibility`
+ * 设 `true`，于是文档里 `visible: undefined → true` —— 两者**都表示可见**，却让 no-op 被判成改动。
+ * 同一件事在 `locked` 上也会发生。
+ *
+ * `revision` 与 `updatedAt` 在这里被排除：它们是**版本与时间**，不是内容。
+ */
+function normalizeForComparison(value: unknown, key?: string): unknown {
+  if (key === "revision" || key === "updatedAt") return undefined
+  if (Array.isArray(value)) return value.map((item) => normalizeForComparison(item))
+  if (value === null || typeof value !== "object") return value
+  const out: Record<string, unknown> = {}
+  for (const [childKey, childValue] of Object.entries(value as Record<string, unknown>)) {
+    if (childKey === "revision" || childKey === "updatedAt") continue
+    // `visible: true` 与缺省**等价**（两者都表示"可见"），只有显式 `false` 才表示被关掉。
+    // **`locked` 不能这样处理**：它的缺省是"未锁定"，`locked: true` 是一个真实的语义变化 ——
+    // 把两者混为一谈会让 `toggleLock` 被判成 no-op，锁根本写不进文档（这是本任务实测踩到的坑）。
+    if (childKey === "visible" && (childValue === undefined || childValue === true)) continue
+    out[childKey] = normalizeForComparison(childValue, childKey)
+  }
+  return out
+}
+
+function documentChanged(before: GeometryDocument, after: GeometryDocument): boolean {
+  return JSON.stringify(normalizeForComparison(before)) !== JSON.stringify(normalizeForComparison(after))
+}
+
+/**
+ * 运行时操作守卫由 `operationNames.ts` 定义（那里有真值列表，且不会与它形成循环导入），
+ * 这里再导出一份，让 `./operations` 作为操作相关 API 的统一入口保持完整。
+ */
+/**
+ * 数值参数必须是有限数（Task 0.3 的补强）。
+ *
+ * 为什么必须有这道闸：`moveSectionPlane` 收到 `NaN` 时会把 `plane.constant` 写成 `NaN`，
+ * 既不提前返回也不抛错 —— 于是"被拒绝的操作"看起来像一次成功提交。
+ * 更糟的是 `NaN` 在 JSON 里序列化成 `null`，任何基于序列化的比较都会把它读成"内容变了"。
+ * 所以**在入口拒绝**，而不是事后靠比较去猜。
+ */
+function requireFinite(values: Readonly<Record<string, number | undefined>>, operationName: string): string | null {
+  for (const [field, value] of Object.entries(values)) {
+    if (value !== undefined && !Number.isFinite(value)) return `${operationName}: ${field} must be a finite number`
+  }
+  return null
+}
+
+export { isDomainOperation } from "./operationNames"
+
+/**
+ * 把一次删除**计划**应用到文档上（`deleteObject` 与 `deleteObjects` 共用，避免两套语义漂移）。
+ *
+ * 顺序是刻意的：先解绑（宿主没了的点降级为自由点、保留位置），再过滤图元，
+ * **最后**回收孤儿驱动参数 —— 若在过滤前回收，被删图元自己的绑定会被算成"仍被引用"。
+ */
+function applyDeletionPlan(next: GeometryDocument, ids: string[]): { plan: DeletionPlan; removedAny: boolean } {
+  const plan = deletionPlan(next, ids)
+  const targets = plan.primitives
+  const before = next.primitives.length
+  next.primitives = next.primitives.map((primitive) => unbindDeletedHost(primitive, targets)).filter((primitive) => !targets.has(primitive.id))
+  const removedAny = before !== next.primitives.length
+
+  if (plan.measurements.size > 0) next.measurements = next.measurements.filter((measurement) => !plan.measurements.has(measurement.id))
+  if (plan.annotations.size > 0) next.annotations = next.annotations.filter((annotation) => !plan.annotations.has(annotation.id))
+  if (plan.engineeringAnnotations.size > 0 && next.engineeringAnnotations) next.engineeringAnnotations = next.engineeringAnnotations.filter((annotation) => !plan.engineeringAnnotations.has(annotation.id))
+  if (plan.constraints.size > 0) next.constraints = next.constraints.filter((constraint) => !plan.constraints.has(constraint.id))
+  if (plan.groupMembers.size > 0) next.groups = next.groups
+    .map((group) => group.members.some((member) => plan.groupMembers.has(member)) ? { ...group, members: group.members.filter((member) => !plan.groupMembers.has(member)) } : group)
+    // 只剩一个成员（或空）的分组是无效数据：`validateDocument` 要求成员 ≥ 2，
+    // 留着它会让整份文档再也存不下去（`encodeMgeo` 抛 "group has invalid members"）。直接解散。
+    .filter((group) => group.members.length >= 2)
+
+  /**
+   * 回收"随对象自动生成"的驱动参数。判据是**孤儿**而不是"本次被删"：
+   * 只要它带 `ownerId`（自动生成）、归属对象已经不在文档里、且没有任何图元引用它，就是垃圾。
+   * 用户手工创建的参数不带 `ownerId`，永远不会被这一步碰掉。
+   */
+  const survivingIds = new Set(next.primitives.map((primitive) => primitive.id))
+  for (const [parameterId, parameter] of Object.entries(next.parameters)) {
+    if (!parameter.ownerId || survivingIds.has(parameter.ownerId)) continue
+    if (parameterIsReferenced(next, parameterId)) continue
+    delete next.parameters[parameterId]
+  }
+  return { plan, removedAny }
 }
 
 export interface OperationResult {
@@ -2252,6 +2351,8 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
       }
     }
   } else if (operation.op === "translatePrimitive3") {
+    const deltaError = requireFinite({ x: operation.delta.x, y: operation.delta.y, z: operation.delta.z }, "translatePrimitive3: delta")
+    if (deltaError) return { document, changed: false, error: deltaError }
     const primitive = next.primitives.find((candidate) => candidate.id === operation.id)
     if (!primitive) return { document, changed: false, error: "object not found" }
     if (!isFreeDraggable3(primitive, point3Index(next), templateTopologyIds(next))) return { document, changed: false, error: "object is not draggable" }
@@ -2266,6 +2367,8 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
     const cutIds = next.primitives.filter((candidate): candidate is Extract<PrimitiveSpec, { type: "section" }> => candidate.type === "section" && candidate.sourceId === operation.id).map((section) => section.id)
     changedIds = [...movedIds, operation.id, ...cutIds]
   } else if (operation.op === "rotatePrimitive3") {
+    const angleError = requireFinite({ degrees: operation.degrees }, "rotatePrimitive3")
+    if (angleError) return { document, changed: false, error: angleError }
     const primitive = next.primitives.find((candidate) => candidate.id === operation.id)
     if (!primitive) return { document, changed: false, error: "object not found" }
     const points = point3Index(next)
@@ -2283,17 +2386,23 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
     const cutIds = next.primitives.filter((candidate): candidate is Extract<PrimitiveSpec, { type: "section" }> => candidate.type === "section" && candidate.sourceId === operation.id).map((section) => section.id)
     changedIds = [operation.id, ...turnedPoints.keys(), ...cutIds]
   } else if (operation.op === "moveSectionPlane") {
+    const distanceError = requireFinite({ distance: operation.distance }, "moveSectionPlane")
+    if (distanceError) return { document, changed: false, error: distanceError }
     const primitive = next.primitives.find((candidate) => candidate.id === operation.id)
     if (!primitive || primitive.type !== "section") return { document, changed: false, error: "section not found" }
     primitive.plane = movedSectionPlane(primitive.plane, operation.distance)
     // 剖切面变了，截面点必须在同一次提交里重算，否则画布上的形状和读数会对不上。
     changedIds = [operation.id]
   } else if (operation.op === "rotateSectionPlane") {
+    const angleError = requireFinite({ degrees: operation.degrees }, "rotateSectionPlane")
+    if (angleError) return { document, changed: false, error: angleError }
     const primitive = next.primitives.find((candidate) => candidate.id === operation.id)
     if (!primitive || primitive.type !== "section") return { document, changed: false, error: "section not found" }
     primitive.plane = rotatedSectionPlane(primitive.plane, operation.axis, operation.degrees, operation.pivot)
     changedIds = [operation.id]
   } else if (operation.op === "setSectionPlane") {
+    const planeError = requireFinite({ nx: operation.normal.x, ny: operation.normal.y, nz: operation.normal.z, constant: operation.constant }, "setSectionPlane")
+    if (planeError) return { document, changed: false, error: planeError }
     const primitive = next.primitives.find((candidate) => candidate.id === operation.id)
     if (!primitive || primitive.type !== "section") return { document, changed: false, error: "section not found" }
     primitive.plane = { normal: { ...operation.normal }, constant: operation.constant }
@@ -2345,39 +2454,14 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
     next.constraints.push(operation.constraint)
     changedIds = operation.constraint.targets
   } else if (operation.op === "deleteObject") {
-    const plan = deletionPlan(next, [operation.id])
-    const targets = plan.primitives
-    const before = next.primitives.length
-    // 先"解绑"再过滤：宿主被删掉的点降级为自由点（保留位置），不留悬空引用。
-    next.primitives = next.primitives.map((primitive) => unbindDeletedHost(primitive, targets)).filter((primitive) => !targets.has(primitive.id))
-    if (before === next.primitives.length) return { document, changed: false, error: "object not found" }
-    // 测量 / 注释 / 工程标注 / 约束随宿主一起注销；分组只摘掉被删成员。
-    if (plan.measurements.size > 0) next.measurements = next.measurements.filter((measurement) => !plan.measurements.has(measurement.id))
-    if (plan.annotations.size > 0) next.annotations = next.annotations.filter((annotation) => !plan.annotations.has(annotation.id))
-    if (plan.engineeringAnnotations.size > 0 && next.engineeringAnnotations) next.engineeringAnnotations = next.engineeringAnnotations.filter((annotation) => !plan.engineeringAnnotations.has(annotation.id))
-    if (plan.constraints.size > 0) next.constraints = next.constraints.filter((constraint) => !plan.constraints.has(constraint.id))
-    if (plan.groupMembers.size > 0) next.groups = next.groups
-      .map((group) => group.members.some((member) => plan.groupMembers.has(member)) ? { ...group, members: group.members.filter((member) => !plan.groupMembers.has(member)) } : group)
-      // 只剩一个成员（或空）的分组是无效数据：`validateDocument` 要求成员 ≥ 2，
-      // 留着它会让整份文档再也存不下去（`encodeMgeo` 抛 "group has invalid members"）。直接解散。
-      .filter((group) => group.members.length >= 2)
-    /**
-     * 回收"随对象自动生成"的驱动参数。判据是**孤儿**而不是"本次被删"：
-     * 只要它带 `ownerId`（自动生成）、归属对象已经不在文档里、且没有任何图元引用它，就是垃圾。
-     *
-     * 不能只看 `targets`：先删点 A（参数因被点 B 共用而保留）、再删点 B 时，
-     * A 早已不在 targets 里，只看 targets 就永远收不掉这个参数。
-     *
-     * 必须在图元过滤**之后**做，否则被删图元自己的绑定会被算成"仍被引用"。
-     * 用户手工创建的参数不带 `ownerId`，永远不会被这一步碰掉。
-     */
-    const survivingIds = new Set(next.primitives.map((primitive) => primitive.id))
-    for (const [parameterId, parameter] of Object.entries(next.parameters)) {
-      if (!parameter.ownerId || survivingIds.has(parameter.ownerId)) continue
-      if (parameterIsReferenced(next, parameterId)) continue
-      delete next.parameters[parameterId]
-    }
-    changedIds = [...targets]
+    const { plan, removedAny } = applyDeletionPlan(next, [operation.id])
+    if (!removedAny) return { document, changed: false, error: "object not found" }
+    changedIds = [...plan.primitives]
+  } else if (operation.op === "deleteObjects") {
+    // 一次算清整批的并集闭包，所以与 ids 的顺序无关（Task 0.4）。
+    const { plan, removedAny } = applyDeletionPlan(next, operation.ids)
+    if (!removedAny) return { document, changed: false, error: "object not found" }
+    changedIds = [...plan.primitives]
   } else if (operation.op === "deleteConstraint") {
     const before = next.constraints.length
     next.constraints = next.constraints.filter((constraint) => constraint.id !== operation.id)
@@ -2472,6 +2556,14 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
   }
   try {
     const recomputed = recomputeDerivedObjects(next, changedIds)
+    /**
+     * 只有**真的变了**才推进 revision（Task 0.3）。
+     * 以前这里无条件 `revision += 1` 并返回 `changed: true`，于是"把已经可见的对象再设为可见"
+     * 这类空操作也会在撤销栈里留下一步 —— Agent 端更糟：它会据此认为"确实改动了文档"，
+     * 从而跳过"无变化"的分支。判定放在重算**之后**，所以派生几何的变化也算改动。
+     */
+    const mutated = documentChanged(document, recomputed)
+    if (!mutated) return { document, changed: false }
     recomputed.revision += 1
     recomputed.metadata.updatedAt = new Date().toISOString()
     return { document: recomputed, changed: true }
