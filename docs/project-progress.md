@@ -6,6 +6,23 @@
 **当前阶段：** P0-P6 与 P7 工程制图已完成；MathCanvas 统一 Ribbon UI 基线、后续 UI 优化（Task 7-13）、工程制图视觉重做（Task 14）、工程制图可用性修复（Task 15-18）、圆锥曲线四项修复、功能键操作指引浮层、CAD 2D 绘图交互重做、平面几何动点系统、3D 视口与几何内核重构、封闭曲线绕定点旋转、UI 优化（草稿纸画布）与平面几何元素选颜色均已完成。**2026-09-17 新增两条解析几何交付线并已全部落地**：**A1 解析二次曲面与"真圆"**（8 片；设计 `docs/superpowers/specs/2026-09-17-analytic-quadrics-design.md`）与 **A2 交面按支撑曲面分组 + 真曲面**（5 轮；设计 `docs/superpowers/specs/2026-09-17-intersection-face-grouping-design.md`）——用户口径从"我不要一个逼近的圆，我需要一个真的圆"一路推到"我需要的只是那个相交的曲面，而不是由很多三角形拼出来的"。**随后"立体几何最后一轮"四件事也已全部交付**（7 片；设计 `docs/superpowers/specs/2026-09-17-3d-tracks-rotation-and-measurement-labels-design.md`）：约束轨道（`circle3` 当动点宿主）、拖动旋转（世界轴三色环 + 15° 吸附 + 属性栏角度）、测量数字常驻画布（2D + 3D）、立体几何 UI 与平面几何同一套令牌。平面动点系统按四个维度交付：①约束模型与参数化映射 ②依赖图 DAG 与增量拓扑重算 ③动态测量监听器 ④轨迹采样与消元法隐式化；3D 重构按四个区块交付：①动点宿主约束与渲染管道 ②截面几何 ③Auto-Fit ④生命周期与多解；四者与三区块**全部接进主流程**（不只是内核可用）。**2026-09-18 又完成平面几何切线**（抛物线 / 双曲线 / 圆 / 椭圆的曲线切线，切点可沿曲线拖动或跟随动点）**与动点扩展**（在动点处作切线、以动点为圆心作圆、半径可调且可随动点位置动态变化），并修掉"切线不能拖动"这一现场反馈。P4 Agent 与 P5 题图解析仍在排除范围内。
 **总体状态：** 开发中
 
+### G2 第二十五批：把"工具"从声明接到可执行（`ToolCallRequest` 补形状 + `toolDispatch`）（2026-09-21）
+
+- **缺口**：`ToolPort` 早就定义、`ToolCallRequest` 也早就存在，但它只有 `run` / `toolCallId` / `actionCount` / `signal` —— **没有工具名，也没有参数**。也就是说"接上 ToolPort"此前是一句空话：端口拿到请求也不知道要执行哪个工具。工具目录（`toolRegistry.ts`）声明了*模型能看到什么*，`sceneTools.ts` 实现了*真正怎么读场景*，而**从名字到实现的这一段**从来不存在。
+- **补的形状**：`ToolCallRequest` 增加 `toolId: string` 与 `input: Record<string, unknown>`（并注明 `input` 是**不可信输入**，由分发器逐项校验后才交给下层）。
+- **新增 `packages/agent-core/src/toolDispatch.ts`**（7 例）。四条纪律：
+  1. **只认自己这张表里的名字**。未知名字如实报 `unknown_tool`，不转发、不猜。
+  2. **目录声明了但没实现的工具如实报 `tool_not_implemented`**，并给出可执行的下一步（`scene.measure` / `scene.check_relations` / `scene.check_section` / `scene.capabilities` / `cad.inspect_drawing` / `run.explain_refusal` 目前都是这一类）。返回一个空数组会让模型拿着空结果继续推理；说"还没实现"它会去问用户。
+  3. **参数畸形在这里拦下**（`invalid_arguments`）：把 `undefined` 传下去只会让下层崩在更远的地方，还会丢掉"是模型的参数不对"这个事实。
+  4. **没有任何写文档的工具**。目录里唯一的写工具是 `draft.confirm_commit`，分发器**明确不认它**（有用例钉住）—— 写入只有 `CommitterPort.commit` 一条路。
+- **一条自己给自己设的检查**：新增用例逐条核对"分发表里的每个名字都必须在**某个阶段**被目录声明过"。写这条时**当场抓到我自己多塞的一个名字**：`scene.resolve_label`（观察层有这个能力，但目录里没有它）。当时的两个选择是"把它加进目录"或"从分发表里去掉"；选了后者，因为**模型面向的工具边界应该由目录单独决定**，而"把用户说的标签解析成对象"是 `interaction.ask_clarification` 那一路的事，不该被模型当只读工具直接调。
+- **宿主接线**：`AgentRuntime` 新增 `callTool(toolId, input)`，内部每次都 `createToolDispatcher({ scene: createSceneTools(createSceneObservation(readSceneDocuments())) })` —— **现取**场景，不缓存快照（观察层的"过期"检测就靠现取）；`AgentRuntime.test.ts` +3 例（真实路径读到一个对象 / 拒绝写工具且文档未动 / 连续两次调用看到的是新场景）。
+- **RED→GREEN**：`toolDispatch.test.ts` 先因模块不存在整体失败（`Failed to resolve import "./toolDispatch"`）；`agentRuntime.test.ts` 的三条在接线前拿不到 `callTool`（类型层直接不过）。
+
+**验证证据（本批）**：单测 **177 文件 / 1983 用例全通过（零跳过）**、typecheck exit 0、lint 0 error / 14 warning（基线）、生产构建通过、e2e **119/119**。
+
+**仍未做**：`ToolTracePanel.tsx`（Task 2.6 Step 4）；worker 的 diff/check/artifact 信封；`ToolPort` 本身仍未被协调器在运行中调用（分发器与运行时方法都已就绪，缺的是"谁在什么时候调它"——那需要真实 provider 的 tool-call 通道，属 G1 之后）。
+
 ### G2 第二十四批：让"同意不可伪造"从注释变成代码（`HostBridge` 只认自己铸造的 nonce）（2026-09-21）
 
 - **发现的缺口（比上一批严重）**：`ConsentToken` 的注释一直写着"协调器**既不能伪造它，也不能从模型输出里读出一个来**"，`hostBridge.ts` 的文件头也写着"同意由**宿主/UI**创建"。但 `commit` 原先只检查四件事：nonce 是否已消费、`runId` 是否相同、是否过期、`previewHash`/`draftVersion` 是否与当前草稿一致 —— **这四条调用方自己就能凑齐**：`preview()` 是公开的（`previewHash` 随手可读）、`expiresAt` 填一个未来时间即可、`runId` 就是这个桥的构造参数。也就是说**任何能调到 `commit` 的代码都能自带一份"同意"**，那句注释当时比代码强。

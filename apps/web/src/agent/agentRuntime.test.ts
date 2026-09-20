@@ -159,4 +159,44 @@ describe("the assembled runtime actually runs", () => {
 
     expect(runtime.scene.inspect("doc-unknown").status).toBe("error")
   })
+
+  /**
+   * **只读工具的接线**（Task 2.4 真正缺的那一段）。
+   *
+   * 在 `callTool` 存在之前，"接上 `ToolPort`"是一句空话：端口不知道要执行哪个工具、
+   * 也没有参数。这条用例走的是**真实**的路径：运行时 → 分发表 → `SceneTools` → 观察层，
+   * 一个替身都没有（唯一的替身是那个脚本化 planner，而这里根本没用到它）。
+   */
+  it("runs a read-only tool through the dispatcher and reports what it found", () => {
+    const document = geometryDocument()
+    document.primitives.push({ id: "point-1", type: "point3", label: "A", position: { x: 0, y: 0, z: 0 } } as never)
+    const { runtime } = makeRuntime({ document })
+
+    const result = runtime.callTool("scene.inspect", { documentId: document.metadata.id })
+
+    expect(result.status).toBe("success")
+    expect(result.payload).toHaveLength(1)
+  })
+
+  it("refuses to run a tool that writes the document, and leaves the document alone", () => {
+    const { runtime, written, current } = makeRuntime()
+
+    const result = runtime.callTool("draft.confirm_commit", {})
+
+    expect(result.status).toBe("error")
+    expect(result.diagnostics.map((entry) => entry.code)).toContain("unknown_tool")
+    expect(written).toHaveLength(0)
+    expect(current()?.primitives).toHaveLength(0)
+  })
+
+  it("reads the scene fresh on every tool call instead of caching the first snapshot", () => {
+    // 观察层的"过期"检测靠现取；缓存快照会让工具一直看到旧场景。
+    const document = geometryDocument()
+    const { runtime } = makeRuntime({ document })
+    expect(runtime.callTool("scene.inspect", { documentId: document.metadata.id }).payload).toHaveLength(0)
+
+    document.primitives.push({ id: "point-2", type: "point3", label: "B", position: { x: 1, y: 0, z: 0 } } as never)
+
+    expect(runtime.callTool("scene.inspect", { documentId: document.metadata.id }).payload).toHaveLength(1)
+  })
 })

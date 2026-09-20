@@ -3,6 +3,7 @@ import {
   createCoordinator,
   createSceneObservation,
   createSceneTools,
+  createToolDispatcher,
   type AgentCoordinator,
   type CommitOutcome,
   type CommitterPort,
@@ -14,7 +15,8 @@ import {
   type PlanEnvelope,
   type PlannerPort,
   type SceneDocumentSnapshot,
-  type SkillCatalog
+  type SkillCatalog,
+  type ToolResult
 } from "@draw/agent-core"
 
 import type { GeometryDocument } from "@draw/dsl"
@@ -82,6 +84,18 @@ export interface AgentRuntime {
   committer: CommitterPort
   /** 观察工具，基于注入的场景快照。 */
   scene: ReturnType<typeof createSceneTools>
+  /**
+   * **只读工具的唯一入口**（Task 2.4 接线）。
+   *
+   * 为什么是方法而不是把 `scene` 直接递出去：调用方（将来的 provider 适配器 / worker）
+   * 只应该按"工具名 + 参数"用工具，因为那正是**登记过、可校验、可记录**的那一层 ——
+   * `toolDispatch.ts` 拒绝未登记的名字、拒绝畸形参数，并且**不认任何写文档的工具**。
+   * 把 `scene` 递出去等于让调用方绕过这三道检查，直接拿到宿主内部对象。
+   *
+   * 场景是**现取**的：每个工具调用都重新读一次注入的文档快照，
+   * 否则工具看到的会是运行开始那一刻的场景，而"过期检测"就是靠现取才成立的。
+   */
+  callTool(toolId: string, input: Record<string, unknown>): ToolResult<unknown>
   /** 这次运行正在用的草稿 id（没有则为 null）。界面靠它去取预览。 */
   draftId(): string | null
   /**
@@ -219,6 +233,11 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
     host,
     committer,
     scene: createSceneTools(createSceneObservation(dependencies.readSceneDocuments())),
+    /**
+     * 每个工具调用都**现取**场景：缓存快照会让工具看到"运行开始那一刻"的场景，
+     * 而观察层的过期检测正是靠现取才成立的。
+     */
+    callTool: (toolId, input) => createToolDispatcher({ scene: createSceneTools(createSceneObservation(dependencies.readSceneDocuments())) }).call(toolId, input),
     draftId: () => committer.draftIdFor(),
     assumptions: () => declaredAssumptions,
     confirmDraft() {

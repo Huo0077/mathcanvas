@@ -103,9 +103,21 @@ export interface ConsentToken {
   readonly previewHash: string
 }
 
+/**
+ * 一次只读工具调用。
+ *
+ * `toolId` 与 `input` 曾经**不在这个类型里** —— 第一版只有 `run` / `toolCallId` /
+ * `actionCount` / `signal`，于是"接上 `ToolPort`"是一句空话：端口根本不知道要执行哪个工具，
+ * 也没有参数。名称与宿主侧的分发表（`toolDispatch.ts` 的 `DISPATCHABLE_TOOL_IDS`）
+ * 对应；分发器**不认**任何写文档的工具（`draft.confirm_commit` 在其中被明确拒绝）。
+ */
 export type ToolCallRequest = {
   run: RunContext
   toolCallId: string
+  /** 要执行的工具名，必须是宿主分发表里认识的只读工具。 */
+  toolId: string
+  /** 工具参数。**不可信输入**：分发器逐项校验后才交给下层。 */
+  input: Record<string, unknown>
   actionCount: number
   signal: AbortSignal
 }
