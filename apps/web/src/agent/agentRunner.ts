@@ -1,4 +1,4 @@
-import { CAPABILITY_REGISTRY_REVISION, type CommitOutcome, type DocumentHandle, type PlanEnvelope, type PlannerPort, type RunContext } from "@draw/agent-core"
+import { CAPABILITY_REGISTRY_REVISION, SKILL_MANIFESTS, type CommitOutcome, type DocumentHandle, type PlanEnvelope, type PlannerPort, type RunContext } from "@draw/agent-core"
 import type { GeometryDocument } from "@draw/dsl"
 import { contentFingerprint } from "@draw/scene-graph"
 
@@ -6,6 +6,7 @@ import { useAgentStore } from "../agentStore"
 import { useSceneStore } from "../store"
 import { createAgentRuntime, type AgentRuntime } from "./agentRuntime"
 import { createLocalPlanner, localIntentSkillIds } from "./localPlanner"
+import { createModelPlanner, resolveActiveProvider, type ModelPlannerDependencies } from "./modelPlanner"
 
 /**
  * **Agent 运行器**（Task 2.5 Step 2 的另一半）。
@@ -113,20 +114,85 @@ function prepareWorkspaceFor(plan: PlanEnvelope): { ok: true } | { ok: false; de
  *
  * `planner` 可注入的**唯一**理由是测试：要验证"规划器声明的假设真的走到确认界面上"，
  * 就得有一个会说假设的规划器，而本地确定性规划器**从不声明假设**（它产出的是固定动作）。
- * 生产路径不传它，用的仍是本地规划器。
+ * 生产路径不传它，用的仍是下面 `selectPlanner` 自动选出来的那一份。
  */
 export interface AgentRunnerDependencies {
   planner?: PlannerPort
+  /**
+   * 模型规划器的注入点（测试用）。
+   *
+   * 生产的缺省值走真实 IPC（读「使用中」的那一份配置 + `provider_run`），
+   * 而这两件事在浏览器里都不成立 —— 所以测试必须能替换它们，否则
+   * "选中了模型服务就用模型"这条判据只能靠人去点。
+   */
+  modelPlanner?: ModelPlannerDependencies
 }
+
+/**
+ * **这一轮由谁规划**。
+ *
+ * 三样东西必须一起决定，因为它们互相约束：谁来规划（`planner`）、
+ * 上下文里给哪些动作（`requestedSkillIds`）、以及这次运行自述用哪个 profile
+ *（`textProfileId` —— 它进 `RunContext`，是"这段文字是谁产生的"这个事实的落点）。
+ */
+export interface PlannerSelection {
+  planner: PlannerPort
+  requestedSkillIds: readonly string[]
+  textProfileId: string
+}
+
+/**
+ * 模型路径下请求哪些技能：**全部已登记的清单**。
+ *
+ * 本地规划器能精确说出"我这条指令要用哪份清单"，因为它的指令表是写死的；
+ * 而模型路径**不可能在发请求之前**知道用户想要什么 —— 这一趟请求本身就是为了问它。
+ * 所以这里的取舍是：把整张菜单给它，靠**别的东西**兜底。
+ *
+ * 兜底的东西是真实存在的三层：传输层 schema（未知动作 / 未知字段 / 未作用域引用一律拒）、
+ * 动作编译器的语义校验、以及"写入必须经用户确认"。按关键词猜技能看起来更"省"，
+ * 但猜错的代价是**某些任务永远做不了**（模型看不到那个动作，于是只能问用户），
+ * 而那种失败在界面上看起来像"模型不会做这件事"。
+ */
+export const MODEL_PLANNER_SKILL_IDS: readonly string[] = SKILL_MANIFESTS.map((manifest) => manifest.id)
 
 export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): AgentRunner {
   let runtime: AgentRuntime | null = null
   let sequence = 0
+  /** 这一轮是谁在规划（`waiting` 那条分支要靠它说人话）。 */
+  let lastSelection: PlannerSelection | null = null
+
+  /**
+   * 选出这一轮要用的规划器。
+   *
+   * **「使用中」的那一份配置就是在这里被消费的**：`resolveActiveProvider` 现取它，
+   * 拿到就用模型规划器，拿不到（浏览器 / 还没选 / 没密钥）就用本地确定性规划器 ——
+   * 后者认不出就问用户，**绝不编答案**（这是 G2 Gate 里"生产路径不再有演示回复"那条的延续）。
+   *
+   * 解析结果被**钉住**（`resolveProvider: async () => resolution`）：一次运行里模型可能被问
+   * 两次（含那次修复），两次必须用同一份配置与同一批能力证据，否则第二次尝试其实换了题目，
+   * 事后没法判断"是模型改好了还是条件变了"。
+   */
+  async function selectPlanner(prompt: string): Promise<PlannerSelection> {
+    // 注入的规划器优先（测试用）：它一被给出来，就不该再去问 IPC。
+    if (dependencies.planner) return { planner: dependencies.planner, requestedSkillIds: [], textProfileId: "local-planner" }
+
+    const resolution = await (dependencies.modelPlanner?.resolveProvider ?? resolveActiveProvider)()
+    if (!resolution.ok) {
+      return { planner: createLocalPlanner(), requestedSkillIds: localIntentSkillIds(prompt), textProfileId: "local-planner" }
+    }
+    return {
+      planner: createModelPlanner({ ...dependencies.modelPlanner, resolveProvider: async () => resolution }),
+      requestedSkillIds: MODEL_PLANNER_SKILL_IDS,
+      textProfileId: resolution.provider.id
+    }
+  }
 
   /** 实现在下面单独定义，`retry` 直接调它 —— 不依赖 `this`（对象字面量的方法里用 `this` 太脆）。 */
   async function runPrompt(prompt: string, promptMessageId: string): Promise<RunPromptResult> {
       sequence += 1
       const runId = `run-${sequence}-${Date.now().toString(36)}`
+      const selection = await selectPlanner(prompt)
+      lastSelection = selection
       runtime = createAgentRuntime({
         // 每次现取：句柄里的内容哈希就是 Compare-and-Swap 的依据。
         readDocument: () => useSceneStore.getState().document,
@@ -136,19 +202,16 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
           const live = useSceneStore.getState().document
           return [{ handle: handleOf(live), document: live }]
         },
-        // 真实 provider 接进来时只换这一行 —— 这也是 `PlannerPort` 存在的理由。
-        planner: dependencies.planner ?? createLocalPlanner(),
+        // 这一轮由谁规划由 `selectPlanner` 决定（「使用中」的那份配置在它里面被消费）。
+        planner: selection.planner,
         /**
          * **这条指令要用到的技能**（决定上下文里的可用动作）。
          *
          * 必须在**建运行时之前**算出来：上下文是发请求前组装的，而它一旦定下来就决定了
-         * 模型能看到哪几个动作。确定性规划器能精确知道自己要用哪份清单
-         *（`localIntentSkillIds`），所以这里问它 —— 而不是把九个清单全塞进去。
-         *
-         * 认不出的指令拿空数组：运行会走到"问用户"，不该顺带给一个用不上的动作菜单。
-         * 真实 provider 接进来时，这一层换成"由模型/意图判断选技能"。
+         * 模型能看到哪几个动作。本地规划器能精确知道自己要用哪份清单（`localIntentSkillIds`）；
+         * 模型路径给全部清单（理由见 `MODEL_PLANNER_SKILL_IDS`）。
          */
-        requestedSkillIds: dependencies.planner ? undefined : localIntentSkillIds(prompt),
+        requestedSkillIds: selection.requestedSkillIds,
         /**
          * 编译之前把工作区切到这条计划需要的那个。
          *
@@ -173,7 +236,8 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
         promptMessageId,
         target: handleOf(live),
         sources: [],
-        textProfileId: "local-planner",
+        // 这次运行自述用哪个 profile：模型路径下就是「使用中」的那一份的 id（真话）。
+        textProfileId: selection.textProfileId,
         capabilityRevision: CAPABILITY_REGISTRY_REVISION,
         policyRevision: "local"
       }
@@ -218,9 +282,18 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
       }
 
       if (phase === "waiting") {
+        /**
+         * **把规划器真正问的那句话说出来**，而不是一句写死的"没有接入模型服务"。
+         *
+         * 那句话在接上模型之后就是**假话**：模型明明问了"半径是多少"，界面却告诉用户
+         * "当前没有模型服务"。问题与假设同一处产生（计划解析那一刻），所以同一处取。
+         */
+        const questions = runtime.questions()
         useAgentStore.getState().failPendingReply({
           code: "needs_more_information",
-          message: "这一步需要你补充信息。当前没有接入模型服务，本地规划器只认识几条固定指令。",
+          message: questions && questions.length > 0
+            ? questions.join(" ")
+            : `这一步需要你补充信息${lastSelection?.textProfileId === "local-planner" ? "。当前没有接入模型服务，本地规划器只认识几条固定指令" : ""}。`,
           retryable: false
         })
       } else if (phase === "failed") {

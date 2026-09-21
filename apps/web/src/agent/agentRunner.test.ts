@@ -274,3 +274,131 @@ describe("stop and retry", () => {
     expect(useSceneStore.getState().document.primitives).toHaveLength(0)
   })
 })
+
+/**
+ * **真实模型接进规划器**（G2 接线）。
+ *
+ * 这一组是 G2 Gate 第一条那条链的**模型版**：模型的 JSON → 真实编译 → 隔离草稿 →
+ * 用户确认 → 落盘 → 一步撤销。用注入的 `runModel`（脚本化的模型接口）而不是注入的规划器，
+ * 于是"从 `provider_run` 回来的一串事件"到"画布上真出现对象"之间**每一个真实部件都跑到了**。
+ */
+describe("the model-backed planner", () => {
+  beforeEach(() => {
+    resetScene()
+    resetAgent()
+  })
+
+  const modelText = (text: string) => ({ ok: true as const, events: [{ kind: "delta" as const, requestId: "req-1", attemptId: "att-1", text }] })
+  const cubeEnvelope = (size: number) => JSON.stringify({
+    schemaVersion: "mathcanvas.plan.v1",
+    kind: "plan",
+    goal: `建一个棱长 ${size} 的立方体`,
+    factIds: [],
+    assumptions: ["底面落在地面上"],
+    actions: [{ actionId: "solid.create_template", actionKey: "cube", factIds: [], inputs: { alias: "cube", template: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: size, y: size, z: size } } }]
+  })
+
+  const selectedProvider = { resolveProvider: async () => ({ ok: true as const, provider: { id: "openai-1", modelId: "gpt-x", dialect: "openai_native", revision: 3, capabilities: { tools: "unknown" as const, json: "verified" as const, vision: "unknown" as const } } }) }
+
+  it("sends the prompt to the selected profile and turns its JSON into a real, confirmable draft", async () => {
+    const calls: { profileId: string; messages: { role: string; content: string }[] }[] = []
+    const runner = createAgentRunner({
+      modelPlanner: {
+        ...selectedProvider,
+        runModel: async (request) => { calls.push({ profileId: request.profileId, messages: request.messages }); return modelText(cubeEnvelope(3)) }
+      }
+    })
+
+    const result = await runAndWait(runner, "建一个棱长 3 的立方体")
+
+    // 「使用中」的那一份被真的用上了：调用方一个 profileId 都没传。
+    expect(calls).toHaveLength(1)
+    expect(calls[0].profileId).toBe("openai-1")
+    // 提示词里带上了动作菜单（这一轮不发 provider 侧的工具表，所以菜单只能写在提示词里）。
+    const prompt = calls[0].messages.map((message) => message.content).join("\n")
+    expect(prompt).toContain("solid.create_template")
+
+    expect(result.phase).toBe("awaiting_confirmation")
+    // 确认之前文档一个字节不动；确认之后真的落盘，且**恰好一步**历史。
+    expect(useSceneStore.getState().document.primitives).toHaveLength(0)
+    expect(runner.confirm().status).toBe("committed")
+    expect(useSceneStore.getState().document.primitives.length).toBeGreaterThan(0)
+
+    useSceneStore.getState().undo()
+    expect(useSceneStore.getState().document.primitives).toHaveLength(0)
+  })
+
+  it("carries the model's declared assumptions into the confirmation view", async () => {
+    const runner = createAgentRunner({ modelPlanner: { ...selectedProvider, runModel: async () => modelText(cubeEnvelope(3)) } })
+
+    await runAndWait(runner, "建一个棱长 3 的立方体")
+
+    const assistant = useAgentStore.getState().activeConversation!.messages.at(-1)!
+    expect(assistant.draft?.assumptions).toEqual(["底面落在地面上"])
+  })
+
+  it("gives an unparseable answer exactly one repair attempt, and says what was wrong", async () => {
+    // 计划 Task 2.3 Step 5："Include exact JSON path errors in the second prompt"。
+    const sent: string[] = []
+    const runner = createAgentRunner({
+      modelPlanner: {
+        ...selectedProvider,
+        runModel: async (request) => {
+          sent.push(request.messages.map((message) => message.content).join("\n"))
+          // 第一次给散文，第二次才给合法信封 —— 修复通道必须真的被用上。
+          return modelText(sent.length === 1 ? "我建议你先画一个点，然后再画线。" : cubeEnvelope(2))
+        }
+      }
+    })
+
+    const result = await runAndWait(runner, "建一个立方体")
+
+    expect(sent).toHaveLength(2)
+    expect(sent[1]).toContain("上一轮的输出没有被接受")
+    // 修复提示不回显模型的原话（回显会形成自我强化的循环）。
+    expect(sent[1]).not.toContain("我建议你先画一个点")
+    expect(result.phase).toBe("awaiting_confirmation")
+  })
+
+  it("reports a provider failure with its classification instead of inventing a plan", async () => {
+    const runner = createAgentRunner({
+      modelPlanner: { ...selectedProvider, runModel: async () => ({ ok: false, failure: "auth", message: "the provider rejected the credential (401)", retryable: false }) }
+    })
+
+    const result = await runAndWait(runner, "建一个立方体")
+
+    expect(result.phase).toBe("failed")
+    const assistant = useAgentStore.getState().activeConversation!.messages.at(-1)!
+    expect(assistant.failure?.message).toContain("401")
+    expect(useSceneStore.getState().document.primitives).toHaveLength(0)
+  })
+
+  it("shows the question the model actually asked, instead of claiming there is no model service", async () => {
+    const clarification = JSON.stringify({ schemaVersion: "mathcanvas.plan.v1", kind: "clarification", goal: "缺少半径", factIds: [], questions: ["这个圆的半径是多少？"] })
+    const runner = createAgentRunner({ modelPlanner: { ...selectedProvider, runModel: async () => modelText(clarification) } })
+
+    const result = await runAndWait(runner, "画一个圆")
+
+    expect(result.draftId).toBeNull()
+    const assistant = useAgentStore.getState().activeConversation!.messages.at(-1)!
+    expect(assistant.failure?.code).toBe("needs_more_information")
+    expect(assistant.failure?.message).toContain("这个圆的半径是多少？")
+    expect(assistant.failure?.message).not.toContain("没有接入模型服务")
+  })
+
+  it("falls back to the local planner when nothing is selected, without touching IPC's model path", async () => {
+    let called = false
+    const runner = createAgentRunner({
+      modelPlanner: {
+        resolveProvider: async () => ({ ok: false, code: "no_active_profile", detail: "还没有选择「使用中」的模型服务。" }),
+        runModel: async () => { called = true; return modelText(cubeEnvelope(3)) }
+      }
+    })
+
+    const result = await runAndWait(runner, "建一个棱长 3 的立方体")
+
+    // 本地规划器照常干活（离线路径没有退化），而且**一次模型调用都没发生**。
+    expect(called).toBe(false)
+    expect(result.phase).toBe("awaiting_confirmation")
+  })
+})

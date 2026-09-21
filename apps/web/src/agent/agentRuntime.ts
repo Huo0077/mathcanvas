@@ -120,6 +120,14 @@ export interface AgentRuntime {
    */
   assumptions(): string[] | undefined
   /**
+   * **规划器要问用户的问题**（`kind: "clarification"` 的计划里那些）。
+   *
+   * 与假设同一处产生、同一条理由：问题在计划解析那一刻就到手了，而它要被**显示出来** ——
+   * 在此之前，界面只能显示一句写死的"当前没有接入模型服务"，而那在接上模型之后就是**假话**
+   *（模型真的问了"半径是多少"，界面却说"没有模型服务"）。
+   */
+  questions(): string[] | undefined
+  /**
    * 用户点了确认之后**真正落盘**。
    *
    * 两步都必须走宿主桥：先 `requestConsent` 铸造一次性凭据，再 `commit` 提交。
@@ -252,13 +260,19 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
    * 每次运行新建一个运行时，所以这里不需要清理 —— 上一轮的假设不会漏到这一轮。
    */
   let declaredAssumptions: string[] | undefined
+  /** 规划器要问用户的问题（同上，一条路径）。 */
+  let declaredQuestions: string[] | undefined
 
   const coordinator = createCoordinator({
     planner: dependencies.planner,
     observer,
     committer,
     prepare: dependencies.prepare,
-    onPlanParsed: (plan) => { declaredAssumptions = plan.assumptions },
+    onPlanParsed: (plan) => {
+      declaredAssumptions = plan.assumptions
+      // 只有澄清分支才有问题；另外两个分支即使带 `questions` 也不是合法的信封（schema 会拒）。
+      declaredQuestions = plan.kind === "clarification" ? [...plan.questions] : undefined
+    },
     requestedSkillIds,
     availableActions,
     consent: undefined // 同意凭据由宿主在用户确认后创建，协调器不构造它。
@@ -278,6 +292,7 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
     callTool: (toolId, input) => createToolDispatcher({ scene: createSceneTools(createSceneObservation(dependencies.readSceneDocuments())) }).call(toolId, input),
     draftId: () => committer.draftIdFor(),
     assumptions: () => declaredAssumptions,
+    questions: () => declaredQuestions,
     confirmDraft() {
       const id = committer.draftIdFor()
       if (!id) return { status: "rejected" as const, detail: "there is no staged draft to confirm" }
