@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { canonicalContentHash, newDraftId, newRunId, parsePlanEnvelope, parseDraftAction } from "./schemas"
+import { canonicalContentHash, newDraftId, newRunId, parsePlanEnvelope, parseDraftAction, sha256HexBytes } from "./schemas"
 import type { DocumentHandle } from "./contracts"
 
 const HANDLE: DocumentHandle = {
@@ -204,5 +204,34 @@ describe("deterministic ids and hashes", () => {
     const base = canonicalContentHash({ handle: HANDLE, geometry: { radius: 2 } })
     const otherGeneration = canonicalContentHash({ handle: { ...HANDLE, generation: 8 }, geometry: { radius: 2 } })
     expect(otherGeneration).not.toBe(base)
+  })
+})
+
+describe("hashing raw bytes", () => {
+  /**
+   * 附件的内容哈希走的是**字节**入口（`put_attachment` 会拿它校验落盘的字节）。
+   *
+   * 这里用 FIPS 180-4 的公开向量当基准：`abc` 与空串的那两个值是标准里印着的，
+   * 所以"这个哈希对不对"不需要相信我的实现。
+   */
+  it("matches the published vectors", () => {
+    expect(sha256HexBytes(new Uint8Array([]))).toBe("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+    expect(sha256HexBytes(new TextEncoder().encode("abc"))).toBe("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+  })
+
+  it("hashes the bytes themselves, not a UTF-8 re-encoding of them", () => {
+    // 这一条是那个入口存在的理由。若实现先把字节当成 latin1 字符串、再过一遍 `TextEncoder`，
+    // 0x89 会变成两个字节（0xc2 0x89）—— 哈希与 Rust 侧永远对不上，
+    // 而症状会是"每一次附加都失败，理由却是内容哈希不符"。
+    const raw = new Uint8Array([0x89, 0x50, 0x4e, 0x47])
+    const reEncoded = new TextEncoder().encode("\u0089PNG")
+
+    expect(reEncoded.length).toBe(5) // 0x89 在 UTF-8 里是两个字节：这条是前提
+    expect(sha256HexBytes(raw)).toMatch(/^[0-9a-f]{64}$/)
+    expect(sha256HexBytes(raw)).not.toBe(sha256HexBytes(reEncoded))
+    // 同样的字节永远得到同样的哈希（附件按内容去重、按内容自验都靠它）。
+    expect(sha256HexBytes(new Uint8Array([0x89, 0x50, 0x4e, 0x47]))).toBe(sha256HexBytes(raw))
+    // 差一个字节就是另一份附件。
+    expect(sha256HexBytes(new Uint8Array([0x89, 0x50, 0x4e, 0x48]))).not.toBe(sha256HexBytes(raw))
   })
 })

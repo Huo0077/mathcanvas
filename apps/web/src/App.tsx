@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 
 import { createEmptyDocument, decodeMgeo, encodeMgeo, isSampledPrimitiveType, type AnnotationFeature, type DrawingSheetSpec, type EngineeringAnnotationKind, type Measurement3Metric, type PrimitiveSpec, type Vector3, type Workspace } from "@draw/dsl"
 import { buildSolidTemplate, createMeasurement3, entityResolverFor, evaluatePlanarMeasurement, host3FromPrimitive, selectPrimitivesInBox, type BoxSelectionMode, type PlanarMetric } from "@draw/geometry-kernel"
@@ -29,6 +29,7 @@ import { ModuleRail } from "./components/ModuleRail"
 import { WorkspaceHeader } from "./components/WorkspaceHeader"
 import { AgentWorkspace } from "./components/agent/AgentWorkspace"
 import { ProviderSettings } from "./components/settings/ProviderSettings"
+import { ProjectPackagePanel } from "./components/ProjectPackagePanel"
 import { readDesktopRuntime, type DesktopRuntimeInfo } from "./services/desktopRuntime"
 import { agentRunner } from "./agent/agentRunner"
 import { useAgentStore } from "./agentStore"
@@ -179,6 +180,13 @@ export function App() {
   /** 保存失败的提示**只报一次**：反复弹同一条没有任何意义，还会把状态栏刷掉。 */
   const persistenceErrorShownRef = useRef(false)
   const [fileError, setFileError] = useState<string | null>(null)
+  /**
+   * 项目包面板是否打开（Task 1.6 Step 4/5 的界面入口）。
+   *
+   * 它是**按需渲染**的：面板一打开就会去问 IPC（读 head），而"没打开却一直在问"
+   * 会在浏览器里刷出一串没人看的失败。
+   */
+  const [packagePanelOpen, setPackagePanelOpen] = useState(false)
   /**
    * 左下角的一次性操作指引：只在点击功能键时写入，由用户关闭、Esc、切换工作区或「创建动作完成」
    * 清空，所以它不会变成一块常驻的说明面板。
@@ -1836,7 +1844,7 @@ export function App() {
     {activeModule === "traditional" ? <div className="app-module" data-module="traditional">
       {/* 顶栏只剩品牌（含动态粒子与打字光标）；文件命令 / 搜索 / 设置下沉到标签栏右端。 */}
       <WorkspaceHeader />
-      <AppChrome activeWorkspace={document.workspace} onWorkspaceChange={handleWorkspaceChange} ribbonGroups={ribbonGroups} activeRibbonTab={activeRibbonTab} ribbonExpanded={ribbonExpanded} ribbonPinned={ribbonPinned} onRibbonTabChange={setActiveRibbonTab} onRibbonCommand={runRibbonCommand} onRibbonExpandedChange={setRibbonExpanded} onRibbonPinnedChange={setRibbonPinned} onUndo={undo} onRedo={redo} canUndo={canUndo} canRedo={canRedo} onSave={save} onOpen={() => fileInputRef.current?.click()} />
+      <AppChrome activeWorkspace={document.workspace} onWorkspaceChange={handleWorkspaceChange} ribbonGroups={ribbonGroups} activeRibbonTab={activeRibbonTab} ribbonExpanded={ribbonExpanded} ribbonPinned={ribbonPinned} onRibbonTabChange={setActiveRibbonTab} onRibbonCommand={runRibbonCommand} onRibbonExpandedChange={setRibbonExpanded} onRibbonPinnedChange={setRibbonPinned} onUndo={undo} onRedo={redo} canUndo={canUndo} canRedo={canRedo} onSave={save} onOpen={() => fileInputRef.current?.click()} onPackage={() => setPackagePanelOpen(true)} />
       {document.workspace === "cad" ? cadWorkbench : <div className="workbench">
         <div className="workbench-mobile-controls" role="toolbar" aria-label="画布面板">
           <button type="button" aria-controls="algebra-dock" aria-expanded={mobileDock === "objects"} onClick={() => setMobileDock((current) => current === "objects" ? null : "objects")}>对象列表</button>
@@ -1857,6 +1865,16 @@ export function App() {
       </div>}
       {(fileError || operationError) && <div role="alert" className="footer-note">{fileError ?? operationError}</div>}
       {document.workspace !== "cad" && guidance && <GuidanceHint text={guidance} onDismiss={() => setGuidance(null)} />}
+      {/* 项目包（`.mcanvas` 导出/导入 + 附件）：文件级动作，与"打开/保存 .mgeo"同一组入口。
+          导入走的是 `load` —— 与打开文件**同一条路**（换文档 + 换一世），所以不需要第二套逻辑。 */}
+      {packagePanelOpen && <ProjectPackagePanel
+        document={document}
+        projectId="local"
+        onImported={load}
+        onNotice={(notice) => setFileError(notice.kind === "error" ? notice.text : null)}
+        onClose={() => setPackagePanelOpen(false)}
+        unavailableReason={desktopRuntimeHint}
+      />}
     </div> : activeModule === "agent" ? <div className="app-module" data-module="agent">
       {/* 模块 B 不含任何从几何文档派生的 UI（Ribbon / 画布 / 检查器），所以文档一步都不订阅，
           切进 Agent 区不会因为画布重渲染而卡一下。 */}

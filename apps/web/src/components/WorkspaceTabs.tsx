@@ -22,6 +22,13 @@ interface WorkspaceTabsProps {
   onPinnedChange: (pinned: boolean) => void
   onOpen?: () => void
   onSave?: () => void
+  /**
+   * 打开**项目包**面板（`.mcanvas` 导出/导入 + 附件）。
+   *
+   * 为什么放在这一组里：它和"打开/保存 `.mgeo`"是同一类东西（文件级动作），
+   * 而用户找文件命令时只会看这一处。附件与项目库都挂在文档上，所以它也不需要单独的模块。
+   */
+  onPackage?: () => void
   onUndo?: () => void
   onRedo?: () => void
   canUndo?: boolean
@@ -36,7 +43,7 @@ const tabs: { id: RibbonTabId | Workspace; label: string }[] = [
   { id: "cad", label: "工程制图" }
 ]
 
-export function WorkspaceTabs({ activeWorkspace, activeTab, expanded, pinned, onWorkspaceChange, onTabChange, onExpandedChange, onPinnedChange, onOpen, onSave, onUndo, onRedo, canUndo, canRedo }: WorkspaceTabsProps) {
+export function WorkspaceTabs({ activeWorkspace, activeTab, expanded, pinned, onWorkspaceChange, onTabChange, onExpandedChange, onPinnedChange, onOpen, onSave, onPackage, onUndo, onRedo, canUndo, canRedo }: WorkspaceTabsProps) {
   const handleTab = (id: RibbonTabId | Workspace) => {
     if (id === "file") {
       onTabChange(activeTab === "file" ? null : "file")
@@ -60,6 +67,7 @@ export function WorkspaceTabs({ activeWorkspace, activeTab, expanded, pinned, on
       <div className="topbar-commands" role="group" aria-label="文件与历史">
         {onOpen && <button type="button" onClick={onOpen}>打开 .mgeo</button>}
         {onSave && <button type="button" onClick={onSave}>保存 .mgeo</button>}
+        {onPackage && <button type="button" onClick={onPackage}>项目包…</button>}
         {onUndo && <button type="button" onClick={onUndo} disabled={canUndo === false} title={canUndo === false ? "没有可撤销的操作（Ctrl+Z）" : "撤销 (Ctrl+Z)"}>撤销</button>}
         {onRedo && <button type="button" onClick={onRedo} disabled={canRedo === false} title={canRedo === false ? "没有可重做的操作（Ctrl+Y）" : "重做 (Ctrl+Y)"}>重做</button>}
       </div>

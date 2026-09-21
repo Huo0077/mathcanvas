@@ -450,9 +450,22 @@ export function canonicalContentHash(value: unknown): string {
   return sha256Hex(canonicalize(value))
 }
 
-/** FIPS 180-4 的 SHA-256（同步、无依赖）。 */
+/** FIPS 180-4 的 SHA-256（同步、无依赖）。内部用；字符串先过 UTF-8。 */
 function sha256Hex(message: string): string {
-  const bytes = new TextEncoder().encode(message)
+  return sha256HexBytes(new TextEncoder().encode(message))
+}
+
+/**
+ * **按原始字节**算 SHA-256。
+ *
+ * 为什么要有一个"按字节"的入口，而不是只留收字符串的那一个：**附件的内容哈希必须是字节的哈希**。
+ * `put_attachment` 会拿调用方声明的哈希去校验它落盘的字节（`BlobStore::write` 里那道门），
+ * 而字符串入口会先过 `TextEncoder` —— 一张 PNG 的开头 `0x89 0x50` 会被编码成四个字节，
+ * 于是**同一份附件在前端与 Rust 侧算出两个哈希**，表现为"每一次附加都失败，理由却是哈希不符"。
+ *
+ * 两个入口共用同一份实现（这里），所以"哈希算法"仍然只有一处。
+ */
+export function sha256HexBytes(bytes: Uint8Array): string {
   const bitLength = bytes.length * 8
 
   const withPadding = new Uint8Array((((bytes.length + 9) >> 6) + 1) << 6)
