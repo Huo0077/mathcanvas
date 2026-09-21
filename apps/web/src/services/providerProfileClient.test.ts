@@ -1,6 +1,6 @@
-﻿import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it } from "vitest"
 
-import { findSecretField, isVerified, listProviderProfiles, readProviderHealth, removeProviderProfile, saveProfileWithSecret, upsertProviderProfile, type ProviderProfile } from "./providerProfileClient"
+import { checkProviderCapabilities, findSecretField, isVerified, listProviderProfiles, readFailureContract, readProviderHealth, removeProviderProfile, saveProfileWithSecret, upsertProviderProfile, type ProviderProfile } from "./providerProfileClient"
 
 /**
  * Provider 配置客户端（Task 1.3 Step 1/3）。
@@ -189,6 +189,43 @@ describe("capability evidence is only trusted when it is verified and current", 
     const health = { status: "ok" as const, capabilityEvidence: verified.capabilities, checkedAt: 5, profileRevision: profile.revision }
 
     expect(isVerified(verified, "tools", health)).toBe(true)
+  })
+})
+
+describe("running a capability probe", () => {
+  it("asks the shell to probe the profile at the revision the interface is showing", async () => {
+    // 修订号必须一起发：给一份界面已经看不到的配置跑探测，会写下一份永远匹配不上的证据。
+    const commands: string[] = []
+    const health = { status: "ok" as const, latencyMs: 120, capabilityEvidence: [{ feature: "streaming", status: "verified" as const, checkedAt: 9 }], checkedAt: 9, profileRevision: profile.revision }
+    installInvoke(async (command) => { commands.push(command); return health })
+
+    const result = await checkProviderCapabilities(profile.id, profile.revision)
+
+    expect(commands).toEqual(["provider_check"])
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.value.capabilityEvidence[0].status).toBe("verified")
+  })
+
+  it("reads the classified failure out of the string the shell hands over", async () => {
+    // Tauri 把命令的 `Err` 做成字符串交过来，而那串东西是**带分类的 JSON**
+    //（`kind` / `failure` / `message` / `retryable`）。直接显示给用户会是一坨 JSON。
+    installInvoke(async () => {
+      throw new Error(JSON.stringify({ kind: "failed", failure: "transport", message: "the provider could not be reached", retryable: true }))
+    })
+
+    const failure = readFailureContract(new Error(JSON.stringify({ kind: "failed", failure: "transport", message: "the provider could not be reached", retryable: true })))
+
+    expect(failure).toEqual({ failure: "transport", message: "the provider could not be reached", retryable: true })
+    // 而探测本身如实报成失败，不假装成功。
+    const result = await checkProviderCapabilities(profile.id, profile.revision)
+    expect(result.ok).toBe(false)
+  })
+
+  it("returns null instead of guessing when the error is not a failure contract", () => {
+    // 认不出来就退回通用处理 —— 假装读懂一份 JSON 比不读更糟。
+    expect(readFailureContract(new Error("connection reset"))).toBeNull()
+    expect(readFailureContract(new Error("{\"kind\":\"something-else\"}"))).toBeNull()
+    expect(readFailureContract(undefined)).toBeNull()
   })
 })
 

@@ -1,4 +1,4 @@
-//! **适配器 + 真实转发**（Task 1.4 收尾 / Task 1.5 另一半）。
+﻿//! **适配器 + 真实转发**（Task 1.4 收尾 / Task 1.5 另一半）。
 //!
 //! ## 这个文件要钉住的四件事
 //!
@@ -83,7 +83,7 @@ fn openai_profile() -> ProviderProfile {
 }
 
 fn messages() -> Vec<ChatMessage> {
-    vec![ChatMessage { role: "user".to_string(), content: "画一个圆".to_string() }]
+    vec![ChatMessage::text("user", "画一个圆")]
 }
 
 /// 一次被记录下来的出站请求。

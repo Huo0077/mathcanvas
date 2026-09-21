@@ -19,7 +19,7 @@
 
 use mathcanvas_desktop_lib::providers::events::{classify_http_failure, FailureKind, ModelEvent};
 use mathcanvas_desktop_lib::providers::normalize::{normalize_response, normalize_to_json};
-use mathcanvas_desktop_lib::providers::request::{build_request, ChatMessage};
+use mathcanvas_desktop_lib::providers::request::{build_request, ChatMessage, RequestOptions};
 use mathcanvas_desktop_lib::repository::provider_profiles::ProviderProfile;
 
 fn fixture(name: &str) -> String {
@@ -214,20 +214,20 @@ fn profile(protocol: &str, dialect: &str, base_url: &str) -> ProviderProfile {
 
 #[test]
 fn the_endpoint_comes_from_the_profile_and_a_constant_path() {
-    let openai = build_request(&profile("openai_compatible", "openai_native", "https://api.openai.com/v1"), vec![], true, false);
-    let anthropic = build_request(&profile("anthropic", "anthropic_messages", "https://api.anthropic.com/v1"), vec![], true, false);
+    let openai = build_request(&profile("openai_compatible", "openai_native", "https://api.openai.com/v1"), vec![], true, RequestOptions::default());
+    let anthropic = build_request(&profile("anthropic", "anthropic_messages", "https://api.anthropic.com/v1"), vec![], true, RequestOptions::default());
 
     // 调用方给不了整条 URL：路径是常量表里的。
     assert_eq!(openai.endpoint, "https://api.openai.com/v1/chat/completions");
     assert_eq!(anthropic.endpoint, "https://api.anthropic.com/v1/messages");
     // 末尾斜杠再兜一次（存储层已经去过）：`//chat/completions` 会让某些网关 404。
-    let trailing = build_request(&profile("openai_compatible", "openai_native", "https://api.example.com/v1/"), vec![], true, false);
+    let trailing = build_request(&profile("openai_compatible", "openai_native", "https://api.example.com/v1/"), vec![], true, RequestOptions::default());
     assert_eq!(trailing.endpoint, "https://api.example.com/v1/chat/completions");
 }
 
 #[test]
 fn the_request_never_carries_the_secret() {
-    let request = build_request(&profile("openai_compatible", "openai_native", "https://api.example.com/v1"), vec![ChatMessage { role: "user".to_string(), content: "hi".to_string() }], false, false);
+    let request = build_request(&profile("openai_compatible", "openai_native", "https://api.example.com/v1"), vec![ChatMessage::text("user", "hi")], false, RequestOptions::default());
 
     // 认证头**留空**：密钥由调用方在发送那一刻借出（`authorize`），不进这个结构体的任何持久化路径。
     let auth = request.headers.iter().find(|(name, _)| name == "Authorization").expect("an auth header slot");
@@ -238,23 +238,66 @@ fn the_request_never_carries_the_secret() {
 #[test]
 fn the_dialect_decides_whether_tool_schemas_may_be_sent() {
     // 计划 Step 3："Do not assume every compatible service supports the same tools…"
-    let generic = build_request(&profile("openai_compatible", "generic_compatible", "https://x/v1"), vec![], false, true);
-    let native = build_request(&profile("openai_compatible", "openai_native", "https://x/v1"), vec![], false, true);
+    let tools = || RequestOptions { allow_tools: true, tools: vec![serde_json::json!({ "type": "function", "function": { "name": "t" } })], force_tool: false, tool_choice_field: None };
+    let generic = build_request(&profile("openai_compatible", "generic_compatible", "https://x/v1"), vec![], false, tools());
+    let native = build_request(&profile("openai_compatible", "openai_native", "https://x/v1"), vec![], false, tools());
 
     assert!(generic.body.get("tools").is_none(), "a generic compatible endpoint must not receive a tool schema by default");
     assert!(native.body.get("tools").is_some());
     // 而且**两个前置条件都要满足**：方言支持 **且** 调用方按已验证证据放行。
-    let native_without_evidence = build_request(&profile("openai_compatible", "openai_native", "https://x/v1"), vec![], false, false);
+    let native_without_evidence = build_request(&profile("openai_compatible", "openai_native", "https://x/v1"), vec![], false, RequestOptions::default());
     assert!(native_without_evidence.body.get("tools").is_none());
+    // 第三个条件：**表不能是空的** —— 一个空工具表等于告诉 provider "我支持工具"却什么都没给。
+    let native_with_an_empty_table = build_request(&profile("openai_compatible", "openai_native", "https://x/v1"), vec![], false, RequestOptions { allow_tools: true, tools: Vec::new(), force_tool: false, tool_choice_field: None });
+    assert!(native_with_an_empty_table.body.get("tools").is_none());
+}
+
+#[test]
+fn forcing_a_tool_uses_the_word_each_dialect_actually_accepts() {
+    // 写错这一个词的后果是 400，而 400 会被读成"这家不支持工具" ——
+    // 正是能力探针最容易误报的地方。
+    let tools = RequestOptions { allow_tools: true, tools: vec![serde_json::json!({ "type": "function", "function": { "name": "t" } })], force_tool: true, tool_choice_field: None };
+    let openai = build_request(&profile("openai_compatible", "openai_native", "https://x/v1"), vec![], false, tools.clone());
+    let anthropic = build_request(&profile("anthropic", "anthropic_messages", "https://x/v1"), vec![], false, tools);
+
+    assert_eq!(openai.body["tool_choice"], "required");
+    assert_eq!(anthropic.body["tool_choice"], "any");
+}
+
+#[test]
+fn an_image_message_gets_each_dialects_own_shape() {
+    // 三家的图片位置完全不同：OpenAI 用 content parts 里的 data URL、
+    // Anthropic 用 base64 的 source block、Ollama 用消息上的裸 base64 数组。
+    // 而**消息里存的都是裸 base64** —— 前缀是拼请求时按方言加的。
+    let image = "iVBORw0KGgo=".to_string();
+    let message = || vec![ChatMessage::with_images("user", "what colour?", vec![image.clone()])];
+
+    let openai = build_request(&profile("openai_compatible", "openai_native", "https://x/v1"), message(), false, RequestOptions::default());
+    let anthropic = build_request(&profile("anthropic", "anthropic_messages", "https://x/v1"), message(), false, RequestOptions::default());
+    let ollama = build_request(&profile("ollama", "ollama_native", "http://127.0.0.1:11434/api"), message(), false, RequestOptions::default());
+
+    let openai_part = &openai.body["messages"][0]["content"][1];
+    assert_eq!(openai_part["type"], "image_url");
+    assert_eq!(openai_part["image_url"]["url"], format!("data:image/png;base64,{image}"));
+
+    let anthropic_block = &anthropic.body["messages"][0]["content"][1];
+    assert_eq!(anthropic_block["type"], "image");
+    assert_eq!(anthropic_block["source"]["type"], "base64");
+    assert_eq!(anthropic_block["source"]["data"], image);
+
+    assert_eq!(ollama.body["messages"][0]["images"][0], image);
+    // 纯文本的消息**保持字符串形状**：有些网关只认那一种，能少变一处就少变一处。
+    let text_only = build_request(&profile("openai_compatible", "openai_native", "https://x/v1"), vec![ChatMessage::text("user", "hi")], false, RequestOptions::default());
+    assert_eq!(text_only.body["messages"][0]["content"], "hi");
 }
 
 #[test]
 fn anthropic_puts_the_system_prompt_at_the_top_level() {
     let request = build_request(
         &profile("anthropic", "anthropic_messages", "https://api.anthropic.com/v1"),
-        vec![ChatMessage { role: "system".to_string(), content: "be brief".to_string() }, ChatMessage { role: "user".to_string(), content: "hi".to_string() }],
+        vec![ChatMessage::text("system", "be brief"), ChatMessage::text("user", "hi")],
         false,
-        false
+        RequestOptions::default()
     );
 
     // Anthropic 的 system 是顶层字段，不是消息里的一条 —— 放进 messages 会被拒。

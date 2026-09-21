@@ -261,6 +261,50 @@ fn provider_health(app: tauri::AppHandle, profile_id: String) -> Result<Option<P
     Ok(store.health(&profile_id))
 }
 
+/**
+ * **跑一次能力探测**（Task 1.4 Step 5）。
+ *
+ * ## 它回答的是"哪些能力真的成立"，而不是"这家活着吗"
+ *
+ * 四条探针各发各的请求，逐条下结论（判据表在 `providers::capability` 的模块头）。
+ * 最要紧的一条：**一次成功的文本 ping 不许把 tools 或 vision 打勾** ——
+ * 那种实现看起来一切正常（四个绿徽章），直到真的给一个不支持图片的模型发图。
+ *
+ * ## 它会花掉几次真请求（如实）
+ *
+ * 四发：文本、JSON、一张 1×1 的 PNG、一次带工具表的请求。所以这是一个**用户按下去才发生**
+ * 的动作，不是打开设置就自动跑的 —— 那会悄悄花掉别人的额度。
+ *
+ * ## 证据挂在修订号上
+ *
+ * 请求带 `profileRevision`，与当前不符时**当场拒绝**：给一份界面已经看不到的配置
+ * 跑探测，会写下一份永远匹配不上任何东西的证据。
+ */
+#[tauri::command]
+fn provider_check(app: tauri::AppHandle, profile_id: String, profile_revision: u32) -> Result<ProviderHealth, String> {
+    let profile = {
+        let state = app.try_state::<ProfileStoreState>().ok_or("the provider store is not initialised")?;
+        let store = state.store.lock().map_err(|_| "the provider store is poisoned".to_string())?;
+        store.get(&profile_id).ok_or_else(|| format!("no provider profile with id {profile_id}"))?
+    };
+    let secrets = app.try_state::<SecretStoreState>().ok_or("the secret store is not initialised")?;
+    // 取消句柄按 `probe-<profile>` 取：用户点了停止之后这一发也能被打断
+    //（探针在真网络下可能等很久，而"停不下来"是最难受的一种）。
+    let cancel = {
+        let proxy = app.try_state::<ProxyState>().ok_or("the proxy is not initialised")?;
+        let session = proxy.session.lock().map_err(|_| "the proxy state is poisoned".to_string())?;
+        session.as_ref().map(|handle| handle.cancel_handle(&format!("probe-{profile_id}"))).unwrap_or_default()
+    };
+
+    let transport = providers::adapter::HttpTransport::new();
+    let state = app.try_state::<ProfileStoreState>().ok_or("the provider store is not initialised")?;
+    let mut store = state.store.lock().map_err(|_| "the provider store is poisoned".to_string())?;
+    providers::capability::check(&secrets.0, &transport, &mut *store, profile, profile_revision, cancel.as_ref())
+        // 与 `provider_run` 同一套口径：失败**带分类**（`failure` / `retryable`）到前端，
+        // 而不是一句话。前端从文本里重新猜分类是一次必然会漏的判断。
+        .map_err(|error| error.to_json().to_string())
+}
+
 /// **唯一的自述命令**（Task 1.1 Step 4）。
 ///
 /// 它回答"我现在跑在什么上面、哪些部件是好的"，供前端如实显示。
@@ -463,6 +507,7 @@ pub fn run() {
             upsert_provider_profile,
             remove_provider_profile,
             provider_health,
+            provider_check,
             provider_run,
             provider_cancel,
             read_document_head,

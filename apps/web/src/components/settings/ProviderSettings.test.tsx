@@ -31,8 +31,18 @@ function profile(overrides: Partial<ProviderProfile> = {}): ProviderProfile {
   }
 }
 
-function makeClient(options: { profiles?: ProviderProfile[]; saveFails?: string; health?: ProviderHealth | null; hasSecret?: boolean } = {}) {
+function makeClient(
+  options: {
+    profiles?: ProviderProfile[]
+    saveFails?: string
+    health?: ProviderHealth | null
+    hasSecret?: boolean
+    /** 探测的结论（缺省＝探测失败，用来验证界面如实报错）。 */
+    probe?: { ok: true; health: ProviderHealth } | { ok: false; detail: string }
+  } = {}
+) {
   const saved: Record<string, unknown>[] = []
+  const checked: { profileId: string; revision: number }[] = []
   const client = {
     list: vi.fn(async () => options.profiles ?? []),
     save: vi.fn(async (candidate: Record<string, unknown>) => {
@@ -42,9 +52,13 @@ function makeClient(options: { profiles?: ProviderProfile[]; saveFails?: string;
     }),
     remove: vi.fn(async () => {}),
     health: vi.fn(async () => options.health ?? null),
-    hasSecret: vi.fn(async () => options.hasSecret ?? false)
+    hasSecret: vi.fn(async () => options.hasSecret ?? false),
+    check: vi.fn(async (profileId: string, revision: number) => {
+      checked.push({ profileId, revision })
+      return options.probe ?? { ok: false as const, detail: "the provider could not be reached" }
+    })
   }
-  return { client, saved }
+  return { client, saved, checked }
 }
 
 async function fillBasicFields(name = "My Provider", model = "gpt-5") {
@@ -186,6 +200,68 @@ describe("provider settings", () => {
     fireEvent.click(remove)
 
     await waitFor(() => expect(client.remove).toHaveBeenCalledWith("openai"))
+  })
+
+  it("only probes when the user asks, and says the probe costs four requests", async () => {
+    // 打开设置就自动探测会在用户不知情的时候花掉他的额度。所以按钮上要写明代价。
+    const { client, checked } = makeClient({ profiles: [profile()], hasSecret: true })
+    render(<ProviderSettings client={client} />)
+
+    const probe = await screen.findByRole("button", { name: "探测能力" })
+    expect(probe.getAttribute("title")).toContain("4 次请求")
+    // **按下去之前一次都没发。**
+    expect(checked).toEqual([])
+
+    const { fireEvent } = await import("@testing-library/react")
+    fireEvent.click(probe)
+
+    await waitFor(() => expect(checked).toEqual([{ profileId: "openai", revision: 1 }]))
+  })
+
+  it("will not probe a service that has no credential, because it could only fail", async () => {
+    const { client, checked } = makeClient({ profiles: [profile()], hasSecret: false })
+    render(<ProviderSettings client={client} />)
+
+    const probe = await screen.findByRole("button", { name: "探测能力" })
+
+    expect((probe as HTMLButtonElement).disabled).toBe(true)
+    expect(checked).toEqual([])
+  })
+
+  it("updates the badges from the probe and marks only the verified ones", async () => {
+    const health: ProviderHealth = {
+      status: "degraded",
+      latencyMs: 300,
+      checkedAt: 9,
+      profileRevision: 1,
+      capabilityEvidence: [
+        { feature: "streaming", status: "verified", checkedAt: 9 },
+        { feature: "tools", status: "unknown", checkedAt: undefined, detail: "the provider replied with text instead of calling the probe tool" },
+        { feature: "json", status: "failed", checkedAt: 9, detail: "not a JSON object" }
+      ]
+    }
+    const { client } = makeClient({ profiles: [profile()], hasSecret: true, probe: { ok: true, health } })
+    render(<ProviderSettings client={client} />)
+
+    const { fireEvent } = await import("@testing-library/react")
+    fireEvent.click(await screen.findByRole("button", { name: "探测能力" }))
+
+    await waitFor(() => expect(screen.getByText("流式已验证")).toBeTruthy())
+    // **`unknown` 不是已验证** —— 这是那一整套判据在界面上的落点。
+    expect(screen.getByText("工具调用未验证")).toBeTruthy()
+    expect(screen.getByText("严格 JSON未验证")).toBeTruthy()
+    // 而状态说明要如实说"没验出任何能力"是**未知**，不是"不支持"。
+    await waitFor(() => expect(screen.getByText(/已探测 OpenAI：流式 已验证/)).toBeTruthy())
+  })
+
+  it("reports a failed probe with the reason instead of leaving the badges silently unverified", async () => {
+    const { client } = makeClient({ profiles: [profile()], hasSecret: true, probe: { ok: false, detail: "the profile has no credential stored" } })
+    render(<ProviderSettings client={client} />)
+
+    const { fireEvent } = await import("@testing-library/react")
+    fireEvent.click(await screen.findByRole("button", { name: "探测能力" }))
+
+    await waitFor(() => expect(screen.getByText(/探测 OpenAI 未完成：the profile has no credential stored/)).toBeTruthy())
   })
 })
 

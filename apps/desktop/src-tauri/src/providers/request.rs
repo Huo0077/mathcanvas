@@ -19,6 +19,9 @@ use crate::repository::provider_profiles::ProviderProfile;
 
 /// 一条归一化消息。三家 provider 的"消息"只有这两种角色，差异在适配器里处理。
 ///
+/// `images`：**base64 的图片字节**（不带 `data:` 前缀）。目前只有能力探针会带它 ——
+/// 真模型运行里的图片输入是另一条线（附件两阶段写），但请求形状是同一个位置。
+///
 /// `Deserialize` 是给 IPC 用的：前端**只发消息**，密钥与端点都不在参数里
 ///（它们由 Rust 侧从 profile 与凭据库取）。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -27,6 +30,21 @@ pub struct ChatMessage {
     /// `system` / `user` / `assistant`。
     pub role: String,
     pub content: String,
+    /// 附在**这一条**消息上的图片（base64，不带前缀）。空数组不进请求体。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub images: Vec<String>,
+}
+
+impl ChatMessage {
+    /// 纯文本的一条。绝大多数调用点要的是这个，所以给它一个不用写 `images: Vec::new()` 的写法。
+    pub fn text(role: impl Into<String>, content: impl Into<String>) -> Self {
+        Self { role: role.into(), content: content.into(), images: Vec::new() }
+    }
+
+    /// 一条带图的用户消息。`images` 是 base64（不带 `data:` 前缀）。
+    pub fn with_images(role: impl Into<String>, content: impl Into<String>, images: Vec<String>) -> Self {
+        Self { role: role.into(), content: content.into(), images }
+    }
 }
 
 /// 一次 provider 请求的**计划**（还缺密钥 —— 密钥在 `Task 1.2` 的凭据库里，
@@ -103,12 +121,44 @@ fn plan_for(protocol: &str, dialect: &str) -> RequestPlan {
 }
 
 /**
+ * **拼请求时能带的东西**。
+ *
+ * 为什么不是一串 `bool` 参数：`allow_tools` 与 `tool_choice` 都是布尔，位置一换就会
+ * 静默反了 —— 而"要不要带工具"与"要不要强制它用工具"是**两个**决定（探针要后者、
+ * 真运行通常不要）。（第一版就是 `build_request(.., allow_tools, force_tool)`，
+ * 在调用点读起来完全分不出谁是谁。）
+ */
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct RequestOptions {
+    /// 允许发工具 schema 吗。由调用方按**已验证的能力证据**给出，不是按方言猜。
+    pub allow_tools: bool,
+    /// 工具 schema 本体。空数组时按"这个能力还没被验证过"处理 ——
+    /// 也就是说**不会**因为 `allow_tools` 为真就发一个空工具表（那等于告诉 provider
+    /// "我支持工具"却什么工具都没给）。
+    pub tools: Vec<serde_json::Value>,
+    /// 强制使用工具（`tool_choice: "required"`）。
+    ///
+    /// 只有**能力探针**用它：不强制的话，模型会跟你聊天而不是调工具，
+    /// 于是"没有工具调用"这个观测会被误读成"不支持工具"。
+    pub force_tool: bool,
+    /// 图片请求时把 `tool_choice` 设成 `none`（有些 provider 带图时拒绝工具）。
+    /// 目前没用上；留它是因为"图片请求与工具请求互斥"这条规则会需要它。
+    pub tool_choice_field: Option<String>,
+}
+
+/// 只放行工具、不带 schema 的写法（绝大多数调用点的意思就是这个）。
+pub fn allow_tools() -> RequestOptions {
+    RequestOptions { allow_tools: true, ..RequestOptions::default() }
+}
+
+/**
  * **拼出请求**。
  *
- * `allow_tools` 由调用方按**已验证的能力证据**给出（`isCapabilityVerified(..)`）——
- * 不是按方言猜。两者都要满足才真的带工具：方言支持 **且** 证据说支持。
+ * `options.allow_tools` 由调用方按**已验证的能力证据**给出（`isCapabilityVerified(..)`）——
+ * 不是按方言猜。三个条件都要满足才真的带工具：方言支持 **且** 证据说支持 **且**
+ * 调用方给了工具表。
  */
-pub fn build_request(profile: &ProviderProfile, messages: Vec<ChatMessage>, stream: bool, allow_tools: bool) -> ProviderRequest {
+pub fn build_request(profile: &ProviderProfile, messages: Vec<ChatMessage>, stream: bool, options: RequestOptions) -> ProviderRequest {
     let plan = plan_for(&profile.protocol, &profile.dialect);
     // 末尾斜杠已经在存储层去过（`providerContracts.normalizeBaseUrl`），这里再兜一次：
     // 拼接出 `//chat/completions` 会让某些网关 404，而那种失败看起来像"地址不对"。
@@ -135,25 +185,77 @@ pub fn build_request(profile: &ProviderProfile, messages: Vec<ChatMessage>, stre
             let dialog: Vec<serde_json::Value> = messages
                 .iter()
                 .filter(|message| message.role != "system")
-                .map(|message| serde_json::json!({ "role": message.role, "content": message.content }))
+                .map(anthropic_message)
                 .collect();
             object.insert("messages".into(), serde_json::json!(dialog));
             object.insert("max_tokens".into(), serde_json::json!(4096));
         }
+        "ollama" => {
+            // Ollama 原生的图片在消息的 `images` 数组里（**裸 base64**，没有 `data:` 前缀）。
+            let dialog: Vec<serde_json::Value> = messages
+                .iter()
+                .map(|message| {
+                    if message.images.is_empty() {
+                        serde_json::json!({ "role": message.role, "content": message.content })
+                    } else {
+                        serde_json::json!({ "role": message.role, "content": message.content, "images": message.images })
+                    }
+                })
+                .collect();
+            object.insert("messages".into(), serde_json::json!(dialog));
+        }
         _ => {
-            object.insert("messages".into(), serde_json::json!(messages));
+            let dialog: Vec<serde_json::Value> = messages.iter().map(openai_message).collect();
+            object.insert("messages".into(), serde_json::json!(dialog));
         }
     }
 
-    if allow_tools && plan.tools_by_default {
+    if options.allow_tools && plan.tools_by_default && !options.tools.is_empty() {
         if let Some(field) = &plan.tools_field {
-            // 工具 schema 的形状由调用方给（`toolRegistry` 的产物）；这里只保证
-            // "要不要带"这个决定有两个前置条件（方言 + 已验证证据）。
-            object.insert(field.clone(), serde_json::json!([]));
+            object.insert(field.clone(), serde_json::json!(options.tools));
+        }
+        if options.force_tool {
+            // 三种方言都认 `tool_choice`，但取值不同：OpenAI 兼容与 Ollama 用 `required`，
+            // Anthropic 用 `any`。写错那一个的后果是 **400**，而 400 会被读成"这家不支持工具" ——
+            // 正是探针最容易误报的地方。
+            let required = if profile.protocol == "anthropic" { "any" } else { "required" };
+            object.insert("tool_choice".into(), serde_json::json!(required));
         }
     }
 
     ProviderRequest { endpoint, model: profile.model_id.clone(), messages, headers, body, stream, plan }
+}
+
+/// OpenAI 兼容的一条消息。带图时 `content` 变成 **parts 数组**（纯文本时保持字符串 ——
+/// 有些网关只认字符串那种形状，能少变一处就少变一处）。
+fn openai_message(message: &ChatMessage) -> serde_json::Value {
+    if message.images.is_empty() {
+        return serde_json::json!({ "role": message.role, "content": message.content });
+    }
+    let mut parts: Vec<serde_json::Value> = vec![serde_json::json!({ "type": "text", "text": message.content })];
+    for image in &message.images {
+        // `data:` 前缀是必须的：裸 base64 在这里会被当成一个 URL 去取。
+        parts.push(serde_json::json!({
+            "type": "image_url",
+            "image_url": { "url": format!("data:image/png;base64,{image}") }
+        }));
+    }
+    serde_json::json!({ "role": message.role, "content": parts })
+}
+
+/// Anthropic Messages 的一条消息。图片是 content block 里的 `source`（base64 **裸值**）。
+fn anthropic_message(message: &ChatMessage) -> serde_json::Value {
+    if message.images.is_empty() {
+        return serde_json::json!({ "role": message.role, "content": message.content });
+    }
+    let mut blocks: Vec<serde_json::Value> = vec![serde_json::json!({ "type": "text", "text": message.content })];
+    for image in &message.images {
+        blocks.push(serde_json::json!({
+            "type": "image",
+            "source": { "type": "base64", "media_type": "image/png", "data": image }
+        }));
+    }
+    serde_json::json!({ "role": message.role, "content": blocks })
 }
 
 /// 把密钥填进认证头。**只在真正发送之前调用**，而且返回值不落到任何持久化的地方。

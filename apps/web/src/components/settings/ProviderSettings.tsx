@@ -3,8 +3,10 @@ import { useCallback, useEffect, useId, useRef, useState } from "react"
 import { clearSecretInput, hasSecret } from "../../services/secretClient"
 import { reasonFor, slug } from "./providerSettingsFields"
 import {
+  checkProviderCapabilities,
   isVerified,
   listProviderProfiles,
+  readFailureContract,
   readProviderHealth,
   removeProviderProfile,
   saveProfileWithSecret,
@@ -27,7 +29,23 @@ import {
  * 5. **键盘可达每一件事** —— 全部用原生 `<button>` / `<input>` / `<select>`，
  *    没有需要自己实现键盘语义的自定义控件。
  *
- * ## 一条刻意的取舍：这个界面**不测试连接**
+ * ## 从"不测试连接"到"按下去才探测"（2026-09-21 改）
+ *
+ * 这条界面原先刻意**没有**"测试连接"按钮，理由写在下面（原文保留）：
+ * 真实连通性要等 Task 1.5 的回环代理，在那之前按一下只能"假装成功"或"永远失败"。
+ * 现在那个理由不成立了：Rust 侧能借出密钥并真的发请求了，所以这里有了
+ * **一个用户主动触发的**能力探测。
+ *
+ * 它仍然是**用户按下去才发生**的：一次探测会花掉**四发真请求**（文本、JSON、
+ * 一张 1×1 的 PNG、一次带工具表的请求）。打开设置就自动跑会在用户不知情的时候
+ * 花掉他的额度，而那比"界面上少一个按钮"糟得多 —— 所以按钮上写明了这一点。
+ *
+ * 探测的判据不在这一层（它只是显示结论）：真正的判据在 `providers::capability`，
+ * 包括最要紧的那条"**一次成功的文本 ping 不许把 tools 或 vision 打勾**"。
+ *
+ * ---
+ *
+ * 下面这段是原先的取舍记录，留在这里因为"为什么当时不做"本身是有用的信息：
  *
  * 计划 Step 5 提到 "test connection"，但真实连通性要等 Task 1.5 的回环代理
  * （密钥不能到前端来，所以请求必须由 Rust 侧发）。在那之前放一个"测试连接"按钮
@@ -43,6 +61,8 @@ export interface ProviderSettingsProps {
     remove(profileId: string): Promise<void>
     health(profileId: string): Promise<ProviderHealth | null>
     hasSecret(profileId: string): Promise<boolean>
+    /** 跑一次能力探测（**会花掉四发真请求**）。返回失败原因供界面如实显示。 */
+    check(profileId: string, revision: number): Promise<{ ok: true; health: ProviderHealth } | { ok: false; detail: string }>
   }
   /** 后端不可用时的说明（浏览器里跑就是这种情况）。 */
   unavailableReason?: string
@@ -93,6 +113,15 @@ export function ProviderSettings({ client, unavailableReason }: ProviderSettings
       const result = await hasSecret(profileId)
       if (!result.ok) throw new Error(`${result.code}: ${result.detail}`)
       return result.value
+    },
+    check: async (profileId: string, revision: number) => {
+      const result = await checkProviderCapabilities(profileId, revision)
+      if (!result.ok) {
+        // 优先显示 Rust 那条**带分类**的失败（它说清了是认证、地址还是没密钥）。
+        const contract = readFailureContract(new Error(result.detail))
+        return { ok: false as const, detail: contract ? contract.message : `${result.code}: ${result.detail}` }
+      }
+      return { ok: true as const, health: result.value }
     }
   })
   const api = client ?? realClient.current
@@ -108,6 +137,8 @@ export function ProviderSettings({ client, unavailableReason }: ProviderSettings
   const [secret, setSecret] = useState("")
   const [errors, setErrors] = useState<FieldErrors>({})
   const [status, setStatus] = useState<{ kind: "idle" | "saving" | "saved" | "failed"; message: string }>({ kind: "idle", message: "" })
+  /** 正在探测哪一个 profile（空串＝没有在探测）。 */
+  const [probing, setProbing] = useState("")
   const secretInput = useRef<HTMLInputElement>(null)
   const errorRefs = useRef<Record<string, HTMLInputElement | null>>({})
   const fieldId = useId()
@@ -237,6 +268,31 @@ export function ProviderSettings({ client, unavailableReason }: ProviderSettings
     }
   }
 
+  /**
+   * **跑一次能力探测**（用户按下去才发生）。
+   *
+   * 它会花掉四发真请求，所以：①只在点击时跑；②跑的时候按钮禁用并如实说"探测中"；
+   * ③失败时**显示原因**，而不是留一个"未验证"让用户猜。
+   */
+  async function probe(profile: ProviderProfile): Promise<void> {
+    setProbing(profile.id)
+    setStatus({ kind: "saving", message: `正在探测 ${profile.name}（会发出 4 次请求）…` })
+    const result = await api.check(profile.id, profile.revision)
+    setProbing("")
+    if (!result.ok) {
+      setStatus({ kind: "failed", message: `探测 ${profile.name} 未完成：${result.detail}` })
+      return
+    }
+    setHealth((current) => ({ ...current, [profile.id]: result.health }))
+    const verified = result.health.capabilityEvidence.filter((entry) => entry.status === "verified").map((entry) => FEATURE_LABELS[entry.feature] ?? entry.feature)
+    setStatus({
+      kind: "saved",
+      message: verified.length > 0
+        ? `已探测 ${profile.name}：${verified.join("、")} 已验证`
+        : `已探测 ${profile.name}：这次没能验证出任何能力（结论是"未知"，不是"不支持"）`
+    })
+  }
+
   return <section className="provider-settings" aria-label="模型服务设置">
     <header className="provider-settings-head">
       <h3>模型服务</h3>
@@ -270,6 +326,16 @@ export function ProviderSettings({ client, unavailableReason }: ProviderSettings
           </span>)}
         </span>
         <button type="button" onClick={() => void remove(profile)} aria-label={`删除 ${profile.name}`}>删除</button>
+        {/* 探测按钮：**写明代价**（四发请求），并在跑的时候禁用 —— 连点几下会连花几次钱。 */}
+        <button
+          type="button"
+          className="provider-settings-probe"
+          onClick={() => void probe(profile)}
+          disabled={probing !== "" || !keyPresent[profile.id]}
+          title={keyPresent[profile.id] ? "会发出 4 次请求（文本、JSON、一张 1×1 的图、一次工具调用）" : "先配置密钥再探测"}
+        >
+          {probing === profile.id ? "探测中…" : "探测能力"}
+        </button>
       </li>)}
       {profiles.length === 0 && <li className="provider-settings-empty">还没有配置任何模型服务。</li>}
     </ul>

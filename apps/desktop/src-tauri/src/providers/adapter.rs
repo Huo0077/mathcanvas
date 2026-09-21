@@ -40,7 +40,7 @@ use std::time::Duration;
 use futures_util::StreamExt;
 
 use super::events::{classify_http_failure, FailureKind, ModelEvent};
-use super::request::{authorize, build_request, ChatMessage, ProviderRequest};
+use super::request::{authorize, build_request, ChatMessage, ProviderRequest, RequestOptions};
 use crate::proxy::security::{self, MAX_BODY_BYTES};
 use crate::repository::provider_profiles::ProviderProfile;
 
@@ -303,7 +303,7 @@ impl<'a, S: SecretSource + ?Sized, T: Transport + ?Sized> ProviderAdapter<'a, S,
         &self.profile
     }
 
-    /// **发一次请求**。
+    /// **发一次请求**（不带工具表）。
     ///
     /// 顺序是刻意的，每一步都在拦住一种具体的故障：
     /// 1. 出站判据 —— 手改过的 `baseUrl` 不该变成 SSRF，也不该明文传密钥；
@@ -312,7 +312,16 @@ impl<'a, S: SecretSource + ?Sized, T: Transport + ?Sized> ProviderAdapter<'a, S,
     /// 4. 现场算出认证头，交给传输层；
     /// 5. 边到边解码，取消一置位就停手。
     pub fn send(&self, messages: Vec<ChatMessage>, stream: bool, stop: &dyn Stop) -> Result<SendOutcome, ProviderError> {
-        let request = build_request(&self.profile, messages, stream, false);
+        self.send_with(messages, stream, RequestOptions::default(), stop)
+    }
+
+    /// **发一次请求**，并指定这次要带什么（工具表、是否强制用工具、图片消息）。
+    ///
+    /// 这个口子是给**能力探针**的：它需要工具表与 `tool_choice`，
+    /// 而真运行走上面那个不带工具的默认路径。两者共用下面这条发送路径 ——
+    /// 判据、借密钥、解码、取消都只有一处实现。
+    pub fn send_with(&self, messages: Vec<ChatMessage>, stream: bool, options: RequestOptions, stop: &dyn Stop) -> Result<SendOutcome, ProviderError> {
+        let request = build_request(&self.profile, messages, stream, options);
         // 端点由 `base_url` + 常量路径拼出（调用方给不了它），但那份 `base_url`
         // 来自**可以被手改的配置文件** —— 所以连接之前再过一遍判据。
         security::allow_upstream(&request.endpoint, &self.profile.network_policy).map_err(|detail| ProviderError::RefusedUrl { detail })?;

@@ -121,6 +121,52 @@ export async function readProviderHealth(profileId: string): Promise<ProviderRes
 }
 
 /**
+ * **失败合同**：Rust 侧把命令的 `Err` 做成 `ModelEvent` 的 `failed` 形状
+ * （`kind` / `failure` / `message` / `retryable`），但 Tauri 把它作为**字符串**交过来。
+ * 所以这里要解析一次 —— 而不是把那个字符串直接显示给用户（那会显示一坨 JSON）。
+ *
+ * 解析不出来时回 `null`：调用方退回 `asResult` 的通用处理，而不是假装读懂了一份 JSON。
+ */
+export function readFailureContract(error: unknown): { failure: string; message: string; retryable: boolean } | null {
+  const text = error instanceof Error ? error.message : typeof error === "string" ? error : ""
+  const start = text.indexOf("{")
+  if (start < 0) return null
+  try {
+    const parsed = JSON.parse(text.slice(start)) as { kind?: unknown; failure?: unknown; message?: unknown; retryable?: unknown }
+    if (parsed.kind !== "failed" || typeof parsed.message !== "string") return null
+    return {
+      failure: typeof parsed.failure === "string" ? parsed.failure : "unknown",
+      message: parsed.message,
+      retryable: parsed.retryable === true
+    }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * **跑一次能力探测**（Task 1.4 Step 5）。
+ *
+ * ## 它会真的花掉四发请求
+ *
+ * 文本、JSON、一张 1×1 的 PNG、一次带工具表的请求。所以它**只能由用户按下去**，
+ * 不能在打开设置时自动跑 —— 那会悄悄花掉别人的额度。界面上的按钮要写明这一点。
+ *
+ * ## 与 `readProviderHealth` 的分工
+ *
+ * 这一个**发请求并改状态**；那一个只读已经存下来的结论。分开是因为两者的代价差得远：
+ * 读是零成本、随时可以做；探测要花钱、要等。
+ */
+export async function checkProviderCapabilities(profileId: string, profileRevision: number): Promise<ProviderResult<ProviderHealth>> {
+  try {
+    const raw = await invokeDesktop<ProviderHealth>("provider_check", { profileId, profileRevision })
+    return { ok: true, value: raw }
+  } catch (error) {
+    return asResult(error)
+  }
+}
+
+/**
  * **能不能采信某个能力**（Task 1.4 Step 5）。
  *
  * 两条判据，缺一不可：`verified` 才作数（`declared` 是"文档里说支持"），
