@@ -79,26 +79,41 @@ npm run build                     # 产出 release exe（内含 build-check/math
 | 界面上出现"需要桌面版" | 你在浏览器里打开了 `127.0.0.1:5173`（开发服务器） | 正常。本地项目库/密钥库/账本都只在桌面版里 |
 | **能力验证四发全 `unknown`，Agent 报"传输失败已尝试 3 次"** | **本机的外网出口需要代理**（`ProxyEnable=1`、`ProxyServer=127.0.0.1:7890`），而 `HttpTransport` **刻意不跟随系统/环境代理**（安全理由见 `adapter.rs` 的注释）——于是它走直连，拿回一张 `Request Blocked` 的拦截页 | 见下方「出口需要代理时怎么办」 |
 
-## 出口需要代理时怎么办（2026-09-21 实测）
+## 云端 provider 在本机拿不到真实回应（2026-09-21 实测，**尚未定论**）
 
-**症状**（本机实测）：保存服务后四发探测全部 `unknown`（"已连通，但这次没能验证出任何能力"），Agent 发一句话得到
-`ModelPlannerError: 传输失败已尝试 3 次（上限 3）`，展开后的底层原因是
-`the provider is rate limiting (429): <!DOCTYPE html>…<title>Error - Request Blocked</title>` —— 那**不是** DeepSeek 的回应，是一张拦截页。
+> **更正**：上面表格里那一行把原因写成"外网出口需要代理、而传输层刻意不跟随代理"。
+> 那**说得太快了** —— 关掉系统代理之后重跑，应用**仍然**拿到同一张拦截页。
+> 下面是目前查清的部分与仍没查清的部分。
 
-**已确认的事实**：
+**症状**：保存服务后四发探测全部 `unknown`（"已连通，但这次没能验证出任何能力"），
+Agent 发一句话得到 `ModelPlannerError: 传输失败已尝试 3 次（上限 3）`，底层原因是
+`the provider is rate limiting (429): <!DOCTYPE html>…<title>Error - Request Blocked</title>` ——
+**那不是 DeepSeek 的回应**，是一张 HTML 拦截页。
 
-- 本机 `HKCU\…\Internet Settings` 里 `ProxyEnable=1`、`ProxyServer=127.0.0.1:7890`（Clash）。
-- 走系统代理请求 `https://api.deepseek.com/` 会拿到 **401**（真实的 DeepSeek 回应，只是没带认证）→ **代理这条路是通的**。
-- 直连则被拦（拦截页）。而 `HttpTransport` 用的是 `.no_proxy()`。
+**已经查清的事实**：
 
-**这是安全与可达性的冲突，不是 bug**：`.no_proxy()` 的理由（"一个环境变量不该悄悄把我们带着凭据的请求改道"）依然成立。
-要在这台机器上用云端 provider，需要在**两者之间显式选一个**，而不是让传输层静默跟随：
+| 检查 | 结果 |
+| --- | --- |
+| 系统代理（`HKCU\…\Internet Settings`） | 曾经 `ProxyEnable=1`（`127.0.0.1:7890`），**关掉之后应用仍然失败** → 代理不是原因 |
+| 直连（`curl`）`https://api.deepseek.com/v1/chat/completions` | **拿到 DeepSeek 的真实 JSON**（无效 key → 401 `Authentication Fails…`）→ 网络本身通 |
+| 空 UA / `reqwest` UA / 浏览器 UA 三种请求头 | **都是真实 401** → 拦截与 User-Agent 无关 |
+| 模型名 `deepseek-chat` 与 `deepseekv4.1` | **都是真实 401** → 与模型名无关 |
+| 健康记录时间戳 | 22:23（关代理之后**真的重跑过**），四条 detail 仍是那张拦截页 |
+| 默认路由 | 经 `100.65.255.254`（一个隧道式网关，ifIndex 9）—— 本机装有 Clash 与若干隧道/加速工具 |
 
-1. （推荐，改动小）给 provider 配置加一个**显式开关**「经由系统代理」，默认关闭；打开时走 `reqwest` 的系统代理探测，并在卡片上写明"这次请求会经过你系统的代理"；
-2. 或者让 Clash 走 **TUN / 透明代理**（系统代理设置关掉也能接管流量）—— 那是机器层面的配置，不是应用的事；
-3. 或者用 `networkPolicy: local` 的本机服务（这一档根本不出外网）。
+**因此只剩两个嫌疑**（都还没证据定论）：
 
-在第 1 条做出来之前，`networkPolicy: cloud` 在**本机**上是走不通的 —— 这条被记进 `docs/project-progress.md`。
+1. **按进程分流**：本机的隧道/加速类工具可能对 `mathcanvas-desktop.exe` 单独接管流量（split tunneling），
+   而 `curl.exe` / PowerShell 不在它的名单里 —— 这解释了"同一个请求、同一个时刻，shell 能通、应用不能"。
+2. **应用那条 TLS/HTTP2 栈被中间设备拦住**（拦截页是 HTML 而不是 DeepSeek 的错误体，说明中间有人应答）。
+
+**下一步（能把范围切一半的廉价实验）**：趁应用运行时，用**控制台里的 Rust 程序**（`cargo test --test provider_live`，
+不需要有效 key —— 拿到真实 401 就够）打同一个端点。
+若控制台那条通、应用那条不通，就是**按进程分流**，修法在机器上（退出/调整那个隧道工具），不在代码里；
+若两条都不通，才轮到应用这一侧。
+
+**与代码无关的旁证**：`tests/provider_live.rs` 在更早（代理还开着时）**真的**从 Rust 侧拿到了 DeepSeek 的
+`pong`，同一套 `HttpTransport` + `.no_proxy()`。所以"传输层实现坏了"这个假设**已经被排除过一次**。
 
 ## 这一遍**不能**证明的事（如实）
 
