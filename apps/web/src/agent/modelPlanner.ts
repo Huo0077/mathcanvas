@@ -405,10 +405,21 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
             remaining: { network: request.budget.remaining("network"), generation: request.budget.remaining("generation") },
             maxAttempts: MAX_TRANSPORT_ATTEMPTS
           })
-          if (decision.action !== "retry") throw new ModelPlannerError("provider_failed", decision.detail, failure.retryable)
+          if (decision.action !== "retry") {
+            /**
+             * **把底层那句话带上**（2026-09-21 修）。
+             *
+             * 原先这里只抛 `decision.detail`，而那句话说清的是**决定**（"传输失败已尝试 3 次，
+             * 停下并如实报告"），不是**原因**（`the provider could not be reached: …`）。
+             * 后果在一次真实运行里立刻显现：界面上只有"传输失败已尝试 3 次"，而排查需要知道
+             * 到底是 DNS、TLS、超时还是连接被拒 —— 那句话本来就在 `failure.message` 里，
+             * 却在决策文字里丢掉了。
+             */
+            throw new ModelPlannerError("provider_failed", `${decision.detail}（底层原因：${failure.message}）`, failure.retryable)
+          }
           // 取消优先于重试：用户按了停止就不该再发一次。
           if (request.signal.aborted) throw new ModelPlannerError("cancelled", "这次运行已取消。", false)
-          if (!spend(request.budget, decision)) throw new ModelPlannerError("provider_failed", `预算已不足以再试一次（${decision.detail}）`, failure.retryable)
+          if (!spend(request.budget, decision)) throw new ModelPlannerError("provider_failed", `预算已不足以再试一次（${decision.detail}；底层原因：${failure.message}）`, failure.retryable)
           lastSignature = `${error.class}:${error.status ?? "none"}:${error.message}`
           continue
         }

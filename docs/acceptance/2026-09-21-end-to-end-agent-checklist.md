@@ -77,6 +77,28 @@ npm run build                     # 产出 release exe（内含 build-check/math
 | Agent 停在 `waiting` 且说"本地规划器只认识几条固定指令" | 这一轮**走的是本地规划器**：桌面外壳没起来 / 没点「使用」/ 那一份没有密钥 | 确认三点（判据在 `agentRunner.selectPlanner`） |
 | 提交被拒 `stale_source` | 预览期间文档被改过（CAS 失败） | 重新发一次；这是设计行为，不是错误 |
 | 界面上出现"需要桌面版" | 你在浏览器里打开了 `127.0.0.1:5173`（开发服务器） | 正常。本地项目库/密钥库/账本都只在桌面版里 |
+| **能力验证四发全 `unknown`，Agent 报"传输失败已尝试 3 次"** | **本机的外网出口需要代理**（`ProxyEnable=1`、`ProxyServer=127.0.0.1:7890`），而 `HttpTransport` **刻意不跟随系统/环境代理**（安全理由见 `adapter.rs` 的注释）——于是它走直连，拿回一张 `Request Blocked` 的拦截页 | 见下方「出口需要代理时怎么办」 |
+
+## 出口需要代理时怎么办（2026-09-21 实测）
+
+**症状**（本机实测）：保存服务后四发探测全部 `unknown`（"已连通，但这次没能验证出任何能力"），Agent 发一句话得到
+`ModelPlannerError: 传输失败已尝试 3 次（上限 3）`，展开后的底层原因是
+`the provider is rate limiting (429): <!DOCTYPE html>…<title>Error - Request Blocked</title>` —— 那**不是** DeepSeek 的回应，是一张拦截页。
+
+**已确认的事实**：
+
+- 本机 `HKCU\…\Internet Settings` 里 `ProxyEnable=1`、`ProxyServer=127.0.0.1:7890`（Clash）。
+- 走系统代理请求 `https://api.deepseek.com/` 会拿到 **401**（真实的 DeepSeek 回应，只是没带认证）→ **代理这条路是通的**。
+- 直连则被拦（拦截页）。而 `HttpTransport` 用的是 `.no_proxy()`。
+
+**这是安全与可达性的冲突，不是 bug**：`.no_proxy()` 的理由（"一个环境变量不该悄悄把我们带着凭据的请求改道"）依然成立。
+要在这台机器上用云端 provider，需要在**两者之间显式选一个**，而不是让传输层静默跟随：
+
+1. （推荐，改动小）给 provider 配置加一个**显式开关**「经由系统代理」，默认关闭；打开时走 `reqwest` 的系统代理探测，并在卡片上写明"这次请求会经过你系统的代理"；
+2. 或者让 Clash 走 **TUN / 透明代理**（系统代理设置关掉也能接管流量）—— 那是机器层面的配置，不是应用的事；
+3. 或者用 `networkPolicy: local` 的本机服务（这一档根本不出外网）。
+
+在第 1 条做出来之前，`networkPolicy: cloud` 在**本机**上是走不通的 —— 这条被记进 `docs/project-progress.md`。
 
 ## 这一遍**不能**证明的事（如实）
 
