@@ -40,6 +40,29 @@
 
 **一句话结论**：G1 六个任务的**代码全部落地且被测透**（Rust **179 例** + 单测 2182 例）；模型服务界面已按用户口径重做成可切换的清单，**「使用中」的那一份现在真的驱动规划器**（G2 接线的核心），**附件与 `.mcanvas` 导出/导入也有了界面入口**。**Gate 五条里已满足四条**（②仍差用户本机的密钥手动重启验证）。剩下的如实缺口是：**密钥手动重启验证**（需要你本机操作；工具链已在本机装好并复核）、**`native_tools` 通道**（需要给 `provider_run` 加 `tools` 参数）、**附件列举命令**、以及"探针请求形状没有对真实服务跑过"。
 
+### G2 补口：原生工具通道打通，并修掉一个**静默失效的探针**（2026-09-21）
+
+- **交付**：`provider_run` 收 `tools`（Rust + 前端各一半）+ `providers::capability::tools_verified`（**出口判据**）+ `ProviderError::ToolsNotVerified`；前端 `modelPlanner` 走原生工具通道（`plan_set_plan`，**它的 arguments 就是计划信封**）。Rust **+5 例**（provider_adapter 20、provider_capability 19），单测 **+4 例**。
+- **一个真实缺陷（本轮最有价值的发现）**：`RequestPlan.tools_by_default` 对 `generic_compatible` 是 `false`，而 `build_request` 把它也当成一道门 —— 于是**工具表被静默丢掉**。后果不是"更保守"：能力探针显式传了 `allow_tools: true` + 工具表 + `force_tool`，发出去的却是一条普通文本请求，模型只能回话，而工具探针把"回了文本"记成 **`unknown`**。用户看到的是"工具徽章永远不亮"，真实原因却是**我们从来没问过**。计划原文那句 "Do not **assume** every compatible service supports the same tools" 是**要问**的理由，不是不问的理由。现在放行与否只有调用方一个决定，方言只决定工具表放哪个字段。
+- **出口判据**（第二道门）：`tools_verified(health, revision)` —— 只有 `verified` **且**属于当前修订号才放行，否则**拒绝**（`ToolsNotVerified`，分类 `permission`、不可重试），而不是静默不发。前端按证据选通道是"我们不该请求"，这里是"就算请求了也不发"——与"密钥字段入口出口都要拦"同一条理由。
+- **一条如实改写**：`the_dialect_decides_whether_tool_schemas_may_be_sent` 断言的是**缺陷本身**（"generic_compatible 即使调用方放行也不能拿到工具表"），已改写为 `the_caller_decides_whether_tool_schemas_are_sent_and_the_dialect_only_decides_where`，并把改写原因写进用例 —— 否则那个断言会让探针**永远哑着**，而它看起来像一条安全测试。
+- **原生通道为什么不需要多轮工具循环**：唯一发给模型的工具是 `plan_set_plan`，它的参数**就是**信封。于是"模型调了计划工具"与"文本通道里回了一段 JSON"是同一个决定、不同的承载方式。原生通道上模型改用文本作答时仍然按文本通道解析一次（有些服务就是这样），**别的**工具调用一律拒绝（我们没发过那个表）。
+- **如实缺口**：这一批让**计划**通道变成原生，不是通用工具调用 —— 协调器仍然从不调用 `ToolPort`，所以模型还不能自己请求 `scene.inspect` 之类；那个循环是独立的一块。
+
+**验证证据（本批）**：Rust **184 例 + 1 ignored**（provider_adapter 20 / provider_capability 19）、clippy `--all-targets` 干净、单测 **191 文件 / 2186 用例**、typecheck exit 0、lint 0 error / 14 warning。
+
+### G2 补口：运行账本真的写进项目库了（Task 2.6）（2026-09-21）
+
+- **交付**：`apps/desktop/src-tauri/src/repository/run_events.rs`（新建，**7 例**）+ 三条 IPC 命令（`append_run_event` / `read_run_events` / `run_event_count`）+ 前端 `services/runEventClient.ts`（**5 例**）+ `agentRunner` 每步写一条（fire-and-forget）。
+- **关掉的缺口**：`run_events` 表在迁移 1 里就建好了，而**从来没有一行写进去过** —— "运行账本"只活在内存里（代理那个 `RunRegistry`，有界、重开就没了）。现在它进项目库，与文档共用一份事务性存储（于是"这次运行改动了哪一版文档"与"它发生了什么"在同一条时间线上）。
+- **三条纪律各有判据**：①**只追加、按 `event_id` 幂等**（`INSERT OR IGNORE`；重放**不是错误**，返回值说清"这次真的写了一行吗"）；②**绝不存模型推理与图像字节** —— 靠**结构**（`RunEventInput` 里没有那些字段）**与入口**（`deny_unknown_fields`：多一个字段就**拒绝**，而不是静默削掉；静默削掉会让调用方以为存进去了，那正是"profile 混进 apiKey"那次的教训）；③**有界**（`detail` 按**字符**截断到 512，一次读取最多 512 条，同毫秒按 `rowid` 定序）。
+- **脱敏是默认拒绝式的**：不是"认出几种前缀就抹几种"，而是**任何像密钥的长串一律抹掉** —— 32 个字符以上的令牌字符连续串、`sk-` / `sk_` 前缀、`bearer` 后面的东西。认前缀必然会漏（每家前缀都不一样，而泄漏只需要漏一次）；与安全无关的部分原样保留（脱敏过度会让账本没用）。
+- **最要紧的一条用例是计划 Step 5 点名的那条**：它把**库文件当字节读一遍**，查凭据、`reasoning`、`imageBytes` 是否存在，而且**同时扫 `-wal`** —— WAL 模式下新写入的行可能还没进主库文件，只扫主库会得到一个"干净"的假结论。
+- **哨兵按设计跳了一次**：新增三条命令撞上了 `shell_smoke` 里那份**逐字列出**注册命令的清单（它的注释写着"注册清单变了就请有意地更新它"）。那次红是预期行为，清单已带说明更新（三条都是具名命令，既不接受任意 SQL 也不接受任意路径）。
+- **一处更正（如实）**：此前我记的"附件列举命令缺失"**说得太重了** —— `ProjectRepository::attachments_of(project, document, generation)` **早就存在并有测试**（`repository_package` 里用过）。缺的只是**一条 IPC 命令 + 界面接线**，不是存储能力。项目包面板那条"只覆盖本次会话"的说明因此比实际更悲观；把命令接出来是一件小事，留在下一批。
+
+**验证证据（本批）**：Rust **191 例 + 1 ignored**（run_events 7、shell_smoke 9）、clippy 干净、单测 **192 文件 / 2191 用例**、typecheck exit 0、lint 0 error / 14 warning、**e2e 122/122**。
+
 ### 环境：Rust 工具链在本机装好并复核（2026-09-21）
 
 - **起因**：用户明确要求"帮我装 Rust 工具链"（此前 2026-09-19 那一批的立场是**不自动装**——"这类会改变用户环境的操作应当由用户决定"，那条判断现在仍然成立，只是决定已经由用户做出）。
