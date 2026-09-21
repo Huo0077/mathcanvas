@@ -548,6 +548,72 @@ fn the_command_layer_passes_the_tool_decision_through_untouched() {
     assert_eq!(transport.last().request.body["tools"][0]["function"]["name"], "plan_set_plan");
 }
 
+/// **非流式正文必须被解成一份响应，而不是零事件**（2026-09-21 的真实缺陷）。
+///
+/// 这条用例是一次**真实往返**换来的：探针用 `stream: false` 发请求，而解码器原先
+/// **永远**按 SSE 拆帧 —— 一份没有 `data:` 行的正文于是被解析成"零事件且**不报错**"。
+/// 在真实服务上的表现是：每一次能力验证都把每个能力记成
+/// "the provider returned an empty reply"，也就是**一个完全健康的服务看起来什么都不支持**，
+/// 而用户会去换 provider。
+///
+/// 它此前测不出来，是因为**假替身喂的字节始终是 SSE 形状**（`data: {...}\n\n`），
+/// 不管请求里那个 `stream` 写的是什么 —— 测试的形状与生产的形状对不上。
+/// 所以这一条刻意喂**裸 JSON**，并且走 `stream: false` 的那条路。
+#[test]
+fn a_non_streaming_body_is_decoded_as_one_response_instead_of_zero_events() {
+    let body = serde_json::json!({
+        "id": "chatcmpl-1",
+        "object": "chat.completion",
+        "model": "deepseek-chat",
+        "choices": [{ "index": 0, "message": { "role": "assistant", "content": "pong" }, "finish_reason": "stop" }],
+        "usage": { "prompt_tokens": 12, "completion_tokens": 2 }
+    });
+    let source = FakeSource { secret: Some("sk-live-secret".to_string()) };
+    let transport = FakeTransport::streaming(vec![body.to_string().into_bytes()]);
+    let stop = AtomicStop::new();
+    let adapter = ProviderAdapter::new(&source, &transport, openai_profile());
+
+    let outcome = adapter.send_with(messages(), false, RequestOptions::default(), stop.as_ref()).expect("the request must be attempted");
+
+    let events = match outcome {
+        SendOutcome::Completed(events) | SendOutcome::Cancelled(events) => events,
+    };
+    let text: String = events
+        .iter()
+        .filter_map(|event| match event {
+            ModelEvent::Delta { text } => Some(text.as_str()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("");
+    assert_eq!(text, "pong", "a bare JSON body must decode into its delta: {events:?}");
+    assert!(events.iter().any(|event| matches!(event, ModelEvent::Completed { .. })), "and it must end with a completion: {events:?}");
+}
+
+/// 请求说"不要流式"、而对方仍然流式时，**正文说了算**（有些网关只此一种）。
+#[test]
+fn a_streaming_body_is_still_decoded_when_the_request_did_not_ask_for_it() {
+    let source = FakeSource { secret: Some("sk-live-secret".to_string()) };
+    let transport = FakeTransport::streaming(vec![b"data: {\"choices\":[{\"delta\":{\"content\":\"po\"}}]}\n\ndata: {\"choices\":[{\"delta\":{\"content\":\"ng\"}}]}\n\ndata: [DONE]\n\n".to_vec()]);
+    let stop = AtomicStop::new();
+    let adapter = ProviderAdapter::new(&source, &transport, openai_profile());
+
+    let outcome = adapter.send_with(messages(), false, RequestOptions::default(), stop.as_ref()).expect("the request must be attempted");
+
+    let events = match outcome {
+        SendOutcome::Completed(events) | SendOutcome::Cancelled(events) => events,
+    };
+    let text: String = events
+        .iter()
+        .filter_map(|event| match event {
+            ModelEvent::Delta { text } => Some(text.as_str()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("");
+    assert_eq!(text, "pong", "`data:` frames must win over the request flag: {events:?}");
+}
+
 // ---------------------------------------------------------------- 真实传输层
 
 /// 一个只会走一趟请求的回环 HTTP 服务器。

@@ -223,6 +223,15 @@ impl std::error::Error for ProviderError {}
 /// `flush()` 处理"最后一块没有尾随分隔符"的情况：那不是畸形，只是对方没补空行。
 struct RunStream {
     protocol: String,
+    /// **这次请求要的是流式吗**（`ProviderRequest.stream`）。
+    ///
+    /// 这个字段是 2026-09-21 补的，补它的原因是一次**真实往返**：探针用 `stream: false` 发请求，
+    /// 而这一层**永远**按 SSE 拆帧 —— 一份没有 `data:` 行的正文于是被解析成"零事件"，
+    /// 而且**不报错**（`Completed([])`）。症状是能力探针在真实服务上把所有能力都记成
+    /// "the provider returned an empty reply"，也就是**一个完全健康的服务看起来什么都不支持**。
+    /// 假替身一直没暴露它，因为替身喂的字节**始终是 SSE 形状**（`data: {...}\n\n`），
+    /// 不管请求里那个 `stream` 是什么 —— 于是测试与生产的形状对不上。
+    stream: bool,
     ndjson: bool,
     buffer: Vec<u8>,
     events: Vec<ModelEvent>,
@@ -230,8 +239,16 @@ struct RunStream {
 }
 
 impl RunStream {
-    fn new(protocol: &str) -> Self {
-        Self { protocol: protocol.to_string(), ndjson: protocol == "ollama", buffer: Vec::new(), events: Vec::new(), done: false }
+    fn new(protocol: &str, stream: bool) -> Self {
+        Self { protocol: protocol.to_string(), stream, ndjson: protocol == "ollama", buffer: Vec::new(), events: Vec::new(), done: false }
+    }
+
+    /// 攒下来的正文看起来像 SSE 吗（有 `data:` 行）。
+    ///
+    /// 请求说"不要流式"、而对方仍然流式，是真实存在的情况（有些网关只此一种）。
+    /// 所以**正文可以推翻那个标志**：形状自己做主，标志只是提示。
+    fn looks_like_sse(&self) -> bool {
+        self.buffer.windows(5).any(|window| window == b"data:")
     }
 
     /// 吃掉一帧。
@@ -255,6 +272,11 @@ impl RunStream {
 
     fn feed(&mut self, chunk: &[u8]) {
         self.buffer.extend_from_slice(chunk);
+        // **非流式请求先攒着**：整份正文在 `flush()` 里一次解释。
+        // 拆帧会把它当成"没有 `data:` 行的 SSE"，于是一条事件都不产出。
+        if !self.stream && !self.looks_like_sse() {
+            return;
+        }
         let separator: &[u8] = if self.ndjson { b"\n" } else { b"\n\n" };
         while let Some(index) = find(&self.buffer, separator) {
             let frame: Vec<u8> = self.buffer.drain(..index).collect();
@@ -270,7 +292,13 @@ impl RunStream {
             return;
         }
         let rest: Vec<u8> = std::mem::take(&mut self.buffer);
-        self.absorb(&String::from_utf8_lossy(&rest));
+        let text = String::from_utf8_lossy(&rest).to_string();
+        // **非流式的整份正文**：一次解释（`stream: false`），而不是当帧拆。
+        if !self.stream && !text.contains("data:") {
+            self.events.extend(super::normalize::normalize_response(&self.protocol, &text, None, false));
+            return;
+        }
+        self.absorb(&text);
     }
 
     fn take(&mut self) -> Vec<ModelEvent> {
@@ -374,7 +402,9 @@ impl<'a, S: SecretSource + ?Sized, T: Transport + ?Sized> ProviderAdapter<'a, S,
             .secrets
             .with_secret(&profile_id, move |secret| {
                 let authorization = authorize(&request, secret);
-                let mut stream = RunStream::new(&protocol);
+                // 解码器要知道**这次请求要的是不是流式**（见 `RunStream::stream` 的说明）：
+                // 非流式的正文没有 `data:` 帧，按 SSE 拆会得到"零事件且不报错"。
+                let mut stream = RunStream::new(&protocol, request.stream);
                 let mut failure: Option<ProviderError> = None;
 
                 let result = transport.send(&request, &authorization, stop, &mut |update| match update {

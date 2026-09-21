@@ -40,6 +40,20 @@
 
 **一句话结论**：G1 六个任务的**代码全部落地且被测透**（Rust **179 例** + 单测 2182 例）；模型服务界面已按用户口径重做成可切换的清单，**「使用中」的那一份现在真的驱动规划器**（G2 接线的核心），**附件与 `.mcanvas` 导出/导入也有了界面入口**。**Gate 五条里已满足四条**（②仍差用户本机的密钥手动重启验证）。剩下的如实缺口是：**密钥手动重启验证**（需要你本机操作；工具链已在本机装好并复核）、**`native_tools` 通道**（需要给 `provider_run` 加 `tools` 参数）、**附件列举命令**、以及"探针请求形状没有对真实服务跑过"。
 
+### 真实往返：第一次对真实 provider 跑通，并抓到一个**静默的解码缺陷**（2026-09-21）
+
+- **交付**：`apps/desktop/src-tauri/tests/provider_live.rs`（新建，**2 例**，默认 `#[ignore]`，密钥只从 `DEEPSEEK_API_KEY` 读）+ 解码器修复（`RunStream`）+ **两条回归单测**。
+- **关掉一条如实保留**：档案里那句"探针的请求形状**照公开文档拼、没有对真实服务跑过**" —— 现在跑过了，而且**跑出了东西**（见下）。
+- **抓到的缺陷：非流式响应被静默吞掉**。`RunStream` **永远**按 SSE 拆帧（`normalize_response(.., !self.ndjson)` 恒为 `true`），而一份非流式正文是一整块 JSON、**没有 `data:` 行**：`feed()` 找不到 `\n\n` 于是什么都不拆，`flush()` 把整块正文当**一帧 SSE** 送进归一化器 —— 结果是 `Completed([])`：**零事件，而且不报错**。
+- **它的真实后果**（这一批最要紧的一句）：能力探针恰恰用 `stream: false` 发请求（`providers::capability` 的 `send`）。也就是说在真实服务上，**每一次能力验证都会把每个能力记成 "the provider returned an empty reply"** —— 一个完全健康的服务看起来什么都不支持，四个徽章全红，而用户会去换 provider。
+- **为什么此前测不出来**：假替身喂的字节**始终是 SSE 形状**（`data: {...}\n\n`），**不管请求里那个 `stream` 写的是什么**。测试与生产在"正文是什么形状"这件事上各说各话 —— 这正是"fixture 值得先写、但不能代替一次真实往返"的例子。
+- **修法**：`RunStream` 收下 `request.stream`；非流式请求先把正文攒着、在 `flush()` 里按**整份 JSON** 解释（`stream: false`）；并且**正文可以推翻标志** —— 请求说"不要流式"、对方仍然流式是真实存在的情况（有些网关只此一种），检测到 `data:` 就按 SSE 走。
+- **实测证据（同一台机器、同一个 key，前后对照）**：修复前两条用例都是 `event kinds: []` / `reply: ""`（1 秒、无错）；修复后 **`event kinds: ["started","usage","delta","completed"]`、`reply: "pong"`**。
+- **工具探针那条的真实结论**：对 `deepseek-chat` 发"带工具表 + `tool_choice: required`"的请求，回 **HTTP 200 + usage，但既没有工具调用也没有文本** —— 一条"空完成"。探针的判据表把它记成 `failed`（"requested a tool, nothing was called"），而那是对的判定。**这条用例刻意只断言"拿到一条能解释的完成"，不断言"工具可用"** —— 后者是证据的事，判据在 `capability.rs` 里。
+- **仍未跑的（如实）**：`vision` 探针没有对真实服务跑过（`deepseek-chat` 是纯文本模型）；Anthropic 与 Ollama 两档也没有真实往返；**整条链路（窗口 → 规划器 → 协调器 → 草稿）仍然需要用户在本机点一遍**（配置表单在 WebView2 窗口里，无法从外部驱动）。
+
+**验证证据（本批）**：Rust **193 例 + 1 ignored**（provider_adapter **22**，含两条回归；`--ignored` 时另有 provider_live 2 例通过）、clippy `--all-targets` 干净、单测 **192 文件 / 2191 用例**、typecheck exit 0、lint 0 error / 14 warning、**e2e 122/122**。
+
 ### G2 补口：原生工具通道打通，并修掉一个**静默失效的探针**（2026-09-21）
 
 - **交付**：`provider_run` 收 `tools`（Rust + 前端各一半）+ `providers::capability::tools_verified`（**出口判据**）+ `ProviderError::ToolsNotVerified`；前端 `modelPlanner` 走原生工具通道（`plan_set_plan`，**它的 arguments 就是计划信封**）。Rust **+5 例**（provider_adapter 20、provider_capability 19），单测 **+4 例**。
