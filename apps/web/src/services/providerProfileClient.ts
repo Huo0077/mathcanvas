@@ -145,6 +145,32 @@ export function readFailureContract(error: unknown): { failure: string; message:
 }
 
 /**
+ * **切换当前使用的模型服务**（Task 1.3 Step 5）。
+ *
+ * 只动一个字段，不改任何 profile —— 这一点值得写在这里，因为"切换模型"听起来
+ * 像是要改配置，而它不该：能力证据挂在修订号上，切换顺带推高修订号会让四个
+ * 徽章在每次切换后全部变回"未验证"。
+ */
+export async function selectProviderProfile(profileId: string): Promise<ProviderResult<string>> {
+  try {
+    const raw = await invokeDesktop<string>("select_provider_profile", { profileId })
+    return { ok: true, value: raw }
+  } catch (error) {
+    return asResult(error)
+  }
+}
+
+/** 现在在用哪一份配置。`null` 表示**还没选过**（不是"选了第一份"）。 */
+export async function readActiveProviderProfile(): Promise<ProviderResult<string | null>> {
+  try {
+    const raw = await invokeDesktop<unknown>("active_provider_profile")
+    return { ok: true, value: typeof raw === "string" && raw.length > 0 ? raw : null }
+  } catch (error) {
+    return asResult(error)
+  }
+}
+
+/**
  * **跑一次能力探测**（Task 1.4 Step 5）。
  *
  * ## 它会真的花掉四发请求

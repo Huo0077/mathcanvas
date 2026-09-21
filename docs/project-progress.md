@@ -2,7 +2,7 @@
 
 > 这份文件是项目的单一进度记录。每完成一个可验证的切片，就更新“已完成”和“下一步”，并附上验证证据。
 
-**最后更新：** 2026-09-21（**G1 第十批：能力证据探针 —— "已验证"真的会变真了**。上一批 provider 会发请求了，这一批回答"**一次成功的请求到底证明了什么**"：四条探针各发各的请求，逐条下结论，而最要紧的判据是计划原文那句"**一次成功的文本 ping 不许把 vision 或 tools 打勾**"。**证据的边界**成了这一批的核心：图片与工具探针被 400 拒 → `failed`（形状是我们拼的，那是要我们改代码）；认证 / 连接 / 没有密钥 / 模型不肯配合 → `unknown`（什么都不说明）。**"这家不支持"与"我们发错了"必须分开**，因为下一步动作完全不同。顺带把请求拼装扩成能带工具表与图片（三家三套形状，逐条断言）。设置界面多了一个**用户按下去才发生**的探测按钮（一次四发真请求，按钮写明代价，没有密钥时禁用）。**验证**：Rust **140 例 + 1 例 `#[ignore]`**、单测 **188 文件 / 2122 用例**、typecheck exit 0、lint 0 error / 14 warning、`cargo clippy --all-targets` **零警告**、`npm run build` exit 0、**e2e 119/119**。**G1 现在只差 `.mcanvas` 打包与附件**（Gate ② 的手动密钥重启验证需要用户本机操作）。同日更早的 G1 各批（1.1 外壳 / 1.2 密钥库 / 1.3 provider 配置 / 1.4 适配器 / 1.5 代理 / 1.6 仓储 / 真实转发）逐条见下方「G1 第一批 … 第九批」。同日更早的 G2 各批（第二十二批至第二十七批：接缝修复 / previewHash 真哈希 / 假设贯通 / 同意不可伪造 / 工具可执行 / 轨迹面板 / worker 信封 / 上下文交给规划器 / 观察者事实文本 / 技能清单 / prepare 已知缺口 / 一次性修复往返）见下方「G2 第二十七批」及更早各节。
+**最后更新：** 2026-09-21（**G1 第十三批：模型服务界面重做成 CC Switch 那种清单**。用户口径："像 ccswitch 那样，首先有加号可以添加 apikey，添加完成并且通过验证之后，在界面可以出现刚刚填入的一栏，能同时存在很多栏，并且能够主动在不同的模型中进行切换"。交付：整屏重做的清单界面（加号 → 表单 → 保存即验证 → 那一栏出现；每一栏一张卡片，含四个能力徽章与"使用中"标记）、Rust 侧的"当前使用哪一份"（`active_profile_id` / `select` + 两个命令，7 例）。**切换只动一个字段、不碰修订号**，因为能力证据挂在修订号上，切换若推高修订号会把四个徽章全清掉。三处新判据都落在存储层：切换跨重启还在 / 删掉选中那份时选中被清空 / 旧配置文件仍打得开。**一个自己写出来的 CSS 优先级缺陷靠截图发现**：`data-active` 与 `data-state="unverified"` 各写一条 `::before`，"正在使用的那一栏恰好也还没验证"时会显示成红线。**如实缺口**：`使用中` 还没被规划器消费（把 `PlannerPort` 接到真模型属 G2）。**验证**：Rust **179 例 + 1 例 `#[ignore]`**、单测 **188 文件 / 2134 用例**、typecheck exit 0、lint 0 error / 14 warning、`cargo clippy --all-targets` 零警告、`npm run build` exit 0、**e2e 119/119**、实拍截图两张。）。下面这一段是上一批（G1 第十批：能力证据探针 —— "已验证"真的会变真了**。上一批 provider 会发请求了，这一批回答"**一次成功的请求到底证明了什么**"：四条探针各发各的请求，逐条下结论，而最要紧的判据是计划原文那句"**一次成功的文本 ping 不许把 vision 或 tools 打勾**"。**证据的边界**成了这一批的核心：图片与工具探针被 400 拒 → `failed`（形状是我们拼的，那是要我们改代码）；认证 / 连接 / 没有密钥 / 模型不肯配合 → `unknown`（什么都不说明）。**"这家不支持"与"我们发错了"必须分开**，因为下一步动作完全不同。顺带把请求拼装扩成能带工具表与图片（三家三套形状，逐条断言）。设置界面多了一个**用户按下去才发生**的探测按钮（一次四发真请求，按钮写明代价，没有密钥时禁用）。**验证**：Rust **140 例 + 1 例 `#[ignore]`**、单测 **188 文件 / 2122 用例**、typecheck exit 0、lint 0 error / 14 warning、`cargo clippy --all-targets` **零警告**、`npm run build` exit 0、**e2e 119/119**。**G1 现在只差 `.mcanvas` 打包与附件**（Gate ② 的手动密钥重启验证需要用户本机操作）。同日更早的 G1 各批（1.1 外壳 / 1.2 密钥库 / 1.3 provider 配置 / 1.4 适配器 / 1.5 代理 / 1.6 仓储 / 真实转发）逐条见下方「G1 第一批 … 第九批」。同日更早的 G2 各批（第二十二批至第二十七批：接缝修复 / previewHash 真哈希 / 假设贯通 / 同意不可伪造 / 工具可执行 / 轨迹面板 / worker 信封 / 上下文交给规划器 / 观察者事实文本 / 技能清单 / prepare 已知缺口 / 一次性修复往返）见下方「G2 第二十七批」及更早各节。
 **当前阶段：** P0-P6 与 P7 工程制图已完成；MathCanvas 统一 Ribbon UI 基线、后续 UI 优化（Task 7-13）、工程制图视觉重做（Task 14）、工程制图可用性修复（Task 15-18）、圆锥曲线四项修复、功能键操作指引浮层、CAD 2D 绘图交互重做、平面几何动点系统、3D 视口与几何内核重构、封闭曲线绕定点旋转、UI 优化（草稿纸画布）与平面几何元素选颜色均已完成。**2026-09-17 新增两条解析几何交付线并已全部落地**：**A1 解析二次曲面与"真圆"**（8 片；设计 `docs/superpowers/specs/2026-09-17-analytic-quadrics-design.md`）与 **A2 交面按支撑曲面分组 + 真曲面**（5 轮；设计 `docs/superpowers/specs/2026-09-17-intersection-face-grouping-design.md`）——用户口径从"我不要一个逼近的圆，我需要一个真的圆"一路推到"我需要的只是那个相交的曲面，而不是由很多三角形拼出来的"。**随后"立体几何最后一轮"四件事也已全部交付**（7 片；设计 `docs/superpowers/specs/2026-09-17-3d-tracks-rotation-and-measurement-labels-design.md`）：约束轨道（`circle3` 当动点宿主）、拖动旋转（世界轴三色环 + 15° 吸附 + 属性栏角度）、测量数字常驻画布（2D + 3D）、立体几何 UI 与平面几何同一套令牌。平面动点系统按四个维度交付：①约束模型与参数化映射 ②依赖图 DAG 与增量拓扑重算 ③动态测量监听器 ④轨迹采样与消元法隐式化；3D 重构按四个区块交付：①动点宿主约束与渲染管道 ②截面几何 ③Auto-Fit ④生命周期与多解；四者与三区块**全部接进主流程**（不只是内核可用）。**2026-09-18 又完成平面几何切线**（抛物线 / 双曲线 / 圆 / 椭圆的曲线切线，切点可沿曲线拖动或跟随动点）**与动点扩展**（在动点处作切线、以动点为圆心作圆、半径可调且可随动点位置动态变化），并修掉"切线不能拖动"这一现场反馈。P4 Agent 与 P5 题图解析仍在排除范围内。
 **总体状态：** 开发中
 
@@ -33,12 +33,29 @@
 | --- | --- | --- |
 | 1.1 桌面外壳 | ✅ | `tauri dev` 热重载未实测 |
 | 1.2 SecretStore | ✅ | 手动重启验证（Gate ②）—— **操作步骤见「G1 第十二批」** |
-| 1.3 provider 配置与设置存储 | ✅ | — |
+| 1.3 provider 配置与设置存储 | ✅ | 切到"使用中"的那一份**还没有被规划器消费**（见「G1 第十三批」的如实说明） |
 | 1.4 provider 适配器与事件归一 | ✅ | 能力探针的**请求形状**照公开文档拼、**没有对真实服务跑过**（见「G1 第十批」的一处保留） |
 | 1.5 回环代理与传输安全 | ✅ | **转发已走通**（`ProviderAdapter` + `HttpTransport`，真回环 socket 测过）；`/v1/runs/{runId}/model` 这条 HTTP 路由**故意仍回 501** —— 动作在 IPC 上，运行记录在代理里（理由见「G1 第九批」） |
 | 1.6 SQLite 仓储 / CAS / 崩溃恢复 | ✅ | Rust 侧全齐（迁移 / CAS / 幂等 / 崩溃恢复 / 附件两阶段写与 GC / `.mcanvas` 导出导入）；**缺界面入口**：导出/导入与附件写入还没有 UI（命令都在，由 `tests/repository_package.rs` 29 例 + `project_repository` 19 例覆盖） |
 
-**一句话结论**：G1 六个任务的**代码全部落地且被测透**（Rust **172 例** + 单测 2124 例）；**Gate 五条里已满足四条**（②仍差手动重启验证）；剩下的是**界面接线**与**用户本机操作**，没有未实现的判据。
+**一句话结论**：G1 六个任务的**代码全部落地且被测透**（Rust **179 例** + 单测 2134 例）；**Gate 五条里已满足四条**（②仍差手动重启验证）；模型服务界面已按用户口径重做成 CC Switch 那种清单，剩下的是**附件与导出/导入的界面入口**、**把"使用中"接给规划器**，以及**用户本机操作**。
+
+### G1 第十三批：模型服务界面重做成 CC Switch 那种清单（用户口径）（2026-09-21）
+
+- **用户口径原文**："交互界面我不是很满意，我需要像 ccswitch 那样，首先有加号可以添加 apikey，添加完成并且通过验证之后，在界面可以出现刚刚填入的一栏，能同时存在很多栏，并且能够主动在不同的模型中进行切换，完成交互界面优化。"
+- **交付**：`ProviderSettings.tsx` 整屏重做（**29 例**）+ 新的 `ProviderForm.tsx`（添加/编辑表单）+ `icons.tsx`（四个内联 SVG，无 emoji）+ `tokens.css` 补上 `--color-danger` / `--color-danger-soft` + Rust 侧 `active_profile_id` / `select`（**7 例**）与两个 IPC 命令（`select_provider_profile` / `active_provider_profile`）。
+- **界面形态**：左上角一个**加号**打开表单；表单收起时清单是主角；每一份配置是**一张卡片**，卡片里有名字、模型名、协议与网络策略、密钥状态、健康状态、**四个能力徽章**、一句说明、四个动作（使用 / 验证 / 编辑 / 删除）。**"使用中"那一栏用左侧竖条 + 写着「使用中」的徽章标出来** —— 只靠颜色的话，灰度截图或色觉障碍下就分不出来了。
+- **保存 → 验证 → 出现那一栏**：用户口径里的顺序被照做了。保存成功立刻跑一次能力探测；**验证没过时那一栏仍然出现**（配置是真的存下来了），只是状态如实说"未通过验证"并能就地重试 —— 把已经存下来的东西藏起来比显示一条红的更让人困惑。
+- **切换只动一个字段**：Rust 侧 `select` **不碰任何 profile 的修订号**。这一条不是洁癖：能力证据挂在修订号上，切换顺带推高修订号会让四个徽章在每次切换后**全部变回"未验证"**，而那显然不是用户做的改动。有一条用例专门盯它（`switching_between_profiles_only_moves_the_marker`）。
+- **新加的三个判据**（都在存储层，真的落盘）：切换**跨重启还在**；删掉选中的那一份时**选中被清空**（否则界面一直显示"正在使用 X"而那份已经不存在）；加这个字段**之前写的配置文件仍然打得开**（`#[serde(default)]`，否则一次升级就是数据丢失）。
+- **不默认选第一份**：`使用中` 这个标记必须对应一次真的选择。默认选第一份会让"我还没配"与"我配了但没选"变成同一件事。而**新增的第一份会自动设为使用中** —— 用户刚填完钥匙，下一步显然是"用它"。
+- **一处颜色的历史问题**：全局此前**没有"危险"这个语义色** —— 删除类按钮要么借 `--color-warning`（那是"注意"不是"破坏"），要么自己写十六进制（`settings.css` 原来是 `#b3261e`）。两者都不好：前者把两种意思混起来，后者让"配色只有一处真源"破了个口子。现在收进 `tokens.css`（白底对比度 6.5:1，过 AA）。
+- **一处 CSS 优先级缺陷（自己写出来的，靠截图发现的）**：第一版给"正在使用"和"未通过验证"各写了一条 `::before` 竖条，而**"正在使用的那一栏恰好也还没通过验证"时后者会覆盖前者** —— 用户看到一条红线，而那一栏明明是当前在用的那一份。改成一条基座 + 两条只改背景色的规则，并在注释里写明优先级（**在用 > 未验证**）。
+- **在浏览器里跑不再显示原始报错**：没有桌面外壳时**根本不去问 IPC**（之前会显示一句 `no_desktop_shell: no desktop shell is available for list_provider_profiles; …`）。在浏览器里跑是**正常状态**，而那句原始错误会把一件正常的事显示成故障。
+- **一处如实的缺口**：`使用中` 这一份**还没有被规划器消费** —— Agent 工作区仍然走本地确定性规划器，而 `startModelRun` 需要调用方显式给 `profileId`。也就是说这一批交付的是"**切换能选、能记住、界面如实显示**"，而"切了之后规划器就用它"属于把 `PlannerPort` 接到真模型那一步（G2）。
+- **没有引设计技能包里的 gate 脚本**（那是另一套仓库的 npm 工程）：对比度与状态的判据改用**已有的测试与截图**两条腿 —— 29 条组件用例管状态词与可访问名，两张实拍截图（浏览器里空态 / 注入假 IPC 后的三栏清单）管版式。
+
+**验证证据（本批）**：Rust **179 例通过 + 1 例 `#[ignore]`**（新增 `provider_profiles` 7 例：22）、单测 **188 文件 / 2134 用例全通过（零跳过）**（+10）、typecheck exit 0、lint 0 error / 14 warning（基线）、`cargo clippy --all-targets` **零警告**、`npm run build` exit 0（含 `tauri build --no-bundle`）、**e2e 119/119**、**实拍截图两张**（`build-check/settings-web.png` 空态、`build-check/settings-list.png` 三栏清单含"使用中"标记）。
 
 ### G1 第十二批：删服务时把凭据也删掉（为 Gate ② 的手动验证清路）（2026-09-21）
 
@@ -67,7 +84,7 @@
 - **来源链接缺失不拒绝整包**：来源是可恢复的（那份文档可以后补），而"因为缺一个来源就拒绝打开"会让用户彻底拿不到自己的文档。所以如实列进 `missingSources`。
 - **一处如实的缺口**：这些命令**都还没有界面入口** —— 导出/导入与附件写入目前只能通过 IPC 调用。1.6 的"代码"齐了，而"用户在界面上能不能做到"还没接。
 
-**验证证据（本批）**：Rust **172 例通过 + 1 例 `#[ignore]`**（单元 8 + project_repository **19** + provider_adapter 16 + provider_capability 18 + provider_profiles 14 + providers 19 + proxy 16 + proxy_server 16 + **repository_package 29** + secrets 8 + shell_smoke 9）、单测 **188 文件 / 2122 用例全通过（零跳过）**、typecheck exit 0、lint 0 error / 14 warning（基线）、`cargo clippy --all-targets` **零警告**、`npm run build` exit 0（含 `tauri build --no-bundle`）、**e2e 119/119**。
+**验证证据（本批）**：Rust **172 例通过 + 1 例 `#[ignore]`**（单元 8 + project_repository **19** + provider_adapter 16 + provider_capability 18 + provider_profiles **22** + providers 19 + proxy 16 + proxy_server 16 + **repository_package 29** + secrets 8 + shell_smoke 9）、单测 **188 文件 / 2122 用例全通过（零跳过）**、typecheck exit 0、lint 0 error / 14 warning（基线）、`cargo clippy --all-targets` **零警告**、`npm run build` exit 0（含 `tauri build --no-bundle`）、**e2e 119/119**。
 
 ### G1 第十批：能力证据探针 —— "已验证"**真的会变真**了（Task 1.4 Step 5）（2026-09-21）
 
@@ -92,7 +109,7 @@
 - **`provider_check` 的判据被抽成 `capability::check`**（收 `impl SecretSource` / `impl Transport` / `&mut dyn HealthSink`）：命令的签名绑着 `AppHandle`（造一个要真的起一个 Tauri 应用），抽出来之后"缺密钥要说清是哪一格""修订号不符先拒再碰密钥"两条判据都能确定性跑。
 - **四项能力在界面上真的会亮**：设置里每个服务多了一个"探测能力"按钮，跑完就地更新四个徽章，并如实说"这次没能验证出任何能力（结论是**未知**，不是不支持）"。
 
-**验证证据（本批）**：Rust **140 例通过 + 1 例 `#[ignore]`**（单元 8 + project_repository 16 + provider_adapter 16 + **provider_capability 18** + provider_profiles 14 + providers 19 + proxy 16 + proxy_server 16 + secrets 8 + shell_smoke 9）、单测 **188 文件 / 2122 用例全通过（零跳过）**、typecheck exit 0、lint 0 error / 14 warning（基线）、`cargo clippy --all-targets` **零警告**、`npm run build` exit 0（含 `tauri build --no-bundle`）、**e2e 119/119**。
+**验证证据（本批）**：Rust **140 例通过 + 1 例 `#[ignore]`**（单元 8 + project_repository 16 + provider_adapter 16 + **provider_capability 18** + provider_profiles **22** + providers 19 + proxy 16 + proxy_server 16 + secrets 8 + shell_smoke 9）、单测 **188 文件 / 2122 用例全通过（零跳过）**、typecheck exit 0、lint 0 error / 14 warning（基线）、`cargo clippy --all-targets` **零警告**、`npm run build` exit 0（含 `tauri build --no-bundle`）、**e2e 119/119**。
 
 ### G1 第九批：provider **真的会发请求了**（Task 1.4 收尾 + Task 1.5 另一半）（2026-09-21）
 
@@ -2599,7 +2616,7 @@ P7-1 至 P7-6 与工程工作台层次化改造 Task 1-7 均已完成；P4 Agent
 
 ## 验证证据
 
-> **当前基线（唯一权威，2026-09-21 在「G1 第十二批：删服务时把凭据也删掉」之后实测）**：`npm.cmd test` **188 个测试文件、2124 个用例全部通过（零跳过）**；6 个 workspace（含 `@draw/desktop`）类型检查通过；ESLint **0 error / 14 warning**（14 条为既有基线）；`cargo clippy --all-targets` **零警告**；`npm.cmd run build` exit 0（含 `tauri build --no-bundle`，产出可运行的 `mathcanvas-desktop.exe`）；**Rust 测试 172 例通过 + 1 例 `#[ignore]`**（单元 8 + project_repository **19** + provider_adapter 16 + provider_capability 18 + provider_profiles 14 + providers 19 + proxy 16 + proxy_server 16 + **repository_package 29** + secrets 8 + shell_smoke 9）；Playwright Chromium **119/119** 通过。逐批证据见「G1 第一批 … 第十二批」各节。
+> **当前基线（唯一权威，2026-09-21 在「G1 第十三批：模型服务界面重做」之后实测）**：`npm.cmd test` **188 个测试文件、2134 个用例全部通过（零跳过）**；6 个 workspace（含 `@draw/desktop`）类型检查通过；ESLint **0 error / 14 warning**（14 条为既有基线）；`cargo clippy --all-targets` **零警告**；`npm.cmd run build` exit 0（含 `tauri build --no-bundle`，产出可运行的 `mathcanvas-desktop.exe`）；**Rust 测试 179 例通过 + 1 例 `#[ignore]`**（单元 8 + project_repository **19** + provider_adapter 16 + provider_capability 18 + provider_profiles **22** + providers 19 + proxy 16 + proxy_server 16 + **repository_package 29** + secrets 8 + shell_smoke 9）；Playwright Chromium **119/119** 通过。逐批证据见「G1 第一批 … 第十三批」各节。
 
 > **上一轮基线（2026-09-18 在"平面几何切线 + 动点扩展 + 切点拖动 + 画布收细"之后实测）**：`npx vitest run` **124 个测试文件、1477 个用例通过**（把上游那 22 个提交一起并进来之后重跑；本轮自己的 37 条全部在内）；4 个 workspace 类型检查通过；ESLint 对改动文件 **0 error**（仓库既有 5 条 warning 与本轮无关）；dev server 逐个模块转译通过。**Playwright 本轮未运行**（需另起构建产物端口与安装 Chromium）—— 界面交互由 `App.test.tsx` 的真实 DOM 与指针事件覆盖，浏览器级门禁待补。
 >

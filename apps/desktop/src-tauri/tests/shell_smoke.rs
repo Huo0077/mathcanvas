@@ -128,6 +128,8 @@ fn exposes_only_named_ipc_commands_and_no_generic_one() {
         "remove_provider_profile",
         "provider_health",
         "provider_check",
+        "select_provider_profile",
+        "active_provider_profile",
         "provider_run",
         "provider_cancel",
         "read_document_head",

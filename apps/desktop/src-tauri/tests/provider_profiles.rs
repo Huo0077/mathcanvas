@@ -49,8 +49,7 @@ impl Drop for TempDir {
 }
 
 #[test]
-fn starts_empty_and_adds_a_profile_with_revision_one() {
-    let dir = TempDir::new("store-add");
+fn starts_empty_and_adds_a_profile_with_revision_one() {    let dir = TempDir::new("store-add");
     let mut store = ProviderProfileStore::open(dir.file("providers.json")).expect("open");
 
     assert!(store.list().is_empty());
@@ -276,4 +275,123 @@ fn lists_profiles_in_a_stable_order() {
     let names: Vec<String> = store.list().into_iter().map(|entry| entry.name).collect();
 
     assert_eq!(names, vec!["Alpha".to_string(), "Mid".to_string(), "Zeta".to_string()]);
+}
+
+// ---------------------------------------------------------------- 当前使用哪一份（Task 1.3 Step 5 的切换）
+
+#[test]
+fn newly_stored_configuration_has_nothing_selected_yet() {
+    // **不默认选第一个**：那会让"我还没选"与"我选了第一份"变成同一件事，
+    // 而界面上要显示的那个"正在使用"的标记必须是真的选过。
+    let dir = TempDir::new("active-none");
+    let mut store = ProviderProfileStore::open(dir.file("providers.json")).expect("open");
+    store.upsert(profile("openai", "OpenAI", "gpt-5"), None).expect("create");
+
+    assert_eq!(store.active_profile_id(), None);
+}
+
+#[test]
+fn selecting_a_profile_survives_a_restart() {
+    // 切换的意义就是"下次还用它"，所以这一条必须是落盘的。
+    let dir = TempDir::new("active-persist");
+    let path = dir.file("providers.json");
+    let mut store = ProviderProfileStore::open(&path).expect("open");
+    store.upsert(profile("openai", "OpenAI", "gpt-5"), None).expect("create");
+    store.upsert(profile("deepseek", "DeepSeek", "deepseek-chat"), None).expect("create");
+
+    let selected = store.select("deepseek").expect("select");
+
+    assert_eq!(selected, "deepseek");
+    assert_eq!(store.active_profile_id().as_deref(), Some("deepseek"));
+    let reopened = ProviderProfileStore::open(&path).expect("reopen");
+    assert_eq!(reopened.active_profile_id().as_deref(), Some("deepseek"), "the choice must be on disk");
+}
+
+#[test]
+fn switching_between_profiles_only_moves_the_marker() {
+    // "在不同模型之间主动切换"就是改这一个字段 —— 它不该顺带改任何 profile 的修订号。
+    let dir = TempDir::new("active-switch");
+    let mut store = ProviderProfileStore::open(dir.file("providers.json")).expect("open");
+    store.upsert(profile("openai", "OpenAI", "gpt-5"), None).expect("create");
+    store.upsert(profile("anthropic", "Anthropic", "claude"), None).expect("create");
+    store.select("openai").expect("select openai");
+    let revisions: Vec<u32> = store.list().into_iter().map(|entry| entry.revision).collect();
+
+    store.select("anthropic").expect("select anthropic");
+
+    assert_eq!(store.active_profile_id().as_deref(), Some("anthropic"));
+    assert_eq!(store.list().into_iter().map(|entry| entry.revision).collect::<Vec<u32>>(), revisions, "switching must not bump any revision");
+}
+
+#[test]
+fn selecting_something_that_does_not_exist_is_refused() {
+    let dir = TempDir::new("active-missing");
+    let mut store = ProviderProfileStore::open(dir.file("providers.json")).expect("open");
+    store.upsert(profile("openai", "OpenAI", "gpt-5"), None).expect("create");
+
+    let outcome = store.select("nope");
+
+    assert!(matches!(outcome, Err(StoreError::NotFound { .. })), "got {outcome:?}");
+    // 而选中的那一份**没有被改掉**：一次失败的切换不该把用户原来的选择清空。
+    assert_eq!(store.active_profile_id(), None);
+}
+
+#[test]
+fn deleting_the_selected_profile_clears_the_selection() {
+    // 不清的话界面会一直显示"正在使用 OpenAI"，而那一份已经不存在了。
+    let dir = TempDir::new("active-delete");
+    let mut store = ProviderProfileStore::open(dir.file("providers.json")).expect("open");
+    store.upsert(profile("openai", "OpenAI", "gpt-5"), None).expect("create");
+    store.select("openai").expect("select");
+
+    store.remove("openai").expect("remove");
+
+    assert_eq!(store.active_profile_id(), None, "a selection must never point at a removed profile");
+}
+
+#[test]
+fn deleting_something_else_keeps_the_selection() {
+    let dir = TempDir::new("active-delete-other");
+    let mut store = ProviderProfileStore::open(dir.file("providers.json")).expect("open");
+    store.upsert(profile("openai", "OpenAI", "gpt-5"), None).expect("create");
+    store.upsert(profile("anthropic", "Anthropic", "claude"), None).expect("create");
+    store.select("openai").expect("select");
+
+    store.remove("anthropic").expect("remove");
+
+    assert_eq!(store.active_profile_id().as_deref(), Some("openai"));
+}
+
+#[test]
+fn the_written_file_carries_the_selection_as_a_reference_not_a_copy() {
+    // 与 `secretRef` 同一个口径：文件里只有 id，没有第二份 profile 副本。
+    let dir = TempDir::new("active-file");
+    let path = dir.file("providers.json");
+    let mut store = ProviderProfileStore::open(&path).expect("open");
+    store.upsert(profile("openai", "OpenAI", "gpt-5"), None).expect("create");
+    store.select("openai").expect("select");
+
+    let text = std::fs::read_to_string(&path).expect("read");
+    let parsed: serde_json::Value = serde_json::from_str(&text).expect("parse");
+
+    assert_eq!(parsed["activeProfileId"], "openai");
+    // 而顶层只有一个 profiles 数组（没有第二份被复制出来的配置）。
+    assert_eq!(parsed["profiles"].as_array().expect("profiles").len(), 1);
+}
+
+#[test]
+fn an_older_configuration_without_a_selection_still_opens() {
+    // 加这个字段之前写的文件里没有 `activeProfileId`。读不动它等于让升级变成数据丢失。
+    let dir = TempDir::new("active-old-file");
+    let path = dir.file("providers.json");
+    std::fs::write(
+        &path,
+        r#"{"schemaVersion":1,"profiles":[{"id":"openai","name":"OpenAI","protocol":"openai_compatible","dialect":"openai_native","baseUrl":"https://api.openai.com/v1","modelId":"gpt-5","secretRef":"openai","capabilities":[],"networkPolicy":"cloud","revision":1}],"health":{}}"#
+    )
+    .expect("write an old file");
+
+    let store = ProviderProfileStore::open(&path).expect("an older file must still open");
+
+    assert_eq!(store.list().len(), 1);
+    assert_eq!(store.active_profile_id(), None, "a file without a selection means nothing is selected");
 }

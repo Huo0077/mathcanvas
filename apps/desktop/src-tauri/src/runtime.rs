@@ -39,17 +39,10 @@ const WEBVIEW2_KEYS: [&str; 3] = [
 #[serde(rename_all = "snake_case")]
 pub enum DesktopComponentHealth {
     /// 现在就能用。
-    ///
-    /// G1 后续任务（1.2 SecretStore / 1.5 回环代理 / 1.6 SQLite 仓储）落地之前，
-    /// 没有任何部件会返回它 —— 那时 `build_runtime_info` 会开始用这两个变体。
-    /// `#[allow(dead_code)]` 是给编译器看的**说明**，不是绕过检查：它表达"这两个值是为
-    /// 已计划的后续任务准备的，现在就删掉反而会让那一步重新发明一遍词汇"。
-    #[allow(dead_code)]
     Ready,
     /// 这台机器上不存在（例如 WebView2 未安装）。
-    #[allow(dead_code)]
     Missing,
-    /// 计划里有、但还没实现（例如 G1 的 SecretStore / SQLite 仓储）。
+    /// 计划里有、但还没实现。
     NotImplemented,
 }
 
@@ -99,19 +92,29 @@ pub fn detect_webview2_version() -> String {
 
 /// 组装自述。
 ///
-/// `secret_store_ready` 由调用方传入而不是这里现算：这个函数要保持**纯函数**
-///（同样的输入给同样的输出），而"密钥库到底可不可用"要么需要碰系统凭据管理器、
-/// 要么需要一个能被替换的探针。传进来之后，`ready` / `not_implemented` 两条路径
-/// 都能被测试直接钉住 —— 而不是只能测其中一条。
+/// ## 为什么三个健康字段都是**传进来的**
+///
+/// 这个函数要保持**纯函数**（同样的输入给同样的输出），而"某个部件到底可不可用"
+/// 要么需要碰系统凭据管理器、要么需要一个能被替换的探针。传进来之后，
+/// `ready` / `not_implemented` 两条路径都能被测试直接钉住 —— 而不是只能测其中一条。
+///
+/// ## 一处被这一批修掉的**过时自述**（2026-09-21）
+///
+/// 在 `repository` 与 `transport` 落地之前，这两个字段是**写死** `not_implemented` 的
+/// （当时的注释写着"这两个仍是后续任务的落点"）。它们落地之后没人回来改，
+/// 于是自述开始说谎 —— 而这条线上"自述不许猜"是被测过的性质（见下面的用例）。
+/// 现在三个字段都如实来自托管状态的实况。
 ///
 /// `data_root` 只接受**目录名**：调用方传进来的如果是绝对路径，这里会取它的最后一段。
 /// 这样做是刻意的 —— 即便某天有人图省事把绝对路径传进来，"绝对路径不出边界"这条性质
 /// 也不会被破坏（会有一条测试专门盯它）。
-pub fn build_runtime_info(app_version: &str, data_root: &Path, secret_store_ready: bool) -> DesktopRuntimeInfo {
+pub fn build_runtime_info(app_version: &str, data_root: &Path, secret_store_ready: bool, repository_ready: bool, transport_ready: bool) -> DesktopRuntimeInfo {
     let data_root_name = data_root
         .file_name()
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_else(|| "unknown".to_string());
+
+    let health = |ready: bool| if ready { DesktopComponentHealth::Ready } else { DesktopComponentHealth::NotImplemented };
 
     DesktopRuntimeInfo {
         platform: std::env::consts::OS.to_string(),
@@ -119,17 +122,13 @@ pub fn build_runtime_info(app_version: &str, data_root: &Path, secret_store_read
         runtime: "webview".to_string(),
         webview_version: detect_webview2_version(),
         data_root: data_root_name,
-        // 密钥库的状态**如实报告**（G1 Task 1.2 之后它不再是写死的 `not_implemented`）。
-        //
-        // 两条路径都要能出现：Windows 凭据管理器可用 → `ready`；
+        // 密钥库的状态**如实报告**：Windows 凭据管理器可用 → `ready`；
         // 退到内存后端 → `not_implemented`（界面据此告诉用户"这次会话有效，重启要重填"）。
         // 把它们压成一个布尔是刻意的：界面**不需要**知道用的是哪个库，
         // 只需要知道"关掉应用之后还在不在"。
-        secret_store: if secret_store_ready { DesktopComponentHealth::Ready } else { DesktopComponentHealth::NotImplemented },
-        // 这两个仍是后续任务（1.6 仓储 / 1.5 回环代理）的落点。**如实标 `not_implemented`** ——
-        // 声称 `ready` 而实际没有，会让前端把"没有"当成"有"，那比缺失更危险。
-        repository: DesktopComponentHealth::NotImplemented,
-        transport: DesktopComponentHealth::NotImplemented,
+        secret_store: health(secret_store_ready),
+        repository: health(repository_ready),
+        transport: health(transport_ready),
     }
 }
 
@@ -139,7 +138,7 @@ mod tests {
 
     #[test]
     fn reports_the_platform_and_the_requested_version_instead_of_guessing_them() {
-        let info = build_runtime_info("0.1.0", Path::new("/home/someone/.mathcanvas"), true);
+        let info = build_runtime_info("0.1.0", Path::new("/home/someone/.mathcanvas"), true, false, false);
 
         // 平台来自 `std::env::consts::OS`，版本来自调用方 —— 两样都不是这里的字面量。
         assert_eq!(info.platform, std::env::consts::OS);
@@ -150,7 +149,7 @@ mod tests {
     /// **唯一允许出现的路径**是应用数据根，而且只以**最后一段目录名**出现。
     #[test]
     fn never_leaks_a_filesystem_path_beyond_the_data_root_directory_name() {
-        let info = build_runtime_info("0.1.0", Path::new(r"C:\Users\someone\AppData\Roaming\com.mathcanvas.app"), true);
+        let info = build_runtime_info("0.1.0", Path::new(r"C:\Users\someone\AppData\Roaming\com.mathcanvas.app"), true, false, false);
         let json = serde_json::to_string(&info).expect("serialize");
 
         assert_eq!(info.data_root, "com.mathcanvas.app");
@@ -159,28 +158,42 @@ mod tests {
         assert!(!json.contains("someone"), "the user name leaked: {json}");
     }
 
-    /// 三部件在 G1 完成之前必须**如实**说"还没实现"，不许声称可用。
-    #[test]
-    fn does_not_claim_components_that_do_not_exist_yet() {
-        let info = build_runtime_info("0.1.0", Path::new("/tmp/app"), false);
-
-        assert_eq!(info.secret_store, DesktopComponentHealth::NotImplemented);
-        assert_eq!(info.repository, DesktopComponentHealth::NotImplemented);
-        assert_eq!(info.transport, DesktopComponentHealth::NotImplemented);
-    }
-
-    /// 密钥库可用时**必须**报 `ready`。
+    /// 三部件各自**如实**报告自己：输入是假就 `not_implemented`，是真就 `ready`。
     ///
-    /// "可用却说不可用"与"不可用却说可用"一样是自述失真：前者会让界面一直提醒用户
-    /// "重启要重填"（而实际能存住），后者会让用户在重启后才发现密钥没了。
+    /// ## 这一条在 2026-09-21 改过语义（记下来）
+    ///
+    /// 原先它断言的是"G1 完成之前三部件必须都说还没实现，不许声称可用"。
+    /// 那是一条**会过期的断言**：部件落地之后它要么被删掉，要么（更糟）留着 ——
+    /// 而这一次正是"留着"导致了自述说谎：`repository` 与 `transport` 实现完
+    /// 却没人回来改那两个写死的字段。
+    ///
+    /// 现在它测的是那条**不会过期**的性质：三个字段**各自**跟着自己的输入走，
+    /// 一个就绪不代表别的也就绪，全就绪时三个都 `ready`。
     #[test]
-    fn reports_a_working_secret_store_as_ready() {
-        let info = build_runtime_info("0.1.0", Path::new("/tmp/app"), true);
+    fn reports_each_component_from_its_own_input_and_never_guesses() {
+        let none = build_runtime_info("0.1.0", Path::new("/tmp/app"), false, false, false);
 
-        assert_eq!(info.secret_store, DesktopComponentHealth::Ready);
-        // 其余两个仍然如实说"还没做" —— 一个部件就绪不代表别的也就绪。
-        assert_eq!(info.repository, DesktopComponentHealth::NotImplemented);
-        assert_eq!(info.transport, DesktopComponentHealth::NotImplemented);
+        assert_eq!(none.secret_store, DesktopComponentHealth::NotImplemented);
+        assert_eq!(none.repository, DesktopComponentHealth::NotImplemented);
+        assert_eq!(none.transport, DesktopComponentHealth::NotImplemented);
+
+        // **一个部件就绪不代表别的也就绪。**
+        let only_secrets = build_runtime_info("0.1.0", Path::new("/tmp/app"), true, false, false);
+        assert_eq!(only_secrets.secret_store, DesktopComponentHealth::Ready);
+        assert_eq!(only_secrets.repository, DesktopComponentHealth::NotImplemented);
+        assert_eq!(only_secrets.transport, DesktopComponentHealth::NotImplemented);
+
+        // "可用却说不可用"与"不可用却说可用"都是自述失真：前者让界面一直提醒用户
+        // "重启要重填"（而实际能存住），后者让用户在重启后才发现密钥没了。
+        let all = build_runtime_info("0.1.0", Path::new("/tmp/app"), true, true, true);
+        assert_eq!(all.secret_store, DesktopComponentHealth::Ready);
+        assert_eq!(all.repository, DesktopComponentHealth::Ready);
+        assert_eq!(all.transport, DesktopComponentHealth::Ready);
+
+        // 而它们**各自**都能单独翻转 —— 仓储可用、代理起不来是常见的一种组合。
+        let no_proxy = build_runtime_info("0.1.0", Path::new("/tmp/app"), true, true, false);
+        assert_eq!(no_proxy.repository, DesktopComponentHealth::Ready);
+        assert_eq!(no_proxy.transport, DesktopComponentHealth::NotImplemented);
     }
 
     /// 自述里**只有**这些字段，而且每个值都是版本串、状态枚举或目录名。
@@ -194,7 +207,7 @@ mod tests {
     /// 2. **值里没有密钥的形状**（没有 `sk-` 前缀、没有长随机串、没有 Authorization 之类）。
     #[test]
     fn carries_only_version_strings_status_enums_and_a_directory_name() {
-        let info = build_runtime_info("0.1.0", Path::new("/tmp/app"), false);
+        let info = build_runtime_info("0.1.0", Path::new("/tmp/app"), false, false, false);
         let value: serde_json::Value = serde_json::to_value(&info).expect("serialize");
         let object = value.as_object().expect("an object");
 
@@ -230,7 +243,7 @@ mod tests {
     /// 前端拿到的键名是 camelCase（与 `apps/web/src/services/desktopRuntime.ts` 的接口一致）。
     #[test]
     fn serialises_with_the_camel_case_keys_the_web_layer_expects() {
-        let info = build_runtime_info("0.1.0", Path::new("/tmp/app"), false);
+        let info = build_runtime_info("0.1.0", Path::new("/tmp/app"), false, false, false);
         let value: serde_json::Value = serde_json::to_value(&info).expect("serialize");
 
         for key in ["platform", "appVersion", "runtime", "webviewVersion", "dataRoot", "secretStore", "repository", "transport"] {

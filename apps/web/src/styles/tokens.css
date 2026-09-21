@@ -48,6 +48,20 @@
   --color-success: #2f7d6b;
   --color-warning: #b4763a;
   --color-warning-soft: #fdf6ec;
+  /**
+   * **破坏性动作的颜色**（2026-09-21 加）。
+   *
+   * 在此之前全局没有"危险"这个语义色 —— 删除类按钮要么借 `--color-warning`（那是
+   * "注意"不是"破坏"），要么自己写一个十六进制（`settings.css` 原来就是
+   * `#b3261e`）。两者都不好：前者把两种不同的意思混起来，后者让"配色只有一处真源"
+   * 这条约定破了一个口子。
+   *
+   * 取值是 `#b3261e`（Material 的 error 红）在**白底上的对比度 6.5:1**，
+   * 正文尺寸下过 WCAG AA（4.5:1）；`--color-danger-soft` 只作悬停底色，
+   * 上面永远压着深色文字，所以它不需要单独过对比度。
+   */
+  --color-danger: #b3261e;
+  --color-danger-soft: #fdf2f1;
   /* Drafting surface: a cool slate the white paper sits on, so the sheet is the focal surface instead of
      blending into the app background. The grid is a faint workbench texture, never a competing pattern. */
   --color-drafting-surface: #eef2f7;

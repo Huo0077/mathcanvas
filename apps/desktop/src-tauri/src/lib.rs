@@ -276,6 +276,26 @@ fn provider_health(app: tauri::AppHandle, profile_id: String) -> Result<Option<P
     Ok(store.health(&profile_id))
 }
 
+/// **切换当前使用的模型服务**（Task 1.3 Step 5）。
+///
+/// 只动一个字段，**不碰任何 profile 的修订号** —— 切换不是修改配置。
+/// 而"能力证据挂在修订号上"那条规则意味着：如果切换顺带把修订号推高，
+/// 四个能力徽章会在每次切换后全部变回"未验证"，而那显然不是用户做的改动。
+#[tauri::command]
+fn select_provider_profile(app: tauri::AppHandle, profile_id: String) -> Result<String, String> {
+    let state = app.try_state::<ProfileStoreState>().ok_or("the provider store is not initialised")?;
+    let mut store = state.store.lock().map_err(|_| "the provider store is poisoned".to_string())?;
+    store.select(&profile_id).map_err(store_error)
+}
+
+/// **现在在用哪一份配置**。`None` 表示还没选过（不是"选了第一份"）。
+#[tauri::command]
+fn active_provider_profile(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    let state = app.try_state::<ProfileStoreState>().ok_or("the provider store is not initialised")?;
+    let store = state.store.lock().map_err(|_| "the provider store is poisoned".to_string())?;
+    Ok(store.active_profile_id())
+}
+
 /**
  * **跑一次能力探测**（Task 1.4 Step 5）。
  *
@@ -337,10 +357,18 @@ fn get_runtime_info(app: tauri::AppHandle) -> Result<runtime::DesktopRuntimeInfo
         .map_err(|error| format!("cannot resolve the app data directory: {error}"))?;
     let version = app.package_info().version.to_string();
     // 没有托管状态时按"不可用"处理：自述宁可说"还没有"，也不许猜"有"。
+    //
+    // 三个部件**各自**现问实况。密钥库那一条见下；仓储与回环代理在 2026-09-21 之前
+    // 是**写死**的 `not_implemented`，而它们当时已经实现 —— 那是一次"过时的自述"，
+    // 靠 `runtime.rs` 里那条改成"三字段各自跟输入走"的用例才发现。
     let secret_store_ready = app
         .try_state::<SecretStoreState>()
         .is_some_and(|state| state.0.backend() == "windows-credential-manager");
-    Ok(runtime::build_runtime_info(&version, &data_root, secret_store_ready))
+    let repository_ready = app.try_state::<RepositoryState>().is_some();
+    let transport_ready = app
+        .try_state::<ProxyState>()
+        .is_some_and(|state| state.session.lock().map(|session| session.is_some()).unwrap_or(false));
+    Ok(runtime::build_runtime_info(&version, &data_root, secret_store_ready, repository_ready, transport_ready))
 }
 
 /// **保存一个 provider 的密钥**（Task 1.2 Step 4）。
@@ -720,6 +748,8 @@ pub fn run() {
             remove_provider_profile,
             provider_health,
             provider_check,
+            select_provider_profile,
+            active_provider_profile,
             provider_run,
             provider_cancel,
             read_document_head,

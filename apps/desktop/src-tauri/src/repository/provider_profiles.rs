@@ -109,6 +109,15 @@ struct ProfilesFile {
     /// 健康记录按 profile id 存。它不是配置，所以与 profiles 分开。
     #[serde(default)]
     health: HashMap<String, ProviderHealth>,
+    /// **当前在用哪一份**（Task 1.3 Step 5 的切换）。
+    ///
+    /// 存的是 **id 引用**，不是 profile 的副本 —— 与 `secretRef` 同一个口径：
+    /// 一份配置只有一个真源，复制出来的第二份必然与第一份分叉。
+    ///
+    /// `#[serde(default)]`：加这个字段之前写的文件里没有它。读不动那种文件
+    /// 等于让一次升级变成数据丢失，所以缺字段一律当"还没选"。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    active_profile_id: Option<String>,
 }
 
 pub const PROFILES_SCHEMA_VERSION: u32 = 1;
@@ -152,7 +161,7 @@ impl ProviderProfileStore {
     pub fn open(path: impl AsRef<Path>) -> Result<Self, StoreError> {
         let path = path.as_ref().to_path_buf();
         if !path.exists() {
-            return Ok(Self { path, file: ProfilesFile { schema_version: PROFILES_SCHEMA_VERSION, profiles: Vec::new(), health: HashMap::new() } });
+            return Ok(Self { path, file: ProfilesFile { schema_version: PROFILES_SCHEMA_VERSION, profiles: Vec::new(), health: HashMap::new(), active_profile_id: None } });
         }
         let text = fs::read_to_string(&path).map_err(|error| StoreError::Io { detail: format!("cannot read {}: {error}", path.display()) })?;
         let file: ProfilesFile = serde_json::from_str(&text).map_err(|error| StoreError::Io { detail: format!("the provider configuration is not valid JSON ({error}); fix or move {}", path.display()) })?;
@@ -175,6 +184,32 @@ impl ProviderProfileStore {
 
     pub fn health(&self, id: &str) -> Option<ProviderHealth> {
         self.file.health.get(id).cloned()
+    }
+
+    // ------------------------------------------------------------ 当前使用哪一份（切换）
+
+    /// 现在在用哪一份配置。`None` 表示**还没选过** —— 而不是"选了第一份"。
+    ///
+    /// 这个区分是刻意的：界面要显示一个"正在使用"的标记，而那个标记必须对应
+    /// 一次真的选择。默认选第一份会让两件事变成同一件，用户就分不清
+    /// "模型没配"与"我配了但没选"。
+    pub fn active_profile_id(&self) -> Option<String> {
+        self.file.active_profile_id.clone()
+    }
+
+    /// **切换当前使用的配置**。只动这一个字段。
+    ///
+    /// 它**不碰任何 profile 的修订号** —— 切换不是修改配置，而"证据挂在修订号上"
+    /// 那条规则意味着：如果切换顺带把修订号推高，四个能力徽章会在每次切换后
+    /// 全部变回"未验证"，而那显然不是用户做的改动。
+    pub fn select(&mut self, id: &str) -> Result<String, StoreError> {
+        if !self.file.profiles.iter().any(|profile| profile.id == id) {
+            // **失败的切换不改任何东西**：把用户原来的选择清空比不切更糟。
+            return Err(StoreError::NotFound { id: id.to_string() });
+        }
+        self.file.active_profile_id = Some(id.to_string());
+        self.save()?;
+        Ok(id.to_string())
     }
 
     /// **写入一份不含密钥的 profile**。
@@ -227,6 +262,11 @@ impl ProviderProfileStore {
         }
         // 健康记录跟着删：留着它会让"重新建一个同 id 的 profile"继承旧证据。
         self.file.health.remove(id);
+        // **选中被删掉时清空选中**：不清的话界面会一直显示"正在使用 X"，
+        // 而那一份配置已经不存在了 —— 那是最容易让人以为"还能用"的一种谎。
+        if self.file.active_profile_id.as_deref() == Some(id) {
+            self.file.active_profile_id = None;
+        }
         self.save()
     }
 
