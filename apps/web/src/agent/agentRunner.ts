@@ -194,7 +194,7 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
       const runId = `run-${sequence}-${Date.now().toString(36)}`
       const selection = await selectPlanner(prompt)
       lastSelection = selection
-      runtime = createAgentRuntime({
+      const active = createAgentRuntime({
         // 每次现取：句柄里的内容哈希就是 Compare-and-Swap 的依据。
         readDocument: () => useSceneStore.getState().document,
         // 提交成功后落盘。用 `commitCandidate`（压一步历史）而不是 `replace`（清历史）。
@@ -229,6 +229,17 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
         projectId: "local",
         runId
       })
+      /**
+       * **这一次运行自己持有它的运行时**（2026-09-21 修的真实缺陷）。
+       *
+       * `runtime` 是模块级的：`confirm()` / `discard()` / `stop()` 都会把它置空，而它们
+       * 完全可能在这一轮还在 `await` 模型的时候被点到（上一轮留下的草稿面板还挂在界面上时
+       * 尤其容易）。运行回来再读 `runtime.coordinator.phase()` 就抛
+       * `Cannot read properties of null (reading 'coordinator')` —— 界面上只显示"没有完成"。
+       *
+       * 所以：**模块级那个字段只用来"让面板找到当前这一轮"，而运行自己走这条 `active`**。
+       */
+      runtime = active
 
       const live = useSceneStore.getState().document
       const runContext: RunContext = {
@@ -243,7 +254,7 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
         policyRevision: "local"
       }
 
-      for await (const event of runtime.coordinator.start({ run: runContext, userMessage: prompt })) {
+      for await (const event of active.coordinator.start({ run: runContext, userMessage: prompt })) {
         // 每一步都回流：用户看到的是"走到哪一步"，而不是一个转圈。
         useAgentStore.getState().recordRunEvent({
           phase: event.phase,
@@ -286,13 +297,13 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
         })
       }
 
-      const phase = runtime.coordinator.phase()
-      const draftId = runtime.draftId()
+      const phase = active.coordinator.phase()
+      const draftId = active.draftId()
 
       if (draftId && phase === "awaiting_confirmation") {
         // 草稿**只是视图**（标识 + 计数）；候选文档留在宿主侧，不进聊天记录。
         // 计数由宿主侧的 `preview()` 从**真实文档**算出（界面不自己数）。
-        const preview = runtime.host.preview(draftId)
+        const preview = active.host.preview(draftId)
         useAgentStore.getState().recordDraft({
           draftId,
           draftVersion: preview.ok ? preview.artifact.draftVersion : 1,
@@ -302,7 +313,7 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
           counts: preview.ok ? preview.artifact.counts : undefined,
           baseCounts: preview.ok ? preview.artifact.baseCounts : undefined,
           // 假设在**计划解析成功那一刻**就知道，而草稿是运行结束之后才拿到的 —— 中间没有第二条路。
-          assumptions: runtime.assumptions()
+          assumptions: active.assumptions()
         })
         return { phase, draftId }
       }
@@ -314,7 +325,7 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
          * 那句话在接上模型之后就是**假话**：模型明明问了"半径是多少"，界面却告诉用户
          * "当前没有模型服务"。问题与假设同一处产生（计划解析那一刻），所以同一处取。
          */
-        const questions = runtime.questions()
+        const questions = active.questions()
         useAgentStore.getState().failPendingReply({
           code: "needs_more_information",
           message: questions && questions.length > 0
@@ -323,7 +334,7 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
           retryable: false
         })
       } else if (phase === "failed") {
-        const last = runtime.coordinator.ledger().at(-1)
+        const last = active.coordinator.ledger().at(-1)
         useAgentStore.getState().failPendingReply({ code: "run_failed", message: last?.detail || "这次运行没有完成。", retryable: false })
       } else if (phase === "completed") {
         useAgentStore.getState().recordReceipt({ status: "no_change" })

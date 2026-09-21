@@ -220,6 +220,81 @@ describe("the confirm and commit cycle", () => {
   })
 })
 
+/**
+ * **运行在飞的时候用面板，不该把这次运行打崩**（2026-09-21，端到端跑出来的真实缺陷）。
+ *
+ * `runtime` 是**模块级**变量，而 `runPrompt` 在 `for await` 期间会交出控制权；只要这期间
+ * 有任何一个入口把它置空（`confirm()` / `discard()` / `stop()` 都会），运行回来再读
+ * `runtime.coordinator.phase()` 就抛 `Cannot read properties of null (reading 'coordinator')`
+ * —— 一次运行以 TypeError 结束，而界面上只显示"没有完成"。
+ *
+ * 触发它的真实路径很普通：**上一轮留下的草稿面板还在**，用户（或脚本）不经意点了确认，
+ * 而刚发出去的那一轮还在等模型。
+ */
+describe("a run in flight survives the panel being used", () => {
+  beforeEach(() => {
+    resetScene()
+    resetAgent()
+  })
+
+  it("keeps running when confirm is clicked while the model is still answering", async () => {
+    let release: () => void = () => {}
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    const planner: PlannerPort = {
+      async plan() {
+        await gate
+        return {
+          requestId: "req-in-flight",
+          attemptId: "attempt-in-flight",
+          plan: {
+            schemaVersion: "mathcanvas.plan.v1",
+            kind: "plan",
+            goal: "建一个立方体",
+            factIds: [],
+            actions: [{
+              actionId: "solid.create_template",
+              actionKey: "cube",
+              factIds: [],
+              inputs: { alias: "cube", template: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 3, y: 3, z: 3 } }
+            }]
+          }
+        }
+      }
+    }
+    const runner = createAgentRunner({ planner })
+
+    const pending = runAndWait(runner, "建一个棱长 3 的立方体")
+    // 让这次运行真的进到规划器的 await 里（否则它同步跑完，测不到这个竞态）。
+    await Promise.resolve()
+    await Promise.resolve()
+    // 运行还在飞的时候用一次面板 —— 这会把它持有的那份运行时置空。
+    runner.confirm()
+    release()
+
+    // 修好之前：这里以 TypeError 结束，而不是正常走到"等你确认"。
+    const result = await pending
+    expect(result.phase).toBe("awaiting_confirmation")
+    expect(result.draftId).toBeTruthy()
+  })
+  it("commits when the run itself switched the workspace (the real path from 平面几何)", async () => {
+    /**
+     * 真实用户就是在**平面几何**里说"建一个立方体"的，而 `prepare` 会在运行中把工作区切到立体几何
+     * —— `switchWorkspace` 会**换一份空白文档**（新 id）。既有用例全都从 `geometry3d` 起步，
+     * 所以这条路一次都没被走过。它来自一次真实运行：界面上草稿好好的，点确认却回
+     * `there is no staged draft to confirm`。
+     */
+    const planar = createEmptyDocument("conics")
+    useSceneStore.setState({ document: planar, workspaceDocuments: { conics: planar }, history: [], future: [], error: null })
+    const runner = createAgentRunner()
+
+    const result = await runAndWait(runner, "建一个棱长 3 的立方体")
+
+    expect(result.phase).toBe("awaiting_confirmation")
+    expect(runner.confirm().status).toBe("committed")
+    expect(useSceneStore.getState().document.primitives.length).toBeGreaterThan(0)
+  })
+})
+
 describe("stop and retry", () => {
   beforeEach(() => {
     resetScene()

@@ -1,6 +1,7 @@
 import {
   PLAN_SCHEMA_VERSION,
   createRecoveryController,
+  describeActions,
   isCapabilityVerified,
   parseModelEnvelope,
   planModelRequest,
@@ -269,10 +270,27 @@ function buildMessages(request: { userMessage: string; model: { context: ModelCo
     "## 本轮允许的动作（`actionId` 只能从这里选）",
     ...(context.availableActions.length > 0 ? context.availableActions.map((action) => `- ${action}`) : ["（这一轮没有任何可用动作：只能提问或作答）"]),
     "",
+    "### 每个动作的 inputs 只能有下面这些字段（`alias` 是新对象的别名）",
+    // 这一节由**动作登记表**生成（`describeActions`），而不是手写 —— 校验读的是同一张表，
+    // 两处各写一份必然分叉，而分叉的表现是"模型按提示词填了、校验却拒了"。
+    ...describeActions(context.availableActions).slice(0, 8).map((action) => {
+      const enums = Object.entries(action.enums).map(([field, values]) => `${field} 只能取 ${values.join(" | ")}`).join("；")
+      return `- ${action.actionId}：${action.inputs.join(", ")}${enums.length > 0 ? ` · **${enums}**` : ""}`
+    }),
+    "坐标一律写成 `{ \"x\": 数, \"y\": 数, \"z\": 数 }`（平面动作只用 x/y）。",
+    "",
     "## 本轮场景（JSON）",
     sceneSnapshot(context),
     "",
-    "对象引用必须带 documentId；不要凭标签猜对象，标签可能重复。没看到的事实不要假设：缺信息时问。"
+    "对象引用必须带 documentId；不要凭标签猜对象，标签可能重复。",
+    "",
+    "## 先做，别反问（2026-09-21 按一次真实运行改）",
+    "能作图就作图：像「建一个棱长 3 的立方体」这样的要求**已经足够** —— 位置、朝向这类没说的细节取**常见默认值**",
+    "（放在原点、轴对齐、底面落在地面上），并把每一条默认写进 `assumptions`。",
+    "`assumptions` 是给用户看的（他会看到「底面落在地面上」这类话），所以用一句人话写，最多 4 条。",
+    "**只有缺关键数值**（用户没说、也没有常见默认，例如「画一个圆」而没说半径）时才返回 `clarification`，",
+    "而且问题要具体到能直接回答。第一次真实运行就是栽在这里：模型对「建一个棱长 3 的立方体」反问了两个问题，",
+    "而那条要求其实已经足够作图。"
   ]
   if (request.repair) {
     // 一次性修复机会：给**字段路径 + 原因**，并且**不回显**模型上一轮的原话

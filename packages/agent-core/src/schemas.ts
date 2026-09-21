@@ -159,7 +159,19 @@ interface ActionSpec {
   requiresAlias: boolean
   /** 是否存在"必须有"的引用字段（`scoped` = 带 documentId 的引用，`id` = 同文档内的裸 id）。 */
   requireReference?: { field: string; kind: "scoped" | "id" }
+  /**
+   * 取值只能是这个集合的字段（例如 `solid.create_template` 的 `template`）。
+   *
+   * **为什么要登记在这一处**：提示词必须让模型知道每个动作能填哪些字段、哪些字段只能取固定值，
+   * 而"能填什么"的判据就是这张表。第一版提示词只给了动作名，于是**真实模型**产出了
+   * `solid.create_template` 却把 `template` 填成了别的值 —— 校验拒绝它（`invalid_template`），
+   * 而模型没有任何办法知道该填什么。在提示词里手抄一份值域就是第二份真源，迟早与被校验的那份不一致。
+   */
+  enumValues?: Record<string, readonly string[]>
 }
+
+/** 空间模板的闭集。**只有一处**：下面那张登记表与运行期校验都读它。 */
+const SOLID_TEMPLATES = ["cube", "pyramid", "cylinder", "cone"] as const
 
 /**
  * **传输层的动作登记表**。
@@ -191,7 +203,7 @@ const ACTIONS = {
   "planar.create_arc": { inputFields: ["alias", "points", "center", "radius", "startAngle", "endAngle", "label"], requiresAlias: true },
 
   // --- 空间模板：字段须与 `SolidCreateTemplateAction` 一致（不能带 segments，动作层没有） ---
-  "solid.create_template": { inputFields: ["alias", "template", "origin", "size", "radius", "height", "label"], requiresAlias: true },
+  "solid.create_template": { inputFields: ["alias", "template", "origin", "size", "radius", "height", "label"], requiresAlias: true, enumValues: { template: SOLID_TEMPLATES } },
 
   // --- 动点 ---
   // 引用是两个**带 documentId** 的引用：跨文档绑定必须能说清是哪两份文档里的哪两个对象。
@@ -219,7 +231,21 @@ const ACTIONS = {
 
 export type ActionId = keyof typeof ACTIONS
 
-const SOLID_TEMPLATES = ["cube", "pyramid", "cylinder", "cone"] as const
+/**
+ * **给模型看的动作形状**：只列调用方允许的那几个动作，字段白名单与固定取值都取自上面那张表。
+ *
+ * 为什么从这里生成、而不是在提示词里手写一份：**校验读的就是这张表**。两处各写一份必然分叉，
+ * 而分叉的表现是"模型按提示词填了、校验却拒了" —— 第一次真实运行正是这样
+ *（模型产出了 `solid.create_template`，`template` 填了别的值，报 `invalid_template`）。
+ */
+export function describeActions(actionIds?: readonly string[]): { actionId: string; inputs: readonly string[]; enums: Record<string, readonly string[]> }[] {
+  return (Object.keys(ACTIONS) as ActionId[])
+    .filter((actionId) => !actionIds || actionIds.includes(actionId))
+    .map((actionId) => {
+      const spec: ActionSpec = ACTIONS[actionId]
+      return { actionId, inputs: spec.inputFields, enums: spec.enumValues ?? {} }
+    })
+}
 
 function parseActionInputs(actionId: ActionId, value: unknown, path: string, errors: ParseError[]): Record<string, unknown> | null {
   if (!isPlainObject(value)) {
