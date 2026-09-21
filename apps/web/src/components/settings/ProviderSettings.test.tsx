@@ -37,6 +37,8 @@ function makeClient(
     saveFails?: string
     health?: ProviderHealth | null
     hasSecret?: boolean
+    /** 凭据库删不掉时（用来验证"配置删了、密钥可能还在"这句话会出现）。 */
+    forgetSecretFails?: boolean
     /** 探测的结论（缺省＝探测失败，用来验证界面如实报错）。 */
     probe?: { ok: true; health: ProviderHealth } | { ok: false; detail: string }
   } = {}
@@ -51,6 +53,9 @@ function makeClient(
       return { ok: true as const, profile: profile({ id: String(candidate.id), name: String(candidate.name), modelId: String(candidate.modelId), revision: 2 }) }
     }),
     remove: vi.fn(async () => {}),
+    forgetSecret: vi.fn(async () => {
+      if (options.forgetSecretFails) throw new Error("the credential store is unavailable")
+    }),
     health: vi.fn(async () => options.health ?? null),
     hasSecret: vi.fn(async () => options.hasSecret ?? false),
     check: vi.fn(async (profileId: string, revision: number) => {
@@ -200,6 +205,39 @@ describe("provider settings", () => {
     fireEvent.click(remove)
 
     await waitFor(() => expect(client.remove).toHaveBeenCalledWith("openai"))
+  })
+
+  it("takes the credential out of the credential store when the service is deleted", async () => {
+    /**
+     * 这一步不做的话，手动验证里的"删除"会**留下一份孤儿密钥**：
+     * 用户看不到它（配置没了）、但它确实占着凭据管理器里的一格，
+     * 而且下次用同一个 id 建一份配置时会**悄悄继承**那份旧密钥。
+     */
+    const { client } = makeClient({ profiles: [profile()], hasSecret: true })
+    render(<ProviderSettings client={client} />)
+
+    const remove = await screen.findByRole("button", { name: "删除 OpenAI" })
+    const { fireEvent } = await import("@testing-library/react")
+    fireEvent.click(remove)
+
+    await waitFor(() => expect(client.remove).toHaveBeenCalledWith("openai"))
+    // 删的是这个 profile 的 `secretRef`（它是凭据库里的那一格的名字）。
+    await waitFor(() => expect(client.forgetSecret).toHaveBeenCalledWith("openai"))
+  })
+
+  it("still deletes the service when the credential store cannot be reached", async () => {
+    // 密钥库碰不到时**不能把删除也一起卡住** —— 那会让用户连配置都删不掉。
+    // 但要说清楚"配置删了、密钥可能还在"，而不是假装全干净了。
+    const { client } = makeClient({ profiles: [profile()], hasSecret: true, forgetSecretFails: true })
+    render(<ProviderSettings client={client} />)
+
+    const remove = await screen.findByRole("button", { name: "删除 OpenAI" })
+    const { fireEvent } = await import("@testing-library/react")
+    fireEvent.click(remove)
+
+    await waitFor(() => expect(client.remove).toHaveBeenCalledWith("openai"))
+    await waitFor(() => expect(screen.getByText(/配置已删除/)).toBeTruthy())
+    expect(screen.getByText(/密钥可能还在/)).toBeTruthy()
   })
 
   it("only probes when the user asks, and says the probe costs four requests", async () => {

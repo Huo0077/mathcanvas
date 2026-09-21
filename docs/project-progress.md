@@ -32,13 +32,23 @@
 | G1 任务 | 代码 | 缺口 |
 | --- | --- | --- |
 | 1.1 桌面外壳 | ✅ | `tauri dev` 热重载未实测 |
-| 1.2 SecretStore | ✅ | 手动重启验证（Gate ②） |
+| 1.2 SecretStore | ✅ | 手动重启验证（Gate ②）—— **操作步骤见「G1 第十二批」** |
 | 1.3 provider 配置与设置存储 | ✅ | — |
 | 1.4 provider 适配器与事件归一 | ✅ | 能力探针的**请求形状**照公开文档拼、**没有对真实服务跑过**（见「G1 第十批」的一处保留） |
 | 1.5 回环代理与传输安全 | ✅ | **转发已走通**（`ProviderAdapter` + `HttpTransport`，真回环 socket 测过）；`/v1/runs/{runId}/model` 这条 HTTP 路由**故意仍回 501** —— 动作在 IPC 上，运行记录在代理里（理由见「G1 第九批」） |
 | 1.6 SQLite 仓储 / CAS / 崩溃恢复 | ✅ | Rust 侧全齐（迁移 / CAS / 幂等 / 崩溃恢复 / 附件两阶段写与 GC / `.mcanvas` 导出导入）；**缺界面入口**：导出/导入与附件写入还没有 UI（命令都在，由 `tests/repository_package.rs` 29 例 + `project_repository` 19 例覆盖） |
 
-**一句话结论**：G1 六个任务的**代码全部落地且被测透**（Rust **172 例** + 单测 2122 例）；**Gate 五条里已满足四条**（②仍差手动重启验证）；剩下的是**界面接线**与**用户本机操作**，没有未实现的判据。
+**一句话结论**：G1 六个任务的**代码全部落地且被测透**（Rust **172 例** + 单测 2124 例）；**Gate 五条里已满足四条**（②仍差手动重启验证）；剩下的是**界面接线**与**用户本机操作**，没有未实现的判据。
+
+### G1 第十二批：删服务时把凭据也删掉（为 Gate ② 的手动验证清路）（2026-09-21）
+
+- **起因**：写 Gate ② 的手动验证步骤（存 → 重启 → 检测 → 轮换 → **删除**）时发现，"删除"这一步会**留下一份孤儿密钥**：`removeProviderProfile` 只删配置，而 Windows 凭据管理器里那一格没人删。
+- **为什么这不是小事**：用户看不到那份密钥（配置没了），但它确实占着一格；更严重的是**下次用同一个 id 建一份配置时会悄悄继承那份旧密钥** —— 界面显示"已配置密钥"，而那份密钥其实是上一次留下的。这与 Task 1.2 那条"内存后端要如实说它只是临时的"是同一类问题：**不能让界面显示一个与实际不符的状态**。
+- **修法**：删除的顺序与保存**相反**。保存是"先写密钥、再写配置"（否则出现"配置指向一个不存在的密钥"）；删除是"**先删配置、再删密钥**"（否则出现"配置指向一个已经不存在的密钥"，界面显示已配置而请求必然失败）。
+- **密钥库碰不到时不卡住删除**：那会让用户连配置都删不掉。但也不假装干净 —— 状态里如实说"配置已删除；但密钥可能还在凭据管理器里（原因）"。1 例专门盯这句话。
+- **一处如实说明**：这一批只动了删除路径，**没有**动 `get_runtime_info` 里那三个健康字段（`repository` / `transport` 至今仍标 `not_implemented`，而它们其实早已实现）。那不是用户可见的谎（界面上不显示它们），但它确实是一份**过时的自述**，留给「界面接线」那一批一起改。
+
+**验证证据（本批）**：单测 **188 文件 / 2124 用例**（+2）、typecheck exit 0、lint 0 error / 14 warning（基线）、`npm run build` exit 0（含 `tauri build --no-bundle`）、**e2e 119/119**。Rust 未改动（172 例不变）。
 
 ### G1 第十一批：附件两阶段写 + `.mcanvas` 打包（Task 1.6 Step 4/5）（2026-09-21）
 
@@ -2589,7 +2599,7 @@ P7-1 至 P7-6 与工程工作台层次化改造 Task 1-7 均已完成；P4 Agent
 
 ## 验证证据
 
-> **当前基线（唯一权威，2026-09-21 在「G1 第十一批：附件两阶段写 + `.mcanvas` 打包」之后实测）**：`npm.cmd test` **188 个测试文件、2122 个用例全部通过（零跳过）**；6 个 workspace（含 `@draw/desktop`）类型检查通过；ESLint **0 error / 14 warning**（14 条为既有基线）；`cargo clippy --all-targets` **零警告**；`npm.cmd run build` exit 0（含 `tauri build --no-bundle`，产出可运行的 `mathcanvas-desktop.exe`）；**Rust 测试 172 例通过 + 1 例 `#[ignore]`**（单元 8 + project_repository **19** + provider_adapter 16 + provider_capability 18 + provider_profiles 14 + providers 19 + proxy 16 + proxy_server 16 + **repository_package 29** + secrets 8 + shell_smoke 9）；Playwright Chromium **119/119** 通过。逐批证据见「G1 第一批 … 第十一批」各节。
+> **当前基线（唯一权威，2026-09-21 在「G1 第十二批：删服务时把凭据也删掉」之后实测）**：`npm.cmd test` **188 个测试文件、2124 个用例全部通过（零跳过）**；6 个 workspace（含 `@draw/desktop`）类型检查通过；ESLint **0 error / 14 warning**（14 条为既有基线）；`cargo clippy --all-targets` **零警告**；`npm.cmd run build` exit 0（含 `tauri build --no-bundle`，产出可运行的 `mathcanvas-desktop.exe`）；**Rust 测试 172 例通过 + 1 例 `#[ignore]`**（单元 8 + project_repository **19** + provider_adapter 16 + provider_capability 18 + provider_profiles 14 + providers 19 + proxy 16 + proxy_server 16 + **repository_package 29** + secrets 8 + shell_smoke 9）；Playwright Chromium **119/119** 通过。逐批证据见「G1 第一批 … 第十二批」各节。
 
 > **上一轮基线（2026-09-18 在"平面几何切线 + 动点扩展 + 切点拖动 + 画布收细"之后实测）**：`npx vitest run` **124 个测试文件、1477 个用例通过**（把上游那 22 个提交一起并进来之后重跑；本轮自己的 37 条全部在内）；4 个 workspace 类型检查通过；ESLint 对改动文件 **0 error**（仓库既有 5 条 warning 与本轮无关）；dev server 逐个模块转译通过。**Playwright 本轮未运行**（需另起构建产物端口与安装 Chromium）—— 界面交互由 `App.test.tsx` 的真实 DOM 与指针事件覆盖，浏览器级门禁待补。
 >

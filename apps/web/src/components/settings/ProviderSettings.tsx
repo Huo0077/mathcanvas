@@ -59,6 +59,8 @@ export interface ProviderSettingsProps {
     list(): Promise<ProviderProfile[]>
     save(profile: Record<string, unknown>, options: { secret?: string; expectedRevision?: number }): Promise<{ ok: true; profile: ProviderProfile } | { ok: false; code: string; detail: string }>
     remove(profileId: string): Promise<void>
+    /** 把凭据库里那一格删掉（删服务时必须一起做，否则留下孤儿密钥）。 */
+    forgetSecret(secretRef: string): Promise<void>
     health(profileId: string): Promise<ProviderHealth | null>
     hasSecret(profileId: string): Promise<boolean>
     /** 跑一次能力探测（**会花掉四发真请求**）。返回失败原因供界面如实显示。 */
@@ -102,6 +104,13 @@ export function ProviderSettings({ client, unavailableReason }: ProviderSettings
     },
     remove: async (profileId: string) => {
       const result = await removeProviderProfile(profileId)
+      if (!result.ok) throw new Error(`${result.code}: ${result.detail}`)
+    },
+    forgetSecret: async (secretRef: string) => {
+      // 复用 `secretClient` 的 `removeSecret`：它已经处理了"没有桌面外壳"与
+      // "IPC 失败"两种情况，而这两条路径在设置界面里都被测过。
+      const { removeSecret } = await import("../../services/secretClient")
+      const result = await removeSecret(secretRef)
       if (!result.ok) throw new Error(`${result.code}: ${result.detail}`)
     },
     health: async (profileId: string) => {
@@ -261,7 +270,25 @@ export function ProviderSettings({ client, unavailableReason }: ProviderSettings
     try {
       await api.remove(profile.id)
       if (selectedId === profile.id) startNew()
-      setStatus({ kind: "saved", message: `已删除 ${profile.name}` })
+      /**
+       * **把凭据库里那一格也删掉**。
+       *
+       * 不做这一步的话，用户"删掉服务"之后会在凭据管理器里留下一份孤儿密钥：
+       * 他看不到它（配置没了），但它确实占着那一格 —— 而且下次用同一个 id
+       * 建一份配置时会**悄悄继承**那份旧密钥，那比"多占一格"严重得多。
+       *
+       * 顺序是"先删配置、再删密钥"，与保存相反：保存时要先有密钥（否则会出现
+       * "配置指向一个不存在的密钥"），删除时要先没有配置（否则出现"配置指向一个
+       * 已经不存在的密钥"，界面会显示"已配置密钥"而请求必然失败）。
+       */
+      let secretNote = ""
+      try {
+        await api.forgetSecret(profile.secretRef ?? profile.id)
+      } catch (error) {
+        // **不能把删除也一起卡住**（那会让用户连配置都删不掉），但也不能假装干净了。
+        secretNote = `；但密钥可能还在凭据管理器里（${error instanceof Error ? error.message : String(error)}）`
+      }
+      setStatus({ kind: "saved", message: `已删除 ${profile.name}（配置已删除${secretNote}）` })
       await refresh()
     } catch (error) {
       setStatus({ kind: "failed", message: error instanceof Error ? error.message : String(error) })

@@ -1,4 +1,4 @@
-# MathCanvas
+﻿# MathCanvas
 
 MathCanvas 是一个面向数学与工程场景的 2D 交互绘图工作台原型。项目采用 React、TypeScript 和 Vite 构建，并将 Geometry DSL、数值几何内核、Scene Graph 与 SVG 工作台分层，便于持续扩展和多人协作。
 
@@ -204,7 +204,7 @@ npm run build
 npm run test:e2e
 ```
 
-当前验证基线（**2026-09-21，G1 第十一批之后实测**）：`npm.cmd test` 为 **188 个测试文件、2122 个用例全部通过（零跳过）**；**6 个 workspace**（含 `@draw/desktop`）类型检查通过；ESLint **0 error / 14 warning**（14 条为既有基线）；`cargo clippy --all-targets` **零警告**；Web 生产构建通过（Vite 仍提示主 bundle 超过 500 KB）；桌面外壳 `tauri build --no-bundle` 通过并产出可运行的 `mathcanvas-desktop.exe`；**Rust 测试 172 例全过 + 1 例 `#[ignore]`**（已显式跑过并通过）；Playwright Chromium **119/119** 通过（global setup **按当前工作区重新构建** `build-check/mathcanvas-current` 再预览，因此结果对应工作区源码，而不是该目录里上一次构建的产物）。
+当前验证基线（**2026-09-21，G1 第十二批之后实测**）：`npm.cmd test` 为 **188 个测试文件、2124 个用例全部通过（零跳过）**；**6 个 workspace**（含 `@draw/desktop`）类型检查通过；ESLint **0 error / 14 warning**（14 条为既有基线）；`cargo clippy --all-targets` **零警告**；Web 生产构建通过（Vite 仍提示主 bundle 超过 500 KB）；桌面外壳 `tauri build --no-bundle` 通过并产出可运行的 `mathcanvas-desktop.exe`；**Rust 测试 172 例全过 + 1 例 `#[ignore]`**（已显式跑过并通过）；Playwright Chromium **119/119** 通过（global setup **按当前工作区重新构建** `build-check/mathcanvas-current` 再预览，因此结果对应工作区源码，而不是该目录里上一次构建的产物）。
 
 ### 桌面外壳、密钥库、provider 转发与仓储（G1，2026-09-21）
 
