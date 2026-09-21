@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 
 import { encodeMgeo, type GeometryDocument } from "@draw/dsl"
 
@@ -9,6 +9,7 @@ import {
   exportPackage,
   importPackage,
   putAttachment,
+  readDocumentAttachments,
   suggestedPackageName
 } from "../services/projectPackageClient"
 
@@ -85,7 +86,17 @@ function readFileBytes(file: File): Promise<Uint8Array> {
 export function ProjectPackagePanel({ document, projectId, onImported, onNotice, onClose, unavailableReason }: ProjectPackagePanelProps) {
   const [destination, setDestination] = useState(() => localStorage.getItem(DESTINATION_KEY) ?? suggestedPackageName(document.metadata.name))
   const [importPath, setImportPath] = useState("")
+  /**
+   * **本次会话附加过的**文件（带名字与大小 —— 名字是本地文件的事，库里只记哈希与大小）。
+   */
   const [attachments, setAttachments] = useState<AttachedFile[]>([])
+  /**
+   * **当前这一版快照引用的**附件哈希（从项目库读回来的）。
+   *
+   * 与上面那份**不是**一回事：那份是"这次会话里我干了什么"，这份是"这一版文档真的引用了什么"。
+   * 重开应用之后只有后者还在，所以导出与显示都以**两者的并集**为准。
+   */
+  const [referenced, setReferenced] = useState<string[]>([])
   const [status, setStatus] = useState<ProjectPackageNotice | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
 
@@ -101,6 +112,30 @@ export function ProjectPackagePanel({ document, projectId, onImported, onNotice,
     return repository.readHead(projectId, document.metadata.id)
   }
 
+  /**
+   * 把"这一版引用了哪些附件"读回来。
+   *
+   * 在浏览器里它如实失败（没有项目库），此时**不报**：那不是错误，而"列不出来"与"没有附件"
+   * 是两件事，所以界面上那份列表的标题会写清它是从哪来的。
+   */
+  async function refreshReferences() {
+    const head = await readHead()
+    if (!head.ok) return
+    const listed = await readDocumentAttachments({ projectId, documentId: document.metadata.id, generation: head.value.generation })
+    if (listed.ok) setReferenced(listed.value)
+  }
+
+  useEffect(() => {
+    // 打开面板就问一次：重开应用之后**这才是**唯一能数出附件的途径。
+    void refreshReferences()
+    // 文档换了 id 才需要重问；引用变化由 attach / import 之后主动刷新。
+  }, [document.metadata.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** 导出要带的附件 = 这一版引用的 ∪ 本次会话附加的（同一份内容只会出现一次）。 */
+  function attachmentHashes(): string[] {
+    return [...new Set([...referenced, ...attachments.map((attachment) => attachment.contentHash)])]
+  }
+
   async function exportCurrent() {
     setBusy("export")
     try {
@@ -114,7 +149,7 @@ export function ProjectPackagePanel({ document, projectId, onImported, onNotice,
           generation: head.ok ? head.value.generation : 0,
           content: encodeMgeo(document)
         }],
-        attachments: attachments.map((attachment) => attachment.contentHash),
+        attachments: attachmentHashes(),
         destination
       })
       if (!result.ok) { report(describeFailure(result, "导出项目包")); return }
@@ -175,6 +210,9 @@ export function ProjectPackagePanel({ document, projectId, onImported, onNotice,
       })
       if (!result.ok) { report(describeFailure(result, "附加文件")); return }
       setAttachments((current) => [...current, { contentHash: result.value.contentHash, byteSize: result.value.byteSize, name: file.name }])
+      // 刚附加的这一份**已经被引用**了（`put_attachment` 的两阶段写里有那一步），
+      // 所以立刻重读一次引用列表 —— 否则界面要等到下次附加才显示它。
+      await refreshReferences()
       report({ kind: "info", text: `已附加 ${file.name}（${result.value.byteSize} 字节）` })
     } finally {
       setBusy(null)
@@ -219,10 +257,15 @@ export function ProjectPackagePanel({ document, projectId, onImported, onNotice,
       <h3>附件</h3>
       <input type="file" aria-label="选择附件" onChange={(event) => { const file = event.target.files?.[0]; if (file) void attach(file); event.target.value = "" }} />
       <button type="button" onClick={() => void collect()} disabled={busy !== null}>回收孤儿附件</button>
-      {attachments.length > 0
-        ? <ul className="project-package-attachments">{attachments.map((attachment) => <li key={attachment.contentHash}>{attachment.name} · {attachment.byteSize} 字节 · <code>{attachment.contentHash.slice(0, 12)}…</code></li>)}</ul>
-        : <p className="project-package-hint">本次会话还没有附加过文件。</p>}
-      <p className="project-package-hint">附件的名字就是内容的哈希（同一份只存一次、随时能自验）。列表只覆盖本次会话：Rust 侧还没有"某份快照引用了哪些附件"的列举命令，所以重开应用之后界面数不出历史附件。</p>
+      {referenced.length > 0 || attachments.length > 0
+        ? <ul className="project-package-attachments">
+            {attachmentHashes().map((hash) => {
+              const known = attachments.find((attachment) => attachment.contentHash === hash)
+              return <li key={hash}>{known ? `${known.name} · ${known.byteSize} 字节 · ` : ""}<code>{hash.slice(0, 12)}…</code></li>
+            })}
+          </ul>
+        : <p className="project-package-hint">这一版快照还没有引用任何附件。</p>}
+      <p className="project-package-hint">附件的名字就是内容的哈希（同一份只存一次、随时能自验）。列表由两处合成：**这一版快照引用的**（从项目库读回来，重开应用之后仍然数得出来）与**本次会话附加的**（带本地文件名）。导出时两者都会带上。</p>
     </div>
 
     {status && <p role="status" className="project-package-status" data-kind={status.kind}>{status.text}</p>}

@@ -22,6 +22,8 @@ interface FakeOptions {
   head?: { generation: number; epoch: string; content: string } | null
   importResult?: Record<string, unknown>
   exportResult?: Record<string, unknown>
+  /** 这一版快照引用了哪些附件（`read_document_attachments` 的返回）。 */
+  referenced?: string[]
 }
 
 function makeClient(options: FakeOptions = {}) {
@@ -32,6 +34,9 @@ function makeClient(options: FakeOptions = {}) {
       case "read_document_head":
         if (!options.head) throw new Error("no such document")
         return { projectId: "local", documentId: "doc-1", epoch: options.head.epoch, generation: options.head.generation, contentHash: "hash", content: options.head.content, updatedAt: 1 }
+      case "read_document_attachments":
+        // 列举那一半：**引用记在快照上**，所以这里也要 `generation`。
+        return (options.referenced ?? []).filter(() => (args as { generation: number }).generation > 0)
       case "put_attachment":
         return { contentHash: (args as { contentHash: string }).contentHash, byteSize: 3 }
       case "export_package":
@@ -116,6 +121,25 @@ describe("附件", () => {
     fireEvent.click(screen.getByRole("button", { name: "导出 .mcanvas" }))
     await waitFor(() => expect(calls.some((call) => call.command === "export_package")).toBe(true))
     expect(calls.find((call) => call.command === "export_package")!.args!.attachments).toEqual(["ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"])
+  })
+
+  it("打开面板就从项目库读出这一版引用的附件，并把它带进导出", async () => {
+    // 这一条关掉的是"列表只覆盖本次会话"那个限制：引用记在**快照**上，
+    // 而列出它的命令在此之前不存在 —— 于是重开应用之后界面数不出历史附件。
+    const stored = "b1946ac92492d2347c6235b4d2611184ba5b1e1b6c8b0f1f4f1d3a4b5c6d7e8f"
+    const calls = makeClient({ head: { generation: 9, epoch: "epoch:doc-1", content: "{}" }, referenced: [stored] })
+    panel()
+
+    await waitFor(() => expect(calls.some((call) => call.command === "read_document_attachments")).toBe(true))
+    // 读的时候必须带 `generation`：问的是"这一版引用了什么"，不是"这份文档一共有什么"。
+    expect(calls.find((call) => call.command === "read_document_attachments")!.args).toMatchObject({ generation: 9 })
+    await screen.findByText((content) => content.includes(stored.slice(0, 12)))
+
+    fireEvent.change(screen.getByLabelText("导出到"), { target: { value: "D:\\out\\demo" } })
+    fireEvent.click(screen.getByRole("button", { name: "导出 .mcanvas" }))
+
+    await waitFor(() => expect(calls.some((call) => call.command === "export_package")).toBe(true))
+    expect(calls.find((call) => call.command === "export_package")!.args!.attachments).toEqual([stored])
   })
 
   it("文档还没落过盘时如实说明，而不是拿一个假的 generation 去写", async () => {

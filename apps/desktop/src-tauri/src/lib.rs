@@ -664,6 +664,18 @@ fn import_package(app: tauri::AppHandle, path: String, project_id: String, epoch
     }))
 }
 
+/// **这一版快照引用了哪些附件**（列举那一半）。
+///
+/// 引用记在**快照**上而不是 head 上（撤销回旧版本时那一版的图必须还在），所以这里要
+/// `generation`：问的是"这一版引用了什么"，而不是"这份文档一共有什么"。
+/// 没有这条命令时，界面只能列出**本次会话里附加过的那几个** —— 重开应用就数不出来了。
+#[tauri::command]
+fn read_document_attachments(app: tauri::AppHandle, project_id: String, document_id: String, generation: i64) -> Result<Vec<String>, String> {
+    let state = app.try_state::<RepositoryState>().ok_or("the project repository is not initialised")?;
+    let repository = state.repository.lock().map_err(|_| "the project repository is poisoned".to_string())?;
+    repository.attachments_of(&project_id, &document_id, generation).map_err(|error| error.to_string())
+}
+
 // ---------------------------------------------------------------- 运行账本（Task 2.6）
 
 /// **追加一条运行事件**。
@@ -820,6 +832,7 @@ pub fn run() {
             replace_document_epoch,
             put_attachment,
             read_attachment,
+            read_document_attachments,
             collect_attachments,
             export_package,
             import_package,

@@ -141,6 +141,7 @@ fn exposes_only_named_ipc_commands_and_no_generic_one() {
         "replace_document_epoch",
         "put_attachment",
         "read_attachment",
+        "read_document_attachments",
         "collect_attachments",
         "export_package",
         "import_package",

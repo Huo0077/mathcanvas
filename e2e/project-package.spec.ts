@@ -51,5 +51,6 @@ test("does not pretend an attachment was stored when there is no project library
 
   // 附件挂在快照上，而浏览器里没有仓储 —— 如实说清，而不是显示"已附加"。
   await expect(panel.getByRole("status")).toContainText("还没有在项目库里落过盘")
-  await expect(panel.getByText("本次会话还没有附加过文件。")).toBeVisible()
+  // 列举那一半也需要仓储，所以这里如实显示"这一版还没有引用任何附件"，而不是伪造一份列表。
+  await expect(panel.getByText("这一版快照还没有引用任何附件。")).toBeVisible()
 })

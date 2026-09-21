@@ -174,6 +174,26 @@ export async function readAttachment(contentHash: string): Promise<PackageResult
   }
 }
 
+/**
+ * **这一版快照引用了哪些附件**。
+ *
+ * 引用记在**快照**上（不是 head、不是文档）：撤销回旧版本时那一版的附件必须还在，
+ * 所以问法必然是"这一版引用了什么"。没有这条命令时界面只能列出**本次会话里附加过的那几个** ——
+ * 重开应用就数不出来了（而那让"我上次附的图还在不在"变成一个只能靠猜的问题）。
+ */
+export async function readDocumentAttachments(input: { projectId: string; documentId: string; generation: number }): Promise<PackageResult<string[]>> {
+  try {
+    const raw = await invokeDesktop<unknown>("read_document_attachments", {
+      projectId: input.projectId,
+      documentId: input.documentId,
+      generation: input.generation
+    })
+    return { ok: true, value: Array.isArray(raw) ? (raw.filter((entry) => typeof entry === "string") as string[]) : [] }
+  } catch (error) {
+    return asResult(error)
+  }
+}
+
 /** 回收孤儿附件（两阶段的清理那一半）。返回**真的被删掉**的那些哈希。 */
 export async function collectAttachments(): Promise<PackageResult<string[]>> {
   try {
