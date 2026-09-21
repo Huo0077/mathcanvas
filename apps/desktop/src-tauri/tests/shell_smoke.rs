@@ -144,6 +144,11 @@ fn exposes_only_named_ipc_commands_and_no_generic_one() {
         "collect_attachments",
         "export_package",
         "import_package",
+        // 运行账本（Task 2.6）。**有意加的三个**：一条只追加的写入、一条有界读取、
+        // 一条计数。它们都是具名命令，而且都不接受"任意 SQL"或"任意路径"。
+        "append_run_event",
+        "read_run_events",
+        "run_event_count",
         "proxy_session",
         "proxy_cancel"
     ];

@@ -664,6 +664,41 @@ fn import_package(app: tauri::AppHandle, path: String, project_id: String, epoch
     }))
 }
 
+// ---------------------------------------------------------------- 运行账本（Task 2.6）
+
+/// **追加一条运行事件**。
+///
+/// 收**原始 JSON** 再自己转换，而不是让 Tauri 直接反序列化成 `RunEventInput`：
+/// 后者在遇到未知字段时的行为取决于类型定义，而这里要的是**明确的拒绝** ——
+/// `RunEventInput` 带 `deny_unknown_fields`，所以一个带着 `reasoning` 或 `imageBytes`
+/// 的事件会在**入口**被拒（计划 Task 2.6："never stores raw model reasoning or image bytes"）。
+/// 静默削掉那个字段比拒绝更危险：调用方会以为它存进去了。
+///
+/// 返回"这次真的写了一行吗"：同一个 `event_id` 第二次返回 `false`（幂等，重放不是错误）。
+#[tauri::command]
+fn append_run_event(app: tauri::AppHandle, event: serde_json::Value) -> Result<bool, String> {
+    let parsed: repository::run_events::RunEventInput = serde_json::from_value(event).map_err(|error| format!("the run event was refused: {error}"))?;
+    let state = app.try_state::<RepositoryState>().ok_or("the project repository is not initialised")?;
+    let repository = state.repository.lock().map_err(|_| "the project repository is poisoned".to_string())?;
+    repository.append_run_event(&parsed).map_err(|error| error.to_string())
+}
+
+/// **读一条运行的事件**（有界、按写入顺序，供界面的开发者详细视图）。
+#[tauri::command]
+fn read_run_events(app: tauri::AppHandle, run_id: String) -> Result<Vec<repository::run_events::RunEventRecord>, String> {
+    let state = app.try_state::<RepositoryState>().ok_or("the project repository is not initialised")?;
+    let repository = state.repository.lock().map_err(|_| "the project repository is poisoned".to_string())?;
+    repository.run_events(&run_id).map_err(|error| error.to_string())
+}
+
+/// 账本里一共多少条（自述与诊断用）。
+#[tauri::command]
+fn run_event_count(app: tauri::AppHandle) -> Result<i64, String> {
+    let state = app.try_state::<RepositoryState>().ok_or("the project repository is not initialised")?;
+    let repository = state.repository.lock().map_err(|_| "the project repository is poisoned".to_string())?;
+    repository.run_event_count().map_err(|error| error.to_string())
+}
+
 /// 把 base64 解成字节。**不用 crate**：这里只有解码与编码两个方向，而它们的形状是固定的。
 fn decode_base64(text: &str) -> Option<Vec<u8>> {
     const TABLE: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -788,6 +823,9 @@ pub fn run() {
             collect_attachments,
             export_package,
             import_package,
+            append_run_event,
+            read_run_events,
+            run_event_count,
             proxy_session,
             proxy_cancel
         ])

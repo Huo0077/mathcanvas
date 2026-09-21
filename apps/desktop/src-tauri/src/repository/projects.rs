@@ -493,4 +493,27 @@ impl ProjectRepository {
             .map_err(|error| RepositoryError::Io { detail: format!("cannot drop the attachment references: {error}") })?;
         Ok(())
     }
+
+    // ------------------------------------------------------------ 运行账本（Task 2.6）
+
+    /**
+     * **追加一条运行事件**。只追加、按 `event_id` 幂等。
+     *
+     * 这一层在 `run_events.rs` 里（那里有脱敏与"多一个字段就拒"的判据），
+     * 这里只是把它接到同一个连接上 —— 账本与文档共用一份事务性存储，
+     * 于是"这次运行改动了哪一版文档"与"这次运行发生了什么"在同一个时间线上。
+     */
+    pub fn append_run_event(&self, event: &super::run_events::RunEventInput) -> Result<bool, RepositoryError> {
+        super::run_events::append(&self.connection, event)
+    }
+
+    /// 读一条运行的事件（有界、按写入顺序）。界面的"开发者详细视图"读的就是它。
+    pub fn run_events(&self, run_id: &str) -> Result<Vec<super::run_events::RunEventRecord>, RepositoryError> {
+        super::run_events::list(&self.connection, run_id)
+    }
+
+    /// 账本里一共多少条（界面与测试据此看"它真的在长"）。
+    pub fn run_event_count(&self) -> Result<i64, RepositoryError> {
+        super::run_events::count(&self.connection)
+    }
 }

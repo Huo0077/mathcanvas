@@ -4,6 +4,7 @@ import { contentFingerprint } from "@draw/scene-graph"
 
 import { useAgentStore } from "../agentStore"
 import { useSceneStore } from "../store"
+import { appendRunEvent } from "../services/runEventClient"
 import { createAgentRuntime, type AgentRuntime } from "./agentRuntime"
 import { createLocalPlanner, localIntentSkillIds } from "./localPlanner"
 import { createModelPlanner, resolveActiveProvider, type ModelPlannerDependencies } from "./modelPlanner"
@@ -258,6 +259,31 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
          * 是这条约束在实现层最省事的落法：这里根本没有可以塞进去的位置。
          */
         useAgentStore.getState().recordDiagnostic(`${event.sequence}. ${event.from} → ${event.phase}: ${event.detail}`)
+        /**
+         * **第三层读者：项目库里的账本**（Task 2.6）。
+         *
+         * 内存里那份诊断随会话消失，而"这次运行到底发生了什么"要能跨重启查。
+         * 事件形状由 Rust 侧定死（`deny_unknown_fields`），所以这里只搬已有字段 ——
+         * 与上面那条同一条纪律：**没有可以塞进去的位置**。
+         *
+         * **不 await**：账本是旁路，让它挡住这一步的推进没有任何好处（写失败会落到下面那句诊断里，
+         * 而不是让运行停下来）。在浏览器里跑时它如实回 `no_desktop_shell`，那是预期状态，不报。
+         */
+        void appendRunEvent({
+          eventId: `${runId}:${event.sequence}`,
+          runId,
+          conversationId: runContext.conversationId,
+          phase: event.phase,
+          status: event.phase === "failed" ? "error" : "ok",
+          detail: event.detail || PHASE_SUMMARY[event.phase] || event.phase,
+          at: event.at,
+          promptMessageId,
+          versions: { capabilityRevision: runContext.capabilityRevision, policyRevision: runContext.policyRevision }
+        }).then((result) => {
+          // "没有桌面外壳"是**预期**（浏览器里账本不可用）；真的写失败要说出来 ——
+          // 否则"账本里少了几行"永远没人会知道。
+          if (!result.ok && result.code === "ipc_failed") useAgentStore.getState().recordDiagnostic(`[ledger] append failed: ${result.detail}`)
+        })
       }
 
       const phase = runtime.coordinator.phase()
