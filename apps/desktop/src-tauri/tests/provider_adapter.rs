@@ -732,8 +732,7 @@ fn the_real_transport_classifies_an_http_failure_instead_of_returning_empty_even
 }
 
 #[test]
-fn the_real_transport_does_not_follow_a_redirect_with_the_credential() {
-    // 302 到别处：跟着走就会把认证头送给对方。
+fn the_real_transport_does_not_follow_a_redirect_with_the_credential() {    // 302 到别处：跟着走就会把认证头送给对方。
     // 每条额外 header **自己带 `\r\n` 结尾**，而且冒号后**只留一个空格** ——
     // 多一个空格、或少一个换行都会让报文非法（hyper 报 `Header(Token)`），
     // 而那个错误看起来像"客户端解析不了"，其实是这台测试服务器把报文写坏了。
@@ -749,4 +748,27 @@ fn the_real_transport_does_not_follow_a_redirect_with_the_credential() {
         ProviderError::Http { status, .. } => assert_eq!(status, 302),
         other => panic!("expected the redirect to surface as an HTTP failure, got {other:?}"),
     }
+}
+
+/// **失败时要说清是"谁"答的**（2026-09-21 加）。
+///
+/// 这一条来自一次真实的排查：**同一个请求**在控制台里（用同一份 `HttpTransport`）拿到了 provider
+/// 的真实 JSON，而应用（GUI 进程）拿到一张 HTML `Request Blocked` 页 —— 只看状态码根本分不出
+/// "provider 在拒绝"与"有人在中间应答"。对端地址把这两件事分开，而它原先只活在抓包里。
+#[test]
+fn an_http_failure_says_which_peer_answered() {
+    let server = serve_once("429 Too Many Requests", "", "<html>Request Blocked</html>");
+    let source = FakeSource { secret: Some("sk-live-secret".to_string()) };
+    let transport = HttpTransport::new();
+    let adapter = ProviderAdapter::new(&source, &transport, local_profile(&format!("http://{}", server.address)));
+    let stop = AtomicStop::new();
+
+    let error = send(&adapter, &stop).expect_err("a 429 must be reported as a failure");
+
+    let message = error.message();
+    // 对端就是那台回环测试服务器 —— 也就是说"谁答的"真的被记下来了，而且记对了。
+    assert!(
+        message.contains(&format!("[peer 127.0.0.1:{}]", server.address.port())),
+        "the answering peer must be named: {message}"
+    );
 }

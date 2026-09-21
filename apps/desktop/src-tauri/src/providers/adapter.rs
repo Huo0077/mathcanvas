@@ -523,13 +523,22 @@ impl Transport for HttpTransport {
 
         let result = drive(async {
             let response = builder.send().await.map_err(|error| ProviderError::Transport { detail: describe(&error) })?;
+            // **对端是谁**（2026-09-21 加，诊断用）。
+            //
+            // 为什么值得永久留在错误里：一次实测里，**同一个请求**在控制台（同一份 `HttpTransport`）
+            // 拿到了 provider 的真实 JSON，而应用（GUI 进程）拿到一张 HTML `Request Blocked` 页 ——
+            // 只看状态码根本分不出"是 provider 在拒绝"还是"有人在中间应答"。
+            // 对端地址能把这两件事分开：打到 provider 的真实 IP，与打到本机/网关，是两种完全不同的事故。
+            let peer = response.remote_addr().map_or_else(|| "unknown".to_string(), |address| address.to_string());
             let status = response.status().as_u16();
             if !response.status().is_success() {
                 // 失败体也要读（诊断要用），但要**限长**：对端可能回一大坨 HTML。
                 let body = response.text().await.unwrap_or_default();
                 let detail: String = body.chars().take(200).collect();
                 let (failure, message) = classify_http_failure(status, Some(&detail));
-                return Err(ProviderError::Http { status, failure, message });
+                // 对端地址放在**开头**：这条详情走到界面上会被截断到 200 字符（前端那条约束），
+                // 放末尾等于没放 —— 而"谁答的"正是最该留下来的那一个事实。
+                return Err(ProviderError::Http { status, failure, message: format!("[peer {peer}] {message}") });
             }
 
             let mut stream = response.bytes_stream();

@@ -101,16 +101,27 @@ Agent 发一句话得到 `ModelPlannerError: 传输失败已尝试 3 次（上�
 | 健康记录时间戳 | 22:23（关代理之后**真的重跑过**），四条 detail 仍是那张拦截页 |
 | 默认路由 | 经 `100.65.255.254`（一个隧道式网关，ifIndex 9）—— 本机装有 Clash 与若干隧道/加速工具 |
 
-**因此只剩两个嫌疑**（都还没证据定论）：
+**结论：应用发往 `api.deepseek.com` 的 HTTPS 被一个出示自签名证书的主机接走了**，它回一张 `Request Blocked` 页。
+不是代码问题（同一份 `HttpTransport` 在控制台里拿到真实 JSON），也不是 DeepSeek 的问题（真实节点正常）。
 
-1. **按进程分流**：本机的隧道/加速类工具可能对 `mathcanvas-desktop.exe` 单独接管流量（split tunneling），
-   而 `curl.exe` / PowerShell 不在它的名单里 —— 这解释了"同一个请求、同一个时刻，shell 能通、应用不能"。
-2. **应用那条 TLS/HTTP2 栈被中间设备拦住**（拦截页是 HTML 而不是 DeepSeek 的错误体，说明中间有人应答）。
+**定位过程与证据**：
 
-**下一步（能把范围切一半的廉价实验）**：趁应用运行时，用**控制台里的 Rust 程序**（`cargo test --test provider_live`，
-不需要有效 key —— 拿到真实 401 就够）打同一个端点。
-若控制台那条通、应用那条不通，就是**按进程分流**，修法在机器上（退出/调整那个隧道工具），不在代码里；
-若两条都不通，才轮到应用这一侧。
+| 检查 | 结果 |
+| --- | --- |
+| **应用连到了谁**（新加的 peer 诊断） | `[peer 60.204.2.4:443]` —— 稳定复现（22:11 / 22:17 / 22:23 / 22:29 / 22:31 / 22:39 / 22:43，含**全新进程 + `ipconfig /flushdns`**） |
+| `60.204.2.4` 出示的证书 | **自签名**：`O=Default Company Ltd, L=Deault City, S=Some-State, C=XX`（OpenSSL 示例配置的默认值，还带拼写错误）→ **它不是 DeepSeek** |
+| 系统解析 `api.deepseek.com` | `113.240.66.218` / `175.12.122.167`，两者都出示 `CN=api.deepseek.com` 并回**真实 JSON** |
+| `60.204.2.4` 在解析结果里吗 | **不在** |
+| 那个自签名 CA 在系统信任库里吗 | 不在（`LocalMachine\Root` 与 `CurrentUser\Root` 都没有） |
+| 本机唯一具备拦截能力的进程 | `clash-core-service`（PID 39652，Clash for Windows 的 **Service Mode** 助手）+ 已安装的 `wintun.sys` |
+| 能不能停掉它 | **不能：Access denied（需要管理员）** |
+
+**下一步（需要管理员权限）**：停掉/卸载 Clash 的 **Service Mode**（Clash for Windows → 设置 → Service Mode → Stop / Uninstall），或**重启一次机器**（服务模式装的 TUN/DNS 接管不会自动恢复），然后再走本清单第 1 步。
+
+**一处仍需单独查清（安全相关）**：应用拿到的是 **HTTP 429**（说明 TLS 握过了），而那张自签名证书本该被拒。两种可能，都必须查：
+① 中间人出示的是**公网 CA 签发的 `api.deepseek.com` 证书**（那就是一次真正的中间人攻击）；
+② 客户端的证书校验被绕过了。传输层用的是 `rustls-tls`（webpki-roots）且**没有** `danger_accept_invalid_certs`，
+所以这一条值得用一个"自签名证书的回环 TLS 服务器"单独断言一次 —— 客户端必须**拒绝**它。
 
 **与代码无关的旁证**：`tests/provider_live.rs` 在更早（代理还开着时）**真的**从 Rust 侧拿到了 DeepSeek 的
 `pong`，同一套 `HttpTransport` + `.no_proxy()`。所以"传输层实现坏了"这个假设**已经被排除过一次**。
