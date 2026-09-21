@@ -36,9 +36,28 @@
 | 1.3 provider 配置与设置存储 | ✅ | — |
 | 1.4 provider 适配器与事件归一 | ✅ | 能力探针的**请求形状**照公开文档拼、**没有对真实服务跑过**（见「G1 第十批」的一处保留） |
 | 1.5 回环代理与传输安全 | ✅ | **转发已走通**（`ProviderAdapter` + `HttpTransport`，真回环 socket 测过）；`/v1/runs/{runId}/model` 这条 HTTP 路由**故意仍回 501** —— 动作在 IPC 上，运行记录在代理里（理由见「G1 第九批」） |
-| 1.6 SQLite 仓储 / CAS / 崩溃恢复 | 🟡 | `.mcanvas` 打包导出/导入；附件的两阶段写与孤儿回收（**表已建好**，缺的是 blob 目录那一半与孤儿回收） |
+| 1.6 SQLite 仓储 / CAS / 崩溃恢复 | ✅ | Rust 侧全齐（迁移 / CAS / 幂等 / 崩溃恢复 / 附件两阶段写与 GC / `.mcanvas` 导出导入）；**缺界面入口**：导出/导入与附件写入还没有 UI（命令都在，由 `tests/repository_package.rs` 29 例 + `project_repository` 19 例覆盖） |
 
-**一句话结论**：G1 的**六个任务主体都在且都被测透**（Rust **140 例** + 单测 2122 例）；**Gate 五条里已满足四条**（②仍差手动重启验证）；离"完成"只差**一件**实质工作：**`.mcanvas` 打包与附件**。
+**一句话结论**：G1 六个任务的**代码全部落地且被测透**（Rust **172 例** + 单测 2122 例）；**Gate 五条里已满足四条**（②仍差手动重启验证）；剩下的是**界面接线**与**用户本机操作**，没有未实现的判据。
+
+### G1 第十一批：附件两阶段写 + `.mcanvas` 打包（Task 1.6 Step 4/5）（2026-09-21）
+
+- **交付**：`repository/blobs.rs`（`BlobStore` + SHA-256 + GC）、`repository/archive.rs`（自己写的 stored-zip 容器 + CRC-32）、`repository/package.rs`（`.mcanvas` 导出/导入与全部判据）、`projects.rs` 的附件引用（`record_attachment` / `reference_attachments` / `referenced_blobs` / `attachments_of` / `drop_references`）、五个 IPC 命令（`put_attachment` / `read_attachment` / `collect_attachments` / `export_package` / `import_package`）。**新增 29 + 3 例**。
+- **两阶段写的顺序由命令写死，不交给调用方**：①按声明的哈希校验并**原子**落盘（先写 `tmp/*.part`、`sync_all`、再 `rename`）→ ②记附件元数据 → ③记"这一版快照引用了它"。崩溃落在 ① 与 ② 之间只会留下**孤儿 blob**（GC 收掉）；反过来先写库会留下**悬空引用**（用户打开文档看到"附件丢失"）。前者只是浪费空间，后者是用户可见的损坏。
+- **临时文件放 `tmp/` 而不是系统临时目录**：`rename` 只在同一文件系统内原子；系统临时目录在另一块盘上时它会失败，或者被悄悄降级成"复制 + 删除"——那就不是原子的了。
+- **附件的名字就是内容的 SHA-256**，三个后果都是好的：同一份附件自然只有一份；校验不需要任何额外记录（读出来的字节自己就能验）；GC 的判据只有一个输入（库里有没有那一行）。
+- **GC 有宽限期**（`GC_GRACE_MS = 60s`）：正常操作里"文件已写、引用还没写"的窗口是存在的（毫秒级），而一次并发的 GC 落在那个窗口里就会删掉一份**正在被引用**的附件 —— 那是用户可见的损坏。宽限期是策略、"哪些该删"是逻辑，两者用 `collect_garbage(.., 0)` 分开测。
+- **引用记在快照上而不是 head 上**：撤销会回到旧版本，而那一版里的图必须还在。有一条用例专门盯这个（`a_blob_referenced_by_an_older_snapshot_survives_a_newer_one_dropping_it`）。
+- **SHA-256 自己写，而且自己证明它对**：标准向量（空串 / `abc` / 两段长消息）+ 一百万个 `a` + 55/56/63/64/65/128 这些**填充边界**长度。理由是判据要留在仓库里 —— 引一个哈希库的话，"哈希对不对"只能靠相信它。代价是没有 SIMD（32 MiB 约 0.3 秒），而这是用户手动挑附件的一次性动作。
+- **`.mcanvas` 是自己写的一小块 zip**（只写 stored 条目）。选 zip 的公开理由：用户拿 7-Zip / 资源管理器就能打开看一眼 —— 一个只有我们自己的代码能读的格式，出问题时没法自查。**读取器刻意不是通用 unzip**：只认 stored、拒绝加密、拒绝 ZIP64、拒绝任何指向容器外的名字。打包格式的读取器天生在处理不可信输入，所以判据是**默认拒绝**。
+- **`is_safe_name` 拒四种**，每种对应一种真实的攻击/事故形状：`..`、绝对路径与盘符、反斜杠（Windows 上也是分隔符，而 zip 规范要求 `/`）、空名字与结尾 `/`。
+- **导入那一侧才是判据所在**：版本、路径安全、**文档哈希**、**附件哈希**、附件大小、以及**清单与条目一一对应（两个方向都查）**。两个方向都要：声明了却没有 → "神秘丢失"；有却没声明 → **夹带**（用户不知道它从哪来）。
+- **一个刻意不做的事**：包里**没有密钥**，只有 `profileId` / `secretRef` 这种引用；用例逐字扫过清单，确保 `apiKey` / `sk-` / `Bearer ` 一个都不出现。
+- **`.mgeo` 兼容性一个字节没改**：包里装的就是 `.mgeo` 原文，老的打开路径完全不受影响 —— 这正是计划那句 "retain `.mgeo` compatibility unchanged" 的落点。
+- **来源链接缺失不拒绝整包**：来源是可恢复的（那份文档可以后补），而"因为缺一个来源就拒绝打开"会让用户彻底拿不到自己的文档。所以如实列进 `missingSources`。
+- **一处如实的缺口**：这些命令**都还没有界面入口** —— 导出/导入与附件写入目前只能通过 IPC 调用。1.6 的"代码"齐了，而"用户在界面上能不能做到"还没接。
+
+**验证证据（本批）**：Rust **172 例通过 + 1 例 `#[ignore]`**（单元 8 + project_repository **19** + provider_adapter 16 + provider_capability 18 + provider_profiles 14 + providers 19 + proxy 16 + proxy_server 16 + **repository_package 29** + secrets 8 + shell_smoke 9）、单测 **188 文件 / 2122 用例全通过（零跳过）**、typecheck exit 0、lint 0 error / 14 warning（基线）、`cargo clippy --all-targets` **零警告**、`npm run build` exit 0（含 `tauri build --no-bundle`）、**e2e 119/119**。
 
 ### G1 第十批：能力证据探针 —— "已验证"**真的会变真**了（Task 1.4 Step 5）（2026-09-21）
 
@@ -2570,7 +2589,7 @@ P7-1 至 P7-6 与工程工作台层次化改造 Task 1-7 均已完成；P4 Agent
 
 ## 验证证据
 
-> **当前基线（唯一权威，2026-09-21 在「G1 第十批：能力证据探针」之后实测）**：`npm.cmd test` **188 个测试文件、2122 个用例全部通过（零跳过）**；6 个 workspace（含 `@draw/desktop`）类型检查通过；ESLint **0 error / 14 warning**（14 条为既有基线）；`cargo clippy --all-targets` **零警告**；`npm.cmd run build` exit 0（含 `tauri build --no-bundle`，产出可运行的 `mathcanvas-desktop.exe`）；**Rust 测试 140 例通过 + 1 例 `#[ignore]`**（单元 8 + project_repository 16 + provider_adapter 16 + **provider_capability 18** + provider_profiles 14 + providers 19 + proxy 16 + proxy_server 16 + secrets 8 + shell_smoke 9）；Playwright Chromium **119/119** 通过。逐批证据见「G1 第一批 … 第十批」各节。
+> **当前基线（唯一权威，2026-09-21 在「G1 第十一批：附件两阶段写 + `.mcanvas` 打包」之后实测）**：`npm.cmd test` **188 个测试文件、2122 个用例全部通过（零跳过）**；6 个 workspace（含 `@draw/desktop`）类型检查通过；ESLint **0 error / 14 warning**（14 条为既有基线）；`cargo clippy --all-targets` **零警告**；`npm.cmd run build` exit 0（含 `tauri build --no-bundle`，产出可运行的 `mathcanvas-desktop.exe`）；**Rust 测试 172 例通过 + 1 例 `#[ignore]`**（单元 8 + project_repository **19** + provider_adapter 16 + provider_capability 18 + provider_profiles 14 + providers 19 + proxy 16 + proxy_server 16 + **repository_package 29** + secrets 8 + shell_smoke 9）；Playwright Chromium **119/119** 通过。逐批证据见「G1 第一批 … 第十一批」各节。
 
 > **上一轮基线（2026-09-18 在"平面几何切线 + 动点扩展 + 切点拖动 + 画布收细"之后实测）**：`npx vitest run` **124 个测试文件、1477 个用例通过**（把上游那 22 个提交一起并进来之后重跑；本轮自己的 37 条全部在内）；4 个 workspace 类型检查通过；ESLint 对改动文件 **0 error**（仓库既有 5 条 warning 与本轮无关）；dev server 逐个模块转译通过。**Playwright 本轮未运行**（需另起构建产物端口与安装 Chromium）—— 界面交互由 `App.test.tsx` 的真实 DOM 与指针事件覆盖，浏览器级门禁待补。
 >

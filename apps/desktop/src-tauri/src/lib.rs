@@ -31,6 +31,7 @@ pub mod secrets;
 
 use repository::projects::{CommitReceipt, CommitRequest, DocumentSnapshot, ProjectRepository};
 use repository::provider_profiles::{ProviderHealth, ProviderProfile, ProviderProfileStore, StoreError};
+use repository::BlobStore;
 use secrets::{SecretState, SecretStore, Store};
 use std::sync::Mutex;
 use tauri::Manager;
@@ -47,6 +48,20 @@ struct SecretStoreState(Store);
  */
 pub struct RepositoryState {
     repository: Mutex<ProjectRepository>,
+}
+
+/**
+ * **附件仓库**（Task 1.6 Step 4）。
+ *
+ * 它与项目仓储**分开**托管，因为两者是不同的东西：一个在 SQLite 里（有事务），
+ * 一个在磁盘上的目录里（名字就是内容的 SHA-256）。GC 需要**同时**问两边
+ *（"哪些被引用"来自库、"磁盘上有什么"来自这里），所以命令那一层要把两个锁都拿住。
+ *
+ * `BlobStore` 自身不需要 `Mutex`：它只持有根路径，方法是 `&self`，
+ * 每次操作各自开文件 —— 而"用不用锁"的判据是"有没有跨调用的可变状态"，这里没有。
+ */
+pub struct BlobState {
+    blobs: BlobStore,
 }
 
 /**
@@ -450,6 +465,194 @@ fn replace_document_epoch(app: tauri::AppHandle, project_id: String, document_id
     repository.replace_epoch(&project_id, &document_id, &epoch, &content, &content_hash).map_err(|error| error.to_string())
 }
 
+// ---------------------------------------------------------------- 附件与 .mcanvas（Task 1.6 Step 4/5）
+
+/**
+ * **存一份附件**（两阶段写的第一阶段 + 引用）。
+ *
+ * ## 两阶段的顺序**必须由这一条命令保证**，不能交给调用方
+ *
+ * 计划原文："Hash/size-check and atomically rename the blob first, then insert the DB reference."
+ * 所以这里的顺序写死成：①按声明的哈希校验并原子落盘（`blobs.write`）→
+ * ②记附件元数据 → ③记"这一版快照引用了它"。
+ *
+ * 崩溃可能落在任何两步之间，而两阶段的取舍是**故意的**：
+ * - 落在 ① 与 ② 之间 → 磁盘上多一个没人引用的 blob（**孤儿**，GC 会收掉它）；
+ * - 反过来先写库 → 库里说有这么个附件、文件却不在，用户打开文档会看到"附件丢失"。
+ *
+ * 前者只是浪费空间，后者是用户可见的损坏。
+ */
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+fn put_attachment(
+    app: tauri::AppHandle,
+    project_id: String,
+    document_id: String,
+    generation: i64,
+    content_hash: String,
+    media_type: String,
+    base64_bytes: String
+) -> Result<serde_json::Value, String> {
+    let bytes = decode_base64(&base64_bytes).ok_or("the attachment is not valid base64")?;
+    let blobs = app.try_state::<BlobState>().ok_or("the attachment store is not initialised")?;
+    // **① 落盘**（哈希门在里面：对不上就一字节都不写）。
+    let staged = blobs.blobs.write(&bytes, &content_hash).map_err(|error| error.to_string())?;
+
+    // **② + ③ 记引用**。
+    let state = app.try_state::<RepositoryState>().ok_or("the project repository is not initialised")?;
+    let mut repository = state.repository.lock().map_err(|_| "the project repository is poisoned".to_string())?;
+    repository
+        .record_attachment(&staged.content_hash, staged.byte_size as i64, &media_type)
+        .map_err(|error| error.to_string())?;
+    repository
+        .reference_attachments(&project_id, &document_id, generation, std::slice::from_ref(&staged.content_hash))
+        .map_err(|error| error.to_string())?;
+
+    Ok(serde_json::json!({ "contentHash": staged.content_hash, "byteSize": staged.byte_size }))
+}
+
+/// **读一份附件**（base64）。找不到时回 `null` —— 与"出错了"分开。
+#[tauri::command]
+fn read_attachment(app: tauri::AppHandle, content_hash: String) -> Result<Option<String>, String> {
+    let blobs = app.try_state::<BlobState>().ok_or("the attachment store is not initialised")?;
+    let bytes = blobs.blobs.read(&content_hash).map_err(|error| error.to_string())?;
+    Ok(bytes.map(|bytes| encode_base64(&bytes)))
+}
+
+/**
+ * **回收孤儿附件**（两阶段的清理那一半）。
+ *
+ * 判据只有一个：**数据库里没有被任何快照引用**。宽限期由 `blobs::GC_GRACE_MS` 定，
+ * 因为正常操作里"文件已写、引用还没写"的窗口是存在的（毫秒级），
+ * 而一次并发的 GC 落在那个窗口里就会删掉一份**正在被引用**的附件。
+ */
+#[tauri::command]
+fn collect_attachments(app: tauri::AppHandle) -> Result<Vec<String>, String> {
+    let referenced = {
+        let state = app.try_state::<RepositoryState>().ok_or("the project repository is not initialised")?;
+        let repository = state.repository.lock().map_err(|_| "the project repository is poisoned".to_string())?;
+        repository.referenced_blobs().map_err(|error| error.to_string())?
+    };
+    let blobs = app.try_state::<BlobState>().ok_or("the attachment store is not initialised")?;
+    blobs.blobs.collect_garbage(&referenced, repository::blobs::GC_GRACE_MS).map_err(|error| error.to_string())
+}
+
+/// **导出 `.mcanvas`**，写到给定的路径。
+///
+/// 文档由调用方给（`documentId` / `epoch` / `content`），附件按哈希列出。
+/// **导出是只读的**：它不改仓库里的任何东西 —— 于是"导出失败"永远不会损坏文档。
+#[tauri::command]
+fn export_package(app: tauri::AppHandle, project_id: String, documents: Vec<serde_json::Value>, attachments: Vec<String>, destination: String) -> Result<serde_json::Value, String> {
+    let exported: Vec<repository::package::ExportDocument> = documents
+        .iter()
+        .map(|document| {
+            Ok(repository::package::ExportDocument {
+                document_id: document["documentId"].as_str().ok_or("a document needs a documentId")?.to_string(),
+                epoch: document["epoch"].as_str().unwrap_or_default().to_string(),
+                generation: document["generation"].as_i64().unwrap_or(0),
+                content: document["content"].as_str().ok_or("a document needs its content")?.to_string()
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    let media: Vec<(String, String)> = attachments.iter().map(|hash| (hash.clone(), "application/octet-stream".to_string())).collect();
+
+    let blobs = app.try_state::<BlobState>().ok_or("the attachment store is not initialised")?;
+    let (bytes, report) = repository::package::export(&project_id, &exported, &media, &[], &blobs.blobs, repository::provider_profiles::timestamp_ms(), None)
+        .map_err(|error| error.to_string())?;
+    repository::package::write_to_file(&destination, &bytes).map_err(|error| error.to_string())?;
+
+    Ok(serde_json::json!({
+        "destination": destination,
+        "byteSize": bytes.len(),
+        "documentCount": report.document_count,
+        "attachmentCount": report.attachment_count
+    }))
+}
+
+/**
+ * **导入 `.mcanvas`**。
+ *
+ * ## 顺序：先把整包验完，再落下任何东西
+ *
+ * `package::import` 自己保证这一点（见它的注释）：验到一半失败**不会**留下
+ * 一半已经写进仓库的文档。文档本体由这一条命令在验完之后写进库，
+ * 而"换一世"用的是 `replace_epoch` —— 于是**在途的旧保存会自动 CAS 失败**
+ *（用户刚打开的文档不会被上一次编辑覆盖）。
+ */
+#[tauri::command]
+fn import_package(app: tauri::AppHandle, path: String, project_id: String, epoch: String) -> Result<serde_json::Value, String> {
+    let bytes = repository::package::read_from_file(&path).map_err(|error| error.to_string())?;
+    let blobs = app.try_state::<BlobState>().ok_or("the attachment store is not initialised")?;
+    let outcome = repository::package::import(&bytes, &blobs.blobs).map_err(|error| error.to_string())?;
+
+    let state = app.try_state::<RepositoryState>().ok_or("the project repository is not initialised")?;
+    let mut repository = state.repository.lock().map_err(|_| "the project repository is poisoned".to_string())?;
+    let mut written = Vec::new();
+    for (document_id, content) in &outcome.documents {
+        // 内容的哈希由**我们**算（包里的那个已经在上一步核对过了）。
+        let content_hash = repository::blobs::sha256_hex(content.as_bytes());
+        // 文档不存在时会走 `create`：`replace_epoch` 要求先有一份 head。
+        match repository.read_head(&project_id, document_id) {
+            Ok(_) => {
+                repository.replace_epoch(&project_id, document_id, &epoch, content, &content_hash).map_err(|error| error.to_string())?;
+            }
+            Err(_) => {
+                repository.create(&project_id, document_id, &epoch, content, &content_hash).map_err(|error| error.to_string())?;
+            }
+        }
+        written.push(document_id.clone());
+    }
+
+    Ok(serde_json::json!({
+        "projectId": outcome.manifest.project_id,
+        "schemaVersion": outcome.manifest.schema_version,
+        "documents": written,
+        "attachmentCount": outcome.stored_attachments.len(),
+        "missingSources": outcome.missing_sources
+    }))
+}
+
+/// 把 base64 解成字节。**不用 crate**：这里只有解码与编码两个方向，而它们的形状是固定的。
+fn decode_base64(text: &str) -> Option<Vec<u8>> {
+    const TABLE: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = Vec::with_capacity(text.len() / 4 * 3);
+    let mut buffer = 0u32;
+    let mut bits = 0u32;
+    for byte in text.bytes() {
+        if byte == b'\n' || byte == b'\r' || byte == b'=' {
+            continue;
+        }
+        let value = TABLE.find(byte as char)? as u32;
+        buffer = (buffer << 6) | value;
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push(((buffer >> bits) & 0xff) as u8);
+        }
+    }
+    Some(out)
+}
+
+/// 把字节编成 base64。
+fn encode_base64(bytes: &[u8]) -> String {
+    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
+    for chunk in bytes.chunks(3) {
+        let mut buffer = 0u32;
+        for (index, byte) in chunk.iter().enumerate() {
+            buffer |= u32::from(*byte) << (16 - index * 8);
+        }
+        for slot in 0..4 {
+            if slot <= chunk.len() {
+                out.push(TABLE[((buffer >> (18 - slot * 6)) & 0x3f) as usize] as char);
+            } else {
+                out.push('=');
+            }
+        }
+    }
+    out
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -483,6 +686,15 @@ pub fn run() {
                 .join("projects.db");
             let repository = ProjectRepository::open(&database).map_err(|error| format!("cannot open the project repository at {}: {error}", database.display()))?;
             app.manage(RepositoryState { repository: Mutex::new(repository) });
+            // **附件仓库**放在应用数据根下的 `attachments/`（Task 1.6 Step 4）。
+            // 与库分开的理由：几十兆的字节塞进 SQLite 会让每次备份与每次读 head 都变贵。
+            let blob_root = app
+                .path()
+                .app_data_dir()
+                .map_err(|error| format!("cannot resolve the app data directory: {error}"))?
+                .join("attachments");
+            let blobs = BlobStore::open(&blob_root).map_err(|error| format!("cannot open the attachment store at {}: {error}", blob_root.display()))?;
+            app.manage(BlobState { blobs });
             // **起回环代理**（Task 1.5）。
             //
             // 它需要一个 tokio 运行时，所以这里建一个**常驻**的（不是每次用一次性的）：
@@ -517,6 +729,11 @@ pub fn run() {
             read_document_snapshot,
             document_history_length,
             replace_document_epoch,
+            put_attachment,
+            read_attachment,
+            collect_attachments,
+            export_package,
+            import_package,
             proxy_session,
             proxy_cancel
         ])

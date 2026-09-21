@@ -410,4 +410,87 @@ impl ProjectRepository {
             updated_at: now
         })
     }
+
+    // ------------------------------------------------------------ 附件引用（Task 1.6 Step 4）
+
+    /**
+     * **记下一份附件的元数据**（第二阶段的前半步）。
+     *
+     * 幂等：同一份内容记两次不报错（内容寻址意味着"同一份附件"只有一行）。
+     */
+    pub fn record_attachment(&mut self, content_hash: &str, byte_size: i64, media_type: &str) -> Result<(), RepositoryError> {
+        self.connection
+            .execute(
+                // `ON CONFLICT DO NOTHING`：同一份内容被两份文档引用是常态，
+                // 而"第二份引它"不该报错、也不该改第一份记下的大小。
+                "INSERT INTO attachments (content_hash, byte_size, media_type, created_at) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(content_hash) DO NOTHING",
+                (content_hash, byte_size, media_type, now_ms())
+            )
+            .map_err(|error| RepositoryError::Io { detail: format!("cannot record the attachment: {error}") })?;
+        Ok(())
+    }
+
+    /**
+     * **记下"这一版快照引用了哪些附件"**（第二阶段的后半步）。
+     *
+     * ## 为什么引用是记在**快照**上的
+     *
+     * 因为"这份附件还有用吗"的答案是"还有没有一版历史引用它"。记在 head 上会让
+     * 撤销回上一版之后附件立刻变成孤儿 —— 而那一版明明还在历史里、还能被打开。
+     */
+    pub fn reference_attachments(&mut self, project_id: &str, document_id: &str, generation: i64, content_hashes: &[String]) -> Result<(), RepositoryError> {
+        let transaction = self.connection.transaction().map_err(|error| RepositoryError::Io { detail: format!("cannot start a transaction: {error}") })?;
+        for content_hash in content_hashes {
+            transaction
+                .execute(
+                    "INSERT INTO snapshot_attachments (project_id, document_id, generation, content_hash) VALUES (?1, ?2, ?3, ?4) ON CONFLICT DO NOTHING",
+                    (project_id, document_id, generation, content_hash)
+                )
+                .map_err(|error| RepositoryError::Io { detail: format!("cannot reference the attachment: {error}") })?;
+        }
+        transaction.commit().map_err(|error| RepositoryError::Io { detail: format!("cannot commit the attachment references: {error}") })
+    }
+
+    /// **所有被引用过的附件哈希**。GC 的输入就是它 —— 删除的判据只有这一个。
+    pub fn referenced_blobs(&self) -> Result<std::collections::BTreeSet<String>, RepositoryError> {
+        let mut statement = self
+            .connection
+            .prepare("SELECT DISTINCT content_hash FROM snapshot_attachments")
+            .map_err(|error| RepositoryError::Io { detail: format!("cannot prepare the reference query: {error}") })?;
+        let rows = statement
+            .query_map([], |row| row.get::<_, String>(0))
+            .map_err(|error| RepositoryError::Io { detail: format!("cannot read the attachment references: {error}") })?;
+        let mut out = std::collections::BTreeSet::new();
+        for row in rows {
+            out.insert(row.map_err(|error| RepositoryError::Io { detail: format!("cannot read an attachment reference: {error}") })?);
+        }
+        Ok(out)
+    }
+
+    /// 这一版快照引用了哪些附件（按名字排序）。
+    pub fn attachments_of(&self, project_id: &str, document_id: &str, generation: i64) -> Result<Vec<String>, RepositoryError> {
+        let mut statement = self
+            .connection
+            .prepare("SELECT content_hash FROM snapshot_attachments WHERE project_id = ?1 AND document_id = ?2 AND generation = ?3 ORDER BY content_hash")
+            .map_err(|error| RepositoryError::Io { detail: format!("cannot prepare the attachment query: {error}") })?;
+        let rows = statement
+            .query_map((project_id, document_id, generation), |row| row.get::<_, String>(0))
+            .map_err(|error| RepositoryError::Io { detail: format!("cannot read the attachments: {error}") })?;
+        let mut out = Vec::new();
+        for row in rows {
+            out.push(row.map_err(|error| RepositoryError::Io { detail: format!("cannot read an attachment: {error}") })?);
+        }
+        Ok(out)
+    }
+
+    /// **删掉某一版快照的引用**（连同它的历史快照）。
+    ///
+    /// 存在的理由与 GC 配套：用户删掉一份文档之后，它引用的附件才会变成孤儿。
+    /// 没有这个动作，GC 就永远删不掉任何东西 —— 而那等于没有 GC。
+    pub fn drop_references(&mut self, project_id: &str, document_id: &str) -> Result<(), RepositoryError> {
+        self.connection
+            .execute("DELETE FROM snapshot_attachments WHERE project_id = ?1 AND document_id = ?2", (project_id, document_id))
+            .map_err(|error| RepositoryError::Io { detail: format!("cannot drop the attachment references: {error}") })?;
+        Ok(())
+    }
 }

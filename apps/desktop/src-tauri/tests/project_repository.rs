@@ -312,3 +312,49 @@ fn replacing_the_epoch_keeps_the_history() {
     assert_eq!(repository.read_snapshot("p1", "d1", 1).expect("v1").content, "{\"v\":1}");
 }
 
+// ---------------------------------------------------------------- 附件引用（Task 1.6 Step 4）
+
+#[test]
+fn an_attachment_is_only_orphaned_once_no_snapshot_references_it() {
+    // 这就是 GC 的**唯一**判据。它必须落在快照上而不是 head 上：撤销回上一版之后
+    // 附件立刻变成孤儿的话，那一版里显示的图会在下次 GC 时消失。
+    let (_dir, mut repository) = seeded("attach-refs");
+    repository.record_attachment("hash-a", 12, "image/png").expect("record");
+    repository.reference_attachments("p1", "d1", 1, &["hash-a".to_string()]).expect("reference");
+
+    assert!(repository.referenced_blobs().expect("referenced").contains("hash-a"));
+    assert_eq!(repository.attachments_of("p1", "d1", 1).expect("attachments"), vec!["hash-a".to_string()]);
+
+    // 同一份内容被多版引用：幂等，引用集合不变。
+    repository.reference_attachments("p1", "d1", 1, &["hash-a".to_string()]).expect("reference again");
+    repository.reference_attachments("p1", "d1", 2, &["hash-a".to_string()]).expect("reference on v2");
+    assert_eq!(repository.referenced_blobs().expect("referenced").len(), 1);
+
+    // 删掉这份文档的引用 → 它才是孤儿。
+    repository.drop_references("p1", "d1").expect("drop");
+    assert!(repository.referenced_blobs().expect("referenced").is_empty());
+}
+
+#[test]
+fn recording_an_attachment_does_not_by_itself_make_it_referenced() {
+    // "记下这份内容的元数据"与"某一版引用了它"是两件事。混起来的话，
+    // 一次被放弃的写入会让那份附件永远删不掉。
+    let (_dir, mut repository) = seeded("attach-meta-only");
+
+    repository.record_attachment("hash-a", 12, "image/png").expect("record");
+
+    assert!(repository.referenced_blobs().expect("referenced").is_empty());
+    assert_eq!(repository.attachments_of("p1", "d1", 1).expect("attachments"), Vec::<String>::new());
+}
+
+#[test]
+fn a_blob_referenced_by_an_older_snapshot_survives_a_newer_one_dropping_it() {
+    // 撤销会回到旧版本，而那一版里的图必须还在。
+    let (_dir, mut repository) = seeded("attach-old-version");
+    repository.record_attachment("hash-a", 3, "image/png").expect("record");
+    repository.reference_attachments("p1", "d1", 1, &["hash-a".to_string()]).expect("v1");
+    repository.reference_attachments("p1", "d1", 2, &[]).expect("v2 has no attachments");
+
+    assert!(repository.referenced_blobs().expect("referenced").contains("hash-a"), "the older snapshot still references it");
+}
+

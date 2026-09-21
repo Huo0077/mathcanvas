@@ -137,6 +137,11 @@ fn exposes_only_named_ipc_commands_and_no_generic_one() {
         "read_document_snapshot",
         "document_history_length",
         "replace_document_epoch",
+        "put_attachment",
+        "read_attachment",
+        "collect_attachments",
+        "export_package",
+        "import_package",
         "proxy_session",
         "proxy_cancel"
     ];
