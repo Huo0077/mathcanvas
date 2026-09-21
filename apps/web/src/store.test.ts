@@ -109,3 +109,40 @@ describe("batch transactions", () => {
     expect(useSceneStore.getState().history).toHaveLength(0)
   })
 })
+
+/**
+ * **Agent 提交的候选"内容变了、revision 没变"，也必须落地**（2026-09-21 的真实缺陷）。
+ * 那份候选来自 `commitTransaction`，而它**不推进 `revision`** —— 推进 revision 的是这里的
+ * `apply` / `applyBatch`。于是 `commitCandidate` 原先那条"revision + id 相同就算没变"的守卫
+ * 会把一次真实的提交**静默丢掉**：确认面板说"已提交"，画布上却什么都没有；而自动保存
+ * 把那份没变的空文档写回了本地草稿（实测：`revision: 0` + `primitives: []`）。
+ */
+describe("committing a candidate the agent built", () => {
+  it("lands even when the candidate carries the base revision, and advances it", () => {
+    const base = createEmptyDocument("geometry3d")
+    useSceneStore.setState({ document: base, workspaceDocuments: { [base.workspace]: base }, history: [], future: [], error: null })
+
+    // 先用一次**真实**改动造出"内容变了"的文档，再把 revision 调回基准值 ——
+    // 这正是 `commitTransaction` 交出来的形状。
+    useSceneStore.getState().apply({ op: "addPrimitive", primitive: { id: "point3-a", type: "point3", position: { x: 0, y: 0, z: 0 }, binding: { kind: "free" } } })
+    const grown = useSceneStore.getState().document
+    useSceneStore.setState({ document: base, workspaceDocuments: { [base.workspace]: base }, history: [], future: [], error: null })
+
+    useSceneStore.getState().commitCandidate({ ...grown, revision: base.revision })
+
+    expect(useSceneStore.getState().document.primitives).toHaveLength(1)
+    // revision 必须**推进**：否则撤销栈、仓储的 generation 与 CAS 全都停在原地。
+    expect(useSceneStore.getState().document.revision).toBeGreaterThan(base.revision)
+    expect(useSceneStore.getState().history).toHaveLength(1)
+  })
+
+  it("still treats a real no-op as a no-op and does not push history", () => {
+    const base = createEmptyDocument("geometry3d")
+    useSceneStore.setState({ document: base, workspaceDocuments: { [base.workspace]: base }, history: [], future: [], error: null })
+
+    useSceneStore.getState().commitCandidate({ ...base })
+
+    expect(useSceneStore.getState().history).toHaveLength(0)
+    expect(useSceneStore.getState().document.revision).toBe(base.revision)
+  })
+})

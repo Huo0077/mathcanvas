@@ -1,7 +1,7 @@
 import { create } from "zustand"
 
 import { createDefaultCadLayout, createEmptyDocument, type GeometryDocument, type Workspace } from "@draw/dsl"
-import { commitPatch, commitTransaction, type DomainOperation } from "@draw/scene-graph"
+import { commitPatch, commitTransaction, contentFingerprint, type DomainOperation } from "@draw/scene-graph"
 
 import { loadWorkbenchPreferences, saveWorkbenchPreferences, type TreeTabPreference } from "./persistence/draftStorage"
 
@@ -126,13 +126,24 @@ export const useSceneStore = create<SceneState>((set, get) => ({
   }),
   commitCandidate: (candidate) => set((state) => {
     const nextDocument = withDocumentLayout(candidate)
-    /** 内容没变就不留历史：与 `apply` / `applyBatch` 同一口径（no-op 不占撤销栈）。 */
-    if (nextDocument.revision === state.document.revision && nextDocument.metadata.id === state.document.metadata.id) {
-      return state
-    }
+    /**
+     * **"没变"的判据是内容，不是 `revision`**（2026-09-21 修的真实缺陷）。
+     *
+     * 这份候选来自 Agent 那条链路（`HostBridge` → `commitTransaction`），而
+     * `commitTransaction` **不推进 `revision`** —— 推进它的是这里的 `apply` / `applyBatch`。
+     * 原先用"`revision` 与 `metadata.id` 都相同"判"内容没变"，于是一次**真的改了内容**的提交
+     * 被静默丢掉：确认面板说"已提交"，画布上什么都没有；而自动保存把那份没变的空文档写回
+     * 本地草稿（实测草稿里是 `revision: 0` + `primitives: []`）。
+     */
+    if (contentFingerprint(nextDocument) === contentFingerprint(state.document)) return state
+    /**
+     * 内容变了就**必须记一次**。候选带来的 `revision` 若没有超过当前值（Agent 那条路就是这样，
+     * 它带的是基准那一版），就由这里推进 —— 否则撤销栈、仓储的 generation 与 CAS 全都停在原地。
+     */
+    const advanced = nextDocument.revision > state.document.revision ? nextDocument : { ...nextDocument, revision: state.document.revision + 1 }
     return {
-      document: nextDocument,
-      workspaceDocuments: { ...state.workspaceDocuments, [nextDocument.workspace]: nextDocument },
+      document: advanced,
+      workspaceDocuments: { ...state.workspaceDocuments, [advanced.workspace]: advanced },
       history: appendHistory(state.history, state.document),
       future: [],
       error: null
