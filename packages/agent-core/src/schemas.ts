@@ -445,24 +445,37 @@ const HASH_IGNORED_KEYS = new Set([
   "updatedAt", "createdAt", "timestamp", "logs", "transcript", "cursor"
 ])
 
-/** 规范化 JSON：键排序、丢视图/时间类字段、拒绝非有限数（NaN 会悄悄变成 null，语义必须显式）。 */
-function canonicalize(value: unknown, depth = 0): string {
-  if (depth > MAX_DEPTH) throw new Error("canonicalContentHash: value is too deep")
+/**
+ * 规范化 JSON：键排序、丢视图/时间类字段、拒绝非有限数（NaN 会悄悄变成 null，语义必须显式）。
+ *
+ * **`undefined` 视同"没有这个字段"**（2026-09-21 修的真实故障）。判据是"哈希值等于同一份数据
+ * JSON 往返之后的哈希值" —— 因为文档的**每一处**落盘与比对路径都是 JSON 语义：
+ * `JSON.stringify` 直接丢键、`contentFingerprint`（CAS 基准）也是 JSON 比语义。
+ * 只有这里曾经把 `undefined` 当垃圾抛出去，于是"内核物化出来的子对象带 `style: undefined`"
+ * 这种完全正常的数据会让整轮 Agent 运行死在 `unsupported value of type undefined`
+ * （现场：启动恢复 → `migrateLegacySolids` → 让 Agent 规划 → `run_failed`）。
+ *
+ * 真正无法用 JSON 表达的值（函数 / symbol / bigint）**照旧拒绝**，但错误信息必须指出**在哪**。
+ */
+function canonicalize(value: unknown, path: string, depth: number): string {
+  if (depth > MAX_DEPTH) throw new Error(`canonicalContentHash: value is too deep at ${path}`)
+  // 对象里的 `undefined` 键在上面被丢掉了，所以走到这里只可能是数组元素 —— 与 JSON 一样记作 null。
+  if (value === undefined) return "null"
   if (value === null) return "null"
   if (typeof value === "number") {
-    if (!Number.isFinite(value)) throw new Error("canonicalContentHash: non-finite number")
+    if (!Number.isFinite(value)) throw new Error(`canonicalContentHash: non-finite number at ${path}`)
     return JSON.stringify(value)
   }
   if (typeof value === "string" || typeof value === "boolean") return JSON.stringify(value)
-  if (Array.isArray(value)) return `[${value.map((item) => canonicalize(item, depth + 1)).join(",")}]`
+  if (Array.isArray(value)) return `[${value.map((item, index) => canonicalize(item, `${path}[${index}]`, depth + 1)).join(",")}]`
   if (isPlainObject(value)) {
     const entries = Object.keys(value)
-      .filter((key) => !HASH_IGNORED_KEYS.has(key))
+      .filter((key) => !HASH_IGNORED_KEYS.has(key) && value[key] !== undefined)
       .sort()
-      .map((key) => `${JSON.stringify(key)}:${canonicalize(value[key], depth + 1)}`)
+      .map((key) => `${JSON.stringify(key)}:${canonicalize(value[key], `${path}.${key}`, depth + 1)}`)
     return `{${entries.join(",")}}`
   }
-  throw new Error(`canonicalContentHash: unsupported value of type ${typeof value}`)
+  throw new Error(`canonicalContentHash: unsupported value of type ${typeof value} at ${path}`)
 }
 
 /**
@@ -470,10 +483,11 @@ function canonicalize(value: unknown, depth = 0): string {
  *
  * 覆盖**影响语义**的内容（几何、语义链接、已确认事实、关联标注），
  * **不包含**时间、运行日志、视图临时状态 —— 否则"只是滚了一下画布"就会让预览失效。
+ * 值域上与 JSON 对齐：`undefined` 等于"没有这个字段"（见 `canonicalize`）。
  * 纯 TypeScript 实现，因此浏览器与 Node 结果一致、也不需要任何依赖。
  */
 export function canonicalContentHash(value: unknown): string {
-  return sha256Hex(canonicalize(value))
+  return sha256Hex(canonicalize(value, "$", 0))
 }
 
 /** FIPS 180-4 的 SHA-256（同步、无依赖）。内部用；字符串先过 UTF-8。 */

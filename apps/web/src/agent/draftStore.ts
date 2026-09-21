@@ -96,7 +96,7 @@ function cloneDocument(document: GeometryDocument): GeometryDocument {
   return structuredClone(document) as GeometryDocument
 }
 
-export function createDraftStore(allocatorFactory: () => IdAllocator = createIdAllocator): DraftStore {
+export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) => IdAllocator = createIdAllocator): DraftStore {
   const drafts = new Map<string, DraftRecord>()
   const invalidated = new Map<string, string>()
 
@@ -114,7 +114,16 @@ export function createDraftStore(allocatorFactory: () => IdAllocator = createIdA
       draftCounter += 1
       const draftId = `draft_${draftCounter}`
       const candidate = cloneDocument(base)
-      const record: DraftRecord = { draftId, draftVersion: 1, candidate, operations: [], compiledOperations: [], allocator: allocatorFactory(), baseHandle }
+      /**
+       * 分配器**必须知道基础文档里已有哪些 id**（2026-09-21 修）。
+       *
+       * 以前这里是无参的 `createIdAllocator()`：计数器从 1 开始数，于是在一个已经有
+       * 手工建的 `solid-1` 的画布上，Agent 新建的第一个立体又被发成 `solid-1` →
+       * `duplicate object id` → 整轮 `compile_failed`（账本 `run-6-mubf109e`）。
+       * 候选里的对象要么来自基础文档（这里传进去），要么由这个分配器自己发号 —— 两者合起来
+       * 就是"候选文档的 id 全集"，所以播种一次就够。
+       */
+      const record: DraftRecord = { draftId, draftVersion: 1, candidate, operations: [], compiledOperations: [], allocator: allocatorFactory(base.primitives.map((primitive) => primitive.id)), baseHandle }
       drafts.set(draftId, record)
       return { ...record, candidate: cloneDocument(record.candidate) }
     },

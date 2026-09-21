@@ -205,6 +205,35 @@ describe("deterministic ids and hashes", () => {
     const otherGeneration = canonicalContentHash({ handle: { ...HANDLE, generation: 8 }, geometry: { radius: 2 } })
     expect(otherGeneration).not.toBe(base)
   })
+
+  /**
+   * **`undefined` 等于"没有这个字段"**（2026-09-21 的真实故障）。
+   *
+   * 真实现场：用户画布上的立方体在启动恢复时过了 `migrateLegacySolids`，物化出来的子对象带着
+   * `style: undefined` / `label: undefined`（"去掉标签"当时就是这么写的）。这些文档**每一处
+   * 落盘/比对路径**都当它是"没这个字段"（JSON 序列化直接丢键、`contentFingerprint` 是 JSON 比
+   * 语义），只有规范化哈希把它当成垃圾并抛出去 —— 于是 Agent 规划到一半死在
+   * `Error: canonicalContentHash: unsupported value of type undefined`，用户看到的是一句内部函数名。
+   *
+   * 这里钉住的契约：**哈希值等于同一份数据 JSON 往返之后的哈希值**。两份"文档是什么"的实现
+   * 不许分叉。
+   */
+  it("treats an undefined field as absent, exactly like a JSON round trip", () => {
+    const document = { primitives: [{ id: "solid-1", label: undefined, style: undefined, size: { x: 1, y: 1, z: 1 } }] }
+    const roundTripped = JSON.parse(JSON.stringify(document)) as unknown
+
+    expect(canonicalContentHash(document)).toBe(canonicalContentHash(roundTripped))
+  })
+
+  it("hashes undefined inside an array the same way JSON does", () => {
+    expect(canonicalContentHash({ points: [1, undefined, 3] })).toBe(canonicalContentHash(JSON.parse(JSON.stringify({ points: [1, undefined, 3] })) as unknown))
+  })
+
+  it("still refuses values JSON cannot carry, and says where they are", () => {
+    // 真正无法表达的值照旧拒绝 —— 但错误信息必须指出**在哪**，否则排障只剩一个函数名。
+    expect(() => canonicalContentHash({ primitives: [{ id: "p", broken: () => 1 }] })).toThrow(/primitives\[0\]\.broken/)
+    expect(() => canonicalContentHash({ primitives: [{ id: "p", x: Number.NaN }] })).toThrow(/primitives\[0\]\.x/)
+  })
 })
 
 describe("hashing raw bytes", () => {

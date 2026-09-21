@@ -32,9 +32,12 @@ export interface ActionContext {
  * 计划 Step 4 的要求："Test retrying the same draft does not duplicate IDs"。
  * 实现要点是**按 alias 记忆**：同一个 alias 再来一次就返回同一个 id，
  * 而不是每调一次就新造一个 —— 否则"重试一次动作"会在文档里留下两个对象。
+ *
+ * 还有一条同样硬的要求：**不许发出目标文档里已经存在的 id**。占用集在构造时传入
+ * （`createIdAllocator(taken)`），因为只有调用方知道这次要落在哪份文档上。
  */
 export interface IdAllocator {
-  /** 为某个草稿别名取得（或创建）一个稳定 id。 */
+  /** 为某个草稿别名取得（或创建）一个稳定 id，且该 id 不在构造时传入的占用集里。 */
   allocate(kind: string, alias: DraftAlias): string
 }
 

@@ -44,7 +44,9 @@ export function handleGeometryRequest(request: GeometryWorkerRequest): GeometryW
         targetWorkspace: request.base.workspace,
         orderedSelection: [],
         capabilityRevision: "worker",
-        idAllocator: createIdAllocator()
+        // 占用集来自**基准文档**：worker 的基准非空时，同类新建要接着已有的号往下发，
+        // 否则第一个新对象就会撞上 `point-1`（与 `draftStore` 那次真实故障同源）。
+        idAllocator: createIdAllocator(request.base.primitives.map((primitive) => primitive.id))
       })
       if (compiled.diagnostics.length > 0) {
         return { ...base, code: "compile_failed", detail: compiled.diagnostics.map((entry) => `${entry.code}: ${entry.message}`).join("; ").slice(0, 512) }

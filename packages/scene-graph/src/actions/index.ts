@@ -20,19 +20,36 @@ function diagnostic(actionKey: string, code: string, message: string): ActionDia
   return { actionKey, code, message }
 }
 
-/** 幂等分配器工厂：同一个 `(kind, alias)` 永远得到同一个 id。 */
-export function createIdAllocator(): IdAllocator {
+/**
+ * 幂等分配器工厂：同一个 `(kind, alias)` 永远得到同一个 id，且**绝不发出已被占用的 id**。
+ *
+ * `taken` 是目标文档里**已经存在**的 id（`primitives` 的 id）。少了这一步，计数器会从 1
+ * 重新数起 —— 在一个已经有 `solid-1` 的画布上，Agent 新建的第一个立体又被分配成 `solid-1`，
+ * `validatePatch` 判 `duplicate object id`，整轮运行以 `compile_failed` 结束
+ * （真实现场：账本 `run-6-mubf109e`，见 `draftStore.test.ts` 同名用例）。
+ *
+ * 手工路径的 `nextPrimitiveId`（`App.tsx`）一直是"扫已有 id 取下一个空位"，这里与它对齐：
+ * 分配器不该是"第二份、更弱的一份" id 规则。占用集**允许稀疏**（`point-1`、`point-3` 都占着）。
+ */
+export function createIdAllocator(taken: Iterable<string> = []): IdAllocator {
   const known = new Map<string, string>()
   const counters = new Map<string, number>()
+  const used = new Set<string>(taken)
   return {
     allocate(kind, alias) {
       const key = `${kind}\u0000${alias}`
       const existing = known.get(key)
       if (existing !== undefined) return existing
-      const next = (counters.get(kind) ?? 0) + 1
-      counters.set(kind, next)
-      const id = `${kind}-${next}`
+      let next = counters.get(kind) ?? 0
+      let id = `${kind}-${next + 1}`
+      while (used.has(id)) {
+        next += 1
+        id = `${kind}-${next + 1}`
+      }
+      counters.set(kind, next + 1)
       known.set(key, id)
+      // 已经发出去的 id 也进占用集：跨 kind 的重名（若将来出现）同样不该撞。
+      used.add(id)
       return id
     }
   }

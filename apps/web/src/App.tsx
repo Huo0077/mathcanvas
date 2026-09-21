@@ -1411,7 +1411,7 @@ export function App() {
       targetWorkspace: document.workspace,
       orderedSelection: [...selectedIds],
       capabilityRevision: CAPABILITY_REGISTRY_REVISION,
-      idAllocator: createIdAllocator()
+      idAllocator: createIdAllocator(document.primitives.map((primitive) => primitive.id))
     })
     if (compiled.diagnostics.length > 0) {
       setFileError(compiled.diagnostics.map((entry) => entry.message).join("；"))

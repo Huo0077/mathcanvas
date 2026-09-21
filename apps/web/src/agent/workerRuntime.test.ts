@@ -49,6 +49,25 @@ describe("geometry worker runtime", () => {
     expect(response.detail.length).toBeGreaterThan(0)
   })
 
+  /**
+   * 与 `draftStore.test.ts` 里那条同源：worker 也是"动作层 + 分配器"的调用方，
+   * 所以非空基准文档上的同类新建必须也能落下去（以前会撞 id → `commit_rejected`）。
+   */
+  it("compiles onto a base document that already uses the id the allocator would mint", () => {
+    const base = createEmptyDocument("conics")
+    base.primitives = [{ id: "point-1", type: "point", x: 9, y: 9 }] as never
+    const request = createWorkerRequest("geometry.compile", envelope, {
+      base,
+      actions: [{ actionId: "planar.create_point", actionKey: "p", factIds: [], inputs: { alias: "p", points: [{ x: 1, y: 0 }] } }]
+    })
+
+    const response = handleGeometryRequest(request)
+
+    expect(response.kind).toBe("geometry.compile.result")
+    if (response.kind !== "geometry.compile.result") throw new Error("expected a result")
+    expect(response.document.primitives.map((primitive) => primitive.id)).toEqual(["point-1", "point-2"])
+  })
+
   it("keeps a real error message when the geometry path throws", () => {
     // 构造一份"会让内核抛"的文档：revision 不是数字时内容指纹会炸。
     const broken = { ...createEmptyDocument("conics"), revision: Number.NaN } as never

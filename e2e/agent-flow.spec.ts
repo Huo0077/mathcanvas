@@ -63,8 +63,82 @@ test("turns one sentence into a confirmed commit, then undoes it in one step", a
   await expect.poll(() => objectRows(page).count()).toBe(0)
 })
 
-test("refuses to keep a draft when the user discards it", async ({ page }) => {
+test("adds a second object to a canvas that already holds one", async ({ page }) => {
+  /**
+   * **真实现场的回归用例**（2026-09-21）。画布上已经有一个手工建的立方体 `solid-1` 时，
+   * 用户让 Agent 再建一个同类对象 —— 分配器的计数器从 1 重数，又发 `solid-1`，
+   * `validatePatch` 判 `duplicate object id`，运行直接以 `compile_failed` 结束。
+   *
+   * 这条用例走的是**真实链路**（本地确定性规划器 → 真实编译器 → 真实草稿 → 真实提交），
+   * 只是不依赖网络与模型服务：它的关键断言是"第二份草稿**能出现**" ——
+   * 撞 id 的话草稿根本进不了确认面板。
+   */
   await page.goto("/")
+  await page.getByRole("button", { name: "Agent 工作区" }).click()
+
+  await sendPrompt(page, "建一个棱长 3 的立方体")
+  await page.getByRole("button", { name: "确认并提交" }).click()
+  await expect(page.getByText("已提交")).toBeVisible()
+  await page.getByRole("button", { name: "返回画布" }).click()
+  await expect.poll(() => objectRows(page).count()).toBeGreaterThan(0)
+  const before = await objectRows(page).count()
+
+  // 画布非空了：第二次请求必须落在已有对象旁边，而不是撞上它们的 id。
+  await page.getByRole("button", { name: "Agent 工作区" }).click()
+  await sendPrompt(page, "建一个棱长 2 的立方体")
+
+  /**
+   * 第一轮的确认面板还留在对话记录里，所以这里取**最后一份**（`.last()`）——
+   * 界面本来就允许历史草稿面板与当前这一份同时存在（`strict mode` 因此会报两个元素，
+   * 那不是缺陷，是这条用例第一版写错的地方）。
+   */
+  const draft = page.getByRole("region", { name: "确认改动" }).last()
+  await expect(draft).toBeVisible()
+  // 关键断言：第二份草稿是**接着**已有对象算的（共 2 个）—— 撞 id 时它根本到不了这一步。
+  await expect(draft).toContainText("共 2 个")
+  await expect(draft).toContainText(/会新增 1 个对象/)
+  await expect(page.getByRole("region", { name: "运行状态" }).last()).not.toContainText("duplicate object id")
+  await draft.getByRole("button", { name: "确认并提交" }).click()
+
+  await page.getByRole("button", { name: "返回画布" }).click()
+  await expect.poll(() => objectRows(page).count()).toBeGreaterThan(before)
+})
+
+test("still drafts after a reload restored and migrated the document", async ({ page }) => {
+  /**
+   * **第二个真实故障的浏览器级回归**（2026-09-21）。应用**启动时的恢复**会走
+   * `migrateLegacySolids`（把实体的子对象物化出来），而那些子对象带着 `style: undefined` /
+   * `label: undefined`。规范化哈希此前把 `undefined` 当垃圾抛出去，于是"画布上有一个立体"
+   * 就等于"Agent 必然失败"：`canonicalContentHash: unsupported value of type undefined`。
+   *
+   * 所以这条用例的关键动作是**刷新一次**（等于重启应用、恢复草稿、迁移），然后再发一条请求。
+   */
+  await page.goto("/")
+  await page.getByRole("button", { name: "Agent 工作区" }).click()
+  await sendPrompt(page, "建一个棱长 3 的立方体")
+  await page.getByRole("button", { name: "确认并提交" }).click()
+  await expect(page.getByText("已提交")).toBeVisible()
+
+  // 重启/重新打开 = 恢复草稿 + `migrateLegacySolids`。
+  await page.reload()
+  await page.getByRole("button", { name: "Agent 工作区" }).click()
+  await sendPrompt(page, "建一个棱长 2 的立方体")
+
+  const draft = page.getByRole("region", { name: "确认改动" }).last()
+  await expect(draft).toBeVisible()
+  /**
+   * 恢复之后文档里**不只是那个立方体**：`migrateLegacySolids` 把它的子对象也物化出来了
+   * （现场是 28 个图元 → 新草稿报"共 29 个"）。所以这里断言的是"草稿确实落在已有的内容之上"，
+   * 而不是某个固定数字 —— 固定数字会把"迁移有没有跑"变成一条脆弱的断言。
+   */
+  const panelText = await draft.innerText()
+  const total = Number(panelText.match(/共\s*(\d+)\s*个/)?.[1] ?? "0")
+  expect(total).toBeGreaterThan(1)
+  await expect(draft).toContainText(/会新增 1 个对象/)
+  await expect(page.getByRole("region", { name: "运行状态" }).last()).not.toContainText("canonicalContentHash")
+})
+
+test("refuses to keep a draft when the user discards it", async ({ page }) => {  await page.goto("/")
   await page.getByRole("button", { name: "Agent 工作区" }).click()
   await sendPrompt(page, "建一个棱长 3 的立方体")
 

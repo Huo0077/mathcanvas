@@ -1,3 +1,4 @@
+import { canonicalContentHash } from "@draw/agent-core"
 import { createEmptyDocument, type PrimitiveSpec } from "@draw/dsl"
 import { buildSolidTemplate, templateEdgeLabel, templatePointLabel } from "@draw/geometry-kernel"
 import { describe, expect, it } from "vitest"
@@ -71,8 +72,30 @@ describe("solid template migration", () => {
     expect(again.primitives.filter((primitive) => primitive.type === "edge3").map((primitive) => primitive.label)).toEqual(edges.map((primitive) => primitive.label))
   })
 
-  it("leaves ordinary solids exactly as they were", () => {
-    const cube = { id: "cube-2", type: "cube" as const, origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 2, z: 2 } }
+  /**
+   * **"去掉标签"必须是删掉字段，而不是把它设成 `undefined`**（2026-09-21 的真实故障）。
+   *
+   * 现场：用户启动应用时恢复草稿 → `migrateLegacySolids` 物化/对齐了立方体的子对象 →
+   * 之后每一次让 Agent 规划，预览哈希都在 `canonicalContentHash` 上抛
+   * `unsupported value of type undefined`，运行以 `run_failed` 结束。
+   */
+  it("removes a hidden child's label instead of writing undefined, and stays hashable", () => {
+    const cone = { id: "cone-1", type: "cone" as const, center: { x: 0, y: 0, z: 0 }, radius: 2, height: 3, segments: 6, label: "圆锥 1" }
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [cone, ...oldStyleRoundSolid(cone)]
+
+    const migrated = migrateLegacySolids(document)
+    const hidden = migrated.primitives.filter((primitive) => (primitive.type === "point3" || primitive.type === "edge3") && primitive.tessellation === true)
+
+    expect(hidden.length).toBeGreaterThan(0)
+    // "没有标签"这件事在数据里就是**没有这个键**：`label: undefined` 会在 JSON 往返时消失，
+    // 于是内存里的文档与磁盘上的文档不是同一份东西 —— 规范化哈希正是被这一点绊倒的。
+    expect(hidden.every((primitive) => !Object.prototype.hasOwnProperty.call(primitive, "label"))).toBe(true)
+    // 迁移之后的文档必须还能被规范化哈希（Agent 的预览哈希走的就是它）。
+    expect(() => canonicalContentHash(migrated)).not.toThrow()
+  })
+
+  it("leaves ordinary solids exactly as they were", () => {    const cube = { id: "cube-2", type: "cube" as const, origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 2, z: 2 } }
     const document = createEmptyDocument("geometry3d")
     document.primitives = [cube, ...buildSolidTemplate(cube).primitives]
 

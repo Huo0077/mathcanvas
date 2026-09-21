@@ -17,18 +17,32 @@ function hasTemplateFor(primitives: PrimitiveSpec[], sourceId: string): boolean 
  * - 新口径里可见的只有在标签**还是旧口径自动生成**的时候才重编（`A…Z/P27…`、`棱 N`），
  *   用户自己起的名字原样保留，哪怕因此让自动编号出现空档。
  */
+/**
+ * "去掉标签" = **删掉这个键**，而不是把它设成 `undefined`。
+ *
+ * `label: undefined` 与"没有 label"在 JSON 往返之后是同一种东西（`JSON.stringify` 丢键），
+ * 所以内存里留着 undefined 键就是让"内存文档"与"磁盘文档"不是同一份数据 —— 规范化哈希
+ * （Agent 的预览哈希）曾因此整轮运行失败：`unsupported value of type undefined`。
+ * 哈希侧现在也已经与 JSON 对齐，但**产生数据的地方同样不该写出这种键**：两份实现都不许分叉。
+ */
+function withoutLabel<T extends PrimitiveSpec>(primitive: T): T {
+  const clone = { ...primitive }
+  delete (clone as { label?: string }).label
+  return clone
+}
+
 function realignTemplateChildren(primitives: PrimitiveSpec[], fresh: SolidBuildResult): PrimitiveSpec[] {
   const targetById = new Map(fresh.primitives.map((primitive) => [primitive.id, primitive]))
   return primitives.map((existing) => {
     const target = targetById.get(existing.id)
     if (!target) return existing
     if (existing.type === "point3" && target.type === "point3") {
-      if (target.tessellation === true) return { ...existing, tessellation: true, label: undefined }
+      if (target.tessellation === true) return { ...withoutLabel(existing), tessellation: true }
       const automatic = templatePointLabel(fresh.vertexIds.indexOf(existing.id))
       return existing.label === undefined || existing.label === automatic ? { ...existing, label: target.label } : existing
     }
     if (existing.type === "edge3" && target.type === "edge3") {
-      if (target.tessellation === true) return { ...existing, tessellation: true, label: undefined }
+      if (target.tessellation === true) return { ...withoutLabel(existing), tessellation: true }
       const automatic = templateEdgeLabel(fresh.edgeIds.indexOf(existing.id))
       return existing.label === undefined || existing.label === automatic ? { ...existing, label: target.label } : existing
     }

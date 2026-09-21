@@ -7,7 +7,7 @@ import {
   SKILL_MANIFESTS,
   type AgentCoordinator,
   type CommitOutcome,
-  type CommitterPort,
+  type CommitterAdapter,
   type DocumentHandle,
   type DraftStageOutcome,
   type DraftStorePort,
@@ -91,7 +91,12 @@ export interface AgentRuntime {
   draftTools: DraftStorePort
   drafts: DraftStore
   host: HostBridge
-  committer: CommitterPort
+  /**
+   * 接线用的提交适配器。类型是**适配器本体**而不只是 `CommitterPort`：
+   * `draftIdFor()`（"这一轮用的是哪个草稿"）是它自己的诊断能力，端口契约里没有，
+   * 而排障与用例都需要问这个 —— 把类型收窄成端口就等于把这个能力从类型上藏起来。
+   */
+  committer: CommitterAdapter
   /** 观察工具，基于注入的场景快照。 */
   scene: ReturnType<typeof createSceneTools>
   /**

@@ -103,6 +103,26 @@ describe("the assembled runtime actually runs", () => {
     expect(current()?.primitives).toHaveLength(0)
   })
 
+  /**
+   * **接线级的真实故障回归**（2026-09-21）。画布上已经有一个对象时，同类的下一个动作
+   * 曾经必然失败：分配器只会数数、不知道文档里已经有 `solid-1`（账本 `run-6-mubf109e`）。
+   * 这条用例从组装好的运行时走一遍，断言**草稿真的成型**且新对象另起了 id。
+   */
+  it("drafts onto a document that already holds an object of the same kind", async () => {
+    const document = geometryDocument()
+    document.primitives.push({ id: "solid-1", type: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 2, z: 2 }, label: "立方体" } as never)
+    const { runtime, written } = makeRuntime({ document })
+
+    const events = await drive(runtime.coordinator, { run: runContext(document), userMessage: "再建一个立方体" })
+
+    expect(events.at(-1)).toBe("awaiting_confirmation")
+    const draftId = runtime.committer.draftIdFor()
+    expect(draftId).not.toBeNull()
+    expect(runtime.drafts.getPreview(draftId!)?.candidate.primitives.map((primitive) => primitive.id)).toEqual(["solid-1", "solid-2"])
+    // 草稿阶段真文档一个字节都没变。
+    expect(written).toHaveLength(0)
+  })
+
   it("completes a read-only run through the assembled observer", async () => {
     const { runtime, written } = makeRuntime({ envelope: answerEnvelope() })
 
