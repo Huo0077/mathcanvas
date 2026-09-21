@@ -31,10 +31,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use mathcanvas_desktop_lib::providers::adapter::{ProviderError, SecretSource, Stop, Transport, TransportUpdate};
-use mathcanvas_desktop_lib::providers::capability::{CapabilityStatus, Feature, Probe, PROBE_FEATURES};
+use mathcanvas_desktop_lib::providers::capability::{tools_verified, CapabilityStatus, Feature, Probe, PROBE_FEATURES};
 use mathcanvas_desktop_lib::providers::events::FailureKind;
 use mathcanvas_desktop_lib::providers::request::ProviderRequest;
-use mathcanvas_desktop_lib::repository::provider_profiles::ProviderProfile;
+use mathcanvas_desktop_lib::repository::provider_profiles::{ProviderHealth, ProviderProfile};
 
 // ---------------------------------------------------------------- 测试替身
 
@@ -521,4 +521,38 @@ fn every_evidence_entry_fits_the_shape_the_frontend_parses() {
         assert!(["tools", "json", "vision", "streaming"].contains(&entry.feature.as_str()), "unknown feature: {}", entry.feature);
         assert!(entry.detail.as_deref().unwrap_or("").len() <= 200, "the frontend truncates at 200; longer means we lost text: {entry:?}");
     }
+}
+
+/// 一份健康记录（`capabilityEvidence` 走 serde，与磁盘上那份 JSON 同一个形状）。
+fn health(profile_revision: u32, feature: &str, status: &str) -> ProviderHealth {
+    serde_json::from_value(serde_json::json!({
+        "status": "ok",
+        "capabilityEvidence": [{ "feature": feature, "status": status }],
+        "checkedAt": 1,
+        "profileRevision": profile_revision
+    }))
+    .expect("the health record must deserialise")
+}
+
+/// **工具表的出口判据**：允许发工具表与否，按**存下来的证据**判，不按方言猜。
+///
+/// 两条与 TS 侧 `isCapabilityVerified` 逐字相同：只有 `verified` 算数，
+/// 而且证据必须属于**当前修订号**。这一条是第二道门 —— 前端已经按证据选过通道，
+/// 但那道判据在调用方手里；只在调用方守着的边界，多出一个调用方就没了。
+#[test]
+fn a_tool_schema_is_only_allowed_when_the_evidence_is_verified_and_current() {
+    // 没有记录 → 不放行。"没验过"与"验过不支持"在这一点上同解：都不发。
+    assert!(!tools_verified(None, 4));
+    // `declared` 是"文档里说支持"，不是"我们验过"。
+    assert!(!tools_verified(Some(&health(4, "tools", "declared")), 4));
+    // `failed` 更不放行。
+    assert!(!tools_verified(Some(&health(4, "tools", "failed")), 4));
+    // `unknown` 也不放行（模型不肯配合时得到的就是它）。
+    assert!(!tools_verified(Some(&health(4, "tools", "unknown")), 4));
+    // verified、但属于**上一版**配置 → 不放行：证据挂在修订号上，配置改过就不算数。
+    assert!(!tools_verified(Some(&health(3, "tools", "verified")), 4));
+    // verified 且属于当前修订号 → 放行。
+    assert!(tools_verified(Some(&health(4, "tools", "verified")), 4));
+    // **别的能力验证过不算数**：图像验过了，不代表这家会调工具。
+    assert!(!tools_verified(Some(&health(4, "vision", "verified")), 4));
 }

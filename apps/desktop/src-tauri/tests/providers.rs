@@ -1,4 +1,4 @@
-﻿//! **三家协议的 fixtures 测试**（Task 1.4 Step 1/2/6）。
+//! **三家协议的 fixtures 测试**（Task 1.4 Step 1/2/6）。
 //!
 //! 计划原文："Add fixture tests for successful text, streaming chunks, tool calls, usage, 401,
 //! 429, 5xx, and disconnect **for each protocol**."
@@ -236,20 +236,29 @@ fn the_request_never_carries_the_secret() {
 }
 
 #[test]
-fn the_dialect_decides_whether_tool_schemas_may_be_sent() {
+fn the_caller_decides_whether_tool_schemas_are_sent_and_the_dialect_only_decides_where() {
     // 计划 Step 3："Do not assume every compatible service supports the same tools…"
+    //
+    // **这条用例 2026-09-21 被改写，原因是它原先钉住的是一个缺陷**：它断言
+    // "generic_compatible 即使调用方放行也拿不到工具表"（`RequestPlan.tools_by_default`）。
+    // 后果不是"更保守"：能力探针显式传 `allow_tools: true` + 工具表 + `force_tool`，却被方言
+    // 这一关静默丢掉，于是发出去的是一条普通文本请求，模型只能回话，而工具探针把"回了文本"
+    // 记成 `unknown` —— 用户看到"工具徽章永远不亮"，真实原因却是**我们没把工具表发出去**。
+    // "不知道这家支不支持"正是要试的理由，不是不试的理由。
     let tools = || RequestOptions { allow_tools: true, tools: vec![serde_json::json!({ "type": "function", "function": { "name": "t" } })], force_tool: false, tool_choice_field: None };
     let generic = build_request(&profile("openai_compatible", "generic_compatible", "https://x/v1"), vec![], false, tools());
     let native = build_request(&profile("openai_compatible", "openai_native", "https://x/v1"), vec![], false, tools());
 
-    assert!(generic.body.get("tools").is_none(), "a generic compatible endpoint must not receive a tool schema by default");
-    assert!(native.body.get("tools").is_some());
-    // 而且**两个前置条件都要满足**：方言支持 **且** 调用方按已验证证据放行。
-    let native_without_evidence = build_request(&profile("openai_compatible", "openai_native", "https://x/v1"), vec![], false, RequestOptions::default());
-    assert!(native_without_evidence.body.get("tools").is_none());
-    // 第三个条件：**表不能是空的** —— 一个空工具表等于告诉 provider "我支持工具"却什么都没给。
-    let native_with_an_empty_table = build_request(&profile("openai_compatible", "openai_native", "https://x/v1"), vec![], false, RequestOptions { allow_tools: true, tools: Vec::new(), force_tool: false, tool_choice_field: None });
-    assert!(native_with_an_empty_table.body.get("tools").is_none());
+    // 方言只决定**放哪个字段**：三家都是 `tools`，所以两边的载荷一模一样。
+    assert!(generic.body.get("tools").is_some(), "an endpoint the caller allowed must receive the schema");
+    assert_eq!(generic.body["tools"], native.body["tools"]);
+
+    // 而"放行与否"**只有一个决定**，在调用方手里：默认（没有已验证证据）一个字都不发。
+    let without_evidence = build_request(&profile("openai_compatible", "openai_native", "https://x/v1"), vec![], false, RequestOptions::default());
+    assert!(without_evidence.body.get("tools").is_none(), "without verified evidence no schema may be sent");
+    // 表是空的也不发 —— 空工具表等于告诉 provider "我支持工具"却什么都没给。
+    let with_an_empty_table = build_request(&profile("openai_compatible", "openai_native", "https://x/v1"), vec![], false, RequestOptions { allow_tools: true, tools: Vec::new(), ..RequestOptions::default() });
+    assert!(with_an_empty_table.body.get("tools").is_none());
 }
 
 #[test]

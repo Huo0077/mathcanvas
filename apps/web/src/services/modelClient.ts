@@ -24,6 +24,15 @@ export interface ModelRunRequest {
   /** 这次请求是为哪一版 profile 构建的（代理会拒绝过期的那一版）。 */
   profileRevision: number
   stream?: boolean
+  /**
+   * **这次要发出去的工具表**（provider 侧的工具 schema）。
+   *
+   * 只有按**已验证**证据放行时才给（`planModelRequest({ needsTools: true })` 走的就是这条路）。
+   * Rust 侧还会**再判一次存下来的证据**（`providers::capability::tools_verified`）：调用方说
+   * "这家支持工具"不算数，跑过一次能力验证才算数 —— 只在调用方守着的边界，多一个调用方就没了。
+   * 证据没验过时 Rust 会**拒绝**这次请求（`ToolsNotVerified`），而不是静默把工具表丢掉。
+   */
+  tools?: unknown[]
 }
 
 export type ModelClientFailure = {
@@ -97,7 +106,9 @@ export async function startModelRun(
       profileId: request.profileId,
       profileRevision: request.profileRevision,
       messages: request.messages,
-      stream: request.stream ?? true
+      stream: request.stream ?? true,
+      // 空数组与"不发工具表"是同一件事（Rust 侧也是这么判的），所以缺省就不带这个字段。
+      ...(request.tools && request.tools.length > 0 ? { tools: request.tools } : {})
     })
     // Rust 侧把"失败"做成一条带分类的事件（见 `provider_run`）：那条**不是**事件，
     // 是错误契约 —— 混进事件列表会让协调器把它当成模型说的话。

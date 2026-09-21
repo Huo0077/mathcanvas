@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest"
 import { PLAN_SCHEMA_VERSION, createBudget, parsePlanEnvelope, type ModelContext, type PlanRequest, type ToolDescriptor } from "@draw/agent-core"
 
 import type { ProviderHealth, ProviderProfile } from "../services/providerProfileClient"
-import { createModelPlanner, toGateCapabilities, type ModelPlannerProvider } from "./modelPlanner"
+import { createModelPlanner, toGateCapabilities, PLAN_TOOL_NAME, type ModelPlannerProvider } from "./modelPlanner"
 
 /**
  * **模型规划器的判据**（G2 接线）。
@@ -65,7 +65,7 @@ const provider: ModelPlannerProvider = { id: "openai-1", modelId: "gpt-x", diale
  * 显式写出来是**为了断言**：`vi.fn(async () => …)` 不带参数时 `mock.calls[0][0]`
  * 推不出类型（元组长度是 0），所以替身必须声明它收什么。
  */
-type SentRequest = { runId: string; profileId: string; profileRevision: number; messages: { role: string; content: string }[] }
+type SentRequest = { runId: string; profileId: string; profileRevision: number; messages: { role: string; content: string }[]; tools: unknown[] }
 
 /** 一串归一化事件（`provider_run` 回来的就是它）。 */
 function deltas(...texts: string[]) {
@@ -189,16 +189,21 @@ describe("模型规划器", () => {
     await expect(planner.plan(request())).rejects.toThrow(/密钥/)
   })
 
-  it("请求里**没有**工具表这个字段：当前 IPC 契约没有放它的位置", async () => {
-    // 发一个 provider 侧的工具 schema 需要 `provider_run` 收 `tools`，而它没有。
-    // 所以这一轮走的是"提示词里给动作菜单 + 解析 JSON 信封"，而不是原生工具调用。
+  it("交给模型接口的东西只有那几样，而工具表按通道给", async () => {
+    // 这一条同时钉住两件事：①`provider_run` 的入参就是这些 —— **没有任何能装密钥的位置**
+    //（密钥在 Rust 侧由凭据库借出）；②工具表这个字段是**通道决定**的，未验证时是空数组。
+    //
+    // 2026-09-21 改写：这条用例原先断言"请求里没有 tools 这个字段"，理由是
+    // "IPC 契约里没有放工具表的位置"。那个前提已经不成立了 —— `provider_run` 现在收 `tools`，
+    // 而缺口补上之后真正要守的性质变成了"**只有按已验证证据放行时才给**"。
     const runModel = vi.fn(async (_request: SentRequest) => deltas(goodEnvelope))
     const planner = createModelPlanner({ resolveProvider: async () => ({ ok: true, provider }), runModel })
 
     await planner.plan(request())
 
     const sent = runModel.mock.calls[0]![0]
-    expect(Object.keys(sent).sort()).toEqual(["messages", "profileId", "profileRevision", "runId"])
+    expect(Object.keys(sent).sort()).toEqual(["messages", "profileId", "profileRevision", "runId", "tools"])
+    expect(sent.tools).toEqual([])
   })
 
   it("动作菜单进提示词，而且**只**给这一轮允许的动作", async () => {
@@ -223,6 +228,73 @@ describe("模型规划器", () => {
     const all = runModel.mock.calls[0]![0].messages.map((message) => message.content).join("\n")
     expect(all).not.toContain('"kind":"plan"')
     expect(all).toContain('"kind":"clarification"')
+  })
+
+  it("没有验证过工具能力时**不发**工具表，走文本通道", async () => {
+    // 这一条是"不该发的 schema 发出去了"的反面：没验过的能力一个字都不发。
+    const runModel = vi.fn(async (_request: SentRequest) => deltas(goodEnvelope))
+    const planner = createModelPlanner({ resolveProvider: async () => ({ ok: true, provider }), runModel })
+
+    await planner.plan(request())
+
+    const sent = runModel.mock.calls[0]![0]
+    expect(sent.tools).toEqual([])
+    // 提示词里也没有工具那条路（它是给已验证证据准备的口子）。
+    const prompt = sent.messages.map((message) => message.content).join("\n")
+    expect(prompt).not.toContain(PLAN_TOOL_NAME)
+  })
+
+  it("工具能力已验证时走**原生工具通道**：发一个工具表，并把它当信封读回来", async () => {
+    const withTools: ModelPlannerProvider = { ...provider, capabilities: { tools: "verified", json: "unknown", vision: "unknown" } }
+    const runModel = vi.fn(async (sent: SentRequest) =>
+      sent.tools.length > 0
+        ? {
+            ok: true as const,
+            events: [{
+              kind: "tool_call" as const,
+              requestId: "req-tool",
+              attemptId: "att-tool",
+              toolCallId: "call-1",
+              toolId: PLAN_TOOL_NAME,
+              // 工具调用携带的 arguments **就是**计划信封。
+              input: JSON.parse(goodEnvelope)
+            }]
+          }
+        : deltas(goodEnvelope))
+    const planner = createModelPlanner({ resolveProvider: async () => ({ ok: true, provider: withTools }), runModel })
+
+    const outcome = await planner.plan(request())
+
+    const sent = runModel.mock.calls[0]![0]
+    expect(sent.tools).toHaveLength(1)
+    expect((sent.tools[0] as { function: { name: string } }).function.name).toBe(PLAN_TOOL_NAME)
+    // 提示词按通道给建议（说了用工具，而不是"只返回 JSON"）。
+    expect(sent.messages.map((message) => message.content).join("\n")).toContain(PLAN_TOOL_NAME)
+    // 信封从工具调用的参数里来，而且**没有**被这一层校验（校验是协调器的事）。
+    const parsed = parsePlanEnvelope(outcome.plan)
+    expect(parsed.ok).toBe(true)
+    if (parsed.ok) expect(parsed.value.kind).toBe("plan")
+    expect(outcome.requestId).toBe("req-tool")
+  })
+
+  it("原生通道上模型改用文本作答时，仍然按文本通道解析一次", async () => {
+    // 有些服务在给了工具表的情况下照旧用文本回答，而那段文本还是同一个信封合同。
+    const withTools: ModelPlannerProvider = { ...provider, capabilities: { tools: "verified", json: "unknown", vision: "unknown" } }
+    const planner = createModelPlanner({ resolveProvider: async () => ({ ok: true, provider: withTools }), runModel: async () => deltas("```json\n" + goodEnvelope + "\n```") })
+
+    const outcome = await planner.plan(request())
+
+    expect(parsePlanEnvelope(outcome.plan).ok).toBe(true)
+  })
+
+  it("原生通道上出现**别的**工具调用仍然拒绝：我们只发过一个工具", async () => {
+    const withTools: ModelPlannerProvider = { ...provider, capabilities: { tools: "verified", json: "unknown", vision: "unknown" } }
+    const planner = createModelPlanner({
+      resolveProvider: async () => ({ ok: true, provider: withTools }),
+      runModel: async () => ({ ok: true, events: [{ kind: "tool_call", requestId: "r1", attemptId: "a1", toolCallId: "c1", toolId: "scene.inspect", input: {} }] })
+    })
+
+    await expect(planner.plan(request())).rejects.toThrow(/tool call/i)
   })
 
   it("requestId / attemptId 取自模型事件，取不到才自己编", async () => {

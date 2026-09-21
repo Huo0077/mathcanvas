@@ -171,13 +171,38 @@ export interface ModelPlannerDependencies {
   /** 现取「使用中」的那一份。缺省走真实 IPC（`resolveActiveProvider`）。 */
   resolveProvider?: () => Promise<ProviderResolution>
   /** 发一次请求。缺省走 `provider_run`。第二个参数是"这次还能不能继续"的判据（取消用）。 */
-  runModel?: (request: { runId: string; profileId: string; profileRevision: number; messages: { role: string; content: string }[] }, signal: { isCancelled: () => boolean }) => Promise<ModelClientStart>
+  runModel?: (request: { runId: string; profileId: string; profileRevision: number; messages: { role: string; content: string }[]; tools: unknown[] }, signal: { isCancelled: () => boolean }) => Promise<ModelClientStart>
   /** 让 Rust 侧真的停下来（缺省走 `provider_cancel`）。 */
   cancelRun?: (runId: string) => Promise<boolean>
 }
 
 /** 一次请求要用的消息。**只有 role 与 content** —— provider 方言由 Rust 侧适配。 */
 type ChatMessage = { role: string; content: string }
+
+/**
+ * **原生工具通道上唯一发给模型的工具**。
+ *
+ * 它的参数**就是计划信封本身**。这样 `native_tools` 通道不需要多轮工具循环：
+ * 模型"调用计划工具"这件事，与文本通道里"回一段 JSON"是同一个决定，
+ * 只是承载方式不同（一个结构化参数、一段文本）。
+ *
+ * 名字用下划线而不是点号：点号在部分兼容服务上会被拒，而拒的形状是 400 ——
+ * 那会被读成"这家不支持工具"，正是最不该误报的地方。
+ */
+export const PLAN_TOOL_NAME = "plan_set_plan"
+
+export const PLAN_TOOL_SCHEMA = {
+  type: "function",
+  function: {
+    name: PLAN_TOOL_NAME,
+    description: "Hand back the plan envelope for this run. The arguments ARE the envelope: { schemaVersion, kind, goal, factIds, assumptions?, actions | questions | answer | toolResultRefs }.",
+    parameters: {
+      type: "object",
+      description: "A plan envelope: { schemaVersion: \"mathcanvas.plan.v1\", kind: \"plan\" | \"clarification\" | \"answer\", goal: string, factIds: string[], assumptions?: string[] } plus `actions` for a plan, `questions` for a clarification, or `answer` + `toolResultRefs` for a read-only answer.",
+      additionalProperties: true
+    }
+  }
+}
 
 const MAX_PROMPT_FACTS = 12
 const MAX_PROMPT_REFS = 16
@@ -207,6 +232,9 @@ function sceneSnapshot(context: ModelContext): string {
 
 /** 通道建议。**必须与解析器用的是同一个通道值**，所以它按参数给，不按"猜"。 */
 function channelAdvice(channel: ModelChannel): string {
+  if (channel === "native_tools") {
+    return `用工具 \`${PLAN_TOOL_NAME}\` 回答：把计划放在它的 arguments 里（arguments 就是一个计划信封）。这一轮**不要**用普通文本回答。`
+  }
   return channel === "strict_json"
     ? "整段回复必须**就是**一个 JSON 对象：不要用代码围栏，也不要在前后添加任何文字。"
     : "如果要包代码围栏，请只包一层 ```json，且围栏内只有这个 JSON；围栏之外不要有别的字。"
@@ -306,23 +334,22 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
       if (!resolved.ok) throw new ModelPlannerError(resolved.code === "no_desktop_shell" ? "no_desktop_shell" : resolved.code, resolved.detail)
 
       const provider = resolved.provider
+      /**
+       * **两个通道之间选一个**，而选择只看**已验证的证据**：
+       * `tools === "verified"` → 原生工具通道（发工具表，模型"调用计划工具"）；
+       * 否则按 `json` / 文本通道（发提示词，模型回一个 JSON 信封）。
+       */
       const planned = planModelRequest({
         profile: { id: provider.id, dialect: provider.dialect, modelId: provider.modelId, capabilities: provider.capabilities },
         context: request.model.context,
-        /**
-         * `needsTools` 恒为 false：这一轮**不发** provider 侧的工具表（见模块头第三条）。
-         * 传 true 会要求 `tools === "verified"`，而选出来的 `native_tools` 通道
-         * 在 `provider_run` 上根本无处安放 —— 那会把一次能跑通的请求变成必然失败。
-         */
-        needsTools: false,
+        needsTools: provider.capabilities.tools === "verified",
         withImages: false
       })
       if (!planned.ok) throw new ModelPlannerError("capability_unavailable", planned.detail)
-      if (planned.channel === "native_tools") {
-        // 如实拒绝而不是降级：静默降级会让人以为工具通道已经通了。
-        throw new ModelPlannerError("capability_unavailable", `provider ${provider.id} 只能走原生工具通道，而 provider_run 的契约里没有放工具表的位置（需要先给 Rust 侧加一个 tools 参数）。`)
-      }
       const channel = planned.channel
+      // 只有原生工具通道带工具表。Rust 侧还会按**存下来的证据**再判一次
+      //（`tools_verified`）：调用方说"这家支持工具"不算数，验过才算数。
+      const tools = channel === "native_tools" ? [PLAN_TOOL_SCHEMA] : []
 
       const runId = request.run.runId
       const messages = buildMessages(request, channel)
@@ -359,7 +386,7 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
         request.signal.addEventListener("abort", onAbort)
         let result: ModelClientStart
         try {
-          result = await runModel({ runId, profileId: provider.id, profileRevision: provider.revision, messages }, { isCancelled: () => request.signal.aborted })
+          result = await runModel({ runId, profileId: provider.id, profileRevision: provider.revision, messages, tools }, { isCancelled: () => request.signal.aborted })
         } finally {
           request.signal.removeEventListener("abort", onAbort)
         }
@@ -387,20 +414,32 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
         }
 
         const events: readonly ModelEvent[] = result.ok ? result.events : []
-        /**
-         * 收到工具调用就拒绝。
-         *
-         * 这一轮**没有**发工具表，所以任何工具调用都不可能是我们请求的 —— 静默忽略它
-         * 等于把"模型以为它调用了什么"变成"什么都没发生"。宁可如实失败。
-         */
         const toolCall = events.find((event) => event.kind === "tool_call")
-        if (toolCall) throw new ModelPlannerError("unexpected_tool_call", `the provider returned a tool call (${toolCall.kind === "tool_call" ? toolCall.toolId : ""}) but no tool schema was ever sent — refusing to guess what it meant`)
+        if (toolCall && toolCall.kind === "tool_call") {
+          /**
+           * **原生工具通道上，唯一发给模型的工具就是 `plan_set_plan`**，而它的参数
+           * 就是一个计划信封。所以"模型调用了它"这件事，与文本通道里"回了一段 JSON"
+           * 是同一个决定，只是承载方式不同 —— 这里把它原样交给协调器校验
+           *（**在这里不校验**：`parsePlanEnvelope` 是协调器的职责，它掌握修复通道）。
+           */
+          if (channel === "native_tools" && toolCall.toolId === PLAN_TOOL_NAME) {
+            return { plan: toolCall.input as PlanEnvelope, ...ids }
+          }
+          // 其余情况一律拒绝：我们**没有**发过那个工具，静默忽略它等于把
+          // "模型以为它调用了什么"变成"什么都没发生"。
+          throw new ModelPlannerError("unexpected_tool_call", `the provider returned a tool call (${toolCall.toolId}) that no tool schema of ours asked for — refusing to guess what it meant`)
+        }
 
         // 取消已经置位：不再产出任何东西（协调器也不会再收事件）。
         if (request.signal.aborted) throw new ModelPlannerError("cancelled", "这次运行已取消。", false)
 
         const text = events.filter((event) => event.kind === "delta").map((event) => (event.kind === "delta" ? event.text : "")).join("")
-        const parsed = parseModelEnvelope(text, channel)
+        /**
+         * 原生工具通道上模型没调工具、而是回了一段文本时，**仍然按文本通道解析一次**：
+         * 有些服务在给了工具表的情况下照旧用文本作答，而那段文本还是同一个信封合同。
+         * 让它走一次解析，比让用户白等一次修复往返要好；解析不通过时协调器照样会拒。
+         */
+        const parsed = parseModelEnvelope(text, channel === "native_tools" ? "fenced_text" : channel)
         if (!parsed.ok) return { plan: asUntrustedEnvelope(parsed), ...ids }
         return { plan: parsed.value, ...ids }
       }

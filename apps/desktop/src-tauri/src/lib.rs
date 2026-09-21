@@ -121,6 +121,7 @@ pub struct ProxyRuntime {
 /// 而那条约束让这次发送不能被打断成若干次 await。Tauri 的同步命令跑在线程池上，
 /// 阻塞它不会卡住界面 —— 而把它写成 `async` 再在里面阻塞，才会真的占住异步线程。
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 fn provider_run(
     app: tauri::AppHandle,
     run_id: String,
@@ -128,6 +129,7 @@ fn provider_run(
     profile_revision: u32,
     messages: Vec<providers::request::ChatMessage>,
     stream: Option<bool>,
+    tools: Option<Vec<serde_json::Value>>,
 ) -> Result<Vec<serde_json::Value>, serde_json::Value> {
     let proxy = app.try_state::<ProxyState>().ok_or_else(|| missing_state("the proxy"))?;
     // 锁**一直持有到这次发送结束**：它保护的是 `ProxyHandle` 的生命周期，
@@ -143,11 +145,33 @@ fn provider_run(
         store.get(&profile_id).ok_or_else(|| providers::adapter::ProviderError::NotFound { profile_id: profile_id.clone() }.to_json())?
     };
 
+    // **工具表的出口判据**（Task 2.3："Do not send a tool schema to providers that failed
+    // capability verification."）。
+    //
+    // 前端已经按能力证据选过通道（`planModelRequest` / `selectChannel`），但那道判据在**调用方**手里。
+    // 这里再看一次**存下来的**证据：调用方说"这家支持工具"不算数，跑过一次能力验证才算数。
+    // 证据没验过时**不是静默丢掉工具表**，而是拒绝 —— 静默丢掉会让调用方拿到一个"没带工具的请求"，
+    // 于是"模型不会用工具"变成一个看起来像模型的问题。
+    let requested_tools = tools.unwrap_or_default();
+    let allow_tools = if requested_tools.is_empty() {
+        false
+    } else {
+        let state = app.try_state::<ProfileStoreState>().ok_or_else(|| missing_state("the provider store"))?;
+        let store = state.store.lock().map_err(|_| missing_state("the provider store is poisoned"))?;
+        if !providers::capability::tools_verified(store.health(&profile_id).as_ref(), profile.revision) {
+            return Err(providers::adapter::ProviderError::ToolsNotVerified { profile_id: profile_id.clone() }.to_json());
+        }
+        true
+    };
+
     let secrets = app.try_state::<SecretStoreState>().ok_or_else(|| missing_state("the secret store"))?;
     let transport = providers::adapter::HttpTransport::new();
     // 查配置 → 对修订号 → 借凭据发请求。**这一段住在 `providers::adapter` 里**
     // 而不是在这里，因为那里能测（见 `run_with_profile` 的说明）。
-    let outcome = providers::adapter::run_with_profile(&secrets.0, &transport, profile, profile_revision, messages, stream.unwrap_or(true), cancel.as_ref())
+    // `force_tool: false`：真运行里模型**可以不调工具**（它可以只回答问题），
+    // 强制它调工具是**探针**才需要的事（不强制就测不出"支持工具"）。
+    let options = providers::request::RequestOptions { allow_tools, tools: requested_tools, force_tool: false, tool_choice_field: None };
+    let outcome = providers::adapter::run_with_profile(&secrets.0, &transport, profile, profile_revision, messages, stream.unwrap_or(true), options, cancel.as_ref())
         .map_err(|error| error.to_json())?;
     let events: Vec<serde_json::Value> = match outcome {
         providers::adapter::SendOutcome::Completed(events) | providers::adapter::SendOutcome::Cancelled(events) => {

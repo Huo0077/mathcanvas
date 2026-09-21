@@ -308,8 +308,28 @@ fn classify(feature: Feature, result: &Result<Vec<ModelEvent>, ProviderError>, o
     }
 }
 
-/// 这次失败对"支不支持某个能力"**说明不了任何事**吗。
+/// **这次允许发工具表吗**（计划 Task 2.3 原文："Do not send a tool schema to providers that
+/// failed capability verification."）。
 ///
+/// 判定用的是**存下来的**证据，与 TS 侧的 `isCapabilityVerified` 逐字同两条：
+/// 1. 状态必须是 `verified` —— `declared` 是"文档里说支持"，不是"我们验过"；
+/// 2. 证据必须属于**当前修订号** —— 配置改过之后，旧证据不该继续被采信。
+///
+/// 为什么前端已经按证据选过通道了，这里还要再判一次：这是一道**出口**判据。
+/// 只在调用方守着的边界，多出一个调用方就没了 —— 与"密钥字段入口与出口都要拦"
+/// （`prepare_profile` 与 `contains_secret_field`）是同一条理由。
+pub fn tools_verified(health: Option<&ProviderHealth>, revision: u32) -> bool {
+    let Some(health) = health else { return false };
+    if health.profile_revision != revision {
+        return false;
+    }
+    health
+        .capability_evidence
+        .iter()
+        .any(|evidence| evidence.feature == Feature::Tools.key() && evidence.status == "verified")
+}
+
+/// 这次失败对"支不支持某个能力"**说明不了任何事**吗。///
 /// 认证、权限、连接失败都属于这一类：它们说的是"这次请求没成"，不是"这个能力不行"。
 /// 把它们记成 `failed` 会让界面建议用户换模型 —— 而真正该做的是去设置里换密钥。
 fn inconclusive(error: &ProviderError) -> bool {

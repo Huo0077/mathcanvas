@@ -66,7 +66,8 @@ pub struct ProviderRequest {
 /// 方言决定的能力**形状**（不是"支不支持"——那是能力证据的事，见 `Task 1.4 Step 5`）。
 ///
 /// 这里说的是"这个方言的**请求**长什么样"：路径、认证头名、工具字段名。
-/// 支不支持由运行时的**已验证证据**决定（`isCapabilityVerified`）。
+/// 支不支持由**已验证证据**决定（`isCapabilityVerified`），而那个决定由调用方
+/// 通过 `RequestOptions.allow_tools` 显式给出。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RequestPlan {
     pub dialect: String,
@@ -76,11 +77,6 @@ pub struct RequestPlan {
     pub auth_prefix: String,
     /// 工具 schema 放在哪个字段里（`tools` / 无）。
     pub tools_field: Option<String>,
-    /// 这条路径是否**默认**允许发工具 schema。
-    ///
-    /// `generic_compatible` 是 `false` —— 那正是计划 Step 3 要求的"不要假设每一家兼容服务
-    /// 都支持同一套工具"的落点。要用工具，得先有**已验证**的能力证据。
-    pub tools_by_default: bool,
 }
 
 /// 路径按方言定。**常量表**，调用方给不了。
@@ -99,23 +95,18 @@ fn plan_for(protocol: &str, dialect: &str) -> RequestPlan {
             auth_header: "x-api-key".to_string(),
             auth_prefix: String::new(),
             tools_field: Some("tools".to_string()),
-            // Anthropic 的工具调用是官方能力，但**仍然要已验证证据**才真的发（见 `build_request`）。
-            tools_by_default: true,
         },
         "ollama" => RequestPlan {
             dialect: dialect.to_string(),
             auth_header: "Authorization".to_string(),
             auth_prefix: "Bearer ".to_string(),
             tools_field: Some("tools".to_string()),
-            tools_by_default: true,
         },
         _ => RequestPlan {
             dialect: dialect.to_string(),
             auth_header: "Authorization".to_string(),
             auth_prefix: "Bearer ".to_string(),
             tools_field: Some("tools".to_string()),
-            // **唯一**默认不发工具的一档：泛化的"OpenAI 兼容"。
-            tools_by_default: dialect != "generic_compatible",
         },
     }
 }
@@ -155,8 +146,21 @@ pub fn allow_tools() -> RequestOptions {
  * **拼出请求**。
  *
  * `options.allow_tools` 由调用方按**已验证的能力证据**给出（`isCapabilityVerified(..)`）——
- * 不是按方言猜。三个条件都要满足才真的带工具：方言支持 **且** 证据说支持 **且**
- * 调用方给了工具表。
+ * 不是按方言猜。两个条件才真的带工具：调用方**明确放行** **且** 给了工具表。
+ *
+ * ## 这里原先还有第三个条件，而它是一个静默失效（2026-09-21 修）
+ *
+ * 旧条件是 `allow_tools && tools_by_default && !tools.is_empty()`，而
+ * `tools_by_default` 对 `generic_compatible` 是 `false`。后果不是"更保守"，是
+ * **探针在那一档上永远发不出工具表**：探针显式传 `allow_tools: true` + 工具表 + `force_tool`，
+ * 却被方言这一关静默丢掉，于是模型只会回一段文本，而工具探针把"回了文本"记成
+ * **`unknown`**（"答了话、就是没调工具"）—— 用户看到四个徽章里工具那一个永远不亮，
+ * 而真正的原因是我们没把工具表发出去。**"不知道这家支不支持"正是要试的理由**，
+ * 不是不试的理由；计划 Step 3 要求的是"不要**假设**每一家兼容服务都支持同一套工具"，
+ * 而不是"不许问"。
+ *
+ * 现在放行与否**只有调用方一个决定**（`allow_tools`），而它在两处都有依据：
+ * 探针按"我就是要试"给真，`provider_run` 按**存下来的已验证证据**给真（见 `lib.rs`）。
  */
 pub fn build_request(profile: &ProviderProfile, messages: Vec<ChatMessage>, stream: bool, options: RequestOptions) -> ProviderRequest {
     let plan = plan_for(&profile.protocol, &profile.dialect);
@@ -210,7 +214,7 @@ pub fn build_request(profile: &ProviderProfile, messages: Vec<ChatMessage>, stre
         }
     }
 
-    if options.allow_tools && plan.tools_by_default && !options.tools.is_empty() {
+    if options.allow_tools && !options.tools.is_empty() {
         if let Some(field) = &plan.tools_field {
             object.insert(field.clone(), serde_json::json!(options.tools));
         }

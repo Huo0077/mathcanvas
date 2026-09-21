@@ -1,4 +1,4 @@
-﻿//! **适配器 + 真实转发**（Task 1.4 收尾 / Task 1.5 另一半）。
+//! **适配器 + 真实转发**（Task 1.4 收尾 / Task 1.5 另一半）。
 //!
 //! ## 这个文件要钉住的四件事
 //!
@@ -29,7 +29,7 @@ use mathcanvas_desktop_lib::providers::adapter::{
     run_with_profile, HttpTransport, ProviderAdapter, ProviderError, SecretSource, SendOutcome, Stop, Transport, TransportUpdate,
 };
 use mathcanvas_desktop_lib::providers::events::{FailureKind, ModelEvent};
-use mathcanvas_desktop_lib::providers::request::{ChatMessage, ProviderRequest};
+use mathcanvas_desktop_lib::providers::request::{ChatMessage, ProviderRequest, RequestOptions};
 use mathcanvas_desktop_lib::repository::provider_profiles::ProviderProfile;
 
 // ---------------------------------------------------------------- 测试替身
@@ -426,7 +426,7 @@ fn a_stale_profile_revision_is_refused_before_the_credential_is_borrowed() {
     let mut stale = openai_profile();
     stale.revision = 7;
 
-    let error = run_with_profile(&source, &transport, stale, 3, messages(), true, stop.as_ref()).expect_err("a stale revision must be refused");
+    let error = run_with_profile(&source, &transport, stale, 3, messages(), true, RequestOptions::default(), stop.as_ref()).expect_err("a stale revision must be refused");
 
     assert_eq!(error, ProviderError::RevisionMismatch { expected: 3, actual: 7 });
     // 分类是 `auth`（配置问题，换时机再试还是同一份错误）—— **不该重试**。
@@ -440,7 +440,7 @@ fn the_command_layer_reports_a_missing_credential_with_a_classification_the_fron
     let transport = FakeTransport::streaming(vec![b"data: {}\n\n".to_vec()]);
     let stop = AtomicStop::new();
 
-    let error = run_with_profile(&source, &transport, openai_profile(), 1, messages(), true, stop.as_ref()).expect_err("no credential");
+    let error = run_with_profile(&source, &transport, openai_profile(), 1, messages(), true, RequestOptions::default(), stop.as_ref()).expect_err("no credential");
 
     // 前端拿到的必须**带分类**（`to_json`），而不是一句话：重试策略只认那两项。
     let json = error.to_json();
@@ -448,6 +448,104 @@ fn the_command_layer_reports_a_missing_credential_with_a_classification_the_fron
     assert_eq!(json["failure"], "auth");
     assert_eq!(json["retryable"], false);
     assert_eq!(transport.calls.load(Ordering::SeqCst), 0, "no request may be sent without a credential");
+}
+
+// ---------------------------------------------------------------- 工具表这条通道
+
+/// 一份最小可用的工具表。形状与探针、规划器发出去的是同一种。
+fn plan_tool_schema() -> serde_json::Value {
+    serde_json::json!({
+        "type": "function",
+        "function": { "name": "plan_set_plan", "description": "hand back the plan envelope", "parameters": { "type": "object" } }
+    })
+}
+
+fn tools_options() -> RequestOptions {
+    RequestOptions { allow_tools: true, tools: vec![plan_tool_schema()], force_tool: false, tool_choice_field: None }
+}
+
+fn anthropic_profile() -> ProviderProfile {
+    profile(serde_json::json!({
+        "id": "anthropic", "name": "Anthropic", "protocol": "anthropic", "dialect": "anthropic_messages",
+        "baseUrl": "https://api.anthropic.com/v1", "modelId": "claude-sonnet-4", "secretRef": "anthropic",
+        "networkPolicy": "cloud", "revision": 1
+    }))
+}
+
+fn ollama_profile() -> ProviderProfile {
+    profile(serde_json::json!({
+        "id": "ollama", "name": "Ollama", "protocol": "ollama", "dialect": "ollama_native",
+        "baseUrl": "http://127.0.0.1:11434/v1", "modelId": "qwen3", "secretRef": "ollama",
+        "networkPolicy": "local", "revision": 1
+    }))
+}
+
+/// **每一档方言都要能把工具表发出去**。
+///
+/// 这一条在 2026-09-21 之前对 `generic_compatible` 是**不成立**的：`RequestPlan.tools_by_default`
+/// 对它是 `false`，而 `build_request` 把那个字段也当成一道门，于是工具表被**静默丢掉**。
+/// 后果不是"更保守"：探针显式传了 `allow_tools: true` + 工具表 + `force_tool`，发出去的却是一条
+/// 普通文本请求，模型只能回话，而工具探针把"回了文本"记成 `unknown` ——
+/// 用户看到的是"工具徽章永远不亮"，真实原因却是我们没把工具表发出去。
+#[test]
+fn every_dialect_can_carry_a_tool_schema_when_the_caller_allows_it() {
+    for (name, profile) in [("openai/generic_compatible", openai_profile()), ("anthropic", anthropic_profile()), ("ollama", ollama_profile())] {
+        let source = FakeSource { secret: Some("sk-live-secret".to_string()) };
+        let transport = FakeTransport::streaming(vec![b"data: [DONE]\n\n".to_vec()]);
+        let stop = AtomicStop::new();
+        let adapter = ProviderAdapter::new(&source, &transport, profile);
+
+        adapter.send_with(messages(), false, tools_options(), stop.as_ref()).expect("the request must be attempted");
+
+        let body = transport.last().request.body;
+        assert_eq!(body["tools"][0]["function"]["name"], "plan_set_plan", "{name} must carry the tool schema");
+        // `force_tool: false`：真运行里模型**可以不调工具**（它可以直接作答），
+        // 强制它调工具是探针才需要的事。
+        assert!(body.get("tool_choice").is_none(), "{name} must not force the tool on a normal run");
+    }
+}
+
+/// 调用方**不放行**时，工具表一个字都不进请求体。
+#[test]
+fn tools_are_left_out_when_the_caller_does_not_allow_them() {
+    let source = FakeSource { secret: Some("sk-live-secret".to_string()) };
+    let transport = FakeTransport::streaming(vec![b"data: [DONE]\n\n".to_vec()]);
+    let stop = AtomicStop::new();
+    let adapter = ProviderAdapter::new(&source, &transport, openai_profile());
+
+    adapter
+        .send_with(messages(), false, RequestOptions { allow_tools: false, tools: vec![plan_tool_schema()], force_tool: false, tool_choice_field: None }, stop.as_ref())
+        .expect("the request must be attempted");
+
+    assert!(transport.last().request.body.get("tools").is_none(), "an unverified provider must not receive a tool schema");
+}
+
+/// 空工具表**不会**变成"我支持工具"的声明。
+#[test]
+fn an_empty_tool_list_never_becomes_a_tool_field() {
+    let source = FakeSource { secret: Some("sk-live-secret".to_string()) };
+    let transport = FakeTransport::streaming(vec![b"data: [DONE]\n\n".to_vec()]);
+    let stop = AtomicStop::new();
+    let adapter = ProviderAdapter::new(&source, &transport, openai_profile());
+
+    adapter
+        .send_with(messages(), false, RequestOptions { allow_tools: true, tools: Vec::new(), force_tool: false, tool_choice_field: None }, stop.as_ref())
+        .expect("the request must be attempted");
+
+    // `tools: []` 会告诉 provider"我支持工具"却什么都没给 —— 那比不发更糟。
+    assert!(transport.last().request.body.get("tools").is_none(), "an empty tool list must not be sent at all");
+}
+
+/// 命令那一层把工具表的决定**透明**传下去（它不替调用方猜，也不替它放宽）。
+#[test]
+fn the_command_layer_passes_the_tool_decision_through_untouched() {
+    let source = FakeSource { secret: Some("sk-live-secret".to_string()) };
+    let transport = FakeTransport::streaming(vec![b"data: [DONE]\n\n".to_vec()]);
+    let stop = AtomicStop::new();
+
+    run_with_profile(&source, &transport, openai_profile(), 1, messages(), true, tools_options(), stop.as_ref()).expect("the request must be attempted");
+
+    assert_eq!(transport.last().request.body["tools"][0]["function"]["name"], "plan_set_plan");
 }
 
 // ---------------------------------------------------------------- 真实传输层

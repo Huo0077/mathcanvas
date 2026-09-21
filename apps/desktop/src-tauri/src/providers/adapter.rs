@@ -134,6 +134,16 @@ pub enum ProviderError {
     /// 这不是"用旧配置跑一次"：请求是按某一版 profile 拼出来的，而当前的那一版
     /// 已经不是它了 —— 跑出来的结果没法解释（模型、端点、方言都可能变了）。
     RevisionMismatch { expected: u32, actual: u32 },
+    /// **工具支持还没有被验证过**，所以不发工具表。
+    ///
+    /// 计划 Task 2.3 原文："Do not send a tool schema to providers that failed capability
+    /// verification." 这一条**在两端各有一道**（前端按证据选通道，这里再看一次存下来的证据）：
+    /// 前端那道是"我们不该请求"，这一道是"就算请求了也不发"。两处都要有，理由与密钥字段
+    /// 那条约束一样 —— 只在调用方守着的边界，一旦多出一个调用方就没了。
+    ///
+    /// **不静默丢掉工具表**：调用方明明给了工具却收到一个"没带工具的请求"，会得到一个
+    /// 看起来像"模型不会用工具"的结果，而真实原因是证据没验过。
+    ToolsNotVerified { profile_id: String },
 }
 
 impl ProviderError {
@@ -146,6 +156,9 @@ impl ProviderError {
             ProviderError::RevisionMismatch { .. } => FailureKind::Auth,
             ProviderError::SecretStore { .. } => FailureKind::Unknown,
             ProviderError::RefusedUrl { .. } => FailureKind::Permission,
+            // 与 `RefusedUrl` 同类：**不是"这次运气不好"**，而是"这条路现在不允许" ——
+            // 重试一百次还是同一份证据。用户在设置里跑一次能力验证才会改变它。
+            ProviderError::ToolsNotVerified { .. } => FailureKind::Permission,
             ProviderError::Transport { .. } => FailureKind::Transport,
             ProviderError::Http { failure, .. } => *failure,
         }
@@ -169,6 +182,9 @@ impl ProviderError {
             ProviderError::NotFound { profile_id } => format!("no provider profile with id {profile_id}"),
             ProviderError::RevisionMismatch { expected, actual } => {
                 format!("the profile is at revision {actual}, the request was built for {expected}; reload the settings before running")
+            }
+            ProviderError::ToolsNotVerified { profile_id } => {
+                format!("the tool support of {profile_id} has not been verified, so no tool schema was sent; run the capability check in Settings first")
             }
         }
     }
@@ -527,6 +543,10 @@ impl Transport for HttpTransport {
  *
  * 命令本身剩下的事只有三件：从托管状态里取 store、调这个函数、把事件交出去。
  */
+// 八个参数触发了 clippy 的 `too_many_arguments`（阈值 7）。**不打包成结构体**是刻意的：
+// 调用点只有两个（`provider_run` 与测试），而扁平签名里每个参数名本身就是文档 ——
+// 打包之后读起来反而要来回跳。`provider_run` / `put_attachment` 出于同一个理由也带这条 allow。
+#[allow(clippy::too_many_arguments)]
 pub fn run_with_profile<S: SecretSource + ?Sized>(
     secrets: &S,
     transport: &dyn Transport,
@@ -534,6 +554,7 @@ pub fn run_with_profile<S: SecretSource + ?Sized>(
     expected_revision: u32,
     messages: Vec<ChatMessage>,
     stream: bool,
+    options: RequestOptions,
     stop: &dyn Stop,
 ) -> Result<SendOutcome, ProviderError> {
     // **先对修订号，再碰密钥**：用一份界面已经看不到的配置发请求，
@@ -541,5 +562,7 @@ pub fn run_with_profile<S: SecretSource + ?Sized>(
     if profile.revision != expected_revision {
         return Err(ProviderError::RevisionMismatch { expected: expected_revision, actual: profile.revision });
     }
-    ProviderAdapter::new(secrets, transport, profile).send(messages, stream, stop)
+    // `options` 是**透明传下去**的：允许发工具表与否由调用方按已验证证据决定
+    //（`allow_tools`），这一层不替它猜，也不替它放宽。
+    ProviderAdapter::new(secrets, transport, profile).send_with(messages, stream, options, stop)
 }
