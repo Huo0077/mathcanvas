@@ -295,7 +295,16 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
     questions: () => declaredQuestions,
     confirmDraft() {
       const id = committer.draftIdFor()
-      if (!id) return { status: "rejected" as const, detail: "there is no staged draft to confirm" }
+      /**
+       * **拒绝时说出运行时知道的事实**（2026-09-21）。
+       *
+       * 原先只有一句"没有草稿可确认"，而它在真机上出现时**界面上明明有草稿面板** ——
+       * 一句话同时要解释"面板为什么在"与"运行时为什么说没有"，谁也猜不出来。
+       * 协调者的相位正是那个能区分原因的事实：如果相位是 `awaiting_confirmation` 而没有草稿 id，
+       * 说明被点的那份运行时**不是**跑出草稿的那一份（模块级字段被换过）；如果相位不是它，
+       * 说明这一次运行根本没走到暂存。**把事实说出来，而不是让人猜。**
+       */
+      if (!id) return { status: "rejected" as const, detail: `there is no staged draft to confirm (coordinator phase: ${coordinator.phase()})` }
       const consent = host.requestConsent(id)
       if (!consent.ok) {
         // 没有可授权的预览（例如草稿已经失效）→ 如实拒绝，而不是硬着头皮提交。
