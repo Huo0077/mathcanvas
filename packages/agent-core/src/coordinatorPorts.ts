@@ -1,8 +1,9 @@
-import type { DocumentHandle, PlanEnvelope, RunContext, ToolResult } from "./contracts"
+import type { DocumentHandle, PlanDiagnostic, PlanEnvelope, RepairRequest, RunContext, StructuredAssumption, ToolResult } from "./contracts"
 import type { DraftAction } from "@draw/scene-graph"
 import type { Budget } from "./budget"
 import type { ConversationContext, ModelContext } from "./contextBuilder"
 import type { RunEvent } from "./runState"
+import type { ObservedDerivedStatus } from "./sceneObservation"
 import type { ToolDescriptor } from "./toolRegistry"
 
 /**
@@ -71,16 +72,31 @@ export interface PlanRequest {
    * "一次性修复"实际上退化成"重试一次"。这正是"有实现、没接上"的一类缺口：
    * 修复提示的构造函数（`outputParser.describeRepairPrompt`）早就写好并有测试，只是没人调它。
    *
-   * `hint` 由**已注册的** `describeRepairPrompt` 生成，所以它按通道给格式建议、
+   * ## 它现在**就是** `RepairRequest`（Agent DSL 切片 Task 4 的接线）
+   *
+   * 修复请求只有一份真源：`RepairRequest`（`reason` / `errors`（code+path+detail）/
+   * `allowedChanges` / `attempt`）。传输解析失败时由 `repairRequestFor` 造；
+   * **编译阶段失败时是 `compilePlan` 已经造好的那一份**，经由
+   * `CommitterPort.stage` 的失败结果原样带到这里 —— 协调器不再自己拼一个
+   * （自己拼就意味着 `allowedChanges` 与"允许改哪几处"是它猜的）。
+   *
+   * `hint` 是唯一不在 `RepairRequest` 里的东西：它由**已注册的**提示构造函数生成
+   *（`describeRepairPrompt` / `describeCompileRepairPrompt`），按通道给格式建议、
    * 且**绝不回显模型的原话**（避免把散文再送回去形成自我强化的循环）。
    */
-  repair?: {
-    /** 上一次尝试的失败原因码（例如 `schema_invalid` / `unexpected_prose`）。 */
-    reason: string
-    /** 解析器给出的逐条错误（字段路径 + 原因）。 */
-    errors: readonly { code: string; path: string; detail: string }[]
-    /** 可直接拼进下一次提示的可执行修复建议（来自 `describeRepairPrompt`）。 */
+  repair?: RepairRequest & {
+    /** 可直接拼进下一次提示的可执行修复建议（来自已注册的提示构造函数）。 */
     hint: string
+    /** 编译器的逐层诊断（层 + 原因码 + 路径）；传输解析失败时缺省（那一层还没有编译诊断）。 */
+    diagnostics?: readonly PlanDiagnostic[]
+    /**
+     * **编译器在失败前已经补出来的假设**（"拉伸向量未指定，取高 3"）。
+     *
+     * 为什么修复请求要带上它们：修复的题目是"改哪几处"，而系统已经替用户定过的那几样
+     * 必须仍然可见 —— 否则模型会以为那是它可以重新选择的字段，第二次尝试就会把
+     * 一条已经写进 `assumptions` 的决定悄悄改掉。
+     */
+    assumptions?: readonly StructuredAssumption[]
   }
 }
 
@@ -120,6 +136,16 @@ export interface Observation {
    * "计划引用的都是已确认事实"那道检查，而那道检查不需要文本。
    */
   facts?: readonly { id: string; text: string; origin: "user" | "inferred" | "assumed" }[]
+  /**
+   * **派生立体读数**（规格 §3.4 / §6.2；可选，给了就进模型上下文）。
+   *
+   * 与 `facts` 同一条理由、同一个教训：读数只在观察端口产出，而**消费它的地方在协调器**
+   * （组装 `ModelContext` / `ConversationContext`）。端口不带这个字段，观察层算得再对，
+   * 模型看到的也还是"场景里有三只多面体"——"它有没有外接球"只能靠猜。
+   * 状态由内核给出（`sceneObservation.derivedStatuses` → `solidStatusReport`），
+   * 这一层不重新解释几何语义。
+   */
+  derived?: readonly ObservedDerivedStatus[]
 }
 
 export interface ObserverPort {
@@ -162,8 +188,30 @@ export interface CommitterPort {
   /**
    * 草稿阶段：**只产生隔离草稿与预览，绝不写文档**。
    * 返回失效原因（例如手工编辑之后草稿过期），供协调器决定是回到编译还是失败。
+   *
+   * **失败结果要带上编译器的那一份修复请求**（Agent DSL 切片 Task 4 的接线）：
+   * 编译是六层管线的最后一站，`compilePlan` 在可修的失败上会给出
+   * `reason` / `errors`（code+path+detail）/ `allowedChanges` / `attempt`。
+   * 端口过去只回一句话（`detail`），于是协调器拿不到"允许改哪几处"，
+   * 只能自己拿解析错误另造一份、或者干脆不再问模型 —— 编译器的那一份从未被消费。
+   *
+   * 判据是**有请求才修**：`repair` 缺省（例如用户能回答的澄清问题）时协调器
+   * **不许**再问模型一次，因为没有请求的重试只是一次盲目的重复。
    */
-  stage(request: CommitRequest): Promise<{ ok: true; draftVersion: number; previewHash: string } | { ok: false; reason: StageFailureReason; detail?: string }>
+  stage(request: CommitRequest): Promise<
+    | { ok: true; draftVersion: number; previewHash: string }
+    | {
+        ok: false
+        reason: StageFailureReason
+        detail?: string
+        /** 编译器给的一次性修复请求；只有 `reason === "compile_failed"` 且失败可修时才有。 */
+        repair?: RepairRequest
+        /** 编译器的逐层诊断（层 + 原因码 + 路径），修复提示据此说清"卡在哪一层"。 */
+        planDiagnostics?: readonly PlanDiagnostic[]
+        /** 编译器在失败前补出来的假设（见 `PlanRequest.repair.assumptions`）。 */
+        assumptions?: readonly StructuredAssumption[]
+      }
+  >
   /** 提交阶段：**唯一能写文档的调用**，必须带用户同意与幂等键。 */
   commit(request: CommitRequest & { consent: ConsentToken }): Promise<CommitOutcome>
 }

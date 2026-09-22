@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest"
 
-import { createBudget } from "./budget"
+import { createBudget, type BudgetLimits } from "./budget"
 import { createCoordinator } from "./coordinator"
-import type { CommitterPort, ConsentToken, Observation, ObserverPort, PlanOutcome, PlannerPort } from "./coordinatorPorts"
-import type { DocumentHandle, PlanEnvelope, RunContext, ToolResult } from "./contracts"
+import type { CommitterPort, ConsentToken, Observation, ObserverPort, PlanOutcome, PlannerPort, PlanRequest } from "./coordinatorPorts"
+import type { DocumentHandle, PlanEnvelope, RepairRequest, RunContext, ToolResult } from "./contracts"
 
 /**
  * Task 2.1 Step 1 点名的九个场景，一个不少：
@@ -370,6 +370,168 @@ describe("coordinator event identity", () => {  it("carries request, attempt and
     expect(committing.handle?.documentId).toBe("doc-1")
     // 每一次事件都带全七个标识。
     for (const event of events) expect(event.runId).toBe("run-1")
+  })
+})
+
+/**
+ * **编译阶段的那一次修复**（Agent DSL 切片 Task 4 的接线缺口）。
+ *
+ * `compilePlan` 会返回一份结构化修复请求，但协调器此前只在自己的
+ * `parsePlanEnvelope` 失败时造一份 —— 编译阶段的失败直接 `failed`，
+ * 编译器的那一份、以及"修复只给一次且共用运行预算"这条全局约束都没在生产路径上。
+ *
+ * 这一组把**协调器的消费契约**钉住：它交给规划器的必须是暂存失败带回来的那一份
+ *（逐字段），修恰好一次，绝不无请求地重试，也绝不另开一份预算。
+ * "编译器确实产出这一份"由 `apps/web/src/agent/compilerRepair.test.ts` 从真实管线证明。
+ */
+describe("the compile stage's one-shot repair", () => {
+  const repair: RepairRequest = {
+    reason: "schema_invalid",
+    errors: [{ code: "degenerate_prism", path: "envelope.actions[0].inputs.basePolygon", detail: "the extrusion vector is zero" }],
+    allowedChanges: ["envelope.actions[0].inputs.basePolygon"],
+    attempt: 1
+  }
+  const planDiagnostics = [{ stage: "geometry_validation" as const, code: "degenerate_prism", path: "envelope.actions[0].inputs.basePolygon", detail: "the extrusion vector is zero", severity: "error" as const }]
+  const assumptions = [{ id: "prism:vector", text: "拉伸向量未指定，取高 3 的直棱柱", kind: "safe_default" as const, value: { x: 0, y: 0, z: 3 }, overridable: true, path: "envelope.actions[0].inputs.vector" }]
+  const compileFailure = { ok: false as const, reason: "compile_failed" as const, detail: "compile_failed: degenerate_prism", repair, planDiagnostics, assumptions }
+
+  function compileHarness(options: { stage: CommitterPort["stage"]; plans?: PlanEnvelope[]; limits?: Partial<BudgetLimits> }) {
+    const seen: PlanRequest[] = []
+    let index = 0
+    const planner: PlannerPort = {
+      plan: vi.fn(async (request: PlanRequest) => {
+        seen.push(request)
+        const plan = options.plans?.[Math.min(index, (options.plans?.length ?? 1) - 1)] ?? planEnvelope()
+        index += 1
+        return { plan, requestId: `req-${index}`, attemptId: `attempt-${index}` }
+      })
+    }
+    const observer: ObserverPort = { observe: vi.fn(async () => facts) }
+    const commitRequests: Parameters<CommitterPort["commit"]>[0][] = []
+    const committer: CommitterPort = {
+      stage: vi.fn(options.stage),
+      commit: vi.fn(async (request: Parameters<CommitterPort["commit"]>[0]) => {
+        commitRequests.push(request)
+        return { status: "committed" as const }
+      })
+    }
+    const budget = createBudget(options.limits)
+    const coordinator = createCoordinator({ planner, observer, committer, consent, budget })
+    return { coordinator, seen, committer, commitRequests, budget }
+  }
+
+  /** 第一次编译失败、第二次成功：这是"修好了一次"的形状。 */
+  function failThenSucceed() {
+    let attempts = 0
+    return async () => {
+      attempts += 1
+      return attempts === 1 ? compileFailure : { ok: true as const, draftVersion: 2, previewHash: "preview-1" }
+    }
+  }
+
+  it("hands the planner the compile stage's repair request field for field", async () => {
+    const harness = compileHarness({ stage: failThenSucceed() })
+
+    const events = await drive(harness.coordinator, { run, userMessage: "draw a point" })
+
+    expect(harness.coordinator.phase()).toBe("awaiting_confirmation")
+    // 账本要看得见"这不是第一次问"：修复是一次**重新规划**。
+    expect(events.map((event) => event.phase).filter((phase) => phase === "planning")).toHaveLength(2)
+    expect(harness.seen).toHaveLength(2)
+    expect(harness.seen[0].repair).toBeUndefined()
+
+    const handed = harness.seen[1].repair
+    expect(handed, "the repair attempt must carry the compiler's request").toBeDefined()
+    // 逐字段：协调器**没有**自己造一份（否则 `allowedChanges` / `attempt` 会是它猜的）。
+    expect(handed!.reason).toBe(repair.reason)
+    expect(handed!.errors).toEqual(repair.errors)
+    expect(handed!.allowedChanges).toEqual(repair.allowedChanges)
+    expect(handed!.attempt).toBe(repair.attempt)
+    // 编译器的逐层诊断与它失败前补出来的假设一起交出去（规格 §6.3/§7）。
+    expect(handed!.diagnostics).toEqual(planDiagnostics)
+    expect(handed!.assumptions).toEqual(assumptions)
+    // 提示仍按既有通道给出可执行的修复建议，并指出卡在哪一层、哪个字段。
+    expect(handed!.hint).toContain("geometry_validation")
+    expect(handed!.hint).toContain("envelope.actions[0].inputs.basePolygon")
+  })
+
+  it("attempts exactly one repair, then fails instead of repairing again", async () => {
+    let attempts = 0
+    const harness = compileHarness({
+      stage: async () => {
+        attempts += 1
+        return { ...compileFailure, repair: { ...repair, attempt: attempts } }
+      }
+    })
+
+    const events = await drive(harness.coordinator, { run, userMessage: "draw a point" })
+
+    expect(harness.coordinator.phase()).toBe("failed")
+    expect(harness.seen).toHaveLength(2)
+    expect(harness.committer.stage).toHaveBeenCalledTimes(2)
+    // 第二次尝试**必须**带着请求（"可见的修复"），而不是把同一份请求再发一遍。
+    expect(harness.seen[1].repair).toBeDefined()
+    expect(events.at(-1)?.detail).toContain("degenerate_prism")
+  })
+
+  it("does not re-ask the model when the failure carries no repair request", async () => {
+    // 用户能回答的问题（或任何不该让模型重发的失败）不会带修复请求。
+    const harness = compileHarness({ stage: async () => ({ ok: false as const, reason: "compile_failed" as const, detail: "needs more information" }) })
+
+    const events = await drive(harness.coordinator, { run, userMessage: "draw a point" })
+
+    expect(harness.coordinator.phase()).toBe("failed")
+    expect(harness.seen).toHaveLength(1)
+    expect(events.at(-1)?.detail).toContain("needs more information")
+  })
+
+  it("does not repair a failure that is not a compile failure, even if a request is attached", async () => {
+    const harness = compileHarness({ stage: async () => ({ ok: false as const, reason: "stale_draft_version" as const, detail: "the draft moved", repair }) })
+
+    await drive(harness.coordinator, { run, userMessage: "draw a point" })
+
+    expect(harness.coordinator.phase()).toBe("failed")
+    expect(harness.seen).toHaveLength(1)
+  })
+
+  it("counts the repair against the same generation and network budget", async () => {
+    const harness = compileHarness({ stage: failThenSucceed() })
+
+    await drive(harness.coordinator, { run, userMessage: "draw a point" })
+
+    // 修复花的是同一份预算的另一个名额，不是另一本账。
+    expect(harness.budget.snapshot().used.generation).toBe(2)
+    expect(harness.budget.snapshot().used.network).toBe(2)
+
+    // 额度只够一次生成时：修复请求因预算被拒，模型不会被多问一次。
+    const tight = compileHarness({ stage: failThenSucceed(), limits: { generation: 1 } })
+    const tightEvents = await drive(tight.coordinator, { run, userMessage: "draw a point" })
+
+    expect(tight.seen).toHaveLength(1)
+    expect(tight.coordinator.phase()).toBe("failed")
+    expect(tightEvents.at(-1)?.detail).toContain("budget")
+  })
+
+  /**
+   * **提交的是通过编译的那一份计划**（修复轮 1 / M4）。
+   *
+   * `stagedPlan.actions` 之前只有结构性保证（没有任何一条用例走到提交）。这条把
+   * **端口上收到的那批动作**钉住：修复之后提交的必须是第二份计划的动作，
+   * 而不是第一份（它在编译阶段就被拒了）。
+   */
+  it("commits the repaired plan's actions, not the ones that failed to compile", async () => {
+    const repairedPlan = { ...planEnvelope(1), goal: "repaired", actions: [{ ...action("p1"), actionKey: "repaired-action" }] }
+    const harness = compileHarness({ stage: failThenSucceed(), plans: [planEnvelope(1), repairedPlan] })
+
+    const events: string[] = []
+    for await (const event of harness.coordinator.start({ run, userMessage: "draw a point", confirmed: true })) events.push(event.phase)
+
+    expect(harness.coordinator.phase()).toBe("completed")
+    expect(harness.commitRequests).toHaveLength(1)
+    const committed = harness.commitRequests[0]
+    // 第一份计划的动作（`p1`）一个都不在提交里；提交的是修复后那一份。
+    expect(committed.actions.map((entry) => entry.actionKey)).toEqual(["repaired-action"])
+    expect(committed.actionCount).toBe(repairedPlan.actions.length)
   })
 })
 

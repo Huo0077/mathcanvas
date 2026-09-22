@@ -510,3 +510,33 @@ export function describeSectionDraft(document: GeometryDocument, sectionId: stri
 
 /** 修复上限：与 `contracts.MAX_REPAIR_ATTEMPTS` 同一份声明（这里只是让调用方少 import 一次）。 */
 export const PLAN_REPAIR_LIMIT = MAX_REPAIR_ATTEMPTS
+
+/**
+ * **编译阶段失败时给模型的修复提示**（Agent DSL 切片 Task 4 的接线）。
+ *
+ * 传输解析失败的提示由 `outputParser.describeRepairPrompt` 生成（它按**通道**给格式建议）。
+ * 编译阶段的失败不是格式问题：计划已经是一个合法的 JSON 信封，错的是字段里说的东西
+ *（悬空别名、退化几何、越界参数）。所以这一份提示换了个说法，并且必须回答**卡在哪一层** ——
+ * 规格 §6.2 把六层各自的名字当成排障的第一个问题，而"计划不成立"是没用的。
+ *
+ * 层名来自诊断本身（`PlanDiagnostic.stage`），不在这里重算：诊断说 `geometry_validation`，
+ * 提示就写 `geometry_validation`。`allowedChanges` 原样来自 `RepairRequest` ——
+ * "这次只允许改这几处"是编译器的判断，不是提示文案自己推的。
+ *
+ * 与 `describeRepairPrompt` 一样，**绝不回显模型的原话**（那会把散文再送回去，
+ * 形成自我强化的循环）。
+ */
+export function describeCompileRepairPrompt(repair: RepairRequest, diagnostics: readonly PlanDiagnostic[] = []): string {
+  const failed = diagnostics.filter((entry) => entry.severity === "error")
+  const lines = failed.length > 0
+    ? failed.map((entry) => `${entry.stage}/${entry.code}@${entry.path}: ${entry.detail}`)
+    : repair.errors.map((error) => `${error.code}@${error.path}: ${error.detail}`)
+  const layers = [...new Set(failed.map((entry) => entry.stage))]
+  return [
+    layers.length > 0 ? `上一份计划没有通过编译管线，卡在：${layers.join(" / ")}。` : "上一份计划没有通过编译管线。",
+    "原因如下（层 + 字段路径 + 原因）：",
+    lines.join("; "),
+    repair.allowedChanges.length > 0 ? `这次只允许改这几处：${repair.allowedChanges.join(", ")}` : "这次只允许改上面点名的字段。",
+    "请重新返回一份完整的计划信封，不要附加任何解释文字。"
+  ].join("\n")
+}

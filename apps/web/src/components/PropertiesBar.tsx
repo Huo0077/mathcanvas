@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react"
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react"
 import { dynamicPointPaths } from "../dynamicPointPaths"
 import { isTangentSource, tangentAnchorLabel } from "../curveTangents"
-import type { AnnotationFeature, EngineeringAnnotationKind, Measurement3Metric, PrimitiveSpec, SolidRotation, Vector3 } from "@draw/dsl"
+import type { AnnotationFeature, EngineeringAnnotationKind, GeometryDocument, Measurement3Metric, PrimitiveSpec, SolidRotation, Vector3 } from "@draw/dsl"
 import { measurementOptionsFor } from "../spatialTools"
 import { adaptiveSampleFunctionSegments, evaluateParameterExpression, functionPresets, getFunctionPreset, normalizeVector3, parseExpression, polygonNormal3 } from "@draw/geometry-kernel"
-import { parameterWindow, pathConstraint, type Alignment, type PrimitiveUpdatePatch } from "@draw/scene-graph"
+import { ownerOfTopology, parameterWindow, pathConstraint, solidStatusReport, topologyOfEntity, type Alignment, type PrimitiveUpdatePatch, type SolidDerivedStatus } from "@draw/scene-graph"
 
 import { defaultStrokeFor } from "../primitiveStyle"
 import { pointHostValue } from "../pointHostOptions"
@@ -109,6 +109,97 @@ const intersectionSolidStatusLabels: Record<string, string> = {
  * `undefined` 是旧文档或还没算过的图元——不假装知道它精确。
  */
 const intersectionFaceAreaPrecisionLabels: Record<string, string> = { "true": "闭式精确", "false": "数值近似", "undefined": "未标注" }
+
+/**
+ * **派生读数的名字**（规格 §3.4）。
+ *
+ * 内核用 `derived.circumsphere` / `derived.insphere` / `derived.section` 说话，
+ * 而用户看的是「外接球 / 内切球 / 截面」—— 内部枚举名不进界面（与交线 / 交面那两组同一条口径）。
+ */
+const derivedCodeLabels: Record<string, string> = {
+  "derived.circumsphere": "外接球",
+  "derived.insphere": "内切球",
+  "derived.section": "截面"
+}
+
+/**
+ * **四个状态各自的中文说法**（规格 §3.4 / §10）。
+ *
+ * 这四个词是这一层存在的全部理由：把 `exact` 与 `approximate` 说成同一句话，
+ * 就是允许"数值近似"冒充"精确"；把 `undefined` / `degenerate` 折叠成"没有结果"，
+ * 用户就分不清"这只实体根本没有外接球"与"这个输入本身不成立"。
+ * `Record<SolidDerivedStatus["status"], string>` 是刻意的：内核将来多一个状态，
+ * 这里会**编译不过**，而不是静默少一行。
+ */
+const derivedStatusLabels: Record<SolidDerivedStatus["status"], string> = {
+  exact: "精确",
+  approximate: "数值近似",
+  undefined: "不存在",
+  degenerate: "退化"
+}
+
+/** 非 `exact` 的读数如果连原因都没有（不该发生），也要说清这一点，而不是留白。 */
+const DERIVED_REASON_MISSING = "内核没有给出原因。"
+
+/**
+ * 选中的图元对应**哪一只实体**的派生读数。
+ *
+ * - `polyhedron3` 就是实体本身（棱柱、模板物化出来的多面体）；归属（模板实体 / 自己的 id）
+ *   由 `ownerOfTopology` 说了算 —— 同一个问题在场景图里已经有答案，这里不再自己判一遍。
+ * - 模板实体（立方体 / 棱锥 / 圆柱 / 圆锥）是一个**参数化源**：它的拓扑是物化出来的
+ *   `polyhedron3`，用 `topologyOfEntity` 找回去。**两种记法都要认**（`template` 与拖过顶点之后的
+ *   `fromFaces`）：前一版这里自己写了一遍、只认 `template`，于是"拖一个顶点"之后整块读数
+ *   无声消失（Fix round 1 / I2）。
+ *
+ * 返回的是**一组** id 而不是一个，因为报告里两种读数的归属口径不同：
+ * 外接球 / 内切球挂在 `polyhedron3` 上，而截面读数挂在 `section.sourceId` 上 ——
+ * 那是用户当初选中的那个实体（模板实体是 `cube-1`，棱柱是 `solid-1`）。
+ * 只认其中一个 id，另一类读数就会**静默消失**（选中立方体时看不到它的截面状态）。
+ *
+ * 其它图元（点、面、量…）没有派生读数 —— 返回空数组，界面那一块就不出现。
+ */
+function derivedSolidIdsOf(primitive: PrimitiveSpec, document: GeometryDocument): string[] {
+  if (primitive.type === "polyhedron3") {
+    const owner = ownerOfTopology(primitive)
+    return owner !== undefined && owner !== primitive.id ? [primitive.id, owner] : [primitive.id]
+  }
+  if (primitive.type !== "cube" && primitive.type !== "pyramid" && primitive.type !== "cylinder" && primitive.type !== "cone") return []
+  const topology = topologyOfEntity(document, primitive.id)
+  return topology ? [topology.id, primitive.id] : []
+}
+
+/**
+ * **派生立体读数**（Solid/Prism 切片 Task 5 的后半）。
+ *
+ * `solidStatusReport`（`@draw/scene-graph`）把内核那三个求解器的四态结论算了出来，
+ * 而这个组件是它在界面上的**唯一**落点：用户选中一只实体，就能看到它的外接球 /
+ * 内切球 / 截面到底是"精确"、"数值近似"、"不存在"还是"退化"，以及**为什么**。
+ *
+ * 三件事写死在结构里，而不是靠文案自觉：
+ * - 状态进 `data-derived-status`（浏览器用例断言的是状态本身，不是中文）；
+ * - `undefined` / `degenerate` 永远显示 `message`（内核给的原因），没有原因时如实说明；
+ * - `approximate` 有独立的类名与文案，与 `exact` 不可能长得一样。
+ *
+ * `labelFor` 是**截面那一类读数的去重手段**：同一只实体上的两条截面读数
+ * 只有 `sourceId` 不同，行标题得用那条截面自己的标签，否则两行长得一模一样（Fix round 1 / M1）。
+ *
+ * 抽成独立组件（而不是写进 `PropertiesBar` 的 JSX 里）是为了让"四态各长什么样"能被
+ * 直接喂进去断言 —— `approximate` 目前没有生产来源（内核那三个求解器还不会给），
+ * 只靠真实文档测不到它。
+ */
+export function SolidDerivedReadings({ entries, labelFor }: { entries: readonly SolidDerivedStatus[]; labelFor?: (entry: SolidDerivedStatus) => string | undefined }) {
+  if (entries.length === 0) return null
+  return <div className="primitive-properties" data-derived-panel="true"><h3>派生读数</h3>
+    {entries.map((entry) => <div className="derived-reading" key={`${entry.solidId}:${entry.code}:${entry.sourceId ?? "solid"}`} data-derived-code={entry.code} data-derived-status={entry.status} data-derived-solid={entry.solidId} data-derived-source={entry.sourceId}>
+      <div className="derived-reading-head">
+        <span className="derived-reading-label">{labelFor?.(entry) ?? derivedCodeLabels[entry.code] ?? entry.code}</span>
+        <span className="derived-status" data-status={entry.status}>{derivedStatusLabels[entry.status]}</span>
+      </div>
+      <p className="derived-reading-message">{entry.message.trim().length > 0 ? entry.message : DERIVED_REASON_MISSING}</p>
+    </div>)}
+    <p className="footer-note">外接球 / 内切球 / 截面都是**内核算出来的结论**（不是估计）：精确的给确定的结论（闭式解或已核验的解），数值近似的带残差，"不存在"表示这只实体根本没有对应的球，而"退化"表示输入本身不成立 —— 三种情况都不会拿一个近似值来顶替。改动实体的顶点或截面朝向，这些读数会立刻重算。</p>
+  </div>
+}
 
 const primitiveTypeLabels: Record<PrimitiveSpec["type"], string> = {  point: "点",  point3: "空间点",
   line: "直线",
@@ -394,6 +485,32 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
     : null
   const objectOrientationNormal = selectedCircle3 ? normalizeVector3(selectedCircle3.normal) : face3Normal
   const applySceneOperation = useSceneStore((state) => state.apply)
+
+  /**
+   * **选中对象的派生读数**（规格 §3.4；Solid/Prism 切片 Task 5 的后半）。
+   *
+   * `solidStatusReport` 对**已提交的文档**逐个实体调内核那三个求解器，所以这里是
+   * "文档现在长什么样"的实时读数（顶点被拖动、截面转了角度，下一帧就变）。
+   *
+   * 三点刻意的取舍：
+   * - **按选中对象过滤，而且只在选中实体 / 截面时才算**：一份画了三十只立体的图纸里，
+   *   每帧把每一只都算一遍是白花的（内切球那条是迭代求解）。过滤用的是文档里既有的
+   *   归属关系（`topologyOfEntity` / `ownerOfTopology`，与场景图同一份规则），不是重新算几何。
+   * - **选中的是截面时只显示这一刀自己的读数**：`App.addSection` 会把选择切到新建的截面上，
+   *   所以这不是边角情形（Fix round 1 / M2）。读数带 `sourceId`，归属是**精确**的 ——
+   *   不去猜"哪一行是哪一刀"，也不把整只实体的球体读数堆到截面面板上。
+   * - `useMemo` 的依赖是**文档对象与选中图元**：`useSceneStore` 每次提交都换新对象，
+   *   所以不会读到过期读数，也不会每渲染都重算一遍。
+   */
+  const derivedReadings = useMemo(() => {
+    if (!selectedPrimitive) return []
+    const report = solidStatusReport(sceneDocument)
+    // 截面：只报这一刀（`sourceId` 是那条截面图元自己的 id）。
+    if (selectedPrimitive.type === "section") return report.filter((entry) => entry.sourceId === selectedPrimitive.id)
+    const solidIds = derivedSolidIdsOf(selectedPrimitive, sceneDocument)
+    if (solidIds.length === 0) return []
+    return report.filter((entry) => solidIds.includes(entry.solidId))
+  }, [sceneDocument, selectedPrimitive])
 
   /**
    * 这个点是不是已经被某条曲线当作**定点**了：是的话就不再提供「创建动圆」，避免重复创建。
@@ -774,6 +891,8 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
     {shows("data") && selectedPoint3 && <div className="primitive-properties"><h3>空间点坐标</h3><Vector3Fields prefix="坐标" value={selectedPoint3.position} disabled={!editable || point3Binding?.kind !== "free"} onChange={updatePoint3} /><Field label="宿主绑定"><select aria-label="点宿主绑定" disabled={!editable} value={pointHostValue(point3Binding)} onChange={(event) => onBindPointHost?.(event.target.value === "" ? null : event.target.value)}><option value="">自由点</option>{(pointHostCandidates ?? []).map((host) => <option key={host.id} value={host.id}>{host.label}</option>)}</select></Field>{point3Binding?.kind === "onHost" && <Field label="宿主参数"><input aria-label="宿主参数" type="number" step="0.01" disabled={!editable} value={point3Binding.parameter} onChange={(event) => onChangeHostParameter?.(numberValue(event))} /></Field>}{(point3Binding?.kind === "onFace" || point3Binding?.kind === "onSurface") && <><Field label="面上参数 u"><input aria-label="面上参数 u" type="number" step="0.1" disabled={!editable} value={point3Binding.uv[0]} onChange={(event) => onChangeHostParameter?.(numberValue(event), point3Binding.uv[1])} /></Field><Field label="面上参数 v"><input aria-label="面上参数 v" type="number" step="0.1" disabled={!editable} value={point3Binding.uv[1]} onChange={(event) => onChangeHostParameter?.(point3Binding.uv[0], numberValue(event))} /></Field></>}{point3Binding?.kind === "inSolid" && <><Field label="体内参数 u"><input aria-label="体内参数 u" type="number" min="0" max="1" step="0.05" disabled={!editable} value={point3Binding.uvw[0]} onChange={(event) => onChangeHostParameter?.(numberValue(event), point3Binding.uvw[1], point3Binding.uvw[2])} /></Field><Field label="体内参数 v"><input aria-label="体内参数 v" type="number" min="0" max="1" step="0.05" disabled={!editable} value={point3Binding.uvw[1]} onChange={(event) => onChangeHostParameter?.(point3Binding.uvw[0], numberValue(event), point3Binding.uvw[2])} /></Field><Field label="体内参数 w"><input aria-label="体内参数 w" type="number" min="0" max="1" step="0.05" disabled={!editable} value={point3Binding.uvw[2]} onChange={(event) => onChangeHostParameter?.(point3Binding.uvw[0], point3Binding.uvw[1], numberValue(event))} /></Field></>}<p className="footer-note">点位置是空间构造的真源；线、面和实体通过点引用联动。绑定到宿主（空间直线 / 棱 / 面 / 圆柱与圆锥侧面）之后，点由**宿主参数**算出坐标，永远贴住宿主；绑定到**实体内**则可以在体内自由移动，出不去（拖到外面会被夹回表面）。</p></div>}
     {shows("data") && selectedSolid && <div className="primitive-properties"><h3>立体几何属性</h3>{selectedSolid.type === "cube" && <><Vector3Fields prefix="原点" value={selectedSolid.origin} disabled={!editable} onChange={(axis, next) => onUpdatePrimitive({ origin3: { ...selectedSolid.origin, [axis]: next } })} /><Vector3Fields prefix="尺寸" value={selectedSolid.size} disabled={!editable} onChange={(axis, next) => onUpdatePrimitive({ size3: { ...selectedSolid.size, [axis]: Math.max(0.01, next) } })} /></>}{selectedSolid.type === "pyramid" && <><Vector3Fields prefix="底面中心" value={selectedSolid.baseCenter} disabled={!editable} onChange={(axis, next) => onUpdatePrimitive({ baseCenter3: { ...selectedSolid.baseCenter, [axis]: next } })} /><CoordinateField label="底面尺寸 X" value={selectedSolid.baseSize.x} disabled={!editable} onChange={(next) => onUpdatePrimitive({ baseSize3: { ...selectedSolid.baseSize, x: Math.max(0.01, next) } })} /><CoordinateField label="底面尺寸 Y" value={selectedSolid.baseSize.y} disabled={!editable} onChange={(next) => onUpdatePrimitive({ baseSize3: { ...selectedSolid.baseSize, y: Math.max(0.01, next) } })} /><CoordinateField label="高度" value={selectedSolid.height} disabled={!editable} onChange={(next) => onUpdatePrimitive({ height: Math.max(0.01, next) })} /></>}{(selectedSolid.type === "cylinder" || selectedSolid.type === "cone") && <><Vector3Fields prefix="中心" value={selectedSolid.center} disabled={!editable} onChange={(axis, next) => onUpdatePrimitive({ center3: { ...selectedSolid.center, [axis]: next } })} /><CoordinateField label="半径 3D" value={selectedSolid.radius} disabled={!editable} onChange={(next) => onUpdatePrimitive({ radius3: Math.max(0.01, next) })} /><CoordinateField label="高度" value={selectedSolid.height} disabled={!editable} onChange={(next) => onUpdatePrimitive({ height: Math.max(0.01, next) })} /><Field label="分段数"><input aria-label="分段数" type="number" min="3" max="256" step="1" disabled={!editable} value={selectedSolid.segments} onChange={(event) => onUpdatePrimitive({ segments: Math.max(3, Math.min(256, Math.round(numberValue(event)))) })} /></Field></>}</div>}
     {shows("data") && selectedSolid && <div className="primitive-properties"><h3>朝向</h3><SolidRotationFields rotation={selectedSolid.rotation} disabled={!editable} onChange={(rotation) => onUpdatePrimitive({ rotation3: rotation })} /></div>}
+    {/* 派生读数：选中实体（模板实体或棱柱那样的多面体）时显示内核给出的四态结论。 */}
+    {shows("data") && <SolidDerivedReadings entries={derivedReadings} labelFor={(entry) => entry.sourceId === undefined ? undefined : sceneDocument.primitives.find((primitive) => primitive.id === entry.sourceId)?.label ?? entry.sourceId} />}
     {shows("data") && selectedPlane3 && <div className="primitive-properties"><h3>平面大小</h3><Field label="半边长（世界单位）"><input aria-label="平面半边长" type="number" min="0.1" step="0.5" placeholder="自动" disabled={!editable} value={selectedPlane3.halfSize ?? ""} onChange={(event) => onUpdatePrimitive({ halfSize: event.target.value === "" ? null : Math.max(0.1, numberValue(event)) })} /></Field><div className="property-actions" aria-label="平面大小操作"><button type="button" disabled={!editable || selectedPlane3.halfSize === undefined} onClick={() => onUpdatePrimitive({ halfSize: null })}>恢复自动</button></div><p className="footer-note">留空表示仍按场景自动适配；填入数值后，平面画出的范围由该半边长决定。</p></div>}
     {shows("data") && selectedSection && exactConicOf(selectedSection) && <div className="primitive-properties"><h3>解析截面</h3><div className="metric-grid">{sectionConicMetrics(selectedSection).map((row) => <span key={row.label}>{row.label}<strong>{row.value}</strong></span>)}</div><p className="footer-note">这一圈边界是**精确的圆锥曲线**（不是多边形近似），画布按屏幕误差细分它——放大不会看出棱。垂直切圆、斜切成椭圆、切到端面时补上端面弦，都是算出来的结论；面积与周长只在整条曲线没被端面裁切时才给闭式（椭圆周长是级数，如实标数值近似）。</p></div>}
     {shows("data") && selectedSection && <div className="primitive-properties"><h3>剖切面</h3><p className="footer-note">截面 = 一个平面切一个实体。剖切面可以沿法向平移（自由拖动模式下拖动截面或按方向键），也可以在这里摆斜。</p><div className="property-actions" aria-label="剖切面旋转">{(["x", "y", "z"] as const).map((axis) => <span key={axis}><button type="button" aria-label={`绕 ${axis.toUpperCase()} 轴旋转剖切面 -15°`} disabled={!editable || !onRotateSection} onClick={() => onRotateSection?.(axis, -15)}>{axis.toUpperCase()} −15°</button><button type="button" aria-label={`绕 ${axis.toUpperCase()} 轴旋转剖切面 +15°`} disabled={!editable || !onRotateSection} onClick={() => onRotateSection?.(axis, 15)}>{axis.toUpperCase()} +15°</button></span>)}</div><div className="metric-grid"><span>法向量<strong>({selectedSection.plane.normal.x.toFixed(2)}, {selectedSection.plane.normal.y.toFixed(2)}, {selectedSection.plane.normal.z.toFixed(2)})</strong></span><span>截面点数<strong>{selectedSection.points.length}</strong></span><span>分类<strong>{selectedSection.classification === "polygon" ? "多边形" : selectedSection.classification === "segment" ? "线段" : selectedSection.classification === "point" ? "一点" : selectedSection.classification === "none" ? "无交线" : "数据不足"}</strong></span>{(selectedSection.loops?.length ?? 0) > 1 && <span>独立边界<strong>{selectedSection.loops!.length} 环</strong></span>}</div><div className="property-actions"><button type="button" aria-label="转为图元" disabled={!editable || selectedSection.points.length < 3} title="把截面的每一环物化成独立的点 / 棱 / 面图元：之后它们不再随来源实体变化，可以单独移动、求交与测量" onClick={() => onMaterializeSection?.()}>转为图元</button></div><p className="footer-note">要用某个面当剖切面，点画布左上角的「以面为剖切面」，再点实体上的那个面；曲面侧边（点不共面）会被拒绝。</p></div>}

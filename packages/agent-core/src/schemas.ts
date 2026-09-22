@@ -69,10 +69,51 @@ function boundedArray(value: unknown, path: string, errors: ParseError[]): unkno
   return value
 }
 
+/**
+ * **模型写的名字能不能原样写进诊断**（修复轮 1 / M3）。
+ *
+ * `unexpected field '<键名>'`、`unregistered action '<动作名>'`、`unexpected kind '<kind>'`、
+ * `action key '<键名>' ...` 里的名字**都是模型自己写的**，而解析错误会被回送出去
+ *（修复提示、逐层诊断、账本、界面）。JSON 对这些名字没有形状限制：模型（或它读到的文档文本）
+ * 可以把一整句话、甚至换行 + 一个假的 Markdown 小标题当字段名 —— 那就是"把散文再送回去"
+ * 的自我强化循环，规格 §7 明令不许。
+ *
+ * 这里判一次，**所有消费者一起安全**（诊断的 `path` 也嵌着键名，只堵详情是堵不住的）。
+ * 判据两条，任一成立才原样写出：
+ * - 名字**真的在登记表里**（`radius` 用在棱柱上就是这一类：字段合法、动作不对）；
+ * - 名字**长得就是一个标识符**（字母开头、字母数字下划线点、长度有界）。
+ *
+ * 挡住名字并不影响修复：位置由路径说清（`envelope.actions[0].inputs.…`），名字是附赠信息。
+ */
+export function isEchoableName(name: string): boolean {
+  if (name in ACTIONS) return true
+  if (Object.values(ACTIONS).some((spec: ActionSpec) => spec.inputFields.includes(name))) return true
+  return /^[A-Za-z][A-Za-z0-9_.]{0,63}$/.test(name)
+}
+
+/** 名字被挡下来时写进 `detail` 的占位（路径里那一段见 `WITHHELD_PATH_SEGMENT`）。 */
+const WITHHELD_NAME = "(name withheld)"
+/** 名字被挡下来时写进**路径**的占位：路径要仍然是一串"段"，否则下游按段解析会断。 */
+const WITHHELD_PATH_SEGMENT = "<unnamed_field>"
+
+/** 诊断详情里的名字：可以回显就带引号写出来，否则只留占位。 */
+function quotedName(name: string): string {
+  return isEchoableName(name) ? `'${name}'` : WITHHELD_NAME
+}
+
 /** 字段白名单：多一个字段就拒绝 —— 模型不能自己发明"提交版本"或"授权"之类的东西。 */
 function rejectUnknownFields(value: Record<string, unknown>, allowed: readonly string[], path: string, errors: ParseError[]): void {
   for (const key of Object.keys(value)) {
-    if (!allowed.includes(key)) errors.push(fail("unknown_field", `${path}.${key}`, `unexpected field '${key}'`))
+    if (allowed.includes(key)) continue
+    /**
+     * **路径与详情都不许原样带出模型写的任意文本**（M3）：键名不是标识符形状时，
+     * 连路径那一段也换成占位 —— 位置（哪个动作、哪一层容器）仍然说得清。
+     */
+    if (isEchoableName(key)) {
+      errors.push(fail("unknown_field", `${path}.${key}`, `unexpected field '${key}'`))
+      continue
+    }
+    errors.push(fail("unknown_field", `${path}.${WITHHELD_PATH_SEGMENT}`, `unexpected field ${WITHHELD_NAME}`))
   }
 }
 
@@ -907,7 +948,7 @@ export function parseDraftAction(input: unknown, path = "action"): ParseResult<D
       errors: [
         ...errors,
         reason === null
-          ? fail("unknown_action", `${path}.actionId`, `unregistered action '${String(actionId)}'`)
+          ? fail("unknown_action", `${path}.actionId`, `unregistered action ${quotedName(String(actionId))}`)
           : fail("unsupported_action", `${path}.actionId`, reason)
       ]
     }
@@ -941,7 +982,7 @@ export function parsePlanEnvelope(input: unknown): ParseResult<PlanEnvelope> {
 
   const kind = input.kind
   if (kind !== "plan" && kind !== "clarification" && kind !== "answer") {
-    return { ok: false, errors: [fail("unknown_kind", "envelope.kind", `unexpected kind '${String(kind)}'`)] }
+    return { ok: false, errors: [fail("unknown_kind", "envelope.kind", `unexpected kind ${quotedName(String(kind))}`)] }
   }
 
   const allowed = kind === "plan"
@@ -980,7 +1021,7 @@ export function parsePlanEnvelope(input: unknown): ParseResult<PlanEnvelope> {
       const parsed = parseDraftAction(raw, `envelope.actions[${index}]`)
       if (!parsed.ok) { errors.push(...parsed.errors); continue }
       if (keys.has(parsed.value.actionKey)) {
-        errors.push(fail("duplicate_action_key", `envelope.actions[${index}].actionKey`, `action key '${parsed.value.actionKey}' is already used in this run`))
+        errors.push(fail("duplicate_action_key", `envelope.actions[${index}].actionKey`, `action key ${quotedName(parsed.value.actionKey)} is already used in this run`))
         continue
       }
       keys.add(parsed.value.actionKey)

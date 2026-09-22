@@ -2,7 +2,7 @@ import { CAPABILITY_REGISTRY_REVISION, SKILL_MANIFESTS, factBelongsToDocument, t
 import type { GeometryDocument } from "@draw/dsl"
 import { contentFingerprint } from "@draw/scene-graph"
 
-import { useAgentStore, type AgentConversation } from "../agentStore"
+import { useAgentStore, setDocumentGenerationReader, type AgentConversation } from "../agentStore"
 import { useSceneStore } from "../store"
 import { conversationRepository } from "../conversationRepository"
 import { summaryOfDocument } from "../conversationSummary"
@@ -79,6 +79,13 @@ interface PendingCommit {
   runId: string
   conversationId: string
   promptMessageId: string
+  /**
+   * 这一轮**收事件与回执的那条助手消息**。
+   *
+   * 长期记忆那一步跑在回执**之后**（Fix round 3 / I1），那时商店里这一轮的落点已经退休 ——
+   * 所以"摘要被削了没有 / 写没写成功"这类诊断必须能按**显式 id** 落回这条消息上。
+   */
+  messageId: string
   createdObjects: string[]
 }
 
@@ -120,10 +127,29 @@ function generation(): number {
  *   别的文档确认的事实（"第 3 版新增 solid-1"）在这份文档里没有对应对象。
  * - **未确认的草稿只以视图形式进去**：草稿进的是 `draft` 字段，不是事实列表（规格 §1.2）。
  */
-async function readConversationSource(pinnedConversationId: string | undefined): Promise<ConversationContextSource> {
+async function readConversationSource(pinnedConversationId: string | undefined, runId?: string): Promise<ConversationContextSource> {
   const document = useSceneStore.getState().document
   const state = useAgentStore.getState()
   const conversation = (pinnedConversationId ? state.conversations.find((candidate) => candidate.id === pinnedConversationId) : undefined) ?? state.activeConversation
+  /**
+   * **按证据重判一遍事实，再读长期记忆**（Follow-up：事实的 `stale` 路径）。
+   *
+   * 事实原先只有 `confirmed` 一种归宿：撤销掉那次改动、或者把那次创建出来的对象删掉之后，
+   * "文档第 3 版新增 solid-1"照样是"已确认"，下一轮就拿着一个不存在的对象继续规划
+   *（规格 §1.2：当前场景优先于旧记忆）。判据保守（只有文档本身能证明它不再成立，
+   * 见 `conversationFacts`），结果**写回仓储**，所以它不只是这一轮的过滤器。
+   *
+   * 判不动（仓储读/写失败）不能让这一轮跑不起来：如实记一行诊断，按现有事实继续。
+   */
+  if (conversation) {
+    try {
+      const live = { documentId: document.metadata.id, revision: document.revision, objectIds: document.primitives.map((primitive) => primitive.id) }
+      const stale = await useAgentStore.getState().revalidateFacts({ conversationId: conversation.id, live })
+      if (stale.length > 0) useAgentStore.getState().recordDiagnostic(`[facts] conversation ${conversation.id}: ${stale.length} fact(s) no longer hold for document ${live.documentId}@${live.revision}: ${stale.join(", ")}`, runId)
+    } catch (error) {
+      useAgentStore.getState().recordDiagnostic(`[facts] could not revalidate the stored facts: ${error instanceof Error ? error.message : String(error)}`, runId)
+    }
+  }
   // 仓储读不到（浏览器里读的是同一份 localStorage 序列化器）就当作"还没有长期记忆"，
   // **不编**一份摘要或事实出来。
   const record = conversation ? await conversationRepository().readRecord(conversation.id) : null
@@ -146,8 +172,10 @@ async function readConversationSource(pinnedConversationId: string | undefined):
       generation: document.revision
     },
     summary: summary === null ? "" : JSON.stringify(summary),
-    // 只带**本文档**的事实（`factBelongsToDocument` 与 `buildConversationContext` 同一条判据）。
-    facts: (record?.facts ?? []).filter((fact) => factBelongsToDocument(fact, documentId)),
+    // 只带**本文档**的、**还算数**的事实（`factBelongsToDocument` 与 `buildConversationContext`
+    // 同一条判据）。`stale` / `retracted` 的那几条**不进来**：它们不是"现状"
+    //（Follow-up：上面那次重判就是为此；`[context]` 那行计数也才说得出真话）。
+    facts: (record?.facts ?? []).filter((fact) => fact.status === "confirmed" && factBelongsToDocument(fact, documentId)),
     messages: (conversation?.messages ?? []).flatMap((message) => message.text.trim().length > 0
       ? [{ id: message.id, role: message.role, text: message.text, createdAt: message.createdAt }]
       : []),
@@ -336,7 +364,7 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
       // 钉不住（那条消息已经不在了）时退回"当前在途"那条老路径，而不是把事件丢掉。
       const eventRunId = pinned ? runId : undefined
       // 这一轮的提交落点（运行结束之后确认时才用得上）。
-      const commit: PendingCommit | null = pinned ? { runId, conversationId: pinned.conversationId, promptMessageId, createdObjects: [] } : null
+      const commit: PendingCommit | null = pinned ? { runId, conversationId: pinned.conversationId, promptMessageId, messageId: pinned.messageId, createdObjects: [] } : null
       const selection = await selectPlanner(prompt)
       lastSelection = selection
       /**
@@ -345,7 +373,7 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
        * **必须按上面钉住的那条会话读**（Fix round 1 / I1）：`selectPlanner` 上面那一行刚 await 过
        * IPC，用户完全可能在这段时间里切到另一条会话 —— 而这一轮属于开始时钉住的那条。
        */
-      const conversation = await readConversationSource(pinned?.conversationId)
+      const conversation = await readConversationSource(pinned?.conversationId, eventRunId)
       /**
        * **这一轮到底看到了多少会话历史**（计数，不是内容）。
        *
@@ -391,6 +419,15 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
         exportPreflight: { preflight: () => ({ error: "export preflight is not wired into the agent path yet" }) },
         // 会话上下文：**一次运行只取一次**（协调器在组装上下文时调它），两次尝试共用同一份。
         conversation: () => conversation,
+        /**
+         * **观察层的诊断出口**（2026-09-21 派生诊断）。
+         *
+         * 观察决定"模型看到了什么"，而它在界面上没有症状 —— 所以观察层把"这一轮带走了哪些
+         * 派生读数"写一行诊断，这里接进既有的诊断通道（与上面那条 `[context]` 同一处、
+         * 同一个运行 id、同样默认折叠）。在浏览器里，这一行是唯一能断言**观察路径真的走过**
+         * 的抓手：模型服务没接上时也照样写。
+         */
+        diagnostics: (line) => useAgentStore.getState().recordDiagnostic(line, eventRunId),
         // 同意绑定这一轮的会话；提交时与**当前**会话比对（Fix round 1 / C2；规格 §5.4）。
         ...(pinned === null ? {} : { conversationId: pinned.conversationId }),
         readConversationId: () => useAgentStore.getState().activeConversation?.id ?? null,
@@ -464,7 +501,15 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
         }).then((result) => {
           // "没有桌面外壳"是**预期**（浏览器里账本不可用）；真的写失败要说出来 ——
           // 否则"账本里少了几行"永远没人会知道。
-          if (!result.ok && result.code === "ipc_failed") useAgentStore.getState().recordDiagnostic(`[ledger] append failed: ${result.detail}`)
+          //
+          // **落在哪条消息上**：按这一轮**显式**的落点，而不是"当前在途的那条"
+          //（Fix round 3：这一句回调回来时，草稿/回执往往已经让消息不再在途 ——
+          // 老写法（不带 `runId`）会先找 `pendingReplyId`、再被"非在途不更新"挡掉，
+          // 结果**静默丢掉**，正是这行想避免的事）。
+          if (!result.ok && result.code === "ipc_failed") {
+            if (pinned === null) useAgentStore.getState().recordDiagnostic(`[ledger] append failed: ${result.detail}`, eventRunId)
+            else useAgentStore.getState().recordDiagnosticFor({ conversationId: pinned.conversationId, messageId: pinned.messageId }, `[ledger] append failed: ${result.detail}`)
+          }
         })
       }
 
@@ -552,6 +597,9 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
           runId: commit.runId,
           conversationId: commit.conversationId,
           promptMessageId: commit.promptMessageId,
+          // 回执已经落在它上面了：长期记忆那一步的诊断（摘要被削 / 写失败）按它落
+          //（Fix round 3 / I1：这一步在回执之后，落点已经退休）。
+          messageId: commit.messageId,
           // 事实属于**这次提交真正落上去的那份文档**（Agent 自己可能刚为这条计划切过工作区）。
           documentId: useSceneStore.getState().document.metadata.id,
           generation: useSceneStore.getState().document.revision,
@@ -633,3 +681,12 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
  * 而组件在切换模块时会卸载。放进组件状态会让"切走再切回来"丢掉等待确认的草稿。
  */
 export const agentRunner = createAgentRunner()
+
+/**
+ * **把"现取当前文档版本"接到 store 上**（Follow-up item 3）。
+ *
+ * 用户提问那条消息由 `sendPrompt` 追加，而它的调用方在界面那一层（`AgentWorkspace`），
+ * 手里没有文档句柄；运行器是同时知道"消息"与"文档"的那一层，所以由它在装配时把这个读口装上。
+ * 装在模块作用域（与上面那个单例同一个位置）：任何真正跑过 Agent 的进程都 import 了这一层。
+ */
+setDocumentGenerationReader(() => useSceneStore.getState().document.revision)

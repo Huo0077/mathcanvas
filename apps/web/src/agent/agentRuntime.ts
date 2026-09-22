@@ -4,6 +4,7 @@ import {
   createSceneObservation,
   createSceneTools,
   createToolDispatcher,
+  MAX_DERIVED_STATUS_LIMIT,
   SKILL_MANIFESTS,
   type AgentCoordinator,
   type CommitOutcome,
@@ -13,6 +14,7 @@ import {
   type DraftStageOutcome,
   type DraftStorePort,
   type ExportPreflightPort,
+  type ObservedDerivedStatus,
   type ObserverPort,
   type PlanEnvelope,
   type PlannerPort,
@@ -22,7 +24,6 @@ import {
 } from "@draw/agent-core"
 import type { GeometryDocument } from "@draw/dsl"
 import { contentFingerprint } from "@draw/scene-graph"
-
 import { createDraftStore, type DraftStore } from "./draftStore"
 import { createHostBridge, type HostBridge } from "./hostBridge"
 
@@ -93,6 +94,15 @@ export interface AgentRuntimeDependencies {
    * 可选：不传时协调器照常跑（工作区不匹配的动作会被编译器拒 —— 那是**如实**的失败）。
    */
   prepare?: (plan: PlanEnvelope) => { ok: true } | { ok: false; detail: string }
+  /**
+   * **观察层的诊断出口**（可选）。
+   *
+   * 观察是"模型看到了什么"的定义，而它在界面上**没有任何症状** —— 少了读数，模型只会
+   * 表现得像没看见；有了它，也不会有第二个地方显示出来。所以观察层把"这一轮带走了哪些
+   * 派生读数"写成一行诊断，宿主把它接进既有的诊断通道（`useAgentStore.recordDiagnostic`
+   * → 默认折叠的开发者详细视图）。这一行是浏览器用例唯一能断言"观察路径真的走过"的地方。
+   */
+  diagnostics?: (line: string) => void
   /**
    * **这一次运行的会话上下文来源**（对话切片 Task 4）。
    *
@@ -237,15 +247,38 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
   const observer: ObserverPort = dependencies.observer ?? {
     async observe() {
       const documents = dependencies.readSceneDocuments()
-      const scene = createSceneTools(createSceneObservation(documents))
+      // 观察层本体与工具层**共用同一个** `SceneObservation`：读数是纯函数，但句柄校验
+      // 与内容指纹只该算一次，两处各建一个实例就意味着两套"过期"判定。
+      const observation = createSceneObservation(documents)
+      const scene = createSceneTools(observation)
       const target = live()
       const facts: { id: string; text: string; origin: "user" | "inferred" | "assumed" }[] = []
       let summary = "no document in scope"
+      /**
+       * **派生立体读数**（规格 §3.4 / §6.2）：内核那三个求解器的四态结论。
+       *
+       * 只有目标文档在观察范围内时才有读数；拿不到（缺文档 / 过期）时**报空**而不是编一个 ——
+       * 与事实那一条同一条纪律：观察层拿不到的东西，模型就不该看到。
+       *
+       * 这里取的是**硬上限**而不是缺省的 12（Fix round 1 / I3）：模型可见的那一份由
+       * `contextBuilder` 按同一组常量夹到缺省值并留下 `truncated_derived` 警告 ——
+       * 观察层先按缺省值砍一刀的话，那两处"按 12 扣费 / 只看 12 条"就永远对得上，
+       * 警告也就永远不会响，等于把截断**静默掉**。取满硬上限之后：
+       * 上下文那一层真的会夹、会警告；而观察层自己这一刀（>24 条时）在下面如实写进
+       * `summary` 与诊断行 —— 模型与排障的人都看得见。
+       */
+      let derived: readonly ObservedDerivedStatus[] = []
       if (target) {
         const inspected = scene.inspect(target.handle.documentId)
         summary = inspected.summary
         // 可确认的事实就是"场景里确实存在的对象"，逐条带上来源文档，供计划引用。
         for (const entity of inspected.payload) facts.push({ id: entity.entityId, text: entity.label, origin: "user" })
+        const readings = observation.derivedStatuses(target.handle.documentId, { derived: MAX_DERIVED_STATUS_LIMIT })
+        if (readings.ok) derived = readings.result.payload
+        // 读数条数与"截断"都要说出来：模型（与人）必须知道这一份不是全量。
+        const truncated = readings.ok ? readings.result.diagnostics.some((entry) => entry.code === "truncated") : false
+        if (truncated) summary = `${summary} (derived readings truncated to ${derived.length})`
+        dependencies.diagnostics?.(`[observation] ${summary} · derived: ${derived.length === 0 ? "(none)" : derived.map((entry) => `${entry.entityId} ${entry.code}=${entry.status}`).join(", ")}${truncated ? " (truncated)" : ""}`)
       }
       /**
        * **`facts` 必须一起交出去**（2026-09-21 补）。
@@ -257,8 +290,11 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
        * 这类缺口很难在代码评审里发现：数组本身写得对、类型也对，只是**没被交出去**，
        * 而"没有事实文本"在界面上没有任何症状 —— 只有在接上模型之后才会表现为
        * "它总是问用户这是什么对象"。是给 `Observation.facts` 补形状时顺出来的。
+       *
+       * `derived` 是同一类缺口的第二个实例（2026-09-21 派生诊断）：观察层算出了
+       * "这只多面体有没有外接球"，但**没进返回值**就等于没算 —— 模型只能猜。
        */
-      return { factIds: facts.map((fact) => fact.id), summary, facts }
+      return { factIds: facts.map((fact) => fact.id), summary, facts, derived: [...derived] }
     }
   }
 

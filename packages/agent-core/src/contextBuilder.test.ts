@@ -15,6 +15,7 @@ import {
   type Fact,
   type SelectedRef
 } from "./contextBuilder"
+import { DEFAULT_DERIVED_STATUS_LIMIT, MAX_DERIVED_STATUS_LIMIT, type ObservedDerivedStatus } from "./sceneObservation"
 import type { ConversationMessageView, DocumentHandle, RunContext } from "./contracts"
 import { SKILL_CATALOGUE_REVISION } from "./skills/manifest"
 
@@ -162,6 +163,106 @@ describe("context bounding", () => {
 
     expect(context.selectedRefs).toHaveLength(DEFAULT_REF_LIMIT)
     expect(context.warnings.some((entry) => entry.code === "truncated_refs")).toBe(true)
+  })
+})
+
+/**
+ * **派生立体读数进上下文**（规格 §3.4 / §6.2）。
+ *
+ * 观察层把内核的四态读数搬出来之后，必须在**模型真正看到的那一份**里出现 ——
+ * 只活在观察对象里而没进上下文，与"没做"是同一件事。同时它必须**有界**：
+ * 一份几十只立体的图纸不能把提示词塞满，而截断要如实留痕（与事实 / 引用同一条纪律）。
+ */
+describe("derived solid readings", () => {
+  function reading(entityId: string, code: string, status: ObservedDerivedStatus["status"], message: string): ObservedDerivedStatus {
+    return { entityId, code, status, message }
+  }
+
+  const circumsphere = reading("solid-1", "derived.circumsphere", "undefined", "外接球：该多面体没有外接球：找不到到所有顶点等距的点。")
+
+  it("carries the kernel's status and reason into the model context", () => {
+    const context = buildContext(input({ observation: { facts: [], summary: "", derived: [circumsphere] } }))
+
+    // **四个状态里的 `undefined` 而不是一个假的球**：状态与原因原样进上下文。
+    expect(context.derived).toEqual([circumsphere])
+  })
+
+  it("bounds the readings by the shared limit and says so", () => {
+    const many = Array.from({ length: DEFAULT_DERIVED_STATUS_LIMIT + 3 }, (_, index) => reading(`solid-${index}`, "derived.circumsphere", "exact", `外接球：半径 ${index}`))
+    const context = buildContext(input({ observation: { facts: [], summary: "", derived: many } }))
+
+    expect(context.derived).toHaveLength(DEFAULT_DERIVED_STATUS_LIMIT)
+    expect(context.warnings.some((entry) => entry.code === "truncated_derived")).toBe(true)
+  })
+
+  it("refuses to widen the derived cap just because the caller asked", () => {
+    const many = Array.from({ length: MAX_DERIVED_STATUS_LIMIT + 5 }, (_, index) => reading(`solid-${index}`, "derived.circumsphere", "exact", `外接球：半径 ${index}`))
+    const context = buildContext(input({ observation: { facts: [], summary: "", derived: many }, limits: { derived: 10_000 } }))
+
+    expect(context.derived).toHaveLength(MAX_DERIVED_STATUS_LIMIT)
+  })
+
+  it("charges the estimate for the readings", () => {
+    // 估算只统计会进提示词的文本；漏掉读数就等于"预算按一份扣、提示词里还有一份"。
+    const without = buildContext(input({ observation: { facts: [], summary: "" } }))
+    const withReadings = buildContext(input({ observation: { facts: [], summary: "", derived: [circumsphere] } }))
+
+    expect(withReadings.estimatedCharacters).toBeGreaterThan(without.estimatedCharacters)
+  })
+
+  it("keeps the readings in the conversation context, where the scene is authoritative", () => {
+    const context = buildConversationContext({
+      binding: { conversationId: "conv-1", projectId: "p", documentId: "doc-target", workspace: "geometry3d", generation: 3 },
+      summary: "",
+      facts: [],
+      messages: [],
+      observation: { facts: [], summary: "", derived: [circumsphere] },
+      request: "切一刀"
+    })
+
+    expect(context.observation.derived).toEqual([circumsphere])
+  })
+
+  /**
+   * **会话这一份读数也要有界、而且截断要留痕**（Fix round 1 / I3）。
+   *
+   * 提示词渲染的是 `conversation.observation.derived`（它比 `context.derived` 优先），
+   * 而 `buildConversationContext` 此前把 `observation` **原样**放行：于是"预算按 12 条扣、
+   * 提示词里却是 24 条"——正是两处各写一个上限那一类漂移，只不过这次是"一处根本没设上限"。
+   * 有界 + 警告必须落在**同一个地方**，否则模型会拿到一份它不知道自己拿少了的清单。
+   */
+  it("bounds the readings the conversation keeps and says what it dropped", () => {
+    const many = Array.from({ length: DEFAULT_DERIVED_STATUS_LIMIT + 2 }, (_, index) => reading(`solid-${index}`, "derived.circumsphere", "exact", `外接球：半径 ${index}`))
+    const context = buildConversationContext({
+      binding: { conversationId: "conv-1", projectId: "p", documentId: "doc-target", workspace: "geometry3d", generation: 3 },
+      summary: "",
+      facts: [],
+      messages: [],
+      observation: { facts: [], summary: "", derived: many },
+      request: "切一刀"
+    })
+
+    expect(context.observation.derived).toHaveLength(DEFAULT_DERIVED_STATUS_LIMIT)
+    const warning = context.warnings.find((entry) => entry.code === "truncated_derived")
+    expect(warning).toBeTruthy()
+    // 警告里的数字必须与**模型真正看到的那一份**一致（否则它连"少了多少"都读错）。
+    expect(warning?.detail).toContain(`${DEFAULT_DERIVED_STATUS_LIMIT} of ${many.length}`)
+  })
+
+  it("lets the caller tighten — never widen — the readings the conversation keeps", () => {
+    const conversation = (limit: number) => buildConversationContext({
+      binding: { conversationId: "conv-1", projectId: "p", documentId: "doc-target", workspace: "geometry3d", generation: 3 },
+      summary: "",
+      facts: [],
+      messages: [],
+      observation: { facts: [], summary: "", derived: Array.from({ length: MAX_DERIVED_STATUS_LIMIT + 5 }, (_, index) => reading(`solid-${index}`, "derived.circumsphere", "exact", `外接球：半径 ${index}`)) },
+      limits: { derived: limit },
+      request: "切一刀"
+    })
+
+    expect(conversation(2).observation.derived).toHaveLength(2)
+    // 上限不是调用方能单方面加大的东西（与事实 / 引用 / 消息同一条纪律）。
+    expect(conversation(10_000).observation.derived).toHaveLength(MAX_DERIVED_STATUS_LIMIT)
   })
 })
 

@@ -1,12 +1,14 @@
 import { createEmptyDocument, type GeometryDocument } from "@draw/dsl"
+import { buildPrism, buildSolidTemplate, createBuilderContext } from "@draw/geometry-kernel"
 import { contentFingerprint } from "@draw/scene-graph"
 import { describe, expect, it, vi } from "vitest"
 
 import type { PlanEnvelope, PlannerPort, PlanRequest } from "@draw/agent-core"
-import { SKILL_CATALOGUE_REVISION } from "@draw/agent-core"
+import { DEFAULT_DERIVED_STATUS_LIMIT, SKILL_CATALOGUE_REVISION } from "@draw/agent-core"
 
 import { createAgentRuntime } from "./agentRuntime"
 import { CONIC_INVARIANT_PROMPT, OBLIQUE_PRISM_PROMPT, conicInvariantPlan, obliquePrismEdges, obliquePrismSectionPlan } from "./representativeFixtures"
+import { buildSystemPrompt } from "./systemPrompt"
 import type { ExportPreflightPort } from "@draw/agent-core"
 
 /**
@@ -45,7 +47,7 @@ function exportPreflight(): ExportPreflightPort {
   return { preflight: vi.fn(() => ({ format: "svg", supported: true, requiresUserAcceptance: false, omitted: [], fontLoss: [], approximationNotes: [], blockedReasons: [], projectedEntityCount: 0 })) }
 }
 
-function makeRuntime(options: { envelope?: PlanEnvelope; document?: GeometryDocument | null } = {}) {
+function makeRuntime(options: { envelope?: PlanEnvelope; document?: GeometryDocument | null; planner?: PlannerPort; diagnostics?: (line: string) => void } = {}) {
   let current = options.document === undefined ? geometryDocument() : options.document
   const written: GeometryDocument[] = []
   const runtime = createAgentRuntime({
@@ -55,8 +57,9 @@ function makeRuntime(options: { envelope?: PlanEnvelope; document?: GeometryDocu
       current = candidate
     },
     readSceneDocuments: () => (current ? [{ handle: { projectId, documentId: current.metadata.id, workspace: current.workspace as "geometry3d", epoch: `epoch:${current.metadata.id}`, generation: current.revision, contentHash: contentFingerprint(current) }, document: current }] : []),
-    planner: plannerFor(options.envelope ?? planEnvelope()),
+    planner: options.planner ?? plannerFor(options.envelope ?? planEnvelope()),
     exportPreflight: exportPreflight(),
+    ...(options.diagnostics === undefined ? {} : { diagnostics: options.diagnostics }),
     projectId,
     runId: "run-1",
     now: () => 1_000
@@ -131,6 +134,84 @@ describe("the assembled runtime actually runs", () => {
 
     expect(events).toEqual(["preflight", "observing", "planning", "answering", "completed"])
     expect(written).toHaveLength(0)
+  })
+
+  /**
+   * **派生读数真的进了规划器的观察**（规格 §3.4 / §6.2）。
+   *
+   * 这一条走的是**装配好的真实观察器**（`createSceneObservation` + 内核求解器），
+   * 断言两件在生产里都会坏掉的事：
+   * 1. 规划器拿到的 `conversation.observation.derived` 里有内核给的状态**与原因**
+   *    —— 少了它，模型只能猜这只多面体有没有外接球；
+   * 2. 观察层把同一份读数**送到诊断通道**（界面上那条默认折叠的开发者详细视图），
+   *    于是"这一轮模型看到了什么"在浏览器里是可断言的，而不是只能靠读代码相信。
+   */
+  it("puts the kernel's derived readings into the planner's observation, and into the diagnostics", async () => {
+    const built = buildPrism({ base: [{ x: 0, y: 0, z: 0 }, { x: 4, y: 0, z: 0 }, { x: 4, y: 3, z: 0 }, { x: 0, y: 3, z: 0 }], vector: { x: 1, y: 0.5, z: 3 } }, createBuilderContext("solid-1"))
+    expect(built.diagnostics).toEqual([])
+    const document = { ...createEmptyDocument("geometry3d"), primitives: built.primitives }
+    const seen: PlanRequest[] = []
+    const planner: PlannerPort = { plan: vi.fn(async (request: PlanRequest) => {
+      seen.push(request)
+      return { plan: answerEnvelope(), requestId: "req-1", attemptId: "attempt-1" }
+    }) }
+    const lines: string[] = []
+    const { runtime } = makeRuntime({ document, planner, diagnostics: (line) => lines.push(line) })
+
+    await drive(runtime.coordinator, { run: runContext(document), userMessage: "这只实体有外接球吗" })
+
+    const readings = seen[0]?.conversation?.observation.derived ?? []
+    const circumsphere = readings.find((entry) => entry.entityId === built.polyhedronId && entry.code === "derived.circumsphere")
+    // 斜棱柱没有外接球：状态是 `undefined`，而且**带着原因**（不是一句空的"没有"）。
+    expect(circumsphere?.status).toBe("undefined")
+    expect(circumsphere?.message).toContain("外接球")
+    // 规划器上下文里那一份（`ModelContext.derived`）与观察同源。
+    expect(seen[0]?.model.context.derived).toEqual(readings)
+    // 诊断通道：同一份读数，状态可断言（浏览器用例读的就是这一行）。
+    expect(lines.some((line) => line.includes("derived") && line.includes("circumsphere=undefined"))).toBe(true)
+  })
+
+  /**
+   * **截断必须让模型看见**（Fix round 1 / I3）。
+   *
+   * 观察层默认只带走 12 条读数，而"模型看到的那一份"（`contextBuilder` 的 `derived` 上限）
+   * 也是 12 —— 两个数一样，于是 `truncated_derived` 这条警告**在真实路径上永远不会响**：
+   * 一份有 13 只立体的图纸会被静默裁成 12 条，模型既不知道少了，也不知道少到什么程度。
+   *
+   * 修法：观察层按**硬上限**（24）取，两处上下文按同一组常量夹到模型可见的那一份并留警告，
+   * 而观察层自己那一次截断（>24 时）写进模型看得见的 `summary` 与开发者诊断行。
+   * 这条用例走完整的装配路径，并且**把提示词真的渲染出来**，断言：
+   * 列表有界、警告在、而且警告出现在模型读得到的那段文本里。
+   */
+  it("bounds the readings the model sees and tells it when they were truncated", async () => {
+    // 13 只立方体 → 26 条读数（每只外接球 + 内切球），越过观察层的硬上限 24，也越过 12。
+    const primitives = Array.from({ length: 13 }, (_, index) => ({ id: `cube-${index + 1}`, type: "cube" as const, origin: { x: index * 3, y: 0, z: 0 }, size: { x: 2, y: 2, z: 2 } })).flatMap((cube) => [cube, ...buildSolidTemplate(cube).primitives])
+    const document = { ...createEmptyDocument("geometry3d"), primitives }
+    const seen: PlanRequest[] = []
+    const planner: PlannerPort = { plan: vi.fn(async (request: PlanRequest) => {
+      seen.push(request)
+      return { plan: answerEnvelope(), requestId: "req-1", attemptId: "attempt-1" }
+    }) }
+    const lines: string[] = []
+    const { runtime } = makeRuntime({ document, planner, diagnostics: (line) => lines.push(line) })
+
+    await drive(runtime.coordinator, { run: runContext(document), userMessage: "画布上有什么" })
+
+    // 观察层按硬上限取，并且**说出**它截断过（这句话进模型读得到的 `summary`）。
+    expect(lines.some((line) => line.includes("derived") && line.includes("(truncated)"))).toBe(true)
+    const modelContext = seen[0]!.model.context
+    const conversation = seen[0]!.conversation!
+    expect(conversation.observation.summary).toContain("truncated")
+    // 模型可见的两份都夹到同一个上限，并且**都**留了痕。
+    expect(modelContext.derived).toHaveLength(DEFAULT_DERIVED_STATUS_LIMIT)
+    expect(conversation.observation.derived).toHaveLength(DEFAULT_DERIVED_STATUS_LIMIT)
+    expect(modelContext.warnings.map((warning) => warning.code)).toContain("truncated_derived")
+    expect(conversation.warnings.map((warning) => warning.code)).toContain("truncated_derived")
+    // 提示词里必须读得到这件事 —— "模型看不见的截断"是不允许的状态。
+    const prompt = buildSystemPrompt({ context: modelContext, conversation, channel: "strict_json", canPlan: true })
+    expect(prompt.content).toContain("truncated_derived")
+    const scene = JSON.parse(prompt.contextJson) as { scene: { derived: unknown[] } }
+    expect(scene.scene.derived).toHaveLength(DEFAULT_DERIVED_STATUS_LIMIT)
   })
 
   it("refuses to commit without a host-minted consent token", async () => {

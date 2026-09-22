@@ -128,14 +128,12 @@ fn a_long_key_shaped_run_is_redacted_even_without_a_known_prefix() {
 
 #[test]
 fn the_credential_prefix_rule_only_looks_at_the_start_of_a_token_run() {
-    /**
-     * **这条判据的形状本身就是契约**（Fix round 2 / N1）。
-     *
-     * 前端那份 localStorage 兜底一度把它写成"任意位置匹配 `sk[-_]`"，于是 `task-1`、
-     * `risk-free`、`disk-space` 这类普通词在浏览器里被当成密钥拒绝，而这里一直放过 ——
-     * 同一句话在两个后端得到不同答案，用户只看到"有时存不下"。所以两边都钉住：
-     * **只看令牌段（`[A-Za-z0-9._-]` 的连续段）的开头**。
-     */
+    // **这条判据的形状本身就是契约**（Fix round 2 / N1）。
+    //
+    // 前端那份 localStorage 兜底一度把它写成"任意位置匹配 `sk[-_]`"，于是 `task-1`、
+    // `risk-free`、`disk-space` 这类普通词在浏览器里被当成密钥拒绝，而这里一直放过 ——
+    // 同一句话在两个后端得到不同答案，用户只看到"有时存不下"。所以两边都钉住：
+    // **只看令牌段（`[A-Za-z0-9._-]` 的连续段）的开头**。
     assert!(contains_credential_prefix("用 sk-live-9f3ab8c7d6e5f4a3b2c1d0e9f8a7b6c5 这个 key 试一下"));
     assert!(contains_credential_prefix("SK_live_abcdef"));
     for benign in ["task-1", "risk-free", "disk-space", "desk-job", "risk_free", "sketch-1"] {

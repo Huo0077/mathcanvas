@@ -1,6 +1,7 @@
 import { createDocumentHandle, type DocumentHandle } from "@draw/scene-graph"
 
 import type { CommitOutcome, CommitRequest, CommitterPort, ConsentToken } from "./coordinatorPorts"
+import type { PlanDiagnostic, RepairRequest, StructuredAssumption } from "./contracts"
 
 /**
  * **把协调器的 `CommitterPort` 接到 G0.5 的 `DraftStore` + `HostBridge`**（Task 2.4 的接线）。
@@ -31,7 +32,24 @@ export interface DraftStoreLike {
    */
   stage(draftId: string, actions: readonly unknown[], expectedDraftVersion: number, userMessage?: string):
     | { ok: true; preview: { draftVersion: number; previewHash: string } }
-    | { ok: false; reason: "unknown_draft" | "stale_draft_version" | "compile_failed"; diagnostics?: { code: string; message: string }[]; detail?: string }
+    | {
+        ok: false
+        reason: "unknown_draft" | "stale_draft_version" | "compile_failed"
+        diagnostics?: { code: string; message: string }[]
+        detail?: string
+        /**
+         * **编译器给的一次性修复请求**（`compilePlan` 的 `repair`）。
+         *
+         * 为什么它必须在这一层就有形状：适配器是协调器与草稿存储之间**唯一**的一段代码，
+         * 而修复请求只有草稿存储那一侧（真的调了 `compilePlan` 的那一侧）才拿得到。
+         * 少了它，"编译失败 → 把修复请求发回模型"这条路径在适配器里就断了。
+         */
+        repair?: RepairRequest
+        /** 编译器的逐层诊断（层 + 原因码 + 路径），供提示说清卡在哪一层。 */
+        planDiagnostics?: readonly PlanDiagnostic[]
+        /** 编译器在失败前补出来的假设（见 `PlanRequest.repair.assumptions`）。 */
+        assumptions?: readonly StructuredAssumption[]
+      }
   /** 基础文档变了（手工编辑 / 撤销 / 切工作区）→ 草稿过期。 */
   assertFresh?(draftId: string, liveHandle: DocumentHandle): { ok: true } | { ok: false; reason: "stale_source"; detail: string }
 }
@@ -90,7 +108,22 @@ export function createCommitterAdapter(dependencies: CommitterAdapterDependencie
         const detail = staged.detail ?? staged.diagnostics?.map((entry) => `${entry.code}: ${entry.message}`).join("; ")
         // 原因码原样映射：`stale_draft_version`（版本对不上）与 `stale_draft`（基础文档变了）是两回事。
         if (staged.reason === "stale_draft_version") return { ok: false, reason: "stale_draft_version" as const, detail }
-        if (staged.reason === "compile_failed") return { ok: false, reason: "compile_failed" as const, detail }
+        /**
+         * `compile_failed` 带**编译器的那一份**（Agent DSL 切片 Task 4 的接线）：
+         * `repair` 是"允许改哪几处"的唯一真源，`planDiagnostics` 说清卡在哪一层，
+         * `assumptions` 是编译到一半已经替用户定下来的东西。三者都原样转交，
+         * 适配器**不解释、不改写**它们（改写等于在这里造第二份判据）。
+         */
+        if (staged.reason === "compile_failed") {
+          return {
+            ok: false,
+            reason: "compile_failed" as const,
+            detail,
+            ...(staged.repair === undefined ? {} : { repair: staged.repair }),
+            ...(staged.planDiagnostics === undefined ? {} : { planDiagnostics: staged.planDiagnostics }),
+            ...(staged.assumptions === undefined ? {} : { assumptions: staged.assumptions })
+          }
+        }
         return { ok: false, reason: "unsupported" as const, detail: detail ?? staged.reason }
       }
 

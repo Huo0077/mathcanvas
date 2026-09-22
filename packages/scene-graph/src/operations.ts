@@ -746,24 +746,53 @@ function polyhedronSectionTopology(polyhedron: Extract<PrimitiveSpec, { type: "p
 }
 
 /**
- * 某个实体图元的物化拓扑（点驱动的 `polyhedron3`）。
+ * **某个实体图元的物化拓扑**（点驱动的 `polyhedron3`）—— 这条规则**只有这一份**。
  *
  * 两种记法都认：模板物化是 `kind: "template"` + `sourceIds[0] === 实体 id`；
- * 而按数值改过顶点的模板会被翻成 `fromFaces`，归属记在 `sourceId` 上——不认这一种的话，
- * 那个实体会在截面 / 交线 / 交面里**静默消失**（实测缺陷），还会给出"来源必须是实体"这种误导诊断。
+ * 而按数值改过顶点的模板（或改得对不上底面 + 向量的棱柱）会被翻成 `fromFaces`，
+ * 归属改记在 `sourceId` 上 —— 不认这一种的话，那个实体会在截面 / 交线 / 交面里
+ * **静默消失**（实测缺陷），还会给出"来源必须是实体"这种误导诊断。
+ *
+ * 同一实体同时存在两种记法时**参数化模板优先**：模板那一份才是参数真源。
+ *
+ * 导出这一个函数（而不是让调用方各写一遍）是因为"用户拖了一个顶点之后 topology 归谁"
+ * 这个问题只能有一个答案：界面上的派生读数（Fix round 1 / I2）此前自己写了一遍、只认模板记法，
+ * 于是拖一个顶点之后整块读数**无声消失**——两个实现迟早会分叉，而分叉的代价就是这个。
  */
-function templateTopology(sourceId: string, primitiveMap: Map<string, PrimitiveSpec>): Extract<PrimitiveSpec, { type: "polyhedron3" }> | null {
+function topologyIn(primitiveMap: Map<string, PrimitiveSpec>, entityId: string): Extract<PrimitiveSpec, { type: "polyhedron3" }> | null {
   let fallback: Extract<PrimitiveSpec, { type: "polyhedron3" }> | null = null
   for (const primitive of primitiveMap.values()) {
-    if (primitive.type !== "polyhedron3" || !primitive.construction) continue
-    const construction = primitive.construction
-    const owner = construction.kind === "template" ? construction.sourceIds[0] : construction.kind === "fromFaces" ? construction.sourceId : undefined
-    if (owner !== sourceId) continue
-    // 参数化模板优先：同一实体同时存在两种记法时，模板那一份才是参数真源。
-    if (construction.kind === "template") return primitive
+    if (primitive.type !== "polyhedron3") continue
+    const owner = ownerOfTopology(primitive)
+    if (owner === undefined || owner !== entityId) continue
+    if (primitive.construction?.kind === "template") return primitive
     fallback = fallback ?? primitive
   }
   return fallback
+}
+
+/**
+ * **一条拓扑归属哪只实体**（上面那条规则的反方向）。
+ *
+ * 与 `topologyOfEntity` 是同一条规则的两个方向，所以**共用同一个出口**：
+ * 两处各写一遍 `template ? sourceIds[0] : fromFaces ? sourceId : undefined`，
+ * 迟早会有一处忘了 `fromFaces`（那个分支正是"拖一个顶点"之后的样子）。
+ */
+export function ownerOfTopology(polyhedron: Extract<PrimitiveSpec, { type: "polyhedron3" }>): string | undefined {
+  const construction = polyhedron.construction
+  if (!construction) return undefined
+  if (construction.kind === "template") return construction.sourceIds[0]
+  if (construction.kind === "fromFaces") return construction.sourceId
+  return undefined
+}
+
+/** 整份文档里的版本（上面那条规则的唯一出口）。 */
+export function topologyOfEntity(document: GeometryDocument, entityId: string): Extract<PrimitiveSpec, { type: "polyhedron3" }> | null {
+  return topologyIn(new Map(document.primitives.map((primitive) => [primitive.id, primitive])), entityId)
+}
+
+function templateTopology(sourceId: string, primitiveMap: Map<string, PrimitiveSpec>): Extract<PrimitiveSpec, { type: "polyhedron3" }> | null {
+  return topologyIn(primitiveMap, sourceId)
 }
 
 /** Vertex positions of a section source: materialized topology first, template tessellation as fallback. */
@@ -1253,12 +1282,24 @@ export function solidTopology3(source: PrimitiveSpec, primitiveMap: Map<string, 
  * 求解本身也一律调用内核那三个函数，所以报告与内核永远同源。
  */
 export interface SolidDerivedStatus {
+  /**
+   * 这条读数**归在哪只实体上**：球体读数是那只 `polyhedron3` 自己的 id，
+   * 截面读数是该截面的 `sourceId`（用户当初选中的那个实体：棱柱是它自己的多面体 id，
+   * 模板实体是 `cube-1` 这样的参数源 id）。
+   */
   solidId: string
   /** `derived.circumsphere` / `derived.insphere` / `derived.section`。 */
   code: string
   status: DerivedSolidResult<unknown>["status"]
   /** 给人看的一句话：为什么是这个状态（`exact` 时给出结论，其余带上原因）。 */
   message: string
+  /**
+   * **这条读数由哪个图元算出来**（只有 `derived.section` 有：那一刀的 `section` 图元 id）。
+   *
+   * 没有它，同一只实体上的两条截面产出两条一模一样的记录：界面分不清行、React key 会撞，
+   * 模型也读不出"这是哪条截面的分类"。球体读数没有"哪条截面"可言，因此缺省。
+   */
+  sourceId?: string
 }
 
 function sphereStatusMessage(label: string, result: DerivedSolidResult<Sphere3>): string {
@@ -1297,7 +1338,10 @@ export function solidStatusReport(document: GeometryDocument): SolidDerivedStatu
       : result.status === "approximate"
         ? `截面（数值近似，残差 ${result.residual.toPrecision(3)}）：${result.value.classification}。`
         : `截面：${result.reason}`
-    report.push({ solidId: primitive.sourceId, code: "derived.section", status: result.status, message })
+    // `sourceId` 是**这一刀是哪条截面**（Fix round 1 / M1）：只写 `solidId` 的话，
+    // 同一只实体上的两条截面会产出两条一模一样的记录 —— 界面分不清行、React key 还会撞，
+    // 模型也读不出"是哪条截面的分类"。
+    report.push({ solidId: primitive.sourceId, sourceId: primitive.id, code: "derived.section", status: result.status, message })
   }
 
   return report

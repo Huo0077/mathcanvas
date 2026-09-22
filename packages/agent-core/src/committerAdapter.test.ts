@@ -137,6 +137,30 @@ describe("committer adapter staging", () => {
     }
   })
 
+  /**
+   * **编译器的修复请求必须穿过适配器**（Agent DSL 切片 Task 4 的接线）。
+   *
+   * 适配器是协调器与草稿存储之间唯一的一段代码。它此前只映射 `reason` 与 `detail`，
+   * 于是 `compilePlan` 那份结构化修复请求（`code`/`path`/`allowedChanges`）在
+   * **这一层就被丢掉了** —— 协调器手里根本没有可发回模型的请求。
+   */
+  it("passes the compiler's repair request, diagnostics and assumptions through", async () => {
+    const repair = { reason: "schema_invalid", errors: [{ code: "degenerate_prism", path: "envelope.actions[0].inputs.basePolygon", detail: "zero vector" }], allowedChanges: ["envelope.actions[0].inputs.basePolygon"], attempt: 1 }
+    const planDiagnostics = [{ stage: "geometry_validation" as const, code: "degenerate_prism", path: "envelope.actions[0].inputs.basePolygon", detail: "zero vector", severity: "error" as const }]
+    const assumptions = [{ id: "prism:vector", text: "拉伸向量未指定", kind: "safe_default" as const, value: { x: 0, y: 0, z: 3 }, overridable: true }]
+    const drafts = makeDrafts({ stage: vi.fn(() => ({ ok: false as const, reason: "compile_failed" as const, diagnostics: [{ code: "degenerate_prism", message: "geometry_validation" }], repair, planDiagnostics, assumptions })) })
+    const adapter = createCommitterAdapter({ drafts, host: makeHost(), live: () => ({ handle: handleFor(document()), document: document() }) })
+
+    const result = await adapter.stage({ run: run(), actionCount: 1, actions, signal })
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.repair).toEqual(repair)
+      expect(result.planDiagnostics).toEqual(planDiagnostics)
+      expect(result.assumptions).toEqual(assumptions)
+    }
+  })
+
   it("refuses to stage when there is no active document", async () => {
     const adapter = createCommitterAdapter({ drafts: makeDrafts(), host: makeHost(), live: () => null })
 

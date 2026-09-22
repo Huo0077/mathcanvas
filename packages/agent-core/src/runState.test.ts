@@ -72,6 +72,24 @@ describe("run ledger happy paths", () => {
 
     expect(ledger.phase()).toBe("completed")
   })
+
+  /**
+   * **编译阶段的一次性修复 = 回到规划**（Agent DSL 切片 Task 4 的接线）。
+   *
+   * 这条边以前不存在，因为编译失败只能走向 `failed`：编译器给出的修复请求
+   * （"只带 code/path/allowedChanges"）根本没有消费方。有了它，账本上才能看见
+   * "这是同一份运行里的第二次规划"，而不是一次说不清来源的重试。
+   */
+  it("goes back to planning when the compile stage handed the model a repair request", () => {
+    const ledger = createRunLedger({ runId: "run-1", promptMessageId: "msg-1" })
+    walk(ledger, ["preflight", "observing", "planning", "compiling"])
+
+    expect(ledger.transition("planning", "re-planning for the one repair").ok).toBe(true)
+    walk(ledger, ["compiling", "validating", "awaiting_confirmation", "committing", "completed"])
+
+    expect(ledger.phase()).toBe("completed")
+    expect(ledger.ledger().map((event) => event.phase)).toEqual(["preflight", "observing", "planning", "compiling", "planning", "compiling", "validating", "awaiting_confirmation", "committing", "completed"])
+  })
 })
 
 describe("run ledger explicit failure paths", () => {
@@ -148,7 +166,9 @@ describe("run ledger refusals", () => {
     const result = ledger.transition("awaiting_confirmation")
 
     expect(result.ok).toBe(false)
-    if (!result.ok) expect(result.allowed).toEqual(["validating", "failed", "cancelled", "interrupted"])
+    // `planning` 在这里是**编译阶段那次一次性修复**的返程边（见上面的用例）；
+    // 它不允许跳过 `validating`，只是允许"回去重新规划一次"。
+    if (!result.ok) expect(result.allowed).toEqual(["validating", "planning", "failed", "cancelled", "interrupted"])
   })
 
   it("refuses any further transition after the run finished", () => {

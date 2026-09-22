@@ -31,6 +31,8 @@ function context(overrides: Partial<ModelContext> = {}): ModelContext {
     binding: { conversationId: "conv-1", projectId: "local", documentId: "doc-1", generation: 4 },
     workspace: "geometry3d",
     facts: [{ id: "cube-1", text: "立方体 cube-1", origin: "user" }],
+    // 派生立体读数（Solid 读数切片）：这一份替身没有内核结论，给空数组。
+    derived: [],
     selectedRefs: [],
     skills: [],
     availableActions: ["solid.create_template", "planar.create_point"],
@@ -189,7 +191,9 @@ describe("模型规划器", () => {
     const planner = createModelPlanner({ resolveProvider: async () => ({ ok: true, provider }), runModel })
 
     await planner.plan(request())
-    await planner.plan(request({ repair: { reason: "unexpected_prose", errors: [{ code: "unexpected_prose", path: "envelope", detail: "expected a JSON object" }], hint: "上一轮的输出没有被接受，原因如下（字段路径 + 原因）：\nenvelope: expected a JSON object" } }))
+    // 修复请求就是 `RepairRequest`（`repairRequestFor` / `compilePlan` 的产物）加上提示文本：
+    // `allowedChanges` 与 `attempt` 现在是**必填**的（"允许改哪几处"与"这是第几次修复"）。
+    await planner.plan(request({ repair: { reason: "unexpected_prose", errors: [{ code: "unexpected_prose", path: "envelope", detail: "expected a JSON object" }], allowedChanges: ["envelope"], attempt: 1, hint: "上一轮的输出没有被接受，原因如下（字段路径 + 原因）：\nenvelope: expected a JSON object" } }))
 
     const second = runModel.mock.calls[1]![0]
     const all = second.messages.map((message) => message.content).join("\n")

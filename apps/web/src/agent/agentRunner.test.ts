@@ -5,7 +5,7 @@ import type { PlanEnvelope, PlannerPort, PlanRequest } from "@draw/agent-core"
 
 import { useAgentStore } from "../agentStore"
 import { conversationRepository } from "../conversationRepository"
-import { summaryOfDocument } from "../conversationSummary"
+import { summaryOfDocument, withDocumentSummary } from "../conversationSummary"
 import { readConversation } from "../services/conversationClient"
 import { useSceneStore } from "../store"
 import { createAgentRunner } from "./agentRunner"
@@ -693,6 +693,27 @@ describe("a committed run leaves long-term memory behind", () => {
 
     expect(messages.at(-1)?.documentGeneration).toBe(generation)
   })
+
+  /**
+   * **用户提问那条消息也要带上版本**（Follow-up item 3）。
+   *
+   * 它正是事实的**证据**（`conversation_facts.source_message_id` 指的就是它），而原先它的
+   * `document_generation` 是 `NULL`：发送路径（`sendPrompt`）在界面那一层，手里没有文档句柄。
+   * 现在运行器把"现取当前版本"注入给 store（与仓储注入同一个风格），于是这条证据也能说清
+   * "它是哪一版文档上的提问"。
+   */
+  it("records the document generation on the user prompt that facts cite as evidence", async () => {
+    const runner = createAgentRunner()
+    await runAndWait(runner, "建一个棱长 3 的立方体")
+    const conversationId = useAgentStore.getState().activeConversation!.id
+    const generation = useSceneStore.getState().document.revision
+
+    const stored = await readConversation(conversationId)
+    const rows = stored.ok ? stored.value.messages : []
+
+    expect(rows[0]?.role).toBe("user")
+    expect(rows[0]?.documentGeneration).toBe(generation)
+  })
   it("writes no fact when the plan fails to compile", async () => {
     // 零拉伸向量的棱柱会被编译器拒（"refuses a prism with a zero extrusion vector"）：
     // 这一轮以 `compile_failed` 结束，因此**什么都不许写进长期记忆**。
@@ -766,6 +787,71 @@ describe("a committed run leaves long-term memory behind", () => {
   })
 
   /**
+   * **失效的事实不再以"已确认"的身份进下一轮**（Follow-up：事实的 `stale` 路径）。
+   *
+   * 事实原先只有一种归宿（`confirmed`）：提交时写下"文档第 N 版新增 solid-1"，
+   * 之后用户**撤销**掉这次改动，那条事实照样是"已确认" —— 模型于是拿着一个文档里
+   * 根本不存在的东西继续规划。这一轮的注入在**读之前**按证据重判一次：只有文档本身
+   * 能证明它不再成立时才降级（这里就是：那些对象已经不在画布上、版本也退回去了）。
+   */
+  it("revalidates stored facts against the live document before injecting them", async () => {
+    const runner = createAgentRunner()
+    await runAndWait(runner, "建一个棱长 3 的立方体")
+    const conversationId = useAgentStore.getState().activeConversation!.id
+
+    runner.confirm()
+    await flush()
+
+    // 先证明这条事实**确实**在、而且引用了这次提交创建出来的对象（不然下面的断言是空的）。
+    const committed = await readConversation(conversationId)
+    const value = committed.ok ? committed.value.facts[0]?.valueJson as { createdObjects?: string[] } : undefined
+    expect(value?.createdObjects?.length ?? 0).toBeGreaterThan(0)
+
+    // 用户撤销：文档退回提交之前那一版，那些对象不在画布上了。
+    useSceneStore.getState().undo()
+    expect(useSceneStore.getState().document.primitives).toHaveLength(0)
+
+    await runAndWait(runner, "画布上有什么")
+
+    const diagnostics = useAgentStore.getState().activeConversation!.messages.at(-1)?.diagnostics ?? []
+    expect(diagnostics.find((line) => line.includes("[context]")) ?? "").toContain("0 confirmed fact(s)")
+    // 降级**落回了仓储**（不是只在这一次注入里被跳过），并且记下了是哪条证据。
+    expect((await conversationRepository().readRecord(conversationId))?.facts[0].status).toBe("stale")
+    const stored = await readConversation(conversationId)
+    const invalidated = stored.ok ? stored.value.facts[0]?.valueJson as { invalidation?: { status?: string; reason?: string; evidence?: string } } : undefined
+    expect(invalidated?.invalidation?.status).toBe("stale")
+    expect(invalidated?.invalidation?.reason).toContain("solid-")
+    expect(invalidated?.invalidation?.evidence).toContain("document:")
+  })
+
+  /**
+   * **用户说"这条不算数了"就真的不算数**（Follow-up：`retract` 路径）。
+   *
+   * 与 `stale` 不同，这是一次**用户动作**：事实原文与它的证据消息都留着（可核对、可回溯），
+   * 只是状态转成 `retracted` —— 于是它不再是"现状"，也不会进任何一轮的提示词。
+   */
+  it("never injects a retracted fact into a run", async () => {
+    const runner = createAgentRunner()
+    await runAndWait(runner, "建一个棱长 3 的立方体")
+    const conversationId = useAgentStore.getState().activeConversation!.id
+
+    runner.confirm()
+    await flush()
+
+    const key = (await conversationRepository().readRecord(conversationId))!.facts[0].key
+    expect(await useAgentStore.getState().retractFact({ conversationId, key, reason: "这个立方体我不要了" })).toBe(true)
+
+    await runAndWait(runner, "画布上有什么")
+
+    const diagnostics = useAgentStore.getState().activeConversation!.messages.at(-1)?.diagnostics ?? []
+    expect(diagnostics.find((line) => line.includes("[context]")) ?? "").toContain("0 confirmed fact(s)")
+    // 事实还在（不是被删了），只是不再当事实用。
+    const record = await conversationRepository().readRecord(conversationId)
+    expect(record?.facts).toHaveLength(1)
+    expect(record?.facts[0].status).toBe("retracted")
+  })
+
+  /**
    * **别份文档的记忆也不许从 `summary` 那条路进来**（Fix round 2 / C1 残余；规格 §5.1 + §9）。
    *
    * 上一条用例挡的是**事实列表**，而摘要是同一段内容的另一条载体：它把该会话全部已确认事实的
@@ -828,6 +914,49 @@ describe("a committed run leaves long-term memory behind", () => {
     expect(sent[0]).not.toContain("已确认：文档第 3 版")
     // 本文档（平面几何）这一轮还没有任何已确认事实。
     expect(sent[0]).toContain('"confirmedFacts":[]')
+  })
+
+  /**
+   * **摘要被削这件事要真的落到那条消息上**（Fix round 3 / I1）。
+   *
+   * 这一行诊断是在**回执之后**才产生的（摘要要等长期记忆那一步才算得出来），而回执那一步
+   * 已经做掉了两件事：这一轮的落点被退休、消息也不再"在途"。原先按 `runId` 写的诊断
+   * 于是**静默消失** —— "削过摘要要说出来"这半件事根本没交付（数据没坏，但用户与开发者
+   * 都看不到）。这条用例走**真实的 `confirm()` 顺序**（运行 → 确认 → 回执 → 写长期记忆），
+   * 所以它在修复前会失败（review 点名的"用例抓不到真缺陷"）。
+   */
+  it("reports a trimmed summary book on the message of the run the user confirmed", async () => {
+    // 一条足够长的会话（越过摘要阈值），再把一本**刚好差一点就满**的书种进仓储。
+    useAgentStore.getState().sendPrompt("建一个棱长 3 的立方体")
+    const conversationId = useAgentStore.getState().activeConversation!.id
+    for (let turn = 0; turn < 40; turn += 1) {
+      useAgentStore.getState().sendPrompt(`第 ${turn} 轮：请继续作图（${"很长的上下文".repeat(20)}）`)
+      useAgentStore.getState().resolvePendingReply(`收到 ${turn}`)
+    }
+    const seed = { goal: "", confirmedFacts: ["甲 已确认"], createdObjects: ["solid-0"], openQuestions: [], preferences: [], messageCount: 3, compactedAt: 1 }
+    const seedBook = withDocumentSummary("", "doc-seed", seed)
+    const unPadded = withDocumentSummary(seedBook, "doc-pad", seed).length
+    const padded = withDocumentSummary(seedBook, "doc-pad", { ...seed, goal: "目".repeat(16_000 - 200 - unPadded) })
+    expect(padded.length).toBeLessThanOrEqual(16_000)
+    await conversationRepository().saveSummary({ conversationId, summary: padded })
+
+    const runner = createAgentRunner()
+    await runAndWait(runner, "建一个棱长 3 的立方体")
+    // 回执要落的那条助手消息（`confirm()` 之后它就不再"在途"了）。
+    const assistantId = useAgentStore.getState().pendingReplyId!
+
+    runner.confirm()
+    await flush()
+
+    // 先证明**确实**削了（不然下面那条断言是空的）：最旧那份没了、本次这份还在、总数没越界。
+    const record = await conversationRepository().readRecord(conversationId)
+    expect(summaryOfDocument(record!.summary, "doc-seed")).toBeNull()
+    expect(summaryOfDocument(record!.summary, "doc-pad")).not.toBeNull()
+    expect(record!.summary.length).toBeLessThanOrEqual(16_000)
+
+    const assistant = useAgentStore.getState().activeConversation!.messages.find((message) => message.id === assistantId)
+    const diagnostics = assistant?.diagnostics ?? []
+    expect(diagnostics.some((line) => line.includes("[summary]") && line.includes("doc-seed"))).toBe(true)
   })
 
   /**

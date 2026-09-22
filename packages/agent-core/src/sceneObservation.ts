@@ -1,5 +1,5 @@
 import type { GeometryDocument, PrimitiveSpec } from "@draw/dsl"
-import { contentFingerprint } from "@draw/scene-graph"
+import { contentFingerprint, solidStatusReport } from "@draw/scene-graph"
 
 import type { DocumentHandle, ToolResult } from "./contracts"
 import { isDerivedPrimitive, isTessellationPrimitive } from "./derivedPrimitives"
@@ -47,6 +47,8 @@ export interface SceneEntityDetail extends SceneEntitySummary {
 export interface ObservationLimits {
   /** 单次返回的实体上限；调用方给更大的值也会被夹紧到 `MAX_ENVELOPE_LIMIT`。 */
   limit?: number
+  /** 单次返回的派生立体读数上限（见 `derivedStatuses`）；同样会被夹紧。 */
+  derived?: number
 }
 
 export type ObservationFailure = { ok: false; reason: "document_not_in_context" | "stale_source" | "entity_not_found"; detail: string }
@@ -54,6 +56,46 @@ export type ObservationSuccess<T> = { ok: true; result: ToolResult<T> }
 
 export const MAX_ENVELOPE_LIMIT = 40
 export const DEFAULT_ENVELOPE_LIMIT = 12
+
+/**
+ * **派生立体读数的上限**（规格 §3.4 / §6.2）。
+ *
+ * 一只实体最多产出三条读数（外接球 / 内切球 / 截面），所以缺省 12 条 ≈ 四只立体 ——
+ * 与实体分页（`DEFAULT_ENVELOPE_LIMIT`）同量级，而 24 条是硬上限（八只立体）。
+ * 这两个数是**唯一的一份**：`contextBuilder` 组装模型上下文时直接引用它们，
+ * 不另写一份 —— 两处各写一个上限就是"预算按一份扣、模型只看到另一份"的老毛病。
+ */
+export const MAX_DERIVED_STATUS_LIMIT = 24
+export const DEFAULT_DERIVED_STATUS_LIMIT = 12
+
+/**
+ * **一条派生读数**：内核求解器对某只实体给出的状态与理由。
+ *
+ * 形状刻意与 `@draw/scene-graph` 的 `SolidDerivedStatus` 对齐（`entityId` 由它的 `solidId` 来、
+ * `sourceId` 由它的 `sourceId` 来），因为**结论只能有一个来源**：这里是搬运，不是重新求解。
+ * 四个状态原样保留 —— `exact`（确定的结论：闭式解或已核验的解）/ `approximate`（数值解，
+ * 带残差）/ `undefined`（解不存在）/ `degenerate`（输入本身退化）折叠任何一个，
+ * 模型就没有办法如实转述（规格 §10）。
+ */
+export interface ObservedDerivedStatus {
+  /**
+   * 读数**归在哪只实体上**：球体读数是那只 `polyhedron3` 自己的 id；截面读数是该截面的
+   * `sourceId` —— 也就是用户当初选中的那个实体（棱柱是它自己的多面体 id，模板实体是
+   * `cube-1` 这样的参数源 id）。**不是**"总是 `polyhedron3` 的 id"。
+   */
+  entityId: string
+  /** `derived.circumsphere` / `derived.insphere` / `derived.section`。 */
+  code: string
+  status: "exact" | "approximate" | "undefined" | "degenerate"
+  /** 一句话结论或原因（`exact` 给结论，其余给原因）。 */
+  message: string
+  /**
+   * **这条读数由哪个图元算出来**（只有截面读数有：那一刀的 `section` 图元 id）。
+   *
+   * 没有它，同一只实体上的两条截面读数长得一模一样：模型读不出"这个 polygon 是哪条截面的"。
+   */
+  sourceId?: string
+}
 
 /** 观察用的文档快照：句柄 + 内容。两者都要，句柄用来检测"内容已经变了"。 */
 export interface SceneDocumentSnapshot {
@@ -66,6 +108,14 @@ export interface SceneObservation {
   search(documentId: string, query: string, limits?: ObservationLimits): ObservationSuccess<SceneEntitySummary[]> | ObservationFailure
   describe(documentId: string, entityIds: string[]): ObservationSuccess<SceneEntityDetail[]> | ObservationFailure
   dependencies(documentId: string, entityId: string): ObservationSuccess<SceneEntityDetail> | ObservationFailure
+  /**
+   * **派生立体的读数**（规格 §3.4；内核结论的生产读取）。
+   *
+   * 走的是与其它观察同一套边界：按文档解析、内容与句柄不符时报 `stale_source`、结果有界。
+   * 状态来自 `solidStatusReport`（`@draw/scene-graph`）—— 它自己调内核那三个求解器，
+   * 所以这里**没有**第二份几何语义（规格 §6.2）。
+   */
+  derivedStatuses(documentId: string, limits?: ObservationLimits): ObservationSuccess<ObservedDerivedStatus[]> | ObservationFailure
   /** 标签 → 实体。重名时**不猜**：返回候选让调用方去问用户。 */
   resolveLabel(documentId: string, label: string): LabelResolution | ObservationFailure
 }
@@ -93,6 +143,13 @@ function clampLimit(limits?: ObservationLimits): number {
   const requested = limits?.limit ?? DEFAULT_ENVELOPE_LIMIT
   if (!Number.isFinite(requested) || requested <= 0) return DEFAULT_ENVELOPE_LIMIT
   return Math.min(Math.floor(requested), MAX_ENVELOPE_LIMIT)
+}
+
+/** 派生读数的同一个夹紧规则（与实体分页同形：缺省 / 硬上限 / 非法值退缺省）。 */
+function clampDerivedLimit(limits?: ObservationLimits): number {
+  const requested = limits?.derived ?? DEFAULT_DERIVED_STATUS_LIMIT
+  if (!Number.isFinite(requested) || requested <= 0) return DEFAULT_DERIVED_STATUS_LIMIT
+  return Math.min(Math.floor(requested), MAX_DERIVED_STATUS_LIMIT)
 }
 
 /** 用户看得见的实体：显式隐藏的不列，内部近似细节不列。 */
@@ -252,6 +309,34 @@ export function createSceneObservation(documents: SceneDocumentSnapshot[]): Scen
         facts: factsOf(entity)
       }
       return { ok: true, result: envelope(`${detail.referencedBy.length} object(s) depend on ${entityId}`, detail) }
+    },
+
+    /**
+     * **派生立体的读数**。
+     *
+     * 结论来自 `solidStatusReport`（`@draw/scene-graph` 对**已提交文档**的那条读取路径，
+     * 它自己调内核的 `solveCircumsphere3` / `solveInsphere3` / `sectionSolid3`）。
+     * 这里只做三件事：按文档解析（含过期检测）、搬运、**截断**。
+     *
+     * 顺序**原样保留**（场景图先按实体、再按截面输出），因为"同一份文档给出同一份读数"
+     * 比"按相关度排序"更重要：上下文里换个顺序等于告诉模型另一个事实。
+     */
+    derivedStatuses(documentId, limits) {
+      const resolved = resolve(documentId)
+      if (!resolved.ok) return resolved
+      const limit = clampDerivedLimit(limits)
+      const all: ObservedDerivedStatus[] = solidStatusReport(resolved.snapshot.document).map((entry) => ({
+        entityId: entry.solidId,
+        code: entry.code,
+        status: entry.status,
+        message: entry.message,
+        ...(entry.sourceId === undefined ? {} : { sourceId: entry.sourceId })
+      }))
+      const readings = all.slice(0, limit)
+      const diagnostics: ToolResult<unknown>["diagnostics"] = all.length > limit
+        ? [{ code: "truncated", severity: "warning", message: `showing ${limit} of ${all.length} derived readings` }]
+        : []
+      return { ok: true, result: envelope(`${readings.length} derived reading(s) in ${documentId}`, readings, diagnostics) }
     },
 
     /**

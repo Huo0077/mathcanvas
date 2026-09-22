@@ -166,4 +166,33 @@ describe("the coordinator assembles what the model may see", () => {
     // 截断要**留痕**：否则"为什么模型没看到我刚说的那条"无从查起。
     expect(captured!.model.context.warnings.map((warning) => warning.code)).toContain("truncated_facts")
   })
+
+  /**
+   * **派生读数一路走到规划器手里**（规格 §3.4 / §6.2）。
+   *
+   * 观察端口产出读数、`buildContext` 会搬运它们，但**组装这一步在协调器**：
+   * 少了这一行，读数就停在观察对象里，模型看到的场景仍然只有"有几只多面体"，
+   * 而"它到底有没有外接球"只能靠猜 —— 这正是本切片要消灭的那种猜测。
+   * 会话上下文那一份也要带（那是提示词渲染 `scene` 的另一条来源）。
+   */
+  it("hands the planner the derived readings that the observation produced", async () => {
+    const reading = { entityId: "solid-1", code: "derived.circumsphere", status: "undefined" as const, message: "外接球：该多面体没有外接球：找不到到所有顶点等距的点。" }
+    let captured: PlanRequest | null = null
+    const planner: PlannerPort = { plan: vi.fn(async (request: PlanRequest) => {
+      captured = request
+      return { plan: planEnvelope(), requestId: "req-1", attemptId: "attempt-1" }
+    }) }
+    const coordinator = createCoordinator({
+      planner,
+      observer: { observe: vi.fn(async () => ({ ...observation, derived: [reading] })) },
+      committer: { stage: vi.fn(async () => ({ ok: true as const, draftVersion: 1, previewHash: "p" })), commit: vi.fn(async () => ({ status: "committed" as const, handle })) },
+      budget: createBudget()
+    })
+
+    await drive(coordinator)
+
+    // 四态里的 `undefined` 与它的**原因**都要在：只给状态码，模型还是会编一个球出来。
+    expect(captured!.model.context.derived).toEqual([reading])
+    expect(captured!.conversation?.observation.derived).toEqual([reading])
+  })
 })

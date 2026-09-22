@@ -458,13 +458,11 @@ fn a_message_carrying_a_credential_prefix_is_refused_while_a_content_hash_is_not
     });
     assert!(conversations::append_message(&mut connection, &receipt).expect("a content hash is not a credential"));
 
-    /**
-     * **普通连字符词不是凭据**（Fix round 2 / N1）。
-     *
-     * 判据只看**令牌段的开头**，所以 `task-1` / `risk-free` 这类词里虽然含有 `sk-`，
-     * 它只是一段普通的文本。前端那份 localStorage 兜底一度按"任意位置匹配"把它们拒了 ——
-     * 这条用例把后端的答案钉住，两边就不会再各说各话。
-     */
+    // **普通连字符词不是凭据**（Fix round 2 / N1）。
+    //
+    // 判据只看**令牌段的开头**，所以 `task-1` / `risk-free` 这类词里虽然含有 `sk-`，
+    // 它只是一段普通的文本。前端那份 localStorage 兜底一度按"任意位置匹配"把它们拒了 ——
+    // 这条用例把后端的答案钉住，两边就不会再各说各话。
     for text in ["task-1", "risk-free", "disk-space", "desk-job", "risk_free"] {
         let mut benign = message(&format!("benign-{text}"), "c1");
         benign.content_json = json!({ "text": text });

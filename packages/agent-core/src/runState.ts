@@ -66,7 +66,18 @@ const TRANSITIONS: Record<RunPhase, readonly RunPhase[]> = {
    * 用户看到一条空的助手消息且**无处可答**。是 `agentRunner` 的用例抓出来的。
    */
   answering: ["completed", "waiting", "failed", "cancelled", "interrupted"],
-  compiling: ["validating", "failed", "cancelled", "interrupted"],
+  /**
+   * `compiling → planning` 是**编译阶段那次一次性修复的返程边**（Agent DSL 切片 Task 4）。
+   *
+   * 六层编译拒绝一份计划时，编译器会给出修复请求（只带 `code`/`path`/`allowedChanges`）。
+   * 把请求交回模型就是**重新规划一次**：这一次尝试既不是编译也不是失败，
+   * 所以账本必须能说出"这是同一份运行里的第二次规划"。没有这条边，那次修复只能
+   * 落在 `compiling` 里（一个说不清正在发生什么的相位）或者干脆不发生。
+   *
+   * 它**不削弱**任何既有拒绝：`compiling → validating` 仍不可跳过，
+   * 而"只修一次"由协调器的 `MAX_REPAIR_ATTEMPTS` 计数守住 —— 状态机只管"这一步是什么"。
+   */
+  compiling: ["validating", "planning", "failed", "cancelled", "interrupted"],
   validating: ["awaiting_confirmation", "compiling", "failed", "cancelled", "interrupted"],
   awaiting_confirmation: ["committing", "compiling", "cancelled", "failed", "interrupted"],
   committing: ["completed", "failed", "cancelled", "interrupted"],

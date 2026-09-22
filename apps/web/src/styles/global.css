@@ -326,6 +326,18 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .measurement-status[data-status="valid"] { color: #1c7a5e; background: #e6f7f0; }
 .measurement-status[data-status="degenerate"], .measurement-status[data-status="numeric-failure"] { color: #a14b2c; background: #fdefe8; }
 .measurement-source, .measurement-explanation { color: var(--color-muted); font-size: 0.7rem; line-height: 1.4; }
+/**
+ * 派生读数（外接球 / 内切球 / 截面）：一行一条，状态用与测量同款的胶囊标签。
+ * 四个状态各有各的颜色 —— `approximate` 与 `exact` 一眼看得出来的差别不止是文案。
+ */
+.derived-reading { grid-column: 1 / -1; display: grid; gap: var(--space-1); padding: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface-subtle); }
+.derived-reading-head { display: flex; align-items: center; gap: var(--space-2); }
+.derived-reading-label { color: var(--color-ink); font-size: 0.8rem; font-weight: 600; }
+.derived-status { margin-left: auto; padding: 1px 6px; border-radius: 999px; color: #4a4a68; background: #f1effa; font-size: 0.66rem; font-weight: 700; }
+.derived-status[data-status="exact"] { color: #1c7a5e; background: #e6f7f0; }
+.derived-status[data-status="approximate"] { color: #8a5a12; background: #fdf3e0; }
+.derived-status[data-status="undefined"], .derived-status[data-status="degenerate"] { color: #a14b2c; background: #fdefe8; }
+.derived-reading-message { margin: 0; color: var(--color-muted); font-size: 0.72rem; line-height: 1.45; }
 /* 参数面板：动点自动生成的驱动参数带归属标签，字段一行内可编辑。 */
 .parameter-row { align-items: flex-start; flex-direction: column; gap: var(--space-2); cursor: default; }
 .parameter-row .object-meta { width: 100%; }

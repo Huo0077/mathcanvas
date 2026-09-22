@@ -117,6 +117,15 @@ export interface ConversationRepository {
    * 与 `read` 一样：**id 是唯一的键**（见上）。
    */
   readRecord(conversationId: string): RepositoryStep<ConversationRecordView | null>
+  /**
+   * 读一条会话的**事实原始记录**（含 `valueJson`）。
+   *
+   * `readRecord` 给的是界面投影（`ConversationFactView`：id / key / text / status / documentId），
+   * 而判"这条事实还算不算数"要看它当初记的是**哪一版**文档、引用了**哪些对象 id**
+   *（Follow-up：事实的 `stale` 路径）—— 这两样只在 `valueJson` 里。
+   * 会话里没有事实（或会话不在了）回空表：这不是"读失败"。
+   */
+  readFacts(conversationId: string): RepositoryStep<ConversationFactRecord[]>
   /** 建一条会话。 */
   create(conversation: AgentConversation, binding: ConversationBinding): RepositoryStep<void>
   /**
@@ -775,6 +784,16 @@ async function desktopSaveSummary(input: { conversationId: string; summary: stri
   if (!result.ok) refused(result)
 }
 
+/** 事实的原始记录（含 `valueJson`）：会话不在了就是空表 —— 这里问的不是"有没有这条会话"。 */
+async function desktopReadFacts(conversationId: string): Promise<ConversationFactRecord[]> {
+  const result = await readConversation(conversationId)
+  if (!result.ok) {
+    if (MISSING_CONVERSATION.test(result.detail)) return []
+    refused(result)
+  }
+  return result.value.facts
+}
+
 async function desktopSaveFact(fact: ConversationFactInput): Promise<void> {
   const result = await updateConversationFact(fact)
   if (!result.ok) refused(result)
@@ -809,6 +828,10 @@ export function createConversationRepository(): ConversationRepository {
       if (isDesktopShell()) return desktopReadRecord(conversationId)
       const record = readLocal(conversationId)
       return record ? recordViewOf(record) : null
+    },
+    readFacts: (conversationId) => {
+      if (isDesktopShell()) return desktopReadFacts(conversationId)
+      return readLocal(conversationId)?.facts ?? []
     },
     create: (conversation, binding) => (isDesktopShell() ? desktopCreate(conversation, binding) : createLocal(conversation, binding)),
     append: (conversation, binding, message, documentGeneration) => (isDesktopShell() ? desktopAppend(conversation, binding, message, documentGeneration) : appendLocalConversation(conversation, binding, message, documentGeneration)),

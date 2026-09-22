@@ -3,8 +3,18 @@ import { create } from "zustand"
 import type { DraftObjectCounts } from "@draw/agent-core"
 
 import { deriveConversationTitle } from "./agentTranscript"
-import { compactConversationSummary, shouldCompactConversation, summaryOfDocument, withDocumentSummary } from "./conversationSummary"
+import {
+  MAX_SUMMARY_BOOK_CHARS,
+  compactConversationSummary,
+  fitSummaryBook,
+  parseConversationSummaryBook,
+  serializeConversationSummaryBook,
+  shouldCompactConversation,
+  summaryOfDocument,
+  withDocumentSummary
+} from "./conversationSummary"
 import { factBelongsToDocument } from "@draw/agent-core"
+import { factInvalidationOf, withFactInvalidation, type LiveDocumentEvidence } from "./conversationFacts"
 import {
   DEFAULT_CONVERSATION_BINDING,
   NEW_CONVERSATION_TITLE,
@@ -257,9 +267,29 @@ function updatePending(
 ): void {
   const target = targetFor(get, runId)
   if (!target) return
-  const conversations = get().conversations.map((conversation) => conversation.id === target.conversation.id
-    ? { ...conversation, updatedAt: Date.now(), messages: conversation.messages.map((message) => (message.id === target.message.id ? update(message) : message)) }
-    : conversation)
+  updateMessageAt(get, set, { conversationId: target.conversation.id, messageId: target.message.id }, update)
+}
+
+/**
+ * 对一个**指定 id** 的消息做一次不可变更新（**不写仓储**）。
+ *
+ * 与 `updatePending` 的唯一区别是它**不看"在途"、也不看这一轮还钉没钉着**：有些事
+ * 恰恰是**回执之后**才知道的（摘要削没削、写没写成功；账本写失败），而回执那一步已经把
+ * 落点退休、把消息变成"非在途" —— 按老出口写的东西会**静默消失**（Fix round 3 / I1）。
+ * 落点由调用方**显式**给出（它知道自己说的是哪条消息），找不到就什么都不做。
+ */
+function updateMessageAt(
+  get: () => AgentState,
+  set: (partial: Partial<AgentState>) => void,
+  target: { conversationId: string; messageId: string },
+  update: (message: AgentMessage) => AgentMessage
+): void {
+  const conversation = get().conversations.find((candidate) => candidate.id === target.conversationId)
+  const message = conversation?.messages.find((candidate) => candidate.id === target.messageId)
+  if (!conversation || !message) return
+  const conversations = get().conversations.map((candidate) => candidate.id === conversation.id
+    ? { ...candidate, updatedAt: Date.now(), messages: candidate.messages.map((entry) => (entry.id === message.id ? update(entry) : entry)) }
+    : candidate)
   set({ conversations, activeConversation: resolveActive(conversations, get().activeConversationId) })
 }
 
@@ -319,6 +349,19 @@ function initialProjection(): AgentConversation[] {
   return restored.length > 0 ? restored : [createAgentConversation()]
 }
 
+let documentGenerationReader: (() => number | undefined) | null = null
+
+/**
+ * **注入"现在文档是第几版"**（Follow-up item 3）。
+ *
+ * 用户提问那条消息由 `sendPrompt` 追加，而 `sendPrompt` 的调用方在界面那一层、
+ * 手里没有文档句柄 —— 所以这里按与仓储注入同一个风格留一个读口：谁同时知道消息与文档
+ * （运行器），谁把它装上。没装时读到 `undefined`（就是原先的 `NULL`），不会编一个数。
+ */
+export function setDocumentGenerationReader(reader: (() => number | undefined) | null): void {
+  documentGenerationReader = reader
+}
+
 interface AgentState {
   conversations: AgentConversation[]
   /** `null` = 跟随最近一次改动的那条对话。 */
@@ -369,6 +412,13 @@ interface AgentState {
    * 不含候选文档、密钥、模型推理或图像字节）。这里不再二次处理，也不落任何结构化对象。
    */
   recordDiagnostic: (line: string, runId?: string) => void
+  /**
+   * 记一行诊断到**显式指定的那条消息**上：不看这一轮还钉没钉着、也不要求消息还在途。
+   *
+   * 给"回执之后才知道的事"用（Fix round 3 / I1）：摘要被削、摘要写失败、账本写失败都发生在
+   * 回执之后，而回执那一步已经退休了落点、把消息变成非在途 —— 走 `recordDiagnostic` 会**静默丢掉**。
+   */
+  recordDiagnosticFor: (target: { conversationId: string; messageId: string }, line: string) => void
   /** 记下已暂存的草稿**视图**。 */
   recordDraft: (draft: AgentDraftView, runId?: string, documentGeneration?: number) => Promise<boolean>
   /** 记下提交结果；`committed` / `no_change` 都算结束。 */
@@ -386,6 +436,10 @@ interface AgentState {
    *
    * 落点优先用显式给的 `conversationId`/`promptMessageId`（提交发生在运行结束之后，
    * 那时这一轮的落点可能已经被终态回执清掉了），其次是 `runId` 钉住的那一份。
+   *
+   * `messageId` 是**回执落在那条助手消息**上（Fix round 3 / I1）：这一层产生的诊断
+   *（摘要被削、摘要写失败）在回执之后才算得出来，所以必须按显式 id 落 —— 只给 `runId` 时
+   * 那一轮已经退休，诊断会被静默丢掉。
    */
   recordCommittedRun: (input: {
     runId: string
@@ -395,7 +449,26 @@ interface AgentState {
     documentId: string
     conversationId?: string
     promptMessageId?: string
+    /** 收这一轮回执的那条助手消息（诊断按它落；见上）。 */
+    messageId?: string
   }) => Promise<boolean>
+  /**
+   * **按证据重判一遍已确认事实是否还算数**（Follow-up：事实的 `stale` 路径）。
+   *
+   * 判据在 `conversationFacts.factInvalidationOf`（保守：只有文档本身能证明它不再成立时才降级）。
+   * 返回**被判成 `stale` 的键**（调用方据此报一行诊断）；没有一条降级就回空表。
+   * 降级是**写回仓储**的：下一轮注入时它已经不是 `confirmed`，也就不会当作现状端给模型。
+   */
+  revalidateFacts: (input: { conversationId: string; live: LiveDocumentEvidence }) => Promise<string[]>
+  /**
+   * **用户说"这条不算数了"**（Follow-up：`retract` 路径）。
+   *
+   * 与 `stale` 的区别是**谁来判**：这一条是用户的动作，理由是用户给的。事实的原文与它的
+   * 证据消息都**留着**（可核对、可回溯），只是状态转成 `retracted` —— 于是它不再是"现状"。
+   * 找不到这条事实、或者它的值读不懂（不是我们写的那种形状）时回 `false` 并**什么都不写**：
+   * 宁可不改，也不编一条事实出来。
+   */
+  retractFact: (input: { conversationId: string; key: string; reason: string }) => Promise<boolean>
   clearAll: () => Promise<boolean>
 }
 
@@ -552,8 +625,11 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       /**
        * 先把用户这一句写进仓储：写不进去就**不起这一轮**。
        * 在途助手消息是界面对"正在跑"的承诺，而一句没存下来的话不该拿到那个承诺。
+       *
+       * 带上**当前文档版本**（Follow-up item 3）：这一行是事实的证据，它要说得出
+       * "这是哪一版文档上的提问"。读口没装时是 `undefined` → 存成 `NULL`（不编数）。
        */
-      () => conversationRepository().append(updated, get().binding, userMessage),
+      () => conversationRepository().append(updated, get().binding, userMessage, documentGenerationReader?.()),
       () => {
         const conversations = get().conversations.map((conversation) => (conversation.id === updated.id ? updated : conversation))
         set({ conversations, activeConversationId: updated.id, activeConversation: updated, pendingReplyId: pendingMessage.id })
@@ -589,6 +665,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   recordDiagnostic: (line, runId) => updatePending(get, set, (message) => message.pending
     ? { ...message, diagnostics: [...(message.diagnostics ?? []), line] }
     : message, runId),
+  recordDiagnosticFor: (target, line) => updateMessageAt(get, set, target, (message) => ({ ...message, diagnostics: [...(message.diagnostics ?? []), line] })),
   recordDraft: (draft, runId, documentGeneration) => commitPending(get, set, (message) => message.pending ? { ...message, draft, pending: false } : message, { runId, documentGeneration }),
   recordReceipt: (receipt, runId, documentGeneration) => commitPending(get, set, (message) => ({
     ...message,
@@ -603,6 +680,12 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     const promptMessageId = input.promptMessageId ?? pinned?.promptMessageId
     if (!conversationId || !promptMessageId) return false
     const createdAt = Date.now()
+    // 诊断按**显式 id** 落（`messageId` 有就给）：回执那一步已经退休了落点、消息也不再在途，
+    // 只按 `runId` 写会被静默丢掉（Fix round 3 / I1）。
+    const messageId = input.messageId
+    const report = messageId === undefined
+      ? (line: string) => get().recordDiagnostic(line, input.runId)
+      : (line: string) => get().recordDiagnosticFor({ conversationId, messageId }, line)
 
     // ① 事实：**代数 + 这次创建的对象 + 它属于哪份文档**。
     //    证据是这条会话里的那条用户消息（Rust 侧同一个判据）；
@@ -655,10 +738,58 @@ export const useAgentStore = create<AgentState>((set, get) => ({
         previous,
         now: createdAt
       })
-      await conversationRepository().saveSummary({ conversationId, summary: withDocumentSummary(record.summary, input.documentId, summary), expectedVersion: record.summaryVersion })
-    } catch {
-      // 摘要失败不影响事实（它已经落下了）：下一次提交再试，不在这里编一份摘要。
+      /**
+       * **写入前先削到装得下**（Follow-up / 摘要 16K 边界）：按文档分开之后一本书可以有很多份，
+       * 合并后越界不是"不可能"。丢/削了什么都**报出来** —— 静默停更比丢一份旧摘要更糟。
+       */
+      const written = withDocumentSummary(record.summary, input.documentId, summary)
+      const fitted = fitSummaryBook(parseConversationSummaryBook(written), input.documentId)
+      if (fitted.dropped.length > 0 || fitted.shrunk.length > 0) {
+        const dropped = fitted.dropped.length === 0 ? "(none)" : fitted.dropped.join(", ")
+        const shrunk = fitted.shrunk.length === 0 ? "(none)" : fitted.shrunk.join(", ")
+        report(`[summary] conversation ${conversationId}: the summary book is over ${MAX_SUMMARY_BOOK_CHARS} characters; dropped ${dropped}; trimmed ${shrunk}`)
+      }
+      await conversationRepository().saveSummary({ conversationId, summary: serializeConversationSummaryBook(fitted.book), expectedVersion: record.summaryVersion })
+    } catch (error) {
+      /**
+       * 摘要失败不影响事实（它已经落下了）：下一次提交再试，不在这里编一份摘要。
+       * 但**不许静默**（Follow-up / 摘要 16K 边界）：仓储两边都有硬上限，
+       * 咽掉异常的表现是"摘要从此不再更新而没有任何人知道"，所以如实报一行诊断。
+       */
+      report(`[summary] conversation ${conversationId}: ${error instanceof Error ? error.message : String(error)}`)
     }
+    return true
+  },
+  /**
+   * **事实的降级只有一条路：证据**（Follow-up）。
+   *
+   * 只碰**本文档**的、还是 `confirmed` 的事实；判据全在 `factInvalidationOf` 里（保守，
+   * 读不懂的一律不动）。改写走 `saveFact`：按 `(conversationId, key)` upsert，证据消息仍是
+   * 原来那条（换一条就是编证据），`valueJson` 里除了多出 `invalidation` 一笔之外原样保留。
+   */
+  revalidateFacts: async (input) => {
+    const facts = await conversationRepository().readFacts(input.conversationId)
+    const stale: string[] = []
+    for (const fact of facts) {
+      if (fact.status !== "confirmed") continue
+      const invalidation = factInvalidationOf(fact.valueJson, input.live)
+      if (invalidation === null) continue
+      const valueJson = withFactInvalidation(fact.valueJson, { ...invalidation, at: Date.now() })
+      // 值读不懂：不改写（改了就把这条事实的原文换掉了）。
+      if (valueJson === null) continue
+      await conversationRepository().saveFact({ id: fact.id, conversationId: fact.conversationId, key: fact.key, valueJson, sourceMessageId: fact.sourceMessageId, status: "stale", createdAt: fact.createdAt })
+      stale.push(fact.key)
+    }
+    return stale
+  },
+  retractFact: async (input) => {
+    const facts = await conversationRepository().readFacts(input.conversationId)
+    const fact = facts.find((candidate) => candidate.key === input.key)
+    if (!fact) return false
+    const valueJson = withFactInvalidation(fact.valueJson, { status: "retracted", reason: input.reason, evidence: `user:${fact.sourceMessageId}`, at: Date.now() })
+    if (valueJson === null) return false
+    // 证据仍是它自己那条消息（Rust 侧要求证据必须是同会话里的真实消息）。
+    await conversationRepository().saveFact({ id: fact.id, conversationId: fact.conversationId, key: fact.key, valueJson, sourceMessageId: fact.sourceMessageId, status: "retracted", createdAt: fact.createdAt })
     return true
   },
   clearAll: () => {

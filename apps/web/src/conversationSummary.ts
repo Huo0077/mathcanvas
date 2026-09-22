@@ -208,3 +208,87 @@ export function withDocumentSummary(serialized: string, documentId: string, summ
   const book = parseConversationSummaryBook(serialized)
   return serializeConversationSummaryBook({ version: SUMMARY_BOOK_VERSION, byDocument: { ...book.byDocument, [documentId]: { ...summary, documentId } } })
 }
+
+/**
+ * **一本书的上限**（Follow-up / 摘要 16K 边界）。
+ *
+ * 与仓储两侧的那条守卫**逐字一致**：`conversationRepository.MAX_SUMMARY_CHARS` 与
+ * Rust 的 `MAX_SUMMARY_CHARS` 都是 16000。按文档分开之后，一本书可以有**很多份**摘要，
+ * 合并后越界就不再是"不可能"：`saveSummary` 抛错，调用方的 `try/catch` 一咽，
+ * 表现是**摘要从此再也不更新**。所以写入前先把它削到装得下。
+ */
+export const MAX_SUMMARY_BOOK_CHARS = 16_000
+
+export interface FittedSummaryBook {
+  /** 装得下的一本（内容都来自原来那一本：丢或削，**不编**）。 */
+  book: ConversationSummaryBook
+  /** 因为装不下而**整份丢掉**的文档（最旧的先丢）。 */
+  dropped: string[]
+  /** 被**削掉最旧条目**的文档（一份自己就超了上限时）。 */
+  shrunk: string[]
+}
+
+function bookSize(book: ConversationSummaryBook): number {
+  return serializeConversationSummaryBook(book).length
+}
+
+/**
+ * 削一步：**最旧的条目先削**，最后才动 `goal`。
+ *
+ * 顺序是有理由的：偏好与未解决问题在别处没有副本（丢了就真丢了），
+ * 而事实原文在事实表里、`goal` 在原始消息里都还有一份（规格 §5.3：压缩的是进上下文的那一段，
+ * 不动历史）。削不动了（只剩一个很短的 `goal`、四个列表都空）回 `null`。
+ */
+function shrinkSummaryOnce(summary: ConversationSummary): ConversationSummary | null {
+  if (summary.preferences.length > 0) return { ...summary, preferences: summary.preferences.slice(1) }
+  if (summary.openQuestions.length > 0) return { ...summary, openQuestions: summary.openQuestions.slice(1) }
+  if (summary.confirmedFacts.length > 0) return { ...summary, confirmedFacts: summary.confirmedFacts.slice(1) }
+  if (summary.createdObjects.length > 0) return { ...summary, createdObjects: summary.createdObjects.slice(1) }
+  if (summary.goal.length > 32) return { ...summary, goal: bounded(summary.goal, Math.max(32, Math.floor(summary.goal.length / 2))) }
+  return null
+}
+
+/**
+ * 把一本书削到 `limit` 字符之内。
+ *
+ * `keepDocumentId` 是**这次正在写的那一份**：先丢别的文档（最旧的先丢），它留到最后——
+ * 正要记住的东西不该为了腾地方被丢掉。只剩它一份还是装不下时，才削它自己的条目；
+ * 连条目都削不动了才整份丢掉（`dropped` 里如实记一笔，调用方把它报成诊断，
+ * 而不是无声无息地什么都不写）。
+ */
+export function fitSummaryBook(book: ConversationSummaryBook, keepDocumentId?: string, limit: number = MAX_SUMMARY_BOOK_CHARS): FittedSummaryBook {
+  const fitted: ConversationSummaryBook = { version: SUMMARY_BOOK_VERSION, byDocument: { ...book.byDocument } }
+  const dropped: string[] = []
+  const shrunk: string[] = []
+  if (bookSize(fitted) <= limit) return { book: fitted, dropped, shrunk }
+
+  const oldestFirst = Object.keys(fitted.byDocument).sort((left, right) => (fitted.byDocument[left].compactedAt ?? 0) - (fitted.byDocument[right].compactedAt ?? 0))
+
+  for (const documentId of oldestFirst) {
+    if (documentId === keepDocumentId) continue
+    delete fitted.byDocument[documentId]
+    dropped.push(documentId)
+    if (bookSize(fitted) <= limit) return { book: fitted, dropped, shrunk }
+  }
+
+  for (const documentId of oldestFirst) {
+    let summary = fitted.byDocument[documentId]
+    if (!summary) continue
+    while (bookSize(fitted) > limit) {
+      const next = shrinkSummaryOnce(summary)
+      if (next === null) {
+        delete fitted.byDocument[documentId]
+        dropped.push(documentId)
+        break
+      }
+      summary = next
+      fitted.byDocument[documentId] = { ...summary, documentId }
+    }
+    if (bookSize(fitted) <= limit) {
+      if (fitted.byDocument[documentId]) shrunk.push(documentId)
+      return { book: fitted, dropped, shrunk }
+    }
+  }
+
+  return { book: fitted, dropped, shrunk }
+}

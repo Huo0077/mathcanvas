@@ -1,5 +1,6 @@
 import type { Budget } from "./budget"
 import type { ConversationBinding, ConversationFactView, ConversationMessageView, DocumentHandle, RunContext } from "./contracts"
+import { DEFAULT_DERIVED_STATUS_LIMIT, MAX_DERIVED_STATUS_LIMIT, type ObservedDerivedStatus } from "./sceneObservation"
 import { createSkillCatalog, type SkillBundle } from "./skills/catalog"
 
 /**
@@ -46,6 +47,15 @@ export interface ObservationSummary {
   facts: readonly Fact[]
   /** 场景摘要（有界的一段话）。 */
   summary: string
+  /**
+   * **派生立体读数**（规格 §3.4 / §6.2）。
+   *
+   * 四态（`exact` / `approximate` / `undefined` / `degenerate`）与它们的理由由内核给出、
+   * 观察层搬运（见 `sceneObservation.derivedStatuses`）。放在这里而不是让模型自己推：
+   * §6.2 明令 schema 不重复实现几何语义 —— "这只多面体到底有没有外接球"是内核的结论。
+   * 缺省为空数组：老调用方（不给读数的观察）行为一字不变。
+   */
+  derived?: readonly ObservedDerivedStatus[]
 }
 
 export type ContextWarning = { code: string; detail: string }
@@ -68,6 +78,13 @@ export interface ModelContext {
   workspace: string
   /** 已确认事实（只含观察结果里有、且被请求的那几条）。 */
   facts: readonly Fact[]
+  /**
+   * **派生立体读数**（有界，见 `derived` 上限）。
+   *
+   * 与 `facts` 一样，它**只能来自观察结果**：这一层没有第二个来源，所以模型不可能
+   * 看到一条"没被观察到的"读数。
+   */
+  derived: readonly ObservedDerivedStatus[]
   /** 有序的选中引用 —— 顺序有意义（"第一个点""第二个点"）。 */
   selectedRefs: readonly SelectedRef[]
   /** 本次运行允许的技能（已经过目录校验）。 */
@@ -88,8 +105,13 @@ export interface BuildContextInput {
   /** 只读阶段可用的动作名（来自技能清单与能力注册表）。 */
   availableActions: readonly string[]
   budget: Budget
-  /** 单次上下文最多几条事实 / 几条引用。 */
-  limits?: { facts?: number; refs?: number }
+  /**
+   * 单次上下文最多几条事实 / 几条引用 / **几条派生读数**。
+   *
+   * 三个上限都只能**收紧**：`clamp` 会夹到各自的硬上限，派生读数沿用观察层的
+   * `DEFAULT_DERIVED_STATUS_LIMIT` / `MAX_DERIVED_STATUS_LIMIT`（同一个数，不另写一份）。
+   */
+  limits?: { facts?: number; refs?: number; derived?: number }
 }
 
 /** 上限：条数与字节都要有界，否则"预算"只是说说。 */
@@ -115,6 +137,8 @@ export function buildContext(input: BuildContextInput): ModelContext {
   const warnings: ContextWarning[] = []
   const factLimit = clamp(input.limits?.facts, DEFAULT_FACT_LIMIT, MAX_FACT_LIMIT)
   const refLimit = clamp(input.limits?.refs, DEFAULT_REF_LIMIT, MAX_REF_LIMIT)
+  // 派生读数的上限与观察层**同一个常量**：两处各写一个就是"按一份扣预算、模型只看另一份"。
+  const derivedLimit = clamp(input.limits?.derived, DEFAULT_DERIVED_STATUS_LIMIT, MAX_DERIVED_STATUS_LIMIT)
   const knownFacts = new Map(input.observation.facts.map((fact) => [fact.id, fact]))
 
   // ---- 技能：只加载经过目录校验的（未注册 / 哈希不符 / 修订号不符都会在这里被拒） ----
@@ -135,6 +159,13 @@ export function buildContext(input: BuildContextInput): ModelContext {
   if (facts.length > factLimit) {
     warnings.push({ code: "truncated_facts", detail: `showing ${factLimit} of ${facts.length} confirmed facts` })
     facts.length = factLimit
+  }
+
+  // ---- 派生读数：同样只从观察结果里取，超了就截断并留痕 ----
+  const derived: ObservedDerivedStatus[] = [...(input.observation.derived ?? [])]
+  if (derived.length > derivedLimit) {
+    warnings.push({ code: "truncated_derived", detail: `showing ${derivedLimit} of ${derived.length} derived solid readings` })
+    derived.length = derivedLimit
   }
 
   // ---- 选中引用：按序保留，过期的进警告而不是进引用 ----
@@ -158,6 +189,7 @@ export function buildContext(input: BuildContextInput): ModelContext {
     binding: { conversationId: input.run.conversationId, projectId: input.run.target.projectId, documentId: input.run.target.documentId, generation: input.run.target.generation },
     workspace: input.run.target.workspace,
     facts,
+    derived,
     selectedRefs,
     skills,
     availableActions: [...input.availableActions],
@@ -174,6 +206,7 @@ function estimate(context: ModelContext): number {
   parts.push(JSON.stringify(context.handles))
   parts.push(JSON.stringify(context.binding))
   parts.push(...context.facts.map((fact) => fact.text))
+  parts.push(...context.derived.map((entry) => `${entry.entityId} ${entry.code} ${entry.status} ${entry.message}`))
   parts.push(...context.selectedRefs.map((ref) => `${ref.documentId}:${ref.entityId}:${ref.label}`))
   parts.push(...context.skills.map((skill) => `${skill.id} ${skill.title} ${skill.summary}`))
   parts.push(...context.availableActions)
@@ -230,7 +263,14 @@ export interface ConversationContextInput {
    * 自己的位置（`PlanRequest.userMessage`），重复一遍既占预算又让模型以为用户说了两次。
    */
   request?: string
-  limits?: { messages?: number; characters?: number }
+  /**
+   * 上限：消息条数、字符预算，以及**场景那一段的派生读数条数**。
+   *
+   * `derived` 与 `BuildContextInput.limits.derived` 是**同一个数**（都从
+   * `sceneObservation` 的常量夹紧）：提示词渲染的是会话这一份，而计费与警告在
+   * 上下文那一份 —— 两边不共用一个上限，模型就会拿到一份它不知道自己拿少了的清单。
+   */
+  limits?: { messages?: number; characters?: number; derived?: number }
 }
 
 /** 会话那一半的入参（观察与当前请求由协调器在运行中补上）。 */
@@ -301,6 +341,7 @@ function byTime(left: ConversationMessageView, right: ConversationMessageView): 
 function estimateConversation(context: ConversationContext): number {
   const parts: string[] = [JSON.stringify(context.binding), context.summary, context.observation.summary]
   parts.push(...context.observation.facts.map((fact) => fact.text))
+  parts.push(...(context.observation.derived ?? []).map((entry) => `${entry.entityId} ${entry.code} ${entry.status} ${entry.message}`))
   parts.push(...context.facts.map((fact) => `${fact.key} ${fact.text}`))
   parts.push(...context.messages.map((message) => message.text))
   if (context.draft) parts.push(`${context.draft.draftId} ${context.draft.stageCount}`)
@@ -370,13 +411,25 @@ export function buildConversationContext(input: ConversationContextInput): Conve
     warnings.push({ code: "truncated_messages", detail: `showing the newest ${kept.length} of ${history.length} recent messages` })
   }
 
+  // ---- 场景里的派生读数：**在提示词真正渲染的那一份上**夹紧并留痕（Fix round 1 / I3） ----
+  // 上限与 `buildContext` 用的是同一组常量；截断必须在这里说出来，因为 `systemPrompt`
+  // 优先渲染这一份 —— 不在这里夹，模型就会拿到一份它不知道自己拿少了的清单。
+  const derivedLimit = clamp(input.limits?.derived, DEFAULT_DERIVED_STATUS_LIMIT, MAX_DERIVED_STATUS_LIMIT)
+  const observationDerived = [...(input.observation.derived ?? [])]
+  if (observationDerived.length > derivedLimit) {
+    warnings.push({ code: "truncated_derived", detail: `showing ${derivedLimit} of ${observationDerived.length} derived solid readings` })
+    observationDerived.length = derivedLimit
+  }
+  const observation: ObservationSummary = { ...input.observation, derived: observationDerived }
+
   const context: ConversationContext = {
     binding: input.binding,
     summary: fitted.text,
     facts: admitted,
     messages: kept,
     // 场景（当前事实）**不进这套裁剪**：它有自己的软额度（见 CONVERSATION_BANDS 的说明）。
-    observation: input.observation,
+    // 唯一的例外是派生读数的**条数**（上面已经夹好并留痕）：它是"清单"而不是"事实文本"。
+    observation,
     ...(input.draft === undefined ? {} : { draft: input.draft }),
     warnings,
     estimatedCharacters: 0

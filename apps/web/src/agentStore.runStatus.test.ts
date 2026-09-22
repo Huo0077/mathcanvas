@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest"
 
 import { AGENT_STORAGE_KEY, useAgentStore, type AgentMessage } from "./agentStore"
-import { summaryOfDocument } from "./conversationSummary"
-import { conversationRepository } from "./conversationRepository"
+import { summaryOfDocument, withDocumentSummary } from "./conversationSummary"
+import { MAX_SUMMARY_CHARS, conversationRepository } from "./conversationRepository"
 import { readConversation } from "./services/conversationClient"
 
 /**
@@ -323,5 +323,176 @@ describe("a run writes back to the conversation it started in", () => {
     const record = await conversationRepository().readRecord(conversationId)
     expect(record?.summary).toBe("")
     expect(record?.facts).toHaveLength(1)
+  })
+
+  /**
+   * **摘要本写不下时：削到装得下，而不是静默地永远不更新**（Follow-up / 摘要 16K 边界）。
+   *
+   * 仓储两边都有 16000 字符的硬上限；"按文档分开"之后一本书可以有很多份摘要，
+   * 一条会话被用在十几份文档上时就会越界。原先的表现是 `saveSummary` 抛错、
+   * 调用方的 `try/catch` 咽掉 —— 摘要从此不再更新，而**没有任何人知道**。
+   * 这条用例把那种书种进仓储（模拟"上次写入之后又用在了新文档上"），
+   * 断言：写入一定 ≤ 上限、本次文档那一份还在、被丢掉的文档能**报出来**。
+   *
+   * **Fix round 3 / I1**：这里走的是**真实的确认顺序**（回执先落、长期记忆随后写）。
+   * 回执那一步会把这一轮的落点退休、消息也不再"在途"，所以诊断必须按**显式 id** 落
+   * （`messageId`）—— 否则这一行会被静默丢掉（review 当场指出：原先这条用例没有前置回执，
+   * 走的调用顺序**生产里根本不存在**，所以它抓不到那个缺陷）。
+   */
+  it("trims the stored summary book to the repository limit and reports what it dropped", async () => {
+    useAgentStore.getState().sendPrompt("建一个立方体")
+    const conversationId = useAgentStore.getState().activeConversation!.id
+    for (let turn = 0; turn < 40; turn += 1) {
+      useAgentStore.getState().sendPrompt(`第 ${turn} 轮：请继续在这个文档上作图（${"很长的上下文".repeat(20)}）`)
+      useAgentStore.getState().resolvePendingReply(`收到 ${turn}`)
+    }
+    useAgentStore.getState().sendPrompt("建一个立方体")
+    const promptMessageId = userMessageIdOf("建一个立方体")
+    const pinned = useAgentStore.getState().pinRun({ runId: "run-book", promptMessageId })!
+
+    /**
+     * 种一本**刚好差一点点就满**的书：先铺几份摘要，再把一份的 `goal` 精确补到
+     * 离上限只剩 200 字符 —— 这样本轮那一份（比 200 字符大）一合进来必然越界，
+     * 而种子书本身仍然合法（`saveSummary` 的守卫不会拒绝它）。
+     */
+    const seedEntry = { documentId: "doc-seed", summary: { goal: "", confirmedFacts: ["甲 已确认"], createdObjects: ["solid-0"], openQuestions: [], preferences: [], messageCount: 3, compactedAt: 1 } }
+    const seed = withDocumentSummary("", seedEntry.documentId, seedEntry.summary)
+    const unPadded = withDocumentSummary(seed, "doc-pad", seedEntry.summary).length
+    const padGoal = "目".repeat(MAX_SUMMARY_CHARS - 200 - unPadded)
+    const padded = withDocumentSummary(seed, "doc-pad", { ...seedEntry.summary, goal: padGoal })
+    expect(padded.length).toBeLessThanOrEqual(MAX_SUMMARY_CHARS)
+    await conversationRepository().saveSummary({ conversationId, summary: padded })
+
+    // 真实的确认顺序：回执先落（这一轮的落点与"在途"就此退休），长期记忆随后才写。
+    await useAgentStore.getState().recordReceipt({ status: "committed" }, "run-book")
+    useAgentStore.getState().endRun("run-book")
+    expect(useAgentStore.getState().runTargets["run-book"]).toBeUndefined()
+
+    /**
+     * 这一行的入参与**生产**逐字一致（`agentRunner.confirm()`）：`runId` / `conversationId` /
+     * `promptMessageId` / `messageId` 都显式给 —— 提交发生在回执之后，商店里那一轮的落点
+     * 已经被退休了，少给一个就什么都找不到（这正是 I1 那一类"看起来写进去了"的坑）。
+     */
+    expect(await useAgentStore.getState().recordCommittedRun({ runId: "run-book", conversationId, promptMessageId, messageId: pinned.messageId, generation: 5, createdObjects: ["solid-1"], documentId: "doc-new" })).toBe(true)
+
+    const record = await conversationRepository().readRecord(conversationId)
+    // ① 写进去的一定装得下（否则仓储会抛，摘要就此停更）。
+    expect(record!.summary.length).toBeLessThanOrEqual(MAX_SUMMARY_CHARS)
+    // ② 本次文档那一份还在。
+    expect(summaryOfDocument(record!.summary, "doc-new")!.createdObjects).toEqual(["solid-1"])
+    // ③ 丢的是最旧的那一份，丢这件事**报出来了**（开发者诊断通道）—— 而且是在**回执之后**落下的。
+    expect(summaryOfDocument(record!.summary, "doc-seed")).toBeNull()
+    expect(summaryOfDocument(record!.summary, "doc-pad")).not.toBeNull()
+    const diagnostics = messageById(conversationId, pinned.messageId)?.diagnostics ?? []
+    expect(diagnostics.some((line) => line.includes("summary book") && line.includes("doc-seed"))).toBe(true)
+  })
+
+  /**
+   * **回执之后才知道的事也要落得下去**（Fix round 3 / I1）。
+   *
+   * 一轮运行里"事后才知道"的东西不止摘要：账本写失败也是在那之后才回来的。而
+   * `recordDiagnostic(line, runId)` 要两样东西都还在 —— 这一轮的落点没被退休、消息还是"在途"。
+   * 回执一落，两样都没了，于是这一类诊断会**静默消失**（"不许静默"这件事就没做到）。
+   * 所以另开一个按**显式 id** 落的出口：不看落点、也不看"在途"。
+   */
+  it("records a diagnostic on a message whose run target has already been retired", async () => {
+    useAgentStore.getState().sendPrompt("建一个立方体")
+    const conversationId = useAgentStore.getState().activeConversation!.id
+    const pinned = useAgentStore.getState().pinRun({ runId: "run-late", promptMessageId: userMessageIdOf("建一个立方体") })!
+
+    // 真实的确认顺序：回执先落。
+    await useAgentStore.getState().recordReceipt({ status: "committed" }, "run-late")
+    useAgentStore.getState().endRun("run-late")
+    expect(useAgentStore.getState().runTargets["run-late"]).toBeUndefined()
+    // 老出口这时**确实**什么都写不进去（这正是缺陷本身，钉住它，免得将来又退回去）。
+    useAgentStore.getState().recordDiagnostic("这一行会被丢掉", "run-late")
+    expect(messageById(conversationId, pinned.messageId)?.diagnostics ?? []).not.toContain("这一行会被丢掉")
+
+    useAgentStore.getState().recordDiagnosticFor({ conversationId, messageId: pinned.messageId }, "[summary] 削过最旧的一份")
+
+    expect(messageById(conversationId, pinned.messageId)?.diagnostics).toContain("[summary] 削过最旧的一份")
+  })
+
+  /**
+   * **没装读口就真的是 `NULL`**（review M5：这条声明原先没有用例，只能算"顺带"）。
+   *
+   * `documentGenerationReader?.()` → `undefined` → `?? null` 这条链要有用例钉住：
+   * 任何"给它兜一个 0/当前版本"的改动都会让这条断言失败 —— 而那种兜底正是
+   * "界面显示一个没人写过的版本号"的成因。装了读口的那一半在 `agentRunner.test.ts`。
+   */
+  it("leaves the user prompt's document generation NULL when no document reader is installed", async () => {
+    useAgentStore.getState().sendPrompt("建一个立方体")
+    const conversationId = useAgentStore.getState().activeConversation!.id
+
+    const stored = await readConversation(conversationId)
+    const prompt = stored.ok ? stored.value.messages.find((message) => message.role === "user") : undefined
+
+    expect(prompt?.contentJson).toMatchObject({ text: "建一个立方体" })
+    expect(prompt?.documentGeneration).toBeNull()
+  })
+
+  /**
+   * **一条事实的两种"不算数"**（Follow-up：`stale` 与 `retract`）。
+   *
+   * 在此之前事实只有 `confirmed` 一种归宿 —— 文档撤销回它写下之前那一版、或者它引用的对象
+   * 已经被删掉，它照样以"已确认"的身份进下一轮的提示词。这两条判据的区别是**谁来判**：
+   * `stale` 由文档本身证明（证据是版本号与被引用的对象 id），`retract` 是用户说不算数就不算数
+   * （理由记在 `valueJson` 里）。两条路都**不删**事实：原文与证据消息留着，只是不再是"现状"。
+   */
+  async function commitOneFact(runId: string): Promise<{ conversationId: string; promptMessageId: string }> {
+    useAgentStore.getState().sendPrompt("建一个立方体")
+    const conversationId = useAgentStore.getState().activeConversation!.id
+    const promptMessageId = userMessageIdOf("建一个立方体")
+    useAgentStore.getState().pinRun({ runId, promptMessageId })
+    await useAgentStore.getState().recordCommittedRun({ runId, generation: 4, createdObjects: ["solid-1"], documentId: "doc-1" })
+    return { conversationId, promptMessageId }
+  }
+
+  it("keeps a fact confirmed while the document still contains what it cites", async () => {
+    const { conversationId } = await commitOneFact("run-fact")
+
+    const stale = await useAgentStore.getState().revalidateFacts({ conversationId, live: { documentId: "doc-1", revision: 9, objectIds: ["solid-1", "circle-2"] } })
+
+    expect(stale).toEqual([])
+    expect((await conversationRepository().readRecord(conversationId))?.facts[0].status).toBe("confirmed")
+  })
+
+  it("marks a fact stale when the document no longer contains the objects it cites", async () => {
+    const { conversationId } = await commitOneFact("run-fact")
+
+    const stale = await useAgentStore.getState().revalidateFacts({ conversationId, live: { documentId: "doc-1", revision: 9, objectIds: [] } })
+
+    expect(stale).toEqual(["commit:run-fact"])
+    expect((await conversationRepository().readRecord(conversationId))?.facts[0].status).toBe("stale")
+    const stored = await readConversation(conversationId)
+    const value = stored.ok ? stored.value.facts[0].valueJson as { text?: string; invalidation?: { status?: string; reason?: string; evidence?: string } } : undefined
+    expect(value?.invalidation?.status).toBe("stale")
+    // 证据里要能读出"是哪些对象不在了、判在哪一版上"。
+    expect(value?.invalidation?.reason).toContain("solid-1")
+    expect(value?.invalidation?.evidence).toBe("document:doc-1@9")
+    // 原文一个字都不改（事实是记录，不是可以随手重写的摘要）。
+    expect(value?.text).toContain("第 4 版")
+  })
+
+  it("retracts a fact on the user's say-so without rewriting what it said", async () => {
+    const { conversationId, promptMessageId } = await commitOneFact("run-fact")
+
+    expect(await useAgentStore.getState().retractFact({ conversationId, key: "commit:run-fact", reason: "这个立方体我不要了" })).toBe(true)
+
+    expect((await conversationRepository().readRecord(conversationId))?.facts[0].status).toBe("retracted")
+    const stored = await readConversation(conversationId)
+    // 证据消息**还是原来那条**（Rust 侧要求证据必须是同会话里的真实消息，换一条就是编）。
+    expect(stored.ok && stored.value.facts[0].sourceMessageId).toBe(promptMessageId)
+    const value = stored.ok ? stored.value.facts[0].valueJson as { text?: string; invalidation?: { status?: string; reason?: string } } : undefined
+    expect(value?.text).toContain("第 4 版")
+    expect(value?.invalidation).toMatchObject({ status: "retracted", reason: "这个立方体我不要了" })
+  })
+
+  it("does not invent a fact to retract", async () => {
+    useAgentStore.getState().sendPrompt("建一个立方体")
+    const conversationId = useAgentStore.getState().activeConversation!.id
+
+    expect(await useAgentStore.getState().retractFact({ conversationId, key: "commit:never-written", reason: "随便说说" })).toBe(false)
+    expect((await conversationRepository().readRecord(conversationId))?.facts).toEqual([])
   })
 })

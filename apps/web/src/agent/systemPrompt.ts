@@ -1,4 +1,4 @@
-import { MAX_CONVERSATION_FACTS, PLAN_SCHEMA_VERSION, describeActions, describeDefaultPolicies, type ConversationContext, type ModelChannel, type ModelContext } from "@draw/agent-core"
+import { MAX_CONVERSATION_FACTS, PLAN_SCHEMA_VERSION, describeActions, describeDefaultPolicies, type ConversationContext, type ModelChannel, type ModelContext, type PlanRequest } from "@draw/agent-core"
 
 /**
  * **生产系统提示词**（Agent DSL 切片 Task 5；规格 §6/§7）。
@@ -24,7 +24,7 @@ import { MAX_CONVERSATION_FACTS, PLAN_SCHEMA_VERSION, describeActions, describeD
  */
 
 /** 提示词版本。**改内容就要改它** —— 这是"模型当时看到的是哪一版"的唯一依据。 */
-export const SYSTEM_PROMPT_VERSION = "mathcanvas.agent.prompt.v2"
+export const SYSTEM_PROMPT_VERSION = "mathcanvas.agent.prompt.v6"
 
 const MAX_PROMPT_FACTS = 12
 const MAX_PROMPT_REFS = 16
@@ -43,8 +43,15 @@ export interface SystemPromptPolicyInput {
   canPlan: boolean
   /** 这一轮允许出现的动作（来自技能清单；决定动作菜单那一节）。 */
   actionIds: readonly string[]
-  /** 上一次尝试为什么没被接受（只有第二次尝试才有）。 */
-  repair?: { reason: string; errors: readonly { code: string; path: string; detail: string }[]; hint: string }
+  /**
+   * **上一次尝试为什么没被接受**（只有第二次尝试才有）。
+   *
+   * 类型**就是**协调器端口上那一份（`PlanRequest["repair"]`，即编译器的 `RepairRequest`
+   * 加上提示文本与结构化诊断/假设），而不是这里手抄一个"长得差不多"的子集：
+   * 抄一份的下场是端口多给了一样东西、提示词却看不到 —— 而这一节的全部价值就是
+   * 把"拒在哪一层 / 允许改哪几处 / 已经替用户定了什么"原样说给模型。
+   */
+  repair?: PlanRequest["repair"]
 }
 
 export interface SystemPromptInput {
@@ -115,6 +122,55 @@ function defaultRulesSection(actionIds: readonly string[]): string[] {
   return lines
 }
 
+/**
+ * **修复请求里的结构化字段**（规格 §6.2 的六层 + §6.3「安全回填必须进入 `assumptions`，
+ * 不能静默发生」）。
+ *
+ * `hint` 是一段话，而这一次修复的三个事实是**结构化**的：拒在哪一层、允许改哪几处、
+ * 系统已经替用户定了什么。它们本来就是编译器给出的准确值（`compilePlan` 的
+ * `RepairRequest` + `diagnostics` + 失败前的 `assumptions`），让模型从散文里反推
+ * 等于把准确信息换成猜测；而 §6.3 那句"不能静默发生"在**模型这一侧**同样成立 ——
+ * 只写在草稿的 `assumptions` 里等用户去读，模型第二轮就会把一条已经定下来的默认值
+ * 当成它还能重新选的字段。
+ *
+ * ## 只渲染白名单字段，**绝不序列化整个对象**
+ *
+ * 每个对象都逐字段取出来（`stage`/`code`/`path`/`detail`、`text`/`path`）。
+ * **不要 `JSON.stringify` 这些对象**：那样任何挂在对象上的附带字段（模型上一轮的原话、
+ * `payload`、`raw`）都会跟着进提示词 —— 规格 §7 明令不回显散文，
+ * 而"顺手把整个对象打进去"正是这条纪律最常见的破法。
+ *
+ * ## 层名**不编**
+ *
+ * 编译诊断自带层名（`PlanDiagnostic.stage`）；传输解析那一层的逐条错误没有 ——
+ * 那时就只写原因码 + 路径 + 原因，不替它编一个 `transport`：编出来的层名会把修复方向指错。
+ */
+function repairDetailSections(repair: NonNullable<SystemPromptPolicyInput["repair"]>): string[] {
+  const sections: string[] = []
+
+  // 1) 每个被拒的层一行：层 + 原因码 + 字段路径 + 原因（没有层名时就不写层名）。
+  const diagnostics = repair.diagnostics ?? []
+  const rejected = diagnostics.length > 0
+    ? diagnostics.map((entry) => `${entry.stage}/${entry.code}@${entry.path}: ${entry.detail}`)
+    : repair.errors.map((error) => `${error.code}@${error.path}: ${error.detail}`)
+  if (rejected.length > 0) sections.push("", "### 被拒的层与字段（系统编译器的诊断）", ...rejected.map((line) => `- ${line}`))
+
+  // 2) "这次只允许改这几处"来自编译器的 `allowedChanges`，不是提示词自己推的。
+  if (repair.allowedChanges.length > 0) sections.push("", "### 这次只允许改这几处", ...repair.allowedChanges.map((path) => `- ${path}`))
+
+  // 3) 每条假设一行，并指出它落在哪个字段（没有 `path` 的那条就只有正文）。
+  const assumptions = repair.assumptions ?? []
+  if (assumptions.length > 0) {
+    sections.push(
+      "",
+      "### 系统已经替你定下来的假设（不要再改它们）",
+      ...assumptions.map((assumption) => (assumption.path === undefined ? `- ${assumption.text}` : `- ${assumption.text}（落在 ${assumption.path}）`))
+    )
+  }
+
+  return sections
+}
+
 /** 策略文本：**只看"这一轮允许做什么"**，与场景无关。 */
 export function buildPolicyText(input: SystemPromptPolicyInput): string {
   const sections: string[] = [
@@ -135,6 +191,15 @@ export function buildPolicyText(input: SystemPromptPolicyInput): string {
      */
     "题目要求「任意 / 恒定 / 定值」时：**必须保留符号参数**（例如参数 θ），把它建成文档参数并用它驱动动点，不要特值化成一组具体数字。",
     "这类结论只能给**数值采样**验证（在若干采样点上核对），**不是形式证明** —— 采样不是证明。",
+    /**
+     * **四条与派生读数有关的说法纪律**（规格 §3.4 / §6.2 / §10）。
+     *
+     * 场景里那几条读数（外接球 / 内切球 / 截面）是**内核算出来的结论**，不是你的推断：
+     * 四种状态各有各的说法，把它们混起来就等于"拿近似冒充精确"——规格 §10 明确禁止。
+     * 与上面两条同理，放在 `canPlan` 之外：只读作答同样会转述读数。
+     */
+    "场景里的派生读数（外接球 / 内切球 / 截面）是**内核给出的结论**，不是你算的：照 `status` 转述。",
+    "`status` 为 `exact` 才能说成精确；`approximate` 必须连**残差**一起说（它是一个带残差的数值解）；`undefined` 说「不存在」，`degenerate` 说「输入退化」，并把 `message` 里的原因带上 —— **不要**替它们编一个数值。",
     "",
     "## 输出形状（多一个字段都会被拒绝）",
     channelAdvice(input.channel),
@@ -170,11 +235,30 @@ export function buildPolicyText(input: SystemPromptPolicyInput): string {
   }
 
   if (input.repair) {
-    // 一次性修复机会：给**字段路径 + 原因**，并且**不回显**模型上一轮的原话。
-    sections.push("", "## 上一轮的输出没有被接受", input.repair.hint)
+    /**
+     * 一次性修复机会：给**字段路径 + 原因**，并且**不回显**模型上一轮的原话。
+     *
+     * 这一段是**规则**而不是场景数据，所以它留在策略文本里（`buildPolicyText`）：
+     * 同一批动作 + 同一通道 + 同一份修复请求 → 策略逐字相同，场景那一段单独注入。
+     */
+    sections.push("", "## 上一轮的输出没有被接受", input.repair.hint, ...repairDetailSections(input.repair))
   }
 
   return sections.join("\n")
+}
+
+/**
+ * **完全相同的警告只留一条**（修复轮 1 / 第 4 项）。
+ *
+ * 两个上下文组装器（`buildContext` 与 `buildConversationContext`）都会在同一次截断上发出
+ * 同名警告（`truncated_derived`、`truncated_facts`），而这里把两边的 `warnings` 合起来渲染。
+ * 完全相同的两行对模型没有新增信息，只是噪音 —— 所以**按 code + detail 去重**。
+ *
+ * **不按 code 去重**：两个组装器各有自己的上限，数字不同的那两行说的是两笔账
+ *（"按 12 条扣费、模型只看 8 条"正是这一节要挡住的东西），合并它们等于把差异藏起来。
+ */
+function dedupedWarnings(warnings: readonly { code: string; detail: string }[]): { code: string; detail: string }[] {
+  return warnings.filter((warning, index) => warnings.findIndex((other) => other.code === warning.code && other.detail === warning.detail) === index)
 }
 
 /**
@@ -188,7 +272,7 @@ export function buildPolicyText(input: SystemPromptPolicyInput): string {
  * 而它也是策略文本里逐字写着的那条规则。
  */
 function contextJson(context: ModelContext, conversation?: ConversationContext): string {
-  const warnings = [...context.warnings, ...(conversation?.warnings ?? [])]
+  const warnings = dedupedWarnings([...context.warnings, ...(conversation?.warnings ?? [])])
   return JSON.stringify({
     preamble: context.preamble,
     // 会话那边给得出绑定（含 workspace 与这一轮的版本）时用它：它比 `ModelContext.binding` 全。
@@ -209,7 +293,26 @@ function contextJson(context: ModelContext, conversation?: ConversationContext):
     }),
     scene: {
       summary: conversation?.observation.summary ?? "",
-      facts: context.facts.slice(0, MAX_PROMPT_FACTS).map((fact) => ({ id: fact.id, text: fact.text, origin: fact.origin }))
+      facts: context.facts.slice(0, MAX_PROMPT_FACTS).map((fact) => ({ id: fact.id, text: fact.text, origin: fact.origin })),
+      /**
+       * **派生立体读数**（规格 §3.4 / §6.2）。
+       *
+       * 与 `recentMessages` 同一条纪律：**这里不再截一次** —— 条数由
+       * `contextBuilder` 的两个组装函数按同一组常量夹紧（`buildConversationContext`
+       * 是提示词真正渲染的那一份，它自己会留 `truncated_derived` 警告；这里再写一个上限
+       * 就是"预算按一份扣、模型只看另一份"的老毛病）。
+       * 场景那一份优先（它是运行里刚观察到的当前事实），没有会话时才回落到上下文里那份。
+       *
+       * `sourceId` 一起渲染（Fix round 1 / M1）：同一只实体上的两条截面读数只有它不同，
+       * 不带它模型就分不清"这个 polygon 是哪条截面的"。
+       */
+      derived: (conversation?.observation.derived ?? context.derived).map((entry) => ({
+        entityId: entry.entityId,
+        code: entry.code,
+        status: entry.status,
+        message: entry.message,
+        ...(entry.sourceId === undefined ? {} : { sourceId: entry.sourceId })
+      }))
     },
     ...(conversation?.draft === undefined ? {} : {
       draft: {

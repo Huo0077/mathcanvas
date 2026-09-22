@@ -3,15 +3,20 @@ import { describe, expect, it } from "vitest"
 import type { ConversationFactView, ConversationMessageView } from "@draw/agent-core"
 
 import {
+  MAX_SUMMARY_BOOK_CHARS,
   MAX_SUMMARY_ITEMS,
   SUMMARY_TRIGGER_CHARACTERS,
   compactConversationSummary,
   estimateConversationCharacters,
+  fitSummaryBook,
   parseConversationSummary,
+  parseConversationSummaryBook,
+  serializeConversationSummaryBook,
   serializeConversationSummary,
   shouldCompactConversation,
   summaryOfDocument,
-  withDocumentSummary
+  withDocumentSummary,
+  type ConversationSummary
 } from "./conversationSummary"
 
 /**
@@ -159,5 +164,77 @@ describe("conversation summary compaction", () => {
     const rewritten = withDocumentSummary(both, "doc-geometry", compactConversationSummary({ messages: [message("m3", "user", "再建一个", 3)], facts: [], createdObjects: ["solid-2"], now: 3 }))
     expect(summaryOfDocument(rewritten, "doc-geometry")?.createdObjects).toEqual(["solid-2"])
     expect(summaryOfDocument(rewritten, "doc-planar")?.createdObjects).toEqual(["circle-1"])
+  })
+})
+
+/**
+ * **摘要本也要装得下**（Follow-up / 摘要 16K 边界）。
+ *
+ * 仓储（Rust 与浏览器兜底**两边**）对 `conversations.summary` 有 16000 字符的硬上限，
+ * 而"按文档分开"之后一本书可以有**很多份**摘要 —— 一条会话被用在十几份文档上时，
+ * 合并后的那本书会越过上限：`saveSummary` 抛错，调用方的 `try/catch` 又把它咽掉，
+ * 表现就是**摘要从此再也不更新**，而没有任何人知道。所以这里钉住两件事：
+ * ① 写进去的书**一定**在上限之内（丢最旧的几份、必要时削一份）；② 丢了什么要能报出来。
+ */
+function bookSummary(marker: string, items: number, compactedAt: number): ConversationSummary {
+  return {
+    goal: `${marker} 的目标 ${"目".repeat(180)}`,
+    confirmedFacts: Array.from({ length: items }, (_, index) => `${marker} 事实 ${index} ${"f".repeat(170)}`),
+    createdObjects: Array.from({ length: items }, (_, index) => `${marker}-对象-${index}-${"o".repeat(40)}`),
+    openQuestions: [`${marker} 待答 ${"q".repeat(170)}`],
+    preferences: [`${marker} 偏好 ${"p".repeat(170)}`],
+    messageCount: 12,
+    compactedAt
+  }
+}
+
+function bookOf(entries: readonly { documentId: string; summary: ConversationSummary }[]): string {
+  return entries.reduce((serialized, entry) => withDocumentSummary(serialized, entry.documentId, entry.summary), "")
+}
+
+describe("fitting the summary book into the stored limit", () => {
+  it("leaves a book that already fits exactly as it was", () => {
+    const stored = bookOf([
+      { documentId: "doc-1", summary: bookSummary("甲", 2, 100) },
+      { documentId: "doc-2", summary: bookSummary("乙", 2, 200) }
+    ])
+    const fitted = fitSummaryBook(parseConversationSummaryBook(stored), "doc-2")
+
+    expect(fitted.dropped).toEqual([])
+    expect(fitted.shrunk).toEqual([])
+    expect(serializeConversationSummaryBook(fitted.book)).toBe(stored)
+    expect(fitted.book.byDocument["doc-1"]).toBeDefined()
+  })
+
+  it("drops the oldest documents until the book fits, keeping the one being written", () => {
+    const stored = bookOf([1, 2, 3, 4, 5, 6].map((index) => ({ documentId: `doc-${index}`, summary: bookSummary(`第${index}份`, 12, index * 1_000) })))
+    expect(stored.length).toBeGreaterThan(MAX_SUMMARY_BOOK_CHARS)
+
+    const fitted = fitSummaryBook(parseConversationSummaryBook(stored), "doc-6")
+    const written = serializeConversationSummaryBook(fitted.book)
+
+    expect(written.length).toBeLessThanOrEqual(MAX_SUMMARY_BOOK_CHARS)
+    // 最旧的先丢，写入的那一份留到最后。
+    expect(fitted.dropped.length).toBeGreaterThan(0)
+    expect(fitted.dropped[0]).toBe("doc-1")
+    expect(fitted.dropped).not.toContain("doc-6")
+    expect(fitted.shrunk).toEqual([])
+    expect(fitted.book.byDocument["doc-6"]).toBeDefined()
+    expect(fitted.book.byDocument["doc-1"]).toBeUndefined()
+  })
+
+  it("shrinks a single entry that is on its own over the limit", () => {
+    const oversized = bookSummary("超大", 200, 1)
+    const stored = withDocumentSummary("", "doc-only", oversized)
+    expect(stored.length).toBeGreaterThan(MAX_SUMMARY_BOOK_CHARS)
+
+    const fitted = fitSummaryBook(parseConversationSummaryBook(stored), "doc-only")
+    const written = serializeConversationSummaryBook(fitted.book)
+
+    expect(written.length).toBeLessThanOrEqual(MAX_SUMMARY_BOOK_CHARS)
+    expect(fitted.shrunk).toEqual(["doc-only"])
+    // 削的是**最旧的那些条目**，不是编一份新的：留下的仍然来自原来那份摘要。
+    expect(fitted.book.byDocument["doc-only"]!.confirmedFacts.length).toBeLessThan(200)
+    expect(fitted.book.byDocument["doc-only"]!.confirmedFacts.length).toBeGreaterThan(0)
   })
 })

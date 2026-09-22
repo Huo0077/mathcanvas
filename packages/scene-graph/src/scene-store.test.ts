@@ -4,7 +4,7 @@ import { createEmptyDocument, encodeMgeo, validateDocument, type GeometryDocumen
 import { buildSolidTemplate, solveCircumsphere3, solveInsphere3, type SolidBoundary } from "@draw/geometry-kernel"
 
 import { compileSolidPrism } from "./actions"
-import { applyOperation, commitPatch, createFace3, createLine3, createPoint3, createPolyhedron3, deletionTargets, getAffectedPrimitiveIds, getDependencyIndex, patchPoint3, recomputeDerivedObjects, resolvePolyhedronTopology, sectionPlaneThroughSource, solidStatusReport, solidTopology3, topologicalRecomputeOrder, validateDeletion, validatePatch } from "./index"
+import { applyOperation, commitPatch, createFace3, createLine3, createPoint3, createPolyhedron3, deletionTargets, getAffectedPrimitiveIds, getDependencyIndex, ownerOfTopology, patchPoint3, recomputeDerivedObjects, resolvePolyhedronTopology, sectionPlaneThroughSource, solidStatusReport, solidTopology3, topologicalRecomputeOrder, topologyOfEntity, validateDeletion, validatePatch } from "./index"
 
 describe("scene graph operations", () => {
   it("recomputes template topology when legacy solid parameters change", () => {
@@ -1591,5 +1591,88 @@ describe("solid status report surfaces the derived results", () => {
     document.primitives = [{ id: "solid-broken", type: "polyhedron3", vertexIds: ["missing"], edgeIds: [], faceIds: [] }]
 
     expect(solidStatusReport(document)).toEqual([])
+  })
+
+  /**
+   * **两条截面读数各自说自己属于哪一个截面图元**（Fix round 1 / M1）。
+   *
+   * 报告原先只有 `solidId`（= 截面的 `sourceId`），于是一只实体上的两个截面产出两条
+   * **完全一样**的读数记录：界面既分不清哪一行是哪一刀（React key 还会撞），
+   * 模型也读不出"是哪条截面的分类"。这里把截面图元自己的 id 一起报出去。
+   */
+  it("attributes every section reading to the section primitive it came from", () => {
+    const document = prismDocument()
+    document.primitives = [
+      ...document.primitives,
+      { id: "section-1", type: "section", sourceId: "solid-1", plane: { normal: { x: 0, y: 0, z: 1 }, constant: -1.5 }, points: [], classification: "none", status: "undefined" },
+      { id: "section-2", type: "section", sourceId: "solid-1", plane: { normal: { x: 0, y: 0, z: 1 }, constant: -0.5 }, points: [], classification: "none", status: "undefined" }
+    ]
+
+    const sections = solidStatusReport(document).filter((entry) => entry.code === "derived.section")
+
+    expect(sections).toHaveLength(2)
+    expect(sections.map((entry) => entry.sourceId)).toEqual(["section-1", "section-2"])
+    // 球体读数没有"哪条截面"可言：这个字段对它们保持缺省，而不是填一个假的 id。
+    expect(solidStatusReport(document).find((entry) => entry.code === "derived.circumsphere")?.sourceId).toBeUndefined()
+  })
+})
+
+/**
+ * **实体的物化拓扑只有一条规则**（Fix round 1 / I2；D8）。
+ *
+ * 两种记法都要认：模板物化是 `kind: "template"` + `sourceIds[0] === 实体 id`；
+ * 而按数值改过顶点的模板会被翻成 `fromFaces`，归属记在 `sourceId` 上。
+ * 这条规则此前只活在 `templateTopology` 里（未导出），界面只好自己再写一遍 ——
+ * 而界面那一版只认第一种记法，于是"拖一个顶点之后派生读数整块消失"。
+ * 现在它从这里出口，两边调同一份。
+ */
+describe("topologyOfEntity", () => {
+  function cubeDocument(): { document: GeometryDocument; vertexId: string; polyhedronId: string } {
+    const source = { id: "cube-1", type: "cube" as const, origin: { x: -1, y: -1, z: -1 }, size: { x: 2, y: 2, z: 2 } }
+    const built = buildSolidTemplate(source)
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [source, ...built.primitives]
+    return { document, vertexId: built.vertexIds[0]!, polyhedronId: built.polyhedronId! }
+  }
+
+  it("finds a template solid's topology through the template notation", () => {
+    const { document, polyhedronId } = cubeDocument()
+
+    expect(topologyOfEntity(document, "cube-1")?.id).toBe(polyhedronId)
+    // 反方向是同一个答案（`ownerOfTopology` 与 `topologyOfEntity` 共用一条规则）。
+    expect(ownerOfTopology(document.primitives.find((primitive) => primitive.id === polyhedronId) as Extract<GeometryDocument["primitives"][number], { type: "polyhedron3" }>)).toBe("cube-1")
+  })
+
+  /**
+   * 翻成 `fromFaces` 之后仍然找得到 —— 这是"拖一个顶点"的真实路径
+   *（`patchPoint3` → `applyOperation`，与属性栏和拖动走同一条）。
+   */
+  it("still finds it after a numeric vertex edit flipped the notation to fromFaces", () => {
+    const { document, vertexId, polyhedronId } = cubeDocument()
+    const flipped = applyOperation(document, patchPoint3(vertexId, { x: -3, y: -1, z: -1 }))
+    expect(flipped.error).toBeUndefined()
+    const topology = flipped.document.primitives.find((primitive) => primitive.id === polyhedronId)
+    if (topology?.type !== "polyhedron3") throw new Error("expected the topology")
+    expect(topology.construction).toMatchObject({ kind: "fromFaces", sourceId: "cube-1" })
+
+    expect(topologyOfEntity(flipped.document, "cube-1")?.id).toBe(polyhedronId)
+    expect(ownerOfTopology(topology)).toBe("cube-1")
+  })
+
+  it("prefers the parameterised template notation when both notations exist", () => {
+    const { document, polyhedronId } = cubeDocument()
+    // 同一实体同时留下两份拓扑：模板那一份才是参数真源。
+    const duplicate = { id: "cube-1-polyhedron-old", type: "polyhedron3" as const, vertexIds: [], edgeIds: [], faceIds: [], construction: { kind: "fromFaces" as const, sourceIds: [], sourceId: "cube-1" } }
+    document.primitives = [duplicate, ...document.primitives]
+
+    expect(topologyOfEntity(document, "cube-1")?.id).toBe(polyhedronId)
+  })
+
+  it("returns null for an entity that has no materialised topology", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [{ id: "point3-1", type: "point3", position: { x: 0, y: 0, z: 0 } }]
+
+    expect(topologyOfEntity(document, "point3-1")).toBeNull()
+    expect(topologyOfEntity(document, "nope")).toBeNull()
   })
 })

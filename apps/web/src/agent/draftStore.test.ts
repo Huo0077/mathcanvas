@@ -122,6 +122,40 @@ describe("isolated drafts", () => {
   })
 
   /**
+   * **编译失败必须把编译器的那一份修复请求交出去**（Agent DSL 切片 Task 4 的接线）。
+   *
+   * `compilePlan` 一直返回 `{reason, errors(code/path/detail), allowedChanges, attempt}`，
+   * 而 `stage` 此前只回一句话（`detail`）—— 协调器于是收不到"允许改哪几处"，
+   * 只能自己拿解析错误另造一份（或干脆不再问模型）。这里钉住：**编译器的那一份原样带出**，
+   * 连同它的逐层诊断与失败前补出来的假设。
+   */
+  it("hands the compiler's repair request back on a compile failure", () => {
+    const store = createDraftStore()
+    const record = store.create(createEmptyDocument("geometry3d"))
+
+    const staged = store.stage(record.draftId, [
+      // 动作 0：`vector` 缺失 → 审计回填安全默认（这是"修复请求要带上的假设"）。
+      { actionId: "solid.create_prism", actionKey: "prism", factIds: [], inputs: { alias: "prism", basePolygon: [{ x: 0, y: 0, z: 0 }, { x: 2, y: 0, z: 0 }, { x: 1, y: 2, z: 0 }] } },
+      // 动作 1：零向量 → 几何语义校验这一层拒。
+      { actionId: "solid.create_prism", actionKey: "degenerate", factIds: [], inputs: { alias: "degenerate", basePolygon: [{ x: 0, y: 0, z: 0 }, { x: 2, y: 0, z: 0 }, { x: 1, y: 2, z: 0 }], vector: { x: 0, y: 0, z: 0 } } }
+    ] as unknown as Parameters<typeof store.stage>[1], record.draftVersion)
+
+    expect(staged.ok).toBe(false)
+    if (staged.ok) return
+    expect(staged.reason).toBe("compile_failed")
+    expect(staged.repair).toBeDefined()
+    expect(staged.repair?.attempt).toBe(1)
+    expect(staged.repair?.allowedChanges).toEqual(["envelope.actions[1].inputs.basePolygon"])
+    expect(staged.repair?.errors[0]).toMatchObject({ code: "degenerate_prism", path: "envelope.actions[1].inputs.basePolygon" })
+    // 逐层诊断（层 + 原因码 + 路径）也要在，而不是被压成一句 detail。
+    expect(staged.planDiagnostics?.some((entry) => entry.stage === "geometry_validation" && entry.code === "degenerate_prism" && entry.path === "envelope.actions[1].inputs.basePolygon")).toBe(true)
+    // 失败前补出来的假设必须一起带走（"系统替你定了什么"不能丢）。
+    expect(staged.assumptions?.map((assumption) => assumption.path)).toContain("envelope.actions[0].inputs.vector")
+    // 草稿依然没有半成品。
+    expect(store.getPreview(record.draftId)?.candidate.primitives).toHaveLength(0)
+  })
+
+  /**
    * **真实现场**（2026-09-21）：画布上已经有一个手工建的立方体 `solid-1`，
    * 随后用户让 Agent 建一个直四棱柱，模型出了一个 `solid.create_template` 动作 ——
    * 分配器从 1 开始数，又发了 `solid-1`，`validatePatch` 判 `duplicate object id`，

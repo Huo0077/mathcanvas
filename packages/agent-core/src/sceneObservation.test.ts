@@ -1,9 +1,10 @@
 import { createEmptyDocument, type GeometryDocument } from "@draw/dsl"
+import { buildPrism, buildSolidTemplate, createBuilderContext } from "@draw/geometry-kernel"
 import { contentFingerprint } from "@draw/scene-graph"
 import { describe, expect, it } from "vitest"
 
 import type { DocumentHandle } from "./contracts"
-import { createSceneObservation, DEFAULT_ENVELOPE_LIMIT, MAX_ENVELOPE_LIMIT, type SceneDocumentSnapshot } from "./sceneObservation"
+import { createSceneObservation, DEFAULT_DERIVED_STATUS_LIMIT, DEFAULT_ENVELOPE_LIMIT, MAX_DERIVED_STATUS_LIMIT, MAX_ENVELOPE_LIMIT, type SceneDocumentSnapshot } from "./sceneObservation"
 
 /**
  * Task 2.2 Step 1 点名的场景，逐条落在这里：
@@ -243,5 +244,140 @@ describe("scene observation dependencies", () => {
 
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.reason).toBe("entity_not_found")
+  })
+})
+
+/**
+ * **派生立体读数进观察**（规格 §3.4 / §6.2）。
+ *
+ * 内核那三个求解器返回 `exact / undefined / degenerate / approximate`，但"精确"与"不存在"
+ * 只有在真的被**模型看到**之后才有意义 —— 否则模型只能猜一只多面体有没有外接球，
+ * 而它猜错的方式恰恰是把 `undefined` 当成一个可以用的球（规格 §10 禁止）。
+ *
+ * 观察层是模型看场景的**唯一**窗口，所以读数必须从 `solidStatusReport`（内核结论的生产读取）
+ * 走这里出去，而不是让 Agent 侧另算一份几何语义（§6.2：schema 不重复实现几何语义）。
+ * 同时它必须**有界**：一份画了几十只立体的图纸不能把提示词塞满。
+ */
+const DERIVED_PRISM_BASE = [{ x: 0, y: 0, z: 0 }, { x: 4, y: 0, z: 0 }, { x: 4, y: 3, z: 0 }, { x: 0, y: 3, z: 0 }]
+const DERIVED_PRISM_VECTOR = { x: 1, y: 0.5, z: 3 }
+
+/** 一只按生产口径建出来的斜棱柱（`buildPrism` 就是 `solid.create_prism` 的内核实现）。 */
+function prismFixture(id: string): { document: GeometryDocument; polyhedronId: string } {
+  const built = buildPrism({ base: DERIVED_PRISM_BASE, vector: DERIVED_PRISM_VECTOR }, createBuilderContext(id))
+  expect(built.diagnostics).toEqual([])
+  return { document: docWith("geometry3d", built.primitives), polyhedronId: built.polyhedronId! }
+}
+
+/** 一只立方体（唯一有闭式外接球 / 内切球的常见情形）。 */
+function cubeFixture(id: string): { document: GeometryDocument; polyhedronId: string } {
+  const built = buildSolidTemplate({ id, type: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 2, z: 2 } })
+  expect(built.diagnostics).toEqual([])
+  return { document: docWith("geometry3d", built.primitives), polyhedronId: built.polyhedronId! }
+}
+
+describe("scene observation derived solid readings", () => {
+  it("carries the kernel's status and its reason instead of letting the model guess", () => {
+    const { document, polyhedronId } = prismFixture("solid-1")
+    const observation = createSceneObservation([snapshot(document)])
+
+    const result = observation.derivedStatuses(document.metadata.id)
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error("expected a result")
+    const circumsphere = result.result.payload.find((entry) => entry.entityId === polyhedronId && entry.code === "derived.circumsphere")
+    const insphere = result.result.payload.find((entry) => entry.entityId === polyhedronId && entry.code === "derived.insphere")
+    // 斜棱柱：一般多面体不一定有外接球 / 内切球，两个都如实报 `undefined`。
+    expect(circumsphere?.status).toBe("undefined")
+    expect(insphere?.status).toBe("undefined")
+    // 原因要跟着一起出去：只给状态码，模型还是不知道为什么"没有球"。
+    expect(circumsphere?.message).toContain("外接球")
+    expect(insphere?.message).toContain("内切球")
+  })
+
+  it("reports an exact reading as exact, so exact and undefined stay distinguishable", () => {
+    const { document, polyhedronId } = cubeFixture("cube-1")
+    const observation = createSceneObservation([snapshot(document)])
+
+    const result = observation.derivedStatuses(document.metadata.id)
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error("expected a result")
+    const readings = result.result.payload.filter((entry) => entry.entityId === polyhedronId)
+    expect(readings.map((entry) => entry.status)).toEqual(["exact", "exact"])
+    // `exact` 也要带结论（半径 / 球心），否则模型只能说"有外接球"而说不出是哪一个。
+    expect(readings[0]?.message).toMatch(/半径/)
+  })
+
+  /**
+   * **截面读数要说清自己是哪一刀**（Fix round 1 / M1）。
+   *
+   * 只带 `entityId`（= 截面的 `sourceId`）时，同一只实体上的两条截面产出两条一模一样的
+   * 读数：模型读不出"这个 polygon 是哪条截面的"。`sourceId` 是那条截面图元自己的 id。
+   */
+  it("says which section each section reading came from", () => {
+    const { document, polyhedronId } = prismFixture("solid-1")
+    document.primitives = [
+      ...document.primitives,
+      { id: "section-1", type: "section", sourceId: polyhedronId, plane: { normal: { x: 0, y: 0, z: 1 }, constant: -1.5 }, points: [], classification: "none", status: "undefined" },
+      { id: "section-2", type: "section", sourceId: polyhedronId, plane: { normal: { x: 0, y: 0, z: 1 }, constant: -0.5 }, points: [], classification: "none", status: "undefined" }
+    ]
+    const observation = createSceneObservation([snapshot(document)])
+
+    const result = observation.derivedStatuses(document.metadata.id)
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error("expected a result")
+    const sections = result.result.payload.filter((entry) => entry.code === "derived.section")
+    expect(sections.map((entry) => entry.sourceId)).toEqual(["section-1", "section-2"])
+    // 球体读数没有"哪条截面"可言：这个字段对它们保持缺省。
+    expect(result.result.payload.find((entry) => entry.code === "derived.circumsphere")?.sourceId).toBeUndefined()
+  })
+
+  it("bounds the readings and says when it truncated", () => {    const cubes = Array.from({ length: 4 }, (_, index) => cubeFixture(`cube-${index + 1}`))
+    const document = docWith("geometry3d", cubes.flatMap((cube) => cube.document.primitives))
+    const observation = createSceneObservation([snapshot(document)])
+
+    const result = observation.derivedStatuses(document.metadata.id, { derived: 3 })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error("expected a result")
+    expect(result.result.payload).toHaveLength(3)
+    // 截断**必须说出来**：否则模型会以为"这只立体的派生读数就这些"。
+    expect(result.result.diagnostics.some((entry) => entry.code === "truncated")).toBe(true)
+  })
+
+  it("clamps an oversized request to the hard limit and uses a sane default", () => {
+    const cubes = Array.from({ length: 20 }, (_, index) => cubeFixture(`cube-${index + 1}`))
+    const document = docWith("geometry3d", cubes.flatMap((cube) => cube.document.primitives))
+    const observation = createSceneObservation([snapshot(document)])
+
+    const clamped = observation.derivedStatuses(document.metadata.id, { derived: 9_999 })
+    const byDefault = observation.derivedStatuses(document.metadata.id)
+
+    expect(clamped.ok && clamped.result.payload).toHaveLength(MAX_DERIVED_STATUS_LIMIT)
+    expect(byDefault.ok && byDefault.result.payload).toHaveLength(DEFAULT_DERIVED_STATUS_LIMIT)
+  })
+
+  it("says nothing about a document with no solid in it", () => {
+    const document = docWith("conics", [{ id: "point-1", type: "point", x: 0, y: 0 }])
+    const observation = createSceneObservation([snapshot(document)])
+
+    const result = observation.derivedStatuses(document.metadata.id)
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error("expected a result")
+    expect(result.result.payload).toEqual([])
+    expect(result.result.diagnostics).toEqual([])
+  })
+
+  it("refuses a stale snapshot instead of reporting readings for the current content", () => {
+    const { document } = prismFixture("solid-1")
+    const stale = { handle: handleFor(document, "doc-prism"), document: { ...document, primitives: [...document.primitives, { id: "point3-extra", type: "point3" as const, position: { x: 1, y: 0, z: 0 } }] } }
+    const observation = createSceneObservation([stale])
+
+    const result = observation.derivedStatuses("doc-prism")
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.reason).toBe("stale_source")
   })
 })

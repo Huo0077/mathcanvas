@@ -1,5 +1,5 @@
 import type { GeometryDocument } from "@draw/dsl"
-import { canonicalContentHash, compilePlan, PLAN_SCHEMA_VERSION, type PlanEnvelope, type StructuredAssumption } from "@draw/agent-core"
+import { canonicalContentHash, compilePlan, PLAN_SCHEMA_VERSION, type PlanDiagnostic, type PlanEnvelope, type RepairRequest, type StructuredAssumption } from "@draw/agent-core"
 import { createIdAllocator, type DocumentHandle } from "@draw/scene-graph"
 
 import type { DraftAction, DomainOperation, IdAllocator } from "@draw/scene-graph"
@@ -79,7 +79,25 @@ export type StageReason = "unknown_draft" | "stale_draft_version" | "compile_fai
 
 export type StageResult =
   | { ok: true; preview: DraftPreview }
-  | { ok: false; reason: StageReason; diagnostics?: { code: string; message: string }[]; detail?: string }
+  | {
+      ok: false
+      reason: StageReason
+      /** 动作层/补丁层的原始诊断（一句话一句）。 */
+      diagnostics?: { code: string; message: string }[]
+      detail?: string
+      /**
+       * **编译器给的一次性修复请求**（Agent DSL 切片 Task 4 的接线）。
+       *
+       * 六层编译在这里被调用，所以"允许改哪几处"（`RepairRequest.allowedChanges`）
+       * 只有这一层拿得到。以前它被压成一句 `detail` 就丢掉了，于是协调器手里
+       * 根本没有可发回模型的请求 —— 编译器的那一份从未被消费。
+       */
+      repair?: RepairRequest
+      /** 编译器的逐层诊断（层 + 原因码 + 路径），修复提示据此说清卡在哪一层。 */
+      planDiagnostics?: PlanDiagnostic[]
+      /** 编译器在失败前补出来的假设（"系统替你定了什么"不能在修复时丢掉）。 */
+      assumptions?: StructuredAssumption[]
+    }
 
 export type FreshnessResult = { ok: true } | { ok: false; reason: "stale_source"; detail: string }
 
@@ -174,10 +192,24 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
           // **层 + 路径 + 原因**：`stage` 以前在这里被丢掉，"卡在哪一层"就查不到了（Fix round 1 / M22）。
           .map((entry) => ({ code: entry.code, message: `${entry.stage}: ${entry.path}: ${entry.detail}` }))
         const questions = compiled.questions.map((question) => question.text)
-        if (diagnostics.length === 0 && questions.length > 0) {
-          return { ok: false, reason: "compile_failed", diagnostics: questions.map((text) => ({ code: "needs_more_information", message: text })) }
+        /**
+         * **编译器的那一份原样带出去**（Agent DSL 切片 Task 4 的接线）：
+         * 修复请求（`reason`/`errors`/`allowedChanges`/`attempt`）、逐层诊断，
+         * 以及失败前已经补出来的假设。合不合并、要不要再问模型由**协调器**决定
+         * （它掌握"整次运行只修一次"与预算），这一层只如实转交。
+         *
+         * 注意 `compiled.repair` 在有澄清问题时**一定是 `undefined`**（`planCompiler` 的判据）：
+         * 用户能回答的问题不变成"让模型重发一遍"（规格 §7）。下面的对象展开因此天然为空。
+         */
+        const compilerFields = {
+          ...(compiled.repair === undefined ? {} : { repair: compiled.repair }),
+          ...(compiled.diagnostics.length === 0 ? {} : { planDiagnostics: compiled.diagnostics }),
+          ...(compiled.assumptions.length === 0 ? {} : { assumptions: compiled.assumptions })
         }
-        return { ok: false, reason: "compile_failed", ...(diagnostics.length > 0 ? { diagnostics } : {}), detail: diagnostics.length > 0 ? undefined : "the plan produced no compilable action" }
+        if (diagnostics.length === 0 && questions.length > 0) {
+          return { ok: false, reason: "compile_failed", diagnostics: questions.map((text) => ({ code: "needs_more_information", message: text })), ...compilerFields }
+        }
+        return { ok: false, reason: "compile_failed", ...(diagnostics.length > 0 ? { diagnostics } : {}), detail: diagnostics.length > 0 ? undefined : "the plan produced no compilable action", ...compilerFields }
       }
 
       record.candidate = compiled.draftDocument

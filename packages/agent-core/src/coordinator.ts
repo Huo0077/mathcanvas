@@ -1,10 +1,11 @@
 import type { Budget } from "./budget"
 import { buildContext, buildConversationContext, type ConversationContextSource, type Fact } from "./contextBuilder"
-import { parsePlanEnvelope } from "./schemas"
-import type { PlanEnvelope, RunContext } from "./contracts"
+import { parsePlanEnvelope, repairRequestFor } from "./schemas"
+import { MAX_REPAIR_ATTEMPTS, type PlanEnvelope, type RunContext } from "./contracts"
 import type { CancelReason, CancelResult, CommitterPort, ConsentToken, ObserverPort, PlannerPort, PlanRequest, ToolPort } from "./coordinatorPorts"
 import { createBudget, type BudgetLimits } from "./budget"
 import { describeRepairPrompt } from "./outputParser"
+import { describeCompileRepairPrompt } from "./planCompiler"
 import { createToolRegistry, type ToolRegistry } from "./toolRegistry"
 import { createRunLedger, type RunEvent, type RunLedger } from "./runState"
 
@@ -15,8 +16,10 @@ import { createRunLedger, type RunEvent, type RunLedger } from "./runState"
  * 模型、场景、编译提交、只读工具全部是注入的端口（见 `coordinatorPorts.ts`）。
  *
  * 五条纪律，逐条都有用例：
- * 1. **模型输出永远不可信**：`plan` 端口回来的东西必须过 `parsePlanEnvelope`。解析失败 =
- *    一次"可见的修复机会"（计划 Task 2.3 的 repair 通道），用完仍是失败则整次运行 `failed`。
+ * 1. **模型输出永远不可信**：`plan` 端口回来的东西必须过 `parsePlanEnvelope`，落草稿前还要过
+ *    六层编译管线。**两个阶段共用那一次"可见的修复机会"**（计划 Task 2.3/2.4 的 repair 通道）：
+ *    修形状还是修字段由失败的位置决定，用完仍是失败则整次运行 `failed` ——
+ *    而且**没有修复请求就不再问模型**（无请求的重试只是一次盲目的重复）。
  * 2. **缺事实不许猜**：计划信封引用的 `factId` 必须在观察结果里。缺了就走 `waiting`
  *    （**不是**失败）—— 问用户比编一个数字好。
  * 3. **写入只有一条路**：`CommitterPort.commit`，且必须带 `ConsentToken`。协调器**不构造**同意凭据，
@@ -45,8 +48,15 @@ export interface CoordinatorDependencies {
    * 而注册表是"这一版软件能做什么"的事实，可能随环境变化；协调器只管把它原样放进上下文。
    */
   availableActions?: readonly string[]
-  /** 上下文条数上限（只能**收紧**，`buildContext` 内部另有硬上限）。 */
-  contextLimits?: { facts?: number; refs?: number }
+  /**
+   * 上下文条数上限（只能**收紧**，两个组装器内部另有硬上限）。
+   *
+   * `derived` 必须在这里：提示词渲染的是**会话那一份**派生读数
+   *（`conversation.observation.derived ?? context.derived`），所以只把上限递给
+   * `buildContext` 时，"这一轮少给几条读数"看着生效了，模型看到的却没变。
+   * 协调器把同一个数递给两个组装器（见 `conversationLimitsFor`）。
+   */
+  contextLimits?: { facts?: number; refs?: number; derived?: number }
   /**
    * **会话上下文的来源**（对话切片 Task 4；规格 §5.3）。
    *
@@ -111,8 +121,26 @@ export interface AgentCoordinator {
   phase(): RunEvent["phase"]
 }
 
-/** 只允许一次修复尝试（计划 Task 2.3：可见的一次性 schema 修复）。 */
-const MAX_PLAN_ATTEMPTS = 2
+/**
+ * 一共允许问模型几次：**一次原始尝试 + 一次修复**。
+ *
+ * 与 `MAX_REPAIR_ATTEMPTS`（`contracts.ts`，全局约束 "Repair is limited to one request"）
+ * 绑在一起而不是各写一个数字：两处各写一份，迟早会出现"给了修复却还允许第三次尝试"
+ * 或者反过来"修复额度说 0 但这里还在问"。修复**共用运行预算**，不另开配额（见 `budget.ts`）。
+ */
+const MAX_PLAN_ATTEMPTS = 1 + MAX_REPAIR_ATTEMPTS
+
+/**
+ * **这一轮生效的会话上下文上限**：宿主声明的 + 协调器这一轮要求收紧的。
+ *
+ * `derived` 以协调器为准（它设了就用它）：这一条决定了**提示词渲染几条派生读数**
+ *（提示词读的是会话那一份），而"这一轮不该看那么多"只有运行这一层知道。
+ * 两种上限最终都会被组装器夹进硬上限里，所以这里只管把数递下去。
+ */
+function conversationLimitsFor(source: ConversationContextSource | undefined, limits: CoordinatorDependencies["contextLimits"]): NonNullable<ConversationContextSource["limits"]> | undefined {
+  const merged = { ...(source?.limits ?? {}), ...(limits?.derived === undefined ? {} : { derived: limits.derived }) }
+  return Object.keys(merged).length === 0 ? undefined : merged
+}
 
 export function createCoordinator(dependencies: CoordinatorDependencies): AgentCoordinator {
   const now = dependencies.now ?? (() => Date.now())
@@ -162,7 +190,13 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
       const modelContext = buildContext({
         run: request.run,
         // 观察端口给的事实文本与来源原样带进去（只有 `factIds` 时，上下文里的事实就只剩一串 id）。
-        observation: { facts: (observation.facts ?? []).map((fact): Fact => ({ id: fact.id, text: fact.text, origin: fact.origin })), summary: observation.summary },
+        // **派生立体读数**（内核给出的四态结论）同样从观察结果里搬：它是 §6.2 明令
+        // schema 不许自己重算的东西，所以协调器只负责原样转交，不解释也不补全。
+        observation: {
+          facts: (observation.facts ?? []).map((fact): Fact => ({ id: fact.id, text: fact.text, origin: fact.origin })),
+          summary: observation.summary,
+          ...(observation.derived === undefined ? {} : { derived: observation.derived })
+        },
         requestedSkillIds: dependencies.requestedSkillIds ?? [],
         selectedRefs: dependencies.selectedRefs?.() ?? [],
         availableActions: dependencies.availableActions ?? [],
@@ -176,6 +210,7 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
        * 必须是同一个题目下的第二次尝试。
        */
       const source = dependencies.conversation?.()
+      const conversationLimits = conversationLimitsFor(source, dependencies.contextLimits)
       const conversation = buildConversationContext({
         binding: source?.binding ?? {
           conversationId: request.run.conversationId,
@@ -188,8 +223,13 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
         facts: source?.facts ?? [],
         messages: source?.messages ?? [],
         ...(source?.draft === undefined ? {} : { draft: source.draft }),
-        ...(source?.limits === undefined ? {} : { limits: source.limits }),
-        observation: { facts: (observation.facts ?? []).map((fact): Fact => ({ id: fact.id, text: fact.text, origin: fact.origin })), summary: observation.summary },
+        ...(conversationLimits === undefined ? {} : { limits: conversationLimits }),
+        // 会话上下文那一份也要带派生读数：它是提示词渲染 `scene` 的另一条来源。
+        observation: {
+          facts: (observation.facts ?? []).map((fact): Fact => ({ id: fact.id, text: fact.text, origin: fact.origin })),
+          summary: observation.summary,
+          ...(observation.derived === undefined ? {} : { derived: observation.derived })
+        },
         request: request.userMessage
       })
       const phaseTools = registry.forPhase("planning", {
@@ -206,7 +246,15 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
       const planning = ledger.transition("planning", "asking for a plan")
       if (planning.ok) yield planning.event
 
-      let parsed: PlanEnvelope | null = null
+      /**
+       * 通过六层编译、真正要落草稿的那一份计划。
+       *
+       * 声明成 `kind: "plan"` 那一支（而不是整个信封联合）是刻意的：循环结束时它是唯一
+       * 还能继续走下去的形状 —— "只读回答"与"澄清"两条路径都在循环里 `return` 了。
+       */
+      let stagedPlan: Extract<PlanEnvelope, { kind: "plan" }> | null = null
+      /** 暂存成功的产物：**只有它非空时**这次运行才有草稿可走下去。 */
+      let staged: { draftVersion: number; previewHash: string } | null = null
       let lastDetail = ""
       /**
        * `requestId` / `attemptId` 在**第一次往返之后**才知道，而 `planning` 事件在往返之前就发出来了。
@@ -219,12 +267,47 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
        * errors in the second prompt"）。
        *
        * 没有它，"一次性修复"只是把同一份请求再发一遍 —— 模型没有任何理由换个答案。
+       *
+       * 它有两个**来源**，但只有一份真源 `RepairRequest`（`reason` / `errors` /
+       * `allowedChanges` / `attempt`）：
+       * - 传输解析失败 → `repairRequestFor(解析错误, attempt)`，提示用 `describeRepairPrompt`；
+       * - **编译阶段失败 → `compilePlan` 已经造好的那一份**，经 `CommitterPort.stage`
+       *   的失败结果原样带回来，提示用 `describeCompileRepairPrompt`。
        */
       let repair: PlanRequest["repair"]
-      for (let attempt = 1; attempt <= MAX_PLAN_ATTEMPTS && parsed === null; attempt += 1) {
+      /**
+       * **已经开始的修复次数**（整次运行**只允许一次**）。
+       *
+       * 计划 Global Constraints："Repair is limited to one request and shares the run budget."
+       * 计数放在协调器而不是各端口里：只有它同时知道"这一次是原始尝试还是修复"与"预算还剩多少"。
+       */
+      let repairsStarted = 0
+
+      /**
+       * **一次原始尝试 + 一次可见修复**的循环。
+       *
+       * 修复可能发生在**两个位置**，但永远不会重来第三次：
+       * - 计划连信封都不合法（传输解析这一层就拒）→ 修的是形状；
+       * - 计划合法但编译阶段拒了它（字段审计 / 引用解析 / 参数补全 / 几何语义 / 动作编译）
+       *   → 修的是字段，请求来自编译器。
+       *
+       * 两条路径共用 `repair` 与 `repairsStarted`，所以"总共只修一次"是结构性的，
+       * 而不是靠每个分支各自记得别多问一次。
+       */
+      for (let attempt = 1; attempt <= MAX_PLAN_ATTEMPTS && stagedPlan === null; attempt += 1) {
         if (attempt > 1) {
           // 第二次尝试是**可见的修复**：它花掉的是同一份预算的另一个名额。
           if (!spend(budget, "generation") || !spend(budget, "network")) return yield* stop("budget_repair")
+          /**
+           * 上一次失败发生在**编译阶段**时账本现在停在 `compiling`，而这一次是重新提问 ——
+           * 所以先回到 `planning`（`compiling → planning` 这条边只由这条路径用到，
+           * 它让账本与界面都能看出"这是同一份运行里的第二次规划"）。
+           * 上一次失败发生在传输解析时账本仍在 `planning`，不需要（也不允许）再转移一次。
+           */
+          if (ledger.phase() !== "planning") {
+            const replanning = ledger.transition("planning", `asking for the one repair (${repairsStarted}/${MAX_REPAIR_ATTEMPTS})`)
+            if (replanning.ok) yield replanning.event
+          }
         }
         const outcome = await dependencies.planner.plan({ run: request.run, userMessage: request.userMessage, budget, signal, model: { context: modelContext, tools: phaseTools }, conversation, repair })
         if (cancelled) return
@@ -232,90 +315,130 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
         ledger.record(`plan attempt ${attempt} returned`, lastAttemptIds)
 
         const result = parsePlanEnvelope(outcome.plan)
-        if (result.ok) {
-          parsed = result.value
-          break
+        if (!result.ok) {
+          lastDetail = result.errors.map((error) => `${error.code}@${error.path}`).join(", ").slice(0, 512)
+          ledger.record(`plan attempt ${attempt} was rejected: ${lastDetail}`)
+          /**
+           * 组装**下一次**要用的修复提示。
+           *
+           * `describeRepairPrompt` 收的是 `EnvelopeParseFailure`；协调器这一层拿到的是
+           * `parsePlanEnvelope` 的错误列表。`reason` 用 `schema_invalid`（两边同名），
+           * `channel` 给 `fenced_text` —— 那是**最宽松**的通道（一次外层围栏 + 围栏内只有 JSON），
+           * 所以在"不知道对方用哪个通道"时说它不会给出错误的格式建议。
+           *
+           * 请求本身走已注册的 `repairRequestFor`：于是"允许改哪几处"（`allowedChanges`）
+           * 与编译阶段那一份是同一个算法，不再是这里手写的一句话。
+           */
+          const next = repairRequestFor(result.errors, repairsStarted + 1)
+          if (repairsStarted >= MAX_REPAIR_ATTEMPTS || next.attempt > MAX_REPAIR_ATTEMPTS) break
+          repairsStarted += 1
+          repair = { ...next, hint: describeRepairPrompt({ ok: false, reason: "schema_invalid", errors: result.errors, payload: "", channel: "fenced_text" }) }
+          continue
         }
-        lastDetail = result.errors.map((error) => `${error.code}@${error.path}`).join(", ").slice(0, 512)
+
         /**
-         * 组装**下一次**要用的修复提示。
+         * 计划已通过校验：把它交给宿主（假设、以及其他协调器自己用不上的东西都从这里出去）。
          *
-         * `describeRepairPrompt` 收的是 `EnvelopeParseFailure`；协调器这一层拿到的是
-         * `parsePlanEnvelope` 的错误列表。`reason` 用 `schema_invalid`（两边同名），
-         * `channel` 给 `fenced_text` —— 那是**最宽松**的通道（一次外层围栏 + 围栏内只有 JSON），
-         * 所以在"不知道对方用哪个通道"时说它不会给出错误的格式建议。
+         * 放在循环里是刻意的：修复那一次同样要交出去，而且**后一份覆盖前一份** ——
+         * 真正要落地的是最后通过编译的那一份计划。
          */
-        repair = {
-          reason: "schema_invalid",
-          errors: result.errors,
-          hint: describeRepairPrompt({ ok: false, reason: "schema_invalid", errors: result.errors, payload: "", channel: "fenced_text" })
-        }
-        ledger.record(`plan attempt ${attempt} was rejected: ${lastDetail}`)
-      }
+        const candidate = result.value
+        dependencies.onPlanParsed?.(candidate)
 
-      if (parsed === null) {
-        const failed = ledger.transition("failed", `the plan never matched the schema: ${lastDetail}`, lastAttemptIds ?? undefined)
-        if (failed.ok) yield failed.event
-        return
-      }
-
-      // 计划已通过校验：把它交给宿主（假设、以及其他协调器自己用不上的东西都从这里出去）。
-      dependencies.onPlanParsed?.(parsed)
-
-      // ---- 缺事实 → 等用户补充（不是失败） --------------------------------
-      const known = new Set(observation.factIds)
-      const missing = parsed.factIds.filter((factId) => !known.has(factId))
-      if (missing.length > 0) {
-        const waiting = ledger.transition("waiting", `waiting for the user to confirm: ${missing.join(", ")}`)
-        if (waiting.ok) yield waiting.event
-        return
-      }
-
-      // ---- 只读回答：没有动作，走显式的 `answering` 路径 --------------------
-      if (parsed.kind !== "plan") {
-        const answering = ledger.transition("answering", parsed.kind === "answer" ? "answering from the scene" : "asking the user a clarifying question")
-        if (answering.ok) yield answering.event
-        if (parsed.kind === "clarification") {
-          const waiting = ledger.transition("waiting", "waiting for the user's answer")
+        // ---- 缺事实 → 等用户补充（不是失败） --------------------------------
+        const known = new Set(observation.factIds)
+        const missing = candidate.factIds.filter((factId) => !known.has(factId))
+        if (missing.length > 0) {
+          const waiting = ledger.transition("waiting", `waiting for the user to confirm: ${missing.join(", ")}`)
           if (waiting.ok) yield waiting.event
           return
         }
-        const completed = ledger.transition("completed", "the run produced no draft")
-        if (completed.ok) yield completed.event
-        return
-      }
 
-      // ---- 草稿：编译 → 校验 → 等确认 → 提交 -------------------------------
-      // 编译之前给宿主一次准备机会（例如切到这条计划需要的工作区）。
-      // 放在编译**之前**是必须的：工作区不匹配的动作会被编译器直接拒。
-      if (dependencies.prepare) {
-        const prepared = dependencies.prepare(parsed)
-        if (!prepared.ok) {
-          const failed = ledger.transition("failed", `could not prepare the target: ${prepared.detail}`)
-          if (failed.ok) yield failed.event
+        // ---- 只读回答：没有动作，走显式的 `answering` 路径 --------------------
+        if (candidate.kind !== "plan") {
+          const answering = ledger.transition("answering", candidate.kind === "answer" ? "answering from the scene" : "asking the user a clarifying question")
+          if (answering.ok) yield answering.event
+          if (candidate.kind === "clarification") {
+            const waiting = ledger.transition("waiting", "waiting for the user's answer")
+            if (waiting.ok) yield waiting.event
+            return
+          }
+          const completed = ledger.transition("completed", "the run produced no draft")
+          if (completed.ok) yield completed.event
           return
         }
-      }
 
-      const actionCount = parsed.actions.length
-      if (!spend(budget, "actions_per_stage", actionCount)) return yield* stop("budget_actions_per_stage")
-      if (!spend(budget, "actions_per_run", actionCount)) return yield* stop("budget_actions_per_run")
+        // 走到这里它必然是 `kind: "plan"`（另外两种信封在上面那条分支里已经走完了）。
+        const plan = candidate
 
-      const compiling = ledger.transition("compiling", `staging ${actionCount} action(s)`)
-      if (compiling.ok) yield compiling.event
+        // ---- 草稿：编译 → 校验 → 等确认 → 提交 -------------------------------
+        // 编译之前给宿主一次准备机会（例如切到这条计划需要的工作区）。
+        // 放在编译**之前**是必须的：工作区不匹配的动作会被编译器直接拒。
+        if (dependencies.prepare) {
+          const prepared = dependencies.prepare(plan)
+          if (!prepared.ok) {
+            const failed = ledger.transition("failed", `could not prepare the target: ${prepared.detail}`)
+            if (failed.ok) yield failed.event
+            return
+          }
+        }
 
-      // 用户原话随暂存一起下去：参数审计的三条判据（符号参数 / 从原话读数字 / 采样≠证明）
-      // 都在编译这一层，而原话只有协调器手里有（Fix round 1 / C3）。
-      const staged = await dependencies.committer.stage({ run: request.run, actionCount, actions: parsed.actions, userMessage: request.userMessage, signal })
-      if (cancelled) return
-      if (!staged.ok) {
-        // 草稿过期不是失败：文档被改过，重新暂存即可（协调器把决定权交回调用方）。
-        const detail = `${staged.reason}${staged.detail ? `: ${staged.detail}` : ""}`
+        const actionCount = plan.actions.length
+        if (!spend(budget, "actions_per_stage", actionCount)) return yield* stop("budget_actions_per_stage")
+        if (!spend(budget, "actions_per_run", actionCount)) return yield* stop("budget_actions_per_run")
+
+        const compiling = ledger.transition("compiling", `staging ${actionCount} action(s)`)
+        if (compiling.ok) yield compiling.event
+
+        // 用户原话随暂存一起下去：参数审计的三条判据（符号参数 / 从原话读数字 / 采样≠证明）
+        // 都在编译这一层，而原话只有协调器手里有（Fix round 1 / C3）。
+        const stagedResult = await dependencies.committer.stage({ run: request.run, actionCount, actions: plan.actions, userMessage: request.userMessage, signal })
+        if (cancelled) return
+        if (stagedResult.ok) {
+          staged = stagedResult
+          // 只有**编译通过**的那一份才算数：修复那一次失败时循环会继续，这份仍是空的。
+          stagedPlan = plan
+          ledger.record(`draft v${stagedResult.draftVersion} staged`, { draftVersion: stagedResult.draftVersion })
+          break
+        }
+
+        const detail = `${stagedResult.reason}${stagedResult.detail ? `: ${stagedResult.detail}` : ""}`
+        lastDetail = detail
+        ledger.record(`plan attempt ${attempt} was refused by the compiler: ${lastDetail}`)
+        /**
+         * **编译阶段的那一次修复**（Agent DSL 切片 Task 4 的接线缺口）。
+         *
+         * 判据只有一条：**编译器给了修复请求**（`compilePlan` 的 `repair`）。
+         * 没有请求就**不再问模型** —— 那只是一次盲目的重复；"用户能回答的澄清问题"
+         * 正是这种形状（规格 §7：无安全默认时返回 clarification，问用户比让模型重发好）。
+         *
+         * `attempt` 由协调器写死成它自己的计数：`MAX_REPAIR_ATTEMPTS` 是**整次运行**的额度，
+         * 不是某个端口的。编译器那一份给的是 1，两处在这里对齐。
+         */
+        const compileRepair = stagedResult.repair
+        if (stagedResult.reason === "compile_failed" && compileRepair !== undefined && compileRepair.attempt <= MAX_REPAIR_ATTEMPTS && repairsStarted < MAX_REPAIR_ATTEMPTS) {
+          repairsStarted += 1
+          repair = {
+            ...compileRepair,
+            attempt: repairsStarted,
+            hint: describeCompileRepairPrompt(compileRepair, stagedResult.planDiagnostics ?? []),
+            ...(stagedResult.planDiagnostics === undefined ? {} : { diagnostics: stagedResult.planDiagnostics }),
+            ...(stagedResult.assumptions === undefined ? {} : { assumptions: stagedResult.assumptions })
+          }
+          continue
+        }
+
+        // 不可修的失败（文档被改过、草稿过期、没有修复请求）→ 如实失败，**绝不静默重试**。
         const failed = ledger.transition("failed", detail)
         if (failed.ok) yield failed.event
         return
       }
-      ledger.record(`draft v${staged.draftVersion} staged`, { draftVersion: staged.draftVersion })
+
+      if (stagedPlan === null || staged === null) {
+        const failed = ledger.transition("failed", `the plan never matched the schema: ${lastDetail}`, lastAttemptIds ?? undefined)
+        if (failed.ok) yield failed.event
+        return
+      }
 
       const validating = ledger.transition("validating", "checking the staged draft against the document")
       if (validating.ok) yield validating.event
@@ -336,7 +459,8 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
       const committing = ledger.transition("committing", "applying the confirmed draft")
       if (committing.ok) yield committing.event
 
-      const outcome = await dependencies.committer.commit({ run: request.run, actionCount, actions: parsed.actions, userMessage: request.userMessage, signal, consent: dependencies.consent })
+      // 提交用的是**通过编译的那一份**计划（修复之后可能是第二份）。
+      const outcome = await dependencies.committer.commit({ run: request.run, actionCount: stagedPlan.actions.length, actions: stagedPlan.actions, userMessage: request.userMessage, signal, consent: dependencies.consent })
       if (cancelled) return
 
       if (outcome.status === "committed" || outcome.status === "no_change") {
