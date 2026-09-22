@@ -22,6 +22,8 @@
 
 **验证证据（本批）**：单测 **193 文件 / 2207 用例**通过（零跳过；新增 1 个文件 + 11 例）、`npm run typecheck` 6 个 workspace exit 0、`npm run lint` **0 error / 14 warning**（基线）、`npm run test:e2e` **124/124**、Rust 侧未改动（**193 例 + 1 ignored**，本批未动 Rust）。
 
+**发布（同日）**：第一次产出 Windows 安装包并上传到 **[GitHub Release `v0.1.0`](https://github.com/Huo0077/mathcanvas/releases/tag/v0.1.0)** —— 免安装 `mathcanvas-desktop.exe`（16.0 MB）、`MathCanvas_0.1.0_x64-setup.exe`（NSIS，4.6 MB）、`MathCanvas_0.1.0_x64_en-US.msi`（6.3 MB），tag 指向 `72e94a0`。构建命令 `npm --workspace @draw/desktop run bundle`（此前一直记着"打包安装器属 Task 5.4、未实测"）：**实测结果是 WiX 3.14 与 NSIS 3.11 的工具链真的下载下来并成功打出两个安装包**，exit 0。**如实**：这两个安装包**没有在本机实际安装过**（只是构建成功）—— 免安装 exe 那份是反复启动、并用 CDP 驱动真窗口跑过真模型往返的。
+
 ### 规范化哈希与 `undefined`：修掉"画布上有立体就必然失败"（2026-09-21，修复过程中暴露的第二个缺陷）
 
 - **怎么暴露的**：修完分配器占用集之后，我重建 exe、重启应用、用真模型再发一次"再建一个棱长 2 的立方体"，运行**不再撞 id**，却停在新的一句上：`Error: canonicalContentHash: unsupported value of type undefined`（账本里是 `phase: failed` / `run_failed`）。**旧版本因为撞 id 在更早一步就失败，这个缺陷一直被挡着看不见。**
