@@ -30,6 +30,11 @@ pub enum RepositoryError {
     StaleHead { detail: String },
     /// 幂等键被另一份**不同**的提交用过。
     IdempotencyConflict { detail: String },
+    /// 调用方给的值本身不合法（空 id、超长、未知状态、明文凭据形状）。
+    /// 它与 `Io` 分开：那是"你的请求有问题"，不是"存储出问题了"。
+    Invalid { detail: String },
+    /// 与当前状态冲突（id 已经存在、版本对不上）。
+    Conflict { detail: String },
 }
 
 impl std::fmt::Display for RepositoryError {
@@ -39,6 +44,8 @@ impl std::fmt::Display for RepositoryError {
             RepositoryError::NotFound { detail } => write!(formatter, "{detail}"),
             RepositoryError::StaleHead { detail } => write!(formatter, "{detail}"),
             RepositoryError::IdempotencyConflict { detail } => write!(formatter, "{detail}"),
+            RepositoryError::Invalid { detail } => write!(formatter, "{detail}"),
+            RepositoryError::Conflict { detail } => write!(formatter, "{detail}"),
         }
     }
 }
@@ -105,7 +112,9 @@ pub struct CommitReceipt {
     pub committed_at: i64,
 }
 
-fn now_ms() -> i64 {
+/// 现在（毫秒）。**对外的**：多会话那一层（`conversations.rs`）也要盖时间戳，
+/// 而"两处各自实现一遍"必然会有一处漏掉某个单位换算。
+pub(crate) fn now_ms() -> i64 {
     use std::time::{SystemTime, UNIX_EPOCH};
     SystemTime::now().duration_since(UNIX_EPOCH).map(|value| value.as_millis() as i64).unwrap_or(0)
 }
@@ -515,5 +524,55 @@ impl ProjectRepository {
     /// 账本里一共多少条（界面与测试据此看"它真的在长"）。
     pub fn run_event_count(&self) -> Result<i64, RepositoryError> {
         super::run_events::count(&self.connection)
+    }
+
+    // ------------------------------------------------------------ 多会话（Task 1 / Task 2）
+    //
+    // 这一层只是把 `conversations.rs` 的函数接到**同一个连接**上（文档、账本、会话
+    // 共用一份事务性存储 —— 于是"这次运行改动了哪一版文档"与"它在哪条会话里说的"
+    // 在同一个时间线上）。判据与文档都写在那个文件里，这里不重复。
+    //
+    // 写者要 `&mut self`：它们要么开事务（`append_message` 要原子地读序号再写、
+    // `upsert_fact` 要先验证据再写、`update_summary` 要比版本号），要么与紧随其后的
+    // 读取配成一次原子的状态转换。
+
+    /// **建一条会话**（绑定一个项目 / 文档 / 工作区）。
+    pub fn create_conversation(&mut self, conversation: &super::conversations::NewConversation) -> Result<super::conversations::ConversationRecord, RepositoryError> {
+        super::conversations::create(&mut self.connection, conversation)
+    }
+
+    /// **列出这个绑定下还没归档的会话**（最近改动的在前）。
+    pub fn list_conversations(&self, binding: &super::conversations::ConversationBinding) -> Result<Vec<super::conversations::ConversationRecord>, RepositoryError> {
+        super::conversations::list(&self.connection, binding)
+    }
+
+    /// **读一条会话的全部内容**（记录 + 有界的一批消息与事实）。
+    pub fn read_conversation(&self, conversation_id: &str) -> Result<super::conversations::ConversationDetail, RepositoryError> {
+        super::conversations::read_conversation(&self.connection, conversation_id)
+    }
+
+    /// **追加一条消息**（同一个 id 重放是空操作，返回 `false`）。
+    pub fn append_conversation_message(&mut self, input: &super::conversations::ConversationMessageInput) -> Result<bool, RepositoryError> {
+        super::conversations::append_message(&mut self.connection, input)
+    }
+
+    /// **写一份新的摘要**（版本号 +1，可带期望版本号做条件更新）。
+    pub fn update_conversation_summary(&mut self, conversation_id: &str, summary: &str, expected_version: Option<i64>) -> Result<super::conversations::ConversationRecord, RepositoryError> {
+        super::conversations::update_summary(&mut self.connection, conversation_id, summary, expected_version)
+    }
+
+    /// **写一条事实**（按 `(conversation_id, key)` upsert，必须带同会话的证据）。
+    pub fn upsert_conversation_fact(&mut self, input: &super::conversations::ConversationFactInput) -> Result<super::conversations::ConversationFactRecord, RepositoryError> {
+        super::conversations::upsert_fact(&mut self.connection, input)
+    }
+
+    /// **归档一条会话**（从列表里消失，记录还在）。
+    pub fn archive_conversation(&mut self, conversation_id: &str) -> Result<super::conversations::ConversationRecord, RepositoryError> {
+        super::conversations::archive(&mut self.connection, conversation_id)
+    }
+
+    /// **删掉一条会话**（连同它的消息与事实）。第二次删回 `false`，不是错误。
+    pub fn delete_conversation(&mut self, conversation_id: &str) -> Result<bool, RepositoryError> {
+        super::conversations::delete(&mut self.connection, conversation_id)
     }
 }

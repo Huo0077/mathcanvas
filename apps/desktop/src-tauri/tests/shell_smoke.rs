@@ -150,6 +150,21 @@ fn exposes_only_named_ipc_commands_and_no_generic_one() {
         "append_run_event",
         "read_run_events",
         "run_event_count",
+        // 多会话（Task 1 / Task 2）。**有意加的八个**：会话的建 / 列 / 读、
+        // 追加一条消息、写摘要、写事实、归档、删除。
+        //
+        // 逐条在这里写下名字的那一刻，就是一次**有意的**决定：这些命令给前端的是
+        // "会话"这一层语义，而不是一把能执行任意 SQL 的钥匙 —— 消息与事实的边界判据
+        // （id、工作区、消息长度、事实状态）在 Rust 侧先跑，见 `src/lib.rs` 的
+        // "多会话"一节。
+        "create_conversation",
+        "list_conversations",
+        "read_conversation",
+        "append_conversation_message",
+        "update_conversation_summary",
+        "update_conversation_fact",
+        "archive_conversation",
+        "delete_conversation",
         "proxy_session",
         "proxy_cancel"
     ];

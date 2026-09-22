@@ -30,11 +30,11 @@
 - Produce `ConversationRecord`, `ConversationMessageRecord`, and `ConversationFactRecord`.
 - Produce repository methods `create`, `list`, `read_messages`, `append_message`, `update_summary`, `upsert_fact`, `archive`, and `delete`.
 
-- [ ] Write migration tests for schema version 3, foreign-key ownership, per-conversation sequence uniqueness, and reopening an older database.
-- [ ] Run `npm run test:rust -- --test conversations` and verify the new tests fail because version 3 tables and methods are absent.
-- [ ] Add the version 3 migration with `conversations`, `conversation_messages`, and `conversation_facts` tables and indexes.
-- [ ] Implement repository methods with bounded reads, deterministic ordering, and idempotent message IDs.
-- [ ] Run `npm run test:rust -- --test conversations` and verify all repository tests pass.
+- [x] Write migration tests for schema version 3, foreign-key ownership, per-conversation sequence uniqueness, and reopening an older database.
+- [x] Run `npm run test:rust -- --test conversations` and verify the new tests fail because version 3 tables and methods are absent.
+- [x] Add the version 3 migration with `conversations`, `conversation_messages`, and `conversation_facts` tables and indexes.
+- [x] Implement repository methods with bounded reads, deterministic ordering, and idempotent message IDs.
+- [x] Run `npm run test:rust -- --test conversations` and verify all repository tests pass.
 
 ### Task 2: Expose named Tauri conversation commands
 
@@ -49,12 +49,12 @@
 - IPC commands: `create_conversation`, `list_conversations`, `read_conversation`, `append_conversation_message`, `update_conversation_summary`, `update_conversation_fact`, `archive_conversation`, `delete_conversation`.
 - TypeScript client methods mirror these commands and return typed records.
 
-- [ ] Add client tests with a mocked `invoke` asserting exact command names and serialized payloads.
-- [ ] Run the focused Vitest test and verify it fails because the client and commands do not exist.
-- [ ] Add named Rust commands that validate IDs, workspace values, message size, and fact status before repository calls.
-- [ ] Implement the client with desktop detection and a local fallback adapter boundary.
-- [ ] Update the explicit IPC command allowlist in `shell_smoke.rs`.
-- [ ] Run `npm test -- apps/web/src/services/conversationClient.test.ts` and `npm run test:rust -- --test shell_smoke`; verify both pass.
+- [x] Add client tests with a mocked `invoke` asserting exact command names and serialized payloads.
+- [x] Run the focused Vitest test and verify it fails because the client and commands do not exist.
+- [x] Add named Rust commands that validate IDs, workspace values, message size, and fact status before repository calls.
+- [x] Implement the client with desktop detection and a local fallback adapter boundary.
+- [x] Update the explicit IPC command allowlist in `shell_smoke.rs`.
+- [x] Run `npm test -- apps/web/src/services/conversationClient.test.ts` and `npm run test:rust -- --test shell_smoke`; verify both pass.
 
 ### Task 3: Replace localStorage records with a conversation repository adapter
 
@@ -69,11 +69,11 @@
 - `ConversationRepository.append(message): Promise<void>`.
 - `ConversationRepository.saveSummary(...)` and `ConversationRepository.saveFact(...)`.
 
-- [ ] Add tests proving two bindings load separate conversation lists and that a deleted conversation cannot reappear from a stale local cache.
-- [ ] Run the focused tests and verify the new repository calls are absent.
-- [ ] Implement the adapter with SQLite IPC in desktop mode and the existing localStorage serializer in browser mode.
-- [ ] Make `createConversation`, `selectConversation`, `deleteConversation`, and message mutations update the in-memory projection only after the repository operation succeeds.
-- [ ] Run the focused store and repository tests and verify pass.
+- [x] Add tests proving two bindings load separate conversation lists and that a deleted conversation cannot reappear from a stale local cache.
+- [x] Run the focused tests and verify the new repository calls are absent.
+- [x] Implement the adapter with SQLite IPC in desktop mode and the existing localStorage serializer in browser mode.
+- [x] Make `createConversation`, `selectConversation`, `deleteConversation`, and message mutations update the in-memory projection only after the repository operation succeeds.
+- [x] Run the focused store and repository tests and verify pass.
 
 ### Task 4: Inject conversation context into planning
 

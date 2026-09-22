@@ -100,6 +100,29 @@ fn is_token_character(character: char) -> bool {
     character.is_ascii_alphanumeric() || character == '-' || character == '_' || character == '.'
 }
 
+/// 一段文本里所有"令牌字符"的**连续段**。分隔符（空格、冒号、中文……）被丢掉。
+fn token_runs(text: &str) -> impl Iterator<Item = &str> {
+    text.split(|character: char| !is_token_character(character))
+}
+
+/// 一段文本里有没有**明确的凭据前缀**（`sk-` / `sk_`）。
+///
+/// 它**不是** [`redact`] 那条"默认拒绝式"规则：账本是内部诊断，把任何长串一律抹掉
+/// 只是难看；而对话内容是**要原样回显给用户**的 —— 把 64 位十六进制的提交哈希
+/// （提交回执里就带着它）当成密钥拒绝掉，那是数据损坏。所以这里只认那两家都用、
+/// 而且几乎不会出现在正常句子里的前缀。
+pub fn contains_credential_prefix(text: &str) -> bool {
+    token_runs(text).any(|run| {
+        let lowered = run.to_ascii_lowercase();
+        lowered.starts_with("sk-") || lowered.starts_with("sk_")
+    })
+}
+
+/// 这一个"令牌段"像不像密钥（**默认拒绝式**的判据，[`redact`] 用的就是它）。
+fn is_key_shaped(run: &str) -> bool {
+    run.chars().count() >= 32 || run.to_ascii_lowercase().starts_with("bearer") || contains_credential_prefix(run)
+}
+
 /// **默认拒绝式脱敏**。
 ///
 /// 规则只有一条主线：**连续 32 个以上的"令牌字符"一律抹掉**，外加三个明确的前缀
@@ -113,12 +136,7 @@ pub fn redact(text: &str) -> String {
         if run.is_empty() {
             return;
         }
-        let lowered = run.to_ascii_lowercase();
-        let key_shaped = run.chars().count() >= 32
-            || lowered.starts_with("sk-")
-            || lowered.starts_with("sk_")
-            || lowered.starts_with("bearer");
-        out.push_str(if key_shaped { "[redacted]" } else { run.as_str() });
+        out.push_str(if is_key_shaped(run) { "[redacted]" } else { run.as_str() });
         run.clear();
     }
 

@@ -9,7 +9,7 @@
 //!
 //! ## 为什么不用迁移库（`refinery` / `sqlx::migrate`）
 //!
-//! 这里一共两条迁移。引一个库意味着多一份要跟着升级、要审的东西，
+//! 这里一共三条迁移。引一个库意味着多一份要跟着升级、要审的东西，
 //! 而它们的价值（多后端、宏、CLI）在这里都用不上。
 //! `user_version` 是 SQLite 自带的整数字段，用它记版本号就够了。
 
@@ -24,7 +24,7 @@ pub struct Migration {
     pub sql: &'static str,
 }
 
-pub const MIGRATIONS: [Migration; 2] = [
+pub const MIGRATIONS: [Migration; 3] = [
     Migration {
         version: 1,
         name: "documents-and-commits",
@@ -88,6 +88,61 @@ pub const MIGRATIONS: [Migration; 2] = [
                 content_hash TEXT NOT NULL,
                 PRIMARY KEY (project_id, document_id, generation, content_hash)
             );
+        ",
+    },
+    Migration {
+        version: 3,
+        name: "conversations",
+        sql: "
+            -- 会话：**绑定一个** project / document / workspace（设计 5.1）。
+            -- 这里**没有**指向 documents 的外键：会话先于文档存在（用户开新对话时文档还没有
+            -- 第一次提交），加一条（文档必须已经在）的约束会把那条正常路径堵死。
+            CREATE TABLE IF NOT EXISTS conversations (
+                id              TEXT PRIMARY KEY,
+                project_id      TEXT NOT NULL,
+                document_id     TEXT NOT NULL,
+                workspace       TEXT NOT NULL,
+                title           TEXT NOT NULL,
+                summary         TEXT NOT NULL DEFAULT '',
+                summary_version INTEGER NOT NULL DEFAULT 1,
+                created_at      INTEGER NOT NULL,
+                updated_at      INTEGER NOT NULL,
+                archived_at     INTEGER
+            );
+            -- 消息：属于**一条**会话（外键 + 级联）。`UNIQUE(conversation_id, sequence)`
+            -- 是（顺序）这条事实的物理保证 —— 没有它，两条消息可以同时声称自己是第 1 条。
+            -- 注意这里**没有**放模型推理、候选文档或图像字节的位置：不存它们靠的是**结构**。
+            CREATE TABLE IF NOT EXISTS conversation_messages (
+                id                  TEXT PRIMARY KEY,
+                conversation_id     TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+                sequence            INTEGER NOT NULL,
+                role                TEXT NOT NULL,
+                kind                TEXT NOT NULL,
+                content_json        TEXT NOT NULL,
+                run_id              TEXT,
+                document_generation INTEGER,
+                token_estimate      INTEGER NOT NULL,
+                created_at          INTEGER NOT NULL,
+                UNIQUE(conversation_id, sequence)
+            );
+            -- 事实：每条会话里 key 唯一。`source_message_id` 指向**同一条会话**里的消息
+            -- （存在性由外键保证，同会话由仓库方法再查一次）——
+            -- 没有证据的事实不许进 confirmed，而证据在别的会话里等于没有证据。
+            CREATE TABLE IF NOT EXISTS conversation_facts (
+                id                TEXT PRIMARY KEY,
+                conversation_id   TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+                key               TEXT NOT NULL,
+                value_json        TEXT NOT NULL,
+                source_message_id TEXT NOT NULL REFERENCES conversation_messages(id) ON DELETE CASCADE,
+                status            TEXT NOT NULL,
+                created_at        INTEGER NOT NULL,
+                updated_at        INTEGER NOT NULL,
+                UNIQUE(conversation_id, key)
+            );
+            -- `list` 按绑定过滤、按最近改动排序；归档的会话不进这张索引的结果集。
+            CREATE INDEX IF NOT EXISTS conversations_binding_idx ON conversations(project_id, document_id, workspace, archived_at);
+            -- 迟到的运行事件要写回**它原本那条**会话：按 run_id 找得到那些消息。
+            CREATE INDEX IF NOT EXISTS conversation_messages_run_idx ON conversation_messages(run_id);
         ",
     }
 ];
