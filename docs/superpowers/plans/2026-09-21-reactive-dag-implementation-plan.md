@@ -71,7 +71,11 @@
 
 - [x] Add tests for tangent updates, Solid section updates, measurement invalidation, adaptive locus subdivision, and transient Trace behavior.
 - [x] Run focused tests and verify failure because derived nodes are not connected to rendering.
-- [x] Connect graph evaluation results to existing preview/render paths without committing per pointer move.
+- [ ] Connect graph evaluation results to existing preview/render paths without committing per pointer move.
+
+  > **未勾选（评审裁决，如实记录）**：图目前驱动的是**临时拖拽轨迹、轨迹采样、3D 宿主拖动坐标与诊断读数**；
+  > **2D 预览几何**仍由既有 `applyOperation`/`recomputeDerivedObjects` 计算 —— 复核发现这是"引入第二份几何真源"与"预览几何走图"之间的取舍，按 spec §1.2（不引入第二份几何真源）选择保留单一份几何来源。
+  > 代价：计划这一条宣称的预览接线只完成了一部分，已同时记入 `docs/project-progress.md` 的"如实缺口"。
 - [x] Commit one compound operation on pointer release and preserve one-step undo.
 - [x] Add browser coverage for moving a point and observing downstream tangent/circle/section updates.
 - [x] Run focused tests and the Playwright scenario and verify pass.
