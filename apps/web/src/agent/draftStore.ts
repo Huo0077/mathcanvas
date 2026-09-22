@@ -1,15 +1,8 @@
 import type { GeometryDocument } from "@draw/dsl"
-import { canonicalContentHash } from "@draw/agent-core"
-import {
-  applyOperation,
-  compileActions,
-  createIdAllocator,
-  validatePatch,
-  type DocumentHandle,
-  type DomainOperation
-} from "@draw/scene-graph"
+import { canonicalContentHash, compilePlan, PLAN_SCHEMA_VERSION, type PlanEnvelope, type StructuredAssumption } from "@draw/agent-core"
+import { createIdAllocator, type DocumentHandle } from "@draw/scene-graph"
 
-import type { DraftAction, IdAllocator } from "@draw/scene-graph"
+import type { DraftAction, DomainOperation, IdAllocator } from "@draw/scene-graph"
 
 /**
  * **隔离草稿**（Task 0.7 Step 4）。
@@ -56,6 +49,8 @@ export interface DraftRecord {
   allocator: IdAllocator
   /** 创建草稿时的基础句柄；用于 `assertFresh` 判断"基础是否已被改过"。 */
   baseHandle?: DocumentHandle
+  /** 编译期补全出来的假设（跨 `stage` 累积，随预览回带）。 */
+  completionAssumptions: StructuredAssumption[]
 }
 
 export interface DraftPreview {
@@ -70,6 +65,14 @@ export interface DraftPreview {
    * 不是 `DraftAction`（那是动作层的形状，`commitTransaction` 会判它 `unknown operation`）。
    */
   operations: DomainOperation[]
+  /**
+   * **这一批补全出来的假设**（缺省字段的默认值、欠定特值）。
+   *
+   * 为什么要由草稿带着它：补全发生在**编译期**，而用户是在看到确认面板时才知道
+   * "系统替他定了什么"。运行时的 `assumptions()` 只有规划器声明的那几条，
+   * 少掉编译期补出来的这些，用户就会确认一件他没看过的事。
+   */
+  completionAssumptions: StructuredAssumption[]
 }
 
 export type StageReason = "unknown_draft" | "stale_draft_version" | "compile_failed"
@@ -106,7 +109,8 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
     candidate: cloneDocument(record.candidate),
     previewHash: canonicalContentHash(record.candidate),
     stageCount: record.operations.length,
-    operations: [...record.compiledOperations]
+    operations: [...record.compiledOperations],
+    completionAssumptions: [...record.completionAssumptions]
   })
 
   return {
@@ -123,7 +127,7 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
        * 候选里的对象要么来自基础文档（这里传进去），要么由这个分配器自己发号 —— 两者合起来
        * 就是"候选文档的 id 全集"，所以播种一次就够。
        */
-      const record: DraftRecord = { draftId, draftVersion: 1, candidate, operations: [], compiledOperations: [], allocator: allocatorFactory(base.primitives.map((primitive) => primitive.id)), baseHandle }
+      const record: DraftRecord = { draftId, draftVersion: 1, candidate, operations: [], compiledOperations: [], completionAssumptions: [], allocator: allocatorFactory(base.primitives.map((primitive) => primitive.id)), baseHandle }
       drafts.set(draftId, record)
       return { ...record, candidate: cloneDocument(record.candidate) }
     },
@@ -135,31 +139,43 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
         return { ok: false, reason: "stale_draft_version", detail: `draft is at version ${record.draftVersion}, not ${expectedDraftVersion}` }
       }
 
-      // 在**候选副本**上编译与执行：草稿阶段绝不写真文档。
-      const working = cloneDocument(record.candidate)
-      const compiled = compileActions(working, actions, {
-        targetDocument: working,
-        targetWorkspace: working.workspace,
-        orderedSelection: [],
+      /**
+       * **编译走六层管线**（Agent DSL 切片 Task 4）。
+       *
+       * 以前这里是 `compileActions(working, actions)`：动作编译器逐笔对着**同一份**
+       * 工作文档编，所以同一批里"先建棱柱、再在中点建点、最后作截面"这种计划
+       * 在第二步就会报 `host_not_found`（它看不到同一批里前面的动作）。
+       * `compilePlan` 逐笔推进工作文档，并在编译前补全缺省字段（补出来的默认值
+       * 以**假设**的形式回带，见 `completionAssumptions`）。
+       *
+       * 分配器用的是**这份草稿自己的**那一只：跨 `stage` 幂等（同一个 alias 永远同一个 id），
+       * 这正是"重试同一笔不产生两个对象"的依据。
+       */
+      const plan: PlanEnvelope = { schemaVersion: PLAN_SCHEMA_VERSION, kind: "plan", goal: "staged batch", factIds: [], actions }
+      const compiled = compilePlan(plan, {
+        document: record.candidate,
+        workspace: record.candidate.workspace,
         capabilityRevision: "draft",
+        conversationId: record.draftId,
+        documentGeneration: record.candidate.revision,
         idAllocator: record.allocator
       })
-      if (compiled.diagnostics.length > 0) {
+      if (!compiled.ok || compiled.draftDocument === null) {
         // 编译失败时草稿保持原样 —— 不留"半成品"。
-        return { ok: false, reason: "compile_failed", diagnostics: compiled.diagnostics.map((entry) => ({ code: entry.code, message: entry.message })) }
+        const diagnostics = compiled.diagnostics
+          .filter((entry) => entry.severity === "error")
+          .map((entry) => ({ code: entry.code, message: `${entry.path}: ${entry.detail}` }))
+        const questions = compiled.questions.map((question) => question.text)
+        if (diagnostics.length === 0 && questions.length > 0) {
+          return { ok: false, reason: "compile_failed", diagnostics: questions.map((text) => ({ code: "needs_more_information", message: text })) }
+        }
+        return { ok: false, reason: "compile_failed", ...(diagnostics.length > 0 ? { diagnostics } : {}), detail: diagnostics.length > 0 ? undefined : "the plan produced no compilable action" }
       }
 
-      // 逐笔执行，用返回值替换当前候选（`applyOperation` 是不可变更新）。
-      let cursor: GeometryDocument = working
-      for (const operation of compiled.operations) {
-        const applied = applyToCandidate(cursor, operation)
-        if (applied.error) return { ok: false, reason: "compile_failed", detail: applied.error }
-        cursor = applied.next ?? cursor
-      }
-
-      record.candidate = cursor
+      record.candidate = compiled.draftDocument
       record.operations = [...record.operations, ...actions]
       record.compiledOperations = [...record.compiledOperations, ...compiled.operations]
+      record.completionAssumptions = [...record.completionAssumptions, ...compiled.assumptions]
       record.draftVersion += 1
       return { ok: true, preview: previewOf(record) }
     },
@@ -185,19 +201,4 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
       return record ? previewOf(record) : null
     }
   }
-}
-
-/**
- * 在候选文档上执行一笔操作。
- *
- * 刻意走**与 `commitTransaction` 同一套**校验与执行路径（`validatePatch` + `applyOperation`），
- * 而不是自己写一遍"草稿版执行"——两份实现必然漂移。
- * `applyOperation` 返回新文档（不可变更新），所以把结果对象直接换给调用方。
- */
-function applyToCandidate(candidate: GeometryDocument, operation: DomainOperation): { next?: GeometryDocument; error?: string } {
-  const validation = validatePatch(candidate, operation)
-  if (!validation.valid) return { error: validation.errors.join(", ") }
-  const applied = applyOperation(candidate, operation)
-  if (applied.error) return { error: applied.error }
-  return { next: applied.document }
 }

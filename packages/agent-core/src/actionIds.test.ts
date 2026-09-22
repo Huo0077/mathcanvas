@@ -16,10 +16,12 @@ import { parseDraftAction } from "./schemas"
  */
 describe("draft action catalogue", () => {
   it("lists every action the compiler implements", () => {
-    // 20 是编译期实测值（`DraftAction["actionId"]` 的成员数）。数字写死在这里是有意的：
-    // 动作层新增动作时这条会失败，提醒把新动作接进传输层，而不是让它静默不可达。
-    expect(DRAFT_ACTION_IDS).toHaveLength(20)
-    expect(new Set(DRAFT_ACTION_IDS).size).toBe(20)
+    // 数字写死在这里是有意的：动作层新增动作时这条会失败，提醒把新动作接进传输层，
+    // 而不是让它静默不可达。**21** 是加上 `solid.create_prism`（Solid/Prism 切片）之后的实测值；
+    // **24** 是加上 `planar.create_conic` / `dynamic.create_bound_point` / `parameter.create`
+    // （Agent DSL 切片）之后的实测值。
+    expect(DRAFT_ACTION_IDS).toHaveLength(24)
+    expect(new Set(DRAFT_ACTION_IDS).size).toBe(24)
   })
 
   it("recognises every catalogue action instead of calling it unknown", () => {

@@ -4,6 +4,7 @@ import * as THREE from "three"
 import type { GeometryDocument, Point3Primitive, PrimitiveSpec, SectionPrimitive } from "@draw/dsl"
 import { createEmptyDocument } from "@draw/dsl"
 import { buildSolidTemplate, circleConic3, dihedralMarker3, rimCircles3, unfoldPolyhedron3 } from "@draw/geometry-kernel"
+import { compileSolidPrism } from "@draw/scene-graph"
 import { POINT_HANDLE_RADIUS_PX, pickPrimitiveAt, pickRaycastHit3, pointHandleWorldRadius, resolveSelectableHit, templateTopologyOwners } from "./threePicking"
 import { applyDragOffsets, dragFamilyIds, dragOffsetDrift, dragWorldPoint, offsetSceneObjects } from "./threeDrag"
 import { buildPointDrivenObject, createCircle3Line, createConic3Line, createCubeMesh, createCurveLoops3, createDihedralMarkerGroup, createEdge3Line, createFace3Mesh, createPlane3Mesh, createPlanePatch, createPoint3Mesh, createPointDrivenLine, createRimCircles3, createSectionMesh, createSolidGroup, createSolidMesh, createUnfoldNetGroup, cubeUnfoldCenters, disposeObject, nextUnfoldProgress, prefersReducedMotion, sectionUnitNormal } from "./threePrimitives"
@@ -620,8 +621,30 @@ describe("Three.js geometry scene", () => {
     expect(resolveSelectableHit(null, owners)).toBeNull()
   })
 
-  it("resolves a raycast on a template solid's surface to the solid itself", () => {
-    const cube: Extract<PrimitiveSpec, { type: "cube" }> = { id: "cube-1", type: "cube", origin: { x: -2, y: -2, z: -1 }, size: { x: 4, y: 4, z: 2 }, label: "立方体 1" }
+  /**
+   * **棱柱的子对象也要把点击交回给实体本身**（Solid/Prism 切片 Task 5 的拖动要求）。
+   *
+   * 棱柱与模板实体的差别在于"谁是用户级对象"：模板实体是 `cube` 那种参数化图元，拓扑是它物化出来的；
+   * 棱柱的 `polyhedron3` **自己就是**用户创建的那个对象（构造描述在它身上）。所以棱柱的子面 / 子棱
+   * 必须把命中交回 `solid-*` —— 交回子对象的话，自由拖动只会带走那个面的顶点，
+   * 其余顶点留在原地：实测症状就是"拖一下棱柱，图形被扯散了"。
+   */
+  it("hands a click on a prism's derived edge or face to the solid itself", () => {
+    const built = compileSolidPrism("solid-1", [{ x: 0, y: 0, z: 0 }, { x: 4, y: 0, z: 0 }, { x: 4, y: 3, z: 0 }, { x: 0, y: 3, z: 0 }], { x: 1, y: 0.5, z: 3 })
+    expect(built.diagnostics).toEqual([])
+    const document: GeometryDocument = { ...createEmptyDocument("geometry3d"), primitives: built.primitives }
+    const owners = templateTopologyOwners(document)
+
+    expect(built.edgeIds).toHaveLength(12)
+    expect(built.faceIds).toHaveLength(6)
+    for (const childId of [...built.edgeIds, ...built.faceIds]) expect(owners.get(childId)).toBe("solid-1")
+    // 顶点仍然是**可直接选中的点**：拖动一个顶点就是"把实体变成点驱动"的那条路。
+    for (const vertexId of built.vertexIds) expect(owners.has(vertexId)).toBe(false)
+
+    expect(resolveSelectableHit(built.faceIds[0], owners)).toBe("solid-1")
+  })
+
+  it("resolves a raycast on a template solid's surface to the solid itself", () => {    const cube: Extract<PrimitiveSpec, { type: "cube" }> = { id: "cube-1", type: "cube", origin: { x: -2, y: -2, z: -1 }, size: { x: 4, y: 4, z: 2 }, label: "立方体 1" }
     const built = buildSolidTemplate(cube)
     const document: GeometryDocument = { ...createEmptyDocument("geometry3d"), primitives: [cube, ...built.primitives] }
     const owners = templateTopologyOwners(document)

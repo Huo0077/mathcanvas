@@ -65,7 +65,7 @@ export const SKILL_MANIFESTS: readonly SkillManifest[] = [
     id: "conics-tangents",
     title: "圆锥曲线与切线",
     summary: "创建椭圆、抛物线、双曲线，并在曲线上作切线。切点可以按曲线参数给定，也可以跟随一个动点。",
-    actionIds: ["planar.create_circle", "planar.create_polyline", "function.create_tangent"],
+    actionIds: ["planar.create_circle", "planar.create_polyline", "planar.create_conic", "function.create_tangent", "parameter.create", "dynamic.create_bound_point"],
     limits: DEFAULT_LIMITS,
     successCase: { prompt: "在抛物线 y² = 4x 上取参数 1 的点作切线", expectation: "一笔 function.create_tangent，anchor 用 parameter 形式" },
     refusalCase: { prompt: "给这条切线再画一条和它重合的切线", expectation: "拒绝：退化情形由编译器判定，不会产生两条重合的切线对象" }
@@ -73,8 +73,8 @@ export const SKILL_MANIFESTS: readonly SkillManifest[] = [
   {
     id: "functions",
     title: "函数与分析",
-    summary: "创建函数图像，并求它的导数、切线或定积分。定义域必须有界才允许积分。",
-    actionIds: ["function.analyze", "function.create_tangent", "parameter.set", "parameter.set_expression"],
+    summary: "创建函数图像，并求它的导数、切线或定积分。定义域必须有界才允许积分。参数（含符号参数）可以新建与修改。",
+    actionIds: ["function.analyze", "function.create_tangent", "parameter.create", "parameter.set", "parameter.set_expression"],
     limits: DEFAULT_LIMITS,
     successCase: { prompt: "求 f(x)=x² 在 [-1,1] 上的定积分", expectation: "一笔 function.analyze，analysis 为 integral" },
     refusalCase: { prompt: "对一条不是函数的对象求导", expectation: "拒绝：source 必须是函数对象，编译器会报 source_not_function" }
@@ -82,8 +82,8 @@ export const SKILL_MANIFESTS: readonly SkillManifest[] = [
   {
     id: "dynamic-bindings",
     title: "动态绑定与轨迹",
-    summary: "把点绑到宿主（曲线、棱、面、实体内部）上并用自然参数驱动它，也可以让圆半径由另一个点的位置决定，或追踪动点生成轨迹。",
-    actionIds: ["dynamic.bind_point", "dynamic.bind_curve", "dynamic.create_locus", "dynamic.set_radius_rule"],
+    summary: "新建或绑定动点：点可以绑到曲线、棱、面、实体内部，由自然参数（或文档参数）驱动；也可以让圆半径由另一个点决定，或追踪动点生成轨迹。",
+    actionIds: ["dynamic.bind_point", "dynamic.create_bound_point", "dynamic.bind_curve", "dynamic.create_locus", "dynamic.set_radius_rule"],
     limits: DEFAULT_LIMITS,
     successCase: { prompt: "让 P 沿这条圆滑动，并追踪它的轨迹", expectation: "先 dynamic.bind_curve 给定参数，再 dynamic.create_locus 引用该点" },
     refusalCase: { prompt: "把点绑到另一个文档里的曲线", expectation: "拒绝：绑定目标必须在目标文档内，跨文档引用报 cross_document_reference" }
@@ -91,8 +91,8 @@ export const SKILL_MANIFESTS: readonly SkillManifest[] = [
   {
     id: "spatial-modeling",
     title: "空间建模",
-    summary: "在立体几何工作区创建立方体、棱锥、圆柱、圆锥四种模板实体。模板会物化出顶点、棱、面。",
-    actionIds: ["solid.create_template"],
+    summary: "在立体几何工作区创建立方体、棱锥、圆柱、圆锥四种模板实体，或用底面多边形 + 拉伸向量构造棱柱（直棱柱与斜棱柱同一套）。实体都会物化出顶点、棱、面；棱柱的侧面由内核按底面与向量生成，不能自己拼。",
+    actionIds: ["solid.create_template", "solid.create_prism"],
     limits: { actionsPerStage: 4, actionsPerRun: 16 },
     successCase: { prompt: "画一个棱长 4 的立方体，中心在原点", expectation: "一笔 solid.create_template，template 为 cube，给 origin 与 size" },
     refusalCase: { prompt: "画一个棱长 0 的立方体", expectation: "拒绝：尺寸必须为正，编译器不接受退化实体" }
@@ -165,8 +165,11 @@ export const CAPABILITY_FOR_ACTION: Record<DraftActionIdName, string> = {
   "planar.create_polyline": "create-primitive",
   "planar.create_circle": "create-primitive",
   "planar.create_arc": "create-primitive",
+  "planar.create_conic": "create-primitive",
   "solid.create_template": "create-primitive",
+  "solid.create_prism": "create-primitive",
   "dynamic.bind_point": "create-primitive",
+  "dynamic.create_bound_point": "create-primitive",
   "dynamic.bind_curve": "create-primitive",
   "dynamic.create_locus": "create-primitive",
   "dynamic.set_radius_rule": "modify-primitive",
@@ -176,6 +179,7 @@ export const CAPABILITY_FOR_ACTION: Record<DraftActionIdName, string> = {
   "section.materialize": "create-primitive",
   "object.delete_many": "batch-delete",
   "object.update_inputs": "modify-primitive",
+  "parameter.create": "modify-primitive",
   "parameter.set": "modify-primitive",
   "parameter.set_expression": "modify-primitive"
 }

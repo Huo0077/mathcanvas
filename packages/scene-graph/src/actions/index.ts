@@ -1,4 +1,5 @@
-import type { GeometryDocument, PrimitiveSpec } from "@draw/dsl"
+import type { GeometryDocument, PrimitiveSpec, Vector3 } from "@draw/dsl"
+import { buildPrismTopology, prismEdgeLabel, prismPointLabel, validatePrismInput } from "@draw/geometry-kernel"
 
 import type { DomainOperation } from "../operations"
 import type { ActionContext, ActionDiagnostic, CompileResult, DraftAction, IdAllocator } from "./types"
@@ -70,7 +71,20 @@ const UPDATABLE_INPUT_FIELDS = new Set(["label", "visible", "locked", "x", "y", 
 
 // ---------------------------------------------------------------- 各族 handler
 
-function compilePlanar(action: Extract<DraftAction, { actionId: `planar.${string}` }>, context: ActionContext): CompileResult {
+/**
+ * 平面创建的七个动作（**不含** `planar.create_conic`：圆锥曲线的字段与它们完全不同，
+ * 硬塞进同一套 `points` / `center` / `radius` 判别式只会让两边都失去类型约束）。
+ */
+type PlanarCreateActionId =
+  | "planar.create_point"
+  | "planar.create_line"
+  | "planar.create_segment"
+  | "planar.create_ray"
+  | "planar.create_polyline"
+  | "planar.create_circle"
+  | "planar.create_arc"
+
+function compilePlanar(action: Extract<DraftAction, { actionId: PlanarCreateActionId }>, context: ActionContext): CompileResult {
   const { actionKey, actionId } = action
   const inputs = action.inputs
   const pointKind = actionId === "planar.create_point" ? "point" : undefined
@@ -158,8 +172,87 @@ function compileSolidTemplate(action: Extract<DraftAction, { actionId: "solid.cr
   return { operations: [{ op: "addPrimitive", primitive } as DomainOperation], diagnostics: [], aliasToId: { [inputs.alias]: id } }
 }
 
-function compileBindPoint(action: Extract<DraftAction, { actionId: "dynamic.bind_point" }>, context: ActionContext): CompileResult {
+/**
+ * 棱柱的**派生拓扑**：`<solidId>:v<i>` / `<solidId>:e<i>` / `<solidId>:f<i>`（规格 §3.3）。
+ *
+ * 名字是**纯函数**（Solid ID + 下标），所以重算任意多次、在任何一台机器上，同一个 Solid 的子对象
+ * 名字都一模一样 —— 下游引用（截面 / 交线 / 绑上去的动点）因此不会因为一次重算而集体失效。
+ *
+ * 返回给构造器一份 `SolidTopology` + 三组 id，是因为调用方还要读写棱 / 面里的下标关系，
+ * 而几何层只给下标（命名属于文档层，见 `@draw/geometry-kernel` 的 `prism.ts`）。
+ */
+export interface SolidPrismBuildResult {
+  primitives: PrimitiveSpec[]
+  vertexIds: string[]
+  edgeIds: string[]
+  faceIds: string[]
+  solidId: string
+  diagnostics: ActionDiagnostic[]
+}
+
+/** 外观键（`label`/`style`…）一律**不写 `undefined`**：JSON 往返会丢这种键，内存与磁盘就成了两份数据。 */
+export function compileSolidPrism(solidId: string, basePolygon: readonly Vector3[], vector: Vector3, label?: string): SolidPrismBuildResult {
+  const validation = validatePrismInput(basePolygon, vector)
+  if (!validation.ok) {
+    return { primitives: [], vertexIds: [], edgeIds: [], faceIds: [], solidId, diagnostics: validation.diagnostics.map((entry) => diagnostic(solidId, "degenerate_prism", entry.message)) }
+  }
+  const topology = buildPrismTopology(basePolygon, vector)
+  if (!topology) return { primitives: [], vertexIds: [], edgeIds: [], faceIds: [], solidId, diagnostics: [diagnostic(solidId, "degenerate_prism", "棱柱底面与拉伸向量无法构成实体。")] }
+
+  const vertexIds = topology.vertices.map((_, index) => `${solidId}:v${index}`)
+  const edgeIds = topology.edges.map((_, index) => `${solidId}:e${index}`)
+  const faceIds = topology.faces.map((_, index) => `${solidId}:f${index}`)
+  /**
+   * 面环上"相邻两点"对应的棱下标。
+   *
+   * 只找**这两个点之间**的棱：`topology.edges` 里那条棱的两个端点就是这两个下标，
+   * 所以这一跳是精确的，不需要按坐标去猜（猜错会让面的边界与棱的索引对不上，
+   * 而 `face3` 的闭合性校验恰好会因此拒绝整份文档）。
+   */
+  const edgeIndexBetween = (first: number, second: number) => topology.edges.findIndex((edge) =>
+    (edge.pointIndexes[0] === first && edge.pointIndexes[1] === second) || (edge.pointIndexes[1] === first && edge.pointIndexes[0] === second))
+
+  const points: PrimitiveSpec[] = topology.vertices.map((position, index) => ({ id: vertexIds[index], type: "point3", position, binding: { kind: "free" }, label: prismPointLabel(index) }))
+  const edges: PrimitiveSpec[] = topology.edges.map((edge, index) => ({ id: edgeIds[index], type: "edge3", pointIds: [vertexIds[edge.pointIndexes[0]], vertexIds[edge.pointIndexes[1]]], faceIds: edge.faceIndexes.map((faceIndex) => faceIds[faceIndex]), label: prismEdgeLabel(index) }))
+  const faces: PrimitiveSpec[] = topology.faces.map((ring, index) => ({
+    id: faceIds[index],
+    type: "face3",
+    pointIds: ring.map((vertexIndex) => vertexIds[vertexIndex]),
+    edgeIds: ring.map((vertexIndex, ringIndex) => edgeIds[edgeIndexBetween(vertexIndex, ring[(ringIndex + 1) % ring.length])]),
+    label: `面 ${index + 1}`
+  }))
+  const solid: PrimitiveSpec = {
+    id: solidId,
+    type: "polyhedron3",
+    vertexIds,
+    edgeIds,
+    faceIds,
+    // 构造描述是**真源**：顶点 / 棱 / 面只是它这一趟派生出来的几何事实（规格 §1.2）。
+    construction: { kind: "prism", base: { polygon: topology.vertices.slice(0, topology.baseCount) }, vector: { ...vector } },
+    ...(label ? { label } : {})
+  }
+  return { primitives: [...points, ...edges, ...faces, solid], vertexIds, edgeIds, faceIds, solidId, diagnostics: [] }
+}
+
+/**
+ * `solid.create_prism`：底面多边形 + 拉伸向量 → 一只 `polyhedron3` 与它的全部子对象。
+ *
+ * 两条与模板动作一致的纪律：工作区必须是立体几何；输入不合法时**一条操作都不产出**
+ * （宁可不做，也不做一半）。第三条是棱柱特有的：**侧面永远由内核生成**，
+ * 动作层没有"传面进来"的入口（规格 §7 禁止把散面拼成 Prism）。
+ */
+function compileSolidPrismAction(action: Extract<DraftAction, { actionId: "solid.create_prism" }>, context: ActionContext): CompileResult {
   const { actionKey, inputs } = action
+  if (context.targetWorkspace !== "geometry3d") {
+    return { operations: [], diagnostics: [diagnostic(actionKey, "workspace_mismatch", "a prism can only be created in the solid workspace")], aliasToId: {} }
+  }
+  const id = context.idAllocator.allocate("solid", inputs.alias)
+  const built = compileSolidPrism(id, inputs.basePolygon, inputs.vector, inputs.label)
+  if (built.diagnostics.length > 0) return { operations: [], diagnostics: built.diagnostics.map((entry) => diagnostic(actionKey, entry.code, entry.message)), aliasToId: {} }
+  return { operations: [{ op: "addPrimitives", primitives: built.primitives }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
+}
+
+function compileBindPoint(action: Extract<DraftAction, { actionId: "dynamic.bind_point" }>, context: ActionContext): CompileResult {  const { actionKey, inputs } = action
   // 跨文档只作为**已授权读取来源**，写入批次只能有一个目标文档（§6）。
   if (inputs.target.documentId !== context.targetDocument.metadata.id || inputs.host.documentId !== context.targetDocument.metadata.id) {
     return { operations: [], diagnostics: [diagnostic(actionKey, "cross_document_reference", "a binding must stay inside the target document")], aliasToId: {} }
@@ -311,6 +404,126 @@ function compileParameterSet(action: Extract<DraftAction, { actionId: "parameter
   return { operations: [{ op: "setParameter", id: inputs.id, value: inputs.value, ...patch } as DomainOperation], diagnostics: [], aliasToId: {} }
 }
 
+/**
+ * **新建参数**（Agent DSL 切片，规格 §4.1）：`parameter.set` 拒绝"参数不存在"，
+ * 所以符号参数必须有自己的创建动作。写入走 `setParameter`（该操作在参数不存在时**创建**它，
+ * 在存在时覆盖 value 与元数据），因此新参数与既有参数**只有一条写入路径**。
+ */
+function compileParameterCreate(action: Extract<DraftAction, { actionId: "parameter.create" }>, context: ActionContext): CompileResult {
+  const { actionKey, inputs } = action
+  if (typeof inputs.id !== "string" || inputs.id.trim().length === 0) {
+    return { operations: [], diagnostics: [diagnostic(actionKey, "invalid_parameter_id", "a parameter needs a non-empty id")], aliasToId: {} }
+  }
+  if (!Number.isFinite(inputs.value)) {
+    return { operations: [], diagnostics: [diagnostic(actionKey, "invalid_value", "a parameter value must be finite")], aliasToId: {} }
+  }
+  const patch: Record<string, number | string> = {}
+  for (const key of ["min", "max", "step"] as const) {
+    const value = inputs[key]
+    if (value === undefined) continue
+    if (!Number.isFinite(value)) return { operations: [], diagnostics: [diagnostic(actionKey, "invalid_value", `${key} must be finite`)], aliasToId: {} }
+    patch[key] = value
+  }
+  if (typeof inputs.label === "string") patch.label = inputs.label
+  /**
+   * **已经存在的参数不许被"创建"覆盖**：那是 `parameter.set` 的活。
+   * 两级语义分开之后，"新建"永远只新建，"改"永远只改 —— 模型不会因为用错动作
+   * 而把一个用户正在拖动的参数静默改回初值。
+   */
+  if (context.targetDocument.parameters[inputs.id]) {
+    return { operations: [], diagnostics: [diagnostic(actionKey, "parameter_exists", `parameter ${inputs.id} already exists; use parameter.set`)], aliasToId: {} }
+  }
+  return { operations: [{ op: "setParameter", id: inputs.id, value: inputs.value, ...patch } as DomainOperation], diagnostics: [], aliasToId: {} }
+}
+
+/**
+ * **平面圆锥曲线**（Agent DSL 切片，规格 §8.2）。
+ *
+ * 三种曲线各自需要的字段不同，所以按 `kind` 分别检查 —— 把三者塞进一套必填字段里，
+ * 只会让"椭圆缺一个半轴"这种真正的错误被一句笼统的 `missing_field` 盖住。
+ * 几何语义（半径为正、焦准距非零）在这里判，**坐标有限性**在传输层已经判过一次。
+ */
+function compileCreateConic(action: Extract<DraftAction, { actionId: "planar.create_conic" }>, context: ActionContext): CompileResult {
+  const { actionKey, inputs } = action
+  const id = context.idAllocator.allocate(inputs.kind, inputs.alias)
+  const label = inputs.label === undefined ? {} : { label: inputs.label }
+  const finitePoint = (point: { x: number; y: number } | undefined) => Boolean(point && Number.isFinite(point.x) && Number.isFinite(point.y))
+
+  if (inputs.kind === "ellipse" || inputs.kind === "hyperbola") {
+    if (!finitePoint(inputs.center)) return { operations: [], diagnostics: [diagnostic(actionKey, "missing_point", "a conic needs a finite centre")], aliasToId: {} }
+    if (!Number.isFinite(inputs.radiusX) || !Number.isFinite(inputs.radiusY) || (inputs.radiusX as number) <= 0 || (inputs.radiusY as number) <= 0) {
+      return { operations: [], diagnostics: [diagnostic(actionKey, "invalid_radius", `${inputs.kind} semi-axes must be positive finite numbers`)], aliasToId: {} }
+    }
+    const rotation = inputs.rotation === undefined ? {} : { rotation: inputs.rotation }
+    const primitive = inputs.kind === "ellipse"
+      ? { id, type: "ellipse" as const, center: inputs.center, radiusX: inputs.radiusX, radiusY: inputs.radiusY, ...rotation, ...label }
+      : { id, type: "hyperbola" as const, center: inputs.center, radiusX: inputs.radiusX, radiusY: inputs.radiusY, axis: inputs.axis ?? "x", ...rotation, ...label }
+    return { operations: [{ op: "addPrimitive", primitive: primitive as unknown as PrimitiveSpec }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
+  }
+
+  if (!finitePoint(inputs.vertex)) return { operations: [], diagnostics: [diagnostic(actionKey, "missing_point", "a parabola needs a finite vertex")], aliasToId: {} }
+  // 焦准距为零的"抛物线"退化成一条直线：那不是抛物线，拒绝而不是画一条假的。
+  if (!Number.isFinite(inputs.focalParameter) || inputs.focalParameter === 0) {
+    return { operations: [], diagnostics: [diagnostic(actionKey, "invalid_focal_parameter", "a parabola needs a non-zero finite focal parameter")], aliasToId: {} }
+  }
+  return {
+    operations: [{ op: "addPrimitive", primitive: { id, type: "parabola", vertex: inputs.vertex, focalParameter: inputs.focalParameter, axis: inputs.axis ?? "y", ...label } as unknown as PrimitiveSpec }],
+    diagnostics: [],
+    aliasToId: { [inputs.alias]: id }
+  }
+}
+
+/** 能作为**平面**点宿主的曲线（自然参数由约束定义，见 `pathConstraint`）。 */
+const PLANAR_HOST_TYPES = new Set(["line", "segment", "ray", "circle", "arc", "polyline", "ellipse", "parabola", "hyperbola", "function"])
+/** 能作为**空间**点宿主的一维对象（棱 / 线 / 圆轨道），参数是仿射比例或圆周角。 */
+const SPATIAL_HOST_TYPES = new Set(["edge3", "line3", "segment3", "ray3", "circle3"])
+
+/**
+ * **新建宿主驱动的动点**（Agent DSL 切片，规格 §3.3/§8.1）。
+ *
+ * 三条判据，每条都对应一次真实会踩的坑：
+ * 1. **宿主必须存在**（在工作文档里找，而编译是按依赖顺序逐笔推进的，所以同一批里
+ *    刚建的棱柱已经在了）—— 找不到就报 `host_not_found`，绝不"先建一个自由点顶着"；
+ * 2. **宿主类型决定点的维度**：曲线宿主 → 平面点（`onPath` 绑定），棱 / 线 / 圆轨道
+ *    → 空间点（`onHost` 绑定）。维度猜错的症状是"点建出来了但不在那条棱上"；
+ * 3. **`parameterId` 必须指向真实参数**：悬空引用会让点静默冻在最后一次算出的位置
+ *    （DSL 校验同样拒绝它，这里是编译期更早的一道）。
+ *
+ * 坐标先填占位值（有限即可）：真正的坐标由**重算**按宿主与参数算出 —— 与属性栏里
+ * "点绑到棱上"是同一条路径，不存在第二份几何。
+ */
+function compileCreateBoundPoint(action: Extract<DraftAction, { actionId: "dynamic.create_bound_point" }>, context: ActionContext): CompileResult {
+  const { actionKey, inputs } = action
+  if (!Number.isFinite(inputs.parameter)) {
+    return { operations: [], diagnostics: [diagnostic(actionKey, "invalid_parameter", "the host parameter must be finite")], aliasToId: {} }
+  }
+  if (inputs.host?.documentId !== context.targetDocument.metadata.id) {
+    return { operations: [], diagnostics: [diagnostic(actionKey, "cross_document_reference", "a bound point must stay inside the target document")], aliasToId: {} }
+  }
+  if (inputs.hostSub !== undefined && (!Number.isInteger(inputs.hostSub) || inputs.hostSub < 0)) {
+    return { operations: [], diagnostics: [diagnostic(actionKey, "invalid_host_sub", "hostSub must be a non-negative integer")], aliasToId: {} }
+  }
+  const hostId = inputs.hostSub === undefined ? inputs.host.entityId : `${inputs.host.entityId}:e${inputs.hostSub}`
+  const host = findPrimitive(context.targetDocument, hostId)
+  if (!host) return { operations: [], diagnostics: [diagnostic(actionKey, "host_not_found", `no host ${hostId}`)], aliasToId: {} }
+  if (inputs.parameterId !== undefined && !context.targetDocument.parameters[inputs.parameterId]) {
+    return { operations: [], diagnostics: [diagnostic(actionKey, "parameter_not_found", `no parameter ${inputs.parameterId}`)], aliasToId: {} }
+  }
+
+  const label = inputs.label === undefined ? {} : { label: inputs.label }
+  if (PLANAR_HOST_TYPES.has(host.type)) {
+    const id = context.idAllocator.allocate("point", inputs.alias)
+    const binding = { kind: "onPath", pathId: hostId, parameter: inputs.parameter, ...(inputs.parameterId === undefined ? {} : { parameterId: inputs.parameterId }) }
+    return { operations: [{ op: "addPrimitive", primitive: { id, type: "point", x: 0, y: 0, binding, ...label } as unknown as PrimitiveSpec }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
+  }
+  if (SPATIAL_HOST_TYPES.has(host.type)) {
+    const id = context.idAllocator.allocate("point3", inputs.alias)
+    const binding = { kind: "onHost", hostId, parameter: inputs.parameter, ...(inputs.parameterId === undefined ? {} : { parameterId: inputs.parameterId }) }
+    return { operations: [{ op: "addPrimitive", primitive: { id, type: "point3", position: { x: 0, y: 0, z: 0 }, binding, ...label } as unknown as PrimitiveSpec }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
+  }
+  return { operations: [], diagnostics: [diagnostic(actionKey, "unsupported_host", `a point cannot be bound to a ${host.type}`)], aliasToId: {} }
+}
+
 function compileParameterSetExpression(action: Extract<DraftAction, { actionId: "parameter.set_expression" }>, context: ActionContext): CompileResult {
   const { actionKey, inputs } = action
   if (!context.targetDocument.parameters[inputs.id]) {
@@ -385,10 +598,16 @@ export function compileAction(action: DraftAction, context: ActionContext): Comp
     case "planar.create_circle":
     case "planar.create_arc":
       return compilePlanar(action, context)
+    case "planar.create_conic":
+      return compileCreateConic(action, context)
     case "solid.create_template":
       return compileSolidTemplate(action, context)
+    case "solid.create_prism":
+      return compileSolidPrismAction(action, context)
     case "dynamic.bind_point":
       return compileBindPoint(action, context)
+    case "dynamic.create_bound_point":
+      return compileCreateBoundPoint(action, context)
     case "dynamic.bind_curve":
       return compileBindCurve(action, context)
     case "dynamic.set_radius_rule":
@@ -401,6 +620,8 @@ export function compileAction(action: DraftAction, context: ActionContext): Comp
       return compileFunctionAnalyze(action, context)
     case "parameter.set":
       return compileParameterSet(action, context)
+    case "parameter.create":
+      return compileParameterCreate(action, context)
     case "parameter.set_expression":
       return compileParameterSetExpression(action, context)
     case "section.create":

@@ -44,10 +44,10 @@ export interface SkillCatalog {
  */
 const EXPECTED_HASHES: Record<string, string> = {
   "planar-basics": "5cf804064cb4f4ec083553e8ef03d5d7775d023e8bd60a94431bbd836031ebbd",
-  "conics-tangents": "65ee353dd0b5823460784b7cf3115855ea9ce9a4546c5a9e31463bfc000f7400",
-  "functions": "0c41d239c27c82223816fd37c9bd632db789f13d877a914e14335dfe945ea286",
-  "dynamic-bindings": "efad36b6adfca34b69b044af66c20d632df1a4657ae67f8ee4f82b2feb0c17be",
-  "spatial-modeling": "1889672b720d08aec2ffccd2ed9180c39459e83bae685f27528e7e76d2cd9b63",
+  "conics-tangents": "be5c416242eaf9b5099e80e1697edeb433899d01c21779641a30fbaca33720f2",
+  "functions": "853f149c0a47f38277d2bdce0ae4f47a8d19ef0b4987c0fa162e82b8080c8664",
+  "dynamic-bindings": "a7a25bf79ac9c9cf89256bc1fb8a1876c41287bca21e6a7163ce1022ee47f9e1",
+  "spatial-modeling": "8f5fbbf1397dfb17c4a6203a01281b6737072f91c1b47d66e83b186487151151",
   "sections-intersections": "fd8e09ed0e1cedc332b61391d8c831c8064277eb4979a6d2d61e35c417aea8e9",
   "engineering-drawing": "da543684eba13b401042859ebedb67f1d92296d0dbbe32f248846cbd1a5fd50e",
   "image-evidence": "2808d6bb4d56335a4dc33ea57eaace75d776d7bad27b51dcbaff2a41e0f2fa3d",

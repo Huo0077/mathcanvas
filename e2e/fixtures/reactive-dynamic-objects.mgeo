@@ -1,0 +1,108 @@
+{
+  "format": "mgeo",
+  "formatVersion": "0.1",
+  "document": {
+    "schemaVersion": "0.1",
+    "revision": 1,
+    "workspace": "conics",
+    "coordinateSystems": [
+      "cartesian-2d"
+    ],
+    "parameters": {
+      "t-P": {
+        "id": "t-P",
+        "value": 0,
+        "min": 0,
+        "max": 6.2832,
+        "step": 0.05,
+        "label": "P 的路径参数",
+        "ownerId": "point-P"
+      }
+    },
+    "primitives": [
+      {
+        "id": "circle-track",
+        "type": "circle",
+        "center": { "x": 0, "y": 0 },
+        "radius": 3,
+        "label": "轨道"
+      },
+      {
+        "id": "point-P",
+        "type": "point",
+        "x": 3,
+        "y": 0,
+        "label": "P",
+        "binding": { "kind": "onPath", "pathId": "circle-track", "parameterId": "t-P", "parameter": 0 }
+      },
+      {
+        "id": "tangent-P",
+        "type": "tangent",
+        "sourceId": "circle-track",
+        "x": 3,
+        "point": { "x": 3, "y": 0 },
+        "slope": 0,
+        "a": { "x": 3, "y": -2 },
+        "b": { "x": 3, "y": 2 },
+        "status": "approximate",
+        "anchor": { "kind": "point", "pointId": "point-P" },
+        "halfLength": 2,
+        "label": "切线"
+      },
+      {
+        "id": "point-A",
+        "type": "point",
+        "x": 2,
+        "y": 0,
+        "label": "A"
+      },
+      {
+        "id": "point-B",
+        "type": "point",
+        "x": 6,
+        "y": 0,
+        "label": "B"
+      },
+      {
+        "id": "point-C",
+        "type": "point",
+        "x": 2,
+        "y": 3,
+        "label": "C"
+      },
+      {
+        "id": "circle-in",
+        "type": "circle",
+        "center": { "x": 3, "y": 1 },
+        "radius": 1,
+        "label": "内切圆",
+        "radiusFrom": {
+          "kind": "triangle",
+          "triangleIds": ["point-A", "point-B", "point-C"],
+          "metric": "inradius"
+        }
+      },
+      {
+        "id": "locus-P",
+        "type": "locus",
+        "sourcePointId": "point-P",
+        "parameterId": "t-P",
+        "domain": [0, 6.2832],
+        "samples": 24,
+        "label": "P 的轨迹"
+      }
+    ],
+    "groups": [],
+    "constraints": [],
+    "dynamics": [],
+    "annotations": [],
+    "measurements": [],
+    "engineeringAnnotations": [],
+    "metadata": {
+      "id": "doc-reactive-dynamic-objects",
+      "name": "Reactive dynamic objects",
+      "createdAt": "2026-09-21T00:00:00.000Z",
+      "updatedAt": "2026-09-21T00:00:00.000Z"
+    }
+  }
+}

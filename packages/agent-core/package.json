@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@draw/dsl": "0.1.0",
+    "@draw/geometry-kernel": "0.1.0",
     "@draw/scene-graph": "0.1.0"
   }
 }

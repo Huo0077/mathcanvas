@@ -237,7 +237,20 @@ function isTangentAnchor(byId: Map<string, unknown>, value: unknown): boolean {
 /** 半径随动点变化的规则：驱动点必须是一个真实存在的点图元，倍率必须是正有限数。 */
 function isCircleRadiusRule(byId: Map<string, unknown>, value: unknown): boolean {
   if (!isRecord(value)) return false
+  // 由三角形派生（内切圆 / 外接圆）：三个顶点都必须是**点**，度量只允许这两种。
+  if (value.kind === "triangle") {
+    return Array.isArray(value.triangleIds)
+      && value.triangleIds.length === 3
+      && value.triangleIds.every((id) => typeof id === "string" && referenceType(byId, id) === "point")
+      && (value.metric === "inradius" || value.metric === "circumradius")
+  }
+  // 老写法（`kind` 缺省或显式 `distance`）：半径 = 驱动点到圆心的距离 × 倍率。
+  if (value.kind !== undefined && value.kind !== "distance") return false
   return typeof value.pointId === "string" && referenceType(byId, value.pointId) === "point" && isFiniteNumber(value.factor) && value.factor > 0
+}
+
+function isParameterIdList(value: unknown, parameterIds: Set<string>, length: number): boolean {
+  return Array.isArray(value) && value.length === length && value.every((id) => typeof id === "string" && parameterIds.has(id))
 }
 
 function validatePresentation(value: RecordValue, errors: string[]): void {
@@ -264,7 +277,20 @@ function referenceType(byId: Map<string, unknown>, value: unknown): string | und
   return typeof value === "string" ? primitiveType(byId.get(value)) : undefined
 }
 
-function validatePrimitive(value: unknown, byId: Map<string, unknown>, parameterIds: Set<string>): string[] {
+/**
+ * **文档校验的可注入判据**（Fix round 2 / I6）。
+ *
+ * 为什么是注入而不是直接 import：棱柱的"共面 / 自交 / 零体积"是**几何语义**，它唯一的实现
+ * 在内核 `@draw/geometry-kernel` 的 `validatePrismInput`；而内核依赖 DSL，DSL 反向依赖它会成环。
+ * 所以由调用方（`codec`，它本来就依赖两边）把那份判据传进来 —— 于是**创建路径与导入路径
+ * 用的是同一份规则**，不会出现"创建时挡住、导入时放行"的裂缝。
+ */
+export interface DocumentValidationOptions {
+  /** 输入是已经抬成世界顶点的底面多边形与拉伸向量；返回可读的失败原因（空数组表示通过）。 */
+  prismConstructionValidator?: (input: { polygon: Vector3[]; vector: Vector3 }) => string[]
+}
+
+function validatePrimitive(value: unknown, byId: Map<string, unknown>, parameterIds: Set<string>, options: DocumentValidationOptions = {}): string[] {
   if (!isRecord(value) || typeof value.id !== "string") return ["every primitive needs a stable id"]
   const errors: string[] = []
   const type = primitiveType(value)
@@ -275,6 +301,12 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>, parameter
     if (!isRecord(value.binding) || !["free", "onPath", "derived"].includes(String(value.binding.kind))) errors.push("point binding is invalid")
     else if (value.binding.kind === "onPath") {
       if (typeof value.binding.pathId !== "string" || !isFiniteNumber(value.binding.parameter)) errors.push("point path binding is invalid")
+      /**
+       * 平面点的宿主参数同样可以由**文档参数**驱动（规格 §4.1/§8.2：符号参数 θ 驱动的动点）。
+       * 悬空引用会让点静默冻在最后一次算出的位置，而文档依然能保存 —— 空间点（`point3`）的
+       * 宿主绑定早就拒绝了这种引用，平面这一侧此前漏了同一道检查。
+       */
+      else if (value.binding.parameterId !== undefined && (typeof value.binding.parameterId !== "string" || !parameterIds.has(value.binding.parameterId))) errors.push("point path binding parameter is invalid")
       // `domain` 是抛物线/双曲线这类无界自然参数曲线的扫描窗口，必须是递增的有限区间。
       else if (value.binding.domain !== undefined && (!Array.isArray(value.binding.domain) || value.binding.domain.length !== 2 || !value.binding.domain.every(isFiniteNumber) || value.binding.domain[0] >= value.binding.domain[1])) errors.push("point path binding domain is invalid")
       else if (value.binding.branch !== undefined && value.binding.branch !== 0 && value.binding.branch !== 1) errors.push("point path binding branch is invalid")
@@ -299,10 +331,15 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>, parameter
        * `point3 host binding is invalid`），用户看到的是"圆轨道上的动点无法与定点建立直线连接"。
        */
       else if (value.binding.kind === "onHost" && (typeof value.binding.hostId !== "string" || !["line3", "segment3", "ray3", "edge3", "circle3"].includes(referenceType(byId, value.binding.hostId) ?? "") || !isFiniteNumber(value.binding.parameter))) errors.push("point3 host binding is invalid")
+      // 宿主参数可以由**文档参数**驱动（设计规格 §4.1）：悬空引用会让点静默冻住，所以引用必须存在。
+      else if (value.binding.kind === "onHost" && value.binding.parameterId !== undefined && (typeof value.binding.parameterId !== "string" || !parameterIds.has(value.binding.parameterId))) errors.push("point3 host binding parameter is invalid")
       else if (value.binding.kind === "onFace" && (typeof value.binding.faceId !== "string" || referenceType(byId, value.binding.faceId) !== "face3" || !isFiniteUvPair(value.binding.uv))) errors.push("point3 face binding is invalid")
+      else if (value.binding.kind === "onFace" && value.binding.parameterIds !== undefined && !isParameterIdList(value.binding.parameterIds, parameterIds, 2)) errors.push("point3 face binding parameters are invalid")
       else if (value.binding.kind === "onSurface" && (typeof value.binding.solidId !== "string" || !["cylinder", "cone"].includes(referenceType(byId, value.binding.solidId) ?? "") || !isFiniteUvPair(value.binding.uv))) errors.push("point3 surface binding is invalid")
+      else if (value.binding.kind === "onSurface" && value.binding.parameterIds !== undefined && !isParameterIdList(value.binding.parameterIds, parameterIds, 2)) errors.push("point3 surface binding parameters are invalid")
       // 实体内：宿主必须是**实体**（点要有体积才谈得上"在里面"），参数是三个 [0,1] 比例。
       else if (value.binding.kind === "inSolid" && (typeof value.binding.solidId !== "string" || !solidTypes.has(referenceType(byId, value.binding.solidId) ?? "") || !Array.isArray(value.binding.uvw) || value.binding.uvw.length !== 3 || !value.binding.uvw.every(isFiniteNumber))) errors.push("point3 solid binding is invalid")
+      else if (value.binding.kind === "inSolid" && value.binding.parameterIds !== undefined && !isParameterIdList(value.binding.parameterIds, parameterIds, 3)) errors.push("point3 solid binding parameters are invalid")
     }
   }
   if (type === "line3") {
@@ -387,8 +424,41 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>, parameter
     }
     if (value.construction !== undefined) {
       const construction = isRecord(value.construction) ? value.construction : undefined
-      if (!construction || !["template", "fromPoints", "fromFaces"].includes(String(construction.kind)) || !Array.isArray(construction.sourceIds) || construction.sourceIds.some((sourceId) => typeof sourceId !== "string" || !byId.has(sourceId))) errors.push("polyhedron3 construction is invalid")
+      if (!construction || !["template", "fromPoints", "fromFaces", "prism"].includes(String(construction.kind))) errors.push("polyhedron3 construction is invalid")
+      /**
+       * `template` / `fromPoints` / `fromFaces` 的 `sourceIds` 引用文档里真实存在的图元。
+       * `prism` **没有** `sourceIds`：它的来源是底面多边形与拉伸向量（自带的数值真源），
+       * 所以不能跟着一起要求 `sourceIds` —— 那会把一份合法的棱柱判成非法。
+       */
+      if (construction && construction.kind !== "prism" && (!Array.isArray(construction.sourceIds) || construction.sourceIds.some((sourceId) => typeof sourceId !== "string" || !byId.has(sourceId)))) errors.push("polyhedron3 construction is invalid")
       if (construction?.kind === "template" && (typeof construction.templateId !== "string" || (construction.parameterIds !== undefined && (!isDistinctStringList(construction.parameterIds, 1) || construction.parameterIds.some((parameterId) => !parameterIds.has(parameterId)))))) errors.push("polyhedron3 template construction is invalid")
+      /**
+       * 棱柱构造只钉**形状与数值**：底面至少三个点、向量有限且非零。
+       *
+       * 底面收**两种**写法（Fix round 2 / I6 + Deviation 5）：
+       * - 规格 §3.2 的输入形式：`base.plane`（原点 + 非零法向）+ **二维** `{x,y}` 点，
+       *   由 codec 在解析边界用内核的 `liftPrismBasePolygon` 抬成世界顶点；
+       * - 存储形式：世界坐标的三维点（`PrismConstruction` 里说明的那一种）。
+       *
+       * 自交 / 共面 / 零体积这类**几何语义**仍然不在这里实现（规格 §6.2："Schema 不重复实现
+       * 几何语义"）—— 它们经 `documentValidation.prismConstructionValidator` 钩子在
+       * **文档校验期**执行，判据就是内核的同一份 `validatePrismInput`（创建路径与导入路径共用）。
+       */
+      if (construction?.kind === "prism") {
+        const base = isRecord(construction.base) ? construction.base : undefined
+        const polygon = base && Array.isArray(base.polygon) ? base.polygon : undefined
+        const planeBase = isRecord(base?.plane) ? base.plane : undefined
+        const validPlane = planeBase === undefined
+          || (isFiniteCoordinate3(planeBase.origin) && isNonZeroVector3(planeBase.normal))
+        const validPolygon = polygon !== undefined && polygon.length >= 3
+          && polygon.every((point) => (planeBase !== undefined ? isFiniteCoordinate(point) : isFiniteCoordinate3(point)))
+        if (!validPlane || !validPolygon || !isNonZeroVector3(construction.vector)) errors.push("polyhedron3 prism construction is invalid")
+        else if (options.prismConstructionValidator && planeBase === undefined) {
+          // 几何语义交给注入的判据（内核那一份）：报告里带上实体 id，导入失败时能指到具体对象。
+          // 二维输入形式在这里**跳过**：它还没有被抬到平面上，等 codec 抬完再判（否则会把合法输入判成退化）。
+          for (const problem of options.prismConstructionValidator({ polygon: polygon as Vector3[], vector: construction.vector as Vector3 })) errors.push(`${value.id} prism base is invalid: ${problem}`)
+        }
+      }
       // `fromFaces` 的 `sourceId` 是"这条拓扑属于哪个实体"：必须指向文档里真实存在的图元。
       if (construction?.sourceId !== undefined && (typeof construction.sourceId !== "string" || !byId.has(construction.sourceId))) errors.push("polyhedron3 construction sourceId is invalid")
     }
@@ -703,7 +773,7 @@ function validateDrawingSheets(value: unknown, viewIds: Set<string>, errors: str
   return sheetIds
 }
 
-export function validateDocument(document: unknown): ValidationResult {
+export function validateDocument(document: unknown, options: DocumentValidationOptions = {}): ValidationResult {
   const errors: string[] = []
   if (!isRecord(document)) return { valid: false, errors: ["document must be an object"] }
   if (document.schemaVersion !== "0.1") errors.push("schemaVersion must be 0.1")
@@ -770,7 +840,7 @@ export function validateDocument(document: unknown): ValidationResult {
   }
   for (const primitive of primitives) {
     if (isRecord(primitive) && primitive.layerId !== undefined && (typeof primitive.layerId !== "string" || !layerIds.has(primitive.layerId))) errors.push(`primitive layer is missing: ${isRecord(primitive) && typeof primitive.id === "string" ? primitive.id : "unknown"}`)
-    errors.push(...validatePrimitive(primitive, primitiveById, parameterIds))
+    errors.push(...validatePrimitive(primitive, primitiveById, parameterIds, options))
   }
 
   if (Array.isArray(document.annotations)) {

@@ -25,11 +25,11 @@
 - Create: `packages/geometry-kernel/src/reactive/evaluator.ts`
 - Test: `packages/geometry-kernel/src/reactive/graph.test.ts`
 
-- [ ] Add failing tests for topological ordering, reverse dependency invalidation, missing-source diagnostics, and cycle detection.
-- [ ] Run focused tests and verify failure because the graph contracts are absent.
-- [ ] Implement `ReactiveGraph`, `addNode`, `setParameter`, `affectedNodes`, `evaluate`, and structured `EvaluationResult`.
-- [ ] Make evaluation reject cycles before calling any evaluator.
-- [ ] Run the focused tests and verify pass.
+- [x] Add failing tests for topological ordering, reverse dependency invalidation, missing-source diagnostics, and cycle detection.
+- [x] Run focused tests and verify failure because the graph contracts are absent.
+- [x] Implement `ReactiveGraph`, `addNode`, `setParameter`, `affectedNodes`, `evaluate`, and structured `EvaluationResult`.
+- [x] Make evaluation reject cycles before calling any evaluator.
+- [x] Run the focused tests and verify pass.
 
 ### Task 2: Implement parameterized point constraints
 
@@ -39,11 +39,11 @@
 - Modify: `packages/scene-graph/src/operations.ts`
 - Test: `packages/geometry-kernel/src/reactive/constraints.test.ts`
 
-- [ ] Add tests for segment/line/circle parameters, face `u,v`, solid `u,v,w`, domain clamping, and invalid host errors.
-- [ ] Run focused tests and verify failure on missing evaluators.
-- [ ] Implement constraint evaluators using existing host geometry and strict domains.
-- [ ] Store generated parameter ownership so deleting a host removes orphan parameters.
-- [ ] Run focused tests and verify pass.
+- [x] Add tests for segment/line/circle parameters, face `u,v`, solid `u,v,w`, domain clamping, and invalid host errors.
+- [x] Run focused tests and verify failure on missing evaluators.
+- [x] Implement constraint evaluators using existing host geometry and strict domains.
+- [x] Store generated parameter ownership so deleting a host removes orphan parameters.
+- [x] Run focused tests and verify pass.
 
 ### Task 3: Add triangle centers and derived circles
 
@@ -53,11 +53,11 @@
 - Modify: `packages/dsl/src/schema.ts`
 - Test: `packages/geometry-kernel/src/reactive/triangleCenters.test.ts`
 
-- [ ] Add tests for centroid, incenter, circumcenter, orthocenter, excenter, inradius, circumradius, collinearity rejection, and moving-source recomputation.
-- [ ] Run focused tests and verify failure on absent center evaluators.
-- [ ] Implement stable plane-basis projection, weighted-center formulas, and tolerance-aware degeneracy results.
-- [ ] Register derived circle rules as graph nodes referencing center and source triangle nodes.
-- [ ] Run focused tests and verify pass.
+- [x] Add tests for centroid, incenter, circumcenter, orthocenter, excenter, inradius, circumradius, collinearity rejection, and moving-source recomputation.
+- [x] Run focused tests and verify failure on absent center evaluators.
+- [x] Implement stable plane-basis projection, weighted-center formulas, and tolerance-aware degeneracy results.
+- [x] Register derived circle rules as graph nodes referencing center and source triangle nodes.
+- [x] Run focused tests and verify pass.
 
 ### Task 4: Add tangent, section, measurement, and locus nodes
 
@@ -69,15 +69,15 @@
 - Test: `packages/geometry-kernel/src/reactive/derivedNodes.test.ts`
 - Test: `apps/web/e2e/reactive-dynamic-objects.spec.ts`
 
-- [ ] Add tests for tangent updates, Solid section updates, measurement invalidation, adaptive locus subdivision, and transient Trace behavior.
-- [ ] Run focused tests and verify failure because derived nodes are not connected to rendering.
-- [ ] Connect graph evaluation results to existing preview/render paths without committing per pointer move.
-- [ ] Commit one compound operation on pointer release and preserve one-step undo.
-- [ ] Add browser coverage for moving a point and observing downstream tangent/circle/section updates.
-- [ ] Run focused tests and the Playwright scenario and verify pass.
+- [x] Add tests for tangent updates, Solid section updates, measurement invalidation, adaptive locus subdivision, and transient Trace behavior.
+- [x] Run focused tests and verify failure because derived nodes are not connected to rendering.
+- [x] Connect graph evaluation results to existing preview/render paths without committing per pointer move.
+- [x] Commit one compound operation on pointer release and preserve one-step undo.
+- [x] Add browser coverage for moving a point and observing downstream tangent/circle/section updates.
+- [x] Run focused tests and the Playwright scenario and verify pass.
 
 ### Task 5: Verify the Reactive DAG slice
 
-- [ ] Run `npm test`, `npm run typecheck`, `npm run lint`, and `npm run test:e2e`.
-- [ ] Confirm deletion of a source produces `missing-source` rather than a world-origin fallback.
-- [ ] Confirm no unrelated graph nodes are evaluated when one parameter changes.
+- [x] Run `npm test`, `npm run typecheck`, `npm run lint`, and `npm run test:e2e`.
+- [x] Confirm deletion of a source produces `missing-source` rather than a world-origin fallback.
+- [x] Confirm no unrelated graph nodes are evaluated when one parameter changes.

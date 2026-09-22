@@ -144,3 +144,107 @@ export interface ParseError {
 }
 
 export type ParseResult<T> = { ok: true; value: T } | { ok: false; errors: ParseError[] }
+
+// ---------------------------------------------------------------- 参数审计的公共词汇（规格 §6.2/§6.3）
+
+/**
+ * **字段缺失时怎么办**（规格 §6.3 的四档）。
+ *
+ * 四档必须分开，因为"回填一个安全默认"与"逼用户回答"在用户看来是两件事：
+ * - `given`：字段已经给了（审计只需要原样保留，**绝不覆盖显式约束**）；
+ * - `safe_default`：有公认的默认，回填之后必须**写进 `assumptions`**（不能静默发生）；
+ * - `infer_from_facts`：能从已确认事实/用户原话里读出来（"棱长 3" → size 3）；
+ * - `ask_user`：没有安全默认 → `clarification`（**不是**失败：问用户比编一个数好）；
+ * - `reject`：连问都不该问（例如"把散面拼成 Prism"）→ 直接拒绝。
+ */
+export type PlanDefaultPolicy = "given" | "safe_default" | "infer_from_facts" | "ask_user" | "reject"
+
+/**
+ * **结构化假设**（审计/补全的产出）。
+ *
+ * 信封上的 `assumptions` 仍然是 `string[]`（界面与宿主共用那一份，见 `EnvelopeAssumptions`），
+ * 而这个结构多带三样东西：这条假设**改的是哪个字段**（`kind` + `value`）、
+ * 用户**能不能覆盖**它（`overridable`）。三者都是"用户看到这句话之后要做什么"必须的，
+ * 而它们无法从一句人话里可靠地反推出来。
+ */
+export interface StructuredAssumption {
+  id: string
+  /** 会进 `EnvelopeAssumptions` 的那句话（人话，一句）。 */
+  text: string
+  kind: "safe_default" | "inferred" | "witness" | "symbolic"
+  /** 被定下来的值（可 JSON 序列化）。 */
+  value: unknown
+  /** 用户改口之后能不能覆盖（默认特值可以；"题目要求恒定"这类不可以）。 */
+  overridable: boolean
+  /** 这条假设落在哪个字段（`envelope.actions[2].inputs.parameter`）。 */
+  path?: string
+}
+
+/** **结构化澄清问题**：问题 + 为什么必须问 + 缺的是哪个字段。 */
+export interface ClarificationQuestion {
+  id: string
+  text: string
+  /** 为什么不能替用户定（例如"平面无穷多，挑一个等于换了一道题"）。 */
+  reason: string
+  /** 缺失字段的路径；有它才能把回答精确写回计划。 */
+  path?: string
+}
+
+/** 逐条字段错误：**路径 + 原因码**，供一次性修复使用。 */
+export interface RepairFieldError {
+  code: string
+  path: string
+  detail: string
+}
+
+/**
+ * **一次性修复请求**（规格 §7 + 计划 Task 4）。
+ *
+ * 只带三样东西：`reason` / `errors`（路径 + 原因）/ `allowedChanges`（允许改哪几处）。
+ * **刻意不带模型上一轮的原话**：回显会把它的散文再送回去，形成自我强化的循环；
+ * 而"允许改哪几处"是从错误路径算出来的，所以第二次尝试不必重新描述整个合同。
+ */
+export interface RepairRequest {
+  reason: string
+  errors: RepairFieldError[]
+  allowedChanges: string[]
+  /** 第几次修复（从 1 开始）；`MAX_REPAIR_ATTEMPTS` 之外不再给机会。 */
+  attempt: number
+}
+
+/** 修复只给**一次**（计划 Global Constraints："Repair is limited to one request"）。 */
+export const MAX_REPAIR_ATTEMPTS = 1
+
+/**
+ * **这份计划是怎么被验证的**（规格 §8.2/§10）。
+ *
+ * "数值采样验证"与"形式证明"必须能分开：把它们合并成一句"已验证"，
+ * 就是在把采样说成证明 —— 规格 §10 明令不许。所以这是一个判别联合，
+ * 而不是一个布尔值加一句描述。
+ */
+export type PlanVerification =
+  | { kind: "formal"; detail: string }
+  | { kind: "numeric_sampling"; detail: string }
+
+/**
+ * **六层编译的层名**（规格 §6.2）。
+ *
+ * 每一层都必须能被指名：一条诊断只说"计划不成立"是没用的，用户与模型都要知道
+ * **卡在哪一层**（传输解析 / 字段审计 / 引用解析 / 参数补全 / 几何语义校验 / 动作编译）。
+ */
+export type PlanStage = "transport" | "field_audit" | "reference_resolution" | "parameter_completion" | "geometry_validation" | "action_compile"
+
+/** 一条编译诊断：**层 + 原因码 + 字段路径**（路径不是装饰：一次性修复只允许改这几处）。 */
+export interface PlanDiagnostic {
+  stage: PlanStage
+  code: string
+  /** 字段路径（`envelope.actions[2].inputs.parameter`）。 */
+  path: string
+  detail: string
+  severity: "info" | "warning" | "error"
+}
+
+/** 只保留错误级诊断（给修复请求与界面用）。 */
+export function errorDiagnostics(diagnostics: readonly PlanDiagnostic[]): PlanDiagnostic[] {
+  return diagnostics.filter((diagnostic) => diagnostic.severity === "error")
+}

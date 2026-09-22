@@ -1,8 +1,10 @@
 import { type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react"
 import type { Coordinate, GeometryDocument, PrimitiveSpec } from "@draw/dsl"
-import { adaptiveSampleFunctionSegments, evaluateParameterExpression, sampleEllipse, sampleHyperbolaBranches, sampleLocus, sampleParabola } from "@draw/geometry-kernel"
-import { applyOperation, getAffectedPrimitiveIds, pathConstraint, recomputeDerivedObjects, type DomainOperation } from "@draw/scene-graph"
+import { adaptiveSampleFunctionSegments, createTransientTrace, evaluateParameterExpression, sampleEllipse, sampleHyperbolaBranches, sampleParabola } from "@draw/geometry-kernel"
+import { applyOperation, getAffectedPrimitiveIds, pathConstraint, type DomainOperation } from "@draw/scene-graph"
 import type { BoxSelectionMode } from "@draw/geometry-kernel"
+
+import { buildDocumentGraph, evaluateDocumentGraph, locusDriverParameterId, sampleLocusThroughGraph, type DocumentGraph } from "../reactivePreview"
 
 import { createDragAction, getDragHandle, primitiveHandlePoints, type DragAction, type DragHandle, type DragRotationTarget, type DragTangentTarget } from "../interaction"
 import { isRotatableCurve, placementPivot } from "../curveRotation"
@@ -110,6 +112,38 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
   const previousPreviewsRef = useRef<IntersectionPreview[]>([])
   /** 最近一次交点评算的读数：重算了几对、沿用了几个（e2e 与排查都读它）。 */
   const previewStatsRef = useRef({ recomputedPairs: 0, reusedPreviews: 0 })
+  /**
+   * **Reactive DAG 的文档视图**（Reactive DAG 切片 Task 4）。
+   *
+   * 按**文档对象**缓存（`WeakMap`），因为一次拖动里会同时存在两份文档：提交态 `document`
+   * （拖动 effect 用它，整次拖动稳定不变 ⇒ 整次拖动共用一张图、只重算下游闭包）与预览态
+   * `previewDocument`（每帧新建，轨迹渲染在渲染期用它采样）。
+   *
+   * 单个槽位是不够的（评审 I4）：两份文档轮流覆盖同一个槽，每帧都要全量重建两次，`signatures`
+   * 永远是空的，于是"只重算下游"在含轨迹的文档里退化成整图求值。`WeakMap` 让两份文档各留一张图，
+   * 拖动那条路径的图在整个手势期间保持不变。
+   */
+  const documentGraphsRef = useRef(new WeakMap<GeometryDocument, DocumentGraph>())
+  const documentGraphFor = (source: GeometryDocument): DocumentGraph => {
+    const cached = documentGraphsRef.current.get(source)
+    if (cached) return cached
+    const built = buildDocumentGraph(source)
+    documentGraphsRef.current.set(source, built)
+    return built
+  }
+  /**
+   * **拖动期间的临时轨迹**：只在内存里滚动保留最近若干个点。
+   *
+   * 规格 §4.4：交互中的 Trace 不产生历史节点，抬手即弃；"未确认的拖动预览不得进入撤销历史"
+   * 在轨迹上的体现就是——它根本没有被写进文档的机会。
+   */
+  const transientTraceRef = useRef(createTransientTrace({ maxPoints: 256 }))
+  /**
+   * 上一帧拖动路径用的那张图。用来把"整次拖动共用一张图"这条**可测**性质报出来
+   * （`data-reactive-graph-reused`）：它是 I4 的真正判据 —— 单个缓存槽位时，渲染期那份
+   * 预览文档的图会把提交态的图挤掉，于是每帧都重建一次（读数恒为 false）。
+   */
+  const draggedGraphRef = useRef<DocumentGraph | null>(null)
   const worldBounds = visibleWorldBounds(viewport)
   const toX = (x: number) => worldToSvg({ x, y: 0 }, viewport).x
   const toY = (y: number) => worldToSvg({ x: 0, y }, viewport).y
@@ -189,6 +223,53 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
     svg.dataset.previewReused = String(previewResult.reusedPreviews)
     svg.dataset.previewCount = String(previewResult.previews.length)
   }, [previewResult])
+  /**
+   * Reactive DAG 在拖动路径上的落点。
+   *
+   * 每次指针移动：把预览文档里的新参数值同步进图（`evaluateDocumentGraph` 的方向是文档 → 图），
+   * 求一次**下游闭包**，然后用**图算出来的坐标**记一个临时轨迹点。
+   * 轨迹是屏幕上看得见的东西，所以"参数 → 约束 evaluator → 坐标"这条链真的参与了渲染，
+   * 而不是只在单测里跑过。
+   *
+   * 图没有给出坐标时（宿主被删、参数非有限……）**不记点**，只把诊断数出来：
+   * 宁可不画，也不拿文档里的旧坐标冒充图的结果。
+   */
+  useEffect(() => {
+    const svg = svgRef.current
+    if (!dragState || !dragCurrent) {
+      if (svg) {
+        svg.dataset.reactiveAffected = "0"
+        svg.dataset.reactiveEvaluated = "0"
+        svg.dataset.reactiveDiagnostics = "0"
+        svg.dataset.reactiveTrace = "0"
+        // 手势结束后把上一次拖动的求值 id 一并清掉：留着它，读数就不再描述"当前"（评审 M5）。
+        svg.dataset.reactiveEvaluatedIds = ""
+        svg.dataset.reactiveGraphReused = "false"
+      }
+      draggedGraphRef.current = null
+      return
+    }
+    const draggedGraph = documentGraphFor(document)
+    const reusedGraph = draggedGraphRef.current === draggedGraph
+    draggedGraphRef.current = draggedGraph
+    const report = evaluateDocumentGraph(draggedGraph.graph, previewDocument, [dragState.id])
+    /**
+     * 轨迹只跟**真正的动点**（坐标由 evaluator 算出来的绑定点）：
+     * 自由定位的点是图里的来源节点，拖它顺手画一条轨迹不是本切片要的视觉（评审 M4）。
+     */
+    const draggedPrimitive = previewDocument.primitives.find((primitive) => primitive.id === dragState.id)
+    const traceable = draggedPrimitive?.type === "point" && draggedPrimitive.binding?.kind === "onPath"
+    const traced = traceable ? report.points.get(dragState.id) : undefined
+    if (traced) transientTraceRef.current.record(traced)
+    if (!svg) return
+    svg.dataset.reactiveAffected = String(report.affected.length)
+    svg.dataset.reactiveEvaluated = String(report.evaluated.length)
+    svg.dataset.reactiveDiagnostics = String(report.diagnostics.length)
+    svg.dataset.reactiveTrace = String(transientTraceRef.current.points.length)
+    // 被求值的图元 id 也报出来：e2e 用它断言"只算了下游闭包"。
+    svg.dataset.reactiveEvaluatedIds = report.evaluated.join(",")
+    svg.dataset.reactiveGraphReused = String(reusedGraph)
+  }, [dragState, dragCurrent, previewDocument, document])
   const intersectionPreviews = useMemo(() => {
     const savedPairs = new Set<string>()
     const savedPoints = new Set<string>()
@@ -235,21 +316,29 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
    *    于是双曲线型轨迹在渐近线两侧被一条凭空出现的竖线连起来 —— 那是不存在的图形。
    *    这里返回 `Coordinate[][]`，渲染层逐条画 polyline，绝不跨分支连线。
    */
+  /**
+   * 轨迹采样走 **Reactive DAG**（规格 §4.4）。
+   *
+   * 旧实现每个采样点都 `recomputeDerivedObjects` 一次（整份文档重算一遍）；现在只驱动
+   * **一个参数节点**，由图的依赖闭包算出动点坐标（`sampleLocusThroughGraph`），
+   * 采样结束后参数回到原处 —— 采样是只读遍历，不能顺手改真值。
+   *
+   * 采样口径与旧实现**逐项一致**：域取 `locus.domain`、采样点数取 `locus.samples`、
+   * 容差按可视精度给，`jumpFactor / maxDepth / breakDepth / maxEvaluations` 显式透传
+   * （不传就会吃内核默认值，细分更深、每帧更贵 —— 评审 M2）。
+   * 驱动哪个参数由 `locusDriverParameterId` 决定（轨迹声明的参数解析不出来时**不画**，评审 M3）。
+   */
   const locusSegments = (locus: Extract<PrimitiveSpec, { type: "locus" }>): Coordinate[][] => {
-    const source = displayPrimitives.find((primitive): primitive is Extract<PrimitiveSpec, { type: "point" }> => primitive.id === locus.sourcePointId && primitive.type === "point")
-    const parameter = previewDocument.parameters[locus.parameterId]
-    if (!source || source.binding?.kind !== "onPath" || !parameter) return []
+    const graph = documentGraphFor(previewDocument).graph
+    const parameterId = locusDriverParameterId(previewDocument, locus, (id) => graph.hasNode(id))
+    if (parameterId === null) return []
     const samples = Math.max(2, Math.min(4096, locus.samples))
-    // 一次求值 = 一次整文档重算，代价很高，所以细分容差按"世界坐标下的可视精度"给：
+    // 一次求值 = 一次增量重算，代价很低，所以细分容差按"世界坐标下的可视精度"给：
     // 约 1/400 个视野宽度，肉眼分辨不出折线，同时避免为看不见的精度付钱。
     const tolerance = Math.max(1e-9, (worldBounds.maxX - worldBounds.minX) / 400)
-    const drivenAt = (value: number): Coordinate | null => {
-      const nextParameters = { ...previewDocument.parameters, [locus.parameterId]: { ...parameter, value, expression: undefined } }
-      const nextDocument = recomputeDerivedObjects({ ...previewDocument, parameters: nextParameters }, [locus.parameterId, source.id])
-      const nextPoint = nextDocument.primitives.find((primitive): primitive is Extract<PrimitiveSpec, { type: "point" }> => primitive.id === source.id && primitive.type === "point")
-      return nextPoint && Number.isFinite(nextPoint.x) && Number.isFinite(nextPoint.y) ? { x: nextPoint.x, y: nextPoint.y } : null
-    }
-    const result = sampleLocus(drivenAt, {
+    const result = sampleLocusThroughGraph(graph, {
+      pointId: locus.sourcePointId,
+      parameterId,
       domain: [locus.domain[0], locus.domain[1]],
       samples,
       tolerance,
@@ -258,7 +347,7 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
       breakDepth: 20,
       maxEvaluations: Math.max(samples * 8, 256)
     })
-    return result.branches.map((branch) => branch.points)
+    return result.branches.map((branch) => [...branch])
   }
 
   const viewportLine = (line: Extract<PrimitiveSpec, { type: "line" }>) => {
@@ -289,6 +378,8 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
     selectionHandled.current = true
     const handle = getDragHandle(primitive, eventToWorld(event, viewport), 0.35, rotationTargetOf(primitive, document.primitives) ?? undefined, selectedIds.includes(id))
     if (!handle) return
+    // 新的一次拖动从空轨迹开始：上一次的临时轨迹不跨手势保留（它本来就不是文档内容）。
+    transientTraceRef.current.clear()
     event.currentTarget.setPointerCapture?.(event.pointerId)
     // 曲线切线：记下按下那一刻的"切点参数 − 指针投影参数"，拖动时保持它（切点不会跳到指针脚下）。
     const tangentGrab = tangentTargetOf(primitive, document.primitives, document.parameters, eventToWorld(event, viewport))
@@ -334,6 +425,8 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
       if (primitive && action && Math.hypot(current.x - dragState.origin.x, current.y - dragState.origin.y) > 0.01) { suppressClick.current = true; onDragEnd(primitive.id, action) }
       setDragState(null)
       setDragCurrent(null)
+      // 抬手：临时轨迹随之作废（"抬手后可选择保留为 Locus"是另一条显式命令，不是默认行为）。
+      transientTraceRef.current.clear()
       return
     }
     if (!dragStart) return
@@ -485,6 +578,18 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
     {/* 轨迹画在点**之前**：动点永远落在自己的轨迹上，轨迹若压在点的命中区之上，点就再也拖不动了。 */}
     {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "locus" }> => primitive.type === "locus" && primitive.visible !== false).map((locus) => <g key={locus.id} data-primitive-type="locus" opacity={opacityFor(locus)} onClick={(event) => handleObjectClick(event, locus.id)}>{locusSegments(locus).map((points, index) => <polyline key={`${locus.id}-${index}`} points={pointsAttribute(points, viewport)} fill="none" stroke={strokeFor(locus)} strokeWidth={strokeWidthFor(locus, selectedIds.includes(locus.id))} strokeDasharray={dashFor(locus)} />)}</g>)}
     {renderAnnotations()}
+    {/**
+      * **拖动中的临时轨迹**（Reactive DAG 切片 Task 4 / 规格 §4.4）。
+      *
+      * 点来自图的求值结果（参数 → 约束 evaluator → 坐标），存在内存缓冲里；
+      * 它**不是**文档对象：不写 `.mgeo`、不压历史、抬手即消失。用户抬手后若要保留，
+      * 那是另一条显式命令（把缓冲区写成持久化 Locus），不会自己发生。
+      */}
+    {dragState && transientTraceRef.current.points.length > 1 && <g data-transient-trace="true" pointerEvents="none">{transientTraceRef.current.points.map((point, index, points) => {
+      if (index === 0) return null
+      const previous = points[index - 1]
+      return <line key={`trace-${index}`} x1={toX(previous.x)} y1={toY(previous.y)} x2={toX(point.x)} y2={toY(point.y)} stroke="var(--color-warning)" strokeWidth="1.5" strokeDasharray="2 3" opacity="0.85" />
+    })}</g>}
     {/* 定点标记：告诉用户"曲线正绕哪个点转"，它本身不接指针事件。 */}
     {renderRotationAnchors()}
     {/* 交点预览画在曲线之上、但在**点之下**：预览的命中圆同样是 14px，若画在最后会把点抢走。 */}

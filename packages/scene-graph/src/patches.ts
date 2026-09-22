@@ -1,7 +1,7 @@
 import { MEASUREMENT_METRICS, validateDocument, type AnnotationSpec, type ConstraintSpec, type EngineeringAnnotation, type GeometryDocument, type Measurement3, type PrimitiveSpec } from "@draw/dsl"
 import { parseExpression } from "@draw/geometry-kernel"
 
-import { applyOperation, deletionTargets, EDITABLE_GEOMETRY_TYPES, isFreeDraggable3, isRotatable3, layerDescendantIds, templateTopologyIds, type DomainOperation } from "./operations"
+import { applyOperation, deletionTargets, EDITABLE_GEOMETRY_TYPES, isFreeDraggable3, isRotatable3, isSourceIdConstruction, layerDescendantIds, templateTopologyIds, type DomainOperation } from "./operations"
 import { isDomainOperation } from "./operationNames"
 
 export type PatchValidationResult =
@@ -149,7 +149,8 @@ function isReferenced(document: GeometryDocument, id: string, ignoredReferrers: 
     // 轨道圆**不在**这里：它自带圆心坐标，不引用任何点，所以圆心点可以随便删。
     || (primitive.type === "edge3" && (primitive.pointIds.includes(id) || primitive.faceIds?.includes(id)))
     || (primitive.type === "face3" && (primitive.pointIds.includes(id) || primitive.edgeIds?.includes(id) || primitive.planeId === id))
-    || (primitive.type === "polyhedron3" && (primitive.vertexIds.includes(id) || primitive.edgeIds.includes(id) || primitive.faceIds.includes(id) || primitive.construction?.sourceIds.includes(id)))
+    // 棱柱的构造里没有 `sourceIds`：它的来源是自带的底面多边形与向量（见 `isSourceIdConstruction`）。
+    || (primitive.type === "polyhedron3" && (primitive.vertexIds.includes(id) || primitive.edgeIds.includes(id) || primitive.faceIds.includes(id) || (isSourceIdConstruction(primitive.construction) && primitive.construction.sourceIds.includes(id))))
   ))
 }
 

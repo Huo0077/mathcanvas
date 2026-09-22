@@ -26,6 +26,9 @@ function context(overrides: Partial<ModelContext> = {}): ModelContext {
   return {
     preamble: "你是 MathCanvas 的构图助手。",
     handles: { target: { projectId: "local", documentId: "doc-1", workspace: "geometry3d", epoch: "epoch:doc-1", generation: 4, contentHash: "hash" }, sources: [] },
+    // 绑定（会话 / 文档 / 版本）是提示词里必须出现的那一块（Agent DSL 切片 Task 5）：
+    // 少了它，模型没有依据判断"我现在在哪个会话、哪份文档的第几版"。
+    binding: { conversationId: "conv-1", projectId: "local", documentId: "doc-1", generation: 4 },
     workspace: "geometry3d",
     facts: [{ id: "cube-1", text: "立方体 cube-1", origin: "user" }],
     selectedRefs: [],
@@ -295,6 +298,25 @@ describe("模型规划器", () => {
     })
 
     await expect(planner.plan(request())).rejects.toThrow(/tool call/i)
+  })
+
+  /**
+   * **只为"这次真的发过的工具"接受工具调用**（Agent DSL 切片 Task 5）。
+   *
+   * 协调器按阶段发布工具：观察阶段连计划工具都没有。所以"模型调用了我们这一轮
+   * 没发的 `plan.set_plan`"两种情况都必须被如实拒绝 ——
+   * 接受它等于让阶段边界失效（模型可以绕过"这一阶段不许出计划"），
+   * 忽略它又会让用户以为模型做了些什么。
+   */
+  it("rejects a plan tool call when this run never offered the plan tool", async () => {
+    const withTools: ModelPlannerProvider = { ...provider, capabilities: { tools: "verified", json: "unknown", vision: "unknown" } }
+    const planner = createModelPlanner({
+      resolveProvider: async () => ({ ok: true, provider: withTools }),
+      runModel: async () => ({ ok: true, events: [{ kind: "tool_call", requestId: "r1", attemptId: "a1", toolCallId: "c1", toolId: PLAN_TOOL_NAME, input: JSON.parse(goodEnvelope) }] })
+    })
+
+    // 工具表是空的：这一轮**不允许**出计划。
+    await expect(planner.plan(request({ model: { context: context(), tools: [] } }))).rejects.toThrow(/tool call/i)
   })
 
   it("requestId / attemptId 取自模型事件，取不到才自己编", async () => {

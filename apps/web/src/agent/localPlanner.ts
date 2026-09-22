@@ -1,6 +1,8 @@
 import type { PlanEnvelope, PlannerPort } from "@draw/agent-core"
 import { PLAN_SCHEMA_VERSION } from "@draw/agent-core"
 
+import { conicInvariantPlan, obliquePrismSectionPlan } from "./representativeFixtures"
+
 /**
  * **本地确定性规划器**（Task 2.5 Step 2 的过渡件）。
  *
@@ -82,6 +84,34 @@ const PLANAR_POINT = (input: LocalIntentInput): PlanEnvelope => ({
   }]
 })
 
+/**
+ * **斜棱柱**：底面多边形 + 拉伸向量（设计规格 §3.2/§3.3）。
+ *
+ * 为什么本地规划器也要认这一句：棱柱目前还没有界面按钮，而"从一句话到具体实体"这条链路
+ * ——动作注册 → 传输校验 → 动作编译 → 草稿 → 确认提交——是必须能被真实走一遍的。
+ * 底面用规格 §6.3 的默认特值口径（底跨 4、高度 3），水平分量给 1 让它是**斜**棱柱。
+ */
+const PRISM = (input: LocalIntentInput): PlanEnvelope => {
+  const span = sizeFrom(input.prompt, 4)
+  const height = 3
+  return {
+    schemaVersion: PLAN_SCHEMA_VERSION,
+    kind: "plan",
+    goal: `创建一个底面边长 ${span}、高 ${height} 的斜棱柱`,
+    factIds: [],
+    actions: [{
+      actionId: "solid.create_prism",
+      actionKey: "prism",
+      factIds: [],
+      inputs: {
+        alias: "prism",
+        basePolygon: [{ x: 0, y: 0, z: 0 }, { x: span, y: 0, z: 0 }, { x: span, y: span, z: 0 }, { x: 0, y: span, z: 0 }],
+        vector: { x: 1, y: 0.5, z: height }
+      }
+    }]
+  }
+}
+
 /** 只读回答：不产生任何动作，因此**不可能**改文档。 */
 const COUNT_ANSWER = (): PlanEnvelope => ({
   schemaVersion: PLAN_SCHEMA_VERSION,
@@ -95,9 +125,26 @@ const COUNT_ANSWER = (): PlanEnvelope => ({
 /**
  * 本地能认的指令表。
  *
- * 顺序有意义：**先匹配更具体的**（"立方体"在"体"之前）。
+ * 顺序有意义：**先匹配更具体的**（"正方体"要在"立方体"之前，"棱柱"要在笼统的"体"之前）。
+ * 触发词互不相交的条目之间没有顺序依赖。
  */
 export const LOCAL_INTENTS: readonly LocalIntent[] = [
+  /**
+   * **代表题一（规格 §8.1）**：斜四棱柱 + 三条棱的中点 + 截面 + 棱上动点。
+   *
+   * 命中的是两个关键词都出现（"棱柱" + "截面"）：单说"棱柱"仍然走下面那条简单夹具
+   * （用户想要的可能只是一只棱柱，而不是一道截面题）。
+   */
+  { all: ["棱柱", "截面"], skillIds: ["spatial-modeling", "sections-intersections", "dynamic-bindings"], build: () => obliquePrismSectionPlan() },
+  /**
+   * **代表题二（规格 §8.2）**：椭圆 + 符号参数 θ + 动点 P + 切线 + 不变量表达式。
+   *
+   * 与长轴短轴无关的那句"恒为 1"是这道题的关键词，所以命中的判据里也带上它 ——
+   * 否则"椭圆"两个字会把别的椭圆题也拉进这条固定夹具。
+   */
+  { all: ["椭圆", "切线"], any: ["恒", "定值", "任意"], skillIds: ["conics-tangents", "dynamic-bindings", "functions"], build: () => conicInvariantPlan() },
+  { all: ["棱柱"], skillIds: ["spatial-modeling"], build: PRISM },
+  { all: ["prism"], skillIds: ["spatial-modeling"], build: PRISM },
   { all: ["立方体"], skillIds: ["spatial-modeling"], build: (input) => CUBE({ ...input, size: sizeFrom(input.prompt, 2) }) },
   { all: ["正方体"], skillIds: ["spatial-modeling"], build: (input) => CUBE({ ...input, size: sizeFrom(input.prompt, 2) }) },
   { all: ["cube"], skillIds: ["spatial-modeling"], build: (input) => CUBE({ ...input, size: sizeFrom(input.prompt, 2) }) },

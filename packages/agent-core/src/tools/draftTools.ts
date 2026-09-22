@@ -1,6 +1,7 @@
 import type { DraftAction } from "@draw/scene-graph"
 
 import type { DocumentHandle, ToolResult } from "../contracts"
+import { compilePlan, type PlanCompileContext, type PlanCompileResult } from "../planCompiler"
 
 /**
  * **草稿工具**（Task 2.4）。
@@ -63,7 +64,7 @@ export interface DraftStorePort {
   discard(draftId: string): boolean
 }
 
-export type DraftToolName = "draft.create" | "draft.stage_actions" | "draft.validate" | "draft.preview" | "draft.discard"
+export type DraftToolName = "draft.create" | "draft.stage_actions" | "draft.validate" | "draft.preview" | "draft.discard" | "draft.compile_plan"
 
 export interface DraftToolArtifact {
   kind: "draft"
@@ -81,6 +82,17 @@ export interface DraftTools {
   validate(draftId: string, expectedDraftVersion: number, actions: readonly DraftAction[]): DraftToolResult<{ accepted: boolean }>
   preview(draftId: string, expectedDraftVersion: number, currentVersion: number): DraftToolResult<DraftHandle | null>
   discard(draftId: string): DraftToolResult<{ discarded: boolean }>
+  /**
+   * **把一份计划（不可信输入）编译成可暂存的动作**（Agent DSL 切片 Task 4）。
+   *
+   * 为什么它不属于 `DraftToolResult`：它**不产生草稿工件** —— 六层编译管线只回答
+   * "这份计划能不能变成一批动作"，产出的是候选文档与诊断，落草稿是下一步。
+   * 硬塞一个 `artifacts: [draft]` 进去，等于让"这份产物是哪一版草稿的"这句话变成假的。
+   *
+   * 失败时把**逐条诊断 + 一次性修复请求**一起交出去：调用方据此要么问用户
+   *（`questions`），要么把修复请求发回模型（`repair`），而不是重发一遍。
+   */
+  compilePlan(plan: unknown, context: PlanCompileContext): ToolResult<PlanCompileResult>
 }
 
 function artifactOf(handle: DraftHandle): DraftToolArtifact {
@@ -151,6 +163,39 @@ export function createDraftTools(drafts: DraftStorePort): DraftTools {
     discard(draftId) {
       const discarded = drafts.discard(draftId)
       return envelope(discarded ? "success" : "warning", discarded ? `discarded draft ${draftId}` : `draft ${draftId} was already gone`, { discarded }, [], discarded ? [] : [{ code: "unknown_draft", severity: "warning", message: `no draft ${draftId}` }])
+    },
+
+    /**
+     * 六层编译管线（`planCompiler.compilePlan`）。返回值里没有草稿工件：
+     * 编译**只产出候选文档**，落草稿是 `stageActions` 的事。
+     *
+     * 失败时的 `next_actions` 按**失败类型**给：能问用户就给"问用户"，
+     * 只有模型能改的（字段格式）才给"按修复请求重发一次"。
+     */
+    compilePlan(plan, context) {
+      const result = compilePlan(plan, context)
+      if (result.ok) {
+        return {
+          status: "success",
+          summary: `compiled ${result.actions.length} action(s) into an isolated draft`,
+          next_actions: ["stage the compiled actions"],
+          artifacts: [],
+          payload: result,
+          diagnostics: result.diagnostics.map((entry) => ({ code: entry.code, severity: entry.severity, message: `${entry.path}: ${entry.detail}` }))
+        }
+      }
+      const blockingQuestions = result.questions.length > 0
+      return {
+        status: "error",
+        summary: blockingQuestions
+          ? `the plan needs more information: ${result.questions[0].text}`
+          : `the plan was refused: ${result.diagnostics.find((entry) => entry.severity === "error")?.code ?? "unknown"}`,
+        next_actions: blockingQuestions ? ["ask the user the clarification question"] : ["send one repair request built from `repair`"],
+        artifacts: [],
+        payload: result,
+        diagnostics: result.diagnostics.map((entry) => ({ code: entry.code, severity: entry.severity, message: `${entry.path}: ${entry.detail}` })),
+        ...(blockingQuestions ? {} : { recovery: { rootCauseHint: "the plan did not match the action contract", safeRetry: "revise_input" as const, stopCondition: "one repair attempt" } })
+      }
     }
   }
 }

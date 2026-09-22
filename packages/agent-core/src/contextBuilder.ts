@@ -55,6 +55,15 @@ export interface ModelContext {
   preamble: string
   /** 目标文档手柄 + 来源手柄：每次调用都带，模型据此说清"改的是哪一份"。 */
   handles: { target: DocumentHandle; sources: DocumentHandle[] }
+  /**
+   * **这一轮绑定的会话与文档**（Agent DSL 切片 Task 5；规格 §5.1/§5.4）。
+   *
+   * 为什么要单独一块：提示词里必须能写出"你现在在哪个会话、哪份文档的第几版"，
+   * 否则模型会**跨会话引用对象**（规格 §7 明令禁止），而那种错误的症状是
+   * "它引用了一个用户根本看不见的对象"。`generation` 也在这里：确认提交时要拿它做
+   * Compare-and-Swap，"模型看到的是哪一版"必须与"用户确认的是哪一版"对得上。
+   */
+  binding: { conversationId: string; projectId: string; documentId: string; generation: number }
   /** 工作区边界。 */
   workspace: string
   /** 已确认事实（只含观察结果里有、且被请求的那几条）。 */
@@ -146,6 +155,7 @@ export function buildContext(input: BuildContextInput): ModelContext {
   const context: ModelContext = {
     preamble: PREAMBLE,
     handles: { target: input.run.target, sources: input.run.sources.map((source) => source.layout) },
+    binding: { conversationId: input.run.conversationId, projectId: input.run.target.projectId, documentId: input.run.target.documentId, generation: input.run.target.generation },
     workspace: input.run.target.workspace,
     facts,
     selectedRefs,
@@ -162,6 +172,7 @@ export function buildContext(input: BuildContextInput): ModelContext {
 function estimate(context: ModelContext): number {
   const parts: string[] = [context.preamble, context.workspace]
   parts.push(JSON.stringify(context.handles))
+  parts.push(JSON.stringify(context.binding))
   parts.push(...context.facts.map((fact) => fact.text))
   parts.push(...context.selectedRefs.map((ref) => `${ref.documentId}:${ref.entityId}:${ref.label}`))
   parts.push(...context.skills.map((skill) => `${skill.id} ${skill.title} ${skill.summary}`))

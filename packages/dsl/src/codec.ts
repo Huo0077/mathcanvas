@@ -1,5 +1,21 @@
-import { validateDocument } from "./schema"
+import { isPrismPlaneBase, liftPrismBasePolygon, validatePrismSolidConstruction } from "@draw/geometry-kernel"
+
+import { validateDocument, type DocumentValidationOptions } from "./schema"
 import type { DrawingSheetSpec, DrawingViewSpec, GeometryDocument, LayerSpec, Section3Classification, Workspace } from "./types"
+
+/**
+ * **文档校验的可注入几何判据**（Fix round 2 / I6）。
+ *
+ * `@draw/dsl` 不能依赖 `@draw/geometry-kernel`（内核依赖 DSL，反向会成环），所以棱柱的
+ * "共面 / 自交 / 零体积"由这一层注入。注入之后**创建路径与导入路径用的是同一份判据**：
+ * 创建走 `compileSolidPrism`（直接调 `validatePrismInput`），导入与保存走这里。
+ */
+const PRISM_SEMANTICS: DocumentValidationOptions = {
+  prismConstructionValidator: ({ polygon, vector }) => {
+    const validation = validatePrismSolidConstruction(polygon, vector)
+    return validation.ok ? [] : validation.diagnostics.map((diagnostic) => diagnostic.message)
+  }
+}
 
 function createId(prefix: string): string {
   const uuid = globalThis.crypto?.randomUUID?.()
@@ -62,9 +78,38 @@ export function createDefaultCadLayout(document: GeometryDocument): GeometryDocu
 }
 
 export function encodeMgeo(document: GeometryDocument): string {
-  const result = validateDocument(document)
+  const result = validateDocument(document, PRISM_SEMANTICS)
   if (!result.valid) throw new Error(`Invalid geometry document: ${result.errors.join(", ")}`)
   return JSON.stringify({ format: "mgeo", formatVersion: "0.1", document }, null, 2)
+}
+
+/**
+ * **规格 §3.2 的棱柱输入形式 → 世界顶点**（Fix round 2 / I6 + Deviation 5）。
+ *
+ * 规格给的是 `base.plane`（原点 + 法向）与**二维**多边形点；存储形式仍是世界顶点 ——
+ * 不引入第二份几何真源（见 `PrismConstruction`）。抬升必须发生在**解析边界、校验之前**：
+ * `decodeMgeo` 对不合法文档是 `throw`，顺序反了照规格写的文件会因为"缺 z"直接打不开。
+ * 与 `withCircleTrackCenter` / `withSectionClassification` 是同一条流水线、同一个理由。
+ *
+ * 抬升是纯函数且**幂等**：已经是三维点的文档原样放行，抬过之后再存再读不再变。
+ */
+function withPrismBasePolygon(primitives: unknown): unknown {
+  if (!Array.isArray(primitives)) return primitives
+  return primitives.map((primitive) => {
+    if (!primitive || typeof primitive !== "object") return primitive
+    const candidate = primitive as { type?: unknown; construction?: { kind?: unknown; base?: unknown; vector?: unknown } }
+    if (candidate.type !== "polyhedron3" || candidate.construction?.kind !== "prism") return primitive
+    const base = candidate.construction.base
+    if (!isPrismPlaneBase(base)) return primitive
+    return {
+      ...candidate,
+      construction: {
+        ...candidate.construction,
+        // 只留下多边形：平面是**输入形式**的辅助信息，存储形式里没有它的位置。
+        base: { polygon: liftPrismBasePolygon(base) }
+      }
+    }
+  })
 }
 
 /** Legacy documents stored sections before the classification field existed; derive it from the stored points. */
@@ -134,13 +179,13 @@ export function decodeMgeo(serialized: string): GeometryDocument {
       groups: "groups" in rawCandidate ? (rawCandidate as { groups: unknown }).groups : [],
       measurements: "measurements" in rawCandidate ? (rawCandidate as { measurements: unknown }).measurements : [],
       engineeringAnnotations: "engineeringAnnotations" in rawCandidate ? (rawCandidate as { engineeringAnnotations: unknown }).engineeringAnnotations : [],
-      primitives: withCircleTrackCenter(withSectionClassification((rawCandidate as { primitives?: unknown }).primitives))
+      primitives: withPrismBasePolygon(withCircleTrackCenter(withSectionClassification((rawCandidate as { primitives?: unknown }).primitives)))
     }
     : rawCandidate
   const migrated = candidate && typeof candidate === "object"
     ? createDefaultCadLayout(candidate as GeometryDocument)
     : candidate
-  const result = validateDocument(migrated)
+  const result = validateDocument(migrated, PRISM_SEMANTICS)
   if (!result.valid) throw new Error(`Invalid geometry document: ${result.errors.join(", ")}`)
   return migrated as GeometryDocument
 }

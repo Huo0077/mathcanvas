@@ -40,6 +40,27 @@ describe("local planner translates the commands it knows", () => {
     expect(envelope.actions[0].actionId).toBe("planar.create_point")
   })
 
+  /**
+   * **斜棱柱**（Solid/Prism 切片 Task 5）。
+   *
+   * 指令产出的必须是 `solid.create_prism` —— **不是**一堆 `solid.create_template`，
+   * 也不是把六个面拼起来（规格 §7 明令禁止"把散面拼成 Prism"）。底面多边形与拉伸向量
+   * 都由这一笔动作携带，侧面交给内核按 `[Bi, B(i+1), T(i+1), Ti]` 生成。
+   */
+  it("builds an oblique prism from a base polygon and an extrusion vector", async () => {
+    const envelope = await plan("画一个斜棱柱")
+
+    expect(envelope.kind).toBe("plan")
+    if (envelope.kind !== "plan") throw new Error("expected a plan")
+    expect(envelope.actions).toHaveLength(1)
+    expect(envelope.actions[0].actionId).toBe("solid.create_prism")
+    const inputs = envelope.actions[0].inputs as { basePolygon?: unknown; vector?: unknown }
+    expect(Array.isArray(inputs.basePolygon)).toBe(true)
+    expect((inputs.basePolygon as unknown[]).length).toBeGreaterThanOrEqual(3)
+    // 向量必须非零，而且**带水平分量**：否则那是一只直棱柱，"斜"字就没了意义。
+    expect(inputs.vector).toMatchObject({ x: 1, z: 3 })
+  })
+
   it("answers a read-only question without producing any action", async () => {
     // 只读回答**不可能**改文档 —— 这条性质比"回答得对不对"更重要。
     const envelope = await plan("现在有什么")
@@ -109,6 +130,7 @@ describe("local planner never invents an answer", () => {
 describe("the local planner declares which skills an instruction needs", () => {
   it("asks for the spatial skill when the instruction is about a solid", () => {
     expect(localIntentSkillIds("建一个棱长 3 的立方体")).toEqual(["spatial-modeling"])
+    expect(localIntentSkillIds("画一个斜棱柱")).toEqual(["spatial-modeling"])
   })
 
   it("asks for the planar skill when the instruction is about a planar point", () => {

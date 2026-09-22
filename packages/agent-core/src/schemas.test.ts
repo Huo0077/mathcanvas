@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
-import { canonicalContentHash, newDraftId, newRunId, parsePlanEnvelope, parseDraftAction, sha256HexBytes } from "./schemas"
+import { auditEntryFor, canonicalContentHash, describeDefaultPolicies, isRegisteredActionId, newDraftId, newRunId, parsePlanEnvelope, parseDraftAction, repairRequestFor, sha256HexBytes, unsupportedActionReason } from "./schemas"
+import { DRAFT_ACTION_IDS } from "./actionIds"
 import type { DocumentHandle } from "./contracts"
 
 const HANDLE: DocumentHandle = {
@@ -126,6 +127,50 @@ describe("draft action parsing", () => {
   it("rejects an unscoped scene reference", () => {
     // 既有实体必须写成 {scope:"scene", ref:{documentId,entityId}}；只给 entityId 不算数。
     expectRejected(parseDraftAction({ actionId: "object.update_inputs", actionKey: "delete", inputs: { target: { entityId: "point-1" }, patch: { label: "x" } }, factIds: [] }), "unscoped_reference")
+  })
+
+  /**
+   * **`solid.create_prism` 必须真的能到达编译器**（Solid/Prism 切片 Task 5）。
+   *
+   * 这条用例守的是本仓库踩过的那个坑（见 `actionIds.ts` 的头注释）：动作层实现了动作而传输层
+   * 没登记，模型给出的合法动作被报成 `unknown_action` —— 看起来像"模型编了个动作"，
+   * 实际是登记表过期。所以这里从**传输层**出发走一遍。
+   */
+  it("accepts a prism action with a base polygon and an extrusion vector", () => {
+    const action = {
+      actionId: "solid.create_prism",
+      actionKey: "create-prism",
+      inputs: {
+        alias: "prism",
+        basePolygon: [{ x: 0, y: 0, z: 0 }, { x: 4, y: 0, z: 0 }, { x: 5, y: 2, z: 0 }, { x: 1, y: 2, z: 0 }],
+        vector: { x: 1, y: 0.5, z: 3 }
+      },
+      factIds: []
+    }
+
+    const result = parseDraftAction(action)
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.actionId).toBe("solid.create_prism")
+      expect(result.value.inputs).toMatchObject({ alias: "prism", vector: { x: 1, y: 0.5, z: 3 } })
+    }
+  })
+
+  it("rejects a prism action whose payload is malformed", () => {
+    const base = { actionId: "solid.create_prism", actionKey: "create-prism", factIds: [], inputs: { alias: "prism", basePolygon: [{ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }], vector: { x: 0, y: 0, z: 1 } } }
+
+    // 少于三个底面顶点：那不是多边形。
+    expectRejected(parseDraftAction({ ...base, inputs: { ...base.inputs, basePolygon: [{ x: 0, y: 0, z: 0 }] } }), "invalid_type")
+    // 向量缺一个分量 / 分量不是有限数。
+    expectRejected(parseDraftAction({ ...base, inputs: { ...base.inputs, vector: { x: 0, y: 0 } } }), "non_finite_number")
+    expectRejected(parseDraftAction({ ...base, inputs: { ...base.inputs, vector: { x: 0, y: 0, z: Number.NaN } } }), "non_finite_number")
+    // 底面点掉了一个分量。
+    expectRejected(parseDraftAction({ ...base, inputs: { ...base.inputs, basePolygon: [{ x: 0, y: 0, z: 0 }, { x: 1, y: 0 }, { x: 0, y: 1, z: 0 }] } }), "non_finite_number")
+    // 没有别名的新对象。
+    expectRejected(parseDraftAction({ ...base, inputs: { basePolygon: base.inputs.basePolygon, vector: base.inputs.vector } }), "missing_field")
+    // 白名单之外的字段（棱柱的面由内核生成，不许调用方塞进来）。
+    expectRejected(parseDraftAction({ ...base, inputs: { ...base.inputs, faces: [] } }), "unknown_field")
   })
 })
 
@@ -262,5 +307,138 @@ describe("hashing raw bytes", () => {
     expect(sha256HexBytes(new Uint8Array([0x89, 0x50, 0x4e, 0x47]))).toBe(sha256HexBytes(raw))
     // 差一个字节就是另一份附件。
     expect(sha256HexBytes(new Uint8Array([0x89, 0x50, 0x4e, 0x48]))).not.toBe(sha256HexBytes(raw))
+  })
+})
+
+/**
+ * **动作登记表要覆盖 Agent 计划里的七个族**（Agent DSL 切片 Task 1，规格 §6.2/§6.3）。
+ *
+ * 七个族里四个**已经有实现**（棱柱、截面、切线、轨迹）；另外三个（球体、五心、符号圆锥曲线）
+ * 里只有圆锥曲线能靠现有图元承载，球体与五心是**派生量** —— 内核算得出来
+ * （`solveCircumsphere3` / `triangleCenter2`），但还没有承载它们的图元与重算路径。
+ *
+ * 这一组用例钉住的是"这三个名字必须被**认出来并说清原因**"：报成 `unknown_action`
+ * 会让排障者以为"模型编了一个动作"，而事实是登记表里没有承载它的位置 —— 这两种失败
+ * 必须能分开（这正是 `actionIds.ts` 头注释里那次真实故障的教训）。
+ */
+describe("action registry coverage for the agent plan families", () => {
+  it("keeps the already-implemented prism, section, tangent and locus actions registered", () => {
+    for (const actionId of ["solid.create_prism", "section.create", "function.create_tangent", "dynamic.create_locus"]) {
+      expect(isRegisteredActionId(actionId), `${actionId} should be registered`).toBe(true)
+    }
+  })
+
+  it("recognises the derived sphere and triangle-centre vocabulary and explains why it cannot be carried", () => {
+    for (const actionId of ["derived.create_sphere", "derived.create_insphere", "derived.create_triangle_center"]) {
+      expect(unsupportedActionReason(actionId), `${actionId} should have a reason`).toBeTruthy()
+
+      const result = parseDraftAction({ actionId, actionKey: "k", factIds: [], inputs: {} })
+
+      expect(result.ok, `${actionId} must not be accepted`).toBe(false)
+      if (!result.ok) {
+        expect(result.errors[0].code).toBe("unsupported_action")
+        expect(result.errors[0].path).toBe("action.actionId")
+        expect(result.errors[0].detail.length).toBeGreaterThan(0)
+      }
+    }
+    // 谁都没实现过的名字仍然是 `unknown_action`：两类失败分得开。
+    expect(unsupportedActionReason("planar.create_dragon")).toBeNull()
+  })
+
+  it("accepts a point bound to a draft host and rejects an unscoped host with its exact path", () => {
+    const action = {
+      actionId: "dynamic.create_bound_point",
+      actionKey: "midpoint",
+      factIds: [],
+      inputs: { alias: "E", host: { scope: "draft", alias: "prism" }, hostSub: 0, parameter: 0.5 }
+    }
+
+    const accepted = parseDraftAction(action)
+    expect(accepted.ok).toBe(true)
+    if (accepted.ok) expect(accepted.value.inputs).toMatchObject({ alias: "E", hostSub: 0, parameter: 0.5 })
+
+    // 引用作用域是闭集：只给 entityId 的裸引用不算数，而且路径要指到那个字段。
+    const unscoped = parseDraftAction({ ...action, inputs: { ...action.inputs, host: { entityId: "solid-1:e0" } } })
+    expect(unscoped.ok).toBe(false)
+    if (!unscoped.ok) {
+      expect(unscoped.errors[0].code).toBe("unscoped_reference")
+      expect(unscoped.errors[0].path).toBe("action.inputs.host")
+    }
+
+    // 白名单之外的字段必须被拒，并报出具体路径（不是一句笼统的"格式不对"）。
+    const extra = parseDraftAction({ ...action, inputs: { ...action.inputs, position: { x: 0, y: 0, z: 0 } } })
+    expect(extra.ok).toBe(false)
+    if (!extra.ok) expect(extra.errors[0].path).toBe("action.inputs.position")
+  })
+
+  it("accepts a symbolic conic action and a parameter-creation action", () => {
+    const conic = parseDraftAction({
+      actionId: "planar.create_conic",
+      actionKey: "ellipse",
+      factIds: [],
+      inputs: { alias: "ellipse", kind: "ellipse", center: { x: 0, y: 0 }, radiusX: 3, radiusY: 2, label: "椭圆" }
+    })
+    expect(conic.ok).toBe(true)
+
+    // `kind` 是闭集：不认识的圆锥曲线名要被拒，并且指到那个字段。
+    const badKind = parseDraftAction({
+      actionId: "planar.create_conic",
+      actionKey: "ellipse",
+      factIds: [],
+      inputs: { alias: "ellipse", kind: "spiral", center: { x: 0, y: 0 }, radiusX: 3, radiusY: 2 }
+    })
+    expect(badKind.ok).toBe(false)
+    if (!badKind.ok) {
+      expect(badKind.errors[0].code).toBe("invalid_conic_kind")
+      expect(badKind.errors[0].path).toBe("action.inputs.kind")
+    }
+
+    // 符号参数：新建一个由文档参数驱动的参数（`parameter.set` 只能改**已经存在**的参数）。
+    const parameter = parseDraftAction({
+      actionId: "parameter.create",
+      actionKey: "theta",
+      factIds: [],
+      inputs: { id: "theta", value: 0.4, min: 0, max: 6.283185307179586, step: 0.01, label: "θ" }
+    })
+    expect(parameter.ok).toBe(true)
+  })
+
+  it("carries a default policy for every field the audit may have to fill", () => {
+    const prism = auditEntryFor("solid.create_prism")
+    // 底面与向量是**显式约束**：不给就不是"有安全默认"，而是欠定（由 witness 选择处理）。
+    expect(prism?.required).toEqual(expect.arrayContaining(["basePolygon", "vector"]))
+
+    const boundPoint = auditEntryFor("dynamic.create_bound_point")
+    expect(boundPoint?.required).toEqual(expect.arrayContaining(["alias", "host"]))
+    // 规格 §6.3：普通动点未指定位置时取 t = 0.4（中点是 0.5，由调用方显式给出）。
+    expect(boundPoint?.defaults.find((entry) => entry.field === "parameter")).toMatchObject({ policy: "safe_default", value: 0.4 })
+
+    // 截面平面是**不安全**的省略：平面无穷多，必须问用户，而不是替他挑一个。
+    const section = auditEntryFor("section.create")
+    expect(section?.defaults.find((entry) => entry.field === "plane")).toMatchObject({ policy: "ask_user" })
+    expect(section?.defaults.find((entry) => entry.field === "plane")?.question).toBeTruthy()
+
+    // 没登记的名字没有审计记录（审计据此走 unknown/unsupported 分支，而不是编一份出来）。
+    expect(auditEntryFor("planar.create_dragon")).toBeNull()
+
+    // 全量导出必须覆盖每一个登记的动作：漏一个，审计就只能靠猜。
+    const all = describeDefaultPolicies()
+    expect(all.length).toBe(DRAFT_ACTION_IDS.length)
+    for (const entry of all) expect(entry.inputs.length).toBeGreaterThan(0)
+    // 过滤参数只影响条数，不影响内容。
+    expect(describeDefaultPolicies(["solid.create_prism"]).map((entry) => entry.actionId)).toEqual(["solid.create_prism"])
+  })
+})
+
+describe("repair envelopes", () => {
+  it("carries only code/path/allowed changes, limited to one attempt", () => {
+    const request = repairRequestFor([{ code: "unknown_field", path: "envelope.actions[0].inputs.faces", detail: "unexpected field 'faces'" }], 1)
+
+    expect(request.reason).toBe("schema_invalid")
+    expect(request.attempt).toBe(1)
+    expect(request.allowedChanges).toEqual(["envelope.actions[0].inputs.faces"])
+    expect(request.errors).toEqual([{ code: "unknown_field", path: "envelope.actions[0].inputs.faces", detail: "unexpected field 'faces'" }])
+    // 重复路径只出现一次：allowedChanges 是"允许改哪几处"，不是错误列表的副本。
+    expect(repairRequestFor([{ code: "a", path: "x", detail: "" }, { code: "b", path: "x", detail: "" }], 2).allowedChanges).toEqual(["x"])
   })
 })

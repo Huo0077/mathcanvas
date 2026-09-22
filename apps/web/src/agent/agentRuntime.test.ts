@@ -6,6 +6,7 @@ import type { PlanEnvelope, PlannerPort, PlanRequest } from "@draw/agent-core"
 import { SKILL_CATALOGUE_REVISION } from "@draw/agent-core"
 
 import { createAgentRuntime } from "./agentRuntime"
+import { CONIC_INVARIANT_PROMPT, OBLIQUE_PRISM_PROMPT, conicInvariantPlan, obliquePrismSectionPlan } from "./representativeFixtures"
 import type { ExportPreflightPort } from "@draw/agent-core"
 
 /**
@@ -298,8 +299,8 @@ describe("the assembled runtime actually runs", () => {
 
     const context = seen[0].model.context
     expect(context.skills.map((skill) => skill.id)).toEqual(["spatial-modeling"])
-    // 清单声明的动作就是上下文里的可用动作（`spatial-modeling` 只声明 solid.create_template）。
-    expect([...context.availableActions]).toEqual(["solid.create_template"])
+    // 清单声明的动作就是上下文里的可用动作（`spatial-modeling` 声明模板实体与拉伸式棱柱两种）。
+    expect([...context.availableActions]).toEqual(["solid.create_template", "solid.create_prism"])
     // 没有请求的技能不该出现，而且**不该**变成一条"未登记"警告（那是给清单本身有问题用的）。
     expect(context.warnings).toEqual([])
   })
@@ -418,5 +419,82 @@ describe("the assembled runtime actually runs", () => {
     expect(seen[0].model.context.workspace).toBe("conics")
     // 而真正被编译的目标已经是切换之后的那份。
     expect(live.metadata.id).toBe(spatial.metadata.id)
+  })
+})
+
+/**
+ * **两道代表题**（Agent DSL 切片 Task 6；规格 §8.1/§8.2）。
+ *
+ * 走的是**装配好的真实运行时**：确定性规划器（代表题夹具）→ 传输校验 → 六层编译
+ *（含依赖顺序与参数审计）→ 隔离草稿 → 停在确认。断言的重点是**计划真的长成规格要求的样子**，
+ * 以及"确认之前真文档一个字节都不变"。
+ */
+describe("representative tasks from the design", () => {
+  it("drafts the oblique-prism section with midpoints at 0.5 and a moving point at the audited 0.4", async () => {
+    const { runtime, written, current } = makeRuntime({ envelope: obliquePrismSectionPlan(), document: createEmptyDocument("geometry3d") })
+
+    const events = await drive(runtime.coordinator, { run: runContext(createEmptyDocument("geometry3d")), userMessage: OBLIQUE_PRISM_PROMPT })
+
+    expect(events.at(-1)).toBe("awaiting_confirmation")
+    // 确认之前草稿是隔离的：没有任何一次写入。
+    expect(written).toHaveLength(0)
+    expect(current()?.primitives).toHaveLength(0)
+
+    const draftId = runtime.draftId()
+    const preview = draftId === null ? null : runtime.drafts.getPreview(draftId)
+    expect(preview).not.toBeNull()
+
+    const plan = obliquePrismSectionPlan()
+    if (plan.kind !== "plan") throw new Error("the prism fixture must be a plan")
+    // 一笔 `solid.create_prism`（不是"把散面拼起来"）：六个面由内核生成。
+    expect(plan.actions.filter((action) => action.actionId === "solid.create_prism")).toHaveLength(1)
+    // 三个中点的参数是**题目的显式约束** 0.5。
+    const midpoints = plan.actions.filter((action) => action.actionKey.startsWith("midpoint-"))
+    expect(midpoints).toHaveLength(3)
+    for (const midpoint of midpoints) expect(midpoint.inputs).toMatchObject({ parameter: 0.5 })
+    // 一个截面节点。
+    expect(plan.actions.some((action) => action.actionId === "section.create")).toBe(true)
+    // 一个可动的边界点：位置未指定 → 审计回填 0.4，并作为**假设**交给界面。
+    expect(plan.actions.find((action) => action.actionKey === "moving-point")?.inputs).not.toHaveProperty("parameter")
+    expect(runtime.assumptions()?.some((text) => text.includes("0.4"))).toBe(true)
+
+    const primitives = preview?.candidate.primitives ?? []
+    expect(primitives.filter((primitive) => primitive.type === "polyhedron3")).toHaveLength(1)
+    expect(primitives.some((primitive) => primitive.type === "section")).toBe(true)
+    // E/M/N/P：三个中点 + 一个动点，都是宿主绑定的点（不是自由点）。
+    const bound = primitives.filter((primitive) => primitive.type === "point3" && (primitive as { binding?: { kind?: string } }).binding?.kind === "onHost")
+    expect(bound).toHaveLength(4)
+    expect(bound.filter((primitive) => (primitive as { binding?: { parameter?: number } }).binding?.parameter === 0.5)).toHaveLength(3)
+    expect(bound.filter((primitive) => (primitive as { binding?: { parameter?: number } }).binding?.parameter === 0.4)).toHaveLength(1)
+  })
+
+  it("keeps the conic parameter symbolic and labels the invariant as numeric sampling", async () => {
+    const document = createEmptyDocument("conics")
+    const { runtime, written, current } = makeRuntime({ envelope: conicInvariantPlan(), document })
+
+    const events = await drive(runtime.coordinator, { run: runContext(document), userMessage: CONIC_INVARIANT_PROMPT })
+
+    expect(events.at(-1)).toBe("awaiting_confirmation")
+    expect(written).toHaveLength(0)
+    expect(current()?.primitives).toHaveLength(0)
+
+    const plan = conicInvariantPlan()
+    if (plan.kind !== "plan") throw new Error("the conic fixture must be a plan")
+    // 符号参数 θ 被**保留**：它被建成文档参数，而不是一组数字。
+    const theta = plan.actions.find((action) => action.actionKey === "theta")
+    expect(theta?.inputs).toMatchObject({ id: "theta" })
+    // P 由 θ 驱动（`parameterId`），所以拖动 θ 就是"任意点"。
+    expect(plan.actions.find((action) => action.actionKey === "P")?.inputs).toMatchObject({ parameterId: "theta" })
+    // 切线跟随 P。
+    expect(plan.actions.find((action) => action.actionKey === "tangent-P")?.inputs).toMatchObject({ sourceId: "draft:P" })
+
+    const draftId = runtime.draftId()
+    const preview = draftId === null ? null : runtime.drafts.getPreview(draftId)
+    expect(preview?.candidate.parameters.theta).toMatchObject({ id: "theta", label: "θ" })
+    expect(preview?.candidate.primitives.some((primitive) => primitive.type === "ellipse")).toBe(true)
+    expect(preview?.candidate.primitives.some((primitive) => primitive.type === "tangent")).toBe(true)
+
+    // **数值采样 ≠ 形式证明**：这句话必须出现在用户能看到的假设里。
+    expect(runtime.assumptions()?.some((text) => text.includes("不是形式证明"))).toBe(true)
   })
 })

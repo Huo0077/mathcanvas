@@ -2,6 +2,26 @@ import { describe, expect, it } from "vitest"
 
 import { createDefaultCadLayout, createEmptyDocument, decodeMgeo, encodeMgeo, validateDocument } from "./index"
 
+/** 一只拓扑合法的四面体（`solid-spec` / `solid-bad` 的顶点、棱、面都指向它）。 */
+function prismTopology() {
+  return [
+    { id: "point-a", type: "point3" as const, position: { x: 0, y: 0, z: 0 } },
+    { id: "point-b", type: "point3" as const, position: { x: 1, y: 0, z: 0 } },
+    { id: "point-c", type: "point3" as const, position: { x: 0, y: 1, z: 0 } },
+    { id: "point-d", type: "point3" as const, position: { x: 0, y: 0, z: 1 } },
+    { id: "edge-ab", type: "edge3" as const, pointIds: ["point-a", "point-b"] as [string, string] },
+    { id: "edge-ac", type: "edge3" as const, pointIds: ["point-a", "point-c"] as [string, string] },
+    { id: "edge-ad", type: "edge3" as const, pointIds: ["point-a", "point-d"] as [string, string] },
+    { id: "edge-bc", type: "edge3" as const, pointIds: ["point-b", "point-c"] as [string, string] },
+    { id: "edge-bd", type: "edge3" as const, pointIds: ["point-b", "point-d"] as [string, string] },
+    { id: "edge-cd", type: "edge3" as const, pointIds: ["point-c", "point-d"] as [string, string] },
+    { id: "face-abc", type: "face3" as const, pointIds: ["point-a", "point-b", "point-c"], edgeIds: ["edge-ab", "edge-bc", "edge-ac"] },
+    { id: "face-abd", type: "face3" as const, pointIds: ["point-a", "point-b", "point-d"], edgeIds: ["edge-ab", "edge-bd", "edge-ad"] },
+    { id: "face-acd", type: "face3" as const, pointIds: ["point-a", "point-c", "point-d"], edgeIds: ["edge-ac", "edge-cd", "edge-ad"] },
+    { id: "face-bcd", type: "face3" as const, pointIds: ["point-b", "point-c", "point-d"], edgeIds: ["edge-bc", "edge-cd", "edge-bd"] }
+  ]
+}
+
 describe("Geometry DSL codec", () => {
   it("round-trips the orientation of a template solid", () => {
     const document = createEmptyDocument("geometry3d")
@@ -516,8 +536,80 @@ describe("Geometry DSL codec", () => {
     expect(decodeMgeo(encodeMgeo(document)).primitives).toEqual(document.primitives)
   })
 
-  it("rejects malformed primitive fields without throwing", () => {
-    const base = createEmptyDocument("calculus")
+  /**
+   * **规格 §3.2 的文档要能打开，并在解析边界被抬成世界顶点**（Fix round 2 / I6 + Deviation 5）。
+   *
+   * 规格给的是 `base.plane`（原点 + 法向）与**二维**多边形点；存储形式仍是世界顶点
+   * （不引入第二份几何真源，见 `types.ts` 的 `PrismConstruction`）。抬升只发生在**解析边界**
+   * —— `decodeMgeo` 的解码器里，与 `withCircleTrackCenter` / `withSectionClassification`
+   * 同一条流水线（都必须在校验之前），否则照规格写的文件会因为"缺少 z"直接打不开。
+   */
+  it("lifts a spec §3.2 prism base (plane + 2-D polygon) to world vertices", () => {
+    const specDocument = (construction: unknown) => JSON.stringify({
+      format: "mgeo",
+      formatVersion: "0.1",
+      document: { ...createEmptyDocument("geometry3d"), primitives: [...prismTopology(), { id: "solid-spec", type: "polyhedron3", vertexIds: ["point-a", "point-b", "point-c", "point-d"], edgeIds: ["edge-ab", "edge-ac", "edge-ad", "edge-bc", "edge-bd", "edge-cd"], faceIds: ["face-abc", "face-abd", "face-acd", "face-bcd"], construction }] }
+    })
+
+    const document = decodeMgeo(specDocument({
+      kind: "prism",
+      base: {
+        plane: { origin: { x: 0, y: 0, z: 2 }, normal: { x: 0, y: 0, z: 1 } },
+        // 规格 §3.2 的那个底面：2-D 点。
+        polygon: [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 5, y: 2 }, { x: 1, y: 2 }]
+      },
+      vector: { x: 1, y: 0.5, z: 3 }
+    }))
+    const solid = document.primitives.find((primitive) => primitive.id === "solid-spec")
+    if (solid?.type !== "polyhedron3" || solid.construction?.kind !== "prism") throw new Error("expected the prism solid")
+
+    /**
+     * 抬到平面上：`B = origin + x·u + y·v`，其中 `(u, v)` 是平面内的一组正交单位基。
+     *
+     * 断言分两层，免得把测试绑在基底的**朝向**上：
+     * 1. 每个点都落在给定平面上（`z = 2`）—— 这是规格 "底面点共面" 的硬要求；
+     * 2. 边长相符 —— 抬升是刚体等距变换，形状不许变。
+     * 具体坐标（(0,4)、(2,5)… 这种带旋转的写法）只作为读数记在下面，好让"底面朝向"这件事可见。
+     */
+    const polygon = solid.construction.base.polygon
+    expect(polygon).toHaveLength(4)
+    for (const point of polygon) expect(point.z).toBeCloseTo(2, 9)
+    const lengths = polygon.map((point, index) => {
+      const next = polygon[(index + 1) % polygon.length]
+      return Math.hypot(point.x - next.x, point.y - next.y, point.z - next.z)
+    })
+    // 规格例子的底面边长：4、√5、4、√5（菱形一样的四边形）。
+    expect(lengths.map((length) => Number(length.toFixed(6))).sort((first, second) => first - second)).toEqual([4, 4, Math.sqrt(5), Math.sqrt(5)].map((length) => Number(length.toFixed(6))).sort((first, second) => first - second))
+    // 抬升是幂等的，而且抬过之后再存再读不再变。
+    expect(decodeMgeo(encodeMgeo(document)).primitives).toEqual(document.primitives)
+  })
+
+  /**
+   * **导入路径上的几何语义校验**（Fix round 2 / I6）：手改 / 导入的 `.mgeo` 里那只"自交底面"
+   * 或"不共面底面"的棱柱必须被**拒掉**，而不是画出来一堆非平面的侧面。
+   *
+   * 判据不是 schema 自己抄的一份，而是内核的 `validatePrismInput` —— 创建路径与导入路径
+   * 因此用的是同一个判据（规格 §6.2）。
+   */
+  it("rejects an imported prism whose base is self-intersecting or non-coplanar", () => {
+    const imported = (id: string, polygon: unknown, vector: unknown) => JSON.stringify({
+      format: "mgeo",
+      formatVersion: "0.1",
+      document: { ...createEmptyDocument("geometry3d"), primitives: [...prismTopology(), { id, type: "polyhedron3", vertexIds: ["point-a", "point-b", "point-c", "point-d"], edgeIds: ["edge-ab", "edge-ac", "edge-ad", "edge-bc", "edge-bd", "edge-cd"], faceIds: ["face-abc", "face-abd", "face-acd", "face-bcd"], construction: { kind: "prism", base: { polygon }, vector } }] }
+    })
+
+    // 自交（bowtie）：`validatePrismInput` 报 self-intersection。
+    expect(() => decodeMgeo(imported("solid-bad", [{ x: 0, y: 0, z: 0 }, { x: 4, y: 4, z: 0 }, { x: 4, y: 0, z: 0 }, { x: 0, y: 4, z: 0 }], { x: 0, y: 0, z: 3 }))).toThrow(/solid-bad prism base is invalid[\s\S]*自交/)
+    // 不共面：四个点里有一个翘出平面。
+    expect(() => decodeMgeo(imported("solid-bad", [{ x: 0, y: 0, z: 0 }, { x: 4, y: 0, z: 0 }, { x: 4, y: 3, z: 0 }, { x: 0, y: 3, z: 1 }], { x: 0, y: 0, z: 3 }))).toThrow(/solid-bad prism base is invalid[\s\S]*共面/)
+    // 零体积（拉伸向量平行于底面）：同一份判据也要挡住导入路径。
+    expect(() => decodeMgeo(imported("solid-flat", [{ x: 0, y: 0, z: 0 }, { x: 4, y: 0, z: 0 }, { x: 4, y: 3, z: 0 }, { x: 0, y: 3, z: 0 }], { x: 2, y: 0, z: 0 }))).toThrow(/solid-flat prism base is invalid[\s\S]*体积/)
+
+    // 合法的棱柱照旧能读（这条是上面三条的对照，防止"一律拒绝"式的假修复）。
+    expect(() => decodeMgeo(imported("solid-ok", [{ x: 0, y: 0, z: 0 }, { x: 4, y: 0, z: 0 }, { x: 4, y: 3, z: 0 }, { x: 0, y: 3, z: 0 }], { x: 0, y: 0, z: 3 }))).not.toThrow()
+  })
+
+  it("rejects malformed primitive fields without throwing", () => {    const base = createEmptyDocument("calculus")
     const malformedDocuments = [
       { ...base, primitives: [{ id: "point-1", type: "point" }] },
       { ...base, primitives: [{ id: "segment-1", type: "segment" }] },
@@ -582,7 +674,8 @@ describe("Geometry DSL codec", () => {
       { id: "solid-1", type: "polyhedron3", vertexIds: ["point-a", "missing"], edgeIds: [], faceIds: [] },
       { id: "solid-2", type: "polyhedron3", vertexIds: ["point-a", "point-b", "point-c", "point-d"], edgeIds: [], faceIds: [] },
       { id: "solid-3", type: "polyhedron3", vertexIds: ["point-a", "point-b", "point-c", "point-d"], edgeIds: ["edge-1", "edge-1", "edge-1", "edge-1", "edge-1", "edge-1"], faceIds: ["face-2", "face-2", "face-2", "face-2"] },
-      { id: "solid-4", type: "polyhedron3", vertexIds: ["point-a", "point-b", "point-c", "point-d"], edgeIds: [], faceIds: [], construction: { kind: "template", templateId: "cube", parameterIds: ["missing-parameter"], sourceIds: [] } }
+      { id: "solid-4", type: "polyhedron3", vertexIds: ["point-a", "point-b", "point-c", "point-d"], edgeIds: [], faceIds: [], construction: { kind: "template", templateId: "cube", parameterIds: ["missing-parameter"], sourceIds: [] } },
+      { id: "solid-5", type: "polyhedron3", vertexIds: ["point-a", "point-b", "point-c", "point-d"], edgeIds: [], faceIds: [], construction: { kind: "prism", base: { polygon: [{ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }] }, vector: { x: 0, y: 0, z: 0 } } }
     ]
 
     const result = validateDocument(document)
@@ -599,7 +692,37 @@ describe("Geometry DSL codec", () => {
       expect(result.errors).toContain("polyhedron3 edge references must be unique")
       expect(result.errors).toContain("polyhedron3 face references must be unique")
       expect(result.errors).toContain("polyhedron3 template construction is invalid")
+      expect(result.errors).toContain("polyhedron3 prism construction is invalid")
     }
+  })
+
+  /**
+   * **棱柱构造的描述符要能往返**（Solid/Prism 切片 Task 1）。
+   *
+   * 构造描述是**真源**（规格 §1.2），顶点 / 棱 / 面是确定性派生拓扑：所以"存下来的是哪份描述"
+   * 必须逐字往返，否则重新打开文档时算出来的是另一只棱柱。
+   */
+  it("round-trips a prism construction descriptor", () => {
+    const document = createEmptyDocument("geometry3d")
+    const polygon = [{ x: 0, y: 0, z: 0 }, { x: 2, y: 0, z: 0 }, { x: 3, y: 2, z: 0 }, { x: 1, y: 2, z: 0 }]
+    const vector = { x: 1, y: 0.5, z: 4 }
+    const baseIds = polygon.map((_, index) => `solid-1:v${index}`)
+    const topIds = polygon.map((_, index) => `solid-1:v${polygon.length + index}`)
+    const vertexIds = [...baseIds, ...topIds]
+    const edgeIds = vertexIds.map((_, index) => `solid-1:e${index}`)
+    const faceIds = vertexIds.map((_, index) => `solid-1:f${index}`)
+    // 构造描述与它派生的拓扑可以同时存在：前者是真源，后者是缓存的几何事实。
+    document.primitives = [
+      ...vertexIds.map((id, index) => ({ id, type: "point3" as const, position: index < polygon.length ? polygon[index] : { x: polygon[index - polygon.length].x + vector.x, y: polygon[index - polygon.length].y + vector.y, z: polygon[index - polygon.length].z + vector.z }, binding: { kind: "free" as const } })),
+      ...edgeIds.map((id) => ({ id, type: "edge3" as const, pointIds: [vertexIds[0], vertexIds[1]] as [string, string] })),
+      ...faceIds.map((id) => ({ id, type: "face3" as const, pointIds: vertexIds.slice(0, 3) })),
+      { id: "solid-1", type: "polyhedron3", vertexIds, edgeIds, faceIds, construction: { kind: "prism", base: { polygon }, vector } }
+    ]
+
+    const restored = decodeMgeo(encodeMgeo(document))
+
+    expect(restored.primitives).toEqual(document.primitives)
+    expect((restored.primitives.at(-1) as { construction?: unknown }).construction).toEqual({ kind: "prism", base: { polygon }, vector })
   })
 
   it("keeps legacy parameterized solids readable alongside point-driven objects", () => {
@@ -652,5 +775,40 @@ describe("Geometry DSL codec", () => {
     const result = validateDocument(document)
     expect(result.valid).toBe(false)
     if (!result.valid) expect(result.errors).toContain("engineering annotation has invalid sources: dimension-invalid")
+  })
+
+  /**
+   * **四种构造形状必须并存可读**（Solid/Prism 切片 Task 6 的第二条验收）。
+   *
+   * 这一条把"旧文档仍然能打开"钉在**同一次解码**里：用户的历史文件里
+   * `template` / `fromPoints` / `fromFaces` 都有，而新加的 `prism` 必须和它们共处，
+   * 不能因为多了一支就把别支判成非法。
+   */
+  it("reads a document that carries all four solid construction kinds at once", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      { id: "cube-1", type: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 2, z: 2 } },
+      { id: "point-a", type: "point3", position: { x: 0, y: 0, z: 0 }, binding: { kind: "free" } },
+      { id: "point-b", type: "point3", position: { x: 1, y: 0, z: 0 }, binding: { kind: "free" } },
+      { id: "point-c", type: "point3", position: { x: 0, y: 1, z: 0 }, binding: { kind: "free" } },
+      { id: "point-d", type: "point3", position: { x: 0, y: 0, z: 1 }, binding: { kind: "free" } },
+      { id: "edge-ab", type: "edge3", pointIds: ["point-a", "point-b"] },
+      { id: "edge-ac", type: "edge3", pointIds: ["point-a", "point-c"] },
+      { id: "edge-ad", type: "edge3", pointIds: ["point-a", "point-d"] },
+      { id: "edge-bc", type: "edge3", pointIds: ["point-b", "point-c"] },
+      { id: "edge-bd", type: "edge3", pointIds: ["point-b", "point-d"] },
+      { id: "edge-cd", type: "edge3", pointIds: ["point-c", "point-d"] },
+      { id: "face-abc", type: "face3", pointIds: ["point-a", "point-b", "point-c"], edgeIds: ["edge-ab", "edge-bc", "edge-ac"] },
+      { id: "face-abd", type: "face3", pointIds: ["point-a", "point-b", "point-d"], edgeIds: ["edge-ab", "edge-bd", "edge-ad"] },
+      { id: "face-acd", type: "face3", pointIds: ["point-a", "point-c", "point-d"], edgeIds: ["edge-ac", "edge-cd", "edge-ad"] },
+      { id: "face-bcd", type: "face3", pointIds: ["point-b", "point-c", "point-d"], edgeIds: ["edge-bc", "edge-cd", "edge-bd"] },
+      { id: "solid-fromPoints", type: "polyhedron3", vertexIds: ["point-a", "point-b", "point-c", "point-d"], edgeIds: ["edge-ab", "edge-ac", "edge-ad", "edge-bc", "edge-bd", "edge-cd"], faceIds: ["face-abc", "face-abd", "face-acd", "face-bcd"], construction: { kind: "fromPoints", sourceIds: ["point-a", "point-b", "point-c", "point-d"] } },
+      { id: "solid-fromFaces", type: "polyhedron3", vertexIds: ["point-a", "point-b", "point-c", "point-d"], edgeIds: ["edge-ab", "edge-ac", "edge-ad", "edge-bc", "edge-bd", "edge-cd"], faceIds: ["face-abc", "face-abd", "face-acd", "face-bcd"], construction: { kind: "fromFaces", sourceIds: ["face-abc", "face-abd", "face-acd", "face-bcd"] } },
+      { id: "solid-template", type: "polyhedron3", vertexIds: ["point-a", "point-b", "point-c", "point-d"], edgeIds: ["edge-ab", "edge-ac", "edge-ad", "edge-bc", "edge-bd", "edge-cd"], faceIds: ["face-abc", "face-abd", "face-acd", "face-bcd"], construction: { kind: "template", templateId: "cube", sourceIds: ["cube-1"] } },
+      { id: "solid-prism", type: "polyhedron3", vertexIds: ["point-a", "point-b", "point-c", "point-d"], edgeIds: ["edge-ab", "edge-ac", "edge-ad", "edge-bc", "edge-bd", "edge-cd"], faceIds: ["face-abc", "face-abd", "face-acd", "face-bcd"], construction: { kind: "prism", base: { polygon: [{ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }] }, vector: { x: 0, y: 0, z: 1 } } }
+    ]
+
+    expect(validateDocument(document)).toEqual({ valid: true })
+    expect(decodeMgeo(encodeMgeo(document)).primitives).toEqual(document.primitives)
   })
 })

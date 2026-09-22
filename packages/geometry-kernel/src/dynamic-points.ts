@@ -48,7 +48,7 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 /** 周期参数折叠到 [min, max)，避免长时间动画后参数无限增大而丢精度。 */
-function wrapParameter(parameter: number, min: number, max: number): number {
+export function wrapParameter(parameter: number, min: number, max: number): number {
   const span = max - min
   if (!(span > 0) || !Number.isFinite(span)) return parameter
   const offset = (parameter - min) % span

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { buildFromPoints, buildFrustum, buildPrism, buildSolid, buildSolidTemplate, createBuilderContext, listSolidBuilders, registerSolidBuilder } from "./solid-builders"
+import { buildPrismTopology, validatePrismInput } from "./prism"
 
 const triangle = [
   { x: 0, y: 0, z: 0 },
@@ -82,7 +83,8 @@ describe("solid builders", () => {
     expect(solidPoints(buildSolidTemplate({ ...cube, rotation: { x: 0, y: 0, z: 0 } }))).toEqual(solidPoints(buildSolidTemplate(cube)))
   })
 
-  it("builds a point-driven triangular prism with closed topology", () => {    const result = buildPrism({ base: triangle, vector: { x: 0, y: 0, z: 3 } }, createBuilderContext("prism"))
+  it("builds a point-driven triangular prism with closed topology", () => {
+    const result = buildPrism({ base: triangle, vector: { x: 0, y: 0, z: 3 } }, createBuilderContext("prism"))
 
     expect(result.diagnostics).toEqual([])
     expect(result.primitives.filter((primitive) => primitive.type === "point3")).toHaveLength(6)
@@ -91,8 +93,52 @@ describe("solid builders", () => {
     expect(result.primitives.find((primitive) => primitive.type === "polyhedron3")).toMatchObject({ vertexIds: expect.arrayContaining(result.vertexIds), edgeIds: expect.arrayContaining(result.edgeIds), faceIds: expect.arrayContaining(result.faceIds) })
   })
 
-  it("requires explicit face rings when building from points", () => {
-    const result = buildFromPoints({ vertices: [...triangle, { x: 0, y: 0, z: 1 }], faces: [] }, createBuilderContext("points"))
+  /**
+   * **I1 残留（评审）：两条棱柱实现不许再各说各话。**
+   *
+   * 同包里有两条"按底面 + 向量拉伸"的路径：
+   * - `buildPrism`（既有的物化构造器，由 `BuilderContext` 分配 id）；
+   * - `buildPrismTopology`（`prism.ts`，纯拓扑，计划 Task 2 要求的那一条）。
+   *
+   * 它们的分工是有意的（一条给 id 与图元、一条给下标），但**判据必须是同一套**：
+   * 之前正是"新的一份漏了体积检查"让零体积的平片从 Agent 输入漏进文档（评审 C1）。
+   * 这条一致性用例把两边钉在一起：同一批代表性输入，接受 / 拒绝的结论必须一致。
+   */
+  it("agrees with the pure prism topology builder on which bases are acceptable", () => {
+    const square = [{ x: 0, y: 0, z: 0 }, { x: 4, y: 0, z: 0 }, { x: 4, y: 3, z: 0 }, { x: 0, y: 3, z: 0 }]
+    const cases: Array<{ label: string; base: Array<{ x: number; y: number; z: number }>; vector: { x: number; y: number; z: number } }> = [
+      { label: "竖直拉伸的三角形", base: [...triangle], vector: { x: 0, y: 0, z: 3 } },
+      { label: "斜拉伸的三角形", base: [...triangle], vector: { x: 1, y: 0.5, z: 3 } },
+      { label: "方形底面", base: square, vector: { x: 2, y: 1, z: 0.5 } },
+      // 前三点共线的合法五边形（评审 I2 的现场）：两条路径都必须接受。
+      { label: "前三点共线", base: [{ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, { x: 2, y: 0, z: 0 }, { x: 2, y: 2, z: 0 }, { x: 0, y: 2, z: 0 }], vector: { x: 0, y: 0, z: 3 } },
+      // 零体积：拉伸向量平行于底面（评审 C1）。
+      { label: "零体积", base: square, vector: { x: 2, y: 0, z: 0 } },
+      { label: "零向量", base: [...triangle], vector: { x: 0, y: 0, z: 0 } },
+      // 自交底面。
+      { label: "自交", base: [{ x: 0, y: 0, z: 0 }, { x: 4, y: 4, z: 0 }, { x: 4, y: 0, z: 0 }, { x: 0, y: 4, z: 0 }], vector: { x: 0, y: 0, z: 3 } },
+      // 不共面的"底面"。
+      { label: "不共面", base: [{ x: 0, y: 0, z: 0 }, { x: 4, y: 0, z: 0 }, { x: 4, y: 3, z: 0 }, { x: 0, y: 3, z: 1 }], vector: { x: 0, y: 0, z: 3 } },
+      // 点数不足。
+      { label: "两点", base: [triangle[0], triangle[1]], vector: { x: 0, y: 0, z: 3 } },
+      // 退化面积（三点共线）。
+      { label: "共线三点", base: [{ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, { x: 2, y: 0, z: 0 }], vector: { x: 0, y: 0, z: 3 } }
+    ]
+
+    for (const testCase of cases) {
+      const materialized = buildPrism({ base: testCase.base, vector: testCase.vector }, createBuilderContext("agree"))
+      const pure = buildPrismTopology(testCase.base, testCase.vector)
+      const pureInput = validatePrismInput(testCase.base, testCase.vector)
+
+      const materializedAccepts = materialized.diagnostics.length === 0
+      expect(materializedAccepts, `${testCase.label}: buildPrism vs buildPrismTopology`).toBe(pure !== null)
+      expect(pureInput.ok, `${testCase.label}: buildPrism vs validatePrismInput`).toBe(pure !== null)
+      // 两边都接受时，顶点数也必须一致（同一条 `Ti = Bi + v` 配方）。
+      if (materializedAccepts && pure) expect(materialized.vertexIds).toHaveLength(pure.vertices.length)
+    }
+  })
+
+  it("requires explicit face rings when building from points", () => {    const result = buildFromPoints({ vertices: [...triangle, { x: 0, y: 0, z: 1 }], faces: [] }, createBuilderContext("points"))
 
     expect(result.primitives).toEqual([])
     expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain("missing-face-rings")

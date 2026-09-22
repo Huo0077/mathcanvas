@@ -1,5 +1,5 @@
-import { isSampledPrimitiveType, type AnnotationSpec, type CircleRadiusRule, type ConstraintSpec, type Coordinate, type CurveRotation, type DrawingSheetSpec, type DrawingViewSpec, type EngineeringAnnotation, type GeometryDocument, type GroupSpec, type LayerSpec, type Measurement3, type Point3Binding, type Point3Primitive, type PointBinding, type PrimitiveSpec, type Section3Classification, type TangentAnchor, type Vector3 } from "@draw/dsl"
-import { createDependencyGraph, adaptiveSampleFunctionSegments, arcConstraint, buildSolidTemplate, calculateMeasurement3, circleConstraint, composeEuler3, constraintTangentAt, createBuilderContext, dihedralMarker3, ellipseConstraint, entityResolverFor, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, evaluatePlanarMeasurement, findExtrema, findInflectionPoints, findZeros, functionGraphConstraint, host3FromPrimitive, hyperbolaConstraint, intersectCirclesDetailed, intersectConvexPolyhedra3, intersectFaceSets, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, lineConstraint, mergeIntersectionSurfaces3, normalFromTangent, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, orderSectionPoints3, parabolaConstraint, placedConic, polylineConstraint, quadric3FromPrimitive, rayConstraint, rotatePointAboutAxis3, rotateVectorAboutAxis3, sectionConvexPolyhedron, sectionPolyhedron3, sectionQuadric3, segmentConstraint, sharedRingEdge3, solidVolumeHost3, solveLineConstraints, tangentSegment, templateSolidPivot, type Conic3Kind, type ConicPlacement, type CurvePiece3, type CurveTangent, type DihedralMarker3, type FaceRing3, type Host3, type IntersectionResult, type IntersectionSurfaceRegion, type PlanarConstraint, type PlanarMetric, type PlaceableConic, type SampledPrimitive, type TemplateSolidPrimitive, type WorldAxis3 } from "@draw/geometry-kernel"
+import { isSampledPrimitiveType, type AnnotationSpec, type CircleRadiusRule, type ConstraintSpec, type Coordinate, type CurveRotation, type DerivedSolidResult, type DrawingSheetSpec, type DrawingViewSpec, type EngineeringAnnotation, type GeometryDocument, type GroupSpec, type LayerSpec, type Measurement3, type Point3Binding, type Point3Primitive, type PointBinding, type PrimitiveSpec, type Section3Classification, type SolidConstruction, type TangentAnchor, type Vector3 } from "@draw/dsl"
+import { createDependencyGraph, adaptiveSampleFunctionSegments, arcConstraint, buildSolidTemplate, calculateMeasurement3, circleConstraint, composeEuler3, constraintTangentAt, createBuilderContext, dihedralMarker3, ellipseConstraint, entityResolverFor, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, evaluatePlanarMeasurement, findExtrema, findInflectionPoints, findZeros, functionGraphConstraint, host3FromPrimitive, hyperbolaConstraint, intersectCirclesDetailed, intersectConvexPolyhedra3, intersectFaceSets, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, lineConstraint, mergeIntersectionSurfaces3, normalFromTangent, normalizeHostParameter, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, orderSectionPoints3, parabolaConstraint, placedConic, polylineConstraint, quadric3FromPrimitive, rayConstraint, rotatePointAboutAxis3, rotateVectorAboutAxis3, sectionConvexPolyhedron, sectionPolyhedron3, sectionQuadric3, sectionSolid3, segmentConstraint, sharedRingEdge3, solidVolumeHost3, solveCircumsphere3, solveInsphere3, solveLineConstraints, tangentSegment, templateSolidPivot, triangleCenter2, triangleRadius2, type Conic3Kind, type ConicPlacement, type CurvePiece3, type CurveTangent, type DihedralMarker3, type FaceRing3, type Host3, type IntersectionResult, type IntersectionSurfaceRegion, type PlanarConstraint, type PlanarMetric, type PlaceableConic, type SampledPrimitive, type SolidBoundary, type Sphere3, type TemplateSolidPrimitive, type WorldAxis3 } from "@draw/geometry-kernel"
 
 /**
  * 曲线的"绕定点旋转"约定：`pivot` 是那个**定点**，`angle` 是绕它的转角（弧度）。
@@ -255,12 +255,16 @@ function applyDeletionPlan(next: GeometryDocument, ids: string[]): { plan: Delet
 
   /**
    * 回收"随对象自动生成"的驱动参数。判据是**孤儿**而不是"本次被删"：
-   * 只要它带 `ownerId`（自动生成）、归属对象已经不在文档里、且没有任何图元引用它，就是垃圾。
+   * 只要它带 `ownerId`（自动生成）且**没有任何图元引用它**，就是垃圾 —— 不论归属对象是否还在。
+   *
+   * 为什么不再要求"归属对象也没了"：宿主（曲线 / 面 / 实体）被删除时，绑定点会被**降级为自由点**
+   * （见 `unbindDeletedHost`，位置保留），于是那个 `t-<点id>` 参数既没有引用者、也不再有意义，
+   * 却因为归属点还在而留在文档里（实测：删掉圆之后参数列表里多出一个没人用的 "A 的路径参数"）。
+   * 这里只在**删除操作**里跑，不存在"刚解绑、马上又要重绑"的中间态。
    * 用户手工创建的参数不带 `ownerId`，永远不会被这一步碰掉。
    */
-  const survivingIds = new Set(next.primitives.map((primitive) => primitive.id))
   for (const [parameterId, parameter] of Object.entries(next.parameters)) {
-    if (!parameter.ownerId || survivingIds.has(parameter.ownerId)) continue
+    if (!parameter.ownerId) continue
     if (parameterIsReferenced(next, parameterId)) continue
     delete next.parameters[parameterId]
   }
@@ -336,6 +340,53 @@ function translatePrimitive(primitive: PrimitiveSpec, x: number, y: number): Pri
   if (primitive.type === "parabola") return { ...primitive, vertex: { x: primitive.vertex.x + x, y: primitive.vertex.y + y } }
   if (primitive.type === "ellipse" || primitive.type === "hyperbola") return { ...primitive, center: { x: primitive.center.x + x, y: primitive.center.y + y }, ...shiftedRotationAbout(primitive, x, y) }
   return primitive
+}
+
+/**
+ * 带 `sourceIds` 的构造：`template` / `fromPoints` / `fromFaces`。
+ *
+ * `prism` 的构造里**没有** `sourceIds`（它的来源是自带的底面多边形与拉伸向量），所以
+ * "遍历构造的来源"这种代码必须先收窄到这一支 —— 直接写 `construction?.sourceIds` 在加了
+ * `prism` 之后就不成立（`tsc` 会拦，这也正是判别联合该起的作用）。
+ */
+export type SourceIdSolidConstruction = Extract<SolidConstruction, { sourceIds: string[] }>
+
+export function isSourceIdConstruction(construction: SolidConstruction | undefined): construction is SourceIdSolidConstruction {
+  return construction !== undefined && construction.kind !== "prism"
+}
+
+/**
+ * **棱柱的构造描述是否仍然与实际顶点一致**（Fix round 2 / I4）。
+ *
+ * 判据就是 `PrismConstruction` 自己的定义：前 `n` 个顶点是底面、`T_i = B_i + vector`。
+ * 只要有一条不成立，这份描述就不再是这只实体的真相（拖走一个顶点、把底面拉得不共面……），
+ * 那时必须改记成显式面环，而不是让文档继续宣称"我是按底面 + 向量拉伸出来的"。
+ *
+ * 判据用**相对容差**（按模型尺度），与 `validatePrismInput` 同一套口径：绝对容差在
+ * 1e-6 量级的模型上会把合法的整只平移判成"变了"。
+ */
+function prismMatchesVertices(
+  polyhedron: Extract<PrimitiveSpec, { type: "polyhedron3" }>,
+  construction: Extract<SolidConstruction, { kind: "prism" }>,
+  primitives: readonly PrimitiveSpec[]
+): boolean {
+  const base = construction.base.polygon
+  if (base.length < 3 || polyhedron.vertexIds.length !== base.length * 2) return false
+  const positions = polyhedron.vertexIds.map((vertexId) => {
+    const vertex = primitives.find((candidate) => candidate.id === vertexId)
+    return vertex?.type === "point3" ? vertex.position : null
+  })
+  if (positions.some((position) => position === null)) return false
+  const defined = positions as Vector3[]
+  const scale = Math.max(1, ...defined.flatMap((point) => [Math.abs(point.x), Math.abs(point.y), Math.abs(point.z)]))
+  const tolerance = scale * 1e-9
+  const close = (first: Vector3, second: Vector3) =>
+    Math.abs(first.x - second.x) <= tolerance && Math.abs(first.y - second.y) <= tolerance && Math.abs(first.z - second.z) <= tolerance
+  for (let index = 0; index < base.length; index += 1) {
+    if (!close(defined[index], base[index])) return false
+    if (!close(defined[base.length + index], { x: base[index].x + construction.vector.x, y: base[index].y + construction.vector.y, z: base[index].z + construction.vector.z })) return false
+  }
+  return true
 }
 
 /**
@@ -547,11 +598,12 @@ function primitiveDependencies(primitive: PrimitiveSpec, relations?: { owners: M
     if (primitive.binding.kind === "onPlane") dependencies.push(primitive.binding.planeId)
     if (primitive.binding.kind === "derived") dependencies.push(...primitive.binding.sourceIds)
     // 宿主绑定：宿主先算，绑定点后算（拓扑序因此自动正确）。
-    if (primitive.binding.kind === "onHost") dependencies.push(primitive.binding.hostId)
-    if (primitive.binding.kind === "onFace") dependencies.push(primitive.binding.faceId)
-    if (primitive.binding.kind === "onSurface") dependencies.push(primitive.binding.solidId)
+    if (primitive.binding.kind === "onHost") dependencies.push(primitive.binding.hostId, ...(primitive.binding.parameterId ? [primitive.binding.parameterId] : []))
+    // 驱动参数是坐标的真值来源（与 2D 的 `onPath.parameterId` 同一条边）：少了它，改参数点不动。
+    if (primitive.binding.kind === "onFace") dependencies.push(primitive.binding.faceId, ...(primitive.binding.parameterIds ?? []))
+    if (primitive.binding.kind === "onSurface") dependencies.push(primitive.binding.solidId, ...(primitive.binding.parameterIds ?? []))
     // 实体内：点跟着实体的拓扑走（实体一动，点的坐标就按参数重算）。
-    if (primitive.binding.kind === "inSolid") dependencies.push(primitive.binding.solidId)
+    if (primitive.binding.kind === "inSolid") dependencies.push(primitive.binding.solidId, ...(primitive.binding.parameterIds ?? []))
   }
   if (primitive.type === "line") dependencies.push(...(primitive.slopeParameter ? [primitive.slopeParameter] : []))
   if (primitive.type === "line3") dependencies.push(...(primitive.definition.kind === "throughPoints" ? primitive.definition.pointIds : [primitive.definition.pointId]))
@@ -565,7 +617,7 @@ function primitiveDependencies(primitive: PrimitiveSpec, relations?: { owners: M
   }
   if (primitive.type === "edge3") dependencies.push(...primitive.pointIds, ...(primitive.faceIds ?? []))
   if (primitive.type === "face3") dependencies.push(...primitive.pointIds, ...(primitive.edgeIds ?? []), ...(primitive.planeId ? [primitive.planeId] : []))
-  if (primitive.type === "polyhedron3") dependencies.push(...primitive.vertexIds, ...primitive.edgeIds, ...primitive.faceIds, ...(primitive.construction?.sourceIds ?? []), ...(primitive.construction?.kind === "template" ? (primitive.construction.parameterIds ?? []) : []))
+  if (primitive.type === "polyhedron3") dependencies.push(...primitive.vertexIds, ...primitive.edgeIds, ...primitive.faceIds, ...(isSourceIdConstruction(primitive.construction) ? primitive.construction.sourceIds : []), ...(primitive.construction?.kind === "template" ? (primitive.construction.parameterIds ?? []) : []))
   // 连接（connection）只存两个点的引用，因此它依赖那些点；不含坐标，永远不会过期。
   if (primitive.type === "connection") dependencies.push(primitive.startPointId, primitive.endPointId, ...(primitive.control?.thirdPointId ? [primitive.control.thirdPointId] : []))
   if (primitive.type === "intersection") dependencies.push(primitive.lineA, primitive.lineB)
@@ -590,7 +642,11 @@ function primitiveDependencies(primitive: PrimitiveSpec, relations?: { owners: M
    */
   if (primitive.type === "circle") {
     if (primitive.centerPointId) dependencies.push(primitive.centerPointId)
-    if (primitive.radiusFrom) dependencies.push(primitive.radiusFrom.pointId)
+    // 三角形规则：三个顶点一起决定圆心与半径（少了任何一条边，改顶点时圆不会重算）。
+    if (primitive.radiusFrom) {
+      if (primitive.radiusFrom.kind === "triangle") dependencies.push(...primitive.radiusFrom.triangleIds)
+      else dependencies.push(primitive.radiusFrom.pointId)
+    }
   }
   /**
    * 依赖一个**实体**时，同时依赖它的物化拓扑。
@@ -1186,6 +1242,68 @@ export function solidTopology3(source: PrimitiveSpec, primitiveMap: Map<string, 
 }
 
 /**
+ * 文档的**派生立体读数**（Fix round 2 / I5）。
+ *
+ * `@draw/geometry-kernel` 的 `solveCircumsphere3` / `solveInsphere3` / `sectionSolid3` 返回
+ * `DerivedSolidResult`（`exact` / `undefined` / `degenerate` / `approximate`），但那个区分
+ * 只有真的被**生产路径**读出来才有意义 —— 否则"精确 / 不存在 / 退化"就只是内核里的一句空话。
+ * 这个函数就是那个消费者：对已提交的文档逐只实体算出派生状态，供预览与诊断使用。
+ *
+ * 拓扑一律经 `solidTopology3`（本文件既有的那条路径）读取，**不另建一份**；
+ * 求解本身也一律调用内核那三个函数，所以报告与内核永远同源。
+ */
+export interface SolidDerivedStatus {
+  solidId: string
+  /** `derived.circumsphere` / `derived.insphere` / `derived.section`。 */
+  code: string
+  status: DerivedSolidResult<unknown>["status"]
+  /** 给人看的一句话：为什么是这个状态（`exact` 时给出结论，其余带上原因）。 */
+  message: string
+}
+
+function sphereStatusMessage(label: string, result: DerivedSolidResult<Sphere3>): string {
+  if (result.status === "exact") return `${label}：半径 ${result.value.radius.toPrecision(4)}，圆心 (${result.value.center.x.toPrecision(4)}, ${result.value.center.y.toPrecision(4)}, ${result.value.center.z.toPrecision(4)})。`
+  if (result.status === "approximate") return `${label}（数值近似，残差 ${result.residual.toPrecision(3)}）：半径 ${result.value.radius.toPrecision(4)}。`
+  return `${label}：${result.reason}`
+}
+
+export function solidStatusReport(document: GeometryDocument): SolidDerivedStatus[] {
+  const primitiveMap = new Map(document.primitives.map((primitive) => [primitive.id, primitive]))
+  const report: SolidDerivedStatus[] = []
+
+  for (const primitive of document.primitives) {
+    if (primitive.type !== "polyhedron3") continue
+    // 拓扑读不全（缺顶点 / 缺面环）时**什么都不报**：那不是"退化"，而是"这只实体还没长齐"。
+    const topology = solidTopology3(primitive, primitiveMap)
+    if (!topology) continue
+    const boundary: SolidBoundary = { vertices: topology.vertices, faces: topology.faces }
+    const circumsphere = solveCircumsphere3(boundary)
+    const insphere = solveInsphere3(boundary)
+    report.push({ solidId: primitive.id, code: "derived.circumsphere", status: circumsphere.status, message: sphereStatusMessage("外接球", circumsphere) })
+    report.push({ solidId: primitive.id, code: "derived.insphere", status: insphere.status, message: sphereStatusMessage("内切球", insphere) })
+  }
+
+  for (const primitive of document.primitives) {
+    if (primitive.type !== "section") continue
+    const source = primitiveMap.get(primitive.sourceId)
+    if (!source) continue
+    const topology = solidTopology3(source, primitiveMap)
+    if (!topology) continue
+    const result = sectionSolid3({ vertices: topology.vertices, faces: topology.faces }, primitive.plane)
+    // 三个分支都要写出来（判别联合必须穷尽）：`sectionSolid3` 目前只产出 exact，
+    // 但契约允许 `approximate`（带残差的数值边界），这里如实渲染它，将来才不会静默漏一种状态。
+    const message = result.status === "exact"
+      ? `截面分类 ${result.value.classification}（${result.value.points.length} 个顶点）。`
+      : result.status === "approximate"
+        ? `截面（数值近似，残差 ${result.residual.toPrecision(3)}）：${result.value.classification}。`
+        : `截面：${result.reason}`
+    report.push({ solidId: primitive.sourceId, code: "derived.section", status: result.status, message })
+  }
+
+  return report
+}
+
+/**
  * 由文档里的曲线对象构造内核约束。
  *
  * **绑定参数就是该约束的自然参数**，不再一律归一化到 [0, 1]：
@@ -1591,10 +1709,11 @@ function resolveLine3Endpoints(primitive: Extract<PrimitiveSpec, { type: "line3"
   return { first: point.position, second: { x: point.position.x + primitive.definition.direction.x, y: point.position.y + primitive.definition.direction.y, z: point.position.z + primitive.definition.direction.z } }
 }
 
-/** 宿主参数一律夹到宿主声明的域内：否则"参数 2"在 [0,1] 的线段上会把点扔到线段之外。 */
-function clampHostParameter(value: number, domain: readonly [number, number]): number {
-  return Math.min(Math.max(value, domain[0]), domain[1])
-}
+/**
+ * 宿主参数的域语义只有一份：内核的 `normalizeHostParameter`（闭合宿主折回、有界宿主夹回、
+ * 无界宿主原样）。这里曾经有一份"一律夹取"的本地实现，对空间圆轨道会把 `π/2 + 4π` 夹到 `2π`，
+ * 于是同一个文档在文档层与 Reactive DAG 上给出**两个不同的点**（fix round 1 / I5）。
+ */
 
 /** 实体内约束的宿主：由实体的**物化拓扑**（顶点 + 面环）构造，解析不出来时返回 null。 */
 export function solidVolumeHostFor(primitives: Map<string, PrimitiveSpec>, solidId: string): Host3 | null {
@@ -1604,7 +1723,27 @@ export function solidVolumeHostFor(primitives: Map<string, PrimitiveSpec>, solid
   return topology ? solidVolumeHost3(topology.vertices, topology.faces) : null
 }
 
-function resolveBoundPoint3(primitive: Extract<PrimitiveSpec, { type: "point3" }>, primitives: Map<string, PrimitiveSpec>): Vector3 | null {
+/**
+ * 3D 宿主绑定的参数真值（设计规格 §4.1）：给了 `parameterId(s)` 就**只看文档参数**，
+ * 绑定里那个字面量退化成缓存。参数不存在或非有限时返回 `null`（调用方保留上一次的坐标，
+ * 不静默把点挪到别处），而不是拿缓存顶替。
+ */
+function bindingParameterValue(parameters: GeometryDocument["parameters"], literal: number, parameterId?: string): number | null {
+  if (parameterId === undefined) return Number.isFinite(literal) ? literal : null
+  const resolved = parameters[parameterId]?.value
+  return resolved !== undefined && Number.isFinite(resolved) ? resolved : null
+}
+
+function bindingTupleValue(parameters: GeometryDocument["parameters"], literal: readonly number[], parameterIds?: readonly string[]): number[] | null {
+  if (parameterIds !== undefined) {
+    if (parameterIds.length !== literal.length) return null
+    const resolved = parameterIds.map((id) => parameters[id]?.value)
+    return resolved.every((value) => value !== undefined && Number.isFinite(value)) ? resolved as number[] : null
+  }
+  return literal.every(Number.isFinite) ? [...literal] : null
+}
+
+function resolveBoundPoint3(primitive: Extract<PrimitiveSpec, { type: "point3" }>, primitives: Map<string, PrimitiveSpec>, parameters: GeometryDocument["parameters"]): Vector3 | null {
   const binding = primitive.binding
   if (!binding || binding.kind === "free") return null
   const points = new Map([...primitives.values()].filter((candidate): candidate is Point3Primitive => candidate.type === "point3").map((point) => [point.id, point]))
@@ -1628,22 +1767,22 @@ function resolveBoundPoint3(primitive: Extract<PrimitiveSpec, { type: "point3" }
     const solidHost = binding.kind === "inSolid" ? solidVolumeHostFor(primitives, binding.solidId) : null
     if (binding.kind === "inSolid") {
       // 实体内：参数是三个 [0,1] 比例；越界会被夹回实体表面（`solidVolumeHost3` 负责）。
-      const [u, v, w] = binding.uvw
-      if (!solidHost || !Number.isFinite(u) || !Number.isFinite(v) || !Number.isFinite(w)) return null
-      return solidHost.evaluate({ u, v, w })
+      const uvw = bindingTupleValue(parameters, binding.uvw, binding.parameterIds)
+      if (!solidHost || !uvw) return null
+      return solidHost.evaluate({ u: uvw[0], v: uvw[1], w: uvw[2] })
     }
     const sourceId = binding.kind === "onHost" ? binding.hostId : binding.kind === "onFace" ? binding.faceId : binding.solidId
     const source = primitives.get(sourceId)
     const host = source ? host3FromPrimitive(source, primitives) : null
     if (!host) return null
     if (binding.kind === "onHost") {
-      if (!Number.isFinite(binding.parameter)) return null
-      return host.evaluate({ u: clampHostParameter(binding.parameter, host.domain.u) })
+      const parameter = bindingParameterValue(parameters, binding.parameter, binding.parameterId)
+      if (parameter === null) return null
+      return host.evaluate({ u: normalizeHostParameter(host, "u", parameter) })
     }
-    const [u, v] = binding.uv
-    if (!Number.isFinite(u) || !Number.isFinite(v)) return null
-    const vDomain = host.domain.v ?? [Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY]
-    return host.evaluate({ u: clampHostParameter(u, host.domain.u), v: clampHostParameter(v, vDomain) })
+    const uv = bindingTupleValue(parameters, binding.uv, binding.parameterIds)
+    if (!uv) return null
+    return host.evaluate({ u: normalizeHostParameter(host, "u", uv[0]), v: normalizeHostParameter(host, "v", uv[1]) })
   }
   if (binding.feature === "midpoint" && binding.sourceIds.length >= 2) {
     const first = point3Position(primitives.get(binding.sourceIds[0]), points)
@@ -1835,12 +1974,37 @@ function pickSolution<T extends { x: number; y: number }>(points: T[], solutionI
 
 const recomputePrimitive = (primitive: PrimitiveSpec): PrimitiveSpec | undefined => {
     if (primitive.type === "point3" && primitive.binding) {
-      const position = resolveBoundPoint3(primitive, primitiveMap)
+      const position = resolveBoundPoint3(primitive, primitiveMap, parameters)
       return position ? { ...primitive, position } : undefined
     }
     if (primitive.type === "point" && primitive.binding) {
       const point = resolveBoundPoint(primitive.binding, primitiveMap, parameters)
       return point ? { ...primitive, x: point.x, y: point.y } : undefined
+    }
+    /**
+     * **由三角形派生的圆**（内切圆 / 外接圆，设计规格 §4.3）。
+     *
+     * 圆心与半径都从那个三角形算出来：`inradius` → 内心 + 内切半径，`circumradius` → 外心 + 外接半径。
+     * 几何来自内核的 `triangleCenter2` / `triangleRadius2`，与 Reactive DAG 的三角形中心节点**同一份**。
+     *
+     * 顶点缺失或三点共线时**保留上一次的几何**：文档层不伪造坐标（与"宿主解析不了就保持不动"
+     * 是既有约定），退化 / 缺失来源的结构化诊断由 Reactive DAG 那一层报。
+     */
+    if (primitive.type === "circle" && primitive.radiusFrom?.kind === "triangle") {
+      const rule = primitive.radiusFrom
+      const vertices = rule.triangleIds.map((id) => primitiveMap.get(id))
+      const points = vertices.map((vertex) => vertex?.type === "point" ? { x: vertex.x, y: vertex.y } : null)
+      if (points.every((point) => point !== null)) {
+        const [first, second, third] = points as [{ x: number; y: number }, { x: number; y: number }, { x: number; y: number }]
+        const center = triangleCenter2(rule.metric === "inradius" ? "incenter" : "circumcenter", first, second, third)
+        const radius = triangleRadius2(rule.metric, first, second, third)
+        if (center.status === "exact" && radius.status === "exact") {
+          const bounded = Math.max(MIN_DYNAMIC_CIRCLE_RADIUS, radius.value)
+          if (center.value.x === primitive.center.x && center.value.y === primitive.center.y && bounded === primitive.radius) return primitive
+          return { ...primitive, center: center.value, radius: bounded }
+        }
+      }
+      return primitive
     }
     /**
      * 以点图元为圆心 / 半径随点图元变化的圆。
@@ -1855,11 +2019,13 @@ const recomputePrimitive = (primitive: PrimitiveSpec): PrimitiveSpec | undefined
     if (primitive.type === "circle" && (primitive.centerPointId || primitive.radiusFrom)) {
       const centerPoint = primitive.centerPointId ? primitiveMap.get(primitive.centerPointId) : undefined
       const center = centerPoint?.type === "point" ? { x: centerPoint.x, y: centerPoint.y } : primitive.center
-      const driver = primitive.radiusFrom ? primitiveMap.get(primitive.radiusFrom.pointId) : undefined
+      // 三角形规则在上面已经返回；这里只剩"半径 = 驱动点距离 × 倍率"这一支。
+      const distanceRule = primitive.radiusFrom?.kind === "triangle" ? undefined : primitive.radiusFrom
+      const driver = distanceRule ? primitiveMap.get(distanceRule.pointId) : undefined
       // 驱动点与圆心重合时半径会变成 0（圆消失），但 schema 要求 radius > 0：
       // 给一个不可见的下限，宁可画出一个极小的圆，也不要让文档存不下去。
-      const radius = driver?.type === "point" && primitive.radiusFrom
-        ? Math.max(MIN_DYNAMIC_CIRCLE_RADIUS, Math.hypot(driver.x - center.x, driver.y - center.y) * primitive.radiusFrom.factor)
+      const radius = driver?.type === "point" && distanceRule
+        ? Math.max(MIN_DYNAMIC_CIRCLE_RADIUS, Math.hypot(driver.x - center.x, driver.y - center.y) * distanceRule.factor)
         : primitive.radius
       if (center.x === primitive.center.x && center.y === primitive.center.y && radius === primitive.radius) return primitive
       return { ...primitive, center, radius }
@@ -2018,6 +2184,11 @@ function functionAnalysisSourceId(primitive: PrimitiveSpec): string | null {
 /**
  * 参数是否仍被某个图元引用。两个用途：回收自动生成的驱动参数时确认它真的成了孤儿，
  * 以及拒绝删除仍被绑定的参数。调用前应先完成图元的增删，这样判断的是**当前**状态。
+ *
+ * 3D 宿主绑定的驱动参数（`point3.binding.parameterId` / `onFace|onSurface|inSolid.parameterIds`）
+ * 必须一起算进来：`schema` 把它们做成了硬校验（悬空即非法），`encodeMgeo` 对非法文档直接抛，
+ * 所以漏掉它们意味着"一次普通删除就能造出一份存不下去的文档"，而回收那一步还会把仍在使用的
+ * 驱动参数当垃圾删掉。
  */
 export function parameterIsReferenced(document: GeometryDocument, parameterId: string): boolean {
   return document.primitives.some((primitive) => {
@@ -2025,6 +2196,13 @@ export function parameterIsReferenced(document: GeometryDocument, parameterId: s
     if (primitive.type === "point" && primitive.binding?.kind === "onPath" && primitive.binding.parameterId === parameterId) return true
     if (primitive.type === "locus" && primitive.parameterId === parameterId) return true
     if (primitive.type === "polyhedron3" && primitive.construction?.kind === "template") return (primitive.construction.parameterIds ?? []).includes(parameterId)
+    if (primitive.type === "point3" && primitive.binding) {
+      const binding = primitive.binding
+      if (binding.kind === "onHost" && binding.parameterId === parameterId) return true
+      // 三个 uv/uvw 变体的元组长度不同，先收成 `readonly string[]` 再查，免得 `includes` 落在元组并集上。
+      const driverIds: readonly string[] | undefined = binding.kind === "onFace" || binding.kind === "onSurface" || binding.kind === "inSolid" ? binding.parameterIds : undefined
+      if (driverIds?.includes(parameterId)) return true
+    }
     return false
   })
 }
@@ -2114,7 +2292,11 @@ function unbindDeletedHost(primitive: PrimitiveSpec, deleted: Set<string>): Prim
    * 丢掉那条规则（半径从此变回可以直接编辑的数字），比静默留下一个悬空引用好得多
    * —— 悬空引用在重算里找不到来源，半径会冻在最后一个值上，用户改都改不动。
    */
-  if (primitive.type === "circle" && primitive.radiusFrom && deleted.has(primitive.radiusFrom.pointId)) return { ...primitive, radiusFrom: undefined }
+  if (primitive.type === "circle" && primitive.radiusFrom) {
+    // 三角形规则：任一顶点被删就整条规则作废（与"驱动点被删"同一处理：圆留下、规则丢掉）。
+    const sources = primitive.radiusFrom.kind === "triangle" ? primitive.radiusFrom.triangleIds : [primitive.radiusFrom.pointId]
+    if (sources.some((sourceId) => deleted.has(sourceId))) return { ...primitive, radiusFrom: undefined }
+  }
   // 平面点的 `derived` 绑定与空间点同理：来源没了就降级为自由点，绝不留悬空引用
   //（悬空引用在重算里找不到来源，点会静默冻住；这与 schema 里点名过的坑是同一类）。
   if (primitive.type === "point" && primitive.binding?.kind === "derived" && deleted.has(primitive.binding.sourceId)) return { ...primitive, binding: { kind: "free" } }
@@ -2143,7 +2325,7 @@ export function deletionTargets(document: GeometryDocument, id: string): Set<str
     return primitive.id === id || primitive.construction.sourceIds[0] === id || primitive.vertexIds.includes(id) || primitive.edgeIds.includes(id) || primitive.faceIds.includes(id)
   })
   if (polyhedron && polyhedron.type === "polyhedron3") {
-    for (const member of [polyhedron.id, ...(polyhedron.construction?.sourceIds ?? []), ...polyhedron.vertexIds, ...polyhedron.edgeIds, ...polyhedron.faceIds]) targets.add(member)
+    for (const member of [polyhedron.id, ...(isSourceIdConstruction(polyhedron.construction) ? polyhedron.construction.sourceIds : []), ...polyhedron.vertexIds, ...polyhedron.edgeIds, ...polyhedron.faceIds]) targets.add(member)
   }
   /**
    * 固定点迭代，不能只扫一趟：级联出来的对象本身可能还被别的派生对象引用。
@@ -2203,13 +2385,28 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
       if (operation.patch.binding3 !== undefined) primitive.binding = operation.patch.binding3
       if (operation.patch.position3 !== undefined) {
         for (const candidate of next.primitives) {
-          if (candidate.type !== "polyhedron3" || !candidate.vertexIds.includes(primitive.id) || candidate.construction?.kind !== "template") continue
+          if (candidate.type !== "polyhedron3" || !candidate.vertexIds.includes(primitive.id)) continue
+          if (candidate.construction?.kind === "template") {
+            /**
+             * 模板一旦有顶点被按数值改动，就不再是"参数化模板"了，改记成显式面环构造。
+             * **归属要一起带走**（`sourceId`）：否则这个实体在截面 / 交线 / 交面里就找不到自己的拓扑，
+             * 会被静默跳过（实测缺陷）。
+             */
+            candidate.construction = { kind: "fromFaces", sourceIds: [...candidate.faceIds], sourceId: candidate.construction.sourceIds[0] }
+            continue
+          }
           /**
-           * 模板一旦有顶点被按数值改动，就不再是"参数化模板"了，改记成显式面环构造。
-           * **归属要一起带走**（`sourceId`）：否则这个实体在截面 / 交线 / 交面里就找不到自己的拓扑，
-           * 会被静默跳过（实测缺陷）。
+           * **棱柱**（Fix round 2 / I4）：`construction` 是声明的真源（规格 §1.2），
+           * 所以顶点一动就必须重新判断"这份描述还算不算数"：
+           *
+           * - 还能对上（每个顶点与 `底面 + 向量` 的约定一致，例如拖走整只实体）→ **保留** `prism`；
+           * - 对不上（拖了某一个顶点、底座被拉得不共面……）→ 与模板同款处理，
+           *   改记成显式面环 `fromFaces` 并保留归属 `sourceId`。描述与几何从此一致，
+           *   也不会留下一句"我是按底面与向量拉伸出来的"这种与环境矛盾的假话。
            */
-          candidate.construction = { kind: "fromFaces", sourceIds: [...candidate.faceIds], sourceId: candidate.construction.sourceIds[0] }
+          if (candidate.construction?.kind === "prism" && !prismMatchesVertices(candidate, candidate.construction, next.primitives)) {
+            candidate.construction = { kind: "fromFaces", sourceIds: [...candidate.faceIds], sourceId: candidate.id }
+          }
         }
       }
     }

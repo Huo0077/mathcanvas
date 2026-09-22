@@ -26,11 +26,11 @@
 - Test: `packages/dsl/src/schema.test.ts`
 - Test: `packages/dsl/src/codec.test.ts`
 
-- [ ] Add failing tests for `solid.prism`, finite non-zero vector validation, simple polygon validation, and old-document round trips.
-- [ ] Run focused DSL tests and verify failure on unknown `prism` construction.
-- [ ] Add `SolidConstruction` prism fields and typed `SolidDerivedResult` status values.
-- [ ] Add strict schema validation without duplicating evaluator geometry checks.
-- [ ] Run focused DSL tests and verify pass.
+- [x] Add failing tests for `solid.prism`, finite non-zero vector validation, simple polygon validation, and old-document round trips.
+- [x] Run focused DSL tests and verify failure on unknown `prism` construction.
+- [x] Add `SolidConstruction` prism fields and typed `SolidDerivedResult` status values.
+- [x] Add strict schema validation without duplicating evaluator geometry checks.
+- [x] Run focused DSL tests and verify pass.
 
 ### Task 2: Implement pure Prism topology
 
@@ -43,11 +43,11 @@
 - `buildPrismTopology(basePolygon: readonly Vector3[], vector: Vector3): SolidTopology`.
 - `validatePrismInput(...)` returns structured diagnostics.
 
-- [ ] Add tests for a triangular prism, an oblique quadrilateral prism, reversed winding, zero vector rejection, and self-intersecting base rejection.
-- [ ] Run the focused test and verify failure because the builder is absent.
-- [ ] Implement `Ti = Bi + vector`, bottom/top winding, and side face `[Bi,Bnext,Tnext,Ti]`.
-- [ ] Add coplanarity and parallel-edge property assertions with numeric tolerance.
-- [ ] Run `npm test -- packages/geometry-kernel/src/prism.test.ts` and verify pass.
+- [x] Add tests for a triangular prism, an oblique quadrilateral prism, reversed winding, zero vector rejection, and self-intersecting base rejection.
+- [x] Run the focused test and verify failure because the builder is absent.
+- [x] Implement `Ti = Bi + vector`, bottom/top winding, and side face `[Bi,Bnext,Tnext,Ti]`.
+- [x] Add coplanarity and parallel-edge property assertions with numeric tolerance.
+- [x] Run `npm test -- packages/geometry-kernel/src/prism.test.ts` and verify pass.
 
 ### Task 3: Connect Solid source and stable child IDs
 
@@ -59,11 +59,11 @@
 - Test: `packages/scene-graph/src/actions/idAllocator.test.ts`
 - Test: `packages/scene-graph/src/patches.test.ts`
 
-- [ ] Add tests proving Solid creation skips occupied IDs and recreates identical child IDs after a topology recompute.
-- [ ] Run focused tests and verify duplicate-ID and unstable-child failures.
-- [ ] Add `solid.create_prism` compilation and use the document primitive ID set as allocator input.
-- [ ] Ensure legacy template migration remains readable and removes undefined presentation keys where required.
-- [ ] Run focused scene-graph tests and verify pass.
+- [x] Add tests proving Solid creation skips occupied IDs and recreates identical child IDs after a topology recompute.
+- [x] Run focused tests and verify duplicate-ID and unstable-child failures.
+- [x] Add `solid.create_prism` compilation and use the document primitive ID set as allocator input.
+- [x] Ensure legacy template migration remains readable and removes undefined presentation keys where required.
+- [x] Run focused scene-graph tests and verify pass.
 
 ### Task 4: Add sections and sphere solver boundaries
 
@@ -73,11 +73,11 @@
 - Test: `packages/geometry-kernel/src/solidDerived.test.ts`
 - Test: `packages/geometry-kernel/src/sections3d.test.ts`
 
-- [ ] Add tests for box/tetrahedron circumcenters, non-spherical prism rejection, tetrahedron insphere, and section `none/point/segment/polygon` states.
-- [ ] Run focused tests and verify missing solver behavior.
-- [ ] Implement residual-checked circumsphere and insphere results; reject non-finite or degenerate inputs.
-- [ ] Reuse topology-adjacency section boundary ordering instead of centroid-angle sorting for non-convex loops.
-- [ ] Run focused geometry-kernel tests and verify pass.
+- [x] Add tests for box/tetrahedron circumcenters, non-spherical prism rejection, tetrahedron insphere, and section `none/point/segment/polygon` states.
+- [x] Run focused tests and verify missing solver behavior.
+- [x] Implement residual-checked circumsphere and insphere results; reject non-finite or degenerate inputs.
+- [x] Reuse topology-adjacency section boundary ordering instead of centroid-angle sorting for non-convex loops.
+- [x] Run focused geometry-kernel tests and verify pass.
 
 ### Task 5: Expose the Solid flow to UI and Agent
 
@@ -88,12 +88,12 @@
 - Test: `apps/web/src/agent/workerRuntime.test.ts`
 - Test: `apps/web/e2e/solid-prism.spec.ts`
 
-- [ ] Add a worker test that compiles an oblique prism into an isolated draft and leaves the live document unchanged.
-- [ ] Implement action registration, draft compilation, preview counts, and Solid-derived diagnostics.
-- [ ] Add browser coverage for creating, moving, and sectioning an oblique prism.
-- [ ] Run the focused worker and Playwright tests and verify pass.
+- [x] Add a worker test that compiles an oblique prism into an isolated draft and leaves the live document unchanged.
+- [x] Implement action registration, draft compilation, preview counts, and Solid-derived diagnostics.
+- [x] Add browser coverage for creating, moving, and sectioning an oblique prism.
+- [x] Run the focused worker and Playwright tests and verify pass.
 
 ### Task 6: Verify the Solid slice
 
-- [ ] Run `npm test`, `npm run typecheck`, `npm run lint`, `npm run test:e2e`, and `npm run test:rust`.
-- [ ] Verify old `.mgeo` fixtures load unchanged and new Prism documents round-trip through codec serialization.
+- [x] Run `npm test`, `npm run typecheck`, `npm run lint`, `npm run test:e2e`, and `npm run test:rust`.
+- [x] Verify old `.mgeo` fixtures load unchanged and new Prism documents round-trip through codec serialization.

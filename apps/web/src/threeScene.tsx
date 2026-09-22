@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import * as THREE from "three"
 import type { GeometryDocument, IntersectionFacePrimitive, IntersectionPoint3Primitive, IntersectionSolidPrimitive, Plane3Primitive, Point3Primitive, Polyhedron3Primitive, PrimitiveSpec, SectionPrimitive, Vector3 } from "@draw/dsl"
-import { dihedralAngleDegrees, host3FromPrimitive, unfoldPolyhedron3, type Host3, type Host3Parameter } from "@draw/geometry-kernel"
+import { dihedralAngleDegrees, host3FromPrimitive, reactive, unfoldPolyhedron3, type Host3, type Host3Parameter } from "@draw/geometry-kernel"
 import { solidVolumeHostFor } from "@draw/scene-graph"
 import { measurementVisualsForDocument, resolveMeasurementVisual } from "./measurementVisuals"
 import { syncOverlay } from "./overlaySync"
@@ -73,6 +73,12 @@ interface DragSessionState {
   hostDependents?: string[]
   hostParameter?: Host3Parameter
   /**
+   * 绑定点的坐标由 **Reactive DAG** 求出（Reactive DAG 切片 Task 4）：宿主是来源节点、
+   * 宿主参数（u/v/w）是三个参数节点、点本身是约束节点。每帧只写参数、求一次闭包，
+   * 坐标来自 evaluator —— 与 2D 的动点是同一条"参数是唯一真值"的路子。
+   */
+  reactiveHost?: { graph: reactive.ReactiveGraph; pointId: string; parameterIds: readonly [string, string, string] }
+  /**
    * 拖动**旋转环**：这次转的是哪根世界轴、枢轴在哪、已经转到哪儿，以及画面上要跟着转的族。
    * 与平移共用同一个会话（一次拖动仍然只提交一步），只是几何含义不同。
    */
@@ -82,6 +88,31 @@ interface DragSessionState {
    * `radius3`——与平移 / 旋转同一条"一次拖动 = 一步撤销"的规则。
    */
   scale?: { id: string; original: number; current: number }
+}
+
+/**
+ * 为一次"绑定点拖动"建一张最小的 Reactive DAG：
+ *
+ * ```text
+ * 宿主(来源) --\
+ *  u 参数 ------> 点(约束节点) --> 坐标
+ *  v 参数 -----/
+ *  w 参数 ---/
+ * ```
+ *
+ * 图的规模与这次拖动无关的部分完全无关，所以"每帧只重算这个点"在读数上可验证
+ * （`data-reactive-evaluated`）。三维宿主即使只有一维（棱 / 线段），多出来的 v/w 参数也不会
+ * 参与求值：`hostPointNode` 只读宿主真正声明了的维度。
+ */
+function buildHostPointGraph(pointId: string, host: Host3): { graph: reactive.ReactiveGraph; pointId: string; parameterIds: readonly [string, string, string] } {
+  const graph = reactive.createReactiveGraph()
+  const hostNodeId = `${pointId}:host`
+  const parameterIds = [`${pointId}:u`, `${pointId}:v`, `${pointId}:w`] as const
+  graph.addNode(reactive.sourceNode(hostNodeId, host))
+  for (const parameterId of parameterIds) graph.addNode(reactive.parameterNode(parameterId, 0))
+  graph.addNode(reactive.hostPointNode(pointId, { host, parameterIds, hostIds: [hostNodeId] }))
+  graph.evaluate()
+  return { graph, pointId, parameterIds }
 }
 
 export interface ThreeSceneViewProps {  document: GeometryDocument
@@ -1335,7 +1366,8 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
               visualApplied: new THREE.Vector3(),
               applied: false,
               hostConstraint,
-              hostDependents: [...dependents].filter((id) => ["line3", "segment3", "ray3", "edge3", "face3"].includes(documentRef.current.primitives.find((candidate) => candidate.id === id)?.type ?? ""))
+              hostDependents: [...dependents].filter((id) => ["line3", "segment3", "ray3", "edge3", "face3"].includes(documentRef.current.primitives.find((candidate) => candidate.id === id)?.type ?? "")),
+              reactiveHost: buildHostPointGraph(target.id, hostConstraint)
             }
           }
         } else if (hit && target && isFreeDraggable3(target, points, templateTopologyIds(documentRef.current))) {
@@ -1414,21 +1446,47 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onStatusPrompt
             /**
              * 绑定点：把指针在世界平面上的落点**投影回宿主参数域**，再由参数算出坐标。
              * 每帧只重建这个点与它的下游对象（不整场重建、不进撤销历史），抬手才提交参数。
+             *
+             * 坐标这一步走 **Reactive DAG**（Reactive DAG 切片 Task 4）：宿主几何是来源节点、
+             * u/v/w 是三个参数节点、"点"是约束节点。求一次闭包就拿到坐标与夹取标记，
+             * 并且**同时**得到诊断（宿主解析不出来时不再是"悄悄不动"）。
              */
             const worldPoint = session.origin.clone().add(world)
             const parameter = session.hostConstraint.closestParameter({ x: worldPoint.x, y: worldPoint.y, z: worldPoint.z })
-            const projected = session.hostConstraint.evaluate(parameter)
             session.hostParameter = parameter
-            session.applied = true
-            const current = points.get(session.targetId)
-            if (current) points.set(session.targetId, { ...current, position: projected })
-            refreshPrimitiveObject(session.targetId)
-            for (const dependentId of session.hostDependents ?? []) refreshPrimitiveObject(dependentId)
+            let projected: { x: number; y: number; z: number } | null = null
+            let reactiveEvaluated = 0
+            let reactiveDiagnostics = 0
+            if (session.reactiveHost) {
+              const { graph, pointId, parameterIds } = session.reactiveHost
+              graph.setParameter(parameterIds[0], parameter.u)
+              graph.setParameter(parameterIds[1], parameter.v ?? 0)
+              graph.setParameter(parameterIds[2], parameter.w ?? 0)
+              const report = graph.evaluate([...parameterIds])
+              reactiveEvaluated = report.evaluated.length
+              reactiveDiagnostics = report.diagnostics.length
+              const value = graph.value(pointId) as { point: Vector3 } | undefined
+              // 图没有给出坐标时**不动这个点**（宁可这一帧不跟手，也不拿旧坐标或原点冒充）。
+              if (value) projected = { ...value.point }
+            } else {
+              projected = session.hostConstraint.evaluate(parameter)
+            }
+            if (projected) {
+              session.applied = true
+              const current = points.get(session.targetId)
+              if (current) points.set(session.targetId, { ...current, position: projected })
+              refreshPrimitiveObject(session.targetId)
+              for (const dependentId of session.hostDependents ?? []) refreshPrimitiveObject(dependentId)
+              if (sceneShell) {
+                sceneShell.dataset.reactiveEvaluated = String(reactiveEvaluated)
+                sceneShell.dataset.reactiveDiagnostics = String(reactiveDiagnostics)
+              }
+            }
             pointerState.lastX = point.x
             pointerState.lastY = point.y
             render()
             dragFrames += 1
-            if (sceneShell) {
+            if (sceneShell && projected) {
               sceneShell.dataset.dragFrames = String(dragFrames)
               sceneShell.dataset.dragParameter = parameter.v === undefined ? parameter.u.toFixed(4) : `${parameter.u.toFixed(4)},${parameter.v.toFixed(4)}`
               // 残差应当恒为 0：坐标就是从参数算出来的（这条读数是"严格贴住宿主"的直接证据）。

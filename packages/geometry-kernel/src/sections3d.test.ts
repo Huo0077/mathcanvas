@@ -148,4 +148,15 @@ describe("3D sections", () => {
     }).sort((first, second) => first - second)
     expect(edgeLengths).toEqual([1, 1, 2, 2, 3, 3])
   })
+
+  /**
+   * M1（评审）：原先这里还有一条"非凸截面必须沿拓扑邻接成环"的用例，已**删除**。
+   *
+   * 理由（评审 M1 的判定，也是事实）：`sections3d.ts` 在本切片里**没有被改动**
+   * （`sectionPolyhedron3` 从实现之初就是"逐面求交 + 按共享端点串环"，见 `faceSectionRing` /
+   * `chainSectionLoops`），所以那条用例对着改动前的代码同样会绿 —— 它证明不了 Task 4 的
+   * "改用拓扑邻接排序"这一条，只是重复了上面已有的那条更弱的夹具。
+   * Task 4 真正的证据是 `solidDerived.test.ts` 里的 `sectionSolid3`：
+   * 那个函数是本切片新增的，它们才对着"改动前不存在的行为"。
+   */
 })

@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest"
 
-import { createEmptyDocument, encodeMgeo, validateDocument } from "@draw/dsl"
-import { buildSolidTemplate } from "@draw/geometry-kernel"
+import { createEmptyDocument, encodeMgeo, validateDocument, type GeometryDocument } from "@draw/dsl"
+import { buildSolidTemplate, solveCircumsphere3, solveInsphere3, type SolidBoundary } from "@draw/geometry-kernel"
 
-import { applyOperation, commitPatch, createFace3, createLine3, createPoint3, createPolyhedron3, deletionTargets, getAffectedPrimitiveIds, getDependencyIndex, patchPoint3, recomputeDerivedObjects, resolvePolyhedronTopology, sectionPlaneThroughSource, topologicalRecomputeOrder, validateDeletion, validatePatch } from "./index"
+import { compileSolidPrism } from "./actions"
+import { applyOperation, commitPatch, createFace3, createLine3, createPoint3, createPolyhedron3, deletionTargets, getAffectedPrimitiveIds, getDependencyIndex, patchPoint3, recomputeDerivedObjects, resolvePolyhedronTopology, sectionPlaneThroughSource, solidStatusReport, solidTopology3, topologicalRecomputeOrder, validateDeletion, validatePatch } from "./index"
 
 describe("scene graph operations", () => {
   it("recomputes template topology when legacy solid parameters change", () => {
@@ -772,6 +773,33 @@ describe("scene graph operations", () => {
       expect(Object.keys(last.document.parameters)).toEqual([])
     })
 
+    /**
+     * 宿主被删除时回收孤儿参数（Reactive DAG 切片 Task 2）。
+     *
+     * 绑定点在宿主消失后会被**降级为自由点**（位置保留，`unbindDeletedHost`），
+     * 于是它的 `t-<点id>` 参数既没有引用者、也再没有意义。旧实现在这里只按"归属对象也没了"回收，
+     * 于是删掉圆之后参数列表里留下一个没人用的驱动参数。
+     */
+    it("reclaims a generated driver parameter after its host is deleted", () => {
+      const document = createEmptyDocument("conics")
+      document.parameters = { "t-point-1": { id: "t-point-1", value: 0, min: 0, max: 6.28, step: 0.05, ownerId: "point-1" } }
+      document.primitives = [
+        { id: "circle-1", type: "circle", center: { x: 0, y: 0 }, radius: 2 },
+        { id: "point-1", type: "point", x: 2, y: 0, binding: { kind: "onPath", pathId: "circle-1", parameterId: "t-point-1", parameter: 0 } }
+      ]
+
+      const deleted = applyOperation(document, { op: "deleteObject", id: "circle-1" })
+      expect(deleted.changed).toBe(true)
+      // 点保留（降级为自由点），但它自动生成的驱动参数是孤儿，应当被回收。
+      expect(deleted.document.primitives.find((primitive) => primitive.id === "point-1")).toMatchObject({ x: 2, y: 0, binding: { kind: "free" } })
+      expect(Object.keys(deleted.document.parameters)).toEqual([])
+      // 手工参数没有 ownerId，不受影响。
+      const manual = structuredClone(document) as typeof document
+      manual.parameters.slider = { id: "slider", value: 1 }
+      const manualDeleted = applyOperation(manual, { op: "deleteObject", id: "circle-1" })
+      expect(Object.keys(manualDeleted.document.parameters)).toEqual(["slider"])
+    })
+
     it("refuses to delete a parameter that is still referenced", () => {
       const document = boundDocument()
       const refused = applyOperation(document, { op: "deleteParameter", id: "t-point-1" })
@@ -1430,5 +1458,125 @@ describe("scene graph operations", () => {
 
     expect(moved.document.measurements[0]).toMatchObject({ metric: "distance", value: 4, status: "valid" })
     expect(moved.document.measurements[0].explanation).toContain("两个空间点")
+  })
+})
+
+/**
+ * **Solid/Prism 切片 Fix round 2**：真源的一致性（I4）与派生状态的可见性（I5）。
+ *
+ * 两条都从**生产入口**走：I4 用 `patchPoint3` / `applyOperation`（属性栏与拖动走的那条路），
+ * I5 用 `solidStatusReport`（场景图对已提交文档算出的派生读数），而不是在测试里直接调内核求解器。
+ */
+const PRISM_BASE = [{ x: 0, y: 0, z: 0 }, { x: 4, y: 0, z: 0 }, { x: 4, y: 3, z: 0 }, { x: 0, y: 3, z: 0 }]
+const PRISM_VECTOR = { x: 1, y: 0.5, z: 3 }
+
+/** 一只按生产口径建出来的棱柱（`compileSolidPrism` 就是 `solid.create_prism` 的实现）。 */
+function prismDocument(): GeometryDocument {
+  const built = compileSolidPrism("solid-1", PRISM_BASE, PRISM_VECTOR, "斜棱柱 1")
+  expect(built.diagnostics).toEqual([])
+  const document = createEmptyDocument("geometry3d")
+  document.primitives = built.primitives
+  return document
+}
+
+describe("a prism's construction descriptor stays the truth source", () => {
+  /**
+   * **I4**：顶点一动，`construction` 就不能再宣称"我还是按底面 + 向量拉伸出来的那只棱柱"。
+   *
+   * 之前只有 `kind === "template"` 会被翻成 `fromFaces`，棱柱不会 —— 于是顶点被拖走之后，
+   * 文档里存着一份**与几何矛盾**的描述（而描述是规格 §1.2 声明的真源）。
+   * 现在的口径与模板一致：还能与实际顶点对上的棱柱保持 `prism`；一旦对不上，
+   * 就如实改记成显式面环（`fromFaces`）并保留归属 `sourceId`（否则这个实体会从截面 / 交线里静默消失）。
+   */
+  it("downgrades the descriptor once a vertex stops matching the base + vector recipe", () => {
+    const document = prismDocument()
+    const moved = applyOperation(document, patchPoint3("solid-1:v6", { x: 0, y: 0, z: 9 }))
+    expect(moved.error).toBeUndefined()
+    const solid = moved.document.primitives.find((primitive) => primitive.id === "solid-1")
+    if (solid?.type !== "polyhedron3") throw new Error("expected the prism solid")
+
+    expect(solid.construction).toEqual({ kind: "fromFaces", sourceIds: [...solid.faceIds], sourceId: "solid-1" })
+    // 拓扑本身没被动过：只是"描述不再自称棱柱"。
+    expect(solid.vertexIds).toHaveLength(8)
+  })
+
+  it("keeps the prism descriptor while every vertex still matches it", () => {
+    const document = prismDocument()
+    // 改的是**外观**（属性栏改名），几何一个点都没动。
+    const restyled = applyOperation(document, { op: "updatePrimitive", id: "solid-1", patch: { label: "棱柱 A" } })
+    const solid = restyled.document.primitives.find((primitive) => primitive.id === "solid-1")
+    if (solid?.type !== "polyhedron3") throw new Error("expected the prism solid")
+    expect(solid.construction).toEqual({ kind: "prism", base: { polygon: PRISM_BASE }, vector: PRISM_VECTOR })
+  })
+
+  it("leaves a template solid's own upgrade path alone", () => {
+    const source = { id: "cube-1", type: "cube" as const, origin: { x: -1, y: -1, z: -1 }, size: { x: 2, y: 2, z: 2 } }
+    const topology = buildSolidTemplate(source)
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [source, ...topology.primitives]
+
+    const moved = applyOperation(document, patchPoint3(topology.vertexIds[0]!, { x: -3, y: -1, z: -1 }))
+    const template = moved.document.primitives.find((primitive) => primitive.type === "polyhedron3" && primitive.construction?.kind === "fromFaces")
+
+    expect(template).toBeDefined()
+    if (template?.type !== "polyhedron3" || template.construction?.kind !== "fromFaces") throw new Error("expected the downgraded template")
+    expect(template.construction.sourceId).toBe("cube-1")
+  })
+})
+
+describe("solid status report surfaces the derived results", () => {
+  /** **I5**：`DerivedSolidResult` 的状态必须能从**已提交的文档**读出来，而不是只活在单测里。 */
+  it("reports the circumsphere and insphere status of every polyhedron", () => {
+    const document = prismDocument()
+
+    const report = solidStatusReport(document)
+
+    const circumsphere = report.find((entry) => entry.solidId === "solid-1" && entry.code === "derived.circumsphere")
+    const insphere = report.find((entry) => entry.solidId === "solid-1" && entry.code === "derived.insphere")
+    // 斜棱柱：一般多面体不一定有外接球 / 内切球，两个都如实报 `undefined`。
+    expect(circumsphere?.status).toBe("undefined")
+    expect(insphere?.status).toBe("undefined")
+    // 理由要能读：只给状态码，用户还是不知道为什么"没有球"。
+    expect(circumsphere?.message).toContain("外接球")
+    expect(insphere?.message).toContain("内切球")
+
+    // 报告与内核求解器**是同一份**结论（不是报告层自己另算一遍）。
+    const primitiveMap = new Map(document.primitives.map((primitive) => [primitive.id, primitive]))
+    const topology = solidTopology3(primitiveMap.get("solid-1")!, primitiveMap)!
+    const boundary: SolidBoundary = { vertices: topology.vertices, faces: topology.faces }
+    expect([solveCircumsphere3(boundary).status, solveInsphere3(boundary).status]).toEqual([circumsphere?.status, insphere?.status])
+  })
+
+  it("reports a box's exact circumsphere and insphere as exact", () => {
+    const source = { id: "cube-1", type: "cube" as const, origin: { x: -1, y: -1, z: -1 }, size: { x: 2, y: 2, z: 2 } }
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [source, ...buildSolidTemplate(source).primitives]
+
+    const report = solidStatusReport(document)
+
+    expect(report.find((entry) => entry.code === "derived.circumsphere")?.status).toBe("exact")
+    expect(report.find((entry) => entry.code === "derived.insphere")?.status).toBe("exact")
+  })
+
+  it("reports a section's classification against its own solid", () => {
+    const document = prismDocument()
+    document.primitives = [
+      ...document.primitives,
+      { id: "section-1", type: "section", sourceId: "solid-1", plane: { normal: { x: 0, y: 0, z: 1 }, constant: -1.5 }, points: [], classification: "none", status: "undefined" }
+    ]
+
+    const report = solidStatusReport(document)
+
+    const section = report.find((entry) => entry.code === "derived.section")
+    expect(section?.status).toBe("exact")
+    // 状态之外还要有可用的形状读数：截面是四边形。
+    expect(section?.message).toContain("polygon")
+  })
+
+  it("says nothing about a solid whose topology cannot be read", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [{ id: "solid-broken", type: "polyhedron3", vertexIds: ["missing"], edgeIds: [], faceIds: [] }]
+
+    expect(solidStatusReport(document)).toEqual([])
   })
 })

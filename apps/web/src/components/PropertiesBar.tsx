@@ -446,14 +446,21 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
    */
   const radiusDriverCandidates = sceneDocument.primitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "point" }> =>
     primitive.type === "point" && primitive.id !== selectedCenterDrivenCircle?.centerPointId)
-  /** 选/清空半径驱动点：清空时写 `null`，圆的半径回到"可直接编辑的数字"（值是最后一次算出来的那个）。 */
+  /**
+   * 选/清空半径驱动点：清空时写 `null`，圆的半径回到"可直接编辑的数字"（值是最后一次算出来的那个）。
+   *
+   * `kind: "triangle"` 的规则（内切圆 / 外接圆）不走这个下拉：它的半径由三角形算出来，
+   * 这里只处理"半径随动点"这一支，所以先收窄掉。
+   */
   const updateRadiusDriver = (pointId: string) => {
     if (!selectedCenterDrivenCircle) return
-    onUpdatePrimitive({ radiusFrom: pointId ? { pointId, factor: selectedCenterDrivenCircle.radiusFrom?.factor ?? 1 } : null })
+    const distanceRule = selectedCenterDrivenCircle.radiusFrom?.kind === "triangle" ? undefined : selectedCenterDrivenCircle.radiusFrom
+    onUpdatePrimitive({ radiusFrom: pointId ? { pointId, factor: distanceRule?.factor ?? 1 } : null })
   }
   const updateRadiusFactor = (factor: number) => {
-    if (!selectedCenterDrivenCircle?.radiusFrom || !(factor > 0)) return
-    onUpdatePrimitive({ radiusFrom: { ...selectedCenterDrivenCircle.radiusFrom, factor } })
+    const distanceRule = selectedCenterDrivenCircle?.radiusFrom?.kind === "triangle" ? undefined : selectedCenterDrivenCircle?.radiusFrom
+    if (!distanceRule || !(factor > 0)) return
+    onUpdatePrimitive({ radiusFrom: { ...distanceRule, factor } })
   }
   /**
    * 曲线来源的切线 / 法线：只有它们才有"切点落在哪里"这件事要调。
@@ -888,7 +895,7 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
         * 用户口径 2 的后半：「第二动点能够作为圆心作圆，圆的半径能够调节，也能够根据动点位置进行动态变化。」
         * 两种方式并排摆：不选驱动点就是固定半径（上面的数字可改），选了动点半径就跟着它走。
         */}
-      {selectedCenterDrivenCircle && <><Field label="半径随动点"><select aria-label="半径随动点" disabled={!editable} value={selectedCenterDrivenCircle.radiusFrom?.pointId ?? ""} onChange={(event) => updateRadiusDriver(event.target.value)}><option value="">固定半径（用上面的数字）</option>{radiusDriverCandidates.map((point) => <option key={point.id} value={point.id}>{point.label ?? point.id}</option>)}</select></Field>{selectedCenterDrivenCircle.radiusFrom && <Field label="半径倍率"><input aria-label="半径倍率" type="number" min="0.01" step="0.1" disabled={!editable} value={selectedCenterDrivenCircle.radiusFrom.factor} onChange={(event) => updateRadiusFactor(numberValue(event))} /></Field>}<p className="footer-note">选中一个动点后，圆就<strong>始终经过那个点</strong>：它沿轨道滑动时圆的大小自动变化。倍率用来做「半径 = 2 倍距离」这类题；上面的半径数字此时不可直接编辑（它是算出来的）。删掉那个动点，圆会保留，只是半径不再跟随。</p></>}
+      {selectedCenterDrivenCircle && <><Field label="半径随动点"><select aria-label="半径随动点" disabled={!editable} value={selectedCenterDrivenCircle.radiusFrom?.kind === "triangle" ? "" : selectedCenterDrivenCircle.radiusFrom?.pointId ?? ""} onChange={(event) => updateRadiusDriver(event.target.value)}><option value="">固定半径（用上面的数字）</option>{radiusDriverCandidates.map((point) => <option key={point.id} value={point.id}>{point.label ?? point.id}</option>)}</select></Field>{selectedCenterDrivenCircle.radiusFrom && selectedCenterDrivenCircle.radiusFrom.kind !== "triangle" && <Field label="半径倍率"><input aria-label="半径倍率" type="number" min="0.01" step="0.1" disabled={!editable} value={selectedCenterDrivenCircle.radiusFrom.factor} onChange={(event) => updateRadiusFactor(numberValue(event))} /></Field>}<p className="footer-note">选中一个动点后，圆就<strong>始终经过那个点</strong>：它沿轨道滑动时圆的大小自动变化。倍率用来做「半径 = 2 倍距离」这类题；上面的半径数字此时不可直接编辑（它是算出来的）。删掉那个动点，圆会保留，只是半径不再跟随。</p></>}
       <CurveTangentAction sourceId={selectedCircleOrArc.id} editable={editable} onCreateCurveTangent={onCreateCurveTangent} />
     </div>}
      {shows("data") && selectedPrimitive?.type === "derivative" && <div className="primitive-properties"><h3>导函数分析</h3><p className="footer-note">来源：{selectedPrimitive.sourceId} · {selectedPrimitive.order} 阶 · 采样近似</p><p className="footer-note">状态：{selectedPrimitive.status}{selectedPrimitive.diagnostic ? ` · ${selectedPrimitive.diagnostic}` : ""}</p></div>}

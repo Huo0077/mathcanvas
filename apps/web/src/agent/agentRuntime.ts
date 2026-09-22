@@ -296,7 +296,23 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
      */
     callTool: (toolId, input) => createToolDispatcher({ scene: createSceneTools(createSceneObservation(dependencies.readSceneDocuments())) }).call(toolId, input),
     draftId: () => committer.draftIdFor(),
-    assumptions: () => declaredAssumptions,
+    /**
+     * **规划器声明的假设 + 编译期补出来的假设**（Agent DSL 切片 Task 4 的接线）。
+     *
+     * 两处必须合在一起说，因为用户看到的是**一列假设**：
+     * - 规划器声明的（"把直径 6 读作半径 3"）在计划解析那一刻就有；
+     * - 编译期补出来的（"拉伸向量未指定，取高 3 的直棱柱"）只有在 `stage` 之后才存在 ——
+     *   而它同样是"系统替你定了什么"，漏掉它用户就会确认一件自己没看过的事。
+     *
+     * 起草之前（只读运行）没有任何草稿，所以这里要**允许只有前半段**。
+     */
+    assumptions: () => {
+      const declared = declaredAssumptions ?? []
+      const draftId = committer.draftIdFor()
+      const compiled = draftId ? (drafts.getPreview(draftId)?.completionAssumptions ?? []).map((assumption) => assumption.text) : []
+      const merged = [...declared, ...compiled.filter((text) => !declared.includes(text))]
+      return merged.length > 0 ? merged : undefined
+    },
     questions: () => declaredQuestions,
     confirmDraft() {
       const id = committer.draftIdFor()

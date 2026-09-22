@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { createEmptyDocument, validateDocument } from "./index"
+import { createEmptyDocument, decodeMgeo, encodeMgeo, validateDocument } from "./index"
 
 /** 3D 动点的宿主绑定（onHost / onFace / onSurface）必须过 schema，且不能留下悬空引用。 */
 describe("3D point host bindings", () => {
@@ -75,5 +75,40 @@ describe("3D point host bindings", () => {
     const badUv = hostDocument()
     bindingOf(badUv, "on-face").uv = [1, Number.POSITIVE_INFINITY]
     expect(validateDocument(badUv).valid).toBe(false)
+  })
+
+  /**
+   * 3D 宿主参数也可以由**文档参数**驱动（Reactive DAG 切片 Task 2；设计规格 §4.1
+   * "参数是独立真源，点坐标由 parameter -> constraint evaluator -> position 得到"）。
+   * 与 2D 的 `onPath.parameterId` 是同一套语义：悬空引用会让点静默冻住，必须在校验期挡住。
+   */
+  it("accepts parameter-driven host bindings and rejects dangling parameter references", () => {
+    const document = hostDocument()
+    document.parameters = {
+      "t-u": { id: "t-u", value: 1, ownerId: "on-face" },
+      "t-v": { id: "t-v", value: 1, ownerId: "on-face" },
+      "t-w": { id: "t-w", value: 0.5, ownerId: "on-host" }
+    }
+    bindingOf(document, "on-host").parameterId = "t-w"
+    bindingOf(document, "on-face").parameterIds = ["t-u", "t-v"]
+    expect(validateDocument(document)).toEqual({ valid: true })
+
+    // 往返（codec 是 JSON 克隆 + 校验）：驱动参数的引用必须原样保留。
+    const roundTripped = decodeMgeo(encodeMgeo(document))
+    const bindingOfRoundTrip = (id: string) => (roundTripped.primitives.find((primitive) => primitive.id === id) as unknown as { binding: unknown }).binding
+    expect(bindingOfRoundTrip("on-host")).toEqual({ kind: "onHost", hostId: "segment-ab", parameter: 0.25, parameterId: "t-w" })
+    expect(bindingOfRoundTrip("on-face")).toEqual({ kind: "onFace", faceId: "face-abc", uv: [1, 1], parameterIds: ["t-u", "t-v"] })
+
+    const dangling = structuredClone(document)
+    bindingOf(dangling, "on-face").parameterIds = ["t-u", "ghost"]
+    expect(validateDocument(dangling).valid).toBe(false)
+
+    const wrongShape = structuredClone(document)
+    bindingOf(wrongShape, "on-face").parameterIds = ["t-u"]
+    expect(validateDocument(wrongShape).valid).toBe(false)
+
+    const notAnId = structuredClone(document)
+    bindingOf(notAnId, "on-host").parameterId = 7
+    expect(validateDocument(notAnId).valid).toBe(false)
   })
 })

@@ -1,0 +1,70 @@
+{
+  "format": "mgeo",
+  "formatVersion": "0.1",
+  "document": {
+    "schemaVersion": "0.1",
+    "revision": 1,
+    "workspace": "geometry3d",
+    "coordinateSystems": [
+      "cartesian-3d"
+    ],
+    "parameters": {},
+    "primitives": [
+      { "id": "point3-A", "type": "point3", "position": { "x": 0, "y": 0, "z": 0 }, "binding": { "kind": "free" }, "label": "A" },
+      { "id": "point3-B", "type": "point3", "position": { "x": 4, "y": 0, "z": 0 }, "binding": { "kind": "free" }, "label": "B" },
+      { "id": "point3-C", "type": "point3", "position": { "x": 0, "y": 4, "z": 0 }, "binding": { "kind": "free" }, "label": "C" },
+      { "id": "point3-D", "type": "point3", "position": { "x": 0, "y": 0, "z": 4 }, "binding": { "kind": "free" }, "label": "D" },
+      { "id": "edge3-1", "type": "edge3", "pointIds": ["point3-A", "point3-B"], "label": "AB" },
+      { "id": "edge3-2", "type": "edge3", "pointIds": ["point3-B", "point3-C"], "label": "BC" },
+      { "id": "edge3-3", "type": "edge3", "pointIds": ["point3-C", "point3-A"], "label": "CA" },
+      { "id": "edge3-4", "type": "edge3", "pointIds": ["point3-A", "point3-D"], "label": "AD" },
+      { "id": "edge3-5", "type": "edge3", "pointIds": ["point3-B", "point3-D"], "label": "BD" },
+      { "id": "edge3-6", "type": "edge3", "pointIds": ["point3-C", "point3-D"], "label": "CD" },
+      { "id": "face3-1", "type": "face3", "pointIds": ["point3-A", "point3-B", "point3-C"], "edgeIds": ["edge3-1", "edge3-2", "edge3-3"], "label": "ABC" },
+      { "id": "face3-2", "type": "face3", "pointIds": ["point3-A", "point3-B", "point3-D"], "edgeIds": ["edge3-1", "edge3-5", "edge3-4"], "label": "ABD" },
+      { "id": "face3-3", "type": "face3", "pointIds": ["point3-A", "point3-C", "point3-D"], "edgeIds": ["edge3-3", "edge3-6", "edge3-4"], "label": "ACD" },
+      { "id": "face3-4", "type": "face3", "pointIds": ["point3-B", "point3-C", "point3-D"], "edgeIds": ["edge3-2", "edge3-6", "edge3-5"], "label": "BCD" },
+      {
+        "id": "solid-1",
+        "type": "polyhedron3",
+        "vertexIds": ["point3-A", "point3-B", "point3-C", "point3-D"],
+        "edgeIds": ["edge3-1", "edge3-2", "edge3-3", "edge3-4", "edge3-5", "edge3-6"],
+        "faceIds": ["face3-1", "face3-2", "face3-3", "face3-4"],
+        "label": "四面体"
+      },
+      {
+        "id": "section-1",
+        "type": "section",
+        "sourceId": "solid-1",
+        "plane": { "normal": { "x": 0, "y": 0, "z": 1 }, "constant": -1 },
+        "points": [
+          { "x": 0, "y": 0, "z": 1 },
+          { "x": 3, "y": 0, "z": 1 },
+          { "x": 0, "y": 3, "z": 1 }
+        ],
+        "loops": [
+          [
+            { "x": 0, "y": 0, "z": 1 },
+            { "x": 3, "y": 0, "z": 1 },
+            { "x": 0, "y": 3, "z": 1 }
+          ]
+        ],
+        "classification": "polygon",
+        "status": "approximate",
+        "label": "截面"
+      }
+    ],
+    "groups": [],
+    "constraints": [],
+    "dynamics": [],
+    "annotations": [],
+    "measurements": [],
+    "engineeringAnnotations": [],
+    "metadata": {
+      "id": "doc-reactive-section",
+      "name": "Reactive section",
+      "createdAt": "2026-09-21T00:00:00.000Z",
+      "updatedAt": "2026-09-21T00:00:00.000Z"
+    }
+  }
+}

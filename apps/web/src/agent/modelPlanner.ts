@@ -1,7 +1,5 @@
 import {
-  PLAN_SCHEMA_VERSION,
   createRecoveryController,
-  describeActions,
   isCapabilityVerified,
   parseModelEnvelope,
   planModelRequest,
@@ -27,6 +25,7 @@ import {
 } from "../services/providerProfileClient"
 import { invokeDesktop } from "../services/desktopRuntime"
 import { cancelModelRun, startModelRun, type ModelClientStart } from "../services/modelClient"
+import { buildSystemPrompt } from "./systemPrompt"
 
 /**
  * **模型规划器**（Task 2.3 的 Step 6 + G2 接线的核心）。
@@ -205,101 +204,27 @@ export const PLAN_TOOL_SCHEMA = {
   }
 }
 
-const MAX_PROMPT_FACTS = 12
-const MAX_PROMPT_REFS = 16
+/**
+ * 规划阶段工具表里的计划工具 id（`toolRegistry` 的命名是点号形式）。
+ * 提示词里"这一轮能不能出计划"的判据就是它有没有出现在 `request.model.tools` 里 ——
+ * 与"模型真的调用了那个工具"那一侧的检查用的是同一个常量。
+ */const PLAN_TOOL_ID = "plan.set_plan"
 
 /**
- * 把上下文**序列化成模型能读的一段 JSON**。
+ * 组装这一轮要说的话（Agent DSL 切片 Task 5）。
  *
- * 两点刻意：
- * - **不给哈希**：模型不能引用版本，`contentHash` / `epoch` 对它没有用处，只会占字符。
- *   引用能用的部分（`documentId` / `entityId` / `label`）都在，因为"对象引用必须带
- *   documentId"是一条硬要求。
- * - **上限在这里再收一次**：`buildContext` 已经收过，但它是"上游给了多少"，
- *   而这里是"发出去多少" —— 两处的预算含义不同，所以不是重复。
- */
-function sceneSnapshot(context: ModelContext): string {
-  return JSON.stringify({
-    preamble: context.preamble,
-    workspace: context.workspace,
-    target: { documentId: context.handles.target.documentId, workspace: context.handles.target.workspace, generation: context.handles.target.generation },
-    sources: context.handles.sources.map((source) => ({ documentId: source.documentId, workspace: source.workspace })),
-    facts: context.facts.slice(0, MAX_PROMPT_FACTS).map((fact) => ({ id: fact.id, text: fact.text, origin: fact.origin })),
-    selectedRefs: context.selectedRefs.slice(0, MAX_PROMPT_REFS).map((ref) => ({ documentId: ref.documentId, entityId: ref.entityId, label: ref.label })),
-    skills: context.skills.map((skill) => ({ id: skill.id, title: skill.title })),
-    warnings: context.warnings.map((warning) => ({ code: warning.code, detail: warning.detail }))
-  })
-}
-
-/** 通道建议。**必须与解析器用的是同一个通道值**，所以它按参数给，不按"猜"。 */
-function channelAdvice(channel: ModelChannel): string {
-  if (channel === "native_tools") {
-    return `用工具 \`${PLAN_TOOL_NAME}\` 回答：把计划放在它的 arguments 里（arguments 就是一个计划信封）。这一轮**不要**用普通文本回答。`
-  }
-  return channel === "strict_json"
-    ? "整段回复必须**就是**一个 JSON 对象：不要用代码围栏，也不要在前后添加任何文字。"
-    : "如果要包代码围栏，请只包一层 ```json，且围栏内只有这个 JSON；围栏之外不要有别的字。"
-}
-
-/**
- * 组装这一轮要说的话。
- *
- * `tools` 的用处是**这一阶段允许做什么**：`plan.set_plan` 在表里才允许返回 `kind:"plan"`。
- * 这是 `PlanRequest.model.tools` 真正的落点 —— 它不该只是"声明了没用"的字段。
+ * 提示词本体搬去了 `systemPrompt.ts`（有版本号、策略与场景分开注入）。
+ * 这一层只剩**接线**：把上下文、通道、能不能出计划、以及这次修复提示一起交过去。
  */
 function buildMessages(request: { userMessage: string; model: { context: ModelContext; tools: readonly { id: string }[] }; repair?: { reason: string; errors: readonly { code: string; path: string; detail: string }[]; hint: string } }, channel: ModelChannel): ChatMessage[] {
-  const context = request.model.context
-  const canPlan = request.model.tools.some((tool) => tool.id === "plan.set_plan")
-  const shapes: string[] = []
-  if (canPlan) {
-    shapes.push(`计划：${JSON.stringify({ schemaVersion: PLAN_SCHEMA_VERSION, kind: "plan", goal: "一句话说清这次要做什么", factIds: [], assumptions: [], actions: [{ actionId: "从下面的动作菜单里选", actionKey: "本次运行内唯一的名字", factIds: [], inputs: {} }] })}`)
-  }
-  shapes.push(`提问（信息不足时用它，不要编数值）：${JSON.stringify({ schemaVersion: PLAN_SCHEMA_VERSION, kind: "clarification", goal: "一句话", factIds: [], questions: ["一个具体的、用户能回答的问题"] })}`)
-  shapes.push(`只读回答（不改文档时用它）：${JSON.stringify({ schemaVersion: PLAN_SCHEMA_VERSION, kind: "answer", goal: "一句话", factIds: [], answer: "回答本身", toolResultRefs: [] })}`)
-
-  const sections = [
-    "你是 MathCanvas 的构图助手。你只能返回一个 JSON 对象；系统会校验它，然后编译成动作、生成隔离草稿、等用户确认之后才可能落盘。",
-    canPlan
-      ? "你不能自己提交：写入必须由用户在看到预览后确认。"
-      : "这一阶段**不允许**返回计划：你只能提问或作答。",
-    "",
-    "## 输出形状（多一个字段都会被拒绝）",
-    channelAdvice(channel),
-    ...shapes,
-    "",
-    "## 本轮允许的动作（`actionId` 只能从这里选）",
-    ...(context.availableActions.length > 0 ? context.availableActions.map((action) => `- ${action}`) : ["（这一轮没有任何可用动作：只能提问或作答）"]),
-    "",
-    "### 每个动作的 inputs 只能有下面这些字段（`alias` 是新对象的别名）",
-    // 这一节由**动作登记表**生成（`describeActions`），而不是手写 —— 校验读的是同一张表，
-    // 两处各写一份必然分叉，而分叉的表现是"模型按提示词填了、校验却拒了"。
-    ...describeActions(context.availableActions).slice(0, 8).map((action) => {
-      const enums = Object.entries(action.enums).map(([field, values]) => `${field} 只能取 ${values.join(" | ")}`).join("；")
-      return `- ${action.actionId}：${action.inputs.join(", ")}${enums.length > 0 ? ` · **${enums}**` : ""}`
-    }),
-    "坐标一律写成 `{ \"x\": 数, \"y\": 数, \"z\": 数 }`（平面动作只用 x/y）。",
-    "",
-    "## 本轮场景（JSON）",
-    sceneSnapshot(context),
-    "",
-    "对象引用必须带 documentId；不要凭标签猜对象，标签可能重复。",
-    "",
-    "## 先做，别反问（2026-09-21 按一次真实运行改）",
-    "能作图就作图：像「建一个棱长 3 的立方体」这样的要求**已经足够** —— 位置、朝向这类没说的细节取**常见默认值**",
-    "（放在原点、轴对齐、底面落在地面上），并把每一条默认写进 `assumptions`。",
-    "`assumptions` 是给用户看的（他会看到「底面落在地面上」这类话），所以用一句人话写，最多 4 条。",
-    "**只有缺关键数值**（用户没说、也没有常见默认，例如「画一个圆」而没说半径）时才返回 `clarification`，",
-    "而且问题要具体到能直接回答。第一次真实运行就是栽在这里：模型对「建一个棱长 3 的立方体」反问了两个问题，",
-    "而那条要求其实已经足够作图。"
-  ]
-  if (request.repair) {
-    // 一次性修复机会：给**字段路径 + 原因**，并且**不回显**模型上一轮的原话
-    //（回显会把它的散文再送回去，形成自我强化的循环）。
-    sections.push("", "## 上一轮的输出没有被接受", request.repair.hint)
-  }
-
-  const messages: ChatMessage[] = [{ role: "system", content: sections.join("\n") }, { role: "user", content: request.userMessage }]
-  return messages
+  const canPlan = request.model.tools.some((tool) => tool.id === PLAN_TOOL_ID)
+  const prompt = buildSystemPrompt({
+    context: request.model.context,
+    channel,
+    canPlan,
+    ...(request.repair === undefined ? {} : { repair: request.repair })
+  })
+  return [{ role: "system", content: prompt.content }, { role: "user", content: request.userMessage }]
 }
 
 /**
@@ -450,8 +375,14 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
            * 就是一个计划信封。所以"模型调用了它"这件事，与文本通道里"回了一段 JSON"
            * 是同一个决定，只是承载方式不同 —— 这里把它原样交给协调器校验
            *（**在这里不校验**：`parsePlanEnvelope` 是协调器的职责，它掌握修复通道）。
+           *
+           * 判据比"名字对不对"更严一层（Agent DSL 切片 Task 5）：**这个工具必须真的
+           * 在这次的请求里**。协调器按阶段发布工具（观察阶段连计划工具都没有），
+           * 所以"模型调用了我们这一轮没发的工具"必须被如实拒绝 ——
+           * 静默接受等于让阶段边界失效，静默忽略又会让用户以为模型做了些什么。
            */
-          if (channel === "native_tools" && toolCall.toolId === PLAN_TOOL_NAME) {
+          const planToolWasOffered = request.model.tools.some((tool) => tool.id === PLAN_TOOL_ID)
+          if (channel === "native_tools" && toolCall.toolId === PLAN_TOOL_NAME && planToolWasOffered) {
             return { plan: toolCall.input as PlanEnvelope, ...ids }
           }
           // 其余情况一律拒绝：我们**没有**发过那个工具，静默忽略它等于把

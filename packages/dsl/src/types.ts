@@ -25,12 +25,16 @@ export type Point3Binding =
   /**
    * 绑到一维宿主（直线 / 线段 / 射线 / 棱）：`parameter` 是该宿主的**自然参数**
    * （线段与棱是 [0,1]、射线是 [0,∞)、直线无界）。坐标由参数算出，不单独存储。
+   *
+   * `parameterId` 给定时以那个**文档参数**为真值（滑块、动画、轨迹扫描都能驱动它），
+   * `parameter` 退化成缓存 —— 与 `PointBinding.onPath` 的 `parameterId` 是同一套语义
+   * （设计规格 §4.1：参数是独立真源，坐标由 `parameter -> constraint evaluator -> position` 得到）。
    */
-  | { kind: "onHost"; hostId: string; parameter: number }
+  | { kind: "onHost"; hostId: string; parameter: number; parameterId?: string }
   /** 绑到一个面（`face3`）：`uv` 是该面自身平面内的直角坐标（环外会被夹回边界）。 */
-  | { kind: "onFace"; faceId: string; uv: [number, number] }
+  | { kind: "onFace"; faceId: string; uv: [number, number]; parameterIds?: [string, string] }
   /** 绑到圆柱 / 圆锥的**侧面**：`uv` 是 (方位角, 轴向比例)，轴线沿世界 +Z。 */
-  | { kind: "onSurface"; solidId: string; uv: [number, number] }
+  | { kind: "onSurface"; solidId: string; uv: [number, number]; parameterIds?: [string, string] }
   /**
    * 绑到一个**实体的内部**（用户要求："动点的约束应该可以在立方体内"）。
    *
@@ -38,7 +42,7 @@ export type Point3Binding =
    * 参数越界时被夹回实体表面。与线上 / 面上 / 曲面上的绑定一样，**参数是唯一真值**：
    * 实体平移或缩放时参数不变、坐标跟着走。
    */
-  | { kind: "inSolid"; solidId: string; uvw: [number, number, number] }
+  | { kind: "inSolid"; solidId: string; uvw: [number, number, number]; parameterIds?: [string, string, string] }
 
 export interface PrimitiveStyle {
   stroke?: string
@@ -198,6 +202,24 @@ export interface Face3Primitive extends PrimitivePresentation {
   planeId?: string
 }
 
+/**
+ * 棱柱的**构造描述**（设计规格 §3.2/§3.3）。
+ *
+ * `polygon` 是底面的有序世界坐标顶点 `B0…Bn-1`，`vector` 是拉伸向量 `v`；顶面与侧面是
+ * **确定性派生**的（`Ti = Bi + v`、侧面 `[Bi, B(i+1), T(i+1), Ti]`），不单独存出来。
+ * 构造描述是**真源**，物化出来的顶点 / 棱 / 面是缓存下来的几何事实（规格 §1.2），
+ * 所以重新计算永远从这份描述出发、结果不会随重算次数漂移。
+ *
+ * 为什么底面存**三维世界坐标**而不是"平面 + 二维多边形"：二维写法还得先把点抬到平面上，
+ * 那份抬升规则会成为**第二份**几何真源（渲染用一份、重算用一份必然分叉）。规格 §3.2 里
+ * 平面只是题目给的输入形式，落到文档里的是已经定好位的三维顶点。
+ */
+export interface PrismConstruction {
+  kind: "prism"
+  base: { polygon: Vector3[] }
+  vector: Vector3
+}
+
 export type SolidConstruction =
   | { kind: "template"; templateId: string; parameterIds?: string[]; sourceIds: string[] }
   | { kind: "fromPoints"; sourceIds: string[] }
@@ -209,6 +231,20 @@ export type SolidConstruction =
    * 那个实体就会从截面 / 交线 / 交面里静默消失（实测缺陷）。
    */
   | { kind: "fromFaces"; sourceIds: string[]; sourceId?: string }
+  | PrismConstruction
+
+/**
+ * **派生立体算法**的统一返回（设计规格 §3.1）。
+ *
+ * 四个状态必须**保持可区分**：`exact` 是闭式解，`approximate` 一定带残差（不许冒充精确），
+ * `undefined`（一般多面体的外接球 / 内切球不存在或残差不过关）与 `degenerate`（输入本身退化）
+ * 都不带值。把它们折叠成"没有结果"就等于允许近似冒充精确（规格 §10 明确禁止）。
+ */
+export type DerivedSolidResult<T> =
+  | { status: "exact"; value: T }
+  | { status: "undefined"; reason: string }
+  | { status: "degenerate"; reason: string }
+  | { status: "approximate"; value: T; residual: number }
 
 export interface Polyhedron3Primitive extends PrimitivePresentation {
   id: string
@@ -686,10 +722,16 @@ export interface IntersectionPoint3Primitive extends PrimitivePresentation {
  *
  * `radius` 字段仍然是圆的**派生缓存**：重算时按这条规则写回去，于是渲染、求交、测量全都无需改动。
  */
-export interface CircleRadiusRule {
-  pointId: string
-  factor: number
-}
+export type CircleRadiusRule =
+  | { kind?: "distance"; pointId: string; factor: number }
+  /**
+   * **半径由三角形算出来**（设计规格 §4.3）：`inradius` 是内切圆半径、`circumradius` 是外接圆半径。
+   *
+   * 圆心也跟着那个三角形走（内切圆取内心、外接圆取外心），所以 `center` / `radius` 两个字段都只是
+   * 派生缓存 —— 文档里不存手抄的数字，顶点一动圆就跟着重算（Reactive DAG 的三角形中心节点
+   * 与这条规则是同一份几何）。
+   */
+  | { kind: "triangle"; triangleIds: [string, string, string]; metric: "inradius" | "circumradius" }
 
 export interface CirclePrimitive extends PrimitivePresentation {
   id: string

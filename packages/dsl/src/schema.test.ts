@@ -1,6 +1,41 @@
 import { describe, expect, it } from "vitest"
 import { createDefaultCadLayout, createEmptyDocument, validateDocument } from "./index"
 
+/**
+ * 一只**拓扑已经合法**的四面体文档（`solid-1` 的构造按参数替换）。
+ *
+ * 棱柱的断言要落在"构造描述"上，而拓扑那几条（顶点 / 棱 / 面引用、闭合边界）与它无关；
+ * 共用这一份夹具之后，构造成立与否是唯一变量。
+ */
+function prismDocument(construction: unknown, options?: Parameters<typeof validateDocument>[1]) {
+  const document = createEmptyDocument("geometry3d")
+  document.primitives = [
+    { id: "point-a", type: "point3", position: { x: 0, y: 0, z: 0 } },
+    { id: "point-b", type: "point3", position: { x: 1, y: 0, z: 0 } },
+    { id: "point-c", type: "point3", position: { x: 0, y: 1, z: 0 } },
+    { id: "point-d", type: "point3", position: { x: 0, y: 0, z: 1 } },
+    { id: "edge-ab", type: "edge3", pointIds: ["point-a", "point-b"] },
+    { id: "edge-ac", type: "edge3", pointIds: ["point-a", "point-c"] },
+    { id: "edge-ad", type: "edge3", pointIds: ["point-a", "point-d"] },
+    { id: "edge-bc", type: "edge3", pointIds: ["point-b", "point-c"] },
+    { id: "edge-bd", type: "edge3", pointIds: ["point-b", "point-d"] },
+    { id: "edge-cd", type: "edge3", pointIds: ["point-c", "point-d"] },
+    { id: "face-abc", type: "face3", pointIds: ["point-a", "point-b", "point-c"], edgeIds: ["edge-ab", "edge-bc", "edge-ac"] },
+    { id: "face-abd", type: "face3", pointIds: ["point-a", "point-b", "point-d"], edgeIds: ["edge-ab", "edge-bd", "edge-ad"] },
+    { id: "face-acd", type: "face3", pointIds: ["point-a", "point-c", "point-d"], edgeIds: ["edge-ac", "edge-cd", "edge-ad"] },
+    { id: "face-bcd", type: "face3", pointIds: ["point-b", "point-c", "point-d"], edgeIds: ["edge-bc", "edge-cd", "edge-bd"] },
+    {
+      id: "solid-1",
+      type: "polyhedron3",
+      vertexIds: ["point-a", "point-b", "point-c", "point-d"],
+      edgeIds: ["edge-ab", "edge-ac", "edge-ad", "edge-bc", "edge-bd", "edge-cd"],
+      faceIds: ["face-abc", "face-abd", "face-acd", "face-bcd"],
+      construction: construction as never
+    }
+  ]
+  return validateDocument(document, options)
+}
+
 describe("Geometry DSL document layout schema", () => {
   /**
    * 抛物线与双曲线的绑定参数是无界的轴向参数，所以绑定要自带一个递增的有限 `domain` 作为扫描窗口。
@@ -26,6 +61,97 @@ describe("Geometry DSL document layout schema", () => {
     }
     expect(build({ kind: "onPath", pathId: "hyperbola-1", parameter: 0, branch: 2 }).valid).toBe(false)
     expect(build({ kind: "onPath", pathId: "hyperbola-1", parameter: 0, branch: -1 }).valid).toBe(false)
+  })
+
+  /**
+   * **斜棱柱的构造描述**（Solid/Prism 切片 Task 1）。
+   *
+   * 设计规格 §3.2 的口径："多边形至少三个点、无自交、底面点共面、向量有限且非零"。
+   * 这一层只钉**字段与数值**那几条（点数、有限性、非零向量）：
+   * 自交 / 共面 / 面积这类**几何语义**由确定性 evaluator（`@draw/geometry-kernel` 的
+   * `validatePrismInput`）负责，schema 不实现第二份会与它分叉的判据（规格 §6.2）。
+   */
+  /**
+   * **规格 §3.2 的输入形式必须被接受**（Fix round 2 / I6 + Deviation 5）。
+   *
+   * 规格给的例子是 `base.plane` + **二维** `{x,y}` 多边形点。之前 schema 只认三维点，
+   * 于是"照规格写出来的文档"**打不开** —— 这不是少一个功能，是规格自己的例子非法。
+   * 现在两种输入形式都收：二维形式由 codec 在解析边界抬到世界顶点（存储形式不变）。
+   *
+   * 这一层只做**形状**校验；自交 / 共面这类几何语义由内核的 `validatePrismInput` 负责，
+   * 经 `prismConstructionValidator` 钩子接进来（规格 §6.2：schema 不重复实现几何语义）。
+   */
+  it("accepts the spec's plane + 2-D polygon input form and still rejects malformed ones", () => {
+    const plane = { origin: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 0, z: 1 } }
+    const polygon2d = [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 5, y: 2 }, { x: 1, y: 2 }]
+    const vector = { x: 1, y: 0.5, z: 3 }
+
+    const build = (construction: unknown) => prismDocument(construction)
+    // 规格 §3.2 的形式：2-D 点 + 平面。
+    expect(build({ kind: "prism", base: { plane, polygon: polygon2d }, vector }).valid).toBe(true)
+    // 存储形式（世界顶点）照旧。
+    expect(build({ kind: "prism", base: { polygon: polygon2d.map((point) => ({ x: point.x, y: point.y, z: 0 })) }, vector }).valid).toBe(true)
+
+    for (const bad of [
+      // 平面缺法向 / 法向为零
+      { kind: "prism", base: { plane: { origin: { x: 0, y: 0, z: 0 } }, polygon: polygon2d }, vector },
+      { kind: "prism", base: { plane: { origin: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 0, z: 0 } }, polygon: polygon2d }, vector },
+      // 2-D 点里混进非有限数
+      { kind: "prism", base: { plane, polygon: [...polygon2d.slice(0, 3), { x: 1, y: Number.NaN }] }, vector },
+      // 少于三个点
+      { kind: "prism", base: { plane, polygon: polygon2d.slice(0, 2) }, vector },
+      // 点既不是合法的三维坐标、也不是合法的二维坐标
+      { kind: "prism", base: { plane, polygon: [...polygon2d.slice(0, 3), { x: 1 }] }, vector }
+    ]) {
+      const result = build(bad)
+      expect(result.valid).toBe(false)
+      if (!result.valid) expect(result.errors.join(" ")).toContain("prism")
+    }
+  })
+
+  /**
+   * **几何语义经钩子在文档校验期执行**（Fix round 2 / I6）。
+   *
+   * `@draw/dsl` 不能依赖 `@draw/geometry-kernel`（内核依赖 DSL，反向导入会成环），
+   * 所以 schema 不自己实现"共面 / 自交"，而是让调用方把内核的那份判据**注入**进来；
+   * 这样导入路径（`decodeMgeo`）与创建路径用的是同一个判据，不会分叉。
+   */
+  it("runs an injected prism semantics check and reports it against the solid", () => {
+    const construction = { kind: "prism", base: { polygon: [{ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }] }, vector: { x: 0, y: 0, z: 1 } }
+
+    expect(prismDocument(construction).valid).toBe(true)
+
+    const strict = prismDocument(construction, { prismConstructionValidator: () => ["底面多边形自交。"] })
+    expect(strict.valid).toBe(false)
+    if (!strict.valid) expect(strict.errors).toContain("solid-1 prism base is invalid: 底面多边形自交。")
+  })
+
+  it("validates the construction descriptor of a prism solid", () => {
+    const base = [{ x: 0, y: 0, z: 0 }, { x: 4, y: 0, z: 0 }, { x: 4, y: 3, z: 0 }]
+    const vector = { x: 1, y: 0.5, z: 3 }
+
+    const build = (construction: unknown) => prismDocument(construction)
+
+    expect(build({ kind: "prism", base: { polygon: base }, vector }).valid).toBe(true)
+
+    // 向量必须有限且非零：零向量拉伸出来的"棱柱"是退化的。
+    for (const bad of [{ x: 0, y: 0, z: 0 }, { x: 1, y: Number.NaN, z: 0 }, { x: 0, y: 0 }, { x: 0, y: 1, z: Number.POSITIVE_INFINITY }]) {
+      const result = build({ kind: "prism", base: { polygon: base }, vector: bad })
+      expect(result.valid).toBe(false)
+      if (!result.valid) expect(result.errors).toContain("polyhedron3 prism construction is invalid")
+    }
+
+    // 底面至少三个点，且每个点必须是有限的空间坐标。
+    for (const polygon of [[], [{ x: 0, y: 0, z: 0 }], [{ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }], [...base, { x: 1, y: 1, z: Number.NaN }], "polygon"]) {
+      const result = build({ kind: "prism", base: { polygon }, vector })
+      expect(result.valid).toBe(false)
+      if (!result.valid) expect(result.errors).toContain("polyhedron3 prism construction is invalid")
+    }
+
+    // `base` 只认多边形：缺 base、缺 polygon 都要拒绝，而不是当成"空底面"放过。
+    for (const construction of [{ kind: "prism", vector }, { kind: "prism", base: {}, vector }, { kind: "prism", base: { polygon: base } }]) {
+      expect(build(construction).valid).toBe(false)
+    }
   })
 
   it("rejects duplicate layer, sheet, and view IDs", () => {
@@ -376,5 +502,34 @@ describe("Geometry DSL document layout schema", () => {
     // 名单之外的名字仍然要被拒绝（这条名单不是"什么都收"）。
     const bogus = validateDocument({ ...withMeasurements, measurements: [{ ...withMeasurements.measurements[0], metric: "circumference" }] })
     expect(bogus.valid).toBe(false)
+  })
+
+  /**
+   * **平面点的 `parameterId` 必须指向真实存在的参数**（Agent DSL 切片 Task 1，规格 §4.1）。
+   *
+   * 空间点（`point3`）的宿主绑定早就检查了这一条（见 `onHost` / `onFace` / `onSurface` / `inSolid`
+   * 那几行），理由是"悬空引用会让点**静默冻住**，而文档依然能保存"。平面点的 `onPath`
+   * 绑定可以同样由文档参数驱动（符号参数 θ 驱动圆周动点，规格 §8.2），但那条检查一直没有 ——
+   * 于是同样的悬空引用在平面侧只是被静默接受。
+   */
+  it("rejects a path-bound point whose parameter reference does not exist", () => {
+    const build = (binding: unknown, parameters: Record<string, unknown> = {}) => {
+      const document = createEmptyDocument("conics")
+      document.parameters = parameters as never
+      document.primitives = [
+        { id: "circle-1", type: "circle", center: { x: 0, y: 0 }, radius: 3 },
+        { id: "point-1", type: "point", x: 3, y: 0, binding: binding as never }
+      ]
+      return validateDocument(document)
+    }
+
+    // 参数存在 → 绑定成立（符号参数驱动的动点）。
+    expect(build({ kind: "onPath", pathId: "circle-1", parameter: 0.4, parameterId: "theta" }, { theta: { id: "theta", value: 0.4 } }).valid).toBe(true)
+    // 参数不存在 → 悬空引用必须被拒（否则点会静默冻在最后一次算出的位置）。
+    const dangling = build({ kind: "onPath", pathId: "circle-1", parameter: 0.4, parameterId: "theta" })
+    expect(dangling.valid).toBe(false)
+    if (!dangling.valid) expect(dangling.errors.join(" ")).toContain("parameter")
+    // 非字符串同拒。
+    expect(build({ kind: "onPath", pathId: "circle-1", parameter: 0.4, parameterId: 7 }).valid).toBe(false)
   })
 })

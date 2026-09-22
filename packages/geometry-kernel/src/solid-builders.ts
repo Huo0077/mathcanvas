@@ -142,11 +142,39 @@ function edgeKey(firstIndex: number, secondIndex: number): string {
   return [Math.min(firstIndex, secondIndex), Math.max(firstIndex, secondIndex)].join(":")
 }
 
+/**
+ * 多边形所在平面的**稳健法向**（未单位化）。
+ *
+ * 不能只看前三个点：边上多带一个**共线点**的多边形很常见（`(0,0,0),(1,0,0),(2,0,0),…`），
+ * 那时 `cross(p1-p0, p2-p0)` 是零向量，投影轴会塌成"丢掉 x 轴"，水平底面于是被压成一条线，
+ * 自交判定把它误报成"自交"（评审 I2；`prism.ts` 里同一个修法）。
+ */
+function polygonNormal(points: Vector3[]): Vector3 {
+  for (let second = 1; second < points.length; second += 1) {
+    for (let third = second + 1; third < points.length; third += 1) {
+      const normal = crossVector3(subtractVector3(points[second], points[0]), subtractVector3(points[third], points[0]))
+      if (isNonZeroVector(normal)) return normal
+    }
+  }
+  return { x: 0, y: 0, z: 0 }
+}
+
 function projectedFacePoints(points: Vector3[]): Array<{ x: number; y: number }> {
-  const normal = crossVector3(subtractVector3(points[1], points[0]), subtractVector3(points[2], points[0]))
+  const normal = polygonNormal(points)
   const absolute = { x: Math.abs(normal.x), y: Math.abs(normal.y), z: Math.abs(normal.z) }
-  if (absolute.x >= absolute.y && absolute.x >= absolute.z) return points.map((point) => ({ x: point.y, y: point.z }))
-  if (absolute.y >= absolute.z) return points.map((point) => ({ x: point.x, y: point.z }))
+  if (absolute.x > 0 || absolute.y > 0 || absolute.z > 0) {
+    if (absolute.x >= absolute.y && absolute.x >= absolute.z) return points.map((point) => ({ x: point.y, y: point.z }))
+    if (absolute.y >= absolute.z) return points.map((point) => ({ x: point.x, y: point.z }))
+    return points.map((point) => ({ x: point.x, y: point.y }))
+  }
+  // 法向退化（全部共线）时按最大坐标跨度选视图，绝不把多边形压成一条线。
+  const spread = points.reduce((span, point) => ({
+    x: Math.max(span.x, Math.abs(point.x)),
+    y: Math.max(span.y, Math.abs(point.y)),
+    z: Math.max(span.z, Math.abs(point.z))
+  }), { x: 0, y: 0, z: 0 })
+  if (spread.x <= spread.y && spread.x <= spread.z) return points.map((point) => ({ x: point.y, y: point.z }))
+  if (spread.y <= spread.z) return points.map((point) => ({ x: point.x, y: point.z }))
   return points.map((point) => ({ x: point.x, y: point.y }))
 }
 
@@ -441,6 +469,23 @@ export function templatePointLabel(index: number): string {
 /** 模板棱的自动标签（`棱 1` 起）。与 `templatePointLabel` 同理：迁移靠它区分自动标签与用户改名。 */
 export function templateEdgeLabel(index: number): string {
   return `棱 ${index + 1}`
+}
+
+/**
+ * **棱柱**子对象的自动标签（Fix round 2 / M5）。
+ *
+ * 为什么与模板分开：`templatePointLabel` 的 `A…Z` 是**模板迁移**的判据
+ * （`solidTemplates.ts` 的 `realignTemplateChildren` 按它决定"这个名字是不是自动生成的，
+ * 可以跟着新拓扑重编"）。棱柱的标签如果长得一模一样，两族对象在文档里就分不出来，
+ * 将来哪一边改迁移规则都会误伤另一边。棱柱给 `P1…` 与 `棱柱棱 1…`，与模板的 `A…` / `棱 1…` 明确区分。
+ */
+export function prismPointLabel(index: number): string {
+  return `P${index + 1}`
+}
+
+/** 棱柱子对象的棱标签：见 `prismPointLabel`。 */
+export function prismEdgeLabel(index: number): string {
+  return `棱柱棱 ${index + 1}`
 }
 
 /**

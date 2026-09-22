@@ -1,5 +1,5 @@
 import type { GeometryDocument, PrimitiveSpec } from "@draw/dsl"
-import { getDependencyIndex } from "@draw/scene-graph"
+import { getDependencyIndex, isSourceIdConstruction } from "@draw/scene-graph"
 
 /**
  * 内容签名：决定"这个场景对象要不要重建"。
@@ -70,7 +70,9 @@ export function createContentSigner(document: GeometryDocument): ContentSigner {
     const cached = topologyCache.get(sourceId)
     if (cached !== undefined) return cached
     const value = document.primitives
-      .filter((primitive) => primitive.type === "polyhedron3" && primitive.construction?.sourceIds.includes(sourceId))
+      // 棱柱的构造没有 `sourceIds`（来源是自带的底面多边形与向量）：`isSourceIdConstruction` 收窄之后
+      // 才能安全读它，否则 `solid.create_prism` 建出来的实体在算"这条拓扑属于哪个来源"时类型就不成立。
+      .filter((primitive) => primitive.type === "polyhedron3" && isSourceIdConstruction(primitive.construction) && primitive.construction.sourceIds.includes(sourceId))
       .map((primitive: PrimitiveSpec) => jsonOf(primitive.id) + closureOf(primitive.id))
       .join("")
     topologyCache.set(sourceId, value)

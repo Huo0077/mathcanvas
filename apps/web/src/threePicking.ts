@@ -84,18 +84,27 @@ export function pickRaycastHit3(scene: THREE.Scene, camera: THREE.Camera, normal
 }
 
 /**
+ * Which **user-level object** a raycast hit on generated topology belongs to.
+ *
  * A template solid (cube/pyramid/cylinder/cone) is never drawn as its own object: the scene shows the
  * point/edge/face children generated from it. Those generated edges and faces are display-only, so a raycast
  * hit on one of them belongs to the owning solid — otherwise the solid could not be clicked at all once its
  * post-creation selection is lost, which makes it look permanently frozen. Generated vertices are deliberately
  * left out: clicking a vertex selects the point, because moving points is how a template solid becomes
  * point-driven.
+ *
+ * **A prism is the other way round**: the `polyhedron3` *is* the object the user created (the construction
+ * descriptor lives on it, spec §3.3), and the vertices/edges/faces are its derived topology. So a hit on one of
+ * those children must resolve to the solid itself. It is not cosmetic: free dragging only moves the hit
+ * object's dependency family, so resolving a prism hit to a child face would carry that face's four vertices
+ * and leave the other four behind — the prism would be torn apart on screen.
  */
 export function templateTopologyOwners(document: GeometryDocument): Map<string, string> {
   const owners = new Map<string, string>()
   for (const primitive of document.primitives) {
-    if (primitive.type !== "polyhedron3" || primitive.construction?.kind !== "template") continue
-    const ownerId = primitive.construction.sourceIds[0]
+    if (primitive.type !== "polyhedron3") continue
+    const construction = primitive.construction
+    const ownerId = construction?.kind === "template" ? construction.sourceIds[0] : construction?.kind === "prism" ? primitive.id : undefined
     if (!ownerId) continue
     for (const childId of [...primitive.edgeIds, ...primitive.faceIds]) owners.set(childId, ownerId)
   }

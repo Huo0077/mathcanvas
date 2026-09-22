@@ -1,5 +1,6 @@
-import { PLAN_SCHEMA_VERSION, type DraftAction, type ParseError, type ParseResult, type PlanEnvelope } from "./contracts"
+import { PLAN_SCHEMA_VERSION, MAX_REPAIR_ATTEMPTS, type DraftAction, type ParseError, type ParseResult, type PlanDefaultPolicy, type PlanEnvelope, type RepairRequest } from "./contracts"
 import type { DraftActionId } from "@draw/scene-graph"
+import { DEFAULT_CENTER_2D, DEFAULT_DYNAMIC_POINT_PARAMETER, DEFAULT_ORIGIN_3D, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SPAN, DEFAULT_SLOPE, DEFAULT_SOLID_HEIGHT, DEFAULT_SOLID_SIZE, defaultPrismBasePolygon, defaultPrismVector } from "./localPlanDefaults"
 /**
  * 运行时 schema 校验与确定性 ID / 哈希（计划 Task 0.2）。
  *
@@ -95,6 +96,24 @@ function readVector3(value: unknown, path: string, errors: ParseError[]): { x: n
   return x === null || y === null || z === null ? null : { x, y, z }
 }
 
+/** 平面坐标（圆锥曲线用）。与 `readVector3` 同一套判据，只是少一个 z。 */
+function readPoint2(value: unknown, path: string, errors: ParseError[]): { x: number; y: number } | null {
+  if (!isPlainObject(value)) {
+    errors.push(fail("invalid_type", path, "expected an object"))
+    return null
+  }
+  rejectUnknownFields(value, ["x", "y"], path, errors)
+  const x = finiteNumber(value.x, `${path}.x`, errors)
+  const y = finiteNumber(value.y, `${path}.y`, errors)
+  return x === null || y === null ? null : { x, y }
+}
+
+/** 可选字段的有限数：**缺省不等于 0**（默认策略在审计那一层决定回填什么）。 */
+function optionalFiniteNumber(value: unknown, path: string, errors: ParseError[]): number | null | undefined {
+  if (value === undefined) return undefined
+  return finiteNumber(value, path, errors)
+}
+
 // ---------------------------------------------------------------- 作用域引用
 
 /**
@@ -168,10 +187,61 @@ interface ActionSpec {
    * 而模型没有任何办法知道该填什么。在提示词里手抄一份值域就是第二份真源，迟早与被校验的那份不一致。
    */
   enumValues?: Record<string, readonly string[]>
+  /**
+   * **没有它这个动作就不成立**的字段（规格 §6.3 的"显式约束"）。
+   *
+   * 缺了它**不等于**失败：审计会先看这个字段有没有安全默认（`defaults`），
+   * 有就回填并写进 `assumptions`，没有就走 `clarification` 问用户。
+   */
+  required?: readonly string[]
+  /**
+   * **字段缺失时的默认策略**（规格 §6.3）。
+   *
+   * 只登记"缺了会怎么办"的字段：没登记的字段一律是"可选字段，给了就用"
+   *（例如 `label`）—— 那不需要策略，也不需要用户回答。
+   */
+  defaults?: Record<string, FieldPolicy>
+}
+
+/**
+ * 一个字段的默认策略。`safe_default` 必须带 `reason`（那句话会进 `assumptions`，
+ * 用户据此知道系统替他定了什么），`ask_user` 必须带 `question`（具体到能直接回答）。
+ */
+export interface FieldPolicy {
+  policy: PlanDefaultPolicy
+  value?: unknown
+  reason?: string
+  question?: string
+  /** `infer_from_facts` 时从哪一类事实里读（`size` = 棱长/边长，`height` = 高度）。 */
+  infer?: "size" | "height" | "label" | "position"
+  /**
+   * **这条策略只对某些取值生效**（例如 `radiusX` 只对椭圆/双曲线有意义）。
+   *
+   * 少了它会出一个很糟的症状：给椭圆作计划时被问"抛物线的焦准距是多少？" ——
+   * 用户看得见的问题里混进了与本题无关的那一个，而这类噪声会让人不再读提问。
+   */
+  appliesWhen?: { field: string; in: readonly string[] }
+}
+
+/** 一条给模型/审计看的字段说明（**从登记表生成**，不手抄）。 */
+export interface ActionAuditDescription {
+  actionId: string
+  requiresAlias: boolean
+  inputs: readonly string[]
+  enums: Record<string, readonly string[]>
+  required: readonly string[]
+  defaults: readonly { field: string; policy: PlanDefaultPolicy; value?: unknown; reason?: string; question?: string; infer?: "size" | "height" | "label" | "position"; appliesWhen?: { field: string; in: readonly string[] } }[]
 }
 
 /** 空间模板的闭集。**只有一处**：下面那张登记表与运行期校验都读它。 */
 const SOLID_TEMPLATES = ["cube", "pyramid", "cylinder", "cone"] as const
+
+/** 平面圆锥曲线的闭集（规格 §8.2）。 */
+const CONIC_KINDS = ["ellipse", "parabola", "hyperbola"] as const
+
+/** 取原点这类"最小复杂度"默认；写成常量而不是每处 new 一个字面量。 */
+const CENTER_2D = { ...DEFAULT_CENTER_2D }
+const ORIGIN_3D = { ...DEFAULT_ORIGIN_3D }
 
 /**
  * **传输层的动作登记表**。
@@ -194,42 +264,268 @@ const SOLID_TEMPLATES = ["cube", "pyramid", "cylinder", "cone"] as const
  */
 const ACTIONS = {
   // --- 平面创建：输入形状见 `PlanarCreateAction`（points / center / radius / 角度） ---
-  "planar.create_point": { inputFields: ["alias", "points", "center", "radius", "startAngle", "endAngle", "label"], requiresAlias: true },
-  "planar.create_line": { inputFields: ["alias", "points", "center", "radius", "startAngle", "endAngle", "label"], requiresAlias: true },
-  "planar.create_segment": { inputFields: ["alias", "points", "center", "radius", "startAngle", "endAngle", "label"], requiresAlias: true },
-  "planar.create_ray": { inputFields: ["alias", "points", "center", "radius", "startAngle", "endAngle", "label"], requiresAlias: true },
-  "planar.create_polyline": { inputFields: ["alias", "points", "center", "radius", "startAngle", "endAngle", "label"], requiresAlias: true },
-  "planar.create_circle": { inputFields: ["alias", "points", "center", "radius", "startAngle", "endAngle", "label"], requiresAlias: true },
-  "planar.create_arc": { inputFields: ["alias", "points", "center", "radius", "startAngle", "endAngle", "label"], requiresAlias: true },
+  // 点的位置是**显式约束**：不给我就不该替用户挑一个坐标（欠定 ≠ 有安全默认）。
+  "planar.create_point": {
+    inputFields: ["alias", "points", "center", "radius", "startAngle", "endAngle", "label"],
+    requiresAlias: true,
+    required: ["points"],
+    defaults: { points: { policy: "ask_user", question: "这个点画在哪里？给一个坐标（x, y）。" } }
+  },
+  "planar.create_line": {
+    inputFields: ["alias", "points", "center", "radius", "startAngle", "endAngle", "label"],
+    requiresAlias: true,
+    required: ["points"],
+    defaults: { points: { policy: "ask_user", question: "这条线过哪两点？给两个坐标。" } }
+  },
+  "planar.create_segment": {
+    inputFields: ["alias", "points", "center", "radius", "startAngle", "endAngle", "label"],
+    requiresAlias: true,
+    required: ["points"],
+    defaults: { points: { policy: "ask_user", question: "这条线段的两个端点坐标是什么？" } }
+  },
+  "planar.create_ray": {
+    inputFields: ["alias", "points", "center", "radius", "startAngle", "endAngle", "label"],
+    requiresAlias: true,
+    required: ["points"],
+    defaults: { points: { policy: "ask_user", question: "这条射线的端点与方向上的一点分别在哪里？" } }
+  },
+  "planar.create_polyline": {
+    inputFields: ["alias", "points", "center", "radius", "startAngle", "endAngle", "label"],
+    requiresAlias: true,
+    required: ["points"],
+    defaults: { points: { policy: "ask_user", question: "这条折线依次经过哪些点？" } }
+  },
+  /**
+   * 圆的半径没有公认默认（单位圆是一种猜测，不是"安全"），所以缺半径就**问**。
+   * 圆心取原点是常见的默认（规格 §6.3 的"最小化复杂度"），但要写进 `assumptions`。
+   */
+  "planar.create_circle": {
+    inputFields: ["alias", "points", "center", "radius", "startAngle", "endAngle", "label"],
+    requiresAlias: true,
+    required: ["radius"],
+    defaults: {
+      center: { policy: "safe_default", value: CENTER_2D, reason: "圆心未指定，取原点。", },
+      radius: { policy: "ask_user", question: "圆的半径是多少？" }
+    }
+  },
+  "planar.create_arc": {
+    inputFields: ["alias", "points", "center", "radius", "startAngle", "endAngle", "label"],
+    requiresAlias: true,
+    required: ["radius", "startAngle", "endAngle"],
+    defaults: {
+      center: { policy: "safe_default", value: CENTER_2D, reason: "圆心未指定，取原点。" },
+      radius: { policy: "ask_user", question: "圆弧的半径是多少？" },
+      startAngle: { policy: "safe_default", value: 0, reason: "起始角未指定，取 0。" },
+      endAngle: { policy: "safe_default", value: Math.PI / 2, reason: "终止角未指定，取四分之一圆（π/2）。" }
+    }
+  },
+  /**
+   * 平面圆锥曲线（规格 §8.2）。中心取原点、轴向取 x 是安全默认；
+   * **半轴与焦准距不是** —— 猜错就等于换了题目里的一条曲线。
+   */
+  "planar.create_conic": {
+    inputFields: ["alias", "kind", "center", "radiusX", "radiusY", "vertex", "focalParameter", "axis", "rotation", "label"],
+    requiresAlias: true,
+    enumValues: { kind: CONIC_KINDS },
+    required: ["kind"],
+    defaults: {
+      center: { policy: "safe_default", value: CENTER_2D, reason: "圆锥曲线中心未指定，取原点。", appliesWhen: { field: "kind", in: ["ellipse", "hyperbola"] } },
+      vertex: { policy: "safe_default", value: CENTER_2D, reason: "抛物线顶点未指定，取原点。", appliesWhen: { field: "kind", in: ["parabola"] } },
+      axis: { policy: "safe_default", value: "x", reason: "圆锥曲线轴向未指定，取 x 轴。", appliesWhen: { field: "kind", in: ["parabola", "hyperbola"] } },
+      radiusX: { policy: "ask_user", question: "这条圆锥曲线的半轴长（x 方向）是多少？", appliesWhen: { field: "kind", in: ["ellipse", "hyperbola"] } },
+      radiusY: { policy: "ask_user", question: "这条圆锥曲线的半轴长（y 方向）是多少？", appliesWhen: { field: "kind", in: ["ellipse", "hyperbola"] } },
+      focalParameter: { policy: "ask_user", question: "抛物线的焦准距是多少？", appliesWhen: { field: "kind", in: ["parabola"] } }
+    }
+  },
 
   // --- 空间模板：字段须与 `SolidCreateTemplateAction` 一致（不能带 segments，动作层没有） ---
-  "solid.create_template": { inputFields: ["alias", "template", "origin", "size", "radius", "height", "label"], requiresAlias: true, enumValues: { template: SOLID_TEMPLATES } },
+  "solid.create_template": {
+    inputFields: ["alias", "template", "origin", "size", "radius", "height", "label"],
+    requiresAlias: true,
+    enumValues: { template: SOLID_TEMPLATES },
+    required: ["template"],
+    defaults: {
+      origin: { policy: "safe_default", value: ORIGIN_3D, reason: "实体位置未指定，放在原点。" },
+      size: { policy: "infer_from_facts", infer: "size", value: { x: DEFAULT_SOLID_SIZE, y: DEFAULT_SOLID_SIZE, z: DEFAULT_SOLID_SIZE }, reason: `棱长未指定：先从你的话里读，读不到取 ${DEFAULT_SOLID_SIZE}。`, appliesWhen: { field: "template", in: ["cube"] } },
+      height: { policy: "infer_from_facts", infer: "height", value: DEFAULT_SOLID_HEIGHT, reason: `高度未指定：先从你的话里读，读不到取 ${DEFAULT_SOLID_HEIGHT}。`, appliesWhen: { field: "template", in: ["cylinder", "cone"] } },
+      radius: { policy: "ask_user", question: "底面半径是多少？", appliesWhen: { field: "template", in: ["cylinder", "cone"] } }
+    }
+  },
+  /**
+   * 拉伸式棱柱（规格 §3.2/§3.3）：底面多边形 + 拉伸向量。
+   *
+   * 白名单里**没有** `faces`：侧面由内核按 `[Bi, B(i+1), T(i+1), Ti]` 生成，
+   * 传输层连这个字段都不接受，模型就没有"把散面拼成 Prism"的入口（规格 §7）。
+   */
+  "solid.create_prism": {
+    inputFields: ["alias", "basePolygon", "vector", "label"],
+    requiresAlias: true,
+    required: ["basePolygon", "vector"],
+    defaults: {
+      basePolygon: { policy: "safe_default", value: defaultPrismBasePolygon(DEFAULT_PRISM_SPAN), reason: `底面未指定，取边长 ${DEFAULT_PRISM_SPAN} 的正方形（规格 §6.3）。` },
+      vector: { policy: "safe_default", value: defaultPrismVector(DEFAULT_PRISM_HEIGHT), reason: `拉伸向量未指定，取高 ${DEFAULT_PRISM_HEIGHT} 的直棱柱（规格 §6.3）。` }
+    }
+  },
 
   // --- 动点 ---
   // 引用是两个**带 documentId** 的引用：跨文档绑定必须能说清是哪两份文档里的哪两个对象。
-  "dynamic.bind_point": { inputFields: ["target", "host", "parameter"], requiresAlias: false, requireReference: { field: "target", kind: "scoped" } },
+  "dynamic.bind_point": {
+    inputFields: ["target", "host", "parameter"],
+    requiresAlias: false,
+    requireReference: { field: "target", kind: "scoped" },
+    required: ["target", "host"],
+    defaults: { parameter: { policy: "safe_default", value: DEFAULT_DYNAMIC_POINT_PARAMETER, reason: `动点位置未指定，取参数 ${DEFAULT_DYNAMIC_POINT_PARAMETER}。` } }
+  },
+  /**
+   * 新建宿主驱动的动点：`hostSub` 指宿主内部第几条棱（规格 §3.3 的 `solidId:e{i}` 命名）。
+   *
+   * `parameter` 的默认是 **0.4**（规格 §6.3 的普通动点），而**中点由调用方显式给 0.5** ——
+   * 审计不许把显式约束覆盖成默认值（`parameterAudit.test.ts` 钉住这条）。
+   */
+  "dynamic.create_bound_point": {
+    inputFields: ["alias", "host", "hostSub", "parameter", "parameterId", "label"],
+    requiresAlias: true,
+    requireReference: { field: "host", kind: "scoped" },
+    required: ["alias", "host"],
+    defaults: {
+      host: { policy: "ask_user", question: "这个动点绑在哪个对象上？（曲线、棱或实体）" },
+      parameter: { policy: "safe_default", value: DEFAULT_DYNAMIC_POINT_PARAMETER, reason: `动点位置未指定，取参数 ${DEFAULT_DYNAMIC_POINT_PARAMETER}。` }
+    }
+  },
   // 这里是**同文档内的裸 id**（动作层用 `findPrimitive` 在目标文档里查），不是作用域引用。
-  "dynamic.bind_curve": { inputFields: ["target", "pathId", "parameter"], requiresAlias: false, requireReference: { field: "target", kind: "scoped" } },
-  "dynamic.create_locus": { inputFields: ["alias", "sourcePointId"], requiresAlias: true, requireReference: { field: "sourcePointId", kind: "id" } },
-  "dynamic.set_radius_rule": { inputFields: ["circleId", "pointId", "factor"], requiresAlias: false, requireReference: { field: "circleId", kind: "id" } },
+  "dynamic.bind_curve": {
+    inputFields: ["target", "pathId", "parameter"],
+    requiresAlias: false,
+    requireReference: { field: "target", kind: "scoped" },
+    required: ["target", "pathId"],
+    defaults: { parameter: { policy: "safe_default", value: DEFAULT_DYNAMIC_POINT_PARAMETER, reason: `动点位置未指定，取参数 ${DEFAULT_DYNAMIC_POINT_PARAMETER}。` } }
+  },
+  "dynamic.create_locus": {
+    inputFields: ["alias", "sourcePointId"],
+    requiresAlias: true,
+    requireReference: { field: "sourcePointId", kind: "id" },
+    required: ["sourcePointId"]
+  },
+  "dynamic.set_radius_rule": {
+    inputFields: ["circleId", "pointId", "factor"],
+    requiresAlias: false,
+    requireReference: { field: "circleId", kind: "id" },
+    required: ["circleId", "pointId"],
+    defaults: { factor: { policy: "safe_default", value: 1, reason: "半径比例未指定，取 1（距离即半径）。" } }
+  },
 
   // --- 函数 ---
-  "function.create_tangent": { inputFields: ["alias", "sourceId", "x", "anchor"], requiresAlias: true, requireReference: { field: "sourceId", kind: "id" } },
-  "function.analyze": { inputFields: ["alias", "sourceId", "analysis"], requiresAlias: true, requireReference: { field: "sourceId", kind: "id" } },
+  "function.create_tangent": {
+    inputFields: ["alias", "sourceId", "x", "anchor"],
+    requiresAlias: true,
+    requireReference: { field: "sourceId", kind: "id" },
+    required: ["sourceId"],
+    defaults: {
+      x: { policy: "safe_default", value: 0, reason: "切点横坐标未指定，取 x = 0。" },
+      anchor: { policy: "safe_default", value: { kind: "parameter", parameter: DEFAULT_SLOPE, branch: 0 }, reason: `切点未指定，取曲线参数 ${DEFAULT_SLOPE}（规格 §6.3：未定斜率取水平）。` }
+    }
+  },
+  "function.analyze": {
+    inputFields: ["alias", "sourceId", "analysis"],
+    requiresAlias: true,
+    requireReference: { field: "sourceId", kind: "id" },
+    required: ["sourceId", "analysis"],
+    defaults: { analysis: { policy: "ask_user", question: "要算导数、切线还是定积分？" } }
+  },
 
   // --- 截面 ---
   // `SectionCreateAction` 收的是裸 `sourceId`（**不是** scoped 引用），与 `section.materialize` 一致。
-  "section.create": { inputFields: ["alias", "sourceId", "plane"], requiresAlias: true, requireReference: { field: "sourceId", kind: "id" } },
-  "section.materialize": { inputFields: ["sectionId"], requiresAlias: false, requireReference: { field: "sectionId", kind: "id" } },
+  /**
+   * 截面平面是**不安全**的省略：过一点有无数个平面，替用户挑一个等于换了一道题。
+   * 所以缺平面就问（而不是拿 z = 0 顶上）。
+   */
+  "section.create": {
+    inputFields: ["alias", "sourceId", "plane"],
+    requiresAlias: true,
+    requireReference: { field: "sourceId", kind: "id" },
+    required: ["sourceId"],
+    defaults: { plane: { policy: "ask_user", question: "截面用哪个平面？给法向与常数，或者说明它过哪三个点。" } }
+  },
+  "section.materialize": {
+    inputFields: ["sectionId"],
+    requiresAlias: false,
+    requireReference: { field: "sectionId", kind: "id" },
+    required: ["sectionId"]
+  },
 
   // --- 对象与参数 ---
-  "object.delete_many": { inputFields: ["targets"], requiresAlias: false, requireReference: { field: "targets", kind: "id" } },
-  "object.update_inputs": { inputFields: ["target", "patch"], requiresAlias: false, requireReference: { field: "target", kind: "scoped" } },
-  "parameter.set": { inputFields: ["id", "value", "min", "max", "step", "label"], requiresAlias: false, requireReference: { field: "id", kind: "id" } },
-  "parameter.set_expression": { inputFields: ["id", "expression"], requiresAlias: false, requireReference: { field: "id", kind: "id" } }
+  "object.delete_many": {
+    inputFields: ["targets"],
+    requiresAlias: false,
+    requireReference: { field: "targets", kind: "id" },
+    required: ["targets"]
+  },
+  "object.update_inputs": {
+    inputFields: ["target", "patch"],
+    requiresAlias: false,
+    requireReference: { field: "target", kind: "scoped" },
+    required: ["target", "patch"]
+  },
+  /**
+   * **新建参数**（规格 §4.1/§8.2）。`parameter.set` 只改已存在的参数，所以"符号参数 θ"
+   * 必须有一个创建入口。`id` 是**新名字**，不是引用 —— 所以这里没有 `requireReference`。
+   */
+  "parameter.create": {
+    inputFields: ["id", "value", "min", "max", "step", "label"],
+    requiresAlias: false,
+    required: ["id"],
+    defaults: { value: { policy: "safe_default", value: 0, reason: "参数初值未指定，取 0。" } }
+  },
+  "parameter.set": {
+    inputFields: ["id", "value", "min", "max", "step", "label"],
+    requiresAlias: false,
+    requireReference: { field: "id", kind: "id" },
+    required: ["id"],
+    defaults: { value: { policy: "safe_default", value: 0, reason: "参数新值未指定，取 0。" } }
+  },
+  "parameter.set_expression": {
+    inputFields: ["id", "expression"],
+    requiresAlias: false,
+    requireReference: { field: "id", kind: "id" },
+    required: ["id", "expression"]
+  }
 } as const satisfies Record<DraftActionId, ActionSpec>
 
+export type { PlanDefaultPolicy } from "./contracts"
 export type ActionId = keyof typeof ACTIONS
+
+/**
+ * **认得出但承载不了的名字**（Agent DSL 切片 Task 1）。
+ *
+ * 球体与三角形五心是**派生量**：内核算得出来（`solveCircumsphere3` / `solveInsphere3` /
+ * `triangleCenter2`），但 DSL 里还没有承载它们的图元，也没有"由实体重算出一颗球"的路径。
+ * 于是模型照着规格 §1.1 说"给我这个四面体的外接球"时，只有两种可能的行为：
+ *
+ * 1. 报 `unknown_action` —— 排障者会以为**模型编了一个动作**，而事实是登记表里
+ *    没有承载它的位置。这两种失败的性质完全不同（一个是模型的错，一个是我们的缺口）；
+ * 2. 报 `unsupported_action` 并说清原因 —— 模型据此可以改成"用观察工具读出半径与球心"，
+ *    用户看到的也是一句实话。
+ *
+ * 所以这张表存在的唯一理由是**把"我们还做不到"与"你在瞎编"分开**（与 `actionIds.ts`
+ * 头注释里那次真实故障同源：登记表过期会被误读成模型乱来）。
+ */
+export const UNSUPPORTED_ACTION_IDS: Readonly<Record<string, string>> = {
+  "derived.create_sphere": "球体是派生量：内核能解外接球/内切球（solveCircumsphere3 / solveInsphere3），但 DSL 还没有承载球的图元与重算路径。",
+  "derived.create_circumsphere": "外接球是派生量：内核能解（solveCircumsphere3），但还没有承载它的图元与重算路径。",
+  "derived.create_insphere": "内切球是派生量：内核能解（solveInsphere3），但还没有承载它的图元与重算路径。",
+  "derived.create_triangle_center": "三角形五心是派生量：内核有纯函数（triangleCenter2），但还没有派生点特征与重算路径。",
+  "derived.create_triangle_circle": "三角形的内切圆/外接圆目前只能作为派生圆规则存在，还没有独立动作。"
+}
+
+/** 这个名字是不是"认得出但目前承载不了"。 */
+export function unsupportedActionReason(actionId: string): string | null {
+  return UNSUPPORTED_ACTION_IDS[actionId] ?? null
+}
+
+/** 这个名字是不是登记在册的动作。 */
+export function isRegisteredActionId(value: string): boolean {
+  return value in ACTIONS
+}
 
 /**
  * **给模型看的动作形状**：只列调用方允许的那几个动作，字段白名单与固定取值都取自上面那张表。
@@ -245,6 +541,61 @@ export function describeActions(actionIds?: readonly string[]): { actionId: stri
       const spec: ActionSpec = ACTIONS[actionId]
       return { actionId, inputs: spec.inputFields, enums: spec.enumValues ?? {} }
     })
+}
+
+/** 一个动作的**审计说明**：必填字段 + 每个字段缺失时的默认策略（规格 §6.2 的"字段类型、必填性、默认策略"）。 */
+function auditDescription(actionId: ActionId, spec: ActionSpec): ActionAuditDescription {
+  return {
+    actionId,
+    requiresAlias: spec.requiresAlias,
+    inputs: spec.inputFields,
+    enums: spec.enumValues ?? {},
+    required: spec.required ?? [],
+    defaults: Object.entries(spec.defaults ?? {}).map(([field, policy]) => ({
+      field,
+      policy: policy.policy,
+      ...(policy.value === undefined ? {} : { value: policy.value }),
+      ...(policy.reason === undefined ? {} : { reason: policy.reason }),
+      ...(policy.question === undefined ? {} : { question: policy.question }),
+      ...(policy.infer === undefined ? {} : { infer: policy.infer }),
+      ...(policy.appliesWhen === undefined ? {} : { appliesWhen: policy.appliesWhen })
+    }))
+  }
+}
+
+/** 单个动作的审计说明；未登记的名字返回 `null`（审计据此走 unknown/unsupported 分支，**不编**一份出来）。 */
+export function auditEntryFor(actionId: string): ActionAuditDescription | null {
+  if (!(actionId in ACTIONS)) return null
+  return auditDescription(actionId as ActionId, ACTIONS[actionId as ActionId])
+}
+
+/**
+ * **默认策略表**：给提示词与审计共用的那一份。
+ *
+ * 为什么由这里生成而不是在提示词里手写：提示词要告诉模型"缺哪个字段会怎样"，
+ * 而**校验与补全读的是同一张表**。两处各写一份必然分叉，症状是"模型按提示词省略了、
+ * 结果被问了一遍"或者反过来。
+ */
+export function describeDefaultPolicies(actionIds?: readonly string[]): ActionAuditDescription[] {
+  return (Object.keys(ACTIONS) as ActionId[])
+    .filter((actionId) => !actionIds || actionIds.includes(actionId))
+    .map((actionId) => auditDescription(actionId, ACTIONS[actionId]))
+}
+
+/**
+ * 把解析错误整理成**一次性修复请求**（计划 Task 4 + 规格 §7）。
+ *
+ * 只带 `reason` / `errors`（路径 + 原因码）/ `allowedChanges`（从错误路径去重而来）。
+ * 修正次数在这里就被**封顶**为 `MAX_REPAIR_ATTEMPTS`：超出之后返回的 `attempt` 仍会写出来，
+ * 调用方据此拒绝再修（协调器的 `MAX_PLAN_ATTEMPTS` 是第二道）。
+ */
+export function repairRequestFor(errors: readonly ParseError[], attempt: number, reason = "schema_invalid"): RepairRequest {
+  return {
+    reason,
+    errors: errors.map((error) => ({ code: error.code, path: error.path, detail: error.detail })),
+    allowedChanges: [...new Set(errors.map((error) => error.path))],
+    attempt: Math.max(1, Math.min(Math.trunc(attempt), MAX_REPAIR_ATTEMPTS))
+  }
 }
 
 function parseActionInputs(actionId: ActionId, value: unknown, path: string, errors: ParseError[]): Record<string, unknown> | null {
@@ -273,13 +624,110 @@ function parseActionInputs(actionId: ActionId, value: unknown, path: string, err
       if (value.radius !== undefined) out.radius = finiteNumber(value.radius, `${path}.radius`, errors)
       if (value.height !== undefined) out.height = finiteNumber(value.height, `${path}.height`, errors)
       if (typeof value.label === "string") out.label = value.label
-      // 不同模板的要求不同，不能把 size 通用于所有实体（设计规格 L968）。
-      if (template === "cube" && out.size === null) {
-        errors.push(fail("missing_field", `${path}.size`, "cube requires origin and size"))
+      /**
+       * 不同模板的要求不同，不能把 size 通用于所有实体（设计规格 L968）。
+       *
+       * 这里只挡**自相矛盾**的那一种：圆柱/圆锥给了 `size`（它没有"棱长"这回事）。
+       * 缺 `radius` / 缺 `size` 由**默认策略**处理（`ask_user` 会去问用户，`infer_from_facts`
+       * 会从原话里读）—— 在传输层提前拒掉，用户看到的就是一句 `missing_field`，
+       * 而不是"请问底面半径是多少？"。
+       */
+      if ((template === "cube" || template === "pyramid") && out.size === null && value.radius !== undefined) {
+        errors.push(fail("unexpected_field", `${path}.radius`, `${template} takes size, not radius`))
       }
-      if ((template === "cylinder" || template === "cone") && out.radius === null) {
-        errors.push(fail("missing_field", `${path}.radius`, `${template} requires radius`))
+      return out
+    }
+
+    case "solid.create_prism": {
+      /**
+       * 载荷形状**逐字段**读出来（不做类型断言）：底面是一串空间点、向量是一个空间向量。
+       *
+       * 这里只挡"明显畸形"（点数不足、缺分量、非有限数），**语义**（是否共面、是否自交、向量是否为零）
+       * 全部留给动作编译器的 `validatePrismInput` —— 传输层再抄一遍必然分叉（见本文件头注释）。
+       *
+       * 底面与向量**缺字段是合法的**：它们登记了默认策略（规格 §6.3 的底跨 4 / 高度 3），
+       * 由审计在编译前回填并写进 `assumptions`。在这里要求它们，会把"我替你取了默认值"
+       * 变成一句硬邦邦的 `missing_field` —— 而用户本来是可以看到那条假设的。
+       */
+      const out: Record<string, unknown> = withAlias({})
+      if (value.basePolygon !== undefined) {
+        if (!Array.isArray(value.basePolygon)) {
+          errors.push(fail("invalid_type", `${path}.basePolygon`, "expected an array of spatial points"))
+          return null
+        }
+        if (value.basePolygon.length < 3) {
+          errors.push(fail("invalid_type", `${path}.basePolygon`, "a prism base needs at least three points"))
+          return null
+        }
+        const basePolygon: { x: number; y: number; z: number }[] = []
+        for (const [index, point] of value.basePolygon.entries()) {
+          const read = readVector3(point, `${path}.basePolygon[${index}]`, errors)
+          if (read === null) return null
+          basePolygon.push(read)
+        }
+        out.basePolygon = basePolygon
       }
+      if (value.vector !== undefined) {
+        const vector = readVector3(value.vector, `${path}.vector`, errors)
+        if (vector === null) return null
+        out.vector = vector
+      }
+      if (typeof value.label === "string") out.label = value.label
+      return out
+    }
+
+    case "planar.create_conic": {
+      /**
+       * 圆锥曲线：`kind` 是闭集（不认识的名字要指到那个字段），三种曲线各自需要的字段不同，
+       * 所以只做**有限性**这一层，语义（半径为正、焦准距非零）留给动作编译器（规格 §6.2）。
+       */
+      const kind = value.kind
+      if (typeof kind !== "string" || !(CONIC_KINDS as readonly string[]).includes(kind)) {
+        errors.push(fail("invalid_conic_kind", `${path}.kind`, `expected one of ${CONIC_KINDS.join(", ")}`))
+        return null
+      }
+      const out: Record<string, unknown> = withAlias({ kind })
+      if (value.center !== undefined) out.center = readPoint2(value.center, `${path}.center`, errors)
+      if (value.vertex !== undefined) out.vertex = readPoint2(value.vertex, `${path}.vertex`, errors)
+      if (value.radiusX !== undefined) out.radiusX = finiteNumber(value.radiusX, `${path}.radiusX`, errors)
+      if (value.radiusY !== undefined) out.radiusY = finiteNumber(value.radiusY, `${path}.radiusY`, errors)
+      if (value.focalParameter !== undefined) out.focalParameter = finiteNumber(value.focalParameter, `${path}.focalParameter`, errors)
+      if (value.rotation !== undefined) out.rotation = finiteNumber(value.rotation, `${path}.rotation`, errors)
+      if (value.axis !== undefined) {
+        if (value.axis !== "x" && value.axis !== "y") errors.push(fail("invalid_axis", `${path}.axis`, "expected 'x' or 'y'"))
+        else out.axis = value.axis
+      }
+      if (typeof value.label === "string") out.label = value.label
+      return out
+    }
+
+    case "dynamic.create_bound_point": {
+      const host = readScopedReference(value.host, `${path}.host`, errors)
+      const out: Record<string, unknown> = withAlias({ host })
+      if (value.hostSub !== undefined) {
+        if (typeof value.hostSub !== "number" || !Number.isInteger(value.hostSub) || value.hostSub < 0) {
+          errors.push(fail("invalid_host_sub", `${path}.hostSub`, "hostSub must be a non-negative integer"))
+        } else out.hostSub = value.hostSub
+      }
+      // `parameter` 有安全默认（0.4），所以**缺省是合法的**：回填发生在审计那一层，并写进 assumptions。
+      const parameter = optionalFiniteNumber(value.parameter, `${path}.parameter`, errors)
+      if (parameter !== undefined && parameter !== null) out.parameter = parameter
+      if (value.parameterId !== undefined) out.parameterId = boundedString(value.parameterId, `${path}.parameterId`, errors)
+      if (typeof value.label === "string") out.label = value.label
+      return out
+    }
+
+    case "parameter.create": {
+      // 这是**新名字**而不是引用：所以只要求它是一个有界的非空字符串，不去文档里找它。
+      const id = boundedString(value.id, `${path}.id`, errors)
+      const out: Record<string, unknown> = { id }
+      const initial = optionalFiniteNumber(value.value, `${path}.value`, errors)
+      if (initial !== undefined && initial !== null) out.value = initial
+      for (const key of ["min", "max", "step"] as const) {
+        const read = optionalFiniteNumber(value[key], `${path}.${key}`, errors)
+        if (read !== undefined && read !== null) out[key] = read
+      }
+      if (typeof value.label === "string") out.label = value.label
       return out
     }
 
@@ -331,7 +779,21 @@ export function parseDraftAction(input: unknown, path = "action"): ParseResult<D
 
   const actionId = input.actionId
   if (typeof actionId !== "string" || !(actionId in ACTIONS)) {
-    return { ok: false, errors: [...errors, fail("unknown_action", `${path}.actionId`, `unregistered action '${String(actionId)}'`)] }
+    /**
+     * 两类"不认"必须分得开（见 `UNSUPPORTED_ACTION_IDS` 的头注释）：
+     * - `unsupported_action`：这个名字我们**认得**，只是还没有承载它的图元/动作；
+     * - `unknown_action`：这个名字谁都没实现过（模型编的，或者登记表过期）。
+     */
+    const reason = typeof actionId === "string" ? unsupportedActionReason(actionId) : null
+    return {
+      ok: false,
+      errors: [
+        ...errors,
+        reason === null
+          ? fail("unknown_action", `${path}.actionId`, `unregistered action '${String(actionId)}'`)
+          : fail("unsupported_action", `${path}.actionId`, reason)
+      ]
+    }
   }
   const spec: ActionSpec = ACTIONS[actionId as ActionId]
   const actionKey = boundedString(input.actionKey, `${path}.actionKey`, errors)

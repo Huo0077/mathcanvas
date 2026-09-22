@@ -83,10 +83,97 @@ export interface SolidCreateTemplateAction extends ActionBase {
   }
 }
 
+/**
+ * **拉伸式棱柱**（设计规格 §3.2/§3.3）：底面多边形 + 拉伸向量。
+ *
+ * 它是 `solid.create_prism` 而**不是** `solid.create_template` 的一个 `template` 取值：
+ * 模板动作的输入是"原点 + 尺寸"这类参数化描述，棱柱的输入是一串顶点与一个向量 ——
+ * 两者的字段完全不同，硬塞进同一个判别式只会让两边都失去类型约束。
+ *
+ * 侧面由内核按 `[Bi, B(i+1), T(i+1), Ti]` **生成**，调用方**不能**传面（规格 §7：
+ * 不许把散面拼成 Prism）。所以这里连"faces"这种字段都不存在。
+ */
+export interface SolidCreatePrismAction extends ActionBase {
+  actionId: "solid.create_prism"
+  inputs: {
+    alias: DraftAlias
+    /** 底面多边形的有序顶点（世界坐标），至少三个、共面、不自交。 */
+    basePolygon: Array<{ x: number; y: number; z: number }>
+    /** 拉伸向量：直棱柱平行底面法向，斜棱柱带水平分量。 */
+    vector: { x: number; y: number; z: number }
+    label?: string
+  }
+}
+
 /** 既有的、指向文档内对象的引用（必须带 documentId，名称不是 ID）。 */
 export interface SceneReference {
   documentId: string
   entityId: string
+}
+
+/**
+ * **新建一个由宿主驱动的动点**（Agent DSL 切片，规格 §3.3/§8.1）。
+ *
+ * 为什么需要它：`dynamic.bind_point` 只能把**已经存在**的点绑到宿主上，而
+ * "棱的中点 E"这类对象在计划里是**新对象** —— 没有创建动作就只能在文档里先放一个
+ * 自由点再绑，那不是模型能可靠做到的两步（而且中间那一步会落进撤销历史）。
+ *
+ * 引用形状刻意保持**闭集**（规格 §6.1：只允许 `{scope:"draft",alias}` 与
+ * `{scope:"scene",ref:{documentId,entityId}}`）：
+ * - `host` 指**实体或曲线本身**（可以是刚在本计划里创建的对象）；
+ * - `hostSub` 指该宿主内部**第几条棱**（`${hostId}:e{hostSub}`，规格 §3.3 的确定性命名）。
+ *
+ * 参数一律是宿主的**自然参数**（棱是仿射比例、曲线是角度/轴向参数），
+ * 中点因此就是 `parameter = 0.5`，不需要"中点"这种特例语义。
+ */
+export interface DynamicCreateBoundPointAction extends ActionBase {
+  actionId: "dynamic.create_bound_point"
+  inputs: {
+    alias: DraftAlias
+    /** 宿主：曲线（平面点 2-D）或实体 / 棱宿主（空间点 3-D）。**已解析**的场景引用。 */
+    host: SceneReference
+    /** 宿主内部的棱下标；给了就绑到 `${host.entityId}:e${hostSub}` 这条棱上。 */
+    hostSub?: number
+    parameter: number
+    /** 由文档参数驱动（符号参数 θ 驱动动点，规格 §8.2）；必须真实存在。 */
+    parameterId?: string
+    label?: string
+  }
+}
+
+/**
+ * **平面圆锥曲线**（Agent DSL 切片，规格 §8.2）。
+ *
+ * 椭圆 / 抛物线 / 双曲线在 DSL 里早就是一等图元（有约束、有切线、有交点），
+ * 但动作层一直没有"创建它们"的入口 —— 于是"画一个椭圆并作切线"这类题目
+ * 只能靠界面手工完成，Agent 侧根本表达不出来。
+ */
+export interface PlanarCreateConicAction extends ActionBase {
+  actionId: "planar.create_conic"
+  inputs: {
+    alias: DraftAlias
+    kind: "ellipse" | "parabola" | "hyperbola"
+    center?: { x: number; y: number }
+    radiusX?: number
+    radiusY?: number
+    vertex?: { x: number; y: number }
+    focalParameter?: number
+    axis?: "x" | "y"
+    rotation?: number
+    label?: string
+  }
+}
+
+/**
+ * **新建文档参数**（Agent DSL 切片，规格 §4.1/§8.2）。
+ *
+ * `parameter.set` 明确拒绝"参数不存在"（不做隐式新建），因为悄悄新建一个参数
+ * 会让"改哪个参数"这件事变得不可预期。但符号参数本身必须能被**创建** ——
+ * 否则"保留符号参数 θ"（规格 §6.3 对"恒定/定值"题目的硬要求）无从表达。
+ */
+export interface ParameterCreateAction extends ActionBase {
+  actionId: "parameter.create"
+  inputs: { id: string; value: number; min?: number; max?: number; step?: number; label?: string }
 }
 
 export interface DynamicBindPointAction extends ActionBase {
@@ -176,8 +263,11 @@ export interface ObjectUpdateInputsAction extends ActionBase {
 
 export type DraftAction =
   | PlanarCreateAction
+  | PlanarCreateConicAction
   | SolidCreateTemplateAction
+  | SolidCreatePrismAction
   | DynamicBindPointAction
+  | DynamicCreateBoundPointAction
   | DynamicCreateLocusAction
   | DynamicBindCurveAction
   | DynamicSetRadiusRuleAction
@@ -188,6 +278,7 @@ export type DraftAction =
   | ObjectDeleteManyAction
   | ObjectUpdateInputsAction
   | ParameterSetAction
+  | ParameterCreateAction
   | ParameterSetExpressionAction
 
 /**
