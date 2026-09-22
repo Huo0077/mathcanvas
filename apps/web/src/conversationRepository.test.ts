@@ -5,6 +5,7 @@ import {
   AGENT_STORAGE_KEY,
   DEFAULT_CONVERSATION_BINDING,
   LEGACY_AGENT_STORAGE_KEY,
+  MAX_CONVERSATION_MESSAGES,
   createConversationRepository,
   setConversationRepository,
   type ConversationBinding
@@ -148,9 +149,84 @@ describe("conversation repository", () => {
     expect(record?.summary).toBe("目标是正方体")
     expect(record?.summaryVersion).toBe(2)
     expect(record?.conversation.messages.map((message) => message.text)).toEqual(["画一个正方体"])
-    expect(record?.facts).toEqual([{ id: "f1", key: "commit:run-1", text: "已提交：文档第 2 版新增 1 个对象（solid-1）", status: "confirmed" }])
+    expect(record?.facts).toEqual([{ id: "f1", key: "commit:run-1", text: "已提交：文档第 2 版新增 1 个对象（solid-1）", status: "confirmed", documentId: undefined }])
     // 仓储里没有这条会话时如实回 null（不编一条空的）。
     expect(await repository.readRecord("missing")).toBeNull()
+  })
+
+  it("surfaces the document a fact was confirmed against", async () => {
+    const repository = createConversationRepository()
+    await repository.create(conversation("c1"), bindingA)
+    await repository.append(conversation("c1"), bindingA, userMessage("m1", "c1", "画一个正方体"))
+    await repository.saveFact({
+      ...factFor("c1", "m1"),
+      key: "commit:run-1",
+      valueJson: { text: "已确认：文档第 2 版新增 1 个对象（solid-1）", generation: 2, createdObjects: ["solid-1"], documentId: "doc-a" }
+    })
+
+    // 事实"属于哪份文档"不写在列里（那是 Rust 侧的固定 schema），而是写在 `value_json` 里；
+    // 读回来必须能看见它 —— 注入上下文时按它筛（规格 §5.1）。
+    expect((await repository.readRecord("c1"))?.facts[0]?.documentId).toBe("doc-a")
+  })
+
+  /**
+   * **两个后端给出一样长的历史**（Fix round 1 / Minor 10）。
+   *
+   * Rust 侧的读上限是 512（保留最新的一批），而 localStorage 这条路径原先一条不丢 ——
+   * 同一份会话在桌面版"少了几条"、在网页版还在，看起来像数据丢了。
+   */
+  it("keeps the newest 512 messages in the browser backend too", async () => {
+    const repository = createConversationRepository()
+    await repository.create(conversation("c1"), bindingA)
+    for (let at = 0; at < 600; at += 1) await repository.append(conversation("c1"), bindingA, userMessage(`m${at}`, "c1", `第 ${at} 条`))
+
+    const record = await repository.readRecord("c1")
+    expect(record?.conversation.messages).toHaveLength(MAX_CONVERSATION_MESSAGES)
+    // 保留的是**最新**的那一批。
+    expect(record?.conversation.messages.at(-1)?.text).toBe("第 599 条")
+    expect(record?.conversation.messages[0]?.text).toBe("第 88 条")
+  })
+
+  /**
+   * **桌面那一支的 `readRecord` 也真的被测过**（Fix round 1 / Minor 7）。
+   *
+   * 原先 `__TAURI_INTERNALS__` 那条用例只覆盖了 `create`/`append`，而 `readRecord` 的
+   * 断言全在浏览器分支上 —— 于是"桌面读回来的形状对不对、找不到时是不是回 null"没人看着。
+   */
+  it("reads the full record over IPC too, and answers null when the conversation is gone", async () => {
+    const invocations: string[] = []
+    Object.defineProperty(globalThis, "__TAURI_INTERNALS__", {
+      configurable: true,
+      writable: true,
+      value: {
+        invoke: async (command: string, args?: Record<string, unknown>) => {
+          invocations.push(command)
+          if (command !== "read_conversation") return []
+          if ((args as { conversationId?: string }).conversationId === "missing") throw new Error("no conversation missing")
+          return {
+            conversation: { id: "c1", ...bindingA, title: "任意三角形", summary: "目标是正方体", summaryVersion: 3, createdAt: 1, updatedAt: 2, archivedAt: null },
+            messages: [{ id: "m1", conversationId: "c1", sequence: 1, role: "user", kind: "prompt", contentJson: { text: "画一个正方体" }, runId: "run-1", documentGeneration: null, tokenEstimate: 5, createdAt: 1 }],
+            facts: [{ id: "f1", conversationId: "c1", key: "commit:run-1", valueJson: { text: "已确认：文档第 2 版新增 1 个对象（solid-1）", documentId: "doc-a" }, sourceMessageId: "m1", status: "confirmed", createdAt: 1, updatedAt: 1 }]
+          }
+        }
+      }
+    })
+
+    try {
+      const repository = createConversationRepository()
+      const record = await repository.readRecord("c1")
+
+      expect(invocations).toEqual(["read_conversation"])
+      expect(record?.summary).toBe("目标是正方体")
+      expect(record?.summaryVersion).toBe(3)
+      expect(record?.conversation.messages.map((message) => message.text)).toEqual(["画一个正方体"])
+      expect(record?.facts[0]?.text).toContain("新增 1 个对象")
+      expect(record?.facts[0]?.documentId).toBe("doc-a")
+      // 找不到 → null（不是编一条空的，也不是当成 IPC 故障）。
+      expect(await repository.readRecord("missing")).toBeNull()
+    } finally {
+      Reflect.deleteProperty(globalThis, "__TAURI_INTERNALS__")
+    }
   })
 
   it("hides an archived conversation from the list without deleting it", async () => {
@@ -194,6 +270,7 @@ describe("conversation repository", () => {
    * 这条用例不是一次性的 grep，而是一道会一直跑的闸：它把一个"什么都有"的消息
    * （含草稿视图、轨迹、开发者诊断）写进去，然后按**键的形状**检查存下来的载荷 ——
    * 所以将来谁给 `AgentMessage` 加一个 `reasoning` 字段，它会当场失败。
+   * **每一条消息**都查（Fix round 1 / Minor 5）：只查第一条的话，别的路径加字段就漏了。
    */
   it("never persists a credential, a candidate document or hidden reasoning", async () => {
     const repository = createConversationRepository()
@@ -205,6 +282,12 @@ describe("conversation repository", () => {
       diagnostics: ["1. preflight → observing: reading the scene"]
     }
     await repository.append(conversation("c1"), bindingA, message)
+    // 第二条走另一条状态路径（回执 + 失败）：只查第一条会漏掉它。
+    await repository.append(conversation("c1"), bindingA, {
+      ...userMessage("m2", "c1", "再建一个"),
+      commit: { status: "committed" },
+      failure: { code: "x", message: "y", retryable: false }
+    })
     await repository.saveFact({ ...factFor("c1", "m1"), valueJson: { text: "已确认：文档第 2 版新增 1 个对象（solid-1）", generation: 2, createdObjects: ["solid-1"] } })
     await repository.saveSummary({ conversationId: "c1", summary: '{"goal":"建一个立方体","confirmedFacts":[],"createdObjects":["solid-1"],"openQuestions":[],"preferences":[]}' })
 
@@ -213,13 +296,69 @@ describe("conversation repository", () => {
     expect(stored).not.toMatch(/sk[-_][A-Za-z0-9]/)
     // ② 候选文档内容：文档字段名一个都不许出现（草稿只存**视图**）。
     for (const field of ["primitives", "candidate", "operations", "contentHash", "epoch"]) expect(stored, field).not.toContain(field)
-    // ③ 隐藏推理：载荷里的键只有界面真的拥有的那些。
+    // ③ 隐藏推理：**每一条**消息的键只有界面真的拥有的那些。
     const records = JSON.parse(stored) as { messages: { contentJson: Record<string, unknown> }[] }[]
     const allowed = new Set(["id", "role", "text", "createdAt", "pending", "runId", "trace", "draft", "commit", "failure", "diagnostics"])
-    for (const key of Object.keys(records[0]!.messages[0]!.contentJson)) {
-      expect(allowed.has(key), `unexpected persisted field: ${key}`).toBe(true)
+    for (const record of records) {
+      for (const entry of record.messages) {
+        for (const key of Object.keys(entry.contentJson)) {
+          expect(allowed.has(key), `unexpected persisted field: ${key}`).toBe(true)
+        }
+      }
     }
     expect(stored).not.toMatch(/reasoning|chain.of.thought/i)
+  })
+
+  /**
+   * **浏览器兜底也要守 Rust 那条边界**（Fix round 1 / I2）。
+   *
+   * 桌面路径的判据在 `conversations.rs`（`sk-`/`sk_` 前缀 + 32K 消息 / 16K 摘要 / 8K 事实值），
+   * 而 localStorage 那条路径原先**一条都没有** —— 于是一条密钥样的消息只在桌面被拒，
+   * 在浏览器里照存不误，而"扫描载荷"的用例（写的是良性消息）永远抓不到这件事。
+   */
+  it("refuses a credential-shaped message in the browser fallback too", async () => {
+    const repository = createConversationRepository()
+    await repository.create(conversation("c1"), bindingA)
+
+    expect(() => repository.append(conversation("c1"), bindingA, userMessage("m1", "c1", "帮我看看这个密钥 sk-abcdef123456 怎么用"))).toThrow(/credential/i)
+    // 被拒的消息**一行都没写**。
+    expect((await repository.readRecord("c1"))?.conversation.messages).toEqual([])
+
+    // 正常内容照旧写进去（判据只认前缀形态，不是"含 sk 就拒"）。
+    await repository.append(conversation("c1"), bindingA, userMessage("m2", "c1", "画一个正方体"))
+    expect((await repository.readRecord("c1"))?.conversation.messages.map((message) => message.text)).toEqual(["画一个正方体"])
+  })
+
+  it("refuses a message, summary or fact value over the Rust size limits", async () => {
+    const repository = createConversationRepository()
+    await repository.create(conversation("c1"), bindingA)
+    await repository.append(conversation("c1"), bindingA, userMessage("m1", "c1", "画一个正方体"))
+
+    expect(() => repository.append(conversation("c1"), bindingA, userMessage("m2", "c1", "x".repeat(32_001)))).toThrow(/over the 32000/i)
+    expect(() => repository.saveSummary({ conversationId: "c1", summary: "y".repeat(16_001) })).toThrow(/over the 16000/i)
+    expect(() => repository.saveFact({ ...factFor("c1", "m1"), valueJson: { text: "z".repeat(8_001) } })).toThrow(/over the 8000/i)
+  })
+
+  /**
+   * **判据与 Rust 逐字一致：只看"令牌段"的**开头**（Fix round 2 / N1）。
+   *
+   * Rust 的 `contains_credential_prefix` 先把文本切成"令牌字符"（`[A-Za-z0-9._-]`）的连续段，
+   * 再看某一段**是否以** `sk-`/`sk_` 开头。而这一层原先用的是 `/sk[-_][A-Za-z0-9]/`
+   * **匹配任意位置** —— 于是 `task-1`、`risk-free`、`disk-space` 这些普通词在浏览器里被当成
+   * 密钥拒绝（消息存不下来、运行起不来），在桌面端却被接受：两个后端对同一句话给出不同的
+   * 结论，而界面只会说"内容里像有密钥"。
+   */
+  it("accepts hyphenated words that merely contain the prefix, like the Rust token rule", async () => {
+    const repository = createConversationRepository()
+    await repository.create(conversation("c1"), bindingA)
+    const benign = ["task-1", "risk-free", "disk-space", "desk-job", "risk_free", "sketch-1"]
+
+    for (const [at, text] of benign.entries()) await repository.append(conversation("c1"), bindingA, userMessage(`m${at}`, "c1", text))
+
+    expect((await repository.readRecord("c1"))?.conversation.messages.map((message) => message.text)).toEqual(benign)
+    // 但**以**前缀开头的那一段仍然被拒（`sk-` 后面带东西才是密钥的形状）。
+    expect(() => repository.append(conversation("c1"), bindingA, userMessage("m-key", "c1", "用 sk-abcdef123456 这个"))).toThrow(/credential/i)
+    expect(() => repository.append(conversation("c1"), bindingA, userMessage("m-key2", "c1", "SK_live_abcdef"))).toThrow(/credential/i)
   })
 
   it("uses the named SQLite commands (and never the local cache) while the desktop shell is present", async () => {

@@ -1,4 +1,4 @@
-import { PLAN_SCHEMA_VERSION, describeActions, describeDefaultPolicies, type ConversationContext, type ModelChannel, type ModelContext } from "@draw/agent-core"
+import { MAX_CONVERSATION_FACTS, PLAN_SCHEMA_VERSION, describeActions, describeDefaultPolicies, type ConversationContext, type ModelChannel, type ModelContext } from "@draw/agent-core"
 
 /**
  * **生产系统提示词**（Agent DSL 切片 Task 5；规格 §6/§7）。
@@ -28,9 +28,14 @@ export const SYSTEM_PROMPT_VERSION = "mathcanvas.agent.prompt.v2"
 
 const MAX_PROMPT_FACTS = 12
 const MAX_PROMPT_REFS = 16
-/** 会话那一段的上限（提示词里再兜一次底：上下文的预算也管着条数与字符）。 */
-const MAX_PROMPT_CONVERSATION_FACTS = 16
-const MAX_PROMPT_MESSAGES = 12
+/**
+ * 会话那一段的条数上限。
+ *
+ * **与 `buildConversationContext` 的预算是同一个常量**（Fix round 1 / I3）：两处各写一个 16
+ * 就会出现"预算按 40 条扣费、模型只看到 16 条"—— 长会话里摘要与最近消息被那些
+ * 模型根本看不到的事实挤空。
+ */
+const MAX_PROMPT_CONVERSATION_FACTS = MAX_CONVERSATION_FACTS
 
 export interface SystemPromptPolicyInput {
   channel: ModelChannel
@@ -194,7 +199,13 @@ function contextJson(context: ModelContext, conversation?: ConversationContext):
     ...(conversation === undefined ? {} : {
       confirmedFacts: conversation.facts.slice(0, MAX_PROMPT_CONVERSATION_FACTS).map((fact) => ({ id: fact.id, key: fact.key, text: fact.text })),
       summary: conversation.summary,
-      recentMessages: conversation.messages.slice(-MAX_PROMPT_MESSAGES).map((message) => ({ role: message.role, text: message.text }))
+      /**
+       * **不再在这里截一次**（Fix round 2 / item 4）：条数与字符都由
+       * `buildConversationContext` 定（§5.3 的 35% 段 + `MAX_MESSAGE_LIMIT`）。
+       * 这里再写一个 `MAX_PROMPT_MESSAGES = 12` 就是"预算按 24 条算、模型只看 12 条"——
+       * 与事实那一处同一种漂移，所以渲染照单全收。
+       */
+      recentMessages: conversation.messages.map((message) => ({ role: message.role, text: message.text }))
     }),
     scene: {
       summary: conversation?.observation.summary ?? "",

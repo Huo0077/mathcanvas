@@ -33,6 +33,7 @@ import { ProjectPackagePanel } from "./components/ProjectPackagePanel"
 import { readDesktopRuntime, type DesktopRuntimeInfo } from "./services/desktopRuntime"
 import { agentRunner } from "./agent/agentRunner"
 import { useAgentStore } from "./agentStore"
+import { useAgentDocumentBinding } from "./useAgentDocumentBinding"
 import { DEFAULT_APP_MODULE, type AppModuleId } from "./shellModules"
 import { resolveIntersectionPreview } from "./intersectionPreview3d"
 import { ThreeSceneView } from "./threeScene"
@@ -146,6 +147,14 @@ function historyShortcut(event: KeyboardEvent): "undo" | "redo" | null {
 
 export function App() {
   const document = useSceneStore((state) => state.document)
+  /**
+   * **会话绑定跟着当前文档走**（对话切片 Fix round 1 / C1；规格 §5.1）。
+   *
+   * 一个会话绑定一个 project/document/workspace，而这个应用里换工作区就是换文档 ——
+   * 少了这一步，所有会话都写在占位绑定上，而在立体几何里确认的事实会被注入平面几何那一轮。
+   * 有未结束的一轮时它会**推迟**（Agent 自己切工作区时不能让草稿面板被换走），见那个 hook。
+   */
+  useAgentDocumentBinding(document)
   const apply = useSceneStore((state) => state.apply)
   // 整批提交（Task 0.4）：批量删除走它，整批只占一步撤销。
   const applyBatch = useSceneStore((state) => state.applyBatch)
@@ -1881,9 +1890,10 @@ export function App() {
       <AgentWorkspace
         onBackToWorkspace={() => setActiveModule(DEFAULT_APP_MODULE)}
         onRun={runAgentPrompt}
-        onConfirm={() => { agentRunner.confirm() }}
-        onDiscard={() => { agentRunner.discard() }}
-        onStop={() => { agentRunner.stop() }}
+        // 点的是哪块面板就确认哪一轮（`runId` 来自那条消息；Fix round 1 / C2）。
+        onConfirm={(runId) => { agentRunner.confirm(runId) }}
+        onDiscard={(runId) => { agentRunner.discard(runId) }}
+        onStop={(runId) => { agentRunner.stop(runId) }}
         onRetry={retryLastPrompt}
       />
       {(fileError || operationError) && <div role="alert" className="footer-note">{fileError ?? operationError}</div>}

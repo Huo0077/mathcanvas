@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest"
 
 import { AGENT_STORAGE_KEY, useAgentStore, type AgentMessage } from "./agentStore"
+import { summaryOfDocument } from "./conversationSummary"
 import { conversationRepository } from "./conversationRepository"
 import { readConversation } from "./services/conversationClient"
 
@@ -177,6 +178,22 @@ describe("a run writes back to the conversation it started in", () => {
     expect(second.messages.some((message) => message.trace !== undefined || message.commit !== undefined)).toBe(false)
   })
 
+  /**
+   * **一轮运行给它那两条消息盖上 `runId`**（Fix round 1 / C2 + Minor 2）。
+   *
+   * 界面上那块"确认改动"面板是**按消息**渲染的，点确认时必须能说出"这是哪一轮"——
+   * 否则它会指回最近的那一轮（可能是**另一条会话**的草稿）。同时它也是
+   * `conversation_messages.run_id` 那一列唯一的写点（原先永远是空的）。
+   */
+  it("stamps the run id on the messages of that run", () => {
+    useAgentStore.getState().sendPrompt("A 的问题")
+    const promptMessageId = userMessageIdOf("A 的问题")
+    const pinned = useAgentStore.getState().pinRun({ runId: "run-a", promptMessageId })!
+
+    expect(messageById(pinned.conversationId, promptMessageId)?.runId).toBe("run-a")
+    expect(messageById(pinned.conversationId, pinned.messageId)?.runId).toBe("run-a")
+  })
+
   it("drops events that arrive after the run ended", () => {
     useAgentStore.getState().sendPrompt("A 的问题")
     const conversationId = useAgentStore.getState().activeConversation!.id
@@ -196,26 +213,34 @@ describe("a run writes back to the conversation it started in", () => {
     const promptMessageId = userMessageIdOf("建一个立方体")
     useAgentStore.getState().pinRun({ runId: "run-commit", promptMessageId })
 
-    expect(await useAgentStore.getState().recordCommittedRun({ runId: "run-commit", generation: 4, createdObjects: ["solid-1", "solid-2"] })).toBe(true)
+    expect(await useAgentStore.getState().recordCommittedRun({ runId: "run-commit", generation: 4, createdObjects: ["solid-1", "solid-2"], documentId: "doc-geometry3d" })).toBe(true)
 
     const record = await conversationRepository().readRecord(conversationId)
     expect(record?.facts).toHaveLength(1)
     expect(record?.facts[0].status).toBe("confirmed")
     expect(record?.facts[0].text).toContain("第 4 版")
     expect(record?.facts[0].text).toContain("solid-1")
+    // **这条事实属于哪份文档**必须一起存下来：换工作区就是换文档，而事实表是会话级的
+    //（规格 §5.1）—— 注入时按它筛，另一份文档的那一轮才不会看到它。
+    expect(record?.facts[0].documentId).toBe("doc-geometry3d")
     // 证据必须是**这条会话里真实存在**的消息（Rust 侧同一个判据）：从原始记录里看那一列。
     const stored = await readConversation(conversationId)
     expect(stored.ok && stored.value.facts[0].sourceMessageId).toBe(promptMessageId)
   })
 
-  it("leaves no facts behind when the run never committed", async () => {
+  /**
+   * **没有落点就一条事实都不写**（Fix round 1 / Minor 6）。
+   *
+   * 这条用例原先写的是"丢弃之后没有事实"，而那条路径上**根本没有**写事实的代码 ——
+   * 它对着任何实现都会通过（评审当场指出）。换成一个真能失败的判据：运行没有 `pinRun`
+   * 时**不许**猜一条会话出来写（`recordCommittedRun` 的正确行为是回 `false`、什么都不写）。
+   * 真正那条"丢弃/编译失败不写事实"的用例在 `agentRunner.test.ts`（走真实运行路径）。
+   */
+  it("writes no fact for a run that is not pinned to any conversation", async () => {
     useAgentStore.getState().sendPrompt("建一个立方体")
     const conversationId = useAgentStore.getState().activeConversation!.id
-    const promptMessageId = userMessageIdOf("建一个立方体")
-    useAgentStore.getState().pinRun({ runId: "run-discarded", promptMessageId })
-    // 用户丢弃草稿：这一轮**没有**提交，所以什么都不该写进长期记忆。
-    void useAgentStore.getState().recordDraft({ draftId: "draft-1", draftVersion: 1, previewHash: "h", stageCount: 2, undoesInOneStep: true }, "run-discarded")
-    useAgentStore.getState().endRun("run-discarded")
+    // 没有 pinRun：没有落点。
+    expect(await useAgentStore.getState().recordCommittedRun({ runId: "run-unknown", generation: 2, createdObjects: ["solid-1"], documentId: "doc-1" })).toBe(false)
 
     const record = await conversationRepository().readRecord(conversationId)
     expect(record?.facts).toEqual([])
@@ -232,15 +257,59 @@ describe("a run writes back to the conversation it started in", () => {
     const promptMessageId = userMessageIdOf("建一个立方体")
     useAgentStore.getState().pinRun({ runId: "run-long", promptMessageId })
 
-    await useAgentStore.getState().recordCommittedRun({ runId: "run-long", generation: 7, createdObjects: ["solid-1"] })
+    await useAgentStore.getState().recordCommittedRun({ runId: "run-long", generation: 7, createdObjects: ["solid-1"], documentId: "doc-1" })
 
     const record = await conversationRepository().readRecord(conversationId)
-    const summary = JSON.parse(record!.summary) as { goal: string; confirmedFacts: string[]; createdObjects: string[]; openQuestions: string[]; preferences: string[] }
-    expect(summary.goal).toContain("建一个立方体")
-    expect(summary.createdObjects).toEqual(["solid-1"])
-    expect(summary.confirmedFacts.length).toBeGreaterThan(0)
+    /**
+     * **期望在 Fix round 2 里改过**：摘要现在按文档存（`{ version, byDocument }`），
+     * 所以这里要**按本文档**取那一份，而不是 `JSON.parse(record.summary)` 直接当摘要用。
+     * 这么改正是为了让"别份文档的记忆"没有第二条进提示词的路（C1 残余）。
+     */
+    const summary = summaryOfDocument(record!.summary, "doc-1")
+    expect(summary?.goal).toContain("建一个立方体")
+    expect(summary?.createdObjects).toEqual(["solid-1"])
+    expect((summary?.confirmedFacts.length ?? 0)).toBeGreaterThan(0)
+    expect(summary?.documentId).toBe("doc-1")
     // 摘要**压缩的是摘要，不是历史**：原始消息一条都不许删（规格 §5.3）。
     expect(record!.conversation.messages.length).toBeGreaterThan(40)
+  })
+
+  /**
+   * **摘要按文档分开**（Fix round 2 / C1 残余；规格 §5.1 + §9）。
+   *
+   * 事实列表早就按文档筛了，但摘要是**另一条**载体：它把该会话全部已确认事实的原文与创建出来
+   * 的对象 id 压成一段文字，注入时又不过滤 —— 于是"在立体几何里确认的事实"会以 `summary`
+   * 的形式出现在平面几何那一轮里。这条用例把**同一条会话用在两份文档上**（正是 Agent 自己
+   * 切工作区之后的可达现场），断言两份记忆各归各、互不混入。
+   */
+  it("scopes the compacted summary to the run's document", async () => {
+    useAgentStore.getState().sendPrompt("建一个立方体")
+    const conversationId = useAgentStore.getState().activeConversation!.id
+    const promptMessageId = userMessageIdOf("建一个立方体")
+    for (let turn = 0; turn < 40; turn += 1) {
+      useAgentStore.getState().sendPrompt(`第 ${turn} 轮：请继续（${"很长的上下文".repeat(20)}）`)
+      useAgentStore.getState().resolvePendingReply(`收到 ${turn}`)
+    }
+
+    // 第一份文档（立体几何）：确认一轮 → 它那一份摘要里有 solid-1。
+    useAgentStore.getState().pinRun({ runId: "run-geometry", promptMessageId })
+    await useAgentStore.getState().recordCommittedRun({ runId: "run-geometry", generation: 3, createdObjects: ["solid-1"], documentId: "doc-geometry" })
+
+    // 同一条会话被用在**另一份文档**上（平面几何）：确认一轮。
+    useAgentStore.getState().pinRun({ runId: "run-planar", promptMessageId })
+    await useAgentStore.getState().recordCommittedRun({ runId: "run-planar", generation: 9, createdObjects: ["circle-1"], documentId: "doc-planar" })
+
+    const record = await conversationRepository().readRecord(conversationId)
+    const geometry = summaryOfDocument(record!.summary, "doc-geometry")
+    const planar = summaryOfDocument(record!.summary, "doc-planar")
+
+    expect(geometry?.createdObjects).toEqual(["solid-1"])
+    expect(planar?.createdObjects).toEqual(["circle-1"])
+    // 两份**互不混入**：本文档那一份里不许出现另一份文档的事实原文与对象 id。
+    expect(JSON.stringify(planar)).not.toContain("solid-1")
+    expect(JSON.stringify(geometry)).not.toContain("circle-1")
+    expect(planar?.confirmedFacts.join(" ")).not.toContain("solid-1")
+    expect(geometry?.confirmedFacts.join(" ")).not.toContain("circle-1")
   })
 
   it("keeps a short transcript out of the summary path", async () => {
@@ -248,7 +317,7 @@ describe("a run writes back to the conversation it started in", () => {
     const conversationId = useAgentStore.getState().activeConversation!.id
     useAgentStore.getState().pinRun({ runId: "run-short", promptMessageId: userMessageIdOf("建一个立方体") })
 
-    await useAgentStore.getState().recordCommittedRun({ runId: "run-short", generation: 2, createdObjects: ["solid-1"] })
+    await useAgentStore.getState().recordCommittedRun({ runId: "run-short", generation: 2, createdObjects: ["solid-1"], documentId: "doc-1" })
 
     // 还没到阈值：摘要保持原样（""），事实照写。
     const record = await conversationRepository().readRecord(conversationId)

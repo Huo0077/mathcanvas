@@ -9,7 +9,9 @@ import {
   estimateConversationCharacters,
   parseConversationSummary,
   serializeConversationSummary,
-  shouldCompactConversation
+  shouldCompactConversation,
+  summaryOfDocument,
+  withDocumentSummary
 } from "./conversationSummary"
 
 /**
@@ -127,5 +129,35 @@ describe("conversation summary compaction", () => {
     expect(parseConversationSummary("")).toBeNull()
     expect(parseConversationSummary("之前我们把立方体建好了")).toBeNull()
     expect(parseConversationSummary('{"somethingElse":1}')).toBeNull()
+  })
+
+  /**
+   * **摘要按文档分开存**（Fix round 2 / C1 残余；规格 §5.1 + §9）。
+   *
+   * 事实列表已经按文档筛了，但摘要曾经是**另一条**载体：它把该会话**全部**已确认事实的原文
+   * 与创建出来的对象 id 压进一段文字，注入时又不过滤 —— 于是"在立体几何里确认的事实"
+   * 会以 `summary` 的形式出现在平面几何那一轮里。改成按文档存之后，注入方只能取到
+   * **本次运行那份文档**的那一份。
+   */
+  it("keeps one summary per document and only hands over the one asked for", () => {
+    const inGeometry = compactConversationSummary({ messages: [message("m1", "user", "建一个立方体", 1)], facts: [], createdObjects: ["solid-1"], now: 1 })
+    const stored = withDocumentSummary("", "doc-geometry", inGeometry)
+    const inPlanar = compactConversationSummary({ messages: [message("m2", "user", "画一个圆", 2)], facts: [], createdObjects: ["circle-1"], now: 2 })
+    const both = withDocumentSummary(stored, "doc-planar", inPlanar)
+
+    expect(summaryOfDocument(both, "doc-geometry")?.createdObjects).toEqual(["solid-1"])
+    expect(summaryOfDocument(both, "doc-planar")?.createdObjects).toEqual(["circle-1"])
+    expect(summaryOfDocument(both, "doc-geometry")?.documentId).toBe("doc-geometry")
+    // 没见过的文档：没有摘要（**不**把别的文档那一份端出来）。
+    expect(summaryOfDocument(both, "doc-never-seen")).toBeNull()
+    // 旧形状（平铺的一份摘要，没有说属于哪份文档）→ 不猜，回 null。
+    expect(summaryOfDocument(serializeConversationSummary(inGeometry), "doc-geometry")).toBeNull()
+    // 坏文本同样如此。
+    expect(summaryOfDocument("之前我们把立方体建好了", "doc-geometry")).toBeNull()
+
+    // 再写一次同一份文档：**只换那一份**，别的文档那一份原样保留。
+    const rewritten = withDocumentSummary(both, "doc-geometry", compactConversationSummary({ messages: [message("m3", "user", "再建一个", 3)], facts: [], createdObjects: ["solid-2"], now: 3 }))
+    expect(summaryOfDocument(rewritten, "doc-geometry")?.createdObjects).toEqual(["solid-2"])
+    expect(summaryOfDocument(rewritten, "doc-planar")?.createdObjects).toEqual(["circle-1"])
   })
 })

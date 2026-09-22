@@ -14,12 +14,12 @@ import { RunStatus } from "./RunStatus"
  */
 interface AgentMessageListProps {
   conversation: AgentConversation | undefined
-  /** 运行状态卡上的动作；不传时只显示状态，不显示按钮。 */
+  /** 运行状态卡上的动作；不传时只显示状态，不显示按钮。参数是**这条消息所属的那一轮**。 */
   onRetry?: () => void
   onRevise?: () => void
-  onStop?: () => void
-  onConfirm?: () => void
-  onDiscard?: () => void
+  onStop?: (runId?: string) => void
+  onConfirm?: (runId?: string) => void
+  onDiscard?: (runId?: string) => void
 }
 
 function CopyCodeButton({ code }: { code: string }) {
@@ -63,11 +63,13 @@ export function AgentMessageList({ conversation, onRetry, onRevise, onStop, onCo
               <time className="agent-message-time">{formatMessageTime(message.createdAt)}</time>
             </div>
             {/* 运行状态卡放在气泡**外面**：它讲的是"这一步做到哪了"，不是"Agent 说了什么"。
-                在途消息（`pending`）也要渲染它 —— 否则用户只看到一个"正在生成"却看不到进度。 */}
-            {message.role === "assistant" && <RunStatus message={message} onRetry={onRetry} onRevise={onRevise} onStop={onStop} onConfirm={onConfirm} onDiscard={onDiscard} />}
+                在途消息（`pending`）也要渲染它 —— 否则用户只看到一个"正在生成"却看不到进度。
+                回调带上这条消息的 `runId`：面板是**按消息**渲染的，点它确认的就是**这一轮**
+                （Fix round 1 / C2 —— 少了它，点确认会提交最近那一轮，可能是另一条会话的草稿）。 */}
+            {message.role === "assistant" && <RunStatus message={message} onRetry={onRetry} onRevise={onRevise} onStop={() => onStop?.(message.runId)} onConfirm={() => onConfirm?.(message.runId)} onDiscard={() => onDiscard?.(message.runId)} />}
             {/* 有草稿时再给一块**确认面板**：它比状态卡里的摘要详细得多（精确计数、来源与目标、
                 假设、近似、导出省略、一步撤销声明）。计划把它与状态卡分开列，这里也分开渲染。 */}
-            {message.role === "assistant" && message.draft && <ConfirmationPanel draft={message.draft} assumptions={message.draft.assumptions} onConfirm={onConfirm} onDiscard={onDiscard} />}
+            {message.role === "assistant" && message.draft && <ConfirmationPanel draft={message.draft} assumptions={message.draft.assumptions} onConfirm={() => onConfirm?.(message.runId)} onDiscard={() => onDiscard?.(message.runId)} />}
             {/* 在途消息在气泡里**仍然**留一句带 `role="status"` 的短标签：屏幕阅读器靠它播报，
                 而状态卡负责说明"走到哪一步"。两者不重复，也不互相替代。 */}
             <div className="agent-bubble">

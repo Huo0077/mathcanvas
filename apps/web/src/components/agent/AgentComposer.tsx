@@ -8,7 +8,14 @@ import { useRef, useState } from "react"
  * 所以 `compositionstart/end` 期间一律放过按键，否则打一个"切线"就会误发两次。
  */
 interface AgentComposerProps {
-  onSend: (prompt: string) => void
+  /**
+   * 发送。
+   *
+   * 返回值是"这条指令被接受了吗"：`false`（或一个 resolve 成 `false` 的 promise）时
+   * **输入框不清空**，并显示一句可照做的说明（Fix round 1 / Minor 1）。
+   * 不返回结果（`undefined`）时按老口径清空 —— 老调用方与只关心"我发了什么"的用例不受影响。
+   */
+  onSend: (prompt: string) => void | boolean | Promise<boolean>
   /** 有回复在途：发送键变成"回复中"并禁用，避免连点发出重复指令。 */
   busy?: boolean
   disabled?: boolean
@@ -16,13 +23,22 @@ interface AgentComposerProps {
 
 export function AgentComposer({ onSend, busy = false, disabled = false }: AgentComposerProps) {
   const [value, setValue] = useState("")
+  const [refusal, setRefusal] = useState<string | null>(null)
   const composingRef = useRef(false)
   const canSend = value.trim().length > 0 && !busy && !disabled
 
   const submit = () => {
     if (!canSend) return
-    onSend(value)
-    setValue("")
+    setRefusal(null)
+    const outcome = onSend(value)
+    /**
+     * **被拒时把话还给用户**：`sendPrompt` 会因为"内容像密钥"或"保存失败"而拒绝，
+     * 而输入框原先在按下发送的那一刻就清空了 —— 用户看到的是自己的指令凭空消失。
+     */
+    const refuse = () => setRefusal("这条指令没有被接受（可能是内容里含密钥样串，或者没能保存）。输入还留着，改一改再发一次。")
+    if (outcome === undefined) { setValue(""); return }
+    if (typeof outcome === "boolean") { if (outcome) setValue(""); else refuse(); return }
+    void outcome.then((accepted) => { if (accepted) setValue(""); else refuse() }).catch(() => refuse())
   }
 
   return <form className="agent-composer" aria-label="对话输入框" onSubmit={(event) => { event.preventDefault(); submit() }}>
@@ -46,5 +62,6 @@ export function AgentComposer({ onSend, busy = false, disabled = false }: AgentC
       <button type="submit" className="agent-send" name="send" disabled={!canSend}>{busy ? "回复中" : "发送"}</button>
     </div>
     {busy && <p className="agent-composer-status" role="status">正在生成回复…</p>}
+    {refusal && <p className="agent-composer-refusal" role="alert">{refusal}</p>}
   </form>
 }

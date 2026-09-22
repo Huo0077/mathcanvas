@@ -16,9 +16,10 @@ import { createHostBridge } from "./hostBridge"
  * - 同意**会过期**；
  * - `commit` **不是模型可见的工具**（只有宿主/UI 能创建同意）。
  */
-function makeBridge(options: { now?: () => number; runId?: string; ttlMs?: number } = {}) {
+function makeBridge(options: { now?: () => number; runId?: string; ttlMs?: number; conversationId?: string } = {}) {
   const drafts: DraftStore = createDraftStore()
   let document: GeometryDocument = createEmptyDocument("conics")
+  let conversationId: string | null = options.conversationId ?? null
   const replaced: GeometryDocument[] = []
   const bridge = createHostBridge({
     drafts,
@@ -28,10 +29,12 @@ function makeBridge(options: { now?: () => number; runId?: string; ttlMs?: numbe
       document = candidate
     },
     runId: options.runId ?? "run-1",
+    conversationId: options.conversationId,
+    readConversationId: () => conversationId,
     now: options.now ?? (() => 1_000),
     consentTtlMs: options.ttlMs ?? 60_000
   })
-  return { bridge, drafts, replaced, getDocument: () => document }
+  return { bridge, drafts, replaced, getDocument: () => document, setConversation: (next: string | null) => { conversationId = next } }
 }
 
 /**
@@ -110,14 +113,36 @@ describe("host bridge consent", () => {
   })
 
   /**
-   * **待查**（不是已知正确行为）：这条用例当前失败 —— 第二次 `stage` 之后 `commit` 竟然
-   * 返回 `ok: true`，说明 `stale_preview` 那道闸没有拦住它。
-   * 已排除的候选：`draftVersion` 确实递增（`stage` 末尾 `record.draftVersion += 1`）、
-   * `compiledOperations` 确实累积、`current.document` 已是文档本体（不再是句柄）。
-   * 下一步该打印的是"两次 `stage` 各自返回的 `previewHash`"与"`consent.previewHash`"，
-   * 确认第二次暂存是否真的改到了 `candidate`（怀疑点：`stage` 内 `cloneDocument` 之后
-   * `applyToCandidate` 的返回值是否被正确串到 `record.candidate`）。
-   * 在查清之前**显式跳过**，而不是让它长期红着 —— 红灯会被当成噪音忽略。
+   * **同意也绑定会话**（Fix round 1 / C2；规格 §5.4："确认提交时检查会话、文档、generation
+   * 和 preview hash，任意不匹配返回 stale 错误"）。
+   *
+   * 少了这一条，一份**属于会话 A** 的同意可以在用户切到 B 之后被消费 —— 而界面上那块面板
+   * 明明说的是 A 的草稿。文档会按 B 的会话被改掉，事后谁也说不清是哪一个会话提交的。
+   */
+  it("refuses a consent that belongs to another conversation", () => {
+    const harness = makeBridge({ conversationId: "conv-a" })
+    const record = harness.drafts.create(harness.getDocument(), harness.bridge.live()!.handle)
+    stagePoint(harness.drafts, record.draftId, record.draftVersion)
+    const consent = harness.bridge.requestConsent(record.draftId)
+    if (!consent.ok) throw new Error("expected consent")
+    expect(consent.record.conversationId).toBe("conv-a")
+
+    // 用户切到了另一条会话（面板却还挂在界面上）。
+    harness.setConversation("conv-b")
+    const receipt = harness.bridge.commit(record.draftId, consent.record)
+
+    expect(receipt.ok).toBe(false)
+    if (!receipt.ok) expect(receipt.reason).toBe("stale_conversation")
+    // 一个字节都没写：拒绝路径不动物档。
+    expect(harness.replaced).toHaveLength(0)
+    expect(harness.getDocument().primitives).toHaveLength(0)
+  })
+
+  /**
+   * **预览之后草稿又变过 → 旧同意作废**。
+   *
+   * （这里原先挂着一段"待查、显式跳过"的注释，说这条用例当时失败；它现在**是通过的**，
+   * 注释与事实不符，已经删掉 —— 留着会让下一个人以为这里有一道已知的坏闸。）
    */
   it("invalidates consent when the draft changed after the preview", () => {
     const harness = makeBridge()

@@ -93,6 +93,15 @@ export interface ConversationFactView {
   /** 人话一句；会原样进提示词。 */
   text: string
   status: ConversationFactStatus
+  /**
+   * **这条事实是在哪份文档上确认的**（规格 §5.1）。
+   *
+   * 会话的事实表是**会话级**的，而这个应用里换工作区就是换文档 —— 少了这一项，
+   * 在立体几何里确认的"第 3 版新增 solid-1"会出现在平面几何那一轮的提示词里，
+   * 而那份文档里根本没有这个对象（§9 门点名的"会话之间不串事实"）。
+   * 可选：旧数据没有这一项，按"未知"处理（保留并留一条警告，不静默丢）。
+   */
+  documentId?: string
 }
 
 export type SafeRetry = "none" | "same_request" | "refresh_context" | "revise_input"

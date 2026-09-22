@@ -3,7 +3,8 @@ import { create } from "zustand"
 import type { DraftObjectCounts } from "@draw/agent-core"
 
 import { deriveConversationTitle } from "./agentTranscript"
-import { compactConversationSummary, parseConversationSummary, serializeConversationSummary, shouldCompactConversation } from "./conversationSummary"
+import { compactConversationSummary, shouldCompactConversation, summaryOfDocument, withDocumentSummary } from "./conversationSummary"
+import { factBelongsToDocument } from "@draw/agent-core"
 import {
   DEFAULT_CONVERSATION_BINDING,
   NEW_CONVERSATION_TITLE,
@@ -272,7 +273,7 @@ function commitPending(
   get: () => AgentState,
   set: (partial: Partial<AgentState>) => void,
   update: (message: AgentMessage) => AgentMessage,
-  options: { finish?: boolean; onRefusal?: () => void; runId?: string } = {}
+  options: { finish?: boolean; onRefusal?: () => void; runId?: string; documentGeneration?: number } = {}
 ): Promise<boolean> {
   const target = targetFor(get, options.runId)
   if (!target) return Promise.resolve(false)
@@ -283,7 +284,8 @@ function commitPending(
     messages: target.conversation.messages.map((candidate) => (candidate.id === message.id ? message : candidate))
   }
   return commitAfter(
-    () => conversationRepository().append(owner, get().binding, message),
+    // `documentGeneration` 落到 `conversation_messages.document_generation`（Fix round 2 / item 5）。
+    () => conversationRepository().append(owner, get().binding, message, options.documentGeneration),
     () => {
       const conversations = get().conversations.map((conversation) => (conversation.id === owner.id ? owner : conversation))
       const projected: Partial<AgentState> = { conversations, activeConversation: resolveActive(conversations, get().activeConversationId) }
@@ -368,11 +370,11 @@ interface AgentState {
    */
   recordDiagnostic: (line: string, runId?: string) => void
   /** 记下已暂存的草稿**视图**。 */
-  recordDraft: (draft: AgentDraftView, runId?: string) => Promise<boolean>
+  recordDraft: (draft: AgentDraftView, runId?: string, documentGeneration?: number) => Promise<boolean>
   /** 记下提交结果；`committed` / `no_change` 都算结束。 */
-  recordReceipt: (receipt: AgentCommitView, runId?: string) => Promise<boolean>
+  recordReceipt: (receipt: AgentCommitView, runId?: string, documentGeneration?: number) => Promise<boolean>
   /** 运行失败：保留原因与"能不能重试"，而不是给一条空回复。 */
-  failPendingReply: (failure: { code: string; message: string; retryable: boolean }, runId?: string) => Promise<boolean>
+  failPendingReply: (failure: { code: string; message: string; retryable: boolean }, runId?: string, documentGeneration?: number) => Promise<boolean>
   /**
    * **一轮已提交运行的结论写进长期记忆**（Task 5）。
    *
@@ -389,6 +391,8 @@ interface AgentState {
     runId: string
     generation: number
     createdObjects: readonly string[]
+    /** 这次提交落在**哪份文档**上（事实按它筛；同一次会话可能被用在两份文档上）。 */
+    documentId: string
     conversationId?: string
     promptMessageId?: string
   }) => Promise<boolean>
@@ -404,6 +408,14 @@ function resolveActive(conversations: AgentConversation[], activeConversationId:
 }
 
 const initialConversations = initialProjection()
+
+/**
+ * 绑定请求的序号：**只有最后那一次算数**（见 `setBinding`）。
+ *
+ * 读列表是异步的，而用户可以在两次读之间换文档 —— 没有这个序号，先发后到的那一次
+ * 会把绑定与列表按旧文档写下去（e2e 当场抓到过）。
+ */
+let bindingRequest = 0
 
 export const useAgentStore = create<AgentState>((set, get) => ({
   conversations: initialConversations,
@@ -423,7 +435,21 @@ export const useAgentStore = create<AgentState>((set, get) => ({
         : [...conversation.messages].reverse().find((candidate) => candidate.role === "assistant" && candidate.pending)
       if (!message) return null
       const target: RunTarget = { conversationId: conversation.id, messageId: message.id, promptMessageId }
-      set({ runTargets: { ...get().runTargets, [runId]: target } })
+      /**
+       * **把 `runId` 盖在这一轮的两条消息上**（Fix round 1 / C2 + Minor 2）。
+       *
+       * 界面上那块"确认改动"面板是按消息渲染的，点确认时必须能说出"这是哪一轮" ——
+       * 否则它会指回最近的那一轮（可能是**另一条会话**的草稿）。它同时是
+       * `conversation_messages.run_id` 那一列唯一的写点（原先永远是空的）。
+       */
+      const conversations = get().conversations.map((candidate) => candidate.id === conversation.id
+        ? { ...candidate, messages: candidate.messages.map((entry) => (entry.id === promptMessageId || entry.id === message.id ? { ...entry, runId } : entry)) }
+        : candidate)
+      set({
+        conversations,
+        activeConversation: resolveActive(conversations, get().activeConversationId),
+        runTargets: { ...get().runTargets, [runId]: target }
+      })
       return target
     }
     return null
@@ -469,6 +495,16 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     })
   ),
   setBinding: async (binding) => {
+    /**
+     * **只有最后一次绑定请求算数**（Fix round 1：e2e 当场抓到的竞态）。
+     *
+     * 读列表是异步的（桌面端要过 IPC）。应用启动时那一次绑定要读一份文档，而用户可能立刻
+     * 切了工作区（= 换文档）—— 两次读的**回来顺序不保证**。慢的那一次后到，就会把绑定
+     * 与列表按**旧文档**写下去：界面在立体几何里，而会话全写在平面几何那份绑定上。
+     * 这正是 C1 要修的那类问题，只是换了一条路进来。
+     */
+    bindingRequest += 1
+    const request = bindingRequest
     let loaded: AgentConversation[]
     try {
       loaded = await conversationRepository().loadList(binding)
@@ -476,6 +512,8 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       // 读不回来就**不换绑定**：界面留着上一次读到的内容，而不是装作"这个绑定是空的"。
       return false
     }
+    // 期间又有人要求换绑定：这一次的结果已经过期，**不应用**（免得把新列表盖回旧的）。
+    if (request !== bindingRequest) return false
     // **整体替换**，绝不与旧列表合并：合并就是"删掉的会话从旧缓存里回来"的另一半。
     const conversations = loaded.length > 0 ? loaded : [createAgentConversation()]
     const activeConversation = resolveActive(conversations, null)
@@ -484,6 +522,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       // 桌面仓储的列表**不带消息**（消息按需读）：把当前这条补上，首屏才不是一段空白。
       try {
         const detail = await conversationRepository().read(activeConversation.id)
+        if (request !== bindingRequest) return true
         if (detail && detail.messages.length > 0) {
           const merged = conversations.map((conversation) => (conversation.id === detail.id ? { ...conversation, messages: detail.messages } : conversation))
           set({ conversations: merged, activeConversation: merged.find((conversation) => conversation.id === detail.id) })
@@ -550,14 +589,14 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   recordDiagnostic: (line, runId) => updatePending(get, set, (message) => message.pending
     ? { ...message, diagnostics: [...(message.diagnostics ?? []), line] }
     : message, runId),
-  recordDraft: (draft, runId) => commitPending(get, set, (message) => message.pending ? { ...message, draft, pending: false } : message, { runId }),
-  recordReceipt: (receipt, runId) => commitPending(get, set, (message) => ({
+  recordDraft: (draft, runId, documentGeneration) => commitPending(get, set, (message) => message.pending ? { ...message, draft, pending: false } : message, { runId, documentGeneration }),
+  recordReceipt: (receipt, runId, documentGeneration) => commitPending(get, set, (message) => ({
     ...message,
     pending: false,
     commit: receipt,
     text: receipt.status === "committed" ? "已按确认提交。" : receipt.status === "no_change" ? "这次没有需要改动的地方。" : ""
-  }), { finish: true, runId }),
-  failPendingReply: (failure, runId) => commitPending(get, set, (message) => ({ ...message, pending: false, failure, text: "" }), { finish: true, runId }),
+  }), { finish: true, runId, documentGeneration }),
+  failPendingReply: (failure, runId, documentGeneration) => commitPending(get, set, (message) => ({ ...message, pending: false, failure, text: "" }), { finish: true, runId, documentGeneration }),
   recordCommittedRun: async (input) => {
     const pinned = get().runTargets[input.runId]
     const conversationId = input.conversationId ?? pinned?.conversationId
@@ -565,7 +604,9 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     if (!conversationId || !promptMessageId) return false
     const createdAt = Date.now()
 
-    // ① 事实：**代数 + 这次创建的对象**。证据是这条会话里的那条用户消息（Rust 侧同一个判据）。
+    // ① 事实：**代数 + 这次创建的对象 + 它属于哪份文档**。
+    //    证据是这条会话里的那条用户消息（Rust 侧同一个判据）；
+    //    `documentId` 是注入时筛选用它（规格 §5.1：一条会话的事实只属于它自己那份文档）。
     try {
       await conversationRepository().saveFact({
         id: `fact-${input.runId}`,
@@ -574,7 +615,8 @@ export const useAgentStore = create<AgentState>((set, get) => ({
         valueJson: {
           text: describeCommittedRun(input.generation, input.createdObjects),
           generation: input.generation,
-          createdObjects: [...input.createdObjects]
+          createdObjects: [...input.createdObjects],
+          documentId: input.documentId
         },
         sourceMessageId: promptMessageId,
         status: "confirmed",
@@ -596,15 +638,24 @@ export const useAgentStore = create<AgentState>((set, get) => ({
         createdAt: message.createdAt
       }))
       if (!shouldCompactConversation(messages)) return true
-      const previous = parseConversationSummary(record.summary)
+      /**
+       * **只喂本文档的事实，也只写回本文档那一份**（Fix round 2 / C1 残余；规格 §5.1 + §9）。
+       *
+       * 摘要是事实原文与"创建出来的对象 id"的**另一条载体**：只筛事实列表、不筛摘要，
+       * 等于换了条路把同一段文字送进另一份文档的提示词。一条会话可以被用在两份文档上
+       * （Agent 自己会为执行计划切工作区），所以这里按 `input.documentId` 取旧摘要、
+       * 按它筛事实、再按它写回 —— 别的文档那一份原样保留。
+       */
+      const scopedFacts = record.facts.filter((fact) => factBelongsToDocument(fact, input.documentId))
+      const previous = summaryOfDocument(record.summary, input.documentId)
       const summary = compactConversationSummary({
         messages,
-        facts: record.facts,
+        facts: scopedFacts,
         createdObjects: input.createdObjects,
         previous,
         now: createdAt
       })
-      await conversationRepository().saveSummary({ conversationId, summary: serializeConversationSummary(summary), expectedVersion: record.summaryVersion })
+      await conversationRepository().saveSummary({ conversationId, summary: withDocumentSummary(record.summary, input.documentId, summary), expectedVersion: record.summaryVersion })
     } catch {
       // 摘要失败不影响事实（它已经落下了）：下一次提交再试，不在这里编一份摘要。
     }

@@ -38,10 +38,13 @@ interface AgentWorkspaceProps {
    * 组件**不**自己提交：它只把这个意图转给上层（`agentRunner.confirm`）。
    * 提交要经过 `HostBridge` 的一次性同意与 Compare-and-Swap，而那两样都不在这一层手里 ——
    * 界面拿得到的最多是"用户点了这个按钮"这个事实。
+   *
+   * 参数是**用户点的那块面板所属的那一轮**（消息上的 `runId`；Fix round 1 / C2）：
+   * 少了它，上层只能猜"最近那一轮"，而在两条会话都暂存过草稿时会提交错的那一份。
    */
-  onConfirm?: () => void
-  onDiscard?: () => void
-  onStop?: () => void
+  onConfirm?: (runId?: string) => void
+  onDiscard?: (runId?: string) => void
+  onStop?: (runId?: string) => void
   onRetry?: () => void
 }
 
@@ -75,8 +78,9 @@ export function AgentWorkspace({ onBackToWorkspace, onRun, onConfirm, onDiscard,
   }, [pendingReplyId, activeConversation, onRun])
 
   // 有新内容就滚到底：用户永远先看到最新的一条。
+  // `?.()`：`scrollTo` 不是每个环境都有（jsdom 就没有），而"滚动失败"不该把一次渲染炸掉。
   useEffect(() => {
-    globalThis.requestAnimationFrame(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight }) })
+    globalThis.requestAnimationFrame(() => { scrollRef.current?.scrollTo?.({ top: scrollRef.current.scrollHeight }) })
   }, [pendingMessage?.trace?.length, pendingMessage?.draft, pendingMessage?.commit, pendingMessage?.failure])
 
   return <div className="agent-workspace">

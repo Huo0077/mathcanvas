@@ -66,6 +66,15 @@ export interface AgentRuntimeDependencies {
   readSceneDocuments(): SceneDocumentSnapshot[]
   projectId: string
   runId: string
+  /**
+   * **这一轮钉住的那条会话**（Fix round 1 / C2；规格 §5.4）。
+   *
+   * 同意要绑定它：确认时如果用户已经切到别条会话，提交必须按 stale 拒绝，
+   * 而不是拿 B 的会话去落一份属于 A 的草稿。
+   */
+  conversationId?: string
+  /** **当前**会话（用户可能已经切走）；与同意里的会话不一致时提交被拒。 */
+  readConversationId?: () => string | null
   consentTtlMs?: number
   now?: () => number
   /**
@@ -179,6 +188,9 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
     live,
     replace: (candidate) => dependencies.writeDocument(candidate),
     runId: dependencies.runId,
+    // 同意绑定这一轮的会话；提交时与**当前**会话比对（规格 §5.4 的会话检查）。
+    ...(dependencies.conversationId === undefined ? {} : { conversationId: dependencies.conversationId }),
+    ...(dependencies.readConversationId === undefined ? {} : { readConversationId: dependencies.readConversationId }),
     now: dependencies.now,
     consentTtlMs: dependencies.consentTtlMs
   })
@@ -344,6 +356,8 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
       const result = host.commit(id, consent.record)
       if (result.ok) return { status: result.receipt.changed ? "committed" as const : "no_change" as const }
       if (result.reason === "stale_source") return { status: "stale_source" as const, detail: result.detail }
+      // 会话对不上（用户切走了）：同样是"世界变了"，按 stale 如实回，而不是硬着头皮提交。
+      if (result.reason === "stale_conversation") return { status: "stale_source" as const, detail: result.detail }
       return { status: "rejected" as const, detail: `${result.reason}${result.detail ? `: ${result.detail}` : ""}` }
     },
     discardDraft() {

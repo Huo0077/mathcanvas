@@ -31,6 +31,28 @@ export interface ConversationSummary {
   /** 压缩时这条会话有多少条消息（"这份摘要覆盖到哪儿"）。 */
   messageCount: number
   compactedAt: number
+  /**
+   * **这份摘要是哪份文档的**（规格 §5.1；Fix round 2 / C1 残余）。
+   *
+   * 摘要是长期记忆的载体之一：没有这一项，注入方只能把"这份会话的摘要"整段端给任何一轮，
+   * 而在立体几何里确认的事实（原文与创建出来的对象 id）就会以 `summary` 的形式
+   * 出现在平面几何那一轮里 —— 事实列表筛了，载体没筛等于没筛。
+   */
+  documentId?: string
+}
+
+/**
+ * **按文档分开的摘要**（存进 `conversations.summary` 的那份 JSON）。
+ *
+ * 一条会话可以被用在两份文档上（这个应用里 Agent 自己会为执行计划切工作区），
+ * 而它的事实/摘要是**文档级**的：所以存储形状是"一份文档一份摘要"，
+ * 注入时只取本次运行那份文档的那一份。
+ */
+export const SUMMARY_BOOK_VERSION = 2
+
+export interface ConversationSummaryBook {
+  version: number
+  byDocument: Record<string, ConversationSummary>
 }
 
 export interface CompactSummaryInput {
@@ -121,19 +143,68 @@ export function serializeConversationSummary(summary: ConversationSummary): stri
 export function parseConversationSummary(serialized: string): ConversationSummary | null {
   if (serialized.trim().length === 0) return null
   try {
-    const parsed = JSON.parse(serialized) as Partial<ConversationSummary>
-    if (typeof parsed !== "object" || parsed === null || typeof parsed.goal !== "string") return null
-    const list = (value: unknown): string[] => (Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [])
-    return {
-      goal: parsed.goal,
-      confirmedFacts: list(parsed.confirmedFacts),
-      createdObjects: list(parsed.createdObjects),
-      openQuestions: list(parsed.openQuestions),
-      preferences: list(parsed.preferences),
-      messageCount: typeof parsed.messageCount === "number" ? parsed.messageCount : 0,
-      compactedAt: typeof parsed.compactedAt === "number" ? parsed.compactedAt : 0
-    }
+    return asConversationSummary(JSON.parse(serialized))
   } catch {
     return null
   }
+}
+
+/** 形状收窄：只认我们写过的那些字段（多一个少一个都不猜）。 */
+function asConversationSummary(value: unknown): ConversationSummary | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null
+  const parsed = value as Partial<ConversationSummary>
+  if (typeof parsed.goal !== "string") return null
+  const list = (candidate: unknown): string[] => (Array.isArray(candidate) ? candidate.filter((entry): entry is string => typeof entry === "string") : [])
+  return {
+    goal: parsed.goal,
+    confirmedFacts: list(parsed.confirmedFacts),
+    createdObjects: list(parsed.createdObjects),
+    openQuestions: list(parsed.openQuestions),
+    preferences: list(parsed.preferences),
+    messageCount: typeof parsed.messageCount === "number" ? parsed.messageCount : 0,
+    compactedAt: typeof parsed.compactedAt === "number" ? parsed.compactedAt : 0,
+    ...(typeof parsed.documentId === "string" && parsed.documentId.length > 0 ? { documentId: parsed.documentId } : {})
+  }
+}
+
+/**
+ * 读回**按文档分开的那本摘要**。
+ *
+ * 读不出这本形状时回一本**空的**：旧形状（平铺的一份摘要）没有说它属于哪份文档，
+ * 而"猜一个"就是把别份文档的记忆端给这一轮 —— 宁可当作还没有摘要。
+ */
+export function parseConversationSummaryBook(serialized: string): ConversationSummaryBook {
+  const empty: ConversationSummaryBook = { version: SUMMARY_BOOK_VERSION, byDocument: {} }
+  if (serialized.trim().length === 0) return empty
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(serialized)
+  } catch {
+    return empty
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return empty
+  const book = parsed as Partial<ConversationSummaryBook>
+  if (book.version !== SUMMARY_BOOK_VERSION || typeof book.byDocument !== "object" || book.byDocument === null) return empty
+
+  const byDocument: Record<string, ConversationSummary> = {}
+  for (const [documentId, value] of Object.entries(book.byDocument)) {
+    const summary = asConversationSummary(value)
+    if (summary) byDocument[documentId] = { ...summary, documentId }
+  }
+  return { version: SUMMARY_BOOK_VERSION, byDocument }
+}
+
+export function serializeConversationSummaryBook(book: ConversationSummaryBook): string {
+  return JSON.stringify(book)
+}
+
+/** 这一轮该看哪份摘要：**只有本文档那一份**（别的文档回 `null`，不是"端上另一份"）。 */
+export function summaryOfDocument(serialized: string, documentId: string): ConversationSummary | null {
+  return parseConversationSummaryBook(serialized).byDocument[documentId] ?? null
+}
+
+/** 写回本文档那一份，**别的文档那几份原样保留**。 */
+export function withDocumentSummary(serialized: string, documentId: string, summary: ConversationSummary): string {
+  const book = parseConversationSummaryBook(serialized)
+  return serializeConversationSummaryBook({ version: SUMMARY_BOOK_VERSION, byDocument: { ...book.byDocument, [documentId]: { ...summary, documentId } } })
 }

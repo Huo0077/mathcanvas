@@ -36,6 +36,14 @@ export interface ConsentRecord {
   expectedHandles: { target: DocumentHandle; sources: DocumentHandle[] }
   /** 这次同意允许产生的效果（供 UI 说明"将要发生什么"）。 */
   allowedEffects: string[]
+  /**
+   * **这一轮钉住的那条会话**（Fix round 1 / C2；规格 §5.4："确认提交时检查会话…"）。
+   *
+   * 同意是"用户在**这条会话**里点了确认"，而用户完全可能在点之前切走 ——
+   * 少了这一项，一份属于 A 的同意会在 B 的会话里被消费掉，文档按 B 的草稿被改，
+   * 事后谁也说不清是哪一个会话提交的。可选：没有会话概念的调用方（纯草稿层测试）不受影响。
+   */
+  conversationId?: string
   expiresAt: number
   nonce: string
 }
@@ -62,7 +70,7 @@ export type PreviewResult = { ok: true; artifact: PreviewArtifact } | { ok: fals
 
 export type ConsentResult = { ok: true; record: ConsentRecord } | { ok: false; reason: "unknown_draft" }
 
-export type CommitReason = "missing_consent" | "consumed_consent" | "unminted_consent" | "wrong_run" | "expired_consent" | "stale_preview" | "unknown_draft" | "stale_source" | "commit_rejected" | "no_change"
+export type CommitReason = "missing_consent" | "consumed_consent" | "unminted_consent" | "wrong_run" | "expired_consent" | "stale_preview" | "stale_conversation" | "unknown_draft" | "stale_source" | "commit_rejected" | "no_change"
 
 export type CommitReceiptResult = { ok: true; receipt: { changed: boolean; draftId: string } } | { ok: false; reason: CommitReason; detail?: string }
 
@@ -78,6 +86,10 @@ export interface HostBridgeDependencies {
   live(): { handle: DocumentHandle; document: GeometryDocument } | null
   replace(candidate: GeometryDocument): void
   runId: string
+  /** 这一轮**钉住**的会话；同意绑定它（规格 §5.4）。 */
+  conversationId?: string
+  /** **当前**会话（用户可能已经切走）。同意里的会话与它不一致时，提交按 stale 拒绝。 */
+  readConversationId?: () => string | null
   now?: () => number
   consentTtlMs?: number
 }
@@ -152,6 +164,7 @@ export function createHostBridge(dependencies: HostBridgeDependencies): HostBrid
           previewHash: artifact.previewHash,
           expectedHandles: { target: handle, sources: [] },
           allowedEffects: [`${artifact.stageCount} action(s) applied to ${handle.documentId}`],
+          ...(dependencies.conversationId === undefined ? {} : { conversationId: dependencies.conversationId }),
           expiresAt: now() + ttl,
           nonce
         }
@@ -166,6 +179,16 @@ export function createHostBridge(dependencies: HostBridgeDependencies): HostBrid
       if (!minted.has(consent.nonce)) return { ok: false, reason: "unminted_consent" }
       if (consent.runId !== runId) return { ok: false, reason: "wrong_run" }
       if (consent.expiresAt <= now()) return { ok: false, reason: "expired_consent" }
+      /**
+       * **会话也要对得上**（Fix round 1 / C2；规格 §5.4）。
+       *
+       * 这一条排在预览与文档 CAS 之前：如果用户在拿到同意之后切到了别条会话，
+       * "这份同意属于哪条会话"就已经不成立了 —— 继续走下去会按另一条会话的草稿改文档。
+       */
+      const liveConversation = dependencies.readConversationId?.() ?? null
+      if (consent.conversationId !== undefined && liveConversation !== null && consent.conversationId !== liveConversation) {
+        return { ok: false, reason: "stale_conversation", detail: `this consent belongs to conversation ${consent.conversationId}, but the active conversation is ${liveConversation}` }
+      }
 
       const artifact = drafts.getPreview(draftId)
       if (!artifact) return { ok: false, reason: "unknown_draft" }

@@ -258,15 +258,44 @@ export const DEFAULT_CONVERSATION_CHARACTER_BUDGET = 6_000
 export const MAX_CONVERSATION_CHARACTER_BUDGET = 24_000
 /** 摘要单独的字符上限：摘要是"压缩过的历史"，它自己不该长到把消息挤没。 */
 export const DEFAULT_SUMMARY_CHARACTER_BUDGET = 2_000
+/**
+ * **已确认事实的条数上限**。
+ *
+ * 与提示词渲染的上限**必须是同一个数**（`systemPrompt.ts` 从这里取）：两处各写一个 16
+ * 就意味着"预算按 40 条扣费、模型只看到 16 条"，长会话里摘要与最近消息会被那些
+ * 模型根本看不到的事实挤空。
+ */
+export const MAX_CONVERSATION_FACTS = 16
 
-function byTimeThenId(left: ConversationMessageView, right: ConversationMessageView): number {
-  if (left.createdAt !== right.createdAt) return left.createdAt - right.createdAt
-  return left.id < right.id ? -1 : left.id > right.id ? 1 : 0
+/**
+ * **§5.3 的分段预算**（Fix round 1 / I3）：
+ * 场景 20% / 已确认事实 15% / 摘要 20% / 最近消息 35% / 当前请求与安全余量 10%。
+ *
+ * 每一段**各有各的额度**，所以谁也不能把别人挤没。唯一的例外是场景：它是**当前事实**，
+ * 额度是软的（超出的部分从安全余量里扣，不够也不动别人的额度）——
+ * 这正是"当前场景优先于旧消息"（§1.2）与"最近消息 35%"两条同时成立的方式。
+ */
+export const CONVERSATION_BANDS = { scene: 0.20, facts: 0.15, summary: 0.20, messages: 0.35, reserve: 0.10 } as const
+
+/**
+ * **这条事实属不属于这份文档**（规格 §5.1；§9 门的"会话之间不串事实"）。
+ *
+ * 没有 `documentId` 的按"未知"处理 —— 保留（旧数据不该被静默丢掉），
+ * 但**能证明是别的文档的**一律不进上下文。
+ */
+export function factBelongsToDocument(fact: ConversationFactView, documentId: string): boolean {
+  return fact.documentId === undefined || fact.documentId === documentId
 }
 
-/** 观察那一段的字符开销：它是固定开销，所以先算出来再决定消息还剩多少。 */
-function observationCost(observation: ObservationSummary): number {
-  return observation.summary.length + observation.facts.reduce((sum, fact) => sum + fact.text.length, 0)
+/**
+ * 顺序**只看 `createdAt`**（稳定排序，保持调用方给的先后）。
+ *
+ * 不能再拿 id 兜底：id 形如 `message-…-10`，字符串序会把 `…-10` 排在 `…-9` 前面，
+ * 而同一次 `sendPrompt` 的用户消息与在途助手消息时间戳相同 —— 于是"用户说完助手接话"
+ * 会变成"助手先说"，当前请求的去重也会跟着错（规格 §5.3 的"最近消息"是有序的）。
+ */
+function byTime(left: ConversationMessageView, right: ConversationMessageView): number {
+  return left.createdAt - right.createdAt
 }
 
 function estimateConversation(context: ConversationContext): number {
@@ -282,14 +311,20 @@ function estimateConversation(context: ConversationContext): number {
 export function buildConversationContext(input: ConversationContextInput): ConversationContext {
   const warnings: ContextWarning[] = []
 
-  // ---- 已确认事实：只留 `confirmed`，并按 key/id 排序（确定性） ----
-  const facts = input.facts
-    .filter((fact) => fact.status === "confirmed")
-    .map((fact): ConversationFactView => ({ id: fact.id, key: fact.key, text: fact.text, status: "confirmed" }))
+  // ---- 已确认事实：只留 `confirmed`、只留**本文档**的，并按 key/id 排序（确定性） ----
+  const confirmed = input.facts.filter((fact) => fact.status === "confirmed")
+  const facts = confirmed
+    .filter((fact) => {
+      if (factBelongsToDocument(fact, input.binding.documentId)) return true
+      // 别的文档确认的事实：**不进上下文**（它说的对象在本文档里根本不存在）。
+      warnings.push({ code: "foreign_fact", detail: `fact ${fact.key} was confirmed against document ${fact.documentId ?? "unknown"}, not ${input.binding.documentId}` })
+      return false
+    })
+    .map((fact): ConversationFactView => ({ id: fact.id, key: fact.key, text: fact.text, status: "confirmed", ...(fact.documentId === undefined ? {} : { documentId: fact.documentId }) }))
     .sort((left, right) => (left.key < right.key ? -1 : left.key > right.key ? 1 : left.id < right.id ? -1 : left.id > right.id ? 1 : 0))
 
   // ---- 历史消息：时间序；空白内容不占预算（在途占位消息没有可读的话） ----
-  const history = [...input.messages].filter((message) => message.text.trim().length > 0).sort(byTimeThenId)
+  const history = [...input.messages].filter((message) => message.text.trim().length > 0).sort(byTime)
   if (input.request !== undefined && history.length > 0) {
     const last = history[history.length - 1]
     if (last.role === "user" && last.text === input.request) history.pop()
@@ -297,24 +332,39 @@ export function buildConversationContext(input: ConversationContextInput): Conve
 
   const messageLimit = clamp(input.limits?.messages, DEFAULT_MESSAGE_LIMIT, MAX_MESSAGE_LIMIT)
   const totalBudget = clamp(input.limits?.characters, DEFAULT_CONVERSATION_CHARACTER_BUDGET, MAX_CONVERSATION_CHARACTER_BUDGET)
-  // 场景与已确认事实是**当前事实**：它们先占预算，剩下的才轮到摘要与消息。
-  let remaining = Math.max(0, totalBudget - observationCost(input.observation) - facts.reduce((sum, fact) => sum + fact.text.length, 0))
+  // ---- §5.3 的分段：每段各有各的额度，谁也挤不掉谁 ----
+  const factBand = Math.floor(totalBudget * CONVERSATION_BANDS.facts)
+  const summaryBand = Math.min(DEFAULT_SUMMARY_CHARACTER_BUDGET, Math.floor(totalBudget * CONVERSATION_BANDS.summary))
+  const messageBand = Math.floor(totalBudget * CONVERSATION_BANDS.messages)
 
-  let summary = input.summary
-  const summaryBudget = Math.min(DEFAULT_SUMMARY_CHARACTER_BUDGET, remaining)
-  if (summary.length > summaryBudget) {
-    warnings.push({ code: "truncated_summary", detail: `the summary was cut from ${summary.length} to ${summaryBudget} characters` })
-    summary = summary.slice(0, summaryBudget)
+  // ---- 已确认事实：**条数与字符都设上限**，超出的既不进上下文也不 charge ----
+  const admitted: ConversationFactView[] = []
+  let factCharacters = 0
+  for (const fact of facts) {
+    if (admitted.length >= MAX_CONVERSATION_FACTS) break
+    const cost = fact.text.length + fact.key.length
+    if (factCharacters + cost > factBand) break
+    admitted.push(fact)
+    factCharacters += cost
   }
-  remaining -= summary.length
+  if (admitted.length < facts.length) {
+    warnings.push({ code: "truncated_facts", detail: `showing ${admitted.length} of ${facts.length} confirmed facts` })
+  }
+
+  // ---- 摘要：压进自己的额度，**始终是合法 JSON**（切一半会给模型一段坏 JSON） ----
+  const fitted = fitSummary(input.summary, summaryBand)
+  if (fitted.reduced) {
+    warnings.push({ code: "truncated_summary", detail: `the summary was reduced from ${input.summary.length} to ${fitted.text.length} characters` })
+  }
 
   // ---- 最近消息：从**最新**往回收，收不下就停（旧消息先让路） ----
   const kept: ConversationMessageView[] = []
+  let messageCharacters = 0
   for (let at = history.length - 1; at >= 0 && kept.length < messageLimit; at -= 1) {
     const message = history[at]
-    if (message.text.length > remaining) break
+    if (messageCharacters + message.text.length > messageBand) break
     kept.unshift(message)
-    remaining -= message.text.length
+    messageCharacters += message.text.length
   }
   if (kept.length < history.length) {
     warnings.push({ code: "truncated_messages", detail: `showing the newest ${kept.length} of ${history.length} recent messages` })
@@ -322,9 +372,10 @@ export function buildConversationContext(input: ConversationContextInput): Conve
 
   const context: ConversationContext = {
     binding: input.binding,
-    summary,
-    facts,
+    summary: fitted.text,
+    facts: admitted,
     messages: kept,
+    // 场景（当前事实）**不进这套裁剪**：它有自己的软额度（见 CONVERSATION_BANDS 的说明）。
     observation: input.observation,
     ...(input.draft === undefined ? {} : { draft: input.draft }),
     warnings,
@@ -332,4 +383,55 @@ export function buildConversationContext(input: ConversationContextInput): Conve
   }
   context.estimatedCharacters = estimateConversation(context)
   return context
+}
+
+/**
+ * 把摘要压进它的额度里 —— **结果始终是合法 JSON**（Fix round 1 / I4）。
+ *
+ * 一份满尺寸的结构化摘要（`conversationSummary.ts` 的构造上限约 3.7K 字符）比摘要的额度大，
+ * 而原先的实现是 `summary.slice(0, budget)`：模型拿到的 `summary` 是一段**坏 JSON**
+ *（截在半个 token 上）。这里改成"解析 → 少留几项 / 截短字符串 → 重新序列化"，
+ * 一路缩到装得下为止；最坏情况只剩 `{ goal }`，那也还是合法 JSON。
+ * 不是我们写的那种形状（旧数据里的散文）时同样折成 `{ goal }`，绝不原样切一半。
+ */
+function fitSummary(summary: string, limit: number): { text: string; reduced: boolean } {
+  if (summary.length <= limit) return { text: summary, reduced: false }
+
+  let parsed: Record<string, unknown> | null = null
+  try {
+    const value = JSON.parse(summary) as unknown
+    if (value && typeof value === "object" && !Array.isArray(value)) parsed = { ...(value as Record<string, unknown>) }
+  } catch {
+    parsed = null
+  }
+  const goal = parsed !== null && typeof parsed.goal === "string" ? parsed.goal : summary
+  /**
+   * 退化成"只剩 goal"时也要**装得下**（Fix round 2 / 残余 5）。
+   *
+   * `{"goal":""}` 本身占 11 个字符，所以额度小于它时给不出合法 JSON ——
+   * 与其超出去 13 个字符（评审指出的上界漏洞），不如回**空**：
+   * "没有摘要"是诚实的状态，而超预算的坏 JSON 不是。
+   */
+  const fallback = (): string => {
+    const candidate = JSON.stringify({ goal: truncateText(goal, Math.max(0, limit - 12)) })
+    return candidate.length <= limit ? candidate : ""
+  }
+  if (parsed === null) return { text: fallback(), reduced: true }
+
+  for (let keep = 0.5; keep >= 0.02; keep /= 2) {
+    const candidate = JSON.stringify(Object.fromEntries(Object.entries(parsed).map(([key, value]) => [key, shrinkSummaryValue(value, keep)])))
+    if (candidate.length <= limit) return { text: candidate, reduced: true }
+  }
+  return { text: fallback(), reduced: true }
+}
+
+/** 数组只留**最近的那几条**（事实/对象都是越新越相关），长字符串截短。 */
+function shrinkSummaryValue(value: unknown, keep: number): unknown {
+  if (Array.isArray(value)) return value.slice(-Math.max(1, Math.ceil(value.length * keep))).map((entry) => shrinkSummaryValue(entry, keep))
+  if (typeof value === "string") return truncateText(value, 120)
+  return value
+}
+
+function truncateText(text: string, limit: number): string {
+  return text.length <= limit ? text : `${text.slice(0, Math.max(0, limit - 1))}…`
 }

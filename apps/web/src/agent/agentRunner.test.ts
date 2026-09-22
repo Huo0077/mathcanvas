@@ -5,6 +5,7 @@ import type { PlanEnvelope, PlannerPort, PlanRequest } from "@draw/agent-core"
 
 import { useAgentStore } from "../agentStore"
 import { conversationRepository } from "../conversationRepository"
+import { summaryOfDocument } from "../conversationSummary"
 import { readConversation } from "../services/conversationClient"
 import { useSceneStore } from "../store"
 import { createAgentRunner } from "./agentRunner"
@@ -28,7 +29,14 @@ function resetAgent() {
 async function runAndWait(runner: ReturnType<typeof createAgentRunner>, prompt: string) {
   useAgentStore.getState().sendPrompt(prompt)
   const conversation = useAgentStore.getState().activeConversation!
-  const userMessage = conversation.messages.find((message) => message.role === "user")!
+  /**
+   * **最后一条**用户消息 —— 不是第一条。
+   *
+   * 同一段用例里第二次 `sendPrompt` 时，第一条用户消息是**上一轮**的那句；
+   * 把它当成这一轮的 prompt 会让 `pinRun` 钉到上一轮那条已经结束的助手消息上，
+   * 于是这一轮的事件全部被"没有在途消息"那条纪律丢掉（Fix round 1 里当场抓到的一次）。
+   */
+  const userMessage = [...conversation.messages].reverse().find((message) => message.role === "user")!
   return runner.run(prompt, userMessage.id)
 }
 
@@ -563,6 +571,59 @@ describe("the run pins its conversation context", () => {
     expect(requests[0].conversation.binding.conversationId).toBe(first)
     expect(useAgentStore.getState().activeConversation?.id).not.toBe(first)
   })
+
+  /**
+   * **读上下文这一步也必须认那条钉住的会话**（Fix round 1 / I1）。
+   *
+   * 上一条用例只在**规划器内部**切会话 —— 那时上下文已经读完了，所以它证明不了这件事。
+   * 真正危险的窗口是 `pinRun` 之后、读上下文之前的那些 `await`（桌面端要过 IPC 问「使用中」
+   * 的配置）。用户在这个窗口里切走，这一轮就可能拿到**另一条会话**的历史与事实，
+   * 而它的事件仍然写回原会话 —— 两边对不上，正是 §5.4 要防的那种串线。
+   */
+  it("reads the context of the conversation it pinned, even when the user switches during the awaited provider lookup", async () => {
+    let release: () => void = () => {}
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    const sent: string[] = []
+    const envelope = JSON.stringify({
+      schemaVersion: "mathcanvas.plan.v1",
+      kind: "plan",
+      goal: "建一个棱长 2 的立方体",
+      factIds: [],
+      actions: [{ actionId: "solid.create_template", actionKey: "cube", factIds: [], inputs: { alias: "cube", template: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 2, z: 2 } } }]
+    })
+    const runner = createAgentRunner({
+      modelPlanner: {
+        // 这一步在桌面端要过 IPC：它就是要被用户"插队"的那个窗口。
+        resolveProvider: async () => {
+          await gate
+          return { ok: true, provider: { id: "openai-1", modelId: "gpt-x", dialect: "openai_native", revision: 3, capabilities: { tools: "unknown" as const, json: "verified" as const, vision: "unknown" as const } } }
+        },
+        runModel: async (request) => {
+          sent.push(request.messages.map((message) => message.content).join("\n"))
+          return { ok: true, events: [{ kind: "delta" as const, requestId: "req-1", attemptId: "att-1", text: envelope }] }
+        }
+      }
+    })
+
+    useAgentStore.getState().sendPrompt("A 的问题")
+    const first = useAgentStore.getState().activeConversation!.id
+    const promptMessageId = useAgentStore.getState().activeConversation!.messages.find((message) => message.role === "user")!.id
+
+    const running = runner.run("A 的问题", promptMessageId)
+    // 让 `run` 走到那个 await，然后用户切到另一条会话并在那里说话。
+    await Promise.resolve()
+    useAgentStore.getState().createConversation()
+    useAgentStore.getState().sendPrompt("B 的问题")
+    release()
+    await running
+
+    // 这一轮看到的是 **A** 的一切：绑定是 A，历史里没有 B 说过的话。
+    expect(sent[0]).toContain(first)
+    expect(sent[0]).not.toContain("B 的问题")
+    // 事件也落在 A 上（不是当前显示的那条会话）。
+    const inA = useAgentStore.getState().conversations.find((conversation) => conversation.id === first)!
+    expect(inA.messages.at(-1)?.diagnostics?.some((line) => line.includes(`[context] conversation ${first}`))).toBe(true)
+  })
 })
 
 /**
@@ -613,6 +674,25 @@ describe("a committed run leaves long-term memory behind", () => {
     expect(useSceneStore.getState().document.primitives).toHaveLength(0)
   })
 
+  /**
+   * **消息也要记下它是哪一版文档的**（Fix round 2 / item 5；`conversation_messages.document_generation`）。
+   *
+   * 这一列原先**没有任何写点**（Minor 2 的后半）：`conversation_messages.run_id` 已经由
+   * `pinRun` 写上，而 `document_generation` 一直是 NULL —— 于是"这条消息说的是哪一版文档"
+   * 只能靠时间去猜。写点放在**追加那一刻**：运行器知道当时的文档版本，消息却只在第一次有内容时
+   * 追加（幂等键），所以"追加时的版本"是唯一诚实的值。
+   */
+  it("records which document generation a run's message was about", async () => {
+    const runner = createAgentRunner()
+    await runAndWait(runner, "建一个棱长 3 的立方体")
+    const conversationId = useAgentStore.getState().activeConversation!.id
+    const generation = useSceneStore.getState().document.revision
+
+    const stored = await readConversation(conversationId)
+    const messages = stored.ok ? stored.value.messages : []
+
+    expect(messages.at(-1)?.documentGeneration).toBe(generation)
+  })
   it("writes no fact when the plan fails to compile", async () => {
     // 零拉伸向量的棱柱会被编译器拒（"refuses a prism with a zero extrusion vector"）：
     // 这一轮以 `compile_failed` 结束，因此**什么都不许写进长期记忆**。
@@ -648,5 +728,185 @@ describe("a committed run leaves long-term memory behind", () => {
     expect(result.phase).toBe("failed")
     const conversationId = useAgentStore.getState().activeConversation!.id
     expect((await conversationRepository().readRecord(conversationId))?.facts).toEqual([])
+  })
+
+  /**
+   * **别份文档确认的事实不许进这一轮**（Fix round 1 / C1；规格 §5.1 + §9）。
+   *
+   * 这个应用里换工作区**就是换文档**（`switchWorkspace` 会换掉 `document`，第一次访问还会
+   * mint 一个新的 `metadata.id`）。会话却是同一台机器上的同一条，所以"在立体几何里确认的
+   * 第 3 版新增 solid-1"完全可能在平面几何那一轮被当成本文档的事实塞给模型 ——
+   * 而那份文档里根本没有这个对象。
+   */
+  it("never injects a fact that was confirmed against another document", async () => {
+    const runner = createAgentRunner()
+    await runAndWait(runner, "建一个棱长 3 的立方体")
+    const conversationId = useAgentStore.getState().activeConversation!.id
+    const geometry3d = useSceneStore.getState().document.metadata.id
+
+    runner.confirm()
+    await flush()
+
+    // 先证明这条事实**确实**在会话里（不然下面那条断言是空的）。
+    const record = await conversationRepository().readRecord(conversationId)
+    expect(record?.facts).toHaveLength(1)
+    expect(record?.facts[0]?.documentId).toBe(geometry3d)
+
+    // 用户切到平面几何（= 另一份文档），在同一条会话里继续问。
+    const conics = createEmptyDocument("conics")
+    useSceneStore.setState({ document: conics, workspaceDocuments: { [conics.workspace]: conics }, history: [], future: [], error: null })
+
+    await runAndWait(runner, "画一个点")
+
+    const diagnostics = useAgentStore.getState().activeConversation!.messages.at(-1)?.diagnostics ?? []
+    const context = diagnostics.find((line) => line.includes("[context]")) ?? ""
+    expect(context).toContain("0 confirmed fact(s)")
+    // 那条事实还在会话里（它不是被删了，只是**不属于这份文档**）。
+    expect((await conversationRepository().readRecord(conversationId))?.facts).toHaveLength(1)
+  })
+
+  /**
+   * **别份文档的记忆也不许从 `summary` 那条路进来**（Fix round 2 / C1 残余；规格 §5.1 + §9）。
+   *
+   * 上一条用例挡的是**事实列表**，而摘要是同一段内容的另一条载体：它把该会话全部已确认事实的
+   * 原文与创建出来的对象 id 压进一段文字。可达路径是**刻意的**那一条：Agent 自己为执行计划
+   * 切了工作区（绑定不跟着换，`useAgentDocumentBinding` 的例外），于是同一条会话继续被用在
+   * 另一份文档上 —— 事实筛掉了，摘要如果不筛，`solid-*` 照样出现在这一轮的提示词里。
+   */
+  it("never leaks another document's memory into the prompt through the summary", async () => {
+    // 一条足够长的会话（超过摘要阈值），并把第一句留作事实的证据。
+    useAgentStore.getState().sendPrompt("建一个棱长 3 的立方体")
+    const conversationId = useAgentStore.getState().activeConversation!.id
+    const promptMessageId = useAgentStore.getState().activeConversation!.messages.find((message) => message.role === "user")!.id
+    for (let turn = 0; turn < 40; turn += 1) {
+      useAgentStore.getState().sendPrompt(`第 ${turn} 轮：请继续作图（${"很长的上下文".repeat(20)}）`)
+      useAgentStore.getState().resolvePendingReply(`收到 ${turn}`)
+    }
+    const geometry3d = useSceneStore.getState().document.metadata.id
+    useAgentStore.getState().pinRun({ runId: "run-geometry", promptMessageId })
+    await useAgentStore.getState().recordCommittedRun({ runId: "run-geometry", generation: 3, createdObjects: ["solid-1"], documentId: geometry3d })
+    await flush()
+
+    // 先证明那份记忆**确实**在会话里（不然下面的断言是空的）。
+    const stored = await conversationRepository().readRecord(conversationId)
+    expect(JSON.stringify(summaryOfDocument(stored!.summary, geometry3d))).toContain("solid-1")
+
+    // Agent 自己把画布切到平面几何（= 另一份文档）：绑定**故意不跟**，
+    // 于是同一条会话继续被用在另一份文档上 —— 这就是那条可达路径。
+    useSceneStore.getState().switchWorkspace("conics", "agent")
+    const conics = useSceneStore.getState().document.metadata.id
+    expect(conics).not.toBe(geometry3d)
+
+    // 用模型路径拿到**真正发出去的提示词**。
+    const sent: string[] = []
+    const envelope = JSON.stringify({
+      schemaVersion: "mathcanvas.plan.v1",
+      kind: "answer",
+      goal: "回答场景里有什么",
+      factIds: [],
+      answer: "只有这一份文档里的对象。",
+      toolResultRefs: []
+    })
+    const modelRunner = createAgentRunner({
+      modelPlanner: {
+        resolveProvider: async () => ({ ok: true, provider: { id: "openai-1", modelId: "gpt-x", dialect: "openai_native", revision: 3, capabilities: { tools: "unknown" as const, json: "verified" as const, vision: "unknown" as const } } }),
+        runModel: async (request) => {
+          sent.push(request.messages.map((message) => message.content).join("\n"))
+          return { ok: true, events: [{ kind: "delta" as const, requestId: "req-1", attemptId: "att-1", text: envelope }] }
+        }
+      }
+    })
+
+    useAgentStore.getState().sendPrompt("画布上有什么")
+    const asked = [...useAgentStore.getState().activeConversation!.messages].reverse().find((message) => message.role === "user")!
+    await modelRunner.run("画布上有什么", asked.id)
+
+    // 这一轮绑的是**另一份文档**（不然上面的断言什么都没证明）……
+    expect(sent[0]).toContain(conics)
+    // ……而立体几何那份文档的记忆（事实原文与对象 id）一个字都不许出现。
+    expect(sent[0]).not.toContain("solid-1")
+    expect(sent[0]).not.toContain("已确认：文档第 3 版")
+    // 本文档（平面几何）这一轮还没有任何已确认事实。
+    expect(sent[0]).toContain('"confirmedFacts":[]')
+  })
+
+  /**
+   * **确认的是"用户点的那块面板"，不是"最近的那一轮"**（Fix round 1 / C2；规格 §5.4）。
+   *
+   * 面板按消息渲染，而回执/提交原先用的是模块级**单槽** `runtime`/`pendingCommit` ——
+   * 于是"在 A 里暂存草稿 → 切到 B 再暂存一份 → 回到 A 点确认"会提交 **B** 的草稿：
+   * 文档被 B 的计划改掉，回执与事实也写进 B。这一节的判据就是"只有 A 被写"。
+   */
+  it("commits the draft of the run whose panel the user clicked, not the most recent one", async () => {
+    const runner = createAgentRunner()
+
+    // A：暂存一份草稿（并记住这一轮的 runId —— 面板上按的就是它）。
+    await runAndWait(runner, "建一个棱长 3 的立方体")
+    const first = useAgentStore.getState().activeConversation!
+    const runInA = first.messages.at(-1)!.runId!
+
+    // B：另一条会话里也暂存一份（它是**最近**的一轮）。
+    useAgentStore.getState().createConversation()
+    await runAndWait(runner, "建一个棱长 5 的立方体")
+    const second = useAgentStore.getState().activeConversation!
+    const runInB = second.messages.at(-1)!.runId!
+    expect(runInB).not.toBe(runInA)
+
+    // 用户回到 A（面板就在 A 的对话记录里）并点确认。
+    await useAgentStore.getState().selectConversation(first.id)
+    const outcome = runner.confirm(runInA)
+    await flush()
+
+    expect(outcome.status).toBe("committed")
+    // 回执与事实都落在 **A**；B 那条在途消息一点都没被碰。
+    const inA = useAgentStore.getState().conversations.find((conversation) => conversation.id === first.id)!
+    const inB = useAgentStore.getState().conversations.find((conversation) => conversation.id === second.id)!
+    expect(inA.messages.at(-1)?.commit?.status).toBe("committed")
+    expect(inB.messages.at(-1)?.commit).toBeUndefined()
+    expect((await conversationRepository().readRecord(first.id))?.facts).toHaveLength(1)
+    expect((await conversationRepository().readRecord(second.id))?.facts ?? []).toEqual([])
+    // B 的那份草稿还在（没被消费掉）：`hasDraft` 说的是"还有没有等待确认的草稿"。
+    expect(runner.hasDraft()).toBe(true)
+  })
+
+  it("refuses a confirm for a run that is not live", async () => {
+    const runner = createAgentRunner()
+    await runAndWait(runner, "建一个棱长 3 的立方体")
+
+    const refused = runner.confirm("run-that-never-existed")
+
+    expect(refused.status).toBe("rejected")
+    // 拒绝路径一个字节都不写。
+    expect(useSceneStore.getState().document.primitives).toHaveLength(0)
+    expect(runner.hasDraft()).toBe(true)
+  })
+
+  /**
+   * **提交被拒时这一轮还活着**（Fix round 2 / item 3）。
+   *
+   * `confirm` 原先**无条件**把这一轮从表里删掉（`retireRun`），于是提交被拒（例如世界变了：
+   * 文档在预览之后被改过 → `stale_source`）之后，面板还挂在界面上，用户再点一次却得到
+   * "这一轮已经不在等确认了" —— 真正的原因（文档变了）被第二句话盖掉，而且
+   * `hasDraft()` 也变成 false，界面再也说不出"这里还有一份草稿"。
+   */
+  it("keeps the run alive when the commit was refused, so the user can retry", async () => {
+    const runner = createAgentRunner()
+    // 本地规划器认这句 → 暂存一个平面点（分配器会给它 `point-1`）。
+    await runAndWait(runner, "画一个点")
+    const runId = useAgentStore.getState().activeConversation!.messages.at(-1)!.runId!
+
+    // 用户手工建了**同一个 id** 的对象（真实出现过的现场：画布上已经有了同类对象）：
+    // 提交时要重放的那笔 `addPrimitive` 会撞 id，`commitTransaction` 当场拒绝。
+    useSceneStore.getState().apply({ op: "addPrimitive", primitive: { id: "point-1", type: "point", x: 5, y: 5 } })
+
+    const first = runner.confirm(runId)
+    expect(first.status).toBe("rejected")
+    expect(first.detail ?? "").toContain("commit_rejected")
+
+    // 面板还挂着：再点一次必须**仍然**报真实原因，而不是"这一轮已经不在等确认了"。
+    const second = runner.confirm(runId)
+    expect(second.detail ?? "").not.toContain("not waiting")
+    expect(second.detail).toBe(first.detail)
+    expect(runner.hasDraft()).toBe(true)
   })
 })

@@ -99,7 +99,14 @@ export class ConversationRepositoryError extends Error {
 export interface ConversationRepository {
   /** 这个绑定下**还没归档**的会话（最近改动的在前）。不带消息 —— 消息按需读。 */
   loadList(binding: ConversationBinding): RepositoryStep<AgentConversation[]>
-  /** 读一条会话（含消息与事实）；仓储里没有它时回 `null`（**不是**编一条空的）。 */
+  /**
+   * 读一条会话（含消息与事实）；仓储里没有它时回 `null`（**不是**编一条空的）。
+   *
+   * **会话 id 是唯一的键，读不再比绑定**（Fix round 1 / Minor 9 的取舍）：列表与创建都按
+   * 整个绑定（§5.1 的硬约束在那里落地），而读是给"界面已经拿着一条会话"的路径用的 ——
+   * 再传一个绑定进去只会在两者不一致时把"这条会话没了"和"你读错了绑定"混成同一句话。
+   * 同样的形状 Rust 侧也是（`read_conversation` 只收 id）。要跨绑定读，得先拿到 id。
+   */
   read(conversationId: string): RepositoryStep<AgentConversation | null>
   /**
    * 读一条会话的**完整记录**：界面投影 + 结构化摘要 + 事实 + 落盘的消息。
@@ -107,6 +114,7 @@ export interface ConversationRepository {
    * 与 `read` 分开是因为读者不同：`read` 服务界面（它只需要能画出来的那部分），
    * 这一条服务**规划上下文**（Task 4 的注入路径）与摘要压缩（Task 5）——
    * 它们要的是"这条会话存下来的摘要与事实"，而那些字段不属于界面投影。
+   * 与 `read` 一样：**id 是唯一的键**（见上）。
    */
   readRecord(conversationId: string): RepositoryStep<ConversationRecordView | null>
   /** 建一条会话。 */
@@ -116,8 +124,11 @@ export interface ConversationRepository {
    *
    * 带上会话本身，是因为**一条刚开的会话可能还没落盘**（会话先于文档的第一次提交存在）：
    * 仓储会把还没有的那条会话补上，再追加消息。同一条消息 id 重放是空操作（幂等键）。
+   *
+   * `documentGeneration` 是**追加那一刻**文档的版本（Fix round 2 / item 5）：消息只写一次
+   * （幂等键），所以这就是唯一诚实的值。不传 = 这一层不知道（用户提问那条路径没有文档句柄）。
    */
-  append(conversation: AgentConversation, binding: ConversationBinding, message: AgentMessage): RepositoryStep<void>
+  append(conversation: AgentConversation, binding: ConversationBinding, message: AgentMessage, documentGeneration?: number): RepositoryStep<void>
   /** 写一份新的结构化摘要（版本号 +1；`expectedVersion` 是条件更新）。 */
   saveSummary(input: { conversationId: string; summary: string; expectedVersion?: number }): RepositoryStep<void>
   /** 写一条事实（按 `(conversationId, key)` upsert；证据必须是同会话里的真实消息）。 */
@@ -359,14 +370,16 @@ function createLocal(conversation: AgentConversation, binding: ConversationBindi
  *
  * 同一条消息 id 重放是**空操作**：它是幂等键，重试不该变成第二行。
  */
-function appendLocalConversation(conversation: AgentConversation, binding: ConversationBinding, message: AgentMessage): void {
+function appendLocalConversation(conversation: AgentConversation, binding: ConversationBinding, message: AgentMessage, documentGeneration?: number): void {
+  // 与客户端兜底那条路径**同一套判据**（密钥前缀 + 上限）。
+  guardLocalMessage(messageInputOf(conversation.id, message))
   const records = readLocalRecords()
   const index = records.findIndex((record) => record.id === conversation.id)
   const existing = index >= 0 ? records[index] : null
   const base = existing ?? emptyLocalRecord(conversation, binding)
   const messages = existing && existing.messages.some((record) => record.id === message.id)
     ? existing.messages
-    : [...base.messages, messageRecordOf(base.id, message, base.messages)]
+    : [...base.messages, messageRecordOf(base.id, message, base.messages, documentGeneration)]
   const next: LocalConversationRecord = {
     ...base,
     // 标题在浏览器序列化器里跟得上（桌面侧没有改标题的命令 —— 见报告的"已知缺口"）。
@@ -377,7 +390,64 @@ function appendLocalConversation(conversation: AgentConversation, binding: Conve
   writeLocalRecords(index >= 0 ? records.map((record, at) => (at === index ? next : record)) : [...records, next])
 }
 
+/**
+ * **浏览器兜底也要守的那条边界**（Fix round 1 / I2）。
+ *
+ * Rust 侧在 `repository/conversations.rs` 里逐条判：内容里有 `sk-`/`sk_` 前缀的**拒绝**，
+ * 消息内容 32K、摘要 16K、事实值 8K 各有一个上限。原先这条路径**一条都没有** ——
+ * 于是一句密钥样的用户指令只在桌面被拒，在浏览器里照存不误；而"扫描载荷"的用例写的是
+ * 良性内容，永远抓不到这件事。上限与判据在这里与本仓库的那一份**逐字对齐**。
+ */
+export const MAX_MESSAGE_CHARS = 32_000
+export const MAX_SUMMARY_CHARS = 16_000
+export const MAX_FACT_VALUE_CHARS = 8_000
+
+/** 令牌段里的字符（与 Rust 的 `is_token_character` 同一组）：字母数字加 `.` `-` `_`。 */
+const TOKEN_SEPARATOR = /[^A-Za-z0-9._-]+/
+
+/**
+ * 一段文本里有没有**明确的凭据前缀**（`sk-` / `sk_`）—— 只看**令牌段**的开头。
+ *
+ * 与 Rust 的 `contains_credential_prefix`（`run_events.rs`）逐字一致：先把文本切成令牌字符的
+ * 连续段，再看某一段是否**以**前缀开头。**不能**写成"任意位置匹配 `sk[-_]`"：
+ * 那会把 `task-1`、`risk-free`、`disk-space` 这类普通词当成密钥拒绝 ——
+ * 同一个句子在浏览器里存不下、在桌面端却存得下，而两个后端本该给同一个答案
+ *（Fix round 2 / N1）。
+ */
+export function containsCredentialPrefix(text: string): boolean {
+  return text.split(TOKEN_SEPARATOR).some((run) => {
+    const lowered = run.toLowerCase()
+    return lowered.startsWith("sk-") || lowered.startsWith("sk_")
+  })
+}
+
+function serialize(value: unknown): string {
+  if (typeof value === "string") return value
+  return JSON.stringify(value) ?? ""
+}
+
+/** 密钥样的内容**拒绝**（不是截掉）：截掉会让"用户以为存下来了"变成一次静默的数据丢失。 */
+function refuseCredential(value: unknown, what: string): void {
+  if (containsCredentialPrefix(serialize(value))) {
+    throw new ConversationRepositoryError(`${what} looks like a credential; refusing to persist it`, "invalid")
+  }
+}
+
+function refuseOversize(serialized: string, limit: number, what: string): void {
+  if (serialized.length > limit) throw new ConversationRepositoryError(`${what} is ${serialized.length} characters, over the ${limit} limit`, "invalid")
+}
+
+/**
+ * 一条消息的边界判据。**两条浏览器写入路径共用它**（仓储直写 `appendLocalConversation`
+ * 与客户端兜底 `appendLocal`）—— 只在一处判的话，另一条路径照样能把密钥写进去。
+ */
+function guardLocalMessage(message: ConversationMessageInput): void {
+  refuseCredential(message.contentJson, "message content")
+  refuseOversize(serialize(message.contentJson), MAX_MESSAGE_CHARS, "message content")
+}
+
 function appendLocal(message: ConversationMessageInput): boolean {
+  guardLocalMessage(message)
   const records = readLocalRecords()
   const index = records.findIndex((record) => record.id === message.conversationId)
   if (index < 0) throw new ConversationRepositoryError(`no conversation ${message.conversationId}`, "not_found")
@@ -397,6 +467,7 @@ function nextSequence(messages: readonly LocalMessageRecord[]): number {
 }
 
 function updateSummaryLocal(input: { conversationId: string; summary: string; expectedVersion?: number }): LocalConversationRecord {
+  refuseOversize(input.summary, MAX_SUMMARY_CHARS, "summary")
   const records = readLocalRecords()
   const index = records.findIndex((record) => record.id === input.conversationId)
   if (index < 0) throw new ConversationRepositoryError(`no conversation ${input.conversationId}`, "not_found")
@@ -416,6 +487,7 @@ function updateSummaryLocal(input: { conversationId: string; summary: string; ex
  * 键相同就是同一条事实（upsert），第一条的 id 与创建时间保留。
  */
 function updateFactLocal(fact: ConversationFactInput): LocalFactRecord {
+  refuseOversize(serialize(fact.valueJson), MAX_FACT_VALUE_CHARS, "fact value")
   const records = readLocalRecords()
   const index = records.findIndex((record) => record.id === fact.conversationId)
   if (index < 0) throw new ConversationRepositoryError(`no conversation ${fact.conversationId}`, "not_found")
@@ -463,7 +535,7 @@ function removeLocal(conversationId: string): boolean {
  * 是加这一层之前的既有行为，有一条用例守着它（草稿 id 在，`primitives` 不在）。
  * 换成"只存一句话"会让那条用例变成假话，也会让界面与存储各说各话。
  */
-function messageInputOf(conversationId: string, message: AgentMessage): ConversationMessageInput {
+function messageInputOf(conversationId: string, message: AgentMessage, documentGeneration?: number): ConversationMessageInput {
   return {
     id: message.id,
     conversationId,
@@ -471,14 +543,22 @@ function messageInputOf(conversationId: string, message: AgentMessage): Conversa
     kind: kindOf(message),
     contentJson: message,
     runId: message.runId,
+    /**
+     * **这条消息追加时文档是第几版**（Fix round 2 / item 5）。
+     *
+     * 追加是"第一次有内容时写一次"（消息 id 是幂等键），所以这里的就是**唯一诚实的值**：
+     * 消息写下的那一刻文档的版本。界面（`sendPrompt`）那条路径没有文档句柄，
+     * 所以用户提问那条消息仍然是 `NULL` —— 见报告的说明。
+     */
+    documentGeneration,
     tokenEstimate: Math.ceil(message.text.length / 4),
     createdAt: message.createdAt
   }
 }
 
 /** 存下来的那一行：多一个序号，可空字段显式记成 `null`（不是"没有这个键"）。 */
-function messageRecordOf(conversationId: string, message: AgentMessage, existing: readonly LocalMessageRecord[]): LocalMessageRecord {
-  const input = messageInputOf(conversationId, message)
+function messageRecordOf(conversationId: string, message: AgentMessage, existing: readonly LocalMessageRecord[], documentGeneration?: number): LocalMessageRecord {
+  const input = messageInputOf(conversationId, message, documentGeneration)
   return { ...input, runId: input.runId ?? null, documentGeneration: input.documentGeneration ?? null, sequence: nextSequence(existing) }
 }
 
@@ -509,13 +589,26 @@ function agentMessageOfLocal(record: LocalMessageRecord): AgentMessage {
   }
 }
 
+/**
+ * 会话能带进界面的**最多这么多条消息**（保留最新的）。
+ *
+ * 与 Rust 侧的读上限逐字一致（`conversations.rs` 的 `MAX_MESSAGES = 512`，它同样保留最新的
+ * 一批）：两个后端对"同一条会话"给出不同的历史长度，会让"桌面版少了几条"看起来像数据丢了
+ * （Fix round 1 / Minor 10）。
+ */
+export const MAX_CONVERSATION_MESSAGES = 512
+
 function agentConversationOfLocal(record: LocalConversationRecord): AgentConversation {
   return {
     id: record.id,
     title: record.title,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
-    messages: [...record.messages].sort((left, right) => left.sequence - right.sequence).map(agentMessageOfLocal)
+    // 保留**最新**的那一批（升序返回），与 Rust 侧同一个口径。
+    messages: [...record.messages]
+      .sort((left, right) => left.sequence - right.sequence)
+      .slice(-MAX_CONVERSATION_MESSAGES)
+      .map(agentMessageOfLocal)
   }
 }
 
@@ -549,7 +642,19 @@ function describeFactValue(valueJson: unknown): string {
 }
 
 function factViewOf(record: LocalFactRecord): ConversationFactView {
-  return { id: record.id, key: record.key, text: describeFactValue(record.valueJson), status: record.status }
+  return { id: record.id, key: record.key, text: describeFactValue(record.valueJson), status: record.status, ...documentIdOf(record.valueJson) }
+}
+
+/**
+ * 一条事实**属于哪份文档**写在 `value_json` 里（Rust 侧的事实列是固定 schema）：
+ * 读回来必须能看见它 —— 注入上下文时按它筛（规格 §5.1，Fix round 1 / C1）。
+ */
+function documentIdOf(valueJson: unknown): { documentId?: string } {
+  if (valueJson && typeof valueJson === "object") {
+    const documentId = (valueJson as { documentId?: unknown }).documentId
+    if (typeof documentId === "string" && documentId.length > 0) return { documentId }
+  }
+  return {}
 }
 
 function recordViewOf(record: LocalConversationRecord): ConversationRecordView {
@@ -659,9 +764,9 @@ async function ensureDesktopConversation(conversation: AgentConversation, bindin
   if (!retry.ok) refused(created)
 }
 
-async function desktopAppend(conversation: AgentConversation, binding: ConversationBinding, message: AgentMessage): Promise<void> {
+async function desktopAppend(conversation: AgentConversation, binding: ConversationBinding, message: AgentMessage, documentGeneration?: number): Promise<void> {
   await ensureDesktopConversation(conversation, binding)
-  const result = await appendConversationMessage(messageInputOf(conversation.id, message))
+  const result = await appendConversationMessage(messageInputOf(conversation.id, message, documentGeneration))
   if (!result.ok) refused(result)
 }
 
@@ -706,7 +811,7 @@ export function createConversationRepository(): ConversationRepository {
       return record ? recordViewOf(record) : null
     },
     create: (conversation, binding) => (isDesktopShell() ? desktopCreate(conversation, binding) : createLocal(conversation, binding)),
-    append: (conversation, binding, message) => (isDesktopShell() ? desktopAppend(conversation, binding, message) : appendLocalConversation(conversation, binding, message)),
+    append: (conversation, binding, message, documentGeneration) => (isDesktopShell() ? desktopAppend(conversation, binding, message, documentGeneration) : appendLocalConversation(conversation, binding, message, documentGeneration)),
     saveSummary: (input) => (isDesktopShell() ? desktopSaveSummary(input) : void updateSummaryLocal(input)),
     saveFact: (fact) => (isDesktopShell() ? desktopSaveFact(fact) : void updateFactLocal(fact)),
     archive: (conversationId) => (isDesktopShell() ? desktopArchive(conversationId) : void archiveLocal(conversationId)),

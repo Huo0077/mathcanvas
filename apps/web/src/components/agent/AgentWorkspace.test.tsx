@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react"
+import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it } from "vitest"
 
 import { createAgentConversation, useAgentStore } from "../../agentStore"
@@ -32,7 +32,7 @@ describe("agent workspace", () => {
     expect(screen.getByRole("button", { name: "发送" }).hasAttribute("disabled")).toBe(true)
   })
 
-  it("sends a multi-line prompt with the button and appends it to the transcript", () => {
+  it("sends a multi-line prompt with the button and appends it to the transcript", async () => {
     render(<AgentWorkspace onBackToWorkspace={() => {}} />)
 
     const input = screen.getByRole("textbox", { name: "对话输入" })
@@ -42,7 +42,12 @@ describe("agent workspace", () => {
     const log = screen.getByRole("log", { name: "对话记录" })
     expect(log.querySelectorAll("[data-message-role]")).toHaveLength(2)
     expect(log.textContent).toContain("画一个正方体")
-    expect((input as HTMLTextAreaElement).value).toBe("")
+    /**
+     * **期望在 Fix round 1 / Minor 1 里改过**：输入框原先在按下发送**那一刻**就清空，
+     * 而被拒的指令（例如内容像密钥，浏览器与桌面同一条边界）会因此凭空消失。
+     * 现在它**在发送被接受之后**才清空（一次微任务），被拒时保留原文并给一句说明。
+     */
+    await waitFor(() => expect((input as HTMLTextAreaElement).value).toBe(""))
   })
 
   it("sends with Enter and keeps a newline for Shift+Enter", () => {

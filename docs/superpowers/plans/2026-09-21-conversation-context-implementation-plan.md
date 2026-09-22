@@ -113,6 +113,6 @@
 
 ### Task 6: Verify the conversation slice
 
-- [ ] Run `npm test`, `npm run typecheck`, `npm run lint`, `npm run test:e2e`, and `npm run test:rust`.
+- [x] Run `npm test`, `npm run typecheck`, `npm run lint`, `npm run test:e2e`, and `npm run test:rust`.
 - [x] Confirm no key-like string, candidate document content, or hidden reasoning is persisted by scanning conversation payload fixtures.
-- [ ] Record the measured test counts and any pre-existing warnings in the project progress document.
+- [x] Record the measured test counts and any pre-existing warnings in the project progress document.

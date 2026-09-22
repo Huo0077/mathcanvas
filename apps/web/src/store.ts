@@ -16,6 +16,15 @@ interface SceneState {
   history: GeometryDocument[]
   future: GeometryDocument[]
   error: string | null
+  /**
+   * **这一次文档变化是谁引起的**（对话切片 Fix round 1 / C1）。
+   *
+   * `"user"`：用户自己换了工作区 / 打开文件 —— Agent 区的会话列表该跟着换（规格 §5.1）。
+   * `"agent"`：Agent 为了执行这条计划自己切的工作区（"建一个立方体"要切到立体几何）——
+   * 那不是用户换了上下文，**不能**把用户正在读的那条会话与它的确认面板换走。
+   * 少了这一项，App 那一层只能看到"文档变了"，于是两条完全不同的意图被当成一件事。
+   */
+  documentChangeReason: DocumentChangeReason
   /** View-only workbench state: never written into `.mgeo`. */
   treeTab: TreeTabPreference
   expandedIds: string[]
@@ -38,9 +47,12 @@ interface SceneState {
   commitCandidate: (candidate: GeometryDocument) => void
   undo: () => void
   redo: () => void
-  switchWorkspace: (workspace: Workspace) => void
+  switchWorkspace: (workspace: Workspace, reason?: DocumentChangeReason) => void
   replace: (document: GeometryDocument) => void
 }
+
+/** 文档变化的来源（见 `SceneState.documentChangeReason`）。 */
+export type DocumentChangeReason = "user" | "agent"
 
 export const MAX_HISTORY_ENTRIES = 100
 
@@ -58,6 +70,7 @@ export const useSceneStore = create<SceneState>((set, get) => ({
   history: [],
   future: [],
   error: null,
+  documentChangeReason: "user",
   treeTab: initialPreferences?.treeTab ?? "model",
   expandedIds: initialPreferences?.expandedIds ?? ["sheet-1"],
   filterQuery: "",
@@ -119,10 +132,10 @@ export const useSceneStore = create<SceneState>((set, get) => ({
       future: state.future.slice(1)
     }
   }),
-  switchWorkspace: (workspace) => set((state) => {
+  switchWorkspace: (workspace, reason = "user") => set((state) => {
     const currentDocuments = { ...state.workspaceDocuments, [state.document.workspace]: state.document }
     const nextDocument = withDocumentLayout(currentDocuments[workspace] ?? createEmptyDocument(workspace))
-    return { document: nextDocument, workspaceDocuments: { ...currentDocuments, [workspace]: nextDocument }, history: [], future: [], error: null }
+    return { document: nextDocument, workspaceDocuments: { ...currentDocuments, [workspace]: nextDocument }, history: [], future: [], error: null, documentChangeReason: reason }
   }),
   commitCandidate: (candidate) => set((state) => {
     const nextDocument = withDocumentLayout(candidate)
@@ -151,6 +164,7 @@ export const useSceneStore = create<SceneState>((set, get) => ({
   }),
   replace: (document) => set((state) => {
     const nextDocument = withDocumentLayout(document)
-    return { document: nextDocument, workspaceDocuments: { ...state.workspaceDocuments, [nextDocument.workspace]: nextDocument }, history: [], future: [], error: null }
+    // 打开文件 / 导入 / 恢复草稿都是**用户**这一侧的上下文变化（不是 Agent 自己切的）。
+    return { document: nextDocument, workspaceDocuments: { ...state.workspaceDocuments, [nextDocument.workspace]: nextDocument }, history: [], future: [], error: null, documentChangeReason: "user" }
   })
 }))

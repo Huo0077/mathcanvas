@@ -6,6 +6,8 @@ import {
   buildConversationContext,
   DEFAULT_FACT_LIMIT,
   DEFAULT_REF_LIMIT,
+  DEFAULT_SUMMARY_CHARACTER_BUDGET,
+  MAX_CONVERSATION_FACTS,
   MAX_FACT_LIMIT,
   MAX_MESSAGE_LIMIT,
   type BuildContextInput,
@@ -228,9 +230,17 @@ describe("conversation context", () => {
     expect(context.estimatedCharacters).toBeGreaterThan(0)
   })
 
-  it("keeps the current scene facts when the budget cannot fit the older messages", () => {
+  /**
+   * **这条用例的期望在 Fix round 1 / I3 里被改过**（原样记下来，免得看起来像"顺手改绿"）：
+   *
+   * - 旧实现：场景 + 全部事实先扣预算 → 场景一大，摘要被切空、消息**一条不剩**（`[]`）。
+   * - 新实现（§5.3 的分段）：场景保留自己的软额度（当前事实一条不少），
+   *   而摘要与消息各有各的保留额度 —— 场景再大也不把历史挤没。
+   *   所以现在的期望是：**场景完整，同时消息还在自己的额度里**。
+   */
+  it("keeps the current scene whole without starving the history bands", () => {
     const messages = [message("old-1", "很久以前说过的一句话", 1), message("old-2", "还有另一句", 2)]
-    // 场景本身就是"当前事实"：这里的观察大到几乎吃掉整个预算。
+    // 场景大到超过它自己的份额（20%）。
     const sceneFacts = Array.from({ length: 6 }, (_, index) => ({ id: `scene-${index}`, text: "场景事实".repeat(8), origin: "user" as const }))
     const context = buildConversationContext(conversation({
       messages,
@@ -240,10 +250,8 @@ describe("conversation context", () => {
 
     // 场景是**当前**事实：预算再紧也不许丢。
     expect(context.observation.facts.map((entry) => entry.id)).toEqual(sceneFacts.map((entry) => entry.id))
-    // 旧消息先让路，并且**如实说**丢了几条（否则"模型为什么忘了"无从查起）。
-    expect(context.messages).toEqual([])
-    const warning = context.warnings.find((entry) => entry.code === "truncated_messages")
-    expect(warning?.detail).toContain("2")
+    // 但它**不吃掉**历史那两段：两条小消息在自己的 35% 额度里放得下。
+    expect(context.messages.map((entry) => entry.id)).toEqual(["old-1", "old-2"])
   })
 
   it("bounds the recent messages by the budget and keeps the newest ones", () => {
@@ -292,5 +300,135 @@ describe("conversation context", () => {
     const huge = buildConversationContext(conversation({ summary: "y".repeat(10_000) }))
     expect(huge.summary.length).toBeLessThan(3_000)
     expect(huge.warnings.some((entry) => entry.code === "truncated_summary")).toBe(true)
+  })
+
+  /**
+   * **一条会话的事实只属于它自己那份文档**（规格 §5.1 + §9 的"会话之间不串事实"）。
+   *
+   * 这条会话可能被用在两份文档上（这个应用里换工作区就是换文档），而事实表是**会话级**的 ——
+   * 所以"这条事实是在哪份文档上确认的"必须一起存下来，注入时按**这一次运行的文档**筛。
+   * 少了这一步，在立体几何里确认的"第 3 版新增 solid-1"会出现在平面几何那一轮的提示词里，
+   * 而那份文档里根本没有这个对象。
+   */
+  it("refuses a fact that was confirmed against another document", () => {
+    const context = buildConversationContext(conversation({
+      binding: { conversationId: "conv-1", projectId: "p", documentId: "doc-a", workspace: "conics", generation: 1 },
+      facts: [
+        { id: "cf-1", key: "a.key", text: "这份文档的事实", status: "confirmed", documentId: "doc-a" },
+        { id: "cf-2", key: "b.key", text: "另一份文档的事实", status: "confirmed", documentId: "doc-b" },
+        // 没写属于哪份文档的（旧数据）：按"未知"处理，保留并留一条警告，而不是静默丢掉。
+        { id: "cf-3", key: "c.key", text: "没说属于哪份文档", status: "confirmed" }
+      ]
+    }))
+
+    expect(context.facts.map((entry) => entry.id)).toEqual(["cf-1", "cf-3"])
+    expect(JSON.stringify(context.facts)).not.toContain("另一份文档")
+    expect(context.warnings.some((entry) => entry.code === "foreign_fact")).toBe(true)
+  })
+
+  it("keeps the caller's order when two messages share a timestamp", () => {
+    /**
+     * **同一次 `sendPrompt` 的用户消息与在途助手消息 `createdAt` 相同**，而 id 的字符串序
+     * 会把它们倒过来（`…-10` 排在 `…-9` 前面）。顺序必须按调用方给的来 ——
+     * 否则 `recentMessages` 里"用户说完助手接话"会变成"助手先说"，而当前请求的去重
+     *（看最后一个是不是当前请求）也会跟着错。
+     */
+    const context = buildConversationContext(conversation({
+      messages: [message("message-x-9", "先说的", 5), message("message-x-10", "后说的", 5, "assistant")]
+    }))
+
+    expect(context.messages.map((entry) => entry.id)).toEqual(["message-x-9", "message-x-10"])
+  })
+
+  /**
+   * **§5.3 的分段预算**（Fix round 1 / I3）：场景 20% / 已确认事实 15% / 摘要 20% /
+   * 最近消息 35% / 当前请求与安全余量 10%。
+   *
+   * 原先的实现是"场景 + **全部**已确认事实先扣，剩下的给摘要与消息"，而事实既没有条数上限、
+   * 又只按字符扣费 —— 于是长命会话里（几百条 `commit:` 事实）摘要被切空、最近消息一条不剩，
+   * 而那些事实里的大多数**根本不会进提示词**（提示词只渲染 16 条）。
+   */
+  it("reserves a band each for the facts, the summary and the messages", () => {
+    const manyFacts = Array.from({ length: 150 }, (_, index) => ({
+      id: `cf-${index}`,
+      key: `commit:run-${String(index).padStart(3, "0")}`,
+      text: `已确认：文档第 ${index} 版新增 1 个对象（${"solid-".repeat(6)}${index}）`,
+      status: "confirmed" as const
+    }))
+    const context = buildConversationContext(conversation({
+      facts: manyFacts,
+      summary: "目标是建一个立方体",
+      messages: [message("m1", "画一个圆", 1), message("m2", "好的。", 2, "assistant")]
+    }))
+
+    // 事实这一段的条数上限与提示词渲染的上限是**同一个数**，并且如实说了截断。
+    // 下界也要断言（Fix round 2 / 残余 6）：只写 `<=` 的话"一条都不留"同样会通过，
+    // 而这一段的算术明明放得下十来条。
+    expect(context.facts.length).toBeGreaterThan(0)
+    expect(context.facts.length).toBeLessThanOrEqual(MAX_CONVERSATION_FACTS)
+    expect(context.warnings.some((entry) => entry.code === "truncated_facts")).toBe(true)
+    // 摘要与最近消息**不会被事实挤没**（各有各的额度）。
+    expect(context.summary).toBe("目标是建一个立方体")
+    expect(context.messages.map((entry) => entry.id)).toEqual(["m1", "m2"])
+  })
+
+  it("keeps the whole current scene while the older messages are bounded", () => {
+    const sceneFacts = Array.from({ length: 6 }, (_, index) => ({ id: `scene-${index}`, text: "场景事实".repeat(8), origin: "user" as const }))
+    const messages = Array.from({ length: 40 }, (_, index) => message(`m${index}`, "x".repeat(100), index))
+    const context = buildConversationContext(conversation({
+      observation: { facts: sceneFacts, summary: "场景" },
+      messages,
+      limits: { characters: 600 }
+    }))
+
+    // 当前场景是权威：一条都不少（它有自己的软额度，不因消息被裁）。
+    expect(context.observation.facts.map((entry) => entry.id)).toEqual(sceneFacts.map((entry) => entry.id))
+    // 旧消息只在自己的额度里放得下多少算多少，并如实留痕。
+    expect(context.messages.length).toBeLessThan(messages.length)
+    expect(context.warnings.some((entry) => entry.code === "truncated_messages")).toBe(true)
+  })
+
+  it("never hands the model half a JSON summary", () => {
+    // 一份**满尺寸**的结构化摘要（构造上就超过摘要的额度）。
+    const full = JSON.stringify({
+      goal: `目标是建一个立方体并继续作图。${"补充说明。".repeat(40)}`,
+      confirmedFacts: Array.from({ length: 12 }, (_, index) => `已确认：文档第 ${index} 版新增 1 个对象（solid-${index}）${"说明".repeat(60)}`),
+      createdObjects: Array.from({ length: 12 }, (_, index) => `solid-${index}`),
+      openQuestions: ["这个圆的半径是多少？"],
+      preferences: ["记住：以后都用红色"],
+      messageCount: 40,
+      compactedAt: 1
+    })
+    expect(full.length).toBeGreaterThan(DEFAULT_SUMMARY_CHARACTER_BUDGET)
+
+    const context = buildConversationContext(conversation({ summary: full }))
+
+    // 切一半会给出**坏 JSON**（模型拿到的 `summary` 解析不了）；必须压成一个更小的合法对象。
+    const parsed = JSON.parse(context.summary) as { goal?: string }
+    expect(parsed.goal).toContain("目标是建一个立方体")
+    expect(context.summary.length).toBeLessThanOrEqual(DEFAULT_SUMMARY_CHARACTER_BUDGET)
+    expect(context.warnings.some((entry) => entry.code === "truncated_summary")).toBe(true)
+  })
+
+  it("keeps a prose summary parseable as JSON too", () => {
+    // 旧数据里可能是一段散文（不是我们写的结构化 JSON）：也不能切一半给模型。
+    const context = buildConversationContext(conversation({ summary: "之前我们把立方体建好了。".repeat(400) }))
+
+    const parsed = JSON.parse(context.summary) as { goal?: string }
+    expect(parsed.goal).toContain("之前我们把立方体建好了")
+  })
+
+  /**
+   * **连"只剩 goal"都装不下时回空**（Fix round 2 / 残余 5）。
+   *
+   * `{"goal":""}` 自己占 11 个字符，所以额度比它还小时给不出合法 JSON。评审指出原先那条
+   * 退路会超出去 ≤13 个字符（上界漏洞）；现在的规则是：装不下就回**空**——
+   * "没有摘要"是诚实状态，超预算的坏 JSON 不是。生产预算（6000 × 20%）永远够，这条守边界。
+   */
+  it("returns no summary at all when even the fallback cannot fit", () => {
+    const context = buildConversationContext(conversation({ summary: "x".repeat(500), limits: { characters: 12 } }))
+
+    expect(context.summary).toBe("")
+    expect(context.warnings.some((entry) => entry.code === "truncated_summary")).toBe(true)
   })
 })

@@ -1,10 +1,11 @@
-import { CAPABILITY_REGISTRY_REVISION, SKILL_MANIFESTS, type CommitOutcome, type ConversationContextSource, type ConversationDraftView, type DocumentHandle, type PlanEnvelope, type PlannerPort, type RunContext, type WorkspaceId } from "@draw/agent-core"
+import { CAPABILITY_REGISTRY_REVISION, SKILL_MANIFESTS, factBelongsToDocument, type CommitOutcome, type ConversationContextSource, type ConversationDraftView, type DocumentHandle, type PlanEnvelope, type PlannerPort, type RunContext, type WorkspaceId } from "@draw/agent-core"
 import type { GeometryDocument } from "@draw/dsl"
 import { contentFingerprint } from "@draw/scene-graph"
 
 import { useAgentStore, type AgentConversation } from "../agentStore"
 import { useSceneStore } from "../store"
 import { conversationRepository } from "../conversationRepository"
+import { summaryOfDocument } from "../conversationSummary"
 import { appendRunEvent } from "../services/runEventClient"
 import { createAgentRuntime, type AgentRuntime } from "./agentRuntime"
 import { createLocalPlanner, localIntentSkillIds } from "./localPlanner"
@@ -33,15 +34,21 @@ export interface RunPromptResult {
 export interface AgentRunner {
   /** 跑一轮。事件会实时回流到 `useAgentStore`，所以界面不需要自己订阅。 */
   run(prompt: string, promptMessageId: string): Promise<RunPromptResult>
-  /** 用户确认：真正落盘。 */
-  confirm(): CommitOutcome
-  /** 用户丢弃草稿：文档不动。 */
-  discard(): boolean
-  /** 用户按了停止：取消当前运行（不再发事件，也不会写文档）。 */
-  stop(): boolean
+  /**
+   * 用户确认：真正落盘。
+   *
+   * `runId` 是**用户点的那块面板所属的那一轮**（消息上盖着它）。传了就必须是已知的一轮，
+   * 而且它的会话必须还是当前会话（规格 §5.4）—— 否则如实拒绝，绝不替另一轮提交。
+   * 不传时退回"最近的那一轮"（老调用方与脚本化用例）。
+   */
+  confirm(runId?: string): CommitOutcome
+  /** 用户丢弃草稿：文档不动。`runId` 语义同 `confirm`。 */
+  discard(runId?: string): boolean
+  /** 用户按了停止：取消当前运行（不再发事件，也不会写文档）。`runId` 语义同 `confirm`。 */
+  stop(runId?: string): boolean
   /** 用户按了重试：用**同一句话**再跑一轮。 */
   retry(prompt: string, promptMessageId: string): Promise<RunPromptResult>
-  /** 当前是否有一份等待确认的草稿。 */
+  /** 当前是否有一份等待确认的草稿（任意一轮）。 */
   hasDraft(): boolean
 }
 
@@ -62,6 +69,19 @@ export const PHASE_SUMMARY: Record<string, string> = {
   interrupted: "已中断"
 }
 
+/**
+ * 一轮运行**提交时要用的落点**（Task 5）：会话、用户消息、以及这次创建出来的对象 id。
+ *
+ * 提交发生在运行结束之后（用户看预览、点确认），所以运行器自己留一份 ——
+ * 商店里这一轮的落点那时可能已经被终态回执清掉了。
+ */
+interface PendingCommit {
+  runId: string
+  conversationId: string
+  promptMessageId: string
+  createdObjects: string[]
+}
+
 function handleOf(document: GeometryDocument): DocumentHandle {
   return {
     projectId: "local",
@@ -74,36 +94,60 @@ function handleOf(document: GeometryDocument): DocumentHandle {
 }
 
 /**
+ * **现在文档是第几版**（Fix round 2 / item 5）。
+ *
+ * 消息只在**第一次有内容**时落盘（幂等键），所以"追加那一刻的版本"就是这一列唯一诚实的值；
+ * 运行器是唯一同时知道"这条消息"与"当前文档"的一层，所以由它读。
+ */
+function generation(): number {
+  return useSceneStore.getState().document.revision
+}
+
+/**
  * **这一轮会话上下文的来源**（对话切片 Task 4；规格 §5.3）。
  *
  * 在运行**开始那一刻**读一次，之后整轮用它：绑定（会话 + 文档 + 版本）、结构化摘要、
  * 已确认事实、最近消息、以及那份**还没确认**的草稿视图。
  *
  * 三件事各自有理由：
- * - **绑定必须现取并钉住**：用户可能在模型"想"的时候切到另一条会话，而这一轮属于开始时的那条
- *   （规格 §5.4"切换会话不取消旧运行；旧事件仍写回原会话"）。
+ * - **会话按钉住的那条读，而不是"现在显示的那条"**（Fix round 1 / I1）：
+ *   `selectPlanner` 在桌面端要过 IPC 问「使用中」的配置，用户完全可能在这个窗口里切走 ——
+ *   而这一轮属于开始时钉住的那条会话（规格 §5.4）。读错会话的后果是
+ *   "B 的历史与事实进了 A 这一轮的提示词，而事件写回 A"。
  * - **消息从界面状态取、摘要与事实从仓储取**：界面是这一轮说话的现场（包括刚发出去的那句），
  *   而摘要与事实是**存下来的**长期记忆 —— 它们存在的意义就是跨重启还在。
+ * - **只带本文档的事实**：换工作区就是换文档，而事实表是会话级的（规格 §5.1）——
+ *   别的文档确认的事实（"第 3 版新增 solid-1"）在这份文档里没有对应对象。
  * - **未确认的草稿只以视图形式进去**：草稿进的是 `draft` 字段，不是事实列表（规格 §1.2）。
  */
-async function readConversationSource(): Promise<ConversationContextSource> {
+async function readConversationSource(pinnedConversationId: string | undefined): Promise<ConversationContextSource> {
   const document = useSceneStore.getState().document
   const state = useAgentStore.getState()
-  const conversation = state.activeConversation
+  const conversation = (pinnedConversationId ? state.conversations.find((candidate) => candidate.id === pinnedConversationId) : undefined) ?? state.activeConversation
   // 仓储读不到（浏览器里读的是同一份 localStorage 序列化器）就当作"还没有长期记忆"，
   // **不编**一份摘要或事实出来。
   const record = conversation ? await conversationRepository().readRecord(conversation.id) : null
   const draft = conversation ? awaitingDraftOf(conversation) : undefined
+  const documentId = document.metadata.id
+  /**
+   * **摘要也按文档取**（Fix round 2 / C1 残余；规格 §5.1 + §9）。
+   *
+   * 存储形状是"一份文档一份摘要"（`summaryOfDocument`）；这里只取本次运行那份文档的那一份，
+   * 别的文档那一份**端都不端出来** —— 否则"在立体几何里确认的事实"会以 `summary` 的形式
+   * 出现在平面几何那一轮里（事实列表筛了，载体没筛等于没筛）。
+   */
+  const summary = record === null ? null : summaryOfDocument(record.summary, documentId)
   return {
     binding: {
       conversationId: conversation?.id ?? "local",
       projectId: state.binding.projectId,
-      documentId: document.metadata.id,
+      documentId,
       workspace: document.workspace as WorkspaceId,
       generation: document.revision
     },
-    summary: record?.summary ?? "",
-    facts: record?.facts ?? [],
+    summary: summary === null ? "" : JSON.stringify(summary),
+    // 只带**本文档**的事实（`factBelongsToDocument` 与 `buildConversationContext` 同一条判据）。
+    facts: (record?.facts ?? []).filter((fact) => factBelongsToDocument(fact, documentId)),
     messages: (conversation?.messages ?? []).flatMap((message) => message.text.trim().length > 0
       ? [{ id: message.id, role: message.role, text: message.text, createdAt: message.createdAt }]
       : []),
@@ -159,7 +203,12 @@ function prepareWorkspaceFor(plan: PlanEnvelope): { ok: true } | { ok: false; de
   if (current === "cad") {
     return { ok: false, detail: `这条指令需要在${wanted === "geometry3d" ? "立体几何" : "平面几何"}工作区执行；请先离开工程制图，或者在图纸里用绘图工具。` }
   }
-  useSceneStore.getState().switchWorkspace(wanted)
+  /**
+   * **标明这是 Agent 自己切的工作区**（Fix round 1 / C1）：它是"执行这条计划"的副作用，
+   * 不是用户换了上下文。App 那一层据此**不**把 Agent 区的会话列表换走 ——
+   * 否则用户正在读的那条会话与它的确认面板会在这一轮还没落地时被换掉。
+   */
+  useSceneStore.getState().switchWorkspace(wanted, "agent")
   return { ok: true }
 }
 
@@ -210,17 +259,43 @@ export interface PlannerSelection {
 export const MODEL_PLANNER_SKILL_IDS: readonly string[] = SKILL_MANIFESTS.map((manifest) => manifest.id)
 
 export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): AgentRunner {
-  let runtime: AgentRuntime | null = null
   let sequence = 0
   /** 这一轮是谁在规划（`waiting` 那条分支要靠它说人话）。 */
   let lastSelection: PlannerSelection | null = null
   /**
-   * **这一轮提交时要用的落点**（Task 5）。
+   * **按 `runId` 索引的运行状态**（Fix round 1 / C2）。
    *
-   * 提交发生在运行**结束之后**（用户看预览、点确认），那时商店里这一轮的落点可能已经被
-   * 终态回执清掉了。所以运行器自己留一份：会话、用户消息、以及这次**创建出来的对象 id**。
+   * 原先只有模块级**单槽** `runtime`/`pendingCommit`：每个新运行都会覆盖它，而确认面板是
+   * **按消息**渲染的 —— 于是"在 A 里暂存草稿 → 切到 B 再暂存一份 → 回到 A 点确认"
+   * 会提交 **B** 的草稿，并把回执与事实写进 B（规格 §5.4 要的正是"确认时检查会话"）。
+   * 现在每一轮都留着它自己的运行时与落点，界面上那块面板说哪一轮就确认哪一轮。
    */
-  let pendingCommit: { runId: string; conversationId: string; promptMessageId: string; createdObjects: string[] } | null = null
+  const runs = new Map<string, { runtime: AgentRuntime; commit: PendingCommit }>()
+  /** 最近一轮（老调用方不传 `runId` 时用它）。 */
+  let lastRunId: string | null = null
+
+  /**
+   * 用户指的那一轮。
+   *
+   * 传了 `runId` 就必须是**已知的**一轮（不认识就如实拒绝）；没传就退回最近一轮。
+   * 另外，会话必须还是**当前**会话：面板挂在 A 的对话记录里，用户看得见它，
+   * 而"当前会话"是 A 才算数（规格 §5.4 的会话检查）。
+   */
+  function resolveRun(runId?: string): { runtime: AgentRuntime; commit: PendingCommit } | null {
+    const id = runId ?? lastRunId
+    if (id === null) return null
+    const entry = runs.get(id)
+    if (!entry) return null
+    const active = useAgentStore.getState().activeConversation?.id
+    if (active !== undefined && entry.commit.conversationId !== active) return null
+    return entry
+  }
+
+  /** 一轮用掉了：从表里删掉（`lastRunId` 跟着挪到还在的那一轮）。 */
+  function retireRun(runId: string): void {
+    runs.delete(runId)
+    if (lastRunId === runId) lastRunId = [...runs.keys()].at(-1) ?? null
+  }
 
   /**
    * 选出这一轮要用的规划器。
@@ -260,11 +335,17 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
       const pinned = useAgentStore.getState().pinRun({ runId, promptMessageId })
       // 钉不住（那条消息已经不在了）时退回"当前在途"那条老路径，而不是把事件丢掉。
       const eventRunId = pinned ? runId : undefined
-      pendingCommit = pinned ? { runId, conversationId: pinned.conversationId, promptMessageId, createdObjects: [] } : null
+      // 这一轮的提交落点（运行结束之后确认时才用得上）。
+      const commit: PendingCommit | null = pinned ? { runId, conversationId: pinned.conversationId, promptMessageId, createdObjects: [] } : null
       const selection = await selectPlanner(prompt)
       lastSelection = selection
-      // 会话上下文在**建运行时之前**读一次：绑定、历史、摘要、事实、草稿视图都钉在这一刻。
-      const conversation = await readConversationSource()
+      /**
+       * 会话上下文在**建运行时之前**读一次：绑定、历史、摘要、事实、草稿视图都钉在这一刻。
+       *
+       * **必须按上面钉住的那条会话读**（Fix round 1 / I1）：`selectPlanner` 上面那一行刚 await 过
+       * IPC，用户完全可能在这段时间里切到另一条会话 —— 而这一轮属于开始时钉住的那条。
+       */
+      const conversation = await readConversationSource(pinned?.conversationId)
       /**
        * **这一轮到底看到了多少会话历史**（计数，不是内容）。
        *
@@ -310,25 +391,30 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
         exportPreflight: { preflight: () => ({ error: "export preflight is not wired into the agent path yet" }) },
         // 会话上下文：**一次运行只取一次**（协调器在组装上下文时调它），两次尝试共用同一份。
         conversation: () => conversation,
+        // 同意绑定这一轮的会话；提交时与**当前**会话比对（Fix round 1 / C2；规格 §5.4）。
+        ...(pinned === null ? {} : { conversationId: pinned.conversationId }),
+        readConversationId: () => useAgentStore.getState().activeConversation?.id ?? null,
         projectId: "local",
         runId
       })
       /**
-       * **这一次运行自己持有它的运行时**（2026-09-21 修的真实缺陷）。
+       * **把这一轮登记进按 `runId` 索引的表**（Fix round 1 / C2）。
        *
-       * `runtime` 是模块级的：`confirm()` / `discard()` / `stop()` 都会把它置空，而它们
-       * 完全可能在这一轮还在 `await` 模型的时候被点到（上一轮留下的草稿面板还挂在界面上时
-       * 尤其容易）。运行回来再读 `runtime.coordinator.phase()` 就抛
-       * `Cannot read properties of null (reading 'coordinator')` —— 界面上只显示"没有完成"。
-       *
-       * 所以：**模块级那个字段只用来"让面板找到当前这一轮"，而运行自己走这条 `active`**。
+       * 每个新运行都覆盖模块级的单槽，而上面那些 `await`（选配置、读会话、跑模型）期间
+       * 用户完全可能切到别条会话并又跑一轮 —— 那次新运行会把旧的一轮挤掉。
+       * 登记之后，"确认/丢弃/停止"都能指回**用户点的那一轮**。
        */
-      runtime = active
+      if (commit) {
+        runs.set(runId, { runtime: active, commit })
+        lastRunId = runId
+      }
 
       const live = useSceneStore.getState().document
       const runContext: RunContext = {
         runId,
-        conversationId: useAgentStore.getState().activeConversation?.id ?? "local",
+        // **钉住的那条会话**，不是"现在显示的那条"（Fix round 1 / I1）：运行账本、事件与事实
+        // 都按它归属，而用户可以在这一轮还在跑的时候切走。
+        conversationId: pinned?.conversationId ?? useAgentStore.getState().activeConversation?.id ?? "local",
         promptMessageId,
         target: handleOf(live),
         sources: [],
@@ -391,12 +477,9 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
         const preview = active.host.preview(draftId)
         // 这次**创建出来的对象 id**（候选文档 vs 当前文档的差集）：提交成功之后它们要进事实。
         // **只取 id**：候选文档本身一个字节都不离开这一层。
-        if (pendingCommit && preview.ok) {
+        if (commit && preview.ok) {
           const before = new Set(useSceneStore.getState().document.primitives.map((primitive) => primitive.id))
-          pendingCommit = {
-            ...pendingCommit,
-            createdObjects: preview.artifact.candidate.primitives.map((primitive) => primitive.id).filter((id) => !before.has(id)).slice(0, 24)
-          }
+          commit.createdObjects = preview.artifact.candidate.primitives.map((primitive) => primitive.id).filter((id) => !before.has(id)).slice(0, 24)
         }
         useAgentStore.getState().recordDraft({
           draftId,
@@ -408,7 +491,7 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
           baseCounts: preview.ok ? preview.artifact.baseCounts : undefined,
           // 假设在**计划解析成功那一刻**就知道，而草稿是运行结束之后才拿到的 —— 中间没有第二条路。
           assumptions: active.assumptions()
-        }, eventRunId)
+        }, eventRunId, generation())
         return { phase, draftId }
       }
 
@@ -426,12 +509,12 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
             ? questions.join(" ")
             : `这一步需要你补充信息${lastSelection?.textProfileId === "local-planner" ? "。当前没有接入模型服务，本地规划器只认识几条固定指令" : ""}。`,
           retryable: false
-        }, eventRunId)
+        }, eventRunId, generation())
       } else if (phase === "failed") {
         const last = active.coordinator.ledger().at(-1)
-        useAgentStore.getState().failPendingReply({ code: "run_failed", message: last?.detail || "这次运行没有完成。", retryable: false }, eventRunId)
+        useAgentStore.getState().failPendingReply({ code: "run_failed", message: last?.detail || "这次运行没有完成。", retryable: false }, eventRunId, generation())
       } else if (phase === "completed") {
-        useAgentStore.getState().recordReceipt({ status: "no_change" }, eventRunId)
+        useAgentStore.getState().recordReceipt({ status: "no_change" }, eventRunId, generation())
       }
 
       // 这一轮到此为止（没有草稿要等确认）：清掉落点，之后迟到的事件一律丢弃。
@@ -442,47 +525,65 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
   return {
     run: runPrompt,
 
-    confirm() {
-      if (!runtime) return { status: "rejected", detail: "there is no run to confirm" }
-      // 落点在这一轮开始时钉好：提交发生在运行**结束之后**，用户可能已经切到别的会话。
-      const commit = pendingCommit
-      const outcome = runtime.confirmDraft()
+    confirm(runId) {
+      /**
+       * **只认用户点的那一轮**（Fix round 1 / C2；规格 §5.4）。
+       *
+       * 不认识的 `runId`、或者它的会话已经不是当前会话 → 如实拒绝（`stale_source` 那一类：
+       * "世界变了，重新看一遍"），绝不替另一轮提交。
+       */
+      const entry = resolveRun(runId)
+      if (!entry) return { status: "rejected", detail: runId === undefined ? "there is no run to confirm" : `run ${runId} is not waiting for a confirmation in the active conversation` }
+      const { runtime: run, commit } = entry
+      const outcome = run.confirmDraft()
       // 只有宿主桥说成功才显示成功；被拒时**如实**把原因带回界面。
       useAgentStore.getState().recordReceipt(outcome.status === "committed"
         ? { status: "committed" }
         : outcome.status === "no_change"
           ? { status: "no_change" }
-          : { status: "failed", detail: outcome.detail ?? outcome.status }, commit?.runId)
+          : { status: "failed", detail: outcome.detail ?? outcome.status }, commit.runId, generation())
       /**
        * **只有真的提交了才写长期记忆**（Task 5；规格 §1.2/§10）：
        * 代数与这次创建的对象进事实表，长会话顺带压缩摘要。
        * `no_change` / 被拒 / 用户丢弃都**不写** —— 那些情况下"事实"并没有发生。
        */
-      if (outcome.status === "committed" && commit) {
+      if (outcome.status === "committed") {
         void useAgentStore.getState().recordCommittedRun({
           runId: commit.runId,
           conversationId: commit.conversationId,
           promptMessageId: commit.promptMessageId,
+          // 事实属于**这次提交真正落上去的那份文档**（Agent 自己可能刚为这条计划切过工作区）。
+          documentId: useSceneStore.getState().document.metadata.id,
           generation: useSceneStore.getState().document.revision,
           createdObjects: commit.createdObjects
         })
       }
-      if (commit) useAgentStore.getState().endRun(commit.runId)
-      // 提交之后这份草稿就用掉了：不清掉的话再点一次确认会去提交一个已消费的凭据。
-      runtime = null
-      pendingCommit = null
+      /**
+       * **只有真的落定才把这一轮用掉**（Fix round 2 / item 3）。
+       *
+       * `committed` / `no_change` = 同意已经消费、草稿已经用掉 → 退休。
+       * 被拒（`stale_source` / `stale_conversation` / `commit_rejected` …）时**留着**：
+       * 面板还挂在界面上，用户再点一次要看到**真正的原因**，而不是
+       * "run … is not waiting for a confirmation"（那句话把真实原因盖掉了，而且
+       * `hasDraft()` 变成 false，界面就再也说不出"这里还有一份草稿"）。
+       */
+      if (outcome.status === "committed" || outcome.status === "no_change") {
+        useAgentStore.getState().endRun(commit.runId)
+        // 提交之后这份草稿就用掉了：不清掉的话再点一次确认会去提交一个已消费的凭据。
+        retireRun(commit.runId)
+      }
       return outcome
     },
 
-    discard() {
-      if (!runtime) return false
-      const commit = pendingCommit
-      const discarded = runtime.discardDraft()
+    discard(runId) {
+      const entry = resolveRun(runId)
+      if (!entry) return false
+      const { runtime: run, commit } = entry
+      const discarded = run.discardDraft()
       // 丢弃**不产生任何事实**：那份草稿从来没有发生过（规格 §1.2）。
-      useAgentStore.getState().recordReceipt({ status: "no_change" }, commit?.runId)
-      if (commit) useAgentStore.getState().endRun(commit.runId)
-      runtime = null
-      pendingCommit = null
+      useAgentStore.getState().recordReceipt({ status: "no_change" }, commit.runId, generation())
+      useAgentStore.getState().endRun(commit.runId)
+      retireRun(commit.runId)
       return discarded
     },
 
@@ -493,28 +594,34 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
      * 而运行器**只**报告结果：如果这一轮已经结束（没有运行时实例），如实返回 `false`，
      * 不假装取消成功。
      */
-    stop() {
-      if (!runtime) return false
-      const result = runtime.coordinator.cancel("user")
-      if (!result.cancelled) return false
+    stop(runId) {
+      const entry = resolveRun(runId)
+      if (!entry) return false
+      const { runtime: run, commit } = entry
+      const result = run.coordinator.cancel("user")
+      if (!result.cancelled) {
+        // 这一轮已经结束了（协调器的账本已经收尾）：它不可能再等确认 —— **顺手收掉**，
+        // 否则这一条会永远留在表里（Fix round 2 / 残余 3 的后半）。
+        retireRun(commit.runId)
+        useAgentStore.getState().endRun(commit.runId)
+        return false
+      }
       // 取消之后草稿也作废：留着它会让用户看到一份永远不会生效的预览。
-      runtime.discardDraft()
-      const commit = pendingCommit
-      useAgentStore.getState().failPendingReply({ code: "cancelled_by_user", message: "已按你的要求停下。没有改动文档。", retryable: true }, commit?.runId)
-      if (commit) useAgentStore.getState().endRun(commit.runId)
-      runtime = null
-      pendingCommit = null
+      run.discardDraft()
+      useAgentStore.getState().failPendingReply({ code: "cancelled_by_user", message: "已按你的要求停下。没有改动文档。", retryable: true }, commit.runId, generation())
+      useAgentStore.getState().endRun(commit.runId)
+      retireRun(commit.runId)
       return true
     },
 
     /** 重试 = 用同一句话再跑一轮。它**不**复用上一轮的草稿（那份已经作废了）。 */
     async retry(prompt, promptMessageId) {
-      runtime = null
       return runPrompt(prompt, promptMessageId)
     },
 
     hasDraft() {
-      return runtime !== null && runtime.draftId() !== null
+      // 任意一轮还挂着草稿都算（用户可能在另一条会话里也暂存了一份）。
+      return [...runs.values()].some((entry) => entry.runtime.draftId() !== null)
     }
   }
 }

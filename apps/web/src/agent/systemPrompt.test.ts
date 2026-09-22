@@ -1,4 +1,4 @@
-import type { ModelContext } from "@draw/agent-core"
+import { MAX_MESSAGE_LIMIT, type ModelContext } from "@draw/agent-core"
 import { describe, expect, it } from "vitest"
 
 import { SYSTEM_PROMPT_VERSION, buildPolicyText, buildSystemPrompt } from "./systemPrompt"
@@ -153,5 +153,35 @@ describe("production system prompt", () => {
 
     expect(prompt.policy).toContain("上一轮的输出没有被接受")
     expect(prompt.policy).toContain("envelope.actions[0].inputs.faces")
+  })
+
+  /**
+   * **提示词不许再截一次消息**（Fix round 2 / item 4）。
+   *
+   * 条数与字符的预算都由 `buildConversationContext` 定（§5.3 的 35% 段 + `MAX_MESSAGE_LIMIT`），
+   * 而这里原先又写了一个 `MAX_PROMPT_MESSAGES = 12` —— 与事实那一处同一种漂移：
+   * 预算按 24 条算，模型只看得到 12 条。同一个数写在两个文件里迟早会不一致，
+   * 所以渲染**不再截**：上下文里有多少条就渲染多少条。
+   */
+  it("renders every recent message the context builder kept", () => {
+    const messages = Array.from({ length: MAX_MESSAGE_LIMIT }, (_, index) => ({ id: `m${index}`, role: "user" as const, text: `第 ${index} 条`, createdAt: index }))
+    const prompt = buildSystemPrompt({
+      context: context(),
+      conversation: {
+        binding: { conversationId: "conv-1", projectId: "local", documentId: "doc-1", workspace: "geometry3d", generation: 4 },
+        summary: "",
+        facts: [],
+        messages,
+        observation: { facts: [], summary: "" },
+        warnings: [],
+        estimatedCharacters: 1
+      },
+      channel: "strict_json",
+      canPlan: true
+    })
+
+    const parsed = JSON.parse(prompt.contextJson) as { recentMessages: { text: string }[] }
+    expect(parsed.recentMessages).toHaveLength(messages.length)
+    expect(parsed.recentMessages.at(-1)?.text).toBe(`第 ${messages.length - 1} 条`)
   })
 })
