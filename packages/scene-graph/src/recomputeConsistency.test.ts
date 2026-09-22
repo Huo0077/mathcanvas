@@ -150,7 +150,6 @@ describe("incremental recompute is a fixpoint of the full recompute", () => {
       ["改立方体原点", { op: "updatePrimitive", id: "cube-1", patch: { origin3: { x: -1, y: -2, z: -2 } } }],
       ["改圆柱半径", { op: "updatePrimitive", id: "cyl-1", patch: { radius3: 2 } }],
       ["移动圆柱", { op: "translatePrimitive3", id: "cyl-1", delta: { x: 0, y: 0, z: 1 } }],
-      ["**按数值改模板顶点**（拓扑翻成 fromFaces）", { op: "updatePrimitive", id: cubeTopology.vertexIds[0], patch: { position3: { x: -3, y: -2, z: -2 } } }],
       ["改绑定点参数（面上 uv）", { op: "updatePrimitive", id: "point-on-face", patch: { binding3: { ...boundPoint.binding, uv: [0.25, 0.75] } } }],
       ["平移剖切面", { op: "moveSectionPlane", id: "section-1", distance: 0.5 }],
       ["旋转剖切面", { op: "rotateSectionPlane", id: "section-1", axis: "x", degrees: 15 }],
@@ -158,5 +157,18 @@ describe("incremental recompute is a fixpoint of the full recompute", () => {
       ["删除截面来源", { op: "deleteObject", id: "cube-1" }]
     ]
     for (const [label, operation] of cases) expectFixpoint(document, operation, label)
+
+    /**
+     * **"按数值改模板顶点"现在被拒**（Fix round 1，Recompute/Store 缺陷）。
+     *
+     * 这条曾经是 fixpoint 用例的一员：改一个立方体顶点会让拓扑翻成 `fromFaces`，
+     * 而翻转之后的四个面**不再共面**（一个"扭过的四边形"）—— 文档于是 schema 非法。
+     * 旧行为是"照收不误"：界面更新、磁盘上还是旧的（保存时 `encodeMgeo` 报错又被吞掉）。
+     * 现在 `commitPatch` 在提交前校验整份文档，所以这笔改动**被明确拒绝**。
+     */
+    const refused = commitPatch(document, { op: "updatePrimitive", id: cubeTopology.vertexIds[0], patch: { position3: { x: -3, y: -2, z: -2 } } })
+    expect(refused.changed).toBe(false)
+    expect(refused.error).toContain("face3 points are not coplanar")
+    expect(refused.document).toBe(document)
   })
 })

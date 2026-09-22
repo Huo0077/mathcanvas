@@ -23,6 +23,53 @@ function baseWithCube(): GeometryDocument {
 }
 
 describe("isolated drafts", () => {
+  /**
+   * **用户原话必须一路走到审计**（Fix round 1 / C3；规格 §6.3/§8.2）。
+   *
+   * 三条判据都只看 `compilePlan` 的 `context.prompt`：`isInvariantRequest`（"任意/恒定/定值"
+   * 必须保留符号参数）、`infer_from_facts`（从用户原话里读数字）、`verifyPlan` 的
+   * "采样不是证明"声明。第一版的生产调用点**都不传它**，于是这三条在真实管线里恒不生效 ——
+   * 机制是死的，只有提示词在兜。这里的用例从 `DraftStore.stage` 这条**生产入口**出发。
+   */
+  it("carries the user's words into the audit so an invariant request asks instead of inventing", () => {
+    const store = createDraftStore()
+    const base = createEmptyDocument("geometry3d")
+    const record = store.create(base)
+
+    const staged = store.stage(record.draftId, [{
+      actionId: "solid.create_prism",
+      actionKey: "prism",
+      factIds: [],
+      // 底面与向量都缺：题目说"任意"时**不该**替它取特值。
+      inputs: { alias: "prism" }
+    }] as unknown as Parameters<typeof store.stage>[1], record.draftVersion, "画一个任意棱柱")
+
+    expect(staged.ok).toBe(false)
+    if (!staged.ok) {
+      expect(staged.reason).toBe("compile_failed")
+      expect(staged.diagnostics?.map((entry) => entry.code)).toContain("needs_concrete_value")
+    }
+    // 没有半份草稿：候选文档一个图元都没多。
+    expect(store.getPreview(record.draftId)?.candidate.primitives).toHaveLength(0)
+  })
+
+  it("reads a stated size out of the user's words on the production path", () => {
+    const store = createDraftStore()
+    const record = store.create(createEmptyDocument("geometry3d"))
+
+    const staged = store.stage(record.draftId, [{
+      actionId: "solid.create_template",
+      actionKey: "cylinder",
+      factIds: [],
+      // 高度没给 → `infer_from_facts` 应当从原话里的"高 5"读出来。
+      inputs: { alias: "c", template: "cylinder", origin: { x: 0, y: 0, z: 0 }, radius: 2 }
+    }], record.draftVersion, "画一个半径 2、高 5 的圆柱")
+
+    expect(staged.ok).toBe(true)
+    const cylinder = store.getPreview(record.draftId)?.candidate.primitives.find((primitive) => primitive.type === "cylinder")
+    expect(cylinder).toMatchObject({ height: 5 })
+  })
+
   it("keeps a draft candidate in memory and never touches the live document", () => {
     const store = createDraftStore()
     const base = baseDocument()

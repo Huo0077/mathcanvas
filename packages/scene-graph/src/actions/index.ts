@@ -69,6 +69,17 @@ const SOLID_TYPES = new Set(["cube", "pyramid", "cylinder", "cone", "polyhedron3
 /** 允许通过动作层修改的字段白名单（§7.3 的"几何只改注册输入字段"）。 */
 const UPDATABLE_INPUT_FIELDS = new Set(["label", "visible", "locked", "x", "y", "radius", "expression", "stroke", "fill", "strokeWidth", "opacity"])
 
+/**
+ * **同一份白名单的对外出口**（Fix round 1 / I14）。
+ *
+ * 传输层（`@draw/agent-core` 的 `schemas.ts`）曾经自己手抄了一份**更窄**的列表，
+ * 于是模型合法地"把点挪到 (1,2)"会被 `unknown_field` 拒绝，并浪费掉唯一一次修复 ——
+ * 正是 `schemas.ts` 头注释警告的"两份真源必然分叉"。白名单只有这一份，两边都读它。
+ */
+export function updatableInputFields(): readonly string[] {
+  return [...UPDATABLE_INPUT_FIELDS]
+}
+
 // ---------------------------------------------------------------- 各族 handler
 
 /**
@@ -88,12 +99,17 @@ function compilePlanar(action: Extract<DraftAction, { actionId: PlanarCreateActi
   const { actionKey, actionId } = action
   const inputs = action.inputs
   const pointKind = actionId === "planar.create_point" ? "point" : undefined
+  /**
+   * **标签要带进图元**（Fix round 1 / M18）：白名单收了 `label`，而这里以前把它丢掉 ——
+   * 模型以为给对象起了名字，上线之后名字静默消失。立体与圆锥曲线分支一直是带的，平面族漏了。
+   */
+  const label = inputs.label === undefined ? {} : { label: inputs.label }
 
   if (pointKind) {
     const first = inputs.points?.[0]
     if (!isFinitePoint(first)) return { operations: [], diagnostics: [diagnostic(actionKey, "missing_point", "a point needs finite x and y")], aliasToId: {} }
     const id = context.idAllocator.allocate("point", inputs.alias)
-    return { operations: [{ op: "addPrimitive", primitive: { id, type: "point", x: first.x, y: first.y } }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
+    return { operations: [{ op: "addPrimitive", primitive: { id, type: "point", x: first.x, y: first.y, ...label } }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
   }
 
   if (actionId === "planar.create_circle") {
@@ -104,7 +120,7 @@ function compilePlanar(action: Extract<DraftAction, { actionId: PlanarCreateActi
       return { operations: [], diagnostics: [diagnostic(actionKey, "invalid_radius", "radius must be a positive finite number")], aliasToId: {} }
     }
     const id = context.idAllocator.allocate("circle", inputs.alias)
-    return { operations: [{ op: "addPrimitive", primitive: { id, type: "circle", center, radius } }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
+    return { operations: [{ op: "addPrimitive", primitive: { id, type: "circle", center, radius, ...label } }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
   }
 
   if (actionId === "planar.create_arc") {
@@ -120,7 +136,7 @@ function compilePlanar(action: Extract<DraftAction, { actionId: PlanarCreateActi
       return { operations: [], diagnostics: [diagnostic(actionKey, "missing_angles", "an arc needs explicit start and end angles")], aliasToId: {} }
     }
     const id = context.idAllocator.allocate("arc", inputs.alias)
-    return { operations: [{ op: "addPrimitive", primitive: { id, type: "arc", center, radius, startAngle, endAngle } }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
+    return { operations: [{ op: "addPrimitive", primitive: { id, type: "arc", center, radius, startAngle, endAngle, ...label } }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
   }
 
   const points = inputs.points ?? []
@@ -132,7 +148,7 @@ function compilePlanar(action: Extract<DraftAction, { actionId: PlanarCreateActi
   if (actionId === "planar.create_polyline") {
     if (finite.length < 2) return { operations: [], diagnostics: [diagnostic(actionKey, "too_few_points", "a polyline needs at least two points")], aliasToId: {} }
     const id = context.idAllocator.allocate("polyline", inputs.alias)
-    return { operations: [{ op: "addPrimitive", primitive: { id, type: "polyline", points: finite } }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
+    return { operations: [{ op: "addPrimitive", primitive: { id, type: "polyline", points: finite, ...label } }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
   }
 
   // line / segment / ray：两个端点，且不能重合。
@@ -143,7 +159,7 @@ function compilePlanar(action: Extract<DraftAction, { actionId: PlanarCreateActi
   }
   const type = actionId === "planar.create_line" ? "line" : actionId === "planar.create_ray" ? "ray" : "segment"
   const id = context.idAllocator.allocate(type, inputs.alias)
-  return { operations: [{ op: "addPrimitive", primitive: { id, type, a, b } }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
+  return { operations: [{ op: "addPrimitive", primitive: { id, type, a, b, ...label } }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
 }
 
 function compileSolidTemplate(action: Extract<DraftAction, { actionId: "solid.create_template" }>, context: ActionContext): CompileResult {
@@ -156,7 +172,8 @@ function compileSolidTemplate(action: Extract<DraftAction, { actionId: "solid.cr
   if (inputs.template === "cube" || inputs.template === "pyramid") {
     const size = inputs.size
     if (!size || !positive(size.x) || !positive(size.y) || !positive(size.z)) {
-      return { operations: [], diagnostics: [diagnostic(actionKey, "invalid_size", "a cube needs positive finite x/y/z")], aliasToId: {} }
+      // 文案按模板取名（Fix round 1 / I3）：原来一律说"a cube"，棱锥缺尺寸时读起来驴唇不对马嘴。
+      return { operations: [], diagnostics: [diagnostic(actionKey, "invalid_size", `a ${inputs.template} needs positive finite x/y/z`)], aliasToId: {} }
     }
   }
   if (inputs.template === "cylinder" || inputs.template === "cone") {
@@ -338,6 +355,16 @@ function compileFunctionAnalyze(action: Extract<DraftAction, { actionId: "functi
     return { operations: [], diagnostics: [diagnostic(actionKey, "unbounded_domain", "analysis needs a bounded domain")], aliasToId: {} }
   }
   const samples = source.samples ?? 128
+  /**
+   * **`analysis` 是闭集，兜底分支不再"默默当成切线"**（Fix round 1 / I15）。
+   *
+   * 原先最后一个 `else` 对任何无法识别的字符串都建一颗 **tangent**，并用那个字符串当 id 前缀：
+   * 用户要"定积分"、文档里多出一条切线 —— 规格 §7 明令不许这种静默错误。
+   * 传输层现在也校验闭集（`invalid_analysis`），这里是第二道（直接调编译器的调用方）。
+   */
+  if (inputs.analysis !== "derivative" && inputs.analysis !== "integral" && inputs.analysis !== "tangent") {
+    return { operations: [], diagnostics: [diagnostic(actionKey, "unknown_analysis", `unknown analysis '${String(inputs.analysis)}'`)], aliasToId: {} }
+  }
   const id = context.idAllocator.allocate(inputs.analysis, inputs.alias)
   const primitive = inputs.analysis === "derivative"
     ? { id, type: "derivative", sourceId: source.id, order: 1, domain: [low, high], samples, points: [], status: "approximate" }
@@ -543,9 +570,17 @@ function compileSectionCreate(action: Extract<DraftAction, { actionId: "section.
   if (!SOLID_TYPES.has(source.type)) {
     return { operations: [], diagnostics: [diagnostic(actionKey, "source_not_solid", `a section needs a solid, got ${source.type}`)], aliasToId: {} }
   }
+  /**
+   * **缺平面就拒绝，不再静默取 `z = 0`**（Fix round 1 / M8）。
+   *
+   * 过一点有无数个平面，替调用方挑一个等于换了一道题。审计层早就会 `ask_user`，
+   * 但任何**直接**调 `compileAction` 的调用方（手工按钮、旧客户端）仍然会拿到那个 z=0 平面。
+   * 现在缺平面在这里也失败，错误码与审计层一致（`missing_field`）。
+   */
+  if (!inputs.plane) return { operations: [], diagnostics: [diagnostic(actionKey, "missing_field", "a section needs its cutting plane")], aliasToId: {} }
   const id = context.idAllocator.allocate("section", inputs.alias)
   return {
-    operations: [{ op: "addPrimitive", primitive: { id, type: "section", sourceId: inputs.sourceId, plane: inputs.plane ?? { normal: { x: 0, y: 0, z: 1 }, constant: 0 }, points: [], classification: "none", status: "undefined" } }],
+    operations: [{ op: "addPrimitive", primitive: { id, type: "section", sourceId: inputs.sourceId, plane: inputs.plane, points: [], classification: "none", status: "undefined" } }],
     diagnostics: [],
     aliasToId: { [inputs.alias]: id }
   }

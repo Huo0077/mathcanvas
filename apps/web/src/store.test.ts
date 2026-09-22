@@ -44,8 +44,7 @@ describe("CAD document layout normalisation", () => {
   })
 })
 
-describe("scene store document replacement", () => {
-  it("keeps documents cached for other workspaces so switching back preserves in-session work", () => {
+describe("scene store document replacement", () => {  it("keeps documents cached for other workspaces so switching back preserves in-session work", () => {
     useSceneStore.getState().replace(createDemoDocument())
     useSceneStore.getState().switchWorkspace("geometry3d")
     useSceneStore.getState().apply({
@@ -144,5 +143,46 @@ describe("committing a candidate the agent built", () => {
 
     expect(useSceneStore.getState().history).toHaveLength(0)
     expect(useSceneStore.getState().document.revision).toBe(base.revision)
+  })
+})
+
+/**
+ * **一次改动只要让文档不再合法，就不许进 store**（Fix round 1，Reactive DAG worker 报的缺陷）。
+ *
+ * 实测过的静默路径：`commitPatch` 只校验**那一笔操作**（`validatePatch`），不校验操作之后的
+ * **整份文档**。于是 `updatePrimitive` 把立方体的 `size` 改成退化值（`y = 0`）时：
+ * - `validatePatch` 放行（它压根不看 `size`）；
+ * - store 接受 → 文档变成 schema 非法，界面照常更新；
+ * - 自动保存走 `encodeMgeo`，那里会校验并抛错，而 `saveDraft` 把它**吞掉** ——
+ *   于是"画布上是新的、磁盘上还是旧的"，用户看不到任何提示。
+ *
+ * 这条用例从**真实入口**（`useSceneStore.apply`）出发，断言非法改动被拒且文档不变。
+ * 它放在文件末尾：store 是模块级单例，前面那些用例会往工作区缓存里放东西。
+ */
+describe("the scene store refuses edits that would make the document invalid", () => {
+  beforeEach(() => {
+    localStorage.clear()
+    const clean = createEmptyDocument("geometry3d")
+    useSceneStore.setState({ document: clean, workspaceDocuments: { [clean.workspace]: clean }, history: [], future: [], error: null })
+  })
+
+  it("rejects an edit that would leave a dangling host reference in the document", () => {
+    const point = { id: "point3-1", type: "point3" as const, position: { x: 0, y: 0, z: 0 }, binding: { kind: "free" as const } }
+    useSceneStore.setState((state) => ({ ...state, document: { ...state.document, primitives: [point] as never } }))
+    const before = useSceneStore.getState().document
+
+    /**
+     * 把空间点绑到一条**不存在**的棱上：`validatePatch` 的 `updatePrimitive` 分支不看 `binding3`，
+     * 而 DSL 校验要求宿主真实存在（悬空宿主会让点静默冻住）。于是这笔改动以前会被整份接受 ——
+     * 文档从此 schema 非法，而保存时 `encodeMgeo` 才报错（那条错误又被 `saveDraft` 吞掉）。
+     * 现在它在提交这一层就被拒。
+     */
+    useSceneStore.getState().apply({ op: "updatePrimitive", id: "point3-1", patch: { binding3: { kind: "onHost", hostId: "edge-does-not-exist", parameter: 0.5 } } })
+
+    const after = useSceneStore.getState().document
+    expect(after).toBe(before)
+    expect((after.primitives[0] as { binding?: { kind: string } }).binding?.kind).toBe("free")
+    // 失败要**说出来**（界面上那一行错误），而不是静默不动。
+    expect(useSceneStore.getState().error).toBeTruthy()
   })
 })

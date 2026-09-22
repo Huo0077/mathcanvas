@@ -11,9 +11,10 @@ import {
   type RepairRequest,
   type StructuredAssumption
 } from "./contracts"
-import { auditDescriptionFor, requiredFieldsFor, type AuditContext } from "./defaultPolicies"
+import { auditDescriptionFor, type AuditContext } from "./defaultPolicies"
 import { auditPlan, type FieldCompletion } from "./parameterAudit"
 import { parsePlanEnvelope, repairRequestFor } from "./schemas"
+import { isInvariantRequest } from "./underdetermined"
 
 /**
  * **把一份计划编译成动作**（Agent DSL 切片 Task 4；规格 §6.2/§6.3/§7）。
@@ -85,12 +86,12 @@ export interface PlanCompileResult {
   repair?: RepairRequest
 }
 
-/** 引用字段：登记表说它必须存在，解析阶段据此把别名换成真 id 或报错。 */
+/** 引用字段：登记表（`ActionAuditDescription.references`）说它是引用，解析阶段据此解析。 */
 interface ReferenceField {
   field: string
   /** `scoped` = 带 documentId 的对象引用；`id` = 同文档内的对象 id；`parameter` = 文档参数 id。 */
   kind: "scoped" | "id" | "parameter"
-  /** `object.delete_many` 的 `targets` 是**一批** id。 */
+  /** 一批 id（`object.delete_many.targets`）。 */
   list: boolean
   /**
    * **嵌套在对象里的引用**（例如切线的 `anchor.pointId`）。
@@ -101,47 +102,22 @@ interface ReferenceField {
   nested?: { outer: string; inner: string; when: { field: string; equals: string } }
 }
 
+/**
+ * **引用字段只有一份真源**：传输层的动作登记表（Fix round 1 / M4、I12、I16）。
+ *
+ * 这里以前手抄了一张 `REFERENCE_FIELDS`，于是"注册表说它是引用、解析器却不知道"完全可能
+ *（`dynamic.bind_point.host`、`dynamic.bind_curve.pathId`、`dynamic.set_radius_rule.pointId`
+ * 都漏在表外）。现在直接从 `ActionAuditDescription.references` 读 —— 传输层与解析器不可能分叉。
+ */
 function referenceFieldsFor(actionId: string): ReferenceField[] {
   const description = auditDescriptionFor(actionId)
   if (description === null) return []
-  const raw = (rawReferenceSpec(actionId))
-  if (!raw) return []
-  return [{ ...raw, list: raw.field === "targets" }]
-}
-
-/**
- * 登记表里的 `requireReference` **不在** `ActionAuditDescription` 里（那是审计视角）。
- * 这里按动作名读一次，与传输层保持同一份声明 —— 传输层是唯一真源，这个映射只是
- * "把它取出来"。
- */
-function rawReferenceSpec(actionId: string): { field: string; kind: "scoped" | "id" | "parameter"; nested?: { outer: string; inner: string; when: { field: string; equals: string } } } | null {
-  return REFERENCE_FIELDS[actionId] ?? null
-}
-
-/**
- * **引用字段表**（与 `schemas.ts` 的 `requireReference` 同源）。
- *
- * 为什么要在这里再写一遍名字：审计视角（`ActionAuditDescription`）刻意只暴露"必填性 + 默认策略"，
- * 因为那是模型与界面需要的；而"哪个字段是引用"是**解析器**需要的，多暴露一层就是多一处漂移面。
- * 代价是这张表必须与传输层逐字一致 —— `planCompiler.test.ts` 的引用解析用例覆盖了每一条。
- */
-const REFERENCE_FIELDS: Record<string, { field: string; kind: "scoped" | "id" | "parameter"; nested?: { outer: string; inner: string; when: { field: string; equals: string } } }> = {
-  "dynamic.bind_point": { field: "target", kind: "scoped" },
-  "dynamic.create_bound_point": { field: "host", kind: "scoped" },
-  "dynamic.bind_curve": { field: "target", kind: "scoped" },
-  "dynamic.create_locus": { field: "sourcePointId", kind: "id" },
-  "dynamic.set_radius_rule": { field: "circleId", kind: "id" },
-  // 切线：平铺的 `sourceId` 与**嵌套的** `anchor.pointId`（跟随动点时两处都是那个点）。
-  "function.create_tangent": { field: "sourceId", kind: "id", nested: { outer: "anchor", inner: "pointId", when: { field: "kind", equals: "point" } } },
-  "function.analyze": { field: "sourceId", kind: "id" },
-  "section.create": { field: "sourceId", kind: "id" },
-  "section.materialize": { field: "sectionId", kind: "id" },
-  "object.delete_many": { field: "targets", kind: "id" },
-  "object.update_inputs": { field: "target", kind: "scoped" },
-  // **参数 id 不是图元 id**：`parameter.set` / `set_expression` 改的是文档参数。
-  // 把它们当对象引用查，症状是"同一个计划里刚建的 θ 找不到自己"。
-  "parameter.set": { field: "id", kind: "parameter" },
-  "parameter.set_expression": { field: "id", kind: "parameter" }
+  return description.references.map((reference) => ({
+    field: reference.field,
+    kind: reference.kind,
+    list: reference.list === true,
+    ...(reference.nested === undefined ? {} : { nested: reference.nested })
+  }))
 }
 
 /** 草稿别名写成 `draft:<alias>`（**这是唯一的别名写法**，来源是 `{scope:"draft"}` 引用）。 */
@@ -243,10 +219,17 @@ export function compilePlan(input: unknown, context: PlanCompileContext): PlanCo
     }
   }
 
-  // 补全之后的计划（假设并进信封，界面与协调器读同一份）。
+  /**
+   * 补全之后的计划（假设**并进**信封，界面与协调器读同一份）。
+   *
+   * **合并而不是替换**（Fix round 1 / M6）：规划器自己声明过的那几条（"把直径 6 读作半径 3"）
+   * 与审计补出来的那几条是**两批**，替换会让 `draftTools.compilePlan` 的 `payload.plan` 少掉前者
+   *（UI 那边因为 `agentRuntime` 又合了一次而看不出来，所以这个缺陷一直没被用户看到）。
+   */
+  const mergedAssumptions = [...new Set([...(plan.assumptions ?? []), ...assumptions.map((assumption) => assumption.text)])]
   const completedPlan: PlanEnvelope = {
     ...plan,
-    assumptions: assumptions.length === 0 ? plan.assumptions : assumptions.map((assumption) => assumption.text),
+    assumptions: mergedAssumptions.length === 0 ? undefined : mergedAssumptions,
     actions: audit.actions
   }
 
@@ -258,13 +241,12 @@ export function compilePlan(input: unknown, context: PlanCompileContext): PlanCo
 
   // ---- 3/5/6. 逐笔：引用解析 → 几何校验 → 动作编译 → 推进工作文档 ----------
   for (const [index, action] of audit.actions.entries()) {
-    // 参数补全的兜底检查：补全之后必填字段还缺 → 这一层报出来（而不是让编译器报一句含糊的错）。
-    const missing = missingRequiredFields(action)
-    if (missing.length > 0) {
-      for (const field of missing) diagnostics.push(planDiagnostic("parameter_completion", "missing_field", pathFor(index, field), `'${field}' is still missing after completion`))
-      continue
-    }
-
+    /**
+     * 注：这里**没有**"补全之后必填字段还缺"的兜底检查 —— 那是死代码（Fix round 1 / I13）。
+     * `auditPlan` 在任何错误/提问时返回 `actions: []`，而 `compilePlan` 在那时就提前返回了，
+     * 所以循环里的动作必然是补全成功的。缺字段的拒绝**只发生在 `parameter_completion` 那一层**
+     *（审计把 `ask_user` / `reject` / 补不出来的诊断标成那个 stage），不再有第二份判据。
+     */
     const resolution = resolveReferences(action, index, working, aliases)
     diagnostics.push(...resolution.diagnostics)
     if (resolution.diagnostics.some((entry) => entry.severity === "error")) continue
@@ -343,11 +325,6 @@ export function compilePlan(input: unknown, context: PlanCompileContext): PlanCo
 /** 只保留 `envelope.` 前缀的诊断路径，用于构造修复请求（修复只认字段路径）。 */
 function toParseErrors(diagnostics: readonly PlanDiagnostic[]): { code: string; path: string; detail: string }[] {
   return diagnostics.filter((entry) => entry.severity === "error").map((entry) => ({ code: entry.code, path: entry.path, detail: entry.detail }))
-}
-
-function missingRequiredFields(action: DraftAction): string[] {
-  const inputs = isRecord(action.inputs) ? (action.inputs as Record<string, unknown>) : {}
-  return requiredFieldsFor(action.actionId).filter((field) => inputs[field] === undefined)
 }
 
 /**
@@ -455,13 +432,16 @@ function validateGeometry(action: DraftAction, index: number, document: Geometry
   if (action.actionId === "solid.create_prism") {
     const basePolygon = Array.isArray(inputs.basePolygon) ? (inputs.basePolygon as { x: number; y: number; z: number }[]) : []
     const vector = isRecord(inputs.vector) ? (inputs.vector as { x: number; y: number; z: number }) : undefined
-    if (!vector) {
-      diagnostics.push(planDiagnostic("geometry_validation", "missing_field", pathFor(index, "vector"), "a prism needs an extrusion vector"))
-      return { diagnostics }
-    }
-    const validation = validatePrismInput(basePolygon, vector)
-    if (!validation.ok) {
-      for (const entry of validation.diagnostics) diagnostics.push(planDiagnostic("geometry_validation", "degenerate_prism", pathFor(index, "basePolygon"), entry.message))
+    /**
+     * `vector` 缺失在这里**不再可能**（Fix round 1 / I13）：它登记了安全默认，审计会回填；
+     * 回填不了时 `auditPlan` 会清空动作并走 `parameter_completion`。原来的兜底分支是死代码。
+     * 直接调用 `compilePlan` 之外的人（例如手工构造 `DraftAction`）由动作编译器拒绝。
+     */
+    if (vector) {
+      const validation = validatePrismInput(basePolygon, vector)
+      if (!validation.ok) {
+        for (const entry of validation.diagnostics) diagnostics.push(planDiagnostic("geometry_validation", "degenerate_prism", pathFor(index, "basePolygon"), entry.message))
+      }
     }
   }
 
@@ -479,15 +459,10 @@ function validateGeometry(action: DraftAction, index: number, document: Geometry
   }
 
   /**
-   * 棱上的参数是仿射比例：落在 [0, 1] 之外的点**不在那条棱上**。
-   * 这一类错误在编译器里表现为"建出来了一个点"，所以必须在这里挡住。
+   * 注：棱上参数的 `[0, 1]` 判据**只在审计那一层**（`parameterAudit` 的 `parameter_out_of_domain`）。
+   * 这里曾经又判一遍，是同一事实的两份实现，而且因为审计先跑并清空动作，这一份永远跑不到
+   *（Fix round 1 / I13）。判据收敛到一处之后，"越界参数"只有一个错误码、一句文案。
    */
-  if (action.actionId === "dynamic.create_bound_point" && inputs.hostSub !== undefined) {
-    const parameter = inputs.parameter
-    if (typeof parameter !== "number" || parameter < 0 || parameter > 1) {
-      diagnostics.push(planDiagnostic("geometry_validation", "parameter_out_of_domain", pathFor(index, "parameter"), `an edge parameter is an affine ratio in [0, 1]; got ${String(parameter)}`))
-    }
-  }
 
   // 未使用的文档参数：`document` 这一层留着是为了将来判"截面是否真的切到实体"，
   // 那需要拓扑物化之后才成立（见 `sectionSolid3` 的用法）。此处不假装已经判过。
@@ -501,6 +476,9 @@ function validateGeometry(action: DraftAction, index: number, document: Geometry
  * 出现"不变量表达式"（`parameter.set_expression`）时**必须**说清是数值采样：
  * 表达式由参数求值器算出来，我们能给的是**采样验证**，不是形式证明。
  * 把它说成"已验证/已证明"就是把采样当成证明 —— 规格 §10 明令不许。
+ *
+ * 判据复用 `isInvariantRequest`（Fix round 1 / M3）：以前这里另写了一份只认中文的关键词表，
+ * 于是英文题面（"for all"/"arbitrary"）会被判成"需要精确证明"，给出一句假的 formal。
  */
 function verifyPlan(actions: readonly DraftAction[], prompt: string | undefined): PlanVerification {
   const hasInvariantExpression = actions.some((action) => action.actionId === "parameter.set_expression")
@@ -510,7 +488,7 @@ function verifyPlan(actions: readonly DraftAction[], prompt: string | undefined)
       detail: "不变量表达式由参数求值器在采样点上验证（这些点满足等式），**不是形式证明**：符号证明不在本阶段范围内。"
     }
   }
-  if (prompt && /任意|恒|定值|不变/.test(prompt)) {
+  if (isInvariantRequest(prompt)) {
     return { kind: "numeric_sampling", detail: "题目要求任意/恒定性，而本计划只做了有限采样的数值核对，不是形式证明。" }
   }
   return { kind: "formal", detail: "每一步都是确定性内核构造（exact）；这份计划不包含需要证明的不变量断言。" }

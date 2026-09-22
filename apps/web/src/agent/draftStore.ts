@@ -85,7 +85,12 @@ export type FreshnessResult = { ok: true } | { ok: false; reason: "stale_source"
 
 export interface DraftStore {
   create(base: GeometryDocument, baseHandle?: DocumentHandle): DraftRecord
-  stage(draftId: string, actions: DraftAction[], expectedDraftVersion: number): StageResult
+  /**
+   * 暂存（= 编译）。第四个参数是**用户原话**（Fix round 1 / C3）：参数审计要看用户说了什么
+   *（"任意/恒定/定值"必须保留符号参数、没说全的尺寸从原话里读、"采样不是证明"的披露）。
+   * 可选：工具调用那条路径没有"用户原话"这种东西。
+   */
+  stage(draftId: string, actions: DraftAction[], expectedDraftVersion: number, userMessage?: string): StageResult
   /** 基础文档变了（手工编辑、撤销、切工作区）→ 草稿过期，不能再提交。 */
   assertFresh(draftId: string, liveHandle: DocumentHandle): FreshnessResult
   invalidate(draftId: string, reason: string): void
@@ -132,7 +137,7 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
       return { ...record, candidate: cloneDocument(record.candidate) }
     },
 
-    stage(draftId, actions, expectedDraftVersion) {
+    stage(draftId, actions, expectedDraftVersion, userMessage) {
       const record = drafts.get(draftId)
       if (!record) return { ok: false, reason: "unknown_draft", detail: `no draft ${draftId}` }
       if (record.draftVersion !== expectedDraftVersion) {
@@ -158,13 +163,16 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
         capabilityRevision: "draft",
         conversationId: record.draftId,
         documentGeneration: record.candidate.revision,
-        idAllocator: record.allocator
+        idAllocator: record.allocator,
+        // 用户原话（Fix round 1 / C3）：符号参数判定、从原话读尺寸、采样≠证明的披露都看它。
+        ...(userMessage === undefined ? {} : { prompt: userMessage })
       })
       if (!compiled.ok || compiled.draftDocument === null) {
         // 编译失败时草稿保持原样 —— 不留"半成品"。
         const diagnostics = compiled.diagnostics
           .filter((entry) => entry.severity === "error")
-          .map((entry) => ({ code: entry.code, message: `${entry.path}: ${entry.detail}` }))
+          // **层 + 路径 + 原因**：`stage` 以前在这里被丢掉，"卡在哪一层"就查不到了（Fix round 1 / M22）。
+          .map((entry) => ({ code: entry.code, message: `${entry.stage}: ${entry.path}: ${entry.detail}` }))
         const questions = compiled.questions.map((question) => question.text)
         if (diagnostics.length === 0 && questions.length > 0) {
           return { ok: false, reason: "compile_failed", diagnostics: questions.map((text) => ({ code: "needs_more_information", message: text })) }
@@ -175,7 +183,14 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
       record.candidate = compiled.draftDocument
       record.operations = [...record.operations, ...actions]
       record.compiledOperations = [...record.compiledOperations, ...compiled.operations]
-      record.completionAssumptions = [...record.completionAssumptions, ...compiled.assumptions]
+      /**
+       * **假设要按 `id` 去重**（Fix round 1）：重复暂存同一份计划（重试 / 用户重发）会在
+       * 列表里堆出多条一模一样的"我替你定了…"，而用户看到的是一列假设，重复条目只会让他
+       * 以为系统定了两次。同一条假设（同 `id`）后写的那份覆盖前一份。
+       */
+      const merged = new Map(record.completionAssumptions.map((assumption) => [assumption.id, assumption]))
+      for (const assumption of compiled.assumptions) merged.set(assumption.id, assumption)
+      record.completionAssumptions = [...merged.values()]
       record.draftVersion += 1
       return { ok: true, preview: previewOf(record) }
     },

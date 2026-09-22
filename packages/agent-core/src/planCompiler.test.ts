@@ -148,12 +148,24 @@ describe("plan compilation", () => {
   it("completes audited defaults and keeps the assumption visible", () => {
     // 向量**整个字段缺失**（不是 `undefined`）：模型输出是 JSON，缺字段就是没有那个键。
     const { vector: _omitted, ...prismInputs } = PRISM.inputs as Record<string, unknown>
-    const result = compilePlan(rawPlan([{ ...PRISM, inputs: prismInputs }]), context())
+    const declared = "规划器自己声明的假设（必须留下）"
+    const result = compilePlan(rawPlan([{ ...PRISM, inputs: prismInputs, factIds: [] }]), context())
+    // 上面那条不含规划器假设；下面这条把规划器声明的那句放进去，专门验"合并而不是替换"。
+    const withDeclared = compilePlan({ ...(rawPlan([{ ...PRISM, inputs: prismInputs }]) as Record<string, unknown>), assumptions: [declared] }, context())
 
     expect(result.ok, JSON.stringify(result.diagnostics)).toBe(true)
     expect(result.actions[0].inputs).toMatchObject({ vector: { x: 0, y: 0, z: 3 } })
-    expect(result.assumptions.some((entry) => entry.text.includes("底面边长 4"))).toBe(true)
-    expect(result.plan?.kind === "plan" ? result.plan.assumptions : []).toEqual(result.assumptions.map((entry) => entry.text))
+    // 文案按**实际回填了哪一半**写（Fix round 1 / M1）：这里底面是给的，所以不能说"底面取边长 4"。
+    expect(result.assumptions.some((entry) => entry.text.includes("拉伸向量未指定"))).toBe(true)
+    expect(result.assumptions.some((entry) => entry.text.includes("底面边长"))).toBe(false)
+    /**
+     * **合并而不是替换**（Fix round 1 / M6）：规划器声明过的那几句必须留下 ——
+     * 以前是 `assumptions.length === 0 ? plan.assumptions : 补全文本`，于是
+     * `draftTools.compilePlan` 的 `payload.plan` 会少掉规划器那几条。
+     */
+    const merged = withDeclared.plan?.kind === "plan" ? withDeclared.plan.assumptions : []
+    expect(merged?.[0]).toBe(declared)
+    expect(merged).toHaveLength(1 + withDeclared.assumptions.length)
   })
 
   it("distinguishes numeric sampling from an exact construction", () => {

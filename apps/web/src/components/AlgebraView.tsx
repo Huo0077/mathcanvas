@@ -43,10 +43,24 @@ interface RowProps {
   onToggleExpand?: () => void
   onSelect: (additive: boolean) => void
   onToggle: () => void
+  /** 宿主绑定的自然参数与宿主 id（Fix round 1 / I11）：让浏览器用例断言的**几何事实**。 */
+  bindingParameter?: number
+  bindingHostId?: string
 }
 
-function ObjectRow({ label, type, visible, locked, selected, depth = 0, expanded, onToggleExpand, onSelect, onToggle }: RowProps) {
-  return <div className={`object-row${selected ? " selected" : ""}${depth > 0 ? " object-row-child" : ""}`} onClick={(event) => onSelect(event.shiftKey)}>
+function ObjectRow({ label, type, visible, locked, selected, depth = 0, expanded, onToggleExpand, onSelect, onToggle, bindingParameter, bindingHostId }: RowProps) {
+  return <div
+    className={`object-row${selected ? " selected" : ""}${depth > 0 ? " object-row-child" : ""}`}
+    onClick={(event) => onSelect(event.shiftKey)}
+    /**
+     * **宿主绑定的参数与宿主进 DOM**（Fix round 1 / I11）。
+     *
+     * 在此之前浏览器用例只能断言行**文案**（"E（中点）"），于是"参数其实是 0.4"
+     * 这种回归（只要标签还写着中点）照样通过。挂成 `data-*` 之后，e2e 断的是几何事实而非标签。
+     */
+    data-binding-parameter={bindingParameter === undefined ? undefined : String(bindingParameter)}
+    data-binding-host={bindingHostId}
+  >
     <div className="object-meta">
       {onToggleExpand && <button className="icon-button row-expand" aria-label={`${expanded ? "收起" : "展开"} ${label} 的子对象`} title={expanded ? "收起子对象" : "展开子对象"} onClick={(event) => { event.stopPropagation(); onToggleExpand() }}>{expanded ? "▾" : "▸"}</button>}
       <span className="object-dot" data-object-type={type} aria-hidden="true" />
@@ -85,17 +99,24 @@ export function AlgebraView({ primitives, selectedIds, onSelect, onToggle, measu
   const topLevel = (childIds.size > 0 ? primitives.filter((primitive) => !childIds.has(primitive.id)) : primitives)
     .filter((primitive) => !query || (primitive.label ?? primitive.id).toLowerCase().includes(query))
 
-  const renderRow = (primitive: PrimitiveSpec, depth = 0): ReactNode => <ObjectRow
-    key={primitive.id}
-    label={primitive.label ?? primitive.id}
-    type={primitive.type}
-    visible={primitive.visible !== false}
-    locked={Boolean(primitive.locked)}
-    selected={selectedIds.includes(primitive.id)}
-    depth={depth}
-    onSelect={(additive) => onSelect(primitive.id, additive)}
-    onToggle={() => onToggle(primitive.id, primitive.visible === false)}
-  />
+  const renderRow = (primitive: PrimitiveSpec, depth = 0): ReactNode => {
+    /** 宿主绑定（`onHost` / `onPath`）的参数与宿主：这是"这个点在哪里"的可断言事实。 */
+    const binding = (primitive as { binding?: { kind?: string; parameter?: number; hostId?: string; pathId?: string } }).binding
+    const isBound = binding?.kind === "onHost" || binding?.kind === "onPath"
+    return <ObjectRow
+      key={primitive.id}
+      label={primitive.label ?? primitive.id}
+      type={primitive.type}
+      visible={primitive.visible !== false}
+      locked={Boolean(primitive.locked)}
+      selected={selectedIds.includes(primitive.id)}
+      depth={depth}
+      onSelect={(additive) => onSelect(primitive.id, additive)}
+      onToggle={() => onToggle(primitive.id, primitive.visible === false)}
+      {...(isBound && typeof binding?.parameter === "number" ? { bindingParameter: binding.parameter } : {})}
+      {...(isBound ? { bindingHostId: binding?.hostId ?? binding?.pathId } : {})}
+    />
+  }
   const renderGroup = (label: string, ids: string[]): ReactNode => {
     const children = ids
       .map((id) => byId.get(id))

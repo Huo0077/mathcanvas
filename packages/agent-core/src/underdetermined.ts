@@ -283,13 +283,19 @@ export function selectWitness(request: WitnessRequest): WitnessSelection {
 
   const parameter = request.constraints?.parameter ?? DEFAULT_DYNAMIC_POINT_PARAMETER
   if (!Number.isFinite(parameter)) return rejectedSelection("moving_point", "degenerate_witness", "动点参数必须是有限数。", considered)
-  considered.push("accepted: 普通动点取 t = 0.4（规格 §6.3）。")
+  considered.push(`accepted: 普通动点取 t = ${parameter}（规格 §6.3 的默认是 ${DEFAULT_DYNAMIC_POINT_PARAMETER}）。`)
   return {
     status: "witness",
     value: { kind: "moving_point", parameter },
     assumption: {
       id: "witness:moving_point",
-      text: `动点位置未指定，取参数 ${DEFAULT_DYNAMIC_POINT_PARAMETER}。`,
+      /**
+       * 文案按**实际取值**写（Fix round 1 / M2）：写死 0.4 时，`constraints.parameter` 给了别的值
+       * 会让假设列表里的话与文档里的数字对不上。
+       */
+      text: request.constraints?.parameter === undefined
+        ? `动点位置未指定，取参数 ${DEFAULT_DYNAMIC_POINT_PARAMETER}。`
+        : `动点位置按你给出的参数 ${parameter} 取。`,
       kind: "witness",
       value: parameter,
       overridable: true,

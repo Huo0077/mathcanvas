@@ -25,7 +25,11 @@ import type { CommitOutcome, CommitRequest, CommitterPort, ConsentToken } from "
 /** 适配器需要的草稿存储面（与 G0.5 的 `DraftStore` 一致，用结构类型避免跨包依赖）。 */
 export interface DraftStoreLike {
   create(base: unknown, baseHandle?: DocumentHandle): { draftId: string; draftVersion: number }
-  stage(draftId: string, actions: readonly unknown[], expectedDraftVersion: number):
+  /**
+   * 第四个参数是**用户原话**（Fix round 1 / C3）：暂存就是编译，而参数审计要看用户说了什么
+   *（"任意/恒定"要保留符号参数、没说全的尺寸要从原话里读）。可选，因为不是每个调用方都有原话。
+   */
+  stage(draftId: string, actions: readonly unknown[], expectedDraftVersion: number, userMessage?: string):
     | { ok: true; preview: { draftVersion: number; previewHash: string } }
     | { ok: false; reason: "unknown_draft" | "stale_draft_version" | "compile_failed"; diagnostics?: { code: string; message: string }[]; detail?: string }
   /** 基础文档变了（手工编辑 / 撤销 / 切工作区）→ 草稿过期。 */
@@ -81,7 +85,7 @@ export function createCommitterAdapter(dependencies: CommitterAdapterDependencie
       const preview = dependencies.host.preview(draftId)
       const expectedVersion = preview.ok ? preview.artifact.draftVersion : 1
 
-      const staged = dependencies.drafts.stage(draftId, request.actions, expectedVersion)
+      const staged = dependencies.drafts.stage(draftId, request.actions, expectedVersion, request.userMessage)
       if (!staged.ok) {
         const detail = staged.detail ?? staged.diagnostics?.map((entry) => `${entry.code}: ${entry.message}`).join("; ")
         // 原因码原样映射：`stale_draft_version`（版本对不上）与 `stale_draft`（基础文档变了）是两回事。

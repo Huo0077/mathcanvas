@@ -345,6 +345,89 @@ describe("action registry coverage for the agent plan families", () => {
     expect(unsupportedActionReason("planar.create_dragon")).toBeNull()
   })
 
+  /**
+   * **注册表与动作层的白名单必须只有一份**（Fix round 1 / I14、I15）。
+   *
+   * 实测过的两类分叉：
+   * - `object.update_inputs.patch` 的传输白名单比编译器的可改字段**窄**，于是模型合法地
+   *   "把点挪到 (1,2)"会拿到 `unknown_field` 并浪费掉唯一一次修复；
+   * - `function.analyze.analysis` 的闭集谁都不校验，于是 `"定积分"` 这样的取值会被
+   *   静默编译成一条**切线**（`actions/index.ts` 的兜底分支）。
+   */
+  it("keeps the patch whitelist and the analysis enum aligned with the action layer", () => {
+    const patch = parseDraftAction({
+      actionId: "object.update_inputs",
+      actionKey: "move",
+      factIds: [],
+      // `x` / `radius` 是动作层 `UPDATABLE_INPUT_FIELDS` 里就有的字段。
+      inputs: { target: { scope: "scene", ref: { documentId: "document-1", entityId: "point-1" } }, patch: { x: 1, y: 2, radius: 3, expression: "t", strokeWidth: 2 } }
+    })
+    expect(patch.ok, JSON.stringify(patch.ok ? [] : patch.errors)).toBe(true)
+    // 白名单之外的东西仍然被拒。
+    expectRejected(parseDraftAction({
+      actionId: "object.update_inputs",
+      actionKey: "move",
+      factIds: [],
+      inputs: { target: { scope: "scene", ref: { documentId: "document-1", entityId: "point-1" } }, patch: { area: 9 } }
+    }), "unknown_field")
+
+    for (const analysis of ["derivative", "tangent", "integral"]) {
+      expect(parseDraftAction({ actionId: "function.analyze", actionKey: `a-${analysis}`, factIds: [], inputs: { alias: "a", sourceId: "function-1", analysis } }).ok, analysis).toBe(true)
+    }
+    // 非闭集取值必须被拒，而且要有稳定错误码 + 字段路径（否则它会被编成切线）。
+    const bogus = parseDraftAction({ actionId: "function.analyze", actionKey: "a", factIds: [], inputs: { alias: "a", sourceId: "function-1", analysis: "定积分" } })
+    expect(bogus.ok).toBe(false)
+    if (!bogus.ok) {
+      expect(bogus.errors[0].code).toBe("invalid_analysis")
+      expect(bogus.errors[0].path).toBe("action.inputs.analysis")
+    }
+  })
+
+  /**
+   * **每个动作的引用字段都要被认出来**（Fix round 1 / I12、I16）。
+   *
+   * 登记表原先只写**一个** `requireReference`，于是 `dynamic.bind_point.host` 既不被解析
+   * 也不被校验：模型按提示词写 `{scope:"draft", alias:"E"}` 时，编译器读到 `documentId === undefined`
+   * → 报 `cross_document_reference`，把"别名没解析"误报成"跨文档"。`dynamic.bind_curve.pathId`
+   * 与 `dynamic.set_radius_rule.pointId` 同样落在表外。
+   */
+  it("flattens every scoped reference of an action, not just the first one", () => {
+    const bindPoint = parseDraftAction({
+      actionId: "dynamic.bind_point",
+      actionKey: "bind",
+      factIds: [],
+      inputs: {
+        target: { scope: "scene", ref: { documentId: "document-1", entityId: "point-1" } },
+        host: { scope: "scene", ref: { documentId: "document-1", entityId: "edge-1" } },
+        parameter: 0.4
+      }
+    })
+    expect(bindPoint.ok).toBe(true)
+    if (bindPoint.ok) {
+      // 两个 scoped 字段都被摊平成动作层读的 `{documentId, entityId}`。
+      expect(bindPoint.value.inputs).toMatchObject({
+        target: { documentId: "document-1", entityId: "point-1" },
+        host: { documentId: "document-1", entityId: "edge-1" }
+      })
+    }
+
+    // `host` 只给 entityId → 必须被拒（引用作用域是闭集），而且路径指到那个字段。
+    const unscopedHost = parseDraftAction({
+      actionId: "dynamic.bind_point",
+      actionKey: "bind",
+      factIds: [],
+      inputs: { target: { scope: "scene", ref: { documentId: "document-1", entityId: "point-1" } }, host: { entityId: "edge-1" } }
+    })
+    expect(unscopedHost.ok).toBe(false)
+    if (!unscopedHost.ok) expect(unscopedHost.errors[0].path).toBe("action.inputs.host")
+
+    // **审计说明里也要有引用字段**：编译器的引用解析表由登记表生成，不再有第二份（M4）。
+    const spec = auditEntryFor("dynamic.bind_point")
+    expect(spec?.references.map((reference) => reference.field)).toEqual(["target", "host"])
+    expect(auditEntryFor("dynamic.bind_curve")?.references.map((reference) => reference.field)).toEqual(["target", "pathId"])
+    expect(auditEntryFor("dynamic.set_radius_rule")?.references.map((reference) => reference.field)).toEqual(["circleId", "pointId"])
+  })
+
   it("accepts a point bound to a draft host and rejects an unscoped host with its exact path", () => {
     const action = {
       actionId: "dynamic.create_bound_point",
@@ -401,6 +484,15 @@ describe("action registry coverage for the agent plan families", () => {
       inputs: { id: "theta", value: 0.4, min: 0, max: 6.283185307179586, step: 0.01, label: "θ" }
     })
     expect(parameter.ok).toBe(true)
+
+    /**
+     * `parameter.set.value` 的默认是**问**而不是 0（Fix round 1 / M24）：
+     * "把 θ 调大一点"而模型漏了数值时，取 0 会把一个活参数**清零** ——
+     * 那不是一个"公认默认"，而是一次静默的破坏（虽然它会进 assumptions）。
+     */
+    expect(auditEntryFor("parameter.set")?.defaults.find((entry) => entry.field === "value")).toMatchObject({ policy: "ask_user" })
+    // `parameter.create.value` 保留 0：新建一个参数取初值 0 是公认默认。
+    expect(auditEntryFor("parameter.create")?.defaults.find((entry) => entry.field === "value")).toMatchObject({ policy: "safe_default", value: 0 })
   })
 
   it("carries a default policy for every field the audit may have to fill", () => {
@@ -417,6 +509,11 @@ describe("action registry coverage for the agent plan families", () => {
     const section = auditEntryFor("section.create")
     expect(section?.defaults.find((entry) => entry.field === "plane")).toMatchObject({ policy: "ask_user" })
     expect(section?.defaults.find((entry) => entry.field === "plane")?.question).toBeTruthy()
+
+    // 棱锥与立方体一样需要 `size`（Fix round 1 / I3）：漏掉它会让审计静默放过，
+    // 最后在动作编译层报一句"cube needs positive finite x/y/z"这种驴唇不对马嘴的错。
+    const template = auditEntryFor("solid.create_template")
+    expect(template?.defaults.find((entry) => entry.field === "size")?.appliesWhen).toMatchObject({ in: ["cube", "pyramid"] })
 
     // 没登记的名字没有审计记录（审计据此走 unknown/unsupported 分支，而不是编一份出来）。
     expect(auditEntryFor("planar.create_dragon")).toBeNull()
@@ -440,5 +537,11 @@ describe("repair envelopes", () => {
     expect(request.errors).toEqual([{ code: "unknown_field", path: "envelope.actions[0].inputs.faces", detail: "unexpected field 'faces'" }])
     // 重复路径只出现一次：allowedChanges 是"允许改哪几处"，不是错误列表的副本。
     expect(repairRequestFor([{ code: "a", path: "x", detail: "" }, { code: "b", path: "x", detail: "" }], 2).allowedChanges).toEqual(["x"])
+    /**
+     * `attempt` **不再夹成恒等于 1**（Fix round 1 / M7）：调用方要能区分"第一次"与"第三次"，
+     * 才能实现"超出上限就拒绝再修"。上限由 `MAX_REPAIR_ATTEMPTS` 表达，由调用方比。
+     */
+    expect(repairRequestFor([{ code: "a", path: "x", detail: "" }], 3).attempt).toBe(3)
+    expect(repairRequestFor([{ code: "a", path: "x", detail: "" }], 0).attempt).toBe(1)
   })
 })

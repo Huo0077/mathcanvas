@@ -119,6 +119,8 @@ export function completeMissingParameter(action: DraftAction, context: AuditCont
    * 那条判据在 `selectWitness` 里（`symbolic` 分支），所以这里必须走它，
    * 而不是自己按登记表塞一组数字。
    */
+  /** witness 回填过的字段（Fix round 1 / I6）：策略循环不再为它们记第二条 `given`，避免重复计数。 */
+  const witnessFilled = new Set<string>()
   if (actionId === "solid.create_prism" && (!isProvided(inputs, "basePolygon") || !isProvided(inputs, "vector"))) {
     const witness = selectWitness({
       kind: "prism",
@@ -135,22 +137,48 @@ export function completeMissingParameter(action: DraftAction, context: AuditCont
       inputs.basePolygon = basePolygon
       inputs.vector = vector
       changed = true
-      if (baseChanged) completions.push({ actionId, actionKey, field: "basePolygon", path: `${pathPrefix}.basePolygon`, policy: "safe_default", value: basePolygon, reason: witness.assumption.text })
-      if (vectorChanged) completions.push({ actionId, actionKey, field: "vector", path: `${pathPrefix}.vector`, policy: "safe_default", value: vector, reason: witness.assumption.text })
-      assumptions.push({ ...witness.assumption, path: baseChanged ? `${pathPrefix}.basePolygon` : `${pathPrefix}.vector` })
+      if (baseChanged) {
+        completions.push({ actionId, actionKey, field: "basePolygon", path: `${pathPrefix}.basePolygon`, policy: "safe_default", value: basePolygon, reason: witness.assumption.text })
+        witnessFilled.add("basePolygon")
+      }
+      if (vectorChanged) {
+        completions.push({ actionId, actionKey, field: "vector", path: `${pathPrefix}.vector`, policy: "safe_default", value: vector, reason: witness.assumption.text })
+        witnessFilled.add("vector")
+      }
+      /**
+       * **假设文案按"实际回填了哪一半"写**（Fix round 1 / M1）。
+       *
+       * 第一版无论缺的是哪一半都说"立体尺寸未指定，取底面边长 4、高 3" —— 代表题夹具给了边长 2 的
+       * 菱形底面、只缺向量，于是那句话在假设列表里**是假的**（用户会以为底面被改成了边长 4）。
+       */
+      const assumptionText = baseChanged && vectorChanged
+        ? witness.assumption.text
+        : vectorChanged
+          ? `拉伸向量未指定，取高 ${DEFAULT_PRISM_HEIGHT} 的直棱柱。`
+          : "底面未指定，取落在 z = 0 平面上的正方形。"
+      assumptions.push({ ...witness.assumption, text: assumptionText, path: baseChanged ? `${pathPrefix}.basePolygon` : `${pathPrefix}.vector` })
       diagnostics.push(...witness.diagnostics)
       if (!baseChanged && !vectorChanged) {
         // 一个字段都没缺：不需要再多做什么（保持显式约束）。
         assumptions.pop()
       }
     } else if (witness.status === "symbolic") {
+      /**
+       * **题目要求任意/恒定 → 只提问，不给特值**（Fix round 1 / I4）。
+       *
+       * 第一版在这里推入问题之后**继续往下走**，于是策略循环又把 `basePolygon`/`vector`
+       * 按 safe_default 写进 inputs 并 push 两条"底面未指定，取边长 4"的假设 ——
+       * 同一份结果里同时存在"请给特值"和"已取特值"两句话，直接违反 Global Constraints
+       *（"Any/constant/invariant requests preserve symbolic parameters"）。所以这里**直接返回**。
+       */
       questions.push({
         id: `${actionKey}:size`,
         text: "这道题要求任意/恒定的结论：请给出具体的底面与高度，或者允许我取一组满足条件的特值。",
         reason: witness.value.reason,
         path: `${pathPrefix}.vector`
       })
-      diagnostics.push({ stage: "field_audit", code: "needs_concrete_value", path: `${pathPrefix}.vector`, detail: witness.value.reason, severity: "error" })
+      diagnostics.push({ stage: "parameter_completion", code: "needs_concrete_value", path: `${pathPrefix}.vector`, detail: witness.value.reason, severity: "error" })
+      return { action, completions, assumptions, questions, diagnostics, rejected: false }
     } else {
       diagnostics.push(...witness.diagnostics)
     }
@@ -161,6 +189,14 @@ export function completeMissingParameter(action: DraftAction, context: AuditCont
     if (!policies.has(field)) policies.set(field, { field, policy: "reject" })
   }
 
+  /**
+   * **`parameterId` 在场时不再为 `parameter` 报假设**（Fix round 1 / M19）。
+   *
+   * 绑定由 `parameterId` 驱动时，那个字面量参数对结果没有影响 —— 但它**必须写进绑定**
+   *（DSL 校验要求 `onPath.parameter` 是有限数），所以值照填、假设不写：
+   * 用户不该在假设列表里看到一条"动点位置未指定，取参数 0.4"而实际上它由 θ 驱动。
+   */
+  const drivenByParameter = typeof inputs.parameterId === "string"
   for (const [field, policy] of policies) {
     const path = `${pathPrefix}.${field}`
     /**
@@ -168,6 +204,10 @@ export function completeMissingParameter(action: DraftAction, context: AuditCont
      * 另一个**已经给定**的字段（`kind` / `template`），所以它不会引入新的输入。
      */
     if (policy.appliesWhen && !matchesVariant(inputs, policy.appliesWhen)) {
+      continue
+    }
+    if (witnessFilled.has(field)) {
+      // 这个字段刚刚由 witness 回填过：**不再记第二条**（否则同一个槽位被数两次，I6）。
       continue
     }
     if (isProvided(inputs, field)) {
@@ -180,6 +220,7 @@ export function completeMissingParameter(action: DraftAction, context: AuditCont
       inputs[field] = policy.value
       changed = true
       completions.push({ actionId, actionKey, field, path, policy: "safe_default", value: policy.value, reason: policy.reason })
+      if (drivenByParameter && field === "parameter") continue
       assumptions.push({
         id: assumptionId(actionKey, field),
         text: policy.reason ?? `未指定 ${field}，取默认值。`,
@@ -196,7 +237,7 @@ export function completeMissingParameter(action: DraftAction, context: AuditCont
       const value = inferred === null ? policy.value : shapeInferred(field, inferred)
       if (value === undefined) {
         questions.push({ id: assumptionId(actionKey, field), text: policy.question ?? `请说明 ${field}。`, reason: "这句话里没有可读出的数值，也没有公认的默认值。", path })
-        diagnostics.push({ stage: "field_audit", code: "missing_required_field", path, detail: `no value and nothing to infer for '${field}'`, severity: "error" })
+        diagnostics.push({ stage: "parameter_completion", code: "missing_required_field", path, detail: `no value and nothing to infer for '${field}'`, severity: "error" })
         continue
       }
       inputs[field] = value
@@ -220,12 +261,17 @@ export function completeMissingParameter(action: DraftAction, context: AuditCont
         reason: "这个字段没有公认的默认值：替你挑一个就是替你改题。",
         path
       })
-      diagnostics.push({ stage: "field_audit", code: "unsafe_omission", path, detail: policy.question ?? `'${field}' has no safe default`, severity: "error" })
+      /**
+       * 这一层是 `parameter_completion`（Fix round 1 / I13）：它就是"我补不出来、需要人来定"。
+       * 原来标成 `field_audit`，而 `field_audit` 已经有自己的诊断了 —— 六层里第四层因此
+       * 永远发不出诊断（死层）。
+       */
+      diagnostics.push({ stage: "parameter_completion", code: "unsafe_omission", path, detail: policy.question ?? `'${field}' has no safe default`, severity: "error" })
       continue
     }
 
     // `reject`：连问都不该问（例如"把散面拼成 Prism"）。
-    diagnostics.push({ stage: "field_audit", code: "rejected_by_policy", path, detail: `'${field}' must be provided explicitly`, severity: "error" })
+    diagnostics.push({ stage: "parameter_completion", code: "rejected_by_policy", path, detail: `'${field}' must be provided explicitly`, severity: "error" })
   }
 
   const rejected = diagnostics.some((diagnostic) => diagnostic.code === "rejected_by_policy" || diagnostic.code === "unknown_action")

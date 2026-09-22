@@ -59,6 +59,8 @@ export function handleGeometryRequest(request: GeometryWorkerRequest): GeometryW
           capabilityRevision: "worker",
           conversationId: request.runId,
           documentGeneration: request.base.revision,
+          // 用户原话（Fix round 1 / C3）：符号参数判定、从原话读尺寸、"采样不是证明"的披露都看它。
+          ...(request.prompt === undefined ? {} : { prompt: request.prompt }),
           // 占用集来自**基准文档**：worker 的基准非空时，同类新建要接着已有的号往下发，
           // 否则第一个新对象就会撞上 `point-1`（与 `draftStore` 那次真实故障同源）。
           takenIds: request.base.primitives.map((primitive) => primitive.id)
@@ -105,12 +107,14 @@ function describe(error: unknown): string {
  * 诊断 → 一句话：**层 + 原因码 + 路径 + 原因**都要在。
  *
  * 只给原因码会让用户看到 `degenerate_prism`；只给一句话又没法据此走修复。
- * 所以两样都带上，并把**字段路径**放在最前面（它就是"改哪里"）。
+ * 所以三样都带上，并把**层**放在最前面 —— "卡在哪一层"（传输解析 / 字段审计 / 引用解析 /
+ * 参数补全 / 几何语义校验 / 动作编译）是排障第一个要问的问题，而 `stage` 以前在这里被丢掉
+ *（Fix round 1 / M22）。
  */
 function formatDiagnostics(diagnostics: readonly PlanDiagnostic[]): string {
   return diagnostics
     .filter((entry) => entry.severity === "error")
-    .map((entry) => `${entry.code}@${entry.path}: ${entry.detail}`)
+    .map((entry) => `${entry.stage}/${entry.code}@${entry.path}: ${entry.detail}`)
     .join("; ")
     .slice(0, 512)
 }

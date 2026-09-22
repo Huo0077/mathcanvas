@@ -45,14 +45,24 @@ test("keeps the symbolic parameter, labels the invariant as numeric sampling, an
   await page.getByRole("button", { name: "返回画布" }).click()
   await expect(objectRows(page)).toHaveCount(0)
 
-  // 4) 确认 → 椭圆 / 动点 / 切线真的落进文档（工作区被切到圆锥曲线）。
+  // 4) 确认 → 椭圆 / 动点 / 切线 / 轴交点真的落进文档（工作区被切到圆锥曲线）。
   await page.getByRole("button", { name: "Agent 工作区" }).click()
   await draft.getByRole("button", { name: "确认并提交" }).click()
   await expect(page.getByText("已提交")).toBeVisible()
   await page.getByRole("button", { name: "返回画布" }).click()
   await expect.poll(() => objectRows(page).count()).toBeGreaterThan(2)
 
-  // 5) 整批一步撤销。
+  /**
+   * 5) **P、A、B 都由文档参数驱动**（Fix round 1 / C1）：
+   * 第一版根本没有 A/B，而且不变量表达式算出来是 `sec²θ+csc²θ`（≈7.77）。
+   * 现在 θ、OA、OB 与不变量都出现在参数区里，P/A/B 的绑定参数指向它们。
+   */
+  const parameterRows = page.locator('[data-parameter-group="true"] .parameter-row')
+  await expect.poll(() => parameterRows.count()).toBeGreaterThanOrEqual(4)
+  const parameterIds = await parameterRows.evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-parameter-id")))
+  for (const id of ["theta", "OA", "OB", "invariant"]) expect(parameterIds, id).toContain(id)
+
+  // 6) 整批一步撤销。
   await page.keyboard.press("Control+z")
   await expect.poll(() => objectRows(page).count()).toBe(0)
 })

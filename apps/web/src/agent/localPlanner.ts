@@ -1,5 +1,5 @@
 import type { PlanEnvelope, PlannerPort } from "@draw/agent-core"
-import { PLAN_SCHEMA_VERSION } from "@draw/agent-core"
+import { PLAN_SCHEMA_VERSION, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SPAN, defaultPrismBasePolygon } from "@draw/agent-core"
 
 import { conicInvariantPlan, obliquePrismSectionPlan } from "./representativeFixtures"
 
@@ -90,10 +90,13 @@ const PLANAR_POINT = (input: LocalIntentInput): PlanEnvelope => ({
  * 为什么本地规划器也要认这一句：棱柱目前还没有界面按钮，而"从一句话到具体实体"这条链路
  * ——动作注册 → 传输校验 → 动作编译 → 草稿 → 确认提交——是必须能被真实走一遍的。
  * 底面用规格 §6.3 的默认特值口径（底跨 4、高度 3），水平分量给 1 让它是**斜**棱柱。
+ *
+ * 数字从 `localPlanDefaults` 取（Fix round 1 / M20）：这个文件以前又写死了一份
+ * `sizeFrom(input.prompt, 4)` 与 `height = 3`，与本切片"这些默认值只有一处"的声明冲突。
  */
 const PRISM = (input: LocalIntentInput): PlanEnvelope => {
-  const span = sizeFrom(input.prompt, 4)
-  const height = 3
+  const span = sizeFrom(input.prompt, DEFAULT_PRISM_SPAN)
+  const height = DEFAULT_PRISM_HEIGHT
   return {
     schemaVersion: PLAN_SCHEMA_VERSION,
     kind: "plan",
@@ -105,7 +108,7 @@ const PRISM = (input: LocalIntentInput): PlanEnvelope => {
       factIds: [],
       inputs: {
         alias: "prism",
-        basePolygon: [{ x: 0, y: 0, z: 0 }, { x: span, y: 0, z: 0 }, { x: span, y: span, z: 0 }, { x: 0, y: span, z: 0 }],
+        basePolygon: defaultPrismBasePolygon(span),
         vector: { x: 1, y: 0.5, z: height }
       }
     }]

@@ -39,6 +39,13 @@ export interface GeometryCompileRequest extends WorkerMessageEnvelope {
   actions: DraftAction[]
   /** 编译与执行必须落在同一份基准文档上（否则 id 分配与校验都会漂）。 */
   base: GeometryDocument
+  /**
+   * **用户原话**（Fix round 1 / C3）。
+   *
+   * 暂存 = 编译，而参数审计的三条判据看的是用户说了什么（"任意/恒定"要保留符号参数、
+   * 没说全的尺寸从原话里读、"采样不是证明"的披露）。可选：没有原话的调用方照旧可用。
+   */
+  prompt?: string
 }
 
 export interface GeometryCheckRequest extends WorkerMessageEnvelope {

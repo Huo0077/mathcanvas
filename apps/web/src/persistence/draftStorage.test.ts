@@ -49,6 +49,23 @@ describe("draft storage", () => {
     }
   })
 
+  /**
+   * **存不下（配额）可以吞，编不出来（文档非法）必须抛**（Fix round 1，Reactive DAG worker 报的缺陷）。
+   *
+   * 原来两种失败共用一个 `catch {}`，于是"文档已经不合法、`encodeMgeo` 抛错"这条路径
+   * 被当成"存不下"静默吞掉：画布上是新内容、磁盘上还是旧的，用户看不到任何提示
+   *（`App.tsx` 那层 `try/catch` 因此永远收不到这个错误）。
+   */
+  it("surfaces an unencodable document instead of swallowing it like a quota error", () => {
+    const broken = createEmptyDocument("geometry3d")
+    // `y = 0` 的立方体在 DSL 里非法（尺寸必须为正）→ `encodeMgeo` 会抛。
+    broken.primitives = [{ id: "cube-1", type: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 0, z: 2 } }] as never
+
+    expect(() => saveDraft(broken)).toThrow()
+    // 抛了就不该留下半份"看起来存过了"的草稿。
+    expect(localStorage.getItem("mathcanvas:draft:geometry3d")).toBeNull()
+  })
+
   it("never reopens the retired calculus workspace from a stored preference", () => {
     localStorage.setItem("mathcanvas:active-workspace", "calculus")
 

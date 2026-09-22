@@ -180,13 +180,29 @@ describe("dynamic family", () => {
 })
 
 describe("section family", () => {
-  it("creates a section through a selected solid", () => {
+  /**
+   * **平面必须显式给出**（Fix round 1 / M8）。
+   *
+   * 旧期望：不给 `plane` 时动作层默默取 `z = 0`（`{ normal: {0,0,1}, constant: 0 }`）——
+   * 而"过一点有无数个平面"，替调用方挑一个等于换了一道题（审计层早就会去问用户）。
+   * 新期望：缺平面在动作层也失败，错误码与审计层一致（`missing_field`）。
+   */
+  it("creates a section through a selected solid when the plane is given", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [{ id: "cube-1", type: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 2, z: 2 } }]
+    const result = compileActions(document, [action({ actionId: "section.create", inputs: { alias: "cut", sourceId: "cube-1", plane: { normal: { x: 0, y: 0, z: 1 }, constant: -1 } } })], contextWith(document))
+
+    expect(result.diagnostics).toEqual([])
+    expect(result.operations[0]).toMatchObject({ op: "addPrimitive", primitive: { id: "section-1", type: "section", sourceId: "cube-1" } })
+  })
+
+  it("refuses a section without a cutting plane instead of silently cutting at z = 0", () => {
     const document = createEmptyDocument("geometry3d")
     document.primitives = [{ id: "cube-1", type: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 2, z: 2 } }]
     const result = compileActions(document, [action({ actionId: "section.create", inputs: { alias: "cut", sourceId: "cube-1" } })], contextWith(document))
 
-    expect(result.diagnostics).toEqual([])
-    expect(result.operations[0]).toMatchObject({ op: "addPrimitive", primitive: { id: "section-1", type: "section", sourceId: "cube-1" } })
+    expect(result.operations).toHaveLength(0)
+    expect(result.diagnostics[0].code).toBe("missing_field")
   })
 
   it("refuses a section whose source is not a solid", () => {

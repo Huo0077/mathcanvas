@@ -19,17 +19,30 @@ describe("scene graph operations", () => {
     expect(point).toMatchObject({ type: "point3", position: { x: 4 } })
   })
 
-  it("materializes a template when a generated point is edited", () => {
+  /**
+   * **按数值改模板顶点现在被拒**（Fix round 1，Recompute/Store 缺陷）。
+   *
+   * 旧期望：`changed === true`，模板拓扑翻成 `fromFaces`（"把模板物化成显式面环"这条功能）。
+   * 新期望：`changed === false` + 一条可读的错误 —— 因为翻转之后那四个面**不再共面**
+   *（"扭过的四边形"），文档从此 schema 非法；旧行为把它照收不误，于是界面更新、磁盘上还是旧的
+   *（保存时 `encodeMgeo` 报错，而那条错误又被 `saveDraft` 吞掉）。
+   *
+   * 代价（记在交付报告里）：**单顶点拖动模板实体**这条路现在会被拒 —— 要恢复它，
+   * 需要在 `operations.ts` 里把翻转后的面三角化（或放宽面的共面要求），那是另一个切片的文件。
+   */
+  it("refuses a numeric vertex edit that would leave a non-planar face", () => {
     const source = { id: "cube-1", type: "cube" as const, origin: { x: -1, y: -1, z: -1 }, size: { x: 2, y: 2, z: 2 }, label: "立方体 1" }
     const topology = buildSolidTemplate(source)
     const document = createEmptyDocument("geometry3d")
     document.primitives = [source, ...topology.primitives]
 
     const updated = commitPatch(document, { op: "updatePrimitive", id: topology.vertexIds[0], patch: { position3: { x: -2, y: -1, z: -1 } } })
-    const polyhedron = updated.document.primitives.find((primitive) => primitive.type === "polyhedron3")
-    expect(updated.changed).toBe(true)
-    expect(polyhedron).toMatchObject({ construction: { kind: "fromFaces" } })
-    expect(updated.document.primitives.find((primitive) => primitive.id === topology.vertexIds[0])).toMatchObject({ position: { x: -2 } })
+
+    expect(updated.changed).toBe(false)
+    expect(updated.error).toContain("face3 points are not coplanar")
+    // 文档**原样不动**：宁可拒绝，也不让 store 拿着一份存不下去的文档。
+    expect(updated.document).toBe(document)
+    expect(updated.document.primitives.find((primitive) => primitive.id === topology.vertexIds[0])).toMatchObject({ position: { x: -1 } })
   })
 
   it("creates point-driven 3D primitives with stable topology references", () => {

@@ -564,8 +564,28 @@ export function validatePatch(document: GeometryDocument, operation: DomainOpera
   return errors.length ? { valid: false, errors } : { valid: true }
 }
 
+/**
+ * 执行一笔改动，**并在改动之后校验整份文档**（Fix round 1）。
+ *
+ * ## 为什么必须校验"操作之后"的文档
+ *
+ * `validatePatch` 只看**那一笔操作**，而有的操作会让整份文档不再合法：实测过的一条是
+ * `updatePrimitive` 把立方体的 `size` 改成退化值（`y = 0`）—— `validatePatch` 里根本没有
+ * `size` 这一项，于是改动进了 store、界面照常更新，而保存时 `encodeMgeo` 才校验并抛错
+ *（那条错误又被 `saveDraft` 吞掉），结果是"画布上是新的、磁盘上还是旧的"。
+ *
+ * 校验放在这里而不是每个 store 各写一遍：**这是所有写入的唯一入口**（`apply` / `applyBatch` /
+ * 草稿 / Agent 提交都走它或它的兄弟 `commitTransaction`），写一次就都覆盖到了。
+ */
 export function commitPatch(document: GeometryDocument, operation: DomainOperation) {
   const validation = validatePatch(document, operation)
   if (!validation.valid) return { document, changed: false, error: validation.errors.join(", ") }
-  return applyOperation(document, operation)
+  const applied = applyOperation(document, operation)
+  if (applied.error || !applied.changed) return applied
+  const documentValidation = validateDocument(applied.document)
+  if (!documentValidation.valid) {
+    // 拒绝而不是"先写进去再说"：半合法的文档会让后续每一步都建立在错的基础上。
+    return { document, changed: false, error: `the change would make the document invalid: ${documentValidation.errors.slice(0, 3).join(", ")}` }
+  }
+  return applied
 }

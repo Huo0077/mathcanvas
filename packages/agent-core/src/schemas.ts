@@ -1,6 +1,9 @@
-import { PLAN_SCHEMA_VERSION, MAX_REPAIR_ATTEMPTS, type DraftAction, type ParseError, type ParseResult, type PlanDefaultPolicy, type PlanEnvelope, type RepairRequest } from "./contracts"
-import type { DraftActionId } from "@draw/scene-graph"
+import { PLAN_SCHEMA_VERSION, type DraftAction, type ParseError, type ParseResult, type PlanDefaultPolicy, type PlanEnvelope, type RepairRequest } from "./contracts"
+// 可改字段白名单只有动作层那一份（Fix round 1 / I14）：传输层不再手抄一份更窄的。
+import { updatableInputFields, type DraftActionId } from "@draw/scene-graph"
 import { DEFAULT_CENTER_2D, DEFAULT_DYNAMIC_POINT_PARAMETER, DEFAULT_ORIGIN_3D, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SPAN, DEFAULT_SLOPE, DEFAULT_SOLID_HEIGHT, DEFAULT_SOLID_SIZE, defaultPrismBasePolygon, defaultPrismVector } from "./localPlanDefaults"
+
+const UPDATABLE_INPUT_FIELDS = updatableInputFields()
 /**
  * 运行时 schema 校验与确定性 ID / 哈希（计划 Task 0.2）。
  *
@@ -176,8 +179,26 @@ interface ActionSpec {
   inputFields: readonly string[]
   /** 是否要求 inputs.alias（新建对象都要，修改既有对象不需要）。 */
   requiresAlias: boolean
-  /** 是否存在"必须有"的引用字段（`scoped` = 带 documentId 的引用，`id` = 同文档内的裸 id）。 */
-  requireReference?: { field: string; kind: "scoped" | "id" }
+  /**
+   * **这个动作的引用字段**（Fix round 1 / I12、I16、M4）。
+   *
+   * 从"只有一个 `requireReference`"改成**列表**，因为有的动作同时有多个引用：
+   * `dynamic.bind_point` 既有 `target`（要绑的点）又有 `host`（绑到谁身上）。
+   * 只登记一个的后果是另一个既不解析也不校验 —— 模型按提示词写
+   * `host: {scope:"draft", alias:"E"}` 时，编译器读到 `documentId === undefined`
+   * 就报 `cross_document_reference`，把"别名没解析"误报成"跨文档"。
+   *
+   * 这份列表同时是**编译器的引用解析表**（`planCompiler` 直接读它，不再有第二份）。
+   */
+  references?: readonly {
+    field: string
+    /** `scoped` = 带 documentId 的对象引用；`id` = 同文档内的对象 id；`parameter` = 文档参数 id。 */
+    kind: "scoped" | "id" | "parameter"
+    /** 一批 id（`object.delete_many.targets`）。 */
+    list?: boolean
+    /** 嵌套在对象里的引用（切线的 `anchor.pointId`）。 */
+    nested?: { outer: string; inner: string; when: { field: string; equals: string } }
+  }[]
   /**
    * 取值只能是这个集合的字段（例如 `solid.create_template` 的 `template`）。
    *
@@ -187,6 +208,8 @@ interface ActionSpec {
    * 而模型没有任何办法知道该填什么。在提示词里手抄一份值域就是第二份真源，迟早与被校验的那份不一致。
    */
   enumValues?: Record<string, readonly string[]>
+  /** 闭集字段的稳定错误码（缺省 `invalid_${field}`）。 */
+  enumCodes?: Record<string, string>
   /**
    * **没有它这个动作就不成立**的字段（规格 §6.3 的"显式约束"）。
    *
@@ -229,6 +252,19 @@ export interface ActionAuditDescription {
   requiresAlias: boolean
   inputs: readonly string[]
   enums: Record<string, readonly string[]>
+  /**
+   * **引用字段**（Fix round 1 / I12、I16、M4）。
+   *
+   * 编译器用它把 `{scope:"draft", alias}` / `draft:<alias>` 解析成真 id ——
+   * 这张表只有这一份（`planCompiler` 直接读它），所以"注册表说它是引用、解析器却不知道"
+   * 这种漂移不可能再发生。
+   */
+  references: readonly {
+    field: string
+    kind: "scoped" | "id" | "parameter"
+    list?: boolean
+    nested?: { outer: string; inner: string; when: { field: string; equals: string } }
+  }[]
   required: readonly string[]
   defaults: readonly { field: string; policy: PlanDefaultPolicy; value?: unknown; reason?: string; question?: string; infer?: "size" | "height" | "label" | "position"; appliesWhen?: { field: string; in: readonly string[] } }[]
 }
@@ -238,6 +274,9 @@ const SOLID_TEMPLATES = ["cube", "pyramid", "cylinder", "cone"] as const
 
 /** 平面圆锥曲线的闭集（规格 §8.2）。 */
 const CONIC_KINDS = ["ellipse", "parabola", "hyperbola"] as const
+
+/** 函数分析动作的闭集（Fix round 1 / I15）。 */
+const ANALYSIS_KINDS = ["derivative", "tangent", "integral"] as const
 
 /** 取原点这类"最小复杂度"默认；写成常量而不是每处 new 一个字面量。 */
 const CENTER_2D = { ...DEFAULT_CENTER_2D }
@@ -346,7 +385,7 @@ const ACTIONS = {
     required: ["template"],
     defaults: {
       origin: { policy: "safe_default", value: ORIGIN_3D, reason: "实体位置未指定，放在原点。" },
-      size: { policy: "infer_from_facts", infer: "size", value: { x: DEFAULT_SOLID_SIZE, y: DEFAULT_SOLID_SIZE, z: DEFAULT_SOLID_SIZE }, reason: `棱长未指定：先从你的话里读，读不到取 ${DEFAULT_SOLID_SIZE}。`, appliesWhen: { field: "template", in: ["cube"] } },
+      size: { policy: "infer_from_facts", infer: "size", value: { x: DEFAULT_SOLID_SIZE, y: DEFAULT_SOLID_SIZE, z: DEFAULT_SOLID_SIZE }, reason: `棱长未指定：先从你的话里读，读不到取 ${DEFAULT_SOLID_SIZE}。`, appliesWhen: { field: "template", in: ["cube", "pyramid"] } },
       height: { policy: "infer_from_facts", infer: "height", value: DEFAULT_SOLID_HEIGHT, reason: `高度未指定：先从你的话里读，读不到取 ${DEFAULT_SOLID_HEIGHT}。`, appliesWhen: { field: "template", in: ["cylinder", "cone"] } },
       radius: { policy: "ask_user", question: "底面半径是多少？", appliesWhen: { field: "template", in: ["cylinder", "cone"] } }
     }
@@ -372,7 +411,7 @@ const ACTIONS = {
   "dynamic.bind_point": {
     inputFields: ["target", "host", "parameter"],
     requiresAlias: false,
-    requireReference: { field: "target", kind: "scoped" },
+    references: [{ field: "target", kind: "scoped" }, { field: "host", kind: "scoped" }],
     required: ["target", "host"],
     defaults: { parameter: { policy: "safe_default", value: DEFAULT_DYNAMIC_POINT_PARAMETER, reason: `动点位置未指定，取参数 ${DEFAULT_DYNAMIC_POINT_PARAMETER}。` } }
   },
@@ -385,7 +424,7 @@ const ACTIONS = {
   "dynamic.create_bound_point": {
     inputFields: ["alias", "host", "hostSub", "parameter", "parameterId", "label"],
     requiresAlias: true,
-    requireReference: { field: "host", kind: "scoped" },
+    references: [{ field: "host", kind: "scoped" }],
     required: ["alias", "host"],
     defaults: {
       host: { policy: "ask_user", question: "这个动点绑在哪个对象上？（曲线、棱或实体）" },
@@ -396,20 +435,20 @@ const ACTIONS = {
   "dynamic.bind_curve": {
     inputFields: ["target", "pathId", "parameter"],
     requiresAlias: false,
-    requireReference: { field: "target", kind: "scoped" },
+    references: [{ field: "target", kind: "scoped" }, { field: "pathId", kind: "id" }],
     required: ["target", "pathId"],
     defaults: { parameter: { policy: "safe_default", value: DEFAULT_DYNAMIC_POINT_PARAMETER, reason: `动点位置未指定，取参数 ${DEFAULT_DYNAMIC_POINT_PARAMETER}。` } }
   },
   "dynamic.create_locus": {
     inputFields: ["alias", "sourcePointId"],
     requiresAlias: true,
-    requireReference: { field: "sourcePointId", kind: "id" },
+    references: [{ field: "sourcePointId", kind: "id" }],
     required: ["sourcePointId"]
   },
   "dynamic.set_radius_rule": {
     inputFields: ["circleId", "pointId", "factor"],
     requiresAlias: false,
-    requireReference: { field: "circleId", kind: "id" },
+    references: [{ field: "circleId", kind: "id" }, { field: "pointId", kind: "id" }],
     required: ["circleId", "pointId"],
     defaults: { factor: { policy: "safe_default", value: 1, reason: "半径比例未指定，取 1（距离即半径）。" } }
   },
@@ -418,7 +457,9 @@ const ACTIONS = {
   "function.create_tangent": {
     inputFields: ["alias", "sourceId", "x", "anchor"],
     requiresAlias: true,
-    requireReference: { field: "sourceId", kind: "id" },
+    // 平铺的 `sourceId` 与**嵌套的** `anchor.pointId`：跟随动点时两处都是那个点，
+    // 都可以指向同一份计划里新建的对象（漏掉嵌套那条会报 `target_not_found: draft:P`）。
+    references: [{ field: "sourceId", kind: "id", nested: { outer: "anchor", inner: "pointId", when: { field: "kind", equals: "point" } } }],
     required: ["sourceId"],
     defaults: {
       x: { policy: "safe_default", value: 0, reason: "切点横坐标未指定，取 x = 0。" },
@@ -428,8 +469,14 @@ const ACTIONS = {
   "function.analyze": {
     inputFields: ["alias", "sourceId", "analysis"],
     requiresAlias: true,
-    requireReference: { field: "sourceId", kind: "id" },
+    references: [{ field: "sourceId", kind: "id" }],
     required: ["sourceId", "analysis"],
+    /**
+     * `analysis` 是**闭集**（Fix round 1 / I15）：不校验的话，编译器的兜底分支会把任何取值
+     * 编成一条切线（要"定积分"、文档里多出一条切线），而规格 §7 明令不许这种静默错误。
+     */
+    enumValues: { analysis: ANALYSIS_KINDS },
+    enumCodes: { analysis: "invalid_analysis" },
     defaults: { analysis: { policy: "ask_user", question: "要算导数、切线还是定积分？" } }
   },
 
@@ -442,14 +489,14 @@ const ACTIONS = {
   "section.create": {
     inputFields: ["alias", "sourceId", "plane"],
     requiresAlias: true,
-    requireReference: { field: "sourceId", kind: "id" },
+    references: [{ field: "sourceId", kind: "id" }],
     required: ["sourceId"],
     defaults: { plane: { policy: "ask_user", question: "截面用哪个平面？给法向与常数，或者说明它过哪三个点。" } }
   },
   "section.materialize": {
     inputFields: ["sectionId"],
     requiresAlias: false,
-    requireReference: { field: "sectionId", kind: "id" },
+    references: [{ field: "sectionId", kind: "id" }],
     required: ["sectionId"]
   },
 
@@ -457,18 +504,18 @@ const ACTIONS = {
   "object.delete_many": {
     inputFields: ["targets"],
     requiresAlias: false,
-    requireReference: { field: "targets", kind: "id" },
+    references: [{ field: "targets", kind: "id", list: true }],
     required: ["targets"]
   },
   "object.update_inputs": {
     inputFields: ["target", "patch"],
     requiresAlias: false,
-    requireReference: { field: "target", kind: "scoped" },
+    references: [{ field: "target", kind: "scoped" }],
     required: ["target", "patch"]
   },
   /**
    * **新建参数**（规格 §4.1/§8.2）。`parameter.set` 只改已存在的参数，所以"符号参数 θ"
-   * 必须有一个创建入口。`id` 是**新名字**，不是引用 —— 所以这里没有 `requireReference`。
+   * 必须有一个创建入口。`id` 是**新名字**，不是引用 —— 所以这里没有 `references`。
    */
   "parameter.create": {
     inputFields: ["id", "value", "min", "max", "step", "label"],
@@ -479,14 +526,18 @@ const ACTIONS = {
   "parameter.set": {
     inputFields: ["id", "value", "min", "max", "step", "label"],
     requiresAlias: false,
-    requireReference: { field: "id", kind: "id" },
+    references: [{ field: "id", kind: "parameter" }],
     required: ["id"],
-    defaults: { value: { policy: "safe_default", value: 0, reason: "参数新值未指定，取 0。" } }
+    /**
+     * **缺新值就问，不取 0**（Fix round 1 / M24）：用户说"把 θ 调大一点"而模型漏了数值时，
+     * 取 0 会把一个活参数清零 —— 那不是一个"公认默认"，而是一次静默的破坏。
+     */
+    defaults: { value: { policy: "ask_user", question: "这个参数要改成多少？" } }
   },
   "parameter.set_expression": {
     inputFields: ["id", "expression"],
     requiresAlias: false,
-    requireReference: { field: "id", kind: "id" },
+    references: [{ field: "id", kind: "parameter" }],
     required: ["id", "expression"]
   }
 } as const satisfies Record<DraftActionId, ActionSpec>
@@ -543,13 +594,15 @@ export function describeActions(actionIds?: readonly string[]): { actionId: stri
     })
 }
 
-/** 一个动作的**审计说明**：必填字段 + 每个字段缺失时的默认策略（规格 §6.2 的"字段类型、必填性、默认策略"）。 */
+/** 一个动作的**审计说明**：必填字段 + 引用字段 + 每个字段缺失时的默认策略（规格 §6.2）。 */
 function auditDescription(actionId: ActionId, spec: ActionSpec): ActionAuditDescription {
   return {
     actionId,
     requiresAlias: spec.requiresAlias,
     inputs: spec.inputFields,
     enums: spec.enumValues ?? {},
+    // 引用字段从这里出去（Fix round 1 / M4）：编译器的引用解析表由它生成，不再有第二份。
+    references: (spec.references ?? []).map((reference) => ({ ...reference })),
     required: spec.required ?? [],
     defaults: Object.entries(spec.defaults ?? {}).map(([field, policy]) => ({
       field,
@@ -586,15 +639,17 @@ export function describeDefaultPolicies(actionIds?: readonly string[]): ActionAu
  * 把解析错误整理成**一次性修复请求**（计划 Task 4 + 规格 §7）。
  *
  * 只带 `reason` / `errors`（路径 + 原因码）/ `allowedChanges`（从错误路径去重而来）。
- * 修正次数在这里就被**封顶**为 `MAX_REPAIR_ATTEMPTS`：超出之后返回的 `attempt` 仍会写出来，
- * 调用方据此拒绝再修（协调器的 `MAX_PLAN_ATTEMPTS` 是第二道）。
+ *
+ * `attempt` **不夹上限**（Fix round 1 / M7）：以前夹成恒等于 1，调用方永远分不清"第一次"与
+ * "第三次"，于是"超出上限就拒绝再修"这条判据在调用方一侧根本无法实现。上限由
+ * `MAX_REPAIR_ATTEMPTS` 表达，调用方自己比。
  */
 export function repairRequestFor(errors: readonly ParseError[], attempt: number, reason = "schema_invalid"): RepairRequest {
   return {
     reason,
     errors: errors.map((error) => ({ code: error.code, path: error.path, detail: error.detail })),
     allowedChanges: [...new Set(errors.map((error) => error.path))],
-    attempt: Math.max(1, Math.min(Math.trunc(attempt), MAX_REPAIR_ATTEMPTS))
+    attempt: Math.max(1, Math.trunc(attempt))
   }
 }
 
@@ -734,7 +789,9 @@ function parseActionInputs(actionId: ActionId, value: unknown, path: string, err
     case "object.update_inputs": {
       const target = readScopedReference(value.target, `${path}.target`, errors)
       const patch = isPlainObject(value.patch)
-        ? (rejectUnknownFields(value.patch, ["label", "visible", "locked", "stroke", "fill", "opacity"], `${path}.patch`, errors), value.patch)
+        // 白名单**只有一份**：直接读动作层的 `UPDATABLE_INPUT_FIELDS`（Fix round 1 / I14）。
+        // 手抄一份更窄的列表会把"把点挪到 (1,2)"判成 `unknown_field` 并浪费唯一一次修复。
+        ? (rejectUnknownFields(value.patch, UPDATABLE_INPUT_FIELDS, `${path}.patch`, errors), value.patch)
         : (errors.push(fail("invalid_type", `${path}.patch`, "expected an object")), null)
       return withAlias({ target, patch })
     }
@@ -758,13 +815,73 @@ function parseActionInputs(actionId: ActionId, value: unknown, path: string, err
        * 而**语义**校验（半径为正、坐标有限、工作区是否允许）在动作编译器里，且只有那一份。
        * 在这里再抄一遍必然分叉，症状是"schema 放行、编译器拒绝"。
        */
-      const reference = spec.requireReference
-      if (reference?.kind === "scoped") {
-        const resolved = readScopedReference(value[reference.field], `${path}.${reference.field}`, errors)
-        if (resolved === null) return null
-        return withAlias({ ...value, [reference.field]: resolved })
+      const out: Record<string, unknown> = { ...value }
+
+      // 闭集字段（Fix round 1 / I15）：不校验的话，编译器的兜底分支会把任何取值编成别的东西。
+      for (const [field, allowed] of Object.entries(spec.enumValues ?? {})) {
+        const provided = out[field]
+        if (provided === undefined) continue
+        if (typeof provided !== "string" || !allowed.includes(provided)) {
+          errors.push(fail(spec.enumCodes?.[field] ?? `invalid_${field}`, `${path}.${field}`, `expected one of ${allowed.join(", ")}`))
+          return null
+        }
       }
-      return withAlias({ ...value })
+
+      /**
+       * **每一个**引用字段都要过作用域校验并摊平（Fix round 1 / I12、I16）。
+       *
+       * scoped 引用摊平成动作层读的 `{documentId, entityId}`；`id` / `parameter` 引用是
+       * 字符串（同文档内的 id 或参数名），这里只挡明显畸形（非字符串、超长），
+       * 存在性由编译器的引用解析负责。
+       */
+      for (const reference of spec.references ?? []) {
+        const provided = out[reference.field]
+        if (reference.list) {
+          if (provided === undefined) continue
+          if (!Array.isArray(provided)) {
+            errors.push(fail("invalid_type", `${path}.${reference.field}`, "expected an array of ids"))
+            return null
+          }
+          const ids = provided.map((entry, index) => boundedString(entry, `${path}.${reference.field}[${index}]`, errors))
+          if (ids.some((entry) => entry === null)) return null
+          out[reference.field] = ids
+          continue
+        }
+        if (provided === undefined) {
+          /**
+           * 缺字段在这里**放行**（Fix round 1 / I17）：审计会按默认策略处理 ——
+           * 有安全默认就回填并写进 assumptions，标着 `ask_user` 的就去问用户
+           *（"这个动点绑在哪个对象上？"）。在传输层提前拒掉，用户看到的只会是一句
+           * `invalid_type`，而登记表里那条 `ask_user` 就成了**永远走不到的死策略**。
+           */
+          continue
+        }
+        if (reference.kind === "scoped") {
+          const resolved = readScopedReference(provided, `${path}.${reference.field}`, errors)
+          if (resolved === null) return null
+          out[reference.field] = resolved
+          continue
+        }
+        const id = boundedString(provided, `${path}.${reference.field}`, errors)
+        if (id === null) return null
+        out[reference.field] = id
+      }
+
+      // 嵌套引用（切线的 `anchor.pointId`）：形状与作用域都按同一个判据走。
+      for (const reference of spec.references ?? []) {
+        if (!reference.nested) continue
+        const outer = out[reference.nested.outer]
+        if (!isPlainObject(outer) || outer[reference.nested.when.field] !== reference.nested.when.equals) continue
+        const inner = outer[reference.nested.inner]
+        if (inner === undefined) continue
+        if (typeof inner !== "string") {
+          errors.push(fail("invalid_type", `${path}.${reference.nested.outer}.${reference.nested.inner}`, "expected an id"))
+          return null
+        }
+        out[reference.nested.outer] = { ...outer, [reference.nested.inner]: boundedString(inner, `${path}.${reference.nested.outer}.${reference.nested.inner}`, errors) }
+      }
+
+      return withAlias(out)
     }
   }
 }

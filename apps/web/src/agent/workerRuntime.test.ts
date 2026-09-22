@@ -23,7 +23,15 @@ function compileRequest(x = 1) {
 
 describe("geometry worker runtime", () => {
   it("compiles and applies actions, returning both the operations and the document", () => {
-    const response = handleGeometryRequest(compileRequest())
+    // **同一个 base 对象**：以前这里写成 `compileRequest().base`（每次新建一份空文档），
+    // 那条隔离断言永远为真、检测不到"传进去的文档被就地改写"（Fix round 1 / M21）。
+    const base = createEmptyDocument("conics")
+    const request = createWorkerRequest("geometry.compile", envelope, {
+      base,
+      actions: [{ actionId: "planar.create_point", actionKey: "p", factIds: [], inputs: { alias: "p", points: [{ x: 1, y: 0 }] } }]
+    })
+
+    const response = handleGeometryRequest(request)
 
     expect(response.kind).toBe("geometry.compile.result")
     expect(response.requestId).toBe("req-1")
@@ -31,7 +39,8 @@ describe("geometry worker runtime", () => {
     expect(response.operations).toHaveLength(1)
     expect(response.document.primitives).toHaveLength(1)
     // 基准文档没有被就地改写（worker 不能拥有调用方的对象）。
-    expect(compileRequest().base.primitives).toHaveLength(0)
+    expect(base.primitives).toHaveLength(0)
+    expect(request.base.primitives).toHaveLength(0)
   })
 
   it("reports a refused action as a typed error instead of throwing", () => {
@@ -261,6 +270,36 @@ describe("geometry worker runtime", () => {
     const midpoint = response.document.primitives.find((primitive) => primitive.id === "point3-1")
     expect(midpoint).toMatchObject({ type: "point3", binding: { kind: "onHost", hostId: "solid-1:e0", parameter: 0.5 } })
     // 隔离：调用方那份基准文档里一个图元都没多。
+    expect(base.primitives).toHaveLength(0)
+  })
+
+  /**
+   * **worker 这条入口也要把用户原话带进审计**（Fix round 1 / C3）。
+   *
+   * 与 `draftStore.stage` 同一件事：没有原话时"任意/恒定必须保留符号参数"这条判据
+   * 永远不生效，缺省会被当成"有安全默认"回填成一组特值 —— 那正是规格 §6.3 禁止的。
+   */
+  it("carries the user's words so an invariant request asks instead of taking a witness", () => {
+    const base = createEmptyDocument("geometry3d")
+    const request = createWorkerRequest("geometry.compile", envelope, {
+      base,
+      prompt: "画一个任意棱柱",
+      actions: [{
+        actionId: "solid.create_prism",
+        actionKey: "prism",
+        factIds: [],
+        // 底面与向量都缺：题目说"任意"时不该替它取特值（传输形状，见 `parsePlanEnvelope`）。
+        inputs: { alias: "prism" }
+      }] as unknown as Parameters<typeof createWorkerRequest<"geometry.compile">>[2]["actions"]
+    })
+
+    const response = handleGeometryRequest(request)
+
+    expect(response.kind).toBe("geometry.error")
+    if (response.kind === "geometry.error") {
+      expect(response.code).toBe("compile_failed")
+      expect(response.detail).toContain("needs_concrete_value")
+    }
     expect(base.primitives).toHaveLength(0)
   })
 

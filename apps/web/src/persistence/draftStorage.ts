@@ -41,9 +41,19 @@ export function loadWorkbenchPreferences(): WorkbenchPreferences | null {
 
 export function saveDraft(document: GeometryDocument): void {
   if (typeof localStorage === "undefined") return
-  // 同上：写不进去（配额 / 隐私模式）不能让调用方在半途抛错。
+  /**
+   * **先编码，再写盘**（Fix round 1，Reactive DAG worker 报的缺陷）。
+   *
+   * `encodeMgeo` 会校验文档：文档已经非法时它抛错。以前编码与写盘共用一个 `catch {}`，
+   * 于是"文档非法"被当成"存不下（配额 / 隐私模式）"静默吞掉 —— 画布上是新内容、
+   * 磁盘上还是旧的，用户看不到任何提示（`App.tsx` 那层 `try/catch` 永远收不到这个错误）。
+   *
+   * 两者的处置**不同**：配额是"这次存不下"（可接受降级），文档非法是"你画的东西本身不合法"
+   *（必须让用户知道）。所以编码放在 try 外面，写盘失败照旧吞掉。
+   */
+  const serialized = encodeMgeo(document)
   try {
-    localStorage.setItem(draftKey(document.workspace), encodeMgeo(document))
+    localStorage.setItem(draftKey(document.workspace), serialized)
     localStorage.setItem(activeWorkspaceKey, document.workspace)
   } catch {
     // 草稿存不下时调用方已经通过 `load` 的提示告知用户；这里不重复抛。

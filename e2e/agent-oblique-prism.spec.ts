@@ -96,8 +96,11 @@ test("the committed prism is oblique, and the batch is one undo step", async ({ 
 
 test("its section is cut through the midpoints and shows up as its own object", async ({ page }) => {
   /**
-   * 第二条验收（规格 §8.1）：截面**切到了实体**，而且它作为独立对象出现。
-   * 三个中点的参数是题目的显式约束 0.5；动点位置未指定 → 审计回填 0.4（假设里可见）。
+   * 第二条验收（规格 §8.1）：截面**切到了实体**，三个中点的参数是**题目的显式约束 0.5**，
+   * 动点位置未指定 → 审计回填 0.4（假设里可见）。
+   *
+   * 断言打在 `data-binding-parameter` 上而不是行文案上（Fix round 1 / I11）：
+   * 标签写着"中点"而参数其实是 0.4 这种回归，必须先被这条用例挡住。
    */
   await page.goto("/")
   await page.getByRole("button", { name: "跳转到立体几何" }).click()
@@ -105,7 +108,10 @@ test("its section is cut through the midpoints and shows up as its own object", 
   await sendPrompt(page, OBLIQUE_PRISM_PROMPT)
   const draft = page.getByRole("region", { name: "确认改动" }).last()
   await expect(draft).toBeVisible()
+  // 27（棱柱本体：8 顶点 + 12 棱 + 6 面 + 1 实体）+ 3 中点 + 1 动点 + 1 截面 = 32。
   await expect(draft).toContainText(/会新增 32 个对象/)
+  // 审计补出来的默认值必须看得见。
+  await expect(draft.locator(".agent-assumptions")).toContainText("0.4")
   await draft.getByRole("button", { name: "确认并提交" }).click()
   await expect(page.getByText("已提交")).toBeVisible()
   await page.getByRole("button", { name: "返回画布" }).click()
@@ -114,12 +120,25 @@ test("its section is cut through the midpoints and shows up as its own object", 
   // 对象列表把一只实体收成一行（顶点/棱/面是它的子树），三个中点与动点各占一行，
   // 截面也是一行 —— 所以"计划真的长成规格要求的样子"在这里是可读的。
   await expect.poll(() => rows.count()).toBeGreaterThanOrEqual(6)
+  // 属性在**行本身**上（`data-binding-parameter`），不是它的子节点。
+  const bound = page.locator(".algebra-panel .object-row[data-binding-parameter]")
+  await expect(bound).toHaveCount(4)
+  // 三个中点是 0.5、动点是审计回填的 0.4 —— 参数而不是文案。
+  await expect(page.locator('.algebra-panel .object-row[data-binding-parameter="0.5"]')).toHaveCount(3)
+  await expect(page.locator('.algebra-panel .object-row[data-binding-parameter="0.4"]')).toHaveCount(1)
+  // 四个点都绑在同一只实体的棱上（`solid-1:e…`）。
+  const hosts = await bound.evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-binding-host")))
+  for (const host of hosts) expect(host).toMatch(/^solid-1:e\d+$/)
+  /**
+   * 而**动点与其中一个中点共用同一条宿主棱** —— 那条棱正是截面多边形的一条边
+   *（Fix round 1 / C2：P 因此始终落在截面边界上；宿主棱的端点是不是截面顶点，
+   *  由 `representativeFixtures.test.ts` 从编译产物上验证）。
+   */
+  const movingHost = await page.locator('.algebra-panel .object-row[data-binding-parameter="0.4"]').getAttribute("data-binding-host")
+  const midpointHosts = await page.locator('.algebra-panel .object-row[data-binding-parameter="0.5"]').evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-binding-host")))
+  expect(midpointHosts).toContain(movingHost)
+
   const labels = await rows.allInnerTexts()
   expect(labels.some((text) => text.includes("斜四棱柱"))).toBe(true)
   expect(labels.some((text) => text.includes("section-1"))).toBe(true)
-  for (const midpoint of ["E（中点）", "M（中点）", "N（中点）"]) {
-    expect(labels.some((text) => text.includes(midpoint)), midpoint).toBe(true)
-  }
-  // 动点 P 也在（它由自然参数驱动，拖动它会沿宿主移动）。
-  expect(labels.some((text) => text.trim().endsWith("P"))).toBe(true)
 })
