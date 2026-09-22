@@ -2,15 +2,16 @@ import {
   createRecoveryController,
   isCapabilityVerified,
   parseModelEnvelope,
+  parsePlanEnvelope,
   planModelRequest,
   type Budget,
   type CapabilityEvidence,
   type EnvelopeParseFailure,
   type ModelChannel,
-  type ModelContext,
   type ModelEvent,
   type PlanEnvelope,
   type PlannerPort,
+  type PlanRequest,
   type ProviderCapabilities,
   type RecoveryError,
   type RetryDecision
@@ -216,10 +217,12 @@ export const PLAN_TOOL_SCHEMA = {
  * 提示词本体搬去了 `systemPrompt.ts`（有版本号、策略与场景分开注入）。
  * 这一层只剩**接线**：把上下文、通道、能不能出计划、以及这次修复提示一起交过去。
  */
-function buildMessages(request: { userMessage: string; model: { context: ModelContext; tools: readonly { id: string }[] }; repair?: { reason: string; errors: readonly { code: string; path: string; detail: string }[]; hint: string } }, channel: ModelChannel): ChatMessage[] {
+function buildMessages(request: PlanRequest, channel: ModelChannel): ChatMessage[] {
   const canPlan = request.model.tools.some((tool) => tool.id === PLAN_TOOL_ID)
   const prompt = buildSystemPrompt({
     context: request.model.context,
+    // 会话上下文（Task 4）：与场景分开渲染，顺序由 `systemPrompt` 定（规格 §5.3）。
+    conversation: request.conversation,
     channel,
     canPlan,
     ...(request.repair === undefined ? {} : { repair: request.repair })
@@ -383,7 +386,15 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
            */
           const planToolWasOffered = request.model.tools.some((tool) => tool.id === PLAN_TOOL_ID)
           if (channel === "native_tools" && toolCall.toolId === PLAN_TOOL_NAME && planToolWasOffered) {
-            return { plan: toolCall.input as PlanEnvelope, ...ids }
+            /**
+             * **工具调用自己先过一遍信封校验**（Fix round 1 / M12）。
+             *
+             * 以前这里是 `toolCall.input as PlanEnvelope`，形状完全由协调器兜底。现在先校验一次：
+             * 通过就把**校验过的值**交出去（字段归一化、白名单都已落实）；不通过则把原值交出去，
+             * 让协调器按它自己的路径报**逐条字段错误**（修复通道在它手里，这一层不做决定）。
+             */
+            const validated = parsePlanEnvelope(toolCall.input)
+            return { plan: validated.ok ? validated.value : (toolCall.input as PlanEnvelope), ...ids }
           }
           // 其余情况一律拒绝：我们**没有**发过那个工具，静默忽略它等于把
           // "模型以为它调用了什么"变成"什么都没发生"。

@@ -67,11 +67,56 @@ describe("production system prompt", () => {
 
     expect(prompt.content).toContain("不要输出推理过程")
     expect(prompt.content).toContain("白名单")
+    /**
+     * **两条只能靠提示词守住的规则必须有用例**（Fix round 1 / I9）。
+     *
+     * 用例文件自己的注释声称"prompt-only 规则都已被钉住"，而这两句此前 grep 不到 ——
+     * 于是下一次改文案时它们可以静默消失，而规格 §6.3/§10 正是靠它们成立的。
+     */
+    expect(prompt.content).toContain("符号参数")
+    expect(prompt.content).toContain("数值采样")
+    expect(prompt.content).toContain("形式证明")
+    // 它们**不只在"能出计划"的那一支**里（Fix round 1 / M9）：只读/澄清阶段同样要遵守。
+    const readOnly = buildPolicyText({ channel: "strict_json", canPlan: false, actionIds: [] })
+    expect(readOnly).toContain("符号参数")
+    expect(readOnly).toContain("不是形式证明")
+  })
+
+  /**
+   * **字段白名单不能被静默截断**（Fix round 1 / I8）。
+   *
+   * 第一版 `.slice(0, 12)` 只列前 12 个动作的字段契约，而菜单那一段列出**全部**动作，
+   * 紧接着还写着"白名单之外的字段一律被拒" —— 被截掉的那些动作，模型只能靠猜。
+   * 请求三个技能（`planar-basics` + `conics-tangents` + `dynamic-bindings`）去重就超过 12 个动作。
+   */
+  it("documents every allowed action's fields instead of truncating the list", () => {
+    const actions = ["planar.create_point", "planar.create_line", "planar.create_segment", "planar.create_ray", "planar.create_polyline", "planar.create_circle", "planar.create_arc", "planar.create_conic", "function.create_tangent", "parameter.create", "dynamic.create_bound_point", "dynamic.bind_point", "dynamic.bind_curve", "dynamic.create_locus", "dynamic.set_radius_rule"]
+    const policy = buildPolicyText({ channel: "strict_json", canPlan: true, actionIds: actions })
+
+    /**
+     * 断言的是**字段白名单那一行**（`- <id>：<inputs>`），而不是"这个名字出现过" ——
+     * 菜单与默认规则表里也会出现动作名，所以只查名字的话，被截断的动作照样"出现"。
+     */
+    expect(policy).toContain("- dynamic.set_radius_rule：circleId, pointId, factor")
+    expect(policy).toContain("- parameter.create：id, value, min, max, step, label")
+    expect(policy).toContain("- function.create_tangent：alias, sourceId, x, anchor")
   })
 
   it("keeps the policy text identical across contexts, and injects the scene separately", () => {
     const first = buildSystemPrompt({ context: context(), channel: "strict_json", canPlan: true })
-    const second = buildSystemPrompt({ context: context({ facts: [{ id: "circle-1", text: "圆", origin: "user" }] }), channel: "strict_json", canPlan: true })
+    /**
+     * 第二个上下文**同时改掉 binding / workspace / generation**（Fix round 1 / M11）：
+     * 只改 `facts` 的话，"把这几个绑定字段漏进策略文本"这种回归不会被发现。
+     */
+    const second = buildSystemPrompt({
+      context: context({
+        facts: [{ id: "circle-1", text: "圆", origin: "user" }],
+        binding: { conversationId: "conversation-99", projectId: "project-9", documentId: "document-9", generation: 12 },
+        workspace: "conics"
+      }),
+      channel: "strict_json",
+      canPlan: true
+    })
 
     // 策略文本与场景无关（同一批可用动作 + 同一通道 → 逐字相同）。
     expect(second.policy).toBe(first.policy)

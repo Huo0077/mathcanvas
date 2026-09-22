@@ -132,6 +132,27 @@ describe("conversation repository", () => {
     expect(loaded.ok && loaded.value.conversation.summaryVersion).toBe(2)
   })
 
+  it("reads a whole conversation record (summary + facts + transcript) for the planning context", async () => {
+    const repository = createConversationRepository()
+    await repository.create(conversation("c1"), bindingA)
+    await repository.append(conversation("c1"), bindingA, userMessage("m1", "c1", "画一个正方体"))
+    await repository.saveFact({
+      ...factFor("c1", "m1"),
+      key: "commit:run-1",
+      valueJson: { text: "已提交：文档第 2 版新增 1 个对象（solid-1）", generation: 2, createdObjects: ["solid-1"] }
+    })
+    await repository.saveSummary({ conversationId: "c1", summary: "目标是正方体" })
+
+    // 界面的投影（`read`）里没有摘要与事实；规划上下文读的是**完整记录**这一条。
+    const record = await repository.readRecord("c1")
+    expect(record?.summary).toBe("目标是正方体")
+    expect(record?.summaryVersion).toBe(2)
+    expect(record?.conversation.messages.map((message) => message.text)).toEqual(["画一个正方体"])
+    expect(record?.facts).toEqual([{ id: "f1", key: "commit:run-1", text: "已提交：文档第 2 版新增 1 个对象（solid-1）", status: "confirmed" }])
+    // 仓储里没有这条会话时如实回 null（不编一条空的）。
+    expect(await repository.readRecord("missing")).toBeNull()
+  })
+
   it("hides an archived conversation from the list without deleting it", async () => {
     const repository = createConversationRepository()
     await repository.create(conversation("c1"), bindingA)
@@ -164,6 +185,41 @@ describe("conversation repository", () => {
 
     expect(listed.ok && listed.value.map((record) => record.id)).toEqual(["c-fallback"])
     expect(localStorage.getItem(AGENT_STORAGE_KEY) ?? "").toContain("c-fallback")
+  })
+
+  /**
+   * **Task 6 的载荷扫描**：一次真实的会话写入里，**不许**出现三类东西
+   * （规格 §1.2/§7）：密钥样串、候选文档内容、以及模型的隐藏推理。
+   *
+   * 这条用例不是一次性的 grep，而是一道会一直跑的闸：它把一个"什么都有"的消息
+   * （含草稿视图、轨迹、开发者诊断）写进去，然后按**键的形状**检查存下来的载荷 ——
+   * 所以将来谁给 `AgentMessage` 加一个 `reasoning` 字段，它会当场失败。
+   */
+  it("never persists a credential, a candidate document or hidden reasoning", async () => {
+    const repository = createConversationRepository()
+    await repository.create(conversation("c1"), bindingA)
+    const message: AgentMessage = {
+      ...userMessage("m1", "c1", "建一个棱角 3 的立方体"),
+      trace: [{ phase: "planning", status: "ok", summary: "规划这一步要做什么", at: 1 }],
+      draft: { draftId: "draft-1", draftVersion: 1, previewHash: "hash", stageCount: 2, undoesInOneStep: true, counts: { user: 2, hidden: 0, derived: 7, internal: 3, total: 9 } },
+      diagnostics: ["1. preflight → observing: reading the scene"]
+    }
+    await repository.append(conversation("c1"), bindingA, message)
+    await repository.saveFact({ ...factFor("c1", "m1"), valueJson: { text: "已确认：文档第 2 版新增 1 个对象（solid-1）", generation: 2, createdObjects: ["solid-1"] } })
+    await repository.saveSummary({ conversationId: "c1", summary: '{"goal":"建一个立方体","confirmedFacts":[],"createdObjects":["solid-1"],"openQuestions":[],"preferences":[]}' })
+
+    const stored = localStorage.getItem(AGENT_STORAGE_KEY) ?? ""
+    // ① 密钥样串（前缀形态：`sk-` / `sk_`）。
+    expect(stored).not.toMatch(/sk[-_][A-Za-z0-9]/)
+    // ② 候选文档内容：文档字段名一个都不许出现（草稿只存**视图**）。
+    for (const field of ["primitives", "candidate", "operations", "contentHash", "epoch"]) expect(stored, field).not.toContain(field)
+    // ③ 隐藏推理：载荷里的键只有界面真的拥有的那些。
+    const records = JSON.parse(stored) as { messages: { contentJson: Record<string, unknown> }[] }[]
+    const allowed = new Set(["id", "role", "text", "createdAt", "pending", "runId", "trace", "draft", "commit", "failure", "diagnostics"])
+    for (const key of Object.keys(records[0]!.messages[0]!.contentJson)) {
+      expect(allowed.has(key), `unexpected persisted field: ${key}`).toBe(true)
+    }
+    expect(stored).not.toMatch(/reasoning|chain.of.thought/i)
   })
 
   it("uses the named SQLite commands (and never the local cache) while the desktop shell is present", async () => {

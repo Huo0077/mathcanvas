@@ -38,6 +38,7 @@ function refusingRepository(): ConversationRepository {
   return {
     loadList: () => Promise.reject(new Error("the repository refused this read")),
     read: refuse,
+    readRecord: refuse,
     create: refuse,
     append: refuse,
     saveSummary: refuse,

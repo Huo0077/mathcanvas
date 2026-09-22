@@ -1,5 +1,5 @@
 import type { Budget } from "./budget"
-import { buildContext, type Fact } from "./contextBuilder"
+import { buildContext, buildConversationContext, type ConversationContextSource, type Fact } from "./contextBuilder"
 import { parsePlanEnvelope } from "./schemas"
 import type { PlanEnvelope, RunContext } from "./contracts"
 import type { CancelReason, CancelResult, CommitterPort, ConsentToken, ObserverPort, PlannerPort, PlanRequest, ToolPort } from "./coordinatorPorts"
@@ -47,6 +47,16 @@ export interface CoordinatorDependencies {
   availableActions?: readonly string[]
   /** 上下文条数上限（只能**收紧**，`buildContext` 内部另有硬上限）。 */
   contextLimits?: { facts?: number; refs?: number }
+  /**
+   * **会话上下文的来源**（对话切片 Task 4；规格 §5.3）。
+   *
+   * 函数而不是值：宿主拿它的时候要现读会话（消息、摘要、已确认事实），
+   * 而"哪条会话"由宿主自己钉住 —— 协调器只管**一次运行取一次**。
+   *
+   * 缺省（不传）时协调器用运行自述造一份最小的：绑定来自 `RunContext`，
+   * 历史、摘要、事实都是空的。这样"端口形状"不因为老调用方而变成可空。
+   */
+  conversation?: () => ConversationContextSource
   /**
    * 有序的选中引用。
    *
@@ -159,13 +169,36 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
         budget,
         limits: dependencies.contextLimits
       })
+      /**
+       * **会话上下文**：宿主的来源（消息/摘要/事实/草稿）+ 运行里的观察 + 这一轮的请求。
+       *
+       * 与 `modelContext` 一样**只组装一次**，两次尝试共用同一个对象 —— "第二次机会"
+       * 必须是同一个题目下的第二次尝试。
+       */
+      const source = dependencies.conversation?.()
+      const conversation = buildConversationContext({
+        binding: source?.binding ?? {
+          conversationId: request.run.conversationId,
+          projectId: request.run.target.projectId,
+          documentId: request.run.target.documentId,
+          workspace: request.run.target.workspace,
+          generation: request.run.target.generation
+        },
+        summary: source?.summary ?? "",
+        facts: source?.facts ?? [],
+        messages: source?.messages ?? [],
+        ...(source?.draft === undefined ? {} : { draft: source.draft }),
+        ...(source?.limits === undefined ? {} : { limits: source.limits }),
+        observation: { facts: (observation.facts ?? []).map((fact): Fact => ({ id: fact.id, text: fact.text, origin: fact.origin })), summary: observation.summary },
+        request: request.userMessage
+      })
       const phaseTools = registry.forPhase("planning", {
         workspace: request.run.target.workspace,
         // 规划阶段还没有确认：提交工具在这个阶段根本不该出现（注册表自己保证）。
         confirmed: false,
         capabilityRevision: request.run.capabilityRevision
       })
-      ledger.record(`context ready: ${modelContext.facts.length} fact(s), ${phaseTools.length} tool(s)`, { requestId: null })
+      ledger.record(`context ready: ${modelContext.facts.length} scene fact(s), ${conversation.facts.length} confirmed fact(s), ${conversation.messages.length} message(s), ${phaseTools.length} tool(s)`, { requestId: null })
 
       // ---- 向模型要计划 ------------------------------------------------
       if (!spend(budget, "generation")) return yield* stop("budget_generation")
@@ -193,7 +226,7 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
           // 第二次尝试是**可见的修复**：它花掉的是同一份预算的另一个名额。
           if (!spend(budget, "generation") || !spend(budget, "network")) return yield* stop("budget_repair")
         }
-        const outcome = await dependencies.planner.plan({ run: request.run, userMessage: request.userMessage, budget, signal, model: { context: modelContext, tools: phaseTools }, repair })
+        const outcome = await dependencies.planner.plan({ run: request.run, userMessage: request.userMessage, budget, signal, model: { context: modelContext, tools: phaseTools }, conversation, repair })
         if (cancelled) return
         lastAttemptIds = { requestId: outcome.requestId, attemptId: outcome.attemptId }
         ledger.record(`plan attempt ${attempt} returned`, lastAttemptIds)
@@ -271,7 +304,9 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
       const compiling = ledger.transition("compiling", `staging ${actionCount} action(s)`)
       if (compiling.ok) yield compiling.event
 
-      const staged = await dependencies.committer.stage({ run: request.run, actionCount, actions: parsed.actions, signal })
+      // 用户原话随暂存一起下去：参数审计的三条判据（符号参数 / 从原话读数字 / 采样≠证明）
+      // 都在编译这一层，而原话只有协调器手里有（Fix round 1 / C3）。
+      const staged = await dependencies.committer.stage({ run: request.run, actionCount, actions: parsed.actions, userMessage: request.userMessage, signal })
       if (cancelled) return
       if (!staged.ok) {
         // 草稿过期不是失败：文档被改过，重新暂存即可（协调器把决定权交回调用方）。
@@ -301,7 +336,7 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
       const committing = ledger.transition("committing", "applying the confirmed draft")
       if (committing.ok) yield committing.event
 
-      const outcome = await dependencies.committer.commit({ run: request.run, actionCount, actions: parsed.actions, signal, consent: dependencies.consent })
+      const outcome = await dependencies.committer.commit({ run: request.run, actionCount, actions: parsed.actions, userMessage: request.userMessage, signal, consent: dependencies.consent })
       if (cancelled) return
 
       if (outcome.status === "committed" || outcome.status === "no_change") {

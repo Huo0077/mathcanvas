@@ -6,7 +6,7 @@ import type { PlanEnvelope, PlannerPort, PlanRequest } from "@draw/agent-core"
 import { SKILL_CATALOGUE_REVISION } from "@draw/agent-core"
 
 import { createAgentRuntime } from "./agentRuntime"
-import { CONIC_INVARIANT_PROMPT, OBLIQUE_PRISM_PROMPT, conicInvariantPlan, obliquePrismSectionPlan } from "./representativeFixtures"
+import { CONIC_INVARIANT_PROMPT, OBLIQUE_PRISM_PROMPT, conicInvariantPlan, obliquePrismEdges, obliquePrismSectionPlan } from "./representativeFixtures"
 import type { ExportPreflightPort } from "@draw/agent-core"
 
 /**
@@ -444,28 +444,66 @@ describe("representative tasks from the design", () => {
     const preview = draftId === null ? null : runtime.drafts.getPreview(draftId)
     expect(preview).not.toBeNull()
 
-    const plan = obliquePrismSectionPlan()
-    if (plan.kind !== "plan") throw new Error("the prism fixture must be a plan")
-    // 一笔 `solid.create_prism`（不是"把散面拼起来"）：六个面由内核生成。
-    expect(plan.actions.filter((action) => action.actionId === "solid.create_prism")).toHaveLength(1)
-    // 三个中点的参数是**题目的显式约束** 0.5。
-    const midpoints = plan.actions.filter((action) => action.actionKey.startsWith("midpoint-"))
-    expect(midpoints).toHaveLength(3)
-    for (const midpoint of midpoints) expect(midpoint.inputs).toMatchObject({ parameter: 0.5 })
-    // 一个截面节点。
-    expect(plan.actions.some((action) => action.actionId === "section.create")).toBe(true)
-    // 一个可动的边界点：位置未指定 → 审计回填 0.4，并作为**假设**交给界面。
-    expect(plan.actions.find((action) => action.actionKey === "moving-point")?.inputs).not.toHaveProperty("parameter")
-    expect(runtime.assumptions()?.some((text) => text.includes("0.4"))).toBe(true)
-
+    /**
+     * **断言打在编译产物上，而不是夹具上**（Fix round 1 / I10）。
+     *
+     * 第一版这里重新构造一遍夹具再断言 `plan.actions` —— 那些断言在"编译器把动作全丢掉"
+     * 的情况下依然会通过（见评审的测试诚实性一节）。现在全部读 `preview.candidate`。
+     */
     const primitives = preview?.candidate.primitives ?? []
-    expect(primitives.filter((primitive) => primitive.type === "polyhedron3")).toHaveLength(1)
-    expect(primitives.some((primitive) => primitive.type === "section")).toBe(true)
+    const solid = primitives.find((primitive) => primitive.type === "polyhedron3")
+    expect(solid?.type).toBe("polyhedron3")
+    if (solid?.type !== "polyhedron3") throw new Error("expected a compiled prism")
+    // 一笔 `solid.create_prism`：六个面由内核生成（不是把散面拼起来）。
+    expect(solid.faceIds).toHaveLength(6)
+    expect(solid.vertexIds).toHaveLength(8)
+
+    const section = primitives.find((primitive) => primitive.type === "section")
+    expect(section?.type).toBe("section")
+    if (section?.type !== "section") throw new Error("expected a compiled section")
+    expect(section.classification).toBe("polygon")
+    expect(section.points.length).toBeGreaterThanOrEqual(3)
+
     // E/M/N/P：三个中点 + 一个动点，都是宿主绑定的点（不是自由点）。
     const bound = primitives.filter((primitive) => primitive.type === "point3" && (primitive as { binding?: { kind?: string } }).binding?.kind === "onHost")
     expect(bound).toHaveLength(4)
-    expect(bound.filter((primitive) => (primitive as { binding?: { parameter?: number } }).binding?.parameter === 0.5)).toHaveLength(3)
-    expect(bound.filter((primitive) => (primitive as { binding?: { parameter?: number } }).binding?.parameter === 0.4)).toHaveLength(1)
+    const midpoints = bound.filter((primitive) => (primitive as { binding?: { parameter?: number } }).binding?.parameter === 0.5)
+    const moving = bound.filter((primitive) => (primitive as { binding?: { parameter?: number } }).binding?.parameter === 0.4)
+    expect(midpoints).toHaveLength(3)
+    expect(moving).toHaveLength(1)
+
+    // 三个中点**真的在截面平面上**（这才是"过三条棱的中点作截面"）。
+    const onPlane = (point: { x: number; y: number; z: number }) =>
+      Math.abs(section.plane.normal.x * point.x + section.plane.normal.y * point.y + section.plane.normal.z * point.z + section.plane.constant)
+    for (const midpoint of midpoints) {
+      const position = (midpoint as { position: { x: number; y: number; z: number } }).position
+      expect(onPlane(position)).toBeLessThan(1e-9)
+    }
+
+    // 位置未指定 → 审计回填 0.4，并作为**假设**交给界面。
+    expect(runtime.assumptions()?.some((text) => text.includes("0.4"))).toBe(true)
+
+    /**
+     * **P 在截面边界上**（Fix round 1 / C2；规格 §8.1）。
+     *
+     * 过 E/M/N 的平面以底棱 `B0B1` 为一条边，而 P 正绑在那条棱上 —— 所以 P 的**任何**参数
+     * 都落在截面边界上，`it.todo` 那条"未达成"因此不再需要（它现在承载的是**平移跟随**，
+     * 见 `representativeFixtures.test.ts`）。
+     */
+    const movingPoint = moving[0] as { binding: { hostId: string }; position: { x: number; y: number; z: number } }
+    // P 与中点 E 共用同一条宿主棱（`hostSub` 取自棱柱拓扑），所以参数取 0.5 时 P 与 E 重合。
+    expect(movingPoint.binding.hostId).toBe(`${solid.id}:e${obliquePrismEdges().movingPoint.hostSub}`)
+    expect(movingPoint.binding.hostId).toBe((midpoints[0] as { binding: { hostId: string } }).binding.hostId)
+    // 而那条棱是截面多边形的一条边 → P 落在这条边上（点到线段的距离为零）。
+    const distanceToSegment = (point: { x: number; y: number; z: number }, from: { x: number; y: number; z: number }, to: { x: number; y: number; z: number }) => {
+      const ab = { x: to.x - from.x, y: to.y - from.y, z: to.z - from.z }
+      const ap = { x: point.x - from.x, y: point.y - from.y, z: point.z - from.z }
+      const lengthSquared = ab.x * ab.x + ab.y * ab.y + ab.z * ab.z
+      const t = Math.max(0, Math.min(1, (ap.x * ab.x + ap.y * ab.y + ap.z * ab.z) / lengthSquared))
+      return Math.hypot(point.x - (from.x + ab.x * t), point.y - (from.y + ab.y * t), point.z - (from.z + ab.z * t))
+    }
+    const onBoundary = section.points.some((_, index) => distanceToSegment(movingPoint.position, section.points[index], section.points[(index + 1) % section.points.length]) < 1e-9)
+    expect(onBoundary, "P is on the section boundary").toBe(true)
   })
 
   it("keeps the conic parameter symbolic and labels the invariant as numeric sampling", async () => {
@@ -478,23 +516,70 @@ describe("representative tasks from the design", () => {
     expect(written).toHaveLength(0)
     expect(current()?.primitives).toHaveLength(0)
 
-    const plan = conicInvariantPlan()
-    if (plan.kind !== "plan") throw new Error("the conic fixture must be a plan")
-    // 符号参数 θ 被**保留**：它被建成文档参数，而不是一组数字。
-    const theta = plan.actions.find((action) => action.actionKey === "theta")
-    expect(theta?.inputs).toMatchObject({ id: "theta" })
-    // P 由 θ 驱动（`parameterId`），所以拖动 θ 就是"任意点"。
-    expect(plan.actions.find((action) => action.actionKey === "P")?.inputs).toMatchObject({ parameterId: "theta" })
-    // 切线跟随 P。
-    expect(plan.actions.find((action) => action.actionKey === "tangent-P")?.inputs).toMatchObject({ sourceId: "draft:P" })
-
     const draftId = runtime.draftId()
     const preview = draftId === null ? null : runtime.drafts.getPreview(draftId)
-    expect(preview?.candidate.parameters.theta).toMatchObject({ id: "theta", label: "θ" })
-    expect(preview?.candidate.primitives.some((primitive) => primitive.type === "ellipse")).toBe(true)
-    expect(preview?.candidate.primitives.some((primitive) => primitive.type === "tangent")).toBe(true)
+    const candidate = preview?.candidate
+    if (!candidate) throw new Error("expected a staged candidate")
+
+    // 符号参数 θ 被**保留**（断言打在产物上）。
+    expect(candidate.parameters.theta).toMatchObject({ id: "theta", label: "θ" })
+    // 轴交点距离由 θ 算出：`OA = 3/cos θ`、`OB = 2/sin θ`，不变量写成 `9/OA^2 + 4/OB^2`
+    //（Fix round 1 / C1：第一版把 OA 当成了 P 的横坐标，算出来 ≈7.77）。
+    expect(candidate.parameters.OA?.expression).toBe("3/cos(theta)")
+    expect(candidate.parameters.OB?.expression).toBe("2/sin(theta)")
+    expect(candidate.parameters.invariant?.expression).toBe("9/OA^2 + 4/OB^2")
+
+    // **P 由 θ 驱动**：断言编译产物里 P 的 binding 带 `parameterId`（I10）。
+    const bound = candidate.primitives.filter((primitive) => primitive.type === "point" && (primitive as { binding?: { parameterId?: string } }).binding?.parameterId !== undefined)
+    const driverOf = (id: string) => (candidate.primitives.find((primitive) => primitive.id === id) as { binding?: { parameterId?: string } } | undefined)?.binding?.parameterId
+    const p = candidate.primitives.find((primitive) => primitive.type === "point" && (primitive as { binding?: { parameterId?: string } }).binding?.parameterId === "theta")
+    expect(p).toBeDefined()
+    // A/B 也由参数驱动（θ 一变，切线与轴交点一起动）。
+    expect(bound.filter((primitive) => (primitive as { binding?: { parameterId?: string } }).binding?.parameterId === "OA")).toHaveLength(1)
+    expect(bound.filter((primitive) => (primitive as { binding?: { parameterId?: string } }).binding?.parameterId === "OB")).toHaveLength(1)
+    void driverOf
+
+    expect(candidate.primitives.some((primitive) => primitive.type === "ellipse")).toBe(true)
+    expect(candidate.primitives.some((primitive) => primitive.type === "tangent")).toBe(true)
 
     // **数值采样 ≠ 形式证明**：这句话必须出现在用户能看到的假设里。
     expect(runtime.assumptions()?.some((text) => text.includes("不是形式证明"))).toBe(true)
+  })
+
+  /**
+   * **用户原话必须走到审计**（Fix round 1 / C3）。
+   *
+   * 走的是装配好的真实运行时：协调器 → `CommitterAdapter` → `DraftStore.stage` → `compilePlan`。
+   * 同一份计划（棱柱，底面与向量都缺）在两句话下的结局必须**不同** ——
+   * 差别只能来自"原话有没有传下去"：
+   * - "画一个任意棱柱" → 题目要求任意，**不许**特值化 → 审计提问 → 没有草稿；
+   * - "画一个棱柱" → 缺省有安全默认 → 回填并出草稿。
+   */
+  it("lets the user's words reach the audit through the assembled runtime", async () => {
+    const planWithoutDimensions: PlanEnvelope = {
+      schemaVersion: "mathcanvas.plan.v1",
+      kind: "plan",
+      goal: "画一个棱柱",
+      factIds: [],
+      // 底面与向量都缺（传输形状：可缺省字段交给审计）。
+      actions: [{ actionId: "solid.create_prism", actionKey: "prism", factIds: [], inputs: { alias: "prism" } } as unknown as PlanEnvelope extends { actions: (infer T)[] } ? T : never]
+    }
+
+    const invariant = makeRuntime({ envelope: planWithoutDimensions, document: createEmptyDocument("geometry3d") })
+    const invariantEvents = await drive(invariant.runtime.coordinator, { run: runContext(createEmptyDocument("geometry3d")), userMessage: "画一个任意棱柱" })
+
+    expect(invariantEvents.at(-1)).toBe("failed")
+    expect(invariant.written).toHaveLength(0)
+    expect(invariant.current()?.primitives).toHaveLength(0)
+    expect(invariant.runtime.coordinator.ledger().at(-1)?.detail).toContain("needs_concrete_value")
+
+    // 对照组：同一份计划、一句没有"任意/恒定"的话 → 缺省被回填，草稿成型。
+    const ordinary = makeRuntime({ envelope: planWithoutDimensions, document: createEmptyDocument("geometry3d") })
+    const ordinaryEvents = await drive(ordinary.runtime.coordinator, { run: runContext(createEmptyDocument("geometry3d")), userMessage: "画一个棱柱" })
+
+    expect(ordinaryEvents.at(-1)).toBe("awaiting_confirmation")
+    const draftId = ordinary.runtime.draftId()
+    const candidate = draftId === null ? null : ordinary.runtime.drafts.getPreview(draftId)?.candidate
+    expect(candidate?.primitives.some((primitive) => primitive.type === "polyhedron3")).toBe(true)
   })
 })

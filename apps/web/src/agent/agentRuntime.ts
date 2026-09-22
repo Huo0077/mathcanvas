@@ -8,6 +8,7 @@ import {
   type AgentCoordinator,
   type CommitOutcome,
   type CommitterAdapter,
+  type ConversationContextSource,
   type DocumentHandle,
   type DraftStageOutcome,
   type DraftStorePort,
@@ -83,6 +84,13 @@ export interface AgentRuntimeDependencies {
    * 可选：不传时协调器照常跑（工作区不匹配的动作会被编译器拒 —— 那是**如实**的失败）。
    */
   prepare?: (plan: PlanEnvelope) => { ok: true } | { ok: false; detail: string }
+  /**
+   * **这一次运行的会话上下文来源**（对话切片 Task 4）。
+   *
+   * 函数而不是快照：协调器**一次运行只调一次**，把"哪条会话、说到哪儿了"钉在运行开始时。
+   * 之后用户切到别的会话，这一轮看到的仍然是它开始时的那一份（规格 §5.4）。
+   */
+  conversation?: () => ConversationContextSource
 }
 
 export interface AgentRuntime {
@@ -273,6 +281,8 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
     observer,
     committer,
     prepare: dependencies.prepare,
+    // 会话上下文（Task 4）：**一次运行只取一次**，两次尝试共用同一份（规格 §5.3/§5.4）。
+    ...(dependencies.conversation === undefined ? {} : { conversation: dependencies.conversation }),
     onPlanParsed: (plan) => {
       declaredAssumptions = plan.assumptions
       // 只有澄清分支才有问题；另外两个分支即使带 `questions` 也不是合法的信封（schema 会拒）。

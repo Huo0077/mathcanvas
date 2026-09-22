@@ -52,6 +52,49 @@ export interface RunContext {
   policyRevision: string
 }
 
+// ---------------------------------------------------------------- 会话上下文（规格 §5）
+
+/**
+ * **这一轮绑到哪条会话、哪份文档的第几版**（规格 §5.1/§5.4）。
+ *
+ * 为什么 `workspace` 与 `generation` 也在里面：一次运行要么整体属于某个会话的某个版本，
+ * 要么整轮作废。少了 `generation`，"模型看到的是哪一版"与"用户确认的是哪一版"就对不上；
+ * 少了 `workspace`，跨工作区的引用就没有可判定的边界。
+ */
+export interface ConversationBinding {
+  conversationId: string
+  projectId: string
+  documentId: string
+  workspace: WorkspaceId
+  generation: number
+}
+
+/** 进规划上下文的一条消息：**只含已经说过的话**（在途状态与草稿视图都不在这里）。 */
+export interface ConversationMessageView {
+  id: string
+  role: "user" | "assistant"
+  text: string
+  createdAt: number
+}
+
+/**
+ * 一条会话事实的四种状态。
+ *
+ * 前三种与 SQLite 那一侧逐字一致（`confirmed` / `stale` / `retracted`）；
+ * `draft` 是**界面侧的临时态**：未确认的草稿只能停在这里，**永远不许**变成 `confirmed`
+ *（规格 §1.2"未确认草稿不得进入长期会话记忆"、§10"摘要模型不能直接升级确认事实"）。
+ */
+export type ConversationFactStatus = "confirmed" | "stale" | "retracted" | "draft"
+
+/** 进规划上下文的一条事实。只有 `status === "confirmed"` 会被当作事实交给模型。 */
+export interface ConversationFactView {
+  id: string
+  key: string
+  /** 人话一句；会原样进提示词。 */
+  text: string
+  status: ConversationFactStatus
+}
+
 export type SafeRetry = "none" | "same_request" | "refresh_context" | "revise_input"
 
 export interface Recovery {

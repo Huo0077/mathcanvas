@@ -3,6 +3,7 @@ import { create } from "zustand"
 import type { DraftObjectCounts } from "@draw/agent-core"
 
 import { deriveConversationTitle } from "./agentTranscript"
+import { compactConversationSummary, parseConversationSummary, serializeConversationSummary, shouldCompactConversation } from "./conversationSummary"
 import {
   DEFAULT_CONVERSATION_BINDING,
   NEW_CONVERSATION_TITLE,
@@ -179,6 +180,35 @@ interface PendingTarget {
   message: AgentMessage
 }
 
+/** 一轮运行钉住的落点（运行一开始就定，之后切会话也不改）。 */
+export interface RunTarget {
+  conversationId: string
+  /** 收到运行事件与终态的那条**助手**消息。 */
+  messageId: string
+  /**
+   * 这一轮的**用户消息** id。
+   *
+   * 与 `messageId` 分开：写事实时"证据"必须是**已经存下来的那条用户消息**
+   *（Rust 侧的同会话判据），而在途的助手消息在它有内容之前根本不在仓储里。
+   */
+  promptMessageId: string
+}
+
+/**
+ * 事件该落到哪条消息上。
+ *
+ * 给了 `runId` 就按**那一轮开始时钉住的落点**找（规格 §5.4：切会话不改落点，
+ * 旧事件也**不许**写进新会话）；没给就退回"当前在途的那条"（老调用方与界面自身）。
+ */
+function targetFor(get: () => AgentState, runId?: string): PendingTarget | null {
+  if (runId === undefined) return pendingTarget(get)
+  const pinned = get().runTargets[runId]
+  if (!pinned) return null
+  const conversation = get().conversations.find((candidate) => candidate.id === pinned.conversationId)
+  const message = conversation?.messages.find((candidate) => candidate.id === pinned.messageId)
+  return conversation && message ? { conversation, message } : null
+}
+
 /** 在途助手消息所在的那条会话与它本身。没有在途消息时回 `null`。 */
 function pendingTarget(get: () => AgentState): PendingTarget | null {
   const pendingId = get().pendingReplyId
@@ -188,6 +218,25 @@ function pendingTarget(get: () => AgentState): PendingTarget | null {
     if (message) return { conversation, message }
   }
   return null
+}
+
+/** 清掉一轮运行的落点（终态之后再来事件一律丢弃）。 */
+function withoutRun(runTargets: Record<string, RunTarget>, runId: string): Record<string, RunTarget> {
+  const { [runId]: _dropped, ...rest } = runTargets
+  return rest
+}
+
+/**
+ * 一条**提交事实**的人话。
+ *
+ * 它是写进提示词的那句话（"已提交：文档第 4 版新增 1 个对象（solid-1）"），
+ * 所以它只说**已经发生的事**：代数与创建出来的对象 id —— **没有候选文档、没有推理**。
+ */
+function describeCommittedRun(generation: number, createdObjects: readonly string[]): string {
+  const listed = createdObjects.slice(0, 6).join("、")
+  return createdObjects.length === 0
+    ? `已确认：文档已经提交到第 ${generation} 版（这次没有新增对象）`
+    : `已确认：文档第 ${generation} 版新增 ${createdObjects.length} 个对象（${listed}）`
 }
 
 /**
@@ -202,9 +251,10 @@ function pendingTarget(get: () => AgentState): PendingTarget | null {
 function updatePending(
   get: () => AgentState,
   set: (partial: Partial<AgentState>) => void,
-  update: (message: AgentMessage) => AgentMessage
+  update: (message: AgentMessage) => AgentMessage,
+  runId?: string
 ): void {
-  const target = pendingTarget(get)
+  const target = targetFor(get, runId)
   if (!target) return
   const conversations = get().conversations.map((conversation) => conversation.id === target.conversation.id
     ? { ...conversation, updatedAt: Date.now(), messages: conversation.messages.map((message) => (message.id === target.message.id ? update(message) : message)) }
@@ -222,9 +272,9 @@ function commitPending(
   get: () => AgentState,
   set: (partial: Partial<AgentState>) => void,
   update: (message: AgentMessage) => AgentMessage,
-  options: { finish?: boolean; onRefusal?: () => void } = {}
+  options: { finish?: boolean; onRefusal?: () => void; runId?: string } = {}
 ): Promise<boolean> {
-  const target = pendingTarget(get)
+  const target = targetFor(get, options.runId)
   if (!target) return Promise.resolve(false)
   const message = update(target.message)
   const owner: AgentConversation = {
@@ -236,8 +286,13 @@ function commitPending(
     () => conversationRepository().append(owner, get().binding, message),
     () => {
       const conversations = get().conversations.map((conversation) => (conversation.id === owner.id ? owner : conversation))
-      const projected = { conversations, activeConversation: resolveActive(conversations, get().activeConversationId) }
-      set(options.finish ? { ...projected, pendingReplyId: null } : projected)
+      const projected: Partial<AgentState> = { conversations, activeConversation: resolveActive(conversations, get().activeConversationId) }
+      if (options.finish) {
+        // 终态：清掉**当前**在途指针（界面据此停止"思考中"）与这一轮的落点。
+        projected.pendingReplyId = get().pendingReplyId === message.id ? null : get().pendingReplyId
+        if (options.runId !== undefined) projected.runTargets = withoutRun(get().runTargets, options.runId)
+      }
+      set(projected)
     },
     options.onRefusal
   )
@@ -276,6 +331,21 @@ interface AgentState {
    * 列表**永远按整个绑定取**，所以两份额外文档不会互相看到对方的对话。
    */
   binding: ConversationBinding
+  /**
+   * **一轮运行钉住的落点**：`runId` → 它属于哪条会话、哪条在途助手消息。
+   *
+   * 为什么不能只用 `pendingReplyId`：那个字段是**界面**的"当前在途"，用户一切走
+   * 就会被清掉（设计如此）。而规格 §5.4 要求"切换会话不取消旧运行；旧事件仍写回原会话" ——
+   * 所以运行自己带一份落点，切会话不动它，回执/失败这类终态才清。
+   */
+  runTargets: Record<string, RunTarget>
+  /**
+   * 钉住一轮运行的落点：按用户消息 id 找到它在哪条会话、随后的哪条助手消息上。
+   * 找不到（例如那条消息已经不在了）时回 `null`，**不编**一个落点出来。
+   */
+  pinRun: (input: { runId: string; promptMessageId: string }) => RunTarget | null
+  /** 一轮结束：清掉落点（之后再来的事件一律丢弃）。 */
+  endRun: (runId: string) => void
   createConversation: () => Promise<boolean>
   selectConversation: (id: string) => Promise<boolean>
   deleteConversation: (id: string) => Promise<boolean>
@@ -283,8 +353,12 @@ interface AgentState {
   setBinding: (binding: ConversationBinding) => Promise<boolean>
   sendPrompt: (prompt: string) => Promise<boolean>
   resolvePendingReply: (text: string) => AgentMessage | undefined
-  /** 记一条运行轨迹（追加，不替换；运行期状态，不进仓储）。 */
-  recordRunEvent: (entry: AgentTraceEntry) => void
+  /**
+   * 记一条运行轨迹（追加，不替换；运行期状态，不进仓储）。
+   *
+   * `runId` 给了就写回**那一轮自己的**会话（切走了也不会写错地方）。
+   */
+  recordRunEvent: (entry: AgentTraceEntry, runId?: string) => void
   /**
    * 记**一行开发者诊断**（追加）。与 `recordRunEvent` 分开，是因为它服务的是另一层读者：
    * 计划要求详细诊断**默认关着**，所以它不能混进用户可见的轨迹里。
@@ -292,13 +366,32 @@ interface AgentState {
    * 传进来的内容必须**已经脱敏**（`agentRunner` 只取账本的 `phase`/`from`/`detail`/时间，
    * 不含候选文档、密钥、模型推理或图像字节）。这里不再二次处理，也不落任何结构化对象。
    */
-  recordDiagnostic: (line: string) => void
+  recordDiagnostic: (line: string, runId?: string) => void
   /** 记下已暂存的草稿**视图**。 */
-  recordDraft: (draft: AgentDraftView) => Promise<boolean>
+  recordDraft: (draft: AgentDraftView, runId?: string) => Promise<boolean>
   /** 记下提交结果；`committed` / `no_change` 都算结束。 */
-  recordReceipt: (receipt: AgentCommitView) => Promise<boolean>
+  recordReceipt: (receipt: AgentCommitView, runId?: string) => Promise<boolean>
   /** 运行失败：保留原因与"能不能重试"，而不是给一条空回复。 */
-  failPendingReply: (failure: { code: string; message: string; retryable: boolean }) => Promise<boolean>
+  failPendingReply: (failure: { code: string; message: string; retryable: boolean }, runId?: string) => Promise<boolean>
+  /**
+   * **一轮已提交运行的结论写进长期记忆**（Task 5）。
+   *
+   * 两件事，各自只在**它该发生的时候**发生：
+   * ① 事实：这次提交落在文档第几版、创建了哪些对象。证据是**这条会话里的**那条用户消息
+   *   （Rust 侧同一个判据：跨会话的证据一律拒）。**丢弃草稿与编译失败永远不会走到这里** ——
+   *   调用方只有"提交成功"那一条路会调它。
+   * ② 摘要：这条会话长过阈值时压缩成结构化摘要（原始消息留在仓储里）。
+   *
+   * 落点优先用显式给的 `conversationId`/`promptMessageId`（提交发生在运行结束之后，
+   * 那时这一轮的落点可能已经被终态回执清掉了），其次是 `runId` 钉住的那一份。
+   */
+  recordCommittedRun: (input: {
+    runId: string
+    generation: number
+    createdObjects: readonly string[]
+    conversationId?: string
+    promptMessageId?: string
+  }) => Promise<boolean>
   clearAll: () => Promise<boolean>
 }
 
@@ -318,6 +411,24 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   pendingReplyId: null,
   activeConversation: mostRecent(initialConversations),
   binding: DEFAULT_CONVERSATION_BINDING,
+  runTargets: {},
+  pinRun: ({ runId, promptMessageId }) => {
+    for (const conversation of get().conversations) {
+      const index = conversation.messages.findIndex((message) => message.id === promptMessageId)
+      if (index < 0) continue
+      // 这一轮的助手消息就是紧随其后的那条；它不是助手消息时退回"这条会话里最后一条在途消息"。
+      const after = conversation.messages[index + 1]
+      const message = after && after.role === "assistant"
+        ? after
+        : [...conversation.messages].reverse().find((candidate) => candidate.role === "assistant" && candidate.pending)
+      if (!message) return null
+      const target: RunTarget = { conversationId: conversation.id, messageId: message.id, promptMessageId }
+      set({ runTargets: { ...get().runTargets, [runId]: target } })
+      return target
+    }
+    return null
+  },
+  endRun: (runId) => set({ runTargets: withoutRun(get().runTargets, runId) }),
   createConversation: () => {
     const conversation = createAgentConversation()
     return commitAfter(
@@ -427,24 +538,78 @@ export const useAgentStore = create<AgentState>((set, get) => ({
    *
    * 抽出来不是为了少写几行，而是为了让三条规则只有一处：
    * ① 没有在途消息时**什么都不做**（不要凭空造一条消息）；
-   * ② 终态（收到回执 / 失败）之后 `pendingReplyId` 清空，因此**迟到的事件会被丢弃** ——
+   * ② 终态（收到回执 / 失败）之后落点清空，因此**迟到的事件会被丢弃** ——
    *    这正是计划 Step 1 点名的 "late response" 场景；
    * ③ 说过的内容先写仓储（草稿 / 回执 / 失败走 `commitPending`），运行期状态只留在内存。
+   *
+   * 每个方法都可以带 `runId`：带上就写回**那一轮自己的**会话与消息（规格 §5.4）。
    */
-  recordRunEvent: (entry) => updatePending(get, set, (message) => message.pending
+  recordRunEvent: (entry, runId) => updatePending(get, set, (message) => message.pending
     ? { ...message, trace: [...(message.trace ?? []), entry] }
-    : message),
-  recordDiagnostic: (line) => updatePending(get, set, (message) => message.pending
+    : message, runId),
+  recordDiagnostic: (line, runId) => updatePending(get, set, (message) => message.pending
     ? { ...message, diagnostics: [...(message.diagnostics ?? []), line] }
-    : message),
-  recordDraft: (draft) => commitPending(get, set, (message) => message.pending ? { ...message, draft, pending: false } : message),
-  recordReceipt: (receipt) => commitPending(get, set, (message) => ({
+    : message, runId),
+  recordDraft: (draft, runId) => commitPending(get, set, (message) => message.pending ? { ...message, draft, pending: false } : message, { runId }),
+  recordReceipt: (receipt, runId) => commitPending(get, set, (message) => ({
     ...message,
     pending: false,
     commit: receipt,
     text: receipt.status === "committed" ? "已按确认提交。" : receipt.status === "no_change" ? "这次没有需要改动的地方。" : ""
-  }), { finish: true }),
-  failPendingReply: (failure) => commitPending(get, set, (message) => ({ ...message, pending: false, failure, text: "" }), { finish: true }),
+  }), { finish: true, runId }),
+  failPendingReply: (failure, runId) => commitPending(get, set, (message) => ({ ...message, pending: false, failure, text: "" }), { finish: true, runId }),
+  recordCommittedRun: async (input) => {
+    const pinned = get().runTargets[input.runId]
+    const conversationId = input.conversationId ?? pinned?.conversationId
+    const promptMessageId = input.promptMessageId ?? pinned?.promptMessageId
+    if (!conversationId || !promptMessageId) return false
+    const createdAt = Date.now()
+
+    // ① 事实：**代数 + 这次创建的对象**。证据是这条会话里的那条用户消息（Rust 侧同一个判据）。
+    try {
+      await conversationRepository().saveFact({
+        id: `fact-${input.runId}`,
+        conversationId,
+        key: `commit:${input.runId}`,
+        valueJson: {
+          text: describeCommittedRun(input.generation, input.createdObjects),
+          generation: input.generation,
+          createdObjects: [...input.createdObjects]
+        },
+        sourceMessageId: promptMessageId,
+        status: "confirmed",
+        createdAt
+      })
+    } catch {
+      // 事实写不进去（例如证据消息不在那条会话里、或 IPC 失败）：如实回 false，**不**假装写下过。
+      return false
+    }
+
+    // ② 摘要：长过阈值才压缩。**只换摘要**，原始消息留在仓储里（规格 §5.3）。
+    try {
+      const record = await conversationRepository().readRecord(conversationId)
+      if (!record) return true
+      const messages = record.conversation.messages.map((message) => ({
+        id: message.id,
+        role: message.role,
+        text: message.text,
+        createdAt: message.createdAt
+      }))
+      if (!shouldCompactConversation(messages)) return true
+      const previous = parseConversationSummary(record.summary)
+      const summary = compactConversationSummary({
+        messages,
+        facts: record.facts,
+        createdObjects: input.createdObjects,
+        previous,
+        now: createdAt
+      })
+      await conversationRepository().saveSummary({ conversationId, summary: serializeConversationSummary(summary), expectedVersion: record.summaryVersion })
+    } catch {
+      // 摘要失败不影响事实（它已经落下了）：下一次提交再试，不在这里编一份摘要。
+    }
+    return true
+  },
   clearAll: () => {
     const previous = get().conversations.map((conversation) => conversation.id)
     const conversation = createAgentConversation()

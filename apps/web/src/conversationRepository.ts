@@ -21,6 +21,7 @@ import {
 } from "./services/conversationClient"
 import { isDesktopShell } from "./services/desktopRuntime"
 
+import type { ConversationFactView } from "@draw/agent-core"
 import type { AgentConversation, AgentMessage } from "./agentStore"
 
 /**
@@ -100,6 +101,14 @@ export interface ConversationRepository {
   loadList(binding: ConversationBinding): RepositoryStep<AgentConversation[]>
   /** 读一条会话（含消息与事实）；仓储里没有它时回 `null`（**不是**编一条空的）。 */
   read(conversationId: string): RepositoryStep<AgentConversation | null>
+  /**
+   * 读一条会话的**完整记录**：界面投影 + 结构化摘要 + 事实 + 落盘的消息。
+   *
+   * 与 `read` 分开是因为读者不同：`read` 服务界面（它只需要能画出来的那部分），
+   * 这一条服务**规划上下文**（Task 4 的注入路径）与摘要压缩（Task 5）——
+   * 它们要的是"这条会话存下来的摘要与事实"，而那些字段不属于界面投影。
+   */
+  readRecord(conversationId: string): RepositoryStep<ConversationRecordView | null>
   /** 建一条会话。 */
   create(conversation: AgentConversation, binding: ConversationBinding): RepositoryStep<void>
   /**
@@ -120,6 +129,20 @@ export interface ConversationRepository {
 }
 
 // ---------------------------------------------------------------- localStorage 那一份（浏览器）
+
+/**
+ * 一条会话的完整记录（规划上下文与摘要压缩读的那一份）。
+ *
+ * `facts[].text` 是**存下来的人话**（写在 `valueJson.text` 里）：事实的"文本"属于写入方
+ * （它知道那条事实是什么意思），读的一方只负责把它取出来 —— 在读的时候现编一句，
+ * 同一条事实就会有两份说法。
+ */
+export interface ConversationRecordView {
+  conversation: AgentConversation
+  summary: string
+  summaryVersion: number
+  facts: ConversationFactView[]
+}
 
 type LocalMessageRecord = ConversationMessageRecord
 type LocalFactRecord = ConversationFactRecord
@@ -511,6 +534,28 @@ function recordOf(record: LocalConversationRecord): ConversationRecord {
   }
 }
 
+/**
+ * 一条事实的**人话**。
+ *
+ * 写入方把它放在 `valueJson.text` 里（它知道那条事实是什么意思）；读的一方只负责取出来，
+ * 取不到就退化成 `key: <有界的 JSON>` —— 在读的时候现编一句，同一条事实就会有两份说法。
+ */
+function describeFactValue(valueJson: unknown): string {
+  if (valueJson && typeof valueJson === "object" && typeof (valueJson as { text?: unknown }).text === "string") {
+    return (valueJson as { text: string }).text.slice(0, 2_048)
+  }
+  const serialized = JSON.stringify(valueJson)
+  return serialized === undefined ? "" : serialized.slice(0, 512)
+}
+
+function factViewOf(record: LocalFactRecord): ConversationFactView {
+  return { id: record.id, key: record.key, text: describeFactValue(record.valueJson), status: record.status }
+}
+
+function recordViewOf(record: LocalConversationRecord): ConversationRecordView {
+  return { conversation: agentConversationOfLocal(record), summary: record.summary, summaryVersion: record.summaryVersion, facts: record.facts.map(factViewOf) }
+}
+
 function detailOf(record: LocalConversationRecord): ConversationDetail {
   return { conversation: recordOf(record), messages: record.messages, facts: record.facts }
 }
@@ -579,6 +624,21 @@ async function desktopRead(conversationId: string): Promise<AgentConversation | 
   return { ...agentConversationOfRecord(result.value.conversation), messages: result.value.messages.map((message) => agentMessageOfLocal(message)) }
 }
 
+async function desktopReadRecord(conversationId: string): Promise<ConversationRecordView | null> {
+  const result = await readConversation(conversationId)
+  if (!result.ok) {
+    if (MISSING_CONVERSATION.test(result.detail)) return null
+    refused(result)
+  }
+  const record = result.value
+  return {
+    conversation: { ...agentConversationOfRecord(record.conversation), messages: record.messages.map((message) => agentMessageOfLocal(message)) },
+    summary: record.conversation.summary,
+    summaryVersion: record.conversation.summaryVersion,
+    facts: record.facts.map(factViewOf)
+  }
+}
+
 async function desktopCreate(conversation: AgentConversation, binding: ConversationBinding): Promise<void> {
   const result = await createConversationCommand({ id: conversation.id, projectId: binding.projectId, documentId: binding.documentId, workspace: binding.workspace, title: conversation.title })
   if (!result.ok) refused(result)
@@ -639,6 +699,11 @@ export function createConversationRepository(): ConversationRepository {
       if (isDesktopShell()) return desktopRead(conversationId)
       const record = readLocal(conversationId)
       return record ? agentConversationOfLocal(record) : null
+    },
+    readRecord: (conversationId) => {
+      if (isDesktopShell()) return desktopReadRecord(conversationId)
+      const record = readLocal(conversationId)
+      return record ? recordViewOf(record) : null
     },
     create: (conversation, binding) => (isDesktopShell() ? desktopCreate(conversation, binding) : createLocal(conversation, binding)),
     append: (conversation, binding, message) => (isDesktopShell() ? desktopAppend(conversation, binding, message) : appendLocalConversation(conversation, binding, message)),

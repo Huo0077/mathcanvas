@@ -1,7 +1,7 @@
 import type { DocumentHandle, PlanEnvelope, RunContext, ToolResult } from "./contracts"
 import type { DraftAction } from "@draw/scene-graph"
 import type { Budget } from "./budget"
-import type { ModelContext } from "./contextBuilder"
+import type { ConversationContext, ModelContext } from "./contextBuilder"
 import type { RunEvent } from "./runState"
 import type { ToolDescriptor } from "./toolRegistry"
 
@@ -49,6 +49,17 @@ export interface PlanRequest {
     /** 当前阶段发布的工具。只读阶段没有写入工具，观察阶段连计划工具都没有。 */
     tools: readonly ToolDescriptor[]
   }
+  /**
+   * **这一轮的会话上下文**（对话切片 Task 4；规格 §5.3）。
+   *
+   * 与 `model.context` 分开，是因为两者回答不同的问题：`model.context` 是"这一轮的场景
+   * 与可用动作"（阶段相关，可能每次组装都不一样），`conversation` 是"这条会话到这一轮为止
+   * 说过什么、确认过什么"。规划器（尤其是模型那一份）需要把两者**分别**渲染。
+   *
+   * **一次运行只有一个这个对象**：两次尝试（含修复）拿到的是同一个引用 ——
+   * 否则"第二次机会"其实换了题目，事后没法判断是模型改好了还是条件变了。
+   */
+  conversation: ConversationContext
   /**
    * **上一次尝试为什么没被接受**（只有第二次尝试才有）。
    *
@@ -126,6 +137,16 @@ export interface CommitRequest {
   run: RunContext
   /** 已通过校验、即将落盘的动作数（用于预算与说明）。 */
   actionCount: number
+  /**
+   * **这一次请求的用户原话**（Fix round 1 / C3）。
+   *
+   * 为什么它必须一路走到暂存：参数审计的三条判据都只看用户说了什么 ——
+   * "任意/恒定/定值必须保留符号参数"（规格 §6.3）、"从用户原话里读出没说全的尺寸"
+   *（`infer_from_facts`）、以及"数值采样不是形式证明"（§8.2/§10 的披露）。
+   * 审计发生在**编译期**（暂存那一步），而用户原话只有协调器手里有 ——
+   * 不传下去，那三条在真实管线里恒不生效（只有提示词在兜，机制是死的）。
+   */
+  userMessage?: string
   /**
    * 要落盘的**动作本身**。
    *

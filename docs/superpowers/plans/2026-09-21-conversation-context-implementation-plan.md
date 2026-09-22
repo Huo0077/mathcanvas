@@ -89,11 +89,11 @@
 - Add `ConversationContext` containing binding, summary, confirmed facts, recent messages, observation, and optional draft view.
 - Extend `PlannerPort.plan` with `conversation: ConversationContext` while keeping local planner compatibility.
 
-- [ ] Add tests proving current scene facts outrank stale messages, recent messages are bounded by token budget, and drafts are excluded from confirmed facts.
-- [ ] Run focused tests and verify the planner does not receive conversation history.
-- [ ] Implement deterministic context ordering and token-budget truncation.
-- [ ] Pin conversation/document resolution once per run and pass the same context to repair attempts.
-- [ ] Run `npm test -- packages/agent-core/src/contextBuilder.test.ts apps/web/src/agent/agentRunner.test.ts` and verify pass.
+- [x] Add tests proving current scene facts outrank stale messages, recent messages are bounded by token budget, and drafts are excluded from confirmed facts.
+- [x] Run focused tests and verify the planner does not receive conversation history.
+- [x] Implement deterministic context ordering and token-budget truncation.
+- [x] Pin conversation/document resolution once per run and pass the same context to repair attempts.
+- [x] Run `npm test -- packages/agent-core/src/contextBuilder.test.ts apps/web/src/agent/agentRunner.test.ts` and verify pass.
 
 ### Task 5: Persist summaries, facts, and cross-conversation event routing
 
@@ -104,15 +104,15 @@
 - Test: `apps/web/src/agentStore.runStatus.test.ts`
 - Test: `apps/web/e2e/conversation-isolation.spec.ts`
 
-- [ ] Add tests for summary rollover, confirmed commit facts, discarded draft exclusion, and late events written to their original conversation.
-- [ ] Run the focused tests and verify the new persistence assertions fail.
-- [ ] Implement structural summary compaction after the configured token threshold; retain raw messages in SQLite.
-- [ ] Update committed runs with document generation and created-object facts; never update facts on discard or failed compile.
-- [ ] Add the browser test: create in conversation A, switch to B, verify isolation, switch back to A, then continue the original reference.
-- [ ] Run `npm test -- apps/web/src/agentStore.runStatus.test.ts` and `npm run test:e2e -- e2e/conversation-isolation.spec.ts`.
+- [x] Add tests for summary rollover, confirmed commit facts, discarded draft exclusion, and late events written to their original conversation.
+- [x] Run the focused tests and verify the new persistence assertions fail.
+- [x] Implement structural summary compaction after the configured token threshold; retain raw messages in SQLite.
+- [x] Update committed runs with document generation and created-object facts; never update facts on discard or failed compile.
+- [x] Add the browser test: create in conversation A, switch to B, verify isolation, switch back to A, then continue the original reference.
+- [x] Run `npm test -- apps/web/src/agentStore.runStatus.test.ts` and `npm run test:e2e -- e2e/conversation-isolation.spec.ts`.
 
 ### Task 6: Verify the conversation slice
 
 - [ ] Run `npm test`, `npm run typecheck`, `npm run lint`, `npm run test:e2e`, and `npm run test:rust`.
-- [ ] Confirm no key-like string, candidate document content, or hidden reasoning is persisted by scanning conversation payload fixtures.
+- [x] Confirm no key-like string, candidate document content, or hidden reasoning is persisted by scanning conversation payload fixtures.
 - [ ] Record the measured test counts and any pre-existing warnings in the project progress document.

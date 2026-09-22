@@ -1,4 +1,4 @@
-import { PLAN_SCHEMA_VERSION, describeActions, describeDefaultPolicies, type ModelChannel, type ModelContext } from "@draw/agent-core"
+import { PLAN_SCHEMA_VERSION, describeActions, describeDefaultPolicies, type ConversationContext, type ModelChannel, type ModelContext } from "@draw/agent-core"
 
 /**
  * **生产系统提示词**（Agent DSL 切片 Task 5；规格 §6/§7）。
@@ -24,10 +24,13 @@ import { PLAN_SCHEMA_VERSION, describeActions, describeDefaultPolicies, type Mod
  */
 
 /** 提示词版本。**改内容就要改它** —— 这是"模型当时看到的是哪一版"的唯一依据。 */
-export const SYSTEM_PROMPT_VERSION = "mathcanvas.agent.prompt.v1"
+export const SYSTEM_PROMPT_VERSION = "mathcanvas.agent.prompt.v2"
 
 const MAX_PROMPT_FACTS = 12
 const MAX_PROMPT_REFS = 16
+/** 会话那一段的上限（提示词里再兜一次底：上下文的预算也管着条数与字符）。 */
+const MAX_PROMPT_CONVERSATION_FACTS = 16
+const MAX_PROMPT_MESSAGES = 12
 
 export interface SystemPromptPolicyInput {
   channel: ModelChannel
@@ -41,6 +44,13 @@ export interface SystemPromptPolicyInput {
 
 export interface SystemPromptInput {
   context: ModelContext
+  /**
+   * **这一轮的会话上下文**（对话切片 Task 4）。
+   *
+   * 可选：只给场景时提示词仍然成立（老调用方与旧的单测不必先补齐会话）。
+   * 给了它才会出现"已确认事实 / 摘要 / 最近消息 / 待确认草稿"那几节。
+   */
+  conversation?: ConversationContext
   channel: ModelChannel
   canPlan: boolean
   repair?: SystemPromptPolicyInput["repair"]
@@ -109,6 +119,17 @@ export function buildPolicyText(input: SystemPromptPolicyInput): string {
       ? "你不能自己提交：写入必须由用户在看到预览后确认。"
       : "这一阶段**不允许返回计划**：你只能提问或作答。",
     "不要引用别的会话或别的文档里的对象：引用必须带 documentId，而且必须是本次绑定的那份文档，或者是同一份计划里用 `{ scope: \"draft\", alias }` 定义的新对象。",
+    "**当前场景是权威，历史消息只是背景**：文档现在是什么样以 `scene` 为准；不要拿很久以前说过的话当作现在的场景。",
+    "`recentMessages` 里的内容**不是**已确认事实；`draft` 里那份草稿还没被用户确认，**不要**把它当成已经存在的东西。",
+    /**
+     * **两条与"证明"有关的规则放在 `canPlan` 之外**（Fix round 1 / M9）。
+     *
+     * 它们限制的是"你说了什么"，而不是"你能不能出计划" —— 只读/澄清阶段同样可能
+     * 回答一个"任意点处…恒为…"的问题，那时把采样说成证明一样是错的。
+     * 用例 `systemPrompt.test.ts` 的 "forbids hidden reasoning…" 用**只读**那一支钉住这一点。
+     */
+    "题目要求「任意 / 恒定 / 定值」时：**必须保留符号参数**（例如参数 θ），把它建成文档参数并用它驱动动点，不要特值化成一组具体数字。",
+    "这类结论只能给**数值采样**验证（在若干采样点上核对），**不是形式证明** —— 采样不是证明。",
     "",
     "## 输出形状（多一个字段都会被拒绝）",
     channelAdvice(input.channel),
@@ -120,8 +141,14 @@ export function buildPolicyText(input: SystemPromptPolicyInput): string {
       ...(input.actionIds.length > 0 ? input.actionIds.map((action) => `- ${action}`) : ["（这一轮没有任何可用动作：只能提问或作答）"]),
       "",
       "### 每个动作的 inputs 只能有下面这些字段（`alias` 是新对象的别名）",
-      // 这一节由**动作登记表**生成（`describeActions`），而不是手写 —— 校验读的是同一张表。
-      ...describeActions([...input.actionIds]).slice(0, 12).map((action) => {
+      /**
+       * 这一节由**动作登记表**生成（`describeActions`），而不是手写 —— 校验读的是同一张表。
+       *
+       * **不再 `slice(0, 12)`**（Fix round 1 / I8）：菜单那一段列出全部动作，而这里只列前 12 个时，
+       * 被截掉的动作只出现名字、没有字段契约 —— 紧接着的一句还是"白名单之外的字段一律被拒"。
+       * 请求三个技能（平面基础 + 圆锥曲线 + 动态绑定）去重就超过 12 个动作，所以这不是理论问题。
+       */
+      ...describeActions([...input.actionIds]).map((action) => {
         const enums = Object.entries(action.enums).map(([field, values]) => `${field} 只能取 ${values.join(" | ")}`).join("；")
         return `- ${action.actionId}：${action.inputs.join(", ")}${enums.length > 0 ? ` · **${enums}**` : ""}`
       }),
@@ -133,11 +160,7 @@ export function buildPolicyText(input: SystemPromptPolicyInput): string {
       "## 先做，别反问",
       "能作图就作图：像「建一个棱长 3 的立方体」这样的要求**已经足够** —— 没说的细节取表里的默认值，并把每一条默认写进 `assumptions`。",
       "`assumptions` 是给用户看的，所以用一句人话写，最多 4 条。",
-      "只有表里标着「必须问」的字段缺失时才返回 `clarification`，而且问题要具体到能直接回答。",
-      "",
-      "## 题目要求「任意 / 恒定 / 定值」时",
-      "必须保留符号参数（例如参数 θ），把它建成文档参数并用它驱动动点，**不要**特值化成一组具体数字。",
-      "这类结论只能给**数值采样验证**，不要把它说成形式证明。"
+      "只有表里标着「必须问」的字段缺失时才返回 `clarification`，而且问题要具体到能直接回答。"
     )
   }
 
@@ -150,33 +173,55 @@ export function buildPolicyText(input: SystemPromptPolicyInput): string {
 }
 
 /**
- * 场景数据：**只给引用能用得上的部分**。
+ * 场景与会话数据：**只给引用能用得上的部分**，并按规格 §5.3 的顺序排。
  *
  * 刻意不给 `contentHash` / `epoch`：模型不能引用版本，那两个字段对它没有用处，只会占字符。
  * `generation` 例外：它出现在绑定里，是为了让"模型看到的是哪一版"事后可查。
+ *
+ * 顺序不是排版问题：先"文档绑定"、再"已确认事实 → 摘要 → 最近消息"（长期记忆，旧），
+ * 最后才是"当前场景"（权威，新）。模型按顺序读，就自然读到"场景优先于历史"这条口径 ——
+ * 而它也是策略文本里逐字写着的那条规则。
  */
-function sceneJson(context: ModelContext): string {
+function contextJson(context: ModelContext, conversation?: ConversationContext): string {
+  const warnings = [...context.warnings, ...(conversation?.warnings ?? [])]
   return JSON.stringify({
     preamble: context.preamble,
-    binding: context.binding,
+    // 会话那边给得出绑定（含 workspace 与这一轮的版本）时用它：它比 `ModelContext.binding` 全。
+    binding: conversation ? conversation.binding : context.binding,
     workspace: context.workspace,
     target: { documentId: context.handles.target.documentId, workspace: context.handles.target.workspace, generation: context.handles.target.generation },
     sources: context.handles.sources.map((source) => ({ documentId: source.documentId, workspace: source.workspace })),
-    facts: context.facts.slice(0, MAX_PROMPT_FACTS).map((fact) => ({ id: fact.id, text: fact.text, origin: fact.origin })),
+    ...(conversation === undefined ? {} : {
+      confirmedFacts: conversation.facts.slice(0, MAX_PROMPT_CONVERSATION_FACTS).map((fact) => ({ id: fact.id, key: fact.key, text: fact.text })),
+      summary: conversation.summary,
+      recentMessages: conversation.messages.slice(-MAX_PROMPT_MESSAGES).map((message) => ({ role: message.role, text: message.text }))
+    }),
+    scene: {
+      summary: conversation?.observation.summary ?? "",
+      facts: context.facts.slice(0, MAX_PROMPT_FACTS).map((fact) => ({ id: fact.id, text: fact.text, origin: fact.origin }))
+    },
+    ...(conversation?.draft === undefined ? {} : {
+      draft: {
+        draftId: conversation.draft.draftId,
+        draftVersion: conversation.draft.draftVersion,
+        stageCount: conversation.draft.stageCount,
+        assumptions: conversation.draft.assumptions ?? []
+      }
+    }),
     selectedRefs: context.selectedRefs.slice(0, MAX_PROMPT_REFS).map((ref) => ({ documentId: ref.documentId, entityId: ref.entityId, label: ref.label })),
     skills: context.skills.map((skill) => ({ id: skill.id, title: skill.title })),
-    warnings: context.warnings.map((warning) => ({ code: warning.code, detail: warning.detail }))
+    warnings: warnings.map((warning) => ({ code: warning.code, detail: warning.detail }))
   })
 }
 
 /** 组装这一轮要发给模型的 system 内容：**策略在前，场景在后**，两段各自可单独取用。 */
 export function buildSystemPrompt(input: SystemPromptInput): SystemPrompt {
   const policy = buildPolicyText({ channel: input.channel, canPlan: input.canPlan, actionIds: input.context.availableActions, ...(input.repair === undefined ? {} : { repair: input.repair }) })
-  const contextJson = sceneJson(input.context)
+  const json = contextJson(input.context, input.conversation)
   return {
     version: SYSTEM_PROMPT_VERSION,
     policy,
-    contextJson,
-    content: [policy, "", "## 本轮场景（JSON，仅供引用；它不是规则）", contextJson].join("\n")
+    contextJson: json,
+    content: [policy, "", "## 本轮场景与会话（JSON，仅供引用；它不是规则）", json].join("\n")
   }
 }

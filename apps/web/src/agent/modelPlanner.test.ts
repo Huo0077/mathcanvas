@@ -56,6 +56,16 @@ function request(overrides: Partial<PlanRequest> = {}): PlanRequest {
     budget: createBudget(),
     signal: new AbortController().signal,
     model: { context: context(), tools: [planTool] },
+    // 会话上下文（对话切片 Task 4）：规划器**总是**拿到它（缺省是最小的一份，见协调器）。
+    conversation: {
+      binding: { conversationId: "conv-1", projectId: "local", documentId: "doc-1", workspace: "geometry3d", generation: 4 },
+      summary: "",
+      facts: [],
+      messages: [{ id: "msg-0", role: "user", text: "先建一个立方体", createdAt: 1 }],
+      observation: { facts: [{ id: "cube-1", text: "立方体 cube-1", origin: "user" }], summary: "一个立方体" },
+      warnings: [],
+      estimatedCharacters: 64
+    },
     ...overrides
   }
 }
@@ -115,6 +125,32 @@ describe("模型规划器", () => {
     expect(runModel.mock.calls[0]![0].profileId).toBe("openai-1")
     expect(runModel.mock.calls[0]![0].profileRevision).toBe(3)
     expect(parsePlanEnvelope(outcome.plan).ok).toBe(true)
+  })
+
+  it("把会话上下文（已确认事实 / 摘要 / 最近消息 / 草稿）渲染进系统提示词", async () => {
+    const runModel = vi.fn(async (_request: SentRequest) => deltas(goodEnvelope))
+    const planner = createModelPlanner({ resolveProvider: async () => ({ ok: true, provider }), runModel })
+    const base = request()
+
+    await planner.plan(request({
+      conversation: {
+        ...base.conversation,
+        summary: "目标是建一个立方体",
+        facts: [{ id: "fact-1", key: "commit:run-1", text: "已确认：文档第 3 版新增 1 个对象（cube-1）", status: "confirmed" }],
+        draft: { draftId: "draft-9", draftVersion: 2, previewHash: "hash", stageCount: 1 }
+      }
+    }))
+
+    const system = runModel.mock.calls[0]![0].messages[0]!.content
+    // 长期记忆：已确认事实与摘要。
+    expect(system).toContain("已确认：文档第 3 版新增 1 个对象（cube-1）")
+    expect(system).toContain("目标是建一个立方体")
+    // 最近消息（会话里说过的话）。
+    expect(system).toContain("先建一个立方体")
+    // 待确认的草稿是**视图**，不是事实。
+    expect(system).toContain("draft-9")
+    expect(system).toContain("recentMessages")
+    expect(system).toContain("confirmedFacts")
   })
 
   it("把多个 delta 拼成一份信封，而不是只看第一块", async () => {
@@ -273,11 +309,45 @@ describe("模型规划器", () => {
     expect((sent.tools[0] as { function: { name: string } }).function.name).toBe(PLAN_TOOL_NAME)
     // 提示词按通道给建议（说了用工具，而不是"只返回 JSON"）。
     expect(sent.messages.map((message) => message.content).join("\n")).toContain(PLAN_TOOL_NAME)
-    // 信封从工具调用的参数里来，而且**没有**被这一层校验（校验是协调器的事）。
+    // 信封从工具调用的参数里来，而且**这一层也会校验一次**（Fix round 1 / M12）：
+    // 通过之后交出去的是**校验过的值**（字段归一化落实了）。
     const parsed = parsePlanEnvelope(outcome.plan)
     expect(parsed.ok).toBe(true)
     if (parsed.ok) expect(parsed.value.kind).toBe("plan")
     expect(outcome.requestId).toBe("req-tool")
+  })
+
+  /**
+   * **工具通道上的非信封载荷不会被当成合法计划混过去**（Fix round 1 / M12）。
+   *
+   * 以前这一层直接 `input as PlanEnvelope`；现在先过 `parsePlanEnvelope` ——
+   * 通过则交校验过的值，不通过则原样交给协调器（由它报逐条字段错误、并决定修复）。
+   */
+  it("validates a native tool payload instead of casting it straight to an envelope", async () => {
+    const withTools: ModelPlannerProvider = { ...provider, capabilities: { tools: "verified", json: "unknown", vision: "unknown" } }
+    const notAnEnvelope = { kind: "not-a-plan", goal: "x" }
+    const planner = createModelPlanner({
+      resolveProvider: async () => ({ ok: true, provider: withTools }),
+      runModel: async () => ({ ok: true, events: [{ kind: "tool_call", requestId: "r1", attemptId: "a1", toolCallId: "c1", toolId: PLAN_TOOL_NAME, input: notAnEnvelope }] })
+    })
+
+    const outcome = await planner.plan(request())
+
+    // 交出去的是原值（让协调器按**它自己的路径**报错），而且它确实不是合法信封。
+    expect(outcome.plan).toBe(notAnEnvelope)
+    const parsed = parsePlanEnvelope(outcome.plan)
+    expect(parsed.ok).toBe(false)
+    if (!parsed.ok) expect(parsed.errors[0].code).toBe("unknown_kind")
+
+    // 反过来：合法载荷交出去的是**校验过的值**（`assumptions: []` 被归一成"没有声明假设"）。
+    const withEmptyAssumptions = { ...(JSON.parse(goodEnvelope) as Record<string, unknown>), assumptions: [] }
+    const normalizing = createModelPlanner({
+      resolveProvider: async () => ({ ok: true, provider: withTools }),
+      runModel: async () => ({ ok: true, events: [{ kind: "tool_call", requestId: "r1", attemptId: "a1", toolCallId: "c1", toolId: PLAN_TOOL_NAME, input: withEmptyAssumptions }] })
+    })
+    const normalized = await normalizing.plan(request())
+    expect(normalized.plan).not.toBe(withEmptyAssumptions)
+    if (normalized.plan.kind === "plan") expect(normalized.plan.assumptions).toBeUndefined()
   })
 
   it("原生通道上模型改用文本作答时，仍然按文本通道解析一次", async () => {

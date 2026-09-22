@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest"
 
-import { AGENT_STORAGE_KEY, useAgentStore } from "./agentStore"
+import { AGENT_STORAGE_KEY, useAgentStore, type AgentMessage } from "./agentStore"
+import { conversationRepository } from "./conversationRepository"
+import { readConversation } from "./services/conversationClient"
 
 /**
  * Task 2.5 Step 1 里属于 store 的部分：**迟到事件**、运行状态、以及"消息里不许出现候选文档"。
@@ -15,6 +17,16 @@ function reset(): void {
 function pendingMessage() {
   const conversation = useAgentStore.getState().activeConversation!
   return conversation.messages.find((message) => message.id === useAgentStore.getState().pendingReplyId)
+}
+
+/** 某条用户消息的 id（运行器钉住一轮运行时要用的就是它）。 */
+function userMessageIdOf(text: string): string {
+  const conversation = useAgentStore.getState().activeConversation!
+  return conversation.messages.find((message) => message.role === "user" && message.text === text)!.id
+}
+
+function messageById(conversationId: string, messageId: string): AgentMessage | undefined {
+  return useAgentStore.getState().conversations.find((conversation) => conversation.id === conversationId)?.messages.find((message) => message.id === messageId)
 }
 
 describe("run status on the pending message", () => {
@@ -128,5 +140,119 @@ describe("conversation switching during a run", () => {
 
     const first = useAgentStore.getState().conversations.find((conversation) => conversation.id === firstId)!
     expect(first.messages.at(-1)?.trace?.[0].summary).toBe("A")
+  })
+})
+
+/**
+ * **旧事件写回原会话**（对话切片 Task 5；规格 §5.4）。
+ *
+ * "切换会话不取消旧运行；旧事件仍写回原会话，不能写入新会话。"
+ * 上面那条守的是"切走再切回来还看得到"；这一节守的是**这一轮一开始绑的是哪条会话**：
+ * 用户切到 B、甚至在 B 里发了新的一句之后，A 那一轮的事件仍然落回 A 的那条消息上，
+ * 而且**永远不许**落到 B 上（那正是最隐蔽的一种串会话）。
+ */
+describe("a run writes back to the conversation it started in", () => {
+  beforeEach(reset)
+
+  it("routes a late event to the original conversation instead of the one on screen", () => {
+    useAgentStore.getState().sendPrompt("A 的问题")
+    const first = useAgentStore.getState().activeConversation!
+    const pinned = useAgentStore.getState().pinRun({ runId: "run-a", promptMessageId: userMessageIdOf("A 的问题") })
+
+    expect(pinned?.conversationId).toBe(first.id)
+
+    // 用户切到另一条会话，并在那里也发了话。
+    useAgentStore.getState().createConversation()
+    useAgentStore.getState().sendPrompt("B 的问题")
+    const second = useAgentStore.getState().activeConversation!
+
+    // 迟到的事件与回执属于 A 那一轮。
+    useAgentStore.getState().recordRunEvent({ phase: "observing", status: "ok", summary: "迟到的事件", at: 1 }, "run-a")
+    void useAgentStore.getState().recordReceipt({ status: "committed" }, "run-a")
+
+    const landed = messageById(first.id, pinned!.messageId)
+    expect(landed?.trace?.[0]?.summary).toBe("迟到的事件")
+    expect(landed?.commit?.status).toBe("committed")
+    // B 那条在途消息一点都不该沾上 A 的事件。
+    expect(second.messages.some((message) => message.trace !== undefined || message.commit !== undefined)).toBe(false)
+  })
+
+  it("drops events that arrive after the run ended", () => {
+    useAgentStore.getState().sendPrompt("A 的问题")
+    const conversationId = useAgentStore.getState().activeConversation!.id
+    const pinned = useAgentStore.getState().pinRun({ runId: "run-a", promptMessageId: userMessageIdOf("A 的问题") })!
+
+    useAgentStore.getState().recordReceipt({ status: "committed" }, "run-a")
+    useAgentStore.getState().endRun("run-a")
+    useAgentStore.getState().recordRunEvent({ phase: "completed", status: "ok", summary: "结束之后才到", at: 9 }, "run-a")
+
+    // 运行已经结束：这一轮不再接受任何事件（"停了之后界面又冒出一段"那条纪律）。
+    expect(messageById(conversationId, pinned.messageId)?.trace).toBeUndefined()
+  })
+
+  it("records a committed run's document generation and created objects as a confirmed fact", async () => {
+    useAgentStore.getState().sendPrompt("建一个立方体")
+    const conversationId = useAgentStore.getState().activeConversation!.id
+    const promptMessageId = userMessageIdOf("建一个立方体")
+    useAgentStore.getState().pinRun({ runId: "run-commit", promptMessageId })
+
+    expect(await useAgentStore.getState().recordCommittedRun({ runId: "run-commit", generation: 4, createdObjects: ["solid-1", "solid-2"] })).toBe(true)
+
+    const record = await conversationRepository().readRecord(conversationId)
+    expect(record?.facts).toHaveLength(1)
+    expect(record?.facts[0].status).toBe("confirmed")
+    expect(record?.facts[0].text).toContain("第 4 版")
+    expect(record?.facts[0].text).toContain("solid-1")
+    // 证据必须是**这条会话里真实存在**的消息（Rust 侧同一个判据）：从原始记录里看那一列。
+    const stored = await readConversation(conversationId)
+    expect(stored.ok && stored.value.facts[0].sourceMessageId).toBe(promptMessageId)
+  })
+
+  it("leaves no facts behind when the run never committed", async () => {
+    useAgentStore.getState().sendPrompt("建一个立方体")
+    const conversationId = useAgentStore.getState().activeConversation!.id
+    const promptMessageId = userMessageIdOf("建一个立方体")
+    useAgentStore.getState().pinRun({ runId: "run-discarded", promptMessageId })
+    // 用户丢弃草稿：这一轮**没有**提交，所以什么都不该写进长期记忆。
+    void useAgentStore.getState().recordDraft({ draftId: "draft-1", draftVersion: 1, previewHash: "h", stageCount: 2, undoesInOneStep: true }, "run-discarded")
+    useAgentStore.getState().endRun("run-discarded")
+
+    const record = await conversationRepository().readRecord(conversationId)
+    expect(record?.facts).toEqual([])
+    expect(record?.summary).toBe("")
+  })
+
+  it("compacts a long transcript into a structural summary and keeps the raw messages", async () => {
+    useAgentStore.getState().sendPrompt("建一个立方体")
+    const conversationId = useAgentStore.getState().activeConversation!.id
+    for (let turn = 0; turn < 40; turn += 1) {
+      useAgentStore.getState().sendPrompt(`第 ${turn} 轮：请继续在这个文档上作图（${"很长的上下文".repeat(20)}）`)
+      useAgentStore.getState().resolvePendingReply(`收到 ${turn}`)
+    }
+    const promptMessageId = userMessageIdOf("建一个立方体")
+    useAgentStore.getState().pinRun({ runId: "run-long", promptMessageId })
+
+    await useAgentStore.getState().recordCommittedRun({ runId: "run-long", generation: 7, createdObjects: ["solid-1"] })
+
+    const record = await conversationRepository().readRecord(conversationId)
+    const summary = JSON.parse(record!.summary) as { goal: string; confirmedFacts: string[]; createdObjects: string[]; openQuestions: string[]; preferences: string[] }
+    expect(summary.goal).toContain("建一个立方体")
+    expect(summary.createdObjects).toEqual(["solid-1"])
+    expect(summary.confirmedFacts.length).toBeGreaterThan(0)
+    // 摘要**压缩的是摘要，不是历史**：原始消息一条都不许删（规格 §5.3）。
+    expect(record!.conversation.messages.length).toBeGreaterThan(40)
+  })
+
+  it("keeps a short transcript out of the summary path", async () => {
+    useAgentStore.getState().sendPrompt("建一个立方体")
+    const conversationId = useAgentStore.getState().activeConversation!.id
+    useAgentStore.getState().pinRun({ runId: "run-short", promptMessageId: userMessageIdOf("建一个立方体") })
+
+    await useAgentStore.getState().recordCommittedRun({ runId: "run-short", generation: 2, createdObjects: ["solid-1"] })
+
+    // 还没到阈值：摘要保持原样（""），事实照写。
+    const record = await conversationRepository().readRecord(conversationId)
+    expect(record?.summary).toBe("")
+    expect(record?.facts).toHaveLength(1)
   })
 })

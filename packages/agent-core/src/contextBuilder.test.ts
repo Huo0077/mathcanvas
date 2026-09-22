@@ -1,8 +1,19 @@
 import { describe, expect, it } from "vitest"
 
 import { createBudget } from "./budget"
-import { buildContext, DEFAULT_FACT_LIMIT, DEFAULT_REF_LIMIT, MAX_FACT_LIMIT, type BuildContextInput, type Fact, type SelectedRef } from "./contextBuilder"
-import type { DocumentHandle, RunContext } from "./contracts"
+import {
+  buildContext,
+  buildConversationContext,
+  DEFAULT_FACT_LIMIT,
+  DEFAULT_REF_LIMIT,
+  MAX_FACT_LIMIT,
+  MAX_MESSAGE_LIMIT,
+  type BuildContextInput,
+  type ConversationContextInput,
+  type Fact,
+  type SelectedRef
+} from "./contextBuilder"
+import type { ConversationMessageView, DocumentHandle, RunContext } from "./contracts"
 import { SKILL_CATALOGUE_REVISION } from "./skills/manifest"
 
 /**
@@ -172,5 +183,114 @@ describe("stale references", () => {
     // 有效引用仍应占满一页：过期的那个不该挤掉一个名额。
     expect(context.selectedRefs).toHaveLength(DEFAULT_REF_LIMIT)
     expect(context.selectedRefs.map((entry) => entry.entityId)).not.toContain("point-1")
+  })
+})
+
+/**
+ * **会话上下文**（对话切片 Task 4；规格 §5.3）。
+ *
+ * 组装顺序是有语义的：**当前场景是权威，旧消息只是背景**（"当前文档事实优先于旧对话
+ * 和模型旧输出"，规格 §1.2）。所以预算不够时先丢的是旧消息，不是场景事实；
+ * 而未确认的草稿**永远不许**变成"已确认事实"（规格 §1.2 与 §10）。
+ */
+describe("conversation context", () => {
+  function message(id: string, text: string, at: number, role: ConversationMessageView["role"] = "user"): ConversationMessageView {
+    return { id, role, text, createdAt: at }
+  }
+
+  function conversation(overrides: Partial<ConversationContextInput> = {}): ConversationContextInput {
+    return {
+      binding: { conversationId: "conv-1", projectId: "p", documentId: "doc-target", workspace: "conics", generation: 3 },
+      summary: "",
+      facts: [],
+      messages: [],
+      observation: { facts: [fact("scene-1")], summary: "一个点和一个圆" },
+      request: "再画一个圆",
+      ...overrides
+    }
+  }
+
+  it("carries the binding, the confirmed facts and the recent messages in a fixed order", () => {
+    const context = buildConversationContext(conversation({
+      facts: [
+        { id: "cf-2", key: "b.key", text: "已确认：半径 3", status: "confirmed" },
+        { id: "cf-1", key: "a.key", text: "已确认：圆心在原点", status: "confirmed" }
+      ],
+      messages: [message("m1", "画一个点", 10), message("m2", "好的。", 11, "assistant")]
+    }))
+
+    expect(context.binding).toEqual({ conversationId: "conv-1", projectId: "p", documentId: "doc-target", workspace: "conics", generation: 3 })
+    // 事实按 key 排序：同一份输入必须给出同一份上下文（否则提示词会随机变化）。
+    expect(context.facts.map((entry) => entry.key)).toEqual(["a.key", "b.key"])
+    // 消息按时间序（旧 → 新）："最近说了什么"要能顺序读出来。
+    expect(context.messages.map((entry) => entry.id)).toEqual(["m1", "m2"])
+    expect(context.observation.facts.map((entry) => entry.id)).toEqual(["scene-1"])
+    expect(context.estimatedCharacters).toBeGreaterThan(0)
+  })
+
+  it("keeps the current scene facts when the budget cannot fit the older messages", () => {
+    const messages = [message("old-1", "很久以前说过的一句话", 1), message("old-2", "还有另一句", 2)]
+    // 场景本身就是"当前事实"：这里的观察大到几乎吃掉整个预算。
+    const sceneFacts = Array.from({ length: 6 }, (_, index) => ({ id: `scene-${index}`, text: "场景事实".repeat(8), origin: "user" as const }))
+    const context = buildConversationContext(conversation({
+      messages,
+      observation: { facts: sceneFacts, summary: "场景" },
+      limits: { characters: 120 }
+    }))
+
+    // 场景是**当前**事实：预算再紧也不许丢。
+    expect(context.observation.facts.map((entry) => entry.id)).toEqual(sceneFacts.map((entry) => entry.id))
+    // 旧消息先让路，并且**如实说**丢了几条（否则"模型为什么忘了"无从查起）。
+    expect(context.messages).toEqual([])
+    const warning = context.warnings.find((entry) => entry.code === "truncated_messages")
+    expect(warning?.detail).toContain("2")
+  })
+
+  it("bounds the recent messages by the budget and keeps the newest ones", () => {
+    const messages = Array.from({ length: 40 }, (_, index) => message(`m${index}`, "x".repeat(100), index))
+    const context = buildConversationContext(conversation({ messages, limits: { characters: 1_000 } }))
+
+    expect(context.messages.length).toBeGreaterThan(0)
+    expect(context.messages.length).toBeLessThan(messages.length)
+    // 留下的一定是**最新的那一批**：最早的被丢掉才是对的。
+    expect(context.messages.at(-1)?.id).toBe("m39")
+    expect(context.messages.map((entry) => entry.id)).not.toContain("m0")
+    expect(context.warnings.some((entry) => entry.code === "truncated_messages")).toBe(true)
+  })
+
+  it("still bounds the message count when the caller asks for an absurd budget", () => {
+    const messages = Array.from({ length: 200 }, (_, index) => message(`m${index}`, "hi", index))
+    const context = buildConversationContext(conversation({ messages, limits: { characters: 10_000_000, messages: 10_000 } }))
+
+    // 预算不是调用方能单方面加大的东西（与事实/引用同一条纪律）。
+    expect(context.messages.length).toBeLessThanOrEqual(MAX_MESSAGE_LIMIT)
+    expect(context.messages.at(-1)?.id).toBe("m199")
+  })
+
+  it("never turns an unconfirmed draft into a confirmed fact", () => {
+    const context = buildConversationContext(conversation({
+      facts: [
+        { id: "cf-1", key: "a.key", text: "已确认：圆心在原点", status: "confirmed" },
+        // 未确认的草稿被塞进事实表时**必须**被丢掉（它是"还没发生的事"）。
+        { id: "cf-draft", key: "draft.key", text: "草稿：将新增一个立方体", status: "draft" },
+        { id: "cf-stale", key: "old.key", text: "过期：半径 9", status: "stale" }
+      ],
+      draft: { draftId: "draft-1", draftVersion: 2, previewHash: "hash", stageCount: 3 }
+    }))
+
+    expect(context.facts.map((entry) => entry.id)).toEqual(["cf-1"])
+    expect(JSON.stringify(context.facts)).not.toContain("草稿")
+    // 草稿**视图**可以进上下文（模型要知道"有一份待确认的草稿"），但它不是事实。
+    expect(context.draft?.draftId).toBe("draft-1")
+    expect(JSON.stringify(context.facts)).not.toContain("draft-1")
+  })
+
+  it("keeps a summary that fits and truncates one that does not", () => {
+    const fitted = buildConversationContext(conversation({ summary: "目标是建一个立方体" }))
+    expect(fitted.summary).toBe("目标是建一个立方体")
+
+    const huge = buildConversationContext(conversation({ summary: "y".repeat(10_000) }))
+    expect(huge.summary.length).toBeLessThan(3_000)
+    expect(huge.warnings.some((entry) => entry.code === "truncated_summary")).toBe(true)
   })
 })

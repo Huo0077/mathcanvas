@@ -1,5 +1,5 @@
 import type { Budget } from "./budget"
-import type { DocumentHandle, RunContext } from "./contracts"
+import type { ConversationBinding, ConversationFactView, ConversationMessageView, DocumentHandle, RunContext } from "./contracts"
 import { createSkillCatalog, type SkillBundle } from "./skills/catalog"
 
 /**
@@ -179,4 +179,157 @@ function estimate(context: ModelContext): number {
   parts.push(...context.availableActions)
   parts.push(...context.warnings.map((warning) => `${warning.code} ${warning.detail}`))
   return parts.join("\n").length
+}
+
+// ---------------------------------------------------------------- 会话上下文（规格 §5.3）
+
+/**
+ * **会话上下文**（对话切片 Task 4；规格 §5.3）。
+ *
+ * 它回答的是"这条会话到这一轮为止，模型应该知道什么"：绑定、结构化摘要、**已确认**事实、
+ * 最近消息、当前场景观察、以及那份**还没确认**的草稿视图。
+ *
+ * ## 顺序即优先级
+ *
+ * 规格 §5.3 给的组装顺序是"已确认事实 → 摘要 → 最近消息 → 当前场景观察"，
+ * 而 §1.2 给的是**当前文档事实优先于旧对话**。两条一起读，规则是：
+ * **场景是当前事实，先占预算且永不因消息被丢**；旧消息只是背景，预算不够时从最旧的开始丢。
+ * 所以 `observation` 与 `facts` 是"固定开销"，`summary` 与 `messages` 争剩下的那部分。
+ *
+ * ## 未确认的草稿不是事实
+ *
+ * `facts` 里只有 `confirmed` 会活下来（`draft` / `stale` / `retracted` 一律丢掉）。
+ * 草稿**视图**可以进上下文（模型得知道"有一份待确认的草稿"），但它进的是 `draft` 字段，
+ * 不是事实列表 —— 否则摘要一压缩，"还没发生的事"就变成了"已经发生的事"。
+ */
+export interface ConversationDraftView {
+  draftId: string
+  draftVersion: number
+  previewHash: string
+  stageCount: number
+  /** 规划器/编译器替用户做的假设（人话，一条一句）。 */
+  assumptions?: readonly string[]
+}
+
+export interface ConversationContextInput {
+  binding: ConversationBinding
+  /** 结构化摘要（目标 / 确认事实 / 已创建对象 / 未解决问题 / 用户偏好）。 */
+  summary: string
+  /** 会话里存下来的事实。只有 `confirmed` 会进上下文。 */
+  facts: readonly ConversationFactView[]
+  /** 会话消息（最新的在后）。顺序由组装方按时间给出，组装时再兜一次底。 */
+  messages: readonly ConversationMessageView[]
+  /** 当前场景观察（**权威来源**：这一份是"文档现在是什么样"）。 */
+  observation: ObservationSummary
+  /** 未确认草稿的视图（可选）。 */
+  draft?: ConversationDraftView
+  /**
+   * 这一轮的当前请求。
+   *
+   * 给了它就把末尾那条**同一句**的用户消息从 `messages` 里去掉：当前请求在提示词里有
+   * 自己的位置（`PlanRequest.userMessage`），重复一遍既占预算又让模型以为用户说了两次。
+   */
+  request?: string
+  limits?: { messages?: number; characters?: number }
+}
+
+/** 会话那一半的入参（观察与当前请求由协调器在运行中补上）。 */
+export type ConversationContextSource = Omit<ConversationContextInput, "observation" | "request">
+
+export interface ConversationContext {
+  binding: ConversationBinding
+  summary: string
+  /** **已确认**事实，按 `key`（再 `id`）排序：同一份输入必须给出同一份上下文。 */
+  facts: readonly ConversationFactView[]
+  /** 最近消息，时间序（旧 → 新），已按预算截断。 */
+  messages: readonly ConversationMessageView[]
+  /** 当前场景观察。**不进预算裁剪**：它是当前事实。 */
+  observation: ObservationSummary
+  draft?: ConversationDraftView
+  warnings: readonly ContextWarning[]
+  estimatedCharacters: number
+}
+
+/** 最近消息的条数上限（缺省 / 硬上限）。 */
+export const DEFAULT_MESSAGE_LIMIT = 12
+export const MAX_MESSAGE_LIMIT = 24
+/** 会话那一段的字符预算（摘要 + 最近消息）。超出的部分不是被截断就是被丢掉。 */
+export const DEFAULT_CONVERSATION_CHARACTER_BUDGET = 6_000
+export const MAX_CONVERSATION_CHARACTER_BUDGET = 24_000
+/** 摘要单独的字符上限：摘要是"压缩过的历史"，它自己不该长到把消息挤没。 */
+export const DEFAULT_SUMMARY_CHARACTER_BUDGET = 2_000
+
+function byTimeThenId(left: ConversationMessageView, right: ConversationMessageView): number {
+  if (left.createdAt !== right.createdAt) return left.createdAt - right.createdAt
+  return left.id < right.id ? -1 : left.id > right.id ? 1 : 0
+}
+
+/** 观察那一段的字符开销：它是固定开销，所以先算出来再决定消息还剩多少。 */
+function observationCost(observation: ObservationSummary): number {
+  return observation.summary.length + observation.facts.reduce((sum, fact) => sum + fact.text.length, 0)
+}
+
+function estimateConversation(context: ConversationContext): number {
+  const parts: string[] = [JSON.stringify(context.binding), context.summary, context.observation.summary]
+  parts.push(...context.observation.facts.map((fact) => fact.text))
+  parts.push(...context.facts.map((fact) => `${fact.key} ${fact.text}`))
+  parts.push(...context.messages.map((message) => message.text))
+  if (context.draft) parts.push(`${context.draft.draftId} ${context.draft.stageCount}`)
+  parts.push(...context.warnings.map((warning) => `${warning.code} ${warning.detail}`))
+  return parts.join("\n").length
+}
+
+export function buildConversationContext(input: ConversationContextInput): ConversationContext {
+  const warnings: ContextWarning[] = []
+
+  // ---- 已确认事实：只留 `confirmed`，并按 key/id 排序（确定性） ----
+  const facts = input.facts
+    .filter((fact) => fact.status === "confirmed")
+    .map((fact): ConversationFactView => ({ id: fact.id, key: fact.key, text: fact.text, status: "confirmed" }))
+    .sort((left, right) => (left.key < right.key ? -1 : left.key > right.key ? 1 : left.id < right.id ? -1 : left.id > right.id ? 1 : 0))
+
+  // ---- 历史消息：时间序；空白内容不占预算（在途占位消息没有可读的话） ----
+  const history = [...input.messages].filter((message) => message.text.trim().length > 0).sort(byTimeThenId)
+  if (input.request !== undefined && history.length > 0) {
+    const last = history[history.length - 1]
+    if (last.role === "user" && last.text === input.request) history.pop()
+  }
+
+  const messageLimit = clamp(input.limits?.messages, DEFAULT_MESSAGE_LIMIT, MAX_MESSAGE_LIMIT)
+  const totalBudget = clamp(input.limits?.characters, DEFAULT_CONVERSATION_CHARACTER_BUDGET, MAX_CONVERSATION_CHARACTER_BUDGET)
+  // 场景与已确认事实是**当前事实**：它们先占预算，剩下的才轮到摘要与消息。
+  let remaining = Math.max(0, totalBudget - observationCost(input.observation) - facts.reduce((sum, fact) => sum + fact.text.length, 0))
+
+  let summary = input.summary
+  const summaryBudget = Math.min(DEFAULT_SUMMARY_CHARACTER_BUDGET, remaining)
+  if (summary.length > summaryBudget) {
+    warnings.push({ code: "truncated_summary", detail: `the summary was cut from ${summary.length} to ${summaryBudget} characters` })
+    summary = summary.slice(0, summaryBudget)
+  }
+  remaining -= summary.length
+
+  // ---- 最近消息：从**最新**往回收，收不下就停（旧消息先让路） ----
+  const kept: ConversationMessageView[] = []
+  for (let at = history.length - 1; at >= 0 && kept.length < messageLimit; at -= 1) {
+    const message = history[at]
+    if (message.text.length > remaining) break
+    kept.unshift(message)
+    remaining -= message.text.length
+  }
+  if (kept.length < history.length) {
+    warnings.push({ code: "truncated_messages", detail: `showing the newest ${kept.length} of ${history.length} recent messages` })
+  }
+
+  const context: ConversationContext = {
+    binding: input.binding,
+    summary,
+    facts,
+    messages: kept,
+    observation: input.observation,
+    ...(input.draft === undefined ? {} : { draft: input.draft }),
+    warnings,
+    estimatedCharacters: 0
+  }
+  context.estimatedCharacters = estimateConversation(context)
+  return context
 }
