@@ -7,8 +7,9 @@
 **目标形态：** Web 优先，桌面端可通过 Tauri 封装  
 **预计周期：** 18～22 周（小型跨职能团队）
 
-> **当前状态（2026-09-18，平面几何切线一轮 + 轨道动点两处修复 + vitest 4 门禁之后）**：本计划除 **P4（Agent 与 Provider Router）** 与 **P5（题图解析）** 外均已落地；
-> P4 / P5 由用户明确排除（右侧面板精简时收敛了多模态入口，Desktop/Tauri 打包与协同同样未做）。
+> **当前状态（2026-09-21，桌面 Agent 的 G1 + G2 交付之后）**：本计划除 **P5（题图解析）** 外均已落地；
+> **P4（Agent 与 Provider Router）已按用户要求开工并已交付**，落地在 [`2026-09-18-desktop-agent-implementation-plan.md`](superpowers/plans/2026-09-18-desktop-agent-implementation-plan.md) 的 G0 / G0.5 / G1 / G2（Tauri 外壳、Windows 凭据管理器、provider 配置与能力证据、回环代理、SQLite 仓储与 CAS、真协调器 + 隔离草稿 + 一次性同意 + 真实模型规划器），
+> **P5（题图解析）仍由用户明确排除**（多模态入口在右侧面板精简时收敛，Desktop/Tauri 打包与协同也未做）。
 > P6 立体几何在 v1 四类模板 → v2 点驱动通用拓扑 → v3 可用性修复之上，再叠加两条解析几何交付线：
 > **A1 解析二次曲面与"真圆"**（精确圆锥曲线截面 + 按屏幕误差细分的真曲线 + 读数/测量/投影/导出/框选全链路适配）
 > 与 **A2 交面按支撑曲面分组 + 真曲面**（50 片→3 区域、曲面∩曲面 49 片→2 区域、解析边界、按屏幕误差吸到真曲面上），
@@ -190,7 +191,7 @@ type DomainOperation =
 | P1 数学内核 | 3 周 | 表达式、点线圆、交点、DAG、撤销 | 2D 内核 v0.1 | **已完成**（含"增量重算 ≡ 全量重算"的性质测试） |
 | P2 工作台 UI | 2 周 | GeoGebra 风格布局、工具栏、属性栏 | 可交互工作台 | **已完成**（Ribbon / 检查器 / 模型树 / 状态栏） |
 | P3 圆锥与微积分 | 3 周 | 椭圆、抛物线、导数、轨迹、滑块 | 数学工作区 MVP | **已完成**（微积分工作区标签按用户要求退役，函数与圆锥曲线保留） |
-| P4 Agent 与路由 | 3 周 | Provider、健康检查、Patch、降级 | 可对话修改画布 | **未做（用户明确排除）** |
+| P4 Agent 与路由 | 3 周 | Provider、健康检查、Patch、降级 | 可对话修改画布 | **已交付（2026-09-21，G0 / G0.5 / G1 / G2；见桌面 Agent 实施计划）** |
 | P5 题图解析 | 3 周 | OCR、视觉识别、置信度、DSL 编译 | 题图导入闭环 | **未做（用户明确排除）** |
 | P6 立体几何 | 4 周 | Three.js、剖切、隐藏线、折叠 | 3D 工作区 Beta | **已完成**（+ 绑定宿主 / 实体内约束 / 交面交线交点 / 固定 1 单位网格；**2026-09-17 再叠加 A1 解析二次曲面与真圆、A2 交面分组与真曲面**） |
 | P7 工程制图 | 3 周 | 三视图、投影、尺寸、公差 | CAD 工作区 Beta | **已完成**（尺寸 / 角度 / 公差标注、SVG/DXF/PDF 导出、2D 绘图与夹点编辑） |
@@ -274,7 +275,7 @@ type DomainOperation =
 
 ### P4：Agent 与 Provider Router
 
-**状态：** **未做（用户明确排除）**。多模态 / 智能体入口在右侧面板精简时被收敛掉，`constraintOptionsFor` / Agent Dock 相关 UI 已删除；数据层与 Patch 校验路径（`validatePatch` + `DomainOperation`）仍然完整，因此将来若要恢复，接入点是现成的。
+**状态：** **已交付（2026-09-21）**。用户随后按需恢复了这条线，实际实现按 [`桌面 Agent 实施计划`](superpowers/plans/2026-09-18-desktop-agent-implementation-plan.md) 的 G0 / G0.5 / G1 / G2 走：Tauri 外壳（前端仍是 `apps/web` 那一份）、Windows 凭据管理器、provider 配置 + 能力证据探针、回环代理与传输安全、SQLite 仓储 / CAS / 崩溃恢复、真协调器与四组端口、隔离草稿 + 一次性同意 + 真实模型规划器 + 一步撤销。**本节计划原文（Provider Router / 健康检查 / 自动降级）保持原样**：实际有两处偏离 —— `native_tools` 通道走 IPC 命令（`provider_run` 收 `tools`）而不是代理路由，未知分类的 provider 错误一律留 `unknown` 而不是自动降级；两处都记在 `docs/project-progress.md`。数据层与 Patch 校验路径（`validatePatch` + `DomainOperation`）正是当年写下的接入点，现在被动作编译器复用。
 
 任务：
 
@@ -348,7 +349,7 @@ type DomainOperation =
 
 ## 8. 测试与验收策略
 
-**现状（2026-09-18，切线一轮 + 轨道动点两处修复 + vitest 4 升级后）**：单元 / 集成 / 浏览器三层都在跑。`npm.cmd test` 覆盖 4 个 workspace 共 **124 个文件 / 1480 个用例**；`npx playwright test` 覆盖 **111 个浏览器用例**（含 Ribbon、CAD 工作台、3D 交集预览与交面分组 / 真曲面、真圆与屏幕误差细分、拖动跟手与偏移一致性读数、平面网格固定、动点拖动性能、空间圆轨道与沿轨道滑动、**"手还没松动点就必须已经在动"与"动点 + 定点建空间直线"**、拖动旋转环与 15° 吸附、测量数字常驻两个画布（含平面画布的条数读数）、立体几何与平面几何的纸令牌一致）；ESLint 0 error / 14 warning；生产构建通过。测试运行器 `vitest` 已升到 `^4.1.11`（3.x 的 birpc 60 秒 RPC 超时会假阳性报 `onTaskUpdate` 超时，见 `docs/project-progress.md`）。**未做**：Provider 错误分类与"Agent 指令 → Patch → 预览 → 提交"、"题图 → 解析 → DSL → 画布"这三类测试随 P4 / P5 一并排除；2D 5000 图元与 3D 100000 三角面的性能指标没有专门的基准测试（只有布尔交集与拖动增量的实测记录）。
+**现状（2026-09-18，切线一轮 + 轨道动点两处修复 + vitest 4 升级后）**：单元 / 集成 / 浏览器三层都在跑。`npm.cmd test` 覆盖 4 个 workspace 共 **124 个文件 / 1480 个用例**；`npx playwright test` 覆盖 **111 个浏览器用例**（含 Ribbon、CAD 工作台、3D 交集预览与交面分组 / 真曲面、真圆与屏幕误差细分、拖动跟手与偏移一致性读数、平面网格固定、动点拖动性能、空间圆轨道与沿轨道滑动、**"手还没松动点就必须已经在动"与"动点 + 定点建空间直线"**、拖动旋转环与 15° 吸附、测量数字常驻两个画布（含平面画布的条数读数）、立体几何与平面几何的纸令牌一致）；ESLint 0 error / 14 warning；生产构建通过。测试运行器 `vitest` 已升到 `^4.1.11`（3.x 的 birpc 60 秒 RPC 超时会假阳性报 `onTaskUpdate` 超时，见 `docs/project-progress.md`）。**未做**："题图 → 解析 → DSL → 画布"这一类测试随 P5 一并排除；**P4 那两类已经补上了**（Provider 错误分类在 `packages/agent-core/src/recovery.test.ts` 与 Rust 侧的 `provider_adapter` 用例里，"Agent 指令 → 草稿预览 → 确认 → 提交 → 一步撤销"在 `e2e/agent-flow.spec.ts` 与 `apps/web/src/agent/agentRuntime.test.ts` 里）；2D 5000 图元与 3D 100000 三角面的性能指标没有专门的基准测试（只有布尔交集与拖动增量的实测记录）。
 
 ### 8.1 单元测试
 
