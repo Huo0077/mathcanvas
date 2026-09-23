@@ -1,4 +1,4 @@
-import { parsePlanEnvelope, SKILL_MANIFESTS } from "@draw/agent-core"
+import { DEFAULT_SOLID_SIZE, parsePlanEnvelope, SKILL_MANIFESTS } from "@draw/agent-core"
 import { describe, expect, it } from "vitest"
 
 import { createLocalPlanner, LOCAL_INTENTS, localIntentSkillIds, matchLocalIntent } from "./localPlanner"
@@ -38,6 +38,33 @@ describe("local planner translates the commands it knows", () => {
 
     if (envelope.kind !== "plan") throw new Error("expected a plan")
     expect(envelope.actions[0].actionId).toBe("planar.create_point")
+  })
+
+  /**
+   * **正四面体**（用户口径直接要它）。
+   *
+   * 以前动作层没有这个形状，模型只能拿三棱柱冒充（用户现场：要正四面体，拿到三棱柱）。现在：
+   * ① 有了独立动作 `solid.create_tetrahedron`；② 本地规划器也认这几句 —— 于是**没有模型服务**时
+   * 也能真的把它建出来，棱长从原话里读。
+   */
+  it("builds a tetrahedron with the edge length the user asked for", async () => {
+    const envelope = await plan("画一个正四面体 ABCD，棱长为 3")
+
+    // 传输层合同先过一遍：这条动作是新的，`parsePlanEnvelope` 不认识就等于模型/规划器都发不出去。
+    expect(parsePlanEnvelope(envelope).ok).toBe(true)
+    expect(envelope.kind).toBe("plan")
+    if (envelope.kind !== "plan") throw new Error("expected a plan")
+    expect(envelope.actions).toHaveLength(1)
+    expect(envelope.actions[0].actionId).toBe("solid.create_tetrahedron")
+    expect(envelope.actions[0].inputs).toMatchObject({ baseCenter: { x: 0, y: 0, z: 0 }, edge: 3 })
+  })
+
+  it("falls back to the shared solid default when a tetrahedron prompt has no number", async () => {
+    const envelope = await plan("画一个正四面体")
+
+    if (envelope.kind !== "plan") throw new Error("expected a plan")
+    // 默认值只有一处（`localPlanDefaults` 的 `DEFAULT_SOLID_SIZE`），不在这里再抄一个数。
+    expect(envelope.actions[0].inputs).toMatchObject({ edge: DEFAULT_SOLID_SIZE })
   })
 
   /**

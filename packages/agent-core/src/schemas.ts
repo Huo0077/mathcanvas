@@ -446,6 +446,24 @@ const ACTIONS = {
       vector: { policy: "safe_default", value: defaultPrismVector(DEFAULT_PRISM_HEIGHT), reason: `拉伸向量未指定，取高 ${DEFAULT_PRISM_HEIGHT} 的直棱柱（规格 §6.3）。` }
     }
   },
+  /**
+   * **正四面体**（用户口径："画一个正四面体 ABCD，棱长为 3"）。
+   *
+   * 形状由 `baseCenter` + `edge` 两个数唯一确定，所以它既不是模板动作（字段是 `origin + size` 或
+   * `center + radius + height`），也不是棱柱（底面多边形 + 向量）—— 独立一项最省心。
+   *
+   * `edge` 走 `infer_from_facts`：先从用户原话里读数字（"棱长为 3"），读不到取
+   * `DEFAULT_SOLID_SIZE` —— 与立方体"棱长未指定"那条**完全同一口径**（含写进 `assumptions` 的那句）。
+   */
+  "solid.create_tetrahedron": {
+    inputFields: ["alias", "baseCenter", "edge", "label"],
+    requiresAlias: true,
+    required: [],
+    defaults: {
+      baseCenter: { policy: "safe_default", value: ORIGIN_3D, reason: "底面中心未指定，放在原点。" },
+      edge: { policy: "infer_from_facts", infer: "size", value: DEFAULT_SOLID_SIZE, reason: `棱长未指定：先从你的话里读，读不到取 ${DEFAULT_SOLID_SIZE}。` }
+    }
+  },
 
   // --- 动点 ---
   // 引用是两个**带 documentId** 的引用：跨文档绑定必须能说清是哪两份文档里的哪两个对象。

@@ -90,6 +90,35 @@ describe("isolated drafts", () => {
     expect(pyramid).toMatchObject({ type: "pyramid", baseCenter: { x: 0, y: 0, z: 0 }, baseSize: { x: 3, y: 3 }, height: 3 })
   })
 
+  /**
+   * **正四面体**（用户口径："画一个正四面体 ABCD，棱长为 3"）。
+   *
+   * 走的是**生产路径**：动作 → 编译器 → `validateDocument` → 候选文档。它落进文档的形状必须是
+   * 一只 `fromPoints` 多面体 + 四个顶点 / 六条棱 / 四个面（这正是 `validateDocument` 认的形状），
+   * 而顶点标签就是用户嘴里的 A / B / C / D。
+   */
+  it("commits a tetrahedron with the four-vertex geometry the document schema expects", () => {
+    const store = createDraftStore()
+    const record = store.create(createEmptyDocument("geometry3d"))
+
+    const staged = store.stage(record.draftId, [{
+      actionId: "solid.create_tetrahedron",
+      actionKey: "tetrahedron",
+      factIds: [],
+      inputs: { alias: "t", baseCenter: { x: 0, y: 0, z: 0 }, edge: 3 }
+    }], record.draftVersion, "画一个正四面体 ABCD，棱长为 3")
+
+    // 断言里带上诊断本身：失败时不用再跑一遍才看得到"为什么"。
+    expect(staged.ok, staged.ok ? "staged" : `${staged.reason}: ${(staged.diagnostics ?? []).map((entry) => entry.message).join(" / ")}`).toBe(true)
+    const primitives = store.getPreview(record.draftId)?.candidate.primitives ?? []
+    const vertices = primitives.filter((primitive) => primitive.type === "point3")
+    expect(vertices.map((primitive) => (primitive.type === "point3" ? primitive.label : undefined))).toEqual(["A", "B", "C", "D"])
+    expect(primitives.filter((primitive) => primitive.type === "edge3")).toHaveLength(6)
+    expect(primitives.filter((primitive) => primitive.type === "face3")).toHaveLength(4)
+    // 构造是 `fromPoints`（不是 `template`）：模板迁移因此不会把它当成自己的子对象去改名。
+    expect(primitives.find((primitive) => primitive.type === "polyhedron3")).toMatchObject({ construction: { kind: "fromPoints" } })
+  })
+
   it("keeps a draft candidate in memory and never touches the live document", () => {
     const store = createDraftStore()
     const base = baseDocument()

@@ -1,5 +1,5 @@
 import type { PlanEnvelope, PlannerPort } from "@draw/agent-core"
-import { PLAN_SCHEMA_VERSION, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SPAN, defaultPrismBasePolygon } from "@draw/agent-core"
+import { PLAN_SCHEMA_VERSION, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SPAN, DEFAULT_SOLID_SIZE, defaultPrismBasePolygon } from "@draw/agent-core"
 
 import { conicInvariantPlan, obliquePrismSectionPlan } from "./representativeFixtures"
 
@@ -115,6 +115,31 @@ const PRISM = (input: LocalIntentInput): PlanEnvelope => {
   }
 }
 
+/**
+ * **正四面体**：底面等边三角形 + 第四个顶点，棱长唯一确定形状。
+ *
+ * 棱长从用户原话里读第一个数字（"棱长为 3"），读不到取 `DEFAULT_SOLID_SIZE` —— 与立方体那条
+ * **同一口径**（默认值只有一处：`localPlanDefaults`）。底面中心放在原点。
+ *
+ * 它是独立动作 `solid.create_tetrahedron`：以前没有这个动作，模型只能拿三棱柱冒充
+ * （用户现场：要正四面体，拿到三棱柱）。
+ */
+const TETRAHEDRON = (input: LocalIntentInput): PlanEnvelope => {
+  const edge = sizeFrom(input.prompt, DEFAULT_SOLID_SIZE)
+  return {
+    schemaVersion: PLAN_SCHEMA_VERSION,
+    kind: "plan",
+    goal: `创建一个棱长 ${edge} 的正四面体`,
+    factIds: [],
+    actions: [{
+      actionId: "solid.create_tetrahedron",
+      actionKey: "tetrahedron",
+      factIds: [],
+      inputs: { alias: "tetrahedron", baseCenter: { x: 0, y: 0, z: 0 }, edge }
+    }]
+  }
+}
+
 /** 只读回答：不产生任何动作，因此**不可能**改文档。 */
 const COUNT_ANSWER = (): PlanEnvelope => ({
   schemaVersion: PLAN_SCHEMA_VERSION,
@@ -146,6 +171,16 @@ export const LOCAL_INTENTS: readonly LocalIntent[] = [
    * 否则"椭圆"两个字会把别的椭圆题也拉进这条固定夹具。
    */
   { all: ["椭圆", "切线"], any: ["恒", "定值", "任意"], skillIds: ["conics-tangents", "dynamic-bindings", "functions"], build: () => conicInvariantPlan() },
+  /**
+   * **正四面体**（用户直接要它）。放在"棱柱"之前：它是更具体的形状，而"四面体"这三个字
+   * 与"棱柱"并不重叠 —— 顺序在这里只是把"先具体后笼统"这条纪律写实。
+   *
+   * **不认裸词"四面体"**：它会命中**分析题**——"帮我求这个四面体的外接球半径并画出球"
+   * 这句话里就有"四面体"（而且还有"画"），于是本地规划器会**新建一只四面体**而不是回答。
+   * 认不出时老实问路，比悄悄改文档好（这正是本文件开头那条纪律）。
+   */
+  { all: ["正四面体"], skillIds: ["spatial-modeling"], build: TETRAHEDRON },
+  { all: ["tetrahedron"], skillIds: ["spatial-modeling"], build: TETRAHEDRON },
   { all: ["棱柱"], skillIds: ["spatial-modeling"], build: PRISM },
   { all: ["prism"], skillIds: ["spatial-modeling"], build: PRISM },
   { all: ["立方体"], skillIds: ["spatial-modeling"], build: (input) => CUBE({ ...input, size: sizeFrom(input.prompt, 2) }) },

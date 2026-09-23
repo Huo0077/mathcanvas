@@ -139,13 +139,17 @@ describe("production system prompt", () => {
    * **没有的图元要如实说**（2026-09-22，用户现场）。
    *
    * 用户要"正四面体 ABCD 棱长 3"，模型用 `solid.create_prism` 拿三点底拉伸 —— 生成的是**三棱柱**。
-   * 这不是它偷懒：动作层**没有**三棱锥/正四面体图元（棱锥固定是矩形底的四棱锥，棱柱是"底面多边形 + 拉伸"），
-   * 而它没有被告知这件事，于是拿最接近的动作冒充了。这一句必须逐字在策略文本里。
+   * 根因是动作层当时**没有**三棱锥/正四面体图元，而它没有被告知，于是拿最接近的动作冒充了。
+   * 现在正四面体有了独立动作（`solid.create_tetrahedron`），所以这条规则的口径是：
+   * **列清能造的那几种（含正四面体）**，剩下没有的（一般多面体）如实说，**不要冒充**。
    */
   it("forbids passing off one solid for another when the shape has no primitive", () => {
-    const policy = buildPolicyText({ channel: "strict_json", canPlan: true, actionIds: ["solid.create_prism", "solid.create_template"] })
+    const policy = buildPolicyText({ channel: "strict_json", canPlan: true, actionIds: ["solid.create_prism", "solid.create_template", "solid.create_tetrahedron"] })
 
-    expect(policy).toContain("没有三棱锥")
+    // 正四面体现在**是**能造的形状之一 —— 规则里必须把它列进去，否则模型会继续拿棱柱冒充。
+    expect(policy).toContain("正四面体")
+    expect(policy).toContain("solid.create_tetrahedron")
+    expect(policy).toContain("没有一般多面体")
     expect(policy).toContain("不要拿别的形状冒充")
   })
 

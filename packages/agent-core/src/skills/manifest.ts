@@ -91,8 +91,8 @@ export const SKILL_MANIFESTS: readonly SkillManifest[] = [
   {
     id: "spatial-modeling",
     title: "空间建模",
-    summary: "在立体几何工作区创建立方体、棱锥、圆柱、圆锥四种模板实体，或用底面多边形 + 拉伸向量构造棱柱（直棱柱与斜棱柱同一套）。实体都会物化出顶点、棱、面；棱柱的侧面由内核按底面与向量生成，不能自己拼。",
-    actionIds: ["solid.create_template", "solid.create_prism"],
+    summary: "在立体几何工作区创建立方体、棱锥、正四面体、圆柱、圆锥五种模板实体，或用底面多边形 + 拉伸向量构造棱柱（直棱柱与斜棱柱同一套）。实体都会物化出顶点、棱、面；棱柱的侧面由内核按底面与向量生成，不能自己拼。",
+    actionIds: ["solid.create_template", "solid.create_prism", "solid.create_tetrahedron"],
     limits: { actionsPerStage: 4, actionsPerRun: 16 },
     successCase: { prompt: "画一个棱长 4 的立方体，中心在原点", expectation: "一笔 solid.create_template，template 为 cube，给 origin 与 size" },
     refusalCase: { prompt: "画一个棱长 0 的立方体", expectation: "拒绝：尺寸必须为正，编译器不接受退化实体" }
@@ -168,6 +168,7 @@ export const CAPABILITY_FOR_ACTION: Record<DraftActionIdName, string> = {
   "planar.create_conic": "create-primitive",
   "solid.create_template": "create-primitive",
   "solid.create_prism": "create-primitive",
+  "solid.create_tetrahedron": "create-primitive",
   "dynamic.bind_point": "create-primitive",
   "dynamic.create_bound_point": "create-primitive",
   "dynamic.bind_curve": "create-primitive",
