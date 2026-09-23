@@ -61,6 +61,45 @@ describe("triangle centers", () => {
     expect(expectExact(triangleRadius2("exradius", { x: 0, y: 0 }, { x: 4, y: 0 }, { x: 0, y: 3 }, { excenterVertex: 0 }))).toBeCloseTo(6, 12)
   })
 
+  /**
+   * **尺度不变性：小三角形不是退化三角形**（外部审查 G4）。
+   *
+   * `TriangleOptions.tolerance` 的文档写的是"退化判据的**相对**容差（除以最长边²）"，
+   * 但判据里的 `Math.max(1, scale)` 把那个 `1` 变成了**绝对**下限：边长 1e-5 量级的
+   * 合法三角形，其 `2*area ≈ 1e-10` 小于 1e-9，于是被判成"三点共线（或重合）"，
+   * 临界点约 3.2e-5。同样形状放大十万倍就"变合法"了 —— 尺度不变性是假的。
+   *
+   * 断言用**比值**（除以缩放因子）而不是绝对值：这样 `toBeCloseTo` 的绝对精度
+   * 不会随尺度一起缩到无意义的量级，而"结论只依赖形状"这件事也表达得更直接。
+   */
+  it("treats a uniformly scaled-down triangle as exact, not degenerate", () => {
+    /**
+     * 缩放因子必须**落到临界点以下**才有判别力：这条直角三角形的
+     * `2*area = 12f²`，旧判据的门槛是 `tolerance × max(1, 4f)² = 1e-9`（f 很小时 `max` 取 1），
+     * 于是 `f ≤ √(1e-9/12) ≈ 9.1e-6` 才被判成退化。**第一版夹具取 f = 1e-5 恰好落在门槛之上**，
+     * 变异检查因此假绿 —— 现在取 1e-6，比临界点低一个数量级。
+     */
+    const factor = 1e-6
+    const triangle = { a: { x: 0, y: 0, z: 0 }, b: { x: 4 * factor, y: 0, z: 0 }, c: { x: 0, y: 3 * factor, z: 0 } }
+
+    // 与上一条同样的形状，只差一个整体比例：结论必须完全一致。
+    expect(expectExact(triangleCenter("centroid", triangle)).x / factor).toBeCloseTo(4 / 3, 12)
+    expect(expectExact(triangleCenter("centroid", triangle)).y / factor).toBeCloseTo(1, 12)
+    expect(expectExact(triangleCenter("circumcenter", triangle)).x / factor).toBeCloseTo(2, 12)
+    expect(expectExact(triangleRadius("circumradius", triangle)) / factor).toBeCloseTo(2.5, 12)
+    expect(expectExact(triangleRadius("inradius", triangle)) / factor).toBeCloseTo(1, 12)
+
+    // 再小一个数量级也一样（旧实现的临界点在约 3.2e-5）。
+    const tinier = 1e-7
+    const tiny = { a: { x: 0, y: 0, z: 0 }, b: { x: 4 * tinier, y: 0, z: 0 }, c: { x: 0, y: 3 * tinier, z: 0 } }
+    expect(expectExact(triangleCenter("centroid", tiny)).x / tinier).toBeCloseTo(4 / 3, 12)
+
+    // **反向守卫**：放宽不能把真正的退化也放过去。
+    // ① 共线（C 落在 AB 的延长线上）；② 三点重合（`scale` 退化为 0，判据是 `0 <= 0`）。
+    expect(triangleCenter("circumcenter", { a: { x: 0, y: 0, z: 0 }, b: { x: 4 * factor, y: 0, z: 0 }, c: { x: 8 * factor, y: 0, z: 0 } })).toMatchObject({ status: "degenerate" })
+    expect(triangleCenter("circumcenter", { a: { x: 0, y: 0, z: 0 }, b: { x: 0, y: 0, z: 0 }, c: { x: 0, y: 0, z: 0 } })).toMatchObject({ status: "degenerate" })
+  })
+
   it("solves centers of a triangle lying in a tilted plane", () => {
     // 平面 z = x 上的三角形：a=(0,0,0)、b=(4,0,4)、c=(0,3,0)。
     const a = { x: 0, y: 0, z: 0 }

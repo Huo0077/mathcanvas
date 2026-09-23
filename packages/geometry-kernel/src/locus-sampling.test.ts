@@ -96,6 +96,32 @@ describe("discontinuities and asymptotes", () => {
     for (const point of result.branches[0].points) expect(point.x).toBeGreaterThanOrEqual(0)
   })
 
+  /**
+   * **`maxJump` 是"更严"的那一道，不是"更松"的**（外部审查 M1）。
+   *
+   * `LocusSamplingOptions.maxJump` 的文档写的是"单步的绝对上限（世界单位）。与 `jumpFactor`
+   * 取**更严**的那个"，而实现是 `Math.max`：小的 `maxJump` 完全无效（阈值仍被
+   * `jumpFactor · 中位步长` 撑着），大的反而**放松**检测 —— 与"上限"这个词的意思正好相反，
+   * 而且错在危险的那一边（该断的地方不断）。
+   */
+  it("treats maxJump as the stricter of the two thresholds, not the looser one", () => {
+    // t = 0.5 处有一个 0.2 的跳步，而中位步长是 0.1（11 个采样点覆盖 [0,1]）。
+    const evaluate = (t: number) => ({ x: t, y: t < 0.5 ? t : t + 0.2 })
+
+    // 对照：不传 `maxJump` 时阈值是 `jumpFactor · 中位步长 = 0.4`，那一步被链成同一条分支。
+    expect(sampleLocus(evaluate, { domain: [0, 1], samples: 11 }).branches).toHaveLength(1)
+
+    // 比中位步长**更严**的 `maxJump` 必须按它断开 —— 修复前它完全无效（结果与不传一模一样）。
+    const strict = sampleLocus(evaluate, { domain: [0, 1], samples: 11, maxJump: 0.05 })
+    expect(strict.branches).toHaveLength(2)
+    expect(strict.breaks.some((value) => Math.abs(value - 0.5) < 0.06)).toBe(true)
+
+    // 反向守卫：一个很**松**的 `maxJump` 不该把检测放松掉 —— 断点集合与对照完全一致。
+    const slack = sampleLocus(evaluate, { domain: [0, 1], samples: 11, maxJump: 100 })
+    expect(slack.branches).toHaveLength(1)
+    expect(slack.breaks).toEqual([])
+  })
+
   it("cuts at a hole inside the parameter domain", () => {
     const result = sampleLocus((t) => (Math.abs(t - 0.5) < 0.05 ? null : { x: t, y: 0 }), { domain: [0, 1], samples: 21 })
     expect(result.branches).toHaveLength(2)

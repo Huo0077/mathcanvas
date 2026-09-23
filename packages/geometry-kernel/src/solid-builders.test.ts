@@ -94,6 +94,47 @@ describe("solid builders", () => {
   })
 
   /**
+   * **顺时针给的底面不许静默产出里外翻转的实体**（外部审查 M3）。
+   *
+   * 底面那套环（底面反向、顶面同向、侧面 `[i, i+1, i'+1, i']`）默认底面是"从拉伸方向看逆时针"。
+   * 顺时针的底面会让**每一个面的法向都一致地朝内** —— 于是 `inconsistent-winding`
+   *（只判"彼此是否一致"）与"体积非零"（只看 `|volume|`）两道判据都不会响：
+   * `buildPrism` 静默吐出一只里外翻转的实体（实测有符号体积 **−72**），
+   * 而 `buildPrismTopology` 对同一份输入会正常化。同一个包里两个导出的棱柱构造器
+   * 不该对同一份输入给出相反的朝向。
+   */
+  it("orients a prism outwards for either winding of the base", () => {
+    const counterClockwise = [{ x: 0, y: 0, z: 0 }, { x: 2, y: 0, z: 0 }, { x: 2, y: 2, z: 0 }, { x: 0, y: 2, z: 0 }]
+    const clockwise = [...counterClockwise].reverse()
+
+    /** 有符号体积（散度定理）：**只对"全部面一致朝外"的闭合曲面**才等于真体积。 */
+    const signedVolumeOf = (base: Array<{ x: number; y: number; z: number }>): number => {
+      const result = buildPrism({ base, vector: { x: 0, y: 0, z: 3 } }, createBuilderContext("winding"))
+      expect(result.diagnostics).toEqual([])
+      const positions = new Map<string, { x: number; y: number; z: number }>()
+      for (const primitive of result.primitives) if (primitive.type === "point3") positions.set(primitive.id, primitive.position)
+      let sixVolume = 0
+      for (const primitive of result.primitives) {
+        if (primitive.type !== "face3") continue
+        const points = primitive.pointIds.map((id) => positions.get(id)!)
+        const origin = points[0]
+        for (let index = 1; index < points.length - 1; index += 1) {
+          const second = points[index]
+          const third = points[index + 1]
+          sixVolume += origin.x * (second.y * third.z - second.z * third.y)
+            + origin.y * (second.z * third.x - second.x * third.z)
+            + origin.z * (second.x * third.y - second.y * third.x)
+        }
+      }
+      return sixVolume / 6
+    }
+
+    // 两种绕向描述的是**同一只** 2×2×3 的棱柱 ⇒ 有符号体积都必须是 **+12**（全部面朝外）。
+    expect(signedVolumeOf(counterClockwise)).toBeCloseTo(12, 9)
+    expect(signedVolumeOf(clockwise)).toBeCloseTo(12, 9)
+  })
+
+  /**
    * **I1 残留（评审）：两条棱柱实现不许再各说各话。**
    *
    * 同包里有两条"按底面 + 向量拉伸"的路径：

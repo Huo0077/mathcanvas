@@ -344,11 +344,45 @@ export function buildPrism(input: PrismInput, context: BuilderContext): SolidBui
   if (!Array.isArray(input?.base) || input.base.length < 3 || input.base.some((point) => !isFiniteVector(point)) || !hasDistinctPositions(input.base) || !hasNonZeroArea(input.base)) diagnostics.push(diagnostic("degenerate-base", "prism base must contain distinct finite points with non-zero area"))
   if (!isNonZeroVector(input?.vector)) diagnostics.push(diagnostic("degenerate-vector", "prism vector must be finite and non-zero"))
   if (diagnostics.length > 0) return emptyResult(diagnostics)
-  const top = input.base.map((point) => ({ x: point.x + input.vector.x, y: point.y + input.vector.y, z: point.z + input.vector.z }))
-  const baseCount = input.base.length
+  /**
+   * **底面先按拉伸方向规范化成"从 vector 方向看逆时针"**（外部审查 M3）。
+   *
+   * 下面那套环（底面反向、顶面同向、侧面 `[i, i+1, i'+1, i']`）默认底面是这么给的。
+   * 顺时针的底面会让**每一个面的法向都朝内** —— 而且是**一致地**朝内，于是
+   * `inconsistent-winding`（只判"彼此是否一致"）与"体积非零"（只看 `|volume|`）两道判据
+   * 都不会响：`buildPrism` 就这么静默吐出一只里外翻转的实体（实测有符号体积 **−72**）。
+   * 同一个包里两个导出的棱柱构造器不该对同一份输入给出相反的朝向 ——
+   * `buildPrismTopology` 对同一输入会正常化（它逐个面按"面心相对形心朝外"定向）。
+   */
+  const ordered = baseOrderedAlongVector(input.base, input.vector)
+  const top = ordered.map((point) => ({ x: point.x + input.vector.x, y: point.y + input.vector.y, z: point.z + input.vector.z }))
+  const baseCount = ordered.length
   const faces = [Array.from({ length: baseCount }, (_, index) => baseCount - 1 - index), Array.from({ length: baseCount }, (_, index) => baseCount + index)]
   for (let index = 0; index < baseCount; index += 1) faces.push([index, (index + 1) % baseCount, baseCount + ((index + 1) % baseCount), baseCount + index])
-  return buildFromPoints({ vertices: [...input.base, ...top], faces }, context)
+  return buildFromPoints({ vertices: [...ordered, ...top], faces }, context)
+}
+
+/**
+ * 底面按拉伸方向规范化成"从 `vector` 方向看逆时针"；已经是的话原样返回一份。
+ *
+ * 法向用**整个环**的 Newell（不看头三个点 —— `prism.ts` 的 `facesOutwards` 正是在那上面栽过：
+ * 前三点点共线时叉积是零向量，于是朝向被判反）。
+ */
+function baseOrderedAlongVector(base: readonly Vector3[], vector: Vector3): Vector3[] {
+  let normal = { x: 0, y: 0, z: 0 }
+  for (let index = 0; index < base.length; index += 1) {
+    const current = base[index]
+    const next = base[(index + 1) % base.length]
+    normal = {
+      x: normal.x + (current.y - next.y) * (current.z + next.z),
+      y: normal.y + (current.z - next.z) * (current.x + next.x),
+      z: normal.z + (current.x - next.x) * (current.y + next.y)
+    }
+  }
+  const along = normal.x * vector.x + normal.y * vector.y + normal.z * vector.z
+  // `along === 0`（底面与拉伸方向平行）保持原序：那是一只零体积的"平片"，
+  // 由 `buildFromPoints` 的 `degenerate-volume` 拒绝，不该在这里被悄悄换个绕向。
+  return along >= 0 ? [...base] : [...base].reverse()
 }
 
 export function buildFrustum(input: FrustumInput, context: BuilderContext): SolidBuildResult {

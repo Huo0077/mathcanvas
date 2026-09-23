@@ -61,10 +61,25 @@ type ExactOrFailure<Value> =
 const undefinedResult = (reason: string): { status: "undefined"; reason: string } => ({ status: "undefined", reason })
 const degenerateResult = (reason: string): { status: "degenerate"; reason: string } => ({ status: "degenerate", reason })
 
-/** 三点是否退化（共线 / 重合）：`2*area` 相对最长边的平方小于容差。 */
+/**
+ * 三点是否退化（共线 / 重合）：`2*area` 相对最长边的平方小于容差。
+ *
+ * **容差必须真的"相对"**（外部审查 G4）。`TriangleOptions.tolerance` 的文档写的是
+ * "退化判据的**相对**容差（除以最长边²）"，但原先的 `scale` 里有一个 `Math.max(1, …)` ——
+ * 那个 `1` 把相对容差变成了**绝对** 1e-9：边长 1e-5 量级的**合法**三角形，
+ * 其 `2*area ≈ 1e-10` 小于 1e-9，于是被判成"三点共线（或重合）"，
+ * 临界点约 3.2e-5。也就是说尺度不变性是假的：同样形状放大 10 万倍就"变合法"了。
+ *
+ * 去掉那个下限之后判据只依赖形状。三点重合时 `scale = 0`、叉积也恒为 0，
+ * `0 <= 0` 仍然判为退化，所以不会因为放宽而对真正的退化漏判。
+ * 有限性由调用方（`triangleFrame`）先查，所以这里不必再防 NaN。
+ */
 function isDegenerate(triangle: Triangle3, tolerance: number): boolean {
   const first = crossVector3({ x: triangle.b.x - triangle.a.x, y: triangle.b.y - triangle.a.y, z: triangle.b.z - triangle.a.z }, { x: triangle.c.x - triangle.a.x, y: triangle.c.y - triangle.a.y, z: triangle.c.z - triangle.a.z })
-  const scale = Math.max(1, lengthVector3({ x: triangle.b.x - triangle.a.x, y: triangle.b.y - triangle.a.y, z: triangle.b.z - triangle.a.z }), lengthVector3({ x: triangle.c.x - triangle.a.x, y: triangle.c.y - triangle.a.y, z: triangle.c.z - triangle.a.z }))
+  const scale = Math.max(
+    lengthVector3({ x: triangle.b.x - triangle.a.x, y: triangle.b.y - triangle.a.y, z: triangle.b.z - triangle.a.z }),
+    lengthVector3({ x: triangle.c.x - triangle.a.x, y: triangle.c.y - triangle.a.y, z: triangle.c.z - triangle.a.z })
+  )
   return lengthVector3(first) <= tolerance * scale * scale
 }
 

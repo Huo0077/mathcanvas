@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import type { Vector3 } from "./geometry3d"
 
-import { buildPrismTopology, validatePrismInput } from "./prism"
+import { buildPrismTopology, liftPrismBasePolygon, validatePrismInput } from "./prism"
 
 /**
  * **棱柱的纯拓扑**（Solid/Prism 切片 Task 2；设计规格 §3.3）。
@@ -189,6 +189,151 @@ describe("prism topology", () => {
       const outward = { x: faceCentre.x - centroid.x, y: faceCentre.y - centroid.y, z: faceCentre.z - centroid.z }
       expect(normal.x * outward.x + normal.y * outward.y + normal.z * outward.z).toBeGreaterThan(0)
     }
+  })
+
+  /**
+   * **前三点共线的合法底面不许把面翻反**（外部审查 G3）。
+   *
+   * 上面那条用的是四点都"好看"的正方形，所以 `(p1−p0)×(p2−p0)` 恰好成立。
+   * 但环上前三点共线是**完全合法**的多边形 —— 模型生成的"边上多给一个共线点"很常见，
+   * 本文件的自交判据早就为同一种输入改过一次。那时叉积是零向量 ⇒ 定向判据恒为 `false`
+   * ⇒ 六个面被**随意翻反**；法向朝里的面在画布上会被剔除，用户看到"棱柱缺了一块"。
+   *
+   * 判据因此必须用**整个环**的 Newell 法向 —— 这条用例也用它来断言，而不是用头三点的叉积
+   *（用叉积的话断言会因为"法向恒为零向量"而毫无意义，正是缺陷本身）。
+   */
+  it("orients every face outwards when the base ring starts with three collinear points", () => {
+    /**
+     * **顺时针**给的底面、且前三点共线。
+     *
+     * 环绕方向是这条用例的关键：`buildPrismTopology` 会把每个面按"面心相对形心朝外"
+     * 规范化，所以**只有那些"本来就已经朝外、不该被翻"的面**才暴露这条缺陷。
+     * 顺时针底面正是这种：它的 Newell 法向（−z）本来就朝外，而 `(p1−p0)×(p2−p0)`
+     * 因为前三点共线是零向量 ⇒ 判据恒为 `false` ⇒ 被**多翻一次**成朝内。
+     *
+     * （逆时针的底面反而测不出来：零向量导致的"翻转"恰好把它翻对了 —— 这正是
+     * 我第一版夹具假绿的原因，见进度文档 G1 那段同类记档。）
+     */
+    const clockwiseCollinearStart = [
+      { x: 0, y: 0, z: 0 },
+      { x: 0, y: 2, z: 0 },
+      { x: 0, y: 4, z: 0 },
+      { x: 3, y: 4, z: 0 },
+      { x: 3, y: 0, z: 0 }
+    ]
+    const height = 2
+    const topology = buildPrismTopology(clockwiseCollinearStart, { x: 0, y: 0, z: height })
+    expect(topology).not.toBeNull()
+    if (!topology) return
+
+    // 夹具自检①：底面环上**确实**存在连续三点共线（环绕方向可能被整体翻反，
+    // 所以按循环找，而不是只看开头）。
+    const baseRing = topology.faces[0]
+    const collinearTriple = (start: number) => {
+      const first = topology.vertices[baseRing[start]]
+      const second = topology.vertices[baseRing[(start + 1) % baseRing.length]]
+      const third = topology.vertices[baseRing[(start + 2) % baseRing.length]]
+      return cross(
+        { x: second.x - first.x, y: second.y - first.y, z: second.z - first.z },
+        { x: third.x - first.x, y: third.y - first.y, z: third.z - first.z }
+      )
+    }
+    expect(baseRing.some((_, start) => { const normal = collinearTriple(start); return normal.x === 0 && normal.y === 0 && normal.z === 0 })).toBe(true)
+
+    // 夹具自检②：顺时针给的底面**本来**就朝外 —— 也就是它不该被翻转的那一个。
+    // （逆时针夹具在这里会是 `false`，那时这条用例测不出缺陷。）
+    let baseNormal = { x: 0, y: 0, z: 0 }
+    for (let index = 0; index < baseRing.length; index += 1) {
+      const current = topology.vertices[baseRing[index]]
+      const next = topology.vertices[baseRing[(index + 1) % baseRing.length]]
+      baseNormal = {
+        x: baseNormal.x + (current.y - next.y) * (current.z + next.z),
+        y: baseNormal.y + (current.z - next.z) * (current.x + next.x),
+        z: baseNormal.z + (current.x - next.x) * (current.y + next.y)
+      }
+    }
+    expect(baseNormal.z).toBeLessThan(0)
+
+    // 断言①：每个面的 Newell 法向都朝外（用整个环，不用头三点）。
+    const centroid = topology.vertices.reduce((sum, point) => ({ x: sum.x + point.x / topology.vertices.length, y: sum.y + point.y / topology.vertices.length, z: sum.z + point.z / topology.vertices.length }), { x: 0, y: 0, z: 0 })
+    for (const face of topology.faces) {
+      let normal = { x: 0, y: 0, z: 0 }
+      for (let index = 0; index < face.length; index += 1) {
+        const current = topology.vertices[face[index]]
+        const next = topology.vertices[face[(index + 1) % face.length]]
+        normal = {
+          x: normal.x + (current.y - next.y) * (current.z + next.z),
+          y: normal.y + (current.z - next.z) * (current.x + next.x),
+          z: normal.z + (current.x - next.x) * (current.y + next.y)
+        }
+      }
+      const points = face.map((index) => topology.vertices[index])
+      const faceCentre = points.reduce((sum, point) => ({ x: sum.x + point.x / points.length, y: sum.y + point.y / points.length, z: sum.z + point.z / points.length }), { x: 0, y: 0, z: 0 })
+      const outward = { x: faceCentre.x - centroid.x, y: faceCentre.y - centroid.y, z: faceCentre.z - centroid.z }
+      expect(Math.hypot(normal.x, normal.y, normal.z)).toBeGreaterThan(1e-9)
+      expect(normal.x * outward.x + normal.y * outward.y + normal.z * outward.z).toBeGreaterThan(0)
+    }
+
+    // 断言②：**有向体积**必须等于真体积（底面积 12 × 高 2 = 24）。
+    // 散度定理的推论，只对"全部面一致朝外"的闭合曲面成立 —— 翻一个面它就错了，
+    // 因此这条比逐面法向更不容易被一个恰好凑对的夹具骗过。
+    let sixVolume = 0
+    for (const face of topology.faces) {
+      const origin = topology.vertices[face[0]]
+      for (let index = 1; index < face.length - 1; index += 1) {
+        const second = topology.vertices[face[index]]
+        const third = topology.vertices[face[index + 1]]
+        sixVolume += origin.x * (second.y * third.z - second.z * third.y)
+          + origin.y * (second.z * third.x - second.x * third.z)
+          + origin.z * (second.x * third.y - second.y * third.x)
+      }
+    }
+    expect(sixVolume / 6).toBeCloseTo(24, 9)
+  })
+
+  /**
+   * **平面基底是右手系，而且对 +z 给出 `u = +x`、`v = +y`**（外部审查 M2）。
+   *
+   * 原先取 `u = n × axis`、`v = u × n`，而 `u × v = u × (u × n) = −n` **恒成立** ——
+   * `(u, v, n)` 对**任何**法向都是**左手系**。后果不是"朝向不同"这么轻：对 `normal = +z`，
+   * 选轴排序把 x 排在 y 前面（两者并列、稳定排序保持原序），于是 `u = +y`、`v = +x`，
+   * 抬升把二维坐标**转置**了 —— 规格 §3.2 的 `(0,0),(4,0),(5,2),(1,2)` 抬出来是
+   * `(0,0),(0,4),(2,5),(2,1)`。中心对称的底面（矩形）看不出差别，但**不**中心对称的底面会变成
+   * **镜像摆放**，而剖切面、指定的中点、测量全都按世界坐标读 —— 整道题都摆在镜像位置上。
+   */
+  it("lifts a plane base with the documented orientation instead of transposing it", () => {
+    const spec = liftPrismBasePolygon({
+      plane: { origin: { x: 0, y: 0, z: 2 }, normal: { x: 0, y: 0, z: 1 } },
+      polygon: [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 5, y: 2 }, { x: 1, y: 2 }]
+    })
+    // 文档承诺的那一句：抬升结果就是 `origin + (x, y, 0)`。
+    expect(spec).toEqual([
+      { x: 0, y: 0, z: 2 }, { x: 4, y: 0, z: 2 }, { x: 5, y: 2, z: 2 }, { x: 1, y: 2, z: 2 }
+    ])
+
+    // **不**中心对称的底面才真正暴露镜像（修复前这里会得到转置后的 (y, x)）。
+    const skewed = liftPrismBasePolygon({
+      plane: { origin: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 0, z: 1 } },
+      polygon: [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 5, y: 2 }, { x: 1, y: 3 }]
+    })
+    expect(skewed).toEqual([
+      { x: 0, y: 0, z: 0 }, { x: 4, y: 0, z: 0 }, { x: 5, y: 2, z: 0 }, { x: 1, y: 3, z: 0 }
+    ])
+  })
+
+  /** 右手系判据本身：`u × v` 必须与法向**同向**（不依赖具体选轴，斜法向也成立）。 */
+  it("builds a right-handed in-plane basis for a tilted normal", () => {
+    const normal = { x: 0, y: 1, z: 1 }
+    // 取两点把基底读出来：polygon[0] = origin + 1·u、polygon[1] = origin + 1·v。
+    const basis = liftPrismBasePolygon({ plane: { origin: { x: 0, y: 0, z: 0 }, normal }, polygon: [{ x: 1, y: 0 }, { x: 0, y: 1 }] })
+    const [u, v] = basis
+    const cross = { x: u.y * v.z - u.z * v.y, y: u.z * v.x - u.x * v.z, z: u.x * v.y - u.y * v.x }
+    const length = Math.hypot(cross.x, cross.y, cross.z)
+    const unit = { x: cross.x / length, y: cross.y / length, z: cross.z / length }
+    const magnitude = Math.hypot(normal.x, normal.y, normal.z)
+    expect(unit.x).toBeCloseTo(normal.x / magnitude, 9)
+    expect(unit.y).toBeCloseTo(normal.y / magnitude, 9)
+    expect(unit.z).toBeCloseTo(normal.z / magnitude, 9)
   })
 
   it("rejects a zero vector as degenerate instead of producing a flat solid", () => {

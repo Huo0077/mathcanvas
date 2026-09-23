@@ -148,12 +148,24 @@ export function sampleLocus(evaluate: (parameter: number) => Coordinate | null, 
     if (isFinitePoint(previous) && isFinitePoint(current)) steps.push(Math.hypot(current.x - previous.x, current.y - previous.y))
   }
   const typicalStep = median(steps)
-  const jumpThreshold = Math.max(
-    typicalStep * jumpFactor,
-    // 中位数为 0（轨迹退化成一点）时仍然需要一个下限，否则任何微小步长都会被当成断点。
-    Math.max(typicalStep, 1e-9),
-    Number.isFinite(options.maxJump ?? Number.POSITIVE_INFINITY) ? (options.maxJump as number) : 0
-  )
+  /**
+   * **`maxJump` 是"更严"的那一道，不是"更松"的**（外部审查 M1）。
+   *
+   * `LocusSamplingOptions.maxJump` 的文档写的是"单步的绝对上限（世界单位）。与 `jumpFactor`
+   * 取**更严**的那个" —— 更严就是 `min`。而原先这里是 `Math.max`，两个方向都错：
+   * - `maxJump` **小**的时候完全无效（阈值仍被 `jumpFactor · 中位步长` 撑着，实测
+   *   `maxJump: 0.05` 与不传的结果一模一样）；
+   * - `maxJump` **大**的时候反而**放松**检测 —— 与"上限"这个词的意思正好相反，
+   *   而且错在危险的那一边（该断的地方不断）。
+   *
+   * 中位数为 0（轨迹退化成一点）时仍然需要一个下限，否则任何微小步长都会被当成断点。
+   * 那个 `1e-9` 只在那种情形下生效：原先它被无条件并进 `Math.max`，于是阈值**恒 ≥ 中位步长**，
+   * 本身就杜绝了任何"比中位步长更严"的收紧 —— 这才是 `maxJump` 小的那一路失效的根因。
+   */
+  const byAbsolute = Number.isFinite(options.maxJump ?? Number.POSITIVE_INFINITY) ? (options.maxJump as number) : Number.POSITIVE_INFINITY
+  const jumpThreshold = typicalStep === 0
+    ? Math.max(byAbsolute === Number.POSITIVE_INFINITY ? 1e-9 : byAbsolute, 1e-9)
+    : Math.min(typicalStep * jumpFactor, byAbsolute)
 
   // ---- 第 2 轮：定位断点 ----------------------------------------------------
   const breaks: number[] = []

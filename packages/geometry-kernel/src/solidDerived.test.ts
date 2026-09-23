@@ -276,3 +276,87 @@ describe("solid section boundary", () => {
     expect(sectionSolid3(tooLittle, { normal: { x: 0, y: 1, z: 0 }, constant: -0.5 }).status).toBe("degenerate")
   })
 })
+
+/**
+ * **外接球不再枚举全部 C(n,4)**（外部审查 G1）。
+ *
+ * 过四个不共面点的球是唯一的，所以枚举出来的每一种组合都在重复同一件事；
+ * 而代价是 C(n,4) 再乘一次线性扫描的球心去重 —— 实测 16 顶点 103ms、22 顶点 1538ms
+ *（每 +2 顶点约 ×2.5）⇒ 32 顶点要几分钟、48 顶点要几小时。
+ *
+ * 立方体与规则多面体因为**第一个候选就命中**，所以这条路径从来没有被这些用例暴露过：
+ * 只有"顶点很多、而且**没有**外接球"的实体才会把枚举跑满。属性面板在选中任何图元时
+ * 都会对整篇文档算一遍这套读数，所以那是一个用户随手可触发的卡死。
+ */
+describe("circumsphere with many vertices (G1)", () => {
+  /** 近似均匀分布的球面点（Fibonacci 球），可选把其中一点沿径向推出去。 */
+  function sphereLike(count: number, radius: number, pushOutIndex: number | null): Vector3[] {
+    const vertices: Vector3[] = []
+    for (let index = 0; index < count; index += 1) {
+      const y = 1 - (2 * index) / (count - 1)
+      const ring = Math.sqrt(Math.max(0, 1 - y * y))
+      const theta = index * Math.PI * (3 - Math.sqrt(5))
+      const scale = index === pushOutIndex ? 1.35 : 1
+      vertices.push({ x: radius * scale * ring * Math.cos(theta), y: radius * scale * y, z: radius * scale * ring * Math.sin(theta) })
+    }
+    return vertices
+  }
+
+  /** 面只为满足 `boundaryProblem` 的结构判据：外接球只看顶点。 */
+  const structuralFaces = [[0, 1, 2], [0, 2, 3], [0, 3, 4], [0, 4, 5]]
+
+  /**
+   * **一般位置**的点（确定性伪随机，mulberry32）。
+   *
+   * 这组输入才是真正把枚举跑满的那一种：没有四点共球 ⇒ 每一组四点算出来的球心几乎都不同
+   * ⇒ 球心去重的那次线性扫描也一路涨到 O(C(n,4))，整体变成 C(n,4) 的平方。
+   * 上面那组"球面点"反而不是好夹具：任何四个球面点算出来都是**同一颗**球，
+   * 于是去重把它们全吃掉、旧实现照样很快（实测 32 顶点只花 561ms，用例会假绿）。
+   */
+  function generalPositionPoints(count: number): Vector3[] {
+    let seed = 123456789
+    const next = () => {
+      seed = (seed + 0x6d2b79f5) | 0
+      let value = Math.imul(seed ^ (seed >>> 15), 1 | seed)
+      value = (value + Math.imul(value ^ (value >>> 7), 61 | value)) ^ value
+      return ((value ^ (value >>> 14)) >>> 0) / 4294967296
+    }
+    return Array.from({ length: count }, () => ({ x: next() * 4 - 2, y: next() * 4 - 2, z: next() * 4 - 2 }))
+  }
+
+  it("solves a 96-vertex ball exactly instead of testing every vertex subset", () => {
+    const vertices = sphereLike(96, 2, null)
+    const started = performance.now()
+
+    const result = solveCircumsphere3({ vertices, faces: structuralFaces })
+
+    expect(result.status).toBe("exact")
+    if (result.status === "exact") {
+      expect(result.value.radius).toBeCloseTo(2, 6)
+      closeTo(result.value.center, { x: 0, y: 0, z: 0 }, 6)
+    }
+    expect(performance.now() - started).toBeLessThan(1_000)
+  })
+
+  it("reports 'no circumsphere' for 32 general-position vertices quickly, without exhausting every subset", () => {
+    const vertices = generalPositionPoints(32)
+    const started = performance.now()
+
+    const result = solveCircumsphere3({ vertices, faces: structuralFaces })
+
+    expect(result.status).toBe("undefined")
+    if (result.status === "undefined") expect(result.reason).toContain("外接球")
+    // 枚举版要在 C(32,4)=35960 组上逐组求球心、并对**不断增长**的球心表线性查重 ⇒
+    // 实测远不止秒级（vitest 的 5 秒上限会先把它掐掉）。新实现是微秒级。
+    expect(performance.now() - started).toBeLessThan(1_000)
+  })
+
+  it("still reports 'no circumsphere' when every vertex is coplanar", () => {
+    // 全共面时挑不出仿射无关的四点 —— 走的是与旧实现**完全相同**的那条 `undefined` 分支。
+    const vertices: Vector3[] = Array.from({ length: 12 }, (_, index) => ({ x: index, y: index * index, z: 0 }))
+    const result = solveCircumsphere3({ vertices, faces: structuralFaces })
+
+    expect(result.status).toBe("undefined")
+    if (result.status === "undefined") expect(result.reason).toContain("找不到到所有顶点等距的点")
+  })
+})

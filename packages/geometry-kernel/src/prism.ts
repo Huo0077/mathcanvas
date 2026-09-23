@@ -118,23 +118,38 @@ export function isPrismPlaneBase(base: unknown): base is PrismPlaneBase {
 export function liftPrismBasePolygon(base: PrismPlaneBase): Vector3[] {
   const normal = lengthVector3(base.plane.normal) > 0 ? normalizeVector3(base.plane.normal) : { x: 0, y: 0, z: 1 }
   /**
-   * 参考轴取"与法向最不平行的坐标轴"，再由 `u = n × axis`、`v = u × n` 得到平面内的正交基。
-   * 选轴这一步决定了底面的**朝向**（形状不变）：对 +z 只需让参考轴是 +y，就得到熟悉的
-   * `u = +x`、`v = +y`。所以参考轴按"离法向最远"的顺序挑，而不是固定从 x 开始。
+   * **平面内正交基必须是右手系，而且对 +z 要给出 `u = +x`、`v = +y`**（外部审查 M2）。
+   *
+   * 原先这里取 `u = n × axis`、`v = u × n`，而 `u × v = u × (u × n) = −n` **恒成立** ——
+   * 也就是说 `(u, v, n)` 对**任何**法向都是**左手系**。后果不是"朝向不同"这么轻：
+   * 对 `normal = +z`，选轴排序把 x 排在前面（x 与 y 并列，稳定排序保持原序），
+   * 于是 `u = z × x = +y`、`v = y × z = +x` —— 抬升把二维坐标 **转置**了：
+   * 规格 §3.2 的例子 `(0,0),(4,0),(5,2),(1,2)` 抬出来是 `(0,0),(0,4),(2,5),(2,1)`（x、y 互换）。
+   * 对中心对称的底面（矩形）看不出差别，但对**不**中心对称的底面，导入的实体就是请求图形的
+   * **镜像摆放** —— 而剖切面、指定的中点、测量全都按世界坐标读，于是整道题都摆在镜像位置上。
+   *
+   * 修法就是文档里早就写着的那一句：参考轴取"与法向最不平行的坐标轴"，
+   * 基用 `u = axis × n`、`v = n × u`（此时 `u × v = n`，右手系）。**并列时优先 +y**，
+   * 对最常见的 `normal = +z` 就得到 `u = +x`、`v = +y`，也就是文档承诺的 `origin + (x, y, 0)`。
    */
   const axes = [
-    { x: 1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }, { x: 0, y: 0, z: 1 }
-  ].sort((first, second) =>
-    Math.abs(dotProduct(first, normal)) - Math.abs(dotProduct(second, normal)))
-  let u = { x: 1, y: 0, z: 0 }
+    // 顺序即"并列时的优先级"：+y 最优先（对 +z 给出熟悉的 x–y 朝向）。
+    { x: 0, y: 1, z: 0 }, { x: 1, y: 0, z: 0 }, { x: 0, y: 0, z: 1 }
+  ]
+  let reference = axes[0]
   for (const axis of axes) {
-    const candidate = crossVector3(normal, axis)
+    // 严格小于 ⇒ 并列时先出现的（+y）胜出。
+    if (Math.abs(dotProduct(axis, normal)) < Math.abs(dotProduct(reference, normal))) reference = axis
+  }
+  let u = { x: 1, y: 0, z: 0 }
+  for (const axis of [reference, ...axes]) {
+    const candidate = crossVector3(axis, normal)
     if (lengthVector3(candidate) > 1e-6) {
       u = normalizeVector3(candidate)
       break
     }
   }
-  const v = crossVector3(u, normal)
+  const v = crossVector3(normal, u)
   return base.polygon.map((point) => ({
     x: base.plane.origin.x + point.x * u.x + point.y * v.x,
     y: base.plane.origin.y + point.x * u.y + point.y * v.y,
@@ -328,12 +343,35 @@ export function validatePrismInput(basePolygon: readonly Vector3[], vector: Vect
   return diagnostics.length > 0 ? { ok: false, diagnostics } : { ok: true }
 }
 
-/** 面环定向：`(p1-p0)×(p2-p0)` 是否指向实体外部（相对形心）。 */
+/**
+ * 面环的 **Newell 法向**（未单位化，模长 = 2×面积，方向随绕向）。
+ *
+ * 为什么不用 `(p1−p0)×(p2−p0)`：环上前三点**共线**是完全合法的多边形
+ *（模型生成的"边上多给一个共线点"很常见，本文件的自交判据早就为此改过一次）。
+ * 那时叉积是零向量 ⇒ 定向判据恒为 `false` ⇒ 这个面被翻成**朝内**，
+ * 违反 `SolidTopology` 的朝外契约（外部审查 G3）。Newell 用**整个环**求和，
+ * 只有环真的退化成零面积时它才是零向量 —— 那种输入已被 `degenerate-volume` 拒掉。
+ *
+ * 同一类缺陷在本仓库已经修过两次（`unfold3d` 的环法向、`hosts3` 的退化判据），
+ * 做法一致：环上的整体量，不要只看头三个点。
+ */
+function newellNormal(ring: readonly number[], vertices: readonly Vector3[]): Vector3 {
+  let x = 0
+  let y = 0
+  let z = 0
+  for (let index = 0; index < ring.length; index += 1) {
+    const current = vertices[ring[index]]
+    const next = vertices[ring[(index + 1) % ring.length]]
+    x += (current.y - next.y) * (current.z + next.z)
+    y += (current.z - next.z) * (current.x + next.x)
+    z += (current.x - next.x) * (current.y + next.y)
+  }
+  return { x, y, z }
+}
+
+/** 面环定向：环的 Newell 法向是否指向实体外部（相对形心）。 */
 function facesOutwards(ring: readonly number[], vertices: readonly Vector3[], centroid: Vector3): boolean {
-  const first = vertices[ring[0]]
-  const second = vertices[ring[1]]
-  const third = vertices[ring[2]]
-  const normal = crossVector3(subtractVector3(second, first), subtractVector3(third, first))
+  const normal = newellNormal(ring, vertices)
   const centre = ring.reduce((sum, index) => ({
     x: sum.x + vertices[index].x / ring.length,
     y: sum.y + vertices[index].y / ring.length,

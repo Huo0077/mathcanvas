@@ -121,6 +121,46 @@ function boundingBoxCenter(vertices: readonly Vector3[]): Vector3 {
 }
 
 /**
+ * 挑四个**仿射无关**的顶点（不共面）；顶点全共面 / 共线 / 重合时返回 `null`。
+ *
+ * 三步"最远点"：最远的点给出方向，离那条**直线**最远的点给出平面，
+ * 离那个**平面**最远的点给出体积。三步都取到非退化距离时，四点必然仿射无关。
+ * 全程 O(n)，不依赖顶点顺序。
+ *
+ * 顺带这也给出了**条件数最好**的那一组：底面积与高都取到最大，
+ * 于是那个 3×3 方程组离奇异最远（`solveLinearSystem` 的判据是绝对主元 1e-12）。
+ */
+function affinelyIndependentTetrad(vertices: readonly Vector3[], tolerance: number): [Vector3, Vector3, Vector3, Vector3] | null {
+  const origin = vertices[0]
+  const farthest = (measure: (candidate: Vector3) => number): { point: Vector3; value: number } => {
+    let best = { point: origin, value: Number.NEGATIVE_INFINITY }
+    for (const vertex of vertices) {
+      const value = measure(vertex)
+      if (value > best.value) best = { point: vertex, value }
+    }
+    return best
+  }
+
+  // ① 离 origin 最远的点：给出第一条方向。全重合 ⇒ 退化。
+  const first = farthest((vertex) => lengthVector3(subtractVector3(vertex, origin)))
+  if (!(first.value > tolerance)) return null
+  const direction = normalizeVector3(subtractVector3(first.point, origin))
+  if (!(lengthVector3(direction) > 0)) return null
+
+  // ② 离直线 origin→first 最远的点：给出第二条方向。全共线 ⇒ 退化。
+  const second = farthest((vertex) => lengthVector3(crossVector3(direction, subtractVector3(vertex, origin))))
+  if (!(second.value > tolerance)) return null
+  const normal = normalizeVector3(crossVector3(direction, subtractVector3(second.point, origin)))
+  if (!(lengthVector3(normal) > 0)) return null
+
+  // ③ 离平面 origin/first/second 最远的点：给出体积。全共面 ⇒ 退化。
+  const third = farthest((vertex) => Math.abs(dotVector3(normal, subtractVector3(vertex, origin))))
+  if (!(third.value > tolerance)) return null
+
+  return [origin, first.point, second.point, third.point]
+}
+
+/**
  * **外接球**。
  *
  * - 长方体（顶点恰好是包围盒的 8 个角）：包围盒中心 + 体对角线半径（规格 §3.4 的第一条闭式解）。
@@ -160,27 +200,36 @@ export function solveCircumsphere3(boundary: SolidBoundary): DerivedSolidResult<
     }
   }
 
-  // 一般情形：等距方程组 + 残差校验。四点不一定独立，所以逐个试基准点组。
-  const seenCenters: Vector3[] = []
-  for (let first = 0; first < vertices.length - 3; first += 1) {
-    for (let second = first + 1; second < vertices.length - 2; second += 1) {
-      for (let third = second + 1; third < vertices.length - 1; third += 1) {
-        for (let fourth = third + 1; fourth < vertices.length; fourth += 1) {
-          const picks = [vertices[first], vertices[second], vertices[third], vertices[fourth]]
-          const reference = picks[0]
-          const matrix = picks.slice(1).map((point) => [2 * (point.x - reference.x), 2 * (point.y - reference.y), 2 * (point.z - reference.z)])
-          const rhs = picks.slice(1).map((point) => (point.x * point.x + point.y * point.y + point.z * point.z) - (reference.x * reference.x + reference.y * reference.y + reference.z * reference.z))
-          const solution = solveLinearSystem(matrix, rhs)
-          if (!solution) continue
-          const candidate = { x: solution[0], y: solution[1], z: solution[2] }
-          // 同一颗球会被很多组四点算出来：去重，免得白验一遍。
-          if (seenCenters.some((seen) => lengthVector3(subtractVector3(seen, candidate)) <= tolerance)) continue
-          seenCenters.push(candidate)
-          const distances = vertices.map((vertex) => lengthVector3(subtractVector3(vertex, candidate)))
-          const radius = (Math.min(...distances) + Math.max(...distances)) / 2
-          if (radius <= tolerance) continue
-          if (Math.max(...distances) - Math.min(...distances) <= tolerance) return { status: "exact", value: { center: candidate, radius } }
-        }
+  /**
+   * 一般情形：先挑一组**仿射无关**的四点定出候选球心，再对**全部**顶点验残差。
+   *
+   * ## 为什么不再枚举所有 C(n,4)（外部审查 G1）
+   *
+   * 过四个不共面点的球是**唯一**的。所以只要实体真的有外接球，任何一组不共面的四点
+   * 算出来的都是同一颗球 —— 枚举出来的每一种组合都在重复同一件事。
+   * 反过来也成立：某一组不共面的四点残差过不了，这只实体就**没有**外接球
+   *（换一组只会得到另一颗同样过不了的球，否则那颗更早的球早就通过残差了）。
+   *
+   * 而枚举的代价是 C(n,4) 再加上一次**线性扫描**的球心去重：实测 16 顶点 103ms、
+   * 22 顶点 1538ms（每 +2 顶点约 ×2.5）⇒ 32 顶点要几分钟、48 顶点要几小时。
+   * 这条路径用户随手就能触发（属性面板在选中任何图元时都会对整篇文档算一遍读数）。
+   * 现在挑四点 O(n)、验残差 O(n)，整体 O(n)。
+   *
+   * 顶点全共面 / 共线 / 重合时 `affinelyIndependentTetrad` 给出 `null`，
+   * 于是走到下面那条与旧实现**完全相同**的 `undefined` 分支（原因文案一字不改）。
+   */
+  const tetrad = affinelyIndependentTetrad(vertices, tolerance)
+  if (tetrad) {
+    const reference = tetrad[0]
+    const matrix = tetrad.slice(1).map((point) => [2 * (point.x - reference.x), 2 * (point.y - reference.y), 2 * (point.z - reference.z)])
+    const rhs = tetrad.slice(1).map((point) => (point.x * point.x + point.y * point.y + point.z * point.z) - (reference.x * reference.x + reference.y * reference.y + reference.z * reference.z))
+    const solution = solveLinearSystem(matrix, rhs)
+    if (solution) {
+      const candidate = { x: solution[0], y: solution[1], z: solution[2] }
+      const distances = vertices.map((vertex) => lengthVector3(subtractVector3(vertex, candidate)))
+      const radius = (Math.min(...distances) + Math.max(...distances)) / 2
+      if (radius > tolerance && Math.max(...distances) - Math.min(...distances) <= tolerance) {
+        return { status: "exact", value: { center: candidate, radius } }
       }
     }
   }
