@@ -31,10 +31,24 @@ function makeRepository(options: { stored?: DocumentSnapshot | null; notDesktop?
   const calls: string[] = []
 
   const repository: DocumentRepository = {
-    readHead: vi.fn(async (): Promise<RepositoryResult<DocumentSnapshot>> => {
+    /**
+     * **替身必须真的按 `documentId` 过滤**（2026-09-22 修 / 外部审查 X1）。
+     *
+     * 原先这里忽略 `documentId`、永远回 `stored` —— 于是"探测用的是刚生成的新随机 id"
+     * 这个缺陷在单测里**根本不可见**，只在真实 Rust 仓储上表现为必然未命中
+     * （`read_head` 是 `WHERE project_id = ?1 AND document_id = ?2`）。
+     * 审查把这一点单独列了出来：替身不按 id 过滤，这类缺陷就永远测不出来。
+     */
+    readHead: vi.fn(async (_projectId: string, documentId: string): Promise<RepositoryResult<DocumentSnapshot>> => {
       calls.push("readHead")
       if (options.notDesktop) return { ok: false, code: "not_a_desktop_shell", detail: "browser" }
-      if (!stored) return { ok: false, code: "not_found", detail: "no document" }
+      if (!stored || stored.documentId !== documentId) return { ok: false, code: "not_found", detail: "no document" }
+      return { ok: true, value: stored }
+    }),
+    readLatestHead: vi.fn(async (): Promise<RepositoryResult<DocumentSnapshot | null>> => {
+      calls.push("readLatestHead")
+      if (options.notDesktop) return { ok: false, code: "not_a_desktop_shell", detail: "browser" }
+      // 项目里一份都没有 → 如实回 `null`（这才是真正的"首次启动"）。
       return { ok: true, value: stored }
     }),
     create: vi.fn(async (_projectId: string, document): Promise<RepositoryResult<DocumentSnapshot>> => {
@@ -68,8 +82,18 @@ function makeRepository(options: { stored?: DocumentSnapshot | null; notDesktop?
   return { repository, calls, stored: () => stored }
 }
 
-function persistence(repository: DocumentRepository) {
-  return createDocumentPersistence({ repository, projectId: "p1", emptyDocument: () => createEmptyDocument("conics") })
+/**
+ * `documentId` 默认给一个**固定的**"这一世会用的 id"：真实调用方（`App.tsx`）给的是
+ * `loadLastDocumentId() ?? store 当前文档的 id`，两次启动之间是稳定的 —— 这正是
+ * "第二次启动能读回上一世那份文档"的前提。
+ */
+function persistence(repository: DocumentRepository, documentId = "doc-session") {
+  return createDocumentPersistence({
+    repository,
+    projectId: "p1",
+    emptyDocument: () => createEmptyDocument("conics"),
+    documentId: () => documentId
+  })
 }
 
 describe("restoring on startup", () => {
@@ -78,11 +102,75 @@ describe("restoring on startup", () => {
     stored.primitives.push({ id: "point-1", type: "point", x: 3, y: 4 } as never)
     const { repository } = makeRepository({ stored: snapshot(stored, 7) })
 
-    const outcome = await persistence(repository).restore()
+    // 按**文档自己的 id** 探测（会话会用的就是它）：这是主路径，命中时不该再走任何回退。
+    const outcome = await persistence(repository, stored.metadata.id).restore()
 
     expect(outcome.created).toBe(false)
     expect(outcome.document.primitives).toHaveLength(1)
     expect(outcome.failure).toBeUndefined()
+  })
+
+  /**
+   * **外部审查 X1 的现场**：每次启动都必然 `not_found`，于是每次启动插一行垃圾文档，
+   * 而仓储里那份真正的内容永远读不回来 —— SQLite 从来不是文档真源。
+   *
+   * 根因是 `restore()` 用 `emptyDocument()` **刚生成的新随机 id** 去探测，
+   * 而 Rust 侧按 `(project_id, document_id)` 精确过滤。
+   */
+  it("finds the document on a second launch instead of inserting a new row every time", async () => {
+    const { repository, calls } = makeRepository({ stored: null })
+    const sessionId = "doc-session"
+
+    // 第一次启动：项目里一份都没有 → 建出来，**行 id 就是这一世会用的那个**。
+    const first = await persistence(repository, sessionId).restore()
+    expect(calls).toEqual(["readHead", "readLatestHead", "create"])
+    expect(first.created).toBe(true)
+    expect(repository.readHead).toHaveBeenCalledWith("p1", sessionId)
+
+    // 第二次启动：同一个 id ⇒ 必须直接读回那一行，一次 `create` 都不发。
+    calls.length = 0
+    const second = await persistence(repository, sessionId).restore()
+
+    expect(second.created).toBe(false)
+    expect(calls).toEqual(["readHead"])
+    expect(calls).not.toContain("create")
+  })
+
+  it("creates the row under the id the session will actually use", async () => {
+    // 断言的不只是"建出来了"，而是**建出来的那一行与文档自己的 id 一致** ——
+    // 否则第一次自动保存就带着"文档 id ≠ 行 id"去提交，Rust 侧只会回 `no document …`。
+    const { repository } = makeRepository({ stored: null })
+
+    const outcome = await persistence(repository, "doc-session").restore()
+
+    expect(outcome.document.metadata.id).toBe("doc-session")
+    expect(repository.create).toHaveBeenCalledWith("p1", expect.objectContaining({ metadata: expect.objectContaining({ id: "doc-session" }) }))
+  })
+
+  it("adopts the project's latest document when the remembered id is gone", async () => {
+    // localStorage 被清掉 / 换了台机器：本地记不住 id，但**仓储里那份内容还在**。
+    // "本地没记住"与"库里没有"是两件事，前者不能把后者当成事实。
+    const stored = createEmptyDocument("conics")
+    stored.primitives.push({ id: "point-1", type: "point", x: 3, y: 4 } as never)
+    const { repository, calls } = makeRepository({ stored: snapshot(stored, 7) })
+
+    const outcome = await persistence(repository, "doc-forgotten").restore()
+
+    expect(calls).toEqual(["readHead", "readLatestHead"])
+    expect(outcome.created).toBe(false)
+    expect(outcome.document.metadata.id).toBe(stored.metadata.id)
+    expect(outcome.document.primitives).toHaveLength(1)
+  })
+
+  it("does not probe the latest head in a browser, where the shell is missing", async () => {
+    // 网页版的行为必须与加这个功能之前**完全一样**：一次注定失败的 IPC 都不多发。
+    const { repository, calls } = makeRepository({ notDesktop: true })
+
+    const outcome = await persistence(repository).restore()
+
+    expect(calls).toEqual(["readHead"])
+    expect(outcome.failure?.ok).toBe(false)
+    if (outcome.failure) expect(outcome.failure.code).toBe("not_a_desktop_shell")
   })
 
   it("creates a document on a first run and reports that it was created", async () => {
@@ -91,7 +179,8 @@ describe("restoring on startup", () => {
     const outcome = await persistence(repository).restore()
 
     // 首次启动时 `readHead` 回 `not_found` 是**正常状态**，不是失败。
-    expect(calls).toEqual(["readHead", "create"])
+    // 中间那次 `readLatestHead` 就是"确认项目里真的空无一物"的那一问。
+    expect(calls).toEqual(["readHead", "readLatestHead", "create"])
     expect(outcome.created).toBe(true)
     expect(outcome.failure).toBeUndefined()
   })
@@ -122,7 +211,8 @@ describe("restoring on startup", () => {
     const broken: DocumentSnapshot = { projectId: "p1", documentId: "d1", epoch: "e", generation: 1, contentHash: "h", content: "{ not json", updatedAt: 0 }
     const { repository } = makeRepository({ stored: broken })
 
-    const outcome = await persistence(repository).restore()
+    // 用**行自己的 id** 探测，命中的就是这份坏快照（而不是靠回退兜到它）。
+    const outcome = await persistence(repository, "d1").restore()
 
     expect(outcome.document.metadata).toBeDefined()
     expect(outcome.failure?.ok).toBe(false)

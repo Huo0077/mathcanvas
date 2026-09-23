@@ -82,6 +82,14 @@ export function classifyRepositoryError(error: unknown): RepositoryFailure {
 export interface DocumentRepository {
   /** 读一份文档的 head；不存在时回 `not_found`。 */
   readHead(projectId: string, documentId: string): Promise<RepositoryResult<DocumentSnapshot>>
+  /**
+   * 读**这个项目里最新的那一份**文档 head；项目里一份都没有时回 `null`。
+   *
+   * 存在的理由是"本地记不住 id"与"库里其实有内容"是两件事（外部审查 X1）：
+   * 记忆（localStorage 里的草稿 / 上次的 id）丢得起，仓储里的文档丢不起。
+   * 恢复路径在按 id 探测未命中之后用它兜底，而不是直接当作用户第一次运行。
+   */
+  readLatestHead(projectId: string): Promise<RepositoryResult<DocumentSnapshot | null>>
   /** 首次写入。 */
   create(projectId: string, document: GeometryDocument): Promise<RepositoryResult<DocumentSnapshot>>
   /**
@@ -120,6 +128,8 @@ export function createDocumentRepository(invoke: Invoke): DocumentRepository {
 
   return {
     readHead: (projectId, documentId) => call<DocumentSnapshot>("read_document_head", { projectId, documentId }),
+
+    readLatestHead: (projectId) => call<DocumentSnapshot | null>("read_latest_document_head", { projectId }),
 
     create: (projectId, document) =>
       call<DocumentSnapshot>("create_document", {

@@ -111,6 +111,14 @@ export interface DraftStore {
   stage(draftId: string, actions: DraftAction[], expectedDraftVersion: number, userMessage?: string): StageResult
   /** 基础文档变了（手工编辑、撤销、切工作区）→ 草稿过期，不能再提交。 */
   assertFresh(draftId: string, liveHandle: DocumentHandle): FreshnessResult
+  /**
+   * **这份草稿是对哪一份文档编译出来的**（即 `create` 时记下的那个句柄）。
+   *
+   * 一次性同意必须绑定**这个**句柄，而不是"用户点确认时"的那一份 ——
+   * 两者在"看预览期间用户又改了画布"这种情况下的取值不同，而这正是要拦下的情形。
+   * 详见 `hostBridge.requestConsent` 里的推导。草稿不存在时为 `null`。
+   */
+  baseHandleOf(draftId: string): DocumentHandle | null
   invalidate(draftId: string, reason: string): void
   getPreview(draftId: string): DraftPreview | null
 }
@@ -236,6 +244,11 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
       if (record.baseHandle.generation !== liveHandle.generation) return { ok: false, reason: "stale_source", detail: "the document changed since the draft was created" }
       if (record.baseHandle.contentHash !== liveHandle.contentHash) return { ok: false, reason: "stale_source", detail: "the document content changed since the draft was created" }
       return { ok: true }
+    },
+
+    baseHandleOf(draftId) {
+      // 失效的草稿已经从 `drafts` 里删掉，所以这里天然返回 `null`（与 `assertFresh` 同一判据）。
+      return drafts.get(draftId)?.baseHandle ?? null
     },
 
     invalidate(draftId, reason) {

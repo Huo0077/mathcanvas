@@ -77,6 +77,21 @@ describe("provider profile client", () => {
     expect(findSecretField({ a: { b: { token: "x" } } })).toBe("token")
     expect(findSecretField({ secretRef: "openai", name: "OpenAI" })).toBeNull()
     expect(findSecretField({ provider: { auth: { password: "x" } } })).toBe("password")
+
+    /**
+     * **数组里也要查**（外部审查 M9）。
+     *
+     * 原先的 `Array.isArray(value) → null` 让数组成为盲区：
+     * `{"capabilities":[{"apiKey":"sk-…"}]}` 这种载荷**不会被拒**，而是被反序列化**静默削掉**
+     *（`CapabilityEvidence` 没有 `deny_unknown_fields`）—— 正是这道门自己的注释里
+     * 说"比报错更危险"的那种结果。函数文档写着"任意深度"，数组也是深度。
+     * Rust 侧同一处也一起修了，两边的用例一一对应。
+     */
+    expect(findSecretField({ capabilities: [{ feature: "vision", status: "unknown", apiKey: "sk-not-a-real-key" }] })).toBe("apiKey")
+    // 数组里嵌对象、对象里再嵌数组。
+    expect(findSecretField({ a: [{ b: [{ token: "sk-not-a-real-key" }] }] })).toBe("token")
+    // 反向守卫：数组里**没有**密钥形状字段时照常放行（这条闸不该变成"见到数组就拒"）。
+    expect(findSecretField({ capabilities: [{ feature: "vision", status: "unknown", secretRef: "openai" }] })).toBeNull()
   })
 
   it("separates 'no desktop shell' from 'ipc failed'", async () => {

@@ -18,6 +18,7 @@ import {
   type ObserverPort,
   type PlanEnvelope,
   type PlannerPort,
+  type RunEvent,
   type SceneDocumentSnapshot,
   type SkillCatalog,
   type ToolResult
@@ -112,6 +113,14 @@ export interface AgentRuntimeDependencies {
   conversation?: () => ConversationContextSource
 }
 
+/**
+ * 宿主确认的结果：提交结论 + **协调器在确认之后补记的那几步账本事件**（外部审查 A4）。
+ *
+ * 事件必须交回宿主：**落库的 `run_events` 就是协调器那份账本**，不回流的话生产账本
+ * 永远停在"等用户确认"，即使文档真的提交了（`committing` / `completed` 只有测试够得到）。
+ */
+export type ConfirmOutcome = CommitOutcome & { events?: RunEvent[] }
+
 export interface AgentRuntime {
   coordinator: AgentCoordinator
   /** 给模型/工具用的草稿工具（与协调器**共用**同一个草稿存储）。 */
@@ -165,7 +174,7 @@ export interface AgentRuntime {
    * 两步都必须走宿主桥：先 `requestConsent` 铸造一次性凭据，再 `commit` 提交。
    * 界面上那个按钮**没有**绕过这一层的能力 —— 它只能调这个方法，而这个方法只能调宿主桥。
    */
-  confirmDraft(): CommitOutcome
+  confirmDraft(): ConfirmOutcome
   /** 用户点了丢弃：草稿失效，文档一个字节都不动。 */
   discardDraft(): boolean
   /** 供诊断：一次运行之后看宿主桥记下了什么。 */
@@ -372,7 +381,7 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
       return merged.length > 0 ? merged : undefined
     },
     questions: () => declaredQuestions,
-    confirmDraft() {
+    confirmDraft(): ConfirmOutcome {
       const id = committer.draftIdFor()
       /**
        * **拒绝时说出运行时知道的事实**（2026-09-21）。
@@ -390,7 +399,21 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
         return { status: "rejected" as const, detail: `cannot mint consent for ${id}: ${consent.reason}` }
       }
       const result = host.commit(id, consent.record)
-      if (result.ok) return { status: result.receipt.changed ? "committed" as const : "no_change" as const }
+      if (result.ok) {
+        const status = result.receipt.changed ? "committed" as const : "no_change" as const
+        /**
+         * **确认之后把账本走完**（外部审查 A4）。
+         *
+         * `coordinator.start()` 在 `awaiting_confirmation` 就返回了 —— 这是对的（同意凭据要等
+         * 用户点确认才存在），但**落库的 `run_events` 就是那份账本**：少了这一步，生产账本永远
+         * 停在"等用户确认"，**即使文档真的提交了**，`committing` / `completed` 只有测试够得到。
+         * 事件交回宿主回流（`agentRunner.confirm` 负责记进 store / 仓储）。
+         *
+         * 只在**成功**时补记：被拒时这一轮仍停在"等用户确认"（面板还挂着、还能再点一次），
+         * 见 `AgentCoordinator.settleConfirmation` 的说明。
+         */
+        return { status, events: coordinator.settleConfirmation({ status }) }
+      }
       if (result.reason === "stale_source") return { status: "stale_source" as const, detail: result.detail }
       // 会话对不上（用户切走了）：同样是"世界变了"，按 stale 如实回，而不是硬着头皮提交。
       if (result.reason === "stale_conversation") return { status: "stale_source" as const, detail: result.detail }

@@ -108,6 +108,30 @@ describe("the assembled runtime actually runs", () => {
   })
 
   /**
+   * **用户确认之后，账本必须走完**（外部审查 A4）。
+   *
+   * `coordinator.start()` 在 `awaiting_confirmation` 就返回了 —— 这是对的，同意凭据要等用户
+   * 点确认才存在。但**落库的 `run_events` 就是那份账本**：少了"确认之后"这一步，生产账本
+   * 永远停在"等用户确认"，**即使文档真的提交了** —— `committing` / `completed` 于是只有测试
+   * 够得到，而那份事实记录在说一件没发生的事（"没提交"，可画布已经变了）。
+   */
+  it("settles the run ledger once the user confirms", async () => {
+    const { runtime, written } = makeRuntime()
+    const events = await drive(runtime.coordinator, { run: runContext(), userMessage: "建个立方体" })
+    expect(events.at(-1)).toBe("awaiting_confirmation")
+
+    const outcome = runtime.confirmDraft()
+
+    expect(outcome.status).toBe("committed")
+    // 补记的那几步交回宿主：提交中 → 完成。
+    expect(outcome.events?.map((event) => event.phase)).toEqual(["committing", "completed"])
+    // 而且**账本本身**真的走到了完成，不是只返回了几条事件。
+    expect(runtime.coordinator.phase()).toBe("completed")
+    expect(runtime.coordinator.ledger().map((event) => event.phase).at(-1)).toBe("completed")
+    expect(written.length).toBeGreaterThan(0)
+  })
+
+  /**
    * **接线级的真实故障回归**（2026-09-21）。画布上已经有一个对象时，同类的下一个动作
    * 曾经必然失败：分配器只会数数、不知道文档里已经有 `solid-1`（账本 `run-6-mubf109e`）。
    * 这条用例从组装好的运行时走一遍，断言**草稿真的成型**且新对象另起了 id。

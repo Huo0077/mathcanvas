@@ -2052,6 +2052,61 @@ describe("MathCanvas workbench", () => {
     // 不变量：定点到基准中心的距离 = 半径，且定点到**解出来的**圆心距离也 = 半径。
     expect(Math.hypot(baseCenter.x - point.x, baseCenter.y - point.y)).toBeCloseTo(3, 9)
     expect(Math.hypot(circle.center.x - point.x, circle.center.y - point.y)).toBeCloseTo(3, 9)
+
+    /**
+     * **整次拖动只压一条撤销记录**（外部审查 S1）。
+     *
+     * 修复前：主位移 `apply` 一次、曲线跟随再 `apply` 一次 ⇒ 压两条记录，
+     * 而一次 Ctrl+Z 只退一条 —— 用户看到的是"点退回去了、圆却留在半路"
+     *（审计实测 `dist = 4.123` vs `r = 3`，要按两次才回得到原状）。
+     * 现在整次拖动走 `applyBatch`，一次撤销必须把两者**一起**退回去。
+     */
+    expect(useSceneStore.getState().history).toHaveLength(1)
+    useSceneStore.getState().undo()
+    const undone = useSceneStore.getState().document
+    const undoneCircle = undone.primitives.find((primitive) => primitive.id === "circle-1")
+    const undonePoint = undone.primitives.find((primitive) => primitive.id === "point-p")
+    if (undoneCircle?.type !== "circle" || undonePoint?.type !== "point") throw new Error("expected a placed circle and its pivot point")
+    expect(undonePoint.x).toBeCloseTo(3, 9)
+    expect(undonePoint.y).toBeCloseTo(0, 9)
+    expect(undoneCircle.rotationAbout?.baseCenter.x).toBeCloseTo(0, 9)
+    expect(undoneCircle.rotationAbout?.baseCenter.y).toBeCloseTo(0, 9)
+  })
+
+  /**
+   * **「绕定点旋转」是一个动作、也是一步撤销**（外部审查 S1）。
+   *
+   * 它内部要写两笔补丁：定点先落到位、曲线再摆到"过它"的位置。原先写成两次 `apply`，
+   * 于是这一个用户动作压**两条**撤销记录 —— 一次 Ctrl+Z 只退曲线那一笔，留下
+   * "点已经挪到圆上、曲线却还没摆过去"的中间态：那个状态用户从没见过，而且曲线不过定点。
+   */
+  it("records the anchor command as a single undo step", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [
+      { id: "circle-1", type: "circle", center: { x: 0, y: 0 }, radius: 3, label: "圆 c" },
+      { id: "point-1", type: "point", x: 5, y: 0, label: "定点 P" }
+    ]
+    useSceneStore.setState({ document, workspaceDocuments: { [document.workspace]: document }, history: [], future: [], error: null })
+    render(<App />)
+
+    fireEvent.click(algebraRow("定点 P"))
+    fireEvent.click(algebraRow("圆 c"), { shiftKey: true })
+    fireEvent.click(screen.getByRole("button", { name: "绕定点旋转" }))
+
+    // 一个动作 = 一条撤销记录（修复前是两条）。
+    expect(useSceneStore.getState().history).toHaveLength(1)
+
+    useSceneStore.getState().undo()
+    const undone = useSceneStore.getState().document
+    const circle = undone.primitives.find((primitive) => primitive.id === "circle-1")
+    const point = undone.primitives.find((primitive) => primitive.id === "point-1")
+    if (circle?.type !== "circle" || point?.type !== "point") throw new Error("expected a circle and a point")
+    // 一步就回到原状：点还在 (5,0)，曲线还没有 rotationAbout。任何"半路状态"都会在这里露出来。
+    expect(point.x).toBeCloseTo(5, 9)
+    expect(point.y).toBeCloseTo(0, 9)
+    expect(circle.rotationAbout).toBeUndefined()
+    expect(circle.center.x).toBeCloseTo(0, 9)
+    expect(circle.center.y).toBeCloseTo(0, 9)
   })
 
   /**

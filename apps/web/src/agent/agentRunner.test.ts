@@ -4,7 +4,7 @@ import { createEmptyDocument } from "@draw/dsl"
 import type { PlanEnvelope, PlannerPort, PlanRequest } from "@draw/agent-core"
 
 import { useAgentStore } from "../agentStore"
-import { conversationRepository } from "../conversationRepository"
+import { conversationRepository, MAX_SUMMARY_CHARS, setConversationRepository } from "../conversationRepository"
 import { summaryOfDocument, withDocumentSummary } from "../conversationSummary"
 import { readConversation } from "../services/conversationClient"
 import { useSceneStore } from "../store"
@@ -65,6 +65,70 @@ describe("the confirm and commit cycle", () => {
     // 文档真的变了，而且**恰好压一步历史**（撤销得回去）。
     expect(useSceneStore.getState().document.primitives.length).toBeGreaterThan(0)
     expect(useSceneStore.getState().history).toHaveLength(1)
+  })
+
+  /**
+   * **读会话记录抛错，不能让这一轮"点了没反应"**（外部审查 A3）。
+   *
+   * `readConversationSource` 里那句 `readRecord` 原先在 try/catch **外面**，而桌面侧读会话记录
+   * 是会抛的（走 IPC）。一抛，`runner.run` 就在**协调器启动之前** reject：界面上那条固定的
+   * 助手消息永远停在 `pending`、输入框一直禁用，而 `AgentWorkspace` 的 `void onRun(...)`
+   * 把这个 rejection 吞掉了 —— 用户看到的是"点了没反应"，且没有任何报错。
+   *
+   * 期望的行为本来就是注释里写的那句："读不到就当作还没有长期记忆，不编一份摘要或事实出来"，
+   * 外加**如实记一行诊断**（不是静默吞掉）。
+   */
+  it("still runs the turn when reading the stored conversation throws", async () => {
+    const base = conversationRepository()
+    setConversationRepository({ ...base, readRecord: async () => { throw new Error("the desktop repository is unreachable") } })
+    try {
+      const runner = createAgentRunner()
+
+      // 关键：`run` 不 reject，而是照常走完这一轮（草稿照样成型）。
+      const result = await runAndWait(runner, "建一个棱长 3 的立方体")
+
+      expect(result.phase).toBe("awaiting_confirmation")
+      expect(runner.hasDraft()).toBe(true)
+      // 而且把原因**说出来**了。
+      const assistant = useAgentStore.getState().activeConversation!.messages.at(-1)!
+      expect((assistant.diagnostics ?? []).some((line) => line.includes("could not read the stored conversation"))).toBe(true)
+    } finally {
+      setConversationRepository(null)
+    }
+  })
+
+  /**
+   * **缺事实时要把"缺的是哪个"说给用户**（外部审查 Agent-M4）。
+   *
+   * 协调器停在 `waiting` 有两个来源：规划器给的澄清问题（`questions()` 有值），
+   * 以及"计划引用了本次观察没有的对象"。原先后者只落到那句写死的"这一步需要你补充信息。" ——
+   * 用户既不知道缺哪个对象、也无从回答（审计在 29 个对象的真实文档上撞到过：
+   * 引用第 13 个对象就死在这里）。现在宿主把账本那句话原样转给用户。
+   */
+  it("names the missing object when the plan cites something this run did not observe", async () => {
+    const planner: PlannerPort = {
+      plan: async () => ({
+        plan: {
+          schemaVersion: "mathcanvas.plan.v1",
+          kind: "plan",
+          goal: "把 solid-not-observed 挪一下",
+          factIds: ["solid-not-observed"],
+          actions: [{ actionId: "solid.create_template", actionKey: "c", factIds: ["solid-not-observed"], inputs: { alias: "c", template: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 1, y: 1, z: 1 } } }]
+        } as unknown as PlanEnvelope,
+        requestId: "req-1",
+        attemptId: "attempt-1"
+      })
+    }
+    const runner = createAgentRunner({ planner })
+
+    const result = await runAndWait(runner, "把 solid-not-observed 挪一下")
+
+    expect(result.phase).toBe("waiting")
+    const assistant = useAgentStore.getState().activeConversation!.messages.at(-1)!
+    expect(assistant.pending).toBe(false)
+    // `failPendingReply` 把话放在 `failure.message` 里（`text` 是空的），界面渲染的就是它。
+    // **点名**：修复前这里只有一句写死的"这一步需要你补充信息。"。
+    expect(assistant.failure?.message).toContain("solid-not-observed")
   })
 
   it("records a committed receipt on the assistant message", async () => {
@@ -936,8 +1000,13 @@ describe("a committed run leaves long-term memory behind", () => {
     const seed = { goal: "", confirmedFacts: ["甲 已确认"], createdObjects: ["solid-0"], openQuestions: [], preferences: [], messageCount: 3, compactedAt: 1 }
     const seedBook = withDocumentSummary("", "doc-seed", seed)
     const unPadded = withDocumentSummary(seedBook, "doc-pad", seed).length
-    const padded = withDocumentSummary(seedBook, "doc-pad", { ...seed, goal: "目".repeat(16_000 - 200 - unPadded) })
-    expect(padded.length).toBeLessThanOrEqual(16_000)
+    /**
+     * 上限由**导出常量**推导，不写字面量（外部审查 M7）：
+     * 上一版把 `16_000` 抄在这里，于是它与 Rust 的 `16 * 1024` 差 2.4% 也没人发现；
+     * 而"离上限只剩 200 字符"这个编排只有在与**仓储/商店同一个数**对齐时才成立。
+     */
+    const padded = withDocumentSummary(seedBook, "doc-pad", { ...seed, goal: "目".repeat(MAX_SUMMARY_CHARS - 200 - unPadded) })
+    expect(padded.length).toBeLessThanOrEqual(MAX_SUMMARY_CHARS)
     await conversationRepository().saveSummary({ conversationId, summary: padded })
 
     const runner = createAgentRunner()
@@ -952,7 +1021,7 @@ describe("a committed run leaves long-term memory behind", () => {
     const record = await conversationRepository().readRecord(conversationId)
     expect(summaryOfDocument(record!.summary, "doc-seed")).toBeNull()
     expect(summaryOfDocument(record!.summary, "doc-pad")).not.toBeNull()
-    expect(record!.summary.length).toBeLessThanOrEqual(16_000)
+    expect(record!.summary.length).toBeLessThanOrEqual(MAX_SUMMARY_CHARS)
 
     const assistant = useAgentStore.getState().activeConversation!.messages.find((message) => message.id === assistantId)
     const diagnostics = assistant?.diagnostics ?? []
@@ -1013,10 +1082,16 @@ describe("a committed run leaves long-term memory behind", () => {
   /**
    * **提交被拒时这一轮还活着**（Fix round 2 / item 3）。
    *
-   * `confirm` 原先**无条件**把这一轮从表里删掉（`retireRun`），于是提交被拒（例如世界变了：
-   * 文档在预览之后被改过 → `stale_source`）之后，面板还挂在界面上，用户再点一次却得到
-   * "这一轮已经不在等确认了" —— 真正的原因（文档变了）被第二句话盖掉，而且
-   * `hasDraft()` 也变成 false，界面再也说不出"这里还有一份草稿"。
+   * `confirm` 原先**无条件**把这一轮从表里删掉（`retireRun`），于是提交被拒之后面板还挂在
+   * 界面上，用户再点一次却得到"这一轮已经不在等确认了" —— 真正的原因被第二句话盖掉，
+   * 而且 `hasDraft()` 也变成 false，界面再也说不出"这里还有一份草稿"。
+   *
+   * **拒绝理由在 2026-09-22 变了（外部审查 X2 的连带修正）**：这里原先断言 `commit_rejected`
+   * （手工建了同一个 `point-1`，重放时撞 id）。但"用户手工编辑过文档"这件事现在**更早**
+   * 就被挡下来 —— 一次性同意绑定的是**草稿编译时**的句柄，而手工编辑让实时句柄变了，
+   * 于是 CAS 先给出 `stale_source`。这既更早也更准确：用户听到的是"文档在草稿生成之后变过"，
+   * 而不是一句让人摸不着头脑的"重复 id"。**这条用例真正守的性质没变**：
+   * 被拒之后这一轮仍然活着，再点一次报的还是同一个真实原因。
    */
   it("keeps the run alive when the commit was refused, so the user can retry", async () => {
     const runner = createAgentRunner()
@@ -1024,13 +1099,14 @@ describe("a committed run leaves long-term memory behind", () => {
     await runAndWait(runner, "画一个点")
     const runId = useAgentStore.getState().activeConversation!.messages.at(-1)!.runId!
 
-    // 用户手工建了**同一个 id** 的对象（真实出现过的现场：画布上已经有了同类对象）：
-    // 提交时要重放的那笔 `addPrimitive` 会撞 id，`commitTransaction` 当场拒绝。
+    // 用户手工建了**同一个 id** 的对象（真实出现过的现场：画布上已经有了同类对象）。
+    // 这一笔同时让"文档已经不是草稿编译时的那一版"成立。
     useSceneStore.getState().apply({ op: "addPrimitive", primitive: { id: "point-1", type: "point", x: 5, y: 5 } })
 
     const first = runner.confirm(runId)
-    expect(first.status).toBe("rejected")
-    expect(first.detail ?? "").toContain("commit_rejected")
+    expect(first.status).toBe("stale_source")
+    // 拒绝路径一个字节都不写：用户那一笔还在，草稿没有落进来。
+    expect(useSceneStore.getState().document.primitives.map((primitive) => primitive.id)).toEqual(["point-1"])
 
     // 面板还挂着：再点一次必须**仍然**报真实原因，而不是"这一轮已经不在等确认了"。
     const second = runner.confirm(runId)

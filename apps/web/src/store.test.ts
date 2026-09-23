@@ -185,4 +185,25 @@ describe("the scene store refuses edits that would make the document invalid", (
     // 失败要**说出来**（界面上那一行错误），而不是静默不动。
     expect(useSceneStore.getState().error).toBeTruthy()
   })
+
+  /**
+   * **批量入口不许成为绕过"结果文档校验"的后门**（外部审查 M2）。
+   *
+   * 上一条钉的是单条路径：`apply` → `commitPatch` 会在应用之后**校验整份文档**。
+   * `applyBatch` 走的是 `commitTransaction`，而它原先只逐条 `validatePatch`、**从不校验结果** ——
+   * 于是同一个非法改动，单条会被拦住、批量就进得去。两条路径都自称"唯一写入口"，
+   * 判据必须一致（`commitPatch` 的那道校验正是为"改动画布上是新的、磁盘上还是旧的"而加的）。
+   */
+  it("rejects the same document-invalidating edit when it arrives through a batch", () => {
+    const point = { id: "point3-1", type: "point3" as const, position: { x: 0, y: 0, z: 0 }, binding: { kind: "free" as const } }
+    useSceneStore.setState((state) => ({ ...state, document: { ...state.document, primitives: [point] as never } }))
+    const before = useSceneStore.getState().document
+
+    useSceneStore.getState().applyBatch([{ op: "updatePrimitive", id: "point3-1", patch: { binding3: { kind: "onHost", hostId: "edge-does-not-exist", parameter: 0.5 } } }])
+
+    const after = useSceneStore.getState().document
+    expect(after).toBe(before)
+    expect((after.primitives[0] as { binding?: { kind: string } }).binding?.kind).toBe("free")
+    expect(useSceneStore.getState().error).toBeTruthy()
+  })
 })

@@ -504,12 +504,16 @@ export function PropertiesBar({ value, min, max, step, onChange, selectedPrimiti
    */
   const derivedReadings = useMemo(() => {
     if (!selectedPrimitive) return []
-    const report = solidStatusReport(sceneDocument)
     // 截面：只报这一刀（`sourceId` 是那条截面图元自己的 id）。
-    if (selectedPrimitive.type === "section") return report.filter((entry) => entry.sourceId === selectedPrimitive.id)
+    if (selectedPrimitive.type === "section") {
+      return solidStatusReport(sceneDocument, { sectionIds: [selectedPrimitive.id] }).filter((entry) => entry.sourceId === selectedPrimitive.id)
+    }
     const solidIds = derivedSolidIdsOf(selectedPrimitive, sceneDocument)
     if (solidIds.length === 0) return []
-    return report.filter((entry) => solidIds.includes(entry.solidId))
+    // **把范围传给报告本身**（外部审查 G1）：上面那段注释一直说"按选中对象过滤"，
+    // 但原先的写法是 `solidStatusReport(sceneDocument)` 算完**整篇文档**再 `.filter(...)` ——
+    // 过滤只筛结果、不省计算，而"算"才是贵的那一半（每只实体都要解外接球与内切球）。
+    return solidStatusReport(sceneDocument, { solidIds }).filter((entry) => solidIds.includes(entry.solidId))
   }, [sceneDocument, selectedPrimitive])
 
   /**

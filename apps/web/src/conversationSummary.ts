@@ -212,12 +212,19 @@ export function withDocumentSummary(serialized: string, documentId: string, summ
 /**
  * **一本书的上限**（Follow-up / 摘要 16K 边界）。
  *
- * 与仓储两侧的那条守卫**逐字一致**：`conversationRepository.MAX_SUMMARY_CHARS` 与
- * Rust 的 `MAX_SUMMARY_CHARS` 都是 16000。按文档分开之后，一本书可以有**很多份**摘要，
- * 合并后越界就不再是"不可能"：`saveSummary` 抛错，调用方的 `try/catch` 一咽，
- * 表现是**摘要从此再也不更新**。所以写入前先把它削到装得下。
+ * 这个数是**唯一来源**：`conversationRepository.MAX_SUMMARY_CHARS` 直接从它取，
+ * 而那一份要与 Rust 的 `MAX_SUMMARY_CHARS`（`repository/conversations.rs`）一致。
+ *
+ * **原先这里是第二份 16000**（外部审查 M7）：注释还写着"与仓储两侧的那条守卫**逐字一致**……
+ * 都是 16000"，而 Rust 其实是 `16 * 1024`。于是同一个"摘要上限"在仓库里有三个数
+ *（这里的 16000、仓储那道闸的 16000、Rust 的 16384），差 2.4% —— 短消息看不出来，
+ * 边界上就是"桌面接受、浏览器拒绝"。**一个量只能有一个数**：现在从这里导出。
+ *
+ * 按文档分开之后，一本书可以有**很多份**摘要，合并后越界就不再是"不可能"：
+ * `saveSummary` 抛错，调用方的 `try/catch` 一咽，表现是**摘要从此再也不更新**。
+ * 所以写入前先把它削到装得下。
  */
-export const MAX_SUMMARY_BOOK_CHARS = 16_000
+export const MAX_SUMMARY_BOOK_CHARS = 16 * 1024
 
 export interface FittedSummaryBook {
   /** 装得下的一本（内容都来自原来那一本：丢或削，**不编**）。 */

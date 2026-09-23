@@ -3,6 +3,7 @@ import type { GeometryDocument, Workspace } from "@draw/dsl"
 
 const activeWorkspaceKey = "mathcanvas:active-workspace"
 const workbenchPreferencesKey = "mathcanvas:workbench-preferences"
+const lastDocumentIdKey = "mathcanvas:last-document-id"
 const draftKey = (workspace: Workspace) => `mathcanvas:draft:${workspace}`
 
 export type TreeTabPreference = "model" | "layers" | "drawings"
@@ -55,9 +56,30 @@ export function saveDraft(document: GeometryDocument): void {
   try {
     localStorage.setItem(draftKey(document.workspace), serialized)
     localStorage.setItem(activeWorkspaceKey, document.workspace)
+    /**
+     * **记住"这一世用的是哪份文档"**（2026-09-22 修 / 外部审查 X1）。
+     *
+     * 启动时的仓储探测必须用**这个** id：Rust 侧 `read_head` 按 `(project_id, document_id)`
+     * 过滤，而 `createEmptyDocument()` 每次都给一个新随机 id —— 没有这份记忆，
+     * 每次启动都必然未命中，仓储里那份真正的内容永远读不回来。
+     * 与草稿写在同一个 `try` 里：两者都是"记住本地状态"，配额满了就一起降级。
+     */
+    localStorage.setItem(lastDocumentIdKey, document.metadata.id)
   } catch {
     // 草稿存不下时调用方已经通过 `load` 的提示告知用户；这里不重复抛。
   }
+}
+
+/**
+ * 上一次活动文档的 id（没有任何记录时为 `null`）。
+ *
+ * 与 `loadDraft` **刻意分开**：读它不需要解码 `.mgeo`，因此没有副作用
+ * （不会删除垃圾草稿、也不会把读不出来的草稿挪到旁路键），可以在启动探测之前安全调用。
+ */
+export function loadLastDocumentId(): string | null {
+  if (typeof localStorage === "undefined") return null
+  const documentId = localStorage.getItem(lastDocumentIdKey)
+  return documentId !== null && documentId.length > 0 ? documentId : null
 }
 
 /**

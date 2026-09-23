@@ -6,6 +6,9 @@ import {
   DEFAULT_CONVERSATION_BINDING,
   LEGACY_AGENT_STORAGE_KEY,
   MAX_CONVERSATION_MESSAGES,
+  MAX_FACT_VALUE_CHARS,
+  MAX_MESSAGE_CHARS,
+  MAX_SUMMARY_CHARS,
   createConversationRepository,
   setConversationRepository,
   type ConversationBinding
@@ -334,9 +337,33 @@ describe("conversation repository", () => {
     await repository.create(conversation("c1"), bindingA)
     await repository.append(conversation("c1"), bindingA, userMessage("m1", "c1", "画一个正方体"))
 
-    expect(() => repository.append(conversation("c1"), bindingA, userMessage("m2", "c1", "x".repeat(32_001)))).toThrow(/over the 32000/i)
-    expect(() => repository.saveSummary({ conversationId: "c1", summary: "y".repeat(16_001) })).toThrow(/over the 16000/i)
-    expect(() => repository.saveFact({ ...factFor("c1", "m1"), valueJson: { text: "z".repeat(8_001) } })).toThrow(/over the 8000/i)
+    // 边界与期望文案都由**导出常量**推导 —— 上一版把 32000/16000/8000 抄在这里，
+    // 于是它比 Rust 的 32*1024 小 2.4% 也没人发现（外部审查 M7）。
+    expect(() => repository.append(conversation("c1"), bindingA, userMessage("m2", "c1", "x".repeat(MAX_MESSAGE_CHARS + 1)))).toThrow(new RegExp(`over the ${MAX_MESSAGE_CHARS}`))
+    expect(() => repository.saveSummary({ conversationId: "c1", summary: "y".repeat(MAX_SUMMARY_CHARS + 1) })).toThrow(new RegExp(`over the ${MAX_SUMMARY_CHARS}`))
+    expect(() => repository.saveFact({ ...factFor("c1", "m1"), valueJson: { text: "z".repeat(MAX_FACT_VALUE_CHARS + 1) } })).toThrow(new RegExp(`over the ${MAX_FACT_VALUE_CHARS}`))
+  })
+
+  /**
+   * **按码点数，而且数字与 Rust 同一份**（外部审查 M7）。
+   *
+   * 两个后端原先对**同一条内容**给出不同结论，原因有两个、都要钉住：
+   * ①数字不同 —— 这里 `32_000`、Rust `32 * 1024`；
+   * ②计数方式不同 —— TS 的 `String.length` 数 **UTF-16 码元**，Rust 的 `chars().count()` 数 **码点**。
+   * 下面第一条断言就是冲 ② 去的：20 000 个 emoji 是 20 000 码点、却是 40 000 码元 ——
+   * 旧实现会以"40000 characters, over the 32000 limit"拒绝一条 Rust 完全接受的正文。
+   */
+  it("counts code points rather than UTF-16 units, like Rust does", async () => {
+    const repository = createConversationRepository()
+    await repository.create(conversation("c1"), bindingA)
+
+    // 20 000 码点（40 000 码元）：必须**接受** —— 这正是旧实现拒绝的那一条。
+    const emoji = "🙂".repeat(20_000)
+    expect(() => repository.append(conversation("c1"), bindingA, userMessage("m1", "c1", emoji))).not.toThrow()
+
+    // 上限之内接受、之外拒绝；文案里报出的数也是**码点**数。
+    expect(() => repository.append(conversation("c1"), bindingA, userMessage("m2", "c1", "x".repeat(MAX_MESSAGE_CHARS - 100)))).not.toThrow()
+    expect(() => repository.append(conversation("c1"), bindingA, userMessage("m3", "c1", "x".repeat(MAX_MESSAGE_CHARS + 1)))).toThrow(new RegExp(`over the ${MAX_MESSAGE_CHARS}`))
   })
 
   /**

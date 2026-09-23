@@ -189,6 +189,41 @@ describe("host bridge consent", () => {
     // 跨桥的授权一样不许写文档。
     expect(harness.replaced).toHaveLength(0)
   })
+
+  /**
+   * **"无需改动"是一次成功的提交**（外部审查 A1）。
+   *
+   * 它原先走 `{ ok: false, reason: "no_change" }` —— 失败通道。于是适配器只在 `ok: true`
+   * 分支里读 `receipt.changed`（那里永远拿不到 `false`），`no_change` 掉进通用拒绝 ⇒
+   * 协调器里 `no_change → completed` **成了死代码**，用户看到"运行失败"。
+   *
+   * 无操作在这里用"**一份什么都没暂存的草稿**"表达：它的操作集是空的，
+   * 于是 `commitTransaction` 的语义哈希不变（`changed: false`）—— 与生产里
+   * "真文档已经等于候选"走的是同一条分支。**授权照常被消费**（这一轮确实结束了），
+   * 而文档**一个字节都不写**。
+   */
+  it("reports a commit that changes nothing as a success, not a failure", () => {
+    const harness = makeBridge()
+    const record = harness.drafts.create(harness.getDocument(), harness.bridge.live()!.handle)
+    // 刻意**不**暂存任何动作：这就是"无需改动"。
+
+    const consent = harness.bridge.requestConsent(record.draftId)
+    expect(consent.ok).toBe(true)
+    if (!consent.ok) throw new Error("expected consent")
+
+    const receipt = harness.bridge.commit(record.draftId, consent.record)
+
+    // 修复前这里是 `{ ok: false, reason: "no_change" }`。
+    expect(receipt.ok).toBe(true)
+    if (receipt.ok) expect(receipt.receipt).toEqual({ changed: false, draftId: record.draftId })
+    // 文档没有被"替换"：无需改动就不写。
+    expect(harness.replaced).toHaveLength(0)
+
+    // 授权仍然是一次性的：同一个 nonce 不能再提交一次。
+    const second = harness.bridge.commit(record.draftId, consent.record)
+    expect(second.ok).toBe(false)
+    if (!second.ok) expect(second.reason).toBe("consumed_consent")
+  })
 })
 
 describe("consent record shape", () => {

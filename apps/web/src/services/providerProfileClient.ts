@@ -54,9 +54,23 @@ export type ProviderResult<T> =
 /** 与 Rust 侧 `FORBIDDEN_SECRET_FIELDS` 同一份判据（两处都要有：入口与出口）。 */
 const FORBIDDEN_SECRET_FIELDS = ["secret", "secretvalue", "secret_value", "apikey", "api_key", "key", "token", "password", "credential"]
 
-/** 找出对象里第一个密钥形状的字段名（任意深度）。`secretRef` 是引用，放行。 */
+/**
+ * 找出对象里第一个密钥形状的字段名（任意深度）。`secretRef` 是引用，放行。
+ *
+ * **数组也要进去**（外部审查 M9）：原先的 `Array.isArray(value) → null` 让数组成为盲区，
+ * 于是 `{"capabilities":[{"apiKey":"sk-…"}]}` 这种载荷**不会被拒**，而是被反序列化**静默削掉**
+ *（`CapabilityEvidence` 没有 `deny_unknown_fields`）—— 正是注释里说"比报错更危险"的那种结果。
+ * 函数自己的文档写着"任意深度"，数组也是深度。Rust 侧同一处也一起修了。
+ */
 export function findSecretField(value: unknown, depth = 0): string | null {
-  if (depth > 6 || !value || typeof value !== "object" || Array.isArray(value)) return null
+  if (depth > 6 || !value || typeof value !== "object") return null
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const nested = findSecretField(item, depth + 1)
+      if (nested) return nested
+    }
+    return null
+  }
   for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
     const lowered = key.toLowerCase()
     if (lowered !== "secretref" && FORBIDDEN_SECRET_FIELDS.includes(lowered)) return key

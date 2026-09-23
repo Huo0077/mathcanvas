@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react"
 
 import { createEmptyDocument, decodeMgeo, encodeMgeo, isSampledPrimitiveType, type AnnotationFeature, type DrawingSheetSpec, type EngineeringAnnotationKind, type Measurement3Metric, type PrimitiveSpec, type Vector3, type Workspace } from "@draw/dsl"
 import { buildSolidTemplate, createMeasurement3, entityResolverFor, evaluatePlanarMeasurement, host3FromPrimitive, selectPrimitivesInBox, type BoxSelectionMode, type PlanarMetric } from "@draw/geometry-kernel"
-import { compileActions, createIdAllocator, planeThroughPoints, sectionMaterialization, sectionPivot, sectionPlaneThroughSource, sectionSourceVertices, solidVolumeHostFor, validateDeletion, validatePatch } from "@draw/scene-graph"
-import type { Alignment } from "@draw/scene-graph"
+import { commitPatch, compileActions, createIdAllocator, planeThroughPoints, sectionMaterialization, sectionPivot, sectionPlaneThroughSource, sectionSourceVertices, solidVolumeHostFor, validateDeletion, validatePatch } from "@draw/scene-graph"
+import type { Alignment, DomainOperation } from "@draw/scene-graph"
 
 import { AlgebraView } from "./components/AlgebraView"
 import { AppChrome } from "./components/AppChrome"
@@ -39,7 +39,7 @@ import { resolveIntersectionPreview } from "./intersectionPreview3d"
 import { ThreeSceneView } from "./threeScene"
 import type { RibbonTabId } from "./uiState"
 import type { IntersectionPreview } from "./intersectionPreview"
-import { loadActiveWorkspace, loadDraft, saveDraft } from "./persistence/draftStorage"
+import { loadActiveWorkspace, loadDraft, loadLastDocumentId, saveDraft } from "./persistence/draftStorage"
 import { createDocumentRepository } from "./services/documentRepository"
 import { createDocumentPersistence, type DocumentPersistence } from "./services/documentPersistence"
 import { invokeDesktop } from "./services/desktopRuntime"
@@ -538,7 +538,22 @@ export function App() {
       if (!persistenceRef.current) persistenceRef.current = createDocumentPersistence({
         repository: createDocumentRepository(invokeDesktop),
         projectId: "local",
-        emptyDocument: () => createEmptyDocument("conics")
+        emptyDocument: () => createEmptyDocument("conics"),
+        /**
+         * **探测要用"这一世真正会用的那个 documentId"**（2026-09-22 修 / 外部审查 X1）。
+         *
+         * 原先这里没有这一项，`restore()` 拿 `createEmptyDocument("conics")` 刚生成的
+         * **新随机 id** 去 `readHead`。Rust 侧按 `(project_id, document_id)` 过滤 ⇒
+         * 每次启动必然 `not_found` ⇒ 每次启动插一行新的空文档，而仓储里那份真正的内容
+         * 永远读不回来（设计里"仓储才是真源"因此是空的），重启后会话侧栏也是空的
+         * （`list_conversations` 按 document 过滤）。
+         *
+         * 取值顺序：**上次活动文档的 id**（`saveDraft` 与草稿一起记下的，不需要解码草稿、
+         * 因此没有副作用）→ 退回 store 当前那份文档的 id（全新用户第一次启动）。
+         * 这里刻意**不**读草稿本体：`loadDraft` 会把读不出来的草稿挪到旁路键并抛错，
+         * 而那段处置属于下面 558 行的恢复分支，不该在探测阶段提前发生一次。
+         */
+        documentId: () => loadLastDocumentId() ?? useSceneStore.getState().document.metadata.id
       })
       const restored = await persistenceRef.current.restore()
       /**
@@ -1300,24 +1315,50 @@ export function App() {
       apply({ op: "updatePrimitive", id, patch: { x: dragged.x + action.delta.x } })
       return
     }
-    if (action.kind === "translate") apply({ op: "translatePrimitive", id, delta: action.delta })
-    else apply({ op: "updatePrimitive", id, patch: action.patch })
-    // 位移取自"这次拖动之后"的文档：点已经被搬过去了，差值就是它实际走的位移。
-    const after = useSceneStore.getState().document
-    const moved = after.primitives.find((primitive) => primitive.id === id)
-    if (moved?.type !== "point" || (action.kind === "translate" && action.delta.x === 0 && action.delta.y === 0)) return
+    /**
+     * **整次拖动只压一条撤销记录**（外部审查 S1）。
+     *
+     * 原先这里对主位移 `apply` 一次、再对每条受影响的曲线各 `apply` 一次 ——
+     * 一次拖动因此压**两条**（或更多）撤销记录，而一次 Ctrl+Z 只退一条：
+     * 用户看到的是"点退回去了、动圆却没跟回来"，圆不再过它的定点
+     *（审计实测 `dist = 4.123` vs `r = 3`），要按两次才回得到原状。
+     * `applyBatch` 就是为"一次交互 = 多笔补丁"准备的：事务里逐笔校验、逐笔应用，
+     * 但**整批只压一步**。
+     *
+     * 位移必须仍然取自**主位移实际生效之后**的那份文档：受限的点（绑在宿主上的）
+     * 可能只走了一部分、甚至拒绝整段位移。所以这里用纯函数 `commitPatch` **先试算一次**，
+     * 而不是"先写进 store、再读回来" —— 试算与真写入走的是同一条 `applyOperation`，
+     * 结果一致，但不会在中途留下一条撤销记录。
+     */
+    const primary: DomainOperation = action.kind === "translate"
+      ? { op: "translatePrimitive", id, delta: action.delta }
+      : { op: "updatePrimitive", id, patch: action.patch }
+    const probe = commitPatch(document, primary)
+    const moved = probe.document.primitives.find((primitive) => primitive.id === id)
     const before = document.primitives.find((primitive) => primitive.id === id)
-    if (before?.type !== "point") return
+    const zeroDelta = action.kind === "translate" && action.delta.x === 0 && action.delta.y === 0
+    if (!probe.changed || moved?.type !== "point" || before?.type !== "point" || zeroDelta) {
+      apply(primary)
+      return
+    }
     const delta = { x: moved.x - before.x, y: moved.y - before.y }
-    if (delta.x === 0 && delta.y === 0) return
-    const affected = after.primitives.flatMap((primitive) => {
+    if (delta.x === 0 && delta.y === 0) {
+      apply(primary)
+      return
+    }
+    const followers = probe.document.primitives.flatMap((primitive) => {
       if (primitive.type !== "circle" && primitive.type !== "ellipse") return []
       const placement = primitive.rotationAbout
       return placement?.pivot.kind === "primitive" && placement.pivot.primitiveId === id ? [{ curve: primitive, placement }] : []
     })
-    for (const { curve, placement } of affected) {
-      apply({
-        op: "updatePrimitive",
+    if (followers.length === 0) {
+      apply(primary)
+      return
+    }
+    applyBatch([
+      primary,
+      ...followers.map(({ curve, placement }) => ({
+        op: "updatePrimitive" as const,
         id: curve.id,
         patch: {
           center: { x: curve.center.x + delta.x, y: curve.center.y + delta.y },
@@ -1326,9 +1367,10 @@ export function App() {
             baseCenter: { x: placement.baseCenter.x + delta.x, y: placement.baseCenter.y + delta.y }
           }
         }
-      })
-    }
+      }))
+    ])
   }
+
   /**
    * 以选中的点为**定点**创建一条"动圆"（用户口径）。
    *
@@ -1378,22 +1420,31 @@ export function App() {
       setFileError("这个点无法作为旋转中心：它落在曲线中心，没有确定的方向。")
       return
     }
-    // 两次补丁：定点先落到位，曲线再摆到"过它"的位置。分开写是因为每一步都要过校验，而
-    // `addPrimitives` 这类"新增"操作对已存在的 id 会被拒绝；两次更新各自重算，结果一致。
-    apply({ op: "updatePrimitive", id: point.id, patch: { x: anchored.pivot.x, y: anchored.pivot.y } })
-    apply({
-      op: "updatePrimitive",
-      id: curve.id,
-      patch: {
-        center: anchored.curve.center,
-        rotation: anchored.curve.rotation,
-        rotationAbout: {
-          pivot: { kind: "primitive", primitiveId: point.id },
-          angle: 0,
-          baseCenter: anchored.rotationAbout.baseCenter
+    /**
+     * **两笔补丁合成一步**（外部审查 S1）：定点先落到位，曲线再摆到"过它"的位置。
+     *
+     * 顺序不能反，而且**每一步都要过校验**（`addPrimitives` 这类"新增"操作对已存在的 id
+     * 会被拒绝）—— `applyBatch` 正是按这个语义做的：它在事务里逐笔校验、逐笔应用，
+     * 只是**整批只压一条撤销记录**。原先写成两次 `apply`，于是"把点定为定点"这一个动作
+     * 要按两次 Ctrl+Z 才回得去，而中间那一步是用户从没见过的状态
+     *（点已经挪到曲线上、曲线却还没摆过去 —— 曲线不过定点）。
+     */
+    applyBatch([
+      { op: "updatePrimitive", id: point.id, patch: { x: anchored.pivot.x, y: anchored.pivot.y } },
+      {
+        op: "updatePrimitive",
+        id: curve.id,
+        patch: {
+          center: anchored.curve.center,
+          rotation: anchored.curve.rotation,
+          rotationAbout: {
+            pivot: { kind: "primitive", primitiveId: point.id },
+            angle: 0,
+            baseCenter: anchored.rotationAbout.baseCenter
+          }
         }
       }
-    })
+    ])
   }
   const deleteSelected = () => {
     if (!selectedIds.length) return

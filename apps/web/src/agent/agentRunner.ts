@@ -127,6 +127,29 @@ function generation(): number {
  *   别的文档确认的事实（"第 3 版新增 solid-1"）在这份文档里没有对应对象。
  * - **未确认的草稿只以视图形式进去**：草稿进的是 `draft` 字段，不是事实列表（规格 §1.2）。
  */
+/**
+ * **读会话记录，读不到就当作"还没有长期记忆"**（外部审查 A3）。
+ *
+ * 这一句原先直接写在 `readConversationSource` 里、且在它那个 try/catch **外面**，
+ * 而桌面侧读会话记录是会**抛**的（`conversationRepository` 走 IPC）。
+ * 一旦抛，`readConversationSource` 整个 reject ⇒ `agentRunner.run` 在协调器
+ * **启动之前**就结束：界面上那条固定的助手消息永远停在 `pending`、输入框一直禁用，
+ * 而 `AgentWorkspace` 的 `void onRun(...)` 把这个 rejection 吞掉了 ——
+ * 用户看到的是"点了没反应"，且没有任何报错。
+ *
+ * 而它下面那句注释本来就写着"仓储读不到就当作还没有长期记忆，**不编**一份摘要或事实出来"。
+ * 这里只是让那句话真的成立：吞掉异常、如实记一行诊断、按"没有长期记忆"继续跑。
+ */
+async function readConversationRecordSafely(conversation: { id: string } | undefined, runId?: string) {
+  if (!conversation) return null
+  try {
+    return await conversationRepository().readRecord(conversation.id)
+  } catch (error) {
+    useAgentStore.getState().recordDiagnostic(`[context] could not read the stored conversation ${conversation.id}: ${error instanceof Error ? error.message : String(error)}`, runId)
+    return null
+  }
+}
+
 async function readConversationSource(pinnedConversationId: string | undefined, runId?: string): Promise<ConversationContextSource> {
   const document = useSceneStore.getState().document
   const state = useAgentStore.getState()
@@ -151,8 +174,8 @@ async function readConversationSource(pinnedConversationId: string | undefined, 
     }
   }
   // 仓储读不到（浏览器里读的是同一份 localStorage 序列化器）就当作"还没有长期记忆"，
-  // **不编**一份摘要或事实出来。
-  const record = conversation ? await conversationRepository().readRecord(conversation.id) : null
+  // **不编**一份摘要或事实出来。读**失败**（桌面侧 IPC 抛错）走的也是同一条路 —— 见上面那个 helper。
+  const record = await readConversationRecordSafely(conversation, runId)
   const draft = conversation ? awaitingDraftOf(conversation) : undefined
   const documentId = document.metadata.id
   /**
@@ -548,11 +571,24 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
          * "当前没有模型服务"。问题与假设同一处产生（计划解析那一刻），所以同一处取。
          */
         const questions = active.questions()
+        /**
+         * **没有"问题"时，把账本那句原话说出来**（外部审查 Agent-M4）。
+         *
+         * `waiting` 有两个来源：规划器给的澄清问题（那时 `questions()` 有值），
+         * 以及"计划引用了本次观察没有的对象"（那条路径上 `questions()` 是空的）。
+         * 原先后者只会落到那句写死的"这一步需要你补充信息。" —— 用户既不知道缺哪个对象、
+         * 也无从回答（审计在 29 个对象的真实文档上撞到过：引用第 13 个对象就死在这里）。
+         * 账本里那句话是**协调器自己写的**（`the plan needs objects this run did not observe: …`），
+         * 直接转给用户就不会把信息丢掉。
+         */
+        const ledgerDetail = [...active.coordinator.ledger()].reverse().find((event) => event.phase === "waiting")?.detail
         useAgentStore.getState().failPendingReply({
           code: "needs_more_information",
           message: questions && questions.length > 0
             ? questions.join(" ")
-            : `这一步需要你补充信息${lastSelection?.textProfileId === "local-planner" ? "。当前没有接入模型服务，本地规划器只认识几条固定指令" : ""}。`,
+            : ledgerDetail
+              ? `这一步需要你补充信息：${ledgerDetail}`
+              : `这一步需要你补充信息${lastSelection?.textProfileId === "local-planner" ? "。当前没有接入模型服务，本地规划器只认识几条固定指令" : ""}。`,
           retryable: false
         }, eventRunId, generation())
       } else if (phase === "failed") {
@@ -581,6 +617,21 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
       if (!entry) return { status: "rejected", detail: runId === undefined ? "there is no run to confirm" : `run ${runId} is not waiting for a confirmation in the active conversation` }
       const { runtime: run, commit } = entry
       const outcome = run.confirmDraft()
+      /**
+       * **把"确认之后"那几步也回流进账本**（外部审查 A4）。
+       *
+       * `committing` / `completed` 是协调器在宿主确认**之后**补记的（见
+       * `AgentCoordinator.settleConfirmation`），而**落库的 `run_events` 就是这份账本**。
+       * 不回流的话，生产账本永远停在"等用户确认" —— 一份说"没提交"、而画布已经变了的事实记录。
+       */
+      for (const event of outcome.events ?? []) {
+        useAgentStore.getState().recordRunEvent({
+          phase: event.phase,
+          status: event.phase === "failed" ? "error" : "ok",
+          summary: event.detail || PHASE_SUMMARY[event.phase] || event.phase,
+          at: event.at
+        }, commit.runId)
+      }
       // 只有宿主桥说成功才显示成功；被拒时**如实**把原因带回界面。
       useAgentStore.getState().recordReceipt(outcome.status === "committed"
         ? { status: "committed" }

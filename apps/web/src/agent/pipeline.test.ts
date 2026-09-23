@@ -103,6 +103,59 @@ describe("agent commit pipeline against the real store", () => {
     expect(useSceneStore.getState().history).toHaveLength(1)
   })
 
+  /**
+   * **真实的调用顺序是"先编辑、后确认"**（2026-09-22 修 / 外部审查 X2）。
+   *
+   * 上一条用例按的是 `stage → requestConsent → 手工编辑 → commit`——
+   * 那个顺序下同意是在编辑**之前**取样的，CAS 自然能拦下。
+   * 但生产顺序恰好相反：`agentRuntime.confirmDraft` 里 `requestConsent` 与 `commit`
+   * **紧挨着**发生，而用户在盯着确认面板的这段时间里完全可以改画布。
+   * 那时"点确认时"取样的句柄与"提交时"的实时句柄永远是同一版 ⇒ CAS 恒过 ⇒
+   * **用户在看过预览之后做的编辑会被静默合并进提交**。
+   *
+   * 修法是让同意绑定**草稿的基准句柄**（候选是从哪一版文档算出来的），
+   * 于是"草稿编译之后文档又变过"这条重新被既有的 `stale_source` 挡住。
+   */
+  it("Gate 2 — a manual edit before the user confirms is not silently merged", () => {
+    const { bridge, drafts } = makeHarness()
+    const record = drafts.create(useSceneStore.getState().document, bridge.live()!.handle)
+    expect(stagePoint(drafts, record.draftId, record.draftVersion).ok).toBe(true)
+
+    // 用户看着确认面板，同时又在画布上添了一笔 —— 这正是**先编辑、后确认**。
+    manualEdit()
+    const afterEdit = useSceneStore.getState().document
+
+    const consent = bridge.requestConsent(record.draftId)
+    expect(consent.ok).toBe(true)
+    if (!consent.ok) throw new Error("expected consent")
+
+    const receipt = bridge.commit(record.draftId, consent.record)
+
+    expect(receipt.ok).toBe(false)
+    if (!receipt.ok) expect(receipt.reason).toBe("stale_source")
+    // 关键：草稿里的点没有落进来，用户那一笔也没有被覆盖。
+    const live = useSceneStore.getState().document
+    expect(live.primitives.map((primitive) => primitive.id)).toEqual(["point-manual"])
+    expect(live.revision).toBe(afterEdit.revision)
+    expect(useSceneStore.getState().history).toHaveLength(1)
+  })
+
+  it("Gate 2 — a draft compiled against the *current* document still commits normally", () => {
+    // 反向守卫：绑定基准句柄不能把"文档根本没被动过"的正常提交一起挡掉。
+    const { bridge, drafts } = makeHarness()
+    const record = drafts.create(useSceneStore.getState().document, bridge.live()!.handle)
+    expect(stagePoint(drafts, record.draftId, record.draftVersion).ok).toBe(true)
+
+    const consent = bridge.requestConsent(record.draftId)
+    if (!consent.ok) throw new Error("expected consent")
+    // 这一条钉住"基准句柄就是实时句柄"（而不是某个更早/更晚的版本）。
+    expect(consent.record.expectedHandles.target.generation).toBe(useSceneStore.getState().document.revision)
+
+    const receipt = bridge.commit(record.draftId, consent.record)
+    expect(receipt.ok).toBe(true)
+    expect(useSceneStore.getState().document.primitives).toHaveLength(1)
+  })
+
   it("Gate 3 — consent is one-time: the same record cannot commit twice", () => {
     const { bridge, drafts } = makeHarness()
     const record = drafts.create(useSceneStore.getState().document, bridge.live()!.handle)

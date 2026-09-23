@@ -70,7 +70,16 @@ export type PreviewResult = { ok: true; artifact: PreviewArtifact } | { ok: fals
 
 export type ConsentResult = { ok: true; record: ConsentRecord } | { ok: false; reason: "unknown_draft" }
 
-export type CommitReason = "missing_consent" | "consumed_consent" | "unminted_consent" | "wrong_run" | "expired_consent" | "stale_preview" | "stale_conversation" | "unknown_draft" | "stale_source" | "commit_rejected" | "no_change"
+/**
+ * 提交**被拒**的理由。
+ *
+ * 注意 `no_change`（"无需改动"）**刻意不在**这一支里（2026-09-22 / 外部审查 A1）：
+ * 它是一次成功的提交，走 `{ ok: true, receipt: { changed: false } }`。
+ * 原先它作为一条理由放在这里，于是适配器把它折成了 `rejected`，
+ * 协调器里 `no_change → completed` 成了死代码、用户看到"运行失败"。
+ * 从类型上去掉它，将来再想让"成功"走失败通道就会被 `tsc` 拦下。
+ */
+export type CommitReason = "missing_consent" | "consumed_consent" | "unminted_consent" | "wrong_run" | "expired_consent" | "stale_preview" | "stale_conversation" | "unknown_draft" | "stale_source" | "commit_rejected"
 
 export type CommitReceiptResult = { ok: true; receipt: { changed: boolean; draftId: string } } | { ok: false; reason: CommitReason; detail?: string }
 
@@ -152,6 +161,25 @@ export function createHostBridge(dependencies: HostBridgeDependencies): HostBrid
       const current = dependencies.live()
       if (!artifact || !current) return { ok: false, reason: "unknown_draft" }
       const handle = current.handle
+      /**
+       * **CAS 的基准是"草稿编译时"的那份文档，不是"点确认时"的这一份**（2026-09-22 修 / 外部审查 X2）。
+       *
+       * 这里原先取的是 `current.handle`。单看这一行没问题，但生产的调用顺序是
+       * `stage →（用户盯着确认面板）→ 用户手工改了画布 → 点确认`，而
+       * `agentRuntime.confirmDraft` 里 `requestConsent` 与 `commit` **紧挨着**发生 ——
+       * 于是"取样那一刻"与"比较那一刻"永远是同一版，下面那道 CAS **必然通过**：
+       * 用户在看过预览之后做的编辑会被静默合并，而"确认的就是落盘的那一份"成了空话。
+       *
+       * 既有测试一直是绿的，正因为它们按的是"先同意、后编辑"的顺序
+       * （`pipeline.test.ts` 的 Gate 2）——反过来才是真实顺序。
+       *
+       * 绑到**草稿的基准句柄**上，"这份候选是从哪一版文档算出来的"就重新变得可检查：
+       * 文档在草稿创建之后变过 ⇒ 提交时 `expectedHandles.target` 与实时句柄不等 ⇒
+       * 走既有的 `stale_source` 分支（运行时已经会把它如实报成"世界变了"，
+       * 拒绝路径一个字节都不写）。草稿没有基准句柄时（纯草稿层的调用方不传）
+       * 退回旧行为，不凭空制造新的失败面。
+       */
+      const base = drafts.baseHandleOf(draftId) ?? handle
       const nonce = mintNonce(runId)
       // 记下来：只有这里铸造过的 nonce 才会被 `commit` 认。
       minted.add(nonce)
@@ -162,7 +190,7 @@ export function createHostBridge(dependencies: HostBridgeDependencies): HostBrid
           draftId,
           draftVersion: artifact.draftVersion,
           previewHash: artifact.previewHash,
-          expectedHandles: { target: handle, sources: [] },
+          expectedHandles: { target: base, sources: [] },
           allowedEffects: [`${artifact.stageCount} action(s) applied to ${handle.documentId}`],
           ...(dependencies.conversationId === undefined ? {} : { conversationId: dependencies.conversationId }),
           expiresAt: now() + ttl,
@@ -213,11 +241,23 @@ export function createHostBridge(dependencies: HostBridgeDependencies): HostBrid
        */
       const result = commitTransaction({ base: current.document, operations: artifact.operations })
       if (result.errors.length > 0) return { ok: false, reason: "commit_rejected", detail: result.errors.join(", ") }
-      if (!result.changed) return { ok: false, reason: "no_change" }
 
       // 消费 nonce 之后才替换真文档：失败路径一个字节都不写。
       consumed.add(consent.nonce)
       minted.delete(consent.nonce)
+      /**
+       * **"无需改动"是一次成功的提交，不是失败**（外部审查 A1）。
+       *
+       * 它原先走的是 `{ ok: false, reason: "no_change" }` —— 那条**失败**通道。后果是连锁的：
+       * 适配器只在 `ok: true` 分支里读 `receipt.changed`（而那里永远拿不到 `false`，
+       * 因为这里提前返回了），`no_change` 于是掉进适配器最后那句通用拒绝 ⇒
+       * 协调器里 `no_change → completed` 那条分支**成了死代码**，用户看到"运行失败"，
+       * 草稿面板也不退场。审计的报告里把这三处一起点名，根因就在这一行。
+       *
+       * 语义上它本来就该在这里：授权被正常消费、草稿被正常用掉，只是**文档本来就不用改**。
+       * 注意这一支仍然**不写文档**（不调 `replace`）—— "失败路径一个字节都不写"这条不变。
+       */
+      if (!result.changed) return { ok: true, receipt: { changed: false, draftId } }
       dependencies.replace(result.document)
       return { ok: true, receipt: { changed: true, draftId } }
     }

@@ -20,6 +20,9 @@ import {
   type NewConversationInput
 } from "./services/conversationClient"
 import { isDesktopShell } from "./services/desktopRuntime"
+// 摘要上限的**唯一来源**（外部审查 M7）：那个量在仓库里曾经有三个数（这里 16000、
+// `conversationSummary` 16000、Rust `16 * 1024`），边界上就是"桌面接受、浏览器拒绝"。
+import { MAX_SUMMARY_BOOK_CHARS } from "./conversationSummary"
 
 import type { ConversationFactView } from "@draw/agent-core"
 import type { AgentConversation, AgentMessage } from "./agentStore"
@@ -406,10 +409,17 @@ function appendLocalConversation(conversation: AgentConversation, binding: Conve
  * 消息内容 32K、摘要 16K、事实值 8K 各有一个上限。原先这条路径**一条都没有** ——
  * 于是一句密钥样的用户指令只在桌面被拒，在浏览器里照存不误；而"扫描载荷"的用例写的是
  * 良性内容，永远抓不到这件事。上限与判据在这里与本仓库的那一份**逐字对齐**。
+ *
+ * **"逐字对齐"原先并不成立**（外部审查 M7）：这里写的是 `32_000` / `16_000` / `8_000`，
+ * 而 Rust 是 `32 * 1024` / `16 * 1024` / `8 * 1024` —— 差 2.4%，于是同一条 32 100 字符的消息
+ * 在桌面被接受、在浏览器被拒。计数方式也不同：TS 的 `String.length` 数的是 **UTF-16 码元**，
+ * Rust 的 `chars().count()` 数的是 **码点** —— 20 000 个 emoji（40 000 码元）在浏览器会被拒。
+ * 现在两处都按**码点**数、数字也与 Rust 取同一份来源。
  */
-export const MAX_MESSAGE_CHARS = 32_000
-export const MAX_SUMMARY_CHARS = 16_000
-export const MAX_FACT_VALUE_CHARS = 8_000
+export const MAX_MESSAGE_CHARS = 32 * 1024
+/** 摘要上限**从 `conversationSummary` 取**（外部审查 M7）：那个量只能有一个数。 */
+export const MAX_SUMMARY_CHARS = MAX_SUMMARY_BOOK_CHARS
+export const MAX_FACT_VALUE_CHARS = 8 * 1024
 
 /** 令牌段里的字符（与 Rust 的 `is_token_character` 同一组）：字母数字加 `.` `-` `_`。 */
 const TOKEN_SEPARATOR = /[^A-Za-z0-9._-]+/
@@ -443,7 +453,13 @@ function refuseCredential(value: unknown, what: string): void {
 }
 
 function refuseOversize(serialized: string, limit: number, what: string): void {
-  if (serialized.length > limit) throw new ConversationRepositoryError(`${what} is ${serialized.length} characters, over the ${limit} limit`, "invalid")
+  /**
+   * **按码点数**（外部审查 M7）：`String.length` 数的是 UTF-16 码元，与 Rust 的
+   * `chars().count()`（码点）不是同一个量 —— 一个 emoji 在 TS 里算 2、在 Rust 里算 1，
+   * 于是同一条内容在两个后端会得到不同的结论。判据用同一个量，才对得起"逐字对齐"这句话。
+   */
+  const characters = [...serialized].length
+  if (characters > limit) throw new ConversationRepositoryError(`${what} is ${characters} characters, over the ${limit} limit`, "invalid")
 }
 
 /**

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * **文档持久化适配器**（Task 1.6：把 `documentService` 接到项目仓储上）。
  *
  * ## 职责与边界
@@ -64,7 +64,28 @@ export interface PersistenceDependencies {
   projectId: string
   /** 恢复失败时用的空文档（由 `@draw/dsl` 造，避免这里依赖它的内部形状）。 */
   emptyDocument(): GeometryDocument
+  /**
+   * **这一世真正会用的那个 `documentId`**（2026-09-22 修 / 外部审查 X1）。
+   *
+   * 恢复必须用它去探测仓储。原先这里没有这一项，`restore()` 拿 `emptyDocument()`
+   * **刚生成的新随机 id** 去 `readHead` —— 而 Rust 侧按 `(project_id, document_id)` 过滤，
+   * 于是**每次启动都必然 `not_found`**：`create` 一路插一行新的空文档，
+   * 仓储里那份真正的内容永远读不回来（设计里"仓储才是真源"这句话因此是空的），
+   * 且每次启动多一条垃圾行。同一个根因还有个用户可见后果：重启后除"上次活动"以外的
+   * 工作区拿到新文档 id，而 `list_conversations` 按 document 过滤 ⇒ **会话侧栏是空的**。
+   */
+  documentId(): string
   now?(): number
+}
+
+/**
+ * 把空文档模板的 id 换成**这一世真正会用的那个**。
+ *
+ * `create` 写下的那一行必须与文档自己的 id 一致 —— 否则第一次自动保存就带着
+ * "文档 id ≠ 行 id"去提交，Rust 侧只会回一句 `no document …`。
+ */
+function withDocumentId(document: GeometryDocument, documentId: string): GeometryDocument {
+  return { ...document, metadata: { ...document.metadata, id: documentId } }
 }
 
 /** 由仓储的 head 造一个句柄。**epoch 与会话内默认值不同**，所以必须显式带上。 */
@@ -88,7 +109,11 @@ export function createDocumentPersistence(dependencies: PersistenceDependencies)
   let generation = 0
 
   async function restore(): Promise<RestoreOutcome> {
-    const fresh = dependencies.emptyDocument()
+    /**
+     * **探测用的是"这一世真正会用的 id"**，不是刚生成的新随机 id（见 `documentId` 的注释）。
+     * 空文档也用同一个 id 造出来，于是"库里没有"时的 `create` 写下的行与文档对得上。
+     */
+    const fresh = withDocumentId(dependencies.emptyDocument(), dependencies.documentId())
     const found = await repository.readHead(projectId, fresh.metadata.id)
     if (found.ok) {
       const document = documentFromSnapshot(found.value)
@@ -107,12 +132,33 @@ export function createDocumentPersistence(dependencies: PersistenceDependencies)
      * `create_document` —— 一次注定失败的 IPC。更糟的是：真实实现里那次调用会走到
      * "文档已存在"或"没有原生侧"两条不同的错误上，**报出来的原因会变成另一个**，
      * 用户看到的就不再是"需要桌面版"。
+     *
+     * 这一条必须排在下面两个分支**之前**：网页版的行为要与加这个功能之前完全一样
+     * （不能因为新增了"读最新一份"的回退，就在浏览器里多发一次注定失败的 IPC）。
      */
     if (found.code === "not_a_desktop_shell") {
       return { document: fresh, created: true, failure: found }
     }
     if (found.code === "not_found") {
-      // `not_found` 是**首次启动的正常状态**：还没保存过任何东西。
+      /**
+       * **本地记不住 id ≠ 库里没有这份文档**（2026-09-22 修 / 外部审查 X1 的第二半）。
+       *
+       * localStorage 被清掉、换了台机器、或者旧版本已经把 id 弄丢过 —— 这些都只说明
+       * "本地没记住用哪份文档"，而仓储里那份内容还在。设计里"仓储是权威那一层"
+       * 要求这里回退到**项目里最新的那一份**，而不是立刻当作用户第一次运行。
+       *
+       * 只有项目里真的一份文档都没有时，`not_found` 才是"首次启动"。
+       */
+      const latest = await repository.readLatestHead(projectId)
+      if (latest.ok && latest.value !== null) {
+        const document = documentFromSnapshot(latest.value)
+        if (document) {
+          head = handleFromSnapshot(latest.value)
+          lastSavedFingerprint = latest.value.contentHash
+          return { document, created: false }
+        }
+      }
+      // `not_found` 且项目里空无一物：**首次启动的正常状态**，还没保存过任何东西。
       const created = await repository.create(projectId, fresh)
       if (created.ok) {
         head = handleFromSnapshot(created.value)
