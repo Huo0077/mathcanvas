@@ -126,6 +126,20 @@ fn refuses_a_profile_that_carries_a_secret_and_writes_nothing() {
     // 而 `secretRef` 是引用，必须放行。
     let reference = serde_json::json!({ "secretRef": "openai", "name": "OpenAI" });
     assert_eq!(contains_secret_field(&reference, 0), None);
+
+    // **数组里也要查**（外部审查 M9）。
+    //
+    // 原先第一句 `value.as_object()?` 让数组成为盲区：`capabilities:[{apiKey}]` 这种载荷
+    // **不会被拒**，而是被反序列化**静默削掉**（`CapabilityEvidence` 没有 `deny_unknown_fields`）——
+    // 正是这道门自己的注释里说"比报错更危险"的那种结果。函数文档写着"任意深度"，数组也是深度。
+    let in_array = serde_json::json!({ "capabilities": [{ "feature": "vision", "status": "unknown", "apiKey": "sk-not-a-real-key" }] });
+    assert_eq!(contains_secret_field(&in_array, 0).as_deref(), Some("apiKey"));
+    // 深一层也是：数组里嵌对象、对象里再嵌数组。
+    let deeper = serde_json::json!({ "a": [{ "b": [{ "token": "sk-not-a-real-key" }] }] });
+    assert_eq!(contains_secret_field(&deeper, 0).as_deref(), Some("token"));
+    // 反向守卫：数组里**没有**密钥形状字段时照常放行（这条闸不该变成"见到数组就拒"）。
+    let clean = serde_json::json!({ "capabilities": [{ "feature": "vision", "status": "unknown", "secretRef": "openai" }] });
+    assert_eq!(contains_secret_field(&clean, 0), None);
 }
 
 /// 落盘的文件里**逐字**不含任何密钥形状的字段名。

@@ -135,6 +135,21 @@ pub fn contains_secret_field(value: &serde_json::Value, depth: usize) -> Option<
     if depth > 6 {
         return None;
     }
+    // **数组也要进去**（外部审查 M9）。
+    //
+    // 原先第一句就是 `value.as_object()?` —— 数组在这里直接 `None`：于是
+    // `{"capabilities":[{"feature":"vision","status":"unknown","apiKey":"sk-…"}]}` 这种载荷
+    // **不会被拒**，而是被反序列化**静默削掉**（`CapabilityEvidence` 没有 `deny_unknown_fields`）——
+    // 正是本函数注释里说"比报错更危险"的那种结果。函数自己的文档写着"任意深度"，数组也是深度。
+    // （没有泄露：类型化再序列化会把它丢掉，所以什么都没落盘 —— 这正是它被算作 Minor 的原因。）
+    if let Some(items) = value.as_array() {
+        for item in items {
+            if let Some(found) = contains_secret_field(item, depth + 1) {
+                return Some(found);
+            }
+        }
+        return None;
+    }
     let object = value.as_object()?;
     for (key, child) in object {
         let lowered = key.to_lowercase();

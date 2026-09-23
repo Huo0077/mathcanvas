@@ -133,6 +133,10 @@ fn exposes_only_named_ipc_commands_and_no_generic_one() {
         "provider_run",
         "provider_cancel",
         "read_document_head",
+        // **有意加的一个**（2026-09-22 / 外部审查 X1）：按 `document_id` 精确探测落空时的兜底。
+        // 它只读"这个项目里最近更新的那一份 head"，参数只有一个 `project_id` ——
+        // 既不能执行任意 SQL，也不能按任意路径读文件，语义仍是"文档"这一层。
+        "read_latest_document_head",
         "create_document",
         "commit_document",
         "lookup_commit",

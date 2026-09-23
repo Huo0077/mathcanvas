@@ -8,7 +8,21 @@
 //! 2. **令牌在 Rust 侧生成、经可信 IPC 交给前端**。**不进 URL、不落盘**：
 //!    URL 会进浏览器历史与日志，落盘会把它变成一份长期凭据。
 //! 3. **每个请求都过一遍判据**。不是"开机检查一次" —— 判据是每请求的
-//!    （令牌、Origin、Host、体积、profile 修订号都会变）。
+//!    （令牌、Origin、Host、体积都会变）。
+//!
+//!    **如实标注这一条今天到哪为止**（外部审查 M10）：中间件确实每请求跑
+//!    `security::admit`，但有两项**判据没有接在活路径上**：
+//!    - `security::admit` 的 `stale_profile_revision` 分支：中间件传的是
+//!      `profile_revision: None, current_profile_revision: 0`，所以那一支**永远不可能触发** ——
+//!      `ProxyState` 里根本没有"当前 profile 修订号"这个东西，要接就得先定
+//!      "请求里的修订号从哪来"（查询串？会话建立时钉住？），那是一个**产品决定**，不是补丁；
+//!    - `security::parse_route` 里"没有任何路由接受上游 URL"那条：axum 直接按路径匹配，
+//!      中间件从不解析路由与查询串，所以它**也不在线上**（判断层与测试里有，socket 上没有）。
+//!
+//!    今天影响为零 —— 这一批**没有任何东西被转发**（`model` / `events` 如实回 501）。
+//!    但一个文件讲的安全故事比 socket 真正执行的更强，本身就是缺陷：**上面那两句原先
+//!    把"profile 修订号"与"每请求判据"写成了已经成立的事实。** 先把它说准，
+//!    等转发真的接上（或有人决定修订号从哪来）再把这两条挂到活路径上。
 //!
 //! ## 为什么这一层薄
 //!
@@ -344,6 +358,16 @@ async fn admit_request(State(state): State<Arc<ProxyState>>, request: Request, n
         .and_then(|value| value.parse::<usize>().ok())
         .unwrap_or(0);
 
+    // **这里没有评估的两项，写在调用点上**（外部审查 M10）—— 免得下一个人从
+    // `admit` 的签名以为它们在跑：
+    //
+    // - `profile_revision` / `current_profile_revision` 恒为 `None` / `0` ⇒
+    //   `stale_profile_revision` 那一支**不可能触发**。`ProxyState` 里没有"当前修订号"，
+    //   要接得先定"请求里的修订号从哪来"（产品决定）。
+    // - `parse_route` 没有被调用 ⇒ "没有任何路由接受上游 URL"那条判据不在活路径上
+    //   （axum 直接按路径匹配）。真正转发之前必须把它接进来。
+    //
+    // 两项都已在模块头如实标注；今天没有任何东西被转发（`model`/`events` 回 501），影响为零。
     let verdict = security::admit(
         &AdmissionInput { token, host, origin, body_bytes, profile_revision: None, current_profile_revision: 0 },
         &state.token

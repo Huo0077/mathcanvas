@@ -8,7 +8,7 @@
 //! 这三条性质只有碰真文件才测得出来。
 
 use mathcanvas_desktop_lib::repository::migrations::{latest_version, migrate, migrate_with, Migration};
-use mathcanvas_desktop_lib::repository::projects::{CommitOutcome, CommitRequest, ProjectRepository, RepositoryError};
+use mathcanvas_desktop_lib::repository::projects::{CommitOutcome, CommitRequest, ImportDocument, ProjectRepository, RepositoryError};
 use rusqlite::Connection;
 
 struct TempDir(std::path::PathBuf);
@@ -52,6 +52,180 @@ fn seeded(label: &str) -> (TempDir, ProjectRepository) {
     let mut repository = ProjectRepository::open(dir.db("project.db")).expect("open");
     repository.create("p1", "d1", "epoch-1", "{\"v\":1}", "hash-1").expect("create");
     (dir, repository)
+}
+
+// ---------------------------------------------------------------- 最新一份 head（外部审查 X1）
+
+/// **"本地没记住 id"与"库里一份都没有"必须能被分开**（外部审查 X1）。
+///
+/// 前者是记忆丢了（localStorage 被清、换机器），仓储里的文档还在；
+/// 只有后者才是真正的首次启动。少了这个区分，恢复路径一探测落空就只能当用户是新来的，
+/// 于是每次启动插一行新的空文档，而那份真正的内容永远读不回来。
+#[test]
+fn read_latest_head_reports_none_when_the_project_has_no_documents() {
+    let dir = TempDir::new("latest-empty");
+    let repository = ProjectRepository::open(dir.db("project.db")).expect("open");
+
+    assert!(repository.read_latest_head("p1").expect("read").is_none());
+}
+
+#[test]
+fn read_latest_head_finds_the_document_the_local_memory_forgot() {
+    let dir = TempDir::new("latest-found");
+    let mut repository = ProjectRepository::open(dir.db("project.db")).expect("open");
+    repository.create("p1", "d1", "epoch-1", "{\"v\":1}", "hash-1").expect("create");
+
+    let latest = repository.read_latest_head("p1").expect("read").expect("a document");
+
+    // 内容是**整份**读回来的（与 `read_head` 同一个形状），上层才能直接用它恢复画布。
+    assert_eq!(latest.document_id, "d1");
+    assert_eq!(latest.content, "{\"v\":1}");
+    assert_eq!(latest.generation, 1);
+    assert_eq!(latest.epoch, "epoch-1");
+}
+
+#[test]
+fn read_latest_head_does_not_leak_across_projects() {
+    let dir = TempDir::new("latest-projects");
+    let mut repository = ProjectRepository::open(dir.db("project.db")).expect("open");
+    repository.create("other", "d9", "epoch-9", "{\"v\":9}", "hash-9").expect("create");
+
+    // 别的项目里有文档，**不等于**这个项目里有。
+    assert!(repository.read_latest_head("p1").expect("read").is_none());
+    assert_eq!(repository.read_latest_head("other").expect("read").expect("a document").document_id, "d9");
+}
+
+#[test]
+fn read_latest_head_prefers_the_most_recently_updated_document() {
+    let dir = TempDir::new("latest-recent");
+    let mut repository = ProjectRepository::open(dir.db("project.db")).expect("open");
+    repository.create("p1", "d1", "epoch-1", "{\"v\":1}", "hash-1").expect("create");
+    repository.create("p1", "d2", "epoch-2", "{\"v\":2}", "hash-2").expect("create");
+
+    // 两次 `create` 可能落在同一毫秒，所以这里不断言"一定是哪一份"，只断言它**确定地**
+    // 返回其中一份（毫秒并列时由次级键 `document_id ASC` 定序，不随 SQLite 返回顺序漂移）。
+    let first = repository.read_latest_head("p1").expect("read").expect("a document");
+    assert!(["d1", "d2"].contains(&first.document_id.as_str()));
+
+    // 提交会推进 `updated_at`（`UPDATE documents SET … updated_at = ?4`），
+    // 于是 d1 明确成为"最近更新的那一份"。
+    let outcome = repository.commit(request("k1", 1, "{\"v\":1b}")).expect("commit");
+    assert_eq!(generation_of(&outcome.outcome), 2);
+    assert_eq!(repository.read_latest_head("p1").expect("read").expect("a document").document_id, "d1");
+}
+
+/**
+ * **建文档失败不等于"已经存在"**（外部审查 M5）。
+ *
+ * 原先 `create` 把**任何** `rusqlite::Error` 都报成 `StaleHead { "document X already exists" }`。
+ * 磁盘满、库被锁、权限不足于是都以"已经存在"的面目到达界面，而 TS 侧又把任何含 "generation"
+ * 的文本归成 `stale_head`（那是"重新读一遍再保存"）—— 用户被指去照做一个**根本做不了**的动作。
+ *
+ * 这里用"另一个连接握着写锁"制造一个**非约束**的失败：它必须走 `Io`，而不是 `StaleHead`。
+ * （只有主键冲突才是"已存在"，那条路径由 `refuses_a_duplicate_document` 一类既有用例钉着。）
+ */
+#[test]
+fn a_locked_database_is_reported_as_io_not_as_already_exists() {
+    let dir = TempDir::new("create-locked");
+    let db = dir.db("project.db");
+    let mut repository = ProjectRepository::open(&db).expect("open");
+
+    // 第二个连接拿到写锁并一直不放：再 `create` 必然得到 SQLITE_BUSY（非约束类失败）。
+    let blocker = Connection::open(&db).expect("open a second connection");
+    blocker.execute_batch("BEGIN IMMEDIATE").expect("take the write lock");
+
+    let outcome = repository.create("p1", "d1", "epoch-1", "{\"v\":1}", "hash-1");
+
+    match outcome {
+        Err(RepositoryError::Io { detail }) => assert!(detail.contains("cannot create document"), "unexpected io detail: {detail}"),
+        other => panic!("a locked database must be reported as io, not as a stale head; got {other:?}")
+    }
+
+    blocker.execute_batch("ROLLBACK").ok();
+}
+
+// ---------------------------------------------------------------- 导入：一个事务（外部审查 D3）
+/// **整次导入要么全成、要么全不成**（外部审查 D3）。
+///
+/// 原先 `import_package` 在循环里逐份调 `replace_epoch` / `create`，而那两个方法
+/// **各自开一个事务** —— 一份坏文档就会留下"前 N−1 份已经进库"的**部分导入**，
+/// 与 `package::import` 自己的契约直接矛盾，而且那种状态最难收拾：
+/// 用户看到一半的文档，没人知道剩下那一半该不该补。
+///
+/// 这里在**真实 schema** 上造一个真实的失败（不写桩）：直接占掉 `d1` 的下一代快照，
+/// 于是导入写到 `d1` 时那条 INSERT 会撞 `snapshots` 的主键。
+#[test]
+fn an_import_writes_every_document_or_none_of_them() {
+    let dir = TempDir::new("import-atomic");
+    let db = dir.db("project.db");
+    let mut repository = ProjectRepository::open(&db).expect("open");
+    repository.create("p1", "d1", "epoch-1", "{\"v\":1}", "hash-1").expect("create d1");
+
+    {
+        // 第二个连接直接占掉 (p1, d1, generation 2) —— 导入一定会推进到那一代。
+        let connection = Connection::open(&db).expect("open a second connection");
+        connection
+            .execute(
+                "INSERT INTO snapshots (project_id, document_id, generation, content_hash, content, created_at) VALUES ('p1', 'd1', 2, 'occupied', '{}', 0)",
+                []
+            )
+            .expect("occupy the next generation");
+    }
+
+    // **d2 排在 d1 前面**：它会在失败之前被写进事务 —— 只有这样才验得到"一起回滚"。
+    let outcome = repository.import_documents(
+        "p1",
+        "epoch-import",
+        &[
+            ImportDocument { document_id: "d2".to_string(), content: "{\"v\":2}".to_string() },
+            ImportDocument { document_id: "d1".to_string(), content: "{\"v\":1b}".to_string() }
+        ],
+        &[]
+    );
+
+    assert!(outcome.is_err(), "the import must fail on the occupied generation, got {outcome:?}");
+    // 关键：**先写的那一份也必须一起回滚**，否则就是"部分导入"。
+    let d2 = repository.read_head("p1", "d2");
+    assert!(
+        matches!(d2, Err(RepositoryError::NotFound { .. })),
+        "a document written before the failure must be rolled back with it, got {d2:?}"
+    );
+    // 而原有的那一份没有被推进到新的一世。
+    assert_eq!(repository.read_head("p1", "d1").expect("d1").epoch, "epoch-1");
+    assert_eq!(repository.read_head("p1", "d1").expect("d1").generation, 1);
+}
+
+/// 导入成功时：**每一份都写进去，并把新代数如实回答出来**（附件引用要按它记）。
+#[test]
+fn an_import_reports_the_generation_each_document_landed_on() {
+    let dir = TempDir::new("import-generations");
+    let mut repository = ProjectRepository::open(dir.db("project.db")).expect("open");
+    repository.create("p1", "d1", "epoch-1", "{\"v\":1}", "hash-1").expect("create d1");
+
+    let written = repository
+        .import_documents(
+            "p1",
+            "epoch-import",
+            &[
+                // 已存在 → 换一世 ⇒ 代数推进到 2。
+                ImportDocument { document_id: "d1".to_string(), content: "{\"v\":1b}".to_string() },
+                // 不存在 → 建出来 ⇒ 代数从 1 开始。
+                ImportDocument { document_id: "d2".to_string(), content: "{\"v\":2}".to_string() }
+            ],
+            &[]
+        )
+        .expect("import");
+
+    assert_eq!(
+        written,
+        vec![
+            mathcanvas_desktop_lib::repository::projects::ImportedDocument { document_id: "d1".to_string(), generation: 2 },
+            mathcanvas_desktop_lib::repository::projects::ImportedDocument { document_id: "d2".to_string(), generation: 1 }
+        ]
+    );
+    // epoch 换掉了：在途的旧提交会 CAS 失败（"用户刚打开的文档不会被上一次编辑覆盖"）。
+    assert_eq!(repository.read_head("p1", "d1").expect("d1").epoch, "epoch-import");
+    assert_eq!(repository.read_head("p1", "d2").expect("d2").epoch, "epoch-import");
 }
 
 // ---------------------------------------------------------------- 迁移

@@ -430,6 +430,18 @@ fn read_document_head(app: tauri::AppHandle, project_id: String, document_id: St
     repository.read_head(&project_id, &document_id).map_err(|error| error.to_string())
 }
 
+/// **读这个项目里最新的那一份文档 head**；项目里一份都没有时回 `None`。
+///
+/// 恢复路径的兜底（外部审查 X1）：前端按 `document_id` 精确探测落空时，用它区分
+/// "本地没记住 id"（仓储里有内容 → 读回来）与"真正的首次启动"（项目里空无一物 → 建一份）。
+/// 没有它，记忆一丢就把已存的文档当成不存在。
+#[tauri::command]
+fn read_latest_document_head(app: tauri::AppHandle, project_id: String) -> Result<Option<DocumentSnapshot>, String> {
+    let state = app.try_state::<RepositoryState>().ok_or("the project repository is not initialised")?;
+    let repository = state.repository.lock().map_err(|_| "the project repository is poisoned".to_string())?;
+    repository.read_latest_head(&project_id).map_err(|error| error.to_string())
+}
+
 /// **建一份文档**（首次写入）。
 ///
 /// 内容哈希**由前端算好传进来**：规则在 `scene-graph` 的 `contentFingerprint` 里
@@ -626,10 +638,19 @@ fn export_package(app: tauri::AppHandle, project_id: String, documents: Vec<serd
  *
  * ## 顺序：先把整包验完，再落下任何东西
  *
- * `package::import` 自己保证这一点（见它的注释）：验到一半失败**不会**留下
- * 一半已经写进仓库的文档。文档本体由这一条命令在验完之后写进库，
- * 而"换一世"用的是 `replace_epoch` —— 于是**在途的旧保存会自动 CAS 失败**
+ * `package::import` 自己保证"验到一半失败**不会**留下半份写进仓库的文档"，
+ * 而**落库那一半也必须是一个事务**（外部审查 D3）：逐份写会在一份坏文档上留下
+ * "前 N−1 份已经进库"的部分导入，那与上面那句契约直接矛盾。
+ * 现在整次导入走 `ProjectRepository::import_documents` 一个事务。
+ *
+ * "换一世"用的是 epoch 替换 —— 于是**在途的旧保存会自动 CAS 失败**
  *（用户刚打开的文档不会被上一次编辑覆盖）。
+ *
+ * ## 附件也要一并登记（外部审查 D1）
+ *
+ * 原先这条路径只写文档、**从不登记附件引用**，于是紧接着的孤儿回收（60 秒宽限）
+ * 会把**刚导入的字节删掉**：导入显示成功、附件却没了。归属只能取保守的过近似
+ *（包里的附件是项目级平铺列表，不记属于哪份文档），细节见 `import_documents`。
  */
 #[tauri::command]
 fn import_package(app: tauri::AppHandle, path: String, project_id: String, epoch: String) -> Result<serde_json::Value, String> {
@@ -639,26 +660,29 @@ fn import_package(app: tauri::AppHandle, path: String, project_id: String, epoch
 
     let state = app.try_state::<RepositoryState>().ok_or("the project repository is not initialised")?;
     let mut repository = state.repository.lock().map_err(|_| "the project repository is poisoned".to_string())?;
-    let mut written = Vec::new();
-    for (document_id, content) in &outcome.documents {
-        // 内容的哈希由**我们**算（包里的那个已经在上一步核对过了）。
-        let content_hash = repository::blobs::sha256_hex(content.as_bytes());
-        // 文档不存在时会走 `create`：`replace_epoch` 要求先有一份 head。
-        match repository.read_head(&project_id, document_id) {
-            Ok(_) => {
-                repository.replace_epoch(&project_id, document_id, &epoch, content, &content_hash).map_err(|error| error.to_string())?;
-            }
-            Err(_) => {
-                repository.create(&project_id, document_id, &epoch, content, &content_hash).map_err(|error| error.to_string())?;
-            }
-        }
-        written.push(document_id.clone());
-    }
+
+    let documents: Vec<repository::projects::ImportDocument> = outcome
+        .documents
+        .iter()
+        .map(|(document_id, content)| repository::projects::ImportDocument { document_id: document_id.clone(), content: content.clone() })
+        .collect();
+    // `manifest.attachments` 里的每一份都已经在上一步验过哈希并**落盘成功**
+    //（`package::import` 先全验后全写），所以这里直接按清单登记即可。
+    let attachments: Vec<repository::projects::ImportAttachment> = outcome
+        .manifest
+        .attachments
+        .iter()
+        .map(|attachment| repository::projects::ImportAttachment { content_hash: attachment.content_hash.clone(), byte_size: attachment.byte_size as i64, media_type: attachment.media_type.clone() })
+        .collect();
+
+    let written = repository
+        .import_documents(&project_id, &epoch, &documents, &attachments)
+        .map_err(|error| error.to_string())?;
 
     Ok(serde_json::json!({
         "projectId": outcome.manifest.project_id,
         "schemaVersion": outcome.manifest.schema_version,
-        "documents": written,
+        "documents": written.iter().map(|document| document.document_id.clone()).collect::<Vec<String>>(),
         "attachmentCount": outcome.stored_attachments.len(),
         "missingSources": outcome.missing_sources
     }))
@@ -932,6 +956,7 @@ pub fn run() {
             provider_run,
             provider_cancel,
             read_document_head,
+            read_latest_document_head,
             create_document,
             commit_document,
             lookup_commit,

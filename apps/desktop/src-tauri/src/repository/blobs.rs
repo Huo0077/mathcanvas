@@ -39,6 +39,10 @@ pub enum BlobError {
     TooLarge { size: usize, limit: usize },
     /// 哈希与内容对不上（调用方说这份是 X，实际算出来是 Y）。
     HashMismatch { declared: String, actual: String },
+    /// 调用方给的哈希**形状就不对**（不是 64 位十六进制）。
+    ///
+    /// 这一条是安全边界，不是洁癖：哈希同时是**文件名**。
+    InvalidHash { detail: String },
     /// 文件系统出问题。`detail` 里**没有附件内容**。
     Io { detail: String },
 }
@@ -48,6 +52,7 @@ impl std::fmt::Display for BlobError {
         match self {
             BlobError::TooLarge { size, limit } => write!(formatter, "the attachment is {size} bytes; the limit is {limit}"),
             BlobError::HashMismatch { declared, actual } => write!(formatter, "the attachment declares hash {declared} but its bytes hash to {actual}"),
+            BlobError::InvalidHash { detail } => write!(formatter, "{detail}"),
             BlobError::Io { detail } => write!(formatter, "{detail}"),
         }
     }
@@ -72,6 +77,14 @@ pub struct StoredBlob {
 /// 单份附件的上限（32 MiB）。**与容器里单条目的上限是两个数**：这一个管的是
 /// "能不能存进仓库"，那一个管的是"能不能打进包里"。
 pub const MAX_ATTACHMENT_BYTES: usize = 32 * 1024 * 1024;
+
+/// **附件哈希的形状**：正好 64 个十六进制字符（sha256 的十六进制写法）。
+///
+/// 单独抽成公开函数是为了让"形状"这件事可以被**直接断言**（不必绕道去读一个文件），
+/// 也让调用方（IPC 命令层）在需要时能自己先挡一道，而不必复制这段判据。
+pub fn is_content_hash(value: &str) -> bool {
+    value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
 
 /// GC 的**宽限期**：比这更新鲜的孤儿先不删。
 ///
@@ -102,8 +115,23 @@ impl BlobStore {
         &self.root
     }
 
-    fn blob_path(&self, content_hash: &str) -> PathBuf {
-        self.root.join("blobs").join(content_hash)
+    /**
+     * **附件文件的路径**。哈希是文件名，所以**形状就是安全边界**（外部审查 D2）。
+     *
+     * 原先这里直接把调用方给的字符串 `join` 进来，于是 `read_attachment` 用
+     * `..\..\projects.db`、`..\..\providers.json` 或一个绝对路径就能读到附件目录之外的
+     * 任意文件，再以 base64 回给 WebView（`BlobStore::verify` 走的是同一条路）。
+     * 今天没有界面传文档哈希，所以它只是"潜在洞"—— 但**一条已注册命令的安全边界
+     * 不能建立在"调用方现在恰好不会那么传"之上**。
+     *
+     * 校验放在这一个函数里（而不是三个入口各写一遍）：`read` / `verify` 拿的是调用方的
+     * 字符串，`write` 拿的是我们自己算出来的 sha256，因此一处收口即可全覆盖。
+     */
+    fn blob_path(&self, content_hash: &str) -> Result<PathBuf, BlobError> {
+        if !is_content_hash(content_hash) {
+            return Err(BlobError::InvalidHash { detail: format!("an attachment hash must be 64 hexadecimal characters; got {content_hash:?}") });
+        }
+        Ok(self.root.join("blobs").join(content_hash))
     }
 
     /// **第一阶段**：把字节原子地放进 `blobs/`，并回答它的哈希与大小。
@@ -121,7 +149,7 @@ impl BlobStore {
             // **一字节都不落盘**：一份哈希对不上的附件存下来只会变成一份没人认得的垃圾。
             return Err(BlobError::HashMismatch { declared: declared_hash.to_string(), actual });
         }
-        if self.blob_path(&actual).is_file() {
+        if self.blob_path(&actual)?.is_file() {
             // 已经有了（同一份附件存两次是常态）。**不重写**：重写会多一次没有必要的
             // 写盘与一个可以让另一个读者看到半个文件的窗口。
             return Ok(StagedBlob { content_hash: actual, byte_size: bytes.len() });
@@ -134,14 +162,14 @@ impl BlobStore {
             // 落盘再改名：断电时"改名"这一步要么没发生、要么已生效。
             handle.sync_all().map_err(|error| BlobError::Io { detail: format!("cannot flush {}: {error}", temp.display()) })?;
         }
-        fs::rename(&temp, self.blob_path(&actual)).map_err(|error| BlobError::Io { detail: format!("cannot move the attachment into place: {error}") })?;
+        fs::rename(&temp, self.blob_path(&actual)?).map_err(|error| BlobError::Io { detail: format!("cannot move the attachment into place: {error}") })?;
 
         Ok(StagedBlob { content_hash: actual, byte_size: bytes.len() })
     }
 
     /// 读一份附件。**找不到就是 `None`**（`BlobError` 只表示"出错了"）。
     pub fn read(&self, content_hash: &str) -> Result<Option<Vec<u8>>, BlobError> {
-        let path = self.blob_path(content_hash);
+        let path = self.blob_path(content_hash)?;
         if !path.is_file() {
             return Ok(None);
         }

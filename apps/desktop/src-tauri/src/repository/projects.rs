@@ -112,6 +112,19 @@ pub struct CommitReceipt {
     pub committed_at: i64,
 }
 
+/// **把"建文档"的插入失败分类**（外部审查 M5）。
+///
+/// 原先这里把**任何** `rusqlite::Error` 都报成 `StaleHead { "document X already exists" }` ——
+/// 磁盘满、库被锁、权限不足于是都以"已经存在"的面目到达界面，而 TS 侧又把任何含 "generation"
+/// 的文本归成 `stale_head`（那是"重新读一遍再保存"），于是用户被指去照做一个**根本做不了**的动作。
+/// 只有**主键冲突**才是"已存在"；其余一律如实报 `Io`。
+fn create_document_error(document_id: &str, error: rusqlite::Error) -> RepositoryError {
+    if matches!(&error, rusqlite::Error::SqliteFailure(failure, _) if failure.code == rusqlite::ErrorCode::ConstraintViolation) {
+        return RepositoryError::StaleHead { detail: format!("document {document_id} already exists: {error}") };
+    }
+    RepositoryError::Io { detail: format!("cannot create document {document_id}: {error}") }
+}
+
 /// 现在（毫秒）。**对外的**：多会话那一层（`conversations.rs`）也要盖时间戳，
 /// 而"两处各自实现一遍"必然会有一处漏掉某个单位换算。
 pub(crate) fn now_ms() -> i64 {
@@ -121,6 +134,31 @@ pub(crate) fn now_ms() -> i64 {
 
 pub struct ProjectRepository {
     connection: Connection,
+}
+
+/// 一次导入里的一份文档（`document_id` + `.mgeo` 原文）。
+///
+/// 哈希**不由调用方给**：它在事务里由内容现算，于是"包里的那一份"与"写进库的那一份"
+/// 不可能对不上（`package::import` 已经逐份核对过包内哈希，这里算的是落库哈希）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImportDocument {
+    pub document_id: String,
+    pub content: String,
+}
+
+/// 一份导入文档**最后落在哪一代**（附件引用要按它记）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImportedDocument {
+    pub document_id: String,
+    pub generation: i64,
+}
+
+/// 一份要登记的附件元数据（哈希 / 字节数 / 媒体类型）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImportAttachment {
+    pub content_hash: String,
+    pub byte_size: i64,
+    pub media_type: String,
 }
 
 impl ProjectRepository {
@@ -162,6 +200,37 @@ impl ProjectRepository {
             .ok_or_else(|| RepositoryError::NotFound { detail: format!("no document {document_id} in project {project_id}") })
     }
 
+    /// **读这个项目里最新的那一份文档 head**；项目里一份都没有时回 `None`。
+    ///
+    /// 存在的理由（外部审查 X1）：`read_head` 按 `(project_id, document_id)` 精确过滤，
+    /// 而前端的"我记得上次用的是哪份文档"只是一条**记忆** —— localStorage 被清掉、
+    /// 换了台机器、或者旧版本把 id 弄丢过，都会让那次精确探测落空。记忆丢得起，
+    /// 仓储里的文档丢不起：那种情况下"项目里一份都没有"与"本地没记住 id"必须能被分开，
+    /// 前者才是真正的首次启动。
+    ///
+    /// 排序用 `updated_at DESC`，并以 `document_id ASC` 作为**确定性**的次级键
+    /// （同一毫秒写入两份文档时，"最新"不能随 SQLite 的返回顺序漂移）。
+    pub fn read_latest_head(&self, project_id: &str) -> Result<Option<DocumentSnapshot>, RepositoryError> {
+        self.connection
+            .query_row(
+                "SELECT project_id, document_id, epoch, generation, content_hash, content, updated_at FROM documents WHERE project_id = ?1 ORDER BY updated_at DESC, document_id ASC LIMIT 1",
+                (project_id,),
+                |row| {
+                    Ok(DocumentSnapshot {
+                        project_id: row.get(0)?,
+                        document_id: row.get(1)?,
+                        epoch: row.get(2)?,
+                        generation: row.get(3)?,
+                        content_hash: row.get(4)?,
+                        content: row.get(5)?,
+                        updated_at: row.get(6)?
+                    })
+                }
+            )
+            .optional()
+            .map_err(|error| RepositoryError::Io { detail: format!("cannot read the latest head: {error}") })
+    }
+
     /// **创建一个文档**（首次写入）。已存在则报 `StaleHead`（调用方该走 `commit`）。
     pub fn create(&mut self, project_id: &str, document_id: &str, epoch: &str, content: &str, content_hash: &str) -> Result<DocumentSnapshot, RepositoryError> {
         let transaction = self.connection.transaction().map_err(|error| RepositoryError::Io { detail: format!("cannot start a transaction: {error}") })?;
@@ -171,10 +240,7 @@ impl ProjectRepository {
                 "INSERT INTO documents (project_id, document_id, epoch, generation, content_hash, content, updated_at) VALUES (?1, ?2, ?3, 1, ?4, ?5, ?6)",
                 (project_id, document_id, epoch, content_hash, content, now)
             )
-            .map_err(|error| {
-                // 撞主键 = 已经存在。这是**如实**的错误，不是"再写一次"。
-                RepositoryError::StaleHead { detail: format!("document {document_id} already exists: {error}") }
-            })?;
+            .map_err(|error| create_document_error(document_id, error))?;
         transaction
             .execute(
                 "INSERT INTO snapshots (project_id, document_id, generation, content_hash, content, created_at) VALUES (?1, ?2, 1, ?3, ?4, ?5)",
@@ -418,6 +484,109 @@ impl ProjectRepository {
             content: content.to_string(),
             updated_at: now
         })
+    }
+
+    // ------------------------------------------------------------ 导入（一次事务）
+
+    /**
+     * **一个事务里写完整次导入**：多份文档 + 附件元数据 + 附件引用。
+     *
+     * ## 为什么必须是**一个**事务（外部审查 D3）
+     *
+     * 原先 `lib.rs` 的 `import_package` 在循环里逐份调 `replace_epoch` / `create`，
+     * 而那两个方法**各自开一个事务**。于是一份坏文档（或一次 IO 失败）就能留下
+     * "前 N−1 份已经进库、剩下的没进"的**部分导入** —— 那与 `package::import`
+     * 自己的契约（"验到一半失败不会留下一半写进仓库的文档"）直接矛盾，
+     * 而部分导入是最难收拾的状态：用户看到一半的文档，没人知道剩下那一半该不该补。
+     *
+     * 顺带修掉同一处循环里的第二个问题：`Err(_) => create` 把**任何** `read_head` 失败
+     * 都当成"这份文档不存在"。真正的 IO / 权限错误因此会伪装成"文档不存在"，
+     * 然后在 `create` 上撞主键、报出一句与真实原因无关的话。这里用 `optional()` 查询
+     * 直接区分"有这一行"与"没有这一行"，其余错误如实上抛。
+     *
+     * ## 为什么顺带登记附件（外部审查 D1）
+     *
+     * 包里的附件是**项目级**的平铺列表（`ManifestAttachment` 不记它属于哪份文档），
+     * 而引用记在**快照**上。原先这条路径只写文档、**从不登记引用**，于是
+     * ①"读取某快照引用了哪些附件"永远报空；②紧接着的孤儿回收（60 秒宽限）
+     * 会把**刚导入的字节删掉** —— 导入成功、附件却没了。
+     *
+     * 归属只能取**保守的过近似**：把项目里的附件记在**每一份**导入文档这一代上。
+     * 这个方向是刻意选的 —— 多记只会让列举多出几行（可恢复），
+     * 少记则是**用户的数据没了**（不可恢复）。
+     */
+    pub fn import_documents(&mut self, project_id: &str, epoch: &str, documents: &[ImportDocument], attachments: &[ImportAttachment]) -> Result<Vec<ImportedDocument>, RepositoryError> {
+        let transaction = self.connection.transaction().map_err(|error| RepositoryError::Io { detail: format!("cannot start a transaction: {error}") })?;
+        let now = now_ms();
+        let mut imported: Vec<ImportedDocument> = Vec::with_capacity(documents.len());
+
+        for document in documents {
+            let content_hash = super::blobs::sha256_hex(document.content.as_bytes());
+            // **区分"没有这一行"与"读失败"**：前者走 `create`，后者如实上抛。
+            let existing: Option<i64> = transaction
+                .query_row(
+                    "SELECT generation FROM documents WHERE project_id = ?1 AND document_id = ?2",
+                    (project_id, document.document_id.as_str()),
+                    |row| row.get(0)
+                )
+                .optional()
+                .map_err(|error| RepositoryError::Io { detail: format!("cannot read the head: {error}") })?;
+
+            let generation = match existing {
+                Some(current) => {
+                    // 已存在：**换一世**（epoch 一变，在途的旧提交会 CAS 失败）。
+                    let next = current + 1;
+                    transaction
+                        .execute(
+                            "UPDATE documents SET epoch = ?1, generation = ?2, content_hash = ?3, content = ?4, updated_at = ?5 WHERE project_id = ?6 AND document_id = ?7",
+                            (epoch, next, content_hash.as_str(), document.content.as_str(), now, project_id, document.document_id.as_str())
+                        )
+                        .map_err(|error| RepositoryError::Io { detail: format!("cannot replace the epoch during an import: {error}") })?;
+                    next
+                }
+                None => {
+                    transaction
+                        .execute(
+                            "INSERT INTO documents (project_id, document_id, epoch, generation, content_hash, content, updated_at) VALUES (?1, ?2, ?3, 1, ?4, ?5, ?6)",
+                            (project_id, document.document_id.as_str(), epoch, content_hash.as_str(), document.content.as_str(), now)
+                        )
+                        .map_err(|error| RepositoryError::Io { detail: format!("cannot create an imported document: {error}") })?;
+                    1
+                }
+            };
+
+            transaction
+                .execute(
+                    "INSERT INTO snapshots (project_id, document_id, generation, content_hash, content, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                    (project_id, document.document_id.as_str(), generation, content_hash.as_str(), document.content.as_str(), now)
+                )
+                .map_err(|error| RepositoryError::Io { detail: format!("cannot write an imported snapshot: {error}") })?;
+
+            imported.push(ImportedDocument { document_id: document.document_id.clone(), generation });
+        }
+
+        for attachment in attachments {
+            transaction
+                .execute(
+                    "INSERT INTO attachments (content_hash, byte_size, media_type, created_at) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(content_hash) DO NOTHING",
+                    (attachment.content_hash.as_str(), attachment.byte_size, attachment.media_type.as_str(), now)
+                )
+                .map_err(|error| RepositoryError::Io { detail: format!("cannot record an imported attachment: {error}") })?;
+            // 引用的 (project_id, document_id, generation) 指向**刚写进去的那一代**，
+            // 而不是包里记的那个代数：导入会推进 generation，用包里的数字会指向一个
+            // 不存在的快照（那样 GC 照样把它当孤儿删掉，等于没修）。
+            for document in &imported {
+                transaction
+                    .execute(
+                        "INSERT INTO snapshot_attachments (project_id, document_id, generation, content_hash) VALUES (?1, ?2, ?3, ?4) ON CONFLICT DO NOTHING",
+                        (project_id, document.document_id.as_str(), document.generation, attachment.content_hash.as_str())
+                    )
+                    .map_err(|error| RepositoryError::Io { detail: format!("cannot reference an imported attachment: {error}") })?;
+            }
+        }
+
+        transaction.commit().map_err(|error| RepositoryError::Io { detail: format!("cannot commit the import: {error}") })?;
+        Ok(imported)
     }
 
     // ------------------------------------------------------------ 附件引用（Task 1.6 Step 4）

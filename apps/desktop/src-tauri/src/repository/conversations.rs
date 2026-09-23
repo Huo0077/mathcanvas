@@ -485,7 +485,11 @@ pub fn archive(connection: &mut Connection, conversation_id: &str) -> Result<Con
     let now = super::projects::now_ms();
     connection
         .execute(
-            "UPDATE conversations SET archived_at = ?1, updated_at = ?1 WHERE id = ?2 AND archived_at IS NULL",
+            // **不推进 `updated_at`**（外部审查 M8）：上面那段文档就是这么写的，而这条 SQL 原先
+            // 写的是 `SET archived_at = ?1, updated_at = ?1` —— 注释与实现相反。归档不该把一条
+            // 旧会话的"最后说话时间"改成现在（取消归档之后顺序还要反映真实的那一次）。
+            // 浏览器 fallback 一直是按文档来的，两个后端因此对不上。
+            "UPDATE conversations SET archived_at = ?1 WHERE id = ?2 AND archived_at IS NULL",
             (now, conversation_id)
         )
         .map_err(|error| io(format!("cannot archive the conversation: {error}")))?;
@@ -658,9 +662,17 @@ pub fn upsert_fact(connection: &mut Connection, input: &ConversationFactInput) -
     }
 
     let now = super::projects::now_ms();
+    // **采纳调用方的 `created_at`**（外部审查 M6）。
+    //
+    // 原先把 `?7` 同时绑给 `created_at` 与 `updated_at` —— 于是 `ConversationFactInput.created_at`
+    // 这个**必填**字段在桌面侧被**静默丢掉**，而浏览器 fallback 是采纳它的
+    //（`conversationRepository.ts` 的同名路径）：同一个 `saveFact`、两个后端给出不同的 `createdAt`。
+    // 本仓库自己的规矩是"静默削掉一个字段比拒绝更糟"（会让调用方以为存进去了）。
+    // `ON CONFLICT` 那一支仍然只更新 `updated_at`，不动 `created_at` —— 重复写同一条事实
+    // 不该改写它最初被记下的时间。
     transaction
         .execute(
-            "INSERT INTO conversation_facts (id, conversation_id, key, value_json, source_message_id, status, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7) ON CONFLICT(conversation_id, key) DO UPDATE SET value_json = excluded.value_json, source_message_id = excluded.source_message_id, status = excluded.status, updated_at = excluded.updated_at",
+            "INSERT INTO conversation_facts (id, conversation_id, key, value_json, source_message_id, status, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) ON CONFLICT(conversation_id, key) DO UPDATE SET value_json = excluded.value_json, source_message_id = excluded.source_message_id, status = excluded.status, updated_at = excluded.updated_at",
             (
                 input.id.as_str(),
                 input.conversation_id.as_str(),
@@ -668,6 +680,7 @@ pub fn upsert_fact(connection: &mut Connection, input: &ConversationFactInput) -
                 input.value_json.to_string(),
                 input.source_message_id.as_str(),
                 input.status.as_str(),
+                input.created_at,
                 now
             )
         )

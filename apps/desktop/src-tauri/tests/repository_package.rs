@@ -17,7 +17,8 @@
 use std::collections::BTreeSet;
 
 use mathcanvas_desktop_lib::repository::archive::{self, Entry};
-use mathcanvas_desktop_lib::repository::blobs::{sha256_hex, BlobStore, MAX_ATTACHMENT_BYTES};
+use mathcanvas_desktop_lib::repository::blobs::{is_content_hash, sha256_hex, BlobStore, MAX_ATTACHMENT_BYTES};
+use mathcanvas_desktop_lib::repository::projects::{ImportAttachment, ImportDocument, ProjectRepository};
 use mathcanvas_desktop_lib::repository::package::{self, ExportDocument, PackageError, SourceLink, PACKAGE_SCHEMA_VERSION};
 
 fn temp_dir(name: &str) -> std::path::PathBuf {
@@ -213,6 +214,83 @@ fn verifying_an_attachment_notices_content_that_no_longer_matches_its_name() {
     assert!(!blobs.verify(&staged.content_hash).expect("verify again"));
     // 而"读不到"与"读坏了"是两件事。
     assert!(blobs.read(&"f".repeat(64)).expect("read a missing blob").is_none());
+}
+
+/// **哈希是文件名，所以形状就是安全边界**（外部审查 D2）。
+///
+/// 原先 `blob_path` 直接把调用方给的字符串 `join` 进来：`read_attachment` 用一个
+/// `..\..\…` 或绝对路径就能读到附件目录之外的**任意**文件，再以 base64 回给 WebView
+/// （`verify` 走的是同一条路）。今天没有界面传文档哈希，所以它只是潜在洞 ——
+/// 但一条已注册命令的安全边界不能建立在"调用方现在恰好不会那么传"之上。
+#[test]
+fn a_traversal_shaped_hash_cannot_read_outside_the_attachment_directory() {
+    let blobs = store("traversal");
+    // 附件目录的**外面**放一份"秘密"（真实布局里这里正是 projects.db / providers.json）。
+    let secret = blobs.root().parent().expect("a parent").join("projects.db");
+    std::fs::write(&secret, b"the database").expect("write the secret");
+
+    // 先确认这份秘密**真的**能被这种路径走到 —— 否则下面的断言可能因为别的原因通过。
+    let escaped = blobs.root().join("blobs").join("..").join("..").join("projects.db");
+    assert!(escaped.is_file(), "the fixture must actually be reachable by traversal, else this test proves nothing");
+
+    let short = "a".repeat(63);
+    let long = "a".repeat(65);
+    let non_hex = "z".repeat(64);
+    for shaped in ["../../projects.db", r"..\..\projects.db", "..", "", short.as_str(), long.as_str(), non_hex.as_str(), "/etc/passwd"] {
+        // 读：**拒**，而不是把外面的字节当成附件交出去。
+        let read = blobs.read(shaped);
+        assert!(
+            matches!(read, Err(mathcanvas_desktop_lib::repository::BlobError::InvalidHash { .. })),
+            "read({shaped:?}) must be refused, got {read:?}"
+        );
+        // 校验走同一条路，因此也必须拒。
+        let verified = blobs.verify(shaped);
+        assert!(
+            matches!(verified, Err(mathcanvas_desktop_lib::repository::BlobError::InvalidHash { .. })),
+            "verify({shaped:?}) must be refused, got {verified:?}"
+        );
+        assert!(!is_content_hash(shaped), "{shaped:?} must not count as a content hash");
+    }
+
+    // 反向守卫：形状合法的哈希照常工作（这条闸不该把正常路径一起挡掉）。
+    let staged = blobs.write(b"legit", &sha256_hex(b"legit")).expect("stage");
+    assert!(is_content_hash(&staged.content_hash));
+    assert!(blobs.read(&staged.content_hash).expect("read the legit blob").is_some());
+    assert!(blobs.verify(&staged.content_hash).expect("verify the legit blob"));
+}
+
+/// **导入的附件必须被登记引用，否则孤儿回收会把刚导入的字节删掉**（外部审查 D1）。
+///
+/// 原先 `import_package` 只写文档、**从不登记附件引用**，于是两件事同时坏掉：
+/// ①"这一版快照引用了哪些附件"永远报空；②紧接着的孤儿回收（60 秒宽限）判据只有
+/// "有没有被引用"，于是**刚导入的附件被当成孤儿删掉** —— 导入显示成功、附件却没了。
+#[test]
+fn an_imported_attachment_is_referenced_so_garbage_collection_cannot_delete_it() {
+    let dir = temp_dir("import-attachments");
+    let mut repository = ProjectRepository::open(dir.join("project.db")).expect("open");
+    let blobs = BlobStore::open(dir.join("attachments")).expect("open the blob store");
+
+    let bytes = b"a picture";
+    let hash = sha256_hex(bytes);
+    blobs.write(bytes, &hash).expect("store the attachment");
+
+    repository
+        .import_documents(
+            "p1",
+            "epoch-import",
+            &[ImportDocument { document_id: "d1".to_string(), content: "{\"v\":1}".to_string() }],
+            &[ImportAttachment { content_hash: hash.clone(), byte_size: bytes.len() as i64, media_type: "image/png".to_string() }]
+        )
+        .expect("import");
+
+    // ① 列举必须答得出来（原先永远报空）。
+    assert_eq!(repository.attachments_of("p1", "d1", 1).expect("attachments"), vec![hash.clone()]);
+
+    // ② GC 的判据只有"有没有被引用"：刚导入的字节必须活下来。
+    let known = repository.referenced_blobs().expect("referenced");
+    let removed = blobs.collect_garbage(&known, 0).expect("collect");
+    assert!(removed.is_empty(), "an imported attachment must not be collected, removed {removed:?}");
+    assert!(blobs.read(&hash).expect("read").is_some(), "the imported bytes must still be there");
 }
 
 #[test]

@@ -264,6 +264,45 @@ fn seeded_conversation(label: &str) -> (TempDir, Connection) {
 
 // ---------------------------------------------------------------- 仓库：会话
 
+/**
+ * **事实的 `created_at` 采纳调用方给的那一个**（外部审查 M6）。
+ *
+ * 原先把 `?7` 同时绑给 `created_at` 与 `updated_at` —— `ConversationFactInput.created_at`
+ * 这个**必填**字段在桌面侧被静默丢掉，而浏览器 fallback 采纳它：同一个 `saveFact`、
+ * 两个后端给出不同的 `createdAt`。本仓库的规矩是"静默削掉一个字段比拒绝更糟"。
+ */
+#[test]
+fn a_fact_keeps_the_created_at_the_caller_supplied() {
+    let (_dir, mut connection) = seeded_conversation("fact-created-at");
+    let input = fact("f1", "c1", "radius", "m1");
+
+    let written = conversations::upsert_fact(&mut connection, &input).expect("write the fact");
+
+    assert_eq!(written.created_at, input.created_at, "the caller's created_at must survive");
+    // 重复写同一条事实只推进 `updated_at`，不该改写它最初被记下的时间。
+    let rewritten = conversations::upsert_fact(&mut connection, &input).expect("rewrite the fact");
+    assert_eq!(rewritten.created_at, input.created_at);
+}
+
+/**
+ * **归档不推进 `updated_at`**（外部审查 M8）。
+ *
+ * 上面那段文档写的是"归档这件事本身不该把一条旧会话顶到列表最前面"，而 SQL 原先写的是
+ * `SET archived_at = ?1, updated_at = ?1` —— 注释与实现相反，两个后端也因此对不上
+ * （浏览器 fallback 一直按文档来）。
+ */
+#[test]
+fn archiving_a_conversation_does_not_advance_its_updated_at() {
+    let (_dir, mut connection) = fresh("archive-timestamp");
+    // 用显式时间戳：断言不该依赖"这两次调用不在同一毫秒里"。
+    insert_conversation_at(&connection, "c1", 1_111);
+
+    let archived = conversations::archive(&mut connection, "c1").expect("archive");
+
+    assert!(archived.archived_at.is_some(), "the conversation must be archived");
+    assert_eq!(archived.updated_at, 1_111, "archiving must not reorder the conversation");
+}
+
 #[test]
 fn a_conversation_survives_a_restart_and_comes_back_through_list() {
     let dir = TempDir::new("restart");
