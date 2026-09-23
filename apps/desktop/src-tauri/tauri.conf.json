@@ -1,7 +1,7 @@
 {
   "$schema": "../../../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "MathCanvas",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "identifier": "com.mathcanvas.desktop",
   "build": {
     "frontendDist": "../../../build-check/mathcanvas-current",
