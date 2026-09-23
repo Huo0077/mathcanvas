@@ -2,7 +2,7 @@
 
 > 这份文件是项目的单一进度记录。每完成一个可验证的切片，就更新“已完成”和“下一步”，并附上验证证据。
 
-**最后更新：** 2026-09-22（**四份 2026-09-21 计划全部落地，并完成一轮收口**：①统一 Solid 与拉伸式 Prism ②Reactive DAG ③Agent DSL 与参数审计 ④多会话上下文；收口轮把 Solid 派生读数接进属性面板与模型观测、把编译阶段的一次性修复回路接通、并补齐会话事实的 `stale`/`retracted` 与会话摘要的落盘诊断。四个切片各自实现 + 独立评审 + 修复轮，最终 **215 文件 / 2560 用例（+1 todo）**、typecheck 6 个 workspace exit 0、lint **0 error / 14 warning**、**e2e 140/140**、Rust **219 例 + 3 ignored**；**已推送到 `origin/main`（远端 `42373eb`）**。**另附：四路外部审查在计划任务之外查出 2 Critical / 14 Important / 16 Minor 缺陷，全部未修**，逐条见下文「已知缺陷清单（2026-09-22 四路外部审查）」。）。下面这一段是上一批（**非空画布上的两处必然失败：id 分配器 + 规范化哈希**。用户截图里那条直四棱柱请求以 `compile_failed: duplicate object id` 结束，修掉之后**当场暴露出第二个缺陷**（此前被第一个挡着看不见）：`canonicalContentHash: unsupported value of type undefined`。①**分配器占用集**：`createIdAllocator()` 的计数器从 1 重数、不知道文档里已有哪些 id —— 画布上已有 `solid-1`，新动作又被发成 `solid-1`；手工路径的 `nextPrimitiveId` 一直是对的，漂移的只有动作层。②**哈希与 JSON 对齐**：应用启动恢复时会 `migrateLegacySolids`，物化出来的子对象带着 `style: undefined` / `label: undefined`；文档的每一处落盘与比对（JSON、`contentFingerprint`）都当"没这个字段"，只有规范化哈希抛错，于是"画布上有一个立体"就等于"Agent 必然失败"，而且错误信息只有一句内部函数名。两处都按 RED→GREEN 修：**+11 例单测**（分配器 3 / 草稿 2 / worker 1 / 组装运行时 1 / 哈希 3 / 迁移 1）+ **2 条 e2e 回归**（先有一个对象再建同类；刷新恢复之后再起草）。**真窗口实测**（重建 exe → 重启 → 真 DeepSeek）：`再建一个棱长 2 的立方体` → 已提交 → 对象 29；用户原来那条直四棱柱 → **草稿成型**（共 30 个 · 3 条假设 · 0 个页面错误），刻意留给用户确认。**验证**：单测 **193 文件 / 2207 用例**、typecheck 6 个 workspace exit 0、lint **0 error / 14 warning**、**e2e 124/124**、Rust 未改动（193 例 + 1 ignored）、release exe 重建并实跑）。下面这一段是上一批（**G2 接线：`PlannerPort` 接到真实 provider + G1 第十四批：项目包界面入口**。用户口径："继续完成 G1 剩下的两项 + G2 接线"。这一批把 G1 第十三批留下的两条如实缺口一起关掉：①**「使用中」的那一份配置现在真的被规划器消费**——`modelPlanner.ts` 自己现取它（三道检查：有没有桌面外壳 / 有没有选过 / 有没有密钥），按**能力证据**选通道（`json` 已验证才走严格 JSON，否则文本通道），provider 失败**抛**带分类的错、解析失败**原样交出去**让协调器走一次性修复，abort 时真的调 `provider_cancel`；②**附件与 `.mcanvas` 导出/导入有了界面入口**（「项目包…」，与"打开/保存 `.mgeo`"同一组）。附件哈希必须按**原始字节**算（`sha256HexBytes`），否则前端与 Rust 侧会算出两个哈希。**两处靠非测试手段发现的缺陷**：一处 CSS 令牌名写错导致面板背景**静默变透明**（`--color-surface` 不存在，是量 `getComputedStyle` 发现的），一处提示文字原样显示 markdown 记号（看截图发现的）。**如实缺口**：`native_tools` 通道到不了（`provider_run` 契约里没有工具表位置）、附件列表只覆盖本次会话（缺"列举某快照的附件"命令）、**没有对真实 provider 跑过一轮**（本机没有配过任何 profile/密钥）。**验证**：单测 **191 文件 / 2182 用例**（零跳过）、typecheck 6 个 workspace exit 0、lint **0 error / 14 warning**、**e2e 122/122**、Rust **179 例 + 1 ignored**、clippy exit 0、release exe 真的启动过、实拍截图两张（项目包面板 / 桌面外壳窗口）。）。下面这一段是上一批（G1 第十三批：模型服务界面重做成 CC Switch 那种清单。用户口径："像 ccswitch 那样，首先有加号可以添加 apikey，添加完成并且通过验证之后，在界面可以出现刚刚填入的一栏，能同时存在很多栏，并且能够主动在不同的模型中进行切换"。交付：整屏重做的清单界面（加号 → 表单 → 保存即验证 → 那一栏出现；每一栏一张卡片，含四个能力徽章与"使用中"标记）、Rust 侧的"当前使用哪一份"（`active_profile_id` / `select` + 两个命令，7 例）。**切换只动一个字段、不碰修订号**，因为能力证据挂在修订号上，切换若推高修订号会把四个徽章全清掉。三处新判据都落在存储层：切换跨重启还在 / 删掉选中那份时选中被清空 / 旧配置文件仍打得开。**一个自己写出来的 CSS 优先级缺陷靠截图发现**：`data-active` 与 `data-state="unverified"` 各写一条 `::before`，"正在使用的那一栏恰好也还没验证"时会显示成红线。**如实缺口**：`使用中` 还没被规划器消费（把 `PlannerPort` 接到真模型属 G2）。**验证**：Rust **179 例 + 1 例 `#[ignore]`**、单测 **188 文件 / 2134 用例**、typecheck exit 0、lint 0 error / 14 warning、`cargo clippy --all-targets` 零警告、`npm run build` exit 0、**e2e 119/119**、实拍截图两张。）。下面这一段是上一批（G1 第十批：能力证据探针 —— "已验证"真的会变真了**。上一批 provider 会发请求了，这一批回答"**一次成功的请求到底证明了什么**"：四条探针各发各的请求，逐条下结论，而最要紧的判据是计划原文那句"**一次成功的文本 ping 不许把 vision 或 tools 打勾**"。**证据的边界**成了这一批的核心：图片与工具探针被 400 拒 → `failed`（形状是我们拼的，那是要我们改代码）；认证 / 连接 / 没有密钥 / 模型不肯配合 → `unknown`（什么都不说明）。**"这家不支持"与"我们发错了"必须分开**，因为下一步动作完全不同。顺带把请求拼装扩成能带工具表与图片（三家三套形状，逐条断言）。设置界面多了一个**用户按下去才发生**的探测按钮（一次四发真请求，按钮写明代价，没有密钥时禁用）。**验证**：Rust **140 例 + 1 例 `#[ignore]`**、单测 **188 文件 / 2122 用例**、typecheck exit 0、lint 0 error / 14 warning、`cargo clippy --all-targets` **零警告**、`npm run build` exit 0、**e2e 119/119**。**G1 现在只差 `.mcanvas` 打包与附件**（Gate ② 的手动密钥重启验证需要用户本机操作）。同日更早的 G1 各批（1.1 外壳 / 1.2 密钥库 / 1.3 provider 配置 / 1.4 适配器 / 1.5 代理 / 1.6 仓储 / 真实转发）逐条见下方「G1 第一批 … 第九批」。同日更早的 G2 各批（第二十二批至第二十七批：接缝修复 / previewHash 真哈希 / 假设贯通 / 同意不可伪造 / 工具可执行 / 轨迹面板 / worker 信封 / 上下文交给规划器 / 观察者事实文本 / 技能清单 / prepare 已知缺口 / 一次性修复往返）见下方「G2 第二十七批」及更早各节。
+**最后更新：** 2026-09-22（**四份 2026-09-21 计划全部落地，并完成一轮收口**：①统一 Solid 与拉伸式 Prism ②Reactive DAG ③Agent DSL 与参数审计 ④多会话上下文；收口轮把 Solid 派生读数接进属性面板与模型观测、把编译阶段的一次性修复回路接通、并补齐会话事实的 `stale`/`retracted` 与会话摘要的落盘诊断。四个切片各自实现 + 独立评审 + 修复轮，最终 **215 文件 / 2560 用例（+1 todo）**、typecheck 6 个 workspace exit 0、lint **0 error / 14 warning**、**e2e 140/140**、Rust **219 例 + 3 ignored**；**已推送到 `origin/main`（远端 `42373eb`）**。**另附：四路外部审查在计划任务之外查出 2 Critical / 14 Important / 16 Minor 缺陷，全部未修**，逐条见下文「已知缺陷清单（2026-09-22 四路外部审查）」。**随后同日开修：两条 Critical 与六条 Important 已修复 —— X1（SQLite 从来不是文档真源：探测用的是刚生成的新随机 id）、X2（一次性同意的 CAS 在"点确认"时才取样，用户看预览期间的编辑被静默合并）、D1（导入的附件字节没登记引用，被孤儿回收删掉）、D2（`read_attachment` 的任意文件读取）、D3（`import_package` 逐份开事务 ⇒ 部分导入）、G1（外接球枚举全部 C(n,4)，且属性面板每次选中都算整篇文档 ⇒ 用户可达的分钟级卡死）、G3（`facesOutwards` 只看头三点，前三点共线时面被翻反）、G4（退化判据的容差其实不相对，1e-5 量级的合法三角形被判成退化）、G2（带 `plane` 字段成了绕过棱柱几何校验的通行证，导入与保存两条路径一起漏）、S1（一次交互压两条撤销记录，一次 Ctrl+Z 落在用户没见过的中间态）、S2（删除棱柱只删掉 `polyhedron3`，26 个派生拓扑留在画布上）、A1（"无需改动"被报成失败，协调器的 `no_change → completed` 成了死代码）、A3（读会话记录抛错让整轮在协调器启动前卡死）、S3（平面动点的宿主路径从不校验存在性，悬空 `pathId` 让点静默冻住而界面仍显示"绑定在路径上"）、A2（引用解析只认第一个字段，第二个引用永远指不到同一份计划里的别名，唯一一次修复还被指向错的字段）、A4（用户确认之后账本永远停在"等用户确认"，即使文档真的提交了），各自取到 RED→GREEN 与变异检查证据 —— **至此 2 Critical + 14 Important 全部修完**；随后进入 Minor：**内核那 3 条也已修**（`sampleLocus` 的 `maxJump` 方向反了、`liftPrismBasePolygon` 的基底是左手系且把坐标转置、`buildPrism` 对顺时针底面静默产出里外翻转的实体），随后 **scene-graph 3 条**、**Agent 3 条**与**桌面/会话 5 条**也修掉（棱柱描述符在搬动后重检、`commitTransaction` 校验结果文档、批量改样式与批量显隐同一条锁策略、`beginStage` 真的被调用、上下文预算真的计费、矛盾检测覆盖 `parameter.set`；`create` 不再把任何插入失败说成"已存在"、`upsert_fact` 采纳 `created_at`、尺寸闸门的数字与计数方式与 Rust 对齐且摘要上限收敛成一个数、`archive()` 不再推进 `updated_at`、密钥字段守卫递归进数组），**Minor 只剩 2 条**。见下文「修复轮 A」「修复轮 B」及其三次续篇。）。下面这一段是上一批（**非空画布上的两处必然失败：id 分配器 + 规范化哈希**。用户截图里那条直四棱柱请求以 `compile_failed: duplicate object id` 结束，修掉之后**当场暴露出第二个缺陷**（此前被第一个挡着看不见）：`canonicalContentHash: unsupported value of type undefined`。①**分配器占用集**：`createIdAllocator()` 的计数器从 1 重数、不知道文档里已有哪些 id —— 画布上已有 `solid-1`，新动作又被发成 `solid-1`；手工路径的 `nextPrimitiveId` 一直是对的，漂移的只有动作层。②**哈希与 JSON 对齐**：应用启动恢复时会 `migrateLegacySolids`，物化出来的子对象带着 `style: undefined` / `label: undefined`；文档的每一处落盘与比对（JSON、`contentFingerprint`）都当"没这个字段"，只有规范化哈希抛错，于是"画布上有一个立体"就等于"Agent 必然失败"，而且错误信息只有一句内部函数名。两处都按 RED→GREEN 修：**+11 例单测**（分配器 3 / 草稿 2 / worker 1 / 组装运行时 1 / 哈希 3 / 迁移 1）+ **2 条 e2e 回归**（先有一个对象再建同类；刷新恢复之后再起草）。**真窗口实测**（重建 exe → 重启 → 真 DeepSeek）：`再建一个棱长 2 的立方体` → 已提交 → 对象 29；用户原来那条直四棱柱 → **草稿成型**（共 30 个 · 3 条假设 · 0 个页面错误），刻意留给用户确认。**验证**：单测 **193 文件 / 2207 用例**、typecheck 6 个 workspace exit 0、lint **0 error / 14 warning**、**e2e 124/124**、Rust 未改动（193 例 + 1 ignored）、release exe 重建并实跑）。下面这一段是上一批（**G2 接线：`PlannerPort` 接到真实 provider + G1 第十四批：项目包界面入口**。用户口径："继续完成 G1 剩下的两项 + G2 接线"。这一批把 G1 第十三批留下的两条如实缺口一起关掉：①**「使用中」的那一份配置现在真的被规划器消费**——`modelPlanner.ts` 自己现取它（三道检查：有没有桌面外壳 / 有没有选过 / 有没有密钥），按**能力证据**选通道（`json` 已验证才走严格 JSON，否则文本通道），provider 失败**抛**带分类的错、解析失败**原样交出去**让协调器走一次性修复，abort 时真的调 `provider_cancel`；②**附件与 `.mcanvas` 导出/导入有了界面入口**（「项目包…」，与"打开/保存 `.mgeo`"同一组）。附件哈希必须按**原始字节**算（`sha256HexBytes`），否则前端与 Rust 侧会算出两个哈希。**两处靠非测试手段发现的缺陷**：一处 CSS 令牌名写错导致面板背景**静默变透明**（`--color-surface` 不存在，是量 `getComputedStyle` 发现的），一处提示文字原样显示 markdown 记号（看截图发现的）。**如实缺口**：`native_tools` 通道到不了（`provider_run` 契约里没有工具表位置）、附件列表只覆盖本次会话（缺"列举某快照的附件"命令）、**没有对真实 provider 跑过一轮**（本机没有配过任何 profile/密钥）。**验证**：单测 **191 文件 / 2182 用例**（零跳过）、typecheck 6 个 workspace exit 0、lint **0 error / 14 warning**、**e2e 122/122**、Rust **179 例 + 1 ignored**、clippy exit 0、release exe 真的启动过、实拍截图两张（项目包面板 / 桌面外壳窗口）。）。下面这一段是上一批（G1 第十三批：模型服务界面重做成 CC Switch 那种清单。用户口径："像 ccswitch 那样，首先有加号可以添加 apikey，添加完成并且通过验证之后，在界面可以出现刚刚填入的一栏，能同时存在很多栏，并且能够主动在不同的模型中进行切换"。交付：整屏重做的清单界面（加号 → 表单 → 保存即验证 → 那一栏出现；每一栏一张卡片，含四个能力徽章与"使用中"标记）、Rust 侧的"当前使用哪一份"（`active_profile_id` / `select` + 两个命令，7 例）。**切换只动一个字段、不碰修订号**，因为能力证据挂在修订号上，切换若推高修订号会把四个徽章全清掉。三处新判据都落在存储层：切换跨重启还在 / 删掉选中那份时选中被清空 / 旧配置文件仍打得开。**一个自己写出来的 CSS 优先级缺陷靠截图发现**：`data-active` 与 `data-state="unverified"` 各写一条 `::before`，"正在使用的那一栏恰好也还没验证"时会显示成红线。**如实缺口**：`使用中` 还没被规划器消费（把 `PlannerPort` 接到真模型属 G2）。**验证**：Rust **179 例 + 1 例 `#[ignore]`**、单测 **188 文件 / 2134 用例**、typecheck exit 0、lint 0 error / 14 warning、`cargo clippy --all-targets` 零警告、`npm run build` exit 0、**e2e 119/119**、实拍截图两张。）。下面这一段是上一批（G1 第十批：能力证据探针 —— "已验证"真的会变真了**。上一批 provider 会发请求了，这一批回答"**一次成功的请求到底证明了什么**"：四条探针各发各的请求，逐条下结论，而最要紧的判据是计划原文那句"**一次成功的文本 ping 不许把 vision 或 tools 打勾**"。**证据的边界**成了这一批的核心：图片与工具探针被 400 拒 → `failed`（形状是我们拼的，那是要我们改代码）；认证 / 连接 / 没有密钥 / 模型不肯配合 → `unknown`（什么都不说明）。**"这家不支持"与"我们发错了"必须分开**，因为下一步动作完全不同。顺带把请求拼装扩成能带工具表与图片（三家三套形状，逐条断言）。设置界面多了一个**用户按下去才发生**的探测按钮（一次四发真请求，按钮写明代价，没有密钥时禁用）。**验证**：Rust **140 例 + 1 例 `#[ignore]`**、单测 **188 文件 / 2122 用例**、typecheck exit 0、lint 0 error / 14 warning、`cargo clippy --all-targets` **零警告**、`npm run build` exit 0、**e2e 119/119**。**G1 现在只差 `.mcanvas` 打包与附件**（Gate ② 的手动密钥重启验证需要用户本机操作）。同日更早的 G1 各批（1.1 外壳 / 1.2 密钥库 / 1.3 provider 配置 / 1.4 适配器 / 1.5 代理 / 1.6 仓储 / 真实转发）逐条见下方「G1 第一批 … 第九批」。同日更早的 G2 各批（第二十二批至第二十七批：接缝修复 / previewHash 真哈希 / 假设贯通 / 同意不可伪造 / 工具可执行 / 轨迹面板 / worker 信封 / 上下文交给规划器 / 观察者事实文本 / 技能清单 / prepare 已知缺口 / 一次性修复往返）见下方「G2 第二十七批」及更早各节。
 **当前阶段：** 四份 2026-09-21 计划（Solid/Prism、Reactive DAG、Agent DSL、多会话上下文）已实现并提交；P0-P6 与 P7 工程制图已完成；MathCanvas 统一 Ribbon UI 基线、后续 UI 优化（Task 7-13）、工程制图视觉重做（Task 14）、工程制图可用性修复（Task 15-18）、圆锥曲线四项修复、功能键操作指引浮层、CAD 2D 绘图交互重做、平面几何动点系统、3D 视口与几何内核重构、封闭曲线绕定点旋转、UI 优化（草稿纸画布）与平面几何元素选颜色均已完成。**2026-09-17 新增两条解析几何交付线并已全部落地**：**A1 解析二次曲面与"真圆"**（8 片；设计 `docs/superpowers/specs/2026-09-17-analytic-quadrics-design.md`）与 **A2 交面按支撑曲面分组 + 真曲面**（5 轮；设计 `docs/superpowers/specs/2026-09-17-intersection-face-grouping-design.md`）——用户口径从"我不要一个逼近的圆，我需要一个真的圆"一路推到"我需要的只是那个相交的曲面，而不是由很多三角形拼出来的"。**随后"立体几何最后一轮"四件事也已全部交付**（7 片；设计 `docs/superpowers/specs/2026-09-17-3d-tracks-rotation-and-measurement-labels-design.md`）：约束轨道（`circle3` 当动点宿主）、拖动旋转（世界轴三色环 + 15° 吸附 + 属性栏角度）、测量数字常驻画布（2D + 3D）、立体几何 UI 与平面几何同一套令牌。平面动点系统按四个维度交付：①约束模型与参数化映射 ②依赖图 DAG 与增量拓扑重算 ③动态测量监听器 ④轨迹采样与消元法隐式化；3D 重构按四个区块交付：①动点宿主约束与渲染管道 ②截面几何 ③Auto-Fit ④生命周期与多解；四者与三区块**全部接进主流程**（不只是内核可用）。**2026-09-18 又完成平面几何切线**（抛物线 / 双曲线 / 圆 / 椭圆的曲线切线，切点可沿曲线拖动或跟随动点）**与动点扩展**（在动点处作切线、以动点为圆心作圆、半径可调且可随动点位置动态变化），并修掉"切线不能拖动"这一现场反馈。**P4 Agent 已按用户要求交付**（G1 + G2：Tauri 外壳 / 凭据管理器 / provider 与能力证据 / 回环代理 / SQLite 仓储 + CAS / 真协调器 + 隔离草稿 + 一次性同意 + 真实模型规划器，见本文件的「G1 阶段状态」表与「G2 接线」、以及最新一批两条修复）；**P5 题图解析仍在排除范围内**。
 **总体状态：** 开发中
 
@@ -37,48 +37,266 @@
 
 **验证证据（本批）**：单测 **215 文件 / 2560 用例通过 + 1 todo**（起点 193 / 2207，全部改动后复跑）；`npm run typecheck` 6 个 workspace exit 0；`npm run lint` **0 error / 14 warning**（与基线一致）；`npm run test:e2e` **140/140**（起点 124）；`npm run test:rust` **219 例通过 + 0 failed + 3 ignored**（16 个测试目标，起点 193 + 1）；全部 42 个改动源文件扫描 **0 个替换字符**（编码完整性）；`git status` 干净且与提交一致；**已推送到 `origin/main`（远端 HEAD `42373eb`，经 GitHub API 独立复核）**。每个切片都有独立评审与修复轮记录，四份原始审查报告随 `42373eb` 一起进了仓库（`docs/research/external-audit-2026-09-22/`）。
 
-### 已知缺陷清单（2026-09-22 四路外部审查，**均未修复**）
+### 已知缺陷清单（2026-09-22 四路外部审查；**已全部处理完毕 —— 2 Critical + 14 Important 修复，Minor 16 条中 15 条修复 + 1 条按"如实标注尚未接线"处理**；另有 1 条**跑门禁时暴露的新缺陷**（密钥用例在动用户的真实凭据库），不在本清单内，见下文同名一节）
 
-四路独立审查在四份计划的任务之外扫全仓（内核/DSL、scene-graph 与文档持久化、agent-core 与 Agent 运行时、desktop Rust 与会话存储），**只读**、探针放在仓库外（`D:\draw\.audit-probe\`、`D:\draw\.audit-tmp\`、`D:\draw\_audit\`），每条都给出 file:line 与可复现场景；审查前先读上面的"如实缺口"，不重复计数。合计 **2 Critical / 14 Important / 16 Minor**（其中文档持久化那条被两路独立复现，按一条计）。**下面每一条都还没有修**，按"修完才允许说已完成"的规矩，这里只记录。
+四路独立审查在四份计划的任务之外扫全仓（内核/DSL、scene-graph 与文档持久化、agent-core 与 Agent 运行时、desktop Rust 与会话存储），**只读**、探针放在仓库外（`D:\draw\.audit-probe\`、`D:\draw\.audit-tmp\`、`D:\draw\_audit\`），每条都给出 file:line 与可复现场景；审查前先读上面的"如实缺口"，不重复计数。合计 **2 Critical / 14 Important / 16 Minor**（其中文档持久化那条被两路独立复现，按一条计）。按本文档既有的规矩（"修完才允许说已完成"），**已修的在行内标注并给出证据，没修的保持原样**：本轮先修 **X1、X2** 两条 Critical 与 **D1 / D2 / D3 / G1 / G2 / G3 / G4 / S1 / S2 / S3 / A1 / A2 / A3 / A4** **十四条 Important 全部修完**（见下文「修复轮 A」）—— **2 Critical + 14 Important 一条不剩**，**只剩 Minor 16 条未修**。
 
 #### Critical（2）
 
 | ID | 位置 | 事实与影响 | 复现/证据 |
 | --- | --- | --- | --- |
-| X1 | `apps/web/src/services/documentPersistence.ts:90-92`（+ `App.tsx:538-555`、`codec.ts:20-23,40`、`projects.rs:143-162,240`） | `restore()` 用 `emptyDocument()` 刚生成的**新随机 id** 去 `read_head`，而 Rust 按 `(project_id, document_id)` 过滤 → 每次启动必然 NotFound → 适配器 `create` 一个空文档并当作 head、`App.tsx` 又因 `created===true` 丢弃取回结果（两路审查独立复现）→ **SQLite 从来不是文档真源**（设计 §5 被违反），每次启动多一条垃圾文档；随后的自动保存以真实 id 对垃圾 head 提交 → `not_found`，`stale_head` 恢复分支永不触发；唯一真正在恢复画布的是 localStorage 草稿（那一层的配额失败是被有意吞掉的）。同一根因还有一个用户可见后果：重启后除"上次活动"以外的工作区拿到新文档 id，`list_conversations` 按 document 过滤 → **会话侧栏空**，而数据仍在 SQLite 里 | 探针复现：launch2 `created=true, primitives=0`、每次启动多一行、初次保存 `{ok:false,code:"not_found"}`；单测抓不到是因为假仓储的 `readHead` 忽略 `documentId`（`documentPersistence.test.ts:34-39`） |
-| X2 | `apps/web/src/agent/hostBridge.ts:152-165,200-205`（+ `agentRuntime.ts:387-392`、`committerAdapter.ts:100`） | 一次性同意的 CAS **在"点确认"时才取样**，而草稿是对更早的 revision 编译的；生产顺序是 stage → 用户改画布 → 点确认（`requestConsent` 紧接 `commit`），于是 CAS 必然通过 → **用户在看到预览之后做的编辑会被静默合并**，"确认的就是落盘的那一份"与 §1.2/§5.4 的 generation 校验形同虚设。`DraftStore.assertFresh` 存在却只在**暂存**路径被调用 | 探针（真实 DraftStore + 真实 HostBridge）：doc@0 暂存 → 手改画布（revision→1）→ 确认 ⇒ `{ok:true,changed:true}`、ids `["point-manual","point-1"]`、revision 2；按测试自己的顺序（先同意后编辑）才会正确返回 `stale_source`，这正是 `pipeline.test.ts:80-104` 一直绿的原因 |
+| **X1 ✅ 已修** | `apps/web/src/services/documentPersistence.ts:90-92`（+ `App.tsx:538-555`、`codec.ts:20-23,40`、`projects.rs:143-162,240`） | `restore()` 用 `emptyDocument()` 刚生成的**新随机 id** 去 `read_head`，而 Rust 按 `(project_id, document_id)` 过滤 → 每次启动必然 NotFound → 适配器 `create` 一个空文档并当作 head、`App.tsx` 又因 `created===true` 丢弃取回结果（两路审查独立复现）→ **SQLite 从来不是文档真源**（设计 §5 被违反），每次启动多一条垃圾文档；随后的自动保存以真实 id 对垃圾 head 提交 → `not_found`，`stale_head` 恢复分支永不触发；唯一真正在恢复画布的是 localStorage 草稿（那一层的配额失败是被有意吞掉的）。同一根因还有一个用户可见后果：重启后除"上次活动"以外的工作区拿到新文档 id，`list_conversations` 按 document 过滤 → **会话侧栏空**，而数据仍在 SQLite 里 | 探针复现：launch2 `created=true, primitives=0`、每次启动多一行、初次保存 `{ok:false,code:"not_found"}`；单测抓不到是因为假仓储的 `readHead` 忽略 `documentId`（`documentPersistence.test.ts:34-39`） |
+| **X2 ✅ 已修** | `apps/web/src/agent/hostBridge.ts:152-165,200-205`（+ `agentRuntime.ts:387-392`、`committerAdapter.ts:100`） | 一次性同意的 CAS **在"点确认"时才取样**，而草稿是对更早的 revision 编译的；生产顺序是 stage → 用户改画布 → 点确认（`requestConsent` 紧接 `commit`），于是 CAS 必然通过 → **用户在看到预览之后做的编辑会被静默合并**，"确认的就是落盘的那一份"与 §1.2/§5.4 的 generation 校验形同虚设。`DraftStore.assertFresh` 存在却只在**暂存**路径被调用 | 探针（真实 DraftStore + 真实 HostBridge）：doc@0 暂存 → 手改画布（revision→1）→ 确认 ⇒ `{ok:true,changed:true}`、ids `["point-manual","point-1"]`、revision 2；按测试自己的顺序（先同意后编辑）才会正确返回 `stale_source`，这正是 `pipeline.test.ts:80-104` 一直绿的原因 |
 
 #### Important（14）
 
 | ID | 区域 | 位置 | 事实与影响 |
 | --- | --- | --- | --- |
-| G1 | 内核性能（用户可达） | `packages/geometry-kernel/src/solidDerived.ts:164-186`，调用方 `scene-graph/src/operations.ts:1311-1325`、`PropertiesBar.tsx:505-513` | `solveCircumsphere3` 枚举全部 C(n,4) 顶点子集并用**线性扫描**去重：实测 16 顶点 103ms、22 顶点 1538ms（每 +2 顶点约 ×2.5）⇒ 32 顶点要几分钟、48 顶点要几小时；而 `PropertiesBar` 在**每次选中任何图元**时都对**整篇文档**调用报告（注释自称先按选中过滤，实际没有）。规则基/立方体因为第一个候选就命中，所以测试从未暴露 |
-| G2 | 校验被绕过 | `packages/dsl/src/schema.ts:447-460`（`planeBase === undefined` 这个闸门）、`codec.ts:96-113`、`prism.ts:93-105` | `base.plane` + **三维**多边形这种写法在**导入与保存两条路径**上都绕过了棱柱几何判定：自交（领结）、非共面、零体积的底面**被接受**；不带 `plane` 的同样输入会被正确拒绝 |
-| G3 | 面朝向契约 | `packages/geometry-kernel/src/prism.ts:331-344` | `facesOutwards` 只看环上前三个点；这三点共线时叉积为零 → 该面被翻**朝内**，违反 `SolidTopology` 的朝外契约（实测底面 Newell 法向 −6，其余面 +2.4…+7.2） |
-| G4 | 误判退化 | `packages/geometry-kernel/src/reactive/triangleCenters.ts:65-69` | `Math.max(1, …)` 把"相对"容差变成了绝对值 1e-9，于是 1e-5 量级的**合法**三角形被报成 `degenerate`（"三点共线（或重合）"），临界点约 3.2e-5 |
-| D1 | 数据丢失 | `apps/desktop/src-tauri/src/lib.rs:635-665`（+ `record_attachment`/`reference_attachments`） | `import_package` 把包里的附件字节写进去却**不登记引用**，于是"读取某快照附件"报空，紧接的孤儿附件回收（60 秒宽限）会**删掉刚导入的字节**；可从"项目包"面板触发（导入 → 稍后回收） |
-| D2 | 安全 | `apps/desktop/src-tauri/src/lib.rs:568-572`、`blobs.rs:105-107` | `read_attachment` 把**未校验**的调用方字符串拼进文件路径 → 任意文件读取（`..\..\projects.db`、`..\..\providers.json`、绝对路径）并以 base64 回给 WebView；`BlobStore::verify` 同样。今天没有 UI 传文档哈希所以是潜在洞，但命令已注册、白名单测试只查名字，且 `export_package`/`import_package` 也收未校验路径。三行修法：要求 64 位十六进制 |
-| D3 | 数据完整性 | `apps/desktop/src-tauri/src/lib.rs:642-656` | `import_package` 用 **N 个事务写 N 个文档**，循环中途失败会留下**部分导入**，与 `package.rs:307-316` 自己的契约矛盾；另外把任何 `read_head` 错误都当"不存在"并 `create` |
-| S1 | 撤销/重做 | `apps/web/src/App.tsx:1303-1330,1383-1396`、`store.ts:91-101` | 一次交互压**两条**撤销记录（`applyBatch` 就是为这种场景存在的），一次 Ctrl+Z 落在**从未渲染过**的中间态：动圆不再过定点（探针：`dist=4.123` vs `r=3`），要撤两次才回原状 |
-| S2 | 删除不干净 | `packages/scene-graph/src/operations.ts:2364-2390`（+ `2260-2294`） | 删除棱柱只删掉 `polyhedron3`，**26 个派生子对象全部留在文档里并继续绘制**（族判定只认 `construction.kind === "template"`）；对照：模板立方体删 28 个、0 残留 |
-| S3 | 导入校验缺一半 | `packages/dsl/src/schema.ts:300-313`、`patches.ts:272-398` | 平面点的 `binding.onPath.pathId` **从不校验存在性**（同级的 `parameterId` 与 point3 的 `hostId` 都校验了），补丁路径也不校验 `binding` → 悬空 pathId 的 `.mgeo` 能导入并往返，点**静默冻结**在旧坐标而 UI 仍显示"绑定在路径上" |
-| A1 | 运行结果被误报 | `apps/web/src/agent/hostBridge.ts:215-216`、`committerAdapter.ts:137-145`、`coordinator.ts:466-471` | 真正的无操作提交返回 `no_change` 却被映射成 `rejected` → 协调器里 `no_change → completed` 那条分支**是死代码**，用户看到"运行失败"，草稿面板也不退场 |
-| A2 | 引用解析 | `packages/agent-core/src/planCompiler.ts:339`（+ `schemas.ts:455,479,492`） | 只解析 `referenceFieldsFor(id)[0]`，于是**第二个**已注册引用永远指不到同一计划里的别名（`dynamic.bind_curve.pathId` → `path_not_found: no path draft:c`，`dynamic.bind_point.host` → 误报 `cross_document_reference`）—— 唯一的一次修复还会被指向错误的字段 |
-| A3 | 会话卡死 | `apps/web/src/agent/agentRunner.ts:155`（try/catch 只包 `:144-152`） | 桌面读会话记录抛错（`conversationRepository.ts:741-746`）会让 `agentRunner.run` 在协调器启动前 reject：固定的助手消息永远 `pending`、输入框一直禁用，而 `AgentWorkspace.tsx:77` 的 `void onRun(...)` 把 rejection 吞掉 |
-| A4 | 账本失真 | `apps/web/src/agent/agentRuntime.ts:341`、`agentRunner.ts:464`、`coordinator.ts:454-457` | 生产运行里 `consent: undefined`、`confirmed` 从不传，协调器在 awaiting_confirmation 就返回 → **持久化的 `run_events` 永远停在"等用户确认"**，即使文档真的提交了；`committing`/`completed` 只在测试里可达 |
+| **G1 ✅ 已修** | 内核性能（用户可达） | `packages/geometry-kernel/src/solidDerived.ts:164-186`，调用方 `scene-graph/src/operations.ts:1311-1325`、`PropertiesBar.tsx:505-513` | `solveCircumsphere3` 枚举全部 C(n,4) 顶点子集并用**线性扫描**去重：实测 16 顶点 103ms、22 顶点 1538ms（每 +2 顶点约 ×2.5）⇒ 32 顶点要几分钟、48 顶点要几小时；而 `PropertiesBar` 在**每次选中任何图元**时都对**整篇文档**调用报告（注释自称先按选中过滤，实际没有）。规则基/立方体因为第一个候选就命中，所以测试从未暴露 |
+| **G2 ✅ 已修** | 校验被绕过 | `packages/dsl/src/schema.ts:447-460`（`planeBase === undefined` 这个闸门）、`codec.ts:96-113`、`prism.ts:93-105` | `base.plane` + **三维**多边形这种写法在**导入与保存两条路径**上都绕过了棱柱几何判定：自交（领结）、非共面、零体积的底面**被接受**；不带 `plane` 的同样输入会被正确拒绝 |
+| **G3 ✅ 已修** | 面朝向契约 | `packages/geometry-kernel/src/prism.ts:331-344` | `facesOutwards` 只看环上前三个点；这三点共线时叉积为零 → 该面被翻**朝内**，违反 `SolidTopology` 的朝外契约（实测底面 Newell 法向 −6，其余面 +2.4…+7.2） |
+| **G4 ✅ 已修** | 误判退化 | `packages/geometry-kernel/src/reactive/triangleCenters.ts:65-69` | `Math.max(1, …)` 把"相对"容差变成了绝对值 1e-9，于是 1e-5 量级的**合法**三角形被报成 `degenerate`（"三点共线（或重合）"），临界点约 3.2e-5 |
+| **D1 ✅ 已修** | 数据丢失 | `apps/desktop/src-tauri/src/lib.rs:635-665`（+ `record_attachment`/`reference_attachments`） | `import_package` 把包里的附件字节写进去却**不登记引用**，于是"读取某快照附件"报空，紧接的孤儿附件回收（60 秒宽限）会**删掉刚导入的字节**；可从"项目包"面板触发（导入 → 稍后回收） |
+| **D2 ✅ 已修** | 安全 | `apps/desktop/src-tauri/src/lib.rs:568-572`、`blobs.rs:105-107` | `read_attachment` 把**未校验**的调用方字符串拼进文件路径 → 任意文件读取（`..\..\projects.db`、`..\..\providers.json`、绝对路径）并以 base64 回给 WebView；`BlobStore::verify` 同样。今天没有 UI 传文档哈希所以是潜在洞，但命令已注册、白名单测试只查名字，且 `export_package`/`import_package` 也收未校验路径。三行修法：要求 64 位十六进制 |
+| **D3 ✅ 已修** | 数据完整性 | `apps/desktop/src-tauri/src/lib.rs:642-656` | `import_package` 用 **N 个事务写 N 个文档**，循环中途失败会留下**部分导入**，与 `package.rs:307-316` 自己的契约矛盾；另外把任何 `read_head` 错误都当"不存在"并 `create` |
+| **S1 ✅ 已修** | 撤销/重做 | `apps/web/src/App.tsx:1303-1330,1383-1396`、`store.ts:91-101` | 一次交互压**两条**撤销记录（`applyBatch` 就是为这种场景存在的），一次 Ctrl+Z 落在**从未渲染过**的中间态：动圆不再过定点（探针：`dist=4.123` vs `r=3`），要撤两次才回原状 |
+| **S2 ✅ 已修** | 删除不干净 | `packages/scene-graph/src/operations.ts:2364-2390`（+ `2260-2294`） | 删除棱柱只删掉 `polyhedron3`，**26 个派生子对象全部留在文档里并继续绘制**（族判定只认 `construction.kind === "template"`）；对照：模板立方体删 28 个、0 残留 |
+| **S3 ✅ 已修** | 导入校验缺一半 | `packages/dsl/src/schema.ts:300-313`、`patches.ts:272-398` | 平面点的 `binding.onPath.pathId` **从不校验存在性**（同级的 `parameterId` 与 point3 的 `hostId` 都校验了），补丁路径也不校验 `binding` → 悬空 pathId 的 `.mgeo` 能导入并往返，点**静默冻结**在旧坐标而 UI 仍显示"绑定在路径上" |
+| **A1 ✅ 已修** | 运行结果被误报 | `apps/web/src/agent/hostBridge.ts:215-216`、`committerAdapter.ts:137-145`、`coordinator.ts:466-471` | 真正的无操作提交返回 `no_change` 却被映射成 `rejected` → 协调器里 `no_change → completed` 那条分支**是死代码**，用户看到"运行失败"，草稿面板也不退场 |
+| **A2 ✅ 已修** | 引用解析 | `packages/agent-core/src/planCompiler.ts:339`（+ `schemas.ts:455,479,492`） | 只解析 `referenceFieldsFor(id)[0]`，于是**第二个**已注册引用永远指不到同一计划里的别名（`dynamic.bind_curve.pathId` → `path_not_found: no path draft:c`，`dynamic.bind_point.host` → 误报 `cross_document_reference`）—— 唯一的一次修复还会被指向错误的字段 |
+| **A3 ✅ 已修** | 会话卡死 | `apps/web/src/agent/agentRunner.ts:155`（try/catch 只包 `:144-152`） | 桌面读会话记录抛错（`conversationRepository.ts:741-746`）会让 `agentRunner.run` 在协调器启动前 reject：固定的助手消息永远 `pending`、输入框一直禁用，而 `AgentWorkspace.tsx:77` 的 `void onRun(...)` 把 rejection 吞掉 |
+| **A4 ✅ 已修** | 账本失真 | `apps/web/src/agent/agentRuntime.ts:341`、`agentRunner.ts:464`、`coordinator.ts:454-457` | 生产运行里 `consent: undefined`、`confirmed` 从不传，协调器在 awaiting_confirmation 就返回 → **持久化的 `run_events` 永远停在"等用户确认"**，即使文档真的提交了；`committing`/`completed` 只在测试里可达 |
 
-#### Minor（16）
+#### Minor（16；**已全部处理完毕：15 条修复 + 1 条如实降级为"尚未接线"**，逐条见下文各修复轮）
 
-- 内核：`sampleLocus` 的 `maxJump` 只能**放松**跳变检测（`locus-sampling.ts:150-156`，文档说它是更严的那个；仓库内无调用方传它）｜`liftPrismBasePolygon` 的平面基底是**左手系且把二维坐标转置**（`(x,y)→(y,x)`），与自己的文档串"右手系 … origin + (x, y, 0)"矛盾 ⇒ 按规范 §3.2 写的文档会被镜像放置（`prism.ts:93-105`）｜`buildPrism` 对 CW 缠绕的底面返回**内外翻转**的立体（有符号体积 −72 vs +72，且无诊断），而 `buildPrismTopology` 会归一化同一输入（潜在，无生产调用方）。
-- 桌面/会话：`ProjectRepository::create` 把**任何**插入失败都报成"已存在"（`StaleHead`，`projects.rs:169-177`），TS 侧又把任何含 "generation" 的文本归类为 `stale_head`｜`upsert_fact` 忽略调用方的 `created_at`，浏览器 fallback 却采纳｜浏览器 fallback 的尺寸闸门是 32000/16000/8000（Rust 是 32\*1024/16\*1024/8\*1024）且按 UTF-16 单元计数，注释却自称"逐字对齐"｜`archive()` 会推进 `updated_at`，与自己的文档串相反｜"无密钥形状字段"守卫**不递归进数组**，两份实现都自称"任意深度"｜代理的每请求准入从不评估 profile-revision 规则，HTTP 处理函数完全绕过 `security::parse_route`。
-- scene-graph：棱柱的构造描述符在**拖动/旋转**后不再重检（`operations.ts:2594-2609,2610-2628`，对比 `2430-2455` 的检查）→ 描述符与顶点矛盾（今天无用户可见症状）｜`commitTransaction`（批处理/Agent/草稿写入路径）**不校验结果文档**，而 `commitPatch` 校验（`transactions.ts:99-136` vs `patches.ts:580-591`；未能构造出可达的破坏性操作）｜批量样式修改**静默跳过**被锁成员，而批量显示/隐藏会整体拒绝（`patches.ts:527-542` vs `563`）。
-- Agent：`actions_per_stage` 从不重置（`beginStage` 无调用方）⇒ 需要一次修复的 20 动作计划会以"预算耗尽"失败，而 `actions_per_run` 还剩 108；技能清单里的上限从未被消费｜上下文预算（及 `time`/`geometry` 预算）从不计费（`buildContext` 收下 `Budget` 却不用），所以 `context`/`time`/`geometry` 三类永不扣费｜引用**第 12 个观测对象之外**的真实对象会以 `waiting` 死路结束且消息不点名对象｜矛盾检测只覆盖 `parameter.create` vs `parameter.create`，编译层提出的 `ask_user` 问题会以 `run_failed` 而不是 `waiting` 呈现。
+- **内核 ✅ 已修（3 条，见下文「修复轮 B」）**：`sampleLocus` 的 `maxJump` 只能**放松**跳变检测（`locus-sampling.ts:150-156`，文档说它是更严的那个；仓库内无调用方传它）｜`liftPrismBasePolygon` 的平面基底是**左手系且把二维坐标转置**（`(x,y)→(y,x)`），与自己的文档串"右手系 … origin + (x, y, 0)"矛盾 ⇒ 按规范 §3.2 写的文档会被镜像放置（`prism.ts:93-105`）｜`buildPrism` 对 CW 缠绕的底面返回**内外翻转**的立体（有符号体积 −72 vs +72，且无诊断），而 `buildPrismTopology` 会归一化同一输入（潜在，无生产调用方）。
+- 桌面/会话（**6 条已处理**，见下文「修复轮 B（三续）」与「（四续）」）：`ProjectRepository::create` 把**任何**插入失败都报成"已存在"（`StaleHead`，`projects.rs:169-177`），TS 侧又把任何含 "generation" 的文本归类为 `stale_head` ✅｜`upsert_fact` 忽略调用方的 `created_at`，浏览器 fallback 却采纳 ✅｜浏览器 fallback 的尺寸闸门是 32000/16000/8000（Rust 是 32\*1024/16\*1024/8\*1024）且按 UTF-16 单元计数，注释却自称"逐字对齐" ✅｜`archive()` 会推进 `updated_at`，与自己的文档串相反 ✅｜"无密钥形状字段"守卫**不递归进数组**，两份实现都自称"任意深度" ✅｜代理的每请求准入从不评估 profile-revision 规则，HTTP 处理函数完全绕过 `security::parse_route` ⚠️ **按"如实标注尚未接线"处理**（修订号在 `ProxyState` 里没有来源，且接线会改掉"未知路由 404"这条既有行为 —— 是产品决定而非补丁；已把文件里那句过强的安全声明改成事实，并写清真正转发之前必须接哪两处）。
+- **scene-graph ✅ 已修（3 条，见下文「修复轮 B」）**：棱柱的构造描述符在**拖动/旋转**后不再重检（`operations.ts:2594-2609,2610-2628`，对比 `2430-2455` 的检查）→ 描述符与顶点矛盾（今天无用户可见症状）｜`commitTransaction`（批处理/Agent/草稿写入路径）**不校验结果文档**，而 `commitPatch` 校验（`transactions.ts:99-136` vs `patches.ts:580-591`；未能构造出可达的破坏性操作）｜批量样式修改**静默跳过**被锁成员，而批量显示/隐藏会整体拒绝（`patches.ts:527-542` vs `563`）。
+- Agent（**4 条已处理**，见下文「修复轮 B（再续）」与「（四续）」）：`actions_per_stage` 从不重置（`beginStage` 无调用方）⇒ 需要一次修复的 20 动作计划会以"预算耗尽"失败，而 `actions_per_run` 还剩 108；技能清单里的上限从未被消费 ✅｜上下文预算（及 `time`/`geometry` 预算）从不计费（`buildContext` 收下 `Budget` 却不用），所以 `context`/`time`/`geometry` 三类永不扣费 ✅（`time`/`geometry` 仍未接，已如实记档）｜矛盾检测只覆盖 `parameter.create` vs `parameter.create` ✅｜引用**第 12 个观测对象之外**的真实对象会以 `waiting` 死路结束且消息不点名对象 ✅（改成**点名**缺的是哪些对象；"观察上限按文档规模推导"仍是一个产品取舍，记档未做）｜编译层提出的 `ask_user` 问题会以 `run_failed` 而不是 `waiting` 呈现 ✅（本轮一并在**收口**一节如实记为仍未修，见下）。
 
 #### 与"如实缺口"的关系
 
-上面的"如实缺口"是**功能未完成/自觉的取舍**（已实现部分的边界）；本节是**实现有错**（已实现但行为不对）。两者都未修复，按严重级别排序：X1、X2 是必须先修的（一个是"SQLite 不是真源 + 每次启动多垃圾数据 + 会话侧栏空"，一个是"确认落盘的可能不是用户确认的那一份"），D1/D2 是数据丢失与安全洞，其余按用户可达性与性能影响排。
+上面的"如实缺口"是**功能未完成/自觉的取舍**（已实现部分的边界）；本节是**实现有错**（已实现但行为不对）。按严重级别排序：X1、X2 是必须先修的（一个是"SQLite 不是真源 + 每次启动多垃圾数据 + 会话侧栏空"，一个是"确认落盘的可能不是用户确认的那一份"），D1/D2 是数据丢失与安全洞，其余按用户可达性与性能影响排。**X1 与 X2 已于同日修复（见下），其余 30 条保持未修。**
 
+### 修复轮 A：X1 + X2 + D1 + D2 + D3 + G1 + G2 + G3 + G4 + S1 + S2 + S3 + A1 + A2 + A3 + A4（2026-09-22，**2 Critical + 14 Important 全部修完**）
 
+从"X1、X2 是必须先修的"开始，按严重度一路修到底：两条 Critical → 数据丢失与安全洞（D2 / D1 / D3）→ 用户可达的性能卡死与内核/校验契约（G1 / G2 / G3 / G4）→ 场景图、撤销栈与导入校验（S1 / S2 / S3）→ Agent 运行时与规划器（A1 / A2 / A3 / A4）。**十六条每一条都有独立的 RED→GREEN 与变异检查证据**（不是推演），随后立刻还原变异；每条还各自记下了"第一次写错的地方"（夹具假绿、替身撒谎、判断反了），因为它们比结论更有复用价值。
+
+**X1 —— 仓储从来不是文档真源**（`restore()` 拿刚生成的新随机 id 去探测）
+
+- **根因**：`documentPersistence.restore()` 用 `emptyDocument()` **刚生成的随机 id** 去 `readHead`，而 Rust 侧是 `WHERE project_id = ?1 AND document_id = ?2` ⇒ **每次启动必然 `not_found`** ⇒ `create` 插一行新的空文档，仓储里那份真内容永远读不回来；随后自动保存又以真实 id 对着一行垃圾 head 提交 ⇒ `not_found`，`stale_head` 恢复分支永不触发。同一根因的用户可见后果：重启后除"上次活动"以外的工作区拿到新文档 id，而 `list_conversations` 按 document 过滤 ⇒ **会话侧栏是空的**。
+- **改法（三层，缺一层都不成立）**：
+  1. `PersistenceDependencies` 新增 **`documentId(): string`**：探测用的是"这一世真正会用的那个 id"，空文档模板也用同一个 id 造出来（`withDocumentId`），于是"库里没有"时 `create` 写下的**行与文档 id 一致** —— 否则第一次自动保存就带着"文档 id ≠ 行 id"去提交。
+  2. `draftStorage` 新增 **`mathcanvas:last-document-id`**（与草稿写在同一个 `try` 里，配额满就一起降级）+ `loadLastDocumentId()`。它与 `loadDraft` **刻意分开**：读它不需要解码 `.mgeo`，因此**没有副作用**（不会删垃圾草稿、也不会把读不出来的草稿挪到旁路键），可以在探测阶段安全调用。`App.tsx` 传的是 `() => loadLastDocumentId() ?? store 当前那份文档的 id`。
+  3. 仓储侧新增 **`read_latest_head(project_id)`**（`ORDER BY updated_at DESC, document_id ASC LIMIT 1` —— 次级键是**确定性**用的：同一毫秒写入两份时"最新"不能随 SQLite 返回顺序漂移）+ IPC 命令 `read_latest_document_head`。`restore()` 在按 id 探测落空后回退到它：**"本地没记住 id"与"库里一份都没有"是两件事**，前者不能把后者当成事实。浏览器里 `not_a_desktop_shell` 仍**排在回退之前**返回 —— 网页版行为与加这个功能之前完全一样。
+- **RED→GREEN（实跑）**：`documentPersistence.test.ts` 新增 4 例（第二次启动必须读回同一行且**一次 `create` 都不发** / 建出来的行 id 就是会话要用的那个 / 本地丢了 id 时取项目里最新那份 / 浏览器里**不**多发一次注定失败的 IPC）。变异检查：把 `restore()` 改回 `dependencies.emptyDocument()` 的随机 id ⇒ **恰好 2 例失败**，报出的正是原缺陷（`expected "vi.fn()" to be called with [ 'p1', 'doc-session' ]`，实收 `doc-71e5ca61-8b9a-4c2e-b01d-401287af9da0`）；还原后 17 例全绿。
+- **两处陈旧的测试替身一并修掉**（其中一处是审查点名的）：`documentPersistence.test.ts` 的假仓储**原先忽略 `documentId`、永远回同一个 `stored`** —— 这正是这个缺陷在单测里不可见的原因，现在它真的按 id 过滤。Rust 侧新增 4 例（空项目回 `None` / 读到"忘记"的那一份 / **不跨项目泄漏** / 优先最近更新的那一份）。
+- **`shell_smoke` 的具名命令守卫如预期地红了**（它存在的意义就是逼人"有意地"改那份清单），已把 `read_latest_document_head` 连同"为什么它安全"（只有一个 `project_id` 参数，不能执行任意 SQL、也不能按任意路径读文件）写进 `named`。
+
+**X2 —— 一次性同意的 CAS 在"点确认"时才取样，用户看预览期间的编辑被静默合并**
+
+- **根因**：`agentRuntime.confirmDraft` 里 `requestConsent` 与 `commit` **紧挨着**发生，而 `requestConsent` 取的是**那一刻**的 `live().handle` ⇒ "取样"与"比较"永远是同一版 ⇒ 下面那道 CAS **必然通过**。生产顺序是 `stage →（用户盯着确认面板）→ 用户手工改画布 → 点确认`，于是**用户在看过预览之后做的编辑会被静默合并进提交**，"确认的就是落盘的那一份"成了空话。既有用例一直绿，正因为它们按的是**反过来的**顺序（先同意、后编辑，`pipeline.test.ts` Gate 2）。
+- **改法**：`DraftStore` 新增 `baseHandleOf(draftId)`（这份草稿是对**哪一份**文档编译出来的），`hostBridge.requestConsent` 把 `expectedHandles.target` 从 `current.handle` 改成 `drafts.baseHandleOf(draftId) ?? current.handle` —— 绑到**草稿的基准句柄**上，"文档在草稿创建之后变过"就重新被**既有**的 `stale_source` 分支挡住（拒绝路径一个字节都不写）；草稿没有基准句柄时（纯草稿层的调用方不传）退回旧行为，不凭空制造新的失败面。
+- **RED→GREEN（实跑）**：`pipeline.test.ts` 新增 2 例 —— **先编辑、后确认**（就是真实顺序）必须以 `stale_source` 拒绝、且用户那一笔不被覆盖；另加反向守卫"文档根本没被动过时照常提交"，并断言基准句柄**就是实时句柄**（而不是某个更早/更晚的版本）。变异检查：把 `requestConsent` 改回 `const base = handle` ⇒ **只有那条新用例失败**（`expected true to be false`：提交真的成功了、编辑被合并），其余 6 条照常通过。
+- **连带的一处行为改写（如实记档）**：`agentRunner.test.ts` 的 "keeps the run alive when the commit was refused" 原先用"手工建同 id 的对象"去逼出 `commit_rejected`；那一笔同时让文档变了，于是现在**更早**就得到 `stale_source`。这既更早也更准确（用户听到的是"文档在草稿生成之后变过"，而不是一句"重复 id"），而该用例真正守的性质（被拒之后这一轮仍活着、再点一次报同一个真实原因）没变，已按新理由改写。**如实说明**：`commit_rejected` 这条分支因此更难从运行器触达；它仍是防御性的闸，在 `workerRuntime` 的提交路径上另有覆盖。
+
+**D2 —— `read_attachment` 的任意文件读取**（审计里唯一被定性为"安全洞"的一条）
+
+- **根因**：`BlobStore::blob_path` 把调用方给的字符串直接 `join` 成文件路径，而**哈希同时就是文件名**。于是 `read_attachment` 传一个 `..\..\projects.db`、`..\..\providers.json` 或绝对路径，就能读到附件目录之外的任意文件，再以 base64 回给 WebView（`verify` 走的是同一条路）。审计的判断是"今天没有界面传文档哈希，所以它只是潜在洞"—— 但**一条已注册命令的安全边界不能建立在"调用方现在恰好不会那么传"之上**。
+- **改法**：把形状校验**收口到 `blob_path` 一处**（`read` / `verify` 拿的是调用方字符串，`write` 拿的是我们自己算的 sha256，因此一处即全覆盖）：新增公开纯函数 `is_content_hash`（正好 64 个十六进制字符）与 `BlobError::InvalidHash`，`blob_path` 改为返回 `Result` 并在拼接**之前**拒绝。
+- **RED→GREEN（实跑）**：`repository_package.rs` 新增 1 例 —— 先在附件目录**外面**放一份 `projects.db`，并**先断言它真的能被遍历路径走到**（否则用例可能因为别的原因通过），再对 8 种形状（`../../projects.db`、`..\..\projects.db`、`..`、空串、63 位、65 位、非十六进制、`/etc/passwd`）逐一断言 `read` 与 `verify` 都以 `InvalidHash` 拒绝，最后反向守卫"形状合法的哈希照常读写"。变异检查：把 `is_content_hash` 改成恒 `true` ⇒ 该例失败，报出的**正是漏洞本身**：`read("../../projects.db") must be refused, got Ok(Some([116, 104, 101, 32, 100, 97, 116, 97, 98, 97, 115, 101]))` —— 那串字节就是目录外那份文件的内容（`the database`）。
+- **未改的部分（如实记档）**：审计同一条里还提到 `export_package` / `import_package` 也收未校验路径。那两个路径是**用户经文件对话框自选的目的地/来源**，与"哈希被当成文件名"不是同一类问题；本轮只收口真正的越权面。
+
+**D1 + D3 —— 导入既不是原子的，又把导入的附件丢给回收站**（两条同源，一起修）
+
+- **D3 根因**：`lib.rs` 的 `import_package` 在循环里逐份调 `replace_epoch` / `create`，而那两个方法**各自开一个事务** —— 一份坏文档就会留下"前 N−1 份已经进库"的**部分导入**，与 `package::import` 自己的契约（"验到一半失败不会留下一半写进仓库的文档"）直接矛盾。同一处循环还有第二个问题：`Err(_) => create` 把**任何** `read_head` 失败都当成"这份文档不存在"，真正的 IO / 权限错误因此伪装成"文档不存在"，然后在 `create` 上撞主键、报出一句与真实原因无关的话。
+- **D1 根因**：同一条路径**只写文档、从不登记附件引用**。包里的附件是**项目级**的平铺列表（`ManifestAttachment` 不记它属于哪份文档），而引用记在**快照**上 ⇒ ①"读取某快照引用了哪些附件"永远报空；②紧接着的孤儿回收（60 秒宽限）判据只有"有没有被引用" ⇒ **刚导入的字节被当成孤儿删掉**：导入显示成功、附件却没了。
+- **改法**：新增 `ProjectRepository::import_documents(project_id, epoch, documents, attachments)` —— **一个事务**里写完全部文档 + 附件元数据 + 附件引用，并如实回答"每一份最后落在哪一代"。`Err(_) => create` 改为用 `optional()` 查询直接区分"有这一行 / 没有这一行"，其余错误如实上抛。附件归属只能取**保守的过近似**（把项目里的附件记在每一份导入文档**这一代**上）—— 方向是刻意选的：多记只让列举多出几行（可恢复），少记是**用户的数据没了**（不可恢复）。引用必须指向**刚写进去的那一代**而不是包里记的代数：导入会推进 generation，用包里的数字会指向不存在的快照，那样 GC 照样删，等于没修。
+- **RED→GREEN（实跑）**：
+  - **D1**：`repository_package.rs` 新增 1 例（导入一份附件 → 断言 `attachments_of` 答得出来 → 再把 `referenced_blobs` 喂给 `collect_garbage`，断言**一份都没被删**且字节还在）。变异检查：把引用写入的那段循环删掉 ⇒ 该例失败，报出的正是"报空"那半：`left: []` / `right: ["92b2fa58…"]`；还原后 31 例全绿。
+  - **D3**：`project_repository.rs` 新增 2 例。原子性那一例在**真实 schema** 上造真实失败（用第二个连接占掉 `d1` 的下一代快照，于是导入写到 `d1` 时 INSERT 撞 `snapshots` 主键），并**把 `d2` 排在 `d1` 前面** —— 只有这样才验得到"先写的那一份也必须一起回滚"。另 1 例钉住成功路径的返回值（`d1 → 2`（换一世）、`d2 → 1`（新建）与 epoch 替换）。旧写法本身用**一次性探针**证实：把旧循环（逐份 `replace_epoch`/`create`）跑在同一份夹具上，**`d2` 真的留了下来**（探针跑完即删）。
+- **`shell_smoke` 的具名命令守卫**这次**没有**变（`import_package` 签名与返回形状不变，只是内部换了原语），因此不必改那份清单。
+
+**G1 —— 外接球枚举全部 C(n,4)，而属性面板每次选中都算整篇文档**（用户可达的分钟级卡死）
+
+- **根因（两处叠加）**：
+  1. `solveCircumsphere3` 在一般情形下**枚举全部 C(n,4) 个顶点子集**，每算出一个候选球心还要对一张**不断增长**的球心表做**线性扫描**去重 ⇒ 整体是 C(n,4) 的平方量级。过四个不共面点的球是**唯一**的，所以枚举出来的每一种组合都在重复同一件事 —— 这些计算从头到尾没有产生任何新信息。
+  2. `PropertiesBar` 的注释一直写着"按选中对象过滤，而且只在选中实体 / 截面时才算"，但实际写法是 `solidStatusReport(sceneDocument)` 算出**整篇文档**的读数再 `.filter(...)`：**过滤只筛结果、不省计算**，而"算"才是贵的那一半（每只实体都要解外接球与内切球，内切球还是迭代求解）。
+  3. 测试从未暴露它：立方体走包围盒闭式解、规则多面体**第一个候选就命中**，只有"顶点多、而且**没有**外接球"的实体才会把枚举跑满。
+- **改法**：
+  - 内核新增 `affinelyIndependentTetrad(vertices, tolerance)`：三步"最远点"（离起点最远 → 离那条**直线**最远 → 离那个**平面**最远）挑出一组不共面的四点，**O(n)** 且与顶点顺序无关；顺带这也给出**条件数最好**的那一组（底面积与高都取到最大）。四点定出候选球心后对**全部**顶点验残差 —— 一次就够：某组不共面的四点残差过不了，这只实体就**没有**外接球（否则那颗更早的球早就通过了）。顶点全共面时返回 `null`，于是走到与旧实现**完全相同**的那条 `undefined` 分支（原因文案一字不改）。
+  - `solidStatusReport` 新增可选 `scope`（`solidIds` / `sectionIds`）。**不传 = 整篇文档**（观察层要的正是全量：模型看到的必须是完整读数）；传了 = 只算这几只。`PropertiesBar` 改为把范围**传进报告本身**，而不是算完再筛。
+- **RED→GREEN（实跑）**：`solidDerived.test.ts` 新增 3 例、`scene-store.test.ts` 新增 2 例。
+  - **第一次写的性能用例是假绿（如实记档）**：我先用"球面点 + 把一个顶点推出球面"当夹具，旧实现只花 **561ms** 就过了 —— 因为**任何四个球面点算出来都是同一颗球**，去重把它们全吃掉，枚举根本没跑满。改成**一般位置**的确定性伪随机点（mulberry32）之后才是真夹具：变异检查（把实现改回 C(n,4) 枚举）下，32 顶点那一例实测 **28,944ms** 并撞穿 1000ms 上限（`Tests 1 failed`），而修好的实现**整个文件 9ms** 跑完 15 例。**这条记档本身是这轮最有价值的一段**：它说明"性能用例过了"不等于"性能问题被测住了"。
+  - 另外两例钉住**不变的行为**：96 顶点球面点仍返回 `exact` 且半径/球心精确；12 个共面顶点仍走那条 `undefined` 分支（原因含"找不到到所有顶点等距的点"）。
+  - 范围参数那 2 例：不传 scope 时两只实体都报；传 `solidIds: ["solid-2"]` 时只剩它那两条读数；传 `sectionIds` 只留那一刀，而球体读数**不**被这个范围清掉（两个字段各自独立）。
+
+**G3 + G4 —— 两条"只看头三个点 / 容差其实不相对"的内核契约缺陷**
+
+- **G3 根因**：`prism.ts` 的 `facesOutwards` 用 `(p1−p0)×(p2−p0)` 定面环朝向。环上**前三点共线**是完全合法的多边形（"边上多给一个共线点"在模型生成的底面里很常见，本文件的自交判据早就为同一种输入改过一次），那时叉积是零向量 ⇒ 定向判据恒为 `false` ⇒ 该面被**多翻一次**成朝内，违反 `SolidTopology` 的朝外契约。**改法**：新增 `newellNormal`（对整个环求和，模长 = 2×面积），`facesOutwards` 改用它 —— 只有环真的退化成零面积时才是零向量，而那种输入已被 `degenerate-volume` 拒掉。同一类缺陷在本仓库已修过两次（`unfold3d` 的环法向、`hosts3` 的退化判据），做法一致。
+- **G4 根因**：`triangleCenters.ts` 的 `isDegenerate` 用 `Math.max(1, |AB|, |AC|)` 算尺度 —— 那个 `1` 把 `TriangleOptions.tolerance` **文档明写的**"相对容差（除以最长边²）"变成了**绝对** 1e-9：边长 1e-5 量级的合法三角形其 `2*area ≈ 1e-10` 小于 1e-9，于是被判成"三点共线（或重合）"，临界点约 3.2e-5。同样形状放大十万倍就"变合法"，尺度不变性是假的。**改法**：去掉那个下限，判据只依赖形状；三点重合时 `scale = 0` 而叉积恒为 0，`0 <= 0` 仍判退化，所以放宽不会漏判。
+- **RED→GREEN（实跑，两处都是"第二次才写对"的记档）**：
+  - **G3 第一版夹具假绿**：我用**逆时针**的五边形（前三点共线），旧实现只花 16ms 就过了 —— 因为逆时针底面的 Newell 法向本来就**朝内**，零向量导致的"翻转"恰好把它翻**对**了。也就是说：`buildPrismTopology` 会把每个面按"面心相对形心朝外"规范化，**只有那些"本来就已经朝外、不该被翻"的面**才暴露这条缺陷。改成**顺时针**底面（前三点仍共线）之后，变异检查报出 `expected 24 to be less than 0` —— 底面 Newell 法向变成 **+24**（朝内），正是审计实测的 `−6 → 翻反` 那一类。断言同时加了**有向体积**（散度定理，只对全部面一致朝外的闭合曲面成立）必须等于 24 = 底面积 12 × 高 2，比逐面法向更不容易被"恰好凑对"的夹具骗过。
+  - **G4 第一版夹具也假绿**：我取缩放因子 `1e-5`，而这条直角三角形的 `2*area = 12f²`，旧门槛是 `1e-9`（f 很小时 `max` 取 1）⇒ 临界点 `f ≈ 9.1e-6`。`1e-5` **恰好落在门槛之上**，所以旧实现也"正确"。改成 `1e-6`（低于临界点一个数量级）之后变异检查报出 `expected 'degenerate' to be 'exact'`，正是审计的症状。
+  - **两段记档的意义与 G1 那段相同**：变异检查没红，说明夹具没有落在缺陷的作用域里 —— 那不是"缺陷不存在"，而是"用例没测住"。所以每次变异检查都必须真的看见红。
+
+**G2 —— 带 `plane` 字段成了绕过棱柱几何校验的通行证**
+
+- **根因**：`schema.ts` 里注入几何判据的门是 `planeBase === undefined` —— 于是"给底面配一个平面"本身就跳过了内核的 `validatePrismInput`。而内核的 `isPrismPlaneBase` 要求二维点**没有 `z`**（两种写法互斥），所以 **`plane` + 三维点**这种输入既不会被 codec 抬升、也不会被 schema 校验：**导入与保存两条路径一起漏**，自交（领结）、非共面、零体积的底面**全被接受**（不带 `plane` 的同样输入会被正确拒绝）。
+- **改法**：门改为按"点里有没有 `z`"取（`unliftedPlanePolygon`），与内核那条互斥规则严格一致。真正的豁免理由只有一条 —— 二维点还没被抬到平面上，现在拿它们当世界坐标判共面 / 自交会把**合法**输入判成退化；codec 抬完（并丢掉 `plane`）之后会再走一遍本函数，那时 `planeBase` 已是 `undefined`，判据照常执行。
+- **RED→GREEN（实跑）**：两层各加 1 例。
+  - `schema.test.ts`：stub 判据在"带 `plane` + 三维点"时必须仍然被调用；反向守卫"真正的二维写法仍然跳过这一次判据"。
+  - `codec.test.ts`：与既有的"拒收自交 / 非共面 / 零体积底面"**完全相同的三份坏输入**，只多一个 `plane` 字段 —— 走真实的 `decodeMgeo` + 内核判据。既有那条用例没有 `plane`，所以它一直是绿的、从来没覆盖到这条路。
+  - 变异检查（门改回 `planeBase === undefined`）⇒ 两层各自的用例都红：`expected [Function] to throw an error`（坏棱柱被接受、没抛错）与 `expected true to be false`（判据根本没跑）。还原后 68 例全绿。
+- **如实记录一处未改的残留**：这种文档解码后 `plane` 字段仍留在存储里（冗余但**不影响几何** —— 三维点是唯一的几何真源，几何判据现在照常跑）。要不要顺手把它规范化掉（codec 在三维点的情形下丢弃 `plane`）属于另一个决定，本轮只关掉"绕过校验"这条。
+
+**S1 + S2 —— 一次交互压两条撤销记录；删除棱柱只删掉 `polyhedron3`**
+
+- **S1 根因**：`App.tsx` 里有两条路径把**一个用户动作**写成**两次 `apply`**：
+  1. `handleDragEnd` 拖动"动圆"的定点时，先 `apply` 主位移、再对每条受影响的曲线各 `apply` 一次；
+  2. `anchorRotation`（「绕定点旋转」）先 `apply` 定点落位、再 `apply` 曲线摆位。
+  两次 `apply` 就是**两条撤销记录**，而一次 Ctrl+Z 只退一条：用户看到"点退回去了、动圆却没跟回来"，圆不再过它的定点（审计实测 `dist = 4.123` vs `r = 3`），要按两次才回得到原状；`anchorRotation` 那条更直接地留下一个**用户从未见过**的中间态（点已在圆上、曲线还没摆过去）。`applyBatch` 就是为"一次交互 = 多笔补丁"准备的：事务里逐笔校验、逐笔应用，但**整批只压一步**。
+  - `handleDragEnd` 的位移必须仍然取自**主位移实际生效之后**的文档（受限的点——绑在宿主上的——可能只走了一部分、甚至拒绝整段位移），所以改成用**纯函数 `commitPatch` 先试算一次**，而不是"先写进 store、再读回来"。试算与真写入走的是同一条 `applyOperation`，结果一致，但不会在中途留下撤销记录。
+- **S2 根因**：`operations.ts` 的 `deletionTargets` 族判定只认 `construction.kind === "template"`，于是删除棱柱时**只删掉 `polyhedron3` 本身**，它物化出来的顶点 / 棱 / 面（**26 个**）全部留在文档里并**继续绘制**；而模板立方体删除时连同 28 个成员一起走、0 残留。两者成员的来路完全一样（都由实体自己物化），删除语义必须一致。**改法**：族判定接受 `template` 与 `prism` 两种；`sourceIds` 的读取仍先经 `isSourceIdConstruction` 收窄（`prism` **没有** `sourceIds`）。**刻意不动** `templateTopologyIds`（拖动那条规则）：棱柱生成的顶点是**可编辑**的（`prismMatchesVertices` 正为"顶点被改过、描述要改写"而存在），不该被排除在自由拖动之外 —— 删除是另一回事。
+- **RED→GREEN（实跑）**：`App.test.tsx` 新增 1 例并在既有的拖动用例里加了撤销断言；`deletion-cascade.test.ts` 新增 2 例（其中一例从**任意一个成员**出发都要求整族被收进来，另一例删除生成的顶点）。
+  - 变异检查（两条路径改回两次 `apply`）⇒ 两条用例都红：`expected [ …(2) ] to have a length of 1 but got 2`。
+  - 变异检查（族判定改回只认 `template`）⇒ 两条用例都红，报出的正是审计的数字：`expected [ 'solid-1' ] to deeply equal [ 'solid-1', 'solid-1:e0', …(25) ]`（**26 个成员**）与 `expected [ { id: 'solid-1:v1', …(4) }, …(25) ] to deeply equal []`（**26 个孤儿**留在文档里）。
+
+**A1 + A3 —— "无需改动"被报成失败；读会话记录抛错让整轮卡死**
+
+- **A1 根因（一行，连锁三处）**：`hostBridge.commit` 把"无需改动"发在**失败**通道上（`{ ok: false, reason: "no_change" }`）。后果是连锁的：适配器只在 `ok: true` 分支里读 `receipt.changed`（而那里永远拿不到 `false`，因为上面提前返回了），`no_change` 于是掉进适配器最后那句通用拒绝 ⇒ 协调器里 `no_change → completed`（`coordinator.ts`）**成了死代码**，用户看到"运行失败"、草稿面板也不退场。**改法**：让它走成功通道（`{ ok: true, receipt: { changed: false, draftId } }`），并把 `no_change` 从 `CommitReason` **类型里删掉** —— 将来再想让"成功"走失败通道会被 `tsc` 拦下。授权照常被消费（这一轮确实结束了），而文档**一个字节都不写**（不调 `replace`）。
+  - **这条最值得记的是"替身替真身撒了谎"**：`committerAdapter.test.ts` 里那条 `no_change` 用例一直绿，因为它 stub 的 host 返回 `{ ok: true, receipt: { changed: false } }` —— 一个**真 `HostBridge` 从来不会产出**的形状。用例测的是一个生产不出现的输入。现在两半各自被钉住：真桥那一半在新加的 `hostBridge.test.ts` 用例（形状就是 adapter 侧 stub 的那一份），另一半钉适配器的映射；改任一侧，另一侧就红。适配器用例的注释里写明了这层配对关系。
+- **A3 根因**：`agentRunner.readConversationSource` 里那句 `readRecord` 在 try/catch **外面**（catch 只包住上面那段事实重判），而桌面侧读会话记录走 IPC、是会**抛**的。一抛，`readConversationSource` 整个 reject ⇒ `agentRunner.run` 在**协调器启动之前**就结束：界面上那条固定的助手消息永远停在 `pending`、输入框一直禁用，而 `AgentWorkspace` 的 `void onRun(...)` 把这个 rejection 吞掉了 —— 用户看到的是"点了没反应"，且**没有任何报错**。**改法**：抽 `readConversationRecordSafely`，吞掉异常、**如实记一行诊断**、按"还没有长期记忆"继续 —— 这正是那一句原有注释早就写着的行为（"读不到就当作还没有长期记忆，不编一份摘要或事实出来"），只是原先没有兑现。
+- **RED→GREEN（实跑）**：
+  - A1：`hostBridge.test.ts` 新增 1 例 —— 用"一份什么都没暂存的草稿"表达"无需改动"（它的操作集为空 ⇒ `commitTransaction` 的语义哈希不变 ⇒ 与生产里"真文档已经等于候选"走同一条分支），断言提交是**成功**且 `changed: false`、文档没被替换、且授权仍然一次性。变异检查（改回失败通道）⇒ `expected false to be true`。
+  - A3：`agentRunner.test.ts` 新增 1 例 —— 用 `setConversationRepository` 注入一个 `readRecord` 必抛的仓储（这个 setter 本来就是"测试注入用"的），断言 `run` **不 reject**、照常走到 `awaiting_confirmation`、草稿照样成型，而且把那行诊断**说出来了**。变异检查（改回无保护的 `await`）⇒ 用例以 `Error: the desktop repository is unreachable` 失败 —— 正是"整轮卡死"那句话。
+
+**S3 —— 平面动点的宿主路径从不校验存在性**
+
+- **根因**：`schema.ts` 里 `point.binding.kind === "onPath"` 那一支只查了 `pathId` **是不是字符串**，从不查它是否指向一个真实存在、且**类型是曲线**的对象。同级的 `parameterId`（下一支）与 `point3` 的 `hostId`（同一文件里的 `referenceType`）早就带类型地校验了引用 —— **平面这一侧是唯一漏掉的一道**。后果：悬空 `pathId` 的 `.mgeo` 能导入、能往返、还能保存，而点**静默冻在最后一次算出的坐标**上，界面却照旧显示"绑定在路径上"。
+- **改法**：新增 `planarPathTypes`（与 `operations.ts` 的 `pathConstraint` 支持的十种曲线一一对应），判据用 `referenceType(byId, pathId)` **同时**校验存在性与类型。带类型而不只是存在性，是因为指向一个 `point` 的 `pathId` 同样会让点冻住。
+- **RED→GREEN（实跑）**：`schema.test.ts` 新增 1 例 —— 反向守卫（真的挂在圆 / 线段上是合法的）、悬空 id、以及**存在但不是曲线**（指向另一个点）三种情形。变异检查（把判据短路）⇒ `expected true to be false`（悬空路径的文档被判为合法）。
+- **顺带确认**：这条收紧**没有**打坏任何既有夹具或文档 —— 全量 215 个测试文件照旧全绿，也就是说测试语料里本来就没有"悬空 pathId"的合法文档（说明它确实只是一个**能进来但没人该写**的非法状态）。
+
+**A2 —— 引用解析只认第一个字段，于是"第二个引用"永远指不到同一份计划里的别名**
+
+- **根因**：`planCompiler.resolveReferences` 取的是 `referenceFieldsFor(action.actionId)[0]` —— **只解析第一个登记字段**。而不少动作登记了**两个**引用：
+  - `dynamic.bind_curve` 的 `pathId`（`kind: "id"`）压根没人解析，`draft:c` 原样传下去，动作层报 `path_not_found: no path draft:c`；
+  - `dynamic.bind_point` 的 `host`（`kind: "scoped"`）同样没人解析，那个未解析的 `{ scope: "draft", alias }` 到了下游因为"没有匹配的 documentId"被判成 `cross_document_reference` —— **两句话都在说"引用错了"，而真正错的是我们漏解析了一个字段**。
+  - 更糟的是那唯一一次修复机会：`RepairRequest` 带的是出错的 `path`，而它只会指到**第一个**字段上，于是"改一处就能救回来"的那次被花在了错的地方。
+- **改法**：把"解析一个引用"整段收进 `for (const reference of references)` 循环，`resolveOne` 改为**按字段传入 `reference`**（而不是闭包捕获唯一那一个），嵌套引用的处理也一并放进循环。`reference.list` 里原先那句"列表形状不对就 `return`"改成 `continue` —— 对单个引用语义不变（该字段保持原值），对多个引用才不会再顺手丢掉后面的字段。
+- **RED→GREEN（实跑）**：`planCompiler.test.ts` 新增 1 例 —— 计划里"先建线段（alias `seg`）、再建点（alias `P`）、最后把点绑到线段上"，`dynamic.bind_curve` 的 `pathId` 写 `"draft:seg"`，也就是**第二个**引用。断言编译通过、且 `pathId` 被换成 `result.aliases.seg`（不再是字面量）、`target` 也被换成真 id 对象。变异检查（把 `references` 截回 `[0]`）⇒ 用例以审计**逐字相同**的那句失败：`path_not_found: no path draft:seg`。
+
+**A4 —— 用户确认之后账本永远停在"等用户确认"**
+
+- **根因**：`coordinator.start()` 在 `awaiting_confirmation` 就返回了 —— 这本身是**对的**（同意凭据要等用户点确认才存在，`agentRuntime` 因此写死 `consent: undefined`）。但**落库的 `run_events` 就是那份账本**，而确认发生在 `start()` 返回**之后**（`agentRunner.confirm` → `runtime.confirmDraft` → `hostBridge.commit`），**没有任何东西把账本往下推**。于是生产账本永远停在"等用户确认"，**即使文档真的提交了**：`committing` / `completed` 只有测试够得到，而那份事实记录在说一件没发生的事（"没提交"，可画布已经变了）。
+- **改法（三层，各司其职）**：
+  1. `coordinator` 新增 `settleConfirmation(outcome)`：宿主拿到提交结果后调用，把 `committing → completed` 补进账本并**返回这几条事件**；
+  2. `agentRuntime.confirmDraft` 在成功分支调用它，把事件放进 `ConfirmOutcome.events`（新增类型 = `CommitOutcome & { events?: RunEvent[] }`）；
+  3. `agentRunner.confirm` 把事件 `recordRunEvent` 回流 —— 与 `start()` 循环里那条路径**同一套字段**，所以界面与持久化看到的是同一种东西。
+- **一处刻意的判断（不只是"补两步就走完"）**：`settleConfirmation` **只在成功时补记**。提交被拒时这一轮**仍然停在"等用户确认"**（面板还挂着、用户还能再点一次 —— 那是 `agentRunner.confirm` 里"只有真的落定才把这一轮用掉"的既有语义）。那时把账本推成 `failed` 会**与界面状态互相矛盾**，而且会把一个还能重试的运行钉成终态，于是重试成功也记不进去了。相位不是 `awaiting_confirmation` 时同样什么都不做（幂等）。
+- **RED→GREEN（实跑）**：`agentRuntime.test.ts` 新增 1 例 —— 驱动组装好的运行时走到 `awaiting_confirmation`，然后 `confirmDraft()`，断言返回的事件恰是 `["committing", "completed"]`、**且账本本身**（`coordinator.phase()` / `ledger()`）真的走到了完成（不是只返回了几条事件没人收），文档也真的被写了。变异检查（让 `settleConfirmation` 直接 `return []`）⇒ `expected [] to deeply equal [ 'committing', 'completed' ]`。
+- **残留（如实记档）**：被拒的那一次确认不会在账本里留痕 —— 账本保持 `awaiting_confirmation`。理由见上（与"这一轮还能重试"保持一致）；真要区分"确认过但被拒"与"还没确认"，需要给 `RunLedger` 加一个非终态的重试计数，那是另一件事。
+
+**验证（修复轮 A 本机实跑）**：单测 **215 文件 / 2587 用例通过 + 1 todo**（起点 2560，+27）；`npm run typecheck` **6 个 workspace exit 0**；`npm run lint` **0 error / 14 warning**（与基线完全一致）；`npm run build` **exit 0**；`cargo clippy --all-targets -- -D warnings` **exit 0（零警告）**；`npm run test:rust` **227 例通过 + 3 ignored**（起点 219 + 3，+8）。
+
+### 修复轮 B：Minor 的**内核**三条（2026-09-22）
+
+Critical 与 Important 清空之后，接着做 Minor。先挑**内核**那三条（同属一个包、判据都能独立复现，且后两条正是 G3 那类"朝向/绕向"缺陷的同族）。
+
+- **M1 `sampleLocus` 的 `maxJump` 方向反了**：文档写的是"与 `jumpFactor` 取**更严**的那个"，实现却是 `Math.max` —— 小的 `maxJump` **完全无效**（阈值仍被 `jumpFactor · 中位步长` 撑着），大的反而**放松**检测。根因比"写错一个字"更具体：那个无条件并进去的 `Math.max(typicalStep, 1e-9)` 让阈值**恒 ≥ 中位步长**，本身就杜绝了任何"更严"的可能。**改法**：非退化时取 `Math.min(typicalStep · jumpFactor, maxJump)`，`1e-9` 那个下限只在 `typicalStep === 0`（轨迹退化成一点）时生效。
+- **M2 `liftPrismBasePolygon` 的平面基底是左手系且把坐标转置**：`u = n × axis`、`v = u × n` 时 `u × v = u × (u × n) = −n` **恒成立** —— `(u, v, n)` 对任何法向都是左手系。对 `normal = +z`，选轴排序把 x 排在 y 前（并列 + 稳定排序），于是 `u = +y`、`v = +x`，抬升把二维坐标**转置**了（规格 §3.2 的 `(0,0),(4,0),(5,2),(1,2)` → `(0,0),(0,4),(2,5),(2,1)`）。中心对称的底面看不出差别，**不**中心对称的底面就是**镜像摆放**，而剖切面、指定中点、测量全按世界坐标读 —— 整道题都摆错位置。**改法**：参考轴仍取"与法向最不平行"那条，但**并列时优先 +y**，基改用 `u = axis × n`、`v = n × u`（此时 `u × v = n`，右手系）；对 `+z` 恰好给出 `u = +x`、`v = +y`，即文档承诺的 `origin + (x, y, 0)`。
+- **M3 `buildPrism` 对顺时针底面静默产出里外翻转的实体**：底面那套环默认"从拉伸方向看逆时针"，顺时针输入会让**每一个面的法向都一致地朝内** —— `inconsistent-winding`（只判彼此是否一致）与"体积非零"（只看绝对值）都不会响，于是静默吐出一只有符号体积为负的实体，而 `buildPrismTopology` 对同一输入会正常化。**改法**：`buildPrism` 先把底面按拉伸方向规范化为"从 `vector` 方向看逆时针"（Newell 法向点乘 `vector`，为负才整体反向）；`along === 0`（零体积平片）保持原序，交给既有的 `degenerate-volume` 拒绝。**刻意不动 `buildFrustum`**：它没有 `buildPrism` 这样可测量的现场，且上下底各自独立给出，"按哪个轴规范化"是个产品决定，留待有现场再做。
+- **RED→GREEN（实跑，全部先看红再改）**：`locus-sampling.test.ts` +1、`prism.test.ts` +2、`solid-builders.test.ts` +1。
+  - M1：小 `maxJump`（0.05）必须把一个 0.2 的跳步断成两条分支，大 `maxJump`（100）不得放松 —— 变异（换回 `Math.max`）⇒ `expected [ … ] to have a length of 2 but got 1`。
+  - M2：规格 §3.2 的例子逐点断言 `origin + (x, y, 0)`，另加**不**中心对称的底面（修复前会被转置）与一条**右手系判据**（`u × v` 与法向同向，斜法向也成立）—— 变异（把两个叉积换回旧顺序）⇒ 坐标断言失败 + `expected -0.7071… to be close to 0.7071…`。
+  - M3：同一只 2×2×3 棱柱，底面顺时针与逆时针的**有符号体积都必须是 +12**（散度定理，只对全部面一致朝外的闭合曲面成立）—— 变异（去掉规范化）⇒ `expected -12 to be close to 12`。
+- **一次如实记档的变异失误**：M1 的第一次变异我写成 `Math.max(typicalStep · jumpFactor, byAbsolute)`，而 `byAbsolute` 在"不传 `maxJump`"时是 `Infinity` ⇒ 阈值变成 `Infinity` ⇒ **一条既有用例也红了**（`splits a jump discontinuity into separate branches`）。那不是回归，是我的变异不忠实：换回与旧实现逐字等价的表达式之后，只有 M1 那条新用例红。**变异检查的写法本身也要忠实于"旧实现"**，否则会得出"改坏了别的"这种假结论。
+
+**仍未修**：Minor 13 条（桌面/会话 6、scene-graph 3、Agent 4）。
+
+### 修复轮 B（续）：Minor 的 **scene-graph** 三条（2026-09-22）
+
+接着做 scene-graph 那三条。它们的共同点不是"同一个函数"，而是**同一个包里两份实现说了两套话**——拖动路径与单点路径、批量写入与单条写入、批量改样式与批量显隐。
+
+- **M1 拖动/旋转整只实体后不重检棱柱的描述符**：`prismMatchesVertices` 那道检查原先只在 `updatePrimitive` 的 `point3` 分支里跑，于是搬动**整只**实体之后文档继续宣称"我是由这个底面加这个向量拉伸出来的"，而顶点已经不是了（实测平移 `(5,0,0)` 后描述符里的底面还在原点）。**改法**：新增 `realignPrismDescriptor`，在 `translatePrimitive3` / `rotatePrimitive3` 搬完之后调用。做法是**从顶点反推描述**而不是直接降级成 `fromFaces` —— 搬动是刚体变换，`前 n 个顶点是底面、`Ti = Bi + v`` 这条结构仍成立，取新底面与 `v = T₀ − B₀` 就得到与新顶点**完全一致**的描述；这保留了"棱柱"这条信息（降级会丢掉它）。反推后仍用 `prismMatchesVertices` 复核一次，对不上（非刚体搬动）才按既有策略降级。
+- **M2 `commitTransaction` 从不校验结果文档**：`commitPatch` 早在应用之后校验整份文档（那条修复针对"改动进了 store、保存时 `encodeMgeo` 才抛错，而错误又被 `saveDraft` 吞掉"），而批处理 / Agent / 草稿走的 `commitTransaction` 只逐条 `validatePatch`、**从不校验结果** —— 两条路径都自称"唯一写入口"，判据却不一致。**改法**：在 `afterHash === beforeHash` 短路之后加 `validateDocument(current)`，不合法就整批拒绝并如实报出前三条错误。
+  - **审计说"没能构造出可达的破坏性操作"，但仓库里其实有一条**：`store.test.ts` 早就用"把空间点绑到不存在的棱上"（`patch.binding3`）钉住过单条路径 —— `validatePatch` 的 `updatePrimitive` 分支不看 `binding3`，而 DSL 校验要求宿主存在。所以这条不是纯理论洞，批量入口确实曾是绕道。
+- **M3 批量改样式对锁住成员静默跳过，而批量显隐整体拒绝**：同一次多选、同一个"批量修改"，一个悄悄少改一个、一个什么都不做但说得出原因 —— 用户看到"改了颜色，可有一个没变，也没有任何提示"。**改法**：按审计给的"镜像"方案，在 `patches.ts` 给 `setPrimitivesStyle` 加上与 `setPrimitivesVisible` **同一条**锁判据（整批拒绝 + `selection contains locked object`）；`applyOperation` 里那个 `continue` 保留为防御，并在注释里写明它现在只对**绕过 `validatePatch` 的直接调用**可达。
+- **RED→GREEN（实跑）**：`scene-store.test.ts` +1、`store.test.ts` +1、`patches.test.ts` +1。
+  - M1：平移之后描述符的底面第一点必须走到 `x+5`、向量不变，且**顶点也确实在那里** —— 变异（让 `realignPrismDescriptor` 直接返回）⇒ `expected { x: +0, y: +0, z: +0 } to deeply equal { x: 5, y: +0, z: +0 }`（与审计探针逐字一致）。
+  - M2：同一笔非法改动走 `applyBatch` 也必须被拒、文档对象不变、并且 `error` 说出来 —— 变异（短路那条校验）⇒ `expected { …(12) } to be { …(12) }`（文档真的被改了）。
+  - M3：带一个锁定成员的批量改色与批量显隐必须给出**完全相同**的拒绝理由，另加反向守卫（全未锁时照常通过）—— 变异（短路新判据）⇒ `expected true to be false`。
+
+**验证（修复轮 B 本机实跑）**：单测 **215 文件 / 2590 用例通过 + 1 todo**（起点 2587，+3）；`npm run typecheck` **6 个 workspace exit 0**；`npm run lint` **0 error / 14 warning**（与基线完全一致）；`npm run build` **exit 0**。**仍未修**：Minor 10 条（桌面/会话 6、Agent 4）。
+
+### 修复轮 B（再续）：Minor 的 **Agent** 三条（2026-09-22）
+
+Agent 那四条里先做三条判据明确的；第 4 条（第 12 个观测对象之外的真实引用）牵涉"观察层的上限该不该按文档规模推导"，属于产品取舍，留待有现场再做。
+
+- **A-M1 `actions_per_stage` 从不重置**：`Budget.beginStage()` 的文档写着"进入下一次暂存：重置 `actions_per_stage`"，而它在整个仓库里**没有任何调用方**（只有 `budget.test.ts`）—— 这个"每次暂存重置"的名额于是退化成**第二个整次运行计数器**，修复那一次也来分它。实测（审计探针）：20 动作的计划、committer 第一次拒绝并给出修复请求之后，运行以 `budget exhausted: budget_actions_per_stage` 结束，而 `actions_per_run` 还剩 108、每次暂存也都没超过默认的 32 —— **报了一次没有发生的预算耗尽，还丢掉了那唯一一次修复**。**改法**：在 `actions_per_stage` 计费之前调 `budget.beginStage()`。
+- **A-M2 上下文预算从不计费**：`buildContext` 一直收着 `budget` 却**从不使用**它，`estimatedCharacters` 也算了出来（注释就写着"供调用方核对预算"）却没人核对 ⇒ `context`/`time`/`geometry` 永远扣不了费，`budget.exhausted()` 的那三段判断**永远不可能为真**。**改法**：按估算值计费 `context`，不够就按既有方式停在这一步并说清是哪一项。
+  - **量纲这一步是测出来的，不是猜的（值得单独记）**：审计说"charge `context` from `estimatedCharacters`"，我照做之后**一条既有用例红了**（`bounds the readings the model sees...`）。加临时探针量了一下：那个"13 只立体、读数已经夹到上限"的**正常**场景是 **79,293 字符** —— 拿它去扣 32,000 的额度会把一次完全正常的运行判成预算耗尽，说明 32,000 不可能是字符；而 `BudgetKind` 的文档把 `context` 写成"上下文 **token** 估算"。于是按通行的 ~4 字符/token 折算（79,293 → 约 19.8k token，落在额度内）。这也让这条额度回到"真正的安全阀"：默认 32k token 约合 128k 字符，只有异常膨胀的上下文才撞得上，而不是每次正常运行都撞。**先量再改**在这里避免了一个"看起来对、其实每次都误报"的修复。
+  - **如实记档**：`time` / `geometry` 两类**仍然没有计费方** —— 它们要等调用方愿意把墙上时间与内核代价单位带进来才有意义（`geometry` 尤其需要内核报告代价），本轮只关掉 `context`。
+- **A-M3 矛盾检测只覆盖 `parameter.create`**：`parameter.create θ = 0.4` 紧跟 `parameter.set θ = 0.9` 会**静默**以 0.9 结束 —— 而 `parameterAudit` 自己那段注释写着"这类矛盾必须报出来而不是'后写的赢'"。**改法**：把 `parameter.set` 也记进同一张写入者表（判据本来就只有一份）。
+- **RED→GREEN（实跑）**：`coordinator.test.ts` +2、`parameterAudit.test.ts` +1。
+  - A-M1：20 动作计划 + 第一次暂存被拒并给出修复请求 ⇒ 两次暂存都真的发出去、**一条"预算耗尽"都没有**、最后停在 `awaiting_confirmation` —— 变异（去掉 `beginStage()`）⇒ `expected true to be false`（真的报出了预算耗尽）。
+  - A-M2：把 `context` 额度压到 1 个 token ⇒ 这一轮必须**在计费处**停下、`detail` 含 `budget_context`、模型一次都没被问到 —— 变异（短路计费）⇒ `expected 'awaiting_confirmation' to be 'failed'`。
+  - A-M3：`create→set` 与 `set→set` 都必须报 `contradictory_constraint`，另加反向守卫"同一个值写两次不算矛盾" —— 变异（条件改回只认 `create`）⇒ `expected false to be true`。
+- **顺带修掉的一处变异写法**：A-M1 的第一次变异我误把 `actions_per_stage` 的**计费**短路了（而不是去掉重置），那会让用例因为"根本没有计费"而通过 —— 与 M1（内核那条）同一种失误。改成只注释掉 `beginStage()` 之后才对得上"旧实现"。
+
+**验证（修复轮 B 再续本机实跑）**：单测 **215 文件 / 2593 用例通过 + 1 todo**（起点 2590，+3）；`npm run typecheck` **6 个 workspace exit 0**；`npm run lint` **0 error / 14 warning**（与基线完全一致）；`npm run build` **exit 0**。**仍未修**：Minor 7 条（桌面/会话 6、Agent 1）。
+
+### 修复轮 B（三续）：Minor 的**桌面/会话**五条（2026-09-22）
+
+桌面/会话那六条里先做五条判据明确的；第六条（代理的每请求准入从不评估 profile-revision、HTTP 处理函数绕过 `security::parse_route`）**没做** —— 审计自己说它今天影响为零，并给了"或者把这句话标成尚未接线"这个选项，那是一个**取舍**而不是补丁，留给有现场时再定。
+
+- **D-M5 `create` 把任何插入失败都报成"已存在"**：`INSERT INTO documents …` 原先把**任何** `rusqlite::Error` 都映射成 `StaleHead { "document X already exists" }` —— 磁盘满、库被锁、权限不足于是都以"已经存在"的面目到达界面，而 TS 侧又把任何含 "generation" 的文本归成 `stale_head`（那是"重新读一遍再保存"），用户被指去照做一个**根本做不了**的动作。**改法**：抽 `create_document_error`，只有 `ErrorCode::ConstraintViolation`（真撞主键）才是"已存在"，其余一律 `Io`。
+- **D-M6 `upsert_fact` 丢掉调用方的 `created_at`**：SQL 把 `?7` 同时绑给 `created_at` 与 `updated_at` —— `ConversationFactInput.created_at` 这个**必填**字段在桌面侧被静默丢掉，而浏览器 fallback 采纳它：同一个 `saveFact`、两个后端给出不同的 `createdAt`。本仓库自己的规矩就是"静默削掉一个字段比拒绝更糟"。**改法**：采纳调用方的值；`ON CONFLICT` 那一支仍然只更新 `updated_at`。
+- **D-M7 尺寸闸门的数字与计数方式都与 Rust 不同**：TS 写 `32_000/16_000/8_000`，Rust 是 `32*1024/16*1024/8*1024`（差 2.4%）；TS 用 `String.length`（UTF-16 码元），Rust 用 `chars().count()`（码点）—— 20 000 个 emoji 在浏览器被拒、在桌面被接受，而注释自称"逐字对齐"。**改法**：数字按 Rust 取，计数改**码点**。
+  - **顺带发现"一个量有三个数"**：`conversationSummary.ts` 自己还有一份 `MAX_SUMMARY_BOOK_CHARS = 16_000`，其注释也写着"与仓储两侧的那条守卫逐字一致……都是 16000"。于是"摘要上限"在仓库里有三个数（16_000 / 16_000 / Rust 的 16_384）。改成**唯一来源**：`MAX_SUMMARY_BOOK_CHARS = 16 * 1024`，`MAX_SUMMARY_CHARS` 从它取。**这不是顺手美化** —— 正是这三个数不一致，才让"种一本刚好差一点就满的书"那条既有用例在我改完常量之后立刻红了（商店按 16_000 削、仓储按 16_384 判）。
+- **D-M8 `archive()` 推进 `updated_at`**：函数上面那段文档写的是"归档这件事本身不该把一条旧会话顶到列表最前面"，而 SQL 写的是 `SET archived_at = ?1, updated_at = ?1` —— **注释与实现相反**，浏览器 fallback 一直按文档来。**改法**：UPDATE 只写 `archived_at`。
+- **D-M9 密钥形状字段的守卫不递归进数组**：两份实现（Rust `contains_secret_field`、TS `findSecretField`）都在"不是对象就返回"处把**数组**挡住了，于是 `{"capabilities":[{"apiKey":"sk-…"}]}` 这种载荷**不会被拒**，而是被反序列化**静默削掉**（`CapabilityEvidence` 没有 `deny_unknown_fields`）—— 正是这两处自己的注释里说"比报错更危险"的那种结果。函数文档都写着"任意深度"，数组也是深度。**改法**：两边都递归进数组元素。
+- **RED→GREEN（实跑）**：Rust `project_repository.rs` +1、`conversations.rs` +2、`provider_profiles.rs` 在原用例里加断言；TS `conversationRepository.test.ts` +1、`providerProfileClient.test.ts` 在原用例里加断言；另有 3 条**既有** TS 用例改用导出常量（它们原先把 32000/16000 抄在断言里，正是这一点让 M7 的错数字一直没被发现）。
+  - D-M5：**另一个连接握着写锁**制造一次非约束失败 ⇒ 必须报 `Io` —— 变异（改回"一律 StaleHead"）⇒ `a locked database must be reported as io, not as a stale head; got Err(StaleHead { detail: "document d1 already exists: database is locked" })` —— 括号里那句就是审计说的"把锁说成已存在"的现场。
+  - D-M6：变异（把 `created_at` 换回 `now`）⇒ `assertion left == right failed: the caller's created_at must survive`。
+  - D-M7：**20 000 个 emoji（20 000 码点、40 000 码元）必须被接受** —— 这正是旧实现拒绝的那一条 —— 变异（换回 `String.length`）⇒ `expected [Function] to not throw an error but 'ConversationRepositoryError: message …' was thrown`。
+  - D-M8：变异（把 `updated_at = ?1` 加回 SQL）⇒ `assertion left == right failed: archiving must not reorder the conversation`。
+  - D-M9：两边各自的用例都红 —— Rust `left: None / right: Some("apiKey")`，TS `expected null to be 'apiKey'`。
+- **顺带修掉自己引入的两处 clippy 警告**：把 `/** */` 写在**语句**上（Rust 只允许它挂在条目上）会触发 `unused doc comment`，而本仓库 clippy 是 `-D warnings`；两处都改成 `//`。另有一条 `variable does not need to be mutable`（新测试里的 `blocker`）。
+
+**验证（修复轮 B 三续本机实跑）**：单测 **215 文件 / 2594 用例通过 + 1 todo**（起点 2593，+1）；`npm run typecheck` **6 个 workspace exit 0**；`npm run lint` **0 error / 14 warning**（与基线完全一致）；`cargo clippy --all-targets -- -D warnings` **exit 0**；`npm run test:rust` **230 例通过 + 3 ignored**（起点 227 + 3，+3）；`npm run build` **exit 0**。**仍未修**：Minor 2 条（桌面/会话 1 条 M10、Agent 1 条）。
+
+### 修复轮 B（四续）：Minor 最后两条 —— Agent 1 条修复 + 桌面/会话 1 条**如实降级**（2026-09-22）
+
+- **Agent-M4「等用户补充」的提示不说要补什么**：协调器在 `waiting` 相位写的 `detail` 原本是 `waiting for the user to confirm: …`（把"缺信息"说成了"等确认"），而 `agentRunner` 只把 `observation` / `failure` 里的信息带给用户，于是界面最终只剩那句"没有接入模型服务"的兜底话 —— 用户看不出到底缺哪一个对象。**改法**：`coordinator.ts` 的 detail 改成 `the plan needs objects this run did not observe: ${missing.join(", ")}`；`agentRunner.ts` 从 `active.coordinator.ledger()` 里**倒着**找第一条 `phase === "waiting"` 的记录取它的 detail，并加前缀 `这一步需要你补充信息：`。
+  - **RED→GREEN（实跑）**：`coordinator.test.ts` 断言 detail 里必须出现 `did not observe` —— RED 是 `expected 'waiting for the user to confirm: fact…' to contain 'did not observe'`；`agentRunner.test.ts` 断言用户可见文本里必须出现缺失对象名 —— RED 是 `expected '这一步需要你补充信息。当前没有接入模型服务，本地规划器只认识几条固定指令。' to contain 'solid-not-observed'`（**这句就是审计描述的现场**：提示说了"需要补充"，却没说补充什么）。两个变异都真的红过，随后都还原，无残留标记。
+- **桌面/会话 M10（代理的 profile-revision 判据从未被求值）**：**按审计自己给的第二个选项"或者把这句话标成尚未接线"处理 —— 这是如实标注，不是代码修复。** `ProxyState` 里 `profile_revision` 一直是 `None`、`current_profile_revision` 恒为 `0`，于是 `stale_profile_revision` 这条判据**不可达**；而真正在跑的路径（Tauri 命令）根本不经过 `security::parse_route`。**做法**：只改注释 —— 模块头不再声称这条规则会被求值，调用点写明这两个常量让该分支不可达、`parse_route` 不在活动路径上。
+  - **为什么不顺手接线**：给 `parse_route` 接上会让未知路由的响应从 404 变成 403 —— 那是一次**真实的行为改变**，还会打翻既有用例；"该怎么接"是产品决定，留给有现场时再定。
+
+**验证（修复轮 B 四续本机实跑）**：单测 **215 文件 / 2595 用例通过 + 1 todo**（起点 2594，+1）；`npm run typecheck` **6 个 workspace exit 0**；`npm run lint` **0 error / 14 warning**（与基线完全一致）；`cargo clippy --all-targets -- -D warnings` **exit 0**。**至此审计 32 条全部处理完毕**：2 Critical + 14 Important 全部修复；Minor 16 条里 **15 条修复 + 1 条（M10）如实降级为"尚未接线"**。
+
+### 密钥用例会删掉用户的真实密钥、还会互相抢同一格（2026-09-22，跑门禁时暴露的**新**缺陷，不在审计 32 条内）
+
+- **怎么暴露的**：跑 `npm run test:rust` 报 `tests/secrets.rs:52` `assertion failed: !store.has("openai").expect("has after remove")`；**单跑必过、整套跑偶尔失败**。第一反应是"环境里有条陈旧凭据"，取证之后发现**两件事都真**，而且第二件比第一件严重。
+- **取证（都是本机实测，全程没有打印过任何密钥值）**：
+  1. `cmdkey /list` 里有 `openai.MathCanvas`、`anthropic.MathCanvas`、`ds.MathCanvas` 三条。用 `CredRead`（P/Invoke）比对值：前两条**等于本文件自己的夹具**（`sk-super-secret-value-9f3a2b` / `sk-ant-test`）⇒ 是测试留下的垃圾；`ds.MathCanvas` 不是夹具、看着是真实数据 ⇒ **原样保留，一个字节没动**。
+  2. 连跑 12 次 `--test secrets`：**8/12 次跑完之后 `openai.MathCanvas` 又被写脏**，而 12 次里 0 次失败 —— 也就是说断言失败是**概率性**的（取决于两条用例的并行交错），不是我那一次跑特有的。
+- **根因两条，都在同一个设计口子上**：`create_store()` 在 Windows 上给的是**真实**凭据管理器后端，而三条常规用例是真的往里写 ——
+  1. **它会删用户的密钥**：`stores_checks_and_removes_a_secret` 对 `openai` 调 `remove`；在真实后端上这一步就是**删掉用户在界面上配好的那一格密钥**（`ds.MathCanvas` 的存在正好说明那一格真的会被使用）。
+  2. **两条用例抢同一格**：`stores_checks_and_removes_a_secret` 与 `never_puts_the_secret_into_an_error_message` 都用 `openai`，且后者**从不删除**；并行跑时后者的 `put` 落进前者的 `remove` 与 `has` 之间 ⇒ 就是那句断言失败。`lends_the_secret_to_a_closure_and_nothing_else` 用 `anthropic` 且从不删除 ⇒ 稳定留一条垃圾。
+- **改法**：给"会真的写凭据库"的用例加 `ScratchCredential` 守卫（`new` 里先清干净、`Drop` 里必删，panic 也删），名字统一 `__test__` 前缀且**两两不同**；并新增用例 `scratch_profiles_are_distinct_and_never_a_real_profile_id`，把两条纪律钉住（清单 `SCRATCH_PROFILES` 必须两两不同、且不得等于 `REAL_PROFILE_IDS`）。
+- **RED→GREEN（四段实跑）**：
+  1. 新增用例 RED：`tests\secrets.rs:65` → `用例在用真实 profile id「openai」：它会覆盖或删掉用户在凭据管理器里已经配好的密钥`；改完 **9 例通过**（原 8 例 +1）。
+  2. **变异 A**（把 `SCRATCH_ROUNDTRIP` 换回 `"openai"`）⇒ 红在 `secrets.rs:107`，同一条真实 id 断言。
+  3. **变异 B**（把 `SCRATCH_MISSING` 指向 `SCRATCH_ROUNDTRIP`）⇒ 红在 `secrets.rs:111` → `两条用例共用同一个凭据格「__test__put-has-remove」：并排跑时一条的 put 会把另一条的 has 翻成 true`。
+  4. **变异 C**（把 `Drop` 的函数体清空）⇒ 套件**照样 9 例全绿**，但 `cmdkey` 里真的多出 `__test__with-secret.MathCanvas`、`__test__error-message.MathCanvas` 两条 —— 这一条恰好说明"清理没了、套件也发现不了"，也正是旧写法能一直留垃圾的原因。还原后连跑 **6 次：0 次污染、0 次失败**，`ds.MathCanvas` 始终没被碰过。
+- **清理**：把已证实是夹具的 `openai.MathCanvas`、`anthropic.MathCanvas` 用 `CredDelete` 删掉（`ds.MathCanvas` 保留）。
+- **如实缺口**：这几条常规用例**仍然在写真实的凭据管理器**（只是现在写的是 `__test__*` 这种一眼能认出、且跑完必删的格子）。让它们改走内存后端可以彻底不碰用户库，但那样"生产后端还能不能用"就又回到没有任何常规用例覆盖的状态 —— 本文件的既有判断是宁可留一条可识别的痕迹也要让真实后端每次都被跑到，这里沿用该判断。另外 `tests/secrets.rs` 里那条 `#[ignore]` 的真实写入用例（`__probe__` 前缀、跑完必删）**本批没有跑** —— 它会在用户的真实凭据库里写一条真条目，要显式加 `--ignored` 才会跑。
+
+**验证（本机实跑，2026-09-22）**：`npm run test:rust` **exit 0**、**231 例通过 + 3 ignored / 0 失败**（起点 230 + 3；本批 +1 就是那条新用例，secrets 单文件 9 通过 + 1 ignored）；`cargo clippy --all-targets -- -D warnings` **exit 0**；`npm test` **215 文件 / 2595 用例通过 + 1 todo**（与上一批相同 —— 本批只动 Rust 测试与文档）；`npm run typecheck` **6 个 workspace exit 0**；`npm run lint` **0 error / 14 warning**（基线）；`npm run build` **exit 0**。
+
+### 动作层 id 分配器：修掉「画布上已有 solid-1 时新建的第一个立体必然撞号」（2026-09-21，本节标题原缺，2026-09-22 补上）
 
 - **用户口径**：一张截图 —— 真实模型（DeepSeek）跑"已知直四棱柱 ABCD-A1B1C1D1 的底面是菱形，AA1=4, AB=2, BAD=60°，E、M、N 分别是 BC、BB1、A1D 的中点"这条请求，运行状态是 **`compile_failed: duplicate object id`**。
 - **取证（没有靠猜，三处真实现场）**：
@@ -2812,6 +3030,8 @@ P7-1 至 P7-6 与工程工作台层次化改造 Task 1-7 均已完成；P4 Agent
 ## 验证证据
 
 > **当前基线（唯一权威，2026-09-21 在「G1 第十三批：模型服务界面重做」之后实测）**：`npm.cmd test` **188 个测试文件、2134 个用例全部通过（零跳过）**；6 个 workspace（含 `@draw/desktop`）类型检查通过；ESLint **0 error / 14 warning**（14 条为既有基线）；`cargo clippy --all-targets` **零警告**；`npm.cmd run build` exit 0（含 `tauri build --no-bundle`，产出可运行的 `mathcanvas-desktop.exe`）；**Rust 测试 179 例通过 + 1 例 `#[ignore]`**（单元 8 + project_repository **19** + provider_adapter 16 + provider_capability 18 + provider_profiles **22** + providers 19 + proxy 16 + proxy_server 16 + **repository_package 29** + secrets 8 + shell_smoke 9）；Playwright Chromium **119/119** 通过。逐批证据见「G1 第一批 … 第十三批」各节。
+>
+> **这一行是 2026-09-21 那一刻的快照，此后不再更新**（它自称"唯一权威"已经过期了）。2026-09-22 的修复轮把它推进到：单测 **215 文件 / 2595 用例通过 + 1 todo**、Rust **231 例通过 + 3 ignored**、`lint` 仍 **0 error / 14 warning**、`clippy` exit 0、`build` exit 0。逐批证据见上文「修复轮 A / B / B 续 / B 再续 / B 三续 / B 四续」各节。
 
 > **上一轮基线（2026-09-18 在"平面几何切线 + 动点扩展 + 切点拖动 + 画布收细"之后实测）**：`npx vitest run` **124 个测试文件、1477 个用例通过**（把上游那 22 个提交一起并进来之后重跑；本轮自己的 37 条全部在内）；4 个 workspace 类型检查通过；ESLint 对改动文件 **0 error**（仓库既有 5 条 warning 与本轮无关）；dev server 逐个模块转译通过。**Playwright 本轮未运行**（需另起构建产物端口与安装 Chromium）—— 界面交互由 `App.test.tsx` 的真实 DOM 与指针事件覆盖，浏览器级门禁待补。
 >
