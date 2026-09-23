@@ -3,7 +3,59 @@ import { describe, expect, it } from "vitest"
 import { createEmptyDocument } from "@draw/dsl"
 import { buildSolidTemplate } from "@draw/geometry-kernel"
 
-import { applyOperation, createPoint3, deletionPlan, recomputeDerivedObjects, validateDeletion } from "./index"
+import { applyOperation, createPoint3, deletionPlan, deletionTargets, recomputeDerivedObjects, validateDeletion } from "./index"
+import { compileSolidPrism } from "./actions"
+
+/**
+ * **棱柱与模板实体是同一套删除语义**（外部审查 S2）。
+ *
+ * 两者都是"一只实体 + 它自己物化出来的拓扑"（顶点 / 棱 / 面）。原先 `deletionTargets`
+ * 的族判定只认 `construction.kind === "template"`，于是删除棱柱时**只删掉 `polyhedron3` 本身**，
+ * 它那 26 个成员全部留在文档里并**继续绘制** —— 用户看到的是"删了棱柱，一地碎片还在画布上"。
+ * 而模板立方体删除时连同 28 个成员一起走、0 残留。这条把两者的等价性钉住。
+ */
+describe("deleting a prism removes its materialised topology too", () => {
+  const base = [{ x: 0, y: 0, z: 0 }, { x: 4, y: 0, z: 0 }, { x: 4, y: 3, z: 0 }, { x: 0, y: 3, z: 0 }]
+
+  function prismDocument() {
+    const built = compileSolidPrism("solid-1", base, { x: 1, y: 0.5, z: 3 }, "斜棱柱 1")
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = built.primitives
+    return document
+  }
+
+  it("deletes the polyhedron together with every vertex, edge and face it materialised", () => {
+    const document = prismDocument()
+    const solid = document.primitives.find((primitive) => primitive.id === "solid-1")
+    if (solid?.type !== "polyhedron3") throw new Error("expected the prism solid")
+    const family = [solid.id, ...solid.vertexIds, ...solid.edgeIds, ...solid.faceIds]
+    // 夹具自检：这只棱柱真的带着一整族成员（否则下面的断言会因为"本来就没有"而恒真）。
+    expect(family.length).toBeGreaterThan(4)
+    expect(document.primitives.length).toBe(family.length)
+
+    // 族判定必须把整族收进来 —— 从**任意一个成员**出发都一样。
+    expect([...deletionTargets(document, "solid-1")].sort()).toEqual([...family].sort())
+    expect([...deletionTargets(document, solid.vertexIds[0])].sort()).toEqual([...family].sort())
+
+    const removed = applyOperation(document, { op: "deleteObject", id: "solid-1" })
+
+    expect(removed.changed).toBe(true)
+    // **0 残留**：没有孤儿顶点 / 棱 / 面留在画布上（模板实体那条路径的同一口径）。
+    expect(removed.document.primitives).toEqual([])
+  })
+
+  it("also removes a prism when the user deletes one of its generated vertices", () => {
+    // 用户可能在画布上点到的正是那个顶点：那时整族也必须一起走，而不是留下一堆碎片。
+    const document = prismDocument()
+    const solid = document.primitives.find((primitive) => primitive.id === "solid-1")
+    if (solid?.type !== "polyhedron3") throw new Error("expected the prism solid")
+
+    const removed = applyOperation(document, { op: "deleteObject", id: solid.vertexIds[0] })
+
+    expect(removed.changed).toBe(true)
+    expect(removed.document.primitives).toEqual([])
+  })
+})
 
 /**
  * 删除语义（用户已确认）：**派生对象与标注随宿主一起注销**，用户自己搭出来的构造引用仍拒绝删除

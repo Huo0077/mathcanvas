@@ -390,6 +390,43 @@ function prismMatchesVertices(
 }
 
 /**
+ * **整只实体被搬动之后，让棱柱的构造描述跟上顶点**（外部审查 M1）。
+ *
+ * `prismMatchesVertices` 那道检查原先只在 `updatePrimitive` 的 `point3` 分支里跑 ——
+ * 于是拖动 / 旋转**整只**实体之后，文档继续宣称"我是由这个底面加这个向量拉伸出来的"，
+ * 而顶点已经不是了（实测：平移 `(5,0,0)` 之后描述符里的底面还在原点，顶点已经走到 x=5）。
+ * 规格 §1.2 的口径是"构造描述是真源、顶点是确定性派生拓扑"，那就不能让它说假话。
+ *
+ * **做法是从顶点反推描述**，而不是直接降级成 `fromFaces`：搬动是**刚体变换**，
+ * 所以"前 n 个顶点是底面、后 n 个是 `Ti = Bi + v`"这条结构仍然成立 ——
+ * 取新的底面顶点、再取 `v = T₀ − B₀`，就得到与新顶点**完全一致**的描述。
+ * 这比"整体降级"更好：保留了棱柱记法这条信息（降级会把它丢掉）。
+ * 反推之后仍然用 `prismMatchesVertices` 复核一次；万一对不上（不是刚体搬动），
+ * 就按同一条既有策略降级为 `fromFaces` + `sourceId`。
+ */
+function realignPrismDescriptor(primitive: PrimitiveSpec, primitives: readonly PrimitiveSpec[]): void {
+  if (primitive.type !== "polyhedron3" || primitive.construction?.kind !== "prism") return
+  const count = primitive.construction.base.polygon.length
+  if (count < 3 || primitive.vertexIds.length !== count * 2) return
+  const positions = primitive.vertexIds.map((vertexId) => {
+    const vertex = primitives.find((candidate) => candidate.id === vertexId)
+    return vertex?.type === "point3" ? vertex.position : null
+  })
+  if (positions.some((position) => position === null)) return
+  const defined = positions as Vector3[]
+  const polygon = defined.slice(0, count).map((point) => ({ x: point.x, y: point.y, z: point.z }))
+  const first = defined[0]
+  const top = defined[count]
+  const vector = { x: top.x - first.x, y: top.y - first.y, z: top.z - first.z }
+  const candidate = { ...primitive, construction: { kind: "prism" as const, base: { polygon }, vector } }
+  if (prismMatchesVertices(candidate, candidate.construction, primitives)) {
+    primitive.construction = candidate.construction
+    return
+  }
+  primitive.construction = { kind: "fromFaces", sourceIds: [...primitive.faceIds], sourceId: primitive.id }
+}
+
+/**
  * 平移时同步搬动旋转的基准：基准圆心总是跟着走；定点是固定坐标时也一起搬
  * （这样"绕这个定点转了多少度"在平移前后完全一致），定点是点图元时保持原样。
  */
@@ -1308,12 +1345,31 @@ function sphereStatusMessage(label: string, result: DerivedSolidResult<Sphere3>)
   return `${label}：${result.reason}`
 }
 
-export function solidStatusReport(document: GeometryDocument): SolidDerivedStatus[] {
+/**
+ * **这份报告要算哪些实体**（外部审查 G1）。
+ *
+ * 不传 = 整篇文档（观察层要的正是全量：模型看到的必须是完整读数）。
+ * 传了 = 只算这几只 —— 界面在**选中某个对象**时只需要它自己那几条读数，
+ * 而对整篇文档求一遍是白花的（内切球那条还是迭代求解）。
+ * `PropertiesBar` 的注释一直声称"按选中对象过滤"，但它原先是在**算完整篇之后**再过滤 ——
+ * 那样过滤不省任何计算，只会让人以为省了。
+ */
+export interface SolidDerivedScope {
+  /** 只算这些 `polyhedron3` 的球体读数。 */
+  solidIds?: readonly string[]
+  /** 只算这些 `section` 图元的截面读数（按截面**自己**的 id，不是来源实体）。 */
+  sectionIds?: readonly string[]
+}
+
+export function solidStatusReport(document: GeometryDocument, scope?: SolidDerivedScope): SolidDerivedStatus[] {
   const primitiveMap = new Map(document.primitives.map((primitive) => [primitive.id, primitive]))
   const report: SolidDerivedStatus[] = []
+  const solidFilter = scope?.solidIds === undefined ? null : new Set(scope.solidIds)
+  const sectionFilter = scope?.sectionIds === undefined ? null : new Set(scope.sectionIds)
 
   for (const primitive of document.primitives) {
     if (primitive.type !== "polyhedron3") continue
+    if (solidFilter && !solidFilter.has(primitive.id)) continue
     // 拓扑读不全（缺顶点 / 缺面环）时**什么都不报**：那不是"退化"，而是"这只实体还没长齐"。
     const topology = solidTopology3(primitive, primitiveMap)
     if (!topology) continue
@@ -1326,6 +1382,7 @@ export function solidStatusReport(document: GeometryDocument): SolidDerivedStatu
 
   for (const primitive of document.primitives) {
     if (primitive.type !== "section") continue
+    if (sectionFilter && !sectionFilter.has(primitive.id)) continue
     const source = primitiveMap.get(primitive.sourceId)
     if (!source) continue
     const topology = solidTopology3(source, primitiveMap)
@@ -2365,8 +2422,25 @@ export function deletionTargets(document: GeometryDocument, id: string): Set<str
   const targets = new Set<string>([id])
   // 模板实体的拓扑是一整族，先按成员归属整体纳入，后面的级联才看得到它们。
   const polyhedron = document.primitives.find((primitive) => {
-    if (primitive.type !== "polyhedron3" || primitive.construction?.kind !== "template") return false
-    return primitive.id === id || primitive.construction.sourceIds[0] === id || primitive.vertexIds.includes(id) || primitive.edgeIds.includes(id) || primitive.faceIds.includes(id)
+    if (primitive.type !== "polyhedron3") return false
+    /**
+     * **模板实体与棱柱都是"一只实体 + 它自己物化出来的拓扑"**（外部审查 S2）。
+     *
+     * 原先这里只认 `kind === "template"`，于是删除棱柱时**只删掉 `polyhedron3` 本身**：
+     * 它的顶点 / 棱 / 面（26 个）全部留在文档里并**继续绘制** —— 而模板立方体删除时
+     * 连同 28 个成员一起走、0 残留。两者成员的来路完全一样（都由实体自己物化），
+     * 删除语义必须一致；否则用户看到的是"删了实体，一地碎片还在画布上"。
+     *
+     * 注意这与 `templateTopologyIds`（拖动）**不是**同一条规则：棱柱生成的顶点是
+     * **可编辑**的（`prismMatchesVertices` 正是为"顶点被改过、描述要改写"准备的），
+     * 所以它们不该被排除在自由拖动之外。删除是另一回事：整族一起走。
+     */
+    const kind = primitive.construction?.kind
+    if (kind !== "template" && kind !== "prism") return false
+    if (primitive.id === id || primitive.vertexIds.includes(id) || primitive.edgeIds.includes(id) || primitive.faceIds.includes(id)) return true
+    // `template` / `fromPoints` / `fromFaces` 才有 `sourceIds`；`prism` **没有**这一支
+    //（它的来源是自带的底面多边形与拉伸向量），所以必须先收窄再读。
+    return isSourceIdConstruction(primitive.construction) && primitive.construction.sourceIds[0] === id
   })
   if (polyhedron && polyhedron.type === "polyhedron3") {
     for (const member of [polyhedron.id, ...(isSourceIdConstruction(polyhedron.construction) ? polyhedron.construction.sourceIds : []), ...polyhedron.vertexIds, ...polyhedron.edgeIds, ...polyhedron.faceIds]) targets.add(member)
@@ -2607,6 +2681,10 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
     // re-derive its own cuts explicitly, or the drawn section would keep the old shape while the solid moves.
     const cutIds = next.primitives.filter((candidate): candidate is Extract<PrimitiveSpec, { type: "section" }> => candidate.type === "section" && candidate.sourceId === operation.id).map((section) => section.id)
     changedIds = [...movedIds, operation.id, ...cutIds]
+    // 搬完整只实体之后重检它的构造描述（外部审查 M1）：棱柱的顶点已经动了，
+    // 描述符不能继续宣称旧的底面与向量。
+    const movedSolid = next.primitives.find((candidate) => candidate.id === operation.id)
+    if (movedSolid) realignPrismDescriptor(movedSolid, next.primitives)
   } else if (operation.op === "rotatePrimitive3") {
     const angleError = requireFinite({ degrees: operation.degrees }, "rotatePrimitive3")
     if (angleError) return { document, changed: false, error: angleError }
@@ -2626,6 +2704,9 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
     // 截面按 id 记来源、不在依赖索引里：实体转了，它的截面必须同一次提交里重算，否则刀口与形状对不上。
     const cutIds = next.primitives.filter((candidate): candidate is Extract<PrimitiveSpec, { type: "section" }> => candidate.type === "section" && candidate.sourceId === operation.id).map((section) => section.id)
     changedIds = [operation.id, ...turnedPoints.keys(), ...cutIds]
+    // 同上：转完整只实体之后重检构造描述（外部审查 M1）。
+    const turnedSolid = next.primitives.find((candidate) => candidate.id === operation.id)
+    if (turnedSolid) realignPrismDescriptor(turnedSolid, next.primitives)
   } else if (operation.op === "moveSectionPlane") {
     const distanceError = requireFinite({ distance: operation.distance }, "moveSectionPlane")
     if (distanceError) return { document, changed: false, error: distanceError }
@@ -2738,6 +2819,9 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
      */
     for (const primitive of next.primitives) {
       if (!operation.ids.includes(primitive.id) || primitive.locked) continue
+      // 注意：走到这里的"锁住成员"只可能来自**绕过 `validatePatch` 的直接调用**（测试 / 内部重算）。
+      // 经补丁路径的批量改样式已经在 `patches.ts` 里被**整体拒绝**（与批量显隐同一条策略，
+      // 外部审查 M3）—— 那条路径下不会有成员被静默跳过。
       const style = { ...primitive.style }
       // 逐项显式处理（不用 `as` 绕类型）：`undefined` 是**有意义的赋值**——清除这一项、回到默认。
       if ("stroke" in operation.style) { if (operation.style.stroke === undefined) delete style.stroke; else style.stroke = operation.style.stroke }

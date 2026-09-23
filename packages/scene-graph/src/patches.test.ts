@@ -1,7 +1,7 @@
 import { createEmptyDocument, decodeMgeo, encodeMgeo, validateDocument, type GeometryDocument } from "@draw/dsl"
 import { describe, expect, it } from "vitest"
 
-import { applyOperation, isDomainOperation } from "./operations"
+import { applyOperation, isDomainOperation, type DomainOperation } from "./operations"
 import { commitPatch, validatePatch } from "./patches"
 import { compileSolidPrism } from "./actions"
 
@@ -14,6 +14,36 @@ import { compileSolidPrism } from "./actions"
  * 后者是账本问题：没有语义变化的操作不该把 revision 推高（否则撤销栈里全是空步）。
  */
 describe("domain operation runtime guard", () => {
+  /**
+   * **批量改样式与批量显隐用同一条锁策略**（外部审查 M3）。
+   *
+   * `applyOperation` 的 `setPrimitivesStyle` 对锁住的成员是 `continue`（静默跳过），
+   * 而同一次多选按"隐藏"是**整体拒绝**并报 `selection contains locked object`。
+   * 用户看到的是"改了颜色，可有一个没变，也没有任何提示"。这里把两条策略钉成同一条。
+   */
+  it("refuses a batch style change when any selected object is locked, like batch hide", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives = [
+      { id: "point-a", type: "point", x: 0, y: 0 },
+      { id: "point-b", type: "point", x: 1, y: 1, locked: true }
+    ] as never
+
+    const style: DomainOperation = { op: "setPrimitivesStyle", ids: ["point-a", "point-b"], style: { stroke: "#ff0000" } }
+    const visible: DomainOperation = { op: "setPrimitivesVisible", ids: ["point-a", "point-b"], visible: false }
+
+    const styleResult = validatePatch(document, style)
+    const visibleResult = validatePatch(document, visible)
+
+    // 两条批量修改给出**同一句**拒绝理由。
+    expect(styleResult.valid).toBe(false)
+    expect(visibleResult.valid).toBe(false)
+    if (!styleResult.valid && !visibleResult.valid) expect(styleResult.errors).toEqual(visibleResult.errors)
+
+    // 反向守卫：全都没锁时照常通过（这条闸不该把正常的多选批量改色一起挡掉）。
+    const unlocked = { ...document, primitives: [{ id: "point-a", type: "point", x: 0, y: 0 }, { id: "point-b", type: "point", x: 1, y: 1 }] } as never
+    expect(validatePatch(unlocked, style).valid).toBe(true)
+  })
+
   it("rejects an unknown operation even when TypeScript was bypassed", () => {
     const document = createEmptyDocument("conics")
     const smuggled = { op: "explodeEverything", id: "point-1" } as unknown as Parameters<typeof validatePatch>[1]

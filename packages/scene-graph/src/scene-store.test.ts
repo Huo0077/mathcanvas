@@ -1522,6 +1522,30 @@ describe("a prism's construction descriptor stays the truth source", () => {
     expect(solid.construction).toEqual({ kind: "prism", base: { polygon: PRISM_BASE }, vector: PRISM_VECTOR })
   })
 
+  /**
+   * **整只实体被搬动之后，棱柱的描述符必须跟着顶点走**（外部审查 M1）。
+   *
+   * `prismMatchesVertices` 那道检查原先只在 `updatePrimitive` 的 `point3` 分支里跑 ——
+   * 于是拖动 / 旋转**整只**实体之后，文档继续宣称"我是由这个底面加这个向量拉伸出来的"，
+   * 而顶点已经不是了（实测：平移 `(5,0,0)` 之后描述符里的底面还在原点）。
+   * 规格 §1.2 的口径是"构造描述才是真源、顶点是确定性派生拓扑"，所以不能让它说假话。
+   */
+  it("keeps the prism descriptor true after the whole solid is dragged", () => {
+    const document = prismDocument()
+    const moved = applyOperation(document, { op: "translatePrimitive3", id: "solid-1", delta: { x: 5, y: 0, z: 0 } })
+    expect(moved.error).toBeUndefined()
+
+    const solid = moved.document.primitives.find((primitive) => primitive.id === "solid-1")
+    if (solid?.type !== "polyhedron3") throw new Error("expected the prism solid")
+    if (solid.construction?.kind !== "prism") throw new Error(`expected the prism descriptor, got ${solid.construction?.kind}`)
+    // 描述符搬了同样的位移：底面第一个点走到 x+5，而刚体平移不改变拉伸向量。
+    expect(solid.construction.base.polygon[0]).toEqual({ x: PRISM_BASE[0].x + 5, y: PRISM_BASE[0].y, z: PRISM_BASE[0].z })
+    expect(solid.construction.vector).toEqual(PRISM_VECTOR)
+    // 顶点确实也走到了那里 —— 描述符与顶点在说**同一件事**。
+    const vertex = moved.document.primitives.find((primitive) => primitive.id === solid.vertexIds[0])
+    expect(vertex).toMatchObject({ type: "point3", position: { x: PRISM_BASE[0].x + 5, y: PRISM_BASE[0].y, z: PRISM_BASE[0].z } })
+  })
+
   it("leaves a template solid's own upgrade path alone", () => {
     const source = { id: "cube-1", type: "cube" as const, origin: { x: -1, y: -1, z: -1 }, size: { x: 2, y: 2, z: 2 } }
     const topology = buildSolidTemplate(source)
@@ -1584,6 +1608,46 @@ describe("solid status report surfaces the derived results", () => {
     expect(section?.status).toBe("exact")
     // 状态之外还要有可用的形状读数：截面是四边形。
     expect(section?.message).toContain("polygon")
+  })
+
+  /**
+   * **范围参数真的把计算限制住了**（外部审查 G1）。
+   *
+   * `PropertiesBar` 的注释一直写着"按选中对象过滤，而且只在选中实体 / 截面时才算"，
+   * 但它原先是在**算完整篇文档之后**再 `.filter(...)` —— 过滤只筛结果、不省计算，
+   * 而"算"才是贵的那一半（每只实体都要解外接球与内切球，内切球还是迭代求解）。
+   * 这里钉住的是"范围传进去之后结果只含范围内那几只"，界面才可能真的省下计算。
+   */
+  it("scopes the report to the requested solids when a scope is given", () => {
+    const document = prismDocument()
+    // **找到真正那只多面体**再克隆（`primitives[0]` 未必是它 —— 棱柱的顶点排在前面）。
+    const solid = document.primitives.find((primitive) => primitive.type === "polyhedron3")
+    expect(solid, "the fixture must contain a polyhedron3").toBeDefined()
+    document.primitives = [...document.primitives, { ...structuredClone(solid!), id: "solid-2" }]
+
+    // 不传范围 = 整篇文档（观察层要的就是全量）。
+    const all = solidStatusReport(document)
+    expect(new Set(all.map((entry) => entry.solidId))).toEqual(new Set(["solid-1", "solid-2"]))
+
+    const scoped = solidStatusReport(document, { solidIds: ["solid-2"] })
+    expect(scoped).toHaveLength(2)
+    expect(new Set(scoped.map((entry) => entry.solidId))).toEqual(new Set(["solid-2"]))
+    expect(scoped.map((entry) => entry.code)).toEqual(["derived.circumsphere", "derived.insphere"])
+  })
+
+  it("scopes the report to the requested sections when a scope is given", () => {
+    const document = prismDocument()
+    document.primitives = [
+      ...document.primitives,
+      { id: "section-1", type: "section", sourceId: "solid-1", plane: { normal: { x: 0, y: 0, z: 1 }, constant: -1.5 }, points: [], classification: "none", status: "undefined" },
+      { id: "section-2", type: "section", sourceId: "solid-1", plane: { normal: { x: 0, y: 0, z: 1 }, constant: -0.5 }, points: [], classification: "none", status: "undefined" }
+    ]
+
+    const scoped = solidStatusReport(document, { sectionIds: ["section-1"] })
+
+    // 截面范围只留那一刀；`solidIds` 缺省时球体读数照旧**不**被这个范围清掉。
+    expect(scoped.filter((entry) => entry.code === "derived.section").map((entry) => entry.sourceId)).toEqual(["section-1"])
+    expect(scoped.some((entry) => entry.code === "derived.circumsphere")).toBe(true)
   })
 
   it("says nothing about a solid whose topology cannot be read", () => {

@@ -561,6 +561,19 @@ export function validatePatch(document: GeometryDocument, operation: DomainOpera
     if ([...affected].some((id) => !operation.ids.includes(id) && document.primitives.find((primitive) => primitive.id === id)?.locked)) errors.push("alignment would move locked constrained object")
   }
   if (operation.op === "setPrimitivesVisible" && operation.ids.some((id) => document.primitives.find((primitive) => primitive.id === id)?.locked)) errors.push("selection contains locked object")
+  /**
+   * **批量改样式与批量显隐必须是同一条策略**（外部审查 M3）。
+   *
+   * `applyOperation` 的 `setPrimitivesStyle` 对锁住的成员是 `continue` —— **静默跳过**；
+   * 而同一次多选按"隐藏"却是**整体拒绝**并报 `selection contains locked object`。
+   * 同一个"批量修改"的语义，一个悄悄少改一个、一个什么都不做但说得出原因 ——
+   * 用户看到的是"改了颜色，可有一个没变，也没有任何提示"。
+   *
+   * 这里取**拒绝**这一条：与显隐一致，而且"说得出原因"永远比"静默少改"好。
+   * （`applyOperation` 里那个 `continue` 保留为防御：直接调它、绕过 `validatePatch` 的调用方 ——
+   *  例如测试与内部重算 —— 仍然不该把锁住的对象改掉。）
+   */
+  if (operation.op === "setPrimitivesStyle" && operation.ids.some((id) => document.primitives.find((primitive) => primitive.id === id)?.locked)) errors.push("selection contains locked object")
   return errors.length ? { valid: false, errors } : { valid: true }
 }
 

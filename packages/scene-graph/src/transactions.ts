@@ -1,4 +1,5 @@
 import type { GeometryDocument } from "@draw/dsl"
+import { validateDocument } from "@draw/dsl"
 
 import { applyOperation, isDomainOperation, type DomainOperation } from "./operations"
 import { validatePatch } from "./patches"
@@ -131,6 +132,19 @@ export function commitTransaction(input: TransactionInput): CommitResult {
   if (afterHash === beforeHash) {
     // 整批没有语义变化：不推进 revision、不返回新文档（否则撤销栈里会多一个空步）。
     return { changed: false, document: base, diff: EMPTY_DIFF, errors: [], beforeHash, afterHash }
+  }
+  /**
+   * **整批之后也要校验结果文档**（外部审查 M2）。
+   *
+   * `commitPatch` 早就在应用之后校验整份文档了（那条修复针对的是"改动进了 store、
+   * 保存时 `encodeMgeo` 才抛错，而错误又被 `saveDraft` 吞掉 ⇒ 画布上是新的、磁盘上还是旧的"），
+   * 而 `commitTransaction` 是批处理 / Agent / 草稿的写入路径，却**从不校验结果**。
+   * 两条路径都自称"唯一写入口"，判据必须一致 —— 否则同一个非法改动走单条会被拦住、
+   * 走批量就进得去。逐条 `validatePatch` 挡不住这一类：有的操作会让**整份文档**不再合法。
+   */
+  const validation = validateDocument(current)
+  if (!validation.valid) {
+    return { changed: false, document: base, diff: EMPTY_DIFF, errors: [`the transaction would make the document invalid: ${validation.errors.slice(0, 3).join(", ")}`], beforeHash, afterHash: beforeHash }
   }
   return { changed: true, document: current, diff: computeDiff(base, current), errors: [], beforeHash, afterHash }
 }
