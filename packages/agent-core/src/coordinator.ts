@@ -357,7 +357,12 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
 
         const result = parsePlanEnvelope(outcome.plan)
         if (!result.ok) {
-          lastDetail = result.errors.map((error) => `${error.code}@${error.path}`).join(", ").slice(0, 512)
+          /**
+           * **带上 `detail`**：只写 `code@path` 时，用户与日志看到的是一句内部码
+           *（`invalid_type@envelope`），看不出模型到底回了什么形状 —— 而那句 `detail` 里现在
+           * 就写着形状（`schemas.ts` 的 `describePlanShape`）。修复通道也拿它说事。
+           */
+          lastDetail = result.errors.map((error) => `${error.code}@${error.path}: ${error.detail}`).join(", ").slice(0, 512)
           ledger.record(`plan attempt ${attempt} was rejected: ${lastDetail}`)
           /**
            * 组装**下一次**要用的修复提示。

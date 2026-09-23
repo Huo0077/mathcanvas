@@ -216,6 +216,26 @@ describe("envelope assumptions", () => {
     plan.assumptions = Array.from({ length: 64 }, (_, index) => `assumption ${index}`)
     expectRejected(parsePlanEnvelope(plan), "array_too_long")
   })
+
+  /**
+   * **用户现场（2026-09-22）**：模型回了一个裸数组（或别的非对象），界面上只有一句
+   * `the plan never matched the schema: invalid_type@envelope` —— 谁也没法据此说出模型到底回了什么。
+   * 形状必须写进**诊断本身**：它同时也是给修复通道看的（模型据此知道自己错在哪）。
+   */
+  it("names the shape that arrived instead of only saying 'expected an object'", () => {
+    const array = parsePlanEnvelope([{ actionId: "planar.create_point" }])
+    expect(array.ok).toBe(false)
+    const arrayDetail = array.ok ? "" : array.errors[0].detail
+    expect(arrayDetail).toContain("an array")
+    // 可执行：告诉模型（和读日志的人）合同要的是信封对象。
+    expect(arrayDetail).toContain("schemaVersion")
+
+    const text = parsePlanEnvelope('{"kind":"plan"}')
+    expect(text.ok ? "" : text.errors[0].detail).toContain("a string")
+
+    const nothing = parsePlanEnvelope(null)
+    expect(nothing.ok ? "" : nothing.errors[0].detail).toContain("null")
+  })
 })
 
 describe("deterministic ids and hashes", () => {

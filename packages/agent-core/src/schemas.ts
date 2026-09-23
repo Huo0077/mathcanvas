@@ -975,10 +975,24 @@ export function parseDraftAction(input: unknown, path = "action"): ParseResult<D
   return { ok: true, value: { actionId, actionKey: actionKey as string, inputs: inputs as never, factIds: factIds as string[] } as DraftAction }
 }
 
+/**
+ * 把"喂进来的东西是什么形状"说成一句话。
+ *
+ * 为什么要有它：原先这里只说 `expected an object`，于是真实运行里用户看到的是
+ * `the plan never matched the schema: invalid_type@envelope` —— 模型回的是数组、字符串还是 `null`，
+ * **谁也不知道**，而**修复通道**同样拿不到可执行的信息（它只能把同一句话再说一遍给模型听）。
+ */
+function describePlanShape(input: unknown): string {
+  if (Array.isArray(input)) return "an array — the envelope is an object with schemaVersion / kind / goal and one of actions / questions / answer"
+  if (input === null) return "null"
+  if (typeof input === "string") return "a string — the envelope must be a JSON object, not text that contains one"
+  return `a ${typeof input}`
+}
+
 /** 解析整个 PlanEnvelope；三个分支的字段集**互不混杂**。 */
 export function parsePlanEnvelope(input: unknown): ParseResult<PlanEnvelope> {
   const errors: ParseError[] = []
-  if (!isPlainObject(input)) return { ok: false, errors: [fail("invalid_type", "envelope", "expected an object")] }
+  if (!isPlainObject(input)) return { ok: false, errors: [fail("invalid_type", "envelope", `expected the plan envelope object, got ${describePlanShape(input)}`)] }
 
   const kind = input.kind
   if (kind !== "plan" && kind !== "clarification" && kind !== "answer") {
