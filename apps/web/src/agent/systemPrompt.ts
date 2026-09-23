@@ -219,6 +219,16 @@ export function buildPolicyText(input: SystemPromptPolicyInput): string {
        * 谁也救不回来（用户现场：要求画正四面体，结果是一组平面对象 + 一个棱柱）。
        */
       "**工作区不是限制**：绑定里的 `workspace` 只是这份文档现在在哪个工作区，宿主会按你的计划自动切过去。要画立体图形就直接用 `solid.*` 动作，**不要用 `planar.*` 的点去拼立体的顶点** —— 那样得到的是一组平面对象。",
+      /**
+       * **没有的图元要如实说**（2026-09-22，用户现场）。
+       *
+       * 用户要"正四面体 ABCD 棱长 3"，模型用 `solid.create_prism`（三点底 + 拉伸）造出了一个**三棱柱**。
+       * 它不是偷懒：动作层**没有**三棱锥 / 正四面体 / 一般多面体 —— `pyramid` 模板固定是**矩形底**的
+       * 四棱锥，`solid.create_prism` 是"底面多边形 + 拉伸"，而 `polyhedron3` 在能力登记表里是
+       * `temporarily_unavailable`（"no action handler: topology is materialised by the kernel"）。
+       * 不把这件事说清楚，模型就会拿最接近的动作**冒充** —— 用户拿到的是一个形状不对的实体。
+       */
+      "**没有的图元要如实说**：能造的立体只有这些 —— 立方体、**四棱锥（底面是矩形）**、圆柱、圆锥，以及**棱柱（底面多边形 + 拉伸）**。**没有三棱锥 / 正四面体 / 一般多面体**。要求这类形状时：说清「这个形状目前没有图元」，给出最接近的替代（例如用四棱锥近似）并写进 `assumptions`，或者返回 `clarification` 问用户要哪个 —— **不要拿别的形状冒充**（用三棱柱当正四面体就是错的）。",
       "## 本轮允许的动作（`actionId` 只能从这里选）",
       ...(input.actionIds.length > 0 ? input.actionIds.map((action) => `- ${action}`) : ["（这一轮没有任何可用动作：只能提问或作答）"]),
       "",

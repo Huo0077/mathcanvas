@@ -135,6 +135,20 @@ describe("production system prompt", () => {
     expect(policy).toContain("不要用 `planar.*` 的点去拼立体的顶点")
   })
 
+  /**
+   * **没有的图元要如实说**（2026-09-22，用户现场）。
+   *
+   * 用户要"正四面体 ABCD 棱长 3"，模型用 `solid.create_prism` 拿三点底拉伸 —— 生成的是**三棱柱**。
+   * 这不是它偷懒：动作层**没有**三棱锥/正四面体图元（棱锥固定是矩形底的四棱锥，棱柱是"底面多边形 + 拉伸"），
+   * 而它没有被告知这件事，于是拿最接近的动作冒充了。这一句必须逐字在策略文本里。
+   */
+  it("forbids passing off one solid for another when the shape has no primitive", () => {
+    const policy = buildPolicyText({ channel: "strict_json", canPlan: true, actionIds: ["solid.create_prism", "solid.create_template"] })
+
+    expect(policy).toContain("没有三棱锥")
+    expect(policy).toContain("不要拿别的形状冒充")
+  })
+
   it("keeps the policy text identical across contexts, and injects the scene separately", () => {
     const first = buildSystemPrompt({ context: context(), channel: "strict_json", canPlan: true })
     /**
