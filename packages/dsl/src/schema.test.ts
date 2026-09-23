@@ -7,8 +7,7 @@ import { createDefaultCadLayout, createEmptyDocument, validateDocument } from ".
  * 棱柱的断言要落在"构造描述"上，而拓扑那几条（顶点 / 棱 / 面引用、闭合边界）与它无关；
  * 共用这一份夹具之后，构造成立与否是唯一变量。
  */
-function prismDocument(construction: unknown, options?: Parameters<typeof validateDocument>[1]) {
-  const document = createEmptyDocument("geometry3d")
+function prismDocument(construction: unknown, options?: Parameters<typeof validateDocument>[1]) {  const document = createEmptyDocument("geometry3d")
   document.primitives = [
     { id: "point-a", type: "point3", position: { x: 0, y: 0, z: 0 } },
     { id: "point-b", type: "point3", position: { x: 1, y: 0, z: 0 } },
@@ -124,6 +123,36 @@ describe("Geometry DSL document layout schema", () => {
     const strict = prismDocument(construction, { prismConstructionValidator: () => ["底面多边形自交。"] })
     expect(strict.valid).toBe(false)
     if (!strict.valid) expect(strict.errors).toContain("solid-1 prism base is invalid: 底面多边形自交。")
+  })
+
+  /**
+   * **带 `plane` 字段不能成为绕过几何语义校验的通行证**（外部审查 G2）。
+   *
+   * 判据原先的门是 `planeBase === undefined`，于是"给底面配一个平面"本身就跳过了注入的几何判据。
+   * 而内核的 `isPrismPlaneBase` 要求二维点**没有 `z`**（两种写法互斥），所以
+   * "`plane` + **三维**点"既不会被 codec 抬升、也不会被 schema 校验 —— 两条路一起漏，
+   * 自交 / 非共面 / 零体积的底面在导入与保存两条路径上都被接受。
+   *
+   * 真正的豁免理由只有一条：二维点还没被抬到平面上。所以门必须按"点里有没有 `z`"取。
+   */
+  it("runs the injected prism semantics check even when a plane field is attached", () => {
+    const plane = { origin: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 0, z: 1 } }
+    const polygon3d = [{ x: 0, y: 0, z: 0 }, { x: 4, y: 4, z: 0 }, { x: 4, y: 0, z: 0 }, { x: 0, y: 4, z: 0 }]
+    const vector = { x: 0, y: 0, z: 3 }
+    const alwaysSelfIntersecting = { prismConstructionValidator: () => ["底面多边形自交。"] }
+
+    // 不带 `plane`：判据照常跑（既有行为，对照用）。
+    expect(prismDocument({ kind: "prism", base: { polygon: polygon3d }, vector }, alwaysSelfIntersecting).valid).toBe(false)
+
+    // 带 `plane` 但点是**三维**的：判据同样必须跑 —— 这正是原先被绕过的那一条。
+    const withPlane = prismDocument({ kind: "prism", base: { plane, polygon: polygon3d }, vector }, alwaysSelfIntersecting)
+    expect(withPlane.valid).toBe(false)
+    if (!withPlane.valid) expect(withPlane.errors).toContain("solid-1 prism base is invalid: 底面多边形自交。")
+
+    // 反向守卫：真正的"尚未抬升的二维写法"仍然**跳过**这一次判据 ——
+    // 二维点还没被抬到平面上，现在拿它们当世界坐标判会把合法输入判成退化；
+    // codec 抬完（并丢掉 `plane`）之后会再走一遍本函数，那时判据照常执行。
+    expect(prismDocument({ kind: "prism", base: { plane, polygon: [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 0, y: 3 }] }, vector }, alwaysSelfIntersecting).valid).toBe(true)
   })
 
   it("validates the construction descriptor of a prism solid", () => {
@@ -531,5 +560,33 @@ describe("Geometry DSL document layout schema", () => {
     if (!dangling.valid) expect(dangling.errors.join(" ")).toContain("parameter")
     // 非字符串同拒。
     expect(build({ kind: "onPath", pathId: "circle-1", parameter: 0.4, parameterId: 7 }).valid).toBe(false)
+  })
+
+  /**
+   * **宿主路径本身也必须存在，而且类型要是曲线**（外部审查 S3）。
+   *
+   * 上面那条钉的是 `parameterId`；同一处的 `pathId` 原先**只查了"是不是字符串"** ——
+   * 于是悬空 `pathId` 的 `.mgeo` 能导入、能往返、还能保存，而点**静默冻在最后一次算出的
+   * 坐标**上，界面却照旧显示"绑定在路径上"。`point3` 的 `hostId` 早就带类型地校验了
+   *（同一文件里的 `referenceType`），平面这一侧是唯一漏掉的一道。
+   */
+  it("rejects a planar point whose path binding references a missing object or a non-curve", () => {
+    const build = (primitives: unknown[], binding: unknown) => {
+      const document = createEmptyDocument("conics")
+      document.primitives = [...primitives, { id: "point-1", type: "point", x: 0, y: 0, binding }] as never
+      return validateDocument(document)
+    }
+    const circle = { id: "circle-1", type: "circle", center: { x: 0, y: 0 }, radius: 3 }
+
+    // 反向守卫：挂在一条真的存在的曲线上是合法的 —— 否则下面的拒绝可能只是因为别的原因。
+    expect(build([circle], { kind: "onPath", pathId: "circle-1", parameter: 0.4 }).valid).toBe(true)
+    expect(build([{ id: "segment-1", type: "segment", a: { x: 0, y: 0 }, b: { x: 1, y: 0 } }], { kind: "onPath", pathId: "segment-1", parameter: 0.4 }).valid).toBe(true)
+
+    // 悬空引用：这个 id 从来没有过。
+    const missing = build([circle], { kind: "onPath", pathId: "circle-gone", parameter: 0.4 })
+    expect(missing.valid).toBe(false)
+    if (!missing.valid) expect(missing.errors.join(" ")).toContain("does not exist or is not a curve")
+    // 存在但**不是曲线**（指向另一个点）：同样会让点冻住，同样要拒。
+    expect(build([{ id: "point-a", type: "point", x: 1, y: 1 }], { kind: "onPath", pathId: "point-a", parameter: 0.4 }).valid).toBe(false)
   })
 })

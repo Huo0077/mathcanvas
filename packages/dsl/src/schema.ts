@@ -12,6 +12,13 @@ const primitiveTypes = new Set(["point", "point3", "line", "line3", "segment", "
  */
 const tangentSourceTypes = new Set(["function", "circle", "arc", "parabola", "ellipse", "hyperbola"])
 const solidTypes = new Set(["cube", "pyramid", "cylinder", "cone", "polyhedron3"])
+/**
+ * **平面动点可以挂在哪些曲线上**（`hosts3` / `pathConstraint` 支持的那一族）。
+ *
+ * 与 `operations.ts` 的 `pathConstraint` 一一对应：那里 `switch` 到哪一种，这里就收哪一种。
+ * 判据必须包含**类型**而不只是"存在" —— 一个指向 `point` 的 `pathId` 同样会让点静默冻住。
+ */
+const planarPathTypes = new Set(["line", "segment", "ray", "circle", "arc", "polyline", "ellipse", "parabola", "hyperbola", "function"])
 const annotationFeatures = new Set(["point", "center", "focus", "vertex", "intersection", "start", "end"])
 const conic3Kinds = new Set(["circle", "ellipse", "parabola", "hyperbola", "line", "lines", "point", "empty", "insufficient-data"])
 
@@ -302,10 +309,17 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>, parameter
     else if (value.binding.kind === "onPath") {
       if (typeof value.binding.pathId !== "string" || !isFiniteNumber(value.binding.parameter)) errors.push("point path binding is invalid")
       /**
-       * 平面点的宿主参数同样可以由**文档参数**驱动（规格 §4.1/§8.2：符号参数 θ 驱动的动点）。
-       * 悬空引用会让点静默冻在最后一次算出的位置，而文档依然能保存 —— 空间点（`point3`）的
-       * 宿主绑定早就拒绝了这种引用，平面这一侧此前漏了同一道检查。
+       * **宿主路径必须真的存在，而且类型是可承载动点的曲线**（外部审查 S3）。
+       *
+       * 原先这里只查了 `pathId` 是不是字符串 —— 于是悬空 `pathId` 的 `.mgeo` 能导入、能往返、
+       * 还能保存，而点**静默冻在最后一次算出的坐标**上，界面却照旧显示"绑定在路径上"。
+       * 同级的 `parameterId`（下面那一支）与 `point3` 的 `hostId` 早就校验了引用存在性与类型
+       *（见 `point3` 那几行里的 `referenceType`），平面这一侧是唯一漏掉的一道。
+       *
+       * 判据里带**类型**而不只是存在性：指向一个 `point` 的 `pathId` 同样让点冻住。
+       * 允许的集合与 `operations.ts` 的 `pathConstraint` 支持的那一族一一对应。
        */
+      else if (!planarPathTypes.has(referenceType(byId, value.binding.pathId) ?? "")) errors.push("point path binding references a path that does not exist or is not a curve")
       else if (value.binding.parameterId !== undefined && (typeof value.binding.parameterId !== "string" || !parameterIds.has(value.binding.parameterId))) errors.push("point path binding parameter is invalid")
       // `domain` 是抛物线/双曲线这类无界自然参数曲线的扫描窗口，必须是递增的有限区间。
       else if (value.binding.domain !== undefined && (!Array.isArray(value.binding.domain) || value.binding.domain.length !== 2 || !value.binding.domain.every(isFiniteNumber) || value.binding.domain[0] >= value.binding.domain[1])) errors.push("point path binding domain is invalid")
@@ -452,10 +466,26 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>, parameter
           || (isFiniteCoordinate3(planeBase.origin) && isNonZeroVector3(planeBase.normal))
         const validPolygon = polygon !== undefined && polygon.length >= 3
           && polygon.every((point) => (planeBase !== undefined ? isFiniteCoordinate(point) : isFiniteCoordinate3(point)))
+        /**
+         * **只有"尚未抬升的二维写法"才允许跳过几何语义校验**（外部审查 G2）。
+         *
+         * 原先这里问的是 `planeBase === undefined` —— 于是"带 `plane` 字段"本身就成了一张通行证：
+         * 只要给底面配一个平面，`base.polygon` 是**三维**世界坐标也照样跳过判据，
+         * 自交（领结）、非共面、零体积的底面**全被接受**（不带 `plane` 的同样输入会被正确拒绝）。
+         * 而内核的 `isPrismPlaneBase` 要求二维点**没有 `z`**（两种写法互斥），
+         * 所以"`plane` + 三维点"既不会被 codec 抬升、也不会被这里校验 —— 两条路一起漏。
+         *
+         * 真正的豁免理由只有一条：二维点还没被抬到平面上，现在拿它们当世界坐标判共面 / 自交
+         * 会把**合法**输入判成退化。codec 抬完（并丢掉 `plane`）之后会再走一遍本函数，
+         * 那时 `planeBase` 已是 `undefined`，判据照常执行。所以判据按"点里有没有 `z`"取，
+         * 与内核那条互斥规则严格一致 —— 而不是按"有没有 `plane`"取。
+         */
+        const unliftedPlanePolygon = planeBase !== undefined
+          && polygon !== undefined
+          && polygon.every((point) => isRecord(point) && !("z" in point))
         if (!validPlane || !validPolygon || !isNonZeroVector3(construction.vector)) errors.push("polyhedron3 prism construction is invalid")
-        else if (options.prismConstructionValidator && planeBase === undefined) {
+        else if (options.prismConstructionValidator && !unliftedPlanePolygon) {
           // 几何语义交给注入的判据（内核那一份）：报告里带上实体 id，导入失败时能指到具体对象。
-          // 二维输入形式在这里**跳过**：它还没有被抬到平面上，等 codec 抬完再判（否则会把合法输入判成退化）。
           for (const problem of options.prismConstructionValidator({ polygon: polygon as Vector3[], vector: construction.vector as Vector3 })) errors.push(`${value.id} prism base is invalid: ${problem}`)
         }
       }

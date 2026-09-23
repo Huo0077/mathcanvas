@@ -609,6 +609,31 @@ describe("Geometry DSL codec", () => {
     expect(() => decodeMgeo(imported("solid-ok", [{ x: 0, y: 0, z: 0 }, { x: 4, y: 0, z: 0 }, { x: 4, y: 3, z: 0 }, { x: 0, y: 3, z: 0 }], { x: 0, y: 0, z: 3 }))).not.toThrow()
   })
 
+  /**
+   * **带 `plane` 字段不能成为绕过几何语义校验的通行证**（外部审查 G2）。
+   *
+   * 上面那条用例没有 `plane`，所以它一直是绿的、从来没覆盖到这条路。而 schema 的判据
+   * 原先以 `planeBase === undefined` 为门：只要给底面配一个平面，`base.polygon` 是**三维**
+   * 世界坐标也照样跳过内核判据（`isPrismPlaneBase` 要求二维点没有 `z`，两种写法互斥，
+   * 所以这种输入既不被 codec 抬升、也不被 schema 校验）。导入与保存两条路径一起漏。
+   */
+  it("rejects the same invalid bases even when a plane field is attached", () => {
+    const plane = { origin: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 0, z: 1 } }
+    const imported = (id: string, polygon: unknown, vector: unknown) => JSON.stringify({
+      format: "mgeo",
+      formatVersion: "0.1",
+      document: { ...createEmptyDocument("geometry3d"), primitives: [...prismTopology(), { id, type: "polyhedron3", vertexIds: ["point-a", "point-b", "point-c", "point-d"], edgeIds: ["edge-ab", "edge-ac", "edge-ad", "edge-bc", "edge-bd", "edge-cd"], faceIds: ["face-abc", "face-abd", "face-acd", "face-bcd"], construction: { kind: "prism", base: { plane, polygon }, vector } }] }
+    })
+
+    // 自交（bowtie）、不共面、零体积 —— 与上一条完全相同的三份坏输入，只多了一个 `plane`。
+    expect(() => decodeMgeo(imported("solid-bowtie", [{ x: 0, y: 0, z: 0 }, { x: 4, y: 4, z: 0 }, { x: 4, y: 0, z: 0 }, { x: 0, y: 4, z: 0 }], { x: 0, y: 0, z: 3 }))).toThrow(/solid-bowtie prism base is invalid[\s\S]*自交/)
+    expect(() => decodeMgeo(imported("solid-skew", [{ x: 0, y: 0, z: 0 }, { x: 4, y: 0, z: 0 }, { x: 4, y: 3, z: 0 }, { x: 0, y: 3, z: 1 }], { x: 0, y: 0, z: 3 }))).toThrow(/solid-skew prism base is invalid[\s\S]*共面/)
+    expect(() => decodeMgeo(imported("solid-flat", [{ x: 0, y: 0, z: 0 }, { x: 4, y: 0, z: 0 }, { x: 4, y: 3, z: 0 }, { x: 0, y: 3, z: 0 }], { x: 2, y: 0, z: 0 }))).toThrow(/solid-flat prism base is invalid[\s\S]*体积/)
+
+    // 对照：合法的三维底面配一个多余的 `plane` 照旧能读（防止"一律拒绝"式的假修复）。
+    expect(() => decodeMgeo(imported("solid-ok", [{ x: 0, y: 0, z: 0 }, { x: 4, y: 0, z: 0 }, { x: 4, y: 3, z: 0 }, { x: 0, y: 3, z: 0 }], { x: 0, y: 0, z: 3 }))).not.toThrow()
+  })
+
   it("rejects malformed primitive fields without throwing", () => {    const base = createEmptyDocument("calculus")
     const malformedDocuments = [
       { ...base, primitives: [{ id: "point-1", type: "point" }] },
