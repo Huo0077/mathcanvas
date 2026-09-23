@@ -145,6 +145,37 @@ describe("solid family", () => {
     expect(Object.keys(primitive).sort()).toEqual(["baseCenter", "baseSize", "height", "id", "type"])
   })
 
+  /**
+   * **正四面体**（用户口径："画一个正四面体 ABCD，棱长为 3"）。
+   *
+   * 它既不是棱柱也不是四棱锥：四个顶点、六条等长棱、四个三角面。这条用例钉住形状、子对象 id 与
+   * **顶点标签** —— 用户看到的、对象列表里写的，就是 A / B / C / D。
+   */
+  it("creates a tetrahedron with four vertices, six edges and four triangular faces", () => {
+    const document = createEmptyDocument("geometry3d")
+    const result = compileActions(document, [action({ actionId: "solid.create_tetrahedron", inputs: { alias: "t", baseCenter: { x: 0, y: 0, z: 0 }, edge: 3 } })], contextWith(document))
+
+    expect(result.diagnostics).toEqual([])
+    const added = result.operations.flatMap((entry) => (entry.op === "addPrimitives" ? [entry.primitives] : []))
+    expect(added).toHaveLength(1)
+    const primitives = added[0]
+    const vertices = primitives.filter((primitive) => primitive.type === "point3")
+    expect(vertices.map((primitive) => primitive.id)).toEqual(["solid-1:v0", "solid-1:v1", "solid-1:v2", "solid-1:v3"])
+    expect(vertices.map((primitive) => (primitive.type === "point3" ? primitive.label : undefined))).toEqual(["A", "B", "C", "D"])
+    expect(primitives.filter((primitive) => primitive.type === "edge3")).toHaveLength(6)
+    expect(primitives.filter((primitive) => primitive.type === "face3")).toHaveLength(4)
+    // 别名指向那只多面体，而那只多面体的 id 就是动作分配出来的 id。
+    expect(primitives.find((primitive) => primitive.type === "polyhedron3")).toMatchObject({ id: "solid-1", vertexIds: ["solid-1:v0", "solid-1:v1", "solid-1:v2", "solid-1:v3"] })
+  })
+
+  it("refuses a tetrahedron outside the solid workspace", () => {
+    const document = createEmptyDocument("conics")
+    const result = compileActions(document, [action({ actionId: "solid.create_tetrahedron", inputs: { alias: "t", baseCenter: { x: 0, y: 0, z: 0 }, edge: 3 } })], contextWith(document))
+
+    expect(result.operations).toHaveLength(0)
+    expect(result.diagnostics[0].code).toBe("workspace_mismatch")
+  })
+
   it("refuses a flat or negative-sized cube instead of fabricating a solid", () => {
     const document = createEmptyDocument("geometry3d")
     const result = compileActions(document, [action({ actionId: "solid.create_template", inputs: { alias: "s", template: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 2, z: 0 } } })], contextWith(document))

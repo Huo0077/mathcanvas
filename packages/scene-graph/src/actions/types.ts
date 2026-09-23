@@ -106,6 +106,28 @@ export interface SolidCreatePrismAction extends ActionBase {
 }
 
 /** 既有的、指向文档内对象的引用（必须带 documentId，名称不是 ID）。 */
+/**
+ * **正四面体**（用户口径："画一个正四面体 ABCD，棱长为 3"）。
+ *
+ * 它是独立动作，而**不是** `solid.create_template` 的一个 `template` 取值：模板的输入是
+ * `origin + size`（立方体 / 四棱锥）或 `center + radius + height`（圆柱 / 圆锥），而正四面体由
+ * **底面中心 + 棱长**两个数唯一确定 —— 硬塞进模板会让每个模板的字段都变成"有些必填、有些没有"。
+ *
+ * 形状由内核按定义构造（四个顶点、六条等长棱、四个三角面），动作层只传这两个参数。
+ */
+export interface SolidCreateTetrahedronAction extends ActionBase {
+  actionId: "solid.create_tetrahedron"
+  inputs: {
+    alias: DraftAlias
+    /** 底面（等边三角形）的中心。 */
+    baseCenter: { x: number; y: number; z: number }
+    /** 棱长。 */
+    edge: number
+    label?: string
+  }
+}
+
+/** 既有的、指向文档内对象的引用（必须带 documentId，名称不是 ID）。 */
 export interface SceneReference {
   documentId: string
   entityId: string
@@ -266,6 +288,7 @@ export type DraftAction =
   | PlanarCreateConicAction
   | SolidCreateTemplateAction
   | SolidCreatePrismAction
+  | SolidCreateTetrahedronAction
   | DynamicBindPointAction
   | DynamicCreateBoundPointAction
   | DynamicCreateLocusAction

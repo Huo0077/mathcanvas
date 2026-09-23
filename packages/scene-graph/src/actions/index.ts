@@ -1,5 +1,5 @@
 import type { GeometryDocument, PrimitiveSpec, Vector3 } from "@draw/dsl"
-import { buildPrismTopology, prismEdgeLabel, prismPointLabel, validatePrismInput } from "@draw/geometry-kernel"
+import { buildFromPoints, buildPrismTopology, prismEdgeLabel, prismPointLabel, regularTetrahedronShape, templateEdgeLabel, templatePointLabel, validatePrismInput, type BuilderContext } from "@draw/geometry-kernel"
 
 import type { DomainOperation } from "../operations"
 import type { ActionContext, ActionDiagnostic, CompileResult, DraftAction, IdAllocator } from "./types"
@@ -280,6 +280,83 @@ function compileSolidPrismAction(action: Extract<DraftAction, { actionId: "solid
   }
   const id = context.idAllocator.allocate("solid", inputs.alias)
   const built = compileSolidPrism(id, inputs.basePolygon, inputs.vector, inputs.label)
+  if (built.diagnostics.length > 0) return { operations: [], diagnostics: built.diagnostics.map((entry) => diagnostic(actionKey, entry.code, entry.message)), aliasToId: {} }
+  return { operations: [{ op: "addPrimitives", primitives: built.primitives }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
+}
+
+/**
+ * 正四面体的 id 分配：**确定性** —— 同一个 `solidId` 永远得到同一批子对象 id。
+ *
+ * 命名与棱柱那一支逐字对齐（`:v0` 顶点、`:e0` 棱、`:f0` 面），而**多面体自己就是那只实体**：
+ * 它的 id 必须是动作分配出来的 `solidId`（别名指向它）。内核的 `buildFromPoints` 只会问
+ * `allocateId(namespace)`，所以这一层把"多面体"这一格映射回 `solidId` 就够。
+ */
+function tetrahedronIds(solidId: string): BuilderContext {
+  const counters = new Map<string, number>()
+  return {
+    allocateId(namespace) {
+      const index = counters.get(namespace) ?? 0
+      counters.set(namespace, index + 1)
+      if (namespace === "polyhedron") return solidId
+      return `${solidId}:${namespace === "point" ? "v" : namespace.charAt(0)}${index}`
+    }
+  }
+}
+
+/**
+ * 正四面体子对象的自动标签：顶点 **A / B / C / D**、棱 `棱 1…6`、面 `面 1…4`。
+ *
+ * 顶点用 A… 而不是棱柱那套 `P1…`：用户说的就是"正四面体 **ABCD**"。而"这个标签是不是自动生成的"
+ * 那条判据（`apps/web/src/solidTemplates.ts` 的 `isTemplateSource`）看的是
+ * `construction.kind === "template"`，正四面体的构造是 `fromPoints`，**不会被模板迁移当成自己的子对象**重命名。
+ */
+function labelTetrahedronChildren(primitives: PrimitiveSpec[], label?: string): PrimitiveSpec[] {
+  let vertices = 0
+  let edges = 0
+  let faces = 0
+  return primitives.map((primitive) => {
+    if (primitive.type === "point3") return { ...primitive, label: templatePointLabel(vertices++) }
+    if (primitive.type === "edge3") return { ...primitive, label: templateEdgeLabel(edges++) }
+    if (primitive.type === "face3") return { ...primitive, label: `面 ${(faces += 1)}` }
+    return label === undefined ? primitive : { ...primitive, label }
+  })
+}
+
+export interface TetrahedronBuildResult {
+  primitives: PrimitiveSpec[]
+  vertexIds: string[]
+  edgeIds: string[]
+  faceIds: string[]
+  solidId: string
+  diagnostics: ActionDiagnostic[]
+}
+
+/** 由**底面中心 + 棱长**造一只正四面体：几何来自内核，id 与标签在这一层。 */
+export function compileSolidTetrahedron(solidId: string, input: { baseCenter: Vector3; edge: number }, label?: string): TetrahedronBuildResult {
+  const shape = regularTetrahedronShape(input)
+  if (!shape) {
+    return { primitives: [], vertexIds: [], edgeIds: [], faceIds: [], solidId, diagnostics: [diagnostic(solidId, "invalid_tetrahedron", "正四面体需要一个有限的底面中心与一个正的棱长。")] }
+  }
+  const built = buildFromPoints(shape, tetrahedronIds(solidId))
+  if (built.diagnostics.length > 0) {
+    return { primitives: [], vertexIds: built.vertexIds, edgeIds: built.edgeIds, faceIds: built.faceIds, solidId, diagnostics: built.diagnostics.map((entry) => diagnostic(solidId, "degenerate_tetrahedron", entry.message)) }
+  }
+  return { primitives: labelTetrahedronChildren(built.primitives, label), vertexIds: built.vertexIds, edgeIds: built.edgeIds, faceIds: built.faceIds, solidId, diagnostics: [] }
+}
+
+/**
+ * `solid.create_tetrahedron`：**底面中心 + 棱长** → 一只 `polyhedron3` 与它的全部子对象。
+ *
+ * 与棱柱动作同一套纪律：工作区必须是立体几何；输入不合法时**一条操作都不产出**（宁可不做，也不做一半）。
+ * 形状走内核既有的 `fromPoints` 通道，所以下游（渲染 / 测量 / 截面 / 平移旋转）全都是现成的。
+ */
+function compileSolidTetrahedronAction(action: Extract<DraftAction, { actionId: "solid.create_tetrahedron" }>, context: ActionContext): CompileResult {
+  const { actionKey, inputs } = action
+  if (context.targetWorkspace !== "geometry3d") {
+    return { operations: [], diagnostics: [diagnostic(actionKey, "workspace_mismatch", "a tetrahedron can only be created in the solid workspace")], aliasToId: {} }
+  }
+  const id = context.idAllocator.allocate("solid", inputs.alias)
+  const built = compileSolidTetrahedron(id, { baseCenter: inputs.baseCenter, edge: inputs.edge }, inputs.label)
   if (built.diagnostics.length > 0) return { operations: [], diagnostics: built.diagnostics.map((entry) => diagnostic(actionKey, entry.code, entry.message)), aliasToId: {} }
   return { operations: [{ op: "addPrimitives", primitives: built.primitives }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
 }
@@ -654,6 +731,8 @@ export function compileAction(action: DraftAction, context: ActionContext): Comp
       return compileSolidTemplate(action, context)
     case "solid.create_prism":
       return compileSolidPrismAction(action, context)
+    case "solid.create_tetrahedron":
+      return compileSolidTetrahedronAction(action, context)
     case "dynamic.bind_point":
       return compileBindPoint(action, context)
     case "dynamic.create_bound_point":
