@@ -186,6 +186,28 @@ describe("模型规划器", () => {
     expect(parsePlanEnvelope(outcome.plan).ok).toBe(true)
   })
 
+  /**
+   * **用户现场（2026-09-22）**：模型回了一个裸数组，界面上只有一句 `invalid_type@envelope` ——
+   * 谁都看不出它到底回了什么，于是"是模型回错了形状，还是我们解析错了"只能靠猜。
+   *
+   * 原文必须留在**本机的开发者详细视图**里（有界），但**不回显进修复提示** ——
+   * 那是上面那条既有纪律（修复请求不带模型上一轮的原话）。
+   */
+  it("keeps a bounded copy of what the model actually returned, for the developer view", async () => {
+    const lines: string[] = []
+    const planner = createModelPlanner({
+      resolveProvider: async () => ({ ok: true, provider }),
+      runModel: async () => deltas(JSON.stringify([{ actionId: "planar.create_point" }])),
+      onDiagnostic: (line) => lines.push(line)
+    })
+
+    await planner.plan(request())
+
+    expect(lines).toHaveLength(1)
+    expect(lines[0]).toContain("an array")
+    expect(lines[0]).toContain("planar.create_point")
+  })
+
   it("第二次尝试带上修复提示，且**不回显**模型上一轮的原话", async () => {
     const runModel = vi.fn(async (_request: SentRequest) => deltas("我建议你这样做：先画一个点。"))
     const planner = createModelPlanner({ resolveProvider: async () => ({ ok: true, provider }), runModel })

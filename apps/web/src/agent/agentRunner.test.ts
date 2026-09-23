@@ -907,6 +907,27 @@ describe("a committed run leaves long-term memory behind", () => {
   })
 
   /**
+   * **用户现场（2026-09-22）**：模型回了一个裸数组，界面上只有
+   * `the plan never matched the schema: invalid_type@envelope` —— 一句内部码，用户不知道该做什么。
+   * 这一层要说人话（引擎那句话仍然留给诊断与修复通道）。
+   */
+  it("tells the user what shape the model returned instead of leaking an internal code", async () => {
+    const planner: PlannerPort = {
+      async plan() {
+        return { requestId: "r1", attemptId: "a1", plan: [] as unknown as PlanEnvelope }
+      }
+    }
+    const runner = createAgentRunner({ planner })
+
+    const result = await runAndWait(runner, "画一个正四面体")
+
+    expect(result.phase).toBe("failed")
+    const assistant = [...useAgentStore.getState().activeConversation!.messages].reverse().find((message) => message.role === "assistant")!
+    expect(assistant.failure?.message).toContain("JSON 对象")
+    expect(assistant.failure?.message).toContain("an array")
+  })
+
+  /**
    * **别份文档确认的事实不许进这一轮**（Fix round 1 / C1；规格 §5.1 + §9）。
    *
    * 这个应用里换工作区**就是换文档**（`switchWorkspace` 会换掉 `document`，第一次访问还会

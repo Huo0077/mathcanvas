@@ -369,7 +369,7 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
    * 两次（含那次修复），两次必须用同一份配置与同一批能力证据，否则第二次尝试其实换了题目，
    * 事后没法判断"是模型改好了还是条件变了"。
    */
-  async function selectPlanner(prompt: string): Promise<PlannerSelection> {
+  async function selectPlanner(prompt: string, runId?: string): Promise<PlannerSelection> {
     // 注入的规划器优先（测试用）：它一被给出来，就不该再去问 IPC。
     if (dependencies.planner) return { planner: dependencies.planner, requestedSkillIds: [], textProfileId: "local-planner" }
 
@@ -378,7 +378,19 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
       return { planner: createLocalPlanner(), requestedSkillIds: localIntentSkillIds(prompt), textProfileId: "local-planner" }
     }
     return {
-      planner: createModelPlanner({ ...dependencies.modelPlanner, resolveProvider: async () => resolution }),
+      planner: createModelPlanner({
+        ...dependencies.modelPlanner,
+        resolveProvider: async () => resolution,
+        /**
+         * **模型原话留在本机诊断里**（2026-09-22，用户现场）：界面上那句失败文案只说得出"形状不对"，
+         * 而"模型到底回了什么"是排查的唯一证据 —— 以前它被整个丢掉，只能靠猜。
+         * 注入的 `onDiagnostic`（测试用）照旧转发。
+         */
+        onDiagnostic: (line) => {
+          dependencies.modelPlanner?.onDiagnostic?.(line)
+          useAgentStore.getState().recordDiagnostic(line, runId)
+        }
+      }),
       requestedSkillIds: MODEL_PLANNER_SKILL_IDS,
       textProfileId: resolution.provider.id
     }
@@ -398,7 +410,7 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
       const eventRunId = pinned ? runId : undefined
       // 这一轮的提交落点（运行结束之后确认时才用得上）。
       const commit: PendingCommit | null = pinned ? { runId, conversationId: pinned.conversationId, promptMessageId, messageId: pinned.messageId, createdObjects: [] } : null
-      const selection = await selectPlanner(prompt)
+      const selection = await selectPlanner(prompt, eventRunId)
       lastSelection = selection
       /**
        * 会话上下文在**建运行时之前**读一次：绑定、历史、摘要、事实、草稿视图都钉在这一刻。
@@ -603,7 +615,23 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
         }, eventRunId, generation())
       } else if (phase === "failed") {
         const last = active.coordinator.ledger().at(-1)
-        useAgentStore.getState().failPendingReply({ code: "run_failed", message: last?.detail || "这次运行没有完成。", retryable: false }, eventRunId, generation())
+        const detail = last?.detail || "这次运行没有完成。"
+        /**
+         * **"模型回的形状不对"要说成人话**（2026-09-22，用户现场）。
+         *
+         * 原先这一支把账本那句话原样端出去，用户看到的就是
+         * `the plan never matched the schema: invalid_type@envelope` —— 一句内部码：
+         * 既没说模型回的是什么形状（现在引擎那句 `detail` 里有了），也没说下一步能做什么。
+         * 判据放在这一层而不是引擎里：引擎的话是给诊断与修复通道用的，中文的用户话在这一层
+         *（与上面 `waiting` 那一支同一条口径）。
+         */
+        useAgentStore.getState().failPendingReply({
+          code: "run_failed",
+          message: detail.includes("never matched the schema")
+            ? `模型的回答不符合计划合同的形状，所以这一轮停下了。计划必须是一个 JSON 对象（schemaVersion / kind / goal，外加 actions 或 questions 或 answer）。引擎的原话：${detail}`
+            : detail,
+          retryable: false
+        }, eventRunId, generation())
       } else if (phase === "completed") {
         useAgentStore.getState().recordReceipt({ status: "no_change" }, eventRunId, generation())
       }

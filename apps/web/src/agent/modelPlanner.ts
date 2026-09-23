@@ -175,6 +175,15 @@ export interface ModelPlannerDependencies {
   runModel?: (request: { runId: string; profileId: string; profileRevision: number; messages: { role: string; content: string }[]; tools: unknown[] }, signal: { isCancelled: () => boolean }) => Promise<ModelClientStart>
   /** 让 Rust 侧真的停下来（缺省走 `provider_cancel`）。 */
   cancelRun?: (runId: string) => Promise<boolean>
+  /**
+   * **把"模型到底回了什么"留给本机诊断**（缺省不记）。
+   *
+   * 为什么必须有：一次真实运行里界面上只有 `the plan never matched the schema: invalid_type@envelope`，
+   * 于是"是模型回错了形状，还是我们解析错了"只能靠猜。这里给的是**有界**的原文副本，
+   * 只进本机的开发者详细视图（`recordDiagnostic`）—— **不进修复提示**：
+   * "修复请求不回显模型上一轮原话"那条纪律不变（见 `modelPlanner.test.ts`）。
+   */
+  onDiagnostic?: (line: string) => void
 }
 
 /** 一次请求要用的消息。**只有 role 与 content** —— provider 方言由 Rust 侧适配。 */
@@ -394,6 +403,10 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
              * 让协调器按它自己的路径报**逐条字段错误**（修复通道在它手里，这一层不做决定）。
              */
             const validated = parsePlanEnvelope(toolCall.input)
+            if (!validated.ok) {
+              // 工具通道上送的参数**不是**信封：同样把原文（有界）留给本机诊断。
+              dependencies.onDiagnostic?.(`[model] tool call ${toolCall.toolId} carried a plan that failed the envelope check: ${describeParseErrors(validated.errors)} — 参数：${boundedExcerpt(JSON.stringify(toolCall.input) ?? String(toolCall.input))}`)
+            }
             return { plan: validated.ok ? validated.value : (toolCall.input as PlanEnvelope), ...ids }
           }
           // 其余情况一律拒绝：我们**没有**发过那个工具，静默忽略它等于把
@@ -411,7 +424,11 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
          * 让它走一次解析，比让用户白等一次修复往返要好；解析不通过时协调器照样会拒。
          */
         const parsed = parseModelEnvelope(text, channel === "native_tools" ? "fenced_text" : channel)
-        if (!parsed.ok) return { plan: asUntrustedEnvelope(parsed), ...ids }
+        if (!parsed.ok) {
+          // 原文（有界）只进本机诊断：它是"模型到底回了什么"唯一的证据。
+          dependencies.onDiagnostic?.(`[model] envelope rejected (${parsed.channel}): ${describeParseErrors(parsed.errors)} — 原文：${boundedExcerpt(parsed.payload)}`)
+          return { plan: asUntrustedEnvelope(parsed), ...ids }
+        }
         return { plan: parsed.value, ...ids }
       }
     }
@@ -425,6 +442,16 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
  * 用户为每一次往返付钱与等待时间。
  */
 const MAX_TRANSPORT_ATTEMPTS = 3
+
+/** 有界的原文副本：够看出形状，又不让一条诊断把上下文撑爆。 */
+function boundedExcerpt(text: string, limit = 480): string {
+  return text.length <= limit ? text : `${text.slice(0, limit)}…(+${text.length - limit} chars)`
+}
+
+/** 逐条诊断压成一行：`code@path: detail`（与协调器记账那一条同形）。 */
+function describeParseErrors(errors: readonly { code: string; path: string; detail: string }[]): string {
+  return errors.map((error) => `${error.code}@${error.path}: ${error.detail}`).join(", ")
+}
 
 /** 从一次调用的结果里取出"这次根本没成功"（命令失败与 `failed` 事件是同一件事）。 */
 function failureOf(result: ModelClientStart): { failure: string; message: string; retryable: boolean } | null {
