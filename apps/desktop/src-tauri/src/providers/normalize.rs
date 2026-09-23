@@ -73,23 +73,101 @@ pub fn openai_chunk(payload: &Value) -> Normalized {
         if let Some(reasoning) = text(choice, &["delta", "reasoning_content"]).or_else(|| text(choice, &["delta", "reasoning"])) {
             events.push(ModelEvent::Started { model: String::new(), metadata: metadata(vec![("reasoning", reasoning)]) });
         }
-        if let Some(calls) = choice.get("delta").and_then(|delta| delta.get("tool_calls")).and_then(Value::as_array) {
-            for (index, call) in calls.iter().enumerate() {
-                let id = call.get("id").and_then(Value::as_str).map(str::to_string).unwrap_or_else(|| format!("tool-call-{index}"));
-                let name = text(call, &["function", "name"]).unwrap_or_default();
-                // 参数是**字符串里的 JSON**（OpenAI 的形状）；解析失败就原样当字符串传下去，
-                // 而不是丢掉 —— 丢掉会让"模型想调工具"变成"模型什么都没说"。
-                let arguments = text(call, &["function", "arguments"]).unwrap_or_default();
-                let input = serde_json::from_str::<Value>(&arguments).unwrap_or(Value::String(arguments));
-                events.push(ModelEvent::ToolCall { tool_call_id: id, tool_id: name, input });
-            }
-        }
+        // 工具调用**不在这里发**：OpenAI 兼容流式把 `function.arguments` 拆成多帧，
+        // 每帧只是一段字符串。它们由 `ToolCallAccumulator` 攒起来，在流结束时一次发出。
+        // （旧实现按"一帧一次调用"发事件，于是把半截 JSON 当字符串交给上层，上层的信封校验
+        //  只能报一句 `invalid_type@envelope` —— 见 `ToolCallAccumulator` 的说明。）
         if let Some(reason) = choice.get("finish_reason").and_then(Value::as_str) {
             events.push(ModelEvent::Completed { stop_reason: Some(reason.to_string()) });
         }
     }
 
     Normalized { events }
+}
+
+/// **攒 OpenAI 兼容的工具调用分片**。
+///
+/// ## 为什么必须攒（真实缺陷，2026-09-22 用户现场）
+///
+/// 这个协议里 `tool_calls[].function.arguments` 是**跨帧**送来的：第一帧通常只有
+/// `{"schemaVersion":"math…`，后面几帧接着补齐。旧实现按"收到一帧就当成一次完整调用"处理，
+/// 于是每一片都被 `serde_json::from_str` 判为非法 JSON，再按"别丢掉"的规矩**原样当成字符串**
+/// 发下去 —— 上层的信封校验看到 `input` 是一个字符串，报 `invalid_type@envelope`，
+/// 用户界面上就只有这一句内部码，谁也看不出模型到底回了什么。
+///
+/// 唯一那条 fixture（`openai-tool-call.sse`）把整份 arguments 放在**一帧**里，
+/// 所以真实流式（分片）从来没被测过 —— 这就是它一直没被发现的原因。
+///
+/// ## 判据
+///
+/// 用协议自己给的 `index` 当键（同一个 `index` 的分片属于同一次调用），`id` / `name` 取第一个非空值，
+/// `arguments` 直接拼接。攒好的调用由调用方在**流结束时**取走（`drain`）—— 这里不发中间事件，
+/// 因为"半次调用"没有任何可用的形状。
+#[derive(Default)]
+pub struct ToolCallAccumulator {
+    calls: Vec<PartialToolCall>,
+}
+
+#[derive(Default)]
+struct PartialToolCall {
+    index: u64,
+    id: Option<String>,
+    name: String,
+    arguments: String,
+}
+
+impl ToolCallAccumulator {
+    /// 吃掉一帧（或一整份非流式正文）里的工具调用；返回是否吃到了。
+    ///
+    /// 返回 `true` 时调用方**不该**再按"一次调用"解释这一帧 —— 它只是一段分片。
+    pub fn absorb(&mut self, payload: &Value) -> bool {
+        let Some(choice) = payload.get("choices").and_then(|value| value.get(0)) else { return false };
+        // 流式是 `delta.tool_calls`；非流式全量是 `message.tool_calls`。两种都真实存在。
+        let streaming = choice.get("delta").and_then(|delta| delta.get("tool_calls")).and_then(Value::as_array);
+        let whole = choice.get("message").and_then(|message| message.get("tool_calls")).and_then(Value::as_array);
+        let Some(calls) = streaming.or(whole) else { return false };
+
+        for call in calls {
+            // 非流式的 `tool_calls` 里没有 `index`（每一次调用各自独立），用已有条数当键即可。
+            let index = call.get("index").and_then(Value::as_u64).unwrap_or(self.calls.len() as u64);
+            if !self.calls.iter().any(|entry| entry.index == index) {
+                self.calls.push(PartialToolCall { index, ..PartialToolCall::default() });
+            }
+            let Some(entry) = self.calls.iter_mut().find(|entry| entry.index == index) else { continue };
+
+            if let Some(id) = call.get("id").and_then(Value::as_str).filter(|id| !id.is_empty()) {
+                entry.id.get_or_insert_with(|| id.to_string());
+            }
+            if entry.name.is_empty() {
+                if let Some(name) = text(call, &["function", "name"]).filter(|name| !name.is_empty()) {
+                    entry.name = name;
+                }
+            }
+            match call.get("function").and_then(|function| function.get("arguments")) {
+                // 字符串形态：一段分片（OpenAI / DeepSeek 的流式就是这样）。
+                Some(Value::String(fragment)) => entry.arguments.push_str(fragment),
+                // 对象形态（有些网关直接把参数当对象发）：它已经是完整的，直接序列化留用。
+                Some(other) if !other.is_null() => entry.arguments = other.to_string(),
+                _ => {}
+            }
+        }
+        true
+    }
+
+    /// 流结束：把攒好的调用**一次**发出来（参数解析成对象）。
+    pub fn drain(&mut self) -> Vec<ModelEvent> {
+        std::mem::take(&mut self.calls)
+            .into_iter()
+            .enumerate()
+            .map(|(position, call)| {
+                let id = call.id.unwrap_or_else(|| format!("tool-call-{position}"));
+                // 拼完之后**仍然**不是合法 JSON（流被截断，或者服务本身就发了坏参数）就原样当字符串 ——
+                // 丢掉会让"模型想调工具"变成"模型什么都没说"。
+                let input = serde_json::from_str::<Value>(&call.arguments).unwrap_or(Value::String(call.arguments));
+                ModelEvent::ToolCall { tool_call_id: id, tool_id: call.name, input }
+            })
+            .collect()
+    }
 }
 
 /**
@@ -215,7 +293,19 @@ pub fn ollama_line(payload: &Value) -> Normalized {
 /// `event` 是 SSE 的 `event:` 行（Anthropic 用它区分 `content_block_delta`
 /// 与 `content_block_start`）。传 `None` 时退到 payload 里的 `type` 字段 ——
 /// 两条路都要留，因为有的实现只给其中一个。
+/// 一次性解释一整份正文（测试与非增量调用方）。
+///
+/// 工具调用在**这一份的最后**取走（`drain`）。增量调用方（`providers::adapter` 的 `RunStream`）
+/// 必须改用 `normalize_response_with` 并把它自己的累加器传进来 —— 否则跨帧分片永远拼不起来。
 pub fn normalize_response(protocol: &str, body: &str, event: Option<&str>, stream: bool) -> Vec<ModelEvent> {
+    let mut tool_calls = ToolCallAccumulator::default();
+    let mut events = normalize_response_with(protocol, body, event, stream, &mut tool_calls);
+    events.extend(tool_calls.drain());
+    events
+}
+
+/// 与 `normalize_response` 同一件事，但**工具调用的累加器由调用方持有**（于是能跨帧攒分片）。
+pub fn normalize_response_with(protocol: &str, body: &str, event: Option<&str>, stream: bool, tool_calls: &mut ToolCallAccumulator) -> Vec<ModelEvent> {
     let mut events = Vec::new();
 
     // **Ollama 原生不是 SSE**：它一行一个完整 JSON（NDJSON），没有 `data:` 前缀。
@@ -260,7 +350,11 @@ pub fn normalize_response(protocol: &str, body: &str, event: Option<&str>, strea
                     let normalized = match protocol {
                         "anthropic" => anthropic_chunk(current_event.as_deref(), &parsed),
                         "ollama" => ollama_line(&parsed),
-                        _ => openai_chunk(&parsed),
+                        // OpenAI 兼容：工具调用的参数是**跨帧分片**，先攒着（见 `ToolCallAccumulator`）。
+                        _ => {
+                            tool_calls.absorb(&parsed);
+                            openai_chunk(&parsed)
+                        }
                     };
                     events.extend(normalized.events);
                     current_event = None;
@@ -276,7 +370,11 @@ pub fn normalize_response(protocol: &str, body: &str, event: Option<&str>, strea
             let normalized = match protocol {
                 "anthropic" => anthropic_chunk(event, &parsed),
                 "ollama" => ollama_line(&parsed),
-                _ => openai_chunk(&parsed),
+                // 非流式全量里的 `message.tool_calls` 同样交给累加器（整份一次，攒完照样成立）。
+                _ => {
+                    tool_calls.absorb(&parsed);
+                    openai_chunk(&parsed)
+                }
             };
             events.extend(normalized.events);
         }

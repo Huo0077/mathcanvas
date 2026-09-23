@@ -235,12 +235,22 @@ struct RunStream {
     ndjson: bool,
     buffer: Vec<u8>,
     events: Vec<ModelEvent>,
+    /// OpenAI 兼容的工具调用参数是**跨帧分片**，必须由一个**活过单帧**的东西攒着。
+    tool_calls: super::normalize::ToolCallAccumulator,
     done: bool,
 }
 
 impl RunStream {
     fn new(protocol: &str, stream: bool) -> Self {
-        Self { protocol: protocol.to_string(), stream, ndjson: protocol == "ollama", buffer: Vec::new(), events: Vec::new(), done: false }
+        Self {
+            protocol: protocol.to_string(),
+            stream,
+            ndjson: protocol == "ollama",
+            buffer: Vec::new(),
+            events: Vec::new(),
+            tool_calls: super::normalize::ToolCallAccumulator::default(),
+            done: false,
+        }
     }
 
     /// 攒下来的正文看起来像 SSE 吗（有 `data:` 行）。
@@ -267,7 +277,7 @@ impl RunStream {
         // 否则 `content_block_delta` 与 `content_block_start` 会被看成同一个东西。
         let name = super::normalize::sse_event_name(trimmed);
         let payload = super::normalize::strip_sse_event_lines(trimmed);
-        self.events.extend(super::normalize::normalize_response(&self.protocol, &payload, name.as_deref(), !self.ndjson));
+        self.events.extend(super::normalize::normalize_response_with(&self.protocol, &payload, name.as_deref(), !self.ndjson, &mut self.tool_calls));
     }
 
     fn feed(&mut self, chunk: &[u8]) {
@@ -286,8 +296,12 @@ impl RunStream {
         }
     }
 
-    /// 流结束：把剩下的半帧交出去（**不丢**）。
+    /// 流结束：把攒着的工具调用发出来，再把剩下的半帧交出去（**不丢**）。
+    ///
+    /// 工具调用**必须在这里**发：它们的参数是跨帧攒起来的，只有流结束才知道攒完了
+    ///（见 `ToolCallAccumulator`）。`drain` 取空之后可以安全地再调（幂等）。
     fn flush(&mut self) {
+        self.events.extend(self.tool_calls.drain());
         if self.buffer.is_empty() {
             return;
         }

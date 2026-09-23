@@ -1,0 +1,9 @@
+data: {"model":"gpt-5","choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"plan_set_plan","arguments":"{\"schemaVersion\":\"mathcanvas"}}]},"index":0}]}
+
+data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":".plan.v1\",\"kind\":\"plan\",\"goal\":\"建一个棱长 3 的立方体\","}}]},"index":0}]}
+
+data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\"factIds\":[],\"actions\":[]}"}}]},"index":0}]}
+
+data: {"choices":[{"delta":{},"finish_reason":"tool_calls","index":0}]}
+
+data: [DONE]

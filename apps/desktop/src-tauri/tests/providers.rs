@@ -74,6 +74,35 @@ fn openai_tool_call_parses_the_arguments_json() {
     assert_eq!(input.get("documentId").and_then(|value| value.as_str()), Some("doc-1"));
 }
 
+/**
+ * **分片**的工具调用参数 —— 真实 OpenAI / DeepSeek 流式就是这样送的。
+ *
+ * 旧实现按"收到一帧就当成一次完整调用"处理：三个分片各自解析失败、各自被当成**字符串**发下去，
+ * 上层（`parsePlanEnvelope`）看到的 `input` 是字符串，于是只能报一句 `invalid_type@envelope`
+ *（用户现场，2026-09-22）。唯一那条 fixture 把整份 arguments 放在**一帧**里，所以这条路径
+ * 从来没被测过 —— 这正是它一直没被发现的原因。
+ */
+#[test]
+fn openai_streamed_tool_call_fragments_are_assembled_into_one_object() {
+    let events = normalize_response("openai_compatible", &fixture("openai-tool-call-fragmented.sse"), None, true);
+    let calls: Vec<_> = events
+        .iter()
+        .filter_map(|event| match event {
+            ModelEvent::ToolCall { tool_id, input, .. } => Some((tool_id.clone(), input.clone())),
+            _ => None,
+        })
+        .collect();
+
+    // **一次**调用，而不是每一片各算一次。
+    assert_eq!(calls.len(), 1, "fragments must be assembled into one call, got {calls:?}");
+    let (name, input) = &calls[0];
+    assert_eq!(name, "plan_set_plan");
+    // 拼完之后必须是**对象**（旧实现在这里会得到三个字符串）。
+    assert!(input.is_object(), "the assembled arguments must be an object, got {input}");
+    assert_eq!(input.get("schemaVersion").and_then(|value| value.as_str()), Some("mathcanvas.plan.v1"));
+    assert_eq!(input.get("goal").and_then(|value| value.as_str()), Some("建一个棱长 3 的立方体"));
+}
+
 #[test]
 fn openai_non_streaming_body_is_understood_too() {
     // 有些网关对 `stream: true` 也回一整份 JSON。认不出来就会得到"模型什么都没说"。
