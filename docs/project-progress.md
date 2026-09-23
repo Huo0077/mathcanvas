@@ -296,6 +296,32 @@ Agent 那四条里先做三条判据明确的；第 4 条（第 12 个观测对�
 
 **验证（本机实跑，2026-09-22）**：`npm run test:rust` **exit 0**、**231 例通过 + 3 ignored / 0 失败**（起点 230 + 3；本批 +1 就是那条新用例，secrets 单文件 9 通过 + 1 ignored）；`cargo clippy --all-targets -- -D warnings` **exit 0**；`npm test` **215 文件 / 2595 用例通过 + 1 todo**（与上一批相同 —— 本批只动 Rust 测试与文档）；`npm run typecheck` **6 个 workspace exit 0**；`npm run lint` **0 error / 14 warning**（基线）；`npm run build` **exit 0**。
 
+### 棱锥：Agent 造出来的每一个都必然失败（2026-09-22，**用户现场**，`pyramid geometry is invalid`）
+
+- **用户现场**：让 Agent"画一个正四面体 ABCD，棱长为 3"，运行停在
+  `compile_failed: commit_rejected: action_compile: envelope.actions[0]: operation 0: pyramid geometry is invalid`，整轮 `run_failed`。
+- **根因（两支走错一支）**：`compileSolidTemplate`（`packages/scene-graph/src/actions/index.ts`）把**立方体与棱锥写成同一支**：`{ origin, size }`。
+  而文档 schema 对棱锥要求 `baseCenter` + `baseSize` + `height`（`packages/dsl/src/schema.ts`）—— 两组键**完全不重叠**，
+  校验必然拒绝。立方体（`{origin,size}`）与圆柱/圆锥（`{center,radius,height,segments}`）都恰好对得上，
+  **只有棱锥这一支是错的**：也就是说"任何由 Agent 创建的棱锥都必然失败"，与用户那句话的内容无关。
+- **两边各自都有理，错的是没人做翻译**：动作层是**模板无关**的（`packages/agent-core/src/schemas.ts` 里 `size` 的 `appliesWhen` 就是 `["cube","pyramid"]`），
+  文档层是**每个模板一套形状**；两套词汇之间只应该有一次翻译，而它当时漏掉了棱锥。
+- **手工路径一直是对的**：`App.tsx` 的 `addDefaultSolid("pyramid")` 用 `{ baseCenter:{5,5,0}, baseSize:{4,4}, height:4 }`，
+  内核 `solid-builders.ts`、渲染 `threePrimitives.ts`、导出 `exporters.ts`、属性面板也都是这一套。所以这是"两条路不一致"，不是"棱锥本身坏了"。
+- **改法**：`compileSolidTemplate` 里把棱锥拆成独立一支 —— `baseCenter: origin`、`baseSize: {x: size.x, y: size.y}`、`height: size.z`
+  （x/y 是底面两条边、z 是高，与立方体"三个棱长"的读法一致）。动作层词汇与参数默认层**一个字没动**。
+- **RED→GREEN（先看红再改）**：
+  - `packages/scene-graph/src/actions/actions.test.ts` **+1**（棱锥动作必须产出 `baseCenter`/`baseSize`/`height`，且**不许**把 `origin`/`size` 一起带上）—— RED 是 `expected { Object (id, type, ...) } to match object {...}`。
+  - `apps/web/src/agent/draftStore.test.ts` **+1**（**生产路径**：暂存一个棱锥动作，`staged.ok` 必须为真、候选文档里的棱锥形状正确；断言里带上诊断本身，失败时不必再跑一遍才知道"为什么"）—— RED **逐字复现用户现场**：`compile_failed: action_compile: envelope.actions[0]: operation 0: pyramid geometry is invalid`。
+  - **变异**（把棱锥那一支改回 `{ origin, size }`）⇒ 这两条**恰好**变红（`Tests 2 failed | 28 passed`），其余 28 条纹丝不动；还原后 30/30 绿。
+- **如实缺口（本批没做，属产品决定）**：
+  1. **"正四面体"仍然画不出来** —— 本项目的棱锥是**四棱锥**（`baseSize.x/y`，底面 4 个顶点 + 1 个顶点），而正四面体是三棱锥。
+     修完之后再发同一句话，得到的是一个**四棱锥**（不再失败，但形状不是你字面要的那个）。真要按字面成立，需要新增三棱锥/正四面体图元：
+     内核 builder + DSL schema + 渲染 + 属性面板 + Agent 能力清单 + 规划提示词，改动面大得多。
+  2. `parameterAudit.test.ts` 里那条棱锥用例的标题仍写着 "cube-shaped error" —— 它守的是**文案**而不是形状；形状这一条现在由上面两条新用例守。
+
+**验证（本机实跑，2026-09-22）**：`npm test` **215 文件 / 2597 用例通过 + 1 todo**（起点 2595，+2，零失败）；`npm run typecheck` **6 个 workspace exit 0**；`npm run lint` **0 error / 14 warning**（基线）。本批只动 TypeScript，**Rust 侧未改动、未重跑**。
+
 ### 动作层 id 分配器：修掉「画布上已有 solid-1 时新建的第一个立体必然撞号」（2026-09-21，本节标题原缺，2026-09-22 补上）
 
 - **用户口径**：一张截图 —— 真实模型（DeepSeek）跑"已知直四棱柱 ABCD-A1B1C1D1 的底面是菱形，AA1=4, AB=2, BAD=60°，E、M、N 分别是 BC、BB1、A1D 的中点"这条请求，运行状态是 **`compile_failed: duplicate object id`**。
