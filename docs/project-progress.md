@@ -351,6 +351,28 @@ Agent 那四条里先做三条判据明确的；第 4 条（第 12 个观测对�
 
 **验证（本机实跑，2026-09-22）**：`npm test` **215 文件 / 2599 用例通过 + 1 todo**（起点 2597，+2，零失败）；`npm run typecheck` **6 个 workspace exit 0**；`npm run lint` **0 error / 14 warning**（基线）。本批只动 TypeScript。
 
+### `invalid_type@envelope`：模型回的不是对象，而这句话把"回了什么"整个丢掉（2026-09-22，**用户现场**）
+
+- **用户现场**：让 Agent 作图，运行停在 `the plan never matched the schema: invalid_type@envelope`，开发者详细视图里也只有这两句。
+- **这句话的精确来源**：`packages/agent-core/src/schemas.ts` 的 `parsePlanEnvelope` 开头 —— 喂进来的值**不是普通对象**。走到那里有三条路，其中两条是真缺陷：
+  1. **文本通道故意放行数组**：`outputParser.ts` 的 `looksLikeJson` 认 `{`，**也认** `[`。于是模型回一个裸数组（例如只回 `actions` 那一串）会一路过闸，然后在信封校验那里变成 `invalid_type@envelope` —— 而**没有任何一层**告诉用户"你回的是数组，合同要的是信封对象"。
+  2. **原生工具通道上，流式分片参数没被拼起来**（`apps/desktop/src-tauri/src/providers/normalize.rs`）：OpenAI / DeepSeek 的 `tool_calls[].function.arguments` 是**跨帧**送的，旧实现按"收到一帧就当成一次完整调用"处理 —— 每一片都解析失败，然后按"别丢掉"的规矩**原样当字符串**发下去，上层拿到的 `input` 是一个字符串 ⇒ `invalid_type@envelope`。**唯一那条 fixture（`openai-tool-call.sse`）把整份 arguments 放在一帧里**，所以真实流式（分片）从来没被测过。
+  3. 用户与我都无法判断这次到底是哪一条 —— 因为界面上只有内部码，而**模型原文没有任何地方留存**（这本身是第三处缺陷）。
+- **改法（三处）**：
+  - **B 协议缺陷**：`normalize.rs` 新增 `ToolCallAccumulator` —— 按协议自己给的 `index` 攒分片（`id`/`name` 取首个非空、`arguments` 直接拼接），`openai_chunk` **不再**逐帧发 `ToolCall`，改由 `drain()` 在**流结束时一次**发出（参数解析成对象）；`normalize_response` 拆成"包装版 + `normalize_response_with(…, &mut accumulator)`"；`providers/adapter.rs` 的 `RunStream` 持有累加器（它是**活过单帧**的那个东西），`flush()` 时取走。
+  - **A 文案**：`schemas.ts` 新增 `describePlanShape` —— 非对象时说出**形状**（`got an array — the envelope is an object with schemaVersion / kind / goal and one of actions / questions / answer`），这句话同时进修复通道；`coordinator.ts` 的记账从 `code@path` 改成 `code@path: detail`（以前那句 `detail` 被丢掉，所以界面上只剩内部码）；`agentRunner.ts` 在失败那一支加中文那一层。
+  - **C 证据**：`modelPlanner.ts` 新增 `onDiagnostic`，解析失败时把**有界（480 字）的模型原文**记进本机开发者详细视图（两处：文本通道 + 工具通道）；`agentRunner.ts` 把它接到 `recordDiagnostic`。**不进修复提示** —— "修复请求不回显模型上一轮原话"那条既有纪律不变。
+- **RED→GREEN 与变异（全部实跑）**：
+  - A：`schemas.test.ts` RED 是 `expected 'expected an object' to contain 'an array'`；`agentRunner.test.ts` RED **逐字复现用户界面文案**（实际值就是 `the plan never matched the schema: in…`）；改完 3 个套件 115 例绿。
+  - C：`modelPlanner.test.ts` RED 是 `expected [] to have a length of 1 but got +0`；改完两个套件 75 例绿。
+  - B：新增 fixture `openai-tool-call-fragmented.sse`（arguments 拆成 3 帧）+ `providers.rs` **+1**。**变异**（把逐帧发事件改回去、并去掉两处 `absorb`）⇒ 那条用例红，而且红得**正是现场**：`got [("plan_set_plan", String("{\"schemaVersion\":\"mathcanvas")), ("", String(".plan.v1\",\"kind\":\"plan\",…")), ("", String("\"factIds\":[],\"actions\":[]}"))]` —— **三个事件、每个 `input` 都是一段半截 JSON 字符串**。恢复后 20/20 绿。
+- **如实缺口**：
+  1. **用户那一次到底是 A 还是 B，我没有证据**（原文没留）。B 是**确定的协议缺陷**（变异把现场复现出来了）；A 也是**确定会把数组说成 `invalid_type@envelope`** 的路径；C 就是为下一次留证据的。
+  2. `RunStream` 的**增量**路径没有单独的用例：分片用例走的是 `normalize_response`（整份正文），增量路径只是把同一个累加器传进去 —— "按 `\n\n` 拆帧 + 逐块喂"这条链路仍只有既有的适配器用例覆盖。
+  3. 分片**拼完仍然**不是合法 JSON 时（流被截断）照旧原样当字符串发下去 —— 那是刻意的（丢掉会让"模型想调工具"变成"模型什么都没说"），但上层那时仍会得到 `invalid_type@envelope`，只不过 C 会把原文留下来。
+
+**验证（本机实跑，2026-09-22）**：`npm run test:rust` **exit 0 / 232 例通过 + 3 ignored**（起点 231 + 3，+1）；`cargo clippy --all-targets -- -D warnings` **exit 0**；`npm test` **215 文件 / 2602 用例通过 + 1 todo**（起点 2599，+3）；`npm run typecheck` **6 个 workspace exit 0**；`npm run lint` **0 error / 14 warning**（基线）。
+
 ### 动作层 id 分配器：修掉「画布上已有 solid-1 时新建的第一个立体必然撞号」（2026-09-21，本节标题原缺，2026-09-22 补上）
 
 - **用户口径**：一张截图 —— 真实模型（DeepSeek）跑"已知直四棱柱 ABCD-A1B1C1D1 的底面是菱形，AA1=4, AB=2, BAD=60°，E、M、N 分别是 BC、BB1、A1D 的中点"这条请求，运行状态是 **`compile_failed: duplicate object id`**。
