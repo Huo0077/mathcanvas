@@ -8,7 +8,9 @@ MathCanvas 是一个面向数学与工程场景的 2D 交互绘图工作台原�
 
 四个切片各自走"实现 → 独立评审 → 修复轮 → 复审"，评审抓出的真实缺陷都已修：**§8.2 的不变量表达式原本在数学上就是错的**（写成了 `sec²θ+csc²θ≈7.77`，而且没有任何地方求值它）、**§8.1 的"P 在截面边界上"当时只是文案**、**编译阶段的 prompt 从未在生产路径传入**（符号参数约束因此永不生效）、**会话的 §5.1 绑定在生产里从未生效**（跨文档事实会被注入，正是 §9 门禁要挡的）、**确认面板可能提交另一个会话的草稿**、以及零体积棱柱被接受、`removeNode` 留下过期 `exact` 坐标、静默保存失败等。**验证（本轮实测）**：`npm test` **215 个测试文件 / 2560 个用例通过 + 1 个 todo**、`npm run typecheck` **6 个 workspace exit 0**、ESLint **0 error / 14 warning**、Playwright **140/140**、Rust **219 例通过 + 3  ignored**。
 
-**同日四路只读外部审查**（计划任务之外）又查出 **2 Critical / 14 Important / 16 Minor，全部未修复**，逐条见 [`docs/project-progress.md`](./docs/project-progress.md) 的「已知缺陷清单（2026-09-22 四路外部审查）」与原始报告 [`docs/research/external-audit-2026-09-22/`](./docs/research/external-audit-2026-09-22/)。两条 Critical 值得先说清楚：①**桌面文档仓储每次启动都用刚生成的随机文档 id 去探针**，于是 SQLite 从来不是文档真源、每次启动多一条垃圾文档、自动保存静默失败，重启后除"上次活动"以外的工作区**会话侧栏是空的**（数据仍在库里）；②**一次性同意的 CAS 在"点确认"时才取样**，用户看完预览之后做的编辑会被静默合并，落盘的不一定是确认的那一份。另有数据丢失（`import_package` 不登记附件引用，孤儿回收会删掉刚导入的字节）、任意文件读取（`read_attachment` 把未校验哈希拼进路径）、选中任意图元时对整篇文档跑 `solveCircumsphere3`（22 顶点 1.5 秒、32 顶点分钟级）、棱柱删除残留 26 个子对象、一次拖动压两条撤销记录等。**这一版是带着这些已记录缺陷发布的**（用户决定：先记录并发布，修复留给下一轮）。
+**2026-09-23 发布 `v0.2.0`**（构建与上传都已实测）：`npm --workspace @draw/desktop run bundle` **exit 0**，产出免安装 `mathcanvas-desktop.exe`（**16.31 MB**）、NSIS `MathCanvas_0.2.0_x64-setup.exe`（**4.70 MB**）、MSI `MathCanvas_0.2.0_x64_en-US.msi`（**6.43 MB**），三份都已上传到 **[GitHub Release `v0.2.0`](https://github.com/Huo0077/mathcanvas/releases/tag/v0.2.0)**（tag 指向 `4d9d5bc`）。**免安装 exe 真的启动过**：10 秒后进程仍存活、窗口标题 `MathCanvas`、47 个 WebView2 进程，随后干净退出。**如实**：两个安装包**没有在本机实际安装过**（只是构建成功）。版本号只动 `tauri.conf.json` + `Cargo.toml`（含 `Cargo.lock`）—— npm workspace 的 `package.json` 版本**刻意不动**：动它会与 `package-lock.json` 失配，而对产出的安装包含义毫无影响。
+
+**2026-09-22 四路只读外部审查**（计划任务之外）查出 **2 Critical / 14 Important / 16 Minor**（**已由 2026-09-23 的修复轮全部处理，见下**），逐条见 [`docs/project-progress.md`](./docs/project-progress.md) 的「已知缺陷清单（2026-09-22 四路外部审查）」与原始报告 [`docs/research/external-audit-2026-09-22/`](./docs/research/external-audit-2026-09-22/)。两条 Critical 值得先说清楚：①**桌面文档仓储每次启动都用刚生成的随机文档 id 去探针**，于是 SQLite 从来不是文档真源、每次启动多一条垃圾文档、自动保存静默失败，重启后除"上次活动"以外的工作区**会话侧栏是空的**（数据仍在库里）；②**一次性同意的 CAS 在"点确认"时才取样**，用户看完预览之后做的编辑会被静默合并，落盘的不一定是确认的那一份。另有数据丢失（`import_package` 不登记附件引用，孤儿回收会删掉刚导入的字节）、任意文件读取（`read_attachment` 把未校验哈希拼进路径）、选中任意图元时对整篇文档跑 `solveCircumsphere3`（22 顶点 1.5 秒、32 顶点分钟级）、棱柱删除残留 26 个子对象、一次拖动压两条撤销记录等。**这些缺陷曾随 `42373eb` 一起发布**（当时的决定是"先记录并发布"）；**2026-09-23 协作者 `niujin66` 的 24 个提交把它们全部处理掉了** —— 进度档案里那一节的标题已改为「**已全部处理完毕 —— 2 Critical + 14 Important 修复，Minor 16 条中 15 条修复 + 1 条如实标注尚未接线**」，并按「修复轮 A / B / B续 / B再续 / B三续 / B四续」逐轮留证（`f4d4338..d370698`）。同一批还新增**正四面体切片**（内核构造器 → `solid.create_tetrahedron` 动作 → 传输层 / 能力表 / 技能清单 / 提示词 + 本地规划器）与四条用户现场修复（棱锥形状、工作区判据、流式工具调用参数分片、信封形状报错）。**本地复核**：`npm test` 215 文件 / **2611 用例通过 + 1 todo**、typecheck 0 error、lint 0 error / 14 warning、e2e **140/140**、Rust **232 例 + 3 ignored**。
 
 **统一 Ribbon 基线、后续 UI 优化、工程制图视觉重做与 CAD 2D 绘图交互重做均已完成**（2026-09-16）：微积分工作区标签已退役，当前新会话默认打开内部 `conics` 工作区，界面标签为「平面几何」；含微积分图元的旧 `.mgeo` 仍可打开。P0 技术验证、P1 数学内核、P2 交互、P3 函数分析、P6 立体几何、P7 工程制图与 Ribbon UI 基线均已完成；Ribbon 后续优化完成平面几何改名、A/B/C 统一点名、3D 画布点名、重命名入口前移、右侧面板精简（移除约束与智能体展示，保留文档数据）、CAD 画布随停靠面板扩大、法向量/二面角底部提示，并修复操作指引浮层遮挡底部状态栏的问题；随后完成**工程制图视觉重做**（制图台 + 图纸层次、图框与图签、视图框角刻度、显式缩放读数、单列响应式修复）与**CAD 2D 绘图交互重做**（稳定坐标窗口、橡皮筋预览、八类对象捕捉与 Tab 循环、栅格捕捉、夹点编辑、方向框选、坐标键入与动态输入、线宽与命中带修复、偏移/修剪/延伸）。CAD 工作区仍保留分层命令栏、模型/图层/图纸树、可持久化图纸视口、2D 直接绘图模式、上下文 Inspector、四视图、投影线联动、工程标注以及 SVG/DXF/PDF 矢量导出。
 
@@ -253,16 +255,16 @@ npm run test:e2e
 
 工程工作台 Task 1-7 的聚焦验证：`LayerTree`/`DrawingTree`/`CommandBar`/`EngineeringWorkbench`/`DrawingViewport`/`DrawingSheetView`/`EngineeringInspector` 等新增测试文件 7 个；DSL 与 Scene Graph 图层/图纸操作 3 个测试文件、41 个用例；`e2e/engineering-workbench.spec.ts` 覆盖旧文档迁移、2D 绘图写入活动图层、图层隐藏、刷新后布局保持、隐藏视图不导出、键盘操作、图纸填充与显式缩放（Task 14）。
 
-## 已知问题（未修，2026-09-22 四路外部审查）
+## 已知问题与修复（2026-09-22 四路外部审查 → 2026-09-23 全部处理）
 
-四路只读审查（几何内核 / DSL、scene-graph 与文档持久化、Agent 流水线、桌面外壳与会话存储）在计划任务之外查出 **2 Critical / 14 Important / 16 Minor**，**全部未修复**，逐条 file:line、影响与复现场景见 [`docs/project-progress.md`](docs/project-progress.md) 的「已知缺陷清单（2026-09-22 四路外部审查）」，原始报告在 [`docs/research/external-audit-2026-09-22/`](docs/research/external-audit-2026-09-22/)。最要紧的两条：
+四路只读审查（几何内核 / DSL、scene-graph 与文档持久化、Agent 流水线、桌面外壳与会话存储）在计划任务之外查出 **2 Critical / 14 Important / 16 Minor**。原始判定与复现场景仍逐条保留在 [`docs/project-progress.md`](docs/project-progress.md) 的「已知缺陷清单（2026-09-22 四路外部审查）」与 [`docs/research/external-audit-2026-09-22/`](docs/research/external-audit-2026-09-22/)，**当前状态是：2 Critical + 14 Important 已全部修复，Minor 16 条中 15 条已修、1 条如实标注尚未接线**（修复轮 A / B / B续 / B再续 / B三续 / B四续，`f4d4338..d370698`）。下面两条 Critical 当时是怎样坏的最值得留档：
 
 - **X1（Critical）桌面文档仓储拿不到用户的文档**：`documentPersistence.ts` 的 `restore()` 用 `emptyDocument()` 刚生成的**新随机 id** 去 `read_head`，而 Rust 按 `(project_id, document_id)` 过滤 → 每次启动必然 miss，于是新建一条空文档当 head、真文档被丢弃，随后的自动保存以真实 id 对垃圾 head 提交 → `not_found`。净效果：**SQLite 从来不是文档真源**，真正在恢复画布的是 localStorage 草稿；每次启动多一条垃圾文档；重启后除"上次活动"以外的工作区**会话侧栏是空的**（数据仍在库里）。单测没抓到，是因为假仓储的 `readHead` 忽略了 `documentId`。
 - **X2（Critical）一次性同意的 CAS 在"点确认"时才取样**：草稿是对更早的 revision 编译的，生产顺序是"暂存 → 用户改画布 → 点确认"，于是 CAS 必然通过 —— **用户看完预览之后做的编辑会被静默合并，落盘的不一定是确认的那一份**，设计里"提交时校验 generation"这条约束形同虚设；`DraftStore.assertFresh` 存在却只在**暂存**路径被调用。
 
 Important 里值得先看的几条：`import_package` 把附件字节写进去却**不登记引用**，孤儿回收会**删掉刚导入的附件**；`read_attachment` 把**未校验的哈希**拼进文件路径 ⇒ 任意文件读取原语（命令已注册，3 行可修）；选中任意图元时对**整篇文档**跑 `solveCircumsphere3`（C(n,4) 枚举 + 线性去重，实测 22 顶点 1.5 秒、32 顶点分钟级）；`base.plane` + 三维多边形这种写法**绕过棱柱几何校验**（导入与保存两条路径都绕）；删除棱柱只删 `polyhedron3`，**26 个派生子对象留在文档里并继续绘制**；一次拖动压**两条撤销记录**且单次撤销落在从未渲染过的中间态；平面点的 `onPath.pathId` **从不校验存在性**（悬空绑定可导入，点静默冻结）；Agent 侧还有无操作提交被报成失败、第二个已注册引用永远解析不到、读会话抛错导致运行永久 pending 等。
 
-修复优先级建议：**X2（1 行）→ `read_attachment` 校验（3 行）→ 附件引用登记与单事务导入 → X1（探针改用真实文档 id，或加一条 `read_latest_document_head` IPC，并修掉忽略参数的假仓储）**。
+修复顺序（已按此执行完毕）：**X2** 确认前调 `assertFresh` → **`read_attachment` 要求 64 位十六进制** → **`import_package` 登记附件引用 + 单事务导入** → **X1** 让文档探针用真实文档 id（并修掉忽略 `documentId` 的假仓储，顺带修好"重启后会话侧栏空"）。
 
 ## 项目文档
 
@@ -291,7 +293,7 @@ Important 里值得先看的几条：`import_package` 把附件字节写进去�
 2026-09-17 的四条线都已收口：**全身大体检**（4 路只读审计 + 性质测试 + 十批修复 + 平面网格固定）、**A1 解析二次曲面与真圆**（8 片）、**A2 交面分组 + 真曲面**（5 轮）与**立体几何最后一轮**（约束轨道 / 拖动旋转 / 测量数字常驻 / UI 令牌对齐，7 片）——确认的缺陷全部修复、误报与偏离逐条记录，详见 [`docs/project-progress.md`](docs/project-progress.md) 的对应各节。**2026-09-18 的两条线同样收口**：**平面几何曲线切线 + 动点扩展**，以及**轨道圆独立化之后用户实测的两处缺陷**（轨道上的动点无法与定点连线、拖动动点画面不跟手）——两处都先量出根因、再写失败用例、再修，并补上了浏览器级连线用例；同日还把测试运行器的假阳性超时（`vitest` 3.x 打进来的 birpc 写死 60 秒 RPC 心跳）按上游口径升级到 `vitest@^4.1.11` 根治。
 
 下一批候选方向：
-0. **先修已记录的缺陷**（2026-09-22 外部审查，优先级从高到低）：**X2** 确认前调 `assertFresh`（1 行，恢复"确认的就是落盘的那一份"）；**`read_attachment` 要求 64 位十六进制**（3 行，堵掉任意文件读取）；**`import_package` 登记附件引用 + 单事务导入**（修掉附件被回收删掉与部分导入）；**X1** 让文档探针用真实文档 id（或加 `read_latest_document_head`），并修掉忽略 `documentId` 的假仓储 —— 这一步同时会让"重启后会话侧栏空"消失。其余见 README「已知问题」一节与进度档案的清单。
+0. ~~**先修已记录的缺陷**（2026-09-22 外部审查）~~ **已在 2026-09-23 全部处理完**：X2（确认前调 `assertFresh`）、`read_attachment` 要求 64 位十六进制、`import_package` 登记附件引用 + 单事务导入、X1（文档探针改用真实文档 id，顺带修好"重启后会话侧栏空"）以及其余 Important/Minor 都已落地并随 **`v0.2.0`** 发布（见上文「已知问题与修复」）。**仍未接线的只剩一条 Minor**（进度档案里如实标注），其余如实缺口见该节末尾的列表。
 1. ~~**3D 顶部两排控件在窄画布下会重叠**~~ **已在 2026-09-18 修掉**：左侧模块栏占掉 72px 之后这件事从"点不到"升级为 e2e 直接失败（`three-camera-controls ... intercepts pointer events`），于是在 `@media (max-width: 1500px)` 下给两排各加 `max-width: calc(50% - var(--space-4))`，放不下时各自换行。
 2. **3D 拾取的两处待定问题**（观察到了、本轮没改，属设计取舍）：①绑到「实体内」的点可能正好落在模板**物化出来的顶点**上，此时拾取命中的是那个"不能单独拖动"的生成顶点（实测 `data-drag-target` 报 `point:cube-1-point-6`、`data-drag-parameter` 为 null）；②严格在实体**内部**的点从外面点不到（射线先打到实体表面，实测 `data-drag-target` 报 `face:cube-1-face-10`）。是否让"点"优先于"所选实体的表面"被拾取，需要先定规则。
 3. **剖切平面的数值输入**（现在能拖动 / 方向键平移、也能「以面为剖切面」，但没有直接键入法向量与偏移量的输入框）、等长 / 等角约束（需要先定角度表示）、圆与圆弧的修剪（拆成多段圆弧）、B-rep / DWG 导入与自动尺寸布局——这些尚未编码。
