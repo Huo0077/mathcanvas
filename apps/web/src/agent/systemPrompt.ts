@@ -207,7 +207,19 @@ export function buildPolicyText(input: SystemPromptPolicyInput): string {
   ]
 
   if (input.canPlan) {
-    sections.push("", "## 本轮允许的动作（`actionId` 只能从这里选）",
+    sections.push(
+      "",
+      /**
+       * **工作区不是限制**（2026-09-22，用户现场）。
+       *
+       * 绑定里的 `workspace` 只是这份文档**现在**在哪个工作区，而宿主会**按你的计划**自动切过去
+       *（`agentRunner` 的 `prepareWorkspaceFor`：计划里有 `solid.*` / `section.*` / `dynamic.*` 就切立体几何，
+       * 而 `geometry3d` 的文档同样接受平面动作）。不说这一句时，模型会在平面几何文档里"就地凑合"：
+       * 用 `planar.create_point` 拼四个顶点、再配一笔棱柱 —— 计划自相矛盾，而切工作区发生在**计划之后**，
+       * 谁也救不回来（用户现场：要求画正四面体，结果是一组平面对象 + 一个棱柱）。
+       */
+      "**工作区不是限制**：绑定里的 `workspace` 只是这份文档现在在哪个工作区，宿主会按你的计划自动切过去。要画立体图形就直接用 `solid.*` 动作，**不要用 `planar.*` 的点去拼立体的顶点** —— 那样得到的是一组平面对象。",
+      "## 本轮允许的动作（`actionId` 只能从这里选）",
       ...(input.actionIds.length > 0 ? input.actionIds.map((action) => `- ${action}`) : ["（这一轮没有任何可用动作：只能提问或作答）"]),
       "",
       "### 每个动作的 inputs 只能有下面这些字段（`alias` 是新对象的别名）",

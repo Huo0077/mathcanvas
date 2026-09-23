@@ -121,6 +121,20 @@ describe("production system prompt", () => {
     expect(policy).toContain("- function.create_tangent：alias, sourceId, x, anchor")
   })
 
+  /**
+   * **工作区不是限制**（2026-09-22，用户现场）。
+   *
+   * 用户在一个**平面几何**文档里让 Agent"画一个正四面体"，模型于是用 `planar.create_point`
+   * 拼了四个"顶点"、再配一笔棱柱 —— 计划自相矛盾，而宿主切工作区发生在**计划之后**，谁也救不回来。
+   * 绑定里的 `workspace` 只是"这份文档现在在哪"，宿主会按计划切过去 —— 这句话必须逐字在策略文本里。
+   */
+  it("tells the model that the host switches workspaces, so solids are built with solid actions", () => {
+    const policy = buildPolicyText({ channel: "strict_json", canPlan: true, actionIds: ["planar.create_point", "solid.create_prism"] })
+
+    expect(policy).toContain("工作区不是限制")
+    expect(policy).toContain("不要用 `planar.*` 的点去拼立体的顶点")
+  })
+
   it("keeps the policy text identical across contexts, and injects the scene separately", () => {
     const first = buildSystemPrompt({ context: context(), channel: "strict_json", canPlan: true })
     /**
