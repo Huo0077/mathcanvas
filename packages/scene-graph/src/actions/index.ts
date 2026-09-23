@@ -183,9 +183,24 @@ function compileSolidTemplate(action: Extract<DraftAction, { actionId: "solid.cr
   }
   const id = context.idAllocator.allocate("solid", inputs.alias)
   const label = inputs.label ? { label: inputs.label } : {}
-  const primitive = inputs.template === "cube" || inputs.template === "pyramid"
-    ? { id, type: inputs.template, origin: inputs.origin, size: inputs.size!, ...label }
-    : { id, type: inputs.template, center: inputs.origin, radius: inputs.radius!, height: inputs.height!, segments: 48, ...label }
+  /**
+   * **动作层与文档层是两套词汇，翻译只发生在这一个地方。**
+   *
+   * 动作层（模型看到的那一层）是模板无关的：`origin` + `size`（`@draw/agent-core` 的 `schemas.ts` 里
+   * `size` 的 `appliesWhen` 就是 `["cube", "pyramid"]`）。文档层却是**每个模板一套形状**
+   *（`@draw/dsl` 的 `validateDocument`）：立方体 `origin` + `size`、棱锥 `baseCenter` + `baseSize` + `height`、
+   * 圆柱 / 圆锥 `center` + `radius` + `height` + `segments`。
+   *
+   * 以前立方体与棱锥共用第一支，于是 Agent 造出来的棱锥带着**立方体的形状**进提交，被 schema 判成
+   * `pyramid geometry is invalid` —— 每个由 Agent 创建的棱锥都必然失败。手工路径
+   *（`App.tsx` 的 `addDefaultSolid("pyramid")`）一直用的是 `baseCenter` / `baseSize` / `height`，
+   * 两条路从来不一致。`size.x` / `size.y` 是底面两条边、`size.z` 是高，与立方体"三个棱长"的读法一致。
+   */
+  const primitive = inputs.template === "cube"
+    ? { id, type: "cube" as const, origin: inputs.origin, size: inputs.size!, ...label }
+    : inputs.template === "pyramid"
+      ? { id, type: "pyramid" as const, baseCenter: inputs.origin, baseSize: { x: inputs.size!.x, y: inputs.size!.y }, height: inputs.size!.z, ...label }
+      : { id, type: inputs.template, center: inputs.origin, radius: inputs.radius!, height: inputs.height!, segments: 48, ...label }
   return { operations: [{ op: "addPrimitive", primitive } as DomainOperation], diagnostics: [], aliasToId: { [inputs.alias]: id } }
 }
 

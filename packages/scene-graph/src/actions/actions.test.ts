@@ -127,6 +127,24 @@ describe("solid family", () => {
     expect(result.operations[0]).toMatchObject({ op: "addPrimitive", primitive: { id: "solid-1", type: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 2, z: 2 } } })
   })
 
+  it("creates a pyramid as base-center plus base-size plus height, not as a cube", () => {
+    const document = createEmptyDocument("geometry3d")
+    const result = compileActions(document, [action({ actionId: "solid.create_template", inputs: { alias: "p", template: "pyramid", origin: { x: 1, y: 2, z: 0 }, size: { x: 4, y: 4, z: 6 } } })], contextWith(document))
+
+    expect(result.diagnostics).toEqual([])
+    expect(result.operations).toHaveLength(1)
+    const primitive = result.operations.flatMap((entry) => (entry.op === "addPrimitive" ? [entry.primitive] : []))[0]
+    /**
+     * 棱锥与立方体**不共用形状**：`@draw/dsl` 的文档 schema 对棱锥要求 `baseCenter` / `baseSize` / `height`，
+     * 对立方体要求 `origin` / `size`（内核 `solid-builders.ts` 与手工路径 `App.tsx` 的 `addDefaultSolid` 也一样）。
+     * 这条用例就是钉住"动作层 → 文档层"这一次翻译：以前两支走同一条，于是 Agent 造的每个棱锥都带着立方体的形状
+     * 进提交，被校验判成 `pyramid geometry is invalid`，整轮 `run_failed`。
+     */
+    expect(primitive).toMatchObject({ id: "solid-1", type: "pyramid", baseCenter: { x: 1, y: 2, z: 0 }, baseSize: { x: 4, y: 4 }, height: 6 })
+    // 也不许把立方体那套键一起带上：文档里多两个没人读的键，下一个人会以为它有意义。
+    expect(Object.keys(primitive).sort()).toEqual(["baseCenter", "baseSize", "height", "id", "type"])
+  })
+
   it("refuses a flat or negative-sized cube instead of fabricating a solid", () => {
     const document = createEmptyDocument("geometry3d")
     const result = compileActions(document, [action({ actionId: "solid.create_template", inputs: { alias: "s", template: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 2, z: 0 } } })], contextWith(document))

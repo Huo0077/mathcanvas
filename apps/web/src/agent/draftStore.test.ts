@@ -70,6 +70,26 @@ describe("isolated drafts", () => {
     expect(cylinder).toMatchObject({ height: 5 })
   })
 
+  it("commits a pyramid with the base-and-height geometry the document schema expects", () => {
+    const store = createDraftStore()
+    const record = store.create(createEmptyDocument("geometry3d"))
+
+    const staged = store.stage(record.draftId, [{
+      actionId: "solid.create_template",
+      actionKey: "pyramid",
+      factIds: [],
+      inputs: { alias: "p", template: "pyramid", origin: { x: 0, y: 0, z: 0 }, size: { x: 3, y: 3, z: 3 } }
+    }], record.draftVersion, "画一个正四棱锥，底面边长 3、高 3")
+
+    // 用户现场：这一条曾经以 `commit_rejected: … pyramid geometry is invalid` 失败，整轮 run_failed。
+    // 断言里带上诊断本身：失败时不用再跑一遍才看得到"为什么"。
+    expect(staged.ok, staged.ok ? "staged" : `${staged.reason}: ${(staged.diagnostics ?? []).map((entry) => entry.message).join(" / ")}`).toBe(true)
+    const pyramid = store.getPreview(record.draftId)?.candidate.primitives.find((primitive) => primitive.type === "pyramid")
+    // 棱锥的几何是 `baseCenter` + `baseSize` + `height`（DSL schema / 内核 / 手工添加棱锥三处一致），
+    // 不是立方体那套 `origin` + `size`；形状写错时 `validateDocument` 会当场拒掉这条提交。
+    expect(pyramid).toMatchObject({ type: "pyramid", baseCenter: { x: 0, y: 0, z: 0 }, baseSize: { x: 3, y: 3 }, height: 3 })
+  })
+
   it("keeps a draft candidate in memory and never touches the live document", () => {
     const store = createDraftStore()
     const base = baseDocument()
