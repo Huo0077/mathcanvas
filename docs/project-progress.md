@@ -413,6 +413,14 @@ Agent 那四条里先做三条判据明确的；第 4 条（第 12 个观测对�
 
 **验证（本机实跑，2026-09-22）**：`npm test` **215 文件 / 2604 用例通过 + 1 todo**（起点 2603，+1）；`npm run typecheck` **6 个 workspace exit 0**；`npm run lint` **0 error / 14 warning**（基线）。本批只动 TypeScript（提示词）。
 
+### 运行中的 dev 窗口可能拿着**半途的模块**（2026-09-23 现场：`ReferenceError: describeParseErrors is not defined`）
+
+- **现象**：在跑着的窗口里发"画正四面体，棱长为 1"，整轮以 `ReferenceError: describeParseErrors is not defined` 失败 —— 而那个名字**定义在同一个文件里**，`npm test`（含专门跑这段诊断的用例）**31/31 全绿**，`typecheck` 与 `build` 也全绿。
+- **取证（直接问 dev 服务器要那个模块）**：`GET http://localhost:5173/src/agent/modelPlanner.ts` 返回的代码里**只有调用点、没有定义**（`has_definition=False`）；磁盘上的文件（`20:19:07` 写入）两个函数都在。**加不加 `?t=` 时间戳结果一样** ⇒ Vite 自 20:19 起就没有再重新转换过这个模块（文件监听没生效），窗口一直在跑我那次四连编辑的**中间态**。
+- **影响面比这一处大**：从那一刻起，**所有 app 层改动都没进过那个窗口** —— 包括正四面体的本地规划器意图与提示词那两条。用户当时看到的行为，有一部分是旧代码的表现。
+- **处置**：重启 dev 实例（`npm --workspace @draw/desktop run dev`）。重启后实测：`modelPlanner.ts` 返回的代码里 `describeParseErrors` / `boundedExcerpt` **两个定义都在**，`localPlanner.ts` 里有 `solid.create_tetrahedron`。
+- **教训**：**"测试全绿"不等于"那个窗口在跑新代码"**。在真实窗口里复现问题之前，先确认服务器发出去的就是当前源码（或干脆重启一次 dev），否则会把"旧代码的症状"当成新缺陷去查 —— 这一次就差点如此。
+
 ### 正四面体（`solid.create_tetrahedron`）：从「拿棱柱冒充」到真的画得出来（2026-09-22，用户需求：把做正四面体的功能做出来）
 
 - **为什么必须有新动作**：动作层原本只有 `solid.create_template`（cube / **四棱锥：底面是矩形** / cylinder / cone）与 `solid.create_prism`（底面多边形 + 拉伸）。正四面体是**三棱锥**（4 顶点、6 条等长棱、4 个三角面）—— 既不是四棱锥、也不是棱柱，所以模型只能拿三棱柱**冒充**（用户现场：要正四面体，拿到三棱柱）。文档模型里虽然有 `polyhedron3`，但它的能力是 `temporarily_unavailable`（没有动作入口）。
