@@ -164,6 +164,35 @@ describe("parameter audit and completion", () => {
     expect(result.assumptions.filter((entry) => entry.path?.endsWith(".parameter") ?? false)).toEqual([])
   })
 
+  /**
+   * **`create` 与 `set` 之间、以及 `set` 与 `set` 之间也是矛盾**（外部审查 M4）。
+   *
+   * 原先那道检查只认 `parameter.create`，于是 `parameter.create θ = 0.4` 紧跟
+   * `parameter.set θ = 0.9` 会**静默**以 0.9 结束 —— 而本文件上面那段注释写得清清楚楚：
+   * "这类矛盾必须报出来而不是'后写的赢'"。判据本来就是同一份，只是要把**两种写入者**
+   * 都记进同一张表再比。
+   */
+  it("reports a create-then-set and a set-then-set contradiction the same way", () => {
+    const createThenSet = auditPlan(plan([
+      { actionId: "parameter.create", actionKey: "a", factIds: [], inputs: { id: "theta", value: 0.4 } },
+      { actionId: "parameter.set", actionKey: "b", factIds: [], inputs: { id: "theta", value: 0.9 } }
+    ]), CONTEXT)
+    expect(createThenSet.diagnostics.some((entry) => entry.code === "contradictory_constraint")).toBe(true)
+
+    const setThenSet = auditPlan(plan([
+      { actionId: "parameter.set", actionKey: "a", factIds: [], inputs: { id: "theta", value: 0.4 } },
+      { actionId: "parameter.set", actionKey: "b", factIds: [], inputs: { id: "theta", value: 0.9 } }
+    ]), CONTEXT)
+    expect(setThenSet.diagnostics.some((entry) => entry.code === "contradictory_constraint")).toBe(true)
+
+    // 反向守卫：**同一个值**写两次不是矛盾（那只是重复），不该被这条闸拦下。
+    const sameValue = auditPlan(plan([
+      { actionId: "parameter.set", actionKey: "a", factIds: [], inputs: { id: "theta", value: 0.4 } },
+      { actionId: "parameter.set", actionKey: "b", factIds: [], inputs: { id: "theta", value: 0.4 } }
+    ]), CONTEXT)
+    expect(sameValue.diagnostics.some((entry) => entry.code === "contradictory_constraint")).toBe(false)
+  })
+
   it("reports contradictory constraints instead of silently picking one", () => {    // 同一个参数在一次计划里被两处写成不同的初值：只能有一个真值。
     const twoWriters = auditPlan(plan([
       { actionId: "parameter.create", actionKey: "a", factIds: [], inputs: { id: "theta", value: 0.4 } },

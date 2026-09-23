@@ -312,8 +312,16 @@ export function auditPlan(plan: PlanEnvelope, context: AuditContext): AuditResul
 
     const inputs = isRecord(result.action.inputs) ? (result.action.inputs as Record<string, unknown>) : {}
 
-    // ---- 矛盾一：同一个**新参数**被两处写成不同的初值 ----
-    if (action.actionId === "parameter.create" && typeof inputs.id === "string" && typeof inputs.value === "number") {
+    // ---- 矛盾一：同一个参数被两处写成不同的值 ----
+    /**
+     * **`create` 与 `set` 之间、`set` 与 `set` 之间同样是矛盾**（外部审查 M4）。
+     *
+     * 原先这里只认 `parameter.create`，于是 `parameter.create θ = 0` 紧跟 `parameter.set θ = 1`
+     * 会**静默**以 θ = 1 结束，`set` vs `set` 同理 —— 而本文件上面那段注释写得很清楚：
+     * "这类矛盾必须报出来而不是'后写的赢'"。判据本来就是同一份，只是要把**两种写入者**
+     * 都记进同一张表再比。
+     */
+    if ((action.actionId === "parameter.create" || action.actionId === "parameter.set") && typeof inputs.id === "string" && typeof inputs.value === "number") {
       const previous = parameterWriters.get(inputs.id)
       if (previous && previous.value !== inputs.value) {
         diagnostics.push({

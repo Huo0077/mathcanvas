@@ -184,6 +184,19 @@ describe("committer adapter commit", () => {
     expect(host.commits).toEqual([consent])
   })
 
+  /**
+   * **`changed: false` 的替身形状必须与真 `HostBridge` 一致**（外部审查 A1）。
+   *
+   * 这条用例一直绿，而生产里 `no_change` 从来没出现过 —— 因为真的 `HostBridge`
+   * 把"无需改动"发在**失败**通道上（`{ ok: false, reason: "no_change" }`），
+   * 那个 `reason` 落进下面那句通用拒绝，于是协调器的 `no_change → completed` 成了死代码。
+   * 也就是说：**替身替真身撒了谎**，用例测的是一个生产不会出现的输入。
+   *
+   * 现在两半各自被钉住了：真 `HostBridge` 那一半在
+   * `apps/web/src/agent/hostBridge.test.ts`（"reports a commit that changes nothing as a
+   * success, not a failure"），形状就是这里 stub 的这一份；这一半钉适配器的映射。
+   * 改动任一侧的形状，另一侧就会红。
+   */
   it("maps a no-change commit to no_change rather than a failure", async () => {
     const host = makeHost({ commit: vi.fn(() => ({ ok: true as const, receipt: { changed: false, draftId: "draft_1" } })) })
     const adapter = createCommitterAdapter({ drafts: makeDrafts(), host, live: () => ({ handle: handleFor(document()), document: document() }) })

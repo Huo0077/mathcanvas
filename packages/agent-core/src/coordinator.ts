@@ -119,6 +119,23 @@ export interface AgentCoordinator {
   /** 供宿主在取消/中断之后查询账本（计划 Step 5 的 "unless commit status is queried by idempotency key"）。 */
   ledger(): readonly RunEvent[]
   phase(): RunEvent["phase"]
+  /**
+   * **用户确认之后把账本走完**（外部审查 A4）。
+   *
+   * `start()` 在 `awaiting_confirmation` 就返回了 —— 这是对的，同意凭据要等用户点确认才存在。
+   * 但**落库的 `run_events` 就是这份账本**：少了"确认之后"这一步，生产里的账本永远停在
+   * "等用户确认"，**即使文档真的提交了** —— `committing` / `completed` 于是只有测试够得到，
+   * 而"运行账本"作为一份事实记录就是**失真的**（它说没提交，可画布已经变了）。
+   *
+   * 宿主在 `HostBridge.commit` 拿到结果之后调用它，把 `committing → completed` 补进账本，
+   * 并返回这几条事件（宿主负责让它们回流到界面与持久化）。
+   *
+   * **只有成功才补记**：提交被拒时这一轮**仍然停在"等用户确认"**（面板还挂着、用户还能再点一次，
+   * 见 `agentRunner.confirm` 的 "只有真的落定才把这一轮用掉"）。那时把账本推成 `failed`
+   * 会与界面状态互相矛盾，而且会把一个还能重试的运行钉成终态 —— 于是重试成功也记不进去了。
+   * 相位不是 `awaiting_confirmation` 时同样什么都不做（幂等）。
+   */
+  settleConfirmation(outcome: { status: string; detail?: string }): RunEvent[]
 }
 
 /**
@@ -147,6 +164,8 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
   let ledger: RunLedger | null = null
   let controller: AbortController | null = null
   let cancelled = false
+  /** 最近一次 `start` 的目标句柄：补记确认结果时 `record` 的 patch 用它。 */
+  let lastTarget: RunContext["target"] | undefined
 
   function cancel(reason: CancelReason = "user"): CancelResult {
     if (!ledger) return { cancelled: false, phase: "created" }
@@ -160,6 +179,7 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
 
   async function* run(request: StartRequest): AsyncGenerator<RunEvent> {
     const budget = dependencies.budget ?? createBudget(dependencies.limits)
+    lastTarget = request.run.target
     ledger = createRunLedger({ runId: request.run.runId, promptMessageId: request.run.promptMessageId, handle: request.run.target, now })
     controller = new AbortController()
     const signal = controller.signal
@@ -203,6 +223,27 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
         budget,
         limits: dependencies.contextLimits
       })
+      /**
+       * **上下文预算真的计费**（外部审查 M2）。
+       *
+       * `buildContext` 一直收着 `budget` 却**从不使用**它，`estimatedCharacters` 也算了出来
+       * （它的注释就写着"供调用方核对预算"）却没人核对 —— 于是 `context` / `time` / `geometry`
+       * 三类永远扣不了费，`budget.exhausted()` 的那三段判断**永远不可能为真**，
+       * 而比上限还长的场景摘要照样发出去。预算模块自己的文档把这种情况叫"装饰"。
+       *
+       * ## 为什么除以 4（这一步是量纲，不是凑数）
+       *
+       * `BudgetKind` 的文档把 `context` 写成"上下文 **token** 估算"，而 `estimatedCharacters`
+       * 是**字符数** —— 直接拿字符去扣是把两种量纲混在一起。实测：这条路径上一个
+       * "13 只立体、读数已经夹到上限"的**正常**场景就已经是 **79,293 字符**，
+       * 拿它去扣 32,000 的额度会把一次完全正常的运行判成预算耗尽 —— 那说明 32,000 这个数
+       * 不可能是字符。按通行的 ~4 字符/token 折算之后它约 19.8k token，落在额度之内。
+       *
+       * 这也让这条额度回到"真正的安全阀"的位置：默认 32k token 对应约 128k 字符，
+       * 只有异常膨胀的上下文才会撞上它 —— 而不是每次正常运行都撞。
+       */
+      const estimatedTokens = Math.ceil(modelContext.estimatedCharacters / 4)
+      if (estimatedTokens > 0 && !spend(budget, "context", estimatedTokens)) return yield* stop("budget_context")
       /**
        * **会话上下文**：宿主的来源（消息/摘要/事实/草稿）+ 运行里的观察 + 这一轮的请求。
        *
@@ -349,7 +390,20 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
         const known = new Set(observation.factIds)
         const missing = candidate.factIds.filter((factId) => !known.has(factId))
         if (missing.length > 0) {
-          const waiting = ledger.transition("waiting", `waiting for the user to confirm: ${missing.join(", ")}`)
+          /**
+           * **缺事实要说清"缺的是哪个"**（外部审查 Agent-M4）。
+           *
+           * 原先这句文案是 `waiting for the user to confirm: <ids>` —— 两处都不对：
+           * ①"等你确认"是**另一个**来源（规划器给的澄清问题）的说法，这里其实是"计划引用了
+           * 本次观察里没有的对象"；②而宿主那条 `waiting` 消息只看 `questions()`
+           *（这条路径上它是空的），于是**连这几个 id 都到不了用户眼前** ——
+           * 用户看到的是一句写死的"这一步需要你补充信息。"，既不点名、也无从回答。
+           *
+           * 现在如实说"缺的是哪些对象"，宿主再把这句话原样转给用户
+           *（`agentRunner` 在 `waiting` 分支里读账本最后一条）。
+           */
+          const detail = `the plan needs objects this run did not observe: ${missing.join(", ")}`
+          const waiting = ledger.transition("waiting", detail)
           if (waiting.ok) yield waiting.event
           return
         }
@@ -384,6 +438,18 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
         }
 
         const actionCount = plan.actions.length
+        /**
+         * **每次暂存之前重置"单次暂存的动作数"**（外部审查 M1）。
+         *
+         * `Budget.beginStage()` 的文档写着"进入下一次暂存：重置 `actions_per_stage`"，
+         * 而它在整个仓库里**没有任何调用方**（只有 `budget.test.ts` 调过）——
+         * 于是这个"每次暂存重置"的名额退化成了**第二个整次运行计数器**，修复那一次也来分它。
+         * 实测（审计探针）：20 个动作的计划、committer 失败一次并给出修复请求之后，
+         * 这一轮会以 `budget exhausted: budget_actions_per_stage` 结束 ——
+         * 而 `actions_per_run` 还剩 108，每一次暂存也都没超过 32。
+         * 它报了一次**没有发生**的预算耗尽，还丢掉了那唯一一次修复机会。
+         */
+        budget.beginStage()
         if (!spend(budget, "actions_per_stage", actionCount)) return yield* stop("budget_actions_per_stage")
         if (!spend(budget, "actions_per_run", actionCount)) return yield* stop("budget_actions_per_run")
 
@@ -495,6 +561,24 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
     return (error instanceof Error ? `${error.name}: ${error.message}` : String(error)).slice(0, 512)
   }
 
+  /**
+   * **用户确认之后把账本走完**（外部审查 A4）。判据与理由见 `AgentCoordinator` 上的说明。
+   */
+  function settleConfirmation(outcome: { status: string; detail?: string }): RunEvent[] {
+    const events: RunEvent[] = []
+    // 只补记**成功**：被拒时这一轮仍停在"等用户确认"（面板还挂着、还能再点一次），
+    // 把它推成 `failed` 既与界面矛盾，又会把还能重试的运行钉成终态。
+    if (outcome.status !== "committed" && outcome.status !== "no_change") return events
+    if (!ledger || ledger.phase() !== "awaiting_confirmation") return events
+
+    const committing = ledger.transition("committing", "applying the confirmed draft")
+    if (committing.ok) events.push(committing.event)
+    ledger.record(`commit ${outcome.status}`, lastTarget === undefined ? undefined : { handle: lastTarget })
+    const completed = ledger.transition("completed", outcome.status === "committed" ? "the document was updated" : "nothing needed to change")
+    if (completed.ok) events.push(completed.event)
+    return events
+  }
+
   return {
     start(request) {
       return run(request)
@@ -505,6 +589,7 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
     },
     phase() {
       return ledger?.phase() ?? "created"
-    }
+    },
+    settleConfirmation
   }
 }

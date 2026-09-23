@@ -208,6 +208,27 @@ describe("plan compilation", () => {
   })
 
   /**
+   * **每一个登记了的引用都要解析，不只第一个**（外部审查 A2）。
+   *
+   * `dynamic.bind_curve` 登记了**两个**引用：`target`（scoped）与 `pathId`（id）。
+   * 引用解析原先只取 `referenceFieldsFor(actionId)[0]` —— 于是 `pathId` 从来没人解析，
+   * `draft:seg` 原样传下去，动作层报 `path_not_found: no path draft:seg`（用户看不懂的内部名字）。
+   * 这条用例的 `pathId` 正是**第二个**引用，也就是那条被漏掉的路径。
+   */
+  it("resolves every registered reference, not just the first one", () => {
+    const result = compilePlan(rawPlan([
+      { actionId: "planar.create_segment", actionKey: "seg", factIds: [], inputs: { alias: "seg", points: [{ x: 0, y: 0 }, { x: 4, y: 0 }] } },
+      { actionId: "planar.create_point", actionKey: "P", factIds: [], inputs: { alias: "P", points: [{ x: 1, y: 0 }] } },
+      { actionId: "dynamic.bind_curve", actionKey: "bind", factIds: [], inputs: { target: { scope: "draft", alias: "P" }, pathId: "draft:seg", parameter: 0.5 } }
+    ]), context(createEmptyDocument("conics")))
+
+    expect(result.ok, JSON.stringify(result.diagnostics)).toBe(true)
+    const bind = result.actions.find((action) => action.actionId === "dynamic.bind_curve")
+    // 修复前 `pathId` 还是字面量 `draft:seg`（第二个引用根本没被解析）。
+    expect(bind?.inputs).toMatchObject({ pathId: result.aliases.seg, target: { documentId: expect.any(String), entityId: result.aliases.P } })
+  })
+
+  /**
    * 草稿工具是宿主侧的入口（`draftTools.ts`）。它**不产生草稿工件**：
    * 编译只回答"这份计划能不能变成一批动作"，落草稿是下一步 ——
    * 所以这里的 `artifacts` 必须是空的，而不是硬塞一个草稿 id 进去。

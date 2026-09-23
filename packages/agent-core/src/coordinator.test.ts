@@ -136,6 +136,15 @@ describe("coordinator refusal paths", () => {
     // 缺事实**不是失败**：问用户比编一个数字好。
     expect(harness.coordinator.phase()).toBe("waiting")
     expect(events.at(-1)?.detail).toContain("fact-1")
+    /**
+     * **而且要说清是"缺对象"这件事**（外部审查 Agent-M4）。
+     *
+     * 原先这句文案是 `waiting for the user to confirm: fact-1` —— "等你确认"是**另一个**
+     * 来源（规划器给的澄清问题）的说法，与这条路径无关；宿主那条 `waiting` 消息又只看
+     * `questions()`（这里它是空的），于是连这个 id 都到不了用户眼前。
+     */
+    expect(events.at(-1)?.detail).toContain("did not observe")
+    expect(events.at(-1)?.detail).not.toContain("to confirm")
     expect(harness.committer.stage).not.toHaveBeenCalled()
   })
 
@@ -279,6 +288,57 @@ describe("coordinator budget enforcement", () => {
     expect(harness.coordinator.phase()).toBe("failed")
     expect(events.at(-1)?.detail).toContain("actions_per_stage")
     expect(harness.committer.stage).not.toHaveBeenCalled()
+  })
+
+  /**
+   * **"单次暂存的动作数"每次暂存都要重置**（外部审查 M1）。
+   *
+   * `Budget.beginStage()` 的文档写着"进入下一次暂存：重置 `actions_per_stage`"，
+   * 而它原先在整个仓库里**没有任何调用方** —— 于是这个名额退化成了第二个整次运行计数器，
+   * 修复那一次也来分它。实测（审计探针）：20 个动作的计划、committer 第一次拒绝并给出
+   * 修复请求之后，这一轮以 `budget exhausted: budget_actions_per_stage` 结束，
+   * 而 `actions_per_run` 还剩 108、每次暂存也都没超过默认的 32 ——
+   * 它报了一次**没有发生**的预算耗尽，还丢掉了那唯一一次修复机会。
+   */
+  it("gives the repaired stage its own per-stage allowance instead of sharing one", async () => {
+    let stageCalls = 0
+    const harness = makeHarness({
+      // 20 个动作：比默认的 32 小，但两次加起来会超过它 —— 只有"每次暂存重置"才对。
+      plan: () => ({ plan: planEnvelope(20), requestId: "req-1", attemptId: "attempt-1" }),
+      stage: async () => {
+        stageCalls += 1
+        return stageCalls === 1
+          ? { ok: false as const, reason: "compile_failed" as const, detail: "the first pass did not compile", repair: { reason: "compile_failed", errors: [{ code: "bad_field", path: "envelope.actions[0].inputs", detail: "x" }], allowedChanges: [], attempt: 1 } }
+          : { ok: true as const, draftVersion: 2, previewHash: "preview-1" }
+      }
+    })
+
+    const events = await drive(harness.coordinator, { run, userMessage: "建一条 20 步的计划" })
+
+    // 从头到尾没有"预算耗尽"：两次暂存都真的发出去了，最后停在等确认。
+    expect(events.some((event) => event.detail.includes("budget"))).toBe(false)
+    expect(stageCalls).toBe(2)
+    expect(harness.coordinator.phase()).toBe("awaiting_confirmation")
+  })
+
+  /**
+   * **上下文预算真的会被扣**（外部审查 M2）。
+   *
+   * `buildContext` 收着 `budget` 却从不使用它、`estimatedCharacters` 也从没人核对，
+   * 于是 `context` 这一类永远扣不了费（`exhausted()` 的那一段永远为假）。
+   * 把额度压到 1 个 token 就能看出来：任何一次真实上下文都远超它，
+   * 这一轮必须**在计费那一步**停下，并说清是哪一项用尽。
+   */
+  it("charges the context budget and stops when the band is exhausted", async () => {
+    const harness = makeHarness({ limits: { context: 1 } })
+
+    const events = await drive(harness.coordinator, { run, userMessage: "draw a point" })
+
+    expect(harness.coordinator.phase()).toBe("failed")
+    expect(events.at(-1)?.detail).toContain("budget_context")
+    // 计费在"组装上下文之后、问模型之前"：模型一次都没被问到，文档也没被碰。
+    expect(harness.planner.plan).not.toHaveBeenCalled()
+    expect(harness.committer.commit).not.toHaveBeenCalled()
   })
 
   it("counts the repair attempt against the same budget", async () => {

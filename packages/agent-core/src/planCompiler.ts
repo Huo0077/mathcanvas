@@ -336,13 +336,13 @@ function toParseErrors(diagnostics: readonly PlanDiagnostic[]): { code: string; 
  * 而这两种失败对用户的含义完全不同（一个是我们漏了，一个是模型编了）。
  */
 function resolveReferences(action: DraftAction, index: number, document: GeometryDocument, aliases: Record<string, string>): { action: DraftAction; diagnostics: PlanDiagnostic[] } {
-  const reference = referenceFieldsFor(action.actionId)[0]
-  if (!reference) return { action, diagnostics: [] }
+  const references = referenceFieldsFor(action.actionId)
+  if (references.length === 0) return { action, diagnostics: [] }
   const inputs = isRecord(action.inputs) ? { ...(action.inputs as Record<string, unknown>) } : {}
-  const value = inputs[reference.field]
   const diagnostics: PlanDiagnostic[] = []
 
-  const resolveOne = (entry: unknown, list: boolean): unknown => {
+  /** 字段按**每一个**登记项传入（见下面的循环）：一个动作登记了几个引用就解析几个。 */
+  const resolveOne = (entry: unknown, list: boolean, reference: ReferenceField): unknown => {
     // 参数引用（`parameter.set` 的 `id`）：查的是**文档参数**，不是图元。
     if (reference.kind === "parameter") {
       if (typeof entry !== "string" || !(entry in document.parameters)) {
@@ -392,26 +392,43 @@ function resolveReferences(action: DraftAction, index: number, document: Geometr
     return entry
   }
 
-  if (reference.list) {
-    if (!Array.isArray(value)) {
-      diagnostics.push(planDiagnostic("reference_resolution", "invalid_reference", pathFor(index, reference.field), "expected a list of ids"))
-      return { action, diagnostics }
-    }
-    inputs[reference.field] = value.map((entry) => resolveOne(entry, true))
-  } else {
-    inputs[reference.field] = resolveOne(value, false)
-  }
-
   /**
-   * **嵌套引用**（`anchor.pointId`）：与平铺引用走同一条解析路径，只是取值在对象里面。
-   * 条件（`anchor.kind === "point"`）不成立时不解析 —— 按曲线参数定位的切线里
-   * 那个字段没有意义，硬解析会把"按参数定位"变成一条看不懂的错误。
+   * **一个动作登记了几个引用，就解析几个**（外部审查 A2）。
+   *
+   * 原先这里只取 `referenceFieldsFor(action.actionId)[0]` —— **只解析第一个字段**。
+   * 于是第二个引用永远指不到同一份计划里的别名：
+   * - `dynamic.bind_curve` 的 `pathId`（`kind: "id"`）压根没人解析，`draft:c` 原样传下去，
+   *   动作层报 `path_not_found: no path draft:c`；
+   * - `dynamic.bind_point` 的 `host`（`kind: "scoped"`）同样没人解析，那个未解析的
+   *   `{ scope: "draft", alias }` 到了下游因为"没有匹配的 documentId"被判成
+   *   `cross_document_reference` —— 两句话都在说"引用错了"，而真正错的是**我们漏解析了一个字段**。
+   *
+   * 更糟的是那唯一一次修复机会：`RepairRequest` 带的是出错的 `path`，而它只会指到**第一个**字段上，
+   * 于是"改一处就能救回来"的那一次被花在了错的地方。
    */
-  if (reference.nested) {
-    const outer = inputs[reference.nested.outer]
-    if (isRecord(outer) && outer[reference.nested.when.field] === reference.nested.when.equals) {
-      const resolved = resolveOne(outer[reference.nested.inner], false)
-      inputs[reference.nested.outer] = { ...outer, [reference.nested.inner]: resolved }
+  for (const reference of references) {
+    const value = inputs[reference.field]
+    if (reference.list) {
+      if (!Array.isArray(value)) {
+        diagnostics.push(planDiagnostic("reference_resolution", "invalid_reference", pathFor(index, reference.field), "expected a list of ids"))
+        continue
+      }
+      inputs[reference.field] = value.map((entry) => resolveOne(entry, true, reference))
+    } else {
+      inputs[reference.field] = resolveOne(value, false, reference)
+    }
+
+    /**
+     * **嵌套引用**（`anchor.pointId`）：与平铺引用走同一条解析路径，只是取值在对象里面。
+     * 条件（`anchor.kind === "point"`）不成立时不解析 —— 按曲线参数定位的切线里
+     * 那个字段没有意义，硬解析会把"按参数定位"变成一条看不懂的错误。
+     */
+    if (reference.nested) {
+      const outer = inputs[reference.nested.outer]
+      if (isRecord(outer) && outer[reference.nested.when.field] === reference.nested.when.equals) {
+        const resolved = resolveOne(outer[reference.nested.inner], false, reference)
+        inputs[reference.nested.outer] = { ...outer, [reference.nested.inner]: resolved }
+      }
     }
   }
 
