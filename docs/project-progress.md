@@ -413,6 +413,26 @@ Agent 那四条里先做三条判据明确的；第 4 条（第 12 个观测对�
 
 **验证（本机实跑，2026-09-22）**：`npm test` **215 文件 / 2604 用例通过 + 1 todo**（起点 2603，+1）；`npm run typecheck` **6 个 workspace exit 0**；`npm run lint` **0 error / 14 warning**（基线）。本批只动 TypeScript（提示词）。
 
+### 正四面体（`solid.create_tetrahedron`）：从「拿棱柱冒充」到真的画得出来（2026-09-22，用户需求：把做正四面体的功能做出来）
+
+- **为什么必须有新动作**：动作层原本只有 `solid.create_template`（cube / **四棱锥：底面是矩形** / cylinder / cone）与 `solid.create_prism`（底面多边形 + 拉伸）。正四面体是**三棱锥**（4 顶点、6 条等长棱、4 个三角面）—— 既不是四棱锥、也不是棱柱，所以模型只能拿三棱柱**冒充**（用户现场：要正四面体，拿到三棱柱）。文档模型里虽然有 `polyhedron3`，但它的能力是 `temporarily_unavailable`（没有动作入口）。
+- **做法（四层，逐层有证据）**：
+  1. **内核**（`packages/geometry-kernel/src/solid-builders.ts`）：新增 `regularTetrahedronShape`（纯几何：底面外接圆半径 `a/√3`、高 `a·√(2/3)`）与 `buildTetrahedron`，注册成构造器 `"tetrahedron"`；形状复用既有的 `buildFromPoints`（编号、共面性、非零体积、自交这些校验都是现成的）。
+     - **RED**：`unknown solid builder: tetrahedron`（实测）。
+     - **GREEN**：用例把 **6 条棱逐对量过**都等于棱长 3（这是定义，不是"看起来像"），顶点 4 / 棱 6 / 面 4；另有"棱长 ≤ 0 或非有限必须被拒"。
+  2. **动作层**（`packages/scene-graph/src/actions/`）：新增 `SolidCreateTetrahedronAction` + `compileSolidTetrahedron` + `compileSolidTetrahedronAction`（工作区守卫）。确定性 id `solid-1:v0…` / `:e0…` / `:f0…`，**多面体自己就是别名指向的那只 `solid-1`**；子对象标签 **A / B / C / D**、`棱 n`、`面 n` —— 顶点用 A…，因为用户说的就是"正四面体 **ABCD**"（而模板迁移的判据是 `construction.kind === "template"`，它是 `fromPoints`，不会被误改名）。
+  3. **登记表 / 能力 / 清单 / 提示词**（`packages/agent-core/src/` + `apps/web`）：`actionIds` +1（两处 `satisfies` 守卫强制同步）、`CAPABILITY_FOR_ACTION` +1、`spatial-modeling` 清单 +1 并**更新签名哈希**（`2b968a48…`）、`schemas.ts` 新增动作契约（`baseCenter` 取原点；`edge` 走 `infer_from_sizes`，读不到取 `DEFAULT_SOLID_SIZE` —— 与立方体"棱长未指定"**同一口径**）。提示词那条"没有的图元要如实说"同步改成"**能造的立体含正四面体**，只剩**一般多面体**没有"。
+  4. **本地规划器**（`apps/web/src/agent/localPlanner.ts`）：认 `正四面体` / `tetrahedron`，棱长从原话里读 —— **没有模型服务时也能画出来**（新增用例同时核对 `parsePlanEnvelope` 放行这个新动作）。
+- **门禁抓出的三处回归（都是这批改动引起的，全部修掉）**：
+  1. `actionIds.test.ts` 的字面量计数 24 → **25**（它故意写死，就是为了逼"新增动作必须同步传输层"）；
+  2. `agentRuntime.test.ts` 的 `availableActions` 期望值补上新动作（清单变了，上下文当然跟着变）；
+  3. **一条真实的行为回归**：本地规划器原本还认裸词 `四面体`，于是"帮我求**这个四面体**的外接球半径并画出球"（这句话里同时有"画"）会被当成"新建一只四面体"，`agentRunner.test.ts` 当场变红。**改法**：不认裸词，只认 `正四面体` / `tetrahedron` —— 认不出时问路，比悄悄改文档好。**这条是这一批最值得记的一次：把动作词汇放宽，会让别的路径更容易误判。**
+- **验证（本机实跑，2026-09-22）**：`npm test` **215 文件 / 2611 用例通过 + 1 todo**（起点 2604，**+7**：内核 2 + 动作层 2 + 本地规划器 2 + 草稿端到端 1）；`npm run typecheck` **6 个 workspace exit 0**；`npm run lint` **0 error / 14 warning**（基线）；`npm run build` **exit 0**。Rust 侧本批未改动。
+- **如实缺口**：
+  1. **手工入口还没有**：工具栏只有"添加棱锥"（四棱锥），没有"添加正四面体" —— 现在能用它的路径是 Agent 与本地规划器这两条。要加按钮得走"用 `compileSolidTetrahedron` 造出图元集再批量落盘"那条路。
+  2. **模型会不会真的用它取决于模型本身**；命令行路径（本地规划器）是确定性的。提示词已把正四面体列进"能造的立体"。
+  3. **一般多面体仍然没有入口** —— 本批只做了正四面体。
+
 ### 动作层 id 分配器：修掉「画布上已有 solid-1 时新建的第一个立体必然撞号」（2026-09-21，本节标题原缺，2026-09-22 补上）
 
 - **用户口径**：一张截图 —— 真实模型（DeepSeek）跑"已知直四棱柱 ABCD-A1B1C1D1 的底面是菱形，AA1=4, AB=2, BAD=60°，E、M、N 分别是 BC、BB1、A1D 的中点"这条请求，运行状态是 **`compile_failed: duplicate object id`**。
