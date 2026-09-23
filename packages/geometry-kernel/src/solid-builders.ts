@@ -414,6 +414,58 @@ function buildPyramid(input: PyramidInput, context: BuilderContext): SolidBuildR
   return buildFromPoints({ vertices: [...base, apex], faces: [[3, 2, 1, 0], [0, 1, 4], [1, 2, 4], [2, 3, 4], [3, 0, 4]] }, context)
 }
 
+/**
+ * **正四面体**的输入：底面（等边三角形）中心 + 棱长。
+ *
+ * 为什么它是内核的一等构造器，而不是"棱锥换个三角形底"：`buildPyramid` 的底面是**矩形**
+ * （`baseSize.x/y`），`buildPrism` 的顶面是底面的**平移副本** —— 两者都表达不出"四个顶点、
+ * 六条等长棱、四个三角面"这个形状。而用户会直接要它（"画一个正四面体 ABCD，棱长为 3"），
+ * 动作层没有对应动作时，模型只能拿最接近的**冒充**（用户现场：正四面体被做成了三棱柱）。
+ */
+export interface TetrahedronInput {
+  /** 底面（等边三角形）的中心。 */
+  baseCenter: Vector3
+  /** 棱长。 */
+  edge: number
+}
+
+/**
+ * 正四面体的**几何本身**（棱长 `a`）：
+ *
+ * - 底面是等边三角形，外接圆半径 `R = a / √3`，三个顶点按 0° / 120° / 240° 均匀取；
+ * - 第四个顶点在底面中心正上方，高 `h = a · √(2/3)`（正四面体的高）。
+ *
+ * 于是**任意两个顶点的距离都等于 `a`** —— 这一点由用例把 6 条棱逐对量过，而不是靠"看起来对称"。
+ *
+ * 返回 `null` 表示输入不合法（底面中心不是有限向量，或棱长不是正的有限数）。
+ */
+export function regularTetrahedronShape(input: TetrahedronInput): { vertices: Vector3[]; faces: number[][] } | null {
+  if (!input || !isFiniteVector(input.baseCenter) || !Number.isFinite(input.edge) || input.edge <= 0) return null
+  const radius = input.edge / Math.sqrt(3)
+  const height = input.edge * Math.sqrt(2 / 3)
+  const { x, y, z } = input.baseCenter
+  return {
+    vertices: [
+      { x: x + radius, y, z },
+      { x: x - radius / 2, y: y + (radius * Math.sqrt(3)) / 2, z },
+      { x: x - radius / 2, y: y - (radius * Math.sqrt(3)) / 2, z },
+      { x, y, z: z + height }
+    ],
+    /**
+     * 面环的绕向与 `buildPyramid` 同一口径：底面 `[2, 1, 0]` 从外侧看是顺时针（法向朝下），
+     * 三个侧面按底面环的顺序接第四点（`[i, i+1, 3]`）。
+     */
+    faces: [[2, 1, 0], [0, 1, 3], [1, 2, 3], [2, 0, 3]]
+  }
+}
+
+function buildTetrahedron(input: TetrahedronInput, context: BuilderContext): SolidBuildResult {
+  const shape = regularTetrahedronShape(input)
+  if (!shape) return emptyResult([diagnostic("invalid-input", "tetrahedron parameters are invalid: the base center must be finite and the edge length a positive finite number")])
+  // 顶点/棱/面的编号、共面性、非零体积、自交这些校验都由既有的 `buildFromPoints` 负责。
+  return buildFromPoints(shape, context)
+}
+
 function buildCylinder(input: RoundSolidInput, context: BuilderContext): SolidBuildResult {
   const bottom = Array.from({ length: input.segments }, (_, index) => {
     const angle = index * Math.PI * 2 / input.segments
@@ -447,6 +499,7 @@ const solidBuilders = new Map<string, SolidBuilder<unknown>>([
   ["fromPoints", { id: "fromPoints", label: "点集构造多面体", create: (input, context) => buildFromPoints(input as FromPointsInput, context) }],
   ["cube", { id: "cube", label: "立方体", create: (input, context) => buildCube(input as CubeInput, context) }],
   ["pyramid", { id: "pyramid", label: "棱锥", create: (input, context) => buildPyramid(input as PyramidInput, context) }],
+  ["tetrahedron", { id: "tetrahedron", label: "正四面体", create: (input, context) => buildTetrahedron(input as TetrahedronInput, context) }],
   ["cylinder", { id: "cylinder", label: "圆柱近似", create: (input, context) => {
     const roundInput = input as RoundSolidInput
     if (!roundInput || !Number.isInteger(roundInput.segments) || roundInput.segments < 3 || roundInput.segments > MAX_SOLID_SEGMENTS || !isFiniteVector(roundInput.center) || !Number.isFinite(roundInput.radius) || roundInput.radius <= 0 || !Number.isFinite(roundInput.height) || roundInput.height <= 0) return emptyResult([diagnostic("invalid-input", `cylinder parameters are invalid (segments must be an integer in 3..${MAX_SOLID_SEGMENTS})`)])

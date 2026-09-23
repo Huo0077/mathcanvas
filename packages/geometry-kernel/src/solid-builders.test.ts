@@ -293,6 +293,42 @@ describe("solid builders", () => {
   })
 
   /**
+   * **正四面体**（用户口径："画一个正四面体 ABCD，棱长为 3"）。
+   *
+   * 判据不是"看起来像"：**六条棱逐对量过都等于棱长**，而面数是 4、顶点数是 4 —— 这就是"正四面体"的定义。
+   * 在那之前内核只有 `pyramid`（底面是**矩形**）与 `prism`（底面 + 平移副本），两者都表达不出这个形状，
+   * 于是模型只能拿三棱柱冒充（用户现场：要正四面体，拿到的是三棱柱）。
+   */
+  it("builds a regular tetrahedron whose six edges all equal the requested length", () => {
+    const built = buildSolid("tetrahedron", { baseCenter: { x: 0, y: 0, z: 0 }, edge: 3 }, createBuilderContext("tetra"))
+
+    expect(built.diagnostics).toEqual([])
+    expect(built.vertexIds).toHaveLength(4)
+    expect(built.edgeIds).toHaveLength(6)
+    expect(built.faceIds).toHaveLength(4)
+
+    const positions = built.primitives.filter((primitive) => primitive.type === "point3").map((primitive) => primitive.position)
+    expect(positions).toHaveLength(4)
+    const lengths: number[] = []
+    for (let first = 0; first < positions.length; first += 1) {
+      for (let second = first + 1; second < positions.length; second += 1) {
+        lengths.push(Math.hypot(positions[first].x - positions[second].x, positions[first].y - positions[second].y, positions[first].z - positions[second].z))
+      }
+    }
+    // 4 个顶点两两一对 = 6 条棱。
+    expect(lengths).toHaveLength(6)
+    for (const length of lengths) expect(length).toBeCloseTo(3, 9)
+  })
+
+  it("refuses a tetrahedron whose edge length is not a positive finite number", () => {
+    for (const edge of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const built = buildSolid("tetrahedron", { baseCenter: { x: 0, y: 0, z: 0 }, edge }, createBuilderContext("tetra"))
+      expect(built.diagnostics.length, `edge=${edge} must be refused`).toBeGreaterThan(0)
+      expect(built.primitives).toHaveLength(0)
+    }
+  })
+
+  /**
    * 用户反馈："立体里的圆相关的内容不要这么多标点啊，只需要四个点就够了。"
    *
    * 圆类实体是**多边形近似**：48 段会把 96 个细分顶点都物化成带标签的点（A…Z、P27…P96），
