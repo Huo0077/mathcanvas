@@ -816,6 +816,97 @@ describe("a committed run leaves long-term memory behind", () => {
   })
 
   /**
+   * **用户现场**：在平面几何文档里让 Agent 建立体 —— 模型给的计划里混着平面动作与立体动作。
+   *
+   * 这一轮曾经以 `compile_failed: workspace_mismatch: … a prism can only be created in the solid
+   * workspace` 结束，而账本里那次"一次性修复"（`asking for the one repair (1/1)`）救不回来：
+   * **模型改不了文档的工作区**。
+   *
+   * 根因是切工作区那条判据**按第一笔动作**决定（循环里第一个命中就 `return`）：第一笔是
+   * `planar.*` 就切平面，后面那笔 `solid.create_prism` 于是必然被编译器拒。判据必须与动作顺序无关，
+   * 而且**三维优先** —— `geometry3d` 的文档同样接受平面动作（`schema.ts` 没有"工作区 ↔ 图元类型"的约束，
+   * 编译器也只对立体那两族设了工作区守卫），反过来不成立。
+   */
+  it("switches to the solid workspace when a plan mixes planar and solid actions, instead of dropping the solid ones", async () => {
+    useSceneStore.getState().switchWorkspace("conics", "user")
+    const planner: PlannerPort = {
+      async plan() {
+        return {
+          requestId: "r1",
+          attemptId: "a1",
+          plan: {
+            schemaVersion: "mathcanvas.plan.v1",
+            kind: "plan",
+            goal: "画一个正四面体",
+            factIds: [],
+            actions: [
+              { actionId: "planar.create_point", actionKey: "a", factIds: [], inputs: { alias: "a", points: [{ x: 0, y: 0 }] } },
+              { actionId: "planar.create_point", actionKey: "b", factIds: [], inputs: { alias: "b", points: [{ x: 3, y: 0 }] } },
+              { actionId: "planar.create_point", actionKey: "c", factIds: [], inputs: { alias: "c", points: [{ x: 1.5, y: 2.6 }] } },
+              { actionId: "planar.create_point", actionKey: "d", factIds: [], inputs: { alias: "d", points: [{ x: 1.5, y: 0.87 }] } },
+              {
+                actionId: "solid.create_prism",
+                actionKey: "prism",
+                factIds: [],
+                inputs: {
+                  alias: "prism",
+                  basePolygon: [{ x: 0, y: 0, z: 0 }, { x: 3, y: 0, z: 0 }, { x: 1.5, y: 2.6, z: 0 }],
+                  vector: { x: 0, y: 0, z: 3 }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+    const runner = createAgentRunner({ planner })
+
+    const result = await runAndWait(runner, "画一个正四面体 ABCD，棱长为 3")
+
+    // 以前这里是 `failed`（进度文档「棱锥 / 工作区」两节记着这条现场）。
+    expect(result.phase).toBe("awaiting_confirmation")
+    expect(useSceneStore.getState().document.workspace).toBe("geometry3d")
+  })
+
+  /**
+   * 上一条**不许把既有行为改坏**：整条计划都属于同一个工作区时照旧自动切过去
+   *（"用户在 Agent 里说'建一个立方体'时画布可能停在平面几何"—— 不切的话这条指令就得用户自己先切再重发）。
+   */
+  it("still switches the workspace when the whole plan belongs to one of them", async () => {
+    useSceneStore.getState().switchWorkspace("conics", "user")
+    const planner: PlannerPort = {
+      async plan() {
+        return {
+          requestId: "r1",
+          attemptId: "a1",
+          plan: {
+            schemaVersion: "mathcanvas.plan.v1",
+            kind: "plan",
+            goal: "建一个三棱柱",
+            factIds: [],
+            actions: [{
+              actionId: "solid.create_prism",
+              actionKey: "prism",
+              factIds: [],
+              inputs: {
+                alias: "prism",
+                basePolygon: [{ x: 0, y: 0, z: 0 }, { x: 3, y: 0, z: 0 }, { x: 1.5, y: 2.6, z: 0 }],
+                vector: { x: 0, y: 0, z: 3 }
+              }
+            }]
+          }
+        }
+      }
+    }
+    const runner = createAgentRunner({ planner })
+
+    const result = await runAndWait(runner, "建一个三棱柱")
+
+    expect(result.phase).toBe("awaiting_confirmation")
+    expect(useSceneStore.getState().document.workspace).toBe("geometry3d")
+  })
+
+  /**
    * **别份文档确认的事实不许进这一轮**（Fix round 1 / C1；规格 §5.1 + §9）。
    *
    * 这个应用里换工作区**就是换文档**（`switchWorkspace` 会换掉 `document`，第一次访问还会

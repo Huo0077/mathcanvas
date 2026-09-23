@@ -228,38 +228,48 @@ function awaitingDraftOf(conversation: AgentConversation): ConversationDraftView
  * - `solid.*` / `section.*` / `dynamic.*`（三维那几族）→ `geometry3d`；
  * - `planar.*` → `conics`。
  *
- * 返回 `null` 表示"这次不需要切"（例如只读回答，或动作本身不绑定工作区）。
+ * **判据与动作顺序无关**。返回空数组表示"这次不需要切"（例如只读回答，或动作本身不绑定工作区）。
  */
-function requiredWorkspace(plan: PlanEnvelope): "conics" | "geometry3d" | null {
-  if (plan.kind !== "plan") return null
+function planWorkspaces(plan: PlanEnvelope): readonly ("conics" | "geometry3d")[] {
+  if (plan.kind !== "plan") return []
+  const wanted = new Set<"conics" | "geometry3d">()
   for (const action of plan.actions) {
-    if (action.actionId.startsWith("solid.") || action.actionId.startsWith("section.")) return "geometry3d"
-    if (action.actionId.startsWith("dynamic.")) return "geometry3d"
-    if (action.actionId.startsWith("planar.")) return "conics"
+    if (action.actionId.startsWith("solid.") || action.actionId.startsWith("section.") || action.actionId.startsWith("dynamic.")) wanted.add("geometry3d")
+    else if (action.actionId.startsWith("planar.")) wanted.add("conics")
   }
-  return null
+  return [...wanted]
 }
 
 /**
  * 把工作区切到计划需要的那个。
  *
+ * **三维优先**：一条计划里既有平面动作又有立体动作时，目标只能是 `geometry3d` ——
+ * `geometry3d` 的文档同样接受平面动作（`packages/dsl/src/schema.ts` 没有"工作区 ↔ 图元类型"的约束，
+ * 动作编译器也只对立体那两族设了工作区守卫），反过来不成立。
+ *
+ * 以前这里是"循环里第一个命中就 `return`"，于是**动作顺序**决定了切到哪个工作区：
+ * 一笔 `planar.*` 写在前面，后面那笔 `solid.create_prism` 就必然在编译器那里被拒
+ *（用户现场：`compile_failed: workspace_mismatch: … a prism can only be created in the solid workspace`）。
+ * 而模型**改不了文档的工作区**，所以账本里那次"一次性修复"救不回来，整轮以 `run_failed` 收场。
+ *
  * **工程制图不参与自动切换**：在工图里说"建一个立方体"时，直接切走会让用户当前的图纸上下文消失，
  * 而这条指令本来就不属于那个工作区 —— 如实拒绝比悄悄切走更尊重用户。
  */
 function prepareWorkspaceFor(plan: PlanEnvelope): { ok: true } | { ok: false; detail: string } {
-  const wanted = requiredWorkspace(plan)
-  if (!wanted) return { ok: true }
+  const wanted = planWorkspaces(plan)
+  const target = wanted.includes("geometry3d") ? "geometry3d" : wanted[0]
+  if (!target) return { ok: true }
   const current = useSceneStore.getState().document.workspace
-  if (current === wanted) return { ok: true }
+  if (current === target) return { ok: true }
   if (current === "cad") {
-    return { ok: false, detail: `这条指令需要在${wanted === "geometry3d" ? "立体几何" : "平面几何"}工作区执行；请先离开工程制图，或者在图纸里用绘图工具。` }
+    return { ok: false, detail: `这条指令需要在${target === "geometry3d" ? "立体几何" : "平面几何"}工作区执行；请先离开工程制图，或者在图纸里用绘图工具。` }
   }
   /**
    * **标明这是 Agent 自己切的工作区**（Fix round 1 / C1）：它是"执行这条计划"的副作用，
    * 不是用户换了上下文。App 那一层据此**不**把 Agent 区的会话列表换走 ——
    * 否则用户正在读的那条会话与它的确认面板会在这一轮还没落地时被换掉。
    */
-  useSceneStore.getState().switchWorkspace(wanted, "agent")
+  useSceneStore.getState().switchWorkspace(target, "agent")
   return { ok: true }
 }
 
