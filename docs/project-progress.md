@@ -322,6 +322,35 @@ Agent 那四条里先做三条判据明确的；第 4 条（第 12 个观测对�
 
 **验证（本机实跑，2026-09-22）**：`npm test` **215 文件 / 2597 用例通过 + 1 todo**（起点 2595，+2，零失败）；`npm run typecheck` **6 个 workspace exit 0**；`npm run lint` **0 error / 14 warning**（基线）。本批只动 TypeScript，**Rust 侧未改动、未重跑**。
 
+### 工作区判据看**第一笔动作**：平面文档里让 Agent 建立体必然失败（2026-09-22，**用户现场**，`a prism can only be created in the solid workspace`）
+
+- **用户现场**：平面几何文档里让 Agent 画正四面体，账本是"暂存 5 笔 → 一次性修复（1/1）→ 又暂存 5 笔 → 失败"，
+  报 `compile_failed: workspace_mismatch: action_compile: envelope.actions[4]: a prism can only be created in the solid workspace`。
+- **第一层事实（这条报错自己在说）**：那句串只有一个产生点 —— `packages/scene-graph/src/actions/index.ts:278` 的
+  `context.targetWorkspace !== "geometry3d"`，而 `targetWorkspace` 正是**目标文档的工作区**
+  （`planCompiler.ts:237` = `context.workspace ?? context.document.workspace`，`App.tsx:1471` 同）。
+  报的是 `actions[4]` 而不是 `[0]` ⇒ 前 4 笔在那个工作区里合法、第 5 笔不是。
+- **根因**：`agentRunner.ts` 的 `requiredWorkspace` 在**循环里第一个命中就 `return`** —— 于是"切到哪个工作区"由
+  **动作顺序**决定。一笔 `planar.*` 写在前面就切平面，后面那笔 `solid.create_prism` 必然被编译器拒。
+  而模型**改不了文档的工作区**，所以账本里那次"一次性修复"必然救不回来（这正是 `1/1` 修复成功却仍然失败的原因）。
+- **改法**：`planWorkspaces` 收集**整条计划**需要的工作区（与顺序无关），`prepareWorkspaceFor` **三维优先**：
+  只要计划里有三维那几族动作就切 `geometry3d` —— 因为 `geometry3d` 的文档**同样接受平面动作**
+  （`packages/dsl/src/schema.ts` 没有"工作区 ↔ 图元类型"的约束，动作编译器也只对立体那两族设了守卫），反过来不成立。
+  工图（`cad`）照旧**不参与自动切换**，仍以那句可执行的中文拒绝（`could not prepare the target: …请先离开工程制图…`）。
+- **RED→GREEN（先看红再改）**：`apps/web/src/agent/agentRunner.test.ts` **+2**
+  - 混着 4 笔 `planar.create_point` + 1 笔 `solid.create_prism` 的计划，在平面文档里必须走到 `awaiting_confirmation`
+    且文档已切到 `geometry3d` —— RED 是 `expected 'failed' to be 'awaiting_confirmation'`（**逐字复现用户现场**）。
+  - 另一条守既有行为：整条计划都属于同一工作区时照旧自动切过去（这条改前改后都绿，是**防我改过头**的闸）。
+  - **变异**（把判据改回 `wanted[0]`，即"第一笔动作决定"）⇒ **只有混合计划那一条变红**，另外两条纹丝不动；还原后 43/43 绿。
+- **顺带纠正我自己第一版诊断里的一个错**：我最初说"要把动作菜单按工作区过滤"，**那是错的** ——
+  `agentRunner.ts:430-439` 明确写着这条自动切工作区是**故意**的（"用户在 Agent 里说'建一个立方体'时画布可能停在平面几何……
+  没有这一步，用户就得自己先切工作区再重发一次 —— 那不是对话式作图"）。按工作区过滤菜单会把这条功能直接掐死。
+  工具注册表那一层（`toolRegistry.ts:118-120`）**确实**按工作区过滤，但动作菜单**不该**照做 —— 两处的正确行为不同。
+- **如实缺口**：模型那条计划本身就不合理（4 个平面点 + 一个棱柱 ≠ 正四面体）。这一批修的是**工作区判据**，不是模型质量；
+  用户现在会拿到"4 个点 + 1 个棱柱"的候选草稿并需要自己确认 —— 比那句英文原因码死路好，但不是他要的图形。
+
+**验证（本机实跑，2026-09-22）**：`npm test` **215 文件 / 2599 用例通过 + 1 todo**（起点 2597，+2，零失败）；`npm run typecheck` **6 个 workspace exit 0**；`npm run lint` **0 error / 14 warning**（基线）。本批只动 TypeScript。
+
 ### 动作层 id 分配器：修掉「画布上已有 solid-1 时新建的第一个立体必然撞号」（2026-09-21，本节标题原缺，2026-09-22 补上）
 
 - **用户口径**：一张截图 —— 真实模型（DeepSeek）跑"已知直四棱柱 ABCD-A1B1C1D1 的底面是菱形，AA1=4, AB=2, BAD=60°，E、M、N 分别是 BC、BB1、A1D 的中点"这条请求，运行状态是 **`compile_failed: duplicate object id`**。
