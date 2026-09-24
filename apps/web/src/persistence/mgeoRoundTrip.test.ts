@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { createEmptyDocument, decodeMgeo, encodeMgeo } from "@draw/dsl"
-import { applyOperation, recomputeDerivedObjects } from "@draw/scene-graph"
+import { applyOperation, compileSolidTetrahedron, recomputeDerivedObjects } from "@draw/scene-graph"
 
 import { createDemoDocument } from "../demoDocument"
 
@@ -55,6 +55,25 @@ describe("mgeo round trip", () => {
     const moved = dragged.document.primitives.find((primitive) => primitive.id === "point-1")
     expect(moved).toMatchObject({ x: expect.closeTo(-3, 3), y: expect.closeTo(2.25, 3) })
     expect(dragged.document.parameters["t-point-1"].value).toBeCloseTo(-3, 3)
+  })
+
+  /**
+   * **用户现场（2026-09-23）**：Agent 建的正四面体在对象列表里是 **14 行顶层图元**（4 点 / 6 棱 / 4 面）——
+   * 说明 `polyhedron3` 不在文档里（否则 `AlgebraView` 会把子对象折叠到实体行下面），删除时那些碎片
+   * 互相引用，界面报 `object is referenced by another object`。
+   *
+   * `.mgeo` 往返（自动保存 → 恢复）此前**只用模板实体、棱柱与动态点测过**，点集构造的多面体没测过。
+   */
+  it("keeps a fromPoints solid (the agent's tetrahedron) through a save and reload", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = compileSolidTetrahedron("solid-1", { baseCenter: { x: 0, y: 0, z: 0 }, edge: 3 }, "正四面体 1").primitives
+    expect(document.primitives).toHaveLength(15)
+
+    const restored = decodeMgeo(encodeMgeo(document))
+
+    const inventory = restored.primitives.map((primitive) => `${primitive.type}:${primitive.id}`).join(", ")
+    expect(restored.primitives.filter((primitive) => primitive.type === "polyhedron3"), `round-tripped: ${inventory}`).toHaveLength(1)
+    expect(restored.primitives, `round-tripped: ${inventory}`).toHaveLength(15)
   })
 
   it("round-trips a hyperbola binding together with its branch", () => {

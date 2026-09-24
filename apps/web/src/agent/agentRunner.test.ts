@@ -68,6 +68,34 @@ describe("the confirm and commit cycle", () => {
   })
 
   /**
+   * **用户现场（2026-09-23）**：Agent 建的正四面体在文档里**丢了实体本身** —— 对象列表里
+   * 4 个顶点 / 6 条棱 / 4 个面是**顶层行**（`AlgebraView` 本会把实体的子对象折叠到实体行下面，
+   * 见 `childIds`），也就是说文档里**没有 `polyhedron3`**；于是删除时那些碎片互相引用，
+   * 界面报 `object is referenced by another object` —— 这就是"删不掉"。
+   *
+   * 这条走**完整生产路径**：本地规划器 → 隔离草稿 → 用户确认提交，然后断言文档里那一整族 15 个图元都在。
+   */
+  it("keeps the solid itself when the agent's tetrahedron is committed", async () => {
+    const runner = createAgentRunner()
+
+    const result = await runAndWait(runner, "画一个正四面体 ABCD，棱长为 3")
+
+    expect(result.phase).toBe("awaiting_confirmation")
+    // 草稿阶段：真文档一个图元都没有。
+    expect(useSceneStore.getState().document.primitives).toHaveLength(0)
+
+    const outcome = runner.confirm()
+    expect(outcome.status).toBe("committed")
+
+    const committed = useSceneStore.getState().document.primitives
+    // 失败时把实际拿到的东西打出来：是"没有 polyhedron3"还是"整族都没了"，一眼可辨。
+    const inventory = committed.map((primitive) => `${primitive.type}:${primitive.id}`).join(", ")
+    const polyhedron = committed.find((primitive) => primitive.type === "polyhedron3")
+    expect(polyhedron, `committed primitives: ${inventory}`).toBeTruthy()
+    expect(committed, `committed primitives: ${inventory}`).toHaveLength(15)
+  })
+
+  /**
    * **读会话记录抛错，不能让这一轮"点了没反应"**（外部审查 A3）。
    *
    * `readConversationSource` 里那句 `readRecord` 原先在 try/catch **外面**，而桌面侧读会话记录
