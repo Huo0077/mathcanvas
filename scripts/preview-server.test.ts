@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process"
 import { once } from "node:events"
-import { mkdtemp, rm, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
 import path from "node:path"
 
 import { expect, test } from "vitest"
@@ -22,7 +22,11 @@ const projectRoot = path.resolve(__dirname, "..")
  */
 test("preview server exits after receiving SIGTERM", async () => {
   // 放在 `build-check/` 之下（已被 .gitignore 忽略），用完即删。
-  const dist = await mkdtemp(path.join(projectRoot, "build-check", ".sigterm-probe-"))
+  // **父目录要先建**：干净检出里没有 `build-check/`（它被忽略了），
+  // `mkdtemp` 不会替你建父目录 —— 实测 CI 上就是这么红的（`ENOENT ... mkdtemp`）。
+  const parent = path.join(projectRoot, "build-check")
+  await mkdir(parent, { recursive: true })
+  const dist = await mkdtemp(path.join(parent, ".sigterm-probe-"))
   await writeFile(path.join(dist, "index.html"), '<!doctype html><html><body><div id="root"></div></body></html>')
   const port = 4300 + Math.floor(Math.random() * 500)
 

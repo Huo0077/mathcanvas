@@ -147,9 +147,16 @@ mod tests {
     }
 
     /// **唯一允许出现的路径**是应用数据根，而且只以**最后一段目录名**出现。
+    ///
+    /// 路径刻意用 `join` 拼，而不是写 `Path::new(r"C:\Users\...")`：反斜杠在 **Linux 上不是
+    /// 分隔符**，那样的字面量在那边只有**一段**，`file_name()` 会返回整串 —— 于是
+    /// "只留最后一段"这条断言在 Linux 上必红，而在 Windows 上（本机）一直是绿的。
+    /// 这正是 2026-09-25 首次 CI 里 `rust` 作业红掉的原因（cargo 退出码 101）。
+    /// `join` 在两边各按自己的分隔符拼出多段路径，测的还是同一件事。
     #[test]
     fn never_leaks_a_filesystem_path_beyond_the_data_root_directory_name() {
-        let info = build_runtime_info("0.1.0", Path::new(r"C:\Users\someone\AppData\Roaming\com.mathcanvas.app"), true, false, false);
+        let data_root = Path::new("C:").join("Users").join("someone").join("AppData").join("Roaming").join("com.mathcanvas.app");
+        let info = build_runtime_info("0.1.0", &data_root, true, false, false);
         let json = serde_json::to_string(&info).expect("serialize");
 
         assert_eq!(info.data_root, "com.mathcanvas.app");

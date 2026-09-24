@@ -124,4 +124,14 @@ jobs:
       - name: Build the web artifact the shell loads
         run: npm run build --workspace @draw/web
       - name: Rust tests
-        run: npm run test:rust
+        run: |
+          set -o pipefail
+          npm run test:rust 2>&1 | tee rust.log
+      # cargo 的失败只写在**日志**里，而日志下载要仓库管理员权限 —— 也就是说
+      # "哪一条用例红了"在 check 页面的注解里看不到。这里把 panic 那几行抬成注解：
+      # 注解是公开可读的（`/check-runs/<id>/annotations`），于是排查不必再猜。
+      - name: Surface a Rust failure as an annotation
+        if: failure()
+        run: |
+          detail=$(grep -m1 -A3 'panicked at' rust.log | tr '\n' ' ' | cut -c1-500)
+          echo "::error title=Rust tests failed::${detail:-见日志（没有抓到 panicked at 行）}"
