@@ -133,7 +133,7 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
 
 ## 四、如实缺口（不是缺陷，是没做或做不到）
 
-- **CI 的首次运行是"三红一绿"，三个红都不是产品代码的问题，而是门禁本身要不要自足**（2026-09-25，run #1 / `96ff89f`；已在本机逐条复现并修掉，见 `CHANGELOG.md` 同日那一节）：
+- **CI 的首次运行是"三红一绿"，三个红都不是产品代码的问题，而是门禁自己要不要自足**（2026-09-25，run #1 / `96ff89f`；run #2 又暴露出两处，run #3 / `f10ee8e` **四个作业全绿**；两条修复提交 `26763e7` / `f10ee8e`，见 `CHANGELOG.md` 同日那一节）：
   1. `checks` 红在 `scripts/preview-server.test.ts` —— 它等 `127.0.0.1:4173` 返回 200，而那需要 `build-check/` 里有一份构建；本机一直有，CI 上没有（构建在另一个作业里），于是轮询到 vitest 的 5 秒超时。修法：用例自己造最小产物 + 随机端口，**不再依赖本机恰好有构建**（把真实产物挪走后复跑，仍然绿）。
   2. `build` 红在根目录的 `npm run build`（= `--workspaces`）连带去跑 `apps/desktop` 的 `tauri build`，而那个作业没有装 WebKitGTK。修法：这个作业只构建 web 工作区 —— 与它自己注释里"桌面打包刻意不进 CI"一致。
   3. `rust` 红在 `shell_smoke` 的 `the_web_entry_the_shell_loads_exists_and_is_the_web_build`：它断言外壳加载的 web 产物**真的在**，而 `cargo test` 不会跑 `tauri.conf.json` 的 `beforeBuildCommand`。修法：作业里先 `npm run build --workspace @draw/web` 再跑测试。
