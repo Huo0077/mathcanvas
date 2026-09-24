@@ -94,9 +94,23 @@ test("adds a second object to a canvas that already holds one", async ({ page })
    */
   const draft = page.getByRole("region", { name: "确认改动" }).last()
   await expect(draft).toBeVisible()
-  // 关键断言：第二份草稿是**接着**已有对象算的（共 2 个）—— 撞 id 时它根本到不了这一步。
-  await expect(draft).toContainText("共 2 个")
-  await expect(draft).toContainText(/会新增 1 个对象/)
+  /**
+   * 关键断言：第二份草稿是**接着**已有对象算的 —— 撞 id 时它根本到不了这一步。
+   *
+   * **这里断言的是"分层"而不是某个固定数字**（改动前这一版写的是 `共 2 个` /
+   * `会新增 1 个对象`，那是"一个立方体 = 一个对象"时代的期望）。方案 1（P0）之后，
+   * 一个模板实体会把它的拓扑**一起物化**，所以"再建一个立方体"报的是它那一族对象的数量
+   *（同批 e2e 里 `solid-prism.spec.ts` 断言 27、`agent-oblique-prism.spec.ts` 断言 32，
+   * 口径见 `draftCounts.test.ts`）。
+   *
+   * 于是判据换成一条**不会随计数口径漂移**的性质："共 N 个"是改动后的总数，
+   * 它必须**大于**本次新增数 —— 空画布上两者相等，只有"落在已有内容之上"才会大于。
+   */
+  const panelText = await draft.innerText()
+  const added = Number(panelText.match(/会新增\s*(\d+)\s*个对象/)?.[1] ?? "0")
+  const total = Number(panelText.match(/共\s*(\d+)\s*个/)?.[1] ?? "0")
+  expect(added).toBeGreaterThan(0)
+  expect(total).toBeGreaterThan(added)
   await expect(page.getByRole("region", { name: "运行状态" }).last()).not.toContainText("duplicate object id")
   await draft.getByRole("button", { name: "确认并提交" }).click()
 
@@ -127,14 +141,16 @@ test("still drafts after a reload restored and migrated the document", async ({ 
   const draft = page.getByRole("region", { name: "确认改动" }).last()
   await expect(draft).toBeVisible()
   /**
-   * 恢复之后文档里**不只是那个立方体**：`migrateLegacySolids` 把它的子对象也物化出来了
-   * （现场是 28 个图元 → 新草稿报"共 29 个"）。所以这里断言的是"草稿确实落在已有的内容之上"，
-   * 而不是某个固定数字 —— 固定数字会把"迁移有没有跑"变成一条脆弱的断言。
+   * 恢复之后文档里**不只是那个立方体**：`migrateLegacySolids` 把它的子对象也物化出来了。
+   * 所以这里断言的是"草稿确实落在已有的内容之上"，而不是某个固定数字 ——
+   * 固定数字会把"迁移有没有跑"变成一条脆弱的断言（这一版初稿写的是 `会新增 1 个对象`，
+   * 那也是"一个立方体 = 一个对象"时代的期望，改动见上一条用例的注释）。
    */
   const panelText = await draft.innerText()
   const total = Number(panelText.match(/共\s*(\d+)\s*个/)?.[1] ?? "0")
+  const added = Number(panelText.match(/会新增\s*(\d+)\s*个对象/)?.[1] ?? "0")
   expect(total).toBeGreaterThan(1)
-  await expect(draft).toContainText(/会新增 1 个对象/)
+  expect(added).toBeGreaterThan(0)
   await expect(page.getByRole("region", { name: "运行状态" }).last()).not.toContainText("canonicalContentHash")
 })
 

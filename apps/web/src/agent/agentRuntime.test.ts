@@ -146,7 +146,17 @@ describe("the assembled runtime actually runs", () => {
     expect(events.at(-1)).toBe("awaiting_confirmation")
     const draftId = runtime.committer.draftIdFor()
     expect(draftId).not.toBeNull()
-    expect(runtime.drafts.getPreview(draftId!)?.candidate.primitives.map((primitive) => primitive.id)).toEqual(["solid-1", "solid-2"])
+    /**
+     * 新实体 `solid-2` 必须另起一个 id，而且**已有的 `solid-1` 还在**。
+     *
+     * 这里不再断言"草稿里恰好只有两个图元"：`solid.create_template` 现在一次落盘
+     * 模板 + 整族物化拓扑（P0 修复：没有拓扑，改 `rotation` 时"值改了、画布不动"），
+     * 所以 `solid-2` 后面跟着一串 `solid-2-*` 子对象是**预期**，不是漂移。
+     */
+    const draftIds = runtime.drafts.getPreview(draftId!)?.candidate.primitives.map((primitive) => primitive.id) ?? []
+    expect(draftIds[0]).toBe("solid-1")
+    expect(draftIds[1]).toBe("solid-2")
+    expect(draftIds.filter((id) => id.startsWith("solid-2")).length).toBeGreaterThan(1)
     // 草稿阶段真文档一个字节都没变。
     expect(written).toHaveLength(0)
   })
@@ -270,7 +280,7 @@ describe("the assembled runtime actually runs", () => {
       generation: 0,
       contentHash: ""
     })
-    const staged = runtime.draftTools.stage(created.draftId, [{ actionId: "solid.create_template", actionKey: "cube", factIds: [], inputs: { alias: "cube", template: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 2, z: 2 } } } as never], created.draftVersion)
+    const staged = await runtime.draftTools.stage(created.draftId, [{ actionId: "solid.create_template", actionKey: "cube", factIds: [], inputs: { alias: "cube", template: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 2, z: 2 } } } as never], created.draftVersion)
 
     expect(staged.ok).toBe(true)
     // 协调器那边的宿主桥读的是**同一个**存储：它能预览到这个草稿。
@@ -282,13 +292,13 @@ describe("the assembled runtime actually runs", () => {
     const created = runtime.draftTools.create({ projectId, documentId: "doc-1", workspace: "geometry3d", epoch: "epoch:doc-1", generation: 0, contentHash: "" })
 
     // 未知动作名 → 编译器拒绝。
-    const staged = runtime.draftTools.stage(created.draftId, [{ actionId: "planar.create_dragon" as never, actionKey: "d", factIds: [], inputs: {} as never }], created.draftVersion)
+    const staged = await runtime.draftTools.stage(created.draftId, [{ actionId: "planar.create_dragon" as never, actionKey: "d", factIds: [], inputs: {} as never }], created.draftVersion)
 
     expect(staged.ok).toBe(false)
     expect(staged.unchanged).toBe(true)
   })
 
-  it("answers export preflight questions through the injected port", () => {
+  it("answers export preflight questions through the injected port", async () => {
     const { runtime } = makeRuntime()
 
     expect(runtime.scene.inspect("doc-unknown").status).toBe("error")
@@ -301,7 +311,7 @@ describe("the assembled runtime actually runs", () => {
    * 也没有参数。这条用例走的是**真实**的路径：运行时 → 分发表 → `SceneTools` → 观察层，
    * 一个替身都没有（唯一的替身是那个脚本化 planner，而这里根本没用到它）。
    */
-  it("runs a read-only tool through the dispatcher and reports what it found", () => {
+  it("runs a read-only tool through the dispatcher and reports what it found", async () => {
     const document = geometryDocument()
     document.primitives.push({ id: "point-1", type: "point3", label: "A", position: { x: 0, y: 0, z: 0 } } as never)
     const { runtime } = makeRuntime({ document })
@@ -312,7 +322,7 @@ describe("the assembled runtime actually runs", () => {
     expect(result.payload).toHaveLength(1)
   })
 
-  it("refuses to run a tool that writes the document, and leaves the document alone", () => {
+  it("refuses to run a tool that writes the document, and leaves the document alone", async () => {
     const { runtime, written, current } = makeRuntime()
 
     const result = runtime.callTool("draft.confirm_commit", {})
@@ -323,7 +333,7 @@ describe("the assembled runtime actually runs", () => {
     expect(current()?.primitives).toHaveLength(0)
   })
 
-  it("reads the scene fresh on every tool call instead of caching the first snapshot", () => {
+  it("reads the scene fresh on every tool call instead of caching the first snapshot", async () => {
     // 观察层的"过期"检测靠现取；缓存快照会让工具一直看到旧场景。
     const document = geometryDocument()
     const { runtime } = makeRuntime({ document })

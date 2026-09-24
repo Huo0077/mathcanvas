@@ -47,8 +47,8 @@ function makeHarness(options: { now?: () => number; ttlMs?: number } = {}) {
   return { bridge, drafts, port }
 }
 
-function stagePoint(drafts: DraftStore, draftId: string, version: number, x = 1, alias = "p") {
-  return drafts.stage(draftId, [{ actionId: "planar.create_point", actionKey: alias, factIds: [], inputs: { alias, points: [{ x, y: 0 }] } }], version)
+async function stagePoint(drafts: DraftStore, draftId: string, version: number, x = 1, alias = "p") {
+  return await drafts.stage(draftId, [{ actionId: "planar.create_point", actionKey: alias, factIds: [], inputs: { alias, points: [{ x, y: 0 }] } }], version)
 }
 
 /** 真文档上的一笔手工编辑（用户操作走的就是 `applyBatch`）。 */
@@ -61,11 +61,11 @@ describe("agent commit pipeline against the real store", () => {
     localStorage.clear()
   })
 
-  it("Gate 1 — a model-shaped action only ever creates an isolated draft", () => {
+  it("Gate 1 — a model-shaped action only ever creates an isolated draft", async () => {
     const { bridge, drafts } = makeHarness()
     const record = drafts.create(useSceneStore.getState().document, bridge.live()!.handle)
 
-    expect(stagePoint(drafts, record.draftId, record.draftVersion).ok).toBe(true)
+    expect((await stagePoint(drafts, record.draftId, record.draftVersion)).ok).toBe(true)
 
     const preview = bridge.preview(record.draftId)
     expect(preview.ok).toBe(true)
@@ -77,10 +77,10 @@ describe("agent commit pipeline against the real store", () => {
     expect(useSceneStore.getState().history).toHaveLength(0)
   })
 
-  it("Gate 2 — a manual edit after the preview makes the draft stale and the newer head survives", () => {
+  it("Gate 2 — a manual edit after the preview makes the draft stale and the newer head survives", async () => {
     const { bridge, drafts } = makeHarness()
     const record = drafts.create(useSceneStore.getState().document, bridge.live()!.handle)
-    expect(stagePoint(drafts, record.draftId, record.draftVersion).ok).toBe(true)
+    expect((await stagePoint(drafts, record.draftId, record.draftVersion)).ok).toBe(true)
 
     const consent = bridge.requestConsent(record.draftId)
     expect(consent.ok).toBe(true)
@@ -116,10 +116,10 @@ describe("agent commit pipeline against the real store", () => {
    * 修法是让同意绑定**草稿的基准句柄**（候选是从哪一版文档算出来的），
    * 于是"草稿编译之后文档又变过"这条重新被既有的 `stale_source` 挡住。
    */
-  it("Gate 2 — a manual edit before the user confirms is not silently merged", () => {
+  it("Gate 2 — a manual edit before the user confirms is not silently merged", async () => {
     const { bridge, drafts } = makeHarness()
     const record = drafts.create(useSceneStore.getState().document, bridge.live()!.handle)
-    expect(stagePoint(drafts, record.draftId, record.draftVersion).ok).toBe(true)
+    expect((await stagePoint(drafts, record.draftId, record.draftVersion)).ok).toBe(true)
 
     // 用户看着确认面板，同时又在画布上添了一笔 —— 这正是**先编辑、后确认**。
     manualEdit()
@@ -140,11 +140,11 @@ describe("agent commit pipeline against the real store", () => {
     expect(useSceneStore.getState().history).toHaveLength(1)
   })
 
-  it("Gate 2 — a draft compiled against the *current* document still commits normally", () => {
+  it("Gate 2 — a draft compiled against the *current* document still commits normally", async () => {
     // 反向守卫：绑定基准句柄不能把"文档根本没被动过"的正常提交一起挡掉。
     const { bridge, drafts } = makeHarness()
     const record = drafts.create(useSceneStore.getState().document, bridge.live()!.handle)
-    expect(stagePoint(drafts, record.draftId, record.draftVersion).ok).toBe(true)
+    expect((await stagePoint(drafts, record.draftId, record.draftVersion)).ok).toBe(true)
 
     const consent = bridge.requestConsent(record.draftId)
     if (!consent.ok) throw new Error("expected consent")
@@ -156,10 +156,10 @@ describe("agent commit pipeline against the real store", () => {
     expect(useSceneStore.getState().document.primitives).toHaveLength(1)
   })
 
-  it("Gate 3 — consent is one-time: the same record cannot commit twice", () => {
+  it("Gate 3 — consent is one-time: the same record cannot commit twice", async () => {
     const { bridge, drafts } = makeHarness()
     const record = drafts.create(useSceneStore.getState().document, bridge.live()!.handle)
-    expect(stagePoint(drafts, record.draftId, record.draftVersion).ok).toBe(true)
+    expect((await stagePoint(drafts, record.draftId, record.draftVersion)).ok).toBe(true)
 
     const consent = bridge.requestConsent(record.draftId)
     if (!consent.ok) throw new Error("expected consent")
@@ -184,10 +184,10 @@ describe("agent commit pipeline against the real store", () => {
    * 所以上面那条用例其实**碰不到** `assertFresh`；这里单独把它钉住，
    * 否则"草稿基准失效"这条判断可以整体删掉而测试全绿。
    */
-  it("Gate 2 — assertFresh reports the draft's base document as stale after a manual edit", () => {
+  it("Gate 2 — assertFresh reports the draft's base document as stale after a manual edit", async () => {
     const { bridge, drafts } = makeHarness()
     const record = drafts.create(useSceneStore.getState().document, bridge.live()!.handle)
-    expect(stagePoint(drafts, record.draftId, record.draftVersion).ok).toBe(true)
+    expect((await stagePoint(drafts, record.draftId, record.draftVersion)).ok).toBe(true)
 
     // 先确认"没被动过"时它是通过的——否则下面的失败可能只是因为别的原因。
     expect(drafts.assertFresh(record.draftId, bridge.live()!.handle).ok).toBe(true)
@@ -199,17 +199,17 @@ describe("agent commit pipeline against the real store", () => {
     if (!freshness.ok) expect(freshness.reason).toBe("stale_source")
   })
 
-  it("Gate 3 — consent is hash-bound: staging more after the preview invalidates the earlier consent", () => {
+  it("Gate 3 — consent is hash-bound: staging more after the preview invalidates the earlier consent", async () => {
     const { bridge, drafts } = makeHarness()
     const record = drafts.create(useSceneStore.getState().document, bridge.live()!.handle)
-    expect(stagePoint(drafts, record.draftId, record.draftVersion, 1, "p1").ok).toBe(true)
+    expect((await stagePoint(drafts, record.draftId, record.draftVersion, 1, "p1")).ok).toBe(true)
 
     const consent = bridge.requestConsent(record.draftId)
     if (!consent.ok) throw new Error("expected consent")
     const previewHash = consent.record.previewHash
 
     // 预览之后草稿又变了一次（**换 alias**：幂等分配器让"同 alias"等于重试同一笔）。
-    expect(stagePoint(drafts, record.draftId, 2, 2, "p2").ok).toBe(true)
+    expect((await stagePoint(drafts, record.draftId, 2, 2, "p2")).ok).toBe(true)
 
     const receipt = bridge.commit(record.draftId, consent.record)
 

@@ -535,6 +535,16 @@ function buildCone(input: RoundSolidInput, context: BuilderContext): SolidBuildR
  */
 export const MAX_SOLID_SEGMENTS = 256
 
+/**
+ * 圆类实体（圆柱 / 圆锥）的**默认**分段数。
+ *
+ * 与 `MAX_SOLID_SEGMENTS` 放在一起，因为"默认值"和"上限"是同一件几何事实的两端，
+ * 而且它此前在三处各写了一份：`apps/web/src/solidDefaults.ts`、动作层 `compileSolidTemplate`
+ * 的字面量 48，以及各测试夹具。手工按钮与 Agent 动作造出来的圆柱**必须是同一种东西**
+ * （同段数、同弦高误差），所以真源只留这一处，Web 那边改为再导出。
+ */
+export const DEFAULT_SOLID_SEGMENTS = 48
+
 const solidBuilders = new Map<string, SolidBuilder<unknown>>([
   ["prism", { id: "prism", label: "棱柱", create: (input, context) => buildPrism(input as PrismInput, context) }],
   ["frustum", { id: "frustum", label: "棱台", create: (input, context) => buildFrustum(input as FrustumInput, context) }],

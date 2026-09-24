@@ -26,6 +26,8 @@ import {
 import type { GeometryDocument } from "@draw/dsl"
 import { contentFingerprint } from "@draw/scene-graph"
 import { createDraftStore, type DraftStore } from "./draftStore"
+import { createWorkerCompileStrategy } from "./geometryWorkerHost"
+import type { WorkerLike } from "./geometryWorkerClient"
 import { createHostBridge, type HostBridge } from "./hostBridge"
 
 /**
@@ -68,6 +70,15 @@ export interface AgentRuntimeDependencies {
   readSceneDocuments(): SceneDocumentSnapshot[]
   projectId: string
   runId: string
+  /**
+   * **几何 Worker 的建法**（方案 3 的测试注入点）。
+   *
+   * 默认走 `spawnGeometryWorker()`（`new Worker(new URL(...), { type: "module" })`）——
+   * 那是 bundler 语法，在 node/vitest 里没有意义。测试注入一个假 Worker
+   *（把消息交给 `handleGeometryRequest`），于是**真链路**（契约 → 运行时 → 结果）能被覆盖，
+   * 只把"线程"换成函数调用。不传就按生产路径建。
+   */
+  geometryWorkerFactory?: () => WorkerLike
   /**
    * **这一轮钉住的那条会话**（Fix round 1 / C2；规格 §5.4）。
    *
@@ -194,7 +205,21 @@ function handleFor(document: GeometryDocument, projectId: string): DocumentHandl
 }
 
 export function createAgentRuntime(dependencies: AgentRuntimeDependencies): AgentRuntime {
-  const drafts = createDraftStore()
+  /**
+   * **编译交给几何 Worker**（方案 3）。
+   *
+   * 为什么值得：实测编译在真实大文档（约 2800 图元，即评审点名的"约 100 个三维实体"）上要
+   * **73 ms**，而过线程边界的复制只要 **1.0 ms**（76 倍）。这一轮跑在 `compilePlan` 上，
+   * 会在用户点「确认」时把主线程卡住那 73 ms；搬进 Worker 就把它挪走了。
+   *
+   * **Worker 的生命周期不在这一层**（`geometryWorkerHost.ts` 有详述）：这个函数**每轮运行**
+   * 建一次，在这里 `new Worker` 会变成"每轮泄漏一个 Worker"。所以这里只拿一个**每页面一份的
+   * 单例**（懒建、随页面卸载终止），并按这一轮的 `runId` 绑一条编译策略。
+   *
+   * 一次性同意与 CAS **一个字都没变**：Worker 只是一条"算出候选结果"的路径，
+   * 它不提交、不铸造凭据。
+   */
+  const drafts = createDraftStore(undefined, createWorkerCompileStrategy(dependencies.runId, dependencies.geometryWorkerFactory))
 
   const live = () => {
     const document = dependencies.readDocument()
@@ -220,21 +245,21 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
       const record = drafts.create(dependencies.readDocument() ?? ({} as GeometryDocument), baseHandle)
       return { draftId: record.draftId, draftVersion: record.draftVersion, previewHash: "" }
     },
-    stage(draftId, actions, expectedDraftVersion) {
+    async stage(draftId, actions, expectedDraftVersion) {
       // `DraftStore` 的签名收可变数组（它会与已有动作拼接），这里把只读入参拷一份。
-      const result = drafts.stage(draftId, [...actions], expectedDraftVersion)
+      const result = await drafts.stage(draftId, [...actions], expectedDraftVersion)
       if (!result.ok) {
         const failure: DraftStageOutcome = { ok: false, reason: result.reason, diagnostics: result.diagnostics ?? [], detail: result.detail, unchanged: true }
         return failure
       }
       return { ok: true, diagnostics: [], handle: { draftId, draftVersion: result.preview.draftVersion, previewHash: result.preview.previewHash }, unchanged: false }
     },
-    preflight(actions) {
+    async preflight(actions) {
       // 只校验不落草稿：用一个临时草稿走同一套编译，然后立刻失效掉它。
       const base = dependencies.readDocument()
       if (!base) return { ok: false, diagnostics: [{ code: "no_document", message: "there is no active document" }], detail: "there is no active document" }
       const probe = drafts.create(base, handleFor(base, dependencies.projectId))
-      const result = drafts.stage(probe.draftId, [...actions], probe.draftVersion)
+      const result = await drafts.stage(probe.draftId, [...actions], probe.draftVersion)
       // `DraftStore` 只有 `invalidate`（不是 `discard`）：它把草稿从表里删掉并记下原因。
       drafts.invalidate(probe.draftId, "preflight probe")
       return result.ok

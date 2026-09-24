@@ -371,8 +371,14 @@ test("fills the drafting area with the sheet and keeps an explicit display scale
   await expect.poll(async () => page.locator(".drawing-sheet").getAttribute("data-sheet-scale")).not.toBe("1.000")
 
   const geometry = async () => page.evaluate(() => {
-    const rect = (selector) => document.querySelector(selector).getBoundingClientRect()
-    const areaElement = document.querySelector(".drawing-sheet-area")
+    /** 取不到就抛：在 `evaluate` 里抛会变成一条读得懂的用例失败，而不是 `null` 上的 TypeError。 */
+    const must = (selector: string) => {
+      const found = document.querySelector(selector)
+      if (found === null) throw new Error(`missing element: ${selector}`)
+      return found
+    }
+    const rect = (selector: string) => must(selector).getBoundingClientRect()
+    const areaElement = must(".drawing-sheet-area")
     const style = getComputedStyle(areaElement)
     const area = rect(".drawing-sheet-area")
     const sheet = rect(".drawing-sheet")
@@ -381,8 +387,8 @@ test("fills the drafting area with the sheet and keeps an explicit display scale
       // The area keeps its own margin; fit is measured against what is left of it.
       available: { w: Math.round(areaElement.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)), h: Math.round(areaElement.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom)) },
       sheet: { w: Math.round(sheet.width), h: Math.round(sheet.height) },
-      scale: Number(document.querySelector(".drawing-sheet").getAttribute("data-sheet-scale")),
-      zoomText: document.querySelector("[data-sheet-zoom]").textContent,
+      scale: Number(must(".drawing-sheet").getAttribute("data-sheet-scale")),
+      zoomText: must("[data-sheet-zoom]").textContent,
       overflowX: document.documentElement.scrollWidth > window.innerWidth
     }
   })
@@ -392,8 +398,10 @@ test("fills the drafting area with the sheet and keeps an explicit display scale
     let previous = ""
     for (let attempt = 0; attempt < 30; attempt += 1) {
       const current = await page.evaluate(() => {
-        const sheet = document.querySelector(".drawing-sheet").getBoundingClientRect()
-        return `${Math.round(sheet.width)}x${Math.round(sheet.height)}`
+        const sheet = document.querySelector(".drawing-sheet")
+        if (sheet === null) throw new Error("missing element: .drawing-sheet")
+        const rect = sheet.getBoundingClientRect()
+        return `${Math.round(rect.width)}x${Math.round(rect.height)}`
       })
       if (current === previous) break
       previous = current

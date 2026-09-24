@@ -58,9 +58,15 @@ export interface DraftPreflightOutcome {
  */
 export interface DraftStorePort {
   create(baseHandle: DocumentHandle): DraftHandle
-  stage(draftId: string, actions: readonly DraftAction[], expectedDraftVersion: number): DraftStageOutcome
-  /** 只校验不落草稿：用来回答"这批动作会不会被接受"。 */
-  preflight(action: DraftAction[]): DraftPreflightOutcome
+  /**
+   * 暂存（= 编译）。**返回 `Promise`**（方案 3）：编译这一步可以被交给几何 Worker。
+   *
+   * 派发层本来就是异步的（`ToolPort.call` 返回 `Promise`），所以这一处改动不需要新的机制 ——
+   * 只是把"工具也可以是异步的"这件事在类型上落到实处。
+   */
+  stage(draftId: string, actions: readonly DraftAction[], expectedDraftVersion: number): Promise<DraftStageOutcome>
+  /** 只校验不落草稿：用来回答"这批动作会不会被接受"。同样会被交给 Worker。 */
+  preflight(action: DraftAction[]): Promise<DraftPreflightOutcome>
   discard(draftId: string): boolean
 }
 
@@ -78,8 +84,10 @@ export type DraftToolResult<Payload> = ToolResult<Payload> & { artifacts: DraftT
 
 export interface DraftTools {
   create(target: DocumentHandle): DraftToolResult<DraftHandle>
-  stageActions(draftId: string, expectedDraftVersion: number, actions: readonly DraftAction[]): DraftToolResult<DraftHandle | null>
-  validate(draftId: string, expectedDraftVersion: number, actions: readonly DraftAction[]): DraftToolResult<{ accepted: boolean }>
+  /** **异步**（编译器可以被交给几何 Worker）：见 `DraftStorePort.stage` 的注释。 */
+  stageActions(draftId: string, expectedDraftVersion: number, actions: readonly DraftAction[]): Promise<DraftToolResult<DraftHandle | null>>
+  /** **异步**：同上（`preflight` 走的是同一套编译）。 */
+  validate(draftId: string, expectedDraftVersion: number, actions: readonly DraftAction[]): Promise<DraftToolResult<{ accepted: boolean }>>
   preview(draftId: string, expectedDraftVersion: number, currentVersion: number): DraftToolResult<DraftHandle | null>
   discard(draftId: string): DraftToolResult<{ discarded: boolean }>
   /**
@@ -119,12 +127,12 @@ export function createDraftTools(drafts: DraftStorePort): DraftTools {
       return envelope("success", `created draft ${handle.draftId} v${handle.draftVersion}`, handle, [artifactOf(handle)], [])
     },
 
-    stageActions(draftId, expectedDraftVersion, actions) {
+    async stageActions(draftId, expectedDraftVersion, actions) {
       if (actions.length === 0) {
         return envelope("warning", "no actions to stage", null, [], [{ code: "empty_batch", severity: "warning", message: "a stage request needs at least one action" }], ["provide at least one action"])
       }
 
-      const outcome = drafts.stage(draftId, actions, expectedDraftVersion)
+      const outcome = await drafts.stage(draftId, actions, expectedDraftVersion)
       if (!outcome.ok) {
         const diagnostics = outcome.diagnostics.length > 0
           ? outcome.diagnostics.map((entry) => ({ code: entry.code, severity: "error" as const, message: entry.message }))
@@ -142,8 +150,8 @@ export function createDraftTools(drafts: DraftStorePort): DraftTools {
       return envelope("success", `draft ${draftId} is now at v${handle.draftVersion}`, handle, [artifactOf(handle)], [])
     },
 
-    validate(draftId, expectedDraftVersion, actions) {
-      const outcome = drafts.preflight([...actions])
+    async validate(draftId, expectedDraftVersion, actions) {
+      const outcome = await drafts.preflight([...actions])
       void draftId
       void expectedDraftVersion
       if (!outcome.ok) {

@@ -234,7 +234,8 @@ describe("plan compilation", () => {
    * 所以这里的 `artifacts` 必须是空的，而不是硬塞一个草稿 id 进去。
    */
   it("exposes the pipeline through the draft tool without faking a draft artifact", () => {
-    const drafts = createDraftTools({ create: () => ({ draftId: "d1", draftVersion: 1, previewHash: "" }), stage: () => ({ ok: false, detail: "unused", unchanged: true, diagnostics: [] }), preflight: () => ({ ok: true, diagnostics: [] }), discard: () => true })
+    // `stage` / `preflight` 返回 `Promise`（方案 3：编译可以交给几何 Worker）。
+    const drafts = createDraftTools({ create: () => ({ draftId: "d1", draftVersion: 1, previewHash: "" }), stage: async () => ({ ok: false as const, detail: "unused", unchanged: true, diagnostics: [] }), preflight: async () => ({ ok: true as const, diagnostics: [] }), discard: () => true })
 
     const success = drafts.compilePlan(rawPlan([PRISM]), context())
     expect(success.status).toBe("success")

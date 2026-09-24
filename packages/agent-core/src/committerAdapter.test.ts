@@ -39,7 +39,8 @@ function makeDrafts(overrides: Partial<DraftStoreLike> = {}, onStaged?: (version
   const base: DraftStoreLike & { stagedWith: typeof stagedWith } = {
     stagedWith,
     create: vi.fn(() => ({ draftId: "draft_1", draftVersion: version })),
-    stage: vi.fn((_draftId: string, _actions: readonly unknown[], expected: number) => {
+    // `stage` 返回 `Promise`（方案 3：编译可以交给几何 Worker）—— 假实现也用 async。
+    stage: vi.fn(async (_draftId: string, _actions: readonly unknown[], expected: number) => {
       stagedWith.push({ draftId: _draftId, version: expected })
       if (expected !== version) return { ok: false as const, reason: "stale_draft_version" as const, detail: `at ${version}` }
       version += 1
@@ -125,7 +126,7 @@ describe("committer adapter staging", () => {
   })
 
   it("reports a compiler refusal with its diagnostics", async () => {
-    const drafts = makeDrafts({ stage: vi.fn(() => ({ ok: false as const, reason: "compile_failed" as const, diagnostics: [{ code: "unsupported_action", message: "no handler" }] })) })
+    const drafts = makeDrafts({ stage: vi.fn(async () => ({ ok: false as const, reason: "compile_failed" as const, diagnostics: [{ code: "unsupported_action", message: "no handler" }] })) })
     const adapter = createCommitterAdapter({ drafts, host: makeHost(), live: () => ({ handle: handleFor(document()), document: document() }) })
 
     const result = await adapter.stage({ run: run(), actionCount: 1, actions, signal })
@@ -148,7 +149,7 @@ describe("committer adapter staging", () => {
     const repair = { reason: "schema_invalid", errors: [{ code: "degenerate_prism", path: "envelope.actions[0].inputs.basePolygon", detail: "zero vector" }], allowedChanges: ["envelope.actions[0].inputs.basePolygon"], attempt: 1 }
     const planDiagnostics = [{ stage: "geometry_validation" as const, code: "degenerate_prism", path: "envelope.actions[0].inputs.basePolygon", detail: "zero vector", severity: "error" as const }]
     const assumptions = [{ id: "prism:vector", text: "拉伸向量未指定", kind: "safe_default" as const, value: { x: 0, y: 0, z: 3 }, overridable: true }]
-    const drafts = makeDrafts({ stage: vi.fn(() => ({ ok: false as const, reason: "compile_failed" as const, diagnostics: [{ code: "degenerate_prism", message: "geometry_validation" }], repair, planDiagnostics, assumptions })) })
+    const drafts = makeDrafts({ stage: vi.fn(async () => ({ ok: false as const, reason: "compile_failed" as const, diagnostics: [{ code: "degenerate_prism", message: "geometry_validation" }], repair, planDiagnostics, assumptions })) })
     const adapter = createCommitterAdapter({ drafts, host: makeHost(), live: () => ({ handle: handleFor(document()), document: document() }) })
 
     const result = await adapter.stage({ run: run(), actionCount: 1, actions, signal })

@@ -25,6 +25,49 @@ import { createModelPlanner, resolveActiveProvider, type ModelPlannerDependencie
  * 界面那一层拿不到 `commit`，也造不出同意凭据 —— 这是"提交不是模型可见工具"在装配层的落点。
  */
 
+/**
+ * 这一轮**新建的对象**：候选文档相对当前文档的差集，但**去掉物化出来的拓扑子对象**。
+ *
+ * ## 为什么不能只做差集
+ *
+ * 一个立体在文档里从来不止一个图元：`solid.create_template` 一次落盘"模板图元 + 点 / 棱 / 面 /
+ * `polyhedron3`"，`solid.create_prism`、`solid.create_tetrahedron`、`solid.create_polyhedron` 同理。
+ * 只按 id 做差集，一个立方体就会算成 **28 个新对象**（实测：`solid-1`、`solid-1-point-1`…
+ * `solid-1-face-14`、`solid-1-polyhedron-27`）。
+ *
+ * 后果不只是数字难看：`createdObjects` 随后被 `.slice(0, 24)` 截断，而子对象排在**实体后面** ——
+ * 于是**实体自己被挤出名单**，长时记忆里留下的是 `solid-1-edge-18`、`solid-1-face-11` 这些
+ * 用户从没听说过的东西，"这一轮建了什么"这句话就废了（实测的确认事实原文：
+ * "已确认：文档第 1 版新增 24 个对象（solid-1、solid-1-point-1、…）"，
+ * 而摘要里的 `createdObjects` 是 `["solid-1-edge-18", …, "solid-1-face-11"]`）。
+ *
+ * 判据取自**文档自身**，与渲染 / 拖动 / 删除级联用的是同一条边界
+ *（`operations.ts` 的 `templateTopologyIds` / `isFreeDraggable3`），不在这里另立一套"什么算子对象"的规则：
+ *
+ * 1. 被某只 `polyhedron3` 的 `vertexIds` / `edgeIds` / `faceIds` 引用的 —— 点 / 棱 / 面；
+ * 2. `construction.sourceIds` 里点名了一只模板图元（`cube` / `pyramid` / `cylinder` / `cone`）的多面体
+ *    —— 它是那只模板的派生表示（`solid-1-polyhedron-27`），不是用户单独建的东西。
+ *
+ * 第 2 条要读的是多面体**自己**的 `sourceIds`，而不是"谁的 sourceIds 里有它"：
+ * 模板多面体的 `sourceIds` 第一个元素是**父图元**（`solid-1`），它自己并不在里面 ——
+ * 从属主那一侧找会把父图元误判成子对象（实测：实体被滤掉，只剩派生多面体）。
+ *
+ * 两条都少不得：只做第 1 条时，一个立方体仍算成"2 个对象"（`solid-1` 与 `solid-1-polyhedron-27`）。
+ */
+export function createdEntitiesOf(candidate: GeometryDocument, before: ReadonlySet<string>): string[] {
+  const templateIds = new Set(candidate.primitives
+    .filter((primitive) => ["cube", "pyramid", "cylinder", "cone"].includes(primitive.type))
+    .map((primitive) => primitive.id))
+  const generated = new Set<string>()
+  for (const primitive of candidate.primitives) {
+    if (primitive.type !== "polyhedron3") continue
+    for (const childId of [...primitive.vertexIds, ...primitive.edgeIds, ...primitive.faceIds]) generated.add(childId)
+    const sourceIds = primitive.construction && "sourceIds" in primitive.construction ? primitive.construction.sourceIds : []
+    if (sourceIds.some((sourceId) => templateIds.has(sourceId))) generated.add(primitive.id)
+  }
+  return candidate.primitives.map((primitive) => primitive.id).filter((id) => !before.has(id) && !generated.has(id))
+}
+
 export interface RunPromptResult {
   phase: string
   /** 有草稿并且停在确认阶段时为它的 id。 */
@@ -569,7 +612,7 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
         // **只取 id**：候选文档本身一个字节都不离开这一层。
         if (commit && preview.ok) {
           const before = new Set(useSceneStore.getState().document.primitives.map((primitive) => primitive.id))
-          commit.createdObjects = preview.artifact.candidate.primitives.map((primitive) => primitive.id).filter((id) => !before.has(id)).slice(0, 24)
+          commit.createdObjects = createdEntitiesOf(preview.artifact.candidate, before).slice(0, 24)
         }
         useAgentStore.getState().recordDraft({
           draftId,

@@ -1,7 +1,6 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib"
 
 import { winAnsiSafe as agentWinAnsiSafe } from "@draw/agent-core"
-import type { DrawingViewSpec } from "@draw/dsl"
 
 import type { ProjectedAnnotation, ProjectedDrawing, ProjectedPrimitive } from "../projectionVisuals"
 
@@ -11,13 +10,13 @@ const viewCellWidth = 500
 const viewCellHeight = 350
 
 /**
- * Exporters only emit views the sheet keeps visible, so a hidden view never produces fabricated geometry.
- * Views without a persisted spec keep their projected content.
+ * **这个模块里的每一个函数都只应当从动态 `import()` 到达。**
+ *
+ * 它静态 import 了 `pdf-lib`（实测 429 kB / gzip 178 kB），而 PDF 导出只发生在用户点"导出"那一刻。
+ * 只要 App 里还有**同步**调用点，整包就会被拉进入口 chunk —— 那正是"主 bundle 超过 500 kB"
+ * 警告的成因。同步可用的那一条判断（`selectExportableDrawings`）已经拆到
+ * `./exportableDrawings`（零重依赖），导出入口见 `App.tsx` 的 `exportSvgFile`。
  */
-export function selectExportableDrawings(drawings: ProjectedDrawing[], views: DrawingViewSpec[] = []): ProjectedDrawing[] {
-  if (views.length === 0) return drawings
-  return drawings.filter((drawing) => views.find((view) => view.kind === drawing.view)?.visible !== false)
-}
 
 interface DrawingBounds {
   minX: number

@@ -289,8 +289,16 @@ describe("the compile stage's repair request drives the one repair attempt", () 
     const committed = harness.written.at(-1)?.primitives ?? []
     // 修复后那一份（`solid.create_template` 立方体）落盘了。
     expect(committed.some((primitive) => primitive.type === "cube")).toBe(true)
-    // 而第一份计划里的棱柱（`polyhedron3`）一个都没有 —— 它连编译都没过。
-    expect(committed.some((primitive) => primitive.type === "polyhedron3")).toBe(false)
+    /**
+     * 而第一份计划里的棱柱**一条都没有** —— 它连编译都没过。
+     *
+     * 判据看的是 `construction.kind`：`solid.create_template` 的立方体现在也带上自己的
+     * `polyhedron3` 物化拓扑（P0 修复：没有它，改朝向就"值改了、画布不动"），
+     * 所以"文档里有没有 polyhedron3"不再是"第一份计划漏进来没有"的判据。
+     * 棱柱那一支的构造是 `prism`，立方体物化出来的是 `template` —— 用这个区分。
+     */
+    expect(committed.filter((primitive) => primitive.type === "polyhedron3").every((primitive) => primitive.type === "polyhedron3" && primitive.construction?.kind === "template")).toBe(true)
+    expect(committed.some((primitive) => primitive.type === "polyhedron3" && primitive.construction?.kind === "prism")).toBe(false)
     // 真文档确实被换成了那一份。
     expect(harness.current().primitives.some((primitive) => primitive.type === "cube")).toBe(true)
   })

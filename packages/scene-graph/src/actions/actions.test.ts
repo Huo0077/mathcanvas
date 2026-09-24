@@ -1,7 +1,9 @@
 import { createEmptyDocument } from "@draw/dsl"
+import { DEFAULT_SOLID_SEGMENTS, templateSolidPivot } from "@draw/geometry-kernel"
 import { describe, expect, it } from "vitest"
 
-import { compileActions } from "./index"
+import { commitPatch } from "../patches"
+import { compileActions, compileTemplateSolid } from "./index"
 import type { ActionContext, DraftAction, IdAllocator } from "./types"
 
 /**
@@ -123,8 +125,16 @@ describe("solid family", () => {
     const result = compileActions(document, [action({ actionId: "solid.create_template", inputs: { alias: "s", template: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 2, z: 2 } } })], contextWith(document))
 
     expect(result.diagnostics).toEqual([])
+    // 一族对象走**一条** addPrimitives：一步撤销、整族一起走（与手工按钮同序）。
     expect(result.operations).toHaveLength(1)
-    expect(result.operations[0]).toMatchObject({ op: "addPrimitive", primitive: { id: "solid-1", type: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 2, z: 2 } } })
+    expect(result.operations[0]).toMatchObject({ op: "addPrimitives" })
+    const added = result.operations.flatMap((entry) => (entry.op === "addPrimitives" ? [entry.primitives] : []))[0]
+    expect(added[0]).toMatchObject({ id: "solid-1", type: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 2, z: 2 } })
+    // 模板后面跟着整族物化拓扑：8 顶点 / 12 棱 / 6 面 + 那只 polyhedron3。
+    expect(added.filter((primitive) => primitive.type === "point3")).toHaveLength(8)
+    expect(added.filter((primitive) => primitive.type === "edge3")).toHaveLength(12)
+    expect(added.filter((primitive) => primitive.type === "face3")).toHaveLength(6)
+    expect(added.filter((primitive) => primitive.type === "polyhedron3")).toHaveLength(1)
   })
 
   it("creates a pyramid as base-center plus base-size plus height, not as a cube", () => {
@@ -133,7 +143,7 @@ describe("solid family", () => {
 
     expect(result.diagnostics).toEqual([])
     expect(result.operations).toHaveLength(1)
-    const primitive = result.operations.flatMap((entry) => (entry.op === "addPrimitive" ? [entry.primitive] : []))[0]
+    const primitive = result.operations.flatMap((entry) => (entry.op === "addPrimitives" ? [entry.primitives] : [])).flat().find((candidate) => candidate.type === "pyramid")
     /**
      * 棱锥与立方体**不共用形状**：`@draw/dsl` 的文档 schema 对棱锥要求 `baseCenter` / `baseSize` / `height`，
      * 对立方体要求 `origin` / `size`（内核 `solid-builders.ts` 与手工路径 `App.tsx` 的 `addDefaultSolid` 也一样）。
@@ -142,7 +152,7 @@ describe("solid family", () => {
      */
     expect(primitive).toMatchObject({ id: "solid-1", type: "pyramid", baseCenter: { x: 1, y: 2, z: 0 }, baseSize: { x: 4, y: 4 }, height: 6 })
     // 也不许把立方体那套键一起带上：文档里多两个没人读的键，下一个人会以为它有意义。
-    expect(Object.keys(primitive).sort()).toEqual(["baseCenter", "baseSize", "height", "id", "type"])
+    expect(Object.keys(primitive!).sort()).toEqual(["baseCenter", "baseSize", "height", "id", "type"])
   })
 
   /**
@@ -248,6 +258,77 @@ describe("solid family", () => {
     expect(result.diagnostics.length).toBeGreaterThan(0)
   })
 
+  /**
+   * **Agent 造的模板实体必须与手工造的是同一种东西**
+   *（用户现场：`docs/project-progress.md` 的「Agent 造的实体改「朝向」画布不动」一节）。
+   *
+   * 现场是：Agent 建了立方体，属性栏把 `rotation.x` 从 0 改到 45°，文档值确实变成 ≈0.785398，
+   * 而三维画面逐字节不变；改尺寸却能看到变化。根因是模板实体的**两条构造路径**：
+   * 手工按钮一次落盘"模板 + 物化拓扑"，`solid.create_template` 却只落盘那一只模板图元。
+   * 没有 `polyhedron3` 拓扑时，渲染落到"直接画模板"的分支，而那条分支读尺寸与位置、
+   * **不读 `rotation`** —— 于是"值改了，画布不动"。
+   *
+   * 这条用例把两件事一起钉住：①动作编译产出整族子对象；②改朝向之后**物化顶点真的跟着转**。
+   */
+  it("materialises the template topology so a later rotation actually moves the vertices", () => {
+    const document = createEmptyDocument("geometry3d")
+    const compiled = compileActions(document, [action({ actionId: "solid.create_template", inputs: { alias: "c", template: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 2, z: 2 } } })], contextWith(document))
+    expect(compiled.diagnostics).toEqual([])
+    const added = compiled.operations.flatMap((entry) => (entry.op === "addPrimitives" ? [entry.primitives] : []))
+    expect(added).toHaveLength(1)
+    const primitives = added[0]
+    // 立方体：8 顶点 / 12 棱 / 6 面，外加那只物化出来的 polyhedron3 自己。
+    expect(primitives.filter((primitive) => primitive.type === "point3")).toHaveLength(8)
+    expect(primitives.filter((primitive) => primitive.type === "edge3")).toHaveLength(12)
+    expect(primitives.filter((primitive) => primitive.type === "face3")).toHaveLength(6)
+    /**
+     * 子对象 id 由**内核的默认上下文**给（`<solidId>-point-1` 这一类），而**不是**动作层另发明一套
+     *（`<solidId>:v0`）。这不是风格问题：`operations.ts` 的 `syncTemplateTopology` 在模板参数变化时
+     * 用同一个默认上下文重算顶点坐标，再**按 id 回填**。两套命名一旦分叉，顶点就永远回填不上，
+     * 表现就是用户现场那句"值改了、画布不动"。
+     */
+    const polyhedron = primitives.find((primitive) => primitive.type === "polyhedron3")
+    expect(polyhedron).toMatchObject({ construction: { kind: "template", templateId: "cube" } })
+    /**
+     * `construction` 是判别联合（`template` / `fromPoints` / `fromFaces` / `prism`…），只有带 `sourceIds`
+     * 的那几支才有这个字段 —— 所以先按 `kind` 收窄一次，不靠非空断言硬穿过去。
+     * 断言的内容是"整族子对象都登记在来源里"，`syncTemplateTopology` 正是靠它把一次编辑认成
+     * "这篇模板脏了"（`dirty.has(id)`），漏了模板自己就等于永不重算。
+     */
+    const construction = polyhedron?.type === "polyhedron3" ? polyhedron.construction : undefined
+    expect(construction?.kind === "template" ? construction.sourceIds : []).toContain("solid-1")
+    // 多面体与模板图元必须是**两个不同**的 id：同名会在 `addPrimitives` 里撞成 duplicate object id。
+    expect(polyhedron?.id).not.toBe("solid-1")
+    expect(primitives.filter((primitive) => primitive.type === "polyhedron3").every((primitive) => primitives.filter((candidate) => candidate.id === primitive.id).length === 1)).toBe(true)
+
+    const committed = commitPatch(document, { op: "addPrimitives", primitives })
+    expect(committed.error).toBeUndefined()
+    expect(committed.changed).toBe(true)
+    // 模板图元自己也在文档里：手工路径一直如此（`App.tsx` 的 `addSolidTemplate`），Agent 路径不许例外。
+    expect(committed.document.primitives.some((primitive) => primitive.id === "solid-1" && primitive.type === "cube")).toBe(true)
+
+    const rotation = { x: 0, y: 0, z: Math.PI / 4 }
+    const turned = commitPatch(committed.document, { op: "updatePrimitive", id: "solid-1", patch: { rotation3: rotation } })
+    expect(turned.error).toBeUndefined()
+    expect(turned.changed).toBe(true)
+
+    const pivot = templateSolidPivot({ id: "solid-1", type: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 2, z: 2 } })
+    const before = primitives.flatMap((primitive) => (primitive.type === "point3" ? [primitive.position] : []))
+    const after = turned.document.primitives.filter((primitive) => primitive.type === "point3").map((primitive) => (primitive.type === "point3" ? primitive.position : { x: 0, y: 0, z: 0 }))
+    expect(after).toHaveLength(8)
+    // 逐顶点比对"绕模板中心转 45°"的解析值：这正是渲染与测量读的那份坐标。
+    after.forEach((position, index) => {
+      const source = before[index]
+      const dx = source.x - pivot.x
+      const dy = source.y - pivot.y
+      expect(position.x).toBeCloseTo(dx * Math.cos(rotation.z) - dy * Math.sin(rotation.z) + pivot.x, 9)
+      expect(position.y).toBeCloseTo(dx * Math.sin(rotation.z) + dy * Math.cos(rotation.z) + pivot.y, 9)
+      expect(position.z).toBeCloseTo(source.z, 9)
+    })
+    // 至少有两个顶点的水平坐标真的动了 —— 否则上面那组等式可能对一份"没转"的坐标也成立。
+    expect(after.some((position, index) => Math.abs(position.x - before[index].x) > 1e-6 || Math.abs(position.y - before[index].y) > 1e-6)).toBe(true)
+  })
+
   it("refuses a flat or negative-sized cube instead of fabricating a solid", () => {
     const document = createEmptyDocument("geometry3d")
     const result = compileActions(document, [action({ actionId: "solid.create_template", inputs: { alias: "s", template: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 2, z: 0 } } })], contextWith(document))
@@ -263,6 +344,60 @@ describe("solid family", () => {
     expect(result.operations).toHaveLength(0)
     expect(result.diagnostics[0].code).toBe("workspace_mismatch")
   })
+
+  /**
+   * **手工入口与 Agent 动作必须落盘同一种东西**（评审方案 1 的验收标准原话：
+   * "Agent 和手工分别创建同参数的立方体、棱锥、圆柱、圆锥，文档中均有实体与对应拓扑，
+   * 数量与引用关系一致"）。
+   *
+   * 这条判据此前**没有被直接测过**：已有的用例分别检查"动作编译产出什么"和"手工路径由
+   * `compileTemplateSolid` 构造"，但**没有任何一条把两条路的产物放在一起比**。
+   * 而 P0 之后两条路的成功判据其实只有一条可操作的形式 —— **同参数必须产出逐字节相同的文档**：
+   * id 序列、子对象数量、拓扑引用、标签、`construction.sourceIds` 全都要对得上，
+   * 而不只是"都能画出个立方体"。
+   *
+   * 手工路径的真实形状见 `App.tsx` 的 `addSolidTemplate`：
+   * `compileTemplateSolid(primitive.id, primitive)` 之后 `addPrimitives([primitive, ...result.primitives])`。
+   * 下面逐字复刻这两步（id 由夹具的分配器给，与手工的 `nextPrimitiveId` 同为 `solid-1`）。
+   */
+  const templateCases = [
+    { name: "cube", primitive: { id: "solid-1", type: "cube", origin: { x: -7, y: 3, z: 0 }, size: { x: 4, y: 4, z: 2 } }, inputs: { template: "cube", origin: { x: -7, y: 3, z: 0 }, size: { x: 4, y: 4, z: 2 } } },
+    { name: "pyramid", primitive: { id: "solid-1", type: "pyramid", baseCenter: { x: 5, y: 5, z: 0 }, baseSize: { x: 4, y: 4 }, height: 4 }, inputs: { template: "pyramid", origin: { x: 5, y: 5, z: 0 }, size: { x: 4, y: 4, z: 4 } } },
+    { name: "cylinder", primitive: { id: "solid-1", type: "cylinder", center: { x: 5, y: -5, z: 0 }, radius: 1.5, height: 3, segments: DEFAULT_SOLID_SEGMENTS }, inputs: { template: "cylinder", origin: { x: 5, y: -5, z: 0 }, radius: 1.5, height: 3 } },
+    { name: "cone", primitive: { id: "solid-1", type: "cone", center: { x: -5, y: -5, z: 0 }, radius: 1.5, height: 3, segments: DEFAULT_SOLID_SEGMENTS }, inputs: { template: "cone", origin: { x: -5, y: -5, z: 0 }, radius: 1.5, height: 3 } }
+  ] as const
+
+  it.each(templateCases)("materialises $name identically through the manual and the agent path", (testCase) => {
+    // 手工：App.tsx 的 `addSolidTemplate` 两步。
+    const manual = compileTemplateSolid(testCase.primitive.id, testCase.primitive as never)
+    expect(manual.diagnostics).toEqual([])
+    const manualPrimitives = [testCase.primitive, ...manual.primitives]
+
+    // Agent：`solid.create_template` 编译出的那一批。
+    const agentContext = contextWith(createEmptyDocument("geometry3d"))
+    const agent = compileActions(
+      agentContext.targetDocument,
+      [action({ actionId: "solid.create_template", inputs: { alias: "s", ...testCase.inputs } })],
+      agentContext
+    )
+    expect(agent.diagnostics).toEqual([])
+    const agentPrimitives = agent.operations.flatMap((entry) => (entry.op === "addPrimitives" ? [entry.primitives] : [])).flat()
+
+    /**
+     * **逐字节相同**，而不只是"都能画出来"。
+     *
+     * 子对象 id 由内核的默认上下文按 `<solidId>-<kind>-<n>` 生成，两边必然一致 —— 但这条用例的价值
+     * 正在于**它会因为"某一侧换了命名或漏了某一族"而红**：那正是 P0 之前的状态
+     *（只在动作侧落盘模板图元、没有拓扑）。
+     */
+    expect(agentPrimitives).toEqual(manualPrimitives)
+
+    // 顺带把"数量与引用关系一致"这件事说成人能读的话：两边的 `polyhedron3` 引用同一批子对象 id。
+    const polyhedronOf = (primitives: readonly { type: string }[]) => primitives.find((primitive) => primitive.type === "polyhedron3") as { vertexIds: string[]; edgeIds: string[]; faceIds: string[] } | undefined
+    expect(polyhedronOf(agentPrimitives)).toEqual(polyhedronOf(manualPrimitives))
+    expect(polyhedronOf(agentPrimitives)?.vertexIds.length).toBeGreaterThan(0)
+  })
+
 })
 
 describe("dynamic family", () => {

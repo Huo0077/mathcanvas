@@ -34,7 +34,7 @@ export function handleGeometryRequest(request: GeometryWorkerRequest): GeometryW
   const base = { kind: "geometry.error" as const, schemaVersion: WORKER_SCHEMA_VERSION, requestId: request.requestId, code: "unknown", detail: "" }
 
   /** 成功响应的**唯一**构造点：三个信封字段只有一处填法，免得哪天漏掉一个。 */
-  const succeed = (operations: WorkerSuccess["operations"], result: ReturnType<typeof commitTransaction>, problems: string[]): WorkerSuccess => ({
+  const succeed = (operations: WorkerSuccess["operations"], result: ReturnType<typeof commitTransaction>, problems: string[], completionAssumptions: WorkerSuccess["completionAssumptions"] = []): WorkerSuccess => ({
     kind: "geometry.compile.result",
     schemaVersion: WORKER_SCHEMA_VERSION,
     requestId: request.requestId,
@@ -46,6 +46,13 @@ export function handleGeometryRequest(request: GeometryWorkerRequest): GeometryW
     problems,
     beforeHash: result.beforeHash,
     afterHash: result.afterHash,
+    /**
+     * **编译期补出来的假设必须过这条边界**（方案 3 接线时发现的缺口）。
+     *
+     * 少了它，`DraftStore.stage` 的 `completionAssumptions` 会在 Worker 路径上静默变空 ——
+     * 而那一份正是确认面板上"系统替你定了什么"。用户会确认一件他没看过的事。
+     */
+    completionAssumptions,
     artifact: { runId: request.runId, draftId: request.draftId, draftVersion: request.draftVersion, requestId: request.requestId }
   })
 
@@ -66,11 +73,34 @@ export function handleGeometryRequest(request: GeometryWorkerRequest): GeometryW
           takenIds: request.base.primitives.map((primitive) => primitive.id)
         }
       )
-      if (!compiled.ok) return { ...base, code: "compile_failed", detail: formatDiagnostics(compiled.diagnostics) }
+      if (!compiled.ok) {
+        /**
+         * **失败路径也要把编译产物带回去**：修复请求、逐层诊断、失败前补出来的假设。
+         *
+         * 少了它们，搬进 Worker 的"编不过的计划"会**比现在更难修** —— 协调器手里没有
+         * 可发回模型的修复请求（`draftStore.stage` 的失败分支正是靠它们走一次性修复）。
+         * 那是一处回退，不是"还没做"。
+         */
+        return {
+          ...base,
+          code: "compile_failed",
+          detail: formatDiagnostics(compiled.diagnostics),
+          ...(compiled.repair === undefined ? {} : { repair: compiled.repair }),
+          ...(compiled.diagnostics.length === 0 ? {} : { planDiagnostics: compiled.diagnostics }),
+          ...(compiled.assumptions.length === 0 ? {} : { assumptions: compiled.assumptions }),
+          /**
+           * **澄清问题也要带回去**：`stage` 靠它把"本该问用户"与"真的编不过"分开。
+           * 少了它，那些计划会被报成笼统的 `compile_failed`，用户看到的是"编译失败"
+           * 而不是"请你确认底面在哪"。
+           */
+          ...(compiled.questions.length === 0 ? {} : { questions: compiled.questions })
+        }
+      }
       // 走 `commitTransaction` 而不是自己循环 `applyOperation`：校验、重算与语义比较只有这一条路径。
       const result = commitTransaction({ base: request.base, operations: compiled.operations })
       if (result.errors.length > 0) return { ...base, code: "commit_rejected", detail: result.errors.join("; ").slice(0, 512) }
-      return succeed(compiled.operations, result, [])
+      // 编译期补出来的假设原样回带（`succeed` 的注释里写了为什么不能丢）。
+      return succeed(compiled.operations, result, [], compiled.assumptions)
     } catch (error) {
       return { ...base, code: "worker_threw", detail: describe(error) }
     }

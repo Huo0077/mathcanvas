@@ -4,8 +4,14 @@ import { PDFDocument } from "pdf-lib"
 
 import type { DrawingViewSpec } from "@draw/dsl"
 
-import { exportEngineeringDxf, exportEngineeringPdf, exportEngineeringSvg, selectExportableDrawings } from "./engineeringExporters"
 import type { ProjectedDrawing } from "../projectionVisuals"
+import { exportEngineeringDxf, exportEngineeringPdf, exportEngineeringSvg } from "./engineeringExporters"
+/**
+ * `selectExportableDrawings` 与三个导出器**分成两个模块**：它必须能同步调用
+ *（`App.tsx` 的 `useMemo`），而导出器静态依赖 `pdf-lib`（429 kB）只能从动态 `import()` 到达。
+ * 放在一起会把 `pdf-lib` 拉进入口 chunk，见 `exportableDrawings.ts` 的注释。
+ */
+import { selectExportableDrawings } from "./exportableDrawings"
 
 function drawing(): ProjectedDrawing[] {
   return [{

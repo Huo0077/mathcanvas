@@ -1,3 +1,4 @@
+import { compilePlan } from "@draw/agent-core"
 import { createEmptyDocument, type GeometryDocument } from "@draw/dsl"
 import { createDocumentHandle } from "@draw/scene-graph"
 import { describe, expect, it } from "vitest"
@@ -31,12 +32,12 @@ describe("isolated drafts", () => {
    * "采样不是证明"声明。第一版的生产调用点**都不传它**，于是这三条在真实管线里恒不生效 ——
    * 机制是死的，只有提示词在兜。这里的用例从 `DraftStore.stage` 这条**生产入口**出发。
    */
-  it("carries the user's words into the audit so an invariant request asks instead of inventing", () => {
+  it("carries the user's words into the audit so an invariant request asks instead of inventing", async () => {
     const store = createDraftStore()
     const base = createEmptyDocument("geometry3d")
     const record = store.create(base)
 
-    const staged = store.stage(record.draftId, [{
+    const staged = await store.stage(record.draftId, [{
       actionId: "solid.create_prism",
       actionKey: "prism",
       factIds: [],
@@ -53,11 +54,11 @@ describe("isolated drafts", () => {
     expect(store.getPreview(record.draftId)?.candidate.primitives).toHaveLength(0)
   })
 
-  it("reads a stated size out of the user's words on the production path", () => {
+  it("reads a stated size out of the user's words on the production path", async () => {
     const store = createDraftStore()
     const record = store.create(createEmptyDocument("geometry3d"))
 
-    const staged = store.stage(record.draftId, [{
+    const staged = await store.stage(record.draftId, [{
       actionId: "solid.create_template",
       actionKey: "cylinder",
       factIds: [],
@@ -70,11 +71,11 @@ describe("isolated drafts", () => {
     expect(cylinder).toMatchObject({ height: 5 })
   })
 
-  it("commits a pyramid with the base-and-height geometry the document schema expects", () => {
+  it("commits a pyramid with the base-and-height geometry the document schema expects", async () => {
     const store = createDraftStore()
     const record = store.create(createEmptyDocument("geometry3d"))
 
-    const staged = store.stage(record.draftId, [{
+    const staged = await store.stage(record.draftId, [{
       actionId: "solid.create_template",
       actionKey: "pyramid",
       factIds: [],
@@ -97,11 +98,11 @@ describe("isolated drafts", () => {
    * 一只 `fromPoints` 多面体 + 四个顶点 / 六条棱 / 四个面（这正是 `validateDocument` 认的形状），
    * 而顶点标签就是用户嘴里的 A / B / C / D。
    */
-  it("commits a tetrahedron with the four-vertex geometry the document schema expects", () => {
+  it("commits a tetrahedron with the four-vertex geometry the document schema expects", async () => {
     const store = createDraftStore()
     const record = store.create(createEmptyDocument("geometry3d"))
 
-    const staged = store.stage(record.draftId, [{
+    const staged = await store.stage(record.draftId, [{
       actionId: "solid.create_tetrahedron",
       actionKey: "tetrahedron",
       factIds: [],
@@ -119,12 +120,12 @@ describe("isolated drafts", () => {
     expect(primitives.find((primitive) => primitive.type === "polyhedron3")).toMatchObject({ construction: { kind: "fromPoints" } })
   })
 
-  it("keeps a draft candidate in memory and never touches the live document", () => {
+  it("keeps a draft candidate in memory and never touches the live document", async () => {
     const store = createDraftStore()
     const base = baseDocument()
     const record = store.create(base)
 
-    const staged = store.stage(record.draftId, [{ actionId: "planar.create_point", actionKey: "a", factIds: [], inputs: { alias: "p", points: [{ x: 1, y: 2 }] } }], record.draftVersion)
+    const staged = await store.stage(record.draftId, [{ actionId: "planar.create_point", actionKey: "a", factIds: [], inputs: { alias: "p", points: [{ x: 1, y: 2 }] } }], record.draftVersion)
 
     expect(staged.ok).toBe(true)
     // 关键隔离断言：候选文档里有新点，**基础文档一个字节都没变**。
@@ -133,20 +134,20 @@ describe("isolated drafts", () => {
     expect(base.primitives).toHaveLength(0)
   })
 
-  it("reports a stale draft version instead of overwriting newer staged work", () => {
+  it("reports a stale draft version instead of overwriting newer staged work", async () => {
     const store = createDraftStore()
     const record = store.create(baseDocument())
-    store.stage(record.draftId, [{ actionId: "planar.create_point", actionKey: "a", factIds: [], inputs: { alias: "p", points: [{ x: 0, y: 0 }] } }], record.draftVersion)
+    await store.stage(record.draftId, [{ actionId: "planar.create_point", actionKey: "a", factIds: [], inputs: { alias: "p", points: [{ x: 0, y: 0 }] } }], record.draftVersion)
 
     // 用**旧版本号**再暂存一次：必须被拒，否则会把新staged 的内容覆盖掉。
-    const stale = store.stage(record.draftId, [{ actionId: "planar.create_point", actionKey: "b", factIds: [], inputs: { alias: "q", points: [{ x: 5, y: 5 }] } }], record.draftVersion)
+    const stale = await store.stage(record.draftId, [{ actionId: "planar.create_point", actionKey: "b", factIds: [], inputs: { alias: "q", points: [{ x: 5, y: 5 }] } }], record.draftVersion)
 
     expect(stale.ok).toBe(false)
     if (!stale.ok) expect(stale.reason).toBe("stale_draft_version")
     expect(store.getPreview(record.draftId)?.candidate.primitives).toHaveLength(1)
   })
 
-  it("invalidates a draft when its base handle no longer matches the live document", () => {
+  it("invalidates a draft when its base handle no longer matches the live document", async () => {
     const store = createDraftStore()
     const base = baseDocument()
     const record = store.create(base, createDocumentHandle(base, "project-1"))
@@ -158,12 +159,12 @@ describe("isolated drafts", () => {
     expect(store.getPreview(record.draftId)).toBeNull()
   })
 
-  it("refuses to stage an action the compiler rejects, and keeps the draft untouched", () => {
+  it("refuses to stage an action the compiler rejects, and keeps the draft untouched", async () => {
     const store = createDraftStore()
     const record = store.create(baseDocument())
 
     // 退化线：编译器给诊断 → 草稿不该被改成"半成品"。
-    const staged = store.stage(record.draftId, [{ actionId: "planar.create_line", actionKey: "l", factIds: [], inputs: { alias: "l", points: [{ x: 1, y: 1 }, { x: 1, y: 1 }] } }], record.draftVersion)
+    const staged = await store.stage(record.draftId, [{ actionId: "planar.create_line", actionKey: "l", factIds: [], inputs: { alias: "l", points: [{ x: 1, y: 1 }, { x: 1, y: 1 }] } }], record.draftVersion)
 
     expect(staged.ok).toBe(false)
     if (!staged.ok) expect(staged.diagnostics?.[0]?.code).toBe("degenerate_line")
@@ -178,11 +179,11 @@ describe("isolated drafts", () => {
    * 只能自己拿解析错误另造一份（或干脆不再问模型）。这里钉住：**编译器的那一份原样带出**，
    * 连同它的逐层诊断与失败前补出来的假设。
    */
-  it("hands the compiler's repair request back on a compile failure", () => {
+  it("hands the compiler's repair request back on a compile failure", async () => {
     const store = createDraftStore()
     const record = store.create(createEmptyDocument("geometry3d"))
 
-    const staged = store.stage(record.draftId, [
+    const staged = await store.stage(record.draftId, [
       // 动作 0：`vector` 缺失 → 审计回填安全默认（这是"修复请求要带上的假设"）。
       { actionId: "solid.create_prism", actionKey: "prism", factIds: [], inputs: { alias: "prism", basePolygon: [{ x: 0, y: 0, z: 0 }, { x: 2, y: 0, z: 0 }, { x: 1, y: 2, z: 0 }] } },
       // 动作 1：零向量 → 几何语义校验这一层拒。
@@ -213,17 +214,26 @@ describe("isolated drafts", () => {
    * 手工路径（`App.tsx` 的 `nextPrimitiveId`）**一直是**扫已有 id 取下一个空位的；
    * 只有动作层的分配器不知道文档里有什么 —— 两份实现漂移，Agent 侧就成了必然失败。
    */
-  it("stages onto a document that already holds an object of the same kind", () => {
+  it("stages onto a document that already holds an object of the same kind", async () => {
     const store = createDraftStore()
     const base = baseWithCube()
     const record = store.create(base)
 
-    const staged = store.stage(record.draftId, [{ actionId: "solid.create_template", actionKey: "prism", factIds: [], inputs: { alias: "prism", template: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 3, y: 3, z: 3 } } }], record.draftVersion)
+    const staged = await store.stage(record.draftId, [{ actionId: "solid.create_template", actionKey: "prism", factIds: [], inputs: { alias: "prism", template: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 3, y: 3, z: 3 } } }], record.draftVersion)
 
     expect(staged.ok).toBe(true)
     const ids = store.getPreview(record.draftId)?.candidate.primitives.map((primitive) => primitive.id)
-    // 新对象必须另起一个没被占用的 id，而且**已有对象还在**。
-    expect(ids).toEqual(["solid-1", "solid-2"])
+    /**
+     * 新对象必须另起一个没被占用的 id（`solid-2`），而且**已有对象还在**。
+     *
+     * 注意这里**不再**是"整份文档只有两个图元"：`solid.create_template` 现在一次落盘
+     * 模板 + 它的整族物化拓扑（P0 修复），所以 `solid-2` 只是**第一个**新 id。
+     * 判据改为"新实体排在新子对象之前，且整族都归 `solid-2`"。
+     */
+    expect(ids?.[0]).toBe("solid-1")
+    expect(ids?.[1]).toBe("solid-2")
+    expect(ids?.filter((id) => id.startsWith("solid-2")).length).toBeGreaterThan(1)
+    expect(ids?.filter((id) => id !== "solid-1" && id !== "solid-2" && !id.startsWith("solid-2"))).toEqual([])
   })
 
   /**
@@ -234,12 +244,12 @@ describe("isolated drafts", () => {
    * 于是"画布上有一个立方体"就成了 Agent 的**必然失败**：
    * `Error: canonicalContentHash: unsupported value of type undefined`（账本里是 `run_failed`）。
    */
-  it("stages onto a document that came back from a restore (materialized children)", () => {
+  it("stages onto a document that came back from a restore (materialized children)", async () => {
     const store = createDraftStore()
     const restored = migrateLegacySolids(baseWithCube())
     const record = store.create(restored)
 
-    const staged = store.stage(record.draftId, [{ actionId: "solid.create_template", actionKey: "second", factIds: [], inputs: { alias: "second", template: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 3, y: 3, z: 3 } } }], record.draftVersion)
+    const staged = await store.stage(record.draftId, [{ actionId: "solid.create_template", actionKey: "second", factIds: [], inputs: { alias: "second", template: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 3, y: 3, z: 3 } } }], record.draftVersion)
 
     expect(staged.ok).toBe(true)
     // 已有的立方体（以及它的子对象）一个都不能丢，新对象另起一个 id。
@@ -248,11 +258,12 @@ describe("isolated drafts", () => {
     expect(ids).toContain("solid-2")
   })
 
-  it("binds a preview hash to the exact staged content", () => {    const store = createDraftStore()
+  it("binds a preview hash to the exact staged content", async () => {
+    const store = createDraftStore()
     const record = store.create(baseDocument())
     const before = store.getPreview(record.draftId)!.previewHash
 
-    store.stage(record.draftId, [{ actionId: "planar.create_point", actionKey: "a", factIds: [], inputs: { alias: "p", points: [{ x: 3, y: 4 }] } }], record.draftVersion)
+    await store.stage(record.draftId, [{ actionId: "planar.create_point", actionKey: "a", factIds: [], inputs: { alias: "p", points: [{ x: 3, y: 4 }] } }], record.draftVersion)
     const after = store.getPreview(record.draftId)!.previewHash
 
     // 预览哈希必须随内容变化 —— 它是 consent 的绑定对象。
@@ -272,14 +283,51 @@ describe("isolated drafts", () => {
    * 这里钉住的是**形状**：64 位十六进制 SHA-256（`canonicalContentHash`），
    * 且**不含**大括号 —— 只要有人把它换回某种"文档字符串"，这两条断言就会红。
    */
-  it("binds the preview to a real SHA-256 hash, not to the document's JSON text", () => {
+  it("binds the preview to a real SHA-256 hash, not to the document's JSON text", async () => {
     const store = createDraftStore()
     const record = store.create(baseDocument())
-    store.stage(record.draftId, [{ actionId: "planar.create_point", actionKey: "a", factIds: [], inputs: { alias: "p", points: [{ x: 3, y: 4 }] } }], record.draftVersion)
+    await store.stage(record.draftId, [{ actionId: "planar.create_point", actionKey: "a", factIds: [], inputs: { alias: "p", points: [{ x: 3, y: 4 }] } }], record.draftVersion)
 
     const previewHash = store.getPreview(record.draftId)!.previewHash
 
     expect(previewHash).toMatch(/^[0-9a-f]{64}$/)
     expect(previewHash).not.toContain("{")
+  })
+
+  /**
+   * **编译策略是可替换的**（方案 3 的缝），而且**默认就是在当前线程上算**。
+   *
+   * 这条用例钉两件事：
+   * 1. 传进去的策略**真的被调用**（否则"可以换一条路"是一句空话 —— 这正是这个功能
+   *    此前"能测不能跑"的成因：`geometry.worker.ts` 一直存在，但没有任何调用点）；
+   * 2. 策略返回什么，`stage` 就照它落草稿（`stage` 之后的逻辑 —— 版本推进、假设合并、
+   *    预览哈希 —— 一行都不用为"换条路"改动）。
+   *
+   * 用假策略而不是真 Worker：Worker 的传输规则已由 `geometryWorkerClient.test.ts` 覆盖，
+   * 两条编译路径的等价性由 `geometryCompileStrategy.test.ts` 覆盖。这一条只问"缝通不通"。
+   */
+  it("runs the injected compile strategy instead of the in-process one", async () => {
+    const calls: string[] = []
+    const store = createDraftStore(undefined, (input) => {
+      calls.push(input.conversationId)
+      // 走真正的编译，只是经过这个可观察的包装：结果必须与默认策略一致。
+      return compilePlan(input.plan, {
+        document: input.document,
+        workspace: input.document.workspace,
+        capabilityRevision: input.capabilityRevision,
+        conversationId: input.conversationId,
+        documentGeneration: input.document.revision,
+        idAllocator: input.allocator,
+        ...(input.userMessage === undefined ? {} : { prompt: input.userMessage })
+      })
+    })
+    const record = store.create(baseDocument())
+    const staged = await store.stage(record.draftId, [{ actionId: "planar.create_point", actionKey: "a", factIds: [], inputs: { alias: "p", points: [{ x: 1, y: 2 }] } }], record.draftVersion)
+
+    expect(calls, "注入的策略一次都没被调用 —— 那条缝是假的").toEqual([record.draftId])
+    expect(staged.ok).toBe(true)
+    if (!staged.ok) return
+    // 策略的产物真的落进了草稿（不是被忽略掉、又跑了一遍默认路径）。
+    expect(staged.preview.candidate.primitives.map((primitive) => primitive.id)).toContain("point-1")
   })
 })

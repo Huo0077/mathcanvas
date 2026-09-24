@@ -1,3 +1,4 @@
+import type { ClarificationQuestion, PlanDiagnostic, RepairRequest, StructuredAssumption } from "@draw/agent-core"
 import type { GeometryDocument } from "@draw/dsl"
 import type { DomainOperation } from "@draw/scene-graph"
 import type { DraftAction } from "@draw/scene-graph"
@@ -88,7 +89,25 @@ export interface WorkerSuccess {
   /** 前后内容指纹，供调用方核对"这份产物是从我给的那份算出来的"。 */
   beforeHash: string
   afterHash: string
-  /** 产物归属：信封的四个标识逐字回带（`schemaVersion` 在顶层，不重复塞进这里）。 */
+  /**
+   * **编译期补出来的假设**（"系统替你定了什么"）。
+   *
+   * 为什么它必须过这条边界：假设是**在编译时**产生的（缺省字段的默认值、欠定特值），
+   * 而用户是在确认面板上才看到它们。搬进 Worker 之后如果这条边界不带它，
+   * `DraftStore.stage` 那份 `completionAssumptions` 就会**静默变空** ——
+   * 用户会确认一件他没看过的事，而这是"确认"这个动作最不该出的错。
+   *
+   * 可缺省：`geometry.check` 那条路径不做编译，自然没有假设。解析侧因此**不把它当必填**
+   * （缺字段与"确实没有假设"在这里是同一件事，与 `parseWorkerResponse` 对
+   * `diff`/`changed`/`artifact` 的严格态度刻意不同 —— 那三个缺了调用方就没法正确工作）。
+   */
+  completionAssumptions?: StructuredAssumption[]
+  /**
+   * 编译**失败**时的产物走 `geometry.error`，那里只有一句话的 `detail`。
+   * 这条边界目前**不带** `repair` / `planDiagnostics`（逐层诊断与一次性修复请求）——
+   * 也就是说：**Worker 路径暂时只支持"编得过"的计划**，失败时协调器拿不到可发回模型的修复请求。
+   * 如实记在这里，接线时必须一并处理（见 `docs/current-status.md` 的方案 3）。
+   */
   artifact: { runId: string; draftId: string; draftVersion: number; requestId: string }
 }
 
@@ -98,6 +117,28 @@ export interface WorkerFailure {
   requestId: string
   code: string
   detail: string
+  /**
+   * **编译器的一次性修复请求**（只在 `code === "compile_failed"` 时可能带上）。
+   *
+   * 为什么失败路径也必须带它：`draftStore.stage` 失败时会把这一份交给协调器，
+   * 协调器据此**再问模型一次**（"允许改哪几处"）。若 Worker 路径只回一句 `detail`，
+   * 那么"编不过的计划"搬进 Worker 之后会**比现在更难修** —— 那不是"还没做"，
+   * 而是一处**回退**。所以它必须在接线之前就在契约里。
+   */
+  repair?: RepairRequest
+  /** 编译器的逐层诊断（层 + 原因码 + 路径）；修复提示据此说清卡在哪一层。 */
+  planDiagnostics?: PlanDiagnostic[]
+  /** 编译器在失败前补出来的假设（"系统替你定了什么"不能在修复时丢掉）。 */
+  assumptions?: StructuredAssumption[]
+  /**
+   * **澄清问题**（"平面无穷多，挑一个等于换了一道题"）。
+   *
+   * `draftStore.stage` 的失败分支用它在"**没有问题**"与"**有问题要问用户**"之间分流：
+   * 有 `questions` 而没有任何 error 诊断时，它按 `needs_more_information` 把问题原样交给界面；
+   * 少了这一项，那些**本该问用户**的计划会被报成笼统的 `compile_failed`
+   *（用户看到"编译失败"而不是"请你确认底面在哪"）。
+   */
+  questions?: ClarificationQuestion[]
 }
 
 export type GeometryWorkerResponse = WorkerSuccess | WorkerFailure
@@ -201,7 +242,25 @@ export function parseWorkerResponse(input: unknown, expectedRequestId?: string):
   if (kind === "geometry.error") {
     const code = typeof input.code === "string" && input.code.length > 0 ? input.code : "worker_error"
     const detail = typeof input.detail === "string" ? input.detail.slice(0, MAX_DETAIL) : ""
-    return { ok: true, message: { kind, schemaVersion: WORKER_SCHEMA_VERSION, requestId, code, detail } }
+    /**
+     * 失败路径的三个编译产物**各自独立、都可缺省**，理由与成功路径的 `completionAssumptions`
+     * 相同：缺了只是"这一次没有那一项"。但**给错了就不认**（类型不对就当没给），
+     * 免得一个畸形载荷把协调器的修复逻辑带进歧义状态。
+     */
+    return {
+      ok: true,
+      message: {
+        kind,
+        schemaVersion: WORKER_SCHEMA_VERSION,
+        requestId,
+        code,
+        detail,
+        ...(isRecord(input.repair) ? { repair: input.repair as unknown as RepairRequest } : {}),
+        ...(Array.isArray(input.planDiagnostics) ? { planDiagnostics: input.planDiagnostics as PlanDiagnostic[] } : {}),
+        ...(Array.isArray(input.assumptions) ? { assumptions: input.assumptions as StructuredAssumption[] } : {}),
+        ...(Array.isArray(input.questions) ? { questions: input.questions as ClarificationQuestion[] } : {})
+      }
+    }
   }
 
   if (!isRecord(input.document)) return rejected("missing_document", "a result must carry the resulting document")
@@ -230,6 +289,12 @@ export function parseWorkerResponse(input: unknown, expectedRequestId?: string):
       problems: Array.isArray(input.problems) ? (input.problems as string[]) : [],
       beforeHash: typeof input.beforeHash === "string" ? input.beforeHash : "",
       afterHash: typeof input.afterHash === "string" ? input.afterHash : "",
+      /**
+       * 假设**可选**，但**给错了就不认**：不是数组就当作没给（而不是原样塞进去）。
+       * 与 `diff` / `changed` / `artifact` 的严格态度刻意不同 —— 那三个缺了调用方没法正确工作，
+       * 而假设缺了只是"这次没有替你定什么"。
+       */
+      ...(Array.isArray(input.completionAssumptions) ? { completionAssumptions: input.completionAssumptions as StructuredAssumption[] } : {}),
       artifact: input.artifact as unknown as WorkerSuccess["artifact"]
     }
   }

@@ -23,7 +23,7 @@ MathCanvas 是一个面向数学与工程场景的 2D 交互绘图工作台原�
 - **G0.5 来源上下文 · 草稿 · 预览**：作用域来源上下文（顺手修掉两个真实缺陷：切到"投影立体几何"后**显示立方体却导出空图纸**；空间来源被图纸树误报"来源已删除"）；所有写入走 Compare-and-Swap（过期候选永远不落盘）；隔离草稿 + 一次性同意（nonce 一次性、绑定预览哈希、会过期、绑定运行 id）；worker 消息边界（五个信封字段缺一即拒，未知消息类型**丢弃并诊断**而不是抛异常）；导出预检（会略过什么、哪些字会被写坏、哪种格式被阻止）。
 - **G2 文本 Agent**：运行账本（显式状态机，非法转移返回"允许的下一步"）、运行预算（4 次生成 / 6 次网络 / 24 次工具 / 每次暂存 32 个动作 / 整次 128 个，**先判后扣**）、协调器与四组注入端口、场景观察（按文档解析、**重名标签不猜**、内部细分细节不暴露给模型）、九个技能清单（哈希校验后才加载）、输出解析（两个可区分通道，**绝不从散文里抠 JSON、绝不修补字段**）、有界恢复策略（**认证 / 权限 / 几何 / 事实矛盾一律不自动重试**）、运行遥测与脱敏（默认拒绝式脱敏、账本只追加且按事件 id 幂等、**拒绝存模型推理与图像字节**）、确认面板（精确计数、来源与目标、假设、近似、删除警告、一步撤销声明）。
 - **浏览器里已经能跑通整条链**：在 Agent 工作区说"建一个棱长 3 的立方体" → 真实协调器读取场景、规划、编译成隔离草稿 → 面板显示"会新增 1 个对象"并可确认 → **确认后画布上真的出现对象（并自动切到对应工作区）→ `Ctrl+Z` 一步撤销回原样**；丢弃草稿则文档一个字节不动。**演示回复已从生产路径删除** —— 没有接入模型服务时用的是**本地确定性规划器**（只认几条固定指令，认不出就**问用户**，绝不编一个答案）。
-- **真实模型服务已接上传输层**（2026-09-21，G1）：Tauri 外壳、Windows 凭据管理器 SecretStore、provider 配置、回环代理、SQLite 项目仓储、**provider 真实转发**（`ProviderAdapter` + `HttpTransport`）、**能力证据探针**、**附件两阶段写与 `.mcanvas` 打包**都已落地。**规划器已经接到真实 provider 上**（G2 接线）：`modelPlanner.ts` 自己现取「使用中」的那一份配置，按**能力证据**选通道（`json` 已验证才走严格 JSON，否则走文本通道），provider 失败按分类上报、解析失败走协调器的一次性修复，用户按停止时真的去取消那一次请求。**没有桌面外壳或还没选服务时用本地确定性规划器**（它只认几条固定指令，认不出就**问用户**，绝不编一个答案）。附件与 `.mcanvas` 导出/导入的**界面入口**已在文件命令那一组（「项目包…」）。G1 剩下的是**密钥的手动重启验证**（需要你本机操作 + Rust 工具链）、**`native_tools` 通道**（要给出 `provider_run` 加 `tools` 参数）与**附件列举命令**。
+- **真实模型服务已接上传输层**（2026-09-21，G1）：Tauri 外壳、Windows 凭据管理器 SecretStore、provider 配置、回环代理、SQLite 项目仓储、**provider 真实转发**（`ProviderAdapter` + `HttpTransport`）、**能力证据探针**、**附件两阶段写与 `.mcanvas` 打包**都已落地。**规划器已经接到真实 provider 上**（G2 接线）：`modelPlanner.ts` 自己现取「使用中」的那一份配置，按**能力证据**选通道（`json` 已验证才走严格 JSON，否则走文本通道），provider 失败按分类上报、解析失败走协调器的一次性修复，用户按停止时真的去取消那一次请求。**没有桌面外壳或还没选服务时用本地确定性规划器**（它只认几条固定指令，认不出就**问用户**，绝不编一个答案）。附件与 `.mcanvas` 导出/导入的**界面入口**已在文件命令那一组（「项目包…」）。G1 剩下的是**密钥的手动重启验证**（需要你本机操作 + Rust 工具链）、**`native_tools` 通道**（要给出 `provider_run` 加 `tools` 参数）与**附件列举命令**。（**这三条后来都做完了** —— 同一份文档的后面几节与「G2 补口」记着结果。本行保留当时的口径不改写，但读到这里的人不该把它当成当前状态：**这一段是 2026-09-21 的快照**。）
 
 **2026-09-21 G1 落地（外壳 → 密钥库 → provider 配置 → 适配器与真实转发 → 回环代理 → SQLite 仓储）**：Rust 工具链装好之后，G1 的六个任务在同一天内逐批推进，每批都按"先写失败用例（RED）→ 实现转 GREEN → 更新进度档案与 README → 跑全套门禁 → 提交推送"走。两条最值得记住的性质：**密钥的明文没有出口**（`provider_run` 的参数里只有 `profileId`；密钥在 Rust 侧由 `ProviderAdapter` 从凭据库借出，借出窗口**只覆盖那一次 HTTP** —— `with_secret` 收同步闭包，闭包一返回那个 `&str` 就没了，而 `ProviderRequest` 里的认证头**永远是空值**，真值由 `authorize(..)` 现场算出；用例同时断言"认证头真上了线"与"请求本体里没有它"）与**取消之后不再产出事件**（每次运行一枚句柄，而不是一枚全局标志 —— 全局标志表达不了"这一次"，会让上一轮的停止掐掉下一轮）。`HttpTransport` 刻意**不跟随重定向**（跟着走会把认证头送给 `Location` 指的地方）、**不用环境/系统代理**（本机配着 `HTTPS_PROXY`，回环请求被代理回了 502，是测试抓出来的）、用 rustls 而非系统 TLS、连接 15 秒 / 总 120 秒超时、响应体限长。逐批细节与"被测试抓出来的真实缺陷"清单见 [`docs/project-progress.md`](docs/project-progress.md) 的「G1 第一批 … 第九批」。
 
@@ -193,15 +193,16 @@ npm run test:e2e
 - **对模型的能力边界是代码里的表，不是提示词**：能力注册表（42 图元 / 39 操作，不可用的显式标出）、按阶段发布的工具（观察阶段**没有任何写入工具**；提交工具只在"等你确认"且你已确认时存在）、技能清单（哈希校验后才加载）。
 - **失败会如实说**：认证 / 权限 / 几何 / 事实矛盾这四类**一律不自动重试**；输出解析**绝不从散文里抠 JSON、绝不修补字段**；运行遥测默认拒绝式脱敏（`Authorization`、`sk-` 前缀、长随机串一律替换），账本**拒绝存模型推理与图像字节**。
 - **假设要摆在台面上**（2026-09-21 补）：计划信封可选声明 `assumptions`（"把「直径 6」读作半径 3"），经协调器的 `onPlanParsed` → 运行时 → 运行器一路带到确认面板的「系统替你做的假设」一节（`AssumptionList.tsx`）。**没有声明就整节不渲染** —— 显示一个空的"确实没有假设"会被读成"它检查过了"，而那是我们不知道的事。
-- **当前边界（如实）**：真实 provider 已接在 `PlannerPort` 上（G2 接线，2026-09-21）—— **选过「使用中」的那一份并且它有密钥**时，那一轮由模型规划；其余情况（浏览器里、还没选、没密钥）用本地确定性规划器。`assumptions` 与 `clarification` 的问题都会显示在界面上（不再是那句写死的"没有模型服务"）。**仍未接的**：`native_tools` 通道（`provider_run` 契约里没有放工具表的位置），以及**协调器还没有调用 `ToolPort`** —— 宿主侧的分发表（`toolDispatch` + `AgentRuntime.callTool`）已经能执行只读工具，但模型目前还不能自己发起一次工具调用。另外 `agent.worker.ts` / `geometry.worker.ts` 有实现与测试，而全仓没有任何 `new Worker(`（没有生产调用方）。
+- **当前边界（如实）**：真实 provider 已接在 `PlannerPort` 上（G2 接线，2026-09-21）—— **选过「使用中」的那一份并且它有密钥**时，那一轮由模型规划；其余情况（浏览器里、还没选、没密钥）用本地确定性规划器。`assumptions` 与 `clarification` 的问题都会显示在界面上（不再是那句写死的"没有模型服务"）。**仍未接的**：**协调器还没有调用 `ToolPort`** —— 宿主侧的分发表（`toolDispatch` + `AgentRuntime.callTool`）已经能执行只读工具，但模型目前还不能自己发起一次工具调用。另外 `agent.worker.ts` / `geometry.worker.ts` 有实现与测试，而全仓没有任何 `new Worker(`（没有生产调用方）—— 所以 `agent.worker.ts` 对请求回 `agent.unavailable` 是**如实回答**，不能读成"Agent 协调器已经能在 worker 里跑"。
 
+  > `native_tools` 通道**已经不在这张"未接"清单里**（本行此前把它列在这里，与本文档后面几节自相矛盾）。它已随"给 `provider_run` 补 `tools` 参数"一起落地：只有能力证据为 `verified` 才走原生工具通道，Rust 侧还会再判一次 `tools_verified`。历史背景见 [`docs/project-progress.md`](docs/project-progress.md) 的「G2 补口」。
 ## 包结构
 
 - `packages/dsl`：版本化 Geometry Document、图元类型、校验和 `.mgeo` 编解码。
 - `packages/geometry-kernel`：数值策略、约束、交点、射线/折线、圆锥曲线和微积分计算。
-- `packages/scene-graph`：Domain Operation、Patch 校验、依赖传播、事务、**动作编译器**（12 族）与**作用域来源上下文**。
+- `packages/scene-graph`：Domain Operation、Patch 校验、依赖传播、事务、**动作编译器**（12 族）与**作用域来源上下文**。文件按职责分：`operations.ts`（操作执行与重算管线）、**`solidGeometry.ts`**（立体与截面的几何：模板 / 物化拓扑 → 顶点 + 面环，供截面、二面角、截面物化三处消费）、`patches.ts`（写入前与写入后的校验）、`transactions.ts`（原子事务与语义 diff）、`actions/`（动作编译器）、`sourceContext.ts`（作用域来源）。
 - `packages/agent-core`：**Agent 的纯逻辑层**（不依赖 UI、也没有任何网络代码）：能力注册表、传输契约与运行时 schema、动作 id 规范清单、运行账本与预算、协调器与其四组注入端口、场景观察、技能清单与哈希校验目录、观察 / 草稿 / 交互三组工具、输出解析、恢复策略、网关通道选择、运行遥测与脱敏。依赖只有 `@draw/dsl` 与 `@draw/scene-graph`。
-- `apps/web`：工作台 UI、SVG/Three.js 画布、交互状态、属性检查器和文件导入导出；`ModuleRail` + `shellModules.ts` 是顶级模块骨架。模块 B 的 Agent 区在 `components/agent/`（状态卡、确认面板、草稿预览）与 `styles/agent.css`，对话状态在 `agentStore.ts`（与几何文档完全分离）；`agent/` 目录是宿主接线：`agentRuntime.ts`（把各部件装到一起）、`agentRunner.ts`（运行 → 确认 → 提交 → 撤销，并决定这一轮由谁规划）、`modelPlanner.ts`（**接到真实 provider 的规划器**：现取「使用中」的那一份配置、按能力证据选通道、按恢复策略重试）、`localPlanner.ts`（离线时的确定性规划器）、`draftStore.ts` / `hostBridge.ts`（隔离草稿与一次性同意）、`agent.worker.ts` / `geometry.worker.ts`（消息边界）。
+- `apps/web`：工作台 UI、SVG/Three.js 画布、交互状态、属性检查器和文件导入导出；`ModuleRail` + `shellModules.ts` 是顶级模块骨架。**`documentIds.ts`** 是 id 与自动标签的**唯一**分配处（手工入口与 Agent 的 `createIdAllocator` 语义必须一致：从 1 找第一个没被占用的号）。属性检查器按层分：**`components/inspectorFields.tsx`**（所有面板共用的表单骨架）、**`components/inspectorMath.ts`**（度数↔弧度换算、直线读数等纯函数）、`components/PropertiesBar.tsx`（各图元类型的面板本体）。文件读写集中在 `persistence/`：**`persistence/fileExports.ts`**（`.mgeo` 保存 + SVG / DXF / PDF / CSV / PNG 导出，依赖以**取值函数**传入，所以命令面板在 React 之外调用也拿到当下的文档）、`persistence/exportableDrawings.ts`（零重依赖的可见性过滤）、`persistence/engineeringExporters.ts`（工程图导出，**只从动态 `import()` 到达**，因为它静态依赖 429 kB 的 `pdf-lib`）。模块 B 的 Agent 区在 `components/agent/`（状态卡、确认面板、草稿预览）与 `styles/agent.css`，对话状态在 `agentStore.ts`（与几何文档完全分离）；`agent/` 目录是宿主接线：`agentRuntime.ts`（把各部件装到一起）、`agentRunner.ts`（运行 → 确认 → 提交 → 撤销，并决定这一轮由谁规划）、`modelPlanner.ts`（**接到真实 provider 的规划器**：现取「使用中」的那一份配置、按能力证据选通道、按恢复策略重试）、`localPlanner.ts`（离线时的确定性规划器）、`draftStore.ts` / `hostBridge.ts`（隔离草稿与一次性同意）、`agent.worker.ts` / `geometry.worker.ts`（消息边界）。
 
 ## 验证命令
 
@@ -211,6 +212,32 @@ npm run typecheck
 npm run build
 npm run test:e2e
 ```
+
+**性能趋势**（评审方案 7；只记录趋势、不设性能目标）：
+
+```bash
+npm run test:perf
+```
+
+它会打印 `PERF <场景> <毫秒>` 几行读数（大场景的事务 / 全量重算 / 派生读数 / 序列化）。CI 会把这几行落进 job summary，所以"这次改动让它变慢了吗"在 PR 页面上直接看得到。当前基准读数见 [`docs/current-status.md`](docs/current-status.md)。
+
+**当前基线不写在这里** —— 它只有一处真源：[`docs/current-status.md`](docs/current-status.md)。理由很实际：同一组数字写三份（README、当前状态、归档）必然漂移，而这个项目已经因为"同一个量有两个数"吃过亏（摘要上限 16000 / 16000 / 16384 三个值，"桌面接受、浏览器拒绝"）。
+需要可复核的当前值时：跑上面的命令，或看 [`docs/current-status.md`](docs/current-status.md)（本地实测）与 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) 的最近一次运行（CI 实测）。
+
+**下面那些带日期的段落都是"当时实测"，不是承诺。** 它们是记录，而门禁要回答的是"这一版还能不能过"。仓库**已经**有 CI 门禁（`checks` 类型检查 + Lint + Vitest、`build`、`e2e` Playwright、`rust` cargo test）—— 在此之前没有任何自动检查，README 里的"全绿"记录是**唯一**的凭据，那正是这套文档最容易过期的部分。
+
+### 构建体积（2026 年本轮实测，`npm run build`）
+
+代码按**工作区能力**分包，不再是一个 2 MB 的单 chunk：
+
+| chunk | 大小 | gzip | 什么时候加载 |
+| --- | ---: | ---: | --- |
+| `index`（入口） | 1 629.80 kB | 468.72 kB | 首屏 |
+| `engineeringExporters`（含 `pdf-lib`） | 433.81 kB | 179.75 kB | 用户点「导出 PDF / DXF / SVG」时 |
+
+分包前入口是 **2 066.63 kB（gzip 650.22 kB）**，即首屏少下 **436.83 kB / gzip 181.5 kB**。做法只有一条纪律：**重依赖不许出现在同步调用链上** —— `pdf-lib`（429 kB）此前经 `App.tsx` 的静态 import 混进入口，哪怕用户从不导出；现在三个导出函数只从动态 `import()` 到达，而同步要用的 `selectExportableDrawings` 拆到了零重依赖的 `persistence/exportableDrawings.ts`。
+
+`three`（530 kB）仍在入口里 —— 立体几何工作区是首屏可达的顶级模块，拆它要连带改 `threeScene.tsx` 的装配方式，属于下一步。构建时仍会看到 "Some chunks are larger than 500 kB" 的警告，那是入口自身的大小（应用代码 ≈ 877 kB + React 221 kB + Three 530 kB），不是某个依赖没拆开。
 
 当前验证基线（**2026-09-22，四份 2026-09-21 计划落地 + 收口轮之后实测**）：`npm test` 为 **215 个测试文件 / 2560 个用例通过 + 1 个 todo（零失败）**；`npm run typecheck` **6 个 workspace exit 0**；ESLint **0 error / 14 warning**（14 条为既有基线）；Playwright Chromium **140/140**；`npm run test:rust` **219 例通过 + 0 failed + 3 个 `#[ignore]`**（16 个测试目标）。同一轮还复扫了全部 42 个改动源文件的编码完整性（0 个替换字符）。
 
@@ -268,7 +295,8 @@ Important 里值得先看的几条：`import_package` 把附件字节写进去�
 
 ## 项目文档
 
-- [项目进度](docs/project-progress.md)：**单一进度记录**——各阶段完成项、每轮 RED→GREEN 证据、验证数字、误报清单与下一步。
+- [`docs/current-status.md`](docs/current-status.md)：**当前状态的唯一一处** —— 门禁读数、各优化方案做到哪一步、还没做什么、如实缺口。**要当前值看这里。**
+- [项目进度归档](docs/project-progress.md)：**过程**——各阶段完成项、每轮 RED→GREEN 证据、当时的验证数字、误报清单与如实缺口。里面的数字是"当时实测"，不是当前值。引用它一律用**小节标题**（行号会随编辑失效）。
 - [**桌面 Agent 实施计划**](docs/superpowers/plans/2026-09-18-desktop-agent-implementation-plan.md)：G0 / G0.5 / G1 / G2 / P5 / G5 的任务与 Gate。**当前进度：G0 与 G0.5 的 Gate 全部满足；G2 主体已实现；G1 六个任务都已动手（1.1 / 1.2 / 1.3 / 1.4 / 1.5 已完成，1.6 差 `.mcanvas` 打包与附件）—— 以 [`docs/project-progress.md`](docs/project-progress.md) 的「G1 阶段状态」表为唯一真源。** 每个任务标题下有复核状态行，写明与计划原文的差异与未完成项。
 - [功能目录](docs/feature-catalog.md)：记录当前可用能力、规划能力和明确限制。
 - [主实施计划](docs/multimodal-math-engine-implementation-plan.md)：P0–P8 的阶段划分与**逐阶段落地状态**（**P5 题图解析仍排除；P4 Agent 已交付**，见「桌面 Agent 实施计划」与进度档案的「G1 阶段状态」表）。

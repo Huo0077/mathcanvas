@@ -1,0 +1,117 @@
+name: CI
+
+# 每个 PR 的**基础门禁**（评审方案 5）。
+#
+# 仓库在评审基线（`3d083360`）上**没有** `.github/workflows` —— 所有测试都存在、都能跑，
+# 但没有任何东西在每次变更时自动执行它们。README 里的历史"全绿"记录替代不了当前提交的自动检查：
+# 那条记录写的是写它那一刻的代码，而门禁要回答的是"这一版还能不能过"。
+#
+# 分层按成本来，不追求样样都在每个 PR 上跑：
+#
+# - `checks`（必修，快）：类型检查 + Lint + Vitest。三件都不需要浏览器 / Rust / GUI。
+# - `build`（必修）：`apps/web` 的 Vite 产物就是用户与桌面 WebView 加载的东西 ——
+#   类型过了不等于打包过（配置、动态导入、体积都会在这一步才说话）。
+# - `e2e`（必修，慢）：Playwright 的 Chrome 用例。`e2e/global-setup.mjs` **自己**会重新构建
+#   当前工作区再起 127.0.0.1:4173 的 preview，所以这里**不要**再叠一次构建
+#   （叠了只会让 suite 跑在另一份产物上 —— 那份 setup 的注释记着这个坑）。
+# - `rust`（可选，最慢）：Tauri 侧的 `cargo test`。走 `scripts/toolchain.mjs` 而不是裸 `cargo`：
+#   那个包装器负责把 cargo / npm 补进子进程的 PATH（Rust 装完只写用户级 PATH，
+#   已经开着的进程看不到；桌面构建的 `beforeBuildCommand` 也据此找 npm）。
+#
+# Windows Tauri 打包与大型场景性能基准**刻意不放在这里**：前者要签名与 GUI 依赖、
+# 后者要稳定的机器才有意义。它们属于定期跑的那一层（评审方案 5 / 7）。
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# 同一分支的新推送取代旧的：PR 上连推几次不该排队等前面那几次跑完。
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Type check every workspace
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Unit and UI tests (Vitest)
+        run: npm test
+      # 性能趋势（评审方案 7）：先把 `PERF <场景> <毫秒>` 那几行落进 job summary，
+      # 再跑一遍当护栏。这样"这次改动让它变慢了吗"在 PR 页面上直接看得到，
+      # 而不用去翻日志 —— 趋势要被看见才有用。
+      - name: Performance trends (recorded)
+        run: npm run test:perf 2>&1 | tee perf.log
+      - name: Publish the performance trend
+        if: always()
+        run: |
+          {
+            echo '### 性能趋势（`PERF <场景> <毫秒>`）'
+            echo ''
+            echo '```'
+            grep -E 'PERF ' perf.log || echo '(没有取到读数)'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build the web workspace
+        run: npm run build
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install the Chromium build Playwright drives
+        run: npx playwright install --with-deps chromium
+      # `e2e/global-setup.mjs` 负责构建 + preview；这里只跑用例。
+      - run: npm run test:e2e
+      - name: Keep the trace and screenshot of a failed case
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: test-results/
+          retention-days: 7
+
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # 与桌面构建同一套系统依赖（Tauri 2 在 Linux 上要 WebKitGTK 与 libsoup）。
+      - name: Install the Tauri system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+      - name: Rust tests
+        run: npm run test:rust

@@ -1,5 +1,5 @@
 import type { GeometryDocument, PrimitiveSpec, Vector3 } from "@draw/dsl"
-import { buildFromPoints, buildPrismTopology, prismEdgeLabel, prismPointLabel, regularPyramidShape, regularTetrahedronShape, templateEdgeLabel, templatePointLabel, validatePrismInput, type BuilderContext } from "@draw/geometry-kernel"
+import { buildFromPoints, buildPrismTopology, buildSolidTemplate, DEFAULT_SOLID_SEGMENTS, prismEdgeLabel, prismPointLabel, regularPyramidShape, regularTetrahedronShape, templateEdgeLabel, templatePointLabel, validatePrismInput, type BuilderContext, type SolidBuildResult, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
 
 import type { DomainOperation } from "../operations"
 import type { ActionContext, ActionDiagnostic, CompileResult, DraftAction, IdAllocator } from "./types"
@@ -162,6 +162,77 @@ function compilePlanar(action: Extract<DraftAction, { actionId: PlanarCreateActi
   return { operations: [{ op: "addPrimitive", primitive: { id, type, a, b, ...label } }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
 }
 
+/**
+ * **模板实体的唯一构造入口**（手工按钮 / Agent 动作 / 后续任何新入口都调它）。
+ *
+ * ## 为什么必须只有一处
+ *
+ * 模板实体在文档里是**两件东西**：用户编辑的那只参数化图元（`cube` / `pyramid` / `cylinder` / `cone`），
+ * 以及由它物化出来的一整族拓扑（点 / 棱 / 面 / `polyhedron3`）。两条路径曾经各写一半：
+ * 手工按钮调 `buildSolidTemplate` 一次落盘整族；`solid.create_template` 只落盘模板图元自己。
+ *
+ * 后果是**用户看得见的**（现场见 `docs/project-progress.md` 的「Agent 造的实体改「朝向」画布不动」一节，
+ * 2026-09-24 用户原话："agent构建的元素无法修改方向、大小等数值。并且可以修改的无法在画布上改变"）：
+ * Agent 造的立方体在文档里没有拓扑，
+ * 渲染于是落到"直接画模板"的分支，而那条分支读尺寸与位置、**不读 `rotation`** ——
+ * 属性栏把 `rotation.x` 改成 45°，文档值确实变成 ≈0.785398，画面却一个像素都不动；改尺寸却能看到变化。
+ *
+ * 返回的整族子对象里**不含**模板图元自己（内核只造点 / 棱 / 面 / `polyhedron3`），
+ * 调用方要把模板排在前面一起提交。多面体的 id 由内核按 `<solidId>-polyhedron-N` 给，
+ * **与模板图元自己的 `solidId` 不同** —— 同名会让同一批 `addPrimitives` 撞成 `duplicate object id`。
+ */
+export function compileTemplateSolid(solidId: string, primitive: TemplateSolidPrimitive): SolidBuildResult {
+  /**
+   * **刻意不传自定义 `BuilderContext`**：这里必须与"事后重算子对象坐标"的那一处
+   * （`operations.ts` 的 `syncTemplateTopology`）**逐字同一套命名**。
+   *
+   * 两者都走 `buildSolidTemplate` 的默认上下文 `createBuilderContext(primitive.id)`，
+   * 名字形如 `<solidId>-point-1` / `-edge-15` / `-face-9`，多面体是 `<solidId>-polyhedron-27`。
+   * 重算那一步是**按 id 回填**顶点坐标的：两套命名一旦分叉，顶点就永远回填不上，
+   * 表现就是"值改了、画布不动"。曾经动作层自己发明过一套 `<solidId>:v0`，正是那个坑。
+   */
+  return buildSolidTemplate({ ...primitive, id: solidId })
+}
+
+/** 动作层与文档层是两套词汇，翻译只发生在这一个地方（导出是为了让这条"唯一入口"能被单测直接钉住）。 */
+export function templatePrimitiveFor(inputs: Extract<DraftAction, { actionId: "solid.create_template" }>["inputs"], id: string): TemplateSolidPrimitive {
+  const label = inputs.label === undefined ? {} : { label: inputs.label }
+  /**
+   * 动作层（模型看到的那一层）是模板无关的：`origin` + `size`（`@draw/agent-core` 的 `schemas.ts` 里
+   * `size` 的 `appliesWhen` 就是 `["cube", "pyramid"]`）。文档层却是**每个模板一套形状**
+   *（`@draw/dsl` 的 `validateDocument`）：立方体 `origin` + `size`、棱锥 `baseCenter` + `baseSize` + `height`、
+   * 圆柱 / 圆锥 `center` + `radius` + `height` + `segments`。
+   *
+   * 以前立方体与棱锥共用第一支，于是 Agent 造出来的棱锥带着**立方体的形状**进提交，被 schema 判成
+   * `pyramid geometry is invalid` —— 每个由 Agent 创建的棱锥都必然失败。手工路径
+   *（`App.tsx` 的 `addDefaultSolid("pyramid")`）一直用的是 `baseCenter` / `baseSize` / `height`，
+   * 两条路从来不一致。`size.x` / `size.y` 是底面两条边、`size.z` 是高，与立方体"三个棱长"的读法一致。
+   */
+  if (inputs.template === "cube") return { id, type: "cube", origin: inputs.origin, size: inputs.size!, ...label }
+  if (inputs.template === "pyramid") return { id, type: "pyramid", baseCenter: inputs.origin, baseSize: { x: inputs.size!.x, y: inputs.size!.y }, height: inputs.size!.z, ...label }
+  return { id, type: inputs.template, center: inputs.origin, radius: inputs.radius!, height: inputs.height!, segments: DEFAULT_SOLID_SEGMENTS, ...label }
+}
+
+/**
+ * **点集 / 模板构造共用的确定性子对象 id**：`<solidId>:v0` / `:e0` / `:f0`（规格 §3.3）。
+ *
+ * 名字是**纯函数**（Solid ID + 下标），所以重算任意多次、在任何一台机器上，同一个 Solid 的子对象
+ * 名字都一模一样 —— 下游引用（截面 / 交线 / 绑上去的动点）因此不会因为一次重算而集体失效。
+ *
+ * `polyhedron` 这一格映射回 `solidId` 自己：多面体**就是**那只实体，别名指向它。
+ */
+function solidChildIds(solidId: string): BuilderContext {
+  const counters = new Map<string, number>()
+  return {
+    allocateId(namespace) {
+      const index = counters.get(namespace) ?? 0
+      counters.set(namespace, index + 1)
+      if (namespace === "polyhedron") return solidId
+      return `${solidId}:${namespace === "point" ? "v" : namespace.charAt(0)}${index}`
+    }
+  }
+}
+
 function compileSolidTemplate(action: Extract<DraftAction, { actionId: "solid.create_template" }>, context: ActionContext): CompileResult {
   const { actionKey, inputs } = action
   // §7.3：模板属于立体几何；在平面工作区里画立方体是"工作区不匹配"，不是"参数错误"。
@@ -182,26 +253,19 @@ function compileSolidTemplate(action: Extract<DraftAction, { actionId: "solid.cr
     }
   }
   const id = context.idAllocator.allocate("solid", inputs.alias)
-  const label = inputs.label ? { label: inputs.label } : {}
+  const primitive = templatePrimitiveFor(inputs, id)
+  // 参数校验过了不代表几何成立（例如尺寸合法但内核判退化）：内核的诊断原样上报，**一条操作都不产出**。
+  const built = compileTemplateSolid(id, primitive)
+  if (built.diagnostics.length > 0) return { operations: [], diagnostics: built.diagnostics.map((entry) => diagnostic(actionKey, entry.code, entry.message)), aliasToId: {} }
   /**
-   * **动作层与文档层是两套词汇，翻译只发生在这一个地方。**
+   * 一次 `addPrimitives` 落盘整族：模板图元 + 物化拓扑。
    *
-   * 动作层（模型看到的那一层）是模板无关的：`origin` + `size`（`@draw/agent-core` 的 `schemas.ts` 里
-   * `size` 的 `appliesWhen` 就是 `["cube", "pyramid"]`）。文档层却是**每个模板一套形状**
-   *（`@draw/dsl` 的 `validateDocument`）：立方体 `origin` + `size`、棱锥 `baseCenter` + `baseSize` + `height`、
-   * 圆柱 / 圆锥 `center` + `radius` + `height` + `segments`。
-   *
-   * 以前立方体与棱锥共用第一支，于是 Agent 造出来的棱锥带着**立方体的形状**进提交，被 schema 判成
-   * `pyramid geometry is invalid` —— 每个由 Agent 创建的棱锥都必然失败。手工路径
-   *（`App.tsx` 的 `addDefaultSolid("pyramid")`）一直用的是 `baseCenter` / `baseSize` / `height`，
-   * 两条路从来不一致。`size.x` / `size.y` 是底面两条边、`size.z` 是高，与立方体"三个棱长"的读法一致。
+   * `built.primitives` 里**没有**模板图元自己（内核只造点 / 棱 / 面 / 多面体），
+   * 所以要显式排在前面 —— 与手工路径 `App.tsx` 的 `addSolidTemplate`
+   *（`apply({ op: "addPrimitives", primitives: [primitive, ...result.primitives] })`）逐字同序。
+   * 一步撤销、整族一起走。
    */
-  const primitive = inputs.template === "cube"
-    ? { id, type: "cube" as const, origin: inputs.origin, size: inputs.size!, ...label }
-    : inputs.template === "pyramid"
-      ? { id, type: "pyramid" as const, baseCenter: inputs.origin, baseSize: { x: inputs.size!.x, y: inputs.size!.y }, height: inputs.size!.z, ...label }
-      : { id, type: inputs.template, center: inputs.origin, radius: inputs.radius!, height: inputs.height!, segments: 48, ...label }
-  return { operations: [{ op: "addPrimitive", primitive } as DomainOperation], diagnostics: [], aliasToId: { [inputs.alias]: id } }
+  return { operations: [{ op: "addPrimitives", primitives: [primitive, ...built.primitives] }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
 }
 
 /**
@@ -282,25 +346,6 @@ function compileSolidPrismAction(action: Extract<DraftAction, { actionId: "solid
   const built = compileSolidPrism(id, inputs.basePolygon, inputs.vector, inputs.label)
   if (built.diagnostics.length > 0) return { operations: [], diagnostics: built.diagnostics.map((entry) => diagnostic(actionKey, entry.code, entry.message)), aliasToId: {} }
   return { operations: [{ op: "addPrimitives", primitives: built.primitives }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
-}
-
-/**
- * **点集构造的实体**（正四面体、正 N 棱锥…）的 id 分配：**确定性** —— 同一个 `solidId` 永远得到同一批子对象 id。
- *
- * 命名与棱柱那一支逐字对齐（`:v0` 顶点、`:e0` 棱、`:f0` 面），而**多面体自己就是那只实体**：
- * 它的 id 必须是动作分配出来的 `solidId`（别名指向它）。内核的 `buildFromPoints` 只会问
- * `allocateId(namespace)`，所以这一层把"多面体"这一格映射回 `solidId` 就够。
- */
-function solidChildIds(solidId: string): BuilderContext {
-  const counters = new Map<string, number>()
-  return {
-    allocateId(namespace) {
-      const index = counters.get(namespace) ?? 0
-      counters.set(namespace, index + 1)
-      if (namespace === "polyhedron") return solidId
-      return `${solidId}:${namespace === "point" ? "v" : namespace.charAt(0)}${index}`
-    }
-  }
 }
 
 /**

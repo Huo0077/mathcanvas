@@ -52,15 +52,24 @@ import { buildSystemPrompt } from "./systemPrompt"
  * 发错通道的表现是"明明能用却一直解析失败"，所以通道建议会**按通道写进提示词**，
  * 而提示词与解析器用的是同一个 `channel` 值 —— 两处各判断一次必然分叉。
  *
- * ## 三、**原生工具通道这一轮到不了**（如实）
+ * ## 三、原生工具通道**已经可用**（本节曾长期写反，是过期注释）
  *
- * `plan.set_plan` 这类工具本该以 provider 侧的工具表（function calling）形式发出去，
- * 而 `provider_run` 的入参只有 `messages` —— **IPC 契约里没有放工具表的位置**。
- * 所以这一轮走的是"动作菜单写进提示词 + 解析 JSON 信封"，而**没有**发任何工具 schema。
- * 这不会产生错误的结论（模型本来就是被要求返回 JSON 的），但它确实是一处缺口：
- * 要让 `native_tools` 通道可用，得先给 `provider_run` 加一个 `tools` 参数（Rust 侧改动）。
- * 上面那个 `channel === "native_tools"` 的分支因此是**如实拒绝**，而不是静默降级 ——
- * 降级会让人以为"工具通道通了"。
+ * 历史上这里是"原生工具通道这一轮到不了"：`provider_run` 的入参只有 `messages`，
+ * IPC 契约里没有放工具表的位置，所以 `channel === "native_tools"` 的分支是**如实拒绝**。
+ * **那段描述已经不成立** —— Rust 侧 `providers::request` / `providers::capability` 与
+ * `lib.rs` 的 `provider_run` 现在都收 `tools`，本文件下面的 `runModel` 也把
+ * `tools: [PLAN_TOOL_SCHEMA]` 真的发了出去（`:307` 选通道、`:344` 发请求）。
+ *
+ * 现在的口径：
+ *
+ * - **放行与否看证据，不看品牌**：只有 `tools === "verified"`（探针真的看到模型调用了我们的工具名）
+ *   才走 `native_tools`，否则走"动作菜单写进提示词 + 解析 JSON 信封"，一个 schema 都不发。
+ * - **Rust 侧还会再判一次**（`tools_verified`）：调用方说"这家支持工具"不算数，存下来的证据才算数。
+ *   两道判断**不是重复** —— 一层在选通道，一层在守"未验证的 provider 收不到工具表"。
+ * - 用户按停止时 `provider_cancel` 真的去取消那一次请求；解析失败仍然**原样交出去**给协调器修复。
+ *
+ * 保留这段历史是为了说明**为什么**管道长这样：`native_tools` 不是"多加一个分支"，
+ * 它要求 IPC 契约、能力证据与取消路径三样同时到位。
  *
  * ## 四、失败**抛**，解析失败**交出去**（两种不同的东西）
  *

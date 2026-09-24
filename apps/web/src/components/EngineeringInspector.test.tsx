@@ -7,7 +7,8 @@ import { applyOperation, patchPoint3, solidStatusReport } from "@draw/scene-grap
 
 import { useSceneStore } from "../store"
 import { EngineeringInspector, type InspectorContext } from "./EngineeringInspector"
-import { SolidDerivedReadings, type PropertiesBarProps } from "./PropertiesBar"
+import { type PropertiesBarProps } from "./PropertiesBar"
+import { SolidDerivedReadings } from "./inspectorReadings"
 
 const baseContext: InspectorContext = {
   sheetName: "工程图纸",

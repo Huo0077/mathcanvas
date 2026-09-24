@@ -1,7 +1,7 @@
 import { createEmptyDocument } from "@draw/dsl"
 import { describe, expect, it } from "vitest"
 
-import { createWorkerRequest, WORKER_SCHEMA_VERSION } from "./workerContracts"
+import { createWorkerRequest, parseWorkerResponse, WORKER_SCHEMA_VERSION } from "./workerContracts"
 import { handleGeometryRequest } from "./workerRuntime"
 
 /**
@@ -22,6 +22,135 @@ function compileRequest(x = 1) {
 }
 
 describe("geometry worker runtime", () => {
+  /**
+   * **编译期补出来的假设必须过这条边界**（方案 3 接线时发现的缺口）。
+   *
+   * 接线之前 `WorkerSuccess` 根本没带 `completionAssumptions`：把编译搬进 Worker 之后，
+   * `DraftStore.stage` 那份假设会**静默变空** —— 而确认面板上"系统替你定了什么"正是它。
+   * 用户会确认一件他没看过的事，这恰恰是"确认"这个动作最不该出的错。
+   *
+   * 夹具用一个**不给全字段**的模板动作：参数审计会把没说的尺寸补成默认值，
+   * 那些默认值以"假设"的形式回带（`compilePlan` 的既有行为）。
+   */
+  it("carries the compiler's completion assumptions across the boundary", () => {
+    const request = createWorkerRequest("geometry.compile", envelope, {
+      base: createEmptyDocument("geometry3d"),
+      // 只给 template 与 origin：`size` 由审计按默认策略补齐 → 必然产生假设。
+      actions: [{ actionId: "solid.create_template", actionKey: "c", factIds: [], inputs: { alias: "c", template: "cube", origin: { x: 0, y: 0, z: 0 } } }] as never
+    })
+
+    const response = handleGeometryRequest(request)
+
+    if (response.kind !== "geometry.compile.result") throw new Error(`expected a result, got ${response.code}: ${response.detail}`)
+    expect(response.completionAssumptions, "假设没带上，确认面板就会漏掉『系统替你定了什么』").toBeDefined()
+    expect(response.completionAssumptions!.length).toBeGreaterThan(0)
+    // 假设要能给用户读出"哪一项、定了什么"。
+    expect(response.completionAssumptions!.every((assumption) => typeof assumption.id === "string" && assumption.id.length > 0)).toBe(true)
+  })
+
+  it("round-trips the assumptions through the message parser", () => {
+    // 光在 runtime 里带上还不够：`parseWorkerResponse` 是主线程**唯一**的入口，
+    // 它若不认这个字段，响应到了主线程照样丢。
+    const request = createWorkerRequest("geometry.compile", envelope, {
+      base: createEmptyDocument("geometry3d"),
+      actions: [{ actionId: "solid.create_template", actionKey: "c", factIds: [], inputs: { alias: "c", template: "cube", origin: { x: 0, y: 0, z: 0 } } }] as never
+    })
+    const response = handleGeometryRequest(request)
+    const parsed = parseWorkerResponse(response, "req-1")
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) return
+    if (parsed.message.kind !== "geometry.compile.result") throw new Error("expected a result")
+    expect(parsed.message.completionAssumptions?.length).toBeGreaterThan(0)
+  })
+
+  /**
+   * **失败路径也必须把编译产物带回去**（方案 3 接线前的第二处缺口）。
+   *
+   * 协调器的"一次性修复"完全依赖 `stage` 失败时给出的 `repair`（允许改哪几处）、
+   * 逐层诊断与失败前的假设。Worker 路径若只回一句 `detail`，搬过去之后
+   * "编不过的计划"会**比现在更难修** —— 那是**回退**，不是"还没做"。
+   *
+   * 夹具与 `compilerRepair.test.ts` 同源：动作 0 缺 `vector`（审计回填默认值 → 产生假设），
+   * 动作 1 是零拉伸向量（几何语义层报 `degenerate_prism`）。
+   */
+  it("carries the repair request, diagnostics and assumptions on the failure path", () => {
+    const base = createEmptyDocument("geometry3d")
+    const request = createWorkerRequest("geometry.compile", envelope, {
+      base,
+      actions: [
+        { actionId: "solid.create_prism", actionKey: "prism", factIds: [], inputs: { alias: "prism", basePolygon: [{ x: 0, y: 0, z: 0 }, { x: 2, y: 0, z: 0 }, { x: 2, y: 2, z: 0 }, { x: 0, y: 2, z: 0 }] } },
+        { actionId: "solid.create_prism", actionKey: "degenerate", factIds: [], inputs: { alias: "degenerate", basePolygon: [{ x: 0, y: 0, z: 0 }, { x: 2, y: 0, z: 0 }, { x: 2, y: 2, z: 0 }, { x: 0, y: 2, z: 0 }], vector: { x: 0, y: 0, z: 0 } } }
+      ] as never
+    })
+
+    const response = handleGeometryRequest(request)
+
+    expect(response.kind, "这份计划应当编不过 —— 编过了这条用例就测不到失败路径").toBe("geometry.error")
+    if (response.kind !== "geometry.error") return
+    expect(response.code).toBe("compile_failed")
+    // 三样产物都要在：少了任何一样，协调器就没法把那一次修复发回模型。
+    expect(response.repair, "没有修复请求，协调器只能把失败原样丢给用户").toBeDefined()
+    expect(response.repair!.allowedChanges.length).toBeGreaterThan(0)
+    expect(response.planDiagnostics?.some((entry) => entry.code === "degenerate_prism")).toBe(true)
+    expect(response.assumptions?.length ?? 0).toBeGreaterThan(0)
+    // 一句话的 detail 仍然要有（它是给人看的）。
+    expect(response.detail).toContain("degenerate_prism")
+  })
+
+  it("round-trips the failure artifacts through the message parser", () => {
+    // 与假设那条同理：主线程只从 `parseWorkerResponse` 进，它不认就等于没带。
+    const request = createWorkerRequest("geometry.compile", envelope, {
+      base: createEmptyDocument("geometry3d"),
+      actions: [{ actionId: "solid.create_prism", actionKey: "d", factIds: [], inputs: { alias: "d", basePolygon: [{ x: 0, y: 0, z: 0 }, { x: 2, y: 0, z: 0 }, { x: 2, y: 2, z: 0 }, { x: 0, y: 2, z: 0 }], vector: { x: 0, y: 0, z: 0 } } }] as never
+    })
+    const response = handleGeometryRequest(request)
+    const parsed = parseWorkerResponse(response, "req-1")
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) return
+    if (parsed.message.kind !== "geometry.error") throw new Error("expected a failure")
+    expect(parsed.message.repair).toBeDefined()
+    expect(parsed.message.planDiagnostics?.length ?? 0).toBeGreaterThan(0)
+  })
+
+  /**
+   * **澄清问题也要过这条边界**（方案 3 接线前的第三处缺口）。
+   *
+   * `draftStore.stage` 的失败分支靠 `questions` 把"**本该问用户**"与"真的编不过"分开：
+   * 有 `questions` 而没有任何 error 诊断时，它按 `needs_more_information` 把问题原样交给界面。
+   * 少了它，那些计划会被报成笼统的 `compile_failed` —— 用户看到"编译失败"，
+   * 而不是"请你确认底面在哪"。
+   *
+   * 夹具：圆柱**不给半径**（schema 把 `radius` 标成 `ask_user`）→ 审计产出正好一条问题。
+   */
+  it("carries clarification questions across the boundary", () => {
+    const request = createWorkerRequest("geometry.compile", envelope, {
+      base: createEmptyDocument("geometry3d"),
+      actions: [{ actionId: "solid.create_template", actionKey: "c", factIds: [], inputs: { alias: "c", template: "cylinder", origin: { x: 0, y: 0, z: 0 } } }] as never
+    })
+
+    const response = handleGeometryRequest(request)
+
+    expect(response.kind, "这份计划应当编不过 —— 编过了就测不到澄清那条路").toBe("geometry.error")
+    if (response.kind !== "geometry.error") return
+    expect(response.questions?.length, "没有问题，界面就只能说『编译失败』").toBeGreaterThan(0)
+    expect(response.questions![0].text).toContain("半径")
+    // 问题必须带 path：有它才能把用户的回答精确写回计划（`ClarificationQuestion.path`）。
+    expect(typeof response.questions![0].reason).toBe("string")
+  })
+
+  it("round-trips the clarification questions through the message parser", () => {
+    const request = createWorkerRequest("geometry.compile", envelope, {
+      base: createEmptyDocument("geometry3d"),
+      actions: [{ actionId: "solid.create_template", actionKey: "c", factIds: [], inputs: { alias: "c", template: "cone", origin: { x: 0, y: 0, z: 0 } } }] as never
+    })
+    const response = handleGeometryRequest(request)
+    const parsed = parseWorkerResponse(response, "req-1")
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) return
+    if (parsed.message.kind !== "geometry.error") throw new Error("expected a failure")
+    expect(parsed.message.questions?.length).toBeGreaterThan(0)
+  })
+
   it("compiles and applies actions, returning both the operations and the document", () => {
     // **同一个 base 对象**：以前这里写成 `compileRequest().base`（每次新建一份空文档），
     // 那条隔离断言永远为真、检测不到"传进去的文档被就地改写"（Fix round 1 / M21）。

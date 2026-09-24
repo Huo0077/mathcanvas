@@ -1,5 +1,5 @@
 import type { GeometryDocument } from "@draw/dsl"
-import { canonicalContentHash, compilePlan, PLAN_SCHEMA_VERSION, type PlanDiagnostic, type PlanEnvelope, type RepairRequest, type StructuredAssumption } from "@draw/agent-core"
+import { canonicalContentHash, compilePlan, PLAN_SCHEMA_VERSION, type PlanCompileResult, type PlanDiagnostic, type PlanEnvelope, type RepairRequest, type StructuredAssumption } from "@draw/agent-core"
 import { createIdAllocator, type DocumentHandle } from "@draw/scene-graph"
 
 import type { DraftAction, DomainOperation, IdAllocator } from "@draw/scene-graph"
@@ -107,8 +107,12 @@ export interface DraftStore {
    * 暂存（= 编译）。第四个参数是**用户原话**（Fix round 1 / C3）：参数审计要看用户说了什么
    *（"任意/恒定/定值"必须保留符号参数、没说全的尺寸从原话里读、"采样不是证明"的披露）。
    * 可选：工具调用那条路径没有"用户原话"这种东西。
+   *
+   * **返回 `Promise`**（方案 3 接线）：编译这一步可以被交给几何 Worker，
+   * 而 Worker 是异步的。改成 `Promise` 是让两条编译路径共用同一个入口的前提 ——
+   * 实测那一步在真实大文档（约 2800 图元）上要 **73 ms**，而把文档交给另一个线程只要 **1.0 ms**。
    */
-  stage(draftId: string, actions: DraftAction[], expectedDraftVersion: number, userMessage?: string): StageResult
+  stage(draftId: string, actions: DraftAction[], expectedDraftVersion: number, userMessage?: string): Promise<StageResult>
   /** 基础文档变了（手工编辑、撤销、切工作区）→ 草稿过期，不能再提交。 */
   assertFresh(draftId: string, liveHandle: DocumentHandle): FreshnessResult
   /**
@@ -130,7 +134,122 @@ function cloneDocument(document: GeometryDocument): GeometryDocument {
   return structuredClone(document) as GeometryDocument
 }
 
-export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) => IdAllocator = createIdAllocator): DraftStore {
+/**
+ * **`stage` 真正需要的那几个字段**（不是整份 `PlanCompileResult`）。
+ *
+ * 为什么收窄：`PlanCompileResult` 有 13 个字段，而 `stage` 只读其中 7 个（其余 `actions` /
+ * `aliases` / `plan` / `completions` / `verification` 它一个都不看）。
+ * 而**几何 Worker 的响应并不携带那 5 个** —— 如果策略的返回类型写成完整的 `PlanCompileResult`，
+ * 那么"从 Worker 那条路返回"就必然要**编造**那些字段（或者断言成 `as`），
+ * 那是一句类型谎话：今天没人读它，明天有人读就成了静默的 `undefined`。
+ *
+ * 收窄之后两件事同时成立：①两条实现都只要交出真正被用到的东西；
+ * ②哪天 `stage` 真需要新字段，这里会**编译不过** —— 而不是悄悄拿到 `undefined`。
+ */
+export interface StagedCompileResult {
+  ok: boolean
+  /** 应用完这批动作之后的候选文档（失败时为 `null`）。 */
+  draftDocument: GeometryDocument | null
+  /** 已编译的操作，顺序即执行顺序。 */
+  operations: PlanCompileResult["operations"]
+  /** 逐层诊断（层 + 原因码 + 路径）。 */
+  diagnostics: PlanCompileResult["diagnostics"]
+  /** 澄清问题：有它才能把"本该问用户"与"真的编不过"分开。 */
+  questions: PlanCompileResult["questions"]
+  /** 编译期补出来的假设（"系统替你定了什么"）。 */
+  assumptions: PlanCompileResult["assumptions"]
+  /** 一次性修复请求（有可修的字段错误时才给）。 */
+  repair?: PlanCompileResult["repair"]
+}
+
+/**
+ * **编译策略**：`stage` 把"怎么算这份计划"外置成一个可替换的步骤。
+ *
+ * 为什么要有这个缝（方案 3 的实测读数）：编译在**真实大文档**（约 2800 图元，
+ * 也就是评审点名的"约 100 个三维实体"）上要 **73 ms**，而把文档交给另一个线程只要 **1.0 ms**
+ *（76 倍）。所以它值得搬进几何 Worker —— 但 Worker 是异步的，`stage` 必须先是异步的
+ *（已经是了），而"用哪条路算"必须是**显式替换**而不是散在各处的 `if`。
+ *
+ * 默认就是**在调用方线程上同步算**（`compilePlan`），也就是改动之前的行为；
+ * 换一条路只影响这一个参数，`stage` 之后的全部逻辑（重算索引、假设合并、版本推进）一行都不用动。
+ */
+export type StagedPlanEnvelope = Extract<PlanEnvelope, { kind: "plan" }>
+
+export type CompileStrategy = (input: {
+  /**
+   * **只可能是 `kind: "plan"` 的那一支** —— 这里刻意收窄，而不是收 `PlanEnvelope`。
+   *
+   * `stage` 编的是"这一批动作"，它构造信封时 `kind` 写死 `"plan"`（见下面 `stage` 里那一行）。
+   * 而 `PlanEnvelope` 是判别联合，还含澄清等变体：写成 `PlanEnvelope` 的话，**编译策略内部
+   * 就必须先自己判一次 `kind`**（或者断言），而"澄清信封不可编译"本来在调用点就已经成立了。
+   * 收窄之后，`compileInProcess` / `compileInWorker` 都能直接吃这个字段，两处 `as` 都不需要。
+   */
+  plan: StagedPlanEnvelope
+  document: GeometryDocument
+  capabilityRevision: string
+  conversationId: string
+  userMessage?: string
+  allocator: IdAllocator
+  /**
+   * **这份草稿在本次编译之前的版本号**（`stage` 里就是 `record.draftVersion`）。
+   *
+   * Worker 那条路需要一个信封（`runId` / `draftId` / `draftVersion`），而
+   * `draftId` 与 `draftVersion` **只有 `stage` 知道**（它们随每次暂存变化，工厂建策略时还不知道）。
+   * 所以由这里把它们交给策略 —— 与 `conversationId` 同一个道理：那是 `record.draftId`。
+   */
+  draftVersion: number
+}) => Promise<StagedCompileResult> | StagedCompileResult
+
+/**
+ * **编译一次计划所需的一切**（同步路径的真实入参）。
+ *
+ * 与 `CompileStrategy` 的入参**不是两套东西**：策略的入参就是这个类型再加上
+ * `draftVersion`（只有 `stage` 知道的值）。分开写是因为 `compileInWorker` 那条路
+ * 只要 `plan` + `document` 两项 —— 它不需要分配器（Worker 按基准文档现建一只、
+ * 跨进程也搬不过去），也不需要版本号。见 `geometryCompileStrategy.ts`。
+ */
+export interface CompileInput {
+  plan: StagedPlanEnvelope
+  document: GeometryDocument
+  conversationId: string
+  capabilityRevision: string
+  /**
+   * 用户这一轮的原话。**必须往编译管线里传**（Fix round 1 / C3）：符号参数判定、
+   * "从原话读尺寸"、以及"采样 ≠ 证明"的披露都看它。
+   *
+   * 这一项曾经在 `geometryCompileStrategy.compileInProcess` 里漏掉 —— 于是"走不用 Worker 的
+   * 那条就地兜底路"与"默认路"对同一份计划给出不同结果（用例抓出来的：用户原话里带着
+   * 符号参数的计划，兜底路上编出了澄清问题而不是照原话编）。两条"就地算"的实现合并成
+   * 下面这一个函数，就是为了让这种分叉不可能再发生。
+   */
+  userMessage?: string
+  /**
+   * 草稿自己的分配器（跨 `stage` 幂等：同一个 alias 永远同一个 id）。
+   * **只用于同步路径** —— Worker 那边按 `takenIds` 现建一个。
+   */
+  allocator?: IdAllocator
+}
+
+/**
+ * **在调用方线程上跑六层编译管线**。这是唯一一处"就地编译"的实现：
+ * `DraftStore` 的默认策略、几何 Worker 起不来时的兜底，都调它。
+ */
+export function compileInProcess(input: CompileInput): PlanCompileResult {
+  return compilePlan(input.plan, {
+    document: input.document,
+    workspace: input.document.workspace,
+    capabilityRevision: input.capabilityRevision,
+    conversationId: input.conversationId,
+    documentGeneration: input.document.revision,
+    ...(input.allocator === undefined ? {} : { idAllocator: input.allocator }),
+    ...(input.userMessage === undefined ? {} : { prompt: input.userMessage })
+  })
+}
+
+/** 默认策略：在**当前线程**上同步算（与接线之前逐字相同的行为）。 */
+const compileOnCallerThread: CompileStrategy = (input) => compileInProcess(input)
+
+export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) => IdAllocator = createIdAllocator, compile: CompileStrategy = compileOnCallerThread): DraftStore {
   const drafts = new Map<string, DraftRecord>()
   const invalidated = new Map<string, string>()
 
@@ -163,7 +282,7 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
       return { ...record, candidate: cloneDocument(record.candidate) }
     },
 
-    stage(draftId, actions, expectedDraftVersion, userMessage) {
+    async stage(draftId, actions, expectedDraftVersion, userMessage) {
       const record = drafts.get(draftId)
       if (!record) return { ok: false, reason: "unknown_draft", detail: `no draft ${draftId}` }
       if (record.draftVersion !== expectedDraftVersion) {
@@ -182,16 +301,15 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
        * 分配器用的是**这份草稿自己的**那一只：跨 `stage` 幂等（同一个 alias 永远同一个 id），
        * 这正是"重试同一笔不产生两个对象"的依据。
        */
-      const plan: PlanEnvelope = { schemaVersion: PLAN_SCHEMA_VERSION, kind: "plan", goal: "staged batch", factIds: [], actions }
-      const compiled = compilePlan(plan, {
+      const plan: StagedPlanEnvelope = { schemaVersion: PLAN_SCHEMA_VERSION, kind: "plan", goal: "staged batch", factIds: [], actions }
+      const compiled = await compile({
+        plan,
         document: record.candidate,
-        workspace: record.candidate.workspace,
         capabilityRevision: "draft",
         conversationId: record.draftId,
-        documentGeneration: record.candidate.revision,
-        idAllocator: record.allocator,
-        // 用户原话（Fix round 1 / C3）：符号参数判定、从原话读尺寸、采样≠证明的披露都看它。
-        ...(userMessage === undefined ? {} : { prompt: userMessage })
+        draftVersion: record.draftVersion,
+        allocator: record.allocator,
+        ...(userMessage === undefined ? {} : { userMessage })
       })
       if (!compiled.ok || compiled.draftDocument === null) {
         // 编译失败时草稿保持原样 —— 不留"半成品"。

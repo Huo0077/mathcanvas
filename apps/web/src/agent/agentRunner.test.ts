@@ -5,7 +5,7 @@ import type { PlanEnvelope, PlannerPort, PlanRequest } from "@draw/agent-core"
 
 import { useAgentStore } from "../agentStore"
 import { conversationRepository, MAX_SUMMARY_CHARS, setConversationRepository } from "../conversationRepository"
-import { summaryOfDocument, withDocumentSummary } from "../conversationSummary"
+import { summaryOfDocument } from "../conversationSummary"
 import { readConversation } from "../services/conversationClient"
 import { useSceneStore } from "../store"
 import { createAgentRunner } from "./agentRunner"
@@ -750,7 +750,19 @@ describe("a committed run leaves long-term memory behind", () => {
     const stored = await readConversation(conversationId)
     const value = stored.ok ? stored.value.facts[0]?.valueJson as { generation?: number; createdObjects?: string[] } : undefined
     expect(value?.generation).toBe(useSceneStore.getState().document.revision)
-    expect(value?.createdObjects?.some((id) => id.startsWith("solid-"))).toBe(true)
+    /**
+     * **记的是对象，不是它物化出来的拓扑**（本轮发现并修掉的一处真实退化）。
+     *
+     * 一个立方体在文档里是 28 个图元（模板 + 8 点 / 12 棱 / 6 面 / 1 多面体）。
+     * 只按 id 做差集会把它们**全算成新对象**，而 `createdObjects` 随后被 `.slice(0, 24)` 截断 ——
+     * 子对象排在实体后面，于是**实体自己被挤出名单**，长时记忆里只剩下
+     * `solid-1-edge-18`、`solid-1-face-11` 这些用户从没听说过的东西。
+     *
+     * 上一版这里写的是 `expect(...some((id) => id.startsWith("solid-")))`，两种行为都能通过：
+     * 断言宽到抓不住它本来要守的东西。现在钉住"恰好是那一个实体"。
+     */
+    expect(value?.createdObjects).toEqual(["solid-1"])
+    expect(value?.createdObjects?.some((id) => id.includes("-point-") || id.includes("-edge-") || id.includes("-face-") || id.includes("-polyhedron-"))).toBe(false)
   })
 
   it("writes no fact when the user discards the draft", async () => {
@@ -1137,17 +1149,49 @@ describe("a committed run leaves long-term memory behind", () => {
       useAgentStore.getState().sendPrompt(`第 ${turn} 轮：请继续作图（${"很长的上下文".repeat(20)}）`)
       useAgentStore.getState().resolvePendingReply(`收到 ${turn}`)
     }
-    const seed = { goal: "", confirmedFacts: ["甲 已确认"], createdObjects: ["solid-0"], openQuestions: [], preferences: [], messageCount: 3, compactedAt: 1 }
-    const seedBook = withDocumentSummary("", "doc-seed", seed)
-    const unPadded = withDocumentSummary(seedBook, "doc-pad", seed).length
     /**
-     * 上限由**导出常量**推导，不写字面量（外部审查 M7）：
-     * 上一版把 `16_000` 抄在这里，于是它与 Rust 的 `16 * 1024` 差 2.4% 也没人发现；
-     * 而"离上限只剩 200 字符"这个编排只有在与**仓储/商店同一个数**对齐时才成立。
+     * **这本书必须用产品自己的写路径填满，不能手塞一份"刚好就满"的 JSON。**
+     *
+     * 本轮在这里返工了三次，根因值得写下来：`compactConversationSummary` 对 `goal`
+     * 有 `MAX_SUMMARY_GOAL_CHARACTERS`（240）的硬上限，而 `withDocumentSummary` 是**纯序列化**、
+     * 不过那道闸。于是"手塞一份 16000 字符的书 → 紧接着真实写一次"这个编排是**假**的：
+     * 真实写入时那条被撑大的 `goal` 会被截到 240，整本书瞬间从 16K 掉到 1.6K，
+     * 根本不越界，`fitSummaryBook` 什么都不用削 —— 用例一路走到最后一条断言才发现。
+     * （这也解释了为什么手工挑的留白常量两轮都被打翻：它调的是一条被静默截断的量。）
+     *
+     * 现在改成用 `recordCommittedRun` 真写若干份**别的文档**的摘要把书堆到接近上限，
+     * 每份都过同一道闸；再写本次这一份就会真的越界，从而真的触发削除。
+     * `doc-seed` 的 `compactedAt` 最旧，所以被丢的必须是它 —— 这就是这条用例要守的性质。
      */
-    const padded = withDocumentSummary(seedBook, "doc-pad", { ...seed, goal: "目".repeat(MAX_SUMMARY_CHARS - 200 - unPadded) })
-    expect(padded.length).toBeLessThanOrEqual(MAX_SUMMARY_CHARS)
-    await conversationRepository().saveSummary({ conversationId, summary: padded })
+    /**
+     * 份数按**实测的单份大小**定：每份 `goal` 被 `MAX_SUMMARY_GOAL_CHARACTERS`（240）截断，
+     * 加上 `documentId` / `createdObjects` 等字段约 225 字符，所以要 80 份才堆到 16K 上限附近。
+     * 这个数**不是**为了凑数字：堆不到上限，"被削"就无从谈起，下面的断言会直接指出这一点。
+     *
+     * 顺带一提，`MAX_SUMMARY_CHARS * 0.8` 这条守卫能抓住的正是本轮踩过的坑：
+     * 手塞一份被 `withDocumentSummary` 撑大的 JSON 看着"接近上限"，过了那道闸就被截回 1.6K。
+     */
+    const seeded = useAgentStore.getState()
+    const anchorMessageId = useAgentStore.getState().pinRun({ runId: "run-seed-anchor", promptMessageId: useAgentStore.getState().activeConversation!.messages.find((message) => message.role === "user")!.id })!.promptMessageId
+    const seedOne = async (index: number, documentId: string) => {
+      const runId = `run-seed-${index}`
+      useAgentStore.getState().pinRun({ runId, promptMessageId: anchorMessageId })
+      const ok = await seeded.recordCommittedRun({ runId, conversationId, generation: index + 1, createdObjects: [`solid-${index}`], documentId })
+      expect(ok, `第 ${index} 份种子摘要（${documentId}）没写进去`).toBe(true)
+    }
+    for (let index = 0; index < 80; index += 1) await seedOne(index, `doc-pad-${index}`)
+    /**
+     * **最旧的那一份要最后写**。`compactedAt` 由 `compactConversationSummary` 取写入时刻，
+     * 所以后写的反而"更新" —— 于是被淘汰的顺序由 `compactedAt` 决定，而我们要它撑到
+     * 本次真实写入那一刻才被淘汰。反过来（先写它）会在**种子阶段**就被挤掉，
+     * "最旧那份没了"这条断言就变成一句空话（本轮实测：先写时 80 份种子一写完它就已经不在了）。
+     */
+    await seedOne(999, "doc-seed")
+    expect(summaryOfDocument((await conversationRepository().readRecord(conversationId))!.summary, "doc-seed"), "种子阶段就不该把它挤掉").not.toBeNull()
+
+    const beforeCommit = await conversationRepository().readRecord(conversationId)
+    expect(beforeCommit!.summary.length, "种子没把书堆起来，后面的『被削』就无从谈起").toBeGreaterThan(MAX_SUMMARY_CHARS * 0.8)
+    expect(summaryOfDocument(beforeCommit!.summary, "doc-seed")).not.toBeNull()
 
     const runner = createAgentRunner()
     await runAndWait(runner, "建一个棱长 3 的立方体")
@@ -1157,15 +1201,24 @@ describe("a committed run leaves long-term memory behind", () => {
     runner.confirm()
     await flush()
 
-    // 先证明**确实**削了（不然下面那条断言是空的）：最旧那份没了、本次这份还在、总数没越界。
+    // 先证明**确实**削了（不然下面那条断言是空的）：最旧那份没了、**刚写的那份还在**、总数没越界。
     const record = await conversationRepository().readRecord(conversationId)
-    expect(summaryOfDocument(record!.summary, "doc-seed")).toBeNull()
-    expect(summaryOfDocument(record!.summary, "doc-pad")).not.toBeNull()
+    const book = JSON.parse(record!.summary).byDocument as Record<string, unknown>
+    /**
+     * 判据用的是**相对顺序**，不是某个写死的 id：
+     * `compactedAt` 最小的是 `doc-pad-0`（最早写的那一份），最稳、最不容易被"写了几份"动摇。
+     * 上面 80 份种子按 `doc-pad-0…79` 的顺序写入，随后又写了一份 `doc-seed` ——
+     * 它在名单里排在最后（`compactedAt` 最新），`fitSummaryBook` 的 `keepDocumentId` 是本次这一份，
+     * 所以"被削掉的是最旧的"这句话的正确判据就是：`doc-pad-0` 不在了、`doc-seed` 还在。
+     */
+    expect(book["doc-pad-0"], "最旧的那一份应当被削掉").toBeUndefined()
+    expect(book["doc-seed"], "后写的、更新的一份不该被淘汰").toBeDefined()
+    expect(Object.keys(book).length, "削除确实发生了：否则上面两条断言都是空的").toBeLessThan(82)
     expect(record!.summary.length).toBeLessThanOrEqual(MAX_SUMMARY_CHARS)
 
     const assistant = useAgentStore.getState().activeConversation!.messages.find((message) => message.id === assistantId)
     const diagnostics = assistant?.diagnostics ?? []
-    expect(diagnostics.some((line) => line.includes("[summary]") && line.includes("doc-seed"))).toBe(true)
+    expect(diagnostics.some((line) => line.includes("[summary]") && line.includes("dropped"))).toBe(true)
   })
 
   /**

@@ -22,13 +22,14 @@ function makePort(overrides: Partial<DraftStorePort> = {}): { port: DraftStorePo
       calls.push("create")
       return { draftId: "draft_1", draftVersion: version, previewHash: "preview-1" }
     }),
-    stage: vi.fn((draftId: string, _actions: readonly never[], expected: number): DraftStageOutcome => {
+    // `stage` / `preflight` 返回 `Promise`（方案 3：编译可以交给几何 Worker）。
+    stage: vi.fn(async (draftId: string, _actions: readonly never[], expected: number): Promise<DraftStageOutcome> => {
       calls.push(`stage:${expected}`)
       if (expected !== version) return { ok: false, diagnostics: [{ code: "stale_draft_version", message: `at ${version}` }], unchanged: true }
       version += 1
       return { ok: true, diagnostics: [], handle: { draftId, draftVersion: version, previewHash: `preview-${version}` }, unchanged: false }
     }),
-    preflight: vi.fn(() => ({ ok: true, diagnostics: [] })),
+    preflight: vi.fn(async () => ({ ok: true, diagnostics: [] })),
     discard: vi.fn(() => true),
     ...overrides
   }
@@ -48,12 +49,12 @@ describe("draft.create", () => {
 })
 
 describe("draft.stage_actions", () => {
-  it("stages a valid action and reports the new draft version", () => {
+  it("stages a valid action and reports the new draft version", async () => {
     const { port, versionOf } = makePort()
     const tools = createDraftTools(port)
     const created = tools.create(target)
 
-    const result = tools.stageActions(created.payload.draftId, 1, [validAction])
+    const result = await tools.stageActions(created.payload.draftId, 1, [validAction])
 
     expect(result.status).toBe("success")
     expect(versionOf()).toBe(2)
@@ -61,13 +62,13 @@ describe("draft.stage_actions", () => {
     expect(result.payload?.draftVersion).toBe(2)
   })
 
-  it("leaves the draft version untouched when the compiler refuses", () => {
+  it("leaves the draft version untouched when the compiler refuses", async () => {
     // Step 1 的另一半：非法动作**不改草稿版本**。
-    const stage = vi.fn(() => ({ ok: false, diagnostics: [{ code: "unsupported_action", message: "no handler for planar.create_dragon" }], unchanged: true }))
+    const stage = vi.fn(async () => ({ ok: false, diagnostics: [{ code: "unsupported_action", message: "no handler for planar.create_dragon" }], unchanged: true }))
     const { port, versionOf } = makePort({ stage })
     const tools = createDraftTools(port)
 
-    const result = tools.stageActions("draft_1", 1, [validAction])
+    const result = await tools.stageActions("draft_1", 1, [validAction])
 
     expect(result.status).toBe("error")
     expect(versionOf()).toBe(1)
@@ -78,18 +79,18 @@ describe("draft.stage_actions", () => {
     expect(result.next_actions.length).toBeGreaterThan(0)
   })
 
-  it("flags a failure that mutated the draft anyway", () => {
+  it("flags a failure that mutated the draft anyway", async () => {
     // 若底层在失败时改了草稿，这必须被报出来：否则模型会以为"部分生效"而继续往上叠。
-    const stage = vi.fn(() => ({ ok: false, diagnostics: [], detail: "boom", unchanged: false }))
+    const stage = vi.fn(async () => ({ ok: false, diagnostics: [], detail: "boom", unchanged: false }))
     const { port } = makePort({ stage })
-    const result = createDraftTools(port).stageActions("draft_1", 1, [validAction])
+    const result = await createDraftTools(port).stageActions("draft_1", 1, [validAction])
 
     expect(result.diagnostics.some((entry) => entry.code === "draft_mutated_on_failure")).toBe(true)
   })
 
-  it("refuses an empty batch instead of staging nothing successfully", () => {
+  it("refuses an empty batch instead of staging nothing successfully", async () => {
     const { port, calls } = makePort()
-    const result = createDraftTools(port).stageActions("draft_1", 1, [])
+    const result = await createDraftTools(port).stageActions("draft_1", 1, [])
 
     expect(result.status).toBe("warning")
     expect(result.diagnostics[0].code).toBe("empty_batch")
@@ -97,10 +98,10 @@ describe("draft.stage_actions", () => {
     expect(calls).not.toContain("stage:1")
   })
 
-  it("surfaces a stale version instead of merging", () => {
+  it("surfaces a stale version instead of merging", async () => {
     // 拿旧版本号再来 = 调用方看的是上一轮的预览。合并等于把用户看过的预览悄悄换掉。
     const { port } = makePort()
-    const result = createDraftTools(port).stageActions("draft_1", 0, [validAction])
+    const result = await createDraftTools(port).stageActions("draft_1", 0, [validAction])
 
     expect(result.status).toBe("error")
     expect(result.diagnostics[0].code).toBe("stale_draft_version")
@@ -108,9 +109,9 @@ describe("draft.stage_actions", () => {
 })
 
 describe("draft.validate", () => {
-  it("reports acceptance without creating a draft", () => {
+  it("reports acceptance without creating a draft", async () => {
     const { port, calls } = makePort()
-    const result = createDraftTools(port).validate("draft_1", 1, [validAction])
+    const result = await createDraftTools(port).validate("draft_1", 1, [validAction])
 
     expect(result.status).toBe("success")
     expect(result.payload).toEqual({ accepted: true })
@@ -118,10 +119,10 @@ describe("draft.validate", () => {
     expect(calls.some((call) => call.startsWith("stage"))).toBe(false)
   })
 
-  it("reports the refusal reason when the batch would fail", () => {
-    const preflight = vi.fn(() => ({ ok: false, diagnostics: [{ code: "target_not_found", message: "no object point-9" }], detail: "no object point-9" }))
+  it("reports the refusal reason when the batch would fail", async () => {
+    const preflight = vi.fn(async () => ({ ok: false, diagnostics: [{ code: "target_not_found", message: "no object point-9" }], detail: "no object point-9" }))
     const { port } = makePort({ preflight })
-    const result = createDraftTools(port).validate("draft_1", 1, [validAction])
+    const result = await createDraftTools(port).validate("draft_1", 1, [validAction])
 
     expect(result.status).toBe("error")
     expect(result.payload).toEqual({ accepted: false })
@@ -155,20 +156,28 @@ describe("draft.preview and draft.discard", () => {
 })
 
 describe("no tool claims the live document changed", () => {
-  it("never returns a changed flag on any path", () => {
+  it("never returns a changed flag on any path", async () => {
     // 计划原文："No tool function returns a fake `changed: true`."
     const { port } = makePort()
     const tools = createDraftTools(port)
     const created: { payload: DraftHandle } = tools.create(target) as never
 
-    const results = [
+    /**
+     * 每个入口都要看一遍"结果形状里没有 `changed`"。
+     *
+     * `stageActions` / `validate` 是**异步**的（编译可以被交给几何 Worker），
+     * 所以这里 `await Promise.all(...)` 把两种都归一成结果值 —— 否则循环里拿到的是
+     * `Promise | ToolResult` 的联合，`result.artifacts` 就成了类型错误
+     *（第一版正是这样漏掉了它们）。
+     */
+    const results = await Promise.all([
       tools.create(target),
       tools.stageActions(created.payload.draftId, 1, [validAction]),
       tools.stageActions("draft_1", 99, [validAction]),
       tools.validate("draft_1", 1, [validAction]),
       tools.preview("draft_1", 1, 1),
       tools.discard("draft_1")
-    ]
+    ])
 
     for (const result of results) {
       expect(JSON.stringify(result)).not.toContain('"changed"')

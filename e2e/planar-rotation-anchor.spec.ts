@@ -196,8 +196,8 @@ test("drags the fixed point itself and the curve follows, still passing through 
     const group = svg.locator('[data-primitive-type="point"]', { hasText: "P" }).first()
     return group.evaluate((node) => {
       const root = node.closest("svg")!
-      const point = node.querySelector("circle:not([data-hit-target])")!
-      const circle = root.querySelector('[data-primitive-type="circle"] circle:not([data-hit-target])')!
+      const point = node.querySelector<SVGCircleElement>("circle:not([data-hit-target])")!
+      const circle = root.querySelector<SVGCircleElement>('[data-primitive-type="circle"] circle:not([data-hit-target])')!
       return Math.hypot(point.cx.baseVal.value - circle.cx.baseVal.value, point.cy.baseVal.value - circle.cy.baseVal.value) / circle.r.baseVal.value
     })
   }

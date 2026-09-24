@@ -42,15 +42,15 @@ function makeBridge(options: { now?: () => number; runId?: string; ttlMs?: numbe
  * id、并被"重复 id"拒绝 —— 这是刻意的（重试不该产生两个对象）。
  * 所以要暂存**另一笔**操作时必须换 alias。第一版测试没换，于是"预览变了"根本没发生。
  */
-function stagePoint(drafts: DraftStore, draftId: string, version: number, x = 1, alias = "p") {
-  return drafts.stage(draftId, [{ actionId: "planar.create_point", actionKey: alias, factIds: [], inputs: { alias, points: [{ x, y: 0 }] } }], version)
+async function stagePoint(drafts: DraftStore, draftId: string, version: number, x = 1, alias = "p") {
+  return await drafts.stage(draftId, [{ actionId: "planar.create_point", actionKey: alias, factIds: [], inputs: { alias, points: [{ x, y: 0 }] } }], version)
 }
 
 describe("host bridge consent", () => {
-  it("previews an isolated draft and commits it once with a valid consent", () => {
+  it("previews an isolated draft and commits it once with a valid consent", async () => {
     const harness = makeBridge()
     const record = harness.drafts.create(harness.getDocument(), harness.bridge.live()!.handle)
-    expect(stagePoint(harness.drafts, record.draftId, record.draftVersion).ok).toBe(true)
+    expect((await stagePoint(harness.drafts, record.draftId, record.draftVersion)).ok).toBe(true)
 
     const preview = harness.bridge.preview(record.draftId)
     expect(preview.ok).toBe(true)
@@ -69,10 +69,10 @@ describe("host bridge consent", () => {
     expect(harness.getDocument().primitives).toHaveLength(1)
   })
 
-  it("refuses a commit without consent, and never touches the live document", () => {
+  it("refuses a commit without consent, and never touches the live document", async () => {
     const harness = makeBridge()
     const record = harness.drafts.create(harness.getDocument(), harness.bridge.live()!.handle)
-    stagePoint(harness.drafts, record.draftId, record.draftVersion)
+    await stagePoint(harness.drafts, record.draftId, record.draftVersion)
 
     const receipt = harness.bridge.commit(record.draftId, null)
 
@@ -81,10 +81,10 @@ describe("host bridge consent", () => {
     expect(harness.replaced).toHaveLength(0)
   })
 
-  it("consumes consent: the same nonce cannot commit twice", () => {
+  it("consumes consent: the same nonce cannot commit twice", async () => {
     const harness = makeBridge()
     const record = harness.drafts.create(harness.getDocument(), harness.bridge.live()!.handle)
-    stagePoint(harness.drafts, record.draftId, record.draftVersion)
+    await stagePoint(harness.drafts, record.draftId, record.draftVersion)
     const consent = harness.bridge.requestConsent(record.draftId)
     if (!consent.ok) throw new Error("expected consent")
 
@@ -96,11 +96,11 @@ describe("host bridge consent", () => {
     expect(harness.replaced).toHaveLength(1)
   })
 
-  it("expires consent instead of honouring it later", () => {
+  it("expires consent instead of honouring it later", async () => {
     let now = 1_000
     const harness = makeBridge({ now: () => now, ttlMs: 5_000 })
     const record = harness.drafts.create(harness.getDocument(), harness.bridge.live()!.handle)
-    stagePoint(harness.drafts, record.draftId, record.draftVersion)
+    await stagePoint(harness.drafts, record.draftId, record.draftVersion)
     const consent = harness.bridge.requestConsent(record.draftId)
     if (!consent.ok) throw new Error("expected consent")
 
@@ -119,10 +119,10 @@ describe("host bridge consent", () => {
    * 少了这一条，一份**属于会话 A** 的同意可以在用户切到 B 之后被消费 —— 而界面上那块面板
    * 明明说的是 A 的草稿。文档会按 B 的会话被改掉，事后谁也说不清是哪一个会话提交的。
    */
-  it("refuses a consent that belongs to another conversation", () => {
+  it("refuses a consent that belongs to another conversation", async () => {
     const harness = makeBridge({ conversationId: "conv-a" })
     const record = harness.drafts.create(harness.getDocument(), harness.bridge.live()!.handle)
-    stagePoint(harness.drafts, record.draftId, record.draftVersion)
+    await stagePoint(harness.drafts, record.draftId, record.draftVersion)
     const consent = harness.bridge.requestConsent(record.draftId)
     if (!consent.ok) throw new Error("expected consent")
     expect(consent.record.conversationId).toBe("conv-a")
@@ -144,15 +144,15 @@ describe("host bridge consent", () => {
    * （这里原先挂着一段"待查、显式跳过"的注释，说这条用例当时失败；它现在**是通过的**，
    * 注释与事实不符，已经删掉 —— 留着会让下一个人以为这里有一道已知的坏闸。）
    */
-  it("invalidates consent when the draft changed after the preview", () => {
+  it("invalidates consent when the draft changed after the preview", async () => {
     const harness = makeBridge()
     const record = harness.drafts.create(harness.getDocument(), harness.bridge.live()!.handle)
-    stagePoint(harness.drafts, record.draftId, record.draftVersion)
+    await stagePoint(harness.drafts, record.draftId, record.draftVersion)
     const consent = harness.bridge.requestConsent(record.draftId)
     if (!consent.ok) throw new Error("expected consent")
 
     // 预览之后又暂存了一笔 —— 用户看到的东西已经变了，旧同意必须作废。
-    const secondStage = stagePoint(harness.drafts, record.draftId, record.draftVersion + 1, 9, "q")
+    const secondStage = await stagePoint(harness.drafts, record.draftId, record.draftVersion + 1, 9, "q")
     expect(secondStage.ok, "第二笔暂存应当成功，否则这条用例验不到 stale_preview").toBe(true)
     const receipt = harness.bridge.commit(record.draftId, consent.record)
 
@@ -161,10 +161,10 @@ describe("host bridge consent", () => {
     expect(harness.replaced).toHaveLength(0)
   })
 
-  it("refuses consent minted for another run", () => {
+  it("refuses consent minted for another run", async () => {
     const harness = makeBridge({ runId: "run-1" })
     const record = harness.drafts.create(harness.getDocument(), harness.bridge.live()!.handle)
-    stagePoint(harness.drafts, record.draftId, record.draftVersion)
+    await stagePoint(harness.drafts, record.draftId, record.draftVersion)
 
     /**
      * 同意必须来自**另一个桥**，而不是手写一份字符串。
@@ -202,7 +202,7 @@ describe("host bridge consent", () => {
    * "真文档已经等于候选"走的是同一条分支。**授权照常被消费**（这一轮确实结束了），
    * 而文档**一个字节都不写**。
    */
-  it("reports a commit that changes nothing as a success, not a failure", () => {
+  it("reports a commit that changes nothing as a success, not a failure", async () => {
     const harness = makeBridge()
     const record = harness.drafts.create(harness.getDocument(), harness.bridge.live()!.handle)
     // 刻意**不**暂存任何动作：这就是"无需改动"。
@@ -227,10 +227,10 @@ describe("host bridge consent", () => {
 })
 
 describe("consent record shape", () => {
-  it("carries the fields the plan names, including the expected handles", () => {
+  it("carries the fields the plan names, including the expected handles", async () => {
     const harness = makeBridge()
     const record = harness.drafts.create(harness.getDocument(), harness.bridge.live()!.handle)
-    stagePoint(harness.drafts, record.draftId, record.draftVersion)
+    await stagePoint(harness.drafts, record.draftId, record.draftVersion)
     const consent = harness.bridge.requestConsent(record.draftId)
     if (!consent.ok) throw new Error("expected consent")
 
@@ -255,10 +255,10 @@ describe("consent record shape", () => {
  * 现在桥里记着**自己铸造过的 nonce**，没铸造过的一律拒绝。这条用例钉的就是它。
  */
 describe("consent must be minted by this bridge", () => {
-  it("refuses a hand-built consent record that was never requested", () => {
+  it("refuses a hand-built consent record that was never requested", async () => {
     const harness = makeBridge()
     const record = harness.drafts.create(harness.getDocument(), harness.bridge.live()!.handle)
-    stagePoint(harness.drafts, record.draftId, record.draftVersion)
+    await stagePoint(harness.drafts, record.draftId, record.draftVersion)
 
     // 伪造：nonce 是编的，其余字段全部照抄真值（previewHash 从公开的 preview 就能拿到）。
     const preview = harness.bridge.preview(record.draftId)
@@ -282,10 +282,10 @@ describe("consent must be minted by this bridge", () => {
     expect(harness.replaced).toHaveLength(0)
   })
 
-  it("still accepts a consent record the bridge itself minted", () => {
+  it("still accepts a consent record the bridge itself minted", async () => {
     const harness = makeBridge()
     const record = harness.drafts.create(harness.getDocument(), harness.bridge.live()!.handle)
-    stagePoint(harness.drafts, record.draftId, record.draftVersion)
+    await stagePoint(harness.drafts, record.draftId, record.draftVersion)
     const consent = harness.bridge.requestConsent(record.draftId)
     if (!consent.ok) throw new Error("expected consent")
 
@@ -297,10 +297,11 @@ describe("consent must be minted by this bridge", () => {
 })
 
 /** 同意里存的是**真句柄**，不是字符串 id —— 后续才能检测 epoch/generation 变化。 */
-describe("consent handles", () => {  it("keeps a real handle so a later epoch/generation change can be detected", () => {
+describe("consent handles", () => {
+  it("keeps a real handle so a later epoch/generation change can be detected", async () => {
     const harness = makeBridge()
     const record = harness.drafts.create(harness.getDocument(), harness.bridge.live()!.handle)
-    stagePoint(harness.drafts, record.draftId, record.draftVersion)
+    await stagePoint(harness.drafts, record.draftId, record.draftVersion)
     const consent = harness.bridge.requestConsent(record.draftId)
     if (!consent.ok) throw new Error("expected consent")
 
