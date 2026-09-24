@@ -2426,6 +2426,45 @@ function unbindDeletedHost(primitive: PrimitiveSpec, deleted: Set<string>): Prim
  * **交点同理**：删除一条直线时，用户不应该先手动删掉它与别的图形的交点再回来删直线。
  * 交点、轨迹、连接都是纯派生对象，一律随来源级联删除。
  */
+/**
+ * 一条拓扑碎片（`point3` / `edge3` / `face3`）**直接引用**的其它图元。
+ *
+ * 只收拓扑之间那几种引用（点 / 棱 / 面），**不收 `planeId`**：平面是**构造**，不是拓扑的一部分 ——
+ * 把平面卷进来会顺手删掉用户自己搭的东西，"构造引用仍然拒绝删除"那条语义就被悄悄放宽了。
+ */
+function topologyReferences(primitive: PrimitiveSpec): string[] {
+  if (primitive.type === "edge3") return [...primitive.pointIds, ...(primitive.faceIds ?? [])]
+  if (primitive.type === "face3") return [...primitive.pointIds, ...(primitive.edgeIds ?? [])]
+  return []
+}
+
+/**
+ * **没有实体当锚时，把互相引用的拓扑收成一片**（2026-09-23，用户现场第二形态）。
+ *
+ * 用户那份文档里**没有 `polyhedron3`**：模型当年用约 10 个动作把 4 个顶点 / 6 条棱 / 4 个面
+ * 各自拼出来（运行账本 `run-1-mue30vw6` 记着 `staging 10 action(s)`），于是族判定找不到"族"，
+ * 点任意一片都被别的片引用 ⇒ `object is referenced by another object` ⇒ **整片都删不掉**。
+ *
+ * 判据取**连通分量**：从点中的那一片出发，反复把"引用了组内对象"与"被组内对象引用"的拓扑并进来。
+ * 只认拓扑之间的引用，所以一个孤立的空间点、以及线 / 面 / 平面这些**构造**都不会被卷进来。
+ */
+function expandTopologyCluster(document: GeometryDocument, targets: Set<string>): void {
+  const isTopology = (primitive: PrimitiveSpec) => primitive.type === "point3" || primitive.type === "edge3" || primitive.type === "face3"
+  let added = true
+  while (added) {
+    added = false
+    for (const primitive of document.primitives) {
+      if (targets.has(primitive.id) || !isTopology(primitive)) continue
+      const referencesTarget = topologyReferences(primitive).some((reference) => targets.has(reference))
+      const referencedByTarget = document.primitives.some((other) => targets.has(other.id) && topologyReferences(other).includes(primitive.id))
+      if (referencesTarget || referencedByTarget) {
+        targets.add(primitive.id)
+        added = true
+      }
+    }
+  }
+}
+
 export function deletionTargets(document: GeometryDocument, id: string): Set<string> {
   const targets = new Set<string>([id])
   // 模板实体的拓扑是一整族，先按成员归属整体纳入，后面的级联才看得到它们。
@@ -2462,6 +2501,9 @@ export function deletionTargets(document: GeometryDocument, id: string): Set<str
   })
   if (polyhedron && polyhedron.type === "polyhedron3") {
     for (const member of [polyhedron.id, ...(isSourceIdConstruction(polyhedron.construction) ? polyhedron.construction.sourceIds : []), ...polyhedron.vertexIds, ...polyhedron.edgeIds, ...polyhedron.faceIds]) targets.add(member)
+  } else {
+    // 没有实体当锚（模型把立体拆成散片拼出来的那种文档，2026-09-23 用户现场）：按拓扑连通分量成组。
+    expandTopologyCluster(document, targets)
   }
   /**
    * 固定点迭代，不能只扫一趟：级联出来的对象本身可能还被别的派生对象引用。

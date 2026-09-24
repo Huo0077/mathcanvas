@@ -236,3 +236,60 @@ describe("deleting a fromPoints solid (the agent's tetrahedron) removes its topo
     expect(removed.document.primitives).toEqual([])
   })
 })
+
+/**
+ * **没有实体当锚的"拓扑碎片堆"也能整片删除**（2026-09-23，用户现场的第二形态）。
+ *
+ * 用户那份文档里**没有 `polyhedron3`** —— 它是模型当年用约 10 个动作把 4 个顶点 / 6 条棱 / 4 个面
+ * **各自**拼出来的（运行账本 `run-1-mue30vw6` 记着 `staging 10 action(s)`；而对象列表里那 14 行是
+ * **顶层行**、计数 14，正是"没有实体"的指纹 —— 有实体时 `AlgebraView` 会把子对象折叠到实体行下面）。
+ *
+ * 于是 `deletionTargets` 找不到"族"，点任意一片都被别的片引用 ⇒
+ * `object is referenced by another object` ⇒ **整片都删不掉**（画布点与列表删是同一条路）。
+ *
+ * 判据：**互相引用的拓扑（`point3` / `edge3` / `face3`）算一个对象**（连通分量），即使没有实体当锚。
+ * 这**不**放宽"用户自己搭出来的构造引用仍然拒绝删除"那条语义 —— `line3` / `plane3` 这类构造不进连通分量。
+ */
+describe("deleting an orphan topology cluster (the solid body was never materialised)", () => {
+  function orphanTetrahedron() {
+    const built = compileSolidTetrahedron("solid-1", { baseCenter: { x: 0, y: 0, z: 0 }, edge: 3 }, "正四面体 1")
+    const document = createEmptyDocument("geometry3d")
+    // 当年那份文档的样子：只有碎片，**没有实体本身**。
+    document.primitives = built.primitives.filter((primitive) => primitive.type !== "polyhedron3")
+    return document
+  }
+
+  it("removes every loose vertex, edge and face when the user deletes one of them", () => {
+    const document = orphanTetrahedron()
+    // 夹具自检：14 个碎片、0 只实体（否则下面的断言会因为"本来就有实体"而走另一条路）。
+    expect(document.primitives).toHaveLength(14)
+    expect(document.primitives.some((primitive) => primitive.type === "polyhedron3")).toBe(false)
+    const edge = document.primitives.find((primitive) => primitive.type === "edge3")!
+
+    // 从**任意一片**出发都要收回整堆。
+    const ids = document.primitives.map((primitive) => primitive.id)
+    expect([...deletionTargets(document, edge.id)].sort()).toEqual([...ids].sort())
+    // 用户现场：这一步今天报 object is referenced by another object，于是删不掉。
+    expect(validateDeletion(document, [edge.id])).toEqual({ valid: true })
+
+    const removed = applyOperation(document, { op: "deleteObject", id: edge.id })
+    expect(removed.changed).toBe(true)
+    expect(removed.document.primitives).toEqual([])
+  })
+
+  it("does not stretch the cluster over construction primitives that reference a loose point", () => {
+    // 边界：连通分量只收**拓扑**（点 / 棱 / 面）。一个孤立的空间点没有被拓扑引用，
+    // 所以它的删除**仍然**被"用户自己搭出来的构造"挡住 —— 既有语义不变。
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      createPoint3("point-a", { x: 0, y: 0, z: 0 }),
+      createPoint3("point-b", { x: 2, y: 0, z: 0 }),
+      { id: "line-ab", type: "line3", definition: { kind: "throughPoints", pointIds: ["point-a", "point-b"] } }
+    ]
+
+    // 单删点仍被拒（线需要它）……
+    expect(validateDeletion(document, ["point-a"]).valid).toBe(false)
+    // ……点 + 线一起删仍然合法（并集校验那条既有语义没被放宽也没被收紧）。
+    expect(validateDeletion(document, ["point-a", "line-ab"])).toEqual({ valid: true })
+  })
+})
