@@ -819,6 +819,14 @@ export function ownerOfTopology(polyhedron: Extract<PrimitiveSpec, { type: "poly
   const construction = polyhedron.construction
   if (!construction) return undefined
   if (construction.kind === "template") return construction.sourceIds[0]
+  /**
+   * **`fromPoints` 也要有归属**（2026-09-23，与下面删除那一处同源）。
+   *
+   * `fromPoints` 是"由一串已有点构造出来的"（Agent 的正四面体就是它），`fromFaces` 是它的另一支。
+   * 漏掉 `fromPoints` 的代价实测过：那只多面体**没有归属**，于是按归属查拓扑的派生读数（体积 / 外接球…）
+   * 会无声消失 —— 与上面 `topologyOfEntity` 注释里记的那次同一类。
+   */
+  if (construction.kind === "fromPoints") return construction.sourceIds[0]
   if (construction.kind === "fromFaces") return construction.sourceId
   return undefined
 }
@@ -2435,8 +2443,18 @@ export function deletionTargets(document: GeometryDocument, id: string): Set<str
      * **可编辑**的（`prismMatchesVertices` 正是为"顶点被改过、描述要改写"准备的），
      * 所以它们不该被排除在自由拖动之外。删除是另一回事：整族一起走。
      */
-    const kind = primitive.construction?.kind
-    if (kind !== "template" && kind !== "prism") return false
+    /**
+     * **不再按 `construction.kind` 筛**（2026-09-23，用户现场："agent 创建的元素无法删除"）。
+     *
+     * 原先这里只认 `template` 与 `prism` 两种，于是 Agent 建的**正四面体**掉进了缝里 ——
+     * 它是**第三种构造** `fromPoints`（`solid.create_tetrahedron` → 内核 `buildFromPoints` 物化）：
+     * ① 删实体本身只删掉 `polyhedron3`，4 个顶点 / 6 条棱 / 4 个面留在画布上继续绘制；
+     * ② 删其中任意一个成员（用户点的往往是画布上那个顶点）被判成
+     *    `object is referenced by another object` 而**拒绝** —— 用户看到的就是"删不掉"。
+     *
+     * 四种构造（`template` / `prism` / `fromPoints` / `fromFaces`）的成员来路完全一样（都由实体自己物化），
+     * 删除语义必须一致：**一只实体 + 它自己物化出来的拓扑就是同一个对象**。
+     */
     if (primitive.id === id || primitive.vertexIds.includes(id) || primitive.edgeIds.includes(id) || primitive.faceIds.includes(id)) return true
     // `template` / `fromPoints` / `fromFaces` 才有 `sourceIds`；`prism` **没有**这一支
     //（它的来源是自带的底面多边形与拉伸向量），所以必须先收窄再读。

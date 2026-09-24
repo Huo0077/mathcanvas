@@ -4,7 +4,7 @@ import { createEmptyDocument } from "@draw/dsl"
 import { buildSolidTemplate } from "@draw/geometry-kernel"
 
 import { applyOperation, createPoint3, deletionPlan, deletionTargets, recomputeDerivedObjects, validateDeletion } from "./index"
-import { compileSolidPrism } from "./actions"
+import { compileSolidPrism, compileSolidTetrahedron } from "./actions"
 
 /**
  * **棱柱与模板实体是同一套删除语义**（外部审查 S2）。
@@ -180,5 +180,59 @@ describe("deletion cascade", () => {
     // 级联之后不留悬空引用：重算一遍不该抛错，被解绑的点仍在。
     expect(() => recomputeDerivedObjects(removed.document)).not.toThrow()
     expect(removed.document.primitives.some((primitive) => primitive.id === "point-b")).toBe(true)
+  })
+})
+
+/**
+ * **`fromPoints` 的多面体也是同一套删除语义**（2026-09-23，用户现场："agent 创建的元素无法删除"）。
+ *
+ * 棱柱那条修完之后，族判定只认 `template` 与 `prism` —— 而 Agent 建的正四面体是**第三种构造**：
+ * `fromPoints`（`solid.create_tetrahedron` → 内核的 `buildFromPoints`）。于是它掉进了缝里：
+ *
+ * 1. **删实体本身**只删掉 `polyhedron3`，4 个顶点 / 6 条棱 / 4 个面留在文档里继续绘制（与 S2 那条同一个病）；
+ * 2. **删任意一个成员**（用户点的往往是画布上那个顶点）会被 `validateDeletion` 判成"被别的对象引用"而**拒绝** ——
+ *    这正是用户看到的"删不掉"。
+ *
+ * 三者（模板 / 棱柱 / 点集构造）成员的来路完全一样（都由实体自己物化），删除语义必须一致。
+ */
+describe("deleting a fromPoints solid (the agent's tetrahedron) removes its topology too", () => {
+  function tetrahedronDocument() {
+    const built = compileSolidTetrahedron("solid-1", { baseCenter: { x: 0, y: 0, z: 0 }, edge: 3 }, "正四面体 1")
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = built.primitives
+    return document
+  }
+
+  it("deletes the polyhedron together with its four vertices, six edges and four faces", () => {
+    const document = tetrahedronDocument()
+    const solid = document.primitives.find((primitive) => primitive.id === "solid-1")
+    if (solid?.type !== "polyhedron3") throw new Error("expected the tetrahedron")
+    const family = [solid.id, ...solid.vertexIds, ...solid.edgeIds, ...solid.faceIds]
+    // 夹具自检：这只四面体真的带着一整族成员（否则下面的断言会因为"本来就没有"而恒真）。
+    expect(family).toHaveLength(15)
+    expect(document.primitives).toHaveLength(15)
+
+    // 族判定必须把整族收进来 —— 从**任意一个成员**出发都一样。
+    expect([...deletionTargets(document, "solid-1")].sort()).toEqual([...family].sort())
+    expect([...deletionTargets(document, solid.vertexIds[0])].sort()).toEqual([...family].sort())
+
+    const removed = applyOperation(document, { op: "deleteObject", id: "solid-1" })
+
+    expect(removed.changed).toBe(true)
+    // **0 残留**：没有孤儿顶点 / 棱 / 面留在画布上。
+    expect(removed.document.primitives).toEqual([])
+  })
+
+  it("lets the user delete it by clicking one of its vertices, instead of refusing the request", () => {
+    const document = tetrahedronDocument()
+    const solid = document.primitives.find((primitive) => primitive.id === "solid-1")
+    if (solid?.type !== "polyhedron3") throw new Error("expected the tetrahedron")
+
+    // 用户现场：这一步今天被判成"被别的对象引用"，于是界面上根本删不掉。
+    expect(validateDeletion(document, [solid.vertexIds[0]])).toEqual({ valid: true })
+
+    const removed = applyOperation(document, { op: "deleteObject", id: solid.vertexIds[0] })
+    expect(removed.changed).toBe(true)
+    expect(removed.document.primitives).toEqual([])
   })
 })
