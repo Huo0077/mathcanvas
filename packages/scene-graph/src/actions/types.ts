@@ -105,7 +105,6 @@ export interface SolidCreatePrismAction extends ActionBase {
   }
 }
 
-/** 既有的、指向文档内对象的引用（必须带 documentId，名称不是 ID）。 */
 /**
  * **正四面体**（用户口径："画一个正四面体 ABCD，棱长为 3"）。
  *
@@ -114,6 +113,7 @@ export interface SolidCreatePrismAction extends ActionBase {
  * **底面中心 + 棱长**两个数唯一确定 —— 硬塞进模板会让每个模板的字段都变成"有些必填、有些没有"。
  *
  * 形状由内核按定义构造（四个顶点、六条等长棱、四个三角面），动作层只传这两个参数。
+ * **它是下面那只正 N 棱锥 `sides = 3` 的特例**（第 1 层：形状只有内核一处定义）。
  */
 export interface SolidCreateTetrahedronAction extends ActionBase {
   actionId: "solid.create_tetrahedron"
@@ -123,6 +123,30 @@ export interface SolidCreateTetrahedronAction extends ActionBase {
     baseCenter: { x: number; y: number; z: number }
     /** 棱长。 */
     edge: number
+    label?: string
+  }
+}
+
+/**
+ * **正 N 棱锥**（第 1 层：用户口径"如果有正 N 面体呢？"）。
+ *
+ * `solid.create_template` 的 `pyramid` 底面是**矩形**（`baseSize.x/y`），只能表达（长）四棱锥；
+ * 正三 / 五 / 六…棱锥都落在这一族里，由**底面中心 + 边数 + 外接圆半径 + 高**四个数唯一确定 ——
+ * 一个动作 + 一个参数，而不是一个形状一个动作。正四面体是它 `sides = 3`、且高取
+ * `a·√(2/3)`（底面外接圆半径取 `a/√3`）时的特例。
+ */
+export interface SolidCreateRegularPyramidAction extends ActionBase {
+  actionId: "solid.create_regular_pyramid"
+  inputs: {
+    alias: DraftAlias
+    /** 底面（正 N 边形）的中心。 */
+    baseCenter: { x: number; y: number; z: number }
+    /** 底面边数（≥ 3 的整数）。 */
+    sides: number
+    /** 底面**外接圆半径**。 */
+    radius: number
+    /** 高（顶点在底面中心正上方多高）。 */
+    height: number
     label?: string
   }
 }
@@ -289,6 +313,7 @@ export type DraftAction =
   | SolidCreateTemplateAction
   | SolidCreatePrismAction
   | SolidCreateTetrahedronAction
+  | SolidCreateRegularPyramidAction
   | DynamicBindPointAction
   | DynamicCreateBoundPointAction
   | DynamicCreateLocusAction

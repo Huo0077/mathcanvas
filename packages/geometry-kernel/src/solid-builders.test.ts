@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { buildFromPoints, buildFrustum, buildPrism, buildSolid, buildSolidTemplate, createBuilderContext, listSolidBuilders, registerSolidBuilder } from "./solid-builders"
+import { buildFromPoints, buildFrustum, buildPrism, buildSolid, buildSolidTemplate, createBuilderContext, listSolidBuilders, registerSolidBuilder, regularPyramidShape, regularTetrahedronShape } from "./solid-builders"
 import { buildPrismTopology, validatePrismInput } from "./prism"
 
 const triangle = [
@@ -326,6 +326,71 @@ describe("solid builders", () => {
       expect(built.diagnostics.length, `edge=${edge} must be refused`).toBeGreaterThan(0)
       expect(built.primitives).toHaveLength(0)
     }
+  })
+
+  /**
+   * **正 N 棱锥**（第 1 层：把"一个形状一个动作"换成"一个构造器 + 一个参数"）。
+   *
+   * 判据也是定义而不是"看起来像"：底面 N 条边**等长**、N 个底面顶点到中心的水平距离都等于外接圆半径、
+   * 顶点**水平坐标恰好在底面中心**（构造保证）、顶点数 N+1、棱数 2N、面数 N+1。
+   */
+  it("builds a regular N-gon pyramid whose base is exact and whose apex is above the centre", () => {
+    const sides = 5
+    const radius = 2
+    const built = buildSolid("regularPyramid", { baseCenter: { x: 1, y: -2, z: 0 }, sides, radius, height: 3 }, createBuilderContext("regpyr"))
+
+    expect(built.diagnostics).toEqual([])
+    expect(built.vertexIds).toHaveLength(sides + 1)
+    expect(built.edgeIds).toHaveLength(sides * 2) // N 条底边 + N 条侧棱
+    expect(built.faceIds).toHaveLength(sides + 1) // 1 个底面 + N 个侧面
+
+    const positions = built.primitives.filter((primitive) => primitive.type === "point3").map((primitive) => primitive.position)
+    const base = positions.slice(0, sides)
+    const apex = positions[sides]
+    for (const vertex of base) {
+      expect(Math.hypot(vertex.x - 1, vertex.y + 2)).toBeCloseTo(radius, 9)
+      expect(vertex.z).toBeCloseTo(0, 9)
+    }
+    // 相邻底边等长 ⇒ 正 N 边形。
+    const sideLengths = base.map((vertex, index) => {
+      const next = base[(index + 1) % sides]
+      return Math.hypot(vertex.x - next.x, vertex.y - next.y)
+    })
+    for (const length of sideLengths) expect(length).toBeCloseTo(sideLengths[0], 9)
+    // 顶点在底面形心正上方（构造保证，不是算出来的）。
+    expect(apex.x).toBeCloseTo(1, 9)
+    expect(apex.y).toBeCloseTo(-2, 9)
+    expect(apex.z).toBeCloseTo(3, 9)
+  })
+
+  it("refuses a regular pyramid whose side count or size is out of range", () => {
+    const baseCenter = { x: 0, y: 0, z: 0 }
+    for (const input of [
+      { sides: 2, radius: 1, height: 1 },
+      { sides: 2.5, radius: 1, height: 1 },
+      { sides: 300, radius: 1, height: 1 },
+      { sides: 5, radius: 0, height: 1 },
+      { sides: 5, radius: 1, height: -1 }
+    ]) {
+      const built = buildSolid("regularPyramid", { baseCenter, ...input }, createBuilderContext("regpyr"))
+      expect(built.diagnostics.length, `sides=${input.sides} radius=${input.radius} height=${input.height}`).toBeGreaterThan(0)
+      expect(built.primitives).toHaveLength(0)
+    }
+  })
+
+  /**
+   * **正四面体就是 N=3 的那个特例**（上面那两段必须走同一个构造器）。
+   *
+   * 这条断言的是**两份几何逐字相同** —— 将来若有人把"正四面体"再写成一套独立几何，它就会红
+   *（那正是第 1 层要消灭的东西：一个形状一个构造器）。
+   */
+  it("treats the regular tetrahedron as the N=3 case of the same construction", () => {
+    const edge = 3
+    const baseCenter = { x: 0, y: 0, z: 0 }
+
+    expect(regularTetrahedronShape({ baseCenter, edge })).toEqual(
+      regularPyramidShape({ baseCenter, sides: 3, radius: edge / Math.sqrt(3), height: edge * Math.sqrt(2 / 3) })
+    )
   })
 
   /**

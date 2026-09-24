@@ -464,6 +464,26 @@ const ACTIONS = {
       edge: { policy: "infer_from_facts", infer: "size", value: DEFAULT_SOLID_SIZE, reason: `棱长未指定：先从你的话里读，读不到取 ${DEFAULT_SOLID_SIZE}。` }
     }
   },
+  /**
+   * **正 N 棱锥**（第 1 层，用户口径："如果有正 N 面体呢？"）。
+   *
+   * `pyramid` 模板的底面是**矩形**（只能四棱锥），而正三 / 五 / 六…棱锥由"边数 + 底面外接圆半径 + 高"
+   * 唯一确定；**正四面体是 `sides = 3` 的特例**（两者走内核同一个构造器）。
+   *
+   * **边数没有公认的默认值** —— 替用户挑一个"正五棱锥"就是替他改题，所以 `sides` 走 `ask_user`；
+   * 半径与高按老口径从原话里读数字、读不到取默认值并写进 `assumptions`。
+   */
+  "solid.create_regular_pyramid": {
+    inputFields: ["alias", "baseCenter", "sides", "radius", "height", "label"],
+    requiresAlias: true,
+    required: [],
+    defaults: {
+      baseCenter: { policy: "safe_default", value: ORIGIN_3D, reason: "底面中心未指定，放在原点。" },
+      sides: { policy: "ask_user", question: "底面是正几边形？（3 = 三棱锥，也就是正四面体那一族）" },
+      radius: { policy: "infer_from_facts", infer: "size", value: DEFAULT_SOLID_SIZE, reason: `底面外接圆半径未指定：先从你的话里读，读不到取 ${DEFAULT_SOLID_SIZE}。` },
+      height: { policy: "infer_from_facts", infer: "height", value: DEFAULT_SOLID_HEIGHT, reason: `高未指定：先从你的话里读，读不到取 ${DEFAULT_SOLID_HEIGHT}。` }
+    }
+  },
 
   // --- 动点 ---
   // 引用是两个**带 documentId** 的引用：跨文档绑定必须能说清是哪两份文档里的哪两个对象。

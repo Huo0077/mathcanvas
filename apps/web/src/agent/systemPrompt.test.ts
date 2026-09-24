@@ -164,6 +164,9 @@ describe("production system prompt", () => {
 
     expect(policy).toContain("立体图形必须由")
     expect(policy).toContain("去拼一只实体")
+    // 第 1 层那条（正 N 棱锥）也必须在"能造的立体"与"用 solid.* 造"两处都出现。
+    expect(policy).toContain("solid.create_regular_pyramid")
+    expect(policy).toContain("正 N 棱锥")
   })
 
   it("keeps the policy text identical across contexts, and injects the scene separately", () => {

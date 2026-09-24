@@ -228,7 +228,7 @@ export function buildPolicyText(input: SystemPromptPolicyInput): string {
        *（`polyhedron3` 在能力登记表里是 `temporarily_unavailable`：只有内核物化那一个入口）。
        * 所以这条规则说的是"**剩下的**没有的图元要如实说"，而不是"没有立体可造"。
        */
-      "**没有的图元要如实说**：能造的立体就是这些 —— 立方体、**四棱锥（底面是矩形）**、**正四面体（独立动作 `solid.create_tetrahedron`：底面中心 + 棱长）**、圆柱、圆锥，以及**棱柱（底面多边形 + 拉伸）**。**没有一般多面体**（既不是棱柱、也不是上面这几种棱锥的形状）。要求这类形状时：说清「这个形状目前没有图元」，给出最接近的替代（例如用四棱锥近似）并写进 `assumptions`，或者返回 `clarification` 问用户要哪个 —— **不要拿别的形状冒充**（例如拿三棱柱当正四面体）。",
+      "**没有的图元要如实说**：能造的立体就是这些 —— 立方体、**四棱锥（底面是矩形）**、**正四面体（`solid.create_tetrahedron`：底面中心 + 棱长）**、**正 N 棱锥（`solid.create_regular_pyramid`：底面中心 + 边数 + 底面外接圆半径 + 高）**、圆柱、圆锥，以及**棱柱（底面多边形 + 拉伸）**。**没有一般多面体**（既不是棱柱、也不是上面这几种棱锥的形状）。要求这类形状时：说清「这个形状目前没有图元」，给出最接近的替代（例如用四棱锥近似）并写进 `assumptions`，或者返回 `clarification` 问用户要哪个 —— **不要拿别的形状冒充**（例如拿三棱柱当正四面体）。",
       /**
        * **立体必须由 `solid.*` 动作造**（2026-09-23，用户现场第二形态）。
        *
@@ -236,7 +236,7 @@ export function buildPolicyText(input: SystemPromptPolicyInput): string {
        * 文档里于是**没有实体本身**（没有 `polyhedron3`），只剩一地互相引用的碎片 ——
        * 删除、派生读数、截面全都失去依据（那次用户点任意一片都删不掉）。
        */
-      "**立体图形必须由 `solid.*` 动作创建**：立方体 / 四棱锥 / 圆柱 / 圆锥用 `solid.create_template`、棱柱用 `solid.create_prism`、正四面体用 `solid.create_tetrahedron` —— 它们一次物化出实体与它的顶点 / 棱 / 面。**不要**用散落的 `planar.*` / `dynamic.*` 点、棱、面去拼一只实体：那样文档里没有实体本身，删除与读数都会失去依据。",
+      "**立体图形必须由 `solid.*` 动作创建**：立方体 / 四棱锥 / 圆柱 / 圆锥用 `solid.create_template`、棱柱用 `solid.create_prism`、正四面体用 `solid.create_tetrahedron`、正 N 棱锥用 `solid.create_regular_pyramid` —— 它们一次物化出实体与它的顶点 / 棱 / 面。**不要**用散落的 `planar.*` / `dynamic.*` 点、棱、面去拼一只实体：那样文档里没有实体本身，删除与读数都会失去依据。",
       "## 本轮允许的动作（`actionId` 只能从这里选）",
       ...(input.actionIds.length > 0 ? input.actionIds.map((action) => `- ${action}`) : ["（这一轮没有任何可用动作：只能提问或作答）"]),
       "",

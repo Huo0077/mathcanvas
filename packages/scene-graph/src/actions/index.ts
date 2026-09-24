@@ -1,5 +1,5 @@
 import type { GeometryDocument, PrimitiveSpec, Vector3 } from "@draw/dsl"
-import { buildFromPoints, buildPrismTopology, prismEdgeLabel, prismPointLabel, regularTetrahedronShape, templateEdgeLabel, templatePointLabel, validatePrismInput, type BuilderContext } from "@draw/geometry-kernel"
+import { buildFromPoints, buildPrismTopology, prismEdgeLabel, prismPointLabel, regularPyramidShape, regularTetrahedronShape, templateEdgeLabel, templatePointLabel, validatePrismInput, type BuilderContext } from "@draw/geometry-kernel"
 
 import type { DomainOperation } from "../operations"
 import type { ActionContext, ActionDiagnostic, CompileResult, DraftAction, IdAllocator } from "./types"
@@ -285,13 +285,13 @@ function compileSolidPrismAction(action: Extract<DraftAction, { actionId: "solid
 }
 
 /**
- * 正四面体的 id 分配：**确定性** —— 同一个 `solidId` 永远得到同一批子对象 id。
+ * **点集构造的实体**（正四面体、正 N 棱锥…）的 id 分配：**确定性** —— 同一个 `solidId` 永远得到同一批子对象 id。
  *
  * 命名与棱柱那一支逐字对齐（`:v0` 顶点、`:e0` 棱、`:f0` 面），而**多面体自己就是那只实体**：
  * 它的 id 必须是动作分配出来的 `solidId`（别名指向它）。内核的 `buildFromPoints` 只会问
  * `allocateId(namespace)`，所以这一层把"多面体"这一格映射回 `solidId` 就够。
  */
-function tetrahedronIds(solidId: string): BuilderContext {
+function solidChildIds(solidId: string): BuilderContext {
   const counters = new Map<string, number>()
   return {
     allocateId(namespace) {
@@ -304,13 +304,14 @@ function tetrahedronIds(solidId: string): BuilderContext {
 }
 
 /**
- * 正四面体子对象的自动标签：顶点 **A / B / C / D**、棱 `棱 1…6`、面 `面 1…4`。
+ * 这类实体的子对象自动标签：顶点 **A / B / C …**、棱 `棱 n`、面 `面 n`。
  *
- * 顶点用 A… 而不是棱柱那套 `P1…`：用户说的就是"正四面体 **ABCD**"。而"这个标签是不是自动生成的"
- * 那条判据（`apps/web/src/solidTemplates.ts` 的 `isTemplateSource`）看的是
- * `construction.kind === "template"`，正四面体的构造是 `fromPoints`，**不会被模板迁移当成自己的子对象**重命名。
+ * 顶点用 A… 而不是棱柱那套 `P1…`：用户说的就是"正四面体 **ABCD**"、"正五棱锥 ABCDE"。
+ * 而"这个标签是不是自动生成的"那条判据（`apps/web/src/solidTemplates.ts` 的 `isTemplateSource`）
+ * 看的是 `construction.kind === "template"`，这些实体的构造是 `fromPoints`，
+ * **不会被模板迁移当成自己的子对象**重命名。
  */
-function labelTetrahedronChildren(primitives: PrimitiveSpec[], label?: string): PrimitiveSpec[] {
+function labelSolidChildren(primitives: PrimitiveSpec[], label?: string): PrimitiveSpec[] {
   let vertices = 0
   let edges = 0
   let faces = 0
@@ -322,7 +323,8 @@ function labelTetrahedronChildren(primitives: PrimitiveSpec[], label?: string): 
   })
 }
 
-export interface TetrahedronBuildResult {
+/** 点集构造的实体交给动作层的那一份结果（正四面体与正 N 棱锥共用）。 */
+export interface ActionSolidBuildResult {
   primitives: PrimitiveSpec[]
   vertexIds: string[]
   edgeIds: string[]
@@ -332,16 +334,34 @@ export interface TetrahedronBuildResult {
 }
 
 /** 由**底面中心 + 棱长**造一只正四面体：几何来自内核，id 与标签在这一层。 */
-export function compileSolidTetrahedron(solidId: string, input: { baseCenter: Vector3; edge: number }, label?: string): TetrahedronBuildResult {
+export function compileSolidTetrahedron(solidId: string, input: { baseCenter: Vector3; edge: number }, label?: string): ActionSolidBuildResult {
   const shape = regularTetrahedronShape(input)
   if (!shape) {
     return { primitives: [], vertexIds: [], edgeIds: [], faceIds: [], solidId, diagnostics: [diagnostic(solidId, "invalid_tetrahedron", "正四面体需要一个有限的底面中心与一个正的棱长。")] }
   }
-  const built = buildFromPoints(shape, tetrahedronIds(solidId))
+  const built = buildFromPoints(shape, solidChildIds(solidId))
   if (built.diagnostics.length > 0) {
     return { primitives: [], vertexIds: built.vertexIds, edgeIds: built.edgeIds, faceIds: built.faceIds, solidId, diagnostics: built.diagnostics.map((entry) => diagnostic(solidId, "degenerate_tetrahedron", entry.message)) }
   }
-  return { primitives: labelTetrahedronChildren(built.primitives, label), vertexIds: built.vertexIds, edgeIds: built.edgeIds, faceIds: built.faceIds, solidId, diagnostics: [] }
+  return { primitives: labelSolidChildren(built.primitives, label), vertexIds: built.vertexIds, edgeIds: built.edgeIds, faceIds: built.faceIds, solidId, diagnostics: [] }
+}
+
+/**
+ * 由**底面中心 + 边数 + 外接圆半径 + 高**造一只**正 N 棱锥**（第 1 层）。
+ *
+ * 正四面体是它 `sides = 3` 的特例（前者现在就走这个构造器），而"正五棱锥 / 正六棱锥…"不必各写一套 ——
+ * 形状只有内核一处定义（`regularPyramidShape`），这里只负责 id、标签与包装。
+ */
+export function compileSolidRegularPyramid(solidId: string, input: { baseCenter: Vector3; sides: number; radius: number; height: number }, label?: string): ActionSolidBuildResult {
+  const shape = regularPyramidShape(input)
+  if (!shape) {
+    return { primitives: [], vertexIds: [], edgeIds: [], faceIds: [], solidId, diagnostics: [diagnostic(solidId, "invalid_regular_pyramid", "正 N 棱锥需要一个有限的底面中心、3 以上的整数边数，以及正的外接圆半径与高。")] }
+  }
+  const built = buildFromPoints(shape, solidChildIds(solidId))
+  if (built.diagnostics.length > 0) {
+    return { primitives: [], vertexIds: built.vertexIds, edgeIds: built.edgeIds, faceIds: built.faceIds, solidId, diagnostics: built.diagnostics.map((entry) => diagnostic(solidId, "degenerate_regular_pyramid", entry.message)) }
+  }
+  return { primitives: labelSolidChildren(built.primitives, label), vertexIds: built.vertexIds, edgeIds: built.edgeIds, faceIds: built.faceIds, solidId, diagnostics: [] }
 }
 
 /**
@@ -357,6 +377,24 @@ function compileSolidTetrahedronAction(action: Extract<DraftAction, { actionId: 
   }
   const id = context.idAllocator.allocate("solid", inputs.alias)
   const built = compileSolidTetrahedron(id, { baseCenter: inputs.baseCenter, edge: inputs.edge }, inputs.label)
+  if (built.diagnostics.length > 0) return { operations: [], diagnostics: built.diagnostics.map((entry) => diagnostic(actionKey, entry.code, entry.message)), aliasToId: {} }
+  return { operations: [{ op: "addPrimitives", primitives: built.primitives }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
+}
+
+/**
+ * `solid.create_regular_pyramid`：**底面中心 + 边数 + 外接圆半径 + 高** → 一只 `polyhedron3` 与它的全部子对象。
+ *
+ * 第 1 层要解决的问题就是"一个形状一个动作"：`pyramid` 模板的底面是矩形（只能四棱锥），
+ * 而正三 / 五 / 六…棱锥都落在这一族里 —— 一个动作 + 四个数，正四面体则是 `sides = 3` 的特例。
+ * 与另外两个立体动作同一套纪律：工作区必须是立体几何；输入不合法时**一条操作都不产出**。
+ */
+function compileSolidRegularPyramidAction(action: Extract<DraftAction, { actionId: "solid.create_regular_pyramid" }>, context: ActionContext): CompileResult {
+  const { actionKey, inputs } = action
+  if (context.targetWorkspace !== "geometry3d") {
+    return { operations: [], diagnostics: [diagnostic(actionKey, "workspace_mismatch", "a regular pyramid can only be created in the solid workspace")], aliasToId: {} }
+  }
+  const id = context.idAllocator.allocate("solid", inputs.alias)
+  const built = compileSolidRegularPyramid(id, { baseCenter: inputs.baseCenter, sides: inputs.sides, radius: inputs.radius, height: inputs.height }, inputs.label)
   if (built.diagnostics.length > 0) return { operations: [], diagnostics: built.diagnostics.map((entry) => diagnostic(actionKey, entry.code, entry.message)), aliasToId: {} }
   return { operations: [{ op: "addPrimitives", primitives: built.primitives }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
 }
@@ -733,6 +771,8 @@ export function compileAction(action: DraftAction, context: ActionContext): Comp
       return compileSolidPrismAction(action, context)
     case "solid.create_tetrahedron":
       return compileSolidTetrahedronAction(action, context)
+    case "solid.create_regular_pyramid":
+      return compileSolidRegularPyramidAction(action, context)
     case "dynamic.bind_point":
       return compileBindPoint(action, context)
     case "dynamic.create_bound_point":

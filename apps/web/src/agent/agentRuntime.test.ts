@@ -404,8 +404,8 @@ describe("the assembled runtime actually runs", () => {
 
     const context = seen[0].model.context
     expect(context.skills.map((skill) => skill.id)).toEqual(["spatial-modeling"])
-    // 清单声明的动作就是上下文里的可用动作（`spatial-modeling` 声明模板实体、拉伸式棱柱与正四面体三种）。
-    expect([...context.availableActions]).toEqual(["solid.create_template", "solid.create_prism", "solid.create_tetrahedron"])
+    // 清单声明的动作就是上下文里的可用动作（`spatial-modeling` 声明模板实体、拉伸式棱柱、正四面体与正 N 棱锥）。
+    expect([...context.availableActions]).toEqual(["solid.create_template", "solid.create_prism", "solid.create_tetrahedron", "solid.create_regular_pyramid"])
     // 没有请求的技能不该出现，而且**不该**变成一条"未登记"警告（那是给清单本身有问题用的）。
     expect(context.warnings).toEqual([])
   })

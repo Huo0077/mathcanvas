@@ -422,6 +422,57 @@ function buildPyramid(input: PyramidInput, context: BuilderContext): SolidBuildR
  * 六条等长棱、四个三角面"这个形状。而用户会直接要它（"画一个正四面体 ABCD，棱长为 3"），
  * 动作层没有对应动作时，模型只能拿最接近的**冒充**（用户现场：正四面体被做成了三棱柱）。
  */
+/**
+ * **正 N 棱锥**的输入：底面（正 N 边形）中心 + 边数 + 底面**外接圆半径** + 高。
+ *
+ * 它是棱锥的**规则形式**。`buildPyramid` 的底面是**矩形**（`baseSize.x/y`），只能表达（长）四棱锥；
+ * 而"正五棱锥""正六棱锥""正四面体"都落在这一族里 —— **一个构造器 + 一个参数**，
+ * 而不是一个形状一个动作（用户口径："如果有正 N 面体呢？"）。
+ */
+export interface RegularPyramidInput {
+  /** 底面（正 N 边形）的中心。 */
+  baseCenter: Vector3
+  /** 底面边数（`3` = 三棱锥；取正四面体的高时就是正四面体）。 */
+  sides: number
+  /** 底面**外接圆半径**。 */
+  radius: number
+  /** 高：顶点在底面中心正上方多高。 */
+  height: number
+}
+
+/**
+ * 正 N 棱锥的**几何本身**：底面 N 个顶点按 `2πk/N` 均匀取（第一个在 +x 方向），
+ * 第 N+1 个顶点的**水平坐标就是底面中心**、z 高出 `height`。
+ *
+ * 于是"顶点在底面形心正上方"是**构造保证**的（不是算出来的），底面各边等长也是。
+ * 面环绕向与 `buildPyramid` 同一口径：底面**逆序**（法向朝下），侧面按底面环序接顶点 `[i, i+1, apex]`。
+ *
+ * 返回 `null` 表示输入不合法（边数不是 3..`MAX_SOLID_SEGMENTS` 的整数、半径或高不是正有限数、底面中心非有限）。
+ */
+export function regularPyramidShape(input: RegularPyramidInput): { vertices: Vector3[]; faces: number[][] } | null {
+  if (!input || !isFiniteVector(input.baseCenter)) return null
+  if (!Number.isInteger(input.sides) || input.sides < 3 || input.sides > MAX_SOLID_SEGMENTS) return null
+  if (!Number.isFinite(input.radius) || input.radius <= 0) return null
+  if (!Number.isFinite(input.height) || input.height <= 0) return null
+  const { x, y, z } = input.baseCenter
+  const vertices: Vector3[] = Array.from({ length: input.sides }, (_, index) => {
+    const angle = (index * Math.PI * 2) / input.sides
+    return { x: x + input.radius * Math.cos(angle), y: y + input.radius * Math.sin(angle), z }
+  })
+  vertices.push({ x, y, z: z + input.height })
+  const apex = input.sides
+  const baseRing = Array.from({ length: input.sides }, (_, index) => input.sides - 1 - index)
+  const faces: number[][] = [baseRing]
+  for (let index = 0; index < input.sides; index += 1) faces.push([index, (index + 1) % input.sides, apex])
+  return { vertices, faces }
+}
+
+function buildRegularPyramid(input: RegularPyramidInput, context: BuilderContext): SolidBuildResult {
+  const shape = regularPyramidShape(input)
+  if (!shape) return emptyResult([diagnostic("invalid-input", `regular pyramid parameters are invalid (sides must be an integer in 3..${MAX_SOLID_SEGMENTS}, and radius / height positive finite numbers)`)])
+  return buildFromPoints(shape, context)
+}
+
 export interface TetrahedronInput {
   /** 底面（等边三角形）的中心。 */
   baseCenter: Vector3
@@ -441,22 +492,13 @@ export interface TetrahedronInput {
  */
 export function regularTetrahedronShape(input: TetrahedronInput): { vertices: Vector3[]; faces: number[][] } | null {
   if (!input || !isFiniteVector(input.baseCenter) || !Number.isFinite(input.edge) || input.edge <= 0) return null
-  const radius = input.edge / Math.sqrt(3)
-  const height = input.edge * Math.sqrt(2 / 3)
-  const { x, y, z } = input.baseCenter
-  return {
-    vertices: [
-      { x: x + radius, y, z },
-      { x: x - radius / 2, y: y + (radius * Math.sqrt(3)) / 2, z },
-      { x: x - radius / 2, y: y - (radius * Math.sqrt(3)) / 2, z },
-      { x, y, z: z + height }
-    ],
-    /**
-     * 面环的绕向与 `buildPyramid` 同一口径：底面 `[2, 1, 0]` 从外侧看是顺时针（法向朝下），
-     * 三个侧面按底面环的顺序接第四点（`[i, i+1, 3]`）。
-     */
-    faces: [[2, 1, 0], [0, 1, 3], [1, 2, 3], [2, 0, 3]]
-  }
+  /**
+   * **正四面体 = N=3 的正棱锥 + 正四面体的高**（底面外接圆半径 `a/√3`、高 `a·√(2/3)`）。
+   *
+   * 走同一个构造器，于是"规则棱锥的形状"在这份文件里**只有一处定义** ——
+   * 正四面体不是另一套几何，而是这一族的一个特例（第 1 层要解决的正是"一个形状一个构造器"）。
+   */
+  return regularPyramidShape({ baseCenter: input.baseCenter, sides: 3, radius: input.edge / Math.sqrt(3), height: input.edge * Math.sqrt(2 / 3) })
 }
 
 function buildTetrahedron(input: TetrahedronInput, context: BuilderContext): SolidBuildResult {
@@ -500,6 +542,7 @@ const solidBuilders = new Map<string, SolidBuilder<unknown>>([
   ["cube", { id: "cube", label: "立方体", create: (input, context) => buildCube(input as CubeInput, context) }],
   ["pyramid", { id: "pyramid", label: "棱锥", create: (input, context) => buildPyramid(input as PyramidInput, context) }],
   ["tetrahedron", { id: "tetrahedron", label: "正四面体", create: (input, context) => buildTetrahedron(input as TetrahedronInput, context) }],
+  ["regularPyramid", { id: "regularPyramid", label: "正 N 棱锥", create: (input, context) => buildRegularPyramid(input as RegularPyramidInput, context) }],
   ["cylinder", { id: "cylinder", label: "圆柱近似", create: (input, context) => {
     const roundInput = input as RoundSolidInput
     if (!roundInput || !Number.isInteger(roundInput.segments) || roundInput.segments < 3 || roundInput.segments > MAX_SOLID_SEGMENTS || !isFiniteVector(roundInput.center) || !Number.isFinite(roundInput.radius) || roundInput.radius <= 0 || !Number.isFinite(roundInput.height) || roundInput.height <= 0) return emptyResult([diagnostic("invalid-input", `cylinder parameters are invalid (segments must be an integer in 3..${MAX_SOLID_SEGMENTS})`)])

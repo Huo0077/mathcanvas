@@ -19,9 +19,10 @@ describe("draft action catalogue", () => {
     // 数字写死在这里是有意的：动作层新增动作时这条会失败，提醒把新动作接进传输层，
     // 而不是让它静默不可达。**21** 是加上 `solid.create_prism`（Solid/Prism 切片）之后的实测值；
     // **24** 是加上 `planar.create_conic` / `dynamic.create_bound_point` / `parameter.create`
-    // （Agent DSL 切片）之后的实测值；**25** 是加上 `solid.create_tetrahedron`（正四面体切片）之后的实测值。
-    expect(DRAFT_ACTION_IDS).toHaveLength(25)
-    expect(new Set(DRAFT_ACTION_IDS).size).toBe(25)
+    // （Agent DSL 切片）之后的实测值；**25** 是加上 `solid.create_tetrahedron`（正四面体切片）之后的实测值；
+    // **26** 是加上 `solid.create_regular_pyramid`（第 1 层：正 N 棱锥）之后的实测值。
+    expect(DRAFT_ACTION_IDS).toHaveLength(26)
+    expect(new Set(DRAFT_ACTION_IDS).size).toBe(26)
   })
 
   it("recognises every catalogue action instead of calling it unknown", () => {

@@ -176,6 +176,41 @@ describe("solid family", () => {
     expect(result.diagnostics[0].code).toBe("workspace_mismatch")
   })
 
+  /**
+   * **正 N 棱锥**（第 1 层：一个构造器 + 一个参数，而不是一个形状一个动作）。
+   *
+   * 判据：顶点 N+1、棱 2N（N 条底边 + N 条侧棱）、面 N+1（1 底面 + N 侧面）；
+   * 标签按顶点序给 A…F（底面五个 A–E，顶点 F）；别名指向那只多面体。
+   */
+  it("creates a regular pentagonal pyramid from one action and four numbers", () => {
+    const document = createEmptyDocument("geometry3d")
+    const result = compileActions(document, [action({ actionId: "solid.create_regular_pyramid", inputs: { alias: "p", baseCenter: { x: 0, y: 0, z: 0 }, sides: 5, radius: 2, height: 3 } })], contextWith(document))
+
+    expect(result.diagnostics).toEqual([])
+    const added = result.operations.flatMap((entry) => (entry.op === "addPrimitives" ? [entry.primitives] : []))
+    expect(added).toHaveLength(1)
+    const primitives = added[0]
+    const vertices = primitives.filter((primitive) => primitive.type === "point3")
+    expect(vertices.map((primitive) => primitive.id)).toEqual(["solid-1:v0", "solid-1:v1", "solid-1:v2", "solid-1:v3", "solid-1:v4", "solid-1:v5"])
+    expect(vertices.map((primitive) => (primitive.type === "point3" ? primitive.label : undefined))).toEqual(["A", "B", "C", "D", "E", "F"])
+    expect(primitives.filter((primitive) => primitive.type === "edge3")).toHaveLength(10)
+    expect(primitives.filter((primitive) => primitive.type === "face3")).toHaveLength(6)
+    expect(primitives.find((primitive) => primitive.type === "polyhedron3")).toMatchObject({ id: "solid-1" })
+  })
+
+  it("refuses a regular pyramid with two sides or a flat height", () => {
+    const document = createEmptyDocument("geometry3d")
+    for (const inputs of [
+      { alias: "p", baseCenter: { x: 0, y: 0, z: 0 }, sides: 2, radius: 2, height: 3 },
+      { alias: "p", baseCenter: { x: 0, y: 0, z: 0 }, sides: 5, radius: 0, height: 3 },
+      { alias: "p", baseCenter: { x: 0, y: 0, z: 0 }, sides: 5, radius: 2, height: 0 }
+    ]) {
+      const result = compileActions(document, [action({ actionId: "solid.create_regular_pyramid", inputs })], contextWith(document))
+      expect(result.operations, `sides=${inputs.sides} radius=${inputs.radius} height=${inputs.height}`).toHaveLength(0)
+      expect(result.diagnostics.length).toBeGreaterThan(0)
+    }
+  })
+
   it("refuses a flat or negative-sized cube instead of fabricating a solid", () => {
     const document = createEmptyDocument("geometry3d")
     const result = compileActions(document, [action({ actionId: "solid.create_template", inputs: { alias: "s", template: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 2, z: 0 } } })], contextWith(document))
