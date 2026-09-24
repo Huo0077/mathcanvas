@@ -359,6 +359,26 @@ Agent 那四条里先做三条判据明确的；第 4 条（第 12 个观测对�
 
 **验证（本机实跑，2026-09-22）**：`npm test` **215 文件 / 2599 用例通过 + 1 todo**（起点 2597，+2，零失败）；`npm run typecheck` **6 个 workspace exit 0**；`npm run lint` **0 error / 14 warning**（基线）。本批只动 TypeScript。
 
+### Agent 建的正四面体删不掉：族判定漏了第三种构造 `fromPoints`（2026-09-23，**用户现场**：agent 创建的元素无法删除）
+
+- **用户现场**：Agent 建的元素删不掉。查下来就是上一批刚做的**正四面体** —— 它既不是模板实体、也不是棱柱。
+- **根因（一处规则漏了一种构造）**：`deletionTargets`（`packages/scene-graph/src/operations.ts`）的族判定写着
+  `if (kind !== "template" && kind !== "prism") return false`，而 Agent 的正四面体是**第三种构造** `fromPoints`
+  （`solid.create_tetrahedron` → 内核 `buildFromPoints` 物化，`construction.kind === "fromPoints"`）。于是它掉进缝里：
+  1. **删实体本身**只删掉 `polyhedron3`，4 个顶点 / 6 条棱 / 4 个面留在画布上继续绘制 —— 与外部审查 S2 那条**同一个病**，只是换了一种构造；
+  2. **删任意一个成员**（用户点的往往正是画布上那个顶点）会被 `validateDeletion` 判成
+     `object is referenced by another object: solid-1:v0` 而**拒绝** —— 这就是"删不掉"。
+- **改法（两处，同一处规则的两个方向）**：
+  1. `deletionTargets`：**不再按 `construction.kind` 筛** —— 任何 `polyhedron3` 都是"一只实体 + 它自己物化出来的拓扑"，四种构造（`template` / `prism` / `fromPoints` / `fromFaces`）删除语义一致；
+  2. `ownerOfTopology`：补上 `fromPoints → sourceIds[0]`。这是"一条拓扑归哪只实体"的反方向（`topologyOfEntity` 读它），漏掉的代价是**派生读数（体积 / 外接球…）无声消失** —— 与那个文件里记过的那次同一类。
+- **RED→GREEN（先看红再改）**：`packages/scene-graph/src/deletion-cascade.test.ts` **+2**（镜像既有的棱柱那两条）：
+  ① 族判定从**实体**与从**任一成员**出发都必须收回整族 15 个 id，`deleteObject` 之后 `primitives` 为**空**（0 残留）；
+  ② 用户点一个顶点时 `validateDeletion` 必须是 `{valid:true}` 且整族一起走 —— RED 逐字是
+  `{ valid: false, errors: ["object is referenced by another object: solid-1:v0"] }`（**用户现场那句话**）。
+  **变异**（把 `kind !== "template" && kind !== "prism"` 加回去）⇒ 恰好这 2 条变红（`12 tests | 2 failed`），模板/棱柱/级联那 10 条纹丝不动；还原后 12/12 绿。
+- **验证（本机实跑，2026-09-23）**：`npm test` **215 文件 / 2613 用例通过 + 1 todo**（起点 2611，+2）；`npm run typecheck` **6 个 workspace exit 0**；`npm run lint` **0 error / 14 warning**（基线）。
+- **如实缺口**：这批修的是**删除**；`templateTopologyIds`（拖动时"哪些顶点算实体的子对象"）**仍然只认模板** —— 所以正四面体的顶点**可以被自由拖动**（拖歪了就是一个普通四面体）。这是有意的取舍（棱柱的顶点同样可编辑），但**没有一条用例钉住它**。
+
 ### `invalid_type@envelope`：模型回的不是对象，而这句话把"回了什么"整个丢掉（2026-09-22，**用户现场**）
 
 - **用户现场**：让 Agent 作图，运行停在 `the plan never matched the schema: invalid_type@envelope`，开发者详细视图里也只有这两句。
