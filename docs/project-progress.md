@@ -469,6 +469,22 @@ Agent 那四条里先做三条判据明确的；第 4 条（第 12 个观测对�
   2. **模型会不会真的用它取决于模型本身**；命令行路径（本地规划器）是确定性的。提示词已把正四面体列进"能造的立体"。
   3. **一般多面体仍然没有入口** —— 本批只做了正四面体。
 
+### 第 2 层：任意多面体 —— 顶点 + 面环接上内核 `fromPoints`，并放开 `polyhedron3` 的能力（2026-09-23，用户口径："或者不是规则的图形"）
+
+- **问题**：第 1 层只覆盖**规则**棱锥。不规则图形（正八面体、棱台、题面直接给了坐标的那种）**没有任何入口** —— 而内核里其实**早就有**通用构造器：`buildFromPoints`（注册名 `fromPoints`，标签"点集构造多面体"），`polyhedron3.construction` 也早有 `fromPoints` 这一支。缺的只是**动作层的入口**：`capabilities.ts` 把 `polyhedron3` 标成 `temporarily_unavailable`，理由写着 *"no action handler: topology is materialised by the kernel"*。
+- **改法（三处，一层比一层薄）**：
+  1. **动作层**：新增 `solid.create_polyhedron`（**顶点 + 面环**）→ `compileSolidPolyhedron` 直接喂内核 `buildFromPoints`。**这一支刻意不做任何自己的几何判断**：共面 / 自交 / 非零体积 / 绕向一致 / 未用顶点 / 连通性全部由内核逐条报诊断，于是"模型把面环写错"的结局是**一次修复**，而不是一份画不出来的文档。
+  2. **传输层**：给 `faces` 加了这份契约里**第一条二层整数数组**的逐字段校验（点 ≥4、面 ≥4、环 ≥3、下标是整数且互异且在范围内）；**几何语义刻意不搬过来**（搬过来就是"模型算错 → 一句 `invalid_type`"，而不是可修复的逐条诊断）。
+  3. **能力表**：`polyhedron3` 由 `temporarily_unavailable` 改成 **`available`**（它原本的理由就是"没有 action handler"，现在有了）。这是我在上一轮标明需要**产品决定**的那一处 —— 你选了"第 1 层 + 第 2 层一起做"，所以这里把它打开了，并补一条用例钉住（改回去就红）。
+  4. **提示词**：原先那句 **"没有一般多面体"作废** —— 现在能造的立体全部列出，并要求不规则形状**走 `create_polyhedron`**自己给顶点与面环；那条"不许拿别的形状冒充"原样保留。
+- **RED→GREEN 与变异**：
+  - 传输层：`schemas.test.ts` **+1** —— 收下合法的正八面体（6 顶点 / 8 个三角面），拒掉"点 <4 / 面 <4 / 环 <3 / 下标越界 / 下标不是整数 / 环内重复"六种畸形（`invalid_type` 与 `duplicate_index` 各归其位）。
+  - 动作层：`actions.test.ts` **+2** —— 正八面体（既不是棱柱也不是任何棱锥）落成 **6 顶点 / 12 棱 / 8 面 + 一只 `fromPoints` 多面体**；只有两个面时**一条操作都不产出**。
+  - 能力表：`capabilities.test.ts` **+1**（`polyhedron3` 必须 available 且 preconditions 里点名 `solid.create_polyhedron`）。**变异**（把它改回 `temporarily_unavailable`）⇒ 只有这一条红：`expected 'temporarily_unavailable' to be 'available'`；恢复后绿。
+- **守卫如实发威（三处既有断言按设计变红，已同步）**：`actionIds.test.ts` 写死计数 26 → **27**；`agentRuntime.test.ts` 的 `availableActions` 补上新动作；`systemPrompt.test.ts` 里那条"没有一般多面体"的断言**必须反过来**（`not.toContain`）—— 这正是"提示词与能力表不能各说各话"的现场。
+- **验证（本机实跑，2026-09-23）**：全量 `npm test` **215 文件 / 2628 用例通过 + 1 todo**（起点 2624，+4）；`npm run typecheck` **6 个 workspace exit 0**；`npm run lint` **0 error / 14 warning**。提交 `7c6fb1a`。
+- **仍未做**：① 那条「桌面持久化没生效」（`documents` 表里没有任何带图元的文档）**还没查**；② 任意多面体**没有手工入口**（只有 Ribbon 上的正四面体那一颗按钮），要加得先决定"顶点从哪来"（画布上选点？还是弹一个坐标表）；③ **第 3 层**（让模型引用文档里已有的点来搭实体 —— `fromPoints` 的 `sourceIds`）还没做。
+
 ### 第 1 层：正 N 棱锥 —— 一个构造器 + 一个参数（2026-09-23，用户口径："这样只解决了正四面体，如果有正 N 面体呢？"）
 
 - **问题**：上一批的正四面体是**写死的一种形状**（动作 + 内核构造器 + 能力 + 提示词各一套），而 `solid.create_template` 的 `pyramid` 底面是**矩形**（`baseSize.x/y`）⇒ 只能（长）四棱锥。正三 / 五 / 六…棱锥**没有任何入口**，边际成本是"一个形状一套"。
