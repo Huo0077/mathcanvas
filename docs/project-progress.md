@@ -469,6 +469,18 @@ Agent 那四条里先做三条判据明确的；第 4 条（第 12 个观测对�
   2. **模型会不会真的用它取决于模型本身**；命令行路径（本地规划器）是确定性的。提示词已把正四面体列进"能造的立体"。
   3. **一般多面体仍然没有入口** —— 本批只做了正四面体。
 
+### 碎片堆也能整片删（A）+ 手工入口与「不许用散片拼立体」（B）（2026-09-23，承接「没有实体当锚」那条用户现场）
+
+- **A（已修）**：`deletionTargets` 在**没有实体当锚**时按**拓扑连通分量**成组 —— 从点中的那一片出发，反复把"引用了组内对象"与"被组内对象引用"的 `point3` / `edge3` / `face3` 并进来。**只认拓扑之间的引用**：`line3` / `plane3` 这些**构造**不会被卷进来，"用户自己搭出来的构造引用仍然拒绝删除"那条语义原样保留。
+  - **RED→GREEN**：`deletion-cascade.test.ts` **+2** —— ①14 片碎片从任意一片出发都收回整堆、`validateDeletion` 为 `{valid:true}`、`deleteObject` 之后 `primitives` 为空（RED 逐字：`expected [ 'solid-1:e0' ] to deeply equal [ 'solid-1:e0', 'solid-1:e1', …(12) ]`）；②边界用例：单删孤立空间点仍被拒、点 + 线一起删仍合法。
+  - **变异**（去掉连通分量扩展）⇒ **只有 ① 红**，另外 13 条（含 ②）纹丝不动；恢复后 14/14、**整包 308/308** 绿。提交 `4e4d00c`。
+- **B1（已做）**：Ribbon 里与四类模板并列加一条 **「添加正四面体」**（`create-tetrahedron`）。它没有参数化图元，所以处理函数 `addTetrahedron` 直接调动作层的 `compileSolidTetrahedron`，把 **15 个图元一次落盘**（一步撤销、整族一起走），与 Agent 那条路产出**同一种东西**；落点取**原点**（另外四个模板各占一个象限，原点正空着）。
+  - **注（顺带发现的死代码）**：`components/GeometryToolbar.tsx` 全仓**没有任何渲染点** —— 用户看到的"添加立方体 / 添加棱锥…"其实来自 **Ribbon 命令**（`ribbonCommands.ts` → `App.tsx` 的 `switch`）。所以这次入口加在 Ribbon 上，`GeometryToolbar` 原样不动（它是否该删是另一件事）。
+- **B2（已做）**：策略文本加一条 —— **立体图形必须由 `solid.*` 动作创建**（`solid.create_template` / `solid.create_prism` / `solid.create_tetrahedron`），**不要**用散落的 `planar.*` / `dynamic.*` 点、棱、面去拼一只实体：那样文档里没有实体本身，删除与读数都会失去依据。
+- **B 的证据**：`App.test.tsx` +1（点「添加正四面体」→ 文档 15 个图元 → 选中实体按 Delete → **整族 0 残留**且无错误条）；`systemPrompt.test.ts` +1（断言那两句逐字在策略文本里）。**变异**（删掉 ribbon 命令）⇒ App 用例红在 `Unable to find an accessible element with the role "button" and name "添加正四面体"`；恢复后绿。
+- **验证（本机实跑，2026-09-23）**：`npm test` **215 文件 / 2619 用例通过 + 1 todo**（起点 2617，+2）；`npm run typecheck` **6 个 workspace exit 0**；`npm run lint` **0 error / 14 warning**。提交 `cd731a9`。
+- **仍未做**：①那条「桌面持久化没生效」（`documents` 表里没有任何带图元的文档、`commits` 为空）**还没查**；②`guidance`（创建后的提示语）没有正四面体的变体（`guidance.ts` 只列了四种模板），所以手工建它时**不弹提示语** —— 是个小缺口。
+
 ### 动作层 id 分配器：修掉「画布上已有 solid-1 时新建的第一个立体必然撞号」（2026-09-21，本节标题原缺，2026-09-22 补上）
 
 - **用户口径**：一张截图 —— 真实模型（DeepSeek）跑"已知直四棱柱 ABCD-A1B1C1D1 的底面是菱形，AA1=4, AB=2, BAD=60°，E、M、N 分别是 BC、BB1、A1D 的中点"这条请求，运行状态是 **`compile_failed: duplicate object id`**。
