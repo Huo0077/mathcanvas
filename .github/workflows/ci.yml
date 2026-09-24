@@ -71,8 +71,12 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # **只构建 web 工作区**，不用根目录的 `npm run build`（那是 `--workspaces`）：
+      # `apps/desktop` 的 build 是 `tauri build --no-bundle`，它要 WebKitGTK 之类的系统依赖
+      # （本文件底部 `rust` 那个作业才装），而且真编译一遍 Rust 要几分钟 ——
+      # 与这里要证明的事（"Vite 产物打得出来"）无关。桌面打包按上面那段说明**刻意不进 CI**。
       - name: Build the web workspace
-        run: npm run build
+        run: npm run build --workspace @draw/web
 
   e2e:
     runs-on: ubuntu-latest
@@ -113,5 +117,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: apps/desktop/src-tauri
+      # `cargo test` **不会**跑 `tauri.conf.json` 的 `beforeBuildCommand`（那是 `tauri build` 的事），
+      # 而 `shell_smoke` 里有一条断言：外壳加载的那份 web 产物**真的在**
+      #（`build-check/mathcanvas-current/index.html`，失败信息里就写着这条命令）。
+      # 干净的 runner 上没有这份产物，所以这里必须先构建，否则 rust 作业必红。
+      - name: Build the web artifact the shell loads
+        run: npm run build --workspace @draw/web
       - name: Rust tests
         run: npm run test:rust

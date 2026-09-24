@@ -17,7 +17,7 @@
 | `npm run build` | exit 0 —— 入口 **1 635.70 kB（gzip 470.70 kB）** + 按需 chunk `engineeringExporters` **433.81 kB（gzip 179.75 kB）** + `geometry.worker` **304.32 kB** |
 | `npm run test:perf` | 八条场景（`packages/scene-graph`），见下；另有 `apps/web/src/agent/compilePlan.bench.test.ts` 量编译成本 |
 | `npm run test:e2e` | Playwright **42 个 spec / 141 条用例全绿**（本机整套实跑，含主线程响应性读数；**不要与 `npm test` 并行跑**，见下表下面的说明） |
-| `npm run test:rust` | Rust 侧测试存在（`apps/desktop/src-tauri/tests`），走 `scripts/toolchain.mjs` 补 PATH；**本阶段未复跑**，数字见归档 |
+| `npm run test:rust` | **232 例通过 + 3 ignored / 0 失败**（2026-09-25 本机复跑，走 `scripts/toolchain.mjs` 补 PATH） |
 
 **性能读数**（`npm run test:perf`，本机实测；定位是**趋势与报警器**，不是性能目标）：
 
@@ -133,10 +133,16 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
 
 ## 四、如实缺口（不是缺陷，是没做或做不到）
 
+- **CI 的首次运行是"三红一绿"，三个红都不是产品代码的问题，而是门禁本身要不要自足**（2026-09-25，run #1 / `96ff89f`；已在本机逐条复现并修掉，见 `CHANGELOG.md` 同日那一节）：
+  1. `checks` 红在 `scripts/preview-server.test.ts` —— 它等 `127.0.0.1:4173` 返回 200，而那需要 `build-check/` 里有一份构建；本机一直有，CI 上没有（构建在另一个作业里），于是轮询到 vitest 的 5 秒超时。修法：用例自己造最小产物 + 随机端口，**不再依赖本机恰好有构建**（把真实产物挪走后复跑，仍然绿）。
+  2. `build` 红在根目录的 `npm run build`（= `--workspaces`）连带去跑 `apps/desktop` 的 `tauri build`，而那个作业没有装 WebKitGTK。修法：这个作业只构建 web 工作区 —— 与它自己注释里"桌面打包刻意不进 CI"一致。
+  3. `rust` 红在 `shell_smoke` 的 `the_web_entry_the_shell_loads_exists_and_is_the_web_build`：它断言外壳加载的 web 产物**真的在**，而 `cargo test` 不会跑 `tauri.conf.json` 的 `beforeBuildCommand`。修法：作业里先 `npm run build --workspace @draw/web` 再跑测试。
+- **`scripts/` 下的测试仍未纳入 `tsc`**（只有 `apps/web/src`、各 package 与 `e2e/` 被类型检查）：`scripts/preview-server.test.ts` 是 vitest 转译执行的。它的类型错误不会在门禁里现形 —— 与"e2e/ 曾经一样"的同一个缺口，补法也一样（一份最小 tsconfig），本阶段没做。
+
 - **几何 Worker 已接线，但"值不值"这条结论仍是**依据本轮读数**得出的**（编译 73 ms vs 复制 1 ms，约 76 倍）；**不是"管线全同步"** —— 那个判断此前记错了，已更正。降级路径（没有 `Worker` 的环境就地算）有独立用例，见方案 3 一节。
 - **性能上的一件事还没做**：把 `applyOperation` 每次从整份文档 `structuredClone` 的成本降下来。基准显示这一档**固定成本压过增量收益**（局部重算比全量还慢）。注意这与方案 3 不是同一件事：编译那 73 ms 花在**算**上（复制只占 1 ms），所以 Worker 对它是有效杠杆；而重算那一档的固定成本才是复制。
 - **主 bundle 仍超 500 kB 警告**：入口 1 636 kB 里是应用代码 ≈877 kB + React 221 kB + Three 530 kB。`three` 仍在入口 —— 立体几何是首屏可达的顶级模块，拆它要连带改 `threeScene.tsx` 的装配方式。
-- **`npm run test:rust` 本阶段未复跑**：Rust 侧本阶段零改动，数字见归档。
+- **`npm run test:rust` 已复跑**（2026-09-25）：**232 例通过 + 3 ignored / 0 失败** —— Rust 侧本阶段零改动，复跑是为了量它、并查清首次 CI 里 rust 作业为什么红（见下一条）。
 - **确认面板不按属主实体归并子对象**：用户要"一个立方体"，面板会说"会新增 28 个对象"。计数本身没错（28 个对象确实都会进文档），但"要不要按实体归并着说"是产品判断 —— 与方案 1 里"对象树以拓扑为依据"是同一个问题的另一面。**连带影响**：`agent-flow.spec.ts` 里有两条用例还在按"一个立方体 = 一个对象"断言（`共 2 个` / `会新增 1 个对象`），方案 1 之后它们必然为红 —— 已改成断言**不会随计数口径漂移**的性质（"共 N 个"必须大于"本次新增"，即草稿落在已有内容之上），同批 e2e 里 `solid-prism` / `agent-oblique-prism` 一直是按新口径断言的。
 - **`longtask` API 在本机不可用（实测，不是猜的）**：评审方案 7 点名要的 `PerformanceObserver({ type: "longtask" })` 在**空白页**上、对一次**故意阻塞 200 ms** 的主线程占用，`observed` 与 `performance.getEntriesByType("longtask")` **都是空的**，而 `supportedEntryTypes` 里**确实**列着 `longtask`（Chromium 153 / Playwright headless）—— 即"声称支持、什么也不报"（一次性探针复核过，用完即删）。所以主线程读数改用**帧间隔**（`requestAnimationFrame` 间隔）实现：同一个 200 ms 阻塞必定表现为 ≥200 ms 的空档，量具灵敏度可以自证（用例里就有这条标定断言）。见 `e2e/main-thread-responsiveness.spec.ts`。
 - **引用进度档案一律用小节标题，不写行号**：`project-progress.md:<行号>` 形式的引用会随任何一次编辑静默失效（本阶段就发生过三处，已全部改成按标题引用）。
