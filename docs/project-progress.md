@@ -469,6 +469,33 @@ Agent 那四条里先做三条判据明确的；第 4 条（第 12 个观测对�
   2. **模型会不会真的用它取决于模型本身**；命令行路径（本地规划器）是确定性的。提示词已把正四面体列进"能造的立体"。
   3. **一般多面体仍然没有入口** —— 本批只做了正四面体。
 
+### Agent 造的实体改「朝向」画布不动：提交后没有物化拓扑，于是落到那条不认 `rotation` 的绘制路径上（2026-09-24，**用户现场**："agent构建的元素无法修改方向、大小等数值。并且可以修改的无法在画布上改变"）
+
+- **用户口径**：两句话，①Agent 建的元素**改不了方向 / 大小这些数值**；②能改的那些**改了画布上看不出来**。
+- **复现（浏览器里走真实链路，不是单测替身）**：`npm --workspace @draw/web run build` + Playwright 直接驱动 `e2e` 的 globalSetup 预览（`127.0.0.1:4173`）→ 让本地确定性规划器建一个 **「建一个棱长 3 的立方体」** → 点「确认并提交」→ 返回画布 → 在对象列表里选中 `solid-1` → 在属性面板改数值。对照组是同一条路上手工建的立方体（Ribbon 的「添加立方体」）。判据是 **3D 视口那张截图的 SHA-256 前 16 位** + 自动保存写进 `localStorage` 的 `mathcanvas:draft:geometry3d`。
+- **实测读数（两条，同一次会话里前后接着做）**：
+
+  | 动作 | 输入框回显 | 草稿里的文档 | 3D 视口截图哈希 |
+  | --- | --- | --- | --- |
+  | Agent 立方体：`尺寸 X` 3 → 5 | `5` | `size.x = 5`，`revision` 1 → 2 | `67fb9693d2bd91ff` → `fc6f97f257063891`（**变了**） |
+  | Agent 立方体：`绕 X 轴旋转角度` 0 → 45 | `45` | `rotation.x = 0.7853981633974483`，`revision` → 3 | `fc6f97f257063891` → `fc6f97f257063891`（**逐字节相同**） |
+
+  也就是说：**值改得动、也确实写进了文档，但画布上一点都不动** —— 正是用户第二句话。手工立方体那条路改尺寸与朝向都正常（它有物化拓扑，见下）。
+- **根因（同一个根因的两半）**：
+  1. **Agent 提交后的文档里只有那个模板图元**。实测提交后草稿逐字是 `primitives: [{ id: "solid-1", type: "cube", origin: {0,0,0}, size: {3,3,3} }]` —— **没有** `polyhedron3`，也没有 point3 / edge3 / face3 子对象。对照手工路径：`App.tsx:904` 调了 `buildSolidTemplate`，所以文档里有 `cube-1-point-1…8`、`cube-1-edge-15…26`、`cube-1-face-9…14`、`cube-1-polyhedron-27`（`construction.kind = "template"`，对象列表里那一行「立方体 1 拓扑」就是它）。
+  2. **渲染对模板实体有两条互斥路径，只有一条认 `rotation`**：
+     - **有物化拓扑**（手工那条）：`visibleSolids()`（`apps/web/src/threePrimitives.ts:893-896`）把"已经被拓扑物化过的"模板图元**排除掉**，画的是拓扑本身 —— 而拓扑坐标是 `buildSolidTemplate` 按 `rotation` 算好的 ⇒ 旋转可见。
+     - **没有物化拓扑**（Agent 这条）：模板图元自己会被画出来 → `createSolidGroup` → `createSolidMesh` → `createCubeMesh`（`threePrimitives.ts:217-229`），而它只做 `new THREE.BoxGeometry(size)` + `mesh.position.set(origin + size/2)`，**从头到尾没有读过 `primitive.rotation`**；`createSolidMesh`（棱锥 / 圆柱 / 圆锥，`:247-260`）同样只设 `position`，也不读 `rotation`。**尺寸之所以有效，只是因为尺寸喂进了 `BoxGeometry`。**
+  3. **本该补上这一步的迁移没有在提交后跑**：`migrateLegacySolids`（`apps/web/src/solidTemplates.ts:53`）能物化拓扑，但它只在**打开文件 / 恢复文档 / 恢复草稿**三处被调用（`App.tsx:368,568,576`），**Agent 提交之后不跑**。所以"手工建的实体是完整的、Agent 建的是个壳"这件事会一直持续到下次重启。
+- **同源的第二组症状（顺带查到，本批未修）**：Agent 的实体没有物化拓扑 ⇒ 对象列表里**只有一行、没有可展开的顶点 / 棱 / 面**，属性面板里也**没有「派生读数」**块（手工立方体有"外接球 精确"），而顶点拖动、单顶点编辑、截面读数这些都以拓扑为前提。这解释得通用户在截图里看到的那只正四面体为什么"点不进任何东西"。
+- **如实：第二句话那半我还没验证到，所以不当结论**。用户说"**无法修改**方向、大小等数值"，而实测属性面板对模板实体（`cube` / `pyramid` / `cylinder` / `cone`）的 `原点` / `尺寸` / `朝向` 字段是**存在且可用**的（`disabled = false`，Agent 与手工两条路完全一样）。所以"字段根本开不出来"应该发生在**另一类** Agent 实体上：`solid.create_tetrahedron` / `solid.create_regular_pyramid` / `solid.create_polyhedron` 产出的是 **`polyhedron3`**（`packages/scene-graph/src/actions/index.ts:337-429`），而属性面板的 `selectedSolid` 只覆盖 `cube | pyramid | cylinder | cone`（`apps/web/src/components/PropertiesBar.tsx:94`）—— 若 `polyhedron3` 确实不在其中，选中它就只有派生读数、没有那一块数值框（用户截图左侧那只「正四棱锥」与那个四面体正是这一类）。**最后一次核对被工具预算截断，没有验证到，因此只记为待验证，不当作事实。**
+- **仍未做（三条，都不许先动手）**：
+  1. **定路径是产品 / 架构决定**：要么让 Agent 提交路径也物化拓扑（与手工路径**同一个入口**），要么让 `createSolidMesh` 真的应用 `rotation`。**两条只能选一条** —— 都做会得到"模板图元 + 物化拓扑"两份几何互相打架（`visibleSolids` 的排除逻辑正是为"只有一份"而写的）。**没定之前不改。**
+  2. `polyhedron3` 的属性面板：它是点集构造、**没有尺寸参数可改**，那么界面上就该把这件事**说出来**，而不是留一块静默空白。
+  3. **先写失败用例再改**：最便宜的是 `threePrimitives` 上一条"带 `rotation` 的模板实体必须真的转"的断言；浏览器级那条用**截图哈希**或**物化拓扑坐标**断言（两者都在本轮复现里跑通过）。这条用例现在写下来必然是红的，所以它与①的选型绑在一起落地。
+
+**验证（本机实跑，2026-09-24）**：本批**没有改任何产品代码** —— 只加了这一节文档，并把复现用的临时脚本清掉（复现配方逐字记在上面，可重跑）。复现读数全部来自真实浏览器链路（`build` + Playwright + `e2e` 的预览服务器），不是推演。门禁只跑了单测这一道（文档改动不碰代码）：`npm test` **215 文件 / 2628 用例通过 + 1 todo**（与上一批记录的基线逐字一致），typecheck / lint / e2e / rust 本批未跑。**同批把这 10 个本地提交推上 `origin/main`**（推送前 `git fetch` 复核：本地领先 10、落后 0，是快进；推送后以 `git ls-remote origin main` 复核本地 = 远端）。
+
 ### 第 2 层：任意多面体 —— 顶点 + 面环接上内核 `fromPoints`，并放开 `polyhedron3` 的能力（2026-09-23，用户口径："或者不是规则的图形"）
 
 - **问题**：第 1 层只覆盖**规则**棱锥。不规则图形（正八面体、棱台、题面直接给了坐标的那种）**没有任何入口** —— 而内核里其实**早就有**通用构造器：`buildFromPoints`（注册名 `fromPoints`，标签"点集构造多面体"），`polyhedron3.construction` 也早有 `fromPoints` 这一支。缺的只是**动作层的入口**：`capabilities.ts` 把 `polyhedron3` 标成 `temporarily_unavailable`，理由写着 *"no action handler: topology is materialised by the kernel"*。
