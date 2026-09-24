@@ -153,6 +153,19 @@ describe("production system prompt", () => {
     expect(policy).toContain("不要拿别的形状冒充")
   })
 
+  /**
+   * **立体必须由 `solid.*` 动作造**（2026-09-23，用户现场第二形态）。
+   *
+   * 模型曾用约 10 个动作把 4 点 / 6 棱 / 4 面**各自**拼成一只"正四面体" —— 文档里没有实体本身，
+   * 只剩一地互相引用的碎片，于是用户点任意一片都删不掉（连通分量那条修复能兜住，但**不该发生**）。
+   */
+  it("requires solids to be built by solid actions instead of loose points and faces", () => {
+    const policy = buildPolicyText({ channel: "strict_json", canPlan: true, actionIds: ["solid.create_tetrahedron", "planar.create_point"] })
+
+    expect(policy).toContain("立体图形必须由")
+    expect(policy).toContain("去拼一只实体")
+  })
+
   it("keeps the policy text identical across contexts, and injects the scene separately", () => {
     const first = buildSystemPrompt({ context: context(), channel: "strict_json", canPlan: true })
     /**

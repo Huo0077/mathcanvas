@@ -1512,6 +1512,33 @@ describe("MathCanvas workbench", () => {
     expect((screen.getByRole("button", { name: "删除对象" }) as HTMLButtonElement).disabled).toBe(true)
   })
 
+  /**
+   * **手工入口 + 一步删除**（B 部分）：Ribbon 里「添加正四面体」与四类模板并列。它落盘的是
+   * **一整族 15 个图元**（含实体本身），所以选中实体删一下就整族消失、**0 残留**。
+   *
+   * 这条把 A 与 B 串起来：创建走**用户侧**那条路（`compileSolidTetrahedron` + 一次批量落盘），
+   * 删除走同一个 `validateDeletion` → `object.delete_many` → `deleteObjects`。
+   */
+  it("adds a tetrahedron from the ribbon and deletes the whole solid in one step", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole("button", { name: "跳转到立体几何" }))
+    fireEvent.click(screen.getByRole("button", { name: "添加正四面体" }))
+
+    const added = useSceneStore.getState().document.primitives
+    const solid = added.find((primitive) => primitive.type === "polyhedron3")
+    expect(solid, `added types: ${added.map((primitive) => primitive.type).join(",")}`).toBeTruthy()
+    if (solid?.type !== "polyhedron3") throw new Error("expected the tetrahedron")
+    const family = new Set([solid.id, ...solid.vertexIds, ...solid.edgeIds, ...solid.faceIds])
+    // 4 个顶点 / 6 条棱 / 4 个面 + 实体自己。
+    expect(family.size).toBe(15)
+
+    fireEvent.click(algebraRow(solid.label ?? solid.id))
+    fireEvent.keyDown(window, { key: "Delete" })
+
+    expect(screen.queryAllByRole("alert")).toHaveLength(0)
+    expect(useSceneStore.getState().document.primitives.filter((primitive) => family.has(primitive.id))).toHaveLength(0)
+  })
+
   it("locks a selected object and disables destructive actions", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "添加点" }))

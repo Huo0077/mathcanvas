@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 
 import { createEmptyDocument, decodeMgeo, encodeMgeo, isSampledPrimitiveType, type AnnotationFeature, type DrawingSheetSpec, type EngineeringAnnotationKind, type Measurement3Metric, type PrimitiveSpec, type Vector3, type Workspace } from "@draw/dsl"
 import { buildSolidTemplate, createMeasurement3, entityResolverFor, evaluatePlanarMeasurement, host3FromPrimitive, selectPrimitivesInBox, type BoxSelectionMode, type PlanarMetric } from "@draw/geometry-kernel"
-import { commitPatch, compileActions, createIdAllocator, planeThroughPoints, sectionMaterialization, sectionPivot, sectionPlaneThroughSource, sectionSourceVertices, solidVolumeHostFor, validateDeletion, validatePatch } from "@draw/scene-graph"
+import { commitPatch, compileActions, compileSolidTetrahedron, createIdAllocator, planeThroughPoints, sectionMaterialization, sectionPivot, sectionPlaneThroughSource, sectionSourceVertices, solidVolumeHostFor, validateDeletion, validatePatch } from "@draw/scene-graph"
 import type { Alignment, DomainOperation } from "@draw/scene-graph"
 
 import { AlgebraView } from "./components/AlgebraView"
@@ -884,6 +884,22 @@ export function App() {
         : { id, type, center: { x: -5, y: -5, z: 0 }, radius: 1.5, height: 3, segments: ROUND_SOLID_SEGMENTS, label: `圆锥 ${id.split("-").at(-1)}` }
     addSolidTemplate(primitive)
   }
+  /**
+   * **正四面体**：手工入口（与四类模板并列的那个按钮）。
+   *
+   * 它**没有参数化图元** —— 文档里的样子就是一只 `polyhedron3`（`fromPoints`）+ 它的 4 点 / 6 棱 / 4 面，
+   * 所以这里直接调动作层那个构造器（`compileSolidTetrahedron`），把 15 个图元**一次**落盘：
+   * 一步撤销、整族一起走，而且与 Agent 那条路（`solid.create_tetrahedron`）产出**同一种东西**。
+   *
+   * 落点取**原点**：另外四个模板各占一个象限（±5），原点正空着（见上面那段"实体放在桌上"的口径）。
+   */
+  const addTetrahedron = () => {
+    const id = nextPrimitiveId(document, "tetrahedron")
+    const built = compileSolidTetrahedron(id, { baseCenter: { x: 0, y: 0, z: 0 }, edge: 4 }, `正四面体 ${id.split("-").at(-1)}`)
+    if (built.diagnostics.length > 0) { setFileError(built.diagnostics.map((diagnostic) => diagnostic.message).join("；")); return }
+    apply({ op: "addPrimitives", primitives: built.primitives })
+    setSelectedIds([id])
+  }
   const addSolidTemplate = (primitive: Extract<PrimitiveSpec, { type: "cube" | "pyramid" | "cylinder" | "cone" }>) => {
     const result = buildSolidTemplate(primitive)
     if (result.diagnostics.length > 0) { setFileError(result.diagnostics.map((diagnostic) => diagnostic.message).join("；")); return }
@@ -1611,6 +1627,7 @@ export function App() {
       case "create-function": addDefaultPrimitive("function"); break
       case "create-cube": addDefaultCube(); break
       case "create-pyramid": addDefaultSolid("pyramid"); break
+      case "create-tetrahedron": addTetrahedron(); break
       case "create-cylinder": addDefaultSolid("cylinder"); break
       case "create-cone": addDefaultSolid("cone"); break
       case "create-section": addSection(); break

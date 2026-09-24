@@ -57,6 +57,7 @@ export function createRibbonGroups(context: RibbonCommandContext): RibbonGroup[]
       command("create-circle3-track", "添加空间圆轨道", "circle", { prompt: "按住 Shift 点选 1–3 个空间点", disabled: !context.canCreateCircle3, disabledReason: "请先按住 Shift 点选 1 至 3 个空间点" }),
       command("create-cube", "添加立方体", "line", { prompt: "添加参数化立方体" }),
       command("create-pyramid", "添加棱锥", "line", { prompt: "添加参数化棱锥" }),
+      command("create-tetrahedron", "添加正四面体", "line", { prompt: "添加棱长为 4 的正四面体" }),
       command("create-cylinder", "添加圆柱", "circle", { prompt: "添加参数化圆柱" }),
       command("create-cone", "添加圆锥", "parabola", { prompt: "添加参数化圆锥" }),
       command("create-section", "创建截面", "polyline", { prompt: "创建当前选中实体的剖切截面", disabled: !context.canCreateSection, disabledReason: "请先选择可剖切的空间实体" })
