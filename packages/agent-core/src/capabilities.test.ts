@@ -64,5 +64,21 @@ describe("agent capability registry", () => {
     expect(byId["export-png-3d"]?.status).toBe("unsupported")
     // 没有 action handler 的图元类型必须显式标成暂不可用，而不是"看起来可用"。
     expect(getCapabilityRegistry().byPrimitiveType.edge3?.status).toBe("temporarily_unavailable")
+    expect(getCapabilityRegistry().byPrimitiveType.face3?.status).toBe("temporarily_unavailable")
+  })
+
+  /**
+   * **多面体不再是"暂不可用"**（第 2 层，2026-09-23）。
+   *
+   * 它原先的理由是"no action handler：拓扑只由内核物化"。现在 `solid.create_polyhedron`
+   *（顶点 + 面环 → 内核 `fromPoints`）就是那个 handler，所以这条能力必须**真的**变成 available ——
+   * 否则模型会在规则里读到"能造任意多面体"，而注册表却说它不可用（两份话）。
+   * 这条同时挡住"把它改回去"：改回去这里就红。
+   */
+  it("marks the arbitrary polyhedron available now that an action handler exists", () => {
+    const polyhedron = getCapabilityRegistry().byPrimitiveType.polyhedron3
+
+    expect(polyhedron?.status).toBe("available")
+    expect(polyhedron?.preconditions.join(" ")).toContain("solid.create_polyhedron")
   })
 })

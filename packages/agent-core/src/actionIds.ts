@@ -44,6 +44,7 @@ export const DRAFT_ACTION_IDS = [
   "solid.create_prism",
   "solid.create_tetrahedron",
   "solid.create_regular_pyramid",
+  "solid.create_polyhedron",
   "dynamic.bind_point",
   "dynamic.create_bound_point",
   "dynamic.bind_curve",

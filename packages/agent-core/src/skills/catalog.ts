@@ -47,7 +47,7 @@ const EXPECTED_HASHES: Record<string, string> = {
   "conics-tangents": "be5c416242eaf9b5099e80e1697edeb433899d01c21779641a30fbaca33720f2",
   "functions": "853f149c0a47f38277d2bdce0ae4f47a8d19ef0b4987c0fa162e82b8080c8664",
   "dynamic-bindings": "a7a25bf79ac9c9cf89256bc1fb8a1876c41287bca21e6a7163ce1022ee47f9e1",
-  "spatial-modeling": "9fcc032c0542ffbaef389f76aeefa8d536f69f2ff10dd03bc2e3d1a6933821a3",
+  "spatial-modeling": "027d20ad985ca7fba016b0cd3f3629ccc2d20cf40ca39bad689b1531f25ddf67",
   "sections-intersections": "fd8e09ed0e1cedc332b61391d8c831c8064277eb4979a6d2d61e35c417aea8e9",
   "engineering-drawing": "da543684eba13b401042859ebedb67f1d92296d0dbbe32f248846cbd1a5fd50e",
   "image-evidence": "2808d6bb4d56335a4dc33ea57eaace75d776d7bad27b51dcbaff2a41e0f2fa3d",

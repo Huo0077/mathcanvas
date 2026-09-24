@@ -220,15 +220,15 @@ export function buildPolicyText(input: SystemPromptPolicyInput): string {
        */
       "**工作区不是限制**：绑定里的 `workspace` 只是这份文档现在在哪个工作区，宿主会按你的计划自动切过去。要画立体图形就直接用 `solid.*` 动作，**不要用 `planar.*` 的点去拼立体的顶点** —— 那样得到的是一组平面对象。",
       /**
-       * **没有的图元要如实说**（2026-09-22，用户现场；同日补上 `solid.create_tetrahedron`）。
+       * **能造的立体要列清、能造就别冒充**（2026-09-22 用户现场；2026-09-23 第 1 / 2 层补齐）。
        *
-       * 用户要"正四面体 ABCD 棱长 3"，模型当时用 `solid.create_prism`（三点底 + 拉伸）造出了**三棱柱** ——
-       * 因为动作层那时**没有**三棱锥：`pyramid` 模板固定是**矩形底**的四棱锥，`solid.create_prism` 是
-       * "底面多边形 + 拉伸"。现在正四面体有了独立动作，但**一般多面体**仍然没有
-       *（`polyhedron3` 在能力登记表里是 `temporarily_unavailable`：只有内核物化那一个入口）。
-       * 所以这条规则说的是"**剩下的**没有的图元要如实说"，而不是"没有立体可造"。
+       * 用户要"正四面体 ABCD 棱长 3"，模型当时拿 `solid.create_prism`（三点底 + 拉伸）造出了**三棱柱** ——
+       * 因为动作层那时**没有**三棱锥。现在三层入口都在了：正四面体（`solid.create_tetrahedron`）、
+       * 正 N 棱锥（`solid.create_regular_pyramid`）、**任意多面体**（`solid.create_polyhedron`：顶点 + 面环；
+       * `polyhedron3` 的能力也从 `temporarily_unavailable` 改成了 `available`）。
+       * 所以这条规则现在的口径是：**把能造的列清**，造不了才如实说，**不许拿别的形状冒充**。
        */
-      "**没有的图元要如实说**：能造的立体就是这些 —— 立方体、**四棱锥（底面是矩形）**、**正四面体（`solid.create_tetrahedron`：底面中心 + 棱长）**、**正 N 棱锥（`solid.create_regular_pyramid`：底面中心 + 边数 + 底面外接圆半径 + 高）**、圆柱、圆锥，以及**棱柱（底面多边形 + 拉伸）**。**没有一般多面体**（既不是棱柱、也不是上面这几种棱锥的形状）。要求这类形状时：说清「这个形状目前没有图元」，给出最接近的替代（例如用四棱锥近似）并写进 `assumptions`，或者返回 `clarification` 问用户要哪个 —— **不要拿别的形状冒充**（例如拿三棱柱当正四面体）。",
+      "**能造的立体就是这些**：立方体、**四棱锥（底面是矩形）**、**正四面体（`solid.create_tetrahedron`）**、**正 N 棱锥（`solid.create_regular_pyramid`）**、圆柱、圆锥、**棱柱（`solid.create_prism`：底面多边形 + 拉伸）**，以及**任意多面体（`solid.create_polyhedron`：顶点 + 面环）**。要造别的形状（正八面体、棱台、题面直接给了坐标的那种）**就用最后这一条**，自己给出顶点与面环 —— 几何合法性由内核逐条校验（共面 / 自交 / 非零体积 / 绕向一致），算错会被拒并给你**逐条诊断**，照诊断改一次即可。**不要拿别的形状冒充**（例如拿三棱柱当正四面体）。",
       /**
        * **立体必须由 `solid.*` 动作造**（2026-09-23，用户现场第二形态）。
        *
@@ -236,7 +236,7 @@ export function buildPolicyText(input: SystemPromptPolicyInput): string {
        * 文档里于是**没有实体本身**（没有 `polyhedron3`），只剩一地互相引用的碎片 ——
        * 删除、派生读数、截面全都失去依据（那次用户点任意一片都删不掉）。
        */
-      "**立体图形必须由 `solid.*` 动作创建**：立方体 / 四棱锥 / 圆柱 / 圆锥用 `solid.create_template`、棱柱用 `solid.create_prism`、正四面体用 `solid.create_tetrahedron`、正 N 棱锥用 `solid.create_regular_pyramid` —— 它们一次物化出实体与它的顶点 / 棱 / 面。**不要**用散落的 `planar.*` / `dynamic.*` 点、棱、面去拼一只实体：那样文档里没有实体本身，删除与读数都会失去依据。",
+      "**立体图形必须由 `solid.*` 动作创建**：立方体 / 四棱锥 / 圆柱 / 圆锥用 `solid.create_template`、棱柱用 `solid.create_prism`、正四面体用 `solid.create_tetrahedron`、正 N 棱锥用 `solid.create_regular_pyramid`、**任意多面体用 `solid.create_polyhedron`** —— 它们一次物化出实体与它的顶点 / 棱 / 面。**不要**用散落的 `planar.*` / `dynamic.*` 点、棱、面去拼一只实体：那样文档里没有实体本身，删除与读数都会失去依据。",
       "## 本轮允许的动作（`actionId` 只能从这里选）",
       ...(input.actionIds.length > 0 ? input.actionIds.map((action) => `- ${action}`) : ["（这一轮没有任何可用动作：只能提问或作答）"]),
       "",

@@ -484,6 +484,19 @@ const ACTIONS = {
       height: { policy: "infer_from_facts", infer: "height", value: DEFAULT_SOLID_HEIGHT, reason: `高未指定：先从你的话里读，读不到取 ${DEFAULT_SOLID_HEIGHT}。` }
     }
   },
+  /**
+   * **任意多面体**（第 2 层）：**顶点 + 面环** —— 就是内核 `fromPoints`（"点集构造多面体"）的形状。
+   *
+   * 它是不规则图形的**唯一通用入口**：正八面体、棱台、题面直接给了坐标的那些，全都走这一条。
+   * 两个字段都**必填**（没有"公认默认值"这回事）；传输层只挡**明显畸形**的形状，
+   * **几何语义**（共面、自交、非零体积、绕向一致、未用顶点、连通性）全部留给内核 `buildFromPoints` ——
+   * 模型算错时它给的是**逐条诊断**（还能走一次性修复），在这里抄一遍只会变成一句 `invalid_type`。
+   */
+  "solid.create_polyhedron": {
+    inputFields: ["alias", "vertices", "faces", "label"],
+    requiresAlias: true,
+    required: ["vertices", "faces"]
+  },
 
   // --- 动点 ---
   // 引用是两个**带 documentId** 的引用：跨文档绑定必须能说清是哪两份文档里的哪两个对象。
@@ -873,6 +886,63 @@ function parseActionInputs(actionId: ActionId, value: unknown, path: string, err
         ? (rejectUnknownFields(value.patch, UPDATABLE_INPUT_FIELDS, `${path}.patch`, errors), value.patch)
         : (errors.push(fail("invalid_type", `${path}.patch`, "expected an object")), null)
       return withAlias({ target, patch })
+    }
+
+    case "solid.create_polyhedron": {
+      /**
+       * 任意多面体：`vertices` 是一串空间点、`faces` 是**二层整数数组**（顶点下标，0 起）。
+       *
+       * 这里只挡**形状**：点少于 4 个、面少于 4 个、环里不是整数 / 越界 / 重复。
+       * **几何语义**留给内核（见登记表那条注释）—— 那条边界是刻意的，不要往这里搬。
+       */
+      const out: Record<string, unknown> = withAlias({})
+      if (!Array.isArray(value.vertices)) {
+        errors.push(fail("invalid_type", `${path}.vertices`, "expected an array of spatial points"))
+        return null
+      }
+      if (value.vertices.length < 4) {
+        errors.push(fail("invalid_type", `${path}.vertices`, "a polyhedron needs at least four vertices"))
+        return null
+      }
+      const vertices: { x: number; y: number; z: number }[] = []
+      for (const [index, point] of value.vertices.entries()) {
+        const read = readVector3(point, `${path}.vertices[${index}]`, errors)
+        if (read === null) return null
+        vertices.push(read)
+      }
+      out.vertices = vertices
+
+      if (!Array.isArray(value.faces)) {
+        errors.push(fail("invalid_type", `${path}.faces`, "expected an array of face rings"))
+        return null
+      }
+      if (value.faces.length < 4) {
+        errors.push(fail("invalid_type", `${path}.faces`, "a polyhedron needs at least four faces"))
+        return null
+      }
+      const faces: number[][] = []
+      for (const [faceIndex, ring] of value.faces.entries()) {
+        if (!Array.isArray(ring) || ring.length < 3) {
+          errors.push(fail("invalid_type", `${path}.faces[${faceIndex}]`, "a face ring needs at least three vertex indexes"))
+          return null
+        }
+        const indexes: number[] = []
+        for (const [cornerIndex, corner] of ring.entries()) {
+          if (!Number.isInteger(corner) || corner < 0 || corner >= vertices.length) {
+            errors.push(fail("invalid_type", `${path}.faces[${faceIndex}][${cornerIndex}]`, `a face ring index must be an integer in 0..${vertices.length - 1}`))
+            return null
+          }
+          if (indexes.includes(corner)) {
+            errors.push(fail("duplicate_index", `${path}.faces[${faceIndex}][${cornerIndex}]`, "a face ring must not repeat a vertex"))
+            return null
+          }
+          indexes.push(corner)
+        }
+        faces.push(indexes)
+      }
+      out.faces = faces
+      if (typeof value.label === "string") out.label = value.label
+      return out
     }
 
     case "object.delete_many": {

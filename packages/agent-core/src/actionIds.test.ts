@@ -20,9 +20,10 @@ describe("draft action catalogue", () => {
     // 而不是让它静默不可达。**21** 是加上 `solid.create_prism`（Solid/Prism 切片）之后的实测值；
     // **24** 是加上 `planar.create_conic` / `dynamic.create_bound_point` / `parameter.create`
     // （Agent DSL 切片）之后的实测值；**25** 是加上 `solid.create_tetrahedron`（正四面体切片）之后的实测值；
-    // **26** 是加上 `solid.create_regular_pyramid`（第 1 层：正 N 棱锥）之后的实测值。
-    expect(DRAFT_ACTION_IDS).toHaveLength(26)
-    expect(new Set(DRAFT_ACTION_IDS).size).toBe(26)
+    // **26** 是加上 `solid.create_regular_pyramid`（第 1 层：正 N 棱锥）之后的实测值；
+    // **27** 是加上 `solid.create_polyhedron`（第 2 层：任意多面体）之后的实测值。
+    expect(DRAFT_ACTION_IDS).toHaveLength(27)
+    expect(new Set(DRAFT_ACTION_IDS).size).toBe(27)
   })
 
   it("recognises every catalogue action instead of calling it unknown", () => {

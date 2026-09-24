@@ -149,7 +149,10 @@ describe("production system prompt", () => {
     // 正四面体现在**是**能造的形状之一 —— 规则里必须把它列进去，否则模型会继续拿棱柱冒充。
     expect(policy).toContain("正四面体")
     expect(policy).toContain("solid.create_tetrahedron")
-    expect(policy).toContain("没有一般多面体")
+    // 第 1 / 2 层之后：正 N 棱锥与**任意多面体**都有入口，所以"没有一般多面体"那句话已经作废。
+    expect(policy).toContain("solid.create_regular_pyramid")
+    expect(policy).toContain("solid.create_polyhedron")
+    expect(policy).not.toContain("没有一般多面体")
     expect(policy).toContain("不要拿别的形状冒充")
   })
 
@@ -164,7 +167,7 @@ describe("production system prompt", () => {
 
     expect(policy).toContain("立体图形必须由")
     expect(policy).toContain("去拼一只实体")
-    // 第 1 层那条（正 N 棱锥）也必须在"能造的立体"与"用 solid.* 造"两处都出现。
+    // 第 1 层那条（正 N 棱锥）与第 2 层那条（任意多面体）都必须在"能造的立体"与"用 solid.* 造"两处出现。
     expect(policy).toContain("solid.create_regular_pyramid")
     expect(policy).toContain("正 N 棱锥")
   })

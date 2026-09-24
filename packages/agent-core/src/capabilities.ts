@@ -98,7 +98,12 @@ const PRIMITIVE_CAPABILITIES = {
   intersectionPoint3: describeCapability("create-intersection-point-3d", "available", SOLID, ["two objects meeting at a point"]),
   edge3: describeCapability("generated-solid-edge", "temporarily_unavailable", SOLID, ["no action handler: edges are materialised by the kernel"]),
   face3: describeCapability("generated-solid-face", "temporarily_unavailable", SOLID, ["no action handler: faces are materialised by the kernel"]),
-  polyhedron3: describeCapability("generated-solid-topology", "temporarily_unavailable", SOLID, ["no action handler: topology is materialised by the kernel"]),
+  /**
+   * 任意多面体：**第 2 层之前**它是 `temporarily_unavailable`（理由就是"没有 action handler：
+   * 拓扑只由内核物化"）。现在 `solid.create_polyhedron`（顶点 + 面环 → 内核 `fromPoints`）
+   * 就是那个 handler，所以它**可用** —— 规则文本跟着改成"怎么用"，而不是"没有入口"。
+   */
+  polyhedron3: describeCapability("generated-solid-topology", "available", SOLID, ["workspace is geometry3d", "template solids are materialised by the kernel", "solid.create_polyhedron builds one from vertices + face rings, and the kernel validates coplanarity / winding / volume / connectivity"]),
   intersectionSolid: describeCapability("legacy-intersection-solid", "legacy_readonly", SOLID, ["legacy documents only: read and render, never create"])
 } satisfies Record<PrimitiveSpec["type"], CapabilityDescriptor>
 

@@ -211,6 +211,43 @@ describe("solid family", () => {
     }
   })
 
+  /**
+   * **任意多面体**（第 2 层：顶点 + 面环）—— 不规则图形的**唯一通用入口**。
+   *
+   * 夹具用正八面体（6 顶点 / 12 棱 / 8 个三角面）：它既不是棱柱、也不是任何棱锥，正是"题面直接给了坐标"
+   * 的那一类。断言落进文档的是 `fromPoints` 构造的那只多面体 + 一整族子对象。
+   */
+  it("creates an arbitrary polyhedron from vertices and face rings", () => {
+    const document = createEmptyDocument("geometry3d")
+    const vertices = [
+      { x: 1, y: 0, z: 0 }, { x: -1, y: 0, z: 0 },
+      { x: 0, y: 1, z: 0 }, { x: 0, y: -1, z: 0 },
+      { x: 0, y: 0, z: 1 }, { x: 0, y: 0, z: -1 }
+    ]
+    // 绕向一致（每个面都从外侧看逆时针）—— 内核的 `inconsistent-winding` 会检查这件事。
+    const faces = [[0, 2, 4], [2, 1, 4], [1, 3, 4], [3, 0, 4], [2, 0, 5], [1, 2, 5], [3, 1, 5], [0, 3, 5]]
+    const result = compileActions(document, [action({ actionId: "solid.create_polyhedron", inputs: { alias: "octa", vertices, faces } })], contextWith(document))
+
+    expect(result.diagnostics).toEqual([])
+    const added = result.operations.flatMap((entry) => (entry.op === "addPrimitives" ? [entry.primitives] : []))
+    expect(added).toHaveLength(1)
+    const primitives = added[0]
+    expect(primitives.filter((primitive) => primitive.type === "point3")).toHaveLength(6)
+    expect(primitives.filter((primitive) => primitive.type === "edge3")).toHaveLength(12)
+    expect(primitives.filter((primitive) => primitive.type === "face3")).toHaveLength(8)
+    expect(primitives.find((primitive) => primitive.type === "polyhedron3")).toMatchObject({ id: "solid-1", construction: { kind: "fromPoints" } })
+  })
+
+  it("refuses a polyhedron whose face rings cannot make a solid", () => {
+    const document = createEmptyDocument("geometry3d")
+    const vertices = [{ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }, { x: 0, y: 0, z: 1 }]
+    // 只有两个面：内核的"至少四个面"会拒 —— 而且**一条操作都不产出**。
+    const result = compileActions(document, [action({ actionId: "solid.create_polyhedron", inputs: { alias: "bad", vertices, faces: [[0, 1, 2], [0, 1, 3]] } })], contextWith(document))
+
+    expect(result.operations).toHaveLength(0)
+    expect(result.diagnostics.length).toBeGreaterThan(0)
+  })
+
   it("refuses a flat or negative-sized cube instead of fabricating a solid", () => {
     const document = createEmptyDocument("geometry3d")
     const result = compileActions(document, [action({ actionId: "solid.create_template", inputs: { alias: "s", template: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 2, z: 0 } } })], contextWith(document))

@@ -399,6 +399,38 @@ function compileSolidRegularPyramidAction(action: Extract<DraftAction, { actionI
   return { operations: [{ op: "addPrimitives", primitives: built.primitives }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
 }
 
+/**
+ * 由**顶点 + 面环**造一只**任意多面体**：几何与合法性**全部**交给内核的 `buildFromPoints`。
+ *
+ * 这一支刻意不做任何自己的几何判断：共面、自交、非零体积、绕向一致、未用顶点、连通性都由内核
+ * 逐条报诊断（`degenerate_polyhedron`），于是"模型把面环写错了"的结局是**一次修复**，
+ * 而不是一份画不出来的文档。
+ */
+export function compileSolidPolyhedron(solidId: string, input: { vertices: Vector3[]; faces: number[][] }, label?: string): ActionSolidBuildResult {
+  const built = buildFromPoints({ vertices: input.vertices, faces: input.faces }, solidChildIds(solidId))
+  if (built.diagnostics.length > 0) {
+    return { primitives: [], vertexIds: built.vertexIds, edgeIds: built.edgeIds, faceIds: built.faceIds, solidId, diagnostics: built.diagnostics.map((entry) => diagnostic(solidId, "degenerate_polyhedron", entry.message)) }
+  }
+  return { primitives: labelSolidChildren(built.primitives, label), vertexIds: built.vertexIds, edgeIds: built.edgeIds, faceIds: built.faceIds, solidId, diagnostics: [] }
+}
+
+/**
+ * `solid.create_polyhedron`：**顶点 + 面环** → 一只 `polyhedron3` 与它的全部子对象。
+ *
+ * 这是**不规则图形的通用入口**（第 2 层）：正八面体、棱台、题面直接给了坐标的形状都走它。
+ * 与另外三个立体动作同一套纪律：工作区必须是立体几何；内核报错时**一条操作都不产出**。
+ */
+function compileSolidPolyhedronAction(action: Extract<DraftAction, { actionId: "solid.create_polyhedron" }>, context: ActionContext): CompileResult {
+  const { actionKey, inputs } = action
+  if (context.targetWorkspace !== "geometry3d") {
+    return { operations: [], diagnostics: [diagnostic(actionKey, "workspace_mismatch", "a polyhedron can only be created in the solid workspace")], aliasToId: {} }
+  }
+  const id = context.idAllocator.allocate("solid", inputs.alias)
+  const built = compileSolidPolyhedron(id, { vertices: inputs.vertices, faces: inputs.faces }, inputs.label)
+  if (built.diagnostics.length > 0) return { operations: [], diagnostics: built.diagnostics.map((entry) => diagnostic(actionKey, entry.code, entry.message)), aliasToId: {} }
+  return { operations: [{ op: "addPrimitives", primitives: built.primitives }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
+}
+
 function compileBindPoint(action: Extract<DraftAction, { actionId: "dynamic.bind_point" }>, context: ActionContext): CompileResult {  const { actionKey, inputs } = action
   // 跨文档只作为**已授权读取来源**，写入批次只能有一个目标文档（§6）。
   if (inputs.target.documentId !== context.targetDocument.metadata.id || inputs.host.documentId !== context.targetDocument.metadata.id) {
@@ -773,6 +805,8 @@ export function compileAction(action: DraftAction, context: ActionContext): Comp
       return compileSolidTetrahedronAction(action, context)
     case "solid.create_regular_pyramid":
       return compileSolidRegularPyramidAction(action, context)
+    case "solid.create_polyhedron":
+      return compileSolidPolyhedronAction(action, context)
     case "dynamic.bind_point":
       return compileBindPoint(action, context)
     case "dynamic.create_bound_point":

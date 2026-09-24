@@ -151,6 +151,26 @@ export interface SolidCreateRegularPyramidAction extends ActionBase {
   }
 }
 
+/**
+ * **任意多面体**（第 2 层：用户口径"或者不是规则的图形"）。
+ *
+ * 输入就是内核 `fromPoints`（"点集构造多面体"）的形状：**顶点 + 面环**。它是不规则图形的
+ * **唯一通用入口**（正八面体、棱台、题面直接给了坐标的那些都在里面），而几何合法性由内核逐条校验
+ *（共面 / 自交 / 非零体积 / 绕向一致 / 未用顶点 / 连通性）—— 模型算错时报的是**逐条诊断**，
+ * 还能走那一次修复，而不是产出一份坏文档。
+ */
+export interface SolidCreatePolyhedronAction extends ActionBase {
+  actionId: "solid.create_polyhedron"
+  inputs: {
+    alias: DraftAlias
+    /** 顶点（世界坐标），至少 4 个。 */
+    vertices: Array<{ x: number; y: number; z: number }>
+    /** 面环：每个面是**至少 3 个顶点下标**（0 起、互异；同一面共面、整只实体绕向一致）—— 由内核校验。 */
+    faces: number[][]
+    label?: string
+  }
+}
+
 /** 既有的、指向文档内对象的引用（必须带 documentId，名称不是 ID）。 */
 export interface SceneReference {
   documentId: string
@@ -314,6 +334,7 @@ export type DraftAction =
   | SolidCreatePrismAction
   | SolidCreateTetrahedronAction
   | SolidCreateRegularPyramidAction
+  | SolidCreatePolyhedronAction
   | DynamicBindPointAction
   | DynamicCreateBoundPointAction
   | DynamicCreateLocusAction

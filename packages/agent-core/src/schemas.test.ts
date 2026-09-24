@@ -172,6 +172,40 @@ describe("draft action parsing", () => {
     // 白名单之外的字段（棱柱的面由内核生成，不许调用方塞进来）。
     expectRejected(parseDraftAction({ ...base, inputs: { ...base.inputs, faces: [] } }), "unknown_field")
   })
+
+  /**
+   * **任意多面体**（第 2 层）的传输层校验：只挡**形状**，几何留给内核。
+   *
+   * `faces` 是这份契约里**第一个二层整数数组**字段，所以单独钉一条：
+   * 收下合法的（顶点 ≥4、面 ≥4、环 ≥3 且下标互异且在范围内），拒掉明显畸形的。
+   * 「共面 / 自交 / 非零体积 / 绕向一致」**不在这里**判 —— 那些是内核的诊断（见登记表那条注释）。
+   */
+  it("accepts a well-formed polyhedron and rejects malformed face rings", () => {
+    const base = {
+      actionId: "solid.create_polyhedron",
+      actionKey: "octa",
+      factIds: [],
+      inputs: {
+        alias: "octa",
+        vertices: [{ x: 1, y: 0, z: 0 }, { x: -1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }, { x: 0, y: -1, z: 0 }, { x: 0, y: 0, z: 1 }, { x: 0, y: 0, z: -1 }],
+        faces: [[0, 2, 4], [2, 1, 4], [1, 3, 4], [3, 0, 4], [2, 0, 5], [1, 2, 5], [3, 1, 5], [0, 3, 5]]
+      }
+    }
+    const accepted = parseDraftAction(base)
+    expect(accepted.ok, accepted.ok ? "" : accepted.errors.map((error) => `${error.code}@${error.path}`).join(", ")).toBe(true)
+
+    // 顶点少于 4 个。
+    expectRejected(parseDraftAction({ ...base, inputs: { ...base.inputs, vertices: base.inputs.vertices.slice(0, 3) } }), "invalid_type")
+    // 面少于 4 个。
+    expectRejected(parseDraftAction({ ...base, inputs: { ...base.inputs, faces: [[0, 2, 4], [2, 1, 4]] } }), "invalid_type")
+    // 环里只有两个下标。
+    expectRejected(parseDraftAction({ ...base, inputs: { ...base.inputs, faces: [[0, 2], [2, 1, 4], [1, 3, 4], [3, 0, 4]] } }), "invalid_type")
+    // 下标越界 / 不是整数。
+    expectRejected(parseDraftAction({ ...base, inputs: { ...base.inputs, faces: [[0, 2, 9], [2, 1, 4], [1, 3, 4], [3, 0, 4]] } }), "invalid_type")
+    expectRejected(parseDraftAction({ ...base, inputs: { ...base.inputs, faces: [[0, 2, 1.5], [2, 1, 4], [1, 3, 4], [3, 0, 4]] } }), "invalid_type")
+    // 同一个环里重复一个顶点。
+    expectRejected(parseDraftAction({ ...base, inputs: { ...base.inputs, faces: [[0, 2, 0], [2, 1, 4], [1, 3, 4], [3, 0, 4]] } }), "duplicate_index")
+  })
 })
 
 describe("envelope assumptions", () => {
