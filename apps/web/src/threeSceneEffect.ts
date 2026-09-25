@@ -3,6 +3,7 @@ import { createThreeSceneGrid, type ThreeSceneGridHolder } from "./threeSceneGri
 import { createThreeSceneRender } from "./threeSceneRender"
 import { createThreeScenePreviewHover } from "./threeScenePreviewHover"
 import { createThreeSceneCamera } from "./threeSceneCamera"
+import { createThreeSceneDragVisuals } from "./threeSceneDragVisuals"
 import { createThreeSceneContent } from "./threeSceneContent"
 /**
  * **三维场景的运行时**（从 `threeScene.tsx` 拆出，评审方案 2 —— 那个文件原本 1807 行）。
@@ -64,14 +65,14 @@ import { createThreeSceneContent } from "./threeSceneContent"
 import { useEffect, type Dispatch, type RefObject, type SetStateAction } from "react"
 import * as THREE from "three"
 
-import type { Point3Primitive, PrimitiveSpec, SectionPrimitive } from "@draw/dsl"
-import { host3FromPrimitive, reactive, type Host3, type Host3Parameter } from "@draw/geometry-kernel"
+import type { Point3Primitive, SectionPrimitive } from "@draw/dsl"
+import { reactive, type Host3, type Host3Parameter } from "@draw/geometry-kernel"
 import { resolveMeasurementVisual } from "./measurementVisuals"
 import { sceneContentKey } from "./sceneContentKey"
 import { applyCameraState, isContentOutOfView, shouldAutoFit, zoomCameraState, type CameraState } from "./threeCamera"
 import { rememberCamera } from "./cameraMemory"
 import type { ThreeScenePreview } from "./threeScenePreview"
-import { applyRotationSkew, applyDragOffsets, circleRadiusHandlePoint, dragWorldPoint, offsetSceneObjects, rotationHandleRadius, type RotationDragState } from "./threeDrag"
+import { dragWorldPoint, type RotationDragState } from "./threeDrag"
 import { PICK_TOLERANCE_PX, pointHandleWorldRadius } from "./threePicking"
 import { sectionUnitNormal, disposeScene } from "./threePrimitives"
 
@@ -374,85 +375,14 @@ export function useThreeSceneEffect(deps: ThreeSceneEffectDeps) {
     resizeObserver?.observe(container)
 
     /**
-     * 把"预览半径"画出来（拖动期间文档不提交，画面全靠这里）：
-     * ①圆本体按预览半径重建；②绑在它上面的点用**同一个半径**重算坐标并重建（参数是唯一真源，
-     * 所以点始终贴在新的圆周上，不会等抬手才跳过去）；③半径手柄移到新圆周；④三色环按比例整体缩放
-     * （比例用构建时的轨道半径算同一个 `rotationHandleRadius`，避免逐帧累积）。
+     * 拖动期间的画面（半径预览 / 手柄落位 / 场景重建后补画）在 `./threeSceneDragVisuals`。
+     * 调用方照旧把它挂进 `resumeDragVisualRef`：内容同步效应在签名变化时调它补画。
      */
-    const applyTrackRadiusPreview = (id: string, trackPrimitive: Extract<PrimitiveSpec, { type: "circle3" }>, radius: number) => {
-      refreshPrimitiveObject(id)
-      const host = host3FromPrimitive({ ...trackPrimitive, radius }, documentRef.current.primitives)
-      if (host) {
-        for (const candidate of documentRef.current.primitives) {
-          if (candidate.type !== "point3" || candidate.binding?.kind !== "onHost" || candidate.binding.hostId !== id) continue
-          points.set(candidate.id, { ...candidate, position: host.evaluate({ u: candidate.binding.parameter }) })
-          refreshPrimitiveObject(candidate.id)
-        }
-      }
-      const handle = trackRadiusHandleRef.current
-      if (handle && handle.id === id) {
-        const point = circleRadiusHandlePoint(trackPrimitive.center, trackPrimitive.normal, radius)
-        handle.point.copy(point)
-        handle.group.userData.handlePoint = point.clone()
-        for (const target of (handle.group.userData.hitTargets as THREE.Object3D[] | undefined) ?? []) target.position.copy(point)
-        for (const child of handle.group.children) {
-          if (!(child instanceof THREE.Line)) continue
-          child.geometry.dispose()
-          child.geometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(trackPrimitive.center.x, trackPrimitive.center.y, trackPrimitive.center.z), point])
-          child.computeLineDistances()
-          const material = child.material as THREE.LineDashedMaterial
-          material.dashSize = Math.max(0.08, radius * 0.08)
-          material.gapSize = Math.max(0.05, radius * 0.05)
-        }
-      }
-      const rings = rotationHandleRef.current
-      if (rings && handle && handle.id === id && handle.radius > 0) rings.group.scale.setScalar(rotationHandleRadius(radius) / rotationHandleRadius(handle.radius))
-    }
-    /** 抬手时把预览交还给文档：清掉预览并把圆与它的动点按文档里的值重建一次。 */
-    const clearTrackRadiusPreview = (id: string) => {
-      circleRadiusPreviewRef.current = null
-      const trackPrimitive = documentRef.current.primitives.find((candidate) => candidate.id === id)
-      if (trackPrimitive?.type === "circle3") applyTrackRadiusPreview(id, trackPrimitive, trackPrimitive.radius)
-    }
-    /**
-     * 平移拖动时手柄跟着图形走。
-     *
-     * 环画在**世界轴**上（所以旋转时它不能跟着转，那是它的意义所在），但它的**位置**必须跟着对象，
-     * 否则拖着拖着环就落在原地、实体自己走了。提交后内容同步会按新中心重建手柄。
-     */
-    const moveRotationHandles = (delta: THREE.Vector3) => {
-      const handle = rotationHandleRef.current
-      if (handle) handle.group.position.add(delta)
-    }
-    /** 把这次拖动已经画上去的偏移补画到（可能是刚重建的）场景上，见 resumeDragVisualRef 的说明。 */
-    resumeDragVisualRef.current = () => {
-      const session = dragSessionRef.current
-      if (!session?.applied) return
-      /**
-       * 旋转：场景被重建（选中变化 / 尺寸变化）后，新对象回到文档里的姿态，临时旋转就丢了。
-       * 这里按**累计角度**一次补画回去（与逐帧增量等价：同一根轴上的旋转可以直接相加）。
-       * 它用 `applied` 而不是 `visualApplied` 判断——旋转根本不走位移那条账。
-       */
-      if (session.rotation) {
-        if (Math.abs(session.rotation.state.applied) > 1e-12) applyRotationSkew(scene, session.rotation.family, session.rotation.state.pivot, session.rotation.state.axis, session.rotation.state.applied)
-        render()
-        return
-      }
-      /**
-       * 缩放：场景被重建（窗口尺寸变化等）后手柄与圆都回到文档里的半径，这里按预览值补画一次。
-       */
-      if (session.scale) {
-        const trackPrimitive = documentRef.current.primitives.find((candidate) => candidate.id === session.targetId)
-        if (trackPrimitive?.type === "circle3") applyTrackRadiusPreview(session.targetId, trackPrimitive, session.scale.current)
-        render()
-        return
-      }
-      if (session.visualApplied.lengthSq() < 1e-12) return
-      if (session.slideNormal) offsetSceneObjects(scene, session.targetId, session.slideNormal.clone().multiplyScalar(session.visualApplied.dot(session.slideNormal)))
-      else applyDragOffsets(scene, session.family, session.visualApplied.clone())
-      moveRotationHandles(session.visualApplied)
-      render()
-    }
+    const { applyTrackRadiusPreview, clearTrackRadiusPreview, moveRotationHandles, resumeDragVisual } = createThreeSceneDragVisuals({
+      scene, documentRef, dragSessionRef, trackRadiusHandleRef, rotationHandleRef, circleRadiusPreviewRef,
+      points, refreshPrimitiveObject, render
+    })
+    resumeDragVisualRef.current = resumeDragVisual
     /**
      * 场景运行时句柄：内容同步 + 补画进行中的拖动偏移 + 重画。
      * 由"内容同步效应"在签名变化时调用；渲染器与事件监听都留在本次挂载里，不再重建。
