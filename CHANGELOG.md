@@ -29,6 +29,23 @@
 
 ## 2026-09-25（续）—— 方案 2 第四十二批：`operations.ts` 1310→1152（交面 / 交点并入 sectionRecompute）
 
+## 2026-09-25（续）—— 方案 2 第四十三批：`operations.ts` 1152→850（重算主族整块搬走）
+
+切出 `recompute.ts`（323 行）：`recomputeDerivedObjects`（"改了一处之后按拓扑序把该跟着变的对象重算一遍"的唯一入口）连同它**内部的两个嵌套函数**（`pickSolution` / `recomputePrimitive`）与 `calculatePlanarMeasurement`。
+
+嵌套是刻意的：它们要闭包持有 `primitiveMap` 与 `parameters`，每算完一个对象就就地更新，好让下游读到刚算出来的上游值。所以搬动**逐行原样、只导出外层那一个** —— 给嵌套函数加 `export` 在语法上非法，这正是前一轮回滚的原因。
+
+## 上一轮中止之后改掉的做法（这一轮因此一次过）
+
+上一轮我在"向上跳过注释行找函数结尾"这条规则上栽了（注释正文也被当成可跳过，边界退到注释内部）。这一轮换成**按大括号配平**从函数名向下找结尾：
+
+1. 先跑一次**只读勘查**：算出 `recomputeDerivedObjects` 的 382..638、`calculatePlanarMeasurement` 的 652..681，并把两端行内容打出来核对；
+2. 再一次性搬迁 382..681（含中间那段文档注释），接线、`tsc`、跑包内测试。
+
+前半段一行未改，后半段只补 import（四轮，每轮以 `tsc` 收口）。搬完 lint 从 13 涨到 63，按读数清掉 **50 个多余 import**，回到 13。
+
+**验收**：`tsc -p packages/scene-graph/tsconfig.json` exit 0、包内 **326 用例**全过、`npm run typecheck` exit 0、`npm run lint` **0 error / 13 warning**、`npm test` **238 文件 / 2810 用例**、`npx playwright test` **141/141**。
+
 这一批不是"再切一块"，而是**解环**：上一批发现 `recomputePrimitive` 调用 `recomputeIntersectionFace`，而后者留在 `operations.ts` 里 —— 只要 `recomputePrimitive` 还想搬走，就必须先把交面那一族挪到它该在的地方。
 
 于是把 `recomputeIntersectionFace` / `recomputeIntersectionPoint3`（含它们的来源解析与区域认领）以及四个小几何辅助（`dedupePoints3` / `centroidOfPoints` / `extentOf` / `distanceBetween` / `dotBetween`）**并入 `sectionRecompute.ts`**（165→**326** 行）。现在 `operations.ts`（**1152** 行）里剩下的只有：文档层的创建 / 更新命令、重算主族（`recomputeDerivedObjects`，内含嵌套的 `pickSolution` / `recomputePrimitive`）、以及 `applyOperation` 那一族。
