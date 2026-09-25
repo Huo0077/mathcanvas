@@ -35,6 +35,29 @@ fn tauri_conf() -> serde_json::Value {
     read_json(&Path::new(env!("CARGO_MANIFEST_DIR")).join("tauri.conf.json"))
 }
 
+/// **命令源码的全文**：`lib.rs` 与 `src/commands/` 下每一个 `.rs`，按文件名排序拼起来。
+///
+/// 排序是为了让"多个文件里各有一条同样的断言"这种情况有确定的顺序，读起来也稳定。
+fn command_sources() -> String {
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut files = vec![src.join("lib.rs")];
+    let commands = src.join("commands");
+    if let Ok(entries) = std::fs::read_dir(&commands) {
+        let mut rest: Vec<PathBuf> = entries
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .filter(|path| path.extension().is_some_and(|extension| extension == "rs"))
+            .collect();
+        rest.sort();
+        files.extend(rest);
+    }
+    files
+        .iter()
+        .map(|path| std::fs::read_to_string(path).unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display())))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// Step 1 的"入口能加载"：`frontendDist` 指向 `apps/web` 的产物，且那份产物**真的在**。
 #[test]
 fn the_web_entry_the_shell_loads_exists_and_is_the_web_build() {
@@ -117,6 +140,14 @@ fn keeps_the_capability_set_minimal() {
 #[test]
 fn exposes_only_named_ipc_commands_and_no_generic_one() {
     let lib = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/lib.rs")).expect("read lib.rs");
+    // **全部命令源码**（`lib.rs` + `src/commands/` 下的每一个文件）。
+    //
+    // 命令从 2026-09-25 起按"它碰的是哪一份托管状态"分了文件（评审方案 2 拆 lib.rs）。
+    // 这份断言的口径因此从"扫 lib.rs"改成"扫整棵树"—— **意图没变，覆盖面反而更大了**：
+    // 它守的仍然是"只暴露具名命令、没有泛型命令、没有通用 shell/文件读写的出口"，
+    // 而"每一个注册过的命令都真的有一个 `#[tauri::command]` 函数、且不多不少"这条
+    // 现在对任何文件都成立。
+    let sources = command_sources();
 
     let named = [
         "get_runtime_info",
@@ -183,16 +214,24 @@ fn exposes_only_named_ipc_commands_and_no_generic_one() {
         .and_then(|(_, rest)| rest.split_once(']'))
         .map(|(inside, _)| inside.to_string())
         .expect("the invoke handler must be present");
-    let registered: Vec<&str> = block.split(',').map(str::trim).filter(|name| !name.is_empty()).collect();
+    let registered: Vec<&str> = block
+        .split(',')
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        // 只比**最后一段名字**：命令从 2026-09-25 起可以写在 `commands::<组>::<名字>` 里，
+        // 而这份清单要守的是"有哪些命令"，不是"它们住在哪个文件"。
+        // 换成路径之后，"新增命令必须在这里写下名字"这条约束一点没松。
+        .map(|path| path.rsplit("::").next().unwrap_or(path))
+        .collect();
     assert_eq!(registered, named, "the registered command list changed; update `named` deliberately");
     assert_eq!(lib.matches("generate_handler!").count(), 1, "exactly one invoke handler");
     // 每个注册过的命令都要有一个 `#[tauri::command]` 函数。
     for command in named {
-        assert!(lib.contains(&format!("fn {command}(")), "no function found for the registered command {command}");
+        assert!(sources.contains(&format!("fn {command}(")), "no function found for the registered command {command}");
     }
-    assert_eq!(lib.matches("#[tauri::command]").count(), named.len(), "every registered command must be declared as a command, and nothing else");
+    assert_eq!(sources.matches("#[tauri::command]").count(), named.len(), "every registered command must be declared as a command, and nothing else");
 
-    let code: String = lib
+    let code: String = sources
         .lines()
         .filter(|line| !line.trim_start().starts_with("//"))
         .collect::<Vec<_>>()
@@ -211,7 +250,7 @@ fn exposes_only_named_ipc_commands_and_no_generic_one() {
 /// 而"接口有没有出口"必须在源头看。
 #[test]
 fn the_secret_commands_have_no_plaintext_exit() {
-    let lib = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/lib.rs")).expect("read lib.rs");
+    let lib = command_sources();
 
     // 没有"读回明文"的命令。
     for forbidden in ["get_secret", "read_secret", "reveal_secret", "show_secret"] {

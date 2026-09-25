@@ -28,16 +28,17 @@ pub mod proxy;
 pub mod repository;
 /// 密钥库（Task 1.2）。**明文没有出口** —— 见 `secrets/mod.rs` 的三条设计决定。
 pub mod secrets;
+/// IPC 命令的分组（按"它碰的是哪一份托管状态"分文件）：代理、密钥，其余仍在根模块。
+pub mod commands;
 
 use repository::projects::{CommitReceipt, CommitRequest, DocumentSnapshot, ProjectRepository};
 use repository::provider_profiles::{ProviderHealth, ProviderProfile, ProviderProfileStore, StoreError};
 use repository::BlobStore;
-use secrets::{SecretState, SecretStore, Store};
+use commands::proxy::ProxyState;
+use commands::secrets::SecretStoreState;
+use secrets::SecretStore;
 use std::sync::Mutex;
 use tauri::Manager;
-
-/// 密钥库在 Tauri 托管状态里的包装。
-struct SecretStoreState(Store);
 
 /**
  * 项目仓储在 Tauri 托管状态里的包装（Task 1.6）。
@@ -62,31 +63,6 @@ pub struct RepositoryState {
  */
 pub struct BlobState {
     blobs: BlobStore,
-}
-
-/**
- * 回环代理的会话（Task 1.5）。
- *
- * **持有它就持有那枚令牌** —— 所以它只挂在 Tauri 的托管状态里，只有可信 IPC 能读到。
- * 令牌不进 URL、不进日志、不落盘：它随 `ProxyHandle` 一起活，应用一退就没了。
- *
- * 用 `std::sync::Mutex` 而不是 tokio 的：这里的临界区只是"读两个字段"，
- * 没有任何 await 在里面 —— 异步锁在无 await 的临界区里只带来额外开销。
- */
-pub struct ProxyState {
-    session: Mutex<Option<proxy::server::ProxyHandle>>,
-}
-
-/**
- * 代理的 tokio 运行时。
- *
- * 它必须被**持有住**：`Runtime` 一被 drop，跑在它上面的服务器任务就停了 ——
- * 而"服务器莫名其妙不响应了"这种故障极难查（应用没崩、日志没报错、只是连不上）。
- * 挂进托管状态 = 生命周期跟着应用走。
- */
-pub struct ProxyRuntime {
-    #[allow(dead_code)]
-    runtime: tokio::runtime::Runtime,
 }
 
 /// **用某个 profile 发一次模型请求**（Task 1.4 Step 3/4 + Task 1.5 Step 3/5）。
@@ -215,35 +191,6 @@ fn missing_state(detail: &str) -> serde_json::Value {
         "message": detail,
         "retryable": false
     })
-}
-
-/// **把回环代理的地址与令牌交给前端**（计划 Step 3："pass it over trusted IPC"）。
-///
-/// 返回的 `baseUrl` **不含令牌**（它进 URL 就会进浏览器历史与日志）；
-/// 令牌单独一个字段，前端每次现取、不缓存。
-#[tauri::command]
-fn proxy_session(app: tauri::AppHandle) -> Result<Option<serde_json::Value>, String> {
-    let state = app.try_state::<ProxyState>().ok_or("the proxy is not initialised")?;
-    let session = state.session.lock().map_err(|_| "the proxy state is poisoned".to_string())?;
-    Ok(session.as_ref().map(|handle| {
-        serde_json::json!({
-            "baseUrl": handle.base_url(),
-            "token": handle.token(),
-            "cancelled": handle.is_cancelled()
-        })
-    }))
-}
-
-/// **取消当前运行**（用户按了停止）。幂等：重复取消不是错误。
-#[tauri::command]
-fn proxy_cancel(app: tauri::AppHandle) -> Result<bool, String> {
-    let state = app.try_state::<ProxyState>().ok_or("the proxy is not initialised")?;
-    let session = state.session.lock().map_err(|_| "the proxy state is poisoned".to_string())?;
-    match session.as_ref() {
-        Some(handle) => { handle.cancel(); Ok(true) }
-        // 没有会话时**如实回 false**，不假装取消成功。
-        None => Ok(false)
-    }
 }
 
 /// Provider 配置存储 + 它所在的配置文件路径。
@@ -393,30 +340,6 @@ fn get_runtime_info(app: tauri::AppHandle) -> Result<runtime::DesktopRuntimeInfo
         .try_state::<ProxyState>()
         .is_some_and(|state| state.session.lock().map(|session| session.is_some()).unwrap_or(false));
     Ok(runtime::build_runtime_info(&version, &data_root, secret_store_ready, repository_ready, transport_ready))
-}
-
-/// **保存一个 provider 的密钥**（Task 1.2 Step 4）。
-///
-/// 返回的是 `SecretState`（三态枚举）—— **不是**明文，也不是原文回显。
-/// 前端据此显示"已保存 / 未配置 / 出错"，并**立刻清空输入框**。
-#[tauri::command]
-fn save_secret(app: tauri::AppHandle, profile_id: String, secret: String) -> Result<SecretState, String> {
-    let state = app.try_state::<SecretStoreState>().ok_or("the secret store is not initialised")?;
-    state.0.put(&profile_id, &secret).map_err(|error| error.to_string())
-}
-
-/// **删除一个 provider 的密钥**。删不存在的条目**不是错误**（按钮可能被点两次）。
-#[tauri::command]
-fn remove_secret(app: tauri::AppHandle, profile_id: String) -> Result<(), String> {
-    let state = app.try_state::<SecretStoreState>().ok_or("the secret store is not initialised")?;
-    state.0.remove(&profile_id).map_err(|error| error.to_string())
-}
-
-/// **查一个 provider 有没有配置密钥**。缺 key 回 `false`，不报错。
-#[tauri::command]
-fn has_secret(app: tauri::AppHandle, profile_id: String) -> Result<bool, String> {
-    let state = app.try_state::<SecretStoreState>().ok_or("the secret store is not initialised")?;
-    state.0.has(&profile_id).map_err(|error| error.to_string())
 }
 
 // ---------------------------------------------------------------- 项目仓储（Task 1.6）
@@ -896,7 +819,7 @@ pub fn run() {
                 )?;
             }
             // **只初始化一次**：Windows 上这一步会去碰系统凭据管理器。
-            app.manage(SecretStoreState(secrets::create_store()));
+            app.manage(commands::secrets::SecretStoreState(secrets::create_store()));
             // Provider 配置放在应用数据根下的 `providers.json`（Task 1.3）。
             // 打不开时**如实失败**：设置界面的所有写入都会因此报错，
             // 而不是让用户以为"存好了"。
@@ -936,16 +859,16 @@ pub fn run() {
             // 而手动工作台照常能用（一个可选组件的失败不该让整个应用打不开）。
             let runtime = tokio::runtime::Runtime::new().map_err(|error| format!("cannot start the proxy runtime: {error}"))?;
             let session = runtime.block_on(proxy::server::start());
-            app.manage(ProxyState { session: Mutex::new(session.ok()) });
+            app.manage(commands::proxy::ProxyState::new(session.ok()));
             // 运行时自己要被**持有住**，否则它一 drop 服务器就停了。
-            app.manage(ProxyRuntime { runtime });
+            app.manage(commands::proxy::ProxyRuntime::new(runtime));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             get_runtime_info,
-            save_secret,
-            remove_secret,
-            has_secret,
+            commands::secrets::save_secret,
+            commands::secrets::remove_secret,
+            commands::secrets::has_secret,
             list_provider_profiles,
             upsert_provider_profile,
             remove_provider_profile,
@@ -980,13 +903,10 @@ pub fn run() {
             update_conversation_fact,
             archive_conversation,
             delete_conversation,
-            proxy_session,
-            proxy_cancel
+            commands::proxy::proxy_session,
+            commands::proxy::proxy_cancel
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
-
-
-
 
