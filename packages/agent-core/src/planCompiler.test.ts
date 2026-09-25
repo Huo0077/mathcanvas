@@ -82,6 +82,36 @@ describe("plan compilation", () => {
     expect(document.primitives).toHaveLength(0)
   })
 
+  /**
+   * **同一份计划里刚建出来的对象，写成场景引用 / 裸名字也要认**（2026-09-26 用户现场）。
+   *
+   * 用户要"把正方体沿对角面剖开，标出截面"，规划器给的三步是"建立方体 → 建截面 → 标截面"，
+   * 但后两步把 `cube` 与 `diagSection` 写成了**场景引用**而不是草稿别名（`{scope:"draft", alias}`），
+   * 整轮因此死在 `target_not_found: no object cube`。
+   *
+   * 判据没有歧义：别名表只装**这一份计划里、这一步之前**已经建出来的对象，命中就是"刚建的那个"。
+   * 所以这里按别名解析；而**真的编造一个 id 仍旧照旧拒绝**（宽容不越界）。
+   */
+  it("accepts a same-plan object named by alias even when the reference forgot the draft scope", () => {
+    const section = (sourceId: unknown) => ({ actionId: "section.create", actionKey: "cut", factIds: [], inputs: { alias: "cut", sourceId, plane: { normal: { x: 0, y: 1, z: 0 }, constant: 0 } } })
+    const document = createEmptyDocument("geometry3d")
+
+    // 写成裸名字
+    const bare = compilePlan(rawPlan([PRISM, section("prism")]), context(document))
+    expect(bare.ok, JSON.stringify(bare.diagnostics)).toBe(true)
+    expect(bare.aliases.cut).toBeDefined()
+
+    // 这个字段只接受**字符串引用**（裸 id 或 `draft:<alias>`）：场景引用那种对象形状在传输层就被拒。
+    const sceneForm = compilePlan(rawPlan([PRISM, section({ documentId: document.metadata.id, entityId: "prism" })]), context(document))
+    expect(sceneForm.ok).toBe(false)
+    expect(sceneForm.diagnostics[0]).toMatchObject({ stage: "transport", code: "invalid_type", path: "envelope.actions[1].inputs.sourceId" })
+
+    // 编造的 id 依旧被拒
+    const invented = compilePlan(rawPlan([section("nowhere")]), context(document))
+    expect(invented.ok).toBe(false)
+    expect(invented.diagnostics.some((entry) => entry.code === "target_not_found")).toBe(true)
+  })
+
   it("allocates ids around the ids the live document already occupies", () => {
     const document = createEmptyDocument("geometry3d")
     document.primitives = [

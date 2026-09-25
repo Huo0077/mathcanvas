@@ -369,6 +369,17 @@ function resolveReferences(action: DraftAction, index: number, document: Geometr
         return entry
       }
       if (!document.primitives.some((primitive) => primitive.id === entityId)) {
+        /**
+         * **宽容一处**：计划把"同一份计划里刚建出来的对象"写成了**场景引用**（`{documentId, entityId:"cube"}`）
+         * 而不是草稿别名（`{scope:"draft", alias:"cube"}`）。实测现场：用户要"把正方体沿对角面剖开，标出截面"，
+         * 计划是建立方体 → 建截面 → 标截面，后两条把 `cube` / `diagSection` 写成了场景引用，
+         * 整轮因此死在 `target_not_found: no object cube`。
+         *
+         * 为什么可以在这里兜：`aliases` 只装**这一份计划里、这一步之前**已经建出来的对象，
+         * 命中别名表就是无歧义的"它就是刚建的那个"；没命中仍然照旧拒绝（模型编的 id 一条都不放过）。
+         */
+        const draftId = aliases[entityId]
+        if (draftId) return { documentId: document.metadata.id, entityId: draftId }
         diagnostics.push(planDiagnostic("reference_resolution", "target_not_found", pathFor(index, reference.field), `no object ${entityId} in ${document.metadata.id}`))
       }
       return { documentId, entityId }
@@ -384,6 +395,9 @@ function resolveReferences(action: DraftAction, index: number, document: Geometr
         return id
       }
       if (!document.primitives.some((primitive) => primitive.id === entry)) {
+        /** 同上面那条：裸名字命中"本计划里刚建出来的别名"时按别名解析（现场见上）。 */
+        const draftId = aliases[entry]
+        if (draftId) return draftId
         diagnostics.push(planDiagnostic("reference_resolution", "target_not_found", pathFor(index, reference.field), `no object ${entry} in ${document.metadata.id}`))
       }
       return entry
