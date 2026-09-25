@@ -33,6 +33,26 @@
 
 ## 2026-09-25（续）—— 方案 2 第四十四批：`operations.ts` 850→307 —— 写入口搬走，方案 2 收口
 
+## 2026-09-25（续）—— 第四十五批：`scripts/` 纳入 `tsc`；推送恢复后 CI 四作业全绿
+
+两件事，一件补门禁、一件收交付。
+
+### 1. `scripts/` 纳入类型检查（补上最后一个已知缺口）
+
+此前只有 `apps/web/src`、各 package 与 `e2e/` 被 `tsc` 检查，`scripts/preview-server.test.ts` 一直只被 vitest 转译执行 —— 它的类型错误不会在门禁里现形（几轮前那条 `mkdtemp` 的 ENOENT 就是这么漏到 CI 才发现的）。现在新增：
+
+- `scripts/tsconfig.json`（与 `e2e/tsconfig.json` 同形：`extends` 基础配置 + `include: ["."]`）；
+- `scripts/nodeTypes.d.ts`：**只声明脚本真的用到的** node 面（`spawn` / `once` / `mkdir` / `mkdtemp` / `rm` / `writeFile` / `path` / `process` / `__dirname`）；
+- 根 `typecheck` 末尾追加 `tsc -p scripts/tsconfig.json`。
+
+**继续刻意不装 `@types/node`**（与 `e2e/nodeTypes.d.ts` 同一条理由）：它一旦进 `node_modules/@types`，所有没写 `types` 的 tsconfig 都会自动全局引入，`setTimeout` 的返回类型从 `number` 变成 `NodeJS.Timeout`，动摇一批好端端的应用代码。实测：补完当场 `tsc -p scripts/tsconfig.json` **exit 0**（最小面刚好覆盖用例所用）。
+
+### 2. 推送恢复，CI 四作业全绿
+
+代理恢复之后 15 个提交一次性推上（`6aa8e95..1cfb322`），CI 在 **`1cfb322` 上四作业全部成功**（`checks` / `build` / `e2e` / `rust`）—— 也就是说：方案 2 的全部拆分（`operations.ts` 2817→307、`schemas.ts` 1300→180、Rust `lib.rs` 992→168、`threeScene.tsx`、`App.tsx`、`PropertiesBar.tsx`）在 CI 上**完整跑过一遍并全绿**。
+
+**验收**：`npm run typecheck` exit 0（现含三段）、`npm run lint` **0 error / 13 warning**、`npm test` **238 文件 / 2810 用例**；CI run #5（`1cfb322`）四作业 success。
+
 切出 `apply.ts`（564 行）：**文档层唯一的写入口** `applyOperation`，连同它自己用的四个 helper（`normalizeForComparison` / `documentChanged` / `requireFinite` / `applyDeletionPlan`）、`OperationResult` 与 `parameterIsReferenced`。
 
 **为什么必须一起搬**：上一轮我试过只搬 `applyOperation`，`tsc` 当场列出四个**值级回头依赖**（那四个 helper 与 `parameterIsReferenced` 还留在 `operations.ts` 里）—— 那就是运行时环。把它们一起搬走，环自然消失。这一轮把"动刀前先查值级回头依赖"补进了流程，于是照单执行、一次过。

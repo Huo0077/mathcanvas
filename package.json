@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "npm --workspace @draw/web run dev",
     "build": "npm run build --workspaces",
-    "typecheck": "npm run typecheck --workspaces && tsc -p e2e/tsconfig.json",
+    "typecheck": "npm run typecheck --workspaces && tsc -p e2e/tsconfig.json && tsc -p scripts/tsconfig.json",
     "test": "vitest run",
     "test:perf": "vitest run --silent=false packages/scene-graph/src/largeScene.bench.test.ts",
     "test:e2e": "playwright test",

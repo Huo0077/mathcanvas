@@ -55,7 +55,7 @@
 | 方案 | 优先级 | 状态 | 一句话 |
 | --- | --- | --- | --- |
 | 1. 统一实体构造与拓扑物化 | P0 | ✅ **已完成并验收** | 见下节 |
-| 2. 拆分过大的编排和领域文件 | P1 | 🔶 **已开四十四批** | `operations.ts` 2817→**307**（→ 十一个模块）、`PropertiesBar.tsx` 1069→298（→`inspectorFields` / `inspectorLabels` / `inspectorReadings` / `inspectorModel`）、`App.tsx` 2000→**809**（→`fileExports` / `documentIds` / `creationCommands` / `solidCommands` / `recordCommands` / `structureCommands` / `anchorRotationCommands` / `point3ToolCommands` / `previewCommands` / `selectionCommands` / `canvasStatusPrompt` / `draftingCommands` / `appViewState` / `useDraftPersistence` / `commandDispatch` / `useKeyboardShortcuts`）、`threeScene.tsx` 1807→269（→`threeSceneEffect` + **七个阶段模块**）、Rust `lib.rs` 992→**168**（→`src/commands/` 五组）、`agent-core/schemas.ts` 1300→**180**（→`schemaReaders` / `actionRegistry` / `hashing` / `actionInputs` / `actionAudit`） |
+| 2. 拆分过大的编排和领域文件 | P1 | 🔶 **已开四十五批** | `operations.ts` 2817→**307**（→ 十一个模块）、`PropertiesBar.tsx` 1069→298（→`inspectorFields` / `inspectorLabels` / `inspectorReadings` / `inspectorModel`）、`App.tsx` 2000→**809**（→`fileExports` / `documentIds` / `creationCommands` / `solidCommands` / `recordCommands` / `structureCommands` / `anchorRotationCommands` / `point3ToolCommands` / `previewCommands` / `selectionCommands` / `canvasStatusPrompt` / `draftingCommands` / `appViewState` / `useDraftPersistence` / `commandDispatch` / `useKeyboardShortcuts`）、`threeScene.tsx` 1807→269（→`threeSceneEffect` + **七个阶段模块**）、Rust `lib.rs` 992→**168**（→`src/commands/` 五组）、`agent-core/schemas.ts` 1300→**180**（→`schemaReaders` / `actionRegistry` / `hashing` / `actionInputs` / `actionAudit`） |
 | 3. 接入几何 Worker | P1 | ✅ **已完成并验收** | 宿主生命周期 + 如实降级；契约缺口全部填上 |
 | 4. 工作区级代码分包 | P2 | ✅ **已完成** | 入口单 chunk 2 066.63 → 1 629.80 kB（−21.1%） |
 | 5. 正式 CI 门禁 | P2 | ✅ **已完成** | 四个作业按成本分层 |
@@ -139,7 +139,7 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
   2. `build` 红在根目录的 `npm run build`（= `--workspaces`）连带去跑 `apps/desktop` 的 `tauri build`，而那个作业没有装 WebKitGTK。修法：这个作业只构建 web 工作区 —— 与它自己注释里"桌面打包刻意不进 CI"一致。
   3. `rust` 红在 `shell_smoke` 的 `the_web_entry_the_shell_loads_exists_and_is_the_web_build`：它断言外壳加载的 web 产物**真的在**，而 `cargo test` 不会跑 `tauri.conf.json` 的 `beforeBuildCommand`。修法：作业里先 `npm run build --workspace @draw/web` 再跑测试。
 - **Rust `lib.rs` 的"大"有一半是被一份**守护性断言**钉住的**（2026-09-25 拆它时发现）：`tests/shell_smoke.rs` 原来要求**所有** `#[tauri::command]` 都写在 `src/lib.rs` 里（它按 `lib.rs` 的文本数 `#[tauri::command]` 的条数、并逐条找 `fn <名字>(`）。也就是说这个文件不是"没人拆"，而是"拆了就会红"。这一批把那份断言的口径从"扫 lib.rs"改成"扫整棵树"（`src/lib.rs` + `src/commands/*.rs`）—— **意图没变，覆盖面反而更大**：它现在守的是"只暴露具名命令、没有泛型命令、没有通用 shell / 文件读写出口"这条性质，而不是"命令住哪个文件"。登记清单仍逐字写在测试里（比对时只取路径的**最后一段**）。
-- **`scripts/` 下的测试仍未纳入 `tsc`**（只有 `apps/web/src`、各 package 与 `e2e/` 被类型检查）：`scripts/preview-server.test.ts` 是 vitest 转译执行的。它的类型错误不会在门禁里现形 —— 与"e2e/ 曾经一样"的同一个缺口，补法也一样（一份最小 tsconfig），本阶段没做。
+- **`scripts/` 下的测试已纳入 `tsc`**（2026-09-25 补）：新增 `scripts/tsconfig.json` 与一份**最小的 node 类型声明**（`scripts/nodeTypes.d.ts`，只声明脚本真的用到的 `spawn` / `once` / `mkdtemp` 等）—— 与 `e2e/` 同一套做法，同样**刻意不装 `@types/node`**（它会全局引入并改变应用侧 `setTimeout` 的类型）。根 `typecheck` 现在末尾跑三段：workspaces + `e2e/tsconfig.json` + `scripts/tsconfig.json`。
 
 - **几何 Worker 已接线，但"值不值"这条结论仍是**依据本轮读数**得出的**（编译 73 ms vs 复制 1 ms，约 76 倍）；**不是"管线全同步"** —— 那个判断此前记错了，已更正。降级路径（没有 `Worker` 的环境就地算）有独立用例，见方案 3 一节。
 - **性能上的一件事还没做**：把 `applyOperation` 每次从整份文档 `structuredClone` 的成本降下来。基准显示这一档**固定成本压过增量收益**（局部重算比全量还慢）。注意这与方案 3 不是同一件事：编译那 73 ms 花在**算**上（复制只占 1 ms），所以 Worker 对它是有效杠杆；而重算那一档的固定成本才是复制。
