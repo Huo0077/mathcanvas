@@ -50,12 +50,12 @@
 
 ## 二、按评审方案：做到哪一步了
 
-**一句话进度（估计，口径写明）**：七条方案**全部按评审 md 落地并验收**。方案 2 里五个目标文件已拆完；**`operations.ts` 仍在进行**（2817→**850**，只剩"应用族"`applyOperation` 那一块）。
+**一句话进度（估计，口径写明）**：**七条方案全部落地并验收**；方案 2 的六个目标文件全部拆分完成（`operations.ts` 也走到 **2817→307**）。剩下的是**可选**项与长尾（`operations.ts` 内仍可细分、`scripts/` 未纳入 `tsc`）。
 
 | 方案 | 优先级 | 状态 | 一句话 |
 | --- | --- | --- | --- |
 | 1. 统一实体构造与拓扑物化 | P0 | ✅ **已完成并验收** | 见下节 |
-| 2. 拆分过大的编排和领域文件 | P1 | 🔶 **已开四十三批** | `operations.ts` 2817→**850**（→ 十个模块；重算主族已切出 `recompute`）、`PropertiesBar.tsx` 1069→298（→`inspectorFields` / `inspectorLabels` / `inspectorReadings` / `inspectorModel`）、`App.tsx` 2000→**809**（→`fileExports` / `documentIds` / `creationCommands` / `solidCommands` / `recordCommands` / `structureCommands` / `anchorRotationCommands` / `point3ToolCommands` / `previewCommands` / `selectionCommands` / `canvasStatusPrompt` / `draftingCommands` / `appViewState` / `useDraftPersistence` / `commandDispatch` / `useKeyboardShortcuts`）、`threeScene.tsx` 1807→269（→`threeSceneEffect` + **七个阶段模块**）、Rust `lib.rs` 992→**168**（→`src/commands/` 五组）、`agent-core/schemas.ts` 1300→**180**（→`schemaReaders` / `actionRegistry` / `hashing` / `actionInputs` / `actionAudit`） |
+| 2. 拆分过大的编排和领域文件 | P1 | 🔶 **已开四十四批** | `operations.ts` 2817→**307**（→ 十一个模块）、`PropertiesBar.tsx` 1069→298（→`inspectorFields` / `inspectorLabels` / `inspectorReadings` / `inspectorModel`）、`App.tsx` 2000→**809**（→`fileExports` / `documentIds` / `creationCommands` / `solidCommands` / `recordCommands` / `structureCommands` / `anchorRotationCommands` / `point3ToolCommands` / `previewCommands` / `selectionCommands` / `canvasStatusPrompt` / `draftingCommands` / `appViewState` / `useDraftPersistence` / `commandDispatch` / `useKeyboardShortcuts`）、`threeScene.tsx` 1807→269（→`threeSceneEffect` + **七个阶段模块**）、Rust `lib.rs` 992→**168**（→`src/commands/` 五组）、`agent-core/schemas.ts` 1300→**180**（→`schemaReaders` / `actionRegistry` / `hashing` / `actionInputs` / `actionAudit`） |
 | 3. 接入几何 Worker | P1 | ✅ **已完成并验收** | 宿主生命周期 + 如实降级；契约缺口全部填上 |
 | 4. 工作区级代码分包 | P2 | ✅ **已完成** | 入口单 chunk 2 066.63 → 1 629.80 kB（−21.1%） |
 | 5. 正式 CI 门禁 | P2 | ✅ **已完成** | 四个作业按成本分层 |
