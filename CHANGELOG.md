@@ -21,6 +21,16 @@
 
 ## 2026-09-25（续）—— 方案 2 第三十八批：`operations.ts` 2211→1961（路径查询 + 解析类图元的重算）
 
+## 2026-09-25（续）—— 方案 2 第三十九批：`operations.ts` 1961→1651（三维变换与可编辑性判据）
+
+`packages/scene-graph/src/operations.ts` 从 1961 行降到 **1651 行**，切出 `transforms.ts`（约 320 行）：平移与旋转怎么落到文档上（`translatePrimitive` / `translatePrimitive3` / `rotatePrimitive3`）、以及"这个对象能不能被拖动 / 绕定点旋转"（`isFreeDraggable3` / `isRotatable3` / `managedPointIds` / `templateTopologyIds` / `EDITABLE_GEOMETRY_TYPES`）。三条口径随代码搬走：模板实体与物化拓扑必须**一起动**；棱柱构造描述可能不再成立时要**改记成显式面环**；旋转的判据是"有自己的一族点"。
+
+`PrimitiveBounds` 这个私有 interface 也跟着 `primitiveBounds` 搬过去（它本来就是那只包围盒的形状）。
+
+**过程**：边界探测又踩了同一种坑（把函数结尾定在下一段的文档注释上），这次直接用"向上跳过注释行再取 `}`"定住；随后补了四轮导入（`CurveRotation` / `SolidConstruction` / `WorldAxis3` / `curveRotationOf` / `rotatePointAboutAxis3` 等），每轮都以 `tsc` 收口。搬完 lint 涨到 30，按读数清掉 **17 个多余 import**，回到 13（基线）。
+
+**验收**：`tsc -p packages/scene-graph/tsconfig.json` exit 0、包内 **326 用例**全过、`npm run typecheck` exit 0、`npm run lint` **0 error / 13 warning**、`npm test` **238 文件 / 2810 用例**、`npx playwright test` **141/141**。
+
 `packages/scene-graph/src/operations.ts` 从 2211 行降到 **1961 行**，切出 `analysisRecompute.ts`（272 行）。它装两半：
 
 - **路径查询**：`pathConstraint` / `parameterWindow` / `projectOntoPath` —— 把一条曲线当成"带参数的路径"来问；

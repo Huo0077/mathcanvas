@@ -50,12 +50,12 @@
 
 ## 二、按评审方案：做到哪一步了
 
-**一句话进度（估计，口径写明）**：七条方案**全部按评审 md 落地并验收**。方案 2 里**五个**目标文件已拆完（`PropertiesBar` 298、`App.tsx` 809、`threeScene.tsx` 269 + 七个阶段模块、Rust `lib.rs` 168、`agent-core/schemas.ts` 180）；**`operations.ts` 仍在进行**（2817→**1961**，已切出六块，还剩"重算主族"与"应用"两族）。
+**一句话进度（估计，口径写明）**：七条方案**全部按评审 md 落地并验收**。方案 2 里五个目标文件已拆完；**`operations.ts` 仍在进行**（2817→**1651**，已切出七块，还剩"重算主族"与"应用"两族）。
 
 | 方案 | 优先级 | 状态 | 一句话 |
 | --- | --- | --- | --- |
 | 1. 统一实体构造与拓扑物化 | P0 | ✅ **已完成并验收** | 见下节 |
-| 2. 拆分过大的编排和领域文件 | P1 | 🔶 **已开三十八批** | `operations.ts` 2817→**1961**（→`solidGeometry` / `deletion` / `primitiveKinds` / `graph` / `curveRotation` / `analysisRecompute`）、`PropertiesBar.tsx` 1069→298（→`inspectorFields` / `inspectorLabels` / `inspectorReadings` / `inspectorModel`）、`App.tsx` 2000→**809**（→`fileExports` / `documentIds` / `creationCommands` / `solidCommands` / `recordCommands` / `structureCommands` / `anchorRotationCommands` / `point3ToolCommands` / `previewCommands` / `selectionCommands` / `canvasStatusPrompt` / `draftingCommands` / `appViewState` / `useDraftPersistence` / `commandDispatch` / `useKeyboardShortcuts`）、`threeScene.tsx` 1807→269（→`threeSceneEffect` + **七个阶段模块**）、Rust `lib.rs` 992→**168**（→`src/commands/` 五组）、`agent-core/schemas.ts` 1300→**180**（→`schemaReaders` / `actionRegistry` / `hashing` / `actionInputs` / `actionAudit`） |
+| 2. 拆分过大的编排和领域文件 | P1 | 🔶 **已开三十九批** | `operations.ts` 2817→**1651**（→`solidGeometry` / `deletion` / `primitiveKinds` / `graph` / `curveRotation` / `analysisRecompute` / `transforms`）、`PropertiesBar.tsx` 1069→298（→`inspectorFields` / `inspectorLabels` / `inspectorReadings` / `inspectorModel`）、`App.tsx` 2000→**809**（→`fileExports` / `documentIds` / `creationCommands` / `solidCommands` / `recordCommands` / `structureCommands` / `anchorRotationCommands` / `point3ToolCommands` / `previewCommands` / `selectionCommands` / `canvasStatusPrompt` / `draftingCommands` / `appViewState` / `useDraftPersistence` / `commandDispatch` / `useKeyboardShortcuts`）、`threeScene.tsx` 1807→269（→`threeSceneEffect` + **七个阶段模块**）、Rust `lib.rs` 992→**168**（→`src/commands/` 五组）、`agent-core/schemas.ts` 1300→**180**（→`schemaReaders` / `actionRegistry` / `hashing` / `actionInputs` / `actionAudit`） |
 | 3. 接入几何 Worker | P1 | ✅ **已完成并验收** | 宿主生命周期 + 如实降级；契约缺口全部填上 |
 | 4. 工作区级代码分包 | P2 | ✅ **已完成** | 入口单 chunk 2 066.63 → 1 629.80 kB（−21.1%） |
 | 5. 正式 CI 门禁 | P2 | ✅ **已完成** | 四个作业按成本分层 |
