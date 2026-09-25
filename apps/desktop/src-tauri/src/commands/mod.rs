@@ -13,3 +13,4 @@ pub mod proxy;
 pub mod secrets;
 pub mod conversations;
 pub mod repository;
+pub mod providers;
