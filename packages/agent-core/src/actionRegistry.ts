@@ -434,3 +434,6 @@ export const ACTIONS = {
     required: ["id", "expression"]
   }
 } as const satisfies Record<DraftActionId, ActionSpec>
+
+/** 登记表里的键就是**动作 id**。它跟着表走：表在哪个文件，这个类型就在哪个文件。 */
+export type ActionId = keyof typeof ACTIONS
