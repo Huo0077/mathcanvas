@@ -1,5 +1,5 @@
 import { type AnnotationSpec, type CircleRadiusRule, type ConstraintSpec, type Coordinate, type CurveRotation, type DerivedSolidResult, type DrawingSheetSpec, type DrawingViewSpec, type EngineeringAnnotation, type GeometryDocument, type GroupSpec, type LayerSpec, type Measurement3, type Point3Binding, type Point3Primitive, type PointBinding, type PrimitiveSpec, type TangentAnchor, type Vector3 } from "@draw/dsl"
-import { buildSolidTemplate, calculateMeasurement3, createBuilderContext, entityResolverFor, evaluateLineParameters, evaluateParameterExpressions, evaluatePlanarMeasurement, host3FromPrimitive, intersectCirclesDetailed, intersectConvexPolyhedra3, intersectFaceSets, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, mergeIntersectionSurfaces3, normalizeHostParameter, orderSectionPoints3, placedConic, quadric3FromPrimitive, sectionConvexPolyhedron, sectionPolyhedron3, sectionQuadric3, sectionSolid3, solidVolumeHost3, solveCircumsphere3, solveInsphere3, solveLineConstraints, triangleCenter2, triangleRadius2, type Conic3Kind, type CurvePiece3, type Host3, type IntersectionResult, type IntersectionSurfaceRegion, type PlanarMetric, type PlaceableConic, type SolidBoundary, type Sphere3, type TemplateSolidPrimitive, type WorldAxis3 } from "@draw/geometry-kernel"
+import { buildSolidTemplate, calculateMeasurement3, createBuilderContext, entityResolverFor, evaluateLineParameters, evaluateParameterExpressions, evaluatePlanarMeasurement, host3FromPrimitive, intersectCirclesDetailed, intersectFaceSets, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, mergeIntersectionSurfaces3, normalizeHostParameter, placedConic, quadric3FromPrimitive, sectionSolid3, solidVolumeHost3, solveCircumsphere3, solveInsphere3, solveLineConstraints, triangleCenter2, triangleRadius2, type Host3, type IntersectionResult, type IntersectionSurfaceRegion, type PlanarMetric, type PlaceableConic, type SolidBoundary, type Sphere3, type TemplateSolidPrimitive, type WorldAxis3 } from "@draw/geometry-kernel"
 
 export * from "./solidGeometry"
 
@@ -11,7 +11,7 @@ export * from "./solidGeometry"
  * 凡是用到 `templateTopology` / `polyhedronSectionTopology` 的地方都会报 `Cannot find name`。
  * （拆文件时踩过：`export *` 看着像"把整个模块搬过来"，其实只搬了对外的那一面。）
  */
-import { classifySectionPoints, movedSectionPlane, polyhedronSectionTopology, rotatedSectionPlane, solidSectionGeometry, templateTopology } from "./solidGeometry"
+import { movedSectionPlane, rotatedSectionPlane } from "./solidGeometry"
 
 // 绕定点旋转的喂料层在 `./curveRotation`（评审方案 2 拆出来的）。
 import { curveRotationPivotId, placementResolver } from "./curveRotation"
@@ -242,7 +242,6 @@ export interface OperationResult {
   error?: string
 }
 
-
 export function createPoint3(id: string, position: Vector3, binding: Point3Binding = { kind: "free" }): Point3Primitive {
   return { id, type: "point3", position: { ...position }, binding }
 }
@@ -261,149 +260,6 @@ export function createPolyhedron3(id: string, vertexIds: string[], edgeIds: stri
 
 export function patchPoint3(id: string, position: Vector3): Extract<DomainOperation, { op: "updatePrimitive" }> {
   return { op: "updatePrimitive", id, patch: { position3: { ...position } } }
-}
-
-/**
- * 解析截面边界：源是圆柱 / 圆锥时给出**精确**圆锥曲线片段环（写进 `section.exact`）。
- *
- * 其余来源（立方体 / 棱锥 / 点驱动多面体）返回 `undefined`：它们的边界本来就是多边形，精确的，
- * 多边形路径就是答案，不需要解析层。
- */
-function analyticSectionBoundary(source: PrimitiveSpec, plane: { normal: Vector3; constant: number }): { kind: Conic3Kind; loops: CurvePiece3[][] } | undefined {
-  const quadric = quadric3FromPrimitive(source)
-  if (!quadric) return undefined
-  return sectionQuadric3(quadric, plane) ?? undefined
-}
-
-/** 边界是弯曲的（圆 / 椭圆 / 抛物线 / 双曲线）才算真的精确；直线与点走多边形路径本来就是精确的。 */
-const curvedConicKinds = new Set<Conic3Kind>(["circle", "ellipse", "parabola", "hyperbola"])
-
-function attachExactBoundary(section: Extract<PrimitiveSpec, { type: "section" }>, exact: { kind: Conic3Kind; loops: CurvePiece3[][] } | undefined): Extract<PrimitiveSpec, { type: "section" }> {
-  if (exact) return { ...section, exact, status: curvedConicKinds.has(exact.kind) ? "exact" : section.status }
-  // 来源不再是圆柱 / 圆锥时要把旧字段摘掉，否则会留下一份和现几何对不上的解析边界。
-  const { exact: _stale, ...rest } = section
-  return rest
-}
-
-function recomputeSection(primitive: Extract<PrimitiveSpec, { type: "section" }>, source: PrimitiveSpec, primitiveMap: Map<string, PrimitiveSpec>): Extract<PrimitiveSpec, { type: "section" }> {
-  const exact = analyticSectionBoundary(source, primitive.plane)
-  const finish = (section: Extract<PrimitiveSpec, { type: "section" }>) => attachExactBoundary(section, exact)
-  const polyhedron = source.type === "polyhedron3" ? source : templateTopology(source.id, primitiveMap)
-  const topology = polyhedron ? polyhedronSectionTopology(polyhedron, primitiveMap) : null
-  if (topology) {
-    const result = sectionPolyhedron3(topology.vertices, topology.faces, primitive.plane)
-    if (result.status === "none") return finish({ ...primitive, points: [], loops: [], classification: "none", status: "undefined", visible: false, diagnostic: result.explanation })
-    if (result.status === "insufficient-data") return finish({ ...primitive, points: [], loops: [], classification: "insufficient-data", status: "failed", visible: false, diagnostic: result.explanation })
-    return finish({ ...primitive, points: result.points, loops: result.loops, classification: result.status, status: "approximate", visible: result.status !== "point", diagnostic: result.status === "polygon" ? undefined : result.explanation })
-  }
-  if (!["cube", "pyramid", "cylinder", "cone"].includes(source.type)) return finish({ ...primitive, points: [], loops: [], classification: "insufficient-data", status: "failed", visible: false, diagnostic: "截面来源不是可剖切的实体。" })
-  const geometry = solidSectionGeometry(source as Extract<PrimitiveSpec, { type: "cube" | "pyramid" | "cylinder" | "cone" }>)
-  const points = orderSectionPoints3(sectionConvexPolyhedron(geometry.vertices, geometry.edges, primitive.plane), primitive.plane)
-  return finish({ ...primitive, points, loops: points.length >= 3 ? [points] : [], classification: classifySectionPoints(points), status: points.length > 0 ? "approximate" : "undefined", visible: points.length > 0, diagnostic: points.length >= 3 ? undefined : "剖切平面与模板实体相切或沿棱相交。" })
-}
-
-/**
- * 交线来源的面环。
- * - `polyhedron3` / 四类模板：取物化拓扑的顶点+面环；
- * - `face3`：它自己就是一个面环；
- * - `plane3`：平面没有边界，不能作为"有界交线"的来源（返回 null，由调用方给诊断）。
- */
-export function intersectionFaceRings(source: PrimitiveSpec, primitiveMap: Map<string, PrimitiveSpec>): Vector3[][] | null {
-  if (source.type === "face3") {
-    const points: Vector3[] = []
-    for (const pointId of source.pointIds) {
-      const point = primitiveMap.get(pointId)
-      if (point?.type !== "point3") return null
-      points.push({ ...point.position })
-    }
-    return points.length >= 3 ? [points] : null
-  }
-  const polyhedron = source.type === "polyhedron3" ? source : templateTopology(source.id, primitiveMap)
-  if (!polyhedron) return null
-  const topology = polyhedronSectionTopology(polyhedron, primitiveMap)
-  if (!topology) return null
-  return topology.faces.map((face) => face.map((index) => topology.vertices[index]))
-}
-
-/**
- * 交线随来源重算：两个来源的面环两两求交，去重合并后写回 `segments`。
- * 与截面的区别：截面是"一个平面切实体"，交线是"两个对象的公共边界"。
- */
-function recomputeIntersectionLine(
-  primitive: Extract<PrimitiveSpec, { type: "intersectionLine" }>,
-  primitiveMap: Map<string, PrimitiveSpec>
-): Extract<PrimitiveSpec, { type: "intersectionLine" }> {
-  const sources = primitive.sourceIds.map((id) => primitiveMap.get(id))
-  if (sources.some((source) => !source)) {
-    return { ...primitive, segments: [], classification: "insufficient-data", status: "insufficient-data", visible: false, diagnostic: "交线来源对象不存在。" }
-  }
-  const rings = sources.map((source) => intersectionFaceRings(source!, primitiveMap))
-  if (rings.some((entry) => !entry)) {
-    return { ...primitive, segments: [], classification: "insufficient-data", status: "insufficient-data", visible: false, diagnostic: "交线来源缺少可用的面环（平面没有边界，模板需要已物化的拓扑）。" }
-  }
-  const result = intersectFaceSets(rings[0]!, rings[1]!)
-  if (result.classification === "insufficient-data") {
-    return { ...primitive, segments: [], classification: "insufficient-data", status: "insufficient-data", visible: false, diagnostic: result.explanation }
-  }
-  if (result.classification === "none") {
-    return { ...primitive, segments: [], classification: "none", status: "degenerate", visible: false, diagnostic: [result.explanation, ...result.diagnostics].join(" ") }
-  }
-  return {
-    ...primitive,
-    segments: result.segments,
-    classification: result.classification,
-    status: "valid",
-    visible: true,
-    diagnostic: result.diagnostics.length > 0 ? result.diagnostics.join(" ") : undefined
-  }
-}
-
-/**
- * 交面（布尔交集）随来源重算：两个实体的公共区域整体表面。
- *
- * 与 `recomputeIntersectionLine` 的区别：交线只写回"公共边界"的线段，交面写回**面集合**与体积/表面积。
- * 形态不完整时（不重叠、只贴面/贴线/贴点、来源不是实体、非凸被内核拒绝）一律给诊断而不是硬画，
- * 其中"贴面"（`flat`）仍有面积，值得画出来，所以保持可见。
- */
-function recomputeIntersectionSolid(
-  primitive: Extract<PrimitiveSpec, { type: "intersectionSolid" }>,
-  primitiveMap: Map<string, PrimitiveSpec>
-): Extract<PrimitiveSpec, { type: "intersectionSolid" }> {
-  const outcome = resolveSolidIntersection(primitive.sourceIds.map((id) => primitiveMap.get(id)), primitiveMap)
-  const empty = { vertices: [], faces: [], volume: 0, area: 0 }
-  if (!outcome.ok) return { ...primitive, ...empty, status: "insufficient-data", visible: false, diagnostic: explainOutcome(outcome) }
-  const { result } = outcome
-  if (result.status === "none") return { ...primitive, ...empty, status: "none", visible: false, diagnostic: result.explanation }
-  // 贴面（flat）有面积、看得见；贴线 / 贴点只是一条线或一个点，交给交线图元更合适。
-  const visible = result.status === "polyhedron" || result.status === "flat"
-  return {
-    ...primitive,
-    vertices: result.vertices,
-    faces: result.faces,
-    volume: result.volume,
-    area: result.area,
-    status: result.status,
-    visible,
-    diagnostic: result.diagnostics.length > 0 ? [result.explanation, ...result.diagnostics].join(" ") : undefined
-  }
-}
-
-/** 两个来源的布尔交集：来源缺失 / 不是实体 / 内核拒绝非凸时给出诊断，而不是硬算。 */
-type SolidIntersectionOutcome =
-  | { ok: true; result: ReturnType<typeof intersectConvexPolyhedra3> }
-  | { ok: false; explanation: string; diagnostics: string[] }
-
-function resolveSolidIntersection(sources: (PrimitiveSpec | undefined)[], primitiveMap: Map<string, PrimitiveSpec>): SolidIntersectionOutcome {
-  if (sources.some((source) => !source)) return { ok: false, explanation: "来源对象不存在。", diagnostics: [] }
-  const topologies = sources.map((source) => solidTopology3(source!, primitiveMap))
-  if (topologies.some((topology) => !topology)) return { ok: false, explanation: "来源必须是实体（立方体 / 棱锥 / 圆柱 / 圆锥 / 多面体）：面与平面没有体积。", diagnostics: [] }
-  const result = intersectConvexPolyhedra3(topologies[0]!, topologies[1]!)
-  if (result.status === "insufficient-data") return { ok: false, explanation: result.explanation, diagnostics: result.diagnostics }
-  return { ok: true, result }
-}
-
-function explainOutcome(outcome: Extract<SolidIntersectionOutcome, { ok: false }>): string {
-  return [outcome.explanation, ...outcome.diagnostics].filter(Boolean).join(" ")
 }
 
 /**
@@ -570,11 +426,6 @@ function dotBetween(first: Vector3, second: Vector3): number {
 /** 平面的 Newell 法向与面积由内核随交集一起给出（`faceNormals` / `faceAreas`），这里不再复刻。 */
 
 /** 实体的索引化拓扑（顶点数组 + 面环下标）；非实体或拓扑未物化时返回 null。 */
-export function solidTopology3(source: PrimitiveSpec, primitiveMap: Map<string, PrimitiveSpec>): { vertices: Vector3[]; faces: number[][] } | null {
-  const polyhedron = source.type === "polyhedron3" ? source : templateTopology(source.id, primitiveMap)
-  if (!polyhedron) return null
-  return polyhedronSectionTopology(polyhedron, primitiveMap)
-}
 
 /**
  * 文档的**派生立体读数**（Fix round 2 / I5）。
@@ -1229,6 +1080,10 @@ export { parameterWindow, pathConstraint } from "./analysisRecompute"
 // 三维变换与可编辑性判据在 `./transforms`（评审方案 2 拆出来的）。
 import { EDITABLE_GEOMETRY_TYPES, isFreeDraggable3, isRotatable3, point3Index, primitiveBounds, prismMatchesVertices, realignPrismDescriptor, rotatePrimitive3, shiftedPoint, templateTopologyIds, translateFunction, translatePrimitive, translatePrimitive3 } from "./transforms"
 export { EDITABLE_GEOMETRY_TYPES, isFreeDraggable3, isRotatable3, managedPointIds, templateTopologyIds } from "./transforms"
+
+// 截面与交的重算在 `./sectionRecompute`（评审方案 2 拆出来的）。
+import { explainOutcome, intersectionFaceRings, recomputeIntersectionLine, recomputeIntersectionSolid, recomputeSection, resolveSolidIntersection, solidTopology3 } from "./sectionRecompute"
+export { intersectionFaceRings, solidTopology3 } from "./sectionRecompute"
 
 export function applyOperation(document: GeometryDocument, operation: DomainOperation): OperationResult {  const next = structuredClone(document) as GeometryDocument
   let changedIds: string[] = []
