@@ -31,7 +31,7 @@ pub mod secrets;
 /// IPC 命令的分组（按"它碰的是哪一份托管状态"分文件）：代理、密钥，其余仍在根模块。
 pub mod commands;
 
-use repository::projects::{CommitReceipt, CommitRequest, DocumentSnapshot, ProjectRepository};
+use repository::projects::ProjectRepository;
 use repository::provider_profiles::{ProviderHealth, ProviderProfile, ProviderProfileStore, StoreError};
 use repository::BlobStore;
 use commands::proxy::ProxyState;
@@ -48,7 +48,7 @@ use tauri::Manager;
  * SQLite 调用，快且不阻塞在 IO 上（本地文件）。
  */
 pub struct RepositoryState {
-    repository: Mutex<ProjectRepository>,
+    pub(crate) repository: Mutex<ProjectRepository>,
 }
 
 /**
@@ -62,7 +62,7 @@ pub struct RepositoryState {
  * 每次操作各自开文件 —— 而"用不用锁"的判据是"有没有跨调用的可变状态"，这里没有。
  */
 pub struct BlobState {
-    blobs: BlobStore,
+    pub(crate) blobs: BlobStore,
 }
 
 /// **用某个 profile 发一次模型请求**（Task 1.4 Step 3/4 + Task 1.5 Step 3/5）。
@@ -342,471 +342,6 @@ fn get_runtime_info(app: tauri::AppHandle) -> Result<runtime::DesktopRuntimeInfo
     Ok(runtime::build_runtime_info(&version, &data_root, secret_store_ready, repository_ready, transport_ready))
 }
 
-// ---------------------------------------------------------------- 项目仓储（Task 1.6）
-
-/// **读一份文档的 head**。找不到时**如实报错**，不回一份空文档 ——
-/// 空文档会让前端以为"这份文档是空的"，而不是"它还不存在"。
-#[tauri::command]
-fn read_document_head(app: tauri::AppHandle, project_id: String, document_id: String) -> Result<DocumentSnapshot, String> {
-    let state = app.try_state::<RepositoryState>().ok_or("the project repository is not initialised")?;
-    let repository = state.repository.lock().map_err(|_| "the project repository is poisoned".to_string())?;
-    repository.read_head(&project_id, &document_id).map_err(|error| error.to_string())
-}
-
-/// **读这个项目里最新的那一份文档 head**；项目里一份都没有时回 `None`。
-///
-/// 恢复路径的兜底（外部审查 X1）：前端按 `document_id` 精确探测落空时，用它区分
-/// "本地没记住 id"（仓储里有内容 → 读回来）与"真正的首次启动"（项目里空无一物 → 建一份）。
-/// 没有它，记忆一丢就把已存的文档当成不存在。
-#[tauri::command]
-fn read_latest_document_head(app: tauri::AppHandle, project_id: String) -> Result<Option<DocumentSnapshot>, String> {
-    let state = app.try_state::<RepositoryState>().ok_or("the project repository is not initialised")?;
-    let repository = state.repository.lock().map_err(|_| "the project repository is poisoned".to_string())?;
-    repository.read_latest_head(&project_id).map_err(|error| error.to_string())
-}
-
-/// **建一份文档**（首次写入）。
-///
-/// 内容哈希**由前端算好传进来**：规则在 `scene-graph` 的 `contentFingerprint` 里
-///（要剔掉 `revision` / `updatedAt`、把 `visible: true` 视同缺省）。
-/// 在 Rust 里再实现一遍必然分叉，而分叉的后果是**同一份文档有两个哈希** ——
-/// CAS 会永远失败，且看起来像"并发冲突"。
-#[tauri::command]
-fn create_document(app: tauri::AppHandle, project_id: String, document_id: String, epoch: String, content: String, content_hash: String) -> Result<DocumentSnapshot, String> {
-    let state = app.try_state::<RepositoryState>().ok_or("the project repository is not initialised")?;
-    let mut repository = state.repository.lock().map_err(|_| "the project repository is poisoned".to_string())?;
-    repository.create(&project_id, &document_id, &epoch, &content, &content_hash).map_err(|error| error.to_string())
-}
-
-/// **提交一次改动**（CAS + 幂等 + 原子写三张表）。
-///
-/// `idempotency_key` 由调用方给：这样"网络重试"与"用户点了两次"都会落到同一条记录上，
-/// 而不会推进两次 generation。
-#[tauri::command]
-#[allow(clippy::too_many_arguments)]
-fn commit_document(
-    app: tauri::AppHandle,
-    idempotency_key: String,
-    project_id: String,
-    document_id: String,
-    expected_epoch: String,
-    expected_generation: i64,
-    expected_content_hash: String,
-    content: String,
-    content_hash: String,
-    actions: usize
-) -> Result<CommitReceipt, String> {
-    let state = app.try_state::<RepositoryState>().ok_or("the project repository is not initialised")?;
-    let mut repository = state.repository.lock().map_err(|_| "the project repository is poisoned".to_string())?;
-    repository
-        .commit(CommitRequest {
-            idempotency_key,
-            project_id,
-            document_id,
-            expected_epoch,
-            expected_generation,
-            expected_content_hash,
-            content,
-            content_hash,
-            actions
-        })
-        .map_err(|error| error.to_string())
-}
-
-/// **按幂等键查提交状态**（"DB 已提交、响应丢了"那条路径）。
-#[tauri::command]
-fn lookup_commit(app: tauri::AppHandle, idempotency_key: String) -> Result<Option<CommitReceipt>, String> {
-    let state = app.try_state::<RepositoryState>().ok_or("the project repository is not initialised")?;
-    let repository = state.repository.lock().map_err(|_| "the project repository is poisoned".to_string())?;
-    repository.lookup_commit(&idempotency_key).map_err(|error| error.to_string())
-}
-
-/// 读历史里某一版的内容（撤销 / 重做靠它）。
-#[tauri::command]
-fn read_document_snapshot(app: tauri::AppHandle, project_id: String, document_id: String, generation: i64) -> Result<DocumentSnapshot, String> {
-    let state = app.try_state::<RepositoryState>().ok_or("the project repository is not initialised")?;
-    let repository = state.repository.lock().map_err(|_| "the project repository is poisoned".to_string())?;
-    repository.read_snapshot(&project_id, &document_id, generation).map_err(|error| error.to_string())
-}
-
-/// 历史里有多少版（含 head）。
-#[tauri::command]
-fn document_history_length(app: tauri::AppHandle, project_id: String, document_id: String) -> Result<i64, String> {
-    let state = app.try_state::<RepositoryState>().ok_or("the project repository is not initialised")?;
-    let repository = state.repository.lock().map_err(|_| "the project repository is poisoned".to_string())?;
-    repository.history_length(&project_id, &document_id).map_err(|error| error.to_string())
-}
-
-/// **换一世**：导入 / 打开文件之后，把 head 的 epoch 换掉并写入新内容。
-///
-/// 为什么这是一个**独立**的原语，而不是"删掉再建"或"当成一次普通提交"：
-/// - 删掉再建会**丢掉历史** —— 而"打开文件之后还能撤销回上一次"是这条路径的应有之义；
-/// - 当成普通提交则该不了 epoch，于是**在途的旧保存仍然能写进来**
-///   （它携带的期望与新 head 匹配）—— 用户刚打开的文档会被上一次编辑覆盖。
-///
-/// epoch 一变，所有在途请求的 CAS 立刻失败。这正是它存在的意义。
-#[tauri::command]
-fn replace_document_epoch(app: tauri::AppHandle, project_id: String, document_id: String, epoch: String, content: String, content_hash: String) -> Result<DocumentSnapshot, String> {
-    let state = app.try_state::<RepositoryState>().ok_or("the project repository is not initialised")?;
-    let mut repository = state.repository.lock().map_err(|_| "the project repository is poisoned".to_string())?;
-    repository.replace_epoch(&project_id, &document_id, &epoch, &content, &content_hash).map_err(|error| error.to_string())
-}
-
-// ---------------------------------------------------------------- 附件与 .mcanvas（Task 1.6 Step 4/5）
-
-/**
- * **存一份附件**（两阶段写的第一阶段 + 引用）。
- *
- * ## 两阶段的顺序**必须由这一条命令保证**，不能交给调用方
- *
- * 计划原文："Hash/size-check and atomically rename the blob first, then insert the DB reference."
- * 所以这里的顺序写死成：①按声明的哈希校验并原子落盘（`blobs.write`）→
- * ②记附件元数据 → ③记"这一版快照引用了它"。
- *
- * 崩溃可能落在任何两步之间，而两阶段的取舍是**故意的**：
- * - 落在 ① 与 ② 之间 → 磁盘上多一个没人引用的 blob（**孤儿**，GC 会收掉它）；
- * - 反过来先写库 → 库里说有这么个附件、文件却不在，用户打开文档会看到"附件丢失"。
- *
- * 前者只是浪费空间，后者是用户可见的损坏。
- */
-#[tauri::command]
-#[allow(clippy::too_many_arguments)]
-fn put_attachment(
-    app: tauri::AppHandle,
-    project_id: String,
-    document_id: String,
-    generation: i64,
-    content_hash: String,
-    media_type: String,
-    base64_bytes: String
-) -> Result<serde_json::Value, String> {
-    let bytes = decode_base64(&base64_bytes).ok_or("the attachment is not valid base64")?;
-    let blobs = app.try_state::<BlobState>().ok_or("the attachment store is not initialised")?;
-    // **① 落盘**（哈希门在里面：对不上就一字节都不写）。
-    let staged = blobs.blobs.write(&bytes, &content_hash).map_err(|error| error.to_string())?;
-
-    // **② + ③ 记引用**。
-    let state = app.try_state::<RepositoryState>().ok_or("the project repository is not initialised")?;
-    let mut repository = state.repository.lock().map_err(|_| "the project repository is poisoned".to_string())?;
-    repository
-        .record_attachment(&staged.content_hash, staged.byte_size as i64, &media_type)
-        .map_err(|error| error.to_string())?;
-    repository
-        .reference_attachments(&project_id, &document_id, generation, std::slice::from_ref(&staged.content_hash))
-        .map_err(|error| error.to_string())?;
-
-    Ok(serde_json::json!({ "contentHash": staged.content_hash, "byteSize": staged.byte_size }))
-}
-
-/// **读一份附件**（base64）。找不到时回 `null` —— 与"出错了"分开。
-#[tauri::command]
-fn read_attachment(app: tauri::AppHandle, content_hash: String) -> Result<Option<String>, String> {
-    let blobs = app.try_state::<BlobState>().ok_or("the attachment store is not initialised")?;
-    let bytes = blobs.blobs.read(&content_hash).map_err(|error| error.to_string())?;
-    Ok(bytes.map(|bytes| encode_base64(&bytes)))
-}
-
-/**
- * **回收孤儿附件**（两阶段的清理那一半）。
- *
- * 判据只有一个：**数据库里没有被任何快照引用**。宽限期由 `blobs::GC_GRACE_MS` 定，
- * 因为正常操作里"文件已写、引用还没写"的窗口是存在的（毫秒级），
- * 而一次并发的 GC 落在那个窗口里就会删掉一份**正在被引用**的附件。
- */
-#[tauri::command]
-fn collect_attachments(app: tauri::AppHandle) -> Result<Vec<String>, String> {
-    let referenced = {
-        let state = app.try_state::<RepositoryState>().ok_or("the project repository is not initialised")?;
-        let repository = state.repository.lock().map_err(|_| "the project repository is poisoned".to_string())?;
-        repository.referenced_blobs().map_err(|error| error.to_string())?
-    };
-    let blobs = app.try_state::<BlobState>().ok_or("the attachment store is not initialised")?;
-    blobs.blobs.collect_garbage(&referenced, repository::blobs::GC_GRACE_MS).map_err(|error| error.to_string())
-}
-
-/// **导出 `.mcanvas`**，写到给定的路径。
-///
-/// 文档由调用方给（`documentId` / `epoch` / `content`），附件按哈希列出。
-/// **导出是只读的**：它不改仓库里的任何东西 —— 于是"导出失败"永远不会损坏文档。
-#[tauri::command]
-fn export_package(app: tauri::AppHandle, project_id: String, documents: Vec<serde_json::Value>, attachments: Vec<String>, destination: String) -> Result<serde_json::Value, String> {
-    let exported: Vec<repository::package::ExportDocument> = documents
-        .iter()
-        .map(|document| {
-            Ok(repository::package::ExportDocument {
-                document_id: document["documentId"].as_str().ok_or("a document needs a documentId")?.to_string(),
-                epoch: document["epoch"].as_str().unwrap_or_default().to_string(),
-                generation: document["generation"].as_i64().unwrap_or(0),
-                content: document["content"].as_str().ok_or("a document needs its content")?.to_string()
-            })
-        })
-        .collect::<Result<Vec<_>, String>>()?;
-    let media: Vec<(String, String)> = attachments.iter().map(|hash| (hash.clone(), "application/octet-stream".to_string())).collect();
-
-    let blobs = app.try_state::<BlobState>().ok_or("the attachment store is not initialised")?;
-    let (bytes, report) = repository::package::export(&project_id, &exported, &media, &[], &blobs.blobs, repository::provider_profiles::timestamp_ms(), None)
-        .map_err(|error| error.to_string())?;
-    repository::package::write_to_file(&destination, &bytes).map_err(|error| error.to_string())?;
-
-    Ok(serde_json::json!({
-        "destination": destination,
-        "byteSize": bytes.len(),
-        "documentCount": report.document_count,
-        "attachmentCount": report.attachment_count
-    }))
-}
-
-/**
- * **导入 `.mcanvas`**。
- *
- * ## 顺序：先把整包验完，再落下任何东西
- *
- * `package::import` 自己保证"验到一半失败**不会**留下半份写进仓库的文档"，
- * 而**落库那一半也必须是一个事务**（外部审查 D3）：逐份写会在一份坏文档上留下
- * "前 N−1 份已经进库"的部分导入，那与上面那句契约直接矛盾。
- * 现在整次导入走 `ProjectRepository::import_documents` 一个事务。
- *
- * "换一世"用的是 epoch 替换 —— 于是**在途的旧保存会自动 CAS 失败**
- *（用户刚打开的文档不会被上一次编辑覆盖）。
- *
- * ## 附件也要一并登记（外部审查 D1）
- *
- * 原先这条路径只写文档、**从不登记附件引用**，于是紧接着的孤儿回收（60 秒宽限）
- * 会把**刚导入的字节删掉**：导入显示成功、附件却没了。归属只能取保守的过近似
- *（包里的附件是项目级平铺列表，不记属于哪份文档），细节见 `import_documents`。
- */
-#[tauri::command]
-fn import_package(app: tauri::AppHandle, path: String, project_id: String, epoch: String) -> Result<serde_json::Value, String> {
-    let bytes = repository::package::read_from_file(&path).map_err(|error| error.to_string())?;
-    let blobs = app.try_state::<BlobState>().ok_or("the attachment store is not initialised")?;
-    let outcome = repository::package::import(&bytes, &blobs.blobs).map_err(|error| error.to_string())?;
-
-    let state = app.try_state::<RepositoryState>().ok_or("the project repository is not initialised")?;
-    let mut repository = state.repository.lock().map_err(|_| "the project repository is poisoned".to_string())?;
-
-    let documents: Vec<repository::projects::ImportDocument> = outcome
-        .documents
-        .iter()
-        .map(|(document_id, content)| repository::projects::ImportDocument { document_id: document_id.clone(), content: content.clone() })
-        .collect();
-    // `manifest.attachments` 里的每一份都已经在上一步验过哈希并**落盘成功**
-    //（`package::import` 先全验后全写），所以这里直接按清单登记即可。
-    let attachments: Vec<repository::projects::ImportAttachment> = outcome
-        .manifest
-        .attachments
-        .iter()
-        .map(|attachment| repository::projects::ImportAttachment { content_hash: attachment.content_hash.clone(), byte_size: attachment.byte_size as i64, media_type: attachment.media_type.clone() })
-        .collect();
-
-    let written = repository
-        .import_documents(&project_id, &epoch, &documents, &attachments)
-        .map_err(|error| error.to_string())?;
-
-    Ok(serde_json::json!({
-        "projectId": outcome.manifest.project_id,
-        "schemaVersion": outcome.manifest.schema_version,
-        "documents": written.iter().map(|document| document.document_id.clone()).collect::<Vec<String>>(),
-        "attachmentCount": outcome.stored_attachments.len(),
-        "missingSources": outcome.missing_sources
-    }))
-}
-
-/// **这一版快照引用了哪些附件**（列举那一半）。
-///
-/// 引用记在**快照**上而不是 head 上（撤销回旧版本时那一版的图必须还在），所以这里要
-/// `generation`：问的是"这一版引用了什么"，而不是"这份文档一共有什么"。
-/// 没有这条命令时，界面只能列出**本次会话里附加过的那几个** —— 重开应用就数不出来了。
-#[tauri::command]
-fn read_document_attachments(app: tauri::AppHandle, project_id: String, document_id: String, generation: i64) -> Result<Vec<String>, String> {
-    let state = app.try_state::<RepositoryState>().ok_or("the project repository is not initialised")?;
-    let repository = state.repository.lock().map_err(|_| "the project repository is poisoned".to_string())?;
-    repository.attachments_of(&project_id, &document_id, generation).map_err(|error| error.to_string())
-}
-
-// ---------------------------------------------------------------- 运行账本（Task 2.6）
-
-/// **追加一条运行事件**。
-///
-/// 收**原始 JSON** 再自己转换，而不是让 Tauri 直接反序列化成 `RunEventInput`：
-/// 后者在遇到未知字段时的行为取决于类型定义，而这里要的是**明确的拒绝** ——
-/// `RunEventInput` 带 `deny_unknown_fields`，所以一个带着 `reasoning` 或 `imageBytes`
-/// 的事件会在**入口**被拒（计划 Task 2.6："never stores raw model reasoning or image bytes"）。
-/// 静默削掉那个字段比拒绝更危险：调用方会以为它存进去了。
-///
-/// 返回"这次真的写了一行吗"：同一个 `event_id` 第二次返回 `false`（幂等，重放不是错误）。
-#[tauri::command]
-fn append_run_event(app: tauri::AppHandle, event: serde_json::Value) -> Result<bool, String> {
-    let parsed: repository::run_events::RunEventInput = serde_json::from_value(event).map_err(|error| format!("the run event was refused: {error}"))?;
-    let state = app.try_state::<RepositoryState>().ok_or("the project repository is not initialised")?;
-    let repository = state.repository.lock().map_err(|_| "the project repository is poisoned".to_string())?;
-    repository.append_run_event(&parsed).map_err(|error| error.to_string())
-}
-
-/// **读一条运行的事件**（有界、按写入顺序，供界面的开发者详细视图）。
-#[tauri::command]
-fn read_run_events(app: tauri::AppHandle, run_id: String) -> Result<Vec<repository::run_events::RunEventRecord>, String> {
-    let state = app.try_state::<RepositoryState>().ok_or("the project repository is not initialised")?;
-    let repository = state.repository.lock().map_err(|_| "the project repository is poisoned".to_string())?;
-    repository.run_events(&run_id).map_err(|error| error.to_string())
-}
-
-/// 账本里一共多少条（自述与诊断用）。
-#[tauri::command]
-fn run_event_count(app: tauri::AppHandle) -> Result<i64, String> {
-    let state = app.try_state::<RepositoryState>().ok_or("the project repository is not initialised")?;
-    let repository = state.repository.lock().map_err(|_| "the project repository is poisoned".to_string())?;
-    repository.run_event_count().map_err(|error| error.to_string())
-}
-
-// ---------------------------------------------------------------- 多会话（Task 1 / Task 2）
-//
-// 八条具名命令，逐条对应前端 `conversationClient.ts` 的一个方法。
-//
-// ## 校验在**命令这一层**先跑一遍，然后仓库自己再跑一遍
-//
-// 计划 Task 2 原文："Add named Rust commands that validate IDs, workspace values,
-// message size, and fact status **before repository calls**." 所以每条命令的第一件事
-// 就是调用 `conversations::validate_*` —— 于是一个不合法的请求**不会**先被拿去开事务、
-// 也不会在"库没打开"时被报成一个存储错误。仓库里那一遍是第二道（任何绕过命令的写入
-// 路径也要被挡住），判据只有一份（那些函数），所以两道防线不会分叉。
-//
-// ## 工作区与事实状态由**类型**把守
-//
-// `Workspace` / `FactStatus` 是带 serde 枚举的：`"calculus"` 或 `"maybe"` 在
-// **反序列化**时就被拒（带着"expected one of …"的清单），连函数体都进不来。
-// 把它们写成 `String` 再手写一遍解析，只会多一份会忘记更新的判据。
-//
-// ## 错误一律是 `String`
-//
-// 与文档 / 附件那几条命令同一口径：前端要的是**能读懂的一句话**（"这条会话的摘要是
-// 第 3 版，不是第 2 版"），而不是重新从错误码里猜。分类靠命令本身（哪条命令失败）
-// 与消息里的措辞。
-
-/// **建一条会话**（绑定一个项目 / 文档 / 工作区）。
-#[tauri::command]
-fn create_conversation(app: tauri::AppHandle, conversation: repository::conversations::NewConversation) -> Result<repository::conversations::ConversationRecord, String> {
-    repository::conversations::validate_new_conversation(&conversation).map_err(|error| error.to_string())?;
-    let state = app.try_state::<RepositoryState>().ok_or("the project repository is not initialised")?;
-    let mut repository = state.repository.lock().map_err(|_| "the project repository is poisoned".to_string())?;
-    repository.create_conversation(&conversation).map_err(|error| error.to_string())
-}
-
-/// **列出这个绑定下还没归档的会话**（最近改动的在前）。
-#[tauri::command]
-fn list_conversations(app: tauri::AppHandle, binding: repository::conversations::ConversationBinding) -> Result<Vec<repository::conversations::ConversationRecord>, String> {
-    repository::conversations::validate_binding(&binding).map_err(|error| error.to_string())?;
-    let state = app.try_state::<RepositoryState>().ok_or("the project repository is not initialised")?;
-    let repository = state.repository.lock().map_err(|_| "the project repository is poisoned".to_string())?;
-    repository.list_conversations(&binding).map_err(|error| error.to_string())
-}
-
-/// **读一条会话的全部内容**（记录 + 有界的一批消息与事实）—— 切回一条会话只要一次往返。
-#[tauri::command]
-fn read_conversation(app: tauri::AppHandle, conversation_id: String) -> Result<repository::conversations::ConversationDetail, String> {
-    repository::conversations::validate_conversation_id(&conversation_id).map_err(|error| error.to_string())?;
-    let state = app.try_state::<RepositoryState>().ok_or("the project repository is not initialised")?;
-    let repository = state.repository.lock().map_err(|_| "the project repository is poisoned".to_string())?;
-    repository.read_conversation(&conversation_id).map_err(|error| error.to_string())
-}
-
-/// **追加一条消息**。同一个 `id` 第二次回 `false`（幂等，**不是错误**）。
-///
-/// 收**结构化**的消息而不是原始 JSON：`ConversationMessageInput` 带
-/// `deny_unknown_fields`，所以一个带着 `reasoning` / `candidateDocument` / `imageBytes`
-/// 的消息会在**入口**被拒（计划的不变量："不持久化 hidden chain-of-thought、密钥、
-/// 候选文档全文与图像字节"）。静默削掉那个字段比拒绝更危险：调用方会以为它存进去了。
-#[tauri::command]
-fn append_conversation_message(app: tauri::AppHandle, message: repository::conversations::ConversationMessageInput) -> Result<bool, String> {
-    repository::conversations::validate_message_input(&message).map_err(|error| error.to_string())?;
-    let state = app.try_state::<RepositoryState>().ok_or("the project repository is not initialised")?;
-    let mut repository = state.repository.lock().map_err(|_| "the project repository is poisoned".to_string())?;
-    repository.append_conversation_message(&message).map_err(|error| error.to_string())
-}
-
-/// **写一份新的摘要**（版本号 +1）。`expected_version` 是条件更新：按旧摘要压出来的
-/// 新摘要不能盖掉别人刚写的那一份。
-#[tauri::command]
-fn update_conversation_summary(app: tauri::AppHandle, conversation_id: String, summary: String, expected_version: Option<i64>) -> Result<repository::conversations::ConversationRecord, String> {
-    repository::conversations::validate_conversation_id(&conversation_id).map_err(|error| error.to_string())?;
-    repository::conversations::validate_summary(&summary).map_err(|error| error.to_string())?;
-    let state = app.try_state::<RepositoryState>().ok_or("the project repository is not initialised")?;
-    let mut repository = state.repository.lock().map_err(|_| "the project repository is poisoned".to_string())?;
-    repository.update_conversation_summary(&conversation_id, &summary, expected_version).map_err(|error| error.to_string())
-}
-
-/// **写一条事实**（按 `(conversationId, key)` upsert）。
-///
-/// 证据（`sourceMessageId`）必须属于**同一条会话**，仓库会在写之前查一次：
-/// 跨会话的引用是把 A 的结论写进 B 的直通车，而那正是"会话之间不串事实"要挡的。
-#[tauri::command]
-fn update_conversation_fact(app: tauri::AppHandle, fact: repository::conversations::ConversationFactInput) -> Result<repository::conversations::ConversationFactRecord, String> {
-    repository::conversations::validate_fact_input(&fact).map_err(|error| error.to_string())?;
-    let state = app.try_state::<RepositoryState>().ok_or("the project repository is not initialised")?;
-    let mut repository = state.repository.lock().map_err(|_| "the project repository is poisoned".to_string())?;
-    repository.upsert_conversation_fact(&fact).map_err(|error| error.to_string())
-}
-
-/// **归档一条会话**（从列表里消失，记录与历史都还在）。重复归档不是错误。
-#[tauri::command]
-fn archive_conversation(app: tauri::AppHandle, conversation_id: String) -> Result<repository::conversations::ConversationRecord, String> {
-    repository::conversations::validate_conversation_id(&conversation_id).map_err(|error| error.to_string())?;
-    let state = app.try_state::<RepositoryState>().ok_or("the project repository is not initialised")?;
-    let mut repository = state.repository.lock().map_err(|_| "the project repository is poisoned".to_string())?;
-    repository.archive_conversation(&conversation_id).map_err(|error| error.to_string())
-}
-
-/// **删掉一条会话**（连同它的消息与事实）。
-///
-/// 回"这次真的删掉了吗"：重复删**不是错误**，但它如实回 `false`。
-#[tauri::command]
-fn delete_conversation(app: tauri::AppHandle, conversation_id: String) -> Result<bool, String> {
-    repository::conversations::validate_conversation_id(&conversation_id).map_err(|error| error.to_string())?;
-    let state = app.try_state::<RepositoryState>().ok_or("the project repository is not initialised")?;
-    let mut repository = state.repository.lock().map_err(|_| "the project repository is poisoned".to_string())?;
-    repository.delete_conversation(&conversation_id).map_err(|error| error.to_string())
-}
-
-/// 把 base64 解成字节。**不用 crate**：这里只有解码与编码两个方向，而它们的形状是固定的。
-fn decode_base64(text: &str) -> Option<Vec<u8>> {
-    const TABLE: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = Vec::with_capacity(text.len() / 4 * 3);
-    let mut buffer = 0u32;
-    let mut bits = 0u32;
-    for byte in text.bytes() {
-        if byte == b'\n' || byte == b'\r' || byte == b'=' {
-            continue;
-        }
-        let value = TABLE.find(byte as char)? as u32;
-        buffer = (buffer << 6) | value;
-        bits += 6;
-        if bits >= 8 {
-            bits -= 8;
-            out.push(((buffer >> bits) & 0xff) as u8);
-        }
-    }
-    Some(out)
-}
-
-/// 把字节编成 base64。
-fn encode_base64(bytes: &[u8]) -> String {
-    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
-    for chunk in bytes.chunks(3) {
-        let mut buffer = 0u32;
-        for (index, byte) in chunk.iter().enumerate() {
-            buffer |= u32::from(*byte) << (16 - index * 8);
-        }
-        for slot in 0..4 {
-            if slot <= chunk.len() {
-                out.push(TABLE[((buffer >> (18 - slot * 6)) & 0x3f) as usize] as char);
-            } else {
-                out.push('=');
-            }
-        }
-    }
-    out
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -878,31 +413,31 @@ pub fn run() {
             active_provider_profile,
             provider_run,
             provider_cancel,
-            read_document_head,
-            read_latest_document_head,
-            create_document,
-            commit_document,
-            lookup_commit,
-            read_document_snapshot,
-            document_history_length,
-            replace_document_epoch,
-            put_attachment,
-            read_attachment,
-            read_document_attachments,
-            collect_attachments,
-            export_package,
-            import_package,
-            append_run_event,
-            read_run_events,
-            run_event_count,
-            create_conversation,
-            list_conversations,
-            read_conversation,
-            append_conversation_message,
-            update_conversation_summary,
-            update_conversation_fact,
-            archive_conversation,
-            delete_conversation,
+            commands::repository::read_document_head,
+            commands::repository::read_latest_document_head,
+            commands::repository::create_document,
+            commands::repository::commit_document,
+            commands::repository::lookup_commit,
+            commands::repository::read_document_snapshot,
+            commands::repository::document_history_length,
+            commands::repository::replace_document_epoch,
+            commands::repository::put_attachment,
+            commands::repository::read_attachment,
+            commands::repository::read_document_attachments,
+            commands::repository::collect_attachments,
+            commands::repository::export_package,
+            commands::repository::import_package,
+            commands::repository::append_run_event,
+            commands::repository::read_run_events,
+            commands::repository::run_event_count,
+            commands::conversations::create_conversation,
+            commands::conversations::list_conversations,
+            commands::conversations::read_conversation,
+            commands::conversations::append_conversation_message,
+            commands::conversations::update_conversation_summary,
+            commands::conversations::update_conversation_fact,
+            commands::conversations::archive_conversation,
+            commands::conversations::delete_conversation,
             commands::proxy::proxy_session,
             commands::proxy::proxy_cancel
         ])
