@@ -1,5 +1,5 @@
 import { type AnnotationSpec, type CircleRadiusRule, type ConstraintSpec, type CurveRotation, type DerivedSolidResult, type DrawingSheetSpec, type DrawingViewSpec, type EngineeringAnnotation, type GeometryDocument, type GroupSpec, type LayerSpec, type Measurement3, type Point3Binding, type Point3Primitive, type PointBinding, type PrimitiveSpec, type TangentAnchor, type Vector3 } from "@draw/dsl"
-import { calculateMeasurement3, entityResolverFor, evaluateLineParameters, evaluateParameterExpressions, evaluatePlanarMeasurement, intersectFaceSets, intersectSampledPrimitives, mergeIntersectionSurfaces3, placedConic, quadric3FromPrimitive, sectionSolid3, solveCircumsphere3, solveInsphere3, solveLineConstraints, triangleCenter2, triangleRadius2, type IntersectionSurfaceRegion, type PlanarMetric, type PlaceableConic, type SolidBoundary, type Sphere3, type WorldAxis3 } from "@draw/geometry-kernel"
+import { calculateMeasurement3, entityResolverFor, evaluateLineParameters, evaluateParameterExpressions, evaluatePlanarMeasurement, intersectSampledPrimitives, placedConic, sectionSolid3, solveCircumsphere3, solveInsphere3, solveLineConstraints, triangleCenter2, triangleRadius2, type PlanarMetric, type PlaceableConic, type SolidBoundary, type Sphere3, type WorldAxis3 } from "@draw/geometry-kernel"
 
 export * from "./solidGeometry"
 
@@ -262,167 +262,6 @@ export function patchPoint3(id: string, position: Vector3): Extract<DomainOperat
   return { op: "updatePrimitive", id, patch: { position3: { ...position } } }
 }
 
-/**
- * 交面图元 = 布尔交集的**一个区域**（按支撑曲面分组后的一块）：平面区域或二次曲面区域。
- *
- * 用户口径："我需要的交面只是一个表面，而不是所有相交的表面"。分组之前，布尔交集把圆柱侧面切成 48 个
- * 细条（法向各不相同），"点一块建一块"点出来的永远是一个小片；分组之后一块区域就是**一个表面**，
- * 所以这里认领的是区域（与画布上那份预览同一个东西），把它的多边形 / 解析边界 / 面积如实写回。
- *
- * 认领方式与逐面时代同一套：按"离 `hint` 最近的区域形心"（`hint` 就是预览给出的区域形心），
- * 距离在容差内打平时才看区域法向与上一轮的取向。
- */
-function recomputeIntersectionFace(
-  primitive: Extract<PrimitiveSpec, { type: "intersectionFace" }>,
-  primitiveMap: Map<string, PrimitiveSpec>
-): Extract<PrimitiveSpec, { type: "intersectionFace" }> {
-  /**
-   * 解析字段是**派生**的：这一轮算不出解析边界就必须把它摘掉，
-   * 否则会留下一份和现几何对不上的边界（来源移动后尤其明显）。
-   * `outerRingLength` / `poleIndex` / `surface` 同理：它们描述的是当前 `points` 的填法
-   *（前导外环多长、极点在哪个下标、铺完要不要吸到哪张曲面上），来源一动就可能对不上。
-   */
-  const withoutAnalytic = (face: Extract<PrimitiveSpec, { type: "intersectionFace" }>) => {
-    const { exactLoops: _staleLoops, areaExact: _staleAreaExact, outerRingLength: _staleOuterRingLength, poleIndex: _stalePoleIndex, surface: _staleSurface, ...rest } = face
-    return rest
-  }
-  const sources = primitive.sourceIds.map((id) => primitiveMap.get(id))
-  const outcome = resolveSolidIntersection(sources, primitiveMap)
-  const empty = { points: [], normal: { x: 0, y: 0, z: 0 }, area: 0 }
-  if (!outcome.ok) return { ...withoutAnalytic(primitive), ...empty, status: "insufficient-data", visible: false, diagnostic: explainOutcome(outcome) }
-  const { result } = outcome
-  if (result.status === "none" || result.faces.length === 0) {
-    return { ...withoutAnalytic(primitive), ...empty, status: "none", visible: false, diagnostic: result.explanation || "两个实体没有重叠区域。" }
-  }
-
-  // 来源各自的解析二次曲面（立方体 / 棱锥没有，函数返回 null）：分组靠它认"哪些面属于同一张曲面"。
-  const regions = mergeIntersectionSurfaces3(result, sources.map((source) => ({ quadric: source ? quadric3FromPrimitive(source) ?? undefined : undefined })))
-  const tolerance = Math.max(extentOf(result.vertices) * 1e-9, 1e-12)
-  let bestRegion: { region: IntersectionSurfaceRegion; centroid: Vector3; distance: number; alignment: number } | null = null
-  for (const region of regions) {
-    if (region.points.length < 3) continue
-    const centroid = centroidOfPoints(region.points)
-    const distance = distanceBetween(centroid, primitive.hint)
-    const alignment = dotBetween(region.normal, primitive.normal)
-    // 主序是距离（"上一轮那一块还是同一块"），只有距离在容差内打平时才用法向取向打破平局。
-    if (!bestRegion || distance < bestRegion.distance - tolerance || (Math.abs(distance - bestRegion.distance) <= tolerance && alignment > bestRegion.alignment)) {
-      bestRegion = { region, centroid, distance, alignment }
-    }
-  }
-  if (bestRegion) {
-    const { region, centroid } = bestRegion
-    return {
-      ...withoutAnalytic(primitive),
-      points: region.points,
-      normal: region.normal,
-      area: region.area,
-      // 面积精度随区域如实标注（曲面区域是网格求和），解析边界有就写、没有就不写。
-      areaExact: region.areaExact,
-      ...(region.exactLoops ? { exactLoops: region.exactLoops } : {}),
-      // 曲面区域的 `points` 缝了不止一圈时才有前导外环长度：渲染方靠它做环向条带三角化。
-      ...(region.outerRingLength ? { outerRingLength: region.outerRingLength } : {}),
-      // 圆锥侧面那类区域的极点（在曲面内部、不在边界环上）：渲染方靠它绕极点铺开填充。
-      // `0` 是合法下标，所以判的是 `!== undefined`。
-      ...(region.poleIndex !== undefined ? { poleIndex: region.poleIndex } : {}),
-      // 这块区域所在的解析曲面：渲染方靠它把填充吸回真正的曲面上（画成光滑曲面而不是一圈平面三角形）。
-      ...(region.surface ? { surface: region.surface } : {}),
-      hint: { ...centroid },
-      status: "valid",
-      visible: true,
-      diagnostic: undefined
-    }
-  }
-
-  // 分组一个区域都没给（退化输入）而原始面片还在：退回逐面认领，而不是把这一面判成失败。
-  let best: { points: Vector3[]; normal: Vector3; area: number; centroid: Vector3; distance: number; alignment: number } | null = null
-  result.faces.forEach((face, index) => {
-    const points = face.map((vertexIndex) => ({ ...result.vertices[vertexIndex] }))
-    if (points.length < 3) return
-    const centroid = centroidOfPoints(points)
-    // 法向与面积由内核给出（与 `faces` 一一对应）：这里不再自己写一份 Newell 法向。
-    const normal = result.faceNormals[index] ?? { x: 0, y: 0, z: 0 }
-    const area = result.faceAreas[index] ?? 0
-    const distance = distanceBetween(centroid, primitive.hint)
-    const alignment = dotBetween(normal, primitive.normal)
-    if (!best) { best = { points, normal, area, centroid, distance, alignment }; return }
-    if (distance < best.distance - tolerance || (Math.abs(distance - best.distance) <= tolerance && alignment > best.alignment)) {
-      best = { points, normal, area, centroid, distance, alignment }
-    }
-  })
-  if (!best) return { ...withoutAnalytic(primitive), ...empty, status: "none", visible: false, diagnostic: "交集没有可用的面。" }
-  const claimed = best as { points: Vector3[]; normal: Vector3; area: number; centroid: Vector3 }
-  return { ...withoutAnalytic(primitive), points: claimed.points, normal: claimed.normal, area: claimed.area, hint: { ...claimed.centroid }, status: "valid", visible: true, diagnostic: undefined }
-}
-
-/**
- * 交点图元 = 交线的一个端点 / 拐点。
- *
- * 不用布尔交集的顶点：完全包含时两个表面并不相交、交集却有顶点——那不是"交点"。这里取的是
- * **公共边界线段的端点**（去重后），所以"有没有交点"与"有没有交线"永远一致；同样按 `hint` 最近认领。
- */
-function recomputeIntersectionPoint3(
-  primitive: Extract<PrimitiveSpec, { type: "intersectionPoint3" }>,
-  primitiveMap: Map<string, PrimitiveSpec>
-): Extract<PrimitiveSpec, { type: "intersectionPoint3" }> {
-  const sources = primitive.sourceIds.map((id) => primitiveMap.get(id))
-  if (sources.some((source) => !source)) {
-    return { ...primitive, status: "insufficient-data", visible: false, diagnostic: "交点来源对象不存在。" }
-  }
-  const rings = sources.map((source) => intersectionFaceRings(source!, primitiveMap))
-  if (rings.some((ring) => !ring)) {
-    return { ...primitive, status: "insufficient-data", visible: false, diagnostic: "交点来源缺少可用的面环（平面没有边界，模板需要已物化的拓扑）。" }
-  }
-  const result = intersectFaceSets(rings[0]!, rings[1]!)
-  if (result.classification === "insufficient-data") {
-    return { ...primitive, status: "insufficient-data", visible: false, diagnostic: result.explanation }
-  }
-  const corners = dedupePoints3(result.segments.flatMap((segment) => [segment.a, segment.b]))
-  if (corners.length === 0) {
-    const detail = [result.explanation, ...result.diagnostics].filter(Boolean).join(" ")
-    return { ...primitive, status: "none", visible: false, diagnostic: `没有交点：两个表面不相交。${detail}`.trim() }
-  }
-  let nearest = corners[0]
-  let nearestDistance = distanceBetween(nearest, primitive.hint)
-  for (const corner of corners.slice(1)) {
-    const distance = distanceBetween(corner, primitive.hint)
-    if (distance < nearestDistance) { nearest = corner; nearestDistance = distance }
-  }
-  return { ...primitive, position: { ...nearest }, hint: { ...nearest }, status: "valid", visible: true, diagnostic: undefined }
-}
-
-/** 去重（按模型尺度量化）：交线端点会被相邻线段各报一次。 */
-function dedupePoints3(points: Vector3[]): Vector3[] {
-  const quantum = Math.max(extentOf(points) * 1e-9, 1e-12)
-  const seen = new Set<string>()
-  const unique: Vector3[] = []
-  for (const point of points) {
-    const key = `${Math.round(point.x / quantum)},${Math.round(point.y / quantum)},${Math.round(point.z / quantum)}`
-    if (seen.has(key)) continue
-    seen.add(key)
-    unique.push({ ...point })
-  }
-  return unique
-}
-
-function centroidOfPoints(points: Vector3[]): Vector3 {
-  const count = Math.max(points.length, 1)
-  return points.reduce((sum, point) => ({ x: sum.x + point.x / count, y: sum.y + point.y / count, z: sum.z + point.z / count }), { x: 0, y: 0, z: 0 })
-}
-
-function extentOf(points: Vector3[]): number {
-  let extent = 0
-  for (const point of points) extent = Math.max(extent, Math.abs(point.x), Math.abs(point.y), Math.abs(point.z))
-  return Math.max(extent, 1)
-}
-
-function distanceBetween(first: Vector3, second: Vector3): number {
-  return Math.hypot(first.x - second.x, first.y - second.y, first.z - second.z)
-}
-
-function dotBetween(first: Vector3, second: Vector3): number {
-  return first.x * second.x + first.y * second.y + first.z * second.z
-}
-
 /** 平面的 Newell 法向与面积由内核随交集一起给出（`faceNormals` / `faceAreas`），这里不再复刻。 */
 
 /** 实体的索引化拓扑（顶点数组 + 面环下标）；非实体或拓扑未物化时返回 null。 */
@@ -536,6 +375,9 @@ export function solidStatusReport(document: GeometryDocument, scope?: SolidDeriv
 // 三维对象的解析在 `./resolve3d`（评审方案 2 拆出来的）。
 import { dragBoundPoint, resolveBoundPoint, resolveBoundPoint3, resolveIntersection, syncTemplateTopology } from "./resolve3d"
 export { sectionMaterialization, solidVolumeHostFor } from "./resolve3d"
+
+// 交面 / 交点与几个小几何辅助在 `./sectionRecompute`。
+import { recomputeIntersectionFace, recomputeIntersectionPoint3 } from "./sectionRecompute"
 
 export function recomputeDerivedObjects(document: GeometryDocument, changedIds?: string[]): GeometryDocument {
   const parameters = evaluateParameterExpressions(document.parameters)
@@ -887,7 +729,7 @@ import { EDITABLE_GEOMETRY_TYPES, isFreeDraggable3, isRotatable3, point3Index, p
 export { EDITABLE_GEOMETRY_TYPES, isFreeDraggable3, isRotatable3, managedPointIds, templateTopologyIds } from "./transforms"
 
 // 截面与交的重算在 `./sectionRecompute`（评审方案 2 拆出来的）。
-import { explainOutcome, intersectionFaceRings, recomputeIntersectionLine, recomputeIntersectionSolid, recomputeSection, resolveSolidIntersection, solidTopology3 } from "./sectionRecompute"
+import { recomputeIntersectionLine, recomputeIntersectionSolid, recomputeSection, solidTopology3 } from "./sectionRecompute"
 export { intersectionFaceRings, solidTopology3 } from "./sectionRecompute"
 
 export function applyOperation(document: GeometryDocument, operation: DomainOperation): OperationResult {  const next = structuredClone(document) as GeometryDocument
