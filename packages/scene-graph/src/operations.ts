@@ -1,5 +1,5 @@
 import { isSampledPrimitiveType, type AnnotationSpec, type CircleRadiusRule, type ConstraintSpec, type Coordinate, type CurveRotation, type DerivedSolidResult, type DrawingSheetSpec, type DrawingViewSpec, type EngineeringAnnotation, type GeometryDocument, type GroupSpec, type LayerSpec, type Measurement3, type Point3Binding, type Point3Primitive, type PointBinding, type PrimitiveSpec, type SolidConstruction, type TangentAnchor, type Vector3 } from "@draw/dsl"
-import { createDependencyGraph, adaptiveSampleFunctionSegments, arcConstraint, buildSolidTemplate, calculateMeasurement3, circleConstraint, composeEuler3, constraintTangentAt, createBuilderContext, ellipseConstraint, entityResolverFor, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, evaluatePlanarMeasurement, findExtrema, findInflectionPoints, findZeros, functionGraphConstraint, host3FromPrimitive, hyperbolaConstraint, intersectCirclesDetailed, intersectConvexPolyhedra3, intersectFaceSets, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, lineConstraint, mergeIntersectionSurfaces3, normalFromTangent, normalizeHostParameter, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, orderSectionPoints3, parabolaConstraint, placedConic, polylineConstraint, quadric3FromPrimitive, rayConstraint, rotatePointAboutAxis3, rotateVectorAboutAxis3, sectionConvexPolyhedron, sectionPolyhedron3, sectionQuadric3, sectionSolid3, segmentConstraint, solidVolumeHost3, solveCircumsphere3, solveInsphere3, solveLineConstraints, tangentSegment, templateSolidPivot, triangleCenter2, triangleRadius2, type Conic3Kind, type ConicPlacement, type CurvePiece3, type CurveTangent, type Host3, type IntersectionResult, type IntersectionSurfaceRegion, type PlanarConstraint, type PlanarMetric, type PlaceableConic, type SampledPrimitive, type SolidBoundary, type Sphere3, type TemplateSolidPrimitive, type WorldAxis3 } from "@draw/geometry-kernel"
+import { adaptiveSampleFunctionSegments, arcConstraint, buildSolidTemplate, calculateMeasurement3, circleConstraint, composeEuler3, constraintTangentAt, createBuilderContext, ellipseConstraint, entityResolverFor, evaluateLineParameters, evaluateParameterExpression, evaluateParameterExpressions, evaluatePlanarMeasurement, findExtrema, findInflectionPoints, findZeros, functionGraphConstraint, host3FromPrimitive, hyperbolaConstraint, intersectCirclesDetailed, intersectConvexPolyhedra3, intersectFaceSets, intersectLineCircleDetailed, intersectLinesDetailed, intersectSampledPrimitives, lineConstraint, mergeIntersectionSurfaces3, normalFromTangent, normalizeHostParameter, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, orderSectionPoints3, parabolaConstraint, placedConic, polylineConstraint, quadric3FromPrimitive, rayConstraint, rotatePointAboutAxis3, rotateVectorAboutAxis3, sectionConvexPolyhedron, sectionPolyhedron3, sectionQuadric3, sectionSolid3, segmentConstraint, solidVolumeHost3, solveCircumsphere3, solveInsphere3, solveLineConstraints, tangentSegment, templateSolidPivot, triangleCenter2, triangleRadius2, type Conic3Kind, type CurvePiece3, type CurveTangent, type Host3, type IntersectionResult, type IntersectionSurfaceRegion, type PlanarConstraint, type PlanarMetric, type PlaceableConic, type SampledPrimitive, type SolidBoundary, type Sphere3, type TemplateSolidPrimitive, type WorldAxis3 } from "@draw/geometry-kernel"
 
 export * from "./solidGeometry"
 
@@ -13,51 +13,9 @@ export * from "./solidGeometry"
  */
 import { classifySectionPoints, movedSectionPlane, polyhedronSectionTopology, rotatedSectionPlane, solidSectionGeometry, templateTopology } from "./solidGeometry"
 
-/**
- * 曲线的"绕定点旋转"约定：`pivot` 是那个**定点**，`angle` 是绕它的转角（弧度）。
- * 几何本身由内核的 `placedConic` 落地，这一层只负责把文档里的两种定点写法喂给它。
- *
- * "圆心是一个点图元"的圆（`centerPointId`）**不参与**这套放置：它的圆心由那个点直接给出，
- * 再叠一次刚体转动只会让圆心在两个来源之间打架。两种能力各自独立，这里明确二选一。
- */
-function curveRotationOf(primitive: PrimitiveSpec): CurveRotation | undefined {
-  if (primitive.type === "circle") return primitive.centerPointId ? undefined : primitive.rotationAbout
-  return primitive.type === "ellipse" ? primitive.rotationAbout : undefined
-}
-
-/**
- * 把一个定点解析成世界坐标。
- *
- * 两种写法都支持：固定坐标（经典题型里那个定点），以及**点图元引用**
- * （先在曲线上放一个点、再让曲线绕它转）。引用悬空时返回 `undefined`，
- * 调用方按"没有放置"处理——曲线仍在原地画得出来，不会因为定点丢了就静默消失。
- *
- * `baseCenter` 一并带上：重算永远从基准几何出发，所以反复重算不会累积旋转（幂等）。
- */
-export function resolveCurveRotation(
-  primitive: PrimitiveSpec,
-  lookup: (id: string) => PrimitiveSpec | undefined
-): ConicPlacement | undefined {
-  const rotation = curveRotationOf(primitive)
-  if (!rotation) return undefined
-  const baseCenter = { x: rotation.baseCenter.x, y: rotation.baseCenter.y }
-  if (rotation.pivot.kind === "coordinate") return { pivot: { x: rotation.pivot.x, y: rotation.pivot.y }, angle: rotation.angle, baseCenter }
-  const point = lookup(rotation.pivot.primitiveId)
-  if (point?.type !== "point") return undefined
-  return { pivot: { x: point.x, y: point.y }, angle: rotation.angle, baseCenter }
-}
-
-/** 这一层到处都要用：把"定点"解析器绑到某张图元查找表上。 */
-function placementResolver(primitives: readonly PrimitiveSpec[]): (primitive: PrimitiveSpec) => ConicPlacement | undefined {
-  const byId = new Map(primitives.map((primitive) => [primitive.id, primitive]))
-  return (primitive) => resolveCurveRotation(primitive, (id) => byId.get(id))
-}
-
-/** 曲线绕的定点是不是一个**点图元**；是的话返回它的 id（依赖图与平移都要用）。 */
-export function curveRotationPivotId(primitive: PrimitiveSpec): string | null {
-  const rotation = curveRotationOf(primitive)
-  return rotation && rotation.pivot.kind === "primitive" ? rotation.pivot.primitiveId : null
-}
+// 绕定点旋转的喂料层在 `./curveRotation`（评审方案 2 拆出来的）。
+import { curveRotationOf, curveRotationPivotId, placementResolver } from "./curveRotation"
+export { curveRotationPivotId, resolveCurveRotation } from "./curveRotation"
 
 export type DomainOperation =
   | { op: "addPrimitive"; primitive: PrimitiveSpec }
@@ -618,89 +576,6 @@ function rotatePrimitive3(primitive: PrimitiveSpec, points: Map<string, Point3Pr
     primitive: { ...primitive, ...rotatedOrientationVectors(primitive, axis, radians) } as PrimitiveSpec,
     movedPoints: owned.map((id) => ({ id, position: rotatePointAboutAxis3(points.get(id)!.position, target, axis, radians) }))
   }
-}
-
-function primitiveDependencies(primitive: PrimitiveSpec, relations?: { owners: Map<string, string>; topologies: Map<string, string> }): string[] {
-  const dependencies: string[] = []
-  /**
-   * 模板物化出来的点 / 棱 / 面 / 多面体是**由实体算出来的**：实体一动它们就跟着重算。
-   * 少了这条边，绑定在"实体的某个面 / 棱"上的点就不会随实体移动（实测缺陷）。
-   */
-  const owner = relations?.owners.get(primitive.id)
-  if (owner && owner !== primitive.id) dependencies.push(owner)
-  if (primitive.type === "point" && primitive.binding) {
-    if (primitive.binding.kind === "onPath") dependencies.push(primitive.binding.pathId, ...(primitive.binding.parameterId ? [primitive.binding.parameterId] : []))
-    if (primitive.binding.kind === "derived") dependencies.push(primitive.binding.sourceId)
-  }
-  if (primitive.type === "point3" && primitive.binding) {
-    if (primitive.binding.kind === "onLine") dependencies.push(primitive.binding.lineId)
-    if (primitive.binding.kind === "onPlane") dependencies.push(primitive.binding.planeId)
-    if (primitive.binding.kind === "derived") dependencies.push(...primitive.binding.sourceIds)
-    // 宿主绑定：宿主先算，绑定点后算（拓扑序因此自动正确）。
-    if (primitive.binding.kind === "onHost") dependencies.push(primitive.binding.hostId, ...(primitive.binding.parameterId ? [primitive.binding.parameterId] : []))
-    // 驱动参数是坐标的真值来源（与 2D 的 `onPath.parameterId` 同一条边）：少了它，改参数点不动。
-    if (primitive.binding.kind === "onFace") dependencies.push(primitive.binding.faceId, ...(primitive.binding.parameterIds ?? []))
-    if (primitive.binding.kind === "onSurface") dependencies.push(primitive.binding.solidId, ...(primitive.binding.parameterIds ?? []))
-    // 实体内：点跟着实体的拓扑走（实体一动，点的坐标就按参数重算）。
-    if (primitive.binding.kind === "inSolid") dependencies.push(primitive.binding.solidId, ...(primitive.binding.parameterIds ?? []))
-  }
-  if (primitive.type === "line") dependencies.push(...(primitive.slopeParameter ? [primitive.slopeParameter] : []))
-  if (primitive.type === "line3") dependencies.push(...(primitive.definition.kind === "throughPoints" ? primitive.definition.pointIds : [primitive.definition.pointId]))
-  if (primitive.type === "segment3") dependencies.push(...primitive.pointIds)
-  if (primitive.type === "ray3") dependencies.push(primitive.originId, primitive.throughId)
-  if (primitive.type === "plane3") dependencies.push(...(primitive.definition.kind === "throughPoints" ? primitive.definition.pointIds : [primitive.definition.pointId]))
-  // 绕定点旋转的封闭曲线依赖那个定点（定点是点图元时）。定点一动，整条曲线跟着重算。
-  if (isPlaceableConic(primitive)) {
-    const pivotId = curveRotationPivotId(primitive)
-    if (pivotId) dependencies.push(pivotId)
-  }
-  if (primitive.type === "edge3") dependencies.push(...primitive.pointIds, ...(primitive.faceIds ?? []))
-  if (primitive.type === "face3") dependencies.push(...primitive.pointIds, ...(primitive.edgeIds ?? []), ...(primitive.planeId ? [primitive.planeId] : []))
-  if (primitive.type === "polyhedron3") dependencies.push(...primitive.vertexIds, ...primitive.edgeIds, ...primitive.faceIds, ...(isSourceIdConstruction(primitive.construction) ? primitive.construction.sourceIds : []), ...(primitive.construction?.kind === "template" ? (primitive.construction.parameterIds ?? []) : []))
-  // 连接（connection）只存两个点的引用，因此它依赖那些点；不含坐标，永远不会过期。
-  if (primitive.type === "connection") dependencies.push(primitive.startPointId, primitive.endPointId, ...(primitive.control?.thirdPointId ? [primitive.control.thirdPointId] : []))
-  if (primitive.type === "intersection") dependencies.push(primitive.lineA, primitive.lineB)
-  if (primitive.type === "lineCircleIntersection") dependencies.push(primitive.lineId, primitive.circleId)
-  if (primitive.type === "circleIntersection") dependencies.push(primitive.circleA, primitive.circleB)
-  if (primitive.type === "curveIntersection") dependencies.push(primitive.objectA, primitive.objectB)
-  if (primitive.type === "intersectionSet") dependencies.push(primitive.objectA, primitive.objectB)
-  if (primitive.type === "intersectionLine") dependencies.push(...primitive.sourceIds)
-  if (primitive.type === "intersectionSolid") dependencies.push(...primitive.sourceIds)
-  if (primitive.type === "intersectionFace") dependencies.push(...primitive.sourceIds)
-  if (primitive.type === "intersectionPoint3") dependencies.push(...primitive.sourceIds)
-  if (primitive.type === "derivative" || primitive.type === "tangent" || primitive.type === "normal" || primitive.type === "secant" || primitive.type === "integral" || primitive.type === "analysisSet" || primitive.type === "section") dependencies.push(primitive.sourceId)
-  /**
-   * 曲线切线如果由**一个动点**定位，就依赖那个点：动点一动，切线跟着重算。
-   * 少了这条边，切点会停在旧位置 —— 而"切线随动点动态变化"正是用户要的那个性质。
-   */
-  if ((primitive.type === "tangent" || primitive.type === "normal") && primitive.anchor?.kind === "point") dependencies.push(primitive.anchor.pointId)
-  /**
-   * "以动点为圆心"与"半径随动点走"的圆依赖那两个点。
-   * 这两条边是整条动态链路的关键：圆心点 / 驱动点一动，`center` 与 `radius` 的派生缓存就过期，
-   * 依赖图必须把它们重新算出来，否则圆会停在一个已经过时的位置和大小上。
-   */
-  if (primitive.type === "circle") {
-    if (primitive.centerPointId) dependencies.push(primitive.centerPointId)
-    // 三角形规则：三个顶点一起决定圆心与半径（少了任何一条边，改顶点时圆不会重算）。
-    if (primitive.radiusFrom) {
-      if (primitive.radiusFrom.kind === "triangle") dependencies.push(...primitive.radiusFrom.triangleIds)
-      else dependencies.push(primitive.radiusFrom.pointId)
-    }
-  }
-  /**
-   * 依赖一个**实体**时，同时依赖它的物化拓扑。
-   *
-   * 实体的几何（顶点、面环）全在拓扑里，而截面 / 交线 / 交面 / 交点的来源写的是实体本身；
-   * 只声明"依赖实体"的话，**按数值改一个顶点**（改的正是拓扑里的 point3）到不了它们，
-   * 增量扫描会留下一份旧截面 / 旧交面（`recomputeConsistency.test.ts` 实测抓到）。
-   */
-  if (relations) {
-    for (const dependency of [...dependencies]) {
-      const topologyId = relations.topologies.get(dependency)
-      if (topologyId && topologyId !== primitive.id) dependencies.push(topologyId)
-    }
-  }
-  return [...new Set(dependencies)]
 }
 
 /**
@@ -1399,104 +1274,6 @@ function recomputeAnalysisSet(primitive: Extract<PrimitiveSpec, { type: "analysi
     : { ...primitive, results: [], status: "undefined" as const, diagnostic: "source function is undefined across the analysis domain" }
 }
 
-/**
- * 模板实体的两类关系：
- * - `owners`：物化出来的子对象（多面体自身、以及它的点 / 棱 / 面）→ 它属于哪个实体；
- * - `topologies`：实体 → 它的物化拓扑（那个多面体）。
- *
- * **为什么两样都要**：依赖图原先只有"多面体依赖它的点 / 棱 / 面 + 模板源"这一个方向，
- * 于是"实体 → 子对象"这条边根本不存在——从实体出发的闭包只到多面体就断了。
- * 后果是实测到的真缺陷：把点绑在立方体的某个面上再移动立方体，**绑定点留在原地**
- *（`getAffectedPrimitiveIds(["cube-a"])` 只有 `cube-a` 与多面体，到不了那个面，更到不了点）。
- *
- * 反过来，`topologies` 补的是另一条实测缺陷：截面 / 交面 / 交线的来源写的是**实体本身**，
- * 而实体的几何全在物化拓扑里。只声明依赖实体的话，**按数值改一个顶点**（改的是拓扑里的 point3）
- * 无法让它们重算——增量扫描后面会留下一份旧截面（`recomputeConsistency.test.ts` 抓到过）。
- */
-function templateRelations(document: GeometryDocument): { owners: Map<string, string>; topologies: Map<string, string> } {
-  const owners = new Map<string, string>()
-  const topologies = new Map<string, string>()
-  for (const primitive of document.primitives) {
-    if (primitive.type !== "polyhedron3" || !primitive.construction) continue
-    const construction = primitive.construction
-    // 参数化模板记在 `sourceIds[0]`；按数值编辑过顶点的翻成 `fromFaces`，归属记在 `sourceId`。
-    const owner = construction.kind === "template" ? construction.sourceIds[0] : construction.kind === "fromFaces" ? construction.sourceId : undefined
-    if (!owner) continue
-    owners.set(primitive.id, owner)
-    topologies.set(owner, primitive.id)
-    for (const childId of [...primitive.vertexIds, ...primitive.edgeIds, ...primitive.faceIds]) owners.set(childId, owner)
-  }
-  return { owners, topologies }
-}
-
-export function getDependencyIndex(document: GeometryDocument): Map<string, Set<string>> {
-  const dependents = new Map<string, Set<string>>()
-  const relations = templateRelations(document)
-  for (const primitive of document.primitives) {
-    for (const dependency of primitiveDependencies(primitive, relations)) {
-      const primitiveDependents = dependents.get(dependency) ?? new Set<string>()
-      primitiveDependents.add(primitive.id)
-      dependents.set(dependency, primitiveDependents)
-    }
-  }
-  for (const constraint of document.constraints) {
-    if (constraint.targets.length !== 2) continue
-    const [first, second] = constraint.targets
-    const firstDependents = dependents.get(first) ?? new Set<string>()
-    firstDependents.add(second)
-    dependents.set(first, firstDependents)
-    const secondDependents = dependents.get(second) ?? new Set<string>()
-    secondDependents.add(first)
-    dependents.set(second, secondDependents)
-  }
-  return dependents
-}
-
-export function getAffectedPrimitiveIds(document: GeometryDocument, changedIds: string[]): Set<string> {
-  const dependents = getDependencyIndex(document)
-  const affected = new Set(changedIds)
-  const queue = [...changedIds]
-  while (queue.length) {
-    const changedId = queue.shift()!
-    for (const dependent of dependents.get(changedId) ?? new Set<string>()) {
-      if (affected.has(dependent)) continue
-      affected.add(dependent)
-      queue.push(dependent)
-    }
-  }
-  return affected
-}
-
-/**
- * 受影响对象的**拓扑重算顺序**：任一对象的依赖都排在它前面。
- *
- * 主重算流程原来是"取所有受影响对象，按数组顺序各重算一次"，只在对象恰好按依赖顺序创建时正确。
- * 用拓扑序之后：一趟就能算完（`recomputeBoundPoint3s` 那个"最多重跑 N 遍直到不动"的循环因此可以去掉），
- * 并且能保证下游读到的是**刚算出来的**上游值。
- *
- * 两个安全措施：
- * - 依赖里只有真实存在的图元才建边（`slopeParameter` / `parameterId` 这类参数 id 不是图元，
- *   它们的值在参数求值的前置步骤里已经应用过，不需要参与排序）；
- * - 环里的节点不会出现在拓扑序中，直接过滤会**静默漏算**，所以按文档顺序补在末尾。
- */
-export function topologicalRecomputeOrder(document: GeometryDocument, changedIds?: string[]): string[] {
-  const graph = createDependencyGraph()
-  const primitiveIds = new Set(document.primitives.map((primitive) => primitive.id))
-  const relations = templateRelations(document)
-  for (const primitive of document.primitives) {
-    graph.addNode(primitive.id, primitiveDependencies(primitive, relations).filter((dependency) => primitiveIds.has(dependency)))
-  }
-  const affected = changedIds === undefined ? primitiveIds : getAffectedPrimitiveIds(document, changedIds)
-  const ordered = graph.topologicalOrder().filter((id) => affected.has(id))
-  const seen = new Set(ordered)
-  for (const primitive of document.primitives) {
-    if (!affected.has(primitive.id) || seen.has(primitive.id)) continue
-    ordered.push(primitive.id)
-    seen.add(primitive.id)
-  }
-  return ordered
-}
-
 function point3Position(primitive: PrimitiveSpec | undefined, points: Map<string, Point3Primitive>): Vector3 | null {
   if (!primitive) return null
   if (primitive.type === "point3") return primitive.position
@@ -2007,8 +1784,12 @@ import { deletionPlan, layerDescendantIds, unbindDeletedHost, type DeletionPlan 
 export { deletionPlan, deletionTargets, layerDescendantIds, type DeletionPlan } from "./deletion"
 
 // 图元种类判据在 `./primitiveKinds`（deletion 也要用，放这里避免成环）。
-import { isPlaceableConic, isSourceIdConstruction } from "./primitiveKinds"
+import { isPlaceableConic } from "./primitiveKinds"
 export { isPlaceableConic, isSourceIdConstruction, type SourceIdSolidConstruction } from "./primitiveKinds"
+
+// 依赖图那一族在 `./graph`（评审方案 2 拆出来的）：引入要用的，并把公开面转出去。
+import { getAffectedPrimitiveIds, topologicalRecomputeOrder } from "./graph"
+export { getAffectedPrimitiveIds, getDependencyIndex, topologicalRecomputeOrder } from "./graph"
 
 export function applyOperation(document: GeometryDocument, operation: DomainOperation): OperationResult {  const next = structuredClone(document) as GeometryDocument
   let changedIds: string[] = []
