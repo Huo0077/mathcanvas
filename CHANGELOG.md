@@ -25,6 +25,20 @@
 
 ## 2026-09-25（续）—— 方案 2 第四十批：`operations.ts` 1651→1505（截面与交的重算）
 
+## 2026-09-25（续）—— 方案 2 第四十一批：`operations.ts` 1505→1310（三维对象怎么解析成几何）
+
+切出 `resolve3d.ts`（217 行）：**绑定点的坐标怎么解**（`resolveBoundPoint` / `resolveBoundPoint3` / `dragBoundPoint`）、**宿主参数怎么取**（`bindingParameterValue` / `bindingTupleValue`）、**截面怎么物化**（`sectionMaterialization`）、**模板拓扑怎么同步**（`syncTemplateTopology`）、**交面 / 交体怎么由来源推出来**（`resolveIntersection`）。
+
+## 一次失败的尝试与它的教训（这一批最值得记的）
+
+我原本想一次把 535..1044 整块搬走（含 `recomputeDerivedObjects` / `recomputePrimitive`），结果编译器给出 `TS1184: Modifiers cannot appear here`：**`pickSolution` 与 `recomputePrimitive` 其实是 `recomputeDerivedObjects` 内部的嵌套函数**（这个文件的风格把嵌套声明也顶格写），我那句"给切片里每个顶层 `function` 加 `export`"的机械改写因此把修饰符加到了嵌套函数上。
+
+更麻烦的是它还会带来**运行时环**：`recomputePrimitive` 调用 `recomputeIntersectionFace`，而后者留在 `operations.ts` 里。
+
+处置：**整批回滚**（`git checkout` + 删掉半成品模块），改搬一个**不含嵌套函数、也不回调 operations 的连续区间**（535..733，纯解析层）。搬完一次 `tsc` 通过。教训很具体：**"整块搬走"之前先确认区间里有没有被嵌套定义的函数，以及被搬走的代码会不会回调留在原处的函数** —— 前者让改写非法，后者让模块成环。
+
+**验收**：`tsc -p packages/scene-graph/tsconfig.json` exit 0、包内 **326 用例**全过、`npm run typecheck` exit 0、`npm run lint` **0 error / 13 warning**（搬完涨到 35，按读数清掉 22 个多余 import）、`npm test` **238 文件 / 2810 用例**、`npx playwright test` **141/141**。
+
 切出 `sectionRecompute.ts`（165 行）：**截面与交的重算** —— 截面（含解析边界：源是圆柱 / 圆锥时给出精确的圆锥曲线片段环，写进 `section.exact`）、交线 / 交体、以及交面图元（布尔交集的**一个区域**，按支撑曲面分组后的一块）。两条用户口径随代码搬走：**"我需要的交面只是一个表面，而不是所有相交的表面"**（分组之前圆柱侧面被切成 48 个细条）；**多边形来源不需要解析层**。`solidTopology3` 与那个私有联合类型 `SolidIntersectionOutcome` 跟着一起搬。
 
 **过程**：这一批把"边界探测"的坑踩全了 —— 又是文档注释、又是把上一轮已经搬走的东西第二次插入（`SolidIntersectionOutcome` 出现两次 → 5 条类型错误全是它的连锁反应），最后一律靠"切完立刻 `tsc`"逐个收口。搬完 lint 从 13 涨到 28，按读数清掉 **15 个多余 import**，回到 13。
