@@ -12,6 +12,83 @@ import { boundedString, fail, finiteNumber, isPlainObject, optionalFiniteNumber,
  */
 
 const UPDATABLE_INPUT_FIELDS = updatableInputFields()
+/** 平面里的一个坐标：`{x,y,z}` 与 `[x,y,z]` **两种写法都收**（模型两种都会写）。 */
+function planeVector(value: unknown, path: string, errors: ParseError[]): { x: number; y: number; z: number } | null {
+  if (Array.isArray(value) && value.length === 3) return readVector3({ x: value[0], y: value[1], z: value[2] }, path, errors)
+  return readVector3(value, path, errors)
+}
+
+/**
+ * **把截面平面收成 `{normal, constant}`**（单位法向 + 常数）。
+ *
+ * ## 为什么必须有这一步（2026-09-26 用户现场）
+ *
+ * `section.create` 的登记项把 `plane` 写成可选、默认策略是 `ask_user`，而那句默认问题**明确承诺**了
+ * 两种写法："给法向与常数，**或者说明它过哪三个点**"。可这一层原先**没有 `section.create` 分支** ——
+ * `plane` 原样透传，于是"过三个点"（"把正方体沿对角面剖开"最自然的写法）一路走到**文档校验器**
+ * 才被拒（`section plane is invalid`），而且报的是**动作级**路径：那条"一次性修复"因此改不动它。
+ *
+ * 三种写法都在这里收成一种：规范形（法向 + 常数）、**过三点**、点 + 法向。
+ *
+ * ## 一处最容易写错的地方
+ *
+ * 法向归一化时，**常数必须同步缩放**：`n·x + c = 0` 两边同除 `|n|`，得到单位法向与 `c/|n|`。
+ * 只把法向变成单位向量、常数不动，平面就被换掉了（在立方体上正好是"切歪"）。
+ */
+function normalizeSectionPlane(value: unknown, path: string, errors: ParseError[]): { normal: { x: number; y: number; z: number }; constant: number } | null {
+  if (!isPlainObject(value)) {
+    errors.push(fail("invalid_plane", path, "expected an object: {normal, constant} / {points:[…3]} / {point, normal}"))
+    return null
+  }
+  const cross = (first: { x: number; y: number; z: number }, second: { x: number; y: number; z: number }) => ({
+    x: first.y * second.z - first.z * second.y,
+    y: first.z * second.x - first.x * second.z,
+    z: first.x * second.y - first.y * second.x
+  })
+  const unitOf = (raw: { x: number; y: number; z: number }, where: string) => {
+    const length = Math.hypot(raw.x, raw.y, raw.z)
+    if (!(length > 1e-9)) {
+      errors.push(fail("degenerate_plane", where, "the normal must not be zero"))
+      return null
+    }
+    return { unit: { x: raw.x / length, y: raw.y / length, z: raw.z / length }, length }
+  }
+
+  // `points` 与 `throughPoints` 是同一种写法的两个名字，报错路径要跟着**用户写的那一个**走。
+  const pointsField = Array.isArray(value.points) ? "points" : Array.isArray(value.throughPoints) ? "throughPoints" : null
+  const points = pointsField === null ? null : (value[pointsField] as unknown[])
+  if (points) {
+    if (points.length !== 3) {
+      errors.push(fail("invalid_plane", `${path}.${pointsField}`, "expected exactly three points"))
+      return null
+    }
+    const [first, second, third] = points.map((point, index) => planeVector(point, `${path}.${pointsField}[${index}]`, errors))
+    if (!first || !second || !third) return null
+    const normalized = unitOf(cross({ x: second.x - first.x, y: second.y - first.y, z: second.z - first.z }, { x: third.x - first.x, y: third.y - first.y, z: third.z - first.z }), path)
+    if (!normalized) return null
+    const { unit } = normalized
+    return { normal: unit, constant: -(unit.x * first.x + unit.y * first.y + unit.z * first.z) }
+  }
+
+  const raw = planeVector(value.normal, `${path}.normal`, errors)
+  if (!raw) return null
+  const normalized = unitOf(raw, `${path}.normal`)
+  if (!normalized) return null
+  const { unit, length } = normalized
+
+  const anchor = value.point ?? value.origin
+  if (anchor !== undefined) {
+    const on = planeVector(anchor, `${path}.point`, errors)
+    if (!on) return null
+    return { normal: unit, constant: -(unit.x * on.x + unit.y * on.y + unit.z * on.z) }
+  }
+
+  const constant = finiteNumber(value.constant, `${path}.constant`, errors)
+  if (constant === null) return null
+  // 归一化法向 → 常数同步缩放（见上面那段说明）。
+  return { normal: unit, constant: constant / length }
+}
+
 export function parseActionInputs(actionId: ActionId, value: unknown, path: string, errors: ParseError[]): Record<string, unknown> | null {
   if (!isPlainObject(value)) {
     errors.push(fail("invalid_type", path, "expected an object"))
@@ -26,6 +103,33 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
   const withAlias = (fields: Record<string, unknown>) => (alias === null ? fields : { alias, ...fields })
 
   switch (actionId) {
+    /**
+     * **截面**：`sourceId` 原样带过，`plane` 收成一种写法（见 `normalizeSectionPlane`）。
+     *
+     * `plane` 缺省是**合法**的：它登记了 `ask_user` 默认策略，由审计去问用户 ——
+     * 在这里补一个默认平面，等于替用户决定"剖哪儿"。
+     */
+    case "section.create": {
+      const out: Record<string, unknown> = withAlias({})
+      /**
+       * `sourceId` 只收**裸 id 字符串**（登记表里是 `{field:"sourceId", kind:"id"}`），
+       * 这一点与默认分支同一个判据：给对象形状（场景引用那种）在这里就报 `invalid_type`，
+       * 而不是拖到引用解析时变成一句 `target_not_found`（症状完全两样）。
+       * 缺字段仍旧放行 —— 它登记在 `required` 里，由审计去问。
+       */
+      if (value.sourceId !== undefined) {
+        const sourceId = boundedString(value.sourceId, `${path}.sourceId`, errors)
+        if (sourceId === null) return null
+        out.sourceId = sourceId
+      }
+      if (value.plane !== undefined) {
+        const plane = normalizeSectionPlane(value.plane, `${path}.plane`, errors)
+        if (!plane) return null
+        out.plane = plane
+      }
+      return out
+    }
+
     case "solid.create_template": {
       const template = value.template
       if (typeof template !== "string" || !(SOLID_TEMPLATES as readonly string[]).includes(template)) {

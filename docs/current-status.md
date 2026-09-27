@@ -5,16 +5,16 @@
 > [`docs/project-progress.md`](project-progress.md) —— 那是**归档**，里面的数字是"当时实测"，
 > 不是当前值。两份文件分工明确：**要当前值看这里，要过程看归档。**
 
-**最后更新：** 2026-09-25 00:35（方案 2 第二十九批：键盘处理搬出 `App.tsx`；表里的门禁读数都是最近一次改动后复跑的实测值）。
+**最后更新：** 2026-09-26（第四十六批：修两处**实机现场故障** —— "把正方体沿对角面剖开，标出截面"连挂两次；表里的门禁读数都是这一次改动后复跑的实测值）。
 
 ## 一、现在能不能跑（可复核的门禁读数）
 
 | 命令 | 当前读数 |
 | --- | --- |
-| `npm test` | **238 个测试文件 / 2810 个用例通过 + 1 个 todo（零失败）** |
-| `npm run typecheck` | **6 个 workspace + `e2e/`（42 个 spec）全部 exit 0** |
+| `npm test` | **238 个测试文件 / 2812 个用例通过 + 1 个 todo（零失败）** |
+| `npm run typecheck` | **6 个 workspace + `e2e/`（42 个 spec）+ `scripts/` 全部 exit 0** |
 | `npm run lint` | **0 error / 13 warning**（基线从 14 降到 13：搬键盘处理时补上了漏写的 `deleteSelected` 依赖，那条警告随之消失） |
-| `npm run build` | exit 0 —— 入口 **1 635.70 kB（gzip 470.70 kB）** + 按需 chunk `engineeringExporters` **433.81 kB（gzip 179.75 kB）** + `geometry.worker` **304.32 kB** |
+| `npm run build` | exit 0 —— 入口 **1 613.94 kB** + 按需 chunk `engineeringExporters` **423.64 kB** + `geometry.worker` **298.77 kB**（同一份源码连跑两次构建，三个 chunk **一致地**小约 2.3%：1 652.65 / 433.81 / 304.33 → 1 613.94 / 423.64 / 298.77，原因未查明，如实记下；上表取的是 `build-check/` 里**当前这一份**） |
 | `npm run test:perf` | 八条场景（`packages/scene-graph`），见下；另有 `apps/web/src/agent/compilePlan.bench.test.ts` 量编译成本 |
 | `npm run test:e2e` | Playwright **42 个 spec / 141 条用例全绿**（本机整套实跑，含主线程响应性读数；**不要与 `npm test` 并行跑**，见下表下面的说明） |
 | `npm run test:rust` | **232 例通过 + 3 ignored / 0 失败**（2026-09-25 本机复跑，走 `scripts/toolchain.mjs` 补 PATH） |
@@ -50,12 +50,12 @@
 
 ## 二、按评审方案：做到哪一步了
 
-**一句话进度（估计，口径写明）**：**七条方案全部落地并验收**；方案 2 的六个目标文件全部拆分完成（`operations.ts` 也走到 **2817→307**）。剩下的是**可选**项与长尾（`operations.ts` 内仍可细分、`scripts/` 未纳入 `tsc`）。
+**一句话进度（估计，口径写明）**：**七条方案全部落地并验收**；方案 2 的六个目标文件全部拆分完成（`operations.ts` 也走到 **2817→307**）。剩下的是**可选**项与长尾（`operations.ts` 内仍可细分、`App.tsx` 与 `threeSceneEffect.ts` 内仍可细分）。门禁面已无已知缺口（`e2e/` 与 `scripts/` 都进了 `tsc`）。
 
 | 方案 | 优先级 | 状态 | 一句话 |
 | --- | --- | --- | --- |
 | 1. 统一实体构造与拓扑物化 | P0 | ✅ **已完成并验收** | 见下节 |
-| 2. 拆分过大的编排和领域文件 | P1 | 🔶 **已开四十五批** | `operations.ts` 2817→**307**（→ 十一个模块）、`PropertiesBar.tsx` 1069→298（→`inspectorFields` / `inspectorLabels` / `inspectorReadings` / `inspectorModel`）、`App.tsx` 2000→**809**（→`fileExports` / `documentIds` / `creationCommands` / `solidCommands` / `recordCommands` / `structureCommands` / `anchorRotationCommands` / `point3ToolCommands` / `previewCommands` / `selectionCommands` / `canvasStatusPrompt` / `draftingCommands` / `appViewState` / `useDraftPersistence` / `commandDispatch` / `useKeyboardShortcuts`）、`threeScene.tsx` 1807→269（→`threeSceneEffect` + **七个阶段模块**）、Rust `lib.rs` 992→**168**（→`src/commands/` 五组）、`agent-core/schemas.ts` 1300→**180**（→`schemaReaders` / `actionRegistry` / `hashing` / `actionInputs` / `actionAudit`） |
+| 2. 拆分过大的编排和领域文件 | P1 | 🔶 **已开四十六批** | `operations.ts` 2817→**307**（→ 十一个模块）、`PropertiesBar.tsx` 1069→298（→`inspectorFields` / `inspectorLabels` / `inspectorReadings` / `inspectorModel`）、`App.tsx` 2000→**809**（→`fileExports` / `documentIds` / `creationCommands` / `solidCommands` / `recordCommands` / `structureCommands` / `anchorRotationCommands` / `point3ToolCommands` / `previewCommands` / `selectionCommands` / `canvasStatusPrompt` / `draftingCommands` / `appViewState` / `useDraftPersistence` / `commandDispatch` / `useKeyboardShortcuts`）、`threeScene.tsx` 1807→269（→`threeSceneEffect` + **七个阶段模块**）、Rust `lib.rs` 992→**168**（→`src/commands/` 五组）、`agent-core/schemas.ts` 1300→**180**（→`schemaReaders` / `actionRegistry` / `hashing` / `actionInputs` / `actionAudit`） |
 | 3. 接入几何 Worker | P1 | ✅ **已完成并验收** | 宿主生命周期 + 如实降级；契约缺口全部填上 |
 | 4. 工作区级代码分包 | P2 | ✅ **已完成** | 入口单 chunk 2 066.63 → 1 629.80 kB（−21.1%） |
 | 5. 正式 CI 门禁 | P2 | ✅ **已完成** | 四个作业按成本分层 |
@@ -118,6 +118,22 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
 
 **教训（已更正）**：此前几轮把这条记成"接进去要把 `stage()` **及其调用方全部**改成异步 —— 那是 Agent 管线的深度改造"。**那个判断是错的**：协调器本来就是异步的。一个记错的阻塞理由会让后来人**不去做本来做得到的事**，所以这条更正本身也是"如实"的一部分。
 
+### 实机现场故障（2026-09-26，第四十六批）：一句话连挂两次，两次根因不同
+
+用户在**装好的桌面版**里说"把正方体沿对角面剖开，标出截面"，连着碰到两次失败。两次都不是"模型不听话"，而是**Agent 说的话编译器没接住**；症状完全两样，所以分开记。
+
+**第一次：`compile_failed: target_not_found … no object cube`（随后级联 `no object diagSection`）。**
+规划器给的三步是"建正方体 → 建截面 → 标出截面"，但后两步把前一步**刚建出来的对象**写成了场景引用 / 裸名字（`cube`、`diagSection`），而别名表只认显式的 `{scope:"draft", alias}`。判据没有歧义：别名表里只有"这一份计划里、这一步之前"建出来的对象，命中就是那个刚建的对象。修法：`planCompiler.resolveReferences` 的两条分支（裸字符串 / 场景作用域）都先按别名查，查不到才报 `target_not_found`。宽容有边界 —— **编造的 id 仍旧被拒**；**形状错误的引用仍在传输层被拒**（`sourceId` 只收裸 id 字符串，喂对象形状报 `invalid_type` 且路径落在 `envelope.actions[1].inputs.sourceId`），不会拖到引用解析时变成一句"找不到对象"。三条都钉进了 `planCompiler.test.ts`。
+
+**第二次：`commit_rejected: action_compile … section plane is invalid`（随后级联 `no object sec1`）。**
+根因是**登记表承诺 ≠ 实现**：`section.create` 的默认问题是"截面用哪个平面？给法向与常数，**或者说明它过哪三个点**"，可 `actionInputs.parseActionInputs` 里**没有 `section.create` 分支** —— `plane` 走默认分支原样透传，"过三个点"那种写法（"沿对角面剖开"最自然的写法）一路走到**文档校验器**才被拒，而且报的是**动作级**路径，那条"一次性修复"够不到字段、改不动它，用户只看到一句"编译失败"。
+修法：补 `section.create` 分支 + `normalizeSectionPlane`，把**三种写法收成一种**（单位法向 + 常数）：规范形 `{normal, constant}`（法向非单位向量则归一化，**常数同步缩放** —— 只归一化法向会把平面换掉，在立方体上正好是"切歪"）、**过三点** `{points:[…3]}`（`throughPoints` 也收，叉积求法向）、**点 + 法向** `{point, normal}`（`origin` 也收），坐标 `{x,y,z}` 与 `[x,y,z]` 两种写法都收。失败时错误路径**落在字段上**（`…inputs.plane`），码是 `invalid_plane` / `degenerate_plane`（三点共线），修复请求因此够得到它。同批把 `sourceId` 的判据一并收进这个分支。
+**`plane` 缺省仍旧放行**：它登记着 `ask_user`，由审计去问用户（"缺平面 → `questions` 里出现 `envelope.actions[0].inputs.plane`"这条既有用例仍在钉）。在传输层替用户挑一个平面，等于替他改题。
+
+**这两次暴露的是同一类风险**：动作登记表（`actionRegistry`）是"我们承诺收什么"的**唯一**声明处，而逐动作校验（`actionInputs`）里少一个分支，承诺就落空 —— 而且是**静默**落空（透传出去，直到文档校验器才被拒，报的还是够不到的路径）。判据：**登记表里写了 `ask_user` 问题、或写了可选字段的每个动作，都必须在校验层有一个显式分支**；新加一条测试钉住三种平面写法的等价性 + 共线时按字段路径拒绝。
+
+
+
 ## 三、还没做的（按建议顺序）
 
 1. **方案 2 剩下的**：`App.tsx`（**809 行**，已无"有状态的整块"，剩下的是装配与 JSX）与 `threeSceneEffect.ts`（**489 行**；组件 `threeScene.tsx` **269 行**；已按阶段切出**七块**：`threeSceneCamera.ts`（相机取景）、`threeScenePreviewHover.ts`（预览悬停）、`threeSceneRender.ts`（一帧的绘制 + 两层标签覆盖层 + 曲线容差档位与手柄缩放）、`threeSceneGrid.ts`（网格与坐标轴落位）、`threeSceneContent.ts`（**内容同步**：`keepContent` 增量重建 + 整场 `syncContent` + `refreshPrimitiveObject`，604 行）、`threeSceneInteraction.ts`（指针按下 / 移动 / 抬起、拖拽会话、拾取判定 481 行）、`threeSceneDragVisuals.ts`（**拖动期间的画面**：半径预览 / 手柄落位 / 场景重建后补画），手法是"依赖对象 + 原文搬"；跨阶段的 `let` 一律改成稳定容器（`copy` / `clear` / 就地 push）），评审 md 点名的六个文件**全部拆完**（`agent-core/src/schemas.ts` 也已 1300→**180**）—— **Rust 侧已完成**：`lib.rs` 992→**168 行**（只剩模块声明、两个托管状态、`run()` 与命令清单），其余全部搬进 `src/commands/` 六组：proxy / secrets / conversations / repository（项目仓储 + 附件 + 运行账本，因碰同一份托管状态合成一个文件）/ providers。
@@ -143,8 +159,11 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
 
 - **几何 Worker 已接线，但"值不值"这条结论仍是**依据本轮读数**得出的**（编译 73 ms vs 复制 1 ms，约 76 倍）；**不是"管线全同步"** —— 那个判断此前记错了，已更正。降级路径（没有 `Worker` 的环境就地算）有独立用例，见方案 3 一节。
 - **性能上的一件事还没做**：把 `applyOperation` 每次从整份文档 `structuredClone` 的成本降下来。基准显示这一档**固定成本压过增量收益**（局部重算比全量还慢）。注意这与方案 3 不是同一件事：编译那 73 ms 花在**算**上（复制只占 1 ms），所以 Worker 对它是有效杠杆；而重算那一档的固定成本才是复制。
-- **主 bundle 仍超 500 kB 警告**：入口 1 636 kB 里是应用代码 ≈877 kB + React 221 kB + Three 530 kB。`three` 仍在入口 —— 立体几何是首屏可达的顶级模块，拆它要连带改 `threeScene.tsx` 的装配方式。
+- **主 bundle 仍超 500 kB 警告**：入口 1 614 kB 里是应用代码 ≈855 kB + React 221 kB + Three 530 kB。`three` 仍在入口 —— 立体几何是首屏可达的顶级模块，拆它要连带改 `threeScene.tsx` 的装配方式。
 - **`npm run test:rust` 已复跑**（2026-09-25）：**232 例通过 + 3 ignored / 0 失败** —— Rust 侧本阶段零改动，复跑是为了量它、并查清首次 CI 里 rust 作业为什么红（见下一条）。
 - **确认面板不按属主实体归并子对象**：用户要"一个立方体"，面板会说"会新增 28 个对象"。计数本身没错（28 个对象确实都会进文档），但"要不要按实体归并着说"是产品判断 —— 与方案 1 里"对象树以拓扑为依据"是同一个问题的另一面。**连带影响**：`agent-flow.spec.ts` 里有两条用例还在按"一个立方体 = 一个对象"断言（`共 2 个` / `会新增 1 个对象`），方案 1 之后它们必然为红 —— 已改成断言**不会随计数口径漂移**的性质（"共 N 个"必须大于"本次新增"，即草稿落在已有内容之上），同批 e2e 里 `solid-prism` / `agent-oblique-prism` 一直是按新口径断言的。
 - **`longtask` API 在本机不可用（实测，不是猜的）**：评审方案 7 点名要的 `PerformanceObserver({ type: "longtask" })` 在**空白页**上、对一次**故意阻塞 200 ms** 的主线程占用，`observed` 与 `performance.getEntriesByType("longtask")` **都是空的**，而 `supportedEntryTypes` 里**确实**列着 `longtask`（Chromium 153 / Playwright headless）—— 即"声称支持、什么也不报"（一次性探针复核过，用完即删）。所以主线程读数改用**帧间隔**（`requestAnimationFrame` 间隔）实现：同一个 200 ms 阻塞必定表现为 ≥200 ms 的空档，量具灵敏度可以自证（用例里就有这条标定断言）。见 `e2e/main-thread-responsiveness.spec.ts`。
+- **`section.create` 的平面已收口，但"登记表承诺 ≠ 校验层实现"这类风险只是**被识别出来**，没有机器挡住**（2026-09-26，见 §二「实机现场故障」）：`actionRegistry` 是"我们承诺收什么"的唯一声明处，而 `actionInputs` 里**少一个分支就静默落空** —— 字段会原样透传，直到文档校验器才被拒，报的还是够不到的**动作级**路径（那条一次性修复因此改不动它）。这一批把 `section.create` 补上了（三种平面写法收成一种，且共线时按**字段路径**拒绝），并留了判据："登记表里写了 `ask_user` 问题、或写了可选字段的每个动作都必须在校验层有显式分支"。**但这条判据目前只写在文档里**，没有一个测试逐动作核对登记表与 `parseActionInputs` 的分支覆盖面 —— 下一个新动作照样可能漏。
+- **平面写法上刻意只收三种**：规范形 `{normal, constant}`、过三点 `{points|throughPoints: […3]}`、点 + 法向 `{point|origin, normal}`（坐标 `{x,y,z}` / `[x,y,z]` 都收）。**不做**的：用两个方向向量定平面、用字符串别名指代平面（`"diagonal"`）、用曲面/多边形顶点集反推 —— 遇到这些会如实按 `invalid_plane` 拒绝并给出字段路径，而不是猜。
 - **引用进度档案一律用小节标题，不写行号**：`project-progress.md:<行号>` 形式的引用会随任何一次编辑静默失效（本阶段就发生过三处，已全部改成按标题引用）。
+

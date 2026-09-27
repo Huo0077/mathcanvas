@@ -5,6 +5,49 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-09-26 —— 第四十六批：修两处**现场故障**（"把正方体沿对角面剖开，标出截面"连挂两次）
+
+这不是重构，是用户在**装好的桌面版里**连着碰到的两次失败。两处都在"Agent 说的话编译器没接住"，症状却完全不同 —— 一次报"找不到对象"，一次报"截面平面非法"。分开记。
+
+### 故障一：同一份计划里刚建出来的对象，后一步引用不到（`target_not_found: no object cube`）
+
+用户那句话，规划器给的是三步：建正方体 → 建截面 → 标出截面。后两步把前一步刚建的对象写成了**场景引用 / 裸名字**（`cube`、`diagSection`），而别名表只认 `{scope:"draft", alias:"cube"}` 那种显式草稿引用 —— 整轮死在 `compile_failed: target_not_found … no object cube`，第 2、3 步接着报 `no object diagSection`（级联，两个诊断其实是一个原因）。
+
+判据本身没有歧义：**别名表里只有"这一份计划里、这一步之前"已经建出来的对象**，命中就是那个刚建的对象，不可能是别的。所以 `planCompiler.resolveReferences` 的两条分支（裸字符串 / 场景作用域）都改成：先按别名查，查不到再报 `target_not_found`。宽容是有边界的 ——
+
+- **编造的 id 依旧被拒**（`section("nowhere")` 仍报 `target_not_found`）；
+- **形状错误的引用仍在传输层就被拒**：`sourceId` 收的是裸 id 字符串，喂 `{documentId, entityId}` 这种对象形状报 `invalid_type`、路径落在 `envelope.actions[1].inputs.sourceId`，而不是拖到引用解析时变成一句"找不到对象"（两种失败的性质完全两样，混起来排障会走错方向）。
+
+三条都钉进了 `planCompiler.test.ts`。
+
+### 故障二：登记表承诺的"过三个点"，这一层根本没实现（`section plane is invalid`）
+
+第一处修完，同一句话在第二批上又挂了，换了一个症状：
+
+```
+commit_rejected: action_compile: envelope.actions[1]: operation 0: section plane is invalid
+   （随后级联 target_not_found … no object sec1）
+```
+
+根因在**两处口径不一致**。`actionRegistry` 里 `section.create` 把 `plane` 登记成可选 + 默认策略 `ask_user`，而那句默认问题**明确承诺了两种写法**："截面用哪个平面？给法向与常数，**或者说明它过哪三个点**。" 可 `actionInputs.parseActionInputs` 里**没有 `section.create` 分支** —— `plane` 走默认分支原样透传，"过三个点"那种写法（也就是"沿对角面剖开"最自然的写法）一路走到**文档校验器**才被拒（`packages/dsl/src/schema.ts` 只认 `{normal, constant}`）。更要命的是它报的是**动作级**路径（`envelope.actions[1]`），于是那条"一次性修复"够不到字段、改不动它 —— 用户看到的就只有一句"编译失败"。
+
+修法：`actionInputs.ts` 补 `section.create` 分支 + `normalizeSectionPlane`，把**三种写法收成一种**（单位法向 + 常数）：
+
+- 规范形 `{normal, constant}`；法向不是单位向量则归一化，**常数同步缩放**（`n·x + c = 0` 两边同除 `|n|`）—— 只归一化法向、常数不动，平面就被换掉了，在立方体上正好表现为"切歪"；
+- **过三点** `{points: […3]}`（`throughPoints` 也收）：叉积求法向，常数由第一个点定；
+- **点 + 法向** `{point, normal}`（`origin` 也收）；
+- 坐标两种写法都收（`{x,y,z}` 与 `[x,y,z]`）—— 模型两种都会写。
+
+失败时**错误路径落在字段上**（`action.inputs.plane` / `…plane.normal`），码是 `invalid_plane` / `degenerate_plane`（三点共线）—— 这样那条一次性修复才够得到它。
+
+同批把 `sourceId` 的判据一并收进这个分支（裸 id 字符串，非字符串报 `invalid_type`）—— 它原先靠默认分支兜着，新分支一写就容易顺手丢掉。
+
+`plane` **缺省仍旧放行**：它登记了 `ask_user`，由审计去问用户（`planCompiler.test.ts` 与 `parameterAudit.test.ts` 都钉着"缺平面 → `questions` 里出现 `envelope.actions[0].inputs.plane`"）。在传输层替用户挑一个平面，等于替他改题。
+
+### 验收
+
+`npm run typecheck` exit 0（含 `e2e/`、`scripts/` 三段）；`npm run lint` **0 error / 13 warning**；`npm test` **238 文件 / 2812 用例**通过 + 1 todo（新增 1 条平面归一化用例）；`npx playwright test` **141 用例全绿**。桌面版重新构建并启动，用户那条"把正方体沿对角面剖开，标出截面"实机走通。
+
 ## 2026-09-25（续）—— 方案 2 第三十一批：Rust `lib.rs` 992→912，代理与密钥两组搬进 `src/commands/`
 
 ## 2026-09-25（续）—— 方案 2 第三十二批：Rust `lib.rs` 912→447，四组命令全部搬进 `src/commands/`

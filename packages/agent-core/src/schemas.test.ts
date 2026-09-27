@@ -124,6 +124,53 @@ describe("draft action parsing", () => {
     expectRejected(parseDraftAction({ op: "addPrimitive", primitive: { id: "point-1", type: "point", x: 0, y: 0 } }), "unknown_action")
   })
 
+  /**
+   * **截面平面的多种写法**（2026-09-26 用户现场："把正方体沿对角面剖开，标出截面"）。
+   *
+   * 登记项的默认问题里明确写着"给法向与常数，**或者说明它过哪三个点**"，但这一层原先没有
+   * `section.create` 分支 —— `plane` 原样透传，"过三个点"那种写法会一路走到文档校验器才被拒，
+   * 而且报的是动作级路径（修复请求因此改不动它）。这里钉住：三种写法都收成**同一种**平面。
+   */
+  it("normalizes a section plane given by normal+constant, by three points, or by point+normal", () => {
+    const section = (plane: unknown) => parseDraftAction({ actionId: "section.create", actionKey: "sec1", factIds: [], inputs: { alias: "sec1", sourceId: "solid-1", plane } })
+    const planeOf = (plane: unknown) => {
+      const result = section(plane)
+      expect(result.ok, JSON.stringify(result.ok ? [] : result.errors)).toBe(true)
+      return result.ok ? (result.value.inputs as { plane: { normal: { x: number; y: number; z: number }; constant: number } }).plane : null
+    }
+
+    // 规范形：法向不是单位向量 → 归一化，且**常数同步缩放**（`n·x + c = 0` 两边同除 |n|）。
+    expect(planeOf({ normal: { x: 0, y: 2, z: 0 }, constant: -2 })).toMatchObject({ normal: { x: 0, y: 1, z: 0 }, constant: -1 })
+
+    // 过三点：断言的是**几何事实**（三点都在这个平面上），不是某一串具体数字 ——
+    // 法向取正取负都是同一个平面，钉死符号只会让这条测试在无关改动里发红。
+    const through = planeOf({ points: [{ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, { x: 0, y: 0, z: 1 }] })!
+    expect(Math.hypot(through.normal.x, through.normal.y, through.normal.z)).toBeCloseTo(1, 12)
+    for (const point of [{ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, { x: 0, y: 0, z: 1 }]) {
+      expect(through.normal.x * point.x + through.normal.y * point.y + through.normal.z * point.z + through.constant).toBeCloseTo(0, 12)
+    }
+    // 这个平面就是 `y = 0`（对角面那个方向的例子用它）：法向只能是 ±y。
+    expect(through.normal.x).toBeCloseTo(0, 12)
+    expect(Math.abs(through.normal.y)).toBeCloseTo(1, 12)
+    expect(through.normal.z).toBeCloseTo(0, 12)
+
+    // 点 + 法向：常数由锚点算出。
+    expect(planeOf({ point: { x: 0, y: 3, z: 0 }, normal: { x: 0, y: 5, z: 0 } })).toMatchObject({ normal: { x: 0, y: 1, z: 0 }, constant: -3 })
+
+    // 数组写法也收。
+    expect(planeOf({ normal: [0, 0, 4], constant: 8 })).toMatchObject({ normal: { x: 0, y: 0, z: 1 }, constant: 2 })
+
+    // 三点共线 → 如实拒绝，且**路径落在字段上**（这样那条一次性修复才改得动）。
+    const collinear = section({ points: [{ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, { x: 2, y: 0, z: 0 }] })
+    expect(collinear.ok).toBe(false)
+    if (!collinear.ok) expect(collinear.errors[0]).toMatchObject({ code: "degenerate_plane", path: "action.inputs.plane" })
+
+    // 点数不对 / 法向为零向量：同样是**字段路径**上的拒绝，而不是拖到文档校验器。
+    expectRejected(section({ throughPoints: [{ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }] }), "invalid_plane")
+    expectRejected(section({ normal: { x: 0, y: 0, z: 0 }, constant: 1 }), "degenerate_plane")
+    expectRejected(section([0, 0, 1]), "invalid_plane")
+  })
+
   it("rejects an unscoped scene reference", () => {
     // 既有实体必须写成 {scope:"scene", ref:{documentId,entityId}}；只给 entityId 不算数。
     expectRejected(parseDraftAction({ actionId: "object.update_inputs", actionKey: "delete", inputs: { target: { entityId: "point-1" }, patch: { label: "x" } }, factIds: [] }), "unscoped_reference")
