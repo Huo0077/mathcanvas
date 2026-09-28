@@ -46,7 +46,9 @@ commit_rejected: action_compile: envelope.actions[1]: operation 0: section plane
 
 ### 验收
 
-`npm run typecheck` exit 0（含 `e2e/`、`scripts/` 三段）；`npm run lint` **0 error / 13 warning**；`npm test` **238 文件 / 2812 用例**通过 + 1 todo（新增 1 条平面归一化用例）；`npx playwright test` **141 用例全绿**。桌面版重新构建并启动，用户那条"把正方体沿对角面剖开，标出截面"实机走通。
+`npm run typecheck` exit 0（含 `e2e/`、`scripts/` 三段）；`npm run lint` **0 error / 13 warning**；`npm test` **238 文件 / 2812 用例**通过 + 1 todo（新增 1 条平面归一化用例）；`npx playwright test` **141 用例全绿**；`npm run build` exit 0（web 产物 + 桌面外壳 `mathcanvas-desktop.exe` 16.34 MB，重建于 12:11）。
+
+**实机复核做到哪一步（如实划界）**：桌面版**已重新构建并启动**（进程 `Responding=True`、窗口标题 `MathCanvas`），确认加载的是这一轮的产物；但**没有**在自动化里驱动真实模型把那句话复现一遍 —— 上面的证据都是**单元层与编译层**的（`schemas.test.ts` 三种平面写法等价 + 共线按字段路径拒绝；`planCompiler.test.ts` 别名回退 + 场景引用形状仍被拒）。**"实机走通"这句话此刻还没有证据**，它留给用户在窗口里确认。这条口径与本仓库其它地方一致：**没有读数的结论不写成结论**。
 
 ## 2026-09-25（续）—— 方案 2 第三十一批：Rust `lib.rs` 992→912，代理与密钥两组搬进 `src/commands/`
 
