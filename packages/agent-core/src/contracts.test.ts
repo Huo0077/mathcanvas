@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
-import { PLAN_SCHEMA_VERSION, type DocumentHandle, type RunContext, type ToolResult } from "./contracts"
+import { PLAN_SCHEMA_VERSION, type DocumentHandle, type RunContext, type ToolExecutionIdentity, type ToolResult, type VerificationReport } from "./contracts"
+import { parseToolExecutionIdentity, parseVerificationReport } from "./toolContracts"
 
 /**
  * 传输契约的**形状守卫**（设计规格 §6 + 计划 Task 0.2 的 Interfaces 段）。
@@ -58,3 +59,63 @@ describe("transport contracts", () => {
     expect(result.recovery?.safeRetry).toBe("refresh_context")
   })
 })
+
+describe("tool execution and verification contracts", () => {
+  it("requires an execution identity to bind a tool result to one draft version", () => {
+    const identity: ToolExecutionIdentity = {
+      runId: "run_1",
+      stepId: "step_1",
+      toolCallId: "call_1",
+      draftVersion: 2,
+      baseDocumentHash: "sha256:base"
+    }
+
+    expect(identity.stepId).toBe("step_1")
+    expect(identity.draftVersion).toBe(2)
+  })
+
+  it("represents verification as explicit checks instead of a boolean", () => {
+    const report: VerificationReport = {
+      status: "failed",
+      checks: [{ id: "edge-length", status: "failed", detail: "edge length is 2, expected 3", path: "cube.edgeLength" }],
+      next_actions: ["update the cube size", "re-run verification"]
+    }
+
+    expect(report.status).toBe("failed")
+    expect(report.checks[0]?.path).toBe("cube.edgeLength")
+  })
+})
+
+
+describe("untrusted tool execution metadata", () => {
+  it("accepts a well-formed identity without rewriting its binding", () => {
+    const value = { runId: "run_1", stepId: "step_1", toolCallId: "call_1", draftVersion: 2, baseDocumentHash: "sha256:base" }
+    expect(parseToolExecutionIdentity(value)).toEqual({ ok: true, value })
+  })
+
+  it("rejects an identity without a positive draft version or complete binding", () => {
+    const malformed = { runId: "run_1", stepId: "", toolCallId: "call_1", draftVersion: 0, baseDocumentHash: "sha256:base", ignored: true }
+    const result = parseToolExecutionIdentity(malformed)
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.errors.map((error) => error.path)).toEqual(expect.arrayContaining(["identity.stepId", "identity.draftVersion", "identity.ignored"]))
+  })
+
+  it("requires verification checks with known statuses and concrete ids", () => {
+    const invalid = { status: "passed", checks: [{ id: "", status: "definitely", detail: "looks fine" }], next_actions: [] }
+    const result = parseVerificationReport(invalid)
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.errors.map((error) => error.path)).toEqual(expect.arrayContaining(["verification.checks[0].id", "verification.checks[0].status"]))
+  })
+
+  it("accepts an explicit not-supported check without claiming it passed", () => {
+    const value = { status: "not_supported", checks: [{ id: "render", status: "not_supported", detail: "vision unavailable" }], next_actions: ["ask user to inspect"] }
+    expect(parseVerificationReport(value)).toEqual({ ok: true, value })
+  })
+
+  it("cannot report overall success with a failed or empty check list", () => {
+    const contradictory = parseVerificationReport({ status: "passed", checks: [{ id: "size", status: "failed", detail: "expected 3, got 2" }], next_actions: [] })
+    const empty = parseVerificationReport({ status: "passed", checks: [], next_actions: [] })
+    expect(contradictory.ok).toBe(false)
+    expect(empty.ok).toBe(false)
+    if (!contradictory.ok) expect(contradictory.errors).toEqual(expect.arrayContaining([expect.objectContaining({ path: "verification.status" })]))
+  })})

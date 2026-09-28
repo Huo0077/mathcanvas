@@ -1,4 +1,5 @@
 import { getCapabilityRegistry } from "./capabilities"
+import { DISPATCHABLE_TOOL_IDS } from "./toolDispatch"
 import type { RunPhase } from "./runState"
 import { SKILL_MANIFESTS } from "./skills/manifest"
 
@@ -67,6 +68,8 @@ export interface ToolEnvironment {
   workspace: "conics" | "geometry3d" | "cad"
   /** 用户是否已经确认了预览。**提交工具只在这个为真时发布。** */
   confirmed: boolean
+  /** True only after a host read-only ToolPort has been connected for this run. */
+  readToolsAvailable?: boolean
   /** 当前能力注册表修订号；与注册表不一致的工具目录会被拒（见 `registryRevision`）。 */
   capabilityRevision: string
 }
@@ -81,11 +84,6 @@ const TOOLS: readonly ToolDescriptor[] = [
   { id: "scene.search_entities", kind: "read", effect: "none", description: "按标签、id 或类型片段查找对象", phases: ["observing", "planning", "compiling", "validating", "awaiting_confirmation"], workspaces: [] },
   { id: "scene.describe_entities", kind: "read", effect: "none", description: "读取若干对象的字段、依赖与反向引用", phases: ["observing", "planning", "compiling", "validating", "awaiting_confirmation"], workspaces: [] },
   { id: "scene.dependencies", kind: "read", effect: "none", description: "查询某个对象依赖谁、谁依赖它（删除前必看）", phases: ["observing", "planning", "compiling", "validating", "awaiting_confirmation"], workspaces: [] },
-  { id: "scene.capabilities", kind: "read", effect: "none", description: "查询当前工作区可用的动作与它们的阻止状态", phases: ["observing", "planning", "compiling", "validating", "awaiting_confirmation"], workspaces: [] },
-  { id: "scene.measure", kind: "read", effect: "none", description: "读取已有测量值，而不是自己算一个", phases: ["observing", "planning", "validating", "awaiting_confirmation"], workspaces: [] },
-  { id: "scene.check_relations", kind: "read", effect: "none", description: "检查指定对象之间的平行、垂直、共线、共面等关系", phases: ["observing", "planning", "validating"], workspaces: [] },
-  // 截面只在有实体的工作区里有意义：平面工作区没有可剖的体。
-  { id: "scene.check_section", kind: "read", effect: "none", description: "检查某个实体在给定平面下的截面是否有效", phases: ["observing", "planning", "validating"], workspaces: ["geometry3d", "cad"] },
 
   // ---------------------------------------------------------------- 控制（改草稿，不改文档）
   { id: "plan.set_plan", kind: "control", effect: "propose_plan", description: "提交本轮的构图计划（动作序列），只产生隔离草稿", phases: ["planning"], workspaces: [] },
@@ -96,13 +94,12 @@ const TOOLS: readonly ToolDescriptor[] = [
   { id: "draft.confirm_commit", kind: "write", effect: "commit", description: "把用户已确认的草稿落盘（需要一次性确认凭据）", phases: ["awaiting_confirmation"], workspaces: [] },
 
   // ---------------------------------------------------------------- 只读收尾
-  { id: "run.explain_refusal", kind: "read", effect: "none", description: "解释上一步为什么被拒，并给出可执行的下一步", phases: ["waiting", "planning"], workspaces: [] },
-  // 工程制图的布局改动**没有对应动作**（技能清单里也这么写），所以只提供"读取图纸状态"的工具。
-  { id: "cad.inspect_drawing", kind: "read", effect: "none", description: "读取图纸的视图、图层与投影来源（制图布局的改动需要用户在界面里做）", phases: ["observing", "planning", "validating"], workspaces: ["cad"] }
 ]
 
 export interface ToolRegistry {
   forPhase(phase: RunPhase, environment: ToolEnvironment): readonly ToolDescriptor[]
+  /** Only tools wired through the current model/provider channel, never HostBridge.commit. */
+  forModelPhase(phase: RunPhase, environment: ToolEnvironment): readonly ToolDescriptor[]
 }
 
 /** 工具目录的修订号：与能力注册表同步递增（工具的有效性取决于能力是否可用）。 */
@@ -111,17 +108,19 @@ export const TOOL_REGISTRY_REVISION = "2026-09-19.1"
 /** 写入类工具在哪些阶段绝不允许出现。 */
 const READ_ONLY_PHASES: readonly RunPhase[] = ["created", "preflight", "observing", "planning", "waiting", "completed", "failed", "cancelled", "interrupted", "answering"]
 export function createToolRegistry(tools: readonly ToolDescriptor[] = TOOLS): ToolRegistry {
+  const forPhase: ToolRegistry["forPhase"] = (phase, environment) => tools.filter((tool) => {
+    if (!tool.phases.includes(phase)) return false
+    if (tool.workspaces.length > 0 && !tool.workspaces.includes(environment.workspace)) return false
+    if (tool.effect === "commit" && !environment.confirmed) return false
+    return true
+  })
+
   return {
-    forPhase(phase, environment) {
-      return tools.filter((tool) => {
-        if (!tool.phases.includes(phase)) return false
-        // **工作区过滤**：空数组 = 任何工作区。没有这一步，模型在平面几何里也能看到
-        // 空间建模与制图工具（第一版就是这样：`workspace` 声明了却没用）。
-        if (tool.workspaces.length > 0 && !tool.workspaces.includes(environment.workspace)) return false
-        // 提交工具需要用户确认；没有确认就没有这个工具（不是"调用了会被拒"，而是根本看不到）。
-        if (tool.effect === "commit" && !environment.confirmed) return false
-        return true
-      })
+    forPhase,
+    forModelPhase(phase, environment) {
+      // Only the final plan tool and host-connected read tools have model round trips.
+      // Draft controls and HostBridge.commit are not model-facing.
+      return forPhase(phase, environment).filter((tool) => tool.id === "plan.set_plan" || (environment.readToolsAvailable && DISPATCHABLE_TOOL_IDS.some((id) => id === tool.id)))
     }
   }
 }

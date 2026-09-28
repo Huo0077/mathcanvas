@@ -29,7 +29,7 @@ use mathcanvas_desktop_lib::providers::adapter::{
     run_with_profile, HttpTransport, ProviderAdapter, ProviderError, SecretSource, SendOutcome, Stop, Transport, TransportUpdate,
 };
 use mathcanvas_desktop_lib::providers::events::{FailureKind, ModelEvent};
-use mathcanvas_desktop_lib::providers::request::{ChatMessage, ProviderRequest, RequestOptions};
+use mathcanvas_desktop_lib::providers::request::{build_request, ChatMessage, ProviderRequest, RequestOptions};
 use mathcanvas_desktop_lib::repository::provider_profiles::ProviderProfile;
 
 // ---------------------------------------------------------------- 测试替身
@@ -498,7 +498,13 @@ fn every_dialect_can_carry_a_tool_schema_when_the_caller_allows_it() {
         adapter.send_with(messages(), false, tools_options(), stop.as_ref()).expect("the request must be attempted");
 
         let body = transport.last().request.body;
-        assert_eq!(body["tools"][0]["function"]["name"], "plan_set_plan", "{name} must carry the tool schema");
+        if name == "anthropic" {
+            assert_eq!(body["tools"][0]["name"], "plan_set_plan", "Anthropic requires a native name field");
+            assert_eq!(body["tools"][0]["input_schema"]["type"], "object", "Anthropic requires input_schema");
+            assert!(body["tools"][0].get("function").is_none(), "OpenAI wrappers must not leak to Anthropic");
+        } else {
+            assert_eq!(body["tools"][0]["function"]["name"], "plan_set_plan", "{name} must carry the tool schema");
+        }
         // `force_tool: false`：真运行里模型**可以不调工具**（它可以直接作答），
         // 强制它调工具是探针才需要的事。
         assert!(body.get("tool_choice").is_none(), "{name} must not force the tool on a normal run");
@@ -506,6 +512,43 @@ fn every_dialect_can_carry_a_tool_schema_when_the_caller_allows_it() {
 }
 
 /// 调用方**不放行**时，工具表一个字都不进请求体。
+#[test]
+fn tool_result_round_trip_uses_each_provider_native_message_shape() {
+    let history = vec![
+        ChatMessage::text("user", "inspect the scene"),
+        ChatMessage::tool_call("call-1", "scene_inspect", serde_json::json!({ "documentId": "doc-1" })),
+        ChatMessage::tool_result("call-1", "scene_inspect", "found point-A"),
+    ];
+    let openai = build_request(&openai_profile(), history.clone(), false, tools_options()).body;
+    assert_eq!(openai["messages"][1]["role"], "assistant");
+    assert_eq!(openai["messages"][1]["tool_calls"][0]["id"], "call-1");
+    assert_eq!(openai["messages"][2]["role"], "tool");
+    assert_eq!(openai["messages"][2]["tool_call_id"], "call-1");
+
+    let anthropic = build_request(&anthropic_profile(), history.clone(), false, tools_options()).body;
+    assert_eq!(anthropic["messages"][1]["content"][0]["type"], "tool_use");
+    assert_eq!(anthropic["messages"][1]["content"][0]["input"]["documentId"], "doc-1");
+    assert_eq!(anthropic["messages"][2]["role"], "user");
+    assert_eq!(anthropic["messages"][2]["content"][0]["type"], "tool_result");
+    assert_eq!(anthropic["messages"][2]["content"][0]["tool_use_id"], "call-1");
+
+    let ollama = build_request(&ollama_profile(), history, false, tools_options()).body;
+    assert_eq!(ollama["messages"][1]["tool_calls"][0]["function"]["name"], "scene_inspect");
+    assert_eq!(ollama["messages"][2]["role"], "tool");
+    assert_eq!(ollama["messages"][2]["content"], "found point-A");
+}
+
+#[test]
+fn anthropic_forced_tool_choice_uses_object_form() {
+    let source = FakeSource { secret: Some("sk-live-secret".to_string()) };
+    let transport = FakeTransport::streaming(vec![b"data: [DONE]\n\n".to_vec()]);
+    let stop = AtomicStop::new();
+    let adapter = ProviderAdapter::new(&source, &transport, anthropic_profile());
+    adapter.send_with(messages(), false, RequestOptions { force_tool: true, ..tools_options() }, stop.as_ref()).expect("request is built");
+    let body = transport.last().request.body;
+    assert_eq!(body["tool_choice"], serde_json::json!({ "type": "any" }));
+}
+
 #[test]
 fn tools_are_left_out_when_the_caller_does_not_allow_them() {
     let source = FakeSource { secret: Some("sk-live-secret".to_string()) };

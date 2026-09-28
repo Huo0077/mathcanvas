@@ -362,6 +362,12 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
     planner: dependencies.planner,
     observer,
     committer,
+    tools: {
+      async call({ toolId, input, signal }) {
+        if (signal.aborted) throw new Error("tool call cancelled")
+        return createToolDispatcher({ scene: createSceneTools(createSceneObservation(dependencies.readSceneDocuments())) }).call(toolId, input)
+      }
+    },
     prepare: dependencies.prepare,
     // 会话上下文（Task 4）：**一次运行只取一次**，两次尝试共用同一份（规格 §5.3/§5.4）。
     ...(dependencies.conversation === undefined ? {} : { conversation: dependencies.conversation }),

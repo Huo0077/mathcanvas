@@ -45,6 +45,8 @@ export interface PlanRequest {
    * **做成一个整体字段而不是两个平铺字段**：它们是同一个问题的两面
    *（"这次生成允许看到什么"），平铺会让将来新增一项时又要改一次端口形状。
    */
+  /** Scoped read-only tool execution provided by the coordinator, never by model output. */
+  executeTool?: ToolPort["call"]
   model: {
     context: ModelContext
     /** 当前阶段发布的工具。只读阶段没有写入工具，观察阶段连计划工具都没有。 */

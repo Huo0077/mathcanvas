@@ -80,7 +80,7 @@ const provider: ModelPlannerProvider = { id: "openai-1", modelId: "gpt-x", diale
  * 显式写出来是**为了断言**：`vi.fn(async () => …)` 不带参数时 `mock.calls[0][0]`
  * 推不出类型（元组长度是 0），所以替身必须声明它收什么。
  */
-type SentRequest = { runId: string; profileId: string; profileRevision: number; messages: { role: string; content: string }[]; tools: unknown[] }
+type SentRequest = { runId: string; profileId: string; profileRevision: number; messages: { role: string; content: string; toolCallId?: string; toolName?: string; toolInput?: unknown }[]; tools: unknown[] }
 
 /** 一串归一化事件（`provider_run` 回来的就是它）。 */
 function deltas(...texts: string[]) {
@@ -519,5 +519,84 @@ describe("传输失败的重试策略", () => {
 
     expect(calls).toBe(2)
     expect(parsePlanEnvelope(outcome.plan).ok).toBe(true)
+  })
+})
+
+describe("provider plan schema", () => {
+  it("closes the envelope and offers only allowed registered actions", async () => {
+    const withTools: ModelPlannerProvider = { ...provider, capabilities: { tools: "verified", json: "unknown", vision: "unknown" } }
+    const sent: SentRequest[] = []
+    const planner = createModelPlanner({ resolveProvider: async () => ({ ok: true, provider: withTools }), runModel: async (value) => { sent.push(value); return deltas(goodEnvelope) } })
+    await planner.plan(request())
+    const schema = sent[0].tools[0] as { function: { parameters: { additionalProperties: boolean; properties: { kind: { enum: string[] }; actions: { items: { oneOf: { properties: { actionId: { enum: string[] }; inputs: { additionalProperties: boolean } } }[] } } } } } }
+    expect(schema.function.parameters.additionalProperties).toBe(false)
+    expect(schema.function.parameters.properties.kind.enum).toEqual(["plan", "clarification", "answer"])
+    const actions = schema.function.parameters.properties.actions.items.oneOf
+    expect(actions.map((action) => action.properties.actionId.enum[0])).toEqual(["solid.create_template", "planar.create_point"])
+    expect(actions[0].properties.inputs.additionalProperties).toBe(false)
+  })
+})
+
+describe("native observation tool loop", () => {
+  const withTools: ModelPlannerProvider = { ...provider, capabilities: { tools: "verified", json: "unknown", vision: "unknown" } }
+  const inspectTool: ToolDescriptor = { id: "scene.inspect", kind: "read", effect: "none", description: "Inspect scoped scene objects", phases: ["planning"], workspaces: [] }
+
+  it("offers an implemented read tool and returns its result to the model before accepting a plan", async () => {
+    const requests: SentRequest[] = []
+    const executeTool = vi.fn(async () => ({ status: "success" as const, summary: "one entity", next_actions: [], artifacts: [], payload: [{ entityId: "cube-1", label: "cube" }], diagnostics: [] }))
+    const planner = createModelPlanner({
+      resolveProvider: async () => ({ ok: true, provider: withTools }),
+      runModel: async (sent) => {
+        requests.push(sent)
+        return requests.length === 1
+          ? { ok: true, events: [{ kind: "tool_call", requestId: "r1", attemptId: "a1", toolCallId: "call-1", toolId: "scene_inspect", input: { documentId: "doc-1" } }] }
+          : { ok: true, events: [{ kind: "tool_call", requestId: "r2", attemptId: "a2", toolCallId: "call-2", toolId: PLAN_TOOL_NAME, input: JSON.parse(goodEnvelope) }] }
+      }
+    })
+    const result = await planner.plan(request({ model: { context: context(), tools: [planTool, inspectTool] }, executeTool }))
+    expect(requests).toHaveLength(2)
+    expect(requests[0].tools.map((tool) => (tool as { function: { name: string } }).function.name)).toContain("scene_inspect")
+    expect(executeTool).toHaveBeenCalledWith(expect.objectContaining({ toolCallId: "call-1", toolId: "scene.inspect", input: { documentId: "doc-1" } }))
+    expect(requests[1].messages.at(-2)).toMatchObject({ role: "tool_call", toolCallId: "call-1", toolName: "scene_inspect", toolInput: { documentId: "doc-1" } })
+    expect(requests[1].messages.at(-1)).toMatchObject({ role: "tool_result", toolCallId: "call-1", toolName: "scene_inspect", content: expect.stringContaining("cube-1") })
+    expect(parsePlanEnvelope(result.plan).ok).toBe(true)
+  })
+
+  it("does not execute a read tool if no budget remains for returning its result", async () => {
+    const budget = createBudget({ generation: 1, network: 1 })
+    budget.consume("generation")
+    const executeTool = vi.fn(async () => ({ status: "success" as const, summary: "ok", next_actions: [], artifacts: [], payload: [], diagnostics: [] }))
+    const planner = createModelPlanner({
+      resolveProvider: async () => ({ ok: true, provider: withTools }),
+      runModel: async () => ({ ok: true, events: [{ kind: "tool_call", requestId: "r1", attemptId: "a1", toolCallId: "call-1", toolId: "scene_inspect", input: { documentId: "doc-1" } }] })
+    })
+    await expect(planner.plan(request({ budget, model: { context: context(), tools: [planTool, inspectTool] }, executeTool }))).rejects.toThrow(/budget/)
+    expect(executeTool).not.toHaveBeenCalled()
+  })
+
+  it("keeps transport retry limits per request instead of counting successful read-tool rounds as failures", async () => {
+    const executeTool = vi.fn(async () => ({ status: "success" as const, summary: "read", next_actions: [], artifacts: [], payload: [], diagnostics: [] }))
+    let requests = 0
+    const planner = createModelPlanner({
+      resolveProvider: async () => ({ ok: true, provider: withTools }),
+      runModel: async () => {
+        requests += 1
+        if (requests < 3) return { ok: true, events: [{ kind: "tool_call", requestId: `r${requests}`, attemptId: "a1", toolCallId: `read-${requests}`, toolId: "scene_inspect", input: { documentId: "doc-1" } }] }
+        if (requests === 3) return { ok: false, failure: "transport", message: "temporary disconnect", retryable: true }
+        return { ok: true, events: [{ kind: "tool_call", requestId: "r4", attemptId: "a2", toolCallId: "plan-1", toolId: PLAN_TOOL_NAME, input: JSON.parse(goodEnvelope) }] }
+      }
+    })
+    const result = await planner.plan(request({ model: { context: context(), tools: [planTool, inspectTool] }, executeTool }))
+    expect(requests).toBe(4)
+    expect(executeTool).toHaveBeenCalledTimes(2)
+    expect(parsePlanEnvelope(result.plan).ok).toBe(true)
+  })
+
+  it("refuses a read call without a matching host execution port", async () => {
+    const planner = createModelPlanner({
+      resolveProvider: async () => ({ ok: true, provider: withTools }),
+      runModel: async () => ({ ok: true, events: [{ kind: "tool_call", requestId: "r1", attemptId: "a1", toolCallId: "call-1", toolId: "scene_inspect", input: { documentId: "doc-1" } }] })
+    })
+    await expect(planner.plan(request({ model: { context: context(), tools: [planTool, inspectTool] } }))).rejects.toThrow(/tool/i)
   })
 })

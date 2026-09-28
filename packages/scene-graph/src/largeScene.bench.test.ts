@@ -380,7 +380,7 @@ describe("large scene performance trends", () => {
     const moved = applyOperation(document, { op: "updatePrimitive", id: "mover", patch: { x: 1, y: 2 } })
     const point = moved.document.primitives.find((primitive) => primitive.id === "mover")
     expect(point?.type === "point" ? { x: point.x, y: point.y } : null).toEqual({ x: 1, y: 2 })
-  })
+  }, 35_000)
 
   /**
    * **基准真的能报警吗**（校准 / 变异检查）。

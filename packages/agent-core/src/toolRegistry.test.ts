@@ -16,13 +16,13 @@ function environment(overrides: Partial<ToolEnvironment> = {}): ToolEnvironment 
 const ALL_PHASES: RunPhase[] = ["created", "preflight", "observing", "planning", "answering", "compiling", "validating", "awaiting_confirmation", "committing", "waiting", "completed", "failed", "cancelled", "interrupted"]
 
 describe("tool publication by phase", () => {
-  it("publishes between 6 and 10 tools in the phases that do work", () => {
+  it("publishes only executable tools in phases that do work", () => {
     const registry = createToolRegistry()
 
     for (const phase of ["observing", "planning", "compiling", "validating"] as RunPhase[]) {
       const tools = registry.forPhase(phase, environment())
-      // 太少不够用；太多等于把整个菜单摊开（清单存在的理由就是不要摊开）。
-      expect(tools.length, `phase ${phase} published ${tools.length}`).toBeGreaterThanOrEqual(6)
+      // 只发布真实可执行工具；后续 Phase 2/3 再逐步增加 typed tools。
+      expect(tools.length, `phase ${phase} published ${tools.length}`).toBeGreaterThanOrEqual(4)
       expect(tools.length, `phase ${phase} published ${tools.length}`).toBeLessThanOrEqual(10)
     }
   })
@@ -35,11 +35,11 @@ describe("tool publication by phase", () => {
     }
   })
 
-  it("offers the seven observation tools the plan names", () => {
+  it("offers the implemented observation tools", () => {
     const registry = createToolRegistry()
     const ids = registry.forPhase("observing", environment()).map((tool) => tool.id)
 
-    for (const id of ["scene.inspect", "scene.search_entities", "scene.describe_entities", "scene.dependencies", "scene.measure", "scene.check_relations", "scene.capabilities"]) {
+    for (const id of ["scene.inspect", "scene.search_entities", "scene.describe_entities", "scene.dependencies"]) {
       expect(ids, `missing ${id}`).toContain(id)
     }
   })
@@ -102,7 +102,7 @@ describe("commit is gated on a one-time confirmation", () => {
 })
 
 describe("the environment actually filters tools", () => {
-  it("hides workspace-specific tools outside their workspace", () => {
+  it("keeps unsupported workspace-specific tools unpublished", () => {
     // 第一版 `ToolEnvironment.workspace` **声明了却完全没用** ——
     // 于是模型在平面几何里也能看到空间建模与制图的工具。声明了却没接上的边界比没有边界更危险。
     const registry = createToolRegistry()
@@ -111,12 +111,11 @@ describe("the environment actually filters tools", () => {
     const inSpatial = registry.forPhase("observing", environment({ workspace: "geometry3d" })).map((tool) => tool.id)
     const inCad = registry.forPhase("observing", environment({ workspace: "cad" })).map((tool) => tool.id)
 
-    expect(inPlanar).not.toContain("cad.inspect_drawing")
-    expect(inPlanar).not.toContain("scene.check_section")
-    expect(inCad).toContain("cad.inspect_drawing")
-    // 截面检查在立体几何与制图里都有意义（制图可以投影空间文档）。
-    expect(inSpatial).toContain("scene.check_section")
-    expect(inCad).toContain("scene.check_section")
+    for (const id of ["cad.inspect_drawing", "scene.check_section"]) {
+      expect(inPlanar).not.toContain(id)
+      expect(inSpatial).not.toContain(id)
+      expect(inCad).not.toContain(id)
+    }
   })
 
   it("keeps the workspace-agnostic tools in every workspace", () => {
@@ -126,7 +125,7 @@ describe("the environment actually filters tools", () => {
       const ids = registry.forPhase("observing", environment({ workspace })).map((tool) => tool.id)
       // 空 `workspaces` 数组表示"任何工作区"。
       expect(ids, workspace).toContain("scene.inspect")
-      expect(ids, workspace).toContain("scene.capabilities")
+      expect(ids, workspace).not.toContain("scene.capabilities")
     }
   })
 
@@ -165,5 +164,36 @@ describe("tool catalogue hygiene", () => {
       expect(ids, `phase ${phase}`).toContain("scene.inspect")
       expect(ids, `phase ${phase}`).toContain("scene.describe_entities")
     }
+  })
+})
+
+describe("publication only exposes executable handlers", () => {
+  it("does not publish tools that the dispatcher cannot execute", () => {
+    const registry = createToolRegistry()
+    const unavailable = ["scene.measure", "scene.check_relations", "scene.check_section", "scene.capabilities", "cad.inspect_drawing", "run.explain_refusal"]
+
+    for (const phase of ["observing", "planning", "compiling", "validating", "awaiting_confirmation", "waiting"] as RunPhase[]) {
+      const published = registry.forPhase(phase, environment({ workspace: phase === "validating" ? "cad" : "geometry3d" })).map((tool) => tool.id)
+      for (const toolId of unavailable) expect(published, `${toolId} published in ${phase}`).not.toContain(toolId)
+    }
+  })
+})
+
+
+
+
+
+describe("model-facing publication honors actual provider wiring", () => {
+  it("never offers a document commit tool to the model, even after user confirmation", () => {
+    const registry = createToolRegistry()
+    for (const phase of ALL_PHASES) {
+      expect(registry.forModelPhase(phase, environment({ confirmed: true })).some(isWritingTool)).toBe(false)
+    }
+  })
+
+  it("does not advertise an unconnected draft control before the tool loop supports it", () => {
+    const registry = createToolRegistry()
+    expect(registry.forModelPhase("compiling", environment()).map((tool) => tool.id)).not.toContain("draft.stage_actions")
+    expect(registry.forModelPhase("planning", environment()).map((tool) => tool.id)).toContain("plan.set_plan")
   })
 })

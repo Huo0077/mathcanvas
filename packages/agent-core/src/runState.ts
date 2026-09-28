@@ -105,6 +105,7 @@ export interface RunEventIds {
   requestId: string | null
   attemptId: string | null
   toolCallId: string | null
+  toolId: string | null
   draftVersion: number | null
   handle: DocumentHandle | null
 }
@@ -151,6 +152,7 @@ export function createRunLedger(init: RunLedgerInit): RunLedger {
     requestId: null,
     attemptId: null,
     toolCallId: null,
+    toolId: null,
     draftVersion: null,
     handle: init.handle ?? null
   }

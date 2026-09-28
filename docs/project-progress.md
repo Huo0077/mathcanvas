@@ -3764,3 +3764,17 @@ P7-1 至 P7-6 与工程工作台层次化改造 Task 1-7 均已完成；P4 Agent
 - `npm.cmd run lint`：未执行成功，仓库当前未安装 `eslint` 命令
 - GitHub：P2 修复与 P3-1 之前的提交均已推送到 `origin/main`
 
+## Agent Tool Loop Pause Snapshot (2026-09-28)
+
+This is the current pause snapshot for the Agent tool-loop work and does not overwrite older historical acceptance records.
+
+- Phase 0 is complete: baseline, seven representative tasks, deterministic judge, offline evaluator, and scorecard.
+- The first Phase 1 slice is complete: execution identity, verification report parsing, action-schema draft, unimplemented-tool removal, read-tool validation, and recovery metadata.
+- The read-only Phase 2 loop is complete in scripted integration tests: Runtime, Coordinator, ToolPort, provider native tool calls/results, Scene Dispatcher, continued planning, isolated draft, and user trace.
+- Provider adapter tests cover OpenAI-compatible, Anthropic, and Ollama tool schemas and tool-result histories.
+- Geometry safeguards cover cube center/corner semantics, edge length, zero-size rejection, and the one-cube constraint.
+- Still paused: incremental draft tools, complete schema single source, general semantic verification, screenshot/layout evidence, real-provider evaluation, and Worker product strategy.
+
+Evidence: 242 Vitest files, 2863 tests passed, 1 todo; TypeScript typecheck, full Rust tests, and Web build passed. Visual tests still emit jsdom/WebGL warnings, and real-provider accuracy/cost/latency remain unmeasured.
+
+Detailed snapshot: `docs/research/2026-09-28-agent-tool-loop-progress.md`.

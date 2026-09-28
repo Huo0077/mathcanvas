@@ -136,8 +136,9 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
         errors.push(fail("invalid_template", `${path}.template`, `expected one of ${SOLID_TEMPLATES.join(", ")}`))
         return null
       }
-      const origin = readVector3(value.origin, `${path}.origin`, errors)
-      const out: Record<string, unknown> = withAlias({ template, origin })
+      // Absent origin is completed by the registered safe_default and recorded as an assumption.
+      const origin = value.origin === undefined ? undefined : readVector3(value.origin, `${path}.origin`, errors)
+      const out: Record<string, unknown> = withAlias({ template, ...(origin === undefined ? {} : { origin }) })
       if (value.size !== undefined) out.size = readVector3(value.size, `${path}.size`, errors)
       if (value.radius !== undefined) out.radius = finiteNumber(value.radius, `${path}.radius`, errors)
       if (value.height !== undefined) out.height = finiteNumber(value.height, `${path}.height`, errors)

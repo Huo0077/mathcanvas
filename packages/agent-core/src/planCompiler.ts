@@ -15,6 +15,7 @@ import { auditDescriptionFor, type AuditContext } from "./defaultPolicies"
 import { auditPlan, type FieldCompletion } from "./parameterAudit"
 import { parsePlanEnvelope, repairRequestFor } from "./schemas"
 import { isInvariantRequest } from "./underdetermined"
+import { cubeCenterFrom, cubeEdgeLengthFrom, explicitlyRequestsCube } from "./geometryIntent"
 
 /**
  * **把一份计划编译成动作**（Agent DSL 切片 Task 4；规格 §6.2/§6.3/§7）。
@@ -286,6 +287,7 @@ export function compilePlan(input: unknown, context: PlanCompileContext): PlanCo
     Object.assign(aliases, compiled.aliasToId)
   }
 
+  diagnostics.push(...verifyExplicitCubeRequest(compiledActions, context.prompt))
   const failed = diagnostics.some((entry) => entry.severity === "error")
   if (failed) {
     const errors = toParseErrors(diagnostics)
@@ -570,4 +572,30 @@ export function describeCompileRepairPrompt(repair: RepairRequest, diagnostics: 
     repair.allowedChanges.length > 0 ? `这次只允许改这几处：${repair.allowedChanges.join(", ")}` : "这次只允许改上面点名的字段。",
     "请重新返回一份完整的计划信封，不要附加任何解释文字。"
   ].join("\n")
+}
+
+/** Code gate for unambiguous dimensions in the user's original cube request. */
+function verifyExplicitCubeRequest(actions: readonly DraftAction[], prompt: string | undefined): PlanDiagnostic[] {
+  if (!prompt || !explicitlyRequestsCube(prompt)) return []
+  const cubeActions = actions.map((action, index) => ({ action, index })).filter(({ action }) => action.actionId === "solid.create_template" && isRecord(action.inputs) && action.inputs.template === "cube")
+  if (cubeActions.length > 1 && /(?:一个|one|single)/i.test(prompt)) {
+    return [planDiagnostic("geometry_validation", "user_constraint_mismatch", "envelope.actions", "the user requested one cube, but the plan creates more than one")]
+  }
+  if (cubeActions.length !== 1) return []
+  const { action, index } = cubeActions[0]
+  const inputs: unknown = action.inputs
+  if (!isRecord(inputs) || !isRecord(inputs.origin) || !isRecord(inputs.size)) return []
+  const origin = inputs.origin
+  const size = inputs.size
+  const edge = cubeEdgeLengthFrom(prompt)
+  const center = cubeCenterFrom(prompt)
+  const diagnostics: PlanDiagnostic[] = []
+  const near = (actual: unknown, expected: number): boolean => typeof actual === "number" && Math.abs(actual - expected) < 1e-7
+  if (edge !== null && ![size.x, size.y, size.z].every((value) => near(value, edge))) {
+    diagnostics.push(planDiagnostic("geometry_validation", "user_constraint_mismatch", pathFor(index, "size"), `the user requested cube edge length ${edge}; planned size differs on at least one axis`))
+  }
+  if (center && !["x", "y", "z"].every((axis) => near((origin[axis] as number) + (size[axis] as number) / 2, center[axis as keyof typeof center]))) {
+    diagnostics.push(planDiagnostic("geometry_validation", "user_constraint_mismatch", pathFor(index, "origin"), "cube origin is a corner; origin + size / 2 must equal the center explicitly requested by the user"))
+  }
+  return diagnostics
 }

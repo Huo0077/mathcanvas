@@ -183,6 +183,9 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
     ledger = createRunLedger({ runId: request.run.runId, promptMessageId: request.run.promptMessageId, handle: request.run.target, now })
     controller = new AbortController()
     const signal = controller.signal
+    const pendingToolEvents: RunEvent[] = []
+    const toolResultRefs = new Set<string>()
+    const observedToolFacts = new Set<string>()
 
     const started = ledger.transition("preflight", "checking capabilities and the target handle", { handle: request.run.target })
     if (started.ok) yield started.event
@@ -273,10 +276,11 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
         },
         request: request.userMessage
       })
-      const phaseTools = registry.forPhase("planning", {
+      const phaseTools = registry.forModelPhase("planning", {
         workspace: request.run.target.workspace,
         // 规划阶段还没有确认：提交工具在这个阶段根本不该出现（注册表自己保证）。
         confirmed: false,
+        readToolsAvailable: dependencies.tools !== undefined,
         capabilityRevision: request.run.capabilityRevision
       })
       ledger.record(`context ready: ${modelContext.facts.length} scene fact(s), ${conversation.facts.length} confirmed fact(s), ${conversation.messages.length} message(s), ${phaseTools.length} tool(s)`, { requestId: null })
@@ -350,10 +354,31 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
             if (replanning.ok) yield replanning.event
           }
         }
-        const outcome = await dependencies.planner.plan({ run: request.run, userMessage: request.userMessage, budget, signal, model: { context: modelContext, tools: phaseTools }, conversation, repair })
+        const executeTool: PlanRequest["executeTool"] | undefined = dependencies.tools === undefined ? undefined : async (call) => {
+          if (signal.aborted) throw new Error("tool call cancelled")
+          if (!phaseTools.some((tool) => tool.id === call.toolId && tool.effect === "none")) throw new Error(`tool not published in this phase: ${call.toolId}`)
+          if (!spend(budget, "tool")) throw new Error("budget exhausted: budget_tool")
+          const result = await dependencies.tools!.call(call)
+          if (!signal.aborted) {
+            toolResultRefs.add(call.toolCallId)
+            if (result.status !== "error" && Array.isArray(result.payload)) {
+              for (const entity of result.payload) {
+                if (entity && typeof entity === "object" && "documentId" in entity && "entityId" in entity
+                    && entity.documentId === request.run.target.documentId && typeof entity.entityId === "string" && entity.entityId.length > 0) {
+                  observedToolFacts.add(entity.entityId)
+                }
+              }
+            }
+            const event = ledger?.record(`read tool ${call.toolId}: ${result.status}`, { toolCallId: call.toolCallId, toolId: call.toolId })
+            if (event) pendingToolEvents.push(event)
+          }
+          return result
+        }
+        const outcome = await dependencies.planner.plan({ run: request.run, userMessage: request.userMessage, budget, signal, model: { context: modelContext, tools: phaseTools }, conversation, repair, ...(executeTool === undefined ? {} : { executeTool }) })
         if (cancelled) return
+        for (const event of pendingToolEvents.splice(0)) yield event
         lastAttemptIds = { requestId: outcome.requestId, attemptId: outcome.attemptId }
-        ledger.record(`plan attempt ${attempt} returned`, lastAttemptIds)
+        ledger.record(`plan attempt ${attempt} returned`, { ...lastAttemptIds, toolCallId: null, toolId: null })
 
         const result = parsePlanEnvelope(outcome.plan)
         if (!result.ok) {
@@ -392,7 +417,7 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
         dependencies.onPlanParsed?.(candidate)
 
         // ---- 缺事实 → 等用户补充（不是失败） --------------------------------
-        const known = new Set(observation.factIds)
+        const known = new Set([...observation.factIds, ...observedToolFacts])
         const missing = candidate.factIds.filter((factId) => !known.has(factId))
         if (missing.length > 0) {
           /**
@@ -414,6 +439,15 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
         }
 
         // ---- 只读回答：没有动作，走显式的 `answering` 路径 --------------------
+        if (candidate.kind === "answer") {
+          const missingResults = candidate.toolResultRefs.filter((ref) => !toolResultRefs.has(ref))
+          if (missingResults.length > 0) {
+            const waiting = ledger.transition("waiting", `the answer cites tool results this run did not produce: ${missingResults.join(", ")}`)
+            if (waiting.ok) yield waiting.event
+            return
+          }
+        }
+
         if (candidate.kind !== "plan") {
           const answering = ledger.transition("answering", candidate.kind === "answer" ? "answering from the scene" : "asking the user a clarifying question")
           if (answering.ok) yield answering.event
@@ -547,6 +581,7 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
     } catch (error) {
       // provider 失败等异常统一落到 `failed`；已取消时不再补一条失败事件（取消已经是终态）。
       if (cancelled || (ledger?.finished() ?? true)) return
+      for (const event of pendingToolEvents.splice(0)) yield event
       const failed = ledger.transition("failed", describe(error))
       if (failed.ok) yield failed.event
     }

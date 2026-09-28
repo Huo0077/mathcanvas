@@ -7,6 +7,7 @@ import type { PlanEnvelope, PlannerPort, PlanRequest } from "@draw/agent-core"
 import { DEFAULT_DERIVED_STATUS_LIMIT, SKILL_CATALOGUE_REVISION } from "@draw/agent-core"
 
 import { createAgentRuntime } from "./agentRuntime"
+import { createModelPlanner, PLAN_TOOL_NAME } from "./modelPlanner"
 import { CONIC_INVARIANT_PROMPT, OBLIQUE_PRISM_PROMPT, conicInvariantPlan, obliquePrismEdges, obliquePrismSectionPlan } from "./representativeFixtures"
 import { buildSystemPrompt } from "./systemPrompt"
 import type { ExportPreflightPort } from "@draw/agent-core"
@@ -159,6 +160,36 @@ describe("the assembled runtime actually runs", () => {
     expect(draftIds.filter((id) => id.startsWith("solid-2")).length).toBeGreaterThan(1)
     // 草稿阶段真文档一个字节都没变。
     expect(written).toHaveLength(0)
+  })
+
+  it("feeds a real scene inspection back into the provider and records the read tool before staging", async () => {
+    const document = geometryDocument()
+    document.primitives = [{ id: "point-A", type: "point3", position: { x: 0, y: 0, z: 0 }, label: "Known A" }] as never
+    const sent: { messages: { role: string; content: string }[]; tools: unknown[] }[] = []
+    const planner = createModelPlanner({
+      resolveProvider: async () => ({ ok: true, provider: { id: "p", modelId: "model", dialect: "openai_native", revision: 1, capabilities: { tools: "verified", json: "unknown", vision: "unknown" } } }),
+      runModel: async (request) => {
+        sent.push(request)
+        return sent.length === 1
+          ? { ok: true, events: [{ kind: "tool_call", requestId: "r1", attemptId: "a1", toolCallId: "read-1", toolId: "scene_inspect", input: { documentId: document.metadata.id } }] }
+          : { ok: true, events: [{ kind: "tool_call", requestId: "r2", attemptId: "a2", toolCallId: "plan-1", toolId: PLAN_TOOL_NAME, input: planEnvelope() }] }
+      }
+    })
+    const { runtime, written, current } = makeRuntime({ document, planner })
+
+    const streamed = []
+    for await (const event of runtime.coordinator.start({ run: runContext(document), userMessage: "Inspect A and add a cube" })) streamed.push(event)
+    const events = streamed.map((event) => event.phase)
+
+    expect(events.at(-1), JSON.stringify(runtime.coordinator.ledger().map((event) => ({ phase: event.phase, detail: event.detail })))).toBe("awaiting_confirmation")
+    expect(streamed).toEqual(expect.arrayContaining([expect.objectContaining({ toolCallId: "read-1", detail: expect.stringContaining("scene.inspect") })]))
+    expect(sent).toHaveLength(2)
+    expect(sent[0].tools.map((tool) => (tool as { function: { name: string } }).function.name)).toContain("scene_inspect")
+    expect(sent[1].messages.at(-1)?.content).toContain("point-A")
+    expect(runtime.coordinator.ledger()).toEqual(expect.arrayContaining([expect.objectContaining({ toolCallId: "read-1", detail: expect.stringContaining("scene.inspect") })]))
+    expect(runtime.draftId()).not.toBeNull()
+    expect(written).toHaveLength(0)
+    expect(current()?.primitives).toHaveLength(1)
   })
 
   it("completes a read-only run through the assembled observer", async () => {

@@ -556,7 +556,8 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
           phase: event.phase,
           status: event.phase === "failed" ? "error" : "ok",
           summary: event.detail || PHASE_SUMMARY[event.phase] || event.phase,
-          at: event.at
+          at: event.at,
+          ...(event.toolId === null ? {} : { toolId: event.toolId })
         }, eventRunId)
         /**
          * **另一层读者**：开发者详细视图（默认关着）。

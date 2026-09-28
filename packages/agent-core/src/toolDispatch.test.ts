@@ -83,6 +83,13 @@ describe("tool dispatch", () => {
     expect(wrongType.diagnostics.map((entry) => entry.code)).toContain("invalid_arguments")
   })
 
+  it("rejects extra and out-of-range read arguments instead of silently ignoring them", () => {
+    const hidden = dispatcher().call("scene.inspect", { documentId: scene.metadata.id, authorization: "model-made-up" })
+    const invalidLimit = dispatcher().call("scene.inspect", { documentId: scene.metadata.id, limit: -1 })
+    expect(hidden.diagnostics.map((entry) => entry.code)).toContain("invalid_arguments")
+    expect(invalidLimit.diagnostics.map((entry) => entry.code)).toContain("invalid_arguments")
+  })
+
   it("never offers a tool that writes the document", () => {
     // 目录里唯一的写工具是 `draft.confirm_commit`；分发器必须**不认它** ——
     // 写入只有 `CommitterPort.commit` 一条路（计划 Task 0.8 Step 3）。
@@ -103,5 +110,15 @@ describe("tool dispatch", () => {
       expect(anywhere, `${id} is dispatched but never declared`).toBe(true)
     }
     expect(declared.size).toBeGreaterThan(0)
+  })
+})
+
+describe("tool error recovery contract", () => {
+  it("returns a bounded recovery instruction for unknown tools", () => {
+    const result = dispatcher().call("unknown.tool", {})
+
+    expect(result.recovery?.rootCauseHint).toContain("unknown.tool")
+    expect(result.recovery?.safeRetry).toBe("none")
+    expect(result.recovery?.stopCondition).toContain("tool list")
   })
 })

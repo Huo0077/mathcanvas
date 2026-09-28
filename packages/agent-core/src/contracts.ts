@@ -125,6 +125,43 @@ export interface ToolDiagnostic {
   message: string
 }
 
+/** 将一次模型工具调用绑定到唯一运行、步骤和草稿版本。 */
+export interface ToolExecutionIdentity {
+  runId: RunId
+  stepId: string
+  toolCallId: string
+  draftVersion: number
+  baseDocumentHash: string
+}
+
+export interface ToolDiff {
+  created: string[]
+  updated: string[]
+  deleted: string[]
+}
+
+export type VerificationStatus = "passed" | "failed" | "unknown" | "approximate" | "not_supported"
+export type VerificationCheckStatus = "passed" | "failed" | "unknown" | "approximate" | "not_supported"
+
+export interface VerificationCheck {
+  id: string
+  status: VerificationCheckStatus
+  detail: string
+  path?: string
+}
+
+export interface VerificationReport {
+  status: VerificationStatus
+  checks: VerificationCheck[]
+  next_actions: string[]
+}
+
+export interface ToolDraftHandle {
+  draftId: DraftId
+  draftVersion: number
+  previewHash: string
+}
+
 /** 每个工具结果都必须自带 `status` / `summary` / `next_actions` / `artifacts` / `diagnostics`。 */
 export interface ToolResult<Payload> {
   status: ToolResultStatus
@@ -134,6 +171,10 @@ export interface ToolResult<Payload> {
   payload: Payload
   diagnostics: ToolDiagnostic[]
   recovery?: Recovery
+  identity?: ToolExecutionIdentity
+  diff?: ToolDiff
+  verification?: VerificationReport
+  draft?: ToolDraftHandle
 }
 
 /** 协议版本号。PlanEnvelope 顶层严格包含 `schemaVersion`。 */

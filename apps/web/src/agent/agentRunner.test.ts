@@ -505,6 +505,24 @@ describe("the model-backed planner", () => {
     expect(useSceneStore.getState().document.primitives).toHaveLength(0)
   })
 
+  it("shows a real scene-tool call in the conversation trace before confirmation", async () => {
+    const sent: { messages: { role: string; content: string }[]; tools: unknown[] }[] = []
+    const runner = createAgentRunner({ modelPlanner: {
+      resolveProvider: async () => ({ ok: true, provider: { id: "openai-1", modelId: "gpt-x", dialect: "openai_native", revision: 3, capabilities: { tools: "verified", json: "unknown", vision: "unknown" } } }),
+      runModel: async (request) => {
+        sent.push(request)
+        return sent.length === 1
+          ? { ok: true, events: [{ kind: "tool_call", requestId: "r1", attemptId: "a1", toolCallId: "read-1", toolId: "scene_inspect", input: { documentId: useSceneStore.getState().document.metadata.id } }] }
+          : { ok: true, events: [{ kind: "tool_call", requestId: "r2", attemptId: "a2", toolCallId: "plan-1", toolId: "plan_set_plan", input: JSON.parse(cubeEnvelope(3)) }] }
+      }
+    } })
+    const result = await runAndWait(runner, "inspect then create a cube")
+    expect(result.phase).toBe("awaiting_confirmation")
+    const assistant = useAgentStore.getState().activeConversation!.messages.at(-1)!
+    expect(assistant.trace).toEqual(expect.arrayContaining([expect.objectContaining({ toolId: "scene.inspect", summary: expect.stringContaining("scene.inspect") })]))
+    expect(useSceneStore.getState().document.primitives).toHaveLength(0)
+  })
+
   it("carries the model's declared assumptions into the confirmation view", async () => {
     const runner = createAgentRunner({ modelPlanner: { ...selectedProvider, runModel: async () => modelText(cubeEnvelope(3)) } })
 

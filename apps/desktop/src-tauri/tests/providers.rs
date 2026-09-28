@@ -299,7 +299,7 @@ fn forcing_a_tool_uses_the_word_each_dialect_actually_accepts() {
     let anthropic = build_request(&profile("anthropic", "anthropic_messages", "https://x/v1"), vec![], false, tools);
 
     assert_eq!(openai.body["tool_choice"], "required");
-    assert_eq!(anthropic.body["tool_choice"], "any");
+    assert_eq!(anthropic.body["tool_choice"], serde_json::json!({ "type": "any" }));
 }
 
 #[test]

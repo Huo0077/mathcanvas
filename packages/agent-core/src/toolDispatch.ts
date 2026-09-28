@@ -1,5 +1,6 @@
-import type { ToolResult } from "./contracts"
+import type { Recovery, ToolResult } from "./contracts"
 import type { SceneTools } from "./tools/sceneTools"
+import { isReadToolId, parseReadToolInput } from "./readToolSchemas"
 
 /**
  * **工具分发**（Task 2.4 缺的那一半）。
@@ -62,7 +63,10 @@ const DECLARED_BUT_UNIMPLEMENTED: readonly string[] = [
 ]
 
 function failure(code: string, summary: string, nextActions: string[] = []): ToolResult<unknown> {
-  return { status: "error", summary, next_actions: nextActions, artifacts: [], payload: null, diagnostics: [{ code, severity: "error", message: summary }] }
+  const recovery: Recovery = code === "invalid_arguments"
+    ? { rootCauseHint: summary, safeRetry: "revise_input", stopCondition: "stop if the required arguments are still unavailable" }
+    : { rootCauseHint: summary, safeRetry: "none", stopCondition: "stop using this tool unless it appears in the published tool list" }
+  return { status: "error", summary, next_actions: nextActions, artifacts: [], payload: null, diagnostics: [{ code, severity: "error", message: summary }], recovery }
 }
 
 function readString(input: Record<string, unknown>, key: string): string | null {
@@ -74,6 +78,11 @@ export function createToolDispatcher(dependencies: ToolDispatcherDependencies): 
   return {
     call(toolId, input) {
       const { scene } = dependencies
+      if (isReadToolId(toolId)) {
+        const parsed = parseReadToolInput(toolId, input)
+        if (!parsed.ok) return failure("invalid_arguments", parsed.errors.map((error) => `${error.path}: ${error.detail}`).join("; "), ["revise the read-tool arguments"])
+        input = parsed.value
+      }
 
       switch (toolId) {
         case "scene.inspect": {

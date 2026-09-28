@@ -4,6 +4,19 @@ MathCanvas 是一个面向数学与工程场景的 2D 交互绘图工作台原�
 
 ## 当前状态
 
+## Agent tool-loop progress (September 28, 2026)
+
+The Agent has moved from a one-shot Plan JSON path to a **read-only typed tool loop**. The runtime can publish `scene.inspect`, `scene.search_entities`, `scene.describe_entities`, and `scene.dependencies`; the model can inspect the live scene through native `tool_call/tool_result` messages, then finish with `plan_set_plan` and an isolated draft. Tool calls are visible in the run trace, and real document writes still require explicit user confirmation.
+
+The provider adapter now has tested tool-schema and tool-result message shapes for OpenAI-compatible, Anthropic, and Ollama protocols. A geometry correctness guard also fixes the cube-center interpretation: `cube.origin` is a corner, so an edge-3 cube centered at the origin must use `origin=(-1.5,-1.5,-1.5)`.
+
+**Paused status:** Phase 0 is complete. Phase 1 has its first contract and safety slice. The read-only Phase 2 loop is implemented and tested with scripted providers. Incremental draft tools, complete task-level verification, screenshots/layout evidence, and real-provider evaluation are not complete. Visual tasks remain `not_supported` in the scorecard; passing deterministic tests must not be reported as real-model drawing accuracy.
+
+- Progress snapshot: `docs/research/2026-09-28-agent-tool-loop-progress.md`
+- Design: `docs/superpowers/specs/2026-09-28-agent-tool-loop-design.md`
+- Plan: `docs/superpowers/plans/2026-09-28-agent-tool-loop-implementation-plan.md`
+- Scorecard: `docs/acceptance/agent-tool-loop-scorecard.md`
+
 **2026-09-22 四份计划一次落地，并完成一轮收口（Solid/Prism、Reactive DAG、Agent DSL、多会话上下文）**：设计依据是 [`docs/superpowers/specs/2026-09-21-incremental-geometry-agent-and-conversations-design.md`](./docs/superpowers/specs/2026-09-21-incremental-geometry-agent-and-conversations-design.md)。①**统一 Solid 与拉伸式 Prism**：`SolidConstruction` 以 `Prism(basePolygon, vector)` 为真源，规范里那套「底面平面 + 二维多边形」的写法在编解码边界被抬升成世界坐标后接受；拓扑由纯函数生成，子对象 id 是 `solidId:v0/e0/f0` 这样的确定名字，且 id 取文档占用集（画布上已有 `solid-1` 时新棱柱是 `solid-2`）；外接球 / 内切球 / 截面求解器返回 `exact` / `undefined` / `degenerate` / `approximate` 四种**可区分**状态，旧 template / fromPoints / fromFaces 文档仍可读。②**Reactive DAG**：新增一套纯 evaluator 图（拓扑序增量求值、反向依赖失效、**先拒环再跑 evaluator**、非有限与缺源都是结构化诊断），参数化宿主约束（线段 / 直线 / 圆参数、面 `u,v`、体 `u,v,w`）、三角形五心与外接 / 内切圆、切线 / 截面 / 测量 / 轨迹（自适应采样，临时 Trace 不入历史，一次拖动一步撤销）。③**Agent DSL 与参数审计**：六层编译（传输解析 → 字段审计 → 引用解析 → 参数补全 → 几何语义校验 → 隔离草稿动作编译，每层拒绝都带路径与错误码）、欠定特值选择（**"任意 / 恒定 / 定值"保留符号参数**）、一次性修复、版本化系统提示。④**多会话上下文**：SQLite 迁移 v3 建会话 / 消息 / 事实三表，8 条具名 IPC 命令 + 类型化客户端，会话绑定到 project / document / workspace，`ConversationContext`（绑定、摘要、已确认事实、最近消息、场景观察、可选草稿视图）按预算组装并在一次运行内固定。随后一轮**收口**把 Solid 派生读数接进属性面板与模型观测（`approximate` 与 `exact` 可区分，超限时模型看得见 `truncated_derived`）、把**编译阶段的一次性修复回路**真正接通（只修一次、与运行预算共享、提交的是通过编译的那一份），并补上事实的 `stale`/`retracted` 与会话摘要的落盘诊断。
 
 四个切片各自走"实现 → 独立评审 → 修复轮 → 复审"，评审抓出的真实缺陷都已修：**§8.2 的不变量表达式原本在数学上就是错的**（写成了 `sec²θ+csc²θ≈7.77`，而且没有任何地方求值它）、**§8.1 的"P 在截面边界上"当时只是文案**、**编译阶段的 prompt 从未在生产路径传入**（符号参数约束因此永不生效）、**会话的 §5.1 绑定在生产里从未生效**（跨文档事实会被注入，正是 §9 门禁要挡的）、**确认面板可能提交另一个会话的草稿**、以及零体积棱柱被接受、`removeNode` 留下过期 `exact` 坐标、静默保存失败等。**验证（本轮实测）**：`npm test` **215 个测试文件 / 2560 个用例通过 + 1 个 todo**、`npm run typecheck` **6 个 workspace exit 0**、ESLint **0 error / 14 warning**、Playwright **140/140**、Rust **219 例通过 + 3  ignored**。

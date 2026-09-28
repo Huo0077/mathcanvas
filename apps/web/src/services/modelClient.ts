@@ -17,10 +17,19 @@
 
 import type { ModelEvent } from "@draw/agent-core"
 
+export interface ModelChatMessage {
+  role: string
+  content: string
+  /** Native provider tool history, normalized by the Rust adapter. */
+  toolCallId?: string
+  toolName?: string
+  toolInput?: unknown
+}
+
 export interface ModelRunRequest {
   runId: string
   profileId: string
-  messages: { role: string; content: string }[]
+  messages: ModelChatMessage[]
   /** 这次请求是为哪一版 profile 构建的（代理会拒绝过期的那一版）。 */
   profileRevision: number
   stream?: boolean

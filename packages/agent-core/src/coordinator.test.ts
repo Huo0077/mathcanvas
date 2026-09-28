@@ -603,3 +603,23 @@ describe("tool port", () => {
     expect(result.status).toBe("success")
   })
 })
+
+describe("facts and read receipts from the model tool loop", () => {
+  it("accepts a fact discovered by a successful scoped scene read", async () => {
+    const planner: PlannerPort = { plan: async (request) => {
+      await request.executeTool!({ run, toolCallId: "read-1", toolId: "scene.inspect", input: { documentId: "doc-1" }, actionCount: 0, signal: request.signal })
+      return { plan: { schemaVersion: "mathcanvas.plan.v1", kind: "answer", goal: "describe point", factIds: ["point-2"], answer: "A point", toolResultRefs: ["read-1"] }, requestId: "req-2", attemptId: "a2" }
+    } }
+    const coordinator = createCoordinator({ planner, observer: { observe: async () => facts }, committer: { stage: async () => ({ ok: true, draftVersion: 1, previewHash: "hash" }), commit: async () => ({ status: "rejected" }) }, tools: { call: async () => ({ status: "success", summary: "found point", next_actions: [], artifacts: [], payload: [{ documentId: "doc-1", entityId: "point-2", label: "P" }], diagnostics: [] }) } })
+    await drive(coordinator, { run, userMessage: "describe point" })
+    expect(coordinator.phase()).toBe("completed")
+  })
+
+  it("refuses an invented tool-result reference even if the model returns a valid answer envelope", async () => {
+    const planner: PlannerPort = { plan: async () => ({ plan: { schemaVersion: "mathcanvas.plan.v1", kind: "answer", goal: "count", factIds: ["fact-1"], answer: "1", toolResultRefs: ["invented-call"] }, requestId: "req-2", attemptId: "a2" }) }
+    const coordinator = createCoordinator({ planner, observer: { observe: async () => facts }, committer: { stage: async () => ({ ok: true, draftVersion: 1, previewHash: "hash" }), commit: async () => ({ status: "rejected" }) } })
+    await drive(coordinator, { run, userMessage: "count" })
+    expect(coordinator.phase()).toBe("waiting")
+    expect(coordinator.ledger().at(-1)?.detail).toContain("invented-call")
+  })
+})

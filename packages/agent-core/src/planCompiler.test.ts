@@ -283,3 +283,39 @@ describe("plan compilation", () => {
     expect(needsAnswer.next_actions.join(" ")).toContain("ask the user")
   })
 })
+
+describe("task-level explicit cube constraints", () => {
+  const makeCube = (origin: { x: number; y: number; z: number }, size: number) => ({
+    schemaVersion: PLAN_SCHEMA_VERSION, kind: "plan", goal: "create one cube", factIds: [],
+    actions: [{ actionId: "solid.create_template", actionKey: "cube", factIds: [], inputs: { alias: "cube", template: "cube", origin, size: { x: size, y: size, z: size } } }]
+  })
+
+  it("rejects a cube whose corner is at the origin when the user explicitly requested its center there", () => {
+    const document = createEmptyDocument("geometry3d")
+    const compiled = compilePlan(makeCube({ x: 0, y: 0, z: 0 }, 3), context(document, { prompt: "画一个棱长 3、中心在原点的立方体" }))
+    expect(compiled.ok).toBe(false)
+    expect(compiled.diagnostics).toEqual(expect.arrayContaining([expect.objectContaining({ code: "user_constraint_mismatch", path: "envelope.actions[0].inputs.origin" })]))
+    expect(compiled.draftDocument).toBeNull()
+  })
+
+  it("rejects a cube with the wrong edge length even when the geometry is valid", () => {
+    const document = createEmptyDocument("geometry3d")
+    const compiled = compilePlan(makeCube({ x: 0, y: 0, z: 0 }, 2), context(document, { prompt: "画一个棱长 3 的立方体" }))
+    expect(compiled.ok).toBe(false)
+    expect(compiled.diagnostics).toEqual(expect.arrayContaining([expect.objectContaining({ code: "user_constraint_mismatch", path: "envelope.actions[0].inputs.size" })]))
+    expect(compiled.draftDocument).toBeNull()
+  })
+  it("refuses to count two valid cubes as satisfying a request for exactly one", () => {
+    const document = createEmptyDocument("geometry3d")
+    const first = makeCube({ x: -1.5, y: -1.5, z: -1.5 }, 3)
+    const second = { ...first.actions[0], actionKey: "cube-2", inputs: { ...first.actions[0].inputs, alias: "cube-2" } }
+    const compiled = compilePlan({ ...first, actions: [...first.actions, second] }, context(document, { prompt: "画一个棱长 3、中心在原点的立方体" }))
+    expect(compiled.ok).toBe(false)
+    expect(compiled.diagnostics).toEqual(expect.arrayContaining([expect.objectContaining({ code: "user_constraint_mismatch", path: "envelope.actions" })]))
+  })
+  it("accepts a cube with the correct center and edge length", () => {
+    const document = createEmptyDocument("geometry3d")
+    const compiled = compilePlan(makeCube({ x: -1.5, y: -1.5, z: -1.5 }, 3), context(document, { prompt: "画一个棱长 3、中心在原点的立方体" }))
+    expect(compiled.ok).toBe(true)
+  })
+})

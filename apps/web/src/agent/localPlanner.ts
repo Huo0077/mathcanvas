@@ -1,5 +1,5 @@
 import type { PlanEnvelope, PlannerPort } from "@draw/agent-core"
-import { PLAN_SCHEMA_VERSION, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SPAN, DEFAULT_SOLID_SIZE, defaultPrismBasePolygon } from "@draw/agent-core"
+import { PLAN_SCHEMA_VERSION, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SPAN, DEFAULT_SOLID_SIZE, defaultPrismBasePolygon, cubeCenterFrom, cubeEdgeLengthFrom } from "@draw/agent-core"
 
 import { conicInvariantPlan, obliquePrismSectionPlan } from "./representativeFixtures"
 
@@ -53,23 +53,36 @@ export interface LocalIntentInput {
 
 /** 把指令里的第一个数字当尺寸；认不出时用调用方给的默认值。 */
 function sizeFrom(prompt: string, fallback: number): number {
-  const match = prompt.match(/(\d+(?:\.\d+)?)/)
-  const value = match ? Number(match[1]) : fallback
-  return Number.isFinite(value) && value > 0 ? value : fallback
+  // A named dimension wins over numbers in coordinates or labels.
+  const named = cubeEdgeLengthFrom(prompt)
+  if (named !== null) return named
+  const numbers = [...prompt.matchAll(/-?\d+(?:\.\d+)?/g)]
+  // Multiple unnamed numbers are ambiguous; do not take a coordinate as a size.
+  return numbers.length === 1 ? Number(numbers[0][0]) : fallback
 }
 
-const CUBE = (input: LocalIntentInput): PlanEnvelope => ({
-  schemaVersion: PLAN_SCHEMA_VERSION,
-  kind: "plan",
-  goal: `创建一个棱长 ${input.size} 的立方体`,
-  factIds: [],
-  actions: [{
-    actionId: "solid.create_template",
-    actionKey: "cube",
+const CUBE = (input: LocalIntentInput): PlanEnvelope => {
+  const specifiesCenter = /\u4e2d\u5fc3/.test(input.prompt)
+  const center = cubeCenterFrom(input.prompt)
+  if (specifiesCenter && center === null) {
+    return { schemaVersion: PLAN_SCHEMA_VERSION, kind: "clarification", goal: "cube center is unclear", factIds: [], questions: ["Please specify the cube center as the origin or as coordinates (x,y,z)."] }
+  }
+  const origin = center === null
+    ? { x: 0, y: 0, z: 0 }
+    : { x: center.x - input.size / 2, y: center.y - input.size / 2, z: center.z - input.size / 2 }
+  return {
+    schemaVersion: PLAN_SCHEMA_VERSION,
+    kind: "plan",
+    goal: `create a cube with edge length ${input.size}`,
     factIds: [],
-    inputs: { alias: "cube", template: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: input.size, y: input.size, z: input.size } }
-  }]
-})
+    actions: [{
+      actionId: "solid.create_template",
+      actionKey: "cube",
+      factIds: [],
+      inputs: { alias: "cube", template: "cube", origin, size: { x: input.size, y: input.size, z: input.size } }
+    }]
+  }
+}
 
 const PLANAR_POINT = (input: LocalIntentInput): PlanEnvelope => ({
   schemaVersion: PLAN_SCHEMA_VERSION,

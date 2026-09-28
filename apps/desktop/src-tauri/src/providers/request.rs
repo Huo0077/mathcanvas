@@ -33,17 +33,31 @@ pub struct ChatMessage {
     /// 附在**这一条**消息上的图片（base64，不带前缀）。空数组不进请求体。
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub images: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_call_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_input: Option<serde_json::Value>,
 }
 
 impl ChatMessage {
     /// 纯文本的一条。绝大多数调用点要的是这个，所以给它一个不用写 `images: Vec::new()` 的写法。
     pub fn text(role: impl Into<String>, content: impl Into<String>) -> Self {
-        Self { role: role.into(), content: content.into(), images: Vec::new() }
+        Self { role: role.into(), content: content.into(), images: Vec::new(), tool_call_id: None, tool_name: None, tool_input: None }
     }
 
     /// 一条带图的用户消息。`images` 是 base64（不带 `data:` 前缀）。
     pub fn with_images(role: impl Into<String>, content: impl Into<String>, images: Vec<String>) -> Self {
-        Self { role: role.into(), content: content.into(), images }
+        Self { role: role.into(), content: content.into(), images, tool_call_id: None, tool_name: None, tool_input: None }
+    }
+
+    pub fn tool_call(id: impl Into<String>, name: impl Into<String>, input: serde_json::Value) -> Self {
+        Self { role: "tool_call".into(), content: String::new(), images: Vec::new(), tool_call_id: Some(id.into()), tool_name: Some(name.into()), tool_input: Some(input) }
+    }
+
+    pub fn tool_result(id: impl Into<String>, name: impl Into<String>, content: impl Into<String>) -> Self {
+        Self { role: "tool_result".into(), content: content.into(), images: Vec::new(), tool_call_id: Some(id.into()), tool_name: Some(name.into()), tool_input: None }
     }
 }
 
@@ -196,16 +210,7 @@ pub fn build_request(profile: &ProviderProfile, messages: Vec<ChatMessage>, stre
         }
         "ollama" => {
             // Ollama 原生的图片在消息的 `images` 数组里（**裸 base64**，没有 `data:` 前缀）。
-            let dialog: Vec<serde_json::Value> = messages
-                .iter()
-                .map(|message| {
-                    if message.images.is_empty() {
-                        serde_json::json!({ "role": message.role, "content": message.content })
-                    } else {
-                        serde_json::json!({ "role": message.role, "content": message.content, "images": message.images })
-                    }
-                })
-                .collect();
+            let dialog: Vec<serde_json::Value> = messages.iter().map(ollama_message).collect();
             object.insert("messages".into(), serde_json::json!(dialog));
         }
         _ => {
@@ -216,14 +221,27 @@ pub fn build_request(profile: &ProviderProfile, messages: Vec<ChatMessage>, stre
 
     if options.allow_tools && !options.tools.is_empty() {
         if let Some(field) = &plan.tools_field {
-            object.insert(field.clone(), serde_json::json!(options.tools));
+            let native_tools: Vec<serde_json::Value> = if profile.protocol == "anthropic" {
+                options.tools.iter().map(|tool| match tool.get("function") {
+                    Some(function) => serde_json::json!({
+                        "name": function.get("name"),
+                        "description": function.get("description"),
+                        "input_schema": function.get("parameters")
+                    }),
+                    None => tool.clone()
+                }).collect()
+            } else {
+                options.tools.clone()
+            };
+            object.insert(field.clone(), serde_json::json!(native_tools));
         }
         if options.force_tool {
-            // 三种方言都认 `tool_choice`，但取值不同：OpenAI 兼容与 Ollama 用 `required`，
-            // Anthropic 用 `any`。写错那一个的后果是 **400**，而 400 会被读成"这家不支持工具" ——
-            // 正是探针最容易误报的地方。
-            let required = if profile.protocol == "anthropic" { "any" } else { "required" };
-            object.insert("tool_choice".into(), serde_json::json!(required));
+            let required = if profile.protocol == "anthropic" {
+                serde_json::json!({ "type": "any" })
+            } else {
+                serde_json::json!("required")
+            };
+            object.insert("tool_choice".into(), required);
         }
     }
 
@@ -232,7 +250,32 @@ pub fn build_request(profile: &ProviderProfile, messages: Vec<ChatMessage>, stre
 
 /// OpenAI 兼容的一条消息。带图时 `content` 变成 **parts 数组**（纯文本时保持字符串 ——
 /// 有些网关只认字符串那种形状，能少变一处就少变一处）。
+fn ollama_message(message: &ChatMessage) -> serde_json::Value {
+    if message.role == "tool_call" {
+        return serde_json::json!({ "role": "assistant", "content": "",
+            "tool_calls": [{ "function": { "name": message.tool_name, "arguments": message.tool_input } }] });
+    }
+    if message.role == "tool_result" {
+        return serde_json::json!({ "role": "tool", "tool_name": message.tool_name, "content": message.content });
+    }
+    if message.images.is_empty() {
+        serde_json::json!({ "role": message.role, "content": message.content })
+    } else {
+        serde_json::json!({ "role": message.role, "content": message.content, "images": message.images })
+    }
+}
+
 fn openai_message(message: &ChatMessage) -> serde_json::Value {
+    if message.role == "tool_call" {
+        let id = message.tool_call_id.as_deref().unwrap_or_default();
+        let name = message.tool_name.as_deref().unwrap_or_default();
+        let args = serde_json::to_string(&message.tool_input).unwrap_or_else(|_| "{}".into());
+        return serde_json::json!({ "role": "assistant", "content": serde_json::Value::Null,
+            "tool_calls": [{ "id": id, "type": "function", "function": { "name": name, "arguments": args } }] });
+    }
+    if message.role == "tool_result" {
+        return serde_json::json!({ "role": "tool", "tool_call_id": message.tool_call_id, "content": message.content });
+    }
     if message.images.is_empty() {
         return serde_json::json!({ "role": message.role, "content": message.content });
     }
@@ -249,6 +292,14 @@ fn openai_message(message: &ChatMessage) -> serde_json::Value {
 
 /// Anthropic Messages 的一条消息。图片是 content block 里的 `source`（base64 **裸值**）。
 fn anthropic_message(message: &ChatMessage) -> serde_json::Value {
+    if message.role == "tool_call" {
+        return serde_json::json!({ "role": "assistant", "content": [{ "type": "tool_use", "id": message.tool_call_id,
+            "name": message.tool_name, "input": message.tool_input }] });
+    }
+    if message.role == "tool_result" {
+        return serde_json::json!({ "role": "user", "content": [{ "type": "tool_result", "tool_use_id": message.tool_call_id,
+            "content": message.content }] });
+    }
     if message.images.is_empty() {
         return serde_json::json!({ "role": message.role, "content": message.content });
     }

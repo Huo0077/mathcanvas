@@ -1,4 +1,5 @@
-import { DEFAULT_SOLID_SIZE, parsePlanEnvelope, SKILL_MANIFESTS } from "@draw/agent-core"
+import { DEFAULT_SOLID_SIZE, compilePlan, parsePlanEnvelope, SKILL_MANIFESTS } from "@draw/agent-core"
+import { createEmptyDocument } from "@draw/dsl"
 import { describe, expect, it } from "vitest"
 
 import { createLocalPlanner, LOCAL_INTENTS, localIntentSkillIds, matchLocalIntent } from "./localPlanner"
@@ -24,6 +25,35 @@ describe("local planner translates the commands it knows", () => {
     expect(envelope.actions[0].actionId).toBe("solid.create_template")
     // 尺寸要来自指令，而不是写死的默认值。
     expect(envelope.actions[0].inputs).toMatchObject({ template: "cube", size: { x: 3, y: 3, z: 3 } })
+  })
+
+  it("places a cube by its actual center when the user asks for the origin", async () => {
+    const envelope = await plan("画一个棱长 3、中心在原点的立方体")
+    expect(envelope.kind).toBe("plan")
+    if (envelope.kind !== "plan") return
+    expect(envelope.actions[0].inputs).toMatchObject({ origin: { x: -1.5, y: -1.5, z: -1.5 }, size: { x: 3, y: 3, z: 3 } })
+    const document = createEmptyDocument("geometry3d")
+    const compiled = compilePlan(envelope, { document, workspace: "geometry3d", prompt: "画一个棱长 3、中心在原点的立方体", conversationId: "eval", documentGeneration: document.revision })
+    expect(compiled.ok).toBe(true)
+    const cube = compiled.draftDocument?.primitives.find((primitive) => primitive.type === "cube")
+    expect(cube).toMatchObject({ type: "cube", origin: { x: -1.5, y: -1.5, z: -1.5 }, size: { x: 3, y: 3, z: 3 } })
+  })
+
+  it("does not mistake center coordinates for the requested edge length", async () => {
+    const envelope = await plan("画一个中心在(1,2,3)、棱长为 4 的立方体")
+    expect(envelope.kind).toBe("plan")
+    if (envelope.kind !== "plan") return
+    expect(envelope.actions[0].inputs).toMatchObject({ origin: { x: -1, y: 0, z: 1 }, size: { x: 4, y: 4, z: 4 } })
+  })
+
+  it("does not silently replace an explicitly invalid zero edge length with a default", async () => {
+    const envelope = await plan("画一个棱长为 0 的立方体")
+    expect(envelope.kind).toBe("plan")
+    if (envelope.kind !== "plan") return
+    const document = createEmptyDocument("geometry3d")
+    const compiled = compilePlan(envelope, { document, workspace: "geometry3d", prompt: "画一个棱长为 0 的立方体", conversationId: "eval", documentGeneration: document.revision })
+    expect(compiled.ok).toBe(false)
+    expect(compiled.draftDocument).toBeNull()
   })
 
   it("falls back to a sane size when the prompt has no number", async () => {
