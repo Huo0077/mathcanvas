@@ -1,7 +1,7 @@
 import { updatableInputFields } from "@draw/scene-graph"
 import type { DraftAction, ParseResult } from "./contracts"
 import { parseDraftAction } from "./schemas"
-import { ACTIONS, type ActionId, type ActionSpec } from "./actionRegistry"
+import { ACTIONS, declaredFieldKind, type ActionId, type ActionSpec } from "./actionRegistry"
 
 /** Minimal JSON Schema subset used to publish model-facing tool contracts. */
 export interface JsonSchema {
@@ -25,19 +25,15 @@ export interface ActionToolSchema {
   inputSchema: JsonSchema
 }
 
-const NUMBER_FIELDS = new Set([
-  "radius", "radiusX", "radiusY", "height", "edge", "sides", "focalParameter", "rotation", "startAngle", "endAngle",
-  "x", "y", "factor", "parameter", "value", "min", "max", "step", "strokeWidth", "opacity"
-])
-
-const STRING_FIELDS = new Set([
-  "alias", "label", "id", "expression", "sourceId", "sourcePointId", "circleId", "pointId", "sectionId", "pathId",
-  "parameterId", "analysis", "template", "kind", "axis", "stroke", "fill"
-])
-
-const PLANAR_FIELDS = new Set(["center", "vertex"])
-const SPATIAL_FIELDS = new Set(["origin", "baseCenter", "size", "vector"])
-const BOOLEAN_FIELDS = new Set(["visible", "locked"])
+/**
+ * 可改字段的类型表：**只有 `object.update_inputs` 的 `patch` 用**。
+ *
+ * 其余字段的种类一律读登记表的 `FIELD_KINDS`（见 `actionRegistry` 的「字段种类（schema 真源）」），
+ * 这里不再维护第二份。
+ */
+const PATCH_FIELD_TYPES: Record<string, JsonSchema["type"]> = {
+  x: "number", y: "number", radius: "number", label: "string", visible: "boolean", locked: "boolean"
+}
 
 const pointSchema: JsonSchema = {
   type: "object",
@@ -99,31 +95,59 @@ const tangentAnchorSchema: JsonSchema = {
   ]
 }
 
+/**
+ * 把登记表里的一个字段翻成 JSON Schema。
+ *
+ * 优先级是**枚举 > 引用 > 字段种类表的显式例外 > 字段种类表**：
+ * 前两者是逐动作登记的（同一个字段在不同动作里可能一个是闭集、一个是自由字符串），
+ * 后两者来自 `actionRegistry` 的全局种类表。
+ */
 function schemaForField(field: string, spec: ActionSpec, actionId: ActionId): JsonSchema {
   const enumValues = spec.enumValues?.[field]
   if (enumValues !== undefined) return { type: "string", enum: enumValues }
+  /**
+   * 一批 id：种类说"这是数组"，元素形状由引用的 `kind` 决定。
+   *
+   * `id` 引用 的元素是**裸 id 字符串**（`object.delete_many.targets`），
+   * 与解析器摊平后的形状一致 —— 发布出去的 schema 与真正接受的载荷必须是同一种东西。
+   */
   const reference = spec.references?.find((entry) => entry.field === field && entry.nested === undefined)
   if (reference?.list) return { type: "array", items: reference.kind === "scoped" ? scopedReferenceSchema : { type: "string" } }
-  if (reference !== undefined) return reference.kind === "scoped" ? scopedReferenceSchema : { type: "string" }
-  if (field === "hostSub") return { type: "integer", minimum: 0 }
-  if (field === "sides") return { type: "integer" }
-  if (NUMBER_FIELDS.has(field)) return { type: "number" }
-  if (BOOLEAN_FIELDS.has(field)) return { type: "boolean" }
-  if (STRING_FIELDS.has(field)) return { type: "string" }
-  if (PLANAR_FIELDS.has(field)) return pointSchema
-  if (SPATIAL_FIELDS.has(field)) return vectorSchema
-  if (field === "anchor" && actionId === "function.create_tangent") return tangentAnchorSchema
-  if (field === "plane") return planeSchema
-  if (field === "points") return { type: "array", items: pointSchema }
-  if (field === "basePolygon") return { type: "array", items: vectorSchema, minItems: 3 }
-  if (field === "vertices") return { type: "array", items: vectorSchema, minItems: 4 }
-  if (field === "faces") return { type: "array", items: { type: "array", items: { type: "integer", minimum: 0 }, minItems: 3 }, minItems: 4 }
-  if (field === "patch") return {
-    type: "object",
-    properties: Object.fromEntries(updatableInputFields().map((key) => [key, schemaForField(key, { inputFields: [], requiresAlias: false }, actionId)])),
-    additionalProperties: false
+  const kind = declaredFieldKind(spec, field)
+  switch (kind) {
+    case "string": return { type: "string" }
+    case "number": return { type: "number" }
+    case "integer": return { type: "integer" }
+    case "boolean": return { type: "boolean" }
+    case "point": return pointSchema
+    case "vector": return vectorSchema
+    case "pointList": return { type: "array", items: pointSchema }
+    case "vectorList": return { type: "array", items: vectorSchema, minItems: 3 }
+    case "vertexList": return { type: "array", items: vectorSchema, minItems: 4 }
+    case "faceRings": return { type: "array", items: { type: "array", items: { type: "integer", minimum: 0 }, minItems: 3 }, minItems: 4 }
+    case "plane": return planeSchema
+    case "tangentAnchor": return tangentAnchorSchema
+    case "updatablePatch": return { type: "object", properties: Object.fromEntries(updatableInputFields().map((key) => [key, schemaForPatchField(key)])), additionalProperties: false }
+    case "scopedRef": return scopedReferenceSchema
+    case "idList": return { type: "array", items: { type: "string" } }
+    default:
+      /**
+       * **这里必须抛，不能兜底成 `{}`**：登记表加了新字段而种类表没跟上时，静默发布一个
+       * 无类型约束的属性，等于把"我们承诺收什么"变成一句空话，而模型会照着它乱填。
+       * 抛出来会在 `actionFieldParity.test.ts` 的"每个字段都有种类"那条用例上立刻红。
+       */
+      throw new Error(`no field kind registered for ${actionId}.${field}`)
   }
-  throw new Error(`no schema mapping for ${actionId}.${field}`)
+}
+
+/**
+ * `patch` 内部的字段 schema。种类来自动作层的 `updatableInputFields()` 白名单
+ * （那是**唯一**一份可改字段清单），这里只补一层"每个字段是什么类型"，
+ * 认不出的字段按数字处理并由用例钉住覆盖面 —— 白名单与这张类型表一旦分叉，patch 就会
+ * 要么漏字段、要么把字符串字段标成数字。
+ */
+function schemaForPatchField(key: string): JsonSchema {
+  return { type: PATCH_FIELD_TYPES[key] ?? "number" }
 }
 
 function requiredFieldsOf(spec: ActionSpec): string[] {

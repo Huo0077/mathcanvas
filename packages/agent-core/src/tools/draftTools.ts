@@ -1,7 +1,9 @@
 import type { DraftAction } from "@draw/scene-graph"
 
-import type { DocumentHandle, ToolResult } from "../contracts"
+import type { DocumentHandle, ToolResult, VerificationReport } from "../contracts"
 import { compilePlan, type PlanCompileContext, type PlanCompileResult } from "../planCompiler"
+import { verificationGate } from "../verification/completionGate"
+import { runAcceptance, type AcceptanceCheck, type AcceptanceDocument } from "../verification/taskAcceptance"
 
 /**
  * **草稿工具**（Task 2.4）。
@@ -70,7 +72,43 @@ export interface DraftStorePort {
   discard(draftId: string): boolean
 }
 
-export type DraftToolName = "draft.create" | "draft.stage_actions" | "draft.validate" | "draft.preview" | "draft.discard" | "draft.compile_plan"
+export type DraftToolName = "draft.create" | "draft.stage_actions" | "draft.validate" | "draft.preview" | "draft.discard" | "draft.compile_plan" | "draft.verify"
+
+/**
+ * **`draft.verify` 的判据**（Phase 2 / Task 2.2，选项 A：草稿仍由协调器代劳）。
+ *
+ * ## 为什么它是纯函数、且**不**接受"要验哪份文档"作为参数
+ *
+ * 计划要的是"模型能自验"，而这一层要回答的只有一件事：
+ * **这份候选文档满足了调用方声明的哪几条验收条件。**
+ *
+ * 候选文档**不是模型给的** —— 它由草稿那一侧决定（`DraftPreview.candidate`）。
+ * 让模型传一份文档进来，等于让它自己挑选验证对象：它可以递一份"更好看的"
+ * 文档来换取 `passed`。这与"确认面板提交的是用户看过的那一份"是同一条纪律：
+ * **验证对象与提交对象必须是同一份**，而只有草稿那一侧说得清那是哪一份。
+ *
+ * ## 判据沿用 `verificationGate`
+ *
+ * 返回 `ok` 与否**只由门禁判据决定**（`completionGate.ts` 是唯一一处）。
+ * 这里不重新判断"什么算通过" —— 两处判据必然分叉，而分叉的后果是
+ * "工具说通过了，协调器却拦住确认"。
+ */
+export interface DraftVerifyOutcome {
+  ok: boolean
+  report: VerificationReport
+  /** 人可读的一句话；`ok` 为假时说清是哪一格没过。 */
+  detail: string
+  /** 可执行的下一步（取自报告自己的失败检查项）。 */
+  nextActions: string[]
+}
+
+export function draftVerify(candidate: unknown, acceptance: readonly AcceptanceCheck[]): DraftVerifyOutcome {
+  const report = runAcceptance((candidate ?? null) as AcceptanceDocument | null, acceptance)
+  const gate = verificationGate(report)
+  return gate.proceed
+    ? { ok: true, report, detail: `verified ${report.checks.length} acceptance check(s)`, nextActions: [] }
+    : { ok: false, report, detail: `${gate.code}: ${gate.reason}`, nextActions: [...gate.next_actions] }
+}
 
 export interface DraftToolArtifact {
   kind: "draft"

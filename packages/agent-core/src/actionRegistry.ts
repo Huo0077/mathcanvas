@@ -19,6 +19,11 @@ import type { PlanDefaultPolicy } from "./contracts"
 export interface ActionSpec {
   /** inputs 里除 `alias` 之外允许出现的字段。 */
   inputFields: readonly string[]
+  /**
+   * **只能逐动作声明的字段类型**（见 `RawFieldTypes`）。必填是刻意的：
+   * 新增一个同名不同义的字段时，开发者必须显式声明，否则编译失败。
+   */
+  rawFieldTypes: RawFieldTypes
   /** 是否要求 inputs.alias（新建对象都要，修改既有对象不需要）。 */
   requiresAlias: boolean
   /**
@@ -114,6 +119,118 @@ export interface ActionAuditDescription {
 /** 空间模板的闭集。**只有一处**：下面那张登记表与运行期校验都读它。 */
 export const SOLID_TEMPLATES = ["cube", "pyramid", "cylinder", "cone"] as const
 
+// ---------------------------------------------------------------- 字段种类（schema 真源）
+
+/**
+ * **一个字段在模型面前是什么形状**。
+ *
+ * ## 为什么这张表必须住在这里
+ *
+ * `actionSchemas` 要把登记表转成发布给模型的 JSON Schema，就必须知道"`radius` 是数字、
+ * `origin` 是三维向量、`basePolygon` 是三维点数组"。这份知识此前写成 `actionSchemas` 内部的
+ * 四张并行集合（`NUMBER_FIELDS` / `STRING_FIELDS` / `PLANAR_FIELDS` / `SPATIAL_FIELDS`），
+ * 于是"某个字段怎么读"在**两处各存一份**：生成 schema 的那一处看集合，
+ * 解析输入的那一处（`actionInputs`）看自己的逐动作分支。
+ *
+ * 两处都不需要覆盖登记表里的每个字段就能让既有测试全绿 —— 实测过一次：既有用例只抽查了
+ * `patch` / `plane` / `anchor` / `targets` 这几个字段。所以这张表搬进登记表，并由
+ * `actionFieldParity.test.ts` 逐字段钉住"每个字段都有种类、且生成出来的 schema 与之相符"。
+ *
+ * ## 为什么是"字段名 → 种类"而不是"逐动作声明"
+ *
+ * 同一个字段名在几乎所有动作里是同一个形状（`radius` 到处都是数字、`label` 到处都是字符串），
+ * 逐动作抄 27 遍只会多出 27 个漂移点。真正的例外只有三个，它们在下面的 `FIELD_KIND_EXCEPTIONS`
+ * 里单独列出，并由用例钉住"例外必须真的存在"。
+ */
+export type FieldKind =
+  | "string"
+  | "number"
+  | "integer"
+  | "boolean"
+  | "point"          // 平面坐标 {x,y}
+  | "vector"         // 空间向量 {x,y,z}
+  | "pointList"      // 平面点数组
+  | "vectorList"     // 空间点数组（≥3，棱柱底面）
+  | "vertexList"     // 空间点数组（≥4，多面体顶点）
+  | "faceRings"      // 顶点下标环数组（多面体面）
+  | "plane"          // {normal,constant} / 过三点 / 点+法向
+  | "tangentAnchor"  // 切线的两种锚点写法
+  | "updatablePatch" // 对象可改字段的封闭集合
+  | "scopedRef"      // {scope:"draft",alias} / {scope:"scene",ref}
+  | "idList"         // 同一文档内的裸 id 数组
+
+/**
+ * **按字段名的种类表**（大多数动作共用）。
+ *
+ * 注意这里**只收字段种类**：`enumValues` 与 `references` 是逐动作登记的（同一字段在不同动作里
+ * 可能一个是枚举、一个是自由字符串），所以生成 schema 时的优先级是
+ * **枚举 > 引用 > 这张表**，与本表无关。
+ */
+export const FIELD_KINDS: Record<string, FieldKind> = {
+  // 字符串族
+  alias: "string", label: "string", id: "string", expression: "string", analysis: "string",
+  parameterId: "string",
+  // 闭集字段：种类是"字符串"，可选值由逐动作的 `enumValues` 决定。
+  kind: "string", axis: "string", template: "string",
+  // 数字族
+  radius: "number", radiusX: "number", radiusY: "number", height: "number", edge: "number",
+  focalParameter: "number", rotation: "number", startAngle: "number", endAngle: "number",
+  x: "number", factor: "number", parameter: "number", value: "number", min: "number",
+  max: "number", step: "number",
+  // 整数族
+  sides: "integer", hostSub: "integer",
+  // 平面点 / 空间向量
+  center: "point", vertex: "point",
+  origin: "vector", baseCenter: "vector", size: "vector", vector: "vector",
+  // 数组族
+  points: "pointList", basePolygon: "vectorList", vertices: "vertexList", faces: "faceRings",
+  targets: "idList",
+  // 结构族
+  plane: "plane", anchor: "tangentAnchor", patch: "updatablePatch"
+}
+
+/** 某个字段的默认种类。认不出就是登记表的缺口 —— 调用方必须抛，不许兜底。 */
+export function fieldKindOf(field: string): FieldKind | undefined {
+  return FIELD_KINDS[field]
+}
+
+/**
+ * **一个字段在某个动作里的最终种类** —— 生成 schema、写用例、排障都用这一处。
+ *
+ * 优先级刻意写成与"发布 schema"完全一致，而且**只有这一份实现**：
+ * 逐动作声明 > 枚举（闭集 → 字符串）> 引用（`scoped` → 作用域引用、其余 → 字符串）> 全局种类表。
+ *
+ * 为什么必须有这个函数：这四层优先级如果各写一遍，就会出现"生成器按 A 顺序、用例按 B 顺序"
+ * 这种最难查的分叉 —— 而它正是本阶段要消灭的那类问题。
+ */
+export function declaredFieldKind(spec: ActionSpec, field: string): FieldKind | undefined {
+  const raw = spec.rawFieldTypes[field as keyof RawFieldTypes]
+  if (raw !== undefined) return raw
+  if (spec.enumValues?.[field] !== undefined) return "string"
+  const reference = spec.references?.find((entry) => entry.field === field)
+  if (reference !== undefined) return reference.kind === "scoped" ? "scopedRef" : "string"
+  return fieldKindOf(field)
+}
+
+/**
+ * **只能逐动作声明的字段类型** —— 那些没法从字段名推出形状的字段。
+ *
+ * `ActionSpec` 把它列成**必填**（不是可选），是为了拿一个编译期保证：
+ * 新增一个"同名不同义"的字段时，开发者**必须**在这里写一句，
+ * 否则 `satisfies Record<DraftActionId, ActionSpec>` 直接编译失败。
+ *
+ * 这一条正是 Phase 1 要补的东西：此前"某个字段怎么读"散在生成器的并行集合里，
+ * 漏掉不会红、只会让模型与编译器各说各话。
+ */
+export interface RawFieldTypes {
+  /** 平面动作里 `center` 是 2D 点、正棱锥里是 3D 底面中心 —— 同一个名字两种形状。 */
+  center?: "point" | "vector"
+  /** `section.create` 的 `origin` 是"点 + 法向"里的那个点，与模板实体的 3D 位置同形。 */
+  origin?: "vector"
+  /** `hostSub` 是宿主内部第几条棱：非负整数，不是普通数字。 */
+  hostSub?: "integer"
+}
+
 /** 平面圆锥曲线的闭集（规格 §8.2）。 */
 export const CONIC_KINDS = ["ellipse", "parabola", "hyperbola"] as const
 
@@ -149,30 +266,35 @@ export const ACTIONS = {
   "planar.create_point": {
     inputFields: ["alias", "points", "center", "radius", "startAngle", "endAngle", "label"],
     requiresAlias: true,
+    rawFieldTypes: {},
     required: ["points"],
     defaults: { points: { policy: "ask_user", question: "这个点画在哪里？给一个坐标（x, y）。" } }
   },
   "planar.create_line": {
     inputFields: ["alias", "points", "center", "radius", "startAngle", "endAngle", "label"],
     requiresAlias: true,
+    rawFieldTypes: {},
     required: ["points"],
     defaults: { points: { policy: "ask_user", question: "这条线过哪两点？给两个坐标。" } }
   },
   "planar.create_segment": {
     inputFields: ["alias", "points", "center", "radius", "startAngle", "endAngle", "label"],
     requiresAlias: true,
+    rawFieldTypes: {},
     required: ["points"],
     defaults: { points: { policy: "ask_user", question: "这条线段的两个端点坐标是什么？" } }
   },
   "planar.create_ray": {
     inputFields: ["alias", "points", "center", "radius", "startAngle", "endAngle", "label"],
     requiresAlias: true,
+    rawFieldTypes: {},
     required: ["points"],
     defaults: { points: { policy: "ask_user", question: "这条射线的端点与方向上的一点分别在哪里？" } }
   },
   "planar.create_polyline": {
     inputFields: ["alias", "points", "center", "radius", "startAngle", "endAngle", "label"],
     requiresAlias: true,
+    rawFieldTypes: {},
     required: ["points"],
     defaults: { points: { policy: "ask_user", question: "这条折线依次经过哪些点？" } }
   },
@@ -183,6 +305,7 @@ export const ACTIONS = {
   "planar.create_circle": {
     inputFields: ["alias", "points", "center", "radius", "startAngle", "endAngle", "label"],
     requiresAlias: true,
+    rawFieldTypes: {},
     required: ["radius"],
     defaults: {
       center: { policy: "safe_default", value: CENTER_2D, reason: "圆心未指定，取原点。", },
@@ -192,6 +315,7 @@ export const ACTIONS = {
   "planar.create_arc": {
     inputFields: ["alias", "points", "center", "radius", "startAngle", "endAngle", "label"],
     requiresAlias: true,
+    rawFieldTypes: {},
     required: ["radius", "startAngle", "endAngle"],
     defaults: {
       center: { policy: "safe_default", value: CENTER_2D, reason: "圆心未指定，取原点。" },
@@ -207,6 +331,7 @@ export const ACTIONS = {
   "planar.create_conic": {
     inputFields: ["alias", "kind", "center", "radiusX", "radiusY", "vertex", "focalParameter", "axis", "rotation", "label"],
     requiresAlias: true,
+    rawFieldTypes: {},
     enumValues: { kind: CONIC_KINDS },
     required: ["kind"],
     defaults: {
@@ -223,6 +348,7 @@ export const ACTIONS = {
   "solid.create_template": {
     inputFields: ["alias", "template", "origin", "size", "radius", "height", "label"],
     requiresAlias: true,
+    rawFieldTypes: {},
     enumValues: { template: SOLID_TEMPLATES },
     required: ["template"],
     defaults: {
@@ -241,6 +367,7 @@ export const ACTIONS = {
   "solid.create_prism": {
     inputFields: ["alias", "basePolygon", "vector", "label"],
     requiresAlias: true,
+    rawFieldTypes: {},
     required: ["basePolygon", "vector"],
     defaults: {
       basePolygon: { policy: "safe_default", value: defaultPrismBasePolygon(DEFAULT_PRISM_SPAN), reason: `底面未指定，取边长 ${DEFAULT_PRISM_SPAN} 的正方形（规格 §6.3）。` },
@@ -259,6 +386,7 @@ export const ACTIONS = {
   "solid.create_tetrahedron": {
     inputFields: ["alias", "baseCenter", "edge", "label"],
     requiresAlias: true,
+    rawFieldTypes: {},
     required: [],
     defaults: {
       baseCenter: { policy: "safe_default", value: ORIGIN_3D, reason: "底面中心未指定，放在原点。" },
@@ -277,6 +405,8 @@ export const ACTIONS = {
   "solid.create_regular_pyramid": {
     inputFields: ["alias", "baseCenter", "sides", "radius", "height", "label"],
     requiresAlias: true,
+    /** `center` 在平面动作里是 2D 点，这里是 3D 底面中心 —— 同一字段名两种形状。 */
+    rawFieldTypes: { center: "vector" },
     required: [],
     defaults: {
       baseCenter: { policy: "safe_default", value: ORIGIN_3D, reason: "底面中心未指定，放在原点。" },
@@ -296,6 +426,7 @@ export const ACTIONS = {
   "solid.create_polyhedron": {
     inputFields: ["alias", "vertices", "faces", "label"],
     requiresAlias: true,
+    rawFieldTypes: {},
     required: ["vertices", "faces"]
   },
 
@@ -304,6 +435,7 @@ export const ACTIONS = {
   "dynamic.bind_point": {
     inputFields: ["target", "host", "parameter"],
     requiresAlias: false,
+    rawFieldTypes: {},
     references: [{ field: "target", kind: "scoped" }, { field: "host", kind: "scoped" }],
     required: ["target", "host"],
     defaults: { parameter: { policy: "safe_default", value: DEFAULT_DYNAMIC_POINT_PARAMETER, reason: `动点位置未指定，取参数 ${DEFAULT_DYNAMIC_POINT_PARAMETER}。` } }
@@ -317,6 +449,8 @@ export const ACTIONS = {
   "dynamic.create_bound_point": {
     inputFields: ["alias", "host", "hostSub", "parameter", "parameterId", "label"],
     requiresAlias: true,
+    /** `hostSub` 是宿主内部第几条棱：非负整数，不是普通数字。 */
+    rawFieldTypes: { hostSub: "integer" },
     references: [{ field: "host", kind: "scoped" }],
     required: ["alias", "host"],
     defaults: {
@@ -328,6 +462,7 @@ export const ACTIONS = {
   "dynamic.bind_curve": {
     inputFields: ["target", "pathId", "parameter"],
     requiresAlias: false,
+    rawFieldTypes: {},
     references: [{ field: "target", kind: "scoped" }, { field: "pathId", kind: "id" }],
     required: ["target", "pathId"],
     defaults: { parameter: { policy: "safe_default", value: DEFAULT_DYNAMIC_POINT_PARAMETER, reason: `动点位置未指定，取参数 ${DEFAULT_DYNAMIC_POINT_PARAMETER}。` } }
@@ -335,12 +470,14 @@ export const ACTIONS = {
   "dynamic.create_locus": {
     inputFields: ["alias", "sourcePointId"],
     requiresAlias: true,
+    rawFieldTypes: {},
     references: [{ field: "sourcePointId", kind: "id" }],
     required: ["sourcePointId"]
   },
   "dynamic.set_radius_rule": {
     inputFields: ["circleId", "pointId", "factor"],
     requiresAlias: false,
+    rawFieldTypes: {},
     references: [{ field: "circleId", kind: "id" }, { field: "pointId", kind: "id" }],
     required: ["circleId", "pointId"],
     defaults: { factor: { policy: "safe_default", value: 1, reason: "半径比例未指定，取 1（距离即半径）。" } }
@@ -350,6 +487,7 @@ export const ACTIONS = {
   "function.create_tangent": {
     inputFields: ["alias", "sourceId", "x", "anchor"],
     requiresAlias: true,
+    rawFieldTypes: {},
     // 平铺的 `sourceId` 与**嵌套的** `anchor.pointId`：跟随动点时两处都是那个点，
     // 都可以指向同一份计划里新建的对象（漏掉嵌套那条会报 `target_not_found: draft:P`）。
     references: [{ field: "sourceId", kind: "id", nested: { outer: "anchor", inner: "pointId", when: { field: "kind", equals: "point" } } }],
@@ -362,6 +500,7 @@ export const ACTIONS = {
   "function.analyze": {
     inputFields: ["alias", "sourceId", "analysis"],
     requiresAlias: true,
+    rawFieldTypes: {},
     references: [{ field: "sourceId", kind: "id" }],
     required: ["sourceId", "analysis"],
     /**
@@ -382,6 +521,8 @@ export const ACTIONS = {
   "section.create": {
     inputFields: ["alias", "sourceId", "plane"],
     requiresAlias: true,
+    /** `origin` = "点 + 法向"写法里的那个点（3D 向量），与模板实体的位置同形。 */
+    rawFieldTypes: { origin: "vector" },
     references: [{ field: "sourceId", kind: "id" }],
     required: ["sourceId"],
     defaults: { plane: { policy: "ask_user", question: "截面用哪个平面？给法向与常数，或者说明它过哪三个点。" } }
@@ -389,6 +530,7 @@ export const ACTIONS = {
   "section.materialize": {
     inputFields: ["sectionId"],
     requiresAlias: false,
+    rawFieldTypes: {},
     references: [{ field: "sectionId", kind: "id" }],
     required: ["sectionId"]
   },
@@ -397,12 +539,14 @@ export const ACTIONS = {
   "object.delete_many": {
     inputFields: ["targets"],
     requiresAlias: false,
+    rawFieldTypes: {},
     references: [{ field: "targets", kind: "id", list: true }],
     required: ["targets"]
   },
   "object.update_inputs": {
     inputFields: ["target", "patch"],
     requiresAlias: false,
+    rawFieldTypes: {},
     references: [{ field: "target", kind: "scoped" }],
     required: ["target", "patch"]
   },
@@ -413,12 +557,14 @@ export const ACTIONS = {
   "parameter.create": {
     inputFields: ["id", "value", "min", "max", "step", "label"],
     requiresAlias: false,
+    rawFieldTypes: {},
     required: ["id"],
     defaults: { value: { policy: "safe_default", value: 0, reason: "参数初值未指定，取 0。" } }
   },
   "parameter.set": {
     inputFields: ["id", "value", "min", "max", "step", "label"],
     requiresAlias: false,
+    rawFieldTypes: {},
     references: [{ field: "id", kind: "parameter" }],
     required: ["id"],
     /**
@@ -430,6 +576,7 @@ export const ACTIONS = {
   "parameter.set_expression": {
     inputFields: ["id", "expression"],
     requiresAlias: false,
+    rawFieldTypes: {},
     references: [{ field: "id", kind: "parameter" }],
     required: ["id", "expression"]
   }

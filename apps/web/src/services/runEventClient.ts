@@ -35,8 +35,46 @@ export interface RunEventInput {
   requestId?: string
   attemptId?: string
   draftVersion?: number
-  versions?: { capabilityRevision: string; policyRevision: string }
+  /**
+   * **这次运行是在哪几个版本下跑的**（Phase 6 / Task 6.1）。
+   *
+   * 计划点名四样：提示词、工具目录、动作 schema、provider 能力。
+   * `capabilityRevision` / `policyRevision` 是**先有的两个**（它们回答的是"当时它看到的是什么"），
+   * 其余三个与它们同一性质，所以并进同一个对象，而不是新开一块。
+   *
+   * Rust 侧 `RunEventVersions` 带 `deny_unknown_fields`：多塞一个字段会在入口被**拒绝**
+   *（那条纪律挡的是 `reasoning` / `imageBytes` 之类）。所以两边必须同批改。
+   */
+  versions?: {
+    capabilityRevision: string
+    policyRevision: string
+    promptVersion: string
+    toolRegistryRevision: string
+    actionSchemaRevision: string
+  }
   usage?: { inputTokens?: number; outputTokens?: number }
+  /**
+   * **一次工具调用的痕迹**（Phase 6 / Task 6.1）。
+   *
+   * 它是一个**声明过的结构**，而不是塞进 `detail` 的一句自由文本：Rust 侧这个结构带
+   * `deny_unknown_fields`，正是为了让"顺手把 `reasoning` / `imageBytes` 塞进一条事件"
+   * 变成一次**响亮的拒绝**。塞进 `detail` 等于把那条边界换成自由文本，就不再可枚举了。
+   *
+   * 两个摘要由 Rust 侧过**同一把脱敏尺子**（与 `detail` 一样），所以这里不必自己脱敏。
+   */
+  trace?: {
+    toolCallId: string
+    toolId: string
+    inputSummary: string
+    resultSummary: string
+    status: string
+    draftVersion?: number
+    verification?: { status: string; checks: number }
+    /** 改动**计数**（不是清单）。 */
+    added?: number
+    removed?: number
+    durationMs: number
+  }
 }
 
 export interface RunEventRecord {

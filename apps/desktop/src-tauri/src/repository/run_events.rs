@@ -67,6 +67,51 @@ pub struct RunEventInput {
     /// 用量。**只有数字** —— 计划要求事件带 usage，而它不该顺带把内容带进来。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub usage: Option<RunEventUsage>,
+    /// **一次工具调用的痕迹**（Phase 6 / Task 6.1）。
+    ///
+    /// 为什么是一个**声明过的结构**、而不是把痕迹塞进 `detail` 字符串：
+    /// 这个结构上的 `deny_unknown_fields` 存在的意义，就是让"顺手把 `reasoning` /
+    /// `imageBytes` 塞进一条事件"变成一次**响亮的拒绝**。塞进 `detail` 等于把这条边界
+    /// 换成一句自由文本，边界就不再可枚举了。
+    ///
+    /// `default` 的理由与 `RunEventVersions` 那三个字段相同：库里已经躺着**没有它**的旧行。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trace: Option<RunEventTrace>,
+}
+
+/// **一次工具调用**的痕迹。字段与 `agent-core` 的 `ToolCallTrace` 一一对应。
+///
+/// 这里**刻意没有**：完整参数体、完整结果体、验证报告的逐条正文、模型推理、图像字节。
+/// 计划原话是"原文日志有界，禁止写入密钥、hidden chain-of-thought 和完整候选文档"，
+/// 而"没有这个字段"比"有这个字段但记得别填"可靠得多。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RunEventTrace {
+    pub tool_call_id: String,
+    pub tool_id: String,
+    /// 输入摘要（**调用方已截断**；这一层只做脱敏，见 `trace_of`）。
+    pub input_summary: String,
+    pub result_summary: String,
+    /// `success` / `warning` / `error` 之类，与 `ToolResult.status` 同一套取值。
+    pub status: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub draft_version: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verification: Option<RunEventVerification>,
+    /// 改动**计数**（不是清单）：痕迹要回答的是"这次动了几样"。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub added: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub removed: Option<i64>,
+    pub duration_ms: i64,
+}
+
+/// 验证结论的**概要**（状态 + 条数），**不带逐条正文**。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RunEventVerification {
+    pub status: String,
+    pub checks: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -74,6 +119,17 @@ pub struct RunEventInput {
 pub struct RunEventVersions {
     pub capability_revision: String,
     pub policy_revision: String,
+    /// 计划 Task 6.1 点名的另外三样：提示词、工具目录、动作 schema。
+    ///
+    /// **`default` 是刻意的**：这三条是后加的，而库里已经躺着**没有它们**的旧行。
+    /// 没有 `default` 时，读一条旧事件会直接反序列化失败 —— 那是"加了字段就把历史读坏"，
+    /// 而版本字段缺失的正确解读是"那一版还没记这个"，不是"这条记录坏了"。
+    #[serde(default)]
+    pub prompt_version: String,
+    #[serde(default)]
+    pub tool_registry_revision: String,
+    #[serde(default)]
+    pub action_schema_revision: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -155,6 +211,25 @@ pub fn redact(text: &str) -> String {
 }
 
 /// 把输入收成要落盘的那一行（`detail` 已经脱敏、`at` 原样）。
+/// **痕迹也要脱敏**（Phase 6 / Task 6.1）。
+///
+/// 位置：`detail` 走 `redact`，而痕迹里的两个摘要是**模型看得见的内容**（工具名、场景标签…），
+/// 所以它们必须走同一把尺子。漏掉这一步的后果很实：密钥从一条新加的旁路绕过了唯一的脱敏点。
+fn trace_of(trace: &RunEventTrace) -> serde_json::Value {
+    serde_json::json!({
+        "toolCallId": trace.tool_call_id,
+        "toolId": trace.tool_id,
+        "inputSummary": redact(&trace.input_summary),
+        "resultSummary": redact(&trace.result_summary),
+        "status": trace.status,
+        "draftVersion": trace.draft_version,
+        "verification": trace.verification,
+        "added": trace.added,
+        "removed": trace.removed,
+        "durationMs": trace.duration_ms
+    })
+}
+
 fn payload_of(event: &RunEventInput) -> serde_json::Value {
     serde_json::json!({
         "eventId": event.event_id,
@@ -169,7 +244,8 @@ fn payload_of(event: &RunEventInput) -> serde_json::Value {
         "detail": redact(&event.detail),
         "at": event.at,
         "versions": event.versions,
-        "usage": event.usage
+        "usage": event.usage,
+        "trace": event.trace.as_ref().map(trace_of)
     })
 }
 

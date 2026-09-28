@@ -2,6 +2,7 @@ import { createDocumentHandle, type DocumentHandle } from "@draw/scene-graph"
 
 import type { CommitOutcome, CommitRequest, CommitterPort, ConsentToken } from "./coordinatorPorts"
 import type { PlanDiagnostic, RepairRequest, StructuredAssumption } from "./contracts"
+import { runAcceptance, type AcceptanceDocument } from "./verification/taskAcceptance"
 
 /**
  * **把协调器的 `CommitterPort` 接到 G0.5 的 `DraftStore` + `HostBridge`**（Task 2.4 的接线）。
@@ -34,7 +35,22 @@ export interface DraftStoreLike {
    * 这一层本来就是 `async`（`CommitterPort.stage` 返回 `Promise`），所以只是把 `await` 加到调用点。
    */
   stage(draftId: string, actions: readonly unknown[], expectedDraftVersion: number, userMessage?: string): Promise<
-    | { ok: true; preview: { draftVersion: number; previewHash: string } }
+    | {
+        ok: true
+        preview: {
+          draftVersion: number
+          previewHash: string
+          /**
+           * **候选文档**。适配器只把它交给验收判定（`runAcceptance`），
+           * **不往协调器传** —— 报告才是回程载荷（见 `CommitterPort.stage` 的 `verification`）。
+           *
+           * 类型是 `unknown` 而不是 `GeometryDocument`：agent-core 不该为了这一步
+           * 依赖 DSL 的图元形状，而验收判定只读它需要的字段（`primitives` 上的 id / type /
+           * label / 坐标），读不出来就是 `unknown` 而不是猜。
+           */
+          candidate?: unknown
+        }
+      }
     | {
         ok: false
         reason: "unknown_draft" | "stale_draft_version" | "compile_failed"
@@ -131,7 +147,29 @@ export function createCommitterAdapter(dependencies: CommitterAdapterDependencie
         return { ok: false, reason: "unsupported" as const, detail: detail ?? staged.reason }
       }
 
-      return { ok: true, draftVersion: staged.preview.draftVersion, previewHash: staged.preview.previewHash }
+      /**
+       * **验收判定在这里跑**（Phase 3 接线）：候选文档只有这一层拿得到，
+       * 而报告要随成功结果回给协调器（让它过 `verificationGate`）。
+       *
+       * 判据的三条落在别处、这里只负责调用，所以这一层不引入第二个真相：
+       * - "要满足哪几条" = `AcceptanceCheck[]`（调用方声明，随 `stage` 传下来）；
+       * - "怎么判" = `runAcceptance`（`verification/taskAcceptance.ts`）；
+       * - "算不算证据" = `verificationGate`（协调器在 `validating` 之后读它）。
+       *
+       * 调用方**没有声明**验收条件时（`acceptance === undefined`）**什么都不跑**，
+       * 成功结果里也就不带 `verification` —— 协调器据此不拦，行为与接线之前逐字相同。
+       * 这与"声明了空数组"是两回事：空数组会产出一份 `not_supported` 报告并被拦下。
+       */
+      const verification = request.acceptance === undefined
+        ? undefined
+        : runAcceptance((staged.preview as { candidate?: unknown }).candidate as AcceptanceDocument | null ?? null, request.acceptance)
+
+      return {
+        ok: true,
+        draftVersion: staged.preview.draftVersion,
+        previewHash: staged.preview.previewHash,
+        ...(verification === undefined ? {} : { verification })
+      }
     },
 
     async commit(request: CommitRequest & { consent: ConsentToken }): Promise<CommitOutcome> {

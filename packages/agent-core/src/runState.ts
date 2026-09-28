@@ -1,4 +1,4 @@
-import type { DocumentHandle, RunId } from "./contracts"
+import type { DocumentHandle, RunId, ToolResult, VerificationReport } from "./contracts"
 
 /**
  * **运行账本**（Task 2.1，设计规格 §9.1）。
@@ -117,6 +117,77 @@ export interface RunEvent extends RunEventIds {
   phase: RunPhase
   from: RunPhase
   detail: string
+  /**
+   * **这次运行是在哪几个版本下跑的**（Phase 6 / Task 6.1）。
+   *
+   * 计划原话："每次运行记录 prompt version、tool registry revision、action schema revision、
+   * provider capability revision."
+   *
+   * 为什么挂在**每一条**事件上、而不是只在第一条：事件会被单独导出、单独贴进缺陷报告，
+   * 而"这条读数是在哪版提示词/哪版工具目录下产生的"正是判断"能不能复现"的第一个问题。
+   * 只在首条记录，等于要求读者先去翻第一条。
+   */
+  revisions: RunRevisions
+}
+
+/**
+ * **一次工具调用的痕迹**（Phase 6 / Task 6.1 第二条）。
+ *
+ * 计划原话："每个 tool call 记录输入摘要、结果摘要、diff、verification、draft version 和耗时."
+ *
+ * 三条纪律：
+ * 1. **全部有界**：摘要有长度上限（见 `boundTrace`）。无界的日志会在真实运行里把内存和
+ *    界面一起拖垮，而"日志太长"通常会以"把日志关掉"收场。
+ * 2. **绝不写密钥、推理过程与完整候选文档**：这里只有摘要、状态与计数；
+ *    `verification` 只带**状态与检查条数**，不带整份报告正文。
+ * 3. **失败也要有痕迹**：`status` 是 `ToolResult["status"]`，
+ *    所以"工具报错了"与"工具成功了"在同一列里可区分，而不是只能靠"没有记录"推断。
+ */
+export interface ToolCallTrace {
+  toolCallId: string
+  toolId: string
+  /** 输入摘要（有界）。**不是**完整参数体。 */
+  inputSummary: string
+  /** 结果摘要（有界）。 */
+  resultSummary: string
+  status: ToolResult<unknown>["status"]
+  /** 这次调用涉及的草稿版本（没有草稿类工具时为 `null`）。 */
+  draftVersion: number | null
+  /** 验证结论的**概要**（状态 + 条数），不带逐条正文。 */
+  verification: { status: VerificationReport["status"]; checks: number } | null
+  /** 改动概要（新增/删除的对象 id，**去重且有界**）。 */
+  diff: { added: number; removed: number } | null
+  durationMs: number
+}
+
+/** 摘要与数组的上限。**只有一处** —— 两处上限必然漂移出两个不同的数字。 */
+export const MAX_TRACE_SUMMARY = 240
+export const MAX_TRACE_IDS = 8
+
+/**
+ * **这次运行是在哪几个版本下跑的**（Phase 6 / Task 6.1 第一条）。
+ *
+ * 四个字段对应计划点名的四样东西，取值都来自**已经存在的**常量，
+ * 而不是在这里新造一份版本号（新造一份就是第二处真源）：
+ * - `promptVersion` ← `apps/web/src/agent/systemPrompt.ts` 的 `SYSTEM_PROMPT_VERSION`（由 app 侧传入）；
+ * - `toolRegistryRevision` ← `toolRegistry.ts` 的 `TOOL_REGISTRY_REVISION`；
+ * - `actionSchemaRevision` ← `contracts.ts` 的 `PLAN_SCHEMA_VERSION`（动作信封的 schema 版本）；
+ * - `providerCapabilityRevision` ← `RunContext.capabilityRevision`（调用方已经带着它）。
+ *
+ * `undefined` 表示**调用方没有接线**：那时如实留空，而不是编一个版本号 ——
+ * 一个假版本号会让"这份读数能不能复现"变成一句无法回答的话。
+ */
+export interface RunRevisions {
+  promptVersion: string
+  toolRegistryRevision: string
+  actionSchemaRevision: string
+  providerCapabilityRevision: string
+}
+
+/** 把一段文本收敛成有界的摘要：先折叠空白，再截断并显式标出截断。 */
+export function boundTrace(text: string, limit = MAX_TRACE_SUMMARY): string {
+  const collapsed = text.replace(/\s+/g, " ").trim()
+  return collapsed.length <= limit ? collapsed : `${collapsed.slice(0, limit)}…(+${collapsed.length - limit})`
 }
 
 export type TransitionRejection = { ok: false; reason: "illegal_transition" | "run_finished"; from: RunPhase; allowed: readonly RunPhase[] }
@@ -131,12 +202,29 @@ export interface RunLedger {
   transition(to: RunPhase, detail?: string, ids?: Partial<RunEventIds>): TransitionResult
   /** 只记录不换状态（例如"工具返回了一条诊断"）。终态之后返回 null 并丢弃。 */
   record(detail: string, ids?: Partial<RunEventIds>): RunEvent | null
+  /**
+   * **记一次工具调用的痕迹**（Phase 6 / Task 6.1 第二条）。
+   *
+   * 与 `record` 分开，是因为两者的**消费者不同**：`record` 是人读的一句话，
+   * 而这条是"事后能重放这次运行"的结构化记录。塞进 `detail` 字符串里会立刻丢掉结构，
+   * 而结构化正是它存在的理由（评测与缺陷报告要按 `toolId` / `status` 聚合）。
+   *
+   * 与 `record` 同一条纪律：**终态之后不再追加** —— 迟到的工具结果不许写进一份已结束的账本。
+   */
+  recordToolTrace(trace: ToolCallTrace): ToolCallTrace | null
+  /** 这次运行已经记下的工具痕迹（按记录顺序）。 */
+  toolTraces(): readonly ToolCallTrace[]
 }
 
 export interface RunLedgerInit {
   runId: RunId
   promptMessageId: string
   handle?: DocumentHandle | null
+  /**
+   * 这次运行的版本标识。缺省时四个字段都留空字符串（见 `RunRevisions` 的注释：
+   * 宁可留空，也不编一个假版本号）。
+   */
+  revisions?: RunRevisions
   now?: () => number
 }
 
@@ -145,6 +233,8 @@ export function createRunLedger(init: RunLedgerInit): RunLedger {
   let phase: RunPhase = "created"
   let sequence = 0
   const events: RunEvent[] = []
+  const traces: ToolCallTrace[] = []
+  const revisions: RunRevisions = init.revisions ?? { promptVersion: "", toolRegistryRevision: "", actionSchemaRevision: "", providerCapabilityRevision: "" }
   /** 随事件累积的标识：新的覆盖旧的，没给的沿用上一次（避免每个调用点都要重填一遍）。 */
   let ids: RunEventIds = {
     runId: init.runId,
@@ -174,7 +264,7 @@ export function createRunLedger(init: RunLedgerInit): RunLedger {
       if (patch) ids = { ...ids, ...patch, runId: init.runId, promptMessageId: patch.promptMessageId ?? ids.promptMessageId }
       phase = to
       sequence += 1
-      const event: RunEvent = { ...ids, sequence, at: now(), phase: to, from, detail }
+      const event: RunEvent = { ...ids, revisions, sequence, at: now(), phase: to, from, detail }
       events.push(event)
       return { ok: true, event }
     },
@@ -184,9 +274,17 @@ export function createRunLedger(init: RunLedgerInit): RunLedger {
       if (finished()) return null
       if (patch) ids = { ...ids, ...patch, runId: init.runId, promptMessageId: patch.promptMessageId ?? ids.promptMessageId }
       sequence += 1
-      const event: RunEvent = { ...ids, sequence, at: now(), phase, from: phase, detail }
+      const event: RunEvent = { ...ids, revisions, sequence, at: now(), phase, from: phase, detail }
       events.push(event)
       return event
-    }
+    },
+
+    recordToolTrace(trace) {
+      if (finished()) return null
+      traces.push(trace)
+      return trace
+    },
+
+    toolTraces: () => [...traces]
   }
 }

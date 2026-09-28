@@ -39,6 +39,15 @@ declare module "node:fs/promises" {
   export function writeFile(path: string, data: string): Promise<void>
 }
 
+declare module "node:fs" {
+  /**
+   * 只声明本仓库真的用到的形状（与上面 `node:fs/promises` 同一条纪律）。
+   * `agent-eval.ts` 用它判断 vitest 的 CLI 入口在不在，好在缺失时说清"装依赖"，
+   * 而不是抛一个 `MODULE_NOT_FOUND` 让调用方猜。
+   */
+  export function existsSync(path: string): boolean
+}
+
 declare module "node:path" {
   const path: {
     resolve(...parts: string[]): string

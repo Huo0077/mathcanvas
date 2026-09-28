@@ -31,7 +31,7 @@ function event(overrides: Partial<RunEventInput> = {}): RunEventInput {
     detail: "asking for a plan",
     at: 1_700_000_000_000,
     promptMessageId: "msg-1",
-    versions: { capabilityRevision: "2026-09-19.1", policyRevision: "local" },
+    versions: { capabilityRevision: "2026-09-19.1", policyRevision: "local", promptVersion: "mathcanvas.agent.prompt.v6", toolRegistryRevision: "2026-09-19.1", actionSchemaRevision: "mathcanvas.plan.v1" },
     ...overrides
   }
 }
@@ -53,6 +53,33 @@ describe("运行账本客户端", () => {
     expect(Object.keys((calls[0].args as { event: object }).event).sort()).toEqual([
       "at", "conversationId", "detail", "eventId", "phase", "promptMessageId", "runId", "status", "versions"
     ])
+    expect(result.ok && result.value).toBe(true)
+  })
+
+  it("同一条痕迹**原样**交给具名命令，字段与 Rust 侧一一对应", async () => {
+    /**
+     * `RunEventTrace` 在 Rust 侧带 `deny_unknown_fields`：多一个字段就是**入口拒绝**。
+     * 所以这条不是"能不能传"，而是"传过去的字段名与 Rust 侧逐字相同"——
+     * 一次字段名拼错（例如 `duration` 而不是 `durationMs`）会让**每一次痕迹落库都失败**，
+     * 而症状只是"痕迹没了"。
+     */
+    const calls: { command: string; args?: Record<string, unknown> }[] = []
+    installInvoke(async (command, args) => {
+      calls.push({ command, args })
+      return true
+    })
+
+    const result = await appendRunEvent({
+      ...event(),
+      phase: "tool_trace",
+      trace: { toolCallId: "call-1", toolId: "scene.inspect", inputSummary: "doc-1", resultSummary: "2 entities", status: "success", added: 2, removed: 1, durationMs: 7 }
+    })
+
+    const sent = (calls[0].args as { event: { trace: Record<string, unknown> } }).event.trace
+    expect(Object.keys(sent).sort()).toEqual(["added", "durationMs", "inputSummary", "removed", "resultSummary", "status", "toolCallId", "toolId"])
+    // 可选字段**不写 `null`** —— Rust 侧是 `Option` + `skip_serializing_if`，写 `null` 是多余且易漂的。
+    expect(sent).not.toHaveProperty("draftVersion")
+    expect(sent).not.toHaveProperty("verification")
     expect(result.ok && result.value).toBe(true)
   })
 

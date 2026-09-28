@@ -605,6 +605,38 @@ describe("tool port", () => {
 })
 
 describe("facts and read receipts from the model tool loop", () => {
+  it("records a structured trace for a read tool call, and the run revisions on every event", async () => {
+    /**
+     * **Phase 6 / Task 6.1 的接线**：痕迹要真的被记下来。
+     * 判据是"事后能重放这次运行"：按 `toolId` / `status` 聚合得出
+     * **执行过哪几个工具、成功还是失败、各花多久**，而不是只有一句人读的话。
+     */
+    const planner: PlannerPort = { plan: async (request) => {
+      await request.executeTool!({ run, toolCallId: "read-1", toolId: "scene.inspect", input: { documentId: "doc-1" }, actionCount: 0, signal: request.signal })
+      return { plan: { schemaVersion: "mathcanvas.plan.v1", kind: "answer", goal: "describe point", factIds: ["point-2"], answer: "A point", toolResultRefs: ["read-1"] }, requestId: "req-2", attemptId: "a2" }
+    } }
+    const coordinator = createCoordinator({ planner, observer: { observe: async () => facts }, committer: { stage: async () => ({ ok: true, draftVersion: 1, previewHash: "hash" }), commit: async () => ({ status: "rejected" }) }, tools: { call: async () => ({ status: "success", summary: "found point", next_actions: [], artifacts: [], payload: [{ documentId: "doc-1", entityId: "point-2", label: "P" }], diagnostics: [] }) } })
+
+    await drive(coordinator, { run, userMessage: "describe point", promptVersion: "mathcanvas.agent.prompt.v6" })
+
+    // 结构化痕迹真的被记下来了 —— 判据是"事后能按工具与状态聚合"。
+    const traces = coordinator.toolTraces()
+    expect(traces).toHaveLength(1)
+    expect(traces[0]).toMatchObject({ toolCallId: "read-1", toolId: "scene.inspect", status: "success", draftVersion: null })
+    expect(traces[0].inputSummary).toContain("doc-1")
+    expect(traces[0].resultSummary).toBe("found point")
+    expect(traces[0].durationMs).toBeGreaterThanOrEqual(0)
+    // 四个版本号落在**每一条**事件上，而不是只有第一条。
+    expect(coordinator.ledger().length).toBeGreaterThan(0)
+    for (const event of coordinator.ledger()) {
+      expect(event.revisions.promptVersion).toBe("mathcanvas.agent.prompt.v6")
+      expect(event.revisions.toolRegistryRevision.length).toBeGreaterThan(0)
+      expect(event.revisions.actionSchemaRevision.length).toBeGreaterThan(0)
+      expect(event.revisions.providerCapabilityRevision).toBe(run.capabilityRevision)
+    }
+    expect(coordinator.phase()).toBe("completed")
+  })
+
   it("accepts a fact discovered by a successful scoped scene read", async () => {
     const planner: PlannerPort = { plan: async (request) => {
       await request.executeTool!({ run, toolCallId: "read-1", toolId: "scene.inspect", input: { documentId: "doc-1" }, actionCount: 0, signal: request.signal })
@@ -621,5 +653,78 @@ describe("facts and read receipts from the model tool loop", () => {
     await drive(coordinator, { run, userMessage: "count" })
     expect(coordinator.phase()).toBe("waiting")
     expect(coordinator.ledger().at(-1)?.detail).toContain("invented-call")
+  })
+})
+
+/**
+ * **验收门禁接线**（Phase 3 / Task 3.3）。
+ *
+ * 判据是计划里那句话："没有验证证据时，Agent 只能停在修复、等待或失败，**不能报告完成**。"
+ * 这三条用例钉的是**接线**本身（判据本身已经在 `verification/completionGate.test.ts` 里
+ * 逐格测过），因为"判据写好了但没人调用"正是这一轮之前的状态。
+ */
+describe("the completion gate is actually consulted", () => {
+  const passingReport = { status: "passed" as const, checks: [{ id: "has_primitive:0", status: "passed" as const, detail: "a polyhedron3 exists" }], next_actions: [] }
+
+  it("stops at waiting instead of offering confirmation when no verification came back", async () => {
+    // 调用方声明了验收条件，而 stage 只回了版本与哈希 —— 那就是**没有证据**。
+    const harness = makeHarness({ stage: async () => ({ ok: true as const, draftVersion: 2, previewHash: "preview-1" }) })
+
+    const events = await drive(harness.coordinator, { run, userMessage: "画一个立方体", acceptance: [{ kind: "has_primitive", type: "polyhedron3" }] })
+
+    expect(harness.coordinator.phase()).toBe("failed")
+    // 关键：**没有**走到确认，更没有提交。
+    expect(events.some((event) => event.phase === "awaiting_confirmation")).toBe(false)
+    expect(harness.committer.commit).not.toHaveBeenCalled()
+    /**
+     * 账本上要能读出来"被门禁拦下"这件事。门禁的 `code` 由
+     * `ledger.record("verification gate blocked confirmation: <code>")` 落进事件，
+     * 而 `at(-1)` 是**转移**事件（带的是人可读的 reason）—— 所以这里断言的是
+     * 那句 reason，而不是 code 字面量。
+     */
+    expect(harness.coordinator.ledger().at(-1)?.detail).toContain("no verification report")
+    expect(harness.coordinator.ledger().some((event) => event.detail.includes("no_verification_report"))).toBe(true)
+  })
+
+  it("passes the acceptance criteria down to the committer so it can actually verify", async () => {
+    // 验收条件必须真的传到能拿到候选文档的那一层；留在协调器手里等于没验。
+    const harness = makeHarness({ stage: async () => ({ ok: true as const, draftVersion: 2, previewHash: "preview-1", verification: passingReport }) })
+
+    await drive(harness.coordinator, { run, userMessage: "画一个立方体", acceptance: [{ kind: "has_primitive", type: "polyhedron3" }] })
+
+    expect(harness.committer.stage).toHaveBeenCalledWith(expect.objectContaining({ acceptance: [{ kind: "has_primitive", type: "polyhedron3" }] }))
+  })
+
+  it("reaches confirmation when the report really is evidence", async () => {
+    const harness = makeHarness({ stage: async () => ({ ok: true as const, draftVersion: 2, previewHash: "preview-1", verification: passingReport }) })
+
+    const events = await drive(harness.coordinator, { run, userMessage: "画一个立方体", acceptance: [{ kind: "has_primitive", type: "polyhedron3" }] })
+
+    expect(events.some((event) => event.phase === "awaiting_confirmation")).toBe(true)
+  })
+
+  it("does not change behaviour at all when the caller declares no acceptance criteria", async () => {
+    /**
+     * 没声明验收条件的调用方（今天所有的生产调用方）行为必须**逐字不变**：
+     * 否则"接了一个可选功能"会变成"所有运行都被拦下"。
+     */
+    const harness = makeHarness()
+
+    const events = await drive(harness.coordinator, { run, userMessage: "画一个立方体" })
+
+    expect(events.some((event) => event.phase === "awaiting_confirmation")).toBe(true)
+    expect(harness.committer.commit).not.toHaveBeenCalled()
+    // 而且不该往下传一个它没声明过的东西。
+    expect(harness.committer.stage).toHaveBeenCalledWith(expect.not.objectContaining({ acceptance: expect.anything() }))
+  })
+
+  it("blocks a run that declared an empty acceptance list, because that is not evidence", async () => {
+    // "声明了但一条条件都没有"与"没有声明"是两件事：前者的正确解读是**没有证据**。
+    const harness = makeHarness({ stage: async () => ({ ok: true as const, draftVersion: 2, previewHash: "preview-1", verification: { status: "not_supported" as const, checks: [{ id: "acceptance:none", status: "not_supported" as const, detail: "no criteria" }], next_actions: [] } }) })
+
+    const events = await drive(harness.coordinator, { run, userMessage: "画一个立方体", acceptance: [] })
+
+    expect(harness.coordinator.phase()).toBe("failed")
+    expect(events.some((event) => event.phase === "awaiting_confirmation")).toBe(false)
   })
 })

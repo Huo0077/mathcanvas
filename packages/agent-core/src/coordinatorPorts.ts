@@ -1,10 +1,11 @@
-import type { DocumentHandle, PlanDiagnostic, PlanEnvelope, RepairRequest, RunContext, StructuredAssumption, ToolResult } from "./contracts"
+import type { DocumentHandle, PlanDiagnostic, PlanEnvelope, RepairRequest, RunContext, StructuredAssumption, ToolResult, VerificationReport } from "./contracts"
 import type { DraftAction } from "@draw/scene-graph"
 import type { Budget } from "./budget"
 import type { ConversationContext, ModelContext } from "./contextBuilder"
 import type { RunEvent } from "./runState"
 import type { ObservedDerivedStatus } from "./sceneObservation"
 import type { ToolDescriptor } from "./toolRegistry"
+import type { AcceptanceCheck } from "./verification/taskAcceptance"
 
 /**
  * **协调器的四组端口**（Task 2.1）。
@@ -176,6 +177,16 @@ export interface CommitRequest {
    */
   userMessage?: string
   /**
+   * **这次运行要用哪几条验收条件来判定"做完了"**（Phase 3 接线）。
+   *
+   * 只有协调器的调用方说得清这件事，而**跑验证需要候选文档**（只有适配器有），
+   * 所以它随 `stage` 一路传下去，报告再随成功结果回来。
+   *
+   * 缺省 = 调用方没有声明验收条件。那时不跑验证、也不拦 —— 行为与接线之前逐字相同。
+   * 这与"声明了空数组"不同：空数组会得到一份 `not_supported` 报告，从而被门禁拦住。
+   */
+  acceptance?: readonly AcceptanceCheck[]
+  /**
    * 要落盘的**动作本身**。
    *
    * 第一版这里只有 `actionCount` —— 那是个真实的设计缺口：适配器拿不到动作，
@@ -201,7 +212,24 @@ export interface CommitterPort {
    * **不许**再问模型一次，因为没有请求的重试只是一次盲目的重复。
    */
   stage(request: CommitRequest): Promise<
-    | { ok: true; draftVersion: number; previewHash: string }
+    | {
+        ok: true
+        draftVersion: number
+        previewHash: string
+        /**
+         * **这次暂存出来的候选文档"满足了哪几条验收条件"**（Phase 3 接线的回程通道）。
+         *
+         * 为什么报告要从这里回来，而不是协调器自己算：**协调器手里从来就没有候选文档**
+         *（`stage` 成功只回版本与预览哈希），而验证必须对着文档跑。
+         * 适配器那一侧拿得到（`staged.preview.candidate`），所以验证在那一侧跑、
+         * **只把结论带回来** —— 候选文档本身不进协调器，也就不进任何模型上下文。
+         *
+         * `undefined` 表示**这次运行没有声明验收条件**：调用方没接线。
+         * 那种情况下协调器**不拦**（行为与接线之前逐字相同），
+         * 但也因此没有任何验证证据 —— 这是如实缺口，不是"验证通过"。
+         */
+        verification?: VerificationReport
+      }
     | {
         ok: false
         reason: StageFailureReason

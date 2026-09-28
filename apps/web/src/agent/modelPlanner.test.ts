@@ -541,6 +541,156 @@ describe("native observation tool loop", () => {
   const withTools: ModelPlannerProvider = { ...provider, capabilities: { tools: "verified", json: "unknown", vision: "unknown" } }
   const inspectTool: ToolDescriptor = { id: "scene.inspect", kind: "read", effect: "none", description: "Inspect scoped scene objects", phases: ["planning"], workspaces: [] }
 
+  /**
+   * **批次是"全有或全无"，而且绝不静默丢弃调用。**
+   *
+   * 这一组是 review 抓出的两个洞的回归守卫（第一版"多调用即抛错"修掉了"整轮作废"，
+   * 却换来"半成品批次"与"静默丢弃同批的计划"）。三条判据：
+   * 1. 混合批次（只读 + `plan_set_plan`）**显式拒绝**，且**一个都不执行**；
+   * 2. 超出观察上限的批次**在执行任何调用之前**就拒绝；
+   * 3. **合法计划永远不会被静默丢弃** —— 要么被采用，要么被拒绝，没有第三种结局。
+   */
+  it("rejects a batch that mixes a read tool with the plan tool, and executes none of it", async () => {
+    const requests: SentRequest[] = []
+    const executeTool = vi.fn(async () => ({ status: "success" as const, summary: "ok", next_actions: [], artifacts: [], payload: [], diagnostics: [] }))
+    const planner = createModelPlanner({
+      resolveProvider: async () => ({ ok: true, provider: withTools }),
+      runModel: async (sent) => {
+        requests.push(sent)
+        return { ok: true, events: [
+          { kind: "tool_call", requestId: "r1", attemptId: "a1", toolCallId: "read-1", toolId: "scene_inspect", input: { documentId: "doc-1" } },
+          { kind: "tool_call", requestId: "r1", attemptId: "a1", toolCallId: "plan-1", toolId: PLAN_TOOL_NAME, input: JSON.parse(goodEnvelope) }
+        ] }
+      }
+    })
+
+    await expect(planner.plan(request({ model: { context: context(), tools: [planTool, inspectTool] }, executeTool }))).rejects.toThrow(/mixes a read tool/)
+
+    // **一个都不执行**：先前那版会先把 read-1 跑掉，于是"模型付了钱却看不到结果"。
+    expect(executeTool).not.toHaveBeenCalled()
+    expect(requests).toHaveLength(1)
+  })
+
+  it("rejects a mixed response instead of silently dropping the plan it carried", async () => {
+    /**
+     * 这条钉的是**结局的完备性**：与只读调用同批出现的合法计划，结局只能是
+     * "被采用"或"被拒绝"。实测过的坏结局是：第一轮那份计划被无声丢弃、
+     * 最终采用第二轮重发的那份 —— 模型白花一轮，日志里也没有任何痕迹。
+     *
+     * 修复后的行为是**显式拒绝**（理由见实现里的两句话判据），
+     * 所以这里断言"抛错、且一个只读调用都没执行"。
+     */
+    const executeTool = vi.fn(async () => ({ status: "success" as const, summary: "ok", next_actions: [], artifacts: [], payload: [], diagnostics: [] }))
+    const firstPlan = { ...JSON.parse(goodEnvelope), goal: "MARKER-FROM-ROUND-1" }
+    let round = 0
+    const planner = createModelPlanner({
+      resolveProvider: async () => ({ ok: true, provider: withTools }),
+      runModel: async () => {
+        round += 1
+        if (round === 1) {
+          return { ok: true, events: [
+            { kind: "tool_call", requestId: "r1", attemptId: "a1", toolCallId: "read-1", toolId: "scene_inspect", input: { documentId: "doc-1" } },
+            { kind: "tool_call", requestId: "r1", attemptId: "a1", toolCallId: "plan-1", toolId: PLAN_TOOL_NAME, input: firstPlan }
+          ] }
+        }
+        // 第二轮故意给一份**不同**的计划：万一实现变成"丢掉第一轮、采用第二轮"，这条会红。
+        return { ok: true, events: [{ kind: "tool_call", requestId: "r2", attemptId: "a2", toolCallId: "plan-2", toolId: PLAN_TOOL_NAME, input: { ...JSON.parse(goodEnvelope), goal: "FROM-ROUND-2" } }] }
+      }
+    })
+
+    const request0 = request({ model: { context: context(), tools: [planTool, inspectTool] }, executeTool })
+
+    await expect(planner.plan(request0)).rejects.toThrow(/mixes a read tool/)
+    // 第一轮的只读调用不该被"先跑掉"，否则模型付了钱却看不到结果。
+    expect(executeTool).not.toHaveBeenCalled()
+  })
+
+  it("rejects an over-limit batch before executing any call in it", async () => {
+    // MAX_OBSERVATION_CALLS 是 4；一次给 5 个。先前那版会先执行 4 个再抛。
+    const requests: SentRequest[] = []
+    const executeTool = vi.fn(async () => ({ status: "success" as const, summary: "ok", next_actions: [], artifacts: [], payload: [], diagnostics: [] }))
+    const planner = createModelPlanner({
+      resolveProvider: async () => ({ ok: true, provider: withTools }),
+      runModel: async (sent) => {
+        requests.push(sent)
+        return { ok: true, events: Array.from({ length: 5 }, (_, index) => ({ kind: "tool_call" as const, requestId: "r", attemptId: "a", toolCallId: `c-${index}`, toolId: "scene_inspect", input: { documentId: "doc-1" } })) }
+      }
+    })
+
+    await expect(planner.plan(request({ model: { context: context(), tools: [planTool, inspectTool] }, executeTool }))).rejects.toThrow(/limit reached/)
+
+    expect(executeTool).not.toHaveBeenCalled()
+  })
+
+  it("rejects a mid-batch duplicate id before executing anything", async () => {
+    // 重复 id 也必须在第一个 await 之前判掉：先前那版会先执行第一个再抛。
+    const executeTool = vi.fn(async () => ({ status: "success" as const, summary: "ok", next_actions: [], artifacts: [], payload: [], diagnostics: [] }))
+    const planner = createModelPlanner({
+      resolveProvider: async () => ({ ok: true, provider: withTools }),
+      runModel: async () => ({ ok: true, events: [
+        { kind: "tool_call", requestId: "r1", attemptId: "a1", toolCallId: "call-1", toolId: "scene_inspect", input: { documentId: "doc-1" } },
+        { kind: "tool_call", requestId: "r1", attemptId: "a1", toolCallId: "call-1", toolId: "scene_inspect", input: { documentId: "doc-1" } }
+      ] })
+    })
+
+    await expect(planner.plan(request({ model: { context: context(), tools: [planTool, inspectTool] }, executeTool }))).rejects.toThrow(/duplicate/)
+    expect(executeTool).not.toHaveBeenCalled()
+  })
+
+  it("executes a whole batch of read calls from one response instead of discarding the turn", async () => {
+    /**
+     * **这一条是缺陷的回归守卫。** 原先一次响应里有两个调用时直接抛
+     * `multiple tool calls in one response are not supported; no calls were executed` ——
+     * 模型合法地要求两条观察，结果**整轮作废**，异常向上传播后协调器从头重建提示词，
+     * 它只能盲改。计划 Task 2.2 要的是"每轮最多执行一个有限工具调用批次"，
+     * 所以正确行为是**执行**这一批。
+     */
+    const requests: SentRequest[] = []
+    const executeTool = vi.fn(async () => ({ status: "success" as const, summary: "one entity", next_actions: [], artifacts: [], payload: [{ entityId: "cube-1" }], diagnostics: [] }))
+    const planner = createModelPlanner({
+      resolveProvider: async () => ({ ok: true, provider: withTools }),
+      runModel: async (sent) => {
+        requests.push(sent)
+        return requests.length === 1
+          ? { ok: true, events: [
+              { kind: "tool_call", requestId: "r1", attemptId: "a1", toolCallId: "call-1", toolId: "scene_inspect", input: { documentId: "doc-1" } },
+              { kind: "tool_call", requestId: "r1", attemptId: "a1", toolCallId: "call-2", toolId: "scene_inspect", input: { documentId: "doc-1", limit: 5 } }
+            ] }
+          : { ok: true, events: [{ kind: "tool_call", requestId: "r2", attemptId: "a2", toolCallId: "call-3", toolId: PLAN_TOOL_NAME, input: JSON.parse(goodEnvelope) }] }
+      }
+    })
+
+    const result = await planner.plan(request({ model: { context: context(), tools: [planTool, inspectTool] }, executeTool }))
+
+    // 两个调用**都**执行了，而不是整轮被丢掉。
+    expect(executeTool).toHaveBeenCalledTimes(2)
+    expect(executeTool).toHaveBeenCalledWith(expect.objectContaining({ toolCallId: "call-1" }))
+    expect(executeTool).toHaveBeenCalledWith(expect.objectContaining({ toolCallId: "call-2", input: { documentId: "doc-1", limit: 5 } }))
+    // 两条结果都回到了下一轮上下文里（否则模型等于没看过）。
+    expect(requests).toHaveLength(2)
+    const toolResults = requests[1].messages.filter((message) => message.role === "tool_result")
+    expect(toolResults.map((message) => message.toolCallId)).toEqual(["call-1", "call-2"])
+    expect(parsePlanEnvelope(result.plan).ok).toBe(true)
+  })
+
+  it("still refuses a duplicate tool call id inside one batch", async () => {
+    // 幂等不能被批次执行削弱：同一个 id 出现两次仍旧是拒绝。
+    const requests: SentRequest[] = []
+    const executeTool = vi.fn(async () => ({ status: "success" as const, summary: "ok", next_actions: [], artifacts: [], payload: [], diagnostics: [] }))
+    const planner = createModelPlanner({
+      resolveProvider: async () => ({ ok: true, provider: withTools }),
+      runModel: async (sent) => {
+        requests.push(sent)
+        return { ok: true, events: [
+          { kind: "tool_call", requestId: "r1", attemptId: "a1", toolCallId: "call-1", toolId: "scene_inspect", input: { documentId: "doc-1" } },
+          { kind: "tool_call", requestId: "r1", attemptId: "a1", toolCallId: "call-1", toolId: "scene_inspect", input: { documentId: "doc-1" } }
+        ] }
+      }
+    })
+
+    await expect(planner.plan(request({ model: { context: context(), tools: [planTool, inspectTool] }, executeTool }))).rejects.toThrow(/duplicate/)
+  })
+
   it("offers an implemented read tool and returns its result to the model before accepting a plan", async () => {
     const requests: SentRequest[] = []
     const executeTool = vi.fn(async () => ({ status: "success" as const, summary: "one entity", next_actions: [], artifacts: [], payload: [{ entityId: "cube-1", label: "cube" }], diagnostics: [] }))

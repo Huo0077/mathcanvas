@@ -1,4 +1,4 @@
-import { CAPABILITY_REGISTRY_REVISION, SKILL_MANIFESTS, factBelongsToDocument, type CommitOutcome, type ConversationContextSource, type ConversationDraftView, type DocumentHandle, type PlanEnvelope, type PlannerPort, type RunContext, type WorkspaceId } from "@draw/agent-core"
+import { CAPABILITY_REGISTRY_REVISION, PLAN_SCHEMA_VERSION, SKILL_MANIFESTS, TOOL_REGISTRY_REVISION, factBelongsToDocument, type CommitOutcome, type ConversationContextSource, type ConversationDraftView, type DocumentHandle, type PlanEnvelope, type PlannerPort, type RunContext, type WorkspaceId } from "@draw/agent-core"
 import type { GeometryDocument } from "@draw/dsl"
 import { contentFingerprint } from "@draw/scene-graph"
 
@@ -8,6 +8,8 @@ import { conversationRepository } from "../conversationRepository"
 import { summaryOfDocument } from "../conversationSummary"
 import { appendRunEvent } from "../services/runEventClient"
 import { createAgentRuntime, type AgentRuntime } from "./agentRuntime"
+import { deriveAcceptance } from "./acceptance"
+import { SYSTEM_PROMPT_VERSION } from "./systemPrompt"
 import { createLocalPlanner, localIntentSkillIds } from "./localPlanner"
 import { createModelPlanner, resolveActiveProvider, type ModelPlannerDependencies } from "./modelPlanner"
 
@@ -549,7 +551,27 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
         policyRevision: "local"
       }
 
-      for await (const event of active.coordinator.start({ run: runContext, userMessage: prompt })) {
+      /**
+       * **这次运行的验收条件从用户原话推出来**（Phase 3 / Task 3.3 的最后一步）。
+       *
+       * 门禁（`verificationGate`）早已接线并生效，但它此前**在真实运行里是惰性的** ——
+       * 没有人声明过"这次要满足什么"，于是协调器那一侧根本不会去问门禁。
+       *
+       * **推不出来就一个都不声明**（`acceptance === undefined`）：门禁保持惰性，
+       * 行为与接线之前逐字相同。这与"声明了空数组"是两回事 ——
+       * 后者会被门禁拦下（"声明了但没有条件"的正确解读是**没有证据**）。
+       * 这条区分很重要：把"原话里没有可判据的东西"当成"没有证据"，
+       * 会让每一次闲聊式请求都以失败结束。
+       */
+      const acceptance = deriveAcceptance(prompt)
+      /**
+       * 这一轮用的提示词版本。**取一次、用在两处**（`start` 与痕迹落库）：
+       * 两处各写一次 `SYSTEM_PROMPT_VERSION` 不会出错，但会让"这一轮用的是哪一版"
+       * 在将来变成两个可以分别改动的地方。
+       */
+      const promptVersion = SYSTEM_PROMPT_VERSION
+
+      for await (const event of active.coordinator.start({ run: runContext, userMessage: prompt, promptVersion, ...(acceptance.length === 0 ? {} : { acceptance }) })) {
         // 每一步都回流：用户看到的是"走到哪一步"，而不是一个转圈。
         // 带上 `eventRunId`：用户切走之后，这一步仍然写回**它自己那条会话**（规格 §5.4）。
         useAgentStore.getState().recordRunEvent({
@@ -586,7 +608,18 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
           detail: event.detail || PHASE_SUMMARY[event.phase] || event.phase,
           at: event.at,
           promptMessageId,
-          versions: { capabilityRevision: runContext.capabilityRevision, policyRevision: runContext.policyRevision }
+          /**
+           * **四个版本号取自账本事件本身**（`event.revisions`），而不是在这里重新取常量 ——
+           * 客户端再取一次就是第二处真源，而"落库的版本号与账本里的不一致"是最难查的分叉
+           *（两者都言之凿凿）。`policyRevision` 不在 `RunRevisions` 里，照旧从 runContext 取。
+           */
+          versions: {
+            capabilityRevision: event.revisions.providerCapabilityRevision,
+            policyRevision: runContext.policyRevision,
+            promptVersion: event.revisions.promptVersion,
+            toolRegistryRevision: event.revisions.toolRegistryRevision,
+            actionSchemaRevision: event.revisions.actionSchemaRevision
+          }
         }).then((result) => {
           // "没有桌面外壳"是**预期**（浏览器里账本不可用）；真的写失败要说出来 ——
           // 否则"账本里少了几行"永远没人会知道。
@@ -598,6 +631,57 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
           if (!result.ok && result.code === "ipc_failed") {
             if (pinned === null) useAgentStore.getState().recordDiagnostic(`[ledger] append failed: ${result.detail}`, eventRunId)
             else useAgentStore.getState().recordDiagnosticFor({ conversationId: pinned.conversationId, messageId: pinned.messageId }, `[ledger] append failed: ${result.detail}`)
+          }
+        })
+      }
+
+      /**
+       * **工具痕迹落库**（Phase 6 / Task 6.1）。
+       *
+       * ## 为什么在循环**之后**写，而不是跟着事件流写
+       *
+       * `coordinator.toolTraces()` 只在运行结束时才完整（痕迹在协调器内部按调用累积），
+       * 所以这里一次性写。**这是一条真实的耐久性差异**，如实写下来而不是留给别人踩：
+       * 运行中途崩溃时，事件（流式写的）留下了，痕迹会丢。要让痕迹也抗崩溃，
+       * 得让协调器把每条痕迹也作为事件发出来 —— 那是另一次改动，不在这里假装做到了。
+       *
+       * `eventId` 用 `${runId}:trace:${toolCallId}`：`toolCallId` 在一次运行内唯一
+       * （幂等判据就是它），而前缀让痕迹行与账本事件行在同一个 `event_id` 空间里**不会撞号**。
+       * 重放（重试、重启后补写）因此也是幂等的 —— 与事件同一条纪律。
+       */
+      for (const trace of active.coordinator.toolTraces()) {
+        void appendRunEvent({
+          eventId: `${runId}:trace:${trace.toolCallId}`,
+          runId,
+          conversationId: runContext.conversationId,
+          phase: "tool_trace",
+          status: trace.status,
+          detail: `${trace.toolId}: ${trace.resultSummary}`,
+          at: Date.now(),
+          promptMessageId,
+          versions: {
+            capabilityRevision: runContext.capabilityRevision,
+            policyRevision: runContext.policyRevision,
+            promptVersion,
+            toolRegistryRevision: TOOL_REGISTRY_REVISION,
+            actionSchemaRevision: PLAN_SCHEMA_VERSION
+          },
+          trace: {
+            toolCallId: trace.toolCallId,
+            toolId: trace.toolId,
+            inputSummary: trace.inputSummary,
+            resultSummary: trace.resultSummary,
+            status: trace.status,
+            ...(trace.draftVersion === null ? {} : { draftVersion: trace.draftVersion }),
+            ...(trace.verification === null ? {} : { verification: { status: trace.verification.status, checks: trace.verification.checks } }),
+            ...(trace.diff === null ? {} : { added: trace.diff.added, removed: trace.diff.removed }),
+            durationMs: trace.durationMs
+          }
+        }).then((result) => {
+          // 与事件同一条纪律：浏览器里"没有桌面外壳"是**预期**；真的写失败要说出来。
+          if (!result.ok && result.code === "ipc_failed") {
+            if (pinned === null) useAgentStore.getState().recordDiagnostic(`[ledger] trace append failed: ${result.detail}`, eventRunId)
+            else useAgentStore.getState().recordDiagnosticFor({ conversationId: pinned.conversationId, messageId: pinned.messageId }, `[ledger] trace append failed: ${result.detail}`)
           }
         })
       }

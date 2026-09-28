@@ -1,6 +1,6 @@
 import { type ParseError } from "./contracts"
 import { updatableInputFields } from "@draw/scene-graph"
-import { ACTIONS, CONIC_KINDS, SOLID_TEMPLATES, type ActionSpec, type ActionId } from "./actionRegistry"
+import { ACTIONS, CONIC_KINDS, SOLID_TEMPLATES, declaredFieldKind, type ActionSpec, type ActionId } from "./actionRegistry"
 import { boundedString, fail, finiteNumber, isPlainObject, optionalFiniteNumber, readPoint2, readScopedReference, readVector3, rejectUnknownFields } from "./schemaReaders"
 
 /**
@@ -89,6 +89,101 @@ function normalizeSectionPlane(value: unknown, path: string, errors: ParseError[
   return { normal: unit, constant: constant / length }
 }
 
+/**
+ * **按登记的种类读一个字段**（Phase 1：字段形状只有登记表一份真源）。
+ *
+ * `default` 分支过去把字段**原样透传**，于是"登记了 `radius` 是数字"这句话在解析层没有任何约束 ——
+ * 模型给 `radius: "big"` 会一路走到动作编译器才炸。这里按 `declaredFieldKind` 逐字段读一遍，
+ * 形状不对就**在该字段的路径上**报错（那条一次性修复因此够得到它）。
+ *
+ * 三种情况返回 `undefined`（= "这里不管"）：
+ * - 结构族（`plane` / `tangentAnchor` / `scopedRef` / `idList` / `updatablePatch`）由各自的分支负责；
+ * - 字段没给（缺字段走审计的默认策略，是合法路径）；
+ * - 种类表认不出（调用方按宽容处理；"认不出"由 `actionFieldParity.test.ts` 在测试期挡住）。
+ */
+function readByDeclaredKind(spec: ActionSpec, field: string, provided: unknown, path: string, errors: ParseError[]): unknown {
+  switch (declaredFieldKind(spec, field)) {
+    case "string": return boundedString(provided, path, errors) ?? undefined
+    case "number": return finiteNumber(provided, path, errors) ?? undefined
+    case "boolean": {
+      if (typeof provided !== "boolean") {
+        errors.push(fail("invalid_type", path, "expected a boolean"))
+        return undefined
+      }
+      return provided
+    }
+    case "integer": {
+      if (typeof provided !== "number" || !Number.isFinite(provided) || !Number.isInteger(provided)) {
+        errors.push(fail("invalid_type", path, "expected an integer"))
+        return undefined
+      }
+      return provided
+    }
+    case "point": return readPoint2(provided, path, errors) ?? undefined
+    case "vector": return readVector3(provided, path, errors) ?? undefined
+    case "pointList": {
+      if (!Array.isArray(provided)) {
+        errors.push(fail("invalid_type", path, "expected an array of points"))
+        return undefined
+      }
+      const points = provided.map((entry, index) => readPoint2(entry, `${path}[${index}]`, errors))
+      if (points.some((entry) => entry === null)) return undefined
+      return points
+    }
+    case "vectorList": {
+      if (!Array.isArray(provided)) {
+        errors.push(fail("invalid_type", path, "expected an array of spatial points"))
+        return undefined
+      }
+      const points = provided.map((entry, index) => readVector3(entry, `${path}[${index}]`, errors))
+      if (points.some((entry) => entry === null)) return undefined
+      return points
+    }
+    case "vertexList": {
+      if (!Array.isArray(provided)) {
+        errors.push(fail("invalid_type", path, "expected an array of spatial points"))
+        return undefined
+      }
+      const points = provided.map((entry, index) => readVector3(entry, `${path}[${index}]`, errors))
+      if (points.some((entry) => entry === null)) return undefined
+      return points
+    }
+    case "faceRings": {
+      if (!Array.isArray(provided)) {
+        errors.push(fail("invalid_type", path, "expected an array of face rings"))
+        return undefined
+      }
+      for (const [ringIndex, ring] of provided.entries()) {
+        if (!Array.isArray(ring)) {
+          errors.push(fail("invalid_type", `${path}[${ringIndex}]`, "expected an array of vertex indexes"))
+          return undefined
+        }
+        for (const [cornerIndex, corner] of ring.entries()) {
+          if (!Number.isInteger(corner)) {
+            errors.push(fail("invalid_type", `${path}[${ringIndex}][${cornerIndex}]`, "expected an integer index"))
+            return undefined
+          }
+        }
+      }
+      return provided
+    }
+    default: return undefined
+  }
+}
+
+/**
+ * **可选的 `label`**：给了就必须是字符串。
+ *
+ * 这条改了原来的行为 —— 过去六个显式分支写的是 `if (typeof value.label === "string")`，
+ * 也就是**形状不对时静默丢掉**。同一个模型错误（`label: 42`）在显式分支上被吞掉、
+ * 在 `default` 分支上却被拒，属于最不该有的那种不一致：模型从"标签没生效"学不到任何东西。
+ * 现在两处都走这一个函数，拒绝时报到 `inputs.label` 上。
+ */
+function boundLabel(value: unknown, path: string, errors: ParseError[]): string | undefined {
+  if (value === undefined) return undefined
+  return boundedString(value, path, errors) ?? undefined
+}
+
 export function parseActionInputs(actionId: ActionId, value: unknown, path: string, errors: ParseError[]): Record<string, unknown> | null {
   if (!isPlainObject(value)) {
     errors.push(fail("invalid_type", path, "expected an object"))
@@ -142,7 +237,8 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
       if (value.size !== undefined) out.size = readVector3(value.size, `${path}.size`, errors)
       if (value.radius !== undefined) out.radius = finiteNumber(value.radius, `${path}.radius`, errors)
       if (value.height !== undefined) out.height = finiteNumber(value.height, `${path}.height`, errors)
-      if (typeof value.label === "string") out.label = value.label
+      const label = boundLabel(value.label, `${path}.label`, errors)
+      if (label !== undefined) out.label = label
       /**
        * 不同模板的要求不同，不能把 size 通用于所有实体（设计规格 L968）。
        *
@@ -191,7 +287,8 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
         if (vector === null) return null
         out.vector = vector
       }
-      if (typeof value.label === "string") out.label = value.label
+      const label = boundLabel(value.label, `${path}.label`, errors)
+      if (label !== undefined) out.label = label
       return out
     }
 
@@ -216,7 +313,8 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
         if (value.axis !== "x" && value.axis !== "y") errors.push(fail("invalid_axis", `${path}.axis`, "expected 'x' or 'y'"))
         else out.axis = value.axis
       }
-      if (typeof value.label === "string") out.label = value.label
+      const label = boundLabel(value.label, `${path}.label`, errors)
+      if (label !== undefined) out.label = label
       return out
     }
 
@@ -232,7 +330,8 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
       const parameter = optionalFiniteNumber(value.parameter, `${path}.parameter`, errors)
       if (parameter !== undefined && parameter !== null) out.parameter = parameter
       if (value.parameterId !== undefined) out.parameterId = boundedString(value.parameterId, `${path}.parameterId`, errors)
-      if (typeof value.label === "string") out.label = value.label
+      const label = boundLabel(value.label, `${path}.label`, errors)
+      if (label !== undefined) out.label = label
       return out
     }
 
@@ -246,7 +345,8 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
         const read = optionalFiniteNumber(value[key], `${path}.${key}`, errors)
         if (read !== undefined && read !== null) out[key] = read
       }
-      if (typeof value.label === "string") out.label = value.label
+      const label = boundLabel(value.label, `${path}.label`, errors)
+      if (label !== undefined) out.label = label
       return out
     }
 
@@ -313,7 +413,8 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
         faces.push(indexes)
       }
       out.faces = faces
-      if (typeof value.label === "string") out.label = value.label
+      const label = boundLabel(value.label, `${path}.label`, errors)
+      if (label !== undefined) out.label = label
       return out
     }
 
@@ -401,6 +502,24 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
         }
         out[reference.nested.outer] = { ...outer, [reference.nested.inner]: boundedString(inner, `${path}.${reference.nested.outer}.${reference.nested.inner}`, errors) }
       }
+
+      /**
+       * **按登记的种类逐字段校验**（Phase 1）。
+       *
+       * 枚举与引用字段已在上面各自处理过 —— 这里只补上"剩下的普通字段"的形状判据：
+       * `radius` 必须是有限数、`label` 必须是字符串、`points` 必须是点数组。
+       * 缺字段一律跳过（默认策略在审计那层）。
+       */
+      for (const field of spec.inputFields) {
+        if (field === "alias") continue
+        if (spec.enumValues?.[field] !== undefined) continue
+        if ((spec.references ?? []).some((entry) => entry.field === field)) continue
+        const provided = out[field]
+        if (provided === undefined) continue
+        const read = readByDeclaredKind(spec, field, provided, `${path}.${field}`, errors)
+        if (read !== undefined) out[field] = read
+      }
+      if (errors.length > 0) return null
 
       return withAlias(out)
     }

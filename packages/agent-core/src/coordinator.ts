@@ -1,13 +1,17 @@
 import type { Budget } from "./budget"
 import { buildContext, buildConversationContext, type ConversationContextSource, type Fact } from "./contextBuilder"
 import { parsePlanEnvelope, repairRequestFor } from "./schemas"
-import { MAX_REPAIR_ATTEMPTS, type PlanEnvelope, type RunContext } from "./contracts"
+import { MAX_REPAIR_ATTEMPTS, type PlanEnvelope, type RunContext, type VerificationReport } from "./contracts"
 import type { CancelReason, CancelResult, CommitterPort, ConsentToken, ObserverPort, PlannerPort, PlanRequest, ToolPort } from "./coordinatorPorts"
 import { createBudget, type BudgetLimits } from "./budget"
 import { describeRepairPrompt } from "./outputParser"
 import { describeCompileRepairPrompt } from "./planCompiler"
 import { createToolRegistry, type ToolRegistry } from "./toolRegistry"
-import { createRunLedger, type RunEvent, type RunLedger } from "./runState"
+import { createRunLedger, boundTrace, type RunEvent, type RunLedger, type RunRevisions, type ToolCallTrace } from "./runState"
+import { TOOL_REGISTRY_REVISION } from "./toolRegistry"
+import { PLAN_SCHEMA_VERSION } from "./contracts"
+import { verificationGate } from "./verification/completionGate"
+import type { AcceptanceCheck } from "./verification/taskAcceptance"
 
 /**
  * **协调器**（Task 2.1）。
@@ -109,6 +113,22 @@ export interface CoordinatorDependencies {
 export interface StartRequest {
   run: RunContext
   userMessage: string
+  /**
+   * **这次运行的验收条件**（Phase 3 接线）。
+   *
+   * 缺省 = 没有声明：不跑验证、不拦（行为与接线之前逐字相同）。
+   * 给了就一定会被判定：`[]` 会得到 `not_supported` 报告并被门禁拦下 ——
+   * "声明了但没有条件"与"没有声明"是两件事，前者的正确解读是**没有证据**。
+   */
+  acceptance?: readonly AcceptanceCheck[]
+  /**
+   * **这一轮用的系统提示词版本**（Phase 6 / Task 6.1）。
+   *
+   * 由调用方给，而不是协调器自己编：提示词由 app 侧组装
+   *（`apps/web/src/agent/systemPrompt.ts`），只有它知道用的是哪一版。
+   * 缺省为空 —— 如实留空，而不是写一个看起来像版本号的字符串。
+   */
+  promptVersion?: string
   /** 用户在预览里点了确认；没有它协调器不会尝试提交。 */
   confirmed?: boolean
 }
@@ -118,6 +138,14 @@ export interface AgentCoordinator {
   cancel(reason?: CancelReason): CancelResult
   /** 供宿主在取消/中断之后查询账本（计划 Step 5 的 "unless commit status is queried by idempotency key"）。 */
   ledger(): readonly RunEvent[]
+  /**
+   * **这次运行的结构化工具痕迹**（Phase 6 / Task 6.1）。
+   *
+   * 与 `ledger()` 分开暴露，因为两者的消费者不同：账本是"走到哪一步"（人读），
+   * 痕迹是"执行过哪几个工具、成功还是失败、各花多久"（评测与缺陷报告按 `toolId`/`status` 聚合）。
+   * 宿主落库时两者都要，所以两个访问器都要有。
+   */
+  toolTraces(): readonly ToolCallTrace[]
   phase(): RunEvent["phase"]
   /**
    * **用户确认之后把账本走完**（外部审查 A4）。
@@ -159,6 +187,22 @@ function conversationLimitsFor(source: ConversationContextSource | undefined, li
   return Object.keys(merged).length === 0 ? undefined : merged
 }
 
+/**
+ * **这次运行是在哪几个版本下跑的**（Phase 6 / Task 6.1）。
+ *
+ * 四个值各有来源，**都不在这里新造**：提示词版本由调用方给（它才组装提示词），
+ * 工具目录与动作 schema 是这一层自己的常量，能力修订号来自 `RunContext`。
+ * 缺一样就如实留空 —— 编一个假版本号会让"这份读数能不能复现"变成无法回答的问题。
+ */
+function runRevisions(request: StartRequest): RunRevisions {
+  return {
+    promptVersion: request.promptVersion ?? "",
+    toolRegistryRevision: TOOL_REGISTRY_REVISION,
+    actionSchemaRevision: PLAN_SCHEMA_VERSION,
+    providerCapabilityRevision: request.run.capabilityRevision
+  }
+}
+
 export function createCoordinator(dependencies: CoordinatorDependencies): AgentCoordinator {
   const now = dependencies.now ?? (() => Date.now())
   let ledger: RunLedger | null = null
@@ -180,7 +224,7 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
   async function* run(request: StartRequest): AsyncGenerator<RunEvent> {
     const budget = dependencies.budget ?? createBudget(dependencies.limits)
     lastTarget = request.run.target
-    ledger = createRunLedger({ runId: request.run.runId, promptMessageId: request.run.promptMessageId, handle: request.run.target, now })
+    ledger = createRunLedger({ runId: request.run.runId, promptMessageId: request.run.promptMessageId, handle: request.run.target, now, revisions: runRevisions(request) })
     controller = new AbortController()
     const signal = controller.signal
     const pendingToolEvents: RunEvent[] = []
@@ -300,6 +344,14 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
       let stagedPlan: Extract<PlanEnvelope, { kind: "plan" }> | null = null
       /** 暂存成功的产物：**只有它非空时**这次运行才有草稿可走下去。 */
       let staged: { draftVersion: number; previewHash: string } | null = null
+      /**
+       * **暂存时回带的验收报告**（Phase 3 接线）。
+       *
+       * 必须提到循环外面：`stagedResult` 是循环体内的局部量，而门禁在循环**之后**
+       * （`validating` 那一步）才读它。留在循环里会编译不过 —— 而"编译不过"正是
+       * 我们要的：它逼着这里显式说清"报告从哪来、活到什么时候"。
+       */
+      let stagedVerification: VerificationReport | null = null
       let lastDetail = ""
       /**
        * `requestId` / `attemptId` 在**第一次往返之后**才知道，而 `planning` 事件在往返之前就发出来了。
@@ -358,6 +410,8 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
           if (signal.aborted) throw new Error("tool call cancelled")
           if (!phaseTools.some((tool) => tool.id === call.toolId && tool.effect === "none")) throw new Error(`tool not published in this phase: ${call.toolId}`)
           if (!spend(budget, "tool")) throw new Error("budget exhausted: budget_tool")
+          /** 耗时从**发起**算起（含被拒的那条路径）—— 只测成功那次会让失败的代价看不见。 */
+          const startedAt = now()
           const result = await dependencies.tools!.call(call)
           if (!signal.aborted) {
             toolResultRefs.add(call.toolCallId)
@@ -371,6 +425,33 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
             }
             const event = ledger?.record(`read tool ${call.toolId}: ${result.status}`, { toolCallId: call.toolCallId, toolId: call.toolId })
             if (event) pendingToolEvents.push(event)
+            /**
+             * **结构化痕迹**（Phase 6 / Task 6.1）。
+             *
+             * 与人读的那句话分开记：这条要能按 `toolId` / `status` 聚合、能算耗时分布，
+             * 而塞进 `detail` 字符串会立刻丢掉结构 —— 结构化正是它存在的理由。
+             *
+             * 三样东西**刻意不写进来**，因为写了就是泄漏或噪声：
+             * 完整参数体（只留摘要）、完整结果体（只留摘要与计数）、
+             * 验证报告的逐条正文（只留状态与条数）。
+             */
+            ledger?.recordToolTrace({
+              toolCallId: call.toolCallId,
+              toolId: call.toolId,
+              inputSummary: boundTrace(JSON.stringify(call.input ?? {}) ?? ""),
+              resultSummary: boundTrace(result.summary),
+              status: result.status,
+              // 只读工具不属于任何草稿版本；草稿类工具接上后这里才会有值。
+              draftVersion: null,
+              verification: result.verification === undefined ? null : { status: result.verification.status, checks: result.verification.checks.length },
+              /**
+               * `ToolDiff` 的字段是 `created` / `updated` / `deleted`，而痕迹里只留
+               * **新增与删除的条数**：改动清单本身可能有上百条，而反思一条痕迹要回答的是
+               * "这次动了几样"，不是"动了哪几样"（后者要的话从账本拿工件）。
+               */
+              diff: result.diff === undefined ? null : { added: result.diff.created.length, removed: result.diff.deleted.length },
+              durationMs: Math.max(0, now() - startedAt)
+            })
           }
           return result
         }
@@ -497,10 +578,11 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
 
         // 用户原话随暂存一起下去：参数审计的三条判据（符号参数 / 从原话读数字 / 采样≠证明）
         // 都在编译这一层，而原话只有协调器手里有（Fix round 1 / C3）。
-        const stagedResult = await dependencies.committer.stage({ run: request.run, actionCount, actions: plan.actions, userMessage: request.userMessage, signal })
+        const stagedResult = await dependencies.committer.stage({ run: request.run, actionCount, actions: plan.actions, userMessage: request.userMessage, signal, ...(request.acceptance === undefined ? {} : { acceptance: request.acceptance }) })
         if (cancelled) return
         if (stagedResult.ok) {
           staged = stagedResult
+          stagedVerification = stagedResult.verification ?? null
           // 只有**编译通过**的那一份才算数：修复那一次失败时循环会继续，这份仍是空的。
           stagedPlan = plan
           ledger.record(`draft v${stagedResult.draftVersion} staged`, { draftVersion: stagedResult.draftVersion })
@@ -547,6 +629,39 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
 
       const validating = ledger.transition("validating", "checking the staged draft against the document")
       if (validating.ok) yield validating.event
+
+      /**
+       * **验收门禁**（Phase 3 / Task 3.3）。
+       *
+       * 计划的判据："没有验证证据时，Agent 只能停在修复、等待或失败，**不能报告完成**。"
+       * 以及 "Forbid inferring task success from revision growth, draft stage success,
+       * or model text claims." —— 上面刚发生的正是"草稿暂存成功了"，那不是证据。
+       *
+       * ## 什么时候才拦
+       *
+       * **只有调用方声明了验收条件时**（`request.acceptance !== undefined`）。
+       * 那之前的运行没有声明过任何条件，因此也没有"报告"可言；在这里一律拦下，
+       * 等于让"没接线"从一个如实缺口变成一次运行失败。判据留在 `verificationGate`
+       * 一处（"什么算证据"），这里只决定"要不要问它"。
+       *
+       * 拦下时**落到 `failed`，而不是 `waiting`**：`waiting` 是"等用户回答一个问题"，
+       * 而这里没有可回答的问题，只有一个没有证据的结论。转移表也从反面证实了这一点 ——
+       * `validating` 的合法下一步只有 `awaiting_confirmation` / `compiling` / `failed`
+       *（没有 `waiting`），所以"等用户"在这里根本不是一个可到达的状态。
+       *
+       * 不落 `compiling`（不发起修复）的理由：门禁拿不到"允许改哪几处"
+       *（那是编译器的 `RepairRequest`，只有编译失败时才有），没有请求的重试
+       * 只是一次盲目的重复 —— 与协调器别处那条判据同源。
+       */
+      if (request.acceptance !== undefined) {
+        const gate = verificationGate(stagedVerification)
+        if (!gate.proceed) {
+          ledger.record(`verification gate blocked confirmation: ${gate.code}`)
+          const failed = ledger.transition("failed", `cannot confirm: ${gate.reason}`)
+          if (failed.ok) yield failed.event
+          return
+        }
+      }
 
       /**
        * **永远先停在 `awaiting_confirmation`**，哪怕调用方这次已经带上了 `confirmed`。
@@ -626,6 +741,9 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
     cancel,
     ledger() {
       return ledger?.ledger() ?? []
+    },
+    toolTraces() {
+      return ledger?.toolTraces() ?? []
     },
     phase() {
       return ledger?.phase() ?? "created"

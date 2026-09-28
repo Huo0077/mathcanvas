@@ -1,6 +1,6 @@
 import type { Recovery, ToolResult } from "./contracts"
 import type { SceneTools } from "./tools/sceneTools"
-import { isReadToolId, parseReadToolInput } from "./readToolSchemas"
+import { isReadToolId, parseReadToolInput, toolInputs, type ReadToolId } from "./readToolSchemas"
 
 /**
  * **工具分发**（Task 2.4 缺的那一半）。
@@ -42,15 +42,18 @@ export interface ToolDispatcher {
  * 两者必须**同时**满足才可能被调用 —— 只看目录会调用到没实现的工具，
  * 只看这张表则会漏掉工作区/阶段的边界。
  *
- * 有测试逐条核对：这张表里的每个名字都必须在**某个阶段**被目录声明过，
- * 免得这里偷偷多出一条模型看不到（但别人调得到）的通道。
+ * ## 这张表不再手抄（Phase 1）
+ *
+ * 它此前是 `scene.inspect` / `scene.search_entities` / `scene.describe_entities` /
+ * `scene.dependencies` 四个字符串的**手写副本**，而同一组名字在 `readToolSchemas.ts`
+ * 的 `toolInputs` 里已经有一份（并且那份还带着必填字段与 JSON Schema）。
+ * 两份手写清单意味着"给某个读工具加了 schema、却忘了加进分发表"可以静默发生，
+ * 症状是模型看得到这个工具、调用它却得到 `unknown_tool`。
+ *
+ * 现在它从 `toolInputs` **推导**出来：能执行 ⟺ 有 schema ⟺ 在分发表里，
+ * 三者是同一件事，不可能漂移。
  */
-export const DISPATCHABLE_TOOL_IDS = [
-  "scene.inspect",
-  "scene.search_entities",
-  "scene.describe_entities",
-  "scene.dependencies"
-] as const
+export const DISPATCHABLE_TOOL_IDS: readonly ReadToolId[] = Object.keys(toolInputs) as ReadToolId[]
 
 /** 目录里声明了、但宿主还没实现的工具。列出来是为了给出可执行的下一步。 */
 const DECLARED_BUT_UNIMPLEMENTED: readonly string[] = [

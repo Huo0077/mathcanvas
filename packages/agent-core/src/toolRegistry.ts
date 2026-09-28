@@ -35,13 +35,16 @@ export type ToolKind = "read" | "write" | "control"
  * - `propose_plan` / `stage_actions`：**只影响隔离草稿**，真文档一个字节都不动。
  *   `propose_plan` 与 `stage_actions` 分开，是因为前者是"给出本轮计划"（规划阶段），
  *   后者是"往已确认的草稿里再追加一笔"（编译阶段）—— 两者都不写文档，但阶段不同。
+ * - `verify_draft`：**只读草稿的候选文档**，既不写文档也不改草稿。
+ *   与 `stage_actions` 分开是必要的：上面那条"哪里能建草稿"的判据读的正是
+ *   `propose_plan | stage_actions`，把验证并进去会让它把"能验"当成"能建"。
  * - `commit`：**唯一**能写文档的副作用，且只在用户确认后发布。
  *
  * 我第一版把 `plan.set_plan` 标成 `stage_actions` 并与提交一起归为"写入类"，
  * 结果"规划阶段不许有写入工具"这条纪律把提议计划本身也挡掉了 —— 那是**分类太粗**，
  * 不是纪律错了。现在把三类分开，"写入类"精确地只指 `commit`。
  */
-export type ToolEffect = "none" | "propose_plan" | "stage_actions" | "commit"
+export type ToolEffect = "none" | "propose_plan" | "stage_actions" | "verify_draft" | "commit"
 
 export interface ToolDescriptor {
   id: string
@@ -89,6 +92,17 @@ const TOOLS: readonly ToolDescriptor[] = [
   { id: "plan.set_plan", kind: "control", effect: "propose_plan", description: "提交本轮的构图计划（动作序列），只产生隔离草稿", phases: ["planning"], workspaces: [] },
   { id: "draft.stage_actions", kind: "control", effect: "stage_actions", description: "追加一笔动作到当前草稿并重新编译", phases: ["compiling"], workspaces: [] },
   { id: "draft.discard", kind: "control", effect: "stage_actions", description: "丢弃当前草稿（用户改了要求或计划有误）", phases: ["compiling", "awaiting_confirmation"], workspaces: [] },
+  /**
+   * **验证已暂存的草稿**（Phase 2 / Task 2.2，选项 A）。
+   *
+   * 它是**控制类**而不是只读类：验证的对象是草稿那一侧的候选文档，
+   * 不是模型递进来的一份文档（模型若能自选验证对象，它就能递一份更好的来换 `passed`）。
+   *
+   * **故意还不出现在 `forModelPhase` 里**：多轮循环尚未接上，现在发布它只会让模型
+   * 看得到一个调不动的工具（症状是 `unknown_tool`），而"模型看得到却调不动"
+   * 正是 Phase 1 花了两轮消灭的那类失败。等循环落地，它再进模型面。
+   */
+  { id: "draft.verify", kind: "control", effect: "verify_draft", description: "用声明的验收条件验证当前草稿的候选文档，返回逐条结论", phases: ["compiling", "validating"], workspaces: [] },
 
   // ---------------------------------------------------------------- 提交（唯一能写文档的）
   { id: "draft.confirm_commit", kind: "write", effect: "commit", description: "把用户已确认的草稿落盘（需要一次性确认凭据）", phases: ["awaiting_confirmation"], workspaces: [] },

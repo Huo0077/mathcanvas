@@ -3,7 +3,7 @@ import type { ParseResult } from "./contracts"
 import { boundedString, fail, isPlainObject, rejectUnknownFields } from "./schemaReaders"
 
 /** Native read-tool schemas are published only when the host ToolPort is connected. */
-const toolInputs = {
+export const toolInputs = {
   "scene.inspect": { required: ["documentId"], properties: { documentId: { type: "string" }, limit: { type: "integer", minimum: 1, maximum: 200 } } },
   "scene.search_entities": { required: ["documentId", "query"], properties: { documentId: { type: "string" }, query: { type: "string" }, limit: { type: "integer", minimum: 1, maximum: 200 } } },
   "scene.describe_entities": { required: ["documentId", "entityIds"], properties: { documentId: { type: "string" }, entityIds: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 200 } } },

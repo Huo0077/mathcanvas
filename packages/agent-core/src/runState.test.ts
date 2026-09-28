@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { createRunLedger, nextPhases, TERMINAL_PHASES, type RunPhase } from "./runState"
+import { createRunLedger, boundTrace, MAX_TRACE_SUMMARY, nextPhases, TERMINAL_PHASES, type RunPhase } from "./runState"
 
 /**
  * Task 2.1 Step 1：**状态机必须显式**。
@@ -249,5 +249,85 @@ describe("transition table", () => {
       expect(allowed, `${phase} must be interruptible`).toContain("interrupted")
       expect(allowed, `${phase} must be failable`).toContain("failed")
     }
+  })
+})
+
+/**
+ * **运行痕迹**（Phase 6 / Task 6.1）。
+ *
+ * 计划的两条判据：每次运行记录四个版本号；每个 tool call 记录输入/结果摘要、
+ * diff、verification、草稿版本与耗时 —— 而且**原文日志有界**，
+ * 不许写密钥、推理过程与完整候选文档。
+ */
+describe("run revisions and tool traces", () => {
+  const revisions = { promptVersion: "prompt.v6", toolRegistryRevision: "tools.1", actionSchemaRevision: "plan.v1", providerCapabilityRevision: "caps.1" }
+
+  it("carries the four revisions on every event, not only the first", () => {
+    /**
+     * 为什么挂在每一条上：事件会被单独导出、单独贴进缺陷报告，
+     * 而"这条读数是在哪版提示词/工具目录下产生的"是判断能否复现的第一个问题。
+     * 只在首条记录，等于要求读者先去翻第一条。
+     */
+    const ledger = createRunLedger({ runId: "run-1", promptMessageId: "msg-1", revisions })
+
+    walk(ledger, ["preflight", "observing", "planning"])
+
+    expect(ledger.ledger().length).toBeGreaterThanOrEqual(3)
+    for (const event of ledger.ledger()) expect(event.revisions).toEqual(revisions)
+  })
+
+  it("leaves the revisions empty instead of inventing a version when the caller did not wire them", () => {
+    // 编一个假版本号会让"这份读数能不能复现"变成一句无法回答的话。
+    const ledger = createRunLedger({ runId: "run-1", promptMessageId: "msg-1" })
+    ledger.record("something happened")
+
+    expect(ledger.ledger()[0].revisions).toEqual({ promptVersion: "", toolRegistryRevision: "", actionSchemaRevision: "", providerCapabilityRevision: "" })
+  })
+
+  it("records a tool trace and hands it back in order", () => {
+    const ledger = createRunLedger({ runId: "run-1", promptMessageId: "msg-1" })
+    const trace = { toolCallId: "c1", toolId: "scene.inspect", inputSummary: "doc-1", resultSummary: "2 entities", status: "success" as const, draftVersion: null, verification: null, diff: null, durationMs: 4 }
+
+    expect(ledger.recordToolTrace(trace)).toEqual(trace)
+    ledger.recordToolTrace({ ...trace, toolCallId: "c2" })
+
+    expect(ledger.toolTraces().map((entry) => entry.toolCallId)).toEqual(["c1", "c2"])
+  })
+
+  it("refuses to append a trace after the run reached a terminal phase", () => {
+    // 与 `record` 同一条纪律：迟到的工具结果不许写进一份已经结束的账本。
+    const ledger = createRunLedger({ runId: "run-1", promptMessageId: "msg-1" })
+    walk(ledger, ["preflight", "observing", "planning"])
+    ledger.transition("failed", "boom")
+
+    expect(ledger.recordToolTrace({ toolCallId: "c1", toolId: "scene.inspect", inputSummary: "", resultSummary: "", status: "error", draftVersion: null, verification: null, diff: null, durationMs: 1 })).toBeNull()
+    expect(ledger.toolTraces()).toEqual([])
+  })
+
+  it("keeps trace summaries bounded and marks the truncation", () => {
+    /**
+     * 无界日志在真实运行里会把内存和界面一起拖垮，而"日志太长"通常以"把日志关掉"收场。
+     * 截断必须**显式**（带上截掉多少），否则读者会把截断当成"原文就这么短"。
+     */
+    const long = "x".repeat(600)
+    const bounded = boundTrace(long)
+
+    expect(bounded.length).toBeLessThan(long.length)
+    expect(bounded).toContain("(+")
+    expect(bounded.startsWith("x".repeat(MAX_TRACE_SUMMARY))).toBe(true)
+  })
+
+  it("collapses whitespace so a multi-line payload cannot smuggle structure into a summary", () => {
+    expect(boundTrace("first line\nsecond\tline")).toBe("first line second line")
+  })
+
+  it("returns a copy of the traces, so a caller cannot mutate the ledger", () => {
+    const ledger = createRunLedger({ runId: "run-1", promptMessageId: "msg-1" })
+    ledger.recordToolTrace({ toolCallId: "c1", toolId: "t", inputSummary: "", resultSummary: "", status: "success", draftVersion: null, verification: null, diff: null, durationMs: 0 })
+
+    const taken = ledger.toolTraces() as unknown as { toolCallId: string }[]
+    taken.push({ toolCallId: "injected" })
+
+    expect(ledger.toolTraces()).toHaveLength(1)
   })
 })

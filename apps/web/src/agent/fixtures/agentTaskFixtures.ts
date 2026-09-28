@@ -1,4 +1,4 @@
-﻿export type AgentTaskCategory = "create" | "dependency" | "modify" | "reject" | "recovery" | "visual"
+export type AgentTaskCategory = "create" | "dependency" | "modify" | "reject" | "recovery" | "visual"
 
 export interface AgentAcceptanceCheck {
   type: string
@@ -79,6 +79,31 @@ export const AGENT_TASK_FIXTURES: readonly AgentTaskFixture[] = [
     expected: {
       toolIntent: ["render.capture", "render.inspect_layout"],
       acceptance: [
+        { type: "clipped_objects", expected: 0 },
+        { type: "label_overlaps", expected: 0 }
+      ]
+    }
+  },
+  {
+    /**
+     * **"先画出来、再检查取景"**（Phase 4 补的一条）。
+     *
+     * 为什么需要它：上一条 `visual-fit` 的原话只有"调整视角"，**没有任何构图动词** ——
+     * 本地确定性规划器对它产不出候选文档，于是布局判据没有东西可判，
+     * 如实报 `not_supported`。那条任务测的是"我们还没接线的部分"，这一条测的是
+     * **"画完之后取景对不对"**，而后者在纯本地就能判定。
+     *
+     * 两点必须同时成立才算数：①这句话真的能画出图形（否则这里也会退化成
+     * `not_supported` 而看不出任何东西）；②画出来的东西**确实**落在画布里、标签不叠。
+     * ②由 `diagnoseLayout` 算出来，不是"没报错所以通过"。
+     */
+    id: "visual-fit-drawn",
+    category: "visual",
+    prompt: "画一个边长为 3、中心在原点的立方体，并调整视角让实体完整显示在画布内",
+    expected: {
+      toolIntent: ["geometry.create_solid", "render.inspect_layout"],
+      acceptance: [
+        { type: "primitive_exists", target: "polyhedron3", expected: true },
         { type: "clipped_objects", expected: 0 },
         { type: "label_overlaps", expected: 0 }
       ]

@@ -14,7 +14,7 @@
 //!    只扫主库会得到一个"干净"的假结论。
 
 use mathcanvas_desktop_lib::repository::projects::ProjectRepository;
-use mathcanvas_desktop_lib::repository::run_events::{contains_credential_prefix, RunEventInput, RunEventUsage, RunEventVersions, MAX_DETAIL};
+use mathcanvas_desktop_lib::repository::run_events::{contains_credential_prefix, RunEventInput, RunEventTrace, RunEventUsage, RunEventVerification, RunEventVersions, MAX_DETAIL};
 
 struct TempDir(std::path::PathBuf);
 
@@ -51,8 +51,16 @@ fn event(event_id: &str, detail: &str) -> RunEventInput {
         request_id: Some("req-1".to_string()),
         attempt_id: Some("att-1".to_string()),
         draft_version: Some(1),
-        versions: Some(RunEventVersions { capability_revision: "2026-09-19.1".to_string(), policy_revision: "local".to_string() }),
-        usage: Some(RunEventUsage { input_tokens: Some(120), output_tokens: Some(40) })
+        versions: Some(RunEventVersions {
+            capability_revision: "2026-09-19.1".to_string(),
+            policy_revision: "local".to_string(),
+            prompt_version: "mathcanvas.agent.prompt.v6".to_string(),
+            tool_registry_revision: "2026-09-19.1".to_string(),
+            action_schema_revision: "mathcanvas.plan.v1".to_string(),
+        }),
+        usage: Some(RunEventUsage { input_tokens: Some(120), output_tokens: Some(40) }),
+        // 普通账本事件没有痕迹；`None` 会被 `skip_serializing_if` 省掉，不写成一个 `null`。
+        trace: None
     }
 }
 
@@ -202,4 +210,78 @@ fn the_database_file_itself_contains_no_prohibited_marker() {
         assert!(!text.contains("imageBytes"), "no image bytes may be stored in {}", candidate.display());
     }
     assert!(scanned >= 1, "at least the main database file must have been read");
+}
+
+/// **旧事件行必须仍然读得出来**（Phase 6 / Task 6.1）。
+///
+/// `versions` 加了三个字段、`trace` 又是一个新字段之后，库里那些**没有它们**的旧行
+/// 都会走到反序列化。没有 `#[serde(default)]` 时它们会直接失败 ——
+/// 那就是"加了字段把历史读坏"，而缺失的正确解读是"那一版还没记这个"。
+#[test]
+fn an_event_written_before_the_newer_fields_still_deserializes() {
+    let legacy = serde_json::json!({
+        "eventId": "run-1:1",
+        "runId": "run-1",
+        "conversationId": "conv-1",
+        "phase": "planning",
+        "status": "ok",
+        "detail": "asking for a plan",
+        "at": 1_700_000_000_000_i64,
+        "versions": { "capabilityRevision": "2026-09-19.1", "policyRevision": "local" }
+    });
+
+    let parsed: RunEventInput = serde_json::from_value(legacy).expect("a legacy row must still deserialize");
+    let versions = parsed.versions.as_ref().expect("versions survived");
+    assert_eq!(versions.capability_revision, "2026-09-19.1");
+    // 缺失的三样如实为空 —— 不是编一个版本号，也不是丢掉整条记录。
+    assert_eq!(versions.prompt_version, "");
+    assert_eq!(versions.tool_registry_revision, "");
+    assert_eq!(versions.action_schema_revision, "");
+    // 没有 trace 的旧行同样成立，而且写回去时**不会**多出一个 `null` 字段。
+    assert!(parsed.trace.is_none());
+    let round_tripped = serde_json::to_value(&parsed).expect("serialize");
+    assert!(round_tripped.get("trace").is_none(), "a missing trace must not be serialized as null");
+}
+
+/// **一条工具痕迹必须原样进库，而且两个摘要要脱敏**（Phase 6 / Task 6.1）。
+///
+/// 两件事一起测，因为它们**必须同时成立**：结构能存进去，与"存进去的东西里没有密钥"。
+/// 只测前者会在"痕迹从旁路绕过了脱敏"时保持绿色 —— 而脱敏点本来就是唯一的。
+#[test]
+fn a_tool_trace_is_stored_and_its_summaries_are_redacted() {
+    let dir = TempDir::new("trace-redaction");
+    let repository = ProjectRepository::open(dir.db("project.db")).expect("open");
+
+    let mut recorded = event("e-trace", "read tool scene.inspect: success");
+    recorded.trace = Some(RunEventTrace {
+        tool_call_id: "call-1".to_string(),
+        tool_id: "scene.inspect".to_string(),
+        // 一个明确像密钥的串：连续 32 个以上的"令牌字符"会被默认拒绝式抹掉。
+        input_summary: "documentId sk-abcdefghijklmnopqrstuvwxyz0123456789".to_string(),
+        result_summary: "labelled cube".to_string(),
+        status: "success".to_string(),
+        draft_version: None,
+        verification: Some(RunEventVerification { status: "passed".to_string(), checks: 3 }),
+        added: Some(2),
+        removed: Some(1),
+        duration_ms: 7,
+    });
+
+    assert!(repository.append_run_event(&recorded).expect("append"), "the trace row must be written");
+
+    let stored = repository.run_events("run-1").expect("read");
+    let trace = &stored[0].payload["trace"];
+    assert_eq!(trace["toolCallId"], "call-1");
+    assert_eq!(trace["toolId"], "scene.inspect");
+    assert_eq!(trace["status"], "success");
+    assert_eq!(trace["verification"]["status"], "passed");
+    assert_eq!(trace["verification"]["checks"], 3);
+    assert_eq!(trace["added"], 2);
+    assert_eq!(trace["removed"], 1);
+    assert_eq!(trace["durationMs"], 7);
+    // 密钥被抹掉，而普通说明原样保留（"不像密钥的都放过"）。
+    let summary = trace["inputSummary"].as_str().expect("a summary string");
+    assert!(!summary.contains("sk-abcdefghijklmnopqrstuvwxyz"), "the key must not survive: {summary}");
+    assert!(summary.contains("[redacted]"));
+    assert_eq!(trace["resultSummary"], "labelled cube");
 }

@@ -2,7 +2,16 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "jsx": "react-jsx",
-    "allowImportingTsExtensions": true
+    "allowImportingTsExtensions": true,
+    /**
+     * Vite 的客户端类型：`import.meta.glob` 等由 Vite 在构建期替换的 API 需要它。
+     *
+     * 显式写 `types` 会**关掉** `node_modules/@types` 的自动引入，这是本项目想要的性质 ——
+     * 装了 `@types/node` 会让 `setTimeout` 的返回类型从 `number` 变成 `NodeJS.Timeout`，
+     * 动摇应用侧现有代码（同一条理由见 `docs/current-status.md` 里 e2e/scripts
+     * 刻意不装 `@types/node` 的那两段）。所以这里只列真正需要的那一个。
+     */
+    "types": ["vite/client"]
   },
   "include": ["src", "vite.config.ts"]
 }

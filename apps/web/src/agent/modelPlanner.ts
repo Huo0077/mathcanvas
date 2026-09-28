@@ -435,41 +435,102 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
         lastSignature = null
         const events: readonly ModelEvent[] = result.ok ? result.events : []
         const calls = events.filter((event) => event.kind === "tool_call")
-        if (calls.length > 1) throw new ModelPlannerError("unexpected_tool_call", "multiple tool calls in one response are not supported; no calls were executed")
-        const toolCall = calls[0]
-        if (toolCall && toolCall.kind === "tool_call") {
-          const readToolId = readToolIdFromNative(toolCall.toolId)
-          if (channel === "native_tools" && readToolId !== null) {
-            if (!request.executeTool || !readTools.some((tool) => tool.function.name === toolCall.toolId)) {
-              throw new ModelPlannerError("unexpected_tool_call", `tool ${toolCall.toolId} was not published with a host executor`)
+        /**
+         * **一次响应里的多个调用：整批先判，再原子执行。**
+         *
+         * ## 这一片修过两次，两次的毛病正相反
+         *
+         * 最初这里是 `if (calls.length > 1) throw ...`：模型合法地要求两条观察时**整轮作废**，
+         * 异常向上传播后协调器从头重建提示词，它只能盲改 —— 而两条观察**一条都没执行**。
+         *
+         * 第二版改成"边扫边执行，遇到非只读就 `break` 出去交给下面那段"。那埋了两个洞：
+         * 1. **跟在只读调用之后的 `plan_set_plan`（或任何未发布的工具）被静默丢弃** ——
+         *    既不返回也不拒绝，连诊断都没有。实测：第一轮同时回 `[read, plan]` 时，
+         *    最终采用的是**第二轮**重新发的计划，第一轮那份**无声消失**。
+         *    这与本文件下面那句"拒绝猜测"的判据直接冲突。
+         * 2. **批次不是全有或全无**：靠前的只读调用已经执行并计费，靠后的调用一抛错，
+         *    整轮就 failed、不做修复 —— 模型永远看不到它花钱换来的结果。
+         *    实测：一次 9 调的批次在**执行了 4 个之后**才抛 `read-tool call limit reached`。
+         *
+         * ## 现在的判据（两句话）
+         *
+         * 1. **任一调用不是已发布的只读工具 → 显式拒绝**，一个都不执行。
+         *    要交给下面那段处理的只有 `calls[0]` 是单调用的情况；批次里出现非只读，
+         *    说明模型把"观察"与"提交计划"挤进了同一轮 —— 那是它该重发一次的事，
+         *    不是我们该替它挑一个执行的事。**静默丢弃是最坏的一种处理。**
+         * 2. **全部是只读工具 → 先逐条判完，再逐条执行。** 判据（重复 id / 观察上限 /
+         *    参数形状 / 预算）**全部在第一个 `await` 之前**跑完，所以"是否执行"这件事
+         *    在执行任何调用之前就已确定。
+         *
+         * 上限依旧不在这一层新造：观察上限读 `MAX_OBSERVATION_CALLS`，预算是
+         * `generation` / `network`（一次性按 `calls.length` 判，而不是每个调用判一次 ——
+         * 按调用判会让"最后一个调用才发现不够"变成又一次半成品）。
+         */
+        const readToolIds = calls.map((call) => readToolIdFromNative(call.toolId))
+        const allReadTools = channel === "native_tools" && calls.length > 0 && readToolIds.every((id) => id !== null)
+        if (allReadTools) {
+          /** **一趟判完**：下面这段里只有 `await`，没有判据、也没有 `throw`。 */
+          const callIds = calls.map((call) => call.toolCallId)
+          const duplicated = callIds.find((id, index) => !id || callIds.indexOf(id) !== index)
+          if (duplicated !== undefined) throw new ModelPlannerError("unexpected_tool_call", "missing or duplicate tool call id")
+          if (observationCalls + calls.length > MAX_OBSERVATION_CALLS) throw new ModelPlannerError("provider_failed", "read-tool call limit reached")
+          for (const call of calls) {
+            if (!request.executeTool || !readTools.some((tool) => tool.function.name === call.toolId)) {
+              throw new ModelPlannerError("unexpected_tool_call", `tool ${call.toolId} was not published with a host executor`)
             }
-            if (!toolCall.toolCallId || seenCalls.has(toolCall.toolCallId)) throw new ModelPlannerError("unexpected_tool_call", "missing or duplicate tool call id")
-            if (observationCalls >= MAX_OBSERVATION_CALLS) throw new ModelPlannerError("provider_failed", "read-tool call limit reached")
-            if (typeof toolCall.input !== "object" || toolCall.input === null || Array.isArray(toolCall.input)) {
-              throw new ModelPlannerError("unexpected_tool_call", `invalid arguments for ${toolCall.toolId}`)
+            if (typeof call.input !== "object" || call.input === null || Array.isArray(call.input)) {
+              throw new ModelPlannerError("unexpected_tool_call", `invalid arguments for ${call.toolId}`)
             }
-            if (request.signal.aborted) throw new ModelPlannerError("cancelled", "run cancelled")
-            if (request.budget.remaining("generation") < 1 || request.budget.remaining("network") < 1) {
-              throw new ModelPlannerError("provider_failed", "budget exhausted before the model could use the tool result")
-            }
-            seenCalls.add(toolCall.toolCallId)
-            const toolResult: ToolResult<unknown> = await request.executeTool({
-              run: request.run, toolCallId: toolCall.toolCallId, toolId: readToolId,
-              input: toolCall.input as Record<string, unknown>, actionCount: 0, signal: request.signal
+          }
+          if (request.signal.aborted) throw new ModelPlannerError("cancelled", "run cancelled")
+          if (request.budget.remaining("generation") < calls.length || request.budget.remaining("network") < calls.length) {
+            throw new ModelPlannerError("provider_failed", "budget exhausted before the model could use the tool results")
+          }
+
+          /** 到这里"整批都会执行"已经确定 —— 下面只做事，不再改主意。 */
+          for (const [index, call] of calls.entries()) {
+            const readToolId = readToolIds[index]!
+            seenCalls.add(call.toolCallId)
+            const toolResult: ToolResult<unknown> = await request.executeTool!({
+              run: request.run, toolCallId: call.toolCallId, toolId: readToolId,
+              input: call.input as Record<string, unknown>, actionCount: 0, signal: request.signal
             })
             if (request.signal.aborted) throw new ModelPlannerError("cancelled", "run cancelled")
             observationCalls += 1
             // The provider transport currently carries only role/content. Send a bounded,
             // explicitly marked tool observation in the next request rather than forge an
             // assistant tool-call message or silently discard the result.
-            messages.push({ role: "tool_call", content: "", toolCallId: toolCall.toolCallId, toolName: toolCall.toolId, toolInput: toolCall.input })
-            messages.push({ role: "tool_result", toolCallId: toolCall.toolCallId, toolName: toolCall.toolId,
+            messages.push({ role: "tool_call", content: "", toolCallId: call.toolCallId, toolName: call.toolId, toolInput: call.input })
+            messages.push({ role: "tool_result", toolCallId: call.toolCallId, toolName: call.toolId,
               content: boundedExcerpt(JSON.stringify(toolResult), 6000) })
+            // 预检已按整批长度判过 `remaining`，所以这里不该失败；留断言是为了
+            // 万一预算语义将来变了，**立刻响亮地失败**，而不是静默少扣一笔。
             if (!request.budget.consume("generation").ok || !request.budget.consume("network").ok) {
-              throw new ModelPlannerError("provider_failed", "budget exhausted before the model could use the tool result")
+              throw new ModelPlannerError("provider_failed", "budget accounting disagreed with the batch pre-check")
             }
-            continue
           }
+          continue
+        }
+        /**
+         * 走到这里有两种情形，**都必须显式处理，不许静默丢弃**：
+         * - 批次里只要有一个调用不是已发布的只读工具（含 `plan_set_plan`、编造的工具名）；
+         * - 频道不是 native（那时 `tools` 本来是空的，模型不该给出任何调用）。
+         *
+         * 判据：**`calls.length > 1` 一律拒绝**。单调用（`calls.length === 1`）留给下面那段 ——
+         * 它既处理 `plan_set_plan` 这个终点，也处理"发过一个我们没发过的工具"的拒绝。
+         */
+        if (calls.length > 1) {
+          const offender = calls.find((call) => readToolIdFromNative(call.toolId) === null)
+          throw new ModelPlannerError(
+            "unexpected_tool_call",
+            offender
+              ? `the provider returned a batch that mixes a read tool with ${offender.toolId}; refusing to execute part of a batch — send the read tools and the plan in separate turns`
+              : "the provider returned multiple tool calls on a channel that publishes no host tools; refusing to guess which one to run"
+          )
+        }
+        const toolCall = calls[0]
+        if (toolCall && toolCall.kind === "tool_call") {
+          {
           /**
            * **原生工具通道上，唯一发给模型的工具就是 `plan_set_plan`**，而它的参数
            * 就是一个计划信封。所以"模型调用了它"这件事，与文本通道里"回了一段 JSON"
@@ -500,6 +561,7 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
           // 其余情况一律拒绝：我们**没有**发过那个工具，静默忽略它等于把
           // "模型以为它调用了什么"变成"什么都没发生"。
           throw new ModelPlannerError("unexpected_tool_call", `the provider returned a tool call (${toolCall.toolId}) that no tool schema of ours asked for — refusing to guess what it meant`)
+          }
         }
 
         // 取消已经置位：不再产出任何东西（协调器也不会再收事件）。

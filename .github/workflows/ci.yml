@@ -51,6 +51,12 @@ jobs:
       # 而不用去翻日志 —— 趋势要被看见才有用。
       - name: Performance trends (recorded)
         run: npm run test:perf 2>&1 | tee perf.log
+      # 发布门禁的读数（`docs/acceptance/agent-release-gate.md`）。
+      # **它红了 CI 就红**：这份评测会在离线口径退化（本地规划器或几何能力变差）时报错，
+      # 而那正是"评测"存在的意义 —— 一个永远绿的评测等于没有评测。
+      # 注意它报的是 `deterministic_local`，**不是模型准确率**（横幅就印在报告首行）。
+      - name: Agent evaluation scorecard
+        run: npm run eval:agent 2>&1 | tee eval.log
       - name: Publish the performance trend
         if: always()
         run: |
@@ -59,6 +65,12 @@ jobs:
             echo ''
             echo '```'
             grep -E 'PERF ' perf.log || echo '(没有取到读数)'
+            echo '```'
+            echo ''
+            echo '### Agent 评测记分卡（离线 `deterministic_local`，不是模型准确率）'
+            echo ''
+            echo '```'
+            grep -E '^(mode|pass@|tool |semantic|visual|average|attempts)' eval.log || echo '(没有取到读数)'
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
