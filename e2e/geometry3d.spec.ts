@@ -129,13 +129,15 @@ test("picks the vertex under the cursor instead of one hidden behind the solid",
   await page.goto("/")
   await page.getByRole("button", { name: "跳转到立体几何" }).click()
   await page.getByRole("button", { name: "添加立方体" }).click()
+  await page.getByRole("button", { name: "自动取景" }).click()
   // 把立方体钉在一个**明确**的位置上（不依赖模板默认落点），再用**当前相机读数**投影它的两个角。
   for (const [axis, value] of [["X", "-2"], ["Y", "-2"], ["Z", "0"]] as const) await page.getByRole("spinbutton", { name: `原点 ${axis}` }).fill(value)
 
+  await page.getByRole("button", { name: "重置3D视角" }).click()
   const heading = page.locator(".inspector-selected-heading h3")
 
-  // 相机从 (+x, +y, +z) 看过来，所以 (2,2,2) 是最近的角、它的手柄够得着。
-  const nearest = await projectWorldPoint(page, { x: 2, y: 2, z: 2 })
+  // 相机从 (+x, +y, +z) 看过来，所以 (2,2,4) 是最近的角、它的手柄够得着。
+  const nearest = await projectWorldPoint(page, { x: 2, y: 2, z: 4 })
   await page.mouse.click(nearest.x, nearest.y)
   await expect(heading).toHaveText(/^[A-H]$/)
 
@@ -336,9 +338,8 @@ test("keeps a template face reachable with Alt instead of always taking the whol
   await page.getByRole("button", { name: "跳转到立体几何" }).click()
   await page.getByRole("button", { name: "添加立方体" }).click()
 
-  const canvas = page.locator("[data-3d-scene] canvas")
-  const box = (await canvas.boundingBox())!
-  const centre = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+  // Project a point inside the now-taller top face instead of assuming the screen centre misses every edge.
+  const centre = await projectWorldPoint(page, { x: -6, y: 4, z: 4 })
 
   // A plain click still selects the solid: that is the P6 v3 fix that made a solid selectable at all.
   await page.mouse.click(centre.x, centre.y)

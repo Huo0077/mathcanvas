@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 
 import { decodeMgeo, type DrawingSheetSpec, type PrimitiveSpec, type Workspace } from "@draw/dsl"
-import { commitPatch } from "@draw/scene-graph"
+import { commitPatch, commitTransaction } from "@draw/scene-graph"
 import type { DomainOperation } from "@draw/scene-graph"
 
 import { AlgebraView } from "./components/AlgebraView"
@@ -20,6 +20,9 @@ import { GuidanceHint } from "./components/GuidanceHint"
 import { guidanceFor } from "./guidance"
 import { LayerTree } from "./components/LayerTree"
 import { PropertiesBar, type PropertiesBarProps } from "./components/PropertiesBar"
+import { SpatialSolidWizard } from "./components/SpatialSolidWizard"
+import { buildTeachingSolid } from "./spatialSolidCommands"
+import { DEFAULT_SOLID_WIZARD_DRAFT, solidWizardInput, type SolidWizardDraft } from "./spatialSolidWizardModel"
 import { StatusBar } from "./components/StatusBar"
 import { createRibbonGroups } from "./ribbonCommands"
 import { useKeyboardShortcuts } from "./useKeyboardShortcuts"
@@ -181,8 +184,23 @@ export function App() {
   const [mobileDock, setMobileDock] = useState<"objects" | "properties" | null>(null)
   const [creationStep, setCreationStep] = useState<CreationStep | null>(null)
   const [spatialSession, setSpatialSession] = useState<SpatialCreationSession | null>(null)
+  const [solidWizardOpen, setSolidWizardOpen] = useState(false)
+  const [solidWizardDraft, setSolidWizardDraft] = useState<SolidWizardDraft>(() => ({ ...DEFAULT_SOLID_WIZARD_DRAFT, origin: { ...DEFAULT_SOLID_WIZARD_DRAFT.origin } }))
   const spatialSessionRef = useRef<SpatialCreationSession | null>(null)
   const updateSpatialSession = (session: SpatialCreationSession | null) => { spatialSessionRef.current = session; setSpatialSession(session) }
+  const wizardFace = document.primitives.find((primitive): primitive is Extract<PrimitiveSpec, { type: "face3" }> => primitive.type === "face3" && selectedIds.includes(primitive.id))
+  const wizardConstruction = useMemo(() => {
+    if (!solidWizardOpen) return null
+    const base = wizardFace?.pointIds.map((id) => document.primitives.find((primitive) => primitive.id === id)).filter((primitive): primitive is Extract<PrimitiveSpec, { type: "point3" }> => primitive?.type === "point3").map((primitive) => primitive.position)
+    const input = solidWizardInput(solidWizardDraft, base)
+    return "error" in input ? input : buildTeachingSolid(document, input)
+  }, [document, solidWizardOpen, solidWizardDraft, wizardFace])
+  const wizardError = wizardConstruction && "error" in wizardConstruction ? wizardConstruction.error : null
+  const wizardPreviewDocument = useMemo(() => {
+    if (!wizardConstruction || "error" in wizardConstruction) return document
+    const preview = commitTransaction({ base: document, operations: wizardConstruction.operations })
+    return preview.changed ? preview.document : document
+  }, [document, wizardConstruction])
   const [cadMode, setCadMode] = useState<CadMode>("projection")
   const [activeCommand, setActiveCommand] = useState<string | null>(null)
   const [showProjectionDiagnostics, setShowProjectionDiagnostics] = useState(false)
@@ -317,6 +335,8 @@ export function App() {
       setSelectedIds([])
       setCreationStep(null)
       updateSpatialSession(null)
+      setSolidWizardOpen(false)
+      setActiveCommand(null)
       setActiveSheetId(null)
       setActiveViewId(null)
       setFileError(null)
@@ -326,7 +346,25 @@ export function App() {
   }
 
   const creationMode: CreationMode = creationStep?.mode ?? null
+  const closeSolidWizard = () => { setSolidWizardOpen(false); setMobileDock(null); setActiveCommand(null); setGuidance(null); globalThis.document.querySelector<HTMLButtonElement>(".three-solid-open")?.focus() }
+  const openSolidWizard = () => {
+    if (solidWizardOpen) { closeSolidWizard(); return }
+    updateSpatialSession(null)
+    setSolidWizardDraft({ ...DEFAULT_SOLID_WIZARD_DRAFT, origin: { ...DEFAULT_SOLID_WIZARD_DRAFT.origin } })
+    setSolidWizardOpen(true)
+    setMobileDock("properties")
+    setActiveCommand(null)
+    setGuidance(null)
+  }
+  const confirmSolidWizard = () => {
+    if (!wizardConstruction || "error" in wizardConstruction) { setGuidance(wizardError); return }
+    applyBatch(wizardConstruction.operations)
+    setSelectedIds([wizardConstruction.selectedId])
+    closeSolidWizard()
+  }
   const startSpatialDrawing = (tool: SpatialTool) => {
+    setSolidWizardOpen(false)
+    setMobileDock(null)
     updateSpatialSession({ tool, anchors: [] })
     setCreationStep(null)
     setGuidance(null)
@@ -597,6 +635,7 @@ export function App() {
       return
     }
     updateSpatialSession(null)
+    setSolidWizardOpen(false)
     runRibbonCommand(commandId)
   }
 
@@ -604,6 +643,7 @@ export function App() {
     setSelectedIds([])
     setCreationStep(null)
     updateSpatialSession(null)
+    setSolidWizardOpen(false)
     setGuidance(workspace === "geometry3d" ? guidanceFor({ kind: "point3Tool", tool: "line", outcome: "blocked", point3Count: 0 }) : null)
     setMobileDock(null)
     setActiveCommand(null)
@@ -615,13 +655,13 @@ export function App() {
    * 键盘快捷键（Esc 分级 / Delete / 撤销重做）在 `./useKeyboardShortcuts`：
    * 搬动时顺手修掉两处依赖问题（多余的 `document`、漏掉的 `deleteSelected`），见那个文件的头注释。
    */
-  useKeyboardShortcuts({ creationStep, activeCommand, guidance, selectedIds, undo, redo, deleteSelected, setCreationStep, setActiveCommand, setGuidance, setSelectedIds, spatialSession, onCancelSpatialCreation: () => { updateSpatialSession(null); setActiveCommand(null); setGuidance(null) }, onFinishSpatialCreation: finishSpatialDrawing, onRemoveSpatialAnchor: () => { const session = spatialSessionRef.current; if (session) updateSpatialSession(removeLastSpatialAnchor(session)) } })
+  useKeyboardShortcuts({ creationStep, activeCommand, guidance, selectedIds, undo, redo, deleteSelected, setCreationStep, setActiveCommand, setGuidance, setSelectedIds, spatialSession, solidWizardOpen, onCancelSolidWizard: closeSolidWizard, onCancelSpatialCreation: () => { updateSpatialSession(null); setActiveCommand(null); setGuidance(null) }, onFinishSpatialCreation: finishSpatialDrawing, onRemoveSpatialAnchor: () => { const session = spatialSessionRef.current; if (session) updateSpatialSession(removeLastSpatialAnchor(session)) } })
 
   // 优先级：创建步骤 > 3D 显示开关提示（法向量/二面角示例）> 交线预览 > 默认选择提示。
   // 显示开关是用户刚刚按下按钮触发的，必须盖过"选择带来的预览"，否则状态栏会像没反应。
   const statusPrompt = deriveCanvasStatusPrompt({ document, selectedIds, selectedPrimitive, creationMode, creationStep, sceneControl, previewStatus, hovering: hoveredPreview !== null, scenePreviews, previewSweep, canAnchorRotation })
 
-  const spatialPrompt = spatialSession ? `第 ${spatialSession.anchors.length + 1} 步：在画布点击已有点或工作平面放点${spatialSession.tool === "face3" && spatialSession.anchors.length >= 3 ? "?按 Enter 完成空间面" : ""}` : statusPrompt
+  const spatialPrompt = solidWizardOpen ? "常用立体预览：调整尺寸和底面，确认后才写入文档；取消不会保存。" : spatialSession ? `第 ${spatialSession.anchors.length + 1} 步：在画布点击已有点或工作平面放点${spatialSession.tool === "face3" && spatialSession.anchors.length >= 3 ? "，按 Enter 完成空间面" : ""}` : statusPrompt
 
   const activeCommandPrompt = ribbonGroups
     .flatMap((group) => group.commands)
@@ -660,7 +700,7 @@ export function App() {
 
   const propertiesPanel = <PropertiesBar {...propertiesBarProps} />
 
-  const inspectorPanel = <aside id="properties-dock" className={`panel right${mobileDock === "properties" ? " is-mobile-open" : ""}`} data-mobile-dock="properties">{propertiesPanel}</aside>
+  const inspectorPanel = <aside id="properties-dock" className={`panel right${mobileDock === "properties" ? " is-mobile-open" : ""}`} data-mobile-dock="properties">{solidWizardOpen ? <SpatialSolidWizard draft={solidWizardDraft} selectedFaceLabel={wizardFace?.label ?? wizardFace?.id} error={wizardError} onChange={setSolidWizardDraft} onConfirm={confirmSolidWizard} onCancel={closeSolidWizard} /> : propertiesPanel}</aside>
 
 
   const layers = document.layers ?? []
@@ -810,7 +850,7 @@ export function App() {
           <button type="button" aria-controls="properties-dock" aria-expanded={mobileDock === "properties"} onClick={() => setMobileDock((current) => current === "properties" ? null : "properties")}>属性检查器</button>
         </div>
         {algebraPanel}
-        {document.workspace === "geometry3d" ? <ThreeSceneView document={document} selectedIds={selectedIds} onSelect={updateSelection} creationSession={spatialSession} onCreationAnchor={handleSpatialAnchor} onCreationError={setGuidance} onFinishCreation={finishSpatialDrawing} onCancelCreation={() => { updateSpatialSession(null); setActiveCommand(null); setGuidance(null) }} onStepBackCreation={() => { const session = spatialSessionRef.current; if (session) updateSpatialSession(removeLastSpatialAnchor(session)) }} onStatusPromptChange={setSceneControl} previews={scenePreviews} onPreviewHover={(hovering, preview) => setHoveredPreviewKey(hovering ? preview.key : null)} onPreviewClick={createFromPreview} onDragEnd={(id, delta) => apply({ op: "translatePrimitive3", id, delta })} onMoveSection={(id, distance) => apply({ op: "moveSectionPlane", id, distance })} onHostDragEnd={(id, parameter) => {
+        {document.workspace === "geometry3d" ? <ThreeSceneView document={wizardPreviewDocument} selectedIds={solidWizardOpen ? [] : selectedIds} onSelect={solidWizardOpen ? () => undefined : updateSelection} creationSession={spatialSession} solidWizardOpen={solidWizardOpen} solidPreviewActive={solidWizardOpen && wizardPreviewDocument !== document} onOpenSolidWizard={openSolidWizard} onCreationAnchor={handleSpatialAnchor} onCreationError={setGuidance} onFinishCreation={finishSpatialDrawing} onCancelCreation={() => { updateSpatialSession(null); setActiveCommand(null); setGuidance(null) }} onStepBackCreation={() => { const session = spatialSessionRef.current; if (session) updateSpatialSession(removeLastSpatialAnchor(session)) }} onStatusPromptChange={setSceneControl} previews={solidWizardOpen ? [] : scenePreviews} onPreviewHover={(hovering, preview) => setHoveredPreviewKey(hovering ? preview.key : null)} onPreviewClick={solidWizardOpen ? undefined : createFromPreview} onDragEnd={solidWizardOpen ? undefined : (id, delta) => apply({ op: "translatePrimitive3", id, delta })} onMoveSection={(id, distance) => apply({ op: "moveSectionPlane", id, distance })} onHostDragEnd={(id, parameter) => {
           const primitive = document.primitives.find((candidate) => candidate.id === id)
           if (primitive?.type !== "point3" || !primitive.binding) return
           // 只提交参数：坐标由重算从参数算出，所以点永远精确落在宿主上。

@@ -98,6 +98,13 @@ describe("keyboard shortcuts", () => {
     expect(spies.setSelectedIds).not.toHaveBeenCalled()
   })
 
+  it("closes an uncommitted solid preview with Escape without deleting prior geometry", () => {
+    const onCancelSolidWizard = vi.fn()
+    const spies = harness({ solidWizardOpen: true, onCancelSolidWizard, selectedIds: ["cube-1"] })
+    press({ key: "Escape" })
+    expect(onCancelSolidWizard).toHaveBeenCalledTimes(1)
+    expect(spies.setSelectedIds).not.toHaveBeenCalled()
+  })
   it("finishes a spatial face with Enter and removes an anchor with Backspace", () => {
     const onFinishSpatialCreation = vi.fn()
     const onRemoveSpatialAnchor = vi.fn()

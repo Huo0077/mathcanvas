@@ -511,7 +511,24 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .three-creation-controls span { padding-inline: var(--space-2); color: var(--color-muted); font-size: var(--font-ui-sm); }
 .three-creation-controls button { min-height: 44px; padding-inline: var(--space-2); border-color: var(--color-border); background: var(--color-panel); }
 .three-creation-controls button[aria-pressed="true"] { border-color: var(--color-accent); color: var(--color-accent-strong); background: var(--color-accent-soft); }
-.three-canvas-shell[data-creation-tool]:not([data-creation-tool=""]) canvas { cursor: crosshair; }.three-canvas-shell[data-pan-mode="true"] canvas { cursor: grab; }
+.three-canvas-shell[data-creation-tool]:not([data-creation-tool=""]) canvas { cursor: crosshair; }
+.three-solid-wizard { display: grid; gap: var(--space-3); min-width: 0; padding: var(--space-4); color: var(--color-ink); }
+.three-solid-wizard-heading { display: flex; align-items: start; justify-content: space-between; gap: var(--space-2); }
+.three-solid-wizard-heading h2 { margin: var(--space-1) 0 0; font-size: 1.125rem; }
+.three-solid-wizard-heading button { min-width: 44px; min-height: 44px; padding: 0; font-size: 1.25rem; }
+.three-solid-wizard-help { margin: 0; color: var(--color-muted); font-size: var(--font-ui-sm); line-height: 1.5; }
+.three-solid-wizard-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
+.three-solid-wizard-fields > label:first-child, .three-solid-wizard-fields > .metric-grid, .three-solid-wizard-base { grid-column: 1 / -1; }
+.three-solid-wizard-fields label { display: grid; gap: var(--space-1); min-width: 0; color: var(--color-muted); font-size: var(--font-ui-sm); }
+.three-solid-wizard-fields input[type="number"], .three-solid-wizard-fields select { width: 100%; min-width: 0; min-height: 40px; padding: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-ink); background: var(--color-panel); }
+.three-solid-wizard-fields .metric-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); }
+.three-solid-wizard-fields .three-solid-wizard-base { display: flex; align-items: center; gap: var(--space-2); line-height: 1.4; }
+.three-solid-wizard-base input { width: 18px; height: 18px; flex: none; }
+.three-solid-wizard-error { margin: 0; padding: var(--space-2); border-radius: var(--radius-sm); color: var(--color-danger); background: var(--color-danger-soft); font-size: var(--font-ui-sm); }
+.three-solid-wizard-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: var(--space-2); }
+.three-solid-wizard-actions .primary { background: var(--color-accent); border-color: var(--color-accent); color: white; }
+.three-solid-open { font-weight: 700; }
+.three-solid-preview-badge { position: absolute; z-index: 2; right: var(--space-3); bottom: calc(var(--space-3) + 48px); padding: var(--space-2) var(--space-3); border: 1px solid var(--color-accent); border-radius: var(--radius-sm); color: var(--color-accent-strong); background: rgb(238 242 247 / 94%); box-shadow: var(--shadow-card); font-size: var(--font-ui-sm); font-weight: 700; pointer-events: none; }.three-canvas-shell[data-pan-mode="true"] canvas { cursor: grab; }
 .three-canvas-shell[data-pan-mode="true"] canvas:active { cursor: grabbing; }
 .three-canvas-shell[data-drag-mode="true"] canvas { cursor: move; }
 .three-canvas-shell[data-drag-mode="true"] canvas:active { cursor: grabbing; }

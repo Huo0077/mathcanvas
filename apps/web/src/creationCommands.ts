@@ -193,7 +193,7 @@ export function createCreationCommands({ document, apply, setSelectedIds, setGui
    */
   const addDefaultCube = () => {
     const id = nextPrimitiveId(document, "cube")
-    addSolidTemplate({ id, type: "cube", origin: { x: -7, y: 3, z: 0 }, size: { x: 4, y: 4, z: 2 }, label: `立方体 ${id.split("-").at(-1)}` })
+    addSolidTemplate({ id, type: "cube", origin: { x: -7, y: 3, z: 0 }, size: { x: 4, y: 4, z: 4 }, label: `立方体 ${id.split("-").at(-1)}` })
   }
   const addDefaultSolid = (type: "pyramid" | "cylinder" | "cone") => {
     const id = nextPrimitiveId(document, type)

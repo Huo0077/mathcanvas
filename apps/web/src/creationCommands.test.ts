@@ -106,7 +106,7 @@ describe("creation commands", () => {
     expect(applied).toHaveLength(1)
     const batch = applied[0] as { op: string; primitives: { id: string; type: string; origin?: { z: number } }[] }
     expect(batch.op).toBe("addPrimitives")
-    expect(batch.primitives[0]).toMatchObject({ id: "cube-1", type: "cube", origin: { x: -7, y: 3, z: 0 }, size: { x: 4, y: 4, z: 2 } })
+    expect(batch.primitives[0]).toMatchObject({ id: "cube-1", type: "cube", origin: { x: -7, y: 3, z: 0 }, size: { x: 4, y: 4, z: 4 } })
     // 底面落在 z = 0 上（"实体放在桌上"那套口径）：不是中心在原点、更不是一半埋在地面下。
     expect(batch.primitives[0].origin?.z).toBe(0)
     // **拓扑与参数化图元同一次提交**（方案 1 的验收口径）：少了它，渲染会落到不读 `rotation` 的那条分支。

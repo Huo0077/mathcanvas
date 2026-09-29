@@ -30,6 +30,8 @@ export interface KeyboardShortcutDeps {
   guidance: string | null
   selectedIds: string[]
   spatialSession?: SpatialCreationSession | null
+  solidWizardOpen?: boolean
+  onCancelSolidWizard?: () => void
   onCancelSpatialCreation?: () => void
   onFinishSpatialCreation?: () => void
   onRemoveSpatialAnchor?: () => void
@@ -42,7 +44,7 @@ export interface KeyboardShortcutDeps {
   setSelectedIds: Dispatch<SetStateAction<string[]>>
 }
 
-export function useKeyboardShortcuts({ creationStep, activeCommand, guidance, selectedIds, spatialSession, onCancelSpatialCreation, onFinishSpatialCreation, onRemoveSpatialAnchor, undo, redo, deleteSelected, setCreationStep, setActiveCommand, setGuidance, setSelectedIds }: KeyboardShortcutDeps) {
+export function useKeyboardShortcuts({ creationStep, activeCommand, guidance, selectedIds, spatialSession, solidWizardOpen, onCancelSolidWizard, onCancelSpatialCreation, onFinishSpatialCreation, onRemoveSpatialAnchor, undo, redo, deleteSelected, setCreationStep, setActiveCommand, setGuidance, setSelectedIds }: KeyboardShortcutDeps) {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const shortcut = historyShortcut(event)
@@ -52,6 +54,7 @@ export function useKeyboardShortcuts({ creationStep, activeCommand, guidance, se
         else redo()
         return
       }
+      if (event.key === "Escape" && solidWizardOpen) { event.preventDefault(); onCancelSolidWizard?.(); return }
       if (spatialSession && !isTextEditingTarget(event.target)) {
         if (event.key === "Escape") { event.preventDefault(); onCancelSpatialCreation?.(); return }
         if (event.key === "Enter" && spatialSession.tool === "face3") { event.preventDefault(); onFinishSpatialCreation?.(); return }
@@ -71,5 +74,5 @@ export function useKeyboardShortcuts({ creationStep, activeCommand, guidance, se
     }
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [creationStep, activeCommand, guidance, selectedIds, spatialSession, onCancelSpatialCreation, onFinishSpatialCreation, onRemoveSpatialAnchor, undo, redo, deleteSelected, setCreationStep, setActiveCommand, setGuidance, setSelectedIds])
+  }, [creationStep, activeCommand, guidance, selectedIds, spatialSession, solidWizardOpen, onCancelSolidWizard, onCancelSpatialCreation, onFinishSpatialCreation, onRemoveSpatialAnchor, undo, redo, deleteSelected, setCreationStep, setActiveCommand, setGuidance, setSelectedIds])
 }

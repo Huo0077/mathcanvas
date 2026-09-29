@@ -21,6 +21,9 @@ export interface ThreeSceneViewProps {  document: GeometryDocument
   selectedIds: string[]
   onSelect: (id: string | null, additive?: boolean) => void
   creationSession?: SpatialCreationSession | null
+  solidWizardOpen?: boolean
+  solidPreviewActive?: boolean
+  onOpenSolidWizard?: () => void
   onCreationAnchor?: (anchor: Extract<SpatialPickResult, { position: Vector3 }>) => void
   onCreationError?: (message: string) => void
   onFinishCreation?: () => void
@@ -51,7 +54,7 @@ export interface ThreeSceneViewProps {  document: GeometryDocument
   onPickSectionFace?: (id: string, plane: { normal: Vector3; constant: number }) => void
 }
 
-export function ThreeSceneView({ document, selectedIds, onSelect, creationSession = null, onCreationAnchor, onCreationError, onFinishCreation, onCancelCreation, onStepBackCreation, onStatusPromptChange, previews = [], onPreviewHover, onPreviewClick, onDragEnd, onMoveSection, onHostDragEnd, onRotateEnd, onTrackRadiusEnd, onPickSectionFace }: ThreeSceneViewProps) {
+export function ThreeSceneView({ document, selectedIds, onSelect, creationSession = null, solidWizardOpen = false, solidPreviewActive = false, onOpenSolidWizard, onCreationAnchor, onCreationError, onFinishCreation, onCancelCreation, onStepBackCreation, onStatusPromptChange, previews = [], onPreviewHover, onPreviewClick, onDragEnd, onMoveSection, onHostDragEnd, onRotateEnd, onTrackRadiusEnd, onPickSectionFace }: ThreeSceneViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const renderTargetRef = useRef<HTMLDivElement>(null)
   const measurementOverlayRef = useRef<HTMLDivElement>(null)
@@ -202,6 +205,11 @@ export function ThreeSceneView({ document, selectedIds, onSelect, creationSessio
 
   const creationTool = creationSession?.tool ?? null
   useEffect(() => {
+    if (!solidWizardOpen) return
+    setDragMode(false)
+    setFacePickMode(false)
+  }, [solidWizardOpen])
+  useEffect(() => {
     if (!creationTool) return
     setPanMode(false)
     setDragMode(false)
@@ -298,7 +306,7 @@ export function ThreeSceneView({ document, selectedIds, onSelect, creationSessio
   /** 「以面为剖切面」需要有选中的截面作为目标。 */
   const hasSelectedSection = selectedIds.some((id) => document.primitives.some((primitive) => primitive.id === id && primitive.type === "section"))
   const angle = dihedralAngleDegrees({ x: 1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 })
-  return <div className="three-canvas-shell" ref={containerRef} data-3d-scene="true" data-canvas-surface="graph-paper" data-pan-mode={panMode ? "true" : "false"} data-drag-mode={dragMode ? "true" : "false"} data-creation-tool={creationSession?.tool ?? ""} data-creation-anchors={String(creationSession?.anchors.length ?? 0)} data-work-plane={workPlaneName} aria-label="3D 几何场景"
+  return <div className="three-canvas-shell" ref={containerRef} data-3d-scene="true" data-canvas-surface="graph-paper" data-pan-mode={panMode ? "true" : "false"} data-drag-mode={dragMode ? "true" : "false"} data-creation-tool={creationSession?.tool ?? ""} data-creation-anchors={String(creationSession?.anchors.length ?? 0)} data-work-plane={workPlaneName} data-solid-preview={solidPreviewActive ? "true" : "false"} aria-label="3D 几何场景"
     onPointerDownCapture={(event) => {
       if (!creationSession || event.button !== 0 || event.shiftKey || !isCreationCanvasTarget(event.target)) return
       event.stopPropagation()
@@ -320,12 +328,12 @@ export function ThreeSceneView({ document, selectedIds, onSelect, creationSessio
       else onCreationAnchor?.(result)
     }}
     onPointerLeave={() => { creationPressRef.current = null; runtimeRef.current?.clearCreationPreview() }}
-  ><div className="three-render-target" ref={renderTargetRef} /><div className="three-measurement-overlay" ref={measurementOverlayRef} aria-label="三维测量标注" /><div className="three-point-label-overlay" ref={pointLabelOverlayRef} aria-label="三维点标注" />{webglAvailable && <div className="three-scene-controls" aria-label="3D显示控制"><button type="button" aria-pressed={transparentFaces} onClick={() => setTransparentFaces((visible) => !visible)}>透明面</button><button type="button" aria-pressed={showHiddenEdges} onClick={() => setShowHiddenEdges((visible) => !visible)}>隐藏边</button><button type="button" aria-pressed={showNormals} onClick={toggleNormals}>法向量</button><button type="button" aria-pressed={unfolded} onClick={() => setUnfolded((visible) => !visible)}>{unfolded ? "折叠" : "展开"}</button><button type="button" aria-pressed={showAngle} onClick={toggleAngleDemo}>测量二面角</button><button type="button" aria-label="自动取景" aria-pressed={autoFit} title="开启后，加载文件、增删图元或内容跑出视野时会自动把视角调整到框住全部可见图元（保留 30% 安全边距）；你手动转动过视角之后就不再主动抢" onClick={() => { const next = !autoFit; setAutoFit(next); saveViewPreference3d({ autoFit: next }); if (next) fitWithoutTouchRef.current() }}>自动取景</button><button type="button" aria-label="以面为剖切面" aria-pressed={facePickMode} title="点一下这个按钮，再点实体上的某个面，该面就成为选中截面的剖切面" disabled={!hasSelectedSection} onClick={() => setFacePickMode((active) => !active)}>取面</button></div>}{webglAvailable && creationSession && <div className="three-creation-controls" role="group" aria-label="立体绘制工作平面">
+  ><div className="three-render-target" ref={renderTargetRef} /><div className="three-measurement-overlay" ref={measurementOverlayRef} aria-label="三维测量标注" /><div className="three-point-label-overlay" ref={pointLabelOverlayRef} aria-label="三维点标注" />{solidPreviewActive && <div className="three-solid-preview-badge">未保存预览</div>}{webglAvailable && <div className="three-scene-controls" aria-label="3D显示控制"><button type="button" className="three-solid-open" aria-pressed={solidWizardOpen} onClick={onOpenSolidWizard}>常用立体</button><button type="button" aria-pressed={transparentFaces} onClick={() => setTransparentFaces((visible) => !visible)}>透明面</button><button type="button" aria-pressed={showHiddenEdges} onClick={() => setShowHiddenEdges((visible) => !visible)}>隐藏边</button><button type="button" aria-pressed={showNormals} onClick={toggleNormals}>法向量</button><button type="button" aria-pressed={unfolded} onClick={() => setUnfolded((visible) => !visible)}>{unfolded ? "折叠" : "展开"}</button><button type="button" aria-pressed={showAngle} onClick={toggleAngleDemo}>测量二面角</button><button type="button" aria-label="自动取景" aria-pressed={autoFit} title="开启后，加载文件、增删图元或内容跑出视野时会自动把视角调整到框住全部可见图元（保留 30% 安全边距）；你手动转动过视角之后就不再主动抢" onClick={() => { const next = !autoFit; setAutoFit(next); saveViewPreference3d({ autoFit: next }); if (next) fitWithoutTouchRef.current() }}>自动取景</button><button type="button" aria-label="以面为剖切面" aria-pressed={facePickMode} title="点一下这个按钮，再点实体上的某个面，该面就成为选中截面的剖切面" disabled={!hasSelectedSection} onClick={() => setFacePickMode((active) => !active)}>取面</button></div>}{webglAvailable && creationSession && <div className="three-creation-controls" role="group" aria-label="立体绘制工作平面">
     <span>落点平面</span>
     {(["xy", "xz", "yz"] as const).map((plane) => <button key={plane} type="button" aria-pressed={workPlaneName === plane} onClick={() => { setWorkPlaneName(plane); runtimeRef.current?.clearCreationPreview() }}>{plane.toUpperCase()}</button>)}
     {selectedPlane && <button type="button" aria-pressed={workPlaneName === "selected-face"} onClick={() => { setWorkPlaneName("selected-face"); runtimeRef.current?.clearCreationPreview() }}>选中面</button>}
     {creationSession.anchors.length > 0 && <button type="button" onClick={onStepBackCreation}>撤回一点</button>}
     {creationSession.tool === "face3" && <button type="button" disabled={creationSession.anchors.length < 3} onClick={onFinishCreation}>完成空间面</button>}
     <button type="button" onClick={onCancelCreation}>取消绘制</button>
-  </div>}{webglAvailable && <div className="three-camera-controls" aria-label="3D视角控制"><button type="button" aria-label="自由拖动" aria-pressed={dragMode} title="开启后左键按住图形即整体拖动：实体、点、以及由点驱动的棱/线/面/平面都会跟着指针在屏幕平面内移动，其它对象不受影响" onClick={() => enterMode("drag")}>自由拖动</button><button type="button" aria-label="平移视角" aria-pressed={panMode} title="开启后左键拖动画布即平移视角，按 Ctrl 拖动沿视线前后移动" onClick={() => enterMode("pan")}>平移视角</button><button type="button" aria-label="适应视图" title="把视角调整到刚好框住当前图形，并把视角中心移回图形" onClick={() => fitCameraRef.current()}>适应视图</button><button type="button" aria-label="重置3D视角" title="回到默认视角" onClick={() => resetCameraRef.current()}>重置视角</button></div>}{webglAvailable && <p className="three-camera-hint" data-camera-hint="true">{creationSession ? "正在绘制：左键单击放点 · 中键或 Shift+左键拖动平移 · 滚轮缩放" : dragMode ? "自由拖动已开启：左键按住图形整体移动 · 关掉按钮后左键拖动恢复为旋转视角 · 滚轮缩放" : panMode ? "平移视角已开启：左键拖动平移 · 按 Ctrl 拖动沿视线前后移动 · 滚轮缩放" : "左键拖动旋转 · 中键或 Shift+左键拖动平移 · Ctrl+拖动沿视线前后移动 · 滚轮缩放"}</p>}{showAngle && webglAvailable && <div className="three-angle-readout" role="status">二面角：{angle.toFixed(1)}°（示例法向量 X/Y）</div>}{!webglAvailable && <div className="three-scene-status" role="status">当前浏览器不支持 WebGL，无法显示 3D 场景。</div>}{webglAvailable && !hasGeometry && !creationSession && <div className="three-scene-status" role="status">添加点、线或面开始探索三维空间。</div>}</div>
+  </div>}{webglAvailable && <div className="three-camera-controls" aria-label="3D视角控制"><button type="button" aria-label="自由拖动" aria-pressed={dragMode} disabled={solidWizardOpen} title="开启后左键按住图形即整体拖动：实体、点、以及由点驱动的棱/线/面/平面都会跟着指针在屏幕平面内移动，其它对象不受影响" onClick={() => enterMode("drag")}>自由拖动</button><button type="button" aria-label="平移视角" aria-pressed={panMode} title="开启后左键拖动画布即平移视角，按 Ctrl 拖动沿视线前后移动" onClick={() => enterMode("pan")}>平移视角</button><button type="button" aria-label="适应视图" title="把视角调整到刚好框住当前图形，并把视角中心移回图形" onClick={() => fitCameraRef.current()}>适应视图</button><button type="button" aria-label="重置3D视角" title="回到默认视角" onClick={() => resetCameraRef.current()}>重置视角</button></div>}{webglAvailable && <p className="three-camera-hint" data-camera-hint="true">{creationSession ? "正在绘制：左键单击放点 · 中键或 Shift+左键拖动平移 · 滚轮缩放" : dragMode ? "自由拖动已开启：左键按住图形整体移动 · 关掉按钮后左键拖动恢复为旋转视角 · 滚轮缩放" : panMode ? "平移视角已开启：左键拖动平移 · 按 Ctrl 拖动沿视线前后移动 · 滚轮缩放" : "左键拖动旋转 · 中键或 Shift+左键拖动平移 · Ctrl+拖动沿视线前后移动 · 滚轮缩放"}</p>}{showAngle && webglAvailable && <div className="three-angle-readout" role="status">二面角：{angle.toFixed(1)}°（示例法向量 X/Y）</div>}{!webglAvailable && <div className="three-scene-status" role="status">当前浏览器不支持 WebGL，无法显示 3D 场景。</div>}{webglAvailable && !hasGeometry && !creationSession && <div className="three-scene-status" role="status">添加点、线或面开始探索三维空间。</div>}</div>
 }
