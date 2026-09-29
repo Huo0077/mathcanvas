@@ -13,10 +13,11 @@
 | P0 直接画图与步骤预览 | `a587da2` | 新增 5 项 e2e、旧 3D 回归 34 项、当时全库 3033 项单测和 Web 构建 |
 | P1 棱柱/棱锥/正方体与长方体构造 | `3f33a43` | 6 项 Vitest、类型检查 |
 | P1 常用立体参数面板与未保存预览 | `478bb57` | 44 项相关 e2e、95 项相关单测、类型检查和 Web 构建 |
+| P1 立体教学线型 + 本期进度文档同步 | `a53b034` | 全库 265 文件/3055 项单测（另 1 todo）、7 个 3D spec/44 项、类型检查、lint 0 错/13 警告、Web 构建 |
 
 上述提交均在 GitHub 功能分支，**没有合并 `main`，也没有打包成桌面新版本**。此前普通权限上传曾留下 `git-remote-https.exe` 弹窗；后续从授权环境上传均返回明确成功结果。
 
-## 当前模块：立体教学线型（已验证，待随本轮文档提交上传）
+## 最新完成模块：立体教学线型（已验证，已上传 GitHub）
 
 - 新增的空间线段、空间直线、空间射线及空间棱支持文档级实线、虚线和点线。沿用 `PrimitivePresentation.style.dash`，不改 `.mgeo` schema；`threePrimitives.ts` 给明确的虚线/点线材质计算线距离，选择高亮时线型不丢。
 - 检查器对这些 3D 图元显示「教学线型」及说明；已有「隐藏边」仍是**视图开关**，不把自动遮挡虚线写成教师手工设置的图元样式。已有截面/交线预览有独立颜色和渲染路径，本轮没有改其语义。
@@ -30,4 +31,4 @@
 3. 更灵活的实体底面输入、拖放顶点/高度手柄与关联拉伸未交付；现有「使用选中面作底面」会**独立复制当时的坐标**，不追随原面更新。
 4. 球体/球截面、截图生成可编辑数学图、平面/函数的逐题补缺和 HTML/GGB 导出属于单独后续方案，当前不能算完成。
 
-详见 [任务说明](../superpowers/specs/2026-09-29-high-school-geometry-interaction-design.md) 与 [实施计划](../superpowers/plans/2026-09-29-high-school-geometry-interaction-implementation-plan.md)。本轮提交并确认 GitHub 推送后再把当前模块记入“已上传”表。
+详见 [任务说明](../superpowers/specs/2026-09-29-high-school-geometry-interaction-design.md) 与 [实施计划](../superpowers/plans/2026-09-29-high-school-geometry-interaction-implementation-plan.md)。`a53b034` 已由 GitHub 推送返回成功结果；本次进度记录收口在随后一笔文档提交中，并同样推送到该功能分支。
