@@ -37,6 +37,9 @@ describe("3D spatial placement", () => {
     expect(resolveSpatialAnchor(hit("face"), ray, "xy")).toEqual({ position: { x: 4, y: 5, z: 6 }, source: "face" })
   })
 
+  it("snaps to a displayed spatial line without binding an invented point", () => {
+    expect(resolveSpatialAnchor(hit("line"), ray, "xy")).toEqual({ position: { x: 4, y: 5, z: 6 }, source: "edge" })
+  })
   it("supports a selected face work plane using its geometric plane", () => {
     const selectedFace: WorkPlane = { normal: { x: 0, y: 0, z: 1 }, constant: -3 }
     expect(resolveSpatialAnchor(null, ray, selectedFace)).toEqual({ position: { x: 2, y: 3, z: 3 }, source: "work-plane" })

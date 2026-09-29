@@ -19,11 +19,11 @@ function planeFor(workPlane: WorkPlane): THREE.Plane {
 }
 
 export function resolveSpatialAnchor(hit: RaycastHit3 | null, ray: THREE.Ray, workPlane: WorkPlane): SpatialPickResult {
-  if (hit && ["point", "edge", "face"].includes(hit.kind)) {
+  if (hit && ["point", "edge", "line", "face"].includes(hit.kind)) {
     return {
       position: { ...hit.worldPoint },
       ...(hit.kind === "point" ? { pointId: hit.primitiveId } : {}),
-      source: hit.kind as "point" | "edge" | "face"
+      source: hit.kind === "line" ? "edge" : hit.kind as "point" | "edge" | "face"
     }
   }
   const plane = planeFor(workPlane)
