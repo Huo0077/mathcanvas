@@ -5,21 +5,21 @@
 > [`docs/project-progress.md`](project-progress.md) —— 那是**归档**，里面的数字是"当时实测"，
 > 不是当前值。两份文件分工明确：**要当前值看这里，要过程看归档。**
 
-**最后更新：** 2026-09-26（第四十六批：修两处**实机现场故障** —— "把正方体沿对角面剖开，标出截面"连挂两次；表里的门禁读数都是这一次改动后复跑的实测值）。
+**最后更新：** 2026-09-29（本次立体教学线型和高中几何交互功能分支；下表只写本次真正复跑过的门禁，不把 9 月 26 日的测试数字当成现值）。
 
 ## 一、现在能不能跑（可复核的门禁读数）
 
-| 命令 | 当前读数 |
+| 命令 | 本轮实际结果与范围 |
 | --- | --- |
-| `npm test` | **238 个测试文件 / 2812 个用例通过 + 1 个 todo（零失败）** |
-| `npm run typecheck` | **6 个 workspace + `e2e/`（42 个 spec）+ `scripts/` 全部 exit 0** |
-| `npm run lint` | **0 error / 13 warning**（基线从 14 降到 13：搬键盘处理时补上了漏写的 `deleteSelected` 依赖，那条警告随之消失） |
-| `npm run build` | exit 0 —— 入口 **1 613.94 kB** + 按需 chunk `engineeringExporters` **423.64 kB** + `geometry.worker` **298.77 kB**（同一份源码连跑两次构建，三个 chunk **一致地**小约 2.3%：1 652.65 / 433.81 / 304.33 → 1 613.94 / 423.64 / 298.77，原因未查明，如实记下；上表取的是 `build-check/` 里**当前这一份**） |
-| `npm run test:perf` | 八条场景（`packages/scene-graph`），见下；另有 `apps/web/src/agent/compilePlan.bench.test.ts` 量编译成本 |
-| `npm run test:e2e` | Playwright **42 个 spec / 141 条用例全绿**（本机整套实跑，含主线程响应性读数；**不要与 `npm test` 并行跑**，见下表下面的说明） |
-| `npm run test:rust` | **232 例通过 + 3 ignored / 0 失败**（2026-09-25 本机复跑，走 `scripts/toolchain.mjs` 补 PATH） |
+| `npm test -- --maxWorkers=3` | **265 个测试文件 / 3055 个用例通过 + 1 todo / 0 失败**（全库，已修正 2 条旧 `4×4×2` 正方体断言后复跑） |
+| `npm run typecheck` | 6 个 workspace，以及 `e2e/` 与 `scripts/` 类型检查，全部 exit 0 |
+| `npm run lint` | exit 0，**0 error / 13 warning**（已有基线警告，并非全部无警告） |
+| `npm --workspace @draw/web run build` | exit 0；入口 1694.22 kB、`engineeringExporters` 433.81 kB、`geometry.worker` 310.99 kB；仍有 >500 kB chunk 警告 |
+| 7 个相关 3D Playwright spec | **44 / 44 通过**，涵盖画布创建、常用立体、旧文档、拾取/旋转、交点预览及教学线型；**全量 `npm run test:e2e` 本轮未复跑** |
+| `npm run build`（含桌面 Rust） | 本轮未完成桌面打包；P0 时一次 Rust 编译超过 180 秒而中止，**不等于桌面构建通过** |
+| `npm run test:rust` / `npm run test:perf` | 本轮均未复跑；此前读数只能当历史基线，不能写成现状 |
 
-**性能读数**（`npm run test:perf`，本机实测；定位是**趋势与报警器**，不是性能目标）：
+**性能读数（2026-09-26 历史基线，本轮未复跑）**（`npm run test:perf`，当时本机实测；定位是**趋势与报警器**，不是性能目标）：
 
 | 场景 | 读数 | 它对应什么 |
 | --- | ---: | --- |
@@ -32,7 +32,7 @@
 | `drag/300-frames` | ~750 ms（≈2.5 ms/帧） | 连续拖动 300 帧；60 fps 预算 16.7 ms/帧，**余量充足** |
 | `dag/*` + 校准 | 见 `PERF` 行 | 局部/全量等价性判据 + "计时本身没坏"的校准 |
 
-**主线程响应性读数**（`npx playwright test e2e/main-thread-responsiveness.spec.ts`，输出 `PERF frame-gap`；单独跑 / 整套并行跑各一次）：
+**主线程响应性读数（2026-09-26 历史基线，本轮未复跑）**（`npx playwright test e2e/main-thread-responsiveness.spec.ts`，输出 `PERF frame-gap`；单独跑 / 整套并行跑各一次）：
 
 | 阶段 | 单独跑 | 整套并行跑 | 它对应什么 |
 | --- | ---: | ---: | --- |
@@ -48,6 +48,11 @@
 选择**不装** `@types/node` 而只写一份最小声明（`e2e/nodeTypes.d.ts`）：它一旦进 `node_modules/@types`，所有没写 `types` 的 tsconfig 都会自动全局引入，`setTimeout` 的返回类型会从 `number` 变成 `NodeJS.Timeout`，动摇应用侧现在好端端的代码 —— 为给测试补类型而付这个代价不划算。
 读数会随提交变化，**以 CI 最近一次运行为准**；上表是本地实测值。
 
+## 本轮高中几何交互（功能分支，尚未并入 v3.0 发布版）
+
+- **P0 已在功能分支完成**：直接在 3D 画布按步骤作空间点/线段/直线/射线/平面/面；XY/XZ/YZ/选中面工作平面落点、只预览不落盘、Esc 取消/Enter 完成、一笔事务一步撤销；保留原 Shift 多选和 Alt 选子对象路径。
+- **P1 已在功能分支完成部分**：常用立体参数面板可创建正方体、长方体、三/四棱柱（含斜棱柱）、三/四棱锥；改变参数显示未保存 3D 预览、确认后提交；原快速「添加立方体」新建尺寸更正为 4×4×4。教学线型模块支持独立空间线/棱的实线、虚线和点线，并保留到 `.mgeo`；「隐藏边」是另一套只影响视图的开关。**旧文件尺寸不迁移**。
+- **本轮完成不等于整期完成**：六类教学样题的组合验收、教师/学生走查、选中对象旋转环遮挡的图面优化、完整 e2e 与桌面打包仍未完成；球体、截图自动绘图、HTML/GGB 导出没有在本阶段交付。逐模块提交及证据见 [高中几何进度](research/2026-09-29-high-school-geometry-interaction-progress.md)、[功能目录](feature-catalog.md) 与 [实施计划](superpowers/plans/2026-09-29-high-school-geometry-interaction-implementation-plan.md)。
 ## 二、按评审方案：做到哪一步了
 
 **一句话进度（估计，口径写明）**：**七条方案全部落地并验收**；方案 2 的六个目标文件全部拆分完成（`operations.ts` 也走到 **2817→307**）。剩下的是**可选**项与长尾（`operations.ts` 内仍可细分、`App.tsx` 与 `threeSceneEffect.ts` 内仍可细分）。门禁面已无已知缺口（`e2e/` 与 `scripts/` 都进了 `tsc`）。

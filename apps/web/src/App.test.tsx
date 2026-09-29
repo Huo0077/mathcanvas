@@ -1744,8 +1744,8 @@ describe("MathCanvas workbench", () => {
     const section = useSceneStore.getState().document.primitives.find((primitive) => primitive.type === "section")
     expect(section).toMatchObject({ classification: "polygon", status: "approximate", visible: true })
     const points = section?.type === "section" ? section.points : []
-    // 默认剖切面是过中心的水平面（世界 Z 轴朝上）：立方体原点 (-2,-2,-1)、尺寸 4×4×2 ⇒ 切在 z = 0。
-    expect(new Set(points.map((point) => `${point.x},${point.y},${point.z}`))).toEqual(new Set(["-2,-2,0", "2,-2,0", "2,2,0", "-2,2,0"]))
+    // 默认剖切面是过中心的水平面（世界 Z 轴朝上）：立方体原点 (-2,-2,-1)、尺寸 4×4×4 ⇒ 切在 z = 1。
+    expect(new Set(points.map((point) => `${point.x},${point.y},${point.z}`))).toEqual(new Set(["-2,-2,1", "2,-2,1", "2,2,1", "-2,2,1"]))
     // 单一连通截面只有一环。
     expect(section?.type === "section" ? section.loops : []).toHaveLength(1)
   })
@@ -1793,7 +1793,7 @@ describe("MathCanvas workbench", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "跳转到立体几何" }))
     fireEvent.click(screen.getByRole("button", { name: "添加立方体" }))
-    // 下面断言的是"点被夹在 (±2, ±2, ±2) 这个盒子里"，所以把立方体钉回那个位置（默认落点会变）。
+    // 下面断言的是"点被夹在 x/y = -2..2、z = -1..3 的正方体里"，所以把立方体钉回那个位置（默认落点会变）。
     for (const [axis, value] of [["X", "-2"], ["Y", "-2"], ["Z", "-1"]] as const) fireEvent.change(screen.getByRole("spinbutton", { name: `原点 ${axis}` }), { target: { value } })
     fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
 
@@ -1806,10 +1806,11 @@ describe("MathCanvas workbench", () => {
     const readPoint = () => useSceneStore.getState().document.primitives.find((primitive) => primitive.type === "point3" && primitive.binding?.kind === "inSolid")
     const bound = readPoint()
     if (bound?.type !== "point3" || bound.binding?.kind !== "inSolid") throw new Error("expected an inSolid binding")
-    // 默认立方体是 (-2..2)³：绑定之后点必须在里面。
+    // 这只正方体的原点是 (-2,-2,-1)，尺寸是 4×4×4：绑定之后点必须在里面。
     expect(Math.abs(bound.position.x)).toBeLessThanOrEqual(2 + 1e-9)
     expect(Math.abs(bound.position.y)).toBeLessThanOrEqual(2 + 1e-9)
-    expect(Math.abs(bound.position.z)).toBeLessThanOrEqual(2 + 1e-9)
+    expect(bound.position.z).toBeGreaterThanOrEqual(-1 - 1e-9)
+    expect(bound.position.z).toBeLessThanOrEqual(3 + 1e-9)
 
     // 三个体内参数都在（u / v / w）。
     for (const label of ["体内参数 u", "体内参数 v", "体内参数 w"]) expect(screen.getByRole("spinbutton", { name: label })).toBeTruthy()

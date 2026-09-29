@@ -1,5 +1,6 @@
 # 多模态数理与工程交互绘图引擎
 
+> **历史总规划，非当前进度台账（2026-09-29 索引）**：下文的“当前状态（2026-09-21）”、测试数量与阶段判断是当时快照，不能当成今天的读数。请看 [MathCanvas 当前状态](current-status.md)；本期高中立体交互的范围和逐模块进度分别见 [专题实施计划](superpowers/plans/2026-09-29-high-school-geometry-interaction-implementation-plan.md) 与 [专题进度记录](research/2026-09-29-high-school-geometry-interaction-progress.md)。原 P5 题图解析计划**不等于**本期已实现截图生成数学图，相关方案仍单独评审。
 ## 实施计划
 
 **文档版本：** v1.4（2026-09-18 状态回填：平面几何切线一轮、轨道圆独立化与轨道动点两处缺陷修复并入 P6，门禁数字与 `vitest` 4.x 一并更新；同日 A1/A2 解析几何两条线与「立体几何最后一轮」四项优化并入 P6）  
