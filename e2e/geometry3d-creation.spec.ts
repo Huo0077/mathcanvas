@@ -167,6 +167,37 @@ test("lets the drawing session win over a preview click", async ({ page }) => {
   await expect(scene).toHaveAttribute("data-preview-face-count", "6")
 })
 /**
+ * **从工具按钮退回"选择工具"**（实施计划 Task 5 那条"从工具按钮可选『选择工具』退出"）。
+ *
+ * 判据：退出后工具状态清空、锚点归零、文档里没有半成品；而且画布点击**回到选择语义**
+ * —— 再点空白不会创建任何东西。
+ */
+test("leaves the drawing session through the select tool", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  const scene = page.locator("[data-3d-scene]")
+  const rows = page.locator(".algebra-panel .object-row")
+
+  await page.getByRole("button", { name: "绘制线段" }).click()
+  await expect(scene).toHaveAttribute("data-creation-tool", "segment3")
+  const first = await projectWorldPoint(page, { x: 0, y: 0, z: 0 })
+  await page.mouse.click(first.x, first.y)
+  await expect(scene).toHaveAttribute("data-creation-anchors", "1")
+
+  await page.getByRole("button", { name: "选择工具" }).click()
+  await expect(scene).toHaveAttribute("data-creation-tool", "")
+  await expect(scene).toHaveAttribute("data-creation-anchors", "0")
+  // 未提交的那个锚点不落盘
+  await expect(rows).toHaveCount(0)
+
+  // 退出之后画布点击回到"选择"语义：点空白不再创建任何东西
+  const empty = await projectWorldPoint(page, { x: 2, y: 2, z: 0 })
+  await page.mouse.click(empty.x, empty.y)
+  await expect(rows).toHaveCount(0)
+  await expect(scene).toHaveAttribute("data-creation-tool", "")
+})
+
+/**
  * **创建会话里悬停要说清"点下去会引用谁 / 落在哪"**（实施计划 Task 5 那条"悬停辅助标记展示目标、
  * 世界坐标与工作平面，不渲染为持久图元"）。
  *
