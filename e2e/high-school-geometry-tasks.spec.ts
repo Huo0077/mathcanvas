@@ -6,9 +6,9 @@ import type { Page } from "@playwright/test"
 /**
  * Task 8：高中六类代表题的整合验收 —— 可重放的操作序列。
  *
- * 这份文件**分批落地**，没写进来的题类一律不算完成：
- *   ① 三棱锥 / ② 四棱锥 / ③ 斜三棱柱 / ④ 异长长方体 / ⑤ 圆锥截面 / ⑥ 空间直线与平面的关系   <- 已落地
- *   ⑦ 已有文档恢复与撤销   <- 尚未落地
+ * 六类**已全部落地**（对照实施计划 Task 8 的六项）：
+ *   1) 三棱锥 / 2) 四棱锥 / 3) 斜三棱柱 / 4) 异长长方体 / 5) 圆锥截面 / 6) 空间直线与平面的关系 / 7) 已有文档恢复与撤销
+ * **但六类齐了不等于整期验收完成**：全量 `npm run test:e2e`、教师/学生走查、桌面打包仍未做。
  *
  * 每题断言四件事，且都取**算得出来的数**，不取"看着像"：
  *   类型与名称、精确几何（坐标 / 尺寸 / 拉伸向量）、依赖（拓扑子对象）、保存与一步撤销。
@@ -43,6 +43,9 @@ interface SavedPrimitive {
   vertexIds?: string[]
   /** `line3` / `plane3` 只存"过哪些点"，法向与常数是**导出量**。 */
   definition?: { kind: string; pointIds?: string[]; pointId?: string; normal?: SavedVec3; direction?: SavedVec3 }
+  /** 物化出来的拓扑靠它认领来源：`{ kind: "template", sourceIds: [模板实体 id] }`
+   *  —— 与 `solidTemplates.ts` 的 `hasTemplateFor` 用**同一个**约定（产品判定"已物化"的判据）。 */
+  construction?: { kind?: string; sourceId?: string; sourceIds?: string[] }
 }
 
 const subtract = (first: SavedVec3, second: SavedVec3): SavedVec3 => ({ x: first.x - second.x, y: first.y - second.y, z: first.z - second.z })
@@ -63,7 +66,14 @@ const DRAFT_KEY = "mathcanvas:draft:geometry3d"
 
 test.beforeEach(async ({ page }) => {
   // 草稿会跨用例恢复，实体编号（三棱锥 1 / 三棱柱 1 …）会跟着漂，所以每个用例从空图纸开始。
-  await page.addInitScript(() => localStorage.clear())
+  // **只清一次**：`addInitScript` 在每次导航后都会重跑，无条件清空的话 `page.reload()` 会把
+  // 「已有文档恢复」正要验的那份草稿一起抹掉（实测症状：刷新后对象列表空了，看着像恢复失败）。
+  await page.addInitScript(() => {
+    if (window.sessionStorage.getItem("e2e-draft-cleared") === null) {
+      window.localStorage.clear()
+      window.sessionStorage.setItem("e2e-draft-cleared", "1")
+    }
+  })
 })
 
 /** 打开「常用立体」并按标签填参数：高度那一栏的名字随预设变（棱长 / 高度 / 拉伸向量 Z / 法向高度）。 */
@@ -385,4 +395,70 @@ test("空间直线与平面的关系：线在面内与平行不共面由平面�
   // 一步撤销：这次测量是一个完整的构造动作，退一步就整条撤掉
   await page.keyboard.press("Control+z")
   await expect(page.locator(".three-measurement-label")).toHaveCount(0)
+})
+
+test("已有文档恢复与撤销：旧 .mgeo 迁移后几何不变，刷新后逐 id 恢复，撤销只撤新工作", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  const algebra = page.locator(".algebra-panel")
+  const ids = async () => (await draftPrimitives(page)).map((primitive) => primitive.id)
+
+  // 这份旧文档里是**只有模板实体、没有拓扑**的三只立方体：打开时必须由 `migrateLegacySolids` 物化子对象
+  await page.getByLabel("加载 .mgeo 文件").setInputFiles("e2e/fixtures/overlapping-cubes.mgeo")
+  await expect(algebra.getByText("立方体 A").first()).toBeVisible()
+  await expect(algebra.getByText("远处的立方体").first()).toBeVisible()
+  // 迁移的正面信号：夹具自己的图元**按原序在前**，物化出来的子对象追加在后
+  await expect.poll(async () => (await ids()).slice(0, 3)).toEqual(["cube-a", "cube-b", "cube-far"])
+
+  const primitives = (await readSavedDocument(page)).document.primitives
+  // 每只立方体 = 1 个模板实体 + 8 点 + 12 棱 + 6 面 + 1 个多面体拓扑
+  expect(primitives).toHaveLength(3 + 3 * 27)
+  expect(primitives.filter((primitive) => primitive.type === "polyhedron3")).toHaveLength(3)
+
+  // 旧文档的几何**逐值不变** —— 打开一份文件不是"顺手改一下"
+  const cubeById = (id: string) => primitives.find((primitive) => primitive.id === id)
+  expect(cubeById("cube-a")?.origin).toEqual({ x: -2, y: -2, z: -2 })
+  expect(cubeById("cube-a")?.size).toEqual({ x: 4, y: 4, z: 4 })
+  expect(cubeById("cube-b")?.origin).toEqual({ x: 0, y: -2, z: -2 })
+  expect(cubeById("cube-far")?.origin).toEqual({ x: 14, y: -2, z: -2 })
+
+  // 物化出来的拓扑要**几何正确**：每只 8 个顶点、包围盒恰为 origin..origin+4（不是"有 8 个点"就算过）
+  for (const [id, origin] of [["cube-a", { x: -2, y: -2, z: -2 }], ["cube-b", { x: 0, y: -2, z: -2 }], ["cube-far", { x: 14, y: -2, z: -2 }]] as const) {
+    const polyhedron = primitives.find((primitive) =>
+      primitive.type === "polyhedron3" && primitive.construction?.kind === "template" && (primitive.construction.sourceIds ?? []).includes(id)
+    )
+    expect(polyhedron, `${id} 必须有一份物化出来的拓扑`).toBeTruthy()
+    const vertices = (polyhedron?.vertexIds ?? []).map((vertexId) => primitives.find((candidate) => candidate.id === vertexId)?.position)
+    expect(vertices).toHaveLength(8)
+    for (const axis of ["x", "y", "z"] as const) {
+      const values = vertices.map((vertex) => vertex?.[axis] ?? Number.NaN).sort((first, second) => first - second)
+      expect(values[0]).toBeCloseTo(origin[axis], 9)
+      expect(values[7]).toBeCloseTo(origin[axis] + 4, 9)
+    }
+  }
+
+  // ---- 恢复：刷新页面后必须**逐 id 一致**地恢复；把已物化的拓扑再迁一遍就会多出一套子对象 ----
+  const beforeReload = await ids()
+  await page.reload()
+  // 先分清两件事：草稿本身还在不在（持久化），以及应用有没有把它装回文档（恢复）。
+  await expect.poll(ids, { message: "刷新后草稿必须仍在 localStorage 里" }).toEqual(beforeReload)
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await expect(algebra.getByText("立方体 A").first()).toBeVisible()
+  await expect.poll(ids, { message: "恢复后 id 列表必须与刷新前逐项相同" }).toEqual(beforeReload)
+
+  // ---- 撤销：只撤"新做的工作"，加载进来的旧文档原样留着 ----
+  // 观测口径用**对象列表**，不用 localStorage：草稿写回本身有一个已记档的时序缺陷
+  // （刷新后**第一次**改动不落草稿，见 `docs/current-status.md` 的如实缺口），
+  // 那是持久化的问题，不该混进"撤销是否只撤新工作"这条判断里。
+  await page.getByRole("button", { name: "添加立方体" }).click()
+  await expect(algebra.getByText("立方体 1").first()).toBeVisible()
+  await page.keyboard.press("Control+z")
+  await expect(algebra.getByText("立方体 1")).toHaveCount(0)
+  await expect(algebra.getByText("立方体 A").first()).toBeVisible()
+  await expect(algebra.getByText("远处的立方体").first()).toBeVisible()
+  await expect(algebra.getByRole("button", { name: "展开 远处的立方体 拓扑 的子对象" })).toBeVisible()
+  // 撤销之后落库的草稿必须正好是"只有旧文档"那一份（这一次改动会写回，缺陷只吞掉恢复后的第一次）
+  await expect.poll(ids, { message: "撤销后草稿应回到只有旧文档的那一份" }).toEqual(beforeReload)
+  await page.keyboard.press("Control+z")
+  await expect.poll(ids).toEqual(beforeReload)
 })
