@@ -90,11 +90,20 @@ function pointDrivenLineEndpoints(primitive: PointDrivenLinePrimitive, points: M
   return first && second ? [first, second] : null
 }
 
+/** Teaching marks are persisted on the primitive, unlike the viewport-only hidden-edge overlay. */
+function teachingLineMaterial(primitive: PointDrivenLinePrimitive | Edge3Primitive, selected: boolean): THREE.LineBasicMaterial | THREE.LineDashedMaterial {
+  const properties = { color: selected ? "#4c3ac7" : strokeFor(primitive), transparent: opacityFor(primitive) < 1, opacity: opacityFor(primitive) }
+  if (primitive.style?.dash === "8 6") return new THREE.LineDashedMaterial({ ...properties, dashSize: 0.32, gapSize: 0.24 })
+  if (primitive.style?.dash === "2 5") return new THREE.LineDashedMaterial({ ...properties, dashSize: 0.08, gapSize: 0.20 })
+  return new THREE.LineBasicMaterial(properties)
+}
+
 export function createPointDrivenLine(primitive: PointDrivenLinePrimitive, points: Map<string, Point3Primitive>, selected: boolean): THREE.Line | null {
   const endpoints = pointDrivenLineEndpoints(primitive, points)
   if (!endpoints) return null
   const geometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(endpoints[0].x, endpoints[0].y, endpoints[0].z), new THREE.Vector3(endpoints[1].x, endpoints[1].y, endpoints[1].z)])
-  const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: selected ? "#4c3ac7" : strokeFor(primitive), transparent: opacityFor(primitive) < 1, opacity: opacityFor(primitive) }))
+  const line = new THREE.Line(geometry, teachingLineMaterial(primitive, selected))
+  if (line.material instanceof THREE.LineDashedMaterial) line.computeLineDistances()
   line.userData.primitiveId = primitive.id
   line.userData.primitiveType = primitive.type
   return line
@@ -194,7 +203,8 @@ export function createEdge3Line(primitive: Edge3Primitive, points: Map<string, P
   const second = point3ById(points, primitive.pointIds[1])
   if (!first || !second) return null
   const geometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(first.x, first.y, first.z), new THREE.Vector3(second.x, second.y, second.z)])
-  const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: selected ? "#4c3ac7" : strokeFor(primitive), transparent: opacityFor(primitive) < 1, opacity: opacityFor(primitive) }))
+  const line = new THREE.Line(geometry, teachingLineMaterial(primitive, selected))
+  if (line.material instanceof THREE.LineDashedMaterial) line.computeLineDistances()
   line.userData.primitiveId = primitive.id
   line.userData.primitiveType = primitive.type
   return line

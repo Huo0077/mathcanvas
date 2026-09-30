@@ -106,6 +106,33 @@ describe("3D measurements", () => {
     expect(measurement.explanation).toContain("不存在")
   })
 
+  /**
+   * **选择顺序不该决定能不能量**（2026-09-29 修）。
+   *
+   * 属性栏只要"1 个空间点 + 1 个空间平面"就给出「距离」按钮，**与点击顺序无关**
+   * （`spatialTools.measurementOptionsFor`）；而这里原来固定按 `sourceIds[0]` 是点、`[1]` 是平面取数，
+   * 于是"先点平面、再选点"只会得到一条 `insufficient-data` 的读数：按钮可点、面板无数字、画布没标签。
+   * 真机现场见 `e2e/high-school-geometry-tasks.spec.ts` 的线面关系用例（按可用顺序才测到 3.000u）。
+   */
+  it("measures a point-to-plane distance whichever of the two was selected first", () => {
+    const primitives: PrimitiveSpec[] = [
+      { id: "p", type: "point3", position: { x: 0, y: 0, z: 5 } },
+      { id: "plane", type: "plane3", definition: { kind: "throughPoints", pointIds: ["q0", "q1", "q2"] } },
+      { id: "q0", type: "point3", position: { x: 0, y: 0, z: 0 } },
+      { id: "q1", type: "point3", position: { x: 1, y: 0, z: 0 } },
+      { id: "q2", type: "point3", position: { x: 0, y: 1, z: 0 } }
+    ]
+
+    const pointFirst = createMeasurement3("distance-point-first", "distance", ["p", "plane"], primitives)
+    const planeFirst = createMeasurement3("distance-plane-first", "distance", ["plane", "p"], primitives)
+
+    // 点 p 到 z = 0 平面的距离是 5 —— 两种选择顺序必须给同一个读数
+    expect(pointFirst).toMatchObject({ value: 5, status: "valid" })
+    expect(planeFirst).toMatchObject({ value: 5, status: "valid" })
+    // 说明文案要指向**真正**的点与平面，不能因为交换而说反
+    expect(planeFirst.explanation).toContain("由点 p 到平面 plane")
+  })
+
   it("does not measure a point-to-plane distance from the origin when the plane point is missing", () => {
     const primitives: PrimitiveSpec[] = [
       { id: "p", type: "point3", position: { x: 0, y: 0, z: 5 } },

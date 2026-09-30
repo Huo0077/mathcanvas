@@ -42,6 +42,12 @@ describe("ribbon command configuration", () => {
     expect(labels).toEqual(expect.arrayContaining(["添加空间点", "添加立方体", "创建截面"]))
   })
 
+  it("offers direct spatial drawing tools before selection-dependent construction", () => {
+    const base = createRibbonGroups({ ...emptyContext, workspace: "geometry3d" }).find((group) => group.id === "base")?.commands ?? []
+    expect(base.slice(0, 7).map((command) => command.id)).toEqual(["select-tool", "draw-point3", "draw-segment3", "draw-line3", "draw-ray3", "draw-plane3", "draw-face3"])
+    expect(base.filter((command) => command.id.startsWith("draw-")).every((command) => !command.disabled)).toBe(true)
+    expect(base.find((command) => command.id === "create-line3")?.disabled).toBe(true)
+  })
   it("offers exactly the two multimodal conversions, both unavailable with a reason", () => {
     const multimodal = createRibbonGroups(emptyContext).find((group) => group.id === "multimodal")
 

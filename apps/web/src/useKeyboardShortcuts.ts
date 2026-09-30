@@ -2,6 +2,7 @@ import { useEffect, type Dispatch, type SetStateAction } from "react"
 
 import { historyShortcut, isTextEditingTarget } from "./documentIds"
 import type { CreationStep } from "./draftingCommands"
+import type { SpatialCreationSession } from "./spatialCreationSession"
 
 /**
  * **画布的键盘快捷键**（从 `App.tsx` 搬出来的那个 `keydown` 监听，评审方案 2）。
@@ -28,6 +29,12 @@ export interface KeyboardShortcutDeps {
   activeCommand: string | null
   guidance: string | null
   selectedIds: string[]
+  spatialSession?: SpatialCreationSession | null
+  solidWizardOpen?: boolean
+  onCancelSolidWizard?: () => void
+  onCancelSpatialCreation?: () => void
+  onFinishSpatialCreation?: () => void
+  onRemoveSpatialAnchor?: () => void
   undo: () => void
   redo: () => void
   deleteSelected: () => void
@@ -37,7 +44,7 @@ export interface KeyboardShortcutDeps {
   setSelectedIds: Dispatch<SetStateAction<string[]>>
 }
 
-export function useKeyboardShortcuts({ creationStep, activeCommand, guidance, selectedIds, undo, redo, deleteSelected, setCreationStep, setActiveCommand, setGuidance, setSelectedIds }: KeyboardShortcutDeps) {
+export function useKeyboardShortcuts({ creationStep, activeCommand, guidance, selectedIds, spatialSession, solidWizardOpen, onCancelSolidWizard, onCancelSpatialCreation, onFinishSpatialCreation, onRemoveSpatialAnchor, undo, redo, deleteSelected, setCreationStep, setActiveCommand, setGuidance, setSelectedIds }: KeyboardShortcutDeps) {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const shortcut = historyShortcut(event)
@@ -46,6 +53,12 @@ export function useKeyboardShortcuts({ creationStep, activeCommand, guidance, se
         if (shortcut === "undo") undo()
         else redo()
         return
+      }
+      if (event.key === "Escape" && solidWizardOpen) { event.preventDefault(); onCancelSolidWizard?.(); return }
+      if (spatialSession && !isTextEditingTarget(event.target)) {
+        if (event.key === "Escape") { event.preventDefault(); onCancelSpatialCreation?.(); return }
+        if (event.key === "Enter" && spatialSession.tool === "face3") { event.preventDefault(); onFinishSpatialCreation?.(); return }
+        if (event.key === "Backspace" && spatialSession.anchors.length > 0) { event.preventDefault(); onRemoveSpatialAnchor?.(); return }
       }
       if (event.key === "Escape") {
         // Esc 分级：先取消进行中的创建（含 CAD 命令），再关掉指引，最后才清空选择。
@@ -61,5 +74,5 @@ export function useKeyboardShortcuts({ creationStep, activeCommand, guidance, se
     }
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [creationStep, activeCommand, guidance, selectedIds, undo, redo, deleteSelected, setCreationStep, setActiveCommand, setGuidance, setSelectedIds])
+  }, [creationStep, activeCommand, guidance, selectedIds, spatialSession, solidWizardOpen, onCancelSolidWizard, onCancelSpatialCreation, onFinishSpatialCreation, onRemoveSpatialAnchor, undo, redo, deleteSelected, setCreationStep, setActiveCommand, setGuidance, setSelectedIds])
 }

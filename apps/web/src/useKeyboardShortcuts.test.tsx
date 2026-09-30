@@ -90,6 +90,31 @@ describe("keyboard shortcuts", () => {
     expect(spies.setSelectedIds).not.toHaveBeenCalled()
   })
 
+  it("cancels an unfinished spatial drawing before clearing existing selection", () => {
+    const onCancelSpatialCreation = vi.fn()
+    const spies = harness({ spatialSession: { tool: "face3", anchors: [{ position: { x: 0, y: 0, z: 0 } }] }, onCancelSpatialCreation, selectedIds: ["point3-1"] })
+    press({ key: "Escape" })
+    expect(onCancelSpatialCreation).toHaveBeenCalledTimes(1)
+    expect(spies.setSelectedIds).not.toHaveBeenCalled()
+  })
+
+  it("closes an uncommitted solid preview with Escape without deleting prior geometry", () => {
+    const onCancelSolidWizard = vi.fn()
+    const spies = harness({ solidWizardOpen: true, onCancelSolidWizard, selectedIds: ["cube-1"] })
+    press({ key: "Escape" })
+    expect(onCancelSolidWizard).toHaveBeenCalledTimes(1)
+    expect(spies.setSelectedIds).not.toHaveBeenCalled()
+  })
+  it("finishes a spatial face with Enter and removes an anchor with Backspace", () => {
+    const onFinishSpatialCreation = vi.fn()
+    const onRemoveSpatialAnchor = vi.fn()
+    const spies = harness({ spatialSession: { tool: "face3", anchors: [{ position: { x: 0, y: 0, z: 0 } }] }, onFinishSpatialCreation, onRemoveSpatialAnchor, selectedIds: ["point3-1"] })
+    press({ key: "Backspace" })
+    press({ key: "Enter" })
+    expect(onRemoveSpatialAnchor).toHaveBeenCalledTimes(1)
+    expect(onFinishSpatialCreation).toHaveBeenCalledTimes(1)
+    expect(spies.deleteSelected).not.toHaveBeenCalled()
+  })
   it("closes the guidance next, and only then clears the selection", () => {
     const guidanceOnly = harness({ guidance: "按住 Shift 依次点选空间点" })
     press({ key: "Escape" })

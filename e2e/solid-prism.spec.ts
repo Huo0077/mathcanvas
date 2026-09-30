@@ -272,3 +272,96 @@ test("cuts a section through the oblique prism", async ({ page }) => {
   expect(normal[2]).toBeCloseTo(Math.cos(Math.PI / 4), 2)
   await expect.poll(async () => Number(await scene.getAttribute("data-section-point-count"))).toBeGreaterThanOrEqual(3)
 })
+
+interface SavedVec3 {
+  x: number
+  y: number
+  z: number
+}
+
+interface SavedPrimitive {
+  id: string
+  type: string
+  position?: SavedVec3
+  vertexIds?: string[]
+  construction?: { kind?: string }
+}
+
+interface SavedEnvelope {
+  document: { primitives: SavedPrimitive[] }
+}
+
+/** 走页面自己的「保存 .mgeo」下载真实产物，而不是去读 localStorage。 */
+async function readSavedDocument(page: import("@playwright/test").Page): Promise<SavedEnvelope> {
+  const download = page.waitForEvent("download")
+  await page.getByRole("navigation", { name: "工作模式" }).getByRole("button", { name: "保存 .mgeo" }).click()
+  const path = await (await download).path()
+  if (!path) throw new Error("保存没有产生可读文件")
+  return JSON.parse(readFileSync(path, "utf8")) as SavedEnvelope
+}
+
+/** 重新打开一份保存出来的文档：同样走页面自己的加载入口。 */
+async function reopen(page: import("@playwright/test").Page, envelope: SavedEnvelope) {
+  await page.getByLabel("加载 .mgeo 文件").setInputFiles({
+    name: "solid-prism-roundtrip.mgeo",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify(envelope))
+  })
+}
+
+/**
+ * **量测 + 保存/恢复**（Solid/Prism 切片 Task 6 的补充验收的另一半）。
+ *
+ * 量测取一个能独立算出来的数：底面 4×4、垂直高 3 ⇒ **体积 48**（斜棱柱的体积只取决于底面积与垂直高，
+ * 与斜度无关 —— 这一条同时验证"按向量拉伸"没有把体积算错）。
+ * 保存取产品自己的下载产物，并核对顶面 = 底面 `+ (1, 0.5, 3)`；恢复后包围盒必须与保存前逐字一致。
+ *
+ * **"移动顶点"这一半没有落地**（Task 6 留未勾选），实测记录见 `docs/current-status.md` 的如实缺口：
+ * 棱柱是构造驱动的（顶点是缓存），属性栏改顶点坐标会被静默丢弃；拖顶点手柄又走向另一条更浑浊的路径
+ * （`data-drag-target` 不是实体，且随后 Ctrl+Z 会被校验拒绝、报 `face3 points are not coplanar`）。
+ * 本用例**刻意不**把这两条钉成"正确行为"。
+ */
+test("measures the oblique prism by volume and reopens it with identical geometry", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await draftAndConfirmPrism(page)
+
+  const scene = page.locator("[data-3d-scene]")
+  const before = await scene.getAttribute("data-content-bounds")
+
+  await objectRows(page).first().click()
+  await page.locator('[aria-label="三维测量工具"]').getByRole("button", { name: "体积", exact: true }).click()
+
+  /**
+   * 读数断言落在**属性栏的测量卡片**上，而不是画布数字：`measurementVisuals.ts` 的 `pointPositions`
+   * 没有 `polyhedron3` 分支，所以实体源的测量拿不到标签落点、画布上不会画数字（体积只能这样读）。
+   * 这一条现状已记入 `docs/current-status.md` 的如实缺口；本用例断言的是**真的能读到的那个数**。
+   */
+  const measurementRow = page.locator(".algebra-panel .measurement-row")
+  await expect(measurementRow).toHaveCount(1)
+  await measurementRow.first().click()
+  await expect(page.locator(".properties .metric-grid strong").getByText("48.000 u³")).toBeVisible()
+  await expect(page.locator(".properties .metric-grid strong").getByText("valid")).toBeVisible()
+
+  const saved = await readSavedDocument(page)
+  const primitives = saved.document.primitives
+  const polyhedron = primitives.find((primitive) => primitive.type === "polyhedron3" && primitive.construction?.kind === "prism")
+  expect(polyhedron, "棱柱必须以 prism 构造落盘").toBeTruthy()
+  const vertices = (polyhedron?.vertexIds ?? []).map((id) => primitives.find((candidate) => candidate.id === id)?.position)
+  expect(vertices).toHaveLength(8)
+  const resolved = vertices.filter((position): position is SavedVec3 => Boolean(position))
+  const lowest = Math.min(...resolved.map((vertex) => vertex.z))
+  const bottom = resolved.filter((vertex) => Math.abs(vertex.z - lowest) < 1e-6)
+  const top = resolved.filter((vertex) => Math.abs(vertex.z - lowest) >= 1e-6)
+  expect(bottom).toHaveLength(4)
+  expect(top).toHaveLength(4)
+  // 斜的关键：顶面四点恰好是底面四点各加拉伸向量 (1, 0.5, 3)
+  for (const vertex of bottom) {
+    const translated = { x: vertex.x + 1, y: vertex.y + 0.5, z: vertex.z + 3 }
+    expect(top.some((candidate) => Math.abs(candidate.x - translated.x) < 1e-9 && Math.abs(candidate.y - translated.y) < 1e-9 && Math.abs(candidate.z - translated.z) < 1e-9)).toBe(true)
+  }
+
+  // 恢复：重新打开保存出来的文件，包围盒必须与保存前逐字一致
+  await reopen(page, saved)
+  await expect.poll(async () => scene.getAttribute("data-content-bounds")).toBe(before)
+})

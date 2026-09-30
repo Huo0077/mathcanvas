@@ -46,7 +46,12 @@ export function createRibbonGroups(context: RibbonCommandContext): RibbonGroup[]
     ]
     : [
       command("select-tool", "选择工具", "select", { prompt: "点击对象进行选择，Shift 加选" }),
-      command("create-point3", "添加空间点", "point", { prompt: "添加一个用于建模的空间点" }),
+      command("draw-point3", "绘制空间点", "point", { prompt: "在画布上点击放置空间点；空白处按工作平面落点" }),
+      command("draw-segment3", "绘制线段", "segment", { prompt: "在画布上依次点击两点" }),
+      command("draw-line3", "绘制空间直线", "line", { prompt: "在画布上依次点击两点" }),
+      command("draw-ray3", "绘制空间射线", "ray", { prompt: "在画布上依次点击起点和经过点" }),
+      command("draw-plane3", "绘制空间平面", "polyline", { prompt: "在画布上依次点击三个不共线的点" }),
+      command("draw-face3", "绘制空间面", "polyline", { prompt: "依次点击顶点，至少三点后按 Enter 完成" }),      command("create-point3", "添加空间点", "point", { prompt: "添加一个用于建模的空间点" }),
       command("create-line3", "由选中点创建空间直线", "line", { prompt: "按住 Shift 依次点选两个空间点", disabled: !context.canCreateLine3, disabledReason: "请先按住 Shift 依次点选 2 个空间点" }),
       command("create-plane3", "由选中点创建空间平面", "segment", { prompt: "按住 Shift 点选三个不共线空间点", disabled: !context.canCreatePlane3, disabledReason: "请先按住 Shift 点选 3 个不共线的空间点" }),
       command("create-face3", "由选中点创建空间面", "polyline", { prompt: "按住 Shift 点选三个以上空间点", disabled: !context.canCreateFace3, disabledReason: "请先按住 Shift 点选 3 个以上的空间点" }),

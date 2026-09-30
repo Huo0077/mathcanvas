@@ -182,11 +182,22 @@ export function useDraftPersistence({ document, replace, switchWorkspace, setFil
 
   useEffect(() => {
     /**
-     * **恢复还没结束就什么都不写**（见上面那段证据）。
-     * 这一条挡的是"初始空文档覆盖掉上一轮的草稿"，而不是"别存"。
+     * **"跳过一次"必须排在"恢复还没结束"之前消费**（2026-09-29 修，缺陷现场见下）。
+     *
+     * 恢复那一侧先 `skipNextDraftSaveRef = true` 再 `replace(...)`，而 `restoreSettledRef` 是在
+     * restore 那个 promise 的 `.finally()` 里才置位的 —— 两者是**赛跑**。恢复自身那次变化触发的
+     * effect 有可能先跑（那时 settled 还是 false）。原来的顺序（先判 settled、再判 skip）在这种情况下
+     * 会直接 return，把 skip 原封不动留着，最终被**用户恢复后的第一次改动**吃掉。
+     *
+     * 真机实测（`e2e/high-school-geometry-tasks.spec.ts` 的旧文档用例）：刷新后加一个立方体，
+     * 对象列表里已经有「立方体 1」，而 `mathcanvas:draft:geometry3d` 仍是 84 个 id；再加第二个才一次跳到 140。
+     * 后果是"刷新后只改一次就关页面，那次改动从草稿里丢了"。
+     *
+     * 顺序反过来之后不会变松：恢复**自身**那次变化消费掉 skip，用户的第一次改动照常写；
+     * 而"恢复没结束就一个字都不写"这条守卫仍在（skip 为假时依然先看 settled）。
      */
-    if (!restoreSettledRef.current) return
     if (skipNextDraftSaveRef.current) { skipNextDraftSaveRef.current = false; return }
+    if (!restoreSettledRef.current) return
     // localStorage 那一份照旧：它是网页版的**唯一**持久化，也是桌面版的兜底。
     try { saveDraft(document) } catch (error) { setFileError(error instanceof Error ? error.message : "无法自动保存草稿") }
     /**

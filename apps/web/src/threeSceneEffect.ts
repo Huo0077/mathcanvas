@@ -66,6 +66,10 @@ import { useEffect, type Dispatch, type RefObject, type SetStateAction } from "r
 import * as THREE from "three"
 
 import type { Point3Primitive, SectionPrimitive } from "@draw/dsl"
+import { pickRaycastHit3 } from "./threePicking"
+import { resolveSpatialAnchor, type SpatialPickResult, type WorkPlane } from "./spatialPick"
+import { updateThreeCreationPreview } from "./threeCreationPreview"
+import type { SpatialCreationSession } from "./spatialCreationSession"
 import { reactive, type Host3, type Host3Parameter } from "@draw/geometry-kernel"
 import { resolveMeasurementVisual } from "./measurementVisuals"
 import { sceneContentKey } from "./sceneContentKey"
@@ -151,6 +155,14 @@ export interface DragSessionState {
 
 import type { ThreeSceneViewProps } from "./threeScene"
 
+export interface ThreeSceneRuntime {
+  syncContent: () => void
+  resolveCreationAnchorAt: (clientX: number, clientY: number, workPlane: WorkPlane) => SpatialPickResult
+  previewCreationAt: (clientX: number, clientY: number, workPlane: WorkPlane) => SpatialPickResult
+  syncCreationPreview: () => void
+  clearCreationPreview: () => void
+}
+
 export interface ThreeSceneEffectDeps {
   containerRef: RefObject<HTMLDivElement | null>
   renderTargetRef: RefObject<HTMLDivElement | null>
@@ -187,7 +199,8 @@ export interface ThreeSceneEffectDeps {
   onSelectRef: RefObject<ThreeSceneViewProps["onSelect"]>
   previewClickRef: RefObject<ThreeSceneViewProps["onPreviewClick"]>
   displayFlagsRef: RefObject<{ showHiddenEdges: boolean; showNormals: boolean; transparentFaces: boolean; unfoldProgress: number }>
-  runtimeRef: RefObject<{ syncContent: () => void } | null>
+  runtimeRef: RefObject<ThreeSceneRuntime | null>
+  creationSessionRef: RefObject<SpatialCreationSession | null>
   contentKeyRef: RefObject<string | null>
   sceneBuildsRef: RefObject<number>
   sceneSyncsRef: RefObject<number>
@@ -197,7 +210,7 @@ export interface ThreeSceneEffectDeps {
 }
 
 export function useThreeSceneEffect(deps: ThreeSceneEffectDeps) {
-  const { containerRef, renderTargetRef, measurementOverlayRef, pointLabelOverlayRef, cameraStateRef, resetCameraRef, fitCameraRef, fittedDocumentRef, panModeRef, dragModeRef, pointerStateRef, dragSessionRef, selectedIdsRef, dragEndRef, previewHoverKeyRef, moveSectionRef, hostDragEndRef, rotateEndRef, trackRadiusEndRef, rotationHandleRef, trackRadiusHandleRef, circleRadiusPreviewRef, pickSectionFaceRef, documentRef, resumeDragVisualRef, setCurveToleranceBucket, curveToleranceBucketRef, setFacePickMode, facePickModeRef, setWebglAvailable, previewHoverRef, previewsRef, onSelectRef, previewClickRef, displayFlagsRef, runtimeRef, contentKeyRef, sceneBuildsRef, sceneSyncsRef, autoFitRef, cameraFitRef, fitWithoutTouchRef } = deps
+  const { containerRef, renderTargetRef, measurementOverlayRef, pointLabelOverlayRef, cameraStateRef, resetCameraRef, fitCameraRef, fittedDocumentRef, panModeRef, dragModeRef, pointerStateRef, dragSessionRef, selectedIdsRef, dragEndRef, previewHoverKeyRef, moveSectionRef, hostDragEndRef, rotateEndRef, trackRadiusEndRef, rotationHandleRef, trackRadiusHandleRef, circleRadiusPreviewRef, pickSectionFaceRef, documentRef, resumeDragVisualRef, setCurveToleranceBucket, curveToleranceBucketRef, setFacePickMode, facePickModeRef, setWebglAvailable, previewHoverRef, previewsRef, onSelectRef, previewClickRef, displayFlagsRef, runtimeRef, contentKeyRef, sceneBuildsRef, sceneSyncsRef, autoFitRef, cameraFitRef, fitWithoutTouchRef, creationSessionRef } = deps
   /**
    * **挂载期只建一次**：渲染器 / 场景 / 事件监听只该建一遍，父组件的任何重渲染都不重建它。
    * 这句话成立的前提是"它读的一切都经 ref"—— 组件把 props 与显示开关逐个镜像进 ref 就是为了这个
@@ -212,6 +225,10 @@ export function useThreeSceneEffect(deps: ThreeSceneEffectDeps) {
     if (!container) return
 
     const scene = new THREE.Scene()
+    const creationGuide = new THREE.Group()
+    scene.add(creationGuide)
+    let creationHover: SpatialPickResult | null = null
+    const creationAccent = getComputedStyle(container).getPropertyValue("--color-accent").trim() || "#3d5a80"
     /**
      * 背景交给 CSS，不在这里填色。
      *
@@ -387,7 +404,46 @@ export function useThreeSceneEffect(deps: ThreeSceneEffectDeps) {
      * 场景运行时句柄：内容同步 + 补画进行中的拖动偏移 + 重画。
      * 由"内容同步效应"在签名变化时调用；渲染器与事件监听都留在本次挂载里，不再重建。
      */
+    const creationPoint = (clientX: number, clientY: number) => {
+      const bounds = renderer.domElement.getBoundingClientRect()
+      if (clientX < bounds.left || clientX > bounds.right || clientY < bounds.top || clientY > bounds.bottom) return null
+      return { x: (clientX - bounds.left) / Math.max(bounds.width, 1), y: (clientY - bounds.top) / Math.max(bounds.height, 1) }
+    }
+    const resolveCreationAt = (clientX: number, clientY: number, workPlane: WorkPlane): SpatialPickResult => {
+      const point = creationPoint(clientX, clientY)
+      if (!point) return { reason: "请在画布内选择位置" }
+      const picked = pickRaycastHit3(scene, camera, point, { tolerance: pickTolerance() })
+      const primitive = picked ? documentRef.current.primitives.find((item) => item.id === picked.primitiveId) : null
+      const hit = primitive?.visible === false || primitive?.locked || (primitive?.type === "point3" && primitive.tessellation) ? null : picked
+      /**
+       * **吸附到已有点时，落点取那个点自己的坐标**（2026-09-29 修）。
+       *
+       * 射线命中的是点手柄**球面**上的一点，与点中心差一个手柄半径（默认相机下实测 `(0.04, 0.04, 0.04)`）。
+       * 预览标记与悬停读数都按这个落点走，于是读数会显示一个**不是那个点坐标**的数字，而创建出来的图元
+       * 引用的又是那个点本身 —— 说一套、做一套。这里直接换成点的坐标：预览更准，读数也不再骗人。
+       * （`resolveSpatialAnchor` 那一层保持不变：它只按命中物回答，不认识文档。）
+       */
+      if (hit?.kind === "point" && primitive?.type === "point3") return { position: { ...primitive.position }, pointId: primitive.id, source: "point" }
+      const surfaceHit = hit && (hit.kind === "solid" || hit.kind === "plane") ? { ...hit, kind: "face" as const } : hit
+      return resolveSpatialAnchor(surfaceHit, raycasterAt(point).ray, workPlane)
+    }
+    const syncCreationPreview = () => {
+      updateThreeCreationPreview(creationGuide, creationSessionRef.current, creationHover && "position" in creationHover ? creationHover.position : null, creationAccent)
+      render()
+    }
     runtimeRef.current = {
+      resolveCreationAnchorAt: resolveCreationAt,
+      previewCreationAt: (clientX, clientY, workPlane) => {
+        creationHover = resolveCreationAt(clientX, clientY, workPlane)
+        syncCreationPreview()
+        // 返回拾取结果：调用方（`threeScene.tsx`）据此算出悬停读数（"吸附到谁 + 世界坐标 + 工作平面"）
+        return creationHover
+      },
+      syncCreationPreview,
+      clearCreationPreview: () => {
+        creationHover = null
+        syncCreationPreview()
+      },
       syncContent: () => {
         syncContent()
         /**

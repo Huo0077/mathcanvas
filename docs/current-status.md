@@ -5,21 +5,30 @@
 > [`docs/project-progress.md`](project-progress.md) —— 那是**归档**，里面的数字是"当时实测"，
 > 不是当前值。两份文件分工明确：**要当前值看这里，要过程看归档。**
 
-**最后更新：** 2026-09-26（第四十六批：修两处**实机现场故障** —— "把正方体沿对角面剖开，标出截面"连挂两次；表里的门禁读数都是这一次改动后复跑的实测值）。
+**最后更新：** 2026-09-29（**本轮收尾并暂停**：Task 1 / 2 / 3 / 5 的清单全部勾选，代码侧验证项已做完；更正一条我记错的判断 —— "锁定不被吸附"一直是实现的；用户已定修法与后续方向见文末「本轮结束时的交接」。下表只写**当次真正复跑过**的门禁，不把 9 月 26 日的测试数字当成现值）。
 
 ## 一、现在能不能跑（可复核的门禁读数）
 
-| 命令 | 当前读数 |
+| 命令 | 本轮实际结果与范围 |
 | --- | --- |
-| `npm test` | **238 个测试文件 / 2812 个用例通过 + 1 个 todo（零失败）** |
-| `npm run typecheck` | **6 个 workspace + `e2e/`（42 个 spec）+ `scripts/` 全部 exit 0** |
-| `npm run lint` | **0 error / 13 warning**（基线从 14 降到 13：搬键盘处理时补上了漏写的 `deleteSelected` 依赖，那条警告随之消失） |
-| `npm run build` | exit 0 —— 入口 **1 613.94 kB** + 按需 chunk `engineeringExporters` **423.64 kB** + `geometry.worker` **298.77 kB**（同一份源码连跑两次构建，三个 chunk **一致地**小约 2.3%：1 652.65 / 433.81 / 304.33 → 1 613.94 / 423.64 / 298.77，原因未查明，如实记下；上表取的是 `build-check/` 里**当前这一份**） |
-| `npm run test:perf` | 八条场景（`packages/scene-graph`），见下；另有 `apps/web/src/agent/compilePlan.bench.test.ts` 量编译成本 |
-| `npm run test:e2e` | Playwright **42 个 spec / 141 条用例全绿**（本机整套实跑，含主线程响应性读数；**不要与 `npm test` 并行跑**，见下表下面的说明） |
-| `npm run test:rust` | **232 例通过 + 3 ignored / 0 失败**（2026-09-25 本机复跑，走 `scripts/toolchain.mjs` 补 PATH） |
+| `npm test -- --maxWorkers=3` | **266 个测试文件 / 3072 个用例通过 + 1 todo / 0 失败**（全库；比上一批多 6 项 = 创建状态机补的边界用例） |
+| `npm run typecheck` | 6 个 workspace，以及 `e2e/` 与 `scripts/` 类型检查，全部 exit 0（本轮复跑） |
+| `npm run lint` | exit 0，**0 error / 13 warning**（已有基线警告，并非全部无警告；本轮复跑） |
+| `npm --workspace @draw/web run build` | exit 0；入口 1694.22 kB、`engineeringExporters` 433.81 kB、`geometry.worker` 310.99 kB；仍有 >500 kB chunk 警告 |
+| 7 个相关 3D Playwright spec | **50 / 50 通过**（本批复跑；含创建、实体面板、原立体交互、旋转环、求交预览、棱柱旧文件、教学虚线；比 `a53b034` 记录的 44 项多 6 项 = 此后各批新增的用例）；**第二组 7 spec / 36 项也通过**（创建、棱柱、六类样题、拖动、相机记忆、求交预览、教学线型）；**全量 `npm run test:e2e` 本轮未复跑** |
+| `e2e/high-school-geometry-tasks.spec.ts`（Task 8 三批合计） | **7 / 7 通过**（本轮复跑）：三棱锥、四棱锥、斜三棱柱、异长长方体、圆锥截面、空间直线与平面的关系、已有文档恢复与撤销 —— **六类代表题全部覆盖**；断言顶点坐标、三边尺寸、拉伸向量、解析圆锥曲线离心率、平面方程判定的线面关系、旧文档迁移后的拓扑几何、刷新后逐 id 恢复、拓扑依赖、保存往返与一步撤销（三批各做过变异检查）；另含两条回归：**恢复后第一次改动必须写回草稿**（修复前红 Expected 112 / Received 84、修复后绿）与**点到平面距离与选择顺序无关**（两种顺序都量出 3.000u） |
+| `apps/web/src/spatialPick.test.ts`（Task 3 补充用例） | **11 / 11 通过**：新增相机斜视（斜射线落点精确）、面背侧（命中优先于工作平面、不猜深度）、距离容差（`1e-8` 阈值两侧都钉住）、重叠点（身份来自命中而非坐标反查）；三次定向变异各自抓红对应用例 |
+| `e2e/solid-prism.spec.ts`（Task 6 补充） | **6 / 6 通过**：新增棱柱**体积 48**的读数（属性栏卡片；实体源在画布上没有数字）与**保存/恢复**往返（`construction.kind === "prism"`、8 顶点、顶面 = 底面 `+(1,0.5,3)`、重开后包围盒逐字一致） |
+| `apps/web/src/persistence/mgeoRoundTrip.test.ts`（Task 4 补充） | **5 / 5 通过**：新增"画布新建的点 / 线段 / 直线 / 面"往返 —— id 集合与几何不变、三种引用写法（线段 `pointIds`、直线 `definition.pointIds`、面 `pointIds`）都仍指着存在的点，且重开后再引用旧点会**复用**（变异检查证过） |
+| `e2e/geometry3d-teaching-lines.spec.ts`（Task 7 补充） | **2 / 2 通过**：新增「旋转视角后顶点标签仍逐点对齐」—— 对每个 `[data-point-id]` 断言其锚点等于**它自己那个顶点**的投影（±2px），旋转前后各查一遍，并用 `data-camera-azimuth` 确认真转了；变异检查（偏移 +10→+60）当场报 50px |
+| `e2e/geometry3d-creation.spec.ts`（Task 5 / Task 3） | **10 / 10 通过**：创建悬停读数（工作平面 + 世界坐标 / 已有点 + **该点自己的**坐标，且**对象行数全程不变**）、切换工作区取消未提交状态（锚点归零、无半成品）、**创建优先于预览点击**（点交面预览只落地一个空间点，不多出交面图元、预览不被消耗）、**从「选择工具」退出**（工具与锚点归零、未提交锚点不落盘、退出后点空白回到选择语义不创建）、**锁定对象不被吸附**（同一坐标：未锁定读"已有点"、锁定读"工作平面 XY"、解锁又读回"已有点"，且点仍在画布上） |
+| `e2e/geometry3d.spec.ts`（Task 1 基线补充） | **24 / 24 通过**（22→24）：新增 **Shift 两点多选→创建空间直线**（原用例只到"按钮可用"，现真的点下去建出对象，并以操作提示"对象 3"钉住复用已有两点不另建）与 **Esc 分级基线**（属性栏不再编辑任何对象、而对象行数一个不少 —— Esc 不是删除）；各带一条定向变异 |
+| `apps/web/src/spatialCreationSession.test.ts`（Task 2 边界） | **10 / 10 通过**（4→10）：point3 一点完成 / line3+ray3 两点完成 / **face3 无论多少点都不自动完成、只有 Enter 收尾** / 首末点重合被拒且会话不前移 / 非有限坐标被拒且不留脏数据 / 拒绝提交的原因文案；三处变异各自精确抓红，并查明 face3 有"两层独立守卫" |
+| `apps/web/src/spatialTools.test.ts` + `threeScene.test.ts`（Task 1 基线） | **74 / 74 通过**（16 + 58） |
+| `npm run build`（含桌面 Rust） | 本轮未完成桌面打包；P0 时一次 Rust 编译超过 180 秒而中止，**不等于桌面构建通过** |
+| `npm run test:rust` / `npm run test:perf` | 本轮均未复跑；此前读数只能当历史基线，不能写成现状 |
 
-**性能读数**（`npm run test:perf`，本机实测；定位是**趋势与报警器**，不是性能目标）：
+**性能读数（2026-09-26 历史基线，本轮未复跑）**（`npm run test:perf`，当时本机实测；定位是**趋势与报警器**，不是性能目标）：
 
 | 场景 | 读数 | 它对应什么 |
 | --- | ---: | --- |
@@ -32,7 +41,7 @@
 | `drag/300-frames` | ~750 ms（≈2.5 ms/帧） | 连续拖动 300 帧；60 fps 预算 16.7 ms/帧，**余量充足** |
 | `dag/*` + 校准 | 见 `PERF` 行 | 局部/全量等价性判据 + "计时本身没坏"的校准 |
 
-**主线程响应性读数**（`npx playwright test e2e/main-thread-responsiveness.spec.ts`，输出 `PERF frame-gap`；单独跑 / 整套并行跑各一次）：
+**主线程响应性读数（2026-09-26 历史基线，本轮未复跑）**（`npx playwright test e2e/main-thread-responsiveness.spec.ts`，输出 `PERF frame-gap`；单独跑 / 整套并行跑各一次）：
 
 | 阶段 | 单独跑 | 整套并行跑 | 它对应什么 |
 | --- | ---: | ---: | --- |
@@ -48,6 +57,13 @@
 选择**不装** `@types/node` 而只写一份最小声明（`e2e/nodeTypes.d.ts`）：它一旦进 `node_modules/@types`，所有没写 `types` 的 tsconfig 都会自动全局引入，`setTimeout` 的返回类型会从 `number` 变成 `NodeJS.Timeout`，动摇应用侧现在好端端的代码 —— 为给测试补类型而付这个代价不划算。
 读数会随提交变化，**以 CI 最近一次运行为准**；上表是本地实测值。
 
+## 本轮高中几何交互（功能分支，尚未并入 v3.0 发布版）
+
+- **P0 已在功能分支完成**：直接在 3D 画布按步骤作空间点/线段/直线/射线/平面/面；XY/XZ/YZ/选中面工作平面落点、只预览不落盘、Esc 取消/Enter 完成、一笔事务一步撤销；保留原 Shift 多选和 Alt 选子对象路径。
+- **P1 已在功能分支完成部分**：常用立体参数面板可创建正方体、长方体、三/四棱柱（含斜棱柱）、三/四棱锥；改变参数显示未保存 3D 预览、确认后提交；原快速「添加立方体」新建尺寸更正为 4×4×4。教学线型模块支持独立空间线/棱的实线、虚线和点线，并保留到 `.mgeo`；「隐藏边」是另一套只影响视图的开关。**旧文件尺寸不迁移**。
+- **本轮完成不等于整期完成**：教师/学生走查、选中对象旋转环遮挡的图面优化、完整 e2e 与桌面打包仍未完成；球体、截图自动绘图、HTML/GGB 导出没有在本阶段交付。逐模块提交及证据见 [高中几何进度](research/2026-09-29-high-school-geometry-interaction-progress.md)、[功能目录](feature-catalog.md) 与 [实施计划](superpowers/plans/2026-09-29-high-school-geometry-interaction-implementation-plan.md)。
+- **Task 8 三批已落地并上传**（提交 `cecc1fe`、`0166845`、`1a82c97`）：`e2e/high-school-geometry-tasks.spec.ts` 把六类代表题**全部**转成可重放操作序列，断言精确几何（顶点坐标 / 三边尺寸 / 拉伸向量 / 解析圆锥曲线离心率）、平面方程判定的线面关系、旧文档迁移后的拓扑几何、刷新后逐 id 恢复、拓扑依赖、保存往返与一步撤销，**7/7 通过**。Task 8 第 2 项的门禁本轮当次复跑（typecheck / lint / 全库单测 / web 构建全 exit 0）。**仍不能读成整期验收完成**：全量 `npm run test:e2e`、教师/学生走查、桌面打包都还没做。
+- **Task 8 第 4 项已收口**（提交 `f48d579`）：[功能目录](feature-catalog.md) 新增「本期收口（2026-09-29）：实际已完成 / 未完成」一节 —— 分别列出**已交付**（画布直接绘制 / 常用立体 / 教学线型 / 解析截面读数 / 六类样题可重放验收 / 两处缺陷修复）与**未交付且需要你决定是否启动**（球体与球截面、截图识图、HTML 与 GGB 导出、平面函数逐题补缺、教师走查与完整桌面打包），并写明「都在功能分支、未并入 `main`、未打包」。
 ## 二、按评审方案：做到哪一步了
 
 **一句话进度（估计，口径写明）**：**七条方案全部落地并验收**；方案 2 的六个目标文件全部拆分完成（`operations.ts` 也走到 **2817→307**）。剩下的是**可选**项与长尾（`operations.ts` 内仍可细分、`App.tsx` 与 `threeSceneEffect.ts` 内仍可细分）。门禁面已无已知缺口（`e2e/` 与 `scripts/` 都进了 `tsc`）。
@@ -165,5 +181,25 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
 - **`longtask` API 在本机不可用（实测，不是猜的）**：评审方案 7 点名要的 `PerformanceObserver({ type: "longtask" })` 在**空白页**上、对一次**故意阻塞 200 ms** 的主线程占用，`observed` 与 `performance.getEntriesByType("longtask")` **都是空的**，而 `supportedEntryTypes` 里**确实**列着 `longtask`（Chromium 153 / Playwright headless）—— 即"声称支持、什么也不报"（一次性探针复核过，用完即删）。所以主线程读数改用**帧间隔**（`requestAnimationFrame` 间隔）实现：同一个 200 ms 阻塞必定表现为 ≥200 ms 的空档，量具灵敏度可以自证（用例里就有这条标定断言）。见 `e2e/main-thread-responsiveness.spec.ts`。
 - **`section.create` 的平面已收口，但"登记表承诺 ≠ 校验层实现"这类风险只是**被识别出来**，没有机器挡住**（2026-09-26，见 §二「实机现场故障」）：`actionRegistry` 是"我们承诺收什么"的唯一声明处，而 `actionInputs` 里**少一个分支就静默落空** —— 字段会原样透传，直到文档校验器才被拒，报的还是够不到的**动作级**路径（那条一次性修复因此改不动它）。这一批把 `section.create` 补上了（三种平面写法收成一种，且共线时按**字段路径**拒绝），并留了判据："登记表里写了 `ask_user` 问题、或写了可选字段的每个动作都必须在校验层有显式分支"。**但这条判据目前只写在文档里**，没有一个测试逐动作核对登记表与 `parseActionInputs` 的分支覆盖面 —— 下一个新动作照样可能漏。
 - **平面写法上刻意只收三种**：规范形 `{normal, constant}`、过三点 `{points|throughPoints: […3]}`、点 + 法向 `{point|origin, normal}`（坐标 `{x,y,z}` / `[x,y,z]` 都收）。**不做**的：用两个方向向量定平面、用字符串别名指代平面（`"diagonal"`）、用曲面/多边形顶点集反推 —— 遇到这些会如实按 `invalid_plane` 拒绝并给出字段路径，而不是猜。
+- **（已闭环，留档；不再是缺口）本轮查实并修掉两处真缺陷** —— 2026-09-29：① **恢复草稿后第一次改动不落盘**（会丢用户数据；提交 `4968051`）—— 根因是 `useDraftPersistence.ts` 里 `skipNextDraftSaveRef` 与 `restoreSettledRef` 的判断顺序赛跑（skip 被用户恢复后的第一次改动吃掉），修法是先消费 skip 再判 settled、两条原有守卫都不变松；回归钉在浏览器侧（修复前红 Expected 112 / Received 84、修复后绿），单测那 9 条钉语义、前后都绿。② **「距离」测量在"平面先选"时只得到无效读数**（提交 `e25cacb`）—— 根因是内核 distance 分支固定按 `sourceIds[0]` 是点取数（`pointFromPrimitive` 对 `plane3` 返回 `null`），修法是把"点那一侧"换到前面、`measurement.sourceIds` 仍记用户的选择顺序；回归在内核（`measurements3d.test.ts`，修复前红）与浏览器（两种顺序都量出 3.000u）两侧都有。详见 `CHANGELOG.md` 同日两节。
+- **（已闭环，留档；此前那条"锁定不被吸附未实现"的记录是错的）「隐藏或锁定对象不被当作可吸附目标」两半现在都成立** —— 2026-09-29 复核更正。**更正的原因是我在错的层次上核对**：当时只看了纯函数 `resolveSpatialAnchor`（它只按命中物回答、**不认识文档**，所以不可能知道 `locked`），没看真正的过滤点 —— `threeSceneEffect.ts` 的 `resolveCreationAt` 里 `primitive.visible === false || primitive.locked || （生成的 point3）` 一律丢弃命中。**隐藏**那一半是构造性的（`threeSceneContent.ts` 先 `filter(isUserVisiblePrimitive)` 再建对象，隐藏图元根本不进场景），**锁定**那一半由上面那道门禁负责：锁定对象仍看得见、仍能选中，但创建时不再被吸附（退回工作平面）。证据是一条自带对照的 e2e（`e2e/geometry3d-creation.spec.ts`）：同一屏幕坐标，未锁定读"已有点 (0.00, 0.00, 0.00)"、锁定后读"工作平面 XY (…)"、解锁后又读回"已有点"；定向变异（摘掉 `primitive?.locked`）当场红。顺带澄清一处容易混的地方：`primitiveVisibility.ts` 的 `isUserVisiblePrimitive` 确实**不看** `locked` —— 那是**渲染可见性**判据，锁定不改变可见性，这正是我们要的语义；吸附门禁在创建拾取那一层，两件事不在一个函数里。
+- **"改不动一个顶点"的真根因：面必须共面（2026-09-29 复核更正，尚未修）** —— 计划 Task 6 里"移动顶点"那一半因此**没有落地**。
+  - **更正**：此前这里记的是"属性栏改棱柱顶点坐标被**静默丢弃**、无任何提示"。走 UI 的真实路径复核后，那条**不准确**：`commitPatch`（`store.apply` 调的就是它）返回 `changed=false` + `error = "the change would make the document invalid: face3 points are not coplanar…"`，浏览器实测输入框弹回原值的同时**页面确实弹出了 `role="alert"`**，文案就是这一句（用一次性探针实测，探针已删）。
+  - **根因**：棱柱（与模板实体一样）的侧面是**四边形**；改一个顶点会让相邻三个面立刻不共面，而文档校验器要求 `face3` 的点共面 → **校验层**把整笔退回。存储层本身是支持这件事的（`apply.ts` 会把描述翻成 `fromFaces` 再写顶点），但它先过不了校验层 —— 所以"存储层能改"不等于"属性栏能改"。
+  - **另一条现象很可能是同一根因**：拖顶点手柄之后按 Ctrl+Z 被拒，报的是**同一条** `face3 points are not coplanar`。**推断**（未逐条验证）：那次拖动本身被拒、没有留下历史，于是 Ctrl+Z 撤掉的是上一步"创建棱柱"，画面因此变空、`data-content-bounds` 读出 NaN。
+  - **真正缺的是"一条能改单顶点的路径"**：**用户已决定修法 —— 把受影响的面拆成三角形**（保持 `face3` 共面校验严格不变），待排期实施；"放宽共面要求"这条未被采纳（会让"面"的概念变松，求交/截面都要处理非平面多边形）。
+  - 证据：`packages/scene-graph/src/scene-store.test.ts` 的表征用例钉住"被拒 + 明确原因 + 文档未变"（`changed=false`、`error` 含该文案、顶点未动）；探测过程见 [`2026-09-29-high-school-geometry-interaction-progress.md`](research/2026-09-29-high-school-geometry-interaction-progress.md)。
+- **实体源的测量在画布上没有数字（2026-09-29 查实，尚未修）**：`measurementVisuals.ts` 的 `pointPositions` 没有 `polyhedron3` 分支（只认点 / 线 / 段 / 棱 / 射线 / 面 / 平面 / 模板实体），于是 `resolveMeasurementVisual` 对"实体体积"这类测量返回 `null`，**画布上不画数字**，只能去属性栏的测量卡片读。用户口径本来是"测量结果要在图中浮现一个数字"（见 `measurementVisuals.ts` 顶部注释），所以这一条是**与口径不符的缺口**；修法：给 `polyhedron3` 补一个标签落点（例如拓扑顶点均值或包围盒中心）。
+- **指针抬起前最后一次相机移动不触发渲染（2026-09-29 查实，尚未修）**：拖动结束后，画面（含 `.three-point-label` 标签）停在**上一帧**的相机状态上，与 `data-camera-azimuth` 等读数所表示的当前相机差约 **30px**，而且**不会自行收敛** —— 实测轮询 5 秒仍不齐，要等下一次交互（再动一下指针）才追平。影响：快速拖动并松手后，画面会比手停的位置差一点，动一下鼠标才对齐。证据：`e2e/geometry3d-teaching-lines.spec.ts` 的标签用例就是这条的现场（用例在拖动后再抖 2px 强制重画一帧，才断言"已对齐的最终状态"；抖动前后同一条断言一个红一个绿）。修法方向：`threeSceneEffect` 里指针抬起（`pointerup`）时补一次 `render()`，或让相机更新统一排进 rAF 后必渲染。
 - **引用进度档案一律用小节标题，不写行号**：`project-progress.md:<行号>` 形式的引用会随任何一次编辑静默失效（本阶段就发生过三处，已全部改成按标题引用）。
+
+## 四、本轮结束时的交接（2026-09-29，按用户要求暂停）
+
+- **实施计划里代码侧的验证项已全部完成**：Task 1 / 2 / 3 / 4 / 5 / 7 全部勾选，Task 8 的第 1、4 项勾选。剩余 3 项未勾选，都不是"还没做验证"，而是**卡在用户侧或已定修法待排期**：
+  1. Task 6 的**单顶点编辑** —— 用户已定修法（拆三角形），**待实施**；
+  2. Task 8 第 2 项的 `npm run build` —— 桌面打包（Tauri/Rust），**用户侧**；
+  3. Task 8 第 3 项教师/学生走查 —— **用户侧**。
+- **用户已决定、本轮尚未开始**：把 `feat/high-school-geometry-interaction` **合并到 `main`**；**启动球体与球截面**（按实施计划"不在此计划内"一节，需先另立方案与实施计划）。
+- **用户本轮未启动**：题目截图→可编辑图、HTML/GeoGebra 导出、平面/函数逐题补缺。
+- **本轮上传情况**：共 9 次提交全部推送到 `feat/high-school-geometry-interaction`，并以 `git ls-remote` **逐次核对远端与本地一致**（最后一次 `d3fb1ba`）。**没有合并 `main`，也没有打包桌面版本。**
 

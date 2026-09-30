@@ -129,13 +129,15 @@ test("picks the vertex under the cursor instead of one hidden behind the solid",
   await page.goto("/")
   await page.getByRole("button", { name: "跳转到立体几何" }).click()
   await page.getByRole("button", { name: "添加立方体" }).click()
+  await page.getByRole("button", { name: "自动取景" }).click()
   // 把立方体钉在一个**明确**的位置上（不依赖模板默认落点），再用**当前相机读数**投影它的两个角。
   for (const [axis, value] of [["X", "-2"], ["Y", "-2"], ["Z", "0"]] as const) await page.getByRole("spinbutton", { name: `原点 ${axis}` }).fill(value)
 
+  await page.getByRole("button", { name: "重置3D视角" }).click()
   const heading = page.locator(".inspector-selected-heading h3")
 
-  // 相机从 (+x, +y, +z) 看过来，所以 (2,2,2) 是最近的角、它的手柄够得着。
-  const nearest = await projectWorldPoint(page, { x: 2, y: 2, z: 2 })
+  // 相机从 (+x, +y, +z) 看过来，所以 (2,2,4) 是最近的角、它的手柄够得着。
+  const nearest = await projectWorldPoint(page, { x: 2, y: 2, z: 4 })
   await page.mouse.click(nearest.x, nearest.y)
   await expect(heading).toHaveText(/^[A-H]$/)
 
@@ -221,6 +223,55 @@ test("builds a visible plane from three selected points", async ({ page }) => {
   await algebra.getByText("空间平面 1").first().click()
   await page.getByRole("region", { name: "属性检查器" }).getByRole("button", { name: "外观样式" }).click()
   await expect(page.getByLabel("填充颜色")).toBeEnabled()
+})
+
+test("creates a spatial line from two Shift-selected points", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "添加空间点" }).click()
+  await page.getByRole("button", { name: "添加空间点" }).click()
+
+  // Shift 多选这条老路径：上一条用例只断言到"按钮可用"，这里补到真的建出对象。
+  const algebra = page.locator(".algebra-panel")
+  await algebra.getByText("A", { exact: true }).click()
+  await algebra.getByText("B", { exact: true }).click({ modifiers: ["Shift"] })
+  const lineCommand = page.getByRole("button", { name: "由选中点创建空间直线" })
+  await expect(lineCommand).toBeEnabled()
+  await lineCommand.click()
+
+  await expect(page.getByRole("alert")).toHaveCount(0)
+  await expect(algebra.getByText("空间直线 1")).toBeVisible()
+  // 引用已有的两点而不是偷偷另建两个：全程正好 3 个对象（A、B、空间直线 1）。
+  await expect(page.getByRole("status", { name: "操作提示" })).toContainText("对象 3")
+})
+
+/**
+ * **Esc 基线**（实施计划 Task 1 那条"保存当前 UI 行为作为对照"）。
+ *
+ * 3D 工作区的 Esc 是**分级**的：先撤进行中的创建/命令与指引，最后才清空选择。
+ * 这里钉的是最后一档的**不变量**：选择被清掉（属性栏不再编辑任何对象），而
+ * **文档一个对象都没少** —— Esc 不是删除，Delete 才是。连按两次是为了跳过前面
+ * 那几档（级数为 0 时多按一次是空操作），从而断言"尘埃落定"的稳定状态。
+ */
+test("clears the selection with Escape without touching the document", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "添加立方体" }).click()
+
+  const heading = page.locator(".inspector-selected-heading h3")
+  const rows = page.locator(".algebra-panel .object-row")
+  await page.locator(".algebra-panel").getByText("立方体 1").first().click()
+  await expect(heading).toHaveText("立方体 1")
+  const before = await rows.count()
+  expect(before).toBeGreaterThan(0)
+
+  await page.keyboard.press("Escape")
+  await page.keyboard.press("Escape")
+
+  await expect(heading).toHaveCount(0)
+  // 文档没动：对象行数一个不少（Esc 清的是选择，不是对象）。
+  await expect(rows).toHaveCount(before)
+  await expect(page.locator(".algebra-panel").getByText("立方体 1").first()).toBeVisible()
 })
 
 test("pans the 3D view along the camera axes within a bounded range", async ({ page }) => {
@@ -336,9 +387,8 @@ test("keeps a template face reachable with Alt instead of always taking the whol
   await page.getByRole("button", { name: "跳转到立体几何" }).click()
   await page.getByRole("button", { name: "添加立方体" }).click()
 
-  const canvas = page.locator("[data-3d-scene] canvas")
-  const box = (await canvas.boundingBox())!
-  const centre = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+  // Project a point inside the now-taller top face instead of assuming the screen centre misses every edge.
+  const centre = await projectWorldPoint(page, { x: -6, y: 4, z: 4 })
 
   // A plain click still selects the solid: that is the P6 v3 fix that made a solid selectable at all.
   await page.mouse.click(centre.x, centre.y)
