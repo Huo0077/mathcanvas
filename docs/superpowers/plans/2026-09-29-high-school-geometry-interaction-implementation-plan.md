@@ -16,7 +16,7 @@
 | --- | --- | --- |
 | 1. 基线 | **清单两条已勾选**：`e2e/geometry3d.spec.ts` 22→**24 项**（新增 Shift 两点→创建空间直线端到端、Esc 分级基线），24/24 通过；`spatialTools.test.ts` + `threeScene.test.ts` **74/74**；其余四条在他处已有回归（默认选择与 Alt 子图元在同文件、相机旋转在 `geometry3d-drag.spec.ts`、撤销在 drag/section/solid-prism、文档恢复在同文件"打开后取景"与六类样题）。默认 `4×4×2` 尺寸债已改并记录 | **这些是改造后补的对照，不是改造前基线** —— 改造已完成，无法再取"改造前"读数；计划原文"新增测试在改造前能验证旧行为"一句已无法事后满足 |
 | 2. 创建会话 | **清单四项全部勾选**：`spatialCreationSession.test.ts` 先红后绿，4→**10 项**（补齐 point3 一点完成 / line3+ray3 两点完成 / face3 永不自动完成 / 首末点重合 / 非有限坐标 / 拒绝原因文案）；Esc 与切工作区取消由两条 e2e 覆盖并各带变异；状态函数、Esc/Enter/退一步路径已接入 | 取消用 `updateSpatialSession(null)`，没有另造计划中的 `cancelSpatialCreation()` 导出（**命名差异，非缺失**）；中文步骤提示由 `App.tsx` 提供 |
-| 3. 3D 落点 | `spatialPick.test.ts` 及创建 e2e 已验证 XY/XZ/YZ/选中面、已有点与近平行拒绝 | 选中面接口实际传 `normal/constant`，不是原计划的 `{faceId}`；锁定/隐藏目标、背侧与重叠候选缺完整独立用例；悬停未显示完整目标名称与世界坐标 |
+| 3. 3D 落点 | `spatialPick.test.ts` 11 项及创建 e2e 已验证 XY/XZ/YZ/选中面、已有点与近平行拒绝、相机斜视/面背侧/距离容差/重叠点；**"隐藏或锁定不被吸附"两半都有据**（隐藏构造性挡在场景外；锁定由创建拾取层过滤，自带对照的 e2e + 变异） | 选中面接口实际传 `normal/constant`，不是原计划的 `{faceId}`（**接口差异，非缺失**）；悬停目标名/世界坐标已由 `[data-creation-readout]` 覆盖 |
 | 4. 原子创建 | `spatialCreationCommands.test.ts` 验证已存在点复用、共线拒绝、`applyBatch` 一步撤销；旧 Alt/Shift 路径回归通过 | 直接作图的新文档保存/重新打开往返需纳入代表样题 |
 | 5. 画布 UI | **任务项全部勾选**：创建 e2e 9 项（原 5 项 + 工作区切换取消、优先于预览点击、选择工具退出、悬停读数）9/9 通过；悬停的目标名/世界坐标/工作平面由 `[data-creation-readout]` 断言，选择工具退出补齐；相机/拖动/求交预览旧回归通过 | 无（本任务清单内条目已逐条有回归或定向变异检查） |
 | 6. 实体入口 | 构造器、参数面板、未保存预览、正方体/长方体、三/四棱柱和棱锥 e2e 通过；旧 `.mgeo` fixture 可打开 | 从手工入口创建后的依赖/保存/量测/截面组合用例仍待 Task 8 |
@@ -75,7 +75,7 @@
 
 **Interfaces:** Produces `type WorkPlane = 'xy'|'xz'|'yz'|{faceId:string}` 和 `type SpatialAnchor = {position:Vector3; pointId?:string; source:'point'|'edge'|'face'|'work-plane'}`；`resolveSpatialAnchor(hit, ray, plane): SpatialAnchor | {reason:string}`。`hit` 须使用已有拾取与可见性规则，`ray` 不在 React 层重建几何。
 
-- [ ] 写失败测试：已有点优先于边/面，空白射线落在 `z=0`，切 XZ/YZ 后世界坐标准确；射线与工作面近平行时返回明确失败；隐藏或锁定对象不被当作可吸附目标。**（2026-09-29 核对：前四条已在既有用例里覆盖 —— 已有点优先 / 空白落 `z=0` / XZ+YZ 精确 / 近平行如实拒绝；最后一条只成立一半 —— 隐藏图元由 `isUserVisiblePrimitive` 挡在场景外（不进场景就碰不到），而**锁定对象照旧可见可拾取**（该判据不看 `locked`），所以"锁定不被吸附"这条口径**未实现**，属产品判断，已记入 `docs/current-status.md` 的如实缺口待定）**
+- [x] 写失败测试：已有点优先于边/面，空白射线落在 `z=0`，切 XZ/YZ 后世界坐标准确；射线与工作面近平行时返回明确失败；隐藏或锁定对象不被当作可吸附目标。**（2026-09-29 六条全部成立，前四条在既有用例里覆盖 —— 已有点优先 / 空白落 `z=0` / XZ+YZ 精确 / 近平行如实拒绝；**最后一条的两半现在都有据**：**隐藏**是构造性的（`threeSceneContent.ts` 先 `filter(isUserVisiblePrimitive)` 再建对象，隐藏图元根本不进场景，射线碰不到）；**锁定**由 `threeSceneEffect.ts` 的 `resolveCreationAt` 负责（`visible === false || locked || 生成的 point3` 一律丢弃命中），新增一条**自带对照**的 e2e 实证 —— 同一屏幕坐标未锁定读"已有点 (0.00, 0.00, 0.00)"、锁定后读"工作平面 XY (…)"、解锁后又读回"已有点"，且点本身仍在画布上；定向变异（摘掉 `primitive?.locked`）当场红，提交 `3e66ce1`。**⚠️ 更正**：此前本项被我记成"锁定那一半未实现、属产品判断" —— 那是在**错的层次**上核对（只看纯函数 `resolveSpatialAnchor`，它不认识文档），已就地更正 `docs/current-status.md`。另需澄清：`isUserVisiblePrimitive` 不看 `locked` 是**对的**，它是渲染可见性判据，锁定不改变可见性）**
 - [x] 运行 `npm test -- apps/web/src/spatialPick.test.ts` 并核对失败原因。
 - [x] 最小实现复用 Three.js 射线与现有拾取次序；面与边的最近点/投影若现有内核没有可靠 API，只显示预览不做隐式绑定，不允许凭像素猜宿主参数。
 - [x] 运行聚焦单测，并补相机斜视、面背侧、距离容差、重叠点测试。**（2026-09-29 完成：`apps/web/src/spatialPick.test.ts` 7→11 项，四项各钉一条性质；三次定向变异证过都能红且不误伤其它用例；提交 `07ac450`）**

@@ -5,6 +5,19 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-09-29 —— 更正："锁定不被吸附"一直是实现的，是我记错了层次
+
+- **要更正的是我自己先前的记录**：本文件与 `docs/current-status.md` 都把计划 Task 3 那条"隐藏或锁定对象不被当作可吸附目标"里的**锁定**一半记成**未实现**、并列进"如实缺口待定"。本轮核到**证据层**才发现那条**不成立**。
+- **错在哪**：我当时只核对了纯函数 `resolveSpatialAnchor` —— 它**只按命中物回答、不认识文档**，所以它不认识 `locked` 本来就不奇怪。真正的过滤点在 `apps/web/src/threeSceneEffect.ts` 的 `resolveCreationAt`：
+  ```ts
+  const hit = primitive?.visible === false || primitive?.locked || (primitive?.type === "point3" && primitive.tessellation) ? null : picked
+  ```
+  三个条件各自挡一类：隐藏的、**锁定的**、以及生成的 `point3`（只该引用原点，不该吸附手柄球面）。
+- **新增自带对照的 e2e**（`e2e/geometry3d-creation.spec.ts` 9→**10 项**，10/10 通过）：同一个屏幕坐标 —— 未锁定时读数 `已有点 (0.00, 0.00, 0.00)`；点属性栏「锁定图元」上锁后读数变成 `工作平面 XY (…)`（退回工作平面），同时断言**点本身仍在画布上**（锁定≠隐藏）；解锁后又读回 `已有点`。三个读数由同一个坐标产生，差别只可能来自锁定状态。
+- **定向变异**：把 `primitive?.locked` 从那个过滤里摘掉 → 用例立刻红在 `Expected /^工作平面 XY \(/`、`Received "已有点 (0.00, 0.00, 0.00)"`。变异已恢复，产品文件与 HEAD **无差异**。
+- **顺带澄清一处容易混的地方**：`primitiveVisibility.ts` 的 `isUserVisiblePrimitive` 确实**不看** `locked` —— 但那是对的，它是**渲染可见性**判据，而"锁定"本来就不该改变可见性（用户选的语义是"看得见、能选中，但不能当吸附目标"）。渲染可见性与吸附门禁是两件事，不在一个函数里。
+- 本批读数：`tsc -p e2e/tsconfig.json` exit 0；`eslint` 该文件 exit 0；该 spec **10/10**；产品运行时代码零改动。
+
 ## 2026-09-29 —— Task 8 第 2 项门禁复跑（代码侧四条全绿；`npm run build` 属用户侧仍未跑）
 
 - 实施计划 Task 8 那条"执行 `typecheck` / `lint` / `test` / `build` / 样题 e2e"的门禁，本轮把**代码侧四条**在同一个 HEAD 上复跑：

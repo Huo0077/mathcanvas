@@ -30,11 +30,21 @@
 | Task 5 收齐：从「选择工具」退出 | `d41e41a` | `e2e/geometry3d-creation.spec.ts` 8→**9 项**：绘制线段点一个锚点 → 点「选择工具」→ 工具与锚点归零、未提交锚点不落盘（对象行数为 0）、**退出后点画布空白仍创建不出东西**（确认回到的是选择语义而非只清了显示）；**先查代码确认无需新代码**（`handleRibbonCommand` 对任何非 `draw-` 命令统一清会话），变异检查（改成 `select-tool` 不清）当场红；Task 5 六条子要求逐条复核后计划项**全部勾选**；tsc/e2e lint exit 0、该 spec 9/9 |
 | Task 1 基线补齐：Esc 分级 + Shift 两点建线端到端 | `208af37` | `e2e/geometry3d.spec.ts` 22→**24 项、24/24 通过**：① Shift 两点多选 → 真的点下"由选中点创建空间直线"建出对象，并以操作提示"对象 3"钉住复用已有两点（变异：`addLine3` 额外建两个重复点 → 红）；② Esc 分级基线（属性栏不再编辑对象、对象行数一个不少；变异：该档改成 `deleteSelected()` → 红）；`spatialTools.test.ts` + `threeScene.test.ts` **74/74**；一次假设出错当场修正（`data-preview-face-count` 数的是交面预览、模板实体下恒 0）；**产品文件零改动**；如实标注这是**改造后补的对照**，不是改造前基线 |
 | Task 2 边界补齐：创建状态机六条子句 | `b73f794` | `spatialCreationSession.test.ts` 4→**10 项**（模块零改动）：point3 一点完成 / line3+ray3 两点完成 / **face3 无论多少点都不自动完成、只有 Enter 收尾** / 首末点重合被拒且会话不前移 / 非有限坐标被拒且不留脏数据 / 拒绝原因文案；三处变异各自精确抓红；**查明 face3 有两层独立守卫**（表里无 face3 条目 + 显式 `tool !== "face3"`，只拆一层仍绿、同拆才红）；`tsc` 抓到 vitest 抓不到的 TS2339（联合类型未收窄），已修，typecheck exit 0 |
+| Task 3 收口：实证"锁定不被吸附"并更正记错的层次 | `3e66ce1` | **更正**：此前把 Task 3 的"锁定不被吸附"记成未实现并列进缺口，**错在核对层次** —— 只看了不认识文档的纯函数 `resolveSpatialAnchor`，真正的过滤在 `threeSceneEffect.ts` 的 `resolveCreationAt`（`visible === false \|\| locked \|\| 生成的 point3` 一律丢命中）。新增**自带对照**的 e2e（创建 spec 9→**10 项**）：同一坐标未锁定读"已有点 (0.00, 0.00, 0.00)"、锁定后读"工作平面 XY (…)"、解锁后又读回"已有点"，且点仍在画布上；变异（摘掉 `primitive?.locked`）当场红；澄清 `isUserVisiblePrimitive` 不看 `locked` 是**对的**（渲染可见性≠吸附门禁）；产品文件零改动 |
 | Task 8 第 2 项门禁复跑（仅文档） | 见本轮提交 | 代码侧四条当次全绿：`typecheck` exit 0 / `lint` 0 error 13 warning / 全库单测 **266 文件 3072 项通过 + 1 todo / 0 失败**（241 s）/ 样题 spec **7/7**；**`npm run build` 未跑**（根脚本 `build --workspaces` 含 `@draw/desktop` 的 Tauri/Rust 打包，属用户侧、不在本轮目标内），故计划项保持未勾选；全量 e2e（47 spec）、`test:perf`、`test:rust` 未复跑并如实记录 |
 
 上述提交均在 GitHub 功能分支，**没有合并 `main`，也没有打包成桌面新版本**。此前普通权限上传曾留下 `git-remote-https.exe` 弹窗；后续从授权环境上传均返回明确成功结果。
 
-## 最新完成模块：Task 8 第 2 项门禁复跑（代码侧四条全绿，只改文档）
+## 最新完成模块：Task 3 收口（实证"锁定不被吸附" + 更正我记错的层次，已上传 GitHub）
+
+- **要更正的是我自己先前的记录**：本文件与 `docs/current-status.md` 都把计划 Task 3 那条"隐藏或锁定对象不被当作可吸附目标"里的**锁定**一半记成**未实现**，并把它列为"如实缺口待定"。本轮核到证据层才发现那条**不成立**。
+- **错在哪**：当时只核对了纯函数 `resolveSpatialAnchor` —— 它**只按命中物回答、不认识文档**，所以不认识 `locked` 本来就不奇怪。真正的过滤点在 `apps/web/src/threeSceneEffect.ts` 的 `resolveCreationAt`：`primitive?.visible === false || primitive?.locked || (primitive?.type === "point3" && primitive.tessellation)` 三个条件各挡一类（隐藏的 / **锁定的** / 生成的 `point3`）。
+- **新增自带对照的 e2e**（`e2e/geometry3d-creation.spec.ts` 9→**10 项**，10/10 通过）：同一个屏幕坐标 —— 未锁定时读数 `已有点 (0.00, 0.00, 0.00)`；点属性栏「锁定图元」上锁后读数变成 `工作平面 XY (…)`（退回工作平面），同时断言**点本身仍在画布上**（锁定≠隐藏）；解锁后又读回 `已有点`。三个读数由同一个坐标产生，差别只可能来自锁定状态。
+- **定向变异**：摘掉 `primitive?.locked` → 用例立刻红在 `Expected /^工作平面 XY \(/`、`Received "已有点 (0.00, 0.00, 0.00)"`；变异已恢复，产品文件与 HEAD **无差异**。
+- **顺带澄清一处容易混的地方**：`primitiveVisibility.ts` 的 `isUserVisiblePrimitive` 确实**不看** `locked` —— 但那是对的：它是**渲染可见性**判据，而"锁定"不该改变可见性（用户选的语义是"看得见、能选中，但不能当吸附目标"）。渲染可见性与吸附门禁是两件事，不在一个函数里。
+- 本批读数：`tsc -p e2e/tsconfig.json` exit 0；`eslint` 该文件 exit 0；该 spec **10/10**；产品运行时代码零改动。
+
+## 上一模块：Task 8 第 2 项门禁复跑（代码侧四条全绿，只改文档）
 
 - 实施计划 Task 8 那条"执行 `typecheck` / `lint` / `test` / `build` / 样题 e2e"的门禁，本轮把**代码侧四条**在同一个 HEAD 上复跑：
   - `npm run typecheck` **exit 0**（6 个 workspace + `e2e/` + `scripts/`）；
