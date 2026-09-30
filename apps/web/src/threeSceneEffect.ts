@@ -158,7 +158,7 @@ import type { ThreeSceneViewProps } from "./threeScene"
 export interface ThreeSceneRuntime {
   syncContent: () => void
   resolveCreationAnchorAt: (clientX: number, clientY: number, workPlane: WorkPlane) => SpatialPickResult
-  previewCreationAt: (clientX: number, clientY: number, workPlane: WorkPlane) => void
+  previewCreationAt: (clientX: number, clientY: number, workPlane: WorkPlane) => SpatialPickResult
   syncCreationPreview: () => void
   clearCreationPreview: () => void
 }
@@ -415,6 +415,15 @@ export function useThreeSceneEffect(deps: ThreeSceneEffectDeps) {
       const picked = pickRaycastHit3(scene, camera, point, { tolerance: pickTolerance() })
       const primitive = picked ? documentRef.current.primitives.find((item) => item.id === picked.primitiveId) : null
       const hit = primitive?.visible === false || primitive?.locked || (primitive?.type === "point3" && primitive.tessellation) ? null : picked
+      /**
+       * **吸附到已有点时，落点取那个点自己的坐标**（2026-09-29 修）。
+       *
+       * 射线命中的是点手柄**球面**上的一点，与点中心差一个手柄半径（默认相机下实测 `(0.04, 0.04, 0.04)`）。
+       * 预览标记与悬停读数都按这个落点走，于是读数会显示一个**不是那个点坐标**的数字，而创建出来的图元
+       * 引用的又是那个点本身 —— 说一套、做一套。这里直接换成点的坐标：预览更准，读数也不再骗人。
+       * （`resolveSpatialAnchor` 那一层保持不变：它只按命中物回答，不认识文档。）
+       */
+      if (hit?.kind === "point" && primitive?.type === "point3") return { position: { ...primitive.position }, pointId: primitive.id, source: "point" }
       const surfaceHit = hit && (hit.kind === "solid" || hit.kind === "plane") ? { ...hit, kind: "face" as const } : hit
       return resolveSpatialAnchor(surfaceHit, raycasterAt(point).ray, workPlane)
     }
@@ -427,6 +436,8 @@ export function useThreeSceneEffect(deps: ThreeSceneEffectDeps) {
       previewCreationAt: (clientX, clientY, workPlane) => {
         creationHover = resolveCreationAt(clientX, clientY, workPlane)
         syncCreationPreview()
+        // 返回拾取结果：调用方（`threeScene.tsx`）据此算出悬停读数（"吸附到谁 + 世界坐标 + 工作平面"）
+        return creationHover
       },
       syncCreationPreview,
       clearCreationPreview: () => {

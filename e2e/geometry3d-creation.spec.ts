@@ -79,3 +79,47 @@ test("keeps camera modes and drawing modes mutually exclusive", async ({ page })
   await expect(scene).toHaveAttribute("data-creation-tool", "")
   await expect(scene).toHaveAttribute("data-pan-mode", "true")
 })
+
+/**
+ * **创建会话里悬停要说清"点下去会引用谁 / 落在哪"**（实施计划 Task 5 那条"悬停辅助标记展示目标、
+ * 世界坐标与工作平面，不渲染为持久图元"）。
+ *
+ * 判据取画布上的读数条 `[data-creation-readout]`（与 2D 画布的 `data-coordinate-readout` 同一个形状）：
+ * 空白处悬停必须说"工作平面 XY"并给出世界坐标，悬停到已有点必须说"已有点"；
+ * 而两种情况都**不许**往文档里写东西 —— 对象行数与进入绘制之前完全一致（"只是预览"的可复核判据）。
+ */
+test("tells what the next click would land on, without writing anything", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+
+  // 先放一个空间点（默认落在 (0,0,0)），用来验"吸附到已有点"那一路
+  await page.getByRole("button", { name: "添加空间点" }).click()
+  const rowsBefore = await page.locator(".algebra-panel .object-row").count()
+
+  await page.getByRole("button", { name: "绘制空间直线", exact: true }).click()
+  const readout = page.locator("[data-creation-readout]")
+  // 还没悬停过：不凭空显示一个落点
+  await expect(readout).toHaveCount(0)
+
+  // ① 空白处：落在默认工作平面 XY 上，并给出世界坐标
+  const empty = await projectWorldPoint(page, { x: 2, y: 1, z: 0 })
+  await page.mouse.move(empty.x, empty.y)
+  await expect(readout).toHaveCount(1)
+  await expect(readout).toHaveText(/^工作平面 XY \(-?\d+\.\d{2}, -?\d+\.\d{2}, -?\d+\.\d{2}\)$/)
+  const coordinates = ((await readout.textContent()) ?? "").replace(/^[^(]*\(/, "").replace(/\)$/, "").split(",").map((value) => Number(value.trim()))
+  expect(coordinates[0]).toBeCloseTo(2, 0)
+  expect(coordinates[1]).toBeCloseTo(1, 0)
+  expect(coordinates[2]).toBeCloseTo(0, 1)
+
+  // ② 已有点：读数改成"已有点"（点优先于它所在的工作平面）
+  const existing = await projectWorldPoint(page, { x: 0, y: 0, z: 0 })
+  await page.mouse.move(existing.x, existing.y)
+  await expect(readout).toHaveText(/^已有点 \(-?0\.00, -?0\.00, -?0\.00\)$/)
+
+  // 全程没写过文档：悬停只是预览
+  expect(await page.locator(".algebra-panel .object-row").count()).toBe(rowsBefore)
+
+  // 指针离开画布：读数撤掉，不留一个过期的落点
+  await page.mouse.move(4, 4)
+  await expect(readout).toHaveCount(0)
+})
