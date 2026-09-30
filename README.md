@@ -61,7 +61,7 @@ npm run dev
 ## 项目进度与能力边界
 
 - **已具备**：平面和立体几何编辑、函数分析、工程制图、本地文档保存/恢复，以及“计划 → 草稿 → 人工确认”的 Agent 基础链路。具体功能范围以 [功能目录](docs/feature-catalog.md) 为准。
-- **高中几何交互功能分支（未并入 v3.0 发布版）**：立体按步骤创建、常用实体参数预览和教学线型已有实现与测试；六类教学题的完整组合验收、教师试用、旋转环遮挡改善仍待完成。现状和证据见 [当前状态](docs/current-status.md)、[本专题进度](docs/research/2026-09-29-high-school-geometry-interaction-progress.md) 与 [实施计划](docs/superpowers/plans/2026-09-29-high-school-geometry-interaction-implementation-plan.md)。
+- **高中几何交互功能分支（未并入 v3.0 发布版，未打包桌面版）**：立体按步骤创建、常用实体参数预览与教学线型已有实现与测试；**六类教学题的完整组合验收已完成**（`e2e/high-school-geometry-tasks.spec.ts` 7 项全过，含三/四棱锥、斜三棱柱、异长长方体、圆锥截面、线面关系、旧文档恢复与撤销），实施计划的 **Task 1 / 2 / 3 / 4 / 5 / 7 已全部勾选**（含创建状态机、拾取边界、锁定/隐藏不被吸附、Esc 与选择工具退出的回归）。**尚未完成**：单顶点编辑（棱柱侧面为四边形，改单点会被共面校验退回；已定修法"把受影响的面拆成三角形"，待实施）、教师试用、完整桌面打包（`npm run build` 含 Rust，用户侧）。现状和证据见 [当前状态](docs/current-status.md)、[本专题进度](docs/research/2026-09-29-high-school-geometry-interaction-progress.md) 与 [实施计划](docs/superpowers/plans/2026-09-29-high-school-geometry-interaction-implementation-plan.md)。
 - **Agent 已有阶段成果**：只读场景工具、类型化工具调用、确定性的局部验收与发布门禁已有实现和测试；离线评估可用。但工具能力和真实模型绘图质量是两回事，不能把离线得分当成真实模型准确率。
 - **仍有限制**：增量草稿工具尚未作为模型可用工具开放；真实场景截图/相机证据与完整视觉检查尚未接通；代表任务的真实 provider pass@1、pass@3、成本和延迟还没有形成可用于放行的测量数据。因此类型化工具循环**尚未满足默认启用的发布门禁**。当前门禁及缺口见 [Agent 发布前门禁](docs/acceptance/agent-release-gate.md)，过程见 [Agent tool-loop 进度记录](docs/research/2026-09-28-agent-tool-loop-progress.md)。
 - **其他已知边界**：没有云端同步；部分高级几何输入、精确曲面互交、DWG/B-rep 导入及自动尺寸布局尚未提供。请以界面实际可用入口和 [功能目录](docs/feature-catalog.md) 为准，不把设计文档中的规划视作已交付功能。
