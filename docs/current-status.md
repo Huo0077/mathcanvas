@@ -5,13 +5,13 @@
 > [`docs/project-progress.md`](project-progress.md) —— 那是**归档**，里面的数字是"当时实测"，
 > 不是当前值。两份文件分工明确：**要当前值看这里，要过程看归档。**
 
-**最后更新：** 2026-09-29（Task 8 三批齐 + 两处缺陷修复 + Task 3/4/6/7 补充用例 + 功能目录收口 + **一处"改不动顶点"的根因更正**；下表只写**当次真正复跑过**的门禁，不把 9 月 26 日的测试数字当成现值）。
+**最后更新：** 2026-09-29（Task 8 三批齐 + 两处缺陷修复 + Task 3/4/5/6/7 补充用例 + 功能目录收口 + 一处根因更正；下表只写**当次真正复跑过**的门禁，不把 9 月 26 日的测试数字当成现值）。
 
 ## 一、现在能不能跑（可复核的门禁读数）
 
 | 命令 | 本轮实际结果与范围 |
 | --- | --- |
-| `npm test -- --maxWorkers=3` | **265 个测试文件 / 3062 个用例通过 + 1 todo / 0 失败**（全库；比上一批多 1 项 = 新增的"改不动顶点"表征用例） |
+| `npm test -- --maxWorkers=3` | **266 个测试文件 / 3066 个用例通过 + 1 todo / 0 失败**（全库；比上一批多 4 项 = 悬停读数函数 4 条） |
 | `npm run typecheck` | 6 个 workspace，以及 `e2e/` 与 `scripts/` 类型检查，全部 exit 0 |
 | `npm run lint` | exit 0，**0 error / 13 warning**（已有基线警告，并非全部无警告） |
 | `npm --workspace @draw/web run build` | exit 0；入口 1694.22 kB、`engineeringExporters` 433.81 kB、`geometry.worker` 310.99 kB；仍有 >500 kB chunk 警告 |
@@ -21,6 +21,7 @@
 | `e2e/solid-prism.spec.ts`（Task 6 补充） | **6 / 6 通过**：新增棱柱**体积 48**的读数（属性栏卡片；实体源在画布上没有数字）与**保存/恢复**往返（`construction.kind === "prism"`、8 顶点、顶面 = 底面 `+(1,0.5,3)`、重开后包围盒逐字一致） |
 | `apps/web/src/persistence/mgeoRoundTrip.test.ts`（Task 4 补充） | **5 / 5 通过**：新增"画布新建的点 / 线段 / 直线 / 面"往返 —— id 集合与几何不变、三种引用写法（线段 `pointIds`、直线 `definition.pointIds`、面 `pointIds`）都仍指着存在的点，且重开后再引用旧点会**复用**（变异检查证过） |
 | `e2e/geometry3d-teaching-lines.spec.ts`（Task 7 补充） | **2 / 2 通过**：新增「旋转视角后顶点标签仍逐点对齐」—— 对每个 `[data-point-id]` 断言其锚点等于**它自己那个顶点**的投影（±2px），旋转前后各查一遍，并用 `data-camera-azimuth` 确认真转了；变异检查（偏移 +10→+60）当场报 50px |
+| `e2e/geometry3d-creation.spec.ts`（Task 5 补充） | **6 / 6 通过**：新增「悬停读数」—— 空白处显示"工作平面 XY + 世界坐标"、已有点显示"已有点 + **该点自己的**坐标"，且**对象行数全程不变**（悬停不写文档）、指针离开即撤掉读数 |
 | `npm run build`（含桌面 Rust） | 本轮未完成桌面打包；P0 时一次 Rust 编译超过 180 秒而中止，**不等于桌面构建通过** |
 | `npm run test:rust` / `npm run test:perf` | 本轮均未复跑；此前读数只能当历史基线，不能写成现状 |
 
