@@ -139,8 +139,14 @@ export function Ribbon({ groups, activeTab, expanded, pinned, onTabChange, onCom
           {/* 分组标题移到**卡片头部**并变成折叠开关。
               原来它是一条撑满分组宽度的说明文字压在命令下面（实测最宽的组 1621px），
               既不像标题、也没有任何交互；移到头部之后它同时承担"这组叫什么"和"收起这组"，
-              而且**净高度反而更小**：省掉了底部那一行 27px，只多了 18px 的头。 */}
-          <button type="button" className="ribbon-group-toggle" aria-expanded={!collapsed} onClick={() => toggleGroup(group.id)}>
+              而且**净高度反而更小**：省掉了底部那一行 27px，只多了 16px 的头。
+
+              开关的**可访问名字必须与可见标题不同**（这里用"收起/展开 + 组名"）：
+              标题是"常用立体"这种词，而 3D 画布的工具条上本来就有一个叫"常用立体"的按钮，
+              两者同名会让 `getByRole("button", { name: "常用立体" })` 一次命中两个元素，
+              Playwright 的 strict mode 直接判失败 —— 实测撞掉 8 条 e2e 用例。
+              语义上也确实该分开：这个控件做的是"收起/展开这一组"，不是"打开常用立体"。 */}
+          <button type="button" className="ribbon-group-toggle" aria-expanded={!collapsed} aria-label={`${collapsed ? "展开" : "收起"}${group.label}`} onClick={() => toggleGroup(group.id)}>
             <span className="ribbon-group-label">{group.label}</span>
             <svg className="ribbon-group-chevron" viewBox="0 0 12 12" aria-hidden="true"><path d={collapsed ? "m4.5 2.5 3.5 3.5-3.5 3.5" : "m2.5 4.5 3.5 3.5 3.5-3.5"} /></svg>
           </button>

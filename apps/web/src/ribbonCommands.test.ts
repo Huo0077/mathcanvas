@@ -42,11 +42,39 @@ describe("ribbon command configuration", () => {
     expect(labels).toEqual(expect.arrayContaining(["添加空间点", "添加立方体", "创建截面"]))
   })
 
-  it("offers direct spatial drawing tools before selection-dependent construction", () => {
-    const base = createRibbonGroups({ ...emptyContext, workspace: "geometry3d" }).find((group) => group.id === "base")?.commands ?? []
-    expect(base.slice(0, 7).map((command) => command.id)).toEqual(["select-tool", "draw-point3", "draw-segment3", "draw-line3", "draw-ray3", "draw-plane3", "draw-face3"])
-    expect(base.filter((command) => command.id.startsWith("draw-")).every((command) => !command.disabled)).toBe(true)
-    expect(base.find((command) => command.id === "create-line3")?.disabled).toBe(true)
+  /**
+   * 立体几何的 18 个空间命令拆成 `draw` / `solids` / `construct` 三组。
+   *
+   * 拆的理由是**宽度**：这 18 个命令挤在一组时实测宽 1466px，比 1280px 窗口下的整个功能区
+   * （1208px）还宽，`多模态输入` / `作业操作` / `文件输出` 三组因此全被挤出屏幕
+   * （26 个命令里 12 个完全看不见）。拆开之后每一组能单独折叠，"收起用不到的那类"才可用。
+   *
+   * 这条同时钉住两件事：**顺序按使用频次**（先画 → 再放现成实体 → 最后才是依赖选中对象的构造），
+   * 以及**平面几何仍然是单独一组 `base`**（不受这次拆分影响）。
+   */
+  it("splits the 3D commands into draw / solids / construct, in that order", () => {
+    const groups = createRibbonGroups({ ...emptyContext, workspace: "geometry3d" })
+    const prefix = groups.slice(0, 3)
+
+    expect(prefix.map((group) => group.id)).toEqual(["draw", "solids", "construct"])
+    expect(prefix.map((group) => group.label)).toEqual(["绘制", "立体与截面", "由选中点构造"])
+    expect(groups.some((group) => group.id === "base")).toBe(false)
+
+    expect(prefix[0].commands.map((command) => command.id)).toEqual(["select-tool", "draw-point3", "draw-segment3", "draw-line3", "draw-ray3", "draw-plane3", "draw-face3"])
+    expect(prefix[1].commands.map((command) => command.id)).toEqual(["create-point3", "create-cube", "create-pyramid", "create-tetrahedron", "create-cylinder", "create-cone", "create-section"])
+    expect(prefix[2].commands.map((command) => command.id)).toEqual(["create-line3", "create-plane3", "create-face3", "create-circle3-track"])
+  })
+
+  it("keeps direct spatial drawing available and gates construction on a selection", () => {
+    const groups = createRibbonGroups({ ...emptyContext, workspace: "geometry3d" })
+    const draw = groups.find((group) => group.id === "draw")!
+    const construct = groups.find((group) => group.id === "construct")!
+
+    // 直接在画布上作画不需要先选中任何东西。
+    expect(draw.commands.filter((command) => command.id.startsWith("draw-")).every((command) => !command.disabled)).toBe(true)
+    // "由选中点构造"必须先有选中对象，并且要说清怎么办 —— 不能让用户点了没反应。
+    expect(construct.commands.every((command) => command.disabled === true)).toBe(true)
+    expect(construct.commands.find((command) => command.id === "create-line3")?.disabledReason).toContain("Shift")
   })
   it("offers exactly the two multimodal conversions, both unavailable with a reason", () => {
     const multimodal = createRibbonGroups(emptyContext).find((group) => group.id === "multimodal")

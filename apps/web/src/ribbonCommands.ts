@@ -29,44 +29,78 @@ export function createRibbonGroups(context: RibbonCommandContext): RibbonGroup[]
   const allSelectedLocked = context.allSelectedLocked
   const selectionReason = "请先选择对象"
   const planar = context.workspace !== "geometry3d" && !(context.workspace === "cad" && context.cadMode === "projection")
-  const baseCommands = planar
-    ? [
-      command("select-tool", "选择工具", "select", { prompt: "点击对象进行选择，Shift 加选" }),
-      command("create-point", "添加点", "point", { prompt: "在空白处或交点单击以创建点" }),
-      command("create-line", "添加直线", "line", { prompt: "点击直线的两个点" }),
-      command("create-segment", "添加线段", "segment", { prompt: "依次点击线段的起点与终点" }),
-      command("create-ray", "添加射线", "ray", { prompt: "依次点击射线的起点与经过点" }),
-      command("create-polyline", "添加折线", "polyline", { prompt: "点击顶点，双击结束" }),
-      command("create-circle", "添加圆", "circle", { prompt: "点击圆心，再点击圆周上的点" }),
-      command("create-arc", "添加圆弧", "arc", { prompt: "点击圆心、起点和终点" }),
-      command("create-parabola", "添加抛物线", "parabola", { prompt: "选择抛物线控制点" }),
-      command("create-ellipse", "添加椭圆", "ellipse", { prompt: "选择椭圆中心和轴参数" }),
-      command("create-hyperbola", "添加双曲线", "hyperbola", { prompt: "选择双曲线中心和轴参数" }),
-      command("create-function", "添加函数", "function", { prompt: "在表达式栏输入公式后按回车" })
-    ]
-    : [
-      command("select-tool", "选择工具", "select", { prompt: "点击对象进行选择，Shift 加选" }),
-      command("draw-point3", "绘制空间点", "point", { prompt: "在画布上点击放置空间点；空白处按工作平面落点" }),
-      command("draw-segment3", "绘制线段", "segment", { prompt: "在画布上依次点击两点" }),
-      command("draw-line3", "绘制空间直线", "line", { prompt: "在画布上依次点击两点" }),
-      command("draw-ray3", "绘制空间射线", "ray", { prompt: "在画布上依次点击起点和经过点" }),
-      command("draw-plane3", "绘制空间平面", "polyline", { prompt: "在画布上依次点击三个不共线的点" }),
-      command("draw-face3", "绘制空间面", "polyline", { prompt: "依次点击顶点，至少三点后按 Enter 完成" }),      command("create-point3", "添加空间点", "point", { prompt: "添加一个用于建模的空间点" }),
-      command("create-line3", "由选中点创建空间直线", "line", { prompt: "按住 Shift 依次点选两个空间点", disabled: !context.canCreateLine3, disabledReason: "请先按住 Shift 依次点选 2 个空间点" }),
-      command("create-plane3", "由选中点创建空间平面", "segment", { prompt: "按住 Shift 点选三个不共线空间点", disabled: !context.canCreatePlane3, disabledReason: "请先按住 Shift 点选 3 个不共线的空间点" }),
-      command("create-face3", "由选中点创建空间面", "polyline", { prompt: "按住 Shift 点选三个以上空间点", disabled: !context.canCreateFace3, disabledReason: "请先按住 Shift 点选 3 个以上的空间点" }),
-      /**
-       * 圆轨道：选 1 个点建以它为圆心的水平圆、2 个点用第二点定半径、3 个点用三点平面定朝向。
-       * 它同时是**动点的约束轨道**（绑定下拉里会出现"圆轨道"那一项）。
-       */
-      command("create-circle3-track", "添加空间圆轨道", "circle", { prompt: "按住 Shift 点选 1–3 个空间点", disabled: !context.canCreateCircle3, disabledReason: "请先按住 Shift 点选 1 至 3 个空间点" }),
-      command("create-cube", "添加立方体", "line", { prompt: "添加参数化立方体" }),
-      command("create-pyramid", "添加棱锥", "line", { prompt: "添加参数化棱锥" }),
-      command("create-tetrahedron", "添加正四面体", "line", { prompt: "添加棱长为 4 的正四面体" }),
-      command("create-cylinder", "添加圆柱", "circle", { prompt: "添加参数化圆柱" }),
-      command("create-cone", "添加圆锥", "parabola", { prompt: "添加参数化圆锥" }),
-      command("create-section", "创建截面", "polyline", { prompt: "创建当前选中实体的剖切截面", disabled: !context.canCreateSection, disabledReason: "请先选择可剖切的空间实体" })
-    ]
+
+  /** 平面几何（以及工程制图的绘图模式）：12 个命令一组，一行放得下，不分拆。 */
+  const planarBaseCommands = [
+    command("select-tool", "选择工具", "select", { prompt: "点击对象进行选择，Shift 加选" }),
+    command("create-point", "添加点", "point", { prompt: "在空白处或交点单击以创建点" }),
+    command("create-line", "添加直线", "line", { prompt: "点击直线的两个点" }),
+    command("create-segment", "添加线段", "segment", { prompt: "依次点击线段的起点与终点" }),
+    command("create-ray", "添加射线", "ray", { prompt: "依次点击射线的起点与经过点" }),
+    command("create-polyline", "添加折线", "polyline", { prompt: "点击顶点，双击结束" }),
+    command("create-circle", "添加圆", "circle", { prompt: "点击圆心，再点击圆周上的点" }),
+    command("create-arc", "添加圆弧", "arc", { prompt: "点击圆心、起点和终点" }),
+    command("create-parabola", "添加抛物线", "parabola", { prompt: "选择抛物线控制点" }),
+    command("create-ellipse", "添加椭圆", "ellipse", { prompt: "选择椭圆中心和轴参数" }),
+    command("create-hyperbola", "添加双曲线", "hyperbola", { prompt: "选择双曲线中心和轴参数" }),
+    command("create-function", "添加函数", "function", { prompt: "在表达式栏输入公式后按回车" })
+  ]
+
+  /**
+   * **立体几何的 18 个命令按"这一步在做什么"拆成三组**（原先挤在 `base` 一组里）。
+   *
+   * 为什么必须拆：那一组实测宽 **1466px**，比 1280px 窗口下的整个功能区（1208px）还宽，
+   * 于是 `多模态输入` / `作业操作` / `文件输出` 三组全部被挤出屏幕 —— 实测 26 个命令里
+   * 有 12 个完全看不见。分组本身不改变总宽度（拆完还多出两组的内边距，约 +48px），
+   * 它改变的是**折叠的粒度**：原来一折就把 18 个命令全藏了（包括最常用的绘制工具），
+   * 等于没法用；拆开之后可以只收起"这一步用不到"的那一类。
+   *
+   * 顺序按使用频次排：先画（在画布上落点连线建面），再放现成的实体，
+   * 最后才是"先选点再构造"——那一类前面必须先有选中对象，不属于第一步。
+   */
+  const drawCommands3d = [
+    command("select-tool", "选择工具", "select", { prompt: "点击对象进行选择，Shift 加选" }),
+    command("draw-point3", "绘制空间点", "point", { prompt: "在画布上点击放置空间点；空白处按工作平面落点" }),
+    command("draw-segment3", "绘制线段", "segment", { prompt: "在画布上依次点击两点" }),
+    command("draw-line3", "绘制空间直线", "line", { prompt: "在画布上依次点击两点" }),
+    command("draw-ray3", "绘制空间射线", "ray", { prompt: "在画布上依次点击起点和经过点" }),
+    command("draw-plane3", "绘制空间平面", "polyline", { prompt: "在画布上依次点击三个不共线的点" }),
+    command("draw-face3", "绘制空间面", "polyline", { prompt: "依次点击顶点，至少三点后按 Enter 完成" })
+  ]
+
+  /**
+   * 参数化实体：拖出来就能用的那批，加上空间点与截面。
+   *
+   * **这一组的名字不能叫"常用立体"**：3D 画布的工具条上本来就有一个同名按钮
+   * （打开常用立体参数面板），而 Playwright 的 `getByRole("button", { name })`
+   * 默认是**子串**匹配 —— 只要另有一个按钮的可访问名字里含"常用立体"，就会一次命中两个元素、
+   * strict mode 直接判失败（实测这一撞干掉了 8 条 e2e 用例，且改成"收起常用立体"也没用，
+   * 因为那仍然包含该子串）。改用"立体与截面"之后两边不再互相包含。
+   */
+  const solidCommands3d = [
+    command("create-point3", "添加空间点", "point", { prompt: "添加一个用于建模的空间点" }),
+    command("create-cube", "添加立方体", "line", { prompt: "添加参数化立方体" }),
+    command("create-pyramid", "添加棱锥", "line", { prompt: "添加参数化棱锥" }),
+    command("create-tetrahedron", "添加正四面体", "line", { prompt: "添加棱长为 4 的正四面体" }),
+    command("create-cylinder", "添加圆柱", "circle", { prompt: "添加参数化圆柱" }),
+    command("create-cone", "添加圆锥", "parabola", { prompt: "添加参数化圆锥" }),
+    command("create-section", "创建截面", "polyline", { prompt: "创建当前选中实体的剖切截面", disabled: !context.canCreateSection, disabledReason: "请先选择可剖切的空间实体" })
+  ]
+
+  /**
+   * 由选中点构造：这一类**前面必须先有选中对象**，所以默认全部禁用并给出原因，
+   * 而不是让用户点了没反应。
+   */
+  const constructCommands3d = [
+    command("create-line3", "由选中点创建空间直线", "line", { prompt: "按住 Shift 依次点选两个空间点", disabled: !context.canCreateLine3, disabledReason: "请先按住 Shift 依次点选 2 个空间点" }),
+    command("create-plane3", "由选中点创建空间平面", "segment", { prompt: "按住 Shift 点选三个不共线空间点", disabled: !context.canCreatePlane3, disabledReason: "请先按住 Shift 点选 3 个不共线的空间点" }),
+    command("create-face3", "由选中点创建空间面", "polyline", { prompt: "按住 Shift 点选三个以上空间点", disabled: !context.canCreateFace3, disabledReason: "请先按住 Shift 点选 3 个以上的空间点" }),
+    /**
+     * 圆轨道：选 1 个点建以它为圆心的水平圆、2 个点用第二点定半径、3 个点用三点平面定朝向。
+     * 它同时是**动点的约束轨道**（绑定下拉里会出现"圆轨道"那一项）。
+     */
+    command("create-circle3-track", "添加空间圆轨道", "circle", { prompt: "按住 Shift 点选 1–3 个空间点", disabled: !context.canCreateCircle3, disabledReason: "请先按住 Shift 点选 1 至 3 个空间点" })
+  ]
 
   const engineeringCommands = context.workspace === "cad"
     ? [
@@ -104,8 +138,21 @@ export function createRibbonGroups(context: RibbonCommandContext): RibbonGroup[]
       command("export-mgeo", "保存 .mgeo", "svg", { prompt: "保存当前文档" })
     ]
 
+  /**
+   * 空间工作区的前三组（绘制 / 常用立体 / 由选中点构造）与平面的一整组
+   * （基础与图元）是**互斥**的：`planar` 同时决定命令集与分组结构。
+   * 后面三组（多模态 / 作业 / 导出）两边共用，所以放在展开之外。
+   */
+  const spatialPrefix: RibbonGroup[] = [
+    { id: "draw", label: "绘制", commands: drawCommands3d },
+    { id: "solids", label: "立体与截面", commands: solidCommands3d },
+    { id: "construct", label: "由选中点构造", commands: constructCommands3d }
+  ]
+
   return [
-    { id: "base", label: "基础与图元", commands: baseCommands },
+    ...(planar
+      ? [{ id: "base" as const, label: "基础与图元", commands: planarBaseCommands }]
+      : spatialPrefix),
     { id: "multimodal", label: "多模态输入", commands: [
       // 只保留项目真正规划的两个入口；转换后端尚未接入，所以入口保持禁用并说明原因，不做假的成功反馈。
       command("input-text-conversion", "文字转换", "text", { disabled: true, disabledReason: "文字转换服务尚未接入，暂不可用" }),

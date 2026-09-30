@@ -23,6 +23,25 @@ describe("ribbon", () => {
     expect(onCommand).toHaveBeenCalledWith("add-point")
   })
 
+  /**
+   * 分组开关的可访问名字**不能等于**它的可见标题。
+   *
+   * 标题用的是"常用立体"这类词，而 3D 画布的工具条上本来就有一个同名按钮；
+   * 两者同名会让 `getByRole("button", { name: "常用立体" })` 一次命中两个元素，
+   * Playwright 的 strict mode 直接判失败 —— 实测这一撞干掉了 8 条 e2e 用例。
+   * 这里把"可见文案"与"可访问名字"分别钉住，避免以后又把它们合成一个。
+   */
+  it("names the group toggle distinctly from its visible label", () => {
+    render(<Ribbon groups={groups} activeTab="home" expanded={true} pinned={false} onTabChange={() => {}} onCommand={() => {}} onExpandedChange={() => {}} onPinnedChange={() => {}} />)
+
+    expect(screen.getByText("基础图元")).toBeTruthy()
+    expect(screen.getByRole("button", { name: "收起基础图元" })).toBeTruthy()
+    expect(screen.queryByRole("button", { name: "基础图元" })).toBeNull()
+
+    fireEvent.click(screen.getByRole("button", { name: "收起基础图元" }))
+    expect(screen.getByRole("button", { name: "展开基础图元" })).toBeTruthy()
+  })
+
   it("collapses from the ribbon control and exposes the pin state", () => {
     const onExpandedChange = vi.fn()
     const onPinnedChange = vi.fn()
