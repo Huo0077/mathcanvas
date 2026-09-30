@@ -17,10 +17,19 @@
 | Task 8 第一批：四类立体样题精确几何验收 | `cecc1fe` | 新增 `e2e/high-school-geometry-tasks.spec.ts` 4 项（三棱锥/四棱锥/斜三棱柱/异长长方体），含顶点坐标、三边尺寸、拉伸向量、拓扑依赖、保存往返、一步撤销；变异检查证明断言非空；全库单测 265 文件/3055 项、类型检查、lint 0 错/13 警告均为本批复跑 |
 | Task 8 第二批：圆锥截面 + 空间直线与平面的关系 | `0166845` | 同文件增至 6 项；圆锥按 `e = sinθ / cosα` 核对圆/椭圆/双曲线与 `πr²` 面积（变异检查证过），线面关系由平面方程判定"在面内 vs 平行不共面"并测到点到平面距离 3.000u；e2e 类型检查、定向 lint、全仓 lint 0 错/13 警告均为本批复跑；顺带查实「距离」测量来源顺序缺陷并记档 |
 | Task 8 第三批：已有文档恢复与撤销（六类齐） | `1a82c97` | 同文件增至 **7 项**，六类代表题**全部覆盖**；旧文档（只有模板实体没拓扑）迁移后 origin/size 逐值不变、拓扑包围盒精确、刷新后 id 逐项恢复、撤销只撤新工作；变异检查证过；顺带查实「恢复后第一次改动不落草稿」缺陷并记档；Task 8 第 2 项门禁当次复跑（typecheck / lint / 单测 265 文件 3055 项 / web 构建 全 exit 0） |
+| 修复：恢复草稿后第一次改动不落盘 | `4968051` | 根因是 `useDraftPersistence.ts` 里 skip 与 settled 的判断顺序（两者赛跑）；修法先消费 skip 再判 settled，两条守卫不变松；回归钉在浏览器侧（修复前红 Expected 112 / Received 84、修复后绿），单测 9 条钉语义前后都绿；全库单测 265 文件/3055 项、lint 0 错/13 警告、typecheck 与 web 构建全 exit 0 |
 
 上述提交均在 GitHub 功能分支，**没有合并 `main`，也没有打包成桌面新版本**。此前普通权限上传曾留下 `git-remote-https.exe` 弹窗；后续从授权环境上传均返回明确成功结果。
 
-## 最新完成模块：Task 8 第三批（已有文档恢复与撤销，六类代表题齐了，已上传 GitHub）
+## 最新完成模块：修复"恢复草稿后第一次改动不落盘"（会丢用户数据，已上传 GitHub）
+
+- **缺陷**：页面加载恢复草稿后，用户的**第一次改动不会写进草稿**。真机实测：刷新后加一个立方体 → 对象列表出现「立方体 1」，而 `mathcanvas:draft:geometry3d` 仍是 84 个 id；再加第二个才一次跳到 140。后果：刷新后只改一次就关页面，那次改动从 localStorage 草稿里丢失（桌面仓储那一份也在同一个 `return` 之后一起被跳过）。
+- **根因**：`useDraftPersistence.ts` 自动保存里 `skipNextDraftSaveRef`（本意"刚恢复的内容不要立刻回写"）与 `restoreSettledRef` 的**判断顺序**错了。恢复那一侧先置 skip 再 `replace(...)`，而 settled 是在 restore 那个 promise 的 `.finally()` 里置位 —— 两者赛跑；恢复自身那次变化触发的 effect 若先跑，就在"还没 settled"那一步直接 return、**没有消费 skip**，这支"跳过"最终被用户恢复后的第一次改动吃掉。
+- **修法**：把 skip 的消费移到 settled 判断**之前**（一行顺序调换）。不会变松：恢复**自身**那次变化消费掉 skip，用户的第一次改动照常写；"恢复没结束就一个字都不写"这条守卫仍在。
+- **回归钉在浏览器侧**：`e2e/high-school-geometry-tasks.spec.ts` 的旧文档用例新增"刷新恢复后第一次改动必须写回草稿"，修复前红（Expected 112 / Received 84）、修复后绿。为什么不是单测：真机顺序是 React 调度与 promise `.finally` 的赛跑，而 `useDraftPersistence.test.tsx` 的 harness 里 `rerender` 发生在 `await` 之后、复现不出这条缝（那 9 条单测钉**语义**，前后都绿，已复跑确认）。
+- 本批读数：全库单测 **265 文件 / 3055 项通过 + 1 todo / 0 失败**（280 s）；`npm run typecheck` exit 0；`npm run lint` 0 error / 13 warning；`npm --workspace @draw/web run build` exit 0；e2e 该文件 7/7 通过。
+
+## 上一模块：Task 8 第三批（已有文档恢复与撤销，六类代表题齐了）
 
 - 同一份 `e2e/high-school-geometry-tasks.spec.ts` 增至 **7 项**，六类代表题**全部覆盖**。
 - 判据走两条真链路（夹具 `overlapping-cubes.mgeo`：只有模板实体、**没有拓扑**的三只立方体）：
@@ -65,4 +74,4 @@
 3. 更灵活的实体底面输入、拖放顶点/高度手柄与关联拉伸未交付；现有「使用选中面作底面」会**独立复制当时的坐标**，不追随原面更新。
 4. 球体/球截面、截图生成可编辑数学图、平面/函数的逐题补缺和 HTML/GGB 导出属于单独后续方案，当前不能算完成。
 
-详见 [任务说明](../superpowers/specs/2026-09-29-high-school-geometry-interaction-design.md) 与 [实施计划](../superpowers/plans/2026-09-29-high-school-geometry-interaction-implementation-plan.md)。`cecc1fe`、`0166845`、`1a82c97` 三笔均已由 `git push` 返回成功、并由 `git fetch` 复核本地与远端 `feat/high-school-geometry-interaction` 的 SHA 一致。上传过程记一笔实况：`github.com:443` 在本机**时通时断**，且越来越差 —— `0166845` 重试到第 6 次成功，`1a82c97` 重试到第 7 次才成功（每次尝试间有 15 秒间隔）。**另记两处待修缺陷**（都是本轮查实、已写入当前状态的如实缺口，未修）：①「距离」测量在"平面先选"时只得到无效读数；②恢复草稿后用户的第一次改动不落草稿。本次进度记录收口在随后一笔文档提交中，并同样推送到该功能分支。
+详见 [任务说明](../superpowers/specs/2026-09-29-high-school-geometry-interaction-design.md) 与 [实施计划](../superpowers/plans/2026-09-29-high-school-geometry-interaction-implementation-plan.md)。`cecc1fe`、`0166845`、`1a82c97`、`4968051` 四笔均已由 `git push` 返回成功、并由 `git fetch` 复核本地与远端 `feat/high-school-geometry-interaction` 的 SHA 一致。上传过程记一笔实况：`github.com:443` 在本机**时通时断**，且越来越差 —— `0166845` 重试到第 6 次、`1a82c97` 重试到第 7 次、`4968051` 第 3 次才成功（每次尝试间有 15 秒间隔）。**两处查实缺陷的现状**：①「距离」测量在"平面先选"时只得到无效读数 —— **仍未修**（见 [当前状态的如实缺口](../../current-status.md)）；②恢复草稿后第一次改动不落草稿 —— **已修**（`4968051`）。本次进度记录收口在随后一笔文档提交中，并同样推送到该功能分支。
