@@ -89,7 +89,7 @@
 - [x] 写失败测试：两次空白点击生成 2 点 + 1 线，已有点复用而不重复建点，三点共线建平面拒绝且文档零变化，Alt/Shift 原有高级建图路径照常；一次构造只增加一步撤销历史。
 - [x] 运行 `npm test -- apps/web/src/spatialCreationCommands.test.ts`，确认是预期失败。
 - [x] 用现有 ID 分配和 `applyBatch`/等价的场景事务提交**整批**操作；内核验收失败时全批不提交，不能先写点后报错。既有 `addLine3/addPlane3/addFace3` 保留为“先选后建”快捷方式。
-- [ ] 运行聚焦单测、`npm test -- apps/web/src/point3ToolCommands.test.ts`（若该文件不存在则选择已有 `apps/web/src/spatialTools.test.ts`），验证一步撤销和保存/加载往返。
+- [x] 运行聚焦单测、`npm test -- apps/web/src/point3ToolCommands.test.ts`（若该文件不存在则选择已有 `apps/web/src/spatialTools.test.ts`），验证一步撤销和保存/加载往返。**（2026-09-29 完成：该文件存在，聚焦三文件 18/18；**一步撤销**由 `spatialCreationCommands.test.ts` 的既有用例覆盖并复跑确认；**保存/加载往返**新增 `mgeoRoundTrip.test.ts` 第 5 条 —— 画布新建的点/线/面经真实入口落盘后 id 与几何不变、三种引用写法都仍指着存在的点、重开后引用旧点会复用；变异检查证过；提交 `7067d3a`）**
 
 ### Task 5：状态提示、预览和画布交互（P0）
 
