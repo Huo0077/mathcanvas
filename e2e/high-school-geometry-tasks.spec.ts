@@ -446,18 +446,19 @@ test("已有文档恢复与撤销：旧 .mgeo 迁移后几何不变，刷新后�
   await expect(algebra.getByText("立方体 A").first()).toBeVisible()
   await expect.poll(ids, { message: "恢复后 id 列表必须与刷新前逐项相同" }).toEqual(beforeReload)
 
-  // ---- 撤销：只撤"新做的工作"，加载进来的旧文档原样留着 ----
-  // 观测口径用**对象列表**，不用 localStorage：草稿写回本身有一个已记档的时序缺陷
-  // （刷新后**第一次**改动不落草稿，见 `docs/current-status.md` 的如实缺口），
-  // 那是持久化的问题，不该混进"撤销是否只撤新工作"这条判断里。
+  // ---- 恢复后的**第一次**改动必须落草稿 ----
+  // 这条曾经是缺陷（已修）：恢复自身那次变化没消费掉"跳过一次"，于是被**用户的第一次改动**吃掉 ——
+  // 真机上表现为"刷新后只改一次就关页面，那次改动从草稿里丢了"。
   await page.getByRole("button", { name: "添加立方体" }).click()
   await expect(algebra.getByText("立方体 1").first()).toBeVisible()
+  await expect.poll(async () => (await ids()).length, { message: "恢复后第一次改动必须写回草稿" }).toBe(beforeReload.length + 28)
+
+  // ---- 撤销：只撤"新做的工作"，加载进来的旧文档原样留着 ----
   await page.keyboard.press("Control+z")
   await expect(algebra.getByText("立方体 1")).toHaveCount(0)
   await expect(algebra.getByText("立方体 A").first()).toBeVisible()
   await expect(algebra.getByText("远处的立方体").first()).toBeVisible()
   await expect(algebra.getByRole("button", { name: "展开 远处的立方体 拓扑 的子对象" })).toBeVisible()
-  // 撤销之后落库的草稿必须正好是"只有旧文档"那一份（这一次改动会写回，缺陷只吞掉恢复后的第一次）
   await expect.poll(ids, { message: "撤销后草稿应回到只有旧文档的那一份" }).toEqual(beforeReload)
   await page.keyboard.press("Control+z")
   await expect.poll(ids).toEqual(beforeReload)
