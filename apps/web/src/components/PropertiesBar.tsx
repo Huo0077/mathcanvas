@@ -9,6 +9,7 @@ import { pointHostValue } from "../pointHostOptions"
 import { measurementMetricLabel } from "../measurementLabels"
 import { measurementFormText } from "../measurementForms"
 import { FormulaKeyboard } from "./FormulaKeyboard"
+import { EmptyStateArt } from "./EmptyStateArt"
 import { exactConicOf, sectionConicMetrics } from "../conicMetrics"
 import { FILL_PALETTE, NO_FILL, PLANAR_PALETTE, supportsFill } from "../palette"
 /**
@@ -114,7 +115,7 @@ value, min, max, step, onChange, selectedPrimitive, selectedIds, selectedCount, 
         内核里的 `exactFormOf` 与文档里的 `measurements` 都保留 —— 删掉的是一块展示，不是测量能力。 */}
     <div className="inspector-heading"><div><span className="panel-kicker">选中对象</span><h2 className="panel-title">属性面板</h2></div><span className="inspector-indicator" aria-hidden="true" /></div>
     {selectedPrimitive && <div className="inspector-selected-heading"><div><span className="panel-kicker">当前图元</span><h3>{selectedPrimitive.label ?? selectedPrimitive.id}</h3></div><span className="property-type-badge">{primitiveTypeLabels[selectedPrimitive.type]}</span><div className="inspector-quick-actions"><button type="button" aria-label={selectedPrimitive.locked ? "解锁图元" : "锁定图元"} onClick={onToggleSelectedLock}>{selectedPrimitive.locked ? "解锁" : "锁定"}</button><button type="button" aria-label="快速删除对象" disabled={selectedPrimitive.locked} onClick={onDeleteSelected}>删除</button></div></div>}
-    {!selectedPrimitive && <div className="inspector-empty-state"><div className="inspector-empty-icon" aria-hidden="true">⌁</div><strong>未选择任何图元</strong><span>在画布中点击点、直线或椭圆即可配置几何参数与外观参数</span></div>}
+    {!selectedPrimitive && <div className="inspector-empty-state"><div className="inspector-empty-icon" aria-hidden="true"><EmptyStateArt name="selection" /></div><strong>未选择任何图元</strong><span>在画布中点击点、直线或椭圆即可配置几何参数与外观参数</span></div>}
     {selectedPrimitive && !usesExternalSections && <>
       <InspectorAccordion title="几何参数" open={openSections.data} onToggle={() => toggleSection("data")} />
       <InspectorAccordion title="外观样式" open={openSections.appearance} onToggle={() => toggleSection("appearance")} />

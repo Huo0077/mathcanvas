@@ -11,7 +11,33 @@
    * 3. 强调色收敛到**板岩蓝**一系，紫色只留在品牌标记上（见 `global.css` 的 `.brand-mark`）。
    */
   --color-ink: #2c3e50;
-  --color-muted: #64748b;
+  /**
+   * **次要文字色**（2026-XX 对比度修正）。
+   *
+   * 原值 `#64748b`（slate-500）在**纯白**底上是 4.76:1，看起来没问题；
+   * 但它大量落在 `--color-surface-subtle` (#f1f5f9) 与 `--color-accent-soft` (#eef2f7)
+   * 这种浅底上，实测只有 **4.34:1**，低于 WCAG AA 正文要求的 4.5:1。
+   *
+   * 压深到 `#586a80`（仍在 slate 色阶上，介于 slate-500 与 slate-600 之间，
+   * 色相不变，所以"冷色调"这条口径不受影响）之后的实测对比度：
+   *   白底 5.54:1、#f8fafc 底 5.30:1、#eef2f7 底 4.93:1、#f1f5f9 底 5.06:1 —— 全部过 AA。
+   * 与正文色 `--color-ink`（白底 10.98:1）之间仍有约 2 倍的明度差，层级没有塌。
+   */
+  --color-muted: #586a80;
+  /**
+   * **第三档文字色：提示 / 占位**（2026-XX 补齐）。
+   *
+   * 本文件开头的口径写的是"文字只有三档：深板岩蓝 / 板岩灰 / 浅板岩（提示）"，
+   * 但第三档**从来没有对应的令牌** —— 于是需要它的地方（Agent 的会话时间戳、
+   * 代码块标题、输入框 placeholder）各写各的字面色：`agent.css` 里是 `#9a9aad`，
+   * 白底实测只有 **2.76:1**，连 AA 大字号的 3:1 都不到，属于真的看不清。
+   *
+   * 这里把第三档定成 `#64748b`（slate-500，也就是 `--color-muted` 改深之前的旧值）：
+   * 白底 **4.76:1**，过 AA；与 `--color-muted`（白底 5.54:1）有可分辨的一档差。
+   * 使用约束：**只用在白色/浅色面板底上**（#f1f5f9 底上是 4.34:1，略低于 4.5），
+   * 因此它只适合 placeholder、时间戳、单位这类辅助文字，不要拿它排正文。
+   */
+  --color-faint: #64748b;
   --color-canvas: #f8fafc;
   --color-panel: #ffffff;
   --color-surface-subtle: #f1f5f9;
@@ -39,10 +65,62 @@
    * 画布那一路用 `--font-math`：Cambria Math / Latin Modern 这类带数学字形血统的衬线字体在前，
    * 退到 Georgia / 通用 serif，中文标签再退到宋体（P1、l1 这类拉丁符号仍走衬线）。
    */
-  --font-ui: 0.8125rem;
-  --font-ui-sm: 0.75rem;
-  --font-ui-lg: 0.875rem;
-  --font-sans: Inter, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+  /**
+   * **字号阶梯**（2026-XX 排版收敛）。
+   *
+   * 收敛之前：整套样式表里 `font-size` 出现过 **38 个不同的值**
+   * （0.6 / 0.62 / 0.63 / 0.64 / 0.66 / 0.68 / 0.7 / 0.72 / 0.74 / 0.75 / 0.76 /
+   *  0.78 / 0.8 / 0.82 / 0.84 / 0.85 / 0.86 / 0.875 / 0.9 / 0.92 / 0.94 / 0.95 /
+   *  0.98 / 1 / 1.05 / 1.125 / 1.15 / 1.25 / 1.35 / 1.375 / 1.6rem，外加若干 px 裸值）。
+   * 相邻两档只差 0.02rem ≈ 0.32px —— 肉眼看不出区别，却让"纽扣一样对齐"这件事永远做不到。
+   *
+   * 现在收敛成 **8 档**，任何新样式只准从这 8 个里挑，不再写裸 rem：
+   *   --text-2xs  11px   微标签：侧栏名称、分组标题、kicker、单位后缀
+   *   --text-xs   12px   次要信息：提示、说明、表格注脚
+   *   --text-sm   13px   正文默认（界面基准）
+   *   --text-md   14px   强调正文：面板卡片标题、主要按钮
+   *   --text-lg   16px   小节标题
+   *   --text-xl   18px   面板大标题
+   *   --text-2xl  20px   页面标题
+   *   --text-3xl  26px   主视觉：空状态大标题、纸面水印
+   *
+   * 11px 是**下限**：再小在 100% 缩放的普通显示器上已经影响可读性，
+   * 所以原来 0.6~0.68rem 那一堆（9.6~10.88px）统一抬到 11px。
+   *
+   * **作用范围只限 `rem`，不碰 `px`。** 这不是偷懒：`global.css` 里剩下的十几个 px 字号
+   * 全都在**制图纸张单位**或 **SVG 用户单位**里 —— 例如工程图标题栏的 `10px/12.5px`
+   * （"Chrome that lives inside the paper is authored in paper units"，纸张缩放时它必须等比走）、
+   * 标注箭头的 `13px`、以及 `.engineering-drawing-annotation text` 的 `0.22px`
+   * （SVG 用户单位，靠 viewBox 放大）。把它们换成 rem 会让纸张上的文字不跟着纸缩放。
+   * 所以这里划一条硬边界：**rem 是界面排版，px 是纸面/用户单位**。
+   */
+  --text-2xs: 0.6875rem;
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-md: 0.875rem;
+  --text-lg: 1rem;
+  --text-xl: 1.125rem;
+  --text-2xl: 1.25rem;
+  --text-3xl: 1.625rem;
+  /* 旧名字保留为别名，避免一次性改掉 40 多处引用；新代码请直接用 --text-*。 */
+  --font-ui: var(--text-sm);
+  --font-ui-sm: var(--text-xs);
+  --font-ui-lg: var(--text-md);
+  /**
+   * 字体栈（2026-XX 修正回退顺序）。
+   *
+   * 原来的顺序是 `Inter, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", ui-sans-serif, ...`，
+   * 但**这个工程从来没有加载过 Inter** —— `index.html` 里没有 `@font-face`、没有 Google Fonts、
+   * 也没有任何字体文件。于是第一位的 Inter 永远命中不到，第二位的中文无衬线在 Windows 上
+   * 直接接管了**拉丁字母**（Microsoft YaHei 的西文字形偏窄、字重偏轻），
+   * 这正是界面"不够精致"最直接的来源。
+   *
+   * 修法**不是**引入网络字体（桌面端要能离线跑，加 CDN 依赖是倒退），而是把回退序列排对：
+   * 浏览器的字体回退是**逐字形**的，所以把高质量西文字体放在中文无衬线**之前**，
+   * 西文走 Segoe UI / 系统 UI，中文自然落到后面的 PingFang / 雅黑 —— 两者互不干扰。
+   * 哪天真的自托管了 Inter，它排在第一位就会自动接管，无需再动这里。
+   */
+  --font-sans: Inter, "Segoe UI Variable Text", "Segoe UI", ui-sans-serif, system-ui, -apple-system, "PingFang SC", "HarmonyOS Sans SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
   --font-math: "Cambria Math", "Latin Modern Math", "STIX Two Math", Cambria, Georgia, "Songti SC", "SimSun", serif;
   --font-mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Consolas, monospace;
   --color-success: #2f7d6b;
@@ -62,6 +140,45 @@
    */
   --color-danger: #b3261e;
   --color-danger-soft: #fdf2f1;
+  /**
+   * **状态语义色的补齐**（2026-XX 调色板审计）。
+   *
+   * 审计发现 `global.css` 里有 40 多处十六进制字面色不在本文件里，
+   * 其中一组是**成对的状态胶囊**（测量/派生读数/模型健康状况），
+   * 它们各自写死了自己的前景 + 底色，于是同一个"成功"出现了两个绿
+   * （`#1c7a5e` 与 `#2f7d6b`）、同一个"注意"出现了两个琥珀。
+   * 这里把缺的补上，让那几处能指回令牌。
+   *
+   * `--color-warning-strong` 不是 `--color-warning` 的笔误：
+   * `--color-warning`(#b4763a) 太亮，压在 `--color-warning-soft` 这种浅琥珀底上过不了 AA；
+   * 状态胶囊里的文字需要更深的一档，所以单列。
+   */
+  --color-success-soft: #e6f7f0;
+  --color-warning-strong: #8a5a12;
+  /**
+   * **图元类型色**：对象树左侧圆点（`.object-dot[data-object-type=...]`）用。
+   * 刻意与 `--color-accent` 分开 —— 这是"这是什么类型"的编码，不是强调色。
+   * 收进令牌是因为原来同一组值在 CSS 里散着写，将来接画布图元配色时会对不上。
+   */
+  --color-entity-line: #21a794;
+  --color-entity-point: #e39a48;
+  /**
+   * **代码高亮**用的字符串色。
+   *
+   * 高亮一共五档，其余四档都直接复用既有令牌（关键字 `--color-accent-strong`、
+   * 数字 `--color-warning-strong`、字面量 `--color-accent`、注释 `--color-muted`），
+   * 只有"字符串"没有合适的一个：`--color-success`(#2f7d6b) 压在代码块的
+   * `--color-surface-subtle` 底上只有 **4.49:1**，差一点点过不了 AA。这里单列一档更深的绿
+   * （实测 **5.84:1**），色相不变，与成功色仍是同一支。
+   */
+  --code-string: #1f6b52;
+  /**
+   * 品牌徽标：顶栏与左侧模块栏各有一枚 Σ 徽标，共用同一条渐变。
+   * 原来两处都直接写 `linear-gradient(145deg, #4a6b96, #2c3e50)`，改一次要改两处。
+   * `--color-brand-caret` 是顶栏品牌打字机的光标色。
+   */
+  --color-brand-mark-from: #4a6b96;
+  --color-brand-caret: #cfe0f5;
   /* Drafting surface: a cool slate the white paper sits on, so the sheet is the focal surface instead of
      blending into the app background. The grid is a faint workbench texture, never a competing pattern. */
   --color-drafting-surface: #eef2f7;
@@ -113,6 +230,9 @@
   --control-height: 38px;
   /* 状态栏那一行的**固定**高度（见 global.css `.workbench` 的注释）：这一行必须是常量，
      否则文案换行会把画布压矮，屏幕坐标与世界坐标的对应关系会在交互中途改变。
-     取值按"实测最长的一条提示 + 状态项在该宽度下需要的行数"来定，窄屏另有更大的值。 */
-  --status-bar-height: 72px;
+     取值跟着 global.css 里那条"实测最长提示"的注释走：>1100px 实测 52px。
+     2026-XX 把宽屏从 72px 收到 56px —— 72px 是当初按最坏情况取的富余量，
+     实测内容只有 17px（一行），同一项目里工程制图的状态栏本来就只占 33px，
+     两处读到的高度差近 40px，视觉上像是两条不同的东西。收到 56px 后仍留 4px 余量。 */
+  --status-bar-height: 56px;
 }

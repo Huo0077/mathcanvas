@@ -117,4 +117,35 @@ describe("agent pieces", () => {
     expect(onConfirm).toHaveBeenCalledWith("run-7")
     expect(onDiscard).toHaveBeenCalledWith("run-7")
   })
+
+  /**
+   * **代码块要真的着色**，而不是只有一个可复制的壳。
+   *
+   * 断言的是"分进了哪个 class"，不是具体颜色 —— 颜色归 CSS 令牌，测试只钉结构与语义。
+   * 其中"拼回去等于原文"这条最关键：高亮最容易出的错不是颜色不对，而是**悄悄吞字符**。
+   */
+  it("highlights fenced code by token kind without dropping characters", () => {
+    const conversation = createAgentConversation()
+    const assistant: AgentMessage = {
+      id: "message-code",
+      role: "assistant",
+      text: "这是脚本：\n```ts\nconst n = 42 // 注释\nconst s = \"hi\"\n```",
+      createdAt: 1
+    }
+    render(<AgentMessageList conversation={{ ...conversation, messages: [assistant] }} />)
+
+    const code = document.querySelector(".agent-code-body code")
+    expect(code).toBeTruthy()
+    expect(code!.textContent).toBe("const n = 42 // 注释\nconst s = \"hi\"")
+
+    const byClass = (cls: string) => [...code!.querySelectorAll(`.${cls}`)].map((node) => node.textContent)
+    expect(byClass("code-keyword")).toEqual(["const", "const"])
+    expect(byClass("code-number")).toEqual(["42"])
+    expect(byClass("code-string")).toEqual(["\"hi\""])
+    expect(byClass("code-comment")).toEqual(["// 注释"])
+
+    // 语言标签与复制按钮不受高亮影响。
+    expect(document.querySelector(".agent-code-head span")?.textContent).toBe("ts")
+    expect(screen.getByRole("button", { name: "复制" })).toBeTruthy()
+  })
 })

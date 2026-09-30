@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 
 import type { RibbonCommand, RibbonGroup, RibbonIcon, RibbonTabId } from "../uiState"
 
@@ -52,6 +52,59 @@ function RibbonGlyph({ name }: { name: RibbonIcon }): ReactNode {
 export function Ribbon({ groups, activeTab, expanded, pinned, onTabChange, onCommand, onExpandedChange, onPinnedChange, showControls = true }: RibbonProps) {
   const visible = expanded || activeTab !== null
   const ribbonRef = useRef<HTMLElement>(null)
+  /**
+   * **每个分组各自可折叠**（"可展开卡片组"）。
+   *
+   * 默认**全部展开** —— 这条不能动：`e2e/ribbon-ui.spec.ts`、`measurement-labels.spec.ts` 等
+   * 都是"固定功能区 → 直接点某个命令"，默认折叠会让它们全部找不到按钮。
+   *
+   * 折叠**收的是宽度，不是高度**：功能区始终是单行（见 `global.css` 里 `.ribbon-body` 的说明），
+   * 所以收起来的效果是"右边的分组不用再横向滚动就能看到"，而不是"画布变高"。
+   *
+   * 状态放在组件里、按分组 id 记，切换工作区时保留 —— 这是"我想少看点东西"的偏好，
+   * 不该因为换了个工作区就被重置。
+   */
+  const [collapsedGroups, setCollapsedGroups] = useState<ReadonlySet<RibbonGroup["id"]>>(() => new Set())
+  const toggleGroup = (id: RibbonGroup["id"]) => {
+    setCollapsedGroups((current) => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  /**
+   * **横向溢出检测**：只要内容比可视宽度宽，就在右边缘显示一层渐隐，告诉用户"右边还有东西"。
+   *
+   * 为什么需要它：立体几何有 26 个命令、内容实需 2064px，而 1280px 窗口下功能区只有 1208px
+   * （实测 12 个命令完全在屏幕外，`多模态输入`/`作业操作`/`文件输出` 三组全被截断）。
+   * 一行放不下是**数学事实**，不是能靠调间距解决的；能解决的是"用户不知道右边还有"。
+   *
+   * 折叠状态变化会改变内容宽度，所以 `collapsedGroups` 也在依赖里 —— 否则收起一组之后
+   * 渐隐不会消失。`ResizeObserver` 负责窗口缩放与字体加载后的重新测量。
+   */
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const [overflowing, setOverflowing] = useState(false)
+  /**
+   * 分组结构的指纹。**必须有它**：切换工作区会换掉整组命令（平面几何 21 个 → 立体几何 26 个），
+   * 但 `.ribbon-body` 自身的外框尺寸没变，所以 `ResizeObserver` 不会触发、effect 也不会重跑 ——
+   * 实测 1680px 下切到立体几何/工程制图时 `data-overflow` 仍停在 `false`，
+   * 而内容其实是溢出的（2064 / 2488px vs 1608px 可视）。
+   * 用字符串指纹而不是 `groups` 数组本身：后者每次渲染都是新引用，会让 observer 每帧重建。
+   */
+  const groupsKey = groups.map((group) => `${group.id}:${group.commands.length}`).join("|")
+  useEffect(() => {
+    const element = bodyRef.current
+    if (!element) return
+    const measure = () => setOverflowing(element.scrollWidth > element.clientWidth + 1)
+    measure()
+    // jsdom（单测环境）没有 ResizeObserver，所以这里不能直接 new。
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure)
+    observer?.observe(element)
+    window.addEventListener("resize", measure)
+    return () => { observer?.disconnect(); window.removeEventListener("resize", measure) }
+  }, [visible, collapsedGroups, groupsKey])
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -74,16 +127,26 @@ export function Ribbon({ groups, activeTab, expanded, pinned, onTabChange, onCom
     return () => document.removeEventListener("pointerdown", handlePointerDown)
   }, [activeTab, expanded, onTabChange, pinned])
 
-  return <section ref={ribbonRef} className={`ribbon ${visible ? "is-visible" : "is-collapsed"} ${expanded ? "is-expanded" : "is-floating"}`} data-ribbon-expanded={expanded ? "true" : "false"} data-ribbon-pinned={pinned ? "true" : "false"} aria-label="功能区">
+  return <section ref={ribbonRef} className={`ribbon ${visible ? "is-visible" : "is-collapsed"} ${expanded ? "is-expanded" : "is-floating"}`} data-ribbon-expanded={expanded ? "true" : "false"} data-ribbon-pinned={pinned ? "true" : "false"} data-overflow={overflowing ? "true" : "false"} aria-label="功能区">
     {showControls && <div className="ribbon-controls" role="toolbar" aria-label="功能区控制">
       <button type="button" className="ribbon-control" aria-label={expanded ? "收起功能区" : "展开功能区"} onClick={() => { onExpandedChange(!expanded); if (expanded) onTabChange(null) }}><span aria-hidden="true">{expanded ? "⌃" : "⌄"}</span></button>
       <button type="button" className={`ribbon-control ${pinned ? "is-active" : ""}`} aria-label={pinned ? "取消固定功能区" : "固定功能区"} aria-pressed={pinned} onClick={() => onPinnedChange(!pinned)}><span aria-hidden="true">{pinned ? "●" : "○"}</span></button>
     </div>}
-    {visible && <div className="ribbon-body">
-      {groups.map((group) => <div className="ribbon-group" key={group.id} data-ribbon-group={group.id}>
-        <div className="ribbon-group-commands">{group.commands.map((command) => <button key={command.id} type="button" className="ribbon-command" aria-label={command.label} title={command.disabled ? command.disabledReason : command.prompt} disabled={command.disabled} onClick={() => { onCommand(command.id); if (!expanded && !pinned) onTabChange(null) }}><RibbonGlyph name={command.icon} /><span>{command.label}</span></button>)}</div>
-        <span className="ribbon-group-label">{group.label}</span>
-      </div>)}
+    {visible && <div className="ribbon-body" ref={bodyRef}>
+      {groups.map((group) => {
+        const collapsed = collapsedGroups.has(group.id)
+        return <div className="ribbon-group" key={group.id} data-ribbon-group={group.id} data-collapsed={collapsed ? "true" : "false"}>
+          {/* 分组标题移到**卡片头部**并变成折叠开关。
+              原来它是一条撑满分组宽度的说明文字压在命令下面（实测最宽的组 1621px），
+              既不像标题、也没有任何交互；移到头部之后它同时承担"这组叫什么"和"收起这组"，
+              而且**净高度反而更小**：省掉了底部那一行 27px，只多了 18px 的头。 */}
+          <button type="button" className="ribbon-group-toggle" aria-expanded={!collapsed} onClick={() => toggleGroup(group.id)}>
+            <span className="ribbon-group-label">{group.label}</span>
+            <svg className="ribbon-group-chevron" viewBox="0 0 12 12" aria-hidden="true"><path d={collapsed ? "m4.5 2.5 3.5 3.5-3.5 3.5" : "m2.5 4.5 3.5 3.5 3.5-3.5"} /></svg>
+          </button>
+          {!collapsed && <div className="ribbon-group-commands">{group.commands.map((command) => <button key={command.id} type="button" className="ribbon-command" aria-label={command.label} title={command.disabled ? command.disabledReason : command.prompt} disabled={command.disabled} onClick={() => { onCommand(command.id); if (!expanded && !pinned) onTabChange(null) }}><RibbonGlyph name={command.icon} /><span>{command.label}</span></button>)}</div>}
+        </div>
+      })}
     </div>}
   </section>
 }

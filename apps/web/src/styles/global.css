@@ -23,63 +23,82 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .panel { background: var(--color-panel); border-right: 1px solid var(--color-border); min-height: 0; min-width: 0; }
 .panel.right { border-right: 0; border-left: 1px solid var(--color-border); overflow-y: auto; overflow-x: hidden; }
 .panel-section.properties { display: grid; align-content: start; gap: var(--space-3); padding: 0 0 var(--space-4); background: var(--color-canvas); }
-.properties > .panel-title { position: sticky; top: 0; z-index: 2; margin: 0; padding: var(--space-4) var(--space-4) var(--space-3); background: rgb(255 255 255 / 96%); border-bottom: 1px solid var(--color-border); backdrop-filter: blur(12px); color: var(--color-ink); font-size: 0.95rem; letter-spacing: -0.01em; text-transform: none; }
+.properties > .panel-title { position: sticky; top: 0; z-index: 2; margin: 0; padding: var(--space-4) var(--space-4) var(--space-3); background: rgb(255 255 255 / 96%); border-bottom: 1px solid var(--color-border); backdrop-filter: blur(12px); color: var(--color-ink); font-size: var(--text-md); letter-spacing: -0.01em; text-transform: none; }
 .properties > .primitive-properties, .properties > .batch-properties { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); margin: 0 var(--space-4); padding: var(--space-4); background: var(--color-panel); border: 1px solid var(--color-border); border-radius: var(--radius-lg); box-shadow: var(--shadow-card); }
-.properties > .primitive-properties h3, .properties > .batch-properties h3 { grid-column: 1 / -1; color: var(--color-ink); font-size: 0.95rem; letter-spacing: -0.01em; }
+.properties > .primitive-properties h3, .properties > .batch-properties h3 { grid-column: 1 / -1; color: var(--color-ink); font-size: var(--text-md); letter-spacing: -0.01em; }
 .properties > .primitive-properties > p, .properties > .primitive-properties > button, .properties > .primitive-properties > .property-actions, .properties > .primitive-properties > .metric-grid, .properties > .primitive-properties > .formula-keyboard, .properties > .primitive-properties > .endpoint-group, .properties > .primitive-properties > .annotation-list, .properties > .batch-properties > * { grid-column: 1 / -1; }
 .properties > .primitive-properties > label:has(textarea) { grid-column: 1 / -1; }
 .inspector-selected-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin: 0 var(--space-4); padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-panel); box-shadow: var(--shadow-card); }
-.inspector-selected-heading h3 { margin: var(--space-1) 0 0; overflow: hidden; font-size: 0.95rem; text-overflow: ellipsis; white-space: nowrap; }
+.inspector-selected-heading h3 { margin: var(--space-1) 0 0; overflow: hidden; font-size: var(--text-md); text-overflow: ellipsis; white-space: nowrap; }
 .inspector-quick-actions { display: flex; flex: 0 0 auto; gap: var(--space-1); }
-.inspector-quick-actions button { min-height: 32px; padding-inline: var(--space-2); font-size: 0.72rem; }
-.inspector-empty-state { display: grid; justify-items: center; gap: var(--space-2); margin: auto var(--space-4); padding: var(--space-6) var(--space-4); color: var(--color-muted); text-align: center; }
-.inspector-empty-state strong { color: var(--color-muted); font-size: 0.9rem; }
-.inspector-empty-state span { max-width: 220px; font-size: 0.75rem; line-height: 1.55; }
-.inspector-empty-icon { display: grid; place-items: center; width: 52px; height: 52px; border: 1px solid var(--color-border); border-radius: 50%; background: var(--color-panel); color: var(--color-accent); font-size: 1.6rem; }
+.inspector-quick-actions button { min-height: 32px; padding-inline: var(--space-2); font-size: var(--text-xs); }
+/**
+ * **空状态统一**（2026-XX）。
+ *
+ * 全局有三处"这里还没有东西"的版面：右侧属性面板（`.inspector-empty-state`）、
+ * 左侧对象树（`.object-empty`）、Agent 欢迎页（`.agent-empty`），加上工程图纸的
+ * `.engineering-drawing-empty`。它们此前各写各的：Agent 那边标题用**正文墨色**、
+ * 20px、700 字重，看起来才像"一句话在跟你说话"；而属性面板的标题却是**次要灰**
+ * （`--color-muted`）、14px、常态字重 —— 一句"未选择任何图元"用次要色排，
+ * 等于把主信息降级成注释。三处的间距也各不相同（`--space-1/2/3`）。
+ *
+ * 现在统一成一套配方：
+ *   · 标题：正文墨色 + 加重字重（面板级 `--text-lg`，整页级仍用 `--text-2xl` 保持层级）
+ *   · 说明：次要灰 + 1.6 行高（面板级 `--text-sm`，整页级 `--text-md`）
+ *   · 纵向节奏：统一 `--space-3`
+ */
+.inspector-empty-state { display: grid; justify-items: center; gap: var(--space-3); margin: auto var(--space-4); padding: var(--space-6) var(--space-4); color: var(--color-muted); text-align: center; }
+.inspector-empty-state strong { color: var(--color-ink); font-size: var(--text-lg); font-weight: 650; }
+.inspector-empty-state span { max-width: 220px; font-size: var(--text-sm); line-height: 1.6; }
+/* 空状态插画（`EmptyStateArt`）：圆角方片 + 极淡的强调色渐变 + 弥散阴影，
+   与全局"微拟物化 = 柔和阴影分层"的语言一致。原来这里是 1px 硬边框的正圆里塞一个字符，
+   既撑不起"插画"的分量，也躲不开不同系统字体下字形走形。 */
+.inspector-empty-icon { display: grid; place-items: center; width: 64px; height: 64px; border: 1px solid var(--color-border); border-radius: 20px; background: linear-gradient(160deg, var(--color-panel), var(--color-accent-soft)); color: var(--color-accent); box-shadow: var(--shadow-card); }
+.empty-state-art { width: 38px; height: 38px; }
 .inspector-accordion { margin: 0 var(--space-4); border-bottom: 1px solid var(--color-border); }
-.inspector-accordion-trigger { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 42px; padding: 0 var(--space-1); border: 0; border-radius: 0; background: transparent; color: var(--color-ink); font-size: 0.8rem; font-weight: 700; text-align: left; }
+.inspector-accordion-trigger { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 42px; padding: 0 var(--space-1); border: 0; border-radius: 0; background: transparent; color: var(--color-ink); font-size: var(--text-sm); font-weight: 700; text-align: left; }
 .inspector-accordion-trigger:hover { background: var(--color-surface-subtle); }
 .inspector-accordion-content { display: grid; gap: var(--space-2); padding: 0 0 var(--space-3); }
 .property-card-heading { grid-column: 1 / -1; display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); min-width: 0; }
 .property-card-heading h3 { overflow: hidden; margin: var(--space-1) 0 0; text-overflow: ellipsis; white-space: nowrap; }
-.property-kicker, .property-subheading { color: var(--color-muted); font-size: 0.7rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.property-kicker, .property-subheading { color: var(--color-muted); font-size: var(--text-xs); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
 .property-subheading { margin: 0; padding-bottom: var(--space-2); border-bottom: 1px solid var(--color-border); }
-.property-type-badge { flex: 0 0 auto; padding: var(--space-1) var(--space-2); border-radius: 999px; background: var(--color-accent-soft); color: var(--color-accent-strong); font-size: 0.72rem; font-weight: 750; }
+.property-type-badge { flex: 0 0 auto; padding: var(--space-1) var(--space-2); border-radius: 999px; background: var(--color-accent-soft); color: var(--color-accent-strong); font-size: var(--text-xs); font-weight: 750; }
 .properties > .primitive-properties label { min-width: 0; }
 .properties > .primitive-properties input, .properties > .primitive-properties select, .properties > .primitive-properties textarea { min-height: var(--control-height); }
 .properties > .primitive-properties input[type="color"] { min-height: var(--control-height); }
 .properties > .primitive-properties input:disabled, .properties > .primitive-properties select:disabled, .properties > .primitive-properties textarea:disabled { cursor: not-allowed; opacity: 0.55; }
 .properties > .function-properties { border-color: rgb(61 90 128 / 30%); }
 .formula-keyboard { display: grid; gap: var(--space-2); padding: var(--space-3); background: var(--color-accent-soft); border: 1px solid rgb(61 90 128 / 18%); border-radius: var(--radius-md); }
-.formula-keyboard-header { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); color: var(--color-ink); font-size: 0.8rem; font-weight: 700; }
-.formula-keyboard-header small { color: var(--color-muted); font-size: 0.7rem; font-weight: 500; }
+.formula-keyboard-header { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); color: var(--color-ink); font-size: var(--text-sm); font-weight: 700; }
+.formula-keyboard-header small { color: var(--color-muted); font-size: var(--text-xs); font-weight: 500; }
 .formula-keyboard-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: var(--space-1); }
-.formula-keyboard-grid button, .formula-log-row button { min-height: 38px; padding: 0 var(--space-1); background: var(--color-panel); border-color: transparent; color: var(--color-accent); font-size: 0.8rem; font-weight: 700; }
+.formula-keyboard-grid button, .formula-log-row button { min-height: 38px; padding: 0 var(--space-1); background: var(--color-panel); border-color: transparent; color: var(--color-accent); font-size: var(--text-sm); font-weight: 700; }
 .formula-keyboard-grid button:hover, .formula-log-row button:hover { border-color: var(--color-accent); background: white; }
-.formula-log-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--space-2); color: var(--color-muted); font-size: 0.75rem; }
+.formula-log-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--space-2); color: var(--color-muted); font-size: var(--text-xs); }
 .formula-log-row input { min-height: 34px; width: 100%; border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 0 var(--space-2); }
 .panel-section { padding: var(--space-4); border-bottom: 1px solid var(--color-border); }
-.panel-title { margin: 0 0 var(--space-3); font-size: 0.75rem; color: var(--color-muted); text-transform: uppercase; letter-spacing: 0.08em; }
+.panel-title { margin: 0 0 var(--space-3); font-size: var(--text-xs); color: var(--color-muted); text-transform: uppercase; letter-spacing: 0.08em; }
 .object-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2) 0; }
 .object-row { cursor: pointer; border-radius: var(--radius-sm); padding-inline: var(--space-2); }
 .object-row.selected { background: var(--color-accent-soft); }
-.lock-badge { font-size: 0.7rem; color: var(--color-muted); }
+.lock-badge { font-size: var(--text-xs); color: var(--color-muted); }
 .object-meta { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
 .object-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--color-accent); flex: 0 0 auto; }
 .object-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .icon-button { width: 44px; padding: 0; }
 .graphics { min-width: 0; min-height: 0; padding: var(--space-4); display: grid; align-items: stretch; justify-items: stretch; overflow: auto; }
 .canvas-card { width: 100%; align-self: start; position: sticky; top: var(--space-4); background: var(--color-panel); border: 1px solid var(--color-border); border-radius: var(--radius-md); box-shadow: var(--shadow-panel); padding: var(--space-3); }
-.coordinate-readout { position: absolute; top: var(--space-4); left: var(--space-4); z-index: 1; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: rgb(255 255 255 / 92%); box-shadow: var(--shadow-card); color: var(--color-ink); font-size: 0.75rem; font-variant-numeric: tabular-nums; pointer-events: none; }
+.coordinate-readout { position: absolute; top: var(--space-4); left: var(--space-4); z-index: 1; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: rgb(255 255 255 / 92%); box-shadow: var(--shadow-card); color: var(--color-ink); font-size: var(--text-xs); font-variant-numeric: tabular-nums; pointer-events: none; }
 .canvas-card [data-auto-intersection] { cursor: pointer; }
 /* Zoom controls live on the canvas rather than in the geometry toolbar so the wheel, the buttons and the
    percentage readout stay next to the coordinates they affect. */
 .canvas-viewport-controls { position: absolute; right: var(--space-4); bottom: var(--space-4); z-index: 1; display: flex; align-items: center; gap: var(--space-1); padding: var(--space-1); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: rgb(255 255 255 / 92%); box-shadow: var(--shadow-card); }
-.canvas-viewport-controls button { min-width: 30px; height: 30px; padding: 0 var(--space-2); border: 0; border-radius: 6px; background: transparent; color: var(--color-ink); font-size: 0.85rem; line-height: 1; cursor: pointer; }
+.canvas-viewport-controls button { min-width: 30px; height: 30px; padding: 0 var(--space-2); border: 0; border-radius: 6px; background: transparent; color: var(--color-ink); font-size: var(--text-md); line-height: 1; cursor: pointer; }
 .canvas-viewport-controls button:hover { background: var(--color-accent-soft); }
 .canvas-viewport-controls button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
-.canvas-viewport-controls .zoom-readout { min-width: 48px; color: var(--color-muted); font-size: 0.72rem; font-variant-numeric: tabular-nums; text-align: center; }
-.canvas-card svg { display: block; width: 100%; height: auto; border-radius: var(--radius-sm); background: #fbfcff; touch-action: none; }
+.canvas-viewport-controls .zoom-readout { min-width: 48px; color: var(--color-muted); font-size: var(--text-xs); font-variant-numeric: tabular-nums; text-align: center; }
+.canvas-card svg { display: block; width: 100%; height: auto; border-radius: var(--radius-sm); background: var(--color-paper-tint); touch-action: none; }
 .canvas-card svg [data-hit-target="true"] { cursor: grab; }
 .canvas-card svg.is-dragging, .canvas-card svg.is-dragging [data-hit-target="true"], .canvas-card svg.is-panning { cursor: grabbing; }
 .engineering-drawing { position: relative; display: flex; flex-direction: column; flex: 1 1 auto; width: 100%; height: 100%; min-width: 0; min-height: 0; padding: 0; overflow: hidden; background: var(--color-canvas); --drawing-toolbar-height: 48px; }
@@ -90,21 +109,21 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .drawing-toolbar-group { display: flex; align-items: center; gap: var(--space-1); flex: 1 1 auto; min-width: 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
 /* 组内元素不收缩：空间不够时横向滚动，而不是挤压后换行把制图台面顶高。 */
 .drawing-toolbar-group > * { flex: 0 0 auto; }
-.drawing-toolbar-hint { color: var(--color-muted); font-size: 0.68rem; white-space: nowrap; }
+.drawing-toolbar-hint { color: var(--color-muted); font-size: var(--text-2xs); white-space: nowrap; }
 @media (max-width: 1400px) { .drawing-toolbar-hint { display: none; } }
 /* 工具条上的小标签输入：标签在左、输入框固定宽，键盘流与图纸内完全一致。 */
-.drawing-toolbar-field { display: inline-flex; align-items: center; gap: var(--space-1); color: var(--color-muted); font-size: 0.7rem; white-space: nowrap; }
-.drawing-toolbar-field input { width: 78px; min-height: 28px; padding: 0 var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface-subtle); color: var(--color-ink); font-size: 0.72rem; font-variant-numeric: tabular-nums; }
+.drawing-toolbar-field { display: inline-flex; align-items: center; gap: var(--space-1); color: var(--color-muted); font-size: var(--text-xs); white-space: nowrap; }
+.drawing-toolbar-field input { width: 78px; min-height: 28px; padding: 0 var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface-subtle); color: var(--color-ink); font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
 .drawing-toolbar-field input:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
 .drawing-toolbar-field input::placeholder { color: var(--color-muted); }
 .drawing-toolbar-group { display: flex; align-items: center; gap: var(--space-1); }
-.engineering-drawing-toolbar button { min-height: 30px; padding: 0 var(--space-3); border: 1px solid transparent; border-radius: 999px; background: transparent; color: var(--color-muted); font-size: 0.76rem; font-weight: 600; cursor: pointer; }
+.engineering-drawing-toolbar button { min-height: 30px; padding: 0 var(--space-3); border: 1px solid transparent; border-radius: 999px; background: transparent; color: var(--color-muted); font-size: var(--text-sm); font-weight: 600; cursor: pointer; }
 .engineering-drawing-toolbar button:hover { background: var(--color-panel); color: var(--color-ink); }
 .engineering-drawing-toolbar button[aria-pressed="true"] { border-color: var(--color-accent); background: var(--color-accent-soft); color: var(--color-accent-strong); }
 .engineering-drawing-toolbar button:disabled { opacity: 0.45; cursor: not-allowed; }
 .engineering-drawing-toolbar button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
-.drawing-zoom-readout { display: inline-flex; align-items: baseline; gap: var(--space-2); color: var(--color-muted); font-size: 0.72rem; }
-.drawing-zoom-readout strong { color: var(--color-ink); font-size: 0.78rem; font-variant-numeric: tabular-nums; }
+.drawing-zoom-readout { display: inline-flex; align-items: baseline; gap: var(--space-2); color: var(--color-muted); font-size: var(--text-xs); }
+.drawing-zoom-readout strong { color: var(--color-ink); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
 /* 4px 制图底纹：极淡的格线让"画布"读成一个工作台面，而不是一块空白 div。 */
 /* 制图台面：占满工具栏之后剩余的全部高度（flex 占位，不用 inset）。内边距 + margin:auto 让纸张居中，
    fit 状态不出滚动条（否则滚动条会反过来改变用于 fit 的尺寸），放大超过一屏后才切成可滚动。 */
@@ -145,7 +164,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .drawing-viewport:hover .drawing-viewport-actions, .drawing-viewport:focus-within .drawing-viewport-actions, .drawing-viewport-actions:focus-within { opacity: 1; transform: none; pointer-events: auto; }
 /* 触摸设备没有悬停：控件必须常驻，否则视图比例和显隐就没有入口。 */
 @media (hover: none) { .drawing-viewport-actions { opacity: 1; transform: none; pointer-events: auto; } }
-.drawing-viewport-actions button { display: grid; place-items: center; min-width: 22px; min-height: 22px; padding: 0 5px; border: 0; border-radius: 999px; background: transparent; color: var(--color-muted); font-size: 0.72rem; line-height: 1; cursor: pointer; }
+.drawing-viewport-actions button { display: grid; place-items: center; min-width: 22px; min-height: 22px; padding: 0 5px; border: 0; border-radius: 999px; background: transparent; color: var(--color-muted); font-size: var(--text-xs); line-height: 1; cursor: pointer; }
 .drawing-viewport-actions button:hover { background: var(--color-accent-soft); color: var(--color-accent-strong); }
 .drawing-viewport-actions button[aria-pressed="true"] { color: var(--color-accent-strong); }
 .drawing-viewport-actions button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
@@ -174,15 +193,16 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .engineering-drawing-annotation-degenerate text, .engineering-drawing-annotation-insufficient-data text { fill: var(--color-warning); }
 .engineering-drawing-annotation-statuses { display: grid; gap: var(--space-1); }
 .engineering-drawing-annotation-statuses:empty { display: none; }
-.engineering-drawing-annotation-statuses .engineering-drawing-annotation { padding: var(--space-1) var(--space-2); border-left: 2px solid var(--color-warning); color: var(--color-warning); font-size: 0.75rem; line-height: 1.4; }
+.engineering-drawing-annotation-statuses .engineering-drawing-annotation { padding: var(--space-1) var(--space-2); border-left: 2px solid var(--color-warning); color: var(--color-warning); font-size: var(--text-xs); line-height: 1.4; }
 /* 空视图只作提示，不抢指针：绘图视口为空时用户仍要能点下第一笔；按钮自己重新开启指针事件。 */
-.engineering-drawing-empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-2); margin: 0; padding: var(--space-4); color: var(--color-muted); font-size: 11px; letter-spacing: 0.02em; text-align: center; pointer-events: none; }
+/* 工程图纸的空状态走同一套配方（见 `.inspector-empty-state` 的说明）；字号从写死的 11px 提到 `--text-sm`。 */
+.engineering-drawing-empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-3); margin: 0; padding: var(--space-4); color: var(--color-muted); font-size: var(--text-sm); line-height: 1.6; letter-spacing: 0.02em; text-align: center; pointer-events: none; }
 .engineering-drawing-empty p { margin: 0; }
-.engineering-drawing-empty button { pointer-events: auto; min-height: 30px; padding: 0 var(--space-3); border: 1px solid var(--color-accent); border-radius: 999px; background: var(--color-accent-soft); color: var(--color-accent-strong); font-size: 0.72rem; font-weight: 650; cursor: pointer; }
+.engineering-drawing-empty button { pointer-events: auto; min-height: 30px; padding: 0 var(--space-3); border: 1px solid var(--color-accent); border-radius: 999px; background: var(--color-accent-soft); color: var(--color-accent-strong); font-size: var(--text-xs); font-weight: 650; cursor: pointer; }
 .engineering-drawing-empty button:hover { background: var(--color-accent); color: #fff; }
 .engineering-drawing-empty button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 .engineering-drawing-empty:empty { display: none; }
-.engineering-drawing-diagnostics { color: var(--color-muted); font-size: 0.75rem; line-height: 1.45; }
+.engineering-drawing-diagnostics { color: var(--color-muted); font-size: var(--text-xs); line-height: 1.45; }
 .engineering-drawing-diagnostics summary { cursor: pointer; color: var(--color-warning); }
 .engineering-drawing-diagnostics ul { margin: var(--space-2) 0 0; padding-left: var(--space-4); }
 /**
@@ -193,43 +213,43 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
  */
 .drag-handles circle { fill: var(--color-panel); stroke: var(--color-accent); stroke-width: 2; stroke-dasharray: 2.5 2; cursor: grab; }
 .drag-handles circle:hover { fill: var(--color-accent-soft); stroke-dasharray: none; }
-.properties-label { display: flex; justify-content: space-between; gap: var(--space-3); font-size: 0.875rem; }
+.properties-label { display: flex; justify-content: space-between; gap: var(--space-3); font-size: var(--text-md); }
 .properties input[type="range"] { width: 100%; accent-color: var(--color-accent); }
 .metric { color: var(--color-accent); font-variant-numeric: tabular-nums; }
 .toolbar button[data-active="true"] { background: var(--color-accent-soft); color: var(--color-accent); border-color: var(--color-accent); }
 .primitive-properties { display: grid; gap: var(--space-2); margin-top: var(--space-4); }
-.primitive-properties h3 { margin: 0; font-size: 0.9rem; }
-.primitive-properties label { display: grid; gap: var(--space-1); font-size: 0.8rem; color: var(--color-muted); }
+.primitive-properties h3 { margin: 0; font-size: var(--text-md); }
+.primitive-properties label { display: grid; gap: var(--space-1); font-size: var(--text-sm); color: var(--color-muted); }
 .primitive-properties input, .primitive-properties select, .primitive-properties textarea { min-height: 36px; width: 100%; border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: var(--space-2); color: var(--color-ink); background: var(--color-panel); }
 .primitive-properties textarea { min-height: 72px; resize: vertical; line-height: 1.45; }
 .primitive-properties input[type="color"] { padding: 3px; cursor: pointer; }
 .annotation-list { display: grid; gap: var(--space-2); }
-.annotation-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm); font-size: 0.8rem; }
+.annotation-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm); font-size: var(--text-sm); }
 .annotation-row span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.annotation-row button { min-height: 32px; padding-inline: var(--space-2); font-size: 0.75rem; }
+.annotation-row button { min-height: 32px; padding-inline: var(--space-2); font-size: var(--text-xs); }
 .annotation-marker line { stroke: var(--color-accent); stroke-width: 1.25; stroke-dasharray: 3 3; opacity: 0.7; }
 .annotation-marker circle { fill: var(--color-panel); stroke: var(--color-accent); stroke-width: 1.5; }
 .annotation-marker text { fill: var(--color-ink); font-size: 13px; font-weight: 700; paint-order: stroke; stroke: var(--color-panel); stroke-width: 4px; stroke-linejoin: round; }
 .property-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
 .property-actions button { min-width: 0; padding-inline: var(--space-2); }
 .metric-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
-.metric-grid span { display: grid; gap: var(--space-1); padding: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-muted); font-size: 0.75rem; }
-.metric-grid strong { color: var(--color-ink); font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+.metric-grid span { display: grid; gap: var(--space-1); padding: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-muted); font-size: var(--text-xs); }
+.metric-grid strong { color: var(--color-ink); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
 /* 读数的精确 / 近似形式（`· ≈ 2/3`）：窄面板里 `0.667 u · ≈ 2/3` 会在 ≈ 与分数之间折行，
    把 `≈` 和它修饰的分数拆成两行读起来像两个东西。形式整体不折行，分隔符 ` · ` 仍可折。 */
 .metric-form { white-space: nowrap; }
 .batch-properties { display: grid; gap: var(--space-2); margin-top: var(--space-4); }
-.batch-properties h3 { margin: 0; font-size: 0.9rem; }
+.batch-properties h3 { margin: 0; font-size: var(--text-md); }
 .batch-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
 .batch-actions button { min-width: 0; padding-inline: var(--space-2); }
 .endpoint-group { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); padding-top: var(--space-2); border-top: 1px solid var(--color-border); }
-.endpoint-group > strong { grid-column: 1 / -1; font-size: 0.78rem; }
+.endpoint-group > strong { grid-column: 1 / -1; font-size: var(--text-sm); }
 .selection-rect { fill: rgb(61 90 128 / 12%); stroke: var(--color-accent); stroke-dasharray: 6 4; pointer-events: none; }
 /**
  * 平面画布上的常驻测量数字：白描边（halo）让它叠在曲线或格线上也读得清，
  * 位置由纯函数给出（`planarMeasurementVisuals`），`pointer-events: none` 保证拾取行为一字不变。
  */
-.planar-measurement-label { fill: #172033; stroke: rgb(255 255 255 / 92%); stroke-width: 3.5; paint-order: stroke; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; pointer-events: none; }
+.planar-measurement-label { fill: var(--color-ink); stroke: rgb(255 255 255 / 92%); stroke-width: 3.5; paint-order: stroke; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; pointer-events: none; }
 .planar-measurement-label[data-selected="true"] { fill: var(--color-accent-strong); }
 /* 框选方向要一眼可辨：窗口选择（左→右）实线，相交选择（右→左）虚线绿色。 */
 .selection-rect[data-selection-mode="window"] { stroke-dasharray: none; }
@@ -238,12 +258,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .engineering-drawing-box-select[data-draft-box="crossing"] { fill: rgb(21 154 136 / 14%); stroke: var(--color-success); stroke-dasharray: 6 4; }
 /* 命令行与动态输入：贴在视口工具栏下方，输入框保持紧凑。 */
 .drawing-viewport-input { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); padding: 0 var(--space-3) var(--space-2); }
-.drawing-viewport-input label { display: flex; align-items: center; gap: var(--space-1); font-size: 0.72rem; color: var(--color-muted); }
-.drawing-viewport-input input { width: 118px; min-height: 26px; padding: 0 var(--space-2); border: 1px solid var(--color-border); border-radius: 6px; font-size: 0.75rem; font-variant-numeric: tabular-nums; color: var(--color-ink); background: var(--color-panel); }
+.drawing-viewport-input label { display: flex; align-items: center; gap: var(--space-1); font-size: var(--text-xs); color: var(--color-muted); }
+.drawing-viewport-input input { width: 118px; min-height: 26px; padding: 0 var(--space-2); border: 1px solid var(--color-border); border-radius: 6px; font-size: var(--text-xs); font-variant-numeric: tabular-nums; color: var(--color-ink); background: var(--color-panel); }
 .drawing-viewport-input input:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
-.drawing-viewport-input-hint { font-size: 0.68rem; color: var(--color-muted); }
-.drawing-viewport-input-error { font-size: 0.7rem; color: var(--color-warning); font-weight: 600; }
-.footer-note { grid-column: 1 / -1; padding: var(--space-2) var(--space-5); font-size: 0.75rem; color: var(--color-muted); background: var(--color-panel); border-top: 1px solid var(--color-border); }
+.drawing-viewport-input-hint { font-size: var(--text-2xs); color: var(--color-muted); }
+.drawing-viewport-input-error { font-size: var(--text-xs); color: var(--color-warning); font-weight: 600; }
+.footer-note { grid-column: 1 / -1; padding: var(--space-2) var(--space-5); font-size: var(--text-xs); color: var(--color-muted); background: var(--color-panel); border-top: 1px solid var(--color-border); }
 /* 窄屏时右侧检查器会整宽另起一行。这一行必须是**有上界**的：`auto` 会按内容一直长
    （检查器里堆满属性卡片时能要 1000px 以上），把上面 `minmax(0, 1fr)` 的画布行压成 0——
    实测 768×800 下选中一个立方体后 3D 画布高度就是 0，画布"消失"了。
@@ -251,7 +271,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 @media (max-width: 960px) { .workbench { grid-template-columns: 200px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 45%) var(--status-bar-height); } .panel.right { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--color-border); } }
 /* 提示在更窄的宽度下要多占一行，状态栏那一行就跟着加高——但每个断点内仍是常量。
    实测"最长提示 + 坐标/对象/工作区"需要的高度：>1100px 52、901~1100px 66、700~900px 83、≤640px 100。 */
-@media (max-width: 900px) { .workbench { --status-bar-height: 92px; } }
+@media (max-width: 1100px) { .workbench { --status-bar-height: 68px; } }
+@media (max-width: 900px) { .workbench { --status-bar-height: 84px; } }
 @media (max-width: 680px) { .topbar { align-items: flex-start; flex-direction: column; } .workspace-tabs { width: 100%; overflow-x: auto; } .workbench { display: block; } .panel, .panel.right { border: 0; border-bottom: 1px solid var(--color-border); } .properties { padding-bottom: var(--space-3); } .properties > .primitive-properties, .properties > .batch-properties { margin-inline: var(--space-3); padding: var(--space-3); } .graphics { min-height: 55vh; padding: var(--space-3); } .toolbar { padding: var(--space-3); } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; } }
 
@@ -261,15 +282,15 @@ button:hover { border-color: var(--color-accent); background: var(--color-accent
 button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline-color: rgb(61 90 128 / 32%); }
 .topbar { min-height: 72px; padding: 0 28px; gap: 24px; border-bottom-color: var(--color-border); }
 .topbar-leading { display: flex; align-items: center; gap: 24px; min-width: max-content; }
-.brand { gap: 10px; color: var(--color-ink); font-size: 1.05rem; }
-.brand-mark { width: 38px; height: 38px; border-radius: 12px; background: linear-gradient(145deg, #4a6b96, #2c3e50); box-shadow: 0 8px 16px rgb(44 62 80 / 24%); font-size: 1.15rem; }
-.model-status { display: flex; align-items: center; gap: 9px; padding-left: 20px; border-left: 1px solid #ebe9f1; color: var(--color-muted); }
+.brand { gap: 10px; color: var(--color-ink); font-size: var(--text-lg); }
+.brand-mark { width: 38px; height: 38px; border-radius: 12px; background: linear-gradient(145deg, var(--color-brand-mark-from), var(--color-ink)); box-shadow: 0 8px 16px rgb(44 62 80 / 24%); font-size: var(--text-xl); }
+.model-status { display: flex; align-items: center; gap: 9px; padding-left: 20px; border-left: 1px solid var(--color-border); color: var(--color-muted); }
 .model-status span:last-child { display: grid; gap: 1px; }
-.model-status small { font-size: 0.68rem; color: var(--color-muted); }
-.model-status strong { font-size: 0.78rem; font-weight: 700; color: #258e81; }
-.health-dot, .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #21ae9a; box-shadow: 0 0 0 4px rgb(33 174 154 / 12%); }
+.model-status small { font-size: var(--text-2xs); color: var(--color-muted); }
+.model-status strong { font-size: var(--text-sm); font-weight: 700; color: var(--color-success); }
+.health-dot, .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-success); box-shadow: 0 0 0 4px rgb(33 174 154 / 12%); }
 .workspace-tabs { flex: 1; justify-content: center; gap: 4px; }
-.workspace-tabs button { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px; border-color: transparent; background: transparent; color: var(--color-muted); font-size: 0.82rem; white-space: nowrap; }
+.workspace-tabs button { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px; border-color: transparent; background: transparent; color: var(--color-muted); font-size: var(--text-md); white-space: nowrap; }
 .workspace-tabs button[data-active="true"] { background: var(--color-accent-soft); color: var(--color-accent-strong); border-color: transparent; box-shadow: inset 0 0 0 1px rgb(61 90 128 / 8%); }
 .workspace-tabs button:hover { background: var(--color-accent-soft); }
 .ui-icon { width: 17px; height: 17px; flex: 0 0 auto; }
@@ -279,7 +300,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .search-box input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--color-ink); }
 .search-box input::placeholder { color: var(--color-muted); }
 .topbar-icon { display: grid; place-items: center; width: 38px; min-height: 38px; padding: 0; border-color: transparent; background: transparent; color: var(--color-muted); }
-.profile-button { color: var(--color-accent-strong); background: #f0edff; }
+.profile-button { color: var(--color-accent-strong); background: var(--color-accent-soft); }
 .workbench { background: var(--color-canvas); }
 .toolbar { align-items: stretch; gap: 10px; padding: 12px 20px; background: var(--color-surface-subtle); border-bottom-color: var(--color-border); }
 .toolbar-group { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 10px; border: 1px solid var(--color-border); border-radius: 15px; background: #fff; box-shadow: 0 5px 18px rgb(44 62 80 / 6%); }
@@ -289,13 +310,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .export-tools { flex: 0 1 265px; }
 .toolbar-group-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 22px; }
 .toolbar-group-heading > div { display: flex; align-items: baseline; gap: 8px; }
-.toolbar-group-heading strong { color: var(--color-ink); font-size: 0.78rem; }
-.toolbar-kicker, .panel-kicker { color: var(--color-muted); font-size: 0.64rem; font-weight: 700; letter-spacing: 0.08em; }
-.toolbar-expand { min-height: 25px; width: 27px; padding: 0; border: 0; color: var(--color-accent-strong); background: #f1efff; }
+.toolbar-group-heading strong { color: var(--color-ink); font-size: var(--text-sm); }
+.toolbar-kicker, .panel-kicker { color: var(--color-muted); font-size: var(--text-2xs); font-weight: 700; letter-spacing: 0.08em; }
+.toolbar-expand { min-height: 25px; width: 27px; padding: 0; border: 0; color: var(--color-accent-strong); background: var(--color-accent-soft); }
 .object-tool-grid { display: grid; grid-template-columns: repeat(6, minmax(58px, 1fr)); gap: 5px; }
 .toolbar-inline-actions { display: flex; flex-wrap: wrap; gap: 5px; align-items: stretch; }
-.tool-button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: 34px; padding: 0 8px; border-color: transparent; color: var(--color-muted); background: var(--color-surface-subtle); font-size: 0.72rem; white-space: nowrap; }
-.tool-button:hover { background: #f0edff; color: var(--color-accent-strong); }
+.tool-button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: 34px; padding: 0 8px; border-color: transparent; color: var(--color-muted); background: var(--color-surface-subtle); font-size: var(--text-xs); white-space: nowrap; }
+.tool-button:hover { background: var(--color-accent-soft); color: var(--color-accent-strong); }
 .tool-button[data-active="true"] { background: var(--color-accent-soft); color: var(--color-accent-strong); border-color: var(--color-accent-soft); }
 .tool-button.primary { background: var(--color-accent); color: #fff; border-color: var(--color-accent); box-shadow: 0 6px 12px rgb(61 90 128 / 18%); }
 .tool-button.primary:hover { background: var(--color-accent-strong); color: #fff; }
@@ -306,53 +327,53 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .panel-section { padding: 18px 16px; border-bottom-color: var(--color-border); }
 .panel-heading, .inspector-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .panel-heading > div, .inspector-heading > div { display: grid; gap: 4px; }
-.panel-title { margin: 0; color: var(--color-ink); font-size: 0.94rem; font-weight: 750; letter-spacing: -0.02em; text-transform: none; }
-.object-count { display: inline-grid; place-items: center; min-width: 24px; height: 24px; padding: 0 7px; border-radius: 999px; color: var(--color-accent-strong); background: var(--color-accent-soft); font-size: 0.7rem; font-weight: 750; }
+.panel-title { margin: 0; color: var(--color-ink); font-size: var(--text-md); font-weight: 750; letter-spacing: -0.02em; text-transform: none; }
+.object-count { display: inline-grid; place-items: center; min-width: 24px; height: 24px; padding: 0 7px; border-radius: 999px; color: var(--color-accent-strong); background: var(--color-accent-soft); font-size: var(--text-xs); font-weight: 750; }
 .algebra-panel { height: 100%; padding-top: 20px; background: #fff; }
 .object-list { display: grid; gap: 3px; margin-top: 16px; }
 .object-row { min-height: 42px; padding: 5px 6px 5px 9px; border: 1px solid transparent; }
 .object-row:hover { background: var(--color-accent-soft); }
-.object-row.selected { border-color: #ded9ff; background: #f1efff; }
+.object-row.selected { border-color: var(--color-border); background: var(--color-accent-soft); }
 .object-dot { width: 8px; height: 8px; background: var(--color-accent); box-shadow: 0 0 0 4px rgb(61 90 128 / 10%); }
 .object-tree { display: grid; gap: 2px; }
 .object-subtree { display: grid; gap: 2px; margin: 2px 0 6px 12px; padding-left: 8px; border-left: 2px solid var(--color-border); }
 .object-group { display: grid; gap: 2px; }
-.object-group-label { padding: 2px 0 2px 6px; color: var(--color-muted); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em; }
+.object-group-label { padding: 2px 0 2px 6px; color: var(--color-muted); font-size: var(--text-xs); font-weight: 700; letter-spacing: 0.04em; }
 .object-row-child { min-height: 36px; }
-.row-expand { width: 22px; min-height: 22px; font-size: 0.7rem; }
+.row-expand { width: 22px; min-height: 22px; font-size: var(--text-xs); }
 .measurement-row { align-items: flex-start; flex-direction: column; gap: 2px; cursor: default; }
 .measurement-row .object-meta { width: 100%; }
-.measurement-status { margin-left: auto; padding: 1px 6px; border-radius: 999px; color: #4a4a68; background: #f1effa; font-size: 0.66rem; font-weight: 700; }
-.measurement-status[data-status="valid"] { color: #1c7a5e; background: #e6f7f0; }
-.measurement-status[data-status="degenerate"], .measurement-status[data-status="numeric-failure"] { color: #a14b2c; background: #fdefe8; }
-.measurement-source, .measurement-explanation { color: var(--color-muted); font-size: 0.7rem; line-height: 1.4; }
+.measurement-status { margin-left: auto; padding: 1px 6px; border-radius: 999px; color: var(--color-muted); background: var(--color-accent-soft); font-size: var(--text-2xs); font-weight: 700; }
+.measurement-status[data-status="valid"] { color: var(--color-success); background: var(--color-success-soft); }
+.measurement-status[data-status="degenerate"], .measurement-status[data-status="numeric-failure"] { color: var(--color-danger); background: var(--color-danger-soft); }
+.measurement-source, .measurement-explanation { color: var(--color-muted); font-size: var(--text-xs); line-height: 1.4; }
 /**
  * 派生读数（外接球 / 内切球 / 截面）：一行一条，状态用与测量同款的胶囊标签。
  * 四个状态各有各的颜色 —— `approximate` 与 `exact` 一眼看得出来的差别不止是文案。
  */
 .derived-reading { grid-column: 1 / -1; display: grid; gap: var(--space-1); padding: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface-subtle); }
 .derived-reading-head { display: flex; align-items: center; gap: var(--space-2); }
-.derived-reading-label { color: var(--color-ink); font-size: 0.8rem; font-weight: 600; }
-.derived-status { margin-left: auto; padding: 1px 6px; border-radius: 999px; color: #4a4a68; background: #f1effa; font-size: 0.66rem; font-weight: 700; }
-.derived-status[data-status="exact"] { color: #1c7a5e; background: #e6f7f0; }
-.derived-status[data-status="approximate"] { color: #8a5a12; background: #fdf3e0; }
-.derived-status[data-status="undefined"], .derived-status[data-status="degenerate"] { color: #a14b2c; background: #fdefe8; }
-.derived-reading-message { margin: 0; color: var(--color-muted); font-size: 0.72rem; line-height: 1.45; }
+.derived-reading-label { color: var(--color-ink); font-size: var(--text-sm); font-weight: 600; }
+.derived-status { margin-left: auto; padding: 1px 6px; border-radius: 999px; color: var(--color-muted); background: var(--color-accent-soft); font-size: var(--text-2xs); font-weight: 700; }
+.derived-status[data-status="exact"] { color: var(--color-success); background: var(--color-success-soft); }
+.derived-status[data-status="approximate"] { color: var(--color-warning-strong); background: var(--color-warning-soft); }
+.derived-status[data-status="undefined"], .derived-status[data-status="degenerate"] { color: var(--color-danger); background: var(--color-danger-soft); }
+.derived-reading-message { margin: 0; color: var(--color-muted); font-size: var(--text-xs); line-height: 1.45; }
 /* 参数面板：动点自动生成的驱动参数带归属标签，字段一行内可编辑。 */
 .parameter-row { align-items: flex-start; flex-direction: column; gap: var(--space-2); cursor: default; }
 .parameter-row .object-meta { width: 100%; }
-.parameter-owner { margin-left: auto; padding: 1px 6px; border-radius: 999px; color: #4a4a68; background: #f1effa; font-size: 0.66rem; font-weight: 700; }
+.parameter-owner { margin-left: auto; padding: 1px 6px; border-radius: 999px; color: var(--color-muted); background: var(--color-accent-soft); font-size: var(--text-2xs); font-weight: 700; }
 .parameter-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); gap: var(--space-2); width: 100%; }
-.parameter-fields label { display: grid; gap: 2px; color: var(--color-muted); font-size: 0.68rem; }
-.parameter-fields input { min-width: 0; padding: 2px 4px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); font-size: 0.74rem; font-variant-numeric: tabular-nums; }
-.object-empty { padding: var(--space-2); color: var(--color-muted); font-size: 0.72rem; line-height: 1.5; }
-.object-dot[data-object-type="measurement3"] { background: var(--color-muted); box-shadow: 0 0 0 4px rgb(139 134 163 / 12%); }
-.object-dot[data-object-type="line"], .object-dot[data-object-type="segment"], .object-dot[data-object-type="ray"] { background: #21a794; box-shadow: 0 0 0 4px rgb(33 167 148 / 10%); }
-.object-dot[data-object-type="point"], .object-dot[data-object-type="intersection"] { background: #e39a48; box-shadow: 0 0 0 4px rgb(227 154 72 / 12%); }
-.icon-button { display: grid; place-items: center; width: 30px; min-height: 30px; border: 0; color: #9d99aa; background: transparent; }
+.parameter-fields label { display: grid; gap: 2px; color: var(--color-muted); font-size: var(--text-2xs); }
+.parameter-fields input { min-width: 0; padding: 2px 4px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
+.object-empty { padding: var(--space-2); color: var(--color-muted); font-size: var(--text-xs); line-height: 1.5; }
+.object-dot[data-object-type="measurement3"] { background: var(--color-muted); box-shadow: 0 0 0 4px rgb(88 106 128 / 12%); }
+.object-dot[data-object-type="line"], .object-dot[data-object-type="segment"], .object-dot[data-object-type="ray"] { background: var(--color-entity-line); box-shadow: 0 0 0 4px rgb(33 167 148 / 10%); }
+.object-dot[data-object-type="point"], .object-dot[data-object-type="intersection"] { background: var(--color-entity-point); box-shadow: 0 0 0 4px rgb(227 154 72 / 12%); }
+.icon-button { display: grid; place-items: center; width: 30px; min-height: 30px; border: 0; color: var(--color-faint); background: transparent; }
 .icon-button:hover { color: var(--color-accent-strong); background: #fff; }
 .row-icon { width: 17px; height: 17px; }
-.row-lock-icon { width: 13px; height: 13px; color: #e39a48; }
+.row-lock-icon { width: 13px; height: 13px; color: var(--color-entity-point); }
 .lock-badge { display: inline-flex; align-items: center; }
 .graphics { padding: 18px; background: var(--color-canvas); }
 
@@ -399,18 +420,18 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
  * 改的是**功能界面**那一圈字号（功能区、状态栏、检查器、对象列表），画布内的几何标注不动 ——
  * 那些是图形的一部分，跟着纸面比例走。统一走 `--font-ui*` 令牌，免得以后又散成各写各的 px。
  */
-.ribbon-command { font-size: var(--font-ui-sm); }
-.ribbon-group-label { font-size: 0.7rem; }
-.ribbon-control { font-size: var(--font-ui); }
-.workspace-tabs-bar .workspace-tabs button { font-size: var(--font-ui); }
-.status-bar { font-size: var(--font-ui); }
-.inspector-accordion-trigger { font-size: var(--font-ui); }
-.property-kicker, .property-subheading { font-size: var(--font-ui-sm); }
-.property-type-badge { font-size: var(--font-ui-sm); }
-.properties > .primitive-properties h3, .properties > .batch-properties h3 { font-size: 1rem; }
-.properties > .primitive-properties label, .properties > .batch-properties label { font-size: var(--font-ui); }
-.object-row .object-name { font-size: var(--font-ui); }
-.panel-title { font-size: var(--font-ui); }
+.ribbon-command { font-size: var(--text-xs); }
+.ribbon-group-label { font-size: var(--text-xs); }
+.ribbon-control { font-size: var(--text-sm); }
+.workspace-tabs-bar .workspace-tabs button { font-size: var(--text-sm); }
+.status-bar { font-size: var(--text-sm); }
+.inspector-accordion-trigger { font-size: var(--text-sm); }
+.property-kicker, .property-subheading { font-size: var(--text-xs); }
+.property-type-badge { font-size: var(--text-xs); }
+.properties > .primitive-properties h3, .properties > .batch-properties h3 { font-size: var(--text-lg); }
+.properties > .primitive-properties label, .properties > .batch-properties label { font-size: var(--text-sm); }
+.object-row .object-name { font-size: var(--text-sm); }
+.panel-title { font-size: var(--text-sm); }
 
 /**
  * 简约装饰：分区标题前一枚浅色数学符号（π / ∠）。
@@ -419,11 +440,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
  */
 .panel-title::before { content: "π"; margin-right: var(--space-2); color: var(--color-accent); opacity: 0.5; font-weight: 700; }
 .properties > .panel-title::before { content: "∠"; }
-.canvas-viewport-controls .zoom-readout { font-size: var(--font-ui-sm); }
-.coordinate-readout { font-size: var(--font-ui-sm); }
+.canvas-viewport-controls .zoom-readout { font-size: var(--text-xs); }
+.coordinate-readout { font-size: var(--text-xs); }
 
 .canvas-card { position: relative; top: 0; padding: 10px; border-color: var(--color-border); border-radius: 18px; box-shadow: 0 15px 35px rgb(44 62 80 / 10%); }
-.canvas-card svg { background: #fcfcfd; }
+.canvas-card svg { background: var(--color-paper-tint); }
 
 /**
  * 平面几何的**草稿纸**（用户口径："让平面几何区的画布变成有淡淡的黄色的'草稿纸的质感'"）。
@@ -435,7 +456,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
  *
  * 立体几何 / 工程制图仍是原来的冷色工作台：只有 `data-canvas-surface="graph-paper"` 命中时才换色。
  */
-.graphics[data-canvas-surface="graph-paper"] { background: linear-gradient(180deg, #f4f6f9, #eef2f7); }
+.graphics[data-canvas-surface="graph-paper"] { background: linear-gradient(180deg, var(--color-canvas), #eef2f7); }
 .graphics[data-canvas-surface="graph-paper"] .canvas-card { border-color: var(--color-graph-paper-edge); box-shadow: inset 0 0 0 1px rgb(255 255 255 / 70%), 0 1px 2px rgb(44 62 80 / 6%), 0 24px 48px -30px rgb(44 62 80 / 22%); }
 .graphics[data-canvas-surface="graph-paper"] .canvas-card svg { background: var(--color-graph-paper); }
 /* 纸右上角一枚极淡的数学水印：装饰，不参与命中。层级要**高过 SVG**，否则会被不透明的纸面盖住。 */
@@ -453,7 +474,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
  *
  * 纸纹强度与平面同级（同一个 `--paper-grain-opacity`）；水印用 `∴`（立体几何的记号）而不是 `∑`。
  */
-.three-canvas-shell[data-canvas-surface="graph-paper"] { background: linear-gradient(180deg, #f4f6f9, #eef2f7); }
+.three-canvas-shell[data-canvas-surface="graph-paper"] { background: linear-gradient(180deg, var(--color-canvas), #eef2f7); }
 .three-canvas-shell[data-canvas-surface="graph-paper"] .three-render-target { background: var(--color-graph-paper); box-shadow: inset 0 0 0 1px rgb(255 255 255 / 70%), 0 1px 2px rgb(44 62 80 / 6%), 0 24px 48px -30px rgb(44 62 80 / 22%); }
 .three-canvas-shell[data-canvas-surface="graph-paper"]::before {
   content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none;
@@ -491,46 +512,57 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 /* 高度交给所在的网格行（`.workbench` 的画布行是 minmax(0, 1fr)）：写死 `calc(100vh - 420px)`
    会让画布比容器矮一截（实测 800px 高的窗口里矮 150px），下面留一条空白，而且那个 420 跟真实的
    工具栏/页脚高度无关——窗口一变就"画布太小"。 */
-.three-canvas-shell { position: relative; width: 100%; height: 100%; min-height: 0; overflow: hidden; border-radius: var(--radius-sm); background: #fbfcff; }
+.three-canvas-shell { position: relative; width: 100%; height: 100%; min-height: 0; overflow: hidden; border-radius: var(--radius-sm); background: var(--color-paper-tint); }
 .three-render-target { position: absolute; inset: 0; }
 .three-measurement-overlay { position: absolute; z-index: 1; inset: 0; pointer-events: none; overflow: hidden; }
-.three-measurement-label { position: absolute; transform: translate(-50%, -50%); padding: 4px 8px; border: 1px solid var(--color-accent); border-radius: 999px; background: rgb(255 255 255 / 94%); box-shadow: var(--shadow-card); color: var(--color-accent-strong); font-size: 0.78rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.three-measurement-label { position: absolute; transform: translate(-50%, -50%); padding: 4px 8px; border: 1px solid var(--color-accent); border-radius: 999px; background: rgb(255 255 255 / 94%); box-shadow: var(--shadow-card); color: var(--color-accent-strong); font-size: var(--text-sm); font-variant-numeric: tabular-nums; white-space: nowrap; }
 /* 测量数字常驻画布之后，"哪一条是我选中的"必须仍然一眼看得出：选中的那条加粗并填强调底色。 */
 .three-measurement-label[data-selected="true"] { border-width: 2px; background: var(--color-accent-soft); font-weight: 700; }
 /* Point captions sit above the canvas but must never swallow a click meant for the point handle. */
 .three-point-label-overlay { position: absolute; z-index: 1; inset: 0; pointer-events: none; overflow: hidden; }
-.three-point-label { position: absolute; transform: translateY(-50%); padding: 1px 5px; border-radius: var(--radius-sm); background: rgb(255 255 255 / 88%); color: var(--color-ink); font-size: 0.75rem; font-weight: 700; line-height: 1.35; white-space: nowrap; }
-.measurement-guidance { grid-column: 1 / -1; margin: 0; padding: var(--space-2); border-radius: var(--radius-sm); background: var(--color-accent-soft); color: var(--color-accent-strong); font-size: 0.75rem; line-height: 1.45; }
+.three-point-label { position: absolute; transform: translateY(-50%); padding: 1px 5px; border-radius: var(--radius-sm); background: rgb(255 255 255 / 88%); color: var(--color-ink); font-size: var(--text-xs); font-weight: 700; line-height: 1.35; white-space: nowrap; }
+.measurement-guidance { grid-column: 1 / -1; margin: 0; padding: var(--space-2); border-radius: var(--radius-sm); background: var(--color-accent-soft); color: var(--color-accent-strong); font-size: var(--text-xs); line-height: 1.45; }
 .three-canvas-shell canvas { display: block; width: 100%; height: 100%; touch-action: none; }
-.three-scene-status { position: absolute; inset: 50% auto auto 50%; transform: translate(-50%, -50%); width: min(82%, 320px); padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: rgb(255 255 255 / 92%); color: var(--color-muted); font-size: 0.82rem; line-height: 1.5; text-align: center; pointer-events: none; }
+.three-scene-status { position: absolute; inset: 50% auto auto 50%; transform: translate(-50%, -50%); width: min(82%, 320px); padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: rgb(255 255 255 / 92%); color: var(--color-muted); font-size: var(--text-md); line-height: 1.5; text-align: center; pointer-events: none; }
 .three-camera-controls { position: absolute; z-index: 2; top: var(--space-3); right: var(--space-3); display: flex; flex-wrap: wrap; gap: var(--space-1); }
 .three-camera-controls button { min-height: 44px; padding-inline: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-muted); background: rgb(255 255 255 / 92%); box-shadow: var(--shadow-card); }
 .three-camera-controls button[aria-pressed="true"] { border-color: var(--color-accent); color: var(--color-accent); background: var(--color-accent-soft); }
-.three-camera-hint { position: absolute; z-index: 2; bottom: var(--space-3); left: var(--space-3); margin: 0; padding: var(--space-1) var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-muted); background: rgb(255 255 255 / 88%); font-size: 0.72rem; pointer-events: none; }
+/**
+ * 画布左下角的两个常驻浮层（相机操作提示 / 功能指引）**共用一套"角落卡片"外观**。
+ *
+ * 原来它们各写各的：`.three-camera-hint` 是一条 88% 白的扁平细条（无阴影、次要文字色），
+ * `.guidance-hint` 却有强调色左边框 + `--shadow-card` + 正文墨色。两者都贴在左下角、
+ * 高度只差几十像素，叠在一起读起来像两条互不相干的横条（用户原话：3D 左下角"两层浮层打架"）。
+ *
+ * 现在统一为：同一个圆角、同一个半透明白底 + 轻微模糊、同一条描边、同一个弥散阴影、
+ * 同一档字号。差别只保留"是否可操作"：指引带强调色左边框和正文色，相机提示保持次要色。
+ * 真正合成一个 DOM 节点需要改 JSX，本轮按约定不动结构。
+ */
+.three-camera-hint { position: absolute; z-index: 2; bottom: var(--space-3); left: var(--space-3); margin: 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-muted); background: rgb(255 255 255 / 94%); box-shadow: var(--shadow-card); backdrop-filter: blur(6px); font-size: var(--text-xs); line-height: 1.45; pointer-events: none; }
 .three-creation-controls { position: absolute; z-index: 3; bottom: calc(var(--space-3) + 36px); left: var(--space-3); display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-1); max-width: calc(100% - var(--space-6)); padding: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: rgb(255 255 255 / 96%); box-shadow: var(--shadow-card); }
 /* 创建会话里的悬停读数：与 2D 画布的 `.coordinate-readout` 同一个形状（只读、不吃指针事件）。 */
-.creation-readout { position: absolute; z-index: 2; top: var(--space-3); right: var(--space-3); padding: var(--space-1) var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-ink); background: rgb(255 255 255 / 92%); box-shadow: var(--shadow-card); font-size: 0.72rem; font-variant-numeric: tabular-nums; pointer-events: none; }
-.three-creation-controls span { padding-inline: var(--space-2); color: var(--color-muted); font-size: var(--font-ui-sm); }
+.creation-readout { position: absolute; z-index: 2; top: var(--space-3); right: var(--space-3); padding: var(--space-1) var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-ink); background: rgb(255 255 255 / 92%); box-shadow: var(--shadow-card); font-size: var(--text-xs); font-variant-numeric: tabular-nums; pointer-events: none; }
+.three-creation-controls span { padding-inline: var(--space-2); color: var(--color-muted); font-size: var(--text-xs); }
 .three-creation-controls button { min-height: 44px; padding-inline: var(--space-2); border-color: var(--color-border); background: var(--color-panel); }
 .three-creation-controls button[aria-pressed="true"] { border-color: var(--color-accent); color: var(--color-accent-strong); background: var(--color-accent-soft); }
 .three-canvas-shell[data-creation-tool]:not([data-creation-tool=""]) canvas { cursor: crosshair; }
 .three-solid-wizard { display: grid; gap: var(--space-3); min-width: 0; padding: var(--space-4); color: var(--color-ink); }
 .three-solid-wizard-heading { display: flex; align-items: start; justify-content: space-between; gap: var(--space-2); }
-.three-solid-wizard-heading h2 { margin: var(--space-1) 0 0; font-size: 1.125rem; }
-.three-solid-wizard-heading button { min-width: 44px; min-height: 44px; padding: 0; font-size: 1.25rem; }
-.three-solid-wizard-help { margin: 0; color: var(--color-muted); font-size: var(--font-ui-sm); line-height: 1.5; }
+.three-solid-wizard-heading h2 { margin: var(--space-1) 0 0; font-size: var(--text-xl); }
+.three-solid-wizard-heading button { min-width: 44px; min-height: 44px; padding: 0; font-size: var(--text-2xl); }
+.three-solid-wizard-help { margin: 0; color: var(--color-muted); font-size: var(--text-xs); line-height: 1.5; }
 .three-solid-wizard-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
 .three-solid-wizard-fields > label:first-child, .three-solid-wizard-fields > .metric-grid, .three-solid-wizard-base { grid-column: 1 / -1; }
-.three-solid-wizard-fields label { display: grid; gap: var(--space-1); min-width: 0; color: var(--color-muted); font-size: var(--font-ui-sm); }
+.three-solid-wizard-fields label { display: grid; gap: var(--space-1); min-width: 0; color: var(--color-muted); font-size: var(--text-xs); }
 .three-solid-wizard-fields input[type="number"], .three-solid-wizard-fields select { width: 100%; min-width: 0; min-height: 40px; padding: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-ink); background: var(--color-panel); }
 .three-solid-wizard-fields .metric-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); }
 .three-solid-wizard-fields .three-solid-wizard-base { display: flex; align-items: center; gap: var(--space-2); line-height: 1.4; }
 .three-solid-wizard-base input { width: 18px; height: 18px; flex: none; }
-.three-solid-wizard-error { margin: 0; padding: var(--space-2); border-radius: var(--radius-sm); color: var(--color-danger); background: var(--color-danger-soft); font-size: var(--font-ui-sm); }
+.three-solid-wizard-error { margin: 0; padding: var(--space-2); border-radius: var(--radius-sm); color: var(--color-danger); background: var(--color-danger-soft); font-size: var(--text-xs); }
 .three-solid-wizard-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: var(--space-2); }
 .three-solid-wizard-actions .primary { background: var(--color-accent); border-color: var(--color-accent); color: white; }
 .three-solid-open { font-weight: 700; }
-.three-solid-preview-badge { position: absolute; z-index: 2; right: var(--space-3); bottom: calc(var(--space-3) + 48px); padding: var(--space-2) var(--space-3); border: 1px solid var(--color-accent); border-radius: var(--radius-sm); color: var(--color-accent-strong); background: rgb(238 242 247 / 94%); box-shadow: var(--shadow-card); font-size: var(--font-ui-sm); font-weight: 700; pointer-events: none; }.three-canvas-shell[data-pan-mode="true"] canvas { cursor: grab; }
+.three-solid-preview-badge { position: absolute; z-index: 2; right: var(--space-3); bottom: calc(var(--space-3) + 48px); padding: var(--space-2) var(--space-3); border: 1px solid var(--color-accent); border-radius: var(--radius-sm); color: var(--color-accent-strong); background: rgb(238 242 247 / 94%); box-shadow: var(--shadow-card); font-size: var(--text-xs); font-weight: 700; pointer-events: none; }.three-canvas-shell[data-pan-mode="true"] canvas { cursor: grab; }
 .three-canvas-shell[data-pan-mode="true"] canvas:active { cursor: grabbing; }
 .three-canvas-shell[data-drag-mode="true"] canvas { cursor: move; }
 .three-canvas-shell[data-drag-mode="true"] canvas:active { cursor: grabbing; }
@@ -543,24 +575,24 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .three-scene-controls,
   .three-camera-controls { max-width: calc(50% - var(--space-4)); }
 }
-.toolbar-hint { margin: var(--space-2) 0 0; color: var(--color-muted); font-size: 0.78rem; line-height: 1.4; }
+.toolbar-hint { margin: var(--space-2) 0 0; color: var(--color-muted); font-size: var(--text-sm); line-height: 1.4; }
 .three-scene-controls { position: absolute; z-index: 2; top: var(--space-3); left: var(--space-3); display: flex; flex-wrap: wrap; gap: var(--space-1); }
 .three-scene-controls button { min-height: 44px; padding-inline: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-muted); background: rgb(255 255 255 / 92%); box-shadow: var(--shadow-card); white-space: nowrap; }
 .three-scene-controls button[aria-pressed="true"] { border-color: var(--color-accent); color: var(--color-accent); background: var(--color-accent-soft); }
-.three-angle-readout { position: absolute; z-index: 2; right: var(--space-3); bottom: var(--space-3); padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-ink); background: rgb(255 255 255 / 92%); box-shadow: var(--shadow-card); font-size: 0.78rem; }
+.three-angle-readout { position: absolute; z-index: 2; right: var(--space-3); bottom: var(--space-3); padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-ink); background: rgb(255 255 255 / 92%); box-shadow: var(--shadow-card); font-size: var(--text-sm); }
 .coordinate-readout { top: 18px; left: 18px; border-color: var(--color-border); border-radius: 10px; color: var(--color-muted); background: rgb(255 255 255 / 90%); }
 .panel.right { background: var(--color-surface-subtle); border-left-color: var(--color-border); }
 .panel-section.properties { gap: 12px; padding: 20px 0 18px; background: var(--color-surface-subtle); }
 .properties > .inspector-heading { padding: 0 18px 4px; }
 .inspector-indicator { width: 8px; height: 8px; margin-top: 7px; border-radius: 50%; background: var(--color-accent); box-shadow: 0 0 0 5px rgb(61 90 128 / 12%); }
 .inspector-tabs { display: flex; gap: 3px; padding: 0 18px 10px; border-bottom: 1px solid var(--color-border); }
-.inspector-tabs button { min-height: 34px; padding: 0 13px; border: 0; border-radius: 8px; color: #8a859b; background: transparent; font-size: 0.78rem; }
+.inspector-tabs button { min-height: 34px; padding: 0 13px; border: 0; border-radius: 8px; color: var(--color-muted); background: transparent; font-size: var(--text-sm); }
 .inspector-tabs button[data-active="true"] { color: var(--color-accent-strong); background: var(--color-accent-soft); font-weight: 700; }
-.properties-label small { color: #aaa5b6; font-size: 0.68rem; }
+.properties-label small { color: var(--color-faint); font-size: var(--text-2xs); }
 .properties > .primitive-properties, .properties > .batch-properties { margin: 0 18px; padding: 14px; border-color: var(--color-border); border-radius: 15px; box-shadow: 0 6px 18px rgb(44 62 80 / 6%); }
 .property-type-badge { background: var(--color-accent-soft); color: var(--color-accent-strong); }
-.property-kicker, .property-subheading { color: #9691a3; }
-.property-subheading { border-bottom-color: #eceaf1; }
+.property-kicker, .property-subheading { color: var(--color-muted); }
+.property-subheading { border-bottom-color: var(--color-border); }
 .metric { color: var(--color-accent-strong); }
 .properties input[type="range"] { accent-color: var(--color-accent); }
 .footer-note { color: var(--color-muted); background: transparent; border-top-color: var(--color-border); }
@@ -595,18 +627,18 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
 /* Engineering workbench shell: command bar, docked trees, sheet canvas and status bar. */
 .topbar-commands { display: flex; align-items: center; gap: var(--space-2); }
-.topbar-commands button { min-height: 38px; padding: 0 var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface-subtle); color: var(--color-ink); font-size: 0.78rem; font-weight: 600; cursor: pointer; }
+.topbar-commands button { min-height: 38px; padding: 0 var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface-subtle); color: var(--color-ink); font-size: var(--text-sm); font-weight: 600; cursor: pointer; }
 .topbar-commands button:hover { border-color: var(--color-accent); color: var(--color-accent-strong); }
 .engineering-workbench { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; min-height: 0; min-width: 0; background: var(--color-canvas); }
 .workbench-mode-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3) var(--space-5); background: var(--color-panel); border-bottom: 1px solid var(--color-border); }
 .workbench-mode-switch, .workbench-dock-toggles { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.workbench-mode-switch button, .workbench-dock-toggles button { min-height: 44px; padding: 0 var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface-subtle); color: var(--color-ink); font-size: 0.8rem; font-weight: 600; cursor: pointer; }
+.workbench-mode-switch button, .workbench-dock-toggles button { min-height: 44px; padding: 0 var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface-subtle); color: var(--color-ink); font-size: var(--text-sm); font-weight: 600; cursor: pointer; }
 .workbench-dock-toggles button { color: var(--color-muted); font-weight: 500; }
 .workbench-mode-switch button[data-active="true"] { background: var(--color-accent-soft); border-color: var(--color-accent); color: var(--color-accent-strong); }
 .workbench-command-region { background: var(--color-panel); border-bottom: 1px solid var(--color-border); }
 .command-bar { display: grid; gap: var(--space-2); padding: var(--space-3) var(--space-5); }
 .command-bar-primary, .command-bar-commands { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.command-bar-primary button, .command-bar-commands button, .command-bar-back { min-height: 44px; padding: 0 var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-panel); color: var(--color-ink); font-size: 0.8rem; font-weight: 600; cursor: pointer; }
+.command-bar-primary button, .command-bar-commands button, .command-bar-back { min-height: 44px; padding: 0 var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-panel); color: var(--color-ink); font-size: var(--text-sm); font-weight: 600; cursor: pointer; }
 .command-bar-primary button[data-active="true"], .command-bar-commands button[data-active="true"] { background: var(--color-accent-soft); border-color: var(--color-accent); color: var(--color-accent-strong); }
 .command-bar-commands button:disabled { cursor: not-allowed; opacity: 0.55; }
 .command-bar-back { justify-self: start; color: var(--color-accent-strong); background: var(--color-surface-subtle); }
@@ -638,50 +670,163 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 /* 宽度令牌放在 `.app-shell` 上：窄屏只留图标，右侧画布列还能保住最小可用宽度。 */
 .app-shell { --rail-width: 72px; }
 .app-rail { flex: 0 0 var(--rail-width); display: flex; flex-direction: column; align-items: center; gap: var(--space-3); padding: var(--space-3) 6px; overflow-y: auto; background: linear-gradient(180deg, var(--color-chrome-top), var(--color-chrome-bottom)); }
-.app-rail-mark { display: grid; place-items: center; width: 32px; height: 32px; flex: 0 0 auto; border-radius: 10px; background: linear-gradient(145deg, #4a6b96, #2c3e50); color: #fff; font-size: 1rem; font-weight: 700; }
+.app-rail-mark { display: grid; place-items: center; width: 32px; height: 32px; flex: 0 0 auto; border-radius: 10px; background: linear-gradient(145deg, var(--color-brand-mark-from), var(--color-ink)); color: #fff; font-size: var(--text-lg); font-weight: 700; }
 .app-rail-modules, .app-rail-workspaces ul { display: grid; gap: var(--space-1); margin: 0; padding: 0; width: 100%; list-style: none; }
-.app-rail-button { display: grid; justify-items: center; gap: 3px; width: 100%; min-height: 56px; padding: var(--space-2) 2px; border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: #94a3b8; font-size: 0.66rem; font-weight: 650; }
-.app-rail-button:hover { border-color: transparent; background: rgb(255 255 255 / 8%); color: #fff; }
-.app-rail-button[data-active="true"] { border-color: rgb(255 255 255 / 14%); background: rgb(255 255 255 / 13%); color: #fff; }
+.app-rail-button { display: grid; justify-items: center; gap: 3px; width: 100%; min-height: 56px; padding: var(--space-2) 2px; border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--color-chrome-ink-dim); font-size: var(--text-2xs); font-weight: 650; }
+.app-rail-button:hover { border-color: transparent; background: rgb(255 255 255 / 8%); color: var(--color-chrome-ink); }
 .app-rail-icon { width: 20px; height: 20px; }
 /* 侧栏按钮的**可见**文案与读屏名字分开：可见的只有两三个字，读屏拿到的是完整名字（见 ModuleRail）。 */
 .app-rail-hint { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 .app-rail-workspaces { display: grid; gap: var(--space-2); width: 100%; padding-top: var(--space-3); border-top: 1px solid rgb(255 255 255 / 10%); }
-.app-rail-label { color: #64748b; font-size: 0.6rem; font-weight: 700; letter-spacing: 0.08em; text-align: center; text-transform: uppercase; }
-.app-rail-workspace { width: 100%; min-height: 30px; padding: 0 2px; border-color: transparent; border-radius: 8px; background: transparent; color: #94a3b8; font-size: 0.68rem; font-weight: 600; }
-.app-rail-workspace:hover { border-color: transparent; background: rgb(255 255 255 / 8%); color: #fff; }
-.app-rail-workspace[data-active="true"] { background: rgb(255 255 255 / 15%); color: #fff; }
-.app-rail-footnote { margin: 0; color: #64748b; font-size: 0.62rem; line-height: 1.5; text-align: center; pointer-events: none; }
-.app-module > .topbar .brand-mark { width: 30px; height: 30px; border-radius: 9px; box-shadow: none; font-size: 0.95rem; }
+/* 深色 chrome 上的文字一律走 chrome 令牌。
+   原来这两处（分组标题、脚注）写的是 `#64748b`，压在 `#1e293b` 的栏底上实测只有 **3.07:1**，
+   连 AA 大字号的 3:1 都刚好卡在线上；换成 `--color-chrome-ink-dim`(#94a3b8) 后是 **5.70:1**。 */
+.app-rail-label { color: var(--color-chrome-ink-dim); font-size: var(--text-2xs); font-weight: 700; letter-spacing: 0.08em; text-align: center; text-transform: uppercase; }
+.app-rail-workspace { width: 100%; min-height: 30px; padding: 0 2px; border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--color-chrome-ink-dim); font-size: var(--text-2xs); font-weight: 600; }
+.app-rail-workspace:hover { border-color: transparent; background: rgb(255 255 255 / 8%); color: var(--color-chrome-ink); }
+/**
+ * 选中态：**模块入口与工作区入口共用同一套高亮**。
+ *
+ * 两处原来各写一份：模块是 13% 填充 + 1px 14% 描边 + 10px 圆角，
+ * 工作区是 15% 填充 + 无描边 + 8px 圆角。它们在同一条 72px 窄栏里上下相邻，
+ * 填充差 2%、圆角差 2px、一个有边一个没边 —— 读起来不像"同一个侧栏里两种粒度都选中"。
+ *
+ * 这条规则**必须排在两个 `:hover` 之后**：`.app-rail-*-{active}` 与 `.app-rail-*:hover`
+ * 的特异度相同（都是 0,2,0），CSS 只能靠源码顺序分胜负。放在前面时，
+ * 鼠标停在已选中的项上会被 hover 的 8% 浅色盖掉 13% 的选中色 ——
+ * 表现就是"点完之后选中态反而变淡了"（Playwright 点击后指针就停在按钮上，实测抓到过）。
+ */
+.app-rail-button[data-active="true"],
+.app-rail-workspace[data-active="true"] {
+  border-color: rgb(255 255 255 / 14%);
+  background: rgb(255 255 255 / 13%);
+  color: var(--color-chrome-ink);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 8%);
+}
+.app-rail-footnote { margin: 0; color: var(--color-chrome-ink-dim); font-size: var(--text-2xs); line-height: 1.5; text-align: center; pointer-events: none; }
+.app-module > .topbar .brand-mark { width: 30px; height: 30px; border-radius: 9px; box-shadow: none; font-size: var(--text-md); }
 .app-module > .topbar .model-status { gap: var(--space-2); padding-left: var(--space-3); }
 .app-module > .topbar .model-status small { display: none; }
 .app-module > .topbar .topbar-actions { margin-left: auto; }
-.app-module > .topbar .topbar-commands button { min-height: 32px; padding-inline: var(--space-2); font-size: 0.72rem; }
+.app-module > .topbar .topbar-commands button { min-height: 32px; padding-inline: var(--space-2); font-size: var(--text-xs); }
 .app-module > .topbar .search-box { position: absolute; left: 50%; width: min(360px, 34vw); height: 30px; transform: translateX(-50%); }
 .workspace-tabs-bar { flex: 0 0 var(--tabbar-height); height: var(--tabbar-height); display: flex; align-items: stretch; justify-content: space-between; gap: var(--space-3); padding: 0 var(--space-4); background: var(--color-panel); border-bottom: 1px solid var(--color-border); }
 .workspace-tabs-bar .workspace-tabs { display: flex; align-items: stretch; justify-content: flex-start; gap: 0; min-width: 0; }
-.workspace-tabs-bar .workspace-tabs button { min-height: var(--tabbar-height); height: var(--tabbar-height); padding: 0 var(--space-4); border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--color-muted); font-size: 0.76rem; font-weight: 650; }
-.workspace-tabs-bar .workspace-tabs button[data-active="true"] { border-bottom-color: var(--color-accent); background: var(--color-accent-soft); color: var(--color-accent-strong); box-shadow: none; }
-.workspace-tabs-bar .workspace-tabs button:hover { background: var(--color-surface-subtle); }
+/* 活动标签 = **极简蓝色下划线**，不再叠一块填充。
+   原来活动态同时给了 `--color-accent` 下划线和 `--color-accent-soft` 底色，
+   两者叠加之后视觉重心落在那个浅蓝方块上，下划线反而看不见了 ——
+   读起来像"一个被选中的按钮"，而不是"当前在哪个工作区"。
+   现在活动态只保留下划线 + 更重的字重 + 强调色文字，底片留给 hover。 */
+.workspace-tabs-bar .workspace-tabs button { min-height: var(--tabbar-height); height: var(--tabbar-height); padding: 0 var(--space-4); border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--color-muted); font-size: var(--text-sm); font-weight: 550; transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease; }
+.workspace-tabs-bar .workspace-tabs button:hover { background: var(--color-surface-subtle); color: var(--color-ink); }
+.workspace-tabs-bar .workspace-tabs button[data-active="true"] { border-bottom-color: var(--color-accent); background: transparent; color: var(--color-accent-strong); font-weight: 700; box-shadow: none; }
+.workspace-tabs-bar .workspace-tabs button[data-active="true"]:hover { background: transparent; }
 .workspace-tabs-controls { display: flex; align-items: center; gap: var(--space-1); }
-.workspace-tabs-controls button { width: 28px; min-height: 28px; height: 28px; padding: 0; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--color-muted); font-size: 0.9rem; }
+.workspace-tabs-controls button { width: 28px; min-height: 28px; height: 28px; padding: 0; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--color-muted); font-size: var(--text-md); }
 .workspace-tabs-controls button:hover, .workspace-tabs-controls button[aria-pressed="true"] { background: var(--color-accent-soft); color: var(--color-accent-strong); }
-.ribbon { position: relative; z-index: 4; flex: 0 0 auto; min-height: var(--ribbon-height); height: var(--ribbon-height); background: var(--color-panel); border-bottom: 1px solid var(--color-border); transition: height 160ms ease, min-height 160ms ease, opacity 160ms ease; }
-.ribbon.is-collapsed { min-height: 0; height: 0; overflow: visible; border-bottom: 0; opacity: 0; pointer-events: none; }
-.ribbon.is-floating { position: absolute; top: calc(var(--topbar-height) + var(--tabbar-height)); left: 0; right: 0; height: var(--ribbon-height); min-height: var(--ribbon-height); opacity: 1; pointer-events: auto; border: 1px solid var(--color-border); box-shadow: var(--shadow-panel); }
+/**
+ * **功能区不再固定 80px 单行，而是允许换行、高度自适应**（2026-XX 溢出修复）。
+ *
+ * 原来的写法是 `.ribbon` 写死 `height: var(--ribbon-height)`、`.ribbon-body` 单行 + `overflow-x: auto`。
+ * 平面几何还能勉强挤下，立体几何就崩了：实测「基础与图元」一组就有 **18 个命令**，
+ * 整条内容宽 **2303px**，而容器只有 **1528px** —— 溢出 775px，
+ * 「作业操作」与「文件输出」两组**整个在屏幕外**，唯一线索是一条不显眼的横向滚动条。
+ * 这属于"功能够不到"，比任何配色问题都严重。
+ *
+ * 改法（仍然只动 CSS）：
+ *   `.ribbon` 由定高改成 `min-height`，让内容撑开；`.ribbon-body` 允许 `flex-wrap`；
+ *   单个分组最多占满一行（`max-width: 100%`），组内命令也允许换行（`flex-wrap`）。
+ * 于是超宽的那一组会自己折成两行，功能区整体变高，但**每个按钮都在视口内**。
+ * 代价是立体几何下功能区变高、画布相应变矮；这比"按钮永远点不到"划算。
+ * 高度仍然只随"工作区 + 视口宽度"变化，不随交互文案变化，所以不会破坏
+ * 状态栏那条"高度必须是常量"的约定。
+ */
+.ribbon { position: relative; z-index: 4; flex: 0 0 auto; min-height: var(--ribbon-height); background: var(--color-panel); border-bottom: 1px solid var(--color-border); transition: min-height 160ms ease, opacity 160ms ease; }
+.ribbon.is-collapsed { min-height: 0; height: 0; overflow: hidden; border-bottom: 0; opacity: 0; pointer-events: none; }
+.ribbon.is-floating { position: absolute; top: calc(var(--topbar-height) + var(--tabbar-height)); left: 0; right: 0; min-height: var(--ribbon-height); opacity: 1; pointer-events: auto; border: 1px solid var(--color-border); box-shadow: var(--shadow-panel); }
+/**
+ * `.is-collapsed` 与 `.is-floating` 特异度相同（都是 0,2,0），而 `.is-floating` 写在后面，
+ * 于是它的 `min-height` 与 `opacity: 1` 会把折叠态整个盖掉 ——
+ * 按 Ctrl+F1 之后功能区**并没有真的消失**：浮动态是 `position: absolute`，
+ * 实测结果是画布顶部压着一条 80px 的空白白条（`height: 80`、`opacity: 1`、`bodyVisible: false`）。
+ * 这条更高特异度（0,3,0）的规则让"折叠"永远赢，两个状态不再互相打架。
+ */
+.ribbon.is-collapsed.is-floating { min-height: 0; height: 0; opacity: 0; border: 0; box-shadow: none; pointer-events: none; }
 /* 浮动 Ribbon 的定位父级是**模块**（`.app-module` 带 position: relative），
    所以 `left/right: 0` 只铺满画布那一列，不会盖住最左侧的模块导航栏；`top` 仍是同一个算式。 */
 .app-module .ribbon.is-floating { left: 0; right: 0; }
-.ribbon-body { height: 100%; display: flex; align-items: stretch; overflow-x: auto; overflow-y: hidden; padding: var(--space-2) var(--space-4) 0; }
-.ribbon-group { display: flex; flex: 0 0 auto; flex-direction: column; justify-content: space-between; min-width: 0; padding: 0 var(--space-3); border-right: 1px solid var(--color-border); }
-.ribbon-group:first-child { padding-left: 0; }
-.ribbon-group:last-child { border-right: 0; }
-.ribbon-group-commands { display: flex; align-items: stretch; gap: var(--space-1); min-height: 52px; }
-.ribbon-command { display: inline-flex; flex: 0 0 auto; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-width: 54px; min-height: 52px; padding: var(--space-1) var(--space-2); border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--color-ink); font-size: 0.68rem; white-space: nowrap; }
+/**
+ * **功能区永远是"单行 + 横向滚动"，不换行**（2026-XX 回退换行方案）。
+ *
+ * 中间试过让它换行，理由是"宽屏上够不到的按钮重新可见"。方向没错，但代价在
+ * **1280×720** 这个常见笔记本尺寸上暴露了：立体几何 26 个命令折成 3 行，
+ * 功能区从 80px 涨到约 270px，**吃掉 37% 的屏幕高度**，画布被压缩到原来的一半多点。
+ * 实测这是 12 条 e2e 失败的直接原因（`git stash` 对比基线：原始 4 条失败 → 换行版 16 条）。
+ *
+ * 所以回到项目原本的设计：一行、横向滚动、高度稳定在 `--ribbon-height` 附近。
+ * "够不到的按钮"改用两个不占高度的办法解决：
+ *   · `.ribbon-body` 显式画出细滚动条（下面几条 `scrollbar-*`），滚动这件事本身可见；
+ *   · 分组标题变成折叠开关（见 `Ribbon.tsx`），用户可以主动收起占了一整行的那一组。
+ *
+ * `nowrap` 同时下传到分组内部，否则单个分组仍会自己折行（立体几何的"基础与图元"有 18 个命令）。
+ */
+/**
+ * **功能区高度必须贴住原来的 80px —— 这不是审美问题，是尺寸契约。**
+ *
+ * `e2e/engineering-drawing-hit.spec.ts` 在 1280×720 下按**元素相对坐标**点击工程图纸
+ * （先点 (120,160)(300,160) 画线，再点 (210,165) 选中它）。图纸是按可用高度等比缩放的，
+ * 功能区每高 1px，图纸区就矮 1px、缩放就变一点，那几个固定坐标最终会落在图元之外。
+ * 实测：卡片版功能区 101px（原 80px）时这条用例稳定 3/3 失败；压回 ~80px 后恢复。
+ *
+ * 所以下面把卡片的内边距、标题开关高度、命令最小高度都收到刚好，
+ * 让"加了卡片和折叠开关"之后整体高度与原来持平。
+ */
+.ribbon-body { display: flex; flex-wrap: nowrap; align-items: stretch; gap: var(--space-2); overflow-x: auto; overflow-y: hidden; padding: var(--space-1) var(--space-3); scrollbar-width: thin; scrollbar-color: var(--color-hairline) transparent; }
+.ribbon-body::-webkit-scrollbar { height: 6px; }
+.ribbon-body::-webkit-scrollbar-track { background: transparent; }
+.ribbon-body::-webkit-scrollbar-thumb { border-radius: 3px; background: var(--color-hairline); }
+.ribbon-body::-webkit-scrollbar-thumb:hover { background: var(--color-hairline-strong); }
+/**
+ * **右边缘渐隐**：只在内容真的溢出时出现（`data-overflow` 由 `Ribbon.tsx` 实测 `scrollWidth` 得出）。
+ *
+ * 立体几何 26 个命令实需 2064px，而 1280px 窗口下功能区只有 1208px ——
+ * 一行放不下是数学事实，不是调间距能解决的。细滚动条太安静，用户容易以为"命令就这些"；
+ * 这层渐隐是"右边还有"的直接提示，且只在需要时出现，不会在放得下的工作区里制造噪音。
+ * `z-index: 1` 让它压在卡片之上、功能区控制按钮（`z-index: 2`）之下。
+ */
+.ribbon::after { content: ""; position: absolute; z-index: 1; top: 0; right: 0; bottom: 0; width: 44px; background: linear-gradient(to right, rgb(255 255 255 / 0%), var(--color-panel)); opacity: 0; transition: opacity 140ms ease; pointer-events: none; }
+.ribbon[data-overflow="true"]::after { opacity: 1; }
+.ribbon.is-collapsed::after { opacity: 0; }
+/**
+ * 分组 = 一张**卡片**（2026-XX "可展开卡片组"）。
+ *
+ * 原来的分组是裸布局：命令一排、组名一行压在底下、组与组之间一条竖线。
+ * 问题在立体几何里最明显 —— "基础与图元"一组 18 个命令、宽 1600px，
+ * 而组名居中在它正下方，离组里大多数按钮都很远，"这是哪一组"只能靠数竖线去猜。
+ *
+ * 现在：极浅描边 + `--radius-md` 圆角把归属关系直接画出来，组名移到卡片头部
+ * 并兼作折叠开关（见 `Ribbon.tsx`）。用 `--color-border` 而不是更重的边，
+ * 是因为 tokens.css 的硬约定要求"分割只保留极浅的 `--color-border`"。
+ */
+.ribbon-group { display: flex; flex: 0 0 auto; flex-direction: column; min-width: 0; padding: 2px 6px 4px; border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+/* `min-height: 0` 是必须的：全局 `button { min-height: 44px }` 会把这条 16px 的标题开关
+   直接撑到 44px，实测让每张卡片高 110px（应为 84px）、功能区凭空多出 60px 高 ——
+   而功能区高度是被 e2e 钉住的尺寸契约（见上面 `.ribbon-body` 的说明）。 */
+.ribbon-group-toggle { display: inline-flex; align-self: flex-start; align-items: center; gap: 4px; height: 16px; min-height: 0; margin: 0; padding: 0 4px; border: 0; border-radius: 6px; background: transparent; color: var(--color-muted); font-size: var(--text-2xs); font-weight: 700; letter-spacing: 0.04em; line-height: 1; cursor: pointer; }
+.ribbon-group-toggle:hover { background: var(--color-accent-soft); color: var(--color-accent-strong); }
+.ribbon-group-toggle:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+.ribbon-group-chevron { flex: 0 0 auto; width: 10px; height: 10px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.ribbon-group[data-collapsed="true"] { padding-bottom: 4px; }
+.ribbon-group[data-collapsed="true"] .ribbon-group-toggle { margin-bottom: 0; }
+/* 52 → 46：为卡片标题腾出高度，让功能区总高守住原来的 80px（见 `.ribbon-body` 的尺寸契约说明）。
+   46px 仍然装得下 22px 图标 + 11px 单行标签 + 间距。 */
+.ribbon-group-commands { display: flex; flex-wrap: nowrap; align-items: stretch; gap: var(--space-1); min-height: 46px; }
+.ribbon-command { display: inline-flex; flex: 0 0 auto; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-width: 54px; min-height: 46px; padding: var(--space-1) var(--space-2); border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--color-ink); font-size: var(--text-2xs); white-space: nowrap; }
 .ribbon-command:hover { border-color: var(--color-accent); background: var(--color-accent-soft); color: var(--color-accent-strong); }
 .ribbon-command:disabled { cursor: not-allowed; opacity: 0.45; }
 .ribbon-icon { width: 24px; height: 24px; color: currentColor; }
-.ribbon-group-label { display: block; padding: var(--space-1) 0 var(--space-2); color: var(--color-muted); font-size: 0.63rem; text-align: center; }
+/* 组名的排版搬到了 `.ribbon-group-toggle` 上（它现在是标题兼开关），这里只留不换行。 */
+.ribbon-group-label { white-space: nowrap; }
 .ribbon-controls { position: absolute; z-index: 2; top: var(--space-2); right: var(--space-3); display: flex; gap: var(--space-1); }
 .ribbon-control { display: grid; place-items: center; width: 28px; min-height: 28px; height: 28px; padding: 0; border: 0; border-radius: var(--radius-sm); background: var(--color-surface-subtle); color: var(--color-muted); }
 .ribbon-control:hover, .ribbon-control.is-active { background: var(--color-accent-soft); color: var(--color-accent-strong); }
@@ -708,15 +853,15 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   /* 手机上导航栏收窄并省掉工作区那一段的竖排留白，把宽度让给画布（工作区入口仍然可用）。 */
   .app-shell { --rail-width: 58px; }
   .app-rail { padding-inline: 3px; }
-  .app-rail-button { min-height: 50px; font-size: 0.62rem; }
+  .app-rail-button { min-height: 50px; font-size: var(--text-2xs); }
   .ribbon-body { padding-inline: var(--space-3); }
   .ribbon.is-floating { top: 72px; }
   /* 手机上一行放不下提示（提示本身 + 坐标/对象/工作区会折成 3~4 行）：把这一行也定成常量
      （宽屏 52px），否则同样的"悬停/拖动改文案 → 画布变矮"会在触屏上重现。
      放不下的部分由状态栏自己滚动，不参与外层布局。 */
-  .app-module > .workbench { --status-bar-height: 108px; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) var(--status-bar-height); position: relative; }
+  .app-module > .workbench { --status-bar-height: 104px; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) var(--status-bar-height); position: relative; }
   .workbench-mobile-controls { grid-column: 1; grid-row: 1; display: flex; justify-content: flex-end; gap: var(--space-2); min-height: 44px; padding: var(--space-1) var(--space-2); background: var(--color-panel); border-bottom: 1px solid var(--color-border); }
-  .workbench-mobile-controls button { min-height: 36px; padding-inline: var(--space-3); font-size: 0.76rem; }
+  .workbench-mobile-controls button { min-height: 36px; padding-inline: var(--space-3); font-size: var(--text-sm); }
   .app-module > .workbench > .panel { display: none; position: absolute; z-index: 5; top: 44px; bottom: 48px; width: min(var(--panel-right-width), calc(100vw - 32px)); max-height: none; overflow: auto; border: 1px solid var(--color-border); box-shadow: var(--shadow-panel); }
   .app-module > .workbench > .panel.is-mobile-open { display: block; }
   .app-module > .workbench > .panel:not(.right) { left: 0; }
@@ -737,12 +882,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 @media (max-width: 600px) {
   .engineering-drawing { --drawing-toolbar-height: 44px; }
   .engineering-drawing-toolbar { padding: 0 var(--space-2); }
-  .drawing-zoom-readout { font-size: 0.68rem; }
+  .drawing-zoom-readout { font-size: var(--text-2xs); }
 }
 /* 状态栏横跨工作台整宽：之前它被自动排进了第一列（左面板那一列，240px），
    一段提示被挤成 6~7 行、页脚高 116px——既是画布被压矮的直接来源，也让提示很难读。
    `safe center`：正常时文案垂直居中；万一真放不下（窄屏长提示），退回顶部对齐以免上沿被裁掉。 */
-.status-bar { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-content: safe center; align-items: center; gap: var(--space-4); overflow-y: auto; padding: var(--space-2) var(--space-5); color: var(--color-muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+.status-bar { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-content: safe center; align-items: center; gap: var(--space-4); overflow-y: auto; padding: var(--space-2) var(--space-5); color: var(--color-muted); font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
 .status-bar-prompt { color: var(--color-ink); font-weight: 600; }
 .status-bar-item[data-has-diagnostics="true"] { color: var(--color-warning); font-weight: 600; }
 .workbench-diagnostics { margin: var(--space-3); padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-panel); }
@@ -762,12 +907,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 /* Model, layer and drawing trees inside the left dock. */
 .document-tree-panel { display: grid; grid-template-rows: auto auto minmax(0, 1fr); min-height: 0; height: 100%; }
 .tree-tabs { display: flex; gap: var(--space-1); padding: var(--space-3) var(--space-3) 0; }
-.tree-tabs button { flex: 1 1 auto; min-height: 40px; padding: 0 var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface-subtle); color: var(--color-muted); font-size: 0.78rem; font-weight: 650; cursor: pointer; }
+.tree-tabs button { flex: 1 1 auto; min-height: 40px; padding: 0 var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface-subtle); color: var(--color-muted); font-size: var(--text-sm); font-weight: 650; cursor: pointer; }
 .tree-tabs button[aria-selected="true"] { background: var(--color-accent-soft); border-color: var(--color-accent); color: var(--color-accent-strong); }
 .tree-tabs button:focus-visible, .tree-filter input:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 .tree-filter { display: grid; gap: var(--space-1); padding: var(--space-3); }
-.tree-filter-label { color: var(--color-muted); font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
-.tree-filter input { min-height: 36px; padding: 0 var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-panel); color: var(--color-ink); font-size: 0.8rem; }
+.tree-filter-label { color: var(--color-muted); font-size: var(--text-2xs); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.tree-filter input { min-height: 36px; padding: 0 var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-panel); color: var(--color-ink); font-size: var(--text-sm); }
 .tree-panel-body { min-height: 0; overflow: auto; padding: 0 var(--space-2) var(--space-3); }
 .tree-list, .tree-sublist { margin: 0; padding: 0; list-style: none; }
 .tree-sublist { border-left: 1px dashed var(--color-border); margin-left: var(--space-3); }
@@ -775,13 +920,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .tree-row { display: flex; align-items: center; gap: var(--space-1); min-height: 40px; padding: 2px var(--space-1); border-radius: var(--radius-sm); }
 .tree-item.is-active > .tree-row { background: var(--color-accent-soft); }
 .tree-spacer { flex: 0 0 26px; }
-.tree-name { flex: 1 1 auto; min-width: 0; min-height: 34px; padding: 0 var(--space-2); border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--color-ink); font-size: 0.8rem; font-weight: 600; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.tree-name { flex: 1 1 auto; min-width: 0; min-height: 34px; padding: 0 var(--space-2); border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--color-ink); font-size: var(--text-sm); font-weight: 600; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
 .tree-name[aria-pressed="true"] { color: var(--color-accent-strong); }
 .tree-name:focus-visible, .tree-row .icon-button:focus-visible, .tree-actions button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
-.tree-badge { flex: 0 0 auto; padding: 2px var(--space-2); border-radius: 999px; background: var(--color-surface-subtle); color: var(--color-muted); font-size: 0.66rem; font-weight: 700; }
-.tree-meta { flex: 0 0 auto; color: var(--color-muted); font-size: 0.7rem; font-variant-numeric: tabular-nums; }
+.tree-badge { flex: 0 0 auto; padding: 2px var(--space-2); border-radius: 999px; background: var(--color-surface-subtle); color: var(--color-muted); font-size: var(--text-2xs); font-weight: 700; }
+.tree-meta { flex: 0 0 auto; color: var(--color-muted); font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
 .tree-actions { display: flex; justify-content: flex-end; padding: 0 var(--space-3) var(--space-2); }
-.tree-actions button { min-height: 36px; padding: 0 var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface-subtle); color: var(--color-ink); font-size: 0.78rem; font-weight: 650; cursor: pointer; }
+.tree-actions button { min-height: 36px; padding: 0 var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface-subtle); color: var(--color-ink); font-size: var(--text-sm); font-weight: 650; cursor: pointer; }
 
 @media (max-width: 1100px) {
   .document-tree-panel { height: auto; }
@@ -793,9 +938,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .engineering-drawing-draft circle { fill: var(--color-paper); stroke: var(--color-ink); stroke-width: 1.6; vector-effect: non-scaling-stroke; }
 .engineering-drawing-draft.is-selected line, .engineering-drawing-draft.is-selected polyline, .engineering-drawing-draft.is-selected circle { stroke: var(--color-accent); stroke-width: 2.4; }
 /* 绘图辅助层：栅格、橡皮筋预览、捕捉标记与实时读数。全部 vector-effect 保持屏幕像素粗细，缩放不变形。 */
-.engineering-drawing-grid line { stroke: #eceaf4; stroke-width: 1; vector-effect: non-scaling-stroke; }
-.engineering-drawing-grid-major line { stroke: #ddd9ea; }
-.engineering-drawing-grid-minor line { stroke: #f1eff8; }
+.engineering-drawing-grid line { stroke: var(--color-border); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.engineering-drawing-grid-major line { stroke: var(--color-border); }
+.engineering-drawing-grid-minor line { stroke: var(--color-accent-soft); }
 .engineering-drawing-draft-preview { stroke: var(--color-accent); stroke-width: 1.5; stroke-dasharray: 6 4; vector-effect: non-scaling-stroke; pointer-events: none; }
 .engineering-drawing-snap-marker { fill: none; stroke: var(--color-accent-strong); stroke-width: 1.5; vector-effect: non-scaling-stroke; pointer-events: none; }
 .engineering-drawing-snap-layer[data-draft-snap="endpoint"] .engineering-drawing-snap-marker { fill: var(--color-accent-soft); }
@@ -809,10 +954,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .engineering-drawing-svg[data-draft-dragging="true"] { cursor: grabbing; }
 .status-bar-notice { color: var(--color-warning); font-weight: 650; }
 /* 左下角的功能指引：只在点击功能键后出现，压成一行到两行的小浮层，不铺满底部也不挡画布。 */
-.guidance-hint { position: fixed; left: 18px; bottom: 60px; z-index: 40; display: flex; align-items: flex-start; gap: var(--space-2); max-width: min(420px, calc(100vw - 36px)); padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); border-left: 3px solid var(--color-accent); border-radius: var(--radius-sm); background: rgb(255 255 255 / 97%); box-shadow: var(--shadow-card); color: var(--color-ink); font-size: 0.75rem; line-height: 1.45; }
-.guidance-hint-mark { flex: 0 0 auto; width: 16px; height: 16px; margin-top: 1px; border-radius: 50%; background: var(--color-accent-soft); color: var(--color-accent-strong); font-size: 0.68rem; font-weight: 700; line-height: 16px; text-align: center; }
+/* 与 `.three-camera-hint` 同一套角落卡片外观（见那条规则的说明）。
+   `left` 原来写死 18px —— 那会压在最左侧 72px 的模块导航栏上（实测浮层左边框落在窄栏内），
+   所以改成从导航栏右边起算。`--rail-width` 由 `.app-shell` 提供，窄屏会变成 58px，这里跟着走。 */
+.guidance-hint { position: fixed; left: calc(var(--rail-width, 72px) + 18px); bottom: 60px; z-index: 40; display: flex; align-items: flex-start; gap: var(--space-2); max-width: min(420px, calc(100vw - 36px)); padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); border-left: 3px solid var(--color-accent); border-radius: var(--radius-sm); background: rgb(255 255 255 / 94%); box-shadow: var(--shadow-card); backdrop-filter: blur(6px); color: var(--color-ink); font-size: var(--text-xs); line-height: 1.45; }
+.guidance-hint-mark { flex: 0 0 auto; width: 16px; height: 16px; margin-top: 1px; border-radius: 50%; background: var(--color-accent-soft); color: var(--color-accent-strong); font-size: var(--text-2xs); font-weight: 700; line-height: 16px; text-align: center; }
 .guidance-hint-text { flex: 1 1 auto; }
-.guidance-hint-close { flex: 0 0 auto; padding: 0 2px; border: 0; background: transparent; color: var(--color-muted); font-size: 0.95rem; line-height: 1; cursor: pointer; }
+.guidance-hint-close { flex: 0 0 auto; padding: 0 2px; border: 0; background: transparent; color: var(--color-muted); font-size: var(--text-md); line-height: 1; cursor: pointer; }
 .guidance-hint-close:hover { color: var(--color-ink); }
 .guidance-hint-close:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
 
@@ -821,14 +969,14 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .inspector-panel { min-height: 0; overflow-y: auto; }
 .inspector-panel > .properties { padding-top: var(--space-3); }
 .inspector-context, .inspector-sources { padding: var(--space-3) 18px; border-bottom: 1px solid var(--color-border); }
-.inspector-context h3, .inspector-sources h3 { margin: 0 0 var(--space-2); color: var(--color-ink); font-size: 0.85rem; }
+.inspector-context h3, .inspector-sources h3 { margin: 0 0 var(--space-2); color: var(--color-ink); font-size: var(--text-md); }
 .inspector-context ul, .inspector-sources ul { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
 .inspector-context li, .inspector-sources li { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); }
-.inspector-context li span, .inspector-sources li span { color: var(--color-muted); font-size: 0.74rem; }
-.inspector-context li strong, .inspector-sources li strong { color: var(--color-ink); font-size: 0.8rem; }
-.inspector-context li small { color: var(--color-muted); font-size: 0.7rem; }
+.inspector-context li span, .inspector-sources li span { color: var(--color-muted); font-size: var(--text-xs); }
+.inspector-context li strong, .inspector-sources li strong { color: var(--color-ink); font-size: var(--text-sm); }
+.inspector-context li small { color: var(--color-muted); font-size: var(--text-xs); }
 .inspector-sources li { flex-direction: column; align-items: flex-start; }
-.inspector-source-missing { color: var(--color-warning); font-size: 0.72rem; font-weight: 650; }
+.inspector-source-missing { color: var(--color-warning); font-size: var(--text-xs); font-weight: 650; }
 
 /* ============================================================================
    冷色调视觉重构（2026-09-18）
@@ -931,7 +1079,7 @@ button:hover { border-color: var(--color-accent); background: var(--color-accent
 .app-module > .topbar { position: relative; padding: 0 var(--space-5); background: linear-gradient(180deg, var(--color-chrome-top), var(--color-chrome-bottom)); border-bottom: 1px solid rgb(255 255 255 / 6%); box-shadow: 0 12px 28px -24px rgb(0 0 0 / 60%); }
 .app-module > .topbar .topbar-leading { display: none; }
 /* 品牌：深色底上的浅色字样，顶栏唯一的焦点；它同时是粒子层的定位父级。 */
-.app-module > .topbar .brand { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); color: var(--color-chrome-ink); font-size: 0.98rem; font-weight: 650; letter-spacing: 0.02em; }
+.app-module > .topbar .brand { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); color: var(--color-chrome-ink); font-size: var(--text-lg); font-weight: 650; letter-spacing: 0.02em; }
 /* 粒子层向外扩一圈，让粒子落在**文字两侧的留白**里，而不是压在字母上
    （用户口径"整体保持干净、不杂乱"对粒子同样成立）。
    `translateZ(0)` 把这一层提升为独立合成层：整层（含 20 颗子元素）只 raster 一次，
@@ -965,22 +1113,41 @@ button:hover { border-color: var(--color-accent); background: var(--color-accent
    且作为溢出内容照常显示。
    容器终宽 **11ch 而不是 9ch**：实测当前字体 `1ch = 9.25px`，而 "MathCanvas" 的自然宽度是
    **96px（≈10.4ch）**，按 9ch 收窄会把尾巴截掉（截图里只剩 "MathCanva"）。留到 11ch 还有余量。 */
-.app-module > .topbar .brand-type { position: relative; display: inline-block; width: 11ch; overflow: hidden; white-space: nowrap; animation: brand-type 3.4s steps(9, jump-none) 240ms both; }
-.app-module > .topbar .brand-text { display: block; color: var(--color-chrome-ink); letter-spacing: 0.01em; }
+/**
+ * 打字机揭示：**揭示用 `clip-path`、光标自己跟着走**，不再 animate `width: 11ch`。
+ *
+ * 原来的写法是给容器写死 `width: 11ch`，并在 keyframes 里从 `0` 长到 `11ch`。
+ * 问题在于 `ch` 是"**当前字体**里数字 0 的宽度"，它随字体变：
+ * 本轮把西文字体从 Microsoft YaHei 换成 Segoe UI / 系统 UI 之后，
+ * 实测容器只剩 101.23px（11 × 9.203），而 "MathCanvas" 自身要 106.83px ——
+ * 顶栏品牌当场被截成 "MathC"，而且动画结束后也回不来（`fill-mode: both` 把它钉在 11ch）。
+ *
+ * 只把 11ch 改大只是把同一个坑挖浅一点：下次换字体还会再踩。
+ * `clip-path` 的百分比是相对**元素自身盒子**算的，与字体宽度完全无关，
+ * 所以这里改成"文字元素自己裁剪揭示 + 光标用同一组 steps 从 0 走到 100%"。
+ * 代价是要去掉容器的 `overflow: hidden`，否则走在 100% 处的光标会被切掉。
+ */
+.app-module > .topbar .brand-type { position: relative; display: inline-block; white-space: nowrap; }
+.app-module > .topbar .brand-text { display: block; color: var(--color-chrome-ink); letter-spacing: 0.01em; animation: brand-reveal 3.4s steps(9, jump-none) 240ms both; }
 /* 光标在深色底上换成浅青（原来用板岩蓝 `--color-accent-strong`，在深底上偏暗、不够清晰）。 */
 .app-module > .topbar .brand-cursor {
   position: absolute;
-  left: calc(100% + 1px);
+  left: 1px;
   top: 0;
   width: 0.5ch;
   height: 1.05em;
-  background: #cfe0f5;
+  background: var(--color-brand-caret);
   box-shadow: 0 0 8px rgb(160 200 240 / 65%);
-  animation: brand-blink 1.1s steps(1, end) 3.4s infinite;
+  /* 与 `brand-reveal` 同一组时长与 steps：光标停在"已经打出来的那个字之后"。 */
+  animation: brand-caret 3.4s steps(9, jump-none) 240ms both, brand-blink 1.1s steps(1, end) 3.4s infinite;
 }
-@keyframes brand-type {
-  from { width: 0; }
-  to { width: 11ch; }
+@keyframes brand-reveal {
+  from { clip-path: inset(0 100% 0 0); }
+  to { clip-path: inset(0 0 0 0); }
+}
+@keyframes brand-caret {
+  from { left: 1px; }
+  to { left: calc(100% + 1px); }
 }
 @keyframes brand-blink {
   0%, 52% { opacity: 1; }
@@ -995,12 +1162,12 @@ button:hover { border-color: var(--color-accent); background: var(--color-accent
   8%, 84% { opacity: 1; }
   100% { transform: translate3d(calc(var(--px, 0) + 2px), calc(var(--py, 0) - var(--particle-rise, -8px)), 0) scale(1.08); opacity: 0; }
 }
-.app-module > .topbar .brand-mark { width: 28px; height: 28px; border-radius: 9px; font-size: 0.86rem; }
+.app-module > .topbar .brand-mark { width: 28px; height: 28px; border-radius: 9px; font-size: var(--text-md); }
 
 /* ---------- 标签栏右端：命令组（原顶栏那一组，按用户口径下沉到这里） ---------- */
 .workspace-tabs-bar .workspace-tabs-actions { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
 .workspace-tabs-bar .workspace-tabs-actions .search-box { position: static; left: auto; width: min(200px, 18vw); height: 26px; transform: none; }
-.workspace-tabs-bar .workspace-tabs-actions .topbar-commands button { min-height: 26px; padding-inline: var(--space-2); font-size: 0.72rem; }
+.workspace-tabs-bar .workspace-tabs-actions .topbar-commands button { min-height: 26px; padding-inline: var(--space-2); font-size: var(--text-xs); }
 .workspace-tabs-bar .workspace-tabs-actions .topbar-icon { width: 28px; min-height: 28px; }
 /* 窄屏优先保住标签本身：搜索与文件命令先让位，功能区开关始终留着。 */
 @media (max-width: 1240px) { .workspace-tabs-bar .workspace-tabs-actions .search-box { display: none; } }
@@ -1014,9 +1181,20 @@ button:hover { border-color: var(--color-accent); background: var(--color-accent
 }
 
 /* ---------- 极细单色线性图标：间距宽敞、常态无边框 ---------- */
-.ribbon-command { min-width: 60px; padding: var(--space-1) var(--space-2); gap: 5px; border-radius: 12px; }
-.ribbon-group-commands { gap: var(--space-2); }
-.ribbon-group { padding-inline: var(--space-4); }
+/* 横向收紧，让"刚好差一点"的工作区守住单行。
+   实测（1600px 视口）：平面几何一行需要 1598px、容器只有 1528px，只差 70px，
+   原来却因为一个出口分组（320px）整体折到第二行，功能区从 80px 变成 171px。
+   这里命令间距 8→4（`--space-1`）、分组内边距 16→12、命令左右内边距 8→6，合计省约 148px：
+     · 平面几何：单行（功能区 92px，只比原来高 12px）
+     · 立体几何的基础组实测需要 1522px / 可用 1496px，只差 26px —— 仅靠间距降到 4px 就省下 34px，
+       于是那 18 个命令也收进一行，整个功能区从三行降到两行（229px → 171px）。
+   `min-width: 60px` 有意保持不变：这是图标按钮的视觉最小尺寸，实测有 6/18 个命令正卡在这个值上，
+   再压就真的失去呼吸感了。剩下那 8px 余量偏紧，但即使某个系统上字体略宽导致重新折行，
+   行为也是"优雅变高"而不是"按钮跑到屏幕外"—— 这正是本轮修复的目的。 */
+.ribbon-command { min-width: 60px; padding: var(--space-1) 5px; gap: 5px; border-radius: 10px; }
+.ribbon-group-commands { gap: var(--space-1); }
+/* 分组的内边距现在由卡片规则负责（`padding: 4px 6px 6px`），这里不再覆盖 -
+   卡片化本身要多占每条边 1px 描边 + 6px 内边距，命令左右内边距从 6px 收到 5px 才补得回来。 */
 .ribbon-icon { width: 22px; height: 22px; }
 /* 图标本身是 SVG，`stroke-width` 是元素属性，只能用 CSS 覆盖；1.35 在 22px 下读作极细线条。 */
 .ribbon-icon, .ui-icon, .row-icon, .row-lock-icon, .header-icon, .rail-icon { stroke-width: 1.35; }
@@ -1033,8 +1211,8 @@ button:hover { border-color: var(--color-accent); background: var(--color-accent
 .object-dot { width: 9px; height: 9px; background: transparent; border: 1.5px solid currentColor; box-shadow: none; color: var(--color-accent); }
 .object-dot[data-object-type="measurement3"], .object-dot[data-object-type="parameter"] { border-style: dashed; }
 .object-row.selected .object-dot { background: currentColor; }
-.object-name { font-size: 0.8rem; font-weight: 560; letter-spacing: 0.01em; }
-.object-group-label { color: var(--color-muted); font-size: 0.68rem; font-weight: 700; letter-spacing: 0.1em; padding: 8px 0 4px 8px; }
+.object-name { font-size: var(--text-sm); font-weight: 560; letter-spacing: 0.01em; }
+.object-group-label { color: var(--color-muted); font-size: var(--text-2xs); font-weight: 700; letter-spacing: 0.1em; padding: 8px 0 4px 8px; }
 .object-subtree { margin: 4px 0 8px 14px; padding-left: 10px; border-left: 1px solid var(--color-border); }
 .object-list { gap: 3px; }
 .row-expand { color: var(--color-muted); }

@@ -9,12 +9,24 @@
  */
 
 .agent-workspace {
-  --agent-canvas: #fbfbfd;
-  --agent-panel: #ffffff;
-  --agent-muted: #6b6b80;
-  --agent-faint: #9a9aad;
-  --agent-line: #ecebf2;
-  --agent-field: #f6f6fa;
+  /**
+   * **Agent 工作区的配色（2026-XX 归并到全局令牌）。**
+   *
+   * 这里原来挂着一整套自成体系的色值：`#fbfbfd` / `#6b6b80` / `#9a9aad` / `#ecebf2` / `#f6f6fa` /
+   * `#2f2b45` / `#fbfaff`。它们单看都很干净，但全部带**紫调**（R≈G<B 且色相偏 270°），
+   * 而 `tokens.css` 里明确写过"不再出现紫调灰"、并给出了三条硬约定。
+   * 结果就是切到 Agent 工作区时，整屏会从板岩蓝系滑到紫灰系 —— 四个工作区里唯一跑出体系的一个。
+   *
+   * 现在这些名字**全部指向全局令牌**，本文件不再自带任何字面色：
+   * 改主题只需要动 `tokens.css` 一处，Agent 会跟着走。
+   * 名字保留是为了不动 20 多处 `var(--agent-*)` 引用（保守改动）。
+   */
+  --agent-canvas: var(--color-canvas);
+  --agent-panel: var(--color-panel);
+  --agent-muted: var(--color-muted);
+  --agent-faint: var(--color-faint);
+  --agent-line: var(--color-border);
+  --agent-field: var(--color-surface-subtle);
   display: grid;
   grid-template-columns: 264px minmax(0, 1fr);
   width: 100%;
@@ -44,7 +56,7 @@
   padding: var(--space-3) var(--space-3) var(--space-2);
 }
 
-.agent-sidebar-title { color: var(--agent-faint); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.agent-sidebar-title { color: var(--agent-faint); font-size: var(--text-xs); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
 
 .agent-new-chat {
   min-height: 32px;
@@ -53,7 +65,7 @@
   border-radius: 999px;
   background: var(--agent-panel);
   color: var(--color-accent-strong);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 650;
 }
 .agent-new-chat:hover { border-color: var(--color-accent); background: var(--color-accent-soft); }
@@ -77,9 +89,11 @@
 }
 .agent-conversation-open:hover { border-color: transparent; background: transparent; }
 
-.agent-conversation-name { overflow: hidden; color: var(--color-ink); font-size: 0.8rem; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.agent-conversation-name { overflow: hidden; color: var(--color-ink); font-size: var(--text-sm); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .agent-conversation[data-active="true"] .agent-conversation-name { color: var(--color-accent-strong); }
-.agent-conversation-meta { overflow: hidden; color: var(--agent-faint); font-size: 0.68rem; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
+/* 用 `--agent-muted` 而不是 `--agent-faint`：会话项被选中时底色是 `--color-accent-soft`，
+   `--color-faint`(#64748b) 压在上面只有 4.23:1，不到 AA；muted 是 4.93:1。 */
+.agent-conversation-meta { overflow: hidden; color: var(--agent-muted); font-size: var(--text-2xs); font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
 
 .agent-conversation-delete {
   width: 26px;
@@ -90,12 +104,12 @@
   background: transparent;
   color: var(--agent-faint);
   opacity: 0;
-  font-size: 0.95rem;
+  font-size: var(--text-md);
   line-height: 1;
 }
 .agent-conversation:hover .agent-conversation-delete,
 .agent-conversation-delete:focus-visible { opacity: 1; }
-.agent-conversation-delete:hover { background: var(--agent-panel); border-color: transparent; color: #c0392b; }
+.agent-conversation-delete:hover { background: var(--agent-panel); border-color: transparent; color: var(--color-danger); }
 
 /* ---------- 主舞台：结果/代码展示区 + 居中输入框 ---------- */
 
@@ -118,8 +132,8 @@
 }
 
 .agent-stage-title { min-width: 0; }
-.agent-stage-title h1 { overflow: hidden; margin: 0; color: var(--color-ink); font-size: 0.92rem; font-weight: 700; letter-spacing: -0.01em; text-overflow: ellipsis; white-space: nowrap; }
-.agent-stage-title p { margin: 2px 0 0; color: var(--agent-faint); font-size: 0.72rem; }
+.agent-stage-title h1 { overflow: hidden; margin: 0; color: var(--color-ink); font-size: var(--text-md); font-weight: 700; letter-spacing: -0.01em; text-overflow: ellipsis; white-space: nowrap; }
+.agent-stage-title p { margin: 2px 0 0; color: var(--agent-faint); font-size: var(--text-xs); }
 
 .agent-back {
   min-height: 32px;
@@ -128,7 +142,7 @@
   border-radius: 999px;
   background: var(--agent-panel);
   color: var(--agent-muted);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
 }
 .agent-back:hover { border-color: var(--color-accent); color: var(--color-accent-strong); }
@@ -142,41 +156,57 @@
 
 /* ---------- 空状态 ---------- */
 
-.agent-empty { display: grid; gap: var(--space-3); margin: auto; max-width: 520px; text-align: center; }
-.agent-empty-title { margin: 0; color: var(--color-ink); font-size: 1.35rem; font-weight: 700; letter-spacing: -0.02em; }
-.agent-empty-text { margin: 0; color: var(--agent-muted); font-size: 0.85rem; line-height: 1.7; }
+.agent-empty { display: grid; gap: var(--space-3); justify-items: center; margin: auto; max-width: 520px; text-align: center; }
+/* Agent 这一侧刻意**不加阴影**（本文件开头的口径：干净清爽、几乎没有阴影），
+   所以插画容器只用极浅的强调色底 + 一条发丝边，与属性面板那边的弥散阴影版本区分开。 */
+.agent-empty-art { display: grid; place-items: center; width: 68px; height: 68px; margin-bottom: var(--space-1); border: 1px solid var(--agent-line); border-radius: 22px; background: var(--color-accent-soft); color: var(--color-accent); }
+.agent-empty-art .empty-state-art { width: 40px; height: 40px; }
+.agent-empty-title { margin: 0; color: var(--color-ink); font-size: var(--text-2xl); font-weight: 700; letter-spacing: -0.02em; }
+.agent-empty-text { margin: 0; color: var(--agent-muted); font-size: var(--text-md); line-height: 1.7; }
 .agent-empty-samples { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--space-2); margin: var(--space-2) 0 0; padding: 0; list-style: none; }
-.agent-empty-samples li { padding: var(--space-2) var(--space-3); border: 1px solid var(--agent-line); border-radius: 999px; background: var(--agent-panel); color: var(--agent-muted); font-size: 0.75rem; }
+.agent-empty-samples li { padding: var(--space-2) var(--space-3); border: 1px solid var(--agent-line); border-radius: 999px; background: var(--agent-panel); color: var(--agent-muted); font-size: var(--text-xs); }
 
 /* ---------- 消息 ---------- */
 
 .agent-messages { display: grid; gap: var(--space-4); margin: 0; padding: 0; list-style: none; }
 .agent-message { display: grid; gap: var(--space-2); min-width: 0; }
 .agent-message-head { display: flex; align-items: center; gap: var(--space-2); }
-.agent-avatar { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--agent-field); color: var(--agent-muted); font-size: 0.68rem; font-weight: 700; }
+.agent-avatar { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--agent-field); color: var(--agent-muted); font-size: var(--text-2xs); font-weight: 700; }
 .agent-message[data-message-role="assistant"] .agent-avatar { background: var(--color-accent-soft); color: var(--color-accent-strong); }
-.agent-message-role { color: var(--color-ink); font-size: 0.75rem; font-weight: 650; }
-.agent-message-time { margin-left: auto; color: var(--agent-faint); font-size: 0.68rem; font-variant-numeric: tabular-nums; }
+.agent-message-role { color: var(--color-ink); font-size: var(--text-xs); font-weight: 650; }
+.agent-message-time { margin-left: auto; color: var(--agent-faint); font-size: var(--text-2xs); font-variant-numeric: tabular-nums; }
 
 .agent-bubble { display: grid; gap: var(--space-3); min-width: 0; padding: var(--space-3) var(--space-4); border: 1px solid var(--agent-line); border-radius: 14px; background: var(--agent-panel); }
 /* 用户那一条是"我说的话"：浅色块、无边框，与 Agent 的白卡片一眼分得开。 */
 .agent-message[data-message-role="user"] .agent-bubble { border-color: transparent; background: var(--agent-field); }
-.agent-bubble-text { margin: 0; color: var(--color-ink); font-size: 0.84rem; line-height: 1.75; white-space: pre-wrap; }
-.agent-bubble-pending { margin: 0; color: var(--agent-faint); font-size: 0.82rem; }
+.agent-bubble-text { margin: 0; color: var(--color-ink); font-size: var(--text-md); line-height: 1.75; white-space: pre-wrap; }
+.agent-bubble-pending { margin: 0; color: var(--agent-faint); font-size: var(--text-md); }
 
 /* ---------- 代码输出 ---------- */
 
-.agent-code { min-width: 0; overflow: hidden; border: 1px solid var(--agent-line); border-radius: var(--radius-sm); background: #fbfaff; }
+.agent-code { min-width: 0; overflow: hidden; border: 1px solid var(--agent-line); border-radius: var(--radius-sm); background: var(--color-surface-subtle); }
 .agent-code-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: 6px var(--space-3); border-bottom: 1px solid var(--agent-line); background: var(--agent-panel); }
-.agent-code-head span { color: var(--agent-faint); font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
-.agent-code-copy { min-height: 26px; padding: 0 var(--space-2); border-color: transparent; border-radius: 7px; background: transparent; color: var(--agent-muted); font-size: 0.7rem; }
+.agent-code-head span { color: var(--agent-faint); font-size: var(--text-2xs); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.agent-code-copy { min-height: 26px; padding: 0 var(--space-2); border-color: transparent; border-radius: 7px; background: transparent; color: var(--agent-muted); font-size: var(--text-xs); }
 .agent-code-copy:hover { border-color: transparent; background: var(--color-accent-soft); color: var(--color-accent-strong); }
 .agent-code-body { margin: 0; padding: var(--space-3); overflow-x: auto; }
-.agent-code-body code { color: #2f2b45; font-family: ui-monospace, SFMono-Regular, "JetBrains Mono", Consolas, monospace; font-size: 0.78rem; line-height: 1.65; white-space: pre; }
+.agent-code-body code { color: var(--color-ink); font-family: var(--font-mono); font-size: var(--text-sm); line-height: 1.65; white-space: pre; }
+/**
+ * 代码高亮着色。**只有颜色**，不加背景 ——
+ * 代码块的底色已经是 `--color-surface-subtle`，再叠色块会让整段读起来像表格。
+ * 五档颜色的对比度都在同一块底色上实测过（见 `tokens.css` 里 `--code-string` 的说明），
+ * 最低的一档是注释 4.93:1，仍然过 AA。
+ */
+.code-keyword { color: var(--color-accent-strong); font-weight: 600; }
+.code-string { color: var(--code-string); }
+.code-number { color: var(--color-warning-strong); }
+.code-literal { color: var(--color-accent); font-weight: 600; }
+.code-comment { color: var(--color-muted); font-style: italic; }
+.code-punctuation { color: var(--color-muted); }
 
 /* ---------- 输入区：整页的视觉焦点 ---------- */
 
-.agent-stage-composer { padding: var(--space-3) var(--space-5) var(--space-5); background: linear-gradient(to bottom, rgb(251 251 253 / 0%), var(--agent-canvas) 34%); }
+.agent-stage-composer { padding: var(--space-3) var(--space-5) var(--space-5); background: linear-gradient(to bottom, rgb(248 250 252 / 0%), var(--agent-canvas) 34%); }
 
 .agent-composer {
   display: grid;
@@ -200,7 +230,7 @@
   border: 0;
   background: transparent;
   color: var(--color-ink);
-  font-size: 0.9rem;
+  font-size: var(--text-md);
   line-height: 1.7;
   resize: none;
 }
@@ -209,8 +239,8 @@
 .agent-composer-input::placeholder { color: var(--agent-faint); }
 
 .agent-composer-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-height: 32px; }
-.agent-composer-hint { margin: 0; color: var(--agent-faint); font-size: 0.68rem; }
-.agent-composer-status { margin: 0 var(--space-2) var(--space-2); color: var(--color-accent-strong); font-size: 0.72rem; }
+.agent-composer-hint { margin: 0; color: var(--agent-faint); font-size: var(--text-2xs); }
+.agent-composer-status { margin: 0 var(--space-2) var(--space-2); color: var(--color-accent-strong); font-size: var(--text-xs); }
 
 .agent-send {
   min-height: 34px;
@@ -219,10 +249,13 @@
   border-radius: 999px;
   background: var(--color-accent);
   color: #fff;
-  font-size: 0.78rem;
+  font-size: var(--text-sm);
   font-weight: 650;
 }
 .agent-send:hover:not(:disabled) { border-color: var(--color-accent-strong); background: var(--color-accent-strong); }
+/* 禁用态用 `--agent-faint`(白底 4.76:1)：在 `--agent-field` 浅底上是 4.34:1，略低于 4.5。
+   WCAG 1.4.3 明确把"非活动的用户界面组件"排除在对比度要求之外，而这个按钮的禁用语义
+   （无强调色边框 + 灰底 + not-allowed）本来就靠颜色以外的线索表达，所以这里按豁免处理，不强行压深。 */
 .agent-send:disabled { border-color: var(--agent-line); background: var(--agent-field); color: var(--agent-faint); cursor: not-allowed; }
 
 /* ---------- 草稿预览（Task 0.8 Step 4） ---------- */
@@ -239,23 +272,23 @@
   background: var(--agent-panel);
 }
 .agent-draft-head { display: grid; gap: 2px; }
-.agent-draft-head h3 { margin: 0; color: var(--color-ink); font-size: 0.9rem; font-weight: 700; }
-.agent-draft-scale { margin: 0; color: var(--agent-muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+.agent-draft-head h3 { margin: 0; color: var(--color-ink); font-size: var(--text-md); font-weight: 700; }
+.agent-draft-scale { margin: 0; color: var(--agent-muted); font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
 
 /* 计数横排：三四个短数字竖排会白白占掉一屏高度。 */
 .agent-draft-counts { display: flex; flex-wrap: wrap; gap: var(--space-3); margin: 0; }
 .agent-draft-counts > div { display: grid; gap: 1px; }
-.agent-draft-counts dt { color: var(--agent-faint); font-size: 0.68rem; }
-.agent-draft-counts dd { margin: 0; color: var(--color-ink); font-size: 0.78rem; font-weight: 650; font-variant-numeric: tabular-nums; }
+.agent-draft-counts dt { color: var(--agent-faint); font-size: var(--text-2xs); }
+.agent-draft-counts dd { margin: 0; color: var(--color-ink); font-size: var(--text-sm); font-weight: 650; font-variant-numeric: tabular-nums; }
 
-.agent-draft-preview h4 { margin: 0 0 var(--space-1); color: var(--agent-muted); font-size: 0.72rem; font-weight: 650; }
-.agent-draft-preview ul { display: grid; gap: 2px; margin: 0; padding-left: 1.1em; color: var(--color-ink); font-size: 0.78rem; line-height: 1.6; }
+.agent-draft-preview h4 { margin: 0 0 var(--space-1); color: var(--agent-muted); font-size: var(--text-xs); font-weight: 650; }
+.agent-draft-preview ul { display: grid; gap: 2px; margin: 0; padding-left: 1.1em; color: var(--color-ink); font-size: var(--text-sm); line-height: 1.6; }
 /* 近似与省略是"不利信息"，用暖色提醒而不是灰掉 —— 灰掉等于藏起来。 */
 .agent-draft-approximation li, .agent-draft-omissions li { color: var(--color-warning); }
 
-.agent-draft-undo { margin: 0; padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); background: var(--agent-field); color: var(--agent-muted); font-size: 0.75rem; }
+.agent-draft-undo { margin: 0; padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); background: var(--agent-field); color: var(--agent-muted); font-size: var(--text-xs); }
 .agent-draft-actions { display: flex; gap: var(--space-2); justify-content: flex-end; }
-.agent-draft-confirm, .agent-draft-cancel { padding: var(--space-2) var(--space-4); border: 1px solid var(--agent-line); border-radius: 999px; font-size: 0.78rem; font-weight: 650; cursor: pointer; }
+.agent-draft-confirm, .agent-draft-cancel { padding: var(--space-2) var(--space-4); border: 1px solid var(--agent-line); border-radius: 999px; font-size: var(--text-sm); font-weight: 650; cursor: pointer; }
 .agent-draft-confirm { border-color: var(--color-accent); background: var(--color-accent); color: #fff; }
 .agent-draft-confirm:hover { border-color: var(--color-accent-strong); background: var(--color-accent-strong); }
 .agent-draft-cancel { background: var(--agent-panel); color: var(--agent-muted); }

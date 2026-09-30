@@ -1,5 +1,7 @@
 import type { AgentConversation, AgentMessage } from "../../agentStore"
 import { formatMessageTime, splitTranscript } from "../../agentTranscript"
+import { highlightCode } from "../../codeHighlight"
+import { EmptyStateArt } from "../EmptyStateArt"
 import { ConfirmationPanel } from "./ConfirmationPanel"
 import { RunStatus } from "./RunStatus"
 
@@ -34,7 +36,9 @@ function AssistantBody({ message }: { message: AgentMessage }) {
   return <>{splitTranscript(message.text).map((section, index) => section.kind === "code"
     ? <div className="agent-code" key={`${message.id}-code-${index}`} data-code-language={section.language}>
       <div className="agent-code-head"><span>{section.language || "code"}</span><CopyCodeButton code={section.code} /></div>
-      <pre className="agent-code-body"><code>{section.code}</code></pre>
+      {/* 高亮由 `codeHighlight` 的纯函数给出 token，这里只负责着色 ——
+          不生成 HTML 字符串，所以代码内容永远不会被当成标记解析。 */}
+      <pre className="agent-code-body"><code>{highlightCode(section.code, section.language).map((token, tokenIndex) => <span className={`code-${token.kind}`} key={tokenIndex}>{token.value}</span>)}</code></pre>
     </div>
     : <p className="agent-bubble-text" key={`${message.id}-text-${index}`}>{section.text}</p>
   )}</>
@@ -47,6 +51,7 @@ export function AgentMessageList({ conversation, onRetry, onRevise, onStop, onCo
     <div className="agent-transcript-scroll" role="log" aria-label="对话记录" aria-live="polite">
       {messages.length === 0
         ? <div className="agent-empty">
+          <div className="agent-empty-art" aria-hidden="true"><EmptyStateArt name="agent" /></div>
           <h2 className="agent-empty-title">有什么数学问题要一起做？</h2>
           <p className="agent-empty-text">可以把要求写清楚，例如「以 A 为圆心作一个半径 3 的圆，并标出它与直线 l 的交点」。发送第一条指令后，回答、推理过程与代码会显示在这里。</p>
           <ul className="agent-empty-samples">
