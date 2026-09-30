@@ -21,7 +21,7 @@
 | 5. 画布 UI | 新增创建 e2e 5 项；相机/拖动/求交预览旧回归通过 | 创建悬停的目标名/世界坐标、选择工具退出等细节还需专门验收 |
 | 6. 实体入口 | 构造器、参数面板、未保存预览、正方体/长方体、三/四棱柱和棱锥 e2e 通过；旧 `.mgeo` fixture 可打开 | 从手工入口创建后的依赖/保存/量测/截面组合用例仍待 Task 8 |
 | 7. 教学线型 | `threeTeachingLines.test.ts` 与 `geometry3d-teaching-lines.spec.ts` 先红后绿；`style.dash` 与“隐藏边”保持独立，旧无样式线仍用实线 | 旋转视角后的标签遮挡、选中线时三色旋转环遮挡教学图面的体验尚未通过样题验收 |
-| 8. 样题与发布决策 | **未完成**；本轮只跑选定的 7 个 e2e spec/44 项，不能替代六题整合验收或教师走查 | `e2e/high-school-geometry-tasks.spec.ts`、完整 e2e、教师/学生操作数与误操作调查、桌面包验证等 |
+| 8. 样题与发布决策 | **进行中（第一批已上传，提交 `cecc1fe`）**：新增 `e2e/high-school-geometry-tasks.spec.ts` 覆盖三棱锥、四棱锥、斜三棱柱、异长长方体四类，含精确几何/拓扑依赖/保存往返/一步撤销断言，4/4 通过；**仍不能替代六题整合验收或教师走查** | 圆锥截面、空间直线与平面的关系、已有文档恢复与撤销三类样题；完整 e2e；教师/学生操作数与误操作调查；桌面包验证 |
 
 **已实现的文件/接口与原计划的差异（明示而非悄悄改名）**：3D 指针创建采用 `threeScene.tsx` 的捕获事件 + `threeSceneEffect.ts` 的稳定运行时，不直接往既有 `threeSceneInteraction.ts` 选择/旋转分支塞模式；传统工作台实际入口是 `ribbonCommands.ts` 而非未挂载的 `components/GeometryToolbar.tsx`；实体表单为新建 `SpatialSolidWizard.tsx`/`spatialSolidWizardModel.ts`；3D 教学线材质位于 `threePrimitives.ts`，原有 DSL 的 `PrimitivePresentation.style.dash` 已足够，无需修改 schema。当前功能目录、测试读数和未完成项见 [专题进度](../../research/2026-09-29-high-school-geometry-interaction-progress.md)。
 
@@ -145,4 +145,4 @@
 
 - 覆盖检查：任务 2–5 对应 S1，任务 6 对应 S2/S3，任务 7 对应 S4，任务 8 跨场景验收；S5/S6/S7 明确独立门禁，不混充本期交付。
 - 契约检查：`SpatialAnchor` 在任务 3 定义，被任务 4/5 消费；`SpatialCreationSession` 在任务 2 定义，被任务 4/5 消费；提交只走任务 4 的场景事务。
-- 开始实现的门槛已由用户在 2026-09-29 确认（立体优先，球体和截图绘图后置）。P0 及部分 P1 已实现；**Task 8 和上表缺口未完成**。用户最新要求：当前教学线型模块完成后先更新所有相关进度文档并上传，上传确认前不进入下一模块。
+- 开始实现的门槛已由用户在 2026-09-29 确认（立体优先，球体和截图绘图后置）。P0 及部分 P1 已实现；**Task 8 分批推进中**（第一批四类样题已上传，提交 `cecc1fe`；其余三类与上表缺口未完成）。用户最新要求：**每完成一个小区块就及时上传 GitHub，并同步更新进度文档**。
