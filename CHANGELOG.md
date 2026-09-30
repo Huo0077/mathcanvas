@@ -5,6 +5,14 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-09-30 —— 功能分支已合并进 `main`；文档里"尚未并入 main"的过时表述按事实改正
+
+- **事实**：`feat/high-school-geometry-interaction` 已通过 **PR #1** 合并进 `main` —— 合并提交 **`3b1f770`**（2026-09-30 12:46:30；父提交 `4d35b9d`（合并前的 `main`）与 `e016f37`（分支 tip，"本轮总收口并暂停"那笔），两者都已用 `git merge-base --is-ancestor` 核实是它的祖先）。本地 `main` = `origin/main` = `3b1f770`，`.git/refs/remotes/origin/main` 于 **2026-09-30 12:50:19** 由 `fetch --all --prune --tags` fast-forward 到该提交；远端分支 `origin/feat/high-school-geometry-interaction` **仍存在（未删除）**。
+- **改了什么**：把四处"尚未并入 `main` / 未合并"的**过时表述**按上述事实改正 —— `docs/current-status.md`（页首更新时间、本轮小节标题、"本轮结束时的交接"两条）、实施计划「执行快照」标题与末条、`docs/research/2026-09-29-high-school-geometry-interaction-progress.md`（页首与三处状态句）、`docs/feature-catalog.md`「本期收口」（引言与第 6 条）。`docs/project-progress.md` 是**归档**（记"当时实测"），其历史条目按该文件自己的体例**不改**。
+- **没有变的**：桌面打包（`npm run build`，含 Tauri/Rust）**仍未做**；教师/学生走查**仍未做**；Task 6 单顶点编辑（已定修法：把受影响的面拆成三角形）**仍待实施**；球体与球截面**尚未启动**（需先另立方案与实施计划）。
+- **核对边界（如实）**：写这份记录时 `git ls-remote origin main` **失败**（`Connection was reset`），所以"远端 tip"引用的是 2026-09-30 12:50 那次 fetch 的结果，**不是当次核对**。
+- 本批**只改文档**，无可执行产物。
+
 ## 2026-09-29 —— 本轮收尾并暂停：代码侧验证项做完，交接与后续方向已记录
 
 - **按用户要求"暂停其他内容"**：本轮在此收尾。实施计划里**代码侧的验证项已全部完成** —— Task 1 / 2 / 3 / 4 / 5 / 7 全部勾选，Task 8 的第 1、4 项勾选。
