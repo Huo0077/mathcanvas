@@ -75,10 +75,10 @@
 
 **Interfaces:** Produces `type WorkPlane = 'xy'|'xz'|'yz'|{faceId:string}` 和 `type SpatialAnchor = {position:Vector3; pointId?:string; source:'point'|'edge'|'face'|'work-plane'}`；`resolveSpatialAnchor(hit, ray, plane): SpatialAnchor | {reason:string}`。`hit` 须使用已有拾取与可见性规则，`ray` 不在 React 层重建几何。
 
-- [ ] 写失败测试：已有点优先于边/面，空白射线落在 `z=0`，切 XZ/YZ 后世界坐标准确；射线与工作面近平行时返回明确失败；隐藏或锁定对象不被当作可吸附目标。
+- [ ] 写失败测试：已有点优先于边/面，空白射线落在 `z=0`，切 XZ/YZ 后世界坐标准确；射线与工作面近平行时返回明确失败；隐藏或锁定对象不被当作可吸附目标。**（2026-09-29 核对：前四条已在既有用例里覆盖 —— 已有点优先 / 空白落 `z=0` / XZ+YZ 精确 / 近平行如实拒绝；最后一条只成立一半 —— 隐藏图元由 `isUserVisiblePrimitive` 挡在场景外（不进场景就碰不到），而**锁定对象照旧可见可拾取**（该判据不看 `locked`），所以"锁定不被吸附"这条口径**未实现**，属产品判断，已记入 `docs/current-status.md` 的如实缺口待定）**
 - [x] 运行 `npm test -- apps/web/src/spatialPick.test.ts` 并核对失败原因。
 - [x] 最小实现复用 Three.js 射线与现有拾取次序；面与边的最近点/投影若现有内核没有可靠 API，只显示预览不做隐式绑定，不允许凭像素猜宿主参数。
-- [ ] 运行聚焦单测，并补相机斜视、面背侧、距离容差、重叠点测试。
+- [x] 运行聚焦单测，并补相机斜视、面背侧、距离容差、重叠点测试。**（2026-09-29 完成：`apps/web/src/spatialPick.test.ts` 7→11 项，四项各钉一条性质；三次定向变异证过都能红且不误伤其它用例；提交 `07ac450`）**
 
 ### Task 4：一次事务的画布创建（P0）
 
