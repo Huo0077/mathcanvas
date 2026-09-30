@@ -1740,3 +1740,30 @@ describe("topologyOfEntity", () => {
     expect(topologyOfEntity(document, "nope")).toBeNull()
   })
 })
+
+/**
+ * **改一个顶点会撞上"面必须共面"这条不变量**（2026-09-29 查实，走的是属性栏那条真实路径）。
+ *
+ * 棱柱（与模板实体一样）的侧面是**四边形**，而文档校验器要求 `face3` 的点共面：改一个顶点会让相邻三个
+ * 四边形立刻不共面，于是 `commitPatch`（`store.apply` 走的就是它）**整笔回滚并返回错误**。属性栏因此把
+ * 输入框弹回原值，同时界面**会**弹出这条告警（`role="alert"`，浏览器实测文案就是下面断言的那句）。
+ *
+ * 所以"改了没生效"**不是静默丢弃**，而是"这条能力对四边形面的实体不成立"——上面 `applyOperation` 那条
+ * 用例覆盖的是**存储层**（它能翻描述），这条覆盖的是**校验层**（它把整笔拦住）。真正的缺口（记在
+ * `docs/current-status.md` 的如实缺口里）是：没有一条让用户改单顶点的路径 —— 把受影响的面拆成三角形、
+ * 或放宽共面要求，都是产品决定。这条用例把**现状与提示**一起钉住：哪天改成"能改"，它会红，
+ * 提醒改的人同时更新那条记录与告警文案。
+ */
+describe("a numeric vertex edit on a quad-faced solid is refused by the validator, with a reason", () => {
+  it("returns an explicit error instead of silently dropping the edit", () => {
+    const document = prismDocument()
+    const result = commitPatch(document, patchPoint3("solid-1:v6", { x: 0, y: 0, z: 9 }))
+
+    expect(result.changed).toBe(false)
+    expect(result.error).toContain("face3 points are not coplanar")
+    // 文档一个字节都没动（所以属性栏的输入框会弹回原值）
+    const kept = result.document.primitives.find((primitive) => primitive.id === "solid-1:v6")
+    const original = document.primitives.find((primitive) => primitive.id === "solid-1:v6")
+    expect(kept?.type === "point3" ? kept.position : null).toEqual(original?.type === "point3" ? original.position : null)
+  })
+})
