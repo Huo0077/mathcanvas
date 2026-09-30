@@ -148,8 +148,17 @@ export function calculateMeasurement3(measurement: Measurement3, context: Measur
     return first && second ? measureLength3(measurement.id, measurement.sourceIds, first, second) : invalidMeasurement(measurement.id, measurement.sourceIds, "length", "insufficient-data", "长度需要一个线性对象或两个空间点。")
   }
   if (measurement.metric === "distance") {
-    const firstSource = sources[0]
-    const secondSource = sources[1]
+    /**
+     * **点那一侧先换到前面**（2026-09-29 修）。
+     *
+     * 属性栏只要"1 个空间点 + 1 个空间平面/直线"就给出「距离」，**与点击顺序无关**
+     * （`spatialTools.measurementOptionsFor`）；而这一支原来固定按 `sourceIds[0]` 是点取数，
+     * 于是"先点平面、再选点"只会得到一条 `insufficient-data`：按钮可点、面板无数字、画布没标签。
+     * 交换只影响**取数**与说明文案；`measurement.sourceIds` 记的仍是用户的选择顺序。
+     */
+    const swap = pointFromPrimitive(sources[0], primitives) === null && pointFromPrimitive(sources[1], primitives) !== null
+    const firstSource = swap ? sources[1] : sources[0]
+    const secondSource = swap ? sources[0] : sources[1]
     const firstPoint = pointFromPrimitive(firstSource, primitives)
     if (firstPoint && secondSource?.type === "plane3") {
       const definition = secondSource.definition
@@ -162,18 +171,18 @@ export function calculateMeasurement3(measurement: Measurement3, context: Measur
          */
         const normal = normalizeVector3(definition.normal)
         if (lengthVector3(normal) <= EPSILON) return invalidMeasurement(measurement.id, measurement.sourceIds, "distance", "insufficient-data", "平面法向量退化（长度为零），无法确定平面方向。")
-        return measureDistance3(measurement.id, measurement.sourceIds, Math.abs(dotVector3(normal, subtractVector3(firstPoint, origin))), `由点 ${measurement.sourceIds[0]} 到平面 ${measurement.sourceIds[1]} 的法向距离计算。`)
+        return measureDistance3(measurement.id, measurement.sourceIds, Math.abs(dotVector3(normal, subtractVector3(firstPoint, origin))), `由点 ${firstSource?.id} 到平面 ${secondSource?.id} 的法向距离计算。`)
       }
       const planePoints = definition.pointIds.map((id) => pointById(primitives, id))
       const plane = planePoints.every(Boolean) ? planeFromPoints(planePoints[0]!, planePoints[1]!, planePoints[2]!) : null
-      return plane ? measureDistance3(measurement.id, measurement.sourceIds, Math.abs(dotVector3(plane.normal, firstPoint) + plane.constant), `由点 ${measurement.sourceIds[0]} 到平面 ${measurement.sourceIds[1]} 的法向距离计算。`) : invalidMeasurement(measurement.id, measurement.sourceIds, "distance", "insufficient-data", "无法解析平面来源。")
+      return plane ? measureDistance3(measurement.id, measurement.sourceIds, Math.abs(dotVector3(plane.normal, firstPoint) + plane.constant), `由点 ${firstSource?.id} 到平面 ${secondSource?.id} 的法向距离计算。`) : invalidMeasurement(measurement.id, measurement.sourceIds, "distance", "insufficient-data", "无法解析平面来源。")
     }
     if (firstPoint && secondSource && ["line3", "segment3", "ray3", "edge3"].includes(secondSource.type)) {
       const endpoints = lineEndpoints(secondSource as LineLike3, primitives)
       if (!endpoints) return invalidMeasurement(measurement.id, measurement.sourceIds, "distance", "insufficient-data", "无法解析直线来源。")
       const direction = subtractVector3(endpoints[1], endpoints[0])
       const length = lengthVector3(direction)
-      return length > EPSILON ? measureDistance3(measurement.id, measurement.sourceIds, lengthVector3(crossVector3(subtractVector3(firstPoint, endpoints[0]), direction)) / length, `由点 ${measurement.sourceIds[0]} 到直线 ${measurement.sourceIds[1]} 的垂距计算。`) : invalidMeasurement(measurement.id, measurement.sourceIds, "distance", "degenerate", "距离来源直线退化。")
+      return length > EPSILON ? measureDistance3(measurement.id, measurement.sourceIds, lengthVector3(crossVector3(subtractVector3(firstPoint, endpoints[0]), direction)) / length, `由点 ${firstSource?.id} 到直线 ${secondSource?.id} 的垂距计算。`) : invalidMeasurement(measurement.id, measurement.sourceIds, "distance", "degenerate", "距离来源直线退化。")
     }
     const secondPoint = pointById(primitives, measurement.sourceIds[1])
     return firstPoint && secondPoint ? measureDistance3(measurement.id, measurement.sourceIds, distanceVector3(firstPoint, secondPoint), `由两个空间点 ${measurement.sourceIds.join("、")} 的坐标计算距离。`) : invalidMeasurement(measurement.id, measurement.sourceIds, "distance", "insufficient-data", "距离需要两个空间点，或点与直线/平面。")

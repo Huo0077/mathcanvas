@@ -380,21 +380,32 @@ test("空间直线与平面的关系：线在面内与平行不共面由平面�
   expect(offsets[1]).toBeCloseTo(3, 6)
 
   // 产品自己的关系读数：点 F 到平面 z = 0 的距离。
-  // **来源顺序有要求**（实测 + 代码一致）：内核 `evaluateMeasurement3` 的 distance 分支按
-  // `sourceIds[0]` 是点、`sourceIds[1]` 是平面3 来取数（`measurements3d.ts` 的 `pointFromPrimitive` 对
-  // `plane3` 返回 null）。反过来选（平面在前）时按钮照样出现，却只会得到一条 `invalid` 读数、画布不出数字——
-  // 这是已记档的真缺陷，本用例按**可用顺序**断言"点 → 平面"，不把无效行为当成正确行为钉住。
-  await algebra.getByText("F", { exact: true }).click()
-  await algebra.getByText("空间平面 1").first().click({ modifiers: ["Shift"] })
-  await page.locator('[aria-label="三维测量工具"]').getByRole("button", { name: "距离", exact: true }).click()
+  // **两种选择顺序都必须能量**（2026-09-29 修）：属性栏只要"1 个空间点 + 1 个空间平面"就给按钮，与顺序无关；
+  // 而内核原来只认 `[点, 平面]`，于是"平面先选"会得到一条 `invalid` 读数（按钮可点、画布不出数字）。
+  // 内核侧另有同名用例（`measurements3d.test.ts`），这条是浏览器侧的回归。
+  const distanceLabel = page.locator(".three-measurement-label")
+  const measureDistance = async (first: string, second: string) => {
+    await algebra.getByText(first, { exact: true }).first().click()
+    await algebra.getByText(second, { exact: true }).first().click({ modifiers: ["Shift"] })
+    await page.locator('[aria-label="三维测量工具"]').getByRole("button", { name: "距离", exact: true }).click()
+  }
+
+  // 顺序一：点 → 平面
+  await measureDistance("F", "空间平面 1")
   await expect(page.locator("[data-3d-scene]")).toHaveAttribute("data-measurement-labels", "1")
-  await expect(page.locator(".three-measurement-label")).toHaveText(/距离：3\.000u/)
+  await expect(distanceLabel).toHaveText(/距离：3\.000u/)
   // 这条读数是产品自己算出来的：它的来源与状态都在对象列表里可查
   await expect(algebra.locator(".measurement-row .measurement-status")).toHaveAttribute("data-status", "valid")
 
   // 一步撤销：这次测量是一个完整的构造动作，退一步就整条撤掉
   await page.keyboard.press("Control+z")
-  await expect(page.locator(".three-measurement-label")).toHaveCount(0)
+  await expect(distanceLabel).toHaveCount(0)
+
+  // 顺序二：平面 → 点（修复前这里只会得到一条 invalid 读数、画布上什么都没有）
+  await measureDistance("空间平面 1", "F")
+  await expect(page.locator("[data-3d-scene]")).toHaveAttribute("data-measurement-labels", "1")
+  await expect(distanceLabel).toHaveText(/距离：3\.000u/)
+  await expect(algebra.locator(".measurement-row .measurement-status")).toHaveAttribute("data-status", "valid")
 })
 
 test("已有文档恢复与撤销：旧 .mgeo 迁移后几何不变，刷新后逐 id 恢复，撤销只撤新工作", async ({ page }) => {
