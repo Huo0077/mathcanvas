@@ -119,7 +119,7 @@
 
 **Interfaces:** Existing `PrimitivePresentation.style?.dash` is preferred for explicit instructional dashes；the view-only hidden-edge toggle remains independent. If `dash` schema or 3D line renderer lacks support, add it through DSL/schema/renderer together; do not convert all hidden edges into persisted dashed lines.
 
-- [ ] 写失败测试：一条教学辅助线存/取仍为虚线；切换自动隐藏棱只改变显示层，不改教学线型；旋转视角后顶点标签仍与对象对应。
+- [x] 写失败测试：一条教学辅助线存/取仍为虚线；切换自动隐藏棱只改变显示层，不改教学线型；旋转视角后顶点标签仍与对象对应。**（2026-09-29 完成：前两条由 `threeTeachingLines.test.ts` 的既有用例覆盖（`.mgeo` 往返保虚线、与"隐藏边"独立）并复跑确认；**第三条新加** —— `e2e/geometry3d-teaching-lines.spec.ts` 增至 2 项，对每个 `[data-point-id]` 断言锚点等于它自己那个顶点的投影（±2px，旋转前后各一遍）；变异检查（偏移 +10→+60）当场报 50px；提交 `5bd2444`。顺带查实"指针抬起前最后一次相机移动不触发渲染"并记入如实缺口）**
 - [x] 运行 `npm test -- apps/web/src/threeTeachingLines.test.ts packages/dsl/src/codec.test.ts` 及 `e2e/geometry3d-teaching-lines.spec.ts`，确认新材质和「教学线型」入口在实现前按预期失败。
 - [x] 补属性入口和 Three.js 线型渲染（复用现有 `style.dash`；如果已有可用则仅加 UI 与测试），保持现有剖切/交线自身的颜色与预览虚线不混入教学线型。
 - [x] 复跑聚焦测试和相关 e2e；确认旧无样式文档渲染不变。
