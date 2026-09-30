@@ -18,10 +18,18 @@
 | Task 8 第二批：圆锥截面 + 空间直线与平面的关系 | `0166845` | 同文件增至 6 项；圆锥按 `e = sinθ / cosα` 核对圆/椭圆/双曲线与 `πr²` 面积（变异检查证过），线面关系由平面方程判定"在面内 vs 平行不共面"并测到点到平面距离 3.000u；e2e 类型检查、定向 lint、全仓 lint 0 错/13 警告均为本批复跑；顺带查实「距离」测量来源顺序缺陷并记档 |
 | Task 8 第三批：已有文档恢复与撤销（六类齐） | `1a82c97` | 同文件增至 **7 项**，六类代表题**全部覆盖**；旧文档（只有模板实体没拓扑）迁移后 origin/size 逐值不变、拓扑包围盒精确、刷新后 id 逐项恢复、撤销只撤新工作；变异检查证过；顺带查实「恢复后第一次改动不落草稿」缺陷并记档；Task 8 第 2 项门禁当次复跑（typecheck / lint / 单测 265 文件 3055 项 / web 构建 全 exit 0） |
 | 修复：恢复草稿后第一次改动不落盘 | `4968051` | 根因是 `useDraftPersistence.ts` 里 skip 与 settled 的判断顺序（两者赛跑）；修法先消费 skip 再判 settled，两条守卫不变松；回归钉在浏览器侧（修复前红 Expected 112 / Received 84、修复后绿），单测 9 条钉语义前后都绿；全库单测 265 文件/3055 项、lint 0 错/13 警告、typecheck 与 web 构建全 exit 0 |
+| 修复：「距离」测量不再依赖选择顺序 | `e25cacb` | 根因是内核 distance 分支固定按 `sourceIds[0]` 是点取数；修法把"点那一侧"换到前面（`sourceIds` 仍记用户顺序）；内核新用例红→绿（该文件 10/10），浏览器侧回归要求两种顺序都量出 3.000u；全库单测 265 文件/3056 项、lint 0 错/13 警告、typecheck 与 web 构建全 exit 0 |
 
 上述提交均在 GitHub 功能分支，**没有合并 `main`，也没有打包成桌面新版本**。此前普通权限上传曾留下 `git-remote-https.exe` 弹窗；后续从授权环境上传均返回明确成功结果。
 
-## 最新完成模块：修复"恢复草稿后第一次改动不落盘"（会丢用户数据，已上传 GitHub）
+## 最新完成模块：修复「距离」测量不再依赖选择顺序（已上传 GitHub）
+
+- **缺陷**：属性栏只要"1 个空间点 + 1 个空间平面"就给出「距离」按钮、**与点击顺序无关**（`spatialTools.measurementOptionsFor`），而内核 distance 分支固定按 `sourceIds[0]` 是点、`[1]` 是平面/直线取数（`pointFromPrimitive` 对 `plane3` 返回 `null`）。于是**先点平面、再选点**会落到"距离需要两个空间点"的兜底：按钮可点、面板无数字、画布不出标签。
+- **修法**：在 distance 分支开头把"点那一侧"换到前面（只在 `sources[0]` 不是点、`sources[1]` 是点时才换）；`measurement.sourceIds` 仍记**用户的选择顺序**。点 + 平面（`pointNormal` / `throughPoints` 两种定义）、点 + 直线三种组合一起受益。
+- **TDD 证据（红 → 绿）**：内核新用例 `measurements3d.test.ts` › "measures a point-to-plane distance whichever of the two was selected first" 修复前红（plane-first 得到 `insufficient-data`、`value` 未定义），修复后绿（该文件 10/10）；浏览器侧回归改成**两种顺序都必须量出 3.000u**（修复前"平面先选"的画布标签数为 0，修复后两种都绿）。说明文案也钉住：必须写"由点 p 到平面 plane"，不能因为交换而说反。
+- 本批读数：全库单测 **265 文件 / 3056 项通过 + 1 todo / 0 失败**（278 s，比上批多 1 项 = 新增的内核用例）；`npm run typecheck` exit 0；`npm run lint` 0 error / 13 warning；`npm --workspace @draw/web run build` exit 0；e2e 该文件 7/7 通过。
+
+## 上一模块：修复"恢复草稿后第一次改动不落盘"（会丢用户数据，已上传 GitHub）
 
 - **缺陷**：页面加载恢复草稿后，用户的**第一次改动不会写进草稿**。真机实测：刷新后加一个立方体 → 对象列表出现「立方体 1」，而 `mathcanvas:draft:geometry3d` 仍是 84 个 id；再加第二个才一次跳到 140。后果：刷新后只改一次就关页面，那次改动从 localStorage 草稿里丢失（桌面仓储那一份也在同一个 `return` 之后一起被跳过）。
 - **根因**：`useDraftPersistence.ts` 自动保存里 `skipNextDraftSaveRef`（本意"刚恢复的内容不要立刻回写"）与 `restoreSettledRef` 的**判断顺序**错了。恢复那一侧先置 skip 再 `replace(...)`，而 settled 是在 restore 那个 promise 的 `.finally()` 里置位 —— 两者赛跑；恢复自身那次变化触发的 effect 若先跑，就在"还没 settled"那一步直接 return、**没有消费 skip**，这支"跳过"最终被用户恢复后的第一次改动吃掉。
@@ -74,4 +82,4 @@
 3. 更灵活的实体底面输入、拖放顶点/高度手柄与关联拉伸未交付；现有「使用选中面作底面」会**独立复制当时的坐标**，不追随原面更新。
 4. 球体/球截面、截图生成可编辑数学图、平面/函数的逐题补缺和 HTML/GGB 导出属于单独后续方案，当前不能算完成。
 
-详见 [任务说明](../superpowers/specs/2026-09-29-high-school-geometry-interaction-design.md) 与 [实施计划](../superpowers/plans/2026-09-29-high-school-geometry-interaction-implementation-plan.md)。`cecc1fe`、`0166845`、`1a82c97`、`4968051` 四笔均已由 `git push` 返回成功、并由 `git fetch` 复核本地与远端 `feat/high-school-geometry-interaction` 的 SHA 一致。上传过程记一笔实况：`github.com:443` 在本机**时通时断**，且越来越差 —— `0166845` 重试到第 6 次、`1a82c97` 重试到第 7 次、`4968051` 第 3 次才成功（每次尝试间有 15 秒间隔）。**两处查实缺陷的现状**：①「距离」测量在"平面先选"时只得到无效读数 —— **仍未修**（见 [当前状态的如实缺口](../../current-status.md)）；②恢复草稿后第一次改动不落草稿 —— **已修**（`4968051`）。本次进度记录收口在随后一笔文档提交中，并同样推送到该功能分支。
+详见 [任务说明](../superpowers/specs/2026-09-29-high-school-geometry-interaction-design.md) 与 [实施计划](../superpowers/plans/2026-09-29-high-school-geometry-interaction-implementation-plan.md)。`cecc1fe`、`0166845`、`1a82c97`、`4968051`、`e25cacb` 五笔均已由 `git push` 返回成功；远端复核改用 `api.github.com`（`github.com:443` 在抖，而推送本身会更新本地的远端跟踪引用，所以"本地与跟踪引用一致"不算独立证据 —— 这一条也是本轮记下的教训）：`e25cacb` 的远端 tip 与本地 HEAD 逐字一致。上传实况：`0166845` 重试到第 6 次、`1a82c97` 第 7 次、`4968051` 第 3 次、`e25cacb` 第 1 次成功（每次尝试间有 15 秒间隔）。**两处查实缺陷现已全部修掉**：①「距离」测量来源顺序 → `e25cacb`；②恢复草稿后第一次改动不落草稿 → `4968051`，两处回归都已钉住。本次进度记录收口在随后一笔文档提交中，并同样推送到该功能分支。

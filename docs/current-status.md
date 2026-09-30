@@ -5,18 +5,18 @@
 > [`docs/project-progress.md`](project-progress.md) —— 那是**归档**，里面的数字是"当时实测"，
 > 不是当前值。两份文件分工明确：**要当前值看这里，要过程看归档。**
 
-**最后更新：** 2026-09-29（Task 8 三批齐 + 修掉"恢复草稿后第一次改动不落盘"；下表只写**当次真正复跑过**的门禁，不把 9 月 26 日的测试数字当成现值）。
+**最后更新：** 2026-09-29（Task 8 三批齐 + 修掉本轮查实的两处真缺陷；下表只写**当次真正复跑过**的门禁，不把 9 月 26 日的测试数字当成现值）。
 
 ## 一、现在能不能跑（可复核的门禁读数）
 
 | 命令 | 本轮实际结果与范围 |
 | --- | --- |
-| `npm test -- --maxWorkers=3` | **265 个测试文件 / 3055 个用例通过 + 1 todo / 0 失败**（全库，已修正 2 条旧 `4×4×2` 正方体断言后复跑） |
+| `npm test -- --maxWorkers=3` | **265 个测试文件 / 3056 个用例通过 + 1 todo / 0 失败**（全库；比上一批多 1 项 = 新增的点到平面距离顺序用例） |
 | `npm run typecheck` | 6 个 workspace，以及 `e2e/` 与 `scripts/` 类型检查，全部 exit 0 |
 | `npm run lint` | exit 0，**0 error / 13 warning**（已有基线警告，并非全部无警告） |
 | `npm --workspace @draw/web run build` | exit 0；入口 1694.22 kB、`engineeringExporters` 433.81 kB、`geometry.worker` 310.99 kB；仍有 >500 kB chunk 警告 |
 | 7 个相关 3D Playwright spec | **44 / 44 通过**，涵盖画布创建、常用立体、旧文档、拾取/旋转、交点预览及教学线型；**全量 `npm run test:e2e` 本轮未复跑** |
-| `e2e/high-school-geometry-tasks.spec.ts`（Task 8 三批合计） | **7 / 7 通过**：三棱锥、四棱锥、斜三棱柱、异长长方体、圆锥截面、空间直线与平面的关系、已有文档恢复与撤销 —— **六类代表题全部覆盖**；断言顶点坐标、三边尺寸、拉伸向量、解析圆锥曲线离心率、平面方程判定的线面关系、旧文档迁移后的拓扑几何、刷新后逐 id 恢复、拓扑依赖、保存往返与一步撤销（三批各做过变异检查）；另含回归：**恢复后第一次改动必须写回草稿**（修复前红 Expected 112 / Received 84、修复后绿） |
+| `e2e/high-school-geometry-tasks.spec.ts`（Task 8 三批合计） | **7 / 7 通过**：三棱锥、四棱锥、斜三棱柱、异长长方体、圆锥截面、空间直线与平面的关系、已有文档恢复与撤销 —— **六类代表题全部覆盖**；断言顶点坐标、三边尺寸、拉伸向量、解析圆锥曲线离心率、平面方程判定的线面关系、旧文档迁移后的拓扑几何、刷新后逐 id 恢复、拓扑依赖、保存往返与一步撤销（三批各做过变异检查）；另含两条回归：**恢复后第一次改动必须写回草稿**（修复前红 Expected 112 / Received 84、修复后绿）与**点到平面距离与选择顺序无关**（两种顺序都量出 3.000u） |
 | `npm run build`（含桌面 Rust） | 本轮未完成桌面打包；P0 时一次 Rust 编译超过 180 秒而中止，**不等于桌面构建通过** |
 | `npm run test:rust` / `npm run test:perf` | 本轮均未复跑；此前读数只能当历史基线，不能写成现状 |
 
@@ -172,7 +172,6 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
 - **`longtask` API 在本机不可用（实测，不是猜的）**：评审方案 7 点名要的 `PerformanceObserver({ type: "longtask" })` 在**空白页**上、对一次**故意阻塞 200 ms** 的主线程占用，`observed` 与 `performance.getEntriesByType("longtask")` **都是空的**，而 `supportedEntryTypes` 里**确实**列着 `longtask`（Chromium 153 / Playwright headless）—— 即"声称支持、什么也不报"（一次性探针复核过，用完即删）。所以主线程读数改用**帧间隔**（`requestAnimationFrame` 间隔）实现：同一个 200 ms 阻塞必定表现为 ≥200 ms 的空档，量具灵敏度可以自证（用例里就有这条标定断言）。见 `e2e/main-thread-responsiveness.spec.ts`。
 - **`section.create` 的平面已收口，但"登记表承诺 ≠ 校验层实现"这类风险只是**被识别出来**，没有机器挡住**（2026-09-26，见 §二「实机现场故障」）：`actionRegistry` 是"我们承诺收什么"的唯一声明处，而 `actionInputs` 里**少一个分支就静默落空** —— 字段会原样透传，直到文档校验器才被拒，报的还是够不到的**动作级**路径（那条一次性修复因此改不动它）。这一批把 `section.create` 补上了（三种平面写法收成一种，且共线时按**字段路径**拒绝），并留了判据："登记表里写了 `ask_user` 问题、或写了可选字段的每个动作都必须在校验层有显式分支"。**但这条判据目前只写在文档里**，没有一个测试逐动作核对登记表与 `parseActionInputs` 的分支覆盖面 —— 下一个新动作照样可能漏。
 - **平面写法上刻意只收三种**：规范形 `{normal, constant}`、过三点 `{points|throughPoints: […3]}`、点 + 法向 `{point|origin, normal}`（坐标 `{x,y,z}` / `[x,y,z]` 都收）。**不做**的：用两个方向向量定平面、用字符串别名指代平面（`"diagonal"`）、用曲面/多边形顶点集反推 —— 遇到这些会如实按 `invalid_plane` 拒绝并给出字段路径，而不是猜。
-- **「距离」测量的来源顺序有一个真缺陷（2026-09-29 查实，尚未修）**：`spatialTools.measurementOptionsFor` 只要选中"1 个空间点 + 1 个空间平面"就提供「距离」按钮，**与选择顺序无关**；但内核 `evaluateMeasurement3` 的 distance 分支按 `sourceIds[0]` 是点、`sourceIds[1]` 是平面来取数（`pointFromPrimitive` 对 `plane3` 返回 `null`），所以**平面先选**时会落到"距离需要两个空间点"的兜底，生成一条 `invalid` 测量：按钮可点、面板无数字、画布不出标签。证据：`e2e/high-school-geometry-tasks.spec.ts` 的线面关系用例按**可用顺序**（先点后平面）断言才测到 3.000u；反过来选时 `data-measurement-labels` 为 0。修法两条（择一）：把内核 distance 分支改成顺序无关，或让 `spatialTools` 只在"点在前"时给出该按钮。**未修**，也未在用例里把错误行为当正确行为钉住。
-- **（已闭环，留档；不再是缺口）恢复草稿后第一次改动不落盘** —— 2026-09-29 查实并**修复**（提交 `4968051`）。根因是 `useDraftPersistence.ts` 里 `skipNextDraftSaveRef` 与 `restoreSettledRef` 的判断顺序（两者赛跑，skip 被用户恢复后的第一次改动吃掉）；修法是先消费 skip 再判 settled，两条原有守卫都不变松。回归钉在浏览器侧（修复前红 Expected 112 / Received 84、修复后绿）；单测那 9 条钉语义、前后都绿。详见 `CHANGELOG.md` 同日那一节。
+- **（已闭环，留档；不再是缺口）本轮查实并修掉两处真缺陷** —— 2026-09-29：① **恢复草稿后第一次改动不落盘**（会丢用户数据；提交 `4968051`）—— 根因是 `useDraftPersistence.ts` 里 `skipNextDraftSaveRef` 与 `restoreSettledRef` 的判断顺序赛跑（skip 被用户恢复后的第一次改动吃掉），修法是先消费 skip 再判 settled、两条原有守卫都不变松；回归钉在浏览器侧（修复前红 Expected 112 / Received 84、修复后绿），单测那 9 条钉语义、前后都绿。② **「距离」测量在"平面先选"时只得到无效读数**（提交 `e25cacb`）—— 根因是内核 distance 分支固定按 `sourceIds[0]` 是点取数（`pointFromPrimitive` 对 `plane3` 返回 `null`），修法是把"点那一侧"换到前面、`measurement.sourceIds` 仍记用户的选择顺序；回归在内核（`measurements3d.test.ts`，修复前红）与浏览器（两种顺序都量出 3.000u）两侧都有。详见 `CHANGELOG.md` 同日两节。
 - **引用进度档案一律用小节标题，不写行号**：`project-progress.md:<行号>` 形式的引用会随任何一次编辑静默失效（本阶段就发生过三处，已全部改成按标题引用）。
 
