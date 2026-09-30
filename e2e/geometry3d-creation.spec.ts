@@ -81,6 +81,92 @@ test("keeps camera modes and drawing modes mutually exclusive", async ({ page })
 })
 
 /**
+ * 载入交叠立方体夹具并把相机钉死 —— 与 `three-intersection-previews.spec.ts` 同一套做法
+ * （否则取景动画会在断言期间把细目标从指针下拖走）。
+ */
+async function loadOverlappingCubes(page: import("@playwright/test").Page) {
+  await page.goto("/")
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.locator('input[type="file"]').setInputFiles("e2e/fixtures/overlapping-cubes.mgeo")
+  const scene = page.locator("[data-3d-scene]")
+  await expect(scene).toHaveAttribute("data-preview-face-count", "6")
+  await page.evaluate(() => (document.querySelector('button[aria-label="自动取景"]') as HTMLButtonElement | null)?.click())
+  await expect(page.getByRole("button", { name: "自动取景" })).toHaveAttribute("aria-pressed", "false")
+  await page.getByRole("button", { name: "重置3D视角" }).click()
+  let previous = ""
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const current = `${await scene.getAttribute("data-camera-azimuth")}|${await scene.getAttribute("data-camera-elevation")}|${await scene.getAttribute("data-camera-distance")}`
+    if (current === previous) break
+    previous = current
+    await page.waitForTimeout(120)
+  }
+  return scene
+}
+
+/** 草稿里的图元类型清单：用来数"这一下到底往文档里写了什么"。 */
+async function draftedTypes(page: import("@playwright/test").Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const raw = window.localStorage.getItem("mathcanvas:draft:geometry3d")
+    if (!raw) return [] as string[]
+    return (JSON.parse(raw) as { document: { primitives: { type: string }[] } }).document.primitives.map((primitive) => primitive.type)
+  })
+}
+
+/**
+ * **切换工作区会取消未提交的创建状态**（实施计划 Task 5 那条的最后一句）。
+ *
+ * 判据：切走再切回之后工具已退出、锚点数归零，而且**文档里没有半成品** ——
+ * 未提交的步骤本来就不该落盘（预览只存在于 UI）。
+ */
+test("cancels an unfinished drawing when the workspace is switched", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  const scene = page.locator("[data-3d-scene]")
+  const rows = page.locator(".algebra-panel .object-row")
+
+  await page.getByRole("button", { name: "绘制线段" }).click()
+  const first = await projectWorldPoint(page, { x: 0, y: 0, z: 0 })
+  await page.mouse.click(first.x, first.y)
+  await expect(scene).toHaveAttribute("data-creation-anchors", "1")
+  // 未提交的第一步**不落盘**：对象列表还是空的
+  await expect(rows).toHaveCount(0)
+
+  await page.getByRole("button", { name: "跳转到平面几何" }).click()
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+
+  await expect(scene).toHaveAttribute("data-creation-tool", "")
+  await expect(scene).toHaveAttribute("data-creation-anchors", "0")
+  await expect(rows).toHaveCount(0)
+})
+
+/**
+ * **创建会话优先于预览点击**（同一条的"覆盖在原拾取分支之上"）。
+ *
+ * 判据：指针压在**交面预览**上时点一下，落地的必须是一个**空间点**，
+ * 而不是那份预览对应的交面图元 —— 而预览本身不该被这一下消耗掉。
+ */
+test("lets the drawing session win over a preview click", async ({ page }) => {
+  const scene = await loadOverlappingCubes(page)
+  const before = await draftedTypes(page)
+
+  await page.getByRole("button", { name: "绘制空间点" }).click()
+  await expect(scene).toHaveAttribute("data-creation-tool", "point3")
+  // (1,2,0) 是交叠区域 y=+2 那一面的中心（与预览用例用的是同一个点）
+  const face = await projectWorldPoint(page, { x: 1, y: 2, z: 0 })
+  await page.mouse.move(face.x, face.y)
+  await expect(scene).toHaveAttribute("data-preview-hover-key", /面\d+$/)
+  await page.mouse.click(face.x, face.y)
+
+  const after = await draftedTypes(page)
+  const added = after.slice(before.length)   // 这一下新增的那一截
+  expect(added.filter((type) => type === "point3")).toHaveLength(1)
+  expect(added.filter((type) => type.startsWith("intersection"))).toHaveLength(0)
+  // 点完即完成（点工具只要一个锚点），工具退出
+  await expect(scene).toHaveAttribute("data-creation-tool", "")
+  // 预览还在：这一下没有把那份交面"点走"
+  await expect(scene).toHaveAttribute("data-preview-face-count", "6")
+})
+/**
  * **创建会话里悬停要说清"点下去会引用谁 / 落在哪"**（实施计划 Task 5 那条"悬停辅助标记展示目标、
  * 世界坐标与工作平面，不渲染为持久图元"）。
  *
