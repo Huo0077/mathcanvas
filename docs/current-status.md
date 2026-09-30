@@ -5,13 +5,13 @@
 > [`docs/project-progress.md`](project-progress.md) —— 那是**归档**，里面的数字是"当时实测"，
 > 不是当前值。两份文件分工明确：**要当前值看这里，要过程看归档。**
 
-**最后更新：** 2026-09-29（Task 8 三批齐 + 两处缺陷修复 + Task 3/4/6/7 补充用例 + 功能目录收口；下表只写**当次真正复跑过**的门禁，不把 9 月 26 日的测试数字当成现值）。
+**最后更新：** 2026-09-29（Task 8 三批齐 + 两处缺陷修复 + Task 3/4/6/7 补充用例 + 功能目录收口 + **一处"改不动顶点"的根因更正**；下表只写**当次真正复跑过**的门禁，不把 9 月 26 日的测试数字当成现值）。
 
 ## 一、现在能不能跑（可复核的门禁读数）
 
 | 命令 | 本轮实际结果与范围 |
 | --- | --- |
-| `npm test -- --maxWorkers=3` | **265 个测试文件 / 3061 个用例通过 + 1 todo / 0 失败**（全库；比上一批多 5 项 = spatialPick 四条边界用例 + `.mgeo` 往返一条） |
+| `npm test -- --maxWorkers=3` | **265 个测试文件 / 3062 个用例通过 + 1 todo / 0 失败**（全库；比上一批多 1 项 = 新增的"改不动顶点"表征用例） |
 | `npm run typecheck` | 6 个 workspace，以及 `e2e/` 与 `scripts/` 类型检查，全部 exit 0 |
 | `npm run lint` | exit 0，**0 error / 13 warning**（已有基线警告，并非全部无警告） |
 | `npm --workspace @draw/web run build` | exit 0；入口 1694.22 kB、`engineeringExporters` 433.81 kB、`geometry.worker` 310.99 kB；仍有 >500 kB chunk 警告 |
@@ -179,10 +179,12 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
 - **平面写法上刻意只收三种**：规范形 `{normal, constant}`、过三点 `{points|throughPoints: […3]}`、点 + 法向 `{point|origin, normal}`（坐标 `{x,y,z}` / `[x,y,z]` 都收）。**不做**的：用两个方向向量定平面、用字符串别名指代平面（`"diagonal"`）、用曲面/多边形顶点集反推 —— 遇到这些会如实按 `invalid_plane` 拒绝并给出字段路径，而不是猜。
 - **（已闭环，留档；不再是缺口）本轮查实并修掉两处真缺陷** —— 2026-09-29：① **恢复草稿后第一次改动不落盘**（会丢用户数据；提交 `4968051`）—— 根因是 `useDraftPersistence.ts` 里 `skipNextDraftSaveRef` 与 `restoreSettledRef` 的判断顺序赛跑（skip 被用户恢复后的第一次改动吃掉），修法是先消费 skip 再判 settled、两条原有守卫都不变松；回归钉在浏览器侧（修复前红 Expected 112 / Received 84、修复后绿），单测那 9 条钉语义、前后都绿。② **「距离」测量在"平面先选"时只得到无效读数**（提交 `e25cacb`）—— 根因是内核 distance 分支固定按 `sourceIds[0]` 是点取数（`pointFromPrimitive` 对 `plane3` 返回 `null`），修法是把"点那一侧"换到前面、`measurement.sourceIds` 仍记用户的选择顺序；回归在内核（`measurements3d.test.ts`，修复前红）与浏览器（两种顺序都量出 3.000u）两侧都有。详见 `CHANGELOG.md` 同日两节。
 - **「锁定对象不被当作可吸附目标」这条口径没有实现（2026-09-29 核对，属产品判断，未擅自改）**：计划 Task 3 点名要验"隐藏或锁定对象不被当作可吸附目标"。**隐藏**那一半成立且是构造性的 —— `threeSceneContent.ts` 先 `filter(isUserVisiblePrimitive)` 再建对象，隐藏图元根本不进场景，射线碰不到（该判据自己有单测）；**锁定**那一半不成立 —— `primitiveVisibility.ts` 的 `isUserVisiblePrimitive` 只看 `visible` 与 `tessellation`，**不看 `locked`**，所以锁定对象照旧可见、可拾取、可被吸附。原因是本项目的锁定语义是"不能移动"（`toggleLock`），不是"不能选中"。两条出路（择一，需要你定）：承认现状并把计划口径改成"锁定只挡移动"，或给锁定对象加一道拾取门禁。
-- **棱柱的两个"改不动"（2026-09-29 查实，尚未修）** —— 计划 Task 6 里"移动顶点"那一半因此**没有落地**：
-  1. **属性栏改棱柱顶点坐标被静默丢弃**：输入框自己弹回原值、文档不变、**无任何提示**。模板实体有"按数值改顶点即翻成 `fromFaces`"的路径，棱柱这一支没有；而棱柱是**构造驱动**的（`polyhedron3.construction = { kind: "prism", base, vector }` 是真源，8 个顶点只是缓存，见 `packages/dsl/src/types.ts`）。
-  2. **拖顶点手柄之后 Ctrl+Z 被校验拒绝**：`data-drag-target` 读到**不是**实体；随后页面报 `the change would make the document invalid: face3 points are not coplanar`。从**实体中心**拖动那条既有用例撤销正常 —— 差别只在抓取点。
-  证据：`e2e/solid-prism.spec.ts` 的补充用例探测过程（顶点拖拽用例已**整条撤掉**，因为它既与"从中心拖动"重复、期望值也无法诚实钉住）。两条都**未修**，也**没有**在用例里把失败交互钉成"预期行为"。
+- **"改不动一个顶点"的真根因：面必须共面（2026-09-29 复核更正，尚未修）** —— 计划 Task 6 里"移动顶点"那一半因此**没有落地**。
+  - **更正**：此前这里记的是"属性栏改棱柱顶点坐标被**静默丢弃**、无任何提示"。走 UI 的真实路径复核后，那条**不准确**：`commitPatch`（`store.apply` 调的就是它）返回 `changed=false` + `error = "the change would make the document invalid: face3 points are not coplanar…"`，浏览器实测输入框弹回原值的同时**页面确实弹出了 `role="alert"`**，文案就是这一句（用一次性探针实测，探针已删）。
+  - **根因**：棱柱（与模板实体一样）的侧面是**四边形**；改一个顶点会让相邻三个面立刻不共面，而文档校验器要求 `face3` 的点共面 → **校验层**把整笔退回。存储层本身是支持这件事的（`apply.ts` 会把描述翻成 `fromFaces` 再写顶点），但它先过不了校验层 —— 所以"存储层能改"不等于"属性栏能改"。
+  - **另一条现象很可能是同一根因**：拖顶点手柄之后按 Ctrl+Z 被拒，报的是**同一条** `face3 points are not coplanar`。**推断**（未逐条验证）：那次拖动本身被拒、没有留下历史，于是 Ctrl+Z 撤掉的是上一步"创建棱柱"，画面因此变空、`data-content-bounds` 读出 NaN。
+  - **真正缺的是"一条能改单顶点的路径"**：把受影响的面拆成三角形，或放宽共面要求 —— 都是产品决定，**未擅自改**。
+  - 证据：`packages/scene-graph/src/scene-store.test.ts` 的表征用例钉住"被拒 + 明确原因 + 文档未变"（`changed=false`、`error` 含该文案、顶点未动）；探测过程见 [`2026-09-29-high-school-geometry-interaction-progress.md`](research/2026-09-29-high-school-geometry-interaction-progress.md)。
 - **实体源的测量在画布上没有数字（2026-09-29 查实，尚未修）**：`measurementVisuals.ts` 的 `pointPositions` 没有 `polyhedron3` 分支（只认点 / 线 / 段 / 棱 / 射线 / 面 / 平面 / 模板实体），于是 `resolveMeasurementVisual` 对"实体体积"这类测量返回 `null`，**画布上不画数字**，只能去属性栏的测量卡片读。用户口径本来是"测量结果要在图中浮现一个数字"（见 `measurementVisuals.ts` 顶部注释），所以这一条是**与口径不符的缺口**；修法：给 `polyhedron3` 补一个标签落点（例如拓扑顶点均值或包围盒中心）。
 - **指针抬起前最后一次相机移动不触发渲染（2026-09-29 查实，尚未修）**：拖动结束后，画面（含 `.three-point-label` 标签）停在**上一帧**的相机状态上，与 `data-camera-azimuth` 等读数所表示的当前相机差约 **30px**，而且**不会自行收敛** —— 实测轮询 5 秒仍不齐，要等下一次交互（再动一下指针）才追平。影响：快速拖动并松手后，画面会比手停的位置差一点，动一下鼠标才对齐。证据：`e2e/geometry3d-teaching-lines.spec.ts` 的标签用例就是这条的现场（用例在拖动后再抖 2px 强制重画一帧，才断言"已对齐的最终状态"；抖动前后同一条断言一个红一个绿）。修法方向：`threeSceneEffect` 里指针抬起（`pointerup`）时补一次 `render()`，或让相机更新统一排进 rAF 后必渲染。
 - **引用进度档案一律用小节标题，不写行号**：`project-progress.md:<行号>` 形式的引用会随任何一次编辑静默失效（本阶段就发生过三处，已全部改成按标题引用）。
