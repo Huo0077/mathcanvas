@@ -29,10 +29,21 @@
 | Task 7 补充：旋转后顶点标签逐点对齐 | `5bd2444` | `e2e/geometry3d-teaching-lines.spec.ts` 1→**2 项**：对每个 `[data-point-id]` 断言锚点等于它自己那个顶点的投影（±2px，旋转前后各一遍，并确认真转了）；变异检查（偏移 +10→+60）当场报 50px；顺带查实"指针抬起前最后一次相机移动不触发渲染"（差约 30px 且不自行收敛）并记档 |
 | Task 5 收齐：从「选择工具」退出 | `d41e41a` | `e2e/geometry3d-creation.spec.ts` 8→**9 项**：绘制线段点一个锚点 → 点「选择工具」→ 工具与锚点归零、未提交锚点不落盘（对象行数为 0）、**退出后点画布空白仍创建不出东西**（确认回到的是选择语义而非只清了显示）；**先查代码确认无需新代码**（`handleRibbonCommand` 对任何非 `draw-` 命令统一清会话），变异检查（改成 `select-tool` 不清）当场红；Task 5 六条子要求逐条复核后计划项**全部勾选**；tsc/e2e lint exit 0、该 spec 9/9 |
 | Task 1 基线补齐：Esc 分级 + Shift 两点建线端到端 | `208af37` | `e2e/geometry3d.spec.ts` 22→**24 项、24/24 通过**：① Shift 两点多选 → 真的点下"由选中点创建空间直线"建出对象，并以操作提示"对象 3"钉住复用已有两点（变异：`addLine3` 额外建两个重复点 → 红）；② Esc 分级基线（属性栏不再编辑对象、对象行数一个不少；变异：该档改成 `deleteSelected()` → 红）；`spatialTools.test.ts` + `threeScene.test.ts` **74/74**；一次假设出错当场修正（`data-preview-face-count` 数的是交面预览、模板实体下恒 0）；**产品文件零改动**；如实标注这是**改造后补的对照**，不是改造前基线 |
+| Task 2 边界补齐：创建状态机六条子句 | `b73f794` | `spatialCreationSession.test.ts` 4→**10 项**（模块零改动）：point3 一点完成 / line3+ray3 两点完成 / **face3 无论多少点都不自动完成、只有 Enter 收尾** / 首末点重合被拒且会话不前移 / 非有限坐标被拒且不留脏数据 / 拒绝原因文案；三处变异各自精确抓红；**查明 face3 有两层独立守卫**（表里无 face3 条目 + 显式 `tool !== "face3"`，只拆一层仍绿、同拆才红）；`tsc` 抓到 vitest 抓不到的 TS2339（联合类型未收窄），已修，typecheck exit 0 |
 
 上述提交均在 GitHub 功能分支，**没有合并 `main`，也没有打包成桌面新版本**。此前普通权限上传曾留下 `git-remote-https.exe` 弹窗；后续从授权环境上传均返回明确成功结果。
 
-## 最新完成模块：Task 1 基线补齐（Esc 分级 + Shift 两点建线端到端，已上传 GitHub）
+## 最新完成模块：Task 2 边界补齐（创建状态机的六条子句，已上传 GitHub）
+
+- 实施计划 Task 2 那条"写失败测试"列的六件事，前四条与"三种结果"在模块新建那轮就已先红后绿；本轮把剩余边界补到 `apps/web/src/spatialCreationSession.test.ts`（4→**10 项**，模块本身**零改动** —— 补的是已实现行为的表征）。
+- 新增的六条断言（都是真性质，不是凑数）：`point3` 一个锚点即 `ready`；`line3` / `ray3` 两点 `ready`（补齐 `requiredAnchors` 表）；**`face3` 无论 4 个点都仍是 `needs-more`，只有 Enter 能收尾**；**收尾点与首点重合**被拒且**会话不前移**（多边形不会被悄悄封口）；**非有限坐标**（NaN）被拒并带自己的原因、脏数据不留进会话且拒后仍能继续；未完成图形拒绝提交时的**原因文案**逐字钉住。
+- **"Esc / 切工作区取消后没有草稿对象"** 由两条 e2e 覆盖并各带定向变异（`geometry3d-creation.spec.ts` 的 Esc 取消、切换工作区取消），二者都断言对象行数为 0。
+- **三处变异各自精确抓红**：去掉 `Number.isFinite` 守卫 / 去掉重合点守卫 / 把 `face3: 3` 塞进 `requiredAnchors` 表 → 恰好红在对应用例上，其余保持绿。
+- **顺带查明 `face3` 不自动完成有"两层独立守卫"**：① `requiredAnchors` 表里**没有** `face3` 条目（查表落空，`next.anchors.length >= undefined` 恒假）；② 显式判断 `session.tool !== "face3"`。实测：只把 `face3: 3` 塞进表 → **仍全绿**（第二层挡住）；再拆掉显式判断 → 红 3 条。与 Task 5 那条优先级守卫同一个模式。
+- **类型门禁抓到一个 vitest 抓不到的问题**：第一版直接写 `finishSpatialCreation(...).reason`，运行时 10/10 绿，但 `tsc` 报 TS2339（`SpatialCreationResult` 是联合类型，`reason` 只在 `rejected` 分支上）。改成"先断言 `status` 再按分支收窄"后 `npm run typecheck` exit 0。
+- 本批读数：`npm run typecheck` exit 0（6 个 workspace + e2e + scripts）；`eslint apps/web/src/spatialCreationSession.test.ts` exit 0；该文件 **10/10**；产品运行时代码零差异。
+
+## 上一模块：Task 1 基线补齐（Esc 分级 + Shift 两点建线端到端，已上传 GitHub）
 
 - 实施计划 Task 1 那条"在现有 e2e 中增加基线用例（**不改运行时代码**）"里，`e2e/geometry3d.spec.ts` 缺两条，本轮补上（22→**24 项**，24/24 通过）。
 - **Shift 两点多选 → 创建空间直线**：原有用例只断言到"由选中点创建空间直线"按钮**变可用**就停了，从没点下去。现在补到真的建出"空间直线 1"，并用操作提示 `对象 3` 钉住"引用已有两点、没有偷偷另建点"。变异：让 `addLine3` 额外建两个重复点 → 当场红。

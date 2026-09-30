@@ -15,7 +15,7 @@
 | 任务 | 状态与已核证据 | 尚缺证据/工作 |
 | --- | --- | --- |
 | 1. 基线 | **清单两条已勾选**：`e2e/geometry3d.spec.ts` 22→**24 项**（新增 Shift 两点→创建空间直线端到端、Esc 分级基线），24/24 通过；`spatialTools.test.ts` + `threeScene.test.ts` **74/74**；其余四条在他处已有回归（默认选择与 Alt 子图元在同文件、相机旋转在 `geometry3d-drag.spec.ts`、撤销在 drag/section/solid-prism、文档恢复在同文件"打开后取景"与六类样题）。默认 `4×4×2` 尺寸债已改并记录 | **这些是改造后补的对照，不是改造前基线** —— 改造已完成，无法再取"改造前"读数；计划原文"新增测试在改造前能验证旧行为"一句已无法事后满足 |
-| 2. 创建会话 | `spatialCreationSession.test.ts` 先红后绿；状态函数、Esc/Enter/退一步路径已接入 | 取消用 `updateSpatialSession(null)`，没有另造计划中的 `cancelSpatialCreation()` 导出；中文步骤提示由 `App.tsx` 提供 |
+| 2. 创建会话 | **清单四项全部勾选**：`spatialCreationSession.test.ts` 先红后绿，4→**10 项**（补齐 point3 一点完成 / line3+ray3 两点完成 / face3 永不自动完成 / 首末点重合 / 非有限坐标 / 拒绝原因文案）；Esc 与切工作区取消由两条 e2e 覆盖并各带变异；状态函数、Esc/Enter/退一步路径已接入 | 取消用 `updateSpatialSession(null)`，没有另造计划中的 `cancelSpatialCreation()` 导出（**命名差异，非缺失**）；中文步骤提示由 `App.tsx` 提供 |
 | 3. 3D 落点 | `spatialPick.test.ts` 及创建 e2e 已验证 XY/XZ/YZ/选中面、已有点与近平行拒绝 | 选中面接口实际传 `normal/constant`，不是原计划的 `{faceId}`；锁定/隐藏目标、背侧与重叠候选缺完整独立用例；悬停未显示完整目标名称与世界坐标 |
 | 4. 原子创建 | `spatialCreationCommands.test.ts` 验证已存在点复用、共线拒绝、`applyBatch` 一步撤销；旧 Alt/Shift 路径回归通过 | 直接作图的新文档保存/重新打开往返需纳入代表样题 |
 | 5. 画布 UI | **任务项全部勾选**：创建 e2e 9 项（原 5 项 + 工作区切换取消、优先于预览点击、选择工具退出、悬停读数）9/9 通过；悬停的目标名/世界坐标/工作平面由 `[data-creation-readout]` 断言，选择工具退出补齐；相机/拖动/求交预览旧回归通过 | 无（本任务清单内条目已逐条有回归或定向变异检查） |
@@ -64,7 +64,7 @@
 
 **Interfaces:** Produces `type SpatialTool = 'point3' | 'segment3' | 'line3' | 'ray3' | 'plane3' | 'face3'`，`type SpatialCreationSession = { tool: SpatialTool; anchors: Array<{ pointId?: string; position: {x:number;y:number;z:number} }> }`，`advanceSpatialCreation(session, anchor)` 与 `cancelSpatialCreation()`；`face3` 用 Enter 完成，其他模式达到所需点数完成。
 
-- [ ] 写失败测试：线段恰好两点完成、平面三点完成、空间面不足三点不能提交、连续点重复不接受、Esc/切工作区取消后没有草稿对象；结果区分 `needs-more | ready | rejected(reason)`。
+- [x] 写失败测试：线段恰好两点完成、平面三点完成、空间面不足三点不能提交、连续点重复不接受、Esc/切工作区取消后没有草稿对象；结果区分 `needs-more | ready | rejected(reason)`。**（2026-09-29 六条子句逐条落地：前四条与"三种结果"在模块新建那轮就已先红后绿（见下一项），本轮把剩余边界补到 `spatialCreationSession.test.ts` 4→**10 项**：point3 一个锚点即 `ready`；line3 / ray3 两点 `ready`（补齐 `requiredAnchors` 表）；**face3 无论 4 个点都仍是 `needs-more`，只有 Enter 能收尾**；收尾点与首点重合被拒且**会话不前移**；非有限坐标被拒并带自己的原因（脏数据不留进会话）；未完成图形拒绝提交时的**原因文案**逐字钉住。**"Esc/切工作区取消后没有草稿对象"** 由两条 e2e 覆盖并各带定向变异（`geometry3d-creation.spec.ts` 的 Esc 取消、切换工作区取消），二者都断言对象行数为 0。三处变异（去掉 `Number.isFinite` 守卫 / 去掉重合点守卫 / 把 `face3:3` 塞进 `requiredAnchors`）各自精确抓红对应用例；**顺带查明 face3 不自动完成有"两层独立守卫"**：① 表里没有 `face3` 条目（查表落空，`>= undefined` 恒假）、② 显式 `session.tool !== "face3"`；只拆任一层都仍绿，两层同拆才红。`npm run typecheck` exit 0、该文件 10/10）**
 - [x] 运行 `npm test -- apps/web/src/spatialCreationSession.test.ts`，确认**因新模块/行为未实现而失败**，不是测试配置错误。
 - [x] 实现纯状态转换和逐步中文提示，不在该文件执行 React 状态或几何落盘；空间面 Enter 时检查至少三点，退化校验委托 Task 4。
 - [x] 再运行上项测试，核对全部通过并覆盖首点/末点相同的边界。
