@@ -198,6 +198,46 @@ test("leaves the drawing session through the select tool", async ({ page }) => {
 })
 
 /**
+ * **锁定的对象看得见、能选中，但不能当吸附目标**（实施计划 Task 3 那条"隐藏或锁定对象不被当作可吸附目标"）。
+ *
+ * 这条以前被我记成"未实现"，那是在**错的层**上核对：纯函数 `resolveSpatialAnchor` 只按命中物回答、
+ * 不认识文档，真正的过滤在 `threeSceneEffect.ts` 的 `resolveCreationAt` 里 —— `visible === false`、
+ * `locked`、以及生成的 `point3` 一律丢掉命中。这里从 UI 走一遍作为实证，并且**自带对照**：
+ * 同一个屏幕坐标，未锁定时读"已有点"、锁定时读"工作平面 XY"、解锁后又读回"已有点" ——
+ * 差别只可能来自锁定状态，不可能是别的东西顺带造成的。
+ */
+test("does not snap to a locked point, and snaps again once it is unlocked", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "添加空间点" }).click()
+
+  const readout = page.locator("[data-creation-readout]")
+  const point = await projectWorldPoint(page, { x: 0, y: 0, z: 0 })
+  const lockToggle = (name: string) => page.locator(".inspector-quick-actions").getByRole("button", { name })
+
+  await page.locator(".algebra-panel").getByText("A", { exact: true }).click()
+  await page.getByRole("button", { name: "绘制空间直线", exact: true }).click()
+
+  // 对照①：未锁定时吸到那个点
+  await page.mouse.move(point.x, point.y)
+  await expect(readout).toHaveText(/^已有点 \(/)
+
+  await lockToggle("锁定图元").click()
+  await expect(lockToggle("解锁图元")).toBeVisible()
+  await page.mouse.move(4, 4)
+  await page.mouse.move(point.x, point.y)
+  // 对照②：锁定后同一个坐标不再吸到它，退回工作平面；而点本身仍然在画布上
+  await expect(readout).toHaveText(/^工作平面 XY \(/)
+  await expect(page.locator(".algebra-panel").getByText("A", { exact: true })).toBeVisible()
+
+  await lockToggle("解锁图元").click()
+  await page.mouse.move(4, 4)
+  await page.mouse.move(point.x, point.y)
+  // 对照③：解锁后恢复吸附
+  await expect(readout).toHaveText(/^已有点 \(/)
+})
+
+/**
  * **创建会话里悬停要说清"点下去会引用谁 / 落在哪"**（实施计划 Task 5 那条"悬停辅助标记展示目标、
  * 世界坐标与工作平面，不渲染为持久图元"）。
  *
