@@ -28,10 +28,20 @@
 | Task 8 第 4 项：功能目录收口 | `f48d579` | `docs/feature-catalog.md` 新增「本期收口：实际已完成 / 未完成」——列出已交付六项（各有当次测试证据）与未交付五项（球体与球截面、截图识图、HTML/GGB 导出、平面函数逐题补缺、教师走查与桌面打包），并请用户决定是否启动；同时修掉 `current-status.md` 两处过时表述；本批只改文档、无可执行产物 |
 | Task 7 补充：旋转后顶点标签逐点对齐 | `5bd2444` | `e2e/geometry3d-teaching-lines.spec.ts` 1→**2 项**：对每个 `[data-point-id]` 断言锚点等于它自己那个顶点的投影（±2px，旋转前后各一遍，并确认真转了）；变异检查（偏移 +10→+60）当场报 50px；顺带查实"指针抬起前最后一次相机移动不触发渲染"（差约 30px 且不自行收敛）并记档 |
 | Task 5 收齐：从「选择工具」退出 | `d41e41a` | `e2e/geometry3d-creation.spec.ts` 8→**9 项**：绘制线段点一个锚点 → 点「选择工具」→ 工具与锚点归零、未提交锚点不落盘（对象行数为 0）、**退出后点画布空白仍创建不出东西**（确认回到的是选择语义而非只清了显示）；**先查代码确认无需新代码**（`handleRibbonCommand` 对任何非 `draw-` 命令统一清会话），变异检查（改成 `select-tool` 不清）当场红；Task 5 六条子要求逐条复核后计划项**全部勾选**；tsc/e2e lint exit 0、该 spec 9/9 |
+| Task 1 基线补齐：Esc 分级 + Shift 两点建线端到端 | `208af37` | `e2e/geometry3d.spec.ts` 22→**24 项、24/24 通过**：① Shift 两点多选 → 真的点下"由选中点创建空间直线"建出对象，并以操作提示"对象 3"钉住复用已有两点（变异：`addLine3` 额外建两个重复点 → 红）；② Esc 分级基线（属性栏不再编辑对象、对象行数一个不少；变异：该档改成 `deleteSelected()` → 红）；`spatialTools.test.ts` + `threeScene.test.ts` **74/74**；一次假设出错当场修正（`data-preview-face-count` 数的是交面预览、模板实体下恒 0）；**产品文件零改动**；如实标注这是**改造后补的对照**，不是改造前基线 |
 
 上述提交均在 GitHub 功能分支，**没有合并 `main`，也没有打包成桌面新版本**。此前普通权限上传曾留下 `git-remote-https.exe` 弹窗；后续从授权环境上传均返回明确成功结果。
 
-## 最新完成模块：Task 5 收齐（从「选择工具」退出，已上传 GitHub）
+## 最新完成模块：Task 1 基线补齐（Esc 分级 + Shift 两点建线端到端，已上传 GitHub）
+
+- 实施计划 Task 1 那条"在现有 e2e 中增加基线用例（**不改运行时代码**）"里，`e2e/geometry3d.spec.ts` 缺两条，本轮补上（22→**24 项**，24/24 通过）。
+- **Shift 两点多选 → 创建空间直线**：原有用例只断言到"由选中点创建空间直线"按钮**变可用**就停了，从没点下去。现在补到真的建出"空间直线 1"，并用操作提示 `对象 3` 钉住"引用已有两点、没有偷偷另建点"。变异：让 `addLine3` 额外建两个重复点 → 当场红。
+- **Esc 基线**：先查代码确认 3D 的 Esc 是**分级**的（`useKeyboardShortcuts.ts`：先撤进行中的创建/命令与指引，再关指引，最后才清空选择）。用例钉最后一档的**不变量**：尘埃落定后属性栏不再编辑任何对象（`.inspector-selected-heading h3` 消失），而**对象行数一个不少** —— Esc 不是删除，Delete 才是。变异：把该档 `setSelectedIds([])` 改成 `deleteSelected()` → 红在行数断言。
+- **一次假设出错并当场修正**：最初想用 `data-preview-face-count="6"` 证明"实体还在画布上"，实测拿到 **0** —— 那个属性数的是**交面预览**的虚面（模板实体下恒为 0），不是实体自己的六个面。改为 DOM 层面的"Esc 前后对象行数不变"，判据与语义都对得上。
+- **六条基线逐条给出落点**：默认选择与 Alt 子图元在 `geometry3d.spec.ts` 自身；相机旋转在 `geometry3d-drag.spec.ts`"关掉拖动开关后左键回到环绕"、平移在同文件两条；撤销在 drag/section/solid-prism；文档恢复在"打开图形后自动取景"与六类样题。**如实标注**：这两条是改造完成后补的对照回归，**不是改造前基线** —— 计划里"新增测试在改造前能验证旧行为"一句已无法事后满足，Task 1 表格行与两条勾选项都写明了。
+- 本批读数：`tsc -p e2e/tsconfig.json` exit 0；`eslint e2e/geometry3d.spec.ts` exit 0；`e2e/geometry3d.spec.ts` **24/24**；`spatialTools.test.ts` 16 + `threeScene.test.ts` 58 = **74/74**。**产品文件零改动**（两条变异均已恢复，`git diff --stat -- apps packages` 为空）。
+
+## 上一模块：Task 5 收齐（从「选择工具」退出，已上传 GitHub）
 
 - 实施计划 Task 5 那条"写失败 e2e"列的六件事，前五件与"步骤数明确"此前已各有覆盖，**只剩"从工具按钮可选『选择工具』退出"没有回归**。补上（`e2e/geometry3d-creation.spec.ts` 8→**9 项**）。
 - **先查代码再写用例**：这条**不需要新代码** —— `App.tsx` 的 `handleRibbonCommand` 对任何非 `draw-` 开头的命令统一先 `updateSpatialSession(null)` 再执行，`选择工具`（`ribbonCommands.ts` 的 `select-tool`）正好走这条。所以本批**只补回归、无产品改动**。

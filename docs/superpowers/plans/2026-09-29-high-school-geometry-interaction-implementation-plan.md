@@ -14,7 +14,7 @@
 
 | 任务 | 状态与已核证据 | 尚缺证据/工作 |
 | --- | --- | --- |
-| 1. 基线 | 既有 Alt/Shift、相机/拖动/截面与旧文件 e2e 回归通过；默认立方体误称 `4×4×2` 的债已记录并修正为新建 `4×4×4` | 没有在改造前补齐计划所列的全量基线用例；不能把后补回归说成改造前基线 |
+| 1. 基线 | **清单两条已勾选**：`e2e/geometry3d.spec.ts` 22→**24 项**（新增 Shift 两点→创建空间直线端到端、Esc 分级基线），24/24 通过；`spatialTools.test.ts` + `threeScene.test.ts` **74/74**；其余四条在他处已有回归（默认选择与 Alt 子图元在同文件、相机旋转在 `geometry3d-drag.spec.ts`、撤销在 drag/section/solid-prism、文档恢复在同文件"打开后取景"与六类样题）。默认 `4×4×2` 尺寸债已改并记录 | **这些是改造后补的对照，不是改造前基线** —— 改造已完成，无法再取"改造前"读数；计划原文"新增测试在改造前能验证旧行为"一句已无法事后满足 |
 | 2. 创建会话 | `spatialCreationSession.test.ts` 先红后绿；状态函数、Esc/Enter/退一步路径已接入 | 取消用 `updateSpatialSession(null)`，没有另造计划中的 `cancelSpatialCreation()` 导出；中文步骤提示由 `App.tsx` 提供 |
 | 3. 3D 落点 | `spatialPick.test.ts` 及创建 e2e 已验证 XY/XZ/YZ/选中面、已有点与近平行拒绝 | 选中面接口实际传 `normal/constant`，不是原计划的 `{faceId}`；锁定/隐藏目标、背侧与重叠候选缺完整独立用例；悬停未显示完整目标名称与世界坐标 |
 | 4. 原子创建 | `spatialCreationCommands.test.ts` 验证已存在点复用、共线拒绝、`applyBatch` 一步撤销；旧 Alt/Shift 路径回归通过 | 直接作图的新文档保存/重新打开往返需纳入代表样题 |
@@ -54,8 +54,8 @@
 
 **Interfaces:** Consumes existing `point3ToolAvailability` and `ThreeSceneView`；Produces baseline tests for old selection and camera behavior.
 
-- [ ] 在现有 e2e 中增加基线用例：默认选择、Shift 两点多选创建空间直线、Alt 点击实体子图元、相机旋转/拖动、Esc、撤销与文档恢复；保存当前 UI 行为作为对照（不改运行时代码）。
-- [ ] 运行 `npm test -- apps/web/src/spatialTools.test.ts apps/web/src/threeScene.test.ts` 与 `npm run test:e2e -- e2e/geometry3d.spec.ts`，记录真实通过/失败及测试环境问题；新增测试在改造前能验证旧行为。
+- [x] 在现有 e2e 中增加基线用例：默认选择、Shift 两点多选创建空间直线、Alt 点击实体子图元、相机旋转/拖动、Esc、撤销与文档恢复；保存当前 UI 行为作为对照（不改运行时代码）。**（2026-09-29 六条逐条落地：① 默认选择 = `geometry3d.spec.ts` 的"点实体本体选中并反复换色"（空白处点击时属性栏标题不存在，点中后为"立方体 1"）；② **Shift 两点多选创建空间直线** = 本轮新增，原用例只断言到"按钮可用"，现补到真的点下去建出"空间直线 1"，并以操作提示"对象 3"钉住"引用已有两点、没有偷偷另建点"（变异：让 `addLine3` 额外建两个重复点 → 当场红）；③ Alt 点击实体子图元 = 同文件"用 Alt 取到模板面而不是整个实体"；④ 相机旋转/拖动 = 旋转由 `geometry3d-drag.spec.ts` 的"关掉拖动开关后左键回到环绕"覆盖，平移由 `geometry3d.spec.ts` 的沿相机轴平移 + 平移模式左键拖两条覆盖；⑤ **Esc** = 本轮新增（3D 里 Esc 分级：先撤进行中的创建/命令与指引，最后才清空选择；用例断言尘埃落定后属性栏不再编辑任何对象而对象行数一个不少 —— Esc 不是删除。变异：把该档 `setSelectedIds([])` 改成 `deleteSelected()` → 红在行数断言）；⑥ 撤销与文档恢复 = 撤销由 `geometry3d-drag.spec.ts`"一次自由拖动一步撤销"、`geometry3d-section.spec.ts`、`solid-prism.spec.ts` 覆盖，文档恢复由 `geometry3d.spec.ts` 的"打开图形后自动取景"与 `high-school-geometry-tasks.spec.ts` 的第六类（刷新后逐 id 恢复 + 保存往返）覆盖。全程**未改运行时代码**（`git diff --stat -- apps packages` 为空）。**注意：这是改造完成后的后补回归，不是改造前的对照基线**，Task 1 表格行已如实标注）**
+- [x] 运行 `npm test -- apps/web/src/spatialTools.test.ts apps/web/src/threeScene.test.ts` 与 `npm run test:e2e -- e2e/geometry3d.spec.ts`，记录真实通过/失败及测试环境问题；新增测试在改造前能验证旧行为。**（2026-09-29 复跑读数：`spatialTools.test.ts` 16 项 + `threeScene.test.ts` 58 项 = **74/74 通过**；`e2e/geometry3d.spec.ts` 22→**24 项、24/24 通过**；测试环境问题无（Playwright globalSetup 每次重建 `apps/web` 到 `build-check/mathcanvas-current` 并预览在 4173）；`tsc -p e2e/tsconfig.json` 与 `eslint e2e/geometry3d.spec.ts` 均 exit 0。**但"新增测试在改造前能验证旧行为"这一句已无法事后满足** —— 改造早已完成，这两条新用例只能特征化**当前**行为；它记录的是"现在的旧路径长什么样"，不能宣称成改造前基线）**
 - [x] 将“添加立方体”实际尺寸与名称不一致（当前默认尺寸 `4×4×2`）、棱柱有内核但缺手工入口记录为待修的交互债；不要误把它们写成“内核缺失”。
 
 ### Task 2：独立的创建状态机（P0）
