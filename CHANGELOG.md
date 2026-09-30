@@ -5,6 +5,23 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-09-30 —— 桌面端（最新版）实际打包并启动实测：release exe + MSI + NSIS
+
+- **为什么值得记**：此前"完整桌面打包"一直被记为**用户侧、没做**（还留着"P0 时一次 Rust 编译超过 180 秒而中止"的旧读数）。这一轮按要求**真的把它跑了**，产物落地、并做了启动实测，所以旧口径必须改。
+- **命令与结果**：`npm --workspace @draw/desktop run bundle`（= `tauri build`；`beforeBuildCommand` 会先跑 `npm run build --workspace @draw/web`）→ **exit 0**。前端 `vite build` 输出到 `build-check/mathcanvas-current`（入口 `index-*.js` **1 694.94 kB** / gzip 490.28 kB，`engineeringExporters` 433.81 kB，`geometry.worker` 310.99 kB，CSS 100.34 kB；仍超 500 kB 的 chunk 警告是历史基线）；Rust `Finished \`release\` profile [optimized] target(s) in 27.43s`，随后 `candle`/`light` 出 MSI、`makensis` 出 NSIS。只多一条**无害**的 linker 警告（`linker stdout: 正在创建库 …dll.lib 和对象 …dll.exp`，`#[warn(linker_messages)]`）。
+- **产物（2026-09-30 13:05，Windows x64，`FileVersion` / `ProductVersion` = 3.0.0，`ProductName` = MathCanvas）**：
+
+  | 产物 | 路径（相对仓库根） | 大小 | SHA256 前 16 位 |
+  | --- | --- | ---: | --- |
+  | 免安装 exe | `apps/desktop/src-tauri/target/release/mathcanvas-desktop.exe` | 16.39 MB | `D2F6218A93721215` |
+  | MSI 安装包 | `apps/desktop/src-tauri/target/release/bundle/msi/MathCanvas_3.0.0_x64_en-US.msi` | 6.53 MB | `8DD330974092E838` |
+  | NSIS 安装包 | `apps/desktop/src-tauri/target/release/bundle/nsis/MathCanvas_3.0.0_x64-setup.exe` | 4.79 MB | `92690919FBD24D0A` |
+
+- **启动实测**：release exe 直接启动后**存活满 12 秒并取得真实窗口句柄**（`MainWindowHandle=722346`）；期间 WebView2 与项目仓储按预期初始化（`%LOCALAPPDATA%\com.mathcanvas.desktop\EBWebView`、`%APPDATA%\com.mathcanvas.desktop\projects.db-shm` 都有对应时间戳）。
+- **一处先前误判的更正**：早先这次会话里两次"起来几秒就没了"被我先怀疑成崩溃/环境不支持 GUI；**经用户确认是他自己关闭了窗口**。三条佐证与"崩溃"不符：stderr 只有关闭期噪声 `Failed to unregister class Chrome_WidgetWin_0. Error = 1411`（窗口类注销失败）、Windows 应用事件日志**无**崩溃记录、应用自己的日志文件 0 字节。**桌面端是能起的**。
+- **仍然没跑（别读成整条门禁通过）**：根脚本 `npm run build`（= `build --workspaces`）**作为整体命令没跑过** —— 它除 web 与 desktop 的 `tauri build --no-bundle` 外，还要跑 4 个 packages 的 `tsc -p tsconfig.json`；本次跑的是 desktop 的 `bundle`（对 desktop 那一档是**超集**，但 4 个 packages 的 `tsc` 构建未跑）。完整 `npm run test:e2e`、`test:perf`、`test:rust` 本轮同样未复跑。所以实施计划 Task 8 第 2 项**仍不勾选**。
+- 未提交/未发布：产物在 `target/` 下（git 忽略），**没有**推到 GitHub Release，也**没有**在本机安装 MSI/NSIS（"打包成功"≠"装过"）。
+
 ## 2026-09-30 —— 功能分支已合并进 `main`；文档里"尚未并入 main"的过时表述按事实改正
 
 - **事实**：`feat/high-school-geometry-interaction` 已通过 **PR #1** 合并进 `main` —— 合并提交 **`3b1f770`**（2026-09-30 12:46:30；父提交 `4d35b9d`（合并前的 `main`）与 `e016f37`（分支 tip，"本轮总收口并暂停"那笔），两者都已用 `git merge-base --is-ancestor` 核实是它的祖先）。本地 `main` = `origin/main` = `3b1f770`，`.git/refs/remotes/origin/main` 于 **2026-09-30 12:50:19** 由 `fetch --all --prune --tags` fast-forward 到该提交；远端分支 `origin/feat/high-school-geometry-interaction` **仍存在（未删除）**。
