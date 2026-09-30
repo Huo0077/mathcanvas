@@ -21,7 +21,7 @@
 | 5. 画布 UI | 新增创建 e2e 5 项；相机/拖动/求交预览旧回归通过 | 创建悬停的目标名/世界坐标、选择工具退出等细节还需专门验收 |
 | 6. 实体入口 | 构造器、参数面板、未保存预览、正方体/长方体、三/四棱柱和棱锥 e2e 通过；旧 `.mgeo` fixture 可打开 | 从手工入口创建后的依赖/保存/量测/截面组合用例仍待 Task 8 |
 | 7. 教学线型 | `threeTeachingLines.test.ts` 与 `geometry3d-teaching-lines.spec.ts` 先红后绿；`style.dash` 与“隐藏边”保持独立，旧无样式线仍用实线 | 旋转视角后的标签遮挡、选中线时三色旋转环遮挡教学图面的体验尚未通过样题验收 |
-| 8. 样题与发布决策 | **进行中（第一、二批已上传，提交 `cecc1fe`、`0166845`）**：`e2e/high-school-geometry-tasks.spec.ts` 已覆盖五类（三/四棱锥、斜三棱柱、异长长方体、圆锥截面、空间直线与平面的关系），含精确几何/解析离心率/平面方程判定的线面关系/拓扑依赖/保存往返/一步撤销断言，6/6 通过；**仍不能替代六题整合验收或教师走查** | 第六类样题「已有文档恢复与撤销」；完整 e2e；教师/学生操作数与误操作调查；桌面包验证 |
+| 8. 样题与发布决策 | **进行中（三批已上传，提交 `cecc1fe`、`0166845`、`1a82c97`）**：`e2e/high-school-geometry-tasks.spec.ts` **7 项覆盖全部六类**（三/四棱锥、斜三棱柱、异长长方体、圆锥截面、空间直线与平面的关系、已有文档恢复与撤销），7/7 通过；第 1 项已勾选。第 2 项的门禁**部分复跑**：typecheck / lint / 全库单测（265 文件 3055 项）/ `npm --workspace @draw/web run build` 全 exit 0，**但未跑完整 `npm run build`（含桌面 Rust 打包）**，故第 2 项仍未勾选 | 完整 `npm run build`；全量 `npm run test:e2e`；教师/学生操作数与误操作调查；`docs/feature-catalog.md` 收口 |
 
 **已实现的文件/接口与原计划的差异（明示而非悄悄改名）**：3D 指针创建采用 `threeScene.tsx` 的捕获事件 + `threeSceneEffect.ts` 的稳定运行时，不直接往既有 `threeSceneInteraction.ts` 选择/旋转分支塞模式；传统工作台实际入口是 `ribbonCommands.ts` 而非未挂载的 `components/GeometryToolbar.tsx`；实体表单为新建 `SpatialSolidWizard.tsx`/`spatialSolidWizardModel.ts`；3D 教学线材质位于 `threePrimitives.ts`，原有 DSL 的 `PrimitivePresentation.style.dash` 已足够，无需修改 schema。当前功能目录、测试读数和未完成项见 [专题进度](../../research/2026-09-29-high-school-geometry-interaction-progress.md)。
 
@@ -130,7 +130,7 @@
 
 **Interfaces:** Uses the released tool and test selectors, no new production API.
 
-- [ ] 把任务说明 S1–S4 中六类题转成可重放的操作序列，分别覆盖三棱锥/四棱锥、斜棱柱、异长长方体、圆锥截面、点线面构造、旧文档恢复；每题断言对象类型、坐标/尺寸、依赖、保存、撤销，而非只断言截图存在。
+- [x] 把任务说明 S1–S4 中六类题转成可重放的操作序列，分别覆盖三棱锥/四棱锥、斜棱柱、异长长方体、圆锥截面、点线面构造、旧文档恢复；每题断言对象类型、坐标/尺寸、依赖、保存、撤销，而非只断言截图存在。**（2026-09-29 完成：`e2e/high-school-geometry-tasks.spec.ts` 7 项、六类全部覆盖、7/7 通过，提交 `cecc1fe` / `0166845` / `1a82c97`；三批各做过变异检查）**
 - [ ] 执行 `npm run typecheck`、`npm run lint`、`npm test`、`npm run build`、`npm run test:e2e -- e2e/high-school-geometry-tasks.spec.ts`；记录通过数和未覆盖风险。桌面包装有改动时才追加 `npm run test:rust`。
 - [ ] 实际做一次教师/学生走查：比较从空白到“三点一面”的主操作数、误操作数和恢复路径；目标 ≤8 次主操作、不必按 Shift。达不到则记录改进项，不用“代码已通过”代替可用性。
 - [ ] 更新 `docs/feature-catalog.md` 明确“实际已完成”和 P2/独立探索未完成项目，并请用户再决定是否启动球体、截图识图与扩展导出。
