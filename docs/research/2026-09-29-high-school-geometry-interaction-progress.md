@@ -30,10 +30,22 @@
 | Task 5 收齐：从「选择工具」退出 | `d41e41a` | `e2e/geometry3d-creation.spec.ts` 8→**9 项**：绘制线段点一个锚点 → 点「选择工具」→ 工具与锚点归零、未提交锚点不落盘（对象行数为 0）、**退出后点画布空白仍创建不出东西**（确认回到的是选择语义而非只清了显示）；**先查代码确认无需新代码**（`handleRibbonCommand` 对任何非 `draw-` 命令统一清会话），变异检查（改成 `select-tool` 不清）当场红；Task 5 六条子要求逐条复核后计划项**全部勾选**；tsc/e2e lint exit 0、该 spec 9/9 |
 | Task 1 基线补齐：Esc 分级 + Shift 两点建线端到端 | `208af37` | `e2e/geometry3d.spec.ts` 22→**24 项、24/24 通过**：① Shift 两点多选 → 真的点下"由选中点创建空间直线"建出对象，并以操作提示"对象 3"钉住复用已有两点（变异：`addLine3` 额外建两个重复点 → 红）；② Esc 分级基线（属性栏不再编辑对象、对象行数一个不少；变异：该档改成 `deleteSelected()` → 红）；`spatialTools.test.ts` + `threeScene.test.ts` **74/74**；一次假设出错当场修正（`data-preview-face-count` 数的是交面预览、模板实体下恒 0）；**产品文件零改动**；如实标注这是**改造后补的对照**，不是改造前基线 |
 | Task 2 边界补齐：创建状态机六条子句 | `b73f794` | `spatialCreationSession.test.ts` 4→**10 项**（模块零改动）：point3 一点完成 / line3+ray3 两点完成 / **face3 无论多少点都不自动完成、只有 Enter 收尾** / 首末点重合被拒且会话不前移 / 非有限坐标被拒且不留脏数据 / 拒绝原因文案；三处变异各自精确抓红；**查明 face3 有两层独立守卫**（表里无 face3 条目 + 显式 `tool !== "face3"`，只拆一层仍绿、同拆才红）；`tsc` 抓到 vitest 抓不到的 TS2339（联合类型未收窄），已修，typecheck exit 0 |
+| Task 8 第 2 项门禁复跑（仅文档） | 见本轮提交 | 代码侧四条当次全绿：`typecheck` exit 0 / `lint` 0 error 13 warning / 全库单测 **266 文件 3072 项通过 + 1 todo / 0 失败**（241 s）/ 样题 spec **7/7**；**`npm run build` 未跑**（根脚本 `build --workspaces` 含 `@draw/desktop` 的 Tauri/Rust 打包，属用户侧、不在本轮目标内），故计划项保持未勾选；全量 e2e（47 spec）、`test:perf`、`test:rust` 未复跑并如实记录 |
 
 上述提交均在 GitHub 功能分支，**没有合并 `main`，也没有打包成桌面新版本**。此前普通权限上传曾留下 `git-remote-https.exe` 弹窗；后续从授权环境上传均返回明确成功结果。
 
-## 最新完成模块：Task 2 边界补齐（创建状态机的六条子句，已上传 GitHub）
+## 最新完成模块：Task 8 第 2 项门禁复跑（代码侧四条全绿，只改文档）
+
+- 实施计划 Task 8 那条"执行 `typecheck` / `lint` / `test` / `build` / 样题 e2e"的门禁，本轮把**代码侧四条**在同一个 HEAD 上复跑：
+  - `npm run typecheck` **exit 0**（6 个 workspace + `e2e/` + `scripts/`）；
+  - `npm run lint` **exit 0，0 error / 13 warning**（与既有基线一致）；
+  - `npm test -- --maxWorkers=3` **266 文件 / 3072 项通过 + 1 todo / 0 失败**（241 s；比上一批多 6 项 = 创建状态机补的边界用例，数字自洽）；
+  - `e2e/high-school-geometry-tasks.spec.ts` **7/7 通过**（六类代表题）。
+- **唯一没跑的是 `npm run build`，原因查实并写明**：根脚本是 `npm run build --workspaces`，**包含 `@draw/desktop` 的 Tauri/Rust 打包**；本轮目标明确把桌面打包划归用户侧、不在范围内（此前一次尝试在 180 s 超时中止）。所以这一项**保持未勾选** —— 不拿"web 构建通过"冒名顶替桌面打包。
+- **未覆盖风险如实记录**：全量 `npm run test:e2e`（47 个 spec）仍未复跑，本轮只跑了 3D 相关的两组共 15 个 spec 加样题 spec；`npm run test:perf` 与 `npm run test:rust` 未复跑。
+- 本批**只改文档**，无可执行产物（`git diff --stat -- apps packages` 为空）。
+
+## 上一模块：Task 2 边界补齐（创建状态机的六条子句，已上传 GitHub）
 
 - 实施计划 Task 2 那条"写失败测试"列的六件事，前四条与"三种结果"在模块新建那轮就已先红后绿；本轮把剩余边界补到 `apps/web/src/spatialCreationSession.test.ts`（4→**10 项**，模块本身**零改动** —— 补的是已实现行为的表征）。
 - 新增的六条断言（都是真性质，不是凑数）：`point3` 一个锚点即 `ready`；`line3` / `ray3` 两点 `ready`（补齐 `requiredAnchors` 表）；**`face3` 无论 4 个点都仍是 `needs-more`，只有 Enter 能收尾**；**收尾点与首点重合**被拒且**会话不前移**（多边形不会被悄悄封口）；**非有限坐标**（NaN）被拒并带自己的原因、脏数据不留进会话且拒后仍能继续；未完成图形拒绝提交时的**原因文案**逐字钉住。
