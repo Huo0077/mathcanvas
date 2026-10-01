@@ -10,6 +10,12 @@
 
 > 下方 2026-09-22 的"最后更新 / 当前阶段 / 总体状态"三行保留为**当时快照**，不再维护。
 
+## 2026-10-01 —— Task 8 第 2 项：根目录完整构建门禁补跑
+
+- `main` 的 v3.0.1：`npm.cmd run build`（根脚本 `npm run build --workspaces`）获桌面构建文件写权限后 **exit 0**；桌面工作区 `tauri build --no-bundle` 完成 release exe（不是安装包），Web 前置构建和工作区构建均通过，4 个 packages 的 `tsc -p tsconfig.json` 全通过。Web 入口 1701.84 kB；>500 kB 分块与混用动态/静态 import 警告仍在，Rust linker 有消息警告。
+- 首次沙箱内运行同一命令因 Tauri 无法改写 `apps/desktop/src-tauri/Cargo.toml`（拒绝访问，os error 5）而 exit 1；获准在沙箱外重跑才是上述通过读数。此构建不是 `bundle`，不证明 MSI/NSIS 本版安装过，也不证明全量 e2e、Rust 测试或性能测试通过。
+- 同次独立运行 `npm.cmd test -- packages/scene-graph/src/scene-store.test.ts packages/scene-graph/src/recomputeConsistency.test.ts`：2 个文件 / 106 项通过；这是单顶点编辑改动前的基线，既有断言记录非共面修改会被拒绝。
+
 ## 2026-09-29/30 —— 第四十九批：Task 8 六类样题、两处缺陷修复、Task 1/2/3/5 回归收口（已合并进 `main`）
 
 > 本节按归档规则补记，覆盖 **`a53b034`（第四十八批）之后**到本轮暂停为止的全部切片。
