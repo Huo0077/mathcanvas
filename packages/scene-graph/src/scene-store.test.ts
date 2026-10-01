@@ -19,30 +19,26 @@ describe("scene graph operations", () => {
     expect(point).toMatchObject({ type: "point3", position: { x: 4 } })
   })
 
-  /**
-   * **按数值改模板顶点现在被拒**（Fix round 1，Recompute/Store 缺陷）。
-   *
-   * 旧期望：`changed === true`，模板拓扑翻成 `fromFaces`（"把模板物化成显式面环"这条功能）。
-   * 新期望：`changed === false` + 一条可读的错误 —— 因为翻转之后那四个面**不再共面**
-   *（"扭过的四边形"），文档从此 schema 非法；旧行为把它照收不误，于是界面更新、磁盘上还是旧的
-   *（保存时 `encodeMgeo` 报错，而那条错误又被 `saveDraft` 吞掉）。
-   *
-   * 代价（记在交付报告里）：**单顶点拖动模板实体**这条路现在会被拒 —— 要恢复它，
-   * 需要在 `operations.ts` 里把翻转后的面三角化（或放宽面的共面要求），那是另一个切片的文件。
-   */
-  it("refuses a numeric vertex edit that would leave a non-planar face", () => {
+  it("edits one template vertex without admitting non-planar faces", () => {
     const source = { id: "cube-1", type: "cube" as const, origin: { x: -1, y: -1, z: -1 }, size: { x: 2, y: 2, z: 2 }, label: "立方体 1" }
     const topology = buildSolidTemplate(source)
     const document = createEmptyDocument("geometry3d")
     document.primitives = [source, ...topology.primitives]
+    const before = document.primitives.find((primitive) => primitive.type === "polyhedron3")
+    if (before?.type !== "polyhedron3") throw new Error("expected template polyhedron")
 
-    const updated = commitPatch(document, { op: "updatePrimitive", id: topology.vertexIds[0], patch: { position3: { x: -2, y: -1, z: -1 } } })
+    const result = commitPatch(document, patchPoint3(topology.vertexIds[0], { x: -2, y: -1, z: -1 }))
 
-    expect(updated.changed).toBe(false)
-    expect(updated.error).toContain("face3 points are not coplanar")
-    // 文档**原样不动**：宁可拒绝，也不让 store 拿着一份存不下去的文档。
-    expect(updated.document).toBe(document)
-    expect(updated.document.primitives.find((primitive) => primitive.id === topology.vertexIds[0])).toMatchObject({ position: { x: -1 } })
+    expect(result.error).toBeUndefined()
+    expect(result.changed).toBe(true)
+    expect(result.document.primitives.find((primitive) => primitive.id === topology.vertexIds[0])).toMatchObject({ position: { x: -2 } })
+    const solid = result.document.primitives.find((primitive) => primitive.id === before.id)
+    if (solid?.type !== "polyhedron3") throw new Error("expected edited polyhedron")
+    expect(solid.faceIds.length).toBeGreaterThan(before.faceIds.length)
+    expect(solid.construction).toEqual({ kind: "fromFaces", sourceIds: solid.faceIds, sourceId: source.id })
+    expect(validateDocument(result.document).valid).toBe(true)
+    expect(() => encodeMgeo(result.document)).not.toThrow()
+    expect(document.primitives.find((primitive) => primitive.id === topology.vertexIds[0])).toMatchObject({ position: { x: -1 } })
   })
 
   it("creates point-driven 3D primitives with stable topology references", () => {
@@ -1741,29 +1737,67 @@ describe("topologyOfEntity", () => {
   })
 })
 
-/**
- * **改一个顶点会撞上"面必须共面"这条不变量**（2026-09-29 查实，走的是属性栏那条真实路径）。
- *
- * 棱柱（与模板实体一样）的侧面是**四边形**，而文档校验器要求 `face3` 的点共面：改一个顶点会让相邻三个
- * 四边形立刻不共面，于是 `commitPatch`（`store.apply` 走的就是它）**整笔回滚并返回错误**。属性栏因此把
- * 输入框弹回原值，同时界面**会**弹出这条告警（`role="alert"`，浏览器实测文案就是下面断言的那句）。
- *
- * 所以"改了没生效"**不是静默丢弃**，而是"这条能力对四边形面的实体不成立"——上面 `applyOperation` 那条
- * 用例覆盖的是**存储层**（它能翻描述），这条覆盖的是**校验层**（它把整笔拦住）。真正的缺口（记在
- * `docs/current-status.md` 的如实缺口里）是：没有一条让用户改单顶点的路径 —— 把受影响的面拆成三角形、
- * 或放宽共面要求，都是产品决定。这条用例把**现状与提示**一起钉住：哪天改成"能改"，它会红，
- * 提醒改的人同时更新那条记录与告警文案。
- */
-describe("a numeric vertex edit on a quad-faced solid is refused by the validator, with a reason", () => {
-  it("returns an explicit error instead of silently dropping the edit", () => {
+/** A single vertex edit must split warped faces rather than weaken face3 coplanarity. */
+describe("editing a prism vertex", () => {
+  it("preserves a closed, serializable polyhedron with matching face and edge references", () => {
     const document = prismDocument()
     const result = commitPatch(document, patchPoint3("solid-1:v6", { x: 0, y: 0, z: 9 }))
 
+    expect(result.error).toBeUndefined()
+    expect(result.changed).toBe(true)
+    const solid = result.document.primitives.find((primitive) => primitive.id === "solid-1")
+    if (solid?.type !== "polyhedron3") throw new Error("expected edited prism")
+    expect(solid.construction).toEqual({ kind: "fromFaces", sourceIds: solid.faceIds, sourceId: "solid-1" })
+    expect(solid.faceIds.length).toBeGreaterThan(6)
+    const byId = new Map(result.document.primitives.map((primitive) => [primitive.id, primitive]))
+    const faceLabels = solid.faceIds.map((id) => byId.get(id)?.label)
+    expect(new Set(faceLabels).size).toBe(faceLabels.length) // New facets must not show duplicate names in the object tree.
+    for (const faceId of solid.faceIds) {
+      const face = byId.get(faceId)
+      if (face?.type !== "face3") throw new Error(`missing face ${faceId}`)
+      expect(face.edgeIds).toHaveLength(face.pointIds.length)
+      for (const edgeId of face.edgeIds ?? []) {
+        const edge = byId.get(edgeId)
+        if (edge?.type !== "edge3") throw new Error(`missing edge ${edgeId}`)
+        expect(edge.faceIds).toContain(faceId)
+      }
+    }
+    const newEdges = solid.edgeIds.filter((id) => !document.primitives.some((primitive) => primitive.id === id))
+    expect(newEdges.length).toBeGreaterThan(0)
+    expect(newEdges.every((id) => { const edge = byId.get(id); return edge?.type === "edge3" && edge.tessellation === true })).toBe(true)
+    expect(validateDocument(result.document).valid).toBe(true)
+    expect(() => encodeMgeo(result.document)).not.toThrow()
+    expect(document.primitives.find((primitive) => primitive.id === "solid-1:v6")).toMatchObject({ position: { z: 3 } })
+  })
+})
+
+
+describe("vertex-edit topology boundaries", () => {
+  it("rejects a collapsed triangular face without changing the original document", () => {
+    const document = prismDocument()
+    const overlapping = document.primitives.find((primitive) => primitive.id === "solid-1:v5")
+    if (overlapping?.type !== "point3") throw new Error("expected the neighboring vertex")
+    const result = commitPatch(document, patchPoint3("solid-1:v6", overlapping.position))
     expect(result.changed).toBe(false)
-    expect(result.error).toContain("face3 points are not coplanar")
-    // 文档一个字节都没动（所以属性栏的输入框会弹回原值）
-    const kept = result.document.primitives.find((primitive) => primitive.id === "solid-1:v6")
-    const original = document.primitives.find((primitive) => primitive.id === "solid-1:v6")
-    expect(kept?.type === "point3" ? kept.position : null).toEqual(original?.type === "point3" ? original.position : null)
+    expect(result.error).toContain("solid vertex overlaps another vertex")
+    expect(result.document).toBe(document)
+  })
+
+  it("keeps all solids that share a modified face pointing to the same triangles", () => {
+    const document = prismDocument()
+    const original = document.primitives.find((primitive) => primitive.id === "solid-1")
+    if (original?.type !== "polyhedron3") throw new Error("expected prism")
+    document.primitives.push({ ...structuredClone(original), id: "solid-2", construction: { kind: "fromFaces", sourceIds: [...original.faceIds], sourceId: "solid-2" } })
+
+    const result = commitPatch(document, patchPoint3("solid-1:v6", { x: 0, y: 0, z: 9 }))
+    expect(result.error).toBeUndefined()
+    expect(result.changed).toBe(true)
+    const first = result.document.primitives.find((primitive) => primitive.id === "solid-1")
+    const second = result.document.primitives.find((primitive) => primitive.id === "solid-2")
+    if (first?.type !== "polyhedron3" || second?.type !== "polyhedron3") throw new Error("expected two solids")
+    expect(second.faceIds).toEqual(first.faceIds)
+    expect(second.edgeIds).toEqual(first.edgeIds)
+    expect(second.construction).toEqual({ kind: "fromFaces", sourceIds: second.faceIds, sourceId: "solid-2" })
+    expect(validateDocument(result.document).valid).toBe(true)
   })
 })

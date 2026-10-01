@@ -4,6 +4,7 @@ import { movedSectionPlane, rotatedSectionPlane } from "./solidGeometry"
 import { deletionPlan, layerDescendantIds, unbindDeletedHost, type DeletionPlan } from "./deletion"
 import { EDITABLE_GEOMETRY_TYPES, isFreeDraggable3, isRotatable3, point3Index, prismMatchesVertices, primitiveBounds, realignPrismDescriptor, rotatePrimitive3, shiftedPoint, templateTopologyIds, translateFunction, translatePrimitive, translatePrimitive3 } from "./transforms"
 import { dragBoundPoint } from "./resolve3d"
+import { triangulateWarpedSolidFaces } from "./solidFaceTriangulation"
 
 /**
  * **文档层唯一的写入口**（从 `operations.ts` 拆出，评审方案 2）：`applyOperation` 按 `op` 分派到各族，
@@ -192,6 +193,8 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
             candidate.construction = { kind: "fromFaces", sourceIds: [...candidate.faceIds], sourceId: candidate.id }
           }
         }
+        const triangulationError = triangulateWarpedSolidFaces(next.primitives, primitive.id)
+        if (triangulationError) return { document, changed: false, error: triangulationError }
       }
     }
     if (primitive.type === "line" || primitive.type === "segment" || primitive.type === "ray") {

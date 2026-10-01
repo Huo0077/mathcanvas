@@ -284,6 +284,8 @@ interface SavedPrimitive {
   type: string
   position?: SavedVec3
   vertexIds?: string[]
+  faceIds?: string[]
+  pointIds?: string[]
   construction?: { kind?: string }
 }
 
@@ -316,10 +318,8 @@ async function reopen(page: import("@playwright/test").Page, envelope: SavedEnve
  * 与斜度无关 —— 这一条同时验证"按向量拉伸"没有把体积算错）。
  * 保存取产品自己的下载产物，并核对顶面 = 底面 `+ (1, 0.5, 3)`；恢复后包围盒必须与保存前逐字一致。
  *
- * **"移动顶点"这一半没有落地**（Task 6 留未勾选），实测记录见 `docs/current-status.md` 的如实缺口：
- * 棱柱是构造驱动的（顶点是缓存），属性栏改顶点坐标会被静默丢弃；拖顶点手柄又走向另一条更浑浊的路径
- * （`data-drag-target` 不是实体，且随后 Ctrl+Z 会被校验拒绝、报 `face3 points are not coplanar`）。
- * 本用例**刻意不**把这两条钉成"正确行为"。
+ * 单顶点编辑另有下方专门用例：改动后非共面四边形三角化，保存、撤销、量测和截面
+ * 都要走用户真实操作链。本用例只锁定未编辑棱柱的体积 48 和文件往返。
  */
 test("measures the oblique prism by volume and reopens it with identical geometry", async ({ page }) => {
   await page.goto("/")
@@ -364,4 +364,78 @@ test("measures the oblique prism by volume and reopens it with identical geometr
   // 恢复：重新打开保存出来的文件，包围盒必须与保存前逐字一致
   await reopen(page, saved)
   await expect.poll(async () => scene.getAttribute("data-content-bounds")).toBe(before)
+})
+
+/** The same inspector action must persist valid triangular faces, undo in one step and survive a reload. */
+test("edits one prism vertex through the inspector, undoes, and reopens the triangulated solid", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await draftAndConfirmPrism(page)
+
+  const scene = page.locator("[data-3d-scene]")
+  const beforeBounds = await scene.getAttribute("data-content-bounds")
+  const algebra = page.locator(".algebra-panel")
+  await algebra.getByRole("button", { name: "展开 solid-1 的子对象" }).click()
+  const vertex = algebra.locator(".object-subtree .object-row").filter({ hasText: /^P7$/ }).first()
+  await expect(vertex).toBeVisible()
+  await vertex.click()
+  const coordinateZ = page.getByRole("spinbutton", { name: "坐标 Z" })
+  await expect(coordinateZ).toHaveValue("3")
+
+  await coordinateZ.fill("6")
+  await expect(coordinateZ).toHaveValue("6")
+  await expect(page.getByRole("alert")).toHaveCount(0)
+  await expect.poll(async () => scene.getAttribute("data-content-bounds")).not.toBe(beforeBounds)
+
+  await page.getByRole("button", { name: "撤销", exact: true }).click()
+  await expect(coordinateZ).toHaveValue("3")
+  await page.getByRole("button", { name: "重做", exact: true }).click()
+  await expect(coordinateZ).toHaveValue("6")
+
+  const saved = await readSavedDocument(page)
+  const solid = saved.document.primitives.find((primitive) => primitive.id === "solid-1")
+  expect(solid?.construction?.kind).toBe("fromFaces")
+  expect(solid?.faceIds?.length).toBeGreaterThan(6)
+  expect(saved.document.primitives.find((primitive) => primitive.id === "solid-1:v6")?.position?.z).toBe(6)
+  for (const faceId of solid?.faceIds ?? []) {
+    const face = saved.document.primitives.find((primitive) => primitive.id === faceId)
+    expect(face?.pointIds?.length).toBeGreaterThanOrEqual(3)
+  }
+
+  await reopen(page, saved)
+  await expect.poll(async () => scene.getAttribute("data-content-bounds")).not.toBe(beforeBounds)
+  await objectRows(page).first().click()
+  await page.locator('[aria-label="三维测量工具"]').getByRole("button", { name: "体积", exact: true }).click()
+  await expect(page.locator(".algebra-panel .measurement-row .measurement-status")).toHaveAttribute("data-status", "valid")
+  await objectRows(page).first().click()
+  await page.getByRole("button", { name: "创建截面" }).click()
+  await expect(scene).toHaveAttribute("data-section-count", "1")
+  await expect.poll(async () => Number(await scene.getAttribute("data-section-point-count"))).toBeGreaterThanOrEqual(3)
+})
+
+/** Template topology must also switch to explicit triangular faces when one generated vertex is edited. */
+test("edits one template cube vertex and restores its explicit faces from mgeo", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "添加立方体" }).click()
+  const scene = page.locator("[data-3d-scene]")
+  const beforeBounds = await scene.getAttribute("data-content-bounds")
+  const algebra = page.locator(".algebra-panel")
+  await algebra.getByRole("button", { name: "展开 立方体 1 拓扑 的子对象" }).click()
+  const vertex = algebra.locator(".object-subtree .object-row").filter({ hasText: /^A$/ }).first()
+  await expect(vertex).toBeVisible()
+  await vertex.click()
+  const coordinateX = page.getByRole("spinbutton", { name: "坐标 X" })
+  const original = Number(await coordinateX.inputValue())
+  await coordinateX.fill(String(original - 1))
+  await expect(coordinateX).toHaveValue(String(original - 1))
+  await expect(page.getByRole("alert")).toHaveCount(0)
+  await expect.poll(async () => scene.getAttribute("data-content-bounds")).not.toBe(beforeBounds)
+
+  const saved = await readSavedDocument(page)
+  const solid = saved.document.primitives.find((primitive) => primitive.type === "polyhedron3")
+  expect(solid?.construction?.kind).toBe("fromFaces")
+  expect(solid?.faceIds?.length).toBeGreaterThan(6)
+  await reopen(page, saved)
+  await expect.poll(async () => scene.getAttribute("data-content-bounds")).not.toBe(beforeBounds)
 })

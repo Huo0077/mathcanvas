@@ -444,15 +444,30 @@ describe("intersection solid primitive", () => {
     expect(solid.volume).toBeCloseTo(64 / 3, 6)
   })
 
+  it("retains the unchanged 32-unit overlap when one cube corner is pulled outward", () => {
+    const document = overlappingCubes()
+    const withSolid = applyOperation(document, { op: "addPrimitive", primitive: pending(["cube-a", "cube-b"]) }).document
+    const vertex = withSolid.primitives.find((primitive) => primitive.id === "cube-a-point-1")
+    if (vertex?.type !== "point3") throw new Error("expected cube-a-point-1")
+    const edited = commitPatch(withSolid, { op: "updatePrimitive", id: vertex.id, patch: { position3: { ...vertex.position, x: vertex.position.x - 1 } } })
+    expect(edited.error).toBeUndefined()
+    expect(edited.changed).toBe(true)
+    const intersection = edited.document.primitives.find((primitive) => primitive.id === "solid-1")
+    if (intersection?.type !== "intersectionSolid") throw new Error("expected intersection solid")
+    // The moved corner remains left of x=0; cube-b starts at x=0, so their overlap is still 2×4×4.
+    expect(intersection.status).toBe("polyhedron")
+    expect(intersection.volume).toBeCloseTo(32, 6)
+  })
+
   it("blames the geometry, not the source type, when an edited template becomes non-convex", () => {
-    // 把立方体的**一个角**沿 x 挪 1 会让相邻三个面不再共面（实体不再是凸的）：内核就该说这件事，
+    // 把立方体的一个角沿 +x 向内部挪 1，局部表面形成凹坑：内核必须拒绝非凸布尔交集，
     // 而不是因为"找不到拓扑"给出"来源必须是实体"这种风马牛不相及的诊断。
     const document = overlappingCubes()
     const withSolid = applyOperation(document, { op: "addPrimitive", primitive: pending(["cube-a", "cube-b"]) }).document
     const vertex = withSolid.primitives.find((primitive) => primitive.id === "cube-a-point-1")
     if (vertex?.type !== "point3") throw new Error("expected cube-a-point-1")
 
-    const edited = applyOperation(withSolid, { op: "updatePrimitive", id: "cube-a-point-1", patch: { position3: { ...vertex.position, x: vertex.position.x - 1 } } }).document
+    const edited = applyOperation(withSolid, { op: "updatePrimitive", id: "cube-a-point-1", patch: { position3: { ...vertex.position, x: vertex.position.x + 1 } } }).document
     const solid = recomputeDerivedObjects(edited).primitives.find((primitive) => primitive.id === "solid-1")
     if (solid?.type !== "intersectionSolid") throw new Error("expected intersectionSolid")
 
