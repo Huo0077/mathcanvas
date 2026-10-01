@@ -10,11 +10,11 @@
 
 > 下方 2026-09-22 的"最后更新 / 当前阶段 / 总体状态"三行保留为**当时快照**，不再维护。
 
-## 2026-10-01 —— 实体源体积画布数字（本地候选，远端待核）
+## 2026-10-01 —— 实体源体积画布数字（`374daa0` 已推送，CI 全绿）
 
 - 根因：体积测量在属性栏能读 48.000u³，但 `measurementVisuals.ts` 的 `pointPositions` 不认 `polyhedron3`，故 `resolveMeasurementVisual` 返回 null；页面 `[data-measurement-labels]` 实测为 0。现复用已有测量标注叠层，只从物化顶点求标签中心，不新增视觉 token；顶点缺失或非有限时不编造落点。
 - RED→GREEN：真实斜棱柱单测先报 `visual.kind` 为 undefined，修后位置独立算得 (2.5, 2.25, 1.5)，缺顶点返回 null；浏览器原用例先报画布标签计数 0，修后 48.000u³ 标注可见且保存重开后仍可见。已截本地实景核对标签在实体中央清晰可读。
-- 本地全量 Vitest **268 文件 / 3104 项通过 + 1 todo**，全量 Playwright **171/171**；`npm.cmd run typecheck` exit 0，`npm.cmd run lint` 0 error / 13 条既有 warning。**本区块尚未提交/推送/核对新 GitHub CI，不提前记为完成**。
+- 本地全量 Vitest **268 文件 / 3104 项通过 + 1 todo**，全量 Playwright **171/171**；`npm.cmd run typecheck` exit 0，`npm.cmd run lint` 0 error / 13 条既有 warning。**提交 `374daa0` 已推送并以 `git ls-remote` 核对 SHA；GitHub Actions run `36898807030` 的 checks/build/rust/e2e 四作业成功，此后才将缺口移出未完成清单。**。
 
 ## 2026-10-01 —— Task 6 单顶点数值编辑（`cc9f533` 已推送，CI 全绿）
 
