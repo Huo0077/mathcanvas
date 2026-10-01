@@ -2,7 +2,7 @@
  * 图元类型名的**唯一真值列表**（运行时）。
  *
  * 为什么需要它：`types.ts` 的 `PrimitiveSpec` 是**类型**联合，运行时无法枚举，
- * 而 Agent 的能力注册表必须在运行时说清"这 42 个类型各自可不可用"——没有一份列表就无从对齐。
+ * 而 Agent 的能力注册表必须在运行时说清"这 43 个类型各自可不可用"——没有一份列表就无从对齐。
  *
  * **漂移防护（两道，缺一不可）**：
  * 1. `PrimitiveSpec` 里新增一个成员而这里没加 → `capabilities.ts` 的
@@ -40,6 +40,7 @@ export const PRIMITIVE_TYPE_NAMES = [
   "pyramid",
   "cylinder",
   "cone",
+  "sphere",
   "plane3",
   "circle3",
   "edge3",

@@ -3,7 +3,7 @@ import { MEASUREMENT_METRICS } from "./types"
 import { isSampledPrimitiveType } from "./sampledTypes"
 
 const workspaces = new Set(["calculus", "conics", "cad", "geometry3d"])
-const primitiveTypes = new Set(["point", "point3", "line", "line3", "segment", "segment3", "ray", "ray3", "polyline", "connection", "locus", "parabola", "ellipse", "hyperbola", "function", "derivative", "tangent", "normal", "secant", "integral", "analysisSet", "cube", "pyramid", "cylinder", "cone", "plane3", "circle3", "edge3", "face3", "polyhedron3", "section", "intersectionLine", "intersectionSolid", "intersectionFace", "intersectionPoint3", "circle", "arc", "intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection", "intersectionSet"])
+const primitiveTypes = new Set(["point", "point3", "line", "line3", "segment", "segment3", "ray", "ray3", "polyline", "connection", "locus", "parabola", "ellipse", "hyperbola", "function", "derivative", "tangent", "normal", "secant", "integral", "analysisSet", "cube", "pyramid", "cylinder", "cone", "sphere", "plane3", "circle3", "edge3", "face3", "polyhedron3", "section", "intersectionLine", "intersectionSolid", "intersectionFace", "intersectionPoint3", "circle", "arc", "intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection", "intersectionSet"])
 /**
  * 能长出切线的来源曲线。
  *
@@ -587,6 +587,7 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>, parameter
   if (type === "cylinder" || type === "cone") {
     if (!isFiniteCoordinate3(value.center) || !isFiniteNumber(value.radius) || value.radius <= 0 || !isFiniteNumber(value.height) || value.height <= 0 || !isFiniteNumber(value.segments) || !Number.isInteger(value.segments) || value.segments < 3 || value.segments > 256) errors.push(`${type} geometry is invalid`)
   }
+  if (type === "sphere" && (!isFiniteCoordinate3(value.center) || !isFiniteNumber(value.radius) || value.radius <= 0)) errors.push("sphere geometry is invalid")
   if (["cube", "pyramid", "cylinder", "cone"].includes(type) && value.rotation !== undefined && !isFiniteCoordinate3(value.rotation)) errors.push(`${type} rotation must be three finite radians`)
   if (type === "plane3" && value.halfSize !== undefined && (!isFiniteNumber(value.halfSize) || value.halfSize <= 0)) errors.push("plane3 halfSize must be a positive finite number")
   if (type === "section") {

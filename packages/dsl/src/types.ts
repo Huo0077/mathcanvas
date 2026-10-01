@@ -498,6 +498,14 @@ export interface ConePrimitive extends PrimitivePresentation {
   rotation?: SolidRotation
 }
 
+/** Analytic sphere: the document stores geometry, never Three.js tessellation vertices. */
+export interface SpherePrimitive extends PrimitivePresentation {
+  id: string
+  type: "sphere"
+  center: Vector3
+  radius: number
+}
+
 /**
  * 平面与二次曲面（圆柱 / 圆锥）相交得到的**圆锥曲线**。
  *
@@ -846,6 +854,7 @@ export type PrimitiveSpec =
   | PyramidPrimitive
   | CylinderPrimitive
   | ConePrimitive
+  | SpherePrimitive
   | Plane3Primitive
   | Circle3Primitive
   | Edge3Primitive

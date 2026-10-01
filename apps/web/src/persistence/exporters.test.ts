@@ -68,6 +68,17 @@ describe("document exporters", () => {
     expect(rayFragment).toContain(`x2="${expectedX2}"`)
   })
 
+  it("exports a sphere's numeric truth without leaking a 3D surface into planar SVG", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [{ id: "sphere-1", type: "sphere", center: { x: 1, y: 2, z: 3 }, radius: 5, label: "球 S" }]
+
+    const csv = exportCsv(document)
+    expect(csv).toContain('""center""')
+    expect(csv).toContain('""radius"":5')
+    expect(csv).not.toContain('""type""') // data column is centre/radius, not a second whole primitive
+    expect(exportSvg(document)).not.toContain('id="sphere-1"') // planar SVG is not a fake 3D sphere projection
+  })
+
   it("exports primitive metadata and escaped CSV data", () => {
     const document = createEmptyDocument("calculus")
     document.primitives = [{ id: "point-1", type: "point", x: 2, y: 1, label: '点, "A"' }]

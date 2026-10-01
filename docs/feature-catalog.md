@@ -180,7 +180,7 @@
 
 **未交付：按计划属 P2 或独立探索；用户决定已记录（2026-09-29）**
 
-1. **球体与球截面**（P2，独立设计已建档，代码未交付）：[设计规格](superpowers/specs/2026-10-01-sphere-and-sections-design.md) / [实施计划](superpowers/plans/2026-10-01-sphere-and-sections-implementation-plan.md) 明确独立解析 `sphere` 类型、球-平面精确截圆、工程正投影与退化/不支持语义；目前外接球/内切球仍只是读数，不能算可编辑球图元。
+1. **球体与球截面**（P2，Task 1 本地候选、整体未交付）：[设计规格](superpowers/specs/2026-10-01-sphere-and-sections-design.md) / [实施计划](superpowers/plans/2026-10-01-sphere-and-sections-implementation-plan.md) 已推送；本地 `sphere` 文档类型可校验有限球心/正半径并 `.mgeo` 往返，Agent 明确暂不可用。**此切片新提交/CI 未核，且解析截圆、画布创建、投影仍未做；外接/内切球读数也不是球图元。**
 2. **题目截图 → 可编辑数学图**（独立探索，不阻塞 P0/P1）：需要单列的质量门禁（样题集、歧义标注、人工核对、真实 provider 结果、草稿确认）。当前 Agent 发布门禁**不允许**宣称"截一张图就能正确生成所有高中图"。**用户本轮未启动**。
 3. **HTML / GeoGebra 导出**：已交付的导出是 `.mgeo`、SVG、CSV、PNG 与工程图的 SVG/DXF/PDF；**HTML 与 GGB 不在已交付范围**。**用户本轮未启动**。
 4. **平面 / 函数题型的逐题补缺**：需先做教师样题盘点再单独排期（现有平面工具不回退是底线）。**未排期**。

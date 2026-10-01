@@ -837,3 +837,25 @@ describe("Geometry DSL codec", () => {
     expect(decodeMgeo(encodeMgeo(document)).primitives).toEqual(document.primitives)
   })
 })
+
+
+describe("analytic sphere mgeo round trip", () => {
+  it("preserves the sphere's numeric truth and presentation without saving a mesh", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [{ id: "sphere-1", type: "sphere", center: { x: 1, y: 2, z: 3 }, radius: 5, label: "球 S", style: { stroke: "#123456", opacity: 0.4 } }]
+
+    const restored = decodeMgeo(encodeMgeo(document))
+
+    expect(restored.primitives).toEqual(document.primitives)
+    expect(restored.primitives).toHaveLength(1)
+    expect(validateDocument(restored).valid).toBe(true)
+  })
+
+  it("refuses to import an invalid zero-radius sphere instead of silently rewriting the file", () => {
+    const serialized = JSON.stringify({
+      format: "mgeo", formatVersion: "0.1",
+      document: { ...createEmptyDocument("geometry3d"), primitives: [{ id: "sphere-bad", type: "sphere", center: { x: 1, y: 2, z: 3 }, radius: 0 }] }
+    })
+    expect(() => decodeMgeo(serialized)).toThrow("sphere geometry is invalid")
+  })
+})

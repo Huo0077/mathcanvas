@@ -5,7 +5,7 @@ import type { DomainOperation } from "@draw/scene-graph"
  * **能力注册表**：Agent 能做什么、不能做什么的单一事实来源。
  *
  * 计划（`docs/superpowers/plans/2026-09-18-desktop-agent-implementation-plan.md` Task 0.1）的硬要求：
- * 把当前 **42 个图元类型**与 **39 个 `DomainOperation` 变体**全部映射到"可用处理器"或**显式阻止状态**。
+ * 把当前 **43 个图元类型**与 **39 个 `DomainOperation` 变体**全部映射到"可用处理器"或**显式阻止状态**。
  *
  * （这里原写作"38 个变体"，是计划正文自己的一处笔误：`DOMAIN_OPERATION_NAMES` 与
  * `capabilities.test.ts` 的断言都是 **39**；`G2 Gate` 里那行"42/38"同样按 39 读。）
@@ -33,14 +33,14 @@ export interface CapabilityDescriptor {
 export interface CapabilityRegistry {
   capabilities: CapabilityDescriptor[]
   byId: Record<string, CapabilityDescriptor>
-  /** 每个图元类型 → 它的能力（42 个键，一个不少）。 */
+  /** 每个图元类型 → 它的能力（43 个键，一个不少）。 */
   byPrimitiveType: Record<string, CapabilityDescriptor>
   /** 每个操作变体 → 负责它的能力（39 个键，一个不少）。 */
   byOperation: Record<string, CapabilityDescriptor>
 }
 
 /** 注册表修订号：描述符表语义变化时递增，Agent 把它写进 run 记录以便事后对账。 */
-export const CAPABILITY_REGISTRY_REVISION = "2026-09-19.1"
+export const CAPABILITY_REGISTRY_REVISION = "2026-10-01.1"
 
 const PLANAR: Workspace[] = ["conics"]
 const SOLID: Workspace[] = ["geometry3d"]
@@ -52,7 +52,7 @@ function describeCapability(id: string, status: CapabilityStatus, workspaces: Wo
 }
 
 /**
- * 每个图元类型一条能力记录。**42 个键一个不能少**。
+ * 每个图元类型一条能力记录。**43 个键一个不能少**。
  *
  * 计划 Step 4 点名的阻止项就落在这里：`intersectionSolid` → `legacy_readonly`；
  * 内核物化的拓扑（`edge3` / `face3` / `polyhedron3`）→ `temporarily_unavailable`（没有 action handler）。
@@ -92,6 +92,7 @@ const PRIMITIVE_CAPABILITIES = {
   pyramid: describeCapability("create-solid-pyramid", "available", SOLID, ["workspace is geometry3d"]),
   cylinder: describeCapability("create-solid-cylinder", "available", SOLID, ["workspace is geometry3d"]),
   cone: describeCapability("create-solid-cone", "available", SOLID, ["workspace is geometry3d"]),
+  sphere: describeCapability("create-solid-sphere", "temporarily_unavailable", SOLID, ["no solid.create_sphere action handler yet; analytic document type only"]),
   section: describeCapability("create-section-plane", "available", SOLID, ["exactly one solid is selected"], [...CORE_TESTS, "e2e/geometry3d-section.spec.ts"]),
   intersectionLine: describeCapability("create-intersection-line", "available", SOLID, ["two intersecting solids"]),
   intersectionFace: describeCapability("create-intersection-face", "available", SOLID, ["two solids sharing a face patch"]),

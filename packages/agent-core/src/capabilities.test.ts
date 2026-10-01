@@ -7,7 +7,7 @@ import { CAPABILITY_STATUSES, getCapabilityRegistry, type CapabilityDescriptor }
 /**
  * Task 0.1 的**覆盖测试**（先失败、后实现）。
  *
- * 它守的是计划里那句硬要求：注册表必须把**当前 42 个图元类型**与**38 个 DomainOperation 变体**
+ * 它守的是计划里那句硬要求：注册表必须把**当前 43 个图元类型**与**39 个 DomainOperation 变体**
  * 全部映射到"可用处理器"或"显式阻止的状态"。两个数字不是抄来的：42 来自 `packages/dsl/src/types.ts`
  * 的 `PrimitiveSpec` 联合，38 来自 `packages/scene-graph/src/operations.ts` 的 `DomainOperation`；
  * 这里改为从两个包的**运行时真值列表**读取，避免测试自己维护第三份副本。
@@ -16,8 +16,8 @@ describe("agent capability registry", () => {
   it("covers every current primitive type and operation variant", () => {
     const registry = getCapabilityRegistry()
 
-    // 前置断言：真值列表本身必须还是 42 / 38，否则"覆盖"是假达标。
-    expect(PRIMITIVE_TYPE_NAMES).toHaveLength(42)
+    // 前置断言：真值列表本身必须还是 43 / 39，否则"覆盖"是假达标。
+    expect(PRIMITIVE_TYPE_NAMES).toHaveLength(43)
     expect(DOMAIN_OPERATION_NAMES).toHaveLength(39)
 
     for (const type of PRIMITIVE_TYPE_NAMES) {
@@ -65,6 +65,7 @@ describe("agent capability registry", () => {
     // 没有 action handler 的图元类型必须显式标成暂不可用，而不是"看起来可用"。
     expect(getCapabilityRegistry().byPrimitiveType.edge3?.status).toBe("temporarily_unavailable")
     expect(getCapabilityRegistry().byPrimitiveType.face3?.status).toBe("temporarily_unavailable")
+    expect(getCapabilityRegistry().byPrimitiveType.sphere?.status).toBe("temporarily_unavailable")
   })
 
   /**

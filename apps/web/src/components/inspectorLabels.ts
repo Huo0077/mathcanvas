@@ -115,6 +115,7 @@ export const primitiveTypeLabels: Record<PrimitiveSpec["type"], string> = {  poi
   pyramid: "棱锥",
   cylinder: "圆柱",
   cone: "圆锥",
+  sphere: "球体",
   plane3: "空间平面",
   circle3: "空间圆",
   edge3: "空间棱",

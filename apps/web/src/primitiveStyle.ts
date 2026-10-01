@@ -39,6 +39,7 @@ const defaultStrokes: Record<PrimitiveSpec["type"], string> = {
   pyramid: "#a8486b",
   cylinder: "#3d6b7d",
   cone: "#b06a3a",
+  sphere: "#3d6b7d",
   plane3: "#3d5a80",
   circle3: "#2f6f68",
   edge3: "#3d6b7d",

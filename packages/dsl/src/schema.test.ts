@@ -590,3 +590,34 @@ describe("Geometry DSL document layout schema", () => {
     expect(build([{ id: "point-a", type: "point", x: 1, y: 1 }], { kind: "onPath", pathId: "point-a", parameter: 0.4 }).valid).toBe(false)
   })
 })
+
+
+describe("analytic sphere document contract", () => {
+  const validateSphere = (sphere: unknown) => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [sphere as never]
+    return validateDocument(document)
+  }
+
+  it("accepts a finite center and strictly positive radius", () => {
+    const sphere = { id: "sphere-1", type: "sphere", center: { x: 1, y: 2, z: 3 }, radius: 5, label: "球 S" }
+    expect(validateSphere(sphere).valid).toBe(true)
+  })
+
+  it("rejects missing or non-finite coordinates and non-positive radii with a sphere diagnostic", () => {
+    const sphere = { id: "sphere-1", type: "sphere", center: { x: 1, y: 2, z: 3 }, radius: 5 }
+    const invalid = [
+      { ...sphere, radius: 0 }, { ...sphere, radius: -1 }, { ...sphere, radius: Number.NaN },
+      { ...sphere, radius: Number.POSITIVE_INFINITY }, { ...sphere, radius: "5" },
+      { ...sphere, center: { ...sphere.center, z: Number.NaN } },
+      { ...sphere, center: { ...sphere.center, x: "1" } },
+      { id: sphere.id, type: sphere.type, radius: sphere.radius }
+    ]
+    for (const candidate of invalid) {
+      const result = validateSphere(candidate)
+      expect(result.valid, JSON.stringify(candidate)).toBe(false)
+      if (result.valid) throw new Error("expected the sphere to be rejected")
+      expect(result.errors).toContain("sphere geometry is invalid")
+    }
+  })
+})

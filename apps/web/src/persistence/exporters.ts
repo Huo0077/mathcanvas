@@ -58,7 +58,7 @@ function primitiveSvg(primitive: PrimitiveSpec): string {
   if (primitive.type === "connection") return ""
   if (primitive.type === "locus") return ""
   if (primitive.type === "intersectionSet") return ""
-  if (primitive.type === "cube" || primitive.type === "pyramid" || primitive.type === "cylinder" || primitive.type === "cone" || primitive.type === "point3" || primitive.type === "line3" || primitive.type === "segment3" || primitive.type === "ray3" || primitive.type === "plane3" || primitive.type === "circle3" || primitive.type === "edge3" || primitive.type === "face3" || primitive.type === "polyhedron3" || primitive.type === "section" || primitive.type === "intersectionLine" || primitive.type === "intersectionSolid" || primitive.type === "intersectionFace" || primitive.type === "intersectionPoint3") return ""
+  if (primitive.type === "cube" || primitive.type === "pyramid" || primitive.type === "cylinder" || primitive.type === "cone" || primitive.type === "sphere" || primitive.type === "point3" || primitive.type === "line3" || primitive.type === "segment3" || primitive.type === "ray3" || primitive.type === "plane3" || primitive.type === "circle3" || primitive.type === "edge3" || primitive.type === "face3" || primitive.type === "polyhedron3" || primitive.type === "section" || primitive.type === "intersectionLine" || primitive.type === "intersectionSolid" || primitive.type === "intersectionFace" || primitive.type === "intersectionPoint3") return ""
   if (primitive.type === "circle") return `<circle cx="${toX(primitive.center.x)}" cy="${toY(primitive.center.y)}" r="${radiusToSvg(primitive.radius)}" ${svgStyleFor(primitive)} />`
   if (primitive.type === "arc") return `<path d="M ${toX(primitive.center.x + primitive.radius * Math.cos(primitive.startAngle))} ${toY(primitive.center.y + primitive.radius * Math.sin(primitive.startAngle))} A ${radiusToSvg(primitive.radius)} ${radiusToSvg(primitive.radius)} 0 ${Math.abs(primitive.endAngle - primitive.startAngle) > Math.PI ? 1 : 0} ${primitive.endAngle >= primitive.startAngle ? 0 : 1} ${toX(primitive.center.x + primitive.radius * Math.cos(primitive.endAngle))} ${toY(primitive.center.y + primitive.radius * Math.sin(primitive.endAngle))}" ${svgStyleFor(primitive)} />`
   // SVG 有 `<ellipse>`，能**精确**表示（可旋转的）椭圆，所以这里不做任何采样：旧实现把椭圆写成 160 段
@@ -120,6 +120,7 @@ function primitiveData(primitive: PrimitiveSpec): string {
   if (primitive.type === "cube") return JSON.stringify({ origin: primitive.origin, size: primitive.size })
   if (primitive.type === "pyramid") return JSON.stringify({ baseCenter: primitive.baseCenter, baseSize: primitive.baseSize, height: primitive.height })
   if (primitive.type === "cylinder" || primitive.type === "cone") return JSON.stringify({ center: primitive.center, radius: primitive.radius, height: primitive.height, segments: primitive.segments })
+  if (primitive.type === "sphere") return JSON.stringify({ center: primitive.center, radius: primitive.radius })
   if (primitive.type === "point3") return JSON.stringify({ position: primitive.position, binding: primitive.binding })
   if (primitive.type === "line3") return JSON.stringify(primitive.definition)
   if (primitive.type === "segment3") return JSON.stringify({ pointIds: primitive.pointIds })

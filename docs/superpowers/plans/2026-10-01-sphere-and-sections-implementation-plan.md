@@ -20,9 +20,10 @@
 
 ## Task 1 — Persist and validate the sphere document type
 
-**Files:** `packages/dsl/src/types.ts`, `packages/dsl/src/schema.ts`, `packages/dsl/src/schema.test.ts`, `packages/dsl/src/codec.test.ts`; inspect `packages/dsl/src/codec.ts` before changing it.
+**Files:** `packages/dsl/src/types.ts`, `schema.ts`, `primitiveTypeNames.ts`, `schema.test.ts`, `codec.test.ts`; `packages/agent-core/src/capabilities.ts`, `capabilities.test.ts`; `apps/web/src/components/inspectorLabels.ts`, `primitiveStyle.ts`, `persistence/exporters.ts`, `persistence/exporters.test.ts`. `codec.ts` 只在现有泛型 JSON 往返不足时修改。
 
 **Interfaces:** Produce `SpherePrimitive { id: string; type: "sphere"; center: Vector3; radius: number } & PrimitivePresentation` within `PrimitiveSpec`. Consumers must narrow on `primitive.type === "sphere"`.
+**本地进展（2026-10-01，远端待核）：** 契约 RED→GREEN；全库 269/3110 + 1 todo、e2e 171/171、typecheck/lint 通过。Agent `sphere` 明确 `temporarily_unavailable`，仅完成文档类型而非球体功能。按全局规则，代码与进度推送并核对新 CI 前，本 Task 不勾选。
 
 - [ ] Write schema and codec tests that first fail when adding a sphere to a geometry3d document:
 ```ts

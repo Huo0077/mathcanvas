@@ -10,6 +10,12 @@
 
 > 下方 2026-09-22 的"最后更新 / 当前阶段 / 总体状态"三行保留为**当时快照**，不再维护。
 
+## 2026-10-01 —— 球体 Task 1 文档契约（本地候选，远端待核）
+
+- RED：`schema.test.ts` 中合法球心/半径被报 `invalid primitive type: sphere`，坏半径得不到字段诊断；`codec.test.ts` 导出有效球被拒。Agent 能力表缺类型键、导出 CSV 将整个 `sphere` 原始对象塞进数据列，这两处在新断言下也抓红。
+- GREEN：`SpherePrimitive` 保存 `{center,radius}`、校验三个有限坐标与严格正半径；`decodeMgeo(encodeMgeo(...))` 保留 id/标签/样式，零半径文件导入明确报错。运行时类型列表 42→43，Agent 能力状态 **`temporarily_unavailable`**（没有 `solid.create_sphere` handler，不假装可用），检查器名字/默认色登记；平面 SVG 不虚构 3D 球，CSV 数据列只记真实球心/半径。没有放行球体截面来源。
+- 定向 schema/codec **73/73**、capability/exporter 目标回归通过；全库 `npm.cmd test -- --maxWorkers=3` **269 文件 / 3110 项通过 + 1 todo**、全量 Playwright **171/171**、typecheck exit 0、lint 0 error / 13 条既有 warning。**本块代码/进度尚未上传，GitHub 新 CI 未核；截交/渲染/向导/投影未做，Task 1 暂不勾选。**
+
 ## 2026-10-01 —— 球体与球截面独立方案立档（仅设计，不冒充功能）
 
 - 用户此前决定启动球体与球截面，原实施计划明确要求独立方案。核对 `packages/dsl/src/types.ts` / `schema.ts`、圆柱/圆锥 `sectionQuadric3`、`sectionRecompute`、Three 场景、实体向导和工程投影后，编写 [解析球体设计](superpowers/specs/2026-10-01-sphere-and-sections-design.md) 与 [逐块实施计划](superpowers/plans/2026-10-01-sphere-and-sections-implementation-plan.md)。
