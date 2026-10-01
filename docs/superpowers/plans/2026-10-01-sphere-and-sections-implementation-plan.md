@@ -23,9 +23,10 @@
 **Files:** `packages/dsl/src/types.ts`, `schema.ts`, `primitiveTypeNames.ts`, `schema.test.ts`, `codec.test.ts`; `packages/agent-core/src/capabilities.ts`, `capabilities.test.ts`; `apps/web/src/components/inspectorLabels.ts`, `primitiveStyle.ts`, `persistence/exporters.ts`, `persistence/exporters.test.ts`. `codec.ts` 只在现有泛型 JSON 往返不足时修改。
 
 **Interfaces:** Produce `SpherePrimitive { id: string; type: "sphere"; center: Vector3; radius: number } & PrimitivePresentation` within `PrimitiveSpec`. Consumers must narrow on `primitive.type === "sphere"`.
-**本地进展（2026-10-01，远端待核）：** 契约 RED→GREEN；全库 269/3110 + 1 todo、e2e 171/171、typecheck/lint 通过。Agent `sphere` 明确 `temporarily_unavailable`，仅完成文档类型而非球体功能。按全局规则，代码与进度推送并核对新 CI 前，本 Task 不勾选。
 
-- [ ] Write schema and codec tests that first fail when adding a sphere to a geometry3d document:
+**交付证据（2026-10-01）：** 契约 RED→GREEN；全库 269/3110 + 1 todo、e2e 171/171、typecheck/lint 通过。Agent `sphere` 明确 `temporarily_unavailable`，仅完成文档类型而非球体功能。代码提交 `ca03ed5` 已推送并核对远端 SHA，CI run `36908959733` checks/build/rust/e2e 四项成功后本 Task 才勾选；球体画布/解析截面仍未实现。
+
+- [x] Write schema and codec tests that first fail when adding a sphere to a geometry3d document:
 ```ts
 const sphere = { id: "sphere-1", type: "sphere", center: { x: 1, y: 2, z: 3 }, radius: 5 } as const
 const document = { ...createEmptyDocument("geometry3d"), primitives: [sphere] }
@@ -33,9 +34,9 @@ expect(validateDocument(document).valid).toBe(true)
 expect(decodeMgeo(encodeMgeo(document)).primitives).toContainEqual(sphere)
 expect(validateDocument({ ...document, primitives: [{ ...sphere, radius: 0 }] }).valid).toBe(false)
 ```
-- [ ] Run `npm.cmd test -- packages/dsl/src/schema.test.ts packages/dsl/src/codec.test.ts`; confirm the new tests fail for missing type/schema, not test setup.
-- [ ] Add type/union and finite-positive schema validation; verify old fixture and round-trip tests remain byte/geometry compatible. Run the same tests and `npm.cmd run typecheck`.
-- [ ] Update progress docs, commit only this slice, push and verify remote SHA and CI; check this task only after proof.
+- [x] Run `npm.cmd test -- packages/dsl/src/schema.test.ts packages/dsl/src/codec.test.ts`; confirm the new tests fail for missing type/schema, not test setup.
+- [x] Add type/union and finite-positive schema validation; verify old fixture and round-trip tests remain byte/geometry compatible. Run the same tests and `npm.cmd run typecheck`.
+- [x] Update progress docs, commit only this slice, push and verify remote SHA and CI; check this task only after proof.
 
 ## Task 2 — Exact sphere-plane mathematics and degeneracy
 

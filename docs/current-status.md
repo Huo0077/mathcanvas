@@ -5,7 +5,7 @@
 > [`docs/project-progress.md`](project-progress.md) —— 那是**归档**，里面的数字是"当时实测"，
 > 不是当前值。两份文件分工明确：**要当前值看这里，要过程看归档。**
 
-**最后更新：** 2026-10-01（球体第 1 切片的**文档类型/有限球心/正半径校验及 `.mgeo` 往返**已在本地完成，Agent 能力仍显式标为暂不可用；全库 269 文件/3110 项通过 + 1 todo、全量 e2e 171/171、类型检查通过、lint 0 error/13 既有 warning。**这一切片尚未提交、上传及核对新 GitHub CI，不计球体功能完成**；解析截面、画布创建与投影仍未做。其它发布与用户侧待办见文末）。
+**最后更新：** 2026-10-01（球体第 1 切片的**文档类型/有限球心/正半径校验及 `.mgeo` 往返**已在本地完成，Agent 能力仍显式标为暂不可用；全库 269 文件/3110 项通过 + 1 todo、全量 e2e 171/171、类型检查通过、lint 0 error/13 既有 warning。**Task 1 已在 `ca03ed5` 提交并核对远端 SHA，CI run `36908959733` 的 checks/build/rust/e2e 四项成功；整个球体功能仍未完成**；解析截面、画布创建与投影仍未做。其它发布与用户侧待办见文末）。
 
 ## 一、现在能不能跑（可复核的门禁读数）
 
@@ -16,8 +16,8 @@
 | `npm run lint` | exit 0，**0 error / 13 warning**（已有基线警告，并非全部无警告；本轮复跑） |
 | `npm.cmd run build`（2026-10-01） | **exit 0**：根脚本遍历全部工作区；桌面 `tauri build --no-bundle` 完成 release exe（不是 MSI/NSIS 打包），Web 前置构建和工作区构建均通过，4 个 packages 的 `tsc -p tsconfig.json` 全通过。Web 入口 1701.84 kB，仍有 >500 kB 分块及混用动态/静态 import 警告；Rust 有 linker 消息警告。首次沙箱内尝试因 `Cargo.toml` 写入拒绝而失败，获准在沙箱外复跑成功。**不代表**全量 e2e、Rust 测试、性能测试或安装包实机验证通过。 |
 | `npm --workspace @draw/web run build` | exit 0；入口 1694.22 kB、`engineeringExporters` 433.81 kB、`geometry.worker` 310.99 kB；仍有 >500 kB chunk 警告 |
-| `npm.cmd test -- --maxWorkers=3`（2026-10-01，球体契约本地候选） | **269 文件 / 3110 项通过 + 1 todo，exit 0**。schema/codec 的球体目标用例先因未知 `sphere` 红，能力表/CSV 目标用例也红后转绿；新提交及 CI 待核。 |
-| `npm.cmd run test:e2e -- --workers=3`（2026-10-01，球体契约本地候选） | **171 / 171 通过**：尚无球体 UI 用例，这一读数只能说明旧浏览器功能未回退，**不能冒充球体已可创建**。 |
+| `npm.cmd test -- --maxWorkers=3`（2026-10-01，球体 Task 1 已核） | **269 文件 / 3110 项通过 + 1 todo，exit 0**。schema/codec 的球体目标用例先因未知 `sphere` 红，能力表/CSV 目标用例也红后转绿；提交 `ca03ed5` 的 CI checks 成功。 |
+| `npm.cmd run test:e2e -- --workers=3`（2026-10-01，球体 Task 1 已核） | **171 / 171 通过**，提交 `ca03ed5` 的 CI e2e 成功；尚无球体 UI 用例，只能证明旧浏览器功能未回退，**不能冒充球体已可创建**。 |
 | `npm.cmd test -- --maxWorkers=3`（2026-10-01，相机同步） | **269 文件 / 3105 项通过 + 1 todo，exit 0**；无网格代刷新时标签与当前相机曾偏差约 386px，绘制入口在投影前显式同步矩阵后点名/测量两层均绿；提交 `a4e2f40` 的 CI checks 成功。 |
 | `npm.cmd run test:e2e -- --workers=3`（2026-10-01，相机同步） | **171 / 171 通过，exit 0**；教学标签用例去掉“松手后再抖鼠标”的补帧，单独连续 5 次通过；提交 `a4e2f40` 的 CI e2e 成功。 |
 | `npm.cmd test -- --maxWorkers=3`（2026-10-01，实体体积标注） | **268 文件 / 3104 项通过 + 1 todo、exit 0**；用真实斜棱柱证明画布定位红→绿，缺顶点时不猜位置；GitHub CI run `36898807030` 的 checks 成功。 |
@@ -230,9 +230,9 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
 2. **匹配当前源码的 MSI/NSIS 尚未本机安装验证**：`target/release/bundle` 当前仅查到 v0.2.0 的 MSI/NSIS，`target/release/mathcanvas-desktop.exe` 的构建时间早于后续功能提交；先从确定的发行提交重打新安装包，再做受控安装/启动/卸载验收，不能以根脚本 `--no-bundle` 或旧版安装结果替代。
 3. **合并后的远端功能分支仍在**：`git ls-remote` 实查 `feat/high-school-geometry-interaction` tip 为 `8c67346`，其文档是合并/打包前的旧快照。删除远端分支属不可逆的仓库整理，**待用户明确决定**；目前不自动删除。
 
-**E. 后续功能与独立探索（4 项；球体设计已建、契约代码在本地候选阶段）**
+**E. 后续功能与独立探索（4 项；球体 Task 1 已交付、其余 Task 2–9 未完成）**
 
-1. **球体与球截面**（P2，**Task 1 本地候选；整体未交付**）：[设计](superpowers/specs/2026-10-01-sphere-and-sections-design.md)与[九块计划](superpowers/plans/2026-10-01-sphere-and-sections-implementation-plan.md)已推送。DSL 新增解析 `sphere`（有限球心/正半径）并本地验证 `.mgeo` 往返、退化拒绝；运行时类型表与 Agent 能力表同步，**Agent 仍暂不可用**；平面 SVG 不伪造 3D 球，CSV 仅存球心/半径。**Task 1 仍待随代码提交、推送及 GitHub CI 核对，未勾选；截圆/3D/工程投影/交互均未实现。**
+1. **球体与球截面**（P2，**Task 1 已完成；整体未交付**）：[设计](superpowers/specs/2026-10-01-sphere-and-sections-design.md)与[九块计划](superpowers/plans/2026-10-01-sphere-and-sections-implementation-plan.md)已推送。DSL 新增解析 `sphere`（有限球心/正半径）并本地验证 `.mgeo` 往返、退化拒绝；运行时类型表与 Agent 能力表同步，**Agent 仍暂不可用**；平面 SVG 不伪造 3D 球，CSV 仅存球心/半径。**Task 1 在 `ca03ed5` 推送、CI run `36908959733` 四项成功后才勾选；Task 2–9 的截圆/3D/工程投影/交互/Agent 创建均未实现。**
 2. **题目截图 → 可编辑数学图**（独立探索）：**未启动**，需要单列质量门禁（样题集、歧义标注、真实 provider 结果、草稿确认）。
 3. **HTML / GeoGebra 导出**：**未启动**（已交付的导出是 `.mgeo` / SVG / CSV / PNG 与工程图 SVG/DXF/PDF）。
 4. **平面 / 函数题型逐题补缺**：**未排期**（需先做教师样题盘点）。

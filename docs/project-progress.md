@@ -10,11 +10,11 @@
 
 > 下方 2026-09-22 的"最后更新 / 当前阶段 / 总体状态"三行保留为**当时快照**，不再维护。
 
-## 2026-10-01 —— 球体 Task 1 文档契约（本地候选，远端待核）
+## 2026-10-01 —— 球体 Task 1 文档契约（`ca03ed5` 已推送，CI 全绿）
 
 - RED：`schema.test.ts` 中合法球心/半径被报 `invalid primitive type: sphere`，坏半径得不到字段诊断；`codec.test.ts` 导出有效球被拒。Agent 能力表缺类型键、导出 CSV 将整个 `sphere` 原始对象塞进数据列，这两处在新断言下也抓红。
 - GREEN：`SpherePrimitive` 保存 `{center,radius}`、校验三个有限坐标与严格正半径；`decodeMgeo(encodeMgeo(...))` 保留 id/标签/样式，零半径文件导入明确报错。运行时类型列表 42→43，Agent 能力状态 **`temporarily_unavailable`**（没有 `solid.create_sphere` handler，不假装可用），检查器名字/默认色登记；平面 SVG 不虚构 3D 球，CSV 数据列只记真实球心/半径。没有放行球体截面来源。
-- 定向 schema/codec **73/73**、capability/exporter 目标回归通过；全库 `npm.cmd test -- --maxWorkers=3` **269 文件 / 3110 项通过 + 1 todo**、全量 Playwright **171/171**、typecheck exit 0、lint 0 error / 13 条既有 warning。**本块代码/进度尚未上传，GitHub 新 CI 未核；截交/渲染/向导/投影未做，Task 1 暂不勾选。**
+- 定向 schema/codec **73/73**、capability/exporter 目标回归通过；全库 `npm.cmd test -- --maxWorkers=3` **269 文件 / 3110 项通过 + 1 todo**、全量 Playwright **171/171**、typecheck exit 0、lint 0 error / 13 条既有 warning。**提交 `ca03ed5` 已推送并以 `git ls-remote` 核对 SHA；GitHub CI run `36908959733` 的 checks/build/rust/e2e 四作业全部成功，Task 1 方可勾选。README、当前状态、功能目录、Agent/高中几何专题和新/旧实施计划已同步；截交/渲染/向导/投影仍未做。**
 
 ## 2026-10-01 —— 球体与球截面独立方案立档（仅设计，不冒充功能）
 

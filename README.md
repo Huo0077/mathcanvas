@@ -16,7 +16,7 @@ npm run dev
 ### 选择工作区
 
 - **平面几何**：创建点、线、圆、圆锥曲线和函数图像；拖动图元或控制点，查看交点、轨迹和属性，使用公式框编辑函数并创建导函数、切线及积分区域。
-- **立体几何**：可在画布按步骤放点、连线、建面；从「常用立体」参数面板预览正方体、长方体、三/四棱柱（可倾斜）与三/四棱锥，确认后才保存。独立空间线/棱可设教学虚线或点线；原有轨道、截面、交面、测量和 Alt 子对象选择仍可用。详见 [功能目录](docs/feature-catalog.md)。
+- **立体几何**：画布按步骤放点、连线、建面；「常用立体」可预览正方体、长方体、三/四棱柱与棱锥，确认后落盘。棱柱/模板实体可在属性栏**单顶点数值编辑**，受影响的面自动三角化；有效体积数字在图面直接显示，旋转后点名/测量标签及时对齐。空间线/棱可设教学虚线或点线；轨道、截面、交面、测量和 Alt 子对象选择仍可用。**球体/球截面还没有画布操作入口**：目前仅球体数据契约在开发中，不能把外接球/内切球读数当成可编辑球。详见 [功能目录](docs/feature-catalog.md)。
 - **工程制图**：从几何模型组织视图与图纸，使用 CAD 2D 绘图、标注及导出功能。
 - **Agent 工作区**：输入自然语言请求，查看计划与隔离草稿，**由你确认后**才写入当前文档。没有可用模型服务时，仅支持本地确定性规划器能识别的有限指令；不应把它当作已完成的通用自然语言绘图助手。
 
@@ -61,12 +61,12 @@ npm run dev
 ## 项目进度与能力边界
 
 - **已具备**：平面和立体几何编辑、函数分析、工程制图、本地文档保存/恢复，以及“计划 → 草稿 → 人工确认”的 Agent 基础链路。具体功能范围以 [功能目录](docs/feature-catalog.md) 为准。
-- **高中几何交互（2026-09-30 已通过 PR #1 合并进 `main`；v3.0 发布版未含本批，桌面端已能打出 MSI/NSIS）**：立体按步骤创建、常用实体参数预览与教学线型已有实现与测试；**六类教学题的完整组合验收已完成**（`e2e/high-school-geometry-tasks.spec.ts` 7 项全过：三/四棱锥、斜三棱柱、异长长方体、圆锥截面、线面关系、旧文档恢复与撤销），实施计划的 **Task 1 / 2 / 3 / 4 / 5 / 7 已全部勾选**（含创建状态机、拾取边界、锁定/隐藏不被吸附、Esc 与选择工具退出的回归）。**仍未完成**（**完整清单见 [当前状态](docs/current-status.md) 的「四、未完成任务总清单」**）：单顶点编辑（棱柱侧面为四边形，改单点会被共面校验退回；已定修法"把受影响的面拆成三角形"，待实施）、选中对象旋转环遮挡的图面优化、教师/学生走查、根脚本 `npm run build`（含 4 个 packages 的 `tsc`）、全量 `npm run test:e2e`（47 spec）、桌面产物未推 Release/未在本机安装。现状和证据见 [当前状态](docs/current-status.md)、[本专题进度](docs/research/2026-09-29-high-school-geometry-interaction-progress.md) 与 [实施计划](docs/superpowers/plans/2026-09-29-high-school-geometry-interaction-implementation-plan.md)。
+- **高中几何交互（2026-10-01）**：六类教学代表题已用 7 条浏览器用例逐题验收；单顶点编辑、体积画布数字及相机标注同步均已逐块上传并在 GitHub CI checks/build/rust/e2e 四项通过。根脚本完整构建、本地全量 171 条端到端测试、性能 9/9 和 Rust 236 通过/3 项按设计忽略均有记录。**仍需用户侧教师/学生走查**（“三点一面”目标 ≤8 次主操作）；最新版源码还没有匹配并安装验证的桌面发行包。可复核读数与未完成清单见 [当前状态](docs/current-status.md)；旧专题过程见 [高中几何进度](docs/research/2026-09-29-high-school-geometry-interaction-progress.md)。
 - **Agent 已有阶段成果**：只读场景工具、类型化工具调用、确定性的局部验收与发布门禁已有实现和测试；离线评估可用。但工具能力和真实模型绘图质量是两回事，不能把离线得分当成真实模型准确率。
 - **仍有限制**：增量草稿工具尚未作为模型可用工具开放；真实场景截图/相机证据与完整视觉检查尚未接通；代表任务的真实 provider pass@1、pass@3、成本和延迟还没有形成可用于放行的测量数据。因此类型化工具循环**尚未满足默认启用的发布门禁**。当前门禁及缺口见 [Agent 发布前门禁](docs/acceptance/agent-release-gate.md)，过程见 [Agent tool-loop 进度记录](docs/research/2026-09-28-agent-tool-loop-progress.md)。
-- **其他已知边界**：没有云端同步；部分高级几何输入、精确曲面互交、DWG/B-rep 导入及自动尺寸布局尚未提供。请以界面实际可用入口和 [功能目录](docs/feature-catalog.md) 为准，不把设计文档中的规划视作已交付功能。
+- **其他已知边界**：没有云端同步；球体 Task 1 虽已交付受校验的 `.mgeo` 数据类型，但**尚无球体画布创建、解析截面和工程投影入口**，Agent 的球体能力也显式标记为暂不可用。部分高级几何输入、精确曲面互交、DWG/B-rep 导入和自动尺寸布局仍未提供。设计目标见 [球体规格](docs/superpowers/specs/2026-10-01-sphere-and-sections-design.md)，交付状态以 [当前状态](docs/current-status.md) 为准。
 
-桌面版 [v3.0 发布说明](docs/release/v3.0.md) 记录了发布产物及尚未完成的验收；历史迭代与修复记录见 [CHANGELOG](CHANGELOG.md) 和 [项目进度归档](docs/project-progress.md)。历史记录不应直接当作当前测试结果。
+公开 GitHub Release 目前最新为 [v3.0 发布说明](docs/release/v3.0.md) 对应的版本；`v3.0.1` 有历史 tag/打包记录但未公开同名 Release，当前 `main` 的后续改动尚未重新制作并安装验证。过程记录见 [CHANGELOG](CHANGELOG.md) 与 [项目进度归档](docs/project-progress.md)，历史数字不能直接当作当前测试结果。
 
 ## 开发者进度与参与开发
 
@@ -86,10 +86,10 @@ npm run eval:agent
 
 ### 当前开发重点
 
-本期高中几何交互的**六类样题验收已完成**（7/7）；下一步是旋转手柄/教学图面检查、单顶点编辑（已定修法：拆三角形）与教师/学生走查。下面是并行的 Agent 长期门禁，不代表几何交互已全部验收。
+当前开发重点是 [球体与球截面独立计划](docs/superpowers/plans/2026-10-01-sphere-and-sections-implementation-plan.md)：第 1 块文档类型/校验/`.mgeo` 往返已在 `main` 提交 `ca03ed5`，**其 GitHub CI run `36908959733` 已完成 checks/build/rust/e2e 四项成功**；解析数学、3D 画布、工程投影和 Agent 创建都未交付。并行保留教师/学生真实走查与匹配最终源码的安装包验收。下面三条是 Agent 的长期门禁，不代表球体已可由模型创建。
 
 1. 维持 Agent 工具目录、模型可见 schema 和实际分发处理器的一致性；写入仍由宿主和用户确认控制。
 2. 补齐需要候选文档与实际渲染证据的验收路径，扩大语义检查覆盖面；对不支持的验证明确标记，而不是报告“完成”。
 3. 在具备真实 provider 凭据与代表性任务集后，测量通过率、工具错误率、延迟和成本，再依据 [发布门禁](docs/acceptance/agent-release-gate.md) 决定是否扩大默认使用范围。
 
-逐阶段已完成、延期及待做事项见 [实施计划](docs/superpowers/plans/2026-09-28-agent-tool-loop-implementation-plan.md)、[进度快照](docs/research/2026-09-28-agent-tool-loop-progress.md) 和 [评估记分卡](docs/acceptance/agent-tool-loop-scorecard.md)。协作时请保持 DSL、几何内核、Scene Graph 与 UI 的边界清晰；每个可验证切片同步更新相应文档，并通过功能分支和 Pull Request 提交。
+逐阶段 Agent 已完成、延期及待做事项见 [实施计划](docs/superpowers/plans/2026-09-28-agent-tool-loop-implementation-plan.md)、[进度快照](docs/research/2026-09-28-agent-tool-loop-progress.md) 与 [评估记分卡](docs/acceptance/agent-tool-loop-scorecard.md)。协作时保持 DSL、几何内核、Scene Graph 与 UI 的边界；每个可验证切片须同步更新 README/相关进度文档，提交并推送 GitHub、核对远端 SHA 和 CI 后才标记完成。
