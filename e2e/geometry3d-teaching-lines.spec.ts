@@ -64,9 +64,8 @@ test("keeps every vertex label on its own vertex after the camera rotates", asyn
       const label = overlay.locator(`[data-point-id="${vertex.id}"]`)
       await expect(label, `${phase}：${vertex.label} 的标注必须存在`).toHaveCount(1)
       /**
-       * 用 `poll` 而不是一次性断言：相机在 `pointermove` 里更新、渲染排在**下一帧**，
-       * 拖动刚结束时读到的可能还是上一帧的锚点（实测差 29.9px）。轮询只放过"最终对齐"，
-       * 若标注真的没跟着相机更新，它会一直不收敛、照样红。
+       * 轮询只容忍测试环境里覆盖层的异步落位，不再通过额外的鼠标动作触发补帧。
+       * 渲染入口在标签投影前显式同步相机矩阵；缺网格时也有独立单测约束。
        */
       await expect.poll(async () => {
         const projected = await projectWorldPoint(page, vertex.position)
@@ -89,15 +88,6 @@ test("keeps every vertex label on its own vertex after the camera rotates", asyn
   // 先确认真的转了 —— 否则"旋转后仍对齐"可能只是因为压根没转
   await expect.poll(async () => Number(await scene.getAttribute("data-camera-azimuth"))).not.toBeCloseTo(azimuthBefore, 1)
 
-  /**
-   * 指针抬起前的**最后一次**移动不会触发渲染：实测拖动结束后标签停在上一帧的相机状态上，
-   * 与"当前"相机读数差 30px 左右，而且不会自己收敛（没有新的一帧）。所以这里再抖 2px
-   * 让它按最终视角重画一帧，然后才断言"逐点对齐"。
-   */
-  await page.mouse.move(canvasBox.x + canvasBox.width / 2 + 140, canvasBox.y + canvasBox.height / 2 + 30)
-  await page.mouse.down()
-  await page.mouse.move(canvasBox.x + canvasBox.width / 2 + 142, canvasBox.y + canvasBox.height / 2 + 31, { steps: 2 })
-  await page.mouse.up()
-
+  // 松手之后不得靠再抖一次指针才把标注追到最终相机位置。
   await assertLabelsOnTheirVertices("旋转后")
 })

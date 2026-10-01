@@ -83,6 +83,9 @@ export function createThreeSceneRender({ renderer, scene, camera, cameraStateRef
     syncPointHandleScales()
     // 缩放会改变曲线的误差容差：档位一变就让同步重算（跨不到一档就不重建）。
     syncCurveToleranceBucket()
+    // HTML overlays project before renderer.render() updates camera matrices. Do not rely on
+    // a visible grid to refresh the camera: the last pointer move must paint the final view.
+    camera.updateMatrixWorld()
     applyGridPlacement()
     const bounds = renderer.domElement.getBoundingClientRect()
     const overlay = measurementOverlayRef.current

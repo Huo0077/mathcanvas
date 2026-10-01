@@ -10,6 +10,12 @@
 
 > 下方 2026-09-22 的"最后更新 / 当前阶段 / 总体状态"三行保留为**当时快照**，不再维护。
 
+## 2026-10-01 —— 相机最后一帧：覆盖层投影时机（本地候选，远端待核）
+
+- 历史现场说"松手前最后一次移动不触发渲染"；复核发现 `threeSceneRender.render()` 在 `renderer.render(scene,camera)` 之前先投影点名和体积数字，`applyCameraState` 又只写相机姿态，矩阵原本要等 WebGL 绘制才更新。v3.0.1 的网格脚印计算偶然调用 `camera.updateMatrixWorld()`，所以当前带网格 e2e 去掉"抖 2px 补帧"后连续 5 次通过；**不能凭这条偶然副作用宣布渲染入口自身正确**。
+- 新隔离单测用无网格的真实 `PerspectiveCamera` + 两层覆盖 DOM：转相机后渲染入口在 WebGL 更新矩阵前投影，标签偏差实测约 **386px（RED）**；入口显式在两层投影前 `camera.updateMatrixWorld()` 后，点名和测量标签均绿。只改一处渲染顺序，不依赖额外 `pointerup` 补画。
+- 浏览器 `e2e/geometry3d-teaching-lines.spec.ts` 去掉松手后额外鼠标拖动，两条相关 e2e 通过；全量 Vitest **269 文件 / 3105 项通过 + 1 todo**，全量 Playwright **171/171**；`npm.cmd run typecheck` exit 0、`npm.cmd run lint` 0 error / 13 条既有 warning。**候选尚未提交、推送或核对新 GitHub CI，不提前从缺口清单移除。**
+
 ## 2026-10-01 —— 实体源体积画布数字（`374daa0` 已推送，CI 全绿）
 
 - 根因：体积测量在属性栏能读 48.000u³，但 `measurementVisuals.ts` 的 `pointPositions` 不认 `polyhedron3`，故 `resolveMeasurementVisual` 返回 null；页面 `[data-measurement-labels]` 实测为 0。现复用已有测量标注叠层，只从物化顶点求标签中心，不新增视觉 token；顶点缺失或非有限时不编造落点。
