@@ -120,6 +120,14 @@ export function ThreeSceneView({ document, selectedIds, onSelect, creationSessio
    */
   const resumeDragVisualRef = useRef<() => void>(() => undefined)
   const [showHiddenEdges, setShowHiddenEdges] = useState(false)
+  /**
+   * 三色旋转环的**视图开关**（默认关，偏好记在本机）。
+   *
+   * 用户口径（选中一个正方体时截图）："把这个太空环删掉" —— 环是"抓着就转"的入口，
+   * 不能真删；但它默认糊在图上挡着图面。所以默认不画，要拖着转时在这里打开。
+   * 文档里那条待办写的就是这件事："三色旋转环会遮挡教学虚线，后续需提供**可见且不改几何的视图控制**"。
+   */
+  const [showRotationHandles, setShowRotationHandles] = useState(() => loadViewPreference3d().showRotationHandles)
   /** 解析曲线的细分档位（2 的幂）。相机缩放只改它，再由同步依赖触发重建——见 `syncCurveToleranceBucket`。 */
   const [curveToleranceBucket, setCurveToleranceBucket] = useState<number | null>(null)
   /** 渲染器只在挂载期建一次，`syncContent` 里的实时值一律经 ref 读——容差也一样。 */
@@ -154,8 +162,8 @@ export function ThreeSceneView({ document, selectedIds, onSelect, creationSessio
    */
   const previewClickRef = useRef(onPreviewClick)
   previewClickRef.current = onPreviewClick
-  const displayFlagsRef = useRef({ showHiddenEdges, showNormals, transparentFaces, unfoldProgress })
-  displayFlagsRef.current = { showHiddenEdges, showNormals, transparentFaces, unfoldProgress }
+  const displayFlagsRef = useRef({ showHiddenEdges, showNormals, transparentFaces, showRotationHandles, unfoldProgress })
+  displayFlagsRef.current = { showHiddenEdges, showNormals, transparentFaces, showRotationHandles, unfoldProgress }
   /** 场景运行时：挂载时创建一次，之后所有内容同步都走它。 */
   const runtimeRef = useRef<ThreeSceneRuntime | null>(null)
   const creationSessionRef = useRef(creationSession)
@@ -289,6 +297,7 @@ export function ThreeSceneView({ document, selectedIds, onSelect, creationSessio
       showHiddenEdges,
       showNormals,
       transparentFaces,
+      showRotationHandles,
       unfoldProgress,
       previewKeys: previews.map((item) => `${item.key}:${item.kind}`).join("|"),
       curveToleranceBucket: wantsExactCurves ? curveToleranceBucket ?? 0 : 0
@@ -296,7 +305,7 @@ export function ThreeSceneView({ document, selectedIds, onSelect, creationSessio
     if (!sceneSyncDecision(contentKeyRef.current, key)) return
     contentKeyRef.current = key
     runtime.syncContent()
-  }, [document, selectedIds, showHiddenEdges, showNormals, transparentFaces, unfoldProgress, previews, curveToleranceBucket])
+  }, [document, selectedIds, showHiddenEdges, showNormals, transparentFaces, showRotationHandles, unfoldProgress, previews, curveToleranceBucket])
 
   useEffect(() => {
     runtimeRef.current?.syncCreationPreview()
@@ -335,7 +344,7 @@ export function ThreeSceneView({ document, selectedIds, onSelect, creationSessio
       else onCreationAnchor?.(result)
     }}
     onPointerLeave={() => { creationPressRef.current = null; runtimeRef.current?.clearCreationPreview(); setCreationReadout(null) }}
-  ><div className="three-render-target" ref={renderTargetRef} /><div className="three-measurement-overlay" ref={measurementOverlayRef} aria-label="三维测量标注" /><div className="three-point-label-overlay" ref={pointLabelOverlayRef} aria-label="三维点标注" />{solidPreviewActive && <div className="three-solid-preview-badge">未保存预览</div>}{webglAvailable && <div className="three-scene-controls" aria-label="3D显示控制"><button type="button" className="three-solid-open" aria-pressed={solidWizardOpen} onClick={onOpenSolidWizard}>常用立体</button><button type="button" aria-pressed={transparentFaces} onClick={() => setTransparentFaces((visible) => !visible)}>透明面</button><button type="button" aria-pressed={showHiddenEdges} onClick={() => setShowHiddenEdges((visible) => !visible)}>隐藏边</button><button type="button" aria-pressed={showNormals} onClick={toggleNormals}>法向量</button><button type="button" aria-pressed={unfolded} onClick={() => setUnfolded((visible) => !visible)}>{unfolded ? "折叠" : "展开"}</button><button type="button" aria-pressed={showAngle} onClick={toggleAngleDemo}>测量二面角</button><button type="button" aria-label="自动取景" aria-pressed={autoFit} title="开启后，加载文件、增删图元或内容跑出视野时会自动把视角调整到框住全部可见图元（保留 30% 安全边距）；你手动转动过视角之后就不再主动抢" onClick={() => { const next = !autoFit; setAutoFit(next); saveViewPreference3d({ autoFit: next }); if (next) fitWithoutTouchRef.current() }}>自动取景</button><button type="button" aria-label="以面为剖切面" aria-pressed={facePickMode} title="点一下这个按钮，再点实体上的某个面，该面就成为选中截面的剖切面" disabled={!hasSelectedSection} onClick={() => setFacePickMode((active) => !active)}>取面</button></div>}{webglAvailable && creationSession && <div className="three-creation-controls" role="group" aria-label="立体绘制工作平面">
+  ><div className="three-render-target" ref={renderTargetRef} /><div className="three-measurement-overlay" ref={measurementOverlayRef} aria-label="三维测量标注" /><div className="three-point-label-overlay" ref={pointLabelOverlayRef} aria-label="三维点标注" />{solidPreviewActive && <div className="three-solid-preview-badge">未保存预览</div>}{webglAvailable && <div className="three-scene-controls" aria-label="3D显示控制"><button type="button" className="three-solid-open" aria-pressed={solidWizardOpen} onClick={onOpenSolidWizard}>常用立体</button><button type="button" aria-pressed={transparentFaces} onClick={() => setTransparentFaces((visible) => !visible)}>透明面</button><button type="button" aria-pressed={showHiddenEdges} onClick={() => setShowHiddenEdges((visible) => !visible)}>隐藏边</button><button type="button" aria-label="旋转环" aria-pressed={showRotationHandles} title="打开后，选中恰好一个可转对象时画布上出现三色环（X 红 / Y 绿 / Z 蓝），拖哪个环就是绕哪根世界轴转；默认关闭，免得环挡住图面。这是纯显示开关：不改几何、不写文档。" onClick={() => { const next = !showRotationHandles; setShowRotationHandles(next); saveViewPreference3d({ autoFit, showRotationHandles: next }) }}>旋转环</button><button type="button" aria-pressed={showNormals} onClick={toggleNormals}>法向量</button><button type="button" aria-pressed={unfolded} onClick={() => setUnfolded((visible) => !visible)}>{unfolded ? "折叠" : "展开"}</button><button type="button" aria-pressed={showAngle} onClick={toggleAngleDemo}>测量二面角</button><button type="button" aria-label="自动取景" aria-pressed={autoFit} title="开启后，加载文件、增删图元或内容跑出视野时会自动把视角调整到框住全部可见图元（保留 30% 安全边距）；你手动转动过视角之后就不再主动抢" onClick={() => { const next = !autoFit; setAutoFit(next); saveViewPreference3d({ autoFit: next, showRotationHandles }); if (next) fitWithoutTouchRef.current() }}>自动取景</button><button type="button" aria-label="以面为剖切面" aria-pressed={facePickMode} title="点一下这个按钮，再点实体上的某个面，该面就成为选中截面的剖切面" disabled={!hasSelectedSection} onClick={() => setFacePickMode((active) => !active)}>取面</button></div>}{webglAvailable && creationSession && <div className="three-creation-controls" role="group" aria-label="立体绘制工作平面">
     <span>落点平面</span>
     {(["xy", "xz", "yz"] as const).map((plane) => <button key={plane} type="button" aria-pressed={workPlaneName === plane} onClick={() => { setWorkPlaneName(plane); runtimeRef.current?.clearCreationPreview(); setCreationReadout(null) }}>{plane.toUpperCase()}</button>)}
     {selectedPlane && <button type="button" aria-pressed={workPlaneName === "selected-face"} onClick={() => { setWorkPlaneName("selected-face"); runtimeRef.current?.clearCreationPreview(); setCreationReadout(null) }}>选中面</button>}

@@ -198,7 +198,7 @@ export interface ThreeSceneEffectDeps {
   previewsRef: RefObject<NonNullable<ThreeSceneViewProps["previews"]>>
   onSelectRef: RefObject<ThreeSceneViewProps["onSelect"]>
   previewClickRef: RefObject<ThreeSceneViewProps["onPreviewClick"]>
-  displayFlagsRef: RefObject<{ showHiddenEdges: boolean; showNormals: boolean; transparentFaces: boolean; unfoldProgress: number }>
+  displayFlagsRef: RefObject<{ showHiddenEdges: boolean; showNormals: boolean; transparentFaces: boolean; showRotationHandles: boolean; unfoldProgress: number }>
   runtimeRef: RefObject<ThreeSceneRuntime | null>
   creationSessionRef: RefObject<SpatialCreationSession | null>
   contentKeyRef: RefObject<string | null>

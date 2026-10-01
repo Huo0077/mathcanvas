@@ -6,7 +6,7 @@ import { resolveDihedralMarker3, resolvePolyhedronTopology, sectionSourceVertice
 import { measurementVisualsForDocument, resolveMeasurementVisual } from "./measurementVisuals"
 import { isUserVisiblePrimitive } from "./primitiveVisibility"
 import { GRID_MAJOR_EVERY, GRID_MIN_RADIUS } from "./sceneGrid"
-import { buildGridGeometry, GRID_MAJOR_COLOR, GRID_MINOR_COLOR } from "./threeGrid"
+import { buildGridGeometry, gridFadeBand, GRID_MAJOR_COLOR, GRID_MINOR_COLOR } from "./threeGrid"
 import { createContentSigner } from "./sceneContentSignature"
 import { contentBounds, contentRadiusExcluding } from "./threeCamera"
 import type { ThreeSceneGridHolder } from "./threeSceneGrid"
@@ -176,7 +176,7 @@ export function createThreeSceneContent({ documentRef, selectedIdsRef, displayFl
     if (sceneShell) sceneShell.dataset.sceneSyncs = String(sceneSyncsRef.current)
     const document = documentRef.current
     const selectedIds = selectedIdsRef.current
-    const { showHiddenEdges, showNormals, transparentFaces, unfoldProgress } = displayFlagsRef.current
+    const { showHiddenEdges, showNormals, transparentFaces, showRotationHandles, unfoldProgress } = displayFlagsRef.current
     const signer = createContentSigner(document)
     /**
      * 曲线的屏幕误差容差（世界单位）：`0.5px × 世界单位每像素`，再量化成 2 的幂档做**滞回**——
@@ -352,14 +352,19 @@ export function createThreeSceneContent({ documentRef, selectedIdsRef, displayFl
       })
     })
     /**
-     * 旋转手柄（三色环）：选中**恰好一个**可转对象时出现。
+     * 旋转手柄（三色环）：选中**恰好一个**可转对象时出现，但**受「旋转环」视图开关管辖**。
      *
-     * 登记在释放循环之前，所以"取消选中 / 换了对象"时旧环会被正常释放；
+     * 用户口径（截图里选中正方体）："把这个太空环删掉" —— 三个环糊在实体上挡住图面。
+     * 环本身还得留着（它是画布上唯一"抓着就转"的入口），所以默认**不画**，想转时在 3D 显示控制里打开。
+     * 关着时这一整段不登记：旧环走下面的释放循环正常销毁（读数记成 removed），
+     * `rotationHandleRef.current` 置空，指针逻辑回到"没抓到环"的原行为（不转、不抢选择）。
+     *
+     * 登记在释放循环之前，所以"取消选中 / 换了对象 / 关掉开关"时旧环都会被正常释放；
      * 环本身带 `excludeFromFit` 且不挂 `primitiveId`，既不参与取景，也不会被偏移 / 临时旋转那些按 id 遍历的逻辑碰到。
      */
     const rotationTargetId = rotationHandleTarget(document, selectedIds)
     const rotationGeometry = rotationTargetId ? rotationHandleGeometry(document, rotationTargetId) : null
-    const rotationGroup = rotationGeometry
+    const rotationGroup = showRotationHandles && rotationGeometry
       ? keepContent(
         "rotation-handles",
         `target:${rotationTargetId};c:${rotationGeometry.center.x.toFixed(4)},${rotationGeometry.center.y.toFixed(4)},${rotationGeometry.center.z.toFixed(4)};r:${rotationGeometry.radius.toFixed(4)}`,
@@ -486,10 +491,10 @@ export function createThreeSceneContent({ documentRef, selectedIdsRef, displayFl
        * 而不是写死像素偏移），以及本次拖动正在绕哪根轴、转了多少度。
        */
       sceneShell.dataset.rotationHandles = String(rotationGroup?.children.length ?? 0)
-      sceneShell.dataset.rotationHandlePivot = rotationGeometry
+      sceneShell.dataset.rotationHandlePivot = rotationGroup && rotationGeometry
         ? `${rotationGeometry.center.x.toFixed(3)},${rotationGeometry.center.y.toFixed(3)},${rotationGeometry.center.z.toFixed(3)}`
         : ""
-      sceneShell.dataset.rotationHandleRadius = rotationGeometry ? rotationGeometry.radius.toFixed(3) : ""
+      sceneShell.dataset.rotationHandleRadius = rotationGroup && rotationGeometry ? rotationGeometry.radius.toFixed(3) : ""
       /** 轨道圆半径读数：拖动期间给**预览值**，所以 e2e 能断言"拖着的时候半径已经变了"。 */
       sceneShell.dataset.trackRadius = track
         ? (circleRadiusPreviewRef.current?.id === track.id ? circleRadiusPreviewRef.current.radius : track.radius).toFixed(4)
@@ -514,16 +519,16 @@ export function createThreeSceneContent({ documentRef, selectedIdsRef, displayFl
     /** 背景坐标系：1 单位细线 + 每 10 格主线；两者都只在覆盖半径跨档时换一份几何。 */
     grid.helper = keepContent("static:grid", "grid", () => {
       const grid = new THREE.LineSegments(
-        buildGridGeometry(GRID_MIN_RADIUS, { skipMultiplesOf: GRID_MAJOR_EVERY }),
-        new THREE.LineBasicMaterial({ color: GRID_MINOR_COLOR, transparent: true })
+        buildGridGeometry(GRID_MIN_RADIUS, { skipMultiplesOf: GRID_MAJOR_EVERY, color: GRID_MINOR_COLOR, fade: gridFadeBand(GRID_MIN_RADIUS) }),
+        new THREE.LineBasicMaterial({ vertexColors: true, transparent: true })
       )
       grid.userData.excludeFromFit = true
       return grid
     }, alive, order) as THREE.LineSegments | null
     grid.majorHelper = keepContent("static:grid-major", "grid-major", () => {
       const major = new THREE.LineSegments(
-        buildGridGeometry(GRID_MIN_RADIUS, { every: GRID_MAJOR_EVERY }),
-        new THREE.LineBasicMaterial({ color: GRID_MAJOR_COLOR, transparent: true })
+        buildGridGeometry(GRID_MIN_RADIUS, { every: GRID_MAJOR_EVERY, color: GRID_MAJOR_COLOR, fade: gridFadeBand(GRID_MIN_RADIUS) }),
+        new THREE.LineBasicMaterial({ vertexColors: true, transparent: true })
       )
       major.userData.excludeFromFit = true
       return major

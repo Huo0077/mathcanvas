@@ -11,6 +11,10 @@
  *   跨档才重建几何，所以缩放不会一路重建；
  * - 每 10 格一条更粗的主线（`GRID_MAJOR_EVERY`），缩得很远时细线被淡出、主线仍在，
  *   但主线间距仍然是精确的 10 个单位。
+ *
+ * 2026-10-01 起还多一条：覆盖范围要按**可见地面脚印**算（`groundReach`）——
+ * 用户口径"把 0 平面也就是 z=0 的格子网做成无限延伸的感觉"。贴地视角下可见脚印比视口宽高远得多，
+ * 只按 `visibleWidth/Height` 铺，方块的直边就会进画面。
  */
 export const GRID_CELL = 1
 export const GRID_MAJOR_EVERY = 10
@@ -18,6 +22,13 @@ export const GRID_MAJOR_EVERY = 10
 export const GRID_MIN_RADIUS = 8
 /** 覆盖半径上限：再远就靠主线表达，"1 格 = 1 单位"的读数不变。 */
 export const GRID_MAX_RADIUS = 4096
+/**
+ * 径向淡出从覆盖半径的这个比例开始（到边界正好为 0）。
+ *
+ * 它同时是**覆盖率**的依据：要"满实区盖住可见地面脚印"，覆盖半径就得 ≥ 脚印 / 这个比例。
+ * `threeGrid.gridFadeBand` 用的是同一个常量（那边只管画，这边管铺多大）。
+ */
+export const GRID_FADE_START_RATIO = 0.6
 
 /** 把半个可见跨度向上取到 2 的幂档，保证覆盖范围不小于请求值。 */
 export function gridRadius(halfSpan: number): number {
@@ -47,6 +58,11 @@ export interface GridInputs {
   contentSpan: number
   /** 内容里离原点最远的角在地面上的距离（空场景传 0）。 */
   contentReach: number
+  /**
+   * **可见地面脚印**上离视点中心最远的距离（z=0 平面与视锥取样射线的交点，见 `threeSceneGrid`）。
+   * 相机平视 / 朝天看、或空场景时传 0（可选，缺省即 0）。
+   */
+  groundReach?: number
 }
 
 export interface GridPlacement {
@@ -66,11 +82,17 @@ export function gridPlacement(inputs: GridInputs): GridPlacement {
   const visibleWidth = visibleHeight * Math.max(inputs.aspect, 0.1)
   // `contentReach * 2` 是让栅格铺到"最远的那个角"：从吸附后的中心往两边各铺 extent，覆盖范围是中点的 ±extent。
   const span = Math.max(visibleWidth, visibleHeight, inputs.contentSpan, inputs.contentReach * 2, 4)
+  /**
+   * 可见脚印要落在**满实区**里（淡出从 `GRID_FADE_START_RATIO × extent` 才开始），
+   * 所以先按这个比例把脚印折算成"需要的覆盖半径"，再交给 2 的幂分档。
+   */
+  const groundReach = Number.isFinite(inputs.groundReach) ? Math.max(0, inputs.groundReach ?? 0) : 0
+  const requiredReach = Math.max(span / 2, groundReach / GRID_FADE_START_RATIO)
   return {
     cell: GRID_CELL,
     // 吸附到整格：轨道旋转 / 平移时线不会跟着爬。
     centre: { x: Math.round(inputs.target.x / GRID_CELL) * GRID_CELL, y: Math.round(inputs.target.y / GRID_CELL) * GRID_CELL },
-    extent: Math.min(gridRadius(span / 2), GRID_MAX_RADIUS),
+    extent: Math.min(gridRadius(requiredReach), GRID_MAX_RADIUS),
     axesLength: Math.max(span * 0.6, 1.2),
     majorEvery: GRID_MAJOR_EVERY
   }

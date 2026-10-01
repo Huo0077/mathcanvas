@@ -126,6 +126,8 @@ test("turns the track with the world-axis rings, keeping its centre", async ({ p
   await algebra.getByText("圆轨道 1", { exact: true }).click()
 
   // 圆轨道是**可转对象**：三个环照旧出现（它不再拥有点，环的几何按它自己的圆心与半径算）。
+  // 环默认不画（用户口径"把这个太空环删掉"）：这条要用环，先把 3D 显示控制里的「旋转环」打开。
+  await page.locator(".three-scene-controls").getByRole("button", { name: "旋转环" }).click()
   await expect(scene).toHaveAttribute("data-rotation-handles", "3")
   const orientation = page.locator("[data-object-orientation]")
   await expect(orientation).toHaveAttribute("data-object-orientation", "0.000,0.000,1.000")

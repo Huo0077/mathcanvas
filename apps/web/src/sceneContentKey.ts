@@ -6,6 +6,13 @@ export interface SceneContentInputs {
   showHiddenEdges: boolean
   showNormals: boolean
   transparentFaces: boolean
+  /**
+   * 旋转手柄（三色环）的**视图开关**：默认关，想拖着转时在 3D 显示控制里打开。
+   *
+   * 它在签名里，是因为"环画不画"确实是场景内容的一部分：开关翻了不重新同步，
+   * 用户点了按钮却什么都不发生（内容同步只看这个签名）。
+   */
+  showRotationHandles: boolean
   unfoldProgress: number
   /** 画布上现有的预览（`key:kind` 列表）：它们也是场景内容的一部分。 */
   previewKeys: string
@@ -33,6 +40,7 @@ export function sceneContentKey(inputs: SceneContentInputs): string {
     inputs.showHiddenEdges ? "1" : "0",
     inputs.showNormals ? "1" : "0",
     inputs.transparentFaces ? "1" : "0",
+    inputs.showRotationHandles ? "1" : "0",
     inputs.previewKeys || "-",
     inputs.curveToleranceBucket ? inputs.curveToleranceBucket.toPrecision(6) : "-"
   ].join("|")

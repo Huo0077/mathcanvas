@@ -20,7 +20,8 @@ test("rotates a solid by dragging the X ring, in one undoable step", async ({ pa
   await page.getByRole("button", { name: "添加圆柱" }).click()
   await expect(page.getByText("圆柱 1").first()).toBeVisible()
 
-  // (1) 选中恰好一个可转对象 ⇒ 三个环（X / Y / Z）。
+  // (1) 选中恰好一个可转对象 ⇒ 打开「旋转环」后出现三个环（X / Y / Z）。
+  await showRotationRings(page)
   await expect(scene).toHaveAttribute("data-rotation-handles", "3")
   const pivot = parseTriple(await scene.getAttribute("data-rotation-handle-pivot"))
   const radius = Number(await scene.getAttribute("data-rotation-handle-radius"))
@@ -81,6 +82,20 @@ function parseTriple(text: string | null): number[] {
   return values
 }
 
+/**
+ * 打开 3D 显示控制里的「旋转环」视图开关。
+ *
+ * 三色环**默认不画**（用户口径："把这个太空环删掉" —— 三个环糊在实体上挡住图面）。
+ * 这个文件验的是"拖环旋转"本身，所以每条用例先自己把环叫出来；
+ * 顺便钉住"默认是关的"：点之前 `aria-pressed` 必须是 `false`。
+ */
+async function showRotationRings(page: import("@playwright/test").Page): Promise<void> {
+  const toggle = page.locator(".three-scene-controls").getByRole("button", { name: "旋转环" })
+  await expect(toggle).toHaveAttribute("aria-pressed", "false")
+  await toggle.click()
+  await expect(toggle).toHaveAttribute("aria-pressed", "true")
+}
+
 /** 拖动读数 `data-rotation-degrees`（度）。 */
 async function readRotationDegrees(scene: import("@playwright/test").Locator): Promise<number> {
   const text = await scene.getAttribute("data-rotation-degrees")
@@ -98,6 +113,7 @@ test("follows the pointer exactly while Alt is held", async ({ page }) => {
 
   const scene = page.locator("[data-3d-scene]")
   await page.getByRole("button", { name: "添加圆柱" }).click()
+  await showRotationRings(page)
   await expect(scene).toHaveAttribute("data-rotation-handles", "3")
 
   const pivot = parseTriple(await scene.getAttribute("data-rotation-handle-pivot"))
@@ -144,6 +160,7 @@ test("does not start a rotation when the pointer is off the rings", async ({ pag
 
   const scene = page.locator("[data-3d-scene]")
   await page.getByRole("button", { name: "添加圆柱" }).click()
+  await showRotationRings(page)
   await expect(scene).toHaveAttribute("data-rotation-handles", "3")
 
   const box = (await page.locator("[data-3d-scene] canvas").boundingBox())!
@@ -165,10 +182,57 @@ test("offers no rings when more than one object is selected", async ({ page }) =
   const scene = page.locator("[data-3d-scene]")
   await page.getByRole("button", { name: "添加圆柱" }).click()
   await page.getByRole("button", { name: "添加立方体" }).click()
+  await showRotationRings(page)
   await expect(scene).toHaveAttribute("data-rotation-handles", "3")
 
   // 按住 Shift 加选第二个：两个对象，手柄收起来。
   await page.getByText("圆柱 1").first().click()
   await page.getByText("立方体 1").first().click({ modifiers: ["Shift"] })
   await expect(scene).toHaveAttribute("data-rotation-handles", "0")
+})
+
+/**
+ * 默认不显示（用户口径：选中正方体时截图，"把这个太空环删掉"）。
+ *
+ * 选中**恰好一个**可转对象，本来正是"三个环出现"的条件；现在默认关着，画布上就不许有环，
+ * 而且不许出现"看不见却能转"的隐形手柄：读数如实为空、拖过去也不进旋转会话。
+ * 打开开关才出现，再点一次收回去（状态写进本机偏好）。
+ */
+test("keeps the rings off the canvas until the view switch is turned on", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+
+  const scene = page.locator("[data-3d-scene]")
+  const toggle = page.locator(".three-scene-controls").getByRole("button", { name: "旋转环" })
+  await page.getByRole("button", { name: "添加圆柱" }).click()
+  await expect(page.getByText("圆柱 1").first()).toBeVisible()
+
+  // (1) 条件满足、环却不在；枢轴与半径读数也不许谎报一个手柄（e2e 会照着它去抓环）。
+  await expect(toggle).toHaveAttribute("aria-pressed", "false")
+  await expect(scene).toHaveAttribute("data-rotation-handles", "0")
+  expect(await scene.getAttribute("data-rotation-handle-pivot")).toBe("")
+  expect(await scene.getAttribute("data-rotation-handle-radius")).toBe("")
+
+  // (2) 没有隐形手柄：在画布上拖一下，不进旋转会话、朝向一字不动。
+  const box = (await page.locator("[data-3d-scene] canvas").boundingBox())!
+  await page.mouse.move(box.x + box.width * 0.35, box.y + box.height * 0.3)
+  await page.mouse.down()
+  await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.42, { steps: 4 })
+  await page.mouse.up()
+  expect(await scene.getAttribute("data-rotation-axis")).toBeFalsy()
+  await expect(page.getByRole("spinbutton", { name: "绕 X 轴旋转角度" })).toHaveValue("0")
+  await expect(page.getByRole("spinbutton", { name: "绕 Y 轴旋转角度" })).toHaveValue("0")
+  await expect(page.getByRole("spinbutton", { name: "绕 Z 轴旋转角度" })).toHaveValue("0")
+
+  // (3) 打开开关：三个环出现，读数补齐；而且这一次点击真的写进了本机偏好（不只是一个 React state）。
+  await showRotationRings(page)
+  await expect(scene).toHaveAttribute("data-rotation-handles", "3")
+  expect(await scene.getAttribute("data-rotation-handle-pivot")).toBeTruthy()
+  await expect.poll(async () => page.evaluate(() => localStorage.getItem("mathcanvas:3d-view"))).toContain('"showRotationHandles":true')
+
+  // (4) 再点一次收回去：环从场景里释放（读数归零、枢轴清空）。
+  await toggle.click()
+  await expect(toggle).toHaveAttribute("aria-pressed", "false")
+  await expect(scene).toHaveAttribute("data-rotation-handles", "0")
+  expect(await scene.getAttribute("data-rotation-handle-pivot")).toBe("")
 })

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { GRID_CELL, GRID_MAJOR_EVERY, gridPlacement, gridRadius, niceGridStep } from "./sceneGrid"
+import { GRID_CELL, GRID_FADE_START_RATIO, GRID_MAJOR_EVERY, gridPlacement, gridRadius, niceGridStep } from "./sceneGrid"
 
 /**
  * 背景坐标系的尺寸与位置。
@@ -114,5 +114,44 @@ describe("regression: the old fixed-extent grid could not reach content at x = 2
     expect(placement.centre.x - placement.extent).toBeLessThanOrEqual(0)
     expect(placement.centre.x + placement.extent).toBeGreaterThanOrEqual(20)
     expect(placement.axesLength).toBeGreaterThan(old.axesLength)
+  })
+})
+
+/**
+ * **可见地面脚印**（用户口径 2026-10-01："把 0 平面也就是 z=0 的格子网做成无限延伸的感觉"）。
+ *
+ * 只看 `visibleWidth/Height` 是不够的：贴地视角下 z=0 平面在画面上一直延伸到地平线，
+ * 可见脚印比"视口宽高"远得多，于是那块方块的直边就进了画面。这里把脚印当输入，
+ * 并且按**淡出比例**倒推所需半径 —— 满实区必须盖住脚印，化开的那一圈落在视野之外。
+ */
+describe("grid coverage for the visible ground footprint", () => {
+  it("grows the patch so the fully opaque zone still covers the footprint", () => {
+    const placement = gridPlacement({ ...base, groundReach: 200 })
+
+    // 满实区（淡出起点以内）必须盖住脚印：否则远处会在画面里化开。
+    expect(placement.extent * GRID_FADE_START_RATIO).toBeGreaterThanOrEqual(200)
+    // 仍然按 2 的幂分档（同档内不许动）。
+    expect(Number.isInteger(Math.log2(placement.extent / 8))).toBe(true)
+  })
+
+  it("ignores the footprint when there is none", () => {
+    expect(gridPlacement({ ...base, groundReach: 0 }).extent).toBe(gridPlacement(base).extent)
+    expect(gridPlacement({ ...base, groundReach: Number.NaN }).extent).toBe(gridPlacement(base).extent)
+  })
+
+  it("stays in one coverage step while a small zoom happens", () => {
+    // 脚印会随缩放微微变，但档位是 2 的幂：小幅缩放不许换档，否则那圈网格会跳一下。
+    const near = gridPlacement({ ...base, distance: 100, groundReach: 120 })
+    const far = gridPlacement({ ...base, distance: 104, groundReach: 124 })
+
+    expect(far.extent).toBe(near.extent)
+  })
+
+  it("keeps the footprint requirement dominated by the patch, never the other way round", () => {
+    // 极端贴地（脚印极大）时撞上覆盖上限：仍然给一个有限的、能铺出来的方块。
+    const placement = gridPlacement({ ...base, groundReach: 1e9 })
+
+    expect(Number.isFinite(placement.extent)).toBe(true)
+    expect(placement.extent).toBeLessThanOrEqual(4096)
   })
 })

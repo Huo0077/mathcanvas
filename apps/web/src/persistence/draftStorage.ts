@@ -128,29 +128,38 @@ export function loadActiveWorkspace(): Workspace | null {
 
 const viewPreference3dKey = "mathcanvas:3d-view"
 
-/** 3D 视口的显示偏好。目前只有"自动取景"：关掉之后相机永不被自动重置。 */
+/**
+ * 3D 视口的显示偏好：`autoFit`（关掉之后相机永不被自动重置）与
+ * `showRotationHandles`（三色旋转环的视图开关，**默认关**：不转的时候它只挡图面）。
+ */
 export interface ViewPreference3d {
   autoFit: boolean
+  showRotationHandles: boolean
 }
 
 export function loadViewPreference3d(): ViewPreference3d {
-  if (typeof localStorage === "undefined") return { autoFit: true }
+  if (typeof localStorage === "undefined") return { autoFit: true, showRotationHandles: false }
   const serialized = localStorage.getItem(viewPreference3dKey)
-  if (!serialized) return { autoFit: true }
+  if (!serialized) return { autoFit: true, showRotationHandles: false }
   try {
     const parsed = JSON.parse(serialized) as Partial<ViewPreference3d>
-    // 只有显式存成 false 才算关掉：旧数据 / 缺字段都按默认（开）处理。
-    return { autoFit: parsed.autoFit !== false }
+    /**
+     * 只有显式存成 false / true 才算数：旧数据、缺字段、写坏的值一律回默认。
+     *
+     * 两个默认值的方向**刻意相反**：`autoFit` 默认开（不自动取景的话打开文件常常看不到图），
+     * `showRotationHandles` 默认关（不转的时候三个环只挡图面 —— 用户口径："把这个太空环删掉"）。
+     */
+    return { autoFit: parsed.autoFit !== false, showRotationHandles: parsed.showRotationHandles === true }
   } catch {
     localStorage.removeItem(viewPreference3dKey)
-    return { autoFit: true }
+    return { autoFit: true, showRotationHandles: false }
   }
 }
 
 export function saveViewPreference3d(preference: ViewPreference3d): void {
   if (typeof localStorage === "undefined") return
   try {
-    localStorage.setItem(viewPreference3dKey, JSON.stringify({ autoFit: preference.autoFit }))
+    localStorage.setItem(viewPreference3dKey, JSON.stringify({ autoFit: preference.autoFit, showRotationHandles: preference.showRotationHandles }))
   } catch {
     // 见 `saveWorkbenchPreferences`：视图偏好存不下属于可接受降级。
   }

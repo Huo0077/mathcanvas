@@ -22,6 +22,26 @@ import { createThreeSceneContent, type ThreeSceneContentDeps } from "./threeScen
 
 const POINT: Point3Primitive = { id: "point3-a", type: "point3", position: { x: 1, y: 2, z: 3 }, binding: { kind: "free" } }
 
+/** 一个**可转**对象（模板实体）：选中它的那一刻，正是"三个环该不该出现"的分水岭。 */
+const CUBE: PrimitiveSpec = { id: "cube-1", type: "cube", origin: { x: -1, y: -1, z: -1 }, size: { x: 2, y: 2, z: 2 } }
+
+/** 一个**自带圆心与半径**的轨道圆：它的半径手柄与三色环是两件事，要能分别断言。 */
+const ORBIT: PrimitiveSpec = { id: "orbit-1", type: "circle3", center: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 0, z: 1 }, radius: 2 }
+
+/** 场景里真正画出来的三色环（按"哪根轴"认，不按组认：组本身也挂同一个 visualRole）。 */
+function ringsOnCanvas(scene: THREE.Scene): THREE.Object3D[] {
+  const found: THREE.Object3D[] = []
+  scene.traverse((object) => { if (typeof object.userData.rotationAxis === "string") found.push(object) })
+  return found
+}
+
+function radiusHandlesOnCanvas(scene: THREE.Scene): THREE.Object3D[] {
+  const found: THREE.Object3D[] = []
+  // 只数那个**小球**：`createTrackRadiusHandle` 把同一个 role 挂在组与小球上（虚线半径是另一个 role）。
+  scene.traverse((object) => { if (object.userData.visualRole === "track-radius-handle" && object.type === "Mesh") found.push(object) })
+  return found
+}
+
 function documentWith(primitives: PrimitiveSpec[]): GeometryDocument {
   return { ...createEmptyDocument("geometry3d"), primitives }
 }
@@ -37,7 +57,7 @@ function harness(primitives: PrimitiveSpec[] = [POINT]) {
   const deps: ThreeSceneContentDeps = {
     documentRef,
     selectedIdsRef: { current: [] },
-    displayFlagsRef: { current: { showHiddenEdges: true, showNormals: false, transparentFaces: false, unfoldProgress: 0 } },
+    displayFlagsRef: { current: { showHiddenEdges: true, showNormals: false, transparentFaces: false, showRotationHandles: false, unfoldProgress: 0 } },
     previewsRef: { current: [] },
     previewHoverKeyRef: { current: null },
     previewHoverRef: { current: undefined },
@@ -163,5 +183,63 @@ describe("incremental scene content sync", () => {
 
     /** 走的是同一张记录表：旧对象被释放、只留一个 —— 不是"没见过的对象"再建一个。 */
     expect(objectsOf("point3-a")).toHaveLength(1)
+  })
+})
+
+/**
+ * 旋转手柄（三色环）的**视图开关**。
+ *
+ * 用户口径："把这个太空环删掉" —— 截图里选中一个正方体时，三个环糊在图上，把图面挡住了。
+ * 环本身还要留着（拖动旋转是唯一的拖转入口），所以做成**默认关的显示开关**：
+ * 关着的时候画布上不建环、`rotationHandleRef` 为空（指针逻辑自然回到"没抓到环"的原行为），
+ * 打开才出现。这一组钉住的正是"默认关 / 开得起来 / 收得回去"，以及**半径手柄不受牵连**。
+ */
+describe("rotation handle view switch", () => {
+  it("keeps the three rings off the canvas while the switch is off", () => {
+    const { syncContent, sceneShell, deps, scene } = harness([CUBE])
+    deps.selectedIdsRef.current = ["cube-1"]
+
+    syncContent()
+
+    // 条件本身是满足的（恰好选中一个可转对象）；关着开关就不许出现环。
+    expect(ringsOnCanvas(scene)).toHaveLength(0)
+    expect(deps.rotationHandleRef.current).toBeNull()
+    expect(sceneShell.dataset.rotationHandles).toBe("0")
+    expect(sceneShell.dataset.rotationHandlePivot).toBe("")
+  })
+
+  it("draws them once the switch is on, and takes them away when it goes back off", () => {
+    const { syncContent, sceneShell, deps, scene } = harness([CUBE])
+    deps.selectedIdsRef.current = ["cube-1"]
+    syncContent()
+
+    deps.displayFlagsRef.current = { ...deps.displayFlagsRef.current, showRotationHandles: true }
+    syncContent()
+
+    expect(ringsOnCanvas(scene)).toHaveLength(3)
+    expect(deps.rotationHandleRef.current?.id).toBe("cube-1")
+    expect(sceneShell.dataset.rotationHandles).toBe("3")
+    expect(sceneShell.dataset.rotationHandlePivot).not.toBe("")
+
+    deps.displayFlagsRef.current = { ...deps.displayFlagsRef.current, showRotationHandles: false }
+    syncContent()
+
+    expect(ringsOnCanvas(scene)).toHaveLength(0)
+    expect(deps.rotationHandleRef.current).toBeNull()
+    expect(sceneShell.dataset.rotationHandles).toBe("0")
+    /** 收起来的环算"被释放"，不是"重建失败"：读数如实。 */
+    expect(sceneShell.dataset.sceneRemoved).toBe("1")
+  })
+
+  it("still offers the radius handle of an orbit track while the rings are off", () => {
+    const { syncContent, deps, scene } = harness([ORBIT])
+    deps.selectedIdsRef.current = ["orbit-1"]
+
+    syncContent()
+
+    /** 半径手柄是**缩放**的唯一入口、也不挡图面：环的开关不该把它一起关掉。 */
+    expect(radiusHandlesOnCanvas(scene)).toHaveLength(1)
+    expect(deps.trackRadiusHandleRef.current?.id).toBe("orbit-1")
+    expect(ringsOnCanvas(scene)).toHaveLength(0)
   })
 })

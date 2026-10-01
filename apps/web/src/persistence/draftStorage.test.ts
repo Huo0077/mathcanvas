@@ -42,7 +42,7 @@ describe("draft storage", () => {
     const spy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new DOMException("quota", "QuotaExceededError") })
     try {
       expect(() => saveWorkbenchPreferences({ treeTab: "layers", expandedIds: [] })).not.toThrow()
-      expect(() => saveViewPreference3d({ autoFit: false })).not.toThrow()
+      expect(() => saveViewPreference3d({ autoFit: false, showRotationHandles: true })).not.toThrow()
       expect(() => saveDraft(createEmptyDocument("conics"))).not.toThrow()
     } finally {
       spy.mockRestore()

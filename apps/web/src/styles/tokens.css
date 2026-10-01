@@ -54,8 +54,8 @@
    */
   --color-graph-paper: #ffffff;
   --color-graph-paper-edge: #e2e8f0;
-  --color-graph-grid-minor: #eef2f7;
-  --color-graph-grid-major: #e2e8f0;
+  --color-graph-grid-minor: #cdd8e6;
+  --color-graph-grid-major: #aebccf;
   --color-graph-axis: #cbd5e1;
   /** 画布内文字（点名 P1、直线名 l1、圆心名 c1、交点读数）的墨色，与 `--color-ink` 同一支冷色。 */
   --color-drawing-ink: #2c3e50;
