@@ -10,6 +10,12 @@
 
 > 下方 2026-09-22 的"最后更新 / 当前阶段 / 总体状态"三行保留为**当时快照**，不再维护。
 
+## 2026-10-01 —— 实体源体积画布数字（本地候选，远端待核）
+
+- 根因：体积测量在属性栏能读 48.000u³，但 `measurementVisuals.ts` 的 `pointPositions` 不认 `polyhedron3`，故 `resolveMeasurementVisual` 返回 null；页面 `[data-measurement-labels]` 实测为 0。现复用已有测量标注叠层，只从物化顶点求标签中心，不新增视觉 token；顶点缺失或非有限时不编造落点。
+- RED→GREEN：真实斜棱柱单测先报 `visual.kind` 为 undefined，修后位置独立算得 (2.5, 2.25, 1.5)，缺顶点返回 null；浏览器原用例先报画布标签计数 0，修后 48.000u³ 标注可见且保存重开后仍可见。已截本地实景核对标签在实体中央清晰可读。
+- 本地全量 Vitest **268 文件 / 3104 项通过 + 1 todo**，全量 Playwright **171/171**；`npm.cmd run typecheck` exit 0，`npm.cmd run lint` 0 error / 13 条既有 warning。**本区块尚未提交/推送/核对新 GitHub CI，不提前记为完成**。
+
 ## 2026-10-01 —— Task 6 单顶点数值编辑（`cc9f533` 已推送，CI 全绿）
 
 - RED：模板和棱柱各一条 `commitPatch` 用例实测因 `face3 points are not coplanar` 被拒。方案按用户已定口径：仅把修改后不再共面的面拆成三角片，保留原面 id、登记新的内部棱（细分标记）、更新每个实体的面/棱及 `fromFaces.sourceIds`；不放宽校验。新面标签不能重名，实测红 6/9→绿 9/9。

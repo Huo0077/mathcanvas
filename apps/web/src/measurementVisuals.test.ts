@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { createEmptyDocument, type GeometryDocument } from "@draw/dsl"
+import { compileSolidPrism } from "@draw/scene-graph"
 
 import { measurementLabelScale, measurementVisualsForDocument, resolveMeasurementVisual } from "./measurementVisuals"
 
@@ -19,6 +20,27 @@ function tetrahedronDocument(): GeometryDocument {
 }
 
 describe("3D measurement visuals", () => {
+  it("anchors a prism volume number at its vertices' centre without selection", () => {
+    const document = createEmptyDocument("geometry3d")
+    const built = compileSolidPrism("solid-1", [
+      { x: 0, y: 0, z: 0 }, { x: 4, y: 0, z: 0 }, { x: 4, y: 4, z: 0 }, { x: 0, y: 4, z: 0 }
+    ], { x: 1, y: 0.5, z: 3 })
+    expect(built.diagnostics).toEqual([])
+    document.primitives = built.primitives
+    document.measurements = [{ id: "volume-1", kind: "measurement3", sourceIds: ["solid-1"], metric: "volume", value: 48, unit: "u³", precision: "numeric-approximation", status: "valid", explanation: "" }]
+
+    const visual = resolveMeasurementVisual(document, "volume-1")
+    expect(visual?.kind).toBe("label")
+    expect(visual?.position).toEqual({ x: 2.5, y: 2.25, z: 1.5 })
+    expect(visual?.label).toContain("48.000u³")
+    expect(visual?.segments).toEqual([])
+    expect(measurementVisualsForDocument(document)).toHaveLength(1)
+
+    // An old or damaged document with a missing referenced vertex must not display a made-up location.
+    document.primitives = document.primitives.filter((primitive) => primitive.id !== built.vertexIds[0])
+    expect(resolveMeasurementVisual(document, "volume-1")).toBeNull()
+  })
+
   it("resolves a valid dihedral measurement with its actual stored value", () => {
     const visual = resolveMeasurementVisual(tetrahedronDocument(), "dihedral-1")
 

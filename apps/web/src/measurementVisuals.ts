@@ -34,6 +34,14 @@ function pointPositions(document: GeometryDocument, primitive: PrimitiveSpec): V
   if (primitive.type === "segment3" || primitive.type === "edge3") return primitive.pointIds.map((id) => primitives.get(id)).filter((candidate): candidate is Extract<PrimitiveSpec, { type: "point3" }> => candidate?.type === "point3").map((point) => point.position)
   if (primitive.type === "ray3") return [primitive.originId, primitive.throughId].map((id) => primitives.get(id)).filter((candidate): candidate is Extract<PrimitiveSpec, { type: "point3" }> => candidate?.type === "point3").map((point) => point.position)
   if (primitive.type === "face3") return primitive.pointIds.map((id) => primitives.get(id)).filter((candidate): candidate is Extract<PrimitiveSpec, { type: "point3" }> => candidate?.type === "point3").map((point) => point.position)
+  if (primitive.type === "polyhedron3") {
+    // The document's materialised vertex set is the source of truth for the on-canvas label;
+    // a missing vertex must not turn into a partial or fabricated centre.
+    const vertices = primitive.vertexIds.map((id) => primitives.get(id))
+    if (vertices.length === 0 || !vertices.every((candidate): candidate is Extract<PrimitiveSpec, { type: "point3" }> =>
+      candidate?.type === "point3" && Number.isFinite(candidate.position.x) && Number.isFinite(candidate.position.y) && Number.isFinite(candidate.position.z))) return []
+    return vertices.map((vertex) => vertex.position)
+  }
   if (primitive.type === "plane3" && primitive.definition.kind === "throughPoints") return primitive.definition.pointIds.map((id) => primitives.get(id)).filter((candidate): candidate is Extract<PrimitiveSpec, { type: "point3" }> => candidate?.type === "point3").map((point) => point.position)
   if (primitive.type === "cube") return [{ x: primitive.origin.x + primitive.size.x / 2, y: primitive.origin.y + primitive.size.y / 2, z: primitive.origin.z + primitive.size.z / 2 }]
   if (primitive.type === "pyramid") return [primitive.baseCenter]

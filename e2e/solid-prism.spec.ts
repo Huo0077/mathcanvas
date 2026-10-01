@@ -332,11 +332,13 @@ test("measures the oblique prism by volume and reopens it with identical geometr
   await objectRows(page).first().click()
   await page.locator('[aria-label="三维测量工具"]').getByRole("button", { name: "体积", exact: true }).click()
 
-  /**
-   * 读数断言落在**属性栏的测量卡片**上，而不是画布数字：`measurementVisuals.ts` 的 `pointPositions`
-   * 没有 `polyhedron3` 分支，所以实体源的测量拿不到标签落点、画布上不会画数字（体积只能这样读）。
-   * 这一条现状已记入 `docs/current-status.md` 的如实缺口；本用例断言的是**真的能读到的那个数**。
-   */
+  // A valid volume measurement must also leave a permanent number over the 3D canvas,
+  // not force the user to open the inspector just to see its value.
+  await expect(scene).toHaveAttribute("data-measurement-labels", "1")
+  const volumeLabel = page.locator('.three-measurement-overlay [data-measurement-id]')
+  await expect(volumeLabel).toBeVisible()
+  await expect(volumeLabel).toContainText(/48\.000\s*u³/)
+
   const measurementRow = page.locator(".algebra-panel .measurement-row")
   await expect(measurementRow).toHaveCount(1)
   await measurementRow.first().click()
@@ -364,6 +366,8 @@ test("measures the oblique prism by volume and reopens it with identical geometr
   // 恢复：重新打开保存出来的文件，包围盒必须与保存前逐字一致
   await reopen(page, saved)
   await expect.poll(async () => scene.getAttribute("data-content-bounds")).toBe(before)
+  await expect(scene).toHaveAttribute("data-measurement-labels", "1")
+  await expect(volumeLabel).toBeVisible()
 })
 
 /** The same inspector action must persist valid triangular faces, undo in one step and survive a reload. */
