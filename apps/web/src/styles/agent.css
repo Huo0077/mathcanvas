@@ -100,7 +100,7 @@
   min-height: 26px;
   padding: 0;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--agent-faint);
   opacity: 0;
@@ -159,7 +159,7 @@
 .agent-empty { display: grid; gap: var(--space-3); justify-items: center; margin: auto; max-width: 520px; text-align: center; }
 /* Agent 这一侧刻意**不加阴影**（本文件开头的口径：干净清爽、几乎没有阴影），
    所以插画容器只用极浅的强调色底 + 一条发丝边，与属性面板那边的弥散阴影版本区分开。 */
-.agent-empty-art { display: grid; place-items: center; width: 68px; height: 68px; margin-bottom: var(--space-1); border: 1px solid var(--agent-line); border-radius: 22px; background: var(--color-accent-soft); color: var(--color-accent); }
+.agent-empty-art { display: grid; place-items: center; width: 68px; height: 68px; margin-bottom: var(--space-1); border: 1px solid var(--agent-line); border-radius: var(--radius-lg); background: var(--color-accent-soft); color: var(--color-accent); }
 .agent-empty-art .empty-state-art { width: 40px; height: 40px; }
 .agent-empty-title { margin: 0; color: var(--color-ink); font-size: var(--text-2xl); font-weight: 700; letter-spacing: -0.02em; }
 .agent-empty-text { margin: 0; color: var(--agent-muted); font-size: var(--text-md); line-height: 1.7; }
@@ -176,7 +176,7 @@
 .agent-message-role { color: var(--color-ink); font-size: var(--text-xs); font-weight: 650; }
 .agent-message-time { margin-left: auto; color: var(--agent-faint); font-size: var(--text-2xs); font-variant-numeric: tabular-nums; }
 
-.agent-bubble { display: grid; gap: var(--space-3); min-width: 0; padding: var(--space-3) var(--space-4); border: 1px solid var(--agent-line); border-radius: 14px; background: var(--agent-panel); }
+.agent-bubble { display: grid; gap: var(--space-3); min-width: 0; padding: var(--space-3) var(--space-4); border: 1px solid var(--agent-line); border-radius: var(--radius-lg); background: var(--agent-panel); }
 /* 用户那一条是"我说的话"：浅色块、无边框，与 Agent 的白卡片一眼分得开。 */
 .agent-message[data-message-role="user"] .agent-bubble { border-color: transparent; background: var(--agent-field); }
 .agent-bubble-text { margin: 0; color: var(--color-ink); font-size: var(--text-md); line-height: 1.75; white-space: pre-wrap; }
@@ -187,7 +187,7 @@
 .agent-code { min-width: 0; overflow: hidden; border: 1px solid var(--agent-line); border-radius: var(--radius-sm); background: var(--color-surface-subtle); }
 .agent-code-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: 6px var(--space-3); border-bottom: 1px solid var(--agent-line); background: var(--agent-panel); }
 .agent-code-head span { color: var(--agent-faint); font-size: var(--text-2xs); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
-.agent-code-copy { min-height: 26px; padding: 0 var(--space-2); border-color: transparent; border-radius: 7px; background: transparent; color: var(--agent-muted); font-size: var(--text-xs); }
+.agent-code-copy { min-height: 26px; padding: 0 var(--space-2); border-color: transparent; border-radius: var(--radius-sm); background: transparent; color: var(--agent-muted); font-size: var(--text-xs); }
 .agent-code-copy:hover { border-color: transparent; background: var(--color-accent-soft); color: var(--color-accent-strong); }
 .agent-code-body { margin: 0; padding: var(--space-3); overflow-x: auto; }
 .agent-code-body code { color: var(--color-ink); font-family: var(--font-mono); font-size: var(--text-sm); line-height: 1.65; white-space: pre; }
