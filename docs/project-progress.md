@@ -15,7 +15,7 @@
 - GitHub Actions API 实查：`fffcaae`、`0232b0e`、`b570917`、`1676452` 的 CI 均为 **checks/build/rust 成功，e2e 失败**；不能把 `git push` 成功当作 CI 通过。最后一次失败 run `36886790657`；日志与失败产物下载需认证，本轮用本地完整复现定位。
 - 修复前在 v3.0.1 工作树运行 `npm.cmd run test:e2e -- --workers=3`：**169 项中 165 通过 / 4 失败**，分别是 `geometry3d-section` 2 项、`solid-derived-readings` 1 项、`three-canvas-size` 1 项。默认立方体已变为 4×4×4，旧 e2e 仍按 4×4×2 取 z=0 剖切边界和"无内切球"的预期；截面拖动的旧中心点射线实测命中 `edge:cube-1-edge-25->cube`，棱的精确拾取按设计优先于截面。
 - 只改测试输入：截面/画布用例把原点 Z 从 -1 调到 -2，使默认 4×4×4 的截面确在 z=0；派生读数用例显式把尺寸 Z 调到 2，继续验证一只 4×4×2 长方体外接球精确、内切球不存在；截面拖动选可验证不压在投影棱上的 (-0.5, 0.5, 0)。不更改产品内核或放宽拾取优先级。
-- 定向 15 项最终通过；本地全量复跑 **169 / 169、exit 0**（约 2.6 分钟）；`npm.cmd run typecheck` exit 0，`npm.cmd run lint` exit 0（0 error / 13 个既有 warning）。**GitHub 新提交的 CI 尚未跑完，不写成远端已绿**。
+- 定向 15 项最终通过；本地全量复跑 **169 / 169、exit 0**（约 2.6 分钟）；`npm.cmd run typecheck` exit 0，`npm.cmd run lint` exit 0（0 error / 13 个既有 warning）。**提交 `465788a` 的 GitHub CI run `36890961011` 已完成，checks/build/rust/e2e 四个作业全部成功**。
 
 ## 2026-10-01 —— Task 8 第 2 项：根目录完整构建门禁补跑
 
