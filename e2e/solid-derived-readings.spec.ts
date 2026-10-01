@@ -67,15 +67,16 @@ test("shows a solid's exact and undefined derived readings side by side in the p
   await page.goto("/")
   await page.getByRole("button", { name: "跳转到立体几何" }).click()
 
-  // 立方体一建出来就是选中状态（`addSolidTemplate` 选中模板实体）。
+  // 默认新建的是 4×4×4 正方体；显式把 Z 尺寸改为 2，构成有外接球但无内切球的长方体。
   await page.getByRole("button", { name: "添加立方体" }).click()
+  await page.getByRole("spinbutton", { name: "尺寸 Z" }).fill("2")
 
   const panel = page.locator("[data-derived-panel]")
   await expect(panel).toBeVisible()
   /**
    * `exact` 与 `undefined` **在同一只实体上并存**，这就是这一层存在的全部意义。
    *
-   * 应用默认的"立方体"其实是 `4×4×2` 的长方体（`App.addDefaultCube`）：它有闭式外接球
+   * 这只显式改成 `4×4×2` 的长方体有闭式外接球
    *（包围盒中心 + 体对角线半径 = 3），但**没有内切球** —— 最大内接球半径是 1，
    * 只贴住上下两个面，不贴四个侧面。内核因此如实报 `undefined` 而**不是**交一个半径 1 的球
    *（那正是规格 §3.4/§10 禁止的"拿近似冒充精确"）。

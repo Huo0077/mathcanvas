@@ -21,12 +21,12 @@ test.beforeEach(async ({ page }) => {
  */
 async function addPinnedCube(page: import("@playwright/test").Page) {
   await page.getByRole("button", { name: "添加立方体" }).click()
-  for (const [axis, value] of [["X", "-2"], ["Y", "-2"], ["Z", "-1"]] as const) await page.getByRole("spinbutton", { name: `原点 ${axis}` }).fill(value)
+  for (const [axis, value] of [["X", "-2"], ["Y", "-2"], ["Z", "-2"]] as const) await page.getByRole("spinbutton", { name: `原点 ${axis}` }).fill(value)
 }
 
 /**
  * 创建截面用的抓取点：必须是剖切面那圈**边界线**上的一点（预览的命中区只有边界线）。
- * 默认截面（法向 +Y、过立方体中心）的环是 x∈[-2,2] × z∈[-1,1] @ y=0，
+ * 默认截面（法向 +Z、过立方体中心）的环是 x∈[-2,2] × y∈[-2,2] @ z=0，
  * 世界点 (2, 0, 0) 落在它的 x=2 这条边上、且被实体表面遮挡（于是点选不会抢走这次点击）。
  * 用相机读数投影出来，而不是写死像素偏移——那会随画布尺寸与比例失效（实测过）。
  */
@@ -34,9 +34,9 @@ async function grabPoint(page: import("@playwright/test").Page) {
   return projectWorldPoint(page, { x: 2, y: 0, z: 0 })
 }
 
-/** 拖动截面用的抓取点：必须落在截面**填充**多边形内部（截面本体是那圈填充，边界线不参与拾取）。 */
+/** 拖动截面用的抓取点：必须落在截面**填充**多边形内部（取偏离投影棱的位置，避免棱的精确拾取按设计优先于截面）。 */
 async function grabSectionBody(page: import("@playwright/test").Page) {
-  return projectWorldPoint(page, { x: 0, y: 0, z: 0 })
+  return projectWorldPoint(page, { x: -0.5, y: 0.5, z: 0 })
 }
 
 test("explains the section preview and creates a section when it is clicked", async ({ page }) => {
@@ -69,7 +69,7 @@ test("explains the section preview and creates a section when it is clicked", as
   await page.mouse.click(start.x, start.y)
 
   await expect(scene).toHaveAttribute("data-section-count", "1")
-  // 立方体边长 2，过中心的水平截面是 4 边形
+  // 立方体边长 4，过中心的水平截面是 4 边形
   await expect(scene).toHaveAttribute("data-section-point-count", "4")
 })
 

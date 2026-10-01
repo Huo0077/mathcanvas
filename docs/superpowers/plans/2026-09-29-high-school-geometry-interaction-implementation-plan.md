@@ -21,7 +21,7 @@
 | 5. 画布 UI | **任务项全部勾选**：创建 e2e **10 项**（原 5 项 + 工作区切换取消、优先于预览点击、选择工具退出、悬停读数、**锁定对象不被吸附**）**10/10** 通过；悬停的目标名/世界坐标/工作平面由 `[data-creation-readout]` 断言，选择工具退出补齐；相机/拖动/求交预览旧回归通过 | 无（本任务清单内条目已逐条有回归或定向变异检查） |
 | 6. 实体入口 | 构造器、参数面板、未保存预览、正方体/长方体、三/四棱柱和棱锥 e2e 通过；旧 `.mgeo` fixture 可打开；`solid-prism.spec.ts` 6/6（含体积 48 的读数与保存/恢复往返） | **只剩"移动顶点"**（唯一未落地的功能项，见 Task 6 那条与 `current-status.md` §四 A-1）；依赖/保存/量测/截面组合用例已由 Task 8 与 `geometry3d.spec.ts` 覆盖 |
 | 7. 教学线型 | `threeTeachingLines.test.ts` 与 `geometry3d-teaching-lines.spec.ts` 先红后绿；`style.dash` 与“隐藏边”保持独立，旧无样式线仍用实线；**旋转后逐点标签对齐已覆盖**（`5bd2444`：每个 `[data-point-id]` 的锚点等于它自己那个顶点的投影，±2px，变异 +10→+60 当场报 50px） | **选中线时三色旋转环遮挡教学图面**的体验仍未做（图面优化，见 `current-status.md` §四 B-3）；另有一条已查实的渲染时序缺口（指针抬起前最后一次相机移动不触发渲染，§四 B-2） |
-| 8. 样题与发布决策 | **进行中（第 1、2、4 项已勾选，教师/学生实地走查未做）**：六类代表题的 7 条 e2e 在 2026-09-29 为 7/7；同日 `typecheck`、`lint`、全库单测分别有实测读数。**2026-10-01** 根脚本 `npm.cmd run build` 整体 exit 0，含桌面 `--no-bundle` release exe、Web 与 4 个 packages 的 tsc。与 2026-09-30 已成功打出 v3.0.0 MSI/NSIS 的 `bundle` 是两种不同构建；全量 e2e、Rust 测试、性能测试、安装包实机验证仍未复跑或完成。 | 全量 `npm run test:e2e`；教师/学生操作数与误操作调查（用户侧）；其余未跑门禁见 `docs/current-status.md`。 |
+| 8. 样题与发布决策 | **进行中（第 1、2、4 项已勾选，教师/学生实地走查未做）**：六类代表题的 7 条 e2e 在 2026-09-29 为 7/7；同日 `typecheck`、`lint`、全库单测分别有实测读数。**2026-10-01** 根脚本 `npm.cmd run build` 整体 exit 0，含桌面 `--no-bundle` release exe、Web 与 4 个 packages 的 tsc。与 2026-09-30 已成功打出 v3.0.0 MSI/NSIS 的 `bundle` 是两种不同构建；本地全量 e2e 已于 2026-10-01 达到 169/169；本机 Rust、性能测试与安装包实机验证仍未复跑或完成。 | GitHub 新 CI 核对；教师/学生操作数与误操作调查（用户侧）；其余未跑门禁见 `docs/current-status.md`。 |
 
 **已实现的文件/接口与原计划的差异（明示而非悄悄改名）**：3D 指针创建采用 `threeScene.tsx` 的捕获事件 + `threeSceneEffect.ts` 的稳定运行时，不直接往既有 `threeSceneInteraction.ts` 选择/旋转分支塞模式；传统工作台实际入口是 `ribbonCommands.ts` 而非未挂载的 `components/GeometryToolbar.tsx`；实体表单为新建 `SpatialSolidWizard.tsx`/`spatialSolidWizardModel.ts`；3D 教学线材质位于 `threePrimitives.ts`，原有 DSL 的 `PrimitivePresentation.style.dash` 已足够，无需修改 schema。当前功能目录、测试读数和未完成项见 [专题进度](../../research/2026-09-29-high-school-geometry-interaction-progress.md)。
 
@@ -131,7 +131,7 @@
 **Interfaces:** Uses the released tool and test selectors, no new production API.
 
 - [x] 把任务说明 S1–S4 中六类题转成可重放的操作序列，分别覆盖三棱锥/四棱锥、斜棱柱、异长长方体、圆锥截面、点线面构造、旧文档恢复；每题断言对象类型、坐标/尺寸、依赖、保存、撤销，而非只断言截图存在。**（2026-09-29 完成：`e2e/high-school-geometry-tasks.spec.ts` 7 项、六类全部覆盖、7/7 通过，提交 `cecc1fe` / `0166845` / `1a82c97`；三批各做过变异检查）**
-- [x] 执行 `npm run typecheck`、`npm run lint`、`npm test`、`npm run build`、`npm run test:e2e -- e2e/high-school-geometry-tasks.spec.ts`；记录通过数和未覆盖风险。桌面包装有改动时才追加 `npm run test:rust`。**（分次完成，并非同一天全量重跑：2026-09-29 `typecheck` exit 0（6 workspace + e2e/scripts）、`lint` 0 error / 13 warning、全库单测 266 文件 / 3072 通过 + 1 todo、样题 e2e 7/7；2026-10-01 根脚本 `npm.cmd run build` **exit 0**，含桌面 `tauri build --no-bundle` release exe、Web 和 4 个 packages 的 tsc。首次沙箱内构建因 `Cargo.toml` 写入权限失败，获准在沙箱外重跑成功；Web 大分块和 Rust linker 消息警告仍存在。**未覆盖**：全量 e2e（v3.0.1 已记录截面 spec 2 条既有失败）、`test:perf`、`test:rust` 和 MSI/NSIS 安装实测。本项勾选不代表它们通过。）**
+- [x] 执行 `npm run typecheck`、`npm run lint`、`npm test`、`npm run build`、`npm run test:e2e -- e2e/high-school-geometry-tasks.spec.ts`；记录通过数和未覆盖风险。桌面包装有改动时才追加 `npm run test:rust`。**（分次完成，并非同一天全量重跑：2026-09-29 `typecheck` exit 0（6 workspace + e2e/scripts）、`lint` 0 error / 13 warning、全库单测 266 文件 / 3072 通过 + 1 todo、样题 e2e 7/7；2026-10-01 根脚本 `npm.cmd run build` **exit 0**，含桌面 `tauri build --no-bundle` release exe、Web 和 4 个 packages 的 tsc。首次沙箱内构建因 `Cargo.toml` 写入权限失败，获准在沙箱外重跑成功；Web 大分块和 Rust linker 消息警告仍存在。**追加验证**：2026-10-01 本地全量 e2e 169/169（修正四处旧预期/拾取落点）；**未覆盖**：`test:perf`、`test:rust` 和 MSI/NSIS 安装实测。本项勾选不代表它们通过。）**
 - [ ] 实际做一次教师/学生走查：比较从空白到“三点一面”的主操作数、误操作数和恢复路径；目标 ≤8 次主操作、不必按 Shift。达不到则记录改进项，不用“代码已通过”代替可用性。
 - [x] 更新 `docs/feature-catalog.md` 明确“实际已完成”和 P2/独立探索未完成项目，并请用户再决定是否启动球体、截图识图与扩展导出。**（2026-09-29 完成：新增「本期收口」一节 —— 已交付六项（各指当次测试证据）与未交付五项（球体与球截面、截图识图、HTML/GGB 导出、平面函数逐题补缺、教师走查与桌面打包），并明确"需要你决定是否启动"；提交 `f48d579`）**
 
@@ -148,7 +148,7 @@
 - 开始实现的门槛已由用户在 2026-09-29 确认（立体优先，球体和截图绘图后置）。**执行快照（2026-10-01 更新；未完成总清单的权威处是 [`docs/current-status.md`](../current-status.md) 的「四、未完成任务总清单」）**：Task **1 / 2 / 3 / 4 / 5 / 7 全部勾选**，Task 8 的第 1、2、4 项勾选；计划内只剩 2 项未勾选：
   1. **Task 6 的"移动顶点"（单顶点编辑）**（唯一还差的代码侧功能项）：根因是棱柱侧面为四边形、改单顶点被 `face3` 共面校验整笔退回。**用户已决定修法：把受影响的面拆成三角形**（保持共面校验严格不变）—— **待实施**。
   2. **Task 8 第 3 项教师/学生走查**：**属用户侧**。
-  - **计划外、已知未做/未跑**：全量 `npm run test:e2e`（47 spec）、`test:perf`、`test:rust` 均未复跑；两条已查实缺口（实体源测量在画布上无数字、指针抬起前最后一次相机移动不触发渲染）未修；旋转环在 v3.0.1 已默认关闭但教学样题走查仍未做；桌面产物未推 GitHub Release、未在本机安装；已合并的远端功能分支仍待确认是否删除。
+  - **计划外、已知未做/未跑**：本地 `test:perf`、`test:rust` 均未复跑；本地全量 e2e 于 2026-10-01 达到 169/169，GitHub 最新 CI 仍待核实。两条已查实缺口（实体源测量在画布上无数字、指针抬起前最后一次相机移动不触发渲染）未修；旋转环在 v3.0.1 已默认关闭但教学样题走查仍未做；桌面产物未推 GitHub Release、未在本机安装；已合并的远端功能分支仍待确认是否删除。
   - **已执行（2026-09-30 补记）**：把 `feat/high-school-geometry-interaction` **合并到 `main`** —— PR #1 合并提交 `3b1f770`（2026-09-30 12:46:30）；本地 `main` 随后由 `4d35b9d` 快进到 `origin/main`（当时 `0d22ab4`，落后 53 个提交），并在其上重做了文档普查（`a22dba9`、`1676452`）。**桌面端同日也已打包并启动实测**。
   - **用户已决定、尚未开始的**：**启动球体与球截面**（需先按本计划"不在此计划内"一节另立方案）。**未启动**：题目截图→可编辑图、HTML/GeoGebra 导出；**未排期**：平面/函数逐题补缺。
   - **本轮按用户要求暂停其他内容**。此前用户要求"每完成一个小区块就及时上传 GitHub，并同步更新进度文档"已按块执行（2026-09-29 的 9 次提交全部已推送、逐次用 `git ls-remote` 核对）。
