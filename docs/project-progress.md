@@ -10,6 +10,12 @@
 
 > 下方 2026-09-22 的"最后更新 / 当前阶段 / 总体状态"三行保留为**当时快照**，不再维护。
 
+## 2026-10-01 —— 球体与球截面独立方案立档（仅设计，不冒充功能）
+
+- 用户此前决定启动球体与球截面，原实施计划明确要求独立方案。核对 `packages/dsl/src/types.ts` / `schema.ts`、圆柱/圆锥 `sectionQuadric3`、`sectionRecompute`、Three 场景、实体向导和工程投影后，编写 [解析球体设计](superpowers/specs/2026-10-01-sphere-and-sections-design.md) 与 [逐块实施计划](superpowers/plans/2026-10-01-sphere-and-sections-implementation-plan.md)。
+- 选择 `sphere` 独立持久解析图元：球心/正半径是真源，Three 显示网格不进 `.mgeo`；球∩平面给精确圆 / 切点 / 空集，球-球/球-多面体布尔交集明确拒绝而不是拿显示三角网格计算。正交工程图为圆轮廓，旧文档不迁移；四点构造和点驱动半径不在原 S5 验收内，未做的入口不伪装可用。
+- 实施计划分 DSL/codec、纯内核、事务/测量、解析截面、3D 画布、向导/属性、CAD 导出、Agent 动作与产品门禁；每块仍需真实 RED→GREEN、进度更新、提交推送与 CI 核对。**此批没有球体生产代码和球体自动化通过数，也没有发行包；当前状态仍列在 E 类。**
+
 ## 2026-10-01 —— 发布渠道/产物一致性核查（尚未发布新版）
 
 - GitHub Releases API 当次返回最新公开 **v3.0**（exe/MSI/NSIS 三个资产），其次 v0.2.0 / v0.1.0；`v3.0.1` 只有 tag（tag 对应 `0232b0e`）和 `docs/release/v3.0.1.md` 的当时打包记录，**不存在同名公开 Release**。截至此核查 `main` 在 v3.0.1 之后还有功能修复，不能把旧 tag 或构建时间较早的 exe 贴成最新源码。
