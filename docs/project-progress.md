@@ -10,6 +10,13 @@
 
 > 下方 2026-09-22 的"最后更新 / 当前阶段 / 总体状态"三行保留为**当时快照**，不再维护。
 
+## 2026-10-01 —— 本机性能与 Rust 门禁补跑
+
+- `npm.cmd run test:perf -- --reporter=verbose`：**9/9、exit 0**；本机读数（ms）：`addPrimitives/1000-planar` 15.2、`recomputeDerivedObjects/100-solid` 59.5、`solidStatusReport/100-solid` 17.9、`encodeMgeo/large` 12.7、`roundTrip/large-mgeo` 40.4、`denseIntersections/200x200` 3.3、`drag/300-frames` 1680.5（约 5.6 ms/帧）、`dag/full-recompute-400` 1.0 / `dag/local-recompute-400` 2.0。护栏均绿；性能数值是当前机器趋势，不拿旧机器读数直接断言退化，局部重算仍比全量慢，可作后续优化线索。
+- `npm.cmd run test:rust`：沙箱内因 `target/debug/.cargo-build-lock` 拒绝访问而未运行；获准在沙箱外跑通并复跑统计，**16 组结果汇总 236 passed / 0 failed / 3 ignored、exit 0**。忽略的两条需真实 DeepSeek 凭据，另一条会写真实 Windows Credential Manager；没有提供凭据或主动授权时不跑，不把它们算成已验证。
+- 同日主线程响应性 `e2e/main-thread-responsiveness.spec.ts` 随全量并行 e2e 运行通过：载入 max 333.4 ms、拖动 24 步 max 83.2 ms / p95 16.8 ms；随后单独运行 **1/1**：载入 max 316.7 ms、拖动 max 150.0 ms / p95 16.8 ms。两次故意阻塞 200 ms 的仪器标定分别读到 200.0/199.9 ms；载入阶段受环境影响不设门禁，拖动最大空档均低于 250 ms 护栏。
+- 这两条本机门禁补齐**不等于** MSI/NSIS 在本机安装过，也不等于真实模型 pass@1、成本/延迟已有评测；用户侧试用和发布事项仍见 `current-status.md`。
+
 ## 2026-10-01 —— 相机最后一帧：覆盖层投影时机（`a4e2f40` 已推送，CI 全绿）
 
 - 历史现场说"松手前最后一次移动不触发渲染"；复核发现 `threeSceneRender.render()` 在 `renderer.render(scene,camera)` 之前先投影点名和体积数字，`applyCameraState` 又只写相机姿态，矩阵原本要等 WebGL 绘制才更新。v3.0.1 的网格脚印计算偶然调用 `camera.updateMatrixWorld()`，所以当前带网格 e2e 去掉"抖 2px 补帧"后连续 5 次通过；**不能凭这条偶然副作用宣布渲染入口自身正确**。
