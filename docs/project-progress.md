@@ -10,6 +10,12 @@
 
 > 下方 2026-09-22 的"最后更新 / 当前阶段 / 总体状态"三行保留为**当时快照**，不再维护。
 
+## 2026-10-01 —— 发布渠道/产物一致性核查（尚未发布新版）
+
+- GitHub Releases API 当次返回最新公开 **v3.0**（exe/MSI/NSIS 三个资产），其次 v0.2.0 / v0.1.0；`v3.0.1` 只有 tag（tag 对应 `0232b0e`）和 `docs/release/v3.0.1.md` 的当时打包记录，**不存在同名公开 Release**。截至此核查 `main` 在 v3.0.1 之后还有功能修复，不能把旧 tag 或构建时间较早的 exe 贴成最新源码。
+- 本机 `apps/desktop/src-tauri/target/release/bundle` 仅有 v0.2.0 MSI/NSIS；根目录构建留下的 `target/release/mathcanvas-desktop.exe` 也早于新增功能提交。不会上传这些与当前源码不匹配的文件。下一次发布须先冻结要交付的源码和版本，改 `tauri.conf.json`/`Cargo.toml` 与锁文件，按该提交 `bundle` 重建，实际核对三件产物哈希、安装/启动/卸载与 tag/source 一致性，再上传 GitHub Release。
+- `git ls-remote` 实查合并后的 `feat/high-school-geometry-interaction` 仍在远端（tip `8c67346`）。删除是独立的不可逆决定，未获用户明确授权前保留；项目进度中的"待你决定"不自动解释为"可删"。
+
 ## 2026-10-01 —— 本机性能与 Rust 门禁补跑
 
 - `npm.cmd run test:perf -- --reporter=verbose`：**9/9、exit 0**；本机读数（ms）：`addPrimitives/1000-planar` 15.2、`recomputeDerivedObjects/100-solid` 59.5、`solidStatusReport/100-solid` 17.9、`encodeMgeo/large` 12.7、`roundTrip/large-mgeo` 40.4、`denseIntersections/200x200` 3.3、`drag/300-frames` 1680.5（约 5.6 ms/帧）、`dag/full-recompute-400` 1.0 / `dag/local-recompute-400` 2.0。护栏均绿；性能数值是当前机器趋势，不拿旧机器读数直接断言退化，局部重算仍比全量慢，可作后续优化线索。
