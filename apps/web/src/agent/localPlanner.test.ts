@@ -2,7 +2,7 @@ import { DEFAULT_SOLID_SIZE, compilePlan, parsePlanEnvelope, SKILL_MANIFESTS } f
 import { createEmptyDocument } from "@draw/dsl"
 import { describe, expect, it } from "vitest"
 
-import { createLocalPlanner, LOCAL_INTENTS, localIntentSkillIds, matchLocalIntent } from "./localPlanner"
+import { createLocalPlanner, LOCAL_INTENTS, localIntentSkillIds, matchLocalIntent, SPHERE_PROMPT } from "./localPlanner"
 
 /**
  * 本地确定性规划器的性质。
@@ -14,6 +14,56 @@ async function plan(prompt: string) {
   const planner = createLocalPlanner()
   return (await planner.plan({ userMessage: prompt } as never)).plan
 }
+
+/**
+ * **球**（球体切片 Task 8 的端到端那一半）：本地确定性规划器也能把一句话变成一只球。
+ *
+ * 判据两条：
+ * ① 半径**从原话里读**，编译后草稿里恰好**一个** `sphere` 图元（球不物化子对象）；
+ * ② **不许劫持分析题** —— "外接球 / 内切球"里都有"球"字，但它们要的是**读数**，不是新建一只球。
+ */
+describe("the sphere intent", () => {
+  it("builds a sphere from the radius in the sentence, and compiles to exactly one primitive", async () => {
+    const envelope = await plan("画一个球体，半径 5")
+
+    expect(envelope.kind).toBe("plan")
+    if (envelope.kind !== "plan") return
+    expect(envelope.actions).toHaveLength(1)
+    expect(envelope.actions[0].actionId).toBe("solid.create_sphere")
+    expect(envelope.actions[0].inputs).toMatchObject({ center: { x: 0, y: 0, z: 0 }, radius: 5 })
+
+    const document = createEmptyDocument("geometry3d")
+    const compiled = compilePlan(envelope, { document, workspace: "geometry3d", prompt: "画一个球体，半径 5", conversationId: "eval", documentGeneration: document.revision })
+    expect(compiled.ok).toBe(true)
+    // 球是解析体：草稿里就它自己，没有点 / 棱 / 面 / polyhedron3。
+    expect(compiled.draftDocument?.primitives).toHaveLength(1)
+    expect(compiled.draftDocument?.primitives[0]).toMatchObject({ type: "sphere", center: { x: 0, y: 0, z: 0 }, radius: 5 })
+  })
+
+  it("falls back to the shared default radius when the sentence has no number", async () => {
+    const envelope = await plan("画一个球体")
+
+    expect(envelope.kind).toBe("plan")
+    if (envelope.kind !== "plan") return
+    expect(envelope.actions[0].inputs).toMatchObject({ radius: DEFAULT_SOLID_SIZE })
+  })
+
+  it("does not hijack an analysis question that merely mentions a sphere", () => {
+    /**
+     * 这两句里都有"球"，但它们要的是**读数**（外接球 / 内切球半径），不是新建一只球。
+     *
+     * 断言写成"命中的**不是球那条**"而不是"认不出"：`内切球` 那句会命中**既有的「正方体」条目**
+     *（它一直在那儿，与本切片无关）—— 那是一条**独立的**既有隐患，记在归档里，
+     * 不在这里冒充成球的问题。
+     */
+    const sphereIntent = LOCAL_INTENTS.find((intent) => intent.all.includes("球体"))
+    expect(sphereIntent, "球那条应该已经登记").toBeDefined()
+    expect(matchLocalIntent("求这个四面体的外接球半径并画出球")).not.toBe(sphereIntent)
+    expect(matchLocalIntent("这个正方体的内切球半径是多少")).not.toBe(sphereIntent)
+    // 具体写法才认。
+    expect(matchLocalIntent(SPHERE_PROMPT)).toBe(sphereIntent)
+  })
+})
 
 describe("local planner translates the commands it knows", () => {
   it("builds a cube with the size the user asked for", async () => {

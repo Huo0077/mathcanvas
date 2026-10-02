@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test"
 
+import { SPHERE_PROMPT } from "../apps/web/src/agent/localPlanner"
+
 import { projectWorldPoint } from "./helpers/projection"
 
 /**
@@ -291,6 +293,48 @@ test("offers no Boolean intersection preview when a sphere is involved, but does
   await expect(scene).toHaveAttribute("data-preview-count", "0")
   // 文档也没被改动：还是那两个图元（建模失败不留半成品）。
   expect(await readPrimitiveCount(page)).toBe(2)
+})
+
+/**
+ * **一句话造球**（球体切片 Task 8 的端到端那一半）。
+ *
+ * 浏览器里没有模型服务，规划器用的是**确定性本地规划器**；但一旦产出了计划，下游
+ *（传输校验 → 动作编译 → 隔离草稿 → 用户确认 → 原子落盘 → 撤销）与真实模型走的是**同一条**。
+ * 这条用例要的正是那条链路：**一句话 → 一份停在确认的草稿 → 确认 → 文档真的多了一只球 → 一步撤销**。
+ */
+test("drafts a sphere from one sentence and commits it in one undo step", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await expect(page.locator(".algebra-panel .object-row")).toHaveCount(0)
+
+  await page.getByRole("button", { name: "Agent 工作区" }).click()
+  await page.getByRole("textbox", { name: "对话输入" }).fill(SPHERE_PROMPT)
+  await page.getByRole("button", { name: "发送" }).click()
+
+  // ① 停在确认：一份真正的草稿，而不是一句"已完成"。球是解析体，只新增**一个**对象。
+  const draft = page.getByRole("region", { name: "确认改动" }).last()
+  await expect(draft).toBeVisible()
+  await expect(draft).toContainText(/会新增 1 个对象/)
+
+  // ② 确认之前真文档一个字节都没变。
+  await page.getByRole("button", { name: "返回画布" }).click()
+  await expect(page.locator(".algebra-panel .object-row")).toHaveCount(0)
+
+  // ③ 确认 → 落盘 → 对象树里出现那只球（**一个**对象行）。
+  await page.getByRole("button", { name: "Agent 工作区" }).click()
+  await draft.getByRole("button", { name: "确认并提交" }).click()
+  await expect(page.getByText("已提交")).toBeVisible()
+  await page.getByRole("button", { name: "返回画布" }).click()
+  // 按**行数**断言而不是按显示名：这条链路和棱柱那条一样**不写 label**（那是手工入口的习惯），
+  // 所以对象行显示的是 id 而不是"球体" —— 拿名字断言会把"名字从哪来"这件事无关地绑进来。
+  await expect.poll(async () => page.locator(".algebra-panel .object-row").count()).toBe(1)
+  // 一句话造出来的球确实在文档里（半径来自原话里的 5）。
+  await expect.poll(async () => (await readSphere(page))?.radius ?? null).toBe(5)
+
+  // ④ 整批只占**一步**撤销。
+  await page.keyboard.press("Control+z")
+  await expect.poll(async () => page.locator(".algebra-panel .object-row").count()).toBe(0)
+  expect(await readSphere(page)).toBeNull()
 })
 
 /**

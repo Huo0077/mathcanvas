@@ -98,6 +98,34 @@ const PLANAR_POINT = (input: LocalIntentInput): PlanEnvelope => ({
 })
 
 /**
+ * **球**：球心 + 半径（球体切片 Task 8 的端到端那一半）。
+ *
+ * 半径从用户原话里读第一个数字（"半径 5"），读不到取 `DEFAULT_SOLID_SIZE` —— 与立方体 / 正四面体
+ * **同一口径**（默认值只有一处：`localPlanDefaults`）。球心放在原点。
+ *
+ * **触发词只认「球体」这个具体写法**：裸词「球」会命中分析题 ——
+ * "求这个四面体的**外接球**半径并画出球"里既有"球"又要求读数，本地规划器若认裸词就会去
+ * **新建一只球**而不是回答。这与 `LOCAL_INTENTS` 里"认正四面体、不认裸四面体"是同一条纪律。
+ */
+export const SPHERE_PROMPT = "画一个球体，半径 5"
+
+const SPHERE = (input: LocalIntentInput): PlanEnvelope => {
+  const radius = sizeFrom(input.prompt, DEFAULT_SOLID_SIZE)
+  return {
+    schemaVersion: PLAN_SCHEMA_VERSION,
+    kind: "plan",
+    goal: `创建一个半径 ${radius}、球心在原点的球`,
+    factIds: [],
+    actions: [{
+      actionId: "solid.create_sphere",
+      actionKey: "sphere",
+      factIds: [],
+      inputs: { alias: "sphere", center: { x: 0, y: 0, z: 0 }, radius }
+    }]
+  }
+}
+
+/**
  * **斜棱柱**：底面多边形 + 拉伸向量（设计规格 §3.2/§3.3）。
  *
  * 为什么本地规划器也要认这一句：棱柱目前还没有界面按钮，而"从一句话到具体实体"这条链路
@@ -194,6 +222,11 @@ export const LOCAL_INTENTS: readonly LocalIntent[] = [
    */
   { all: ["正四面体"], skillIds: ["spatial-modeling"], build: TETRAHEDRON },
   { all: ["tetrahedron"], skillIds: ["spatial-modeling"], build: TETRAHEDRON },
+  /**
+   * **球**：只认「球体」这个具体写法 —— 裸词「球」会把"外接球 / 内切球"那类**分析题**拉进来
+   *（用户要的是读数，却被新建了一只球）。理由与上面那条"不认裸四面体"完全相同。
+   */
+  { all: ["球体"], skillIds: ["spatial-modeling"], build: SPHERE },
   { all: ["棱柱"], skillIds: ["spatial-modeling"], build: PRISM },
   { all: ["prism"], skillIds: ["spatial-modeling"], build: PRISM },
   { all: ["立方体"], skillIds: ["spatial-modeling"], build: (input) => CUBE({ ...input, size: sizeFrom(input.prompt, 2) }) },
