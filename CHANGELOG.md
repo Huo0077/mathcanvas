@@ -5,6 +5,15 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-02 —— D2 的 NSIS 那半：本机「安装 → 启动 → 卸载」完整验收
+
+- **用户选择只试 NSIS**（每用户、可卸载；MSI 每机器那半不试）。v3.1.0 的安装包**不在本地**（`target/release/bundle` 里只有 v0.2.0 的两件），所以从 GitHub Release 下载 `MathCanvas_3.1.0_x64-setup.exe`：**5,030,195 B**、SHA-256 **`1A4B2AA1A5278E8A5B1DA92B23B6FD6B47B74D6FD151B1C02C4343CF11D5052A`** —— 与 D1 记录的 `1a4b2aa1…5052a` **逐位一致**（顺带又独立复核了一次 Release 资产）。
+- **装**：`setup.exe /S` → **exit 0**；落点 `D:\release\MathCanvas`，HKCU 卸载项 `DisplayVersion=3.1.0`、`Publisher=mathcanvas`、开始菜单快捷方式就位。
+- **启动**：`mathcanvas-desktop.exe`（**17,190,400 B**、`FileVersion=3.1.0`）→ 存活 **T+12s / T+18s**、**真窗口句柄 `920116`**、标题 `MathCanvas`、`Responding=True`；WebView2 配置目录时间戳刷新到本次启动。
+- **卸载**：先优雅关闭窗口，再 `uninstall.exe /S` → **exit 0**；核对**目录 / HKCU 卸载项 / 开始菜单快捷方式三者都已消失**。
+- **两处如实说明**：① 这台机器在我动手**之前**就有一条 MathCanvas 卸载记录（HKCU，`InstallLocation=D:\release\MathCanvas`，主 exe 时间戳 16:41、版本已是 3.1.0）—— 所以这**不是"干净机器首次安装"**的验收，本轮 `-S` 安装是把它刷新一遍，**净效果是这台机器从"有一份 v3.1.0 每用户安装"变成"没有安装"**（按你的要求验完立即卸载）。② **MSI（每机器）那半仍未实测**（本会话非管理员，且你选的是只试 NSIS）—— 所以 D2 **只关闭了 NSIS 那一半**。
+- 下载物放在仓库外的临时目录，用完已删；仓库工作区保持干净。
+
 ## 2026-10-02 —— 分析题不再被本地规划器当成建模指令（"这个正方体的内切球半径是多少"）
 
 - **背景**：本文件早先把它记成"顺带查实一条**既有隐患**（未修，记为发现）"—— 把"这个正方体的内切球半径是多少"喂给本地规划器，命中的是既有的「正方体」条目，于是它会**去新建一只正方体**，而用户要的是一个读数。这一轮修掉（提交 `8febd38`）。
