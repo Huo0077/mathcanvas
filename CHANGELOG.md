@@ -5,6 +5,26 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-01 —— 球体 Task 3：球的场景事务与数值测量
+
+- **背景**：承接 Task 2（球-平面解析数学）。Task 3 要让球成为**文档里可编辑、可测量、可保存**的普通对象，而不是一个"只能摆着看"的类型。
+- **改动（4 个文件 + 2 个新测试文件）**：
+  - `packages/scene-graph/src/transforms.ts`：
+    - `translatePrimitive3` 加球分支（平移球心、半径不变）；
+    - `EDITABLE_GEOMETRY_TYPES` 与 `isFreeDraggable3` 加入 `"sphere"`。**这两处是真正的门**：`apply.ts` 的 `updatePrimitive` 先查 `EDITABLE_GEOMETRY_TYPES`（不满足直接 `changed=false, error:"object is not editable"`），`translatePrimitive3` 先查 `isFreeDraggable3`。**只改 `apply.ts` 的分支是不够的** —— 这正是本批第一次跑 RED 时踩到的。
+  - `packages/scene-graph/src/patches.ts`：`center3Types` / `radiusTypes` 加入 `"sphere"`（球心与半径是它自己的字段，与圆柱/圆锥/轨道圆同一套"有限、正数"校验），错误文案同步为 "only cylinders, cones, spheres and circle tracks support …"。没有测试钉着旧文案，已核对过。
+  - `packages/scene-graph/src/apply.ts`：`updatePrimitive` 加球分支 —— 只有 `center3` 与 `radius3`，**没有** `segments` / 朝向（显示网格是画布缓存，不进文档）。
+  - `packages/geometry-kernel/src/measurements3d.ts`：球的面积 `4πr²` 与体积 `4πr³/3`，均标 `exact-input`。
+- **为什么测量要单独钉**：同一个球如果走"三角网格求和"，48 边形的结果会明显偏小，而且**随画布网格密度漂** —— 读数会跟着渲染设置变。球是解析实体，读数必须来自解析式，所以用例直接钉 r=2 → `16π` / `32π/3`，并额外断言体积按 r³ 走（3 倍半径 = 27 倍体积）。
+- **验证（本轮实测）**：
+  - 新增 `packages/scene-graph/src/sphereTransactions.test.ts`（7 条）与 `packages/geometry-kernel/src/sphereMeasurements.test.ts`（4 条）。
+  - **RED 起点**：4 条失败，原因如实记录为"球的编辑/平移被两道白名单挡在门外"，不是断言写错。
+  - **GREEN**：`sphere.test.ts` + `sphereMeasurements.test.ts` + `sphereTransactions.test.ts` → **3 文件 24/24 通过**。
+  - **全库回归**（因为动了共享白名单，必须跑全套）：`npx vitest run --maxWorkers=3` → **272 文件 / 3134 项通过 + 1 todo / 0 失败**。
+  - `npm run typecheck` exit 0；`npm run lint` exit 0（**0 error / 13 warning**，与既有基线一致）。
+- **一处自查并已加固的地方**：`sphereTransactions.test.ts` 里"非法半径整笔拒绝"两条在实现之前**就已经是绿的** —— 因为球当时压根不支持改半径，`changed=false` 成立得毫无意义（典型的"为错误的理由通过"）。已加断言 `expect(rejected.error).toMatch(/radius must be positive/)`，把**拒绝的理由**也钉住。
+- **未做**：Task 4–9（截圆接入 `SectionPrimitive`、3D 网格与拾取、工程投影、手工/预览入口、Agent 创建、完整产品门禁）。Task 3 的方框按计划纪律**等 CI 四项全绿之后再勾**。
+
 ## 2026-10-01 —— 球体 Task 2：球-平面精确数学与退化（内核 `spherePlaneSection3`）
 
 - **背景**：球体九块计划（[`docs/superpowers/plans/2026-10-01-sphere-and-sections-implementation-plan.md`](docs/superpowers/plans/2026-10-01-sphere-and-sections-implementation-plan.md)）此前只交付了 Task 1（DSL 类型 + 校验）。本批按计划做 **Task 2**：把"球 ∩ 平面"做成**解析**判定，而不是把球切成多面体再求交。

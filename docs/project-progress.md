@@ -10,6 +10,47 @@
 
 > 下方 2026-09-22 的"最后更新 / 当前阶段 / 总体状态"三行保留为**当时快照**，不再维护。
 
+## 2026-10-01 —— 球体 Task 3：场景事务与数值测量
+
+> 承接上一节的 Task 2。
+
+### A. RED（失败原因如实记录）
+
+- 新增 `packages/scene-graph/src/sphereTransactions.test.ts`（7 条）：创建、改半径、改球心（含"部分补丁是合并语义"）、非法半径/球心原子拒绝、平移、保存往返。首次运行 **3 通过 / 4 失败**。
+- 新增 `packages/geometry-kernel/src/sphereMeasurements.test.ts`（4 条）：面积 `4πr²`、体积 `4πr³/3`、均 `exact-input`、按 r³ 缩放、Map 与数组两种入参。首次运行即通过（测量分支是本批新写的，RED 由"球走不到任何分支 → `insufficient-data`"这一层先验证过思路）。
+- 4 条失败的**真实原因**（不是断言写错）：`apply.ts` 的 `updatePrimitive` 先过 `EDITABLE_GEOMETRY_TYPES` 白名单、`translatePrimitive3` 先过 `isFreeDraggable3`，**球两道都不在名单里**，于是 `changed=false, error:"object is not editable"` / `"object is not draggable"`。第一次只改了 `apply.ts` 里的球分支，因此仍然红 —— 这一步本身就是"改对了地方但没过门"的现场。
+
+### B. GREEN（改了什么）
+
+| 文件 | 改动 |
+| --- | --- |
+| `packages/scene-graph/src/transforms.ts` | `translatePrimitive3` 加球分支（平移球心、半径不变）；`EDITABLE_GEOMETRY_TYPES` 与 `isFreeDraggable3` 加入 `"sphere"` |
+| `packages/scene-graph/src/patches.ts` | `center3Types` / `radiusTypes` 加入 `"sphere"`，文案同步为 "only cylinders, cones, spheres and circle tracks support …"（核对过：没有测试钉旧文案） |
+| `packages/scene-graph/src/apply.ts` | `updatePrimitive` 加球分支：只有 `center3` / `radius3`，**没有** `segments` / 朝向 |
+| `packages/geometry-kernel/src/measurements3d.ts` | 球面积 `4πr²`、体积 `4πr³/3`，均 `exact-input` |
+
+### C. 本轮实测读数
+
+| 命令 | 当次结果 |
+| --- | --- |
+| `npx vitest run` 三个球测试文件 | **24 / 24 通过**（13 + 4 + 7） |
+| `npx vitest run --maxWorkers=3`（全库，因动了共享白名单） | **272 文件 / 3134 项通过 + 1 todo / 0 失败** |
+| `npm run typecheck` | exit 0 |
+| `npm run lint` | exit 0，**0 error / 13 warning**（与既有基线一致） |
+
+> 读全库输出时有一处**容易误读**的地方记下来：`apps/web` 的夹具回归会打印 `section-after-solid #1 → failed: no section was created` 这类**逐题报告**，而它所在的那个测试文件本身是 ✓ 通过的（那是评测脚注，不是断言失败）。最终汇总 "272 passed / 0 failed" 才作准。
+
+### D. 一处自查并加固："为错误的理由通过"
+
+- `sphereTransactions.test.ts` 里"非法半径整笔拒绝"两条，在实现之前**就已经是绿的** —— 因为当时球压根不支持改半径，`commitPatch` 也会返回 `changed=false`。也就是说这两条**什么都没钉住**。
+- 修法：加断言 `expect(rejected.error).toMatch(/radius must be positive/)`，把**拒绝的理由**钉住（"半径本身不合法" vs "这个类型不支持半径"）。加上之后，它们在实现前是红的。
+
+### E. 明确没有做的事
+
+- Task 4–9 一条都没动：球**还没有** `SectionPrimitive` 的截圆、没有 3D 网格与拾取、没有工程投影、没有手工/预览入口，Agent 仍 `temporarily_unavailable`。
+- `sectionRecompute` / `solidGeometry` / `deletion` 未改：球现在既不能被切、也还没接进渲染，所以那些路径保持原样。
+- Task 3 的方框**等 CI 四项全绿之后再勾**。
+
 ## 2026-10-01 —— 球体 Task 2：球-平面精确数学与退化（内核 `spherePlaneSection3`）
 
 > 承接 [Task 1 文档契约](#2026-10-01--球体-task-1-文档契约ca03ed5-已推送ci-全绿)。按[九块计划](superpowers/plans/2026-10-01-sphere-and-sections-implementation-plan.md)的 Task 2 执行：**先 RED、再最小实现、跑聚焦测试与类型检查、记文档、提交推送并核对 SHA，CI 四项全绿之后才勾方框**。

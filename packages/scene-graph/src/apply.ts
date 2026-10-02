@@ -296,6 +296,14 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
       if (operation.patch.center3) primitive.center = { ...primitive.center, ...operation.patch.center3 }
       if (operation.patch.radius3 !== undefined) primitive.radius = operation.patch.radius3
     }
+    /**
+     * 球：球心与半径都是它自己的参数，**没有** `segments` / 朝向 —— 显示用的网格是画布的缓存，
+     * 不进文档，所以这里的补丁面比圆柱 / 圆锥窄（半径非正 / 非有限已在 `patches.ts` 拦下）。
+     */
+    if (primitive.type === "sphere") {
+      if (operation.patch.center3) primitive.center = { ...primitive.center, ...operation.patch.center3 }
+      if (operation.patch.radius3 !== undefined) primitive.radius = operation.patch.radius3
+    }
     if (operation.patch.label !== undefined) primitive.label = operation.patch.label
     // A template solid paints its generated point/edge/face children, so a template style change recolours them too.
     if (operation.patch.style !== undefined && ["cube", "pyramid", "cylinder", "cone"].includes(primitive.type)) {

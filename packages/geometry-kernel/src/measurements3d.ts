@@ -205,6 +205,11 @@ export function calculateMeasurement3(measurement: Measurement3, context: Measur
       return points ? measureArea3(measurement.id, measurement.sourceIds, points, "exact-input") : invalidMeasurement(measurement.id, measurement.sourceIds, "area", "insufficient-data", "无法解析面的顶点。")
     }
     if (source?.type === "circle3") return result(measurement.id, measurement.sourceIds, "area", Math.PI * source.radius ** 2, "u²", `由空间圆 ${source.id} 的半径计算圆面积。`, "exact-input")
+    /**
+     * 球的表面积 `4πr²`：闭式，所以标 `exact-input` —— 与"用显示网格的三角面求和"是两回事，
+     * 后者的 48 边形近似算出来会明显偏小，而且会随画布网格密度变化。
+     */
+    if (source?.type === "sphere") return result(measurement.id, measurement.sourceIds, "area", 4 * Math.PI * source.radius ** 2, "u²", `由球 ${source.id} 的半径计算球面积 4πr²。`, "exact-input")
     const points = measurement.sourceIds.map((id) => pointById(primitives, id))
     return points.length >= 3 && points.every(Boolean) ? measureArea3(measurement.id, measurement.sourceIds, points as Vector3[], "exact-input") : invalidMeasurement(measurement.id, measurement.sourceIds, "area", "insufficient-data", "面积需要一个空间面、空间圆或有序顶点。")
   }
@@ -219,6 +224,8 @@ export function calculateMeasurement3(measurement: Measurement3, context: Measur
     if (source?.type === "pyramid") return measureVolume3(measurement.id, measurement.sourceIds, source.baseSize.x * source.baseSize.y * source.height / 3, "exact-input")
     if (source?.type === "cylinder") return measureVolume3(measurement.id, measurement.sourceIds, Math.PI * source.radius ** 2 * source.height, "exact-input")
     if (source?.type === "cone") return measureVolume3(measurement.id, measurement.sourceIds, Math.PI * source.radius ** 2 * source.height / 3, "exact-input")
+    /** 球的体积 `4πr³/3`：同样是闭式，不经过任何多面体近似。 */
+    if (source?.type === "sphere") return measureVolume3(measurement.id, measurement.sourceIds, (4 * Math.PI * source.radius ** 3) / 3, "exact-input")
     return invalidMeasurement(measurement.id, measurement.sourceIds, "volume", "insufficient-data", "体积需要一个多面体或参数化实体。")
   }
   const faces = sources.filter((source): source is Face3Primitive => source?.type === "face3")

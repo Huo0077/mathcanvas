@@ -177,7 +177,7 @@ export function point3Index(document: GeometryDocument): Map<string, Point3Primi
  * 为什么抽成一处：校验（`patches.ts`）与应用（本文件）各写过一份，两份一旦不同步就会出现
  * "校验通过、提交却被拒"这种最难受的失败——实测就是这么撞上的（`circle3` 只加进了一份）。
  */
-export const EDITABLE_GEOMETRY_TYPES = ["point", "point3", "line", "segment", "ray", "polyline", "parabola", "ellipse", "hyperbola", "function", "circle", "arc", "tangent", "normal", "cube", "pyramid", "cylinder", "cone", "plane3", "circle3"] as const
+export const EDITABLE_GEOMETRY_TYPES = ["point", "point3", "line", "segment", "ray", "polyline", "parabola", "ellipse", "hyperbola", "function", "circle", "arc", "tangent", "normal", "cube", "pyramid", "cylinder", "cone", "plane3", "circle3", "sphere"] as const
 
 /**
  * Point-driven objects only reference their points; those points are what a drag has to move.
@@ -219,6 +219,8 @@ export function isFreeDraggable3(primitive: PrimitiveSpec, points: Map<string, P
   if (generated.has(primitive.id)) return false
   if (primitive.type === "point3") return !primitive.binding || primitive.binding.kind === "free"
   if (primitive.type === "cube" || primitive.type === "pyramid" || primitive.type === "cylinder" || primitive.type === "cone") return true
+  // 球与模板实体同类：几何是**它自己的**（球心坐标 + 半径），不依赖任何点能不能动。
+  if (primitive.type === "sphere") return true
   // 轨道圆与模板实体同类：几何是**它自己的**（圆心坐标 / 半径 / 法向），不依赖任何点能不能动。
   if (primitive.type === "circle3") return true
   if (!["line3", "segment3", "ray3", "plane3", "face3", "polyhedron3", "edge3"].includes(primitive.type)) return false
@@ -244,6 +246,8 @@ export function translatePrimitive3(primitive: PrimitiveSpec, delta: Vector3): {
   if (primitive.type === "cube") return { primitive: { ...primitive, origin: shiftedPoint(primitive.origin, delta) }, movedIds: [primitive.id] }
   if (primitive.type === "pyramid") return { primitive: { ...primitive, baseCenter: shiftedPoint(primitive.baseCenter, delta) }, movedIds: [primitive.id] }
   if (primitive.type === "cylinder" || primitive.type === "cone") return { primitive: { ...primitive, center: shiftedPoint(primitive.center, delta) }, movedIds: [primitive.id] }
+  // 球平移的是它自己的球心（半径不变）——与圆柱 / 圆锥同一个口径，也不带走任何点。
+  if (primitive.type === "sphere") return { primitive: { ...primitive, center: shiftedPoint(primitive.center, delta) }, movedIds: [primitive.id] }
   // 轨道圆平移的是**它自己的圆心**（不引用点，所以不会把任何点带走）。
   if (primitive.type === "circle3") return { primitive: { ...primitive, center: shiftedPoint(primitive.center, delta) }, movedIds: [primitive.id] }
   return { primitive, movedIds: managedPointIds(primitive) }

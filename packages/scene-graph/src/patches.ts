@@ -310,18 +310,18 @@ export function validatePatch(document: GeometryDocument, operation: DomainOpera
     if (operation.patch.baseCenter3 !== undefined && (!isVector3(operation.patch.baseCenter3) || primitive?.type !== "pyramid")) errors.push(primitive?.type === "pyramid" ? "base center must be finite" : "only pyramids support base center")
     if (operation.patch.baseSize3 !== undefined && (!operation.patch.baseSize3 || !Number.isFinite(operation.patch.baseSize3.x) || !Number.isFinite(operation.patch.baseSize3.y) || primitive?.type !== "pyramid" || operation.patch.baseSize3.x <= 0 || operation.patch.baseSize3.y <= 0)) errors.push(primitive?.type === "pyramid" ? "pyramid base size must be positive" : "only pyramids support base size")
     /**
-     * `center3`：圆柱 / 圆锥的中心，或**轨道圆自己的圆心**（圆是独立对象，圆心是它的字段而不是引用）。
-     * 两处语义相同（都是"这个对象自己的中心坐标"），所以共用同一个补丁字段。
+     * `center3`：圆柱 / 圆锥的中心、**球的球心**，或**轨道圆自己的圆心**（圆是独立对象，圆心是它的字段而不是引用）。
+     * 三处语义相同（都是"这个对象自己的中心坐标"），所以共用同一个补丁字段。
      */
-    const center3Types = ["cylinder", "cone", "circle3"]
-    if (operation.patch.center3 !== undefined && (!isVector3(operation.patch.center3) || !center3Types.includes(primitive?.type ?? ""))) errors.push(center3Types.includes(primitive?.type ?? "") ? "center must be finite" : "only cylinders, cones and circle tracks support center")
+    const center3Types = ["cylinder", "cone", "circle3", "sphere"]
+    if (operation.patch.center3 !== undefined && (!isVector3(operation.patch.center3) || !center3Types.includes(primitive?.type ?? ""))) errors.push(center3Types.includes(primitive?.type ?? "") ? "center must be finite" : "only cylinders, cones, spheres and circle tracks support center")
     if (operation.patch.height !== undefined && (!Number.isFinite(operation.patch.height) || operation.patch.height <= 0 || !["pyramid", "cylinder", "cone"].includes(primitive?.type ?? ""))) errors.push(["pyramid", "cylinder", "cone"].includes(primitive?.type ?? "") ? "height must be positive" : "only solids with height support height")
     /**
-     * 半径：圆柱 / 圆锥的底面半径，或**空间圆轨道**（`circle3`）的半径——同义字段，同一套"正数、有限"校验。
-     * 别的图元没有半径可改，如实拒绝（不静默忽略）。
+     * 半径：圆柱 / 圆锥的底面半径、**球的半径**，或**空间圆轨道**（`circle3`）的半径——同义字段，
+     * 同一套"正数、有限"校验。别的图元没有半径可改，如实拒绝（不静默忽略）。
      */
-    const radiusTypes = ["cylinder", "cone", "circle3"]
-    if (operation.patch.radius3 !== undefined && (!Number.isFinite(operation.patch.radius3) || operation.patch.radius3 <= 0 || !radiusTypes.includes(primitive?.type ?? ""))) errors.push(radiusTypes.includes(primitive?.type ?? "") ? "3D radius must be positive" : "only cylinders, cones and circle tracks support radius")
+    const radiusTypes = ["cylinder", "cone", "circle3", "sphere"]
+    if (operation.patch.radius3 !== undefined && (!Number.isFinite(operation.patch.radius3) || operation.patch.radius3 <= 0 || !radiusTypes.includes(primitive?.type ?? ""))) errors.push(radiusTypes.includes(primitive?.type ?? "") ? "3D radius must be positive" : "only cylinders, cones, spheres and circle tracks support radius")
     if (operation.patch.segments !== undefined && (!Number.isInteger(operation.patch.segments) || operation.patch.segments < 3 || operation.patch.segments > 256 || !["cylinder", "cone"].includes(primitive?.type ?? ""))) errors.push(["cylinder", "cone"].includes(primitive?.type ?? "") ? "segment count is invalid" : "only cylinders and cones support segments")
     if (operation.patch.rotation !== undefined && !Number.isFinite(operation.patch.rotation)) errors.push("rotation must be finite")
     if (operation.patch.rotationAbout !== undefined) {
