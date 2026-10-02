@@ -5,6 +5,27 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-01 —— 球体 Task 8：Agent 动作 `solid.create_sphere`（三层一起接）
+
+- **背景**：手工路径（Task 6）已经能造球，Agent 这条还没有 —— 能力表里球明确写着 `temporarily_unavailable`。**产品的球路径已经存在，所以这个动作该发布了**（这正是本 Task 的标题："只有产品路径存在时才发布动作"）。
+- **三层一起改（不搞"某一层先跑在前面"）**：
+  - **动作层（scene-graph）**：`types.ts` 加 `SolidCreateSphereAction` 并进 `DraftAction` 联合；`actions/index.ts` 加 `compileSolidSphereAction` 与分派。球**只落一个图元**（不物化点 / 棱 / 面 / `polyhedron3`），与手工路径产出同一种文档。
+  - **传输层（agent-core）**：`actionIds.ts` 加 id；`actionInputs.ts` 加 `case`（只挡明显畸形，**缺字段合法** —— `center` / `radius` 都登记了 `ask_user`，由审计去问用户；半径非正 / 非有限则**当场按字段路径拒绝**，好让一次性修复够得到）。
+  - **登记层**：`actionRegistry.ts` 加条目（`center` / `radius` 都是 `ask_user`，**不静默填默认**）；`capabilities.ts` 把球由 `temporarily_unavailable` 翻成 **`available`**；`skills/manifest.ts` 的技能动作列表与 `CAPABILITY_FOR_ACTION` 各加一条。
+- **验证（本轮实测）**：
+  - 新增 `packages/scene-graph/src/actions/sphereAction.test.ts`（5 条）。**RED 起点 3/5 红**（`unknown_action`：动作还不存在）。
+  - **一处自查**：另两条（"半径非法要拒""球心非有限要拒"）在实现之前**就是绿的** —— 动作未知时同样"不产出操作 + 有诊断"，等于什么都没钉住。已加断言要求诊断码是 **`invalid_sphere`**（而不是 `unknown_action`）。这是本项目**第五次**踩同一个坑，规矩已经写进归档。
+  - `packages/agent-core/src/actionSchemas.test.ts` 加 **3 条**：合法输入通过、**缺 `center`/`radius` 也通过**（它们是 ask_user 字段）、半径 0 按 `tool.inputs.radius` 路径拒绝。
+  - **闸门确实存在（一处旧表述要更正）**：`current-status.md` 里一直写着"登记表承诺 ≠ 校验层实现这类风险只写在文档里，**没有机器挡住**"。这一批证明**动作目录这一层是有闸门的**，而且是它把我挡下来的：
+    - `CAPABILITY_FOR_ACTION` 是 `Record<DraftActionIdName, string>` —— 新增动作漏登记**编译不过**（`tsc` 当场报 `Property '"solid.create_sphere"' is missing`）；
+    - `actionIds.test.ts` 钉动作总数（27 → 28）、`capabilities.test.ts` 钉球的状态（`temporarily_unavailable` → `available`）、`catalog.test.ts` 钉技能清单的**内容哈希**（改 `actionIds` 不改哈希就 `hash_mismatch`）。
+    - 也就是说："新加一个动作要同时改哪几处"在**动作目录**上是被机器逼着改齐的；那条旧表述该收窄到它真正适用的范围（`section.create` 那类逐动作的**字段**覆盖面）。
+  - **全库**：`npx vitest run --maxWorkers=3` → **278 文件 / 3176 项通过 + 1 todo / 0 失败**。
+  - `npm run typecheck` exit 0；`npm run lint` exit 0（**0 error / 13 warning**）。
+  - 顺带修掉一处自己造成的编辑事故（见下）。
+- **事故与教训（如实记）**：我用 PowerShell 改 `actionIds.ts` 时，把替换文本写在**双引号字符串**里却用了 `\"` 转义 —— PowerShell 不认 `\"`，结果把 `"solid.create_prism",` 整行替换成了一个孤立的反斜杠行（`create_prism` 一度从清单里消失）。**当场发现并用 .NET 精确替换修好**（现顺序已逐行核对）。教训：**源码文本编辑不要走 PowerShell 的字符串转义**，改用编辑工具或 .NET 字面量替换。
+- **未做**：Agent 端到端（真模型跑一轮"画一个半径 5 的球"）——计划里 Task 8 提到 e2e，本轮只做到三层单元与传输层；Task 9（完整产品门禁）整块未做。
+
 ## 2026-10-01 —— 球体 Task 7：工程投影与导出
 
 - **背景**：球在画布上、在截面里都通了，但**工程制图里没有它** —— `projectionVisuals.ts` 的 `templateTypes` 又是一张漏了 `sphere` 的硬编码名单（上一批已经预告过这一处）。

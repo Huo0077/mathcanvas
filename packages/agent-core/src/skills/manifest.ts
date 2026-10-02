@@ -92,7 +92,7 @@ export const SKILL_MANIFESTS: readonly SkillManifest[] = [
     id: "spatial-modeling",
     title: "空间建模",
     summary: "在立体几何工作区创建立方体、棱锥、正四面体、正 N 棱锥、圆柱、圆锥，用底面多边形 + 拉伸向量构造棱柱，或用**顶点 + 面环**构造任意多面体（不规则图形走这一条）。实体都会物化出顶点、棱、面；棱柱的侧面由内核按底面与向量生成，不能自己拼。",
-    actionIds: ["solid.create_template", "solid.create_prism", "solid.create_tetrahedron", "solid.create_regular_pyramid", "solid.create_polyhedron"],
+    actionIds: ["solid.create_template", "solid.create_prism", "solid.create_sphere", "solid.create_tetrahedron", "solid.create_regular_pyramid", "solid.create_polyhedron"],
     limits: { actionsPerStage: 4, actionsPerRun: 16 },
     successCase: { prompt: "画一个棱长 4 的立方体，中心在原点", expectation: "一笔 solid.create_template，template 为 cube，给 origin 与 size" },
     refusalCase: { prompt: "画一个棱长 0 的立方体", expectation: "拒绝：尺寸必须为正，编译器不接受退化实体" }
@@ -168,6 +168,8 @@ export const CAPABILITY_FOR_ACTION: Record<DraftActionIdName, string> = {
   "planar.create_conic": "create-primitive",
   "solid.create_template": "create-primitive",
   "solid.create_prism": "create-primitive",
+  /** 球走**自己的**能力条目（`create-solid-sphere`）：它是解析体，与"模板实体 + 物化拓扑"那条路不同。 */
+  "solid.create_sphere": "create-solid-sphere",
   "solid.create_tetrahedron": "create-primitive",
   "solid.create_regular_pyramid": "create-primitive",
   "solid.create_polyhedron": "create-primitive",

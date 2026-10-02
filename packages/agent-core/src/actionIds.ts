@@ -42,6 +42,7 @@ export const DRAFT_ACTION_IDS = [
   "planar.create_conic",
   "solid.create_template",
   "solid.create_prism",
+  "solid.create_sphere",
   "solid.create_tetrahedron",
   "solid.create_regular_pyramid",
   "solid.create_polyhedron",

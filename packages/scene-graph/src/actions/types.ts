@@ -115,6 +115,24 @@ export interface SolidCreatePrismAction extends ActionBase {
  * 形状由内核按定义构造（四个顶点、六条等长棱、四个三角面），动作层只传这两个参数。
  * **它是下面那只正 N 棱锥 `sides = 3` 的特例**（第 1 层：形状只有内核一处定义）。
  */
+/**
+ * **解析球**：球心 + 半径两个字段就是它的全部。
+ *
+ * 与另外几个立体动作的区别：球**没有子对象**（不像立方体 / 棱柱那样物化点 / 棱 / 面 / `polyhedron3`），
+ * 所以它落到文档里就是**一个** `sphere` 图元 —— 与手工路径（`buildTeachingSolid` 的球分支）产出同一种文档。
+ */
+export interface SolidCreateSphereAction extends ActionBase {
+  actionId: "solid.create_sphere"
+  inputs: {
+    alias: DraftAlias
+    /** 球心。 */
+    center: { x: number; y: number; z: number }
+    /** 半径（严格大于 0 的有限数）。 */
+    radius: number
+    label?: string
+  }
+}
+
 export interface SolidCreateTetrahedronAction extends ActionBase {
   actionId: "solid.create_tetrahedron"
   inputs: {
@@ -332,6 +350,7 @@ export type DraftAction =
   | PlanarCreateConicAction
   | SolidCreateTemplateAction
   | SolidCreatePrismAction
+  | SolidCreateSphereAction
   | SolidCreateTetrahedronAction
   | SolidCreateRegularPyramidAction
   | SolidCreatePolyhedronAction

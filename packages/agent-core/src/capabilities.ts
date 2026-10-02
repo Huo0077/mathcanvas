@@ -92,7 +92,7 @@ const PRIMITIVE_CAPABILITIES = {
   pyramid: describeCapability("create-solid-pyramid", "available", SOLID, ["workspace is geometry3d"]),
   cylinder: describeCapability("create-solid-cylinder", "available", SOLID, ["workspace is geometry3d"]),
   cone: describeCapability("create-solid-cone", "available", SOLID, ["workspace is geometry3d"]),
-  sphere: describeCapability("create-solid-sphere", "temporarily_unavailable", SOLID, ["no solid.create_sphere action handler yet; analytic document type only"]),
+  sphere: describeCapability("create-solid-sphere", "available", SOLID, ["workspace is geometry3d", "analytic sphere: the document stores centre + radius only", "solid.create_sphere builds one sphere primitive and materialises no children", "sphere-plane sections are exact (circle / tangent point / empty)", "sphere boolean intersections are explicitly unsupported"]),
   section: describeCapability("create-section-plane", "available", SOLID, ["exactly one solid is selected"], [...CORE_TESTS, "e2e/geometry3d-section.spec.ts"]),
   intersectionLine: describeCapability("create-intersection-line", "available", SOLID, ["two intersecting solids"]),
   intersectionFace: describeCapability("create-intersection-face", "available", SOLID, ["two solids sharing a face patch"]),

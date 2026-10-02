@@ -65,7 +65,8 @@ describe("agent capability registry", () => {
     // 没有 action handler 的图元类型必须显式标成暂不可用，而不是"看起来可用"。
     expect(getCapabilityRegistry().byPrimitiveType.edge3?.status).toBe("temporarily_unavailable")
     expect(getCapabilityRegistry().byPrimitiveType.face3?.status).toBe("temporarily_unavailable")
-    expect(getCapabilityRegistry().byPrimitiveType.sphere?.status).toBe("temporarily_unavailable")
+    // 球在球体切片 Task 8 之后是**真的可用**了（`solid.create_sphere` 三层都接通），不再是"看起来可用"。
+    expect(getCapabilityRegistry().byPrimitiveType.sphere?.status).toBe("available")
   })
 
   /**

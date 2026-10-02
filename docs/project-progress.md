@@ -10,6 +10,62 @@
 
 > 下方 2026-09-22 的"最后更新 / 当前阶段 / 总体状态"三行保留为**当时快照**，不再维护。
 
+## 2026-10-01 —— 球体 Task 8：Agent 动作 `solid.create_sphere`（三层一起接）
+
+> 承接 Task 7。手工路径（Task 6）已经能造球，所以按 Task 8 的标题"只有产品路径存在时才发布动作"，这个动作该发布了。
+
+### A. RED
+
+- 新增 `packages/scene-graph/src/actions/sphereAction.test.ts`（5 条）。首次运行 **3/5 红**，诊断码是 `unknown_action` —— 动作还不存在。
+
+### B. GREEN（三层一起改，不搞"某一层先跑在前面"）
+
+| 层 | 文件 | 改动 |
+| --- | --- | --- |
+| 动作 | `scene-graph/src/actions/types.ts`、`actions/index.ts` | `SolidCreateSphereAction` + 进联合；`compileSolidSphereAction` + 分派。球**只落一个图元** |
+| 传输 | `agent-core/src/actionIds.ts`、`actionInputs.ts` | 加 id 与 `case`（只挡畸形；缺字段合法；半径非正按字段路径拒绝） |
+| 登记 | `agent-core/src/actionRegistry.ts`、`capabilities.ts`、`skills/manifest.ts` | 条目（`center`/`radius` 都 `ask_user`，不静默填默认）；球翻成 `available`；技能动作表 + `CAPABILITY_FOR_ACTION` |
+
+`SolidCreateSphereAction` 与其它立体动作最大的不同：**球没有子对象**，所以这里没有 `buildFromPoints` 那一套 —— 文档里就是那只球自己，与手工路径产出**同一种文档**。
+
+### C. 一处自查："为错误的理由通过"（本项目**第五次**）
+
+- "半径非法要拒"与"球心非有限要拒"两条在实现之前**就已经是绿的**：动作未知时同样"不产出操作 + 有诊断"，等于什么都没钉住。
+- 修法：断言诊断码是 **`invalid_sphere`**，而不是任意非空诊断。加上之后它们在实现前是红的。
+
+### D. 闸门确实存在 —— 一处旧表述要更正
+
+`current-status.md` 的"如实缺口"里一直写着：**"登记表承诺 ≠ 校验层实现"这类风险只写在文档里，没有机器挡住。** 这一批证明**动作目录这一层是有闸门的**，而且正是它把我挡下来的：
+
+1. **编译期**：`skills/manifest.ts` 的 `CAPABILITY_FOR_ACTION` 是 `Record<DraftActionIdName, string>` —— 新增动作漏登记**编译不过**（实测 `tsc` 报 `Property '"solid.create_sphere"' is missing in type …`）。
+2. **测试期**：
+   - `actionIds.test.ts` 钉动作总数（27 → 28）；
+   - `capabilities.test.ts` 钉球的状态（`temporarily_unavailable` → `available`）；
+   - `catalog.test.ts` 钉技能清单的**内容哈希** —— 改 `manifest.actionIds` 而不更新 `EXPECTED_HASHES` 就 `hash_mismatch`（实测报 `content hash is 7563c028…, expected 027d20ad…`）；
+   - `actionFieldParity.test.ts` 逐动作跑 `parseActionToolInput`。
+3. **因此那条旧表述该收窄**：它真正适用的范围不是"整张动作登记表"，而是 `section.create` 那类**逐动作的字段覆盖面**（"登记表写了可选字段，`actionInputs` 却没有对应分支"）。已在 `current-status.md` 更正。
+
+### E. 事故与教训（我自己的）
+
+用 PowerShell 改 `actionIds.ts` 时，把替换文本写进**双引号字符串**却用了 `\"` 转义 —— PowerShell 不认 `\"`（它用反引号转义），结果 `"solid.create_prism",` 整行被替换成一个孤立的 `\` 行，`create_prism` 一度从清单里消失。**当场发现并修**（改用 .NET 字面量替换，逐行核对恢复为 `create_template / create_prism / create_sphere / create_tetrahedron / …`）。
+
+**教训**：源码文本编辑不要走 PowerShell 的字符串转义。本轮它一共坑了我三次。
+
+### F. 本轮实测读数
+
+| 命令 | 当次结果 |
+| --- | --- |
+| `npx vitest run packages/scene-graph/src/actions/sphereAction.test.ts` | RED 3/5 红 → 修后 **5 / 5 通过** |
+| `npx vitest run packages/agent-core` | **40 文件 / 521 项通过** |
+| `npx vitest run --maxWorkers=3` | **278 文件 / 3176 项通过 + 1 todo / 0 失败** |
+| `npm run typecheck` / `npm run lint` | exit 0 / exit 0（0 error / 13 warning） |
+
+### G. 明确没有做的事
+
+- **Agent 端到端**（真模型跑一轮"画一个半径 5 的球"）没做 —— 计划 Task 8 提到 e2e，本轮只做到三层单元与传输层。
+- Task 9（完整产品门禁、逐条核对 spec §5、发布决策）整块未做。
+- 球布尔交的"不支持"仍然只由 `schema.ts` 那道门禁保证；Agent 侧没有额外声明（spec 说"不声称支持不支持的布尔工具"，这一点目前靠能力登记表里 `intersectionSolid` 那几条）。
+
 ## 2026-10-01 —— 球体 Task 7：工程投影与导出
 
 > 承接 Task 6。上一节末尾已经预告过这一处名单（`projectionVisuals.ts` 的 `templateTypes`），本批把它补上。

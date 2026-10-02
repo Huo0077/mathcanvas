@@ -253,6 +253,32 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
       return out
     }
 
+    case "solid.create_sphere": {
+      /**
+       * 球只有两个入参：球心（3D 向量）与半径（正数）。
+       *
+       * 与棱柱那条同一套分工：这里只挡**明显畸形**（形状不对、非有限数、半径非正），
+       * 而"缺字段"是**合法的** —— 两者都登记了 `ask_user`，由审计去问用户，
+       * 在这里要求它们会把"本来该问用户"变成一句硬邦邦的 `missing_field`。
+       */
+      const out: Record<string, unknown> = withAlias({})
+      if (value.center !== undefined) {
+        const center = readVector3(value.center, `${path}.center`, errors)
+        if (center === null) return null
+        out.center = center
+      }
+      if (value.radius !== undefined) {
+        const radius = finiteNumber(value.radius, `${path}.radius`, errors)
+        if (radius === null) return null
+        if (radius <= 0) {
+          errors.push(fail("invalid_type", `${path}.radius`, "a sphere radius must be a positive finite number"))
+          return null
+        }
+        out.radius = radius
+      }
+      return out
+    }
+
     case "solid.create_prism": {
       /**
        * 载荷形状**逐字段**读出来（不做类型断言）：底面是一串空间点、向量是一个空间向量。

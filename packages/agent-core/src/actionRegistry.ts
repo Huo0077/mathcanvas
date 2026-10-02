@@ -383,6 +383,27 @@ export const ACTIONS = {
    * `edge` 走 `infer_from_facts`：先从用户原话里读数字（"棱长为 3"），读不到取
    * `DEFAULT_SOLID_SIZE` —— 与立方体"棱长未指定"那条**完全同一口径**（含写进 `assumptions` 的那句）。
    */
+  /**
+   * **解析球**（用户口径："画一个球心在原点、半径 5 的球"）。
+   *
+   * 与其它立体动作的关键区别：球**没有子对象**（不像立方体 / 棱柱那样物化点 / 棱 / 面 / `polyhedron3`），
+   * 所以它落到文档里就是**一个** `sphere` 图元 —— 与手工路径（`buildTeachingSolid` 的球分支）
+   * 产出同一种文档。
+   *
+   * **球心与半径都走 `ask_user`**：这两个数就是球的全部，替用户挑一个等于替他改题
+   *（规格 §6.3："没有公认默认值的字段不许静默填默认"）。
+   */
+  "solid.create_sphere": {
+    inputFields: ["alias", "center", "radius", "label"],
+    requiresAlias: true,
+    /** `center` 在平面动作里是 2D 点，这里是 3D 球心 —— 同一字段名两种形状。 */
+    rawFieldTypes: { center: "vector" },
+    required: [],
+    defaults: {
+      center: { policy: "ask_user", question: "球心放在哪里？给我三个坐标（x, y, z）。" },
+      radius: { policy: "ask_user", question: "球的半径是多少？（必须大于 0）" }
+    }
+  },
   "solid.create_tetrahedron": {
     inputFields: ["alias", "baseCenter", "edge", "label"],
     requiresAlias: true,

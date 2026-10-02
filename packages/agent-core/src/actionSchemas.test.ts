@@ -94,6 +94,34 @@ describe("tool inputs reuse the actual plan parser", () => {
     if (!result.ok) expect(result.errors).toEqual(expect.arrayContaining([expect.objectContaining({ code: "unknown_field", path: "tool.inputs.faces" })]))
   })
 
+  /**
+   * **球**（球体切片 Task 8）：三层都接通之后，模型产出的 `{alias, center, radius}` 必须原样通过。
+   *
+   * 同时钉住两件与"诚实"有关的事：
+   * ① 缺 `center` / `radius` 是**合法的**（两者登记了 `ask_user`，由审计去问用户）——
+   *    在这里报 `missing_field` 会把"本该问用户"变成一句生硬的拒绝；
+   * ② 半径非正 / 非有限则**当场拒绝**，路径要落在字段上（好让一次性修复够得到它）。
+   */
+  it("accepts a sphere with a finite centre and a positive radius", () => {
+    const result = parseActionToolInput("solid.create_sphere", { alias: "S", center: { x: 1, y: 2, z: 3 }, radius: 5 }, "step-sphere")
+
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.value).toMatchObject({ actionId: "solid.create_sphere", actionKey: "step-sphere", inputs: { alias: "S", center: { x: 1, y: 2, z: 3 }, radius: 5 } })
+  })
+
+  it("lets a sphere omit centre and radius, because both are ask_user fields", () => {
+    const result = parseActionToolInput("solid.create_sphere", { alias: "S" }, "step-sphere-2")
+
+    expect(result.ok).toBe(true)
+  })
+
+  it("rejects a non-positive sphere radius on the field path, so one-shot repair can reach it", () => {
+    const result = parseActionToolInput("solid.create_sphere", { alias: "S", center: { x: 0, y: 0, z: 0 }, radius: 0 }, "step-sphere-3")
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.errors).toEqual(expect.arrayContaining([expect.objectContaining({ code: "invalid_type", path: "tool.inputs.radius" })]))
+  })
+
   it("rejects an unscoped object reference before staging a draft", () => {
     const result = parseActionToolInput("object.update_inputs", { target: { entityId: "cube-1" }, patch: { x: 2 } }, "step-3")
     expect(result.ok).toBe(false)

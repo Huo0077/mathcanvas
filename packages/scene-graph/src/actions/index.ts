@@ -410,6 +410,29 @@ export function compileSolidRegularPyramid(solidId: string, input: { baseCenter:
 }
 
 /**
+ * `solid.create_sphere`：**球心 + 半径** → **一个** `sphere` 图元。
+ *
+ * 与另外几个立体动作最不一样的地方：球**不物化子对象**（没有点 / 棱 / 面 / `polyhedron3`），
+ * 所以这里没有 `buildFromPoints` 那一套 —— 文档里就是那只球自己，与手工路径
+ *（`buildTeachingSolid` 的球分支）产出**同一种文档**。
+ *
+ * 纪律与其它立体动作一致：工作区必须是立体几何；输入不合法时**一条操作都不产出**。
+ */
+function compileSolidSphereAction(action: Extract<DraftAction, { actionId: "solid.create_sphere" }>, context: ActionContext): CompileResult {
+  const { actionKey, inputs } = action
+  if (context.targetWorkspace !== "geometry3d") {
+    return { operations: [], diagnostics: [diagnostic(actionKey, "workspace_mismatch", "a sphere can only be created in the solid workspace")], aliasToId: {} }
+  }
+  const { center, radius } = inputs
+  if (![center.x, center.y, center.z].every(Number.isFinite) || !Number.isFinite(radius) || radius <= 0) {
+    return { operations: [], diagnostics: [diagnostic(actionKey, "invalid_sphere", "球需要一个有限的球心与一个严格大于 0 的有限半径。")], aliasToId: {} }
+  }
+  const id = context.idAllocator.allocate("sphere", inputs.alias)
+  const primitive: Extract<PrimitiveSpec, { type: "sphere" }> = { id, type: "sphere", center: { ...center }, radius, ...(inputs.label === undefined ? {} : { label: inputs.label }) }
+  return { operations: [{ op: "addPrimitives", primitives: [primitive] }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
+}
+
+/**
  * `solid.create_tetrahedron`：**底面中心 + 棱长** → 一只 `polyhedron3` 与它的全部子对象。
  *
  * 与棱柱动作同一套纪律：工作区必须是立体几何；输入不合法时**一条操作都不产出**（宁可不做，也不做一半）。
@@ -846,6 +869,8 @@ export function compileAction(action: DraftAction, context: ActionContext): Comp
       return compileSolidTemplate(action, context)
     case "solid.create_prism":
       return compileSolidPrismAction(action, context)
+    case "solid.create_sphere":
+      return compileSolidSphereAction(action, context)
     case "solid.create_tetrahedron":
       return compileSolidTetrahedronAction(action, context)
     case "solid.create_regular_pyramid":
