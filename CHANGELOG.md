@@ -5,6 +5,23 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-02 —— 发版 v3.2.0：HTML 导出 + 三处修复，打包并发布 Release
+
+- **为什么是 minor**：v3.1.0 之后 `main` 上新增了一个**用户可见的新能力**（HTML 导出），所以版本真值 `3.1.0 → 3.2.0`（只动 `apps/desktop/src-tauri/tauri.conf.json` 与 `src-tauri/Cargo.toml` 两处；`git grep "3.1.0" -- "*.json" "*.toml"` 的命中全在 `package-lock.json` 的**第三方依赖**上，与产品版本无关）。
+- **构建**：根 `npm run build` **exit 0** → `npm --workspace @draw/desktop run bundle` **exit 0**（Rust `Finished release profile [optimized] in 1m 16s`；WiX 出 MSI、NSIS 出 setup）。**打包前按 v3.1.0 的口径核实了前端来源**：外壳读的是 `build-check/mathcanvas-current`（不是 `apps/web/dist`），那份 `assets/index-BRMKadFt.js`（1,715,839 B）距打包 **2.3 分钟**，且确实含「导出 HTML」「自包含的 HTML 快照」「HTML 导出不在本批范围」「这次导出漏了什么」。
+- **产物与哈希**（Windows x64，`FileVersion` / `ProductVersion` = **3.2.0**）：
+
+  | 产物 | 字节 | SHA-256 |
+  | --- | ---: | --- |
+  | `mathcanvas-desktop.exe`（免安装） | 17,209,344 | `94253819D54ED351BF7AC4289C438B5D687B506F6DBF45D6349B6679B0CE783A` |
+  | `MathCanvas_3.2.0_x64_en-US.msi` | 6,860,800 | `6671DACB382B35A595C0A8DFFE4F2756D034E237CA6076CA5195D1E85DC6AB33` |
+  | `MathCanvas_3.2.0_x64-setup.exe` | 5,040,418 | `6EFFDB276945537EF3F0C7937C7E04F764B216DC3FD5CBA6F6AB2B2D87BA5680` |
+
+- **启动实测**（release exe）：存活 T+12s / T+20s、真窗口句柄 `2886386`、标题 `MathCanvas`、`Responding=True`、工作集 43.3 MB，随后优雅关闭成功。
+- **门禁**：全量 e2e **184 通过 / 0 失败**；全库单测 **280 文件 / 3203 通过 + 1 todo / 0 失败**；`typecheck` exit 0；`lint` 0 error / 13 warning；`main` 顶端 CI **#87 四项全绿**（#84 / #86 被 `concurrency: cancel-in-progress` 取消，属设计行为）。
+- **本版边界（如实）**：**MSI 的"装 → 启动 → 卸载"未验**（本会话 `admin=False`，MSI 按 Tauri 默认是每机器安装；NSIS 那半已在 v3.1.0 那次走完完整一圈）；教师/学生走查未做；立体几何画面进 HTML、`.ggb`、截图识图、平面/函数逐题补缺都不在本版。
+- 发行说明见 [`docs/release/v3.2.0.md`](docs/release/v3.2.0.md)。
+
 ## 2026-10-02 —— 收尾验证：全量 e2e 复跑 **184 通过 / 0 失败**（"未复跑"那条缺口关闭）
 
 - 本轮改了共享路径上的三处（`pointerdown` 取消取景、内容同步后的悬停自愈、规划器的分析题守卫），所以做了一次**全量** e2e 而不是只跑相关 spec：`npx playwright test`（默认 workers）→ **184 通过 / 0 失败**（1.1 分钟）。

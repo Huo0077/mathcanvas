@@ -64,9 +64,9 @@ npm run dev
 - **高中几何交互（2026-10-01）**：六类教学代表题已用 7 条浏览器用例逐题验收；单顶点编辑、体积画布数字及相机标注同步均已逐块上传并在 GitHub CI checks/build/rust/e2e 四项通过。根脚本完整构建、本地全量 171 条端到端测试、性能 9/9 和 Rust 236 通过/3 项按设计忽略均有记录。**仍需用户侧教师/学生走查**（“三点一面”目标 ≤8 次主操作）；最新版源码还没有匹配并安装验证的桌面发行包。可复核读数与未完成清单见 [当前状态](docs/current-status.md)；旧专题过程见 [高中几何进度](docs/research/2026-09-29-high-school-geometry-interaction-progress.md)。
 - **Agent 已有阶段成果**：只读场景工具、类型化工具调用、确定性的局部验收与发布门禁已有实现和测试；离线评估可用。但工具能力和真实模型绘图质量是两回事，不能把离线得分当成真实模型准确率。
 - **仍有限制**：增量草稿工具尚未作为模型可用工具开放；真实场景截图/相机证据与完整视觉检查尚未接通；代表任务的真实 provider pass@1、pass@3、成本和延迟还没有形成可用于放行的测量数据。因此类型化工具循环**尚未满足默认启用的发布门禁**。当前门禁及缺口见 [Agent 发布前门禁](docs/acceptance/agent-release-gate.md)，过程见 [Agent tool-loop 进度记录](docs/research/2026-09-28-agent-tool-loop-progress.md)。
-- **其他已知边界**：没有云端同步；球体 Task 1 虽已交付受校验的 `.mgeo` 数据类型，但**尚无球体画布创建、解析截面和工程投影入口**，Agent 的球体能力也显式标记为暂不可用。部分高级几何输入、精确曲面互交、DWG/B-rep 导入和自动尺寸布局仍未提供。设计目标见 [球体规格](docs/superpowers/specs/2026-10-01-sphere-and-sections-design.md)，交付状态以 [当前状态](docs/current-status.md) 为准。
+- **其他已知边界**：没有云端同步；球体能力已在 **v3.1.0** 整体交付（画布创建、解析截面、工程投影、Agent 动作都在），但**球不参与布尔运算**（明确拒绝并留诊断）；部分高级几何输入、精确曲面互交、DWG/B-rep 导入和自动尺寸布局仍未提供；**MSI 的"装 → 启动 → 卸载"验收未做**（缺管理员权限），教师/学生走查也未做。交付状态以 [当前状态](docs/current-status.md) 为准。
 
-公开 GitHub Release 目前最新为 [v3.0 发布说明](docs/release/v3.0.md) 对应的版本；`v3.0.1` 有历史 tag/打包记录但未公开同名 Release，当前 `main` 的后续改动尚未重新制作并安装验证。过程记录见 [CHANGELOG](CHANGELOG.md) 与 [项目进度归档](docs/project-progress.md)，历史数字不能直接当作当前测试结果。
+公开 GitHub Release 目前最新为 **`v3.2.0`**（[发布说明](docs/release/v3.2.0.md)）—— 这一版带来 **HTML 导出**（自包含快照 + 可再导入存档，立体几何明确拒绝）与三处修复（拖动取消进行中的自动取景、悬停读数随内容自愈、本地规划器不再把分析题当建模指令）。历史版本见 `docs/release/`。过程记录见 [CHANGELOG](CHANGELOG.md) 与 [项目进度归档](docs/project-progress.md)，历史数字不能直接当作当前测试结果。
 
 ## 开发者进度与参与开发
 

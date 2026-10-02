@@ -10,6 +10,15 @@
 
 > 下方 2026-09-22 的"最后更新 / 当前阶段 / 总体状态"三行保留为**当时快照**，不再维护。
 
+## 2026-10-02 —— 发版 v3.2.0（HTML 导出 + 三处修复）：打包、启动实测、发布 Release
+
+- **为什么 minor**：v3.1.0 之后新增了用户可见的新能力（HTML 导出），版本真值 `3.1.0 → 3.2.0`（只动 `tauri.conf.json` 与 `src-tauri/Cargo.toml`；`git grep "3.1.0" -- "*.json" "*.toml"` 的命中全在 `package-lock.json` 的第三方依赖上）。
+- **构建**：根 `npm run build` **exit 0** → `npm --workspace @draw/desktop run bundle` **exit 0**（Rust `Finished release profile [optimized] in 1m 16s`，WiX 出 MSI、NSIS 出 setup）。**打包前核实前端来源**（与 v3.1.0 同口径）：外壳读 `build-check/mathcanvas-current`，`assets/index-BRMKadFt.js`（1,715,839 B）距打包 **2.3 分钟**，且含「导出 HTML」「自包含的 HTML 快照」「HTML 导出不在本批范围」「这次导出漏了什么」——**不核实这一步就有发一版旧界面的风险**。
+- **产物与哈希**：exe 17,209,344 B / `94253819…783A`；MSI 6,860,800 B / `6671DACB…AB33`；NSIS 5,040,418 B / `6EFFDB27…5680`。`FileVersion` / `ProductVersion` = **3.2.0**。
+- **启动实测**：release exe 存活 T+12s / T+20s、真窗口句柄 `2886386`、标题 `MathCanvas`、`Responding=True`、工作集 43.3 MB，优雅关闭成功。
+- **门禁**：全量 e2e **184 通过 / 0 失败**；全库单测 **280 文件 / 3203 通过 + 1 todo / 0 失败**；`typecheck` exit 0；`lint` 0 error / 13 warning；`main` 顶端 CI **#87 四项全绿**。
+- **边界（如实）**：本机"装 → 启动 → 卸载"的验收对象仍是 **v3.1.0 那次（NSIS）**；v3.2.0 只做了打包 + 裸 exe 启动实测，**没有重复装/卸**；**MSI 那半依旧未验**（本会话 `admin=False`，MSI 按 Tauri 默认是每机器安装）。教师/学生走查未做；3D 画面进 HTML、`.ggb`、截图识图、平面/函数逐题补缺都不在本版。
+
 ## 2026-10-02 —— 收尾验证：全量 e2e 184 通过 / 0 失败
 
 - 本轮动了共享路径上的三处（`pointerdown` 取消取景、内容同步后的悬停自愈、规划器的分析题守卫），所以做的是**全量** e2e 而不是只跑相关 spec：`npx playwright test`（默认 workers）→ **184 通过 / 0 失败**（1.1 分钟）。
