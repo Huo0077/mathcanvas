@@ -165,7 +165,9 @@ expect(parsed.ok).toBe(true)
 - **bullet 2（e2e 覆盖清单）**：**全部落到浏览器层** —— `e2e/geometry3d-sphere.spec.ts` **7 条**：数值创建（向导 + Agent 一句话）、精确圆（工具栏过球心）、**切点**、**空集**（后两例由"整数步方向键"走到：默认刀口常数 `-3`，五次 `ArrowUp` ⇒ `-8` 精确相切、再一次 ⇒ `-9` 空集，断言 `circle → point(点数 1) → empty(点数 0 不留旧点)`）、编辑后持久化、撤销、相机与选择、CAD 四视图与三件套导出（`engineering-drawing.spec.ts`）、**刻意的不支持布尔**（球参与的布尔交**一个预览都不给**，并以"两个立方体**有**预览"作反向对照）。
   - **一处自我更正**：切点/空集起初被我判成"验不了"（理由是"种一份草稿再读读数走不通" —— 恢复路径信任保存下来的派生字段、不重跑 `recomputeDerivedObjects`，该结论**本身是对的**）。**但"因此验不了"是错的**：改成**让应用自己算**（工具栏切一刀 → 方向键挪刀口）就能稳定走到。留档在用例注释里。
 - **bullet 3（spec §5 逐行审计）**：六行逐条对真实文件与测试输出 —— 五行成立；**「工程图/导出与测量」那一行查出一处静默缺口并修掉**：`measurementVisuals.ts` 的 `pointPositions`（硬编码类型名单）**漏了 `sphere`**，于是球的面积/体积测量让 `resolveMeasurementVisual` 返回 `null`、**画布上一个字都不画**，而属性栏照样有数字（所以是静默的）；这是**同一张名单第二次漏配**（此前漏 `polyhedron3`）。已加球分支（落点取球心），RED `expected null not to be null` → GREEN。文档（`current-status.md` / `feature-catalog.md` / `project-progress.md` / `CHANGELOG.md`）均已更新，提交推送并逐个核对 SHA 与 CI。
-- **为什么没有写"球体能力已完成"**：spec §6 与 §5 末句都要求"新的桌面 Release 需要一个匹配版本的安装包 + 安装证据"。当前 `main` 的源码能力已交付，但**发布三件套**（定版本 → 重打 exe/MSI/NSIS → 哈希与 source tag 对齐 → GitHub Release → 本机安装实测）属 `current-status.md` §四 **D 类**，按计划要求**由用户先决定版本与是否发布**，不能由实现方自行宣布。
+- **为什么当时没有写"球体能力已完成"**：spec §6 与 §5 末句都要求"新的桌面 Release 需要一个匹配版本的安装包 + 安装证据"。当时发布三件套属 `current-status.md` §四 **D 类**，按计划要求**由用户先决定版本与是否发布**，不能由实现方自行宣布。
+  **2026-10-02 更新（用户已决定 v3.1.0，发布已完成）**：版本真值 `3.0.1 → 3.1.0`（提交 `33facf1`）；根构建 exit 0（并核实外壳前端 `build-check/mathcanvas-current` 确为新鲜产物、含「球体」与 `create_sphere`）；`tauri build` 产出 MSI 6,848,512 B / NSIS 5,030,195 B / 裸 exe 17,190,400 B；注解 tag `v3.1.0`（→ `165e4fb`）已推送；**GitHub Release 已发布**（非 draft）：<https://github.com/Huo0077/mathcanvas/releases/tag/v3.1.0>，3 个资产**重下载后 SHA-256 与本地全部 MATCH**，匿名 API `releases/latest` 亦已返回 `v3.1.0`。
+  **仍然不能声称"安装可用"的那一半**：**本机安装实测（装 → 启动 → 卸载）没做**（§四 D2，需用户决定）。因此本计划的口径是：**源码、安装包、Release 三者一一对应且哈希可复核 = 已交付；"本机装过一遍"= 未做。**
 
 **Files:** `e2e/geometry3d-sphere.spec.ts`, `docs/current-status.md`, `docs/feature-catalog.md`, `docs/project-progress.md`, `CHANGELOG.md`; release packaging only after a separately selected version/tag.
 

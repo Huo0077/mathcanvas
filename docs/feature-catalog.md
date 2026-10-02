@@ -187,7 +187,7 @@
 3. **HTML / GeoGebra 导出**：已交付的导出是 `.mgeo`、SVG、CSV、PNG 与工程图的 SVG/DXF/PDF；**HTML 与 GGB 不在已交付范围**。**用户本轮未启动**。
 4. **平面 / 函数题型的逐题补缺**：需先做教师样题盘点再单独排期（现有平面工具不回退是底线）。**未排期**。
 5. **教师 / 学生真实走查**（实施计划 Task 8 第 3 项）：**没有**做，按用户口径属**用户侧**。~~完整桌面打包~~：**2026-09-30 已实际跑通** —— `npm --workspace @draw/desktop run bundle`（`tauri build`）exit 0，产出 release exe / MSI / NSIS 三件（见 [`CHANGELOG.md`](../CHANGELOG.md)）；**根脚本 `npm run build` 的整体命令后来也已跑通**（exit 0，见 [`current-status.md`](current-status.md) §一与 `CHANGELOG.md` 同日「根目录完整构建门禁补跑」一节）。
-6. ~~**功能分支合并到 `main`**~~：**2026-09-30 已完成** —— PR #1 合并提交 `3b1f770`。~~**未打包桌面版本**~~：**同日也已打包并实测启动** —— `npm --workspace @draw/desktop run bundle` exit 0，产出 release exe **16.39 MB** / MSI **6.53 MB** / NSIS setup **4.79 MB**（版本 3.0.0）。**仍未做的**：把产物推到 GitHub Release、在本机安装 MSI/NSIS（根脚本 `npm run build` 已补跑通）。
+6. ~~**功能分支合并到 `main`**~~：**2026-09-30 已完成** —— PR #1 合并提交 `3b1f770`。~~**未打包桌面版本**~~：**同日也已打包并实测启动** —— `npm --workspace @draw/desktop run bundle` exit 0，产出 release exe **16.39 MB** / MSI **6.53 MB** / NSIS setup **4.79 MB**（版本 3.0.0）。**仍未做的**：在本机安装 MSI/NSIS 做受控验收（装 → 启动 → 卸载）。（`npm run build` 已补跑通；**推到 GitHub Release 已于 2026-10-02 完成** —— tag `v3.1.0`、[Release 页](https://github.com/Huo0077/mathcanvas/releases/tag/v3.1.0) 挂 3 个资产，三个资产重下载后 SHA-256 与本地全部一致。）
 
 **已闭环的功能与体验缺口**（细节与当前状态以 [`current-status.md`](current-status.md) 为准）
 
