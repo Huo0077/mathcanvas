@@ -5,6 +5,28 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-02 —— 发布 v3.1.0（桌面三件套）
+
+> 用户决定：把球体这批（Task 1–9）作为 **v3.1.0** 发布（新能力走 minor）。版本真值从 `3.0.1` 升到 `3.1.0`。
+
+**产物（本机实打包，逐件记哈希）**
+
+| 产物 | 字节 | 体积 | SHA-256 |
+| --- | --- | --- | --- |
+| `MathCanvas_3.1.0_x64_en-US.msi` | 6,848,512 | 6.53 MB | `3531e488383d6902d3d659e2c10a589f83d5efc3f151a9a117a0902b5a2f17eb` |
+| `MathCanvas_3.1.0_x64-setup.exe`（NSIS） | 5,030,195 | 4.80 MB | `1a4b2aa1a5278e8a5b1da92b23b6fd6b47b74d6fd151b1c02c4343cf11d5052a` |
+| `mathcanvas-desktop.exe`（未打包裸 exe） | 17,190,400 | 16.39 MB | `2c70f1c9c24c8d64c985a19ce5bc7d3d7421d9734443e29252779ddc9ebf7b23` |
+
+**版本真值只有两处**（`git grep "3.0.1"` 在 `*.json` / `*.toml` 上只命中这两行）：`apps/desktop/src-tauri/tauri.conf.json` 与 `apps/desktop/src-tauri/Cargo.toml`。根 `package.json` 与 `apps/desktop/package.json` 都是 `0.1.0` 的**私有 workspace 版本**，不参与发行，故未动。
+
+**打包前做过的一步核实**：桌面外壳的前端来自 `build-check/mathcanvas-current`（`tauri.conf.json` 的 `frontendDist`），**不是** `apps/web/dist` —— 所以先跑根 `npm run build`（exit 0），并确认那份 `index.html` 的时间戳距打包动作仅 **0.3 分钟**、`index-*.js` 里同时含「球体」与 `create_sphere`。**不核实这一步就有发一版旧界面的风险。**
+
+**本次内容（相对 3.0.1）**：球体这条线的全部交付 —— 解析球文档类型、球-平面精确截交（圆 / 切点 / 空集）、场景事务与 `4πr²`·`4πr³/3` 测量、截面接入 + 球布尔门禁、3D 渲染（不画可选中经纬网）、「常用立体」球体预设 + 属性栏编辑、CAD 四视图与 SVG/DXF/PDF 导出、Agent 动作 `solid.create_sphere` 三层接通、Agent 端到端（一句话造球），以及审计查出的一处静默缺口修复（球的测量数字此前**不会**画在画布上）。详见同日各条。
+
+**构建读数**：`vite build` 510 modules / 3.65 s；Rust release `26.28 s`；`cargo`、`candle`/`light`(MSI)、`makensis`(NSIS) 全部 exit 0。**警告一条**（如实记）：`mathcanvas-desktop (lib) generated 1 warning` —— `linker_messages`（链接器输出 DLL/EXP 提示），非代码告警。
+
+**仍未做**：本机**安装实测**（装 → 启动 → 卸载）属 §四 **D2**，需用户决定；本文件只证明"打包成功且哈希可复核"，**不等于**"已在本机装过一遍"。GitHub Release 的上传见同日提交记录。
+
 ## 2026-10-01 —— Task 9 收口：切点与空集**在浏览器里也验到了**（我上一轮判"验不了"是错的）
 
 - **上一轮我写下的结论是**："种一份草稿再读读数这条路走不通（恢复路径不重算派生字段），所以 z=8 相切 / z=9 空集只能停在单元判据。" **这一轮把它推翻了，而且推得干净。**
