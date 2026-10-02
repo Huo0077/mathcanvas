@@ -1,0 +1,25 @@
+{
+  "format": "mgeo",
+  "formatVersion": "0.1",
+  "document": {
+    "schemaVersion": "0.1",
+    "revision": 0,
+    "workspace": "cad",
+    "coordinateSystems": ["cartesian-3d"],
+    "parameters": {},
+    "primitives": [
+      {"id": "sphere-1", "type": "sphere", "center": {"x": 1, "y": 2, "z": 3}, "radius": 5, "label": "球体 1"}
+    ],
+    "groups": [],
+    "constraints": [],
+    "dynamics": [],
+    "annotations": [],
+    "measurements": [],
+    "metadata": {
+      "id": "doc-cad-sphere",
+      "name": "CAD sphere r=5",
+      "createdAt": "2026-10-01T00:00:00.000Z",
+      "updatedAt": "2026-10-01T00:00:00.000Z"
+    }
+  }
+}

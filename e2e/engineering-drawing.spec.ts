@@ -60,3 +60,33 @@ test("exports CAD views as SVG, DXF, and PDF", async ({ page }) => {
     await expect((await download).suggestedFilename()).toMatch(new RegExp(`${extension.replace(".", "\\.")}$`))
   }
 })
+
+/**
+ * **球的工程投影**（实施计划 Task 7）。
+ *
+ * 球区别于所有多面体的那条性质：**正投影下它的轮廓永远是半径等于球半径的圆，与视线方向无关**。
+ * 所以判据不是"导出文件非空"，而是**四个视图里每一个都有这条轮廓**（立方体在四个视图里是三个
+ * 不同的矩形，而球是四个同样大的圆）。半径本身由单元用例钉住
+ * （`apps/web/src/sphereProjection.test.ts`：四个视图的点集半径都等于球半径）。
+ */
+test("projects a sphere as an outline in all four CAD views and exports it", async ({ page }) => {
+  await page.goto("/")
+  await page.locator('input[type="file"]').setInputFiles("e2e/fixtures/cad-sphere.mgeo")
+  await page.getByRole("button", { name: "跳转到工程制图" }).click()
+
+  const engineeringDrawing = page.getByRole("main", { name: "工程制图视图" })
+  const viewports = engineeringDrawing.locator("[data-drawing-view]")
+  await expect(viewports).toHaveCount(4)
+  // 不是"总共 4 条"就算 —— 逐个视图点名，否则"四条全挤在一个视图里"也会绿。
+  for (let index = 0; index < 4; index += 1) {
+    await expect(viewports.nth(index).locator('[data-source-id="sphere-1"]'), `第 ${index + 1} 个视图里的球轮廓`).toHaveCount(1)
+  }
+  // 有东西可投影，就不该再显示"暂无可投影的空间对象"。
+  await expect(engineeringDrawing.getByText("暂无可投影的空间对象")).toHaveCount(0)
+
+  for (const [label, extension] of [["导出 SVG", ".svg"], ["导出 DXF", ".dxf"], ["导出 PDF", ".pdf"]] as const) {
+    const download = page.waitForEvent("download")
+    await page.getByRole("button", { name: label, exact: true }).click()
+    await expect((await download).suggestedFilename()).toMatch(new RegExp(`${extension.replace(".", "\\.")}$`))
+  }
+})

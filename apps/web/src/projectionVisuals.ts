@@ -317,6 +317,30 @@ export function resolveProjectedDrawing(document: GeometryDocument, view: Drawin
       primitives.push({ kind: "polyline", sourceId: primitive.id, points: sampleProjectedEllipse(projected), closed: true })
       return
     }
+    if (primitive.type === "sphere") {
+      /**
+       * **正投影下球的轮廓永远是半径等于球半径的圆**，与视线方向无关 —— 所以四个视图给出四个
+       * 同样大的圆（这正是球区别于立方体 / 棱柱的地方：那些在四个视图里是三个不同的矩形）。
+       *
+       * 只画轮廓，**不投影显示网格的三角形**：网格是画布缓存、不是几何（spec 明令）。拿它去投影
+       * 会得到几十条多余的线，而且线数会随网格密度漂。
+       *
+       * 采样结果仍是既有的 `polyline` 图元（`closed: true`），所以三个消费方
+       *（`DrawingViewport` / `engineeringExporters`）完全不用改，`sourceId` 也仍是这个球。
+       */
+      const center = projectVector3(primitive.center, view)
+      if (!center || !isFiniteProjectedPoint(center) || !Number.isFinite(primitive.radius) || primitive.radius <= 0) {
+        addDiagnostic(primitive.id, "sphere cannot be projected")
+        return
+      }
+      primitives.push({
+        kind: "polyline",
+        sourceId: primitive.id,
+        points: sampleProjectedEllipse({ kind: "ellipse", center, semiMajor: primitive.radius, semiMinor: primitive.radius, rotation: 0 }),
+        closed: true
+      })
+      return
+    }
     if (primitive.type === "polyhedron3") resolvePolyhedronReferences(primitive)
   })
 

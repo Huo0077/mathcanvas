@@ -5,6 +5,23 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-01 —— 球体 Task 7：工程投影与导出
+
+- **背景**：球在画布上、在截面里都通了，但**工程制图里没有它** —— `projectionVisuals.ts` 的 `templateTypes` 又是一张漏了 `sphere` 的硬编码名单（上一批已经预告过这一处）。
+- **改动（1 个文件 + 1 个新测试文件 + 1 个新夹具 + 1 处 e2e）**：
+  - `projectionVisuals.ts` 加球分支：**只画轮廓，不投影显示网格的三角形**。判据是球区别于所有多面体的那条性质 —— **正投影下球的轮廓永远是半径等于球半径的圆，与视线方向无关**（立方体在四个视图里是三个不同的矩形，球是四个同样大的圆）。
+  - 采样结果仍是既有的 `polyline` 图元（`closed: true`），所以 `DrawingViewport` 与 `engineeringExporters` **一个字都不用改**（计划里那句"仅在共用契约需要变更时才改 exporters"因此不成立），`sourceId` 也仍是那个球。
+  - 半径 / 段的采样复用既有的 `sampleProjectedEllipse`（构造一个长短半轴都等于球半径的椭圆），所以弦高容差、闭合处不重算 `t=2π` 这些既有约定全部继承。
+- **验证（本轮实测）**：
+  - 新增 `apps/web/src/sphereProjection.test.ts`（5 条）。**RED 起点 4/5 红**，症状是 `expected [] to have a length of 1`（球压根没被投影）。
+  - **一处自查**：第 5 条"隐藏的球不出现"在实现之前**就是绿的** —— 球那时压根不投影，`toHaveLength(0)` 成立得毫无意义（本项目第四次踩这个坑）。已改成**反向对照**：同一份文档里放一个隐藏的球 + 一个可见的空间点，点必须照常投影、球必须不出现。
+  - 四个视图的**半径相等**由单元用例钉住（逐个视图把采样点集的形心当圆心、逐点量半径，都等于 5）；"投影中心就是球心投影"单独钉一条（front 视图下形心 = (1,2)）。
+  - 新增夹具 `e2e/fixtures/cad-sphere.mgeo`，`e2e/engineering-drawing.spec.ts` 增到 **5 条**：逐个视图点名（第 N 个视图里恰好一条球轮廓，而不是"总共 4 条"——否则"四条全挤在一个视图里"也会绿），并断言"暂无可投影的空间对象"提示消失、三件套（SVG / DXF / PDF）都能导出且扩展名正确。**5/5 通过**。
+  - **全库**：`npx vitest run --maxWorkers=3` → **277 文件 / 3168 项通过 + 1 todo / 0 失败**。
+  - `npm run typecheck` exit 0；`npm run lint` exit 0（**0 error / 13 warning**）。
+- **如实说明**：新增那条 e2e 的 **RED 没有被独立观察到** —— 我只观察到单元用例的 RED（`expected [] to have a length of 1`）。e2e 断言的是 DOM 上的 `[data-source-id="sphere-1"]`，而那个属性只可能由投影产生，所以两者走的是同一条代码路径；但"e2e 在修改前必红"是**推理**，不是**实测**。
+- **未做**：Task 8–9（Agent 创建球、完整产品门禁）。
+
 ## 2026-10-01 —— 球体 Task 6（上半）：从「常用立体」手工造一个球
 
 - **背景**：Task 5 之后球已经能画、能选、能切，但**没有任何界面入口能造出一个球** —— 上一批的浏览器验收甚至得先建个立方体、再把草稿里的图元偷换成球才验得了。这一批把入口补上。
