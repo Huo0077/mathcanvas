@@ -237,10 +237,42 @@ export const LOCAL_INTENTS: readonly LocalIntent[] = [
   { all: ["有什么"], skillIds: [], build: () => COUNT_ANSWER() }
 ]
 
-/** 找出这条指令命中的那一条（认不出返回 `null`）。**匹配规则只有这一处**。 */
+/**
+ * **建模动词**：句子里出现这些，就认为用户是在要求作图（而不是在问读数）。
+ * 与下面那组"读数问法"配合使用，见 `isAnalysisQuestion`。
+ */
+const CREATION_VERBS = ["画", "作", "建", "添加", "创建", "放", "来一个", "来个"]
+
+/** **读数问法**：句子里出现这些，通常是在问某个量是多少、多长、多大。 */
+const MEASUREMENT_QUESTIONS = ["是多少", "多少", "多大", "多长", "求", "怎么", "为什么", "吗"]
+
+/**
+ * **这是不是一道"只在问读数"的分析题？**
+ *
+ * 现场（2026-10-02 查实）：把"这个正方体的内切球半径是多少"喂进本地规划器，命中的是
+ * 既有的「正方体」条目 —— 它会**去新建一只正方体**，而用户要的是一个读数。
+ * 这与上面两条注释里的纪律是同一条（不认裸词"四面体"、不认裸词"球"）：
+ * **认不出时老实问路，比悄悄改文档好**（见本文件开头那条纪律）。
+ *
+ * **边界（如实写清）**：只挡"**没有任何建模动词**"的问句。像"画出这个正方体的内切球"
+ * 这种既在问几何、又明确要求作图的句子照旧走建模 —— 它确实是在要求作图。
+ */
+export function isAnalysisQuestion(prompt: string): boolean {
+  const normalized = prompt.toLowerCase()
+  if (CREATION_VERBS.some((verb) => normalized.includes(verb))) return false
+  return MEASUREMENT_QUESTIONS.some((marker) => normalized.includes(marker))
+}
+
+/**
+ * 找出这条指令命中的那一条（认不出返回 `null`）。**匹配规则只有这一处**。
+ */
 export function matchLocalIntent(prompt: string): LocalIntent | null {
   const normalized = prompt.toLowerCase()
+  // 只在问读数、又没说要画：**请求技能的建模意图一律不认**（认不出的结果是"老实问路"）。
+  // 不求技能的意图（例如"有什么"那条只读回答）不受影响 —— 它们本来就要在问句里命中。
+  const analysis = isAnalysisQuestion(normalized)
   for (const intent of LOCAL_INTENTS) {
+    if (analysis && intent.skillIds.length > 0) continue
     if (!intent.all.every((token) => normalized.includes(token.toLowerCase()))) continue
     if (intent.any && !intent.any.some((token) => normalized.includes(token.toLowerCase()))) continue
     return intent

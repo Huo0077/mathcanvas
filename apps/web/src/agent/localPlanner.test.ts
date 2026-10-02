@@ -280,3 +280,42 @@ describe("the local planner declares which skills an instruction needs", () => {
     }
   })
 })
+
+/**
+ * **分析题不该被当成建模指令**（2026-10-02 查实的既有隐患）。
+ *
+ * 现场：把"这个正方体的内切球半径是多少"喂进本地规划器，命中的是既有的「正方体」条目 ——
+ * 它会**去新建一只正方体**，而用户要的是一个读数。这与"不认裸词四面体 / 裸词球"是同一条
+ * 纪律（见 `localPlanner.ts` 里那两条注释）：认不出时**老实问路**，比悄悄改文档好。
+ *
+ * 判据刻意不是"答得对不对"（本地规划器不接模型、答不了读数），而是**不许悄悄改文档**。
+ */
+describe("analysis questions", () => {
+  it("does not turn an inscribed-sphere question into a new cube", async () => {
+    const envelope = await plan("这个正方体的内切球半径是多少")
+
+    expect(envelope.kind).toBe("clarification")
+  })
+
+  it("does not turn an 'external sphere' question into a new cube either", async () => {
+    const envelope = await plan("求这个正方体的外接球半径")
+
+    expect(envelope.kind).toBe("clarification")
+  })
+
+  it("still builds a cube when the sentence actually asks for one", async () => {
+    const envelope = await plan("建一个棱长 3 的立方体")
+
+    expect(envelope.kind).toBe("plan")
+    if (envelope.kind !== "plan") return
+    expect(envelope.actions[0]?.actionKey).toBe("cube")
+  })
+
+  it("keeps the sphere prompt working, because it does say 'draw'", async () => {
+    // 反向对照：`SPHERE_PROMPT` 里既有"画"也有"半径" —— 挡的必须是"只问读数"的句子，
+    // 不能连"画一个半径 5 的球体"一起挡掉。
+    const envelope = await plan(SPHERE_PROMPT)
+
+    expect(envelope.kind).toBe("plan")
+  })
+})
