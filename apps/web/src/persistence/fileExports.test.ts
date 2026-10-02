@@ -5,6 +5,19 @@ import { createFileExports } from "./fileExports"
 import type { ProjectedDrawing } from "../projectionVisuals"
 
 /**
+ * jsdom 的 `Blob` 还没有 `text()`（浏览器都有），用 `FileReader` 读 —— 与 `App.test.tsx`
+ * 补 `File.prototype.text` 是同一手法，只是这里不改原型、直接读。
+ */
+function readBlob(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result))
+    reader.onerror = () => reject(reader.error)
+    reader.readAsText(blob)
+  })
+}
+
+/**
  * **文件下载与导出**的用例。
  *
  * 这一族入口此前是 `App.tsx` 里的闭包，**一条测试都没有** —— 所以它们被拆出来的时候
@@ -138,5 +151,58 @@ describe("file exports", () => {
     expect(errors).toHaveLength(1)
     expect(typeof errors[0]).toBe("string")
     expect((errors[0] as string).length).toBeGreaterThan(0)
+  })
+
+  /**
+   * **HTML 导出**（spec §4 的硬性要求）。
+   *
+   * 立体几何必须**明确拒绝**：照现有分支走，3D 文档会落进平面导出器的 `else`，
+   * 得到一份"导出成功、HTML 里只有一个坐标网格"的文件。判据是"什么都没发生 + 说清为什么"，
+   * 不是"文件是空的"。
+   */
+  it("refuses HTML export in the 3D workspace and downloads nothing", async () => {
+    const exports = harness(() => document3d("我的 图纸"))
+    await exports.exportHtmlFile()
+
+    expect(downloads).toEqual([])
+    expect(blobs).toEqual([])
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain("立体几何")
+  })
+
+  it("writes a self-contained HTML snapshot for a planar document", async () => {
+    const document = createEmptyDocument("conics")
+    document.metadata.name = "我的 平面图"
+    const exports = harness(() => document)
+
+    await exports.exportHtmlFile()
+
+    expect(downloads).toEqual(["我的-平面图.html"])
+    expect(errors).toEqual([null])
+    const html = await readBlob(blobs[0]!)
+    expect(html).toContain("<svg")
+    expect(html).toContain("格式版本 1")
+    // 浏览器里没有桌面桥：版本戳必须如实写 unknown。
+    expect(html).toContain("应用版本 unknown")
+  })
+
+  it("uses the engineering SVG and reports drawing diagnostics for the CAD workspace", async () => {
+    const document = createEmptyDocument("cad")
+    document.metadata.name = "工程图"
+    // 夹具要给全 `svgDrawing` 会去 map 的四个数组，否则会崩在 `undefined.map`。
+    const drawings = [{ view: "front", primitives: [], projectionLines: [], annotations: [], diagnostics: ["轮廓按采样折线写出"] }] as unknown as ProjectedDrawing[]
+    const exports = createFileExports({
+      getDocument: () => document,
+      getExportableDrawings: () => drawings,
+      setFileError: (message) => { errors.push(message) }
+    })
+
+    await exports.exportHtmlFile()
+
+    expect(downloads).toEqual(["工程图.html"])
+    const html = await readBlob(blobs[0]!)
+    // 走的是工程那条路（视图属性来自 `exportEngineeringSvg`），且诊断进了损失清单。
+    expect(html).toContain('data-drawing-view="front"')
+    expect(html).toContain("front: 轮廓按采样折线写出")
   })
 })

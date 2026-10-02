@@ -1,9 +1,15 @@
 import { encodeMgeo, type GeometryDocument } from "@draw/dsl"
 
 import { exportCsv, exportSvg } from "./exporters"
+import { collectHtmlOmissions, exportHtmlSnapshot } from "./htmlExporter"
+import { readDesktopRuntime } from "../services/desktopRuntime"
 import type { ProjectedDrawing } from "../projectionVisuals"
 
-export type ExportFormat = "svg" | "dxf" | "pdf"
+/** 矢量导出器认的三种格式。**不含 `html`** —— HTML 走自己的函数（见 `exportHtmlFile`），
+ *  否则 `exportSvgFile("html")` 会在类型上合法、实际却导出一份 SVG。 */
+export type VectorExportFormat = "svg" | "dxf" | "pdf"
+/** 导出菜单上出现过的全部格式（供命令层与文档引用）。 */
+export type ExportFormat = VectorExportFormat | "html"
 
 /**
  * **文件下载 / 导出**（从 `App.tsx` 拆出）。
@@ -41,9 +47,10 @@ export interface FileExportDependencies {
 
 export interface FileExports {
   save(): void
-  exportSvgFile(format?: ExportFormat): Promise<void>
+  exportSvgFile(format?: VectorExportFormat): Promise<void>
   exportCsvFile(): void
   exportPngFile(): void
+  exportHtmlFile(): Promise<void>
 }
 
 /** PNG 导出的画布尺寸。写成常量而不是两处字面量：`width` / `height` 必须与下面的绘制一致。 */
@@ -75,7 +82,7 @@ export function createFileExports(dependencies: FileExportDependencies): FileExp
    * SVG / DXF / PDF 三个出口合成一个函数：它们在菜单里是三条命令，但**前置条件与失败文案
    * 是同一套**（都要看工作区、都要清/报错误）。分成三个函数会让"CAD 工作区才允许"这条判据抄三遍。
    */
-  const exportSvgFile = async (format: ExportFormat = "svg") => {
+  const exportSvgFile = async (format: VectorExportFormat = "svg") => {
     try {
       if (format === "pdf") {
         if (getDocument().workspace !== "cad") return
@@ -127,5 +134,43 @@ export function createFileExports(dependencies: FileExportDependencies): FileExp
     } catch (error) { reportFileError(error, "无法导出 PNG 文件") }
   }
 
-  return { save, exportSvgFile, exportCsvFile, exportPngFile }
+  /**
+   * **HTML 快照**（自包含 + 可再导入存档）。
+   *
+   * 路由在这里而不在产出器里：按工作区选 `exportSvg` 还是 `exportEngineeringSvg`、
+   * 以及"立体几何明确拒绝"，都是**前置条件**，与 DXF / PDF 那条"只在 CAD 工作区有意义"同一族。
+   *
+   * 立体几何必须拒绝而不是照平面导出器走：`exportSvg` **刻意不投影 3D 图元**
+   * （`exporters.test.ts` 有断言），照走会得到"导出成功、HTML 里只有一个坐标网格"——
+   * 正是本仓库最讨厌的静默半死。
+   */
+  const exportHtmlFile = async () => {
+    try {
+      const document = getDocument()
+      if (document.workspace === "geometry3d") {
+        setFileError("立体几何画面的 HTML 导出不在本批范围：3D 画布是 WebGL，没有矢量产出器，导出的会是一张空图。请在平面几何或工程制图里导出。")
+        return
+      }
+      const isCad = document.workspace === "cad"
+      const drawings = isCad ? getExportableDrawings() : []
+      const svg = isCad
+        ? (await import("./engineeringExporters")).exportEngineeringSvg(drawings)
+        : exportSvg(document)
+      // 桌面外壳给真版本；浏览器里 `info` 是 null，如实写 unknown（不编号、也不省略）。
+      const runtime = await readDesktopRuntime()
+      const appVersion = runtime.ok && runtime.info ? runtime.info.appVersion : "unknown"
+      const html = exportHtmlSnapshot({
+        document,
+        svg,
+        omissions: collectHtmlOmissions(document),
+        approximationNotes: drawings.flatMap((drawing) => drawing.diagnostics.map((note) => `${drawing.view}: ${note}`)),
+        appVersion,
+        exportedAt: new Date()
+      })
+      download(html, "text/html;charset=utf-8", "html")
+      setFileError(null)
+    } catch (error) { reportFileError(error, "无法导出 HTML 文件") }
+  }
+
+  return { save, exportSvgFile, exportCsvFile, exportPngFile, exportHtmlFile }
 }
