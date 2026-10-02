@@ -5,6 +5,16 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-02 —— HTML 导出 Task 2：接进文件导出路径，立体几何明确拒绝
+
+- 实施计划 **Task 2** 完成（提交 `fc4df43`）：`fileExports.ts` 新增 `exportHtmlFile()` —— 按工作区选 `exportSvg`（平面）或 `exportEngineeringSvg`（工程），把 omissions、工程视图 `diagnostics` 与应用版本戳交给 Task 1 的产出器，最后走既有的 `download()`。
+- **立体几何明确拒绝**（spec §4 的硬性要求）：`document.workspace === "geometry3d"` 时经 `setFileError` 给一句人话并**不产出任何文件**。理由写在代码注释里：照平面分支走会得到"导出成功、HTML 里只有一个坐标网格"，因为 `exportSvg` 刻意不投影 3D 图元。
+- **版本戳如实**：走 `readDesktopRuntime()` —— 桌面外壳给 `tauri.conf.json` 的真版本，浏览器里 `info` 是 `null`，写 `unknown`（不编号、也不省略）。
+- **类型收紧**：原来的 `ExportFormat` 拆成 `VectorExportFormat`（`svg|dxf|pdf`）与 `ExportFormat`（`+ "html"`）—— 否则 `exportSvgFile("html")` 在类型上合法、实际却导出一份 SVG（一个静默的路径混淆）。
+- **3 条新单测，先红后绿**：3D 拒绝且零下载、平面文档产出自包含 HTML（文件名、`格式版本 1`、`应用版本 unknown`）、CAD 走工程产出器且视图诊断进损失清单。**变异检查**：去掉 3D 拒绝分支 → 用例立刻红在 `expected [ '我的-图纸.html' ] to deeply equal []`，正是"静默半死"的症状；变异已恢复。
+- **一处与计划的差异（jsdom 限制，已记）**：计划里写 `await blobs[0].text()`，但 jsdom 的 `Blob` **没有** `text()`（`App.test.tsx:1962` 记过同一件事），改用 `FileReader` 读，与仓库既有手法一致。
+- 读数：`fileExports.test.ts` **9/9**（6 旧 + 3 新）；`npm run typecheck` exit 0；定向 eslint exit 0。菜单入口还没接（那时还点不到），下一块走 e2e 先红 → 接线。
+
 ## 2026-10-02 —— HTML 导出 Task 1：纯函数产出器（`htmlExporter`）落地
 
 - 实施计划 [`2026-10-02-html-export-implementation-plan.md`](docs/superpowers/plans/2026-10-02-html-export-implementation-plan.md) 的 **Task 1** 完成（提交 `6d28578`）。新增 `apps/web/src/persistence/htmlExporter.ts`：一个**纯函数**产出器（收文档 + 已算好的 SVG + 损失条目 + 版本戳，吐字符串），不碰 DOM、不下载、不读全局 —— 所以转义与注入这类判据能直接单测，而"按工作区选哪个 SVG 产出器"留给下一块的 `fileExports`。

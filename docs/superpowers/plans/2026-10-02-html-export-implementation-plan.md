@@ -358,6 +358,9 @@ git commit -m "feat(web): HTML 快照产出器（纯函数）+ 复用同一张�
 
 ### Task 2: 导出路径组装（含立体几何明确拒绝）
 
+> **状态：已完成（2026-10-02，提交 `fc4df43`）。** 读数：`fileExports.test.ts` **9/9**（6 旧 + 3 新；RED = `exports.exportHtmlFile is not a function`）、`npm run typecheck` exit 0、定向 eslint exit 0。**变异检查**：去掉 `geometry3d` 拒绝分支 → 红在 `expected [ '我的-图纸.html' ] to deeply equal []`（正是"静默半死"的症状），变异已恢复。
+> **一处与计划不同（jsdom 限制）**：Step 1 的测试代码里 `await blobs[0]!.text()` 在本仓库的 jsdom 下**不可用**（`Blob` 没有 `text()`，`App.test.tsx:1962` 记过同一件事）；实际用了一个 `readBlob()`（`FileReader`）辅助函数。CAD 那条夹具还要给全 `projectionLines` / `annotations`（`svgDrawing` 会对它们 `.map`），否则会崩在 `undefined.map`。
+
 **Files:**
 - Modify: `apps/web/src/persistence/fileExports.ts`
 - Modify: `apps/web/src/persistence/fileExports.test.ts`
