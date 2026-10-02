@@ -79,14 +79,16 @@ expect(edited.document.primitives.find((item) => item.id === "sphere-1")).toMatc
 
 **Interfaces:** A sphere `SectionPrimitive` records exact full circle, tangent point or none from Task 2. `sectionPlaneThroughSource` defaults to a plane through the sphere centre. New sphere Boolean operations return `commitPatch(...).changed=false` with `unsupported` error; defensive recompute of historical cached intersections returns `insufficient-data`, never a fake polyhedron.
 
-- [ ] Write failing tests for z=6 circle `section.exact.kind="circle"`, radius 4, z=8 single visible point, z=9 none and no stale exact loop; edit sphere radius and re-evaluate both cached points and exact coefficients. Try adding `intersectionSolid` with a sphere via `commitPatch`: assert `changed=false`, original document identity and `unsupported` error; defensive recompute of an old cached intersection produces `insufficient-data`.
+**交付证据（2026-10-01，两批）：** 代码提交 `2e76a45`（截面接入）与 `145319c`（布尔门禁）已推送并核对远端 SHA；CI run `36964580061` 为 Task 3，本 Task 的 CI 为 `145319c` 触发的 run（checks/build/rust/e2e 四项 success，见 `current-status.md` 第四节 E1）。**实测**：`sphereSection.test.ts` **10/10**（截面 7 + 布尔门禁 3，两批各自的 RED→GREEN 都记录在 `docs/project-progress.md`）；点名的那组截面 / 交测试（16 个文件）**163/163**；全库 `vitest run --maxWorkers=3` **274 文件 / 3147 项 + 1 todo / 0 失败**；`npm run typecheck` exit 0；`npm run lint` exit 0（0 error / 13 warning）。**未做**：`apps/web/src/solidCommands.ts` 的截面按钮"选中球就能切"、球截面 e2e；`deletion.ts` **未改**（球的删除沿用既有语义，全库含 `deletion-cascade` 全绿，但**不等于**球的删除级联已被专门验证）。
+
+- [x] Write failing tests for z=6 circle `section.exact.kind="circle"`, radius 4, z=8 single visible point, z=9 none and no stale exact loop; edit sphere radius and re-evaluate both cached points and exact coefficients. Try adding `intersectionSolid` with a sphere via `commitPatch`: assert `changed=false`, original document identity and `unsupported` error; defensive recompute of an old cached intersection produces `insufficient-data`. **（全部落地。切点按 spec §3 判 `classification:"point"` / `status:"exact"` / **`visible:true`** —— 这与多面体路径刻意不同，那边相切时把截面藏起来。布尔门禁另加一条**反向对照**"两个立方体照样放行"，否则"一律拒绝"也能让拒绝那两条变绿）**
 ```ts
 const section = recomputeSection(cutAtZ6, sphere, new Map([[sphere.id, sphere]]))
 expect(section.exact?.kind).toBe("circle")
 expect(section.status).toBe("exact")
 ```
-- [ ] Run focused `sectionRecompute` / `section-materialization` / `intersectionSolid` tests for RED.
-- [ ] Route sphere through the analytic section before any `polyhedron3` fallback; keep existing section and deletion semantics. Run the tests and typecheck, update docs, commit/push and verify CI.
+- [x] Run focused `sectionRecompute` / `section-materialization` / `intersectionSolid` tests for RED. **（本 Task 的 **RED 来自新增的 `sphereSection.test.ts`**（截面上半 7/7 全红、门禁下半 3 条全红），原因是"线还没接上"而不是既有文件被改坏；点名的这组文件改成**回归**跑：16 个文件 **163/163 通过**，用来证明没有连带破坏）**
+- [x] Route sphere through the analytic section before any `polyhedron3` fallback; keep existing section and deletion semantics. Run the tests and typecheck, update docs, commit/push and verify CI. **（球分支写在 `recomputeSection` 里 `polyhedron3` 回退**之前**，且球压根走不到那条回退（没有物化拓扑）；`analyticSectionBoundary` 仍是"源 + 平面 → 解析边界"的唯一一处映射。删除语义未改，全库 0 失败）**
 
 ## Task 5 — 3D sphere mesh, identity and visible tangent point
 
