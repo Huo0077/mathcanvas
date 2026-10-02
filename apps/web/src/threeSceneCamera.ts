@@ -27,10 +27,21 @@ import type { ThreeSceneViewProps } from "./threeScene"
  * 内容同步改成了 `sceneBounds.copy(...)`（同一只盒子就地更新），于是这里永远读到最新的边界。
  */
 
+/** 取景动画的三态：跑着 / 自己跑完 / 被用户打断。 */
+export type FitAnimationState = "running" | "done" | "cancelled"
+
 export interface ThreeSceneCameraDeps {
   camera: THREE.PerspectiveCamera
   cameraStateRef: RefObject<CameraState>
   render: () => void
+  /**
+   * 取景动画的状态变化（`running` / `done` / `cancelled`）。
+   *
+   * 为什么要把它暴露出来：**"动画还在跑"这件事在 DOM 上原本看不见** —— 于是"用户一开始拖，
+   * 进行中的自动取景会不会把视角覆盖回去"只能靠时序去猜（这类测试写完往往是假绿）。
+   * 画布把它写成 `data-fit-animation`，用例就能先确认"动画确实在跑"，再断言"按下即取消"。
+   */
+  onFitAnimationChange?: (state: FitAnimationState) => void
   /** 场景内容的包围盒。**身份稳定**，内容同步用 `copy` 就地更新（见文件头）。 */
   sceneBounds: THREE.Box3
   resetCameraRef: RefObject<() => void>
@@ -42,7 +53,7 @@ export interface ThreeSceneCameraDeps {
   currentContentKey: () => string
 }
 
-export function createThreeSceneCamera({ camera, cameraStateRef, render, sceneBounds, resetCameraRef, fitCameraRef, fitWithoutTouchRef, contentKeyRef, documentRef, fittedDocumentRef, currentContentKey }: ThreeSceneCameraDeps) {
+export function createThreeSceneCamera({ camera, cameraStateRef, render, sceneBounds, resetCameraRef, fitCameraRef, fitWithoutTouchRef, contentKeyRef, documentRef, fittedDocumentRef, currentContentKey, onFitAnimationChange }: ThreeSceneCameraDeps) {
   const setCameraState = (nextState: CameraState) => {
     cameraStateRef.current = nextState
     applyCameraState(camera, nextState)
@@ -59,9 +70,13 @@ export function createThreeSceneCamera({ camera, cameraStateRef, render, sceneBo
    * 直接写 `cameraStateRef` 而不走 `setCameraState`，因为自动取景不该把自己标记成"用户动过相机"。
    */
   let fitAnimation: number | null = null
+  /** 取景动画的可观测状态（画布把它写到 `data-fit-animation` 上，e2e 与排查都读它）。 */
+  const reportFitAnimation = (state: FitAnimationState) => onFitAnimationChange?.(state)
   const cancelFitAnimation = () => {
-    if (fitAnimation !== null) cancelAnimationFrame(fitAnimation)
+    if (fitAnimation === null) return
+    cancelAnimationFrame(fitAnimation)
     fitAnimation = null
+    reportFitAnimation("cancelled")
   }
   const animateToFit = () => {
     const fitted = fitCameraState(cameraStateRef.current, sceneBounds, camera)
@@ -70,6 +85,7 @@ export function createThreeSceneCamera({ camera, cameraStateRef, render, sceneBo
       cameraStateRef.current = fitted
       applyCameraState(camera, fitted)
       render()
+      reportFitAnimation("done")
       return
     }
     const from = cameraStateRef.current
@@ -81,8 +97,10 @@ export function createThreeSceneCamera({ camera, cameraStateRef, render, sceneBo
       applyCameraState(camera, cameraStateRef.current)
       render()
       fitAnimation = ratio < 1 ? requestAnimationFrame(step) : null
+      if (fitAnimation === null) reportFitAnimation("done")
     }
     fitAnimation = requestAnimationFrame(step)
+    reportFitAnimation("running")
   }
   // Fit when a different document arrives (open file, switch workspace, restore draft), not on every edit:
   // re-framing while the user is working would fight their own camera moves.

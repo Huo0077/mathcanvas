@@ -377,7 +377,12 @@ export function useThreeSceneEffect(deps: ThreeSceneEffectDeps) {
      * 相机的取景与动画在 `./threeSceneCamera`：它收下真相机 / ref / 渲染函数与**稳定**的
      * `sceneBounds`，并挂好"复位"与"取景"两个 ref；这里只留后面还要用的两个入口。
      */
-    const { setCameraState, animateToFit, cancelFitAnimation } = createThreeSceneCamera({ camera, cameraStateRef, render, sceneBounds, resetCameraRef, fitCameraRef, fitWithoutTouchRef, contentKeyRef, documentRef, fittedDocumentRef, currentContentKey })
+    const { setCameraState, animateToFit, cancelFitAnimation } = createThreeSceneCamera({
+      camera, cameraStateRef, render, sceneBounds, resetCameraRef, fitCameraRef, fitWithoutTouchRef, contentKeyRef, documentRef, fittedDocumentRef, currentContentKey,
+      // 取景动画的状态写到画布上：`running` / `done` / `cancelled`。用例据此先确认"动画确实在跑"，
+      // 再断言"用户一按下就被取消" —— 没有这个读数，那条判据只能靠时序猜（写出来往往假绿）。
+      onFitAnimationChange: (state) => { if (sceneShell) sceneShell.dataset.fitAnimation = state }
+    })
     render()
     // 场景重建后把进行中的拖动偏移补画回去，避免拖动中途回弹（见 resumeDragVisualRef）。
     resumeDragVisualRef.current()
@@ -489,6 +494,8 @@ cameraStateRef, panModeRef, dragModeRef, pointerStateRef, dragSessionRef, select
     renderer.domElement.addEventListener("pointerleave", handlePointerLeaveForPreview)
     const handleWheel = (event: WheelEvent) => {
       event.preventDefault()
+      // 滚轮缩放同属"用户自己动相机"：进行中的取景不许在随后的帧里覆盖它。
+      cancelFitAnimation()
       setCameraState(zoomCameraState(cameraStateRef.current, Math.exp(event.deltaY * 0.001)))
     }
     const handleContextMenu = (event: MouseEvent) => event.preventDefault()
@@ -506,7 +513,21 @@ cameraStateRef, panModeRef, dragModeRef, pointerStateRef, dragSessionRef, select
       moveSectionRef.current?.(section.id, direction * (event.shiftKey ? 0.2 : 1))
     }
     globalThis.addEventListener("keydown", handleKeyDown)
-    renderer.domElement.addEventListener("pointerdown", handlePointerDown)
+    /**
+     * **用户一动手，进行中的自动取景立刻停**（2026-10-02 修）。
+     *
+     * 现场：`cancelFitAnimation()` 过去只在副作用清理（卸载）里被调用，于是"换文档触发取景"之后
+     * **在 250 ms 窗口内开始拖**，拖动结束后剩下的帧会把用户刚拖出来的视角覆盖回去 ——
+     * 用户看到的是"我明明拖了，它自己又转回去了"。
+     *
+     * 为什么挂在 `pointerdown` 而不是拖动开始之后：取景动画的帧**不等**任何判定，
+     * 只要还在跑就会在下一帧写 `cameraStateRef`；所以必须在"用户动作的第一步"就掐掉。
+     */
+    const handlePointerDownForCamera = (event: PointerEvent) => {
+      cancelFitAnimation()
+      handlePointerDown(event)
+    }
+    renderer.domElement.addEventListener("pointerdown", handlePointerDownForCamera)
     renderer.domElement.addEventListener("pointermove", handlePointerMove)
     renderer.domElement.addEventListener("pointerup", handlePointerUp)
     renderer.domElement.addEventListener("pointercancel", handlePointerUp)
@@ -526,7 +547,7 @@ cameraStateRef, panModeRef, dragModeRef, pointerStateRef, dragSessionRef, select
       runtimeRef.current = null
       contentKeyRef.current = null
       cancelFitAnimation()
-      renderer.domElement.removeEventListener("pointerdown", handlePointerDown)
+      renderer.domElement.removeEventListener("pointerdown", handlePointerDownForCamera)
       renderer.domElement.removeEventListener("pointermove", handlePointerMove)
       renderer.domElement.removeEventListener("pointerup", handlePointerUp)
       renderer.domElement.removeEventListener("pointercancel", handlePointerUp)

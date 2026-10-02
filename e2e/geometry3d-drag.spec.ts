@@ -80,8 +80,48 @@ test("returns left-drag to orbiting when the toggle is off", async ({ page }) =>
   expect(distance(parseVector(await scene.getAttribute("data-content-bounds")), centreBefore)).toBeLessThan(0.05)
 })
 
-test("drags only the solid under the pointer", async ({ page }) => {
+/**
+ * **用户一动手，进行中的自动取景动画就必须停下**（2026-10-02 查实的缺口）。
+ *
+ * 现场：`cancelFitAnimation()` 过去**只在副作用清理（卸载）里**被调用，于是"换文档触发自动取景"
+ * 之后**在 250 ms 的动画窗口内开始拖**，拖动结束后剩下的帧会把用户刚拖出来的视角覆盖回去。
+ *
+ * 这条用例的第一版是**假绿**的：我用"添加立方体"去触发取景，而 `shouldAutoFit` 只在
+ * **换文档或内容出界**时取景（编辑不算，`dragging` 时也不算），于是动画根本没在跑，
+ * "相机没被覆盖"自然成立。现在的判据分两步、且由画布自己的读数给：
+ * ① 先抓到 `data-fit-animation="running"`（证明动画**确实在跑**，抓不到就**明确失败**）；
+ * ② 按下鼠标后断言它变成 `"cancelled"` —— 与动画"自己跑完"的 `"done"` 是两回事。
+ */
+test("stops an in-flight auto-fit as soon as the user starts dragging", async ({ page }) => {
   await page.goto("/")
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  const scene = page.locator("[data-3d-scene]")
+  await expect(scene).toBeVisible()
+
+  // 换文档才会取景；两次用**不同夹具**，否则第二遍是同一份文档、`documentChanged` 为假。
+  const fixtures = ["e2e/fixtures/tetrahedron.mgeo", "e2e/fixtures/cube-cylinder.mgeo"]
+  const box = (await page.locator("[data-3d-scene] canvas").boundingBox())!
+  // 指针**先**挪到画布中央：抓窗口和按下之间不能再夹别的慢动作（第一版就死在
+  // `boundingBox()` 那一百多毫秒上 —— 抓到 `running` 时动画已经跑完了）。
+  await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5)
+
+  let caught = false
+  for (let attempt = 0; attempt < fixtures.length * 3 && !caught; attempt += 1) {
+    await page.locator('input[type="file"]').setInputFiles(fixtures[attempt % fixtures.length]!)
+    // `waitForFunction` 按帧轮询（`toHaveAttribute` 是约 100 ms 一次），能贴着动画起步那一刻返回。
+    caught = await page
+      .waitForFunction(() => document.querySelector("[data-3d-scene]")?.getAttribute("data-fit-animation") === "running", null, { timeout: 400 })
+      .then(() => true)
+      .catch(() => false)
+  }
+  expect(caught, "没能抓到取景动画正在跑的窗口").toBe(true)
+
+  await page.mouse.down()
+  await expect(scene).toHaveAttribute("data-fit-animation", "cancelled")
+  await page.mouse.up()
+})
+
+test("drags only the solid under the pointer", async ({ page }) => {  await page.goto("/")
   await page.getByRole("button", { name: "跳转到立体几何" }).click()
   // 这个用例按**固定屏幕位移**拖动，依赖相机稳定：关掉自动取景（把第一个立方体挪到 (8,8,0)
   // 会让内容越界，自动取景会重新构图，于是下面那次固定位移的拖动就落空了）。
