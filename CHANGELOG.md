@@ -5,6 +5,14 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-02 —— HTML 导出 Task 3+4：e2e 先红 → 菜单接线转绿（全量门禁复跑）
+
+- 实施计划 **Task 3 + Task 4** 完成（提交 `59eb3be`）。**e2e 三条浏览器判据**（`e2e/html-export.spec.ts`）：平面导出拿到 `.html`、文件里有内嵌 `<svg>` 与存档 JSON、**零外部引用**，再把它当普通网页 `setContent` 打开、断言图**可见**且"这次导出漏了什么"那一节在；CAD 导出断言文件名 `CAD-linear-dimension-A-B.html`、四个 `data-drawing-view` 齐全、整份文件**只有一个** `<svg>`；立体几何断言 `role="alert"` 含"立体几何"且**零下载**。
+- **RED 证据如实记录**：接线前三条都红，红法一致 —— `waiting for getByRole('button', { name: '导出 HTML' })` 30 秒超时（菜单里还点不到）。计划把"提交这条红 spec"标为可选，实际**与接线合并成一笔提交**，避免历史里留一个"提交即红"的状态。
+- **接线**：功能区两个分支各加 `export-html`；`commandDispatch` 的 CAD 表与功能区表各加一条分派 + 依赖注入类型；`App.tsx` 加 `exportHtmlFile` 包装并注入；`GeometryToolbar` 的 prop 与按钮同步。
+- **两条口径差异，写进注释**：① 立体几何里 **HTML 不禁用**（spec §4 要求"点得到、点了明确拒绝"），与既有的"导出 SVG / PNG 在 3D **禁用**"是两套口径；② 顺带查实 **`GeometryToolbar` 没有被任何地方挂载**（只有自身引用）—— 真实入口是功能区，改它纯粹是"将来挂载时不用再补"，不构成功能证据。
+- 读数：`e2e/html-export.spec.ts` **3/3**；`workbench` + `engineering-drawing` 回归 **11/11**；`ribbonCommands` + `commandDispatch` **19/19**；全仓 `npm run lint` **0 error / 13 warning**；`npm run typecheck` exit 0；**全库单测 279 文件 / 3195 通过 + 1 todo / 0 失败**（247 s）。
+
 ## 2026-10-02 —— HTML 导出 Task 2：接进文件导出路径，立体几何明确拒绝
 
 - 实施计划 **Task 2** 完成（提交 `fc4df43`）：`fileExports.ts` 新增 `exportHtmlFile()` —— 按工作区选 `exportSvg`（平面）或 `exportEngineeringSvg`（工程），把 omissions、工程视图 `diagnostics` 与应用版本戳交给 Task 1 的产出器，最后走既有的 `download()`。

@@ -527,6 +527,8 @@ git commit -m "feat(web): HTML 导出接入文件导出路径，立体几何明�
 
 ### Task 3: e2e —— 先看着它红（菜单里还点不到）
 
+> **状态：已完成（2026-10-02）。** RED **观察到了**：接线前三条红法一致 —— `waiting for getByRole('button', { name: '导出 HTML' })` 30 秒超时。**与计划的差异（Step 3 是"可选"）**：这条红着的 spec **没有单独提交**，而是与 Task 4 的接线合并成一笔（`59eb3be`）—— 避免历史里留一个"提交即红"的状态。CAD 那条的断言按实测写成了 `data-drawing-view`（见本计划"自我复核"里记的那处更正）。
+
 **Files:**
 - Create: `e2e/html-export.spec.ts`
 
@@ -627,6 +629,9 @@ git commit -m "test(e2e): HTML 导出的三条浏览器判据（先红：菜单�
 ---
 
 ### Task 4: 命令与界面接线（让 e2e 变绿）
+
+> **状态：已完成（2026-10-02，提交 `59eb3be`）。** 读数：`e2e/html-export.spec.ts` **3/3**（先红后绿）、既有导出 e2e 回归 **11/11**、`ribbonCommands` + `commandDispatch` **19/19**、全仓 `npm run lint` **0 error / 13 warning**、`npm run typecheck` exit 0、**全库单测 279 文件 / 3195 通过 + 1 todo / 0 失败**（247 s）。
+> **两点与计划不同（如实记）**：① 立体几何里这条命令**不禁用** —— spec §4 要求"点得到、点了明确拒绝"，与既有的"导出 SVG / PNG 在 3D 禁用"是两套口径，注释里写明了理由；② 顺带查实 **`GeometryToolbar` 没有被任何地方挂载**（全仓只有自身引用），所以那次 prop/按钮改动**不构成功能证据**，真实入口是功能区 —— 保留它是为了将来挂载时不用再补。
 
 **Files:**
 - Modify: `apps/web/src/ribbonCommands.ts`、`apps/web/src/commandDispatch.ts`、`apps/web/src/App.tsx`、`apps/web/src/components/GeometryToolbar.tsx`
