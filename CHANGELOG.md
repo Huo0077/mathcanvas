@@ -5,6 +5,24 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-01 —— 球体 Task 2：球-平面精确数学与退化（内核 `spherePlaneSection3`）
+
+- **背景**：球体九块计划（[`docs/superpowers/plans/2026-10-01-sphere-and-sections-implementation-plan.md`](docs/superpowers/plans/2026-10-01-sphere-and-sections-implementation-plan.md)）此前只交付了 Task 1（DSL 类型 + 校验）。本批按计划做 **Task 2**：把"球 ∩ 平面"做成**解析**判定，而不是把球切成多面体再求交。
+- **新增** `packages/geometry-kernel/src/sphere.ts`：
+  - `spherePlaneSection3(sphere, plane)` —— 设 `n̂ = n/|n|`、有符号距离 `d = (n·C + constant)/|n|`，交圆圆心 `C − d·n̂`、半径 `√(r² − d²)`；三种结局 `circle` / `point` / `empty`，非法输入返回带 `code` 的 `invalid`（`invalid_sphere` / `invalid_plane`），**不编一个"看着像"的圆**。
+  - 圆分支同时给出 `conic`（复用既有的 `circleConic3`，所以能直接进 `Conic3` / `section.exact` 那套）与 `loops` —— 球是无端面实体，整条交圆是一段完整参数域 `[0, 2π]`，**不需要**圆柱/圆锥那套端面弦裁剪（与 `section-quadric.ts` 形成对照）。
+  - 退化到切点时**刻意不返回** `√(r²−d²)` 算出的"极扁圆"：那个数在 `|d| ≈ r` 的区间里完全是噪声。
+- **判据两条（都写进了用例）**：
+  1. **交圆上的点真的落在球面上** —— 逐点采样回代 `|X − C|² = r²`，残差 < 1e-9。而不是断言"坐标看起来是整数"。
+  2. **退化容差与模型尺度同源**（相对量 `r·1e-9`，不是绝对阈值）。两个方向各一条用例：半径 `1e-6` 的球上 `1e-12` 的绝对间隙是**真实间隙**（空集），半径 `1e6` 的球上 `1e-6` 的间隙是**数值噪声**（相切）。绝对阈值在这两处会各错一次。
+- **验证（本轮实测）**：
+  - `npx vitest run packages/geometry-kernel/src/sphere.test.ts` → **13/13 通过**。RED 起点是 `Failed to resolve import "./sphere"`（模块不存在，不是测试环境问题）。
+  - 连同 `quadrics.test.ts` + `section-quadric.test.ts` 三个解析层文件一起跑 → **35/35 通过**（确认没有破坏既有的圆锥曲线分类与有限实体裁剪）。
+  - `tsc -p packages/geometry-kernel/tsconfig.json` exit 0；`eslint` 三个改动文件 exit 0。
+  - **变异检查**：把 `tolerance = radius * RELATIVE_TOLERANCE` 改成绝对量 `RELATIVE_TOLERANCE` → **恰好**那两条尺度用例变红（其余 11 条不动），证明这两条断言不是空转；探针随后还原，`git grep MUTATION-PROBE` 无输出。
+- **有意偏离计划原文一处**：计划把"不相交"拼作 `kind:"none"`，内核实现用 `"empty"`。理由是 `Conic3Kind`（`"circle" | "ellipse" | … | "empty" | "insufficient-data"`）已经是内核的既有枚举，而 `"none"` 是 DSL `Section3Classification` 的产品层拼法 —— 同一个概念在内核里再起一个同义名，正是这个项目吃过亏的"同一个判断写了两遍"。映射在 Task 4 的 `sectionRecompute` 一层做（`empty` → `classification: "none"`）。
+- **未做**：Task 3–9（截圆接入 / 3D 渲染 / 工程投影 / 交互 / Agent 创建）一条都没动；`sectionQuadric3` 也**没有**被改成走球体（球没有 `bounds`，仍如实回退既有路径）。Task 2 的方框按计划纪律**等 CI 四项全绿之后再勾**。
+
 ## 2026-10-01 —— `main` 未发布修复：相机最后一帧标签对齐
 
 - `a4e2f40`：`threeSceneRender.render()` 在顶点/测量 HTML 标签投影前显式同步相机矩阵，不再依赖网格渲染的偶然副作用；浏览器用例移除松手后的额外指针抖动。无网格隔离测试修前约 386px 漂移、修后对齐。

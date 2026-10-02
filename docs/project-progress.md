@@ -10,6 +10,48 @@
 
 > 下方 2026-09-22 的"最后更新 / 当前阶段 / 总体状态"三行保留为**当时快照**，不再维护。
 
+## 2026-10-01 —— 球体 Task 2：球-平面精确数学与退化（内核 `spherePlaneSection3`）
+
+> 承接 [Task 1 文档契约](#2026-10-01--球体-task-1-文档契约ca03ed5-已推送ci-全绿)。按[九块计划](superpowers/plans/2026-10-01-sphere-and-sections-implementation-plan.md)的 Task 2 执行：**先 RED、再最小实现、跑聚焦测试与类型检查、记文档、提交推送并核对 SHA，CI 四项全绿之后才勾方框**。
+
+### A. RED（起点与失败原因都记下来，避免"测试环境坏了"冒充 RED）
+
+- 新建 `packages/geometry-kernel/src/sphere.test.ts` 后先跑：`Failed to resolve import "./sphere" from "packages/geometry-kernel/src/sphere.test.ts". Does the file exist?` —— **0 test collected**。
+- 这正是这一片该有的 RED：缺的是被测量的模块本身，不是夹具、不是路径、不是环境。所以后面 GREEN 的 13/13 才有意义。
+
+### B. GREEN（实现 + 判据）
+
+- 新增 `packages/geometry-kernel/src/sphere.ts`：
+  - `spherePlaneSection3(sphere, plane)`：`n̂ = n/|n|`、有符号距离 `d = (n·C + constant)/|n|`、交圆圆心 `C − d·n̂`、半径 `√(r² − d²)`。结局 `circle` / `point` / `empty`；非法输入是带 `code` 的 `invalid`（`invalid_sphere` / `invalid_plane`）。
+  - 圆分支给出 `conic`（复用 `circleConic3`）+ `loops`：球**无端面**，整条交圆就是一段完整参数域 `[0, 2π]`，不需要 `section-quadric.ts` 那套端面弦裁剪。两处的对照写在了各自文件头。
+  - 切点分支刻意**不**返回 `√(r²−d²)` 算出的极扁圆 —— 那个数在 `|d| ≈ r` 区间里是噪声，报出去等于让"看着像圆的圆"冒充精确几何。
+- 从包桶 `packages/geometry-kernel/src/index.ts` 导出（`export * from "./sphere"`，紧挨 `./section-quadric`）。
+- **两条判据是本片的实质**，都写成了断言而不是口头约定：
+  1. **交圆上的点真的落在球面上**：对 `circle` 分支按 16 等分采样 `conic3PointAt`，逐点回代 `|X − C|² − r²` 断言 `< 1e-9`。垂直截（半径 4）与斜截（法向 `(1,1,1)`、半径 3）各查一遍。"坐标看着是整数"不算证据。
+  2. **退化容差与模型尺度同源**：容差取 `r · 1e-9` 这个**相对**量。用例一对反向钉子 —— 半径 `1e-6` 的球、平面距离 `1e-6·(1+1e-6)`（绝对间隙 `1e-12`，相对间隙 `1e-6`）必须判**空集**；半径 `1e6` 的球、距离 `1e6·(1+1e-12)`（绝对间隙 `1e-6`，相对间隙 `1e-12`）必须判**相切**。绝对阈值会在这两处各错一次。
+
+### C. 本轮实测读数与变异检查
+
+| 命令 | 当次结果 |
+| --- | --- |
+| `npx vitest run packages/geometry-kernel/src/sphere.test.ts` | **13 / 13 通过** |
+| 同上 + `quadrics.test.ts` + `section-quadric.test.ts` | **3 文件 35 / 35 通过**（确认没碰坏既有圆锥曲线分类与有限实体裁剪） |
+| `npx tsc -p packages/geometry-kernel/tsconfig.json --noEmit` | exit 0 |
+| `npx eslint` 三个改动文件 | exit 0 |
+| **变异检查**：`tolerance = radius * RELATIVE_TOLERANCE` → 绝对量 | **恰好 2 条尺度用例变红**（`calls a 1e-12 absolute gap on a 1e-6 sphere a real gap` / `calls a 1e-6 absolute gap on a 1e6 sphere numerical noise`），其余 11 条不动；探针已 `git grep MUTATION-PROBE` 复核无残留 |
+
+### D. 有意偏离计划原文一处（写下来免得被当笔误）
+
+- 计划 Task 2 的接口行把"不相交"拼作 `kind:"none"`；内核实现用 **`"empty"`**。
+- 理由：`Conic3Kind`（`"circle" | "ellipse" | "parabola" | "hyperbola" | "line" | "lines" | "point" | "empty" | "insufficient-data"`）已经是内核的**既有**枚举，也是 `section.exact.kind` 的类型；`"none"` 是 DSL `Section3Classification` 的**产品层**拼法。同一个概念在内核里再起一个同义名，正是这个项目已经吃过亏的"同一个判断写了两遍"。
+- 映射放在 Task 4 的 `sectionRecompute` 一层做：`empty` → `classification: "none"` / `visible=false`（见 spec §3）。
+
+### E. 明确没有做的事
+
+- Task 3–9 一条都没动：截圆还没接进 `SectionPrimitive`、球还没有 3D 网格与拾取、没有工程投影、没有手工/预览入口、Agent 仍 `temporarily_unavailable`。
+- `sectionQuadric3` **没有**被改成走球体：球没有 `bounds`，该函数仍如实返回 `null` 让调用方回退既有路径 —— 本批不动它，免得顺带改变圆柱/圆锥的行为。
+- Task 2 的方框**等 CI 四项全绿之后再勾**（与 Task 1 同一套纪律）。
+
 ## 2026-10-01 —— 球体 Task 1 文档契约（`ca03ed5` 已推送，CI 全绿）
 
 - RED：`schema.test.ts` 中合法球心/半径被报 `invalid primitive type: sphere`，坏半径得不到字段诊断；`codec.test.ts` 导出有效球被拒。Agent 能力表缺类型键、导出 CSV 将整个 `sphere` 原始对象塞进数据列，这两处在新断言下也抓红。

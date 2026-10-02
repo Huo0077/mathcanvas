@@ -230,9 +230,9 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
 2. **匹配当前源码的 MSI/NSIS 尚未本机安装验证**：`target/release/bundle` 当前仅查到 v0.2.0 的 MSI/NSIS，`target/release/mathcanvas-desktop.exe` 的构建时间早于后续功能提交；先从确定的发行提交重打新安装包，再做受控安装/启动/卸载验收，不能以根脚本 `--no-bundle` 或旧版安装结果替代。
 3. **合并后的远端功能分支仍在**：`git ls-remote` 实查 `feat/high-school-geometry-interaction` tip 为 `8c67346`，其文档是合并/打包前的旧快照。删除远端分支属不可逆的仓库整理，**待用户明确决定**；目前不自动删除。
 
-**E. 后续功能与独立探索（4 项；球体 Task 1 已交付、其余 Task 2–9 未完成）**
+**E. 后续功能与独立探索（4 项；球体 Task 1–2 已交付、其余 Task 3–9 未完成）**
 
-1. **球体与球截面**（P2，**Task 1 已完成；整体未交付**）：[设计](superpowers/specs/2026-10-01-sphere-and-sections-design.md)与[九块计划](superpowers/plans/2026-10-01-sphere-and-sections-implementation-plan.md)已推送。DSL 新增解析 `sphere`（有限球心/正半径）并本地验证 `.mgeo` 往返、退化拒绝；运行时类型表与 Agent 能力表同步，**Agent 仍暂不可用**；平面 SVG 不伪造 3D 球，CSV 仅存球心/半径。**Task 1 在 `ca03ed5` 推送、CI run `36908959733` 四项成功后才勾选；Task 2–9 的截圆/3D/工程投影/交互/Agent 创建均未实现。**
+1. **球体与球截面**（P2，**Task 1–2 已完成；整体未交付**）：[设计](superpowers/specs/2026-10-01-sphere-and-sections-design.md)与[九块计划](superpowers/plans/2026-10-01-sphere-and-sections-implementation-plan.md)已推送。DSL 新增解析 `sphere`（有限球心/正半径）并本地验证 `.mgeo` 往返、退化拒绝；运行时类型表与 Agent 能力表同步，**Agent 仍暂不可用**；平面 SVG 不伪造 3D 球，CSV 仅存球心/半径。**Task 1 在 `ca03ed5` 推送、CI run `36908959733` 四项成功后才勾选。** **Task 2（球-平面精确数学与退化）本轮交付**：新增内核 `packages/geometry-kernel/src/sphere.ts` 的 `spherePlaneSection3`（`n̂=n/|n|`、`d=(n·C+constant)/|n|`、圆心 `C−d·n̂`、半径 `√(r²−d²)`；`|d|>r` 空集 / `|d|≈r` 切点 / `|d|<r` 圆），并从包桶 `index.ts` 导出。判据两条：①**交圆上的点真的落在球面上**（逐点采样回代 `|X−C|²=r²`，残差 < 1e-9，而不是"坐标看着是整数"）；②**退化容差取相对量** `r·1e-9`（两个方向各一条用例：半径 1e-6 上 1e-12 的绝对间隙是真空隙、半径 1e6 上 1e-6 的间隙是数值噪声）。**本轮实测**：`sphere.test.ts` 13/13（RED 起点是 `Failed to resolve import "./sphere"`）、连同 `quadrics.test.ts` + `section-quadric.test.ts` 共 **35/35**；`tsc -p packages/geometry-kernel/tsconfig.json` 与 eslint 均 exit 0；变异检查（把相对容差改成绝对阈值）**恰好**让那两条尺度用例变红、其余 11 条不动，探针已还原（`git grep MUTATION-PROBE` 无输出）。**偏离计划原文一处（有意）**：计划把"不相交"拼作 `kind:"none"`，内核实现用 `"empty"` —— 因为 `Conic3Kind` 是内核既有枚举，`"none"` 是 DSL `Section3Classification` 的产品层拼法，两套词汇各归其位。**Task 3–9 的截圆接入/3D 渲染/工程投影/交互/Agent 创建均未实现。**
 2. **题目截图 → 可编辑数学图**（独立探索）：**未启动**，需要单列质量门禁（样题集、歧义标注、真实 provider 结果、草稿确认）。
 3. **HTML / GeoGebra 导出**：**未启动**（已交付的导出是 `.mgeo` / SVG / CSV / PNG 与工程图 SVG/DXF/PDF）。
 4. **平面 / 函数题型逐题补缺**：**未排期**（需先做教师样题盘点）。
