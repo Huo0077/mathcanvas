@@ -167,7 +167,7 @@ expect(parsed.ok).toBe(true)
 - **bullet 3（spec §5 逐行审计）**：六行逐条对真实文件与测试输出 —— 五行成立；**「工程图/导出与测量」那一行查出一处静默缺口并修掉**：`measurementVisuals.ts` 的 `pointPositions`（硬编码类型名单）**漏了 `sphere`**，于是球的面积/体积测量让 `resolveMeasurementVisual` 返回 `null`、**画布上一个字都不画**，而属性栏照样有数字（所以是静默的）；这是**同一张名单第二次漏配**（此前漏 `polyhedron3`）。已加球分支（落点取球心），RED `expected null not to be null` → GREEN。文档（`current-status.md` / `feature-catalog.md` / `project-progress.md` / `CHANGELOG.md`）均已更新，提交推送并逐个核对 SHA 与 CI。
 - **为什么当时没有写"球体能力已完成"**：spec §6 与 §5 末句都要求"新的桌面 Release 需要一个匹配版本的安装包 + 安装证据"。当时发布三件套属 `current-status.md` §四 **D 类**，按计划要求**由用户先决定版本与是否发布**，不能由实现方自行宣布。
   **2026-10-02 更新（用户已决定 v3.1.0，发布已完成）**：版本真值 `3.0.1 → 3.1.0`（提交 `33facf1`）；根构建 exit 0（并核实外壳前端 `build-check/mathcanvas-current` 确为新鲜产物、含「球体」与 `create_sphere`）；`tauri build` 产出 MSI 6,848,512 B / NSIS 5,030,195 B / 裸 exe 17,190,400 B；注解 tag `v3.1.0`（→ `165e4fb`）已推送；**GitHub Release 已发布**（非 draft）：<https://github.com/Huo0077/mathcanvas/releases/tag/v3.1.0>，3 个资产**重下载后 SHA-256 与本地全部 MATCH**，匿名 API `releases/latest` 亦已返回 `v3.1.0`。
-  **仍然不能声称"安装可用"的那一半**：**本机安装实测（装 → 启动 → 卸载）没做**（§四 D2，需用户决定）。因此本计划的口径是：**源码、安装包、Release 三者一一对应且哈希可复核 = 已交付；"本机装过一遍"= 未做。**
+  **仍然不能声称"安装可用"的那一半**：**MSI / NSIS 的"装 → 启动 → 卸载"受控验收没做**（§四 D2）—— 本会话身份非管理员、审批提示被禁用，无法提权。按用户本轮选择，只做了**免安装裸 exe 的启动实测**：`mathcanvas-desktop.exe`（与 Release 同哈希）启动成功，存活 T+10s/T+18s、真窗口句柄、标题 `MathCanvas`、按窗口句柄截图确认是**完整应用界面而非白窗**（细节见 [`docs/release/v3.1.0.md`](../../release/v3.1.0.md)）。因此本计划的口径是：**源码、安装包、Release 三者一一对应且哈希可复核 = 已交付；免安装 exe 能启动 = 已验证；"安装器装得上、卸得掉" = 未做。**
 
 **Files:** `e2e/geometry3d-sphere.spec.ts`, `docs/current-status.md`, `docs/feature-catalog.md`, `docs/project-progress.md`, `CHANGELOG.md`; release packaging only after a separately selected version/tag.
 

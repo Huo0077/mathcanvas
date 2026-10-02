@@ -27,7 +27,9 @@
 
 **仍未做**：本机**安装实测**（装 → 启动 → 卸载）属 §四 **D2**，需用户决定；本文件只证明"打包成功且哈希可复核"，**不等于**"已在本机装过一遍"。GitHub Release 的上传见同日提交记录。
 
-**GitHub Release 已发布（2026-10-02）**：注解 tag **`v3.1.0`**（tag 对象 `d9a92f94`，指向提交 `165e4fb`）→ **https://github.com/Huo0077/mathcanvas/releases/tag/v3.1.0**，非 draft、非 prerelease，挂 3 个资产。**独立复核**：① 匿名 API `releases/latest` 现已返回 `v3.1.0`（此前是 `v3.0`）、draft=false、assets=3；② 三个资产**重新下载**回来算 SHA-256，**三件全部 MATCH** 上面那张表的哈希 —— 也就是说"Release 上的字节"与"本机打出的字节"是同一份。第三个资产在 Release 上叫 `MathCanvas_3.1.0_x64.exe`（上游 `mathcanvas-desktop.exe`），**本版未对它做启动实测**（v3.0.0 那只裸 exe 做过启动实测，但那是另一份构建，不算在 v3.1.0 头上）。
+**GitHub Release 已发布（2026-10-02）**：注解 tag **`v3.1.0`**（tag 对象 `d9a92f94`，指向提交 `165e4fb`）→ **https://github.com/Huo0077/mathcanvas/releases/tag/v3.1.0**，非 draft、非 prerelease，挂 3 个资产。**独立复核**：① 匿名 API `releases/latest` 现已返回 `v3.1.0`（此前是 `v3.0`）、draft=false、assets=3；② 三个资产**重新下载**回来算 SHA-256，**三件全部 MATCH** 上面那张表的哈希 —— 也就是说"Release 上的字节"与"本机打出的字节"是同一份。第三个资产在 Release 上叫 `MathCanvas_3.1.0_x64.exe`（上游 `mathcanvas-desktop.exe`）。
+
+**免安装裸 exe 的启动实测（2026-10-02 补做）**：用户选择"只试未打包裸 exe 能不能启动"，故只做了这一项。`target/release/mathcanvas-desktop.exe`（SHA-256 `2c70f1c9…f7b23`，与 Release 同哈希）**启动成功**：存活 T+10s 与 T+18s、真窗口句柄 `3017702`、标题 **`MathCanvas`**、`Responding=True`、工作集 32.6 MB；**仅按窗口句柄截图**（不截整屏）确认画面是**完整应用界面而非白窗**（立体几何页签、绘制与立体与截面工具栏、常用立体、代数区、z=0 网格与提示语）。截图存临时目录、未入库（本仓库不提交截图），其 SHA-256 为 `eb243753fb60496c25c2a138fedf4321c7ca9f35de75c1dc140c7d2fa4a53b85`。细节见 [`docs/release/v3.1.0.md`](docs/release/v3.1.0.md)。**MSI / NSIS 的安装验收仍未做**（本会话非管理员、无法提权）。
 
 ## 2026-10-01 —— Task 9 收口：切点与空集**在浏览器里也验到了**（我上一轮判"验不了"是错的）
 
