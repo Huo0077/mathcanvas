@@ -49,7 +49,8 @@
 
 - Task 4–9 一条都没动：球**还没有** `SectionPrimitive` 的截圆、没有 3D 网格与拾取、没有工程投影、没有手工/预览入口，Agent 仍 `temporarily_unavailable`。
 - `sectionRecompute` / `solidGeometry` / `deletion` 未改：球现在既不能被切、也还没接进渲染，所以那些路径保持原样。
-- Task 3 的方框**等 CI 四项全绿之后再勾**。
+- Task 3 的方框**等 CI 四项全绿之后再勾**。**已完成**：`44353ad` 推送后核对远端 SHA = 本地，CI run `36964580061` 的 `checks` / `build` / `rust` / `e2e` **四项全部 success**。勾选时补了两件事：① 跑齐 Task 3 点名的四个既有聚焦文件（`scene-store` / `patches` / `recomputeConsistency` / `measurements3d`）= **126/126**，用来确认**没有回归**（本 Task 的 RED 来自新增的三个聚焦文件，不是靠改既有文件制造红）；② 补上原本缺的**撤销/重做**覆盖 `apps/web/src/sphereHistory.test.ts`（3 条：改半径=一步撤销、撤销后球仍在、**被拒绝的编辑不压历史**）。加上之后球用例共 **27/27**。
+- **一处范围说明（写在计划里，免得后来人以为漏了）**：Task 3 原清单里的「source section recompute」**不在本 Task 交付** —— 球当时还不是 `SectionPrimitive` 的来源，该子项由 **Task 4** 的 "edit sphere radius and re-evaluate both cached points and exact coefficients" 覆盖。
 
 ## 2026-10-01 —— 球体 Task 2：球-平面精确数学与退化（内核 `spherePlaneSection3`）
 

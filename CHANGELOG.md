@@ -24,6 +24,8 @@
   - `npm run typecheck` exit 0；`npm run lint` exit 0（**0 error / 13 warning**，与既有基线一致）。
 - **一处自查并已加固的地方**：`sphereTransactions.test.ts` 里"非法半径整笔拒绝"两条在实现之前**就已经是绿的** —— 因为球当时压根不支持改半径，`changed=false` 成立得毫无意义（典型的"为错误的理由通过"）。已加断言 `expect(rejected.error).toMatch(/radius must be positive/)`，把**拒绝的理由**也钉住。
 - **未做**：Task 4–9（截圆接入 `SectionPrimitive`、3D 网格与拾取、工程投影、手工/预览入口、Agent 创建、完整产品门禁）。Task 3 的方框按计划纪律**等 CI 四项全绿之后再勾**。
+- **交付闭环**：代码提交 `44353ad` 推送后核对远端 SHA = 本地；CI run `36964580061` 的 `checks` / `build` / `rust` / `e2e` **四项全部 success**。勾选前补了两件事：① 跑齐 Task 3 点名的四个既有聚焦文件（`scene-store` / `patches` / `recomputeConsistency` / `measurements3d`）= **126/126**，确认**没有回归**（本 Task 的 RED 来自新增聚焦文件，不是靠改既有文件制造红）；② 补上原本缺的**撤销/重做**覆盖 —— 新增 `apps/web/src/sphereHistory.test.ts`（3 条：改半径 = 一步撤销、撤销后球仍在、**被拒绝的编辑不压历史**，否则下一次 Ctrl+Z 会变成空操作）。球用例合计 **27/27**。
+- **一处范围说明**：Task 3 原清单里的「source section recompute」**不在本 Task 交付** —— 球当时还不是 `SectionPrimitive` 的来源；该子项由 **Task 4** 覆盖。已写进计划，避免被读成漏做。
 
 ## 2026-10-01 —— 球体 Task 2：球-平面精确数学与退化（内核 `spherePlaneSection3`）
 

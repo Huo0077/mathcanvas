@@ -61,15 +61,17 @@ expect(spherePlaneSection3(sphere, { normal: { x: 0, y: 0, z: 1 }, constant: -6 
 
 **Interfaces:** Create via `addPrimitive`; numerical edit via `updatePrimitive` patch `{ center3, radius3 }`; `translatePrimitive3` moves the sphere and its dependent section in one undo step. `calculateMeasurement3` returns `4πr²` for area and `4πr³/3` for volume with `exact-input` precision.
 
-- [ ] Add failing tests: create C/r, move centre by (2,0,0), edit r 5→4, undo/redo once, persist/reopen, source section recompute; r=0/NaN must atomically reject. Verify area for r=2 is `16π`, volume `32π/3` with the production calculator.
+**交付证据（2026-10-01）：** 代码提交 `44353ad` 已推送并核对远端 SHA，CI run `36964580061` 的 checks/build/rust/e2e **四项全绿**后才勾选。**实测**：球用例 4 个文件 **27/27**（`sphere.test.ts` 13 + `sphereMeasurements.test.ts` 4 + `sphereTransactions.test.ts` 7 + `apps/web/src/sphereHistory.test.ts` 3）；全库 `vitest run --maxWorkers=3` **272 文件 / 3134 项 + 1 todo / 0 失败**；`npm run typecheck` exit 0；`npm run lint` exit 0（0 error / 13 warning）。**关键门是两道白名单**：`EDITABLE_GEOMETRY_TYPES` 与 `isFreeDraggable3`（`transforms.ts`）—— 只加 `apply.ts` 的球分支仍会被 `"object is not editable"` / `"not draggable"` 挡下，这是本 Task 第一次 RED 的现场。**一处范围说明**：本 Task 原清单里的「source section recompute」**不在此交付** —— 球当时还不是 `SectionPrimitive` 的来源；该子项由 **Task 4**（"edit sphere radius and re-evaluate both cached points and exact coefficients"）覆盖，见下。**未做**：Task 4–9 全部。
+
+- [x] Add failing tests: create C/r, move centre by (2,0,0), edit r 5→4, undo/redo once, persist/reopen, source section recompute; r=0/NaN must atomically reject. Verify area for r=2 is `16π`, volume `32π/3` with the production calculator. **（`source section recompute` 归 Task 4，理由见上；其余全部落地并实测。撤销/重做在 `apps/web/src/sphereHistory.test.ts`：改半径=一步撤销、撤销后球仍在、**被拒绝的编辑不压历史**——否则下一次 Ctrl+Z 会变成空操作）**
 ```ts
 const edited = commitPatch(document, { op: "updatePrimitive", id: "sphere-1", patch: { radius3: 4 } })
 expect(edited.changed).toBe(true)
 expect(edited.document.primitives.find((item) => item.id === "sphere-1")).toMatchObject({ radius: 4 })
 ```
-- [ ] Run focused `scene-store`, `patches`, `recomputeConsistency`, `measurements3d` tests to confirm RED.
-- [ ] Add the smallest operation/validation/dependency branches; do not generate faceted child primitives. Run focused tests and typecheck.
-- [ ] Update progress docs, commit/push and verify SHA/CI.
+- [x] Run focused `scene-store`, `patches`, `recomputeConsistency`, `measurements3d` tests to confirm RED. **（实跑这 4 个文件 = 126/126 通过，用来确认**没有回归**；本 Task 的 **RED 来自新增的三个聚焦文件**（4 条失败，原因是球的编辑/平移被上述两道白名单挡下），而不是靠改动既有文件制造红）**
+- [x] Add the smallest operation/validation/dependency branches; do not generate faceted child primitives. Run focused tests and typecheck. **（球不物化任何子对象：新增用例显式断言文档里 `polyhedron3` 数量为 0、保存往返后图元总数仍为 1）**
+- [x] Update progress docs, commit/push and verify SHA/CI. **（`44353ad`；CI `36964580061` 四项全绿）**
 
 ## Task 4 — Exact section integration and unsupported boolean gate
 
