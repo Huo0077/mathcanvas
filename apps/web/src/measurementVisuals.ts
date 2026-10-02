@@ -46,6 +46,14 @@ function pointPositions(document: GeometryDocument, primitive: PrimitiveSpec): V
   if (primitive.type === "cube") return [{ x: primitive.origin.x + primitive.size.x / 2, y: primitive.origin.y + primitive.size.y / 2, z: primitive.origin.z + primitive.size.z / 2 }]
   if (primitive.type === "pyramid") return [primitive.baseCenter]
   if (primitive.type === "cylinder" || primitive.type === "cone") return [primitive.center]
+  /**
+   * **球**：落点取球心 —— 与圆柱 / 圆锥同一条口径（解析体的几何中心）。
+   *
+   * 这一条是 Task 9 的 spec §5 逐行审计查出来的：spec 明写"表面积/体积精确值及**来源在属性/画布可读**"，
+   * 而这张名单漏了球，于是 `resolveMeasurementVisual` 对它返回 `null`、**画布上一个字都不画** ——
+   * 属性栏照样有数字，所以这个缺口是**静默的**。同一张名单此前已经漏过一次 `polyhedron3`。
+   */
+  if (primitive.type === "sphere") return [primitive.center]
   return []
 }
 

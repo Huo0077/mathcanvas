@@ -5,6 +5,22 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-01 —— 球体 Task 9（下半）：spec §5 逐行审计，查出一处**静默缺口并修掉**
+
+- **审计方式**：spec §5 是一张六行的"必须看到的证据"表。逐行拿**真实文件与测试输出**去对（而不是相信文档），结果如下：
+  - **文档契约与保存** ✅ —— Task 1 的 DSL 往返 + `sphereTransactions.test.ts` 的保存/重开 + `sphereAction.test.ts` 的事务往返；`solid-prism.spec.ts` 的"打开每一只随仓库发布的夹具"（15 只）覆盖"旧 fixture 继续加载"。
+  - **解析截面** ✅ —— `sphere.test.ts`（z=6/8/9、非单位法向等价、尺度容差）+ `sphereSection.test.ts`（精确圆 / 切点 / 空集不留旧环 / 改半径后重算）。
+  - **UI/撤销/场景** ✅ —— `e2e/geometry3d-sphere.spec.ts` 四条：未确认预览不落盘、确认一次提交、属性栏可改 + 一步撤销、球可拾取（点击后快捷操作条出现）、刷新后 C/r 不变。
+  - **工程图/导出与测量** ⚠️ **查出问题（见下）** —— 四视图同半径（`sphereProjection.test.ts` + `engineering-drawing.spec.ts`）、三件套导出、`4πr²` / `4πr³/3` 精确读数（`sphereMeasurements.test.ts`）都有；但"**来源在属性/画布可读**"这一半**不成立**。
+  - **不支持项** ✅（单元层）—— `sphereSection.test.ts` 三条：拒绝创建含球的 `intersectionSolid`、反向对照、旧缓存交集退化为 `insufficient-data`。**无 e2e**。
+  - **门禁与上传** ✅ —— 全程"先红后绿"，六条门禁当次复跑并报数。
+- **查出的静默缺口**：`apps/web/src/measurementVisuals.ts` 的 `pointPositions` 是一张**硬编码类型名单**（`polyhedron3` / `cube` / `pyramid` / `cylinder` / `cone`），**漏了 `sphere`** → 球的面积 / 体积测量让 `resolveMeasurementVisual` 返回 `null` → **画布上一个字都不画**。而**属性栏照样有数字**，所以这个缺口是**静默的**。
+  - 这**正是同一张名单第二次漏配**（此前它漏的是 `polyhedron3`，由另一批补上）—— 与"加一种实体要改七八张名单"是同一个结构问题，只是这次是**测量标签**那张。
+  - **修法**：加球分支，落点取**球心**（与圆柱 / 圆锥同一条口径：解析体的几何中心）。
+  - **RED → GREEN**：新增 `measurementVisuals.test.ts` 一条，修前 `expected null not to be null`、修后 **6/6 通过**。
+- **实测**：全库 **278 文件 / 3179 项通过 + 1 todo / 0 失败**；`typecheck` exit 0；`lint` exit 0（0 error / 13 warning）。
+- **仍未做**：① 计划点名的 e2e 覆盖里"切点 / 空集 / **刻意的不支持布尔**"目前只有**单元**判据（浏览器里没有可读读数能观察）；② `docs/feature-catalog.md` 还没按审计结果更新；③ 发布决策属 **D 类**（等用户决定版本与是否发布，且计划要求"匹配版本的安装包 + 安装证据"）。
+
 ## 2026-10-01 —— 球体 Task 9（上半）：全量门禁复跑，逐条报数而不是"全绿"
 
 - **本批只做测量，不改产品代码**。六条门禁**当次全部复跑**，逐条写出读数（包括那个不好看的）：

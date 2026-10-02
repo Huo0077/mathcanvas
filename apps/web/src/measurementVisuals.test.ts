@@ -20,6 +20,31 @@ function tetrahedronDocument(): GeometryDocument {
 }
 
 describe("3D measurement visuals", () => {
+  /**
+   * **球的测量数字也要在画布上浮现**（spec §5「工程图/导出与测量」那一行点名：
+   * "表面积/体积精确值及**来源在属性/画布可读**"）。
+   *
+   * 判据不是"属性栏能读到"（那是 `measurements3d` 的事，已经有用例），而是**画布上真的有一个标签**：
+   * `pointPositions` 是一张硬编码类型名单，漏了球就会让 `resolveMeasurementVisual` 返回 `null`，
+   * 于是画布上一个字都不画 —— 而属性栏照样有数字，所以这个缺口**是静默的**。
+   *
+   * 这条是 Task 9 的 spec §5 逐行审计查出来的（同一张名单此前已经漏过一次 `polyhedron3`）。
+   */
+  it("anchors a sphere's volume number at its centre, so the canvas shows the value too", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [{ id: "sphere-1", type: "sphere", center: { x: 1, y: 2, z: 3 }, radius: 5 }]
+    document.measurements = [{ id: "volume-1", kind: "measurement3", sourceIds: ["sphere-1"], metric: "volume", value: 523.5987756, unit: "u³", precision: "exact-input", status: "valid", explanation: "" }]
+
+    const visual = resolveMeasurementVisual(document, "volume-1")
+
+    expect(visual, "球体积的画布标签不该是 null").not.toBeNull()
+    expect(visual?.kind).toBe("label")
+    expect(visual?.sourceIds).toEqual(["sphere-1"])
+    // 落点就是球心（与圆柱 / 圆锥同一口径：解析体的几何中心）。
+    expect(visual?.position).toEqual({ x: 1, y: 2, z: 3 })
+    expect(measurementVisualsForDocument(document)).toHaveLength(1)
+  })
+
   it("anchors a prism volume number at its vertices' centre without selection", () => {
     const document = createEmptyDocument("geometry3d")
     const built = compileSolidPrism("solid-1", [
