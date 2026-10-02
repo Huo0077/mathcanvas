@@ -92,33 +92,37 @@ expect(section.status).toBe("exact")
 
 ## Task 5 — 3D sphere mesh, identity and visible tangent point
 
+**交付证据（2026-10-01，两批）：** 代码提交 `43e4bb8`（球网格 + 不许经纬网 + 拾取）与 `cd72faf`（相切点标记 + 浏览器验收 + 修掉「有球却说画布是空的」），均已推送并由 CI run #46 / #47 四项全绿。**实测**：`threeSphere.test.ts` **8/8**、`e2e/geometry3d-sphere.spec.ts` **1/1**（变异：从 `visibleSolids` 拿掉 `sphere` → 当场红）。**「visually inspect an actual frame」这条要求真的做了**，并抓出一处真缺陷：`threeScene.tsx` 的 `hasGeometry` 漏了 `sphere`，于是球画在中间、上面却压着「这里什么都没有」的提示；已修并钉进 e2e。**两条判据只落在单元层**：无密集可选中经纬线（浏览器里没有可读读数可观察）、相切点标记是否真的画出来（当时还没有界面能切球 —— 已在 Task 6 补上，端到端目前验到「过球心那一刀给出精确圆」）。
+
 **Files:** `apps/web/src/threePrimitives.ts`, `threeSceneContent.ts`, `threePicking.ts` where needed, `sceneFit.ts` and tests; `e2e/geometry3d-sphere.spec.ts`.
 
 **Interfaces:** `createSolidGroup(sphere, selected, options)` produces only render objects with `primitiveId/type="sphere"`; it never persists mesh vertices. Screen-quality mesh density may change without changing `.mgeo`. A tangent section draws a marker rather than an invisible 0-point mesh.
 
-- [ ] Add tests/e2e that fail before sphere rendering: a sphere at C=(1,2,3), r=5 is visible and selectable; camera orbit changes its projection but not stored C/r; no dense selectable latitude/longitude edges; tangent section point is visible.
+- [x] Add tests/e2e that fail before sphere rendering: a sphere at C=(1,2,3), r=5 is visible and selectable; camera orbit changes its projection but not stored C/r; no dense selectable latitude/longitude edges; tangent section point is visible.
 ```ts
 const group = createSolidGroup(sphere, false)
 expect(group.children.some((child) => child.userData.primitiveId === sphere.id && child.userData.primitiveType === "sphere")).toBe(true)
 expect(group.children.filter((child) => child.userData.primitiveType === "edge3")).toHaveLength(0)
 ```
-- [ ] Implement mesh/picking/fit and reuse current materials/tokens. Run focused Three tests and sphere e2e, visually inspect an actual frame, typecheck/lint.
-- [ ] Record actual evidence in progress docs; commit/push and verify SHA/CI.
+- [x] Implement mesh/picking/fit and reuse current materials/tokens. Run focused Three tests and sphere e2e, visually inspect an actual frame, typecheck/lint.
+- [x] Record actual evidence in progress docs; commit/push and verify SHA/CI.
 
 ## Task 6 — Manual creation, preview and property editing
+
+**交付证据（2026-10-01，两批）：** 代码提交 `04c0c88`（常用立体加球预设）与 `537ed69`（属性栏编辑 + 工具栏切球），均已推送并由 CI run #48 / #49 四项全绿。**实测**：`spatialSphereWizard.test.ts` **7/7**（RED 起点 5/7 红）、`SpatialSolidWizard.test.tsx` **6/6**、`e2e/geometry3d-sphere.spec.ts` **4/4** —— 覆盖本条点名的全部行为：未确认前预览不动文档、确认一次成球、改半径 5→4、一步撤销、保存/刷新、切一刀读出精确圆（`data-section-exact-kind=circle`）、非法半径如实报原因且文档不动。全库 **276 文件 / 3163 项通过 + 1 todo / 0 失败**；`typecheck` / `lint` exit 0。**实现时踩到的名单**：`packages/dsl/src/schema.ts` 里**另有一份** `solidTypes`，只改 UI 侧会「按钮可点、什么都没发生」—— 单元测试全绿，跑 e2e 才暴露。
 
 **Files:** `apps/web/src/spatialSolidWizardModel.ts`, `components/SpatialSolidWizard.tsx`, `spatialSolidCommands.ts`, `solidCommands.ts`, `components/PropertiesBar.tsx`, `components/inspectorModel.ts` if needed; their existing tests and `e2e/geometry3d-sphere.spec.ts`.
 
 **Interfaces:** `SolidPreset` adds `sphere` with `center`/`radius`. An unconfirmed wizard edit changes preview only; confirm issues one `addPrimitive`. Inspector uses the same `updatePrimitive { center3, radius3 }` as Task 3. Section creation accepts the selected sphere.
 
-- [ ] RED e2e: set C=(1,2,3), r=5, watch uncommitted preview and unchanged object count; confirm once, edit radius 5→4, undo in one step, save/reload, create plane cut and read exact circle. Invalid radius shows a reason and leaves document untouched.
+- [x] RED e2e: set C=(1,2,3), r=5, watch uncommitted preview and unchanged object count; confirm once, edit radius 5→4, undo in one step, save/reload, create plane cut and read exact circle. Invalid radius shows a reason and leaves document untouched.
 ```ts
 await page.getByRole("combobox", { name: "立体类型" }).selectOption("sphere")
 await page.getByRole("spinbutton", { name: "半径" }).fill("5")
 await expect(page.locator("[data-3d-scene]")).toHaveAttribute("data-sphere-count", "0") // not confirmed
 ```
-- [ ] Implement the preset and fields by reusing existing `Vector3Fields`/`CoordinateField`; do not create a dead four-point-construction button. Run wizard model/component tests, e2e, typecheck/lint.
-- [ ] Update docs, commit/push and verify SHA/CI.
+- [x] Implement the preset and fields by reusing existing `Vector3Fields`/`CoordinateField`; do not create a dead four-point-construction button. Run wizard model/component tests, e2e, typecheck/lint.
+- [x] Update docs, commit/push and verify SHA/CI.
 
 ## Task 7 — Engineering projections and exports
 
