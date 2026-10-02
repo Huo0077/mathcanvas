@@ -65,6 +65,20 @@
 - `exportEngineeringSvg(drawings: ProjectedDrawing[]): string` 把**四视图放在同一张 SVG** 里 —— 所以工程制图那半个也只内嵌一个 `<svg>`。
 - 两个产出器**都不使用 `id="…"` 属性**（只用 `data-*`）—— 所以内嵌时**没有 id 冲突**风险。
 
+**第三个工作区（立体几何）必须先定行为 —— 这一条是复审时实测发现的，原写法会踩坑**
+
+实测 `apps/web/src/persistence/fileExports.ts:95-97`：SVG 出口的分支条件是 **`getDocument().workspace === "cad"` 才走工程产出器，否则一律走平面的 `exportSvg(getDocument())`**。于是：
+
+| 工作区 | 现行走哪一支 | 本批是否覆盖 |
+| --- | --- | --- |
+| `cad`（工程制图） | `exportEngineeringSvg(drawings)` —— 四视图 | ✅ 覆盖 |
+| 平面几何（`geometry` / `conics`） | `exportSvg(document)` | ✅ 覆盖 |
+| **`geometry3d`（立体几何）** | **也落进"否则"那一支**，会用**平面**导出器去导一份 3D 文档 | ❌ 不在本批 |
+
+而平面导出器**刻意不投影 3D 图元**（`exporters.test.ts:79` 的断言与注释写着 "planar SVG is not a fake 3D sphere projection"）。所以照现有分支直接做，用户在立体几何里点导出会得到：**导出"成功"、HTML 里只有一个坐标网格、没有任何图形** —— 正是本仓库最讨厌的"静默半死"。
+
+**因此本批要求（硬性）**：在 `geometry3d` 工作区点"导出 HTML"时**明确拒绝** —— 走既有 `setFileError` 通道给一句人话（例如"立体几何画面的 HTML 导出不在本批范围"），**而不是**吐出一份空 HTML。并且要有测试钉住：**3D 文档导出 HTML → 报错且不产生下载**，**配反向对照**（平面几何文档 → 正常产出）。
+
 ## 5. 安全与诚实性（硬约束，不是"最好做到"）
 
 1. **转义一切文档派生文本**：标题、标签、注释文本进入 HTML 前必须转义（`<`、`&`、`"`）。
@@ -82,7 +96,8 @@
 | 存档可回导 | 单测：内嵌 JSON 取出后经 `decodeMgeo` 解回，与原文档**深度相等**（含标签 / 样式 / 参数） |
 | 诚实性 | 单测：预检有损失时，损失条目出现在正文；无损失时出现"无" |
 | 注入防护 | 单测：标签含 `<`、`&`、`"` 以及**含 `</script>` 的字符串**时，产物结构不被破坏，且解回的文档里那个标签**一字不差** |
-| 菜单入口 | 命令层 `export-html` 已接；e2e 覆盖一次真实点击 |
+| 菜单入口 | 命令层 `export-html` 已接（**§9 那 8 处一处不漏**）；e2e 覆盖一次真实点击 |
+| 立体几何拒绝 | 单测：`geometry3d` 文档导出 HTML → **报错且不产生下载**；**配反向对照**（平面几何文档 → 正常产出，证明拒绝不是"功能整体没接"） |
 | 门禁与上传 | 先红后绿；目标测试、`typecheck` / `lint` / 相关 e2e 实跑；更新 `current-status.md`、`feature-catalog.md`、`project-progress.md`、`CHANGELOG.md`；提交推送并核对 `git ls-remote` 与 CI 四项 |
 
 ## 7. 发布边界
@@ -94,3 +109,32 @@
 - **未决**：立体几何 3D 画面要不要进 HTML（若进，"当前视角截图 PNG"与"走工程正投影生成 SVG"是两条不同的路）。本设计**不覆盖**，等第一批交付后再决定。
 - **风险**：产物里的格式版本号一旦定下就不该随意改；改动要按版本号区分，否则老文件认不出。
 - **风险**：`exportSvg` 会画网格。本批**沿用**（与现有 SVG 导出行为一致）。要"不带网格"是另一个决定，不在本批。
+
+## 9. 落地清单：加一个导出格式要同时改哪几处（2026-10-02 实测，不是凭记忆）
+
+本仓库有一个**反复出现的失败模式**：加一种类型要同时改**七八处硬编码名单**，漏一处就**静默半死**（`current-status.md` 记过；球体那批也被机器闸门挡过）。所以这里把位置**实测列全**，好让实施计划一处不漏 —— 这一节也是本设计迟交一轮换来的东西。
+
+**生产代码（8 处）**
+
+| # | 位置 | 是什么 |
+| --- | --- | --- |
+| 1 | `apps/web/src/ribbonCommands.ts:130` 附近 | 功能区的**命令定义**（含中文标签与提示）：`command("export-pdf", "导出 PDF", "png", { prompt: "导出矢量 PDF 页面" })` |
+| 2 | `apps/web/src/commandDispatch.ts:105-107` | 命令 → 导出器的分派 `switch`（`export-svg` / `export-dxf` / `export-pdf`） |
+| 3 | `apps/web/src/commandDispatch.ts:60` | 依赖注入的类型联合 |
+| 4 | `apps/web/src/App.tsx:316` | `exportSvgFile` 包装函数的类型与默认值 |
+| 5 | `apps/web/src/components/GeometryToolbar.tsx:5` | 工具栏 prop 的类型联合 |
+| 6 | `apps/web/src/persistence/fileExports.ts:6`（+ 第 88 行附近的分支） | 真正写文件的 `ExportFormat` 联合与按格式分支 |
+| 7 | `apps/web/src/services/exportService.ts:15`（+ 第 84 行附近） | **导出预检**的 `ExportFormat` 联合与按格式的损失判定 |
+| 8 | `packages/agent-core/src/tools/interactionTools.ts:38,56` | **Agent 的导出通道**：`preflight({format})` 与 `proposeExport(format)` 的联合 |
+
+**测试（会因此变红 —— 这是好事，它们就是闸门）**
+
+`commandDispatch.test.ts:166-170`、`ribbonCommands.test.ts:33`（一条**精确顺序**断言 `["export-svg","export-dxf","export-pdf","export-csv","export-mgeo"]`）、`fileExports.test.ts:117`、`exportService.test.ts:44,55`、`interactionTools.test.ts:51`。
+
+**一个必须现在就定的取舍（否则它会变成"忘了"）**
+
+第 8 处是 **Agent 提议导出**的那条通道。本批**不让 Agent 提议 HTML 导出** —— HTML 是"给人看 / 分享"的产物，而那条通道现有的形态是"提议导出并把结果回给模型"，要加就得连带设计"模型拿这个 HTML 干什么"，属于另一个话题。
+
+**但"不做"要写成有意的"不做"，而不是漏掉**：实施计划里必须有一条**明确判据** —— Agent 的格式联合**保持四个不变**，并有一个测试钉住它。否则下一个人看到两个联合不一致，会以为是 bug 顺手"修齐"，反而破坏本批边界。
+
+**为什么单列这一节**：如果只改第 6、7 处就以为做完了，结果会是**菜单里点不到**（缺 1、2）或**工具栏不给用**（缺 5）—— 功能写完了却摸不着，这正是本仓库踩过多次的坑。
