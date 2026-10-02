@@ -100,8 +100,11 @@ export function createThreeScenePreviewHover({ camera, previewGroups, previewByK
     if (next) applyPreviewHighlight(next, true)
     if (sceneShell) sceneShell.dataset.previewHoverKey = key ?? ""
   }
-  const updatePreviewHover = (event: PointerEvent) => {
-    const point = pointFromEvent(event)
+  let previewHovering = false
+  let lastPreview: ThreeScenePreview | null = null
+  /** 最后一次指针位置（归一化坐标）；`pointerleave` 之后清空 —— 自愈不能凭空造一个悬停。 */
+  let lastHoverPoint: { x: number; y: number } | null = null
+  const applyPreviewHoverAt = (point: { x: number; y: number }) => {
     const { hovering, preview } = previewHitAt(point)
     if (sceneShell) sceneShell.dataset.previewHovering = hovering ? "true" : "false"
     setPreviewHoverKey(preview?.key ?? null)
@@ -117,10 +120,27 @@ export function createThreeScenePreviewHover({ camera, previewGroups, previewByK
     if (hovering && preview) previewHoverRef.current?.(true, preview)
     else if (lastPreview) previewHoverRef.current?.(false, lastPreview)
   }
-  let previewHovering = false
-  let lastPreview: ThreeScenePreview | null = null
+  const updatePreviewHover = (event: PointerEvent) => {
+    lastHoverPoint = pointFromEvent(event)
+    applyPreviewHoverAt(lastHoverPoint)
+  }
+  /**
+   * **悬停自愈**：内容（预览）重建之后，用**最后一次指针位置**重算一遍悬停。
+   *
+   * 现场（2026-10-02 追查的那条 e2e 抖动）：`data-preview-hovering` **只**由 `pointermove` 写入，
+   * 而预览几何是内容同步建的 —— 于是"指针移动"与"预览就绪"谁先谁后是**竞态**：
+   * 移动先到、预览后到，属性就永远停在 `false`（`expect` 的轮询救不回来 —— 事件已经发生、不会再来一次）。
+   * 让同步之后按最后的指针位置**再算一次**，这条路径就不再依赖两者的先后。
+   *
+   * 指针从未进过画布（或在 `pointerleave` 之后）时什么也不做 —— 不能凭空造一个悬停。
+   */
+  const refreshPreviewHover = () => {
+    if (!lastHoverPoint) return
+    applyPreviewHoverAt(lastHoverPoint)
+  }
   const handlePointerMoveForPreview = (event: PointerEvent) => updatePreviewHover(event)
   const handlePointerLeaveForPreview = () => {
+    lastHoverPoint = null
     setPreviewHoverKey(null)
     if (!previewHovering) return
     previewHovering = false
@@ -128,5 +148,5 @@ export function createThreeScenePreviewHover({ camera, previewGroups, previewByK
   }
 
   /** `raycasterAt` / `previewHitAt` 也要给出去：抬起指针时的"点到预览了吗"判据与悬停共用同一套。 */
-  return { raycasterAt, previewHitAt, handlePointerMoveForPreview, handlePointerLeaveForPreview }
+  return { raycasterAt, previewHitAt, handlePointerMoveForPreview, handlePointerLeaveForPreview, refreshPreviewHover }
 }

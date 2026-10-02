@@ -452,6 +452,12 @@ export function useThreeSceneEffect(deps: ThreeSceneEffectDeps) {
       syncContent: () => {
         syncContent()
         /**
+         * **悬停自愈**：预览刚重建完，用最后一次指针位置再算一遍 —— 否则"指针先到、预览后到"
+         * 那次移动就白费了（`data-preview-hovering` 只由 pointermove 写，事件不会再来一次）。
+         * 见 `refreshPreviewHover` 的注释。
+         */
+        refreshPreviewHover()
+        /**
          * 自动取景的决策：文档换了或内容越界一定要拟合；内容变了但用户没动过相机也拟合；
          * 用户一旦手动调过视角，就只有"内容越界"才允许再抢（见 shouldAutoFit）。
          */
@@ -482,7 +488,7 @@ export function useThreeSceneEffect(deps: ThreeSceneEffectDeps) {
      * 预览的悬停判定与高亮在 `./threeScenePreviewHover`：它收下相机、两张"稳定身份"的预览表与
      * 指针换算，交出两个监听器（注册与注销仍在本函数里，见下面的 addEventListener）。
      */
-    const { raycasterAt, previewHitAt, handlePointerMoveForPreview, handlePointerLeaveForPreview } = createThreeScenePreviewHover({ camera, previewGroups, previewByKey, previewHoverKeyRef, previewHoverRef, sceneShell, pointFromEvent, pickTolerance })
+    const { raycasterAt, previewHitAt, handlePointerMoveForPreview, handlePointerLeaveForPreview, refreshPreviewHover } = createThreeScenePreviewHover({ camera, previewGroups, previewByKey, previewHoverKeyRef, previewHoverRef, sceneShell, pointFromEvent, pickTolerance })
     /**
      * 指针交互（按下 / 移动 / 抬起、拖拽会话、拾取判定）在 `./threeSceneInteraction`：约 380 行。
      * 依赖面宽是这一层的性质；三个监听器由下面的注册行使用。

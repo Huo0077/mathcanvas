@@ -132,3 +132,31 @@ test("creates a 交点 from the corner marker, and a 交线 from the crossing li
   await expect(page.locator(".panel.right")).toContainText("段数")
   await expect(page.locator(".panel.right")).toContainText("总长度")
 })
+
+/**
+ * **悬停读数跟着内容重算，而不是只跟着指针**（2026-10-02 追查那条 e2e 抖动的可证伪判据）。
+ *
+ * 为什么值得单列一条：`data-preview-hovering` **只**由 `pointermove` 写入，而预览几何是
+ * **内容同步**建的 —— 两者谁先谁后是竞态。本文件 `loadFixture` 的注释里记着实测现场：
+ * 全量跑里出过一次"指针先到、预览后到 ⇒ 属性永远停在 `false`"，而 `expect` 的轮询救不回来
+ * （事件已经发生、不会再来一个）。既然那次竞态**不能按需复现**，就把同一件事做成**确定性的**：
+ *
+ * 指针**一动都不动**，只让内容变（删掉一只立方体 ⇒ 预览消失），悬停读数必须跟着变成 `false`。
+ * 没有"内容变了就按最后的指针位置重算"这条路径时，它会一直停在 `true` —— 陈旧读数。
+ * 用 DOM 派发选对象而不是 `locator.click()`：后者会**移动鼠标**，一离开画布就走 `pointerleave`，
+ * 那样测的就不是"内容变了"这件事了。
+ */
+test("recomputes the hover readout when the content changes under a still pointer", async ({ page }) => {
+  const scene = await loadFixture(page)
+  const point = await projectWorldPoint(page, { x: 1, y: 2, z: 0 })
+  await page.mouse.move(point.x, point.y)
+  await expect(scene).toHaveAttribute("data-preview-hovering", "true")
+
+  await page.locator(".algebra-panel").getByText("立方体 A", { exact: true }).first().dispatchEvent("click")
+  await page.keyboard.press("Delete")
+
+  // 内容确实变了：交叠面的预览一个都不剩。
+  await expect(scene).toHaveAttribute("data-preview-face-count", "0")
+  // 而悬停读数在**没有指针移动**的情况下也必须跟着变 —— 这就是自愈。
+  await expect(scene).toHaveAttribute("data-preview-hovering", "false")
+})
