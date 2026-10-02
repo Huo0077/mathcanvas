@@ -5,6 +5,18 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-02 —— 启动 E3：HTML 导出（spec 已写并就审，尚未实现）
+
+- **用户决定**启动 E 类第 3 项的 **HTML 一半**（GeoGebra `.ggb` 仍未启动）。按 brainstorming 流程走：分类为 **architectural**（新的对外产物格式，且仓库惯例是每个功能配 spec + plan）→ 逐项澄清 → 八段设计获批 → 写 spec。
+- **spec**：[`docs/superpowers/specs/2026-10-02-html-export-design.md`](docs/superpowers/specs/2026-10-02-html-export-design.md)。**用户逐项确认的四个决定**：① **自包含静态快照**（单文件、不依赖本应用、不联网、不可交互）；② 第一批覆盖**平面几何 + 工程制图**；③ 平面几何**复用 `exportSvg` 的标准视野（含网格）** —— 不是"我屏幕上当前这一张"；④ **内嵌 `.mgeo`**，使 HTML 兼作**可再导入的存档**。四条各自的**代价**都写进了 spec（③ 平移缩放过的文档与屏幕不一致；④ 文件变大且文档 JSON 对收件人可见）。
+- **状态：卡在 spec 评审** —— brainstorming 的硬门禁要求用户审过才可写实施计划，因此**本批零实现代码**。第 23、24 轮改用**只读探查**去验 spec 自身的假设，查出 **5 处会让功能带病上线**的问题：
+  - **加一个导出格式要同时改 8 处生产代码 + 5 处测试**（功能区命令定义 `ribbonCommands.ts:130`、命令分派 switch、`App.tsx` 包装类型、`GeometryToolbar.tsx` 的 prop、`fileExports.ts` / `exportService.ts` 的两个 `ExportFormat`、以及 **`packages/agent-core/src/tools/interactionTools.ts` 的 Agent 导出联合**）。**只改两个类型会做出"菜单里点不到"的功能。** 并明确写下取舍：本批**不让 Agent 提议 HTML 导出** + 一条测试钉住，防止后人误判为 bug 顺手"修齐"。
+  - **立体几何会落进平面分支**：实测 `fileExports.ts:95-97` 的分支是 `workspace === "cad"` 才走工程产出器，否则一律走平面 `exportSvg`；而平面导出器**刻意不投影 3D 图元**（`exporters.test.ts:79`）。照现状做会得到"**导出成功、HTML 里只有一个坐标网格**"——正是本仓库最讨厌的静默半死。已硬性要求立体几何下**明确拒绝**而不是吐空 HTML，并配反向对照。
+  - **标题字段是 `metadata.name` 不是 `title`**（`packages/dsl/src/types.ts:955`），且 DSL 自带默认值，不必自造默认名。
+  - **现成转义函数够不着**：`engineeringExporters.ts:76` 的 `escapeXml` 等**未 export**，而 spec 硬性要求转义一切文档派生文本 ⇒ 必须自带（并给它自己的单测）。
+  - **版本戳**：走桌面桥 `commands/providers.rs:282` 的 `package_info().version`（**就是 `tauri.conf.json` 的产品版本**；`runtime.rs` 里的 `0.1.0` 是单测夹具），但**浏览器里是 `unknown`**，须如实写。
+- **一处自查出的文档漂移**：连推三版 spec 却忘了同步进度文档（§四 E3 仍写"未启动"），已在提交 `d5decf9` 更正；过程归档也在 `894192f` 补齐 2026-10-02 全段。
+
 ## 2026-10-02 —— 修掉本机必红的那条相机平移 e2e（根因：测试读了动画中途的读数）
 
 - **症状**：`e2e/geometry3d.spec.ts:277`「pans the 3D view along the camera axes within a bounded range」在本机**必红**，CI 上却时绿时红。它让"本机全量 e2e"这条门禁不可信（此前一直以 CI 的 `e2e` 作业为准）。
