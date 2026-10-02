@@ -10,6 +10,77 @@
 
 > 下方 2026-09-22 的"最后更新 / 当前阶段 / 总体状态"三行保留为**当时快照**，不再维护。
 
+## 2026-10-02 —— 发布 v3.1.0 / D3 存档后删分支 / 修掉本机必红的相机平移 e2e / E3 HTML 导出 spec
+
+> 用户逐项决定的一批。四个已交付，一个停在 spec 评审。下面每个数字都只代表**写它的那一刻**。
+
+### A. 发布 v3.1.0（提交 `33facf1` → tag `v3.1.0` → GitHub Release）
+
+- **用户决定**：把球体这批作为 **v3.1.0** 发布（新能力走 minor）。**版本真值只有两处**：`apps/desktop/src-tauri/tauri.conf.json` 与 `src-tauri/Cargo.toml`（`git grep "3.0.1"` 在 `*.json`/`*.toml` 上只命中这两行；根与 `apps/desktop` 的 `0.1.0` 是私有 workspace 版本，不参与发行）。**顺带纠正我上一轮的口误**：上一次打包不是 3.0.0，产品版本真值早已是 **3.0.1**，本机也已有 3.0.1 的 MSI/NSIS。
+- **打包前专门核实的一步（有真实风险）**：外壳前端来自 `build-check/mathcanvas-current`（`tauri.conf.json` 的 `frontendDist`），**不是** `apps/web/dist`。所以先跑根 `npm run build`（exit 0），再确认那份产物 `index.html` 的时间戳距打包动作**仅 0.3 分钟**、且 `index-*.js` 里同时含「球体」与 `create_sphere`。**不核实这一步就有发一版旧界面的风险。**
+- **`npm --workspace @draw/desktop run bundle` exit 0**：`vite build` 510 modules / 3.65s；Rust release 26.28s；`candle`/`light`(MSI) 与 `makensis`(NSIS) 全部成功，日志确认 `Compiling mathcanvas-desktop v3.1.0`。产物：MSI **6,848,512 B**、NSIS **5,030,195 B**、裸 exe **17,190,400 B**（三件 SHA-256 记在 `docs/release/v3.1.0.md`）。**唯一警告**：`mathcanvas-desktop (lib) generated 1 warning` —— `linker_messages`，非代码告警。
+- **Release 走"先 draft → 传三个资产 → 复核 → 再 `draft=false`"**，避免出现"公开了但只有一半资产"。tag 是**注解 tag**（对象 `d9a92f94`，指向提交 `165e4fb`）。
+- **独立复核（不是只信自己那次写入）**：① 匿名 API `releases/latest` 由 `v3.0` 变为 **`v3.1.0`**、`draft=false`、`assets=3`；② 把三个资产**重新下载**回来算 SHA-256 —— **三件全部 MATCH** 本机哈希。即"Release 上的字节"与"本机打出的字节"是同一份。
+- **免安装裸 exe 启动实测（用户选择"只试这个"）**：`mathcanvas-desktop.exe`（与 Release 同哈希）启动成功 —— 存活 **T+10s 与 T+18s**、真窗口句柄 `3017702`、标题 **`MathCanvas`**、`Responding=True`、工作集 32.6MB。**仅按窗口句柄截图**（不截整屏，避免拍到用户其他窗口），画面是**完整应用界面而非白窗**。这一步是特意加的：Tauri 应用在前端资源没加载时会显示**空白窗口**，"进程活着 + 有窗口"证明不了界面真的渲染了。（截图存临时目录、**未入库** —— 本仓库不提交截图，现有 `*.png` 只有应用图标。）
+- **如实缺口**：**MSI/NSIS 只构建并上传，没有在本机安装过**。本会话身份**非管理员**（实测 `admin: False`）且审批提示被禁用、无法提权；按 Tauri 默认安装模式 NSIS 应为每用户（大概可做）、MSI 应为每机器（大概会因缺权失败）—— 这两条是**基于默认值的预判，未实测**。
+
+### B. D3：远端功能分支**先存档再删**（提交 `074a7db`）
+
+- **删除前查出的事实与文档旧表述相左**：GitHub compare API `compare main...feat/high-school-geometry-interaction` 实查 **`status: diverged`、`ahead_by: 1`、`behind_by: 54`** —— 它**不是**"已全部合并、只剩空壳"，而是有 **1 个提交不在 `main` 里**：`8c67346`（2026-09-30）"docs: 补齐所有进度文档"，**仅动文档**（README、`current-status.md`、`project-progress.md`、一份 spec）。它是合并/打包当天的旧快照，main 上这几份文件此后已被反复重写（**很可能已取代，但没有逐行比对过**，所以不假设内容已覆盖）。另实查**无任何开放 PR**。
+- **顺序刻意如此（删分支不可逆）**：① 建注解 tag **`archive/feat-high-school-geometry-interaction`**（对象 `bb4a5aad`）指向 `8c67346`；② 推送；③ **API 三重确认**（tag ref 存在 / 解引用得 `8c67346` 且与 tip **MATCHES: True** / 该提交可解析）；④ **才**执行 `git push origin --delete`。**删除后复核**：远端只剩 `main`，存档 tag 仍解析到 `8c67346` —— 那份旧快照在远端**依然可达、不会被 GC**。
+- **一条方法论纠正（值得记）**：本轮第一次 `git ls-remote` 被网络 reset 打断（`Recv failure: Connection was reset`），脚本据此打印过 **"MERGED: NO"** —— 那是**失败命令的产物、不是事实**；改用 API 重查才得到上面 `diverged / ahead_by=1` 的结论。**命令失败时的默认输出不能当结论。**
+
+### C. 修掉本机必红的相机平移 e2e（提交 `c01ab86`）
+
+- **症状**：`e2e/geometry3d.spec.ts:277`「pans the 3D view along the camera axes within a bounded range」在本机**必红**、CI 上时绿时红，使"本机全量 e2e"这条门禁不可信。
+- **根因（读代码得出，不是猜）**：自动取景 `threeSceneCamera.ts` 的 `animateToFit` 在 rAF 里把**整份相机状态（含 `target`）**从旧值插值到拟合值，历时 `FIT_ANIMATION_MS = 250`；而 `data-camera-target` 是从**每帧都在变**的那个 ref 渲染的。用例加完立方体**立刻**读基准 ⇒ 读到**动画中途**的值；拖动发生在动画结束之后 ⇒ 落点是**拟合真值**。**同一场竞态有两个面孔**：
+  - 读得早 → 第 **299** 行 `toBeCloseTo(boundsCentre[0], 1)`（容差 0.05）红，实测 `Expected -5 / Received -4.8`（另一次 `-4.87`）；
+  - 读得不等于停稳 → 第 299–301 行过了、第 **309** 行 `expect(z).toBeCloseTo(startZ, 6)` 红，实测 `Expected 1.98 / Received 2`。
+  这解释了"同一用例两次报**不同断言**、且数值逐次不同"。
+- **顺带排除两个旧怀疑（都用代码）**：① `clampCameraTarget` 是**箱式夹取**（中心 ± `PAN_RANGE_FACTOR(3)` × 半径），够不到那 0.02；② "水平平移不动 z"**确实成立** —— `cameraBasis` 的 `right = (-sin az, cos az, 0)`，第三分量**恒为 0**。⇒ **错在测试的基准值，不在产品**（那 250ms 过渡是有意的体验）。
+- **修法（一处，最小）**：取基准前**等相机停稳** —— 判据是**连续两次读数一致**，**不写死 sleep**、不看动画时长。与同文件既有的 `settledWidth`、以及 `three-orbit-tracks.spec.ts` / `three-intersection-previews.spec.ts` 的 `settleCamera` 同一套口径。
+- **验证**：修前先复现（红）；修后 `--repeat-each=5` → **5/5 通过**（单跑一次不足以证明抖动去掉）。`tsc -p e2e/tsconfig.json` exit 0。
+- **修完后全量 e2e 仍不是全绿**：读数 **178 通过 / 1 失败**，红的是**另一条**（见 D）。所以当时**没有**得出"本机 e2e 全绿"的结论。
+
+### D. `geometry3d-section` 抖动：**主动选择不修**（提交 `931fa50`）
+
+- **按需复现失败**：单独跑（`--workers=1 --repeat-each=3`）3/3 全过；全量 `--workers=6` **179/179 全过**。只在 C 之前那次 `--workers=3` 的全量里见过一次。**不复现就不猜着改。**
+- **假设一（我最初的想法）被代码证伪**：原以为是"投影时取景动画还在跑"。读 `threeSceneCamera.ts:87-97` 后不成立 —— 取景触发条件是**文档 id 变化**（`fittedDocumentRef.current !== fittedId`），**不是每次编辑**；且它调的是 `fitToContent()`（**立即** `setCameraState`），**不是** `animateToFit()`。加立方体**不会**触发取景动画；真正那次取景在更早的"跳转到立体几何"，到 `grabPoint` 时早已结束。
+- **新查出一条代码级可证的脆弱点**：`data-preview-hovering` **只在** `threeScenePreviewHover.ts:106` 的 `updatePreviewHover` 里写入，而它**只由 pointermove 事件驱动**（没有任何 effect 会在其它状态变化时重算）。于是**一次性的合成指针移动天然是竞态的** —— 若那一瞬间命中几何尚未准备好，属性就**永远停在 `"false"`**，`expect` 那 5 秒轮询**也救不回来**（事件已经发生过，不会再来一个）。这与观察到的现象吻合，但**没有复现，所以不称它是已证实的根因**。
+- **为什么不顺手改**：两条可选修法（测试侧反复重发移动 / 产品侧在预览变化时重算悬停）都**无法用"改前红、改后绿"的一次前后对比证明**它修好了那次失败。按本项目纪律，**不拿未经验证的改动冒充修复**。
+- **顺带只记不改的发现**：`cancelFitAnimation()` 只在**副作用清理（卸载）**里被调用（`threeSceneEffect.ts:528`），**用户拖动并不会取消**进行中的自动取景动画 —— 理论上"在 250ms 内开始拖"会被剩下的帧覆盖。
+- **正面事实**：修掉 C 之后，本机全量 e2e 在 `--workers=6` 下是 **179/179 全绿** —— 所以"本机 e2e 完全不可信"这个旧结论该收窄为"还有一条**偶发**且未定位的用例"。
+
+### E. E3 HTML 导出：spec 已写并就审（提交 `8353409` / `06fb4d3` / `2b29d7a`）
+
+- **用户决定启动 E3 的 HTML 一半**（`.ggb` 未启动）。按 brainstorming 流程：分类为 **architectural**（新对外产物格式 + 仓库惯例是每个功能配 spec+plan）→ 逐项澄清 → 八段设计获批 → 写 spec。
+- **用户逐项确认的四个决定**：① **自包含静态快照**（单文件、不依赖本应用、不联网、不可交互）；② 第一批覆盖**平面几何 + 工程制图**；③ 平面几何**复用 `exportSvg` 的标准视野（含网格）**，不是"我屏幕上当前这一张"；④ **内嵌 `.mgeo`** 使之兼作可再导入的存档。四条各自的**代价**都写进了 spec（③ 平移缩放后与屏幕不一致；④ 文件变大且文档 JSON 对收件人可见）。
+- **卡在 spec 评审**：brainstorming 的硬门禁要求用户审过才可写实施计划 ⇒ **本批零实现代码**。第 23、24 轮我改用**只读探查**去验 spec 自身的假设，查出 5 处实质问题：
+  - **§9 新增（最要命的一条）**：实测"加一个导出格式要同时改 **8 处生产代码 + 5 处测试**" —— 含功能区命令定义 `ribbonCommands.ts:130`、命令分派 switch、`App.tsx` 包装类型、`GeometryToolbar.tsx` 的 prop 类型、`fileExports.ts` / `exportService.ts` 的两个 `ExportFormat`、以及 **`packages/agent-core/src/tools/interactionTools.ts` 的 Agent 导出联合**。**只改两个类型会做出"菜单里点不到"的功能。** 并**明确写下取舍**：本批**不让 Agent 提议 HTML 导出**（第 8 处保持四个不变）+ 一条测试钉住，防止后人误以为是 bug 顺手"修齐"。
+  - **§4 新增**：实测 `fileExports.ts:95-97` 的分支是 **`workspace === "cad"` 才走工程产出器，否则一律走平面 `exportSvg`** ⇒ **`geometry3d`（立体几何）也落进平面那一支**，而平面导出器**刻意不投影 3D 图元**（`exporters.test.ts:79`：*"planar SVG is not a fake 3D sphere projection"*）。照现状直接做会得到"**导出成功、HTML 里只有一个坐标网格**"——正是本仓库最讨厌的静默半死。已硬性要求立体几何下**明确拒绝**而不是吐空 HTML，并配反向对照。
+  - **§10 三条实现前必须知道的事实**：标题字段叫 **`metadata.name` 不是 `title`**（且 DSL 自带默认值，不必自造）；现成转义函数 `escapeXml` **未 export**、够不着，必须自带（而 §5 硬性要求转义一切文档派生文本）；版本戳走桌面桥 `commands/providers.rs:282` 的 `package_info().version`（**就是 `tauri.conf.json` 的产品版本**，`runtime.rs` 里的 `0.1.0` 是单测夹具），但**浏览器里是 `unknown`**，须如实写。
+- **一处我自己的文档漂移**：连推三版 spec 却忘了同步进度文档（§四 E3 仍写"未启动"），已在提交 `d5decf9` 更正。
+
+### F. 本批门禁读数（只代表当时）
+
+| 命令 | 当次结果 |
+| --- | --- |
+| `npx vitest run --maxWorkers=3` | 278 文件 / 3182 项通过 + 1 todo / 0 失败 |
+| `npm run typecheck` / `npm run lint` | exit 0 / exit 0（0 error / **13 warning**，既有基线） |
+| `npx playwright test --workers=6` | **179 通过 / 0 失败**（57.6s） |
+| `npx playwright test --workers=3`（C 修复后） | 178 通过 / 1 失败（那一失败即 D 的偶发用例） |
+| `npm run test:rust` | 16 个测试二进制 / 236 通过 / 0 失败 / 3 ignored |
+| `npm run test:perf` | 9/9 通过（`drag/300-frames` 682.5ms ≈ 2.3ms/帧） |
+| CI | #54–#72 期间各次四项全绿（#62 被 `ci.yml` 的 `concurrency: cancel-in-progress: true` 按设计取消，内容被 #63 覆盖） |
+
+### G. 如实缺口（写这条时）
+
+- **HTML 导出只有 spec，没有实现**（等用户审）。
+- **D2 未整项关闭**：MSI/NSIS 未安装实测（非管理员、无法提权）。
+- **`geometry3d-section` 偶发用例未定位**（不复现）。
+- **"正方体内切球"那句被本地规划器当成建模指令**（既有隐患，非本批引入）：把"这个正方体的内切球半径是多少"喂进去，命中的是**既有的「正方体」条目** ⇒ 会去新建一只正方体而不是回答读数问题；与文档早记过的"裸词四面体会命中分析题"同类，**修不修需先定"什么算建模指令、什么算提问"的口径**。
+
+
 ## 2026-10-01 —— 球体 Task 9（下半）：spec §5 逐行审计，查出一处静默缺口
 
 > spec §5 是一张六行的"必须看到的证据"表。**逐行拿真实文件与测试输出去对**（不是相信文档），这一行的做法换来了一个真缺陷。
