@@ -76,8 +76,18 @@ const UNEXPORTABLE_TYPES = new Set([
   "intersectionSolid"
 ])
 
-/** WinAnsi 装不下的字符：DXF 的文本编码是 WinAnsi，中文会被写成 `?`。 */
-function collectFontLoss(document: GeometryDocument, format: ExportFormat): FontLoss[] {
+/**
+ * 这一类图元**投影不出来、导出器也不画**。
+ *
+ * 导出成函数而不是把那个 `Set` 暴露出去：调用方只该问"这一类算不算漏"，
+ * 不该能改这张表。`htmlExporter` 的"这次漏了什么"复用**同一份**规则 ——
+ * 两处各写一张表必然分叉，而分叉的症状是"界面说有损失、文件里说没有"。
+ */
+export function isUnexportableType(type: string): boolean {
+  return UNEXPORTABLE_TYPES.has(type)
+}
+
+/** WinAnsi 装不下的字符：DXF 的文本编码是 WinAnsi，中文会被写成 `?`。 */function collectFontLoss(document: GeometryDocument, format: ExportFormat): FontLoss[] {
   // 只有走 WinAnsi 的格式需要报这条；SVG / PDF 能带 UTF-8。
   // 规则本身在 `@draw/agent-core`：Agent 侧的导出预检也要报同一条损失，
   // 两处各写一份必然分叉（而分叉的症状是"界面说有损失、Agent 说没有"）。
