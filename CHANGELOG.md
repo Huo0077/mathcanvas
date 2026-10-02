@@ -5,6 +5,14 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-02 —— HTML 导出 Task 5：钉住 Agent 通道四个格式 + 收口（E3 的 HTML 一半交付完成）
+
+- 实施计划 **Task 5** 完成，**5 个区块全部交付**。在 `packages/agent-core/src/tools/interactionTools.test.ts` 加了一条**类型级**判据，钉住 Agent 的导出通道**恰好四个格式**（spec §9 的"有意不做"：那条通道会把结果回给模型，加 HTML 得连带设计"模型拿它干什么"）。
+- **变异检查做了两次，第二次比第一次有用**：第一次只钉 `proposeExport`，然后给 **`preflight`** 的 `format` 加 `| "html"` —— **`tsc` 全绿，拦不住**；于是把判据扩成两条（两处联合各一条）。再分别变异：改 `proposeExport` → `interactionTools.test.ts(149,11): Type 'true' is not assignable to type 'false'`；改 `preflight` → 报在 `(155,11)`。**两次都拦得住**，变异已恢复、`interactionTools.ts` 与 HEAD 无差异。这条"只钉一处等于没钉"的教训已写进计划的 Task 5 状态行。
+- **功能收口**：`docs/feature-catalog.md` 的导出能力加了 HTML 一条（自包含快照 + 损失清单 + 内嵌存档 + **立体几何明确拒绝**，并写明"不做"的四项）；`current-status.md` §四 E3 更新为 **HTML 一半已交付、`.ggb` 一半仍未启动**。
+- **全量门禁（本批最后一次复跑）**：`npm run typecheck` exit 0；`npm run lint` **0 error / 13 warning**；**全库单测 279 文件 / 3196 通过 + 1 todo / 0 失败**（265 s，比上一批 +1 = 新增的钉住用例）；`e2e/html-export.spec.ts` **3/3**、既有导出 e2e 回归 **11/11**。
+- **发布边界（spec §7）**：本次只交付**当前 `main` 的源码能力**，**不等于**发布了含此功能的桌面安装包 —— 那需要一个新版本号、从确定的发行提交重打并核对哈希。
+
 ## 2026-10-02 —— HTML 导出 Task 3+4：e2e 先红 → 菜单接线转绿（全量门禁复跑）
 
 - 实施计划 **Task 3 + Task 4** 完成（提交 `59eb3be`）。**e2e 三条浏览器判据**（`e2e/html-export.spec.ts`）：平面导出拿到 `.html`、文件里有内嵌 `<svg>` 与存档 JSON、**零外部引用**，再把它当普通网页 `setContent` 打开、断言图**可见**且"这次导出漏了什么"那一节在；CAD 导出断言文件名 `CAD-linear-dimension-A-B.html`、四个 `data-drawing-view` 齐全、整份文件**只有一个** `<svg>`；立体几何断言 `role="alert"` 含"立体几何"且**零下载**。

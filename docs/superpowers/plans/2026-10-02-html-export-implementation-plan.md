@@ -61,7 +61,7 @@
   - `exportHtmlSnapshot(input: HtmlSnapshotInput): string`
   - `isUnexportableType(type: string): boolean`（`exportService` 导出）
 
-- [ ] **Step 1: 先加"画不出来"的唯一判据（`exportService`）**
+- [x] **Step 1: 先加"画不出来"的唯一判据（`exportService`）**
 
 在 `apps/web/src/services/exportService.ts` 的 `UNEXPORTABLE_TYPES` 常量之后加：
 
@@ -78,7 +78,7 @@ export function isUnexportableType(type: string): boolean {
 }
 ```
 
-- [ ] **Step 2: 写失败的测试**
+- [x] **Step 2: 写失败的测试**
 
 创建 `apps/web/src/persistence/htmlExporter.test.ts`：
 
@@ -187,12 +187,12 @@ describe("HTML snapshot exporter", () => {
 })
 ```
 
-- [ ] **Step 3: 运行测试，确认失败**
+- [x] **Step 3: 运行测试，确认失败**
 
 Run: `npx vitest run apps/web/src/persistence/htmlExporter.test.ts`
 Expected: FAIL —— `Failed to resolve import "./htmlExporter"`（模块还不存在）。
 
-- [ ] **Step 4: 写实现**
+- [x] **Step 4: 写实现**
 
 创建 `apps/web/src/persistence/htmlExporter.ts`：
 
@@ -338,16 +338,16 @@ ${losses}
 }
 ```
 
-- [ ] **Step 5: 运行测试，确认通过**
+- [x] **Step 5: 运行测试，确认通过**
 
 Run: `npx vitest run apps/web/src/persistence/htmlExporter.test.ts`
 Expected: PASS（9 项）。
 
-- [ ] **Step 6: 类型检查与 lint**
+- [x] **Step 6: 类型检查与 lint**
 
 Run: `npm run typecheck` → exit 0；`npx eslint apps/web/src/persistence/htmlExporter.ts apps/web/src/persistence/htmlExporter.test.ts apps/web/src/services/exportService.ts` → exit 0。
 
-- [ ] **Step 7: 提交**
+- [x] **Step 7: 提交**
 
 ```bash
 git add apps/web/src/persistence/htmlExporter.ts apps/web/src/persistence/htmlExporter.test.ts apps/web/src/services/exportService.ts
@@ -369,7 +369,7 @@ git commit -m "feat(web): HTML 快照产出器（纯函数）+ 复用同一张�
 - Consumes: `exportHtmlSnapshot` / `collectHtmlOmissions`（Task 1）、`readDesktopRuntime`（`../services/desktopRuntime`）、`exportSvg`、动态 `import("./engineeringExporters")`
 - Produces: `FileExports.exportHtmlFile(): Promise<void>`
 
-- [ ] **Step 1: 写失败的测试**
+- [x] **Step 1: 写失败的测试**
 
 在 `apps/web/src/persistence/fileExports.test.ts` 的 `describe` 里追加：
 
@@ -421,12 +421,12 @@ git commit -m "feat(web): HTML 快照产出器（纯函数）+ 复用同一张�
   })
 ```
 
-- [ ] **Step 2: 运行测试，确认失败**
+- [x] **Step 2: 运行测试，确认失败**
 
 Run: `npx vitest run apps/web/src/persistence/fileExports.test.ts`
 Expected: FAIL —— `exports.exportHtmlFile is not a function`。
 
-- [ ] **Step 3: 写实现**
+- [x] **Step 3: 写实现**
 
 在 `apps/web/src/persistence/fileExports.ts` 里：
 
@@ -507,16 +507,16 @@ export type ExportFormat = VectorExportFormat | "html"
   return { save, exportSvgFile, exportCsvFile, exportPngFile, exportHtmlFile }
 ```
 
-- [ ] **Step 4: 运行测试，确认通过**
+- [x] **Step 4: 运行测试，确认通过**
 
 Run: `npx vitest run apps/web/src/persistence/fileExports.test.ts`
 Expected: PASS（原有全部 + 新增 3 项）。若既有用例因 `ExportFormat` 改名而报类型错，同步改它们的引用即可（`apps/web/src/persistence/fileExports.test.ts` 与 `apps/web/src/commandDispatch.ts` 是仅有的两处）。
 
-- [ ] **Step 5: 类型检查与 lint**
+- [x] **Step 5: 类型检查与 lint**
 
 Run: `npm run typecheck` → exit 0；`npx eslint apps/web/src/persistence/fileExports.ts apps/web/src/persistence/fileExports.test.ts` → exit 0。
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git add apps/web/src/persistence/fileExports.ts apps/web/src/persistence/fileExports.test.ts
@@ -535,7 +535,7 @@ git commit -m "feat(web): HTML 导出接入文件导出路径，立体几何明�
 **Interfaces:**
 - Consumes: 功能区命令标签 `导出 HTML`（Task 4 才加）；夹具 `e2e/fixtures/planar-demo.mgeo`、`e2e/fixtures/cad-dimension.mgeo`；`role="alert"` 错误条（`App.tsx` 的 `.footer-note`）
 
-- [ ] **Step 1: 写失败的 e2e**
+- [x] **Step 1: 写失败的 e2e**
 
 创建 `e2e/html-export.spec.ts`：
 
@@ -614,12 +614,12 @@ test("refuses HTML export in the 3D workspace instead of writing an empty file",
 })
 ```
 
-- [ ] **Step 2: 运行，确认失败**
+- [x] **Step 2: 运行，确认失败**
 
 Run: `npx playwright test e2e/html-export.spec.ts --reporter=line`
 Expected: FAIL —— 三条都红在 `getByRole("button", { name: "导出 HTML" })` 找不到元素（命令还没接）。**把这次红的输出记下来**：它是这组用例的 RED 证据。
 
-- [ ] **Step 3: 提交这个红着的 spec（可选但推荐）**
+- [ ] **Step 3: 提交这个红着的 spec（可选但推荐）** —— **未单独做（有意）**：这条红 spec 与 Task 4 的接线合并成一笔提交（`59eb3be`），避免历史里留一个"提交即红"的状态。RED 本身观察到了并记在 Task 3 的状态行里。
 
 ```bash
 git add e2e/html-export.spec.ts
@@ -641,7 +641,7 @@ git commit -m "test(e2e): HTML 导出的三条浏览器判据（先红：菜单�
 - Consumes: `FileExports.exportHtmlFile`（Task 2）
 - Produces: 命令 id `export-html`（功能区两个工作区分支各一条）
 
-- [ ] **Step 1: 先改会因此变红的顺序断言**
+- [x] **Step 1: 先改会因此变红的顺序断言**
 
 `apps/web/src/ribbonCommands.test.ts` 第 33 行的精确顺序断言改成：
 
@@ -669,12 +669,12 @@ git commit -m "test(e2e): HTML 导出的三条浏览器判据（先红：菜单�
 
 （`harness` 的替身表里要补 `exportHtmlFile: vi.fn()`。）
 
-- [ ] **Step 2: 运行，确认失败**
+- [x] **Step 2: 运行，确认失败**
 
 Run: `npx vitest run apps/web/src/ribbonCommands.test.ts apps/web/src/commandDispatch.test.ts`
 Expected: FAIL —— 顺序断言实收缺 `export-html`；`exportHtmlFile` 不是函数。
 
-- [ ] **Step 3: 接线**
+- [x] **Step 3: 接线**
 
 `apps/web/src/ribbonCommands.ts`：CAD 分支在 `export-pdf` 之后、`export-csv` 之前插一条；平面/空间分支在 `export-svg` 之后插一条：
 
@@ -714,20 +714,20 @@ CAD 分支注意：`export-html` 对 CAD 是**可用**的（导四视图），�
         <ToolButton label="导出 HTML" icon="svg" onClick={props.onExportHtml} />
 ```
 
-- [ ] **Step 4: 跑单测与 e2e，确认变绿**
+- [x] **Step 4: 跑单测与 e2e，确认变绿**
 
 Run: `npx vitest run apps/web/src/ribbonCommands.test.ts apps/web/src/commandDispatch.test.ts` → PASS
 Run: `npx playwright test e2e/html-export.spec.ts --reporter=line` → PASS（3 项）
 Run: `npx vitest run apps/web/src/App.test.tsx` → PASS（若 App 的替身表要求新 prop 存在，同步补上）
 
-- [ ] **Step 5: 全量门禁**
+- [x] **Step 5: 全量门禁**
 
 Run: `npm run typecheck` → exit 0
 Run: `npm run lint` → exit 0（0 error，warning 数不高于既有基线 13）
 Run: `npm test -- --maxWorkers=3` → 全绿，记下"文件数 / 用例数"
 Run: `npx playwright test e2e/workbench.spec.ts e2e/engineering-drawing.spec.ts e2e/html-export.spec.ts --reporter=line` → 全绿（确认既有导出入口没被改动碰坏）
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git add apps/web/src/ribbonCommands.ts apps/web/src/commandDispatch.ts apps/web/src/App.tsx apps/web/src/components/GeometryToolbar.tsx apps/web/src/ribbonCommands.test.ts apps/web/src/commandDispatch.test.ts e2e/html-export.spec.ts
@@ -738,6 +738,8 @@ git commit -m "feat(web): 导出菜单接入 HTML（功能区两个分支 + 工�
 
 ### Task 5: Agent 通道保持四个格式（有意的不做）+ 文档收口 + 上传
 
+> **状态：已完成（2026-10-02）。** 钉住用例在 `packages/agent-core/src/tools/interactionTools.test.ts`（该文件 **12/12**）。**变异检查做了两次**，分别打在两处联合上：给 `proposeExport` 加 `| "html"` → `tsc` 报 `interactionTools.test.ts(149,11): Type 'true' is not assignable to type 'false'`；给 `preflight` 的 `format` 加 `| "html"` → 同样报在 `(155,11)`。**两处都拦得住**（第一次只钉 `proposeExport` 时，改 `preflight` 是**拦不住**的 —— 于是把判据扩成两条，这条教训记在这里）。变异已恢复，`interactionTools.ts` 与 HEAD 无差异。
+
 **Files:**
 - Modify: `packages/agent-core/src/tools/interactionTools.test.ts`
 - Modify: `CHANGELOG.md`、`docs/current-status.md`、`docs/feature-catalog.md`、`docs/project-progress.md`
@@ -747,7 +749,7 @@ git commit -m "feat(web): 导出菜单接入 HTML（功能区两个分支 + 工�
 - Consumes: 无（本任务只加判据与文档）
 - Produces: 一条**被类型门禁强制执行**的钉住用例
 
-- [ ] **Step 1: 写"有意不做"的钉住用例**
+- [x] **Step 1: 写"有意不做"的钉住用例**
 
 在 `packages/agent-core/src/tools/interactionTools.test.ts` 追加：
 
@@ -771,12 +773,12 @@ git commit -m "feat(web): 导出菜单接入 HTML（功能区两个分支 + 工�
 
 （`InteractionTools` 类型从 `./interactionTools` 导入；该文件已有导入行，补上类型名即可。）
 
-- [ ] **Step 2: 运行，确认绿且真的会拦**
+- [x] **Step 2: 运行，确认绿且真的会拦**
 
 Run: `npx vitest run packages/agent-core/src/tools/interactionTools.test.ts` → PASS
 **变异检查**：临时把 `interactionTools.ts` 的两处联合加上 `| "html"`，`npm run typecheck` **必须报错**（那两行赋值不再满足条件类型）；确认后**改回去**，并核对 `git diff` 里 `interactionTools.ts` 无差异。
 
-- [ ] **Step 3: 文档收口**
+- [x] **Step 3: 文档收口**
 
 - `docs/superpowers/specs/2026-10-02-html-export-design.md`：状态行由"待用户审阅"改为"**已批准，实施中/已实施**"，并把两处**实测偏差**写进 §10 末尾：① 本批**没有**调用 `buildExportPlan`（它至今没接进任何用户路径，`agentRunner.ts:509` 是桩），损失清单改为复用 `exportService.isUnexportableType` + 隐藏对象 + 工程视图诊断；因此 §9 的第 7 处（`exportService` 的 `ExportFormat` 联合）**不需要**动，"只加一个导出函数"即可；② "零外部引用"的判据不能写成"不含 `http://`" —— 内嵌 SVG 的 `xmlns="http://www.w3.org/2000/svg"` 是 **XML 命名空间、不是网络请求**，判据落实为"没有 `<link>` / 没有带 `src` 的 `<script>` / 没有指向网络的 `src|href` / 没有 `@import`"。
 - `CHANGELOG.md`：新增一节，写清"用户决定 + spec 批准 + 本批交付了什么 + 当次门禁读数 + 两处偏差"。
@@ -784,7 +786,7 @@ Run: `npx vitest run packages/agent-core/src/tools/interactionTools.test.ts` →
 - `docs/feature-catalog.md`：导出能力那条加上 HTML（自包含快照 + 可再导入存档，且**立体几何明确拒绝**）。
 - `docs/project-progress.md`（归档）：新增一节，记 RED→GREEN 证据、变异检查、偏差与两处"实测才发现的坑"。
 
-- [ ] **Step 4: 全量门禁与提交推送**
+- [x] **Step 4: 全量门禁与提交推送**
 
 Run: `npm run typecheck`、`npm run lint`、`npm test -- --maxWorkers=3`、`npx playwright test e2e/html-export.spec.ts --reporter=line` —— 全绿并记下读数。
 
