@@ -180,12 +180,14 @@
 
 **未交付：按计划属 P2 或独立探索；用户决定已记录（2026-09-29）**
 
-1. **球体与球截面**（P2，Task 1 已交付、整体未交付）：[设计规格](superpowers/specs/2026-10-01-sphere-and-sections-design.md) / [实施计划](superpowers/plans/2026-10-01-sphere-and-sections-implementation-plan.md) 已推送；本地 `sphere` 文档类型可校验有限球心/正半径并 `.mgeo` 往返，Agent 明确暂不可用。**提交 `ca03ed5` 已推送并核对 SHA，CI run `36908959733` 四项成功；解析截圆、画布创建与投影仍未做，外接/内切球读数也不是球图元。**
+1. **球体与球截面**（P2，**Task 1–8 已交付；Task 9 的门禁复跑与 spec §5 审计已完成；球体能力尚未宣布整体交付**）：[设计规格](superpowers/specs/2026-10-01-sphere-and-sections-design.md) / [实施计划](superpowers/plans/2026-10-01-sphere-and-sections-implementation-plan.md) 已推送；本地 `sphere` 文档类型可校验有限球心/正半径并 `.mgeo` 往返，Agent 明确暂不可用。**已交付（2026-10-01，逐块都有当次 RED→GREEN 与 CI 证据）**：① 文档类型（`sphere` 只存球心 + 半径，有限性 / 正半径校验，`.mgeo` 往返）；② **解析球-平面截交**（圆 / 单点切触 / 空集，退化容差与模型尺度同源）；③ **场景事务与数值测量**（球心 / 半径可编辑、可平移、一步撤销、`4πr²` / `4πr³/3` 标 `exact-input`）；④ **截面接进 `SectionPrimitive`**（圆 → `exact.kind="circle"` / `status="exact"`，切点可见，空集不留旧环）+ **布尔门禁**（球-球 / 球-实体明确 `unsupported`，旧缓存交集退化为 `insufficient-data`）；⑤ **3D 渲染**（球面网格 + 拾取；**不画经纬网** —— 那些线看得见也选得中）；⑥ **手工入口**（「常用立体」新增球体预设，球心 + 半径两个字段）+ **属性栏编辑**；⑦ **工程投影与导出**（四个视图给出**同样大**的圆、SVG/DXF/PDF 三件套）；⑧ **Agent 动作 `solid.create_sphere`**（动作 / 传输 / 登记三层一起接通，能力表已翻成 `available`）。
+**Task 9 的审计结论**：六条门禁当次全量复跑并逐条报数（全库 278 文件 / 3179 项 + 1 todo / 0 失败、`test:perf` 9/9、`test:rust` 236 通过 / 3 ignored；**全量 e2e 本机 175 通过 / 1 失败** —— 那条失败已核实为**既有环境敏感**用例，非本批引入，但它让本机 e2e 不能当放行依据，只有 CI 的 `e2e` 作业能）；**spec §5 逐行审计**查出并修掉一处**静默缺口**（`measurementVisuals.ts` 的 `pointPositions` 漏了 `sphere`，于是球的面积 / 体积**在画布上一个字都不画**，而属性栏照样有数字）。
+**因此仍不能读成"球体整体交付"**：切点 / 空集 / 刻意的不支持布尔在浏览器里**只有单元判据**（没有可读读数可观察）；外接 / 内切球读数**仍不是**可编辑球图元；发布三件套（匹配版本的安装包 + 安装实测 + Release）属 **D 类**，需用户先定版本。
 2. **题目截图 → 可编辑数学图**（独立探索，不阻塞 P0/P1）：需要单列的质量门禁（样题集、歧义标注、人工核对、真实 provider 结果、草稿确认）。当前 Agent 发布门禁**不允许**宣称"截一张图就能正确生成所有高中图"。**用户本轮未启动**。
 3. **HTML / GeoGebra 导出**：已交付的导出是 `.mgeo`、SVG、CSV、PNG 与工程图的 SVG/DXF/PDF；**HTML 与 GGB 不在已交付范围**。**用户本轮未启动**。
 4. **平面 / 函数题型的逐题补缺**：需先做教师样题盘点再单独排期（现有平面工具不回退是底线）。**未排期**。
-5. **教师 / 学生真实走查**（实施计划 Task 8 第 3 项）：**没有**做，按用户口径属**用户侧**。~~完整桌面打包~~：**2026-09-30 已实际跑通** —— `npm --workspace @draw/desktop run bundle`（`tauri build`）exit 0，产出 release exe / MSI / NSIS 三件（见 [`CHANGELOG.md`](../CHANGELOG.md)）；**唯一没跑的是根脚本 `npm run build` 的整体命令**（它还会跑 4 个 packages 的 `tsc` 构建）。
-6. ~~**功能分支合并到 `main`**~~：**2026-09-30 已完成** —— PR #1 合并提交 `3b1f770`。~~**未打包桌面版本**~~：**同日也已打包并实测启动** —— `npm --workspace @draw/desktop run bundle` exit 0，产出 release exe **16.39 MB** / MSI **6.53 MB** / NSIS setup **4.79 MB**（版本 3.0.0）。**仍未做的**：把产物推到 GitHub Release、在本机安装 MSI/NSIS，以及根脚本 `npm run build` 的整体命令。
+5. **教师 / 学生真实走查**（实施计划 Task 8 第 3 项）：**没有**做，按用户口径属**用户侧**。~~完整桌面打包~~：**2026-09-30 已实际跑通** —— `npm --workspace @draw/desktop run bundle`（`tauri build`）exit 0，产出 release exe / MSI / NSIS 三件（见 [`CHANGELOG.md`](../CHANGELOG.md)）；**根脚本 `npm run build` 的整体命令后来也已跑通**（exit 0，见 [`current-status.md`](current-status.md) §一与 `CHANGELOG.md` 同日「根目录完整构建门禁补跑」一节）。
+6. ~~**功能分支合并到 `main`**~~：**2026-09-30 已完成** —— PR #1 合并提交 `3b1f770`。~~**未打包桌面版本**~~：**同日也已打包并实测启动** —— `npm --workspace @draw/desktop run bundle` exit 0，产出 release exe **16.39 MB** / MSI **6.53 MB** / NSIS setup **4.79 MB**（版本 3.0.0）。**仍未做的**：把产物推到 GitHub Release、在本机安装 MSI/NSIS（根脚本 `npm run build` 已补跑通）。
 
 **已闭环的功能与体验缺口**（细节与当前状态以 [`current-status.md`](current-status.md) 为准）
 

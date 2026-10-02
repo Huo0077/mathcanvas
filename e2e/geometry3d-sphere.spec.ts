@@ -250,3 +250,65 @@ test("cuts the selected sphere from the toolbar and records an exact circle", as
   // 球没有端面：整条交圆都在，所以采样点是一整圈而不是几段弧。
   await expect.poll(async () => Number(await scene.getAttribute("data-section-point-count"))).toBeGreaterThan(2)
 })
+
+/**
+ * **球参与的布尔交：一个预览都不给**（spec §5「不支持项」那一行：球-球 / 球-实体要**明确拒绝**）。
+ *
+ * 文档层的拒绝由 `sphereSection.test.ts` 钉住（`commitPatch` 返回 `changed=false` + `unsupported`）；
+ * 这一条验的是**界面这一侧不自作主张**：球与立方体的组合不该冒出"点一下就建交面"的虚线预览。
+ *
+ * **反向对照是必须的**：少了它，"预览数恒为 0"（比如预览功能压根没开）也能让断言变绿 ——
+ * 所以同一份用例里先证明"两个立方体**有**预览"，再证明"球参与时**没有**"。
+ */
+test("offers no Boolean intersection preview when a sphere is involved, but does for two solids", async ({ page }) => {
+  const seed = async (primitives: unknown[]) => {
+    await page.evaluate(({ key, primitives }) => {
+      const raw = window.localStorage.getItem(key)
+      if (!raw) throw new Error("应用还没有写出 3D 草稿")
+      const envelope = JSON.parse(raw) as DraftEnvelope
+      envelope.document.primitives = primitives as DraftEnvelope["document"]["primitives"]
+      window.localStorage.setItem(key, JSON.stringify(envelope))
+    }, { key: DRAFT_KEY, primitives })
+    await page.reload()
+  }
+
+  await page.goto("/")
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "添加立方体" }).click()
+  await expect.poll(async () => readPrimitiveCount(page)).toBeGreaterThan(0)
+
+  const scene = page.locator("[data-3d-scene]")
+  const previewCount = async () => Number(await scene.getAttribute("data-preview-count"))
+  const outerCube = { id: "cube-1", type: "cube", origin: { x: -2, y: -2, z: -2 }, size: { x: 4, y: 4, z: 4 } }
+  const innerCube = { id: "cube-2", type: "cube", origin: { x: -1, y: -1, z: -1 }, size: { x: 2, y: 2, z: 2 } }
+
+  // 反向对照：两个实体相交时**有**预览（证明这条链是通的，不是"功能没开"）。
+  await seed([outerCube, innerCube])
+  await expect.poll(previewCount).toBeGreaterThan(0)
+
+  // 球参与时一个都不给 —— 而不是给一个假的。
+  await seed([SPHERE, outerCube])
+  await expect(scene).toHaveAttribute("data-preview-count", "0")
+  // 文档也没被改动：还是那两个图元（建模失败不留半成品）。
+  expect(await readPrimitiveCount(page)).toBe(2)
+})
+
+/**
+ * **一处试过但走不通的浏览器验收，连同原因留在这里**（免得后来人重走一遍）。
+ *
+ * 想验的是 spec §5「解析截面」那一行点名的 z=8 / z=9 两例在**浏览器里**也说得清 —— 做法是
+ * 直接把一颗球 + 一个截面种进草稿，然后读画布自己的读数（`data-section-exact-kind` /
+ * `data-section-point-count`）。
+ *
+ * **实测走不通**：种下去的截面**不会被重算**。连最容易的一档（z=6，正圆）都读不出
+ * `data-section-exact-kind`（是空串），而 `data-section-count` 是 1 —— 也就是说
+ * **恢复路径信任保存下来的派生字段**（`points` / `classification` / `status` / `exact`），
+ * 不会为了一份手写的草稿重新跑 `recomputeDerivedObjects`。
+ *
+ * 这不是缺陷（保存的文档本来就该是算好的），但它决定了**这条路验不了**：要么让应用自己
+ * 算出这一刀（工具栏那条已经覆盖了"过球心给精确圆"），要么把刀口挪到相切位置
+ *（截面可以拖动 / 方向键移动，但要按到刚好相切，代价大且脆）。
+ *
+ * **所以这两例目前仍是单元判据**：`sphereSection.test.ts` 钉 z=8 → `kind:"point"`、
+ * z=9 → `kind:"empty"` 且不留旧环；`createSectionMesh` 那条钉"切点画得出标记"。
+ */
