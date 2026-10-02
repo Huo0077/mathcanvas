@@ -10,6 +10,13 @@
 
 > 下方 2026-09-22 的"最后更新 / 当前阶段 / 总体状态"三行保留为**当时快照**，不再维护。
 
+## 2026-10-02 —— 悬停读数不再只跟着指针（修掉那条"不能复现"的抖动）
+
+- **修的是同日本文件追查过、当时"只记不改"的那条脆弱点**：`data-preview-hovering` **只**由 pointermove 写入，而预览几何由**内容同步**建 ⇒ "指针先到、预览后到"时属性永远停在 `false`（事件不会再来，`expect` 的轮询救不回来）。
+- **修法**：`threeScenePreviewHover` 记住最后一次指针的归一化位置，新增 `refreshPreviewHover()`；`threeSceneEffect` 的 `syncContent` 包装在内容同步之后调用它。`pointerleave` 清掉记住的位置 ⇒ 不会凭空造悬停。
+- **判据为什么这么做**（这是本块最值得留的一条）：那次竞态**不能按需复现**，所以**不去重发指针移动**（那等于把抖动藏起来），而是把同一件事做成**确定性的** —— 指针**一动都不动**、只让内容变（DOM 派发选中"立方体 A" → Delete ⇒ 预览消失），`data-preview-hovering` 必须从 `true` 变 `false`。用 DOM 派发而不是 `locator.click()`：后者会移动鼠标、触发 `pointerleave`，测的就不是这件事了。**顺带一个探针教训**：夹具 `overlapping-cubes.mgeo` 里的对象叫 **"立方体 A/B/远处的立方体"**，不是"立方体 1" —— 第一次写错名字导致 `dispatchEvent` 超时；用一次性探针把面板文本打出来才对上（探针用完即删）。
+- **证据**：`e2e/three-intersection-previews.spec.ts` 新增一条；**变异检查**（拿掉 `refreshPreviewHover()`）→ 期望 `false` 实收 `true`（陈旧读数）✓。回归：预览 / 创建 / 截面 **23/23**；typecheck exit 0、eslint exit 0；全库单测 **280 文件 / 3203 通过 + 1 todo / 0 失败**（282 s）。
+
 ## 2026-10-02 —— D2 的 NSIS 那半：本机「安装 → 启动 → 卸载」完整验收
 
 - **范围**：用户选择**只试 NSIS**（每用户、可卸载），MSI（每机器）那半不试。

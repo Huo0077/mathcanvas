@@ -5,6 +5,14 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-02 —— 悬停读数不再只跟着指针（修掉那条"不能复现"的 e2e 抖动）
+
+- **修的是本文件同日追查过、当时"只记不改"的那条脆弱点**：`data-preview-hovering` **只**由 `pointermove` 写入（`threeScenePreviewHover.ts` 的 `updatePreviewHover`），而预览几何是**内容同步**建的 —— 两者谁先谁后是竞态：指针先到、预览后到，属性就永远停在 `false`，而 `expect` 的轮询救不回来（事件已经发生、不会再来一个）。现场记录见同日「追查 `geometry3d-section` 抖动」一节。
+- **修法（产品侧重算）**：`threeScenePreviewHover` 记住最后一次指针的**归一化位置**，新增 `refreshPreviewHover()`；`threeSceneEffect` 的 `syncContent` 包装在**内容同步之后**调用它 —— 于是"指针已停下、内容才变"这类路径不再依赖两者先后。`pointerleave` 会清掉记住的位置，所以**不会凭空造一个悬停**。
+- **判据为什么这么写（这一节值得记）**：原来那次竞态**不能按需复现**（单独跑 3/3、全量 `--workers=6` 179/179 全过，只在一次 `--workers=3` 里见过），所以我**不去重发指针移动**（那会变成"把抖动藏起来"），而是把同一件事**做成确定性的**：指针**一动都不动**，只让内容变（DOM 派发选中一只立方体 → 按 Delete ⇒ 预览消失），悬停读数必须跟着从 `true` 变成 `false`。用 DOM 派发而不是 `locator.click()`：后者会**移动鼠标**，一离开画布就走 `pointerleave`，那样测的就不是"内容变了"这件事。
+- **证据**：`e2e/three-intersection-previews.spec.ts` 新增一条（修法下通过）；**变异检查**：拿掉 `refreshPreviewHover()` 那一行 → 期望 `false` 实收 `true`（**陈旧读数**，正是那条脆弱点的症状）✓。回归：预览 / 创建 / 截面三个 spec **23/23**；`npm run typecheck` exit 0；`eslint` exit 0；全库单测 **280 文件 / 3203 通过 + 1 todo / 0 失败**（282 s）。
+- **顺带修正一处过时的排查笔记**：老记录里说"加立方体会触发取景动画"——**不成立**（`shouldAutoFit` 只在换文档或内容出界时触发，见前一条 `cancelFitAnimation` 那节的记录）。
+
 ## 2026-10-02 —— D2 的 NSIS 那半：本机「安装 → 启动 → 卸载」完整验收
 
 - **用户选择只试 NSIS**（每用户、可卸载；MSI 每机器那半不试）。v3.1.0 的安装包**不在本地**（`target/release/bundle` 里只有 v0.2.0 的两件），所以从 GitHub Release 下载 `MathCanvas_3.1.0_x64-setup.exe`：**5,030,195 B**、SHA-256 **`1A4B2AA1A5278E8A5B1DA92B23B6FD6B47B74D6FD151B1C02C4343CF11D5052A`** —— 与 D1 记录的 `1a4b2aa1…5052a` **逐位一致**（顺带又独立复核了一次 Release 资产）。
