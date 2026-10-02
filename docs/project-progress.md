@@ -10,6 +10,51 @@
 
 > 下方 2026-09-22 的"最后更新 / 当前阶段 / 总体状态"三行保留为**当时快照**，不再维护。
 
+## 2026-10-01 —— 球体 Task 5（上半）：画的球与"不许出现经纬网"
+
+> 承接 Task 4。
+
+### A. RED（症状逐条对上"球走了圆锥那条分支"）
+
+- 新增 `apps/web/src/threeSphere.test.ts`（5 条）。首次运行 **4/5 全红**：
+  - `expected [ LineSegments{ …(37) } ] to have a length of +0 but got 1` —— `EdgesGeometry(SphereGeometry)` 把球面拆成了一张经纬网；
+  - 打开隐藏边后变成 2 条；
+  - `expected [ 1, NaN, 3 ] to deeply equal [ 1, 2, 3 ]` —— 球没有 `height`，而圆锥分支要写 `center.y + height / 2`，`undefined / 2` 直接是 NaN。这条最直观：**位置都算错了**；
+  - `visibleSolids` 返回 `[]` —— 球的类型压根不在过滤列表里。
+- 换句话说，RED 的成因是"球根本没进渲染层"，而不是断言写得太严。
+
+### B. GREEN（改了什么）
+
+| 文件 | 改动 |
+| --- | --- |
+| `apps/web/src/threePrimitives.ts` | `SolidPrimitive` 加入 `SpherePrimitive`；`visibleSolids` 加入 `"sphere"`；`createSolidMesh` 加球分支（`SphereGeometry(radius, 48, 32)`，位置=球心）；`createSolidGroup` 对球跳过 `solidOutline` 与 `hiddenEdgeOverlay` |
+| `apps/web/src/threePicking.ts` | `pickKind` 的实体列表加入 `"sphere"`（否则看得见选不中） |
+
+两个设计点值得留在归档里：
+
+1. **球不画线，而且理由不是"省事"**：`solidOutline` / `hiddenEdgeOverlay` 都是 `EdgesGeometry`，套在球面上会拆出一整张经纬网 —— 那些"棱"看得见、也**选得中**，用户点球面会选到一条虚构的边，而 spec 明确不要"密集的可选中经纬线"。球真正的轮廓是**视角相关**的屏幕空间剪影，不是网格边；所以这里如实不加，而不是加一圈"看着像轮廓"的假边。
+2. **网格密度只是显示缓存**：文档里只有球心与半径，改 48×32 不会动 `.mgeo` 一个字节 —— 用例里把"图元上只有 `center/id/radius/type` 四个键"也钉住了，防止以后有人把网格顶点塞进图元。
+
+### C. 一处自查："为错误的理由通过"（本项目第二次踩到同一个坑）
+
+- 第 5 条"隐藏的球不进场景"在实现之前**就是绿的**：`visibleSolids` 当时压根不认球，返回空数组，碰巧满足 `toHaveLength(0)` —— 它什么都没钉住。
+- 改成**反向对照**：一份文档里同时放一个可见球与一个隐藏球，必须只留下可见那一个。改法之后它在实现前是红的。
+
+### D. 本轮实测读数
+
+| 命令 | 当次结果 |
+| --- | --- |
+| `npx vitest run apps/web/src/threeSphere.test.ts` | RED 4/5 红 → 修后 **5/5 通过** |
+| `npx vitest run --maxWorkers=3`（全库，改了核心联合类型 `SolidPrimitive`） | **275 文件 / 3152 项通过 + 1 todo / 0 失败** |
+| `npm run typecheck` | exit 0 |
+| `npm run lint` | exit 0，**0 error / 13 warning** |
+
+### E. 明确没有做的事（Task 5 下半）
+
+- **切点截面的可见标记**没验证：Task 4 已让切点截面 `visible:true` 且 `points` 里有一个点，但 `createSectionMesh` 对"只有一个点"的截面是否真的画出标记，还没查。
+- 球的**自动取景**（`sceneFit.ts`）没做。
+- `e2e/geometry3d-sphere.spec.ts` 没写（可见/可选、轨道相机不改变存储的 C/r、无密集可选中经纬线、切点可见）。
+
 ## 2026-10-01 —— 球体 Task 4（上半）：球的解析截面接进 `SectionPrimitive`
 
 > 承接 Task 3。

@@ -51,7 +51,7 @@ function pickKind(primitiveType: unknown): RaycastHit3["kind"] {  if (primitiveT
   if (primitiveType === "face3") return "face"
   if (primitiveType === "plane3") return "plane"
   if (primitiveType === "section") return "section"
-  if (["cube", "pyramid", "cylinder", "cone", "polyhedron3"].includes(String(primitiveType))) return "solid"
+  if (["cube", "pyramid", "cylinder", "cone", "polyhedron3", "sphere"].includes(String(primitiveType))) return "solid"
   return "line"
 }
 

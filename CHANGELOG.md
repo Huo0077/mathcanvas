@@ -5,6 +5,24 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-01 —— 球体 Task 5（上半）：画的球与"不许出现经纬网"
+
+- **背景**：Task 1–4 让球在**文档层**完整（类型、解析截交、可编辑可测量、截面接入 + 布尔门禁），但画布上**根本没有球** —— `SolidPrimitive` 只含 cube/pyramid/cylinder/cone，球会掉进"圆锥"那条分支。
+- **改动（2 个文件 + 1 个新测试文件）**：
+  - `apps/web/src/threePrimitives.ts`：
+    - `SolidPrimitive` 联合类型加入 `SpherePrimitive`；`visibleSolids` 的过滤列表加入 `"sphere"`（否则球压根不进场景）。
+    - `createSolidMesh` 加球分支：`SphereGeometry(radius, 48, 32)`，位置是**球心**。
+    - `createSolidGroup` 对球**不画任何线**（`solidOutline` 与 `hiddenEdgeOverlay` 都跳过）。理由写进了代码：两者都是 `EdgesGeometry`，套在球面上会拆出一整张**经纬网** —— 几十条看得见、也**选得中**的"棱"，用户点球面会选到一条虚构的边；而 spec 明确不要"密集的可选中经纬线"。球真正的轮廓是**视角相关**的屏幕空间剪影，不是网格边，所以这里如实不加，而不是加一圈"看着像轮廓"的假边。
+    - 网格密度取 48×32（与圆柱默认 48 分段同一量级）并写明：**它只是显示缓存**，文档只存球心与半径，改这个数不会动 `.mgeo` 一个字节。
+  - `apps/web/src/threePicking.ts`：`pickKind` 的实体列表加入 `"sphere"` —— 少了它，点球面不会被认成实体，球"看得见但选不中"。
+- **验证（本轮实测）**：
+  - 新增 `apps/web/src/threeSphere.test.ts`（5 条）。**RED 起点：4/5 全红**，症状逐条对上"球走了圆锥那条分支"：出现了 `LineSegments`（经纬网）、开了隐藏边后变成 2 条、**`mesh.position` 是 `[1, NaN, 3]`**（球没有 `height`，`center.y + undefined / 2` 直接是 NaN）、`visibleSolids` 返回空。
+  - **GREEN**：同一条命令 **5/5 通过**。
+  - **一处自查**：第 5 条"隐藏的球不进场景"在实现之前**就是绿的**（`visibleSolids` 当时压根不认球，返回空数组碰巧满足 `toHaveLength(0)`）—— 典型的"为错误的理由通过"。已改成**反向对照**：一份文档里同时放可见球与隐藏球，必须只留下可见那一个；改法之后它在实现前是红的。
+  - **全库回归**（因改了 `SolidPrimitive` 这个核心联合类型）：`npx vitest run --maxWorkers=3` → **275 文件 / 3152 项通过 + 1 todo / 0 失败**。
+  - `npm run typecheck` exit 0；`npm run lint` exit 0（**0 error / 13 warning**）。
+- **未做（Task 5 下半）**：**切点截面的可见标记**（Task 4 已让切点截面 `visible:true` 且 `points` 有一个点，但 `createSectionMesh` 对"只有一个点"的截面是否真的画出标记还没验证）、球的**自动取景**（`sceneFit.ts`）、以及 `e2e/geometry3d-sphere.spec.ts`（可见/可选、轨道相机不改变存储的 C/r、无密集可选中经纬线、切点可见）。
+
 ## 2026-10-01 —— 球体 Task 4（上半）：球的解析截面接进 `SectionPrimitive`
 
 - **背景**：Task 2 有了"球 ∩ 平面"的解析式，Task 3 让球可编辑可测量，但**截面还是画不出来** —— `recomputeSection` 里球走不到任何一条分支，落进兜底那句 `classification:"insufficient-data" / status:"failed"`，诊断还写着"截面来源不是可剖切的实体"。本批把这条接上。

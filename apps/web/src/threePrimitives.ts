@@ -5,14 +5,21 @@
  * 组件文件也不再混着一堆非组件导出（react-refresh 的告警就是这么来的）。
  */
 import * as THREE from "three"
-import type { ConePrimitive, Conic3, CubePrimitive, CurvePiece3, CylinderPrimitive, Edge3Primitive, Face3Primitive, GeometryDocument, Line3Primitive, Plane3Primitive, Point3Primitive, PrimitiveSpec, PyramidPrimitive, Ray3Primitive, SectionPrimitive, Segment3Primitive, Vector3 } from "@draw/dsl"
+import type { ConePrimitive, Conic3, CubePrimitive, CurvePiece3, CylinderPrimitive, Edge3Primitive, Face3Primitive, GeometryDocument, Line3Primitive, Plane3Primitive, Point3Primitive, PrimitiveSpec, PyramidPrimitive, Ray3Primitive, SectionPrimitive, Segment3Primitive, SpherePrimitive, Vector3 } from "@draw/dsl"
 import { conic3FromCircle3, type DihedralMarker3, type UnfoldLayout3 } from "@draw/geometry-kernel"
 import { sampleClosedConic, sampleCurvePieces } from "./conicSampling"
 import { circleRadiusHandlePoint } from "./threeDrag"
 import { opacityFor, strokeFor } from "./primitiveStyle"
 import type { ThreeScenePreview } from "./threeScenePreview"
 
-type SolidPrimitive = CubePrimitive | PyramidPrimitive | CylinderPrimitive | ConePrimitive
+type SolidPrimitive = CubePrimitive | PyramidPrimitive | CylinderPrimitive | ConePrimitive | SpherePrimitive
+
+/**
+ * 球显示网格的密度。**只是显示缓存**：文档里只存球心与半径，所以改这两个数不会动 `.mgeo` 一个字节
+ *（spec：显示网格永远不是数学来源）。取 48×32 与圆柱默认 48 分段同一量级，这个尺寸下球面看不出多边形边。
+ */
+const SPHERE_WIDTH_SEGMENTS = 48
+const SPHERE_HEIGHT_SEGMENTS = 32
 type PointDrivenLinePrimitive = Line3Primitive | Segment3Primitive | Ray3Primitive
 
 export interface SolidVisualOptions {
@@ -256,6 +263,18 @@ function createPyramidGeometry(primitive: PyramidPrimitive): THREE.BufferGeometr
 
 export function createSolidMesh(primitive: SolidPrimitive, selected: boolean, options: SolidVisualOptions = {}): THREE.Mesh {
   if (primitive.type === "cube") return createCubeMesh(primitive, selected, options)
+  /**
+   * 球：位置就是**球心**，不像圆柱 / 圆锥那样还要抬 `height/2`（它们的 `center` 是底面中心）。
+   * 照抄那条偏移会让球整体上移半个半径（漏掉这一条时实测 `position` 是 `[1, NaN, 3]` ——
+   * 球没有 `height`，`center.y + undefined / 2` 直接是 NaN）。
+   */
+  if (primitive.type === "sphere") {
+    const sphereMesh = new THREE.Mesh(new THREE.SphereGeometry(primitive.radius, SPHERE_WIDTH_SEGMENTS, SPHERE_HEIGHT_SEGMENTS), solidMaterial(primitive, selected, options))
+    sphereMesh.position.set(primitive.center.x, primitive.center.y, primitive.center.z)
+    sphereMesh.userData.primitiveId = primitive.id
+    sphereMesh.userData.primitiveType = primitive.type
+    return sphereMesh
+  }
   const geometry = primitive.type === "pyramid"
     ? createPyramidGeometry(primitive)
     : primitive.type === "cylinder"
@@ -872,8 +891,18 @@ export function createSolidGroup(primitive: SolidPrimitive, selected: boolean, o
   const group = new THREE.Group()
   const mesh = createSolidMesh(primitive, selected, options)
   group.add(mesh)
-  group.add(solidOutline(mesh, primitive, selected))
-  if (options.showHiddenEdges) group.add(hiddenEdgeOverlay(mesh, primitive))
+  /**
+   * 球**不画任何线**。`solidOutline` / `hiddenEdgeOverlay` 都是 `EdgesGeometry`，套在
+   * `SphereGeometry` 上会把球面拆成一整张**经纬网**：几十条看得见、也**选得中**的"棱"，
+   * 用户点球面就会选到一条虚构的边。spec 明确不要"密集的可选中经纬线"。
+   *
+   * 球真正的轮廓是**视角相关**的（屏幕空间那条剪影），不是网格边 —— 所以这里如实不加，
+   * 而不是加一圈"看着像轮廓"的假边。
+   */
+  if (primitive.type !== "sphere") {
+    group.add(solidOutline(mesh, primitive, selected))
+    if (options.showHiddenEdges) group.add(hiddenEdgeOverlay(mesh, primitive))
+  }
   if (options.showNormals) normalVisuals(mesh).forEach((normal) => group.add(normal))
   return group
 }
@@ -902,7 +931,7 @@ function createCubeUnfoldGroup(primitive: CubePrimitive, selected: boolean, opti
 
 export function visibleSolids(document: GeometryDocument): SolidPrimitive[] {
   const templateSources = new Set(document.primitives.flatMap((primitive) => primitive.type === "polyhedron3" && primitive.construction?.kind === "template" ? primitive.construction.sourceIds : []))
-  return document.primitives.filter((primitive): primitive is SolidPrimitive => ["cube", "pyramid", "cylinder", "cone"].includes(primitive.type) && primitive.visible !== false && !templateSources.has(primitive.id))
+  return document.primitives.filter((primitive): primitive is SolidPrimitive => ["cube", "pyramid", "cylinder", "cone", "sphere"].includes(primitive.type) && primitive.visible !== false && !templateSources.has(primitive.id))
 }
 
 /** 释放一个对象子树的几何与材质。内容对象每次同步都会重建，必须逐个释放，否则显存会一路涨。 */
