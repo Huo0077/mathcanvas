@@ -244,7 +244,7 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
 **C. 未复跑的门禁（0 条；本机 perf 与 Rust 的实测见第一节）**
 
 
-**D. 发布与仓库收尾（3 项）**
+**D. 发布与仓库收尾（**剩余 1 项**；D1 发布与 D3 分支归档删除已于 2026-10-02 完成，下面各自的更新写在条目内）**
 
 1. **当前源码还没有匹配的 GitHub Release**：2026-10-01 官方仓库 Releases API 的最新公开版本为 `v3.0`（3 个资产）；`v3.0.1` tag 存在但无同名 Release。当前 `main` 在标签之后又有独立功能提交，**不能**把旧版本打出的三件套直接传成当前版本。确定下一发行版本、从最终源码重打 exe/MSI/NSIS、校验哈希和 source tag 后再上传。
    **2026-10-02 更新（用户已决定 v3.1.0，打包已完成）**：版本真值由 `3.0.1` 升到 **`3.1.0`**（提交 `33facf1`，只动 `tauri.conf.json` 与 `Cargo.toml` 两处——`git grep "3.0.1"` 在 `*.json`/`*.toml` 上只命中这两行；根与 `apps/desktop` 的 `0.1.0` 是私有 workspace 版本，不参与发行）；打包前先跑根 `npm run build`（exit 0）并核实外壳前端来源 `build-check/mathcanvas-current` 的时间戳距打包仅 **0.3 分钟**、`index-*.js` 含「球体」与 `create_sphere`；随后 `npm --workspace @draw/desktop run bundle` **exit 0**，产出 **`MathCanvas_3.1.0_x64_en-US.msi`（6,848,512 B / SHA-256 `3531e488…f17eb`）**、**`MathCanvas_3.1.0_x64-setup.exe`（5,030,195 B / `1a4b2aa1…5052a`）**、裸 exe（17,190,400 B / `2c70f1c9…f7b23`）。**尚未做**：把这版传成 GitHub Release（tag 与 Release 上传是下一步）。
