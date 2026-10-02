@@ -41,6 +41,9 @@
 
 ### Task 1: HTML 快照产出器（纯函数）
 
+> **状态：已完成（2026-10-02，提交 `6d28578`）。** 下面七个 Step 按写的那样执行过；读数：`htmlExporter.test.ts` **9/9**（RED = `Failed to resolve import "./htmlExporter"`，模块不存在）、`npm run typecheck` exit 0、定向 eslint exit 0。**变异检查**：同时去掉 `escapeHtmlText` 与 `escapeJsonForScript` → **3 条红**（注入那条把内嵌存档提前截断，正是它要防的症状），变异已恢复。
+> 各 Step 前面的 `- [ ]` 会在本计划收口（Task 5）时统一回填勾选，避免分两次改同一份文件的同一段。
+
 **Files:**
 - Create: `apps/web/src/persistence/htmlExporter.ts`
 - Create: `apps/web/src/persistence/htmlExporter.test.ts`
