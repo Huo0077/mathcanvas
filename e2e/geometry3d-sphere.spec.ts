@@ -338,21 +338,67 @@ test("drafts a sphere from one sentence and commits it in one undo step", async 
 })
 
 /**
- * **一处试过但走不通的浏览器验收，连同原因留在这里**（免得后来人重走一遍）。
+ * **相切与空集在浏览器里也说得清**（spec §5「解析截面」那一行点名 z=8 / z=9 两例）。
  *
- * 想验的是 spec §5「解析截面」那一行点名的 z=8 / z=9 两例在**浏览器里**也说得清 —— 做法是
- * 直接把一颗球 + 一个截面种进草稿，然后读画布自己的读数（`data-section-exact-kind` /
- * `data-section-point-count`）。
+ * ## 为什么这条能用"整数步"精确走到相切
  *
- * **实测走不通**：种下去的截面**不会被重算**。连最容易的一档（z=6，正圆）都读不出
- * `data-section-exact-kind`（是空串），而 `data-section-count` 是 1 —— 也就是说
- * **恢复路径信任保存下来的派生字段**（`points` / `classification` / `status` / `exact`），
- * 不会为了一份手写的草稿重新跑 `recomputeDerivedObjects`。
+ * `sectionPlaneThroughSource` 对球默认给的是**过球心**的平面（球心 z=3 ⇒ `constant = -3`，大圆）；
+ * 而方向键在「自由拖动」开着、且选中的是截面时按**整整 1 个单位**沿法向平移
+ *（`threeSceneEffect.ts`，按住 Shift 才是 0.2）。于是五次 `ArrowUp` 把常数送到 **-8** ——
+ * 球心到平面的距离正好等于半径 5，**精确相切**；再一次就是 **-9**（距离 6 > 5），空集。
  *
- * 这不是缺陷（保存的文档本来就该是算好的），但它决定了**这条路验不了**：要么让应用自己
- * 算出这一刀（工具栏那条已经覆盖了"过球心给精确圆"），要么把刀口挪到相切位置
- *（截面可以拖动 / 方向键移动，但要按到刚好相切，代价大且脆）。
+ * 整数步 + 整数球心，让"相切"这个测度为零的状态在浏览器里也能**稳定**走到 ——
+ * 这也是它当初被我判成"验不了"时漏掉的一点。
  *
- * **所以这两例目前仍是单元判据**：`sphereSection.test.ts` 钉 z=8 → `kind:"point"`、
- * z=9 → `kind:"empty"` 且不留旧环；`createSectionMesh` 那条钉"切点画得出标记"。
+ * ## 那一次失败的做法（留档，免得重走）
+ *
+ * 更早的写法是把球 + 截面**直接种进草稿**再读读数，**实测走不通**：种下去的截面**不会被重算**
+ *（连正圆那档都读不出 `kind`），因为**恢复路径信任保存下来的派生字段**、不会为手写草稿重跑
+ * `recomputeDerivedObjects`。所以这条改成**让应用自己算**：工具栏切一刀 → 方向键挪刀口。
  */
+test("walks a sphere section from an exact circle to a tangent point and then to empty", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "添加立方体" }).click()
+  await expect.poll(async () => readPrimitiveCount(page)).toBeGreaterThan(0)
+  await page.evaluate(({ key, sphere }) => {
+    const raw = window.localStorage.getItem(key)
+    if (!raw) throw new Error("应用还没有写出 3D 草稿")
+    const envelope = JSON.parse(raw) as DraftEnvelope
+    envelope.document.primitives = [sphere]
+    window.localStorage.setItem(key, JSON.stringify(envelope))
+  }, { key: DRAFT_KEY, sphere: SPHERE })
+  await page.reload()
+  await expect.poll(async () => (await readSphere(page))?.radius ?? null).toBe(5)
+
+  // 选中球并从工具栏切一刀：默认过球心 ⇒ 大圆。
+  const projected = await projectWorldPoint(page, SPHERE.center)
+  await page.mouse.click(projected.x, projected.y)
+  await page.getByRole("button", { name: "创建截面" }).click()
+
+  const scene = page.locator("[data-3d-scene]")
+  await expect(scene).toHaveAttribute("data-section-count", "1")
+  await expect(scene).toHaveAttribute("data-section-exact-kind", "circle")
+  await expect(scene).toHaveAttribute("data-section-plane-constant", "-3.000")
+
+  /**
+   * 方向键只在「自由拖动」开着、且选中的是截面时生效。切完那一刀应用已经把截面选上了，
+   * 这里只要开模式 —— 不需要再点画布（点画布反而会把选择改掉）。
+   */
+  await page.getByRole("button", { name: "自由拖动" }).click()
+
+  const step = async (times: number) => { for (let index = 0; index < times; index += 1) await page.keyboard.press("ArrowUp") }
+
+  // 五次 × 1 单位：常数 -3 → **-8**，距离 = 半径 5 ⇒ 精确相切 ⇒ 一个可见点。
+  await step(5)
+  await expect(scene).toHaveAttribute("data-section-plane-constant", "-8.000")
+  await expect(scene).toHaveAttribute("data-section-exact-kind", "point")
+  await expect(scene).toHaveAttribute("data-section-exact-status", "exact")
+  await expect(scene).toHaveAttribute("data-section-point-count", "1")
+
+  // 再一次：**-9**，距离 6 > 5 ⇒ 空集，而且**不留上一刀那个点**。
+  await step(1)
+  await expect(scene).toHaveAttribute("data-section-plane-constant", "-9.000")
+  await expect(scene).toHaveAttribute("data-section-exact-kind", "empty")
+  await expect(scene).toHaveAttribute("data-section-point-count", "0")
+})
