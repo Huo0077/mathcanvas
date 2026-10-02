@@ -50,10 +50,43 @@
 
 **浏览器验收这条守的是"预览与提交分开"**：参数改完但没点确认之前文档里**不该有球**；画面确实有东西（那句"这里什么都没有"的提示必须消失）；半径填 0 时如实报原因且文档没动；确认后恰好一个球、球心 / 半径逐值相等。
 
-### E. 明确没有做的事（Task 6 剩下的）
+### E. 下半：属性栏编辑 + 截面按钮接受球
 
-- **属性栏编辑**：选中球之后改球心 / 半径。Task 3 已经把 `updatePrimitive { center3, radius3 }` 这条写入路径打通（补丁校验 + 应用分支 + 撤销），缺的是**属性栏那侧的字段**。
-- **截面按钮接受球**（`solidCommands.ts`）—— 也就是 Task 4 的尾巴。
+- **属性栏编辑球心 / 半径**：`inspectorLabels.ts` 的 `SolidPrimitive` 与 `inspectorModel.ts` 的 `selectedSolid` 名单加入 `"sphere"`；`PropertiesBar.tsx` 加球的分支（只有**球心 + 半径 3D**），并给"朝向"那块加 `selectedSolid.type !== "sphere"` 守卫 —— **球没有 `rotation` 字段**，不加守卫 `tsc` 直接报错。
+  - **RED**：e2e `expect(locator).toHaveValue("5")` 报 `element(s) not found`（球的属性面板里没有"半径 3D"）。
+- **工具栏「创建截面」对球可用**：`solidCommands.ts` 的 `solidTypes` 加入 `"sphere"`（它同时管着按钮的 `disabled` 与命令的守卫）。
+- **还有一张更深的名单（跑 e2e 才暴露）**：`packages/dsl/src/schema.ts` 里**另有一份** `solidTypes`，`section` 的校验写着"来源必须是实体"。只改 UI 侧的话，点击后会被**文档校验层**挡掉，症状是"按钮可点，但什么都没发生"（`data-section-count` 停在 0）——**单元测试全绿**，因为是端到端才走到那条校验。
+- **反向验证（很重要）**：`schema.ts` 这张表同时被布尔交那四处使用。放开"球可当截面来源"之后，"**球不能参与布尔交**"必须仍然成立 —— 那四处检查在查这张表**之前**先查 `hasSphereSource`。全库跑过，`sphereSection.test.ts` 里那条"拒绝创建含球的 intersectionSolid"仍绿。
+
+### F. 结构性发现：加一种实体要改七八张硬编码名单
+
+球这一路踩过的（**每一处漏掉都不报错，只是那条功能静默失效**）：
+
+| 名单 | 漏掉的后果 |
+| --- | --- |
+| `visibleSolids`（threePrimitives） | 球不进场景 —— 画布上什么都没有 |
+| `pickKind`（threePicking） | 看得见、**选不中** |
+| `hasGeometry`（threeScene） | 场景里画着球，却压着"这里什么都没有"的提示（**视觉验收才抓到**） |
+| `schema.ts` 的 `solidTypes` | 截面被**文档校验层**挡掉：按钮可点、什么都没发生 |
+| `solidCommands.ts` 的 `solidTypes` | 按钮直接 `disabled` |
+| `inspectorModel` + `inspectorLabels` | 属性栏不认识球，改不了球心 / 半径 |
+| `projectionVisuals.ts` 的 `templateTypes` | **还没改** —— Task 7 的工程投影会在这里失效 |
+
+值得记的原因：这些名单之间没有任何一致性检查，某个实体类型"是不是完整接上了"目前**只能靠人肉盘点**（或者靠某次端到端验证刚好走到那条路径）。
+
+### G. 本轮实测读数（下半）
+
+| 命令 | 当次结果 |
+| --- | --- |
+| `npx playwright test e2e/geometry3d-sphere.spec.ts` | **4 / 4 通过**（新增"属性栏编辑"与"工具栏切一刀"两条） |
+| `npx vitest run --maxWorkers=3` | **276 文件 / 3163 项通过 + 1 todo / 0 失败** |
+| `npm run typecheck` / `npm run lint` | exit 0 / exit 0（0 error / 13 warning） |
+
+### H. 明确没有做的事
+
+- Task 7–9 全部未做（工程投影与导出、Agent 创建、完整产品门禁）。
+- "切点可见"仍然只有**单元**判据（`createSectionMesh` 对只有一个点的截面画标记）＋ 端到端只验到"过球心那一刀给出精确圆"；**没有**在浏览器里把刀口挪到相切位置再确认那一点真的画出来了。
+- "无密集可选中经纬线"同样只有单元判据。
 
 ## 2026-10-01 —— 球体 Task 5（上半）：画的球与"不许出现经纬网"
 

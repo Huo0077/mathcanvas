@@ -21,7 +21,15 @@
   - **全库**：`npx vitest run --maxWorkers=3` → **276 文件 / 3163 项通过 + 1 todo / 0 失败**。
   - `npm run typecheck` exit 0；`npm run lint` exit 0（**0 error / 13 warning**）。
   - 顺带修掉一处自己引入的类型错误：新测试里写了 `createEmptyDocument("geometry")`，而 `Workspace` 没有这个名字（合法值：`calculus` / `conics` / `cad` / `geometry3d`）—— 单测不报、`tsc` 当场报。
-- **未做（Task 6 剩下的）**：**属性栏编辑**（选中球之后改球心 / 半径 —— Task 3 已经把 `updatePrimitive { center3, radius3 }` 打通，缺的是属性栏那侧的字段）；**截面按钮接受球**（`solidCommands.ts`，也就是 Task 4 的尾巴）。
+- **下半（属性栏编辑 + 截面按钮）也已落地**：
+  - **属性栏编辑球心 / 半径**：`inspectorLabels.ts` 的 `SolidPrimitive` 与 `inspectorModel.ts` 的 `selectedSolid` 名单加入 `"sphere"`；`PropertiesBar.tsx` 加球的分支（**只有球心 + 半径 3D 两个字段**，用的是 Task 3 打通的 `updatePrimitive { center3, radius3 }`），并给"朝向"那块加 `selectedSolid.type !== "sphere"` 守卫 —— **球没有 `rotation` 字段**（解析体没有朝向），不加守卫 `tsc` 直接报错。
+  - **工具栏「创建截面」对球可用**：`solidCommands.ts` 的 `solidTypes` 加入 `"sphere"`（它同时管着按钮的 `disabled` 与命令的守卫），对应测试的名单断言同步更新。
+  - **还有一张更深的名单**：`packages/dsl/src/schema.ts` 里**另有一份** `solidTypes`，`section` 的校验写着"来源必须是实体" —— 不加球的话，界面点下去会被**文档校验层**挡掉，症状是"按钮可点但什么都没发生"。这一处是**跑 e2e 才暴露的**（单元测试全绿）。
+- **验证（下半，本轮实测）**：
+  - `e2e/geometry3d-sphere.spec.ts` 增到 **4 条**，新增两条：①"属性栏改球心 / 半径、一步撤销"（RED 起点是 `expect(locator).toHaveValue` 找不到"半径 3D"字段）；②"工具栏切一刀并记录精确圆"（断言 `data-section-count=1`、`data-section-exact-kind=circle`、`data-section-exact-status=exact`、交圆采样点 > 2）。**4/4 通过**。
+  - **全库**：`npx vitest run --maxWorkers=3` → **276 文件 / 3163 项通过 + 1 todo / 0 失败**（含球布尔门禁那条 —— 说明 `schema.ts` 放开"球可当截面来源"之后，**"球不能参与布尔交"仍然成立**：那四处检查在查这张表**之前**先查 `hasSphereSource`）。
+  - `npm run typecheck` exit 0；`npm run lint` exit 0（**0 error / 13 warning**）。
+- **一处结构性发现（值得单独记）**：给这个项目**加一种实体**，要同时改**七八张硬编码的类型名单**。球这一路已经踩过：`visibleSolids`（否则不进场景）、`pickKind`（否则看得见选不中）、`hasGeometry`（否则说画布是空的）、`schema.ts` 的 `solidTypes`（否则截面被文档校验挡掉）、`solidCommands.ts` 的 `solidTypes`（否则按钮不可点）、`inspectorModel` + `inspectorLabels`（否则属性栏不认识）。每一处漏掉都**不报错**，只是那条功能静默失效 —— 而且单元测试全绿。**下一处已知的还没改**：`projectionVisuals.ts` 的 `templateTypes`（Task 7 的工程投影）。
 
 ## 2026-10-01 —— 球体 Task 5（上半）：画的球与"不许出现经纬网"
 

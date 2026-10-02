@@ -11,7 +11,14 @@ const primitiveTypes = new Set(["point", "point3", "line", "line3", "segment", "
  * 切线由内核约束的解析切向给出。直线 / 折线不在列：它们处处是自身，再"作切线"没有数学含义。
  */
 const tangentSourceTypes = new Set(["function", "circle", "arc", "parabola", "ellipse", "hyperbola"])
-const solidTypes = new Set(["cube", "pyramid", "cylinder", "cone", "polyhedron3"])
+/**
+ * "实体"这一族。`sphere` 在 2026-10-01 加入：它**可以**当剖切截面的来源（球 ∩ 平面有解析解）。
+ *
+ * 注意布尔交那三处（`intersectionLine` / `intersectionSolid` / `intersectionFace` /
+ * `intersectionPoint3`）在查这张表**之前**先查 `hasSphereSource`，所以球在那边仍然是被明确拒绝的
+ * ——「能当截面的来源」与「能参与布尔交」是两件事，别因为共用了这张表就把后者也放开了。
+ */
+const solidTypes = new Set(["cube", "pyramid", "cylinder", "cone", "polyhedron3", "sphere"])
 /**
  * **球不能参与布尔交**（spec §1）。本阶段能精确算的只有球 ∩ 平面（`spherePlaneSection3`）；
  * 球 ∩ 球 / 球 ∩ 多面体需要另一套曲面求交，明确不做，**也绝不用多面体近似冒充**。

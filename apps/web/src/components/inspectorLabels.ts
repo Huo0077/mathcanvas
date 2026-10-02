@@ -15,8 +15,7 @@ import { ownerOfTopology, topologyOfEntity, type SolidDerivedStatus } from "@dra
  */
 
 export type ConicPrimitive = Extract<PrimitiveSpec, { type: "parabola" | "ellipse" | "hyperbola" }>
-export type SolidPrimitive = Extract<PrimitiveSpec, { type: "cube" | "pyramid" | "cylinder" | "cone" }>
-
+export type SolidPrimitive = Extract<PrimitiveSpec, { type: "cube" | "pyramid" | "cylinder" | "cone" | "sphere" }>
 /** 交线 / 交面的状态读数：给用户看的说法，不是内核里的枚举名。 */
 export const intersectionLineStatusLabels: Record<string, string> = { valid: "有交线", degenerate: "无交线", "insufficient-data": "数据不足" }
 export const intersectionSolidStatusLabels: Record<string, string> = {

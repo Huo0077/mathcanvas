@@ -28,7 +28,7 @@ import { nextPrimitiveId } from "./documentIds"
 import { guidanceFor } from "./guidance"
 import { parsePointHostValue } from "./pointHostOptions"
 
-export const solidTypes = ["cube", "pyramid", "cylinder", "cone", "polyhedron3"] as const
+export const solidTypes = ["cube", "pyramid", "cylinder", "cone", "polyhedron3", "sphere"] as const
 
 export interface SolidCommandDeps {
   document: GeometryDocument

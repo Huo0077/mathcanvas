@@ -40,7 +40,7 @@ export function useInspectorModel(props: InspectorModelInput) {
   const selectedCircleOrArc = selectedPrimitive?.type === "circle" || selectedPrimitive?.type === "arc" ? selectedPrimitive : null
   /** 已经定了绕哪个定点旋转的圆 / 椭圆：检查器多出一块"绕定点旋转"。 */
   const selectedPlacedCurve = selectedPrimitive && (selectedPrimitive.type === "circle" || selectedPrimitive.type === "ellipse") && selectedPrimitive.rotationAbout ? selectedPrimitive : null
-  const selectedSolid = selectedPrimitive && ["cube", "pyramid", "cylinder", "cone"].includes(selectedPrimitive.type) ? selectedPrimitive as SolidPrimitive : null
+  const selectedSolid = selectedPrimitive && ["cube", "pyramid", "cylinder", "cone", "sphere"].includes(selectedPrimitive.type) ? selectedPrimitive as SolidPrimitive : null
   const selectedPlane3 = selectedPrimitive?.type === "plane3" ? selectedPrimitive : null
   const selectedSection = selectedPrimitive?.type === "section" ? selectedPrimitive : null
   const selectedIntersectionLine = selectedPrimitive?.type === "intersectionLine" ? selectedPrimitive : null

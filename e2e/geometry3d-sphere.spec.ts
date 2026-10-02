@@ -162,3 +162,91 @@ test("creates a sphere from the common-solid wizard: preview first, one commit o
   expect(await readSphere(page)).toEqual({ center: { x: 1, y: 2, z: 3 }, radius: 5 })
   await expect(page.locator(".algebra-panel").getByText(/^球体 \d+$/).first()).toBeVisible()
 })
+
+/**
+ * **在属性栏里改球的球心与半径**（Task 6 的第三条接口）。
+ *
+ * 写入路径由 Task 3 打好（`updatePrimitive { center3, radius3 }`：补丁校验 + 应用分支 +
+ * 一步撤销都已有用例）；这一条验的是**界面真的接上了那条路径**：
+ * ① 选中球之后属性栏要有"球心"和"半径"两组字段，且读出的就是文档里的值；
+ * ② 改半径会**落到文档**（不是只改画面）；
+ * ③ 一次 Ctrl+Z 回到改之前 —— 与其它实体的编辑同一套撤销语义。
+ */
+test("edits a sphere's centre and radius from the inspector, one undo step", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "添加立方体" }).click()
+  await expect.poll(async () => readPrimitiveCount(page)).toBeGreaterThan(0)
+  await page.evaluate(({ key, sphere }) => {
+    const raw = window.localStorage.getItem(key)
+    if (!raw) throw new Error("应用还没有写出 3D 草稿")
+    const envelope = JSON.parse(raw) as DraftEnvelope
+    envelope.document.primitives = [sphere]
+    window.localStorage.setItem(key, JSON.stringify(envelope))
+  }, { key: DRAFT_KEY, sphere: SPHERE })
+  await page.reload()
+  await expect.poll(async () => (await readSphere(page))?.radius ?? null).toBe(5)
+
+  // 选中它：点球心投到屏幕上的那一点。
+  const projected = await projectWorldPoint(page, SPHERE.center)
+  await page.mouse.click(projected.x, projected.y)
+
+  const radiusField = page.getByRole("spinbutton", { name: "半径 3D" })
+  await expect(radiusField).toHaveValue("5")
+  await expect(page.getByRole("spinbutton", { name: "球心 X" })).toHaveValue("1")
+
+  await radiusField.fill("4")
+  await expect.poll(async () => (await readSphere(page))?.radius ?? null).toBe(4)
+
+  await page.getByRole("spinbutton", { name: "球心 Y" }).fill("7")
+  await expect.poll(async () => (await readSphere(page))?.center.y ?? null).toBe(7)
+
+  // ③ 一步撤销：回到改球心之前（半径仍是 4）。
+  await page.keyboard.press("Control+z")
+  await expect.poll(async () => (await readSphere(page))?.center.y ?? null).toBe(2)
+  expect((await readSphere(page))?.radius).toBe(4)
+
+  // 再撤一步：回到改半径之前。
+  await page.keyboard.press("Control+z")
+  await expect.poll(async () => (await readSphere(page))?.radius ?? null).toBe(5)
+})
+
+/**
+ * **工具栏的「创建截面」对球也能用**（Task 4 的尾巴，同时补上 Task 5 里"经界面切一刀"那条）。
+ *
+ * 判据是"解析"这两个字在**端到端**上也成立：过球心那一刀给出的是**大圆**，而且画布读数里
+ * `data-section-exact-kind` 必须是 `circle`、`status` 必须是 `exact` —— 不是 48 边形近似。
+ */
+test("cuts the selected sphere from the toolbar and records an exact circle", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "添加立方体" }).click()
+  await expect.poll(async () => readPrimitiveCount(page)).toBeGreaterThan(0)
+  await page.evaluate(({ key, sphere }) => {
+    const raw = window.localStorage.getItem(key)
+    if (!raw) throw new Error("应用还没有写出 3D 草稿")
+    const envelope = JSON.parse(raw) as DraftEnvelope
+    envelope.document.primitives = [sphere]
+    window.localStorage.setItem(key, JSON.stringify(envelope))
+  }, { key: DRAFT_KEY, sphere: SPHERE })
+  await page.reload()
+  await expect.poll(async () => (await readSphere(page))?.radius ?? null).toBe(5)
+
+  // 选中球：点球心投到屏幕上的那一点。
+  const projected = await projectWorldPoint(page, SPHERE.center)
+  await page.mouse.click(projected.x, projected.y)
+
+  const sectionButton = page.getByRole("button", { name: "创建截面" })
+  // 按钮**可用**本身就是一条判据：`canCreateSection` 与 `addSection` 共用 `solidTypes`，
+  // 名单里没有球时这里会是 disabled（点了也什么都不发生）。
+  await expect(sectionButton).toBeEnabled()
+  await sectionButton.click()
+
+  const scene = page.locator("[data-3d-scene]")
+  await expect(scene).toHaveAttribute("data-section-count", "1")
+  // 一刀过球心 ⇒ 大圆；而且是**解析**结论，不是折线拟合。
+  await expect(scene).toHaveAttribute("data-section-exact-kind", "circle")
+  await expect(scene).toHaveAttribute("data-section-exact-status", "exact")
+  // 球没有端面：整条交圆都在，所以采样点是一整圈而不是几段弧。
+  await expect.poll(async () => Number(await scene.getAttribute("data-section-point-count"))).toBeGreaterThan(2)
+})

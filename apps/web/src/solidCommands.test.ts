@@ -46,7 +46,8 @@ describe("solid commands", () => {
   it("keeps the shared list of section-capable types in one place", () => {
     // `solidTypes` 原先在 `App.tsx`，而 `addSection` 与 `canCreateSection` 都在用它 ——
     // 跟着命令搬到本模块后，App 改成从这里 import，仍然只有**一份**定义。
-    expect([...solidTypes]).toEqual(["cube", "pyramid", "cylinder", "cone", "polyhedron3"])
+    // 球在 2026-10-01 加入：它有解析截交（圆 / 切点 / 空集），所以"能被切"。
+    expect([...solidTypes]).toEqual(["cube", "pyramid", "cylinder", "cone", "polyhedron3", "sphere"])
   })
 
   it("rotates the selected object, and does nothing without a selection", () => {
