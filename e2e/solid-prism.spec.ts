@@ -171,8 +171,9 @@ test("opens every shipped .mgeo fixture and actually loads it", async ({ page })
   const directory = join(process.cwd(), "e2e", "fixtures")
   const fixtures = readdirSync(directory).filter((name) => name.endsWith(".mgeo"))
   // 数与内容都对一遍：目录里少一个文件也不该让这条静默变松。
-  // 14 = 12 只既有夹具 + `reactive-dynamic-objects.mgeo` + `reactive-section.mgeo`（Reactive DAG 切片新增）。
-  expect(fixtures.length).toBe(14)
+  // 15 = 12 只既有夹具 + `reactive-dynamic-objects.mgeo` + `reactive-section.mgeo`（Reactive DAG 切片新增）
+  //      + `cad-sphere.mgeo`（球体切片 Task 7 新增：球的工程投影）。
+  expect(fixtures.length).toBe(15)
 
   await page.goto("/")
   const fileInput = page.locator('input[aria-label="加载 .mgeo 文件"]')
