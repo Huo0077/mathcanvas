@@ -126,16 +126,19 @@ await expect(page.locator("[data-3d-scene]")).toHaveAttribute("data-sphere-count
 
 ## Task 7 — Engineering projections and exports
 
+**交付证据（2026-10-01）：** 代码提交 `488e8ad`（球投影）与 `91ac837`（夹具清点同步），已推送并由 CI run #52 四项全绿（#51 曾因夹具个数红过一次，见下）。**实测**：`apps/web/src/sphereProjection.test.ts` **5/5**（RED 起点 4/5 红，`expected [] to have a length of 1`）；`e2e/engineering-drawing.spec.ts` **5/5**（逐个视图点名「第 N 个视图里恰好一条球轮廓」，而不是「总共 4 条」）；全库 **277 文件 / 3168 项 + 1 todo / 0 失败**；`typecheck` / `lint` exit 0。**只画轮廓、不投影显示网格的三角形**；采样仍是既有的 `polyline` 图元，所以 `DrawingViewport` 与 `engineeringExporters` 一个字都没改。**CI 抓到的一件事**：新增夹具 `cad-sphere.mgeo` 会让 `e2e/solid-prism.spec.ts` 里「打开每一只随仓库发布的夹具」那条硬编码计数（14 → 15）失败 —— 本地只跑受影响的 spec 不足以替代全量 e2e；修完复跑全量 e2e **176 通过 / 0 失败**。**如实说明**：新增 e2e 的 RED 没有被独立观察到（只观察到单元用例的 RED）。**未做**：Task 8–9。
+
+
 **Files:** `apps/web/src/projectionVisuals.ts`, `projectionVisuals.test.ts`, `apps/web/src/persistence/engineeringExporters.ts` only if the common `ProjectedPrimitive.polyline` contract needs a change; `e2e/engineering-drawing.spec.ts` / new sphere e2e.
 
 **Interfaces:** A sphere projects to a closed circle of radius 5 in front/top/left/axonometric with projected centre matching the source centre. `sourceId` stays the sphere id; exporters consume the same renderer-neutral polyline.
 
-- [ ] Add failing tests for C=(1,2,3), r=5: all four orthographic views have equal circular radii, no extra mesh edges; a hidden sphere yields no projection. E2e exports SVG/DXF/PDF and asserts a sphere outline in each, not just non-empty files.
+- [x] Add failing tests for C=(1,2,3), r=5: all four orthographic views have equal circular radii, no extra mesh edges; a hidden sphere yields no projection. E2e exports SVG/DXF/PDF and asserts a sphere outline in each, not just non-empty files.
 ```ts
 const outlines = resolveProjectedDrawing(document, "front").primitives.filter((item) => item.sourceId === "sphere-1")
 expect(outlines).toMatchObject([{ kind: "polyline", closed: true }])
 ```
-- [ ] Implement analytic projection sampling using view bases; do not project the triangles of a display mesh. Run focused projection/export tests and e2e; update docs, commit/push, verify CI.
+- [x] Implement analytic projection sampling using view bases; do not project the triangles of a display mesh. Run focused projection/export tests and e2e; update docs, commit/push, verify CI.
 
 ## Task 8 — Agent action only when the product path exists
 
