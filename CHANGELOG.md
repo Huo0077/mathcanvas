@@ -5,6 +5,14 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-02 —— 仓库整理：远端功能分支先存档再删除（D3）
+
+- **用户决定**：先打存档 tag，再删分支。
+- **删除前实查，结果与旧表述不同**：`compare main...feat/high-school-geometry-interaction` 给出 **`status: diverged`、`ahead_by: 1`、`behind_by: 54`** —— 该分支**并非"已全合并的空壳"**，而是有 **1 个提交不在 `main` 里**：`8c67346`（2026-09-30）"docs: 补齐所有进度文档（归档 / README / 设计说明 / 当前状态）"，**仅动文档**（README、`current-status.md`、`project-progress.md`、一份 spec）。它是合并/打包当天的旧快照，main 上这几份文件此后已被反复重写 —— **很可能已取代，但没有逐行比对过**，故不假设内容已覆盖。另实查**无开放 PR**。
+- **做法（顺序刻意如此）**：建注解 tag **`archive/feat-high-school-geometry-interaction`**（tag 对象 `bb4a5aad`）指向 `8c67346` 并推送 → **API 三重确认**（tag ref 存在 / 解引用得 `8c67346` 且与 tip MATCHES / 提交可解析）→ 才执行 `git push origin --delete`。
+- **删除后复核**：远端分支只剩 `main`（`e2c53c0`）；存档 tag 仍解析到 `8c67346` —— 那份旧快照**在远端依然可达、不会被 GC**。
+- **一条方法论纠正**：本轮第一次 `git ls-remote` 被网络 reset 打断，脚本据此打印过 "MERGED: NO" —— 那是**失败命令的产物、不是事实**；改用 API 重查才得到 `diverged / ahead_by=1`。**命令失败时的默认输出不能当结论。**
+
 ## 2026-10-02 —— 发布 v3.1.0（桌面三件套）
 
 > 用户决定：把球体这批（Task 1–9）作为 **v3.1.0** 发布（新能力走 minor）。版本真值从 `3.0.1` 升到 `3.1.0`。
