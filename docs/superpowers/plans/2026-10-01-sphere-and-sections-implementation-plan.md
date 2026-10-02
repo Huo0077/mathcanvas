@@ -42,16 +42,18 @@ expect(validateDocument({ ...document, primitives: [{ ...sphere, radius: 0 }] })
 
 **Files:** create `packages/geometry-kernel/src/sphere.ts` and `sphere.test.ts`; modify `index.ts`, `quadrics.ts`, `section-quadric.ts` and the corresponding analytic tests if reusing the `Conic3` kernel.
 
-**Interfaces:** `spherePlaneSection3({center,radius}, {normal,constant})` returns `{kind:"circle",center,radius,conic}` / `{kind:"point",point}` / `{kind:"none"}`, or a typed diagnostic for invalid input. The spherical quadric has no cylinder/cone axial caps.
+**Interfaces:** `spherePlaneSection3({center,radius}, {normal,constant})` returns `{kind:"circle",center,radius,conic,loops}` / `{kind:"point",point}` / `{kind:"empty",distance}`, or a typed diagnostic (`{kind:"invalid",code,detail}`) for invalid input. **实现说明（2026-10-01）**：第三种的拼法是 `"empty"` 而不是本文原写的 `"none"` —— `Conic3Kind` 是内核既有枚举，`"none"` 是 DSL `Section3Classification` 的产品层拼法；映射（`empty` → `classification:"none"`、`visible=false`）在 Task 4 的 `sectionRecompute` 一层做。The spherical quadric has no cylinder/cone axial caps.
 
-- [ ] Add failing cases for sphere C=(1,2,3), r=5 cut by z=6 → centre (1,2,6), radius 4; z=8 → point (1,2,8); z=9 → none; `{normal:(0,0,2),constant:-12}` equivalent to z=6; zero normal and non-positive radius reject. Assert conic coefficients and sampled points satisfy `|X−C|²=r²` rather than merely appearing round.
+**交付证据（2026-10-01）：** `packages/geometry-kernel/src/sphere.ts` 新增 `spherePlaneSection3`；RED 起点 `Failed to resolve import "./sphere"`、GREEN `sphere.test.ts` **13/13**，连 `quadrics.test.ts` + `section-quadric.test.ts` 共 **35/35**；`tsc -p packages/geometry-kernel/tsconfig.json` 与 eslint exit 0；变异检查（相对容差改绝对量）恰好 2 条尺度用例变红。代码提交 `22bd7a2` 已推送并核对远端 SHA，CI run `36963752920` 的 checks/build/rust/e2e **四项全绿**后才勾选。**偏离计划一处（有意）**：不相交拼作 `"empty"` 而非 `"none"` —— `Conic3Kind` 是内核既有枚举，`"none"` 是 DSL `Section3Classification` 的产品层拼法，映射放 Task 4。截圆尚未接进 `SectionPrimitive`，球仍无 3D 渲染。
+
+- [x] Add failing cases for sphere C=(1,2,3), r=5 cut by z=6 → centre (1,2,6), radius 4; z=8 → point (1,2,8); z=9 → none; `{normal:(0,0,2),constant:-12}` equivalent to z=6; zero normal and non-positive radius reject. Assert conic coefficients and sampled points satisfy `|X−C|²=r²` rather than merely appearing round.
 ```ts
 const sphere = { center: { x: 1, y: 2, z: 3 }, radius: 5 }
 expect(spherePlaneSection3(sphere, { normal: { x: 0, y: 0, z: 1 }, constant: -6 })).toMatchObject({ kind: "circle", center: { x: 1, y: 2, z: 6 }, radius: 4 })
 ```
-- [ ] Run `npm.cmd test -- packages/geometry-kernel/src/sphere.test.ts` to observe the intended failures.
-- [ ] Implement the scale-aware distance classification and full `[0,2π]` circle piece in the shared analytic layer. Keep cylinder/cone cap clipping unchanged. Run sphere, `quadrics`, and `section-quadric` tests plus typecheck.
-- [ ] Update progress docs, commit/push, verify SHA/CI before checking the task.
+- [x] Run `npm.cmd test -- packages/geometry-kernel/src/sphere.test.ts` to observe the intended failures. **（实测 RED = `Failed to resolve import "./sphere"`，0 test collected —— 缺的是模块本身，不是夹具/环境）**
+- [x] Implement the scale-aware distance classification and full `[0,2π]` circle piece in the shared analytic layer. Keep cylinder/cone cap clipping unchanged. Run sphere, `quadrics`, and `section-quadric` tests plus typecheck. **（`section-quadric.ts` 与 `quadrics.ts` 未改动：球没有 `bounds`，`sectionQuadric3` 仍如实返回 `null` 回退既有路径；端面弦裁剪对圆柱/圆锥逐字不变）**
+- [x] Update progress docs, commit/push, verify SHA/CI before checking the task. **（`22bd7a2`；远端 SHA 已核对；CI `36963752920` 四项全绿）**
 
 ## Task 3 — Scene transactions and numerical measurement
 

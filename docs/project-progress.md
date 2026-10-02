@@ -50,7 +50,7 @@
 
 - Task 3–9 一条都没动：截圆还没接进 `SectionPrimitive`、球还没有 3D 网格与拾取、没有工程投影、没有手工/预览入口、Agent 仍 `temporarily_unavailable`。
 - `sectionQuadric3` **没有**被改成走球体：球没有 `bounds`，该函数仍如实返回 `null` 让调用方回退既有路径 —— 本批不动它，免得顺带改变圆柱/圆锥的行为。
-- Task 2 的方框**等 CI 四项全绿之后再勾**（与 Task 1 同一套纪律）。
+- Task 2 的方框**等 CI 四项全绿之后再勾**（与 Task 1 同一套纪律）。**已完成**：`22bd7a2` 推送后核对远端 SHA = 本地，CI run `36963752920` 的 `checks` / `build` / `rust` / `e2e` **四项全部 success**，随后才勾上 Task 2 的四个方框，并把计划里"不相交"的拼法由 `"none"` 更正为 `"empty"`（附理由），免得计划与代码互相打架。
 
 ## 2026-10-01 —— 球体 Task 1 文档契约（`ca03ed5` 已推送，CI 全绿）
 

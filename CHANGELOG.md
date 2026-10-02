@@ -22,6 +22,7 @@
   - **变异检查**：把 `tolerance = radius * RELATIVE_TOLERANCE` 改成绝对量 `RELATIVE_TOLERANCE` → **恰好**那两条尺度用例变红（其余 11 条不动），证明这两条断言不是空转；探针随后还原，`git grep MUTATION-PROBE` 无输出。
 - **有意偏离计划原文一处**：计划把"不相交"拼作 `kind:"none"`，内核实现用 `"empty"`。理由是 `Conic3Kind`（`"circle" | "ellipse" | … | "empty" | "insufficient-data"`）已经是内核的既有枚举，而 `"none"` 是 DSL `Section3Classification` 的产品层拼法 —— 同一个概念在内核里再起一个同义名，正是这个项目吃过亏的"同一个判断写了两遍"。映射在 Task 4 的 `sectionRecompute` 一层做（`empty` → `classification: "none"`）。
 - **未做**：Task 3–9（截圆接入 / 3D 渲染 / 工程投影 / 交互 / Agent 创建）一条都没动；`sectionQuadric3` 也**没有**被改成走球体（球没有 `bounds`，仍如实回退既有路径）。Task 2 的方框按计划纪律**等 CI 四项全绿之后再勾**。
+- **交付闭环**：代码提交 `22bd7a2` 推送后核对远端 SHA = 本地；CI run `36963752920` 的 `checks` / `build` / `rust` / `e2e` **四项全部 success**，随后才在计划里勾上 Task 2，并把计划 Interfaces 行里"不相交"的拼法由 `"none"` 更正为 `"empty"`（附理由），避免计划与代码互相打架。
 
 ## 2026-10-01 —— `main` 未发布修复：相机最后一帧标签对齐
 
