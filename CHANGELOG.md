@@ -5,6 +5,13 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-02 —— 收尾验证：全量 e2e 复跑 **184 通过 / 0 失败**（"未复跑"那条缺口关闭）
+
+- 本轮改了共享路径上的三处（`pointerdown` 取消取景、内容同步后的悬停自愈、规划器的分析题守卫），所以做了一次**全量** e2e 而不是只跑相关 spec：`npx playwright test`（默认 workers）→ **184 通过 / 0 失败**（1.1 分钟）。
+- **那条偶发红的 `geometry3d-section` 没有再出现** —— 它正是本轮"悬停自愈"修掉的那个机制（`data-preview-hovering` 只由 pointermove 写入）。
+- 至此 `docs/current-status.md` §一里"全量 `npm run test:e2e` 未复跑"这条缺口**关闭**；该节现在只剩"`test:perf` / `test:rust` 未复跑"这类如实记录（Rust 已在上一批复跑过，见 §一表）。
+- 本批**只改文档**（读数回填），无可执行产物。
+
 ## 2026-10-02 —— 悬停读数不再只跟着指针（修掉那条"不能复现"的 e2e 抖动）
 
 - **修的是本文件同日追查过、当时"只记不改"的那条脆弱点**：`data-preview-hovering` **只**由 `pointermove` 写入（`threeScenePreviewHover.ts` 的 `updatePreviewHover`），而预览几何是**内容同步**建的 —— 两者谁先谁后是竞态：指针先到、预览后到，属性就永远停在 `false`，而 `expect` 的轮询救不回来（事件已经发生、不会再来一个）。现场记录见同日「追查 `geometry3d-section` 抖动」一节。
