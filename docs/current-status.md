@@ -16,7 +16,9 @@
 | `npx vitest run --maxWorkers=3` | **278 文件 / 3178 项通过 + 1 todo / 0 失败** |
 | `npm run typecheck` | exit 0（6 个 workspace + `e2e/` + `scripts/`） |
 | `npm run lint` | exit 0，**0 error / 13 warning**（既有基线警告，非零警告） |
-| `npx playwright test --workers=3`（**全量 e2e**） | **175 通过 / 1 失败**。失败的是 `e2e/geometry3d.spec.ts:277`「pans the 3D view along the camera axes within a bounded range」，`expect(z).toBeCloseTo(startZ, 6)`：期望 1.98 / 实收 2。**经核实不是本批引入的**：在球体工作之前的 `91ac837` 上同样失败（期望 1.99 / 实收 2），而且那个期望值**逐次运行会变**（1.98 / 1.99 都出现过）—— 属**本机环境敏感的既有不稳定用例**；CI 的 `e2e` 作业在 Linux 上 #52 / #54 / #55 均绿。**这条已如实记为"门禁不稳"，没有被当成通过。** |
+| `npx playwright test --workers=3`（**全量 e2e**） | **175 通过 / 1 失败**。失败的是 `e2e/geometry3d.spec.ts:277`「pans the 3D view along the camera axes within a bounded range」，`expect(z).toBeCloseTo(startZ, 6)`：期望 1.98 / 实收 2。**经核实不是本批引入的**：在球体工作之前的 `91ac837` 上同样失败（期望 1.99 / 实收 2），而且那个期望值**逐次运行会变**（1.98 / 1.99 都出现过）—— 属**本机环境敏感的既有不稳定用例**；CI 的 `e2e` 作业在 Linux 上 #52 / #54 / #55 均绿。**这条已如实记为"门禁不稳"，没有被当成通过。**
+   **2026-10-02 更新（该条已修，但全量 e2e 仍有 1 条红，且换了另一条）**：`geometry3d.spec.ts:277` 那条已**根因定位并修掉** —— 根因是**测试读了自动取景动画中途的读数**（`animateToFit` 约 250ms，rAF 里插值整份相机状态；`data-camera-target` 每帧都在变）。它有**两个面孔**：读得早 → 第 299 行（精度 1，实测 `Expected -5 / Received -4.8`）红；读得不等于停稳 → 第 309 行（精度 6，`Expected 1.98 / Received 2`）红。顺带**排除**了两个旧怀疑：`clampCameraTarget` 是箱式夹取（±3×半径）够不到那 0.02；而"水平平移不动 z"**确实成立**（`cameraBasis` 的 `right` 第三分量恒为 0）。修法：取基准前**等相机停稳**（连续两次读数一致，不写死 sleep），与既有 `settledWidth` / `settleCamera` 同一口径。**修后 `--repeat-each=5` 5/5 通过**。
+   **但全量 e2e 仍不是全绿**：修后读数为 **178 通过 / 1 失败**，红的是**另一条** —— `e2e/geometry3d-section.spec.ts:42` 第 59 行 `data-preview-hovering` 期望 `"true"` 实收 `"false"`（指针没落在虚线预览上），**单独跑 3/3 全过**，属**并行负载下才出现的抖动**，机制与刚修的那条**不同**（那是"读动画中途"，这是"负载下命中判定偏移"）。**本条尚未定位，本批未修** —— 所以"本机全量 e2e 已全绿"**不成立**。 |
 | `npm run test:rust` | **16 个测试二进制 / 236 通过 / 0 失败 / 3 ignored**，exit 0 |
 | `npm run test:perf` | **9 / 9 通过**。关键读数：`roundTrip/large-mgeo` 24.8 ms、`dag/local-recompute-400` 0.9 ms（全量 0.5 ms）、`denseIntersections/200x200` 1.4 ms、`drag/300-frames` **682.5 ms（≈2.3 ms/帧**，60 fps 预算 16.7 ms/帧）；校准档 1× ≈6 ms vs 4× ≈16–22 ms（量具灵敏度自证） |
 

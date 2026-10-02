@@ -5,6 +5,18 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-02 —— 修掉本机必红的那条相机平移 e2e（根因：测试读了动画中途的读数）
+
+- **症状**：`e2e/geometry3d.spec.ts:277`「pans the 3D view along the camera axes within a bounded range」在本机**必红**，CI 上却时绿时红。它让"本机全量 e2e"这条门禁不可信（此前一直以 CI 的 `e2e` 作业为准）。
+- **根因（读代码得出，不是猜）**：自动取景是一段**约 250ms 的动画** —— `threeSceneCamera.ts` 的 `animateToFit` 在 rAF 里把**整份相机状态（含 `target`）**从旧值插值到拟合值，而 `three-canvas` 的 `data-camera-target` 是从**每帧都在变**的那个 ref 渲染的。用例加完立方体**立刻**读基准值，读到的是**动画中途**的值；而拖动发生在动画结束之后，落点是**拟合真值**。
+  - **它有两个面孔，都是同一场竞态**：读得早 → `startX` 离拟合值还远 → **第 299 行**（`toBeCloseTo(boundsCentre[0], 1)`，容差 0.05）红，实测 `Expected -5 / Received -4.8`（另一次 `-4.87`）；读得晚但不等于停稳 → 第 299–301 行过了、**第 309 行**（`expect(z).toBeCloseTo(startZ, 6)`）红，实测 `Expected 1.98 / Received 2`。**这就解释了"同一个用例两次报不同的断言、且数值逐次运行都不一样"。**
+  - **顺带排除两个曾经的怀疑**：① `clampCameraTarget` 是**箱式夹取**（中心 ± `PAN_RANGE_FACTOR(3)` × 半径），够不到那 0.02，不是它；② "水平平移不动 z"这条不变量**是真的** —— `cameraBasis` 的 `right = (-sin az, cos az, 0)`，第三个分量**恒为 0**。所以**错在测试的基准值，不在产品**（产品那 250ms 过渡是有意的体验）。
+- **修法（一处，最小）**：取基准值前**等相机停稳** —— 判据是**连续两次读数一致**，**不写死 sleep**、不看动画时长。与同文件既有的 `settledWidth`、以及 `three-orbit-tracks.spec.ts` / `three-intersection-previews.spec.ts` 的 `settleCamera` 同一套口径。
+- **验证**：修前先复现（`Expected -5 / Received -4.8`，红）；修后 `--repeat-each=5` **5/5 通过**（单跑一次不足以证明去掉了抖动，所以用重复跑）。`tsc -p e2e/tsconfig.json` exit 0；`npm run lint` exit 0（0 error / 13 warning）。
+- **修完后全量 e2e 的读数（如实）**：**178 通过 / 1 失败** —— 失败**换了另一条**：`e2e/geometry3d-section.spec.ts:42`「explains the section preview and creates a section when it is clicked」在第 59 行 `data-preview-hovering` 上期望 `"true"`、实收 `"false"`（指针没落在那圈虚线预览上）。**单独跑 3/3 全过**，也就是说它是**并行负载下才出现**的抖动，**机制与刚修的那条不同**（那条是"读动画中途"，这条是"负载下命中判定偏移"）。
+  - **本批没有修它**（一次只修一个根因，不夹带）。所以**"本机全量 e2e 现在全绿"这句话不成立** —— 仍然是 1 条红，只是红的那条换成了另一个尚未定位的负载敏感用例。文档里已同步更正。
+- **另一处顺带发现（只记不改）**：`cancelFitAnimation()` 只在**副作用清理（卸载）**里被调用（`threeSceneEffect.ts:528`），**用户拖动并不会取消**进行中的自动取景动画 —— 理论上"在 250ms 内开始拖"会被剩下的帧覆盖。本批没动它（与本次红的原因无关：本例的拖动发生在动画结束之后）。
+
 ## 2026-10-02 —— 仓库整理：远端功能分支先存档再删除（D3）
 
 - **用户决定**：先打存档 tag，再删分支。

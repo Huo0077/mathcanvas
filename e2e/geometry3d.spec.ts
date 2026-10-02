@@ -293,9 +293,37 @@ test("pans the 3D view along the camera axes within a bounded range", async ({ p
     await page.keyboard.up(modifier)
   }
 
+  /**
+   * **先等相机停稳，再取基准值。**
+   *
+   * 自动取景是一段**约 250ms 的动画**（`threeSceneCamera.ts` 的 `animateToFit`：在 rAF 里把整份相机状态
+   * —— 含 `target` —— 从旧值插值到拟合值），而 `data-camera-target` 是从**每帧都在变**的那个 ref 渲染的。
+   * 加完立方体立刻读数，读到的就是**动画中途**的值，而这个值**逐次运行都不一样**（实测同一台机器上先后
+   * 读到过 `-4.8`、`-4.87`、`1.98`、`1.99`），因为"读的时候动画跑到哪儿了"取决于帧与调用的时序。
+   *
+   * 它有两个面孔，都是同一场竞态：
+   *  - 读得早 → `startX` 离拟合值还远 → **第 299 行**（`toBeCloseTo(boundsCentre[0], 1)`，容差 0.05）红；
+   *  - 读得晚但不等于停稳 → 第 299–301 行过了，**第 309 行**（`expect(z).toBeCloseTo(startZ, 6)`）红 ——
+   *    因为拖动发生在动画结束之后，落点是**拟合真值**（正好的 2.00），而水平平移恰好**不动 z**
+   *   （`cameraBasis` 的 `right` 第三个分量恒为 0，已核实）。
+   *
+   * 判据**不看动画时长**（不写死 sleep），只看**连续两次读数一致** —— 与本文件 `settledWidth`、
+   * `three-orbit-tracks.spec.ts` 与 `three-intersection-previews.spec.ts` 的 `settleCamera` 同一套口径。
+   */
+  const settledTarget = async () => {
+    let previous = ""
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const current = (await scene.getAttribute("data-camera-target")) ?? ""
+      if (current === previous) return current.split(",").map(Number)
+      previous = current
+      await page.waitForTimeout(120)
+    }
+    return previous.split(",").map(Number)
+  }
+
   // 起始视点中心 = 内容的包围盒中心（自动取景的结论）；不写死原点，默认落点变了也不假红。
   const boundsCentre = (await scene.getAttribute("data-content-bounds"))!.split(" size ")[0].split(",").map(Number)
-  const [startX, startY, startZ] = await target()
+  const [startX, startY, startZ] = await settledTarget()
   expect(startX).toBeCloseTo(boundsCentre[0], 1)
   expect(startY).toBeCloseTo(boundsCentre[1], 1)
   expect(startZ).toBeCloseTo(boundsCentre[2], 1)
