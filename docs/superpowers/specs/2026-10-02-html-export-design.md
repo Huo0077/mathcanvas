@@ -1,6 +1,6 @@
 # HTML 导出（自包含快照 + 可再导入存档）设计
 
-**日期：** 2026-10-02 ｜ **状态：** **已获用户批准（2026-10-02）**，实施计划见 [`../plans/2026-10-02-html-export-implementation-plan.md`](../plans/2026-10-02-html-export-implementation-plan.md)；实现进行中 ｜ **来源：** `current-status.md` §四 E 类第 3 项「HTML / GeoGebra 导出」中的 **HTML** 一半（GeoGebra `.ggb` 不在本设计范围内）
+**日期：** 2026-10-02 ｜ **状态：** **已实现并随 [`v3.2.0`](../../release/v3.2.0.md) 发布**（用户批准 → 实施计划 [`../plans/2026-10-02-html-export-implementation-plan.md`](../plans/2026-10-02-html-export-implementation-plan.md) 的 5 个区块全部交付；三件套已打包、Release 已发布并复核哈希）｜ **来源：** `current-status.md` §四 E 类第 3 项「HTML / GeoGebra 导出」中的 **HTML** 一半（GeoGebra `.ggb` 不在本设计范围内，**仍未启动**）
 
 ## 1. 用户工作与验收
 

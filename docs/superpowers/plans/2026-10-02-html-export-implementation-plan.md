@@ -1,5 +1,7 @@
 # HTML 导出（自包含快照 + 可再导入存档）实施计划
 
+> **状态：5 个区块全部交付，并随 [`v3.2.0`](../../release/v3.2.0.md) 打包发布**（提交链：`59eb3be` → `22b1f9c` → `5291c5c`；tag `v3.2.0` → Release 已发布、三件资产重下载哈希全部 MATCH）。每个区块的门禁读数与变异检查都写在对应 Task 的状态行里。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 让用户从导出菜单拿到一个单文件 `.html`：双击即开、零外部引用、内嵌既有 SVG 产出器的产物与"这次漏了什么"，并且内嵌 `.mgeo` 使它同时是可再导入的存档；立体几何必须**明确拒绝**而不是吐一张空图。
