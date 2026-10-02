@@ -5,6 +5,18 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-02 —— E3 HTML 导出：spec 获批 + 实施计划落地（开始实现）
+
+- **用户在本轮批准 HTML 导出的 spec**（`docs/superpowers/specs/2026-10-02-html-export-design.md`，此前状态是"待用户审阅"，brainstorming 的硬门禁要求用户审过才能出实施计划）。按 `writing-plans` 产出 [`docs/superpowers/plans/2026-10-02-html-export-implementation-plan.md`](docs/superpowers/plans/2026-10-02-html-export-implementation-plan.md)：**5 个区块**（纯函数产出器 → 导出路径含立体几何明确拒绝 → e2e 先红 → 命令与界面接线 → Agent 通道钉住 + 文档收口），每步都带可粘贴的代码与命令。
+- **写计划时按实测改掉三处"凭印象"的写法**（这三处若不改，计划里的代码一跑就假红）：
+  1. `AnnotationSpec` 的字段是 **`target`**，不是 `targetId`（`packages/dsl/src/types.ts:928-937`）；
+  2. **工程 SVG 里没有"主视图"这类中文标签** —— `svgDrawing`（`engineeringExporters.ts:108`）只写 `data-drawing-view="front"` 这类属性，所以 CAD 那条 e2e 改成断言四个 `data-drawing-view`；
+  3. 内嵌存档的往返判据改成 **"`encodeMgeo` → `decodeMgeo` 的不动点"**：`encodeMgeo` 会补默认值，拿手搭的文档直接 `toEqual` 会因那些默认值假红。
+- **两处与 spec 的偏差，写在计划里而不是悄悄做**：
+  1. **本批不调用 `buildExportPlan`** —— 实测它至今**没接进任何用户路径**（`agentRunner.ts:509` 还是 `{ error: "export preflight is not wired into the agent path yet" }` 的桩），而它需要的 `layoutDocumentId` / `geometryDocumentId` 在导出路径上拿不到（编一个就是伪造）。损失清单改为：**复用 `exportService` 那张"画不出来"的类型表**（新导出 `isUnexportableType`，规则只有一份）+ 隐藏对象 + 工程视图的 `diagnostics`。因此 spec §9 的第 7 处（`exportService` 的 `ExportFormat` 联合）**不需要动**。
+  2. **"零外部引用"的判据不能写成"不含 `http://`"** —— 内嵌 SVG 的 `xmlns="http://www.w3.org/2000/svg"` 是 **XML 命名空间、不是网络请求**，照字面写会必红。判据落实为：无 `<link>`、无带 `src` 的 `<script>`、无指向网络的 `src|href`、无 `@import`，并配"文件里真有内嵌 `<svg>` 与内联 `<style>`"的反向对照（否则"没有外链"可能只是因为文件是空的）。
+- **本批只新增文档**（计划 + spec 状态行 + 本节 + `current-status.md` §四 E3 的更新），**尚未写任何实现代码** —— 所以没有可执行门禁读数可报，下一批按计划 Task 1 起走 TDD。
+
 ## 2026-10-02 —— 同步到最新 `main`（`5a8546d`）时发现并修掉 `current-status.md` 的两处小节缺陷
 
 - **背景**：用户要求"获取 GitHub 最新版本"。本地 `main` 落后 **36 个提交**，已快进到 `origin/main` = **`5a8546d`**（`git ls-remote` 核对；期间球体那批已全部交付、`v3.1.0` 已发布）。在最新的 `current-status.md` 上发现两处缺陷，一并修掉：

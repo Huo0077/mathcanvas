@@ -10,6 +10,13 @@
 
 > 下方 2026-09-22 的"最后更新 / 当前阶段 / 总体状态"三行保留为**当时快照**，不再维护。
 
+## 2026-10-02 —— E3 HTML 导出：spec 获批 + 实施计划落地（尚未写实现代码）
+
+- **用户批准 spec**（`2026-10-02-html-export-design.md` 的状态行由"待用户审阅"改为"已获批准"），按 `writing-plans` 产出 `2026-10-02-html-export-implementation-plan.md`：5 个区块 —— 纯函数产出器（转义 / 损失清单 / 内嵌存档 / 版本戳）、导出路径组装（含**立体几何明确拒绝**）、e2e 三判据**先红**、命令与界面接线（功能区两个分支 + 工具栏，同步修顺序断言）、Agent 通道钉住四个格式 + 文档收口。
+- **写计划时按实测改掉三处"凭印象"**：`AnnotationSpec` 的字段是 `target` 不是 `targetId`（`types.ts:928`）；**工程 SVG 不含"主视图"这类中文标签**，只有 `data-drawing-view="front"`（`engineeringExporters.ts:108`），照印象写的断言会假红；存档往返的判据改成"`encodeMgeo` → `decodeMgeo` 的不动点"（`encodeMgeo` 会补默认值，手搭文档直接比会假红）。
+- **两处与 spec 的偏差（明示，不悄悄做）**：① 本批不调用 `buildExportPlan` —— 实测它**没接进任何用户路径**（`agentRunner.ts:509` 仍是桩），且它要的 `layoutDocumentId` / `geometryDocumentId` 在导出路径上拿不到，编一个就是伪造；损失清单改用 `exportService` 新导出的 `isUnexportableType`（同一张表只留一份）+ 隐藏对象 + 工程视图诊断 ⇒ spec §9 第 7 处不需要动。② "零外部引用"不能照字面写成"不含 `http://`" —— 内嵌 SVG 的 `xmlns` 是 XML 命名空间、不是网络请求，判据改成"无 `<link>` / 无带 `src` 的 script / 无指向网络的 `src|href` / 无 `@import`"并配反向对照。
+- **本批只改文档**，无可执行产物；实现从计划 Task 1 起按 TDD 逐块推进（每块跑门禁 → 提交推送 → 更新本文件与 `current-status.md`）。
+
 ## 2026-10-02 —— 发布 v3.1.0 / D3 存档后删分支 / 修掉本机必红的相机平移 e2e / E3 HTML 导出 spec
 
 > 用户逐项决定的一批。四个已交付，一个停在 spec 评审。下面每个数字都只代表**写它的那一刻**。
