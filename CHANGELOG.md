@@ -20,6 +20,8 @@
 - **启动实测**（release exe）：存活 T+12s / T+20s、真窗口句柄 `2886386`、标题 `MathCanvas`、`Responding=True`、工作集 43.3 MB，随后优雅关闭成功。
 - **门禁**：全量 e2e **184 通过 / 0 失败**；全库单测 **280 文件 / 3203 通过 + 1 todo / 0 失败**；`typecheck` exit 0；`lint` 0 error / 13 warning；`main` 顶端 CI **#87 四项全绿**（#84 / #86 被 `concurrency: cancel-in-progress` 取消，属设计行为）。
 - **本版边界（如实）**：**MSI 的"装 → 启动 → 卸载"未验**（本会话 `admin=False`，MSI 按 Tauri 默认是每机器安装；NSIS 那半已在 v3.1.0 那次走完完整一圈）；教师/学生走查未做；立体几何画面进 HTML、`.ggb`、截图识图、平面/函数逐题补缺都不在本版。
+- **Release 已发布并独立复核**：注解 tag `v3.2.0`（tag 对象 `62f6d0546817223f0dc3140c7c969d8cbf648b78`）→ 提交 `5291c5c`；Release id **`401859437`**、`draft=false`、`prerelease=false`、3 个资产（字节数与本地逐一相同）；**复核两步**：① 匿名 API `releases/latest` 由 `v3.1.0` 变为 **`v3.2.0`**；② 三件资产**重新下载**回来算 SHA-256 —— **全部 MATCH**。
+- **发版过程的一处教训（写下来免得下次再踩）**：用 `curl` + 临时 config 调 API（token 取自 git 凭据助手，config 用完即删）。头两次创建 Release 都返 **422**，真实原因既不是网络也不是权限，而是 **PowerShell 5.1 的 `Get-Content -Raw` 给返回字符串挂了 ETS 属性**（`PSPath` / `ReadCount`…），`ConvertTo-Json` 于是把 `body` 序列化成 `{"value": …}` 对象、GitHub 判为非法请求；换成 `[System.IO.File]::ReadAllText(..., UTF8)` 拿到干净字符串后一次通过。**光看"成功/失败"不够，报文的形状本身也要核**（错误正文里 GitHub 已经把 `properties/body` 的原样值打出来了，是我第一遍没去读它）。
 - 发行说明见 [`docs/release/v3.2.0.md`](docs/release/v3.2.0.md)。
 
 ## 2026-10-02 —— 收尾验证：全量 e2e 复跑 **184 通过 / 0 失败**（"未复跑"那条缺口关闭）

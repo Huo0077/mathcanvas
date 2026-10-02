@@ -18,6 +18,8 @@
 - **启动实测**：release exe 存活 T+12s / T+20s、真窗口句柄 `2886386`、标题 `MathCanvas`、`Responding=True`、工作集 43.3 MB，优雅关闭成功。
 - **门禁**：全量 e2e **184 通过 / 0 失败**；全库单测 **280 文件 / 3203 通过 + 1 todo / 0 失败**；`typecheck` exit 0；`lint` 0 error / 13 warning；`main` 顶端 CI **#87 四项全绿**。
 - **边界（如实）**：本机"装 → 启动 → 卸载"的验收对象仍是 **v3.1.0 那次（NSIS）**；v3.2.0 只做了打包 + 裸 exe 启动实测，**没有重复装/卸**；**MSI 那半依旧未验**（本会话 `admin=False`，MSI 按 Tauri 默认是每机器安装）。教师/学生走查未做；3D 画面进 HTML、`.ggb`、截图识图、平面/函数逐题补缺都不在本版。
+- **Release 已发布并独立复核**：注解 tag `v3.2.0`（tag 对象 `62f6d054…`）→ 提交 `5291c5c`；Release id `401859437`、3 个资产（字节数与本地逐一相同）；复核两步 —— 匿名 API `releases/latest` 现为 `v3.2.0`；三件资产**重新下载**后 SHA-256 **全部 MATCH**。
+- **发版过程的一处教训**：`curl` + 临时 config 调 API 时头两次都返 **422**。真实原因**不是网络也不是权限**，而是 PowerShell 5.1 的 `Get-Content -Raw` 给字符串挂了 ETS 属性（`PSPath`/`ReadCount`），`ConvertTo-Json` 把 `body` 序列化成了 `{"value":…}`；换 `[System.IO.File]::ReadAllText(..., UTF8)` 后一次通过。**GitHub 的错误正文里其实已经把原样值打出来了 —— 第一遍我没读它，等于把一个可诊断的错误当成了不可诊断的。**
 
 ## 2026-10-02 —— 收尾验证：全量 e2e 184 通过 / 0 失败
 
