@@ -229,6 +229,7 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
   - **旧表征用例已更新**：`scene-store.test.ts`、`recomputeConsistency.test.ts`、`intersectionSolid.test.ts` 钉住面/棱引用、增量重算不动点、真实凹形拒绝与外凸体交集体积；`e2e/solid-prism.spec.ts` 走浏览器保存/撤销/量测/截面。
 - **实体源体积的画布数字（2026-09-29 查实；2026-10-01 已修且 GitHub CI 全绿）**：原 `measurementVisuals.ts` 的 `pointPositions` 不认 `polyhedron3`，有效体积测量也没有画布数字；现以物化顶点求标签落点、缺顶点不造假坐标，复用现有 3D 叠层和样式。提交 `374daa0`；48.000u³ 实景清楚显示于实体中央，`.mgeo` 重开保持，CI run `36898807030` 四作业成功。
 - **相机拖动后 HTML 标签滞后一帧（2026-09-29 查实；2026-10-01 修复且 GitHub CI 全绿）**：两层标签原在 `renderer.render` 更新相机矩阵之前投影；v3.0.1 的网格脚印计算曾碰巧提前刷新矩阵，掩盖无网格时约 386px 的偏差。现由 `threeSceneRender.render()` 在点名/测量标签投影前显式同步矩阵，不靠网格副作用或松手额外补帧。提交 `a4e2f40`，CI run `36901742182` 四作业成功。
+- **（已闭环，留档）「自动取景动画会覆盖用户拖动」那个窗口已修**（2026-10-02，提交 `fd234fd`）：过去 `cancelFitAnimation()` 只在副作用清理（卸载）里被调用，用户拖动不取消进行中的取景，于是"换文档触发取景"之后在 **250 ms 窗口内开始拖**，拖动结束后剩下的帧会把用户刚拖出来的视角覆盖回去。现在 `pointerdown` 与滚轮都会先取消它。**顺带补了可观测状态** `data-fit-animation`（`running` / `done` / `cancelled`）—— 因为这条缺口的第一版用例是**假绿**的（触发条件搞错了：`shouldAutoFit` 只在换文档或内容出界时取景），现在用例要先抓到 `running` 才继续。证据：新增 `threeSceneCamera.test.ts`（该模块此前无测试，3/3，含"取消后不再排帧"）+ `geometry3d-drag.spec.ts` 一条 e2e（变异：去掉取消 → 期望 cancelled 实收 done，红）。
 - **引用进度档案一律用小节标题，不写行号**：`project-progress.md:<行号>` 形式的引用会随任何一次编辑静默失效（本阶段就发生过三处，已全部改成按标题引用）。
 
 ## 四、未完成任务总清单（2026-10-02 更新；本文件是"还差什么"的**唯一**权威处）

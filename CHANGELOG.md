@@ -5,6 +5,16 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-02 —— 修掉"自动取景动画覆盖用户拖动"的窗口 + 给它一个可观测状态
+
+- **背景**：本文件早先把它记成"顺带发现、**只记不改**"（`cancelFitAnimation()` 只在副作用清理里被调用，用户拖动不会取消进行中的取景）。这一轮把它修掉（提交 `fd234fd`）。
+- **修法**：画布的 `pointerdown` 处理器**先** `cancelFitAnimation()` 再交给交互层；滚轮缩放同理（同属"用户自己动相机"）。顺序不能反 —— 取景的帧不等任何判定，只要还在跑下一帧就会写 `cameraStateRef`，所以必须在用户动作的**第一步**掐掉。
+- **顺带补一个可观测状态，因为这条缺口的第一版用例是假绿的**：我先用"添加立方体"去触发取景，而 `shouldAutoFit` 只在**换文档或内容出界**时取景（编辑不算、`dragging` 时也不算），动画压根没跑 —— "相机没被覆盖"于是自然成立。现在取景动画的三态写到画布上：`data-fit-animation` = `running` / `done` / `cancelled`（`cancelled` 只在**真有帧在跑**时报告，免得重取景时的例行取消把读数弄脏）。用例因此能分两步走：**先抓到 `running`（抓不到就明确失败，不再有假绿）**，再断言按下后变成 `cancelled` —— 与动画自己跑完的 `done` 区分得开。
+- **证据**：
+  - 新增单测 `apps/web/src/threeSceneCamera.test.ts`（该模块**此前没有测试文件**，3/3）：`running → done` 的转移、**取消之后不再排帧**（受控 rAF：再刷两帧相机也不动）、空取消不报 `cancelled`。
+  - `e2e/geometry3d-drag.spec.ts` 新增一条：先抓 `running`，按下鼠标后断言 `cancelled`。**变异检查**：去掉按下时的 `cancel()` → 期望 `cancelled` 实收 `running` / `done`，**红** ✓。
+  - 定向读数：`npm run typecheck` exit 0；`eslint`（四个改动文件）exit 0；拖动 + 相机记忆 + 自动取景三个 spec **11/11**；全库单测 **280 文件 / 3199 通过 + 1 todo / 0 失败**（258 s）。
+
 ## 2026-10-02 —— HTML 导出 Task 5：钉住 Agent 通道四个格式 + 收口（E3 的 HTML 一半交付完成）
 
 - 实施计划 **Task 5** 完成，**5 个区块全部交付**。在 `packages/agent-core/src/tools/interactionTools.test.ts` 加了一条**类型级**判据，钉住 Agent 的导出通道**恰好四个格式**（spec §9 的"有意不做"：那条通道会把结果回给模型，加 HTML 得连带设计"模型拿它干什么"）。
@@ -80,7 +90,7 @@
 - **验证**：修前先复现（`Expected -5 / Received -4.8`，红）；修后 `--repeat-each=5` **5/5 通过**（单跑一次不足以证明去掉了抖动，所以用重复跑）。`tsc -p e2e/tsconfig.json` exit 0；`npm run lint` exit 0（0 error / 13 warning）。
 - **修完后全量 e2e 的读数（如实）**：**178 通过 / 1 失败** —— 失败**换了另一条**：`e2e/geometry3d-section.spec.ts:42`「explains the section preview and creates a section when it is clicked」在第 59 行 `data-preview-hovering` 上期望 `"true"`、实收 `"false"`（指针没落在那圈虚线预览上）。**单独跑 3/3 全过**，也就是说它是**并行负载下才出现**的抖动，**机制与刚修的那条不同**（那条是"读动画中途"，这条是"负载下命中判定偏移"）。
   - **本批没有修它**（一次只修一个根因，不夹带）。所以**"本机全量 e2e 现在全绿"这句话不成立** —— 仍然是 1 条红，只是红的那条换成了另一个尚未定位的负载敏感用例。文档里已同步更正。
-- **另一处顺带发现（只记不改）**：`cancelFitAnimation()` 只在**副作用清理（卸载）**里被调用（`threeSceneEffect.ts:528`），**用户拖动并不会取消**进行中的自动取景动画 —— 理论上"在 250ms 内开始拖"会被剩下的帧覆盖。本批没动它（与本次红的原因无关：本例的拖动发生在动画结束之后）。
+- **另一处顺带发现（只记不改）**：`cancelFitAnimation()` 只在**副作用清理（卸载）**里被调用（`threeSceneEffect.ts:528`），**用户拖动并不会取消**进行中的自动取景动画 —— 理论上"在 250ms 内开始拖"会被剩下的帧覆盖。本批没动它（与本次红的原因无关：本例的拖动发生在动画结束之后）。**（2026-10-02 已修：见同日「修掉'自动取景动画覆盖用户拖动'的窗口 + 给它一个可观测状态」一节，提交 `fd234fd`。）**
 - **那条 `geometry3d-section` 抖动的追查结论：没有修，但把两条假设里的**一条证伪了**、并查出一条**代码级可证的脆弱点**。**
   - **可复现性**：**没能按需复现** —— 单独跑（`--workers=1 --repeat-each=3`）3/3 全过；全量 `--workers=6` 跑了 **179/179 全过**。只在第 21 轮那次 `--workers=3` 的全量里见过一次。按纪律：**不复现就不猜着改**。
   - **假设一（我最初的想法）已被代码证伪**：我原以为是"投影时自动取景动画还在跑"。读 `threeSceneCamera.ts:87-97` 后不成立 —— 取景的触发条件是**文档 id 变了**（`fittedDocumentRef.current !== fittedId`），**不是每次编辑**；而它调的是 `fitToContent()`（**立即** `setCameraState`），**不是** `animateToFit()`。也就是说：加立方体**不会**触发取景动画，而真正那次取景发生在更早的"跳转到立体几何"，到 `grabPoint` 时早已结束。**这条假设作废。**
