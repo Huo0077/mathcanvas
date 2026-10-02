@@ -10,6 +10,46 @@
 
 > 下方 2026-09-22 的"最后更新 / 当前阶段 / 总体状态"三行保留为**当时快照**，不再维护。
 
+## 2026-10-01 —— 球体 Task 9（上半）：全量门禁复跑
+
+> 本批只做**测量**，不改产品代码。计划要求"report counts/warnings/ignored tests, not a generic all green" —— 因此下面每一条都写具体数，包括那个不好看的。
+
+### A. 当次读数
+
+| 命令 | 当次结果 |
+| --- | --- |
+| `npx vitest run --maxWorkers=3` | **278 文件 / 3178 项通过 + 1 todo / 0 失败** |
+| `npm run typecheck` | exit 0（6 个 workspace + `e2e/` + `scripts/`） |
+| `npm run lint` | exit 0，**0 error / 13 warning**（既有基线警告） |
+| `npx playwright test --workers=3`（**全量 e2e**） | **175 通过 / 1 失败** |
+| `npm run test:rust` | **16 个测试二进制 / 236 通过 / 0 失败 / 3 ignored**，exit 0 |
+| `npm run test:perf` | **9 / 9 通过** |
+
+性能细读：`roundTrip/large-mgeo` 24.8 ms、`dag/local-recompute-400` 0.9 ms（全量 0.5 ms）、`denseIntersections/200x200` 1.4 ms、`drag/300-frames` **682.5 ms（≈2.3 ms/帧**，60 fps 预算 16.7 ms/帧）、校准档 1× ≈6 ms vs 4× ≈16–22 ms（量具灵敏度自证）。
+
+Rust 细读：`proxy` 16、`proxy_server` 16、`repository_package` 31、`run_events` 10、`secrets` 9 通过 + **1 ignored**、`shell_smoke` 9，合计 **236 / 0 / 3 ignored**。
+
+### B. 那条失败：先证伪"是不是我弄坏的"
+
+失败用例：`e2e/geometry3d.spec.ts:277`「pans the 3D view along the camera axes within a bounded range」，断言 `expect(z).toBeCloseTo(startZ, 6)` —— 期望 **1.98** / 实收 **2**。
+
+排查顺序（**没有先假设**）：
+
+1. **先排除并行干扰**：单独跑（`--workers=1`）这一条 —— **照样失败**，所以不是"抢 CPU"那类偶发；
+2. **再回到球体工作之前的提交**：`git checkout 91ac837` 后单独跑同一条 —— **同样失败**（期望 **1.99** / 实收 2），随后回到 `main`；
+3. **看期望值本身稳不稳**：两次跑出来的期望是 **1.98** 和 **1.99** —— 逐次运行会变，说明初始取景在本机不是完全确定的；
+4. **看 CI**：`e2e` 作业在 Linux 上 #52 / #54 / #55 三次都是 success。
+
+**结论**：本机环境敏感的**既有**不稳定用例，**不是本批引入的**。
+
+**但它有后果**：既然它在 `.98 / .99` 之间跳，那么 **"全量 e2e"这条门禁在本机不可信** —— 本机的 e2e 读数不能当放行依据，只有 CI 的 `e2e` 作业能。这条写进了 `current-status.md` §一。
+
+### C. 明确没有做的事（Task 9 剩下的）
+
+- **e2e 覆盖清单逐项对照**：数值创建 / 精确圆 · 切点 · 空集 / 编辑后持久化 / 撤销 / 相机与选择 / CAD 视图与导出 / **刻意的不支持布尔** —— 还没逐条核。
+- **spec §5 逐行审计**：拿真实文件与测试输出对每一行，而不是相信文档。
+- **发布决策**：计划明写"新的桌面 Release 还需要一个匹配版本的安装包 + 安装证据" —— 那属于 **D 类**，等用户决定版本与是否发布。
+
 ## 2026-10-01 —— 球体 Task 8：Agent 动作 `solid.create_sphere`（三层一起接）
 
 > 承接 Task 7。手工路径（Task 6）已经能造球，所以按 Task 8 的标题"只有产品路径存在时才发布动作"，这个动作该发布了。

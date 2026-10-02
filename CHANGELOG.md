@@ -5,6 +5,22 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-01 —— 球体 Task 9（上半）：全量门禁复跑，逐条报数而不是"全绿"
+
+- **本批只做测量，不改产品代码**。六条门禁**当次全部复跑**，逐条写出读数（包括那个不好看的）：
+  - `npx vitest run --maxWorkers=3` → **278 文件 / 3178 项通过 + 1 todo / 0 失败**
+  - `npm run typecheck` → exit 0（6 个 workspace + `e2e/` + `scripts/`）
+  - `npm run lint` → exit 0，**0 error / 13 warning**（既有基线警告）
+  - `npx playwright test --workers=3`（**全量 e2e**）→ **175 通过 / 1 失败**
+  - `npm run test:rust` → **16 个测试二进制 / 236 通过 / 0 失败 / 3 ignored**，exit 0
+  - `npm run test:perf` → **9 / 9 通过**；`roundTrip/large-mgeo` 24.8 ms、`denseIntersections/200x200` 1.4 ms、`drag/300-frames` **682.5 ms（≈2.3 ms/帧**，60 fps 预算 16.7 ms/帧）、校准档 1× ≈6 ms vs 4× ≈16–22 ms
+- **那条失败不是"忽略掉"的，是查实为既有不稳**：`e2e/geometry3d.spec.ts:277`「pans the 3D view along the camera axes within a bounded range」在 `expect(z).toBeCloseTo(startZ, 6)` 上失败（期望 1.98 / 实收 2）。
+  - **核实方法**：它在**单独跑**时照样失败（排除并行抢 CPU）；再回到球体工作**之前**的 `91ac837` 单独跑这一条 —— **同样失败**（期望 **1.99** / 实收 2）。
+  - 而且那个**期望值逐次运行会变**（1.98 / 1.99 都出现过），说明初始取景在本机本身不是完全确定的。
+  - CI 的 `e2e` 作业在 Linux 上 #52 / #54 / #55 三次都是 success。
+  - **结论**：本机环境敏感的既有不稳定用例，**不是本批引入的**；但**它让"全量 e2e"这条门禁在本机不可信** —— 所以如实记为"门禁不稳"，而不是写成通过。**本机 e2e 不能当放行依据，CI 的 `e2e` 作业才是。**
+- **未做（Task 9 剩下的）**：① 计划点名的 e2e 覆盖清单**逐项对照**（数值创建 / 精确圆 · 切点 · 空集 / 编辑后持久化 / 撤销 / 相机与选择 / CAD 视图与导出 / 刻意的不支持布尔）；② **spec §5 逐行审计**（拿真实文件与测试输出去对每一行，而不是相信文档）；③ 发布决策 —— 计划明写"新的桌面 Release 还需要一个匹配版本的安装包 + 安装证据"，而那属于 **D 类**（等用户决定版本与是否发布）。
+
 ## 2026-10-01 —— 球体 Task 8：Agent 动作 `solid.create_sphere`（三层一起接）
 
 - **背景**：手工路径（Task 6）已经能造球，Agent 这条还没有 —— 能力表里球明确写着 `temporarily_unavailable`。**产品的球路径已经存在，所以这个动作该发布了**（这正是本 Task 的标题："只有产品路径存在时才发布动作"）。

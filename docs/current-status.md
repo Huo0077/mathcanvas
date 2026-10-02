@@ -9,6 +9,19 @@
 
 ## 一、现在能不能跑（可复核的门禁读数）
 
+**2026-10-01 球体 Task 9 全量复跑（当次实测；下面那张表是更早一批的读数，保留作对照）**：
+
+| 命令 | 当次实际结果 |
+| --- | --- |
+| `npx vitest run --maxWorkers=3` | **278 文件 / 3178 项通过 + 1 todo / 0 失败** |
+| `npm run typecheck` | exit 0（6 个 workspace + `e2e/` + `scripts/`） |
+| `npm run lint` | exit 0，**0 error / 13 warning**（既有基线警告，非零警告） |
+| `npx playwright test --workers=3`（**全量 e2e**） | **175 通过 / 1 失败**。失败的是 `e2e/geometry3d.spec.ts:277`「pans the 3D view along the camera axes within a bounded range」，`expect(z).toBeCloseTo(startZ, 6)`：期望 1.98 / 实收 2。**经核实不是本批引入的**：在球体工作之前的 `91ac837` 上同样失败（期望 1.99 / 实收 2），而且那个期望值**逐次运行会变**（1.98 / 1.99 都出现过）—— 属**本机环境敏感的既有不稳定用例**；CI 的 `e2e` 作业在 Linux 上 #52 / #54 / #55 均绿。**这条已如实记为"门禁不稳"，没有被当成通过。** |
+| `npm run test:rust` | **16 个测试二进制 / 236 通过 / 0 失败 / 3 ignored**，exit 0 |
+| `npm run test:perf` | **9 / 9 通过**。关键读数：`roundTrip/large-mgeo` 24.8 ms、`dag/local-recompute-400` 0.9 ms（全量 0.5 ms）、`denseIntersections/200x200` 1.4 ms、`drag/300-frames` **682.5 ms（≈2.3 ms/帧**，60 fps 预算 16.7 ms/帧）；校准档 1× ≈6 ms vs 4× ≈16–22 ms（量具灵敏度自证） |
+
+> **读法**：全量 e2e 那条**不是"全绿"**。除它以外的五条都是当次复跑的精确读数。
+
 | 命令 | 本轮实际结果与范围 |
 | --- | --- |
 | `npm test -- --maxWorkers=3` | **266 个测试文件 / 3072 个用例通过 + 1 todo / 0 失败**（全库；比上一批多 6 项 = 创建状态机补的边界用例） |
