@@ -317,7 +317,12 @@ export function ThreeSceneView({ document, selectedIds, onSelect, creationSessio
   const workPlane: WorkPlane = workPlaneName === "selected-face" ? selectedPlane ?? "xy" : workPlaneName
   const isCreationCanvasTarget = (target: EventTarget) => target instanceof HTMLCanvasElement && renderTargetRef.current?.contains(target)
 
-  const hasGeometry = document.primitives.some((primitive) => ["point3", "line3", "segment3", "ray3", "edge3", "face3", "polyhedron3", "cube", "pyramid", "cylinder", "cone"].includes(primitive.type) && primitive.visible !== false)
+  /**
+   * 画布上"有没有东西"。**球必须算数** —— 少了它，一份只含球的文档会被当成空图纸：
+   * 场景里明明画着一个球，中间却压着那句"添加点、线或面开始探索三维空间"。
+   * （这是 2026-10-01 视觉验收抓到的：单看单元用例全绿，只有真看一眼画出来的那一帧才暴露。）
+   */
+  const hasGeometry = document.primitives.some((primitive) => ["point3", "line3", "segment3", "ray3", "edge3", "face3", "polyhedron3", "cube", "pyramid", "cylinder", "cone", "sphere"].includes(primitive.type) && primitive.visible !== false)
   /** 「以面为剖切面」需要有选中的截面作为目标。 */
   const hasSelectedSection = selectedIds.some((id) => document.primitives.some((primitive) => primitive.id === id && primitive.type === "section"))
   const angle = dihedralAngleDegrees({ x: 1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 })

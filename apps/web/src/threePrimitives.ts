@@ -417,8 +417,28 @@ export function createCircle3Line(primitive: Extract<PrimitiveSpec, { type: "cir
 export function createSectionMesh(primitive: SectionPrimitive, options: { omitBoundary?: boolean } = {}): THREE.Object3D | null {
   // A cut that misses the solid (points moved past a face) has nothing to draw; drawing a fabricated
   // placeholder would make "moved the plane off the solid" look like a real section.
-  if (primitive.points.length < 2) return null
+  if (primitive.points.length === 0) return null
   const sectionColor = primitive.style?.stroke ?? "#f97316"
+  /**
+   * **相切的那一个点要画出来。** 球 ∩ 平面相切时截面恰好是一个点（Task 4 给的是
+   * `classification:"point"` / `status:"exact"` / `points` 长度 1）。
+   *
+   * 这条分支以前不存在，后果很实：`points.length < 2 → return null` 让**"相切"与"根本没切到"
+   * 在画布上长得一模一样** —— 两个都是空的，用户无从分辨。spec §3 明确要求切点有可见点标记。
+   *
+   * 写法与交点图元一致（`SphereGeometry(1,16,12)` 缩到手柄半径），所以画布上所有"一个点"的
+   * 标记是同一个尺寸语言。
+   */
+  if (primitive.points.length === 1) {
+    const point = primitive.points[0]
+    const marker = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), new THREE.MeshBasicMaterial({ color: sectionColor }))
+    marker.scale.setScalar(DEFAULT_POINT_HANDLE_RADIUS)
+    marker.position.set(point.x, point.y, point.z)
+    marker.userData.primitiveId = primitive.id
+    marker.userData.primitiveType = primitive.type
+    marker.userData.visualRole = "section-tangent-point"
+    return marker
+  }
   // 截面的全部闭合环：带孔或分成多块的截面在 `loops` 里保留完整几何，旧文档只有 `points`。
   const loops = primitive.loops && primitive.loops.length > 0 ? primitive.loops : [primitive.points]
   if (primitive.points.length === 2 && loops.every((loop) => loop.length < 3)) {

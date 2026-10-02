@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest"
 
 import { createEmptyDocument } from "@draw/dsl"
 
-import { createSolidGroup, createSolidMesh, visibleSolids } from "./threePrimitives"
+import { createSectionMesh, createSolidGroup, createSolidMesh, visibleSolids } from "./threePrimitives"
 
 /**
  * 球的**渲染**（实施计划 Task 5 的单元那一半）。
@@ -69,5 +69,58 @@ describe("sphere rendering", () => {
     // 反向对照：只留下可见的那一个。少了它，"把球整个排除在 visibleSolids 之外"也能让下面那句变绿。
     expect(visibleSolids(document).map((primitive) => primitive.id)).toEqual(["sphere-1"])
     expect(visibleSolids({ ...document, primitives: [{ ...SPHERE, visible: false }] })).toHaveLength(0)
+  })
+})
+
+/**
+ * **相切的那一刻必须看得见**（Task 5 的第三条接口）。
+ *
+ * Task 4 已经让切点截面 `classification:"point"` / `status:"exact"` / `visible:true`、`points` 里恰好一个点。
+ * 但渲染层此前有一条 `points.length < 2 → return null`：于是**"相切"和"根本没切到"在画布上长得一模一样**
+ * —— 两个都是空的。spec §3 明确要求切点要有可见点标记，所以这里钉住它。
+ */
+describe("a tangent sphere section draws a visible marker", () => {
+  const tangentSection = {
+    id: "section-1",
+    type: "section" as const,
+    sourceId: "sphere-1",
+    plane: { normal: { x: 0, y: 0, z: 1 }, constant: -8 },
+    points: [{ x: 1, y: 2, z: 8 }],
+    loops: [],
+    classification: "point" as const,
+    status: "exact" as const,
+    visible: true
+  }
+
+  it("returns a marker sitting on the tangent point instead of nothing at all", () => {
+    const marker = createSectionMesh(tangentSection)
+
+    expect(marker).not.toBeNull()
+    expect(marker!.userData).toMatchObject({ primitiveId: "section-1", primitiveType: "section", visualRole: "section-tangent-point" })
+    expect(marker!.position.toArray()).toEqual([1, 2, 8])
+    // 标记要小到像个点，而不是又一个球体。
+    expect(marker!.scale.x).toBeGreaterThan(0)
+    expect(marker!.scale.x).toBeLessThan(0.5)
+  })
+
+  it("still draws nothing when the plane genuinely misses the sphere", () => {
+    // 反向对照：空集**必须**继续什么都不画，否则"没切到"会变成画布上一个假标记。
+    const empty = { ...tangentSection, points: [], classification: "none" as const, status: "undefined" as const, visible: false }
+    expect(createSectionMesh(empty)).toBeNull()
+  })
+
+  it("leaves the ordinary circle cut exactly as it was", () => {
+    const circlePoints = Array.from({ length: 12 }, (_, index) => ({
+      x: 1 + 4 * Math.cos((index / 12) * Math.PI * 2),
+      y: 2 + 4 * Math.sin((index / 12) * Math.PI * 2),
+      z: 6
+    }))
+    const circle = { ...tangentSection, points: circlePoints, classification: "polygon" as const, status: "approximate" as const }
+
+    const object = createSectionMesh(circle)
+    expect(object).not.toBeNull()
+    expect(object!.userData).toMatchObject({ primitiveId: "section-1", primitiveType: "section", visualRole: "section" })
+    // 圆截面仍然是"填充 + 边界"，不是被切点那条新分支抢走。
+    expect(object!.children.length).toBeGreaterThan(0)
   })
 })

@@ -21,7 +21,23 @@
   - **一处自查**：第 5 条"隐藏的球不进场景"在实现之前**就是绿的**（`visibleSolids` 当时压根不认球，返回空数组碰巧满足 `toHaveLength(0)`）—— 典型的"为错误的理由通过"。已改成**反向对照**：一份文档里同时放可见球与隐藏球，必须只留下可见那一个；改法之后它在实现前是红的。
   - **全库回归**（因改了 `SolidPrimitive` 这个核心联合类型）：`npx vitest run --maxWorkers=3` → **275 文件 / 3152 项通过 + 1 todo / 0 失败**。
   - `npm run typecheck` exit 0；`npm run lint` exit 0（**0 error / 13 warning**）。
-- **未做（Task 5 下半）**：**切点截面的可见标记**（Task 4 已让切点截面 `visible:true` 且 `points` 有一个点，但 `createSectionMesh` 对"只有一个点"的截面是否真的画出标记还没验证）、球的**自动取景**（`sceneFit.ts`）、以及 `e2e/geometry3d-sphere.spec.ts`（可见/可选、轨道相机不改变存储的 C/r、无密集可选中经纬线、切点可见）。
+- **下半（同一批的后续）也已落地**：
+  - **相切的那一个点现在画得出来**（`threePrimitives.ts` 的 `createSectionMesh`）：此前第一行是 `points.length < 2 → return null`，于是**"相切"和"根本没切到"在画布上长得一模一样** —— 两个都是空的，用户无从分辨。新增 `points.length === 1` 分支：在切点画一个标记（`SphereGeometry(1,16,12)` 缩到手柄半径，与交点图元同一套尺寸语言），`visualRole = "section-tangent-point"`。空集仍然返回 `null`（反向对照：没切到**不许**出现假标记）。
+  - **球的自动取景不用改**：`threeCamera.ts` 的取景是从**场景对象**算包围盒的（`contentRadiusExcluding`），球现在有了真网格，所以自动纳入 —— 这一条是"查实后确认不需要改"，不是漏做。
+  - **`selectionCommands.ts` 里那张实体名单刻意不加球**（已加注释说明）：那句引导语是"点击棱或面默认选中整个实体；按住 Alt 点击可单独选中棱或面"，而**球既没有棱也没有面**（它是解析体，没有 `edge3`/`face3` 子对象）—— 给球弹这句引导是**误导**。
+  - **新增浏览器实机验收** `e2e/geometry3d-sphere.spec.ts`（1 条）：球**还没有手工入口**（那是 Task 6），所以用例借应用自己的"添加立方体"落一份**合法**草稿、再把 `primitives` 换成球 —— 文档其余字段（图层 / 元数据）由应用保证，不在测试里手搓。断言：刷新后球的 C/r 逐值不变 → 对象树里以"球体 1"出现 → **刚刷新时快捷操作条不可见、在球心投影处点一下之后必须可见**（这是"真的画出来了"唯一的实机证据：没画出来的话这一点命不中任何物体）→ 轨道相机方位角确实变了、而文档里的 C/r 一个字节都没变。
+- **验证（下半，本轮实测）**：
+  - `apps/web/src/threeSphere.test.ts` 增到 **8 条**（球网格 5 + 相切标记 3）。**相切标记那条 RED 起点是 `expected null not to be null`**；另两条反向对照（空集仍 `null`、圆截面路径没被抢走）一开始就是绿的。
+  - `e2e/geometry3d-sphere.spec.ts` → **1/1 通过**。**变异检查**：把 `"sphere"` 从 `visibleSolids` 拿掉 → 该用例当场红在 `expect(locator).toBeVisible()`（快捷操作条找不到）—— 证明它真的守着"球被画出来"这件事，不是只读文档。探针已还原。
+  - **全库**：`npx vitest run --maxWorkers=3` → **275 文件 / 3155 项通过 + 1 todo / 0 失败**。
+  - `npm run typecheck` exit 0；`npm run lint` exit 0（**0 error / 13 warning**）。
+  - 一处**自查**：这份 e2e 的初版里我写了一句拿方位角**自己和自己比**的断言（`not.toBeCloseTo(同一个读数)`），它永远不可能满足、只会超时 —— 等于把"相机真的转了"这条判据写废了。已改成先记下拖动前的方位角再比。同一版还因为单次 `mouse.move` 没触发旋转而红过一次，改用 `{ steps: 8 }`（既有 spec 的成熟写法）后通过。
+- **仍未做（Task 5 剩下的两条判据）**：**经界面**创建球并切一刀来验"切点可见"（球的截面按钮是 Task 4 的尾巴、手工入口是 Task 6）；"没有密集可选中经纬线"只有单元判据（浏览器里没有可读的读数能观察它）。
+- **视觉验收抓出一处真缺陷并已修**（计划里"visually inspect an actual frame"那一条真的有用）：按要求把种子球那一帧截下来人工看一眼，发现球画得对（剪影干净、**没有经纬网**），但**画布中间压着一句"添加点、线或面开始探索三维空间。"** —— 场景里明明有球，应用却说这里是空的。
+  - **根因**：`threeScene.tsx` 的 `hasGeometry` 又是一张**硬编码类型名单**（`point3/line3/…/cube/pyramid/cylinder/cone`），**漏了 `sphere`**，于是一份只含球的文档被判成空图纸。这和 `visibleSolids` 是同一类漏配 —— 又一次"同一个判断散在多张名单里"。
+  - **为什么单元用例全绿也没抓到**：`hasGeometry` 是组件里的局部常量，只有真渲染那一帧才看得见。所以这条**唯一的判据就是看一眼截图**。
+  - **修法**：名单加入 `"sphere"` 并写明理由。**回归**钉在 `e2e/geometry3d-sphere.spec.ts` 里：断言那句空图纸提示 `toHaveCount(0)`。
+  - 证据（修复前那一帧）见提交信息与 `docs/project-progress.md` 的 Task 5 一节。
 
 ## 2026-10-01 —— 球体 Task 4（上半）：球的解析截面接进 `SectionPrimitive`
 

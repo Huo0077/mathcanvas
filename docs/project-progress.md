@@ -49,11 +49,42 @@
 | `npm run typecheck` | exit 0 |
 | `npm run lint` | exit 0，**0 error / 13 warning** |
 
-### E. 明确没有做的事（Task 5 下半）
+### E. 下半：相切标记 + 浏览器实机验收（同一批的后续）
 
-- **切点截面的可见标记**没验证：Task 4 已让切点截面 `visible:true` 且 `points` 里有一个点，但 `createSectionMesh` 对"只有一个点"的截面是否真的画出标记，还没查。
-- 球的**自动取景**（`sceneFit.ts`）没做。
-- `e2e/geometry3d-sphere.spec.ts` 没写（可见/可选、轨道相机不改变存储的 C/r、无密集可选中经纬线、切点可见）。
+- **相切的那一个点现在画得出来**（`createSectionMesh`）：此前第一行是 `points.length < 2 → return null`，于是**"相切"与"根本没切到"在画布上长得一模一样**（两个都是空的）。新增 `points.length === 1` 分支画一个切点标记（与交点图元同一套 `SphereGeometry(1,16,12)` + 手柄半径的尺寸语言），`visualRole = "section-tangent-point"`；空集仍 `null`。
+  - **RED**：`expected null not to be null`。**反向对照**两条一开始就是绿的（空集仍 `null`、圆截面路径没被这条新分支抢走）。
+- **自动取景查实无需改动**：`threeCamera.ts` 的取景从**场景对象**算包围盒（`contentRadiusExcluding`），球有了真网格就自动纳入。这是"查实后确认不需要改"，不是漏做。
+- **`selectionCommands.ts` 的实体名单刻意不加球**（已写注释）：那句引导语是"点击棱或面默认选中整个实体；按住 Alt 点击可单独选中棱或面"，而**球既没有棱也没有面** —— 弹这句是误导。
+- **新增** `e2e/geometry3d-sphere.spec.ts`（1 条）。球还没有手工入口（Task 6），所以用例借应用自己的"添加立方体"落一份**合法**草稿、再把 `primitives` 换成球（文档其余字段由应用保证，不在测试里手搓）。断言链：刷新后 C/r 逐值不变 → 对象树里出现"球体 1" → **刚刷新时 `.inspector-quick-actions` 不可见、在球心投影处点一下之后必须可见** → 轨道方位角确实变了而 C/r 没变。
+  - 中间那条是**渲染唯一的实机证据**：前面几条都只读文档，球一个像素都不画它们照样绿；拾取这条真链路一断就红。
+  - **变异检查**：从 `visibleSolids` 拿掉 `"sphere"` → 用例当场红在 `expect(locator).toBeVisible()`。证明它守着"球被画出来"。
+  - **两处自查**：① 初版里我写了拿方位角**自己和自己比**的断言（永远不可能满足、只会超时），等于把"相机真的转了"这条判据写废了 —— 已改成先记下拖动前的值再比；② 单次 `mouse.move` 没触发旋转，改用既有 spec 的 `{ steps: 8 }`。
+
+### F. 本轮实测读数（下半）
+
+| 命令 | 当次结果 |
+| --- | --- |
+| `npx vitest run apps/web/src/threeSphere.test.ts` | 相切标记 RED（`expected null not to be null`）→ 修后 **8 / 8 通过** |
+| `npx playwright test e2e/geometry3d-sphere.spec.ts` | **1 / 1 通过**；变异（拿掉 `"sphere"`）→ 红 |
+| `npx vitest run --maxWorkers=3` | **275 文件 / 3155 项通过 + 1 todo / 0 失败** |
+| `npm run typecheck` / `npm run lint` | exit 0 / exit 0（0 error / 13 warning） |
+
+### G. 视觉验收抓到的一处真缺陷（已修）
+
+计划 Task 5 的验收清单里有一条 **"visually inspect an actual frame"**。照做：用一个一次性探针把种子球那一帧截下来人工看。**这一眼看出了单元用例全绿也漏掉的东西。**
+
+- **看到的**：球画得对 —— 剪影干净、表面有明暗，**一条经纬网都没有**（正是 Task 5 要的）。但画布**中间压着一句"添加点、线或面开始探索三维空间。"** —— 场景里明明有球，应用却说这里是空的。
+- **根因**：`threeScene.tsx` 的 `hasGeometry` 是一张**硬编码类型名单**（`point3` / `line3` / … / `cube` / `pyramid` / `cylinder` / `cone`），**漏了 `sphere`** —— 一份只含球的文档被判成"空图纸"，于是空图纸提示盖在球上。这与 `visibleSolids` 是同一类漏配：**同一个判断散在多张名单里**，加一种实体就要记得改好几处（本轮已经改了三处：`visibleSolids`、`pickKind`、`hasGeometry`）。
+- **为什么单元用例抓不到**：`hasGeometry` 是组件里的局部常量，不导出、也不经过任何纯函数层，只有真渲染那一帧才看得见。**这条唯一的判据就是看一眼截图** —— 也正是它让这条缺陷没被"275 文件全绿"掩盖过去。
+- **修法**：名单加入 `"sphere"`，并把这段成因写进代码注释（免得下次又只改名单不改注释）。**回归**钉在 `e2e/geometry3d-sphere.spec.ts`：断言那句空图纸提示 `toHaveCount(0)`。
+- **探针已删**（`e2e/tmp-sphere-shot.spec.ts` 与它产出的 PNG 都不留在仓库里）。
+
+> 顺带记两个探针自己的坑，免得下次重踩：① `locator.screenshot()` 会等元素"稳定"，而 WebGL 画布一直在重画 —— 等不到，超时；改用整页截图 + `clip` 才对。② 探针最初无条件 `localStorage.clear()`，而 `addInitScript` **每次导航都会重跑**，于是 `page.reload()` 把自己刚种下的球抹掉了 —— 这个坑本项目早就在 `high-school-geometry-tasks.spec.ts` 里写过，我还是踩了一次。
+
+### H. 明确没有做的事（Task 5 剩下的两条判据）
+
+- **经界面**创建球并切一刀来验"切点可见"：球的截面按钮是 Task 4 的尾巴、手工入口是 Task 6，两条路都还没通。
+- "没有密集可选中经纬线"只有**单元**判据（`threeSphere.test.ts` 断言组里一条 `LineSegments` 都没有）；浏览器里没有可读的读数能观察它。
 
 ## 2026-10-01 —— 球体 Task 4（上半）：球的解析截面接进 `SectionPrimitive`
 
