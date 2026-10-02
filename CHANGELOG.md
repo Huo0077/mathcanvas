@@ -5,6 +5,24 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-01 —— 球体 Task 6（上半）：从「常用立体」手工造一个球
+
+- **背景**：Task 5 之后球已经能画、能选、能切，但**没有任何界面入口能造出一个球** —— 上一批的浏览器验收甚至得先建个立方体、再把草稿里的图元偷换成球才验得了。这一批把入口补上。
+- **改动（3 个文件 + 2 个新测试文件 / 2 处既有测试更新）**：
+  - `spatialSolidWizardModel.ts`：`SolidPreset` 加 `"sphere"`，草稿加 `radius`（默认 2，球心沿用 `origin` 那个字段）；`solidWizardInput` 里球**先判**并单独校验（半径有限正数、球心有限），报错文案点名"球"。
+  - `spatialSolidCommands.ts`：`TeachingSolidInput` 加 `{ kind: "sphere"; center; radius }`；`buildTeachingSolid` 的球分支**只落一个图元**（解析实体，不像立方体 / 棱柱那样物化点 / 棱 / 面 / `polyhedron3`），标签 `球体 N`。
+  - `components/SpatialSolidWizard.tsx`：预设列表加「球体」（六 → 七），球只渲染**球心 + 半径**两个入参 —— 底面 / 拉伸向量 / 顶点偏移那一整套都不显示（它们与球无关）。
+- **为什么要"球先判"**：共用那套尺寸校验会让球平白背上 `width/depth/height` 的合法性约束，而且报错会与棱锥那条混成一句看不出所以然的话。实测 RED 就是这个现场：球预设当时**掉进棱锥分支**，报 `{ kind: 'pyramid' }`、`Cannot read properties of undefined (reading 'length')`。
+- **验证（本轮实测）**：
+  - 新增 `apps/web/src/spatialSphereWizard.test.ts`（7 条）。**RED 起点 5/7 红**，成因如上。
+  - **一处自查**：其中两条（"半径非法要拒""球心非有限要拒"）在实现之前**就已经是绿的** —— 因为球那时走棱锥分支、棱锥分支同样会拒 0/NaN，等于什么都没钉住。已加断言要求**报错文案点名"球"**，改法之后它们在实现前是红的。
+  - `SpatialSolidWizard.test.tsx`：把"六个课堂立体"更新为**七个**（并在断言里点名"球体"），另加一条"球只提供球心 + 半径，不出现底面宽 / 拉伸向量 / 顶点偏移"。
+  - **浏览器验收** `e2e/geometry3d-sphere.spec.ts` 增到 **2 条**（新增"从「常用立体」造球"）：参数改完但**没点确认**之前文档里不该有球（预览只改画面）、画面确实有东西（"这里什么都没有"的提示消失）、半径填 0 时如实报原因且文档没动、确认后恰好一个球且球心/半径逐值相等。**2/2 通过**。
+  - **全库**：`npx vitest run --maxWorkers=3` → **276 文件 / 3163 项通过 + 1 todo / 0 失败**。
+  - `npm run typecheck` exit 0；`npm run lint` exit 0（**0 error / 13 warning**）。
+  - 顺带修掉一处自己引入的类型错误：新测试里写了 `createEmptyDocument("geometry")`，而 `Workspace` 没有这个名字（合法值：`calculus` / `conics` / `cad` / `geometry3d`）—— 单测不报、`tsc` 当场报。
+- **未做（Task 6 剩下的）**：**属性栏编辑**（选中球之后改球心 / 半径 —— Task 3 已经把 `updatePrimitive { center3, radius3 }` 打通，缺的是属性栏那侧的字段）；**截面按钮接受球**（`solidCommands.ts`，也就是 Task 4 的尾巴）。
+
 ## 2026-10-01 —— 球体 Task 5（上半）：画的球与"不许出现经纬网"
 
 - **背景**：Task 1–4 让球在**文档层**完整（类型、解析截交、可编辑可测量、截面接入 + 布尔门禁），但画布上**根本没有球** —— `SolidPrimitive` 只含 cube/pyramid/cylinder/cone，球会掉进"圆锥"那条分支。

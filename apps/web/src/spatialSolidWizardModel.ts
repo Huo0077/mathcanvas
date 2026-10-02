@@ -3,7 +3,7 @@ import { planeThroughPoints } from "@draw/scene-graph"
 
 import type { TeachingSolidInput } from "./spatialSolidCommands"
 
-export type SolidPreset = "cube" | "box" | "tri-prism" | "quad-prism" | "tri-pyramid" | "quad-pyramid"
+export type SolidPreset = "cube" | "box" | "tri-prism" | "quad-prism" | "tri-pyramid" | "quad-pyramid" | "sphere"
 
 export interface SolidWizardDraft {
   preset: SolidPreset
@@ -14,6 +14,8 @@ export interface SolidWizardDraft {
   offsetX: number
   offsetY: number
   useSelectedBase: boolean
+  /** 球体预设用：半径（球心就是 `origin`，与其它预设共用"起点"那个字段）。 */
+  radius: number
 }
 
 export const DEFAULT_SOLID_WIZARD_DRAFT: SolidWizardDraft = {
@@ -24,11 +26,23 @@ export const DEFAULT_SOLID_WIZARD_DRAFT: SolidWizardDraft = {
   height: 3,
   offsetX: 0,
   offsetY: 0,
-  useSelectedBase: false
+  useSelectedBase: false,
+  radius: 2
 }
 
 export function solidWizardInput(draft: SolidWizardDraft, selectedBase?: Vector3[]): TeachingSolidInput | { error: string } {
   const { origin, width, depth, height, offsetX, offsetY } = draft
+  /**
+   * 球**先判**：它只用到球心与半径，共用不到下面那套"底面 / 拉伸向量 / 顶点偏移"的尺寸校验
+   *（否则 `width/depth/height` 会给球带进一堆与它无关的合法性约束）。报错文案里点名"球"，
+   * 免得它和棱锥那条错误混成一句看不出所以然的话。
+   */
+  if (draft.preset === "sphere") {
+    const { radius } = draft
+    if (!Number.isFinite(radius) || radius <= 0) return { error: "球的半径必须是有限正数" }
+    if (![origin.x, origin.y, origin.z].every(Number.isFinite)) return { error: "球的球心必须是有限数" }
+    return { kind: "sphere", center: origin, radius }
+  }
   const isCube = draft.preset === "cube"
   const isBox = isCube || draft.preset === "box"
   const usesPresetBase = isBox || !draft.useSelectedBase

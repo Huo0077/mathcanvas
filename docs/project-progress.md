@@ -10,6 +10,51 @@
 
 > 下方 2026-09-22 的"最后更新 / 当前阶段 / 总体状态"三行保留为**当时快照**，不再维护。
 
+## 2026-10-01 —— 球体 Task 6（上半）：从「常用立体」手工造一个球
+
+> 承接 Task 5。此前球能画、能选、能切，却**没有任何界面入口能造出一个球** —— 上一批的浏览器验收甚至得先建立方体、再把草稿图元偷换成球。
+
+### A. RED（成因是"球掉进了棱锥分支"）
+
+- 新增 `apps/web/src/spatialSphereWizard.test.ts`（7 条）。首次运行 **5/7 红**：
+  - `expected { kind: 'pyramid', …(2) } to deeply equal { kind: 'sphere', …(2) }` —— 球预设落到了函数末尾的棱锥分支；
+  - `radius=0: expected false to be true` —— 半径压根没被单独校验；
+  - 三条 `TypeError: Cannot read properties of undefined (reading 'length')` —— 棱锥分支读 `input.base`，而球输入没有这个字段。
+
+### B. GREEN（改了什么）
+
+| 文件 | 改动 |
+| --- | --- |
+| `spatialSolidWizardModel.ts` | `SolidPreset` 加 `"sphere"`；草稿加 `radius`（球心沿用 `origin`）；`solidWizardInput` **球先判**并单独校验，报错点名"球" |
+| `spatialSolidCommands.ts` | `TeachingSolidInput` 加球；`buildTeachingSolid` 球分支只落**一个**图元，标签 `球体 N` |
+| `components/SpatialSolidWizard.tsx` | 预设列表六 → **七**；球只渲染**球心 + 半径** |
+
+**为什么要"球先判"**：共用那套尺寸校验会让球平白背上 `width/depth/height` 的合法性约束，报错还会与棱锥那条混成一句看不出所以然的话。
+
+### C. 一处自查："为错误的理由通过"（本项目第三次踩到同一个坑）
+
+- "半径非法要拒"与"球心非有限要拒"两条，在实现之前**就已经是绿的** —— 球那时走棱锥分支，而棱锥分支同样会拒 0 / NaN。它们什么都没钉住。
+- 修法：断言**报错文案点名"球"**（`toMatch(/球/)`）。加上之后，它们在实现前是红的。
+
+### D. 本轮实测读数
+
+| 命令 | 当次结果 |
+| --- | --- |
+| `npx vitest run apps/web/src/spatialSphereWizard.test.ts` | RED 5/7 红 → 修后 **7/7 通过** |
+| `npx vitest run apps/web/src/components/SpatialSolidWizard.test.tsx` | **6/6 通过**（"六个"更新为**七个**并点名"球体"，另加"球只有球心 + 半径"一条） |
+| `npx playwright test e2e/geometry3d-sphere.spec.ts` | **2/2 通过**（新增"从「常用立体」造球"） |
+| `npx vitest run --maxWorkers=3` | **276 文件 / 3163 项通过 + 1 todo / 0 失败** |
+| `npm run typecheck` / `npm run lint` | exit 0 / exit 0（0 error / 13 warning） |
+
+**顺带修掉一处自己引入的类型错误**：新测试里写了 `createEmptyDocument("geometry")`，而 `Workspace` 没有这个名字（合法值只有 `calculus` / `conics` / `cad` / `geometry3d`）—— 单测不报、`tsc` 当场报。这又一次说明"单测全绿"替不了类型检查。
+
+**浏览器验收这条守的是"预览与提交分开"**：参数改完但没点确认之前文档里**不该有球**；画面确实有东西（那句"这里什么都没有"的提示必须消失）；半径填 0 时如实报原因且文档没动；确认后恰好一个球、球心 / 半径逐值相等。
+
+### E. 明确没有做的事（Task 6 剩下的）
+
+- **属性栏编辑**：选中球之后改球心 / 半径。Task 3 已经把 `updatePrimitive { center3, radius3 }` 这条写入路径打通（补丁校验 + 应用分支 + 撤销），缺的是**属性栏那侧的字段**。
+- **截面按钮接受球**（`solidCommands.ts`）—— 也就是 Task 4 的尾巴。
+
 ## 2026-10-01 —— 球体 Task 5（上半）：画的球与"不许出现经纬网"
 
 > 承接 Task 4。

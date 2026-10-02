@@ -122,3 +122,43 @@ test("keeps an analytic sphere through reload and a camera orbit, and names it i
   await expect.poll(async () => Number(await scene.getAttribute("data-camera-azimuth"))).not.toBeCloseTo(azimuthBefore, 1)
   expect(await readSphere(page)).toEqual({ center: SPHERE.center, radius: SPHERE.radius })
 })
+
+/**
+ * **从「常用立体」手工创建一个球**（Task 6 的界面那一半）。
+ *
+ * 判据是"预览与提交分开"这条口径：
+ * ① 参数改完但**没点确认**之前，文档里**不该有球**（预览只改画面）；
+ * ② 点确认之后文档里恰好是那一个球，球心 / 半径逐值等于填的；
+ * ③ 半径填 0 时**如实报原因**，而且文档**一个字节都没动**（不是"写进去一半再说"）。
+ */
+test("creates a sphere from the common-solid wizard: preview first, one commit on confirm", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "常用立体" }).click()
+
+  const wizard = page.getByRole("dialog", { name: "常用立体" })
+  await wizard.getByRole("combobox", { name: "立体类型" }).selectOption("sphere")
+  for (const [axis, value] of [["X", "1"], ["Y", "2"], ["Z", "3"]] as const) {
+    await wizard.getByRole("spinbutton", { name: `球心 ${axis}` }).fill(value)
+  }
+  await wizard.getByRole("spinbutton", { name: "半径" }).fill("5")
+
+  // ① 参数齐了、预览该有了，但**还没点确认** —— 文档里不该出现球。
+  expect(await readSphere(page)).toBeNull()
+  // 画面确实有东西了：那句"这里什么都没有"的提示必须消失（预览真的画出来了）。
+  await expect(page.getByText("添加点、线或面开始探索三维空间。")).toHaveCount(0)
+
+  // ③ 先试一个非法半径：如实报原因，且文档仍然没有球。
+  await wizard.getByRole("spinbutton", { name: "半径" }).fill("0")
+  await expect(wizard.getByRole("alert")).toBeVisible()
+  expect(await readSphere(page)).toBeNull()
+
+  await wizard.getByRole("spinbutton", { name: "半径" }).fill("5")
+  await expect(wizard.getByRole("alert")).toHaveCount(0)
+
+  // ② 确认：一次提交落一个球。
+  await wizard.getByRole("button", { name: "确认创建" }).click()
+  await expect.poll(async () => (await readSphere(page))?.radius ?? null).toBe(5)
+  expect(await readSphere(page)).toEqual({ center: { x: 1, y: 2, z: 3 }, radius: 5 })
+  await expect(page.locator(".algebra-panel").getByText(/^球体 \d+$/).first()).toBeVisible()
+})

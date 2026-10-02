@@ -7,6 +7,7 @@ export type TeachingSolidInput =
   | { kind: "box"; origin: Vector3; size: Vector3 }
   | { kind: "prism"; base: Vector3[]; vector: Vector3 }
   | { kind: "pyramid"; base: Vector3[]; apex: Vector3 }
+  | { kind: "sphere"; center: Vector3; radius: number }
 
 export type TeachingSolidResult = { operations: DomainOperation[]; selectedId: string } | { error: string }
 
@@ -32,6 +33,17 @@ export function buildTeachingSolid(document: GeometryDocument, input: TeachingSo
     const built = compileSolidPrism(selectedId, input.base, input.vector, label)
     if (built.diagnostics.length > 0) return { error: built.diagnostics.map((item) => item.message).join("；") }
     primitives = built.primitives
+  } else if (input.kind === "sphere") {
+    /**
+     * 球是**解析实体**：文档里只有球心与半径，所以这里**只落一个图元** —— 不像立方体 / 棱柱那样
+     * 还要物化点 / 棱 / 面 / `polyhedron3`。显示用的网格由画布现搭，永远不进文档。
+     */
+    if (!Number.isFinite(input.radius) || input.radius <= 0) return { error: "球的半径必须是有限正数" }
+    if (![input.center.x, input.center.y, input.center.z].every(Number.isFinite)) return { error: "球的球心必须是有限数" }
+    selectedId = nextPrimitiveId(document, "sphere")
+    const label = `球体 ${selectedId.split("-").at(-1)}`
+    const primitive: Extract<PrimitiveSpec, { type: "sphere" }> = { id: selectedId, type: "sphere", center: input.center, radius: input.radius, label }
+    primitives = [primitive]
   } else {
     selectedId = nextPrimitiveId(document, "solid")
     const plane = planeThroughPoints(input.base)
