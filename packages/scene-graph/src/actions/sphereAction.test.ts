@@ -1,6 +1,7 @@
-import { createEmptyDocument } from "@draw/dsl"
+import { createEmptyDocument, decodeMgeo, encodeMgeo } from "@draw/dsl"
 import { describe, expect, it } from "vitest"
 
+import { commitTransaction } from "../transactions"
 import { compileActions } from "./index"
 import type { ActionContext, DraftAction, IdAllocator } from "./types"
 
@@ -69,6 +70,29 @@ describe("solid.create_sphere", () => {
     expect(committed.primitives.filter((primitive) => primitive.type === "sphere")).toHaveLength(1)
   })
 
+  /**
+   * 计划 Task 8 点名的"**一次确认的场景事务 + 保存往返**"：编译出来的操作要能**真的提交**，
+   * 提交后的文档要能**编码再解码**而不变形（球心 / 半径逐值不变，且不凭空多出子对象）。
+   *
+   * 只编译不提交的话，"这个动作产出的东西进不了文档"这种错会一路漏到运行时。
+   */
+  it("commits as one transaction and survives a save/reopen round trip", () => {
+    const document = createEmptyDocument("geometry3d")
+    const result = compileActions(document, [sphereAction({ alias: "S", center: { x: 1, y: 2, z: 3 }, radius: 5, label: "球体 1" })], contextWith(document))
+    expect(result.diagnostics).toEqual([])
+
+    const committed = commitTransaction({ base: document, operations: result.operations })
+    expect(committed.changed).toBe(true)
+    if (!committed.changed) return
+    expect(committed.document.primitives).toHaveLength(1)
+
+    const reopened = decodeMgeo(encodeMgeo(committed.document))
+    const sphere = reopened.primitives.find((primitive) => primitive.type === "sphere")
+    expect(sphere).toMatchObject({ center: { x: 1, y: 2, z: 3 }, radius: 5, label: "球体 1" })
+    // 球不物化子对象：往返前后图元总数都是 1。
+    expect(reopened.primitives).toHaveLength(1)
+  })
+
   it("refuses a radius that is not a finite positive number, producing no operation at all", () => {
     for (const radius of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
       const document = createEmptyDocument("geometry3d")
@@ -98,5 +122,28 @@ describe("solid.create_sphere", () => {
 
     expect(result.operations).toHaveLength(0)
     expect(result.diagnostics[0].code).toBe("workspace_mismatch")
+  })
+
+  /**
+   * 计划 Task 8 点名的"**alias 碰撞**"：同一份计划里两次用同一个别名。
+   *
+   * 幂等分配器对同一 alias 会给**同一个 id**，于是两次 `addPrimitives` 会撞 id。
+   * 判据不是"哪一层拦的"，而是**必须被拦住**：要么编译期给诊断，要么事务校验拒绝 ——
+   * 绝不许悄悄落下两只同 id 的球（那会让后续每一次按 id 的查找都指向同一边）。
+   */
+  it("catches an alias collision instead of leaving two spheres that share one id", () => {
+    const document = createEmptyDocument("geometry3d")
+    const result = compileActions(document, [
+      sphereAction({ alias: "S", center: { x: 0, y: 0, z: 0 }, radius: 1 }),
+      sphereAction({ alias: "S", center: { x: 1, y: 0, z: 0 }, radius: 2 })
+    ], contextWith(document))
+
+    const committed = commitTransaction({ base: document, operations: result.operations })
+    expect(result.diagnostics.length > 0 || !committed.changed).toBe(true)
+
+    if (committed.changed) {
+      const spheres = committed.document.primitives.filter((primitive) => primitive.type === "sphere")
+      expect(new Set(spheres.map((primitive) => primitive.id)).size).toBe(spheres.length)
+    }
   })
 })

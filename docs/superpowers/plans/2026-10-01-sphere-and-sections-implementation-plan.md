@@ -146,7 +146,9 @@ expect(outlines).toMatchObject([{ kind: "polyline", closed: true }])
 
 **Interfaces:** Publish `solid.create_sphere` only after all three layers accept `{alias,center,radius}` with finite centre/r>0. Missing centre/radius is `ask_user`; provider output may not silently default them. Compiler emits the same `SpherePrimitive` as the manual path and does not claim unsupported Boolean tools.
 
-- [ ] Write tests that fail for action registry/schema mismatch, invalid radius, alias collision, missing inputs, one confirmed scene transaction and saved round trip.
+**交付证据（2026-10-01）：** 代码提交 `46e5279` 已推送并由 CI run #54 四项全绿。**三层一起接**：动作层 `SolidCreateSphereAction` + `compileSolidSphereAction`（球只落一个图元，与手工路径同一种文档）；传输层 `actionIds` + `actionInputs`（只挡畸形、缺字段合法、半径非正按字段路径拒绝）；登记层 `actionRegistry`（`center`/`radius` 都 `ask_user`）+ `capabilities`（球翻成 `available`）+ `skills/manifest`（技能动作表与 `CAPABILITY_FOR_ACTION`）。**实测**：`sphereAction.test.ts` **7/7**（RED 起点 3/5 红 `unknown_action`；现已覆盖本条点名的 invalid radius / missing inputs / **alias 碰撞** / **一次确认的事务 + 保存往返**）、`actionSchemas.test.ts` **15/15**、`agent-core` 全包 **40 文件 / 521 项**、全库 **278 文件 / 3178 项 + 1 todo / 0 失败**、`typecheck`/`lint` exit 0。**"registry/schema 不一致"这条不是靠新写用例，而是靠既有的机器闸门**：`CAPABILITY_FOR_ACTION` 是 `Record<DraftActionIdName, string>`（漏登记编译不过），加上 `actionIds` / `capabilities` / `catalog`（内容哈希）/ `actionFieldParity` 四条用例 —— 它们在本批**确实把我挡下来了**（这一发现同时更正了 `current-status.md` 里"没有机器挡住"那条过重的表述）。**未做**：**Agent 端到端**（真模型跑一轮"画一个半径 5 的球"）—— 下面 bullet 2 因此**不勾**。
+
+- [x] Write tests that fail for action registry/schema mismatch, invalid radius, alias collision, missing inputs, one confirmed scene transaction and saved round trip.
 ```ts
 const parsed = parseActionToolInput("solid.create_sphere", { alias: "S", center: { x: 1, y: 2, z: 3 }, radius: 5 }, "step-1")
 expect(parsed.ok).toBe(true)
