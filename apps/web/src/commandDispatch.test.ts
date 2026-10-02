@@ -38,6 +38,7 @@ function harness(overrides: Partial<CommandDispatchDeps> = {}) {
     addSection: vi.fn(),
     anchorRotation: vi.fn(),
     exportSvgFile: vi.fn(),
+    exportHtmlFile: vi.fn(),
     exportCsvFile: vi.fn(),
     exportPngFile: vi.fn(),
     save: vi.fn()
@@ -164,10 +165,12 @@ describe("command dispatch", () => {
     runCadCommand("export-svg")
     runCadCommand("export-dxf")
     runCadCommand("export-pdf")
+    runCadCommand("export-html")
     runCadCommand("export-csv")
     runCadCommand("export-mgeo")
 
     expect(spies.exportSvgFile.mock.calls).toEqual([["svg"], ["dxf"], ["pdf"]])
+    expect(spies.exportHtmlFile).toHaveBeenCalledTimes(1)
     expect(spies.exportCsvFile).toHaveBeenCalledTimes(1)
     expect(spies.save).toHaveBeenCalledTimes(1)
   })

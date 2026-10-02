@@ -314,6 +314,7 @@ export function App() {
   const fileExports = createFileExports({ getDocument: () => document, getExportableDrawings: () => exportableEngineeringDrawings, setFileError })
   const save = () => fileExports.save()
   const exportSvgFile = (format: "svg" | "dxf" | "pdf" = "svg") => fileExports.exportSvgFile(format)
+  const exportHtmlFile = () => fileExports.exportHtmlFile()
   const exportCsvFile = () => fileExports.exportCsvFile()
   const exportPngFile = () => fileExports.exportPngFile()
   const load = (serialized: string) => {
@@ -617,7 +618,7 @@ export function App() {
     addPoint3, addLine3, addPlane3, addFace3, addCircle3Track, addPoint, startCreation,
     deleteSelected, toggleLock, createGroup, addEngineeringAnnotation,
     addDefaultPrimitive, addDefaultCube, addDefaultSolid, addTetrahedron, addSection, anchorRotation,
-    exportSvgFile, exportCsvFile, exportPngFile, save
+    exportSvgFile, exportHtmlFile, exportCsvFile, exportPngFile, save
   })
 
   /**

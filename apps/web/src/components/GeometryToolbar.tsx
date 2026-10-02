@@ -3,6 +3,7 @@ import type { Workspace } from "@draw/dsl"
 
 interface GeometryToolbarProps {
   onExportSvg: (format?: "svg" | "dxf" | "pdf") => void
+  onExportHtml: () => void
   onExportCsv: () => void
   onExportPng: () => void
   onAddPoint: () => void
@@ -108,7 +109,7 @@ export function GeometryToolbar(props: GeometryToolbarProps) {
     </section>
     <section className="toolbar-group export-tools">
       <div className="toolbar-group-heading"><div><span className="toolbar-kicker">导出</span><strong>文件输出</strong></div></div>
-      <div className="toolbar-inline-actions"><ToolButton label="导出 SVG" disabled={projectedExportDisabled} title={projectedExportDisabled ? projectedExportTitle : undefined} onClick={() => props.onExportSvg("svg")} /><ToolButton label="导出 CSV" onClick={props.onExportCsv} /><ToolButton label="导出 PNG" disabled={pngExportDisabled} title={pngExportDisabled ? projectedExportTitle : undefined} onClick={props.onExportPng} /></div>
+      <div className="toolbar-inline-actions"><ToolButton label="导出 SVG" disabled={projectedExportDisabled} title={projectedExportDisabled ? projectedExportTitle : undefined} onClick={() => props.onExportSvg("svg")} /><ToolButton label="导出 HTML" onClick={props.onExportHtml} /><ToolButton label="导出 CSV" onClick={props.onExportCsv} /><ToolButton label="导出 PNG" disabled={pngExportDisabled} title={pngExportDisabled ? projectedExportTitle : undefined} onClick={props.onExportPng} /></div>
     </section>
   </div>
 }

@@ -30,9 +30,16 @@ describe("ribbon command configuration", () => {
     const exports = groups.find((group) => group.id === "export")?.commands.map((command) => command.id)
     const deleteCommand = groups.find((group) => group.id === "edit")?.commands.find((command) => command.id === "modify-delete")
 
-    expect(exports).toEqual(["export-svg", "export-dxf", "export-pdf", "export-csv", "export-mgeo"])
+    expect(exports).toEqual(["export-svg", "export-dxf", "export-pdf", "export-html", "export-csv", "export-mgeo"])
     expect(deleteCommand?.disabled).toBe(true)
     expect(deleteCommand?.disabledReason).toContain("选择")
+  })
+
+  it("offers HTML export in the planar workspace too", () => {
+    const groups = createRibbonGroups({ ...emptyContext, workspace: "conics" })
+    const exports = groups.find((group) => group.id === "export")?.commands.map((command) => command.id)
+
+    expect(exports).toEqual(["export-svg", "export-html", "export-csv", "export-png", "export-mgeo"])
   })
 
   it("keeps spatial construction commands available in the 3D workspace", () => {

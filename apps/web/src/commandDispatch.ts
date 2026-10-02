@@ -58,12 +58,13 @@ export interface CommandDispatchDeps {
   addSection: () => void
   anchorRotation: () => void
   exportSvgFile: (format?: "svg" | "dxf" | "pdf") => void
+  exportHtmlFile: () => void
   exportCsvFile: () => void
   exportPngFile: () => void
   save: () => void
 }
 
-export function createCommandDispatch({ document, selectedIds, cadMode, cadActiveLayerBlockedReason, engineeringDrawings, apply, setActiveCommand, setLayerNotice, setCreationStep, setSelectedIds, setShowProjectionDiagnostics, setCadMode, addPoint3, addLine3, addPlane3, addFace3, addCircle3Track, addPoint, startCreation, deleteSelected, toggleLock, createGroup, addEngineeringAnnotation, addDefaultPrimitive, addDefaultCube, addDefaultSolid, addTetrahedron, addSection, anchorRotation, exportSvgFile, exportCsvFile, exportPngFile, save }: CommandDispatchDeps) {
+export function createCommandDispatch({ document, selectedIds, cadMode, cadActiveLayerBlockedReason, engineeringDrawings, apply, setActiveCommand, setLayerNotice, setCreationStep, setSelectedIds, setShowProjectionDiagnostics, setCadMode, addPoint3, addLine3, addPlane3, addFace3, addCircle3Track, addPoint, startCreation, deleteSelected, toggleLock, createGroup, addEngineeringAnnotation, addDefaultPrimitive, addDefaultCube, addDefaultSolid, addTetrahedron, addSection, anchorRotation, exportSvgFile, exportHtmlFile, exportCsvFile, exportPngFile, save }: CommandDispatchDeps) {
   const runCadCommand = (commandId: string) => {
     setActiveCommand(commandId)
     if (cadMode === "draft" && commandId.startsWith("create-") && cadActiveLayerBlockedReason) {
@@ -105,6 +106,7 @@ export function createCommandDispatch({ document, selectedIds, cadMode, cadActiv
       case "export-svg": void exportSvgFile("svg"); break
       case "export-dxf": void exportSvgFile("dxf"); break
       case "export-pdf": void exportSvgFile("pdf"); break
+      case "export-html": void exportHtmlFile(); break
       case "export-csv": exportCsvFile(); break
       case "export-mgeo": save(); break
       default: break
@@ -147,6 +149,7 @@ export function createCommandDispatch({ document, selectedIds, cadMode, cadActiv
       case "modify-show": apply({ op: "setPrimitivesVisible", ids: selectedIds, visible: true }); break
       case "modify-group": createGroup(); break
       case "export-svg": void exportSvgFile(); break
+      case "export-html": void exportHtmlFile(); break
       case "export-csv": exportCsvFile(); break
       case "export-png": exportPngFile(); break
       case "export-mgeo": save(); break

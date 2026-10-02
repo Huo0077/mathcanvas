@@ -128,11 +128,18 @@ export function createRibbonGroups(context: RibbonCommandContext): RibbonGroup[]
       command("export-svg", "导出 SVG", "svg", { prompt: "导出四个视图的矢量工程图" }),
       command("export-dxf", "导出 DXF", "csv", { prompt: "导出 AutoCAD DXF 文件" }),
       command("export-pdf", "导出 PDF", "png", { prompt: "导出矢量 PDF 页面" }),
+      command("export-html", "导出 HTML", "svg", { prompt: "导出自包含的 HTML 快照（内嵌矢量图与可再导入的存档）" }),
       command("export-csv", "导出 CSV", "csv", { prompt: "导出图元清单" }),
       command("export-mgeo", "保存 .mgeo", "svg", { prompt: "保存当前文档" })
     ]
     : [
       command("export-svg", "导出 SVG", "svg", { prompt: "导出当前画布", disabled: context.workspace === "geometry3d", disabledReason: "立体几何暂不支持投影 SVG 导出" }),
+      /**
+       * HTML 导出**不**在立体几何里禁用：spec §4 要求"点得到、点了明确拒绝"，
+       * 而不是把命令藏起来 —— 用户需要知道为什么不能导，以及该去哪儿导。
+       * 拒绝走 `setFileError`（见 `fileExports.exportHtmlFile`）。
+       */
+      command("export-html", "导出 HTML", "svg", { prompt: "导出自包含的 HTML 快照（内嵌矢量图与可再导入的存档）" }),
       command("export-csv", "导出 CSV", "csv", { prompt: "导出图元清单" }),
       command("export-png", "导出 PNG", "png", { prompt: "导出当前画布图片", disabled: context.workspace === "geometry3d", disabledReason: "立体几何暂不支持投影 PNG 导出" }),
       command("export-mgeo", "保存 .mgeo", "svg", { prompt: "保存当前文档" })
