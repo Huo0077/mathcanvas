@@ -51,7 +51,7 @@
 
 单个 `.html`，UTF-8，自包含。`<head>` 只有 `<meta charset>`、`<title>`、一段内联 `<style>`。正文四块，顺序固定：
 
-1. **标题块** —— 文档标题（无标题时给一个基于日期与工作区的默认名）、导出日期、工作区名、图元计数。
+1. **标题块** —— 标题取 **`document.metadata.name`**（实测 `packages/dsl/src/types.ts:955`：`DocumentMetadata = { id, name, createdAt, updatedAt }` —— 字段叫 **`name`，不是 `title`**；而且 DSL 自己保证有值，默认 `"Untitled geometry"`，所以**不需要**我再编一个"基于日期的默认名"）；再加导出日期、工作区名、图元计数。
 2. **图块** —— 按当前文档的工作区选产出器：
    - 平面几何 → `exportSvg(document)`
    - 工程制图 → `exportEngineeringSvg(drawings)`
@@ -138,3 +138,10 @@
 **但"不做"要写成有意的"不做"，而不是漏掉**：实施计划里必须有一条**明确判据** —— Agent 的格式联合**保持四个不变**，并有一个测试钉住它。否则下一个人看到两个联合不一致，会以为是 bug 顺手"修齐"，反而破坏本批边界。
 
 **为什么单列这一节**：如果只改第 6、7 处就以为做完了，结果会是**菜单里点不到**（缺 1、2）或**工具栏不给用**（缺 5）—— 功能写完了却摸不着，这正是本仓库踩过多次的坑。
+
+## 10. 三件"实现前必须知道"的实测事实（免得计划里写错）
+
+1. **标题字段叫 `name`，不叫 `title`** —— `packages/dsl/src/types.ts:955` 的 `DocumentMetadata` 是 `{ id, name, createdAt, updatedAt }`。DSL 自己会给默认值（`codec.ts:40` 的 `"Untitled geometry"`），所以**不需要**自造默认名（§4 第 1 条已按此更正）。
+2. **现成的转义函数是模块私有的，拿不到** —— 实测 `apps/web/src/persistence/engineeringExporters.ts:76` 的 `escapeXml` 与 `exporters.ts` 里的同名工具**都没有 export**。所以 HTML 导出器**不能直接复用**它们：要么在本模块自带一个转义函数（并给它自己的单测），要么先把其中一个导出出来。**这是一个要写进计划的决定**，不能含糊过去 —— §5 第 1 条要求"转义一切文档派生文本"，而做这件事的工具现在够不着。
+3. **应用版本：走桌面外壳那条桥，而且它就是产品版本**（这条原本我写着"没核实"，现已实测解决）—— 链路是 `apps/desktop/src-tauri/src/commands/providers.rs:282-295`：`let version = app.package_info().version.to_string();` 再交给 `runtime::build_runtime_info(&version, …)`；Tauri 的 `package_info().version` 取自 **`tauri.conf.json` 的 `version`**，也就是**发布时我改的那个产品版本**（当前 3.1.0）。`runtime.rs` 里那一堆 `"0.1.0"` 是**单测夹具**，不是真值。
+   **但仍有一档要如实处理**：浏览器（非桌面外壳）里拿不到这条桥，`desktopRuntime.ts` 会给出 `"unknown"`（其单测 `:85` 明确钉了这一档）。所以产物里的版本戳要**如实写 `unknown`**，不编号、也不省略。
