@@ -13,6 +13,20 @@ const primitiveTypes = new Set(["point", "point3", "line", "line3", "segment", "
 const tangentSourceTypes = new Set(["function", "circle", "arc", "parabola", "ellipse", "hyperbola"])
 const solidTypes = new Set(["cube", "pyramid", "cylinder", "cone", "polyhedron3"])
 /**
+ * **球不能参与布尔交**（spec §1）。本阶段能精确算的只有球 ∩ 平面（`spherePlaneSection3`）；
+ * 球 ∩ 球 / 球 ∩ 多面体需要另一套曲面求交，明确不做，**也绝不用多面体近似冒充**。
+ *
+ * 为什么要单独一句话，而不是让它掉进下面那句 `sources must be solids`：球**本来就是实体**，
+ * 那句话对球既没错也没用 —— 用户看到"需要实体"，手里给的正是实体。所以这里点名球、并明写
+ * `unsupported`，让诊断能指向真正的限制。
+ */
+function unsupportedSphereSourceMessage(kind: string): string {
+  return `${kind} does not support a sphere source (unsupported): only sphere ∩ plane is exact; sphere ∩ sphere and sphere ∩ polyhedron are not implemented`
+}
+function hasSphereSource(sources: unknown, byId: Map<string, unknown>): boolean {
+  return Array.isArray(sources) && sources.some((id) => typeof id === "string" && referenceType(byId as Parameters<typeof referenceType>[0], id) === "sphere")
+}
+/**
  * **平面动点可以挂在哪些曲线上**（`hosts3` / `pathConstraint` 支持的那一族）。
  *
  * 与 `operations.ts` 的 `pathConstraint` 一一对应：那里 `switch` 到哪一种，这里就收哪一种。
@@ -613,6 +627,7 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>, parameter
     if (!Array.isArray(sources) || sources.length !== 2 || sources.some((id) => typeof id !== "string")) errors.push("intersectionLine needs exactly two source ids")
     else if (sources[0] === sources[1]) errors.push("intersectionLine sources must differ")
     else if (sources.some((id) => !byId.has(id as string))) errors.push("intersectionLine references a missing source")
+    else if (hasSphereSource(sources, byId)) errors.push(unsupportedSphereSourceMessage("intersectionLine"))
     else if (!sources.every((id) => solidTypes.has(referenceType(byId, id as string) ?? "") || ["face3", "plane3"].includes(referenceType(byId, id as string) ?? ""))) errors.push("intersectionLine sources must be solids, faces or planes")
     if (!Array.isArray(value.segments) || value.segments.some((segment) => !isRecord(segment) || !isFiniteCoordinate3(segment.a) || !isFiniteCoordinate3(segment.b))) errors.push("intersectionLine segments are invalid")
     if (value.classification !== undefined && !["none", "segment", "polyline", "insufficient-data"].includes(String(value.classification))) errors.push("intersectionLine classification is invalid")
@@ -625,6 +640,7 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>, parameter
     else if (sources[0] === sources[1]) errors.push("intersectionSolid sources must differ")
     else if (sources.some((id) => !byId.has(id as string))) errors.push("intersectionSolid references a missing source")
     // 交面是**布尔交集**：只有凸实体之间才有确定的结果，平面/面都没有体积可言。
+    else if (hasSphereSource(sources, byId)) errors.push(unsupportedSphereSourceMessage("intersectionSolid"))
     else if (!sources.every((id) => solidTypes.has(referenceType(byId, id as string) ?? ""))) errors.push("intersectionSolid sources must be solids")
     if (!Array.isArray(value.vertices) || value.vertices.some((vertex) => !isFiniteCoordinate3(vertex))) errors.push("intersectionSolid vertices are invalid")
     const vertexCount = Array.isArray(value.vertices) ? value.vertices.length : 0
@@ -641,6 +657,7 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>, parameter
     else if (sources[0] === sources[1]) errors.push(`${kindLabel} sources must differ`)
     else if (sources.some((id) => !byId.has(id as string))) errors.push(`${kindLabel} references a missing source`)
     // 交面是**布尔交集的一个面**：只有实体才有面可言；交点是交线的端点，面 / 平面也能给（平面没有边界，重算时会报诊断）。
+    else if (hasSphereSource(sources, byId)) errors.push(unsupportedSphereSourceMessage(kindLabel))
     else if (type === "intersectionFace" && !sources.every((id) => solidTypes.has(referenceType(byId, id as string) ?? ""))) errors.push("intersectionFace sources must be solids")
     else if (type === "intersectionPoint3" && !sources.every((id) => solidTypes.has(referenceType(byId, id as string) ?? "") || ["face3", "plane3"].includes(referenceType(byId, id as string) ?? ""))) errors.push("intersectionPoint3 sources must be solids, faces or planes")
     if (!isFiniteCoordinate3(value.hint)) errors.push(`${kindLabel} hint is invalid`)

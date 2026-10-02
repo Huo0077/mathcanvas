@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest"
 import { createEmptyDocument, type PrimitiveSpec } from "@draw/dsl"
 import { conic3PointAt } from "@draw/geometry-kernel"
 
+import { commitPatch } from "./patches"
+import { recomputeDerivedObjects } from "./recompute"
 import { recomputeSection } from "./sectionRecompute"
 import { sectionPlaneThroughSource } from "./solidGeometry"
 
@@ -141,5 +143,71 @@ describe("analytic sphere sections", () => {
     expect(result.exact?.kind).toBe("circle")
     expect(result.points.length).toBeGreaterThanOrEqual(3)
     for (const point of result.points) expect(Math.hypot(point.x - 1, point.y - 2)).toBeCloseTo(5, 9)
+  })
+})
+
+/**
+ * **球参与的布尔运算是明确不支持的**（spec §1、§5）。
+ *
+ * 为什么值得钉死两件事，而不是"反正重算时会失败"：
+ * ① **创建时就拒绝**，并且原文档的身份不变（不是"改了一半又回滚"造出来的等价副本）；
+ * ② 诊断里必须**点名球** —— 原先球会走到 `resolveSolidIntersection` 的兜底那句
+ *    "来源必须是实体（立方体 / 棱锥 / 圆柱 / 圆锥 / 多面体）：面与平面没有体积"，
+ *    把球说成了面 / 平面。那句「没错但没用」的话正是这一条要修掉的东西。
+ *
+ * 同时留一条**反向对照**（两个立方体照样放行），否则"一律拒绝"也能让上面两条变绿。
+ */
+describe("sphere Boolean operations are explicitly unsupported", () => {
+  const cube = (id: string, x: number) => ({ id, type: "cube" as const, origin: { x, y: -2, z: -2 }, size: { x: 4, y: 4, z: 4 } })
+  const pendingIntersection = (sourceIds: [string, string]) => ({
+    id: "inter-1",
+    type: "intersectionSolid" as const,
+    sourceIds,
+    vertices: [],
+    faces: [],
+    volume: 0,
+    area: 0,
+    status: "none" as const
+  })
+
+  const documentWith = (...primitives: readonly PrimitiveSpec[]) => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [...primitives]
+    return document
+  }
+
+  it("refuses at creation time to intersect a sphere, keeping the original document", () => {
+    const before = documentWith(SPHERE, cube("cube-1", -2))
+    const result = commitPatch(before, { op: "addPrimitive", primitive: pendingIntersection(["sphere-1", "cube-1"]) })
+
+    expect(result.changed).toBe(false)
+    expect(result.document).toBe(before)
+    expect(result.error).toMatch(/unsupported/)
+    // 关键：诊断必须点名球，不能沿用那句把球说成"面与平面"的误导文案。
+    expect(result.error).toMatch(/sphere/)
+  })
+
+  it("still allows the same operation between two polyhedral solids", () => {
+    const before = documentWith(cube("cube-1", -2), cube("cube-2", -1))
+    const result = commitPatch(before, { op: "addPrimitive", primitive: pendingIntersection(["cube-1", "cube-2"]) })
+
+    // 反向对照：门禁只挡球，不是"一律拒绝"。
+    expect(result.error ?? "").not.toMatch(/unsupported/)
+  })
+
+  it("degrades a historical cached sphere intersection to insufficient-data instead of faking a polyhedron", () => {
+    const document = documentWith(SPHERE, cube("cube-1", -2), pendingIntersection(["sphere-1", "cube-1"]))
+
+    const recomputed = recomputeDerivedObjects(document)
+    const solid = recomputed.primitives.find((primitive) => primitive.id === "inter-1")
+    expect(solid?.type).toBe("intersectionSolid")
+    if (solid?.type !== "intersectionSolid") return
+
+    // 旧文档里已经缓存下来的那份交集：重算只能如实说"数据不足"，绝不伪造一个多面体。
+    expect(solid.status).toBe("insufficient-data")
+    expect(solid.visible).toBe(false)
+    expect(solid.vertices).toEqual([])
+    expect(solid.faces).toEqual([])
+    expect(solid.volume).toBe(0)
   })
 })

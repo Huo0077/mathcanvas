@@ -40,17 +40,25 @@
 | 命令 | 当次结果 |
 | --- | --- |
 | `npx vitest run packages/scene-graph/src/sphereSection.test.ts` | RED 7/7 全红 → 修后 **7/7 通过** |
-| `npx vitest run --maxWorkers=3`（全库，改的是所有截面共用的 `recomputeSection`） | **274 文件 / 3144 项通过 + 1 todo / 0 失败** |
+| `npx vitest run --maxWorkers=3`（全库，改的是所有截面共用的 `recomputeSection`） | **274 文件 / 3147 项通过 + 1 todo / 0 失败**（布尔门禁那 3 条加上之后的最终读数；接进截面时为 3144） |
+| 点名的那组截面 / 交测试（16 个文件） | **163 / 163 通过** |
 | `npm run typecheck` | exit 0 |
 | `npm run lint` | exit 0，**0 error / 13 warning** |
 
 **插曲（如实记）**：第一次 `npm run typecheck` 是 **exit 2** —— 新测试把 `PrimitiveSpec` 从 `@draw/geometry-kernel` 导入，而该类型属于 `@draw/dsl`。麻烦的地方在于**当时整套单测是绿的**：那是个 `import type`，运行时被擦除，而 vitest 不做类型检查 —— 也就是说"单测全绿"完全掩盖了这个错误。改对之后 typecheck exit 0，并且**按纪律重跑了整套单测**（读数同上），没有拿"改动只是类型层面的"当借口跳过验证。
 
-### D. 明确没有做的事（Task 4 下半）
+### D. 布尔门禁（同一批的下半）
 
-- **布尔门禁没做**：球 ∩ 球 / 球 ∩ 多面体现在仍会走到 `resolveSolidIntersection`，而它对球的诊断是**误导性**的 —— "来源必须是实体（立方体 / 棱锥 / 圆柱 / 圆锥 / 多面体）：面与平面没有体积"，把球说成了面 / 平面。应当是明确的 `unsupported`。
-- 旧文档里已缓存的不支持交集重算要返回 `insufficient-data`（防御性重算）也没做。
-- 删除级联、`solidCommands.ts` 的截面按钮、e2e 都没动。
+- `packages/dsl/src/schema.ts` 新增：四种布尔图元（`intersectionLine` / `intersectionSolid` / `intersectionFace` / `intersectionPoint3`）的来源里出现球时，报一条**点名球**的 `unsupported` 诊断。四处共用同一个 helper，判断只写一份。
+- **要修掉的东西是什么**：球**本来就是实体**。让它掉进下面那句 `sources must be solids`，用户看到的是"需要实体"、而他手里给的正是实体 —— 那句话对球既没错也没**用**。改前实测的确就是这句（新用例的 RED 原话）。
+- **反向对照**：另加一条"两个立方体照样放行"的用例。少了它，"一律拒绝球（乃至一律拒绝一切）"也能让拒绝那两条变绿，门禁就变成了一句空话。
+- **防御性重算**：旧文档里已经缓存下来的球交集，重算仍如实退化为 `insufficient-data` / `visible:false` / 空顶点、**不伪造多面体** —— 这条在改动之前就成立（`recomputeIntersectionSolid` 的 `!outcome.ok` 分支），本批把它**钉进用例**，免得以后被顺手改掉。
+- **自查出的测试 API 误用**：`recomputeDerivedObjects` 返回的是 `GeometryDocument` 本身，不是 `{ document }`；RED 时报的是 `Cannot read properties of undefined (reading 'primitives')`。
+
+### E. 明确没有做的事（Task 4 剩下的）
+
+- `apps/web/src/solidCommands.ts` 的截面按钮"选中球就能切"这一步没做；球截面的 e2e 也没做。
+- `deletion.ts` **未改** —— 球的删除沿用既有语义。全库（含 `deletion-cascade.test.ts`）0 失败，说明没有连带破坏，但这不等于"球的删除级联已被专门验证过"。
 
 ## 2026-10-01 —— 球体 Task 3：场景事务与数值测量
 

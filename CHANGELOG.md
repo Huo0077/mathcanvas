@@ -24,7 +24,17 @@
 - **判据的两条实质**：
   1. 显示缓存里的点必须**真的落在球面上**（回代 `|X−C|²=r²` 残差 < 1e-9）**且在剖切面上** —— 两个条件缺一条就说明缓存是编出来的；
   2. 改半径之后，**显示缓存与解析系数两边都重算**（半径 5 → 交圆半径 4、系数 `−16`；半径 4 → 交圆半径 `√7`、系数 `−7`）。只更新一边就等于"画的和算的不是一件事"。
-- **未做（Task 4 下半，下一批）**：球 ∩ 球 / 球 ∩ 多面体的布尔**门禁**（现在 `resolveSolidIntersection` 会给出**误导性**的诊断"来源必须是实体……面与平面没有体积"，把球说成了面 / 平面），以及旧文档里已缓存的不支持交集重算要返回 `insufficient-data`；删除级联、`solidCommands.ts` 的截面按钮、e2e。
+- **下半（布尔门禁）也已落地**：
+  - `packages/dsl/src/schema.ts`：新增一处判据 —— 四种布尔图元（`intersectionLine` / `intersectionSolid` / `intersectionFace` / `intersectionPoint3`）的**来源里出现球**时，报一条点名球的 `unsupported` 诊断（`… does not support a sphere source (unsupported): only sphere ∩ plane is exact; sphere ∩ sphere and sphere ∩ polyhedron are not implemented`）。
+  - **为什么必须单独一句话**：球**本来就是实体**，让它掉进下面那句 `sources must be solids`，用户看到的是"需要实体"、而他手里给的正是实体 —— 那句话对球既没错也**没用**。这正是这一条要修掉的东西。四处共用同一个 helper，判断只写一份。
+  - 创建时即拒（`changed=false`）且**返回原文档本身**（同一引用，不是"改了一半又回滚"的等价副本）；旧文档里已缓存的球交集重算仍如实退化为 `insufficient-data` / `visible:false` / 空顶点，**不伪造多面体**。
+- **验证（下半，本轮实测）**：
+  - `sphereSection.test.ts` 增到 **10 条**：门禁 2 条（拒绝 + "两个立方体照样放行"的**反向对照**，否则"一律拒绝"也能让它变绿）与防御性重算 1 条。**RED 起点：这 3 条全红** —— 当时诊断是 `intersectionSolid sources must be solids`（不含 `unsupported`、也没点名球）。
+  - 顺手纠正了自己测试里一处 API 误用：`recomputeDerivedObjects` 返回的是 `GeometryDocument` 本身，不是 `{ document }`（RED 时报 `Cannot read properties of undefined (reading 'primitives')`）。
+  - **全库**：`npx vitest run --maxWorkers=3` → **274 文件 / 3147 项通过 + 1 todo / 0 失败**。
+  - 点名的那组截面 / 交测试（16 个文件：`section-loops`、`section-quadric`、`sections3d`、`section-materialization`、`intersectionSolid`、`intersectionLine`、`intersection-surfaces`、三个 `intersectionPreview*`、`threeIntersectionSolid` 等）→ **163/163 通过**。
+  - `npm run typecheck` exit 0；`npm run lint` exit 0（**0 error / 13 warning**）。
+- **未做（Task 4 剩下的）**：`apps/web/src/solidCommands.ts` 的截面按钮在 UI 上"选中球就能切"这一步、以及球截面的 e2e；删除级联语义本身**未改**（全库含 `deletion-cascade` 全绿，说明没有连带破坏）。
 
 ## 2026-10-01 —— 球体 Task 3：球的场景事务与数值测量
 
