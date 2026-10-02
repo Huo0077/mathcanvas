@@ -16,6 +16,7 @@
 - **写计划时按实测改掉三处"凭印象"**：`AnnotationSpec` 的字段是 `target` 不是 `targetId`（`types.ts:928`）；**工程 SVG 不含"主视图"这类中文标签**，只有 `data-drawing-view="front"`（`engineeringExporters.ts:108`），照印象写的断言会假红；存档往返的判据改成"`encodeMgeo` → `decodeMgeo` 的不动点"（`encodeMgeo` 会补默认值，手搭文档直接比会假红）。
 - **两处与 spec 的偏差（明示，不悄悄做）**：① 本批不调用 `buildExportPlan` —— 实测它**没接进任何用户路径**（`agentRunner.ts:509` 仍是桩），且它要的 `layoutDocumentId` / `geometryDocumentId` 在导出路径上拿不到，编一个就是伪造；损失清单改用 `exportService` 新导出的 `isUnexportableType`（同一张表只留一份）+ 隐藏对象 + 工程视图诊断 ⇒ spec §9 第 7 处不需要动。② "零外部引用"不能照字面写成"不含 `http://`" —— 内嵌 SVG 的 `xmlns` 是 XML 命名空间、不是网络请求，判据改成"无 `<link>` / 无带 `src` 的 script / 无指向网络的 `src|href` / 无 `@import`"并配反向对照。
 - **本批只改文档**，无可执行产物；实现从计划 Task 1 起按 TDD 逐块推进（每块跑门禁 → 提交推送 → 更新本文件与 `current-status.md`）。
+- **Task 1 已交付（提交 `6d28578`）**：`apps/web/src/persistence/htmlExporter.ts` 纯函数产出器（转义 / 损失清单 / 内嵌 `.mgeo` 存档 / 格式与应用版本戳）+ `exportService.isUnexportableType`（"画不出来"那张表只留一份）。**9 条单测先红后绿**（RED = `Failed to resolve import "./htmlExporter"`）；判据里有两条值得一提：**零外部引用**配了反向对照（先证明文件里真有内嵌 `<svg>` 与内联 `<style>`，否则"没有外链"可能只是因为文件是空的），**注入防护**用含 `</script>` 的标签钉住。**一次变异检查**：同时去掉 `escapeHtmlText` 与 `escapeJsonForScript` → 3 条红，其中注入那条正是它要防的症状（存档被提前截断、连往返也一起失败）。读数：该文件 9/9、`npm run typecheck` exit 0、定向 eslint exit 0。**该模块此刻还没接进任何用户路径**（菜单里点不到），Task 2 起继续。
 
 ## 2026-10-02 —— 发布 v3.1.0 / D3 存档后删分支 / 修掉本机必红的相机平移 e2e / E3 HTML 导出 spec
 

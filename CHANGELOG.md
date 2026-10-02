@@ -5,6 +5,14 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-02 —— HTML 导出 Task 1：纯函数产出器（`htmlExporter`）落地
+
+- 实施计划 [`2026-10-02-html-export-implementation-plan.md`](docs/superpowers/plans/2026-10-02-html-export-implementation-plan.md) 的 **Task 1** 完成（提交 `6d28578`）。新增 `apps/web/src/persistence/htmlExporter.ts`：一个**纯函数**产出器（收文档 + 已算好的 SVG + 损失条目 + 版本戳，吐字符串），不碰 DOM、不下载、不读全局 —— 所以转义与注入这类判据能直接单测，而"按工作区选哪个 SVG 产出器"留给下一块的 `fileExports`。
+- **9 条单测，先红后绿**（RED 是 `Failed to resolve import "./htmlExporter"`）：内嵌 SVG **逐字包含**且整份文件只有一个 `<svg>`；**零外部引用**（判据是"无 `<link>` / 无带 `src` 的 `<script>` / 无指向网络的 `src|href` / 无 `@import`"，并配"文件里真有内嵌 `<svg>` 与内联 `<style>`"的**反向对照**，免得"没有外链"只是因为文件是空的）；SVG 内部无 `id="`；内嵌存档 `encodeMgeo → decodeMgeo` **不动点**；标签里含 `</script>` 时结构不被提前闭合、解回来的标签**一字不差**；正文转义；损失清单有则列出、无则写明"无"；版本戳含 `unknown` 档。
+- **一次变异检查**：同时去掉 `escapeHtmlText` 与 `escapeJsonForScript` → **3 条红**，其中注入那条正是它要防的症状 —— 存档被 `</script>` **提前截断**，连存档往返也一起失败。变异已恢复，产品文件与提交内容一致。
+- **顺带把一张表只留一份**：`exportService` 新导出 `isUnexportableType`，`htmlExporter` 的"这次漏了什么"复用它（而不是另抄一张类型表）——两处各写一张的症状是"界面说有损失、文件里说没有"。
+- 读数：该文件 **9/9**；`npm run typecheck` exit 0；`eslint`（三个改动文件）exit 0。全局 `npm run lint` / 全库单测按计划留到 Task 4 收口时复跑（本块只新增一个未被引用的模块，尚未接进任何用户路径）。
+
 ## 2026-10-02 —— E3 HTML 导出：spec 获批 + 实施计划落地（开始实现）
 
 - **用户在本轮批准 HTML 导出的 spec**（`docs/superpowers/specs/2026-10-02-html-export-design.md`，此前状态是"待用户审阅"，brainstorming 的硬门禁要求用户审过才能出实施计划）。按 `writing-plans` 产出 [`docs/superpowers/plans/2026-10-02-html-export-implementation-plan.md`](docs/superpowers/plans/2026-10-02-html-export-implementation-plan.md)：**5 个区块**（纯函数产出器 → 导出路径含立体几何明确拒绝 → e2e 先红 → 命令与界面接线 → Agent 通道钉住 + 文档收口），每步都带可粘贴的代码与命令。
