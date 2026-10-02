@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 
-import { createInteractionTools, MAX_PROPOSED_LOSSES, type ExportPreflightPort, type ExportPreflightSummary } from "./interactionTools"
+import { createInteractionTools, MAX_PROPOSED_LOSSES, type ExportPreflightPort, type ExportPreflightSummary, type InteractionTools } from "./interactionTools"
 
 /**
  * Task 2.4 的 `interaction.*` 三个工具。
@@ -132,5 +132,31 @@ describe("propose_view", () => {
     const tools = createInteractionTools(port(summary()))
 
     expect(tools.proposeView("").status).toBe("error")
+  })
+})
+
+/**
+ * **Agent 的导出通道保持四个格式，HTML 不在其中**（spec §9 的"有意不做"）。
+ *
+ * 理由：那条通道的形态是"提议导出并**把结果回给模型**"，要加 HTML 就得连带设计
+ * "模型拿这份 HTML 干什么" —— 属于另一个话题。这里用**类型级**判据钉住它：
+ * 谁哪天给联合加了 `"html"`，下面那行赋值会立刻类型不通过（`npm run typecheck` 与
+ * CI 的 checks 作业会红），而不是被后来者当成"两个联合不一致的 bug"顺手改齐。
+ */
+describe("agent export channel", () => {
+  it("stays at exactly four formats", () => {
+    type AgentExportFormat = Parameters<InteractionTools["proposeExport"]>[0]
+    type AgentPreflightFormat = Parameters<ExportPreflightPort["preflight"]>[0]["format"]
+    const exactlyFour: AgentExportFormat extends "svg" | "dxf" | "pdf" | "png"
+      ? ("svg" | "dxf" | "pdf" | "png" extends AgentExportFormat ? true : false)
+      : false = true
+    // 两个联合**都要**钉住：spec §9 第 8 处点名的就是 `preflight({format})` 与
+    // `proposeExport(format)` 这两行；只钉一处，另一处被加宽时不会有人发现。
+    const preflightAlsoFour: AgentPreflightFormat extends "svg" | "dxf" | "pdf" | "png"
+      ? ("svg" | "dxf" | "pdf" | "png" extends AgentPreflightFormat ? true : false)
+      : false = true
+
+    expect(exactlyFour).toBe(true)
+    expect(preflightAlsoFour).toBe(true)
   })
 })
