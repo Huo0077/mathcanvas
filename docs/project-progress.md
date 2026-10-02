@@ -10,6 +10,48 @@
 
 > 下方 2026-09-22 的"最后更新 / 当前阶段 / 总体状态"三行保留为**当时快照**，不再维护。
 
+## 2026-10-01 —— 球体 Task 4（上半）：球的解析截面接进 `SectionPrimitive`
+
+> 承接 Task 3。
+
+### A. RED（起点与原因）
+
+- 新增 `packages/scene-graph/src/sphereSection.test.ts`（7 条）。首次运行 **7/7 全红**，失败原因逐条对上"球还没接进截面层"：
+  - `expected undefined to be 'circle'`（`section.exact` 不存在 —— `analyticSectionBoundary` 不认球）
+  - `expected 0 to be greater than or equal to 3`（`points` 为空，没有显示缓存）
+  - `expected 'insufficient-data' to be 'point'` / `... to be 'none'`（落进兜底分支 line 51 那句"截面来源不是可剖切的实体"）
+  - `expected null not to be null`（`sectionPlaneThroughSource` 对球返回 null，因为它按顶点算包围盒中心，而球没有顶点）
+- 换句话说，RED 的成因是**一条没接上的线**，不是断言写得太严。
+
+### B. GREEN（改了什么）
+
+| 文件 | 改动 |
+| --- | --- |
+| `packages/scene-graph/src/sectionRecompute.ts` | `analyticSectionBoundary` 认球（走 `spherePlaneSection3`，**不**走二次曲面矩阵 —— 球没有 `bounds`，`sectionQuadric3` 对它直接回退）；`recomputeSection` 加球分支：圆 / 切点 / 空集三结局 + 显示缓存采样 |
+| `packages/scene-graph/src/solidGeometry.ts` | `sectionPlaneThroughSource` 对球返回**过球心**的水平面（`constant = -center.z`） |
+
+两个设计点值得留在归档里：
+
+1. **切点要可见**，这与多面体那条路径**刻意不同**（那边相切时 `visible: result.status !== "point"`，把截面藏起来）。理由：多边形切在一点上确实没有可画的边界；而球相切是 spec §3 点名要"画布上有可见点标记"的一种正常结局。
+2. **显示缓存与真几何分开**：`section.points/loops` 是 spec §3 说的"可再生显示缓存"，由 `conic3PointAt` 采样解析圆得到（48 段，与圆柱默认分段同一视觉密度）；真几何在 `section.exact`。文件里写明**不许**拿这 48 个点算面积 / 弦长冒充精确圆。"源 + 平面 → 解析边界"这条映射仍只在 `analyticSectionBoundary` 一处。
+
+### C. 本轮实测读数
+
+| 命令 | 当次结果 |
+| --- | --- |
+| `npx vitest run packages/scene-graph/src/sphereSection.test.ts` | RED 7/7 全红 → 修后 **7/7 通过** |
+| `npx vitest run --maxWorkers=3`（全库，改的是所有截面共用的 `recomputeSection`） | **274 文件 / 3144 项通过 + 1 todo / 0 失败** |
+| `npm run typecheck` | exit 0 |
+| `npm run lint` | exit 0，**0 error / 13 warning** |
+
+**插曲（如实记）**：第一次 `npm run typecheck` 是 **exit 2** —— 新测试把 `PrimitiveSpec` 从 `@draw/geometry-kernel` 导入，而该类型属于 `@draw/dsl`。麻烦的地方在于**当时整套单测是绿的**：那是个 `import type`，运行时被擦除，而 vitest 不做类型检查 —— 也就是说"单测全绿"完全掩盖了这个错误。改对之后 typecheck exit 0，并且**按纪律重跑了整套单测**（读数同上），没有拿"改动只是类型层面的"当借口跳过验证。
+
+### D. 明确没有做的事（Task 4 下半）
+
+- **布尔门禁没做**：球 ∩ 球 / 球 ∩ 多面体现在仍会走到 `resolveSolidIntersection`，而它对球的诊断是**误导性**的 —— "来源必须是实体（立方体 / 棱锥 / 圆柱 / 圆锥 / 多面体）：面与平面没有体积"，把球说成了面 / 平面。应当是明确的 `unsupported`。
+- 旧文档里已缓存的不支持交集重算要返回 `insufficient-data`（防御性重算）也没做。
+- 删除级联、`solidCommands.ts` 的截面按钮、e2e 都没动。
+
 ## 2026-10-01 —— 球体 Task 3：场景事务与数值测量
 
 > 承接上一节的 Task 2。

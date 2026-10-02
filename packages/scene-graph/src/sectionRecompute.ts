@@ -1,5 +1,5 @@
 import type { PrimitiveSpec, Vector3 } from "@draw/dsl"
-import { intersectConvexPolyhedra3, intersectFaceSets, mergeIntersectionSurfaces3, orderSectionPoints3, quadric3FromPrimitive, sectionConvexPolyhedron, sectionPolyhedron3, sectionQuadric3, type Conic3Kind, type IntersectionSurfaceRegion, type CurvePiece3 } from "@draw/geometry-kernel"
+import { conic3PointAt, intersectConvexPolyhedra3, intersectFaceSets, mergeIntersectionSurfaces3, orderSectionPoints3, quadric3FromPrimitive, sectionConvexPolyhedron, sectionPolyhedron3, sectionQuadric3, spherePlaneSection3, type Conic3, type Conic3Kind, type IntersectionSurfaceRegion, type CurvePiece3 } from "@draw/geometry-kernel"
 import { classifySectionPoints, polyhedronSectionTopology, solidSectionGeometry, templateTopology } from "./solidGeometry"
 
 /**
@@ -16,15 +16,43 @@ import { classifySectionPoints, polyhedronSectionTopology, solidSectionGeometry,
  */
 
 /**
- * 解析截面边界：源是圆柱 / 圆锥时给出**精确**圆锥曲线片段环（写进 `section.exact`）。
+ * 解析截面边界：源是圆柱 / 圆锥 / **球**时给出**精确**圆锥曲线片段环（写进 `section.exact`）。
  *
  * 其余来源（立方体 / 棱锥 / 点驱动多面体）返回 `undefined`：它们的边界本来就是多边形，精确的，
  * 多边形路径就是答案，不需要解析层。
  */
 export function analyticSectionBoundary(source: PrimitiveSpec, plane: { normal: Vector3; constant: number }): { kind: Conic3Kind; loops: CurvePiece3[][] } | undefined {
+  /**
+   * 球走自己的解析式，**不是**二次曲面那套矩阵：球没有 `bounds`（无端面），`sectionQuadric3`
+   * 对它会直接回退，所以它到不了下面那一行。三种结局 `circle` / `point` / `empty` 本来就在
+   * `Conic3Kind` 里 —— 不新造枚举（见 `sphere.ts` 里那条"内核只留一套词汇"的说明）。
+   */
+  if (source.type === "sphere") {
+    const section = spherePlaneSection3({ center: source.center, radius: source.radius }, plane)
+    if (section.kind === "invalid") return undefined
+    return { kind: section.kind, loops: section.kind === "circle" ? section.loops : [] }
+  }
   const quadric = quadric3FromPrimitive(source)
   if (!quadric) return undefined
   return sectionQuadric3(quadric, plane) ?? undefined
+}
+
+/**
+ * 解析圆的**显示缓存**采样密度。
+ *
+ * `section.points` / `section.loops` 按 spec §3 只是"填充与旧消费者的**可再生显示缓存**"，
+ * 真几何在 `section.exact` 里。取 48 与圆柱默认分段一致（同样的视觉密度），
+ * 但**不许**拿这 48 个点去算面积 / 弦长冒充精确圆 —— 那正是 spec 明令禁止的。
+ */
+const SECTION_DISPLAY_SAMPLES = 48
+
+function sampleConicCircle(conic: Conic3): Vector3[] {
+  const points: Vector3[] = []
+  for (let index = 0; index < SECTION_DISPLAY_SAMPLES; index += 1) {
+    const point = conic3PointAt(conic, (index / SECTION_DISPLAY_SAMPLES) * Math.PI * 2)
+    if (point) points.push(point)
+  }
+  return points
 }
 
 /** 边界是弯曲的（圆 / 椭圆 / 抛物线 / 双曲线）才算真的精确；直线与点走多边形路径本来就是精确的。 */
@@ -40,6 +68,29 @@ export function attachExactBoundary(section: Extract<PrimitiveSpec, { type: "sec
 export function recomputeSection(primitive: Extract<PrimitiveSpec, { type: "section" }>, source: PrimitiveSpec, primitiveMap: Map<string, PrimitiveSpec>): Extract<PrimitiveSpec, { type: "section" }> {
   const exact = analyticSectionBoundary(source, primitive.plane)
   const finish = (section: Extract<PrimitiveSpec, { type: "section" }>) => attachExactBoundary(section, exact)
+  /**
+   * 球：解析截交，**不走**下面任何一条多边形路径 —— 球既没有物化拓扑（`templateTopology` 返回 null），
+   * 也没有端面弦可以拼环。
+   *
+   * 这里再算一次 `spherePlaneSection3` 是为了拿**结构化**数据（圆心 / 半径 / 切点）来定
+   * `classification` 与显示缓存；`exact` 仍由 `finish` → `attachExactBoundary` 统一挂上。
+   * 换句话说"源 + 平面 → 解析边界"这条映射规则仍只写在一处，重算的只是同一个纯函数在
+   * 同一组入参上的几个浮点运算。
+   */
+  if (source.type === "sphere") {
+    const analytic = spherePlaneSection3({ center: source.center, radius: source.radius }, primitive.plane)
+    if (analytic.kind === "invalid") return finish({ ...primitive, points: [], loops: [], classification: "insufficient-data", status: "failed", visible: false, diagnostic: analytic.detail })
+    if (analytic.kind === "empty") return finish({ ...primitive, points: [], loops: [], classification: "none", status: "undefined", visible: false, diagnostic: "剖切平面与球不相交。" })
+    if (analytic.kind === "point") {
+      /**
+       * 切点要**可见**（spec §3）：画布上得有一个点标记，而不是"什么都看不见的零面积截面"。
+       * 注意这与多面体那条路径不同 —— 那边相切时把截面藏起来，因为多边形切在一点上确实没有可画的边界。
+       */
+      return finish({ ...primitive, points: [{ ...analytic.point }], loops: [], classification: "point", status: "exact", visible: true, diagnostic: "剖切平面与球相切，交于一点。" })
+    }
+    const points = sampleConicCircle(analytic.conic)
+    return finish({ ...primitive, points, loops: [points], classification: "polygon", status: "exact", visible: true, diagnostic: undefined })
+  }
   const polyhedron = source.type === "polyhedron3" ? source : templateTopology(source.id, primitiveMap)
   const topology = polyhedron ? polyhedronSectionTopology(polyhedron, primitiveMap) : null
   if (topology) {

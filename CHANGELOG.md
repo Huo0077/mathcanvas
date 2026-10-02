@@ -5,6 +5,27 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-01 —— 球体 Task 4（上半）：球的解析截面接进 `SectionPrimitive`
+
+- **背景**：Task 2 有了"球 ∩ 平面"的解析式，Task 3 让球可编辑可测量，但**截面还是画不出来** —— `recomputeSection` 里球走不到任何一条分支，落进兜底那句 `classification:"insufficient-data" / status:"failed"`，诊断还写着"截面来源不是可剖切的实体"。本批把这条接上。
+- **改动（2 个文件 + 1 个新测试文件）**：
+  - `packages/scene-graph/src/sectionRecompute.ts`：
+    - `analyticSectionBoundary` 认球 —— 球走 `spherePlaneSection3`，**不是**二次曲面那套矩阵表示（球没有 `bounds`，`sectionQuadric3` 对它会直接回退，压根到不了那一行）。三种结局 `circle` / `point` / `empty` 本来就在 `Conic3Kind` 里，不新造枚举。
+    - `recomputeSection` 加球分支：圆 → `classification:"polygon"` / `status:"exact"` / `visible:true`；**切点 → `classification:"point"` / `status:"exact"` / `visible:true`**（spec §3 要求画布上有一个点标记；这点与多面体那条路径**刻意不同** —— 那边相切时把截面藏起来，因为多边形切在一点上确实没有可画的边界）；空集 → `classification:"none"` / `status:"undefined"` / `visible:false`。
+    - `section.points` / `loops` 按 spec §3 只当**可再生显示缓存**：由 `conic3PointAt` 采样解析圆得到（48 段，与圆柱默认分段同一视觉密度），真几何在 `section.exact` 里。文件里写明了**不许**拿这 48 个点去算面积 / 弦长冒充精确圆。
+    - `analyticSectionBoundary` 仍是"源 + 平面 → 解析边界"的**唯一**一处映射；球分支里重算的只是同一个纯函数在同一组入参上的几个浮点运算，规则没有写两遍。
+  - `packages/scene-graph/src/solidGeometry.ts`：`sectionPlaneThroughSource` 对球返回**过球心**的水平面（`constant = -center.z`）。球没有顶点可算包围盒，但球心就是它的几何中心；过球心切出来的是大圆，既最容易看见、也最容易和"压根没切到"区分开。
+- **验证（本轮实测）**：
+  - 新增 `packages/scene-graph/src/sphereSection.test.ts`（7 条）。**RED 起点：7/7 全红**，失败原因如实是"球落进兜底分支"（`exact` 为 `undefined`、`points` 为空、`classification` 是 `"insufficient-data"`、默认平面返回 `null`），不是断言写错。
+  - **GREEN**：同一条命令 **7/7 通过**。
+  - **全库回归**（因改的是所有截面共用的 `recomputeSection`）：`npx vitest run --maxWorkers=3` → **274 文件 / 3144 项通过 + 1 todo / 0 失败**。
+  - `npm run typecheck` exit 0；`npm run lint` exit 0（**0 error / 13 warning**，与基线一致）。
+  - **插曲（如实记）**：第一次 typecheck 报 exit 2 —— 新测试把 `PrimitiveSpec` 从 `@draw/geometry-kernel` 导入，而那个类型属于 `@draw/dsl`。当时整套单测是绿的，因为那是个 `import type`，运行时会被擦除、vitest 不做类型检查。改对之后 typecheck exit 0，并按纪律**重跑了整套单测**（读数同上），没有拿"改动只是类型层面的"当借口跳过验证。
+- **判据的两条实质**：
+  1. 显示缓存里的点必须**真的落在球面上**（回代 `|X−C|²=r²` 残差 < 1e-9）**且在剖切面上** —— 两个条件缺一条就说明缓存是编出来的；
+  2. 改半径之后，**显示缓存与解析系数两边都重算**（半径 5 → 交圆半径 4、系数 `−16`；半径 4 → 交圆半径 `√7`、系数 `−7`）。只更新一边就等于"画的和算的不是一件事"。
+- **未做（Task 4 下半，下一批）**：球 ∩ 球 / 球 ∩ 多面体的布尔**门禁**（现在 `resolveSolidIntersection` 会给出**误导性**的诊断"来源必须是实体……面与平面没有体积"，把球说成了面 / 平面），以及旧文档里已缓存的不支持交集重算要返回 `insufficient-data`；删除级联、`solidCommands.ts` 的截面按钮、e2e。
+
 ## 2026-10-01 —— 球体 Task 3：球的场景事务与数值测量
 
 - **背景**：承接 Task 2（球-平面解析数学）。Task 3 要让球成为**文档里可编辑、可测量、可保存**的普通对象，而不是一个"只能摆着看"的类型。

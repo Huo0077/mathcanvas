@@ -327,6 +327,11 @@ export function resolveDihedralMarker3(document: GeometryDocument, measurementId
 export function sectionPlaneThroughSource(document: GeometryDocument, sourceId: string): { normal: Vector3; constant: number } | null {
   const primitiveMap = new Map(document.primitives.map((primitive) => [primitive.id, primitive]))
   const source = primitiveMap.get(sourceId)
+  /**
+   * 球没有顶点可算包围盒，但"过中心"的平面是确定的：**球心就是它的几何中心**。
+   * 过球心切出来的是大圆 —— 既最容易看见，也最容易和"压根没切到"区分开。
+   */
+  if (source?.type === "sphere") return { normal: { x: 0, y: 0, z: 1 }, constant: -source.center.z }
   const vertices = source ? sourceVertices(source, primitiveMap) : []
   if (vertices.length === 0) return null
   const heights = vertices.map((vertex) => vertex.z)
