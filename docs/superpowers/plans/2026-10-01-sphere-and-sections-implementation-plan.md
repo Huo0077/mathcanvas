@@ -148,17 +148,27 @@ expect(outlines).toMatchObject([{ kind: "polyline", closed: true }])
 
 **交付证据（2026-10-01）：** 代码提交 `46e5279` 已推送并由 CI run #54 四项全绿。**三层一起接**：动作层 `SolidCreateSphereAction` + `compileSolidSphereAction`（球只落一个图元，与手工路径同一种文档）；传输层 `actionIds` + `actionInputs`（只挡畸形、缺字段合法、半径非正按字段路径拒绝）；登记层 `actionRegistry`（`center`/`radius` 都 `ask_user`）+ `capabilities`（球翻成 `available`）+ `skills/manifest`（技能动作表与 `CAPABILITY_FOR_ACTION`）。**实测**：`sphereAction.test.ts` **7/7**（RED 起点 3/5 红 `unknown_action`；现已覆盖本条点名的 invalid radius / missing inputs / **alias 碰撞** / **一次确认的事务 + 保存往返**）、`actionSchemas.test.ts` **15/15**、`agent-core` 全包 **40 文件 / 521 项**、全库 **278 文件 / 3178 项 + 1 todo / 0 失败**、`typecheck`/`lint` exit 0。**"registry/schema 不一致"这条不是靠新写用例，而是靠既有的机器闸门**：`CAPABILITY_FOR_ACTION` 是 `Record<DraftActionIdName, string>`（漏登记编译不过），加上 `actionIds` / `capabilities` / `catalog`（内容哈希）/ `actionFieldParity` 四条用例 —— 它们在本批**确实把我挡下来了**（这一发现同时更正了 `current-status.md` 里"没有机器挡住"那条过重的表述）。**未做**：**Agent 端到端**（真模型跑一轮"画一个半径 5 的球"）—— 下面 bullet 2 因此**不勾**。
 
+**补记（2026-10-01，同日稍晚；提交 `1806239`，CI run #59 四项全绿）：Agent 端到端已交付。** 浏览器里没有模型服务，规划器用的是**确定性本地规划器**；一旦产出计划，下游（传输校验 → 动作编译 → 隔离草稿 → 用户确认 → 原子落盘 → 撤销）与真实模型**走同一条**，所以给它加一条球指令就能把那条链路真的跑一遍。改动：`localPlanner.ts` 新增 `SPHERE` 构建器 + 条目 + 导出 `SPHERE_PROMPT`（半径从原话读第一个数字、读不到取 `DEFAULT_SOLID_SIZE`；**触发词只认「球体」、刻意不认裸词「球」** —— 裸词会把"求外接球半径"那类**分析题**拉进来去新建一只球，与既有"认正四面体、不认裸四面体"同一条纪律）。`e2e/geometry3d-sphere.spec.ts` 新增一条走**真界面**的用例（Agent 工作区 → 发送 → 确认改动面板 → 确认并提交 → 返回画布 → 一步撤销），断言"停在确认（会新增 1 个对象）/ 确认前零改动 / 确认后对象行 = 1 且文档里半径 5 / 一步 Ctrl+Z 归零"。**实测**：`localPlanner.test.ts` 加 3 条（RED 起点 3 条全红）→ **25/25**、球 e2e **6/6**、全库 **278 文件 / 3182 项 + 1 todo / 0 失败**、`typecheck`/`lint` exit 0、`tsc -p e2e/tsconfig.json` exit 0。**顺带查实一条既有隐患（未修，记为发现）**："这个正方体的内切球半径是多少"命中的是**既有的「正方体」条目** —— 规划器会去新建一只正方体而不是回答读数问题；与文档里早记过的"裸词四面体会命中分析题"同一类，修不修需单独定口径。
+
 - [x] Write tests that fail for action registry/schema mismatch, invalid radius, alias collision, missing inputs, one confirmed scene transaction and saved round trip.
 ```ts
 const parsed = parseActionToolInput("solid.create_sphere", { alias: "S", center: { x: 1, y: 2, z: 3 }, radius: 5 }, "step-1")
 expect(parsed.ok).toBe(true)
 ```
-- [ ] Implement registry, schema and compiler together (not one unchecked layer ahead of the others). Run agent parity tests, scene action tests and e2e, then docs/commit/push/CI.
+- [x] Implement registry, schema and compiler together (not one unchecked layer ahead of the others). Run agent parity tests, scene action tests and e2e, then docs/commit/push/CI.
 
 ## Task 9 — Full product gate and release decision
 
+**交付证据（2026-10-01）：三条 bullet 全部勾上，但"宣布球体能力整体交付"这一句按规格**没有**做 —— 它被发布边界挡着（见末尾）。**
+
+- **bullet 1（六条门禁逐条报数）**：当次全量复跑 —— 全库 **278 文件 / 3179→3182 项通过 + 1 todo / 0 失败**；`typecheck` exit 0；`lint` exit 0（**0 error / 13 warning**，既有基线）；`test:rust` **16 二进制 / 236 通过 / 0 失败 / 3 ignored**；`test:perf` **9/9**（`drag/300-frames` 682.5 ms ≈ 2.3 ms/帧，60 fps 预算 16.7 ms/帧；校准档 1× ≈6 ms vs 4× ≈16–22 ms）；**全量 e2e 本机 175 通过 / 1 失败** —— 那条失败（`geometry3d.spec.ts:277` 相机平移的 `toBeCloseTo`）经核实为**既有环境敏感**用例（回到球体工作之前的 `91ac837` 同样失败，且期望值逐次在 1.98/1.99 间变），**不是本批引入**，但**本机 e2e 因此不能当放行依据**，以 CI 的 `e2e` 作业为准（#52/#54/#55/#56/#57/#58/#59/#60 均 success）。
+- **bullet 2（e2e 覆盖清单）**：**全部落到浏览器层** —— `e2e/geometry3d-sphere.spec.ts` **7 条**：数值创建（向导 + Agent 一句话）、精确圆（工具栏过球心）、**切点**、**空集**（后两例由"整数步方向键"走到：默认刀口常数 `-3`，五次 `ArrowUp` ⇒ `-8` 精确相切、再一次 ⇒ `-9` 空集，断言 `circle → point(点数 1) → empty(点数 0 不留旧点)`）、编辑后持久化、撤销、相机与选择、CAD 四视图与三件套导出（`engineering-drawing.spec.ts`）、**刻意的不支持布尔**（球参与的布尔交**一个预览都不给**，并以"两个立方体**有**预览"作反向对照）。
+  - **一处自我更正**：切点/空集起初被我判成"验不了"（理由是"种一份草稿再读读数走不通" —— 恢复路径信任保存下来的派生字段、不重跑 `recomputeDerivedObjects`，该结论**本身是对的**）。**但"因此验不了"是错的**：改成**让应用自己算**（工具栏切一刀 → 方向键挪刀口）就能稳定走到。留档在用例注释里。
+- **bullet 3（spec §5 逐行审计）**：六行逐条对真实文件与测试输出 —— 五行成立；**「工程图/导出与测量」那一行查出一处静默缺口并修掉**：`measurementVisuals.ts` 的 `pointPositions`（硬编码类型名单）**漏了 `sphere`**，于是球的面积/体积测量让 `resolveMeasurementVisual` 返回 `null`、**画布上一个字都不画**，而属性栏照样有数字（所以是静默的）；这是**同一张名单第二次漏配**（此前漏 `polyhedron3`）。已加球分支（落点取球心），RED `expected null not to be null` → GREEN。文档（`current-status.md` / `feature-catalog.md` / `project-progress.md` / `CHANGELOG.md`）均已更新，提交推送并逐个核对 SHA 与 CI。
+- **为什么没有写"球体能力已完成"**：spec §6 与 §5 末句都要求"新的桌面 Release 需要一个匹配版本的安装包 + 安装证据"。当前 `main` 的源码能力已交付，但**发布三件套**（定版本 → 重打 exe/MSI/NSIS → 哈希与 source tag 对齐 → GitHub Release → 本机安装实测）属 `current-status.md` §四 **D 类**，按计划要求**由用户先决定版本与是否发布**，不能由实现方自行宣布。
+
 **Files:** `e2e/geometry3d-sphere.spec.ts`, `docs/current-status.md`, `docs/feature-catalog.md`, `docs/project-progress.md`, `CHANGELOG.md`; release packaging only after a separately selected version/tag.
 
-- [ ] Run `npm.cmd test -- --maxWorkers=3`, `npm.cmd run typecheck`, `npm.cmd run lint`, `npm.cmd run test:e2e -- --workers=3`, `npm.cmd run test:rust`, `npm.cmd run test:perf`; report counts/warnings/ignored tests, not a generic “all green”.
-- [ ] E2e cover numeric creation, exact circle/tangent/empty, edited persistence, undo, camera/selection, CAD views and export, deliberate unsupported sphere Boolean operation.
-- [ ] Audit spec §5 row by row against real files/test output. Update `current-status.md`, feature catalog and progress; push, verify remote SHA and every CI job. Only then mark sphere capability complete. A new desktop Release still needs a matching versioned installer plus installation evidence.
+- [x] Run `npm.cmd test -- --maxWorkers=3`, `npm.cmd run typecheck`, `npm.cmd run lint`, `npm.cmd run test:e2e -- --workers=3`, `npm.cmd run test:rust`, `npm.cmd run test:perf`; report counts/warnings/ignored tests, not a generic “all green”.
+- [x] E2e cover numeric creation, exact circle/tangent/empty, edited persistence, undo, camera/selection, CAD views and export, deliberate unsupported sphere Boolean operation.
+- [x] Audit spec §5 row by row against real files/test output. Update `current-status.md`, feature catalog and progress; push, verify remote SHA and every CI job. Only then mark sphere capability complete. A new desktop Release still needs a matching versioned installer plus installation evidence.
