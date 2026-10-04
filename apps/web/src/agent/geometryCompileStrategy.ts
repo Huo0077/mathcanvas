@@ -67,6 +67,11 @@ export interface WorkerCompileEnvelope {
   draftId: string
   draftVersion: number
   prompt?: string
+  /**
+   * **Phase N1 的统一 IR 开关**（R6）。Worker 那条路读不到主线程的应用级 flag，
+   * 只能由调用方随信封交过来；缺省 = 关。
+   */
+  obligationIR?: boolean
 }
 
 /**
@@ -91,7 +96,9 @@ export async function compileInWorker(
     runId: envelope.runId,
     draftId: envelope.draftId,
     draftVersion: envelope.draftVersion,
-    ...(envelope.prompt === undefined ? {} : { prompt: envelope.prompt })
+    ...(envelope.prompt === undefined ? {} : { prompt: envelope.prompt }),
+    // IR 开关随请求过线程边界（R6）：Worker 读不到主线程的 flag。
+    ...(envelope.obligationIR === undefined ? {} : { obligationIR: envelope.obligationIR })
   })
   if (!outcome.ok) {
     return {

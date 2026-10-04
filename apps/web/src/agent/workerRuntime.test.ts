@@ -1,7 +1,7 @@
 ﻿import { createEmptyDocument } from "@draw/dsl"
 import { describe, expect, it } from "vitest"
 
-import { createWorkerRequest, parseWorkerResponse, WORKER_SCHEMA_VERSION } from "./workerContracts"
+import { createWorkerRequest, parseWorkerRequest, parseWorkerResponse, WORKER_SCHEMA_VERSION } from "./workerContracts"
 import { handleGeometryRequest } from "./workerRuntime"
 
 /**
@@ -286,6 +286,36 @@ describe("geometry worker runtime", () => {
     if (response.kind !== "geometry.compile.result") throw new Error("expected a result")
     // 信封的五个字段来自请求，逐字回带 —— "这份产物是哪一版草稿的"必须能对上。
     expect(response.artifact).toEqual({ runId: "run-1", draftId: "draft_1", draftVersion: 1, requestId: "req-1" })
+  })
+
+  /**
+   * **N1 的 IR 开关过线程边界**（控制器裁决 R6）。
+   *
+   * Worker 读不到主线程那份 `agentNextPhaseFlags`，所以这个布尔只能随请求过来。
+   * 为什么这条必须在**契约**上验证：`parseWorkerRequest` 会把消息**逐字段重建**
+   *（不是原样透传），字段漏掉就等于"Worker 那条路的开关永远是关的" ——
+   * 而那正是 R6 要消灭的"开关事实上不生效"。
+   *
+   * 畸形载荷（`"true"` / `1`）必须当成关：缺省是关，就不该让一个不认识的值把它打开。
+   */
+  it("carries the N1 IR switch across the worker request boundary, and only as a real boolean", () => {
+    const base = createEmptyDocument("conics")
+    const actions = [{ actionId: "planar.create_point", actionKey: "p", factIds: [], inputs: { alias: "p", points: [{ x: 1, y: 0 }] } }] as never
+    const withSwitch = parseWorkerRequest({ ...createWorkerRequest("geometry.compile", envelope, { base, actions }), obligationIR: true })
+    expect(withSwitch.ok).toBe(true)
+    if (withSwitch.ok && withSwitch.message.kind === "geometry.compile") expect(withSwitch.message.obligationIR).toBe(true)
+
+    const withoutSwitch = parseWorkerRequest(createWorkerRequest("geometry.compile", envelope, { base, actions }))
+    expect(withoutSwitch.ok).toBe(true)
+    if (withoutSwitch.ok && withoutSwitch.message.kind === "geometry.compile") {
+      expect(Object.hasOwn(withoutSwitch.message, "obligationIR")).toBe(false)
+    }
+
+    for (const malformed of ["true", 1, {}, null]) {
+      const parsed = parseWorkerRequest({ ...createWorkerRequest("geometry.compile", envelope, { base, actions }), obligationIR: malformed })
+      expect(parsed.ok).toBe(true)
+      if (parsed.ok && parsed.message.kind === "geometry.compile") expect(parsed.message.obligationIR, `${JSON.stringify(malformed)} 被当成了 true`).toBeUndefined()
+    }
   })
 
   it("reports a no-op batch as unchanged instead of pretending something happened", () => {

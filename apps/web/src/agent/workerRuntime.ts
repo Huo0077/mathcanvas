@@ -68,6 +68,12 @@ export function handleGeometryRequest(request: GeometryWorkerRequest): GeometryW
           documentGeneration: request.base.revision,
           // 用户原话（Fix round 1 / C3）：符号参数判定、从原话读尺寸、"采样不是证明"的披露都看它。
           ...(request.prompt === undefined ? {} : { prompt: request.prompt }),
+          /**
+           * **N1 的 IR 开关跟着请求过来**（R6）：Worker 读不到主线程的应用级 flag，
+           * 所以它只能是请求上的一个布尔。`=== true` 才开 —— 缺省/畸形载荷一律当关，
+           * 免得"Worker 那条路默认产出 IR"又变成另一种事实上的常开。
+           */
+          diagramObligationIR: request.obligationIR === true,
           // 占用集来自**基准文档**：worker 的基准非空时，同类新建要接着已有的号往下发，
           // 否则第一个新对象就会撞上 `point-1`（与 `draftStore` 那次真实故障同源）。
           takenIds: request.base.primitives.map((primitive) => primitive.id)

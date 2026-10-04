@@ -46,6 +46,11 @@ export interface GeometryWorkerRequestEnvelope {
   draftId: string
   draftVersion: number
   prompt?: string
+  /**
+   * **Phase N1 的统一 IR 开关**（R6）：Worker 读不到主线程的 `agentNextPhaseFlags`，
+   * 所以这个布尔必须随请求过去。缺省 = 关。
+   */
+  obligationIR?: boolean
 }
 
 export type GeometryWorkerOutcome =
@@ -184,7 +189,13 @@ export function createGeometryWorkerClient(worker: WorkerLike, options: Geometry
   }
 
   return {
-    compile: (actions, base, envelope) => send("geometry.compile", { actions: [...actions], base, ...(envelope.prompt === undefined ? {} : { prompt: envelope.prompt }) }, envelope),
+    compile: (actions, base, envelope) => send("geometry.compile", {
+      actions: [...actions],
+      base,
+      ...(envelope.prompt === undefined ? {} : { prompt: envelope.prompt }),
+      // IR 开关随请求过边界（R6）；只在给了的时候带上，缺省就是"没有这一项"。
+      ...(envelope.obligationIR === undefined ? {} : { obligationIR: envelope.obligationIR })
+    }, envelope),
     check: (operations, base, envelope) => send("geometry.check", { operations: [...operations], base }, envelope),
     pendingCount: () => pending.size,
     dispose: () => {

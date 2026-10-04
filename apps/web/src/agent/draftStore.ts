@@ -113,8 +113,15 @@ export interface DraftStore {
    * **返回 `Promise`**（方案 3 接线）：编译这一步可以被交给几何 Worker，
    * 而 Worker 是异步的。改成 `Promise` 是让两条编译路径共用同一个入口的前提 ——
    * 实测那一步在真实大文档（约 2800 图元）上要 **73 ms**，而把文档交给另一个线程只要 **1.0 ms**。
+   *
+   * 第六个参数是 **Phase N1 的统一 IR 开关**（`apps/web/src/agent/featureFlags.ts` 的
+   * `agentNextPhaseFlags.obligationIR`）。可选，且**缺省 = 关**（控制器裁决 R6）：
+   * 不传它的调用方拿到的是改动之前那份报告（没有 `obligationIR` 字段）。
+   * 它必须由**应用层**持有并显式传进来 —— 编译层（`agent-core`）是纯函数库，
+   * 不读应用级 flag；而 Worker 那条路读不到主线程的 flag，所以这个布尔随编译入参
+   * 一起过边界（`workerContracts.ts` 的 `obligationIR` 字段）。
    */
-  stage(draftId: string, actions: DraftAction[], expectedDraftVersion: number, userMessage?: string, relations?: PlanRelations): Promise<StageResult>
+  stage(draftId: string, actions: DraftAction[], expectedDraftVersion: number, userMessage?: string, relations?: PlanRelations, obligationIR?: boolean): Promise<StageResult>
   /** 基础文档变了（手工编辑、撤销、切工作区）→ 草稿过期，不能再提交。 */
   assertFresh(draftId: string, liveHandle: DocumentHandle): FreshnessResult
   /**
@@ -200,6 +207,11 @@ export type CompileStrategy = (input: {
    * 所以由这里把它们交给策略 —— 与 `conversationId` 同一个道理：那是 `record.draftId`。
    */
   draftVersion: number
+  /**
+   * **Phase N1 的统一 IR 开关**，由应用层传进两条编译路（R6）。
+   * 缺省 = 关：策略实现必须按 `=== true` 处理，不许自己兜底成 true。
+   */
+  obligationIR?: boolean
 }) => Promise<StagedCompileResult> | StagedCompileResult
 
 /**
@@ -230,6 +242,12 @@ export interface CompileInput {
    * **只用于同步路径** —— Worker 那边按 `takenIds` 现建一个。
    */
   allocator?: IdAllocator
+  /**
+   * **Phase N1 的统一 IR 开关**（R6）。缺省 = 关；只有显式 `true` 才让编译期产出 IR。
+   * 这一项**必须**原样传给 `compilePlan`（见下面那一行），否则"两条路都打开了 IR"
+   * 会在就地路径上静默失效 —— 而那正是 R6 要消灭的那种"开关从不生效"。
+   */
+  obligationIR?: boolean
 }
 
 /**
@@ -244,7 +262,8 @@ export function compileInProcess(input: CompileInput): PlanCompileResult {
     conversationId: input.conversationId,
     documentGeneration: input.document.revision,
     ...(input.allocator === undefined ? {} : { idAllocator: input.allocator }),
-    ...(input.userMessage === undefined ? {} : { prompt: input.userMessage })
+    ...(input.userMessage === undefined ? {} : { prompt: input.userMessage }),
+    ...(input.obligationIR === undefined ? {} : { diagramObligationIR: input.obligationIR })
   })
 }
 
@@ -285,7 +304,7 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
       return { ...record, candidate: cloneDocument(record.candidate) }
     },
 
-    async stage(draftId, actions, expectedDraftVersion, userMessage, relations) {
+    async stage(draftId, actions, expectedDraftVersion, userMessage, relations, obligationIR) {
       const record = drafts.get(draftId)
       if (!record) return { ok: false, reason: "unknown_draft", detail: `no draft ${draftId}` }
       if (record.draftVersion !== expectedDraftVersion) {
@@ -323,7 +342,11 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
         conversationId: record.draftId,
         draftVersion: record.draftVersion,
         allocator: record.allocator,
-        ...(userMessage === undefined ? {} : { userMessage })
+        ...(userMessage === undefined ? {} : { userMessage }),
+        // **N1 的开关随编译入参一起过边界**（R6）：Worker 那条路读不到主线程的
+        // 应用级 flag，所以它必须搭这条既有的参数通道过去；就地那条路由
+        // `compileInProcess` 转交给 `compilePlan`。两条路都**只在显式 true 时**开。
+        ...(obligationIR === undefined ? {} : { obligationIR })
       })
       if (!compiled.ok || compiled.draftDocument === null) {
         // 编译失败时草稿保持原样 —— 不留"半成品"。
@@ -362,7 +385,7 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
         ? parseObligationWithLegacy(userMessage) : null
       const obligations = parsed?.legacy ?? null
       const checked = obligations && (obligations.givens.length > 0 || obligations.unverified.length > 0)
-        ? verifyDiagramObligations(obligations, plan, compiled.draftDocument, record.candidate) : undefined
+        ? verifyDiagramObligations(obligations, plan, compiled.draftDocument, record.candidate, { obligationIR: obligationIR === true }) : undefined
       if (checked?.status === "failed") {
         return { ok: false, reason: "compile_failed", diagnostics: checked.checks.filter((item) => item.status === "failed").map((item) => ({ code: "diagram_condition_failed", message: `${item.sourceText}：${item.reason}` })) }
       }

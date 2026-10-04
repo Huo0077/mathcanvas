@@ -81,11 +81,14 @@ describe("diagram checks on the real draft staging path", () => {
    * "IR 在两条路上同形"这条判据放在这里 —— 在第一层（`compilePlan`）断言只能证明
    * 单条路正确，"Worker 那条路丢字段"照样能全绿（这个项目在 `prompt` / 假设 / 关系表上
    * 已经各踩过一次）。
+   *
+   * **显式打开开关**（控制器裁决 R6）：IR 是"默认关闭的新能力"，所以这里必须由调用方
+   * 把 `obligationIR` 传进来，而不是靠缺省值。缺省那条路由下面一条用例守。
    */
-  it("carries the unified obligation IR through PlanCompiler, DraftStore and the Worker path", async () => {
+  it("carries the unified obligation IR through PlanCompiler, DraftStore and the Worker path once it is switched on", async () => {
     const userMessage = "在三棱锥A-BCD中，BD=2，AB=AD，画示意图"
     const direct = setup()
-    const directResult = await direct.store.stage(direct.draft.draftId, [action] as never, direct.draft.draftVersion, userMessage)
+    const directResult = await direct.store.stage(direct.draft.draftId, [action] as never, direct.draft.draftVersion, userMessage, undefined, true)
     expect(directResult.ok).toBe(true)
     if (!directResult.ok) return
     const ir = directResult.preview.diagramVerification?.obligationIR
@@ -99,13 +102,35 @@ describe("diagram checks on the real draft staging path", () => {
     expect(direct.store.getPreview(direct.draft.draftId)?.diagramVerification?.obligationIR).toEqual(ir)
 
     const client = createGeometryWorkerClient(inlineWorker((request) => handleGeometryRequest(request as never)))
-    const workerStore = createDraftStore(createIdAllocator, async ({ plan, document, conversationId, draftVersion, userMessage: prompt }) =>
-      compileInWorker(client, { plan, document }, { runId: "worker-run", draftId: conversationId, draftVersion, prompt }))
+    const workerStore = createDraftStore(createIdAllocator, async ({ plan, document, conversationId, draftVersion, userMessage: prompt, obligationIR }) =>
+      compileInWorker(client, { plan, document }, { runId: "worker-run", draftId: conversationId, draftVersion, prompt, obligationIR }))
     const workerDraft = workerStore.create(createEmptyDocument("geometry3d"))
     try {
-      const workerResult = await workerStore.stage(workerDraft.draftId, [action] as never, workerDraft.draftVersion, userMessage)
+      const workerResult = await workerStore.stage(workerDraft.draftId, [action] as never, workerDraft.draftVersion, userMessage, undefined, true)
       expect(workerResult.ok).toBe(true)
       if (workerResult.ok) expect(workerResult.preview.diagramVerification).toEqual(directResult.preview.diagramVerification)
     } finally { client.dispose() }
+  })
+
+  /**
+   * **R6 的核心判据**：不传开关 = 关 = 与改动之前的报告逐字相同。
+   *
+   * 这条盯的是"新能力默认不生效"，而不是"IR 能不能算出来"。少了它，
+   * "缺省 true + 生产调用方不传"这种**事实上的常开**会一路绿灯（正是 R6 要改掉的）。
+   */
+  it("leaves the diagram report exactly as before when nobody switches the IR on", async () => {
+    const { store, draft } = setup()
+    const result = await store.stage(draft.draftId, [action] as never, draft.draftVersion, "在三棱锥A-BCD中，BD=2，AB=AD，画示意图")
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const report = result.preview.diagramVerification
+    expect(report?.checks.map((item) => [item.kind, item.status, item.sourceText])).toEqual([
+      ["fixedLength", "passed", "BD=2"],
+      ["equalLength", "passed", "AB=AD"]
+    ])
+    expect(report?.sampleValues).toEqual([])
+    expect(report?.status).toBe("passed")
+    // 字段本身**不在**：不是"值是 undefined"，而是这份旧形状里没有它。
+    expect(Object.keys(report ?? {}).sort()).toEqual(["checks", "sampleValues", "status"])
   })
 })

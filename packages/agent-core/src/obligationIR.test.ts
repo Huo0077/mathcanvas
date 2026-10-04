@@ -73,10 +73,12 @@ describe("legacy compatibility of the obligation IR", () => {
     expect(report.status).toBe("passed")
     expect(report.checks).toHaveLength(7)
     expect(report.checks.map((item) => item.sourceText)).toEqual(legacy.givens.map((item) => item.sourceText))
+    // R6：IR 是"默认关闭的新能力"，所以不传选项时报告就是**旧形状**（没有那个字段）。
+    expect(Object.keys(report).sort()).toEqual(["checks", "sampleValues", "status"])
   })
 
-  it("attaches the same IR to the verification report the legacy call site already reads", () => {
-    const report = verifyDiagramObligations(parseDiagramObligations(PYRAMID_PROMPT), planOf(), candidateOf())
+  it("attaches the same IR to the verification report once the caller switches it on", () => {
+    const report = verifyDiagramObligations(parseDiagramObligations(PYRAMID_PROMPT), planOf(), candidateOf(), undefined, { obligationIR: true })
     expect(report.obligationIR).toEqual(parseObligationIR(PYRAMID_PROMPT))
     // 角色必须真的分得开：目标不会被当成"已核验的题设"。
     expect(report.obligationIR?.obligations.filter((item) => item.role === "goal").map((item) => item.sourceText)).toEqual(["OA⊥CD"])

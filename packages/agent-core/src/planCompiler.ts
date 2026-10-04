@@ -65,8 +65,13 @@ export interface PlanCompileContext {
    *
    * 为什么由调用方传进来、而不是在 agent-core 里读那个 flag：开关是**应用级**的
    * （进程环境），而这个包是纯函数库 —— 在这里读 `process.env` 会让"同一份输入
-   * 在不同环境给出不同结果"，那样连测试都无法钉住。缺省 `true`（核验器本来就该产出 IR），
-   * 传 `false` 就是那条"旧静态链路行为不变"的回退路。
+   * 在不同环境给出不同结果"，那样连测试都钉不住。所以库只收一个布尔参数。
+   *
+   * **语义是"显式为 `true` 才开"**（控制器裁决 R6）：缺省 / `undefined` / `false`
+   * 一律**不产出** `obligationIR`。R6 之前是"缺省开 + 生产调用方不传"，
+   * 那等于这个开关**事实上从不生效** —— 与 Global Constraints「任何新能力先放在独立
+   * feature flag 下」、flags 段「默认全部关闭」、「`flags=false` 时旧静态示意图链路行为不变」
+   * 都冲突。保守方向：生产默认走旧路径，IR 只有显式打开才产出。
    */
   diagramObligationIR?: boolean
 }
@@ -313,7 +318,7 @@ export function compilePlan(input: unknown, context: PlanCompileContext): PlanCo
     ? parseObligationWithLegacy(context.prompt) : null
   const obligations = obligationParse?.legacy ?? null
   const diagramVerification = obligations && (obligations.givens.length > 0 || obligations.unverified.length > 0)
-    ? verifyDiagramObligations(obligations, plan, working, context.document, { obligationIR: context.diagramObligationIR ?? true }) : undefined
+    ? verifyDiagramObligations(obligations, plan, working, context.document, { obligationIR: context.diagramObligationIR === true }) : undefined
   for (const check of diagramVerification?.checks ?? []) {
     if (check.status === "failed") diagnostics.push(planDiagnostic("geometry_validation", "diagram_condition_failed", "envelope.actions", `${check.sourceText}：${check.reason}`))
     if (check.status === "unverified") diagnostics.push(planDiagnostic("geometry_validation", "diagram_condition_unverified", "envelope.actions", `${check.sourceText}：${check.reason}`, "warning"))

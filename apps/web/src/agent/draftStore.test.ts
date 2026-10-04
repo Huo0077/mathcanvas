@@ -330,4 +330,51 @@ describe("isolated drafts", () => {
     // 策略的产物真的落进了草稿（不是被忽略掉、又跑了一遍默认路径）。
     expect(staged.preview.candidate.primitives.map((primitive) => primitive.id)).toContain("point-1")
   })
+
+  /**
+   * **N1 的统一 IR 开关穿过草稿这一层**（控制器裁决 R6）。
+   *
+   * R6 之后开关的语义是"显式为 `true` 才开"，而且必须由**应用层**交进来。这两条用例
+   * 分别守缺省与打开：只守一条都不够 —— 只守缺省，"开关打不开"会静默通过；
+   * 只守打开，"缺省变成常开"（R6 要改掉的那种）会静默通过。
+   *
+   * 这两个参数位置也一并钉住：`stage` 的第六个参数就是它（第五个是 relations）。
+   */
+  const IR_TETRAHEDRON = {
+    actionId: "solid.create_polyhedron",
+    actionKey: "tetrahedron",
+    factIds: [],
+    inputs: {
+      alias: "tetrahedron", vertexNames: ["A", "B", "C", "D"],
+      vertices: [{ x: 0, y: 0, z: 1 }, { x: -1, y: 0, z: 0 }, { x: 0.5, y: Math.sqrt(3) / 2, z: 0 }, { x: 1, y: 0, z: 0 }],
+      faces: [[0, 1, 2], [0, 3, 1], [0, 2, 3], [1, 3, 2]]
+    }
+  } as const
+  const IR_PROMPT = "在三棱锥A-BCD中，BD=2，AB=AD，画示意图"
+
+  it("leaves the staged diagram report in its old shape while the IR switch is off", async () => {
+    const store = createDraftStore()
+    const record = store.create(createEmptyDocument("geometry3d"))
+    const staged = await store.stage(record.draftId, [IR_TETRAHEDRON] as never, record.draftVersion, IR_PROMPT)
+
+    expect(staged.ok).toBe(true)
+    if (!staged.ok) return
+    expect(staged.preview.diagramVerification?.status).toBe("passed")
+    expect(Object.keys(staged.preview.diagramVerification ?? {}).sort()).toEqual(["checks", "sampleValues", "status"])
+  })
+
+  it("stages the unified obligation IR when the application passes its switch on", async () => {
+    const store = createDraftStore()
+    const record = store.create(createEmptyDocument("geometry3d"))
+    const staged = await store.stage(record.draftId, [IR_TETRAHEDRON] as never, record.draftVersion, IR_PROMPT, undefined, true)
+
+    expect(staged.ok).toBe(true)
+    if (!staged.ok) return
+    expect(staged.preview.diagramVerification?.obligationIR?.obligations.map((item) => [item.role, item.kind, item.sourceText])).toEqual([
+      ["given", "fixedLength", "BD=2"],
+      ["given", "equalLength", "AB=AD"]
+    ])
+    // 预览那一份也要带着 IR（`previewOf` 是 structuredClone；IR 必须是可克隆的纯数据）。
+    expect(store.getPreview(record.draftId)?.diagramVerification?.obligationIR).toEqual(staged.preview.diagramVerification?.obligationIR)
+  })
 })

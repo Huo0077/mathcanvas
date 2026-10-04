@@ -37,10 +37,12 @@ export interface DiagramVerificationReport {
 /**
  * 核验的可选项。
  *
- * `obligationIR` 缺省为 `true`：`verifyDiagramObligations` 是**纯函数**，它照做即可；
- * 真正的开关在调用方（`planCompiler` 读 `flags.obligationIR`）。把默认值写成 `true`
- * 是为了让"直接调用这个函数的测试与工具"不必为了拿 IR 而再传一个参数 ——
- * "关掉"必须由**显式**的决定产生（那个决定就是 flag）。
+ * **`obligationIR` 必须显式为 `true` 才产出 IR**（控制器裁决 R6）：缺省 / `undefined` / `false`
+ * 一律返回**旧形状**的报告 —— 没有那个字段，而不是"值是 undefined"。
+ *
+ * R6 之前这里是"缺省 `true`"。那样写的代价不是形式问题：生产调用方根本没传过这个参数，
+ * 于是开关**事实上从不生效**，"默认关闭的新能力"这条约束在这条路上是空的。
+ * 保守方向才是对的：旧路径是缺省，IR 由显式决定产生。
  */
 export interface DiagramVerificationOptions {
   obligationIR?: boolean
@@ -171,6 +173,6 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
     status,
     checks,
     sampleValues,
-    ...(options.obligationIR === false ? {} : { obligationIR: buildObligationIR(set) })
+    ...(options.obligationIR === true ? { obligationIR: buildObligationIR(set) } : {})
   }
 }

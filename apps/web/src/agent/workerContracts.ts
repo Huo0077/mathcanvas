@@ -47,6 +47,19 @@ export interface GeometryCompileRequest extends WorkerMessageEnvelope {
    * 没说全的尺寸从原话里读、"采样不是证明"的披露）。可选：没有原话的调用方照旧可用。
    */
   prompt?: string
+  /**
+   * **Phase N1 的统一 IR 开关**（`featureFlags.ts` 的 `agentNextPhaseFlags.obligationIR`；
+   * 控制器裁决 R6）。
+   *
+   * 为什么它必须**过这条边界**：Worker 是另一个线程，读不到主线程那份应用级开关，
+   * 而 IR 是在 Worker 里的 `compilePlan` 里产出的。所以主线程要把这个布尔**随编译入参**
+   * 一起交过去 —— 交不过去就等于"Worker 那条路的开关永远是关的"，那正是 R6 要消灭的
+   * "开关事实上不生效"。
+   *
+   * 可选，且**缺省 = 关**（`workerRuntime` 按 `=== true` 处理，不做兜底）。
+   * 与其他可选字段同一套策略：不给就是没有，`parseWorkerRequest` 不把它当必填。
+   */
+  obligationIR?: boolean
 }
 
 export interface GeometryCheckRequest extends WorkerMessageEnvelope {
@@ -208,7 +221,24 @@ export function parseWorkerRequest(input: unknown): WorkerParseResult<GeometryWo
     if (!Array.isArray(actions)) return rejected("invalid_actions", "actions must be an array")
     if (actions.length === 0) return rejected("empty_actions", "a compile request must carry at least one action")
     if (actions.length > MAX_ACTIONS) return rejected("too_many_actions", `max ${MAX_ACTIONS} actions per request`)
-    return { ok: true, message: { ...(input as unknown as GeometryCompileRequest), kind, actions: actions as DraftAction[] } }
+    /**
+     * **N1 的 IR 开关只认布尔 `true`**（R6）。畸形载荷（`"true"` / `1` / 对象）**不当成 true**：
+     * 这个开关决定"报告里有没有那一段状态"，靠类型强制转换把它打开，
+     * 就等于让一个不认识的值决定产品行为 —— 而缺省必须是关。
+     *
+     * 所以这里先把 `obligationIR` 从输入里**摘出去**再重建：只靠"`=== true` 才附上"
+     * 是不够的（`...input` 会把 `"true"` 原样带过来），必须显式排除。
+     */
+    const { obligationIR, ...rest } = input
+    return {
+      ok: true,
+      message: {
+        ...(rest as unknown as GeometryCompileRequest),
+        kind,
+        actions: actions as DraftAction[],
+        ...(obligationIR === true ? { obligationIR: true } : {})
+      }
+    }
   }
 
   const operations = input.operations

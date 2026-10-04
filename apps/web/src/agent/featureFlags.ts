@@ -59,3 +59,27 @@ const OFF: Record<AgentNextPhaseFlagName, false> = {
 export function createAgentNextPhaseFlags(overrides: Partial<AgentNextPhaseFlags> = {}): AgentNextPhaseFlags {
   return { ...OFF, ...overrides }
 }
+
+/**
+ * **应用层持有的那一份开关**（控制器裁决 R6："由应用层持有并显式传入 flag"）。
+ *
+ * 这是"开关从哪来"的**唯一答案**：`agent-core` 是纯函数库、不读它（读了就无法用测试钉住
+ * "同一份输入给同一份结果"），所以应用侧必须有这么一处把开关交出去 ——
+ * 而不是由 `draftStore.stage` 或 `compilePlan` 各自去猜。
+ *
+ * 接线方式（N1 只有 `obligationIR` 接了线）：
+ * ```ts
+ * await store.stage(draftId, actions, version, userMessage, relations, agentNextPhaseFlags().obligationIR)
+ * ```
+ * 这个布尔随后经 `compileInProcess`（→ `compilePlan` 的 `diagramObligationIR`）或
+ * `compileInWorker`（→ `workerContracts` 的 `obligationIR` 字段 → Worker 里的 `compilePlan`）
+ * 到达核验处。两条路都**只在显式 `true` 时**产出 IR。
+ *
+ * N2–N5 的四个开关保持 `false`，各阶段实现时只允许在自己的开关下启用。
+ *
+ * 为什么是**函数**而不是常量对象：开关将来要能由运行配置/实验组驱动，
+ * 而"每次调用现取"与"进程启动时冻结一份"在接线处看不出区别，到那时才改就要动一批调用点。
+ */
+export function agentNextPhaseFlags(): AgentNextPhaseFlags {
+  return createAgentNextPhaseFlags()
+}
