@@ -170,17 +170,23 @@ export function describeRepairPrompt(failure: EnvelopeParseFailure): string {
   ].join("\n")
 }
 
-/** 顶层必需字段，按 `kind` 分。**只列键名，不回显模型的内容。** */
+/**
+ * 顶层**仍然必填**的字段，按 `kind` 分。**只列键名，不回显模型的内容。**
+ *
+ * 2026-10-04 用户同意放宽后调整：`schemaVersion` / `factIds` / `kind` 已改为**可推断**
+ *（见 `schemas.ts` 里那两段注释），所以它们**不再出现在这张表里** —— 再要求模型补
+ * 一个系统自己能补的字段，只会制造又一轮无谓失败。
+ */
 const REQUIRED_ENVELOPE_FIELDS: Record<string, readonly string[]> = {
-  plan: ["schemaVersion", "kind", "goal", "factIds", "actions"],
-  clarification: ["schemaVersion", "kind", "goal", "factIds", "questions"],
-  answer: ["schemaVersion", "kind", "goal", "factIds", "answer", "toolResultRefs"]
+  plan: ["goal", "actions"],
+  clarification: ["goal", "questions"],
+  answer: ["goal", "answer", "toolResultRefs"]
 }
 
 /**
  * 从被拒的原始输出里认出**缺了哪些顶层必需字段**，返回一行给修复提示。
  *
- * 认不出（不是对象、不是合法 JSON、没有 kind）就返回空数组 —— **不猜**。
+ * 认不出（不是对象、不是合法 JSON）就返回空数组 —— **不猜**。
  * 这条与"不回显模型原文"并不冲突：它只说**键名**，不说内容。
  */
 function missingEnvelopeFields(payload: string): string[] {
@@ -192,7 +198,10 @@ function missingEnvelopeFields(payload: string): string[] {
   }
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return []
   const record = parsed as Record<string, unknown>
-  const kind = typeof record.kind === "string" ? record.kind : "plan"
+  // 与解析层同一套推断：带 actions 就是 plan。
+  const kind = typeof record.kind === "string"
+    ? record.kind
+    : "actions" in record ? "plan" : "questions" in record ? "clarification" : "answer"
   const required = REQUIRED_ENVELOPE_FIELDS[kind]
   if (!required) return []
   const missing = required.filter((field) => !(field in record))

@@ -184,9 +184,18 @@ export function parsePlanEnvelope(input: unknown): ParseResult<PlanEnvelope> {
   const errors: ParseError[] = []
   if (!isPlainObject(input)) return { ok: false, errors: [fail("invalid_type", "envelope", `expected the plan envelope object, got ${describePlanShape(input)}`)] }
 
-  const kind = input.kind
+  /**
+   * **`kind` 可以推断**（2026-10-04，用户同意放宽）。
+   *
+   * 实测四次不合格的信封，模型每次缺的顶层字段都不同（`kind` / `actions` / `factIds`），
+   * 而它稳定产出的是**动作本身**。`kind` 的信息量几乎为零：带 `actions` 就是 plan。
+   * 所以缺 `kind` 时按内容推断，**不再因为一个推断得出来的字段把整份计划拒掉**。
+   *
+   * 推断不出来（既没有 actions，也没有 questions/answer）时才真拒 —— 那时确实不知道它想干什么。
+   */
+  const kind = input.kind ?? ("actions" in input ? "plan" : "questions" in input ? "clarification" : "answer" in input ? "answer" : undefined)
   if (kind !== "plan" && kind !== "clarification" && kind !== "answer") {
-    return { ok: false, errors: [fail("unknown_kind", "envelope.kind", `unexpected kind ${quotedName(String(kind))}`)] }
+    return { ok: false, errors: [fail("unknown_kind", "envelope.kind", `unexpected kind ${quotedName(String(input.kind))}`)] }
   }
 
   const allowed = kind === "plan"
@@ -196,11 +205,28 @@ export function parsePlanEnvelope(input: unknown): ParseResult<PlanEnvelope> {
       : ["schemaVersion", "kind", "goal", "factIds", "assumptions", "answer", "toolResultRefs"]
   rejectUnknownFields(input, allowed, "envelope", errors)
 
-  if (input.schemaVersion !== PLAN_SCHEMA_VERSION) {
-    errors.push(fail("schema_version_mismatch", "envelope.schemaVersion", `expected '${PLAN_SCHEMA_VERSION}'`))
+  /**
+   * **样板字段漏了就当默认值**（2026-10-04，用户同意放宽）。
+   *
+   * 两处都不是"内容"，而是**只有一个合理取值的样板**：
+   * - `schemaVersion`：系统自己知道当前版本，模型漏了补上即可（它没有第二种取值）；
+   * - `factIds`：下游本来就归一到"空 = 没声明"（与 `assumptions` 同一条口径）。
+   *
+   * 为什么值得放宽：实测模型连续四次在不同的样板字段上翻车（`kind` / `actions` / `factIds`），
+   * 而**要求 `factIds: []` 这种零信息字段必须出现，收益为零、代价是每次运行都在这里失败**。
+   * 这与方案 C 是同一条原则：**质量门禁不能依赖模型稳定产出它能做对、但做不稳的东西。**
+   *
+   * 仍然必填的是 `goal`（给人看的一句话，模型一直写得出）与 `actions`（真正的意图）。
+   * `goal` **原样保留模型的话**，系统不替它编。
+   */
+  // 只在"给了但给错"时报错；缺失走默认值。
+  if (input.schemaVersion !== undefined) {
+    if (input.schemaVersion !== PLAN_SCHEMA_VERSION) {
+      errors.push(fail("schema_version_mismatch", "envelope.schemaVersion", `expected '${PLAN_SCHEMA_VERSION}'`))
+    }
   }
   const goal = boundedString(input.goal, "envelope.goal", errors)
-  const factIds = readStringArray(input.factIds, "envelope.factIds", errors)
+  const factIds = input.factIds === undefined ? [] : readStringArray(input.factIds, "envelope.factIds", errors)
 
   /**
    * `assumptions` 是**三个分支共用**的可选字段：无论"要作图 / 要问 / 只回答"，

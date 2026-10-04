@@ -61,6 +61,61 @@ describe("plan envelope parsing", () => {
     expectRejected(parsePlanEnvelope({ ...(validPlan() as object), kind: "not-a-plan" }), "unknown_kind")
   })
 
+  /**
+   * **样板字段漏了就当默认值**（2026-10-04，用户同意放宽）。
+   *
+   * 实测模型连续四次在不同的顶层样板字段上翻车（`kind` / `actions` / `factIds`），
+   * 而它稳定产出的是**动作本身**。这些都是"只有一个合理取值"的样板：
+   * `schemaVersion` 系统自己知道，`factIds` 下游本来就归一到空，`kind` 由内容推得出来。
+   *
+   * **要求 `factIds: []` 这种零信息字段必须出现，收益为零、代价是每次运行都在这里失败。**
+   * 这与方案 C 同一条原则：质量门禁不能依赖模型稳定产出它能做对、但做不稳的东西。
+   */
+  it("accepts a plan that omits the boilerplate top-level fields", () => {
+    const base = validPlan() as Record<string, unknown>
+
+    const noSchemaVersion = { ...base }
+    delete noSchemaVersion.schemaVersion
+    expect(parsePlanEnvelope(noSchemaVersion).ok, "缺 schemaVersion").toBe(true)
+
+    const noFactIds = { ...base }
+    delete noFactIds.factIds
+    expect(parsePlanEnvelope(noFactIds).ok, "缺 factIds").toBe(true)
+
+    // 全缺，只剩 goal + actions：仍然能推出 kind=plan 并接受。
+    const bare = { goal: base.goal, actions: base.actions }
+    const result = parsePlanEnvelope(bare)
+    expect(result.ok, "只剩 goal + actions").toBe(true)
+    if (result.ok) {
+      expect(result.value.kind).toBe("plan")
+      expect(result.value.factIds).toEqual([])
+    }
+  })
+
+  /**
+   * **放宽不等于什么都收**：`kind` 推断不出来时仍然必须拒绝 ——
+   * 那时确实不知道它想做图、想提问、还是只想回答。
+   */
+  it("still refuses when the kind cannot be inferred from the content", () => {
+    expectRejected(parsePlanEnvelope({ goal: "说不清要干什么" }), "unknown_kind")
+  })
+
+  it("still requires goal and actions on the plan branch", () => {
+    const base = validPlan() as Record<string, unknown>
+    const noGoal = { ...base }
+    delete noGoal.goal
+    expectRejected(parsePlanEnvelope(noGoal), "invalid_type")
+
+    const noActions = { ...base }
+    delete noActions.actions
+    expectRejected(parsePlanEnvelope(noActions), "invalid_type")
+  })
+
+  /** 给了但给错，仍然要报 —— 放宽的是"缺失"，不是"错误"。 */
+  it("still rejects a schemaVersion that is present but wrong", () => {
+    expectRejected(parsePlanEnvelope({ ...(validPlan() as object), schemaVersion: "mathcanvas.plan.v0" }), "schema_version_mismatch")
+  })
+
   it("rejects unknown top-level fields", () => {
     expectRejected(parsePlanEnvelope({ ...(validPlan() as object), authorised: true }), "unknown_field")
   })
