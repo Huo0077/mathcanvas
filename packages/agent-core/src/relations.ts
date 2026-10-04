@@ -175,3 +175,64 @@ export function verifyRelations(relations: readonly Relation[], lookup: Relation
   })
   return { ok: failures.length === 0, failures }
 }
+
+/**
+ * 关系关键词表：**只在这里定义一次**（沿用 `underdetermined.ts` 把关键词写成唯一来源的做法，
+ * 避免"提示词说一套、判据认另一套"两处分叉）。
+ *
+ * 覆盖度**只查"有没有回应"**，不试图从自然语言里抠出"是哪四个点"—— 那是模型声明表的职责
+ * （设计 §5.2）。这条边界必须同时写进提示词，否则模型会以为系统也在解析。
+ *
+ * 关于 `//`：题面里出现两个斜杠（例如"平面 // 平面"）是平行的一种写法，认它。
+ */
+const RELATION_KEYWORDS: readonly { kind: RelationKind; keywords: readonly string[] }[] = [
+  { kind: "perpendicular", keywords: ["垂直", "⊥", "perp"] },
+  { kind: "parallel", keywords: ["平行", "∥", "//", "水平"] },
+  { kind: "coplanar", keywords: ["共面"] },
+  { kind: "equalLength", keywords: ["等长", "长度相等", "相等"] },
+  { kind: "midpoint", keywords: ["中点"] },
+  { kind: "ratio", keywords: ["比例", "之比", "比值", "比"] }
+]
+
+/**
+ * **一个关系被声明时，它的英文种类名本身就构成回应**：模型写 `kind: "ratio"` 时，
+ * `ratio` 就是它在回应"比例"。所以判定"有没有回应"要把**声明表里的 kind** 一起看 ——
+ * 否则中文提示词与英文 kind 之间那道语言缝会把一次正确的声明误判成漏声明。
+ *
+ * 这里**必须用集合精确匹配，不能用子串**：曾经写成 `declaredText.includes('"perp"')`，
+ * 而 `JSON.stringify(["parallel"])` 里的 `"parallel"` 含有 `"perp` 这一段 ——
+ * 于是"声明了平行"被误判成"已经回应了垂直"，漏声明就这么静默通过了。
+ * 字符串包含关系在这里是**恰好会出错**的那种便利写法。
+ */
+function declaredKinds(declared: readonly Relation[]): Set<RelationKind> {
+  return new Set(
+    declared
+      .map((relation) => relation.kind)
+      .filter((kind): kind is RelationKind => RELATION_KEYWORDS.some((entry) => entry.kind === kind))
+  )
+}
+
+/** 原话里点名了哪些关系种类（与声明表无关，只看用户说了什么）。 */
+export function relationKindsInText(prompt: string): Set<RelationKind> {
+  const lowered = prompt.toLowerCase()
+  const found = new Set<RelationKind>()
+  for (const entry of RELATION_KEYWORDS) {
+    if (entry.keywords.some((keyword) => lowered.includes(keyword.toLowerCase()))) found.add(entry.kind)
+  }
+  return found
+}
+
+/**
+ * 原话点名、而声明表里**没有回应**的关系种类。
+ *
+ * **只查漏、不查多**：模型可以补充题面隐含的关系（例如由 ⊥ 推出的事实），但不能漏掉题面
+ * 明说的。漏掉就是设计 §5.2 要挡的那类静默错误 —— 系统会宣布"关系全部成立"，而漏掉的那条
+ * 根本没人验过。
+ *
+ * 只把**白名单里的 kind** 算作回应：模型若写了 `kind: "tangent"`（内核没有判据的关系），
+ * 那不算回应了任何东西，不能让"比例"这类要求被一个未知种类蒙混过去。
+ */
+export function missingRelationKinds(prompt: string, declared: readonly Relation[]): RelationKind[] {
+  const answered = declaredKinds(declared)
+  return [...relationKindsInText(prompt)].filter((kind) => !answered.has(kind))
+}

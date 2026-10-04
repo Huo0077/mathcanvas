@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import { diagnoseConstraints3, type Vector3 } from "@draw/geometry-kernel"
 import type { ConstraintSpec, PrimitiveSpec } from "@draw/dsl"
 
-import { RELATION_TOLERANCE, relationResidual, verifyRelations, type Relation, type RelationTarget } from "./relations"
+import { RELATION_TOLERANCE, missingRelationKinds, relationKindsInText, relationResidual, verifyRelations, type Relation, type RelationTarget } from "./relations"
 
 /**
  * **关系判据**（设计 2026-10-03 §5.3）。
@@ -145,6 +145,73 @@ describe("verifyRelations", () => {
 
   it("accepts an empty declaration list as vacuously satisfied", () => {
     expect(verifyRelations([], lookup)).toEqual({ ok: true, failures: [] })
+  })
+})
+
+/**
+ * **覆盖度校对**（设计 2026-10-03 §5.2）。
+ *
+ * 它防的是这一类静默错误：题面明说"PA ⊥ 平面 ABCD、BC ∥ AD"，模型只声明了平行，
+ * 于是"垂直"这条**根本没人验**，而系统照样宣布"关系全部成立"。
+ *
+ * 边界同样重要：覆盖度**只查"有没有回应"**，不试图从自然语言里抠出是哪四个点 ——
+ * 那是模型声明表的职责。第一、三条用例把这条边界钉住。
+ */
+describe("relation coverage", () => {
+  it("finds the relation keywords in the user's own words", () => {
+    const prompt = "在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，BC ∥ AD，AB ⊥ AD，画出这个四棱锥"
+
+    const kinds = relationKindsInText(prompt)
+
+    expect(kinds.has("perpendicular")).toBe(true)
+    expect(kinds.has("parallel")).toBe(true)
+  })
+
+  it("demands an answer for every keyword the prompt used", () => {
+    const prompt = "在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，BC ∥ AD"
+
+    // 模型只声明了平行，漏掉了垂直 → 必须报出来。
+    expect(missingRelationKinds(prompt, [{ kind: "parallel", targets: [] }])).toEqual(["perpendicular"])
+  })
+
+  it("does not demand a kind the prompt never mentioned", () => {
+    // 只说了共面，就只该要求共面；不能因为"没声明垂直"而报错。
+    expect(missingRelationKinds("四个点共面", [{ kind: "coplanar", targets: [] }])).toEqual([])
+    expect(missingRelationKinds("画一个四棱锥，底面是矩形", [])).toEqual([])
+  })
+
+  it("recognises the metric relations by their Chinese phrasings", () => {
+    expect(relationKindsInText("M 是 AD 的中点").has("midpoint")).toBe(true)
+    expect(relationKindsInText("AB 与 CD 等长").has("equalLength")).toBe(true)
+    expect(relationKindsInText("BC 与 AD 的长度相等").has("equalLength")).toBe(true)
+    expect(relationKindsInText("BC 与 AD 之比为 3 比 2").has("ratio")).toBe(true)
+    expect(relationKindsInText("这四个点共面").has("coplanar")).toBe(true)
+  })
+
+  it("does not read a point name as a ratio", () => {
+    // 裸的点名里有 "P:" / "AD:"，不能把冒号当成比例号。
+    expect(relationKindsInText("在四棱锥 P-ABCD 中，PA 垂直 平面 ABCD").has("ratio")).toBe(false)
+  })
+
+  it("does not read an unknown declared kind as a ratio", () => {
+    // 放行名单里没有的种类不许被当成"已经回应了比例"。
+    const unknown = [{ kind: "tangent" } as unknown as Relation]
+    expect(missingRelationKinds("BC 与 AD 之比为 3 比 2", unknown)).toEqual(["ratio"])
+  })
+
+  it("counts a declared kind as answering its own Chinese phrasing", () => {
+    // 中文题面 vs 英文 kind 之间那道语言缝：声明了 ratio 就是回应了"比例"。
+    expect(missingRelationKinds("BC 与 AD 之比为 3 比 2", [{ kind: "ratio", targets: [] }])).toEqual([])
+    expect(missingRelationKinds("这四个点共面", [{ kind: "coplanar", targets: [] }])).toEqual([])
+  })
+
+  it("is not fooled by one kind name containing another as a substring", () => {
+    // **真踩过的坑**：`JSON.stringify(["parallel"])` 里含有 `"perp` 这一段，
+    // 于是"用子串判断声明表里有没有 perpendicular"会**误判为已回应**，
+    // 漏掉的垂直就这么静默通过了。这条用例专门钉住它。
+    expect(missingRelationKinds("PA 垂直 平面 ABCD，BC 平行 AD", [{ kind: "parallel", targets: [] }])).toEqual(["perpendicular"])
+    // 反向：声明了垂直、漏了平行，同样必须报出来。
+    expect(missingRelationKinds("PA 垂直 平面 ABCD，BC 平行 AD", [{ kind: "perpendicular", targets: [] }])).toEqual(["parallel"])
   })
 })
 
