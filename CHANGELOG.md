@@ -1090,3 +1090,10 @@ commit_rejected: action_compile: envelope.actions[1]: operation 0: section plane
 - 当前代码基线固定为 `b1ee3d3`，上一轮文档路线提交为 `9fb64e0`；当前门禁读数以 `docs/current-status.md` §一为准，历史文档中的旧数字保留为历史记录，不再作为当前状态。
 - README 现在链接完整下一阶段 N1–N6 路线：统一数学 IR、约束/非线性求解、动态拖动保持、开放题编译与真实 provider 评测、形式证明出口。
 - 修正了当前状态中把“修复前问题”与“当前未完成任务”混在一起的表述，明确真实 provider、用户走查和 MSI 验收仍未完成。
+## 2026-10-05 —— N1 统一数学状态 IR 与自由度诊断（在默认关闭的 flag 之后）
+
+- 新增 `packages/agent-core/src/obligationIR.ts`（题设/目标/自由选择的统一状态，与旧结构双向兼容且有无损断言）、`constraintIR.ts`（`reportFreeDegrees`：逐对象自由度、约束残差、冲突集合与未支持集合）、`claimEvidence.ts`（证据状态词表 + 候选结果 → 证据状态的显式映射），以及 `apps/web/src/agent/featureFlags.ts`（五个开关，**默认全部关闭**）。
+- **兼容契约**：`parseDiagramObligations` / `DiagramObligationSet` 未改；`verifyDiagramObligations(set, plan, candidate, base?)` 前四个形参逐字未动，IR 经可选尾参与兼容适配层接入。`obligationIR` 缺省为**关**，关闭时报告形状与 `b1ee3d3` 逐字相同（有用例钉住键集合），且开关由**应用层**持有、随既有编译入参穿过 Worker 边界。
+- **三个真缺陷**（复核发现，全部带回归）：① `no_witness` 曾被映射成证据状态 `failed`（把"我还不知道"说成"我知道它不是"），改为 `unknown`，冲突结论留给 N2 的 solver 报 `inconsistent`；② 受约束点的自由度按"有无绑定"而非绑定**种类**计（线上点报 3，与文件头契约的 1 矛盾），已按 `free=2 / onPath=1 / derived=0` 修正，2D 与 3D 两组用例经变异证明互不掩盖；③ 生产 Worker 策略（`createWorkerCompileStrategy`）不转发开关，使开关在真实应用里**永不生效**，已补转发并让**真实策略**驱动跨线程用例，`agentNextPhaseFlags()` 由此有了生产调用点。
+- **门禁**（控制器在 `f997b3f` 上复跑，非采信实施者）：全库 **292 文件 / 3362 通过 + 1 todo / 0 失败**（439 s）、`typecheck` exit 0、`lint` exit 0（**0 error / 13 warning**，与基线逐条相同）。
+- **本批不改变默认行为、也不新增可判定的题型**：题设覆盖面、确认门禁与用户可见文案未变；真实 provider 准确率、求解器状态机与拖动保持关系仍未测。

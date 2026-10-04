@@ -1,6 +1,6 @@
 # 下一阶段 Agent 完整升级实施计划
 
-> **状态（复核）：设计已批准、尚未实施。** 本计划对应 `docs/superpowers/specs/2026-10-04-agent-full-next-phase-design.md`；每个阶段必须先写 RED，再实现 GREEN，再跑全量门禁，最后单独提交。
+> **状态：N1 已实施并复核（2026-10-05，提交 `acd3bd5` / `2d62c4d` / `b5b33f9` / `f997b3f`）；N2–N6 尚未实施。** 本计划对应 `docs/superpowers/specs/2026-10-04-agent-full-next-phase-design.md`；每个阶段必须先写 RED，再实现 GREEN，再跑全量门禁，最后单独提交。
 
 **Goal:** 在 `b1ee3d3` 的静态题设核验之上，逐步实现约束求解、动态拖动保持、开放题编译、真实 provider 评测和形式证明出口。
 
@@ -105,13 +105,17 @@ export interface ClaimEvidence {
 }
 ```
 
-- [ ] **RED：** 用当前三棱锥题面断言 `given/goal/free_choice`、来源区间、支持/未支持和旧字段兼容；断言 `PlanCompiler → DraftStore → Worker` 不丢 IR。
-- [ ] **Feature flag：** N1 创建 `obligationIR/witnessSearch/constrainedDrag/openProblemCompiler/proofExport` 五个独立开关，默认 `false`；关闭时跑旧静态路径回归。
-- [ ] **RED 命令：** `npm.cmd exec -- vitest run packages/agent-core/src/obligationIR.test.ts --maxWorkers=1`；预期因文件/接口不存在失败。
-- [ ] **GREEN：** 实现 IR 和兼容适配，不让模型自报 relations 取代原话清单。
-- [ ] **GREEN 命令：** 同上；再跑 `npm.cmd exec -- vitest run packages/agent-core/src/diagram*.test.ts packages/agent-core/src/relations.test.ts --maxWorkers=1`。
-- [ ] 增加 `reportFreeDegrees(document, constraints)`，返回对象自由度、约束残差、冲突集合和未支持集合。
-- [ ] **提交检查点：** `git commit -m "feat(agent-core): unify geometry obligation evidence"`。
+- [x] **RED：** 用当前三棱锥题面断言 `given/goal/free_choice`、来源区间、支持/未支持和旧字段兼容；断言 `PlanCompiler → DraftStore → Worker` 不丢 IR。
+- [x] **Feature flag：** N1 创建 `obligationIR/witnessSearch/constrainedDrag/openProblemCompiler/proofExport` 五个独立开关，默认 `false`；关闭时跑旧静态路径回归。
+- [x] **RED 命令：** `npm.cmd exec -- vitest run packages/agent-core/src/obligationIR.test.ts --maxWorkers=1`；预期因文件/接口不存在失败。
+- [x] **GREEN：** 实现 IR 和兼容适配，不让模型自报 relations 取代原话清单。
+- [x] **GREEN 命令：** 同上；再跑 `npm.cmd exec -- vitest run packages/agent-core/src/diagram*.test.ts packages/agent-core/src/relations.test.ts --maxWorkers=1`。
+- [x] 增加 `reportFreeDegrees(document, constraints)`，返回对象自由度、约束残差、冲突集合和未支持集合。
+- [x] **提交检查点：** `git commit -m "feat(agent-core): unify geometry obligation evidence"`。
+
+> **N1 执行记录（2026-10-05）：** 提交 `acd3bd5`（IR + 兼容层 + flag）、`2d62c4d`（R6 缺省改为关）、`b5b33f9`（把开关穿到真正的 Worker 策略并接线应用层）、`f997b3f`（2D 点自由度按 binding 种类判）。门禁读数只写在 `docs/current-status.md` §一（当次实测）；过程与三次复核的发现见 `docs/project-progress.md`。
+>
+> **与计划原文的偏差（已裁决，未做即是有意不做）：** ① `contracts.ts` / `relations.ts` **未改** —— 设计明文"模型自报 `relations` 不是 IR 的来源，只能作为附加线索"，relation 判据已作为 `perpendicular`/`parallel` 的 obligation 与既有 residual 路径存在，硬塞一等公民属 YAGNI（口径写在 `obligationIR.ts` 头注释）。② `GeometryObligation` 多了一个可选 `geometry.planeLengths` —— 扁平 `targets` 无法还原"每个平面几个点名"，不补就只能猜切点。③ N1 只接线 `obligationIR` 一个开关，另外四个是给 N2–N5 留的占位（不得绕过）。
 
 ## Phase N2：解析构造、有限数值求解和 WitnessSearch
 
@@ -227,7 +231,7 @@ export type DragSolveResult =
 
 **Files:** `apps/web/src/agent/featureFlags.ts`、`packages/agent-core/src/capabilities.ts`、release gate、README、current-status、feature-catalog、CHANGELOG。
 
-- [ ] N1 开始前先加入 `obligationIR/witnessSearch/constrainedDrag/openProblemCompiler/proofExport` 五个独立 flag，默认关闭。
+- [x] 五个独立 flag 已由 **N1** 创建（`apps/web/src/agent/featureFlags.ts`，默认关闭）——本阶段只做核对，不再重复创建。
 - [ ] 每个 flag 有单元、浏览器和回退用例；关闭 flag 时旧路径行为逐字不变。
 - [ ] 更新所有进度文档和发布门禁；统一记录真实 provider、动态拖动和 proof artifact 证据。
 - [ ] 运行：`npm.cmd run typecheck`、`npm.cmd test`、`npm.cmd run lint`、`npm.cmd run build --workspace @draw/web`、`npm.cmd run test:e2e -- --workers=3`、`npm.cmd run test:rust`、`npm.cmd run test:perf`、`npm.cmd run eval:agent`。
