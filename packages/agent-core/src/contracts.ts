@@ -226,9 +226,35 @@ import type { DraftAction } from "@draw/scene-graph"
 export type EnvelopeAssumptions = string[]
 
 export type PlanEnvelope =
-  | { schemaVersion: string; kind: "plan"; goal: string; factIds: string[]; assumptions?: EnvelopeAssumptions; actions: DraftAction[] }
+  | { schemaVersion: string; kind: "plan"; goal: string; factIds: string[]; assumptions?: EnvelopeAssumptions; relations?: PlanRelations; actions: DraftAction[] }
   | { schemaVersion: string; kind: "clarification"; goal: string; factIds: string[]; assumptions?: EnvelopeAssumptions; questions: string[] }
   | { schemaVersion: string; kind: "answer"; goal: string; factIds: string[]; assumptions?: EnvelopeAssumptions; answer: string; toolResultRefs: string[] }
+
+// ---------------------------------------------------------------- 关系表（设计 2026-10-03 §5.1）
+//
+// 类型在这里**内联**而不是从 `relations.ts` 导入：`relations.ts` 要依赖几何内核的残差，
+// 而 contracts.ts 是这个包最底层的契约文件 —— 让最底层反过来依赖内核会把依赖方向倒过来，
+// 也会让只想读契约的调用方被迫拉进内核。两处的形状由结构化赋值兜住（relations.ts 的值
+// 可直接赋给这里），分叉会在编译期暴露。
+
+/** 本批支持的关系种类。**内核没有判据的关系不许进来**（否则它会悄悄变成"已满足"）。 */
+export type PlanRelationKind = "perpendicular" | "parallel" | "coplanar" | "pointOn" | "equalLength" | "ratio" | "midpoint"
+
+/** 关系目标：第一批**只支持顶点**，用下标约定 `v0`、`v1`…（设计 §2 决定 7）。 */
+export interface PlanRelationTarget {
+  vertex: string
+}
+
+export interface PlanRelation {
+  id?: string
+  kind: PlanRelationKind
+  targets: PlanRelationTarget[]
+  /** `ratio` 用（第二个线段 / 第一个线段）。 */
+  value?: number
+}
+
+/** 题目显式给出的关系表。 */
+export type PlanRelations = PlanRelation[]
 
 export interface ParseError {
   code: string

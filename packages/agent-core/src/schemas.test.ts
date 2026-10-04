@@ -299,6 +299,65 @@ describe("envelope assumptions", () => {
   })
 
   /**
+   * **关系表**（设计 2026-10-03 §5.1）。
+   *
+   * 用户现场：题面只给关系、不给数值（"在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，BC ∥ AD，AB ⊥ AD"）
+   * 时画不出来。解法的第一步是让模型**把题面给的关系逐条声明出来**，系统才能在执行前逐条核验。
+   *
+   * **这个字段当初是被拒的**（实测：`unknown_field@envelope.relations`）—— 因为信封走的是
+   * 严格白名单（`rejectUnknownFields`）。所以这里既钉住"它现在进得来"，也钉住
+   * "它仍然是**具名**放行，不是把白名单整体放宽"。
+   */
+  it("carries the relations the prompt stated, so they can be verified before execution", () => {
+    const plan = validPlan() as Record<string, unknown>
+    plan.relations = [
+      { id: "r1", kind: "perpendicular", targets: [{ vertex: "v0" }, { vertex: "v1" }, { vertex: "v2" }, { vertex: "v3" }, { vertex: "v4" }] },
+      { id: "r2", kind: "parallel", targets: [{ vertex: "v2" }, { vertex: "v3" }, { vertex: "v1" }, { vertex: "v4" }] },
+      { id: "r3", kind: "ratio", targets: [{ vertex: "v0" }, { vertex: "v1" }, { vertex: "v2" }, { vertex: "v3" }], value: 0.5 }
+    ]
+
+    const result = parsePlanEnvelope(plan)
+
+    expect(result.ok).toBe(true)
+    if (result.ok && result.value.kind === "plan") {
+      expect(result.value.relations).toEqual([
+        { id: "r1", kind: "perpendicular", targets: [{ vertex: "v0" }, { vertex: "v1" }, { vertex: "v2" }, { vertex: "v3" }, { vertex: "v4" }] },
+        { id: "r2", kind: "parallel", targets: [{ vertex: "v2" }, { vertex: "v3" }, { vertex: "v1" }, { vertex: "v4" }] },
+        { id: "r3", kind: "ratio", targets: [{ vertex: "v0" }, { vertex: "v1" }, { vertex: "v2" }, { vertex: "v3" }], value: 0.5 }
+      ])
+    }
+  })
+
+  it("treats a plan without relations as having none declared", () => {
+    // 回归底线：**没有这个字段时，行为与今天逐字相同**。
+    const result = parsePlanEnvelope(validPlan())
+    expect(result.ok).toBe(true)
+    if (result.ok && result.value.kind === "plan") expect(result.value.relations).toBeUndefined()
+  })
+
+  it("rejects a relation whose kind is not one we can verify", () => {
+    // 白名单只放行具名字段，**不放行任意 kind**：内核没有判据的关系不许悄悄进来当"已满足"。
+    const plan = validPlan() as Record<string, unknown>
+    plan.relations = [{ kind: "tangent", targets: [{ vertex: "v0" }] }]
+    expectRejected(parsePlanEnvelope(plan), "invalid_type")
+  })
+
+  it("rejects a relation with no targets, and one with an unknown field", () => {
+    const noTargets = validPlan() as Record<string, unknown>
+    noTargets.relations = [{ kind: "parallel", targets: [] }]
+    expectRejected(parsePlanEnvelope(noTargets), "empty_targets")
+
+    const noRelations = validPlan() as Record<string, unknown>
+    // 空表与"没声明"是两件事：声明了却一条都没有，等于什么也没回应，必须报。
+    noRelations.relations = []
+    expectRejected(parsePlanEnvelope(noRelations), "empty_relations")
+
+    const strayField = validPlan() as Record<string, unknown>
+    strayField.relations = [{ kind: "parallel", targets: [{ vertex: "v0" }], tension: 1 }]
+    expectRejected(parsePlanEnvelope(strayField), "unknown_field")
+  })
+
+  /**
    * **用户现场（2026-09-22）**：模型回了一个裸数组（或别的非对象），界面上只有一句
    * `the plan never matched the schema: invalid_type@envelope` —— 谁也没法据此说出模型到底回了什么。
    * 形状必须写进**诊断本身**：它同时也是给修复通道看的（模型据此知道自己错在哪）。

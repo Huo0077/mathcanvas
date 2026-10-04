@@ -1,8 +1,8 @@
-import { PLAN_SCHEMA_VERSION, type DraftAction, type ParseError, type ParseResult, type PlanEnvelope } from "./contracts"
+import { PLAN_SCHEMA_VERSION, type DraftAction, type ParseError, type ParseResult, type PlanEnvelope, type PlanRelation, type PlanRelationKind, type PlanRelationTarget } from "./contracts"
 // 可改字段白名单只有动作层那一份（Fix round 1 / I14）：传输层不再手抄一份更窄的。
 
 import { ACTIONS, type ActionSpec } from "./actionRegistry"
-import { MAX_ACTIONS, isPlainObject, boundedArray, boundedString, fail, readStringArray, quotedName, rejectUnknownFields } from "./schemaReaders"
+import { MAX_ACTIONS, isPlainObject, boundedArray, boundedString, fail, optionalFiniteNumber, readStringArray, quotedName, rejectUnknownFields } from "./schemaReaders"
 
 // 这两个模块的东西**继续从这里出去**：`index.ts` 是 `export * from "./schemas"`，
 // 所以把它们搬走之后必须在这里转出去，否则包的公开面就变了（调用方一行都不用改）。
@@ -109,6 +109,76 @@ function describePlanShape(input: unknown): string {
   return `a ${typeof input}`
 }
 
+/**
+ * 本批能核验的关系种类（设计 2026-10-03 §5.1）。**与 `contracts.ts` 的 `PlanRelationKind` 对齐**，
+ * 由 `const RELATION_KINDS: readonly PlanRelationKind[]` 这一行注解保证：漏一个会在编译期报错。
+ *
+ * 为什么要有这张表而不是"kind 是任意字符串"：内核**没有判据**的关系（例如"相切"）如果被放进来，
+ * 下游核验取不到残差，只能当"无法判定" —— 那是最容易被读成"已满足"的一种状态。
+ */
+const RELATION_KINDS: readonly PlanRelationKind[] = ["perpendicular", "parallel", "coplanar", "pointOn", "equalLength", "ratio", "midpoint"]
+
+/**
+ * 读关系表。
+ *
+ * 只挡**形状**（是不是对象 / kind 认不认识 / targets 是不是非空顶点数组），
+ * **几何含义**留给 `relations.ts` 的残差 —— 那条边界与 `solid.create_polyhedron` 的注释同源：
+ * 传输层不抄一遍几何语义。
+ */
+function readRelations(value: unknown, path: string, errors: ParseError[]): PlanRelation[] | null {
+  const items = boundedArray(value, path, errors)
+  if (!items) return null
+  if (items.length === 0) {
+    errors.push(fail("empty_relations", path, "declare at least one relation, or omit the field"))
+    return null
+  }
+  const relations: PlanRelation[] = []
+  for (const [index, item] of items.entries()) {
+    const itemPath = `${path}[${index}]`
+    if (!isPlainObject(item)) {
+      errors.push(fail("invalid_type", itemPath, "expected a relation object"))
+      continue
+    }
+    rejectUnknownFields(item, ["id", "kind", "targets", "value"], itemPath, errors)
+
+    const kind = item.kind
+    if (typeof kind !== "string" || !RELATION_KINDS.includes(kind as PlanRelationKind)) {
+      errors.push(fail("invalid_type", `${itemPath}.kind`, `expected one of ${RELATION_KINDS.join(" | ")}`))
+      continue
+    }
+    const relationKind = kind as PlanRelationKind
+
+    const rawTargets = boundedArray(item.targets, `${itemPath}.targets`, errors)
+    if (!rawTargets) continue
+    if (rawTargets.length === 0) {
+      errors.push(fail("empty_targets", `${itemPath}.targets`, "a relation needs at least one target vertex"))
+      continue
+    }
+    const targets: PlanRelationTarget[] = []
+    for (const [targetIndex, rawTarget] of rawTargets.entries()) {
+      const targetPath = `${itemPath}.targets[${targetIndex}]`
+      if (!isPlainObject(rawTarget)) {
+        errors.push(fail("invalid_type", targetPath, "expected a target object"))
+        continue
+      }
+      rejectUnknownFields(rawTarget, ["vertex"], targetPath, errors)
+      const vertex = boundedString(rawTarget.vertex, `${targetPath}.vertex`, errors)
+      if (vertex === null) continue
+      targets.push({ vertex })
+    }
+
+    const id = item.id === undefined ? undefined : boundedString(item.id, `${itemPath}.id`, errors)
+    const value = optionalFiniteNumber(item.value, `${itemPath}.value`, errors)
+    relations.push({
+      ...(id === null || id === undefined ? {} : { id }),
+      kind: relationKind,
+      targets,
+      ...(value === null || value === undefined ? {} : { value })
+    })
+  }
+  return relations
+}
+
 /** 解析整个 PlanEnvelope；三个分支的字段集**互不混杂**。 */
 export function parsePlanEnvelope(input: unknown): ParseResult<PlanEnvelope> {
   const errors: ParseError[] = []
@@ -120,7 +190,7 @@ export function parsePlanEnvelope(input: unknown): ParseResult<PlanEnvelope> {
   }
 
   const allowed = kind === "plan"
-    ? ["schemaVersion", "kind", "goal", "factIds", "assumptions", "actions"]
+    ? ["schemaVersion", "kind", "goal", "factIds", "assumptions", "relations", "actions"]
     : kind === "clarification"
       ? ["schemaVersion", "kind", "goal", "factIds", "assumptions", "questions"]
       : ["schemaVersion", "kind", "goal", "factIds", "assumptions", "answer", "toolResultRefs"]
@@ -145,6 +215,21 @@ export function parsePlanEnvelope(input: unknown): ParseResult<PlanEnvelope> {
     : undefined
   const assumptions = !rawAssumptions || rawAssumptions.length === 0 ? undefined : rawAssumptions
 
+  /**
+   * **关系表**（设计 2026-10-03 §5.1）：题目显式给出的几何关系，供执行前逐条核验。
+   *
+   * 只放行**这一个具名字段**，白名单不整体放宽 —— 提示词里"白名单之外的字段一律被拒"
+   * 那条纪律对别的字段仍然成立（实测：这个字段当初就是被 `rejectUnknownFields` 拒掉的）。
+   *
+   * 与 `assumptions` 同一条归一规则：缺省 / 显式 undefined / 空数组都当"没声明"。
+   * 注意**空数组**在这里会被 `readRelations` 报 `empty_relations` —— 声明了却一条都没有，
+   * 等于什么也没回应，不能当"没有声明"混过去。
+   */
+  const rawRelations = "relations" in input && input.relations !== undefined
+    ? readRelations(input.relations, "envelope.relations", errors)
+    : undefined
+  const relations = rawRelations === null ? undefined : rawRelations
+
   if (kind === "plan") {
     const rawActions = boundedArray(input.actions, "envelope.actions", errors)
     if (rawActions && rawActions.length === 0) errors.push(fail("empty_actions", "envelope.actions", "a plan needs at least one action"))
@@ -162,7 +247,7 @@ export function parsePlanEnvelope(input: unknown): ParseResult<PlanEnvelope> {
       actions.push(parsed.value)
     }
     if (errors.length > 0) return { ok: false, errors }
-    return { ok: true, value: { schemaVersion: PLAN_SCHEMA_VERSION, kind, goal: goal as string, factIds: factIds as string[], assumptions, actions } }
+    return { ok: true, value: { schemaVersion: PLAN_SCHEMA_VERSION, kind, goal: goal as string, factIds: factIds as string[], assumptions, relations, actions } }
   }
 
   if (kind === "clarification") {
