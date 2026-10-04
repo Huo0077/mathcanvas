@@ -164,6 +164,52 @@ describe("repair prompt", () => {
 
     expect(prompt).not.toContain("好的，我来画一个")
   })
+
+  /**
+   * **点名缺了哪个顶层字段**（2026-10-04，来自真实运行）。
+   *
+   * 用户现场的模型两次都没给出合法信封：一次连 `kind` 都没有，一次把
+   * `schemaVersion`/`kind`/`goal`/`factIds`/`assumptions` 都写了、**却漏了 `actions`**。
+   * 引擎只回一句 `invalid_type@envelope.actions: expected an array`，模型并不知道
+   * "kind 为 plan 时 actions 必填"这条合同细节，于是第二轮照样漏。
+   *
+   * 修复提示是唯一能让第二轮不同的东西，所以它必须点名**具体缺哪个键**。
+   */
+  it("names the missing top-level fields, because 'expected an array' tells the model nothing", () => {
+    // 复刻现场那次：goal / assumptions 都写了，就是没有 actions。
+    const withoutActions = JSON.stringify({
+      schemaVersion: "mathcanvas.plan.v1",
+      kind: "plan",
+      goal: "建立满足题设的三棱锥",
+      factIds: [],
+      assumptions: ["取 BD 在 x 轴上"]
+    })
+    const result = parseStrictJsonEnvelope(withoutActions)
+    if (result.ok) throw new Error("expected a failure")
+
+    const prompt = describeRepairPrompt(result)
+
+    expect(prompt).toContain("actions")
+    expect(prompt).toContain("缺了顶层必填字段")
+  })
+
+  it("names kind as missing when the envelope has no kind at all", () => {
+    // 复刻现场第一次尝试：连 kind 都没有。
+    const result = parseStrictJsonEnvelope(JSON.stringify({ schemaVersion: "mathcanvas.plan.v1", actions: [{}] }))
+    if (result.ok) throw new Error("expected a failure")
+
+    const prompt = describeRepairPrompt(result)
+
+    expect(prompt).toContain("kind")
+  })
+
+  it("stays silent about missing fields when the payload is unreadable", () => {
+    // 不是合法 JSON / 不是对象时**不猜** —— 只给原有的字段路径错误。
+    const result = parseStrictJsonEnvelope("not json at all")
+    if (result.ok) throw new Error("expected a failure")
+
+    expect(describeRepairPrompt(result)).not.toContain("缺了顶层必填字段")
+  })
 })
 
 describe("channel dispatch", () => {

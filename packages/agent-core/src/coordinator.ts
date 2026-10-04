@@ -484,7 +484,21 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
           const next = repairRequestFor(result.errors, repairsStarted + 1)
           if (repairsStarted >= MAX_REPAIR_ATTEMPTS || next.attempt > MAX_REPAIR_ATTEMPTS) break
           repairsStarted += 1
-          repair = { ...next, hint: describeRepairPrompt({ ok: false, reason: "schema_invalid", errors: result.errors, payload: "", channel: "fenced_text" }) }
+          /**
+           * **把被拒的那份东西本当"证据"传下去**（2026-10-04，来自真实运行）。
+           *
+           * 这里原先写的是 `payload: ""`。更麻烦的是：协调器拿到的是**解析后的对象**
+           *（文本通道下由 `parseModelEnvelope` 解析，工具通道下由 `modelPlanner` 交过来），
+           * 所以**两条路都拿不到原始文本** —— `describeRepairPrompt` 因此永远无法说出
+           * "你缺了哪个键"，只能回一句 `invalid_type@envelope.actions: expected an array`。
+           * 而那句话对模型没有新增信息（它不知道"plan 必须有 actions"这条合同细节），
+           * 于是用户现场**第二次照样漏**。
+           *
+           * 这里把它重新序列化一遍：`missingEnvelopeFields` 只读**键名**，不引用内容，
+           * 所以与"不回显模型原话"那条纪律不冲突。
+           */
+          const rejected = JSON.stringify(outcome.plan)
+          repair = { ...next, hint: describeRepairPrompt({ ok: false, reason: "schema_invalid", errors: result.errors, payload: rejected, channel: "fenced_text" }) }
           continue
         }
 

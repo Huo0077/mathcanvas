@@ -80,6 +80,43 @@ async function drive(coordinator: ReturnType<typeof createCoordinator>, request:
   return events
 }
 
+/**
+ * **信封形状失败时，修复提示必须点名缺了哪个键**（2026-10-04，来自真实运行）。
+ *
+ * 用户现场模型两次都没给出合法信封：一次连 `kind` 都没有，一次把
+ * `schemaVersion`/`kind`/`goal`/`factIds`/`assumptions` 都写了、**却漏了 `actions`**，
+ * 引擎只回 `invalid_type@envelope.actions: expected an array` —— 这句话对模型没有新增信息，
+ * 所以第二次照样漏。
+ *
+ * 根因是协调器把 `payload` 硬写成 `""`（而且它拿到的是**对象**、不是文本），
+ * 于是 `describeRepairPrompt` 永远看不到被拒的那份东西。这条用例钉住"第二轮真的不一样了"。
+ */
+describe("repair hint for a malformed envelope", () => {
+  it("names the top-level key that is missing, instead of only saying 'expected an array'", async () => {
+    // 复刻现场：除 actions 之外都写了。
+    const missingActions = {
+      schemaVersion: "mathcanvas.plan.v1",
+      kind: "plan",
+      goal: "建立满足题设的三棱锥",
+      factIds: [],
+      assumptions: ["取 BD 在 x 轴上"]
+    } as unknown as PlanEnvelope
+
+    const harness = makeHarness({ plan: () => ({ plan: missingActions, requestId: "req", attemptId: "attempt" }) })
+    const events = await drive(harness.coordinator, { run, userMessage: "画一个三棱锥" })
+
+    // 第一次被拒 → 修复一次 → 第二次仍不合格 → 失败。
+    expect(events.at(-1)?.phase).toBe("failed")
+    const requests = vi.mocked(harness.planner.plan).mock.calls.map((call) => call[0])
+    expect(requests.length).toBeGreaterThanOrEqual(2)
+
+    const hint = requests[1].repair?.hint ?? ""
+    // 关键：提示里必须出现"actions"这个**键名**，而不是只有 "expected an array"。
+    expect(hint).toContain("actions")
+    expect(hint).toContain("缺了顶层必填字段")
+  })
+})
+
 describe("coordinator success paths", () => {
   it("walks a read-only run to completion and never touches the document", async () => {
     const harness = makeHarness({ plan: () => ({ plan: answerEnvelope(), requestId: "req-1", attemptId: "attempt-1" }) })

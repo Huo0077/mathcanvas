@@ -568,11 +568,23 @@ export function describeCompileRepairPrompt(repair: RepairRequest, diagnostics: 
     ? failed.map((entry) => `${entry.stage}/${entry.code}@${entry.path}: ${entry.detail}`)
     : repair.errors.map((error) => `${error.code}@${error.path}: ${error.detail}`)
   const layers = [...new Set(failed.map((entry) => entry.stage))]
+  /**
+   * **补一句顶层合同的提醒**（2026-10-04，来自真实运行）。
+   *
+   * 用户现场模型两次都没给出合法信封：一次连 `kind` 都没有，一次写了
+   * `schemaVersion`/`kind`/`goal`/`factIds`/`assumptions` 却**漏了 `actions`**。
+   * 引擎只说 `invalid_type@envelope.actions: expected an array`，而模型并不知道
+   * "kind 为 plan 时 actions 必填"这条合同细节 —— 所以它第二轮照样漏。
+   * 这里在**信封类失败**时把必需字段逐字重申一遍（只对涉及 `envelope` 的失败加，
+   * 免得平常的字段级修复被这句噪音淹没）。
+   */
+  const envelopeFailure = failed.some((entry) => entry.path.startsWith("envelope")) || repair.errors.some((error) => error.path.startsWith("envelope"))
   return [
     layers.length > 0 ? `上一份计划没有通过编译管线，卡在：${layers.join(" / ")}。` : "上一份计划没有通过编译管线。",
     "原因如下（层 + 字段路径 + 原因）：",
     lines.join("; "),
     repair.allowedChanges.length > 0 ? `这次只允许改这几处：${repair.allowedChanges.join(", ")}` : "这次只允许改上面点名的字段。",
+    ...(envelopeFailure ? ["提醒：kind 为 plan 时，顶层必须有 schemaVersion、kind、goal、factIds、**actions**（数组，至少一项）。"] : []),
     "请重新返回一份完整的计划信封，不要附加任何解释文字。"
   ].join("\n")
 }

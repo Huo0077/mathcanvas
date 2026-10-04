@@ -155,7 +155,47 @@ export function describeRepairPrompt(failure: EnvelopeParseFailure): string {
   return [
     "上一轮的输出没有被接受，原因如下（字段路径 + 原因）：",
     paths,
+    /**
+     * **点名缺了哪个顶层字段**（2026-10-04 加，来自真实运行）。
+     *
+     * 用户现场：模型两次都没给出合法的信封 —— 第一次连 `kind` 都没有，第二次把
+     * `schemaVersion` / `kind` / `goal` / `factIds` / `assumptions` 都写了，**却漏了 `actions`**，
+     * 于是引擎只说 `invalid_type@envelope.actions: expected an array`。
+     * 那句话对模型没有任何新增信息（它并不知道"一个 plan 必须有 actions"这条合同细节），
+     * 所以第二次照样漏。这里把**具体缺的键**列出来 —— 这是唯一能让第二轮真正不同的信息。
+     */
+    ...missingEnvelopeFields(failure.payload),
     "请只返回一个 JSON 对象，不要附加任何解释文字。",
     formatAdvice
   ].join("\n")
+}
+
+/** 顶层必需字段，按 `kind` 分。**只列键名，不回显模型的内容。** */
+const REQUIRED_ENVELOPE_FIELDS: Record<string, readonly string[]> = {
+  plan: ["schemaVersion", "kind", "goal", "factIds", "actions"],
+  clarification: ["schemaVersion", "kind", "goal", "factIds", "questions"],
+  answer: ["schemaVersion", "kind", "goal", "factIds", "answer", "toolResultRefs"]
+}
+
+/**
+ * 从被拒的原始输出里认出**缺了哪些顶层必需字段**，返回一行给修复提示。
+ *
+ * 认不出（不是对象、不是合法 JSON、没有 kind）就返回空数组 —— **不猜**。
+ * 这条与"不回显模型原文"并不冲突：它只说**键名**，不说内容。
+ */
+function missingEnvelopeFields(payload: string): string[] {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(payload)
+  } catch {
+    return []
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return []
+  const record = parsed as Record<string, unknown>
+  const kind = typeof record.kind === "string" ? record.kind : "plan"
+  const required = REQUIRED_ENVELOPE_FIELDS[kind]
+  if (!required) return []
+  const missing = required.filter((field) => !(field in record))
+  if (missing.length === 0) return []
+  return [`你这一份**缺了顶层必填字段**：${missing.join("、")}。${kind === "plan" ? "kind 为 plan 时 actions 必填，且必须是数组。" : ""}`]
 }

@@ -91,8 +91,20 @@ function channelAdvice(channel: ModelChannel): string {
 /** 输出形状：三个分支各自**逐字**给出，因为多一个字段就会被拒。 */
 function outputShapes(canPlan: boolean): string[] {
   const shapes: string[] = []
+  /**
+   * **先把"哪几个键是必填"说成一个短句**，再给例子（2026-10-04，来自真实运行）。
+   *
+   * 用户现场的模型两次都没给出合法信封：一次连 `kind` 都没有，一次把
+   * `schemaVersion`/`kind`/`goal`/`factIds`/`assumptions` 全写了、**却漏了 `actions`**，
+   * 引擎只回 `invalid_type@envelope.actions: expected an array`。
+   * 这份提示词后面有一大段"关系怎么给"的说明，模型很可能把注意力都放在那里，
+   * 反而漏掉了信封本身的必填键 —— 所以把合同单独提前、说短。
+   */
+  shapes.push("**每个分支的顶层必填键**：`schemaVersion`、`kind`、`goal`、`factIds`，以及 —— `kind` 为 `plan` 时**必须有 `actions`（非空数组）**；为 `clarification` 时必须有 `questions`；为 `answer` 时必须有 `answer` 与 `toolResultRefs`。**少一个键整份计划就会被拒。**")
   if (canPlan) {
-    shapes.push(`计划：${JSON.stringify({ schemaVersion: PLAN_SCHEMA_VERSION, kind: "plan", goal: "一句话说清这次要做什么", factIds: [], assumptions: [], relations: [{ id: "r1", kind: "perpendicular", targets: [{ vertex: "v0" }, { vertex: "v1" }] }], actions: [{ actionId: "从下面的动作菜单里选", actionKey: "本次运行内唯一的名字", factIds: [], inputs: {} }] })}`)
+    // 例子里**不放 `relations`**：它是可选的，而且"perpendicular 只给 2 个顶点"与判据要求的
+    // 3 / 5 个自相矛盾 —— 放一个自相矛盾的例子只会把模型带偏。
+    shapes.push(`计划：${JSON.stringify({ schemaVersion: PLAN_SCHEMA_VERSION, kind: "plan", goal: "一句话说清这次要做什么", factIds: [], assumptions: [], actions: [{ actionId: "从下面的动作菜单里选", actionKey: "本次运行内唯一的名字", factIds: [], inputs: {} }] })}`)
   }
   /**
    * **"不要编数值"与"先做别反问"的冲突在这里解开**（设计 2026-10-03 §5.5）。
