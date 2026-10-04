@@ -1,6 +1,7 @@
 ﻿import { triangleCenter2, validatePrismInput, type Vector3 } from "@draw/geometry-kernel"
 
 import type { PlanDiagnostic, StructuredAssumption } from "./contracts"
+import { isInvariantRequest } from "./invariantRequest"
 import { DEFAULT_DYNAMIC_POINT_PARAMETER, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SPAN, DEFAULT_SLOPE, WITNESS_TRIANGLE, defaultPrismBasePolygon, defaultPrismVector } from "./localPlanDefaults"
 import type { Relation } from "./relations"
 import type { PolyhedronWitness } from "./solver/solverContracts"
@@ -102,19 +103,15 @@ export type WitnessSelection =
   | { status: "symbolic"; value: SymbolicWitness; assumption: StructuredAssumption; considered: readonly string[]; diagnostics: PlanDiagnostic[] }
   | { status: "rejected"; value: null; diagnostics: PlanDiagnostic[]; considered: readonly string[] }
 
-/** "任意/恒定/定值"这类要求。**判据只有一个**：这一层与提示词共用同一份关键词。 */
-const SYMBOLIC_KEYWORDS = ["任意", "恒", "定值", "不变", "全都成立", "invariant", "arbitrary", "for all", "any point", "constant"]
-
-export function isInvariantRequest(prompt: string | undefined): boolean {
-  if (!prompt) return false
-  const lowered = prompt.toLowerCase()
-  // “任意”限定的是图形族，不限定用户此刻要交付的东西。
-  // 静态画图允许选一张满足题设的示例；普遍证明与持续移动仍要保留参数。
-  if (/(?:求证|证明|恒定|定值|不变|全都成立|invariant|for all|constant)/i.test(lowered)) return true
-  if (/(?:任意.*(?:移动|运动|变化)|任意动点|随.*变化)/.test(lowered)) return true
-  if (/(?:画|作|绘|示意图)/.test(lowered)) return false
-  return SYMBOLIC_KEYWORDS.some((keyword) => lowered.includes(keyword.toLowerCase()))
-}
+/**
+ * **"题目要求保留符号"的判据搬去了 `./invariantRequest.ts`**（复核裁决 R29）。
+ *
+ * 它被 `planCompiler.ts` 直接使用，留在这里会形成模块级环
+ * `planCompiler → underdetermined → solver/witnessSearch → planCompiler`；
+ * 判据本身只依赖字符串，抽成叶子模块即可断环。这里 re-export，
+ * 既有调用方（`underdetermined.test.ts`、`planCompiler` 之外的消费者、包根 barrel）都不用动。
+ */
+export { isInvariantRequest }
 
 /** 每个族在"必须保留符号"时留下的符号名。 */
 const SYMBOLS_BY_KIND: Record<WitnessKind, readonly string[]> = {

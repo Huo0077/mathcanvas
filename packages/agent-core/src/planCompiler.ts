@@ -18,7 +18,15 @@ import { parseObligationWithLegacy } from "./obligationIR"
 import { verifyDiagramObligations, type DiagramVerificationReport } from "./diagramVerification"
 import { verifyRelations, type RelationLookup } from "./relations"
 import { parsePlanEnvelope, repairRequestFor } from "./schemas"
-import { isInvariantRequest } from "./underdetermined"
+/**
+ * `isInvariantRequest` 从**叶子模块**导入（复核裁决 R29）。
+ *
+ * 它原先住在 `./underdetermined`，而那条边会让模块图成环：
+ * `planCompiler → underdetermined → solver/witnessSearch → planCompiler`。
+ * 判据本身只依赖字符串，搬到一个不 import 任何本包模块的叶子文件即可断环；
+ * `underdetermined` 仍然 re-export 同一个函数，既有调用方与本行的**语义**都没有变。
+ */
+import { isInvariantRequest } from "./invariantRequest"
 import { cubeCenterFrom, cubeEdgeLengthFrom, explicitlyRequestsCube } from "./geometryIntent"
 
 /**
