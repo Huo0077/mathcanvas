@@ -225,6 +225,14 @@ describe("constructPyramidWitness", () => {
     expect(at("P").y).toBeCloseTo(A.y, 12)
     // 求出来的高必须写进 freeValues 让用户看见。
     expect(freeValues.some((entry) => entry.includes("60"))).toBe(true)
+    /**
+     * 用户可见的 explanation 必须**如实**说这是有界求根而不是解析闭式
+     *（复核 round 1 Important 1 ③：早先一律写"由题面条件解析求出"）。
+     */
+    const origin = result.witness.assumptions.find((entry) => entry.includes("顶点 P 取在垂足 A 正上方"))
+    expect(origin, `assumptions: ${JSON.stringify(result.witness.assumptions)}`).toBeDefined()
+    expect(origin).toContain("求根")
+    expect(origin).toContain("非解析闭式")
   })
 
   it("rejects an apex that projects onto a base-ring vertex with a structured reason instead of throwing", () => {
