@@ -42,6 +42,16 @@ export * from "./locus-sampling"
 export * from "./polynomial"
 export * from "./exact-forms"
 /**
+ * **见证构造与残差**（N2 子任务 2a）。
+ *
+ * 扁平导出（而不是命名空间）：`constructWitnessShape` / `candidateResiduals` 这些名字
+ * 不与既有导出冲突，而 `agent-core` 的见证搜索（2b）要直接从包根取用它们。
+ * 这一层只做纯几何构造与形状 / 尺度判据，**不 import `@draw/agent-core`**（控制器 R12：
+ * 内核依赖方向是单向的，反向 import 会成环）；题设验收仍在 `verifyDiagramObligations`。
+ */
+export * from "./witness/constructors"
+export * from "./witness/residuals"
+/**
  * Reactive DAG 切片（设计规格 §4）。
  *
  * 用**命名空间**导出而不是 `export *`：`ReactiveNode` / `ReactiveGraph` 这两个名字已经被
