@@ -248,6 +248,87 @@ describe("solid family", () => {
     expect(primitives.find((primitive) => primitive.type === "polyhedron3")).toMatchObject({ id: "solid-1", construction: { kind: "fromPoints" } })
   })
 
+  /**
+   * **绕向不一致时机械修正**（2026-10-04，真实运行）。
+   *
+   * 用户现场的模型给了正确的三棱锥顶点与四个面，但四个面的顶点顺序**有正有反**，
+   * 内核按"相邻面必须以相反方向走同一条棱"直接拒。而绕向**完全由面环集合决定** ——
+   * 给定一张封闭壳的面集合，自洽绕向只有一个解（整体翻不翻转用有向体积定正负）。
+   *
+   * 所以这件事不该让一份几何正确的计划作废。下面用的顶点与面就是现场那一份。
+   */
+  it("fixes inconsistent face winding instead of refusing a geometrically fine solid", () => {
+    const document = createEmptyDocument("geometry3d")
+    const vertices = [
+      { x: -1, y: 0, z: 0 }, // B
+      { x: 1, y: 0, z: 0 }, // D
+      { x: 0.5, y: 0.8660254038, z: 0 }, // C
+      { x: 0, y: -1.1, z: 0.64 } // A
+    ]
+    // 现场原样：[[0,1,2],[0,1,3],[1,2,3],[2,0,3]] —— 相邻面走了同一条棱的同一方向。
+    const faces = [[0, 1, 2], [0, 1, 3], [1, 2, 3], [2, 0, 3]]
+
+    const result = compileActions(document, [action({ actionId: "solid.create_polyhedron", inputs: { alias: "tetra", vertices, faces } })], contextWith(document))
+
+    expect(result.diagnostics).toEqual([])
+    const added = result.operations.flatMap((entry) => (entry.op === "addPrimitives" ? [entry.primitives] : []))
+    expect(added).toHaveLength(1)
+    // 4 个顶点 / 6 条棱 / 4 个面 —— 一只完整的三棱锥。
+    expect(added[0].filter((primitive) => primitive.type === "point3")).toHaveLength(4)
+    expect(added[0].filter((primitive) => primitive.type === "edge3")).toHaveLength(6)
+    expect(added[0].filter((primitive) => primitive.type === "face3")).toHaveLength(4)
+
+    /**
+     * **独立核对"修正后真的自洽且朝外"** —— 不能只看"编译没报错"。
+     *
+     * 直接从产出的文档里读回面环与顶点，自己算两件事：
+     * ① 每条棱是否恰好被两个面以**相反**方向走过（内核要的就是这条）；
+     * ② 有向体积是否为正（法向朝外）。
+     * 只断言"没报错"的话，一个把面全翻反的实现也能过。
+     */
+    const faceRings = added[0].filter((primitive) => primitive.type === "face3") as unknown as { pointIds: string[] }[]
+    const positions = new Map(
+      added[0]
+        .filter((primitive) => primitive.type === "point3")
+        .map((primitive) => [(primitive as unknown as { id: string }).id, (primitive as unknown as { position: { x: number; y: number; z: number } }).position])
+    )
+    const directions = new Map<string, number[]>()
+    for (const ring of faceRings) {
+      for (let i = 0; i < ring.pointIds.length; i += 1) {
+        const a = ring.pointIds[i]
+        const b = ring.pointIds[(i + 1) % ring.pointIds.length]
+        const key = a < b ? `${a}|${b}` : `${b}|${a}`
+        directions.set(key, [...(directions.get(key) ?? []), a < b ? 1 : -1])
+      }
+    }
+    expect(directions.size).toBe(6)
+    for (const [edge, seen] of directions) {
+      expect(seen, `edge ${edge} must be walked once in each direction`).toHaveLength(2)
+      expect(seen[0], `edge ${edge} orientation`).not.toBe(seen[1])
+    }
+    let volume = 0
+    for (const ring of faceRings) {
+      const points = ring.pointIds.map((id) => positions.get(id)!)
+      for (let i = 1; i < points.length - 1; i += 1) {
+        const [a, b, c] = [points[0], points[i], points[i + 1]]
+        volume += (a.x * (b.y * c.z - b.z * c.y) - a.y * (b.x * c.z - b.z * c.x) + a.z * (b.x * c.y - b.y * c.x)) / 6
+      }
+    }
+    expect(volume, "outward-facing normals give a positive signed volume").toBeGreaterThan(0)
+  })
+
+  it("still refuses real geometric faults, because winding is not the only check", () => {
+    // 四个面都在同一张平面上（顶点全共面）→ 零体积，这是**真几何问题**，不许被绕向修正掩盖。
+    const document = createEmptyDocument("geometry3d")
+    const vertices = [{ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, { x: 1, y: 1, z: 0 }, { x: 0, y: 1, z: 0 }]
+    const faces = [[0, 1, 2], [0, 2, 3], [0, 1, 3], [1, 2, 3]]
+
+    const result = compileActions(document, [action({ actionId: "solid.create_polyhedron", inputs: { alias: "flat", vertices, faces } })], contextWith(document))
+
+    expect(result.operations).toHaveLength(0)
+    expect(result.diagnostics.some((entry) => entry.message.includes("coplanar") || entry.message.includes("volume"))).toBe(true)
+  })
+
   it("refuses a polyhedron whose face rings cannot make a solid", () => {
     const document = createEmptyDocument("geometry3d")
     const vertices = [{ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }, { x: 0, y: 0, z: 1 }]

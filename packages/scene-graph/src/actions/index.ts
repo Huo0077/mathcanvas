@@ -476,10 +476,110 @@ function compileSolidRegularPyramidAction(action: Extract<DraftAction, { actionI
  */
 export function compileSolidPolyhedron(solidId: string, input: { vertices: Vector3[]; faces: number[][] }, label?: string): ActionSolidBuildResult {
   const built = buildFromPoints({ vertices: input.vertices, faces: input.faces }, solidChildIds(solidId))
-  if (built.diagnostics.length > 0) {
-    return { primitives: [], vertexIds: built.vertexIds, edgeIds: built.edgeIds, faceIds: built.faceIds, solidId, diagnostics: built.diagnostics.map((entry) => diagnostic(solidId, "degenerate_polyhedron", entry.message)) }
+  if (built.diagnostics.length === 0) {
+    return { primitives: labelSolidChildren(built.primitives, label), vertexIds: built.vertexIds, edgeIds: built.edgeIds, faceIds: built.faceIds, solidId, diagnostics: [] }
   }
-  return { primitives: labelSolidChildren(built.primitives, label), vertexIds: built.vertexIds, edgeIds: built.edgeIds, faceIds: built.faceIds, solidId, diagnostics: [] }
+
+  /**
+   * **绕向可以机械地推出来，所以不该因此拒掉一份几何正确的多面体**（2026-10-04，真实运行）。
+   *
+   * 用户现场的模型给了正确的三棱锥顶点与四个面，四个面的顶点顺序却**有正有反**，
+   * 内核按"相邻面必须以相反方向走同一条棱"直接拒 —— 于是只差这一步就成的计划作废。
+   * 而这件事**完全由面环集合决定**：给定一张封闭壳的面集合，绕向只有一个自洽解
+   *（整体翻转是唯一的二义性，用有向体积定正负即可）。
+   *
+   * 这与前面几次放宽是同一条原则：**质量门禁不该卡在模型能做对、但做不稳的形式细节上**。
+   * 注意**只修绕向**：共面 / 自交 / 零体积 / 未用顶点 / 连通性这些**真几何问题照旧拒**，
+   * 因为那些不是"形式"，而是模型确实画错了。
+   */
+  const normalized = normalizeFaceWinding(input.vertices, input.faces)
+  if (normalized !== null) {
+    const retried = buildFromPoints({ vertices: input.vertices, faces: normalized }, solidChildIds(solidId))
+    if (retried.diagnostics.length === 0) {
+      return { primitives: labelSolidChildren(retried.primitives, label), vertexIds: retried.vertexIds, edgeIds: retried.edgeIds, faceIds: retried.faceIds, solidId, diagnostics: [] }
+    }
+  }
+
+  return { primitives: [], vertexIds: built.vertexIds, edgeIds: built.edgeIds, faceIds: built.faceIds, solidId, diagnostics: built.diagnostics.map((entry) => diagnostic(solidId, "degenerate_polyhedron", entry.message)) }
+}
+
+/**
+ * 把面环的绕向整理成**自洽且朝外**的一版；做不到就返回 `null`（交给内核如实报错）。
+ *
+ * 做法（纯拓扑，不看几何细节）：
+ * 1. 从第一个面出发做广度优先传播：沿共享棱走到相邻面时，若两边走这条棱的**方向相同**，
+ *    就把相邻面翻转 —— 这正是内核要求的"相邻面共享棱方向相反"；
+ * 2. 用有向体积定正负：负则**整体翻转**，得到朝外的法向。
+ *
+ * 边只被两个面共用是"封闭壳"的前提；这里遇到一条棱出现在 2 个以上面（或少于 2 个）时
+ * 不做假设，返回 `null` 让内核按它自己的诊断报（开口边界 / 非流形是**真问题**，不该我们掩盖）。
+ */
+function normalizeFaceWinding(vertices: Vector3[], faces: number[][]): number[][] | null {
+  if (faces.length === 0) return null
+
+  /** 棱 → 用到它的所有 (面下标, 该面内这条棱是否按 index→index+1 方向走)。 */
+  const edges = new Map<string, { face: number; forward: boolean }[]>()
+  faces.forEach((ring, face) => {
+    for (let i = 0; i < ring.length; i += 1) {
+      const a = ring[i]
+      const b = ring[(i + 1) % ring.length]
+      const key = a < b ? `${a}:${b}` : `${b}:${a}`
+      const list = edges.get(key) ?? []
+      list.push({ face, forward: a < b })
+      edges.set(key, list)
+    }
+  })
+  // 每条棱恰好属于两个面，否则不是我们能推的封闭壳。
+  for (const list of edges.values()) if (list.length !== 2) return null
+
+  const flipped = faces.map(() => false)
+  const seen = faces.map(() => false)
+  const queue = [0]
+  seen[0] = true
+  while (queue.length > 0) {
+    const face = queue.shift() as number
+    const ring = faces[face]
+    for (let i = 0; i < ring.length; i += 1) {
+      const a = ring[i]
+      const b = ring[(i + 1) % ring.length]
+      const key = a < b ? `${a}:${b}` : `${b}:${a}`
+      const owners = edges.get(key)
+      if (!owners) continue
+      const other = owners[0].face === face ? owners[1] : owners[0]
+      if (seen[other.face]) continue
+      // 本面走这条棱的有效方向（考虑自身是否已被翻转）。
+      const mine = (a < b) !== flipped[face]
+      const theirs = owners.find((entry) => entry.face === other.face)!.forward
+      // 要求相反：相同则翻转相邻面。
+      flipped[other.face] = mine === theirs
+      seen[other.face] = true
+      queue.push(other.face)
+    }
+  }
+  // 有不连通的面 → 交给内核报"不连通"，不在这里猜。
+  if (seen.some((value) => !value)) return null
+
+  const oriented = faces.map((ring, face) => (flipped[face] ? [...ring].reverse() : [...ring]))
+  return signedVolume(vertices, oriented) < 0 ? oriented.map((ring) => [...ring].reverse()) : oriented
+}
+
+/**
+ * 有向体积（散度定理：`Σ (a × b) · c / 6`）—— 只用来定整体朝向的符号。
+ *
+ * 负值意味着全部面朝内，整体翻转即可得到朝外的法向（内核要的正是这个）。
+ */
+function signedVolume(vertices: Vector3[], faces: number[][]): number {
+  let total = 0
+  for (const ring of faces) {
+    for (let i = 1; i < ring.length - 1; i += 1) {
+      const a = vertices[ring[0]]
+      const b = vertices[ring[i]]
+      const c = vertices[ring[i + 1]]
+      if (!a || !b || !c) continue
+      total += (a.x * (b.y * c.z - b.z * c.y) - a.y * (b.x * c.z - b.z * c.x) + a.z * (b.x * c.y - b.y * c.x)) / 6
+    }
+  }
+  return total
 }
 
 /**
