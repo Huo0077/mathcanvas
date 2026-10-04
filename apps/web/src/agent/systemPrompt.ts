@@ -1,4 +1,4 @@
-import { MAX_CONVERSATION_FACTS, PLAN_SCHEMA_VERSION, describeActions, describeDefaultPolicies, type ConversationContext, type ModelChannel, type ModelContext, type PlanRequest } from "@draw/agent-core"
+﻿import { MAX_CONVERSATION_FACTS, PLAN_SCHEMA_VERSION, describeActions, describeDefaultPolicies, type ConversationContext, type ModelChannel, type ModelContext, type PlanRequest } from "@draw/agent-core"
 
 /**
  * **生产系统提示词**（Agent DSL 切片 Task 5；规格 §6/§7）。
@@ -24,7 +24,7 @@ import { MAX_CONVERSATION_FACTS, PLAN_SCHEMA_VERSION, describeActions, describeD
  */
 
 /** 提示词版本。**改内容就要改它** —— 这是"模型当时看到的是哪一版"的唯一依据。 */
-export const SYSTEM_PROMPT_VERSION = "mathcanvas.agent.prompt.v7"
+export const SYSTEM_PROMPT_VERSION = "mathcanvas.agent.prompt.v8"
 
 const MAX_PROMPT_FACTS = 12
 const MAX_PROMPT_REFS = 16
@@ -211,7 +211,7 @@ export function buildPolicyText(input: SystemPromptPolicyInput): string {
      * 回答一个"任意点处…恒为…"的问题，那时把采样说成证明一样是错的。
      * 用例 `systemPrompt.test.ts` 的 "forbids hidden reasoning…" 用**只读**那一支钉住这一点。
      */
-    "题目要求「任意 / 恒定 / 定值」时：**必须保留符号参数**（例如参数 θ），把它建成文档参数并用它驱动动点，不要特值化成一组具体数字。",
+    "题目要求证明任意情形、恒定或定值时：**必须保留符号参数**（例如参数 θ），不能用一个特值冒充普遍证明；若用户只要求画一张静态示意图，则可选一组满足所有题设的坐标，明确标出示例取值，不要求图形唯一。",
     "这类结论只能给**数值采样**验证（在若干采样点上核对），**不是形式证明** —— 采样不是证明。",
     /**
      * **四条与派生读数有关的说法纪律**（规格 §3.4 / §6.2 / §10）。
@@ -301,7 +301,7 @@ export function buildPolicyText(input: SystemPromptPolicyInput): string {
       "",
       "**关系由系统自己从题面里读，你不需要声明它们**（这一条是 2026-10-03 改的：以前要求你用 `relations` 表逐条声明，实测模型做不到，于是几何正确的计划也被拒）。你要做的只是让坐标**真的满足**题面那些关系 —— 系统抽出来后会逐条算残差，不满足会被拒。",
       "计划顶层的 `relations` 字段仍然接受（自愿声明也行，系统会一并核验），但**它不是必填、也不该为了它去猜**。",
-      "**请用 `vertexNames` 说出每个顶点的名字**（例如 `[\"P\",\"A\",\"B\",\"C\",\"D\"]`，与 `vertices` 一一对应）。系统靠它把题面里的「AB ⊥ AD」对上具体哪两个顶点；**不给就只能假设 `vertices` 的顺序恰好等于题面点名的顺序** —— 顺序一乱，判据就会指错顶点，于是明明画对了也被判不满足。"
+      "**请用 `vertexNames` 说出每个顶点的名字**（例如 `[\"P\",\"A\",\"B\",\"C\",\"D\"]`，与 `vertices` 一一对应）。系统靠它把题面里的「AB ⊥ AD」对上具体哪两个顶点；**不给 `vertexNames` 时系统无法核验这些关系**，不会靠猜题面点名顺序认顶点；请明确给出每个坐标对应的名字。"
     )
   }
 

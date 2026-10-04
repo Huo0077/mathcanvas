@@ -1,4 +1,4 @@
-import { buildPrismTopology } from "@draw/geometry-kernel"
+﻿import { buildPrismTopology } from "@draw/geometry-kernel"
 import { PLAN_SCHEMA_VERSION, MIDPOINT_PARAMETER, type DraftAction, type PlanEnvelope } from "@draw/agent-core"
 
 /**
@@ -230,6 +230,8 @@ export function conicInvariantPlan(): PlanEnvelope {
  * 而"挑得对不对"由 `relations` 表 + 内核残差核验。
  */
 export const PYRAMID_PROMPT = "在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，BC ∥ AD，AB ⊥ AD，画出这个四棱锥"
+/** 离线负例：同一张图外加尚未支持的角度条件，必须停在未核验。 */
+export const PYRAMID_UNVERIFIED_PROMPT = `${PYRAMID_PROMPT}，∠ABC=60°`
 
 /**
  * 一组满足全部所述关系的坐标。**顶点用下标引用**（`v0`…`v4` 依次是 P、A、B、C、D）。
@@ -287,7 +289,7 @@ export function pyramidPlan(withRelations = false): PlanEnvelope {
       actionId: "solid.create_polyhedron",
       actionKey: "pyramid",
       factIds: [],
-      inputs: { alias: "pyramid", vertices: [...PYRAMID_VERTICES], faces: PYRAMID_FACES.map((ring) => [...ring]), label: "四棱锥 P-ABCD" }
+      inputs: { alias: "pyramid", vertexNames: ["P", "A", "B", "C", "D"], vertices: [...PYRAMID_VERTICES], faces: PYRAMID_FACES.map((ring) => [...ring]), label: "四棱锥 P-ABCD" }
     }
   ]
   return {

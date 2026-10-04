@@ -1,4 +1,4 @@
-import type { AgentDraftView } from "../../agentStore"
+﻿import type { AgentDraftView } from "../../agentStore"
 import { AssumptionList } from "./AssumptionList"
 import { countDeltas, removedObjectCount, summarizeDraftScale } from "./confirmationCounts"
 
@@ -86,6 +86,14 @@ export function ConfirmationPanel({ draft, assumptions = [], approximationNotes 
       （`canonicalContentHash`）之后再把它露出来。详见 `docs/project-progress.md`。
     */}
 
+    {draft.diagramVerification && <section className="agent-diagram-verification" aria-label="题设核验" data-status={draft.diagramVerification.status}>
+      <h4>{draft.diagramVerification.status === "passed" ? "符合题设的一组示意图（不是普遍证明）" : "题设尚未全部核验，不能正式确认"}</h4>
+      <p>通过 {draft.diagramVerification.checks.filter((item) => item.status === "passed").length} / 失败 {draft.diagramVerification.checks.filter((item) => item.status === "failed").length} / 未核验 {draft.diagramVerification.checks.filter((item) => item.status === "unverified").length}</p>
+      <ul>{draft.diagramVerification.checks.map((item, index) => <li key={`${index}:${item.sourceText}`}>
+        <strong>{item.sourceText}</strong>：{item.status === "passed" ? "通过" : item.status === "failed" ? "不满足" : "未核验"}。{item.reason}
+      </li>)}</ul>
+      {draft.diagramVerification.sampleValues.length > 0 && <div><h4>本图选用的示例值</h4><ul>{draft.diagramVerification.sampleValues.map((value) => <li key={value}>{value}</li>)}</ul></div>}
+    </section>}
     {assumptions.length > 0 && <AssumptionList assumptions={assumptions} />}
 
     {approximationNotes.length > 0 && <div className="agent-confirmation-approximation">
@@ -104,7 +112,7 @@ export function ConfirmationPanel({ draft, assumptions = [], approximationNotes 
     </p>
 
     <div className="agent-confirmation-actions">
-      {onConfirm && <button type="button" className="agent-draft-confirm" onClick={onConfirm}>确认并提交</button>}
+      {onConfirm && (draft.diagramVerification === undefined || draft.diagramVerification.status === "passed") && <button type="button" className="agent-draft-confirm" onClick={onConfirm}>确认并提交</button>}
       {onDiscard && <button type="button" className="agent-draft-discard" onClick={onDiscard}>丢弃草稿</button>}
     </div>
   </section>

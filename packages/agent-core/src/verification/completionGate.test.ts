@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+﻿import { describe, expect, it } from "vitest"
 
 import type { VerificationReport } from "../contracts"
 import { verificationGate, type VerificationGateCode } from "./completionGate"
@@ -71,6 +71,17 @@ describe("the completion gate blocks everything that is not evidence", () => {
     expect(rejected(report("passed", [ok("a"), { id: "visual", status: "not_supported", detail: "no judge" }]))).toBe("verification_incomplete")
   })
 
+  it("names every unverified diagram condition instead of showing only the first", () => {
+    const gate = verificationGate(report("not_supported", [
+      { id: "diagram:0", status: "not_supported", detail: "平面ABD⊥平面BCD：缺少点名" },
+      { id: "diagram:1", status: "not_supported", detail: "二面角E-BC-D=45°：角度无法计算" }
+    ]))
+    expect(gate.proceed).toBe(false)
+    if (!gate.proceed) {
+      expect(gate.reason).toContain("平面ABD⊥平面BCD")
+      expect(gate.reason).toContain("二面角E-BC-D=45°")
+    }
+  })
   it("blocks unknown and approximate, because inconclusive is not a pass", () => {
     expect(rejected(report("unknown", [{ id: "size", status: "unknown", detail: "cannot read the extent" }]))).toBe("verification_inconclusive")
     expect(rejected(report("approximate", [{ id: "size", status: "approximate", detail: "sampled, not proved" }]))).toBe("verification_inconclusive")

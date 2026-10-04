@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest"
+﻿import { describe, expect, it, vi } from "vitest"
 
 import { createBudget, type BudgetLimits } from "./budget"
 import { createCoordinator } from "./coordinator"
@@ -740,6 +740,14 @@ describe("the completion gate is actually consulted", () => {
     expect(events.some((event) => event.phase === "awaiting_confirmation")).toBe(true)
   })
 
+  it("blocks an unverified diagram report even when no external acceptance list was supplied", async () => {
+    const harness = makeHarness({ stage: async () => ({ ok: true as const, draftVersion: 2, previewHash: "preview-1", verification: {
+      status: "not_supported" as const, checks: [{ id: "diagram:0", status: "not_supported" as const, detail: "∠ABC=60° 尚未核验" }], next_actions: ["请补充可核验条件"]
+    } }) })
+    const events = await drive(harness.coordinator, { run, userMessage: "画三棱锥，∠ABC=60°" })
+    expect(events.some((event) => event.phase === "awaiting_confirmation")).toBe(false)
+    expect(harness.coordinator.phase()).toBe("failed")
+  })
   it("does not change behaviour at all when the caller declares no acceptance criteria", async () => {
     /**
      * 没声明验收条件的调用方（今天所有的生产调用方）行为必须**逐字不变**：

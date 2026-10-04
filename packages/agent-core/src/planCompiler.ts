@@ -1,4 +1,4 @@
-import type { GeometryDocument, Workspace } from "@draw/dsl"
+﻿import type { GeometryDocument, Workspace } from "@draw/dsl"
 import { commitTransaction, compileAction, createIdAllocator, solidTopology3, type ActionContext, type DomainOperation, type DraftAction, type IdAllocator } from "@draw/scene-graph"
 import { sectionSolid3, validatePrismInput } from "@draw/geometry-kernel"
 
@@ -14,6 +14,8 @@ import {
 import { auditDescriptionFor, type AuditContext } from "./defaultPolicies"
 import { auditPlan, type FieldCompletion } from "./parameterAudit"
 import { extractRelations } from "./relationExtraction"
+import { parseDiagramObligations } from "./diagramObligations"
+import { verifyDiagramObligations, type DiagramVerificationReport } from "./diagramVerification"
 import { verifyRelations, type RelationLookup } from "./relations"
 import { parsePlanEnvelope, repairRequestFor } from "./schemas"
 import { isInvariantRequest } from "./underdetermined"
@@ -85,6 +87,8 @@ export interface PlanCompileResult {
   draftDocument: GeometryDocument | null
   /** 这份计划是怎么被验证的（精确构造 / 数值采样），见 `PlanVerification`。 */
   verification: PlanVerification | null
+  /** 题设逐条核验：欠定不是失败，无法可靠解析才是未核验。 */
+  diagramVerification?: DiagramVerificationReport
   /** 一次性修复请求（有可修的字段错误时才给）。 */
   repair?: RepairRequest
 }
@@ -291,6 +295,14 @@ export function compilePlan(input: unknown, context: PlanCompileContext): PlanCo
 
   diagnostics.push(...verifyExplicitCubeRequest(compiledActions, context.prompt))
   diagnostics.push(...validateRelations(plan, context.prompt))
+  const obligations = context.prompt && compiledActions.some((action) => action.actionId === "solid.create_polyhedron")
+    ? parseDiagramObligations(context.prompt) : null
+  const diagramVerification = obligations && (obligations.givens.length > 0 || obligations.unverified.length > 0)
+    ? verifyDiagramObligations(obligations, plan, working, context.document) : undefined
+  for (const check of diagramVerification?.checks ?? []) {
+    if (check.status === "failed") diagnostics.push(planDiagnostic("geometry_validation", "diagram_condition_failed", "envelope.actions", `${check.sourceText}：${check.reason}`))
+    if (check.status === "unverified") diagnostics.push(planDiagnostic("geometry_validation", "diagram_condition_unverified", "envelope.actions", `${check.sourceText}：${check.reason}`, "warning"))
+  }
   const failed = diagnostics.some((entry) => entry.severity === "error")
   if (failed) {
     const errors = toParseErrors(diagnostics)
@@ -306,6 +318,7 @@ export function compilePlan(input: unknown, context: PlanCompileContext): PlanCo
       operations: [],
       draftDocument: null,
       verification: null,
+      ...(diagramVerification === undefined ? {} : { diagramVerification }),
       repair: repairRequestFor(errors, 1)
     }
   }
@@ -323,7 +336,8 @@ export function compilePlan(input: unknown, context: PlanCompileContext): PlanCo
     aliases,
     operations,
     draftDocument: working,
-    verification
+    verification,
+    ...(diagramVerification === undefined ? {} : { diagramVerification })
   }
 }
 
@@ -674,8 +688,9 @@ function validateRelations(plan: PlanEnvelope, prompt: string | undefined): Plan
   //    只有模型知道 P 是哪个顶点）。没有那个字段时才退回"按原话点名的出现顺序"这条**假设** ——
   //    它会在模型打乱顶点顺序时静默指错顶点，所以一旦有声明就用声明。
   const declaredNames = vertexNamesOf(plan)
-  const order = declaredNames ?? pointNamesInOrder(prompt ?? "")
-  const extracted = extractRelations(prompt ?? "", (name) => order.indexOf(name))
+  // Without vertexNames, the prompt order is not a mapping. A guessed mapping
+  // can turn a correct diagram into a false geometry failure.
+  const extracted = declaredNames === null ? { relations: [] } : extractRelations(prompt ?? "", (name) => declaredNames.indexOf(name))
   const fromPrompt = extracted.relations.map((entry) => entry.relation)
 
   // ② 模型**自愿声明**的关系一并核验（契约里保留 `relations`：它不再被要求，但给了就认）。
@@ -695,7 +710,7 @@ function validateRelations(plan: PlanEnvelope, prompt: string | undefined): Plan
    *    这不是"关系成立"，如实标成 warning，不当成通过。
    */
   const hasPolyhedron = actions.some((action) => action.actionId === "solid.create_polyhedron")
-  if (relations.length > 0 && !hasPolyhedron) {
+  if (!hasPolyhedron && (relations.length > 0 || /⊥|∥|垂直|平行/.test(prompt ?? ""))) {
     return [planDiagnostic("geometry_validation", "relation_not_checkable", "envelope.actions", `题目里读到了 ${relations.length} 条几何关系，但这份计划没有产出可核验的顶点（缺少 solid.create_polyhedron），关系未被核验。`, "warning")]
   }
   if (relations.length === 0) return diagnostics
@@ -709,26 +724,10 @@ function validateRelations(plan: PlanEnvelope, prompt: string | undefined): Plan
 }
 
 /**
- * 原话里出现的点名，按**首次出现**顺序去重。
- *
- * 「在四棱锥 P-ABCD 中，PA垂直 平面 ABCD，BC平行 AD」→ `["P","A","B","C","D"]`。
- * 连续大写串按单字母拆开（`ABCD` → `A`、`B`、`C`、`D`），因为几何里点名就是一个字母一个点。
- */
-function pointNamesInOrder(prompt: string): string[] {
-  const names: string[] = []
-  for (const run of prompt.matchAll(/[A-Z][A-Z0-9]*/g)) {
-    for (const letter of run[0].length <= 1 ? [run[0]] : [...run[0]]) {
-      if (!names.includes(letter)) names.push(letter)
-    }
-  }
-  return names
-}
-
-/**
  * 计划里**显式声明的**顶点名（`create_polyhedron` 的可选 `vertexNames`），没有就返回 `null`。
  *
  * 为什么它比"按原话出现顺序猜"可靠：只有模型知道自己把哪个坐标放在 `vertices` 的第几位。
- * 有它时，关系里的点名能**精确**映到下标；没有时才退回那条会静默出错的顺序假设。
+ * 有它时，关系里的点名能**精确**映到下标；没有时必须报未核验，不再推断题面出现顺序。
  */
 function vertexNamesOf(plan: PlanEnvelope): string[] | null {
   if (plan.kind !== "plan") return null

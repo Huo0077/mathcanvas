@@ -1,4 +1,4 @@
-import type { Budget } from "./budget"
+﻿import type { Budget } from "./budget"
 import { buildContext, buildConversationContext, type ConversationContextSource, type Fact } from "./contextBuilder"
 import { parsePlanEnvelope, repairRequestFor } from "./schemas"
 import { MAX_REPAIR_ATTEMPTS, type PlanEnvelope, type RunContext, type VerificationReport } from "./contracts"
@@ -667,7 +667,7 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
        *（那是编译器的 `RepairRequest`，只有编译失败时才有），没有请求的重试
        * 只是一次盲目的重复 —— 与协调器别处那条判据同源。
        */
-      if (request.acceptance !== undefined) {
+      if (request.acceptance !== undefined || stagedVerification !== null) {
         const gate = verificationGate(stagedVerification)
         if (!gate.proceed) {
           ledger.record(`verification gate blocked confirmation: ${gate.code}`)

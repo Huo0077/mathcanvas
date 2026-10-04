@@ -1,4 +1,4 @@
-import { createEmptyDocument, type GeometryDocument } from "@draw/dsl"
+﻿import { createEmptyDocument, type GeometryDocument } from "@draw/dsl"
 import { contentFingerprint } from "@draw/scene-graph"
 import { describe, expect, it } from "vitest"
 
@@ -74,7 +74,7 @@ function polyhedronPlan(vertices: unknown[], relations?: unknown, faces: unknown
       actionId: "solid.create_polyhedron",
       actionKey: "pyramid",
       factIds: [],
-      inputs: { alias: "pyramid", vertices, faces }
+      inputs: { alias: "pyramid", vertexNames: ["P", "A", "B", "C", "D"], vertices, faces }
     }]) as Record<string, unknown>),
     ...(relations === undefined ? {} : { relations })
   }

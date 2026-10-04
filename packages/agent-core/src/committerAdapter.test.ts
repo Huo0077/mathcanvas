@@ -1,4 +1,4 @@
-import { createEmptyDocument, type GeometryDocument } from "@draw/dsl"
+﻿import { createEmptyDocument, type GeometryDocument } from "@draw/dsl"
 import { contentFingerprint } from "@draw/scene-graph"
 import { describe, expect, it, vi } from "vitest"
 
@@ -81,6 +81,21 @@ function makeHost(overrides: Partial<HostBridgeLike> = {}): HostDouble {
 }
 
 describe("committer adapter staging", () => {
+  it("reports unverified diagram conditions to the gate even without caller acceptance", async () => {
+    const drafts = makeDrafts({ stage: vi.fn(async () => ({ ok: true as const, preview: {
+      draftVersion: 2, previewHash: "preview-2", diagramVerification: {
+        status: "unverified" as const, sampleValues: [], checks: [{ kind: "unparsed" as const, sourceText: "∠ABC=60°", status: "unverified" as const, reason: "尚未支持" }]
+      }
+    } })) })
+    const adapter = createCommitterAdapter({ drafts, host: makeHost(), live: () => ({ handle: handleFor(document()), document: document() }) })
+    const result = await adapter.stage({ run: run(), actionCount: 1, actions, signal, userMessage: "画三棱锥，∠ABC=60°" })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.verification?.status).toBe("not_supported")
+      expect(result.verification?.checks[0].detail).toContain("∠ABC=60°")
+    }
+  })
+
   it("creates one draft per run and reuses it across stages", async () => {
     // 每次阶段调用都新建草稿 → `commit` 提交的是用户没看过的预览。
     const host = makeHost()

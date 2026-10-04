@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Agent 工作区（模块 B）的版式。
  *
  * 设计口径参考 DSH / Codex：**干净清爽** —— 大留白、极细边框、几乎没有阴影，
@@ -294,6 +294,21 @@
 .agent-draft-cancel { background: var(--agent-panel); color: var(--agent-muted); }
 .agent-draft-cancel:hover { border-color: var(--color-accent); color: var(--color-accent-strong); }
 
+/* Verification is readable beside the existing draft summary, with text carrying
+   every status; colour only reinforces the result. */
+.agent-diagram-verification {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--agent-line);
+  border-radius: var(--radius-md);
+  background: var(--agent-field);
+}
+.agent-diagram-verification[data-status="failed"],
+.agent-diagram-verification[data-status="unverified"] { border-color: var(--color-warning); }
+.agent-diagram-verification h4,
+.agent-diagram-verification p { margin: 0; }
+.agent-diagram-verification ul { margin: 0; padding-left: 1.2em; line-height: 1.6; overflow-wrap: anywhere; }
 /* ---------- 窄屏 ---------- */
 
 @media (max-width: 1024px) {

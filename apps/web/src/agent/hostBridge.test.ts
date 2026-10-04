@@ -1,4 +1,4 @@
-import { createEmptyDocument, type GeometryDocument } from "@draw/dsl"
+﻿import { createEmptyDocument, type GeometryDocument } from "@draw/dsl"
 import { createDocumentHandle } from "@draw/scene-graph"
 import { describe, expect, it } from "vitest"
 
@@ -47,6 +47,24 @@ async function stagePoint(drafts: DraftStore, draftId: string, version: number, 
 }
 
 describe("host bridge consent", () => {
+  it("refuses to mint a consent token for an unverified diagram even if called directly", async () => {
+    const drafts = createDraftStore()
+    const document = createEmptyDocument("geometry3d")
+    const bridge = createHostBridge({
+      drafts, live: () => ({ handle: createDocumentHandle(document, "project-1"), document }),
+      replace: () => { throw new Error("unverified diagram must not be committed") }, runId: "run-diagram"
+    })
+    const record = drafts.create(document, bridge.live()!.handle)
+    const staged = await drafts.stage(record.draftId, [{ actionId: "solid.create_polyhedron", actionKey: "solid", factIds: [], inputs: {
+      alias: "solid", vertexNames: ["A", "B", "C", "D"],
+      vertices: [{ x: 0, y: 0, z: 1 }, { x: -1, y: 0, z: 0 }, { x: 0.5, y: 0.8, z: 0 }, { x: 1, y: 0, z: 0 }],
+      faces: [[0, 1, 2], [0, 3, 1], [0, 2, 3], [1, 3, 2]]
+    } }], record.draftVersion, "在三棱锥A-BCD中，∠ABC=60°，画示意图")
+    expect(staged.ok).toBe(true)
+    if (staged.ok) expect(staged.preview.diagramVerification?.status).toBe("unverified")
+    expect(bridge.requestConsent(record.draftId)).toEqual({ ok: false, reason: "unverified_diagram" })
+  })
+
   it("previews an isolated draft and commits it once with a valid consent", async () => {
     const harness = makeBridge()
     const record = harness.drafts.create(harness.getDocument(), harness.bridge.live()!.handle)

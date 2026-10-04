@@ -1,4 +1,4 @@
-import { PLAN_SCHEMA_VERSION, type PlanEnvelope } from "@draw/agent-core"
+﻿import { PLAN_SCHEMA_VERSION, type PlanEnvelope } from "@draw/agent-core"
 import { createEmptyDocument, type GeometryDocument } from "@draw/dsl"
 import { createIdAllocator } from "@draw/scene-graph"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -31,7 +31,7 @@ type PlanAction = PlanEnvelope extends { actions: (infer T)[] } ? T : never
  * 底面与向量**都缺**的棱柱计划。
  *
  * 它在两句话下的结局必须不同（复用 `agentRuntime.test.ts` 里那条既有的代表题）：
- * - "画一个任意棱柱" → 题目要求任意，**不许**特值化 → 审计拒绝，编不过；
+ * - "证明任意棱柱都满足某结论" → 题目要求任意，**不许**特值化 → 审计拒绝，编不过；
  * - "画一个棱柱" → 缺省有安全默认 → 回填并编过。
  */
 const dimensionLessPrismPlan = (): StagedPlanEnvelope => ({
@@ -156,7 +156,7 @@ describe("picking the compile path", () => {
     // 这台环境压根没有 Worker（node / vitest / 某些 WebView）：工厂**抛**。
     const strategy = createWorkerCompileStrategy("run-fallback", () => { throw new Error("Worker is not defined") })
 
-    const invariant = await strategy(compileInput(dimensionLessPrismPlan(), "画一个任意棱柱"))
+    const invariant = await strategy(compileInput(dimensionLessPrismPlan(), "证明任意棱柱都满足某结论"))
     expect(invariant.ok).toBe(false)
     expect(invariant.draftDocument).toBeNull()
 

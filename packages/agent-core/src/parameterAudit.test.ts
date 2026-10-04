@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+﻿import { describe, expect, it } from "vitest"
 
 import { PLAN_SCHEMA_VERSION, type PlanEnvelope } from "./contracts"
 import { auditPlan, completeMissingParameter, type AuditContext } from "./parameterAudit"
@@ -127,7 +127,7 @@ describe("parameter audit and completion", () => {
     const result = auditPlan(plan([
       // 底面与向量都缺，而题目要求"任意"。
       { actionId: "solid.create_prism", actionKey: "prism", factIds: [], inputs: { alias: "prism" } }
-    ]), { ...CONTEXT, prompt: "画一个任意棱柱" })
+    ]), { ...CONTEXT, prompt: "证明任意棱柱都满足某结论" })
 
     expect(result.ok).toBe(false)
     expect(result.actions).toEqual([])

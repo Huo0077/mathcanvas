@@ -1,4 +1,4 @@
-import {
+﻿import {
   compilePlan,
   createBudget,
   createCommitterAdapter,
@@ -252,13 +252,13 @@ describe("the compile stage's repair request drives the one repair attempt", () 
   it("does not re-ask the model when the compiler wanted the user instead", async () => {
     // 编译器的修复请求**缺省**（用户能回答的问题不该变成"让模型重发一遍"，规格 §7）。
     const plan = needsTheUserPlan()
-    const verdict = compilePlan(plan, { document: baseDocument(), workspace: "geometry3d", prompt: "画一个任意棱柱" })
+    const verdict = compilePlan(plan, { document: baseDocument(), workspace: "geometry3d", prompt: "证明任意棱柱都满足某结论" })
     expect(verdict.ok).toBe(false)
     expect(verdict.questions.length).toBeGreaterThan(0)
     expect(verdict.repair).toBeUndefined()
 
     const harness = makeRuntime([plan, cubePlan()])
-    const events = await drive(harness.runtime.coordinator, { run: runContext(harness.document), userMessage: "画一个任意棱柱" })
+    const events = await drive(harness.runtime.coordinator, { run: runContext(harness.document), userMessage: "证明任意棱柱都满足某结论" })
 
     expect(events.at(-1)).toBe("failed")
     expect(harness.requests).toHaveLength(1)

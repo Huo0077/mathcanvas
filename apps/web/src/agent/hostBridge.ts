@@ -1,4 +1,4 @@
-import type { GeometryDocument } from "@draw/dsl"
+﻿import type { GeometryDocument } from "@draw/dsl"
 import { countDraftObjects, type DraftObjectCounts } from "@draw/agent-core"
 import { commitTransaction, type DocumentHandle } from "@draw/scene-graph"
 
@@ -54,6 +54,7 @@ export type PreviewArtifact = {
   previewHash: string
   candidate: GeometryDocument
   stageCount: number
+  diagramVerification?: import("@draw/agent-core").DiagramVerificationReport
   /**
    * 候选文档里各类对象的**精确计数**（用户可编辑 / 隐藏 / 派生 / 内部近似）。
    *
@@ -68,7 +69,7 @@ export type PreviewArtifact = {
 
 export type PreviewResult = { ok: true; artifact: PreviewArtifact } | { ok: false; reason: "unknown_draft" }
 
-export type ConsentResult = { ok: true; record: ConsentRecord } | { ok: false; reason: "unknown_draft" }
+export type ConsentResult = { ok: true; record: ConsentRecord } | { ok: false; reason: "unknown_draft" | "unverified_diagram" }
 
 /**
  * 提交**被拒**的理由。
@@ -79,7 +80,7 @@ export type ConsentResult = { ok: true; record: ConsentRecord } | { ok: false; r
  * 协调器里 `no_change → completed` 成了死代码、用户看到"运行失败"。
  * 从类型上去掉它，将来再想让"成功"走失败通道就会被 `tsc` 拦下。
  */
-export type CommitReason = "missing_consent" | "consumed_consent" | "unminted_consent" | "wrong_run" | "expired_consent" | "stale_preview" | "stale_conversation" | "unknown_draft" | "stale_source" | "commit_rejected"
+export type CommitReason = "missing_consent" | "consumed_consent" | "unminted_consent" | "wrong_run" | "expired_consent" | "stale_preview" | "stale_conversation" | "unknown_draft" | "stale_source" | "unverified_diagram" | "commit_rejected"
 
 export type CommitReceiptResult = { ok: true; receipt: { changed: boolean; draftId: string } } | { ok: false; reason: CommitReason; detail?: string }
 
@@ -150,6 +151,7 @@ export function createHostBridge(dependencies: HostBridgeDependencies): HostBrid
           previewHash: artifact.previewHash,
           candidate: artifact.candidate,
           stageCount: artifact.stageCount,
+          ...(artifact.diagramVerification === undefined ? {} : { diagramVerification: artifact.diagramVerification }),
           counts: countDraftObjects(artifact.candidate),
           baseCounts: current ? countDraftObjects(current.document) : emptyCounts
         }
@@ -160,6 +162,7 @@ export function createHostBridge(dependencies: HostBridgeDependencies): HostBrid
       const artifact = drafts.getPreview(draftId)
       const current = dependencies.live()
       if (!artifact || !current) return { ok: false, reason: "unknown_draft" }
+      if (artifact.diagramVerification && artifact.diagramVerification.status !== "passed") return { ok: false, reason: "unverified_diagram" }
       const handle = current.handle
       /**
        * **CAS 的基准是"草稿编译时"的那份文档，不是"点确认时"的这一份**（2026-09-22 修 / 外部审查 X2）。
@@ -224,6 +227,8 @@ export function createHostBridge(dependencies: HostBridgeDependencies): HostBrid
       if (artifact.previewHash !== consent.previewHash || artifact.draftVersion !== consent.draftVersion) {
         return { ok: false, reason: "stale_preview" }
       }
+
+      if (artifact.diagramVerification && artifact.diagramVerification.status !== "passed") return { ok: false, reason: "unverified_diagram" }
 
       // 仍要走 Compare-and-Swap：授权是"用户同意过"，不等于"文档没被动过"。
       const current = dependencies.live()

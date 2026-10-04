@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+﻿import { describe, expect, it } from "vitest"
 
 import { DEFAULT_DYNAMIC_POINT_PARAMETER, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SPAN, WITNESS_TRIANGLE } from "./localPlanDefaults"
 import type { Relation } from "./relations"
@@ -19,18 +19,27 @@ import { firstAcceptableTriangle, isInvariantRequest, isNonSpecialTriangle, sele
  * 所以这一层最重要的用例不是"选出了哪个特值"，而是"**什么时候不许选特值**"。
  */
 describe("underdetermined witness selection", () => {
+  it("allows an example for a static arbitrary diagram but not for a universal claim", () => {
+    expect(isInvariantRequest("画一张任意四棱锥的示意图")).toBe(false)
+    expect(isInvariantRequest("求证任意四棱锥都满足该结论")).toBe(true)
+    expect(isInvariantRequest("点P在椭圆上任意移动")).toBe(true)
+    const sample = selectWitness({ kind: "triangle", prompt: "画一个任意三角形 ABC 的示意图" })
+    expect(sample.status).toBe("witness")
+    if (sample.status === "witness") expect(sample.assumption.text).not.toContain("证明")
+  })
+
   it("treats 'any/constant/invariant' phrasings as symbolic requests", () => {
-    for (const prompt of ["求证 9/OA²+4/OB² 为定值", "画一个任意三角形", "这个量恒定不变", "点 P 在椭圆上任意移动"]) {
+    for (const prompt of ["求证 9/OA²+4/OB² 为定值", "证明任意三角形都成立", "这个量恒定不变", "点 P 在椭圆上任意移动"]) {
       expect(isInvariantRequest(prompt), prompt).toBe(true)
     }
-    for (const prompt of ["画一个边长 3 的正方形", "在椭圆 x²/9+y²/4=1 上取一点作切线"]) {
+    for (const prompt of ["画一个任意三角形", "画一个边长 3 的正方形", "在椭圆 x²/9+y²/4=1 上取一点作切线"]) {
       expect(isInvariantRequest(prompt), prompt).toBe(false)
     }
     expect(isInvariantRequest(undefined)).toBe(false)
   })
 
   it("preserves symbolic parameters instead of specialising an invariant request", () => {
-    const result = selectWitness({ kind: "triangle", prompt: "画一个任意三角形 ABC" })
+    const result = selectWitness({ kind: "triangle", prompt: "证明任意三角形 ABC 都满足该结论" })
 
     expect(result.status).toBe("symbolic")
     if (result.status !== "symbolic") throw new Error("expected a symbolic witness")
@@ -167,6 +176,16 @@ describe("polyhedron witness selection", () => {
     expect(result.assumption.text).toContain("示例值")
   })
 
+  it("prefers a readable valid witness over an equally valid but extremely stretched one", () => {
+    const tall: PolyhedronWitness = { ...PYRAMID, vertices: [{ x: 0, y: 0, z: 100 }, ...PYRAMID.vertices.slice(1)] }
+    const result = selectWitness({ kind: "polyhedron", prompt: "画一张四棱锥示意图", candidates: [tall, PYRAMID], relations: PYRAMID_RELATIONS })
+    expect(result.status).toBe("witness")
+    if (result.status === "witness" && result.value.kind === "polyhedron") {
+      expect(result.value.vertices[0].z).toBe(4)
+      expect(result.considered.join(" ")).toContain("候选 0")
+      expect(result.considered.join(" ")).toContain("候选 1")
+    }
+  })
   it("skips a candidate that violates a declared relation, and says why", () => {
     // P 偏到 (1, 0, 4)：PA 不再垂直于底面。
     const skewed: PolyhedronWitness = { ...PYRAMID, vertices: [{ x: 1, y: 0, z: 4 }, ...PYRAMID.vertices.slice(1)] }
@@ -196,11 +215,12 @@ describe("polyhedron witness selection", () => {
     expect(result.diagnostics.some((entry) => entry.code === "no_acceptable_witness")).toBe(true)
   })
 
-  it("still refuses to specialise when the prompt asks for an arbitrary figure", () => {
-    // **符号优先不可动摇**（设计 §5.4）：题面要"任意"时根本不该走到候选筛选，
-    // 哪怕调用方已经把候选递上来了。
-    const result = selectWitness({ kind: "polyhedron", prompt: "画一个任意四棱锥", candidates: [PYRAMID], relations: PYRAMID_RELATIONS })
+  it("chooses a condition-valid sample for an arbitrary drawing but not for a universal proof", () => {
+    const sample = selectWitness({ kind: "polyhedron", prompt: "画一个任意四棱锥的示意图", candidates: [PYRAMID], relations: PYRAMID_RELATIONS })
+    expect(sample.status).toBe("witness")
+    if (sample.status === "witness") expect(sample.assumption.text).toContain("示例值")
 
-    expect(result.status).toBe("symbolic")
+    const proof = selectWitness({ kind: "polyhedron", prompt: "证明任意四棱锥都满足结论", candidates: [PYRAMID], relations: PYRAMID_RELATIONS })
+    expect(proof.status).toBe("symbolic")
   })
 })

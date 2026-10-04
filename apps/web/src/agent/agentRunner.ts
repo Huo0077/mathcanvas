@@ -1,4 +1,4 @@
-import { CAPABILITY_REGISTRY_REVISION, PLAN_SCHEMA_VERSION, SKILL_MANIFESTS, TOOL_REGISTRY_REVISION, factBelongsToDocument, type CommitOutcome, type ConversationContextSource, type ConversationDraftView, type DocumentHandle, type PlanEnvelope, type PlannerPort, type RunContext, type WorkspaceId } from "@draw/agent-core"
+﻿import { CAPABILITY_REGISTRY_REVISION, PLAN_SCHEMA_VERSION, SKILL_MANIFESTS, TOOL_REGISTRY_REVISION, factBelongsToDocument, type CommitOutcome, type ConversationContextSource, type ConversationDraftView, type DocumentHandle, type PlanEnvelope, type PlannerPort, type RunContext, type WorkspaceId } from "@draw/agent-core"
 import type { GeometryDocument } from "@draw/dsl"
 import { contentFingerprint } from "@draw/scene-graph"
 
@@ -707,6 +707,7 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
           undoesInOneStep: true,
           counts: preview.ok ? preview.artifact.counts : undefined,
           baseCounts: preview.ok ? preview.artifact.baseCounts : undefined,
+          diagramVerification: preview.ok ? preview.artifact.diagramVerification : undefined,
           // 假设在**计划解析成功那一刻**就知道，而草稿是运行结束之后才拿到的 —— 中间没有第二条路。
           assumptions: active.assumptions()
         }, eventRunId, generation())
@@ -755,7 +756,9 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
          */
         useAgentStore.getState().failPendingReply({
           code: "run_failed",
-          message: detail.includes("never matched the schema")
+          message: detail.includes("verification is incomplete:")
+            ? `题设尚未核验，本次不会提交。${detail.split("verification is incomplete:").at(-1)?.trim() ?? ""} 请补充明确点名，或改用受支持的条件表达。`
+            : detail.includes("never matched the schema")
             ? `模型的回答不符合计划合同的形状，所以这一轮停下了。计划必须是一个 JSON 对象（schemaVersion / kind / goal，外加 actions 或 questions 或 answer）。引擎的原话：${detail}`
             : detail,
           retryable: false
@@ -764,6 +767,13 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
         useAgentStore.getState().recordReceipt({ status: "no_change" }, eventRunId, generation())
       }
 
+      // A failed verification may have staged an isolated preview, but it must
+      // not remain confirmable by a later direct call. Only awaiting_confirmation
+      // keeps its draft and run entry alive.
+      if (commit) {
+        active.discardDraft()
+        retireRun(commit.runId)
+      }
       // 这一轮到此为止（没有草稿要等确认）：清掉落点，之后迟到的事件一律丢弃。
       if (eventRunId !== undefined) useAgentStore.getState().endRun(eventRunId)
       return { phase, draftId: null }

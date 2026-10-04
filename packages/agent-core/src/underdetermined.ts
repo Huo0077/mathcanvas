@@ -1,4 +1,4 @@
-import { buildFromPoints, createBuilderContext, triangleCenter2, validatePrismInput, type Vector3 } from "@draw/geometry-kernel"
+﻿import { buildFromPoints, createBuilderContext, triangleCenter2, validatePrismInput, type Vector3 } from "@draw/geometry-kernel"
 
 import type { PlanDiagnostic, StructuredAssumption } from "./contracts"
 import { DEFAULT_DYNAMIC_POINT_PARAMETER, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SPAN, DEFAULT_SLOPE, WITNESS_TRIANGLE, defaultPrismBasePolygon, defaultPrismVector } from "./localPlanDefaults"
@@ -9,7 +9,7 @@ import { verifyRelations, type Relation, type RelationLookup } from "./relations
  *
  * ```
  * 欠定选择优先级：满足显式约束、保持非退化、避免特殊对称、使用小整数、最小化复杂度。
- * 若问题要求"任意""恒定""定值"，必须保留符号参数，不能特值化成单点。
+ * 若任务要求普遍证明或动态保持关系，必须保留符号参数；仅画示意图可选合条件的一例。
  * ```
  *
  * ## 这个文件唯一真正难的地方：什么时候**不许**选特值
@@ -115,6 +115,11 @@ const SYMBOLIC_KEYWORDS = ["任意", "恒", "定值", "不变", "全都成立", 
 export function isInvariantRequest(prompt: string | undefined): boolean {
   if (!prompt) return false
   const lowered = prompt.toLowerCase()
+  // “任意”限定的是图形族，不限定用户此刻要交付的东西。
+  // 静态画图允许选一张满足题设的示例；普遍证明与持续移动仍要保留参数。
+  if (/(?:求证|证明|恒定|定值|不变|全都成立|invariant|for all|constant)/i.test(lowered)) return true
+  if (/(?:任意.*(?:移动|运动|变化)|任意动点|随.*变化)/.test(lowered)) return true
+  if (/(?:画|作|绘|示意图)/.test(lowered)) return false
   return SYMBOLIC_KEYWORDS.some((keyword) => lowered.includes(keyword.toLowerCase()))
 }
 
@@ -329,52 +334,67 @@ export function selectWitness(request: WitnessRequest): WitnessSelection {
    * ② **再验几何合法性** —— 判据来自内核 `buildFromPoints`（共面 / 自交 / 零体积 / 绕向 /
    *    连通性），与真正落盘时用的是同一个构造器，所以不会出现"这里说合法、内核说不行"。
    *
-   * **符号优先已经在函数开头处理掉了**（`isInvariantRequest`）：题面要求"任意/恒定/定值"时
+   * **符号优先已经在函数开头处理掉了**（`isInvariantRequest`）：任务要求普遍证明或动态参数时
    * 根本走不到这里。这个顺序不许改动。
    */
   if (request.kind === "polyhedron") {
     const declared = request.relations ?? []
     const candidates = request.candidates ?? []
+    const accepted: { witness: PolyhedronWitness; index: number; readability: number }[] = []
     for (const [index, candidate] of candidates.entries()) {
+      if (candidate.names.length !== candidate.vertices.length || new Set(candidate.names).size !== candidate.names.length) {
+        considered.push(`names: 候选 ${index} 顶点名与坐标没有一一对应，不能核验。`)
+        continue
+      }
       const byName = new Map(candidate.names.map((name, position) => [name, candidate.vertices[position]]))
       const lookup: RelationLookup = (target) => byName.get(target.vertex) ?? null
-
       const check = verifyRelations(declared, lookup)
       if (!check.ok) {
-        // 逐条可读的理由：这正是 `considered` 这个既有字段存在的意义。
         considered.push(`relations: 候选 ${index} 未满足 ${check.failures.map((failure) => failure.id).join("、")} —— ${check.failures[0].detail}`)
         continue
       }
 
-      // 判据来自内核：与真正落盘时同一个构造器。
+      // The same kernel constructor used for the final solid rejects degenerate topology.
       const built = buildFromPoints({ vertices: candidate.vertices, faces: candidate.faces }, createBuilderContext())
       if (built.diagnostics.length > 0) {
         considered.push(`degenerate: 候选 ${index} 几何不合法 —— ${built.diagnostics.map((entry) => entry.message).join("；")}`)
         continue
       }
 
+      // A preference, never a constraint: only candidates that passed every relation
+      // and topology check are ranked. Translation and rotation do not affect the score.
+      const spans = (["x", "y", "z"] as const).map((axis) => {
+        const values = candidate.vertices.map((vertex) => vertex[axis])
+        return Math.max(...values) - Math.min(...values)
+      })
+      const readability = Math.min(...spans) / Math.max(...spans)
+      accepted.push({ witness: candidate, index, readability })
       considered.push(`accepted: 候选 ${index} 关系逐条成立、几何合法。`)
-      const described = candidate.names
-        .map((name, position) => `${name}(${candidate.vertices[position].x}, ${candidate.vertices[position].y}, ${candidate.vertices[position].z})`)
-        .join("、")
-      return {
-        status: "witness",
-        value: { kind: "polyhedron", ...candidate },
-        assumption: {
-          id: "witness:polyhedron",
-          text: `题目没有给定具体尺寸，以下为系统选取的一组示例值（满足题面全部关系，可在属性栏修改）：${described}。`,
-          kind: "witness",
-          value: candidate,
-          overridable: true,
-          path: "witness.polyhedron"
-        },
-        considered,
-        diagnostics: []
-      }
     }
-    return rejectedSelection("polyhedron", "no_acceptable_witness", "没有候选能同时满足题面关系与几何合法性。", considered)
-  }
 
+    if (accepted.length === 0) return rejectedSelection("polyhedron", "no_acceptable_witness", "没有候选能同时满足题面关系与几何合法性。", considered)
+    // Stable tie-breaking: an equally readable candidate keeps its input order.
+    const chosen = accepted.reduce((best, current) => current.readability > best.readability ? current : best)
+    const candidate = chosen.witness
+    considered.push(`chosen: 候选 ${chosen.index} 在合格图中比例更适合观察。`)
+    const described = candidate.names
+      .map((name, position) => `${name}(${candidate.vertices[position].x}, ${candidate.vertices[position].y}, ${candidate.vertices[position].z})`)
+      .join("、")
+    return {
+      status: "witness",
+      value: { kind: "polyhedron", ...candidate },
+      assumption: {
+        id: "witness:polyhedron",
+        text: `题目没有给定具体尺寸，以下为系统选取的一组示例值（满足题面全部关系，可在属性栏修改）：${described}。`,
+        kind: "witness",
+        value: candidate,
+        overridable: true,
+        path: "witness.polyhedron"
+      },
+      considered,
+      diagnostics: []
+    }
+  }
   const parameter = request.constraints?.parameter ?? DEFAULT_DYNAMIC_POINT_PARAMETER
   if (!Number.isFinite(parameter)) return rejectedSelection("moving_point", "degenerate_witness", "动点参数必须是有限数。", considered)
   considered.push(`accepted: 普通动点取 t = ${parameter}（规格 §6.3 的默认是 ${DEFAULT_DYNAMIC_POINT_PARAMETER}）。`)

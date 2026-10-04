@@ -1,8 +1,9 @@
-import { DEFAULT_SOLID_SIZE, compilePlan, parsePlanEnvelope, SKILL_MANIFESTS } from "@draw/agent-core"
+﻿import { DEFAULT_SOLID_SIZE, compilePlan, parsePlanEnvelope, SKILL_MANIFESTS } from "@draw/agent-core"
 import { createEmptyDocument } from "@draw/dsl"
 import { describe, expect, it } from "vitest"
 
 import { createLocalPlanner, LOCAL_INTENTS, localIntentSkillIds, matchLocalIntent, SPHERE_PROMPT } from "./localPlanner"
+import { PYRAMID_PROMPT, PYRAMID_UNVERIFIED_PROMPT } from "./representativeFixtures"
 
 /**
  * 本地确定性规划器的性质。
@@ -66,6 +67,26 @@ describe("the sphere intent", () => {
 })
 
 describe("local planner translates the commands it knows", () => {
+  it("replays only the exact condition-checked pyramid fixture offline", async () => {
+    const matched = matchLocalIntent(PYRAMID_PROMPT)
+    expect(matched).not.toBeNull()
+    expect(matchLocalIntent(`${PYRAMID_PROMPT}，AB=7`)).toBeNull()
+    const envelope = await plan(PYRAMID_PROMPT)
+    expect(envelope.kind).toBe("plan")
+    if (envelope.kind !== "plan") return
+    expect(envelope.actions[0].inputs).toMatchObject({ vertexNames: ["P", "A", "B", "C", "D"] })
+    const document = createEmptyDocument("geometry3d")
+    expect(compilePlan(envelope, { document, prompt: PYRAMID_PROMPT }).diagramVerification?.status).toBe("passed")
+  })
+
+  it("routes the exact unsupported-angle representative to the same deterministic gate, never a verified claim", async () => {
+    expect(matchLocalIntent(PYRAMID_UNVERIFIED_PROMPT)).not.toBeNull()
+    const envelope = await plan(PYRAMID_UNVERIFIED_PROMPT)
+    const document = createEmptyDocument("geometry3d")
+    const compiled = compilePlan(envelope, { document, prompt: PYRAMID_UNVERIFIED_PROMPT })
+    expect(compiled.ok).toBe(true)
+    expect(compiled.diagramVerification?.status).toBe("unverified")
+  })
   it("builds a cube with the size the user asked for", async () => {
     const envelope = await plan("建一个棱长 3 的立方体")
 

@@ -1,4 +1,4 @@
-import { compilePlan } from "@draw/agent-core"
+﻿import { compilePlan } from "@draw/agent-core"
 import { createEmptyDocument, type GeometryDocument } from "@draw/dsl"
 import { createDocumentHandle } from "@draw/scene-graph"
 import { describe, expect, it } from "vitest"
@@ -43,7 +43,7 @@ describe("isolated drafts", () => {
       factIds: [],
       // 底面与向量都缺：题目说"任意"时**不该**替它取特值。
       inputs: { alias: "prism" }
-    }] as unknown as Parameters<typeof store.stage>[1], record.draftVersion, "画一个任意棱柱")
+    }] as unknown as Parameters<typeof store.stage>[1], record.draftVersion, "证明任意棱柱都满足某结论")
 
     expect(staged.ok).toBe(false)
     if (!staged.ok) {

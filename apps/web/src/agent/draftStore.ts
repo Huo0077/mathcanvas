@@ -1,5 +1,5 @@
-import type { GeometryDocument } from "@draw/dsl"
-import { canonicalContentHash, compilePlan, PLAN_SCHEMA_VERSION, type PlanCompileResult, type PlanDiagnostic, type PlanEnvelope, type PlanRelations, type RepairRequest, type StructuredAssumption } from "@draw/agent-core"
+﻿import type { GeometryDocument } from "@draw/dsl"
+import { canonicalContentHash, compilePlan, parseDiagramObligations, verifyDiagramObligations, PLAN_SCHEMA_VERSION, type PlanCompileResult, type PlanDiagnostic, type PlanEnvelope, type PlanRelations, type RepairRequest, type StructuredAssumption, type DiagramVerificationReport } from "@draw/agent-core"
 import { createIdAllocator, type DocumentHandle } from "@draw/scene-graph"
 
 import type { DraftAction, DomainOperation, IdAllocator } from "@draw/scene-graph"
@@ -51,6 +51,7 @@ export interface DraftRecord {
   baseHandle?: DocumentHandle
   /** 编译期补全出来的假设（跨 `stage` 累积，随预览回带）。 */
   completionAssumptions: StructuredAssumption[]
+  diagramVerification?: DiagramVerificationReport
 }
 
 export interface DraftPreview {
@@ -73,6 +74,7 @@ export interface DraftPreview {
    * 少掉编译期补出来的这些，用户就会确认一件他没看过的事。
    */
   completionAssumptions: StructuredAssumption[]
+  diagramVerification?: DiagramVerificationReport
 }
 
 export type StageReason = "unknown_draft" | "stale_draft_version" | "compile_failed"
@@ -260,7 +262,8 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
     previewHash: canonicalContentHash(record.candidate),
     stageCount: record.operations.length,
     operations: [...record.compiledOperations],
-    completionAssumptions: [...record.completionAssumptions]
+    completionAssumptions: [...record.completionAssumptions],
+    ...(record.diagramVerification === undefined ? {} : { diagramVerification: structuredClone(record.diagramVerification) })
   })
 
   return {
@@ -349,6 +352,27 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
         return { ok: false, reason: "compile_failed", ...(diagnostics.length > 0 ? { diagnostics } : {}), detail: diagnostics.length > 0 ? undefined : "the plan produced no compilable action", ...compilerFields }
       }
 
+      // The Worker and in-process compiler share one pure checker. Re-evaluate on the exact
+      // staged candidate so a successful Worker response cannot silently lose its report.
+      const obligations = userMessage && actions.some((action) => action.actionId === "solid.create_polyhedron")
+        ? parseDiagramObligations(userMessage) : null
+      const checked = obligations && (obligations.givens.length > 0 || obligations.unverified.length > 0)
+        ? verifyDiagramObligations(obligations, plan, compiled.draftDocument, record.candidate) : undefined
+      if (checked?.status === "failed") {
+        return { ok: false, reason: "compile_failed", diagnostics: checked.checks.filter((item) => item.status === "failed").map((item) => ({ code: "diagram_condition_failed", message: `${item.sourceText}：${item.reason}` })) }
+      }
+      // A second stage changes the candidate document. Until all earlier obligations can
+      // be rechecked against their original named solid, evidence from an earlier version
+      // is stale. Preserve the trace, but never silently erase it and bypass the gate.
+      const earlier = record.diagramVerification
+      record.diagramVerification = earlier === undefined ? checked : {
+        status: "unverified",
+        checks: [...earlier.checks, ...(checked?.checks ?? []), {
+          kind: "unparsed", sourceText: "前一批题设", status: "unverified",
+          reason: "草稿追加了操作，之前的题设尚未在最终候选图上重新核验。"
+        }],
+        sampleValues: [...earlier.sampleValues, ...(checked?.sampleValues ?? [])]
+      }
       record.candidate = compiled.draftDocument
       record.operations = [...record.operations, ...actions]
       record.compiledOperations = [...record.compiledOperations, ...compiled.operations]

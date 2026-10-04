@@ -1,7 +1,7 @@
-import type { PlanEnvelope, PlannerPort } from "@draw/agent-core"
+﻿import type { PlanEnvelope, PlannerPort } from "@draw/agent-core"
 import { PLAN_SCHEMA_VERSION, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SPAN, DEFAULT_SOLID_SIZE, defaultPrismBasePolygon, cubeCenterFrom, cubeEdgeLengthFrom } from "@draw/agent-core"
 
-import { conicInvariantPlan, obliquePrismSectionPlan } from "./representativeFixtures"
+import { PYRAMID_PROMPT, PYRAMID_UNVERIFIED_PROMPT, conicInvariantPlan, obliquePrismSectionPlan, pyramidPlan } from "./representativeFixtures"
 
 /**
  * **本地确定性规划器**（Task 2.5 Step 2 的过渡件）。
@@ -31,6 +31,8 @@ import { conicInvariantPlan, obliquePrismSectionPlan } from "./representativeFix
 export interface LocalIntent {
   /** 触发词（全部出现才算命中）。 */
   all: readonly string[]
+  /** 固定代表题必须逐字匹配，不能把改了题设的请求套入旧坐标。 */
+  exact?: string
   /** 至少出现一个（缺省表示不需要）。 */
   any?: readonly string[]
   /**
@@ -198,6 +200,8 @@ const COUNT_ANSWER = (): PlanEnvelope => ({
  * 触发词互不相交的条目之间没有顺序依赖。
  */
 export const LOCAL_INTENTS: readonly LocalIntent[] = [
+  { all: ["四棱锥", "PA", "BC", "AD"], exact: PYRAMID_PROMPT, skillIds: ["spatial-modeling"], build: () => pyramidPlan() },
+  { all: ["四棱锥", "PA", "BC", "AD", "∠"], exact: PYRAMID_UNVERIFIED_PROMPT, skillIds: ["spatial-modeling"], build: () => pyramidPlan() },
   /**
    * **代表题一（规格 §8.1）**：斜四棱柱 + 三条棱的中点 + 截面 + 棱上动点。
    *
@@ -273,6 +277,7 @@ export function matchLocalIntent(prompt: string): LocalIntent | null {
   const analysis = isAnalysisQuestion(normalized)
   for (const intent of LOCAL_INTENTS) {
     if (analysis && intent.skillIds.length > 0) continue
+    if (intent.exact !== undefined && normalized.trim() !== intent.exact.toLowerCase()) continue
     if (!intent.all.every((token) => normalized.includes(token.toLowerCase()))) continue
     if (intent.any && !intent.any.some((token) => normalized.includes(token.toLowerCase()))) continue
     return intent

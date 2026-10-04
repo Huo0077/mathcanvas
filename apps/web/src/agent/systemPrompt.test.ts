@@ -1,4 +1,4 @@
-import { MAX_MESSAGE_LIMIT, PLAN_SCHEMA_VERSION, describeRepairPrompt, parsePlanEnvelope, repairRequestFor, type ModelContext } from "@draw/agent-core"
+﻿import { MAX_MESSAGE_LIMIT, PLAN_SCHEMA_VERSION, describeRepairPrompt, parsePlanEnvelope, repairRequestFor, type ModelContext } from "@draw/agent-core"
 import { describe, expect, it } from "vitest"
 
 import { SYSTEM_PROMPT_VERSION, buildPolicyText, buildSystemPrompt } from "./systemPrompt"
@@ -199,8 +199,9 @@ describe("production system prompt", () => {
     // 抽取器按下标认顶点，而下标要跟题面点名对上**只有模型知道** —— 所以要它用 vertexNames 说出来。
     expect(policy).toContain("vertexNames")
     expect(policy).toContain("一一对应")
-    // 并写清不声明时的后果：只能假设顺序，顺序一乱就指错顶点。
-    expect(policy).toContain("只能假设")
+    // 并写清不声明时的后果：无法核验，不按题面顺序猜坐标。
+    expect(policy).toContain("无法核验")
+    expect(policy).not.toContain("只能假设")
   })
 
   /**
@@ -230,8 +231,8 @@ describe("production system prompt", () => {
   it("keeps the symbolic-parameter rule for arbitrary and constant requests untouched", () => {
     const policy = buildPolicyText({ channel: "strict_json", canPlan: true, actionIds: ["solid.create_polyhedron"] })
 
-    expect(policy).toContain("题目要求「任意 / 恒定 / 定值」时：**必须保留符号参数**")
-    expect(policy).toContain("不要特值化成一组具体数字")
+    expect(policy).toContain("题目要求证明任意情形、恒定或定值时：**必须保留符号参数**")
+    expect(policy).toContain("不能用一个特值冒充普遍证明")
   })
 
   it("keeps the policy text identical across contexts, and injects the scene separately", () => {

@@ -1,4 +1,4 @@
-import { createEmptyDocument, type GeometryDocument } from "@draw/dsl"
+﻿import { createEmptyDocument, type GeometryDocument } from "@draw/dsl"
 import { buildPrism, buildSolidTemplate, createBuilderContext } from "@draw/geometry-kernel"
 import { contentFingerprint } from "@draw/scene-graph"
 import { describe, expect, it, vi } from "vitest"
@@ -583,13 +583,24 @@ describe("representative tasks from the design", () => {
    *（实测：即使系统明确要求它改 `envelope.relations`，它两次都不给）。
    * 关系改由系统从原话里抽（方案 C），所以这条路必须通。
    */
+  it("blocks an unsupported extra condition in the assembled runtime without changing the live document", async () => {
+    const { runtime, written, current } = makeRuntime({ envelope: pyramidPlan(), document: createEmptyDocument("geometry3d") })
+    const events = await drive(runtime.coordinator, {
+      run: runContext(createEmptyDocument("geometry3d")), userMessage: `${PYRAMID_PROMPT}，∠ABC=60°`
+    })
+    expect(events.at(-1)).toBe("failed")
+    expect(runtime.coordinator.ledger().at(-1)?.detail).toContain("∠ABC=60°")
+    expect(events).not.toContain("awaiting_confirmation")
+    expect(written).toHaveLength(0)
+    expect(current()?.primitives).toHaveLength(0)
+  })
   it("drafts the pyramid from a relations-only prompt, with the chosen numbers visible", async () => {
     // `pyramidPlan()` 默认**不带** relations —— 与现场一致。
     const { runtime, written, current } = makeRuntime({ envelope: pyramidPlan(), document: createEmptyDocument("geometry3d") })
 
     const events = await drive(runtime.coordinator, { run: runContext(createEmptyDocument("geometry3d")), userMessage: PYRAMID_PROMPT })
 
-    expect(events.at(-1)).toBe("awaiting_confirmation")
+    expect(events.at(-1), runtime.coordinator.ledger().map((event) => event.detail).join("\n")).toBe("awaiting_confirmation")
     // 确认之前草稿是隔离的：真文档一个字节都没变。
     expect(written).toHaveLength(0)
     expect(current()?.primitives).toHaveLength(0)
@@ -765,7 +776,7 @@ describe("representative tasks from the design", () => {
    * 走的是装配好的真实运行时：协调器 → `CommitterAdapter` → `DraftStore.stage` → `compilePlan`。
    * 同一份计划（棱柱，底面与向量都缺）在两句话下的结局必须**不同** ——
    * 差别只能来自"原话有没有传下去"：
-   * - "画一个任意棱柱" → 题目要求任意，**不许**特值化 → 审计提问 → 没有草稿；
+   * - "证明任意棱柱都满足某结论" → 题目要求任意，**不许**特值化 → 审计提问 → 没有草稿；
    * - "画一个棱柱" → 缺省有安全默认 → 回填并出草稿。
    */
   it("lets the user's words reach the audit through the assembled runtime", async () => {
@@ -779,7 +790,7 @@ describe("representative tasks from the design", () => {
     }
 
     const invariant = makeRuntime({ envelope: planWithoutDimensions, document: createEmptyDocument("geometry3d") })
-    const invariantEvents = await drive(invariant.runtime.coordinator, { run: runContext(createEmptyDocument("geometry3d")), userMessage: "画一个任意棱柱" })
+    const invariantEvents = await drive(invariant.runtime.coordinator, { run: runContext(createEmptyDocument("geometry3d")), userMessage: "证明任意棱柱都满足某结论" })
 
     expect(invariantEvents.at(-1)).toBe("failed")
     expect(invariant.written).toHaveLength(0)

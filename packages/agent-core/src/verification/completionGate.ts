@@ -1,4 +1,4 @@
-import type { VerificationReport } from "../contracts"
+﻿import type { VerificationReport } from "../contracts"
 
 /**
  * **"没有验证证据就不许进入确认"**（Phase 3 / Task 3.3）。
@@ -93,9 +93,9 @@ export function verificationGate(report: VerificationReport | null | undefined):
     return {
       proceed: false,
       code: "verification_incomplete",
-      reason: `verification is incomplete: ${notSupported[0]?.detail ?? "some checks have no judge"}`,
+      reason: `verification is incomplete: ${notSupported.length > 0 ? notSupported.map((check) => check.detail).join("；") : "some checks have no judge"}`,
       report,
-      next_actions: ["either implement a judge for these checks or report them to the user as unverified"]
+      next_actions: notSupported.length > 0 ? notSupported.map((check) => `${check.id}: ${check.detail}`) : ["either implement a judge for these checks or report them to the user as unverified"]
     }
   }
 

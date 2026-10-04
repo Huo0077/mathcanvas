@@ -1,4 +1,4 @@
-import { type ParseError } from "./contracts"
+﻿import { type ParseError } from "./contracts"
 import { updatableInputFields } from "@draw/scene-graph"
 import { ACTIONS, CONIC_KINDS, SOLID_TEMPLATES, declaredFieldKind, type ActionSpec, type ActionId } from "./actionRegistry"
 import { boundedString, fail, finiteNumber, isPlainObject, optionalFiniteNumber, quotedName, readPoint2, readScopedReference, readVector3, rejectUnknownFields } from "./schemaReaders"
@@ -419,7 +419,7 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
        * 模型若把顶点顺序打乱，抽取出来的"AB ⊥ AD"会指向别的两个点，于是报
        * `relation_not_satisfied`，而真正的问题是**顺序**不是**几何**。
        *
-       * 所以让模型把名字显式说出来。**可选**：不给时行为与今天逐字相同（退回按下标假设）。
+       * 所以让模型把名字显式说出来。字段形状仍可选，但不给时关系只能标“未核验”，不能按下标猜。
        */
       if (value.vertexNames !== undefined) {
         if (!Array.isArray(value.vertexNames) || value.vertexNames.length !== vertices.length) {

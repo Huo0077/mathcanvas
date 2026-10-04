@@ -1,7 +1,8 @@
-import { createDocumentHandle, type DocumentHandle } from "@draw/scene-graph"
+﻿import { createDocumentHandle, type DocumentHandle } from "@draw/scene-graph"
 
 import type { CommitOutcome, CommitRequest, CommitterPort, ConsentToken } from "./coordinatorPorts"
-import type { PlanDiagnostic, PlanRelations, RepairRequest, StructuredAssumption } from "./contracts"
+import type { PlanDiagnostic, PlanRelations, RepairRequest, StructuredAssumption, VerificationReport } from "./contracts"
+import type { DiagramVerificationReport } from "./diagramVerification"
 import { runAcceptance, type AcceptanceDocument } from "./verification/taskAcceptance"
 
 /**
@@ -29,7 +30,7 @@ export interface DraftStoreLike {
   create(base: unknown, baseHandle?: DocumentHandle): { draftId: string; draftVersion: number }
   /**
    * 第四个参数是**用户原话**（Fix round 1 / C3）：暂存就是编译，而参数审计要看用户说了什么
-   *（"任意/恒定"要保留符号参数、没说全的尺寸要从原话里读）。可选，因为不是每个调用方都有原话。
+   *（普遍证明要保留符号参数、静态示意图可选见证，没说全的尺寸要从原话里读）。可选，因为不是每个调用方都有原话。
    *
    * **返回 `Promise`**（方案 3）：编译可以被交给几何 Worker，而 Worker 是异步的。
    * 这一层本来就是 `async`（`CommitterPort.stage` 返回 `Promise`），所以只是把 `await` 加到调用点。
@@ -49,6 +50,7 @@ export interface DraftStoreLike {
            * label / 坐标），读不出来就是 `unknown` 而不是猜。
            */
           candidate?: unknown
+          diagramVerification?: DiagramVerificationReport
         }
       }
     | {
@@ -77,7 +79,7 @@ export interface DraftStoreLike {
 /** `HostBridge` 里适配器用到的部分。 */
 export interface HostBridgeLike {
   preview(draftId: string): { ok: true; artifact: { draftVersion: number; previewHash: string } } | { ok: false; reason: "unknown_draft" }
-  requestConsent(draftId: string): { ok: true; record: unknown } | { ok: false; reason: "unknown_draft" }
+  requestConsent(draftId: string): { ok: true; record: unknown } | { ok: false; reason: "unknown_draft" | "unverified_diagram" }
   commit(draftId: string, consent: unknown): { ok: true; receipt: { changed: boolean; draftId: string } } | { ok: false; reason: string; detail?: string }
 }
 
@@ -156,13 +158,22 @@ export function createCommitterAdapter(dependencies: CommitterAdapterDependencie
        * - "怎么判" = `runAcceptance`（`verification/taskAcceptance.ts`）；
        * - "算不算证据" = `verificationGate`（协调器在 `validating` 之后读它）。
        *
-       * 调用方**没有声明**验收条件时（`acceptance === undefined`）**什么都不跑**，
-       * 成功结果里也就不带 `verification` —— 协调器据此不拦，行为与接线之前逐字相同。
+       * 没有外部验收条件时仍必须读取草稿内系统生成的题设报告；两者都没有时才保持原来的可选门禁行为。
        * 这与"声明了空数组"是两回事：空数组会产出一份 `not_supported` 报告并被拦下。
        */
-      const verification = request.acceptance === undefined
+      const acceptanceReport = request.acceptance === undefined
         ? undefined
         : runAcceptance((staged.preview as { candidate?: unknown }).candidate as AcceptanceDocument | null ?? null, request.acceptance)
+      const diagram = staged.preview.diagramVerification
+      const diagramReport: VerificationReport | undefined = diagram === undefined ? undefined : {
+        status: diagram.status === "unverified" ? "not_supported" : diagram.status,
+        checks: diagram.checks.map((check, index) => ({ id: `diagram:${index}`, status: check.status === "unverified" ? "not_supported" : check.status, detail: `${check.sourceText}：${check.reason}` })),
+        next_actions: diagram.checks.filter((check) => check.status !== "passed").map((check) => `${check.sourceText}：${check.reason}`)
+      }
+      const checks = [...(acceptanceReport?.checks ?? []), ...(diagramReport?.checks ?? [])]
+      const verification: VerificationReport | undefined = checks.length === 0 && acceptanceReport === undefined && diagramReport === undefined
+        ? undefined
+        : { status: checks.some((check) => check.status === "failed") ? "failed" : checks.some((check) => check.status === "not_supported") ? "not_supported" : checks.some((check) => check.status === "unknown") ? "unknown" : "passed", checks, next_actions: [...(acceptanceReport?.next_actions ?? []), ...(diagramReport?.next_actions ?? [])] }
 
       return {
         ok: true,

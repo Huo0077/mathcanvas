@@ -1,4 +1,4 @@
-import { createEmptyDocument } from "@draw/dsl"
+﻿import { createEmptyDocument } from "@draw/dsl"
 import { describe, expect, it } from "vitest"
 
 import { createWorkerRequest, parseWorkerResponse, WORKER_SCHEMA_VERSION } from "./workerContracts"
@@ -412,7 +412,7 @@ describe("geometry worker runtime", () => {
     const base = createEmptyDocument("geometry3d")
     const request = createWorkerRequest("geometry.compile", envelope, {
       base,
-      prompt: "画一个任意棱柱",
+      prompt: "证明任意棱柱都满足某结论",
       actions: [{
         actionId: "solid.create_prism",
         actionKey: "prism",

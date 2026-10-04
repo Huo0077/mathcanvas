@@ -1,4 +1,4 @@
-import { create } from "zustand"
+﻿import { create } from "zustand"
 
 import type { DraftObjectCounts } from "@draw/agent-core"
 
@@ -91,6 +91,8 @@ export interface AgentDraftView {
    * 计划信封里可以声明它（`EnvelopeAssumptions`），界面只负责显示，不负责猜。
    */
   assumptions?: string[]
+  /** 只含题设文字和结果；候选文档仍留在宿主。 */
+  diagramVerification?: import("@draw/agent-core").DiagramVerificationReport
 }
 
 /** 提交回执：成功与否、有没有真的改动、失败原因。 */

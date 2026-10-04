@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest"
+﻿import { beforeEach, describe, expect, it } from "vitest"
 
 import { createEmptyDocument } from "@draw/dsl"
 import type { PlanEnvelope, PlannerPort, PlanRequest } from "@draw/agent-core"
@@ -9,6 +9,7 @@ import { summaryOfDocument } from "../conversationSummary"
 import { readConversation } from "../services/conversationClient"
 import { useSceneStore } from "../store"
 import { createAgentRunner } from "./agentRunner"
+import { PYRAMID_PROMPT, pyramidPlan } from "./representativeFixtures"
 
 /**
  * **确认提交这条链路**（Task 2.5 Step 4，计划 G2 Gate 的"preview → confirm → commit → undo"）。
@@ -41,6 +42,21 @@ async function runAndWait(runner: ReturnType<typeof createAgentRunner>, prompt: 
 }
 
 describe("the confirm and commit cycle", () => {
+  it("shows every unverified diagram condition in Chinese and offers no confirmation", async () => {
+    const planner: PlannerPort = {
+      plan: async () => ({ plan: pyramidPlan(), requestId: "pyramid-eval", attemptId: "attempt-1" })
+    }
+    const runner = createAgentRunner({ planner })
+    const result = await runAndWait(runner, `${PYRAMID_PROMPT}，∠ABC=60°，平面ABC∥平面PAD`)
+    expect(result.phase).toBe("failed")
+    const assistant = useAgentStore.getState().activeConversation!.messages.at(-1)!
+    expect(assistant.failure?.message).toContain("题设尚未核验")
+    expect(assistant.failure?.message).toContain("∠ABC=60°")
+    expect(assistant.failure?.message).toContain("平面ABC∥平面PAD")
+    expect(runner.hasDraft()).toBe(false)
+    expect(useSceneStore.getState().document.primitives).toHaveLength(0)
+  })
+
   beforeEach(() => {
     resetScene()
     resetAgent()
