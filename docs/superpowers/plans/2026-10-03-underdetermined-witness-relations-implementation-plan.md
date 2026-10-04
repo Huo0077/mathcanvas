@@ -762,9 +762,12 @@ function validateRelations(plan: PlanEnvelope, prompt: string | undefined): { di
 }
 ```
 
-**顶点名从哪来**（实施时按实际情况定，二选一，**必须写清楚选的是哪种**）：
-- 若 `solid.create_polyhedron` 的 `inputs` 带顶点名（本计划在 Task 6 的提示词里要求模型给 `vertices` 时**带上名字**），就直接读；
-- 否则按下标约定 `v0, v1, …`，并在提示词里写清"关系表用 `v0` 这种下标名"。
+**顶点名下标的约定（控制器预检裁定，2026-10-03）**：`solid.create_polyhedron` 的 `inputs`
+今天**没有顶点名字段**，而 T4 的 `PolyhedronWitness.names` 是模型给的 —— 两处接口不闭合。
+本批**统一采用下标约定**：关系表里 `targets[].vertex` 写 `v0`、`v1`…（`vertices` 的下标），
+判据侧不去猜中文点名。给 `create_polyhedron` 增加可选 `vertexNames` 字段**留作后续**
+（那要动 DSL schema 与 `.mgeo` 往返，是另一个量级）。取不到顶点时 `verifyRelations` 报
+`relation_not_satisfied`（**不是静默通过**），下一轮可修。
 
 `repair` 的构造沿用既有的 `repairRequestFor(toParseErrors(diagnostics), 1)`（`:219` 的同一写法），`allowedChanges` 指到 `envelope.relations` 与相关 `inputs`。
 
