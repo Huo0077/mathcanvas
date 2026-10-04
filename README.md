@@ -87,16 +87,18 @@ npm run eval:agent
 
 ### 当前开发重点
 
-**代码侧的已布置任务已经做完**：高中几何交互与球体/球截面两条线的实施计划均已全部勾选（球体计划 28 条 bullet 全勾），HTML 导出也已交付并随 **v3.2.0** 发布。现在只剩三类**不在代码侧**的事，权威清单见 [当前状态](docs/current-status.md) §四：
+**已交付并推送：** `b1ee3d3` 完成欠定立体示意图的题设逐条核验、未核验 fail-closed 提交和示意图/普遍证明边界；文档路线同步提交 `9fb64e0`。当前可复核读数以 [当前状态](docs/current-status.md) §一为准。
 
-1. **用户侧**：教师/学生真实走查（"三点一面"目标 ≤8 次主操作、不必按 Shift）。
-2. **需要管理员权限**：MSI 的"安装 → 启动 → 卸载"受控验收（NSIS 那半已实测走完）。
-3. **你还没决定是否启动的功能**：题目截图识图、GeoGebra `.ggb` 导出、平面/函数题型逐题补缺、立体几何的 3D 画面进 HTML。
+**当前待完成：**
 
-下面三条是 Agent 的长期门禁，与上面的几何线互不影响。
+1. 真实 provider 开放题现场复核：pass@1/pass@3、成本、延迟、题设覆盖率和人工可读性。
+2. 教师/学生走查与 MSI 安装→启动→卸载验收。
+3. 下一阶段 N1–N5：统一数学 IR、约束/非线性求解、动态拖动保持、开放题编译与真实评测、形式证明出口。详见 [完整下一阶段设计](docs/superpowers/specs/2026-10-04-agent-full-next-phase-design.md)、[实施计划](docs/superpowers/plans/2026-10-04-agent-full-next-phase-implementation-plan.md) 和 [GitHub 调研](docs/research/2026-10-04-github-project-survey.md)。
 
-1. 维持 Agent 工具目录、模型可见 schema 和实际分发处理器的一致性；写入仍由宿主和用户确认控制。
-2. 补齐需要候选文档与实际渲染证据的验收路径，扩大语义检查覆盖面；对不支持的验证明确标记，而不是报告“完成”。
-3. 在具备真实 provider 凭据与代表性任务集后，测量通过率、工具错误率、延迟和成本，再依据 [发布门禁](docs/acceptance/agent-release-gate.md) 决定是否扩大默认使用范围。
+Agent 的当前安全边界和下一阶段路线见：
 
+- [Agent 发布门禁](docs/acceptance/agent-release-gate.md)：真实 provider 数据仍是默认启用的必要门槛；
+- [完整下一阶段设计](docs/superpowers/specs/2026-10-04-agent-full-next-phase-design.md)：约束求解、动态拖动保持、开放题编译、真实评测、形式证明；
+- [完整下一阶段计划](docs/superpowers/plans/2026-10-04-agent-full-next-phase-implementation-plan.md)：按 N1→N6 分阶段实施；
+- [GitHub 项目调研](docs/research/2026-10-04-github-project-survey.md)：外部项目参考和不采用边界。
 逐阶段 Agent 已完成、延期及待做事项见 [实施计划](docs/superpowers/plans/2026-09-28-agent-tool-loop-implementation-plan.md)、[进度快照](docs/research/2026-09-28-agent-tool-loop-progress.md) 与 [评估记分卡](docs/acceptance/agent-tool-loop-scorecard.md)。协作时保持 DSL、几何内核、Scene Graph 与 UI 的边界；每个可验证切片须同步更新 README/相关进度文档，提交并推送 GitHub、核对远端 SHA 和 CI 后才标记完成。

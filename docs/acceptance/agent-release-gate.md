@@ -6,7 +6,16 @@
 > **这份文件回答的问题是"能不能放行"，不是"做到哪一步了"。**
 > 做到哪一步看 `docs/current-status.md` 与 `docs/research/2026-09-28-agent-tool-loop-progress.md`。
 
-## 2026-10-04 立体示意图升级补充\n\n`b1ee3d3` 增加了支持题型的题设逐条核验和 fail-closed 确认路径。它改善了“错误候选图静默通过”的风险，但**没有满足真实 provider 评测门槛**，也没有把静态实例升级成形式证明。\n\n下一轮要新增两条单独门槛：\n\n- **Witness coverage**：受支持题型中，题设可追溯、候选可分类为 verified_instance / unverified_instance / no_witness；不允许空报告成功。\n- **Real-provider baseline**：至少一组真实 provider 的 pass@1/pass@3、成本、延迟和人工可读性记录。\n\n## 一句话结论
+## 2026-10-04 立体示意图升级补充
+
+`b1ee3d3` 增加了支持题型的题设逐条核验和 fail-closed 确认路径；文档路线已在 `9fb64e0` 同步。它改善了“错误候选图静默通过”的风险，但**没有满足真实 provider 评测门槛**，也没有把静态实例升级成形式证明。
+
+下一轮要新增两条单独门槛：
+
+- **Witness coverage**：受支持题型中，题设可追溯、候选可分类为 verified_instance / unverified_instance / no_witness；不允许空报告成功。
+- **Real-provider baseline**：至少一组真实 provider 的 pass@1/pass@3、成本、延迟和人工可读性记录。
+
+## 一句话结论
 
 **还没到放行条件。** 五条门禁里**四条已达成**（其中三条由测试自动守住），
 只有**一条**卡住：第 2 条**没有真实 provider 数据**，因此"预先约定阈值"无基线可比。

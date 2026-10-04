@@ -1084,3 +1084,9 @@ commit_rejected: action_compile: envelope.actions[1]: operation 0: section plane
   - `docs/superpowers/specs/2026-10-04-agent-full-next-phase-design.md`
   - `docs/superpowers/plans/2026-10-04-agent-full-next-phase-implementation-plan.md`
   - `docs/research/2026-10-04-github-project-survey.md`
+## 2026-10-04 —— 文档一致性审查：统一当前基线与下一阶段路线
+
+- 对 README、当前状态、功能目录、项目进度归档、CHANGELOG、发布门禁、Agent 评测记分卡和研究进度做了统一审查。
+- 当前代码基线固定为 `b1ee3d3`，上一轮文档路线提交为 `9fb64e0`；当前门禁读数以 `docs/current-status.md` §一为准，历史文档中的旧数字保留为历史记录，不再作为当前状态。
+- README 现在链接完整下一阶段 N1–N6 路线：统一数学 IR、约束/非线性求解、动态拖动保持、开放题编译与真实 provider 评测、形式证明出口。
+- 修正了当前状态中把“修复前问题”与“当前未完成任务”混在一起的表述，明确真实 provider、用户走查和 MSI 验收仍未完成。
