@@ -15,7 +15,7 @@ import { candidateResiduals, polygonResiduals } from "./residuals"
  * 只保证构造本身确定性、可复算，并且拒绝时**给出结构化的理由**而不是抛异常。
  *
  * 三条 RED 判据（控制器 R17）在这里各有一组用例：
- * 1. 确定性：同输入同输出、无 RNG（还有一条源码级守卫）；
+ * 1. 确定性：同输入同输出（连跑 25 次逐字节比较；**没有**"扫源码找 RNG"的守卫 —— 测试环境无 `node:fs`）；
  * 2. 退化 / 尺度守卫：拒绝要带 `code`，不能抛、不能悄悄返回坏候选；
  * 3. 独立回代：用内核自己的距离 / 角度函数重算被要求的关系，**不复用构造过程的中间量**。
  */
@@ -324,6 +324,21 @@ describe("constructPyramidWitness", () => {
     expect(splitEncoding.status, `split-encoding: ${JSON.stringify(splitEncoding)}`).toBe("rejected")
     if (splitEncoding.status === "rejected") expect(splitEncoding.code).toBe("unsupported-base-shape")
 
+    /**
+     * **环首直角也可以拆成两条单段关系**（与上面梯形用例同一编码轴的反面）：
+     * `[["A","B"]]` + `[["A","D"]]` 说的是"在 A 处两条底边垂直"，必须照样建出候选。
+     */
+    const splitRightAngle = constructPyramidWitness(
+      pyramidRequest({
+        relations: [
+          { kind: "perpendicular", segments: [["A", "B"]] },
+          { kind: "perpendicular", segments: [["A", "D"]] },
+          { kind: "parallel", segments: [["B", "C"], ["A", "D"]] }
+        ]
+      })
+    )
+    expect(splitRightAngle.status, `split-right-angle: ${JSON.stringify(splitRightAngle)}`).toBe("candidate")
+
     // 五边形底面：首批不支持（只有 n = 3 / 4）。
     const pentagon = constructPyramidWitness(
       pyramidRequest({
@@ -342,6 +357,48 @@ describe("constructPyramidWitness", () => {
     )
     expect(skewed.status).toBe("rejected")
     if (skewed.status === "rejected") expect(skewed.code).toBe("unsupported-base-shape")
+  })
+
+  it("accepts `PB ⊥ AB` / `PB ⊥ BC` (line-perpendicular-to-base) instead of reading them as a base corner", () => {
+    /**
+     * 复核 round 2 / Important A（R21）的**正例**：`PB ⊥ AB` 与 `PB ⊥ BC` 是"侧棱 ⊥ 平面 ABCD"
+     * 的自然写法（两条件一起才说明 PB 垂直于底面），不是"底面在 B 处有直角"。
+     * 垂足不在环首（这里垂足是 B）是被支持的，所以这个输入必须能建出候选 ——
+     * round 1 的修法曾把探测扩大到全局，把它误拒成"直角梯形"。
+     */
+    const result = constructPyramidWitness({
+      shape: "pyramid",
+      base: ["A", "B", "C", "D"],
+      relations: [
+        { kind: "perpendicular", segments: [["P", "B"], ["B", "A"]] },
+        { kind: "perpendicular", segments: [["P", "B"], ["B", "C"]] },
+        { kind: "perpendicular", segments: [["A", "B"], ["A", "D"]] }
+      ],
+      apex: { at: "P", foot: "B", height: { kind: "fixed", value: 4 } }
+    })
+    expect(result.status, `line-perp-base: ${JSON.stringify(result)}`).toBe("candidate")
+    if (result.status !== "candidate") return
+    const { points, names } = result.witness
+    const at = (name: string): Vector3 => points[names.indexOf(name)]
+    const P = at("P")
+    const B = at("B")
+
+    // 独立回代：PB 真的垂直于底面（与两条底边方向都垂直），且顶点在 B 的正上方。
+    expect(Math.abs(dotVector3(subtractVector3(P, B), subtractVector3(at("A"), B)))).toBeLessThan(TOLERANCE)
+    expect(Math.abs(dotVector3(subtractVector3(P, B), subtractVector3(at("C"), B)))).toBeLessThan(TOLERANCE)
+    expect(P.x).toBeCloseTo(B.x, 12)
+    expect(P.y).toBeCloseTo(B.y, 12)
+    expect(distanceVector3(P, B)).toBeCloseTo(4, 9)
+  })
+
+  it("labels a directly given height as such, not as `derived from the statement`", () => {
+    // 复核 round 2 / Minor D：`fixed` 高没有被求解，文案不能说"由题面条件解析求出"。
+    const result = constructPyramidWitness(pyramidRequest({ apex: { at: "P", foot: "A", height: { kind: "fixed", value: 4 } } }))
+    expect(result.status).toBe("candidate")
+    if (result.status !== "candidate") return
+    const origin = result.witness.assumptions.find((entry) => entry.includes("顶点 P 取在垂足 A 正上方"))
+    expect(origin, `assumptions: ${JSON.stringify(result.witness.assumptions)}`).toContain("题面直接给定")
+    expect(origin).not.toContain("解析求出")
   })
 
   it("does not mutate the request and is deterministic across repeated calls (no RNG)", () => {

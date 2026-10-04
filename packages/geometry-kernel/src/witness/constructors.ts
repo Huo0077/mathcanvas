@@ -77,7 +77,14 @@ export interface WitnessApexSpec {
 /** 拉伸向量（棱柱）的来源。 */
 export type WitnessExtrusionSpec =
   | { kind: "vector"; vector: Vector3 }
-  /** 由一对点名顶点给出（`to − from`）。 */
+  /**
+   * 由一对点名顶点给出（`to − from`）。
+   *
+   * **首批边界（2b 必读）**：两个端点都必须是**底面环上的**点名顶点，而 `deriveBasePolygon`
+   * 把底面顶点一律建在 z = 0 平面上 —— 所以这条分支产出的向量**永远落在底面内**，
+   * 必然被零体积判据拒成 `degenerate-extrusion`。要用它真正拉出实体，得先有"环外点名顶点"
+   * 的概念（那是后续批次的事）。当前保留这条分支只为如实拒绝，不是为了能用。
+   */
   | { kind: "points"; from: string; to: string }
   /** 题面未给：由编排层（2b 的有限网格）决定，本层不猜。 */
   | { kind: "unknown" }
@@ -208,16 +215,21 @@ export function constructPyramidWitness(request: PyramidConstructRequest): Witne
   const apexPoint: Vector3 = { x: footPoint.x, y: footPoint.y, z: footPoint.z + heightValue }
 
   /**
-   * 用户可见文案必须**如实**说明高是怎么来的（复核 round 1 Important 1）。
+   * 用户可见文案必须**如实**说明高是怎么来的（复核 round 1 Important 1 + round 2 Minor D）。
    *
-   * 二面角那条**不是解析闭式**，而是对内核的二面角度量做有界求根 —— 早先这里对它们
-   * 一律写"由题面条件解析求出"，等于把"数值求根"说成"解析求解"，正是要消除的混淆。
+   * 三路各说各的：
+   * - `free`：系统自选示例值；
+   * - `fixed`：**题面直接给定**（没有任何求解 —— 早先它被归进"由题面条件解析求出"，不实）；
+   * - `dihedral`：**有界求根**，不是解析闭式（早先这里一律写"解析求出"，把数值求根说成解析求解）。
+   * - `lateral-edge`：解析闭式 `h = √(L² − d²)`。
    */
   const heightOrigin = heightAssumed
     ? "（系统自选示例值）"
     : heightDerived === "dihedral"
       ? `（按题面二面角对内核的二面角度量做有界求根求出，非解析闭式${heightNote ? `；${heightNote}` : ""}）`
-      : "（由题面条件解析求出）"
+      : heightDerived === "lateral-edge"
+        ? "（由题面的侧棱长度解析求出）"
+        : "（题面直接给定）"
 
   return assembleCandidate({
     baseNames: base.names,
@@ -574,23 +586,27 @@ function segmentOf(target: readonly string[]): [string, string] | null {
   return [target[0], target[1]]
 }
 
-function relationHasSegment(relation: WitnessRelation, segment: readonly [string, string]): boolean {
-  return relation.segments.some((target) => {
-    const pair = segmentOf(target)
-    return pair ? sameSegment(pair, segment) : false
-  })
-}
-
 /**
- * **跨所有 `perpendicular` 关系**找"这两条边互相垂直"。
+ * **只看底面的**垂直判据（复核 round 2 / R21）：跨所有 `perpendicular` 关系找"这两条边互相垂直"，
+ * 但**忽略任何点名了底面环以外顶点（如顶点 `P`）的关系**。
  *
- * 与 `relationHasSegment` 的分工：后者问"这一条关系里有没有这条边"，前者问"题面整体有没有说
- * 这两条边垂直"。两句物理事实可以写成一条含两条边的关系（`[["B","A"],["B","C"]]`），
- * 也可以拆成两条单段关系（`[["B","A"]]` + `[["B","C"]]`）—— 判据必须对两种编码都成立，
- * 否则适配器换个写法就会 fail-open（复核 round 1 Minor 9）。
+ * 为什么必须排除环外顶点：`PB ⊥ AB` 与 `PB ⊥ BC` 是"侧棱垂直于底面"（`PB ⊥ 平面 ABCD`）的
+ * 自然写法，它们说的是**线面垂直**，不是"B 处有一个底角直角"。第一版（round 1 的修法）
+ * 全局探测这两条底边、不要求它们互为一对，于是把这个**完全合法的输入**误拒成"直角梯形"。
+ * 方向必须是 **fail-closed 而不是 fail-open**：finding 9 的问题是"静默建成矩形"（方向错了），
+ * 但正确方向是"拒"，不是"把合法输入也拒掉"。
+ *
+ * 两种等价编码都收：① 一条关系同时给出两条边；② 两条关系各给一条底边。
  */
-function edgeHasSegment(relations: readonly WitnessRelation[], segment: readonly [string, string]): boolean {
-  return relations.some((relation) => relation.kind === "perpendicular" && relationHasSegment(relation, segment))
+function baseEdgePerpendicular(relations: readonly WitnessRelation[], baseNames: readonly string[], edge: readonly [string, string]): boolean {
+  return relations.some((relation) => {
+    if (relation.kind !== "perpendicular") return false
+    const segments = relation.segments.map(segmentOf).filter((pair): pair is [string, string] => pair !== null)
+    // 关系里的**每一条边**都必须落在底面环内；只要点名了环外顶点，这条关系对"底角"就不作数。
+    const allInBase = segments.length > 0 && segments.every(([from, to]) => baseNames.includes(from) && baseNames.includes(to))
+    if (!allInBase) return false
+    return segments.some((pair) => sameSegment(pair, edge))
+  })
 }
 
 function interpretValue(value: number | WitnessStatedValue | undefined, fallback: number | null): WitnessStatedValue | null {
@@ -638,9 +654,12 @@ function deriveBasePolygon(
    *
    * 四边形的第 3 个点 `C` 是 `AB` 的对边端点，不是直角的另一条边 —— 用它去要求 `AB ⊥ AC`
    * 会把这个最常见矩形的直角判错（第一版就是这么错的，RED 里 5 条构造用例一起失败）。
+   *
+   * 判据与底角探测同源（`baseEdgePerpendicular`）：**只认两端点都在底面环内的关系**，
+   * 否则 `PB ⊥ AB` 这种"侧棱垂直于底面"的写法会被读成"底面在 A 处有直角"。
    */
   const third = names.length === 4 ? names[3] : names[2]
-  const rightAngleAtFirst = relations.some((relation) => relation.kind === "perpendicular" && relationHasSegment(relation, [first, second]) && relationHasSegment(relation, [first, third]))
+  const rightAngleAtFirst = baseEdgePerpendicular(relations, names, [first, second]) && baseEdgePerpendicular(relations, names, [first, third])
   if (!rightAngleAtFirst) {
     return reject(
       "unsupported-base-shape",
@@ -672,9 +691,11 @@ function deriveBasePolygon(
      * 底面只要**在环首以外的顶点**还有直角，它就不是矩形而是直角梯形 ——
      * 构造出来的矩形是比题面更强的假设，所以拒绝，不把"额外特殊性"悄悄塞进图里。
      *
-     * 判据**跨所有 `perpendicular` 关系**收集边（复核 round 1 Minor 9）：若 2b 的适配器把
-     * 同一句"在 B 处两条边互相垂直"拆成两条单段关系，要求"一条关系同时含两条边"就会 fail-open，
-     * 把一个**题面明说的直角梯形**静默建成矩形 —— 正是这个守卫要防的事。
+     * 判据用 `baseEdgePerpendicular`（复核 round 1 Minor 9 + round 2 R21）：
+     * ① 跨所有 `perpendicular` 关系（"在 B 处垂直"可以拆成两条单段关系，要求"一条关系同时含两条边"
+     *    就会 fail-open，把题面明说的直角梯形静默建成矩形）；
+     * ② 但**只看两端点都在底面环内的关系** —— `PB ⊥ AB` / `PB ⊥ BC` 是"侧棱 ⊥ 底面"的自然写法，
+     *    把它们当成底角会把完全合法的输入误拒（round 2 Important A 实测）。
      * 反过来，文案也不该断言"这就是梯形"：冗余点名第二个内角直角的矩形也会走到这里。
      */
     let internalRightAngle = -1
@@ -682,7 +703,7 @@ function deriveBasePolygon(
       const name = names[index]
       const before = names[(index + names.length - 1) % names.length]
       const after = names[(index + 1) % names.length]
-      const hasInternalRightAngle = relations.some((relation) => relation.kind === "perpendicular" && edgeHasSegment(relations, [before, name]) && edgeHasSegment(relations, [name, after]))
+      const hasInternalRightAngle = baseEdgePerpendicular(relations, names, [before, name]) && baseEdgePerpendicular(relations, names, [name, after])
       if (hasInternalRightAngle) {
         internalRightAngle = index
         break
@@ -920,33 +941,16 @@ const DIHEDRAL_BISECTION_STEPS = 200
  *
  * 求的是"顶点在垂足正上方"这一族里能满足题面陈述二面角的**最小正高**：先按固定步数扫出
  * 第一个符号变化区间，再固定次数二分收敛。**不是闭式解**，也不做通用非线性求解（R18）：
- * 一个未知量、有界区间、固定步数、无 RNG。
+ * 一个未知量、有界区间、固定步数、无 RNG，失败返回 `null`（由调用方转成结构化拒绝，不抛异常）。
  *
- * 两个点名平面有两种顶点记法（同一个平面、不同形心 ⇒ 读数可能互补），所以两种记法各求一次，
- * 取先命中的那个 —— 这才是"内角 / 外角读法"歧义真正所在（见 `measureDihedralDegrees`）。
- * 两种都求不到就返回 `null`，由调用方转成结构化拒绝 —— 不抛异常。
+ * 平面**只按题面点名的三个点**取：对固定三点命名，读数与环绕向、参数顺序都无关
+ * （见 `measureDihedralDegrees`），所以这里不做"换一种记法再试"——构造器不能自己发明
+ * 题面没写的平面命名（复核 round 2 / R22）。
  *
  * 量的是**最终坐标**、用的是 2b 会用的同一个 `dihedralAngleDetail3`；构造器没有自证"满足题设"，
  * 只是不把"题面关系其实不成立"的候选交给下游。
  */
 function solveDihedralHeight(request: {
-  baseNames: readonly string[]
-  basePoints: readonly Vector3[]
-  apexName: string
-  footPoint: Vector3
-  planes: readonly (readonly string[])[]
-  targetDegrees: number
-  scale: number
-}): number | null {
-  for (const rings of dihedralRingVariants(request.planes)) {
-    const height = searchDihedralHeight({ ...request, planes: rings })
-    if (height !== null) return height
-  }
-  return null
-}
-
-/** 单一顶点记法下的求根（扫描 + 二分）。 */
-function searchDihedralHeight(request: {
   baseNames: readonly string[]
   basePoints: readonly Vector3[]
   apexName: string
@@ -1001,14 +1005,18 @@ function searchDihedralHeight(request: {
 /**
  * 用**内核自己的**二面角度量核对候选高，量的是"两个点名三点平面之间的内二面角"。
  *
- * ## 这个原语对什么敏感（复核 round 1 更正）
+ * ## 这个原语对什么敏感（复核 round 1 + round 2 更正）
  *
  * `dihedralAngleDetail3` 取"面内垂直于公共棱的方向"（`markers3d.ts` 的 `inwardPerpendicular`），
- * 而那是**面心相对铰链**的方向 —— 所以它与参数顺序、与环的绕向**都无关**：
- * `(a,b)`、`(b,a)` 与两种反转返回同一个 `interiorDegrees`（实测四个读数逐位相同）。
- * 唯一影响读数的是**用哪三个点命名那个面**（面的形心随之改变，实测同一几何可以量出 `θ` 与其补角）。
- * 所以这里不再做那种"取最小读法"的空操作：一次如实测量；点名的歧义由求根器
- * 同时尝试两种平面记法来处理（见 `solveDihedralHeight`）。
+ * 而那是 `centroid(face) − hingeStart` 的垂线分量 —— `centroid` 是与顺序无关的平均，
+ * 所以读数与参数顺序、与环的绕向**都无关**：`(a,b)`、`(b,a)` 与两种反转返回同一个
+ * `interiorDegrees`（实测四个读数逐位相同）。
+ *
+ * **决定读数的是用哪三个点命名那个面**（形心随之改变，同一几何可以量出 `θ` 与其补角）。
+ * 但那是**题面语义**：平面由题面点名的三个点给定，2b 通过 relation 的 `segments` 传进来，
+ * 构造器**不能自己发明另一种命名**（复核 round 2 / R22 否决了"把环反转再试一次"的做法 ——
+ * 对固定三点命名，反转是恒等的空操作，只会让失败路径多跑一遍 2048 步扫描）。
+ * 所以这里就是**一次如实测量**：平面按题面点名的三个点取。
  *
  * 这是"构造器不许自证"的例外而非违反：它量的不是构造过程的中间量，而是**最终坐标**
  * 的几何，而且用的就是 2b 会用的那个函数（`dihedralAngleDetail3`）。
@@ -1033,18 +1041,6 @@ function measureDihedralDegrees(
   if (first.some((point) => !point) || second.some((point) => !point)) return null
   const detail = dihedralAngleDetail3(first as Vector3[], second as Vector3[], start, end)
   return detail ? detail.interiorDegrees : null
-}
-
-/**
- * 两个点名平面的**顶点顺序**是否要反过来再量一次。
- *
- * 上面说过：`dihedralAngleDetail3` 只对"用哪三个点命名那个面"敏感。题面写 `∠P-CD-A`
- * 指的是两个平面，而 `[P,C,D]` 与 `[P,D,C]` 是同一个平面但形心不同、读数可以互补 ——
- * 所以求根时两种记法都试，取能对上题面那个角的那一个。**这是"读法歧义"的真正所在**，
- * 不是参数顺序或绕向（那两者是恒等的空操作）。
- */
-function dihedralRingVariants(rings: readonly (readonly string[])[]): Array<readonly (readonly string[])[]> {
-  return [rings, [rings[0], [...rings[1]].reverse()]]
 }
 
 /** 点到**直线**（`start`–`end`）的垂距：`|v − (v·û)û|`。内核自己没有这个函数，但只用既有向量原语。 */
