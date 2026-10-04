@@ -79,4 +79,6 @@ if (-not (Test-Owns -Dir $dir)) {
 New-Item -ItemType Directory -Force -Path $base | Out-Null
 [System.IO.File]::WriteAllText((Join-Path $base ".gitignore"), "*`n", (New-Object System.Text.UTF8Encoding($false)))
 
-(Resolve-Path -LiteralPath $dir).Path
+# 只写 stdout 的那一行路径：不能用裸的 Resolve-Path（它的管道输出会被调用方
+# `$ws = & script` 捕获成对象，路径就不再是纯字符串）。
+[Console]::Out.WriteLine((Resolve-Path -LiteralPath $dir).Path)

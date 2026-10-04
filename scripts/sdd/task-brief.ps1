@@ -39,7 +39,8 @@ for ($i = 0; $i -lt $lines.Count; $i++) {
   if ($lines[$i] -match $startPattern) { $start = $i; break }
 }
 if ($start -lt 0) {
-  [Console]::Error.WriteLine("no '## Task $Task:' heading in $PlanFile")
+  # 变量名后面紧跟冒号会被解析成"驱动器限定变量"（`$Task:`），必须用 ${} 断开。
+  [Console]::Error.WriteLine("no '## Task ${Task}:' heading in $PlanFile")
   exit 2
 }
 
@@ -51,4 +52,6 @@ for ($i = $start + 1; $i -lt $lines.Count; $i++) {
 $brief = $lines[$start..($end - 1)] -join "`n"
 $out = Join-Path $workspace "task-$Task-brief.md"
 [System.IO.File]::WriteAllText($out, "$brief`n", (New-Object System.Text.UTF8Encoding($false)))
-(Resolve-Path -LiteralPath $out).Path
+# 只写 stdout 的那一行路径：不能用 Resolve-Path 的管道输出（会多出一段目录清单，
+# 被调用方 `$b = & script` 一并捕获，于是"路径"变成多行、后续 Read 直接失败）。
+[Console]::Out.WriteLine((Resolve-Path -LiteralPath $out).Path)
