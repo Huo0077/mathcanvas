@@ -81,4 +81,9 @@ New-Item -ItemType Directory -Force -Path $base | Out-Null
 
 # 只写 stdout 的那一行路径：不能用裸的 Resolve-Path（它的管道输出会被调用方
 # `$ws = & script` 捕获成对象，路径就不再是纯字符串）。
+#
+# 收尾用 `return` 而不是 `exit 0`：`&` 调用是**在同一个会话里**执行脚本的，
+# `exit` 会把整个会话一起结束掉 —— 调用方（task-brief / review-package，以及
+# 控制器那行命令）就此静默停住，表现为"脚本跑了但什么都没发生"。
 [Console]::Out.WriteLine((Resolve-Path -LiteralPath $dir).Path)
+return

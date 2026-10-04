@@ -58,3 +58,4 @@ $out = Join-Path $workspace "review-$base7..$head7.md"
 [System.IO.File]::WriteAllText($out, $body, (New-Object System.Text.UTF8Encoding($false)))
 # 只写 stdout 的那一行路径（与 sdd-workspace 同理）。
 [Console]::Out.WriteLine((Resolve-Path -LiteralPath $out).Path)
+return
