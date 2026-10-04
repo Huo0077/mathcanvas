@@ -97,9 +97,45 @@ export function extractRelations(prompt: string, indexOf: (name: string) => numb
         from = at + word.length
 
         /**
+         * **中点先按固定句型认**（`O为 BD的中点` / `M是AD中点`）—— 必须在下面那个"两侧点名"
+         * 的通用逻辑**之前**：中点的两个操作数都写在词前，通用逻辑取到的 `left` 可能是
+         * 上一句残留的串（实测 `O为 BD的中点` 就取空了），于是根本走不到句型处理。
+         *
+         * 几何题里中点的写法高度固定，直接认句型比"猜左右更可靠"。
+         *
+         * 用**字符串**比较而不是直接比 `entry.kind`：`tsc` 在它前面的分支收窄之后会把这里判成
+         * "两个类型不可能相等"（`TS2367`），但运行期它是**可达的** —— 实测三种中点写法全部抽得到。
+         * 那个收窄是编译器对 `continue` 链的推断，不是可达性的证据；这里明确绕开它。
+         */
+        if ((entry.kind as string) === "midpoint") {
+          const window = prompt.slice(Math.max(0, at - 20), at + word.length + 12)
+          /**
+           * 两种固定句型都要认，实测它们都真实出现过：
+           * - `O为 BD的中点`（点在词前、线段夹在"的"两侧）
+           * - `M是中点 AD`（点在词前、线段**在词后**）
+           */
+          const before = /([A-Z][A-Z0-9]*)\s*(?:为|是|乃)?\s*([A-Z][A-Z0-9]*)\s*的中点/.exec(window)
+          const after = /([A-Z][A-Z0-9]*)\s*(?:为|是|乃)?\s*中点\s*([A-Z][A-Z0-9]*)/.exec(window)
+          const match: RegExpExecArray | null = before ?? after
+          if (match) {
+            const pointShape = asShape(match[1], known)
+            const segmentShape = asShape(match[2], known)
+            if (pointShape?.kind === "point" && segmentShape?.kind === "line") {
+              relations.push({
+                relation: { kind: "midpoint", targets: [vertexTarget(match[1]), ...segmentShape.names.map(vertexTarget)] },
+                evidence: `${match[1]} 是 ${match[2]} 的中点`
+              })
+              continue
+            }
+          }
+          unverified.push("原话里的「中点」没读成「X为YZ的中点」或「X是中点 YZ」这两种句型（需要一个点 + 一条由两个已知点组成的线段），未核验。")
+          continue
+        }
+
+        /**
          * 关系词两侧的点名。
          *
-         * - **前缀/中缀**（`垂直`、`平行`、`共面`、`中点`）：左侧取**紧邻**的那一段，
+         * - **前缀/中缀**（`垂直`、`平行`、`共面`）：左侧取**紧邻**的那一段，
          *   右侧取词后第一段。例：`PA垂直 平面 ABCD`、`BC平行 AD`。
          * - **后缀**（`等长`、`之比`）：**两个对象都写在词前面**，词后什么都没有。
          *   例：`BC与AD等长` 在"等长"处看到的是 `leftRuns = ["BC","AD"]`、`rightText = ""`。
@@ -109,8 +145,13 @@ export function extractRelations(prompt: string, indexOf: (name: string) => numb
         const leftRuns = pointRuns(prompt.slice(Math.max(0, at - 24), at))
         const rightText = prompt.slice(at + word.length, at + word.length + 24)
         // 右侧优先认「平面 / 面 + 点名」这种带前缀的写法，否则取词后第一个点名串。
-        const planePrefix = /^\s*(平面|面)\s*([A-Z][A-Z0-9]*)/.exec(rightText)
-        const trailing = planePrefix ? planePrefix[2] : pointRuns(rightText).at(0)
+        //
+        // **允许前缀与点名之间有空白**（`平面 ABD`、`面 BCD`）—— 第一版写成 `(平面|面)\s*` 之后
+        // 紧跟名字，实测在真实题面上**完全失效**：`平面 ABD⊥平面 BCD` 这类写法里
+        // `平面` 与 `ABD` 之间有空格，正则匹配不上，于是 `right` 为空、整条垂直关系被丢掉，
+        // 而它**不会报错**（只进 unverified）。用户现场那一句正是这种写法。
+        const planePrefix = /^\s*(?:平面|面)\s*([A-Z][A-Z0-9]*)/.exec(rightText)
+        const trailing = planePrefix ? planePrefix[1] : pointRuns(rightText).at(0)
 
         const left = entry.suffix ? leftRuns.at(-2) : leftRuns.at(-1)
         const right = entry.suffix ? leftRuns.at(-1) : trailing
@@ -164,15 +205,38 @@ export function extractRelations(prompt: string, indexOf: (name: string) => numb
           continue
         }
 
-        // midpoint：`M是中点 AD` —— 左侧是点、右侧是那条线段。
-        if (leftShape.kind === "point" && rightShape.kind === "line") {
-          relations.push({
-            relation: { kind: "midpoint", targets: [vertexTarget(leftShape.names[0]), ...rightShape.names.map(vertexTarget)] },
-            evidence: `${describe}（${left} 是 ${right} 的中点）`
-          })
+        if (entry.kind === "midpoint") {
+          /**
+           * **先认"X 为/是 YZ 的中点"这个固定句型**，认不出才退回"词左侧的名字对"。
+           *
+           * 实测（2026-10-04，用户第二句 `O为 BD的中点`）：只取左侧窗口的最后两段是**错的** ——
+           * 窗口里可能还留着前一句的 `AB=AD`，于是 `.at(-2)` 落到一个**不是点名**的串上，
+           * `leftRuns` 为空、整条中点关系丢掉，而且**不报错**。中点的写法在几何题里高度固定
+           *（`O为BD的中点` / `M是AD中点`），所以直接认这个句型最可靠。
+           */
+          const pattern = /([A-Z][A-Z0-9]*)\s*(?:为|是|乃)?\s*([A-Z][A-Z0-9]*)\s*的中点/.exec(prompt.slice(Math.max(0, at - 20), at + word.length + 2))
+          const pointName = pattern ? pattern[1] : null
+          const segmentRun = pattern ? pattern[2] : null
+          const pointShape = pointName ? asShape(pointName, known) : null
+          const segmentShape = segmentRun ? asShape(segmentRun, known) : null
+          if (pointName && segmentRun && pointShape?.kind === "point" && segmentShape?.kind === "line") {
+            relations.push({
+              relation: { kind: "midpoint", targets: [vertexTarget(pointName), ...segmentShape.names.map(vertexTarget)] },
+              evidence: `${pointName} 是 ${segmentRun} 的中点`
+            })
+            continue
+          }
+          // 退回"左侧是点、右侧是线段"这种写法（例如 `中点 M`）。
+          if (leftShape.kind === "point" && rightShape.kind === "line") {
+            relations.push({
+              relation: { kind: "midpoint", targets: [vertexTarget(leftShape.names[0]), ...rightShape.names.map(vertexTarget)] },
+              evidence: `${describe}（${left} 是 ${right} 的中点）`
+            })
+            continue
+          }
+          unverified.push(`原话里的「中点」没读成"点 + 线段"（认的是「X为YZ的中点」这种句型），未核验。`)
           continue
         }
-        unverified.push(`原话里的「中点」（${left} / ${right}）没读成"点 + 线段"，未核验。`)
       }
     }
   }

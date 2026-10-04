@@ -94,4 +94,41 @@ describe("extractRelations", () => {
     expect(result.relations).toEqual([])
     expect(result.unverified).toEqual([])
   })
+
+  /**
+   * **用户现场第二句（2026-10-04）**：三棱锥 A-BCD 的题面。它同时含三种关系，
+   * 而且点名有 6 个（A B C D O E）—— 是抽取器目前见过最复杂的一句。
+   *
+   * 这条用例的价值：它把"抽取器对真实题面到底读出什么"变成可复核的读数。
+   * 真实运行里那一句**没有**报 `relation_not_declared`（说明它过了门禁），
+   * 但到底抽出几条、有没有误抽，只有这里能看清。
+   */
+  it("reads the tetrahedron sentence: the midpoint, and honestly reports the plane-perpendicular it cannot check", () => {
+    const prompt = "在三棱锥 A-BCD中，平面 ABD⊥平面 BCD，且 AB=AD，O为 BD的中点"
+    // 点名按原话出现顺序：A、B、C、D、O。
+    const order = ["A", "B", "C", "D", "O"]
+
+    const { relations, unverified } = extractRelations(prompt, indexOf(order))
+
+    // 中点必须抽到，而且指向正确的下标对（O 是 v4、B v1、D v3）。
+    const midpoint = relations.find((entry) => entry.relation.kind === "midpoint")
+    expect(midpoint, JSON.stringify(relations)).toBeTruthy()
+    expect(midpoint!.relation.targets.map((target) => target.vertex)).toEqual(["v4", "v1", "v3"])
+
+    /**
+     * **平面⊥平面 本批不支持 —— 但它必须被如实报成"未核验"，不能静默丢掉。**
+     *
+     * 我们只实现了"线-线"与"线-面"（3 个 / 5 个顶点）。`平面 ABD⊥平面 BCD` 是**面-面**，
+     * 判据不存在。这条断言钉住的正是诚实性：宁可说"这条没法验"，也不许它悄悄消失、
+     * 然后整个计划被宣布"关系全部成立"。
+     */
+    expect(relations.some((entry) => entry.relation.kind === "perpendicular")).toBe(false)
+    expect(unverified.some((line) => line.includes("⊥"))).toBe(true)
+
+    // 这一句里没有"平行/共面/等长/比例"的可靠写法，尤其**不许凭 `AB=AD` 猜等长**。
+    const kinds = relations.map((entry) => entry.relation.kind)
+    expect(kinds).not.toContain("parallel")
+    expect(kinds).not.toContain("coplanar")
+    expect(kinds).not.toContain("equalLength")
+  })
 })
