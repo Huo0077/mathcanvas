@@ -1,6 +1,10 @@
 # 欠定图形的见证生成与关系核验 实施计划
 
-> **状态：** **计划已写，待执行**（设计见 [`../specs/2026-10-03-underdetermined-witness-relations-design.md`](../specs/2026-10-03-underdetermined-witness-relations-design.md)，已获用户批准 2026-10-03）。每个 Task 完成后把当次门禁读数与变异检查写在它的状态行里。
+> **状态：** **7 个 Task 全部实现，在分支 `feat/underdetermined-witness-relations` 上（尚未合并进 `main`、未打包、未发布）**。设计见 [`../specs/2026-10-03-underdetermined-witness-relations-design.md`](../specs/2026-10-03-underdetermined-witness-relations-design.md)。
+>
+> **执行过程中的两处偏离（都已留档）**：① **Task 4 的 `polyhedron` 见证族在本批没有产品调用点** —— 预检扫描时查实 `selectWitness` 只被 `parameterAudit` 以 triangle/prism 调用，所以它照旧实现但**不算本批收益**，真正解掉报障的是 Task 5 的关系核验（见下方「执行前的范围裁定」）；② **Task 7 由端到端用例抓出一个真缺陷并修好** —— `relations` 在 `coordinator → committer → draftStore` 链路上被两处"按 actions 重造信封"丢掉，于是关系核验在真实运行时恒失败，而 7 条编译器用例全绿也发现不了。修复提交 `99ba741`。
+>
+> **门禁（当次实测）**：全库单测 281 文件 / 3250 通过 + 1 todo / 0 失败；`agent-core` 与 `apps/web` 的 typecheck 均 exit 0；eslint exit 0；每个判据都有对应的定向变异。
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

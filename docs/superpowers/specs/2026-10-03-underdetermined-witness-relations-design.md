@@ -1,6 +1,6 @@
 # 欠定图形的见证生成与关系核验 设计
 
-**日期：** 2026-10-03 ｜ **状态：** **设计已获用户批准（2026-10-03）**，实施计划待写 ｜ **来源：** 用户现场报障——「在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，BC ∥ AD，AB ⊥ AD」这类**只有关系、没有数值**的描述画不出来
+**日期：** 2026-10-03 ｜ **状态：** **已按本设计实现（7 个 Task 全部完成），在分支 `feat/underdetermined-witness-relations` 上——尚未合并进 `main`、未打包、未发布**（实施计划 [`../plans/2026-10-03-underdetermined-witness-relations-implementation-plan.md`](../plans/2026-10-03-underdetermined-witness-relations-implementation-plan.md)；当次读数：全库单测 281 文件 / 3250 通过 + 1 todo / 0 失败，两个包 typecheck exit 0）｜ **来源：** 用户现场报障——「在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，BC ∥ AD，AB ⊥ AD」这类**只有关系、没有数值**的描述画不出来
 
 ## 1. 用户工作与验收
 
