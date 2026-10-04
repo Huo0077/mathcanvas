@@ -156,6 +156,8 @@ export type WitnessSearchResult =
 - [ ] **Feasibility spike：** 在独立脚本中评估 Z3/NLSAT/WASM/原生依赖，不接默认 UI；记录许可证、线程模型、包体、启动时间和超时行为。
 - [ ] **提交检查点：** `git commit -m "feat(agent): add bounded witness search"`。
 
+> **N2 进度（2026-10-05）：** 本阶段拆成三个子任务执行。**2a（内核见证构造，`packages/geometry-kernel/src/witness/`）已交付并复核**（提交 `c2314c9` / `1328088` / `84a6d89` / `e3fdb61`）；2b（agent-core 搜索编排 + `selectWitness` facade 单实现 + 证据分类）与 2c（`witnessSearch` flag 接线 + Z3/NLSAT feasibility spike + 出口证据）**尚未实施**。2a 的导出签名是 2b 的接口来源，见 `.superpowers/sdd/…/task-2a-report.md` §2。门禁读数只写在 `docs/current-status.md` §一。
+
 ## Phase N3：动态拖动保持约束
 
 **目标：** 让已确认的几何关系进入文档，拖动点不会静默破坏它们。
