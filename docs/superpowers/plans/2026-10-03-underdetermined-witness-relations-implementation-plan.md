@@ -5,6 +5,30 @@
 > **执行过程中的两处偏离（都已留档）**：① **Task 4 的 `polyhedron` 见证族在本批没有产品调用点** —— 预检扫描时查实 `selectWitness` 只被 `parameterAudit` 以 triangle/prism 调用，所以它照旧实现但**不算本批收益**，真正解掉报障的是 Task 5 的关系核验（见下方「执行前的范围裁定」）；② **Task 7 由端到端用例抓出一个真缺陷并修好** —— `relations` 在 `coordinator → committer → draftStore` 链路上被两处"按 actions 重造信封"丢掉，于是关系核验在真实运行时恒失败，而 7 条编译器用例全绿也发现不了。修复提交 `99ba741`。
 >
 > **门禁（当次实测）**：全库单测 281 文件 / 3250 通过 + 1 todo / 0 失败；`agent-core` 与 `apps/web` 的 typecheck 均 exit 0；eslint exit 0；每个判据都有对应的定向变异。
+>
+> ## ⚠️ 发版之后的翻转（2026-10-03，真实应用实测推翻方案一）
+>
+> **上面那一切在真实应用里不工作。** 用户在桌面版发原句，两次失败在 `relation_not_declared`。
+> 探针复现后拿到模型第二次收到的那段修复提示 —— 工具 schema 里有 `relations`、提示明确写着
+> 「这次只允许改这几处：envelope.relations」、还逐条列出缺 `perpendicular` 与 `parallel`，
+> **模型依然只是把同一份计划又发了一遍**。
+>
+> 结论：**那条覆盖度门禁是模型满足不了的关卡** —— 一份几何完全正确的计划会因为"没有自证"被判失败。
+> **质量门禁不能依赖被测方主动配合。方案一（模型声明关系）由此被推翻。**
+>
+> 改为**方案 C**：关系由**系统自己从原话里抽**（`relationExtraction.ts`），模型只负责给出满足这些
+> 关系的坐标；并给 `create_polyhedron` 加可选 `vertexNames`，免得"顶点顺序"只能靠猜。
+> **但方案 C 生效之后是否真能画出图，尚未经过真实运行验证** —— 它的门禁全是我自己写的测试，
+> 而方案一当初也是全绿的。
+>
+> ## 已知仍未验证 / 未完成（**不能读成"已可用"**）
+>
+> 1. **真实模型下端到端未验证**（关键）：需要用户在桌面版发一次原句。四种可能结果指向完全不同的修法
+>    —— 成功 / `relation_not_satisfied`＋有 vertexNames / 报"无法核验" / 图错但不报错。
+> 2. 几何 Worker 的 compile 分支仍不带 `relations`。
+> 3. **抽不到的关系不会让计划失败，也还没显示给用户**（只进编译期日志）—— 诚实性缺口。
+> 4. 抽取器可能误抽（设计里原本因此排除方案 C）：已加固"顶点对不上"，**未**加固"关系读错"。
+> 5. 平面几何那一批、带自由参数的表达式关系、把关系存进文档（约束求解）—— 均未做。
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
