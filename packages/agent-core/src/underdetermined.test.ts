@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest"
 
 import { DEFAULT_DYNAMIC_POINT_PARAMETER, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SPAN, WITNESS_TRIANGLE } from "./localPlanDefaults"
-import { firstAcceptableTriangle, isInvariantRequest, isNonSpecialTriangle, selectWitness, validatePrismWitness, validateTriangleWitness } from "./underdetermined"
+import type { Relation } from "./relations"
+import { firstAcceptableTriangle, isInvariantRequest, isNonSpecialTriangle, selectWitness, validatePrismWitness, validateTriangleWitness, type PolyhedronWitness } from "./underdetermined"
 
 /**
  * **欠定题目的特值选择**（Agent DSL 切片 Task 3；规格 §6.3）。
@@ -116,5 +117,90 @@ describe("underdetermined witness selection", () => {
     const movingPoint = selectWitness({ kind: "moving_point", prompt: "点 P 在棱上滑动" })
     expect(movingPoint.status).toBe("witness")
     if (movingPoint.status === "witness" && movingPoint.value.kind === "moving_point") expect(movingPoint.value.parameter).toBe(DEFAULT_DYNAMIC_POINT_PARAMETER)
+  })
+})
+
+/**
+ * **多面体见证**（设计 2026-10-03 §5.4）。
+ *
+ * 这一族要解决的是用户现场那句话："在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，BC ∥ AD，AB ⊥ AD" ——
+ * 只有关系、没有数值，过去根本画不出来（不规则立体只能走 `solid.create_polyhedron`，
+ * 而它的顶点与面环是必填、零默认）。
+ *
+ * 与其它族的关键区别：候选**不可能预置**（满足"PA ⊥ 底面"的坐标取决于题面），所以候选由模型
+ * 给出，`selectWitness` 只负责按规格 §6.3 的优先级**筛选**。
+ *
+ * **本批没有产品调用点**（执行前的范围裁定）：这些用例钉的是这一层自己的能力；真正解掉报障的
+ * 是 `planCompiler` 里的关系核验。不要把它读成"它修好了报障"。
+ */
+const PYRAMID: PolyhedronWitness = {
+  vertices: [
+    { x: 0, y: 0, z: 4 }, // v0 = P
+    { x: 0, y: 0, z: 0 }, // v1 = A
+    { x: 2, y: 0, z: 0 }, // v2 = B
+    { x: 2, y: 3, z: 0 }, // v3 = C
+    { x: 0, y: 3, z: 0 } // v4 = D
+  ],
+  names: ["v0", "v1", "v2", "v3", "v4"],
+  // 底面 ABCD + 四个侧面，绕向**暴力搜出来的合法组合**（这个顶点的四棱锥只有 2 组合法）：
+  // 我第一版手推的绕向被内核判 inconsistent-winding，四个侧面全错 —— 拓扑别手推。
+  faces: [[1, 2, 3, 4], [0, 2, 1], [0, 3, 2], [0, 4, 3], [0, 1, 4]]
+}
+
+const PYRAMID_RELATIONS: Relation[] = [
+  // PA ⊥ 平面 ABCD：5 个顶点 = 前两个定线、后三个定平面。
+  { id: "PA-perp-base", kind: "perpendicular", targets: [{ vertex: "v0" }, { vertex: "v1" }, { vertex: "v1" }, { vertex: "v2" }, { vertex: "v3" }] },
+  { id: "BC-parallel-AD", kind: "parallel", targets: [{ vertex: "v2" }, { vertex: "v3" }, { vertex: "v1" }, { vertex: "v4" }] },
+  { id: "AB-perp-AD", kind: "perpendicular", targets: [{ vertex: "v1" }, { vertex: "v2" }, { vertex: "v1" }, { vertex: "v4" }] }
+]
+
+describe("polyhedron witness selection", () => {
+  it("accepts a candidate only when every declared relation holds", () => {
+    const result = selectWitness({ kind: "polyhedron", prompt: "画出这个四棱锥", candidates: [PYRAMID], relations: PYRAMID_RELATIONS })
+
+    expect(result.status).toBe("witness")
+    if (result.status !== "witness" || result.value.kind !== "polyhedron") throw new Error("expected a polyhedron witness")
+    // 系统挑的值必须**看得见、可改**（设计 §1 验收判据 4、5）。
+    expect(result.assumption.kind).toBe("witness")
+    expect(result.assumption.overridable).toBe(true)
+    // 假设那句话要写清是"系统选取的示例值"，否则用户会以为题面给了这些数。
+    expect(result.assumption.text).toContain("示例值")
+  })
+
+  it("skips a candidate that violates a declared relation, and says why", () => {
+    // P 偏到 (1, 0, 4)：PA 不再垂直于底面。
+    const skewed: PolyhedronWitness = { ...PYRAMID, vertices: [{ x: 1, y: 0, z: 4 }, ...PYRAMID.vertices.slice(1)] }
+
+    const result = selectWitness({ kind: "polyhedron", prompt: "画出这个四棱锥", candidates: [skewed], relations: PYRAMID_RELATIONS })
+
+    expect(result.status).toBe("rejected")
+    // `considered` 是既有字段，正好用来解释"我为什么没选它"。
+    // 断言真实的措辞（"未满足某条关系"），不写一个恰好能匹配上的泛词。
+    expect(result.considered.join(" ")).toContain("未满足 PA-perp-base")
+  })
+
+  it("skips a candidate whose geometry the kernel rejects, even if no relation is declared", () => {
+    // 面环绕向不一致 —— 内核对这一条会报 inconsistent-winding。
+    const badWinding: PolyhedronWitness = { ...PYRAMID, faces: [[1, 2, 3, 4], [0, 1, 2], [0, 2, 3], [0, 3, 4], [0, 1, 4]] }
+
+    const result = selectWitness({ kind: "polyhedron", prompt: "画出这个四棱锥", candidates: [badWinding], relations: [] })
+
+    expect(result.status).toBe("rejected")
+    expect(result.considered.join(" ")).toContain("degenerate")
+  })
+
+  it("rejects when there are no candidates at all, rather than inventing coordinates", () => {
+    const result = selectWitness({ kind: "polyhedron", prompt: "画出这个四棱锥", candidates: [], relations: PYRAMID_RELATIONS })
+
+    expect(result.status).toBe("rejected")
+    expect(result.diagnostics.some((entry) => entry.code === "no_acceptable_witness")).toBe(true)
+  })
+
+  it("still refuses to specialise when the prompt asks for an arbitrary figure", () => {
+    // **符号优先不可动摇**（设计 §5.4）：题面要"任意"时根本不该走到候选筛选，
+    // 哪怕调用方已经把候选递上来了。
+    const result = selectWitness({ kind: "polyhedron", prompt: "画一个任意四棱锥", candidates: [PYRAMID], relations: PYRAMID_RELATIONS })
+
+    expect(result.status).toBe("symbolic")
   })
 })

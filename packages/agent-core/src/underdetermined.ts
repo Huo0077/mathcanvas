@@ -1,7 +1,8 @@
-import { triangleCenter2, validatePrismInput, type Vector3 } from "@draw/geometry-kernel"
+import { buildFromPoints, createBuilderContext, triangleCenter2, validatePrismInput, type Vector3 } from "@draw/geometry-kernel"
 
 import type { PlanDiagnostic, StructuredAssumption } from "./contracts"
 import { DEFAULT_DYNAMIC_POINT_PARAMETER, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SPAN, DEFAULT_SLOPE, WITNESS_TRIANGLE, defaultPrismBasePolygon, defaultPrismVector } from "./localPlanDefaults"
+import { verifyRelations, type Relation, type RelationLookup } from "./relations"
 
 /**
  * **欠定题目的特值选择**（Agent DSL 切片 Task 3；规格 §6.3）。
@@ -29,7 +30,7 @@ import { DEFAULT_DYNAMIC_POINT_PARAMETER, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SP
  * 于是这一层没有第二套几何判据，只有"挑哪个候选"这件事。
  */
 
-export type WitnessKind = "triangle" | "slope" | "prism" | "moving_point"
+export type WitnessKind = "triangle" | "slope" | "prism" | "moving_point" | "polyhedron"
 
 export interface Point2 {
   x: number
@@ -47,11 +48,35 @@ export interface PrismWitness {
   vector: Vector3
 }
 
+/**
+ * **任意多面体的见证**（设计 2026-10-03 §5.4）。
+ *
+ * 这是"只有关系、没有数值"的立体题面（四棱锥 P-ABCD 那类）唯一可能的出口：
+ * 不规则形状在动作层只能走 `solid.create_polyhedron`，而它的 `vertices` / `faces`
+ * 是必填、零默认 —— 一组坐标必须由**模型算出来**，系统的职责是逐条核验。
+ *
+ * `names` 与 `vertices` 按下标对应，关系表用**下标名**（`v0`、`v1`…）引用顶点
+ * （设计 §2 决定 7：第一批关系目标只支持顶点）。
+ *
+ * **本批没有产品调用点**（执行前的范围裁定，2026-10-03）：`selectWitness` 的非测试调用点
+ * 只有 `parameterAudit.ts`，而它只请求 triangle / prism。所以这个族现在的价值是
+ * "为第二批（平面）与将来的'系统自己挑特值'留接口"，**不是本批验收的依据** ——
+ * 解掉用户报障的是 `planCompiler` 里的关系核验。不要把它读成"它修好了报障"。
+ */
+export interface PolyhedronWitness {
+  vertices: Vector3[]
+  /** 顶点名，与题面一致；关系表按下标约定引用（`v0`、`v1`…）。 */
+  names: string[]
+  /** 面环，元素是 `vertices` 的下标。 */
+  faces: number[][]
+}
+
 export type WitnessValue =
   | ({ kind: "triangle" } & TriangleWitness)
   | { kind: "slope"; value: number }
   | ({ kind: "prism" } & PrismWitness)
   | { kind: "moving_point"; parameter: number }
+  | ({ kind: "polyhedron" } & PolyhedronWitness)
 
 /** 题目要求保留的符号参数（不做特值化）。 */
 export interface SymbolicWitness {
@@ -73,6 +98,10 @@ export interface WitnessRequest {
   /** 用户原话：`任意/恒定/定值` 这类要求只看它（不看模型的转述）。 */
   prompt?: string
   constraints?: WitnessConstraints
+  /** 模型给出的多面体候选（多面体族用）。缺省时没有候选可挑，如实返回 rejected。 */
+  candidates?: readonly PolyhedronWitness[]
+  /** 题目显式给出的关系。**判据在 `relations.ts`，这里只调它。** */
+  relations?: readonly Relation[]
 }
 
 export type WitnessSelection =
@@ -94,7 +123,15 @@ const SYMBOLS_BY_KIND: Record<WitnessKind, readonly string[]> = {
   triangle: ["A", "B", "C"],
   slope: ["k"],
   prism: ["a", "h"],
-  moving_point: ["t"]
+  moving_point: ["t"],
+  /**
+   * 多面体的符号是**边长 / 高度**这一类自由量，不是某个具体顶点 —— 题面说"任意四棱锥"时，
+   * 保留的是"形状自由"这件事本身。漏掉这一项会让 `symbols.join` 直接抛 TypeError
+   * （实测踩到），而 `WitnessKind` 加了新成员、这张表却没跟上，是**编译期查不出来**的：
+   * `Record<WitnessKind, …>` 本该拦住，但它被写在 `WitnessKind` 扩过之后才补——
+   * 真正兜住它的是那条"任意图形必须返回 symbolic"的用例。
+   */
+  polyhedron: ["边长", "高"]
 }
 
 function symbolicSelection(kind: WitnessKind, considered: string[]): WitnessSelection {
@@ -279,6 +316,63 @@ export function selectWitness(request: WitnessRequest): WitnessSelection {
       considered,
       diagnostics: []
     }
+  }
+
+  /**
+   * **多面体**（设计 2026-10-03 §5.4）：候选由模型给出，这里只做**筛选**。
+   *
+   * 与其它族的关键区别：其它族的候选是**常量表**（`witnessTriangleCandidates()`），
+   * 而"四棱锥满足 PA ⊥ 底面"这组坐标不可能预置 —— 它取决于题面。所以候选来自 `request`。
+   *
+   * 筛选顺序就是规格 §6.3 的优先级，两步都不可省：
+   * ① **先验题目显式关系**（优先级第一条）—— 不满足的候选跳过，理由记进 `considered`；
+   * ② **再验几何合法性** —— 判据来自内核 `buildFromPoints`（共面 / 自交 / 零体积 / 绕向 /
+   *    连通性），与真正落盘时用的是同一个构造器，所以不会出现"这里说合法、内核说不行"。
+   *
+   * **符号优先已经在函数开头处理掉了**（`isInvariantRequest`）：题面要求"任意/恒定/定值"时
+   * 根本走不到这里。这个顺序不许改动。
+   */
+  if (request.kind === "polyhedron") {
+    const declared = request.relations ?? []
+    const candidates = request.candidates ?? []
+    for (const [index, candidate] of candidates.entries()) {
+      const byName = new Map(candidate.names.map((name, position) => [name, candidate.vertices[position]]))
+      const lookup: RelationLookup = (target) => byName.get(target.vertex) ?? null
+
+      const check = verifyRelations(declared, lookup)
+      if (!check.ok) {
+        // 逐条可读的理由：这正是 `considered` 这个既有字段存在的意义。
+        considered.push(`relations: 候选 ${index} 未满足 ${check.failures.map((failure) => failure.id).join("、")} —— ${check.failures[0].detail}`)
+        continue
+      }
+
+      // 判据来自内核：与真正落盘时同一个构造器。
+      const built = buildFromPoints({ vertices: candidate.vertices, faces: candidate.faces }, createBuilderContext())
+      if (built.diagnostics.length > 0) {
+        considered.push(`degenerate: 候选 ${index} 几何不合法 —— ${built.diagnostics.map((entry) => entry.message).join("；")}`)
+        continue
+      }
+
+      considered.push(`accepted: 候选 ${index} 关系逐条成立、几何合法。`)
+      const described = candidate.names
+        .map((name, position) => `${name}(${candidate.vertices[position].x}, ${candidate.vertices[position].y}, ${candidate.vertices[position].z})`)
+        .join("、")
+      return {
+        status: "witness",
+        value: { kind: "polyhedron", ...candidate },
+        assumption: {
+          id: "witness:polyhedron",
+          text: `题目没有给定具体尺寸，以下为系统选取的一组示例值（满足题面全部关系，可在属性栏修改）：${described}。`,
+          kind: "witness",
+          value: candidate,
+          overridable: true,
+          path: "witness.polyhedron"
+        },
+        considered,
+        diagnostics: []
+      }
+    }
+    return rejectedSelection("polyhedron", "no_acceptable_witness", "没有候选能同时满足题面关系与几何合法性。", considered)
   }
 
   const parameter = request.constraints?.parameter ?? DEFAULT_DYNAMIC_POINT_PARAMETER
