@@ -221,3 +221,80 @@ export function conicInvariantPlan(): PlanEnvelope {
     actions: actions as unknown as DraftAction[]
   }
 }
+
+/**
+ * **用户报障的那一句**（2026-10-03）：只有关系、没有数值，过去根本画不出四棱锥 P-ABCD。
+ *
+ * 与上面两道代表题的区别：那两道题的数字是**题面给的**（菱形边长 2、椭圆 x²/9+y²/4=1），
+ * 而这一句**一个数字都没有** —— 所以坐标必须由模型自己挑（挑完写进 `assumptions` 给用户看），
+ * 而"挑得对不对"由 `relations` 表 + 内核残差核验。
+ */
+export const PYRAMID_PROMPT = "在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，BC ∥ AD，AB ⊥ AD，画出这个四棱锥"
+
+/**
+ * 一组满足全部所述关系的坐标。**顶点用下标引用**（`v0`…`v4` 依次是 P、A、B、C、D）。
+ *
+ * 挑值的三条理由（都对应提示词里那条"倾向于小整数、避免退化成更特殊的形状"）：
+ * - 小整数，便于学生一眼看懂；
+ * - `BC = 3` 与 `AD = 3` **恰好等长**，但题面只说"平行"—— 这正是要避免的那种巧合，
+ *   所以底面取 2×3 的矩形而不是正方形（若取正方形，`BC ∥ AD` 与"AB ⊥ AD"会顺带把
+ *   更多关系变成"意外成立"，掩盖一般性）。**注意**：这里仍满足 `AB ⊥ AD`（题面明说），
+ *   只是没有额外造出"四边相等"这种题面没说的特殊性；
+ * - 高取 4，与底面尺寸同量级，图形不变形。
+ */
+export const PYRAMID_VERTICES = [
+  { x: 0, y: 0, z: 4 }, // v0 = P（在底面正上方 → PA ⊥ 底面）
+  { x: 0, y: 0, z: 0 }, // v1 = A
+  { x: 2, y: 0, z: 0 }, // v2 = B
+  { x: 2, y: 3, z: 0 }, // v3 = C
+  { x: 0, y: 3, z: 0 } // v4 = D
+] as const
+
+/**
+ * 面环。**绕向是暴力搜出来的合法组合**（这个顶点的四棱锥只有 2 组合法）。
+ *
+ * 我第一版手推的绕向被内核判 `inconsistent-winding`（四个侧面全错），于是"关系核验不通过"
+ * 的假象把排查带偏了一轮 —— 拓扑别手推。
+ */
+export const PYRAMID_FACES = [[1, 2, 3, 4], [0, 2, 1], [0, 3, 2], [0, 4, 3], [0, 1, 4]] as const
+
+/**
+ * 题面给的三条关系，逐条写进信封的 `relations`。
+ *
+ * `PA ⊥ 平面 ABCD` 是**线⊥平面**：5 个顶点，前两个定线、后三个定平面。
+ * 另外两条是线⊥线 / 线∥线，各 4 个顶点。
+ */
+export const PYRAMID_RELATIONS = [
+  { id: "PA-perp-base", kind: "perpendicular", targets: [{ vertex: "v0" }, { vertex: "v1" }, { vertex: "v1" }, { vertex: "v2" }, { vertex: "v3" }] },
+  { id: "BC-parallel-AD", kind: "parallel", targets: [{ vertex: "v2" }, { vertex: "v3" }, { vertex: "v1" }, { vertex: "v4" }] },
+  { id: "AB-perp-AD", kind: "perpendicular", targets: [{ vertex: "v1" }, { vertex: "v2" }, { vertex: "v1" }, { vertex: "v4" }] }
+] as const
+
+/**
+ * 完整的四棱锥计划（用户报障那一句的确定性夹具）。
+ *
+ * `assumptions` 里那句话就是**设计 §1 验收判据 4/5 的落点**：用户必须看见
+ * "这些数是系统选的"，并且能在属性栏改。
+ */
+export function pyramidPlan(): PlanEnvelope {
+  const actions = [
+    {
+      actionId: "solid.create_polyhedron",
+      actionKey: "pyramid",
+      factIds: [],
+      inputs: { alias: "pyramid", vertices: [...PYRAMID_VERTICES], faces: PYRAMID_FACES.map((ring) => [...ring]), label: "四棱锥 P-ABCD" }
+    }
+  ]
+  return {
+    schemaVersion: PLAN_SCHEMA_VERSION,
+    kind: "plan",
+    goal: "作四棱锥 P-ABCD，满足 PA ⊥ 平面 ABCD、BC ∥ AD、AB ⊥ AD",
+    factIds: [],
+    assumptions: [
+      "题目没有给定具体尺寸，以下为系统选取的一组示例值（满足题面全部关系，可在属性栏修改）：P(0, 0, 4)、A(0, 0, 0)、B(2, 0, 0)、C(2, 3, 0)、D(0, 3, 0)。"
+    ],
+    relations: PYRAMID_RELATIONS.map((relation) => ({ ...relation, targets: relation.targets.map((target) => ({ ...target })) })),
+    // 与其它夹具同一条理由：这是**传输形状**，交给 `parsePlanEnvelope` 校验、由六层编译管线解析。
+    actions: actions as unknown as DraftAction[]
+  }
+}

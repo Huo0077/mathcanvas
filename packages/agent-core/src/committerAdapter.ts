@@ -1,7 +1,7 @@
 import { createDocumentHandle, type DocumentHandle } from "@draw/scene-graph"
 
 import type { CommitOutcome, CommitRequest, CommitterPort, ConsentToken } from "./coordinatorPorts"
-import type { PlanDiagnostic, RepairRequest, StructuredAssumption } from "./contracts"
+import type { PlanDiagnostic, PlanRelations, RepairRequest, StructuredAssumption } from "./contracts"
 import { runAcceptance, type AcceptanceDocument } from "./verification/taskAcceptance"
 
 /**
@@ -34,7 +34,7 @@ export interface DraftStoreLike {
    * **返回 `Promise`**（方案 3）：编译可以被交给几何 Worker，而 Worker 是异步的。
    * 这一层本来就是 `async`（`CommitterPort.stage` 返回 `Promise`），所以只是把 `await` 加到调用点。
    */
-  stage(draftId: string, actions: readonly unknown[], expectedDraftVersion: number, userMessage?: string): Promise<
+  stage(draftId: string, actions: readonly unknown[], expectedDraftVersion: number, userMessage?: string, relations?: PlanRelations): Promise<
     | {
         ok: true
         preview: {
@@ -123,7 +123,7 @@ export function createCommitterAdapter(dependencies: CommitterAdapterDependencie
       const preview = dependencies.host.preview(draftId)
       const expectedVersion = preview.ok ? preview.artifact.draftVersion : 1
 
-      const staged = await dependencies.drafts.stage(draftId, request.actions, expectedVersion, request.userMessage)
+      const staged = await dependencies.drafts.stage(draftId, request.actions, expectedVersion, request.userMessage, request.relations)
       if (!staged.ok) {
         const detail = staged.detail ?? staged.diagnostics?.map((entry) => `${entry.code}: ${entry.message}`).join("; ")
         // 原因码原样映射：`stale_draft_version`（版本对不上）与 `stale_draft`（基础文档变了）是两回事。

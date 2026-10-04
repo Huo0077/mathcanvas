@@ -8,7 +8,7 @@ import { DEFAULT_DERIVED_STATUS_LIMIT, SKILL_CATALOGUE_REVISION } from "@draw/ag
 
 import { createAgentRuntime } from "./agentRuntime"
 import { createModelPlanner, PLAN_TOOL_NAME } from "./modelPlanner"
-import { CONIC_INVARIANT_PROMPT, OBLIQUE_PRISM_PROMPT, conicInvariantPlan, obliquePrismEdges, obliquePrismSectionPlan } from "./representativeFixtures"
+import { CONIC_INVARIANT_PROMPT, OBLIQUE_PRISM_PROMPT, PYRAMID_PROMPT, conicInvariantPlan, obliquePrismEdges, obliquePrismSectionPlan, pyramidPlan } from "./representativeFixtures"
 import { buildSystemPrompt } from "./systemPrompt"
 import type { ExportPreflightPort } from "@draw/agent-core"
 
@@ -576,6 +576,46 @@ describe("the assembled runtime actually runs", () => {
  * 以及"确认之前真文档一个字节都不变"。
  */
 describe("representative tasks from the design", () => {
+  /**
+   * **用户报障的那一句**（2026-10-03）：只有关系、没有数值。
+   *
+   * 走的是**装配好的真实运行时**：确定性夹具（形状与模型给的一样）→ 传输校验 → 六层编译
+   * （含新增的关系核验）→ 隔离草稿 → 停在确认。断言三件事：
+   * ① 真的能建出来（过去这句话两条路都被提示词堵死）；
+   * ② 停在与"关系核验不通过"不同的地方 —— 即关系逐条成立、编译器没有把它拒掉；
+   * ③ **系统选的值对用户可见**（设计 §1 验收判据 4），而不是静默填数。
+   */
+  it("drafts the pyramid from a relations-only prompt, with the chosen numbers visible", async () => {
+    const { runtime, written, current } = makeRuntime({ envelope: pyramidPlan(), document: createEmptyDocument("geometry3d") })
+
+    const events = await drive(runtime.coordinator, { run: runContext(createEmptyDocument("geometry3d")), userMessage: PYRAMID_PROMPT })
+
+    expect(events.at(-1)).toBe("awaiting_confirmation")
+    // 确认之前草稿是隔离的：真文档一个字节都没变。
+    expect(written).toHaveLength(0)
+    expect(current()?.primitives).toHaveLength(0)
+
+    const draftId = runtime.draftId()
+    const preview = draftId === null ? null : runtime.drafts.getPreview(draftId)
+    expect(preview).not.toBeNull()
+
+    // ① 实体真的物化成了 polyhedron3（不是一地碎片）。
+    const primitives = preview?.candidate.primitives ?? []
+    const solid = primitives.find((primitive) => primitive.type === "polyhedron3")
+    expect(solid, `committed primitives: ${primitives.map((entry) => entry.type).join(",")}`).toBeTruthy()
+
+    /**
+     * ② **系统选的值对用户可见**（设计 §1 验收判据 4）。
+     *
+     * 读 `runtime.assumptions()` 而不是 `preview`：规划器**声明**的那几条假设不由预览带
+     *（预览只带编译期补出来的 `completionAssumptions`），而"这些数是系统选的"正是
+     * 声明出来的那一条。两处合起来才是用户在确认面板上真正看到的东西。
+     */
+    const text = (runtime.assumptions() ?? []).join(" ")
+    expect(text).toContain("示例值")
+    expect(text).toContain("(2, 3, 0)")
+  })
+
   it("drafts the oblique-prism section with midpoints at 0.5 and a moving point at the audited 0.4", async () => {
     const { runtime, written, current } = makeRuntime({ envelope: obliquePrismSectionPlan(), document: createEmptyDocument("geometry3d") })
 

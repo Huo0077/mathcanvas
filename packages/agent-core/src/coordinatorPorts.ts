@@ -1,4 +1,4 @@
-import type { DocumentHandle, PlanDiagnostic, PlanEnvelope, RepairRequest, RunContext, StructuredAssumption, ToolResult, VerificationReport } from "./contracts"
+import type { DocumentHandle, PlanDiagnostic, PlanEnvelope, PlanRelations, RepairRequest, RunContext, StructuredAssumption, ToolResult, VerificationReport } from "./contracts"
 import type { DraftAction } from "@draw/scene-graph"
 import type { Budget } from "./budget"
 import type { ConversationContext, ModelContext } from "./contextBuilder"
@@ -194,6 +194,15 @@ export interface CommitRequest {
    * 两者都要有，而动作不能靠计数推出来。
    */
   actions: DraftAction[]
+  /**
+   * **题目显式给出的关系表**（设计 2026-10-03 §5.1），随 `actions` 一起下去。
+   *
+   * 与 `userMessage` 是**同一类东西**：判据发生在编译期（关系核验那一层），而这张表只有
+   * 协调器手里的计划有。不传下去，`planCompiler` 的覆盖度检查会对每一份声明了关系的计划
+   * 报 `relation_not_declared` —— 实测踩到的正是这个：直接调 `compilePlan` 一切正常，
+   * 走真实运行时 100% 失败，因为中间有两处按 `actions` 重造了信封而没有带上它。
+   */
+  relations?: PlanRelations
   signal: AbortSignal
 }
 

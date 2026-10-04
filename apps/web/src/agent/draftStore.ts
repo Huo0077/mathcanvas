@@ -1,5 +1,5 @@
 import type { GeometryDocument } from "@draw/dsl"
-import { canonicalContentHash, compilePlan, PLAN_SCHEMA_VERSION, type PlanCompileResult, type PlanDiagnostic, type PlanEnvelope, type RepairRequest, type StructuredAssumption } from "@draw/agent-core"
+import { canonicalContentHash, compilePlan, PLAN_SCHEMA_VERSION, type PlanCompileResult, type PlanDiagnostic, type PlanEnvelope, type PlanRelations, type RepairRequest, type StructuredAssumption } from "@draw/agent-core"
 import { createIdAllocator, type DocumentHandle } from "@draw/scene-graph"
 
 import type { DraftAction, DomainOperation, IdAllocator } from "@draw/scene-graph"
@@ -112,7 +112,7 @@ export interface DraftStore {
    * 而 Worker 是异步的。改成 `Promise` 是让两条编译路径共用同一个入口的前提 ——
    * 实测那一步在真实大文档（约 2800 图元）上要 **73 ms**，而把文档交给另一个线程只要 **1.0 ms**。
    */
-  stage(draftId: string, actions: DraftAction[], expectedDraftVersion: number, userMessage?: string): Promise<StageResult>
+  stage(draftId: string, actions: DraftAction[], expectedDraftVersion: number, userMessage?: string, relations?: PlanRelations): Promise<StageResult>
   /** 基础文档变了（手工编辑、撤销、切工作区）→ 草稿过期，不能再提交。 */
   assertFresh(draftId: string, liveHandle: DocumentHandle): FreshnessResult
   /**
@@ -282,7 +282,7 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
       return { ...record, candidate: cloneDocument(record.candidate) }
     },
 
-    async stage(draftId, actions, expectedDraftVersion, userMessage) {
+    async stage(draftId, actions, expectedDraftVersion, userMessage, relations) {
       const record = drafts.get(draftId)
       if (!record) return { ok: false, reason: "unknown_draft", detail: `no draft ${draftId}` }
       if (record.draftVersion !== expectedDraftVersion) {
@@ -301,7 +301,18 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
        * 分配器用的是**这份草稿自己的**那一只：跨 `stage` 幂等（同一个 alias 永远同一个 id），
        * 这正是"重试同一笔不产生两个对象"的依据。
        */
-      const plan: StagedPlanEnvelope = { schemaVersion: PLAN_SCHEMA_VERSION, kind: "plan", goal: "staged batch", factIds: [], actions }
+      const plan: StagedPlanEnvelope = {
+        schemaVersion: PLAN_SCHEMA_VERSION,
+        kind: "plan",
+        goal: "staged batch",
+        factIds: [],
+        // **关系表必须一起带上**：下面这层是"按 actions 重造信封"，而关系核验发生在编译期。
+        // 实测踩到的正是这里 —— 协调器把 relations 交给了 committer，但这一行只传 actions，
+        // 于是每一份声明了关系的计划都在真实路径上被报 `relation_not_declared`
+        // （直接调 `compilePlan` 却一切正常，所以单元测试全绿也发现不了）。
+        ...(relations === undefined ? {} : { relations }),
+        actions
+      }
       const compiled = await compile({
         plan,
         document: record.candidate,
