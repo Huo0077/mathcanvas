@@ -36,10 +36,11 @@
 | --- | --- | --- |
 | 题设来源与 claim | `packages/agent-core/src/obligationIR.ts` | 新增唯一 IR；兼容现有 `diagramObligations.ts` |
 | 几何约束 | `packages/agent-core/src/constraintIR.ts` | 统一现有 `PlanRelation` 与 3D constraints |
-| 证据状态 | `packages/agent-core/src/claimEvidence.ts` | `verified_instance/sampled/formally_proved` 与 solver 状态 |
+| 证据状态 | `packages/agent-core/src/claimEvidence.ts` | `ClaimEvidenceStatus` 与 `SolverStatus`；候选结果另用 `WitnessResultStatus` |
 | 解析构造与候选搜索 | `packages/agent-core/src/solver/witnessSearch.ts` | 搜索编排、预算、seed、排序；不复制残差 |
 | 纯几何构造/残差 | `packages/geometry-kernel/src/witness/` | 解析构造、数值残差、退化和尺度处理 |
-| 编译接入 | `packages/agent-core/src/planCompiler.ts` | 现有调用点：约 299–301 的编译候选与约 358–360 的报告路径 |
+| 编译接入 | `packages/agent-core/src/planCompiler.ts` | 现有调用点：约 299–301 解析/核验候选 |
+| 草稿报告接线 | `apps/web/src/agent/draftStore.ts` | 现有调用点：约 358–360 重新核验草稿候选并保存报告 |
 | 草稿/Worker | `apps/web/src/agent/draftStore.ts`、`workerContracts.ts`、`geometryCompileStrategy.ts` | 同步/Worker 传递 IR、候选、报告和失败原因 |
 | 动态拖动 | `packages/scene-graph/src/`、`apps/web/src/threeScene*`、`apps/web/src/agent/agentRuntime.ts` | 约束进入文档；拖动进入事务 |
 | Provider 评测 | `scripts/agent-benchmark/` | JSONL 题集、脱敏、真实/离线模式分离 |
@@ -68,7 +69,7 @@ export interface AgentNextPhaseFlags {
 **目标：** 把当前 `DiagramObligation`、`PlanRelation`、三维约束和验证报告统一到一个可追溯状态，不改变默认行为。
 
 **Files:**
-- Create: `packages/agent-core/src/obligationIR.ts`, `constraintIR.ts`, `claimEvidence.ts` 及测试。
+- Create: `apps/web/src/agent/featureFlags.ts`、`packages/agent-core/src/obligationIR.ts`、`constraintIR.ts`、`claimEvidence.ts` 及测试。
 - Modify: `packages/agent-core/src/contracts.ts`, `index.ts`, `diagramObligations.ts`, `diagramVerification.ts`, `relations.ts`。
 - Modify call sites: `packages/agent-core/src/planCompiler.ts:299-301`、验证结果回传处、`apps/web/src/agent/draftStore.ts:358-360`、`apps/web/src/agent/workerContracts.ts`、`geometryCompileStrategy.ts`。
 - Test: `packages/agent-core/src/obligationIR.test.ts`、Worker 等价测试、现有 diagram/relations tests。
@@ -78,6 +79,8 @@ export interface AgentNextPhaseFlags {
 ```ts
 export type ClaimRole = "given" | "construction" | "goal" | "free_choice"
 export type Judgeability = "supported" | "unsupported" | "ambiguous"
+export type ClaimEvidenceStatus = "not_run" | "sampled" | "formally_proved" | "failed" | "unknown" | "inconsistent" | "timeout"
+export type WitnessResultStatus = "verified_instance" | "unverified_instance" | "no_witness"
 export type SolverStatus = "not_run" | "model" | "unsat" | "unknown" | "timeout" | "diverged"
 
 export interface GeometryObligation {
@@ -94,7 +97,7 @@ export interface GeometryObligation {
 }
 
 export interface ClaimEvidence {
-  status: "verified_instance" | "sampled" | "formally_proved" | "failed" | "unknown"
+  status: ClaimEvidenceStatus
   solver: SolverStatus
   residuals: Record<string, number | null>
   degreesOfFreedom: number | null
@@ -103,6 +106,7 @@ export interface ClaimEvidence {
 ```
 
 - [ ] **RED：** 用当前三棱锥题面断言 `given/goal/free_choice`、来源区间、支持/未支持和旧字段兼容；断言 `PlanCompiler → DraftStore → Worker` 不丢 IR。
+- [ ] **Feature flag：** N1 创建 `obligationIR/witnessSearch/constrainedDrag/openProblemCompiler/proofExport` 五个独立开关，默认 `false`；关闭时跑旧静态路径回归。
 - [ ] **RED 命令：** `npm.cmd exec -- vitest run packages/agent-core/src/obligationIR.test.ts --maxWorkers=1`；预期因文件/接口不存在失败。
 - [ ] **GREEN：** 实现 IR 和兼容适配，不让模型自报 relations 取代原话清单。
 - [ ] **GREEN 命令：** 同上；再跑 `npm.cmd exec -- vitest run packages/agent-core/src/diagram*.test.ts packages/agent-core/src/relations.test.ts --maxWorkers=1`。
@@ -173,9 +177,10 @@ export type DragSolveResult =
 ```
 
 - [ ] **RED：** 拖动保持中点/垂直/固定距离；过约束拒绝；欠约束显示自由度；拖动一步撤销。
-- [ ] **RED 命令：** `npm.cmd exec -- vitest run packages/scene-graph/src/constraints*.test.ts packages/geometry-kernel/src/constraints3d.test.ts --maxWorkers=1`；`npm.cmd run test:e2e -- e2e/agent-constrained-drag.spec.ts --workers=1`。
+- [ ] **RED 命令：** `npm.cmd exec -- vitest run packages/geometry-kernel/src/constraints.test.ts packages/geometry-kernel/src/constraints3d.test.ts packages/geometry-kernel/src/planar-constraints.test.ts packages/geometry-kernel/src/reactive/constraints.test.ts packages/scene-graph/src/operations.test.ts packages/scene-graph/src/patches.test.ts packages/scene-graph/src/scene-store.test.ts --maxWorkers=1`；`npm.cmd run test:e2e -- e2e/agent-constrained-drag.spec.ts --workers=1`。
 - [ ] **GREEN：** pointer intent → 临时约束 → solve → commit transaction；禁止直接改 render state。
 - [ ] **GREEN 命令：** 上述定向测试；再跑完整 `npm.cmd run test:e2e -- --workers=3`。
+- [ ] **N3 出口：** `constrainedDrag=false` 时旧拖动路径逐字回归；`constrainedDrag=true` 时保持约束、过约束拒绝、冲突恢复和一步撤销的浏览器用例全部通过。
 - [ ] **提交检查点：** `git commit -m "feat(geometry): preserve constraints during drag"`。
 
 ## Phase N4：开放题编译与真实 Provider Benchmark
@@ -188,7 +193,9 @@ export type DragSolveResult =
 - Docs: `docs/acceptance/agent-tool-loop-scorecard.md`、`agent-release-gate.md`。
 
 - [ ] **RED：** 缺 `provider/model/seed/status`、包含 secret、claim 缺 evidence、模式未标识时报告生成必须失败。
-- [ ] **RED 命令：** `node --test scripts/agent-benchmark/*.test.mjs`。
+
+**Interfaces:** `BenchmarkCase` 读取 JSONL 题集；`BenchmarkRun` 必须含 `provider/model/seed/mode/status/evidence/cost/latency`；`BenchmarkReport` 分开输出 `deterministic_local` 和 `real_provider`。
+- [ ] **RED 命令：** `npm.cmd exec -- vitest run scripts/agent-benchmark --maxWorkers=1`。
 - [ ] 题集至少包含：欠定、矛盾、未支持表达式、点名打乱、二面角/比例、动态请求、普遍证明请求。
 - [ ] 每题最多 3 轮，记录抽取率、求解率、题设覆盖率、verified/unverified/no_witness、成本、延迟和人工可读性。
 - [ ] 先跑小样本真实 provider；无凭据时写 `not_measured`，不伪造数字。
@@ -205,12 +212,16 @@ export type DragSolveResult =
 - Docs: proof support matrix and release gate.
 
 - [ ] **RED：** verified_instance/sampled 不能生成 formally_proved；伪造/缺字段/版本不匹配 artifact 拒绝。
+
+**Interfaces:** `ProofArtifact` 必须绑定输入哈希、后端/版本、claim id、证明正文和校验结果；`verifyProofArtifact()` 只返回 `verified/failed/unsupported/timeout`。
 - [ ] **RED 命令：** `npm.cmd exec -- vitest run packages/agent-core/src/proof --maxWorkers=1`。
+- [ ] **Proof spike：** 创建 scripts/proof-spike/ 的 adapter smoke runner；先输出后端版本/许可证/进程模型/WASM 或原生依赖/启动耗时/超时状态，未通过依赖审查时只允许 unsupported。
 - [ ] 先支持 5–10 个短目标：共线/共面、平行/垂直、等长、勾股；后端可选 Lean/mathlib 或 AlphaGeometry/Newclid 风格 adapter。
 - [ ] **依赖审查任务（必须在 GREEN 前完成）：** 记录许可证、进程/线程边界、WASM/原生依赖、缓存/沙箱、启动时间和失败/超时行为；没有审查结论不得接入默认构建。
 - [ ] **提交检查点：** `git commit -m "feat(proof): add verified proof artifact boundary"`。
+- [ ] **N5 GREEN 命令：** `npm.cmd exec -- vitest run packages/agent-core/src/proof --maxWorkers=1`; `node scripts/proof-spike/runner.mjs --mode=smoke`。
 
-## Phase N6：Feature flags、发布与维护收口
+## Phase N6：发布与维护收口（flags 已在 N1 创建）
 
 **目标：** 把前五阶段的能力安全地从实验变成可选择发布能力。
 
