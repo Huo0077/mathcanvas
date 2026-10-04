@@ -25,8 +25,13 @@ describe("evidenceStatusForWitness", () => {
     expect(evidenceStatusForWitness("unverified_instance")).toBe("unknown")
   })
 
-  it("maps a failed search to failed evidence rather than an unsupported pass", () => {
-    expect(evidenceStatusForWitness("no_witness")).toBe("failed")
+  it("maps a failed search to unknown evidence, not to a claim that the geometry is false", () => {
+    /**
+     * **裁决 R8**：`no_witness`（没找到见证）是"我还不知道"，`failed`（证据表明不成立）是
+     * "我知道它不是" —— 两者混为一谈会把"没算出来"显示成"题设不成立"。
+     * 搜索确实跑过（所以不是 `not_run`），但它没跑出否定结论，所以只能是 `unknown`。
+     */
+    expect(evidenceStatusForWitness("no_witness")).toBe("unknown")
   })
 
   it("maps every witness outcome so N2/N5 cannot invent a fourth state", () => {

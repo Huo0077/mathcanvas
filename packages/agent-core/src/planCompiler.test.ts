@@ -1,4 +1,4 @@
-import { createEmptyDocument, type GeometryDocument } from "@draw/dsl"
+﻿import { createEmptyDocument, type GeometryDocument } from "@draw/dsl"
 import { contentFingerprint } from "@draw/scene-graph"
 import { describe, expect, it } from "vitest"
 

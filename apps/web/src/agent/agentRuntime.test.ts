@@ -7,9 +7,12 @@ import type { PlanEnvelope, PlannerPort, PlanRequest } from "@draw/agent-core"
 import { DEFAULT_DERIVED_STATUS_LIMIT, SKILL_CATALOGUE_REVISION } from "@draw/agent-core"
 
 import { createAgentRuntime } from "./agentRuntime"
+import type { WorkerLike } from "./geometryWorkerClient"
+import { handleGeometryRequest } from "./workerRuntime"
 import { createModelPlanner, PLAN_TOOL_NAME } from "./modelPlanner"
 import { CONIC_INVARIANT_PROMPT, OBLIQUE_PRISM_PROMPT, PYRAMID_PROMPT, conicInvariantPlan, obliquePrismEdges, obliquePrismSectionPlan, pyramidPlan } from "./representativeFixtures"
 import { buildSystemPrompt } from "./systemPrompt"
+import { inlineWorker } from "./testing/inlineWorker"
 import type { ExportPreflightPort } from "@draw/agent-core"
 
 /**
@@ -48,7 +51,7 @@ function exportPreflight(): ExportPreflightPort {
   return { preflight: vi.fn(() => ({ format: "svg", supported: true, requiresUserAcceptance: false, omitted: [], fontLoss: [], approximationNotes: [], blockedReasons: [], projectedEntityCount: 0 })) }
 }
 
-function makeRuntime(options: { envelope?: PlanEnvelope; document?: GeometryDocument | null; planner?: PlannerPort; diagnostics?: (line: string) => void } = {}) {
+function makeRuntime(options: { envelope?: PlanEnvelope; document?: GeometryDocument | null; planner?: PlannerPort; diagnostics?: (line: string) => void; geometryWorkerFactory?: () => WorkerLike; obligationIR?: boolean } = {}) {
   let current = options.document === undefined ? geometryDocument() : options.document
   const written: GeometryDocument[] = []
   const runtime = createAgentRuntime({
@@ -61,6 +64,9 @@ function makeRuntime(options: { envelope?: PlanEnvelope; document?: GeometryDocu
     planner: options.planner ?? plannerFor(options.envelope ?? planEnvelope()),
     exportPreflight: exportPreflight(),
     ...(options.diagnostics === undefined ? {} : { diagnostics: options.diagnostics }),
+    ...(options.geometryWorkerFactory === undefined ? {} : { geometryWorkerFactory: options.geometryWorkerFactory }),
+    // N1 的开关按裁决 R6 由应用层持有；这里用注入点把它打开，好让"接线到底通不通"可测。
+    ...(options.obligationIR === undefined ? {} : { agentNextPhaseFlags: { obligationIR: options.obligationIR, witnessSearch: false, constrainedDrag: false, openProblemCompiler: false, proofExport: false } }),
     projectId,
     runId: "run-1",
     now: () => 1_000
@@ -327,6 +333,33 @@ describe("the assembled runtime actually runs", () => {
 
     expect(staged.ok).toBe(false)
     expect(staged.unchanged).toBe(true)
+  })
+
+  /**
+   * **R6 在生产装配上到底通不通**（复核 Important 1）。
+   *
+   * 这条走的是**真正的生产策略**（`createAgentRuntime` 注入的那个
+   * `createWorkerCompileStrategy`），而不是 `diagramDraftStage.test.ts` 里手写的那一份 ——
+   * 手写策略自己会带全字段，恰好盖住了"真策略漏转发开关"这个缺陷。
+   * 观测点是**发到假 Worker 上的请求载荷**：开关过没过去，只有那里看得见。
+   */
+  it("hands the application's next-phase flag down to the real worker compile strategy", async () => {
+    const posted: Record<string, unknown>[] = []
+    const { runtime } = makeRuntime({
+      obligationIR: true,
+      geometryWorkerFactory: () => {
+        const inner = inlineWorker((request) => handleGeometryRequest(request as never))
+        return { ...inner, postMessage(message: unknown) { posted.push(message as Record<string, unknown>); inner.postMessage(message) } }
+      }
+    })
+    const created = runtime.draftTools.create({ projectId, documentId: "doc-1", workspace: "geometry3d", epoch: "epoch:doc-1", generation: 0, contentHash: "" })
+
+    const staged = await runtime.draftTools.stage(created.draftId, [{ actionId: "solid.create_template", actionKey: "cube", factIds: [], inputs: { alias: "cube", template: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 2, z: 2 } } } as never], created.draftVersion)
+
+    expect(staged.ok).toBe(true)
+    expect(posted).toHaveLength(1)
+    // 少这一个字段 = 生产上 Worker 那条路的开关永远不生效（R6 要消灭的形态）。
+    expect(posted[0]?.obligationIR).toBe(true)
   })
 
   it("answers export preflight questions through the injected port", async () => {

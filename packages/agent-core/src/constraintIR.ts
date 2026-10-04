@@ -99,13 +99,29 @@ function pointDof(primitive: Extract<PrimitiveSpec, { type: "point3" }>): number
 }
 
 /**
- * 可扰动的标量参数。**只列显式参数化的量**：`point` 的 `x/y`、`point3.position.*`、
- * 圆的 `center/normal/radius`、平面点法式的 `normal.*`。
+ * 可扰动的标量参数。**只列显式参数化的量，而且只列绑定真正留下的那些量**：
+ * 自由点 3 个坐标轴、线上/宿主上的点 1 个、面上/曲面上的点 2 个（派生点 0 个）；
+ * 圆的 `center/normal/radius`；平面点法式的 `normal.*`。
  *
- * 特意**不**给平面法向做单位化、也**不**手工扣掉"法向长度不影响残差"这个事实：
- * 内核的残差函数自己会归一（`planeNormal` 先 `normalizeVector3`），所以缩放任一分量
- * 对残差没有一阶影响 —— 那种"没有影响的参数"会被有限差分自动判成 0 列。
- * 在这里手工扣掉，等于把内核的实现细节抄第二遍。
+ * ## 受约束点为什么只暴露绑定留下的轴（复核 Important 4 / 裁决 R9）
+ *
+ * 这一版**不把绑定建模成约束**（那需要一条"点必须在宿主上"的残差，属于 N2/N3 的工作），
+ * 所以没有任何东西会替它扣掉被绑掉的自由度。若这里仍然返回三个位置轴，
+ * `objects[].dof` 与 `totalDof` 就会把"线上点"报成 3 —— 与文件头和 `pointDof` 的承诺直接矛盾，
+ * 而且 `pointDof` 的 1/2 分支成了死代码。
+ *
+ * 于是口径是：**绑定是模型的一部分**，可动方向就是它留下的那些轴（1 个轴用坐标的一个分量代表、
+ * 2 个轴用两个分量代表）。坐标与参数不同步是"哪一根轴当代表"的近似，但**轴数**是绑定唯一确定的 ——
+ * 而自由度诊断要的正是轴数。
+ *
+ * ## 另外两件刻意不做的事
+ *
+ * - **不给平面法向做单位化**、也**不手工扣掉**"法向长度不影响残差"：内核的残差函数自己会归一
+ *   （`planeNormal` 先 `normalizeVector3`），所以缩放任一分量对残差没有一阶影响 ——
+ *   那种"没有影响的参数"会被有限差分自动判成 0 列。手工扣掉等于把内核的实现细节抄第二遍。
+ * - **不给 `onHost`/`onLine` 的 `parameter` 再加一根轴**：`parameter` 是那根轴的缓存
+ *   （`Point3Binding.onHost` 的注释写明它由 `parameterId` 驱动时只是缓存），
+ *   再加一根会把线上点报成 2 个自由度。驱动它的文档参数属于 N3 的动态约束范围。
  */
 function parametersOf(primitive: PrimitiveSpec, ownerIndex: number): ScalarParameter[] {
   const at = (key: string): ScalarParameter => ({
@@ -135,8 +151,13 @@ function parametersOf(primitive: PrimitiveSpec, ownerIndex: number): ScalarParam
     }
   })
 
-  if (primitive.type === "point3") return pointDof(primitive) === 0 ? [] : [positionAt("x"), positionAt("y"), positionAt("z")]
-  if (primitive.type === "point") return [at("x"), at("y")]
+  // 暴露的轴数 = 绑定的自由度（自由点 3、线上点 1、面上点 2、派生点 0）——
+  // 与 `dofOf` 共用同一个 `pointDof`，所以"逐对象报的数"与"雅可比扰动的轴"不可能分叉。
+  if (primitive.type === "point3") return [positionAt("x"), positionAt("y"), positionAt("z")].slice(0, pointDof(primitive))
+  if (primitive.type === "point") {
+    // `PointBinding.onPath`（绑在轨道上）同样只剩 1 个自由度；没有绑定 = 自由点（2 个轴）。
+    return primitive.binding === undefined ? [at("x"), at("y")] : [at("x")]
+  }
   if (primitive.type === "circle3") {
     return [
       vectorAt("center", "x"), vectorAt("center", "y"), vectorAt("center", "z"),

@@ -92,6 +92,32 @@ describe("reportFreeDegrees", () => {
   })
 
   /**
+   * **受约束点的自由度必须按绑定报数**（复核 Important 4 / 裁决 R9）。
+   *
+   * 文件头与 `pointDof` 都承诺"线上点 1、面上点 2"，但 `parametersOf` 曾经对任何非派生
+   * `point3` 都返回三个位置轴，于是 `objects[].dof` 与 `totalDof` 对受约束点也是 3 ——
+   * `pointDof` 的 1/2 分支成了死代码，而夹具体系里全是自由点，所以没有任何用例发现它。
+   *
+   * 这条同时钉住**两个出口**：`objects[].dof`（逐对象）与 `totalDof`（汇总）。
+   * 只钉一个的话，另一个仍然可以是谎话。
+   */
+  it("reports the binding's degree of freedom for a constrained point instead of a free point's three", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives.push({ id: "free", type: "point3", position: { x: 0, y: 0, z: 1 } })
+    document.primitives.push({ id: "on-line", type: "point3", position: { x: 1, y: 0, z: 0 }, binding: { kind: "onHost", hostId: "some-line", parameter: 0.5 } })
+    document.primitives.push({ id: "on-plane", type: "point3", position: { x: 2, y: 3, z: 0 }, binding: { kind: "onPlane", planeId: "some-plane", coordinates: [2, 3], frame: { origin: { x: 0, y: 0, z: 0 }, u: { x: 1, y: 0, z: 0 }, v: { x: 0, y: 1, z: 0 } } } })
+
+    const report = reportFreeDegrees(document, [])
+
+    expect(report.objects).toEqual([
+      { id: "free", kind: "point3", dof: 3 },
+      { id: "on-line", kind: "point3", dof: 1 },
+      { id: "on-plane", kind: "point3", dof: 2 }
+    ])
+    expect(report.totalDof).toBe(6)
+  })
+
+  /**
    * 诊断是**只读**的：雅可比靠扰动参数来算，而扰动必须逐个还原。
    * 少了这条，"诊断一次"就会把用户文档里的坐标悄悄挪掉一点点 —— 这种破坏只在
    * 后续计算里表现为"莫名其妙差了一点"，最难查。

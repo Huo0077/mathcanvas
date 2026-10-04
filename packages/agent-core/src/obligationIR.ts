@@ -33,6 +33,26 @@ import type { ClaimRole, GeometryObligation, Judgeability, ObligationTolerance }
  *   N2/N5 的事），把目标标成 `supported` 会让界面以为"系统验证了这道题"。
  *
  * 判错这一格的代价很具体：用户看到"已支持"就会以为系统证明了它。所以宁可窄一点。
+ *
+ * ## 为什么**模型声明的 `relations` 不进这份 IR**（裁决 R7：有记录的偏离）
+ *
+ * 计划的 Files 清单里点了 `contracts.ts` 与 `relations.ts`，N1 的目标描述也点了 `PlanRelation`。
+ * 本任务**有意不改那两个文件**，IR 里也没有 `PlanRelation` 的一等公民。理由三条：
+ *
+ * 1. **设计定的口径**：模型自报的 `relations` **不是**统一状态的来源，只能当**附加线索**
+ *    （设计 §5.2 与"Obligation IR 只由原话清单产出"那条红线）。把它塞进 IR 会让
+ *    "模型说它垂直"变成一条与题设同级的 claim —— 那正是"模型自报取代原话清单"的入口。
+ * 2. **relation 类判据已经在了，只是换了形态**：线线垂直/平行在 IR 里就是
+ *    `kind: "perpendicular" | "parallel"` 的 obligation（由原话驱动），而**判定**仍然走
+ *    既有那条唯一路径 —— `diagramVerification.calculate` → `relations.relationResidual`
+ *    （`relations.ts` 的模块注释写明它是"关系判据的唯一真源"，坐标版与内核逐式同源）。
+ *    所以"relation 没有进 IR"不等于"relation 没人判"，而是**判据不搬家**。
+ * 3. **硬塞属 YAGNI**：`PlanRelation` 的形状（`id` / `kind` / `targets[].vertex` / `value`）是
+ *    给"编辑期声明表"用的，与 IR 需要的"角色 + 原话区间 + 判性"不是一回事。等真有某个阶段
+ *    需要"把模型声明与题设 claim 对齐"（N4 的开放题编译才可能），那时按那个阶段的判据再加，
+ *    而不是现在按清单凑一个字段。
+ *
+ * 一句话：**IR 的可追溯性来自原话，relation 只是佐证；佐证不进账本，判据不搬第二处。**
  */
 
 /** 有现成判据的题设种类（`diagramVerification.ts` 的 `calculate` 覆盖这些）。 */

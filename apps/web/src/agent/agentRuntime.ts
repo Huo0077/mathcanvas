@@ -26,6 +26,7 @@ import {
 import type { GeometryDocument } from "@draw/dsl"
 import { contentFingerprint } from "@draw/scene-graph"
 import { createDraftStore, type DraftStore } from "./draftStore"
+import { agentNextPhaseFlags, type AgentNextPhaseFlags } from "./featureFlags"
 import { createWorkerCompileStrategy } from "./geometryWorkerHost"
 import type { WorkerLike } from "./geometryWorkerClient"
 import { createHostBridge, type HostBridge } from "./hostBridge"
@@ -79,6 +80,15 @@ export interface AgentRuntimeDependencies {
    * 只把"线程"换成函数调用。不传就按生产路径建。
    */
   geometryWorkerFactory?: () => WorkerLike
+  /**
+   * **下一阶段能力开关的注入点**（N1 的 `obligationIR`；裁决 R6）。
+   *
+   * 缺省取 `agentNextPhaseFlags()`（应用层持有的那一份，五个开关默认全关）。
+   * 与 `geometryWorkerFactory` 同一条理由：**没有注入点就无法在测试里验证接线**，
+   * 而"应用层到底有没有把开关交下去"正是复核点名要证明的那一件事 ——
+   * 一个只在生产路径上生效、测试里永远读不到的开关，与没有开关无法区分。
+   */
+  agentNextPhaseFlags?: AgentNextPhaseFlags
   /**
    * **这一轮钉住的那条会话**（Fix round 1 / C2；规格 §5.4）。
    *
@@ -219,6 +229,15 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
    * 一次性同意与 CAS **一个字都没变**：Worker 只是一条"算出候选结果"的路径，
    * 它不提交、不铸造凭据。
    */
+  /**
+   * **应用层持有的开关取一次**（裁决 R6："由应用层持有并显式传入 flag"）。
+   *
+   * 为什么在这一层取：`agent-core` 是纯函数库、不读应用级 flag（否则同一份输入在不同环境
+   * 给出不同结果、测试也钉不住），所以"开关现在是什么"只能由应用侧回答。这里取一次、
+   * 往下交给 `stage` —— 于是**这一轮运行里**所有编译（Worker 那条路与就地兜底路）
+   * 用的是同一个值，不会出现"同一次运行里两次编译开关不同"。
+   */
+  const nextPhase = dependencies.agentNextPhaseFlags ?? agentNextPhaseFlags()
   const drafts = createDraftStore(undefined, createWorkerCompileStrategy(dependencies.runId, dependencies.geometryWorkerFactory))
 
   const live = () => {
@@ -247,7 +266,8 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
     },
     async stage(draftId, actions, expectedDraftVersion) {
       // `DraftStore` 的签名收可变数组（它会与已有动作拼接），这里把只读入参拷一份。
-      const result = await drafts.stage(draftId, [...actions], expectedDraftVersion)
+      // 第六个参数是 N1 的统一 IR 开关（R6）：它必须**由应用层显式传**，不能靠编译层兜底。
+      const result = await drafts.stage(draftId, [...actions], expectedDraftVersion, undefined, undefined, nextPhase.obligationIR)
       if (!result.ok) {
         const failure: DraftStageOutcome = { ok: false, reason: result.reason, diagnostics: result.diagnostics ?? [], detail: result.detail, unchanged: true }
         return failure
@@ -259,7 +279,7 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
       const base = dependencies.readDocument()
       if (!base) return { ok: false, diagnostics: [{ code: "no_document", message: "there is no active document" }], detail: "there is no active document" }
       const probe = drafts.create(base, handleFor(base, dependencies.projectId))
-      const result = await drafts.stage(probe.draftId, [...actions], probe.draftVersion)
+      const result = await drafts.stage(probe.draftId, [...actions], probe.draftVersion, undefined, undefined, nextPhase.obligationIR)
       // `DraftStore` 只有 `invalidate`（不是 `discard`）：它把草稿从表里删掉并记下原因。
       drafts.invalidate(probe.draftId, "preflight probe")
       return result.ok

@@ -94,7 +94,22 @@ export function createWorkerCompileStrategy(runId: string, factory?: () => Worke
       return await compileInWorker(
         geometryWorkerForPage(factory),
         { plan: input.plan, document: input.document },
-        { runId, draftId: input.conversationId, draftVersion: input.draftVersion, ...(input.userMessage === undefined ? {} : { prompt: input.userMessage }) }
+        {
+          runId,
+          draftId: input.conversationId,
+          draftVersion: input.draftVersion,
+          ...(input.userMessage === undefined ? {} : { prompt: input.userMessage }),
+          /**
+           * **N1 的 IR 开关必须在这里转发**（复核 Important 1 / 裁决 R6）。
+           *
+           * 这一条曾经漏掉：`CompileStrategy` 的入参有 `obligationIR`，而这里构 Worker 信封时
+           * 只取了 `runId` / `conversationId` / `draftVersion` / `userMessage` ——
+           * 于是**生产**那条 Worker 路永远看不到这个开关，而 `diagramDraftStage.test.ts`
+           * 里那条"跨线程"用例用的是**手写 strategy**（它自己会带上），所以整份测试全绿。
+           * 少转发一个字段的后果不是"少一个功能"，而是"开关事实上不生效" —— 正是 R6 要消灭的形态。
+           */
+          ...(input.obligationIR === undefined ? {} : { obligationIR: input.obligationIR })
+        }
       )
     } catch (error) {
       /**

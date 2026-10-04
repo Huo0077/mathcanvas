@@ -1,4 +1,4 @@
-import { createEmptyDocument } from "@draw/dsl"
+﻿import { createEmptyDocument } from "@draw/dsl"
 import { createIdAllocator } from "@draw/scene-graph"
 import { describe, expect, it } from "vitest"
 

@@ -128,15 +128,18 @@ export interface ClaimEvidence {
  * - `verified_instance` → `verified_instance`：有一个通过核验的实例，证据就是那个实例；
  * - `unverified_instance` → `unknown`：找到了候选但**没能核验**（点名缺失、退化、超预算）——
  *   "不知道"必须保持是"不知道"，不能升格成通过；
- * - `no_witness` → `failed`：明说了没找到 → 这是"搜索失败"这一个**事实**的证据。
+ * - `no_witness` → `unknown`（**裁决 R8 改的**）：搜索**确实跑过**（所以不是 `not_run`），
+ *   但它没有跑出否定结论 —— "没找到见证"是「我还不知道」，不是「我知道它不是」。
+ *   本文件对 `failed` 的定义是"系统自洽而候选实例不满足"，那要求**有反例证据**；
+ *   把"没找到"写成 `failed` 会让界面把"没算出来"显示成"题设不成立"。
  *
- * 注意 `no_witness` **不是** `inconsistent`：搜索失败不等于约束系统自相矛盾，
- * 那是求解器状态（`unsat`）才该报的话。
+ * **若 N2 的搜索器真能给出冲突证据**（例如约束系统被证明无解），那时由**搜索器**自己报
+ * `inconsistent` —— 那是求解器状态（`SolverStatus.unsat`）该说的话，不在这张静态映射表里
+ * 预先断言。这张表只说"搜索结果本身"意味着什么。
  */
 export function evidenceStatusForWitness(result: WitnessResultStatus): ClaimEvidenceStatus {
   if (result === "verified_instance") return "verified_instance"
-  if (result === "unverified_instance") return "unknown"
-  return "failed"
+  return "unknown"
 }
 
 /** 现有静态核验的三态（`DiagramCheckStatus`）；这里刻意用字面量联合，避免依赖那张报告。 */
