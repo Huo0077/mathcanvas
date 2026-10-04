@@ -1,6 +1,6 @@
-# MathCanvas Agent Tool Loop Scorecard
+﻿# MathCanvas Agent Tool Loop Scorecard
 
-Date: September 28, 2026. Status: evaluation protocol defined; real-provider evaluation not run.
+Date: October 4, 2026. Status: geometry-instance verification added; real-provider evaluation still not run.
 
 ## Metrics
 
@@ -14,7 +14,16 @@ Date: September 28, 2026. Status: evaluation protocol defined; real-provider eva
 | Average latency | Total time to confirmable draft / successful runs | Keep failed-run latency separate |
 | Average cost | Provider billable cost / successful runs | Missing billing data is null, never zero |
 
-## Current evidence
+## Deferred-capability scorecard (design only)
+
+| Capability | Status | Required evidence before enabling |
+| --- | --- | --- |
+| General nonlinear solving | design only | model/unsat/unknown/timeout/diverged, residuals and reproducible seeds |
+| Constraint-preserving drag | design only | browser drag suite with DOF/overconstraint/recovery evidence |
+| Open-ended problem compilation | design only | obligation extraction and judgeability rates separate from final drawing rate |
+| Formal proof | design only | independently checked proof artifacts |
+| Real provider | not measured | pass@1/pass@3, cost, latency and human readability |
+## Current evidence\n\n### 2026-10-04 geometry-diagram supplement\n\n| Metric | Current reading | Boundary |\n| --- | --- | --- |\n| Supported static-instance verification | 3319 unit assertions + 186 browser assertions in the current workspace | Fixed/ offline candidates; not real-model accuracy |\n| Unknown-condition blocking | Covered by unit, runtime, HostBridge and browser negative paths | Only supported high-precision obligation forms are judged |\n| Real-provider geometry pass@1/pass@3 | Not measured | Requires provider credential and benchmark dataset |\n| Witness-search success rate | Not implemented | Next-round design only |\n
 
 `npm run eval:agent` runs the offline evaluator and prints the scorecard (it reuses vitest because this repo has no TS runner; the report lives in `apps/web/src/agent/fixtures/agentEvalReport.ts`).
 
@@ -27,7 +36,7 @@ Date: September 28, 2026. Status: evaluation protocol defined; real-provider eva
 | Offline tool error rate | Measured **3/45** | same run |
 | Deterministic check coverage | **7 of 8 tasks judged**, 1 unverifiable | Only `visual-fit` remains `not_supported`, because its prompt has no composition verb so the deterministic planner produces nothing to judge. `section-after-solid` and `modify-section` gained judges this round and now honestly report `failed` (the local planner issues no section actions / produces no candidate) |
 | Real provider tool selection | **One live run recorded** | 2026-09-29, DeepSeek `deepseek-chat` (`tools` verified): the native channel published **exactly the 5 model-facing tools** (`tools=5` in the transport log) and the model called `plan_set_plan`. Still not a pass@1 measurement |
-| Real drawing pass@1/pass@3 | Not measured | One problem was driven end to end (`docs/research/2026-09-28-agent-tool-loop-progress.md`, "Live run against a real provider") and the model's answer was independently correct — but one problem is not a rate, and the scene was not connected |
+| Real drawing pass@1/pass@3 | Not measured | Offline geometry-instance/browser evidence is not a real-model rate. One problem was driven end to end (`docs/research/2026-09-28-agent-tool-loop-progress.md`, "Live run against a real provider") and the model's answer was independently correct — but one problem is not a rate, and the scene was not connected |
 | Visual/layout evidence | **Local path measured; screenshot path not wired** | `visual-fit-drawn` is judged by `diagnoseLayout` on a candidate document with **no provider vision** (clipping 0, label overlaps 0). `render.capture` / `render.inspect_layout` and live-camera boxes remain unconnected |
 | Cost/latency | Not measured | No real-provider billing or end-to-end sample set; the printed latency covers the deterministic local planner only |
 

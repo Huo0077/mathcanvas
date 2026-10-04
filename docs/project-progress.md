@@ -1,4 +1,4 @@
-# MathCanvas 项目进度（归档）
+﻿# MathCanvas 项目进度（归档）
 
 > **这是归档，不是当前状态。** [**`docs/current-status.md`**](current-status.md) 是"现在时"的唯一一处
 > —— 当前门禁读数、各方案做到哪一步、还没做什么，都在那里。
@@ -4488,3 +4488,44 @@ This is the current pause snapshot for the Agent tool-loop work and does not ove
 Evidence: 242 Vitest files, 2863 tests passed, 1 todo; TypeScript typecheck, full Rust tests, and Web build passed. Visual tests still emit jsdom/WebGL warnings, and real-provider accuracy/cost/latency remain unmeasured.
 
 Detailed snapshot: `docs/research/2026-09-28-agent-tool-loop-progress.md`.
+## 2026-10-04 —— b1ee3d3：欠定示意图核验收口；下一轮转向见证搜索与真实 provider 基线
+
+### A. 本轮交付
+
+- 题设由系统从用户原话提取，候选图按最终物化坐标逐项核验；欠定允许选择一组实例，不把实例当证明。
+- `verified_instance` 可确认；失败或未核验停在门禁外；宿主层同样拒绝未核验同意凭据；多轮草稿和 Worker/同步路径有回归。
+- 离线代表题正例与额外未知角度条件反例均走真实浏览器；不支持表达式、点名歧义、旧等长写法、点面/共线等漏检风险加入测试。
+
+### B. 当次门禁
+
+- 287 个 Vitest 文件 / 3319 项通过 + 1 todo。
+- Playwright 186 通过 / 0 失败。
+- typecheck、Web build 通过；lint 0 error / 13 warnings；Rust 236 通过 / 3 ignored。
+
+### C. 下一轮决策
+
+- 不立即做通用求解器或形式证明；先把题设统一成 Obligation IR，再做有预算、有 seed 的解析构造 + 有限搜索。
+- 真实 provider pass@1/pass@3、成本、延迟和人工可读性仍未测，必须单独建 benchmark，不能用 deterministic_local 代替。
+- 动态拖动保持约束与形式证明继续后置。
+
+### D. 外部参考的使用边界
+
+本轮调研参考 GeoGebra 的动态几何分层、FreeCAD 的参数化历史和几何内核分离、mathlib4 的形式证明边界；它们提供设计启发，不代表本项目已经拥有对应能力，也不引入外部代码。
+## 2026-10-04 —— 下一阶段完整路线：从静态核验进入求解、动态、证明和开放题编译
+
+本条不是已交付功能，而是用户要求的下一阶段设计归档。
+
+### A. 四条主线
+
+1. **统一数学状态 IR**：Obligation / Constraint / Claim，保存来源、目标、自由度、证据和 solver 状态。
+2. **通用约束与非线性求解**：解析构造优先；有限预算数值 solver；Z3/NLSAT 只通过 adapter 评估。
+3. **动态拖动保持约束**：约束进入文档，拖动是临时约束求解和事务提交，显示自由度、过约束、无解和超时。
+4. **开放题理解、真实 provider benchmark、形式证明出口**：抽取与求解分开评测；实例/采样/形式证明分级；证明后端独立校验证书。
+
+### B. 外部参考和边界
+
+SolveSpace、FreeCAD、Z3、AlphaGeometry、Newclid、mathlib4/Lean 只作为架构参考或未来 adapter 目标；不把外部代码、许可证或模型效果写成本项目已具备能力。完整调研见 `docs/research/2026-10-04-github-project-survey.md`。
+
+### C. 实施顺序
+
+N1 IR → N2 求解 adapter → N3 动态拖动 → N4 开放题与真实 provider benchmark → N5 形式证明 → N6 发布门槛。每一阶段必须保留当前 fail-closed 确认边界和全量门禁。

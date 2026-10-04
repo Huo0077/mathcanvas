@@ -1,4 +1,4 @@
-# Agent Tool Loop Progress Snapshot
+﻿# Agent Tool Loop Progress Snapshot
 
 Date: September 29, 2026. Status: **the six-phase checklist is complete, or deferred by a recorded decision.** The final release gate is **not** met — one line lacks real-provider data.
 
@@ -227,3 +227,19 @@ Related documents:
 - `docs/superpowers/plans/2026-09-28-agent-tool-loop-implementation-plan.md`
 - `docs/research/2026-09-28-agent-tool-loop-baseline.md`
 - `docs/acceptance/agent-tool-loop-scorecard.md`
+## 2026-10-04 follow-up: geometry verification is live; next round is witness search, not a broader tool loop
+
+The `b1ee3d3` slice adds a second semantic boundary on top of the typed tool loop: a static solid candidate may be confirmed only when supported obligations extracted from the user's text pass against the materialized candidate. Underdetermined geometry is valid when it is one verified instance; it is not a proof. Unknown obligations stay visible and block confirmation, including the HostBridge consent path.
+
+This closes the specific “wrong diagram silently passed” class for the supported high-precision obligation forms. It does not supply real-provider accuracy, a general nonlinear solver, persistent drag constraints, screenshot judgment, or formal proof. The next design is therefore `docs/superpowers/specs/2026-10-04-agent-next-round-witness-search-design.md`: first unify obligation IR, then add bounded deterministic witness search, then measure real providers separately from `deterministic_local`.
+## 2026-10-04 complete deferred-capability roadmap
+
+The user asked to bring the previously deferred capabilities back into planning. They are now explicitly separated into five phases, without claiming implementation:
+
+- N1: Obligation / Constraint / Claim IR, including evidence type and solver status.
+- N2: bounded analytic and nonlinear witness solving, with an adapter boundary for optional Z3/NLSAT feasibility work.
+- N3: document-backed constraint-preserving drag with degrees-of-freedom and overconstraint diagnostics.
+- N4: open-ended natural-language compilation plus a real-provider benchmark; `deterministic_local` remains a regression mode only.
+- N5: a small formal-proof export/verification pilot, where `verified_instance`, `sampled`, and `formally_proved` remain distinct.
+
+The design and implementation documents are `docs/superpowers/specs/2026-10-04-agent-full-next-phase-design.md` and `docs/superpowers/plans/2026-10-04-agent-full-next-phase-implementation-plan.md`. GitHub project notes are in `docs/research/2026-10-04-github-project-survey.md`.

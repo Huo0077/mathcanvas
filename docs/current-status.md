@@ -252,6 +252,19 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
 - **（已闭环，留档）「自动取景动画会覆盖用户拖动」那个窗口已修**（2026-10-02，提交 `fd234fd`）：过去 `cancelFitAnimation()` 只在副作用清理（卸载）里被调用，用户拖动不取消进行中的取景，于是"换文档触发取景"之后在 **250 ms 窗口内开始拖**，拖动结束后剩下的帧会把用户刚拖出来的视角覆盖回去。现在 `pointerdown` 与滚轮都会先取消它。**顺带补了可观测状态** `data-fit-animation`（`running` / `done` / `cancelled`）—— 因为这条缺口的第一版用例是**假绿**的（触发条件搞错了：`shouldAutoFit` 只在换文档或内容出界时取景），现在用例要先抓到 `running` 才继续。证据：新增 `threeSceneCamera.test.ts`（该模块此前无测试，3/3，含"取消后不再排帧"）+ `geometry3d-drag.spec.ts` 一条 e2e（变异：去掉取消 → 期望 cancelled 实收 done，红）。
 - **引用进度档案一律用小节标题，不写行号**：`project-progress.md:<行号>` 形式的引用会随任何一次编辑静默失效（本阶段就发生过三处，已全部改成按标题引用）。
 
+## 下一轮 Agent 方向（设计中，未实施）
+
+这次用户要求把原先暂缓的能力全部纳入路线，已形成完整设计，但尚未实现：
+
+1. **N1 统一数学状态**：Obligation / Constraint / Claim IR，统一题设、目标、自由点、证据和 solver 状态。
+2. **N2 约束与非线性求解**：解析构造优先，有限预算数值求解，必要时通过 adapter 评估 Z3/NLSAT；返回 model / unsat / unknown / timeout / diverged。
+3. **N3 动态拖动保持**：约束进入文档状态，拖动变成临时约束求解和事务提交，显示自由度与冲突原因。
+4. **N4 开放题理解与真实 Provider Benchmark**：自然语言先编译为 Obligation IR，再规划/求解/核验；建立真实 provider 的 pass@1、pass@3、成本、延迟和人工可读性基线。
+5. **N5 形式证明出口**：先支持少量短目标，区分 verified_instance、sampled、formally_proved，证明后端独立校验证书。
+
+完整设计：`docs/superpowers/specs/2026-10-04-agent-full-next-phase-design.md`；实施计划：`docs/superpowers/plans/2026-10-04-agent-full-next-phase-implementation-plan.md`。外部项目调研：`docs/research/2026-10-04-github-project-survey.md`。
+
+**当前明确不承诺**：下一阶段设计不等于已实现；在真实 provider 基线、求解器边界、动态拖动和证明试点完成前，默认 Agent 仍只按当前已验证的静态示意图能力运行。
 ## 四、未完成任务总清单（2026-10-04 更新；本文件是"还差什么"的**唯一**权威处）
 
 > 口径：只有**当次真正跑过**的才写进「一、现在能不能跑」；这里列的是**还没做/还没跑**的事。

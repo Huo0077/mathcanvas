@@ -1,4 +1,4 @@
-# 变更记录
+﻿# 变更记录
 
 > **这份文件记"改了什么"，不记"现在什么样"，也不记"当时怎么想的"。**
 > - **当前状态**（门禁读数、做到哪一步、还差什么）看 [`docs/current-status.md`](docs/current-status.md) —— 那是"现在时"的**唯一**一处；
@@ -1067,3 +1067,20 @@ commit_rejected: action_compile: envelope.actions[1]: operation 0: section plane
 - 几何 Worker 的契约缺 `completionAssumptions` / `repair` / `planDiagnostics` / `assumptions` / `questions`，缺任何一项都会在接线后**静默降级**（确认面板变空、可修的计划变得不可修、该问用户的被报成"编译失败"）。
 
 **门禁读数**（本机实测，明细见 `docs/current-status.md`）：`npm test` 238 文件 / 2810 用例通过 + 1 todo；`npm run typecheck` 6 workspace + e2e 全 exit 0；`npm run lint` 0 error / **13** warning（基线从 14 降 1 —— 见下"顺手修掉的两处依赖问题"）；`npx playwright test` 42 spec / 141 用例全绿。（**读读数要看每一条自己的 exit code**：把几条门禁串在一条命令里跑时，整条命令的退出码来自**最后一条**，前面某一条失败会被吞掉 —— 本阶段就因此漏看过一次 `tsc` 的失败，后来改成逐条取 `$LASTEXITCODE`。）
+## 2026-10-04 —— b1ee3d3：欠定立体示意图的题设核验与下一轮升级设计
+
+- 本轮已推送 `b1ee3d3`：系统从用户原话建立题设清单，在候选多面体的实际坐标上核验定长、等长、等边、中点、分点比例、线面/面面关系和内二面角；未知写法、缺点名、退化和过期证据不再静默放行。
+- 欠定图形按产品口径处理为“一组符合题设的示意图”：自由点示例值可见，不能称唯一图或普遍证明；宿主同意凭据也对未核验草稿 fail-closed。
+- 新增离线四棱锥正/反浏览器验收、Worker/同步报告等价、多轮草稿回归和题设覆盖反例；最终读数见 `docs/current-status.md` §一。
+- 下一轮只做规划，不宣称已实现：建立 Obligation IR、受支持题型的确定性见证搜索、冲突分类和真实 provider benchmark。设计与计划见：
+  - `docs/superpowers/specs/2026-10-04-agent-next-round-witness-search-design.md`
+  - `docs/superpowers/plans/2026-10-04-agent-next-round-witness-search-implementation-plan.md`
+- 外部调研仅作为设计参考：GeoGebra 的动态几何产品分层、FreeCAD 的参数化/历史/内核分离、mathlib4 的形式证明边界；没有把外部项目代码或能力计入本仓库完成度。
+## 2026-10-04 —— 下一阶段完整路线设计：把四条暂缓主线纳入实施计划
+
+- 在 `b1ee3d3` 的静态示意图核验之上，补充了四条未来主线：统一 Obligation/Constraint/Claim IR；约束与非线性求解；动态拖动保持关系；开放题编译与真实 provider benchmark；以及形式证明出口。
+- GitHub 调研参考了 SolveSpace 的自由度/冲突求解状态、FreeCAD 的参数化与几何内核分层、Z3 的非线性求解器边界、AlphaGeometry/Newclid 的几何证明分层、mathlib4/Lean 的形式化证明边界。
+- **本条只记录设计，不代表任何暂缓能力已实现。** 具体设计与实施顺序见：
+  - `docs/superpowers/specs/2026-10-04-agent-full-next-phase-design.md`
+  - `docs/superpowers/plans/2026-10-04-agent-full-next-phase-implementation-plan.md`
+  - `docs/research/2026-10-04-github-project-survey.md`
