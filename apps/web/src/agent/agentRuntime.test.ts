@@ -579,13 +579,12 @@ describe("representative tasks from the design", () => {
   /**
    * **用户报障的那一句**（2026-10-03）：只有关系、没有数值。
    *
-   * 走的是**装配好的真实运行时**：确定性夹具（形状与模型给的一样）→ 传输校验 → 六层编译
-   * （含新增的关系核验）→ 隔离草稿 → 停在确认。断言三件事：
-   * ① 真的能建出来（过去这句话两条路都被提示词堵死）；
-   * ② 停在与"关系核验不通过"不同的地方 —— 即关系逐条成立、编译器没有把它拒掉；
-   * ③ **系统选的值对用户可见**（设计 §1 验收判据 4），而不是静默填数。
+   * 这是**真实形状**的用例：模型给出了坐标，但**没有**给出 `relations` 表
+   *（实测：即使系统明确要求它改 `envelope.relations`，它两次都不给）。
+   * 关系改由系统从原话里抽（方案 C），所以这条路必须通。
    */
   it("drafts the pyramid from a relations-only prompt, with the chosen numbers visible", async () => {
+    // `pyramidPlan()` 默认**不带** relations —— 与现场一致。
     const { runtime, written, current } = makeRuntime({ envelope: pyramidPlan(), document: createEmptyDocument("geometry3d") })
 
     const events = await drive(runtime.coordinator, { run: runContext(createEmptyDocument("geometry3d")), userMessage: PYRAMID_PROMPT })
@@ -614,6 +613,34 @@ describe("representative tasks from the design", () => {
     const text = (runtime.assumptions() ?? []).join(" ")
     expect(text).toContain("示例值")
     expect(text).toContain("(2, 3, 0)")
+  })
+
+  /**
+   * 同一句原话、同样**不给** `relations`，但坐标是歪的 —— 系统从原话抽出来的关系必须抓到它。
+   * 这条防的是"方案 C 退化成放行不管"。
+   */
+  it("refuses the same prompt when the coordinates do not satisfy the relations it read", async () => {
+    // 直接在夹具上换掉顶点（只挪 P），其余照旧；`kind: "plan"` 是夹具本来就有的。
+    const base = pyramidPlan()
+    const skewed = {
+      ...base,
+      kind: "plan" as const,
+      actions: [{
+        actionId: "solid.create_polyhedron" as const,
+        actionKey: "pyramid",
+        factIds: [],
+        inputs: {
+          alias: "pyramid",
+          vertices: [{ x: 1, y: 0, z: 4 }, { x: 0, y: 0, z: 0 }, { x: 2, y: 0, z: 0 }, { x: 2, y: 3, z: 0 }, { x: 0, y: 3, z: 0 }],
+          faces: [[1, 2, 3, 4], [0, 2, 1], [0, 3, 2], [0, 4, 3], [0, 1, 4]]
+        }
+      }]
+    }
+    const { runtime } = makeRuntime({ envelope: skewed as typeof base, document: createEmptyDocument("geometry3d") })
+
+    const events = await drive(runtime.coordinator, { run: runContext(createEmptyDocument("geometry3d")), userMessage: PYRAMID_PROMPT })
+
+    expect(events.at(-1)).toBe("failed")
   })
 
   it("drafts the oblique-prism section with midpoints at 0.5 and a moving point at the audited 0.4", async () => {

@@ -275,8 +275,13 @@ export const PYRAMID_RELATIONS = [
  *
  * `assumptions` 里那句话就是**设计 §1 验收判据 4/5 的落点**：用户必须看见
  * "这些数是系统选的"，并且能在属性栏改。
+ *
+ * `withRelations` 默认 **false** —— 取"真实形状"。**真实模型不会给这张表**
+ *（2026-10-03 用户现场实测：两次都没给，即使系统明确要求它改 `envelope.relations`）。
+ * 所以关系的来源是**系统从原话里抽**（方案 C）；模型自愿声明只是额外支持，
+ * 传 `true` 用来覆盖那条路径。
  */
-export function pyramidPlan(): PlanEnvelope {
+export function pyramidPlan(withRelations = false): PlanEnvelope {
   const actions = [
     {
       actionId: "solid.create_polyhedron",
@@ -293,7 +298,7 @@ export function pyramidPlan(): PlanEnvelope {
     assumptions: [
       "题目没有给定具体尺寸，以下为系统选取的一组示例值（满足题面全部关系，可在属性栏修改）：P(0, 0, 4)、A(0, 0, 0)、B(2, 0, 0)、C(2, 3, 0)、D(0, 3, 0)。"
     ],
-    relations: PYRAMID_RELATIONS.map((relation) => ({ ...relation, targets: relation.targets.map((target) => ({ ...target })) })),
+    ...(withRelations ? { relations: PYRAMID_RELATIONS.map((relation) => ({ ...relation, targets: relation.targets.map((target) => ({ ...target })) })) } : {}),
     // 与其它夹具同一条理由：这是**传输形状**，交给 `parsePlanEnvelope` 校验、由六层编译管线解析。
     actions: actions as unknown as DraftAction[]
   }

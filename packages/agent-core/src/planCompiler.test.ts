@@ -109,12 +109,38 @@ describe("relation verification gate", () => {
     expect(result.repair).toBeDefined()
   })
 
-  it("rejects a plan that stays silent about a relation the prompt named", () => {
-    // 原话里有 ⊥ 与 ∥，计划一条关系都没声明 → 谁也验不了，系统不许宣布"成立"。
+  /**
+   * **方案 C 的核心判据**（2026-10-03 追加）：关系由系统从原话里读，**不要求模型声明**。
+   *
+   * 这一条对应的就是用户现场：模型两次都没给 `relations`（即使被明确要求改
+   * `envelope.relations`），于是旧门禁把一份几何**完全正确**的计划判成了失败。
+   * 现在同一份计划必须通过，而且**关系真的被核验了**（不是放行不管）。
+   */
+  it("verifies relations it read from the prompt even when the model declares none", () => {
+    // 用户原句；计划只说坐标、`relations` 一个字都不给。
     const result = compilePlan(polyhedronPlan(PYRAMID_VERTICES, undefined), context(createEmptyDocument("geometry3d"), { prompt: PYRAMID_PROMPT }))
 
+    expect(result.ok).toBe(true)
+    expect(result.diagnostics.filter((entry) => entry.code.startsWith("relation_"))).toEqual([])
+  })
+
+  it("still rejects the same prompt when the coordinates do not actually satisfy the relations", () => {
+    // 同一句原话、同一个"不给 relations"，但坐标是歪的 —— 核验必须抓到它。
+    // 这条防的是"方案 C 退化成放行不管"。
+    const skewed = [{ x: 1, y: 0, z: 4 }, PYRAMID_VERTICES[1], PYRAMID_VERTICES[2], PYRAMID_VERTICES[3], PYRAMID_VERTICES[4]]
+
+    const result = compilePlan(polyhedronPlan(skewed, undefined), context(createEmptyDocument("geometry3d"), { prompt: PYRAMID_PROMPT }))
+
     expect(result.ok).toBe(false)
-    expect(result.diagnostics.some((entry) => entry.code === "relation_not_declared")).toBe(true)
+    expect(result.diagnostics.some((entry) => entry.code === "relation_not_satisfied")).toBe(true)
+  })
+
+  it("says so when it read relations but the plan has nothing to verify them against", () => {
+    // 原话里有关系词，但这份计划不产出自由坐标（没有 create_polyhedron）→ 没得验。
+    // **不许静默当成"通过"**：如实给一条 warning。
+    const result = compilePlan(rawPlan([PRISM]), context(createEmptyDocument("geometry3d"), { prompt: "底面边长 2 的棱柱，AB垂直AD" }))
+
+    expect(result.diagnostics.some((entry) => entry.code === "relation_not_checkable" && entry.severity === "warning")).toBe(true)
   })
 
   it("fails a declared relation whose vertex name does not exist, instead of passing it silently", () => {
@@ -132,34 +158,6 @@ describe("relation verification gate", () => {
     const result = compilePlan(polyhedronPlan(PYRAMID_VERTICES, undefined), context(createEmptyDocument("geometry3d"), { prompt: "画一个四棱锥" }))
 
     expect(result.diagnostics.some((entry) => entry.code.startsWith("relation_"))).toBe(false)
-  })
-
-  /**
-   * **由构造表达的关系也算"已回应"**（2026-10-03 实测后加）。
-   *
-   * 实测踩到的误伤：代表题「…过三条棱的**中点**作截面…」的计划里，中点是用
-   * `dynamic.create_bound_point` + `parameter: 0.5` 建出来的 —— 那就是"中点"最好的表达。
-   * 覆盖度若只认声明表，会把这次正常作图拒回去重做（`agentDslMetrics` 与 `agentRuntime`
-   * 两个既有夹具真的因此红了，而它们本来好端端的）。
-   */
-  it("accepts a midpoint the plan expressed by construction instead of by declaration", () => {
-    const plan = rawPlan([
-      PRISM,
-      { actionId: "dynamic.create_bound_point", actionKey: "mid-E", factIds: [], inputs: { alias: "E", host: { scope: "draft", alias: "prism" }, hostSub: 0, parameter: 0.5 } }
-    ])
-
-    const result = compilePlan(plan, context(createEmptyDocument("geometry3d"), { prompt: "过棱的中点作一个标记" }))
-
-    expect(result.diagnostics.some((entry) => entry.code === "relation_not_declared")).toBe(false)
-  })
-
-  it("still demands a declaration for a relation no construction can express", () => {
-    // 等长 / 比例**没有**对应的构造动作 —— 只能靠坐标满足，所以必须由声明表回应。
-    // 这条防的是"把 construction 兜底写成万能豁免"：那会让漏声明重新静默通过。
-    const result = compilePlan(polyhedronPlan(PYRAMID_VERTICES, undefined), context(createEmptyDocument("geometry3d"), { prompt: "画一个四棱锥，AB 与 CD 等长" }))
-
-    expect(result.ok).toBe(false)
-    expect(result.diagnostics.some((entry) => entry.code === "relation_not_declared")).toBe(true)
   })
 })
 

@@ -13,7 +13,8 @@ import {
 } from "./contracts"
 import { auditDescriptionFor, type AuditContext } from "./defaultPolicies"
 import { auditPlan, type FieldCompletion } from "./parameterAudit"
-import { missingRelationKinds, relationKindsConstructed, verifyRelations, type RelationLookup } from "./relations"
+import { extractRelations } from "./relationExtraction"
+import { verifyRelations, type RelationLookup } from "./relations"
 import { parsePlanEnvelope, repairRequestFor } from "./schemas"
 import { isInvariantRequest } from "./underdetermined"
 import { cubeCenterFrom, cubeEdgeLengthFrom, explicitlyRequestsCube } from "./geometryIntent"
@@ -596,29 +597,89 @@ export function describeCompileRepairPrompt(repair: RepairRequest, diagnostics: 
  * `inputs` 今天没有顶点名字段，所以判据侧只能按下标认。取名不对会走"取不到顶点"这条
  * 失败路径（`relation_not_satisfied`），**不是静默通过**。
  */
+/**
+ * **关系核验**（设计 2026-10-03 §5.3/§5.5，2026-10-03 追加方案 C）。
+ *
+ * 与 `validateGeometry` 是同一类东西 —— 都是"这批动作产出的几何对不对"，所以 stage 同样用
+ * `geometry_validation`，失败也走同一条一次性修复回路。
+ *
+ * ## 为什么关系由**系统从原话里抽**，而不是要模型声明
+ *
+ * 第一版让模型在计划里声明一张 `relations` 表，系统只做覆盖度校对 + 残差核验，想法是
+ * "判据精确、模型也没法糊弄过去"。**真实应用推翻了它**（2026-10-03 用户现场）：
+ * 发「在四棱锥 P-ABCD 中，PA垂直 平面 ABCD，BC平行 AD，AB垂直AD，画出P-ABCD」，
+ * 模型两次都没给出 `relations` —— 即使系统明确告诉它「这次只允许改这几处：envelope.relations」、
+ * 并把缺的那两条（perpendicular / parallel）逐条列出来，它仍然只是把同一份计划又发了一遍。
+ *
+ * 于是那条门禁变成了**模型满足不了的关卡**：一份几何完全正确的计划，会因为"没有自证"被判失败。
+ * **质量门禁不能依赖被测方主动配合** —— 所以关系改由系统自己从原话里读（方案 C）。
+ *
+ * ## 点位怎么对上
+ *
+ * 抽取器的 targets 是**下标名** `v0`、`v1`…，而下标按**原话里点名的出现顺序**定：
+ * 「在四棱锥 P-ABCD 中…」里的 `P`、`A`、`B`、`C`、`D` 依次是 `v0`…`v4`。
+ * 这与 `solid.create_polyhedron` 的 `vertices` 顺序是同一个约定（模型的顶点数组也按题面点名的
+ * 顺序给）。**名字对不上就不抽**（抽取器自己处理），抽不出来的那条不进核验、也不会被当成"通过"。
+ *
+ * ## 忠实于能验的部分
+ *
+ * 只核验**抽得出来**的关系；抽不出来的（写法不认识、点名不在计划里）不会让计划失败，
+ * 但也**不会被说成"已核验"**。已知局限：这些"未核验"目前只写进编译期日志，还没有一路
+ * 显示到用户面前 —— 那需要新增一条面向用户的通道，不在本次范围内。
+ */
 function validateRelations(plan: PlanEnvelope, prompt: string | undefined): PlanDiagnostic[] {
   const diagnostics: PlanDiagnostic[] = []
+  const actions = plan.kind === "plan" ? plan.actions : []
+
+  // ① **从原话抽关系**（方案 C 的核心）：点名的下标按出现顺序。
+  const order = pointNamesInOrder(prompt ?? "")
+  const extracted = extractRelations(prompt ?? "", (name) => order.indexOf(name))
+  const fromPrompt = extracted.relations.map((entry) => entry.relation)
+
+  // ② 模型**自愿声明**的关系一并核验（契约里保留 `relations`：它不再被要求，但给了就认）。
   const declared = plan.kind === "plan" ? plan.relations ?? [] : []
 
-  // ① 覆盖度：只在有原话时查（没有 prompt 就不该把"没原话"误判成"漏声明"）。
-  //    两种"已回应"都算：声明表里写了，**或者**动作本身就把它构造出来了
-  //    （实测：代表题"过三条棱的中点作截面"是用 parameter 0.5 的构造表达的，
-  //    若只认声明表，一次正常作图会被拒回去重做）。
-  if (prompt !== undefined) {
-    const constructed = relationKindsConstructed(plan.kind === "plan" ? plan.actions : [])
-    for (const kind of missingRelationKinds(prompt, declared)) {
-      if (constructed.has(kind)) continue
-      diagnostics.push(planDiagnostic("geometry_validation", "relation_not_declared", "envelope.relations", `题目里出现了「${kind}」，但计划既没有声明这条关系、也没有用构造表达它，无法核验。`))
-    }
-  }
-  if (declared.length === 0) return diagnostics
+  // 两边合起来去重：同一条关系（kind + targets 一模一样）只验一次。
+  const seen = new Set<string>()
+  const relations = [...fromPrompt, ...declared].filter((relation) => {
+    const key = `${relation.kind}:${relation.targets.map((target) => target.vertex).join(",")}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 
-  // ② 残差：顶点从计划里读出来（此刻只有 inputs，还没有图元 id）。
+  /**
+   * ③ 抽到了关系、但**这份计划不产出任何自由坐标**时，没得验。
+   *    这不是"关系成立"，如实标成 warning，不当成通过。
+   */
+  const hasPolyhedron = actions.some((action) => action.actionId === "solid.create_polyhedron")
+  if (relations.length > 0 && !hasPolyhedron) {
+    return [planDiagnostic("geometry_validation", "relation_not_checkable", "envelope.actions", `题目里读到了 ${relations.length} 条几何关系，但这份计划没有产出可核验的顶点（缺少 solid.create_polyhedron），关系未被核验。`, "warning")]
+  }
+  if (relations.length === 0) return diagnostics
+
+  // ④ 残差：顶点从计划里读出来（此刻只有 inputs，还没有图元 id）。
   const lookup: RelationLookup = (target) => vertexByName(plan, target.vertex)
-  for (const failure of verifyRelations(declared, lookup).failures) {
+  for (const failure of verifyRelations(relations, lookup).failures) {
     diagnostics.push(planDiagnostic("geometry_validation", "relation_not_satisfied", "envelope.relations", `关系 ${failure.id}（${failure.kind}）不成立：${failure.detail}`))
   }
   return diagnostics
+}
+
+/**
+ * 原话里出现的点名，按**首次出现**顺序去重。
+ *
+ * 「在四棱锥 P-ABCD 中，PA垂直 平面 ABCD，BC平行 AD」→ `["P","A","B","C","D"]`。
+ * 连续大写串按单字母拆开（`ABCD` → `A`、`B`、`C`、`D`），因为几何里点名就是一个字母一个点。
+ */
+function pointNamesInOrder(prompt: string): string[] {
+  const names: string[] = []
+  for (const run of prompt.matchAll(/[A-Z][A-Z0-9]*/g)) {
+    for (const letter of run[0].length <= 1 ? [run[0]] : [...run[0]]) {
+      if (!names.includes(letter)) names.push(letter)
+    }
+  }
+  return names
 }
 
 /** 顶点名（`v0`、`v1`…）→ 坐标。名字不合约定时返回 `null`（**不许拿默认值顶上**）。 */

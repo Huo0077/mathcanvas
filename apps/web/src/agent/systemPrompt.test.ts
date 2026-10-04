@@ -181,22 +181,24 @@ describe("production system prompt", () => {
   it("tells the model to answer a stated relation with a coordinate witness instead of asking back", () => {
     const policy = buildPolicyText({ channel: "strict_json", canPlan: true, actionIds: ["solid.create_polyhedron"] })
 
-    // 新口径的三件事都得在：给见证、写 relations、把自选的数写进 assumptions。
-    expect(policy).toContain("relations")
+    // 新口径的三件事都得在：给见证、把自选的数写进 assumptions、以及
+    // **关系由系统自己读**（2026-10-03 改：原先要求模型声明 `relations`，实测它做不到，
+    // 于是几何正确的计划也被拒 —— 门禁不能依赖被测方主动配合）。
     expect(policy).toContain("满足题面全部关系")
     expect(policy).toContain("每个你自选的数值")
+    expect(policy).toContain("关系由系统自己从题面里读，你不需要声明它们")
     // 澄清的口径收窄成"关系无法同时满足时"，不再是"信息不足时"。
     expect(policy).toContain("只有在**关系无法同时满足**时才用它")
-    // 覆盖度只查"有没有回应"这条边界必须写进提示词，否则模型会以为系统也在解析自然语言。
-    expect(policy).toContain("不会**替你从自然语言里读关系")
+    // `relations` 仍接受自愿声明，但**不是必填**。
+    expect(policy).toContain("它不是必填")
   })
 
-  it("still spells out the relation kinds and the vertex-index convention", () => {
+  it("still pins the vertex-index convention the extractor relies on", () => {
     const policy = buildPolicyText({ channel: "strict_json", canPlan: true, actionIds: ["solid.create_polyhedron"] })
 
+    // 抽取器按下标认顶点，所以"按题面点名的顺序给 vertices"这条必须留在提示词里。
     expect(policy).toContain("v0")
-    expect(policy).toContain("5 个")
-    expect(policy).toContain("第二个线段 ÷ 第一个")
+    expect(policy).toContain("按题面点名的顺序")
   })
 
   /**
