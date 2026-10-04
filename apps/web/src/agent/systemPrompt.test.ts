@@ -193,12 +193,14 @@ describe("production system prompt", () => {
     expect(policy).toContain("它不是必填")
   })
 
-  it("still pins the vertex-index convention the extractor relies on", () => {
+  it("tells the model to declare vertex names, so the extractor does not have to guess the order", () => {
     const policy = buildPolicyText({ channel: "strict_json", canPlan: true, actionIds: ["solid.create_polyhedron"] })
 
-    // 抽取器按下标认顶点，所以"按题面点名的顺序给 vertices"这条必须留在提示词里。
-    expect(policy).toContain("v0")
-    expect(policy).toContain("按题面点名的顺序")
+    // 抽取器按下标认顶点，而下标要跟题面点名对上**只有模型知道** —— 所以要它用 vertexNames 说出来。
+    expect(policy).toContain("vertexNames")
+    expect(policy).toContain("一一对应")
+    // 并写清不声明时的后果：只能假设顺序，顺序一乱就指错顶点。
+    expect(policy).toContain("只能假设")
   })
 
   /**

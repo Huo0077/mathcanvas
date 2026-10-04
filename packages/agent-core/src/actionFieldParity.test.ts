@@ -75,6 +75,7 @@ describe("registry, published schema and parser agree on fields", () => {
       pointList: (s) => s.type === "array",
       vectorList: (s) => s.type === "array" && s.items !== undefined,
       vertexList: (s) => s.type === "array" && s.items !== undefined,
+      stringList: (s) => s.type === "array" && s.items !== undefined,
       faceRings: (s) => s.type === "array" && s.items !== undefined,
       plane: (s) => Array.isArray((s as { oneOf?: unknown[] }).oneOf),
       tangentAnchor: (s) => Array.isArray((s as { oneOf?: unknown[] }).oneOf),

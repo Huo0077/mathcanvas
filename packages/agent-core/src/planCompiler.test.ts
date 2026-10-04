@@ -159,6 +159,65 @@ describe("relation verification gate", () => {
 
     expect(result.diagnostics.some((entry) => entry.code.startsWith("relation_"))).toBe(false)
   })
+
+  /**
+   * **顶点顺序不再靠猜**（2026-10-03，方案 C 的配套）。
+   *
+   * 抽取出来的关系按**下标**认顶点，而下标要跟题面的点名对上只有模型知道。
+   * 不声明时只能假设"`vertices` 顺序 = 题面点名顺序"—— 模型一打乱，判据就指错顶点，
+   * 于是**明明画对了也被判不满足**。`vertexNames` 让模型把这件事说清楚。
+   */
+  it("uses the declared vertex names, so a different vertex order is still verified correctly", () => {
+    // 同样的几何，但**顶点数组顺序被打乱**：C 放最前、P 放最后。
+    // 面环必须跟着重排（下标变了），否则内核先报绕向不一致 —— 那是另一回事。
+    const shuffled = [PYRAMID_VERTICES[3], PYRAMID_VERTICES[0], PYRAMID_VERTICES[1], PYRAMID_VERTICES[2], PYRAMID_VERTICES[4]]
+    const names = ["C", "P", "A", "B", "D"]
+    const remappedFaces = [[2, 3, 0, 4], [1, 3, 2], [1, 0, 3], [1, 4, 0], [1, 2, 4]]
+    const plan = {
+      ...(rawPlan([{
+        actionId: "solid.create_polyhedron",
+        actionKey: "pyramid",
+        factIds: [],
+        inputs: { alias: "pyramid", vertices: shuffled, faces: remappedFaces, vertexNames: names }
+      }]) as Record<string, unknown>)
+    }
+
+    const result = compilePlan(plan, context(createEmptyDocument("geometry3d"), { prompt: PYRAMID_PROMPT }))
+
+    // 有了声明，关系仍能逐条对上：不满足的一条都不该有，而且计划整体通过。
+    expect(result.diagnostics.filter((entry) => entry.code === "relation_not_satisfied")).toEqual([])
+    expect(result.ok).toBe(true)
+  })
+
+  it("rejects duplicate vertex names, because name-to-index would stop being a function", () => {
+    const plan = {
+      ...(rawPlan([{
+        actionId: "solid.create_polyhedron",
+        actionKey: "pyramid",
+        factIds: [],
+        inputs: { alias: "pyramid", vertices: PYRAMID_VERTICES, faces: PYRAMID_FACES, vertexNames: ["P", "A", "A", "C", "D"] }
+      }]) as Record<string, unknown>)
+    }
+
+    const result = compilePlan(plan, context(createEmptyDocument("geometry3d")))
+
+    expect(result.diagnostics.some((entry) => entry.code === "duplicate_name")).toBe(true)
+  })
+
+  it("rejects a vertex-name list whose length does not match the vertices", () => {
+    const plan = {
+      ...(rawPlan([{
+        actionId: "solid.create_polyhedron",
+        actionKey: "pyramid",
+        factIds: [],
+        inputs: { alias: "pyramid", vertices: PYRAMID_VERTICES, faces: PYRAMID_FACES, vertexNames: ["P", "A", "B"] }
+      }]) as Record<string, unknown>)
+    }
+
+    const result = compilePlan(plan, context(createEmptyDocument("geometry3d")))
+
+    expect(result.diagnostics.some((entry) => entry.code === "invalid_type")).toBe(true)
+  })
 })
 
 describe("plan compilation", () => {

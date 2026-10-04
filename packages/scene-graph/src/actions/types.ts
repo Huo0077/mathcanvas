@@ -185,6 +185,14 @@ export interface SolidCreatePolyhedronAction extends ActionBase {
     vertices: Array<{ x: number; y: number; z: number }>
     /** 面环：每个面是**至少 3 个顶点下标**（0 起、互异；同一面共面、整只实体绕向一致）—— 由内核校验。 */
     faces: number[][]
+    /**
+     * **可选的点名**，与 `vertices` 一一对应（例如 `["P","A","B","C","D"]`）。
+     *
+     * 为什么需要它（2026-10-03）：关系是**系统从题面里抽**的，抽出来的目标按下标认顶点；
+     * 而下标要跟题面的点名对上**只有模型知道**。没有这个字段时只能假设
+     * "`vertices` 的顺序 = 题面点名顺序"—— 顺序一乱判据就指错顶点，于是画对了也被判不满足。
+     */
+    vertexNames?: string[]
     label?: string
   }
 }

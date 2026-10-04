@@ -1,7 +1,7 @@
 import { type ParseError } from "./contracts"
 import { updatableInputFields } from "@draw/scene-graph"
 import { ACTIONS, CONIC_KINDS, SOLID_TEMPLATES, declaredFieldKind, type ActionSpec, type ActionId } from "./actionRegistry"
-import { boundedString, fail, finiteNumber, isPlainObject, optionalFiniteNumber, readPoint2, readScopedReference, readVector3, rejectUnknownFields } from "./schemaReaders"
+import { boundedString, fail, finiteNumber, isPlainObject, optionalFiniteNumber, quotedName, readPoint2, readScopedReference, readVector3, rejectUnknownFields } from "./schemaReaders"
 
 /**
  * **逐个动作的 inputs 校验**（从 `schemas.ts` 拆出，评审方案 2）。
@@ -409,6 +409,36 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
         vertices.push(read)
       }
       out.vertices = vertices
+
+      /**
+       * **可选的点名**（2026-10-03 加，方案 C 的配套）。
+       *
+       * 关系是**系统从原话里抽**的，抽出来的 targets 按下标认顶点；而下标要跟题面的点名对上
+       *（`P-ABCD` 里的 P 是哪个顶点）**只有模型知道**。没有这个字段时只能假设
+       * "`vertices` 的顺序 = 题面点名的顺序" —— 那是个**会静默出错的假设**：
+       * 模型若把顶点顺序打乱，抽取出来的"AB ⊥ AD"会指向别的两个点，于是报
+       * `relation_not_satisfied`，而真正的问题是**顺序**不是**几何**。
+       *
+       * 所以让模型把名字显式说出来。**可选**：不给时行为与今天逐字相同（退回按下标假设）。
+       */
+      if (value.vertexNames !== undefined) {
+        if (!Array.isArray(value.vertexNames) || value.vertexNames.length !== vertices.length) {
+          errors.push(fail("invalid_type", `${path}.vertexNames`, `expected an array of ${vertices.length} names, one per vertex`))
+          return null
+        }
+        const names: string[] = []
+        for (const [index, name] of value.vertexNames.entries()) {
+          const read = boundedString(name, `${path}.vertexNames[${index}]`, errors)
+          if (read === null) return null
+          if (names.includes(read)) {
+            // 重名会让"名字 → 下标"不是函数，判据无法唯一定位顶点。
+            errors.push(fail("duplicate_name", `${path}.vertexNames[${index}]`, `vertex name ${quotedName(read)} is used twice`))
+            return null
+          }
+          names.push(read)
+        }
+        out.vertexNames = names
+      }
 
       if (!Array.isArray(value.faces)) {
         errors.push(fail("invalid_type", `${path}.faces`, "expected an array of face rings"))

@@ -631,8 +631,13 @@ function validateRelations(plan: PlanEnvelope, prompt: string | undefined): Plan
   const diagnostics: PlanDiagnostic[] = []
   const actions = plan.kind === "plan" ? plan.actions : []
 
-  // ① **从原话抽关系**（方案 C 的核心）：点名的下标按出现顺序。
-  const order = pointNamesInOrder(prompt ?? "")
+  // ① **从原话抽关系**（方案 C 的核心）。
+  //
+  //    点位怎么对上：优先用模型**显式给出的点名**（`create_polyhedron` 的可选 `vertexNames`；
+  //    只有模型知道 P 是哪个顶点）。没有那个字段时才退回"按原话点名的出现顺序"这条**假设** ——
+  //    它会在模型打乱顶点顺序时静默指错顶点，所以一旦有声明就用声明。
+  const declaredNames = vertexNamesOf(plan)
+  const order = declaredNames ?? pointNamesInOrder(prompt ?? "")
   const extracted = extractRelations(prompt ?? "", (name) => order.indexOf(name))
   const fromPrompt = extracted.relations.map((entry) => entry.relation)
 
@@ -680,6 +685,24 @@ function pointNamesInOrder(prompt: string): string[] {
     }
   }
   return names
+}
+
+/**
+ * 计划里**显式声明的**顶点名（`create_polyhedron` 的可选 `vertexNames`），没有就返回 `null`。
+ *
+ * 为什么它比"按原话出现顺序猜"可靠：只有模型知道自己把哪个坐标放在 `vertices` 的第几位。
+ * 有它时，关系里的点名能**精确**映到下标；没有时才退回那条会静默出错的顺序假设。
+ */
+function vertexNamesOf(plan: PlanEnvelope): string[] | null {
+  if (plan.kind !== "plan") return null
+  for (const action of plan.actions) {
+    if (action.actionId !== "solid.create_polyhedron") continue
+    const inputs = action.inputs
+    if (!isRecord(inputs)) continue
+    const names = inputs.vertexNames
+    if (Array.isArray(names) && names.every((name) => typeof name === "string")) return names as string[]
+  }
+  return null
 }
 
 /** 顶点名（`v0`、`v1`…）→ 坐标。名字不合约定时返回 `null`（**不许拿默认值顶上**）。 */

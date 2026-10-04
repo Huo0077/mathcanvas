@@ -152,6 +152,7 @@ export type FieldKind =
   | "pointList"      // 平面点数组
   | "vectorList"     // 空间点数组（≥3，棱柱底面）
   | "vertexList"     // 空间点数组（≥4，多面体顶点）
+  | "stringList"     // 字符串数组（多面体的顶点名）
   | "faceRings"      // 顶点下标环数组（多面体面）
   | "plane"          // {normal,constant} / 过三点 / 点+法向
   | "tangentAnchor"  // 切线的两种锚点写法
@@ -184,6 +185,7 @@ export const FIELD_KINDS: Record<string, FieldKind> = {
   origin: "vector", baseCenter: "vector", size: "vector", vector: "vector",
   // 数组族
   points: "pointList", basePolygon: "vectorList", vertices: "vertexList", faces: "faceRings",
+  vertexNames: "stringList",
   targets: "idList",
   // 结构族
   plane: "plane", anchor: "tangentAnchor", patch: "updatablePatch"
@@ -445,7 +447,9 @@ export const ACTIONS = {
    * 模型算错时它给的是**逐条诊断**（还能走一次性修复），在这里抄一遍只会变成一句 `invalid_type`。
    */
   "solid.create_polyhedron": {
-    inputFields: ["alias", "vertices", "faces", "label"],
+    // `vertexNames`：**可选**的点名（`["P","A","B","C","D"]`），让系统能把"关系里的点名"
+    // 与"顶点下标"对上，而不是假设 vertices 的顺序就等于题面点名的顺序（那是个会静默出错的假设）。
+    inputFields: ["alias", "vertices", "faces", "vertexNames", "label"],
     requiresAlias: true,
     rawFieldTypes: {},
     required: ["vertices", "faces"]

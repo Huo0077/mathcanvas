@@ -124,6 +124,7 @@ function schemaForField(field: string, spec: ActionSpec, actionId: ActionId): Js
     case "pointList": return { type: "array", items: pointSchema }
     case "vectorList": return { type: "array", items: vectorSchema, minItems: 3 }
     case "vertexList": return { type: "array", items: vectorSchema, minItems: 4 }
+    case "stringList": return { type: "array", items: { type: "string" } }
     case "faceRings": return { type: "array", items: { type: "array", items: { type: "integer", minimum: 0 }, minItems: 3 }, minItems: 4 }
     case "plane": return planeSchema
     case "tangentAnchor": return tangentAnchorSchema
