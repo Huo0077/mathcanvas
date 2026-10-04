@@ -5,7 +5,7 @@
 > [`docs/project-progress.md`](project-progress.md) —— 那是**归档**，里面的数字是"当时实测"，
 > 不是当前值。两份文件分工明确：**要当前值看这里，要过程看归档。**
 
-**最后更新：** 2026-10-04（支持的题设已加逐条核验；未知条件不得确认，真实模型开放题仍待实测）。
+**最后更新：** 2026-10-04（仓库文档提交时间为 2026-10-05 01:48:36 +08:00；支持的题设已加逐条核验，未知条件不得确认，真实模型开放题仍待实测）。
 **修复前一版做完了什么**：用户现场"A 字句只有关系、没有数值的立体题面"从**画不出来**推进到**能画出来**。路上推翻了两个自己的设计（见下方"走过的弯路"），并修掉一批真实运行暴露的形式障碍（信封缺字段、平面动作带 `z`、面环绕向不一致、空 `relations`）。
 **修复前一版暴露了什么（更重要）**：用户在真图上确认"**图画出来了，明显画错了**"。实测模型给的坐标：`BD=2`、`O` 是中点、`△OCD` 等边、`AB=AD` 都对，但 `OA·CD = −0.314 ≠ 0`（**第（1）问要证的那件事本身不成立**），且 `A` 的高度取 0.64、而"二面角 45°"要求约 1.33（**差约一倍**）。
 **当时根因（必须写清，不能含糊）**：这道题的七个条件里，机器**真正核验过的只有一条**（`O 为 BD 中点`）。`AB=AD` 的等号写法不在关系词表里、`平面⊥平面` 没有判据、`等边三角形` / `DE=2EA` / `二面角 45°` 是**数值约束**而不在判据范围内 —— 于是**一张错图静默通过了全部门禁**。当次读数：全库单测 **282 文件 / 3277 通过 + 1 todo / 0 失败**、`agent-core`/`scene-graph`/`apps/web` 的 `typecheck` 均 exit 0、`eslint` exit 0。**这些绿读数与"图对不对"无关** —— 这一点此前几轮我没有说清楚，是本轮修正的表述。
@@ -13,7 +13,7 @@
 
 ## 一、现在能不能跑（可复核的门禁读数）
 
-**2026-10-04 本轮升级后实测（代码提交 `b1ee3d3`；文档同步提交 `9fb64e0`，均已推送 `origin/main`）：**
+**2026-10-04 本轮升级后实测（代码提交 `b1ee3d3`；文档同步提交 `666d651`，均已推送 `origin/main`）：**
 
 | 命令 | 当次结果 |
 | --- | --- |
@@ -265,77 +265,44 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
 完整设计：`docs/superpowers/specs/2026-10-04-agent-full-next-phase-design.md`；实施计划：`docs/superpowers/plans/2026-10-04-agent-full-next-phase-implementation-plan.md`。外部项目调研：`docs/research/2026-10-04-github-project-survey.md`。
 
 **当前明确不承诺**：下一阶段设计不等于已实现；在真实 provider 基线、求解器边界、动态拖动和证明试点完成前，默认 Agent 仍只按当前已验证的静态示意图能力运行。
-## 四、未完成任务总清单（2026-10-04 更新；本文件是"还差什么"的**唯一**权威处）
+## 四、未完成任务总清单（2026-10-04 文档审查后；本节是“还差什么”的唯一权威处）
 
-> 口径：只有**当次真正跑过**的才写进「一、现在能不能跑」；这里列的是**还没做/还没跑**的事。
-> 分五类，A 类是实施计划里仍未勾选的条目，B/C/D 类是计划外但已查实或已知未做的，E 类需要你决定是否启动。
+> 口径：只有在第一节当次真正跑过的内容才写成门禁读数；本节只列当前未完成项。历史过程、失败尝试和旧数字移到 `docs/project-progress.md` / `CHANGELOG.md`，不在这里重复制造“当前状态”。
 
-### 本轮已收口的“错图静默通过”问题
+### 先保留一条关键教训
 
-**当前状态（2026-10-04，提交 `b1ee3d3`，文档同步提交 `9fb64e0`）：**
+**门禁全绿 ≠ 结果正确。** 修复前，用户现场的一张三棱锥错图曾通过全部已有门禁，因为系统当时只核验了中点，未覆盖等式、等边、比例、面面垂直和二面角。`b1ee3d3` 已对支持的题设增加逐条核验和 fail-closed 提交；这条历史事实仍保留，因为它解释了为什么后续必须继续分层建设求解、动态约束和证明证据。
 
-- 对支持的多面体题设，系统从原话提取定长、等长、等边、中点、分点比例、线面/面面关系和内二面角，并在候选图的实际坐标上逐条核验。
-- 缺少 `vertexNames`、无法解析、退化、过期或多轮暂存后无法重新核验的证据，会显示为**未核验**；确认门禁和 HostBridge 同意凭据均不放行。
-- 欠定不是失败：只要一组具体坐标满足支持的全部题设，就可以作为示意图确认；界面明确说明“示意图，不是普遍证明”，自选值也会显示给用户。
-- 离线浏览器正例和额外未知条件反例已覆盖；但真实 provider 开放题准确率、完整原始错图的逐字节复现、拖动后关系保持仍未测量。
+### A. 用户侧验收（不需要管理员权限）
 
-**历史现场（保留作原因记录，不再当作当前实现状态）：**
-用户曾确认三棱锥图形“画出来了但明显画错”，当时记录了 `OA·CD = −0.314`、A 高度 `0.64` 与二面角所需高度约 `1.33`。当时只核验到中点条件；这正是本轮补齐题设覆盖、残差核验和 fail-closed 提交的原因。
+1. **教师/学生走查尚未完成**：验证“三点一面”目标（主操作数 ≤8、不必依赖 Shift）、误操作、取消、恢复、未核验提示和欠定示意图文案。
 
-**当前仍待完成：**
+### B. 管理员权限验收
 
-1. 真实 provider 开放题现场复核：记录 pass@1/pass@3、成本、延迟、题设覆盖率和人工可读性。
-2. 用户侧教师/学生走查，以及 MSI 安装→启动→卸载验收。
-3. 下一阶段 N1–N5：统一数学 IR、约束/非线性求解、动态拖动保持、开放题编译与真实评测、形式证明出口。设计见 `docs/superpowers/specs/2026-10-04-agent-full-next-phase-design.md`。
+1. **MSI 安装→启动→卸载尚未完成**：NSIS 的安装/启动/卸载已实测；MSI 仍需在管理员权限环境中单独验收。不能把裸 exe 或 NSIS 结果替代 MSI 证据。
 
-**已从待办移除（2026-10-01）**：根脚本 `npm.cmd run build` 已 exit 0；Task 6 单顶点数值编辑已于 `cc9f533` 交付且 CI `36895877862` 四项全绿；实体体积画布数字在 `374daa0` 交付、CI `36898807030` 四项成功；相机标签最后一帧在 `a4e2f40` 修复、CI `36901742182` 四项成功；本机 `test:perf` 9/9 与 `test:rust` 236通过/3预设忽略均已补跑；三色旋转环在 v3.0.1 默认关闭并有定向 e2e。教师场景目视检查仍归 A 类走查，不视为已做。
-**C. 未复跑的门禁（0 条；本机 perf 与 Rust 的实测见第一节）**
+### C. 真实 provider 与 Agent 质量基线
 
+1. **真实 provider 开放题现场复核尚未完成**：至少记录 pass@1/pass@3、成本、延迟、题设覆盖率、verified/unverified/no_witness 分类和人工图面可读性。
+2. 当前 `deterministic_local` 只用于协议与几何回归，不能作为真实模型准确率。
 
-**D. 发布与仓库收尾（**NSIS 那半已关闭；剩 MSI 那半**；D1 发布与 D3 分支归档删除已于 2026-10-02 完成，各条目的更新写在条目内）**
+### D. 发布与仓库收尾
 
-1. **当前源码还没有匹配的 GitHub Release**：2026-10-01 官方仓库 Releases API 的最新公开版本为 `v3.0`（3 个资产）；`v3.0.1` tag 存在但无同名 Release。当前 `main` 在标签之后又有独立功能提交，**不能**把旧版本打出的三件套直接传成当前版本。确定下一发行版本、从最终源码重打 exe/MSI/NSIS、校验哈希和 source tag 后再上传。
-   **2026-10-02 更新（用户已决定 v3.1.0，打包已完成）**：版本真值由 `3.0.1` 升到 **`3.1.0`**（提交 `33facf1`，只动 `tauri.conf.json` 与 `Cargo.toml` 两处——`git grep "3.0.1"` 在 `*.json`/`*.toml` 上只命中这两行；根与 `apps/desktop` 的 `0.1.0` 是私有 workspace 版本，不参与发行）；打包前先跑根 `npm run build`（exit 0）并核实外壳前端来源 `build-check/mathcanvas-current` 的时间戳距打包仅 **0.3 分钟**、`index-*.js` 含「球体」与 `create_sphere`；随后 `npm --workspace @draw/desktop run bundle` **exit 0**，产出 **`MathCanvas_3.1.0_x64_en-US.msi`（6,848,512 B / SHA-256 `3531e488…f17eb`）**、**`MathCanvas_3.1.0_x64-setup.exe`（5,030,195 B / `1a4b2aa1…5052a`）**、裸 exe（17,190,400 B / `2c70f1c9…f7b23`）。**尚未做**：把这版传成 GitHub Release（tag 与 Release 上传是下一步）。
-   **2026-10-02 再更新 —— D1 已完成**：注解 tag **`v3.1.0`**（tag 对象 `d9a92f94`，指向提交 **`165e4fb`** = 当时的 `main` 头）已推送；GitHub Release **已发布**（非 draft、非 prerelease）：**https://github.com/Huo0077/mathcanvas/releases/tag/v3.1.0**，挂 3 个资产，字节数与本地逐一相同（6,848,512 / 5,030,195 / 17,190,400）。**独立复核**（不是只信自己的写入）：① 匿名 API `releases/latest` 现已返回 `v3.1.0`（此前最新是 `v3.0`），draft=false、assets=3；② 把三个资产**重新下载**回来算 SHA-256，**三件全部 MATCH** 本地哈希。**D2（本机装 → 启动 → 卸载）仍未做** —— 本项只证明"源码、安装包、Release 三者一一对应且哈希可复核"，**不等于**"已在本机装过"。
-2. **匹配当前源码的 MSI/NSIS 尚未本机安装验证**：`target/release/bundle` 当前仅查到 v0.2.0 的 MSI/NSIS，`target/release/mathcanvas-desktop.exe` 的构建时间早于后续功能提交；先从确定的发行提交重打新安装包，再做受控安装/启动/卸载验收，不能以根脚本 `--no-bundle` 或旧版安装结果替代。
-   **2026-10-02 部分完成（用户选择"只试未打包裸 exe 能不能启动"）**：安装包已从确定的发行提交 `33facf1` 重打（3.1.0），但用户本轮选的是**只验证免安装裸 exe**，故做的是那一项：`target/release/mathcanvas-desktop.exe`（SHA-256 `2c70f1c9…f7b23`，与 Release 上 `MathCanvas_3.1.0_x64.exe` 同哈希）**启动成功** —— 存活 T+10s/T+18s、真窗口句柄 `3017702`、标题 `MathCanvas`、`Responding=True`、32.6 MB；仅按窗口句柄截图（不截整屏）确认是**完整应用界面而非白窗**（立体几何页签、绘制与立体与截面工具栏、常用立体、代数区、z=0 网格与提示语）。截图存临时目录、未入库，哈希 `eb243753…53b85`，细节见 [`docs/release/v3.1.0.md`](release/v3.1.0.md)。
-   **2026-10-02 第三次更新 —— NSIS 那半已完整验收（用户选择"只试 NSIS"）**：从 GitHub Release 下载 `MathCanvas_3.1.0_x64-setup.exe`（**5,030,195 B / SHA-256 `1A4B2AA1A5278E8A5B1DA92B23B6FD6B47B74D6FD151B1C02C4343CF11D5052A`**，与 D1 记录的 `1a4b2aa1…5052a` **逐位一致** —— 这同时是对 Release 资产的又一次独立复核），然后走完整一圈：
-   - **装**：`setup.exe /S` → **exit 0**；落点 `D:\release\MathCanvas`（HKCU 卸载项 `DisplayVersion=3.1.0`、`Publisher=mathcanvas`、开始菜单快捷方式 `MathCanvas.lnk` 就位）。
-   - **启动**：`mathcanvas-desktop.exe`（**17,190,400 B**，`FileVersion=3.1.0`）→ 存活 **T+12s / T+18s**、真窗口句柄 **`920116`**、标题 `MathCanvas`、`Responding=True`；WebView2 配置目录时间戳刷新到本次启动时刻。
-   - **卸载**：关闭窗口（优雅退出）后 `uninstall.exe /S` → **exit 0**；核对 **目录不存在 / HKCU 卸载项不存在 / 开始菜单快捷方式不存在**。
-   **两处如实说明**：① 这台机器在我动手**之前**就已经有一条 MathCanvas 卸载记录（HKCU，`InstallLocation=D:\release\MathCanvas`，主 exe 时间戳 16:41、版本已是 3.1.0），所以这**不是"干净机器首次安装"**的验收；本轮/`/S` 安装是把它刷新了一遍，**净效果是这台机器从"有一份 v3.1.0 每用户安装"变成"没有安装"**（验完按你的要求立即卸载）。② **MSI（每机器）那半没有验**（你选的是只试 NSIS），按 Tauri 默认它是每机器安装、本会话非管理员，**仍未实测**。
-   **因此 D2 只关闭了 NSIS 那一半**：NSIS 的"装 → 启动 → 卸载"有本机实测证据；MSI 的对应验收仍未做。
-   **2026-10-02 第四次更新 —— 新一轮发版 v3.2.0（HTML 导出 + 三处修复）**：版本真值 `3.1.0 → 3.2.0`（只动 `tauri.conf.json` 与 `Cargo.toml`）；根 `npm run build` exit 0 → `bundle` exit 0，产出 **exe 17,209,344 B / MSI 6,860,800 B / NSIS 5,040,418 B**（哈希与发行说明见 [`docs/release/v3.2.0.md`](release/v3.2.0.md)）；release exe 启动实测（句柄 `2886386`、标题 `MathCanvas`、存活 T+20s）；门禁：全量 e2e **184/0**、全库单测 **280 文件 / 3203 + 1 todo / 0 失败**、`main` 顶端 CI **#87 四项全绿**。**本机装 / 卸的验收对象仍是 v3.1.0 那次**（NSIS 三步实测），v3.2.0 的安装包**只做了打包 + 裸 exe 启动实测**，没有重复一遍装/卸 —— MSI 那半依旧未验。
-   **2026-10-02 第五次更新 —— v3.2.0 的 Release 已发布并独立复核**：注解 tag `v3.2.0`（tag 对象 `62f6d054…`）→ 提交 `5291c5c`；Release id `401859437`、`draft=false`、`prerelease=false`、**3 个资产**，字节数与本地逐一相同；复核两步都过：① 匿名 API `releases/latest` 现为 **`v3.2.0`**；② 三件资产**重新下载**后 SHA-256 **全部 MATCH**。**发布边界照旧**：这只证明"源码 / 安装包 / Release 三者一一对应且哈希可复核"，**不等于**"v3.2.0 已在本机装过"。
-3. **合并后的远端功能分支仍在**：`git ls-remote` 实查 `feat/high-school-geometry-interaction` tip 为 `8c67346`，其文档是合并/打包前的旧快照。删除远端分支属不可逆的仓库整理，**待用户明确决定**；目前不自动删除。
-   **2026-10-02 已完成（用户选择"先打存档 tag，再删分支"）**。**删除前查出的事实与原表述不同，先记下来**：GitHub compare API `compare main...feat/high-school-geometry-interaction` 实查 **`status: diverged`、`ahead_by: 1`、`behind_by: 54`** —— 也就是说它**并不是"已全部合并、只剩空壳"**，而是有 **1 个提交不在 main 里**：`8c67346`（2026-09-30）"docs: 补齐所有进度文档（归档 / README / 设计说明 / 当前状态）"，**仅动文档**（`README.md` +1/-1、`docs/current-status.md` +4/-4、`docs/project-progress.md` +46/-1、`docs/superpowers/specs/2026-09-29-high-school-geometry-interaction-design.md` +2/-2）。它是合并/打包当天的旧快照，main 上这四份文件此后已被反复重写（**很可能已取代，但没有逐行比对过**，所以不假设内容已覆盖）。另实查**无任何开放 PR**，删分支不会关掉 PR。
-   **做法**：先建注解 tag **`archive/feat-high-school-geometry-interaction`**（tag 对象 `bb4a5aad`）指向 `8c67346` 并推送；**经 API 三重确认后才动手**（① `refs/tags/archive/...` 存在；② 解引用得 `8c67346`，与 tip **MATCHES: True**；③ 该提交可解析）；随后 `git push origin --delete feat/high-school-geometry-interaction` 成功。**删除后复核**：远端分支只剩 `main`（`e2c53c0`），存档 tag 仍解析到 `8c67346`。也就是说那份旧快照**在远端依然可达、不会被 GC**。
-   **顺带纠正一条方法论**：本轮第一次 `git ls-remote` 被网络 reset 打断，脚本据此打印过 "MERGED: NO" —— 那是**失败命令的产物、不是事实**；改用 API 重查才得到上面 `diverged / ahead_by=1` 的结论。**命令失败时的默认输出不能被当成结论。**
+1. 当前源码基线是 `b1ee3d3`，公开 Release 仍对应较早的 `v3.2.0`；下一次发布前需要决定版本号、重新打包、校验哈希、创建 source tag 和 GitHub Release。
+2. 这不是本轮代码缺陷；在没有重新打包和发布前，不能把 `v3.2.0` 资产称为当前源码的发行包。
 
-**E. 后续功能与独立探索（4 项；球体计划 28 条 bullet 已全部勾选；**E3 的 HTML 一半已交付并随 v3.2.0 打包装箱**；`.ggb` 一半与其余未动）**
+### E. 后续功能决策与下一阶段 N1–N6
 
-1. **球体与球截面**（P2，**Task 1–8 已完成；Task 9 未完成**）：[设计](superpowers/specs/2026-10-01-sphere-and-sections-design.md)与[九块计划](superpowers/plans/2026-10-01-sphere-and-sections-implementation-plan.md)已推送。DSL 新增解析 `sphere`（有限球心/正半径）并本地验证 `.mgeo` 往返、退化拒绝；运行时类型表与 Agent 能力表同步，**Agent 仍暂不可用**；平面 SVG 不伪造 3D 球，CSV 仅存球心/半径。**Task 1 在 `ca03ed5` 推送、CI run `36908959733` 四项成功后才勾选。** **Task 2（球-平面精确数学与退化）**：新增内核 `packages/geometry-kernel/src/sphere.ts` 的 `spherePlaneSection3`（`n̂=n/|n|`、`d=(n·C+constant)/|n|`、圆心 `C−d·n̂`、半径 `√(r²−d²)`；`|d|>r` 空集 / `|d|≈r` 切点 / `|d|<r` 圆），并从包桶 `index.ts` 导出。判据两条：①**交圆上的点真的落在球面上**（逐点采样回代 `|X−C|²=r²`，残差 < 1e-9，而不是"坐标看着是整数"）；②**退化容差取相对量** `r·1e-9`（两个方向各一条用例：半径 1e-6 上 1e-12 的绝对间隙是真空隙、半径 1e6 上 1e-6 的间隙是数值噪声）。**偏离计划原文一处（有意）**：计划把"不相交"拼作 `kind:"none"`，内核实现用 `"empty"` —— 因为 `Conic3Kind` 是内核既有枚举，`"none"` 是 DSL `Section3Classification` 的产品层拼法；映射放 Task 4 的 `sectionRecompute`。代码提交 `22bd7a2`/`6f7d046` 已推送，CI run `36963752920` 四项全绿后才勾选。
-   **Task 3（场景事务与数值测量）本轮交付**：`transforms.ts` 的 `translatePrimitive3` 加球分支，并把 `"sphere"` 加入 `EDITABLE_GEOMETRY_TYPES` 与 `isFreeDraggable3`（**这两道白名单才是真门** —— 只改 `apply.ts` 的分支仍会被 `"object is not editable"` / `"not draggable"` 挡下，本批第一次 RED 就是这个现场）；`patches.ts` 的 `center3Types`/`radius3Types` 加入 `"sphere"`；`apply.ts` 的 `updatePrimitive` 加球分支（只有 `center3`/`radius3`，**无** `segments`/朝向）；`measurements3d.ts` 加球面积 `4πr²` 与体积 `4πr³/3`，均 `exact-input`。**实测**：新增 `sphereTransactions.test.ts`(7) + `sphereMeasurements.test.ts`(4)，连同 `sphere.test.ts`(13) 共 **24/24**；因动了共享白名单，另跑**全库** `vitest run --maxWorkers=3` → **272 文件 / 3134 项通过 + 1 todo / 0 失败**；`npm run typecheck` exit 0、`npm run lint` exit 0（**0 error / 13 warning**，与基线一致）。**一处自查加固**："非法半径整笔拒绝"两条实现前就已是绿的（球当时不支持改半径，`changed=false` 毫无意义），已加断言把**拒绝的理由**钉住（`/radius must be positive/`）。**Task 6–9 的工程投影 / 手工入口 / Agent 创建均未实现（截圆接入由 Task 4 交付、3D 渲染上半由 Task 5 交付）。**
-   **Task 4（解析截面接进 `SectionPrimitive` + 布尔门禁）本轮交付**：`sectionRecompute.ts` 的 `analyticSectionBoundary` 认球（走 `spherePlaneSection3`，**不**走二次曲面矩阵 —— 球没有 `bounds`，`sectionQuadric3` 对它直接回退），`recomputeSection` 加球分支：圆 → `classification:"polygon"` / `status:"exact"` / `visible:true`；**切点 → `classification:"point"` / `status:"exact"` / `visible:true`**（spec §3 要求画布上有点标记；与多面体路径刻意不同，那边相切时藏起来）；空集 → `classification:"none"` / `status:"undefined"` / `visible:false` 且不留旧圆。`section.points/loops` 按 spec §3 只当**可再生显示缓存**（采样解析圆，48 段），真几何在 `section.exact`。`sectionPlaneThroughSource` 对球默认返回**过球心**的平面（大圆）。`dsl/schema.ts` 新增布尔门禁：四种布尔图元的来源里出现球 → 点名球的 `unsupported` 诊断（原先掉进 `sources must be solids`，而球本来就是实体，那句话既没错也没用），创建即拒且返回原文档本身；旧文档已缓存的球交集重算仍如实退化为 `insufficient-data`、不伪造多面体。**实测**：`sphereSection.test.ts` **10/10**（两批各自 RED→GREEN）、点名的截面/交测试 16 文件 **163/163**、全库 **274 文件 / 3147 项 + 1 todo / 0 失败**、`typecheck` exit 0、`lint` exit 0（0 error / 13 warning）；提交 `2e76a45`/`145319c` 已推送，CI run **#44 四项全绿**。**未做**：UI 上"选中球就能切"（`solidCommands.ts` 截面按钮）、球截面 e2e、`deletion.ts`（球的删除沿用既有语义，全库含 `deletion-cascade` 全绿，但不等于球的删除级联已被专门验证）。
-   **Task 5（球的 3D 渲染，上半）本轮交付**：`threePrimitives.ts` 的 `SolidPrimitive` 加入 `SpherePrimitive`、`visibleSolids` 加入 `"sphere"`、`createSolidMesh` 加球分支（`SphereGeometry(radius, 48, 32)`，位置是**球心** —— 球没有 `height`，照抄圆柱/圆锥那句 `center.y + height/2` 会得到 NaN），`createSolidGroup` 对球**跳过 `solidOutline` 与 `hiddenEdgeOverlay`**（两者都是 `EdgesGeometry`，套在球面上会拆出一整张**经纬网**：那些"棱"看得见也**选得中**，spec 明确不要"密集的可选中经纬线"；球的轮廓是视角相关的屏幕空间剪影，不加假边）；`threePicking.ts` 的 `pickKind` 加入 `"sphere"`（否则看得见选不中）。**实测**：新增 `apps/web/src/threeSphere.test.ts` **5/5**（RED 起点 4/5 红，症状含 `position = [1, NaN, 3]` 与出现 `LineSegments`）；全库 **275 文件 / 3152 项 + 1 todo / 0 失败**；`typecheck` exit 0、`lint` exit 0（0 error / 13 warning）。**一处自查**："隐藏的球不进场景"那条在实现前就已经是绿的（当时 `visibleSolids` 压根不认球、返回空数组碰巧满足断言），已改成"可见球 + 隐藏球只留可见那个"的**反向对照**。**Task 5 下半未做**：切点截面的可见标记是否真的画出来（`createSectionMesh` 对"只有一个点"的截面未验证）、球的自动取景（`sceneFit.ts`）、`e2e/geometry3d-sphere.spec.ts`。
-   **Task 5 下半本轮补完**：① **相切的一个点现在画得出来** —— `createSectionMesh` 此前第一行是 `points.length < 2 → return null`，于是"相切"与"根本没切到"在画布上**长得一模一样**；新增 `points.length === 1` 分支画切点标记（与交点图元同一套尺寸语言），空集仍 `null`。② **自动取景查实无需改动**（`threeCamera.ts` 从场景对象算包围盒，球有了真网格就自动纳入）。③ `selectionCommands.ts` 的实体名单**刻意不加球**并写了注释：那句引导语讲的是"棱或面"，而球既无棱也无面（加了是误导）。④ 新增浏览器实机验收 `e2e/geometry3d-sphere.spec.ts`：借"添加立方体"落合法草稿再换成球（球还没有手工入口，那是 Task 6）；断言刷新后 C/r 不变、对象树出现"球体 1"、**刷新后快捷操作条不可见而在球心投影处点一下之后必须可见**（渲染唯一的实机证据）、轨道方位角真的变了而 C/r 没变。**实测**：`threeSphere.test.ts` **8/8**（RED 起点 `expected null not to be null`）、该 e2e **1/1**（变异：拿掉 `visibleSolids` 里的 `"sphere"` → 当场红）、全库 **275 文件 / 3155 项 + 1 todo / 0 失败**、`typecheck`/`lint` exit 0。**Task 5 仍未覆盖的两条**：经界面创建球并切一刀验"切点可见"（截面按钮是 Task 4 尾巴、手工入口是 Task 6）、"无密集可选中经纬线"只有单元判据。
-   **Task 5 视觉验收又抓出一处真缺陷（已修）**：按计划"visually inspect an actual frame"把种子球那一帧截下来看 —— 球画得对（剪影干净、**无经纬网**），但画布中间**压着一句"添加点、线或面开始探索三维空间。"**。根因是 `threeScene.tsx` 的 `hasGeometry` 又是一张**硬编码类型名单**、漏了 `sphere`，于是一份只含球的文档被判成空图纸。这与 `visibleSolids` 同类：**同一个判断散在多张名单里**（本轮共改三处：`visibleSolids`、`pickKind`、`hasGeometry`）。**单元用例抓不到它** —— `hasGeometry` 是组件局部常量，只有真渲染一帧才看得见；判据就是看一眼截图。修法：名单加 `"sphere"` 并写明成因；回归钉在 `e2e/geometry3d-sphere.spec.ts`（断言该提示 `toHaveCount(0)`）。探针与截图均未留在仓库。
-   **Task 6（上半：从「常用立体」手工造球）本轮交付**：`spatialSolidWizardModel.ts` 的 `SolidPreset` 加 `"sphere"`、草稿加 `radius`（球心沿用 `origin`），`solidWizardInput` **球先判**并单独校验（否则球会掉进棱锥分支 —— 实测 RED 就是 `{kind:'pyramid'}` 与 `Cannot read properties of undefined`）；`spatialSolidCommands.ts` 的 `buildTeachingSolid` 球分支**只落一个图元**（解析实体不物化子对象），标签 `球体 N`；`SpatialSolidWizard.tsx` 预设六 → **七**、球只渲染**球心 + 半径**。**实测**：新增 `spatialSphereWizard.test.ts` **7/7**（RED 起点 5/7 红；其中两条"非法半径 / 非有限球心要拒"在实现前**就已经是绿的** —— 球当时走棱锥分支、棱锥也拒 0/NaN，等于什么都没钉住，已加"报错文案点名球"的断言）、`SpatialSolidWizard.test.tsx` **6/6**（"六个"更新为"七个"并点名球体）、球 e2e 增到 **2/2**（新增"从常用立体造球"，守"预览与提交分开"：没确认前文档里不该有球、半径填 0 如实报原因且文档不动）、全库 **276 文件 / 3163 项 + 1 todo / 0 失败**、`typecheck`/`lint` exit 0。**Task 6 剩下的**：属性栏编辑球心 / 半径（写入路径 Task 3 已打通，缺属性栏字段）、截面按钮接受球（Task 4 尾巴）。
-   **Task 6 下半本轮交付**：① **属性栏编辑球心 / 半径** —— `inspectorLabels` 的 `SolidPrimitive` 与 `inspectorModel` 的 `selectedSolid` 名单加入 `"sphere"`，`PropertiesBar` 加球分支（只有球心 + 半径 3D），并给"朝向"那块加 `type !== "sphere"` 守卫（**球没有 `rotation`**，不加守卫 `tsc` 直接报错）。② **工具栏「创建截面」对球可用** —— `solidCommands.ts` 的 `solidTypes` 加入 `"sphere"`；**还有一张更深的**：`packages/dsl/src/schema.ts` 里另有一份 `solidTypes`（`section` 校验"来源必须是实体"），只改 UI 侧会"按钮可点但什么都没发生"（`data-section-count` 停在 0），**这是跑 e2e 才暴露的**。**实测**：球 e2e 增到 **4/4**（新增"属性栏改球心/半径 + 一步撤销"与"工具栏切一刀并记录精确圆"：`data-section-exact-kind=circle`、`status=exact`）；全库 **276 文件 / 3163 项 + 1 todo / 0 失败**（含"球不能参与布尔交"那条 —— 证明放开截面来源之后门禁仍成立）；`typecheck`/`lint` exit 0。**仍只有单元判据的两条**：相切那一刀的点标记真的画出来（端到端只验到过球心的精确圆）、无密集可选中经纬线。
-   **结构性发现（记下来免得下一种实体再踩一遍）**：给这个项目加一种实体要同时改**七八张硬编码类型名单**（`visibleSolids` / `pickKind` / `hasGeometry` / `schema.ts` 的 `solidTypes` / `solidCommands.ts` 的 `solidTypes` / `inspectorModel` + `inspectorLabels`），**每一处漏掉都不报错**，只是那条功能静默失效，而且单元测试可能全绿。**下一处已知未改**：`projectionVisuals.ts` 的 `templateTypes`（Task 7 的工程投影会在那里失效）。
-   **Task 7（工程投影与导出）本轮交付**：`projectionVisuals.ts` 加球分支 —— 判据是球区别于所有多面体的那条性质：**正投影下球的轮廓永远是半径等于球半径的圆、与视线方向无关**（立方体在四个视图里是三个不同的矩形，球是四个同样大的圆）；**只画轮廓，不投影显示网格的三角形**（网格是画布缓存，拿它投影会多出几十条线且随密度漂）。采样结果仍是既有的 `polyline` 图元，所以 `DrawingViewport` 与 `engineeringExporters` **一个字都没改**。**实测**：新增 `sphereProjection.test.ts` **5/5**（RED 起点 4/5 红，症状 `expected [] to have a length of 1`）、新增夹具 `e2e/fixtures/cad-sphere.mgeo` 且 `engineering-drawing.spec.ts` 增到 **5/5**（逐个视图点名"第 N 个视图里恰好一条球轮廓"，而不是"总共 4 条"）、全库 **277 文件 / 3168 项 + 1 todo / 0 失败**、`typecheck`/`lint` exit 0。**一处自查**："隐藏的球不出现"那条实现前就已绿（球当时压根不投影），已改成"隐藏球 + 可见点"的反向对照 —— 这是本项目**第四次**踩同一个坑，已归纳成规矩写进归档。**如实说明**：新增 e2e 的 RED **没有被独立观察到**（只观察到单元用例的 RED），两者走同一条代码路径但"修改前必红"是推理不是实测。**Task 8–9 未做**（Agent 创建球、完整产品门禁）。
-   **Task 8（Agent 动作 `solid.create_sphere`）本轮交付**：按"只有产品路径存在时才发布动作"，手工路径（Task 6）已通，所以这个动作该发布了。**三层一起接**：动作层加 `SolidCreateSphereAction` + `compileSolidSphereAction`（球**只落一个图元**，不物化子对象，与手工路径产出同一种文档）；传输层加 id 与 `case`（只挡畸形，**缺字段合法** —— `center`/`radius` 登记 `ask_user` 由审计问用户；半径非正**按字段路径**拒绝，好让一次性修复够得到）；登记层加条目（两个字段都 `ask_user`，**不静默填默认**）、把球由 `temporarily_unavailable` 翻成 **`available`**、技能动作表与 `CAPABILITY_FOR_ACTION` 同步。**实测**：新增 `sphereAction.test.ts` **5/5**（RED 起点 3/5 红 `unknown_action`）、`actionSchemas.test.ts` 加 3 条 → **15/15**、`agent-core` 全包 **40 文件 / 521 项**、全库 **278 文件 / 3176 项 + 1 todo / 0 失败**、`typecheck`/`lint` exit 0。**一处自查**（本项目第五次）：新写的"半径非法/球心非有限要拒"两条在实现前**就已绿**（动作未知时同样"不产出操作 + 有诊断"），已加断言要求诊断码是 **`invalid_sphere`**。**上部那条"没有机器挡住"的表述已更正**（见 §四）。**未做**：Agent 端到端（真模型跑一轮）、Task 9（完整产品门禁与发布决策）。
-   **Task 9（完整产品门禁）本轮交付上半 + 下半上半**：① **六条门禁当次全量复跑并逐条报数**（见 §一顶部那张表）：全库 278 文件 / 3178 项 + 1 todo / 0 失败、`typecheck` exit 0、`lint` exit 0（0 error / 13 warning）、**全量 e2e 175 通过 / 1 失败**、`test:rust` 16 二进制 / 236 通过 / 0 失败 / 3 ignored、`test:perf` 9/9。那条 e2e 失败**查实为既有不稳**（回到球体工作之前的 `91ac837` 同样失败，且期望值逐次在 1.98/1.99 之间变），**不是本批引入**，但它让"全量 e2e"这条门禁在本机不可信 —— 本机 e2e 不能当放行依据，CI 的 `e2e` 作业才是。② **spec §5 逐行审计**（六行逐条对真实文件与测试输出），**查出一处静默缺口并修掉**：`measurementVisuals.ts` 的 `pointPositions` 是硬编码类型名单、**漏了 `sphere`**，于是球的面积/体积测量让 `resolveMeasurementVisual` 返回 `null`、**画布上一个字都不画**（而属性栏照样有数字，所以是静默的）—— 这是**同一张名单第二次漏配**（此前漏 `polyhedron3`）。已加球分支（落点取球心，与圆柱/圆锥同一口径），RED `expected null not to be null` → GREEN **6/6**；全库随之 **278 文件 / 3179 项 + 1 todo / 0 失败**。**未做**：计划点名的 e2e 覆盖里"切点 / 空集 / 刻意的不支持布尔"目前只有单元判据；`docs/feature-catalog.md` 尚未按审计结果更新；发布决策属 **D 类**。
-   **Task 9 收尾本轮交付**：① **`docs/feature-catalog.md` 的球体条目按审计结果重写**（标题改为"Task 1–8 已交付；Task 9 门禁复跑与 spec §5 审计已完成；**球体能力尚未宣布整体交付**"，正文逐条列 ①–⑧ 八块交付 + 审计结论 + 三条"仍不能读成整体交付"的理由），并修掉同文件两处已被推翻的旧表述（根脚本 `npm run build` 后来已跑通）。② **补一条真 e2e**：**球参与的布尔交一个预览都不给** —— 并把"两个立方体**有**交预览"作为**反向对照**放进同一条用例（少了它，"预览数恒为 0"也会绿）；实测立方体∩立方体 > 0、球∩立方体 = 0 且文档未变，`e2e/geometry3d-sphere.spec.ts` 增到 **5/5**。③ **一条走不通的路连同原因留在用例文件里**：想把 z=8 相切 / z=9 空集也种进草稿在浏览器里验，**实测种下去的截面不会被重算**（连正圆那档都读不出 `kind`，而 `data-section-count` 是 1）—— 即**恢复路径信任保存下来的派生字段**；这不是缺陷（保存的文档本来就该是算好的），但决定了这条路验不了，**两例仍是单元判据**。原因写在 spec 文件末尾注释里。
-   **Task 8 尾巴（Agent 端到端）本轮交付**：本地确定性规划器新增**球**指令（`localPlanner.ts` 的 `SPHERE` + 条目，导出 `SPHERE_PROMPT`），半径从原话读第一个数字、读不到取 `DEFAULT_SOLID_SIZE`（与立方体/正四面体同一口径）。**触发词只认「球体」、刻意不认裸词「球」** —— 裸词会把"求这个四面体的**外接球**半径"这类**分析题**拉进来去新建一只球；这与既有"认正四面体、不认裸四面体"是同一条纪律。`e2e/geometry3d-sphere.spec.ts` 增到 **6 条**：新的一条走真界面（Agent 工作区 → 发送 → 确认改动面板 → 确认并提交 → 返回画布 → 一步撤销），断言"停在确认（会新增 1 个对象）/ 确认前零改动 / 确认后对象行 = 1 且文档里半径 5 / 一步 Ctrl+Z 归零"。**实测**：`localPlanner.test.ts` 加 3 条（RED 起点 3 条全红）→ **25/25**、球 e2e **6/6**、全库 **278 文件 / 3182 项 + 1 todo / 0 失败**、`typecheck`/`lint` exit 0、`tsc -p e2e/tsconfig.json` exit 0。
-   **顺带查实一条既有隐患（2026-10-02 已修）**：把"这个正方体的内切球半径是多少"喂给本地规划器，命中的曾是**既有的「正方体」条目** —— 它会**去新建一只正方体而不是回答读数问题**。与文档里早已记过的"裸词四面体会命中分析题"同一类，只是落在「正方体/立方体」上。**修法**：`matchLocalIntent` 加一道守卫 —— 句子里**没有任何建模动词**、却在问读数（是多少 / 多少 / 多大 / 多长 / 求 …）时，**请求技能的建模意图一律不认**，落到既有的"老实问路"（clarification），而不是悄悄改文档；只读意图（如"有什么"）不受影响。**边界（如实）**：只挡"没有建模动词"的问句，"画出这个正方体的内切球"这类明确要求作图的照旧走建模。证据：4 条单测（两句分析题 + 两条反向对照：建立方体仍建、`SPHERE_PROMPT` 仍建），实现前 RED（`expected 'plan' to be 'clarification'`）；四个 Agent e2e 17/17；提交 `8febd38`。
-   **Task 9 收口（切点 / 空集的浏览器验收）本轮完成，并推翻了我上一轮的判断**：上一轮我写"种一份草稿再读读数走不通 ⇒ 这两例只能停在单元判据"。**漏掉的一点**是：`sectionPlaneThroughSource` 对球默认给**过球心**的平面（球心 z=3 ⇒ 常数 `-3`），而方向键在「自由拖动」开着且选中截面时按**整整 1 个单位**沿法向平移（Shift 才是 0.2）—— 于是**整数步 + 整数球心**让"相切"这个测度为零的状态在浏览器里能**稳定走到**：五次 `ArrowUp` ⇒ `-8`（距离 = 半径，精确相切）、再一次 ⇒ `-9`（空集）。新增一条 e2e 走真界面（切一刀 → 开自由拖动 → 五次方向键 → 再一次），断言 `circle → point(点数 1) → empty(点数 0，不留旧点)`；`e2e/geometry3d-sphere.spec.ts` 增到 **7/7**。**于是 Task 9 第二条 bullet 点名的 e2e 覆盖（数值创建 / 精确圆 / 切点 / 空集 / 编辑后持久化 / 撤销 / 相机与选择 / CAD 视图与导出 / 刻意的不支持布尔）全部落到浏览器层**，原先只剩单元判据的两项已消掉。那次失败的做法与原因仍留在用例注释里。
-2. **题目截图 → 可编辑数学图**（独立探索）：**未启动**，需要单列质量门禁（样题集、歧义标注、真实 provider 结果、草稿确认）。
-3. **HTML / GeoGebra 导出**：**HTML 一半已交付并随 `v3.2.0` 发布、`.ggb` 一半未启动**（已交付的导出还有 `.mgeo` / SVG / CSV / PNG 与工程图 SVG/DXF/PDF）。
-   **2026-10-02 更新（用户已决定启动；这一半后来已交付，见本条末尾的"进度"）**：用户在第 20 轮选定**启动 E3 的 HTML 一半**（`.ggb` 仍未启动）。按 brainstorming 流程走完：分类为 **architectural** → 逐项澄清 → 八段设计获批 → **spec 已写并就审**：[`docs/superpowers/specs/2026-10-02-html-export-design.md`](superpowers/specs/2026-10-02-html-export-design.md)。用户逐项确认的四个决定：**自包含静态快照**（单文件、不依赖本应用、不联网、不可交互）/ **第一批覆盖平面几何 + 工程制图** / **平面几何复用 `exportSvg` 的标准视野（含网格）** / **内嵌 `.mgeo` 使之兼作可再导入的存档**。
-   **2026-10-02 再次更新 —— 门禁已过、实施开始**：用户**批准 spec**，`writing-plans` 已产出实施计划 [`docs/superpowers/plans/2026-10-02-html-export-implementation-plan.md`](superpowers/plans/2026-10-02-html-export-implementation-plan.md)（5 个区块：纯函数产出器 → 导出路径含 3D 拒绝 → e2e 先红 → 命令/界面接线 → Agent 通道钉住与文档收口）。**写计划时按实测改掉了三处凭印象的写法**（`AnnotationSpec` 的字段是 `target`；工程 SVG 不含"主视图"这类中文标签、只有 `data-drawing-view="front"`；存档往返的判据改成"编码→解码的不动点"），并记下**两处与 spec 的偏差**：本批不调用 `buildExportPlan`（它至今没接进任何用户路径，`agentRunner.ts:509` 是桩），损失清单改为复用 `exportService.isUnexportableType` + 隐藏对象 + 工程视图诊断；"零外部引用"不能写成"不含 `http://`"（内嵌 SVG 的 `xmlns` 是命名空间不是网络请求），判据落实为无 `<link>` / 无带 `src` 的 `<script>` / 无指向网络的 `src|href` / 无 `@import`。
-   **进度（5/5 块全部交付，功能已可用）**：Task 1 `htmlExporter` 纯函数产出器（`6d28578`）→ Task 2 `fileExports.exportHtmlFile()` 接进导出路径、**立体几何明确拒绝且零下载**（`fc4df43`，变异：去掉拒绝分支 → 红在 `expected [ '我的-图纸.html' ] to deeply equal []`）→ Task 3+4 e2e **先红后绿**（`59eb3be`，RED = 三条都卡在"导出 HTML"按钮不存在 30 s 超时）与功能区/分派接线 → Task 5 钉住 Agent 通道**恰好四个格式**（类型级判据，**两处联合各一条** —— 只钉 `proposeExport` 时改 `preflight` 是拦不住的，实测发现后补上）并收口文档。**HTML 导出的能力登记已写进 `feature-catalog.md`；`.ggb` 一半仍未启动。** **发布边界**：本条早先写着"这只交付当前 `main` 的源码能力，不等于发布了含此功能的安装包" —— **2026-10-02 已随 `v3.2.0` 打包并作为 GitHub Release 发布**（见 §四 D1 与 [`release/v3.2.0.md`](release/v3.2.0.md)），所以那句话对本版已经不再成立，保留在此只为记录当时的边界。
-4. **平面 / 函数题型逐题补缺**：**未排期**（需先做教师样题盘点）。
+以下均为设计中、尚未实施：
 
-**历史痕迹（不是待办，留档以免误读）**：本轮共 9 次提交推送到功能分支，随后该分支通过 **PR #1** 合并进 `main`（合并提交 `3b1f770`，2026-09-30 12:46:30；父提交 `4d35b9d` + `e016f37`，两者都用 `git merge-base --is-ancestor` 核实过）。本地 `main` 已于 2026-09-30 由 `4d35b9d` 快进到 `origin/main` 的 `0d22ab4`（当时落后 53 个提交），并在其上重做了文档普查（`a22dba9`、`1676452`）。
+1. **N1：统一数学状态 IR**（Obligation / Constraint / Claim / evidence / solver status）。
+2. **N2：约束与非线性求解**（解析构造、有限预算数值后端、可选 solver adapter）。
+3. **N3：动态拖动保持约束**（自由度、过约束、无解、事务和恢复）。
+4. **N4：开放题编译与真实 Provider Benchmark**。
+5. **N5：形式证明出口**（实例、采样、形式证明严格分级）。
+6. **N6：feature flag、依赖/许可证/线程/WASM 审查、发布门槛与维护收口**。
+7. 其他尚未启动的产品探索：题目截图识图、GeoGebra `.ggb` 互操作、平面/函数题型逐题补缺、3D 画面进入 HTML。
 
+完整设计：`docs/superpowers/specs/2026-10-04-agent-full-next-phase-design.md`。
+完整计划：`docs/superpowers/plans/2026-10-04-agent-full-next-phase-implementation-plan.md`。
+GitHub 调研：`docs/research/2026-10-04-github-project-survey.md`。

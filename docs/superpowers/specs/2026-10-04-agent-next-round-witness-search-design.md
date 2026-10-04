@@ -1,4 +1,4 @@
-﻿> **路线更新：** 本文是较窄的第一版见证搜索路线，已被 `2026-10-04-agent-full-next-phase-design.md` 与 `2026-10-04-agent-full-next-phase-implementation-plan.md` 扩展为完整阶段路线；保留本文作为 N2/N4 的早期拆解。
+> **路线更新：** 本文是较窄的第一版见证搜索路线，已被 `2026-10-04-agent-full-next-phase-design.md` 与 `2026-10-04-agent-full-next-phase-implementation-plan.md` 扩展为完整阶段路线；保留本文作为 N2/N4 的早期拆解。
 
 # 下一轮 Agent 升级设计：约束驱动的示意图见证生成与真实模型评测
 
@@ -82,11 +82,15 @@ interface GeometryObligation {
 
 不做通用非线性方程求解。优先使用解析构造；解析构造失败后才使用小范围确定性参数网格。任何候选都必须回到同一 `verifyDiagramObligations` 验收，搜索器不能自证成功。
 
-### 4.3 反例与冲突解释
+### 4.3 WitnessSearch 归属和已有实现
+
+`packages/agent-core/src/solver/witnessSearch.ts` 负责搜索编排、候选池、seed、预算和排序；`packages/geometry-kernel/src/witness/` 只负责纯几何构造和残差。现有 `packages/agent-core/src/underdetermined.ts:66` 的 `PolyhedronWitness` 与 `selectWitness` 是兼容入口，下一轮必须内部转调新搜索器，不能再复制一套。
+
+### 4.4 反例与冲突解释
 
 每次 `no_witness` 保留：候选数、失败最多的题设、最大残差、退化原因和建议。把“模型算错了”“题设矛盾”“系统尚不支持”三者分开，禁止统一显示“作图失败”。
 
-### 4.4 真实 provider 评测
+### 4.5 真实 provider 评测
 
 新增真实题集，至少分为：
 
@@ -114,19 +118,21 @@ interface GeometryObligation {
 
 **出口：** 对首批题型，正确题稳定产出 `verified_instance`；矛盾题稳定产出 `no_witness`；不支持题稳定产出 `unverified_instance`。
 
-### R3：真实 provider benchmark
+### R3：动态约束拖动（N3）
 
-接入带脱敏日志的 benchmark runner；先人工运行，不把 provider 接入 CI。建立 pass@1/pass@3、成本、延迟和人工正确率基线，再决定是否调整提示词、工具循环或模型。
+R2 的自由度、残差和失败分类稳定后，把约束持久化到文档并接入拖动事务。真实 provider benchmark 不依赖这一阶段，可以并行准备题集和报告 schema，但不把 benchmark 结果作为动态拖动的前置条件。
 
-**出口：** 有可重复的真实 provider 报告，且报告能区分“图合法”“题设全覆盖”“人工认为图可读”。
+**出口：** 拖动不会静默破坏已确认关系；过约束、欠约束、无解和恢复路径在浏览器中可见。
 
-### R4：再决定是否做动态约束或形式证明
+### R4：真实 provider benchmark + 开放题编译（N4）
 
-只有 R2/R3 证明候选生成和题设覆盖已经稳定，才评估：
+使用 N1/N2 的 IR 和候选状态跑脱敏 benchmark；先人工运行，不把 provider 接入 CI。建立 pass@1/pass@3、成本、延迟和人工可读性基线，再决定是否调整提示词、工具循环或模型。
 
-- 把题设持久化为文档约束，拖动时投影求解；
-- 对部分目标接入符号/形式证明后端；
-- 把 draft 工具升级为模型可见的多轮草稿循环。
+**出口：** 报告能区分抽取、求解、验证、确认、图合法性和人工可读性；没有凭据时明确 `not_measured`。
+
+### R5：形式证明试点（N5）
+
+只对少量短目标接入证明后端；需要 proof artifact 才能进入 `formally_proved`，实例和采样永不升级为证明。
 
 ## 6. 发布门槛
 

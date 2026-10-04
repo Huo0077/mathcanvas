@@ -1,4 +1,4 @@
-﻿# 下一阶段 Agent 完整升级设计：约束求解、动态保持、形式证明与开放题理解
+# 下一阶段 Agent 完整升级设计：约束求解、动态保持、形式证明与开放题理解
 
 > 日期：2026-10-04
 > 基线：`b1ee3d3`（已完成欠定静态示意图的题设核验与 fail-closed 提交）
@@ -19,23 +19,23 @@
 
 ### 2.1 约束求解：SolveSpace / FreeCAD / ToubkalCAD
 
-SolveSpace 的求解接口明确暴露 `dof`、失败约束、`INCONSISTENT`、`DIDNT_CONVERGE` 和 `TOO_MANY_UNKNOWNS` 等结果；这说明动态拖动不能只返回“成功/失败”，必须把自由度、冲突约束和不收敛分开。citeturn1search1turn1search6
+SolveSpace 的求解接口明确暴露 `dof`、失败约束、`INCONSISTENT`、`DIDNT_CONVERGE` 和 `TOO_MANY_UNKNOWNS` 等结果；这说明动态拖动不能只返回“成功/失败”，必须把自由度、冲突约束和不收敛分开。（详见 `docs/research/2026-10-04-github-project-survey.md`）
 
-FreeCAD Sketcher 的约束系统把几何关系、尺寸和自由度交给约束求解器，并允许用户交互探索剩余自由度；MathCanvas 应借鉴“约束是文档状态，拖动是求解请求”的边界，而不是让 Agent 每次拖动都重新编一组坐标。citeturn0search5
+FreeCAD Sketcher 的约束系统把几何关系、尺寸和自由度交给约束求解器，并允许用户交互探索剩余自由度；MathCanvas 应借鉴“约束是文档状态，拖动是求解请求”的边界，而不是让 Agent 每次拖动都重新编一组坐标。（详见 `docs/research/2026-10-04-github-project-survey.md`）
 
-ToubkalCAD 展示了浏览器 3D 参数化 CAD、约束求解和 OpenCascade WASM 可以组合，但它的依赖体量和建模范围也说明：MathCanvas 应先实现自己的小型约束子集，不直接引入完整 CAD 内核。citeturn1search5
+ToubkalCAD 展示了浏览器 3D 参数化 CAD、约束求解和 OpenCascade WASM 可以组合，但它的依赖体量和建模范围也说明：MathCanvas 应先实现自己的小型约束子集，不直接引入完整 CAD 内核。（详见 `docs/research/2026-10-04-github-project-survey.md`）
 
 ### 2.2 非线性求解：Z3/NLSAT 与边界
 
-Z3 提供非线性算术、模型和“对猜想加入否定后检查不可满足”的证明式工作流；其公开示例也展示了从非线性约束取模型和做反例检查。citeturn0search1turn0search6 Z3 的版本说明还显示 NLSAT/CAD 单元近似等算法会持续演进，因此它更适合作为**可选后端**，而不是把 WASM/原生求解器直接塞入 UI 主线程。citeturn0search4
+Z3 提供非线性算术、模型和“对猜想加入否定后检查不可满足”的证明式工作流；其公开示例也展示了从非线性约束取模型和做反例检查。（详见 `docs/research/2026-10-04-github-project-survey.md`） Z3 的版本说明还显示 NLSAT/CAD 单元近似等算法会持续演进，因此它更适合作为**可选后端**，而不是把 WASM/原生求解器直接塞入 UI 主线程。（详见 `docs/research/2026-10-04-github-project-survey.md`）
 
 采用边界：先把 MathCanvas 题设编译为受限约束 IR，再提供 Z3/数值优化后端适配器；后端返回模型、无解、超时或未知，均不能被压成一个布尔值。
 
 ### 2.3 形式证明：mathlib4 / AlphaGeometry / Newclid
 
-mathlib4 是 Lean 的数学库与证明基础设施，强调可检查的形式化数学；它适合作为将来的证明出口，不适合作为当前静态画图的隐藏判据。citeturn0search0turn0search7
+mathlib4 是 Lean 的数学库与证明基础设施，强调可检查的形式化数学；它适合作为将来的证明出口，不适合作为当前静态画图的隐藏判据。（详见 `docs/research/2026-10-04-github-project-survey.md`）
 
-AlphaGeometry 的公开实现把几何状态、数值引擎和符号/规则搜索结合起来；其仓库描述的 `geometry.py`、`numericals.py` 分层与 MathCanvas 的“几何文档 + 数值候选 + 规则证明”方向高度相关，但它面向奥数证明，不等价于高中 3D 作图。citeturn1search0turn1search10 Newclid 也表明，把自然语言或半结构化题面送入证明引擎本身就是独立的自动形式化问题，不能假设模型生成一个 JSON 就已经完成形式化。citeturn1academia22turn1academia19
+AlphaGeometry 的公开实现把几何状态、数值引擎和符号/规则搜索结合起来；其仓库描述的 `geometry.py`、`numericals.py` 分层与 MathCanvas 的“几何文档 + 数值候选 + 规则证明”方向高度相关，但它面向奥数证明，不等价于高中 3D 作图。（详见 `docs/research/2026-10-04-github-project-survey.md`） Newclid 也表明，把自然语言或半结构化题面送入证明引擎本身就是独立的自动形式化问题，不能假设模型生成一个 JSON 就已经完成形式化。（详见 `docs/research/2026-10-04-github-project-survey.md`）
 
 ## 3. 统一状态模型
 

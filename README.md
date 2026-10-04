@@ -87,18 +87,19 @@ npm run eval:agent
 
 ### 当前开发重点
 
-**已交付并推送：** `b1ee3d3` 完成欠定立体示意图的题设逐条核验、未核验 fail-closed 提交和示意图/普遍证明边界；文档路线同步提交 `9fb64e0`。当前可复核读数以 [当前状态](docs/current-status.md) §一为准。
+**已交付并推送：** `b1ee3d3` 完成欠定立体示意图的题设逐条核验、未核验 fail-closed 提交和示意图/普遍证明边界；文档路线同步于 `9fb64e0`，本次文档审查同步于 `666d651`。当前读数以 [当前状态](docs/current-status.md) §一为准。
 
 **当前待完成：**
 
-1. 真实 provider 开放题现场复核：pass@1/pass@3、成本、延迟、题设覆盖率和人工可读性。
-2. 教师/学生走查与 MSI 安装→启动→卸载验收。
-3. 下一阶段 N1–N5：统一数学 IR、约束/非线性求解、动态拖动保持、开放题编译与真实评测、形式证明出口。详见 [完整下一阶段设计](docs/superpowers/specs/2026-10-04-agent-full-next-phase-design.md)、[实施计划](docs/superpowers/plans/2026-10-04-agent-full-next-phase-implementation-plan.md) 和 [GitHub 调研](docs/research/2026-10-04-github-project-survey.md)。
+1. **用户侧验收**：教师/学生走查，包括“三点一面”主操作数、误操作、恢复和未核验提示。
+2. **管理员验收**：MSI 安装→启动→卸载；NSIS 与裸 exe 证据不能替代 MSI。
+3. **真实 Agent 质量基线**：真实 provider 的 pass@1/pass@3、成本、延迟、题设覆盖率和人工图面可读性。
+4. **下一阶段 N1–N6**：统一数学 IR、约束/非线性求解、动态拖动保持、开放题编译与真实评测、形式证明出口、feature flag/依赖审查/发布收口。
 
-Agent 的当前安全边界和下一阶段路线见：
+完整路线见：
 
-- [Agent 发布门禁](docs/acceptance/agent-release-gate.md)：真实 provider 数据仍是默认启用的必要门槛；
-- [完整下一阶段设计](docs/superpowers/specs/2026-10-04-agent-full-next-phase-design.md)：约束求解、动态拖动保持、开放题编译、真实评测、形式证明；
-- [完整下一阶段计划](docs/superpowers/plans/2026-10-04-agent-full-next-phase-implementation-plan.md)：按 N1→N6 分阶段实施；
-- [GitHub 项目调研](docs/research/2026-10-04-github-project-survey.md)：外部项目参考和不采用边界。
-逐阶段 Agent 已完成、延期及待做事项见 [实施计划](docs/superpowers/plans/2026-09-28-agent-tool-loop-implementation-plan.md)、[进度快照](docs/research/2026-09-28-agent-tool-loop-progress.md) 与 [评估记分卡](docs/acceptance/agent-tool-loop-scorecard.md)。协作时保持 DSL、几何内核、Scene Graph 与 UI 的边界；每个可验证切片须同步更新 README/相关进度文档，提交并推送 GitHub、核对远端 SHA 和 CI 后才标记完成。
+- [Agent 发布门禁](docs/acceptance/agent-release-gate.md)
+- [完整下一阶段设计](docs/superpowers/specs/2026-10-04-agent-full-next-phase-design.md)
+- [完整下一阶段计划](docs/superpowers/plans/2026-10-04-agent-full-next-phase-implementation-plan.md)
+- [GitHub 项目调研](docs/research/2026-10-04-github-project-survey.md)
+- [项目进度归档](docs/project-progress.md)

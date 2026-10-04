@@ -1,4 +1,4 @@
-﻿# MathCanvas Agent Tool Loop Scorecard
+# MathCanvas Agent Tool Loop Scorecard
 
 Date: October 4, 2026. Status: geometry-instance verification added; real-provider evaluation still not run.
 
@@ -23,7 +23,17 @@ Date: October 4, 2026. Status: geometry-instance verification added; real-provid
 | Open-ended problem compilation | design only | obligation extraction and judgeability rates separate from final drawing rate |
 | Formal proof | design only | independently checked proof artifacts |
 | Real provider | not measured | pass@1/pass@3, cost, latency and human readability |
-## Current evidence\n\n### 2026-10-04 geometry-diagram supplement\n\n| Metric | Current reading | Boundary |\n| --- | --- | --- |\n| Supported static-instance verification | 3319 unit assertions + 186 browser assertions in the current workspace | Fixed/ offline candidates; not real-model accuracy |\n| Unknown-condition blocking | Covered by unit, runtime, HostBridge and browser negative paths | Only supported high-precision obligation forms are judged |\n| Real-provider geometry pass@1/pass@3 | Not measured | Requires provider credential and benchmark dataset |\n| Witness-search success rate | Not implemented | Next-round design only |\n
+## Current evidence
+
+### 2026-10-04 geometry-diagram supplement
+
+| Metric | Current reading | Boundary |
+| --- | --- | --- |
+| Supported static-instance verification | 3319 unit assertions + 186 browser assertions in the current workspace | Fixed/ offline candidates; not real-model accuracy |
+| Unknown-condition blocking | Covered by unit, runtime, HostBridge and browser negative paths | Only supported high-precision obligation forms are judged |
+| Real-provider geometry pass@1/pass@3 | Not measured | Requires provider credential and benchmark dataset |
+| Witness-search success rate | Not implemented | Next-round design only |
+
 
 `npm run eval:agent` runs the offline evaluator and prints the scorecard (it reuses vitest because this repo has no TS runner; the report lives in `apps/web/src/agent/fixtures/agentEvalReport.ts`).
 
