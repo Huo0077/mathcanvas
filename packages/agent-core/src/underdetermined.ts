@@ -1,8 +1,24 @@
-﻿import { buildFromPoints, createBuilderContext, triangleCenter2, validatePrismInput, type Vector3 } from "@draw/geometry-kernel"
+﻿import { triangleCenter2, validatePrismInput, type Vector3 } from "@draw/geometry-kernel"
 
 import type { PlanDiagnostic, StructuredAssumption } from "./contracts"
 import { DEFAULT_DYNAMIC_POINT_PARAMETER, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SPAN, DEFAULT_SLOPE, WITNESS_TRIANGLE, defaultPrismBasePolygon, defaultPrismVector } from "./localPlanDefaults"
-import { verifyRelations, type Relation, type RelationLookup } from "./relations"
+import type { Relation } from "./relations"
+import type { PolyhedronWitness } from "./solver/solverContracts"
+import { selectPolyhedronWitness } from "./solver/witnessSearch"
+
+/**
+ * **`PolyhedronWitness` 的定义搬去了 `solver/solverContracts.ts`**（N2 子任务 2b，裁决 R13）。
+ *
+ * 理由只有一个：它的**唯一**消费者是搜索器（`WitnessSearchResult.candidate`）与本文件的
+ * polyhedron 分支。定义留在这里，solver 就得反过来依赖 facade；而 R13 定的方向恰好相反 ——
+ * 筛选与排序逻辑搬进 solver，facade 只是入口。这里改成 re-export，
+ * 对外名字（`@draw/agent-core` 的 barrel 与 `underdetermined.test.ts` 的 import）一个字节没变。
+ *
+ * 原始口径仍然成立：这是"只有关系、没有数值"的立体题面（四棱锥 P-ABCD 那类）唯一可能的出口，
+ * 而**本批没有产品调用点**（`selectWitness` 的非测试调用点只有 `parameterAudit.ts`，
+ * 它只请求 triangle / prism）。
+ */
+export type { PolyhedronWitness }
 
 /**
  * **欠定题目的特值选择**（Agent DSL 切片 Task 3；规格 §6.3）。
@@ -46,29 +62,6 @@ export interface TriangleWitness {
 export interface PrismWitness {
   basePolygon: Vector3[]
   vector: Vector3
-}
-
-/**
- * **任意多面体的见证**（设计 2026-10-03 §5.4）。
- *
- * 这是"只有关系、没有数值"的立体题面（四棱锥 P-ABCD 那类）唯一可能的出口：
- * 不规则形状在动作层只能走 `solid.create_polyhedron`，而它的 `vertices` / `faces`
- * 是必填、零默认 —— 一组坐标必须由**模型算出来**，系统的职责是逐条核验。
- *
- * `names` 与 `vertices` 按下标对应，关系表用**下标名**（`v0`、`v1`…）引用顶点
- * （设计 §2 决定 7：第一批关系目标只支持顶点）。
- *
- * **本批没有产品调用点**（执行前的范围裁定，2026-10-03）：`selectWitness` 的非测试调用点
- * 只有 `parameterAudit.ts`，而它只请求 triangle / prism。所以这个族现在的价值是
- * "为第二批（平面）与将来的'系统自己挑特值'留接口"，**不是本批验收的依据** ——
- * 解掉用户报障的是 `planCompiler` 里的关系核验。不要把它读成"它修好了报障"。
- */
-export interface PolyhedronWitness {
-  vertices: Vector3[]
-  /** 顶点名，与题面一致；关系表按下标约定引用（`v0`、`v1`…）。 */
-  names: string[]
-  /** 面环，元素是 `vertices` 的下标。 */
-  faces: number[][]
 }
 
 export type WitnessValue =
@@ -324,59 +317,25 @@ export function selectWitness(request: WitnessRequest): WitnessSelection {
   }
 
   /**
-   * **多面体**（设计 2026-10-03 §5.4）：候选由模型给出，这里只做**筛选**。
+   * **多面体**（设计 2026-10-03 §5.4）：候选来自 `request`，这里只做**转调**（R13）。
    *
    * 与其它族的关键区别：其它族的候选是**常量表**（`witnessTriangleCandidates()`），
-   * 而"四棱锥满足 PA ⊥ 底面"这组坐标不可能预置 —— 它取决于题面。所以候选来自 `request`。
+   * 而"四棱锥满足 PA ⊥ 底面"这组坐标不可能预置 —— 它取决于题面。所以候选来自调用方。
    *
-   * 筛选顺序就是规格 §6.3 的优先级，两步都不可省：
-   * ① **先验题目显式关系**（优先级第一条）—— 不满足的候选跳过，理由记进 `considered`；
-   * ② **再验几何合法性** —— 判据来自内核 `buildFromPoints`（共面 / 自交 / 零体积 / 绕向 /
-   *    连通性），与真正落盘时用的是同一个构造器，所以不会出现"这里说合法、内核说不行"。
+   * **筛选与排序现在住在 `solver/witnessSearch.ts`**（计划 N2 的 Ownership："不得再出现
+   * 两套候选选择逻辑"）：那边按规格 §6.3 的优先级先验显式关系（`verifyRelations`）、
+   * 再验几何合法性（内核 `buildFromPoints`，与真正落盘时是同一个构造器），
+   * 最后按可读性排序。本文件只剩"把结果包回旧形状"这件事，所以对外的
+   * `considered` / `assumption` / 诊断与搬迁之前逐字相同。
    *
    * **符号优先已经在函数开头处理掉了**（`isInvariantRequest`）：任务要求普遍证明或动态参数时
    * 根本走不到这里。这个顺序不许改动。
    */
   if (request.kind === "polyhedron") {
-    const declared = request.relations ?? []
-    const candidates = request.candidates ?? []
-    const accepted: { witness: PolyhedronWitness; index: number; readability: number }[] = []
-    for (const [index, candidate] of candidates.entries()) {
-      if (candidate.names.length !== candidate.vertices.length || new Set(candidate.names).size !== candidate.names.length) {
-        considered.push(`names: 候选 ${index} 顶点名与坐标没有一一对应，不能核验。`)
-        continue
-      }
-      const byName = new Map(candidate.names.map((name, position) => [name, candidate.vertices[position]]))
-      const lookup: RelationLookup = (target) => byName.get(target.vertex) ?? null
-      const check = verifyRelations(declared, lookup)
-      if (!check.ok) {
-        considered.push(`relations: 候选 ${index} 未满足 ${check.failures.map((failure) => failure.id).join("、")} —— ${check.failures[0].detail}`)
-        continue
-      }
-
-      // The same kernel constructor used for the final solid rejects degenerate topology.
-      const built = buildFromPoints({ vertices: candidate.vertices, faces: candidate.faces }, createBuilderContext())
-      if (built.diagnostics.length > 0) {
-        considered.push(`degenerate: 候选 ${index} 几何不合法 —— ${built.diagnostics.map((entry) => entry.message).join("；")}`)
-        continue
-      }
-
-      // A preference, never a constraint: only candidates that passed every relation
-      // and topology check are ranked. Translation and rotation do not affect the score.
-      const spans = (["x", "y", "z"] as const).map((axis) => {
-        const values = candidate.vertices.map((vertex) => vertex[axis])
-        return Math.max(...values) - Math.min(...values)
-      })
-      const readability = Math.min(...spans) / Math.max(...spans)
-      accepted.push({ witness: candidate, index, readability })
-      considered.push(`accepted: 候选 ${index} 关系逐条成立、几何合法。`)
-    }
-
-    if (accepted.length === 0) return rejectedSelection("polyhedron", "no_acceptable_witness", "没有候选能同时满足题面关系与几何合法性。", considered)
-    // Stable tie-breaking: an equally readable candidate keeps its input order.
-    const chosen = accepted.reduce((best, current) => current.readability > best.readability ? current : best)
-    const candidate = chosen.witness
-    considered.push(`chosen: 候选 ${chosen.index} 在合格图中比例更适合观察。`)
+    const selection = selectPolyhedronWitness({ candidates: request.candidates ?? [], relations: request.relations ?? [] })
+    considered.push(...selection.considered)
+    if (selection.status === "none") return rejectedSelection("polyhedron", "no_acceptable_witness", "没有候选能同时满足题面关系与几何合法性。", considered)
+    const candidate = selection.candidate
     const described = candidate.names
       .map((name, position) => `${name}(${candidate.vertices[position].x}, ${candidate.vertices[position].y}, ${candidate.vertices[position].z})`)
       .join("、")

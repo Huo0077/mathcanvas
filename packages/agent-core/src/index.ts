@@ -61,6 +61,15 @@ export * from "./sceneObservation"
 export * from "./schemas"
 export * from "./skills/catalog"
 export * from "./skills/manifest"
+/**
+ * **N2 的求解器层**（子任务 2b；计划 N2 的 Ownership）。
+ *
+ * `solverContracts` 先于 `solver/witnessSearch` 导出，顺序与依赖方向一致：
+ * 契约只有形状，搜索器才是行为。两者一起出现在包根，是因为 2c 的接线
+ *（Worker / `draftStore`）必须能只依赖包根拿到 `WitnessSearchInput` 与 `searchWitness`。
+ */
+export * from "./solver/solverContracts"
+export * from "./solver/witnessSearch"
 export * from "./toolContracts"
 export * from "./toolDispatch"
 export * from "./toolLoop"

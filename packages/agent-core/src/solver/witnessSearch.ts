@@ -1,0 +1,715 @@
+import { buildFromPoints, constructWitnessShape, createBuilderContext, type Vector3, type WitnessConstructRequest, type WitnessHeightSpec, type WitnessRelation, type WitnessShapeCandidate } from "@draw/geometry-kernel"
+import { createEmptyDocument } from "@draw/dsl"
+
+import { evidenceStatusForWitness, type ClaimEvidence, type ClaimEvidenceStatus, type GeometryObligation, type SolverStatus, type WitnessResultStatus } from "../claimEvidence"
+import { PLAN_SCHEMA_VERSION, type PlanEnvelope } from "../contracts"
+import type { DiagramObligationSet } from "../diagramObligations"
+import { verifyDiagramObligations, type DiagramVerificationReport } from "../diagramVerification"
+import { toLegacyObligationSet } from "../obligationIR"
+import { compilePlan } from "../planCompiler"
+import { verifyRelations, type RelationLookup } from "../relations"
+import {
+  WITNESS_SEARCH_CODES,
+  type PolyhedronWitness,
+  type PolyhedronWitnessSelection,
+  type PolyhedronWitnessSelectionInput,
+  type WitnessSearchInput,
+  type WitnessSearchResult
+} from "./solverContracts"
+
+/**
+ * **见证搜索的编排层**（N2 子任务 2b；计划 N2 的 Ownership / R13 / R15 / R16 / R25 / R26）。
+ *
+ * ## 这一层拥有的东西，与它**不许**拥有的东西
+ *
+ * 拥有：候选池、seed、上限与预算、排序、失败分类、`ClaimEvidence`，以及**既有 polyhedron
+ * 候选的筛选与排序**（R13：这段逻辑从 `underdetermined.ts` 搬到这里，只留一份）。
+ *
+ * 不拥有：任何几何判据。坐标由内核 `witness/` 的解析构造器产出，形状自检由内核的
+ * `residuals.ts` 负责，**题设是否成立**只由 `verifyDiagramObligations` +
+ * `buildFromPoints` 判定（R15：不允许求解器自证）。这一层连一次点积都不算。
+ *
+ * ## 候选的一生（也是判据的唯一路径）
+ *
+ * ```text
+ * GeometryObligation[]                       ← N1 的 IR（题设原话解析的产物）
+ *   → toLegacyObligationSet(...)             ← N1 的兼容适配：桥到核验器要的旧结构
+ *   → constructWitnessShape(request)         ← 内核 2a：解析构造 / 结构化拒绝
+ *   → buildFromPoints(...)                   ← 内核：拓扑构造（绕向 / 共面 / 零体积）
+ *   → 一封单动作信封（solid.create_polyhedron，带 vertexNames）
+ *   → compilePlan(envelope, ...)             ← **产品用的那条**物化路径，不另造文档
+ *   → verifyDiagramObligations(legacy, envelope, draftDocument)   ← 唯一的判定
+ * ```
+ *
+ * 所以"候选合格了吗"这个问题的答案只有一处，不存在第二套残差或第二个判据。
+ *
+ * ## 解析构造优先，有限网格只扫构造器已暴露的自由标量（R26）
+ *
+ * 解析候选（题面关系 → 2a 的默认特值）永远排第一；它没能通过核验时，才在**自由标量**
+ * 上做有限网格：底面两条自由边长与自由高。**不做通用约束求解**（R18）：
+ * 取值表是固定的小整数、无连续优化、无 RNG（只有一个由 seed 决定的排列）。
+ *
+ * ## 分类口径（R25）
+ *
+ * 三值 `status` 不变；原因落到 `ClaimEvidence.status`：
+ * 预算耗尽 → `timeout`；题设自相矛盾且能给出冲突证据 → `inconsistent`；
+ * 找到候选但验不过 / 无法判定 → `unknown`。每条 `failures` / `reasons` 都以机器可读码开头。
+ * **文案纪律**：超时一律写成"在预算内没有找到"，绝不写成"不存在见证"。
+ */
+
+/** 自由底面边长的候选值：小整数（规格 §6.3 的优先级），2 是 2a 的默认值。 */
+const FREE_BASE_VALUES: readonly number[] = [2, 3, 4]
+/** 自由高的候选值：1 是 2a 的默认值，所以网格从 2 起（默认那组由解析候选负责）。 */
+const FREE_HEIGHT_VALUES: readonly number[] = [2, 3]
+
+/**
+ * "耐看"的下限：`readabilityOf < 1/4` 的候选在画布上已经读成一根杆子。
+ *
+ * 这是**偏好**，不是约束：题面强制要求（例如点名 `PA=10` 而底面尺寸也由题面钉死）时，
+ * 仍然会返回它 —— 内核真正的拒绝判据是 `residuals.ts` 的长宽比上限（1e6 量级），
+ * 两者一个是"难看"，一个是"不可信"，不能互相代替。
+ */
+const READABILITY_FLOOR = 0.25
+
+/** 单次搜索的输入回显（进 assumptions / failures），**不含耗时** —— 结果必须可重现。 */
+function configLine(input: WitnessSearchInput, considered: number): string {
+  return `witness-search: seed=${String(input.seed)} candidates=${considered} maxCandidates=${String(input.maxCandidates)} timeoutMs=${String(input.timeoutMs)}`
+}
+
+/**
+ * 候选的"耐看程度"：三个轴向尺度里最小 / 最大。平移与旋转不影响它。
+ *
+ * 这是**偏好**，不是判据：它只决定"同样合格的两个候选先看哪个"。
+ */
+export function readabilityOf(vertices: readonly Vector3[]): number {
+  if (vertices.length === 0) return 0
+  const spans = (["x", "y", "z"] as const).map((axis) => {
+    const values = vertices.map((vertex) => vertex[axis])
+    return Math.max(...values) - Math.min(...values)
+  })
+  const largest = Math.max(...spans)
+  return largest > 0 ? Math.min(...spans) / largest : 0
+}
+
+/**
+ * **既有 polyhedron 候选的筛选与排序**（R13 的唯一实现）。
+ *
+ * 顺序就是规格 §6.3 的优先级，两步都不可省：
+ * ① 先验题目显式关系（不满足的跳过，理由进 `considered`）；
+ * ② 再验几何合法性 —— 判据来自内核 `buildFromPoints`（共面 / 自交 / 零体积 / 绕向 /
+ *    连通性），与真正落盘时用的是同一个构造器。
+ *
+ * 排序用 `readabilityOf`，**只是偏好**：同样合格的两个候选里挑更耐看的那个；
+ * 完全同等可读时保持输入顺序（稳定 tie-break），所以调用方的候选顺序仍然有意义。
+ */
+export function selectPolyhedronWitness(input: PolyhedronWitnessSelectionInput): PolyhedronWitnessSelection {
+  const considered: string[] = []
+  const candidates = input.candidates ?? []
+  const relations = input.relations ?? []
+  const accepted: { witness: PolyhedronWitness; index: number; readability: number }[] = []
+
+  for (const [index, candidate] of candidates.entries()) {
+    if (candidate.names.length !== candidate.vertices.length || new Set(candidate.names).size !== candidate.names.length) {
+      considered.push(`names: 候选 ${index} 顶点名与坐标没有一一对应，不能核验。`)
+      continue
+    }
+    const byName = new Map(candidate.names.map((name, position) => [name, candidate.vertices[position]]))
+    const lookup: RelationLookup = (target) => byName.get(target.vertex) ?? null
+    const check = verifyRelations(relations, lookup)
+    if (!check.ok) {
+      considered.push(`relations: 候选 ${index} 未满足 ${check.failures.map((failure) => failure.id).join("、")} —— ${check.failures[0].detail}`)
+      continue
+    }
+
+    // The same kernel constructor used for the final solid rejects degenerate topology.
+    const built = buildFromPoints({ vertices: candidate.vertices, faces: candidate.faces }, createBuilderContext())
+    if (built.diagnostics.length > 0) {
+      considered.push(`degenerate: 候选 ${index} 几何不合法 —— ${built.diagnostics.map((entry) => entry.message).join("；")}`)
+      continue
+    }
+
+    accepted.push({ witness: candidate, index, readability: readabilityOf(candidate.vertices) })
+    considered.push(`accepted: 候选 ${index} 关系逐条成立、几何合法。`)
+  }
+
+  if (accepted.length === 0) return { status: "none", considered }
+  // Stable tie-breaking: an equally readable candidate keeps its input order.
+  const chosen = accepted.reduce((best, current) => current.readability > best.readability ? current : best)
+  considered.push(`chosen: 候选 ${chosen.index} 在合格图中比例更适合观察。`)
+  return { status: "selected", candidate: chosen.witness, index: chosen.index, considered }
+}
+
+// ---------------------------------------------------------------- 题设 → 结构（只有一种读法）
+
+interface LineAndPlane {
+  line: [string, string]
+  plane: string[]
+  sourceText: string
+}
+
+/**
+ * 认出一条"线段 ⊥ 平面"的题设。
+ *
+ * **为什么按 targets 的长度还原切点**：解析器给这类写法的 targets 是扁平的
+ * `[线段两端点, 平面上的每个点名]`（`PA ⊥ 平面 ABCD` → 6 个），而且**没有** `planeLengths`
+ * —— 那是 `平面X⊥平面Y` 才有的字段。线段固定两个字母、平面固定三或四个，所以
+ * 长度 5 / 6 只能来自"2 + 3"与"2 + 4"；长度 4 一律是"线段 ⊥ 线段"。
+ * 若将来解析器补上 `planeLengths`，这里优先采信它（并在不一致时宁可不当成线面垂直）。
+ */
+function lineAndPlane(obligation: GeometryObligation): LineAndPlane | null {
+  if (obligation.kind !== "perpendicular") return null
+  const targets = obligation.targets
+  if (targets.length !== 5 && targets.length !== 6) return null
+  const plane = targets.slice(2)
+  if (plane.length !== 3 && plane.length !== 4) return null
+  if (new Set(plane).size !== plane.length) return null
+  const lengths = obligation.geometry?.planeLengths
+  if (lengths && (lengths[0] !== 2 || lengths[1] !== plane.length)) return null
+  return { line: [targets[0], targets[1]], plane, sourceText: obligation.sourceText }
+}
+
+/**
+ * **题设自相矛盾**（R25 要求搜索器能给出冲突证据）。
+ *
+ * 只查两条**不需要算几何**就能断定的冲突，因为它们给出的是"题设本身无解"这个结论，
+ * 而不是"我没试出来"：
+ * ① 同一条线段被给了两个不同的长度；
+ * ② 一条线段的两个端点都在它自称垂直的那个点名平面内（线在面内不可能垂直于该面）。
+ *
+ * 其余"看起来矛盾"的输入（例如同时 ⊥ 与 ∥）不在这里断言 —— 那需要几何推理，
+ * 由统一核验器按残差说话，结论只会是"没找到"，不会被升级成"矛盾"。
+ */
+function findContradiction(givens: readonly GeometryObligation[]): { code: string; message: string } | null {
+  const lengths = new Map<string, { value: number; sourceText: string }>()
+  for (const obligation of givens) {
+    if (obligation.kind !== "fixedLength" || obligation.targets.length !== 2 || typeof obligation.expected !== "number") continue
+    const key = [...obligation.targets].sort().join("|")
+    const seen = lengths.get(key)
+    if (seen === undefined) {
+      lengths.set(key, { value: obligation.expected, sourceText: obligation.sourceText })
+      continue
+    }
+    if (Math.abs(seen.value - obligation.expected) > 1e-9) {
+      return {
+        code: WITNESS_SEARCH_CODES.contradictoryGiven,
+        message: `${seen.sourceText} 与 ${obligation.sourceText} 对同一条线段给出了不同的长度（${String(seen.value)} 与 ${String(obligation.expected)}），题设自相矛盾。`
+      }
+    }
+  }
+  for (const obligation of givens) {
+    const entry = lineAndPlane(obligation)
+    if (!entry) continue
+    if (entry.plane.includes(entry.line[0]) && entry.plane.includes(entry.line[1])) {
+      return {
+        code: WITNESS_SEARCH_CODES.contradictoryLinePlane,
+        message: `${entry.sourceText} 里的线段 ${entry.line.join("")} 两个端点都在所点名的平面内，线在面内不可能垂直于该平面。`
+      }
+    }
+  }
+  return null
+}
+
+/** 交给内核构造器的两两写法。 */
+function kernelRelations(givens: readonly GeometryObligation[]): WitnessRelation[] {
+  const relations: WitnessRelation[] = []
+  for (const obligation of givens) {
+    const targets = obligation.targets
+    if (obligation.kind === "perpendicular" && targets.length === 4) {
+      relations.push({ kind: "perpendicular", segments: [[targets[0], targets[1]], [targets[2], targets[3]]] })
+      continue
+    }
+    if (obligation.kind === "parallel" && targets.length === 4) {
+      relations.push({ kind: "parallel", segments: [[targets[0], targets[1]], [targets[2], targets[3]]] })
+      continue
+    }
+    if (obligation.kind === "fixedLength" && targets.length === 2 && typeof obligation.expected === "number") {
+      relations.push({ kind: "segment-length", segments: [[targets[0], targets[1]]], value: obligation.expected })
+    }
+    /**
+     * "线段 ⊥ 平面"**不翻译**：内核构造器的 `WitnessRelation` 只有两两写法，
+     * 硬拆成"线段 ⊥ 平面上的某条边"会把一个更强的命题降级成一条更弱的、可能不成立的命题。
+     * 它由判定侧逐字核验（`verifyDiagramObligations` 的线面垂直残差），构造侧只需要
+     * 顶点与垂足这个位置关系 —— 而那已经由 `derivePyramidStructure` 读出来了。
+     */
+  }
+  return relations
+}
+
+interface PyramidStructure {
+  base: string[]
+  apex: string
+  foot: string
+  relations: WitnessRelation[]
+  /** 题面**没有**给长度的底面两条边（`AB` 与 `AD`）：它们才是网格可以扫的自由标量。 */
+  freeBaseEdges: [string, string][]
+  heightSpec: WitnessHeightSpec
+}
+
+type StructureResult = { status: "ok"; structure: PyramidStructure } | { status: "rejected"; code: string; message: string }
+
+/** 高的来源：题面点名的那条含顶点的定长线段（解析式），否则自由。 */
+function heightSpecFor(givens: readonly GeometryObligation[], apex: string): WitnessHeightSpec {
+  for (const obligation of givens) {
+    if (obligation.kind !== "fixedLength" || obligation.targets.length !== 2 || typeof obligation.expected !== "number") continue
+    if (!obligation.targets.includes(apex)) continue
+    const other = obligation.targets[0] === apex ? obligation.targets[1] : obligation.targets[0]
+    return { kind: "lateral-edge", edge: [apex, other], length: obligation.expected }
+  }
+  return { kind: "free" }
+}
+
+/**
+ * **从题设读出底面环与顶点**（首批唯一的读法）。
+ *
+ * 底面环来自"线段 ⊥ 平面"那句里点名的平面（题面写 `平面 ABCD` 就是环 `A→B→C→D`）；
+ * 线段两端点里**落在环内**的那个是垂足，另一个是顶点。这三件事一旦确定，其余全是 2a 的事。
+ *
+ * 读不出来就明确拒绝（`unsupported-shape`）：首批不做通用非线性求解，
+ * 也不会去猜一个题面没说的底面 —— 那正是"特值化悄悄改题"的老毛病。
+ */
+function derivePyramidStructure(givens: readonly GeometryObligation[]): StructureResult {
+  const entries = givens.map(lineAndPlane).filter((entry): entry is LineAndPlane => entry !== null)
+  const usable = entries.find((entry) => entry.plane.includes(entry.line[0]) !== entry.plane.includes(entry.line[1]))
+  if (!usable) {
+    return {
+      status: "rejected",
+      code: WITNESS_SEARCH_CODES.unsupportedShape,
+      message: entries.length === 0
+        ? "题面没有给出「某条线段 ⊥ 某个点名平面」的写法，首批无法确定底面环、垂足与顶点。"
+        : "题面里那条「线段 ⊥ 平面」的两个端点都不在所点名的平面内，无法确定垂足与顶点。"
+    }
+  }
+
+  const base = usable.plane
+  const foot = base.includes(usable.line[0]) ? usable.line[0] : usable.line[1]
+  const apex = foot === usable.line[0] ? usable.line[1] : usable.line[0]
+  const relations = kernelRelations(givens)
+  const stated = new Set(relations.filter((relation) => relation.kind === "segment-length").flatMap((relation) => relation.segments.map((segment) => [...segment].sort().join("|"))))
+  const first = base[0]
+  const second = base[1]
+  const third = base.length === 4 ? base[3] : base[2]
+  const freeBaseEdges = ([[first, second], [first, third]] as [string, string][]).filter((edge) => !stated.has([...edge].sort().join("|")))
+
+  return {
+    status: "ok",
+    structure: { base: [...base], apex, foot, relations, freeBaseEdges, heightSpec: heightSpecFor(givens, apex) }
+  }
+}
+
+// ---------------------------------------------------------------- 候选池（解析优先 + 有限网格）
+
+interface CandidatePlan {
+  request: WitnessConstructRequest
+  /** 这个候选**自己选定**的自由标量（解析候选为空）—— 必须写进 assumptions 给用户看。 */
+  freeChoices: { edge: [string, string]; value: number }[]
+  /** 排序键：只累加我们选定的自由标量；题面已定的部分对所有候选都一样，比它没有意义。 */
+  sizeKey: number
+}
+
+/**
+ * 由 seed 决定的确定性排列（LCG + Fisher–Yates，无 `Math.random`、无时间）。
+ *
+ * 它**只**用来给"优先级完全相同"（同样的 `sizeKey`）的候选排先后，
+ * 所以同一 seed 必然同一顺序、同一结果（R26）；不同 seed 只在这类并列上才有差别。
+ */
+function seededOrder<T>(values: readonly T[], seed: number): T[] {
+  const items = [...values]
+  let state = Number.isFinite(seed) ? Math.trunc(seed) >>> 0 : 0
+  const next = (): number => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0
+    return state
+  }
+  for (let index = items.length - 1; index > 0; index -= 1) {
+    const swap = next() % (index + 1)
+    const held = items[index]
+    items[index] = items[swap]
+    items[swap] = held
+  }
+  return items
+}
+
+function requestFor(structure: PyramidStructure, choices: readonly { edge: [string, string]; value: number }[], heightValue: number | null): WitnessConstructRequest {
+  const relations: WitnessRelation[] = [...structure.relations]
+  for (const choice of choices) {
+    relations.push({ kind: "segment-length", segments: [[choice.edge[0], choice.edge[1]]], value: choice.value })
+  }
+  const height: WitnessHeightSpec = heightValue === null || structure.heightSpec.kind !== "free"
+    ? structure.heightSpec
+    : { kind: "free", value: heightValue }
+  return { shape: "pyramid", base: [...structure.base], apex: { at: structure.apex, foot: structure.foot, height }, relations }
+}
+
+/**
+ * 候选池：**解析候选第一**，然后是有限网格。
+ *
+ * 网格的轴只有 2a 已经暴露的自由标量（R26）：题面没给长度的那两条底面边、以及题面没定的高。
+ * 两轴同时自由时取笛卡尔积（这正是"题面只给关系"时唯一说得通的兜底），
+ * 但取值表是固定的小整数（各 3 / 2 个），所以池子的规模有上界，`maxCandidates` 只会在尾部截断。
+ */
+function candidatePool(structure: PyramidStructure, input: WitnessSearchInput): CandidatePlan[] {
+  const pool: CandidatePlan[] = [{ request: requestFor(structure, [], null), freeChoices: [], sizeKey: 0 }]
+  const baseOptions: { edge: [string, string]; value: number }[][] = []
+  if (structure.freeBaseEdges.length === 2) {
+    const [widthEdge, depthEdge] = structure.freeBaseEdges
+    for (const width of seededOrder(FREE_BASE_VALUES, input.seed)) {
+      for (const depth of seededOrder(FREE_BASE_VALUES, input.seed + 1)) {
+        // 两条边都自由时不许取相等：那会顺带把底面做成正方形 —— 题面没说的额外特殊性。
+        if (width === depth) continue
+        baseOptions.push([{ edge: widthEdge, value: width }, { edge: depthEdge, value: depth }])
+      }
+    }
+  } else if (structure.freeBaseEdges.length === 1) {
+    const [edge] = structure.freeBaseEdges
+    for (const value of seededOrder(FREE_BASE_VALUES, input.seed)) baseOptions.push([{ edge, value }])
+  } else {
+    baseOptions.push([])
+  }
+
+  const heightOptions: (number | null)[] = structure.heightSpec.kind === "free"
+    ? seededOrder(FREE_HEIGHT_VALUES, input.seed + 2)
+    : [null]
+
+  const grid: CandidatePlan[] = []
+  for (const choices of baseOptions) {
+    for (const height of heightOptions) {
+      const sizeKey = choices.reduce((total, choice) => total + choice.value * choice.value, 0) + (height ?? 0) ** 2
+      grid.push({ request: requestFor(structure, choices, height), freeChoices: choices.map((choice) => ({ edge: choice.edge, value: choice.value })), sizeKey })
+    }
+  }
+  // 小整数优先（规格 §6.3 的优先级）：同键的先后由 seed 决定（上面那两次排列 + 这里的稳定排序）。
+  grid.sort((left, right) => left.sizeKey - right.sizeKey)
+  pool.push(...grid)
+  return pool
+}
+
+// ---------------------------------------------------------------- 判定（唯一路径）
+
+type CandidateJudgement =
+  /** 连坐标都没拿到（内核解析构造拒绝 / 拓扑拒绝 / 物化失败）：`code` 是机器可读的原因。 */
+  | { kind: "rejected"; code: string; message: string }
+  /** 拿到了坐标并且**真的量过**：`outcome` 是统一核验器的三值结论。 */
+  | {
+    kind: "judged"
+    outcome: "verified" | "failed" | "unverified"
+    witness: WitnessShapeCandidate
+    report: DiagramVerificationReport
+    residuals: Record<string, number | null>
+    lines: string[]
+  }
+
+function envelopeFor(names: readonly string[], vertices: readonly Vector3[], faces: readonly (readonly number[])[]): PlanEnvelope {
+  return {
+    schemaVersion: PLAN_SCHEMA_VERSION,
+    kind: "plan",
+    goal: "按题设关系构造一组候选坐标（见证搜索）",
+    factIds: [],
+    actions: [{
+      actionId: "solid.create_polyhedron",
+      actionKey: "witness-search",
+      factIds: [],
+      inputs: {
+        alias: "witness-search",
+        vertexNames: [...names],
+        vertices: vertices.map((point) => ({ ...point })),
+        faces: faces.map((ring) => [...ring])
+      }
+    }]
+  }
+}
+
+function residualsOf(report: DiagramVerificationReport): Record<string, number | null> {
+  const residuals: Record<string, number | null> = {}
+  for (const check of report.checks) {
+    residuals[check.sourceText] = typeof check.actual === "number" && typeof check.expected === "number"
+      ? check.actual - check.expected
+      : null
+  }
+  return residuals
+}
+
+function toWitness(witness: WitnessShapeCandidate): PolyhedronWitness {
+  return {
+    // `names` / `points` / `faces` / `buildOrder` 共用**同一套下标空间**（2a 的接口注释）：
+    // 按 buildOrder 同时重排坐标与名字，面环原样交给内核 —— 只搬其中一边会把顶点认错。
+    vertices: witness.buildOrder.map((index) => ({ ...witness.points[index] })),
+    names: witness.buildOrder.map((index) => witness.names[index]),
+    faces: witness.faces.map((ring) => [...ring])
+  }
+}
+
+/**
+ * 一个候选的完整判定。三步都不能省，顺序也不能换：
+ * 构造（2a）→ 拓扑（内核 `buildFromPoints`）→ 物化（既有编译路径）→ 判定（唯一核验器）。
+ */
+function judgeCandidate(plan: CandidatePlan, legacy: DiagramObligationSet): CandidateJudgement {
+  const constructed = constructWitnessShape(plan.request)
+  if (constructed.status === "rejected") {
+    return { kind: "rejected", code: constructed.code, message: constructed.message }
+  }
+  const witness = constructed.witness
+  const vertices = witness.buildOrder.map((index) => witness.points[index])
+  const topology = buildFromPoints({ vertices: vertices.map((point) => ({ ...point })), faces: witness.faces.map((ring) => [...ring]) }, createBuilderContext())
+  if (topology.diagnostics.length > 0) {
+    const [first] = topology.diagnostics
+    return { kind: "rejected", code: WITNESS_SEARCH_CODES.topologyRejected, message: `${first.code}：${first.message}` }
+  }
+
+  const envelope = envelopeFor(witness.buildOrder.map((index) => witness.names[index]), vertices, witness.faces)
+  const compiled = compilePlan(envelope, { document: createEmptyDocument("geometry3d"), conversationId: "witness-search" })
+  if (compiled.draftDocument === null) {
+    const detail = compiled.diagnostics.map((entry) => `${entry.code}@${entry.path}: ${entry.detail}`).join("；")
+    return { kind: "rejected", code: WITNESS_SEARCH_CODES.materialisationFailed, message: detail.length > 0 ? detail : "既有编译路径没有产出候选文档。" }
+  }
+
+  const report = verifyDiagramObligations(legacy, envelope, compiled.draftDocument)
+  const residuals = residualsOf(report)
+  const outcome = report.status === "passed" ? "verified" : report.status === "failed" ? "failed" : "unverified"
+  const lines = report.checks
+    .filter((check) => check.status !== "passed")
+    .map((check) => check.status === "failed"
+      ? `${WITNESS_SEARCH_CODES.failedGiven}: ${check.sourceText}：${check.reason}`
+      : `${WITNESS_SEARCH_CODES.unverified}: ${check.sourceText}：${check.reason}`)
+  return { kind: "judged", outcome, witness, report, residuals, lines }
+}
+
+// ---------------------------------------------------------------- 证据（R16 + R25）
+
+function nextActionsFor(status: ClaimEvidenceStatus): string[] {
+  if (status === "verified_instance") return ["可以用这组坐标继续落盘；要升级成“对所有情形成立”仍需 N5 的证明产物。"]
+  if (status === "inconsistent") return ["题设自相矛盾：先与用户确认这几条条件本身，再谈作图。"]
+  if (status === "timeout") return ["提高 timeoutMs 或放宽 maxCandidates 后重试 —— 这是“没算完”，不是“无解”。"]
+  return ["补齐点名映射，或把这条条件交给后续阶段的判据；不要按“已通过”处理。"]
+}
+
+/**
+ * **搜索结果 → 证据**（R16：只走 N1 那张表 `evidenceStatusForWitness`）。
+ *
+ * R25 允许搜索器覆盖两处，且只有这两处：预算耗尽 → `timeout`；题设自相矛盾 →
+ * `inconsistent`（`claimEvidence.ts` 的注释写明"若 N2 的搜索器真能给出冲突证据，
+ * 那时由搜索器自己报"）。其余一律由那张表翻译。
+ */
+function evidenceFor(
+  result: WitnessResultStatus,
+  residuals: Record<string, number | null>,
+  override?: { status: ClaimEvidenceStatus; solver: SolverStatus }
+): ClaimEvidence {
+  return {
+    status: override?.status ?? evidenceStatusForWitness(result),
+    solver: override?.solver ?? (result === "verified_instance" ? "model" : "unknown"),
+    residuals,
+    // 这一层不算自由度：`null` 的含义正是"没算过"，填 0 会谎报算过一次。
+    degreesOfFreedom: null,
+    nextActions: nextActionsFor(override?.status ?? evidenceStatusForWitness(result))
+  }
+}
+
+// ---------------------------------------------------------------- 入口
+
+/**
+ * **搜索一个通过核验的候选**（计划 N2 的 `WitnessSearchInput` / `WitnessSearchResult`）。
+ *
+ * 保证：
+ * - 同一个 seed + 同样的题面 + 同样的预算 ⇒ 同样的结果（没有时钟进入排序，只有 `timeoutMs` 会终止搜索）；
+ * - `verified_instance` 只可能来自统一核验器的 `passed`；
+ * - 不给不出的时候，一定说清是哪一种给不出（超时 / 矛盾 / 不支持 / 没验过）。
+ */
+export function searchWitness(input: WitnessSearchInput): WitnessSearchResult {
+  const givens = (Array.isArray(input.obligations) ? input.obligations : []).filter((obligation) => obligation.role === "given")
+
+  if (input.shape !== "pyramid") {
+    /**
+     * 首批只做棱锥。另外两族如实报"系统尚不支持"：
+     * - `prism`：题面对侧棱的写法（`AA₁`）经原话解析会压成单个大写字母，拉伸方向无从确定；
+     * - `polyhedron`：任意多面体的坐标只能由调用方给出（`selectPolyhedronWitness` 负责筛选），
+     *   搜索器不凭空造坐标。
+     */
+    const reason = input.shape === "prism"
+      ? "棱柱需要题面点名出底面环与拉伸方向，而原话解析只保留单个大写字母点名（A′ 之类会被截成 A），首批无法确定拉伸方向。"
+      : "任意多面体的候选坐标必须由调用方给出（见 selectPolyhedronWitness），搜索器不自造坐标。"
+    const code = input.shape === "prism" ? WITNESS_SEARCH_CODES.unsupportedShape : WITNESS_SEARCH_CODES.requiresCandidates
+    return {
+      status: "unverified_instance",
+      evidence: evidenceFor("unverified_instance", {}),
+      reasons: [`${code}: ${reason}`, configLine(input, 0)]
+    }
+  }
+
+  const contradiction = findContradiction(givens)
+  if (contradiction) {
+    return {
+      status: "no_witness",
+      evidence: evidenceFor("no_witness", {}, { status: "inconsistent", solver: "unsat" }),
+      failures: [`${contradiction.code}: ${contradiction.message}`, configLine(input, 0)]
+    }
+  }
+
+  const derived = derivePyramidStructure(givens)
+  if (derived.status === "rejected") {
+    return {
+      status: "unverified_instance",
+      evidence: evidenceFor("unverified_instance", {}),
+      reasons: [`${derived.code}: ${derived.message}`, configLine(input, 0)]
+    }
+  }
+
+  const structure = derived.structure
+  /** R15/R16：判据与词表都从 N1 来 —— 旧结构过一次兼容适配，判定只有一条路径。 */
+  const legacy = toLegacyObligationSet({ obligations: [...givens], unverified: [] })
+  // 上限在**生成之后、判定之前**截断：`maxCandidates` 是"最多判几个"，不是"最多想几个"。
+  const fullPool = candidatePool(structure, input)
+  const pool = fullPool.slice(0, Math.max(0, Math.trunc(input.maxCandidates)))
+  const judged: Extract<CandidateJudgement, { kind: "judged" }>[] = []
+  const rejections = new Map<string, { count: number; message: string }>()
+  const started = Date.now()
+  let considered = 0
+  let budgetExhausted = false
+  let fallback: { judgement: Extract<CandidateJudgement, { kind: "judged" }>; plan: CandidatePlan } | null = null
+
+  for (const plan of pool) {
+    // 预算在**每个**候选之前检查：`timeoutMs` 必须真的生效，而不是只写在类型里。
+    if (Date.now() - started >= input.timeoutMs) {
+      budgetExhausted = true
+      break
+    }
+    considered += 1
+    const judgement = judgeCandidate(plan, legacy)
+    if (judgement.kind === "rejected") {
+      const seen = rejections.get(judgement.code)
+      rejections.set(judgement.code, { count: (seen?.count ?? 0) + 1, message: judgement.message })
+      continue
+    }
+    if (judgement.outcome === "verified") {
+      const candidate = toWitness(judgement.witness)
+      const readability = readabilityOf(candidate.vertices)
+      if (Number.isFinite(readability) && readability >= READABILITY_FLOOR) {
+        return verifiedResult(input, plan, judgement, candidate, considered)
+      }
+      // 合格但难看：留作兜底，继续找更耐看的（R26：极大长宽比候选不优先）。
+      if (fallback === null) fallback = { judgement, plan }
+      continue
+    }
+    judged.push(judgement)
+  }
+
+  if (fallback !== null) {
+    return verifiedResult(input, fallback.plan, fallback.judgement, toWitness(fallback.judgement.witness), considered)
+  }
+
+  const config = configLine(input, considered)
+  const unjudgeable = givens.filter((obligation) => obligation.judgeability !== "supported")
+  const unverifiedLines = judged.flatMap((judgement) => judgement.lines.filter((line) => line.startsWith(`${WITNESS_SEARCH_CODES.unverified}:`)))
+  const failedLines = judged.flatMap((judgement) => judgement.lines.filter((line) => line.startsWith(`${WITNESS_SEARCH_CODES.failedGiven}:`)))
+
+  if (budgetExhausted) {
+    // R25 的文案纪律：预算耗尽只能说"在预算内没有找到"。
+    return {
+      status: "unverified_instance",
+      evidence: evidenceFor("unverified_instance", residualsOfJudged(judged), { status: "timeout", solver: "timeout" }),
+      reasons: [
+        `${WITNESS_SEARCH_CODES.budgetTimeout}: 在预算内没有找到通过核验的候选（预算 ${String(input.timeoutMs)}ms，已考虑 ${String(considered)} 个）。这是"还没找到"，不能读成题设不成立。`,
+        ...unverifiedLines,
+        ...mostFailedLines(failedLines),
+        config
+      ]
+    }
+  }
+  if (unjudgeable.length > 0) {
+    return {
+      status: "unverified_instance",
+      evidence: evidenceFor("unverified_instance", residualsOfJudged(judged)),
+      reasons: [
+        ...unjudgeable.map((obligation) => `${WITNESS_SEARCH_CODES.unjudgeable}: ${obligation.sourceText} 的判性不是 supported，不能按"已核验"处理。`),
+        ...unverifiedLines,
+        config
+      ]
+    }
+  }
+  if (unverifiedLines.length > 0) {
+    return {
+      status: "unverified_instance",
+      evidence: evidenceFor("unverified_instance", residualsOfJudged(judged)),
+      reasons: [...unverifiedLines, config]
+    }
+  }
+  if (considered < fullPool.length) {
+    // 上限截断了池子：后面还有候选没试，不许把"没试完"说成"题设不成立"。
+    return {
+      status: "unverified_instance",
+      evidence: evidenceFor("unverified_instance", residualsOfJudged(judged)),
+      reasons: [
+        `${WITNESS_SEARCH_CODES.candidateCapExhausted}: 候选上限 ${String(input.maxCandidates)} 已经用完（已考虑 ${String(considered)} 个），后面还有候选没试 —— 这是"没试完"，不能读成题设不成立。`,
+        ...mostFailedLines(failedLines),
+        config
+      ]
+    }
+  }
+  if (judged.length > 0) {
+    return {
+      status: "no_witness",
+      evidence: evidenceFor("no_witness", residualsOfJudged(judged)),
+      failures: [`${WITNESS_SEARCH_CODES.noCandidateVerified}: ${String(judged.length)} 个候选通过了几何构造，但没有一个满足全部可判题设。`, ...mostFailedLines(failedLines), config]
+    }
+  }
+  const rejectionLines = [...rejections.entries()].map(([code, entry]) => `${code}: ${entry.message}（${String(entry.count)} 个候选）`)
+  return {
+    status: "unverified_instance",
+    evidence: evidenceFor("unverified_instance", {}),
+    reasons: [`${WITNESS_SEARCH_CODES.noCandidateConstructed}: ${String(considered)} 个候选都在构造期被拒，没有得到任何可核验的坐标。`, ...rejectionLines, config]
+  }
+}
+
+function verifiedResult(
+  input: WitnessSearchInput,
+  plan: CandidatePlan,
+  judgement: Extract<CandidateJudgement, { kind: "judged" }>,
+  candidate: PolyhedronWitness,
+  considered: number
+): WitnessSearchResult {
+  const witness = judgement.witness
+  const assumptions = [
+    ...witness.assumptions,
+    ...witness.freeValues,
+    // 网格候选注入的自由值在 2a 眼里是"题面给的"（我们就是用长度告诉它的），
+    // 所以那几行**必须**由这一层补上，否则用户看不到系统替他定了什么。
+    ...plan.freeChoices.map((choice) => `${choice.edge[0]}${choice.edge[1]} = ${String(choice.value)}（搜索器自选，题面未给）`),
+    configLine(input, considered)
+  ]
+  return {
+    status: "verified_instance",
+    candidate,
+    evidence: evidenceFor("verified_instance", judgement.residuals),
+    assumptions: [...new Set(assumptions)]
+  }
+}
+
+/** 最接近通过的那次判定的残差：证据里的残差必须是"真的量过"的那一份。 */
+function residualsOfJudged(judged: readonly Extract<CandidateJudgement, { kind: "judged" }>[]): Record<string, number | null> {
+  let best: Record<string, number | null> = {}
+  let bestWorst = Number.POSITIVE_INFINITY
+  for (const judgement of judged) {
+    const worst = Math.max(0, ...Object.values(judgement.residuals).map((value) => (typeof value === "number" && Number.isFinite(value) ? Math.abs(value) : 0)))
+    if (worst < bestWorst) {
+      bestWorst = worst
+      best = judgement.residuals
+    }
+  }
+  return best
+}
+
+/**
+ * `no_witness` 的逐条说明（设计 §4.4：候选数、失败最多的题设、最大残差）。
+ *
+ * 只报**失败次数最多**的那几条题设（并列时按原话排序，保证可重现）：一份几十行的
+ * "每条都在每个候选上失败"的清单对排查没有帮助，而"卡在某一条上"才是下一步的入口。
+ */
+function mostFailedLines(lines: readonly string[]): string[] {
+  const counts = new Map<string, number>()
+  for (const line of lines) counts.set(line, (counts.get(line) ?? 0) + 1)
+  /**
+   * 并列时按**码位**排序，而不是 `localeCompare`：后者的结果随 ICU 数据与运行环境的
+   * 语言设置变化，而这一层的输出必须"同一 seed 同一结果"（R26），连报告行的顺序也一样。
+   */
+  const ranked = [...counts.entries()].sort((left, right) => right[1] - left[1] || (left[0] < right[0] ? -1 : left[0] > right[0] ? 1 : 0))
+  const top = ranked.length > 0 ? ranked[0][1] : 0
+  return ranked.filter(([, count]) => count === top).map(([line, count]) => `${line}（在 ${String(count)} 个候选上）`)
+}
