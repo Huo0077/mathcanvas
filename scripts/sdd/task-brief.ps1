@@ -54,5 +54,5 @@ $out = Join-Path $workspace "task-$Task-brief.md"
 [System.IO.File]::WriteAllText($out, "$brief`n", (New-Object System.Text.UTF8Encoding($false)))
 # 只写 stdout 的那一行路径：不能用 Resolve-Path 的管道输出（会多出一段目录清单，
 # 被调用方 `$b = & script` 一并捕获，于是"路径"变成多行、后续 Read 直接失败）。
-[Console]::Out.WriteLine((Resolve-Path -LiteralPath $out).Path)
+Write-Output ((Resolve-Path -LiteralPath $out).Path -join '')
 return

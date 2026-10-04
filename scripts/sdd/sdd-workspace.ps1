@@ -79,11 +79,16 @@ if (-not (Test-Owns -Dir $dir)) {
 New-Item -ItemType Directory -Force -Path $base | Out-Null
 [System.IO.File]::WriteAllText((Join-Path $base ".gitignore"), "*`n", (New-Object System.Text.UTF8Encoding($false)))
 
-# 只写 stdout 的那一行路径：不能用裸的 Resolve-Path（它的管道输出会被调用方
-# `$ws = & script` 捕获成对象，路径就不再是纯字符串）。
+# 只写 stdout 的那一行路径。
+#
+# 两个 PowerShell 特有的坑，都实测踩过：
+# ① 不能用**裸的** Resolve-Path 收尾 —— 它会把路径对象和目录清单一起写进管道，
+#    `$ws = & script` 捕获到的就不是一个纯字符串；用 Write-Output 只发一个字符串。
+# ② 不能用 [Console]::Out.WriteLine —— 它绕过 PowerShell 管道直接写控制台，
+#    外部进程能做到"stdout 被抓"，进程内 `&` 调用**抓不到**。
 #
 # 收尾用 `return` 而不是 `exit 0`：`&` 调用是**在同一个会话里**执行脚本的，
-# `exit` 会把整个会话一起结束掉 —— 调用方（task-brief / review-package，以及
-# 控制器那行命令）就此静默停住，表现为"脚本跑了但什么都没发生"。
-[Console]::Out.WriteLine((Resolve-Path -LiteralPath $dir).Path)
+# `exit` 会把整个会话一起结束掉，调用方（task-brief / review-package）就此静默停住，
+# 表现为"脚本跑了但什么都没发生"。
+Write-Output ((Resolve-Path -LiteralPath $dir).Path -join '')
 return
