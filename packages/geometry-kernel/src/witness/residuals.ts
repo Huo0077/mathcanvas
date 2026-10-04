@@ -170,9 +170,10 @@ function ringEdges(count: number): Array<[number, number]> {
 /**
  * 环是否退化到"一条线"：所有顶点共线（或全部重合）。
  *
- * 判据取**整只环的直径**作为尺度（`Σ` 里第一对不重合的点给出方向），
- * 叉积模长与 `diameter²` 比较 —— 与 `prism.ts` 的 `hasNonZeroArea` 同思路，
- * 但它用"整只多边形"的稳健方向（`baseNormal` 那条教训：别看头三个点）。
+ * 尺度取**整只环的直径**（第一对不重合的点给出方向），叉积模长与 `diameter · RELATIVE_TOLERANCE`
+ * 比较 —— `cross(unit, p−p0)` 是**长度**量纲，阈值也必须是长度量纲（复核 round 1 Minor 5：
+ * 早先用 `diameter² · 1e-9`，`diameter ≈ 1e5` 时阈值涨到 1e1，一个合法的 1e5×1 三角形会被误判共线）。
+ * 方向仍取"整只多边形"的稳健方向（`baseNormal` 那条教训：别看头三个点）。
  */
 function isDegenerateCollinear(points: readonly Vector3[], diameter: number): boolean {
   if (points.length < 3) return true
@@ -184,7 +185,7 @@ function isDegenerateCollinear(points: readonly Vector3[], diameter: number): bo
   }
   if (!direction) return true
   const unit = normalizeVector3(direction)
-  const threshold = diameter * diameter * RELATIVE_TOLERANCE
+  const threshold = diameter * RELATIVE_TOLERANCE
   for (const point of points) {
     if (lengthVector3(crossVector3(unit, subtractVector3(point, points[0]))) > threshold) return false
   }
@@ -249,6 +250,13 @@ function emptyMetrics(vertexCount: number): WitnessResidualMetrics {
   }
 }
 
+/**
+ * 点集的形状 / 尺度摘要。纯量测，不下结论。
+ *
+ * 共面容差是**长度**量纲（`areCoplanar` 用单位法向算点到平面的距离），所以阈值取
+ * `max(diameter, 1) · RELATIVE_TOLERANCE` —— 复核 round 1 Minor 5：早先写成 `max(diameter², 1) · 1e-9`，
+ * 相对容差退化成 `diameter · 1e-9`，`diameter = 1e6` 时容忍 1000 单位的离面顶点，守卫等于失明。
+ */
 function metricsFor(points: readonly Vector3[], edges: readonly (readonly [number, number])[], closedRing: boolean): WitnessResidualMetrics {
   const spread = pointSpread(points, edges)
   const edgeLengths = closedRing ? ringEdgeLengths(points) : edges.map(([first, second]) => distanceVector3(points[first], points[second]))
@@ -256,7 +264,7 @@ function metricsFor(points: readonly Vector3[], edges: readonly (readonly [numbe
     vertexCount: points.length,
     ...spread,
     edgeLengths,
-    coplanar: points.length < 4 ? true : areCoplanar([...points], Math.max(spread.diameter * spread.diameter, 1) * RELATIVE_TOLERANCE)
+    coplanar: points.length < 4 ? true : areCoplanar([...points], Math.max(spread.diameter, 1) * RELATIVE_TOLERANCE)
   }
 }
 
@@ -302,8 +310,10 @@ export function polygonResiduals(points: readonly Vector3[]): { diagnostics: Wit
 /**
  * **完整候选**（点集 + 可选面环）的残差报告。
  *
- * 没给面环时按点集判（并额外要求"存在不共线的三点"），给了面环时逐环按多边形判
- * —— 面环由构造器按规则生成，所以这里判的是"规则生成的面有没有塌掉"。
+ * 没给面环时按点集判（并额外要求"存在不共线的三点"）；给了面环时：先按**拓扑**判
+ * （量级、边长），再**逐个面环交给 `polygonResiduals`** 判共线 / 共面 / 长宽比 ——
+ * 复核 round 1 Minor 6：早先这里手写了一个"只查共线"的循环，于是给了面环的路径不查共面，
+ * 与 `polygonResiduals` 的导出口径不一致（那个 `non-coplanar` 用例也只走了无面环的路径）。
  */
 export function candidateResiduals(candidate: {
   points: readonly Vector3[]
@@ -325,7 +335,15 @@ export function candidateResiduals(candidate: {
     return { acceptable: false, diagnostics, metrics: emptyMetrics(points.length), kind: "faces", source }
   }
   const metrics = metricsFor(points, edges, false)
-  const largest = Math.max(Math.abs(metrics.max.x), Math.abs(metrics.max.y), Math.abs(metrics.max.z))
+  /**
+   * 量级守卫与 `pointSetResiduals` 对齐：`max` 与 `min` 都要看（复核 round 1 Minor 4）。
+   * 早先只看 `metrics.max`，于是 `x ∈ {−1e140, 0}` 这种候选在**面路径**（构造器实际走的那条）
+   * 能溜过 `magnitude-unrepresentable`。
+   */
+  const largest = Math.max(
+    Math.abs(metrics.max.x), Math.abs(metrics.max.y), Math.abs(metrics.max.z),
+    Math.abs(metrics.min.x), Math.abs(metrics.min.y), Math.abs(metrics.min.z)
+  )
   const smallest = smallestNonZeroMagnitude(points)
   if (largest > 0 && smallest > 0 && largest / smallest > MAGNITUDE_TOLERANCE) {
     diagnostics.push({
@@ -333,12 +351,14 @@ export function candidateResiduals(candidate: {
       message: `候选坐标的量级跨度过大（最大 ${largest}、最小非零 ${smallest}），双精度下无法可靠比较距离与角度。`
     })
   }
-  if (metrics.minEdgeLength <= metrics.diameter * RELATIVE_TOLERANCE) {
+  const shortEdges = metrics.edgeLengths.filter((length) => length <= metrics.diameter * RELATIVE_TOLERANCE).length
+  if (shortEdges > 0) {
     diagnostics.push({
       code: "degenerate-edge",
-      message: `拓扑里存在长度为 ${metrics.minEdgeLength} 的边（直径 ${metrics.diameter}），两个顶点实质重合。`
+      message: `拓扑里有 ${shortEdges} 条边长度不超过 ${metrics.diameter * RELATIVE_TOLERANCE}（直径 ${metrics.diameter}），顶点实质重合。`
     })
   }
+  const seenCodes = new Set(diagnostics.map((entry) => entry.code))
   for (const ring of rings) {
     if (ring.length < 3) {
       diagnostics.push({ code: "ring-too-small", message: `面环至少需要三个顶点，收到 ${ring.length} 个。` })
@@ -349,8 +369,11 @@ export function candidateResiduals(candidate: {
       diagnostics.push({ code: "non-finite-value", message: "面环引用了不存在或非有限的顶点。" })
       continue
     }
-    if (isDegenerateCollinear(ringPoints, pointSpread(ringPoints, ringEdges(ringPoints.length)).diameter)) {
-      diagnostics.push({ code: "degenerate-collinear", message: "面环上所有顶点共线，该面面积为 0。" })
+    // 每个环走同一个导出判据（共线 / 共面 / 长宽比），并按码去重（点集层面已经报过的不重复）。
+    for (const entry of polygonResiduals(ringPoints).diagnostics) {
+      if (seenCodes.has(entry.code)) continue
+      seenCodes.add(entry.code)
+      diagnostics.push(entry)
     }
   }
   if (metrics.aspectRatio > MAX_ASPECT_RATIO) {

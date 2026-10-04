@@ -4,8 +4,8 @@ import { areCoplanar, crossVector3, distanceVector3, dotVector3, subtractVector3
 import { dihedralAngleDetail3 } from "../markers3d"
 import { buildFromPoints, createBuilderContext } from "../solid-builders"
 
-import { constructPrismWitness, constructPyramidWitness, type PyramidConstructRequest, type WitnessRelation } from "./constructors"
-import { candidateResiduals } from "./residuals"
+import { constructPrismWitness, constructPyramidWitness, constructWitnessShape, type PrismConstructRequest, type PyramidConstructRequest, type WitnessConstructRequest, type WitnessRelation } from "./constructors"
+import { candidateResiduals, polygonResiduals } from "./residuals"
 
 /**
  * **解析见证构造**（N2 子任务 2a；计划 N2 RED 项）。
@@ -298,6 +298,24 @@ describe("constructPyramidWitness", () => {
     expect(trapezoid.status, `trapezoid: ${JSON.stringify(trapezoid)}`).toBe("rejected")
     if (trapezoid.status === "rejected") expect(trapezoid.code).toBe("unsupported-base-shape")
 
+    /**
+     * 同一句物理事实的**另一种编码**：把"在 B 处两条边互相垂直"拆成两条单段关系。
+     * 复核 round 1 Minor 9：早先要求"一条关系同时含两条边"，这种编码会 fail-open ——
+     * 题面明说的直角梯形会被静默建成矩形。
+     */
+    const splitEncoding = constructPyramidWitness(
+      pyramidRequest({
+        relations: [
+          { kind: "perpendicular", segments: [["A", "B"], ["A", "D"]] },
+          { kind: "parallel", segments: [["B", "C"], ["A", "D"]] },
+          { kind: "perpendicular", segments: [["B", "A"]] },
+          { kind: "perpendicular", segments: [["B", "C"]] }
+        ]
+      })
+    )
+    expect(splitEncoding.status, `split-encoding: ${JSON.stringify(splitEncoding)}`).toBe("rejected")
+    if (splitEncoding.status === "rejected") expect(splitEncoding.code).toBe("unsupported-base-shape")
+
     // 五边形底面：首批不支持（只有 n = 3 / 4）。
     const pentagon = constructPyramidWitness(
       pyramidRequest({
@@ -328,15 +346,65 @@ describe("constructPyramidWitness", () => {
     expect(JSON.stringify(second)).toBe(JSON.stringify(first))
 
     /**
-     * **无 RNG 的证据**：连跑 25 次、逐字节比较。构造器里任何 `Math.random` / 时间 / Map 迭代
-     * 顺序依赖都会让某一轮不同 —— 这比读源码扫关键字更直接（测试环境是 jsdom，没有 `node:fs`）。
+     * **无 RNG 的证据**：连跑 25 次、逐字节比较。这条只对"被跑到的这条路径"成立 ——
+     * 它证明的是"重复调用结果逐位相同"，不是"源码里没有非确定性 API"
+     *（复核 round 1 Minor 7：早先的注释声称有一个"源码级守卫"，那个守卫并不存在）。
      */
     const fingerprint = JSON.stringify(first)
     for (let round = 0; round < 25; round += 1) {
       expect(JSON.stringify(constructPyramidWitness(pyramidRequest({ apex: { at: "P", foot: "A", height: { kind: "fixed", value: 4 } } })))).toBe(fingerprint)
     }
-    // 参数顺序不同但语义相同的请求也应给出同一组坐标（不依赖对象键顺序）。
-    expect(constructPyramidWitness(pyramidRequest({ apex: { at: "P", foot: "A", height: { kind: "fixed", value: 4 } } }))).toEqual(first)
+  })
+
+  it("rejects type-valid requests with missing fields as values instead of throwing (2b adapter inputs)", () => {
+    /**
+     * 复核 round 1 Important 2：这条契约（"不抛异常"）早先可被证伪 ——
+     * `relations: undefined` 与 `extrusion: { kind: "vector" }` 都会在实现里被无守卫解引用。
+     * 这正是 2b 从题面适配时最容易产生的形状（关系还没抽出来 / 向量还没算出来）。
+     */
+    const missingRelations = { shape: "pyramid", base: ["A", "B", "C"], apex: { at: "P" }, relations: undefined } as unknown as PyramidConstructRequest
+    expect(() => constructPyramidWitness(missingRelations)).not.toThrow()
+    const relationsResult = constructPyramidWitness(missingRelations)
+    expect(relationsResult.status).toBe("rejected")
+    if (relationsResult.status === "rejected") expect(relationsResult.code).toBe("invalid-input")
+
+    const missingVector = {
+      shape: "prism",
+      base: ["A", "B", "C"],
+      relations: [{ kind: "perpendicular", segments: [["A", "B"], ["A", "C"]] }],
+      extrusion: { kind: "vector" }
+    } as unknown as PrismConstructRequest
+    expect(() => constructPrismWitness(missingVector)).not.toThrow()
+    const vectorResult = constructPrismWitness(missingVector)
+    expect(vectorResult.status).toBe("rejected")
+    if (vectorResult.status === "rejected") expect(vectorResult.code).toBe("invalid-input")
+
+    // 顶层分派也守住了同一个字段。
+    const dispatched = constructWitnessShape({ shape: "prism", base: ["A", "B", "C"], extrusion: { kind: "unknown" } } as unknown as WitnessConstructRequest)
+    expect(dispatched.status).toBe("rejected")
+    if (dispatched.status === "rejected") expect(dispatched.code).toBe("invalid-input")
+  })
+
+  it("rejects a non-finite stated side length instead of silently substituting a free value", () => {
+    /**
+     * 复核 round 1 Important 3：`statedLength` 早先对"题面没提"与"题面给了 NaN/Infinity"都返回
+     * `null`，于是非有限值被 `freeLength` 换成系统示例值 2 / 3 —— 题面给的数字消失。
+     */
+    for (const value of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      const result = constructPyramidWitness(
+        pyramidRequest({ relations: [...PYRAMID_RELATIONS, { kind: "segment-length", segments: [["A", "B"]], value }] })
+      )
+      expect(result.status, `value ${value}`).toBe("rejected")
+      if (result.status === "rejected") expect(result.code).toBe("non-finite-value")
+    }
+    // 同一份输入里的另一条边（没给长度）仍然照常取自由值 —— 拒绝只针对那个真的坏掉的值。
+    const healthy = constructPyramidWitness(
+      pyramidRequest({ relations: [...PYRAMID_RELATIONS, { kind: "segment-length", segments: [["A", "B"]], value: 5 }] })
+    )
+    expect(healthy.status).toBe("candidate")
+    if (healthy.status === "candidate") {
+      expect(distanceVector3(healthy.witness.points[0], healthy.witness.points[1])).toBeCloseTo(5, 9)
+    }
   })
 
   it("rejects candidates whose magnitudes are not representable relative to each other", () => {
@@ -417,6 +485,54 @@ describe("constructPrismWitness", () => {
     })
     expect(duplicated.status).toBe("rejected")
     if (duplicated.status === "rejected") expect(duplicated.code).toBe("duplicate-name")
+  })
+
+  it("handles a point-pair extrusion from base vertices as an in-plane vector (zero volume)", () => {
+    /**
+     * 复核 round 1 Minor 8：`extrusion: { kind: "points" }` 这条分支 2b 能触达，却完全没有用例。
+     *
+     * 这条分支的语义是 `to − from`，而两个端点都必须是**底面环上的**点名顶点 ——
+     * 底面环的点一律构造在 z = 0 平面上，所以这条分支产出的向量**永远落在底面内**，
+     * 必然被零体积判据拒绝。这是接口的固有边界（真实可用的拉伸向量要么显式给，
+     * 要么等 2b 引入"环外点名顶点"的概念），所以这里把两种结局都钉住。
+     */
+    const inPlane = constructPrismWitness({
+      shape: "prism",
+      base: ["A", "B", "C"],
+      relations: [{ kind: "perpendicular", segments: [["A", "B"], ["A", "C"]] }],
+      extrusion: { kind: "points", from: "C", to: "A" }
+    })
+    expect(inPlane.status).toBe("rejected")
+    if (inPlane.status === "rejected") expect(inPlane.code).toBe("degenerate-extrusion")
+
+    // 端点不是底面点名顶点 ⇒ 结构化拒绝，不抛异常。
+    const unnamed = constructPrismWitness({
+      shape: "prism",
+      base: ["A", "B", "C"],
+      relations: [{ kind: "perpendicular", segments: [["A", "B"], ["A", "C"]] }],
+      extrusion: { kind: "points", from: "A", to: "T" }
+    })
+    expect(unnamed.status).toBe("rejected")
+    if (unnamed.status === "rejected") expect(unnamed.code).toBe("missing-height-reference")
+  })
+
+  it("names the top-face vertices without collisions when the base already uses primed names", () => {
+    /**
+     * 复核 round 1 Minor 8：`withPrimes` 的冲突回退（底面点名里已经有 `A′`）没有用例。
+     * 题面罕见，但一旦发生，重名会让顶面与底面无法区分 —— 必须是**唯一**的名字。
+     */
+    const result = constructPrismWitness({
+      shape: "prism",
+      base: ["A", "B", "A′"],
+      relations: [{ kind: "perpendicular", segments: [["A", "B"], ["A", "A′"]] }],
+      extrusion: { kind: "vector", vector: { x: 0, y: 0, z: 2 } }
+    })
+    expect(result.status).toBe("candidate")
+    if (result.status !== "candidate") return
+    const { names } = result.witness
+    expect(names.slice(0, 3)).toEqual(["A", "B", "A′"])
+    expect(new Set(names).size).toBe(names.length)
+    expect(names.slice(3)).toEqual(["A′2", "B′", "A′′"])
   })
 })
 
@@ -508,6 +624,82 @@ describe("candidateResiduals", () => {
     })
     expect(zeroAreaFace.acceptable).toBe(false)
     expect(zeroAreaFace.diagnostics.map((entry) => entry.code)).toContain("degenerate-collinear")
+  })
+
+  it("checks ring coplanarity on the face path too (same criteria as polygonResiduals)", () => {
+    /**
+     * 复核 round 1 Minor 6：给了面环的路径早先只查"每环共线"，不查共面，与导出的
+     * `polygonResiduals` 口径不一致 —— 而构造器与 2b 走的正是这条路径。
+     */
+    const nonPlanarRing = candidateResiduals({
+      points: [
+        { x: 0, y: 0, z: 0 },
+        { x: 1, y: 0, z: 0 },
+        { x: 1, y: 1, z: 0 },
+        { x: 0, y: 1, z: 0.5 },
+        { x: 0, y: 0, z: 2 }
+      ],
+      faces: [{ indexes: [0, 1, 2, 3] }, { indexes: [0, 1, 4] }]
+    })
+    expect(nonPlanarRing.acceptable).toBe(false)
+    expect(nonPlanarRing.diagnostics.map((entry) => entry.code)).toContain("non-coplanar-base")
+    // 与单环判据给出同一个结论（两条路径不再分叉）。
+    expect(polygonResiduals([{ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, { x: 1, y: 1, z: 0 }, { x: 0, y: 1, z: 0.5 }]).diagnostics.map((entry) => entry.code)).toContain("non-coplanar-base")
+  })
+
+  it("keeps the scale guards meaningful on large models (no false rejects, no blind spots)", () => {
+    /**
+     * 复核 round 1 Minor 5：两处尺度守卫的单位曾经不一致 ——
+     * 共线判据拿长度比 `diameter²`（大模型上误判共线），共面判据拿长度比 `diameter²`
+     * （大模型上容忍上千单位的离面顶点）。这里用 1e5 / 1e6 量级的模型钉住两个方向。
+     */
+    const largeThin = candidateResiduals({
+      points: [
+        { x: 0, y: 0, z: 0 },
+        { x: 1e5, y: 0, z: 0 },
+        { x: 0, y: 1, z: 0 }
+      ]
+    })
+    // 1e5 × 1 的细长三角形是**合法**的（长宽比 1e5 < 上限 1e6），不能被误判成共线。
+    expect(largeThin.diagnostics.map((entry) => entry.code)).not.toContain("degenerate-collinear")
+    expect(largeThin.acceptable).toBe(true)
+
+    const largeNonPlanar = candidateResiduals({
+      points: [
+        { x: 0, y: 0, z: 0 },
+        { x: 1e6, y: 0, z: 0 },
+        { x: 1e6, y: 1e6, z: 0 },
+        { x: 0, y: 1e6, z: 0.5 }
+      ]
+    })
+    // 离面 0.5 个单位的顶点在 1e6 量级的模型上是**真实的**非共面，守卫不能失明。
+    expect(largeNonPlanar.acceptable).toBe(false)
+    expect(largeNonPlanar.diagnostics.map((entry) => entry.code)).toContain("non-coplanar-base")
+
+    // 反方向：真正共线的大模型仍然要被判共线（阈值没有松到失去判别力）。
+    const largeCollinear = candidateResiduals({
+      points: [
+        { x: 0, y: 0, z: 0 },
+        { x: 1e6, y: 0, z: 0 },
+        { x: 5e5, y: 0, z: 0 }
+      ]
+    })
+    expect(largeCollinear.diagnostics.map((entry) => entry.code)).toContain("degenerate-collinear")
+  })
+
+  it("rejects a mixed-magnitude candidate on the face path too", () => {
+    // 复核 round 1 Minor 4：`candidateResiduals` 的量级守卫早先只看 `max`，`min` 侧的负值漏掉。
+    const report = candidateResiduals({
+      points: [
+        { x: -1e140, y: 0, z: 0 },
+        { x: 0, y: 0, z: 0 },
+        { x: 0, y: 1, z: 0 },
+        { x: 0, y: 1, z: 1 }
+      ],
+      faces: [{ indexes: [0, 1, 2] }, { indexes: [0, 1, 3] }, { indexes: [0, 2, 3] }, { indexes: [1, 2, 3] }]
+    })
+    expect(report.acceptable).toBe(false)
+    expect(report.diagnostics.map((entry) => entry.code)).toContain("magnitude-unrepresentable")
   })
 })
 
