@@ -172,6 +172,47 @@ describe("production system prompt", () => {
     expect(policy).toContain("正 N 棱锥")
   })
 
+  /**
+   * **"不要编数值"与"先做别反问"的冲突解开了**（设计 2026-10-03 §5.5）。
+   *
+   * 用户现场：题面只给关系、不给数值（"在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，BC ∥ AD，AB ⊥ AD"）
+   * 时画不出来。根因是两条规则把两条路同时堵死 —— 编数值被前者禁止，反问被后者禁止。
+   */
+  it("tells the model to answer a stated relation with a coordinate witness instead of asking back", () => {
+    const policy = buildPolicyText({ channel: "strict_json", canPlan: true, actionIds: ["solid.create_polyhedron"] })
+
+    // 新口径的三件事都得在：给见证、写 relations、把自选的数写进 assumptions。
+    expect(policy).toContain("relations")
+    expect(policy).toContain("满足题面全部关系")
+    expect(policy).toContain("每个你自选的数值")
+    // 澄清的口径收窄成"关系无法同时满足时"，不再是"信息不足时"。
+    expect(policy).toContain("只有在**关系无法同时满足**时才用它")
+    // 覆盖度只查"有没有回应"这条边界必须写进提示词，否则模型会以为系统也在解析自然语言。
+    expect(policy).toContain("不会**替你从自然语言里读关系")
+  })
+
+  it("still spells out the relation kinds and the vertex-index convention", () => {
+    const policy = buildPolicyText({ channel: "strict_json", canPlan: true, actionIds: ["solid.create_polyhedron"] })
+
+    expect(policy).toContain("v0")
+    expect(policy).toContain("5 个")
+    expect(policy).toContain("第二个线段 ÷ 第一个")
+  })
+
+  /**
+   * **符号保留规则一字未动**（设计 §5.4 的硬约束）。
+   *
+   * 这条是本次改动最容易误伤的地方：新口径说"没数值就给一组数"，而这条说"任意/恒定/定值
+   * 必须保留符号"。两者靠**同一个判据**（题面是否在要求任意/恒定）分野，所以这条必须还在，
+   * 而且措辞不许被改软。
+   */
+  it("keeps the symbolic-parameter rule for arbitrary and constant requests untouched", () => {
+    const policy = buildPolicyText({ channel: "strict_json", canPlan: true, actionIds: ["solid.create_polyhedron"] })
+
+    expect(policy).toContain("题目要求「任意 / 恒定 / 定值」时：**必须保留符号参数**")
+    expect(policy).toContain("不要特值化成一组具体数字")
+  })
+
   it("keeps the policy text identical across contexts, and injects the scene separately", () => {
     const first = buildSystemPrompt({ context: context(), channel: "strict_json", canPlan: true })
     /**

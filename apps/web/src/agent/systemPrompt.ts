@@ -24,7 +24,7 @@ import { MAX_CONVERSATION_FACTS, PLAN_SCHEMA_VERSION, describeActions, describeD
  */
 
 /** 提示词版本。**改内容就要改它** —— 这是"模型当时看到的是哪一版"的唯一依据。 */
-export const SYSTEM_PROMPT_VERSION = "mathcanvas.agent.prompt.v6"
+export const SYSTEM_PROMPT_VERSION = "mathcanvas.agent.prompt.v7"
 
 const MAX_PROMPT_FACTS = 12
 const MAX_PROMPT_REFS = 16
@@ -92,9 +92,19 @@ function channelAdvice(channel: ModelChannel): string {
 function outputShapes(canPlan: boolean): string[] {
   const shapes: string[] = []
   if (canPlan) {
-    shapes.push(`计划：${JSON.stringify({ schemaVersion: PLAN_SCHEMA_VERSION, kind: "plan", goal: "一句话说清这次要做什么", factIds: [], assumptions: [], actions: [{ actionId: "从下面的动作菜单里选", actionKey: "本次运行内唯一的名字", factIds: [], inputs: {} }] })}`)
+    shapes.push(`计划：${JSON.stringify({ schemaVersion: PLAN_SCHEMA_VERSION, kind: "plan", goal: "一句话说清这次要做什么", factIds: [], assumptions: [], relations: [{ id: "r1", kind: "perpendicular", targets: [{ vertex: "v0" }, { vertex: "v1" }] }], actions: [{ actionId: "从下面的动作菜单里选", actionKey: "本次运行内唯一的名字", factIds: [], inputs: {} }] })}`)
   }
-  shapes.push(`澄清（信息不足时用它，不要编数值）：${JSON.stringify({ schemaVersion: PLAN_SCHEMA_VERSION, kind: "clarification", goal: "一句话", factIds: [], questions: ["一个具体的、用户能回答的问题"] })}`)
+  /**
+   * **"不要编数值"与"先做别反问"的冲突在这里解开**（设计 2026-10-03 §5.5）。
+   *
+   * 过去这两条同时成立，于是"题目只给关系、不给数值"的题面（四棱锥 P-ABCD 那类）
+   * **两条路都堵死**：编数值被这条禁止，反问又被下一条禁止。新口径把"信息不足"分成三种：
+   * ① 题面给了固定图形、只是没给数字 → **给一组满足全部关系的坐标见证**（不是反问，
+   *    也不是"编"—— 每个自选的数都要写进 assumptions，用户能看见、能改）；
+   * ② 题面要求「任意 / 恒定 / 定值」→ **保留符号参数**（下一条，一字未改）；
+   * ③ 关系本身无法同时满足 → 才反问。
+   */
+  shapes.push(`澄清（只有在**关系无法同时满足**时才用它）：${JSON.stringify({ schemaVersion: PLAN_SCHEMA_VERSION, kind: "clarification", goal: "一句话", factIds: [], questions: ["一个具体的、用户能回答的问题"] })}`)
   shapes.push(`只读回答（不改文档时用它）：${JSON.stringify({ schemaVersion: PLAN_SCHEMA_VERSION, kind: "answer", goal: "一句话", factIds: [], answer: "回答本身", toolResultRefs: [] })}`)
   return shapes
 }
@@ -260,7 +270,22 @@ export function buildPolicyText(input: SystemPromptPolicyInput): string {
       "## 先做，别反问",
       "能作图就作图：像「建一个棱长 3 的立方体」这样的要求**已经足够** —— 没说的细节取表里的默认值，并把每一条默认写进 `assumptions`。",
       "`assumptions` 是给用户看的，所以用一句人话写，最多 4 条。",
-      "只有表里标着「必须问」的字段缺失时才返回 `clarification`，而且问题要具体到能直接回答。"
+      "只有表里标着「必须问」的字段缺失时才返回 `clarification`，而且问题要具体到能直接回答。",
+      "",
+      "### 题面只给了关系、没给数值时（例如「在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，BC ∥ AD，AB ⊥ AD」）",
+      "**不要反问，也不要随手编一组数**。要这样做：",
+      "1. 选一组**满足题面全部关系**的坐标（用自己的判断挑，倾向于小整数、避免让图形退化成更特殊的形状——例如只说了「平行」就不要取成恰好等长）；",
+      "2. 用 `solid.create_polyhedron` 给出 `vertices` 与 `faces`；几何合法性由内核逐条校验（共面 / 自交 / 非零体积 / 绕向一致 / 连通），算错会被拒并给你**逐条诊断**，照诊断改一次即可；",
+      "3. 把**每条关系**写进计划顶层的 `relations` 表（见下），一条都不能漏；",
+      "4. 把**每个你自选的数值**写进 `assumptions`（一句人话），用户会看到它们、也能在属性栏改。",
+      "",
+      "### `relations` 表怎么写",
+      "- `targets[].vertex` 用**下标** `v0`、`v1`…，对应 `vertices` 数组里的位置（顶点没有名字字段，判据按下标认）；",
+      "- `perpendicular` / `parallel`：**3 个**顶点 = 线与线；**5 个**顶点 = 线与平面（前两个定线，后三个定平面）。例：`PA ⊥ 平面 ABCD` → `[\"v0\",\"v1\",\"v1\",\"v2\",\"v3\"]`（P、A、A、B、C）；",
+      "- `coplanar`：≥4 个顶点；`pointOn`：1 个点 + 3 个顶点定平面；",
+      "- `equalLength` / `ratio`：4 个顶点（前两个第一条线段，后两个第二条），`ratio` 另给 `value`（**第二个线段 ÷ 第一个**）；`midpoint`：3 个顶点（第一个是中点，后两个是端点）；",
+      "- **题面出现了「垂直 / 平行 / 共面 / 中点 / 等长 / 之比」，你就必须有一条对应的 `relations`**：系统会拿题面里的关键词与你写的表对照，漏了会被拒。中点若你是用 `parameter: 0.5` 的构造点表达的，也算回应。",
+      "- 系统**不会**替你从自然语言里读关系：它只做两件事 —— 查你有没有逐条回应，以及逐条算残差。写错点名会报「取不到顶点」，不会被当成满足。"
     )
   }
 

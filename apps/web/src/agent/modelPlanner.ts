@@ -242,6 +242,32 @@ export function buildPlanToolSchema(actionIds: readonly string[]) {
           goal: { type: "string" },
           factIds: { type: "array", items: { type: "string" } },
           assumptions: { type: "array", items: { type: "string" } },
+          /**
+           * **关系表**（设计 2026-10-03 §5.1）。
+           *
+           * 必须写在工具 schema 里 —— 信封解析层是**严格白名单**（`additionalProperties: false`
+           * 加上 `rejectUnknownFields`），模型**看不见**的字段它就永远不会产出，
+           * 而"题面给了哪些关系"正是这一层要它回答的东西。少了这一段，
+           * 后面的关系核验会一律报 `relation_not_declared`。
+           *
+           * `targets[].vertex` 用**下标约定** `v0`、`v1`…（执行前的裁定 2）：
+           * `solid.create_polyhedron` 的 `vertices` 没有名字字段，判据侧只能按下标认。
+           */
+          relations: {
+            type: "array",
+            maxItems: 32,
+            items: {
+              type: "object",
+              properties: {
+                id: { type: "string" },
+                kind: { type: "string", enum: ["perpendicular", "parallel", "coplanar", "pointOn", "equalLength", "ratio", "midpoint"] },
+                targets: { type: "array", minItems: 1, maxItems: 5, items: { type: "object", properties: { vertex: { type: "string" } }, required: ["vertex"], additionalProperties: false } },
+                value: { type: "number" }
+              },
+              required: ["kind", "targets"],
+              additionalProperties: false
+            }
+          },
           actions: actions.length > 0 ? { type: "array", items: { oneOf: actions }, maxItems: 32 } : { type: "array", maxItems: 0 },
           questions: { type: "array", items: { type: "string" } },
           answer: { type: "string" },

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest"
 import { PLAN_SCHEMA_VERSION, createBudget, parsePlanEnvelope, type ModelContext, type PlanRequest, type ToolDescriptor } from "@draw/agent-core"
 
 import type { ProviderHealth, ProviderProfile } from "../services/providerProfileClient"
-import { createModelPlanner, toGateCapabilities, PLAN_TOOL_NAME, type ModelPlannerProvider } from "./modelPlanner"
+import { createModelPlanner, toGateCapabilities, PLAN_TOOL_NAME, PLAN_TOOL_SCHEMA, type ModelPlannerProvider } from "./modelPlanner"
 
 /**
  * **模型规划器的判据**（G2 接线）。
@@ -534,6 +534,28 @@ describe("provider plan schema", () => {
     const actions = schema.function.parameters.properties.actions.items.oneOf
     expect(actions.map((action) => action.properties.actionId.enum[0])).toEqual(["solid.create_template", "planar.create_point"])
     expect(actions[0].properties.inputs.additionalProperties).toBe(false)
+  })
+
+  /**
+   * **关系表必须出现在模型看得见的 schema 里**（设计 2026-10-03 §5.1）。
+   *
+   * 为什么这条值得单列：信封解析层是严格白名单（`additionalProperties: false` +
+   * `rejectUnknownFields`）。一个**工具 schema 里没有**的字段，模型永远不会产出它 ——
+   * 而"题面给了哪些关系"正是这一层要它回答的东西。少了这段，关系核验会一律报
+   * `relation_not_declared`，而且症状是"模型明明该写却没写"，极难反查。
+   */
+  it("exposes the relations table in the plan tool schema, so the model can actually emit it", () => {
+    const properties = PLAN_TOOL_SCHEMA.function.parameters.properties as unknown as {
+      relations: { maxItems: number; items: { properties: { kind: { enum: string[] }; targets: { minItems: number; maxItems: number } }; required: string[]; additionalProperties: boolean } }
+    }
+
+    expect(properties.relations.items.properties.kind.enum).toEqual(["perpendicular", "parallel", "coplanar", "pointOn", "equalLength", "ratio", "midpoint"])
+    expect(properties.relations.items.required).toEqual(["kind", "targets"])
+    // 与解析层的白名单一致：字段之外的键一律不许（"白名单之外的字段一律被拒"那条纪律）。
+    expect(properties.relations.items.additionalProperties).toBe(false)
+    // 线⊥平面要 5 个顶点，所以上限至少是 5。
+    expect(properties.relations.items.properties.targets.maxItems).toBeGreaterThanOrEqual(5)
+    expect(properties.relations.items.properties.targets.minItems).toBe(1)
   })
 })
 
