@@ -31,8 +31,14 @@ const finitePositive = (value: string): number | null => {
   return Number.isFinite(number) && number > 0 ? number : null
 }
 
-/** 更具体的模式排在普通等号/垂直之前，避免截取比例式或面-面句式的一部分。 */
-const MATCHERS: readonly Matcher[] = [
+/**
+ * 更具体的模式排在普通等号/垂直之前，避免截取比例式或面-面句式的一部分。
+ *
+ * **导出而不是私有**：Phase N1 的 IR 要用**同一张表**给"求证段"里的目标句定种类
+ *（`求证 OA⊥CD` → `perpendicular`）。让 IR 自己再写一套匹配规则，两份规则必然分叉，
+ * 而分叉的症状是"题设认平行、目标认垂直"这种最难查的错。
+ */
+export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
   {
     pattern: /二面角\s*([A-Z])\s*[-−]\s*([A-Z])([A-Z])\s*[-−]\s*([A-Z])\s*=\s*(\d+(?:\.\d+)?)\s*°/g,
     read: (m) => { const value = finitePositive(m[5]); return value === null || value >= 180 ? null : { kind: "dihedral", targets: m.slice(1, 5), value } }
@@ -85,7 +91,7 @@ export function parseDiagramObligations(prompt: string): DiagramObligationSet {
   const unverified: DiagramObligationSet["unverified"] = []
   const used = new Set<number>()
 
-  for (const { pattern, read } of MATCHERS) {
+  for (const { pattern, read } of DIAGRAM_OBLIGATION_MATCHERS) {
     for (const match of givenText.matchAll(pattern)) {
       const start = match.index
       const end = start + match[0].length

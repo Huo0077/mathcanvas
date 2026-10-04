@@ -3,6 +3,7 @@ import { crossVector3, dihedralAngleDetail3, distanceVector3, dotVector3, length
 
 import type { PlanEnvelope } from "./contracts"
 import type { DiagramObligation, DiagramObligationKind, DiagramObligationSet } from "./diagramObligations"
+import { buildObligationIR, type ObligationIR } from "./obligationIR"
 import { relationResidual } from "./relations"
 
 export type DiagramCheckStatus = "passed" | "failed" | "unverified"
@@ -18,6 +19,31 @@ export interface DiagramVerificationReport {
   status: DiagramCheckStatus
   checks: DiagramCheck[]
   sampleValues: string[]
+  /**
+   * **统一 IR 的同一次解析结果**（Phase N1；设计 §3"任何 UI、Agent trace 都只读这份状态"）。
+   *
+   * 为什么挂在**这份报告**上，而不是另开一个返回值：现有三处消费点
+   *（`planCompiler` 的诊断、`draftStore` 的预览、`ConfirmationPanel` 的展示）
+   * 都已经在读这份报告，而报告本身就是"这一批题设核验到了什么"的载体。
+   * 另开一条并行通道的代价是"有人读了新通道、有人还在读旧的"，两者一旦分叉就再也说不清
+   * 哪一份是真相 —— 这个项目在"同一个判断写了两遍"上已经踩过好几次。
+   *
+   * 可选：`flags.obligationIR=false` 时**不生成**它（旧路径行为不变，
+   * 见 `apps/web/src/agent/featureFlags.ts` 的验收条件）。
+   */
+  obligationIR?: ObligationIR
+}
+
+/**
+ * 核验的可选项。
+ *
+ * `obligationIR` 缺省为 `true`：`verifyDiagramObligations` 是**纯函数**，它照做即可；
+ * 真正的开关在调用方（`planCompiler` 读 `flags.obligationIR`）。把默认值写成 `true`
+ * 是为了让"直接调用这个函数的测试与工具"不必为了拿 IR 而再传一个参数 ——
+ * "关掉"必须由**显式**的决定产生（那个决定就是 flag）。
+ */
+export interface DiagramVerificationOptions {
+  obligationIR?: boolean
 }
 
 const UNITLESS_TOLERANCE = 1e-6
@@ -123,7 +149,7 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>): { act
   return residual === null ? null : { actual: residual, expected: 0, tolerance: UNITLESS_TOLERANCE }
 }
 
-export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument): DiagramVerificationReport {
+export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument, options: DiagramVerificationOptions = {}): DiagramVerificationReport {
   const points = candidatePoints(plan, candidate, base)
   const checks: DiagramCheck[] = set.givens.map((item) => {
     if (points === null) return { kind: item.kind, sourceText: item.sourceText, status: "unverified", reason: "候选图缺少唯一、可靠的顶点名映射；不能按题面顺序猜坐标。" }
@@ -140,5 +166,11 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
     else sampleValues.push(`自由点 ${name} 采用示例坐标 (${point.x}, ${point.y}, ${point.z})`)
   }
   if (checks.length === 0) checks.push({ kind: "unparsed", sourceText: "题设", status: "unverified", reason: "没有可靠识别到可核验的题设，不能用空报告宣布全部通过。" })
-  return { status: checks.some((entry) => entry.status === "failed") ? "failed" : checks.some((entry) => entry.status === "unverified") ? "unverified" : "passed", checks, sampleValues }
+  const status = checks.some((entry) => entry.status === "failed") ? "failed" : checks.some((entry) => entry.status === "unverified") ? "unverified" : "passed"
+  return {
+    status,
+    checks,
+    sampleValues,
+    ...(options.obligationIR === false ? {} : { obligationIR: buildObligationIR(set) })
+  }
 }

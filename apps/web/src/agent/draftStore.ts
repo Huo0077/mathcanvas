@@ -1,5 +1,5 @@
 ﻿import type { GeometryDocument } from "@draw/dsl"
-import { canonicalContentHash, compilePlan, parseDiagramObligations, verifyDiagramObligations, PLAN_SCHEMA_VERSION, type PlanCompileResult, type PlanDiagnostic, type PlanEnvelope, type PlanRelations, type RepairRequest, type StructuredAssumption, type DiagramVerificationReport } from "@draw/agent-core"
+import { canonicalContentHash, compilePlan, parseObligationWithLegacy, verifyDiagramObligations, PLAN_SCHEMA_VERSION, type PlanCompileResult, type PlanDiagnostic, type PlanEnvelope, type PlanRelations, type RepairRequest, type StructuredAssumption, type DiagramVerificationReport } from "@draw/agent-core"
 import { createIdAllocator, type DocumentHandle } from "@draw/scene-graph"
 
 import type { DraftAction, DomainOperation, IdAllocator } from "@draw/scene-graph"
@@ -354,8 +354,13 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
 
       // The Worker and in-process compiler share one pure checker. Re-evaluate on the exact
       // staged candidate so a successful Worker response cannot silently lose its report.
-      const obligations = userMessage && actions.some((action) => action.actionId === "solid.create_polyhedron")
-        ? parseDiagramObligations(userMessage) : null
+      //
+      // Phase N1：解析走 `parseObligationWithLegacy`（一次解析同时给出旧结构与统一 IR），
+      // 但**核验仍然在草稿这一层重算** —— Worker 那条路只回带 `draftDocument` 与 `operations`，
+      // 所以"两条路等价"靠的还是同一个纯判据在这里重跑，而不是靠把报告搬过线程边界。
+      const parsed = userMessage && actions.some((action) => action.actionId === "solid.create_polyhedron")
+        ? parseObligationWithLegacy(userMessage) : null
+      const obligations = parsed?.legacy ?? null
       const checked = obligations && (obligations.givens.length > 0 || obligations.unverified.length > 0)
         ? verifyDiagramObligations(obligations, plan, compiled.draftDocument, record.candidate) : undefined
       if (checked?.status === "failed") {

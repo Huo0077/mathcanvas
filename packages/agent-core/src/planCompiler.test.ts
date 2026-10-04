@@ -1,4 +1,4 @@
-﻿import { createEmptyDocument, type GeometryDocument } from "@draw/dsl"
+import { createEmptyDocument, type GeometryDocument } from "@draw/dsl"
 import { contentFingerprint } from "@draw/scene-graph"
 import { describe, expect, it } from "vitest"
 
@@ -160,6 +160,30 @@ describe("relation verification gate", () => {
     expect(result.diagnostics.some((entry) => entry.code.startsWith("relation_"))).toBe(false)
   })
 
+  /**
+   * **Phase N1：统一 IR 与它的开关**。
+   *
+   * 这两条一起钉住 N1 的验收条件："`flags=false` 时旧静态示意图链路行为不变"
+   * 与"IR 确实接进了编译期"。只断言前者会退化成"什么都没做也算过"；
+   * 只断言后者则无法证明回退路还在。
+   */
+  it("attaches the unified obligation IR to the report the plan compiler produces", () => {
+    const result = compilePlan(polyhedronPlan(PYRAMID_VERTICES, PYRAMID_RELATIONS), context(createEmptyDocument("geometry3d"), { prompt: PYRAMID_PROMPT }))
+
+    expect(result.diagramVerification?.obligationIR?.obligations.map((item) => [item.role, item.kind, item.targets])).toEqual([
+      ["given", "perpendicular", ["P", "A", "A", "B", "C", "D"]],
+      ["given", "parallel", ["B", "C", "A", "D"]]
+    ])
+  })
+
+  it("leaves the legacy diagram report unchanged when the IR switch is off", () => {
+    const result = compilePlan(polyhedronPlan(PYRAMID_VERTICES, PYRAMID_RELATIONS), context(createEmptyDocument("geometry3d"), { prompt: PYRAMID_PROMPT, diagramObligationIR: false }))
+
+    // 报告本体仍然照旧（核验条数与结论一字未变），只是不带 IR。
+    expect(result.diagramVerification?.status).toBe("passed")
+    expect(result.diagramVerification?.checks).toHaveLength(2)
+    expect(result.diagramVerification?.obligationIR).toBeUndefined()
+  })
   /**
    * **顶点顺序不再靠猜**（2026-10-03，方案 C 的配套）。
    *

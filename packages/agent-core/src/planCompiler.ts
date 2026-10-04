@@ -14,7 +14,7 @@ import {
 import { auditDescriptionFor, type AuditContext } from "./defaultPolicies"
 import { auditPlan, type FieldCompletion } from "./parameterAudit"
 import { extractRelations } from "./relationExtraction"
-import { parseDiagramObligations } from "./diagramObligations"
+import { parseObligationWithLegacy } from "./obligationIR"
 import { verifyDiagramObligations, type DiagramVerificationReport } from "./diagramVerification"
 import { verifyRelations, type RelationLookup } from "./relations"
 import { parsePlanEnvelope, repairRequestFor } from "./schemas"
@@ -60,6 +60,15 @@ export interface PlanCompileContext {
   /** 草稿级分配器（`draftStore` 会传它自己的那一份，保证跨 `stage` 幂等）。 */
   idAllocator?: IdAllocator
   orderedSelection?: readonly string[]
+  /**
+   * **Phase N1 的能力开关**（`apps/web/src/agent/featureFlags.ts` 的 `obligationIR`）。
+   *
+   * 为什么由调用方传进来、而不是在 agent-core 里读那个 flag：开关是**应用级**的
+   * （进程环境），而这个包是纯函数库 —— 在这里读 `process.env` 会让"同一份输入
+   * 在不同环境给出不同结果"，那样连测试都无法钉住。缺省 `true`（核验器本来就该产出 IR），
+   * 传 `false` 就是那条"旧静态链路行为不变"的回退路。
+   */
+  diagramObligationIR?: boolean
 }
 
 export interface PlanCompileResult {
@@ -295,10 +304,16 @@ export function compilePlan(input: unknown, context: PlanCompileContext): PlanCo
 
   diagnostics.push(...verifyExplicitCubeRequest(compiledActions, context.prompt))
   diagnostics.push(...validateRelations(plan, context.prompt))
-  const obligations = context.prompt && compiledActions.some((action) => action.actionId === "solid.create_polyhedron")
-    ? parseDiagramObligations(context.prompt) : null
+  /**
+   * **原话清单的解析入口在这里收成一个**（Phase N1）：`parseObligationWithLegacy` 同时给出
+   * 旧结构（核验器要吃它）与统一 IR（trace / UI / N2 要吃它），所以"解析一次、两种形状"
+   * 不可能分叉。`obligations` 的判据（有 polyhedron 动作 + 有原话）一字未改。
+   */
+  const obligationParse = context.prompt && compiledActions.some((action) => action.actionId === "solid.create_polyhedron")
+    ? parseObligationWithLegacy(context.prompt) : null
+  const obligations = obligationParse?.legacy ?? null
   const diagramVerification = obligations && (obligations.givens.length > 0 || obligations.unverified.length > 0)
-    ? verifyDiagramObligations(obligations, plan, working, context.document) : undefined
+    ? verifyDiagramObligations(obligations, plan, working, context.document, { obligationIR: context.diagramObligationIR ?? true }) : undefined
   for (const check of diagramVerification?.checks ?? []) {
     if (check.status === "failed") diagnostics.push(planDiagnostic("geometry_validation", "diagram_condition_failed", "envelope.actions", `${check.sourceText}：${check.reason}`))
     if (check.status === "unverified") diagnostics.push(planDiagnostic("geometry_validation", "diagram_condition_unverified", "envelope.actions", `${check.sourceText}：${check.reason}`, "warning"))
