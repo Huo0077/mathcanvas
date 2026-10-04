@@ -256,6 +256,14 @@ describe("same-source check against the geometry kernel", () => {
     expect(ours, relation.id).not.toBeNull()
     // 内核的 satisfied 与"我们算出的残差在同一个容差内"必须一致。
     expect(kernel.satisfied, `${relation.id}: kernel residual ${String(kernel.residual)} vs ours ${String(ours)}`).toBe(ours! <= RELATION_TOLERANCE)
+    /**
+     * **残差本身也必须对得上，不能只对布尔**。
+     *
+     * 这条是补上的：第一版只比 `satisfied`，于是 `planeNormalFrom` 忘了归一（残差被 `|n|`
+     * 缩放）照样全绿 —— 0 与非 0 不受缩放影响，结论一致而数值全错。用"只看布尔"的判据去证明
+     * "两处判定一致"，只能证明一半。
+     */
+    expect(kernel.residual, `${relation.id}: kernel ${String(kernel.residual)} vs ours ${String(ours)}`).toBeCloseTo(ours!, 12)
   }
 
   it("agrees on a positive perpendicular and a negative one", () => {

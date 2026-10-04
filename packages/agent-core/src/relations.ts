@@ -56,10 +56,18 @@ function pointsOf(targets: readonly RelationTarget[], lookup: RelationLookup): V
   return resolved.every((point): point is Vector3 => point !== null) ? resolved : null
 }
 
-/** 由三个顶点定平面法向（与 `planeFromPoints` 同款叉积）。三点共线时返回 `null`。 */
+/**
+ * 由三个顶点定**单位**平面法向（与内核 `planeFromPoints` 同款：先叉积、再归一）。
+ *
+ * **必须归一**：内核的 `coplanar` / `pointOnPlane` 残差是**真距离**（它用 `planeFromPoints`
+ * 拿到的单位法向算点积）。这里若返回原始叉积，残差会被 `|n|` 缩放 —— 满足与否的结论仍然一致
+ * （0 与非 0 不受缩放影响），但**数值对不上**，于是"两处判定一致"就只剩一半是真的。
+ * 第一版就是漏了归一，靠"残差比较"而不是"只看布尔"的同源用例才发现。
+ */
 function planeNormalFrom(first: Vector3, second: Vector3, third: Vector3): Vector3 | null {
-  const normal = cross(subtract(second, first), subtract(third, first))
-  return length(normal) > EPSILON ? normal : null
+  const raw = cross(subtract(second, first), subtract(third, first))
+  const magnitude = length(raw)
+  return magnitude > EPSILON ? { x: raw.x / magnitude, y: raw.y / magnitude, z: raw.z / magnitude } : null
 }
 
 /** 一条线段的方向；两端重合（退化）时返回 `null`。 */
