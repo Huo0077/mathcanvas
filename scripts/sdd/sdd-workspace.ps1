@@ -49,29 +49,46 @@ $planDirName = Split-Path -Parent $PlanFile
 if ([string]::IsNullOrWhiteSpace($planDirName)) { $planDirName = "." }
 
 # 规范化计划路径：物理目录 + 文件名（相对 / 绝对 / 带 .. 的写法都归一成同一个标记值）。
+#
+# **不要用 `$planAbs.Substring($root.Length + 1)` 这种下标算术**：本仓库根目录含非 ASCII
+# 字符（`数学画布`），一旦两侧的大小写或分隔符写法有一点点不一致，下标就会整体偏移，
+# 算出来的标记值变成一个以 `/` 开头的怪串（实测：`/2026-10-03-...md`），于是所有权判定
+# 恒为假。改用正则前缀剥离，并显式忽略大小写。
+#
+# `git rev-parse --show-toplevel` 已经给的是正斜杠形式（实测 `D:/数学画布/mathcanvas-main`），
+# 所以 -replace 是幂等的、无害的，但两侧都要过一遍以免来源不同。
 $planDirPhysical = (Resolve-Path -LiteralPath $planDirName).Path -replace '\\', '/'
+$rootNorm = $root -replace '\\', '/'
 $planAbs = "$planDirPhysical/$planFileName"
-$planId = if ($planAbs.StartsWith("$root/")) { $planAbs.Substring($root.Length + 1) } else { $planAbs }
+$planId = $planAbs -ireplace ("^" + [regex]::Escape("$rootNorm/")), ""
 
 function Test-Owns {
   param([string]$Dir)
   $marker = Join-Path $Dir "plan-path"
   if (Test-Path -LiteralPath $marker) {
-    return ((Get-Content -LiteralPath $marker -Raw -Encoding UTF8).Trim() -eq $planId)
+    Write-Output ((Get-Content -LiteralPath $marker -Raw -Encoding UTF8).Trim() -eq $planId)
+    return
   }
   New-Item -ItemType Directory -Force -Path $Dir | Out-Null
   [System.IO.File]::WriteAllText($marker, "$planId`n", (New-Object System.Text.UTF8Encoding($false)))
-  return $true
+  Write-Output $true
+  return
 }
 
 $dir = Join-Path $base $slug
-if (-not (Test-Owns -Dir $dir)) {
+$owns = Test-Owns -Dir $dir
+if (-not $owns) {
   $parent = Split-Path -Leaf $planDirPhysical
   $dir = Join-Path $base "$slug-$parent"
-  if (-not (Test-Owns -Dir $dir)) {
+  $owns = Test-Owns -Dir $dir
+  if (-not $owns) {
     $n = 2
-    while (-not (Test-Owns -Dir (Join-Path $base "$slug-$parent-$n"))) { $n++ }
-    $dir = Join-Path $base "$slug-$parent-$n"
+    while ($true) {
+      $candidate = Join-Path $base "$slug-$parent-$n"
+      $owns = Test-Owns -Dir $candidate
+      if ($owns) { $dir = $candidate; break }
+      $n++
+    }
   }
 }
 
