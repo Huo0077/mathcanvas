@@ -1,6 +1,6 @@
 # 欠定图形的见证生成与关系核验 实施计划
 
-> **状态：** **7 个 Task 全部实现，在分支 `feat/underdetermined-witness-relations` 上（尚未合并进 `main`、未打包、未发布）**。设计见 [`../specs/2026-10-03-underdetermined-witness-relations-design.md`](../specs/2026-10-03-underdetermined-witness-relations-design.md)。
+> **状态：** **已合并进 `main`（未打包、未发布）；但"能画出来"≠"画对了"** —— 详见下方「发版之后的翻转」与 [`current-status.md`](../../current-status.md) §四「当前最严重的问题」。设计见 [`../specs/2026-10-03-underdetermined-witness-relations-design.md`](../specs/2026-10-03-underdetermined-witness-relations-design.md)。
 >
 > **执行过程中的两处偏离（都已留档）**：① **Task 4 的 `polyhedron` 见证族在本批没有产品调用点** —— 预检扫描时查实 `selectWitness` 只被 `parameterAudit` 以 triangle/prism 调用，所以它照旧实现但**不算本批收益**，真正解掉报障的是 Task 5 的关系核验（见下方「执行前的范围裁定」）；② **Task 7 由端到端用例抓出一个真缺陷并修好** —— `relations` 在 `coordinator → committer → draftStore` 链路上被两处"按 actions 重造信封"丢掉，于是关系核验在真实运行时恒失败，而 7 条编译器用例全绿也发现不了。修复提交 `99ba741`。
 >
@@ -23,12 +23,21 @@
 >
 > ## 已知仍未验证 / 未完成（**不能读成"已可用"**）
 >
-> 1. **真实模型下端到端未验证**（关键）：需要用户在桌面版发一次原句。四种可能结果指向完全不同的修法
->    —— 成功 / `relation_not_satisfied`＋有 vertexNames / 报"无法核验" / 图错但不报错。
-> 2. 几何 Worker 的 compile 分支仍不带 `relations`。
-> 3. **抽不到的关系不会让计划失败，也还没显示给用户**（只进编译期日志）—— 诚实性缺口。
-> 4. 抽取器可能误抽（设计里原本因此排除方案 C）：已加固"顶点对不上"，**未**加固"关系读错"。
-> 5. 平面几何那一批、带自由参数的表达式关系、把关系存进文档（约束求解）—— 均未做。
+> **2026-10-04 更新：用户已实测，结论比原先设想的更严重。**
+>
+> - ✅ **能画出图了**：六轮真实运行之后，三棱锥那道题**第一次走到了画布**。
+> - ❌ **但画错了，而系统没拦**：用户确认"明显画错了"。实测模型给的坐标里
+>   `OA · CD = −0.314 ≠ 0`（**第（1）问要证的那件事本身不成立**）；`A` 的高度取 0.64、
+>   而"二面角 45°"要求约 1.33（**差约一倍**）。**那道题的七条条件里，机器真正核验过的只有一条。**
+> - **根因**：数值约束（等边 / 比例 / 二面角）**完全不在判据内**；`AB=AD` 的等号写法不认；
+>   `平面⊥平面` 无判据（只记"未核验"）；而**抽不到的关系只进开发者详细视图、正式界面无任何提示**
+>   —— 用户会以为"没报错 = 验过了"。完整清单与修法方向见
+>   [`current-status.md`](../../current-status.md) §四「当前最严重的问题」。
+> - **教训**：这一版之前所有门禁都是绿的，**而没有任何一条能发现这张图是错的**。
+>   **"门禁全绿"不等于"结果正确"。**
+>
+> 其余仍未验证 / 未完成：几何 Worker 的 compile 分支不带 `relations`；平面几何那一批；
+> 带自由参数的表达式关系；把关系存进文档（约束求解）—— 均未做。
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
