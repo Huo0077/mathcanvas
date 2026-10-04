@@ -87,7 +87,7 @@ function numberAt(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : Number.NaN
 }
 
-/** 一个点的**自身参数个数**：绑定决定它还有多少能动的量（自由点 3、线上点 1……）。 */
+/** 一个空间点的**自身参数个数**：绑定决定它还有多少能动的量（自由点 3、线上点 1……）。 */
 function pointDof(primitive: Extract<PrimitiveSpec, { type: "point3" }>): number {
   const binding = primitive.binding
   if (binding === undefined || binding.kind === "free") return 3
@@ -95,6 +95,27 @@ function pointDof(primitive: Extract<PrimitiveSpec, { type: "point3" }>): number
   if (binding.kind === "onPlane" || binding.kind === "onFace" || binding.kind === "onSurface") return 2
   if (binding.kind === "inSolid") return 3
   // derived：坐标由来源算出，本版不展开来源 → 不计参数。
+  return 0
+}
+
+/**
+ * 一个**平面点**（`type: "point"`）的参数个数。与 `pointDof` 同构，但 `PointBinding`
+ * 只有三支：`free | onPath | derived`。
+ *
+ * ## 为什么必须有这个函数，而不是在 `parametersOf` 里判"有没有 binding"
+ *
+ * 那正是限定复核 round 2 抓到的缺陷机制：**存在性分叉**会把"显式写成 `{ kind: "free" }`"的
+ * 自由点判成 1（它明明是 2），把 `derived` 判成 1（契约说它 0）。而这两种形状在生产上
+ * **真的会出现**：`packages/scene-graph/src/deletion.ts` 在删除宿主/来源时会把 2D 点重写成
+ * `{ kind: "free" }`，`apps/web/src/components/inspectorModel.ts` 在更新时也写同一形状。
+ *
+ * 所以判据必须落在**判别联合的种类**上，而不是"那个字段在不在"。
+ */
+function planarPointDof(primitive: Extract<PrimitiveSpec, { type: "point" }>): number {
+  const binding = primitive.binding
+  if (binding === undefined || binding.kind === "free") return 2
+  if (binding.kind === "onPath") return 1
+  // derived：坐标由来源算出，本版不展开来源 → 不计参数（与 `pointDof` 的 derived 同义）。
   return 0
 }
 
@@ -154,10 +175,9 @@ function parametersOf(primitive: PrimitiveSpec, ownerIndex: number): ScalarParam
   // 暴露的轴数 = 绑定的自由度（自由点 3、线上点 1、面上点 2、派生点 0）——
   // 与 `dofOf` 共用同一个 `pointDof`，所以"逐对象报的数"与"雅可比扰动的轴"不可能分叉。
   if (primitive.type === "point3") return [positionAt("x"), positionAt("y"), positionAt("z")].slice(0, pointDof(primitive))
-  if (primitive.type === "point") {
-    // `PointBinding.onPath`（绑在轨道上）同样只剩 1 个自由度；没有绑定 = 自由点（2 个轴）。
-    return primitive.binding === undefined ? [at("x"), at("y")] : [at("x")]
-  }
+  // 2D 点同一条纪律：按**绑定的种类**取轴（自由 2、轨道上 1、派生 0），
+  // **不按"有没有 binding"** —— 存在性分叉会把显式 `{kind:"free"}` 的自由点报成 1。
+  if (primitive.type === "point") return [at("x"), at("y")].slice(0, planarPointDof(primitive))
   if (primitive.type === "circle3") {
     return [
       vectorAt("center", "x"), vectorAt("center", "y"), vectorAt("center", "z"),

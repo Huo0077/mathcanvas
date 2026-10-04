@@ -118,6 +118,38 @@ describe("reportFreeDegrees", () => {
   })
 
   /**
+   * **2D 点的自由度必须按绑定种类判，不能按"有没有 binding"判**（限定复核 round 2 的 Important）。
+   *
+   * `PointBinding` 是三支判别联合：`free | onPath | derived`。按**存在性**分叉会把
+   * "显式写成 `{ kind: "free" }`"的自由点判成 1（它明明是 2），把 `derived` 判成 1（契约说它 0）——
+   * 而且这条在生产上可达：删除宿主/来源时 `scene-graph` 会把 2D 点重写成 `{ kind: "free" }`
+   *（`deletion.ts`），检查器更新时也写同一形状（`inspectorModel.ts`）。
+   *
+   * 与 `point3` 那一条**不能互相掩盖**：这一组全建在 `point`（2D）上，
+   * 把 `point3` 分支改坏时这组不会红，反之亦然。
+   */
+  it("counts a 2D point's degrees of freedom by its binding kind, not by the mere presence of a binding", () => {
+    const document = createEmptyDocument("conics")
+    document.primitives.push({ id: "free", type: "point", x: 1, y: 2 })
+    document.primitives.push({ id: "explicit-free", type: "point", x: 3, y: 4, binding: { kind: "free" } })
+    document.primitives.push({ id: "on-path", type: "point", x: 5, y: 0, binding: { kind: "onPath", pathId: "some-curve", parameter: 0.25 } })
+    document.primitives.push({ id: "derived", type: "point", x: 0, y: 0, binding: { kind: "derived", sourceId: "some-curve", feature: "start" } })
+
+    const report = reportFreeDegrees(document, [])
+
+    // `objects` **只列有参数的图元**（0 自由度不进列表 = 派生点的不变量本身）。
+    expect(report.objects).toEqual([
+      { id: "free", kind: "point", dof: 2 },
+      { id: "explicit-free", kind: "point", dof: 2 },
+      { id: "on-path", kind: "point", dof: 1 }
+    ])
+    // 汇总数是那三种绑定的**算术和**：2 + 2 + 1 + 0 = 5。
+    // 把派生点算成 1 会让它变成 6（这才是"派生点贡献 0"的可断言出口），
+    // 把显式 free 算成 1 会让它变成 4 —— 两个方向都钉住了。
+    expect(report.totalDof).toBe(5)
+  })
+
+  /**
    * 诊断是**只读**的：雅可比靠扰动参数来算，而扰动必须逐个还原。
    * 少了这条，"诊断一次"就会把用户文档里的坐标悄悄挪掉一点点 —— 这种破坏只在
    * 后续计算里表现为"莫名其妙差了一点"，最难查。
