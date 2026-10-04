@@ -183,15 +183,26 @@ export function verifyRelations(relations: readonly Relation[], lookup: Relation
  * 覆盖度**只查"有没有回应"**，不试图从自然语言里抠出"是哪四个点"—— 那是模型声明表的职责
  * （设计 §5.2）。这条边界必须同时写进提示词，否则模型会以为系统也在解析。
  *
+ * ## 关键词必须**窄**，宽一个就误伤一大片
+ *
+ * 这张表的第一版是宽口径的，实测直接打红了两个既有夹具（它们本来好端端的）：
+ * - `角` —— "底面边长 2、一**角** 60° 的菱形斜四棱柱" 里的"一角"是"一个角"，
+ *   与"AB ⊥ AD"这种**两个对象之间的关系**不是一回事；
+ * - `相等` / `比` —— "边长**相等**的…"、"**比**如"、"相**比**"这类日常用词到处都是。
+ *
+ * 所以这里只留**高精度**写法。代价：口语化的关系表述可能漏检（覆盖度只查漏，
+ * 漏检等于少查一条，不会误报）；收益：不把一句与关系无关的话判成"你漏声明了关系"。
+ * 覆盖度是**噪声敏感**的判据 —— 它每次误报都会让一次正常作图被拒回去重做。
+ *
  * 关于 `//`：题面里出现两个斜杠（例如"平面 // 平面"）是平行的一种写法，认它。
  */
 const RELATION_KEYWORDS: readonly { kind: RelationKind; keywords: readonly string[] }[] = [
   { kind: "perpendicular", keywords: ["垂直", "⊥", "perp"] },
-  { kind: "parallel", keywords: ["平行", "∥", "//", "水平"] },
+  { kind: "parallel", keywords: ["平行", "∥", "//"] },
   { kind: "coplanar", keywords: ["共面"] },
-  { kind: "equalLength", keywords: ["等长", "长度相等", "相等"] },
+  { kind: "equalLength", keywords: ["等长", "长度相等", "线段相等", "边相等"] },
   { kind: "midpoint", keywords: ["中点"] },
-  { kind: "ratio", keywords: ["比例", "之比", "比值", "比"] }
+  { kind: "ratio", keywords: ["之比", "比值", "比例"] }
 ]
 
 /**
@@ -235,4 +246,33 @@ export function relationKindsInText(prompt: string): Set<RelationKind> {
 export function missingRelationKinds(prompt: string, declared: readonly Relation[]): RelationKind[] {
   const answered = declaredKinds(declared)
   return [...relationKindsInText(prompt)].filter((kind) => !answered.has(kind))
+}
+
+/**
+ * 计划里**由动作本身就表达了**的关系种类（设计 §5.2 的补充，2026-10-03 实测后加）。
+ *
+ * 为什么需要它：覆盖度如果只认"声明表"，就会误伤一大批**已经用构造表达了关系**的计划。
+ * 实测踩到的那一个：代表题「…过三条棱的**中点**作截面…」的计划里，中点是用
+ * `dynamic.create_bound_point` + `parameter: 0.5` 建出来的 —— 这就是"中点"最好的表达，
+ * 再要求它另外声明一条 `midpoint` 关系是重复劳动，而覆盖度会因此把一次正常作图拒回去重做。
+ *
+ * 只覆盖**动作层真能表达**的那几种：
+ * - `midpoint` ← `dynamic.create_bound_point` 取 `parameter === 0.5`；
+ * - `pointOn` ← `dynamic.create_bound_point`（绑在宿主上的点，本来就"在对象上"）。
+ *
+ * `equalLength` / `ratio` / `perpendicular` / `parallel` / `coplanar` **没有对应的构造动作**
+ * （它们只能靠坐标满足），所以那几种仍然必须由声明表回应 —— 不能在这里假装它们被表达了。
+ */
+export function relationKindsConstructed(actions: readonly { actionId: string; inputs: unknown }[]): Set<RelationKind> {
+  const kinds = new Set<RelationKind>()
+  for (const action of actions) {
+    if (action.actionId !== "dynamic.create_bound_point") continue
+    const inputs = action.inputs
+    if (typeof inputs !== "object" || inputs === null) continue
+    kinds.add("pointOn")
+    const parameter = (inputs as Record<string, unknown>).parameter
+    // 0.5 是"中点"的构造参数（与 `MIDPOINT_PARAMETER` 同值）。
+    if (typeof parameter === "number" && parameter === 0.5) kinds.add("midpoint")
+  }
+  return kinds
 }

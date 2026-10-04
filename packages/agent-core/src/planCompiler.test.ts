@@ -48,6 +48,121 @@ const MIDPOINT = (alias: string, hostSub: number, parameter?: number) => ({
   inputs: { alias, host: { scope: "draft", alias: "prism" }, hostSub, ...(parameter === undefined ? {} : { parameter }) }
 })
 
+/**
+ * **四棱锥 P-ABCD**（用户报障那一道）。绕向是暴力搜出来的合法组合 —— 拓扑别手推。
+ */
+const PYRAMID_VERTICES = [
+  { x: 0, y: 0, z: 4 }, // v0 = P
+  { x: 0, y: 0, z: 0 }, // v1 = A
+  { x: 2, y: 0, z: 0 }, // v2 = B
+  { x: 2, y: 3, z: 0 }, // v3 = C
+  { x: 0, y: 3, z: 0 } // v4 = D
+]
+
+const PYRAMID_FACES = [[1, 2, 3, 4], [0, 2, 1], [0, 3, 2], [0, 4, 3], [0, 1, 4]]
+
+const PYRAMID_RELATIONS = [
+  { id: "PA-perp-base", kind: "perpendicular", targets: [{ vertex: "v0" }, { vertex: "v1" }, { vertex: "v1" }, { vertex: "v2" }, { vertex: "v3" }] },
+  { id: "BC-parallel-AD", kind: "parallel", targets: [{ vertex: "v2" }, { vertex: "v3" }, { vertex: "v1" }, { vertex: "v4" }] }
+]
+
+const PYRAMID_PROMPT = "在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，BC ∥ AD，画出这个四棱锥"
+
+function polyhedronPlan(vertices: unknown[], relations?: unknown, faces: unknown = PYRAMID_FACES): unknown {
+  return {
+    ...(rawPlan([{
+      actionId: "solid.create_polyhedron",
+      actionKey: "pyramid",
+      factIds: [],
+      inputs: { alias: "pyramid", vertices, faces }
+    }]) as Record<string, unknown>),
+    ...(relations === undefined ? {} : { relations })
+  }
+}
+
+/**
+ * **关系核验**（设计 2026-10-03 §5.3/§5.5）。
+ *
+ * 这是**真正解掉用户报障的那一层**：题面只给关系、不给数值时，模型自己算出一组坐标，
+ * 系统在执行**之前**用内核判据逐条核验它说的是不是真的。
+ *
+ * 两件事，顺序不能反：先**覆盖度**（题面点名的关系一条都不许漏声明），再**残差**
+ * （声明了的每条都要真的成立）。失败走既有的一次性修复回路，不静默给残图。
+ */
+describe("relation verification gate", () => {
+  it("accepts a plan whose declared relations really hold", () => {
+    const result = compilePlan(polyhedronPlan(PYRAMID_VERTICES, PYRAMID_RELATIONS), context(createEmptyDocument("geometry3d"), { prompt: PYRAMID_PROMPT }))
+
+    expect(result.diagnostics.filter((entry) => entry.code.startsWith("relation_"))).toEqual([])
+    expect(result.ok).toBe(true)
+  })
+
+  it("rejects a plan whose declared relation does not hold, and offers a repair", () => {
+    // P 偏到 (1, 0, 4)：PA 不再垂直于底面，而计划声称它垂直。
+    const skewed = [{ x: 1, y: 0, z: 4 }, PYRAMID_VERTICES[1], PYRAMID_VERTICES[2], PYRAMID_VERTICES[3], PYRAMID_VERTICES[4]]
+
+    const result = compilePlan(polyhedronPlan(skewed, PYRAMID_RELATIONS), context(createEmptyDocument("geometry3d"), { prompt: PYRAMID_PROMPT }))
+
+    expect(result.ok).toBe(false)
+    expect(result.diagnostics.some((entry) => entry.stage === "geometry_validation" && entry.code === "relation_not_satisfied")).toBe(true)
+    // 失败必须给一次性修复的机会（设计 §6），而不是直接死掉。
+    expect(result.repair).toBeDefined()
+  })
+
+  it("rejects a plan that stays silent about a relation the prompt named", () => {
+    // 原话里有 ⊥ 与 ∥，计划一条关系都没声明 → 谁也验不了，系统不许宣布"成立"。
+    const result = compilePlan(polyhedronPlan(PYRAMID_VERTICES, undefined), context(createEmptyDocument("geometry3d"), { prompt: PYRAMID_PROMPT }))
+
+    expect(result.ok).toBe(false)
+    expect(result.diagnostics.some((entry) => entry.code === "relation_not_declared")).toBe(true)
+  })
+
+  it("fails a declared relation whose vertex name does not exist, instead of passing it silently", () => {
+    // 模型写错点名（v9）—— "无法判定"不许读成"已满足"。
+    const typo = [{ id: "typo", kind: "parallel", targets: [{ vertex: "v9" }, { vertex: "v2" }, { vertex: "v1" }, { vertex: "v4" }] }]
+
+    const result = compilePlan(polyhedronPlan(PYRAMID_VERTICES, typo), context(createEmptyDocument("geometry3d"), { prompt: "画一个四棱锥" }))
+
+    expect(result.ok).toBe(false)
+    expect(result.diagnostics.some((entry) => entry.code === "relation_not_satisfied")).toBe(true)
+  })
+
+  it("leaves a plan without relations exactly as it behaves today", () => {
+    // **回归底线**：没有 relations 字段、题面也没有关系词 → 行为与今天逐字相同。
+    const result = compilePlan(polyhedronPlan(PYRAMID_VERTICES, undefined), context(createEmptyDocument("geometry3d"), { prompt: "画一个四棱锥" }))
+
+    expect(result.diagnostics.some((entry) => entry.code.startsWith("relation_"))).toBe(false)
+  })
+
+  /**
+   * **由构造表达的关系也算"已回应"**（2026-10-03 实测后加）。
+   *
+   * 实测踩到的误伤：代表题「…过三条棱的**中点**作截面…」的计划里，中点是用
+   * `dynamic.create_bound_point` + `parameter: 0.5` 建出来的 —— 那就是"中点"最好的表达。
+   * 覆盖度若只认声明表，会把这次正常作图拒回去重做（`agentDslMetrics` 与 `agentRuntime`
+   * 两个既有夹具真的因此红了，而它们本来好端端的）。
+   */
+  it("accepts a midpoint the plan expressed by construction instead of by declaration", () => {
+    const plan = rawPlan([
+      PRISM,
+      { actionId: "dynamic.create_bound_point", actionKey: "mid-E", factIds: [], inputs: { alias: "E", host: { scope: "draft", alias: "prism" }, hostSub: 0, parameter: 0.5 } }
+    ])
+
+    const result = compilePlan(plan, context(createEmptyDocument("geometry3d"), { prompt: "过棱的中点作一个标记" }))
+
+    expect(result.diagnostics.some((entry) => entry.code === "relation_not_declared")).toBe(false)
+  })
+
+  it("still demands a declaration for a relation no construction can express", () => {
+    // 等长 / 比例**没有**对应的构造动作 —— 只能靠坐标满足，所以必须由声明表回应。
+    // 这条防的是"把 construction 兜底写成万能豁免"：那会让漏声明重新静默通过。
+    const result = compilePlan(polyhedronPlan(PYRAMID_VERTICES, undefined), context(createEmptyDocument("geometry3d"), { prompt: "画一个四棱锥，AB 与 CD 等长" }))
+
+    expect(result.ok).toBe(false)
+    expect(result.diagnostics.some((entry) => entry.code === "relation_not_declared")).toBe(true)
+  })
+})
+
 describe("plan compilation", () => {
   it("resolves draft aliases in dependency order and produces an isolated draft document", () => {
     const document = createEmptyDocument("geometry3d")

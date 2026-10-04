@@ -188,6 +188,22 @@ describe("relation coverage", () => {
     expect(relationKindsInText("这四个点共面").has("coplanar")).toBe(true)
   })
 
+  /**
+   * **误报是这张表最贵的错误**：覆盖度每次误报都会把一次正常作图拒回去重做。
+   * 这几条来自实测 —— 它们对应的两个夹具在第一版宽口径下**真的红了**。
+   */
+  it("does not fire on an angle that is not a relation between two objects", () => {
+    // "一角 60°" 是"一个角"，不是"AB ⊥ AD"那种两个对象之间的关系。
+    expect(relationKindsInText("底面边长 2、一角 60° 的菱形斜四棱柱").has("perpendicular")).toBe(false)
+  })
+
+  it("does not fire on everyday words that merely contain relation characters", () => {
+    // "比如" / "相比" 里的"比"；口语里的"相等"。宽口径会在这里误报。
+    expect(relationKindsInText("比如画一个棱柱，相比上一个更大").has("ratio")).toBe(false)
+    // 注意"比 2"这种写法仍然算比例（之比/比值/比例 三选一即可）。
+    expect(relationKindsInText("BC 与 AD 之比为 3 比 2").has("ratio")).toBe(true)
+  })
+
   it("does not read a point name as a ratio", () => {
     // 裸的点名里有 "P:" / "AD:"，不能把冒号当成比例号。
     expect(relationKindsInText("在四棱锥 P-ABCD 中，PA 垂直 平面 ABCD").has("ratio")).toBe(false)

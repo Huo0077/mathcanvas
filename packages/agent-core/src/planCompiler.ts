@@ -13,6 +13,7 @@ import {
 } from "./contracts"
 import { auditDescriptionFor, type AuditContext } from "./defaultPolicies"
 import { auditPlan, type FieldCompletion } from "./parameterAudit"
+import { missingRelationKinds, relationKindsConstructed, verifyRelations, type RelationLookup } from "./relations"
 import { parsePlanEnvelope, repairRequestFor } from "./schemas"
 import { isInvariantRequest } from "./underdetermined"
 import { cubeCenterFrom, cubeEdgeLengthFrom, explicitlyRequestsCube } from "./geometryIntent"
@@ -288,6 +289,7 @@ export function compilePlan(input: unknown, context: PlanCompileContext): PlanCo
   }
 
   diagnostics.push(...verifyExplicitCubeRequest(compiledActions, context.prompt))
+  diagnostics.push(...validateRelations(plan, context.prompt))
   const failed = diagnostics.some((entry) => entry.severity === "error")
   if (failed) {
     const errors = toParseErrors(diagnostics)
@@ -575,6 +577,74 @@ export function describeCompileRepairPrompt(repair: RepairRequest, diagnostics: 
 }
 
 /** Code gate for unambiguous dimensions in the user's original cube request. */
+/**
+ * **关系核验**（设计 2026-10-03 §5.3/§5.5）。
+ *
+ * 与 `validateGeometry` 是同一类东西 —— 都是"这批动作产出的几何对不对"，所以 stage 同样用
+ * `geometry_validation`，失败也走同一条一次性修复回路。
+ *
+ * **这一层才是真正解掉用户报障的地方**：题面只给关系、不给数值时（"在四棱锥 P-ABCD 中，
+ * PA ⊥ 平面 ABCD，BC ∥ AD，AB ⊥ AD"），模型得自己算出一组坐标；而"它算的到底对不对"
+ * 过去**没有任何检查**，只有内核那套退化判据（共面 / 自交 / 零体积 / 绕向）。
+ *
+ * 两件事，顺序不能反：
+ * ① **覆盖度** —— 原话点名了 ⊥/∥/共面 而计划一条都没声明 → `relation_not_declared`。
+ *    没有这一条，模型只要"不声明"就能绕过全部核验，而系统照样宣布关系成立。
+ * ② **残差** —— 声明了的每条，用 `relations.ts` 的判据逐条算（那里是唯一真源）。
+ *
+ * **顶点名用下标约定** `v0`、`v1`…（执行前的裁定 2）：`solid.create_polyhedron` 的
+ * `inputs` 今天没有顶点名字段，所以判据侧只能按下标认。取名不对会走"取不到顶点"这条
+ * 失败路径（`relation_not_satisfied`），**不是静默通过**。
+ */
+function validateRelations(plan: PlanEnvelope, prompt: string | undefined): PlanDiagnostic[] {
+  const diagnostics: PlanDiagnostic[] = []
+  const declared = plan.kind === "plan" ? plan.relations ?? [] : []
+
+  // ① 覆盖度：只在有原话时查（没有 prompt 就不该把"没原话"误判成"漏声明"）。
+  //    两种"已回应"都算：声明表里写了，**或者**动作本身就把它构造出来了
+  //    （实测：代表题"过三条棱的中点作截面"是用 parameter 0.5 的构造表达的，
+  //    若只认声明表，一次正常作图会被拒回去重做）。
+  if (prompt !== undefined) {
+    const constructed = relationKindsConstructed(plan.kind === "plan" ? plan.actions : [])
+    for (const kind of missingRelationKinds(prompt, declared)) {
+      if (constructed.has(kind)) continue
+      diagnostics.push(planDiagnostic("geometry_validation", "relation_not_declared", "envelope.relations", `题目里出现了「${kind}」，但计划既没有声明这条关系、也没有用构造表达它，无法核验。`))
+    }
+  }
+  if (declared.length === 0) return diagnostics
+
+  // ② 残差：顶点从计划里读出来（此刻只有 inputs，还没有图元 id）。
+  const lookup: RelationLookup = (target) => vertexByName(plan, target.vertex)
+  for (const failure of verifyRelations(declared, lookup).failures) {
+    diagnostics.push(planDiagnostic("geometry_validation", "relation_not_satisfied", "envelope.relations", `关系 ${failure.id}（${failure.kind}）不成立：${failure.detail}`))
+  }
+  return diagnostics
+}
+
+/** 顶点名（`v0`、`v1`…）→ 坐标。名字不合约定时返回 `null`（**不许拿默认值顶上**）。 */
+function vertexByName(plan: PlanEnvelope, name: string): { x: number; y: number; z: number } | null {
+  if (plan.kind !== "plan") return null
+  const match = /^v(\d+)$/.exec(name)
+  if (!match) return null
+  const ordinal = Number(match[1])
+  for (const action of plan.actions) {
+    if (action.actionId !== "solid.create_polyhedron") continue
+    // 分两句写而不是 `||` 合并：合并时 TS 不会把 `inputs` 缩窄到 `Record<string, unknown>`，
+    // 于是 `inputs.vertices` 报 TS2339（实测）。分开写才缩得住。
+    const inputs = action.inputs
+    if (!isRecord(inputs)) continue
+    const rawVertices = inputs.vertices
+    if (!Array.isArray(rawVertices)) continue
+    const vertex = rawVertices[ordinal]
+    if (isRecord(vertex) && typeof vertex.x === "number" && typeof vertex.y === "number" && typeof vertex.z === "number") {
+      return { x: vertex.x, y: vertex.y, z: vertex.z }
+    }
+    // 只有一份多面体计划：下标越界就当取不到。
+    return null
+  }
+  return null
+}
+
 function verifyExplicitCubeRequest(actions: readonly DraftAction[], prompt: string | undefined): PlanDiagnostic[] {
   if (!prompt || !explicitlyRequestsCube(prompt)) return []
   const cubeActions = actions.map((action, index) => ({ action, index })).filter(({ action }) => action.actionId === "solid.create_template" && isRecord(action.inputs) && action.inputs.template === "cube")
