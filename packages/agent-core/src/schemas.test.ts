@@ -402,14 +402,26 @@ describe("envelope assumptions", () => {
     noTargets.relations = [{ kind: "parallel", targets: [] }]
     expectRejected(parsePlanEnvelope(noTargets), "empty_targets")
 
-    const noRelations = validPlan() as Record<string, unknown>
-    // 空表与"没声明"是两件事：声明了却一条都没有，等于什么也没回应，必须报。
-    noRelations.relations = []
-    expectRejected(parsePlanEnvelope(noRelations), "empty_relations")
-
     const strayField = validPlan() as Record<string, unknown>
     strayField.relations = [{ kind: "parallel", targets: [{ vertex: "v0" }], tension: 1 }]
     expectRejected(parsePlanEnvelope(strayField), "unknown_field")
+  })
+
+  /**
+   * **空数组 = 没声明**（2026-10-04 放宽）。
+   *
+   * 原先报 `empty_relations`（"声明了却一条都没有"），那在**关系由模型声明**的时代说得通。
+   * 现在关系改由**系统从原话里抽**，`relations` 只是自愿补充 —— 空数组与不写是同一件事。
+   * 用户现场就撞上过：模型写了 `relations: []`，被拒一次、白跑一轮修复。
+   */
+  it("treats an empty relations array as 'declared none', like assumptions and factIds", () => {
+    const plan = validPlan() as Record<string, unknown>
+    plan.relations = []
+
+    const result = parsePlanEnvelope(plan)
+
+    expect(result.ok).toBe(true)
+    if (result.ok && result.value.kind === "plan") expect(result.value.relations).toBeUndefined()
   })
 
   /**

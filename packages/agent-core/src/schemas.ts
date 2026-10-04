@@ -128,10 +128,17 @@ const RELATION_KINDS: readonly PlanRelationKind[] = ["perpendicular", "parallel"
 function readRelations(value: unknown, path: string, errors: ParseError[]): PlanRelation[] | null {
   const items = boundedArray(value, path, errors)
   if (!items) return null
-  if (items.length === 0) {
-    errors.push(fail("empty_relations", path, "declare at least one relation, or omit the field"))
-    return null
-  }
+  /**
+   * **空数组 = 没声明**（2026-10-04 放宽，用户同意）。
+   *
+   * 原先这里报 `empty_relations`，理由是"声明了却一条都没有，等于什么也没回应"。那在
+   * **关系由模型声明**的时代说得通；现在关系改由**系统从原话里抽**，`relations` 只是
+   * "自愿补充"，空数组与不写是同一件事。用户现场就撞上过：模型写了 `relations: []`，
+   * 被拒一次、白跑一轮修复。
+   *
+   * 与 `assumptions` / `factIds` 同一条口径：**空 = 没声明**。
+   */
+  if (items.length === 0) return []
   const relations: PlanRelation[] = []
   for (const [index, item] of items.entries()) {
     const itemPath = `${path}[${index}]`
@@ -247,14 +254,14 @@ export function parsePlanEnvelope(input: unknown): ParseResult<PlanEnvelope> {
    * 只放行**这一个具名字段**，白名单不整体放宽 —— 提示词里"白名单之外的字段一律被拒"
    * 那条纪律对别的字段仍然成立（实测：这个字段当初就是被 `rejectUnknownFields` 拒掉的）。
    *
-   * 与 `assumptions` 同一条归一规则：缺省 / 显式 undefined / 空数组都当"没声明"。
-   * 注意**空数组**在这里会被 `readRelations` 报 `empty_relations` —— 声明了却一条都没有，
-   * 等于什么也没回应，不能当"没有声明"混过去。
+   * 与 `assumptions` 同一条归一规则：缺省 / 显式 undefined / **空数组**都当"没声明"
+   *（2026-10-04 放宽：关系改由系统从原话里抽之后，`relations` 只是自愿补充，空数组与不写
+   * 是同一件事 —— 原先报 `empty_relations` 会让模型白跑一轮修复）。
    */
   const rawRelations = "relations" in input && input.relations !== undefined
     ? readRelations(input.relations, "envelope.relations", errors)
     : undefined
-  const relations = rawRelations === null ? undefined : rawRelations
+  const relations = !rawRelations || rawRelations.length === 0 ? undefined : rawRelations
 
   if (kind === "plan") {
     const rawActions = boundedArray(input.actions, "envelope.actions", errors)
