@@ -140,7 +140,16 @@ describe("verifyRelations", () => {
 
     expect(result.ok).toBe(false)
     expect(result.failures[0].residual).toBeNull()
-    expect(result.failures[0].detail).toContain("顶点来源")
+    /**
+     * **报的是"无法核验"，不是"不成立"**（2026-10-03 补）。
+     *
+     * 这两者的修法完全不同：取不到顶点 ⇒ 命名/顺序问题（该给 `vertexNames`）；
+     * 残差超容差 ⇒ 坐标真的不满足。原先共用一句"缺少有效顶点来源"，用户现场会把
+     * **顺序错了**读成**几何算错了**，排查方向整条带偏。所以这里逐字钉住措辞。
+     */
+    expect(result.failures[0].detail).toContain("无法核验")
+    expect(result.failures[0].detail).toContain("顶点 Q")
+    expect(result.failures[0].detail).toContain("vertexNames")
   })
 
   it("accepts an empty declaration list as vacuously satisfied", () => {

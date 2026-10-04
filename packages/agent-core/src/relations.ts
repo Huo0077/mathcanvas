@@ -159,17 +159,31 @@ export interface RelationCheck {
 /**
  * 逐条核验；`tolerance` 缺省用 `RELATION_TOLERANCE`。
  *
- * **取不到顶点也算失败**（`residual === null` → 进 `failures`）：这条是刻意的。另一种做法是
- * "无法判定就不管它"，但那会让"模型写了一个不存在的顶点名"变成**静默通过** —— 与设计
- * §6「不静默给残图」直接冲突。宁可报一条"缺少有效顶点来源"，让模型下一轮改正。
+ * **取不到顶点也算失败**（进 `failures`）：另一种做法是"无法判定就不管它"，但那会让
+ * "顶点名没映射上"变成**静默通过** —— 与设计 §6「不静默给残图」直接冲突。
+ *
+ * 但**"取不到顶点"与"几何不成立"必须报得不一样**（2026-10-03 补）：它们原先共用同一句
+ * "缺少有效顶点来源，无法计算残差"，而修法完全不同 ——
+ * 前者是**命名/顺序**问题（模型没给 `vertexNames`，或顶点顺序与题面点名不一致），
+ * 后者是**坐标**问题。用户现场的风险正是这个混淆：明明是顺序错了，报出来却像是几何算错了。
  */
 export function verifyRelations(relations: readonly Relation[], lookup: RelationLookup, tolerance = RELATION_TOLERANCE): RelationCheck {
   const failures: RelationFailure[] = []
   relations.forEach((relation, index) => {
     const id = relation.id ?? `relation-${index}`
+    const missing = relation.targets.filter((target) => lookup(target) === null).map((target) => target.vertex)
+    if (missing.length > 0) {
+      failures.push({
+        id,
+        kind: relation.kind,
+        residual: null,
+        detail: `顶点 ${missing.join("、")} 没能对应到这份计划里的任何坐标，所以这条关系**无法核验**（不是"不成立"）。请用 solid.create_polyhedron 的 vertexNames 说出每个顶点的名字（与 vertices 一一对应）。`
+      })
+      return
+    }
     const residual = relationResidual(relation, lookup)
     if (residual === null) {
-      failures.push({ id, kind: relation.kind, residual: null, detail: "缺少有效顶点来源，无法计算这条关系的残差。" })
+      failures.push({ id, kind: relation.kind, residual: null, detail: "顶点都取到了，但这组坐标退化（例如两点重合），残差算不出来，未能核验。" })
       return
     }
     if (!(residual <= tolerance)) {
