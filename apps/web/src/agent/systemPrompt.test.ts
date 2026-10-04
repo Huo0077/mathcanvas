@@ -204,6 +204,23 @@ describe("production system prompt", () => {
   })
 
   /**
+   * **平面动作收不下 `z`，而且会被直接拒**（2026-10-04，真实运行）。
+   *
+   * 用户现场的模型建完 `solid.create_polyhedron` 后，又加 `planar.create_segment` 想补
+   * OA / CD 两条棱、坐标带了 `z`，于是传输层报 `unknown_field@…points[0].z`，
+   * **整份计划作废**。它其实只差"把那两笔平面动作删掉"。
+   * 旧提示词只说"会得到一组平面对象"，没说后果是**被拒**，所以它照旧那么写。
+   */
+  it("warns that planar actions take only x/y and a stray z rejects the whole plan", () => {
+    const policy = buildPolicyText({ channel: "strict_json", canPlan: true, actionIds: ["solid.create_polyhedron"] })
+
+    expect(policy).toContain("平面的坐标只能是二维")
+    expect(policy).toContain("不接受 `z`")
+    expect(policy).toContain("整份计划作废")
+    expect(policy).toContain("不要再补 `planar.*` 的动作去画它的边")
+  })
+
+  /**
    * **符号保留规则一字未动**（设计 §5.4 的硬约束）。
    *
    * 这条是本次改动最容易误伤的地方：新口径说"没数值就给一组数"，而这条说"任意/恒定/定值

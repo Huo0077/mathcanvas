@@ -569,24 +569,49 @@ export function describeCompileRepairPrompt(repair: RepairRequest, diagnostics: 
     : repair.errors.map((error) => `${error.code}@${error.path}: ${error.detail}`)
   const layers = [...new Set(failed.map((entry) => entry.stage))]
   /**
-   * **补一句顶层合同的提醒**（2026-10-04，来自真实运行）。
+   * **按错误路径补一句"下一步怎么改"**（2026-10-04，来自真实运行）。
    *
-   * 用户现场模型两次都没给出合法信封：一次连 `kind` 都没有，一次写了
-   * `schemaVersion`/`kind`/`goal`/`factIds`/`assumptions` 却**漏了 `actions`**。
-   * 引擎只说 `invalid_type@envelope.actions: expected an array`，而模型并不知道
-   * "kind 为 plan 时 actions 必填"这条合同细节 —— 所以它第二轮照样漏。
-   * 这里在**信封类失败**时把必需字段逐字重申一遍（只对涉及 `envelope` 的失败加，
-   * 免得平常的字段级修复被这句噪音淹没）。
+   * 只按签名给针对性提醒，不做通用泛谈。三条签名都来自真实运行里出现过的失败：
+   * ① 平面动作带了 `z`（模型建完立体后想用 `planar.*` 补几条边）；
+   * ② `kind` 为 plan 却塞了 `answer`/`toolResultRefs`；
+   * ③ 信封层失败时重申顶层合同。
    */
-  const envelopeFailure = failed.some((entry) => entry.path.startsWith("envelope")) || repair.errors.some((error) => error.path.startsWith("envelope"))
+  const targeted = targetedRepairAdvice(failed.length > 0 ? failed : repair.errors)
   return [
     layers.length > 0 ? `上一份计划没有通过编译管线，卡在：${layers.join(" / ")}。` : "上一份计划没有通过编译管线。",
     "原因如下（层 + 字段路径 + 原因）：",
     lines.join("; "),
     repair.allowedChanges.length > 0 ? `这次只允许改这几处：${repair.allowedChanges.join(", ")}` : "这次只允许改上面点名的字段。",
-    ...(envelopeFailure ? ["提醒：kind 为 plan 时，顶层必须有 schemaVersion、kind、goal、factIds、**actions**（数组，至少一项）。"] : []),
+    ...targeted,
     "请重新返回一份完整的计划信封，不要附加任何解释文字。"
   ].join("\n")
+}
+
+/**
+ * 按**错误签名**给针对性提醒。签名来自真实运行，不是想象出来的：
+ *
+ * - `points` 上出现 `unexpected field 'z'` ⇒ 模型把**三维坐标**给了**平面动作**。
+ *   它建完 `solid.create_polyhedron` 之后，会想用 `planar.create_segment` 去补 OA / CD 这类边，
+ *   而平面动作只收 `x`/`y` —— 于是**整份计划被传输层拒掉**。
+ * - `envelope.answer` 出现在 `plan` 分支 ⇒ 它把两个分支的字段混在一起了。
+ * - 其余 `envelope.*` 失败 ⇒ 重申顶层合同（**只列仍然必填的字段**；`schemaVersion`/`factIds`/`kind`
+ *   已改为可推断，再要求模型补它们等于制造又一轮无谓失败）。
+ */
+function targetedRepairAdvice(errors: readonly { code: string; path: string; detail: string }[]): string[] {
+  const advice: string[] = []
+  const planarZ = errors.some((error) => error.path.includes(".inputs.points") && error.detail.includes("'z'"))
+  if (planarZ) {
+    advice.push("提醒：`planar.*` 动作在**平面上**作图，坐标只能有 `x`、`y`，**不接受 `z`** —— 带上 `z` 会被直接拒。立体图元（顶点/棱/面）请由 `solid.*` 动作一次建出；不要再用 `planar.*` 去补立体的边。")
+  }
+  const answerInPlan = errors.some((error) => error.path === "envelope.answer" || error.path === "envelope.toolResultRefs" || error.path === "envelope.questions")
+  if (answerInPlan) {
+    advice.push("提醒：`kind` 为 `plan` 时顶层**只能有** `schemaVersion`、`kind`、`goal`、`factIds`、`assumptions`、`relations`、`actions`。`answer` / `toolResultRefs` / `questions` 属于别的分支，**不要混进来**。")
+  }
+  const envelopeFailure = errors.some((error) => error.path.startsWith("envelope")) && !answerInPlan
+  if (envelopeFailure) {
+    advice.push("提醒：`kind` 为 `plan` 时顶层必须有 `goal` 与 `actions`（数组，至少一项）。")
+  }
+  return advice
 }
 
 /** Code gate for unambiguous dimensions in the user's original cube request. */

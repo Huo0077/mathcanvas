@@ -3,7 +3,7 @@ import { contentFingerprint } from "@draw/scene-graph"
 import { describe, expect, it } from "vitest"
 
 import { PLAN_SCHEMA_VERSION } from "./contracts"
-import { compilePlan, type PlanCompileContext } from "./planCompiler"
+import { compilePlan, describeCompileRepairPrompt, type PlanCompileContext } from "./planCompiler"
 import { createDraftTools } from "./tools/draftTools"
 
 /**
@@ -489,5 +489,51 @@ describe("task-level explicit cube constraints", () => {
     const document = createEmptyDocument("geometry3d")
     const compiled = compilePlan(makeCube({ x: -1.5, y: -1.5, z: -1.5 }, 3), context(document, { prompt: "画一个棱长 3、中心在原点的立方体" }))
     expect(compiled.ok).toBe(true)
+  })
+})
+
+/**
+ * **修复提示按错误签名给"下一步怎么改"**（2026-10-04，来自真实运行）。
+ *
+ * 三次运行的失败签名各不相同，而引擎原本只回"字段路径 + 原因"。模型拿到
+ * `unknown_field@…points[0].z` 并不知道**为什么**：它以为自己在补立体的边，
+ * 而平面动作根本收不下 `z`。这里把三个真实签名逐条钉住。
+ */
+describe("compile repair advice", () => {
+  const repairFor = (errors: { code: string; path: string; detail: string }[]) => ({ reason: "schema_invalid" as const, errors, allowedChanges: [], attempt: 1 })
+  const ask = (errors: { code: string; path: string; detail: string }[]) => describeCompileRepairPrompt(repairFor(errors))
+
+  it("explains that planar actions cannot take a z coordinate", () => {
+    // 现场原话：模型建完 create_polyhedron 后想用 planar.create_segment 补 OA / CD。
+    const hint = ask([
+      { code: "unknown_field", path: "envelope.actions[1].inputs.points[0].z", detail: "unexpected field 'z'" },
+      { code: "unknown_field", path: "envelope.actions[2].inputs.points[0].z", detail: "unexpected field 'z'" }
+    ])
+
+    expect(hint).toContain("planar.*")
+    expect(hint).toContain("不接受 `z`")
+    // 还要说清"立体已由 solid.* 建好，别再用 planar 去补边"。
+    expect(hint).toContain("不要再用 `planar.*` 去补立体的边")
+  })
+
+  it("explains that a plan branch must not carry answer/other-branch fields", () => {
+    const hint = ask([{ code: "unknown_field", path: "envelope.answer", detail: "unexpected field 'answer'" }])
+
+    expect(hint).toContain("不要混进来")
+    expect(hint).toContain("toolResultRefs")
+  })
+
+  /**
+   * **提醒不能与"放宽样板字段"那条决定自相矛盾**。
+   *
+   * 放宽之后 `schemaVersion` / `factIds` / `kind` 都是可推断的；如果修复提示还在要求
+   * 模型补它们，就等于让它花一轮去补系统自己能补的字段 —— 那正是我们刚刚修掉的毛病。
+   */
+  it("no longer asks the model to supply the fields we relaxed", () => {
+    const hint = ask([{ code: "invalid_type", path: "envelope.actions", detail: "expected an array" }])
+
+    expect(hint).toContain("`goal` 与 `actions`")
+    expect(hint).not.toContain("schemaVersion")
+    expect(hint).not.toContain("factIds")
   })
 })
