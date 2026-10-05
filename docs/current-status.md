@@ -59,11 +59,13 @@
 > | 每题最多 3 轮 | 上限从 `>` 改成 `> +99` | **正好那一条红** |
 > | 每条 run 事件都带 flag 状态 | 抹掉 `revisions.nextPhaseFlags` | **正好那一条红** |
 > | 并发：`drop(runs)` 是**锁序的一部分** | 删掉它 | **90 秒自锁、被强杀**（不是逃过） |
+> | Rust 依赖里出现 GPL/AGPL/SSPL | 往快照里塞一个 `eviltool@1.0.0: GPL-3.0-only` | **2 条红**（硬禁 + copyleft-only） |
+> | `Cargo.lock` 新增依赖却没重新扫描 | （判据本身就是它）本次实测：`lockPackages=550` 与快照 550 条对齐 |
 >
 > **没有守卫、只靠"我读过"的论断（如实列出）**：① "关闭 `constrainedDrag` 时旧路径就是原来那一行"
 > （结构性的，只有注释与代码位置，没有用例；因为它是**同一行代码**，可漂移的东西不存在）；
 > ② "两处约束模块互补而非重复"（一条读完两个模块文件的结论，不是可执行的判据）；
-> ③ "Rust 传递依赖无 GPL/AGPL/SSPL"（读 `cargo metadata` 得出，没有把"出现 GPL 就红"做成门禁）。
+> ③ ~~"Rust 传递依赖无 GPL/AGPL/SSPL"（读 `cargo metadata` 得出）~~ —— **第 39 轮已升格为有守卫**：`scripts/dependency-licences/licences.test.ts`（快照 + `Cargo.lock`）。
 > **这三条不是错的，是"没被机器挡住"** —— 引用它们时要知道这一点。
 > `test-results/` 是 gitignore 的：e2e 的 trace 只在本机，**任何一次默认 e2e 跑都会覆盖它**
 >（要留 `error-context.md` 就得用 `--retries=1 --output=...`，见下方过程记录）。

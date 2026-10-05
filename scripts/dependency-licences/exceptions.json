@@ -1,0 +1,30 @@
+{
+  "note": "**已复核过的例外**：许可证表达式里**没有任何宽松选项**、但我们判定可以用的包。每一条都要写明理由，并且**钉住当年复核的那个许可证** —— 一旦那个包换了许可证，这条就过期（licences.test.ts 会红）。",
+  "allowCopyleftOnly": [
+    {
+      "id": "cssparser@0.36.0",
+      "license": "MPL-2.0",
+      "reason": "Tauri 的 CSS 选择器一侧的传递依赖。MPL-2.0 是**文件级** copyleft：链接与分发二进制允许，义务落在\"被修改过的 MPL 文件\"上，而本项目不修改它们。"
+    },
+    {
+      "id": "cssparser-macros@0.6.1",
+      "license": "MPL-2.0",
+      "reason": "同上（cssparser 的宏）。"
+    },
+    {
+      "id": "dtoa-short@0.3.5",
+      "license": "MPL-2.0",
+      "reason": "同上（数字格式化，Tauri 一侧的传递依赖）。"
+    },
+    {
+      "id": "option-ext@0.2.0",
+      "license": "MPL-2.0",
+      "reason": "同上（Option 扩展，传递依赖）。"
+    },
+    {
+      "id": "selectors@0.36.1",
+      "license": "MPL-2.0",
+      "reason": "同上（Servo 的选择器引擎，Tauri 一侧的传递依赖）。"
+    }
+  ]
+}
