@@ -20,10 +20,16 @@ const EXPECTATION: ProofExpectation = {
 }
 
 /**
- * 测试里**假装接上**的后端。生产默认是**空**的（`WIRED_PROOF_BACKENDS`）——
- * 那正是"今天谁也别想升到 `formally_proved`"这条不变量的落点，所以它单独有用例钉着。
+ * 测试里**假装接上**的后端。生产名单是**推导出来的**（`WIRED_PROOF_BACKENDS` = passed 记录的
+ * `name`），它的**精确字面量只钉在一处**：`proofBackendAdmission.test.ts`（+ 那条 `proof:smoke`
+ * 的名单断言）。这里**不复制**那份名单 —— 两个文件各写一份字面量就会出现"两个权威"。
  */
 const WIRED: readonly string[] = ["lean4"]
+/**
+ * **没交过审查记录**的后端名（用来测"形状合格 ≠ 真的验过"）。
+ * `newclid` 是 `proofArtifact.ts` 文件头举过的例子；下面那条用例会先断言它**不在**名单里。
+ */
+const UNWIRED_BACKEND = "newclid"
 const check = (value: unknown, expectation: ProofExpectation = EXPECTATION) => verifyProofArtifact(value, expectation, { wiredBackends: WIRED })
 const upgraded = (base: ClaimEvidenceStatus, expectation: ProofExpectation, artifacts: readonly unknown[]) =>
   evidenceStatusWithProof(base, expectation, artifacts, { wiredBackends: WIRED })
@@ -88,15 +94,23 @@ describe("证明产物的校验（N5 的边界）", () => {
 
     expect(outcome.verification.reasons[0]?.code).toBe("version-mismatch")
   })
-  it("**生产默认一个后端都没接**：形状全合格的产物也过不去，谁也不许升到 formally_proved", () => {
-    // 这条是"形状合格 ≠ 真的验过"的落点：手工编一份看起来完美的产物，它照样过不去。
-    expect(WIRED_PROOF_BACKENDS).toEqual([])
-    const verification = verifyProofArtifact(artifact(), EXPECTATION)
+  it("**形状合格 ≠ 真的验过**：一个**没接入**的后端送的产物过不去（谁也不许升到 formally_proved）", () => {
+    /**
+     * 这条测的**不是**"生产默认名单是空的"（那是 `proofBackendAdmission.test.ts` 与
+     * `scripts/proof-spike/smoke.test.ts` 的事，**精确名单只钉一处**），而是那条更要紧的性质：
+     * **手工编一份看起来完美的产物，只要它自称来自一个没交过审查记录的后端，就过不去。**
+     * 探针用 `newclid`（`proofArtifact.ts` 文件头举过的"另一个后端"）。
+     */
+    const unwired = artifact({ backend: { name: UNWIRED_BACKEND, version: "1.0" } })
+    // 前提：那个名字**确实**不在接入名单里。哪天有人接了它，这条会红 —— 那时要换一个探针，
+    // 而不是让这条用例悄悄失效（假绿）。
+    expect(WIRED_PROOF_BACKENDS, `${UNWIRED_BACKEND} 现在接上了，这条用例的探针要换`).not.toContain(UNWIRED_BACKEND)
+    const verification = verifyProofArtifact(unwired, EXPECTATION)
 
     expect(verification.status).toBe("failed")
     expect(verification.reasons[0]?.code).toBe("backend-not-wired")
     expect(verification.artifact).toBeNull()
-    expect(evidenceStatusWithProof("verified_instance", EXPECTATION, [artifact()]).status).toBe("verified_instance")
+    expect(evidenceStatusWithProof("verified_instance", EXPECTATION, [unwired]).status).toBe("verified_instance")
   })
 
   it("接上一个后端之后这条路是通的 —— 这道门禁不是「什么都没接所以永远拒」", () => {

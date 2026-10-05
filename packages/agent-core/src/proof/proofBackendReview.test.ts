@@ -80,8 +80,8 @@ describe("证明后端的审查记录（N5 的准入契约）", () => {
   })
 
   it("**接入不变量**：`WIRED_PROOF_BACKENDS` 里每个名字都必须有一份 passed 记录", () => {
-    // 今天它是空的（一个后端都没接），所以这条平凡成立 —— 它钉住的是**"推导"这件事本身**：
-    // 哪天有人把 `WIRED_PROOF_BACKENDS` 改回手写数组，这条就会红。
+    // 这条钉住的是**"推导"这件事本身** —— 哪天有人把 `WIRED_PROOF_BACKENDS` 改回手写数组，它会红。
+    // 名单的**精确字面量**只写在 `proofBackendAdmission.test.ts` 里（一处，不是两处）。
     for (const name of WIRED_PROOF_BACKENDS) {
       const record = PROOF_BACKEND_REVIEWS.find((entry) => entry.name === name)
       expect(record, `${name} 被接上了却没有审查记录`).toBeDefined()
@@ -90,9 +90,13 @@ describe("证明后端的审查记录（N5 的准入契约）", () => {
     expect(WIRED_PROOF_BACKENDS).toEqual(PROOF_BACKEND_REVIEWS.filter((entry) => isReviewPassed(entry)).map((entry) => entry.name))
   })
 
-  it("今天的实况：一份审查记录都没有，所以一个后端都没接", () => {
-    expect(PROOF_BACKEND_REVIEWS).toEqual([])
-    expect(WIRED_PROOF_BACKENDS).toEqual([])
+  it("今天的实况：**恰好一条**审查记录（`lean4`），而它不是空表", () => {
+    // 这一条原来是 `toEqual([])`（一个后端都没接）。2026-10-06（N5b）接上 `lean4` 之后，
+    // 它按设计红了 —— 现在改成"记录条数恰好是一、而且第一条就是它"，
+    // 于是"哪天记录被误删/多出一条"仍然会红（不是被删掉，也不是被放宽）。
+    expect(PROOF_BACKEND_REVIEWS).toHaveLength(1)
+    expect(PROOF_BACKEND_REVIEWS[0].name).toBe("lean4")
+    expect(WIRED_PROOF_BACKENDS).toEqual(["lean4"])
   })
 
   it("不是对象（模型直接给了一段话 / 一个数组）要拒，且**不抛**", () => {
