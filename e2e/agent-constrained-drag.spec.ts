@@ -208,10 +208,13 @@ test("过约束拒绝：同一条线段被赋两个长度，拖动 A 被拒绝�
   await dragPointA(page, 90, 60)
 
   // 正向信号：**拒绝文案**到了界面上，而且**点名**了冲突的两条约束（不是含糊的"没算出来"）。
+  // 两个 id **分别**断言：这是"点名了冲突的约束"这条语义钉子本身，
+  // 而**不是**去钉住内核的分组顺序与 `、`／全角括号那种展示格式（那是文案自由）。
   const hint = guidance(page)
   await expect(hint).toContainText("已拒绝")
   await expect(hint).toContainText("不可能同时成立")
-  await expect(hint).toContainText("（fixed-ab、fixed-ab-two）")
+  await expect(hint).toContainText("fixed-ab")
+  await expect(hint).toContainText("fixed-ab-two")
 
   // 然后才是"一个坐标都没写进去"：逐字比较草稿里的实际坐标（不是 toBeCloseTo 的宽容比较）。
   expect(await storedPoints(page)).toEqual(before)
@@ -253,8 +256,10 @@ test("冲突恢复：拒绝不写文档也不占历史；修掉冲突之后同�
   await dragPointA(page, 90, 60)
 
   await expect(guidance(page)).toContainText("已按约束调整")
-  const recovered = await storedPoints(page)
-  expect(recovered["point3-A"]).not.toEqual(before["point3-A"])
+  // "A 真的动了"是**发生变化**方向：草稿写入是被动副作用（`useDraftPersistence`），
+  // 单发读在一次滞后的负载下会变成抖动红 —— 所以与「打开开关」那条一样用 `expect.poll`
+  // （轮询到"变了"为止，超时才算失败）。
+  await expect.poll(async () => (await storedPoints(page))["point3-A"]).not.toEqual(before["point3-A"])
   expect(await storedDistanceAb(page)).toBeCloseTo(1, 6)
   // 这次真的写进去了（= 占了历史），与①"一步都没占"正好相反。
   await expect(undo).toBeEnabled()
@@ -280,8 +285,8 @@ test("一步撤销：约束拖动只占一步历史，一次 Ctrl+Z 回到拖动
 
   // ① 这次拖动**真的提交了**：指引给出"已按约束调整"，A 真的动了，|AB| 仍是 1。
   await expect(guidance(page)).toContainText("已按约束调整")
-  const moved = await storedPoints(page)
-  expect(moved["point3-A"]).not.toEqual(before["point3-A"])
+  // 同一条口径：这是"发生了变化"方向，用 `expect.poll` 轮询，避免一次滞后的被动保存读成抖动红。
+  await expect.poll(async () => (await storedPoints(page))["point3-A"]).not.toEqual(before["point3-A"])
   expect(await storedDistanceAb(page)).toBeCloseTo(1, 6)
   // 提交进了历史（正好一步 —— 下面一次 Ctrl+Z 就把它用完）。
   await expect(undo).toBeEnabled()
