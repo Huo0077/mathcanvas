@@ -109,7 +109,23 @@ export function parseDiagramObligations(prompt: string): DiagramObligationSet {
 
   for (const match of givenText.matchAll(UNREAD_CONDITION)) {
     if ([...match[0]].some((_, offset) => used.has(match.index + offset))) continue
-    const sourceText = /^[^，,。；;\s]+/.exec(givenText.slice(match.index))?.[0] ?? match[0]
+    /**
+       * **引「整句」，不引「第一个词」**（2026-10-05 修）。
+       *
+       * 原来是 `/^[^，,。；;\s]+/` —— 只取到第一个空白为止。于是 `∠ABC=60°`（**无空格**）拿到整条，
+       * 而 `∠PAB = 60°`（**有空格**）只拿到 `∠PAB`、`sin∠PAB = 0.5` 只拿到 `AB`、`AB:AD = 1:2`
+       * 只拿到 `AB:AD` —— **值全被截掉**。
+       *
+       * 为什么这是**用户可见的缺陷**而不是内部细节：`diagramVerification.ts` 把 residue 的
+       * `sourceText` **原样**变成核验 check 的文案，而那条 check 会出现在用户的"题设尚未核验"列表里。
+       * 用户看到的是"**∠PAB 没核验**" —— 条件本身没显示出来。
+       *
+       * 为什么此前没被发现：既有用例用的是 `∠ABC=60°`（**无空格**）那位，它一直是对的；
+       * **缺陷正好藏在"带空格的写法"那一侧**，而那是用户随手就会打出来的形状。
+       */
+      const clause = [...givenText.matchAll(/[^，,。；;\n]+/g)]
+        .find((entry) => (entry.index ?? 0) <= match.index && match.index < (entry.index ?? 0) + entry[0].length)
+      const sourceText = clause?.[0].trim() ?? match[0]
     unverified.push({ sourceText, reason: "这个条件没有被可靠解析或数值非法，未核验。" })
   }
 

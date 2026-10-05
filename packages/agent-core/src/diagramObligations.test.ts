@@ -57,6 +57,21 @@ describe("parseDiagramObligations", () => {
     expect(missingUnit.givens).toEqual([])
     expect(missingUnit.unverified.some((item) => item.sourceText.includes("二面角E-BC-D=45"))).toBe(true)
   })
+  it("**带空格的条件也要整句引用** —— 这串文字会**原样显示给用户**（`diagramVerification` 把 residue 的 sourceText 直接当 check 文案）", () => {
+    // 修前这里是 ["∠PAB"]：**值被截掉**，而用户的"题设尚未核验"列表里显示的就是这一串。
+    const parsed = parseDiagramObligations("在四棱锥 P-ABCD 中，∠PAB = 60°")
+
+    expect(parsed.unverified.map((item) => item.sourceText)).toEqual(["∠PAB = 60°"])
+  })
+
+  it("同一类写法，**带不带空格都要拿到整条**（既有用例只覆盖了不带空格那位 —— 缺陷正好藏在另一侧）", () => {
+    for (const prompt of ["在四棱锥 P-ABCD 中，∠ABC=60°", "在四棱锥 P-ABCD 中，sin∠PAB = 0.5", "在四棱锥 P-ABCD 中，AB:AD = 1:2"]) {
+      const text = parseDiagramObligations(prompt).unverified[0]?.sourceText ?? ""
+
+      // 每条都是"某个量 = 某个值"的形状：整句引用必然含 `=`，碎片则不会。
+      expect(text, prompt).toContain("=")
+    }
+  })
   it("does not accept a prefix of an unsupported algebraic value as an exact given", () => {
     for (const expression of ["AB=1/2", "AB=2√3", "AB=AD+1", "DE=2EA/3"]) {
       const parsed = parseDiagramObligations(`在四棱锥P-ABCD中，${expression}，画示意图`)
