@@ -46,6 +46,13 @@ describe("agent evaluation scorecard report", () => {
     expect(evalModeBanner("real_provider")).toContain("measured against a real provider")
   })
 
+  it("**说清是哪个 provider / 哪个模型**；没测就写 not measured（同一个 pass@1 在不同模型上不是一个数）", async () => {
+    const result = await runOfflineAgentEval(1)
+
+    expect(formatScorecard({ ...result, provider: null })).toContain("provider          not measured")
+    expect(formatScorecard({ ...result, provider: { id: "p-eval", modelId: "m-eval" } })).toContain("provider          p-eval / m-eval")
+  })
+
   it("reports a single-trial run as pass@1 only, never as pass@3", async () => {
     /**
      * 期望值取自**实测**（本机跑出来 pass@1 = 4/8）。数字写死是有意的：

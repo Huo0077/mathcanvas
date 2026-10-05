@@ -28,6 +28,14 @@ export interface ScorecardReportInput {
   mode: "deterministic_local" | "real_provider"
   scorecard: AgentEvalScorecard
   attempts: readonly { fixtureId: string; trial: 1 | 2 | 3; report: VerificationReport; durationMs: number; toolErrors: number; costUsd?: number }[]
+  /**
+   * **跑的是哪个 provider / 哪个模型**（真实 provider 那一侧才给得出）。
+   *
+   * 为什么必须写进报告：同一份 `pass@1` 在 `gpt-*` 与在另一个模型上**不是同一个数**。
+   * 只写"measured against a real provider"而不写是谁，读数就没法比对。
+   * 离线那一侧不给这个字段 ⇒ 报告写 `not measured`。
+   */
+  provider?: { id: string; modelId: string } | null
 }
 
 function percent(value: { passed: number; total: number } | null): string {
@@ -47,6 +55,7 @@ export function formatScorecard(input: ScorecardReportInput): string {
   const visual = scorecard.unverifiableTaskIds.length
   const lines: string[] = [
     evalModeBanner(input.mode),
+    `provider          ${input.provider ? `${input.provider.id} / ${input.provider.modelId}` : NOT_MEASURED}`,
     "",
     `pass@1            ${percent(scorecard.passAt1)}`,
     `pass@3            ${percent(scorecard.passAt3)}`,

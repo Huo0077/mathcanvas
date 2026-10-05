@@ -5,6 +5,32 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-05 —— 真实 provider 评测：harness 与入口落地（**方案 C**，用户裁决）
+
+- **裁决**：`real_provider` 走**应用内跑 harness**（C），而不是"脚本自己发请求"（B）。理由是硬的：
+  B 要在 TS 里再写一遍三家方言的拼请求与解码（**第二条调用路径**），还要把密钥交给脚本进程 ——
+  而 `modelClient.ts` 的模块头写着「**密钥永远不到前端来**……真正的请求由 Rust 侧代理发出」。
+  C 走的就是那条路：`createModelPlanner` → 回环代理 → provider，**密钥不出凭据库**。
+- **怎么落地的（全在既有缝上）**：
+  1. **抽出** `runOneEvalAttempt` / `runEvalSweep`（`offlineAgentEval.ts`）：把"规划 → 编译 → 判题"
+     这一段从"写死本地规划器"改成**接收一个规划器工厂**。离线与真实两侧因此**共用同一条扫描** ——
+     抄一份就等于两套判题口径；
+  2. **新增** `providerAgentEval.ts`：`runProviderAgentEval(trials, deps)`。**先解析 provider，再决定要不要跑** ——
+     解析失败时连规划器都不造，于是"没配好"这件事**在类型上**不可能变成一次网络请求；
+  3. **新增** 设置面板 `ProviderEval.tsx`：**两段式**（先解析「使用中」的配置并说清"将发出 24 次请求、
+     发给谁"，**显式确认**才跑）。它**没有** `useEffect`、没有定时器 —— 不挂在任何自动路径上；
+  4. **报告**补 `provider` 一行（`formatScorecard`）：同一个 `pass@1` 在不同模型上不是一个数，
+     不写是谁就没法比对。
+- **成本这一项：不许编**。这条通道里有 `usage`（`kind: "usage"` 带 inputTokens/outputTokens），
+  但**仓里没有价目表** ⇒ `costUsd` 一律不填 ⇒ 报告如实写 `average cost      not measured`，
+  与记分卡 `REAL_PROVIDER_GAPS` 里那条 "provider-billed cost" 一致。
+- **定向变异三次（都验过判据不是空壳）**：① 取不到 provider 时**编一个空记分卡** ⇒ 1 条红；
+  ② 给每次尝试**编一个成本 0** ⇒ 1 条红；③（更早一轮）`enabled` 写死 false ⇒ 约束拖动正例红。
+- **还没做完的（不许含糊）**：**一次都还没跑过** —— 它花钱，得**你**在配好 provider 的机器上点那两下。
+  所以发布门禁第 2 条**仍然没有数据**，仍然是"还没到放行条件"。
+- **证据**：新增 8 条用例（harness 4 + 报告 1 + 面板 3）；全库单测 **3620 → 3628 通过 + 1 todo / 0 失败**；
+  全量 e2e **191 通过**；`typecheck` / `lint` exit 0；`npm run eval:agent` exit 0（pass@1 仍 4/8，多打 `provider not measured`）。
+
 ## 2026-10-05 —— **第一次推送**：61 个提交上远端（推到 CI 还不知道结果）
 
 - **用户授权后执行**：`git push origin main` → **`9a65e6d..6a5c2f0`**（快进，无强推）。推完本地与远端

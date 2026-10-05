@@ -34,6 +34,7 @@ import { ModuleRail } from "./components/ModuleRail"
 import { WorkspaceHeader } from "./components/WorkspaceHeader"
 import { AgentWorkspace } from "./components/agent/AgentWorkspace"
 import { ExperimentalFeatures } from "./components/settings/ExperimentalFeatures"
+import { ProviderEval } from "./components/settings/ProviderEval"
 import { ProviderSettings } from "./components/settings/ProviderSettings"
 import { ProjectPackagePanel } from "./components/ProjectPackagePanel"
 import { readDesktopRuntime, type DesktopRuntimeInfo } from "./services/desktopRuntime"
@@ -923,6 +924,9 @@ export function App() {
       {/* **实验性功能**（N3 的第一个产品入口）：这个面是用户在设置里打开"约束拖动"的地方。
           它接的是 `agentNextPhaseFlags().constrainedDrag`，而 `App.tsx` 关着时走的是原来的 `translatePrimitive3`。 */}
       <ExperimentalFeatures />
+      {/* **真实 provider 评测**（发布门禁第 2 条）：这是应用里**唯一会花钱**的按钮 ——
+          两段式（先解析配置、再显式确认），绝不在任何自动路径上跑。 */}
+      <ProviderEval />
     </div>}
     <input ref={fileInputRef} hidden aria-label="加载 .mgeo 文件" type="file" accept=".mgeo,application/json" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; file.text().then(load).catch(() => setFileError("无法读取 .mgeo 文件")); event.target.value = "" }} />
   </div>
