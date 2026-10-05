@@ -7,7 +7,9 @@ import {
   PLANNING_EVAL_CASE_COUNT,
   PLANNING_EVAL_REQUESTS,
   PLANNING_EVAL_SEED,
+  PLANNING_EVAL_TOTAL_CASES,
   PLANNING_EVAL_TRIALS,
+  formatPlanningReport,
   planningEvalCases,
   runProviderPlanningEval,
   workspaceFor
@@ -239,5 +241,34 @@ describe("应用内真实 provider 的题集 planning 通道（N4b）", () => {
     // 证明"这条通道产出的记录"本身满足三条硬规矩（必需字段 / 模式标识 / claim 有证据）。
     expect(result.report.realProvider.runs).toHaveLength(PLANNING_EVAL_REQUESTS)
     expect(result.report.realProvider.extractionRate).toEqual({ covered: 0, total: 0, rate: null })
+  })
+
+  it("**逐条渲染**：汇总之外还要给出每一条的结局与理由（否则「rejected 1/3」说不出为什么）", async () => {
+    /**
+     * 这条的由来是**第一次真实运行暴露的缺口**（2026-10-05）：用户在桌面端跑出
+     * `planned 2/3 / rejected 1/3`，但面板只打汇总 —— 被拒的那一条**为什么**被拒**看不到**，
+     * 而原因其实就在 `runs[].evidence` 里（`code@path: detail`，或"模型给的是澄清 / 只读回答"）。
+     * 诊断信息留在内存里而没渲染，等于这次运行白跑一半。
+     *
+     * 判据：格式化文本里必须出现**每一条题的 id**，以及**被拒那一条的真实理由原文**。
+     */
+    const cases = planningEvalCases()
+    let seen = 0
+    const result = await runProviderPlanningEval({
+      resolveProvider: async () => RESOLVED,
+      // 第 1 条接受、其余被拒（`REJECTED_ENVELOPE` 的动作没人登记过 ⇒ `unknown_action`）
+      createPlanner: () => plannerReturning(seen++ === 0 ? ACCEPTED_ENVELOPE : REJECTED_ENVELOPE)
+    })
+    const text = formatPlanningReport(result)
+
+    for (const entry of cases) expect(text).toContain(entry.id)
+    expect(text).toContain("planned")
+    expect(text).toContain("rejected")
+    // 理由**原文**要在场：被拒那一条的证据是编译器自己的 `code@path: detail`
+    expect(text).toMatch(/unknown_action/)
+  })
+
+  it("题集总数常量与真实条数一致（界面文案读它，题集一变就红在这里）", () => {
+    expect(PLANNING_EVAL_TOTAL_CASES).toBe(parseBenchmarkCases().length)
   })
 })

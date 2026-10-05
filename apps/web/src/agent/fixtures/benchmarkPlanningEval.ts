@@ -76,6 +76,17 @@ export const PLANNING_EVAL_SEED = 7
 export const PLANNING_EVAL_REQUESTS = PLANNING_EVAL_CASE_COUNT * PLANNING_EVAL_TRIALS
 
 /**
+ * **题集总数**（只用于界面文案说清"前 3 条是从多少条里取的"）。
+ *
+ * **为什么是手写的 21 而不是 `parseBenchmarkCases().length`**（2026-10-05 复核 M-4 的处置）：
+ * 渲染路径上**不该再解析一遍题集**（本文件自己的注释就写着这句），而在模块顶层解析会让
+ * **任何** import agent-core 的代码都承担"坏题集 ⇒ 抛在导入期"的风险（那会把一个评测路径的
+ * 问题变成整个应用打不开）。所以这里留一个字面量，**但有用例钉着它与真实条数相等** ——
+ * 题集一变，红在**这个文件自己的用例**里，而不是等到界面文案先撒谎。
+ */
+export const PLANNING_EVAL_TOTAL_CASES = 21
+
+/**
  * **这次要跑的那套题集**：`@draw/agent-core` 的 `parseBenchmarkCases()`（21 条）里的前 3 条。
  *
  * 两条纪律：
@@ -125,9 +136,27 @@ export function workspaceFor(entry: BenchmarkCase): "geometry3d" | "cad" {
  *   它不是观察端口的产物（这里没有场景观察层），所以不假装有事实；
  * - **没有只读工具**：这个 harness 没有 `ToolPort` 宿主，所以 `readToolsAvailable: false`
  *  （协调器在 `dependencies.tools === undefined` 时传的也是这个值）。
+ *
+ * **另外三处差异（2026-10-05 复核要求逐条写明）** —— 不写出来，"这条请求 = 生产请求"就是一句不可核的话：
+ * - **`signal` 永不可中止**：这里是 `new AbortController().signal`，永远不会 abort；
+ *   协调器用的是用户按"停止"时真的会触发的 `controller.signal`（`modelPlanner` 会读它）。
+ *   评测里没有"用户按停止"这回事，所以今天不可达；但**它意味着这条通道不会因为取消而中断**；
+ * - **`compilePlan` 未带 `diagramWitnessSearch` / `obligationIR` 两个 flag**：也就是"接受与否"是在
+ *   **默认 flag 配置**（两个都关）下测的，而生产 stage 路径会把运行时的 flag 传进去。
+ *   今天两个 flag 默认都关 ⇒ 与生产等价；**它们将来默认打开时，这个读数就不再等于生产路径**；
+ * - **`conversationId === runId`**：真实运行里 conversationId 是会话 id、runId 是另一回事
+ *  （`agentRunner` 里两者不同）。评测每条题都是独立的一次，没有会话可归属，所以拿 runId 顶上。
  */
-export function planRequestFor(prompt: string, workspace: "geometry3d" | "cad", runId: string): PlanRequest {
-  const document = createEmptyDocument(workspace)
+export function planRequestFor(prompt: string, workspace: "geometry3d" | "cad", runId: string, document: ReturnType<typeof createEmptyDocument>): PlanRequest {
+  /**
+   * **文档由调用方传进来，不在这里再建一份**（2026-10-05 复核 M-1）。
+   *
+   * 原来这里自己 `createEmptyDocument`，而 `runOneCase` 另建一份给 `compilePlan` ——
+   * 两份的 `metadata.id` 是**两个不同的随机 UUID**（`createEmptyDocument` 用 `crypto.randomUUID()`），
+   * 于是"模型看到的 `documentId`"与"真正被编译的那份"**对不上**。
+   * 今天它不影响判定（revision 都是 0、`PlanCompileContext` 也不收 handle），但那是**巧合**，
+   * 不是设计：一个"模型看到的文档 ≠ 被编译的文档"的评测，迟早会在某个读 `documentId` 的地方说谎。
+   */
   const handle: DocumentHandle = {
     projectId: "local",
     documentId: document.metadata.id,
@@ -256,7 +285,7 @@ async function runOneCase(
      * 判题口径只有 `compilePlan` 那一处；这里不另写"模型调用 + 解析"。
      *（`request` 为什么必须完整，见 `planRequestFor` 的注释。）
      */
-    const request = planRequestFor(entry.prompt, workspace, `benchmark-planning-${entry.id}-${trial}`)
+    const request = planRequestFor(entry.prompt, workspace, `benchmark-planning-${entry.id}-${trial}`, document)
     const envelope = (await createPlanner().plan(request)).plan
     const compiled = compilePlan(envelope, {
       document,
@@ -313,10 +342,23 @@ function rejectionEvidence(caseId: string, compiled: PlanCompileResult): Benchma
 }
 
 /**
+ * **逐条证据的截断上限**：够看出形状，又不让一条长证据把面板撑爆（"有界文本"这条纪律）。
+ * 截断时**如实写原长**，不假装这就是全文。
+ */
+const PER_CASE_EVIDENCE_LIMIT = 240
+
+/**
  * 把这一批读数渲染成有界文本（供面板显示，也供用例断言）。
  *
  * 每个数都**直接数 `runs`**，不在这里重算 —— 重算就是第二份口径。
  * 题数从 `runs` 的 `caseId` 去重得到（不重新解析题集：渲染路径上不该再解析一遍）。
+ *
+ * ## 为什么**汇总之外还要逐条**（2026-10-05 第一次真实运行暴露的缺口）
+ *
+ * 那次真实运行的面板只打汇总：`planned 2/3 / rejected 1/3`。于是"**被拒的那一条为什么被拒**"
+ * 变成了一个查不到的问题 —— 而理由其实就在 `runs[].evidence` 里（`code@path: detail`，
+ * 或"模型给的是澄清 / 只读回答"）。**诊断信息留在内存里而没渲染，等于这次运行白跑一半**：
+ * 一条被拒的计划往往正好是下一步该修的地方。所以逐条也要打出来。
  */
 export function formatPlanningReport(result: PlanningEvalResult): string {
   const total = result.runs.length
@@ -336,6 +378,15 @@ export function formatPlanningReport(result: PlanningEvalResult): string {
     `not measured      ${count("not_measured")}/${total}`,
     `average latency   ${averageLatency === null ? NOT_MEASURED : `${averageLatency} ms (measured runs only)`}`,
     // 仓里没有价目表 ⇒ 成本写 `not measured`，而不是拿一个猜出来的钱数充数。
-    `cost              ${NOT_MEASURED}（仓里没有价目表）`
+    `cost              ${NOT_MEASURED}（仓里没有价目表）`,
+    "",
+    `per case（每条题一行：题 id / 结局 / 理由原文）`,
+    ...result.runs.map((run) => {
+      const evidence = run.evidence.map((entry) => entry.evidence).join(" | ")
+      const bounded = evidence.length > PER_CASE_EVIDENCE_LIMIT
+        ? `${evidence.slice(0, PER_CASE_EVIDENCE_LIMIT)}…（已截断，原长 ${evidence.length}）`
+        : evidence
+      return `  ${run.caseId}  ${run.status}  ${bounded.length === 0 ? "（这一轮没测）" : bounded}`
+    })
   ].join("\n")
 }

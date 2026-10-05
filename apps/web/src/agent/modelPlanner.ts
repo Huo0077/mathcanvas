@@ -616,8 +616,12 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
  *
  * 与 `recovery.ts` 的缺省上限一致，写在这里是为了让"这一层最多花掉几次"在调用处看得见 ——
  * 用户为每一次往返付钱与等待时间。
+ *
+ * **`export`（2026-10-05）**：设置面板里那句"将发出 N 次请求"是**金钱可见文案**，
+ * 而 `N` 只是**下界**（每条题遇到传输类失败会重试，最多 ×这个数）。
+ * 导出它是为了让那句文案从**同一处**取上限，而不是在界面里再写一个 3 —— 复核提的 M-5。
  */
-const MAX_TRANSPORT_ATTEMPTS = 3
+export const MAX_TRANSPORT_ATTEMPTS = 3
 const MAX_OBSERVATION_CALLS = 4
 
 /** 有界的原文副本：够看出形状，又不让一条诊断把上下文撑爆。 */

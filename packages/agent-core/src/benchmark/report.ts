@@ -73,7 +73,7 @@ export type BenchmarkRunStatus =
  * - **`error`**：这一条题在跑的过程中**抛了**（`evidence` 带错误消息原文）。
  * - **`not_measured`**：这一轮**什么都没测**（没有 provider / 没有凭据），
  *   显式写 `null` 的 `provider` / `model` —— 这是 `real_provider` 唯一允许缺身份的一支
- *   （见本文件 `:235`）。**没有凭据时不许"跳过"，也不许编一个数字**。
+ *   （见本文件 `:262-268` 那条判据）。**没有凭据时不许"跳过"，也不许编一个数字**。
  */
 export const BENCHMARK_STATUSES_BY_LAYER: Record<BenchmarkLayer, readonly BenchmarkRunStatus[]> = {
   extraction: ["extracted", "partial", "empty", "not_measured", "error"],

@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest"
 
 import { createLocalPlanner } from "../../agent/localPlanner"
 import type { ProviderResolution } from "../../agent/modelPlanner"
+import { MAX_TRANSPORT_ATTEMPTS } from "../../agent/modelPlanner"
 import { PLANNING_EVAL_TRIALS, planningEvalCases } from "../../agent/fixtures/benchmarkPlanningEval"
 import { ProviderEval } from "./ProviderEval"
 
@@ -50,7 +51,7 @@ describe("设置 → 真实 provider 评测", () => {
 
     await screen.findByText(/将向/)
     expect(screen.getByText("p-eval / m-eval")).toBeTruthy()
-    expect(screen.getByText("24")).toBeTruthy()
+    expect(screen.getByText("至少 24")).toBeTruthy()
     expect(planned).toBe(0)
   })
 
@@ -100,7 +101,10 @@ describe("设置 → 真实 provider 评测", () => {
     const planning = screen.getByRole("region", { name: "真实 provider 评测：题集 planning" })
     const text = planning.textContent ?? ""
     // 文案里的请求数/题数必须**等于这一次真正要跑的那套题集**（不是硬编码的 8，也不是题集全部的 21）。
-    expect(text).toContain(`发出 ${cases.length * PLANNING_EVAL_TRIALS} 次请求`)
+    // **「至少」是本次修正**（复核 M-5）：那条通道每条题在传输类失败时会重试，最多 ×`MAX_TRANSPORT_ATTEMPTS`，
+    // 所以"将发出 N 次"是**假的精确**；文案必须说是下界，且上限要从**同一处**取。
+    expect(text).toContain(`至少 ${cases.length * PLANNING_EVAL_TRIALS} 次请求`)
+    expect(text).toContain(`×${MAX_TRANSPORT_ATTEMPTS}`)
     expect(text).toContain(`${cases.length} 题 × ${PLANNING_EVAL_TRIALS} 轮`)
     expect(text).toContain("p-eval / m-eval")
     // 说完"发给谁、几题几轮"之后，还要说清这与上面那 24 次是**两笔不同的开销**。
@@ -138,5 +142,31 @@ describe("设置 → 真实 provider 评测", () => {
     // 如实报出底层那句话，并且说清"没有拿到任何读数"—— 卡在"正在跑…"等于什么都没说。
     await waitFor(() => expect(planning.textContent).toContain("IPC 断了"))
     expect(planning.textContent).toContain("没有拿到任何读数")
+  })
+
+  it("**老那套（agent 工具环）抛了也不许把面板卡在「正在跑…」**（与上一连同形：复核 I-2）", async () => {
+    /**
+     * 这一条的由来：复核指出我只给**新**通道补了 `failed` 态，而**旧**通道的同型坑原样留着
+     * —— 于是它遇到异常时会永远停在"正在跑…（至少 24 次请求）"。
+     *
+     * **这不是一条理论上的兜底**：旧通道把请求写成 `{ userMessage }`，真实规划器在发出任何请求之前
+     * 就会抛（`TypeError: Cannot read properties of undefined (reading 'context')`）—— 也就是说
+     * **今天这条分支是必然走到的**。这里用一个必抛的规划器把那个行为钉住。
+     * 注意：这一条**只**要求"失败如实显示"，它**没有**修那条通道的请求形状（那会改变旧评测语义）。
+     */
+    render(<ProviderEval dependencies={{
+      resolveProvider: async () => resolved,
+      createPlanner: () => ({ plan: async () => { throw new Error("Cannot read properties of undefined (reading 'context')") } })
+    }} />)
+
+    fireEvent.click(screen.getByRole("button", { name: /跑真实评测/ }))
+    await screen.findByText(/将向/)
+    fireEvent.click(screen.getByRole("button", { name: "确认开始" }))
+
+    const section = screen.getByRole("region", { name: "真实 provider 评测" })
+    await waitFor(() => expect(section.textContent).toContain("reading 'context'"))
+    expect(section.textContent).toContain("没有拿到任何读数")
+    // 不许还在说"正在跑…"（那正是这次要修掉的样子）。
+    expect(section.textContent).not.toContain("正在跑…")
   })
 })
