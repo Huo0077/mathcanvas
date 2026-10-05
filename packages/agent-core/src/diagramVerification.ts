@@ -1,4 +1,4 @@
-﻿import type { GeometryDocument, PrimitiveSpec } from "@draw/dsl"
+import type { GeometryDocument, PrimitiveSpec } from "@draw/dsl"
 import { crossVector3, dihedralAngleDetail3, distanceVector3, dotVector3, lengthVector3, subtractVector3, type Vector3 } from "@draw/geometry-kernel"
 
 import type { PlanEnvelope } from "./contracts"
@@ -72,6 +72,43 @@ function candidatePoints(plan: PlanEnvelope, candidate: GeometryDocument, base?:
     const position = vertex.position
     if (![position.x, position.y, position.z].every(Number.isFinite)) return null
     points.set(name as string, position)
+  }
+
+  /**
+   * **再扫一遍带 `label` 的点**（2026-10-05，用户报的现场）。
+   *
+   * ## 为什么必须有这一步
+   *
+   * 上面那张表**只**从 `solid.create_polyhedron` 的 `vertexNames` 建。于是**任何由别的动作
+   * 创建的点**在核验里**根本不存在** —— 最典型的就是"O 是 BD 的中点"：
+   * `dynamic.create_bound_point` 能把 O 精确放到中点（实测坐标就是 (0,0,0)），
+   * 但那条题设仍然报"点名缺失…未核验"。**用户看到的错句，根源在这里，不在题面。**
+   *
+   * ## 三条语义（缺一条就会引入新的静默错误）
+   *
+   * 1. **顶点名优先**：`vertexNames` 已经定了的名字，标签不许覆盖它；
+   * 2. **同名只许一个**：同一个标签出现两次 ⇒ 这个**名字缺失**（依赖它的题设如实未核验）。
+   *    这里**不猜** —— 猜一个就等于把"图里有两个 O"这件事静默吞掉；
+   * 3. **非单字母标签不进表**：点名的形状是 `[A-Z]`，别的标签（"中点"、"O1"）不是题面点名。
+   */
+  const labelled = new Map<string, Vector3 | null>()
+  for (const primitive of candidate.primitives) {
+    if (primitive.type !== "point3") continue
+    const label = (primitive as { label?: unknown }).label
+    /**
+     * **"顶点名优先"只在这一处判**（收集时**不**跳过与顶点同名的标签，只在下面写入时挡）。
+     *
+     * 原先两处都判过（收集时 `points.has(label) → continue` + 写入时 `!points.has(label)`），
+     * 后果是**同一个判断写了两遍**、互为冗余：单点变异改不动行为，
+     * 于是那条"顶点名优先"的用例**看着有守卫、实际抓不到任何东西**（试过，变异两次都全绿）。
+     * 这与本仓那句"同一个判断不许写两遍"是同一条账。
+     */
+    if (typeof label !== "string" || !/^[A-Z]$/.test(label)) continue
+    const position = primitive.position
+    labelled.set(label, labelled.has(label) || ![position.x, position.y, position.z].every(Number.isFinite) ? null : position)
+  }
+  for (const [label, position] of labelled) {
+    if (position !== null && !points.has(label)) points.set(label, position)
   }
   return points
 }

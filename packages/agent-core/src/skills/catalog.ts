@@ -47,7 +47,8 @@ const EXPECTED_HASHES: Record<string, string> = {
   "conics-tangents": "be5c416242eaf9b5099e80e1697edeb433899d01c21779641a30fbaca33720f2",
   "functions": "853f149c0a47f38277d2bdce0ae4f47a8d19ef0b4987c0fa162e82b8080c8664",
   "dynamic-bindings": "a7a25bf79ac9c9cf89256bc1fb8a1876c41287bca21e6a7163ce1022ee47f9e1",
-  "spatial-modeling": "7563c0281d57a871c71d6f8d1c928180ec6db81afc15871c6f9c75d471393ece",
+  /** 2026-10-05 重签：`spatial-modeling` 的 `actionIds` 加了 `dynamic.create_bound_point`（用户报的"O 为 BD 中点"那一类题要它）。 */
+  "spatial-modeling": "137c5307513614c3e2748956b3fd5cf5b54457682d99adacad09af7ee79ef8f3",
   "sections-intersections": "fd8e09ed0e1cedc332b61391d8c831c8064277eb4979a6d2d61e35c417aea8e9",
   "engineering-drawing": "da543684eba13b401042859ebedb67f1d92296d0dbbe32f248846cbd1a5fd50e",
   "image-evidence": "2808d6bb4d56335a4dc33ea57eaace75d776d7bad27b51dcbaff2a41e0f2fa3d",
