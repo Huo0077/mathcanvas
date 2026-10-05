@@ -5,6 +5,40 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-05 —— N3 开工：3D 约束的点投影（内核砖；**未接线，产品行为零变化**）
+
+- **为什么先做这一块**：N3 的出口是"拖动点不静默破坏已确认的题设"。而内核现有的
+  `solvePoint3Constraints` 契约明写"**只诊断、绝不动点**"（还有一条用例钉着它）—— 它回答
+  "现在差多少"，回答不了"该挪到哪"，而拖动要的正是后者。这两件事合成一个函数，
+  结果就是"只想量一下"的调用方被顺手改了几何。
+- **新增** `packages/geometry-kernel/src/constraints3dProjection.ts`：
+  `projectPoint3Constraints(primitives, constraints, options)` —— 顺序投影（Gauss–Seidel 式，
+  与 2D 的 `solveLineConstraints` 同一个思路），这一版支持 `pointOnLine` / `pointOnPlane` /
+  `collinear` / `coplanar` / `fixedDistance` 五种；带 `anchoredPointIds`（拖动时用户抓住的点、
+  被锁定宿主牵住的点——不许动）。**没有时钟、没有 RNG**：同一份输入必然给同一份输出，
+  拖动才可能可撤销、可重放。
+- **结果口径是 fail-closed 的**：`satisfied` 要求**每一条**约束都被判过且在容差内，
+  `skipped` 非空时恒为 `false`；`exhausted` 单独表示"次数用完还没到定点"（半成品）。
+  两个布尔值分开，是因为"停下了但没满足"与"还没跑完"是两件事 —— 合成一个会让上层门禁读错。
+- **如实跳过的几类**（各有机器可读 code，绝不写成"已满足"）：`parallel` / `perpendicular` 的
+  **线状写法**要动就必须先决定旋转哪一侧的点 —— 那是产品判断不是数学结论，进
+  `no-projection-rule`；`coincident` 是平面约束、内核没有空间判据，进 `planar-only`；
+  几何退化（方向为零、三点共线、两点重合还要求非零距离）进 `no-judge`；牵涉的点全被锚住进
+  `no-movable-point`。
+- **顺带的两处重构**（都在 `constraints3d.ts`，都是"同一个判断不许写两遍"）：抽出 `planeOrigin`
+  （原先内联在 `pointPlaneResidual` 里，投影要用同一份"平面上的点是哪一个"的读法），
+  并导出 `isLineLike3`（原先那段 `["line3","segment3",…].includes(type)` 要被抄第二遍）。
+- **证据**：新增 `constraints3dProjection.test.ts` **13 条**；**先红后绿**（RED = 模块不存在，
+  `Test Files 1 failed / no tests`）。**定向变异两条**：① 把 `projectPointOntoLine3` 改成原样
+  返回 → pointOnLine 那两条用例变红；② 拿掉"已经满足就早退"那一行 → "本来就满足的约束不会被
+  改动，也不算跳过"变红（它会掉进投影分支而报 `no-projection-rule`）。
+  全库单测 **299 文件 / 3462 通过 + 1 todo / 0 失败**（比 N2 批次多 1 个文件 / 13 条，正是本批新增）；
+  `typecheck` exit 0；`lint` exit 0（**0 error / 13 warning**，与基线逐条相同）。
+- **边界（如实）**：**没有接进拖动管线** —— `apps/web` 的 `threeScene*`、`scene-graph` 的约束事务
+  与 undo/redo **一行未动**，所以**产品行为与上一版完全相同**；`constraintIR.reportFreeDegrees`
+  也尚未与这里合流（自由度还是它自己那份算）。N3 的出口（浏览器里拖动保持约束、过约束拒绝、
+  一步撤销）**尚未达成**，本批只是它的第一块内核砖。
+
 ## 2026-10-05 —— N2 解析见证构造 + 有界见证搜索 + 默认关闭的接线
 
 - **N2a 内核（`packages/geometry-kernel/src/witness/`）**：题面点名 + 关系（**无显式坐标**）时的解析候选构造 —— 棱锥（三/四边底面、垂足正上方、高由示例值/给定值/**点名侧棱长度**/点名二面角四种来源）与棱柱（底面 + 拉伸向量）；面环按规则生成后由**内核自己的判据**归一化成朝外；拒绝一律是带**机器可读 code** 的值（12 个），从不抛异常。提交 `c2314c9` / `1328088` / `84a6d89` / `e3fdb61`。

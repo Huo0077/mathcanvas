@@ -1,6 +1,6 @@
 import type { ConstraintSpec, Face3Primitive, Line3Primitive, Plane3Primitive, PrimitiveSpec, Point3Primitive, Vector3 } from "@draw/dsl"
 
-import { crossVector3, dotVector3, lengthVector3, normalizeVector3, planeFromPoints, subtractVector3 } from "./geometry3d"
+import { addVector3, crossVector3, dotVector3, lengthVector3, normalizeVector3, planeFromPoints, scaleVector3, subtractVector3 } from "./geometry3d"
 
 export interface ConstraintDiagnostic3 {
   constraintId: string
@@ -17,7 +17,8 @@ export interface ConstraintSolve3Result {
 }
 
 type Context3 = readonly PrimitiveSpec[] | ReadonlyMap<string, PrimitiveSpec>
-type LineLike3 = Extract<PrimitiveSpec, { type: "line3" | "segment3" | "ray3" | "edge3" }>
+/** 能把方向读出来的线状图元。**导出**是因为 N3 的拖动投影要用同一份判据，不许抄第二遍。 */
+export type LineLike3 = Extract<PrimitiveSpec, { type: "line3" | "segment3" | "ray3" | "edge3" }>
 const EPSILON = 1e-10
 
 function byId(context: Context3): ReadonlyMap<string, PrimitiveSpec> {
@@ -46,9 +47,19 @@ function lineEndpoints(primitive: LineLike3, map: ReadonlyMap<string, PrimitiveS
   return first && second ? [first, second] : null
 }
 
+/**
+ * "这个图元是不是线状的"这条判据的唯一实现。
+ *
+ * 导出是因为 N3 的拖动投影也要问同一个问题；两处各写一份 `["line3", …].includes(type)`
+ * 就是"同一个判断写两遍"，而这类分叉在本项目里已经吃过几次亏。
+ */
+export function isLineLike3(primitive: PrimitiveSpec | undefined): primitive is LineLike3 {
+  return primitive !== undefined && ["line3", "segment3", "ray3", "edge3"].includes(primitive.type)
+}
+
 function lineDirection(primitive: PrimitiveSpec | undefined, map: ReadonlyMap<string, PrimitiveSpec>): Vector3 | null {
-  if (!primitive || !["line3", "segment3", "ray3", "edge3"].includes(primitive.type)) return null
-  const endpoints = lineEndpoints(primitive as LineLike3, map)
+  if (!isLineLike3(primitive)) return null
+  const endpoints = lineEndpoints(primitive, map)
   if (!endpoints) return null
   const direction = subtractVector3(endpoints[1], endpoints[0])
   return lengthVector3(direction) > EPSILON ? direction : null
@@ -72,11 +83,16 @@ function planeNormal(primitive: Plane3Primitive | Face3Primitive, map: ReadonlyM
   return points.length >= 3 && points.every(Boolean) ? planeFromPoints(points[0]!, points[1]!, points[2]!)?.normal ?? null : null
 }
 
+/** 平面上的一个点：法式平面用它自己的基点，三点式用第一个点。**唯一一处**这么读。 */
+function planeOrigin(plane: Plane3Primitive, map: ReadonlyMap<string, PrimitiveSpec>): Vector3 | null {
+  return plane.definition.kind === "pointNormal" ? point(map, plane.definition.pointId) : point(map, plane.definition.pointIds[0])
+}
+
 function pointPlaneResidual(pointValue: Vector3, plane: Plane3Primitive, map: ReadonlyMap<string, PrimitiveSpec>): number | null {
   const normal = planeNormal(plane, map)
-  if (!normal) return null
-  const origin = plane.definition.kind === "pointNormal" ? point(map, plane.definition.pointId) : point(map, plane.definition.pointIds[0])
-  return origin ? Math.abs(dotVector3(normal, subtractVector3(pointValue, origin))) : null
+  const origin = planeOrigin(plane, map)
+  if (!normal || !origin) return null
+  return Math.abs(dotVector3(normal, subtractVector3(pointValue, origin)))
 }
 
 function pointLineResidual(pointValue: Vector3, line: LineLike3, map: ReadonlyMap<string, PrimitiveSpec>): number | null {
@@ -85,6 +101,38 @@ function pointLineResidual(pointValue: Vector3, line: LineLike3, map: ReadonlyMa
   const direction = subtractVector3(endpoints[1], endpoints[0])
   const length = lengthVector3(direction)
   return length > EPSILON ? lengthVector3(crossVector3(subtractVector3(pointValue, endpoints[0]), direction)) / length : null
+}
+
+/**
+ * **点在线上的垂足**（N3 的拖动投影；残差只回答"差多少"，这里回答"该挪到哪"）。
+ *
+ * 与 `pointLineResidual` 共用同一份"怎么从图元读出一条线"的判据（`lineEndpoints`），
+ * 所以"残差说 0"与"垂足就是它自己"不可能分叉。直线退化（两端点重合）时返回 `null`：
+ * 此时垂足有无穷多个，编一个出来就是拿假设当结果。
+ */
+export function projectPointOntoLine3(pointValue: Vector3, line: LineLike3, map: ReadonlyMap<string, PrimitiveSpec>): Vector3 | null {
+  const endpoints = lineEndpoints(line, map)
+  if (!endpoints) return null
+  const direction = subtractVector3(endpoints[1], endpoints[0])
+  const squared = dotVector3(direction, direction)
+  if (squared <= EPSILON * EPSILON) return null
+  const ratio = dotVector3(subtractVector3(pointValue, endpoints[0]), direction) / squared
+  return addVector3(endpoints[0], scaleVector3(direction, ratio))
+}
+
+/**
+ * **点在平面上的垂足**。法向归一化失败（`planeNormal` 返回 `null`，例如 (1e-30,0,0) 那种
+ * 存得进文档却归一化不出来的法向）时返回 `null` —— 与 `pointPlaneResidual` 同一条纪律：
+ * 算不出来就说算不出来，**不报 0、也不编一个落点**。
+ */
+export function projectPointOntoPlane3(pointValue: Vector3, plane: Plane3Primitive, map: ReadonlyMap<string, PrimitiveSpec>): Vector3 | null {
+  const normal = planeNormal(plane, map)
+  const origin = planeOrigin(plane, map)
+  if (!normal || !origin) return null
+  const unit = normalizeVector3(normal)
+  if (lengthVector3(unit) <= EPSILON) return null
+  const distance = dotVector3(subtractVector3(pointValue, origin), unit)
+  return subtractVector3(pointValue, scaleVector3(unit, distance))
 }
 
 function pointSet(map: ReadonlyMap<string, PrimitiveSpec>, ids: string[]): Vector3[] | null {
@@ -151,10 +199,13 @@ export function diagnoseConstraints3(constraints: ConstraintSpec[], context: Con
 }
 
 /**
- * Diagnosis-only helper: it reports residuals and conflicts for spatial constraints and deliberately does not
- * project or move any point, so `positions` mirrors the current point positions. Constraint projection is
- * scheduled with the spatial-relation teaching slice; `converged` therefore only means "every diagnosed
- * constraint is already satisfied".
+ * **只诊断，绝不动点**（这条分工有测试钉着）：它报告残差与冲突，因此 `positions` 逐点等于
+ * 当前位置，`converged` 只意味着"每一条被诊断的约束现在都已经满足"。
+ *
+ * **真的要挪点**请用 `projectPoint3Constraints`（`constraints3dProjection.ts`，N3 的拖动投影）：
+ * 那是另一个函数、另一份契约（它带锚点、跳过分类与 fail-closed 的 `satisfied`）。
+ * 两条路都保留是有意的 —— 拖动前要问"现在差多少"，拖动中要问"该挪到哪"，
+ * 而把这两件事塞进一个函数就会让"诊断"顺手改掉调用方的几何。
  */
 export function solvePoint3Constraints(constraints: ConstraintSpec[], context: Context3, tolerance = 1e-6): ConstraintSolve3Result {
   const map = byId(context)
