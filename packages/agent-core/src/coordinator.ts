@@ -280,7 +280,7 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
        * 同一份形状还被另两处需要 —— 旧 8 题夹具通道与应用内的题集 planning 通道 ——
        * 而"模型能看到什么"的归属地按 `PlanRequest.model` 的注释是协调器。
        * 手写第二份的下场已经发生过一次：旧通道写成 `{ userMessage } as never`，
-       * 于是**那个唯一会花钱的按钮从来没有真正工作过**。
+       * 于是**那条会花钱的通道（agent 工具环，两个会花钱的入口之一）从来没有真正工作过**。
        *
        * 留在这里的只有**协调器自己的那几件事**（它们是"这一次运行为什么这样走"，
        * 不是"模型看到什么"）：预算的 token 折算与 `budget_context` 判断、账本那一行、

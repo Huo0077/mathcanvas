@@ -9,7 +9,7 @@ import { PLANNING_EVAL_TRIALS, planningEvalCases } from "../../agent/fixtures/be
 import { ProviderEval } from "./ProviderEval"
 
 /**
- * **唯一会花钱的按钮**：它的形状是被"要花钱"这条性质决定的。
+ * **会花钱的入口**（2026-10-05 起是**两个**：agent 工具环 / 题集 planning）：它们的形状是被"要花钱"这条性质决定的。
  *
  * 这一组用例守三件事：
  *

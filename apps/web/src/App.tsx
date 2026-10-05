@@ -924,7 +924,8 @@ export function App() {
       {/* **实验性功能**（N3 的第一个产品入口）：这个面是用户在设置里打开"约束拖动"的地方。
           它接的是 `agentNextPhaseFlags().constrainedDrag`，而 `App.tsx` 关着时走的是原来的 `translatePrimitive3`。 */}
       <ExperimentalFeatures />
-      {/* **真实 provider 评测**（发布门禁第 2 条）：这是应用里**唯一会花钱**的按钮 ——
+      {/* **真实 provider 评测**（发布门禁第 2 条）：这里是应用里**会花钱**的地方 —— 面板里有**两个**会花钱的入口
+          （agent 工具环 8×3 = 24 次 / 题集 planning 3 次；**2026-10-05 N4b 起是两个**，此前只有一个）。
           两段式（先解析配置、再显式确认），绝不在任何自动路径上跑。 */}
       <ProviderEval />
     </div>}

@@ -16,7 +16,7 @@ import { runEvalSweep, runOneEvalAttempt } from "./offlineAgentEval"
  * `request.budget` / `request.signal`，少一样就是一次
  * `TypeError: Cannot read properties of undefined (reading 'context')`。
  *
- * 后果不是"报个错"那么轻：这条通道是应用里**唯一会花钱**的入口，而它从来没有真正发出过
+ * 后果不是"报个错"那么轻：这条通道是应用里**两个会花钱的入口之一**（另一个是题集 planning；2026-10-05 N4b 起是两个），而它从来没有真正发出过
  * 一次请求。上一批修掉了"假装在跑"（失败如实显示），**没有修它的输入** —— 于是它现在
  * 会明确报错，但仍然跑不了。这条用例钉的就是那个输入。
  *
@@ -67,9 +67,15 @@ describe("旧 8 题夹具通道：请求形状必须与产品真实路径一致�
 
     // 每条题一条尝试：8 题 × 3 轮。改动前这里根本走不到（扫描在第一题就抛了）。
     expect(attempts.map((attempt) => attempt.fixtureId)).toEqual(AGENT_TASK_FIXTURES.flatMap((fixture) => [fixture.id, fixture.id, fixture.id]))
-    // 8 题 × 3 轮 = 一次请求都不少；`> 0` 那一半是"真的发出去过"的判据。
+    /**
+     * 8 题 × 3 轮 = **24 次，一次都不少**。
+     *
+     * **2026-10-05 复核 m2**：这里原本还有一条 `expect(runModelCalls.length).toBeGreaterThan(0)`，
+     * 它被上面那条 `toBe(24)` **蕴含** ⇒ 永远不可能独立变红，而注释却把它说成"真的发出去过"的
+     * **独立**判据。那种断言看着像多一道保险，实际只是让读者以为这里有两道。
+     * 真正证明"发出去的是对的题面"的是下面那条 `sentPrompts` 断言。
+     */
     expect(runModelCalls.length).toBe(24)
-    expect(runModelCalls.length).toBeGreaterThan(0)
     expect(runModelCalls.every((profileId) => profileId === "p-legacy")).toBe(true)
     // 每条题的原话确实进了那次请求 —— "跑过了"这句话要能追到实际发出去的东西。
     expect(sentPrompts).toEqual(AGENT_TASK_FIXTURES.flatMap((fixture) => [fixture.prompt, fixture.prompt, fixture.prompt]))

@@ -221,7 +221,7 @@ export interface PlanRequestInputs {
  * `plan({ userMessage } as never)` —— 那对本地确定性规划器成立，对**真实**
  * `createModelPlanner` 不成立：它在发出任何网络请求**之前**就读 `request.model.context`，
  * 于是抛 `TypeError: Cannot read properties of undefined (reading 'context')`。
- * 后果不是"报错"，而是**那个唯一会花钱的按钮从来没有真正工作过**。
+ * 后果不是"报错"，而是**那条会花钱的通道（agent 工具环，两个会花钱的入口之一）从来没有真正工作过**。
  *
  * 修法不是"去 fixtures 里再拼一份完整请求"（那就是第二份"模型能看到什么"），
  * 而是把这件事收回它该在的地方：`PlanRequest.model` 的注释写着"模型这一次能看到的一切"

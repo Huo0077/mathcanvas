@@ -39,6 +39,27 @@ describe("agent evaluation scorecard report", () => {
     expect(failures.some((line) => line.startsWith("visual-fit"))).toBe(true)
   })
 
+  /**
+   * **`npm run eval:agent` 的四个数都要有机器判据**（2026-10-05 复核 m4）。
+   *
+   * 为什么单列一条：这四个数里**原来只有 `pass@1` 被断言过**（下面那条单轮用例），
+   * 而 `pass@3` / `tool selection` / `tool error rate` 只是被 `formatScorecard` **打印**出来 ——
+   * 全仓没有任何断言（`grep "45/45"` / `"tool selection"` 无命中）。
+   * 也就是说：**它们漂移时 `npm run eval:agent` 仍然退 0**，而"读数变了"这件事会被静默放过。
+   *
+   * 这四个数同时是 §一 的在版读数，也是"改离线那条路径的请求内容会不会动读数"的唯一判据
+   *（N4d 就该用它们说话）—— 所以它们必须是**被钉住的**，而不是"我跑了一眼看着一样"。
+   */
+  it("**把四个在版读数逐条钉住**（pass@1 / pass@3 / 工具选择 / 工具错误率）", async () => {
+    const result = await runOfflineAgentEval(3)
+    const report = formatScorecard(result)
+
+    expect(report).toContain("pass@1            4/8")
+    expect(report).toContain("pass@3            4/8")
+    expect(report).toContain("tool selection    45/45")
+    expect(report).toContain("tool error rate   3/45")
+  })
+
   it("states the real-provider gaps instead of leaving them blank", () => {
     // 这些是记分卡里明确"未测"的范围。列出来是为了让"没测"不可能被读成"通过"。
     expect(REAL_PROVIDER_GAPS).toContain("real provider tool selection")

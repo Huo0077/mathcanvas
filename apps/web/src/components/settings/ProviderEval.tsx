@@ -17,7 +17,9 @@ import { MAX_TRANSPORT_ATTEMPTS, resolveActiveProvider } from "../../agent/model
 /**
  * **设置 → 真实 provider 评测**（发布门禁第 2 条；用户 2026-10-05 选的方案 C）。
  *
- * ## 这里是这个应用里**唯一会花钱**的地方
+ * ## 这里是这个应用里**会花钱**的地方（**两个**入口：agent 工具环 / 题集 planning）
+ *
+ * （2026-10-05 N4b 起是两个；此前只有 agent 工具环一个 —— 那句"唯一"就不再成立了，见复核 m5。）
  *
  * 所以面板的形状是被这条性质决定的，不是审美：
  *

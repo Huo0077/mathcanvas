@@ -23,7 +23,7 @@ export interface OfflineEvalResult {
  *   这不是"多给点没坏处"：`request.model.context` 里的 `availableActions` 由清单决定，
  *   给少了模型就看不到那个动作，于是"某些任务永远做不了"在界面上看起来像"模型不会做这件事"；
  * - 本地确定性规划器 → `localIntentSkillIds(prompt)`（它命中哪条指令就用那条的技能）。
- *   离线那条路在 `agentRuntime.selectPlanner` 里就是这么给的，所以它不需要另发明一套。
+ *   离线那条路在 `agentRunner.ts:456` 的 `selectPlanner` 里就是这么给的，所以它不需要另发明一套。
  *
  * 缺省是**模型口径**：这条通道默认由设置面板用真实 provider 跑（`providerAgentEval.ts`），
  * 而"用例注入本地规划器"只是它的另一种用法（`runOfflineAgentEval` 显式给本地口径）。
@@ -54,7 +54,7 @@ export function availableActionsFor(requestedSkillIds: readonly string[]): reado
  * `createLocalPlanner`（只读 `userMessage`）成立，对**真实** `createModelPlanner`
  * **不成立**：它在发出任何网络请求**之前**就读 `request.model.context`（`modelPlanner.ts:369`），
  * 于是抛 `TypeError: Cannot read properties of undefined (reading 'context')`。
- * 后果不是"报个错"三个字：这条通道是应用里**唯一会花钱**的入口，而它从来没有真正跑过
+ * 后果不是"报个错"三个字：这条通道是应用里**两个会花钱的入口之一**（另一个是题集 planning 通道；**2026-10-05 N4b 起是两个**，此前只有一个），而它从来没有真正跑过
  *（历史上连"失败"都不显示，面板会永远停在"正在跑…"—— 那是上一批修掉的）。
  *
  * ## 为什么不在这里自己拼
@@ -175,7 +175,7 @@ export async function runEvalSweep(createPlanner: () => PlannerPort, trials: 1 |
 
 /**
  * **离线那一轮**：规划器是本地确定性那一份，所以技能口径也跟着换成它的
- *（`localIntentSkillIds` —— 与 `agentRuntime.selectPlanner` 对本地规划器的口径一致）。
+ *（`localIntentSkillIds` —— 与 `agentRunner.ts:456` 的 `selectPlanner` 对本地规划器的口径一致）。
  */
 export async function runOfflineAgentEval(trials: 1 | 3 = 3): Promise<OfflineEvalResult> {
   const attempts = await runEvalSweep(() => createLocalPlanner(), trials, LOCAL_PLANNER_SKILL_IDS)
