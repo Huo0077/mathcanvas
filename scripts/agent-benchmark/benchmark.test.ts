@@ -109,8 +109,17 @@ describe("benchmark 题集", () => {
     expect(categoryCoverage(cases).map((entry) => [entry.category, entry.count]))
       .toEqual(BENCHMARK_CATEGORIES.map((category) => [category, 3]))
     expect(categoryCoverage(cases).filter((entry) => !entry.covered)).toEqual([])
-    // 题面是真的读进来了（不是空字符串占位）：每条都要有非空 prompt。
-    expect(cases.every((entry) => entry.prompt.trim().length > 0)).toBe(true)
+    /**
+     * **复核更正（2026-10-05）**：这里原来是
+     * `expect(cases.every((entry) => entry.prompt.trim().length > 0)).toBe(true)`，
+     * 注释写"题面是真的读进来了（不是空字符串占位）"—— 那句因果**不成立**：
+     * 空题面会被解析器**丢弃**（`prompt` 在 `BENCHMARK_CASE_REQUIRED_FIELDS` 里，必须过 `nonEmptyString`），
+     * 所以真的出问题时会红在上一行的 `toHaveLength(21)`，而不是这一行；
+     * 反过来说，"数组里每条 prompt 都非空"是**解析器的定义**，这条断言不可能红。
+     * 换成一条真的会咬人的内容钉子：题集里**具体那一条**的 id 与题面都对得上。
+     */
+    expect(cases[0]!.id).toBe("underdetermined-pyramid-base")
+    expect(cases[0]!.prompt).toContain("PA ⊥ 平面 ABCD")
   })
 
   it("schema 与校验器的必需字段是同一份（校验器直接从 schema 读）", () => {

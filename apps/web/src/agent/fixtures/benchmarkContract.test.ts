@@ -69,7 +69,19 @@ describe("应用侧：benchmark 题集与报告契约来自 @draw/agent-core（�
     expect(cases).toHaveLength(21)
     expect(categoryCoverage(cases).map((entry) => [entry.category, entry.count]))
       .toEqual(BENCHMARK_CATEGORIES.map((category) => [category, 3]))
-    expect(cases.every((entry) => entry.prompt.trim().length > 0)).toBe(true)
+    /**
+     * **复核更正（2026-10-05）**：这里原来还有一条
+     * `expect(cases.every((entry) => entry.prompt.trim().length > 0)).toBe(true)`，
+     * 标题把它算作"题面非空"的钉子 —— 但它在当前实现下**不可能红**：
+     * `parseBenchmarkCases()` 就是 `parseBenchmarkDataset(BENCHMARK_CASES_JSONL, where)`，
+     * 而解析器只把 `prompt` 通过 `nonEmptyString`（即 `trim().length > 0`）的记录放进数组
+     * （`dataset.ts` 的必填字段循环），所以"数组里的每条 prompt 都非空"是**解析器的定义**，不是可违反的性质。
+     * 空题面会让那条 case **被丢弃**，红的是上面的 `toHaveLength(21)`。
+     * 删掉它、换成一条**真的会咬人**的内容钉子：应用拿到的是那份**真的题集**（首条 id 与题面都对得上）。
+     * 更强的内容钉子是同文件的**冻结指纹**（字节数 + sha256），这里只补一条能指明"是这份题"的锚点。
+     */
+    expect(cases[0]!.id).toBe("underdetermined-pyramid-base")
+    expect(cases[0]!.prompt).toContain("PA ⊥ 平面 ABCD")
   })
 
   it("题集文本有一枚**冻结指纹**：改一个字节就红（这一份没有被静默改动）", () => {
@@ -102,8 +114,16 @@ describe("应用侧：benchmark 题集与报告契约来自 @draw/agent-core（�
     expect([...BENCHMARK_CATEGORIES]).toHaveLength(7)
     expect([...BENCHMARK_MODES]).toEqual(["deterministic_local", "real_provider"])
     expect([...BENCHMARK_LAYERS]).toEqual(["extraction", "witness"])
-    // 两层各自的结局词表：见证层的词描述不了抽取层（这条口径是报告契约的一部分）。
-    expect([...BENCHMARK_STATUSES_BY_LAYER.extraction]).not.toContain("verified_instance")
+    /**
+     * 两层各自的结局词表：见证层的词描述不了抽取层（这条口径是报告契约的一部分）。
+     *
+     * **复核更正（2026-10-05）**：这里原来是 `not.toContain("verified_instance")` —— 那是**单词级否定**，
+     * 把 extraction 词表改成 `[]`、或塞进一个 `"junk"`，它**都还是绿的**，
+     * 而这个用例自称在钉"两层各自的词表"。改成**逐项相等**：词表增删改任何一项都会红。
+     * 真实定义在 `packages/agent-core/src/benchmark/report.ts` 的 `BENCHMARK_STATUSES_BY_LAYER`。
+     */
+    expect([...BENCHMARK_STATUSES_BY_LAYER.extraction]).toEqual(["extracted", "partial", "empty", "not_measured", "error"])
+    expect([...BENCHMARK_STATUSES_BY_LAYER.witness]).toEqual(["verified_instance", "unverified_instance", "no_witness", "clarification", "not_measured", "error"])
   })
 
   it("报告契约可调用：对一份合成的 BenchmarkRun 建出报告", () => {
