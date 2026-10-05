@@ -27,6 +27,7 @@
 | Agent 评测 | `npm.cmd run eval:agent` | `deterministic_local`：pass@1 **4/8**、pass@3 **4/8**、工具选择 45/45、工具错误 3/45 | 0 | **第 27 轮**（整批电池；**未接真实模型**，不是模型准确率） |
 | Agent benchmark | `npm.cmd run bench:agent` | `cases=21 covered=14 empty=7 error=0`；`BENCHMARK_PREMISE obligations=24 residue=9 rate=0.727` | 0 | **第 29 轮** |
 | 证明边界 smoke | `npm.cmd run proof:smoke` | 7 通过 / 0 失败；`PROOF_BACKENDS {"wired":[],"reviewed":0}`、`wiredBackends=[]` | 0 | **第 30 轮** |
+| N3 定向测试（**计划点名的那七件**） | `vitest run constraints / constraints3d / planar-constraints / reactive/constraints / operations / patches / scene-store` | **7 文件 / 241 通过 / 0 失败** | 0 | **第 31 轮** |
 
 > **这一张表现在是同一批读数**（2026-10-05 第 27 轮，九道门禁**串行**跑完，14:47:49 → 14:52:12，
 > 约 4 分 24 秒）。第 28 轮又补上了**生产构建**这一行 —— 于是**计划里 N6 出口点名的八道命令
@@ -648,6 +649,9 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
 7. 其他尚未启动的产品探索：题目截图识图、GeoGebra `.ggb` 互操作、平面/函数题型逐题补缺、3D 画面进入 HTML。
 
 ### F. N1/N2 的已知边界与 park 项（**不是缺陷，是如实记录**）
+
+- **N5 的"只读展示"这一条**（计划要求把 proof artifact 接进 `ConfirmationPanel` / `agentStore` / run event schema）**目前做不了，而且不是"没时间做"**：查下来 `ClaimEvidence` 这套证据词汇**根本没有进过 Web 界面** —— 面板显示的是 `diagramVerification`（另一套词汇，讲的是"这份图核验了吗"），而 `ClaimEvidence` 只在 `witnessSearch` / `solverContracts` / `planCompiler` 这些**核心层**里活着。加上**今天没有任何后端**，产物永远不存在 —— 为一个**不可能出现**的东西先做展示面，属于投机性设计。**这一条与"接一个真实后端"是同一件事，跟着那个决定走。**
+- **两处"约束"模块的分工（免得被误当成重复实现）**：`planar-constraints.ts` 管**"点能待在哪儿"**（一维曲线 + 自然参数，`project`/`evaluate`，拖拽与动画是同一条状态更新），是**点 ↔ 宿主**的一元关系；`constraints3dProjection.ts` 管**"几个对象之间必须保持什么关系"**（⊥ / ∥ / 等长 / 共面…），是**多元**关系，用顺序投影迭代。**两者互补，可以同时出现在同一份文档里**；分工已写进 `constraints3dProjection.ts` 的文件头。
 
 - **N5 待裁决：计划首批的"共线 / 共面 / 勾股"现在表达不出来。** 计划 N5 的首批清单写着"共线/共面、平行/垂直、等长、勾股"，而解析层的 `DiagramObligationKind` 只有
   `fixedLength | equilateral | equalLength | midpoint | segmentRatio | planePerpendicular | dihedral | perpendicular | parallel` —— **没有共线、共面、勾股**。所以照计划把它们列进"支持"只会得到一句没有载体的话（永远不会有 goal 被分类成它）。处置见 `packages/agent-core/src/proof/proofGoals.ts` 的 `unexpressibleFirstBatchGoals()`，两条路：**① 先扩解析层**（让这三类目标能被表达），或 **② 从首批里划掉**（N5 只声称支持能表达的那几类）。**这一条需要裁决，不是实现细节。**
