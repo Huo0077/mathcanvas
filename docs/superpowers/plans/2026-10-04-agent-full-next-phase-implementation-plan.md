@@ -1,6 +1,6 @@
 # 下一阶段 Agent 完整升级实施计划
 
-> **状态：N1、N2 已实施并复核（2026-10-05）；N3–N6 尚未实施。** N1 提交 `acd3bd5` / `2d62c4d` / `b5b33f9` / `f997b3f`；N2 提交 `c2314c9`…`9c5ae2f`（逐条见各阶段执行记录）。本计划对应 `docs/superpowers/specs/2026-10-04-agent-full-next-phase-design.md`；每个阶段必须先写 RED，再实现 GREEN，再跑全量门禁，最后单独提交。
+> **状态：N1、N2 已实施并复核；N3 内核侧完成、产品入口已通（默认关），N4/N5/N6 进行中。** N1 提交 `acd3bd5` / `2d62c4d` / `b5b33f9` / `f997b3f`；N2 提交 `c2314c9`…`9c5ae2f`；N3/N4/N5/N6 的进度逐条见各阶段执行记录（`2026-10-05` 那一批以 `git log` 为准）。本计划对应 `docs/superpowers/specs/2026-10-04-agent-full-next-phase-design.md`；每个阶段必须先写 RED，再实现 GREEN，再跑全量门禁，最后单独提交。
 
 **Goal:** 在 `b1ee3d3` 的静态题设核验之上，逐步实现约束求解、动态拖动保持、开放题编译、真实 provider 评测和形式证明出口。
 
@@ -202,8 +202,10 @@ export type DragSolveResult =
   > 它是第 33 轮才第一次按这个**集合**跑过的。
   > **后半段仍然不成立**：`e2e/agent-constrained-drag.spec.ts` **不存在**，因为**没有任何产品入口能打开
   > `constrainedDrag` 开关（见 `docs/current-status.md` §一.2 第 1 条 —— **2026-10-05 已解决：设置有实验性开关**）。**2026-10-05 补齐：这条现在可以勾了** —— `e2e/next-phase-flag-entry.spec.ts`（入口 3 条）+ `e2e/agent-constrained-drag.spec.ts`（拖动正/反例 2 条，`fixedDistance` 判据；把 `enabled` 写死 `false` 的定向变异会让正例红）。
-- [ ] **GREEN：** pointer intent → 临时约束 → solve → commit transaction；禁止直接改 render state。
-- [ ] **GREEN 命令：** 上述定向测试；再跑完整 `npm.cmd run test:e2e -- --workers=3`。
+- [x] **GREEN：** pointer intent → 临时约束 → solve → commit transaction；禁止直接改 render state。
+  > **2026-10-05 勾上**：接线决策层 `apps/web/src/constrainedDrag3.ts` + `App.tsx` 的 3D `onDragEnd` —— 保留这次平移 → 算出被拖点的目标坐标 → 以该点为锚跑 `projectPoint3Constraints` → 用一次 `applyBatch`（内部 `commitTransaction`）提交其余点；**没有直接改渲染状态**。浏览器证据：`e2e/agent-constrained-drag.spec.ts`。
+- [x] **GREEN 命令：** 上述定向测试；再跑完整 `npm.cmd run test:e2e -- --workers=3`。
+  > **2026-10-05 勾上**：定向 7 文件 / **241 通过 / 0 失败**；全量 e2e **191 通过 / 0 失败**（读数在 `docs/current-status.md` §一）。
 > **第五步（2026-10-05）：线状 `parallel` / `perpendicular` 的投影。** 计划 RED 里点名的"垂直"
 > 这一半补上了：保持**第一条**线不动、把**第二条**绕中点摆过去（最小改动），长度与中点不变。
 > 与 2D `projectLineConstraint` **同一口径**，所以不需要新的产品裁决 —— 此前把它记成
@@ -211,11 +213,18 @@ export type DragSolveResult =
 > **三种如实跳过**：`pointDirection`（方向显式写死）、`perpendicular` 而两条线已平行（没有唯一答案）、
 > 第二条线有端点被锚住。`no-projection-rule` 这一支**从此不可达**（保留给下一个新增种类）。
 >
-> **本阶段仍未达成的出口**：`constrainedDrag=true` 的**浏览器正/反例** —— 它卡在
-> **没有任何产品入口能把开关打开**（见 §四 D 的裁决项）。**内核侧已经做完了**。
+> **本阶段出口的现状（2026-10-05 更新，上一版这条的理由已过期）**：**产品入口已经通了**
+> （设置 → 实验性功能 → 约束拖动），所以 `constrainedDrag=true` 的**浏览器正/反例已经补上**
+> （`e2e/agent-constrained-drag.spec.ts`：关着拖动**真的改变** `|AB|`；打开后同样拖动 `|AB|`
+> **仍是 1**，且先断言 A 真的动过 —— 不许用"没变"冒充"被约束住"）。
+> **但出口仍未完整达成**：这一条还点名了"**过约束拒绝 / 冲突恢复 / 一步撤销**的浏览器用例"，
+> 这三样目前只有**单元**证据；`inconsistent` / `timeout` 两个状态也**没实现**（顺序投影下矛盾
+> 只会振荡，本层如实报 `exhausted` 而不报"无解"）。**所以下面那条出口故意不勾。**
 
 - [ ] **N3 出口：** `constrainedDrag=false` 时旧拖动路径逐字回归；`constrainedDrag=true` 时保持约束、过约束拒绝、冲突恢复和一步撤销的浏览器用例全部通过。
+  > **2026-10-05：只达成一半，故意不勾。** 已达成：`=false` 时旧拖动路径的**浏览器**回归（关着拖动真的改变 `|AB|`）、`=true` 时**保持约束**（同样拖动后 `|AB|` 仍是 1，并先断言 A 确实动过）。**未达成**：**过约束拒绝 / 冲突恢复 / 一步撤销**没有浏览器用例（只有 `constrainedDragUndo.test.ts` 等单元证据）；`inconsistent` / `timeout` 未实现。等这三样也在浏览器里验过再勾。
 - [ ] **提交检查点：** `git commit -m "feat(geometry): preserve constraints during drag"`。
+  > **2026-10-05：故意不勾** —— 它是**本阶段收尾**的检查点，而出口还没达成（见上）。本阶段的工作已经以多次提交落地（`6c43044` 第一块砖 / `9ae58de` 第二步 / `a40afdb` 第三步 / `db04158` 第四步 / `3f7cfa4` 第五步 / `fbb7584` 产品入口 / `96be699` + `6d21847` 浏览器正反例 / `616881a` 一步撤销），但**没有使用这条建议的提交信息**。
 
 > **N3 执行记录（2026-10-05，进行中，两步内核砖）：** 上面五条检查项**一条都还没勾**——
 > 本阶段目前交付的全是**内核侧**的东西，**没有任何产品调用点**：
