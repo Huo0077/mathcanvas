@@ -131,6 +131,8 @@ function schemaForField(field: string, spec: ActionSpec, actionId: ActionId): Js
     case "updatablePatch": return { type: "object", properties: Object.fromEntries(updatableInputFields().map((key) => [key, schemaForPatchField(key)])), additionalProperties: false }
     case "scopedRef": return scopedReferenceSchema
     case "idList": return { type: "array", items: { type: "string" } }
+    /** 两个点名 `{from,to}`（按端点名指定棱）：形状与校验那侧的 `normalizeHostEdge` 一致。 */
+    case "namePair": return { type: "object", properties: { from: { type: "string" }, to: { type: "string" } }, required: ["from", "to"], additionalProperties: false }
     default:
       /**
        * **这里必须抛，不能兜底成 `{}`**：登记表加了新字段而种类表没跟上时，静默发布一个

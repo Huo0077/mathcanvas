@@ -154,6 +154,7 @@ export type FieldKind =
   | "vertexList"     // 空间点数组（≥4，多面体顶点）
   | "stringList"     // 字符串数组（多面体的顶点名）
   | "faceRings"      // 顶点下标环数组（多面体面）
+  | "namePair"       // 两个点名 {from,to}（按端点名指定棱，2026-10-05）
   | "plane"          // {normal,constant} / 过三点 / 点+法向
   | "tangentAnchor"  // 切线的两种锚点写法
   | "updatablePatch" // 对象可改字段的封闭集合
@@ -231,6 +232,8 @@ export interface RawFieldTypes {
   origin?: "vector"
   /** `hostSub` 是宿主内部第几条棱：非负整数，不是普通数字。 */
   hostSub?: "integer"
+  /** `hostEdge` 是"哪两个点之间的棱"：两个点名（`{ from, to }`），不是数字。 */
+  hostEdge?: "namePair"
 }
 
 /** 平面圆锥曲线的闭集（规格 §8.2）。 */
@@ -466,16 +469,23 @@ export const ACTIONS = {
     defaults: { parameter: { policy: "safe_default", value: DEFAULT_DYNAMIC_POINT_PARAMETER, reason: `动点位置未指定，取参数 ${DEFAULT_DYNAMIC_POINT_PARAMETER}。` } }
   },
   /**
-   * 新建宿主驱动的动点：`hostSub` 指宿主内部第几条棱（规格 §3.3 的 `solidId:e{i}` 命名）。
+   * 新建宿主驱动的动点。指定**哪条棱**有两条路，二者**互斥**：
+   *
+   * - `hostEdge: { from, to }`（**2026-10-05 新增，推荐**）：直接说"**from 与 to 之间那条棱**"，
+   *   两个值是**点名**（顶点的 label）。编译器拿宿主物化出来的棱去比对两端点名 ——
+   *   于是模型**不必知道内部棱下标**（那在一批之内是拿不到的：要等这一批走完才看得到观察结果，
+   *   而猜错会被几何语义校验当场拒绝）。
+   * - `hostSub: number`：宿主内部第几条棱（规格 §3.3 的 `solidId:e{i}` 命名）。
+   *   两条都给了**不猜**，报 `ambiguous_host_edge`。
    *
    * `parameter` 的默认是 **0.4**（规格 §6.3 的普通动点），而**中点由调用方显式给 0.5** ——
    * 审计不许把显式约束覆盖成默认值（`parameterAudit.test.ts` 钉住这条）。
    */
   "dynamic.create_bound_point": {
-    inputFields: ["alias", "host", "hostSub", "parameter", "parameterId", "label"],
+    inputFields: ["alias", "host", "hostSub", "hostEdge", "parameter", "parameterId", "label"],
     requiresAlias: true,
-    /** `hostSub` 是宿主内部第几条棱：非负整数，不是普通数字。 */
-    rawFieldTypes: { hostSub: "integer" },
+    /** `hostSub` 是宿主内部第几条棱：非负整数，不是普通数字。`hostEdge` 是两个点名。 */
+    rawFieldTypes: { hostSub: "integer", hostEdge: "namePair" },
     references: [{ field: "host", kind: "scoped" }],
     required: ["alias", "host"],
     defaults: {

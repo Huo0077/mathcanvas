@@ -849,6 +849,42 @@ const SPATIAL_HOST_TYPES = new Set(["edge3", "line3", "segment3", "ray3", "circl
  * 坐标先填占位值（有限即可）：真正的坐标由**重算**按宿主与参数算出 —— 与属性栏里
  * "点绑到棱上"是同一条路径，不存在第二份几何。
  */
+/**
+ * **按两端点名找那条棱**（2026-10-05）：`{ from, to }` 是两个**点名**（顶点 label）。
+ *
+ * ## 为什么不给模型一个下标就完事
+ *
+ * `hostSub` 是宿主内部的棱下标。模型在一个 stage 里"先建实体、再绑点"时，**拿不到这次的结果**
+ *（观察是这一批走完之后才有的事），只能赌；而赌错会被几何语义校验当场拒绝
+ *（`diagram_condition_failed`）。让它直接说"**B 与 D 之间那条**"才是一步到位的写法。
+ *
+ * ## 三条判据
+ *
+ * 1. **顺序无关**：`{from:"B",to:"D"}` 与 `{from:"D",to:"B"}` 是同一条棱；
+ * 2. **点名对不上就如实报**，并把这条实体**有哪些点名**列进 detail（否则模型无从修）；
+ * 3. **多于一條就停下**（`ambiguous_edge`），不挑一条 —— 不过按今天的路它**到不了**：
+ *    顶点点名重复在 `solid.*` 那一层就被拒了（`duplicated…`），而正常多面体两个顶点之间只有一条棱。
+ *    留着这一支是为了"将来真出现时不许猜"，**不声称它有守卫**（没有用例能构造出来）。
+ */
+function resolveEdgeByNames(document: GeometryDocument, hostEntityId: string, edge: { from: string; to: string }): string | { code: string; detail: string } {
+  const labelOf = (id: string): string | undefined => {
+    const primitive = findPrimitive(document, id)
+    return primitive?.type === "point3" ? (primitive as { label?: string }).label : undefined
+  }
+  const wanted = new Set([edge.from, edge.to])
+  const edges = document.primitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "edge3" }> =>
+    primitive.type === "edge3" && primitive.id.startsWith(`${hostEntityId}:e`) && primitive.pointIds.length === 2)
+  const matches = edges.filter((candidate) => {
+    const labels = candidate.pointIds.map(labelOf)
+    if (labels.some((label) => label === undefined)) return false
+    if (new Set(labels).size !== 2) return false
+    return [...new Set(labels)].every((label) => wanted.has(label as string)) && wanted.size === new Set(labels).size
+  })
+  if (matches.length === 1) return matches[0]!.id
+  const known = [...new Set(edges.flatMap((candidate) => candidate.pointIds.map(labelOf)).filter((label): label is string => label !== undefined))]
+  if (matches.length === 0) return { code: "edge_not_found", detail: `no edge between ${edge.from} and ${edge.to} on ${hostEntityId}; known names: ${known.join(", ") || "(none)"}` }
+  return { code: "ambiguous_edge", detail: `more than one edge joins ${edge.from} and ${edge.to} on ${hostEntityId}` }
+}
 function compileCreateBoundPoint(action: Extract<DraftAction, { actionId: "dynamic.create_bound_point" }>, context: ActionContext): CompileResult {
   const { actionKey, inputs } = action
   if (!Number.isFinite(inputs.parameter)) {
@@ -860,7 +896,17 @@ function compileCreateBoundPoint(action: Extract<DraftAction, { actionId: "dynam
   if (inputs.hostSub !== undefined && (!Number.isInteger(inputs.hostSub) || inputs.hostSub < 0)) {
     return { operations: [], diagnostics: [diagnostic(actionKey, "invalid_host_sub", "hostSub must be a non-negative integer")], aliasToId: {} }
   }
-  const hostId = inputs.hostSub === undefined ? inputs.host.entityId : `${inputs.host.entityId}:e${inputs.hostSub}`
+  if (inputs.hostEdge !== undefined && inputs.hostSub !== undefined) {
+    return { operations: [], diagnostics: [diagnostic(actionKey, "ambiguous_host_edge", "give either hostSub (the edge index) or hostEdge (the two names), not both")], aliasToId: {} }
+  }
+  let hostId: string
+  if (inputs.hostEdge !== undefined) {
+    const resolved = resolveEdgeByNames(context.targetDocument, inputs.host.entityId, inputs.hostEdge)
+    if (typeof resolved !== "string") return { operations: [], diagnostics: [diagnostic(actionKey, resolved.code, resolved.detail)], aliasToId: {} }
+    hostId = resolved
+  } else {
+    hostId = inputs.hostSub === undefined ? inputs.host.entityId : `${inputs.host.entityId}:e${inputs.hostSub}`
+  }
   const host = findPrimitive(context.targetDocument, hostId)
   if (!host) return { operations: [], diagnostics: [diagnostic(actionKey, "host_not_found", `no host ${hostId}`)], aliasToId: {} }
   if (inputs.parameterId !== undefined && !context.targetDocument.parameters[inputs.parameterId]) {

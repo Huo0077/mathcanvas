@@ -226,6 +226,11 @@ export interface DynamicCreateBoundPointAction extends ActionBase {
     host: SceneReference
     /** 宿主内部的棱下标；给了就绑到 `${host.entityId}:e${hostSub}` 这条棱上。 */
     hostSub?: number
+    /**
+     * **按两端点名指定棱**（2026-10-05）：`{ from, to }` 是两个**点名**（顶点 label）。
+     * 与 `hostSub` 互斥；编译器拿宿主物化出来的棱比对两端点名，顺序无关。
+     */
+    hostEdge?: { from: string; to: string }
     parameter: number
     /** 由文档参数驱动（符号参数 θ 驱动动点，规格 §8.2）；必须真实存在。 */
     parameterId?: string

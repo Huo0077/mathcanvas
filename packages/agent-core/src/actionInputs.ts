@@ -1,4 +1,4 @@
-﻿import { type ParseError } from "./contracts"
+import { type ParseError } from "./contracts"
 import { updatableInputFields } from "@draw/scene-graph"
 import { ACTIONS, CONIC_KINDS, SOLID_TEMPLATES, declaredFieldKind, type ActionSpec, type ActionId } from "./actionRegistry"
 import { boundedString, fail, finiteNumber, isPlainObject, optionalFiniteNumber, quotedName, readPoint2, readScopedReference, readVector3, rejectUnknownFields } from "./schemaReaders"
@@ -182,6 +182,23 @@ function readByDeclaredKind(spec: ActionSpec, field: string, provided: unknown, 
 function boundLabel(value: unknown, path: string, errors: ParseError[]): string | undefined {
   if (value === undefined) return undefined
   return boundedString(value, path, errors) ?? undefined
+  }
+
+  /**
+   * **`hostEdge`：哪两个点之间的棱**（2026-10-05）。
+   *
+   * 两个**点名**（顶点 label），不是一个下标 —— 理由见动作登记表那条注释：
+   * 下标在一批之内拿不到（要等这一批走完才看得到观察结果），而猜错会被几何语义校验当场拒绝。
+   */
+  function normalizeHostEdge(value: unknown, path: string, errors: ParseError[]): { from: string; to: string } | null {
+    if (!isPlainObject(value)) {
+      errors.push(fail("invalid_host_edge", path, "hostEdge must be an object {from, to} holding two vertex names"))
+      return null
+    }
+    const from = boundedString(value.from, `${path}.from`, errors)
+    const to = boundedString(value.to, `${path}.to`, errors)
+    if (from === null || to === null) return null
+    return { from, to }
 }
 
 export function parseActionInputs(actionId: ActionId, value: unknown, path: string, errors: ParseError[]): Record<string, unknown> | null {
@@ -358,6 +375,12 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
       if (value.parameterId !== undefined) out.parameterId = boundedString(value.parameterId, `${path}.parameterId`, errors)
       const label = boundLabel(value.label, `${path}.label`, errors)
       if (label !== undefined) out.label = label
+      if (value.hostEdge !== undefined) {
+        const edge = normalizeHostEdge(value.hostEdge, `${path}.hostEdge`, errors)
+        if (edge === null) return null
+        out.hostEdge = edge
+      }
+      /** 两条路互斥的判据在**编译层**（`scene-graph` 的 `compileCreateBoundPoint`）—— 只判一处，见那里的注释。 */
       return out
     }
 

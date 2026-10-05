@@ -81,7 +81,8 @@ describe("registry, published schema and parser agree on fields", () => {
       tangentAnchor: (s) => Array.isArray((s as { oneOf?: unknown[] }).oneOf),
       updatablePatch: (s) => s.type === "object",
       scopedRef: (s) => Array.isArray((s as { oneOf?: unknown[] }).oneOf),
-      idList: (s) => s.type === "array"
+      idList: (s) => s.type === "array",
+      namePair: (s) => s.type === "object" && "from" in (s.properties ?? {}) && "to" in (s.properties ?? {})
     }
 
     const mismatches: string[] = []

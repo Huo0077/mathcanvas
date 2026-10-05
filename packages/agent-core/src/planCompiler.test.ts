@@ -1,4 +1,4 @@
-﻿import { createEmptyDocument, type GeometryDocument } from "@draw/dsl"
+import { createEmptyDocument, type GeometryDocument } from "@draw/dsl"
 import { crossVector3, dotVector3, lengthVector3, subtractVector3 } from "@draw/geometry-kernel"
 import { contentFingerprint } from "@draw/scene-graph"
 import { describe, expect, it } from "vitest"
@@ -727,5 +727,81 @@ describe("witness search rescue in the compile path", () => {
     expect(switchedOn.ok).toBe(false)
     expect(switchedOn.draftDocument).toBeNull()
     expect(JSON.stringify(switchedOn)).toBe(JSON.stringify(withoutSwitch))
+  })
+})
+
+/**
+ * **按点名指定棱**（`hostEdge`，2026-10-05，用户裁决）。
+ *
+ * `hostSub` 是**宿主内部的棱下标** —— 模型在一个 stage 里"先建实体、再绑点"时拿不到那次的观察结果，
+ * 只能赌下标（而且赌错会被当场拒绝：几何语义校验报 `diagram_condition_failed`）。
+ * `hostEdge: { from, to }` 让它直接说"**B 与 D 之间那条棱**"，由编译器去查两端点名。
+ *
+ * 四条判据：能查到 / **顺序无关** / 名字不存在要如实报 / **两条都给了不许猜**。
+ */
+const TETRA_NAMED = {
+  actionId: "solid.create_polyhedron", actionKey: "solid", factIds: [],
+  inputs: {
+    alias: "solid",
+    vertices: [{ x: 0, y: 0, z: 1 }, { x: -1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }, { x: 1, y: 0, z: 0 }],
+    faces: [[0, 1, 2], [0, 3, 1], [0, 2, 3], [1, 3, 2]],
+    vertexNames: ["A", "B", "C", "D"]
+  }
+}
+
+const BOUND_BY_NAME = (alias: string, from: string, to: string, extra: Record<string, unknown> = {}) => ({
+  actionId: "dynamic.create_bound_point", actionKey: `bound-${alias}`, factIds: [],
+  inputs: { alias, host: { scope: "draft", alias: "solid" }, hostEdge: { from, to }, parameter: 0.5, label: alias, ...extra }
+})
+
+/** 候选文档里那个带某点名的点的坐标（找不到返回 undefined）。 */
+function positionOf(compiled: { draftDocument?: GeometryDocument | null }, label: string) {
+  const point = (compiled.draftDocument?.primitives ?? []).find((primitive) => (primitive as { label?: string }).label === label)
+  return (point as { position?: { x: number; y: number; z: number } } | undefined)?.position
+}
+
+describe("按点名指定棱（hostEdge）", () => {
+  it("「B 与 D 之间那条」⇒ 绑到它的中点（一步之内，不必知道下标）", () => {
+    const compiled = compilePlan(rawPlan([TETRA_NAMED, BOUND_BY_NAME("O", "B", "D")]), context())
+
+    expect(compiled.ok, JSON.stringify(compiled.diagnostics)).toBe(true)
+    // B=(-1,0,0)、D=(1,0,0) ⇒ 中点 (0,0,0)
+    expect(positionOf(compiled, "O")).toEqual({ x: 0, y: 0, z: 0 })
+  })
+
+  it("**顺序无关**：写「D 与 B」是同一条棱", () => {
+    const compiled = compilePlan(rawPlan([TETRA_NAMED, BOUND_BY_NAME("O", "D", "B")]), context())
+
+    expect(compiled.ok, JSON.stringify(compiled.diagnostics)).toBe(true)
+    expect(positionOf(compiled, "O")).toEqual({ x: 0, y: 0, z: 0 })
+  })
+
+  it("点名的顶点不存在 ⇒ `edge_not_found`（不猜，也不静默建一个自由点顶着）", () => {
+    const compiled = compilePlan(rawPlan([TETRA_NAMED, BOUND_BY_NAME("O", "B", "Z")]), context())
+
+    expect(compiled.ok).toBe(false)
+    expect(JSON.stringify(compiled.diagnostics)).toContain("edge_not_found")
+  })
+
+  it("`hostEdge` 与 `hostSub` **同时给 ⇒ 不猜**（明确报错）", () => {
+    const compiled = compilePlan(rawPlan([TETRA_NAMED, BOUND_BY_NAME("O", "B", "D", { hostSub: 4 })]), context())
+
+    expect(compiled.ok).toBe(false)
+    expect(JSON.stringify(compiled.diagnostics)).toContain("ambiguous_host_edge")
+  })
+
+  /**
+   * **`ambiguous_edge` 那一支今天到不了** —— 这条用例把"到不了"钉住，而不是假装它有守卫。
+   *
+   * 两个顶点同名在 `solid.create_polyhedron` 那一层就被拒了（`duplicated…`），
+   * 而正常多面体两个顶点之间只有一条棱。所以解析里那一支**留着是为了将来真出现时不许猜**，
+   * 我**不声称它有守卫**（今天没有用例能构造出来）。
+   */
+  it("两个顶点同名在**建实体那一层**就被拒 ⇒ 歧义根本到不了绑定这一步", () => {
+    const duplicated = { ...TETRA_NAMED, inputs: { ...TETRA_NAMED.inputs, vertexNames: ["A", "B", "B", "D"] } }
+    const compiled = compilePlan(rawPlan([duplicated, BOUND_BY_NAME("O", "B", "D")]), context())
+
+    expect(compiled.ok).toBe(false)
+    expect(JSON.stringify(compiled.diagnostics)).toContain("duplicat")
   })
 })
