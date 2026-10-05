@@ -12,13 +12,15 @@ N6 只核对"每个 flag 有单元 / 浏览器 / 回退用例"，**不重复创�
 | --- | --- | --- | --- | --- | --- |
 | `obligationIR` | `agentRuntime.ts:240`（缺省取应用层那一份）→ `:271`/`:283` 传进 `drafts.stage`；`draftStore.ts:287` → 编译期 `diagramObligationIR`；Worker 链 `workerContracts.ts:51` / `workerRuntime.ts:82` / `geometryWorkerClient.ts:202` / `geometryWorkerHost.ts:111` / `geometryCompileStrategy.ts:106`；产出处 `diagramVerification.ts:176`；`committerAdapter.ts:154` | `featureFlags.test.ts`、`agentRuntime.test.ts:363`、`workerRuntime.test.ts:306`、`geometryWorkerHost.obligationIR.test.ts:101`、`draftStore.test.ts:373`、`planCompiler.test.ts:177`、`obligationIR.test.ts` | ✅ 三条：`planCompiler.test.ts:195`（关时不生成 IR）、`workerRuntime.test.ts:317`（畸形/缺省**不许**当 true）、`committerAdapter.test.ts:314`（不传 → `undefined`） | ❌ 无 | 浏览器端专测 |
 | `witnessSearch` | 同一条通道（`agentRuntime.ts:240` → `draftStore.ts:288` → 编译期 / Worker） | `geometryWorkerHost.witnessSearch.test.ts:121`、`workerRuntime.test.ts:334`、`committerAdapter.test.ts:296` | ✅ **最硬的一条**：`planCompiler.offPath.golden.test.ts` —— 对着基线采的 golden，断言关闭时**逐字节相同** | ❌ 无 | 浏览器端专测 |
-| `constrainedDrag` | `App.tsx:518`（**N3 第三步新增的第一个读取点**） | `featureFlags.test.ts`（默认关）、`constrainedDrag3.test.ts`（关 → 只 `passthrough`，一个坐标都不写） | ✅ `e2e/geometry3d-drag.spec.ts` + `geometry3d-creation.spec.ts` 共 **19 条**在关闭状态下全绿（含"一次自由拖动只撤销一步"） | ❌ 无 | **打开状态的浏览器正/反例** —— 而且目前**没有任何产品入口**能把它打开 |
+| `constrainedDrag` | `App.tsx:518`（**N3 第三步新增的第一个读取点**） | `featureFlags.test.ts`（默认关）、`constrainedDrag3.test.ts`（关 → 只 `passthrough`，一个坐标都不写） | ✅ `e2e/geometry3d-drag.spec.ts` + `geometry3d-creation.spec.ts` 共 **19 条**在关闭状态下全绿（含"一次自由拖动只撤销一步"） | ✅ **5 条**（2026-10-05 补，见下） | 无 —— 入口与正/反例都到位了 |
 | `openProblemCompiler` | **无** | 只有 `featureFlags.test.ts` 的"默认全关"与"键集合相等" | 不适用（无行为） | ❌ 无 | N4 实现时才该有读取点 |
 | `proofExport` | **无** | 同上 | 不适用（无行为） | ❌ 无 | N5 实现时才该有读取点 |
 
-**结论**：三个已实现的开关都有"关闭回退"的证据，其中 `witnessSearch` 最硬（golden 逐字节）；
-**五个开关都没有浏览器用例**，而 `openProblemCompiler` / `proofExport` 是**占位**（只有开关表
-与默认值，没有任何读取点）—— 这是刻意的，N6 不该为占位开关补用例。
+**2026-10-05 更正（这一份的基线是 `6829f77`，它早于下面这两个提交）**：`constrainedDrag` 那一行原写"❌ 无 / **没有任何产品入口**能把它打开"，**已经过期** —— `fbb7584` 给了产品入口（顶栏「设置」→ 实验性功能 → 约束拖动，偏好存 `mathcanvas:next-phase-preferences`，`agentNextPhaseFlags()` 只取这一个），`96be699` / `6d21847` 补上了浏览器正反例：`e2e/next-phase-flag-entry.spec.ts`（入口本身 **3 条**）+ `e2e/agent-constrained-drag.spec.ts`（**2 条**：关着拖动**真的改变** `|AB|`；打开后同样拖动 `|AB|` **仍是 1**，且先断言 A 确实动过 —— 不许用"没变"冒充"被约束住"）。所以那一格改成 ✅ 5 条。
+
+**结论（同样按 2026-10-05 更正）**：三个已实现的开关都有"关闭回退"的证据，其中 `witnessSearch` 最硬（golden 逐字节）；
+**浏览器用例现在只有 `constrainedDrag` 有**（`obligationIR` 与 `witnessSearch` **没有产品入口**，浏览器专测无从谈起）；
+`openProblemCompiler` / `proofExport` 是**占位**（只有开关表与默认值，没有任何读取点）—— 这是刻意的，N6 不该为占位开关补用例。
 
 ### 「关闭 flag 时旧路径行为逐字不变」—— 这句话**不是一种证据，是三种**（2026-10-05 补审）
 

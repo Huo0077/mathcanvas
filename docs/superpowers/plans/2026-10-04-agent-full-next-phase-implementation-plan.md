@@ -307,14 +307,19 @@ export type DragSolveResult =
 - Modify only after dataset schema is green: `apps/web/src/agent/systemPrompt.ts`、`modelPlanner.ts`、tool loop contracts。
 - Docs: `docs/acceptance/agent-tool-loop-scorecard.md`、`agent-release-gate.md`。
 
-- [ ] **RED：** 缺 `provider/model/seed/status`、包含 secret、claim 缺 evidence、模式未标识时报告生成必须失败。
+- [x] **RED：** 缺 `provider/model/seed/status`、包含 secret、claim 缺 evidence、模式未标识时报告生成必须失败。
+  > **2026-10-05 勾上**：四类拒绝都有用例 —— 题集侧 `benchmark.test.ts`（缺必填字段点名字段与行号 / 原话带凭据要抛 / `category` 不在词表要抛 / 未声明字段要抛 / `id` 重复要抛）、运行记录侧（缺 `provider` `model` `seed` `status` `layer` 任一都要抛且点名 / **模式未标识要抛** / `real_provider` 却说不出 provider·model 要抛 / `claim` 缺证据要抛 / 带凭据要抛），且"没测"必须写成显式 `null` 而不是删键。
 
 **Interfaces:** `BenchmarkCase` 读取 JSONL 题集；`BenchmarkRun` 必须含 `provider/model/seed/mode/status/evidence/cost/latency`；`BenchmarkReport` 分开输出 `deterministic_local` 和 `real_provider`。
 - [x] **RED 命令：** `npm.cmd exec -- vitest run scripts/agent-benchmark --maxWorkers=1`。
-- [ ] 题集至少包含：欠定、矛盾、未支持表达式、点名打乱、二面角/比例、动态请求、普遍证明请求。
+- [x] 题集至少包含：欠定、矛盾、未支持表达式、点名打乱、二面角/比例、动态请求、普遍证明请求。
+  > **2026-10-05 勾上**：`scripts/agent-benchmark/cases.jsonl` **21 条 = 七类 × 3**（`underdetermined` / `contradictory` / `unsupported-expression` / `shuffled-naming` / `dihedral-or-ratio` / `dynamic-request` / `universal-proof-request`），并有一条用例钉"随仓库走的那份题集七类全覆盖"。
 - [ ] 每题最多 3 轮，记录抽取率、求解率、题设覆盖率、verified/unverified/no_witness、成本、延迟和人工可读性。
+  > **2026-10-05：七项里六项在位，仍不勾。** 已在位：轮次上限（"每题超过 `MAX_ROUNDS_PER_CASE` 轮要**整份拒收**"）、抽取率（题级）、求解率（见证层）、题设覆盖率（子句级，且"一条子句都没读到时报 `null` 而不是 0"）、`verified`/`unverified`/`no_witness` 三种结局计数、`cost`/`latency` **字段**（允许显式 `null`）。**缺的一项是"人工可读性"**：报告契约里**没有这个字段**，也**没有任何一次人工标注** —— 它要等真实 provider 真跑过才有对象可读，所以这一条与下一条一起卡在同一次运行上。
 - [ ] 先跑小样本真实 provider；无凭据时写 `not_measured`，不伪造数字。
+  > **2026-10-05：后半句已做到、前半句没做，仍不勾。** "无凭据/没测就写 `not_measured`、不伪造数字"已经在报告里落实（`provider` / `average cost` 两行都如实写 `not measured`）；**但一次真实 provider 都没跑过** —— 评测入口已经搬进应用内（设置 → 真实 provider 评测，两段式、会花钱、密钥不出凭据库），**差的是那一次显式确认的运行**。
 - [ ] **提交检查点：** `git commit -m "feat(eval): add real provider benchmark schema"`。
+  > **2026-10-05：故意不勾** —— 它是**本阶段收尾**的检查点，而上面两条还没达成。本阶段的工作已经以多次提交落地（`6829f77` 题集与报告契约 / `ca9d286` 运行入口与 `layer` 契约 / `6a5c2f0` 之后的题集 7→21 等，逐条见 `git log`），但**没有使用这条建议的提交信息**。
 
 > **N4 执行记录（2026-10-05，只完成第一步）：** 上面几条检查项**一条都还没勾** ——
 > 已交付的是**载体与判据**：`scripts/agent-benchmark/` 的 `dataset.schema.json` + `dataset.ts`
@@ -362,14 +367,19 @@ export type DragSolveResult =
 - Modify: `apps/web/src/components/agent/ConfirmationPanel.tsx`、`agentStore.ts`、run event schema。
 - Docs: proof support matrix and release gate.
 
-- [ ] **RED：** verified_instance/sampled 不能生成 formally_proved；伪造/缺字段/版本不匹配 artifact 拒绝。
+- [x] **RED：** verified_instance/sampled 不能生成 formally_proved；伪造/缺字段/版本不匹配 artifact 拒绝。
+  > **2026-10-05 勾上**：`packages/agent-core/src/proof/proofArtifact.test.ts` 逐条钉住 —— "没有产物时证据状态**原样不动**，`verified_instance` 与 `sampled` 都升不上去"、后端自报没证成时状态同样不动、缺字段要拒并**点名缺了哪个**、版本不匹配要拒（不做兼容猜测）、伪造的结局词要拒、声称 `verified` 却拿不出正文或说不清后端要拒、"证明的是**别的 claim** / **别的输入**"要拒、表外目标绝不升级、以及**生产默认一个后端都没接 ⇒ 谁也不许升到 `formally_proved`**。
 
 **Interfaces:** `ProofArtifact` 必须绑定输入哈希、后端/版本、claim id、证明正文和校验结果；`verifyProofArtifact()` 只返回 `verified/failed/unsupported/timeout`。
 - [x] **RED 命令：** `npm.cmd exec -- vitest run packages/agent-core/src/proof --maxWorkers=1`。
-- [ ] **Proof spike：** 创建 scripts/proof-spike/ 的 adapter smoke runner；先输出后端版本/许可证/进程模型/WASM 或原生依赖/启动耗时/超时状态，未通过依赖审查时只允许 unsupported。
-- [ ] 先支持 5–10 个短目标：共线/共面、平行/垂直、等长、勾股；后端可选 Lean/mathlib 或 AlphaGeometry/Newclid 风格 adapter。
-- [ ] **依赖审查任务（必须在 GREEN 前完成）：** 记录许可证、进程/线程边界、WASM/原生依赖、缓存/沙箱、启动时间和失败/超时行为；没有审查结论不得接入默认构建。
+- [x] **Proof spike：** 创建 scripts/proof-spike/ 的 adapter smoke runner；先输出后端版本/许可证/进程模型/WASM 或原生依赖/启动耗时/超时状态，未通过依赖审查时只允许 unsupported。
+  > **2026-10-05 勾上**：`scripts/proof-spike/runner.mjs` + `smoke.test.ts` + `npm run proof:smoke`。用例逐条钉住：前提是"这个构建里**没有任何后端接上**"、首批每个能表达的目标都升不上去且原因正是 `backend-not-wired`、**反方向**（注入一个假后端后同一份产物能升上去，证明这道路不是死的）、表外目标连门都进不去（`undeclared-goal`）、`sampled` 也一样升不上去、以及"**先输出后端审查状态**"。
+- [x] 先支持 5–10 个短目标：共线/共面、平行/垂直、等长、勾股；后端可选 Lean/mathlib 或 AlphaGeometry/Newclid 风格 adapter。
+  > **2026-10-05 勾上（词表这一半），但要看清没接后端**：`proofGoals.ts` 的短目标**封闭词表 9 种**（`parallel` / `perpendicular` / `planePerpendicular` / `equalLength` / `midpoint` / `segmentRatio` / `collinear` / `coplanar` / `pythagorean`），落在计划要求的 5–10 区间内；词表与矩阵**同一份键集合**有用例挡着，不在首批的目标（二面角）即使能表达也不放行。**勾股按用户裁决走"判成 ⊥ + 勾股定理那一步"的推断路线**（`inference` 字段 + `proofGoalDischargeRoute()`），**没有做成别名**（"从约束层问垂直只会得到垂直"有专门用例）。适配器那一半**只到准入契约**：`WIRED_PROOF_BACKENDS` 由通过的审查记录推导，今天 `{"wired":[],"reviewed":0}` ⇒ **一个后端都没接、没有任何产物能升到 `formally_proved`**。
+- [x] **依赖审查任务（必须在 GREEN 前完成）：** 记录许可证、进程/线程边界、WASM/原生依赖、缓存/沙箱、启动时间和失败/超时行为；没有审查结论不得接入默认构建。
+  > **2026-10-05 勾上**：`packages/agent-core/src/proof/proofBackendReview.ts` 的**十栏准入契约**（含进程模型词表、原生/WASM 依赖必须写**空数组**而不是省掉、启动耗时必须是有限非负数），加一条**接入不变量**："`WIRED_PROOF_BACKENDS` 里每个名字都必须有一份 `passed` 记录" —— 于是"没审查就接上"**在结构上做不到**。依赖侧的实测记录另见 `docs/acceptance/next-phase-flag-and-dependency-review.md`。
 - [ ] **提交检查点：** `git commit -m "feat(proof): add verified proof artifact boundary"`。
+  > **2026-10-05：故意不勾** —— 本阶段收尾的检查点，而**出口未达成**（设计 §5 N5 要求"至少一类目标有可独立验证的 proof artifact"，今天没有任何后端接上，真实运行只会得到 `unsupported`）。本阶段工作已以多次提交落地（`f550972` 产物边界 / `79473ee` 短目标词表 / `2c13158` 后端接线门 + `proof:smoke` / `be22ced` 准入契约 / `6a5c2f0` 勾股按裁决落地），但**没有使用这条建议的提交信息**。
 > **第二步（2026-10-05）：短目标词表。** 新增 `packages/agent-core/src/proof/proofGoals.ts` ——
 > 10 种短目标的**封闭词表**与支持矩阵，映射按**题设种类**走（不做文本关键词匹配，本项目在
 > 关键词表上吃过亏）。`ProofExpectation` 新增**必填**的 `goalKind`；为 `null` 时无论产物多合法
@@ -412,7 +422,8 @@ export type DragSolveResult =
 > 结论 `passed` 的记录），以及把 proof artifact 接进 `ConfirmationPanel` / `agentStore` / run event
 > schema 的只读展示。
 
-- [ ] **N5 GREEN 命令：** `npm.cmd exec -- vitest run packages/agent-core/src/proof --maxWorkers=1`; `node scripts/proof-spike/runner.mjs --mode=smoke`。
+- [x] **N5 GREEN 命令：** `npm.cmd exec -- vitest run packages/agent-core/src/proof --maxWorkers=1`; `node scripts/proof-spike/runner.mjs --mode=smoke`。
+  > **2026-10-05 勾上（命令拼写有一处偏差，如实记）**：前半段 `vitest run packages/agent-core/src/proof` 就是那三份 proof 用例；后半段**实际跑的是 `npm run proof:smoke`**（= `node scripts/proof-spike/runner.mjs`）—— 这个脚本**没有 `--mode` 参数**，计划里那个 `--mode=smoke` 从来没存在过。读数：**7 通过 / 0 失败**，并打印 `PROOF_BACKENDS {"wired":[],"reviewed":0}` 与 `goalsWithoutAnyRoute: []`（见 `docs/current-status.md` §一）。
 
 > **N5 执行记录（2026-10-05，只完成第一步）：** 上面几条检查项**一条都还没勾** ——
 > 已交付的是**边界**：`packages/agent-core/src/proof/proofArtifact.ts` 的产物 schema、
@@ -440,9 +451,13 @@ export type DragSolveResult =
 
 - [x] 五个独立 flag 已由 **N1** 创建（`apps/web/src/agent/featureFlags.ts`，默认关闭）——本阶段只做核对，不再重复创建。
 - [ ] 每个 flag 有单元、浏览器和回退用例；关闭 flag 时旧路径行为逐字不变。
+  > **2026-10-05：只达成一部分，故意不勾。** 逐格核对见 [`docs/acceptance/next-phase-flag-and-dependency-review.md`](../../acceptance/next-phase-flag-and-dependency-review.md) 的覆盖矩阵：**单元用例**三个已实现的开关都有；**关闭回退**也都有证据，但**强度不同**（`witnessSearch` = 黄金样本逐字节；`obligationIR` = 结构 + 单测；`constrainedDrag` = 结构性——离路径就是原来那一行）；**浏览器用例只有 `constrainedDrag` 有**（`e2e/next-phase-flag-entry.spec.ts` 入口 3 条 + `e2e/agent-constrained-drag.spec.ts` 正/反例 2 条），`obligationIR` 与 `witnessSearch` **没有**（它们**没有产品入口**）；`openProblemCompiler` / `proofExport` 是**占位**（零读取点，不该为占位补用例）。**"逐字不变"这句话本身也要分开读**：它**不是一种证据，是三种**（矩阵里那节标题就写着这句）。
 - [ ] 更新所有进度文档和发布门禁；统一记录真实 provider、动态拖动和 proof artifact 证据。
-- [ ] 运行：`npm.cmd run typecheck`、`npm.cmd test`、`npm.cmd run lint`、`npm.cmd run build --workspace @draw/web`、`npm.cmd run test:e2e -- --workers=3`、`npm.cmd run test:rust`、`npm.cmd run test:perf`、`npm.cmd run eval:agent`。
+  > **2026-10-05：文档那一半在做（且刚被独立审查修过 7 处漂移），"真实 provider 证据"仍然没有，不勾。** 已更新：`current-status.md` / `feature-catalog.md` / 发布门禁 / 记分卡 / 本计划 / `CHANGELOG.md` / 新增的开关与依赖审查。**动态拖动**的证据在（浏览器正/反例 + 出口未完整，见 N3 那条）；**proof artifact** 的证据在（边界 + 准入契约，但没接后端）；**真实 provider 一次都没跑** ⇒ 没有任何 pass@1 / pass@3 / 成本 / 延迟 / 人工可读性数字。
+- [x] 运行：`npm.cmd run typecheck`、`npm.cmd test`、`npm.cmd run lint`、`npm.cmd run build --workspace @draw/web`、`npm.cmd run test:e2e -- --workers=3`、`npm.cmd run test:rust`、`npm.cmd run test:perf`、`npm.cmd run eval:agent`。
+  > **2026-10-05 勾上**：八道命令都有当次读数（见 `docs/current-status.md` §一 的「当前读数总表」）。**一处如实说明**：独立复核时 `npm.cmd test` 在本机跑出过 **1 条 5 秒超时**（`fileExports.test.ts` 的 CAD 导出用例，该文件未被本批改动、单跑 9/9 通过），属**负载敏感的既有抖动**，按本仓口径不把那次算绿也不算红。
 - [ ] **提交检查点：** `git commit -m "docs(agent): close next-phase release gate"`。
+  > **2026-10-05：故意不勾** —— 这是**整个计划收尾**的检查点，而 N3/N4/N5 的出口都还没达成（N3 缺过约束拒绝·冲突恢复·一步撤销的浏览器用例；N4 缺一次真实 provider 运行；N5 缺任何后端）。N6 自己的十五步（flag/依赖/WASM 审查、门禁电池、两条抖动修复、并发专项、目录订正）已落地，但"收口"要等那三个出口。
 
 > **N6 执行记录（2026-10-05，只完成第一步）：** 第 1 条（五个 flag 已由 N1 创建）本来就打了勾，
 > 其余**一条还没勾**。这一批交付的是**核对记录**：
