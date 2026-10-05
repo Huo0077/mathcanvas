@@ -99,7 +99,7 @@
   **读数不可比**：`covered` 从 `5/7` 到 `14/21` 是**题集换了**（新加的三类刻意偏难），只记录、不比较。
 - **没有的**：门槛要"抽取率、judgeability、求解率与人工审查分开统计" —— 现在有抽取层的**题级覆盖**
   （`covered`）与**题设级覆盖**（premise rate），但 **judgeability / 人工审查两样仍然没有** —— **求解率第 48 轮补上了**（`BENCHMARK_WITNESS verified=1 unverified=20 no_witness=0 solveRate=0.048`，见证层与救援路径共用同一个离线入口）；
-  `real_provider` 整批 `not_measured`（**适配器没写**，需要先定用哪个 provider、凭据放哪），
+  `real_provider` 整批 `not_measured`（**2026-10-05 更正：不是"适配器没写"** —— **生产侧的 provider 适配器早就有了**：`apps/desktop/src-tauri/src/providers/adapter.rs`（621 行：拼请求 / 解响应 / 借凭据 / 传输 / 取消 / 解码，含 SSRF 守卫），且**有一次真实往返记录**（2026-09-29，DeepSeek `deepseek-chat`，`tools` 通道验过 5 个模型可见工具）。**缺的是 benchmark 那一侧的 `real_provider` 模式**：`scripts/agent-benchmark/` 今天只发 `not_measured`；要跑它得先定"走应用的**回环代理**（`proxy/server.rs`，同一份通道）还是自己发请求"，以及凭据放在哪）
   成本 / 延迟 / 人工可读性同样没有。**不要把 N4 的第一步读成"开放题门槛已过"。**
 
 **N5 形式证明出口：只有"边界"，没有任何后端 —— 所以这一条门槛今天**无法判定**。**
