@@ -26,7 +26,7 @@
 | Lint | `npm.cmd run lint` | **0 error / 13 warning**（与基线逐条相同） | 0 | **第 27 轮**（整批电池） |
 | 单测（全库） | `npm.cmd test -- --maxWorkers=2 --reporter=dot` | **306 文件 / 3567 通过 + 1 todo / 0 失败** | 0 | **第 27 轮**（整批电池） |
 | Rust provider 测试 | `npm.cmd run test:rust` | **238 通过 / 3 ignored / 0 失败**（16 个二进制） | 0 | **第 27 轮**（整批电池） |
-| 全量 e2e | `npm.cmd run test:e2e` | **189 通过（第 58 轮 +3：`next-phase-flag-entry.spec.ts`） / 0 失败**（54.2 s，16 workers） | 0 | **第 27 轮**（整批电池） |
+| 全量 e2e | `npm.cmd run test:e2e` | **191 通过 / 0 失败**（55.7 s，16 workers；含 `next-phase-flag-entry.spec.ts` 3 条与 `agent-constrained-drag.spec.ts` **正/反例 2 条**） | 0 | **第 60 轮** |
 | 性能基线 | `npm.cmd run test:perf` | 9/9；`drag/300-frames` **686–711 ms**（**三次采样的区间，不是单点**） | 0 | **第 37 轮重校** |
 | 生产构建（web） | `npm.cmd run build --workspace @draw/web` | **成功**（4.83 s）；产物落 `build-check/`（已 gitignore，构建后工作树干净）；有**既有的**主 chunk 1.8 MB 提示 | 0 | **第 28 轮** |
 | Agent 评测 | `npm.cmd run eval:agent` | `deterministic_local`：pass@1 **4/8**、pass@3 **4/8**、工具选择 45/45、工具错误 3/45 | 0 | **第 27 轮**（整批电池；**未接真实模型**，不是模型准确率） |
@@ -86,7 +86,7 @@
 
 | # | 要你定什么 | 为什么我定不了 | 定了之后能做什么 |
 | --- | --- | --- | --- |
-| 1 | ~~**`constrainedDrag` 怎么打开**（没有任何产品入口）~~ **✅ 已解决（2026-10-05）** | **设置 → 实验性功能 → 约束拖动**（`apps/web/src/components/settings/ExperimentalFeatures.tsx`）：用户在设置里打开，值存 `mathcanvas:next-phase-preferences`，`agentNextPhaseFlags()` 只从偏好里取**这一个**（另外四个锁死，有"恶意存储"用例钉着）。顺带把顶栏那个**死的「设置」按钮**接上了 | 开关可开可关；**默认仍是关**（关着走原来的 `translatePrimitive3`）。**入口本身已有浏览器验收**：`e2e/next-phase-flag-entry.spec.ts` 3 条（顶栏「设置」到设置模块 / 打开后**刷新仍然成立** / 偏好里只有这一个键）。**还差的**是**拖动行为**那一半（计划点名的 `e2e/agent-constrained-drag.spec.ts` 仍不存在）：要先把 3D 里"拖动单个 `point3`"的指针交互钉住 |
+| 1 | ~~**`constrainedDrag` 怎么打开**~~ **✅ 全解决（2026-10-05）** | 入口：**设置 → 实验性功能 → 约束拖动**（`ExperimentalFeatures.tsx`，偏好存 `mathcanvas:next-phase-preferences`，`agentNextPhaseFlags()` **只**取这一个）。浏览器验收：`e2e/next-phase-flag-entry.spec.ts`（入口 3 条）+ **`e2e/agent-constrained-drag.spec.ts`（拖动正/反例 2 条）** —— 关着时拖动改变 \|AB\|、打开后同样的拖动 \|AB\| **仍是 1**（且断言 A 真的动过，不许用"没变"冒充"被约束住"）。顺带修掉顶栏那个**死的「设置」按钮** | **默认仍是关**（关着走原来的 `translatePrimitive3`）；**定向变异验证过判据**：把 `enabled` 写死 false ⇒ 正例红（实测 \|AB\|=1.539）；全量 e2e 191 通过 |
 | 2 | **N5 首批的「勾股」怎么办**：① 判成 ⊥ 目标、再用**勾股定理那一步**把结论接回来，② 还是从首批里划掉 | **（2026-10-05 两轮更正）** ① 原来我把"共线 / 共面 / 勾股"三个都算成"表达不出来"——**错**：**共线 / 共面在约束层有完整载体**（`ConstraintType` 就有这两个，内核**既判**（`collinearResidual` / `coplanarResidual`）**又投影**），我只是**只在解析层找过**。② 剩下那个**勾股**也不再是"缺能力"：对三点 X/Y/Z，**`XY ⊥ YZ` 与 `|XY|²+|YZ|²=|XZ|²` 等价**（勾股定理及其逆定理），而 `perpendicular` 是 `ConstraintType` 的一员；角度本身也有测量载体（`MeasurementNode` 的 `angle`）。所以真正要定的是：**要不要让证明出口走"判成 ⊥ + 用勾股定理接回来"** —— 注意**别把两者别名**，那等于把一条**推断**藏进分类函数；推断应该出现在**证明**里、看得见。`proof:smoke` 分开报两个清单（`goalsWithoutObligationCarrier` / `goalsWithoutAnyCarrier`） | 短目标词表立刻自洽；`unexpressibleFirstBatchGoals()` 那条待办消失（详见 §四 F） |
 | 3 | **`real_provider` 用哪个 provider、凭据放哪** | 要动凭据与对外调用边界，也是唯一会**花钱**的一项 | N4 的出口（pass@1 / pass@3 / 成本 / 延迟 / 人工复核率）才能有数字；今天那一栏是整批 `not_measured` |
 | 4 | **要不要 `git push`** | 远端写操作，我不自行决定 | 本地领先 `origin/main` **25 个提交**（含两条门禁抖动的修复）才能进远端与 CI |

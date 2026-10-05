@@ -197,11 +197,11 @@ export type DragSolveResult =
   > 过约束拒绝 → `constrainedDrag3.test.ts` + `findConstraintContradictions`；欠约束自由度 →
   > `analysis.remainingDof / underconstrained`；**一步撤销 → `apps/web/src/constrainedDragUndo.test.ts`（第 45 轮补）**。
   > **注意**：这不是"新写了一条替代品"，而是逐条确认**既有测试**覆盖到了 RED 的每一个词。
-- [ ] **RED 命令：** `npm.cmd exec -- vitest run packages/geometry-kernel/src/constraints.test.ts packages/geometry-kernel/src/constraints3d.test.ts packages/geometry-kernel/src/planar-constraints.test.ts packages/geometry-kernel/src/reactive/constraints.test.ts packages/scene-graph/src/operations.test.ts packages/scene-graph/src/patches.test.ts packages/scene-graph/src/scene-store.test.ts --maxWorkers=1`；`npm.cmd run test:e2e -- e2e/agent-constrained-drag.spec.ts --workers=1`
+- [x] **RED 命令：** `npm.cmd exec -- vitest run packages/geometry-kernel/src/constraints.test.ts packages/geometry-kernel/src/constraints3d.test.ts packages/geometry-kernel/src/planar-constraints.test.ts packages/geometry-kernel/src/reactive/constraints.test.ts packages/scene-graph/src/operations.test.ts packages/scene-graph/src/patches.test.ts packages/scene-graph/src/scene-store.test.ts --maxWorkers=1`；`npm.cmd run test:e2e -- e2e/agent-constrained-drag.spec.ts --workers=1`
   > **前半段已跑（2026-10-05）：7 文件 / 241 通过 / 0 失败。** 前半段**不是**"跑过一次"就算完 ——
   > 它是第 33 轮才第一次按这个**集合**跑过的。
   > **后半段仍然不成立**：`e2e/agent-constrained-drag.spec.ts` **不存在**，因为**没有任何产品入口能打开
-  > `constrainedDrag` 开关（见 `docs/current-status.md` §一.2 第 1 条 —— **2026-10-05 已解决：设置有实验性开关**）。但**这条仍然不能勾**：`e2e/agent-constrained-drag.spec.ts` 至今**不存在**，入口有了不等于用例写了。
+  > `constrainedDrag` 开关（见 `docs/current-status.md` §一.2 第 1 条 —— **2026-10-05 已解决：设置有实验性开关**）。**2026-10-05 补齐：这条现在可以勾了** —— `e2e/next-phase-flag-entry.spec.ts`（入口 3 条）+ `e2e/agent-constrained-drag.spec.ts`（拖动正/反例 2 条，`fixedDistance` 判据；把 `enabled` 写死 `false` 的定向变异会让正例红）。
 - [ ] **GREEN：** pointer intent → 临时约束 → solve → commit transaction；禁止直接改 render state。
 - [ ] **GREEN 命令：** 上述定向测试；再跑完整 `npm.cmd run test:e2e -- --workers=3`。
 > **第五步（2026-10-05）：线状 `parallel` / `perpendicular` 的投影。** 计划 RED 里点名的"垂直"
@@ -301,7 +301,7 @@ export type DragSolveResult =
 - [ ] **RED：** 缺 `provider/model/seed/status`、包含 secret、claim 缺 evidence、模式未标识时报告生成必须失败。
 
 **Interfaces:** `BenchmarkCase` 读取 JSONL 题集；`BenchmarkRun` 必须含 `provider/model/seed/mode/status/evidence/cost/latency`；`BenchmarkReport` 分开输出 `deterministic_local` 和 `real_provider`。
-- [ ] **RED 命令：** `npm.cmd exec -- vitest run scripts/agent-benchmark --maxWorkers=1`。
+- [x] **RED 命令：** `npm.cmd exec -- vitest run scripts/agent-benchmark --maxWorkers=1`。
 - [ ] 题集至少包含：欠定、矛盾、未支持表达式、点名打乱、二面角/比例、动态请求、普遍证明请求。
 - [ ] 每题最多 3 轮，记录抽取率、求解率、题设覆盖率、verified/unverified/no_witness、成本、延迟和人工可读性。
 - [ ] 先跑小样本真实 provider；无凭据时写 `not_measured`，不伪造数字。
@@ -356,7 +356,7 @@ export type DragSolveResult =
 - [ ] **RED：** verified_instance/sampled 不能生成 formally_proved；伪造/缺字段/版本不匹配 artifact 拒绝。
 
 **Interfaces:** `ProofArtifact` 必须绑定输入哈希、后端/版本、claim id、证明正文和校验结果；`verifyProofArtifact()` 只返回 `verified/failed/unsupported/timeout`。
-- [ ] **RED 命令：** `npm.cmd exec -- vitest run packages/agent-core/src/proof --maxWorkers=1`。
+- [x] **RED 命令：** `npm.cmd exec -- vitest run packages/agent-core/src/proof --maxWorkers=1`。
 - [ ] **Proof spike：** 创建 scripts/proof-spike/ 的 adapter smoke runner；先输出后端版本/许可证/进程模型/WASM 或原生依赖/启动耗时/超时状态，未通过依赖审查时只允许 unsupported。
 - [ ] 先支持 5–10 个短目标：共线/共面、平行/垂直、等长、勾股；后端可选 Lean/mathlib 或 AlphaGeometry/Newclid 风格 adapter。
 - [ ] **依赖审查任务（必须在 GREEN 前完成）：** 记录许可证、进程/线程边界、WASM/原生依赖、缓存/沙箱、启动时间和失败/超时行为；没有审查结论不得接入默认构建。
