@@ -80,10 +80,42 @@ export interface BenchmarkRun {
   latency: { totalMs: number } | null
 }
 
+/**
+ * **每题最多几轮**（实施计划 N4 第 4 条：「每题最多 3 轮」）。
+ *
+ * 按 `(mode, caseId)` 计：两种模式是**两次独立评测**（一次离线回归、一次真实模型），各自上限
+ * `MAX_ROUNDS_PER_CASE`。超了**整份拒收** —— 一份"某一题跑了 9 轮"的报告会让聚合数字失去可比性，
+ * 而它看起来完全正常。
+ */
+export const MAX_ROUNDS_PER_CASE = 3
+
+/**
+ * 抽取层里 **residue（没被可靠解析的子句）** 在 `evidence[].status` 上用的记号。
+ *
+ * **单源**：`run.test.ts` 构造 residue 证据时用它，`report.ts` 统计覆盖率时也用它 ——
+ * 不然"哪条算 residue"就会有两份判断。
+ */
+export const EXTRACTION_RESIDUE_STATUS = "unverified"
+
+/**
+ * **题设覆盖率**：变成给定义的子句 ÷（给定义 + residue）。
+ *
+ * 口径写在这里，因为**这是本仓自己的定义**，不是行业标准：
+ * - 只看**抽取层**（见证层的 evidence 讲的是候选，不是子句）；
+ * - `not_measured` 的轮次不进统计；
+ * - 一条子句都没读到（`total === 0`）时 `rate` 是 **`null` 而不是 0** ——
+ *   "没读到任何子句"与"读到的全都核验不了"是两件事。
+ */
+export interface BenchmarkPremiseCoverage {
+  obligations: number
+  residue: number
+  rate: number | null
+}
 export interface BenchmarkModeReport {
   runs: BenchmarkRun[]
   byStatus: Record<string, number>
   byLayer: Record<string, number>
+  premiseCoverage: BenchmarkPremiseCoverage
 }
 
 export interface BenchmarkReport {
@@ -114,6 +146,19 @@ function countByLayer(runs: readonly BenchmarkRun[]): Record<string, number> {
   return counts
 }
 
+function premiseCoverage(runs: readonly BenchmarkRun[]): BenchmarkPremiseCoverage {
+  const extraction = runs.filter((run) => run.layer === "extraction" && run.status !== "not_measured")
+  let obligations = 0
+  let residue = 0
+  for (const run of extraction) {
+    for (const entry of run.evidence) {
+      if (entry.status === EXTRACTION_RESIDUE_STATUS) residue += 1
+      else obligations += 1
+    }
+  }
+  const total = obligations + residue
+  return { obligations, residue, rate: total === 0 ? null : obligations / total }
+}
 /**
  * 校验一批运行记录并分组。
  *
@@ -211,14 +256,31 @@ export function buildBenchmarkReport(runs: readonly unknown[], where = "运行�
 
   if (problems.length > 0) throw new BenchmarkReportError(problems)
 
+  /**
+   * **每题最多 `MAX_ROUNDS_PER_CASE` 轮**（计划 N4 第 4 条）。放在形状校验之后：
+   * 形状问题先报，读者才不会被"轮数超限"引开。
+   */
+  const roundsByKey = new Map<string, number>()
+  for (const run of accepted) {
+    const key = `${run.mode}\u0000${run.caseId}`
+    roundsByKey.set(key, (roundsByKey.get(key) ?? 0) + 1)
+  }
+  const overCap = [...roundsByKey.entries()].filter(([, count]) => count > MAX_ROUNDS_PER_CASE)
+  if (overCap.length > 0) {
+    throw new BenchmarkReportError(overCap.map(([key, count]) => {
+      const [mode, caseId] = key.split("\u0000")
+      return `${caseId} 在 ${mode} 下记了 ${count} 轮，超过上限 ${MAX_ROUNDS_PER_CASE}（否则聚合数字失去可比性）`
+    }))
+  }
   const local = accepted.filter((run) => run.mode === "deterministic_local")
   const real = accepted.filter((run) => run.mode === "real_provider")
   return {
-    deterministicLocal: { runs: local, byStatus: countByStatus(local), byLayer: countByLayer(local) },
+    deterministicLocal: { runs: local, byStatus: countByStatus(local), byLayer: countByLayer(local), premiseCoverage: premiseCoverage(local) },
     realProvider: {
       runs: real,
       byStatus: countByStatus(real),
       byLayer: countByLayer(real),
+      premiseCoverage: premiseCoverage(real),
       measured: real.filter((run) => run.status !== "not_measured").length,
       notMeasured: real.filter((run) => run.status === "not_measured").length
     }

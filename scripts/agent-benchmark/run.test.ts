@@ -4,7 +4,7 @@ import { parseObligationIR } from "@draw/agent-core"
 import { describe, expect, it } from "vitest"
 
 import { parseBenchmarkDataset } from "./dataset"
-import { buildBenchmarkReport, type BenchmarkRun, type BenchmarkRunStatus } from "./report"
+import { buildBenchmarkReport, EXTRACTION_RESIDUE_STATUS, MAX_ROUNDS_PER_CASE, type BenchmarkRun, type BenchmarkRunStatus } from "./report"
 
 /**
  * **benchmark 真正的运行入口**（实施计划 N4）。
@@ -50,7 +50,7 @@ function extractionRun(caseId: string, prompt: string): BenchmarkRun {
       status: extractionStatus(ir.obligations.length, ir.unverified.length),
       evidence: [
         ...ir.obligations.map((item) => ({ claim: item.sourceText, status: item.kind, evidence: `角色 ${item.role}` })),
-        ...ir.unverified.map((item) => ({ claim: item.sourceText, status: "unverified", evidence: item.reason })),
+        ...ir.unverified.map((item) => ({ claim: item.sourceText, status: EXTRACTION_RESIDUE_STATUS, evidence: item.reason })),
         /**
          * 一条都没抽出来时 `evidence` 会是空的，而"除了 not_measured 每轮都必须给出凭什么这么说"
          * 那条规则会把它判失败 —— 那是对的：**"没读出来"也是一个结论，要有理由**。
@@ -133,6 +133,40 @@ describe(`benchmark 运行入口（mode=${MODE}）`, () => {
     }
   })
 
+  it("每题超过 MAX_ROUNDS_PER_CASE 轮要**整份拒收**（计划 N4：「每题最多 3 轮」）", () => {
+    const one = cases[0]!
+    const overCap = Array.from({ length: MAX_ROUNDS_PER_CASE + 1 }, () => extractionRun(one.id, one.prompt))
+
+    expect(() => buildBenchmarkReport(overCap)).toThrow(/超过上限/)
+  })
+
+  it("恰好 MAX_ROUNDS_PER_CASE 轮是允许的（边界要钉住，否则上限会被写成 off-by-one）", () => {
+    const one = cases[0]!
+    const atCap = Array.from({ length: MAX_ROUNDS_PER_CASE }, () => extractionRun(one.id, one.prompt))
+
+    expect(buildBenchmarkReport(atCap).deterministicLocal.runs).toHaveLength(MAX_ROUNDS_PER_CASE)
+  })
+
+  it("题设覆盖率：给定义 ÷（给定义 + residue）；**一条子句都没读到时报 null 而不是 0**", () => {
+    const one = cases[0]!
+    const withObligations = buildBenchmarkReport([extractionRun(one.id, one.prompt)]).deterministicLocal.premiseCoverage
+    expect(withObligations.obligations).toBeGreaterThan(0)
+    expect(withObligations.residue).toBe(0)
+    expect(withObligations.rate).toBe(1)
+
+    // 只有 residue 的题：0 ÷ (0+1) = 0 —— "读到的全都核验不了"就是 0，不许和"没读到"混为一谈。
+    const residueOnly = buildBenchmarkReport([extractionRun("only-residue", "拖动这个正四面体的一个顶点，保持六条棱长始终相等")]).deterministicLocal.premiseCoverage
+    expect(residueOnly.obligations).toBe(0)
+    expect(residueOnly.residue).toBe(1)
+    expect(residueOnly.rate).toBe(0)
+
+    // 整批的读数也打出来（`--silent=false` 就是给它看的）：口径见 `report.ts` 的
+    // `BenchmarkPremiseCoverage` —— 只看抽取层、not_measured 不进统计。
+    const whole = buildBenchmarkReport(cases.map((entry) => extractionRun(entry.id, entry.prompt))).deterministicLocal.premiseCoverage
+    console.log(`BENCHMARK_PREMISE obligations=${whole.obligations} residue=${whole.residue} rate=${whole.rate === null ? "null" : whole.rate.toFixed(3)}`)
+    // 完全空的一批：没有子句可算 → null。
+    expect(buildBenchmarkReport([]).deterministicLocal.premiseCoverage.rate).toBeNull()
+  })
   it("每一条题都至少留下一条痕迹（给定义或 residue）—— 让静默丢句再也过不去", () => {
     // 这条不变量写在 `diagramObligations.ts` 自己的注释里（"新写法必须显形为 unverified，
     // 不许把非空题面静默变成空通过"），而题集里**真的**有一条曾经整句消失
