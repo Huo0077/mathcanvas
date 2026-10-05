@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MathCanvas Agent 开放题 benchmark 题集（JSONL，每行一条）",
+  "description": "一份题集是 JSONL：每行一个 BenchmarkCase。词表与必需字段由 dataset.ts 校验，两者的一致性有一条测试钉着（不许分叉）。",
+  "type": "object",
+  "required": ["id", "category", "workspace", "prompt"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "题集内唯一。重复的 id 会被校验器拒绝（否则报告里两条记录分不清谁是谁）。"
+    },
+    "category": {
+      "type": "string",
+      "description": "覆盖矩阵的一格。计划要求题集至少覆盖这七类。",
+      "enum": [
+        "underdetermined",
+        "contradictory",
+        "unsupported-expression",
+        "shuffled-naming",
+        "dihedral-or-ratio",
+        "dynamic-request",
+        "universal-proof-request"
+      ]
+    },
+    "workspace": {
+      "type": "string",
+      "enum": ["geometry3d", "cad", "draft"]
+    },
+    "prompt": {
+      "type": "string",
+      "minLength": 1,
+      "description": "用户原话。**不许含凭据**（解析时会查）。"
+    },
+    "note": {
+      "type": "string",
+      "description": "这条题在测什么。给人看，不参与判分。"
+    }
+  }
+}

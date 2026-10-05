@@ -46,6 +46,12 @@ declare module "node:fs" {
    * 而不是抛一个 `MODULE_NOT_FOUND` 让调用方猜。
    */
   export function existsSync(path: string): boolean
+  /**
+   * `scripts/agent-benchmark` 的用例用它读随仓库走的题集（`cases.jsonl`）。
+   * 用**相对 cwd 的路径**而不是 `URL`：那套用例跑在 jsdom 环境里，`import.meta.url`
+   * 不是 `file:` 协议，传 URL 给 `readFileSync` 会抛 ERR_INVALID_URL_SCHEME。
+   */
+  export function readFileSync(path: string, encoding: "utf8"): string
 }
 
 declare module "node:path" {

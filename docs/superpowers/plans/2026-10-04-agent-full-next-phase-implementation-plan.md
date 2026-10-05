@@ -287,6 +287,22 @@ export type DragSolveResult =
 - [ ] 先跑小样本真实 provider；无凭据时写 `not_measured`，不伪造数字。
 - [ ] **提交检查点：** `git commit -m "feat(eval): add real provider benchmark schema"`。
 
+> **N4 执行记录（2026-10-05，只完成第一步）：** 上面几条检查项**一条都还没勾** ——
+> 已交付的是**载体与判据**：`scripts/agent-benchmark/` 的 `dataset.schema.json` + `dataset.ts`
+> （JSONL 题集 schema 与校验器，词表只从 schema 读）、`redaction.ts`（凭据检查，题集与报告两道口子）、
+> `report.ts`（运行记录与报告契约）、`cases.jsonl`（七类各一条的起步题集），加 **24 条**用例。
+>
+> **与计划原文的偏差（有据）：** ① 文件名由计划的 `*.mjs` 改成 `*.ts` —— `scripts/tsconfig.json`
+> 的 `allowJs` 是 false，`.mjs` 根本不过 `tsc`，而 `.test.ts` 去 import `.mjs` 要手写声明（第二份
+> API、会漂移）；Node 24 可直接执行 `.ts`，将来的 node 入口仍然做得到。
+> ② `provider` / `model` 的口径由"必须含"细化成**键必须在、值可为 `null`**：`deterministic_local`
+> 本来就没有 provider，硬要求非空就得编一个名字。`real_provider` 模式下两者必须是非空字符串。
+>
+> **还没做的（本阶段剩下的全部）：** `runner.mjs`（真正跑题集的入口）、题集**内容**的扩充
+> （现在只有七类各一条，远不够算覆盖率）、**一个真实 provider 都没跑**（所以报告里没有任何
+> pass@1 / pass@3 / 成本 / 延迟 / 人工可读性数字）、抽取率与题设覆盖率的统计、
+> `agent-tool-loop-scorecard.md` 与 `agent-release-gate.md` 的回填。
+
 ## Phase N5：形式证明出口
 
 **目标：** 让少量短目标产生可独立校验的 proof artifact，不把采样或实例通过冒充证明。

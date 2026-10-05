@@ -1,0 +1,7 @@
+{"id":"underdetermined-pyramid-base","category":"underdetermined","workspace":"geometry3d","prompt":"在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，BC ∥ AD，AB ⊥ AD","note":"用户现场报障过的那类题面：一个数字都没有，只有关系。"}
+{"id":"contradictory-two-lengths","category":"contradictory","workspace":"geometry3d","prompt":"作线段 AB，使 AB = 3，同时 AB = 5","note":"可证的矛盾：同一条线段被要求等于两个不同的长度。"}
+{"id":"unsupported-expression","category":"unsupported-expression","workspace":"geometry3d","prompt":"在四棱锥 P-ABCD 中，sin∠PAB = 0.5","note":"测的是「未知写法必须显形为未核验」，不是断言它一定失败。"}
+{"id":"shuffled-naming","category":"shuffled-naming","workspace":"geometry3d","prompt":"在四棱锥 P-DCBA 中，PD ⊥ 平面 DCBA","note":"同样的图形、点名顺序被打乱：核对「顶点顺序靠猜」这个静默假设。"}
+{"id":"dihedral-forty-five","category":"dihedral-or-ratio","workspace":"geometry3d","prompt":"在三棱锥 P-ABC 中，PA ⊥ 平面 ABC，二面角 P-BC-A 为 45°","note":"数值约束：这类条件过去不在判据范围内，是「错图静默通过」的成因之一。"}
+{"id":"dynamic-drag-request","category":"dynamic-request","workspace":"geometry3d","prompt":"拖动这个正四面体的一个顶点，保持六条棱长始终相等","note":"动态请求：属于 N3 的范围，当前只能如实说未支持。"}
+{"id":"universal-proof-request","category":"universal-proof-request","workspace":"geometry3d","prompt":"证明：对任意四棱锥 P-ABCD，若 PA ⊥ 平面 ABCD，则 PA ⊥ BD","note":"普遍性请求：测「任意 / 恒定」的分流，不要把示意图当成证明。"}
