@@ -106,6 +106,23 @@ export const EXTRACTION_RESIDUE_STATUS = "unverified"
  * - 一条子句都没读到（`total === 0`）时 `rate` 是 **`null` 而不是 0** ——
  *   "没读到任何子句"与"读到的全都核验不了"是两件事。
  */
+/**
+ * **抽取率（题级）**：至少抽出一条给定义的题数 ÷ 总题数。
+ *
+ * **与 `BenchmarkPremiseCoverage` 不是一回事**，所以两个名字分开、定义各写一遍：
+ * - 这一条是**题级**的 —— "这道题有没有读懂"（分子是题数）；
+ * - `premiseCoverage` 是**子句级**的 —— "读出来的子句里有多少真的落成了给定义"（分子是子句数）。
+ *
+ * 一道题可以"读懂了但有 5 条子句没核验"，也可以"一条都没读懂" —— 两个比率会给出不同答案，
+ * 混成一个数就会把"没读懂"与"读懂了但没核验"说成同一件事。
+ *
+ * `total === 0` 时 `rate` 是 `null`（没有题就没有率），不是 0。
+ */
+export interface BenchmarkExtractionRate {
+  covered: number
+  total: number
+  rate: number | null
+}
 export interface BenchmarkPremiseCoverage {
   obligations: number
   residue: number
@@ -116,6 +133,7 @@ export interface BenchmarkModeReport {
   byStatus: Record<string, number>
   byLayer: Record<string, number>
   premiseCoverage: BenchmarkPremiseCoverage
+  extractionRate: BenchmarkExtractionRate
 }
 
 export interface BenchmarkReport {
@@ -146,6 +164,13 @@ function countByLayer(runs: readonly BenchmarkRun[]): Record<string, number> {
   return counts
 }
 
+function extractionRate(runs: readonly BenchmarkRun[]): BenchmarkExtractionRate {
+  // 只看抽取层、只算跑过的轮次；**按题去重**（同一题跑多轮不该把分母撑大）。
+  const extraction = runs.filter((run) => run.layer === "extraction" && run.status !== "not_measured")
+  const caseIds = [...new Set(extraction.map((run) => run.caseId))]
+  const covered = new Set(extraction.filter((run) => run.status !== "empty").map((run) => run.caseId))
+  return { covered: covered.size, total: caseIds.length, rate: caseIds.length === 0 ? null : covered.size / caseIds.length }
+}
 function premiseCoverage(runs: readonly BenchmarkRun[]): BenchmarkPremiseCoverage {
   const extraction = runs.filter((run) => run.layer === "extraction" && run.status !== "not_measured")
   let obligations = 0
@@ -275,12 +300,13 @@ export function buildBenchmarkReport(runs: readonly unknown[], where = "运行�
   const local = accepted.filter((run) => run.mode === "deterministic_local")
   const real = accepted.filter((run) => run.mode === "real_provider")
   return {
-    deterministicLocal: { runs: local, byStatus: countByStatus(local), byLayer: countByLayer(local), premiseCoverage: premiseCoverage(local) },
+    deterministicLocal: { runs: local, byStatus: countByStatus(local), byLayer: countByLayer(local), premiseCoverage: premiseCoverage(local), extractionRate: extractionRate(local) },
     realProvider: {
       runs: real,
       byStatus: countByStatus(real),
       byLayer: countByLayer(real),
       premiseCoverage: premiseCoverage(real),
+      extractionRate: extractionRate(real),
       measured: real.filter((run) => run.status !== "not_measured").length,
       notMeasured: real.filter((run) => run.status === "not_measured").length
     }

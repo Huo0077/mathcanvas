@@ -167,6 +167,27 @@ describe(`benchmark 运行入口（mode=${MODE}）`, () => {
     // 完全空的一批：没有子句可算 → null。
     expect(buildBenchmarkReport([]).deterministicLocal.premiseCoverage.rate).toBeNull()
   })
+  it("**抽取率（题级）与题设覆盖率（子句级）是两个数**，不许混成一个", () => {
+    const one = cases[0]!
+    const single = buildBenchmarkReport([extractionRun(one.id, one.prompt)]).deterministicLocal
+    expect(single.extractionRate).toEqual({ covered: 1, total: 1, rate: 1 })
+    expect(single.premiseCoverage.rate).toBe(1)
+
+    // 一道"一条都没读懂"的题：题级是 0/1，子句级也是 0 —— 但两者问的不是同一件事。
+    const empty = buildBenchmarkReport([extractionRun("only-residue-2", "拖动这个正四面体的一个顶点，保持六条棱长始终相等")]).deterministicLocal
+    expect(empty.extractionRate).toEqual({ covered: 0, total: 1, rate: 0 })
+    expect(empty.premiseCoverage).toEqual({ obligations: 0, residue: 1, rate: 0 })
+
+    // 同一题跑多轮**不把分母撑大**（按题去重）。
+    const twice = buildBenchmarkReport([extractionRun(one.id, one.prompt), extractionRun(one.id, one.prompt)]).deterministicLocal
+    expect(twice.extractionRate).toEqual({ covered: 1, total: 1, rate: 1 })
+
+    // 一道题都没有：`rate` 是 null（没有题就没有率），不是 0。
+    expect(buildBenchmarkReport([]).deterministicLocal.extractionRate).toEqual({ covered: 0, total: 0, rate: null })
+
+    const whole = buildBenchmarkReport(cases.map((entry) => extractionRun(entry.id, entry.prompt))).deterministicLocal
+    console.log(`BENCHMARK_EXTRACTION covered=${whole.extractionRate.covered}/${whole.extractionRate.total} rate=${whole.extractionRate.rate === null ? "null" : whole.extractionRate.rate.toFixed(3)}`)
+  })
   it("每一条题都至少留下一条痕迹（给定义或 residue）—— 让静默丢句再也过不去", () => {
     // 这条不变量写在 `diagramObligations.ts` 自己的注释里（"新写法必须显形为 unverified，
     // 不许把非空题面静默变成空通过"），而题集里**真的**有一条曾经整句消失

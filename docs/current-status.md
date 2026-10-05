@@ -653,6 +653,8 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
 
 ### F. N1/N2 的已知边界与 park 项（**不是缺陷，是如实记录**）
 
+- **`deterministic_local` 的「求解率」不是"顺手跑一下"就能有的，它缺一个定义（2026-10-05 查实）**：见证搜索只在**救援路径**里触发 —— `planCompiler.ts:235` 是 `if (context.diagramWitnessSearch !== true) return first.result`，而 `searchWitness` 的调用点在 `:623`，它要**先有一份模型给的计划（含坐标）失败**才有东西可救。离线（无模型）那一侧**没有这个输入**，所以"求解率"要先回答"**离线时喂什么给见证层**"：是拿解析构造的候选当输入，还是干脆把离线见证层定义为 `not_measured`？**这是口径决定，不是实现缺口** —— 别把它当成"忘了跑"。
+
 - **N5 的"只读展示"这一条**（计划要求把 proof artifact 接进 `ConfirmationPanel` / `agentStore` / run event schema）**目前做不了，而且不是"没时间做"**：查下来 `ClaimEvidence` 这套证据词汇**根本没有进过 Web 界面** —— 面板显示的是 `diagramVerification`（另一套词汇，讲的是"这份图核验了吗"），而 `ClaimEvidence` 只在 `witnessSearch` / `solverContracts` / `planCompiler` 这些**核心层**里活着。加上**今天没有任何后端**，产物永远不存在 —— 为一个**不可能出现**的东西先做展示面，属于投机性设计。**这一条与"接一个真实后端"是同一件事，跟着那个决定走。**
 - **两处"约束"模块的分工（免得被误当成重复实现）**：`planar-constraints.ts` 管**"点能待在哪儿"**（一维曲线 + 自然参数，`project`/`evaluate`，拖拽与动画是同一条状态更新），是**点 ↔ 宿主**的一元关系；`constraints3dProjection.ts` 管**"几个对象之间必须保持什么关系"**（⊥ / ∥ / 等长 / 共面…），是**多元**关系，用顺序投影迭代。**两者互补，可以同时出现在同一份文档里**；分工已写进 `constraints3dProjection.ts` 的文件头。
 
