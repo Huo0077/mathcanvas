@@ -130,7 +130,7 @@ node scripts/toolchain.mjs cargo metadata --format-version 1 --manifest-path app
   LICENSE 正文、没有 per-crate 的 SPDX 择一解析、没有复核 `bundled` SQLite 的版本与声明。
 - **并发**：Rust 侧有过一轮专项（锁序 + 淘汰分支的守卫，见 §四），但**几何 Worker 那侧的共享可变
   状态没有写成清单**，也没有任何压测 —— 那部分仍然只能读作"我读过、没发现"，不是"已证"。
-- 三个已实现开关的**浏览器**用例（§一）—— 其中 `constrainedDrag` 还卡在"没有产品入口能把它
+- 三个已实现开关的**浏览器**用例（§一）—— 其中 `constrainedDrag` 的入口**2026-10-05 补上了**（设置 → 实验性功能 → 约束拖动，偏好存 `mathcanvas:next-phase-preferences`，且只有这一个开关能被偏好打开）；原先卡在"没有产品入口能把它
   打开"，所以连正/反例都写不出来。
 - `openProblemCompiler` / `proofExport` 的真实依赖（N4 / N5 实现时才有）。
 - 依赖体积 / 供应链（例如 lockfile 完整性、是否有 postinstall 脚本）—— 未审。

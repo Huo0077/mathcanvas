@@ -5,6 +5,37 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-05 —— **N3 的第一个产品入口**：开关从哪来这件事定了（用户批准，方案 B）
+
+- **背景**：`constrainedDrag` 的代码从 N3 起就在，但 `agentNextPhaseFlags()` 一直返回全关的一份，
+  于是**没有产品入口能打开它** —— 浏览器验收写不出来，`current-status.md` §一.2 第 1 条挂了很久。
+  这一轮把这个入口补上了（用户在两轮里分别选了「用户偏好」与「把死按钮接上」）。
+- **做了什么**：
+  1. `apps/web/src/persistence/nextPhasePreferences.ts`（新）：一个独立的 localStorage 键
+     `mathcanvas:next-phase-preferences` + 一对 load/save。**降级口径与 `loadViewPreference3d` 一致**：
+     没存过 / 坏数据 / 存不下**一律当作关**（判定用 `=== true`，所以 `{"constrainedDrag":"yes"}` 读成关）；
+     写的时候**只改这一个键、其它键原样保留**（将来会有第二个实验性开关）。
+  2. `agentNextPhaseFlags()` **只从偏好里取 `constrainedDrag` 这一个**。另外四个**故意不读偏好**：
+     `witnessSearch` 打开会替换被物化的坐标与点名（有自己的接线前提），`openProblemCompiler` /
+     `proofExport` 还没交付，`obligationIR` 同理。**一个"存了就能全开"的偏好等于把四个未完成阶段的路一起打开。**
+  3. `apps/web/src/components/settings/ExperimentalFeatures.tsx`（新）：「设置 → 实验性功能 → 约束拖动」。
+     **文案里两边行为都写清楚**（关着=原来的自由拖动；打开=受约束的点沿约束走并占一步撤销）——
+     这个开关会**换掉拖动路径**，用户得知道自己在开什么。
+  4. **顺带修掉一个死按钮**：`WorkspaceTabs` 顶栏那个「设置」此前**没有 `onClick`**、props 里也没有
+     `onSettings`（它是个装饰）。现在它接到设置模块（`App` 切 `activeModule`），`AppChrome` 透传。
+- **一条被改动的既有判据（如实记档）**：`featureFlags.test.ts` 的
+  "keeps the application-owned flags fully off" 说的原本是"**恒为全关**"。
+  偏好进来之后这句话要说得更准：**没有存过偏好时全关**。**它盯的东西没变**
+（生产缺省不许自己变成开 —— 由 `createAgentNextPhaseFlags()` 那条继续把着），
+  同时新增一条"**恶意存储**"用例把"只有 `constrainedDrag` 能被偏好打开"钉住。
+- **证据（都看过红绿）**：
+  - 新增 13 条用例（偏好 4 条、组件 4 条、端到端入口 3 条、顶栏按钮 1 条、既有判据拆成 2 条）；
+  - **定向变异两次都对**：① 把偏好读取的默认改成"开" ⇒ **3 条红**；
+    ② 顺手让 `witnessSearch` 也读偏好 ⇒ **正好那条"恶意存储"红**；
+  - 全库单测 **310 文件 / 3602 通过** → **313 文件 / 3615 通过 + 1 todo / 0 失败**；
+  - `typecheck` exit 0；`lint` exit 0。
+- **还没做完的（不许含糊）**：`e2e/agent-constrained-drag.spec.ts` **仍然不存在** ——
+  **入口有了，浏览器正/反例可以写了、但还没写**。所以 N3 的 RED 后半段与发布门禁那两条**仍然不能算完成**。
 ## 2026-10-05 —— N4 第十五步：提交被拒时，用户看到的是**引擎的英文原话**（已修，而且是修在"设计指定该修的那一层"）
 
 - **怎么查到的**：接着第 54 轮那条线（去读"用户可见的字符串是怎么生成的"），这一轮沿着

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest"
 
+import { NEXT_PHASE_PREFERENCES_KEY } from "../persistence/nextPhasePreferences"
+
 import { AGENT_NEXT_PHASE_FLAG_NAMES, agentNextPhaseFlags, createAgentNextPhaseFlags, type AgentNextPhaseFlags } from "./featureFlags"
 
 describe("agent next phase feature flags", () => {
@@ -29,16 +31,41 @@ describe("agent next phase feature flags", () => {
   })
 
   /**
-   * **R6：应用层持有的那一份就是"开关从哪来"的答案，而且它现在必须是关的。**
+   * **R6：应用层持有的那一份就是"开关从哪来"的答案。**
    *
-   * 这条判据看着像重复（上面已经断言过 `createAgentNextPhaseFlags()` 全关），
-   * 但它盯的是**另一个对象**：生产接线读的是这一处。
-   * 哪天有人为了"先跑起来"把这里的缺省改成 `true`，上面那条仍然全绿，
-   * 而"生产默认走旧路径"这条验收条件会静默失效 —— 正是 R6 要防的那种改动。
+   * **2026-10-05 更新（用户批准的改动）**：这一处现在会读**用户偏好** —— N3 的第一个产品入口
+   *（"设置 → 实验性功能 → 约束拖动"），所以"全关"这句话要说得更准：**没有存过偏好时全关**。
+   *
+   * **这条判据真正盯的东西没变**：生产缺省不许自己变成开。上面第一条（`createAgentNextPhaseFlags()`
+   * 全关）仍然把"有人把缺省改成 true"挡着；而"只有偏好能开、且只能开那一个"由下面两条钉住。
    */
-  it("keeps the application-owned flags fully off", () => {
+  it("keeps the application-owned flags fully off when no preference is stored", () => {
+    localStorage.clear()
+
     expect(agentNextPhaseFlags()).toEqual({
       obligationIR: false, witnessSearch: false, constrainedDrag: false, openProblemCompiler: false, proofExport: false
     })
+  })
+
+  /**
+   * **偏好只开 `constrainedDrag` 一个 —— 这一条是本次改动的关键安全性质。**
+   *
+   * 存储里可能是任何东西：旧版本写的、手改的、别的程序写的。**那四个开关不许被它打开**，理由是各不相同
+   * 而都必须成立：`witnessSearch` 打开后会替换被物化的坐标与点名（它有自己的接线前提，见
+   * `featureFlags.ts` 的说明），`openProblemCompiler` / `proofExport` 根本还没交付，
+   * `obligationIR` 同理。**一个"存了就能全开"的偏好等于把四个未完成阶段的路一起打开。**
+   */
+  it("opens only constrainedDrag from the stored preference, never the other four", () => {
+    localStorage.setItem(NEXT_PHASE_PREFERENCES_KEY, JSON.stringify({
+      obligationIR: true, witnessSearch: true, constrainedDrag: true, openProblemCompiler: true, proofExport: true
+    }))
+
+    const flags = agentNextPhaseFlags()
+
+    expect(flags.constrainedDrag).toBe(true)
+    for (const name of ["obligationIR", "witnessSearch", "openProblemCompiler", "proofExport"] as const) {
+      expect(flags[name], `${name} 不许被偏好打开`).toBe(false)
+    }
+    localStorage.clear()
   })
 })

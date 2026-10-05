@@ -33,6 +33,7 @@ import { PaperTexture } from "./components/PaperTexture"
 import { ModuleRail } from "./components/ModuleRail"
 import { WorkspaceHeader } from "./components/WorkspaceHeader"
 import { AgentWorkspace } from "./components/agent/AgentWorkspace"
+import { ExperimentalFeatures } from "./components/settings/ExperimentalFeatures"
 import { ProviderSettings } from "./components/settings/ProviderSettings"
 import { ProjectPackagePanel } from "./components/ProjectPackagePanel"
 import { readDesktopRuntime, type DesktopRuntimeInfo } from "./services/desktopRuntime"
@@ -868,7 +869,8 @@ export function App() {
     {activeModule === "traditional" ? <div className="app-module" data-module="traditional">
       {/* 顶栏只剩品牌（含动态粒子与打字光标）；文件命令 / 搜索 / 设置下沉到标签栏右端。 */}
       <WorkspaceHeader />
-      <AppChrome activeWorkspace={document.workspace} onWorkspaceChange={handleWorkspaceChange} ribbonGroups={ribbonGroups} activeRibbonTab={activeRibbonTab} ribbonExpanded={ribbonExpanded} ribbonPinned={ribbonPinned} onRibbonTabChange={setActiveRibbonTab} onRibbonCommand={handleRibbonCommand} onRibbonExpandedChange={setRibbonExpanded} onRibbonPinnedChange={setRibbonPinned} onUndo={undo} onRedo={redo} canUndo={canUndo} canRedo={canRedo} onSave={save} onOpen={() => fileInputRef.current?.click()} onPackage={() => setPackagePanelOpen(true)} />
+      <AppChrome
+      onSettings={() => setActiveModule("settings")} activeWorkspace={document.workspace} onWorkspaceChange={handleWorkspaceChange} ribbonGroups={ribbonGroups} activeRibbonTab={activeRibbonTab} ribbonExpanded={ribbonExpanded} ribbonPinned={ribbonPinned} onRibbonTabChange={setActiveRibbonTab} onRibbonCommand={handleRibbonCommand} onRibbonExpandedChange={setRibbonExpanded} onRibbonPinnedChange={setRibbonPinned} onUndo={undo} onRedo={redo} canUndo={canUndo} canRedo={canRedo} onSave={save} onOpen={() => fileInputRef.current?.click()} onPackage={() => setPackagePanelOpen(true)} />
       {document.workspace === "cad" ? cadWorkbench : <div className="workbench">
         <div className="workbench-mobile-controls" role="toolbar" aria-label="画布面板">
           <button type="button" aria-controls="algebra-dock" aria-expanded={mobileDock === "objects"} onClick={() => setMobileDock((current) => current === "objects" ? null : "objects")}>对象列表</button>
@@ -918,6 +920,9 @@ export function App() {
           在桌面外壳里它是真的能存的地方；在浏览器里如实说明"需要桌面版"，
           而不是让用户填完才发现存不下。 */}
       <ProviderSettings unavailableReason={desktopRuntimeHint} />
+      {/* **实验性功能**（N3 的第一个产品入口）：这个面是用户在设置里打开"约束拖动"的地方。
+          它接的是 `agentNextPhaseFlags().constrainedDrag`，而 `App.tsx` 关着时走的是原来的 `translatePrimitive3`。 */}
+      <ExperimentalFeatures />
     </div>}
     <input ref={fileInputRef} hidden aria-label="加载 .mgeo 文件" type="file" accept=".mgeo,application/json" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; file.text().then(load).catch(() => setFileError("无法读取 .mgeo 文件")); event.target.value = "" }} />
   </div>

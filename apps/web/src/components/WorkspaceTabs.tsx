@@ -33,6 +33,8 @@ interface WorkspaceTabsProps {
   onRedo?: () => void
   canUndo?: boolean
   canRedo?: boolean
+  /** 打开**设置**模块（N3 的第一个产品入口）。这个按钮此前是死的：没有 onClick，也没有这个 prop。 */
+  onSettings?: () => void
 }
 
 const tabs: { id: RibbonTabId | Workspace; label: string }[] = [
@@ -43,7 +45,7 @@ const tabs: { id: RibbonTabId | Workspace; label: string }[] = [
   { id: "cad", label: "工程制图" }
 ]
 
-export function WorkspaceTabs({ activeWorkspace, activeTab, expanded, pinned, onWorkspaceChange, onTabChange, onExpandedChange, onPinnedChange, onOpen, onSave, onPackage, onUndo, onRedo, canUndo, canRedo }: WorkspaceTabsProps) {
+export function WorkspaceTabs({ activeWorkspace, activeTab, expanded, pinned, onWorkspaceChange, onTabChange, onExpandedChange, onPinnedChange, onOpen, onSave, onPackage, onUndo, onRedo, canUndo, canRedo, onSettings }: WorkspaceTabsProps) {
   const handleTab = (id: RibbonTabId | Workspace) => {
     if (id === "file") {
       onTabChange(activeTab === "file" ? null : "file")
@@ -71,7 +73,7 @@ export function WorkspaceTabs({ activeWorkspace, activeTab, expanded, pinned, on
         {onUndo && <button type="button" onClick={onUndo} disabled={canUndo === false} title={canUndo === false ? "没有可撤销的操作（Ctrl+Z）" : "撤销 (Ctrl+Z)"}>撤销</button>}
         {onRedo && <button type="button" onClick={onRedo} disabled={canRedo === false} title={canRedo === false ? "没有可重做的操作（Ctrl+Y）" : "重做 (Ctrl+Y)"}>重做</button>}
       </div>
-      <button className="topbar-icon" type="button" aria-label="设置"><HeaderIcon name="settings" /></button>
+      <button className="topbar-icon" type="button" aria-label="设置" onClick={onSettings}><HeaderIcon name="settings" /></button>
       <div className="workspace-tabs-controls" role="group" aria-label="功能区控制" data-ribbon-control>
         <button type="button" aria-label={expanded ? "收起功能区" : "展开功能区"} aria-expanded={expanded} onClick={() => { onExpandedChange(!expanded); if (expanded) onTabChange(null) }}>{expanded ? "⌃" : "⌄"}</button>
         <button type="button" aria-label={pinned ? "取消固定功能区" : "固定功能区"} aria-pressed={pinned} onClick={() => onPinnedChange(!pinned)}>{pinned ? "●" : "○"}</button>

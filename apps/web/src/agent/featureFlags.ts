@@ -1,3 +1,5 @@
+import { loadConstrainedDragEnabled } from "../persistence/nextPhasePreferences"
+
 /**
  * **下一阶段能力的项目级开关**（设计 2026-10-04 的 Feature flags 一节；控制器裁决 R2）。
  *
@@ -78,11 +80,23 @@ export function createAgentNextPhaseFlags(overrides: Partial<AgentNextPhaseFlags
  * N2 另有一条与本文件无关的注意点：`witnessSearch` 打开后会替换被物化的坐标与点名，
  * 所以草稿层那次再核验必须对着编译器回带的 `materialisedActions`（见 `draftStore.stage`）。
  *
- * N3–N5 的三个开关保持 `false`，各阶段实现时只允许在自己的开关下启用。
+ * N3–N5 的三个开关里，**`constrainedDrag` 已有用户入口**（设置 → 实验性功能，走 `loadConstrainedDragEnabled`），另外两个保持 `false`；**各阶段实现时只允许在自己的开关下启用**。
  *
  * 为什么是**函数**而不是常量对象：开关将来要能由运行配置/实验组驱动，
  * 而"每次调用现取"与"进程启动时冻结一份"在接线处看不出区别，到那时才改就要动一批调用点。
  */
 export function agentNextPhaseFlags(): AgentNextPhaseFlags {
-  return createAgentNextPhaseFlags()
+  /**
+   * **只从偏好里取 `constrainedDrag` 这一个**（2026-10-05，用户批准的 N3 入口）。
+   *
+   * 另外四个**故意不读偏好**，理由是各不相同而都必须成立：
+   *
+   * - `witnessSearch` 打开后**会替换被物化的坐标与点名**（见上面的注意点），它有自己的接线前提；
+   * - `openProblemCompiler` / `proofExport` 属于 N4 / N5，**还没交付**；
+   * - `obligationIR` 同理。
+   *
+   * 一个"存了就能全开"的偏好，等于把四个未完成阶段的路一起打开 ——
+   * `featureFlags.test.ts` 里那条"恶意存储"用例就是钉这件事的。
+   */
+  return createAgentNextPhaseFlags({ constrainedDrag: loadConstrainedDragEnabled() })
 }

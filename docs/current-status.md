@@ -86,7 +86,7 @@
 
 | # | 要你定什么 | 为什么我定不了 | 定了之后能做什么 |
 | --- | --- | --- | --- |
-| 1 | **`constrainedDrag` 开关怎么打开** | 仓库里**不存在**任何运行期开关约定（没有 `import.meta.env`、没有 localStorage 开关；`agentNextPhaseFlags()` 是 `App.tsx:518` 直接调的常量）。所以"加一个入口"本身就是产品决定；而按 N2 的先例，**测试后门是被禁止的** | N3 的出口（保持约束 / 过约束拒绝 / 冲突恢复 / 一步撤销的**浏览器**正反例）当天就能写；N3 从"代码在、用户看不见"变成"可验收" |
+| 1 | ~~**`constrainedDrag` 怎么打开**（没有任何产品入口）~~ **✅ 已解决（2026-10-05）** | **设置 → 实验性功能 → 约束拖动**（`apps/web/src/components/settings/ExperimentalFeatures.tsx`）：用户在设置里打开，值存 `mathcanvas:next-phase-preferences`，`agentNextPhaseFlags()` 只从偏好里取**这一个**（另外四个锁死，有"恶意存储"用例钉着）。顺带把顶栏那个**死的「设置」按钮**接上了 | 开关可开可关；**默认仍是关**（关着走原来的 `translatePrimitive3`）。**下一步**：`e2e/agent-constrained-drag.spec.ts` 仍然**不存在** —— 入口有了，浏览器正/反例**可以写了、但还没写** |
 | 2 | **N5 首批的「勾股」怎么办**：① 判成 ⊥ 目标、再用**勾股定理那一步**把结论接回来，② 还是从首批里划掉 | **（2026-10-05 两轮更正）** ① 原来我把"共线 / 共面 / 勾股"三个都算成"表达不出来"——**错**：**共线 / 共面在约束层有完整载体**（`ConstraintType` 就有这两个，内核**既判**（`collinearResidual` / `coplanarResidual`）**又投影**），我只是**只在解析层找过**。② 剩下那个**勾股**也不再是"缺能力"：对三点 X/Y/Z，**`XY ⊥ YZ` 与 `|XY|²+|YZ|²=|XZ|²` 等价**（勾股定理及其逆定理），而 `perpendicular` 是 `ConstraintType` 的一员；角度本身也有测量载体（`MeasurementNode` 的 `angle`）。所以真正要定的是：**要不要让证明出口走"判成 ⊥ + 用勾股定理接回来"** —— 注意**别把两者别名**，那等于把一条**推断**藏进分类函数；推断应该出现在**证明**里、看得见。`proof:smoke` 分开报两个清单（`goalsWithoutObligationCarrier` / `goalsWithoutAnyCarrier`） | 短目标词表立刻自洽；`unexpressibleFirstBatchGoals()` 那条待办消失（详见 §四 F） |
 | 3 | **`real_provider` 用哪个 provider、凭据放哪** | 要动凭据与对外调用边界，也是唯一会**花钱**的一项 | N4 的出口（pass@1 / pass@3 / 成本 / 延迟 / 人工复核率）才能有数字；今天那一栏是整批 `not_measured` |
 | 4 | **要不要 `git push`** | 远端写操作，我不自行决定 | 本地领先 `origin/main` **25 个提交**（含两条门禁抖动的修复）才能进远端与 CI |

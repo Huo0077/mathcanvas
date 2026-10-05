@@ -201,7 +201,7 @@ export type DragSolveResult =
   > **前半段已跑（2026-10-05）：7 文件 / 241 通过 / 0 失败。** 前半段**不是**"跑过一次"就算完 ——
   > 它是第 33 轮才第一次按这个**集合**跑过的。
   > **后半段仍然不成立**：`e2e/agent-constrained-drag.spec.ts` **不存在**，因为**没有任何产品入口能打开
-  > `constrainedDrag` 开关**（见 `docs/current-status.md` §一.2 第 1 条）。这一条**不能**勾。
+  > `constrainedDrag` 开关（见 `docs/current-status.md` §一.2 第 1 条 —— **2026-10-05 已解决：设置有实验性开关**）。但**这条仍然不能勾**：`e2e/agent-constrained-drag.spec.ts` 至今**不存在**，入口有了不等于用例写了。
 - [ ] **GREEN：** pointer intent → 临时约束 → solve → commit transaction；禁止直接改 render state。
 - [ ] **GREEN 命令：** 上述定向测试；再跑完整 `npm.cmd run test:e2e -- --workers=3`。
 > **第五步（2026-10-05）：线状 `parallel` / `perpendicular` 的投影。** 计划 RED 里点名的"垂直"

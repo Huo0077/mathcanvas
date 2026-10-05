@@ -26,15 +26,17 @@ interface AppChromeProps {
   onSave?: () => void
   /** 打开项目包面板（`.mcanvas` 导出/导入 + 附件）。与上面两个同属文件级动作。 */
   onPackage?: () => void
+  /** 打开设置模块（N3 实验性功能的入口）。 */
+  onSettings?: () => void
   onUndo?: () => void
   onRedo?: () => void
   canUndo?: boolean
   canRedo?: boolean
 }
 
-export function AppChrome({ activeWorkspace, onWorkspaceChange, ribbonGroups, activeRibbonTab, ribbonExpanded, ribbonPinned, onRibbonTabChange, onRibbonCommand = () => {}, onRibbonExpandedChange, onRibbonPinnedChange, onOpen, onSave, onPackage, onUndo, onRedo, canUndo, canRedo }: AppChromeProps) {
+export function AppChrome({ onSettings, activeWorkspace, onWorkspaceChange, ribbonGroups, activeRibbonTab, ribbonExpanded, ribbonPinned, onRibbonTabChange, onRibbonCommand = () => {}, onRibbonExpandedChange, onRibbonPinnedChange, onOpen, onSave, onPackage, onUndo, onRedo, canUndo, canRedo }: AppChromeProps) {
   return <>
-    <WorkspaceTabs activeWorkspace={activeWorkspace} activeTab={activeRibbonTab} expanded={ribbonExpanded} pinned={ribbonPinned} onWorkspaceChange={onWorkspaceChange} onTabChange={onRibbonTabChange} onExpandedChange={onRibbonExpandedChange} onPinnedChange={onRibbonPinnedChange} onOpen={onOpen} onSave={onSave} onPackage={onPackage} onUndo={onUndo} onRedo={onRedo} canUndo={canUndo} canRedo={canRedo} />
+    <WorkspaceTabs onSettings={onSettings} activeWorkspace={activeWorkspace} activeTab={activeRibbonTab} expanded={ribbonExpanded} pinned={ribbonPinned} onWorkspaceChange={onWorkspaceChange} onTabChange={onRibbonTabChange} onExpandedChange={onRibbonExpandedChange} onPinnedChange={onRibbonPinnedChange} onOpen={onOpen} onSave={onSave} onPackage={onPackage} onUndo={onUndo} onRedo={onRedo} canUndo={canUndo} canRedo={canRedo} />
     <Ribbon groups={ribbonGroups} activeTab={activeRibbonTab} expanded={ribbonExpanded} pinned={ribbonPinned} onTabChange={onRibbonTabChange} onCommand={onRibbonCommand} onExpandedChange={onRibbonExpandedChange} onPinnedChange={onRibbonPinnedChange} showControls={false} />
   </>
 }

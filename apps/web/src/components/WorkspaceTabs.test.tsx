@@ -18,6 +18,18 @@ function renderTabs(overrides: Partial<Parameters<typeof WorkspaceTabs>[0]> = {}
 }
 
 describe("workspace tab bar", () => {
+  /**
+   * **顶栏那个「设置」按钮此前是死的**（没有 `onClick`，`WorkspaceTabs` 也没有 `onSettings` prop）。
+   * N3 的第一个产品入口就落在这里：点它要能到设置模块（由 `App` 把 `activeModule` 切过去）。
+   */
+  it("点「设置」会通知调用方（这个按钮以前是死的）", () => {
+    const onSettings = vi.fn()
+    renderTabs({ onSettings })
+
+    fireEvent.click(screen.getByRole("button", { name: "设置" }))
+
+    expect(onSettings).toHaveBeenCalledTimes(1)
+  })
   it("keeps the workspace tabs and the ribbon switches", () => {
     renderTabs()
 
