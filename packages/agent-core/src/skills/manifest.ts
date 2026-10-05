@@ -91,7 +91,7 @@ export const SKILL_MANIFESTS: readonly SkillManifest[] = [
   {
     id: "spatial-modeling",
     title: "空间建模",
-    summary: "在立体几何工作区创建立方体、棱锥、正四面体、正 N 棱锥、圆柱、圆锥，用底面多边形 + 拉伸向量构造棱柱，或用**顶点 + 面环**构造任意多面体（不规则图形走这一条）。实体都会物化出顶点、棱、面；棱柱的侧面由内核按底面与向量生成，不能自己拼。**题面点名了实体上的点**（棱的中点、棱上的分点、面上的点、体内的点）时用 `dynamic.create_bound_point`：`host` 指实体、`hostSub` 指它第几条棱（从 0 数，就是物化出来的 `:e0`、`:e1`…）、`parameter` 是那点在这条棱上的位置（**0.5 就是中点**，0 与 1 是两个端点；`scale`/`offset` 之类的位置说法先自己换算成 parameter）。",
+    summary: "在立体几何工作区创建立方体、棱锥、正四面体、正 N 棱锥、圆柱、圆锥，用底面多边形 + 拉伸向量构造棱柱，或用**顶点 + 面环**构造任意多面体（不规则图形走这一条）。实体都会物化出顶点、棱、面；棱柱的侧面由内核按底面与向量生成，不能自己拼。**题面点名了实体上的点**（棱的中点、棱上的分点、面上的点、体内的点）时用 `dynamic.create_bound_point`：`host` 指实体、`hostSub` 指它第几条棱（从 0 数）、`parameter` 是那点在这条棱上的位置（**0.5 就是中点**，0 与 1 是两个端点）。**棱的顺序不要猜**：实体建好之后，观察里每条棱都带着它的两个端点（`pointIds`）、顶点都带点名 —— 拿它对着题面把「哪条棱连着哪两个点名」读出来，再填 `hostSub`；**猜错会被当场拒绝**（编译器要按题设逐条核验，图不对就不许提交）。",
     actionIds: ["solid.create_template", "solid.create_prism", "solid.create_sphere", "solid.create_tetrahedron", "solid.create_regular_pyramid", "solid.create_polyhedron", "dynamic.create_bound_point"],
     limits: { actionsPerStage: 4, actionsPerRun: 16 },
     successCase: { prompt: "画一个棱长 4 的立方体，中心在原点", expectation: "一笔 solid.create_template，template 为 cube，给 origin 与 size" },
