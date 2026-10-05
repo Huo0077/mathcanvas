@@ -13,7 +13,9 @@ import { evidenceStatusWithProof, proofInputHash, verifyProofArtifact, PROOF_ART
 
 const EXPECTATION: ProofExpectation = {
   claimId: "claim-1",
-  inputHash: proofInputHash({ prompt: "在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD", claimSourceText: "PA ⊥ BD" })
+  inputHash: proofInputHash({ prompt: "在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD", claimSourceText: "PA ⊥ BD" }),
+  // 这条 goal 属于**首批**里能表达的那一类（见 proofGoals.ts）。
+  goalKind: "perpendicular"
 }
 
 function artifact(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -64,6 +66,19 @@ describe("证明产物的校验（N5 的边界）", () => {
     expect(outcome.verification.artifact).not.toBeNull()
   })
 
+  it("**表外目标绝不升级**：goalKind 为 null 时，再合法的产物也报 undeclared-goal", () => {
+    const outcome = evidenceStatusWithProof("verified_instance", { ...EXPECTATION, goalKind: null }, [artifact()])
+
+    expect(outcome.status).toBe("verified_instance")
+    expect(outcome.verification.status).toBe("failed")
+    expect(outcome.verification.reasons[0]?.code).toBe("undeclared-goal")
+  })
+
+  it("不合格产物与「表外目标」是两句话：表内目标的坏产物报的是它自己的毛病", () => {
+    const outcome = evidenceStatusWithProof("sampled", EXPECTATION, [artifact({ version: 99 })])
+
+    expect(outcome.verification.reasons[0]?.code).toBe("version-mismatch")
+  })
   it("缺字段要拒，并点名缺了哪个", () => {
     for (const field of ["version", "claimId", "inputHash", "backend", "proof", "result"]) {
       const broken = artifact()

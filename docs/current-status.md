@@ -13,6 +13,21 @@
 
 ## 一、现在能不能跑（可复核的门禁读数）
 
+**2026-10-05 N5 第二步（短目标词表）—— 本批实测：**
+
+| 命令 | 当次结果 |
+| --- | --- |
+| `npm.cmd test -- --maxWorkers=2 --reporter=dot` | **305 文件 / 3551 通过 + 1 todo / 0 失败**（137 s） |
+| `npm.cmd run typecheck` | exit 0（全部工作区 + `e2e/` + `scripts/`） |
+| `npm.cmd run lint` | exit 0，**0 error / 13 warning**（与基线逐条相同） |
+| `npm.cmd exec -- vitest run packages/agent-core/src/proof --maxWorkers=1` | **22 通过 / 0 失败** |
+
+> **新增** `packages/agent-core/src/proof/proofGoals.ts`：10 种短目标的**封闭词表** + 支持矩阵 + `declaredProofGoal(obligationKind)`。映射按**题设种类**（结构化字段）走，**不做文本关键词匹配**。
+> **接线（fail-closed）**：`ProofExpectation` 新增**必填**的 `goalKind`；为 `null`（不在首批）时无论产物多合法都**不升级**，报 `undeclared-goal`。这条门放在绑定检查之前。
+> **本批最有价值的产出是一条事实**：计划首批点名的"共线/共面、勾股"**在解析层表达不出来** —— `DiagramObligationKind` 里根本没有这三种（只有 `fixedLength | equilateral | equalLength | midpoint | segmentRatio | planePerpendicular | dihedral | perpendicular | parallel`）。矩阵如实标注为"首批里、但现在表达不出来"，并单列成 `unexpressibleFirstBatchGoals()`；**要一个裁决**（扩解析层，还是从首批划掉）。见 §四 F。
+> **证据**：`proofGoals.test.ts` 5 条 + `proofArtifact.test.ts` 17 条；定向变异（停掉 `goalKind === null` 那道门）→ **正好那一条红**。
+> **边界**：仍然**没有接任何后端**；`dihedral` 能表达但**不在首批**，同样不升级。
+
 **2026-10-05 N5 第一步（形式证明出口的边界）—— 本批实测：**
 
 | 命令 | 当次结果 |
@@ -526,6 +541,9 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
 7. 其他尚未启动的产品探索：题目截图识图、GeoGebra `.ggb` 互操作、平面/函数题型逐题补缺、3D 画面进入 HTML。
 
 ### F. N1/N2 的已知边界与 park 项（**不是缺陷，是如实记录**）
+
+- **N5 待裁决：计划首批的"共线 / 共面 / 勾股"现在表达不出来。** 计划 N5 的首批清单写着"共线/共面、平行/垂直、等长、勾股"，而解析层的 `DiagramObligationKind` 只有
+  `fixedLength | equilateral | equalLength | midpoint | segmentRatio | planePerpendicular | dihedral | perpendicular | parallel` —— **没有共线、共面、勾股**。所以照计划把它们列进"支持"只会得到一句没有载体的话（永远不会有 goal 被分类成它）。处置见 `packages/agent-core/src/proof/proofGoals.ts` 的 `unexpressibleFirstBatchGoals()`，两条路：**① 先扩解析层**（让这三类目标能被表达），或 **② 从首批里划掉**（N5 只声称支持能表达的那几类）。**这一条需要裁决，不是实现细节。**
 
 - **棱柱族恒为"未核验"**：原话解析把 `A′` / `AA₁` 压成单个大写字母，且核验器的点名别名映射只收 `/^[A-Z]$/`，所以 `shape:"prism"` 稳定产出 `unverified_instance`。设计 §5 的 R2 出口本来就规定"**不支持**题稳定产出 `unverified_instance`"，故这是**符合出口**的诚实结果；带撇点名的支持是独立后续项（要动解析层，**不许**在内核或接线层"猜"）。
 - **`degreesOfFreedom` 目前恒为 `null`**（窄豁免）：N1 的 `reportFreeDegrees` 要的是 DSL `ConstraintSpec[]`（`targets` 是**图元 id**），而 `ConstraintType` 表达不了线⊥面与角度；只映射子集会让数字**看不出漏了什么**，拿实测值冒充更是自证。要真算需扩 `dsl` + 内核判据 → 归 N3。**呈现纪律**：`null` 必须读作"未计算"，**不得**读作"自由度 0 / 刚性"。

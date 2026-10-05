@@ -332,6 +332,20 @@ export type DragSolveResult =
 - [ ] 先支持 5–10 个短目标：共线/共面、平行/垂直、等长、勾股；后端可选 Lean/mathlib 或 AlphaGeometry/Newclid 风格 adapter。
 - [ ] **依赖审查任务（必须在 GREEN 前完成）：** 记录许可证、进程/线程边界、WASM/原生依赖、缓存/沙箱、启动时间和失败/超时行为；没有审查结论不得接入默认构建。
 - [ ] **提交检查点：** `git commit -m "feat(proof): add verified proof artifact boundary"`。
+> **第二步（2026-10-05）：短目标词表。** 新增 `packages/agent-core/src/proof/proofGoals.ts` ——
+> 10 种短目标的**封闭词表**与支持矩阵，映射按**题设种类**走（不做文本关键词匹配，本项目在
+> 关键词表上吃过亏）。`ProofExpectation` 新增**必填**的 `goalKind`；为 `null` 时无论产物多合法
+> 都**不升级**（新码 `undeclared-goal`），这就是"表外目标绝不变成 `formally_proved`"的落点。
+>
+> **本批查实的一条事实（需要裁决，不是实现细节）**：计划首批点名的"共线 / 共面 / 勾股"
+> **在解析层表达不出来** —— `DiagramObligationKind` 里没有这三种。所以矩阵如实标注它们为
+> "首批里、但现在表达不出来"，并单列成 `unexpressibleFirstBatchGoals()`。
+> **要么先扩解析层，要么从首批里划掉。** 已记进 `docs/current-status.md` §四 F。
+>
+> **本阶段仍未做的（剩下的全部）**：`scripts/proof-spike/` 与 `--mode=smoke`；**任何后端 adapter**
+>（必须先过依赖/许可证/进程与线程边界审查）；把 proof artifact 接进 `ConfirmationPanel` /
+> `agentStore` / run event schema；"一份证明该绑到多细的输入"仍未裁决。
+
 - [ ] **N5 GREEN 命令：** `npm.cmd exec -- vitest run packages/agent-core/src/proof --maxWorkers=1`; `node scripts/proof-spike/runner.mjs --mode=smoke`。
 
 > **N5 执行记录（2026-10-05，只完成第一步）：** 上面几条检查项**一条都还没勾** ——

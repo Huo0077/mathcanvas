@@ -5,6 +5,33 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-05 —— N5 第二步：短目标**词表**，以及"计划点名的三个现在表达不出来"这个事实
+
+- **为什么要有这张表**：证明出口最危险的失效方式不是"证不出来"，而是**把没证的东西说成证过了**。
+  所以先要一个**封闭词表**：只有落在表里的目标，才允许升到 `formally_proved`。
+- **新增** `packages/agent-core/src/proof/proofGoals.ts`：`ProofGoalKind`（10 种）+
+  `PROOF_GOAL_SUPPORT` 矩阵 + `declaredProofGoal(obligationKind)` + `unexpressibleFirstBatchGoals()`。
+  映射按**题设种类**（`DiagramObligationKind`，结构化字段）走，**不做文本关键词匹配** ——
+  本项目在关键词表上吃过亏（覆盖度校对曾因关键词太宽把两个既有夹具误判成"漏声明"）。
+- **一条必须记下来的事实（本批最有价值的产出）**：计划的首批清单写着"共线/共面、平行/垂直、
+  等长、勾股"，而**解析层的 `DiagramObligationKind` 里根本没有共线 / 共面 / 勾股**
+  （它只有 `fixedLength | equilateral | equalLength | midpoint | segmentRatio |
+  planePerpendicular | dihedral | perpendicular | parallel`）。照计划的话把它们列进"支持"，
+  这张表就会变成一句**没有载体的话**：永远不会有任何 goal 被分类成它。
+  所以矩阵如实标注 `collinear` / `coplanar` / `pythagorean` 是"**首批里、但现在表达不出来**"，
+  并把它们列成 `unexpressibleFirstBatchGoals()` —— **要么先扩解析层，要么从首批里划掉，
+  这一条要一个裁决**（已写进 `docs/current-status.md` §四 F 的待裁决项）。
+- **接线（fail-closed）**：`ProofExpectation` 新增**必填**的 `goalKind: ProofGoalKind | null`，
+  `null` 表示"不在我们声称支持的首批里"，此时无论产物多合法都**不升级**，
+  报新的机器可读码 `undeclared-goal`。刻意不做成可选参数：调用方**必须**显式回答这个问题。
+  这条门放在绑定检查**之前** —— 免得报成"产物有问题、但目标本身是支持的"。
+- **证据**：`proofGoals.test.ts` **5 条** + `proofArtifact.test.ts` **17 条**（原 15 + 2：
+  "表外目标绝不升级"、以及"不合格产物与表外目标是两句话"）。
+  **定向变异**：把 `goalKind === null` 那道门停掉 → **正好那一条红**，其余全绿。
+  全库单测读数见 `docs/current-status.md` §一；`typecheck` exit 0；`lint` exit 0
+  （0 error / 13 warning，与基线逐条相同）。
+- **边界**：**仍然没有接任何后端**；`dihedral`（二面角）能表达但**不在首批**，所以也一律不升级。
+
 ## 2026-10-05 —— N5 开工第一步：形式证明出口的**边界**（还没有后端）
 
 - **为什么先做这一步**：N5 的出口是"让'实例通过'‘采样'‘形式证明'严格分级"，而分级的前提是

@@ -1,5 +1,6 @@
 import type { ClaimEvidenceStatus } from "../claimEvidence"
 import { canonicalContentHash } from "../hashing"
+import type { ProofGoalKind } from "./proofGoals"
 
 /**
  * **形式证明出口的边界**（实施计划 Phase N5 的第一步；设计 2026-10-04 §4C）。
@@ -52,10 +53,18 @@ export interface ProofArtifact {
   result: { status: ProofCheckStatus; detail: string }
 }
 
-/** 调用方期望这份产物证明什么。**两个字段都必须给** —— 见文件头"为什么必须带 expectation"。 */
+/** 调用方期望这份产物证明什么。**三个字段都必须给** —— 见文件头"为什么必须带 expectation"。 */
 export interface ProofExpectation {
   claimId: string
   inputHash: string
+  /**
+   * 这条 goal 属于哪个**已声明**的短目标（`proofGoals.ts` 的封闭词表）。
+   *
+   * **`null` 表示"它不在我们声称支持的首批里"**，此时无论产物多合法都**不许**升级 ——
+   * 这就是"表外目标绝不变成 `formally_proved`"那条判据的落点。刻意不做成可选参数：
+   * 调用方**必须**显式回答这个问题，而不是靠默认值蒙过去。
+   */
+  goalKind: ProofGoalKind | null
 }
 
 export type ProofRejectionCode =
@@ -77,6 +86,8 @@ export type ProofRejectionCode =
   | "claim-mismatch"
   /** 产物是对另一份输入证出来的 —— 输入变了，它就不再证明这件事。 */
   | "input-mismatch"
+  /** 这条 goal 不在我们声称支持的首批短目标里（`proofGoals.ts`）—— 表外目标绝不升级。 */
+  | "undeclared-goal"
   /** 产物自身合法，是**后端**报的 failed / unsupported / timeout。 */
   | "backend-verdict"
 
@@ -152,6 +163,14 @@ export function verifyProofArtifact(artifact: unknown, expectation: ProofExpecta
   }
   const status = result.status as ProofCheckStatus
 
+  /**
+   * **表外目标绝不升级**：这一步与产物自身是否合法无关，所以放在绑定检查之前 ——
+   * 一份"证明了别的东西"的产物会先撞上这条，报的是"这个目标我们不声称支持"，
+   * 而不是让调用方误以为"产物有问题、但目标本身是支持的"。
+   */
+  if (expectation.goalKind === null) {
+    return reject("failed", "undeclared-goal", "这条目标不在形式证明出口声称支持的首批短目标里（见 proofGoals.ts 的支持矩阵）：不许升级成 formally_proved。")
+  }
   if (record.version !== PROOF_ARTIFACT_VERSION) {
     return reject("failed", "version-mismatch", `产物版本 ${record.version} 与本模块的 ${PROOF_ARTIFACT_VERSION} 不一致：不做兼容猜测。`)
   }
