@@ -5,6 +5,19 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-05 —— N3 第二步：拖动层的**自由度与冗余诊断**（欠约束看得见、过约束分得清）
+
+- **做出了 N3 四条 RED 里的两条**：`projectPoint3Constraints` 的结果新增 `analysis` —— 在**最终构型**上对可动坐标做数值雅可比、算秩，于是"还剩多少自由度"（欠约束）与"约束有没有冗余"（过约束）都成了可读的数，而不是靠猜。
+- **冗余的定义是"秩"，不是"条数"**：把同一条定长约束写两遍，秩仍是 1（不是 2）、第二条如实进 `redundantConstraintIds`。按条数算会同时给出"自由度少 1"与"过约束"两个错数 —— `constraintIR.test.ts` 早有一条用例盯着这件事，本批把它变成两边共用的实现。
+- **消灭一处真重复（跨包）**：`agent-core/src/constraintIR.ts` 里的 `rankOf`（Gram–Schmidt）搬到内核 `linear-algebra.ts` 的 `rankRows`，`constraintIR` 改为调用。理由：拖动层要算的是同一件事，两处各写一份就会出现"同一组几何、两个不同的秩"。`agent-core` 的既有用例现在**走的是内核这一份实现**。
+- **三处"看起来一样、其实不一样"的分开写清楚**（每一处都有一条例外用例钉着）：
+  1. `redundantConstraintIds`（重复/能推出）与 `unaffectedConstraintIds`（雅可比那一行恒为零：对任何可动坐标都不敏感）分开 —— 混在一起会让一份完全正常的文档被读成"过约束"；
+  2. 判据是"**行是不是零**"，不是"点名里有没有可动点"：`pointOnPlane(p, 平面)` 里 `p` 被锚住、而平面的定义点仍可动时，行是**非零**的（挪定义点会改变平面）。第一版测试就是在这里写错了预期，按实测改正；
+  3. 本读数与 `agent-core` 的 `reportFreeDegrees` **不是同一个问题**，不许合并：那个按**绑定**算可动轴、并**扣掉**整体平移/旋转（问"形状定了没有"）；拖动层按 `anchoredPointIds` 算、**不扣**规范自由度（问"拖动时还有几个坐标能变"）。共用的是秩本身。
+- **不声称的事（如实）**：矛盾约束在顺序投影下会**振荡**，表现为 `exhausted` + `unsatisfiedConstraintIds`；本层**不**把它判成 `inconsistent`（"无解"需要可证的冲突检测，本层没有）。残差取绝对值的地方在**恰好满足**时是非光滑点，前向差分给无符号梯度 —— 所以"同一线段两个不同的长度要求"会算成 2 条独立约束；这不是缺陷，它们本来就不该叫冗余，而是矛盾。
+- **证据**：`constraints3dProjection.test.ts` 13 → **20 条**（新增 7 条钉分析语义），新建 `linear-algebra.test.ts` **8 条**钉秩本身；**定向变异两条**：① 把 `rankRows` 的"秩"换成"行数" → 9 条变红，**包括 `agent-core/constraintIR.test.ts` 那条重复约束用例**（跨包证明共用生效）；② `movableAxes` 忽略 `anchoredPointIds` → 分析里 2 条变红。全库单测读数见 `docs/current-status.md` §一；`typecheck` exit 0；`lint` exit 0（0 error / 13 warning）。
+- **边界（如实）**：**仍然没有任何产品调用点** —— `analysis` 与投影都还没有消费者，拖动、重算、保存、Agent 一行未动，产品行为与上一版完全相同；N3 的出口仍未达成。
+
 ## 2026-10-05 —— N3 开工：3D 约束的点投影（内核砖；**未接线，产品行为零变化**）
 
 - **为什么先做这一块**：N3 的出口是"拖动点不静默破坏已确认的题设"。而内核现有的

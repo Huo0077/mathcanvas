@@ -2,6 +2,7 @@ import type { ConstraintSpec, Plane3Primitive, PrimitiveSpec, Vector3 } from "@d
 
 import { constraintResidual3, diagnoseConstraint3, isLineLike3, projectPointOntoLine3, projectPointOntoPlane3, type ConstraintDiagnostic3 } from "./constraints3d"
 import { addVector3, dotVector3, lengthVector3, normalizeVector3, planeFromPoints, scaleVector3, subtractVector3 } from "./geometry3d"
+import { rankRows } from "./linear-algebra"
 
 /**
  * **3D 约束的点投影**（N3「动态拖动保持约束」的第一块内核砖）。
@@ -80,6 +81,8 @@ export interface Point3ProjectionResult {
   exhausted: boolean
   /** 实际跑了几轮（`exhausted` 为 `true` 时等于上限）。 */
   iterations: number
+  /** 拖动门禁要的那两个读数：还剩多少自由度（欠约束）、有没有冗余约束（过约束）。 */
+  analysis: Point3ConstraintAnalysis
 }
 
 const DEFAULT_MAX_ITERATIONS = 12
@@ -244,6 +247,167 @@ function applyConstraint(
 }
 
 /**
+ * **拖动层的自由度与冗余读数**（N3 的两条判据：欠约束要看得见、过约束要能拒绝）。
+ *
+ * ## 它与 `agent-core` 的 `reportFreeDegrees` 是两个问题，**不许合并**
+ *
+ * | | `reportFreeDegrees`（agent-core） | 本读数（内核 · 拖动层） |
+ * | --- | --- | --- |
+ * | 问的是 | 这份**文档**的形状定了没有 | **拖动**时还有几个坐标能变 |
+ * | 可动集来自 | 每个图元的**绑定**（自由点 3 / 线上点 1 / 面上点 2 / 派生 0） | 调用方给的 `anchoredPointIds` |
+ * | 规范自由度 | **扣掉**整体平移/旋转（0 点 0、1 点 3、≥2 点 6） | **不扣** —— 整幅图能被拖走，对拖动而言就是一个真实的剩余自由 |
+ *
+ * 唯一被两边共用的是**秩本身**（内核 `linear-algebra.ts` 的 `rankRows`），
+ * 所以不会出现"同一组几何、两个不同的秩"。
+ */
+export interface Point3ConstraintAnalysis {
+  /** 可动坐标轴总数：每个未被锚住的空间点算 3 个坐标。 */
+  movableParameters: number
+  /** 有判据的约束条数（残差算得出来；被跳过的不算）。 */
+  judged: number
+  /** 其中**涉及可动坐标**、真正进了秩计算的条数。 */
+  ranked: number
+  /** 这些约束在**最终构型**上独立压掉的方向数 = `rank(J)`。 */
+  independentConstraints: number
+  /** 进了秩计算、但**没有增加秩**的约束 id：重复声明，或能由别的约束推出来。 */
+  redundantConstraintIds: string[]
+  /**
+   * **一处要留意的数值性质**（不是缺陷，是前向差分的性质）：残差取绝对值的地方
+   * （`fixedDistance` / `pointOnLine` / `pointOnPlane` / `collinear` / `coplanar`）在**恰好满足**时
+   * 正落在非光滑点上，前向差分给出的是**无符号**梯度；一条**未满足**的同类约束给的是有符号梯度。
+   * 于是"同一个值写两遍"会正确合成秩 1，而"同一线段两个不同的长度要求"会算成 2 条独立约束 ——
+   * 后者本来也不该叫冗余：它们**互相矛盾**。
+   */
+  /**
+   * 有判据、但**对任何可动坐标都不敏感**的约束 id（雅可比那一行恒为零）。
+   *
+   * 单列出来、而不是丢进 `redundantConstraintIds`：它们确实压不掉任何方向，
+   * 但那与"你重复写了一条约束"是两件事 —— 混在一起会让一份完全正常的文档被读成"过约束"。
+   */
+  unaffectedConstraintIds: string[]
+  /** 最终构型上仍超容差的约束 id。**只表示"没满足"，不表示"已证明无解"。** */
+  unsatisfiedConstraintIds: string[]
+  /**
+   * 还剩多少个可动方向 = `movableParameters − independentConstraints`。
+   *
+   * **这是一阶读数**：残差取绝对值的地方是非光滑点，退化构型上雅可比秩可能高估局部刚度。
+   * 要更强的结论得等求解器状态机，本层不冒充它。
+   */
+  remainingDof: number
+  /** 还有自由度 ⇒ 这组约束**定不住形状**。这不是错误，是如实陈述（含整体平移/旋转）。 */
+  underconstrained: boolean
+  /**
+   * 有冗余约束 ⇒ 约束条数多于独立方向数。
+   *
+   * **冗余不等于矛盾**：把同一条定长约束声明两遍是冗余的，而且完全自洽。
+   * 把两者混成一个"过约束"结论，会让一份好文档被拒。
+   *
+   * **怎么读**：本字段单独不足以判定"拖不动"。门禁要三件一起看 —— `satisfied`（能不能满足）、
+   * `remainingDof`（定没定住）、以及本字段（约束有没有冗余）。
+   */
+  overconstrained: boolean
+}
+
+/** 数值微分的步长，与 `constraintIR` 同量级（那里也是 1e-6）。 */
+const DERIVATIVE_STEP = 1e-6
+/** 雅可比那一行"恒为零"的判据：残差本身是归一化过的，真正耦合的分量是 O(1)。 */
+const ZERO_ROW_EPSILON = 1e-12
+
+interface MovableAxis {
+  pointId: string
+  axis: "x" | "y" | "z"
+}
+
+/** 可动坐标轴：逐点三根。顺序由 `map` 的插入顺序（= 图元顺序）决定，所以结果可重现。 */
+function movableAxes(map: ReadonlyMap<string, PrimitiveSpec>, anchored: ReadonlySet<string>): MovableAxis[] {
+  const axes: MovableAxis[] = []
+  for (const primitive of map.values()) {
+    if (primitive.type !== "point3" || anchored.has(primitive.id)) continue
+    axes.push({ pointId: primitive.id, axis: "x" }, { pointId: primitive.id, axis: "y" }, { pointId: primitive.id, axis: "z" })
+  }
+  return axes
+}
+
+/**
+ * 雅可比的一行：逐可动轴做**前向差分**，每扰动一个分量立刻还原。
+ *
+ * 还原放在 `finally` 里 —— 内核若对某种输入抛异常，"诊断把坐标改了"就会变成一条
+ * 只在异常路径上出现的隐性破坏（调用方拿回的是被扰动过的点）。
+ */
+function jacobianRow(
+  constraint: ConstraintSpec,
+  map: ReadonlyMap<string, PrimitiveSpec>,
+  axes: readonly MovableAxis[],
+  baseline: number
+): number[] {
+  return axes.map(({ pointId, axis }) => {
+    const target = map.get(pointId)
+    if (target?.type !== "point3") return 0
+    const original = target.position[axis]
+    try {
+      target.position[axis] = original + DERIVATIVE_STEP
+      const perturbed = constraintResidual3(constraint, map)
+      return perturbed === null ? 0 : (perturbed - baseline) / DERIVATIVE_STEP
+    } finally {
+      target.position[axis] = original
+    }
+  })
+}
+
+/** 在**当前构型**上算自由度与冗余。调用方负责保证构型已经是最终那份。 */
+function analysePoint3Constraints(
+  constraints: readonly ConstraintSpec[],
+  map: ReadonlyMap<string, PrimitiveSpec>,
+  anchored: ReadonlySet<string>,
+  tolerance: number
+): Point3ConstraintAnalysis {
+  const axes = movableAxes(map, anchored)
+  const rows: number[][] = []
+  /** 与 `rows` 同序：秩报告给的是**行**下标，要能换回约束 id。 */
+  const rankedIds: string[] = []
+  const unaffectedConstraintIds: string[] = []
+  const unsatisfiedConstraintIds: string[] = []
+  let judged = 0
+  for (const constraint of constraints) {
+    const baseline = constraintResidual3(constraint, map)
+    if (baseline === null) continue
+    judged += 1
+    if (baseline > tolerance) unsatisfiedConstraintIds.push(constraint.id)
+    const row = jacobianRow(constraint, map, axes, baseline)
+    /**
+     * 零行 = 这条约束的残差**不随任何可动坐标变化**，它压不掉任何方向。
+     *
+     * 注意这条判据是"行是不是零"，不是"点名里有没有可动点"：`pointOnLine(p, 线)` 里
+     * `p` 被锚住、而线的两个端点可动时，行是**非零**的（拖线的端点会改变 p 到线的距离），
+     * 按点名判会把它误判成"与拖动无关"。
+     */
+    if (row.every((value) => Math.abs(value) <= ZERO_ROW_EPSILON)) {
+      unaffectedConstraintIds.push(constraint.id)
+      continue
+    }
+    rankedIds.push(constraint.id)
+    rows.push(row)
+  }
+  const report = rankRows(rows)
+  const redundantConstraintIds = report.dependentIndices
+    .map((index) => rankedIds[index])
+    .filter((id): id is string => id !== undefined)
+  const remainingDof = Math.max(0, axes.length - report.rank)
+  return {
+    movableParameters: axes.length,
+    judged,
+    ranked: rankedIds.length,
+    independentConstraints: report.rank,
+    redundantConstraintIds,
+    unaffectedConstraintIds,
+    unsatisfiedConstraintIds,
+    remainingDof,
+    underconstrained: remainingDof > 0,
+    overconstrained: redundantConstraintIds.length > 0
+  }
+}
+
+/**
  * **把点投影到约束上**（顺序投影 / Gauss–Seidel 式，与 2D 的 `solveLineConstraints` 同一个思路）。
  *
  * @param primitives 现有图元。**只读**：内部逐点克隆，返回的坐标在 `positions` 里，
@@ -312,13 +476,22 @@ export function projectPoint3Constraints(
     if (before !== undefined && !samePosition(before, primitive.position)) movedPointIds.push(primitive.id)
   }
 
+  const diagnostics = constraints.map((constraint) => diagnoseConstraint3(constraint, map, tolerance))
+
+  /**
+   * 诊断放在**最后**：它要对可动坐标做数值微分（扰动 + 还原）。先把要交出去的
+   * 坐标与读数全部抄下来，就不怕哪一次还原出岔子 —— 调用方拿到的是抄本，不是活引用。
+   */
+  const analysis = analysePoint3Constraints(constraints, map, anchored, tolerance)
+
   return {
     positions,
     movedPointIds,
-    diagnostics: constraints.map((constraint) => diagnoseConstraint3(constraint, map, tolerance)),
+    diagnostics,
     skipped: [...skipped.values()],
     satisfied,
     exhausted,
-    iterations
+    iterations,
+    analysis
   }
 }

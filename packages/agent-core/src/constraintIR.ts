@@ -1,5 +1,5 @@
 import type { Circle3Primitive, ConstraintSpec, ConstraintType, GeometryDocument, Plane3Primitive, PrimitiveSpec } from "@draw/dsl"
-import { constraintResidual3 } from "@draw/geometry-kernel"
+import { constraintResidual3, rankRows } from "@draw/geometry-kernel"
 
 /**
  * **约束 IR 与自由度诊断**（设计 2026-10-04 §5 Phase N1："给每个对象计算自由度、残差和冲突集合"）。
@@ -246,26 +246,10 @@ function jacobianRow(
 /**
  * 秩（Gram–Schmidt，带绝对阈值）。返回的就是**独立约束个数**。
  *
- * 用秩而不是条数：`J` 的行相关时（重复约束、由别的约束推出来的约束）多出来的那些行
- * 不减少自由度 —— 把它们算进去，"过约束"就会被误报成"自由度 −1"。
- *
- * 阈值是**绝对**的，而且只用在"单位方向还剩多少长度"上：内核的残差函数自己就是
- * 归一化过的（长度差/比例/夹角/法向点积），所以雅可比的分量本身就与坐标尺度无关。
- * 这里若再按参数尺度缩放，大坐标文档会把`近相关的行`判成独立，秩被高估。
+ * **实现搬到了内核的 `linear-algebra.ts`（`rankRows`）**：N3 的拖动层要算同一件事
+ * （"这组约束还剩几个方向没被压掉"），两处各写一份 Gram–Schmidt 就是"同一个判断写两遍"——
+ * 而那两处一旦容差不同，就会出现"同一组几何、两个不同的自由度"。搬走之后这里只留调用。
  */
-function rankOf(rows: readonly number[][]): number {
-  const basis: number[][] = []
-  for (const row of rows) {
-    let remaining = [...row]
-    for (const kept of basis) {
-      const projection = kept.reduce((sum, value, index) => sum + value * remaining[index], 0)
-      remaining = remaining.map((value, index) => value - projection * kept[index])
-    }
-    const norm = Math.hypot(...remaining)
-    if (norm > 1e-8) basis.push(remaining.map((value) => value / norm))
-  }
-  return basis.length
-}
 
 /**
  * **自由度诊断**（N1 的出口）。
@@ -314,7 +298,7 @@ export function reportFreeDegrees(document: GeometryDocument, constraints: reado
     const baseline = constraintResidual3(constraint, document.primitives)
     return baseline === null ? [] : jacobianRow(document, constraint, parameters, baseline)
   })
-  const constraintDof = rankOf(rows)
+  const constraintDof = rankRows(rows).rank
   const totalDof = parameters.length
   const gaugeDof = gaugeDofOf(document)
   return {
