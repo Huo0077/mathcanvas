@@ -197,6 +197,28 @@ export type DragSolveResult =
 - [ ] **N3 出口：** `constrainedDrag=false` 时旧拖动路径逐字回归；`constrainedDrag=true` 时保持约束、过约束拒绝、冲突恢复和一步撤销的浏览器用例全部通过。
 - [ ] **提交检查点：** `git commit -m "feat(geometry): preserve constraints during drag"`。
 
+> **N3 执行记录（2026-10-05，进行中，只完成第一块砖）：** 上面五条检查项**一条都还没勾**——
+> 本阶段目前只交付了内核侧的**点投影** `packages/geometry-kernel/src/constraints3dProjection.ts`
+> 的 `projectPoint3Constraints`（提交 `6c43044`）。它是上面"GREEN：pointer intent → 临时约束 →
+> solve → commit transaction"里 **solve 那一步的最小实现**，支持的约束种类是
+> `pointOnLine` / `pointOnPlane` / `collinear` / `coplanar` / `fixedDistance`，带
+> `anchoredPointIds`（拖动时抓住的点不许动），判据 fail-closed（见 `docs/current-status.md` §一）。
+>
+> **为什么先做它**：内核原有的 `solvePoint3Constraints` 契约明写"只诊断、绝不动点"，回答不了
+> "该挪到哪"。两者分工保留，不合并。
+>
+> **还没做的（本阶段剩下的全部）**：`DragSolveRequest` / `DragSolveResult` 五个状态
+> （`solved` / `underconstrained` / `overconstrained` / `inconsistent` / `timeout`）里，本批
+> **只落地了"能不能满足"这一层**，"过约束 / 无解 / 超时"的分类**尚未实现**（投影层刻意不编这些
+> 结论）；`packages/dsl` 与 `scene-graph` 一行未动；`apps/web` 的 `threeScene*` 拖动管线、
+> undo/redo、inspector **未接线**；`e2e/agent-constrained-drag.spec.ts` **不存在**；
+> 线状 `parallel` / `perpendicular` 的投影仍是 `no-projection-rule` 跳过
+> （3D 里"把两条线转成平行/垂直"的最小改动不唯一，属产品判断）；`constraintIR.reportFreeDegrees`
+> 尚未与投影合流。**`constrainedDrag` 这个 flag 还不存在**（N6 的 flag 核对里要记这一笔）。
+>
+> **本阶段两条 park 项的状态**（来自 N2 记录 ④⑥）：模块环（④）与"真正算出自由度"（⑥）
+> **都还没动** —— 前者按裁决等"N3 的第二个消费者"到场时一次定死，后者要先扩 `ConstraintType`。
+
 ## Phase N4：开放题编译与真实 Provider Benchmark
 
 **目标：** 把自然语言抽取、求解、验证和图面可读性分别测量；不使用 deterministic_local 冒充模型能力。
