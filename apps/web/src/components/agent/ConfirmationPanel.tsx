@@ -1,6 +1,7 @@
 ﻿import type { AgentDraftView } from "../../agentStore"
 import { AssumptionList } from "./AssumptionList"
 import { countDeltas, removedObjectCount, summarizeDraftScale } from "./confirmationCounts"
+import { ProofLevelNotice } from "./ProofLevelNotice"
 
 /**
  * **确认面板**（Task 2.5 Step 4）。
@@ -31,11 +32,20 @@ export interface ConfirmationPanelProps {
   /** 目标文档与来源文档的标识，供用户核对"改的是哪一份"。 */
   targetDocumentId?: string
   sourceDocumentIds?: string[]
+  /**
+   * **这个构建里接上的形式证明后端**。缺省＝包根导出的真实事实 `WIRED_PROOF_BACKENDS`（今天 `[]`）。
+   *
+   * 做成可注入的是为了让"文案确实是**排**出来的"这条判据能写：用例注入一个假后端，
+   * 文案里就必须出现它的名字。生产路径不传它 —— 于是界面上那句话永远跟着事实走。
+   */
+  proofBackends?: readonly string[]
+  /** 交过审查记录的后端条数。缺省＝`PROOF_BACKEND_REVIEWS.length`（今天 `0`）。 */
+  proofReviewedCount?: number
   onConfirm?: () => void
   onDiscard?: () => void
 }
 
-export function ConfirmationPanel({ draft, assumptions = [], approximationNotes = [], omittedExports = [], targetDocumentId, sourceDocumentIds = [], onConfirm, onDiscard }: ConfirmationPanelProps) {
+export function ConfirmationPanel({ draft, assumptions = [], approximationNotes = [], omittedExports = [], targetDocumentId, sourceDocumentIds = [], proofBackends, proofReviewedCount, onConfirm, onDiscard }: ConfirmationPanelProps) {
   const deltas = countDeltas(draft)
   const removing = removedObjectCount(draft)
 
@@ -94,6 +104,21 @@ export function ConfirmationPanel({ draft, assumptions = [], approximationNotes 
       </li>)}</ul>
       {draft.diagramVerification.sampleValues.length > 0 && <div><h4>本图选用的示例值</h4><ul>{draft.diagramVerification.sampleValues.map((value) => <li key={value}>{value}</li>)}</ul></div>}
     </section>}
+
+    {/*
+      **「证明级别」只读状态面**：题设核验说完"这一份图核了什么"，紧跟着说清"形式证明这一档
+      今天是什么状态"。两者不是一回事：核验是**一个实例**的检查，形式证明要的是命题普遍成立。
+
+      它**只读**、**不宣称任何一条 claim 已被证明**，而且那几句话由 `WIRED_PROOF_BACKENDS` /
+      `PROOF_BACKEND_REVIEWS` **推导**（见 `proofLevelStatus.ts`）。今天一个后端都没接，
+      所以它会明说"当前没有接入任何形式证明后端"，以及后果：升不到 `formally_proved`。
+      接了后端它就自己变 —— 不留一句会腐烂的假话。
+
+      **这里不做产物正文查看器**：今天没有任何代码会生产 proof artifact（全仓零生产者），
+      那会是一条永远跑不到的生产路径，只能用注入的假数据测＝弱证据。理由写在
+      `proofLevelStatus.ts` 的文件头与 `docs/current-status.md` §四 F。
+    */}
+    <ProofLevelNotice wired={proofBackends} reviewedCount={proofReviewedCount} />
     {assumptions.length > 0 && <AssumptionList assumptions={assumptions} />}
 
     {approximationNotes.length > 0 && <div className="agent-confirmation-approximation">

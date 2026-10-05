@@ -242,7 +242,7 @@
 > **N5 的判据第一次可执行了**：`verified_instance` / `sampled` **不能**变成 `formally_proved`；伪造、缺字段、版本不匹配、以及**"证明了别的东西"**（`claimId` 或 `inputHash` 不匹配）的产物一律拒绝。落点是 `packages/agent-core/src/proof/proofArtifact.ts` 的 `verifyProofArtifact` / `evidenceStatusWithProof`。
 > **两条设计决定**：① 校验**必须**带 `expectation`（`claimId` + `inputHash`）—— 否则一份"证明了别的东西"的合格产物贴过来也看不出来；② **拒收不是第五种结局**，只报 `failed` + 机器可读 `reasons`。
 > **证据**：15 条（一半反例）+ 一条定向变异（改成无条件升级 → 3 条红）。
-> **边界**：**没有接任何后端**，所以现在任何真实运行都只会得到 `unsupported`；adapter 要先过依赖与许可证审查。"一份证明该绑到多细的输入"**未裁决**。
+> **边界**：**没有接任何后端**，所以现在任何真实运行都只会得到 `unsupported`；adapter 要先过依赖与许可证审查。"一份证明该绑到多细的输入"**未裁决** → **2026-10-05 已裁决**（R51 + R56，落地在 `proofInputHash` 与 `ProofLevelNotice`；见 §四 F 那一节）。
 
 **2026-10-05 N6 门禁复跑（**串行**跑完整套）—— 本批实测：**
 
@@ -786,7 +786,28 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
 
 - **~~`deterministic_local` 的「求解率」缺一个定义~~（2026-10-05 更正：**这个结论错了，已经能跑了**）**：我原来的理由是"见证搜索只在救援路径里触发（`planCompiler.ts:235`），要先有一份模型给的计划失败才有东西可救，所以离线没有输入"。**那个理由错了** —— 救援路径传进去的只有两样：`first.obligations.ir`（**解析结果**）与 `witnessShapeFor(context.prompt)`（**从题面推出来的图形族**）。**两样都不来自模型。** 现在 `agent-core` 导出了离线入口 `searchWitnessForPrompt(prompt)`，`bench:agent` 的**见证层**用它，实测：`BENCHMARK_WITNESS verified=1 unverified=20 no_witness=0 solveRate=0.048`（**离线求解率 4.8%**，21 题里 1 题拿到通过核验的候选）。它与救援路径共用同一份组成（seed / 候选上限 / 超时 / 题面→图形族），不是又写一遍。
 
-- **N5 的"只读展示"这一条**（计划要求把 proof artifact 接进 `ConfirmationPanel` / `agentStore` / run event schema）**目前做不了，而且不是"没时间做"**：查下来 `ClaimEvidence` 这套证据词汇**根本没有进过 Web 界面** —— 面板显示的是 `diagramVerification`（另一套词汇，讲的是"这份图核验了吗"），而 `ClaimEvidence` 只在 `witnessSearch` / `solverContracts` / `planCompiler` 这些**核心层**里活着。加上**今天没有任何后端**，产物永远不存在 —— 为一个**不可能出现**的东西先做展示面，属于投机性设计。**这一条与"接一个真实后端"是同一件事，跟着那个决定走。**
+- **N5 的"输入绑定"与"只读展示"两条都已裁决并落地（2026-10-05，R51 + R56 + N5a）—— 此前这里记的是"未裁决 / 做不了"**：
+
+  **① 输入绑定的边界（R51 + R56，落点在 `packages/agent-core/src/proof/proofArtifact.ts` 的 `proofInputHash`）**：
+  **必绑** 题设原话 + 这条 claim 的原话 + 目标 + **系统替你定的假设**（`assumptions`）+ **被证明的那条命题原文**（`statement`）；
+  **不绑** 文档内容指纹（坐标 / 形状 / 标签）—— 不是"默认不传"，而是**入参里根本没有这一栏**。
+  规范化的两条决定：假设**先排序**（顺序不影响哈希）、**逐字去重**（同名假设两次与一次同哈希 —— 重复只可能来自"同一条被推导了两次"，
+  让它参与哈希只会造成**假过期**；反过来逐字相同的两条不可能指两条不同的假设，所以去重不会制造假有效）；空数组与不传**同哈希**。
+  **R56 的两个选项里选了 ①（命题原文），理由**：② 要发明的"命题模板注册表 + 版本"今天**没有生产者**，
+  而它的保证挂在"改了模板记得升版本"这条**靠人守**的纪律上 —— 忘掉时旧证明被挂到新命题上，**那种错看起来完全正常**。
+  三条失效模式都是"让信号说错话"：不绑假设 ⇒ **过度声称**、不绑命题 ⇒ **假有效**、绑文档指纹 ⇒ **假过期**（会被改个 `label` / 重解选到另一组坐标刷掉，且训练人忽略失效提示）。
+
+  **②「证明级别」只读状态面**（`apps/web/src/components/agent/ProofLevelNotice.tsx` + `proofLevelStatus.ts`，插在 `ConfirmationPanel` 题设核验节之后）：
+  文案**由事实推导**（`WIRED_PROOF_BACKENDS` / `PROOF_BACKEND_REVIEWS` 从包根导入，没有第二份副本）。今天它如实说
+  "**当前没有接入任何形式证明后端**"以及后果 —— "本条的证明级别不可能升到 `formally_proved`；能给的只是**一个实例**的核验"。
+  判据：注入一个假后端后文案里**必须出现它的名字**（写死的实现会在那里红），今天**不出现**"已证明 / 证明通过"这类字样。
+
+  **③ 产物正文查看器：明确不做，而且不是"没时间做"**（查证结果）：`ProofArtifact` / `proofInputHash` / `evidenceStatusWithProof`
+  在 `apps/` 与 `packages/` 里除 proof 模块自身、它的用例与 `scripts/proof-spike/` 之外**零引用** ⇒ **今天没有任何代码会生产 proof artifact**，
+  也没有任何通道把它送进界面。为一个**永远跑不到**的生产路径做查看器，只能用注入的假数据测，按本仓口径那是**弱证据** ——
+  它证明的是"组件能渲染假数据"，不是"用户能看到他的证明"。**等第一个后端过了十栏准入再做**（那时才有真数据）。
+  **仍然没接的**：`agentStore` / run event schema 上的产物通道（`ClaimEvidence` 这套证据词汇至今没有进过 Web 界面）——
+  那要等有产物可送，与"接一个真实后端"是同一件事。
 - **两处"约束"模块的分工（免得被误当成重复实现）**：`planar-constraints.ts` 管**"点能待在哪儿"**（一维曲线 + 自然参数，`project`/`evaluate`，拖拽与动画是同一条状态更新），是**点 ↔ 宿主**的一元关系；`constraints3dProjection.ts` 管**"几个对象之间必须保持什么关系"**（⊥ / ∥ / 等长 / 共面…），是**多元**关系，用顺序投影迭代。**两者互补，可以同时出现在同一份文档里**；分工已写进 `constraints3dProjection.ts` 的文件头。
 
 - **N5「勾股」已裁决（2026-10-05，用户决定）**：走"**判成 ⊥ 目标 + 用勾股定理那一步把结论接回来**"。**这件事没有做成别名** —— 勾股仍然**没有直接载体**（两个载体字段都空），它多的是一条**显式的推断路线**（`inference: { from: "perpendicular", theorem: "勾股定理及其逆定理" }`），并且新函数 `proofGoalDischargeRoute()` 把它与"直接能判"分开报。理由写在第 50 轮那段更正里，也在代码注释里：**别名等于把一条推断藏进分类函数，而推断应当出现在证明里、看得见**。于是 `firstBatchGoalsWithoutAnyRoute()` **现在是空的**（`proof:smoke` 的读数里能看到 `goalsWithoutAnyRoute: []` 与 `pythagoreanRoute`）。
