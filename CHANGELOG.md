@@ -45,6 +45,17 @@
   建议把"模型只给了澄清"独立成一支（跨层词表里已有 `clarification`，见证层在用），
   或至少在计数行下按子类拆开 —— **但必须由结构化字段驱动，不许去解析中文证据串**（那是第二份判断）。
   **尚未实施，需要裁决。**
+- **已实施（用户批准"按推荐做"）**：`planning` 层**新增 `clarification` 一支** ——
+  契约词表变成 `["planned","clarification","rejected","not_measured","error"]`，
+  应用侧结局判定从两支变三支（信封 `kind === "clarification"` ⇒ `clarification`，带**问题原文**），
+  汇总多一行 `clarification N/M`。`rejected` 只留"编译器拒了 / 只读回答 / 什么都没给"。
+  **fail-closed 一个字没改：澄清不是 `planned`**（"问了"不等于"计划被接受"）。
+  于是那两次运行按今天的词表会读成 `planned 2/3` / **`clarification 1/3`** / `rejected 0/3`
+  —— 面板当时显示 `rejected 1/3` 是**旧词表**的结果，两者都留在文档里，便于回溯。
+  **RED**：改前那条用例红成 `expected ['rejected',…] to deeply equal ['clarification',…]`；
+  **契约哨兵按设计先红一次**（`expected ['planned','clarification',…] to deeply equal ['planned','rejected',…]`）。
+  **变异**：把汇总行标签改成 `clarify` ⇒ 红，证明它钉的是汇总行；并顺手修掉一条**不可能红的弱断言**
+  （原 `toContain("clarification")` 会被逐条行满足，改成 `/^clarification\s+3\/3$/m`）。
 
 
 

@@ -498,6 +498,21 @@ export type DragSolveResult =
 > **处置建议（尚未实施，需裁决）**：让 `planning` 层能把"模型只给了澄清"**独立成一支**
 >（跨层词表里本来就有 `clarification`，见证层在用），或至少在计数行下**按子类拆开**；
 > **但必须由结构化字段驱动 —— 不许解析中文证据串**（那是第二份判断，正是本计划一直在防的东西）。
+>
+> **第九步（2026-10-05）：把「澄清」独立成一支 —— 用户批准"按推荐做"。**
+> - **契约**：`BENCHMARK_STATUSES_BY_LAYER.planning` 由 `["planned","rejected","not_measured","error"]`
+>   变成 `["planned","clarification","rejected","not_measured","error"]`；`report.ts` 的 `planning` 词表说明
+>   从"四个词"改成"五个词"，并把**为什么"在问"必须与"被拒"分开**写在那里（方向读反那条）。
+>   **fail-closed 一个字没改**：澄清**不是** `planned`。
+> - **应用侧**：结局判定从两支变三支（信封 `kind === "clarification"` ⇒ `clarification`，带**问题原文**）；
+>   `rejected` 只留"编译器拒了 / 只读回答 / 什么都没给"；汇总多一行 `clarification N/M`。
+> - **RED 证据**：改之前那条用例红成 `expected ['rejected','rejected','rejected'] to deeply equal ['clarification',…]`；
+>   **契约哨兵按设计也先红了一次**（`expected ['planned','clarification',…] to deeply equal ['planned','rejected',…]`）——
+>   它当初就是精确相等钉死的，这正是它该有的形状。
+> - **变异**：把汇总行的标签从 `clarification` 改成 `clarify`（逐条行里仍是 `clarification`）⇒ 新判据**红**，
+>   证明它钉的是**汇总行本身**。同时自查并修掉了一条弱断言：原来是 `toContain("clarification")`，
+>   而逐条行本来就含这个词 ⇒ 删掉汇总行它也照样绿（不可能红的断言）；改成 `/^clarification\s+3\/3$/m`。
+> - **本步没做的**：`:324` 的人工可读性（前置仍是"能把计划/澄清正文呈现出来"）；旧那条 24 次通道的**真修**（下一步）。
 
 ## Phase N5：形式证明出口
 

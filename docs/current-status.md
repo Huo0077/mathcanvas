@@ -31,7 +31,7 @@
 | 生产构建（web） | `npm.cmd run build --workspace @draw/web` | **成功**（3.92 s）；入口 chunk **1,803.76 kB / gzip 527.62 kB**（比上轮 1,801.18 kB **+2.6 kB**：新增设置组件与偏好模块）；产物落 `build-check/`（已 gitignore，构建后工作树干净） | 0 | **2026-10-05 复核** |
 | Agent 评测 | `npm.cmd run eval:agent` | `deterministic_local`：pass@1 **4/8**、pass@3 **4/8**、工具选择 45/45、工具错误 3/45。报告现在多打两行：`provider          not measured`（还都是离线那条腿）与 `average cost      not measured`（**没有价目表**）。**真实 provider 的 harness 已落地**（应用内：设置 → 真实 provider 评测），**但一次还没跑** | 0 | **2026-10-05 复核**（**未接真实模型**，不是模型准确率） |
 | Agent benchmark | `npm.cmd run bench:agent` | 抽取层：`cases=21 covered=14 empty=7 error=0`；`BENCHMARK_PREMISE obligations=24 residue=9 rate=0.727`；`BENCHMARK_EXTRACTION covered=14/21 rate=0.667`。**见证层（第 48 轮新增）**：`BENCHMARK_WITNESS verified=1 unverified=20 no_witness=0 error=0 solveRate=0.048`；`BENCHMARK_JUDGEABILITY supported=21 unsupported=3 ambiguous=0 totalObligations=24`；`BENCHMARK_WITNESS_CODES {"(no-code)":1,"requires-candidates":7,"unsupported-shape":9,"no-candidate-constructed":4,"unsupported-base-shape":4,"witness-search":20}`（**2026-10-05 N4a 后实测**。上一版这行**少记了 `"(no-code)":1` 这一档** —— 那是见证层"给了结论但没留下原因文本"的兜底证据，**实际输出里一直有**（BASE 时的捕获也含它），所以这是**重新测量并改正旧读数**，不是本批引入的差异；同一次实测里 `cases=21 covered=14 empty=7 error=0` 等三条读数与改前**逐字相同**） | 0 | **2026-10-05 N4a 后实测** |
-| **Agent benchmark（真实 provider，`planning`）** | 设置 → 真实 provider 评测：题集 planning | **两次运行（同一天、同一台机器、同一套 3 题）**：`planned 2/3` / `rejected 1/3` / `error 0/3` / `not measured 0/3`（**两次一样**）；`average latency` **13445 ms**（第一次）/ **8465 ms**（第二次，逐条渲染上线后那次）；`cost not measured`（**仓里没有价目表**）；provider `deepseek-v4-flash / deepseek-v4-flash`；`cases 3`（`layer=planning`，`seed=7`）。**这是计划 N4「先跑小样本真实 provider」那一条的落点** —— **n=3 的子集**，**不是全题集结论**；`rejected` 那一格的**真实含义见下面那段**（它**不是**"模型失败率 1/3"） | 0 | **2026-10-05 用户在桌面端运行并回传读数原文**（控制器**未旁观**该次运行；3=2+1+0+0 自洽、provider 非空、`cost` 如实 `not measured`，由控制器核对） |
+| **Agent benchmark（真实 provider，`planning`）** | 设置 → 真实 provider 评测：题集 planning | **两次运行（同一天、同一台机器、同一套 3 题）**：面板当时显示的都是 `planned 2/3` / `rejected 1/3` / `error 0/3` / `not measured 0/3`；`average latency` **13445 ms**（第一次）/ **8465 ms**（第二次，逐条渲染上线后那次）；`cost not measured`（**仓里没有价目表**）；provider `deepseek-v4-flash / deepseek-v4-flash`；`cases 3`（`layer=planning`，`seed=7`）。**按今天的词表**，那 1 条 `rejected` 其实是 **`clarification`**（模型在问，不是失败）⇒ 同两次运行现在会读成 `planned 2/3` / **`clarification 1/3`** / `rejected 0/3`。**这是计划 N4「先跑小样本真实 provider」那一条的落点** —— **n=3 的子集**，**不是全题集结论**；下面那段说清 `rejected` 那一格当时为什么会被读反 | 0 | **2026-10-05 用户在桌面端运行并回传读数原文**（控制器**未旁观**该次运行；3=2+1+0+0 自洽、provider 非空、`cost` 如实 `not measured`，由控制器核对） |
 | 证明边界 smoke | `npm.cmd run proof:smoke` | 7 通过 / 0 失败；`PROOF_BACKENDS {"wired":[],"reviewed":0}`；**勾股裁决后新增**：`goalsWithoutAnyRoute: []`、`pythagoreanRoute: {"kind":"via-inference","from":"perpendicular"}` | 0 | **2026-10-05 复核** |
 | N3 定向测试（**计划点名的那七件**） | `vitest run constraints / constraints3d / planar-constraints / reactive/constraints / operations / patches / scene-store` | **7 文件 / 241 通过 / 0 失败** | 0 | **第 31 轮** |
 
@@ -58,9 +58,15 @@
 > ① **模型自己发现了矛盾、于是提问**（这次就是这种：它没有硬编一个长度，而是要求用户二选一 ——
 > 这与本产品自己的可证矛盾检测是**同一个判断**，属于**好**行为）；② 编译器把计划拒了 / 模型压根没给计划。
 > **把两者合成一个 `rejected` 计数，会让读数的方向恰好反过来**（把"模型做对了"读成"模型失败了"）。
-> 这是第二次真实运行给出的**实质发现**，处置建议（尚未实施，需裁决）：让 `planning` 层的词表能把
-> "模型只给了澄清"**独立成一支**（跨层词表里本来就有 `clarification` 这个词，见证层在用），
-> 或至少在计数行下面**按子类拆开** —— 但**必须由结构化字段驱动，不许去解析中文证据串**（那是第二份判断）。
+>
+> **处置（2026-10-05 已实施，用户批准）**：`planning` 层的词表**新增 `clarification`**（跨层词表里本来就有这个词，
+> 见证层在用）—— 模型"在问"**独立成一支**，`rejected` 只留"编译器拒了 / 只读回答 / 什么都没给"。
+> **fail-closed 那一半一个字没改**：澄清**不是** `planned`（"问了"不等于"计划被接受"）。
+> 汇总里也多了一行 `clarification N/M`；逐条行照旧给出**问题原文**。
+> **由结构化字段驱动**（信封的 `kind`），**没有**去解析中文证据串 —— 那是第二份判断。
+> 判据：契约词表那条**精确相等**的哨兵按设计**先红了一次**
+>（`expected ['planned','clarification',…] to deeply equal ['planned','rejected',…]`）才更新；
+> 新判据另有**变异**证明它会咬人（把汇总行的标签改掉 ⇒ 红）。
 
 > **这一张表现在是同一批读数**（2026-10-05 第 27 轮，九道门禁**串行**跑完，14:47:49 → 14:52:12，
 > 约 4 分 24 秒）。第 28 轮又补上了**生产构建**这一行 —— 于是**计划里 N6 出口点名的八道命令
@@ -732,7 +738,7 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
    **没有**改它的输入语义（那会改变旧评测在测什么，需要单独裁决）。
    **第二次运行（逐条渲染上线后）给出了被拒那一条的真实原因**：模型对"AB 同时等于 3 和 5"那道题**给的是澄清**（要求用户二选一），
    于是被记成 `rejected`。**⇒ `rejected` 这一格今天是混装**：它同时装着"模型发现矛盾并提问"（好行为）与"编译器拒了计划 / 根本没给计划"（失败）。
-   合并计数会让读数方向反过来。建议把"澄清"独立成一支（跨层词表里已有 `clarification`），但**必须由结构化字段驱动**。
+   合并计数会让读数方向反过来。**已实施**：`planning` 层新增 `clarification` 一支（模型"在问"独立出来；fail-closed 不变，它**不是** `planned`）。
 2. 当前 `deterministic_local` 只用于协议与几何回归，不能作为真实模型准确率。
 
 ### D. 发布与仓库收尾
