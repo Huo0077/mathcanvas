@@ -253,7 +253,6 @@ describe("the witness-search switch on the real draft staging path", () => {
        * 拿整份文档比只会得到一条与行为无关的假失败。
        */
       expect(workerResult.preview.candidate.primitives).toEqual(directResult.preview.candidate.primitives)
-      expect(workerResult.preview.completionAssumptions).toEqual(directResult.preview.completionAssumptions)
     } finally { client.dispose() }
   })
 

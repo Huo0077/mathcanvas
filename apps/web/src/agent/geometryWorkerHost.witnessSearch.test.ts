@@ -20,10 +20,19 @@ import type { StagedPlanEnvelope } from "./geometryCompileStrategy"
  *
  * ## 判据为什么落在"请求"与"救回来的文档"两处
  *
- * ① 请求里必须**带了** `witnessSearch: true`（缺省时连字段都没有）；
+ * ① 开关为 `true` 时请求里必须**带了** `witnessSearch: true`；
  * ② Worker 侧真的按它救回了一次：响应里的候选文档已经不是模型那组歪坐标。
  * 只断言 ① 会漏掉"Worker 读了字段却没用"，只断言 ② 则漏掉"信封上根本没这个字段"
  * （假的线程在同一进程里，不经过序列化，光看结果看不出字段丢没丢）。
+ *
+ * ## 缺省那两条的**措辞纪律**（复核 R43 / M2）
+ *
+ * 生产装配（`agentRuntime.ts:241,271`）**永远**会传那个五键 flag 对象，所以线上真正出现的是
+ * `witnessSearch: false`（不是"没有这个字段"）。"没给 ⇒ 线上没有这一项"只是**策略这一层**的
+ * 契约，拿它当"生产上的缺省形状"就是在声称一件不会发生的事。所以这里分成两条分别钉：
+ * - 没给（`undefined`）：线上没有这一项 —— 策略的既有语义；
+ * - 给了 `false`（**真实装配的形状**）：线上是 `false`，而且**打不开任何东西** ——
+ *   `parseWorkerRequest` 会把它剥掉、`workerRuntime.ts:87` 只认 `=== true`。
  */
 
 /** 用户报障那道四棱锥：P 偏出垂足，模型给的坐标不满足题设。 */
@@ -121,17 +130,31 @@ describe("the worker compile strategy and the N2 witness-search switch", () => {
     expect(result.assumptions.map((assumption) => assumption.text).join(" ")).toContain("系统自选")
   })
 
-  it("does not put the switch on the wire at all when nobody asked for it", async () => {
+  it("leaves the switch off the wire when the strategy input does not carry it at all", async () => {
     const { factory, posted } = await recordingWorker()
     const strategy = createWorkerCompileStrategy("run-worker", factory)
 
     const result = await strategy(compileInput())
 
     expect(posted).toHaveLength(1)
-    // 缺省 = 关，而且**请求里连字段都没有**（"没给"与"给了 false"在协议上是同一件事，
-    // 但"多一个 undefined 字段"会让契约看起来像必填）。
+    // 策略这一层的既有语义：没给 = 线上没有这一项（"多一个 undefined 字段"会让契约看起来像必填）。
     expect(Object.hasOwn(posted[0] ?? {}, "witnessSearch")).toBe(false)
     // 关着的时候与改动之前逐字相同：失败、没有草稿。
+    expect(result.ok).toBe(false)
+    expect(result.draftDocument).toBeNull()
+  })
+
+  it("never opens anything when the application passes the switch as false", async () => {
+    const { factory, posted } = await recordingWorker()
+    const strategy = createWorkerCompileStrategy("run-worker", factory)
+
+    // **这条才是生产装配的形状**（`agentRuntime.ts:271` 传的是那个五键 flag 对象，
+    // 关掉时值就是 `false`，不是"没有这个字段"）。
+    const result = await strategy(compileInput(false))
+
+    expect(posted).toHaveLength(1)
+    expect(posted[0]?.witnessSearch).toBe(false)
+    // `false` 打不开任何东西：Worker 侧按 `=== true` 读，于是救回不发生、结果与关着时相同。
     expect(result.ok).toBe(false)
     expect(result.draftDocument).toBeNull()
   })

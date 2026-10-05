@@ -534,14 +534,27 @@ function withWitnessCoordinates(plan: Extract<PlanEnvelope, { kind: "plan" }>, c
 
   const declared = inputs.vertexNames
   const declaredNames = Array.isArray(declared) && declared.every((name) => typeof name === "string") ? (declared as string[]) : null
-  /** 模型声明的点名能不能把候选的点名**一一对上**（等价于两张表是同一个集合）。 */
-  const bijective = declaredNames !== null && new Set(declaredNames).size === declaredNames.length && candidate.names.every((name) => declaredNames.includes(name))
+  /**
+   * 模型声明的点名与候选的点名**是不是同一张表**（复核 R43 / M3）。
+   *
+   * 判据必须是**等长 + 双向集合相等 + 两边各自无重名**，四条缺一不可：
+   * - `candidate.names` 里有重名 ⇒ `indexOf` 会把两个下标指到同一处；
+   * - `declaredNames` 里有一个候选没有的名字 ⇒ `indexOf` 返回 `-1`，于是
+   *   `vertices[-1]` 是 `undefined`、被对象展开摊成 `{}`，面环里还会出现 `-1`。
+   * 那种图**不会**通过第二遍核验（`buildFromPoints` 会拒），所以它不可利用；
+   * 但"先造一个坏计划再指望下游拒掉"不是这一层该有的写法 —— 这里直接判成"替换不了"。
+   */
+  const sameNameSet = declaredNames !== null
+    && declaredNames.length === candidate.names.length
+    && new Set(declaredNames).size === declaredNames.length
+    && new Set(candidate.names).size === candidate.names.length
+    && candidate.names.every((name) => declaredNames.includes(name))
   const declaredRelations = plan.relations ?? []
 
   let vertices: PolyhedronWitness["vertices"]
   let faces: PolyhedronWitness["faces"]
   let vertexNames: string[]
-  if (bijective) {
+  if (sameNameSet) {
     // `permutation[model] = candidate`：按候选的**点名**重排，`v<i>` 因此仍然指向同一个顶点。
     const permutation = declaredNames!.map((name) => candidate.names.indexOf(name))
     vertices = permutation.map((position) => ({ ...candidate.vertices[position] }))

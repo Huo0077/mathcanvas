@@ -1,0 +1,761 @@
+{
+  "baselineCommit": "4707b64",
+  "capturedFrom": "git show 4707b64:packages/agent-core/src/planCompiler.ts",
+  "capturedWith": "packages/agent-core/src/zzGoldenCapture.tmp.test.ts（一次性；抓完即删）",
+  "frozenClock": "2026-01-01T00:00:00.000Z",
+  "note": "resultJson 是 JSON.stringify(result) 的原文；resultKeys / diagramVerificationKeys 用来抓『新增一个值为 undefined 的键』那种 JSON.stringify 看不见的差异。抓取与回放都把系统时间钉在 frozenClock（候选文档的 updatedAt 是墙上时间）。",
+  "cases": [
+    {
+      "name": "pyramid-fail-closed",
+      "document": {
+        "schemaVersion": "0.1",
+        "revision": 0,
+        "workspace": "geometry3d",
+        "coordinateSystems": [
+          "cartesian-3d"
+        ],
+        "parameters": {},
+        "primitives": [],
+        "groups": [],
+        "constraints": [],
+        "dynamics": [],
+        "annotations": [],
+        "measurements": [],
+        "engineeringAnnotations": [],
+        "metadata": {
+          "id": "doc-325fcfdd-d952-48e4-a403-a7f84340d409",
+          "name": "Untitled geometry",
+          "createdAt": "2026-01-01T00:00:00.000Z",
+          "updatedAt": "2026-01-01T00:00:00.000Z"
+        }
+      },
+      "plan": {
+        "schemaVersion": "mathcanvas.plan.v1",
+        "kind": "plan",
+        "goal": "代表题",
+        "factIds": [],
+        "actions": [
+          {
+            "actionId": "solid.create_polyhedron",
+            "actionKey": "pyramid",
+            "factIds": [],
+            "inputs": {
+              "alias": "pyramid",
+              "vertexNames": [
+                "P",
+                "A",
+                "B",
+                "C",
+                "D"
+              ],
+              "vertices": [
+                {
+                  "x": 1,
+                  "y": 0,
+                  "z": 4
+                },
+                {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                },
+                {
+                  "x": 2,
+                  "y": 0,
+                  "z": 0
+                },
+                {
+                  "x": 2,
+                  "y": 3,
+                  "z": 0
+                },
+                {
+                  "x": 0,
+                  "y": 3,
+                  "z": 0
+                }
+              ],
+              "faces": [
+                [
+                  1,
+                  2,
+                  3,
+                  4
+                ],
+                [
+                  0,
+                  2,
+                  1
+                ],
+                [
+                  0,
+                  3,
+                  2
+                ],
+                [
+                  0,
+                  4,
+                  3
+                ],
+                [
+                  0,
+                  1,
+                  4
+                ]
+              ]
+            }
+          }
+        ],
+        "relations": [
+          {
+            "id": "PA-perp-base",
+            "kind": "perpendicular",
+            "targets": [
+              {
+                "vertex": "v0"
+              },
+              {
+                "vertex": "v1"
+              },
+              {
+                "vertex": "v1"
+              },
+              {
+                "vertex": "v2"
+              },
+              {
+                "vertex": "v3"
+              }
+            ]
+          },
+          {
+            "id": "BC-parallel-AD",
+            "kind": "parallel",
+            "targets": [
+              {
+                "vertex": "v2"
+              },
+              {
+                "vertex": "v3"
+              },
+              {
+                "vertex": "v1"
+              },
+              {
+                "vertex": "v4"
+              }
+            ]
+          }
+        ]
+      },
+      "context": {
+        "conversationId": "golden",
+        "prompt": "在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，BC ∥ AD，AB ⊥ AD，画出这个四棱锥"
+      },
+      "resultJson": "{\"ok\":false,\"actions\":[],\"plan\":null,\"assumptions\":[],\"questions\":[],\"completions\":[{\"actionId\":\"solid.create_polyhedron\",\"actionKey\":\"pyramid\",\"field\":\"vertices\",\"path\":\"envelope.actions[0].inputs.vertices\",\"policy\":\"given\"},{\"actionId\":\"solid.create_polyhedron\",\"actionKey\":\"pyramid\",\"field\":\"faces\",\"path\":\"envelope.actions[0].inputs.faces\",\"policy\":\"given\"}],\"diagnostics\":[{\"stage\":\"geometry_validation\",\"code\":\"relation_not_satisfied\",\"path\":\"envelope.relations\",\"detail\":\"关系 relation-0（perpendicular）不成立：残差 2.43e-1 超过容差 1.00e-6。\",\"severity\":\"error\"},{\"stage\":\"geometry_validation\",\"code\":\"diagram_condition_failed\",\"path\":\"envelope.actions\",\"detail\":\"PA ⊥ 平面 ABCD：实测 0.24254，题设要求 0。\",\"severity\":\"error\"}],\"aliases\":{\"pyramid\":\"solid-1\"},\"operations\":[],\"draftDocument\":null,\"verification\":null,\"diagramVerification\":{\"status\":\"failed\",\"checks\":[{\"kind\":\"perpendicular\",\"sourceText\":\"PA ⊥ 平面 ABCD\",\"status\":\"failed\",\"reason\":\"实测 0.24254，题设要求 0。\",\"expected\":0,\"actual\":0.24253562503633297},{\"kind\":\"parallel\",\"sourceText\":\"BC ∥ AD\",\"status\":\"passed\",\"reason\":\"已按候选图坐标核验。\",\"expected\":0,\"actual\":0},{\"kind\":\"perpendicular\",\"sourceText\":\"AB ⊥ AD\",\"status\":\"passed\",\"reason\":\"已按候选图坐标核验。\",\"expected\":0,\"actual\":0}],\"sampleValues\":[]},\"repair\":{\"reason\":\"schema_invalid\",\"errors\":[{\"code\":\"relation_not_satisfied\",\"path\":\"envelope.relations\",\"detail\":\"关系 relation-0（perpendicular）不成立：残差 2.43e-1 超过容差 1.00e-6。\"},{\"code\":\"diagram_condition_failed\",\"path\":\"envelope.actions\",\"detail\":\"PA ⊥ 平面 ABCD：实测 0.24254，题设要求 0。\"}],\"allowedChanges\":[\"envelope.relations\",\"envelope.actions\"],\"attempt\":1}}",
+      "resultKeys": [
+        "actions",
+        "aliases",
+        "assumptions",
+        "completions",
+        "diagnostics",
+        "diagramVerification",
+        "draftDocument",
+        "ok",
+        "operations",
+        "plan",
+        "questions",
+        "repair",
+        "verification"
+      ],
+      "diagramVerificationKeys": [
+        "checks",
+        "sampleValues",
+        "status"
+      ]
+    },
+    {
+      "name": "pyramid-verified",
+      "document": {
+        "schemaVersion": "0.1",
+        "revision": 0,
+        "workspace": "geometry3d",
+        "coordinateSystems": [
+          "cartesian-3d"
+        ],
+        "parameters": {},
+        "primitives": [],
+        "groups": [],
+        "constraints": [],
+        "dynamics": [],
+        "annotations": [],
+        "measurements": [],
+        "engineeringAnnotations": [],
+        "metadata": {
+          "id": "doc-0ba9fbad-6885-42f9-9cc6-eae9b3a77b5e",
+          "name": "Untitled geometry",
+          "createdAt": "2026-01-01T00:00:00.000Z",
+          "updatedAt": "2026-01-01T00:00:00.000Z"
+        }
+      },
+      "plan": {
+        "schemaVersion": "mathcanvas.plan.v1",
+        "kind": "plan",
+        "goal": "代表题",
+        "factIds": [],
+        "actions": [
+          {
+            "actionId": "solid.create_polyhedron",
+            "actionKey": "pyramid",
+            "factIds": [],
+            "inputs": {
+              "alias": "pyramid",
+              "vertexNames": [
+                "P",
+                "A",
+                "B",
+                "C",
+                "D"
+              ],
+              "vertices": [
+                {
+                  "x": 0,
+                  "y": 0,
+                  "z": 4
+                },
+                {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                },
+                {
+                  "x": 2,
+                  "y": 0,
+                  "z": 0
+                },
+                {
+                  "x": 2,
+                  "y": 3,
+                  "z": 0
+                },
+                {
+                  "x": 0,
+                  "y": 3,
+                  "z": 0
+                }
+              ],
+              "faces": [
+                [
+                  1,
+                  2,
+                  3,
+                  4
+                ],
+                [
+                  0,
+                  2,
+                  1
+                ],
+                [
+                  0,
+                  3,
+                  2
+                ],
+                [
+                  0,
+                  4,
+                  3
+                ],
+                [
+                  0,
+                  1,
+                  4
+                ]
+              ]
+            }
+          }
+        ],
+        "relations": [
+          {
+            "id": "PA-perp-base",
+            "kind": "perpendicular",
+            "targets": [
+              {
+                "vertex": "v0"
+              },
+              {
+                "vertex": "v1"
+              },
+              {
+                "vertex": "v1"
+              },
+              {
+                "vertex": "v2"
+              },
+              {
+                "vertex": "v3"
+              }
+            ]
+          },
+          {
+            "id": "BC-parallel-AD",
+            "kind": "parallel",
+            "targets": [
+              {
+                "vertex": "v2"
+              },
+              {
+                "vertex": "v3"
+              },
+              {
+                "vertex": "v1"
+              },
+              {
+                "vertex": "v4"
+              }
+            ]
+          }
+        ]
+      },
+      "context": {
+        "conversationId": "golden",
+        "prompt": "在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，BC ∥ AD，AB ⊥ AD，画出这个四棱锥"
+      },
+      "resultJson": "{\"ok\":true,\"actions\":[{\"actionId\":\"solid.create_polyhedron\",\"actionKey\":\"pyramid\",\"inputs\":{\"alias\":\"pyramid\",\"vertices\":[{\"x\":0,\"y\":0,\"z\":4},{\"x\":0,\"y\":0,\"z\":0},{\"x\":2,\"y\":0,\"z\":0},{\"x\":2,\"y\":3,\"z\":0},{\"x\":0,\"y\":3,\"z\":0}],\"vertexNames\":[\"P\",\"A\",\"B\",\"C\",\"D\"],\"faces\":[[1,2,3,4],[0,2,1],[0,3,2],[0,4,3],[0,1,4]]},\"factIds\":[]}],\"plan\":{\"schemaVersion\":\"mathcanvas.plan.v1\",\"kind\":\"plan\",\"goal\":\"代表题\",\"factIds\":[],\"relations\":[{\"id\":\"PA-perp-base\",\"kind\":\"perpendicular\",\"targets\":[{\"vertex\":\"v0\"},{\"vertex\":\"v1\"},{\"vertex\":\"v1\"},{\"vertex\":\"v2\"},{\"vertex\":\"v3\"}]},{\"id\":\"BC-parallel-AD\",\"kind\":\"parallel\",\"targets\":[{\"vertex\":\"v2\"},{\"vertex\":\"v3\"},{\"vertex\":\"v1\"},{\"vertex\":\"v4\"}]}],\"actions\":[{\"actionId\":\"solid.create_polyhedron\",\"actionKey\":\"pyramid\",\"inputs\":{\"alias\":\"pyramid\",\"vertices\":[{\"x\":0,\"y\":0,\"z\":4},{\"x\":0,\"y\":0,\"z\":0},{\"x\":2,\"y\":0,\"z\":0},{\"x\":2,\"y\":3,\"z\":0},{\"x\":0,\"y\":3,\"z\":0}],\"vertexNames\":[\"P\",\"A\",\"B\",\"C\",\"D\"],\"faces\":[[1,2,3,4],[0,2,1],[0,3,2],[0,4,3],[0,1,4]]},\"factIds\":[]}]},\"assumptions\":[],\"questions\":[],\"completions\":[{\"actionId\":\"solid.create_polyhedron\",\"actionKey\":\"pyramid\",\"field\":\"vertices\",\"path\":\"envelope.actions[0].inputs.vertices\",\"policy\":\"given\"},{\"actionId\":\"solid.create_polyhedron\",\"actionKey\":\"pyramid\",\"field\":\"faces\",\"path\":\"envelope.actions[0].inputs.faces\",\"policy\":\"given\"}],\"diagnostics\":[],\"aliases\":{\"pyramid\":\"solid-1\"},\"operations\":[{\"op\":\"addPrimitives\",\"primitives\":[{\"id\":\"solid-1:v0\",\"type\":\"point3\",\"position\":{\"x\":0,\"y\":0,\"z\":4},\"binding\":{\"kind\":\"free\"},\"label\":\"A\"},{\"id\":\"solid-1:v1\",\"type\":\"point3\",\"position\":{\"x\":0,\"y\":0,\"z\":0},\"binding\":{\"kind\":\"free\"},\"label\":\"B\"},{\"id\":\"solid-1:v2\",\"type\":\"point3\",\"position\":{\"x\":2,\"y\":0,\"z\":0},\"binding\":{\"kind\":\"free\"},\"label\":\"C\"},{\"id\":\"solid-1:v3\",\"type\":\"point3\",\"position\":{\"x\":2,\"y\":3,\"z\":0},\"binding\":{\"kind\":\"free\"},\"label\":\"D\"},{\"id\":\"solid-1:v4\",\"type\":\"point3\",\"position\":{\"x\":0,\"y\":3,\"z\":0},\"binding\":{\"kind\":\"free\"},\"label\":\"E\"},{\"id\":\"solid-1:e0\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v1\",\"solid-1:v2\"],\"faceIds\":[\"solid-1:f0\",\"solid-1:f1\"],\"label\":\"棱 1\"},{\"id\":\"solid-1:e1\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v2\",\"solid-1:v3\"],\"faceIds\":[\"solid-1:f0\",\"solid-1:f2\"],\"label\":\"棱 2\"},{\"id\":\"solid-1:e2\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v3\",\"solid-1:v4\"],\"faceIds\":[\"solid-1:f0\",\"solid-1:f3\"],\"label\":\"棱 3\"},{\"id\":\"solid-1:e3\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v4\",\"solid-1:v1\"],\"faceIds\":[\"solid-1:f0\",\"solid-1:f4\"],\"label\":\"棱 4\"},{\"id\":\"solid-1:e4\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v0\",\"solid-1:v2\"],\"faceIds\":[\"solid-1:f1\",\"solid-1:f2\"],\"label\":\"棱 5\"},{\"id\":\"solid-1:e5\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v1\",\"solid-1:v0\"],\"faceIds\":[\"solid-1:f1\",\"solid-1:f4\"],\"label\":\"棱 6\"},{\"id\":\"solid-1:e6\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v0\",\"solid-1:v3\"],\"faceIds\":[\"solid-1:f2\",\"solid-1:f3\"],\"label\":\"棱 7\"},{\"id\":\"solid-1:e7\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v0\",\"solid-1:v4\"],\"faceIds\":[\"solid-1:f3\",\"solid-1:f4\"],\"label\":\"棱 8\"},{\"id\":\"solid-1:f0\",\"type\":\"face3\",\"pointIds\":[\"solid-1:v1\",\"solid-1:v2\",\"solid-1:v3\",\"solid-1:v4\"],\"edgeIds\":[\"solid-1:e0\",\"solid-1:e1\",\"solid-1:e2\",\"solid-1:e3\"],\"label\":\"面 1\"},{\"id\":\"solid-1:f1\",\"type\":\"face3\",\"pointIds\":[\"solid-1:v0\",\"solid-1:v2\",\"solid-1:v1\"],\"edgeIds\":[\"solid-1:e4\",\"solid-1:e0\",\"solid-1:e5\"],\"label\":\"面 2\"},{\"id\":\"solid-1:f2\",\"type\":\"face3\",\"pointIds\":[\"solid-1:v0\",\"solid-1:v3\",\"solid-1:v2\"],\"edgeIds\":[\"solid-1:e6\",\"solid-1:e1\",\"solid-1:e4\"],\"label\":\"面 3\"},{\"id\":\"solid-1:f3\",\"type\":\"face3\",\"pointIds\":[\"solid-1:v0\",\"solid-1:v4\",\"solid-1:v3\"],\"edgeIds\":[\"solid-1:e7\",\"solid-1:e2\",\"solid-1:e6\"],\"label\":\"面 4\"},{\"id\":\"solid-1:f4\",\"type\":\"face3\",\"pointIds\":[\"solid-1:v0\",\"solid-1:v1\",\"solid-1:v4\"],\"edgeIds\":[\"solid-1:e5\",\"solid-1:e3\",\"solid-1:e7\"],\"label\":\"面 5\"},{\"id\":\"solid-1\",\"type\":\"polyhedron3\",\"vertexIds\":[\"solid-1:v0\",\"solid-1:v1\",\"solid-1:v2\",\"solid-1:v3\",\"solid-1:v4\"],\"edgeIds\":[\"solid-1:e0\",\"solid-1:e1\",\"solid-1:e2\",\"solid-1:e3\",\"solid-1:e4\",\"solid-1:e5\",\"solid-1:e6\",\"solid-1:e7\"],\"faceIds\":[\"solid-1:f0\",\"solid-1:f1\",\"solid-1:f2\",\"solid-1:f3\",\"solid-1:f4\"],\"construction\":{\"kind\":\"fromPoints\",\"sourceIds\":[\"solid-1:v0\",\"solid-1:v1\",\"solid-1:v2\",\"solid-1:v3\",\"solid-1:v4\"]}}]}],\"draftDocument\":{\"schemaVersion\":\"0.1\",\"revision\":1,\"workspace\":\"geometry3d\",\"coordinateSystems\":[\"cartesian-3d\"],\"parameters\":{},\"primitives\":[{\"id\":\"solid-1:v0\",\"type\":\"point3\",\"position\":{\"x\":0,\"y\":0,\"z\":4},\"binding\":{\"kind\":\"free\"},\"label\":\"A\"},{\"id\":\"solid-1:v1\",\"type\":\"point3\",\"position\":{\"x\":0,\"y\":0,\"z\":0},\"binding\":{\"kind\":\"free\"},\"label\":\"B\"},{\"id\":\"solid-1:v2\",\"type\":\"point3\",\"position\":{\"x\":2,\"y\":0,\"z\":0},\"binding\":{\"kind\":\"free\"},\"label\":\"C\"},{\"id\":\"solid-1:v3\",\"type\":\"point3\",\"position\":{\"x\":2,\"y\":3,\"z\":0},\"binding\":{\"kind\":\"free\"},\"label\":\"D\"},{\"id\":\"solid-1:v4\",\"type\":\"point3\",\"position\":{\"x\":0,\"y\":3,\"z\":0},\"binding\":{\"kind\":\"free\"},\"label\":\"E\"},{\"id\":\"solid-1:e0\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v1\",\"solid-1:v2\"],\"faceIds\":[\"solid-1:f0\",\"solid-1:f1\"],\"label\":\"棱 1\"},{\"id\":\"solid-1:e1\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v2\",\"solid-1:v3\"],\"faceIds\":[\"solid-1:f0\",\"solid-1:f2\"],\"label\":\"棱 2\"},{\"id\":\"solid-1:e2\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v3\",\"solid-1:v4\"],\"faceIds\":[\"solid-1:f0\",\"solid-1:f3\"],\"label\":\"棱 3\"},{\"id\":\"solid-1:e3\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v4\",\"solid-1:v1\"],\"faceIds\":[\"solid-1:f0\",\"solid-1:f4\"],\"label\":\"棱 4\"},{\"id\":\"solid-1:e4\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v0\",\"solid-1:v2\"],\"faceIds\":[\"solid-1:f1\",\"solid-1:f2\"],\"label\":\"棱 5\"},{\"id\":\"solid-1:e5\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v1\",\"solid-1:v0\"],\"faceIds\":[\"solid-1:f1\",\"solid-1:f4\"],\"label\":\"棱 6\"},{\"id\":\"solid-1:e6\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v0\",\"solid-1:v3\"],\"faceIds\":[\"solid-1:f2\",\"solid-1:f3\"],\"label\":\"棱 7\"},{\"id\":\"solid-1:e7\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v0\",\"solid-1:v4\"],\"faceIds\":[\"solid-1:f3\",\"solid-1:f4\"],\"label\":\"棱 8\"},{\"id\":\"solid-1:f0\",\"type\":\"face3\",\"pointIds\":[\"solid-1:v1\",\"solid-1:v2\",\"solid-1:v3\",\"solid-1:v4\"],\"edgeIds\":[\"solid-1:e0\",\"solid-1:e1\",\"solid-1:e2\",\"solid-1:e3\"],\"label\":\"面 1\"},{\"id\":\"solid-1:f1\",\"type\":\"face3\",\"pointIds\":[\"solid-1:v0\",\"solid-1:v2\",\"solid-1:v1\"],\"edgeIds\":[\"solid-1:e4\",\"solid-1:e0\",\"solid-1:e5\"],\"label\":\"面 2\"},{\"id\":\"solid-1:f2\",\"type\":\"face3\",\"pointIds\":[\"solid-1:v0\",\"solid-1:v3\",\"solid-1:v2\"],\"edgeIds\":[\"solid-1:e6\",\"solid-1:e1\",\"solid-1:e4\"],\"label\":\"面 3\"},{\"id\":\"solid-1:f3\",\"type\":\"face3\",\"pointIds\":[\"solid-1:v0\",\"solid-1:v4\",\"solid-1:v3\"],\"edgeIds\":[\"solid-1:e7\",\"solid-1:e2\",\"solid-1:e6\"],\"label\":\"面 4\"},{\"id\":\"solid-1:f4\",\"type\":\"face3\",\"pointIds\":[\"solid-1:v0\",\"solid-1:v1\",\"solid-1:v4\"],\"edgeIds\":[\"solid-1:e5\",\"solid-1:e3\",\"solid-1:e7\"],\"label\":\"面 5\"},{\"id\":\"solid-1\",\"type\":\"polyhedron3\",\"vertexIds\":[\"solid-1:v0\",\"solid-1:v1\",\"solid-1:v2\",\"solid-1:v3\",\"solid-1:v4\"],\"edgeIds\":[\"solid-1:e0\",\"solid-1:e1\",\"solid-1:e2\",\"solid-1:e3\",\"solid-1:e4\",\"solid-1:e5\",\"solid-1:e6\",\"solid-1:e7\"],\"faceIds\":[\"solid-1:f0\",\"solid-1:f1\",\"solid-1:f2\",\"solid-1:f3\",\"solid-1:f4\"],\"construction\":{\"kind\":\"fromPoints\",\"sourceIds\":[\"solid-1:v0\",\"solid-1:v1\",\"solid-1:v2\",\"solid-1:v3\",\"solid-1:v4\"]}}],\"groups\":[],\"constraints\":[],\"dynamics\":[],\"annotations\":[],\"measurements\":[],\"engineeringAnnotations\":[],\"metadata\":{\"id\":\"doc-0ba9fbad-6885-42f9-9cc6-eae9b3a77b5e\",\"name\":\"Untitled geometry\",\"createdAt\":\"2026-01-01T00:00:00.000Z\",\"updatedAt\":\"2026-01-01T00:00:00.000Z\"}},\"verification\":{\"kind\":\"formal\",\"detail\":\"每一步都是确定性内核构造（exact）；这份计划不包含需要证明的不变量断言。\"},\"diagramVerification\":{\"status\":\"passed\",\"checks\":[{\"kind\":\"perpendicular\",\"sourceText\":\"PA ⊥ 平面 ABCD\",\"status\":\"passed\",\"reason\":\"已按候选图坐标核验。\",\"expected\":0,\"actual\":0},{\"kind\":\"parallel\",\"sourceText\":\"BC ∥ AD\",\"status\":\"passed\",\"reason\":\"已按候选图坐标核验。\",\"expected\":0,\"actual\":0},{\"kind\":\"perpendicular\",\"sourceText\":\"AB ⊥ AD\",\"status\":\"passed\",\"reason\":\"已按候选图坐标核验。\",\"expected\":0,\"actual\":0}],\"sampleValues\":[]}}",
+      "resultKeys": [
+        "actions",
+        "aliases",
+        "assumptions",
+        "completions",
+        "diagnostics",
+        "diagramVerification",
+        "draftDocument",
+        "ok",
+        "operations",
+        "plan",
+        "questions",
+        "verification"
+      ],
+      "diagramVerificationKeys": [
+        "checks",
+        "sampleValues",
+        "status"
+      ]
+    },
+    {
+      "name": "pyramid-unverified-without-names",
+      "document": {
+        "schemaVersion": "0.1",
+        "revision": 0,
+        "workspace": "geometry3d",
+        "coordinateSystems": [
+          "cartesian-3d"
+        ],
+        "parameters": {},
+        "primitives": [],
+        "groups": [],
+        "constraints": [],
+        "dynamics": [],
+        "annotations": [],
+        "measurements": [],
+        "engineeringAnnotations": [],
+        "metadata": {
+          "id": "doc-e609cd06-cf0c-4536-b9e6-b515c87f5be3",
+          "name": "Untitled geometry",
+          "createdAt": "2026-01-01T00:00:00.000Z",
+          "updatedAt": "2026-01-01T00:00:00.000Z"
+        }
+      },
+      "plan": {
+        "schemaVersion": "mathcanvas.plan.v1",
+        "kind": "plan",
+        "goal": "代表题",
+        "factIds": [],
+        "actions": [
+          {
+            "actionId": "solid.create_polyhedron",
+            "actionKey": "pyramid",
+            "factIds": [],
+            "inputs": {
+              "alias": "pyramid",
+              "vertices": [
+                {
+                  "x": 1,
+                  "y": 0,
+                  "z": 4
+                },
+                {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                },
+                {
+                  "x": 2,
+                  "y": 0,
+                  "z": 0
+                },
+                {
+                  "x": 2,
+                  "y": 3,
+                  "z": 0
+                },
+                {
+                  "x": 0,
+                  "y": 3,
+                  "z": 0
+                }
+              ],
+              "faces": [
+                [
+                  1,
+                  2,
+                  3,
+                  4
+                ],
+                [
+                  0,
+                  2,
+                  1
+                ],
+                [
+                  0,
+                  3,
+                  2
+                ],
+                [
+                  0,
+                  4,
+                  3
+                ],
+                [
+                  0,
+                  1,
+                  4
+                ]
+              ]
+            }
+          }
+        ]
+      },
+      "context": {
+        "conversationId": "golden",
+        "prompt": "在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，BC ∥ AD，AB ⊥ AD，画出这个四棱锥"
+      },
+      "resultJson": "{\"ok\":true,\"actions\":[{\"actionId\":\"solid.create_polyhedron\",\"actionKey\":\"pyramid\",\"inputs\":{\"alias\":\"pyramid\",\"vertices\":[{\"x\":1,\"y\":0,\"z\":4},{\"x\":0,\"y\":0,\"z\":0},{\"x\":2,\"y\":0,\"z\":0},{\"x\":2,\"y\":3,\"z\":0},{\"x\":0,\"y\":3,\"z\":0}],\"faces\":[[1,2,3,4],[0,2,1],[0,3,2],[0,4,3],[0,1,4]]},\"factIds\":[]}],\"plan\":{\"schemaVersion\":\"mathcanvas.plan.v1\",\"kind\":\"plan\",\"goal\":\"代表题\",\"factIds\":[],\"actions\":[{\"actionId\":\"solid.create_polyhedron\",\"actionKey\":\"pyramid\",\"inputs\":{\"alias\":\"pyramid\",\"vertices\":[{\"x\":1,\"y\":0,\"z\":4},{\"x\":0,\"y\":0,\"z\":0},{\"x\":2,\"y\":0,\"z\":0},{\"x\":2,\"y\":3,\"z\":0},{\"x\":0,\"y\":3,\"z\":0}],\"faces\":[[1,2,3,4],[0,2,1],[0,3,2],[0,4,3],[0,1,4]]},\"factIds\":[]}]},\"assumptions\":[],\"questions\":[],\"completions\":[{\"actionId\":\"solid.create_polyhedron\",\"actionKey\":\"pyramid\",\"field\":\"vertices\",\"path\":\"envelope.actions[0].inputs.vertices\",\"policy\":\"given\"},{\"actionId\":\"solid.create_polyhedron\",\"actionKey\":\"pyramid\",\"field\":\"faces\",\"path\":\"envelope.actions[0].inputs.faces\",\"policy\":\"given\"}],\"diagnostics\":[{\"stage\":\"geometry_validation\",\"code\":\"diagram_condition_unverified\",\"path\":\"envelope.actions\",\"detail\":\"PA ⊥ 平面 ABCD：候选图缺少唯一、可靠的顶点名映射；不能按题面顺序猜坐标。\",\"severity\":\"warning\"},{\"stage\":\"geometry_validation\",\"code\":\"diagram_condition_unverified\",\"path\":\"envelope.actions\",\"detail\":\"BC ∥ AD：候选图缺少唯一、可靠的顶点名映射；不能按题面顺序猜坐标。\",\"severity\":\"warning\"},{\"stage\":\"geometry_validation\",\"code\":\"diagram_condition_unverified\",\"path\":\"envelope.actions\",\"detail\":\"AB ⊥ AD：候选图缺少唯一、可靠的顶点名映射；不能按题面顺序猜坐标。\",\"severity\":\"warning\"}],\"aliases\":{\"pyramid\":\"solid-1\"},\"operations\":[{\"op\":\"addPrimitives\",\"primitives\":[{\"id\":\"solid-1:v0\",\"type\":\"point3\",\"position\":{\"x\":1,\"y\":0,\"z\":4},\"binding\":{\"kind\":\"free\"},\"label\":\"A\"},{\"id\":\"solid-1:v1\",\"type\":\"point3\",\"position\":{\"x\":0,\"y\":0,\"z\":0},\"binding\":{\"kind\":\"free\"},\"label\":\"B\"},{\"id\":\"solid-1:v2\",\"type\":\"point3\",\"position\":{\"x\":2,\"y\":0,\"z\":0},\"binding\":{\"kind\":\"free\"},\"label\":\"C\"},{\"id\":\"solid-1:v3\",\"type\":\"point3\",\"position\":{\"x\":2,\"y\":3,\"z\":0},\"binding\":{\"kind\":\"free\"},\"label\":\"D\"},{\"id\":\"solid-1:v4\",\"type\":\"point3\",\"position\":{\"x\":0,\"y\":3,\"z\":0},\"binding\":{\"kind\":\"free\"},\"label\":\"E\"},{\"id\":\"solid-1:e0\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v1\",\"solid-1:v2\"],\"faceIds\":[\"solid-1:f0\",\"solid-1:f1\"],\"label\":\"棱 1\"},{\"id\":\"solid-1:e1\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v2\",\"solid-1:v3\"],\"faceIds\":[\"solid-1:f0\",\"solid-1:f2\"],\"label\":\"棱 2\"},{\"id\":\"solid-1:e2\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v3\",\"solid-1:v4\"],\"faceIds\":[\"solid-1:f0\",\"solid-1:f3\"],\"label\":\"棱 3\"},{\"id\":\"solid-1:e3\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v4\",\"solid-1:v1\"],\"faceIds\":[\"solid-1:f0\",\"solid-1:f4\"],\"label\":\"棱 4\"},{\"id\":\"solid-1:e4\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v0\",\"solid-1:v2\"],\"faceIds\":[\"solid-1:f1\",\"solid-1:f2\"],\"label\":\"棱 5\"},{\"id\":\"solid-1:e5\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v1\",\"solid-1:v0\"],\"faceIds\":[\"solid-1:f1\",\"solid-1:f4\"],\"label\":\"棱 6\"},{\"id\":\"solid-1:e6\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v0\",\"solid-1:v3\"],\"faceIds\":[\"solid-1:f2\",\"solid-1:f3\"],\"label\":\"棱 7\"},{\"id\":\"solid-1:e7\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v0\",\"solid-1:v4\"],\"faceIds\":[\"solid-1:f3\",\"solid-1:f4\"],\"label\":\"棱 8\"},{\"id\":\"solid-1:f0\",\"type\":\"face3\",\"pointIds\":[\"solid-1:v1\",\"solid-1:v2\",\"solid-1:v3\",\"solid-1:v4\"],\"edgeIds\":[\"solid-1:e0\",\"solid-1:e1\",\"solid-1:e2\",\"solid-1:e3\"],\"label\":\"面 1\"},{\"id\":\"solid-1:f1\",\"type\":\"face3\",\"pointIds\":[\"solid-1:v0\",\"solid-1:v2\",\"solid-1:v1\"],\"edgeIds\":[\"solid-1:e4\",\"solid-1:e0\",\"solid-1:e5\"],\"label\":\"面 2\"},{\"id\":\"solid-1:f2\",\"type\":\"face3\",\"pointIds\":[\"solid-1:v0\",\"solid-1:v3\",\"solid-1:v2\"],\"edgeIds\":[\"solid-1:e6\",\"solid-1:e1\",\"solid-1:e4\"],\"label\":\"面 3\"},{\"id\":\"solid-1:f3\",\"type\":\"face3\",\"pointIds\":[\"solid-1:v0\",\"solid-1:v4\",\"solid-1:v3\"],\"edgeIds\":[\"solid-1:e7\",\"solid-1:e2\",\"solid-1:e6\"],\"label\":\"面 4\"},{\"id\":\"solid-1:f4\",\"type\":\"face3\",\"pointIds\":[\"solid-1:v0\",\"solid-1:v1\",\"solid-1:v4\"],\"edgeIds\":[\"solid-1:e5\",\"solid-1:e3\",\"solid-1:e7\"],\"label\":\"面 5\"},{\"id\":\"solid-1\",\"type\":\"polyhedron3\",\"vertexIds\":[\"solid-1:v0\",\"solid-1:v1\",\"solid-1:v2\",\"solid-1:v3\",\"solid-1:v4\"],\"edgeIds\":[\"solid-1:e0\",\"solid-1:e1\",\"solid-1:e2\",\"solid-1:e3\",\"solid-1:e4\",\"solid-1:e5\",\"solid-1:e6\",\"solid-1:e7\"],\"faceIds\":[\"solid-1:f0\",\"solid-1:f1\",\"solid-1:f2\",\"solid-1:f3\",\"solid-1:f4\"],\"construction\":{\"kind\":\"fromPoints\",\"sourceIds\":[\"solid-1:v0\",\"solid-1:v1\",\"solid-1:v2\",\"solid-1:v3\",\"solid-1:v4\"]}}]}],\"draftDocument\":{\"schemaVersion\":\"0.1\",\"revision\":1,\"workspace\":\"geometry3d\",\"coordinateSystems\":[\"cartesian-3d\"],\"parameters\":{},\"primitives\":[{\"id\":\"solid-1:v0\",\"type\":\"point3\",\"position\":{\"x\":1,\"y\":0,\"z\":4},\"binding\":{\"kind\":\"free\"},\"label\":\"A\"},{\"id\":\"solid-1:v1\",\"type\":\"point3\",\"position\":{\"x\":0,\"y\":0,\"z\":0},\"binding\":{\"kind\":\"free\"},\"label\":\"B\"},{\"id\":\"solid-1:v2\",\"type\":\"point3\",\"position\":{\"x\":2,\"y\":0,\"z\":0},\"binding\":{\"kind\":\"free\"},\"label\":\"C\"},{\"id\":\"solid-1:v3\",\"type\":\"point3\",\"position\":{\"x\":2,\"y\":3,\"z\":0},\"binding\":{\"kind\":\"free\"},\"label\":\"D\"},{\"id\":\"solid-1:v4\",\"type\":\"point3\",\"position\":{\"x\":0,\"y\":3,\"z\":0},\"binding\":{\"kind\":\"free\"},\"label\":\"E\"},{\"id\":\"solid-1:e0\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v1\",\"solid-1:v2\"],\"faceIds\":[\"solid-1:f0\",\"solid-1:f1\"],\"label\":\"棱 1\"},{\"id\":\"solid-1:e1\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v2\",\"solid-1:v3\"],\"faceIds\":[\"solid-1:f0\",\"solid-1:f2\"],\"label\":\"棱 2\"},{\"id\":\"solid-1:e2\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v3\",\"solid-1:v4\"],\"faceIds\":[\"solid-1:f0\",\"solid-1:f3\"],\"label\":\"棱 3\"},{\"id\":\"solid-1:e3\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v4\",\"solid-1:v1\"],\"faceIds\":[\"solid-1:f0\",\"solid-1:f4\"],\"label\":\"棱 4\"},{\"id\":\"solid-1:e4\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v0\",\"solid-1:v2\"],\"faceIds\":[\"solid-1:f1\",\"solid-1:f2\"],\"label\":\"棱 5\"},{\"id\":\"solid-1:e5\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v1\",\"solid-1:v0\"],\"faceIds\":[\"solid-1:f1\",\"solid-1:f4\"],\"label\":\"棱 6\"},{\"id\":\"solid-1:e6\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v0\",\"solid-1:v3\"],\"faceIds\":[\"solid-1:f2\",\"solid-1:f3\"],\"label\":\"棱 7\"},{\"id\":\"solid-1:e7\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v0\",\"solid-1:v4\"],\"faceIds\":[\"solid-1:f3\",\"solid-1:f4\"],\"label\":\"棱 8\"},{\"id\":\"solid-1:f0\",\"type\":\"face3\",\"pointIds\":[\"solid-1:v1\",\"solid-1:v2\",\"solid-1:v3\",\"solid-1:v4\"],\"edgeIds\":[\"solid-1:e0\",\"solid-1:e1\",\"solid-1:e2\",\"solid-1:e3\"],\"label\":\"面 1\"},{\"id\":\"solid-1:f1\",\"type\":\"face3\",\"pointIds\":[\"solid-1:v0\",\"solid-1:v2\",\"solid-1:v1\"],\"edgeIds\":[\"solid-1:e4\",\"solid-1:e0\",\"solid-1:e5\"],\"label\":\"面 2\"},{\"id\":\"solid-1:f2\",\"type\":\"face3\",\"pointIds\":[\"solid-1:v0\",\"solid-1:v3\",\"solid-1:v2\"],\"edgeIds\":[\"solid-1:e6\",\"solid-1:e1\",\"solid-1:e4\"],\"label\":\"面 3\"},{\"id\":\"solid-1:f3\",\"type\":\"face3\",\"pointIds\":[\"solid-1:v0\",\"solid-1:v4\",\"solid-1:v3\"],\"edgeIds\":[\"solid-1:e7\",\"solid-1:e2\",\"solid-1:e6\"],\"label\":\"面 4\"},{\"id\":\"solid-1:f4\",\"type\":\"face3\",\"pointIds\":[\"solid-1:v0\",\"solid-1:v1\",\"solid-1:v4\"],\"edgeIds\":[\"solid-1:e5\",\"solid-1:e3\",\"solid-1:e7\"],\"label\":\"面 5\"},{\"id\":\"solid-1\",\"type\":\"polyhedron3\",\"vertexIds\":[\"solid-1:v0\",\"solid-1:v1\",\"solid-1:v2\",\"solid-1:v3\",\"solid-1:v4\"],\"edgeIds\":[\"solid-1:e0\",\"solid-1:e1\",\"solid-1:e2\",\"solid-1:e3\",\"solid-1:e4\",\"solid-1:e5\",\"solid-1:e6\",\"solid-1:e7\"],\"faceIds\":[\"solid-1:f0\",\"solid-1:f1\",\"solid-1:f2\",\"solid-1:f3\",\"solid-1:f4\"],\"construction\":{\"kind\":\"fromPoints\",\"sourceIds\":[\"solid-1:v0\",\"solid-1:v1\",\"solid-1:v2\",\"solid-1:v3\",\"solid-1:v4\"]}}],\"groups\":[],\"constraints\":[],\"dynamics\":[],\"annotations\":[],\"measurements\":[],\"engineeringAnnotations\":[],\"metadata\":{\"id\":\"doc-e609cd06-cf0c-4536-b9e6-b515c87f5be3\",\"name\":\"Untitled geometry\",\"createdAt\":\"2026-01-01T00:00:00.000Z\",\"updatedAt\":\"2026-01-01T00:00:00.000Z\"}},\"verification\":{\"kind\":\"formal\",\"detail\":\"每一步都是确定性内核构造（exact）；这份计划不包含需要证明的不变量断言。\"},\"diagramVerification\":{\"status\":\"unverified\",\"checks\":[{\"kind\":\"perpendicular\",\"sourceText\":\"PA ⊥ 平面 ABCD\",\"status\":\"unverified\",\"reason\":\"候选图缺少唯一、可靠的顶点名映射；不能按题面顺序猜坐标。\"},{\"kind\":\"parallel\",\"sourceText\":\"BC ∥ AD\",\"status\":\"unverified\",\"reason\":\"候选图缺少唯一、可靠的顶点名映射；不能按题面顺序猜坐标。\"},{\"kind\":\"perpendicular\",\"sourceText\":\"AB ⊥ AD\",\"status\":\"unverified\",\"reason\":\"候选图缺少唯一、可靠的顶点名映射；不能按题面顺序猜坐标。\"}],\"sampleValues\":[]}}",
+      "resultKeys": [
+        "actions",
+        "aliases",
+        "assumptions",
+        "completions",
+        "diagnostics",
+        "diagramVerification",
+        "draftDocument",
+        "ok",
+        "operations",
+        "plan",
+        "questions",
+        "verification"
+      ],
+      "diagramVerificationKeys": [
+        "checks",
+        "sampleValues",
+        "status"
+      ]
+    },
+    {
+      "name": "transport-invalid",
+      "document": {
+        "schemaVersion": "0.1",
+        "revision": 0,
+        "workspace": "geometry3d",
+        "coordinateSystems": [
+          "cartesian-3d"
+        ],
+        "parameters": {},
+        "primitives": [],
+        "groups": [],
+        "constraints": [],
+        "dynamics": [],
+        "annotations": [],
+        "measurements": [],
+        "engineeringAnnotations": [],
+        "metadata": {
+          "id": "doc-b0e1084f-5668-4790-9487-016de7da07e5",
+          "name": "Untitled geometry",
+          "createdAt": "2026-01-01T00:00:00.000Z",
+          "updatedAt": "2026-01-01T00:00:00.000Z"
+        }
+      },
+      "plan": {
+        "schemaVersion": "mathcanvas.plan.v1",
+        "kind": "plan",
+        "goal": "代表题",
+        "factIds": [],
+        "actions": [
+          {
+            "actionId": "planar.create_dragon",
+            "actionKey": "d",
+            "factIds": [],
+            "inputs": {}
+          }
+        ]
+      },
+      "context": {
+        "conversationId": "golden",
+        "prompt": "画一条龙"
+      },
+      "resultJson": "{\"ok\":false,\"actions\":[],\"plan\":null,\"assumptions\":[],\"questions\":[],\"completions\":[],\"diagnostics\":[{\"stage\":\"transport\",\"code\":\"unknown_action\",\"path\":\"envelope.actions[0].actionId\",\"detail\":\"unregistered action 'planar.create_dragon'\",\"severity\":\"error\"}],\"aliases\":{},\"operations\":[],\"draftDocument\":null,\"verification\":null,\"repair\":{\"reason\":\"schema_invalid\",\"errors\":[{\"code\":\"unknown_action\",\"path\":\"envelope.actions[0].actionId\",\"detail\":\"unregistered action 'planar.create_dragon'\"}],\"allowedChanges\":[\"envelope.actions[0].actionId\"],\"attempt\":1}}",
+      "resultKeys": [
+        "actions",
+        "aliases",
+        "assumptions",
+        "completions",
+        "diagnostics",
+        "draftDocument",
+        "ok",
+        "operations",
+        "plan",
+        "questions",
+        "repair",
+        "verification"
+      ],
+      "diagramVerificationKeys": null
+    },
+    {
+      "name": "audit-completes-defaults",
+      "document": {
+        "schemaVersion": "0.1",
+        "revision": 0,
+        "workspace": "geometry3d",
+        "coordinateSystems": [
+          "cartesian-3d"
+        ],
+        "parameters": {},
+        "primitives": [],
+        "groups": [],
+        "constraints": [],
+        "dynamics": [],
+        "annotations": [],
+        "measurements": [],
+        "engineeringAnnotations": [],
+        "metadata": {
+          "id": "doc-5098f1be-d5da-4236-a206-439b8201b78d",
+          "name": "Untitled geometry",
+          "createdAt": "2026-01-01T00:00:00.000Z",
+          "updatedAt": "2026-01-01T00:00:00.000Z"
+        }
+      },
+      "plan": {
+        "schemaVersion": "mathcanvas.plan.v1",
+        "kind": "plan",
+        "goal": "代表题",
+        "factIds": [],
+        "actions": [
+          {
+            "actionId": "solid.create_template",
+            "actionKey": "c",
+            "factIds": [],
+            "inputs": {
+              "alias": "c",
+              "template": "cube",
+              "origin": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              }
+            }
+          }
+        ]
+      },
+      "context": {
+        "conversationId": "golden",
+        "prompt": "画一个立方体"
+      },
+      "resultJson": "{\"ok\":true,\"actions\":[{\"actionId\":\"solid.create_template\",\"actionKey\":\"c\",\"inputs\":{\"alias\":\"c\",\"template\":\"cube\",\"origin\":{\"x\":0,\"y\":0,\"z\":0},\"size\":{\"x\":2,\"y\":2,\"z\":2}},\"factIds\":[]}],\"plan\":{\"schemaVersion\":\"mathcanvas.plan.v1\",\"kind\":\"plan\",\"goal\":\"代表题\",\"factIds\":[],\"assumptions\":[\"棱长未指定：先从你的话里读，读不到取 2。\"],\"actions\":[{\"actionId\":\"solid.create_template\",\"actionKey\":\"c\",\"inputs\":{\"alias\":\"c\",\"template\":\"cube\",\"origin\":{\"x\":0,\"y\":0,\"z\":0},\"size\":{\"x\":2,\"y\":2,\"z\":2}},\"factIds\":[]}]},\"assumptions\":[{\"id\":\"c:size\",\"text\":\"棱长未指定：先从你的话里读，读不到取 2。\",\"kind\":\"safe_default\",\"value\":{\"x\":2,\"y\":2,\"z\":2},\"overridable\":true,\"path\":\"envelope.actions[0].inputs.size\"}],\"questions\":[],\"completions\":[{\"actionId\":\"solid.create_template\",\"actionKey\":\"c\",\"field\":\"origin\",\"path\":\"envelope.actions[0].inputs.origin\",\"policy\":\"given\"},{\"actionId\":\"solid.create_template\",\"actionKey\":\"c\",\"field\":\"size\",\"path\":\"envelope.actions[0].inputs.size\",\"policy\":\"inferred\",\"value\":{\"x\":2,\"y\":2,\"z\":2},\"reason\":\"棱长未指定：先从你的话里读，读不到取 2。\"},{\"actionId\":\"solid.create_template\",\"actionKey\":\"c\",\"field\":\"template\",\"path\":\"envelope.actions[0].inputs.template\",\"policy\":\"given\"}],\"diagnostics\":[],\"aliases\":{\"c\":\"solid-1\"},\"operations\":[{\"op\":\"addPrimitives\",\"primitives\":[{\"id\":\"solid-1\",\"type\":\"cube\",\"origin\":{\"x\":0,\"y\":0,\"z\":0},\"size\":{\"x\":2,\"y\":2,\"z\":2}},{\"id\":\"solid-1-point-1\",\"type\":\"point3\",\"position\":{\"x\":0,\"y\":0,\"z\":0},\"binding\":{\"kind\":\"free\"},\"label\":\"A\"},{\"id\":\"solid-1-point-2\",\"type\":\"point3\",\"position\":{\"x\":2,\"y\":0,\"z\":0},\"binding\":{\"kind\":\"free\"},\"label\":\"B\"},{\"id\":\"solid-1-point-3\",\"type\":\"point3\",\"position\":{\"x\":2,\"y\":2,\"z\":0},\"binding\":{\"kind\":\"free\"},\"label\":\"C\"},{\"id\":\"solid-1-point-4\",\"type\":\"point3\",\"position\":{\"x\":0,\"y\":2,\"z\":0},\"binding\":{\"kind\":\"free\"},\"label\":\"D\"},{\"id\":\"solid-1-point-5\",\"type\":\"point3\",\"position\":{\"x\":0,\"y\":0,\"z\":2},\"binding\":{\"kind\":\"free\"},\"label\":\"E\"},{\"id\":\"solid-1-point-6\",\"type\":\"point3\",\"position\":{\"x\":2,\"y\":0,\"z\":2},\"binding\":{\"kind\":\"free\"},\"label\":\"F\"},{\"id\":\"solid-1-point-7\",\"type\":\"point3\",\"position\":{\"x\":2,\"y\":2,\"z\":2},\"binding\":{\"kind\":\"free\"},\"label\":\"G\"},{\"id\":\"solid-1-point-8\",\"type\":\"point3\",\"position\":{\"x\":0,\"y\":2,\"z\":2},\"binding\":{\"kind\":\"free\"},\"label\":\"H\"},{\"id\":\"solid-1-edge-15\",\"type\":\"edge3\",\"pointIds\":[\"solid-1-point-4\",\"solid-1-point-3\"],\"faceIds\":[\"solid-1-face-9\",\"solid-1-face-13\"],\"label\":\"棱 1\"},{\"id\":\"solid-1-edge-16\",\"type\":\"edge3\",\"pointIds\":[\"solid-1-point-3\",\"solid-1-point-2\"],\"faceIds\":[\"solid-1-face-9\",\"solid-1-face-12\"],\"label\":\"棱 2\"},{\"id\":\"solid-1-edge-17\",\"type\":\"edge3\",\"pointIds\":[\"solid-1-point-2\",\"solid-1-point-1\"],\"faceIds\":[\"solid-1-face-9\",\"solid-1-face-11\"],\"label\":\"棱 3\"},{\"id\":\"solid-1-edge-18\",\"type\":\"edge3\",\"pointIds\":[\"solid-1-point-1\",\"solid-1-point-4\"],\"faceIds\":[\"solid-1-face-9\",\"solid-1-face-14\"],\"label\":\"棱 4\"},{\"id\":\"solid-1-edge-19\",\"type\":\"edge3\",\"pointIds\":[\"solid-1-point-5\",\"solid-1-point-6\"],\"faceIds\":[\"solid-1-face-10\",\"solid-1-face-11\"],\"label\":\"棱 5\"},{\"id\":\"solid-1-edge-20\",\"type\":\"edge3\",\"pointIds\":[\"solid-1-point-6\",\"solid-1-point-7\"],\"faceIds\":[\"solid-1-face-10\",\"solid-1-face-12\"],\"label\":\"棱 6\"},{\"id\":\"solid-1-edge-21\",\"type\":\"edge3\",\"pointIds\":[\"solid-1-point-7\",\"solid-1-point-8\"],\"faceIds\":[\"solid-1-face-10\",\"solid-1-face-13\"],\"label\":\"棱 7\"},{\"id\":\"solid-1-edge-22\",\"type\":\"edge3\",\"pointIds\":[\"solid-1-point-8\",\"solid-1-point-5\"],\"faceIds\":[\"solid-1-face-10\",\"solid-1-face-14\"],\"label\":\"棱 8\"},{\"id\":\"solid-1-edge-23\",\"type\":\"edge3\",\"pointIds\":[\"solid-1-point-2\",\"solid-1-point-6\"],\"faceIds\":[\"solid-1-face-11\",\"solid-1-face-12\"],\"label\":\"棱 9\"},{\"id\":\"solid-1-edge-24\",\"type\":\"edge3\",\"pointIds\":[\"solid-1-point-5\",\"solid-1-point-1\"],\"faceIds\":[\"solid-1-face-11\",\"solid-1-face-14\"],\"label\":\"棱 10\"},{\"id\":\"solid-1-edge-25\",\"type\":\"edge3\",\"pointIds\":[\"solid-1-point-3\",\"solid-1-point-7\"],\"faceIds\":[\"solid-1-face-12\",\"solid-1-face-13\"],\"label\":\"棱 11\"},{\"id\":\"solid-1-edge-26\",\"type\":\"edge3\",\"pointIds\":[\"solid-1-point-4\",\"solid-1-point-8\"],\"faceIds\":[\"solid-1-face-13\",\"solid-1-face-14\"],\"label\":\"棱 12\"},{\"id\":\"solid-1-face-9\",\"type\":\"face3\",\"pointIds\":[\"solid-1-point-4\",\"solid-1-point-3\",\"solid-1-point-2\",\"solid-1-point-1\"],\"edgeIds\":[\"solid-1-edge-15\",\"solid-1-edge-16\",\"solid-1-edge-17\",\"solid-1-edge-18\"],\"label\":\"面 1\"},{\"id\":\"solid-1-face-10\",\"type\":\"face3\",\"pointIds\":[\"solid-1-point-5\",\"solid-1-point-6\",\"solid-1-point-7\",\"solid-1-point-8\"],\"edgeIds\":[\"solid-1-edge-19\",\"solid-1-edge-20\",\"solid-1-edge-21\",\"solid-1-edge-22\"],\"label\":\"面 2\"},{\"id\":\"solid-1-face-11\",\"type\":\"face3\",\"pointIds\":[\"solid-1-point-1\",\"solid-1-point-2\",\"solid-1-point-6\",\"solid-1-point-5\"],\"edgeIds\":[\"solid-1-edge-17\",\"solid-1-edge-23\",\"solid-1-edge-19\",\"solid-1-edge-24\"],\"label\":\"面 3\"},{\"id\":\"solid-1-face-12\",\"type\":\"face3\",\"pointIds\":[\"solid-1-point-2\",\"solid-1-point-3\",\"solid-1-point-7\",\"solid-1-point-6\"],\"edgeIds\":[\"solid-1-edge-16\",\"solid-1-edge-25\",\"solid-1-edge-20\",\"solid-1-edge-23\"],\"label\":\"面 4\"},{\"id\":\"solid-1-face-13\",\"type\":\"face3\",\"pointIds\":[\"solid-1-point-3\",\"solid-1-point-4\",\"solid-1-point-8\",\"solid-1-point-7\"],\"edgeIds\":[\"solid-1-edge-15\",\"solid-1-edge-26\",\"solid-1-edge-21\",\"solid-1-edge-25\"],\"label\":\"面 5\"},{\"id\":\"solid-1-face-14\",\"type\":\"face3\",\"pointIds\":[\"solid-1-point-4\",\"solid-1-point-1\",\"solid-1-point-5\",\"solid-1-point-8\"],\"edgeIds\":[\"solid-1-edge-18\",\"solid-1-edge-24\",\"solid-1-edge-22\",\"solid-1-edge-26\"],\"label\":\"面 6\"},{\"id\":\"solid-1-polyhedron-27\",\"type\":\"polyhedron3\",\"vertexIds\":[\"solid-1-point-1\",\"solid-1-point-2\",\"solid-1-point-3\",\"solid-1-point-4\",\"solid-1-point-5\",\"solid-1-point-6\",\"solid-1-point-7\",\"solid-1-point-8\"],\"edgeIds\":[\"solid-1-edge-15\",\"solid-1-edge-16\",\"solid-1-edge-17\",\"solid-1-edge-18\",\"solid-1-edge-19\",\"solid-1-edge-20\",\"solid-1-edge-21\",\"solid-1-edge-22\",\"solid-1-edge-23\",\"solid-1-edge-24\",\"solid-1-edge-25\",\"solid-1-edge-26\"],\"faceIds\":[\"solid-1-face-9\",\"solid-1-face-10\",\"solid-1-face-11\",\"solid-1-face-12\",\"solid-1-face-13\",\"solid-1-face-14\"],\"construction\":{\"kind\":\"template\",\"templateId\":\"cube\",\"sourceIds\":[\"solid-1\",\"solid-1-point-1\",\"solid-1-point-2\",\"solid-1-point-3\",\"solid-1-point-4\",\"solid-1-point-5\",\"solid-1-point-6\",\"solid-1-point-7\",\"solid-1-point-8\",\"solid-1-edge-15\",\"solid-1-edge-16\",\"solid-1-edge-17\",\"solid-1-edge-18\",\"solid-1-edge-19\",\"solid-1-edge-20\",\"solid-1-edge-21\",\"solid-1-edge-22\",\"solid-1-edge-23\",\"solid-1-edge-24\",\"solid-1-edge-25\",\"solid-1-edge-26\",\"solid-1-face-9\",\"solid-1-face-10\",\"solid-1-face-11\",\"solid-1-face-12\",\"solid-1-face-13\",\"solid-1-face-14\"]}}]}],\"draftDocument\":{\"schemaVersion\":\"0.1\",\"revision\":1,\"workspace\":\"geometry3d\",\"coordinateSystems\":[\"cartesian-3d\"],\"parameters\":{},\"primitives\":[{\"id\":\"solid-1\",\"type\":\"cube\",\"origin\":{\"x\":0,\"y\":0,\"z\":0},\"size\":{\"x\":2,\"y\":2,\"z\":2}},{\"id\":\"solid-1-point-1\",\"type\":\"point3\",\"position\":{\"x\":0,\"y\":0,\"z\":0},\"binding\":{\"kind\":\"free\"},\"label\":\"A\"},{\"id\":\"solid-1-point-2\",\"type\":\"point3\",\"position\":{\"x\":2,\"y\":0,\"z\":0},\"binding\":{\"kind\":\"free\"},\"label\":\"B\"},{\"id\":\"solid-1-point-3\",\"type\":\"point3\",\"position\":{\"x\":2,\"y\":2,\"z\":0},\"binding\":{\"kind\":\"free\"},\"label\":\"C\"},{\"id\":\"solid-1-point-4\",\"type\":\"point3\",\"position\":{\"x\":0,\"y\":2,\"z\":0},\"binding\":{\"kind\":\"free\"},\"label\":\"D\"},{\"id\":\"solid-1-point-5\",\"type\":\"point3\",\"position\":{\"x\":0,\"y\":0,\"z\":2},\"binding\":{\"kind\":\"free\"},\"label\":\"E\"},{\"id\":\"solid-1-point-6\",\"type\":\"point3\",\"position\":{\"x\":2,\"y\":0,\"z\":2},\"binding\":{\"kind\":\"free\"},\"label\":\"F\"},{\"id\":\"solid-1-point-7\",\"type\":\"point3\",\"position\":{\"x\":2,\"y\":2,\"z\":2},\"binding\":{\"kind\":\"free\"},\"label\":\"G\"},{\"id\":\"solid-1-point-8\",\"type\":\"point3\",\"position\":{\"x\":0,\"y\":2,\"z\":2},\"binding\":{\"kind\":\"free\"},\"label\":\"H\"},{\"id\":\"solid-1-edge-15\",\"type\":\"edge3\",\"pointIds\":[\"solid-1-point-4\",\"solid-1-point-3\"],\"faceIds\":[\"solid-1-face-9\",\"solid-1-face-13\"],\"label\":\"棱 1\"},{\"id\":\"solid-1-edge-16\",\"type\":\"edge3\",\"pointIds\":[\"solid-1-point-3\",\"solid-1-point-2\"],\"faceIds\":[\"solid-1-face-9\",\"solid-1-face-12\"],\"label\":\"棱 2\"},{\"id\":\"solid-1-edge-17\",\"type\":\"edge3\",\"pointIds\":[\"solid-1-point-2\",\"solid-1-point-1\"],\"faceIds\":[\"solid-1-face-9\",\"solid-1-face-11\"],\"label\":\"棱 3\"},{\"id\":\"solid-1-edge-18\",\"type\":\"edge3\",\"pointIds\":[\"solid-1-point-1\",\"solid-1-point-4\"],\"faceIds\":[\"solid-1-face-9\",\"solid-1-face-14\"],\"label\":\"棱 4\"},{\"id\":\"solid-1-edge-19\",\"type\":\"edge3\",\"pointIds\":[\"solid-1-point-5\",\"solid-1-point-6\"],\"faceIds\":[\"solid-1-face-10\",\"solid-1-face-11\"],\"label\":\"棱 5\"},{\"id\":\"solid-1-edge-20\",\"type\":\"edge3\",\"pointIds\":[\"solid-1-point-6\",\"solid-1-point-7\"],\"faceIds\":[\"solid-1-face-10\",\"solid-1-face-12\"],\"label\":\"棱 6\"},{\"id\":\"solid-1-edge-21\",\"type\":\"edge3\",\"pointIds\":[\"solid-1-point-7\",\"solid-1-point-8\"],\"faceIds\":[\"solid-1-face-10\",\"solid-1-face-13\"],\"label\":\"棱 7\"},{\"id\":\"solid-1-edge-22\",\"type\":\"edge3\",\"pointIds\":[\"solid-1-point-8\",\"solid-1-point-5\"],\"faceIds\":[\"solid-1-face-10\",\"solid-1-face-14\"],\"label\":\"棱 8\"},{\"id\":\"solid-1-edge-23\",\"type\":\"edge3\",\"pointIds\":[\"solid-1-point-2\",\"solid-1-point-6\"],\"faceIds\":[\"solid-1-face-11\",\"solid-1-face-12\"],\"label\":\"棱 9\"},{\"id\":\"solid-1-edge-24\",\"type\":\"edge3\",\"pointIds\":[\"solid-1-point-5\",\"solid-1-point-1\"],\"faceIds\":[\"solid-1-face-11\",\"solid-1-face-14\"],\"label\":\"棱 10\"},{\"id\":\"solid-1-edge-25\",\"type\":\"edge3\",\"pointIds\":[\"solid-1-point-3\",\"solid-1-point-7\"],\"faceIds\":[\"solid-1-face-12\",\"solid-1-face-13\"],\"label\":\"棱 11\"},{\"id\":\"solid-1-edge-26\",\"type\":\"edge3\",\"pointIds\":[\"solid-1-point-4\",\"solid-1-point-8\"],\"faceIds\":[\"solid-1-face-13\",\"solid-1-face-14\"],\"label\":\"棱 12\"},{\"id\":\"solid-1-face-9\",\"type\":\"face3\",\"pointIds\":[\"solid-1-point-4\",\"solid-1-point-3\",\"solid-1-point-2\",\"solid-1-point-1\"],\"edgeIds\":[\"solid-1-edge-15\",\"solid-1-edge-16\",\"solid-1-edge-17\",\"solid-1-edge-18\"],\"label\":\"面 1\"},{\"id\":\"solid-1-face-10\",\"type\":\"face3\",\"pointIds\":[\"solid-1-point-5\",\"solid-1-point-6\",\"solid-1-point-7\",\"solid-1-point-8\"],\"edgeIds\":[\"solid-1-edge-19\",\"solid-1-edge-20\",\"solid-1-edge-21\",\"solid-1-edge-22\"],\"label\":\"面 2\"},{\"id\":\"solid-1-face-11\",\"type\":\"face3\",\"pointIds\":[\"solid-1-point-1\",\"solid-1-point-2\",\"solid-1-point-6\",\"solid-1-point-5\"],\"edgeIds\":[\"solid-1-edge-17\",\"solid-1-edge-23\",\"solid-1-edge-19\",\"solid-1-edge-24\"],\"label\":\"面 3\"},{\"id\":\"solid-1-face-12\",\"type\":\"face3\",\"pointIds\":[\"solid-1-point-2\",\"solid-1-point-3\",\"solid-1-point-7\",\"solid-1-point-6\"],\"edgeIds\":[\"solid-1-edge-16\",\"solid-1-edge-25\",\"solid-1-edge-20\",\"solid-1-edge-23\"],\"label\":\"面 4\"},{\"id\":\"solid-1-face-13\",\"type\":\"face3\",\"pointIds\":[\"solid-1-point-3\",\"solid-1-point-4\",\"solid-1-point-8\",\"solid-1-point-7\"],\"edgeIds\":[\"solid-1-edge-15\",\"solid-1-edge-26\",\"solid-1-edge-21\",\"solid-1-edge-25\"],\"label\":\"面 5\"},{\"id\":\"solid-1-face-14\",\"type\":\"face3\",\"pointIds\":[\"solid-1-point-4\",\"solid-1-point-1\",\"solid-1-point-5\",\"solid-1-point-8\"],\"edgeIds\":[\"solid-1-edge-18\",\"solid-1-edge-24\",\"solid-1-edge-22\",\"solid-1-edge-26\"],\"label\":\"面 6\"},{\"id\":\"solid-1-polyhedron-27\",\"type\":\"polyhedron3\",\"vertexIds\":[\"solid-1-point-1\",\"solid-1-point-2\",\"solid-1-point-3\",\"solid-1-point-4\",\"solid-1-point-5\",\"solid-1-point-6\",\"solid-1-point-7\",\"solid-1-point-8\"],\"edgeIds\":[\"solid-1-edge-15\",\"solid-1-edge-16\",\"solid-1-edge-17\",\"solid-1-edge-18\",\"solid-1-edge-19\",\"solid-1-edge-20\",\"solid-1-edge-21\",\"solid-1-edge-22\",\"solid-1-edge-23\",\"solid-1-edge-24\",\"solid-1-edge-25\",\"solid-1-edge-26\"],\"faceIds\":[\"solid-1-face-9\",\"solid-1-face-10\",\"solid-1-face-11\",\"solid-1-face-12\",\"solid-1-face-13\",\"solid-1-face-14\"],\"construction\":{\"kind\":\"template\",\"templateId\":\"cube\",\"sourceIds\":[\"solid-1\",\"solid-1-point-1\",\"solid-1-point-2\",\"solid-1-point-3\",\"solid-1-point-4\",\"solid-1-point-5\",\"solid-1-point-6\",\"solid-1-point-7\",\"solid-1-point-8\",\"solid-1-edge-15\",\"solid-1-edge-16\",\"solid-1-edge-17\",\"solid-1-edge-18\",\"solid-1-edge-19\",\"solid-1-edge-20\",\"solid-1-edge-21\",\"solid-1-edge-22\",\"solid-1-edge-23\",\"solid-1-edge-24\",\"solid-1-edge-25\",\"solid-1-edge-26\",\"solid-1-face-9\",\"solid-1-face-10\",\"solid-1-face-11\",\"solid-1-face-12\",\"solid-1-face-13\",\"solid-1-face-14\"]}}],\"groups\":[],\"constraints\":[],\"dynamics\":[],\"annotations\":[],\"measurements\":[],\"engineeringAnnotations\":[],\"metadata\":{\"id\":\"doc-5098f1be-d5da-4236-a206-439b8201b78d\",\"name\":\"Untitled geometry\",\"createdAt\":\"2026-01-01T00:00:00.000Z\",\"updatedAt\":\"2026-01-01T00:00:00.000Z\"}},\"verification\":{\"kind\":\"formal\",\"detail\":\"每一步都是确定性内核构造（exact）；这份计划不包含需要证明的不变量断言。\"}}",
+      "resultKeys": [
+        "actions",
+        "aliases",
+        "assumptions",
+        "completions",
+        "diagnostics",
+        "draftDocument",
+        "ok",
+        "operations",
+        "plan",
+        "questions",
+        "verification"
+      ],
+      "diagramVerificationKeys": null
+    },
+    {
+      "name": "pyramid-verified-with-ir-on",
+      "document": {
+        "schemaVersion": "0.1",
+        "revision": 0,
+        "workspace": "geometry3d",
+        "coordinateSystems": [
+          "cartesian-3d"
+        ],
+        "parameters": {},
+        "primitives": [],
+        "groups": [],
+        "constraints": [],
+        "dynamics": [],
+        "annotations": [],
+        "measurements": [],
+        "engineeringAnnotations": [],
+        "metadata": {
+          "id": "doc-77605c87-1899-45f6-8d75-de3786c51b2c",
+          "name": "Untitled geometry",
+          "createdAt": "2026-01-01T00:00:00.000Z",
+          "updatedAt": "2026-01-01T00:00:00.000Z"
+        }
+      },
+      "plan": {
+        "schemaVersion": "mathcanvas.plan.v1",
+        "kind": "plan",
+        "goal": "代表题",
+        "factIds": [],
+        "actions": [
+          {
+            "actionId": "solid.create_polyhedron",
+            "actionKey": "pyramid",
+            "factIds": [],
+            "inputs": {
+              "alias": "pyramid",
+              "vertexNames": [
+                "P",
+                "A",
+                "B",
+                "C",
+                "D"
+              ],
+              "vertices": [
+                {
+                  "x": 0,
+                  "y": 0,
+                  "z": 4
+                },
+                {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                },
+                {
+                  "x": 2,
+                  "y": 0,
+                  "z": 0
+                },
+                {
+                  "x": 2,
+                  "y": 3,
+                  "z": 0
+                },
+                {
+                  "x": 0,
+                  "y": 3,
+                  "z": 0
+                }
+              ],
+              "faces": [
+                [
+                  1,
+                  2,
+                  3,
+                  4
+                ],
+                [
+                  0,
+                  2,
+                  1
+                ],
+                [
+                  0,
+                  3,
+                  2
+                ],
+                [
+                  0,
+                  4,
+                  3
+                ],
+                [
+                  0,
+                  1,
+                  4
+                ]
+              ]
+            }
+          }
+        ],
+        "relations": [
+          {
+            "id": "PA-perp-base",
+            "kind": "perpendicular",
+            "targets": [
+              {
+                "vertex": "v0"
+              },
+              {
+                "vertex": "v1"
+              },
+              {
+                "vertex": "v1"
+              },
+              {
+                "vertex": "v2"
+              },
+              {
+                "vertex": "v3"
+              }
+            ]
+          },
+          {
+            "id": "BC-parallel-AD",
+            "kind": "parallel",
+            "targets": [
+              {
+                "vertex": "v2"
+              },
+              {
+                "vertex": "v3"
+              },
+              {
+                "vertex": "v1"
+              },
+              {
+                "vertex": "v4"
+              }
+            ]
+          }
+        ]
+      },
+      "context": {
+        "conversationId": "golden",
+        "prompt": "在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，BC ∥ AD，AB ⊥ AD，画出这个四棱锥",
+        "diagramObligationIR": true
+      },
+      "resultJson": "{\"ok\":true,\"actions\":[{\"actionId\":\"solid.create_polyhedron\",\"actionKey\":\"pyramid\",\"inputs\":{\"alias\":\"pyramid\",\"vertices\":[{\"x\":0,\"y\":0,\"z\":4},{\"x\":0,\"y\":0,\"z\":0},{\"x\":2,\"y\":0,\"z\":0},{\"x\":2,\"y\":3,\"z\":0},{\"x\":0,\"y\":3,\"z\":0}],\"vertexNames\":[\"P\",\"A\",\"B\",\"C\",\"D\"],\"faces\":[[1,2,3,4],[0,2,1],[0,3,2],[0,4,3],[0,1,4]]},\"factIds\":[]}],\"plan\":{\"schemaVersion\":\"mathcanvas.plan.v1\",\"kind\":\"plan\",\"goal\":\"代表题\",\"factIds\":[],\"relations\":[{\"id\":\"PA-perp-base\",\"kind\":\"perpendicular\",\"targets\":[{\"vertex\":\"v0\"},{\"vertex\":\"v1\"},{\"vertex\":\"v1\"},{\"vertex\":\"v2\"},{\"vertex\":\"v3\"}]},{\"id\":\"BC-parallel-AD\",\"kind\":\"parallel\",\"targets\":[{\"vertex\":\"v2\"},{\"vertex\":\"v3\"},{\"vertex\":\"v1\"},{\"vertex\":\"v4\"}]}],\"actions\":[{\"actionId\":\"solid.create_polyhedron\",\"actionKey\":\"pyramid\",\"inputs\":{\"alias\":\"pyramid\",\"vertices\":[{\"x\":0,\"y\":0,\"z\":4},{\"x\":0,\"y\":0,\"z\":0},{\"x\":2,\"y\":0,\"z\":0},{\"x\":2,\"y\":3,\"z\":0},{\"x\":0,\"y\":3,\"z\":0}],\"vertexNames\":[\"P\",\"A\",\"B\",\"C\",\"D\"],\"faces\":[[1,2,3,4],[0,2,1],[0,3,2],[0,4,3],[0,1,4]]},\"factIds\":[]}]},\"assumptions\":[],\"questions\":[],\"completions\":[{\"actionId\":\"solid.create_polyhedron\",\"actionKey\":\"pyramid\",\"field\":\"vertices\",\"path\":\"envelope.actions[0].inputs.vertices\",\"policy\":\"given\"},{\"actionId\":\"solid.create_polyhedron\",\"actionKey\":\"pyramid\",\"field\":\"faces\",\"path\":\"envelope.actions[0].inputs.faces\",\"policy\":\"given\"}],\"diagnostics\":[],\"aliases\":{\"pyramid\":\"solid-1\"},\"operations\":[{\"op\":\"addPrimitives\",\"primitives\":[{\"id\":\"solid-1:v0\",\"type\":\"point3\",\"position\":{\"x\":0,\"y\":0,\"z\":4},\"binding\":{\"kind\":\"free\"},\"label\":\"A\"},{\"id\":\"solid-1:v1\",\"type\":\"point3\",\"position\":{\"x\":0,\"y\":0,\"z\":0},\"binding\":{\"kind\":\"free\"},\"label\":\"B\"},{\"id\":\"solid-1:v2\",\"type\":\"point3\",\"position\":{\"x\":2,\"y\":0,\"z\":0},\"binding\":{\"kind\":\"free\"},\"label\":\"C\"},{\"id\":\"solid-1:v3\",\"type\":\"point3\",\"position\":{\"x\":2,\"y\":3,\"z\":0},\"binding\":{\"kind\":\"free\"},\"label\":\"D\"},{\"id\":\"solid-1:v4\",\"type\":\"point3\",\"position\":{\"x\":0,\"y\":3,\"z\":0},\"binding\":{\"kind\":\"free\"},\"label\":\"E\"},{\"id\":\"solid-1:e0\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v1\",\"solid-1:v2\"],\"faceIds\":[\"solid-1:f0\",\"solid-1:f1\"],\"label\":\"棱 1\"},{\"id\":\"solid-1:e1\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v2\",\"solid-1:v3\"],\"faceIds\":[\"solid-1:f0\",\"solid-1:f2\"],\"label\":\"棱 2\"},{\"id\":\"solid-1:e2\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v3\",\"solid-1:v4\"],\"faceIds\":[\"solid-1:f0\",\"solid-1:f3\"],\"label\":\"棱 3\"},{\"id\":\"solid-1:e3\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v4\",\"solid-1:v1\"],\"faceIds\":[\"solid-1:f0\",\"solid-1:f4\"],\"label\":\"棱 4\"},{\"id\":\"solid-1:e4\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v0\",\"solid-1:v2\"],\"faceIds\":[\"solid-1:f1\",\"solid-1:f2\"],\"label\":\"棱 5\"},{\"id\":\"solid-1:e5\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v1\",\"solid-1:v0\"],\"faceIds\":[\"solid-1:f1\",\"solid-1:f4\"],\"label\":\"棱 6\"},{\"id\":\"solid-1:e6\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v0\",\"solid-1:v3\"],\"faceIds\":[\"solid-1:f2\",\"solid-1:f3\"],\"label\":\"棱 7\"},{\"id\":\"solid-1:e7\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v0\",\"solid-1:v4\"],\"faceIds\":[\"solid-1:f3\",\"solid-1:f4\"],\"label\":\"棱 8\"},{\"id\":\"solid-1:f0\",\"type\":\"face3\",\"pointIds\":[\"solid-1:v1\",\"solid-1:v2\",\"solid-1:v3\",\"solid-1:v4\"],\"edgeIds\":[\"solid-1:e0\",\"solid-1:e1\",\"solid-1:e2\",\"solid-1:e3\"],\"label\":\"面 1\"},{\"id\":\"solid-1:f1\",\"type\":\"face3\",\"pointIds\":[\"solid-1:v0\",\"solid-1:v2\",\"solid-1:v1\"],\"edgeIds\":[\"solid-1:e4\",\"solid-1:e0\",\"solid-1:e5\"],\"label\":\"面 2\"},{\"id\":\"solid-1:f2\",\"type\":\"face3\",\"pointIds\":[\"solid-1:v0\",\"solid-1:v3\",\"solid-1:v2\"],\"edgeIds\":[\"solid-1:e6\",\"solid-1:e1\",\"solid-1:e4\"],\"label\":\"面 3\"},{\"id\":\"solid-1:f3\",\"type\":\"face3\",\"pointIds\":[\"solid-1:v0\",\"solid-1:v4\",\"solid-1:v3\"],\"edgeIds\":[\"solid-1:e7\",\"solid-1:e2\",\"solid-1:e6\"],\"label\":\"面 4\"},{\"id\":\"solid-1:f4\",\"type\":\"face3\",\"pointIds\":[\"solid-1:v0\",\"solid-1:v1\",\"solid-1:v4\"],\"edgeIds\":[\"solid-1:e5\",\"solid-1:e3\",\"solid-1:e7\"],\"label\":\"面 5\"},{\"id\":\"solid-1\",\"type\":\"polyhedron3\",\"vertexIds\":[\"solid-1:v0\",\"solid-1:v1\",\"solid-1:v2\",\"solid-1:v3\",\"solid-1:v4\"],\"edgeIds\":[\"solid-1:e0\",\"solid-1:e1\",\"solid-1:e2\",\"solid-1:e3\",\"solid-1:e4\",\"solid-1:e5\",\"solid-1:e6\",\"solid-1:e7\"],\"faceIds\":[\"solid-1:f0\",\"solid-1:f1\",\"solid-1:f2\",\"solid-1:f3\",\"solid-1:f4\"],\"construction\":{\"kind\":\"fromPoints\",\"sourceIds\":[\"solid-1:v0\",\"solid-1:v1\",\"solid-1:v2\",\"solid-1:v3\",\"solid-1:v4\"]}}]}],\"draftDocument\":{\"schemaVersion\":\"0.1\",\"revision\":1,\"workspace\":\"geometry3d\",\"coordinateSystems\":[\"cartesian-3d\"],\"parameters\":{},\"primitives\":[{\"id\":\"solid-1:v0\",\"type\":\"point3\",\"position\":{\"x\":0,\"y\":0,\"z\":4},\"binding\":{\"kind\":\"free\"},\"label\":\"A\"},{\"id\":\"solid-1:v1\",\"type\":\"point3\",\"position\":{\"x\":0,\"y\":0,\"z\":0},\"binding\":{\"kind\":\"free\"},\"label\":\"B\"},{\"id\":\"solid-1:v2\",\"type\":\"point3\",\"position\":{\"x\":2,\"y\":0,\"z\":0},\"binding\":{\"kind\":\"free\"},\"label\":\"C\"},{\"id\":\"solid-1:v3\",\"type\":\"point3\",\"position\":{\"x\":2,\"y\":3,\"z\":0},\"binding\":{\"kind\":\"free\"},\"label\":\"D\"},{\"id\":\"solid-1:v4\",\"type\":\"point3\",\"position\":{\"x\":0,\"y\":3,\"z\":0},\"binding\":{\"kind\":\"free\"},\"label\":\"E\"},{\"id\":\"solid-1:e0\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v1\",\"solid-1:v2\"],\"faceIds\":[\"solid-1:f0\",\"solid-1:f1\"],\"label\":\"棱 1\"},{\"id\":\"solid-1:e1\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v2\",\"solid-1:v3\"],\"faceIds\":[\"solid-1:f0\",\"solid-1:f2\"],\"label\":\"棱 2\"},{\"id\":\"solid-1:e2\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v3\",\"solid-1:v4\"],\"faceIds\":[\"solid-1:f0\",\"solid-1:f3\"],\"label\":\"棱 3\"},{\"id\":\"solid-1:e3\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v4\",\"solid-1:v1\"],\"faceIds\":[\"solid-1:f0\",\"solid-1:f4\"],\"label\":\"棱 4\"},{\"id\":\"solid-1:e4\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v0\",\"solid-1:v2\"],\"faceIds\":[\"solid-1:f1\",\"solid-1:f2\"],\"label\":\"棱 5\"},{\"id\":\"solid-1:e5\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v1\",\"solid-1:v0\"],\"faceIds\":[\"solid-1:f1\",\"solid-1:f4\"],\"label\":\"棱 6\"},{\"id\":\"solid-1:e6\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v0\",\"solid-1:v3\"],\"faceIds\":[\"solid-1:f2\",\"solid-1:f3\"],\"label\":\"棱 7\"},{\"id\":\"solid-1:e7\",\"type\":\"edge3\",\"pointIds\":[\"solid-1:v0\",\"solid-1:v4\"],\"faceIds\":[\"solid-1:f3\",\"solid-1:f4\"],\"label\":\"棱 8\"},{\"id\":\"solid-1:f0\",\"type\":\"face3\",\"pointIds\":[\"solid-1:v1\",\"solid-1:v2\",\"solid-1:v3\",\"solid-1:v4\"],\"edgeIds\":[\"solid-1:e0\",\"solid-1:e1\",\"solid-1:e2\",\"solid-1:e3\"],\"label\":\"面 1\"},{\"id\":\"solid-1:f1\",\"type\":\"face3\",\"pointIds\":[\"solid-1:v0\",\"solid-1:v2\",\"solid-1:v1\"],\"edgeIds\":[\"solid-1:e4\",\"solid-1:e0\",\"solid-1:e5\"],\"label\":\"面 2\"},{\"id\":\"solid-1:f2\",\"type\":\"face3\",\"pointIds\":[\"solid-1:v0\",\"solid-1:v3\",\"solid-1:v2\"],\"edgeIds\":[\"solid-1:e6\",\"solid-1:e1\",\"solid-1:e4\"],\"label\":\"面 3\"},{\"id\":\"solid-1:f3\",\"type\":\"face3\",\"pointIds\":[\"solid-1:v0\",\"solid-1:v4\",\"solid-1:v3\"],\"edgeIds\":[\"solid-1:e7\",\"solid-1:e2\",\"solid-1:e6\"],\"label\":\"面 4\"},{\"id\":\"solid-1:f4\",\"type\":\"face3\",\"pointIds\":[\"solid-1:v0\",\"solid-1:v1\",\"solid-1:v4\"],\"edgeIds\":[\"solid-1:e5\",\"solid-1:e3\",\"solid-1:e7\"],\"label\":\"面 5\"},{\"id\":\"solid-1\",\"type\":\"polyhedron3\",\"vertexIds\":[\"solid-1:v0\",\"solid-1:v1\",\"solid-1:v2\",\"solid-1:v3\",\"solid-1:v4\"],\"edgeIds\":[\"solid-1:e0\",\"solid-1:e1\",\"solid-1:e2\",\"solid-1:e3\",\"solid-1:e4\",\"solid-1:e5\",\"solid-1:e6\",\"solid-1:e7\"],\"faceIds\":[\"solid-1:f0\",\"solid-1:f1\",\"solid-1:f2\",\"solid-1:f3\",\"solid-1:f4\"],\"construction\":{\"kind\":\"fromPoints\",\"sourceIds\":[\"solid-1:v0\",\"solid-1:v1\",\"solid-1:v2\",\"solid-1:v3\",\"solid-1:v4\"]}}],\"groups\":[],\"constraints\":[],\"dynamics\":[],\"annotations\":[],\"measurements\":[],\"engineeringAnnotations\":[],\"metadata\":{\"id\":\"doc-77605c87-1899-45f6-8d75-de3786c51b2c\",\"name\":\"Untitled geometry\",\"createdAt\":\"2026-01-01T00:00:00.000Z\",\"updatedAt\":\"2026-01-01T00:00:00.000Z\"}},\"verification\":{\"kind\":\"formal\",\"detail\":\"每一步都是确定性内核构造（exact）；这份计划不包含需要证明的不变量断言。\"},\"diagramVerification\":{\"status\":\"passed\",\"checks\":[{\"kind\":\"perpendicular\",\"sourceText\":\"PA ⊥ 平面 ABCD\",\"status\":\"passed\",\"reason\":\"已按候选图坐标核验。\",\"expected\":0,\"actual\":0},{\"kind\":\"parallel\",\"sourceText\":\"BC ∥ AD\",\"status\":\"passed\",\"reason\":\"已按候选图坐标核验。\",\"expected\":0,\"actual\":0},{\"kind\":\"perpendicular\",\"sourceText\":\"AB ⊥ AD\",\"status\":\"passed\",\"reason\":\"已按候选图坐标核验。\",\"expected\":0,\"actual\":0}],\"sampleValues\":[],\"obligationIR\":{\"obligations\":[{\"id\":\"obligation-0\",\"role\":\"given\",\"kind\":\"perpendicular\",\"sourceText\":\"PA ⊥ 平面 ABCD\",\"start\":14,\"end\":26,\"targets\":[\"P\",\"A\",\"A\",\"B\",\"C\",\"D\"],\"judgeability\":\"supported\",\"tolerance\":{\"kind\":\"relative\",\"value\":0.000001}},{\"id\":\"obligation-1\",\"role\":\"given\",\"kind\":\"parallel\",\"sourceText\":\"BC ∥ AD\",\"start\":27,\"end\":34,\"targets\":[\"B\",\"C\",\"A\",\"D\"],\"judgeability\":\"supported\",\"tolerance\":{\"kind\":\"relative\",\"value\":0.000001}},{\"id\":\"obligation-2\",\"role\":\"given\",\"kind\":\"perpendicular\",\"sourceText\":\"AB ⊥ AD\",\"start\":35,\"end\":42,\"targets\":[\"A\",\"B\",\"A\",\"D\"],\"judgeability\":\"supported\",\"tolerance\":{\"kind\":\"relative\",\"value\":0.000001}}],\"unverified\":[]}}}",
+      "resultKeys": [
+        "actions",
+        "aliases",
+        "assumptions",
+        "completions",
+        "diagnostics",
+        "diagramVerification",
+        "draftDocument",
+        "ok",
+        "operations",
+        "plan",
+        "questions",
+        "verification"
+      ],
+      "diagramVerificationKeys": [
+        "checks",
+        "obligationIR",
+        "sampleValues",
+        "status"
+      ]
+    }
+  ]
+}
