@@ -51,7 +51,9 @@ function extractionStatus(extracted: number, residue: number): BenchmarkRunStatu
 }
 
 function extractionRun(caseId: string, prompt: string): BenchmarkRun {
-  const base = { caseId, provider: null, model: null, seed: SEED, mode: "deterministic_local" as const, layer: "extraction" as const, cost: null, latency: null }
+  // `humanReadability: null` = **没有人标过**（N4e 的键必须在、值可为 null）。
+  // CLI 这一路没有任何可读的模型正文（抽取/见证都是本地算的），所以这里永远是未标注。
+  const base = { caseId, provider: null, model: null, seed: SEED, mode: "deterministic_local" as const, layer: "extraction" as const, cost: null, latency: null, humanReadability: null }
   try {
     const ir = parseObligationIR(prompt)
     return {
@@ -93,7 +95,8 @@ function notMeasuredRun(caseId: string): BenchmarkRun {
     status: "not_measured",
     evidence: [],
     cost: null,
-    latency: null
+    latency: null,
+    humanReadability: null
   }
 }
 
@@ -107,7 +110,7 @@ function notMeasuredRun(caseId: string): BenchmarkRun {
  *（`verified_instance` / `unverified_instance` / `no_witness`），所以这里**不需要任何新判断**。
  */
 function witnessRun(caseId: string, prompt: string): BenchmarkRun {
-  const base = { caseId, provider: null, model: null, seed: SEED, mode: "deterministic_local" as const, layer: "witness" as const, cost: null, latency: null }
+  const base = { caseId, provider: null, model: null, seed: SEED, mode: "deterministic_local" as const, layer: "witness" as const, cost: null, latency: null, humanReadability: null }
   try {
     const result = searchWitnessForPrompt(prompt)
     const evidence = result.status === "verified_instance"

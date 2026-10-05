@@ -33,6 +33,8 @@ function run(overrides: Record<string, unknown> = {}): Record<string, unknown> {
     evidence: [{ claim: "底面四点共面", status: "verified_instance", evidence: "内核核验通过，残差 0" }],
     cost: null,
     latency: { totalMs: 12 },
+    // N4e：这个键必须在（值可以是显式的 `null` = 未标注）。
+    humanReadability: null,
     ...overrides
   }
 }

@@ -58,6 +58,8 @@ function synthesisedRun(overrides: Partial<BenchmarkRun> = {}): BenchmarkRun {
     evidence: [{ claim: "PA ⊥ 平面 ABCD", status: "perpendicular", evidence: "角色 given；判定力 supported" }],
     cost: null,
     latency: null,
+    // N4e：可读性标注的键必须在、值可为 `null`（= 未标注）—— 与 `cost` / `latency` 同一条纪律。
+    humanReadability: null,
     ...overrides
   }
 }

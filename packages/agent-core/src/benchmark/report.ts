@@ -5,9 +5,10 @@ import { assertNoSecrets } from "./redaction"
  *
  * ## 三条硬规矩（缺一条就**抛**，不静默降级）
  *
- * 1. **必需字段必须"在"**：`caseId` / `provider` / `model` / `seed` / `mode` / `status` /
- *    `evidence` / `cost` / `latency` 九个字段一个都不能少。
- *    "没测"要写成**显式的 `null`**（`cost` / `latency` 允许），**不是**把这个键删掉 ——
+ * 1. **必需字段必须"在"**：`caseId` / `provider` / `model` / `seed` / `mode` / `layer` / `status` /
+ *    `evidence` / `cost` / `latency` / `humanReadability` 十一个字段一个都不能少
+ *    （清单的唯一来源是 `BENCHMARK_RUN_REQUIRED_FIELDS`，别在这里数数）。
+ *    "没测"要写成**显式的 `null`**（`cost` / `latency` / `humanReadability` 允许），**不是**把这个键删掉 ——
  *    删掉之后，"没测"与"忘了写"在报告里长得一模一样。
  * 2. **模式必须标识**：`mode` 只能是 `deterministic_local` 或 `real_provider`。
  *    把两者混在一张表里报出来，等于拿离线确定性回归冒充模型准确率 —— 这个项目已经
@@ -42,6 +43,34 @@ export type BenchmarkMode = (typeof BENCHMARK_MODES)[number]
  */
 export const BENCHMARK_LAYERS = ["extraction", "witness", "planning"] as const
 export type BenchmarkLayer = (typeof BENCHMARK_LAYERS)[number]
+
+/**
+ * **人工可读性的三值**（实施计划 N4 第 `:324` 条的最后一项；2026-10-05 的 N4e）。
+ *
+ * 口径**写死在这里**，因为它是这一项的全部内容，而不是实现细节：
+ *
+ * - 三值 `readable` / `partly` / `unreadable`，只问一件事：
+ *   **「一个不懂实现的人，能不能看懂它打算建什么、依据是什么？」**
+ * - **判断者是「不懂实现的人」**，不是实现者 —— 所以软件里必须有地方让人**输入**这个判断
+ *   （设置面板人读区的那三个按钮），而不是由代码替它算一个。
+ * - **没有缺省值**：没人标注就是显式的 `null`（= 未标注），**不许**默认成 `readable`
+ *   —— 「没标」与「标了说能读懂」是两件事，混起来会让空报告读起来是绿的。
+ */
+export const HUMAN_READABILITY_VALUES = ["readable", "partly", "unreadable"] as const
+export type HumanReadability = (typeof HUMAN_READABILITY_VALUES)[number]
+
+/**
+ * **可读性按「要读的是什么」分组**，每组自己一个分母。
+ *
+ * 键就是三种**有对象可读**的 planning 结局（`not_measured` / `error` 没有对象，不在表里）：
+ * - `plan`：读「这条**计划**好不好读」（`planned`）；
+ * - `clarification`：读「它**问**得清不清楚」（`clarification`）——
+ *   这与「计划好不好」**不是同一件事**，所以**不共用分母**（把两者平均成一个数，
+ *   正是本仓刚在 `planning` 词表上修过的那类方向错误）；
+ * - `rejected`：读「被拒那一条的正文」（编译器诊断 / 只读回答 / 什么都没给）。
+ */
+export const HUMAN_READABILITY_GROUPS = ["plan", "clarification", "rejected"] as const
+export type ReadabilityGroup = (typeof HUMAN_READABILITY_GROUPS)[number]
 
 /** 全部结局词（跨层并集）。 */
 export type BenchmarkRunStatus =
@@ -87,7 +116,7 @@ export const BENCHMARK_STATUSES_BY_LAYER: Record<BenchmarkLayer, readonly Benchm
 }
 
 export const BENCHMARK_RUN_REQUIRED_FIELDS = [
-  "caseId", "provider", "model", "seed", "mode", "layer", "status", "evidence", "cost", "latency"
+  "caseId", "provider", "model", "seed", "mode", "layer", "status", "evidence", "cost", "latency", "humanReadability"
 ] as const
 
 export interface BenchmarkEvidenceEntry {
@@ -107,6 +136,17 @@ export interface BenchmarkRun {
   evidence: BenchmarkEvidenceEntry[]
   cost: { currency: string; amount: number } | null
   latency: { totalMs: number } | null
+  /**
+   * **人工可读性标注**（三值；`null` = 未标注）。
+   *
+   * **这个键必须在**（`BENCHMARK_RUN_REQUIRED_FIELDS` 里有它），值可以是 `null` ——
+   * 与 `cost` / `latency` 同一条纪律：`null` 表示「没人标过」，而**键不见了**表示「忘了写」，
+   * 两者在报告里必须能分辨。**不给缺省值**：没有一处代码会把 `null` 改成 `readable`。
+   *
+   * 什么叫「可读」、判断者是谁、哪些轮次不进分母：见 `HUMAN_READABILITY_VALUES` 与
+   * `BenchmarkReadability` 的定义处（口径不是实现细节，所以写在契约里而不是报告渲染里）。
+   */
+  humanReadability: HumanReadability | null
 }
 
 /**
@@ -157,12 +197,39 @@ export interface BenchmarkPremiseCoverage {
   residue: number
   rate: number | null
 }
+/**
+ * **可读性标注的计数**（一组自己的分母）。
+ *
+ * - `total`：这一组里**有对象可读**的轮次数（= 分母）。`not_measured` / `error` **不进**：
+ *   它们没有「模型给的那段东西」，拿它们当分母是在给一个不存在的对象打分；
+ * - `annotated` / `unannotated`：标过的 / 没标的（「未标注」是一个**状态**，不是一个分数）；
+ * - `byValue`：三值各自几条（「各自几比几」）；
+ * - `readableRate`：`readable` 条数 ÷ **已标注**条数。**分母为 0（一条都没标）时是 `null`，
+ *   不是 `0`** —— 若拿"有对象的条数"当分母，没人标注时会算出 `0`，而它读起来就是
+ *   「可读性 0 分」。这两件事必须可分辨（本批做完的真实状态就是「已标注 = 0」）。
+ */
+export interface BenchmarkReadabilityGroup {
+  group: ReadabilityGroup
+  total: number
+  annotated: number
+  unannotated: number
+  byValue: Record<HumanReadability, number>
+  readableRate: number | null
+}
+/** 整批的标注计数（各组恒在，顺序固定；见 `readability()` 的注释）。 */
+export interface BenchmarkReadability {
+  groups: BenchmarkReadabilityGroup[]
+  total: number
+  annotated: number
+  unannotated: number
+}
 export interface BenchmarkModeReport {
   runs: BenchmarkRun[]
   byStatus: Record<string, number>
   byLayer: Record<string, number>
   premiseCoverage: BenchmarkPremiseCoverage
   extractionRate: BenchmarkExtractionRate
+  readability: BenchmarkReadability
 }
 
 export interface BenchmarkReport {
@@ -213,6 +280,58 @@ function premiseCoverage(runs: readonly BenchmarkRun[]): BenchmarkPremiseCoverag
   const total = obligations + residue
   return { obligations, residue, rate: total === 0 ? null : obligations / total }
 }
+
+/**
+ * **这一轮有没有「要读的那段东西」**，有的话属于哪一组；没有就返回 `null`。
+ *
+ * 两个条件都要看，缺一个就会把分母算错：
+ * - **层**：只有 `planning` 层有「模型给出的那段东西」。见证层的词表里**也有** `clarification`
+ *   （`BENCHMARK_STATUSES_BY_LAYER.witness`），但那条记录没有任何正文（CLI 那一路不经过模型）
+ *   —— 只按 `status` 分组会把"没有对象"的轮次算进"问法清不清楚"的分母；
+ * - **结局**：`not_measured` / `error` 不在 `HUMAN_READABILITY_GROUPS` 的映射里（没跑 / 跑挂了，
+ *   没有对象可读）。
+ *
+ * **导出它**是为了让界面用**同一份**判据决定「这一条要不要给标注按钮」：
+ * 界面自己再写一遍（例如只看 `status`）会造出"有按钮但对象不存在"或"有对象却标不了"，
+ * 而那种分叉在这里没有第二个判据可以对照。
+ */
+export function readabilityGroupFor(run: Pick<BenchmarkRun, "layer" | "status">): ReadabilityGroup | null {
+  if (run.layer !== "planning") return null
+  switch (run.status) {
+    case "planned": return "plan"
+    case "clarification": return "clarification"
+    case "rejected": return "rejected"
+    default: return null
+  }
+}
+
+/**
+ * **可读性标注的计数**（口径见 `BenchmarkReadabilityGroup`）。
+ *
+ * **三组恒在、顺序固定**（`HUMAN_READABILITY_GROUPS` 的顺序），空组**不折叠**：
+ * 「这一组没有轮次」与「这一组还没人标」是两种不同的状态，折叠掉空组会让两者长得一样
+ *（与 `premiseCoverage` 在 `total === 0` 时仍返回 `{0, 0, null}` 同一条纪律）。
+ */
+function readability(runs: readonly BenchmarkRun[]): BenchmarkReadability {
+  const groups = HUMAN_READABILITY_GROUPS.map((group): BenchmarkReadabilityGroup => {
+    const members = runs.filter((run) => readabilityGroupFor(run) === group)
+    const annotated = members.filter((run) => run.humanReadability !== null)
+    const byValue: Record<HumanReadability, number> = { readable: 0, partly: 0, unreadable: 0 }
+    for (const run of annotated) byValue[run.humanReadability as HumanReadability] += 1
+    return {
+      group,
+      total: members.length,
+      annotated: annotated.length,
+      unannotated: members.length - annotated.length,
+      byValue,
+      // 分母是**已标注**的条数：一条都没标 ⇒ `null`（不是 0，不是拿别人的标注算出来的数）。
+      readableRate: annotated.length === 0 ? null : byValue.readable / annotated.length
+    }
+  })
+  const total = groups.reduce((sum, entry) => sum + entry.total, 0)
+  const annotated = groups.reduce((sum, entry) => sum + entry.annotated, 0)
+  return { groups, total, annotated, unannotated: total - annotated }
+}
 /**
  * 校验一批运行记录并分组。
  *
@@ -259,6 +378,17 @@ export function buildBenchmarkReport(runs: readonly unknown[], where = "运行�
       continue
     }
     const status = record.status as BenchmarkRunStatus
+    /**
+     * **人工可读性**：只能是三值之一，或**显式的 `null`（= 未标注）**。
+     *
+     * 这里刻意**不给缺省值**：`undefined` / 空串 / 拼错的值 / 布尔都不会被"顺手"当成某个值。
+     * 漏写这个键由上面那条必需字段检查点名（「没标」与「忘了写」必须能分辨）。
+     */
+    const humanReadability = record.humanReadability
+    if (humanReadability !== null && !HUMAN_READABILITY_VALUES.includes(humanReadability as HumanReadability)) {
+      problems.push(`${label} 的 humanReadability「${String(humanReadability)}」不是合法标注：只能是 ${HUMAN_READABILITY_VALUES.join(" / ")}，或显式的 null（= 未标注，不是缺省值）`)
+      continue
+    }
     if (typeof record.seed !== "number" || !Number.isFinite(record.seed)) {
       problems.push(`${label} 的 seed 必须是有限数`)
       continue
@@ -310,7 +440,9 @@ export function buildBenchmarkReport(runs: readonly unknown[], where = "运行�
       status,
       evidence: evidence as BenchmarkEvidenceEntry[],
       cost: (record.cost ?? null) as BenchmarkRun["cost"],
-      latency: (record.latency ?? null) as BenchmarkRun["latency"]
+      latency: (record.latency ?? null) as BenchmarkRun["latency"],
+      // 上面已经把这一个字段校验成"三值之一或 null"，所以这里**是**转换而不是补缺省值。
+      humanReadability: humanReadability as HumanReadability | null
     })
   }
 
@@ -335,13 +467,21 @@ export function buildBenchmarkReport(runs: readonly unknown[], where = "运行�
   const local = accepted.filter((run) => run.mode === "deterministic_local")
   const real = accepted.filter((run) => run.mode === "real_provider")
   return {
-    deterministicLocal: { runs: local, byStatus: countByStatus(local), byLayer: countByLayer(local), premiseCoverage: premiseCoverage(local), extractionRate: extractionRate(local) },
+    deterministicLocal: {
+      runs: local,
+      byStatus: countByStatus(local),
+      byLayer: countByLayer(local),
+      premiseCoverage: premiseCoverage(local),
+      extractionRate: extractionRate(local),
+      readability: readability(local)
+    },
     realProvider: {
       runs: real,
       byStatus: countByStatus(real),
       byLayer: countByLayer(real),
       premiseCoverage: premiseCoverage(real),
       extractionRate: extractionRate(real),
+      readability: readability(real),
       measured: real.filter((run) => run.status !== "not_measured").length,
       notMeasured: real.filter((run) => run.status === "not_measured").length
     }

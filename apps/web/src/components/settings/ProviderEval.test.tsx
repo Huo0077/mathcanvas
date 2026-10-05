@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { PLAN_SCHEMA_VERSION, type PlanEnvelope } from "@draw/agent-core"
 import { describe, expect, it } from "vitest"
 
@@ -168,5 +168,47 @@ describe("设置 → 真实 provider 评测", () => {
     expect(section.textContent).toContain("没有拿到任何读数")
     // 不许还在说"正在跑…"（那正是这次要修掉的样子）。
     expect(section.textContent).not.toContain("正在跑…")
+  })
+
+  /**
+   * **N4e：人读区（只读）+ 三值标注（只存在内存里）**。
+   *
+   * 这条的由来是两次真实运行暴露的前置条件：报告里只有计数与证据串，于是「这条计划好不好读」
+   * 无从判断。所以先要把**模型给的那段正文**摆出来，再让人按写死的口径标。
+   *
+   * 判据分三块：① 正文真的在界面上（不是只躺在内存里）；② 没标注时显示的是「未标注」而不是 0 分；
+   * ③ 标了之后计数跟着动 —— 三个按钮只写内存，这一版不落盘。
+   */
+  it("**人读区**：呈现模型给的正文（只读），三值标注只存在内存里", async () => {
+    render(<ProviderEval dependencies={{
+      resolveProvider: async () => resolved,
+      createPlanner: () => ({ plan: async () => ({ plan: ACCEPTED_ENVELOPE, requestId: "req-1", attemptId: "att-1" }) })
+    }} />)
+
+    fireEvent.click(screen.getByRole("button", { name: /题集 planning/ }))
+    await screen.findByRole("button", { name: "确认开始（题集 planning）" })
+    fireEvent.click(screen.getByRole("button", { name: "确认开始（题集 planning）" }))
+
+    const planning = screen.getByRole("region", { name: "真实 provider 评测：题集 planning" })
+    const cases = planningEvalCases()
+    // ① 正文必须在场。改动之前面板只有计数与证据摘要（`ok=true；诊断 0 条…`）—— 这条当时是红的。
+    await waitFor(() => expect(planning.textContent).toContain(ACCEPTED_ENVELOPE.goal))
+
+    const area = screen.getByRole("region", { name: "人读区（只读）" })
+    const blocks = within(area).getAllByRole("article")
+    expect(blocks).toHaveLength(cases.length)
+    expect(blocks[0]!.textContent).toContain(cases[0]!.id)
+    expect(blocks[0]!.textContent).toContain(ACCEPTED_ENVELOPE.goal)
+    // 「只读」：这一块里没有任何可输入的控件；判断由旁边那三个按钮记录。
+    expect(area.querySelector("textarea, input")).toBeNull()
+
+    // ② 谁都没标时，报告里出现的是「未标注」（**不是** 0 分，也不是一个占位比率）。
+    expect(blocks[0]!.textContent).toContain("当前标注：未标注")
+    expect(planning.textContent).toContain("已标 0 / 未标 3")
+
+    // ③ 标一条：计数在内存里跟着动（这一版**不落盘**，也没有任何持久化位置）。
+    fireEvent.click(within(blocks[0]!).getByRole("button", { name: "readable" }))
+    await waitFor(() => expect(planning.textContent).toContain("已标 1 / 未标 2"))
+    expect(within(area).getAllByRole("article")[0]!.textContent).toContain("当前标注：readable")
   })
 })

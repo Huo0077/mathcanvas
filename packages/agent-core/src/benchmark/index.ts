@@ -44,14 +44,21 @@ export {
   BenchmarkReportError,
   buildBenchmarkReport,
   EXTRACTION_RESIDUE_STATUS,
+  HUMAN_READABILITY_GROUPS,
+  HUMAN_READABILITY_VALUES,
   MAX_ROUNDS_PER_CASE,
+  readabilityGroupFor,
   type BenchmarkEvidenceEntry,
   type BenchmarkExtractionRate,
   type BenchmarkLayer,
   type BenchmarkMode,
   type BenchmarkModeReport,
   type BenchmarkPremiseCoverage,
+  type BenchmarkReadability,
+  type BenchmarkReadabilityGroup,
   type BenchmarkReport,
   type BenchmarkRun,
-  type BenchmarkRunStatus
+  type BenchmarkRunStatus,
+  type HumanReadability,
+  type ReadabilityGroup
 } from "./report"

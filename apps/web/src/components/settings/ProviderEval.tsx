@@ -1,5 +1,7 @@
 import { useState } from "react"
 
+import { HUMAN_READABILITY_VALUES, type HumanReadability } from "@draw/agent-core"
+
 import { AGENT_TASK_FIXTURES } from "../../agent/fixtures/agentTaskFixtures"
 import { formatScorecard } from "../../agent/fixtures/agentEvalReport"
 import {
@@ -7,9 +9,12 @@ import {
   PLANNING_EVAL_REQUESTS,
   PLANNING_EVAL_TOTAL_CASES,
   PLANNING_EVAL_TRIALS,
+  annotateReadability,
   formatPlanningReport,
+  readableTextForDisplay,
   runProviderPlanningEval,
-  type PlanningEvalDependencies
+  type PlanningEvalDependencies,
+  type PlanningEvalResult
 } from "../../agent/fixtures/benchmarkPlanningEval"
 import { runProviderAgentEval, type ProviderEvalDependencies } from "../../agent/fixtures/providerAgentEval"
 import { MAX_TRANSPORT_ATTEMPTS, resolveActiveProvider } from "../../agent/modelPlanner"
@@ -75,12 +80,34 @@ type PanelState =
    */
   | { kind: "failed"; detail: string }
 
-/** 题集那套与工具环那套**共用同一支状态**（`failed` 两边都必须有，理由见上）。 */
-type PlanningState = PanelState
+/**
+ * **题集那套自己的状态**（N4e 起不再与工具环那套是同一个别名）。
+ *
+ * 两者仍然**共用同一批状态名**（`idle` / `asking` / `confirming` / `running` / `unavailable` / `failed`
+ * 都在，`failed` 两边都必须有，理由见上），但 `done` 装的东西不同：题集那套跑完还要把
+ * **结果本身**留在内存里 —— 人读区要呈现模型给的那段正文（`result.readable`），而正文不在
+ * 渲染好的文本里（文本只承载计数与证据）。
+ */
+type PlanningState =
+  | { kind: "idle" }
+  | { kind: "asking" }
+  | { kind: "confirming"; provider: { id: string; modelId: string } }
+  | { kind: "running" }
+  | { kind: "done"; result: PlanningEvalResult }
+  | { kind: "unavailable"; code: string; detail: string }
+  | { kind: "failed"; detail: string }
 
 export function ProviderEval({ dependencies }: { dependencies?: ProviderEvalDependencies & PlanningEvalDependencies } = {}) {
   const [state, setState] = useState<PanelState>({ kind: "idle" })
   const [planning, setPlanning] = useState<PlanningState>({ kind: "idle" })
+  /**
+   * **可读性标注只存在这里**（`caseId → 三值`）。
+   *
+   * 这一版**不做持久化**，也**没有**顺手发明一个存储位置：刷新页面就没了，这是有意的
+   *（`localStorage` 会造出第二份"标了什么"的真相，而键与题集的对应关系一改就静默对错）。
+   * 它由 `annotateReadability` 送进**同一份**报告契约去数，界面不自己算。
+   */
+  const [readability, setReadability] = useState<Readonly<Record<string, HumanReadability>>>({})
   const requests = AGENT_TASK_FIXTURES.length * TRIALS
 
   /** 第一段：只解析「使用中」的那份配置 —— **这一步不发请求**。 */
@@ -136,17 +163,26 @@ export function ProviderEval({ dependencies }: { dependencies?: ProviderEvalDepe
   /** 题集那套的第二段：确认之后才真的跑那 3 条题。 */
   const runPlanning = async () => {
     setPlanning({ kind: "running" })
+    // 新一轮的结果是新的对象：上一轮的标注不能跟着过来（人读区换了一批正文）。
+    setReadability({})
     try {
       const result = await runProviderPlanningEval(dependencies)
       setPlanning(
         result.provider === null
           ? { kind: "unavailable", code: result.unavailable?.code ?? "unknown", detail: result.unavailable?.detail ?? "" }
-          : { kind: "done", report: formatPlanningReport(result) }
+          : { kind: "done", result }
       )
     } catch (error) {
       setPlanning({ kind: "failed", detail: error instanceof Error ? error.message : String(error) })
     }
   }
+
+  /**
+   * 跑完之后的**带上标注**的那一份：报告文本与人读区读的是它。
+   *
+   * 计数不在这里算 —— `annotateReadability` 走的是报告契约（`readability()`）那一份口径。
+   */
+  const annotated = planning.kind === "done" ? annotateReadability(planning.result, readability) : null
 
   return (
     <>
@@ -248,10 +284,56 @@ export function ProviderEval({ dependencies }: { dependencies?: ProviderEvalDepe
 
         {planning.kind === "running" && <p role="status">正在跑…（至少 {PLANNING_EVAL_REQUESTS} 次请求）</p>}
 
-        {planning.kind === "done" && (
+        {planning.kind === "done" && annotated && (
           <div>
             <h4>读数</h4>
-            <pre>{planning.report}</pre>
+            <pre>{formatPlanningReport(annotated)}</pre>
+
+            {/**
+             * **人读区（只读）**：把「要读的那段东西」呈现出来。
+             *
+             * 存在的理由（两次真实运行暴露的）：报告里只有计数与证据串，而"这条计划好不好读"
+             * 要读的是**模型给出的那段东西本身**。没有它，任何可读性标注都是凭印象打分。
+             *
+             * 三条纪律：**只读**（正文只显示、不改）；正文**不进 `evidence`**（那会让证据变成正文）；
+             * 渲染路径上**不再解析题集**（每条区块的数据来自 `result.readable`，那是 harness
+             * 在内存里本来就有的信封）。
+             */}
+            <section className="readable-area" aria-label="人读区（只读）">
+              <h4>人读区（只读）—— 可读性标注的对象</h4>
+              <p>
+                口径：判断者是<strong>一个不懂实现的人</strong>（不是实现者），只问一件事 ——
+                「它打算建什么、依据是什么」能不能看懂；三值 <code>readable</code> / <code>partly</code> /{" "}
+                <code>unreadable</code>。标注<strong>只存在内存里</strong>（这一版不落盘，刷新即丢）。
+                没标注时显示的是「未标注」，它<strong>不是</strong> 0 分。
+              </p>
+              {annotated.readable.map((entry) => (
+                <article key={`${entry.caseId}#${entry.trial}`} className="readable-case" aria-label={`人读区：${entry.caseId}`}>
+                  <p>
+                    <code>{entry.caseId}</code> · {entry.status}
+                  </p>
+                  <pre>{readableTextForDisplay(entry)}</pre>
+                  {entry.group === null ? (
+                    // 没有对象可读的那两条（not_measured / error）：**不给标注按钮**，
+                    // 因为它们不进可读性分母 —— 给了按钮就会出现"标了但没被数进去"。
+                    <p>（这一轮没有正文可读 —— 它不进可读性分母，所以也没有标注）</p>
+                  ) : (
+                    <p>
+                      当前标注：{readability[entry.caseId] ?? "未标注"}{" "}
+                      {HUMAN_READABILITY_VALUES.map((value) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => setReadability((current) => ({ ...current, [entry.caseId]: value }))}
+                        >
+                          {value}
+                        </button>
+                      ))}
+                    </p>
+                  )}
+                </article>
+              ))}
+            </section>
           </div>
         )}
 

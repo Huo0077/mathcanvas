@@ -9,6 +9,7 @@ import {
   PLANNING_EVAL_SEED,
   PLANNING_EVAL_TOTAL_CASES,
   PLANNING_EVAL_TRIALS,
+  annotateReadability,
   formatPlanningReport,
   planningEvalCases,
   runProviderPlanningEval,
@@ -80,6 +81,16 @@ const CLARIFICATION_ENVELOPE: PlanEnvelope = {
   questions: ["请说明底面四边形的形状"]
 }
 
+/** 一份**只读回答**的信封：人读区要呈现的第三类正文（N4e）。 */
+const ANSWER_ENVELOPE: PlanEnvelope = {
+  schemaVersion: PLAN_SCHEMA_VERSION,
+  kind: "answer",
+  goal: "解释一下什么是异面直线",
+  factIds: [],
+  answer: "异面直线是指不同在任何一个平面内的两条直线。",
+  toolResultRefs: []
+}
+
 function plannerReturning(envelope: PlanEnvelope, seen: string[] = []) {
   return {
     plan: async (request: { userMessage: string }) => {
@@ -139,6 +150,9 @@ describe("应用内真实 provider 的题集 planning 通道（N4b）", () => {
       expect(run.cost).toBeNull()
       expect(run.latency).toBeNull()
       expect(run.evidence).toEqual([])
+      // **没标注就是显式的 `null`**（N4e）：这一批连对象都没有，所以它既不是某个缺省值，
+      // 也不会进可读性分母 —— 但"键必须在"这条纪律对它同样成立。
+      expect(run.humanReadability).toBeNull()
     }
     expect(result.report.realProvider.measured).toBe(0)
     expect(result.report.realProvider.notMeasured).toBe(PLANNING_EVAL_CASE_COUNT)
@@ -166,6 +180,8 @@ describe("应用内真实 provider 的题集 planning 通道（N4b）", () => {
       expect(run.provider).toBe("p-plan")
       expect(run.model).toBe("m-plan")
       expect(run.evidence.length).toBeGreaterThan(0)
+      // 跑过了、但**没有人标过**可读性 ⇒ 未标注（显式 `null`，不是缺省成 `readable`）。
+      expect(run.humanReadability).toBeNull()
     }
     expect(result.report.realProvider.byLayer).toEqual({ planning: PLANNING_EVAL_REQUESTS })
     expect(result.report.realProvider.byStatus).toEqual({ planned: PLANNING_EVAL_REQUESTS })
@@ -288,5 +304,84 @@ describe("应用内真实 provider 的题集 planning 通道（N4b）", () => {
 
   it("题集总数常量与真实条数一致（界面文案读它，题集一变就红在这里）", () => {
     expect(PLANNING_EVAL_TOTAL_CASES).toBe(parseBenchmarkCases().length)
+  })
+
+  /**
+   * **N4e：把「要读的那段东西」呈现出来。**
+   *
+   * 两次真实运行暴露的前置条件：报告里只有**计数**与**证据串**，而「这条计划好不好读」要读的是
+   * **模型给出的那段东西本身**。没有那段东西，任何可读性标注都是凭印象打分。
+   *
+   * 数据源是 harness 手里本来就有的**信封**（`planner.plan(...)` 的返回值 / `compilePlan` 的
+   * `plan`），**不是**去解析证据串 —— 证据是「凭什么这么说」，正文是「说了什么」，两回事。
+   */
+  it("**人读区拿得到正文**：计划的 goal 与动作 / 澄清的问题 / 只读回答的正文", async () => {
+    const planned = await runProviderPlanningEval({ resolveProvider: async () => RESOLVED, createPlanner: () => plannerReturning(ACCEPTED_ENVELOPE) })
+    expect(planned.readable).toHaveLength(PLANNING_EVAL_REQUESTS)
+    const entry = planned.readable[0]!
+    expect(entry.caseId).toBe(planningEvalCases()[0]!.id)
+    expect(entry.status).toBe("planned")
+    expect(entry.text).toContain(ACCEPTED_ENVELOPE.goal)
+    // 动作摘要也要在（只说"目标是建个东西"读不出它打算怎么建）。
+    expect(entry.text).toContain("solid.create_template")
+    // **正文不许混进 `evidence`**：那会让"证据"变成"正文"，而这一条读数正是为它们分开才做的。
+    expect(planned.runs[0]!.evidence.map((item) => item.evidence).join(" | ")).not.toContain(ACCEPTED_ENVELOPE.goal)
+
+    const asked = await runProviderPlanningEval({ resolveProvider: async () => RESOLVED, createPlanner: () => plannerReturning(CLARIFICATION_ENVELOPE) })
+    expect(asked.runs[0]!.status).toBe("clarification")
+    expect(asked.readable[0]!.text).toContain("请说明底面四边形的形状")
+
+    const answered = await runProviderPlanningEval({ resolveProvider: async () => RESOLVED, createPlanner: () => plannerReturning(ANSWER_ENVELOPE) })
+    // 只读回答对**这一层**是"没给计划" ⇒ 仍是 rejected（fail-closed 那一半没变），但它的正文有人读。
+    expect(answered.runs.map((run) => run.status)).toEqual(["rejected", "rejected", "rejected"])
+    expect(answered.readable[0]!.text).toContain("异面直线是指不同在任何一个平面内的两条直线")
+  })
+
+  it("**没有对象的那一条不留正文**（`error`），它也因此不进可读性分母", async () => {
+    const prompts = planningEvalCases().map((entry) => entry.prompt)
+    const result = await runProviderPlanningEval({
+      resolveProvider: async () => RESOLVED,
+      createPlanner: () => ({
+        plan: async (request: { userMessage: string }) => {
+          if (request.userMessage === prompts[1]) throw new Error("provider 500: upstream unavailable")
+          return { plan: ACCEPTED_ENVELOPE, requestId: "req-1", attemptId: "att-1" }
+        }
+      })
+    })
+
+    expect(result.runs.map((run) => run.status)).toEqual(["planned", "error", "planned"])
+    // 抛了的那一条**没有**任何可读正文 —— 于是它的 `text` 是空串，而不是"写点什么凑数"。
+    expect(result.readable[1]!.text).toBe("")
+    // 3 条记录里只有 2 条有对象可读：可读性分母是 2，不是 3。
+    expect(result.report.realProvider.readability.total).toBe(2)
+  })
+
+  it("**可读性标注**：没标就是「未标注」，比率是 `null` 不是 `0`；标过之后才有比率", async () => {
+    const result = await runProviderPlanningEval({ resolveProvider: async () => RESOLVED, createPlanner: () => plannerReturning(ACCEPTED_ENVELOPE) })
+    const cases = planningEvalCases()
+    const group = (annotated: ReturnType<typeof annotateReadability>, name: "plan" | "clarification" | "rejected") =>
+      annotated.report.realProvider.readability.groups.find((entry) => entry.group === name)!
+
+    // ① 谁都没标 —— **这一版做完的真实状态**：报告里出现的是「未标注」，不是一个 0 分。
+    const none = annotateReadability(result, {})
+    expect([group(none, "plan").total, group(none, "plan").annotated, group(none, "plan").unannotated]).toEqual([3, 0, 3])
+    expect(group(none, "plan").readableRate).toBeNull()
+    expect(formatPlanningReport(none)).toContain("已标 0 / 未标 3")
+    expect(formatPlanningReport(none)).toContain("未标注")
+    // 报告里**不许**出现"可读性 0"这种读起来像分数的写法。
+    expect(formatPlanningReport(none)).not.toMatch(/readable 比率\s+0(\.0+)?\b/)
+
+    // ② 标一条 `readable`：计数与比率都动，而且**不再自己数一遍**（走同一份报告契约）。
+    const some = annotateReadability(result, { [cases[0]!.id]: "readable" })
+    expect([group(some, "plan").annotated, group(some, "plan").unannotated]).toEqual([1, 2])
+    expect(group(some, "plan").readableRate).toBe(1)
+    expect(group(some, "plan").byValue).toEqual({ readable: 1, partly: 0, unreadable: 0 })
+    expect(formatPlanningReport(some)).toContain("已标 1 / 未标 2")
+
+    // 标注只碰 `humanReadability` 这一个字段：其余读数与正文一个字不动。
+    expect(some.report.realProvider.byStatus).toEqual(result.report.realProvider.byStatus)
+    expect(some.readable).toEqual(result.readable)
+    // **纯函数**：原结果上的标注不被改动（标注是界面上的内存状态，不是回写到这一批记录里）。
+    expect(result.runs[0]!.humanReadability).toBeNull()
   })
 })

@@ -5,14 +5,19 @@ import {
   compilePlan,
   createBudget,
   parseBenchmarkCases,
+  readabilityGroupFor,
   type BenchmarkCase,
   type BenchmarkEvidenceEntry,
   type BenchmarkReport,
   type BenchmarkRun,
+  type BenchmarkRunStatus,
   type DocumentHandle,
+  type HumanReadability,
+  type PlanEnvelope,
   type PlannerPort,
   type PlanCompileResult,
   type PlanRequest,
+  type ReadabilityGroup,
   type RunContext
 } from "@draw/agent-core"
 import { createEmptyDocument } from "@draw/dsl"
@@ -201,8 +206,39 @@ export interface PlanningEvalResult {
   unavailable: { code: string; detail: string } | null
   /** 一次请求都没发时这里是 3 条 `not_measured`（**不是**"跑了 0 分"）。 */
   runs: BenchmarkRun[]
+  /**
+   * **人读区要呈现的那段正文**（N4e）—— 每条题一轮，与 `runs` 一一对应。
+   *
+   * 数据源是 harness 手里本来就有的**信封**（`planner.plan(...)` 的返回值），**不去解析证据串**：
+   * 证据是「凭什么这么说」，正文是「说了什么」，两回事。
+   *
+   * **不放进 `BenchmarkRun.evidence`**（那会让证据变成正文），所以它是**并列的一支**。
+   */
+  readable: PlanningReadableCase[]
   /** 同一批记录过**报告契约**的校验与分组：不合法会在 `runProviderPlanningEval` 里抛。 */
   report: BenchmarkReport
+}
+
+/**
+ * 一条题要读的那段东西（N4e）。
+ *
+ * `text` 是**未截断的原文**；渲染时按 `PER_CASE_READABLE_LIMIT` 截断并如实写原长
+ *（沿用本仓既有的"有界文本"纪律）。
+ */
+export interface PlanningReadableCase {
+  caseId: string
+  trial: number
+  status: BenchmarkRunStatus
+  /**
+   * 这一轮**有没有对象可读**、属于哪一组；`null` = 没有（`not_measured` / `error`）。
+   *
+   * 判据来自报告契约那一份（`readabilityGroupFor`）—— 界面据此决定"要不要给标注按钮"，
+   * 不在这里另写一套（两套判据必然分叉：例如只看 `status` 会把见证层的同名 `clarification`
+   * 也算成"有对象"）。
+   */
+  group: ReadabilityGroup | null
+  /** 模型给的那段东西本身；空串 = 这一轮没有正文可读。 */
+  text: string
 }
 
 export interface PlanningEvalDependencies {
@@ -212,13 +248,15 @@ export interface PlanningEvalDependencies {
   createPlanner?: (resolution: Extract<ProviderResolution, { ok: true }>) => PlannerPort
 }
 
+/** 报告契约的"哪里出错了"标签：**一处定义**（运行、标注重算两条路都用它）。 */
+const PLANNING_REPORT_WHERE = "应用内题集 planning 运行记录"
+
 /** 跑一轮真实 provider 的题集 planning 评测。 */
 export async function runProviderPlanningEval(dependencies: PlanningEvalDependencies = {}): Promise<PlanningEvalResult> {
   const cases = planningEvalCases()
   const resolveProvider = dependencies.resolveProvider ?? resolveActiveProvider
   const resolution = await resolveProvider()
 
-  const where = "应用内题集 planning 运行记录"
   if (!resolution.ok) {
     /**
      * **一次请求都不发**：解析失败时连规划器都不造（与 `providerAgentEval.ts:58` 同一顺序）。
@@ -234,23 +272,53 @@ export async function runProviderPlanningEval(dependencies: PlanningEvalDependen
       status: "not_measured",
       evidence: [],
       cost: null,
-      latency: null
+      latency: null,
+      // 没跑 ⇒ 没人标过 ⇒ 未标注（显式 `null`，不是缺省值）。
+      humanReadability: null
     }))
-    return { mode: "real_provider", provider: null, unavailable: { code: resolution.code, detail: resolution.detail }, runs, report: buildReport(runs, where) }
+    return {
+      mode: "real_provider",
+      provider: null,
+      unavailable: { code: resolution.code, detail: resolution.detail },
+      runs,
+      // 一行都没跑，所以一条正文都没有（`text` 是空的），但每条题仍然占一行区块 ——
+      // 读者要能看出"这几条没有对象可读"，而不是以为人读区漏了东西。
+      readable: cases.map((entry): PlanningReadableCase => ({ caseId: entry.id, trial: 1, status: "not_measured", group: readabilityGroupFor({ layer: "planning", status: "not_measured" }), text: "" })),
+      report: buildReport(runs, PLANNING_REPORT_WHERE)
+    }
   }
 
   const createPlanner = dependencies.createPlanner ?? ((resolved) => createModelPlanner({ resolveProvider: async () => resolved }))
   const identity = { id: resolution.provider.id, modelId: resolution.provider.modelId }
   const runs: BenchmarkRun[] = []
+  const readable: PlanningReadableCase[] = []
   for (const entry of cases) {
     for (let trial = 1; trial <= PLANNING_EVAL_TRIALS; trial += 1) {
       // 每条题一个新的规划器实例：真实那一侧因此每次重新解析 provider、拿新的 runId
       //（与 `offlineAgentEval.ts` 的"每次尝试都新建"同一条口径）。
-      runs.push(await runOneCase(entry, trial, identity, () => createPlanner(resolution)))
+      const outcome = await runOneCase(entry, trial, identity, () => createPlanner(resolution))
+      runs.push(outcome.run)
+      readable.push(outcome.readable)
     }
   }
 
-  return { mode: "real_provider", provider: identity, unavailable: null, runs, report: buildReport(runs, where) }
+  return { mode: "real_provider", provider: identity, unavailable: null, runs, readable, report: buildReport(runs, PLANNING_REPORT_WHERE) }
+}
+
+/**
+ * **把内存里的标注套到这一批记录上，再用同一份报告契约重算计数**（N4e）。
+ *
+ * 为什么要有这个函数，而不是让界面自己数一遍：
+ * - 界面上每点一次按钮，报告里的"已标 / 未标 / 各自几比几"就要跟着动，而**口径只有一份**
+ *   （`buildBenchmarkReport` 的 `readability()`）。界面自己数 = 第二份口径，早晚与报告分叉；
+ * - **纯函数**：它返回一份新的结果，不改动传进来的 `result` —— 标注是界面上的内存状态，
+ *   **不回写**到这一批记录里（这一版不做任何持久化，也**没有**存储位置）。
+ * - 没标注的题记 `null`（= 未标注）。这**不是**给 `humanReadability` 一个缺省值：
+ *   `null` 的含义就是"没人标过"，与"默认成 readable"相反。
+ */
+export function annotateReadability(result: PlanningEvalResult, annotations: Readonly<Record<string, HumanReadability>>): PlanningEvalResult {
+  const runs = result.runs.map((run): BenchmarkRun => ({ ...run, humanReadability: annotations[run.caseId] ?? null }))
+  return { ...result, runs, report: buildReport(runs, PLANNING_REPORT_WHERE) }
 }
 
 function buildReport(runs: readonly BenchmarkRun[], where: string) {
@@ -264,7 +332,7 @@ async function runOneCase(
   trial: number,
   identity: { id: string; modelId: string },
   createPlanner: () => PlannerPort
-): Promise<BenchmarkRun> {
+): Promise<{ run: BenchmarkRun; readable: PlanningReadableCase }> {
   const base = {
     caseId: entry.id,
     provider: identity.id,
@@ -272,9 +340,13 @@ async function runOneCase(
     seed: PLANNING_EVAL_SEED,
     mode: "real_provider" as const,
     layer: "planning" as const,
-    cost: null
+    cost: null,
+    // **没有人标过**（标注由人在面板上按三值口径给；这一版没有持久化）。
+    humanReadability: null
   }
   const started = Date.now()
+  /** 模型给的那段东西（`planner.plan` 的返回值）。抛之前拿不到 ⇒ 保持 `null` ⇒ 正文是空串。 */
+  let envelope: PlanEnvelope | null = null
   try {
     const workspace = workspaceFor(entry)
     const document = createEmptyDocument(workspace)
@@ -284,7 +356,7 @@ async function runOneCase(
      *（`request` 为什么必须完整，见 `planRequestFor` 的注释。）
      */
     const request = planRequestFor(entry.prompt, workspace, `benchmark-planning-${entry.id}-${trial}`, document)
-    const envelope = (await createPlanner().plan(request)).plan
+    envelope = (await createPlanner().plan(request)).plan
     const compiled = compilePlan(envelope, {
       document,
       prompt: entry.prompt,
@@ -302,20 +374,53 @@ async function runOneCase(
      * **fail-closed 那一半一个字不改**：澄清**不是** `planned`（"问了"不等于"计划被接受"）。
      */
     if (compiled.ok && compiled.plan?.kind === "clarification") {
-      return { ...base, status: "clarification", evidence: clarificationEvidence(entry.id, compiled.plan), latency }
+      return outcome(entry, trial, { ...base, status: "clarification", evidence: clarificationEvidence(entry.id, compiled.plan), latency }, envelope)
     }
     return compiled.ok && compiled.plan?.kind === "plan"
-      ? { ...base, status: "planned", evidence: acceptedEvidence(compiled.diagnostics.length, compiled.actions.length, compiled.draftDocument !== null), latency }
-      : { ...base, status: "rejected", evidence: rejectionEvidence(entry.id, compiled), latency }
+      ? outcome(entry, trial, { ...base, status: "planned", evidence: acceptedEvidence(compiled.diagnostics.length, compiled.actions.length, compiled.draftDocument !== null), latency }, envelope)
+      : outcome(entry, trial, { ...base, status: "rejected", evidence: rejectionEvidence(entry.id, compiled), latency }, envelope)
   } catch (error) {
-    return {
+    return outcome(entry, trial, {
       ...base,
       status: "error",
       // 原始消息，不加工：这一条读数说的是"跑的时候抛了"，把它概括成一句话会让排障无从下手。
       evidence: [{ claim: entry.id, status: "error", evidence: error instanceof Error ? `${error.name}: ${error.message}` : String(error) }],
       latency: { totalMs: Math.max(0, Date.now() - started) }
-    }
+    }, envelope)
   }
+}
+
+/**
+ * 把"这一轮的记录"与"这一轮要读的那段东西"配成一对。
+ *
+ * **两样东西一起返回**（而不是各建一次）是为了它们不可能对不上：人读区第 N 行永远是
+ * `runs` 第 N 行的正文。分组（`group`）用的是报告契约那一份判据，不在这里另写。
+ */
+function outcome(entry: BenchmarkCase, trial: number, run: BenchmarkRun, envelope: PlanEnvelope | null): { run: BenchmarkRun; readable: PlanningReadableCase } {
+  return {
+    run,
+    readable: { caseId: entry.id, trial, status: run.status, group: readabilityGroupFor(run), text: readableBody(envelope) }
+  }
+}
+
+/**
+ * **要读的那段东西**（模型给的原话，逐字不加工）：
+ * 计划的 `goal` 与动作摘要 / 澄清的问题 / 只读回答的正文。
+ *
+ * 只做"把结构摊成人能读的几行"，**不解释、不概括、不补**：一旦这里做了概括，
+ * 可读性标注量的就是我们的概括，而不是模型给的东西。
+ */
+function readableBody(envelope: PlanEnvelope | null): string {
+  if (envelope === null) return ""
+  if (envelope.kind === "plan") {
+    const actions = envelope.actions.map((action, index) => `${index + 1}. ${action.actionId}`)
+    return [
+      `目标：${envelope.goal}`,
+      `动作（${envelope.actions.length} 条）：${actions.length === 0 ? "（这份计划没有动作）" : actions.join("；")}`
+    ].join("\n")
+  }
+  if (envelope.kind === "clarification") return `提问：${envelope.questions.join(" / ")}`
+  return `只读回答：${envelope.answer}`
 }
 
 /** 「被接受」是一条**客观**结论，所以证据写的是编译器自己给出的那几个量。 */
@@ -369,6 +474,32 @@ function rejectionEvidence(caseId: string, compiled: PlanCompileResult): Benchma
 const PER_CASE_EVIDENCE_LIMIT = 240
 
 /**
+ * **人读区每条的截断上限**：与证据那条上限分开写，因为它们会各自演进
+ *（正文是"要读的东西"，比一句理由长得多；共用一个常量会让调其中一个时误伤另一个）。
+ */
+export const PER_CASE_READABLE_LIMIT = 480
+
+/** 有界文本：截断时**如实写原长**（本仓既有的做法，两处用同一份实现）。 */
+function boundedText(text: string, limit: number): string {
+  return text.length > limit ? `${text.slice(0, limit)}…（已截断，原长 ${text.length}）` : text
+}
+
+/**
+ * 人读区里显示的那段文本：**空正文如实说"没有正文可读"**，否则按上限截断。
+ *
+ * 空正文**不是**"渲染失败"：`not_measured` / `error` 那两条本来就没有对象可读
+ *（它们也因此不进可读性分母、不给标注按钮）。
+ */
+export function readableTextForDisplay(entry: PlanningReadableCase): string {
+  return entry.text.trim().length === 0 ? "（这一条没有正文可读）" : boundedText(entry.text, PER_CASE_READABLE_LIMIT)
+}
+
+/** `readableRate` 的呈文：**分母为 0 时说的是"未标注"，不是一个 0 分**。 */
+function readabilityRateText(rate: number | null): string {
+  return rate === null ? "未标注（分母 = 已标 0，不是 0 分）" : rate.toFixed(3)
+}
+
+/**
  * 把这一批读数渲染成有界文本（供面板显示，也供用例断言）。
  *
  * 每个数都**直接数 `runs`**，不在这里重算 —— 重算就是第二份口径。
@@ -387,6 +518,7 @@ export function formatPlanningReport(result: PlanningEvalResult): string {
   const count = (status: BenchmarkRun["status"]): number => result.runs.filter((run) => run.status === status).length
   const measured = result.runs.filter((run) => run.status !== "not_measured")
   const averageLatency = measured.length === 0 ? null : Math.round(measured.reduce((sum, run) => sum + (run.latency?.totalMs ?? 0), 0) / measured.length)
+  const readability = result.report.realProvider.readability
 
   return [
     "mode: real_provider — 题集 planning（计划是否被 compilePlan 接受）",
@@ -404,13 +536,36 @@ export function formatPlanningReport(result: PlanningEvalResult): string {
     // 仓里没有价目表 ⇒ 成本写 `not measured`，而不是拿一个猜出来的钱数充数。
     `cost              ${NOT_MEASURED}（仓里没有价目表）`,
     "",
+    ...formatReadabilitySection(readability),
+    "",
     `per case（每条题一行：题 id / 结局 / 理由原文）`,
     ...result.runs.map((run) => {
       const evidence = run.evidence.map((entry) => entry.evidence).join(" | ")
-      const bounded = evidence.length > PER_CASE_EVIDENCE_LIMIT
-        ? `${evidence.slice(0, PER_CASE_EVIDENCE_LIMIT)}…（已截断，原长 ${evidence.length}）`
-        : evidence
-      return `  ${run.caseId}  ${run.status}  ${bounded.length === 0 ? "（这一轮没测）" : bounded}`
+      return `  ${run.caseId}  ${run.status}  ${boundedText(evidence, PER_CASE_EVIDENCE_LIMIT) || "（这一轮没测）"}`
     })
   ].join("\n")
+}
+
+/**
+ * **人工可读性的计数行**（N4e）—— 口径先写死，再谈数字。
+ *
+ * 三条必须能从这五行里读出来：
+ * 1. **判断者是谁**：一个**不懂实现的人**（不是实现者）—— 所以那个判断只能由人给；
+ * 2. **分母是什么**：只有"有对象可读"的轮次；`not_measured` / `error` 不进；
+ *    `plan` 与 `clarification` **各有各的分母**（问法清不清楚 ≠ 计划好不好）；
+ * 3. **"未标注"与"0 分"可分辨**：一条都没标时比率写的是「未标注（分母 = 已标 0，不是 0 分）」，
+ *    而**不是** `0.000`。本批做完的真实状态正是这个 —— 不许拿 0 或占位比率凑。
+ */
+function formatReadabilitySection(readability: BenchmarkReport["realProvider"]["readability"]): string[] {
+  return [
+    "人工可读性（判断者：一个不懂实现的人 —— 只问「它打算建什么、依据是什么」能不能看懂）",
+    "  三值 readable / partly / unreadable；没标注就是「未标注」，**不是** 0 分。",
+    "  分母只算有对象可读的轮次：not_measured / error 不进；plan 与 clarification 各有各的分母。",
+    ...readability.groups.map((group) =>
+      `  ${group.group.padEnd(14)}已标 ${group.annotated} / 未标 ${group.unannotated}   ` +
+      `readable ${group.byValue.readable} / partly ${group.byValue.partly} / unreadable ${group.byValue.unreadable}   ` +
+      `readable 比率 ${readabilityRateText(group.readableRate)}`
+    ),
+    `  ${"合计".padEnd(12)}已标 ${readability.annotated} / 未标 ${readability.unannotated}`
+  ]
 }
