@@ -161,7 +161,7 @@ impl RunRegistry {
         }
         let cancel = Arc::new(RunCancel::new());
         runs.insert(run_id.to_string(), RunRecord { events: VecDeque::new(), finished: false, truncated: false, cancel: cancel.clone() });
-        /**
+        /*
          * **这一行是锁序的一部分，不是多余的清理。**
          *
          * `touch` 里先拿 `order`、淘汰时再拿 `runs`（顺序恒为 `order → runs`）。
@@ -192,7 +192,7 @@ impl RunRegistry {
         if finished {
             record.finished = true;
         }
-        /**
+        /*
          * **这一行是锁序的一部分，不是多余的清理。**
          *
          * `touch` 里先拿 `order`、淘汰时再拿 `runs`（顺序恒为 `order → runs`）。
