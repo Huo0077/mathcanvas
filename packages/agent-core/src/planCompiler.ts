@@ -1,4 +1,5 @@
-﻿import type { GeometryDocument, Workspace } from "@draw/dsl"
+import { parseObligationIR } from "./obligationIR"
+import type { GeometryDocument, Workspace } from "@draw/dsl"
 import { commitTransaction, compileAction, createIdAllocator, solidTopology3, type ActionContext, type DomainOperation, type DraftAction, type IdAllocator } from "@draw/scene-graph"
 import { sectionSolid3, validatePrismInput } from "@draw/geometry-kernel"
 
@@ -615,18 +616,49 @@ function witnessAssumptions(found: Extract<WitnessSearchResult, { status: "verif
  * 5. 第二遍**必须** `ok` + 有草稿 + 核验 `passed`，三者缺一都不算救回 ——
  *    生成物与模型给的候选走的是同一个核验器，没有任何"系统生成所以跳过"的豁免。
  */
+/**
+ * **组成一次见证搜索的入参 —— 只有这一处。**
+ *
+ * 三个常量（seed / 候选上限 / 超时）与"题面 → 图形族"的判据都收在这里，所以**救援路径**与
+ * **离线入口**用的是同一份口径。"同一判断写两遍"会在这里造成两种后果之一：要么离线读数与
+ * 救援路径的结果不可比，要么有人改了一边忘了另一边。
+ */
+function witnessSearchInput(ir: Parameters<typeof searchWitness>[0]["obligations"], prompt: string): Parameters<typeof searchWitness>[0] {
+  return {
+    obligations: ir,
+    shape: witnessShapeFor(prompt),
+    seed: WITNESS_SEARCH_SEED,
+    maxCandidates: WITNESS_SEARCH_MAX_CANDIDATES,
+    timeoutMs: WITNESS_SEARCH_TIMEOUT_MS
+  }
+}
+
+/**
+ * **离线见证搜索**：题面 → IR → 图形族 → 有界搜索。**不需要模型给的任何坐标。**
+ *
+ * ## 为什么它必须存在（以及我此前为什么以为它不存在）
+ *
+ * 第 36 轮我把 N4 的"求解率"记成"**要先回答离线时喂什么给见证层**，属口径决定" —— 理由是
+ * "见证搜索只在救援路径里触发，它要先有一份模型给的计划失败才有东西可救"。**那个理由错了**：
+ * 救援路径传进去的只有两样东西 —— `first.obligations.ir`（**解析结果**）与
+ * `witnessShapeFor(context.prompt)`（**从题面推出来的图形族**）。**两样都不来自模型。**
+ * 所以离线跑见证搜索从来就不缺输入，缺的只是"有人把它包成一个入口"。
+ *
+ * 与第 46 / 47 轮同源：**先问"是不是已经有别的机制在做"，再下"缺能力"的结论。**
+ *
+ * 返回的 `status` 与 benchmark 见证层的词表**逐字对应**（`verified_instance` /
+ * `unverified_instance` / `no_witness`），所以那一层不需要任何新判断。
+ */
+export function searchWitnessForPrompt(prompt: string): ReturnType<typeof searchWitness> {
+  return searchWitness(witnessSearchInput(parseObligationIR(prompt), prompt))
+}
 function rescuedByWitnessSearch(context: PlanCompileContext, first: CompileOnceOutcome): PlanCompileResult | null {
   const report = first.result.diagramVerification
   if (report === undefined || report.status === "passed") return null
   if (first.plan === null || first.obligations === null || context.prompt === undefined) return null
 
-  const found = searchWitness({
-    obligations: first.obligations.ir,
-    shape: witnessShapeFor(context.prompt),
-    seed: WITNESS_SEARCH_SEED,
-    maxCandidates: WITNESS_SEARCH_MAX_CANDIDATES,
-    timeoutMs: WITNESS_SEARCH_TIMEOUT_MS
-  })
+  const found = searchWitness(witnessSearchInput(first.obligations.ir, context.prompt))
+
   if (found.status !== "verified_instance") return null
 
   const candidatePlan = withWitnessCoordinates(first.plan, found.candidate)

@@ -5,6 +5,30 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-05 —— N4 第八步：**离线求解率能跑了** —— 我第 36 轮把它记成"缺一个定义"，那个理由错了
+
+- **同一个错法，第三次**（第 46 轮"中点"、第 47 轮"共线/共面"、这一轮"求解率"）。我第 36 轮的理由是：
+  "见证搜索**只在救援路径里触发**（`planCompiler.ts:235`），要先有一份**模型给的计划**失败才有东西可救，
+  所以离线那一侧**没有这个输入**"。**这个理由错了。**
+- **真相**：救援路径传给 `searchWitness` 的只有两样东西 ——
+  `first.obligations.ir`（**解析结果**）与 `witnessShapeFor(context.prompt)`（**从题面推出来的图形族**）。
+  **两样都不来自模型。** 所以离线跑见证搜索**从来就不缺输入**，缺的只是"有没有人把它包成一个入口"。
+- **做了什么**：
+  1. `agent-core` 新增导出 `searchWitnessForPrompt(prompt)` —— 题面 → IR → 图形族 → 有界搜索；
+     并把"入参怎么组成"（seed / 候选上限 / 超时 / 题面→图形族）收进**一个**私有 `witnessSearchInput`，
+     **救援路径与离线入口共用同一份**（原先那三样在救援路径里各自写了一遍）。
+  2. `bench:agent` 新增**见证层**：`deterministic_local` 现在每题跑**两层各一轮**（抽取 + 见证），
+     `status` 用 `BENCHMARK_STATUSES_BY_LAYER.witness` 的现成词表 —— `WitnessSearchResult.status`
+     与它**逐字对应**，所以这一层**没有引入任何新判断**。
+  3. 新增读数与用例：`BENCHMARK_WITNESS verified=… unverified=… no_witness=… solveRate=…`，
+     并断言四种结局**不重不漏**（否则"求解率"的分母是编出来的）。
+- **第一个真实读数**：`BENCHMARK_WITNESS verified=1 unverified=20 no_witness=0 error=0 solveRate=0.048`
+  —— **离线求解率 4.8%**（21 题里 1 题拿到通过核验的候选）。**这个数很低，而"低"本身就是有用的信息**：
+  离线解析构造只覆盖得了"点名够、形状是棱锥"的那一小撮，其余 20 题如实回到 `unverified_instance`。
+- **四处文档同步改准**：`current-status.md` §四 F（原文划掉并写明理由错在哪）、发布门禁的 N4 一节
+（"求解率"从"没有"移出）、记分卡（`solve rate` 从 Missing 移出）、计划的 N4 记录。
+- **证据**：benchmark 套件 11 → **12 条**；全库单测 **310 文件 / 3599 通过 + 1 todo / 0 失败**；
+  `typecheck` exit 0；`lint` exit 0（0 error / 13 warning，与基线逐条相同）。
 ## 2026-10-05 —— N5 第五步：又一处**同源误判** —— 「共线 / 共面」不是没有载体，是我只找了一层
 
 - **同一个错法，第二次**：第 46 轮我把计划的"中点"误判成需要扩约束词表（其实**派生点**早就在做）。

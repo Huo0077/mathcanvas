@@ -30,7 +30,7 @@
 | 性能基线 | `npm.cmd run test:perf` | 9/9；`drag/300-frames` **686–711 ms**（**三次采样的区间，不是单点**） | 0 | **第 37 轮重校** |
 | 生产构建（web） | `npm.cmd run build --workspace @draw/web` | **成功**（4.83 s）；产物落 `build-check/`（已 gitignore，构建后工作树干净）；有**既有的**主 chunk 1.8 MB 提示 | 0 | **第 28 轮** |
 | Agent 评测 | `npm.cmd run eval:agent` | `deterministic_local`：pass@1 **4/8**、pass@3 **4/8**、工具选择 45/45、工具错误 3/45 | 0 | **第 27 轮**（整批电池；**未接真实模型**，不是模型准确率） |
-| Agent benchmark | `npm.cmd run bench:agent` | `cases=21 covered=14 empty=7 error=0`；`BENCHMARK_PREMISE obligations=24 residue=9 rate=0.727` | 0 | **第 29 轮** |
+| Agent benchmark | `npm.cmd run bench:agent` | 抽取层：`cases=21 covered=14 empty=7 error=0`；`BENCHMARK_PREMISE obligations=24 residue=9 rate=0.727`；`BENCHMARK_EXTRACTION covered=14/21 rate=0.667`。**见证层（第 48 轮新增）**：`BENCHMARK_WITNESS verified=1 unverified=20 no_witness=0 error=0 solveRate=0.048` | 0 | **第 48 轮** |
 | 证明边界 smoke | `npm.cmd run proof:smoke` | 7 通过 / 0 失败；`PROOF_BACKENDS {"wired":[],"reviewed":0}`、`wiredBackends=[]` | 0 | **第 30 轮** |
 | N3 定向测试（**计划点名的那七件**） | `vitest run constraints / constraints3d / planar-constraints / reactive/constraints / operations / patches / scene-store` | **7 文件 / 241 通过 / 0 失败** | 0 | **第 31 轮** |
 
@@ -695,7 +695,7 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
 
 ### F. N1/N2 的已知边界与 park 项（**不是缺陷，是如实记录**）
 
-- **`deterministic_local` 的「求解率」不是"顺手跑一下"就能有的，它缺一个定义（2026-10-05 查实）**：见证搜索只在**救援路径**里触发 —— `planCompiler.ts:235` 是 `if (context.diagramWitnessSearch !== true) return first.result`，而 `searchWitness` 的调用点在 `:623`，它要**先有一份模型给的计划（含坐标）失败**才有东西可救。离线（无模型）那一侧**没有这个输入**，所以"求解率"要先回答"**离线时喂什么给见证层**"：是拿解析构造的候选当输入，还是干脆把离线见证层定义为 `not_measured`？**这是口径决定，不是实现缺口** —— 别把它当成"忘了跑"。
+- **~~`deterministic_local` 的「求解率」缺一个定义~~（2026-10-05 更正：**这个结论错了，已经能跑了**）**：我原来的理由是"见证搜索只在救援路径里触发（`planCompiler.ts:235`），要先有一份模型给的计划失败才有东西可救，所以离线没有输入"。**那个理由错了** —— 救援路径传进去的只有两样：`first.obligations.ir`（**解析结果**）与 `witnessShapeFor(context.prompt)`（**从题面推出来的图形族**）。**两样都不来自模型。** 现在 `agent-core` 导出了离线入口 `searchWitnessForPrompt(prompt)`，`bench:agent` 的**见证层**用它，实测：`BENCHMARK_WITNESS verified=1 unverified=20 no_witness=0 solveRate=0.048`（**离线求解率 4.8%**，21 题里 1 题拿到通过核验的候选）。它与救援路径共用同一份组成（seed / 候选上限 / 超时 / 题面→图形族），不是又写一遍。
 
 - **N5 的"只读展示"这一条**（计划要求把 proof artifact 接进 `ConfirmationPanel` / `agentStore` / run event schema）**目前做不了，而且不是"没时间做"**：查下来 `ClaimEvidence` 这套证据词汇**根本没有进过 Web 界面** —— 面板显示的是 `diagramVerification`（另一套词汇，讲的是"这份图核验了吗"），而 `ClaimEvidence` 只在 `witnessSearch` / `solverContracts` / `planCompiler` 这些**核心层**里活着。加上**今天没有任何后端**，产物永远不存在 —— 为一个**不可能出现**的东西先做展示面，属于投机性设计。**这一条与"接一个真实后端"是同一件事，跟着那个决定走。**
 - **两处"约束"模块的分工（免得被误当成重复实现）**：`planar-constraints.ts` 管**"点能待在哪儿"**（一维曲线 + 自然参数，`project`/`evaluate`，拖拽与动画是同一条状态更新），是**点 ↔ 宿主**的一元关系；`constraints3dProjection.ts` 管**"几个对象之间必须保持什么关系"**（⊥ / ∥ / 等长 / 共面…），是**多元**关系，用顺序投影迭代。**两者互补，可以同时出现在同一份文档里**；分工已写进 `constraints3dProjection.ts` 的文件头。

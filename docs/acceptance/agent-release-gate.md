@@ -98,7 +98,7 @@
   `BENCHMARK_PREMISE obligations=24 residue=9 rate=0.727`（题设覆盖率 **72.7%**）。
   **读数不可比**：`covered` 从 `5/7` 到 `14/21` 是**题集换了**（新加的三类刻意偏难），只记录、不比较。
 - **没有的**：门槛要"抽取率、judgeability、求解率与人工审查分开统计" —— 现在有抽取层的**题级覆盖**
-  （`covered`）与**题设级覆盖**（premise rate），但 **judgeability / 求解率 / 人工审查三样都没有**；
+  （`covered`）与**题设级覆盖**（premise rate），但 **judgeability / 人工审查两样仍然没有** —— **求解率第 48 轮补上了**（`BENCHMARK_WITNESS verified=1 unverified=20 no_witness=0 solveRate=0.048`，见证层与救援路径共用同一个离线入口）；
   `real_provider` 整批 `not_measured`（**适配器没写**，需要先定用哪个 provider、凭据放哪），
   成本 / 延迟 / 人工可读性同样没有。**不要把 N4 的第一步读成"开放题门槛已过"。**
 

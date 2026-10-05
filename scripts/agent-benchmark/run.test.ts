@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs"
 
-import { parseObligationIR } from "@draw/agent-core"
+import { parseObligationIR, searchWitnessForPrompt } from "@draw/agent-core"
 import { describe, expect, it } from "vitest"
 
 import { parseBenchmarkDataset } from "./dataset"
@@ -88,26 +88,73 @@ function notMeasuredRun(caseId: string): BenchmarkRun {
   }
 }
 
+/**
+ * **见证层的一轮**（`deterministic_local`）：题面 → **离线**见证搜索。
+ *
+ * 用的是 `searchWitnessForPrompt`（agent-core 导出的离线入口）—— 于是这一层与**救援路径**
+ * 用的是同一份"题面 → 图形族 → 有界搜索"的口径，不是又写一遍。
+ *
+ * `status` 与 `BENCHMARK_STATUSES_BY_LAYER.witness` 的词表**逐字对应**
+ *（`verified_instance` / `unverified_instance` / `no_witness`），所以这里**不需要任何新判断**。
+ */
+function witnessRun(caseId: string, prompt: string): BenchmarkRun {
+  const base = { caseId, provider: null, model: null, seed: SEED, mode: "deterministic_local" as const, layer: "witness" as const, cost: null, latency: null }
+  try {
+    const result = searchWitnessForPrompt(prompt)
+    const evidence = result.status === "verified_instance"
+      ? [{ claim: caseId, status: "verified_instance" as const, evidence: `候选通过统一核验器；系统替你定了 ${result.assumptions.length} 条` }]
+      : result.status === "no_witness"
+        ? result.failures.map((failure) => ({ claim: caseId, status: "no_witness" as const, evidence: failure }))
+        : result.reasons.map((reason) => ({ claim: caseId, status: "unverified_instance" as const, evidence: reason }))
+
+    return {
+      ...base,
+      status: result.status,
+      evidence: evidence.length > 0 ? evidence : [{ claim: caseId, status: result.status, evidence: "搜索给了结论，但没有留下原因文本。" }]
+    }
+  } catch (error) {
+    return { ...base, status: "error", evidence: [{ claim: caseId, status: "error", evidence: error instanceof Error ? error.message : String(error) }] }
+  }
+}
 const runs: BenchmarkRun[] = MODE === "real_provider"
   ? cases.map((entry) => notMeasuredRun(entry.id))
-  : cases.map((entry) => extractionRun(entry.id, entry.prompt))
+  : cases.flatMap((entry) => [extractionRun(entry.id, entry.prompt), witnessRun(entry.id, entry.prompt)])
 
 const report = buildBenchmarkReport(runs, `${MODE} 运行记录`)
 
 describe(`benchmark 运行入口（mode=${MODE}）`, () => {
-  it("每条题都恰好有一轮记录，不多不少", () => {
+  it("每条题都恰好留下应有的轮次，不多不少", () => {
     const total = report.deterministicLocal.runs.length + report.realProvider.runs.length
-    expect(total).toBe(cases.length)
+    // `deterministic_local` 每题**两层各一轮**（抽取 + 见证）；`real_provider` 仍是每题一轮 `not_measured`。
+    expect(total).toBe(MODE === "real_provider" ? cases.length : cases.length * 2)
     expect(new Set(runs.map((entry) => entry.caseId)).size).toBe(cases.length)
   })
 
-  it("报告按层计数，且层计数之和等于题数", () => {
+  it("报告按层计数，每一层都覆盖到全部题", () => {
     const mode = MODE === "real_provider" ? report.realProvider : report.deterministicLocal
     const byLayer = Object.values(mode.byLayer).reduce((sum, count) => sum + count, 0)
 
-    expect(byLayer).toBe(cases.length)
+    expect(byLayer).toBe(MODE === "real_provider" ? cases.length : cases.length * 2)
+    if (MODE !== "real_provider") {
+      expect(mode.byLayer.extraction).toBe(cases.length)
+      expect(mode.byLayer.witness).toBe(cases.length)
+    }
   })
 
+  it("**见证层读数（求解率）**：verified / unverified / no_witness 各多少（**不是门禁**，是读数）", () => {
+    if (MODE !== "deterministic_local") return
+    const witness = report.deterministicLocal.runs.filter((entry) => entry.layer === "witness")
+    const count = (status: string) => witness.filter((entry) => entry.status === status).length
+    const verified = count("verified_instance")
+
+    console.log(
+      `BENCHMARK_WITNESS verified=${verified} unverified=${count("unverified_instance")} ` +
+        `no_witness=${count("no_witness")} error=${count("error")} ` +
+        `solveRate=${(verified / witness.length).toFixed(3)}`
+    )
+    // 计数必须盖满：四种结局不重不漏（否则"求解率"的分母是编出来的）。
+    expect(verified + count("unverified_instance") + count("no_witness") + count("error")).toBe(witness.length)
+  })
   it("打印报告（`--silent=false` 就是给它看的）", () => {
     console.log(`BENCHMARK_REPORT ${JSON.stringify({ mode: MODE, seed: SEED, cases: cases.length, report }, null, 2)}`)
     expect(report).toBeDefined()
@@ -116,8 +163,14 @@ describe(`benchmark 运行入口（mode=${MODE}）`, () => {
   it("deterministic_local：跑的是抽取层，每一轮的证据都非空", () => {
     if (MODE !== "deterministic_local") return
     for (const entry of report.deterministicLocal.runs) {
-      expect(entry.layer).toBe("extraction")
-      expect(["extracted", "partial", "empty", "error"]).toContain(entry.status)
+      /**
+       * **两层各自在自己的词表里** —— 判据的来源就是 `report.ts` 的 `BENCHMARK_STATUSES_BY_LAYER`，
+       * 这里只是按层取那一份（不是又写一套）。加了见证层之后，"本地只跑抽取层"这句话就不再成立了。
+       */
+      const allowed = entry.layer === "extraction"
+        ? ["extracted", "partial", "empty", "error"]
+        : ["verified_instance", "unverified_instance", "no_witness", "error"]
+      expect(allowed, `${entry.caseId} / ${entry.layer}`).toContain(entry.status)
       expect(entry.evidence.length).toBeGreaterThan(0)
     }
   })
