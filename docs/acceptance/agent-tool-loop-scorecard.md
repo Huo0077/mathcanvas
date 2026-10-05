@@ -47,7 +47,7 @@ Date: October 4, 2026. Status: geometry-instance verification added; real-provid
 
 | Scope | Status | Evidence |
 |---|---|---|
-| Deterministic code/tests | Measured (2026-10-05) | **303 Vitest files, 3529 passed, 1 todo**; `typecheck` and `lint` exit 0; Rust **236 passed / 3 ignored** (5 runs: 4 clean, 1 red — located to `tests/secrets.rs:149`, read-after-write returns `None`, root cause at the OS/`keyring` boundary); full e2e (2 runs: one **186/0**, one **185/1** on `three-canvas-size.spec.ts:72`, which passes 3/3 alone) |
+| Deterministic code/tests | Measured (2026-10-05) | **303 Vitest files, 3529 passed, 1 todo**; `typecheck` and `lint` exit 0; Rust **236 passed / 3 ignored** (5 runs: 4 clean, 1 red — located to `tests/secrets.rs:149`, read-after-write returns `None`, root cause at the OS/`keyring` boundary, **not fixed**); full e2e **186 passed** in 4 consecutive runs after fixing the projection helper to wait for the camera to settle (before: 4 of 6 runs failed the same `data-preview-hovering` assertion) |
 | Offline deterministic pass@1 | Measured **4/8** | `npm run eval:agent`, 2026-09-29 — passes: `create-cube`, `create-tetrahedron`, `reject-degenerate-cube`, `visual-fit-drawn` |
 | Offline deterministic pass@3 | Measured **4/8** | same run, 3 independent trials per task |
 | Offline tool selection | Measured **45/45** | same run |

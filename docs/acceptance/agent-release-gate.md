@@ -26,7 +26,7 @@
 
 | # | 计划原文 | 状态 | 判据 / 证据 |
 | --- | --- | --- | --- |
-| 1 | 类型检查、Agent 核心测试、Web Agent 测试、Rust provider 测试必须通过 | ⚠️ **有两条已定位、但未修复的不稳定** | 原始读数在 `docs/current-status.md` §一「2026-10-05 N6 门禁复跑」与紧随其后的「门禁不稳定：定位记录」：单测 **303 文件 / 3529 通过 + 1 todo / 0 失败**、`typecheck` exit 0、`lint` 0 error / 13 warning；全量 e2e **两次里一次 186 通过 / 0 失败、一次 185 通过 / 1 失败**（`three-canvas-size.spec.ts:72`，单独跑 3 次全过）；`test:rust` **五次里一次红**，已定位到 `tests/secrets.rs:149`（`put` 成功后 `with_secret` 读回 `None`）。**两条都不许读成全绿。** |
+| 1 | 类型检查、Agent 核心测试、Web Agent 测试、Rust provider 测试必须通过 | ⚠️ **e2e 那条已修；`test:rust` 那条仍未修** | 读数在 `docs/current-status.md` §一「2026-10-05 N6 门禁复跑」与其后两节：单测 **303 文件 / 3529 通过 + 1 todo / 0 失败**、`typecheck` exit 0、`lint` 0 error / 13 warning。**e2e**：原来 6 次全量里 4 次红在同一条断言（`data-preview-hovering`），已修（`e2e/helpers/projection.ts` 的 `projectWorldPoint` 现在先等相机停稳），**修后连续 4 次全量全绿 186 passed**。**`test:rust`**：五次里一次红，已定位到 `tests/secrets.rs:149`（`put` 成功后 `with_secret` 读回 `None`），根因在 OS / `keyring` 边界，**未修**。 |
 | 2 | 代表任务 pass@1 和语义验证率达到预先约定阈值 | ❌ **未测（无数据）** | 离线读数由 `npm run eval:agent` 打印：**pass@1 4/8、语义验证 4/8**，模式是 `deterministic_local`。**真实 provider 的 pass@1 仍未测过**，所以"预先约定阈值"没有可对照的基线 |
 | 3 | 不允许出现模型可见但 dispatcher 未实现的工具 | ✅ 已守住（测试） | `agentReleaseGate.test.ts`：模型面发布的**每一个只读工具**都必须有真实执行路径；模型面上**唯一**的非只读工具是 `plan.set_plan`（精确集合，多一个就红）；`draft.confirm_commit` / `draft.stage_actions` / `draft.discard` / `draft.verify` **一个都不许**出现在模型面上 |
 | 4 | 不允许出现未验证却声称完成的运行记录 | ✅ 已守住（测试） | `agentReleaseGate.test.ts` + `verification/completionGate.ts`：声明了验收条件的运行，报告不构成证据时**不得到达 `awaiting_confirmation`** |

@@ -32,11 +32,29 @@
 
 | 门禁 | 现象 | 定位 | 判据与边界 |
 | --- | --- | --- | --- |
-| 全量 e2e | **两次里一次红，且红的不止一条** | 第一次红的：`three-canvas-size.spec.ts:72`（单独跑 3 次全过 12/12）。**第二次红的换了另一条**：`geometry3d-section.spec.ts:42` → **第 59 行 `await expect(scene).toHaveAttribute("data-preview-hovering", "true")`**，实收 `"false"`（5 秒轮询超时） | **这一条这次拿到了证据**（见下）。两条都是 `toHaveAttribute` 超时 —— 说明这不是"某一条用例写坏了"，而是一类**时序**问题 |
+| 全量 e2e | **已修**（原来 6 次全量里 4 次红） | 四次现场**全部是同一条断言**：`data-preview-hovering` 期望 `"true"` 实收 `"false"`（`three-canvas-size.spec.ts:90` 与 `geometry3d-section.spec.ts:59` 是同一条） | 机制见下；**修后连续 4 次全量全绿**（186 passed，无 flaky） |
 | `test:rust` | 五次里一次红 | **`tests/secrets.rs:149` → `lends_the_secret_to_a_closure_and_nothing_else`** | 单跑 `--test secrets` **15 次里红 1 次**；断言是 `left: None` / `right: Some(11)` —— **`put` 成功之后 `with_secret` 立刻读回"没有这一条"**。后端实现（`src/secrets/windows.rs`）把 `keyring::Error::NoEntry` 映射成 `Ok(None)`、其余错误映射成 `Backend`，所以是**操作系统在写入成功后立即报了"没有这条凭据"**：根因在 OS / `keyring` 边界，**不在我们的分支里** |
 
 > **为什么不"顺手加一次重试"把红压下去**：那会把一条**真实的不稳定**藏起来，而这个组件是**密钥库** —— 它报"没有配置"时，调用方会去发一次注定 401 的请求。要么找到根因，要么如实留着这条记录。
 > **下一次要做的**：让 e2e 失败时的产物**在失败当次就留住**（Playwright 的 `error-context.md` 会被下一次运行清掉），至少先拿到**是哪一条断言**。
+
+**2026-10-05 e2e 抖动：修掉了（一条断言、一个机制、一处调用点）**
+
+- **收敛成一条**：用上面那个配方又跑了 3 次全量，**又红 2 次、都在 `three-canvas-size.spec.ts:72`**；
+  把这次留下的 `error-context.md` 读出来才发现，它和在 `geometry3d-section.spec.ts:42` 红的那次
+  **是同一条断言** —— `data-preview-hovering` 期望 `"true"` 实收 `"false"`。
+  **四次现场（含 round-12 那次硬失败）全部是同一条**，失败那一刻场景读数也一致
+  （`data-preview-count="1"`、`data-scene-syncs="5"`）：**预览在，指针却不在它上面。**
+- **机制（推断，与全部证据一致）**：`animateToFit` 约 250ms，在 rAF 里逐帧插值整份相机状态；
+  而 `e2e/helpers/projection.ts` 的 `projectWorldPoint` **一上来就读** `data-camera-*`。
+  动画没跑完时读到的是中途值，等 `mouse.move` 执行时相机又动过 —— 投影出的屏幕点不再对应那个世界点，
+  而预览命中区只有那圈边界虚线，差一点就是空。指针事件不会再发一次。
+  同类竞态本仓修过一次（`geometry3d.spec.ts:277`）。
+- **修法（单源）**：把"等相机停稳"放进 `projectWorldPoint` **内部**，判据是**连续两次读数一致**
+  （不写死 sleep），与既有的 `settleCamera` / `settledTarget` 同一套口径；画布盒子的读取挪到 settle **之后**。
+- **证据（是证据，不是证明）**：修前 **6 次全量里 4 次红**这条断言；修后 **连续 4 次全量、4 次全绿**
+  （`186 passed`、无 flaky）。若真实故障率仍是 4/6，"连绿 4 次"的概率约 **1.2%**。
+  **我没有直接录到"投影那一刻相机还在动"的那一帧**，所以说的是"与全部证据一致"，不是"已证明"。
 
 **2026-10-05 e2e 抖动：拿到了断言现场与复现配方**
 

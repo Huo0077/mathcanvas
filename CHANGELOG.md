@@ -5,6 +5,38 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-05 —— N6 第五步：**修掉** e2e 抖动（追到一条断言、一个机制、一处调用点）
+
+- **先把它收敛成一条**：上一轮我记的是"两处抖动"。这一轮用固化的配方跑了 3 次全量，
+  **又红 2 次，而且都在 `three-canvas-size.spec.ts:72`**；把那份 `error-context.md` 读出来之后才发现，
+  它和在 `geometry3d-section.spec.ts:42` 红的那次**是同一条断言**：
+  `await expect(scene).toHaveAttribute("data-preview-hovering", "true")`，实收 `"false"`。
+  四次现场（含 round-12 那次硬失败）**全部是同一条**，失败那一刻场景读数也一致：
+  `data-preview-count="1"`、`data-scene-syncs="5"` —— **预览在，指针却不在它上面**。
+- **机制（推断，与全部证据一致）**：自动取景 `animateToFit` 约 250ms，在 rAF 里**逐帧插值整份相机状态**；
+  而 `e2e/helpers/projection.ts` 的 `projectWorldPoint` **一上来就读** `data-camera-*`。
+  动画没跑完时读到的是**中途**的方位角/距离，等 `mouse.move` 执行时相机又动过了 ——
+  投影出来的屏幕点不再对应那个世界点，而预览的命中区只有那圈**边界虚线**，差一点就是空。
+  指针事件不会再发一次，所以属性一直停在 `false`；产品侧的悬停自愈也救不回来（它按最后指针位置重算，
+  而那个位置本身就是错的）。这与本仓已经修过一次的那条同类竞态是同一个东西
+  （`geometry3d.spec.ts:277`：测试读了取景动画中途的读数）。
+- **修法（一处，且是"单源"）**：把"等相机停稳"放进 `projectWorldPoint` **内部** ——
+  判据用**连续两次相机读数一致**（不写死 sleep），与 `three-orbit-tracks.spec.ts` /
+  `three-intersection-previews.spec.ts` 的 `settleCamera`、`geometry3d.spec.ts` 的 `settledTarget`
+  **同一套口径**；并把画布盒子的读取挪到 settle **之后**。
+  **为什么放在公共 helper 里而不是各个 spec 里**：这类坑已经咬过两次，而"每个调用点自己记得先 settle"
+  正是它复发的原因。代价是每个用例第一次投影多等一次采样间隔。
+- **证据（是证据，不是证明）**：修前** 6 次全量 e2e 里 4 次**红在这条断言（另 2 次全绿）；
+  修后**连续 4 次全量、4 次全绿**（`186 passed`，无 flaky、无产物）。
+  若真实故障率仍是 4/6，"连绿 4 次"的概率约 **1.2%**。
+  **措辞纪律**：机制是**推断**出来的 —— 我**没有**直接录到"投影那一刻相机还在动"的那一帧，
+  所以说的是"与全部证据一致"，不是"已证明"。
+- **仍然没修的一条**：`test:rust` 的 `tests/secrets.rs:149`（`put` 成功后 `with_secret` 读回 `None`）——
+  根因在 OS / `keyring` 边界，**一个字都没动**。
+- **门禁与记分卡同步**：`agent-release-gate.md` 第 1 条由"两条已定位、但未修复的不稳定"改成
+  "**e2e 那条已修并有前后计数**，剩下 `test:rust` 那条仍未修"；`agent-tool-loop-scorecard.md` 的读数列同步。
+- **读数**：`typecheck` exit 0（含 `e2e/` 的 `tsc`）；`lint` exit 0（0 error / 13 warning，与基线逐条相同）。
+
 ## 2026-10-05 —— N6 第四步：e2e 抖动拿到了**断言现场**与**复现配方**
 
 - **为什么值得单独一轮**：上一轮只做到"两条红定位到用例名"，而 e2e 那条连**是哪一条断言**都没拿到。
