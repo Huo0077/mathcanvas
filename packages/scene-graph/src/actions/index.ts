@@ -913,7 +913,22 @@ function compileCreateBoundPoint(action: Extract<DraftAction, { actionId: "dynam
     return { operations: [], diagnostics: [diagnostic(actionKey, "parameter_not_found", `no parameter ${inputs.parameterId}`)], aliasToId: {} }
   }
 
-  const label = inputs.label === undefined ? {} : { label: inputs.label }
+  /**
+   * **没给点名时，用草稿内别名当它的名字**（2026-10-05，用户第二次现场）。
+   *
+   * 现场：模型只填了 `alias: "O"`（草稿内的引用名）、**没填 `label`**（题面里的点名）。
+   * 那样建出来的点坐标完全正确，却是个**无名点** —— 于是核验按点名找不到它，报
+   * `diagram_condition_unverified`（放行但标记未核验），最后卡在确认门禁上。
+   *
+   * `alias` 本来就是模型给这个对象起的名字（`solid` 用 `vertexNames` 给顶点命名的道理一样），
+   * 所以这里退回别名，而不是留一个没名字、也没法被题面点到的点。
+   * 显式 `label` 仍然优先。
+   *
+   * 注：这一条默认**没有**写进登记表的 `defaults` —— 那里的策略闭集（`PlanDefaultPolicy`）里
+   * 没有"从别的字段派生"这一档（`infer_from_facts` 是从**用户的话**里读），加它要牵动审计与
+   * 提示词渲染。**这个缺口记在 CHANGELOG 里**。
+   */
+  const label = { label: inputs.label ?? inputs.alias }
   if (PLANAR_HOST_TYPES.has(host.type)) {
     const id = context.idAllocator.allocate("point", inputs.alias)
     const binding = { kind: "onPath", pathId: hostId, parameter: inputs.parameter, ...(inputs.parameterId === undefined ? {} : { parameterId: inputs.parameterId }) }

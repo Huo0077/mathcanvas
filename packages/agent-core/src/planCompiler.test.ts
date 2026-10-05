@@ -804,4 +804,28 @@ describe("按点名指定棱（hostEdge）", () => {
     expect(compiled.ok).toBe(false)
     expect(JSON.stringify(compiled.diagnostics)).toContain("duplicat")
   })
+
+  /**
+   * **只给 `alias`、没给 `label`，也算它的点名**（2026-10-05 用户**第二次**现场）。
+   *
+   * 第二现场与第一次**逐字相同**，但模型这次暂存了 4 笔（还调了 `scene.inspect`）——
+   * 说明它确实在建 O，只是把名字填进了 `alias`（草稿内的引用名）、**没填 `label`**（题面里的点名）。
+   * 实测：那样建出来的点坐标**完全正确**（BD 的中点），但**没有名字**，于是编译器报
+   * `diagram_condition_unverified`（**放行但标记未核验**），最后卡在确认门禁上 ——
+   * 与用户 trace 里"校验成功 → cannot confirm"逐字吻合。
+   *
+   * `alias` 本来就是模型给这个对象起的名字；`solid` 用 `vertexNames` 给顶点命名的道理一样。
+   */
+  it("只给 `alias` 没给 `label` ⇒ 它也算这个点的点名（不许落到「无名点」）", () => {
+    const aliasOnly = {
+      actionId: "dynamic.create_bound_point", actionKey: "bound-O", factIds: [],
+      inputs: { alias: "O", host: { scope: "draft", alias: "solid" }, hostEdge: { from: "B", to: "D" }, parameter: 0.5 }
+    }
+    const compiled = compilePlan(rawPlan([TETRA_NAMED, aliasOnly]), context())
+
+    expect(compiled.ok, JSON.stringify(compiled.diagnostics)).toBe(true)
+    // 今天这里会剩一条 `diagram_condition_unverified` —— 那正是用户看到的"题设尚未核验"。
+    expect(compiled.diagnostics.filter((entry) => entry.code.startsWith("diagram_condition"))).toEqual([])
+    expect(positionOf(compiled, "O")).toEqual({ x: 0, y: 0, z: 0 })
+  })
 })
