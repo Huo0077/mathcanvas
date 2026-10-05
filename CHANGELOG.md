@@ -5,6 +5,31 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-05 —— N6 第八步：并发正确性专项（唯一一处两把锁嵌套，此前**从未被执行到**）
+
+- **为什么值得做**：`next-phase-flag-and-dependency-review.md` 的第四节原来自认"**没有做过并发
+  正确性的专项审查**"。而这一节里有两个线程边界（几何 Worker、tokio 回环代理），"没审"是一个
+  悬着的风险，不是一句免责声明。
+- **审出来的结论（三条，都有代码位置）**：
+  1. **IPC 命令全是同步的**（`commands/*.rs` 里没有 `async fn`），所以托管状态用
+     `std::sync::Mutex` 是对的，代码里也写明了理由；**同步命令 + std Mutex + 无 `.await`**
+     是自洽的 —— `MutexGuard` 不是 `Send`，"跨 await 持锁"那类错误在 async 上下文里编译不过。
+  2. **唯一一处两把锁嵌套**在 `proxy/server.rs` 的 `RunRegistry::touch`：先拿 `order`、淘汰时再拿
+     `runs`，**顺序恒为 `order → runs`**；两个调用点（`cancel_handle` / `record`）都在
+     `drop(runs)` **之后**才调它 —— 那两行 `drop` 是**锁序的一部分，不是多余的清理**。
+  3. **本批查出的真缺口**：`touch` 只在**超过 `MAX_TRACKED_RUNS`（16）**时才去拿第二把锁，而
+     **此前没有任何用例把注册表推过上限** —— 也就是说**那段嵌套从未被执行到**。
+- **本批补上的守卫**：新增两条用例（`evicting_past_the_cap_keeps_the_registry_bounded` /
+  `recording_past_the_cap_also_evicts`）把淘汰分支跑到，并在两处 `drop(runs)` 上写明了不变量。
+  **守卫是确定性的，而且验证过它会响**：`std::sync::Mutex` 不可重入，删掉任一处 `drop(runs)`
+  会**同线程自锁**。实测——删掉第一处后跑那条用例：**90 秒未结束、被强杀**（挂住即红）；
+  恢复后全量 `test:rust` **238 通过 / 0 失败**（原 236 + 新增 2）。
+- **仍然没做的（写进文档，不是漏写）**：几何 Worker 那一侧**没有**做同样的"共享可变状态"清点
+  （它是消息传递、没有共享锁，但这份结论**没有**写成清单），也没有任何并发压测 ——
+  **"没有共享锁"是读代码得出的，不是机器挡住的。**
+- **只改 Rust 源码与文档**：`server.rs` 的改动是**纯新增**（+63 / −0），
+  `typecheck` / `lint` 不受影响（Rust 不在它们的范围内）。
+
 ## 2026-10-05 —— N5 第三步：补上"**这个后端接上了没有**"这一环（上一版漏掉的），并给出可跑的 smoke
 
 - **上一版漏了什么（自查发现的真缺口）**：`verifyProofArtifact` 只校验产物的**形状、版本与绑定** ——

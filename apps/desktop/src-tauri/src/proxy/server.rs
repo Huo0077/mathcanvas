@@ -161,6 +161,13 @@ impl RunRegistry {
         }
         let cancel = Arc::new(RunCancel::new());
         runs.insert(run_id.to_string(), RunRecord { events: VecDeque::new(), finished: false, truncated: false, cancel: cancel.clone() });
+        /**
+         * **这一行是锁序的一部分，不是多余的清理。**
+         *
+         * `touch` 里先拿 `order`、淘汰时再拿 `runs`（顺序恒为 `order → runs`）。
+         * `std::sync::Mutex` **不可重入**，所以这里**必须先放开 `runs`**，否则同一条线程会自锁。
+         * 下面 `evicting_*` / `recording_*` 两条用例就是这条不变量的守卫。
+         */
         drop(runs);
         self.touch(run_id);
         cancel
@@ -185,6 +192,13 @@ impl RunRegistry {
         if finished {
             record.finished = true;
         }
+        /**
+         * **这一行是锁序的一部分，不是多余的清理。**
+         *
+         * `touch` 里先拿 `order`、淘汰时再拿 `runs`（顺序恒为 `order → runs`）。
+         * `std::sync::Mutex` **不可重入**，所以这里**必须先放开 `runs`**，否则同一条线程会自锁。
+         * 下面 `evicting_*` / `recording_*` 两条用例就是这条不变量的守卫。
+         */
         drop(runs);
         self.touch(run_id);
     }
@@ -454,4 +468,53 @@ pub fn read_bounded(body: &Bytes) -> Result<&[u8], String> {
         return Err(format!("the body is {} bytes; the limit is {BODY_LIMIT}", body.len()));
     }
     Ok(body.as_ref())
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /**
+     * **淘汰分支的守卫，同时也是锁序不变量的守卫。**
+     *
+     * `touch` 是**唯一**两把锁会嵌套的地方（`order → runs`），而它只在**超过
+     * `MAX_TRACKED_RUNS`** 时才去拿第二把锁 —— 也就是说：**不把注册表推过上限，
+     * 这段嵌套根本不会被执行到**（这也是它此前一直没有用例的原因）。
+     *
+     * `std::sync::Mutex` **不可重入**：两个调用点那两行 `drop(runs)` 一旦被当成多余的清理删掉，
+     * `touch` 就会在同一条线程上二次加锁 —— **必然死锁**，而不是偶发竞态。所以这两条用例
+     * 给的是**确定性**守卫（卡住即红），不需要靠并发去撞。
+     */
+    #[test]
+    fn evicting_past_the_cap_keeps_the_registry_bounded() {
+        let registry = RunRegistry::new();
+        for index in 0..(MAX_TRACKED_RUNS + 3) {
+            registry.cancel_handle(&format!("run-{index}"));
+        }
+
+        assert!(!registry.has("run-0"), "最旧的应当已被淘汰");
+        assert!(registry.has(&format!("run-{}", MAX_TRACKED_RUNS + 2)), "最近的必须还在");
+        assert_eq!(
+            registry.order.lock().expect("the run order is not poisoned").len(),
+            MAX_TRACKED_RUNS,
+            "`order` 必须是有界的"
+        );
+    }
+
+    /// `record` 是另一个会走到 `touch` 的入口 —— 同样要能把注册表推过上限。
+    #[test]
+    fn recording_past_the_cap_also_evicts() {
+        let registry = RunRegistry::new();
+        for index in 0..(MAX_TRACKED_RUNS + 2) {
+            registry.record(&format!("r{index}"), &[], false);
+        }
+
+        assert!(!registry.has("r0"), "最旧的应当已被淘汰");
+        assert_eq!(
+            registry.runs.lock().expect("the run registry is not poisoned").len(),
+            MAX_TRACKED_RUNS,
+            "`runs` 必须是有界的"
+        );
+    }
 }

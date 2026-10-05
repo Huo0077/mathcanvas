@@ -77,8 +77,25 @@ node scripts/toolchain.mjs cargo metadata --format-version 1 --manifest-path app
   刻意**没有**给任何 `package.json` 加依赖，只在临时目录里试装。
 - **线程边界有两处**：① `apps/web/src/agent/geometryWorkerHost.ts` 的几何 Worker
   （懒建单例、`pagehide` 终止、建不起来时**如实降级**到就地编译并有独立用例）；
-  ② Rust 侧的 tokio 多线程运行时（回环代理）。两处都有实现记录，但**没有做过"并发正确性"
-  的专项审查**（例如竞态压测）—— 这也是没测，不是通过。
+  ② Rust 侧的 tokio 多线程运行时（回环代理）。
+- **并发正确性专项审查（2026-10-05 补上，这一节现在有结论）**：
+  - **IPC 命令全是同步的**（`apps/desktop/src-tauri/src/commands/*.rs` 里没有 `async fn`），
+    所以托管状态用 `std::sync::Mutex` 是对的，代码里也写明了理由（"这些是同步的 SQLite 调用，
+    快且不阻塞在 IO 上"）。**同步命令 + std Mutex + 无 `.await`** 是个自洽的组合：
+    `MutexGuard` 不是 `Send`，所以"跨 await 持锁"那类错误在 async 上下文里根本编译不过。
+  - **唯一一处两把锁嵌套**：`proxy/server.rs` 的 `RunRegistry::touch`（先拿 `order`、淘汰时再拿
+    `runs`，顺序恒为 `order → runs`）。两个调用点（`cancel_handle` / `record`）都在
+    `drop(runs)` **之后**才调它 —— 那两行 `drop` 是**锁序的一部分，不是多余的清理**。
+  - **本批补上的守卫**：`touch` 只在**超过 `MAX_TRACKED_RUNS`（16）**时才去拿第二把锁，而
+    **此前没有任何用例把注册表推过上限** —— 也就是说那段嵌套**从未被执行到**。新增两条用例
+    （`evicting_past_the_cap_keeps_the_registry_bounded` / `recording_past_the_cap_also_evicts`）
+    把它跑到，并在两处 `drop(runs)` 上写明了不变量的名字。
+  - **守卫是确定性的，而且验证过它会响**：`std::sync::Mutex` 不可重入，所以删掉任一处 `drop(runs)`
+    会**同线程自锁**（必然死锁，不是偶发竞态）。实测：删掉第一处后跑那条用例 →
+    **90 秒未结束、被强杀**（挂住即红）；恢复后全量 `test:rust` **238 通过 / 0 失败**。
+  - **仍然没做的**：几何 Worker 那一侧**没有**做同样的"共享可变状态"清点（它是消息传递、
+    没有共享锁，但这份结论**没有**写成清单）；也没有任何并发压测。
+    **"没有共享锁"是好消息，可它是我读代码得出的，不是机器挡住的。**
 
 ## 五、顺手查出的两处依赖归位问题（未修）
 
@@ -94,7 +111,8 @@ node scripts/toolchain.mjs cargo metadata --format-version 1 --manifest-path app
 
 - **不是法律意见**：Rust 那节（§三）是"每个 crate 声明的 `license` 字段"的统计，没有逐 crate 读
   LICENSE 正文、没有 per-crate 的 SPDX 择一解析、没有复核 `bundled` SQLite 的版本与声明。
-- 任何"并发正确性"结论（§四）。
+- **并发**：Rust 侧有过一轮专项（锁序 + 淘汰分支的守卫，见 §四），但**几何 Worker 那侧的共享可变
+  状态没有写成清单**，也没有任何压测 —— 那部分仍然只能读作"我读过、没发现"，不是"已证"。
 - 三个已实现开关的**浏览器**用例（§一）—— 其中 `constrainedDrag` 还卡在"没有产品入口能把它
   打开"，所以连正/反例都写不出来。
 - `openProblemCompiler` / `proofExport` 的真实依赖（N4 / N5 实现时才有）。
