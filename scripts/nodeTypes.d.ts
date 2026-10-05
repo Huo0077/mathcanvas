@@ -47,8 +47,14 @@ declare module "node:fs" {
    */
   export function existsSync(path: string): boolean
   /**
-   * `scripts/agent-benchmark` 的用例用它读随仓库走的题集（`cases.jsonl`）。
-   * 用**相对 cwd 的路径**而不是 `URL`：那套用例跑在 jsdom 环境里，`import.meta.url`
+   * 读仓库里的文件。当前用户是 `scripts/docs-consistency/*.test.ts`（计划 / `current-status.md` /
+   * 三张能力表）与 `scripts/dependency-licences/licences.test.ts`（许可快照与 `Cargo.lock`）。
+   *
+   * **不再有 benchmark 的用户**：题集（原 `scripts/agent-benchmark/cases.jsonl`）在 N4a 搬进了
+   * `packages/agent-core/src/benchmark/cases.ts`，因为应用侧是浏览器、不能 `node:fs` ——
+   * 所有相关用例改成从包根 **import** 那份文本常量，这里不再为它留一个理由。
+   *
+   * 用**相对 cwd 的路径**而不是 `URL`：这些用例跑在 jsdom 环境里，`import.meta.url`
    * 不是 `file:` 协议，传 URL 给 `readFileSync` 会抛 ERR_INVALID_URL_SCHEME。
    */
   export function readFileSync(path: string, encoding: "utf8"): string

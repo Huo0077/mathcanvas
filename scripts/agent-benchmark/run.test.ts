@@ -1,10 +1,5 @@
-import { readFileSync } from "node:fs"
-
-import { parseObligationIR, searchWitnessForPrompt } from "@draw/agent-core"
+import { BENCHMARK_CASES_JSONL, buildBenchmarkReport, EXTRACTION_RESIDUE_STATUS, MAX_ROUNDS_PER_CASE, parseBenchmarkDataset, parseObligationIR, searchWitnessForPrompt, type BenchmarkRun, type BenchmarkRunStatus } from "@draw/agent-core"
 import { describe, expect, it } from "vitest"
-
-import { parseBenchmarkDataset } from "./dataset"
-import { buildBenchmarkReport, EXTRACTION_RESIDUE_STATUS, MAX_ROUNDS_PER_CASE, type BenchmarkRun, type BenchmarkRunStatus } from "./report"
 
 /**
  * **benchmark 真正的运行入口**（实施计划 N4）。
@@ -23,9 +18,16 @@ import { buildBenchmarkReport, EXTRACTION_RESIDUE_STATUS, MAX_ROUNDS_PER_CASE, t
  *
  * 那是**基线**，不是门禁。把当前读数钉成阈值，会让"今天测得差"变成"明天必须犯同样的错"。
  * 抽取率由报告如实报出来，阈值等有真实 provider 基线之后再谈（N4 的后半段）。
+ *
+ * ## scripts 侧已经不是题集的持有者，只是它的调用方之一（子任务 N4a）
+ *
+ * 这个文件过去用 `readFileSync` 读 `cases.jsonl`。现在题集住在包里
+ *（`packages/agent-core/src/benchmark/cases.ts` 的 `BENCHMARK_CASES_JSONL`），
+ * 因为**应用侧是浏览器、不能 `node:fs`**，而"随仓库走的题集"必须有**一处**定义
+ *（两份必然分叉：bench 说 21 条、应用说 8 条，而两边都自称跑过了）。
+ * 所以这里与 CLI **共用同一份 import**，而不是继续读一份本地副本。
  */
 
-const DATASET = "scripts/agent-benchmark/cases.jsonl"
 /** 固定种子：同一份题集必须给同一份读数（报告要可重现）。 */
 const SEED = 7
 
@@ -33,7 +35,7 @@ const MODE: "deterministic_local" | "real_provider" = process.env.BENCHMARK_MODE
   ? "real_provider"
   : "deterministic_local"
 
-const cases = parseBenchmarkDataset(readFileSync(DATASET, "utf8"), "cases.jsonl")
+const cases = parseBenchmarkDataset(BENCHMARK_CASES_JSONL, "cases.jsonl")
 
 /** 抽取层的三种结局：一条都没抽出来 / 有抽出来的也有残留 / 子句都被处理。 */
 function extractionStatus(extracted: number, residue: number): BenchmarkRunStatus {
@@ -284,7 +286,7 @@ describe(`benchmark 运行入口（mode=${MODE}）`, () => {
   it("每一条题都至少留下一条痕迹（给定义或 residue）—— 让静默丢句再也过不去", () => {
     // 这条不变量写在 `diagramObligations.ts` 自己的注释里（"新写法必须显形为 unverified，
     // 不许把非空题面静默变成空通过"），而题集里**真的**有一条曾经整句消失
-    //（"保持六条棱长始终相等"）。放在题集这一层挡：以后往 `cases.jsonl` 里加的新写法，
+    //（"保持六条棱长始终相等"）。放在题集这一层挡：以后往题集（`packages/agent-core/src/benchmark/cases.ts`）里加的新写法，
     // 只要静默丢掉就会红在这里，而不必等谁去逐条读归因。
     for (const entry of cases) {
       const ir = parseObligationIR(entry.prompt)

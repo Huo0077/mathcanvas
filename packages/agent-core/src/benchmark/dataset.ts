@@ -1,3 +1,4 @@
+import { BENCHMARK_CASES_JSONL } from "./cases"
 import schema from "./dataset.schema.json"
 import { assertNoSecrets } from "./redaction"
 
@@ -8,6 +9,12 @@ import { assertNoSecrets } from "./redaction"
  *
  * 类别清单、必需字段、允许的 workspace 全部**从 schema 文件读**，不在这个文件里再写一遍。
  * 两处各写一份必然分叉，而分叉的表现是"schema 说合法、校验器说非法"这类最难查的不一致。
+ *
+ * ## 题集也只有一处：`cases.ts` 的 `BENCHMARK_CASES_JSONL`
+ *
+ * 格式仍然是 JSONL，但载体是**能被 import 拿到的常量** —— 应用侧是浏览器，不能 `readFileSync`。
+ * 于是"随仓库走的题集"在 CLI 与应用之间是同一份（见 `parseBenchmarkCases`），
+ * 而不是"文件一份 + 包里再抄一份"。
  *
  * ## 为什么坏输入是**抛**而不是返回错误数组
  *
@@ -116,4 +123,17 @@ export function categoryCoverage(cases: readonly BenchmarkCase[]): { category: s
     const count = cases.filter((entry) => entry.category === category).length
     return { category, count, covered: count > 0 }
   })
+}
+
+/**
+ * **随仓库走的那份题集**（`BENCHMARK_CASES_JSONL`），解析成 `BenchmarkCase[]`。
+ *
+ * 它存在的理由是**浏览器**：应用侧不能 `readFileSync`，但"随仓库走的题集是哪一份"这件事
+ * 必须有**一处**定义。CLI 与应用都走这个函数，于是"包内一份 + scripts 里再抄一份"不可能发生。
+ *
+ * 不是缓存也不是常量数组：它就是 `parseBenchmarkDataset(BENCHMARK_CASES_JSONL)` ——
+ * 校验规则、错误类型与错误文案**一条都不绕过**（坏题集在这里也照样抛 `BenchmarkDatasetError`）。
+ */
+export function parseBenchmarkCases(where = "cases.jsonl"): BenchmarkCase[] {
+  return parseBenchmarkDataset(BENCHMARK_CASES_JSONL, where)
 }

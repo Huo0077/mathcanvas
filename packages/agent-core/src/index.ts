@@ -1,5 +1,14 @@
 export * from "./actionSchemas"
 export * from "./actionIds"
+/**
+ * **benchmark 的题集与报告契约**（子任务 N4a 从 `scripts/agent-benchmark/` 搬进来）。
+ *
+ * 它进包根是因为**应用侧要用同一份**：`scripts/` 不是工作区，应用拿不到它，
+ * 于是"bench 的 21 条"与"应用内那套旧 8 题"曾经是两份真相。`./benchmark` 的题集是
+ * **文本常量**（不是读文件），所以浏览器也能 import —— 见
+ * `apps/web/src/agent/fixtures/benchmarkContract.test.ts` 那条应用侧判据。
+ */
+export * from "./benchmark"
 export * from "./budget"
 export * from "./capabilities"
 export * from "./claimEvidence"

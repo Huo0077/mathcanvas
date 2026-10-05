@@ -1,10 +1,16 @@
-import { readFileSync } from "node:fs"
-
 import { describe, expect, it } from "vitest"
 
-import { BENCHMARK_CASE_REQUIRED_FIELDS, BENCHMARK_CATEGORIES, BenchmarkDatasetError, categoryCoverage, parseBenchmarkDataset } from "./dataset"
-import { BenchmarkReportError, buildBenchmarkReport } from "./report"
-import { findSecrets } from "./redaction"
+import {
+  BENCHMARK_CASE_REQUIRED_FIELDS,
+  BENCHMARK_CASES_JSONL,
+  BENCHMARK_CATEGORIES,
+  BenchmarkDatasetError,
+  BenchmarkReportError,
+  buildBenchmarkReport,
+  categoryCoverage,
+  findSecrets,
+  parseBenchmarkDataset
+} from "@draw/agent-core"
 
 /**
  * **N4 的 RED 条件**（实施计划 Phase N4）：
@@ -86,18 +92,25 @@ describe("benchmark 题集", () => {
     expect(() => parseBenchmarkDataset('{"id":"a"}')).toThrow(BenchmarkDatasetError)
   })
 
-  it("随仓库走的那份题集本身合法，而且**七类全覆盖**", () => {
+  it("随仓库走的那份题集本身合法，而且**七类各三条**（21 条）", () => {
     /**
-     * 用**相对 cwd 的路径**而不是 `import.meta.url`：这套测试跑在 jsdom 环境里
-     *（`vitest.config.ts` 把 `environmentOptions.jsdom.url` 设成 `http://localhost/`），
-     * 于是 `import.meta.url` 不是 `file:` 协议，`readFileSync` 会直接抛 ERR_INVALID_URL_SCHEME。
-     * vitest 的 cwd 是仓库根。
+     * **这条读的是"真的题面文本"**：题集现在住在包里（`cases.ts` 的 `BENCHMARK_CASES_JSONL`，
+     * 子任务 N4a 从 `scripts/agent-benchmark/cases.jsonl` 搬进来），而且**只有那一份** ——
+     * 解析走的仍然是 `parseBenchmarkDataset`（校验规则一条都不绕过），
+     * 所以这条判据咬的是"随仓库走的那份题集本身"，不是一份再抄出来的副本。
+     *
+     * 为什么不再 `readFileSync`：应用侧是浏览器，不能 `node:fs`；题集必须能被 **import** 拿到，
+     * 否则"bench 的 21 条"与"应用内那套旧 8 题"就会永远是两份真相。
      */
-    const raw = readFileSync("scripts/agent-benchmark/cases.jsonl", "utf8")
-    const cases = parseBenchmarkDataset(raw, "cases.jsonl")
+    const cases = parseBenchmarkDataset(BENCHMARK_CASES_JSONL, "cases.jsonl")
 
-    expect(cases.length).toBeGreaterThanOrEqual(BENCHMARK_CATEGORIES.length)
+    // 七类 × 3 = 21：**每一格**都点名数出来（"至少覆盖到"挡不住"某一类只有一条"）。
+    expect(cases).toHaveLength(21)
+    expect(categoryCoverage(cases).map((entry) => [entry.category, entry.count]))
+      .toEqual(BENCHMARK_CATEGORIES.map((category) => [category, 3]))
     expect(categoryCoverage(cases).filter((entry) => !entry.covered)).toEqual([])
+    // 题面是真的读进来了（不是空字符串占位）：每条都要有非空 prompt。
+    expect(cases.every((entry) => entry.prompt.trim().length > 0)).toBe(true)
   })
 
   it("schema 与校验器的必需字段是同一份（校验器直接从 schema 读）", () => {
