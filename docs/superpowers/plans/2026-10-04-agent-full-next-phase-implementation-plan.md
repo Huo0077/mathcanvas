@@ -335,6 +335,23 @@ export type DragSolveResult =
 - [ ] 运行：`npm.cmd run typecheck`、`npm.cmd test`、`npm.cmd run lint`、`npm.cmd run build --workspace @draw/web`、`npm.cmd run test:e2e -- --workers=3`、`npm.cmd run test:rust`、`npm.cmd run test:perf`、`npm.cmd run eval:agent`。
 - [ ] **提交检查点：** `git commit -m "docs(agent): close next-phase release gate"`。
 
+> **N6 执行记录（2026-10-05，只完成第一步）：** 第 1 条（五个 flag 已由 N1 创建）本来就打了勾，
+> 其余**一条还没勾**。这一批交付的是**核对记录**：
+> `docs/acceptance/next-phase-flag-and-dependency-review.md` —— 五个开关的读取点 / 单元 /
+> 浏览器 / 关闭回退逐格实测；JS 运行依赖逐包读 `license`（全宽松，无 copyleft）；
+> 无任何 WASM 依赖；Rust 侧只列**直接**依赖并明说**没做**传递依赖的许可扫描。
+>
+> **与计划的偏差（有据）：** 计划把"每个 flag 有单元、浏览器和回退用例"当成一条，实测下来
+> **回退用例齐、浏览器用例一个都没有**；而 `openProblemCompiler` / `proofExport` 是**占位**
+> （零读取点），给它们补浏览器用例是没有意义的 —— 所以那两格记"不适用"，而不是补一堆空测试。
+> 另外顺手查出两处依赖归位问题（`@vitejs/plugin-react` 在 `apps/web` 的 `dependencies`、
+> 根 `package.json` 多余 `three`），**未修**（动依赖要单独一批验证）。
+>
+> **还没做的（本阶段剩下的全部）：** 第 2 条三个已实现开关的浏览器用例（`constrainedDrag` 还卡在
+> "没有产品入口能打开它"）；第 3 条进度文档与发布门禁的统一回填（`agent-release-gate.md`、
+> `agent-tool-loop-scorecard.md` 尚未按 N3/N4 的现状更新）；第 4 条那一整串门禁命令
+> （`build` / `test:e2e` 全量 / `test:rust` / `test:perf` / `eval:agent`）本阶段未复跑。
+
 ## 计划自审与执行纪律
 
 - 每个 Phase 开始前核对上游接口和当前调用点；不得只创建新目录而不接入 `planCompiler → draftStore → Worker → HostBridge`。

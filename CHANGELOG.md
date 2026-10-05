@@ -5,6 +5,29 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-05 —— N6 第一步：五个开关的覆盖矩阵 + 依赖 / 许可证审查
+
+- **为什么先做这个**：N6 是"把前五阶段的能力安全地从实验变成可发布能力"，它的前置事实是：
+  这五个开关**到底有没有被覆盖**、依赖里**有没有许可风险**。这两件事不需要任何决定，只需要去查 ——
+  查完才知道 N6 还差什么。
+- **新增** `docs/acceptance/next-phase-flag-and-dependency-review.md`，逐格写实测：
+  - **五个开关**：三个已实现的（`obligationIR` / `witnessSearch` / `constrainedDrag`）都有
+    "关闭回退"的证据，其中 `witnessSearch` 最硬 —— `planCompiler.offPath.golden.test.ts` 断言
+    关闭时**逐字节相同**；**五个都没有浏览器用例**；`openProblemCompiler` / `proofExport` 是
+    **占位**（只有开关表与默认值，**没有任何读取点** —— 那是刻意的，N6 不该给占位开关补用例）。
+  - **JS 运行依赖逐个读过 `license` 字段**（版本是实测装到的）：`three` / `react` / `react-dom` /
+    `zustand` / `pdf-lib` / `robust-predicates` / `@tauri-apps/api` / `@vitejs/plugin-react` ——
+    全是 MIT / Apache-2.0 / Unlicense，**没有 copyleft**。
+  - **没有任何 WASM 依赖**（实测：所有非 `node_modules` 的 `package.json` 里依赖名中不含
+    `wasm` / `z3` / `solver`）；N2 的后端 spike 刻意**没有**给任何 `package.json` 加依赖。
+- **顺手查出两处依赖归位问题（未修）**：`apps/web` 把 `@vitejs/plugin-react` 列在 `dependencies`
+  （构建期插件应在 `devDependencies`）；根 `package.json` 有一个多余的 `three`。
+  **没有改**：动依赖牵动 `package-lock.json` 与安装结果，要单独一批验证，不塞进审查里顺手做。
+- **这一份明确**没有**回答的**（写在文档第六节，不是漏写）：Rust **传递**依赖的许可证扫描
+  （需要 `cargo-deny` 之类，本机没跑 —— 所以那一节**只是清单，不是结论**）；并发正确性专项；
+  三个开关的浏览器用例；依赖体积与供应链（postinstall、lock 完整性）。
+- **只改文档**，无可执行产物，因此没有新的门禁读数。
+
 ## 2026-10-05 —— N4 第一步：真实 provider benchmark 的**题集与报告契约**（还没有跑任何 provider）
 
 - **为什么先做这个**：这个项目里被反复提起、又始终没有的一次测量，就是"真实 provider 在开放题上

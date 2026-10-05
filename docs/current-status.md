@@ -398,7 +398,7 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
 3. **N3：动态拖动保持约束**（自由度、过约束、无解、事务和恢复）—— 并承接 N2 留下的两件事：`planCompiler ↔ solver/witnessSearch` 的模块环（断法：给搜索器注入物化端口）与"**真正算出**自由度"（需先把 `ConstraintType` 扩到能表达线⊥面与角度）。**状态（2026-10-05）：已开工三步** —— 内核的点投影、拖动层的自由度/冗余诊断、**拖动接线的决策层**（`apps/web/src/constrainedDrag3.ts` + `App.tsx` 的 3D `onDragEnd`）都已落地并复核；**但开关缺省关，产品行为未变**，也**没有把开关打开的产品入口**，所以浏览器正/反例仍未达成。上面两件事里，**"真正算出自由度"只解决了拖动层那一半**（文档层的 `witnessSearch.degreesOfFreedom` 仍是 `null`），**模块环仍未动**。
 4. **N4：开放题编译与真实 Provider Benchmark** —— 并承接 N2 的浏览器端验收（flag 打开时救援路径的端到端）与 flag 状态进入 trace/benchmark 记录。
 5. **N5：形式证明出口**（实例、采样、形式证明严格分级）。
-6. **N6：feature flag、依赖/许可证/线程/WASM 审查、发布门槛与维护收口**。
+6. **N6：feature flag、依赖/许可证/线程/WASM 审查、发布门槛与维护收口**。**状态（2026-10-05）：已开工第一步** —— 五个开关的覆盖矩阵、JS 运行依赖的许可证清单、WASM/线程边界都查过并写进 [`docs/acceptance/next-phase-flag-and-dependency-review.md`](acceptance/next-phase-flag-and-dependency-review.md)。**那一份里明确写了没回答的**：Rust **传递**依赖的许可扫描（未跑 `cargo-deny`，所以那节只是清单）、并发正确性专项、三个开关的浏览器用例、依赖体积与供应链。另查出两处依赖归位问题（`apps/web` 的 `@vitejs/plugin-react` 放错在 `dependencies`、根 `package.json` 多余一个 `three`），**未修**。
 7. 其他尚未启动的产品探索：题目截图识图、GeoGebra `.ggb` 互操作、平面/函数题型逐题补缺、3D 画面进入 HTML。
 
 ### F. N1/N2 的已知边界与 park 项（**不是缺陷，是如实记录**）
