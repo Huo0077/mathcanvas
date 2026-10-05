@@ -5,6 +5,36 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-05 —— benchmark 题集与报告契约搬进 `agent-core`（一份定义，CLI 与应用共用）
+
+- **为什么搬**：`scripts/` **不是工作区**（根 `package.json` 的 `workspaces` 只有 `apps/*` + `packages/*`），
+  所以**应用侧（浏览器）拿不到它**。后果此前一直挂着：应用内那次真实 provider 评测跑的是自己那套旧
+  **8 题**夹具（`AGENT_TASK_FIXTURES`），而 `bench:agent` 跑的是 **21 条** —— 两边都自称"跑过了"，
+  **数字不可比**。搬进包后，题集与报告契约在 CLI 与应用之间是**同一份**。
+- **搬了什么（零改动的搬运，用 blob 哈希核对而非 diff 推断）**：`report.ts`（314 行）/ `redaction.ts`（66 行）/
+  `dataset.schema.json`（41 行）三份 **blob 级完全相同**地移到 `packages/agent-core/src/benchmark/`；
+  `dataset.ts` 只 **+20 行**（`import`、`parseBenchmarkCases()`、注释）、**零删除** ⇒ 校验规则一条未动；
+  新增 `benchmark/index.ts`（**逐项 re-export**）与包根 `export * from "./benchmark"`。`runner.mjs` 未动。
+- **题集载体**：`scripts/agent-benchmark/cases.jsonl` 删除，改为 `cases.ts` 的 `BENCHMARK_CASES_JSONL`
+  **文本常量** —— 格式仍是 JSONL（`parseBenchmarkDataset` 逐字不变地解析），载体换成"能被 import 拿到的东西"
+  只因**浏览器不能 `node:fs`**。原文由 git blob 生成、不手抄。
+- **"一个字节都没变"是复算的**：那段字面量解析回文本后与 `e96d0f5:scripts/agent-benchmark/cases.jsonl`
+  的 blob 逐字节比对 —— **5488 字节 / sha256 `7bc7b49c074b85f3fc09cbbf91a1eb1a64883ce9078424741ee2d047af54769e`
+  / 无 CR（只有 LF）**，双侧一致；`cases.ts` 注释自报的 blob 与摘要也被独立复算对上。
+- **读数不变**：`npm run bench:agent` exit 0 / 13 通过，`cases=21 covered=14 empty=7 error=0`、
+  `BENCHMARK_PREMISE obligations=24 residue=9 rate=0.727`、`BENCHMARK_EXTRACTION covered=14/21 rate=0.667`、
+  见证层 `solveRate=0.048` —— 与改前**逐字相同**。
+- **新增应用侧判据**（`apps/web/src/agent/fixtures/benchmarkContract.test.ts`，5 条，**只 import 包、不读文件**）：
+  21 条 = 七类各 3、**题集冻结指纹**、词表/状态常量可用、报告契约可调用并正确分组、报告错误类型文案未变。
+- **两处"宣称"被换成"会咬人"**（都做了字节级备份 + 还原，变异完文件 sha256 与备份逐字节一致）：
+  1. 这条判据的第一版是**恒真式**（断言 `parseBenchmarkCases()` 与
+     `parseBenchmarkDataset(BENCHMARK_CASES_JSONL)` 相等，而前者就是后者的定义，**不可能红**），
+     注释却宣称它能挡"两份副本分叉"，而**根本没有第二份** —— 换成**冻结指纹**后，删一个字符会红
+     （`expected 5485 to be 5488`）、同字节长度换一个标点也会红（`da626ef5…` ≠ `7bc7b49c…`）；
+  2. `scripts/nodeTypes.d.ts` 里 `readFileSync` 的理由写的是"`scripts/agent-benchmark` 的用例用它读题集"，
+     那个用法已被本次搬迁删掉 ⇒ 注释改成点名当前真实用户，**声明本身保留**（还有人需要）。
+- **本批没有解决的**：应用内评测**仍然**跑那 8 条夹具（接线是下一步）；`run.test.ts` 的 `real_provider`
+  仍整批 `not_measured`；`parseBenchmarkCases()` **未加缓存**（刻意不引入第二份可漂移的东西，调用方应只调一次）。
 ## 2026-10-05 —— 第二次现场：模型只填了 `alias`、没填 `label`，于是那个点**没有名字**
 
 - **现场**：用户重建桌面端后再跑同一题，**报错逐字相同**（"题设尚未核验：O为 BD的中点：点名缺失…"），

@@ -24,13 +24,13 @@
 | --- | --- | --- | --- | --- |
 | 类型检查 | `npm.cmd run typecheck` | 全部工作区 + `e2e/` + `scripts/`，无错 | 0 | **2026-10-05 复核** |
 | Lint | `npm.cmd run lint` | **0 error / 13 warning**（与基线逐条相同） | 0 | **2026-10-05 复核** |
-| 单测（全库） | `npm.cmd test -- --maxWorkers=2 --reporter=dot` | **315 文件 / 3627 通过 + 1 todo / 0 失败**。上一版这条记的 **313 / 3620 已经过期**：`e773301` 之后又多了两个测试文件（`providerAgentEval.test.ts`、`ProviderEval.test.tsx`）。**另如实记一次抖动**：独立复核时同一条命令在本机跑出 **1 条 5 秒超时**（`apps/web/src/persistence/fileExports.test.ts` 的 CAD 导出用例）—— 该文件**未被本批任何提交改动**（最后动它是 2026-10-02 的 `fc4df43`），**单跑 9/9 通过、那条用例本身 308 ms**，属**负载敏感的既有抖动**：按本仓口径**超时那次既不算绿也不算红**，但它确实存在、值得记 | 0（抖动那轮为 1） | **2026-10-05 复核（含一次抖动）** |
+| 单测（全库） | `npm.cmd test -- --maxWorkers=2 --reporter=dot` | **317 文件 / 3645 通过 + 1 todo / 0 失败**（**2026-10-05 N4a 后实测**）。**与上一版记的 315 / 3627 的差额不能全记在 N4a 头上**：文档那个 315 本身已是旧读数 —— 我在 BASE `e96d0f5` 上直接数出 **316** 个被 vitest 收录的测试文件（`packages|apps|scripts` 下的 `*.test.ts(x)`），HEAD `f315cf6` 是 **317**，**唯一新增**是 N4a 那条应用侧判据 `apps/web/src/agent/fixtures/benchmarkContract.test.ts`（+1 文件 / +5 用例）；此外 `scripts/agent-benchmark` 的用例由 34 条增至 40 条（`benchmark.test.ts` 27 + `run.test.ts` 13）。其余差额来自这两个读数之间的其它提交，**不是本批**。**另如实记一次抖动**：独立复核时同一条命令在本机跑出 **1 条 5 秒超时**（`apps/web/src/persistence/fileExports.test.ts` 的 CAD 导出用例）—— 该文件**未被本批任何提交改动**（最后动它是 2026-10-02 的 `fc4df43`），**单跑 9/9 通过、那条用例本身 308 ms**，属**负载敏感的既有抖动**：按本仓口径**超时那次既不算绿也不算红**，但它确实存在、值得记 | 0（抖动那轮为 1） | **2026-10-05 复核（含一次抖动）** |
 | Rust provider 测试 | `npm.cmd run test:rust` | **238 通过 / 3 ignored / 0 失败**（16 个二进制） | 0 | **2026-10-05 复核** |
 | 全量 e2e | `npm.cmd run test:e2e` | **194 通过 / 0 失败**（1.1 min；含 `next-phase-flag-entry.spec.ts` 3 条与 `agent-constrained-drag.spec.ts` **5 条** = 正/反例 2 + **N3 出口的三条：过约束拒绝 / 冲突恢复 / 一步撤销**） | 0 | **2026-10-05 复核（N3 出口收尾后）** |
 | 性能基线 | `npm.cmd run test:perf` | 9/9；`drag/300-frames` **479–488 ms（三次采样：479.2 / 487.7 / 486.5）** —— 比第 37 轮记录的 **686–711 ms** 区间明显低（同一台机器、同一批用例；性能与机器负载相关，故两说并存） | 0 | **2026-10-05 复核（三次采样）** |
 | 生产构建（web） | `npm.cmd run build --workspace @draw/web` | **成功**（3.92 s）；入口 chunk **1,803.76 kB / gzip 527.62 kB**（比上轮 1,801.18 kB **+2.6 kB**：新增设置组件与偏好模块）；产物落 `build-check/`（已 gitignore，构建后工作树干净） | 0 | **2026-10-05 复核** |
 | Agent 评测 | `npm.cmd run eval:agent` | `deterministic_local`：pass@1 **4/8**、pass@3 **4/8**、工具选择 45/45、工具错误 3/45。报告现在多打两行：`provider          not measured`（还都是离线那条腿）与 `average cost      not measured`（**没有价目表**）。**真实 provider 的 harness 已落地**（应用内：设置 → 真实 provider 评测），**但一次还没跑** | 0 | **2026-10-05 复核**（**未接真实模型**，不是模型准确率） |
-| Agent benchmark | `npm.cmd run bench:agent` | 抽取层：`cases=21 covered=14 empty=7 error=0`；`BENCHMARK_PREMISE obligations=24 residue=9 rate=0.727`；`BENCHMARK_EXTRACTION covered=14/21 rate=0.667`。**见证层（第 48 轮新增）**：`BENCHMARK_WITNESS verified=1 unverified=20 no_witness=0 error=0 solveRate=0.048`；`BENCHMARK_JUDGEABILITY supported=21 unsupported=3 ambiguous=0 totalObligations=24`；`BENCHMARK_WITNESS_CODES {"requires-candidates":7,"unsupported-shape":9,"no-candidate-constructed":4,"unsupported-base-shape":4,"witness-search":20}`（**第 51 轮**） | 0 | **第 48 轮** |
+| Agent benchmark | `npm.cmd run bench:agent` | 抽取层：`cases=21 covered=14 empty=7 error=0`；`BENCHMARK_PREMISE obligations=24 residue=9 rate=0.727`；`BENCHMARK_EXTRACTION covered=14/21 rate=0.667`。**见证层（第 48 轮新增）**：`BENCHMARK_WITNESS verified=1 unverified=20 no_witness=0 error=0 solveRate=0.048`；`BENCHMARK_JUDGEABILITY supported=21 unsupported=3 ambiguous=0 totalObligations=24`；`BENCHMARK_WITNESS_CODES {"(no-code)":1,"requires-candidates":7,"unsupported-shape":9,"no-candidate-constructed":4,"unsupported-base-shape":4,"witness-search":20}`（**2026-10-05 N4a 后实测**。上一版这行**少记了 `"(no-code)":1` 这一档** —— 那是见证层"给了结论但没留下原因文本"的兜底证据，**实际输出里一直有**（BASE 时的捕获也含它），所以这是**重新测量并改正旧读数**，不是本批引入的差异；同一次实测里 `cases=21 covered=14 empty=7 error=0` 等三条读数与改前**逐字相同**） | 0 | **2026-10-05 N4a 后实测** |
 | 证明边界 smoke | `npm.cmd run proof:smoke` | 7 通过 / 0 失败；`PROOF_BACKENDS {"wired":[],"reviewed":0}`；**勾股裁决后新增**：`goalsWithoutAnyRoute: []`、`pythagoreanRoute: {"kind":"via-inference","from":"perpendicular"}` | 0 | **2026-10-05 复核** |
 | N3 定向测试（**计划点名的那七件**） | `vitest run constraints / constraints3d / planar-constraints / reactive/constraints / operations / patches / scene-store` | **7 文件 / 241 通过 / 0 失败** | 0 | **第 31 轮** |
 
@@ -109,7 +109,7 @@
 
 > **题集从 7 条（每类 1 条）扩到 21 条（每类 3 条）**。归因是**机器展开**的（`BENCHMARK_REPORT` 逐条带 `caseId`/`status`/`evidence`）：`extracted` 14 条、`partial` 2 条（都是二面角/线段比，留下 residue）、`empty` 7 条且**全部带 residue**。
 > **14 条新用例里没有一条"整句凭空消失"** —— 包括我**特意**按同一类写法挑的两条（`dynamic-drag-midpoint`「让 M 始终是 AB 的中点」、`dynamic-animate-perpendicular`「让 PA 始终垂直于平面 ABCD」：关系词在句子里、但状语把匹配隔开）。它们都留下了 residue，说明上一轮那个修法确实在管用。
-> **新增一条题集级不变量用例**：每一条题都必须至少留下一条给定义或一条 residue（用的就是跑读数时的同一个 `parseObligationIR`，不另写判断）。以后往 `cases.jsonl` 加新写法，静默丢掉会红在**题集**这一层。
+> **新增一条题集级不变量用例**：每一条题都必须至少留下一条给定义或一条 residue（用的就是跑读数时的同一个 `parseObligationIR`，不另写判断）。以后往**题集**加新写法，静默丢掉会红在**题集**这一层。（**2026-10-05 更正**：题集已从 `scripts/agent-benchmark/cases.jsonl` 搬进 `packages/agent-core/src/benchmark/cases.ts` —— 格式仍是 JSONL，载体换成"能被 import 拿到的文本常量"，因为应用侧是浏览器、不能 `node:fs`；所以"往题集里加写法"现在是改那个常量，不是改一个 `.jsonl` 文件。）
 > **一条不可比性（必须说清）**：`covered` 从 `5/7`（71%）到 `14/21`（67%）**不是下降，是不可比** —— 题集换了，新加的三类是**刻意偏难**的（`unsupported-expression` / `dynamic-request` / `dihedral-or-ratio`，现在占 9 条）。**这两个数字只记录、不比较。**
 > **顺带一条正面的**：`contradictory-three-lengths`（同一条线段被赋三个不同长度）**没有**被静默合并 —— 读出 3 条 `fixedLength`。
 
@@ -640,15 +640,15 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
 - **（已闭环，留档）「自动取景动画会覆盖用户拖动」那个窗口已修**（2026-10-02，提交 `fd234fd`）：过去 `cancelFitAnimation()` 只在副作用清理（卸载）里被调用，用户拖动不取消进行中的取景，于是"换文档触发取景"之后在 **250 ms 窗口内开始拖**，拖动结束后剩下的帧会把用户刚拖出来的视角覆盖回去。现在 `pointerdown` 与滚轮都会先取消它。**顺带补了可观测状态** `data-fit-animation`（`running` / `done` / `cancelled`）—— 因为这条缺口的第一版用例是**假绿**的（触发条件搞错了：`shouldAutoFit` 只在换文档或内容出界时取景），现在用例要先抓到 `running` 才继续。证据：新增 `threeSceneCamera.test.ts`（该模块此前无测试，3/3，含"取消后不再排帧"）+ `geometry3d-drag.spec.ts` 一条 e2e（变异：去掉取消 → 期望 cancelled 实收 done，红）。
 - **引用进度档案一律用小节标题，不写行号**：`project-progress.md:<行号>` 形式的引用会随任何一次编辑静默失效（本阶段就发生过三处，已全部改成按标题引用）。
 
-## 下一轮 Agent 方向（**N1、N2、N3 已交付并复核（N3 出口已达成）**；N4 五步；N5 四步；N6 十五步）
+## 下一轮 Agent 方向（**N1、N2、N3 已交付并复核（N3 出口已达成）**；N4 到第五步（题集与报告契约已进包；`real_provider` 与那次付费运行仍未做）；N5 四步；N6 十五步）
 
 这次用户要求把原先暂缓的能力全部纳入路线，已形成完整设计。**N1 与 N2 已交付并复核**（都在默认关闭的 flag 之后，默认行为未变），其余尚未实现：
 
 1. **N1 统一数学状态（已完成）**：Obligation / Constraint / Claim IR，统一题设、目标、自由点、证据和 solver 状态。提交 `acd3bd5` / `2d62c4d` / `b5b33f9` / `f997b3f`；**在 flag 之后，默认关闭**。
 2. **N2 解析构造与见证搜索（已完成）**：题面点名 + 关系（**无显式坐标**）时，系统自己解析构造候选（棱锥/棱柱）、按 seed/上限/预算做有界搜索，并**只把通过同一个核验器的候选**接进编译路径。提交 `c2314c9`..`e3fdb61`（内核）、`8648a13`..`ab05add`（搜索）、`ca1d0b2`..`9c5ae2f`（接线 + spike）。**`witnessSearch` 缺省关**；关闭时编译结果与 `4707b64` 逐字节相同。后端的可行性评估（Z3/NLSAT）只有**一次运行**的实测数字与原始产物，**没有接入产品**。
 3. **N3 动态拖动保持**：约束进入文档状态，拖动变成临时约束求解和事务提交，显示自由度与冲突原因。
-   **已开工（2026-10-05，五步 + 入口）**：内核的点投影、拖动层的自由度/冗余诊断、**拖动接线的决策层** `apps/web/src/constrainedDrag3.ts`（`App.tsx` 的 3D `onDragEnd` 已接上）、可证的矛盾判据、线状平行/垂直的投影都已落地并复核。**开关缺省关，关着时逐字走旧路径**，所以产品行为未变。**产品入口已通**（设置 → 实验性功能 → 约束拖动），浏览器正/反例已有（`e2e/agent-constrained-drag.spec.ts`）。**还没做**：`inconsistent`/`timeout` 的可证判据（矛盾目前只报"没能同时满足"）、**过约束拒绝/冲突恢复/一步撤销的浏览器用例**（现在只有单元证据）、拖动连带的撤销/重做与 inspector 提示。**秩已与 `reportFreeDegrees` 合流**（共用内核 `linear-algebra.ts` 的 `rankRows`），但两者的"可动集"口径按设计保持不同。
-4. **N4 开放题理解与真实 Provider Benchmark**：自然语言先编译为 Obligation IR，再规划/求解/核验；建立真实 provider 的 pass@1、pass@3、成本、延迟和人工可读性基线。
+   **已开工（2026-10-05，五步 + 入口）**：内核的点投影、拖动层的自由度/冗余诊断、**拖动接线的决策层** `apps/web/src/constrainedDrag3.ts`（`App.tsx` 的 3D `onDragEnd` 已接上）、可证的矛盾判据、线状平行/垂直的投影都已落地并复核。**开关缺省关，关着时逐字走旧路径**，所以产品行为未变。**产品入口已通**（设置 → 实验性功能 → 约束拖动），浏览器正/反例已有（`e2e/agent-constrained-drag.spec.ts`）。**还没做**：`inconsistent`/`timeout` 的可证判据（矛盾目前只报"没能同时满足"）、拖动连带的撤销/重做与 inspector 提示。（**2026-10-05 更正**：这里原来还把"**过约束拒绝/冲突恢复/一步撤销的浏览器用例**"列在"还没做"里 —— 那三条**已在 N3 出口收尾时交付**，就是 `e2e/agent-constrained-drag.spec.ts` 的 5 条用例。）**秩已与 `reportFreeDegrees` 合流**（共用内核 `linear-algebra.ts` 的 `rankRows`），但两者的"可动集"口径按设计保持不同。
+4. **N4 开放题理解与真实 Provider Benchmark**：自然语言先编译为 Obligation IR，再规划/求解/核验；建立真实 provider 的 pass@1、pass@3、成本、延迟和人工可读性基线。**已开工（2026-10-05，到第五步）**：题集（21 条）与报告契约已在 `packages/agent-core/src/benchmark/`，**CLI 与应用共用同一份**（提交 `f315cf6`；题集文本逐字节未变、`bench:agent` 读数逐字不变）。**还没做**：把应用内评测真正接到这 21 条上、`real_provider` 模式、以及那一次**付费运行**（**已裁决**：契约新增 `planning` 层，端到端记"计划是否被编译接受"；规模 3 题 × 1 轮，且需用户显式确认后才发起）。
 5. **N5 形式证明出口**：先支持少量短目标，区分 verified_instance、sampled、formally_proved，证明后端独立校验证书。
 
 完整设计：`docs/superpowers/specs/2026-10-04-agent-full-next-phase-design.md`；实施计划：`docs/superpowers/plans/2026-10-04-agent-full-next-phase-implementation-plan.md`。外部项目调研：`docs/research/2026-10-04-github-project-survey.md`。

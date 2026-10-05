@@ -120,7 +120,7 @@
 
 **所以"离线求解率 4.8%"这件事已经读完：**它不是"搜索差"、不是"判据不够"、也不是"构造器写坏了"，
 而是**首批设计覆盖面**决定的。**真正待裁决的是"要不要扩覆盖面、以及怎么扩才不违反那条纪律"** —— 而设计本身已经警告过硬扩的风险（把题悄悄改成构造器认得的形状）；
-  `real_provider` 整批 `not_measured`（**2026-10-05 更正：不是"适配器没写"** —— **生产侧的 provider 适配器早就有了**：`apps/desktop/src-tauri/src/providers/adapter.rs`（621 行：拼请求 / 解响应 / 借凭据 / 传输 / 取消 / 解码，含 SSRF 守卫），且**有一次真实往返记录**（2026-09-29，DeepSeek `deepseek-chat`，`tools` 通道验过 5 个模型可见工具）。**"走哪条通道"这个决定已经做了（方案 C）**：不是让脚本自己发请求（那要在 TS 里再写一遍三家方言的拼请求与解码 = **第二条调用路径**，还要把密钥交给脚本进程），而是**把 harness 搬进应用内** —— 已经落地的是**评测那一侧**（`runProviderAgentEval` + 设置面板，**两段式**、会花钱）。**仍然缺的是 benchmark 那一侧的 `real_provider` 模式**：`scripts/agent-benchmark/` 那 21 条题今天只发 `not_measured`，而它的题集与报告契约在 **workspace 之外**，要搬进包里才能给应用共用）
+  `real_provider` 整批 `not_measured`（**2026-10-05 更正：不是"适配器没写"** —— **生产侧的 provider 适配器早就有了**：`apps/desktop/src-tauri/src/providers/adapter.rs`（621 行：拼请求 / 解响应 / 借凭据 / 传输 / 取消 / 解码，含 SSRF 守卫），且**有一次真实往返记录**（2026-09-29，DeepSeek `deepseek-chat`，`tools` 通道验过 5 个模型可见工具）。**"走哪条通道"这个决定已经做了（方案 C）**：不是让脚本自己发请求（那要在 TS 里再写一遍三家方言的拼请求与解码 = **第二条调用路径**，还要把密钥交给脚本进程），而是**把 harness 搬进应用内** —— 已经落地的是**评测那一侧**（`runProviderAgentEval` + 设置面板，**两段式**、会花钱）。**仍然缺的是 benchmark 那一侧的 `real_provider` 模式**：`scripts/agent-benchmark/` 那 21 条题今天只发 `not_measured`，而它的题集与报告契约在 **workspace 之外**，要搬进包里才能给应用共用）（**2026-10-05 后半句已解决**：题集与报告契约**已搬进** `packages/agent-core/src/benchmark/`（提交 `f315cf6`，一份定义、CLI 与应用共用，题集文本逐字节未变、`bench:agent` 读数逐字不变）——**仍然缺的是把应用内评测真正接到这 21 条上、并跑那一次**：`scripts/agent-benchmark/` 的 `real_provider` 模式今天仍整批 `not_measured`）
   成本 / 延迟 / 人工可读性同样没有。**不要把 N4 的第一步读成"开放题门槛已过"。**
 
 **N5 形式证明出口：只有"边界"，没有任何后端 —— 所以这一条门槛今天**无法判定**。**

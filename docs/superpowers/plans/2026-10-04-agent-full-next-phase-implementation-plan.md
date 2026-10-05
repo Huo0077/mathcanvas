@@ -1,6 +1,6 @@
 # 下一阶段 Agent 完整升级实施计划
 
-> **状态：N1、N2 已实施并复核；N3 已实施并复核（出口已达成，五条浏览器用例全绿）；N4/N5/N6 进行中。** N1 提交 `acd3bd5` / `2d62c4d` / `b5b33f9` / `f997b3f`；N2 提交 `c2314c9`…`9c5ae2f`；N3 的收尾提交 `d7fe702` + `2dd89ab`；N4/N5/N6 的进度逐条见各阶段执行记录（`2026-10-05` 那一批以 `git log` 为准）。本计划对应 `docs/superpowers/specs/2026-10-04-agent-full-next-phase-design.md`；每个阶段必须先写 RED，再实现 GREEN，再跑全量门禁，最后单独提交。
+> **状态：N1、N2 已实施并复核；N3 已实施并复核（出口已达成，五条浏览器用例全绿）；N4 已把题集与报告契约搬进 `packages/agent-core/src/benchmark/`（一份定义，CLI 与应用共用，提交 `f315cf6`）——`real_provider` 与那次付费运行仍未做；N5/N6 进行中。** N1 提交 `acd3bd5` / `2d62c4d` / `b5b33f9` / `f997b3f`；N2 提交 `c2314c9`…`9c5ae2f`；N3 的收尾提交 `d7fe702` + `2dd89ab`；N4/N5/N6 的进度逐条见各阶段执行记录（`2026-10-05` 那一批以 `git log` 为准）。本计划对应 `docs/superpowers/specs/2026-10-04-agent-full-next-phase-design.md`；每个阶段必须先写 RED，再实现 GREEN，再跑全量门禁，最后单独提交。
 
 **Goal:** 在 `b1ee3d3` 的静态题设核验之上，逐步实现约束求解、动态拖动保持、开放题编译、真实 provider 评测和形式证明出口。
 
@@ -43,7 +43,7 @@
 | 草稿报告接线 | `apps/web/src/agent/draftStore.ts` | 现有调用点：约 358–360 重新核验草稿候选并保存报告 |
 | 草稿/Worker | `apps/web/src/agent/draftStore.ts`、`workerContracts.ts`、`geometryCompileStrategy.ts` | 同步/Worker 传递 IR、候选、报告和失败原因 |
 | 动态拖动 | `packages/scene-graph/src/`、`apps/web/src/threeScene*`、`apps/web/src/agent/agentRuntime.ts` | 约束进入文档；拖动进入事务 |
-| Provider 评测 | `scripts/agent-benchmark/` | JSONL 题集、脱敏、真实/离线模式分离 |
+| Provider 评测 | `packages/agent-core/src/benchmark/`（题集与报告契约；CLI 入口仍在 `scripts/agent-benchmark/`） | JSONL 题集、脱敏、真实/离线模式分离。**2026-10-05 更正**：题集与报告契约原在此列写 `scripts/agent-benchmark/`，但 `scripts/` 不是工作区、应用拿不到，已搬进包（见 N4 第五步） |
 | 证明出口 | `packages/agent-core/src/proof/` | proof artifact schema 与外部后端 adapter |
 
 ## Feature flags（N1 先完成，后续阶段不得绕过）
@@ -363,6 +363,59 @@ export type DragSolveResult =
 >
 > **仍然没解决的**：`real_provider` 仍整批 `not_measured`（**2026-10-05 更正：不是"适配器没写"** —— **生产侧的 provider 适配器早就有了**：`providers/adapter.rs`（621 行，含 SSRF 守卫），且**有一次真实往返记录**（2026-09-29，DeepSeek `deepseek-chat`）。**"走回环代理还是自己发请求"这个决定做了（方案 C：把 harness 搬进应用内）**，而且**评测那一侧已经落地**（`runProviderAgentEval` + 设置面板，两段式、会花钱、密钥不出凭据库）—— 但**一次都还没跑过**，所以还没有数字。**缺的仍然包括 benchmark 那一侧的 `real_provider` 模式**：那 21 条题的题集与报告契约在 **workspace 之外**，要先搬进包里才能给应用共用）
 > 属独立一批）；报告里仍然没有 pass@1 / pass@3 / 成本 / 延迟 / 人工复核率（**但"求解率"第 48 轮有了**：离线见证层 `solveRate=0.048`；原来把它记成"缺一个定义"是错的）。
+
+> **第五步（2026-10-05）：题集与报告契约搬进包里（一份定义，CLI 与应用共用）。** 提交 `f315cf6`。
+> 这一批**不加新能力**，只把"一份定义"交出去 —— 但它是 N4 后半段的前提，因为
+> `scripts/` **不是工作区**（根 `package.json` 的 `workspaces` 只有 `apps/*` + `packages/*`），
+> 应用侧（浏览器）**拿不到它**：于是应用内那次真实 provider 评测用的是自己那套旧 **8 题**夹具
+> （`AGENT_TASK_FIXTURES`，逐条点过：`create-cube` / `create-tetrahedron` / `section-after-solid` /
+> `modify-section` / `reject-degenerate-cube` / `visual-fit` / `visual-fit-drawn` /
+> `recover-invalid-reference`），而 `bench:agent` 跑的是这 **21 条** —— 两边都自称"跑过了"，
+> 数字却不可比。
+> - **搬了什么**：`report.ts`（314 行）/ `redaction.ts`（66 行）/ `dataset.schema.json`（41 行）
+>   **blob 级零改动**地搬进 `packages/agent-core/src/benchmark/`（跨改名用 **blob 哈希**核对：
+>   三份 base/head **完全相同**，不是靠 diff 的 `0 0` 推断）；`dataset.ts` 只 **+20 行**
+>   （import、`parseBenchmarkCases()`、注释）、**零删除** ⇒ 校验规则一条未动；新增
+>   `benchmark/index.ts`（**逐项 re-export**，不 `export *`）与包根 `export * from "./benchmark"`。
+>   CLI 入口 `runner.mjs` **没动**（它只 spawn vitest 跑 `run.test.ts`）。
+> - **题集载体**：`scripts/agent-benchmark/cases.jsonl` 删除，改成 `cases.ts` 的
+>   `BENCHMARK_CASES_JSONL` **文本常量**（格式仍是 JSONL，`parseBenchmarkDataset` **逐字不变**地解析它）
+>   —— 理由只有一个：**浏览器不能 `node:fs`**，而"随仓库走的那份题集"必须**只有一处**定义。
+>   原文由 git blob 生成、**不手抄**。
+> - **"一个字节都没变"是复算出来的，不是宣称**：用仓外脚本把那段字面量解析回文本，与
+>   `e96d0f5:scripts/agent-benchmark/cases.jsonl` 的 blob **逐字节**比对 —— **5488 字节、
+>   sha256 `7bc7b49c074b85f3fc09cbbf91a1eb1a64883ce9078424741ee2d047af54769e`、无 CR（只有 LF）**，
+>   双侧一致；且 `cases.ts` 注释自报的 blob `49dce3da…` / 字节数 / 摘要**被独立复算对上**。
+>   （工作树里那份 `.jsonl` 曾是 5509 字节 CRLF —— 那是 autocrlf，**口径必须对 blob**。）
+> - **读数逐字不变**：`npm run bench:agent` **exit 0 / 13 通过**，三条必守读数与改前相同 ——
+>   `BENCHMARK_COVERAGE cases=21 covered=14 empty=7 error=0`、
+>   `BENCHMARK_PREMISE obligations=24 residue=9 rate=0.727`、
+>   `BENCHMARK_EXTRACTION covered=14/21 rate=0.667`；见证层
+>   `verified=1 unverified=20 no_witness=0 error=0 solveRate=0.048`。
+> - **新增应用侧判据**（`apps/web/src/agent/fixtures/benchmarkContract.test.ts`，**5 条**，
+>   **只 import `@draw/agent-core`、不读任何文件**）：题集能在浏览器 import 路径下拿到
+>   （21 条 = 七类各 3）、**题集冻结指纹**、词表与状态常量可用、报告契约可调用并正确分组、
+>   报告错误类型与文案未变。
+> - **"会咬人"是变异证明过的**（两处变异都做了字节级备份 + 还原）：删掉题面里**一个字符** →
+>   **长度断言红**（`expected 5485 to be 5488`）；把全角逗号换成句号（**字节数不变**）→
+>   **只有哈希断言红**（`da626ef5…` ≠ `7bc7b49c…`）。还原后文件 sha256 与备份**逐字节一致**。
+> - **一处自纠（记下来）**：这条判据的第一版是**恒真式** —— 它断言
+>   `parseBenchmarkCases()` 与 `parseBenchmarkDataset(BENCHMARK_CASES_JSONL)` 相等，而前者**就是**
+>   后者的定义（`return parseBenchmarkDataset(BENCHMARK_CASES_JSONL, where)`），**不可能红**；
+>   注释却宣称它能挡"两份副本分叉"，而**根本没有第二份**。**恒真断言挡不住任何东西**，
+>   已换成上面的冻结指纹，措辞也改成事实（钉的是"这一份没有被静默改动"）。
+> - **顺带修一处被本次搬迁证伪的注释**：`scripts/nodeTypes.d.ts` 里 `readFileSync` 的理由原文写
+>   "`scripts/agent-benchmark` 的用例用它读随仓库走的题集（`cases.jsonl`）"—— 那个用法**已被删掉**；
+>   改成点名当前真实用户（`scripts/docs-consistency/*.test.ts`、`scripts/dependency-licences/licences.test.ts`），
+>   **声明本身保留**（它们仍需要它）。
+> - **计划原文两处路径因此过期**（记录在此，不改写历史）：第 313 行 Files 里的
+>   `scripts/agent-benchmark/dataset.schema.json` 与第 323 行注记里的
+>   `scripts/agent-benchmark/cases.jsonl` —— 现在分别是
+>   `packages/agent-core/src/benchmark/dataset.schema.json` 与 `.../cases.ts`。
+> - **本步没有解决的**：应用内评测（`providerAgentEval.ts` / `ProviderEval.tsx`）**仍然**跑那 8 条夹具
+>   —— 把它接到这 21 条上是 N4 的下一步（**已裁决：契约新增 `planning` 层，端到端记"计划是否被编译接受"**）；
+>   `run.test.ts` 的 `real_provider` 仍整批 `not_measured`（那句"适配器还没写"的旧措辞留给下一步改）；
+>   `parseBenchmarkCases()` **没有缓存**（每次解析一次，刻意不引入第二份可漂移的东西；渲染路径上只应调一次）。
 
 ## Phase N5：形式证明出口
 
