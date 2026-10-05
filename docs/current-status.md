@@ -31,8 +31,21 @@
 | 生产构建（web） | `npm.cmd run build --workspace @draw/web` | **成功**（3.92 s）；入口 chunk **1,803.76 kB / gzip 527.62 kB**（比上轮 1,801.18 kB **+2.6 kB**：新增设置组件与偏好模块）；产物落 `build-check/`（已 gitignore，构建后工作树干净） | 0 | **2026-10-05 复核** |
 | Agent 评测 | `npm.cmd run eval:agent` | `deterministic_local`：pass@1 **4/8**、pass@3 **4/8**、工具选择 45/45、工具错误 3/45。报告现在多打两行：`provider          not measured`（还都是离线那条腿）与 `average cost      not measured`（**没有价目表**）。**真实 provider 的 harness 已落地**（应用内：设置 → 真实 provider 评测），**但一次还没跑** | 0 | **2026-10-05 复核**（**未接真实模型**，不是模型准确率） |
 | Agent benchmark | `npm.cmd run bench:agent` | 抽取层：`cases=21 covered=14 empty=7 error=0`；`BENCHMARK_PREMISE obligations=24 residue=9 rate=0.727`；`BENCHMARK_EXTRACTION covered=14/21 rate=0.667`。**见证层（第 48 轮新增）**：`BENCHMARK_WITNESS verified=1 unverified=20 no_witness=0 error=0 solveRate=0.048`；`BENCHMARK_JUDGEABILITY supported=21 unsupported=3 ambiguous=0 totalObligations=24`；`BENCHMARK_WITNESS_CODES {"(no-code)":1,"requires-candidates":7,"unsupported-shape":9,"no-candidate-constructed":4,"unsupported-base-shape":4,"witness-search":20}`（**2026-10-05 N4a 后实测**。上一版这行**少记了 `"(no-code)":1` 这一档** —— 那是见证层"给了结论但没留下原因文本"的兜底证据，**实际输出里一直有**（BASE 时的捕获也含它），所以这是**重新测量并改正旧读数**，不是本批引入的差异；同一次实测里 `cases=21 covered=14 empty=7 error=0` 等三条读数与改前**逐字相同**） | 0 | **2026-10-05 N4a 后实测** |
+| **Agent benchmark（真实 provider，`planning`）** | 设置 → 真实 provider 评测：题集 planning | **`planned 2/3` / `rejected 1/3` / `error 0/3` / `not measured 0/3`**；`average latency` **13445 ms**（measured runs only）；`cost not measured`（**仓里没有价目表**）；provider `deepseek-v4-flash / deepseek-v4-flash`；`cases 3`（`layer=planning`，`seed=7`）。**这是计划 N4「先跑小样本真实 provider」那一条的落点** —— **n=3 的子集**，**不是全题集结论**；读法边界与两处缺口见下面那段 | 0 | **2026-10-05 用户在桌面端运行并回传读数原文**（控制器**未旁观**该次运行；3=2+1+0+0 自洽、provider 非空、`cost` 如实 `not measured`，由控制器核对） |
 | 证明边界 smoke | `npm.cmd run proof:smoke` | 7 通过 / 0 失败；`PROOF_BACKENDS {"wired":[],"reviewed":0}`；**勾股裁决后新增**：`goalsWithoutAnyRoute: []`、`pythagoreanRoute: {"kind":"via-inference","from":"perpendicular"}` | 0 | **2026-10-05 复核** |
 | N3 定向测试（**计划点名的那七件**） | `vitest run constraints / constraints3d / planar-constraints / reactive/constraints / operations / patches / scene-store` | **7 文件 / 241 通过 / 0 失败** | 0 | **第 31 轮** |
+
+> **2026-10-05 真实 provider 的第一次读数（`planning`，N4）**：上面那行是**用户在自己的桌面端**跑出来、把面板原文回传的 ——
+> **控制器没有旁观那次运行**，所以它是「**用户提供的实测**」，不是「控制器实测」。控制器只核了它的**内部自洽**：
+> `3 = 2 + 1 + 0 + 0`、`layer=planning`、`seed=7`、provider/model 非空（契约要求 `real_provider` 必须有身份）、`cost` 如实 `not measured`。
+> **读法边界**：这条通道发出去的是**空画布条件下的规划请求**（观察结果空场景、技能全量、**无只读工具**）⇒ 那个 `2/3` 只能读成
+> 「**空画布条件下计划被接受的比例**」，**不是**"模型的规划能力"，也**不是**全题集（21 条）的结论（今天只跑了前 3 条，n=3）。
+> **两处如实缺口**：① **被拒的那一条为什么被拒，这次没有留下来** —— 原因其实在 `runs[].evidence` 里（`code@path: detail`，或"模型给的是澄清/只读回答"），
+> 但 `formatPlanningReport` **只渲染汇总、不渲染逐条**，所以那次的诊断信息随窗口一起没了（控制器本轮把"逐条渲染"列为改进点，并已修）；
+> ② **成本仍然没有** —— 这条通道能给 token 数，但仓里没有价目表，所以 `cost` 只能是 `not measured`（不编一个钱数）。
+> **它关掉了什么**：计划 N4 的 `:326`（"先跑小样本真实 provider；无凭据时写 `not_measured`、不伪造数字"）**两半都达成** ⇒ 已勾。
+> **它没关掉什么**：`:324` 的「**人工可读性**」仍然**既没有字段也没有标注** —— 而且这次运行暴露出：
+> 要标注它，得先把**模型给出的计划 / 澄清正文**呈现出来（今天的报告里只有计数与证据串，没有可读的产物）。
 
 > **这一张表现在是同一批读数**（2026-10-05 第 27 轮，九道门禁**串行**跑完，14:47:49 → 14:52:12，
 > 约 4 分 24 秒）。第 28 轮又补上了**生产构建**这一行 —— 于是**计划里 N6 出口点名的八道命令
@@ -322,7 +335,7 @@
 > **判据只有编译器那一处**："计划被接受" = `compiled.ok` **且**信封是 `kind: "plan"`；**模型只给澄清不算接受**（fail-closed）。三处变异各自抓红（改了什么 → 哪条红）：编译失败写成 `planned` ⇒ 2 条红；澄清当接受 ⇒ 1 条红；拿掉 `rejected` 词 ⇒ 1 条红。全部还原并逐字节核对。
 > **界面**：两套评测**各自独立、各自两段式、各自报请求数**（agent 工具环 **24** 次 / 题集 planning **3** 次）；旧那套 8 题记分卡的**行为一个字未改**（它那 3 条既有用例原样绿）。
 > **读数该怎么读（边界，必须一起读）**：这条通道发出去的是**空画布条件下的规划请求** —— 观察结果是空场景（题集里每条题都从零作图）、技能清单是**全部技能**、而且**没有只读工具**（harness 没有 `ToolPort` 宿主，故 `readToolsAvailable: false`）。所以将来那个数字要读成「**空画布条件下计划被接受的比例**」，**不是**"模型的规划能力"（真实会话里模型有画布观察、有只读工具、技能也可能被裁剪）。差异逐条写在 `apps/web/src/agent/fixtures/benchmarkPlanningEval.ts` 的适配器注释里。（**2026-10-05 控制器补**：这句原来是**只写在模块注释里**的，`current-status` / `CHANGELOG` / 计划三处都没有 —— 一个会被误读成"模型能力"的数字放在状态文档里而不带边界，正是本仓最忌的那类。）
-> **没有跑那次付费运行**：触发点在桌面端界面、密钥在系统凭据库里（浏览器只会得到 `no_desktop_shell`）⇒ **真实 provider 的读数一个都还没有**。
+> **没有跑那次付费运行**：触发点在桌面端界面、密钥在系统凭据库里（浏览器只会得到 `no_desktop_shell`）⇒ **真实 provider 的读数一个都还没有**。（**2026-10-05 当天更正**：这句在写下之后就不成立了 —— 用户随后在桌面端跑出了**第一次真实读数**，见 §一 那一行与计划 N4 第七步。原句保留在这里，是为了让"哪一批是什么状态"可回溯。）
 > **本批发现一处既有缺陷（未修，已上报）**：旧那条通道（`providerAgentEval.ts` + `offlineAgentEval.ts:30`）把请求写成 `{ userMessage } as never` —— 那对 `createLocalPlanner` 成立，对**真实** `createModelPlanner` **不成立**，实测抛 `TypeError: Cannot read properties of undefined (reading 'context')`，而且抛在**任何请求发出之前**。新通道不受影响（用完整 `PlanRequest`，并有"真规划器 + 假 transport"的用例钉着）；旧通道的修法会改变旧评测语义 ⇒ **留待裁决**。
 
 **2026-10-05 N4 第一步（benchmark 题集与报告契约）—— 本批实测：**
@@ -695,7 +708,13 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
 
 1. **真实 provider 开放题现场复核尚未完成**：仍缺 pass@1 / pass@3、成本、延迟、`verified/unverified/no_witness` 分类与人工图面可读性。
    **已有的一半（2026-10-05 更正）**：**题设覆盖率已经有读数了** —— `BENCHMARK_PREMISE obligations=24 residue=9 rate=0.727`（抽取层，21 题，**72.7%**）。所以这一条不再是"一样都没有"：**抽取层的题级覆盖（`covered=14/21`）与题设级覆盖都有数**，缺的是**真实模型那一侧的全部指标**。
-   **另一半"通道"已接好，但读数仍为 0（2026-10-05 N4b）**：应用侧的题集 planning 通道（3 题 × 1 轮 = 3 次请求）已经接线并有判据，**但那一次运行没有跑过** —— 它由人在桌面端点、要花钱、且密钥在系统凭据库里（浏览器里只会得到 `no_desktop_shell`）。所以这一条**不因为代码合入而改变**：真实 provider 的读数**一个都还没有**。
+   **真实 provider 的第一次读数已拿到（2026-10-05，用户运行；见 §一 那一行）**：应用侧的题集 planning 通道（3 题 × 1 轮）跑出
+   `planned 2/3 / rejected 1/3 / error 0/3 / not measured 0/3`，`average latency 13445 ms`，`cost not measured`。
+   **来源如实标注**：这是**用户提供的实测**（控制器未旁观那次运行），控制器只核了内部自洽。
+   **读法边界**：`2/3` 只能读成「**空画布条件下计划被接受的比例**」—— 不是"模型的规划能力"，也**不是**全题集（21 条）的结论（本次 n=3）。
+   **仍未达成的**：计划 `:324` 的「人工可读性」还是**既没有字段也没有标注**（要标注它，得先把模型给出的计划/澄清正文呈现出来）。
+   旧那条 agent 工具环通道（24 次）**仍然是坏的**（请求形状对真实规划器不成立）—— 本轮只做到"失败如实显示、不许假装在跑"，
+   **没有**改它的输入语义（那会改变旧评测在测什么，需要单独裁决）。
 2. 当前 `deterministic_local` 只用于协议与几何回归，不能作为真实模型准确率。
 
 ### D. 发布与仓库收尾

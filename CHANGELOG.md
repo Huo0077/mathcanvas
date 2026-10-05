@@ -5,6 +5,38 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-05 —— 第一次真实 provider 读数（用户跑的）+ 逐条渲染与"钱按钮"不许假装在跑
+
+- **第一次真实 provider 读数**（计划 N4 `:326` 的落点）：**用户在自己的桌面端**跑的应用内
+  「真实 provider 评测：题集 planning」（授权规模 **3 题 × 1 轮**），面板原文：
+  `planned 2/3` / `rejected 1/3` / `error 0/3` / `not measured 0/3`、`average latency 13445 ms (measured runs only)`、
+  `cost not measured（仓里没有价目表）`、provider `deepseek-v4-flash`、`cases 3（layer=planning，seed=7）`。
+  **来源如实标注**：控制器**未旁观**那次运行，只核了内部自洽（`3 = 2 + 1 + 0 + 0`、层与 seed 对得上、身份非空、成本如实）。
+  **读法**：空画布条件下的规划请求 ⇒ `2/3` 是「**空画布条件下计划被接受的比例**」，**不是**"模型的规划能力"，
+  也**不是**全题集（21 条）的结论（**n=3**）。
+- **这次运行暴露并立刻修掉的一处缺口**：面板当时**只渲染汇总** —— "被拒的那一条为什么被拒"随窗口一起丢了，
+  而原因其实就在 `runs[].evidence` 里（`code@path: detail`，或"模型给的是澄清/只读回答"）。
+  现在**逐条渲染**（题 id / 结局 / 理由原文，带截断上限，截断时如实写原长）。
+  **诊断信息留在内存里而没渲染，等于这次运行白跑一半。**
+- **"唯一会花钱的按钮"不许再假装在跑**（复核 I-2，独立复现过）：旧那条 agent 工具环通道**不接异常**，
+  于是 `setState({kind:"running"})` 之后 promise 被拒、面板**永远停在"正在跑…"**；
+  而这条分支**今天必然走到** —— 它把请求写成 `{ userMessage }`，真实 `createModelPlanner` 在发出任何请求之前
+  就抛 `TypeError: Cannot read properties of undefined (reading 'context')`。
+  修法：旧通道与题集通道**共用同一支 `failed` 状态**（原来只有题集那套有），并明确写出它与"没配好"那支的**区别**
+  （那支能保证"一次请求都没发"，这一支**不能**：异常可能出现在跑到一半时）。
+  **两次变异**证明新判据会咬人（失败详情换固定串 ⇒ 红；catch 改回 `running` ⇒ 红），两次都还原。
+  **没有**改旧通道的请求形状 —— 那会改变旧评测在测什么，**需要单独裁决**。
+- **复核 Minor 里"会说谎或与钱有关"的几条**：`report.ts` 交叉引用指错行已改正；
+  界面里的"21"改成单一常量 + 一条钉住它等于题集真实条数的用例；
+  **金钱可见文案**"将发出 N 次请求"改成"**至少** N 次"并写明重试上限（上限从 `modelPlanner` 同一处取，
+  为此把 `MAX_TRANSPORT_ATTEMPTS` 导出）；把保护归因给"类型"的说法改正为"控制流 + 用例"；
+  并把复核要求的三处差异（`signal` 永不可中止、`compilePlan` 未带两个 flag、`conversationId === runId`）
+  写进适配器注释 —— 不写出来，"这条请求 = 生产请求"就是一句不可核的话。
+- **门禁**（控制器自跑）：typecheck 0；lint 0 error / 13 warning；定向 13 文件 / 131 通过；
+  全库 **318 文件 / 3662 通过 + 1 todo**；`bench:agent` 三条读数**逐字不变**；`test:e2e` **194 通过**；BOM `mismatches=0`。
+
+
+
 ## 2026-10-05 —— 应用内评测接到 21 条题集上，报告契约新增 `planning` 层（N4b）
 
 - **为什么**：上一批把题集与报告契约搬进了 `packages/agent-core/src/benchmark/`，但**应用内那次真实
