@@ -5,6 +5,30 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-05 —— N6 第六步：Rust **传递依赖**的许可证扫描（那一节从"只有清单"变成"有结论"）
+
+- **为什么要补**：`docs/acceptance/next-phase-flag-and-dependency-review.md` 的第三节原来自认
+  "**只有清单，没有结论**" —— 只列了 15 个直接依赖。而"许可有没有风险"这件事，直接依赖永远是
+  最不可能出问题的那一层。
+- **怎么扫的**：`cargo metadata --format-version 1` 的 `packages[].license` **覆盖整张依赖图**
+  （`node scripts/toolchain.mjs cargo metadata --format-version 1 --manifest-path
+  apps/desktop/src-tauri/Cargo.toml`）。不需要新装任何工具。
+- **实测**：**551 个包 = 1 个工作区成员 + 550 个第三方**，**33 种许可证表达式**，
+  **没有一个包缺 `license` 字段**（所以不存在"许可未知"的黑洞）。
+- **结论**：
+  1. **没有任何 GPL / AGPL / SSPL / CDDL / EUPL**；
+  2. **5 个 crate 只给 MPL-2.0** —— `cssparser@0.36.0`、`cssparser-macros@0.6.1`、`dtoa-short@0.3.5`、
+     `option-ext@0.2.0`、`selectors@0.36.1`，全是 Tauri 的 CSS 选择器一侧的**传递依赖**。
+     MPL-2.0 是**文件级** copyleft：链接与分发二进制允许，义务落在"被修改过的 MPL 文件"上，
+     而**本项目不修改它们**；
+  3. **2 个 crate 把 LGPL 列为可选项之一**（`r-efi@5.3.0` / `6.0.0` =
+     `MIT OR Apache-2.0 OR LGPL-2.1-or-later`）—— 是**选择**，取 MIT/Apache 即可，**不承担 LGPL 义务**。
+- **边界（写进文档，不是漏写）**：结论来自每个 crate **自己声明的 `license` 字段**；
+  **没有**逐 crate 读 LICENSE 正文、**没有**做 per-crate 的 SPDX 择一解析
+  （`cargo-about` / `cargo-deny` 会做）、**没有**复核 `rusqlite` 的 `bundled` SQLite 版本与声明。
+  另外 `--offline` 在本机**跑不通**（registry 索引不全，exit 101）—— 这一遍**需要联网**。
+- **只改文档**，无可执行产物，因此没有新的门禁读数。
+
 ## 2026-10-05 —— N6 第五步：**修掉** e2e 抖动（追到一条断言、一个机制、一处调用点）
 
 - **先把它收敛成一条**：上一轮我记的是"两处抖动"。这一轮用固化的配方跑了 3 次全量，

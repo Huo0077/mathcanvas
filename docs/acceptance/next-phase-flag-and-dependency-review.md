@@ -37,16 +37,38 @@ N6 只核对"每个 flag 有单元 / 浏览器 / 回退用例"，**不重复创�
 **结论（仅限这一层）**：全部是 MIT / Apache-2.0 / Unlicense 这类宽松许可，**没有 copyleft**
 （GPL / LGPL / AGPL / MPL）出现在 JS 运行依赖里。
 
-## 三、Rust / Tauri 侧（**只有清单，没有结论**）
+## 三、Rust / Tauri 侧：传递依赖的许可证扫描（2026-10-05 补上，**这一节现在有结论**）
 
-`apps/desktop/src-tauri/Cargo.toml` 的**直接**依赖：
+上一版这一节只列了**直接**依赖、并明说"没有结论"。这一版用 `cargo metadata` 把**整张依赖图**扫了
+（`packages[].license` 覆盖传递依赖，不只看直接依赖）：
 
-`tauri` 2.11.6、`tauri-build` 2.6.3、`tauri-plugin-log` 2、`rusqlite` 0.37（`bundled` SQLite）、
-`tokio` 1、`axum` 0.8、`reqwest` 0.12（`rustls-tls`）、`futures-util` 0.3、`tower` 0.5、
-`rand` 0.9、`serde` / `serde_json` / `log`、以及 Windows 专有的 `winreg` 0.55 与 `keyring` 4.2.0。
+```
+node scripts/toolchain.mjs cargo metadata --format-version 1 --manifest-path apps/desktop/src-tauri/Cargo.toml
+```
 
-**没测的**：传递依赖的许可证扫描（需要 `cargo-deny` / `cargo-about` 之类的工具，本机没跑）、
-`bundled` SQLite 的版本与许可声明复核。**所以这一节只是清单** —— 把它当成"Rust 侧许可已审"是错的。
+**当次实测**：**551 个包 = 1 个工作区成员 + 550 个第三方**，**33 种许可证表达式**，
+**没有一个包缺 `license` 字段**（所以不存在"许可未知"的黑洞）。分布前几名：
+`MIT OR Apache-2.0` 266、`MIT` 116、`Apache-2.0 OR MIT` 52、`MIT/Apache-2.0` 22、
+`Unicode-3.0` 18、`Zlib OR Apache-2.0 OR MIT` 17、`Unlicense OR MIT` 9。
+
+**结论（可以当结论读）**：
+
+1. **没有任何 GPL / AGPL / SSPL / CDDL / EUPL** 出现在依赖图里。
+2. **5 个 crate 只给 MPL-2.0**：`cssparser@0.36.0`、`cssparser-macros@0.6.1`、`dtoa-short@0.3.5`、
+   `option-ext@0.2.0`、`selectors@0.36.1` —— 都来自 Tauri 的 CSS 选择器一侧，**全是传递依赖**。
+   **MPL-2.0 是文件级 copyleft**：链接与分发二进制是允许的，义务落在"被修改过的 MPL 文件"上；
+   **本项目不修改它们**。
+3. **2 个 crate 把 LGPL 作为可选项之一**（`r-efi@5.3.0` / `r-efi@6.0.0` =
+   `MIT OR Apache-2.0 OR LGPL-2.1-or-later`）—— 那是**选择**，取 MIT / Apache 即可，**不承担 LGPL 义务**。
+4. 工作区自己的 crate 直接依赖 15 个：`axum` / `futures-util` / `log` / `rand` / `reqwest` / `rusqlite` /
+   `serde` / `serde_json` / `tauri` / `tauri-plugin-log` / `tokio` / `tower` / `tauri-build` / `keyring` / `winreg`。
+
+**这一遍的边界（仍然不是法律意见）**：结论来自每个 crate **自己声明的 `license` 字段**；
+**没有**逐 crate 读 LICENSE 正文，**没有**做 per-crate 的 SPDX 择一解析
+（`cargo-about` / `cargo-deny` 会做这件事），也**没有**处理 `license_file` 的情形（这一遍没有遇到）。
+另外：`--offline` 在本机**跑不通**（registry 索引不全，exit 101），所以这一遍**需要联网**。
+`rusqlite` 的 `bundled` SQLite 具体版本与许可声明**仍未复核**（SQLite 本身是 public domain，
+但"未复核"就是未复核）。
 
 ## 四、WASM 与线程边界
 
@@ -70,7 +92,8 @@ N6 只核对"每个 flag 有单元 / 浏览器 / 回退用例"，**不重复创�
 
 ## 六、这一份**没有**回答的问题（如实）
 
-- Rust 传递依赖的许可证结论（§三）。
+- **不是法律意见**：Rust 那节（§三）是"每个 crate 声明的 `license` 字段"的统计，没有逐 crate 读
+  LICENSE 正文、没有 per-crate 的 SPDX 择一解析、没有复核 `bundled` SQLite 的版本与声明。
 - 任何"并发正确性"结论（§四）。
 - 三个已实现开关的**浏览器**用例（§一）—— 其中 `constrainedDrag` 还卡在"没有产品入口能把它
   打开"，所以连正/反例都写不出来。

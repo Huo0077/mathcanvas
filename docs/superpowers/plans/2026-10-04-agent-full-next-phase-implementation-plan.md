@@ -350,7 +350,10 @@ export type DragSolveResult =
 > 其余**一条还没勾**。这一批交付的是**核对记录**：
 > `docs/acceptance/next-phase-flag-and-dependency-review.md` —— 五个开关的读取点 / 单元 /
 > 浏览器 / 关闭回退逐格实测；JS 运行依赖逐包读 `license`（全宽松，无 copyleft）；
-> 无任何 WASM 依赖；Rust 侧只列**直接**依赖并明说**没做**传递依赖的许可扫描。
+> 无任何 WASM 依赖；Rust 侧的**传递依赖**也已用 `cargo metadata` 扫过（551 个包 / 33 种表达式 /
+> 无一缺 `license` 字段；无 GPL/AGPL/SSPL；5 个 crate 只给 MPL-2.0 —— 文件级 copyleft，本项目不改它们；
+> 2 个 crate 把 LGPL 列为可选项之一，取 MIT/Apache 即可）。**仍不是法律意见**：
+> 没有逐 crate 读 LICENSE 正文、没有 per-crate 的 SPDX 择一解析、没有复核 `bundled` SQLite。
 >
 > **与计划的偏差（有据）：** 计划把"每个 flag 有单元、浏览器和回退用例"当成一条，实测下来
 > **回退用例齐、浏览器用例一个都没有**；而 `openProblemCompiler` / `proofExport` 是**占位**
