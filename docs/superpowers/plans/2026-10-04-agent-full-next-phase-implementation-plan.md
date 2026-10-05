@@ -323,6 +323,14 @@ export type DragSolveResult =
   > **2026-10-05 勾上**：`scripts/agent-benchmark/cases.jsonl` **21 条 = 七类 × 3**（`underdetermined` / `contradictory` / `unsupported-expression` / `shuffled-naming` / `dihedral-or-ratio` / `dynamic-request` / `universal-proof-request`），并有一条用例钉"随仓库走的那份题集七类全覆盖"。
 - [ ] 每题最多 3 轮，记录抽取率、求解率、题设覆盖率、verified/unverified/no_witness、成本、延迟和人工可读性。
   > **2026-10-05：七项里六项在位，仍不勾。** 已在位：轮次上限（"每题超过 `MAX_ROUNDS_PER_CASE` 轮要**整份拒收**"）、抽取率（题级）、求解率（见证层）、题设覆盖率（子句级，且"一条子句都没读到时报 `null` 而不是 0"）、`verified`/`unverified`/`no_witness` 三种结局计数、`cost`/`latency` **字段**（允许显式 `null`）。**缺的一项是"人工可读性"**：报告契约里**没有这个字段**，也**没有任何一次人工标注** —— 它要等真实 provider 真跑过才有对象可读，所以这一条与下一条一起卡在同一次运行上。
+  > **2026-10-05 第二次更正（N4e，提交 `dbe6fb1`）—— 前半已补齐，这一格仍然不勾**：现在
+  > ① **字段有了**：`BenchmarkRun.humanReadability`（**键必须在、值可 `null`**，词表外一律拒收）；
+  > ② **有对象可读了**：面板的只读「人读区」呈现模型给的那段正文（计划的 `goal`+动作摘要 / 澄清的问题 / 只读回答），
+  >    harness 从**内存里的信封**取、与 `runs` 一一配对（不解析证据串、不塞进 `evidence`）；
+  > ③ **口径写死了**：三值 + 判断者是"不懂实现的人"，「`not_measured` / `error` 不进分母」，
+  >    「`plan` 与 `clarification` 各有各的分母」，`readableRate` 的分母是**已标注**条数（0 标注 ⇒ `null`，不是 0）。
+  > **仍然不勾的唯一理由**：**一次标注都没有**（已标注 = 0；报告里出现的是"未标注"，不是 0 分、也不是占位比率）。
+  > ⇒ 这一格剩下的**不是代码**，是**一个人真的去读那几段正文并打分**（口径已定：见 `HUMAN_READABILITY_VALUES` 的定义处）。
 - [x] 先跑小样本真实 provider；无凭据时写 `not_measured`，不伪造数字。
   > **2026-10-05 勾上（两半都达成）**。**后半句**（"无凭据就写 `not_measured`、不伪造数字"）此前已落实；
   > **前半句**在 `2026-10-05` 由**用户在桌面端**跑出来了（授权规模 3 题 × 1 轮）——面板读数原文：
@@ -554,6 +562,36 @@ export type DragSolveResult =
 >   两段式确认仍在。**实施者与控制器都没有跑它**；"真实 provider 上能不能跑成"**仍未被证明** ——
 >   已证明的只是"请求与生产路径同构 + 真规划器能走完 24 次（假 transport、零网络）"。
 
+> **第十一步（2026-10-05）：人工可读性 —— 先把"要读的东西"呈现出来，并把口径写死。** 提交 `dbe6fb1`。
+> 这一步做的是第 `:324` 条的**前半**（字段 + 呈现 + 口径），**故意不勾那一格**（后半是"有人真的去标注"，今天为 **0**）。
+> - **为什么先做呈现**：两次真实运行暴露了前置条件 —— 报告里只有**计数**与**证据串**，没有"模型给的那段东西"，
+>   于是任何"可读性"标注都是**凭印象**。现在 harness 从**内存里的信封**（`planner.plan(...)` 的返回值）取正文
+>   （计划的 `goal` + 动作摘要 / 澄清的问题 / 只读回答正文），与 `runs` **一一配对**，面板新增**只读**「人读区」
+>   （逐条 `article`、有界 480、**截断时如实写原长**）。**不解析证据串、不重新解析题集、不塞进 `evidence`。**
+> - **口径写在契约里**（不是散在渲染里）：三值 `readable` / `partly` / `unreadable`，判断者是"**不懂实现的人**"；
+>   **`not_measured` / `error` 不进分母**（没有对象可读）；**`plan` 与 `clarification` 各有各的分母**
+>   （"问法清不清楚" ≠ "计划好不好"）；**`readableRate` 的分母是"已标注"条数 ⇒ 0 标注时是 `null` 而不是 `0`**。
+> - **一处我没想到、它钉住了的陷阱**：**见证层也有一个同名的 `clarification`** —— 而只有 `planning` 层有"要读的那段东西"，
+>   所以见证层的那个**不进**可读性分母（有用例断言）。
+> - **契约字段的口径（含糊措辞由实施者落定）**：`humanReadability` **键必须在、值可 `null`**（追加进 `BENCHMARK_RUN_REQUIRED_FIELDS`，
+>  与 `cost` / `latency` 同一条纪律）；**词表外的值**（`"good"` / `""` / `true`）一律**拒收**，不许被静默当成未标注。
+> - **"未标注"与"0 分"必须可分辨**（本任务的要害）：4 处叠加 —— ① rate 分母是已标注条数；② 报告始终给"已标 N / 未标 M"；
+>  ③ 面板渲染"**未标注（分母 = 已标 0，不是 0 分）**"；④ 一条 `not.toMatch(/readable 比率\s+0(\.0+)?\b/)` 的机器判据。
+>  **本批真实状态：已标注 = 0，报告里出现的是"未标注"，没有 0、没有占位比率，也没有顺手标一条。**
+> - **控制器自跑门禁（当次实测）**：typecheck 0；lint **0 error / 13 warning**；定向 15 文件 / 149 通过；
+>   全库 **320 文件 / 3681 通过 + 1 todo**（较上批 +1 文件 +15 用例，逐项对账：契约 11 + harness 3 + 面板 1）；
+>   **`bench:agent` 三条读数逐字不变**；**`eval:agent` 四个数逐字不变**；`test:e2e` **194 通过**；BOM `mismatches=0`。
+> - **实施者的三条变异都咬人**（正文换占位 ⇒ 3 红；无对象进分母 ⇒ 2 红；缺省 `readable` ⇒ **5 红**），
+>   还原证据是 `git diff` 空 + blob 哈希两侧相同。**它如实申报**：RED 首跑 **10 红 / 1 绿**，那条绿的是**钉子**、没算成 RED。
+> - **控制器裁决的两条（实施者上报、我没让它顺手改）**：
+>   ① **既有**：`clarification` 的 `evidence`（N4b）里已经引用了问题原文，与本批"正文不进 evidence"**表面**冲突 ——
+>    **不是冲突**：`evidence` 回答的是"**凭什么这么说**"（对澄清这一支，理由**就是**那段问题原文），
+>    人读区回答的是"**要读的是哪段东西**"。二者在**这一支**上恰好重合，是**性质使然**，不改。
+>   ② **口径边界（记为已知边界）**：`rejected` 组的分母含"**模型什么都没给**"那一种 —— 那时其实**没有正文可读**，
+>    而界面仍给三个按钮。收窄需要在契约里记下"有没有正文"（本批没做）。**代价（若错）**：将来标注时可能给
+>    "什么都没有"打一个可读性分（那是给**我们的占位文本**打分，不是给模型的输出打分）。
+>    **本批按简报口径（只排除 `not_measured` / `error`）执行是对的** —— 改它是下一批的事。
+
 ## Phase N5：形式证明出口
 
 **目标：** 让少量短目标产生可独立校验的 proof artifact，不把采样或实例通过冒充证明。
@@ -647,7 +685,18 @@ export type DragSolveResult =
 **Files:** `apps/web/src/agent/featureFlags.ts`、`packages/agent-core/src/capabilities.ts`、release gate、README、current-status、feature-catalog、CHANGELOG。
 
 - [x] 五个独立 flag 已由 **N1** 创建（`apps/web/src/agent/featureFlags.ts`，默认关闭）——本阶段只做核对，不再重复创建。
-- [ ] 每个 flag 有单元、浏览器和回退用例；关闭 flag 时旧路径行为逐字不变。
+- [x] 每个 flag 有单元、浏览器和回退用例；关闭 flag 时旧路径行为逐字不变。
+  > **2026-10-05 控制器裁决：勾上，但逐格写明是哪一类**（因为这条的字面要求**已经不可能对每个 flag 都成立**，
+  > 而"逐格写清"比"含糊地不勾"更诚实）。逐格（矩阵见 `docs/acceptance/next-phase-flag-and-dependency-review.md`）：
+  > - **`constrainedDrag`**（唯一有产品入口的已实现开关）：**三类齐** —— 单元 ✅；浏览器 ✅（入口 3 条 + `agent-constrained-drag.spec.ts` **5 条**）；关闭回退 ✅（结构性 + 正/反例）。
+  > - **`obligationIR` / `witnessSearch`**：单元 ✅、关闭回退 ✅（强度不同，见矩阵）；**浏览器格 = 【不适用】**，
+  >   理由**不是"缺代码路径"**（实测：`agentRuntime.ts:271/283` 会把它们传进 `drafts.stage(...)`、`:369` 放进 `nextPhaseFlags`），
+  >   而是"**浏览器里没有任何办法把它们打开**"（`nextPhasePreferences.loadConstrainedDragEnabled` **只认 `constrainedDrag` 这一个键**）。
+  > - **`openProblemCompiler` / `proofExport`**：**零读取点占位**（非测试代码 0 命中）⇒ 三类都【不适用】。
+  > - **"关闭时旧路径逐字不变"这句话本身要分三种证据读**（矩阵那节标题已写：结构性 / 黄金样本逐字节 / 单元）。
+  > **代价（若错，写在这里以防将来误读）**：这一格现在勾着，但**"不适用"是当时的结论** ——
+  > **哪天有人给 `obligationIR` / `witnessSearch` 加了产品入口，就必须同时补浏览器用例，并重审这一格**。
+  > 那句话已经写进 `next-phase-flag-and-dependency-review.md` 的覆盖矩阵里（不然这一勾会变成"永远不用再管"）。
   > **2026-10-05：只达成一部分，故意不勾。** 逐格核对见 [`docs/acceptance/next-phase-flag-and-dependency-review.md`](../../acceptance/next-phase-flag-and-dependency-review.md) 的覆盖矩阵：**单元用例**三个已实现的开关都有；**关闭回退**也都有证据，但**强度不同**（`witnessSearch` = 黄金样本逐字节；`obligationIR` = 结构 + 单测；`constrainedDrag` = 结构性——离路径就是原来那一行）；**浏览器用例只有 `constrainedDrag` 有**（`e2e/next-phase-flag-entry.spec.ts` 入口 3 条 + `e2e/agent-constrained-drag.spec.ts` **5 条** = 正/反例 2 + **N3 出口的三条：过约束拒绝 / 冲突恢复 / 一步撤销**），`obligationIR` 与 `witnessSearch` **没有**（它们**没有产品入口**）；`openProblemCompiler` / `proofExport` 是**占位**（零读取点，不该为占位补用例）。**"逐字不变"这句话本身也要分开读**：它**不是一种证据，是三种**（矩阵里那节标题就写着这句）。
   > **2026-10-05 控制器更正（"没有产品入口"这句话不精确，实测见下）**：逐条查非测试代码里的读取点 ——
   > `obligationIR` / `witnessSearch` **在生产运行时代码里是被读取的**（`agentRuntime.ts:271/283` 把它们传进 `drafts.stage(...)`，`:369` 放进 `nextPhaseFlags`）；

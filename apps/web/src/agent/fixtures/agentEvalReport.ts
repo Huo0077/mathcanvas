@@ -61,7 +61,19 @@ export function formatScorecard(input: ScorecardReportInput): string {
     `pass@3            ${percent(scorecard.passAt3)}`,
     `tool error rate   ${rate(scorecard.toolErrorRate)}`,
     `tool selection    ${scorecard.toolSelection.matched}/${scorecard.toolSelection.total}`,
-    `semantic verify   ${percent(scorecard.passAt1)}`,
+    /**
+     * **这一行原来打的是 `semantic verify   ${percent(scorecard.passAt1)}`** —— 也就是把 `pass@1`
+     * **又打印了一遍**（2026-10-05 发现并删除）。它不是第二个指标：`AgentEvalScorecard` 里
+     * **没有**独立的"语义验证"字段，而全仓也没有任何断言钉过那一行。
+     *
+     * 后果不是"少一行"那么轻：读数里会出现两个名字、一个数，读者很容易当成两个数据点；
+     * 而**发布门禁第 2 条**点名的恰恰是"pass@1 **和语义验证率**" —— 那个名义指标因此**看起来存在、实际没有**。
+     *
+     * **真要做它**，判据就在仓里：`packages/agent-core/src/verification/taskVerification.ts` 是任务级语义验证器，
+     * 而记分卡（`docs/acceptance/agent-tool-loop-scorecard.md`）给它的定义是
+     * "已完成且证据完整的 claim 数 ÷ 已完成的 claim 数"。那是**一个要实现的指标**，不是一行 `percent(passAt1)`。
+     * 在实现之前，这一行**不打印** —— 留白比留一个错的数诚实。
+     */
     `visual verify     ${visual === 0 ? NOT_MEASURED : `not_supported for ${visual} task(s): ${scorecard.unverifiableTaskIds.join(", ")}`}`,
     `average latency   ${scorecard.averageLatencyMs === null ? NOT_MEASURED : `${Math.round(scorecard.averageLatencyMs)} ms (successful runs only)`}`,
     `average cost      ${scorecard.averageCostUsd === null ? NOT_MEASURED : `$${scorecard.averageCostUsd.toFixed(4)} (successful runs only)`}`,

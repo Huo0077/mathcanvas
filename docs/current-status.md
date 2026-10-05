@@ -32,6 +32,7 @@
 | Agent 评测 | `npm.cmd run eval:agent` | `deterministic_local`：pass@1 **4/8**、pass@3 **4/8**、工具选择 45/45、工具错误 3/45。报告现在多打两行：`provider          not measured`（还都是离线那条腿）与 `average cost      not measured`（**没有价目表**）。**这一行的数字是离线回归，不是模型准确率**；真实 provider 那两条轴的状态见下面两行（**2026-10-05 更正**：这里原来写"真实 provider 的 harness 已落地，**但一次还没跑**" —— 那句话把两条轴混成一条：**题集 planning 轴已经跑过两次**，而**工具环 pass@1 轴以前根本跑不了**（请求形状缺陷，`90eba6e` 已修），**修好之后也没人跑过**） | 0 | **2026-10-05 复核**（**未接真实模型**，不是模型准确率） |
 | Agent benchmark | `npm.cmd run bench:agent` | 抽取层：`cases=21 covered=14 empty=7 error=0`；`BENCHMARK_PREMISE obligations=24 residue=9 rate=0.727`；`BENCHMARK_EXTRACTION covered=14/21 rate=0.667`。**见证层（第 48 轮新增）**：`BENCHMARK_WITNESS verified=1 unverified=20 no_witness=0 error=0 solveRate=0.048`；`BENCHMARK_JUDGEABILITY supported=21 unsupported=3 ambiguous=0 totalObligations=24`；`BENCHMARK_WITNESS_CODES {"(no-code)":1,"requires-candidates":7,"unsupported-shape":9,"no-candidate-constructed":4,"unsupported-base-shape":4,"witness-search":20}`（**2026-10-05 N4a 后实测**。上一版这行**少记了 `"(no-code)":1` 这一档** —— 那是见证层"给了结论但没留下原因文本"的兜底证据，**实际输出里一直有**（BASE 时的捕获也含它），所以这是**重新测量并改正旧读数**，不是本批引入的差异；同一次实测里 `cases=21 covered=14 empty=7 error=0` 等三条读数与改前**逐字相同**） | 0 | **2026-10-05 N4a 后实测** |
 | **Agent benchmark（真实 provider，`planning`）** | 设置 → 真实 provider 评测：题集 planning | **两次运行（同一天、同一台机器、同一套 3 题）**：面板当时显示的都是 `planned 2/3` / `rejected 1/3` / `error 0/3` / `not measured 0/3`；`average latency` **13445 ms**（第一次）/ **8465 ms**（第二次，逐条渲染上线后那次）；`cost not measured`（**仓里没有价目表**）；provider `deepseek-v4-flash / deepseek-v4-flash`；`cases 3`（`layer=planning`，`seed=7`）。**按今天的词表**，那 1 条 `rejected` 其实是 **`clarification`**（模型在问，不是失败）⇒ 同两次运行现在会读成 `planned 2/3` / **`clarification 1/3`** / `rejected 0/3`。**这是计划 N4「先跑小样本真实 provider」那一条的落点** —— **n=3 的子集**，**不是全题集结论**；下面那段说清 `rejected` 那一格当时为什么会被读反 | 0 | **2026-10-05 用户在桌面端运行并回传读数原文**（控制器**未旁观**该次运行；3=2+1+0+0 自洽、provider 非空、`cost` 如实 `not measured`，由控制器核对） |
+| **Agent 评测（真实 provider，agent 工具环）** | 设置 → 真实 provider 评测：agent 工具环 | **`pass@1 1/8`** / **`pass@3 2/8`** / `tool selection 45/45` / `tool error rate 4/45` / `average latency 4126 ms (successful runs only)` / `average cost not measured` / `attempts 24`；provider `deepseek-v4-flash / deepseek-v4-flash`。**口径**：`passAt1` = **第 1 轮就过**的题数（`agentEvalRunner.ts:52`）、`passAt3` = **三轮里任一轮过**（`:53`）。**这是 pass@1 轴的第一次真实读数**（那条通道的请求形状缺陷已在 `90eba6e` 修好）。**边界**：8 题 × 3 轮、**单模型单次采样**；与离线 `deterministic_local` 的 `pass@1 4/8` **不可直接比"谁更好"**（离线是确定性、且那是协议/几何回归，不是模型准确率）；**也不是**题集 `planning` 轴（3 题，另一个坐标系） | 0 | **2026-10-05 用户在桌面端运行并回传**（控制器**未旁观**；`2/8 ≥ 1/8` 单调性自洽、成本如实 `not measured`，由控制器核对） |
 | 证明边界 smoke | `npm.cmd run proof:smoke` | 7 通过 / 0 失败；`PROOF_BACKENDS {"wired":[],"reviewed":0}`；**勾股裁决后新增**：`goalsWithoutAnyRoute: []`、`pythagoreanRoute: {"kind":"via-inference","from":"perpendicular"}` | 0 | **2026-10-05 复核** |
 | N3 定向测试（**计划点名的那七件**） | `vitest run constraints / constraints3d / planar-constraints / reactive/constraints / operations / patches / scene-store` | **7 文件 / 241 通过 / 0 失败** | 0 | **第 31 轮** |
 
@@ -67,6 +68,21 @@
 > 判据：契约词表那条**精确相等**的哨兵按设计**先红了一次**
 >（`expected ['planned','clarification',…] to deeply equal ['planned','rejected',…]`）才更新；
 > 新判据另有**变异**证明它会咬人（把汇总行的标签改掉 ⇒ 红）。
+
+> **2026-10-05 第三次真实运行：pass@1 轴的**第一次**读数（用户运行，控制器未旁观）**：跑的是面板**上面那块**「agent 工具环」
+> （8 题 × 3 轮 = **24 次请求**）—— 那条通道的请求形状缺陷在 `90eba6e` 修好之后，这是它**第一次真的发出去并跑完**。
+> 读数：**`pass@1 1/8`**、**`pass@3 2/8`**、`tool selection 45/45`、`tool error rate 4/45`、
+> `average latency 4126 ms (successful runs only)`、`average cost not measured`、`attempts 24`。
+> - **口径**（不许猜）：`passAt1` = **第 1 轮就过**的题数（`agentEvalRunner.ts:52`）；`passAt3` = **三轮里任一轮过**的题数（`:53`）。
+>   这份读数内部自洽：`2/8 ≥ 1/8`（`pass@3` 的定义蕴含它不小于 `pass@1`）。
+> - **与离线的对比要小心说**：离线 `deterministic_local` 是 `pass@1 4/8` —— **真实模型这一次比它低**（`1/8`）。
+>   但这**不是**"模型比本地规划器差"这种结论：两边**不是同一个被测对象**（离线那条腿是**协议与几何回归**，
+>   本仓的纪律一直是"**不许把 `deterministic_local` 读成模型准确率**"）；而且这里是 **8 题 × 3 轮、单模型、单次采样**，
+>   离线那个数**确定可复现**、这个数是**一次抽样**。它证明的是一件更朴素的事：**这两个数确实不是一回事**。
+> - **`semantic verify` 那一行的更正**：用户回传的原文里有 `semantic verify 1/8`，而它**就是 `pass@1` 的重复打印**
+>   （`agentEvalReport.ts` 里同一个 `percent(scorecard.passAt1)` 打了两遍；`AgentEvalScorecard` 没有独立的语义验证字段）。
+>   **那一行已删除** —— 也就是说门禁第 2 条点名的"**语义验证率**"**今天仍然没有被实现**（判据在 `verification/taskVerification.ts`
+>   的任务级语义验证器；要做就得真的算它）。所以这次读数**只有 5 个数据点**，不是 6 个。
 
 > **这一张表现在是同一批读数**（2026-10-05 第 27 轮，九道门禁**串行**跑完，14:47:49 → 14:52:12，
 > 约 4 分 24 秒）。第 28 轮又补上了**生产构建**这一行 —— 于是**计划里 N6 出口点名的八道命令
@@ -733,7 +749,11 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
    `planned 2/3 / rejected 1/3 / error 0/3 / not measured 0/3`，`average latency 13445 ms`，`cost not measured`。
    **来源如实标注**：这是**用户提供的实测**（控制器未旁观那次运行），控制器只核了内部自洽。
    **读法边界**：`2/3` 只能读成「**空画布条件下计划被接受的比例**」—— 不是"模型的规划能力"，也**不是**全题集（21 条）的结论（本次 n=3）。
-   **仍未达成的**：计划 `:324` 的「人工可读性」还是**既没有字段也没有标注**（要标注它，得先把模型给出的计划/澄清正文呈现出来）。
+   **仍未达成的**：计划 `:324` 的「人工可读性」——（**2026-10-05 第二次更正**）**字段与呈现已经做完**（N4e，提交 `dbe6fb1`）：
+   面板有只读「人读区」、契约有 `humanReadability`（键必须在、值可 null）、口径写死在契约里（三值 / 谁判 / 哪些不进分母）。
+   **剩下的是"有人真的去读那几段正文并打分"** —— 今天**已标注 = 0**，报告里出现的是"未标注"（不是 0 分、也不是占位比率）。
+   **另外（同一天更晚）**：**pass@1 轴也拿到了第一次真实读数**（见 §一 那一行：`pass@1 1/8` / `pass@3 2/8` / 工具错误 `4/45`）——
+   所以这一条现在只差**人工可读性的实际标注**，以及"**成本**"那一栏（它永远需要一张价目表）。
    旧那条 agent 工具环通道（24 次）**仍然是坏的**（请求形状对真实规划器不成立）—— 本轮只做到"失败如实显示、不许假装在跑"，
    **没有**改它的输入语义（那会改变旧评测在测什么，需要单独裁决）。
    **第二次运行（逐条渲染上线后）给出了被拒那一条的真实原因**：模型对"AB 同时等于 3 和 5"那道题**给的是澄清**（要求用户二选一），
