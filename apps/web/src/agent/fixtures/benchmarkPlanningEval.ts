@@ -251,9 +251,26 @@ export interface PlanningEvalDependencies {
 /** 报告契约的"哪里出错了"标签：**一处定义**（运行、标注重算两条路都用它）。 */
 const PLANNING_REPORT_WHERE = "应用内题集 planning 运行记录"
 
+/**
+ * **一次运行有几条记录**：题 × 轮 —— **两条支路共用这一个公式**（fix round，复核 m5）。
+ *
+ * 为什么要有它：没 provider 的那一支原来是 `cases.map(...)` + **写死的 `trial: 1`**，
+ * 而成功那一支是两层循环。两处各写一遍 ⇒ `PLANNING_EVAL_TRIALS` 一变，两支的可读区长度就分叉
+ *（而"分叉"在这里的表现是"人读区少了几块"或"多出几块对不上的区块"，不会报错）。
+ * 现在"有几条"只由这一个函数回答，两支只管怎么造那一条。
+ */
+function attemptsFor(cases: readonly BenchmarkCase[]): { entry: BenchmarkCase; trial: number }[] {
+  const attempts: { entry: BenchmarkCase; trial: number }[] = []
+  for (const entry of cases) {
+    for (let trial = 1; trial <= PLANNING_EVAL_TRIALS; trial += 1) attempts.push({ entry, trial })
+  }
+  return attempts
+}
+
 /** 跑一轮真实 provider 的题集 planning 评测。 */
 export async function runProviderPlanningEval(dependencies: PlanningEvalDependencies = {}): Promise<PlanningEvalResult> {
   const cases = planningEvalCases()
+  const attempts = attemptsFor(cases)
   const resolveProvider = dependencies.resolveProvider ?? resolveActiveProvider
   const resolution = await resolveProvider()
 
@@ -262,7 +279,7 @@ export async function runProviderPlanningEval(dependencies: PlanningEvalDependen
      * **一次请求都不发**：解析失败时连规划器都不造（与 `providerAgentEval.ts:58` 同一顺序）。
      * 整批写 `not_measured` + 显式 `null` 的身份 —— 没有凭据时不许"跳过"，也不许编一个数字。
      */
-    const runs = cases.map((entry): BenchmarkRun => ({
+    const runs = attempts.map(({ entry }): BenchmarkRun => ({
       caseId: entry.id,
       provider: null,
       model: null,
@@ -281,9 +298,9 @@ export async function runProviderPlanningEval(dependencies: PlanningEvalDependen
       provider: null,
       unavailable: { code: resolution.code, detail: resolution.detail },
       runs,
-      // 一行都没跑，所以一条正文都没有（`text` 是空的），但每条题仍然占一行区块 ——
+      // 一行都没跑，所以一条正文都没有（`text` 是空的），但每条题每一轮仍然占一行区块 ——
       // 读者要能看出"这几条没有对象可读"，而不是以为人读区漏了东西。
-      readable: cases.map((entry): PlanningReadableCase => ({ caseId: entry.id, trial: 1, status: "not_measured", group: readabilityGroupFor({ layer: "planning", status: "not_measured" }), text: "" })),
+      readable: attempts.map(({ entry, trial }): PlanningReadableCase => readableCaseFor(entry, trial, "not_measured", "")),
       report: buildReport(runs, PLANNING_REPORT_WHERE)
     }
   }
@@ -292,14 +309,13 @@ export async function runProviderPlanningEval(dependencies: PlanningEvalDependen
   const identity = { id: resolution.provider.id, modelId: resolution.provider.modelId }
   const runs: BenchmarkRun[] = []
   const readable: PlanningReadableCase[] = []
-  for (const entry of cases) {
-    for (let trial = 1; trial <= PLANNING_EVAL_TRIALS; trial += 1) {
-      // 每条题一个新的规划器实例：真实那一侧因此每次重新解析 provider、拿新的 runId
-      //（与 `offlineAgentEval.ts` 的"每次尝试都新建"同一条口径）。
-      const outcome = await runOneCase(entry, trial, identity, () => createPlanner(resolution))
-      runs.push(outcome.run)
-      readable.push(outcome.readable)
-    }
+  for (const { entry, trial } of attempts) {
+    // 每条题一个新的规划器实例：真实那一侧因此每次重新解析 provider、拿新的 runId
+    //（与 `offlineAgentEval.ts` 的"每次尝试都新建"同一条口径）。
+    // **顺序 `await`**（不是并行）：这是一条会花钱的路径，不许把它变成并发请求。
+    const one = await runOneCase(entry, trial, identity, () => createPlanner(resolution))
+    runs.push(one.run)
+    readable.push(one.readable)
   }
 
   return { mode: "real_provider", provider: identity, unavailable: null, runs, readable, report: buildReport(runs, PLANNING_REPORT_WHERE) }
@@ -345,8 +361,19 @@ async function runOneCase(
     humanReadability: null
   }
   const started = Date.now()
-  /** 模型给的那段东西（`planner.plan` 的返回值）。抛之前拿不到 ⇒ 保持 `null` ⇒ 正文是空串。 */
-  let envelope: PlanEnvelope | null = null
+  /**
+   * **正文在 `try` 内算一次，`catch` 复用同一个值**（fix round，复核 C1）。
+   *
+   * 初始值是 `""` 是这条纪律的另一半：万一 `readableBody` 还是抛了（不可信输入没有下限），
+   * 抛点落在"算正文"这一步时 `text` 仍然是 `""` —— 这一条会**如实记 `error`**，
+   * **整批不会被拖垮**，也不会出现半截正文。
+   *
+   * 改动前是"在 `catch` 里再调一次 `readableBody`"：`try` 内抛 ⇒ 被 `catch` 接住 ⇒
+   * `catch` 里**又**调一次同一个无保护的构造 ⇒ 二次抛出直接逃出 `runOneCase` ⇒
+   * `runProviderPlanningEval` reject，**一条记录都留不下**（复核员的探针实测：
+   * `TypeError: Cannot read properties of undefined (reading 'map')`）。
+   */
+  let text = ""
   try {
     const workspace = workspaceFor(entry)
     const document = createEmptyDocument(workspace)
@@ -356,7 +383,12 @@ async function runOneCase(
      *（`request` 为什么必须完整，见 `planRequestFor` 的注释。）
      */
     const request = planRequestFor(entry.prompt, workspace, `benchmark-planning-${entry.id}-${trial}`, document)
-    envelope = (await createPlanner().plan(request)).plan
+    /**
+     * 信封**只在 `try` 里活着**（不再声明到外面）：`catch` 需要的是**已经算好的那段正文**，
+     * 不是信封本身 —— 这正是"不许在 `catch` 里再调一次构造"的结构保证。
+     */
+    const envelope = (await createPlanner().plan(request)).plan
+    text = readableBody(envelope)
     const compiled = compilePlan(envelope, {
       document,
       prompt: entry.prompt,
@@ -374,11 +406,11 @@ async function runOneCase(
      * **fail-closed 那一半一个字不改**：澄清**不是** `planned`（"问了"不等于"计划被接受"）。
      */
     if (compiled.ok && compiled.plan?.kind === "clarification") {
-      return outcome(entry, trial, { ...base, status: "clarification", evidence: clarificationEvidence(entry.id, compiled.plan), latency }, envelope)
+      return outcome(entry, trial, { ...base, status: "clarification", evidence: clarificationEvidence(entry.id, compiled.plan), latency }, text)
     }
     return compiled.ok && compiled.plan?.kind === "plan"
-      ? outcome(entry, trial, { ...base, status: "planned", evidence: acceptedEvidence(compiled.diagnostics.length, compiled.actions.length, compiled.draftDocument !== null), latency }, envelope)
-      : outcome(entry, trial, { ...base, status: "rejected", evidence: rejectionEvidence(entry.id, compiled), latency }, envelope)
+      ? outcome(entry, trial, { ...base, status: "planned", evidence: acceptedEvidence(compiled.diagnostics.length, compiled.actions.length, compiled.draftDocument !== null), latency }, text)
+      : outcome(entry, trial, { ...base, status: "rejected", evidence: rejectionEvidence(entry.id, compiled), latency }, text)
   } catch (error) {
     return outcome(entry, trial, {
       ...base,
@@ -386,7 +418,8 @@ async function runOneCase(
       // 原始消息，不加工：这一条读数说的是"跑的时候抛了"，把它概括成一句话会让排障无从下手。
       evidence: [{ claim: entry.id, status: "error", evidence: error instanceof Error ? `${error.name}: ${error.message}` : String(error) }],
       latency: { totalMs: Math.max(0, Date.now() - started) }
-    }, envelope)
+      // **复用** `try` 里算过的那一份 —— 不许在这里再调一次构造（那正是 C1 的机制）。
+    }, text)
   }
 }
 
@@ -394,13 +427,15 @@ async function runOneCase(
  * 把"这一轮的记录"与"这一轮要读的那段东西"配成一对。
  *
  * **两样东西一起返回**（而不是各建一次）是为了它们不可能对不上：人读区第 N 行永远是
- * `runs` 第 N 行的正文。分组（`group`）用的是报告契约那一份判据，不在这里另写。
+ * `runs` 第 N 行的正文。
  */
-function outcome(entry: BenchmarkCase, trial: number, run: BenchmarkRun, envelope: PlanEnvelope | null): { run: BenchmarkRun; readable: PlanningReadableCase } {
-  return {
-    run,
-    readable: { caseId: entry.id, trial, status: run.status, group: readabilityGroupFor(run), text: readableBody(envelope) }
-  }
+function outcome(entry: BenchmarkCase, trial: number, run: BenchmarkRun, text: string): { run: BenchmarkRun; readable: PlanningReadableCase } {
+  return { run, readable: readableCaseFor(entry, trial, run.status, text) }
+}
+
+/** 一条可读区记录：分组用报告契约那一份判据（不在这里另写一套）。 */
+function readableCaseFor(entry: BenchmarkCase, trial: number, status: BenchmarkRunStatus, text: string): PlanningReadableCase {
+  return { caseId: entry.id, trial, status, group: readabilityGroupFor({ layer: "planning", status }), text }
 }
 
 /**
@@ -409,18 +444,45 @@ function outcome(entry: BenchmarkCase, trial: number, run: BenchmarkRun, envelop
  *
  * 只做"把结构摊成人能读的几行"，**不解释、不概括、不补**：一旦这里做了概括，
  * 可读性标注量的就是我们的概括，而不是模型给的东西。
+ *
+ * ## 这个函数的输入是**不可信输出**（fix round，复核 C1）
+ *
+ * 信封来自模型，`modelPlanner.ts:315-316` 自己的注释就写着"**不可信输出**"：
+ * `:585` 在 `parsePlanEnvelope` 失败时**原样**交出模型给的形状（`actions` 可能根本没有），
+ * `:606` 与 `:325-329`（文本通道）在 `JSON.parse` 失败时交出的是**原始字符串**。
+ *
+ * 所以这里**逐项防御**，两条纪律：
+ * - **认不出的形状一律返回 `""`**（= 没有可读正文）。**不抛** —— 抛了会把这一条变成"跑的时候抛了"，
+ *   而在改动之前它甚至会把**整批**拖垮（见 `runOneCase` 的注释）；
+ * - **不拼接**：`只读回答：${undefined}` 这种"我们自己编出来的正文"绝不许出现 ——
+ *   面板会把它当"模型给的那段东西"摆出来，旁边就是三个可读性按钮，**人会拿它去打分**。
  */
 function readableBody(envelope: PlanEnvelope | null): string {
-  if (envelope === null) return ""
-  if (envelope.kind === "plan") {
-    const actions = envelope.actions.map((action, index) => `${index + 1}. ${action.actionId}`)
+  if (typeof envelope !== "object" || envelope === null) return ""
+  const shape = envelope as { kind?: unknown }
+  if (shape.kind === "plan") {
+    const plan = envelope as { goal?: unknown; actions?: unknown }
+    if (typeof plan.goal !== "string" || !Array.isArray(plan.actions)) return ""
+    // 动作名也逐项查：`actionId` 不是非空字符串时**不编一个名字**（"undefined" 与占位串都是编的）。
+    const ids = plan.actions.map((action) => (typeof action === "object" && action !== null ? (action as { actionId?: unknown }).actionId : undefined))
+    if (!ids.every((id): id is string => typeof id === "string" && id.trim().length > 0)) return ""
+    const actions = ids.map((id, index) => `${index + 1}. ${id}`)
     return [
-      `目标：${envelope.goal}`,
-      `动作（${envelope.actions.length} 条）：${actions.length === 0 ? "（这份计划没有动作）" : actions.join("；")}`
+      `目标：${plan.goal}`,
+      `动作（${plan.actions.length} 条）：${actions.length === 0 ? "（这份计划没有动作）" : actions.join("；")}`
     ].join("\n")
   }
-  if (envelope.kind === "clarification") return `提问：${envelope.questions.join(" / ")}`
-  return `只读回答：${envelope.answer}`
+  if (shape.kind === "clarification") {
+    const questions = (envelope as { questions?: unknown }).questions
+    if (!Array.isArray(questions) || !questions.every((question): question is string => typeof question === "string")) return ""
+    return `提问：${questions.join(" / ")}`
+  }
+  if (shape.kind === "answer") {
+    const answer = (envelope as { answer?: unknown }).answer
+    return typeof answer === "string" ? `只读回答：${answer}` : ""
+  }
+  // 连 `kind` 都不是那三种之一（例如交上来一个**原始字符串**）：**没有可读正文**。
+  return ""
 }
 
 /** 「被接受」是一条**客观**结论，所以证据写的是编译器自己给出的那几个量。 */
@@ -485,13 +547,24 @@ function boundedText(text: string, limit: number): string {
 }
 
 /**
+ * **这一条有没有正文可读**（空串 / 全空白都算没有）。
+ *
+ * 定义只有一处：呈现（`readableTextForDisplay`）与界面（人读区那一句说明）共用它 ——
+ * 否则会出现"正文明明有，旁边却写着'没有正文可读'"这种**同屏自相矛盾**
+ *（fix round，复核 m7）。
+ */
+export function hasReadableBody(entry: PlanningReadableCase): boolean {
+  return entry.text.trim().length > 0
+}
+
+/**
  * 人读区里显示的那段文本：**空正文如实说"没有正文可读"**，否则按上限截断。
  *
  * 空正文**不是**"渲染失败"：`not_measured` / `error` 那两条本来就没有对象可读
  *（它们也因此不进可读性分母、不给标注按钮）。
  */
 export function readableTextForDisplay(entry: PlanningReadableCase): string {
-  return entry.text.trim().length === 0 ? "（这一条没有正文可读）" : boundedText(entry.text, PER_CASE_READABLE_LIMIT)
+  return hasReadableBody(entry) ? boundedText(entry.text, PER_CASE_READABLE_LIMIT) : "（这一条没有正文可读）"
 }
 
 /** `readableRate` 的呈文：**分母为 0 时说的是"未标注"，不是一个 0 分**。 */

@@ -12,6 +12,7 @@ import {
   annotateReadability,
   formatPlanningReport,
   planningEvalCases,
+  readableTextForDisplay,
   runProviderPlanningEval,
   workspaceFor
 } from "./benchmarkPlanningEval"
@@ -90,6 +91,22 @@ const ANSWER_ENVELOPE: PlanEnvelope = {
   answer: "异面直线是指不同在任何一个平面内的两条直线。",
   toolResultRefs: []
 }
+
+/**
+ * **不可信的输出**（fix round，复核 C1/I1）—— 这三个形状都不是我编的，是**真实路径**会交出来的：
+ * - `MALFORMED_PLAN_ENVELOPE`：`kind` 说是计划，但 `actions` 没了。
+ *   `modelPlanner.ts:585` 在 `parsePlanEnvelope` 失败时**原样**交出模型给的形状，所以这就是它；
+ * - `ANSWER_MISSING_FIELD_ENVELOPE`：`kind` 说是只读回答，但 `answer` 没了；
+ * - `RAW_STRING_ENVELOPE`：**根本不是信封** —— `modelPlanner.ts:606` 与 `:325-329`（文本通道）
+ *   在 `JSON.parse` 失败时交出的就是**原始字符串**。
+ *
+ * 三个形状共同的后果（改动前）：`readableBody` 在 `try` 内抛 ⇒ 被 `catch` 接住 ⇒
+ * `catch` 里**又**调一次同一个无保护的构造 ⇒ 二次抛出逃出 `runOneCase` ⇒
+ * **整批 `runProviderPlanningEval` reject，一条记录都留不下**（而钱已经花掉了）。
+ */
+const MALFORMED_PLAN_ENVELOPE = { schemaVersion: PLAN_SCHEMA_VERSION, kind: "plan", goal: "缺 actions", factIds: [] } as unknown as PlanEnvelope
+const ANSWER_MISSING_FIELD_ENVELOPE = { schemaVersion: PLAN_SCHEMA_VERSION, kind: "answer", goal: "缺 answer" } as unknown as PlanEnvelope
+const RAW_STRING_ENVELOPE = "这根本不是 JSON，也不是信封" as unknown as PlanEnvelope
 
 function plannerReturning(envelope: PlanEnvelope, seen: string[] = []) {
   return {
@@ -354,6 +371,92 @@ describe("应用内真实 provider 的题集 planning 通道（N4b）", () => {
     expect(result.readable[1]!.text).toBe("")
     // 3 条记录里只有 2 条有对象可读：可读性分母是 2，不是 3。
     expect(result.report.realProvider.readability.total).toBe(2)
+    /**
+     * 空正文在**呈现**上也要如实说"没有正文可读"（而不是留白，更不是编一句）。
+     * 这条与本文件下面的 C1/I1 判据共用同一个谓词（`hasReadableBody`），所以两处不会分叉。
+     */
+    expect(readableTextForDisplay(result.readable[1]!)).toBe("（这一条没有正文可读）")
+    expect(readableTextForDisplay(result.readable[0]!)).toContain(ACCEPTED_ENVELOPE.goal)
+  })
+
+  /**
+   * **fix round（复核 C1，Critical）**：`readableBody` 读的是**不可信**的输出。
+   *
+   * 复核员的探针实测：`{kind:"plan", goal:"missing actions"}` ⇒
+   * `TypeError: Cannot read properties of undefined (reading 'map')` ⇒ `runProviderPlanningEval` **reject**，
+   * **一条 `error` 记录都留不下**。机制不是"偶然逃逸"而是**必然**：`readableBody` 在 `try` 内抛 ⇒
+   * 被 `catch` 接住 ⇒ `catch` 里**又**调一次同一个无保护的构造 ⇒ 二次抛出逃出 `runOneCase`。
+   *
+   * 后果与立项理由正相反：**一条坏输出就让整批读数全丢**，而"真实 provider 的坏输出"正是这本
+   * benchmark 要测的东西之一 —— 钱已经花掉的那几次请求的诊断会一起消失。
+   */
+  it("**结构不合格的信封不许拖垮整批**：那一条照旧留下记录，且不许伪造正文", async () => {
+    const result = await runProviderPlanningEval({
+      resolveProvider: async () => RESOLVED,
+      createPlanner: () => plannerReturning(MALFORMED_PLAN_ENVELOPE)
+    })
+
+    // ① **整批仍然留下记录**（改动前这里直接 reject，三条一条都留不下）。
+    expect(result.runs).toHaveLength(PLANNING_EVAL_REQUESTS)
+    expect(result.readable).toHaveLength(PLANNING_EVAL_REQUESTS)
+    // ② 判题口径**没有被这条健壮性改动绕过**：`actions` 没了 ⇒ 解析失败 ⇒ `rejected`
+    //    （不是"跑的时候抛了"，更不是"没测"）—— 编译器自己的诊断照旧留在 `evidence` 里。
+    expect(result.runs.map((run) => run.status)).toEqual(["rejected", "rejected", "rejected"])
+    expect(result.runs[0]!.evidence.length).toBeGreaterThan(0)
+    // ③ **不许伪造正文**：认不出的形状一律"没有可读正文"。
+    expect(result.readable.map((entry) => entry.text)).toEqual(["", "", ""])
+  })
+
+  /**
+   * **fix round（复核 I1，Important）**：兜底分支原来会**伪造**正文 ——
+   * `只读回答：${envelope.answer}` 对"根本不是信封"的输入渲染成 `只读回答：undefined`，
+   * 而面板把它当"模型给的那段东西"摆出来、旁边就是三个三值按钮 ⇒ **人会对我们自己拼出来的
+   * `undefined` 打可读性分**，污染本批唯一要产出的东西。
+   */
+  it("**认不出的形状不许被渲染成正文**（尤其不许出现 `只读回答：undefined`）", async () => {
+    for (const envelope of [ANSWER_MISSING_FIELD_ENVELOPE, RAW_STRING_ENVELOPE]) {
+      const result = await runProviderPlanningEval({
+        resolveProvider: async () => RESOLVED,
+        createPlanner: () => plannerReturning(envelope)
+      })
+
+      expect(result.runs).toHaveLength(PLANNING_EVAL_REQUESTS)
+      expect(result.readable.map((entry) => entry.text)).toEqual(["", "", ""])
+      // 把"伪造"这件事本身也钉住（不只是"不是空串"）：面板上不许出现我们自己拼的词。
+      for (const entry of result.readable) {
+        expect(entry.text).not.toContain("undefined")
+        expect(entry.text).not.toContain("只读回答")
+      }
+      expect(readableTextForDisplay(result.readable[0]!)).toBe("（这一条没有正文可读）")
+    }
+  })
+
+  it("**人读区与记录整列一一配对**（不是只有第 0 条对得上）", async () => {
+    const result = await runProviderPlanningEval({ resolveProvider: async () => RESOLVED, createPlanner: () => plannerReturning(ACCEPTED_ENVELOPE) })
+
+    expect(result.readable).toHaveLength(result.runs.length)
+    // 整列的（题 id / 轮次 / 结局）逐项相等 —— 只断言 `[0]` 的话，错位或漏一条都照绿。
+    expect(result.readable.map((entry) => [entry.caseId, entry.trial, entry.status]))
+      .toEqual(result.runs.map((run) => [run.caseId, 1, run.status]))
+    // 分组也整列对上（这一批三条都是 `planned` ⇒ 都在 `plan` 那一组）。
+    expect(new Set(result.readable.map((entry) => entry.group))).toEqual(new Set(["plan"]))
+  })
+
+  it("**两条支路用同一个「一次运行有几条记录」的公式**（没 provider 那一支也一样）", async () => {
+    const result = await runProviderPlanningEval({
+      resolveProvider: async () => ({ ok: false, code: "no_active_profile", detail: "还没有选择「使用中」的模型服务" })
+    })
+
+    /**
+     * 改动前这一支把 `trial: 1` **写死**（成功那一支是循环）⇒ 轮数一改，两支的可读区长度就分叉。
+     * **诚实标注**：`PLANNING_EVAL_TRIALS` 今天就是 1，所以这条断言**在现值下是退化的** ——
+     * 它钉的是"长度 = 题数 × 轮数"这个公式，不是现值；真正防止两条支路分叉的是它们**共用**同一个
+     * `attemptsFor()`（代码结构，不是这条断言）。
+     */
+    expect(result.readable).toHaveLength(PLANNING_EVAL_CASE_COUNT * PLANNING_EVAL_TRIALS)
+    expect(result.readable).toHaveLength(result.runs.length)
+    expect(result.readable.every((entry) => entry.trial >= 1 && entry.trial <= PLANNING_EVAL_TRIALS)).toBe(true)
+    expect(result.readable.every((entry) => entry.text === "")).toBe(true)
   })
 
   it("**可读性标注**：没标就是「未标注」，比率是 `null` 不是 `0`；标过之后才有比率", async () => {
@@ -368,7 +471,13 @@ describe("应用内真实 provider 的题集 planning 通道（N4b）", () => {
     expect(group(none, "plan").readableRate).toBeNull()
     expect(formatPlanningReport(none)).toContain("已标 0 / 未标 3")
     expect(formatPlanningReport(none)).toContain("未标注")
-    // 报告里**不许**出现"可读性 0"这种读起来像分数的写法。
+    /**
+     * **正向钉**（fix round 复核 m3）：下面那条否定式**不恒真但很窄** —— 换个词它就漏，
+     * 而且面板上那份 JSON 根本不在它的射程里。所以这里再钉一次"必须真的出现这句话"：
+     * 没有标注时，报告里**必须**写着 `readable 比率 未标注`。
+     */
+    expect(formatPlanningReport(none)).toContain("readable 比率 未标注")
+    // 报告里**不许**出现"可读性 0"这种读起来像分数的写法（否定式，配合上面那条正向钉）。
     expect(formatPlanningReport(none)).not.toMatch(/readable 比率\s+0(\.0+)?\b/)
 
     // ② 标一条 `readable`：计数与比率都动，而且**不再自己数一遍**（走同一份报告契约）。

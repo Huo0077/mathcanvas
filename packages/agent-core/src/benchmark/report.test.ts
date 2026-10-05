@@ -78,7 +78,13 @@ describe("人工可读性：词表与字段（计划 N4 :324）", () => {
   })
 
   it("**`humanReadability` 这个键必须在**（与 cost / latency 同一条纪律：漏写要能被点名）", () => {
-    expect([...BENCHMARK_RUN_REQUIRED_FIELDS]).toContain("humanReadability")
+    /**
+     * 清单**逐项相等**（fix round 复核 m8）：原来只有 `toContain("humanReadability")`，
+     * 那挡不住"旧十项被改内容 / 换顺序 / 少一项"（本仓在词表上正是靠 `toEqual` 钉的）。
+     */
+    expect([...BENCHMARK_RUN_REQUIRED_FIELDS]).toEqual([
+      "caseId", "provider", "model", "seed", "mode", "layer", "status", "evidence", "cost", "latency", "humanReadability"
+    ])
 
     const broken = run()
     delete broken.humanReadability
@@ -99,6 +105,15 @@ describe("人工可读性：词表与字段（计划 N4 :324）", () => {
     expect(() => buildBenchmarkReport([run({ humanReadability: "" })])).toThrow(/humanReadability/)
     // 也不能拿布尔/数字顶上（`true` 不是「可读」）。
     expect(() => buildBenchmarkReport([run({ humanReadability: true })])).toThrow(/humanReadability/)
+  })
+
+  it("**`humanReadability: undefined` 也要抛**（那才是「忘了写」的现实形状）", () => {
+    /**
+     * fix round 复核 m2：下面这条注释宣称"`undefined` 一律拒收"，但原来只测了 `"good"` / `""` / `true`。
+     * 而现实里"忘了写"交出来的恰恰是这个 —— 键在、值是 `undefined`（例如
+     * `{ ...base, humanReadability: maybe }` 而 `maybe` 没拿到值）。它**不许**被当成未标注。
+     */
+    expect(() => buildBenchmarkReport([run({ humanReadability: undefined })])).toThrow(/humanReadability/)
   })
 })
 
@@ -136,8 +151,9 @@ describe("人工可读性：分母与比率", () => {
     expect([plan.total, plan.annotated, plan.unannotated]).toEqual([2, 2, 0])
     expect([clarification.total, clarification.annotated, clarification.unannotated]).toEqual([1, 0, 1])
     // 若两个组共用一个分母，这里会算成 1/3（分子 1、分母 3 条对象）；各自算才是 1/2。
+    // （这里只留这一条断言：复核 m4 指出再补一条 `not.toBeCloseTo(1/3)` 是**冗余否定** ——
+    //   上面这条 `toBe(0.5)` 已经钉死同一个值，它不可能独立变红，所以删掉。）
     expect(plan.readableRate).toBe(0.5)
-    expect(plan.readableRate).not.toBeCloseTo(1 / 3)
     // 一条都没标的那一组：分母是 0 ⇒ 比率是 `null`（不是 0，也不是拿别人的标注算出来的数）。
     expect(clarification.readableRate).toBeNull()
   })
@@ -213,18 +229,21 @@ describe("人工可读性：分母与比率", () => {
   })
 })
 
-/** 编译期钉子：`BenchmarkRun` 上这个字段是**必需的键 + 可 null 的值**（不是可选键）。 */
-const _keyIsRequired: BenchmarkRun = {
-  caseId: "x",
-  provider: null,
-  model: null,
-  seed: 7,
-  mode: "deterministic_local",
-  layer: "extraction",
-  status: "extracted",
-  evidence: [{ claim: "x", status: "extracted", evidence: "一条子句" }],
-  cost: null,
-  latency: null,
-  humanReadability: null
-}
+/**
+ * **编译期钉子**：`humanReadability` 在类型上**是必需键**（不是可选键）。
+ *
+ * 为什么原来那条钉不住（fix round 复核 m1）：原来只是写了一个**带这个属性的对象字面量**赋给
+ * `BenchmarkRun` —— 而 TS 里"写了可选属性"与"写了必需属性"**同样**通过赋值检查。
+ * 也就是说：把 `BenchmarkRun.humanReadability` 改成可选，那条断言照样编译，
+ * 它**宣称**的"编译期钉子"是超能力的宣称。
+ *
+ * 下面这条用的是"空对象能否赋给只含该字段的 `Pick`"这个判据：
+ * - **必需** ⇒ `Record<never, never>` 不可赋 ⇒ 结果类型是 `true` ⇒ `const _keyIsRequired: true = true` 通过；
+ * - **改成可选** ⇒ 可赋 ⇒ 结果类型是 `never` ⇒ `true` 不可赋给 `never` ⇒ **`npm run typecheck` 红**。
+ *
+ * 它真的会被检查：`packages/agent-core/tsconfig.json` 的 `include` 是 `["src"]`，测试文件在里面。
+ * （`Record<never, never>` 就是"空对象类型"的写法，用它而不用 `{}` 是为了不撞 eslint 的空对象类型规则。）
+ */
+type HumanReadabilityKeyIsRequired = Record<never, never> extends Pick<BenchmarkRun, "humanReadability"> ? never : true
+const _keyIsRequired: HumanReadabilityKeyIsRequired = true
 void _keyIsRequired

@@ -11,6 +11,7 @@ import {
   PLANNING_EVAL_TRIALS,
   annotateReadability,
   formatPlanningReport,
+  hasReadableBody,
   readableTextForDisplay,
   runProviderPlanningEval,
   type PlanningEvalDependencies,
@@ -314,9 +315,19 @@ export function ProviderEval({ dependencies }: { dependencies?: ProviderEvalDepe
                   </p>
                   <pre>{readableTextForDisplay(entry)}</pre>
                   {entry.group === null ? (
-                    // 没有对象可读的那两条（not_measured / error）：**不给标注按钮**，
-                    // 因为它们不进可读性分母 —— 给了按钮就会出现"标了但没被数进去"。
-                    <p>（这一轮没有正文可读 —— 它不进可读性分母，所以也没有标注）</p>
+                    /**
+                     * 没有对象可读的那两条（`not_measured` / `error`）：**不给标注按钮**，
+                     * 因为它们不进可读性分母 —— 给了按钮就会出现"标了但没被数进去"。
+                     *
+                     * 那句"没有正文可读"**必须与正文本身同判据**（fix round，复核 m7）：
+                     * 这里问的是 `hasReadableBody(entry)`，与上面渲染正文用的是**同一个谓词** ——
+                     * 否则将来"有正文却写着没有正文"会**同屏自相矛盾**。
+                     */
+                    <p>
+                      {hasReadableBody(entry)
+                        ? "（这一轮不进可读性分母，所以没有标注）"
+                        : "（这一轮没有正文可读 —— 它不进可读性分母，所以也没有标注）"}
+                    </p>
                   ) : (
                     <p>
                       当前标注：{readability[entry.caseId] ?? "未标注"}{" "}
