@@ -508,7 +508,7 @@
 | 1. 统一实体构造与拓扑物化 | P0 | ✅ **已完成并验收** | 见下节 |
 | 2. 拆分过大的编排和领域文件 | P1 | 🔶 **已开四十六批** | `operations.ts` 2817→**307**（→ 十一个模块）、`PropertiesBar.tsx` 1069→298（→`inspectorFields` / `inspectorLabels` / `inspectorReadings` / `inspectorModel`）、`App.tsx` 2000→**809**（→`fileExports` / `documentIds` / `creationCommands` / `solidCommands` / `recordCommands` / `structureCommands` / `anchorRotationCommands` / `point3ToolCommands` / `previewCommands` / `selectionCommands` / `canvasStatusPrompt` / `draftingCommands` / `appViewState` / `useDraftPersistence` / `commandDispatch` / `useKeyboardShortcuts`）、`threeScene.tsx` 1807→269（→`threeSceneEffect` + **七个阶段模块**）、Rust `lib.rs` 992→**168**（→`src/commands/` 五组）、`agent-core/schemas.ts` 1300→**180**（→`schemaReaders` / `actionRegistry` / `hashing` / `actionInputs` / `actionAudit`） |
 | 3. 接入几何 Worker | P1 | ✅ **已完成并验收** | 宿主生命周期 + 如实降级；契约缺口全部填上 |
-| 4. 工作区级代码分包 | P2 | ✅ **已完成** | 入口单 chunk 2 066.63 → 1 629.80 kB（−21.1%） |
+| 4. 工作区级代码分包 | P2 | ✅ **已完成** | 分包那一次：入口单 chunk 2 066.63 → 1 629.80 kB（−21.1%）。**当前入口是 1 801.18 kB**（2026-10-05 实测，之后的正常增长），见 §三 的"主 bundle 仍超 500 kB"一条 |
 | 5. 正式 CI 门禁 | P2 | ✅ **已完成** | 四个作业按成本分层 |
 | 6. 文档与过期注释收口 | P2 | ✅ **已完成**（当前 / 归档 / 变更记录三份分工） | 点名注释已修；`docs/current-status.md` 是"现在时"的唯一一处，变更记录见 `CHANGELOG.md` |
 | 7. 大型场景性能基准 | 持续 | ✅ **已完成（八条场景 + 主线程响应性）** | 覆盖评审点名的场景，含密集相交、连续拖动 300 帧与浏览器里的帧间隔读数 |
@@ -610,8 +610,8 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
 
 - **几何 Worker 已接线，但"值不值"这条结论仍是**依据本轮读数**得出的**（编译 73 ms vs 复制 1 ms，约 76 倍）；**不是"管线全同步"** —— 那个判断此前记错了，已更正。降级路径（没有 `Worker` 的环境就地算）有独立用例，见方案 3 一节。
 - **性能上的一件事还没做**：把 `applyOperation` 每次从整份文档 `structuredClone` 的成本降下来。基准显示这一档**固定成本压过增量收益**（局部重算比全量还慢）。注意这与方案 3 不是同一件事：编译那 73 ms 花在**算**上（复制只占 1 ms），所以 Worker 对它是有效杠杆；而重算那一档的固定成本才是复制。
-- **主 bundle 仍超 500 kB 警告**：入口 1 614 kB 里是应用代码 ≈855 kB + React 221 kB + Three 530 kB。`three` 仍在入口 —— 立体几何是首屏可达的顶级模块，拆它要连带改 `threeScene.tsx` 的装配方式。
-- **`npm run test:rust` 已复跑**（2026-09-25）：**232 例通过 + 3 ignored / 0 失败** —— Rust 侧本阶段零改动，复跑是为了量它、并查清首次 CI 里 rust 作业为什么红（见下一条）。
+- **主 bundle 仍超 500 kB 警告（2026-10-05 重新量过）**：入口 `index` chunk 现在是 **1 801.18 kB**（gzip 526.71 kB），比此前记的 1 614 kB **又长了约 11.6%**。上面那句"应用代码 ≈855 + React 221 + Three 530"是**当时那次的拆分读数**，本轮**没有重新拆**（要拆得单独做一次 bundle 分析）。`three` 仍在入口 —— 立体几何是首屏可达的顶级模块，拆它要连带改 `threeScene.tsx` 的装配方式。**同一次构建里还有** `engineeringExporters` 433.81 kB 与 `geometry.worker` 376.19 kB 两个独立 chunk。
+- **`npm run test:rust` 已复跑**（**2026-10-05 更新：238 例通过 + 3 ignored / 0 失败**；2026-09-25 那次是 232 —— 差额来自第 21 轮给凭据库用例加的两条并发守卫，与第 27 / 37 轮两次复跑一致）—— Rust 侧其余部分本阶段零改动。
 - **确认面板不按属主实体归并子对象**：用户要"一个立方体"，面板会说"会新增 28 个对象"。计数本身没错（28 个对象确实都会进文档），但"要不要按实体归并着说"是产品判断 —— 与方案 1 里"对象树以拓扑为依据"是同一个问题的另一面。**连带影响**：`agent-flow.spec.ts` 里有两条用例还在按"一个立方体 = 一个对象"断言（`共 2 个` / `会新增 1 个对象`），方案 1 之后它们必然为红 —— 已改成断言**不会随计数口径漂移**的性质（"共 N 个"必须大于"本次新增"，即草稿落在已有内容之上），同批 e2e 里 `solid-prism` / `agent-oblique-prism` 一直是按新口径断言的。
 - **`longtask` API 在本机不可用（实测，不是猜的）**：评审方案 7 点名要的 `PerformanceObserver({ type: "longtask" })` 在**空白页**上、对一次**故意阻塞 200 ms** 的主线程占用，`observed` 与 `performance.getEntriesByType("longtask")` **都是空的**，而 `supportedEntryTypes` 里**确实**列着 `longtask`（Chromium 153 / Playwright headless）—— 即"声称支持、什么也不报"（一次性探针复核过，用完即删）。所以主线程读数改用**帧间隔**（`requestAnimationFrame` 间隔）实现：同一个 200 ms 阻塞必定表现为 ≥200 ms 的空档，量具灵敏度可以自证（用例里就有这条标定断言）。见 `e2e/main-thread-responsiveness.spec.ts`。
 - **`section.create` 的平面已收口，但"登记表承诺 ≠ 校验层实现"这类风险只是**被识别出来**，没有机器挡住**（2026-09-26，见 §二「实机现场故障」）：`actionRegistry` 是"我们承诺收什么"的唯一声明处，而 `actionInputs` 里**少一个分支就静默落空** —— 字段会原样透传，直到文档校验器才被拒，报的还是够不到的**动作级**路径（那条一次性修复因此改不动它）。这一批把 `section.create` 补上了（三种平面写法收成一种，且共线时按**字段路径**拒绝），并留了判据："登记表里写了 `ask_user` 问题、或写了可选字段的每个动作都必须在校验层有显式分支"。**但这条判据目前只写在文档里**，没有一个测试逐动作核对登记表与 `parseActionInputs` 的分支覆盖面 —— 下一个新动作照样可能漏。
