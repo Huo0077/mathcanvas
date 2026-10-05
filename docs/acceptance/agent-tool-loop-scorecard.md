@@ -19,12 +19,18 @@ Date: October 4, 2026. Status: geometry-instance verification added; real-provid
 | Capability | Status | Required evidence before enabling |
 | --- | --- | --- |
 | General nonlinear solving | **partial (N2, flag default off)** | model/unsat/unknown/timeout/diverged, residuals and reproducible seeds — **present**; **degrees of freedom still `null`**; no success rate on a real task set; not wired into any user path unless the switch is turned on |
-| Constraint-preserving drag | design only | browser drag suite with DOF/overconstraint/recovery evidence |
-| Open-ended problem compilation | design only | obligation extraction and judgeability rates separate from final drawing rate |
+| Constraint-preserving drag | **partial (N3, flag default off)** | kernel point projection + drag-layer DOF/redundancy diagnosis + provable contradictions + the drag decision layer all exist, and the commit is **one transaction** (so single-step undo is free). **Missing**: any browser case, any test of "single-step undo after a constrained drag", the recovery path, and **any product entry that turns the switch on** — so the browser suite the gate asks for cannot even be written yet |
+| Open-ended problem compilation | **harness only (N4 step 1–2)** | dataset schema + validator, credential redaction, run/report contract split by `extraction` / `witness`, a seven-category starter set, and `npm run bench:agent`. One real reading: extraction coverage 5/7. **Missing**: judgeability, solve rate, human review, and the entire `real_provider` adapter |
 | Formal proof | design only | independently checked proof artifacts |
 | Real provider | not measured | pass@1/pass@3, cost, latency and human readability |
 
 > **Do not read "partial (N2)" as "the solving gate is passed."** What exists: a bounded, seed-reproducible search that produces a witness only when the same verifier passes it, behind a default-off switch, with a golden pin proving the off path is byte-identical to `4707b64`. What does not: degrees of freedom (always `null`), any real-task success rate, any browser end-to-end of the rescue path, and any product wiring of a solver backend.
+>
+> **Degrees of freedom, precisely (2026-10-05).** Two different questions now have two different answers, and neither is "done":
+> - **Witness layer** (`apps/web`/`agent-core`): still `null`. It needs `ConstraintType` to express line⊥plane and dihedral angles; until then any number would be a partial sum that hides what it left out.
+> - **Drag layer** (kernel `constraints3dProjection`): a **real first-order number** — movable axes minus the rank of the constraint Jacobian, computed at the final configuration. First-order only: at a non-smooth point (residuals that take an absolute value) or a degenerate configuration the rank can overstate local stiffness. The two layers share one rank implementation (`linear-algebra.ts`) but deliberately use different "movable" sets (bindings vs. `anchoredPointIds`).
+>
+> **Do not read "partial (N3)" as "the drag gate is passed", nor "harness only (N4)" as "open-ended understanding works".** In both cases the missing half is the half that needs a real user or a real provider — see the per-capability notes above.
 ## Current evidence
 
 ### 2026-10-04 geometry-diagram supplement
@@ -41,7 +47,7 @@ Date: October 4, 2026. Status: geometry-instance verification added; real-provid
 
 | Scope | Status | Evidence |
 |---|---|---|
-| Deterministic code/tests | Measured | 250 Vitest files, 2935 passed, 1 todo; TypeScript, Rust, and Web build passed |
+| Deterministic code/tests | Measured (2026-10-05) | **303 Vitest files, 3529 passed, 1 todo**; `typecheck` and `lint` exit 0; Rust **236 passed / 3 ignored** (4 of 5 runs this round — one run had a failure that did not reproduce); full e2e **185 passed / 1 failed** (that spec passes 3/3 when run alone) |
 | Offline deterministic pass@1 | Measured **4/8** | `npm run eval:agent`, 2026-09-29 — passes: `create-cube`, `create-tetrahedron`, `reject-degenerate-cube`, `visual-fit-drawn` |
 | Offline deterministic pass@3 | Measured **4/8** | same run, 3 independent trials per task |
 | Offline tool selection | Measured **45/45** | same run |

@@ -13,6 +13,24 @@
 
 ## 一、现在能不能跑（可复核的门禁读数）
 
+**2026-10-05 N6 门禁复跑（**串行**跑完整套）—— 本批实测：**
+
+| 命令 | 当次结果 |
+| --- | --- |
+| `npm.cmd run typecheck` | exit 0（全部工作区 + `e2e/` + `scripts/`） |
+| `npm.cmd test -- --maxWorkers=2 --reporter=dot` | **303 文件 / 3529 通过 + 1 todo / 0 失败**（135 s） |
+| `npm.cmd run lint` | exit 0，**0 error / 13 warning**（与基线逐条相同） |
+| `npm.cmd run test:rust` | 五次里**四次 236 通过 / 3 ignored / 0 失败**；**一次有 1 条失败** |
+| `npm.cmd run test:e2e -- --workers=3` | **185 通过 / 1 失败**（`three-canvas-size.spec.ts:72`） |
+| `npm.cmd run test:perf` | **9 / 9 通过**；`drag/300-frames` **1295 ms（≈4.3 ms/帧）** |
+| `npm.cmd run eval:agent` | exit 0；`deterministic_local`：pass@1 **4/8**、pass@3 **4/8**、tool selection **45/45**、tool error rate **3/45** |
+| `npm.cmd run bench:agent` | exit 0；`cases=7 covered=5 empty=2 error=0` |
+
+> **两条红都不可复现，而且都没有定位 —— 不许读成全绿。** e2e 那条（`keeps the canvas size when the status text changes`）**单独跑 3 次全过（12/12）**；rust 那次的完整输出没有留档，**失败用例名没抓到**，随后 4 次复跑都不复现。按本仓纪律"不复现就不猜着改"，这里如实记为**未定位的不稳定**，既不写成"已修"，也不写成"与本批无关"。
+> **性能读数要谨慎比较**：`drag/300-frames` 这次 **1295 ms**，而本文件 2026-10-01 的读数是 **682.5 ms（≈2.3 ms/帧）**。这一次是在**跑完一整套门禁之后**测的（机器不是空闲状态），所以**不能据此断言回归**；要判断趋势得在空闲机器上单独复跑。
+> **`eval:agent` 的数字与 2026-09-29 那次逐项相同**（4/8、4/8、45/45、3/45），模式仍是 `deterministic_local` —— 计划的记分卡原文写明它**与模型能力无关**。
+> **串行纪律**：这一套是**依次**跑的。把 `test:e2e` 与那几条 node 套件并行跑会污染主线程读数（本文件记过：拖动那一档从 16.8 ms 涨到 366.7 ms），那样跑出来的 e2e 不算一次有效验收。
+
 **2026-10-05 N4 第二步（benchmark 运行入口与 `layer` 契约）—— 本批实测：**
 
 | 命令 | 当次结果 |

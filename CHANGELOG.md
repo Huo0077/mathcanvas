@@ -5,6 +5,36 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-05 —— N6 第二步：**串行**复跑整套门禁，并把两条不可复现的红如实记下
+
+- **为什么要专门跑这一遍**：发布门禁文档（`docs/acceptance/agent-release-gate.md`）里的读数还是 N2 批次的
+  （287 文件 / 3319 用例），而它回答的是"能不能放行"—— **一份过期的门禁读数比没有读数更危险**。
+  计划的 N6 第 4 条也点名了这一整串命令。
+- **这一遍是串行跑的**（不是并行）：本仓自己记过"整套 node 单测与 e2e 并行跑时，拖动那一档从
+  16.8 ms 涨到 366.7 ms，那样跑出来的 e2e 不算一次有效验收"。原始读数在
+  `docs/current-status.md` §一「N6 门禁复跑」。
+- **两条红，都不可复现，都没有定位**（这是本批最值得留下的事实）：
+  1. 全量 e2e **185 通过 / 1 失败**（`three-canvas-size.spec.ts:72`"keeps the canvas size when the
+     status text changes"）—— 那条**单独跑 3 次全过**（12/12）；
+  2. `test:rust` 五次里**一次有 1 条失败**—— 那次的完整输出没有留档，**失败用例名没抓到**，
+     随后 4 次复跑都不复现（四次都是 236 通过 / 3 ignored / 0 失败）。
+  **两条都不写成"已修"，也不写成"与本批无关"** —— 按本仓纪律"不复现就不猜着改"，
+  它们是**未定位的不稳定**，这一条事实本身就该留在门禁文档里。
+- **一处需要谨慎的读数**：`test:perf` 的 `drag/300-frames` 这次 **1295 ms**（≈4.3 ms/帧），
+  而 2026-10-01 的读数是 **682.5 ms**（≈2.3 ms/帧）。这一次是在**跑完一整套门禁之后**测的，
+  机器不是空闲状态，**不能据此断言回归** —— 要判断趋势得在空闲机器上单独复跑。
+- **其余都是绿的**：`typecheck` exit 0；单测 **303 文件 / 3529 通过 + 1 todo / 0 失败**；
+  `lint` exit 0（0 error / 13 warning）；`test:perf` 9/9；`eval:agent` exit 0
+  （`deterministic_local`：pass@1 **4/8**、pass@3 **4/8**、tool selection **45/45**、tool error rate **3/45**
+  —— 与 2026-09-29 那次逐项相同，**与模型能力无关**）；`bench:agent` exit 0
+  （`cases=7 covered=5 empty=2 error=0`）。
+- **发布门禁文档同步更新**（判决与读数分工）：`agent-release-gate.md` 的第 1 条由"✅ 已守住"改成
+  "⚠️ **本轮复跑有两条不可复现的红**"，并补了 N3 / N4 各自"到哪一步、缺什么"的一节；
+  `agent-tool-loop-scorecard.md` 把"Constraint-preserving drag"由 `design only` 改成
+  **`partial (N3, flag default off)`**、"Open-ended problem compilation"改成 **`harness only (N4 step 1–2)`**，
+  并把"自由度"那一句拆成**见证层（仍 `null`）**与**拖动层（一阶实数）**两件事 —— 它们回答的不是同一个问题。
+- **只改文档**（外加门禁复跑本身），所以没有新的可执行产物。
+
 ## 2026-10-05 —— N4 第二步：benchmark 的**运行入口**与 `layer` 契约（跑出第一个真实读数）
 
 - **补上了上一批留下的两件事**：

@@ -26,7 +26,7 @@
 
 | # | 计划原文 | 状态 | 判据 / 证据 |
 | --- | --- | --- | --- |
-| 1 | 类型检查、Agent 核心测试、Web Agent 测试、Rust provider 测试必须通过 | ✅ 已守住 | `npm run typecheck`（6 workspace + `e2e/` + `scripts/`）exit 0；`npx vitest run` **287 文件 / 3319 用例 + 1 todo / 0 失败**；`npm run test:rust` **236 例 + 3 ignored / 0 失败**。CI 四个作业见 `.github/workflows/ci.yml` |
+| 1 | 类型检查、Agent 核心测试、Web Agent 测试、Rust provider 测试必须通过 | ⚠️ **本轮复跑有两条不可复现的红** | 原始读数在 `docs/current-status.md` §一「2026-10-05 N6 门禁复跑」：单测 **303 文件 / 3529 通过 + 1 todo / 0 失败**、`typecheck` exit 0、`lint` 0 error / 13 warning；`test:rust` **五次里四次 236 通过 / 3 ignored / 0 失败，一次有 1 条失败**；全量 e2e **185 通过 / 1 失败**（那条单独跑 3 次全过）。**两条都是"没复现、也没定位"，不许读成全绿。** |
 | 2 | 代表任务 pass@1 和语义验证率达到预先约定阈值 | ❌ **未测（无数据）** | 离线读数由 `npm run eval:agent` 打印：**pass@1 4/8、语义验证 4/8**，模式是 `deterministic_local`。**真实 provider 的 pass@1 仍未测过**，所以"预先约定阈值"没有可对照的基线 |
 | 3 | 不允许出现模型可见但 dispatcher 未实现的工具 | ✅ 已守住（测试） | `agentReleaseGate.test.ts`：模型面发布的**每一个只读工具**都必须有真实执行路径；模型面上**唯一**的非只读工具是 `plan.set_plan`（精确集合，多一个就红）；`draft.confirm_commit` / `draft.stage_actions` / `draft.discard` / `draft.verify` **一个都不许**出现在模型面上 |
 | 4 | 不允许出现未验证却声称完成的运行记录 | ✅ 已守住（测试） | `agentReleaseGate.test.ts` + `verification/completionGate.ts`：声明了验收条件的运行，报告不构成证据时**不得到达 `awaiting_confirmation`** |
@@ -73,6 +73,24 @@
 
 **但这一条门槛仍未达成**，缺的是：① **自由度**目前恒为 `null`（`ConstraintType` 表达不了线⊥面与角度；窄豁免，归 N3）；② 只有**一次运行**的后端可行性实测，**没有接入产品**，也没有真实题集上的成功率；③ **浏览器端**的救援路径端到端未验收（归 N4）。**不要把 N2 读成"求解门槛已过"。**
 
+### 2026-10-05 更新：N3（动态拖动）与 N4（开放题）各自到了哪一步
+
+**N3 动态拖动：从"design only"变成"内核与接线都有，但开关关着、验收未做"。**
+
+- **已有的**：内核的点投影（`constraints3dProjection.ts`）、拖动层的**自由度与冗余诊断**、**可证的矛盾**判据（同一条线段两个不同长度；点既在线上又在面上而两者平行且不相交）、以及 `apps/web/src/constrainedDrag3.ts` + `App.tsx` 的 3D `onDragEnd` 接线。提交走**一次** `applyBatch`，所以一步撤销是白拿的。
+- **没有的（按门槛原文逐条对）**：门槛要"**真实浏览器**中保持约束、拒绝过约束、一步撤销和恢复路径" ——
+  - **保持约束**：只有**单元**证据（`constrainedDrag3.test.ts` 11 条），**没有浏览器用例**；
+  - **拒绝过约束**：有（矛盾与"改不动"两条路径都有用例），但同样只在单元层；
+  - **一步撤销**：机制上成立（一次事务），**但没有任何用例验过"约束拖动后一次撤销回到原状"**；
+  - **恢复路径**：未做。
+  - **并且**：`constrainedDrag` 开关**默认关**，`appNextPhaseFlags()` 恒返回全关，**没有任何产品入口能把它打开** —— 所以浏览器正/反例**写不出来**。这一条是 N3 验收的**唯一**障碍，需要产品决定（不是技术问题）。
+
+**N4 开放题理解：只有"载体"，没有任何真实读数。**
+
+- **已有的**：题集 schema + 校验器、凭据检查、运行记录与报告契约（分 `extraction` / `witness` 两层）、七类各一条的起步题集、`runner.mjs` + `npm run bench:agent`。
+- **唯一的实测**：`BENCHMARK_COVERAGE cases=7 covered=5 empty=2 error=0`（**抽取层**，`deterministic_local`）。
+- **没有的**：门槛要"抽取率、judgeability、求解率与人工审查分开统计" —— 现在只有抽取层的一个覆盖率读数，**judgeability / 求解率 / 人工审查三样都没有**；`real_provider` 整批 `not_measured`（**适配器没写**，需要先定用哪个 provider、凭据放哪）。**不要把 N4 的第一步读成"开放题门槛已过"。**
+
 ## 最终阶段门槛
 
 计划的原文门槛是"**只有所有门禁通过**，才允许把 typed tool loop 设为默认运行路径"。
@@ -85,4 +103,10 @@ npm.cmd run typecheck
 npm.cmd test
 npm.cmd run test:rust
 npm.cmd run eval:agent
+npm.cmd run bench:agent
+npm.cmd run test:e2e -- --workers=3
+npm.cmd run test:perf
 ```
+
+> **读法**：`test:e2e` 与那几条 node 套件**不要并行跑**（本机实测过拖动那一档从 16.8 ms 涨到 366.7 ms，
+> 那样跑出来的 e2e 不算一次有效验收）。上面这个顺序是**串行**的。
