@@ -230,6 +230,18 @@ describe("输入绑定（R51 假设 / R56 被证明的命题）", () => {
     expect(proofInputHash({ ...base, assumptions: ["甲", "甲"] })).toBe(proofInputHash({ ...base, assumptions: ["甲"] }))
   })
 
+  it("**已知的不对称（钉子，不是 RED）**：goal 传空串与不传 goal 是**两个**哈希", () => {
+    /**
+     * 上面那条"空数组与不传同哈希"**只适用于列表**：列表的"没有"就是空列表。
+     * **字符串不是**——`goal: ""` 与不传 goal 今天就是两个哈希。
+     * 两把尺子并存是**有意的**（控制器裁决：本任务不改 `goal` 的语义），
+     * 但它是同一个"假过期"来源，所以在这里钉住，免得哪天有人把它当成"顺手统一"。
+     * 这条**首跑即绿**（写它的时候行为已经如此），如实记为钉子。
+     */
+    expect(proofInputHash({ ...base, goal: "" })).not.toBe(proofInputHash(base))
+    expect(proofInputHash({ ...base, statement: "" })).not.toBe(proofInputHash(base))
+  })
+
   it("**R56**：被证明的那条命题原文进哈希 —— 换了命题就必须失配", () => {
     expect(proofInputHash({ ...base, statement: "theorem t : PA ⟂ BD := by sorry" }))
       .not.toBe(proofInputHash({ ...base, statement: "theorem t : True := by trivial" }))
