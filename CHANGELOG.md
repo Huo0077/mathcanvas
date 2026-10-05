@@ -5,6 +5,38 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-05 —— `hostEdge`：按端点名指定棱（用户裁决；一步之内绑对，不必赌下标）
+
+- **动机（承上一条）**：`hostSub` 是**宿主内部的棱下标**。模型在一个 stage 里"先建实体、再绑点"时
+  **拿不到那次的观察结果**，只能赌下标；而赌错会被几何语义校验**当场拒绝**（实测：
+  `diagram_condition_failed: O为 BD的中点：实测 0.70711，题设要求 0。`）。
+  `hostEdge: { from, to }` 让它直接说"**B 与 D 之间那条棱**"，由编译器去查两端点名 —— **顺序无关**。
+- **配套六处（缺一件都不成立，每一件都有它自己的守卫）**：
+  1. `actionRegistry`：`inputFields` 加 `hostEdge`；`RawFieldTypes` 加 `hostEdge: "namePair"`；
+     `FieldKind` 闭集加 `namePair`（**新字段必须显式声明**，这是刻意的）；
+  2. `actionSchemas`：**发布给模型**的工具 schema 加 `namePair`（`{from,to}` 两个 string、required、
+     `additionalProperties: false`）；
+  3. `actionFieldParity.test`：**每个 `FieldKind` 都必须有形状断言** —— 补 `namePair`（这条奇偶守卫
+     本身就是"新种类必须显式声明"的第二道）；
+  4. `actionInputs`：`normalizeHostEdge`（两个有界非空点名）；
+  5. `scene-graph`：动作类型加 `hostEdge`；`compileCreateBoundPoint` 里 `resolveEdgeByNames`
+     —— 拿宿主物化出来的 `edge3` 的 `pointIds` 比对两端 `label`，**唯一命中**才返回 `...:e{k}`，
+     **后面那条路径一个字节都没变**；找不到 ⇒ `edge_not_found`（detail 里**列出这条实体有哪些点名**，
+     否则模型无从修）；
+  6. 技能摘要：`spatial-modeling` 改成"**优先用 `hostEdge`**"，`hostSub` 只在拿不到点名时用。
+- **又一次"同一个判断写了两遍"（与上一条同一笔账）**：我把「两条都给不许猜」在**校验层**与**编译层**
+  各判了一遍 —— 于是靶向变异（去掉校验层那处）**全绿**、抓不住。删掉校验层那处、只留编译层
+  （并在校验层写明判据在编译层）之后，变异立刻抓住它。
+  **冗余的判据不是双保险，是假守卫** —— 这一条今天第二次记。
+- **一支到不了的判据，如实标注**：`ambiguous_edge` 今天**到不了** —— 两个顶点同名在
+  `solid.create_polyhedron` 那一层就被拒了（`duplicated…`），而正常多面体两顶点之间只有一条棱。
+  所以用例改成**钉住"到不了"这件事**，注释里明说**不声称它有守卫**；留着那一支是为了将来真出现时不许猜。
+- **又一次自己挖的引号坑**：把 `{from:"B",to:"D"}` 写进 TS 的**双引号字符串**里，未转义的引号把字符串截断，
+  表现是两个测试文件报 **transform 错误**（不是用例失败）—— 这类"文件级失败"要看清是语法还是断言。
+- **证据（都验过红绿）**：RED 5 条全红（`unknown_field`）；**变异 A**（解析只看一端）⇒ 2 条红；
+  **变异 B**（去掉"两条都给"的判据）⇒ 1 条红；全库单测 **3634 → 3639 通过 + 1 todo / 0 失败**；
+  `typecheck` / `lint` exit 0；**黄金样本 13 条仍绿**。
+
 ## 2026-10-05 —— 修掉"O 为 BD 的中点"那条死路（用户现场：题设尚未核验）
 
 - **现场**：用户在三棱锥 A-BCD 的题上得到"题设尚未核验：**O为 BD的中点**：点名缺失、图形退化或角度无法计算"。
