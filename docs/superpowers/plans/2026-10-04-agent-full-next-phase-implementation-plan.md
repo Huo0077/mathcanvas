@@ -190,8 +190,18 @@ export type DragSolveResult =
   | { status: "overconstrained" | "inconsistent" | "timeout"; conflicts: string[]; nextActions: string[] }
 ```
 
-- [ ] **RED：** 拖动保持中点/垂直/固定距离；过约束拒绝；欠约束显示自由度；拖动一步撤销。
-- [ ] **RED 命令：** `npm.cmd exec -- vitest run packages/geometry-kernel/src/constraints.test.ts packages/geometry-kernel/src/constraints3d.test.ts packages/geometry-kernel/src/planar-constraints.test.ts packages/geometry-kernel/src/reactive/constraints.test.ts packages/scene-graph/src/operations.test.ts packages/scene-graph/src/patches.test.ts packages/scene-graph/src/scene-store.test.ts --maxWorkers=1`；`npm.cmd run test:e2e -- e2e/agent-constrained-drag.spec.ts --workers=1`。
+- [x] **RED：** 拖动保持中点/垂直/固定距离；过约束拒绝；欠约束显示自由度；拖动一步撤销。
+  > **逐条落在哪（2026-10-05 核，全部成立）：** 中点 → **派生点**路径（`scene-graph/src/operations.test.ts`：
+  > 拖派生中点自己被拒、拖它挂靠的线会带着它走；3D 在 `resolve3d.ts:138`）—— **这一半本来就成立，
+  > 不在"约束"而在"派生"里**；垂直 → `constraints3dProjection.test.ts`；固定距离 → 同上；
+  > 过约束拒绝 → `constrainedDrag3.test.ts` + `findConstraintContradictions`；欠约束自由度 →
+  > `analysis.remainingDof / underconstrained`；**一步撤销 → `apps/web/src/constrainedDragUndo.test.ts`（第 45 轮补）**。
+  > **注意**：这不是"新写了一条替代品"，而是逐条确认**既有测试**覆盖到了 RED 的每一个词。
+- [ ] **RED 命令：** `npm.cmd exec -- vitest run packages/geometry-kernel/src/constraints.test.ts packages/geometry-kernel/src/constraints3d.test.ts packages/geometry-kernel/src/planar-constraints.test.ts packages/geometry-kernel/src/reactive/constraints.test.ts packages/scene-graph/src/operations.test.ts packages/scene-graph/src/patches.test.ts packages/scene-graph/src/scene-store.test.ts --maxWorkers=1`；`npm.cmd run test:e2e -- e2e/agent-constrained-drag.spec.ts --workers=1`
+  > **前半段已跑（2026-10-05）：7 文件 / 241 通过 / 0 失败。** 前半段**不是**"跑过一次"就算完 ——
+  > 它是第 33 轮才第一次按这个**集合**跑过的。
+  > **后半段仍然不成立**：`e2e/agent-constrained-drag.spec.ts` **不存在**，因为**没有任何产品入口能打开
+  > `constrainedDrag` 开关**（见 `docs/current-status.md` §一.2 第 1 条）。这一条**不能**勾。
 - [ ] **GREEN：** pointer intent → 临时约束 → solve → commit transaction；禁止直接改 render state。
 - [ ] **GREEN 命令：** 上述定向测试；再跑完整 `npm.cmd run test:e2e -- --workers=3`。
 > **第五步（2026-10-05）：线状 `parallel` / `perpendicular` 的投影。** 计划 RED 里点名的"垂直"
