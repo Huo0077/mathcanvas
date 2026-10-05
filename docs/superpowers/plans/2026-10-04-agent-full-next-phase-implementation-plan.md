@@ -346,6 +346,21 @@ export type DragSolveResult =
 >（必须先过依赖/许可证/进程与线程边界审查）；把 proof artifact 接进 `ConfirmationPanel` /
 > `agentStore` / run event schema；"一份证明该绑到多细的输入"仍未裁决。
 
+> **第三步（2026-10-05）：后端接线门 + `--mode=smoke`。** 自查发现第一步漏了一环：
+> `verifyProofArtifact` 原来只校验形状 / 版本 / 绑定，而**手工编的产物**可以把这些都满足
+>（`backend.name` 写 `lean4`、正文放一段字符串、`status` 写 `verified`）。新增
+> `WIRED_PROOF_BACKENDS`（**空的**）+ 新码 `backend-not-wired`：生产默认一个后端都没接，
+> 所以**今天没有任何产物能升到 `formally_proved`**。同时交付计划点名的
+> `scripts/proof-spike/`（`smoke.test.ts` + `runner.mjs` + `npm run proof:smoke`），
+> 它验的是那条不变量 + **反方向**（注入假后端后必须能升上去）。
+>
+> **本阶段仍未做的（剩下的全部）**：**任何真实后端 adapter** —— 要把名字加进
+> `WIRED_PROOF_BACKENDS`，**必须先过**依赖 / 许可证 / 进程与线程边界 / WASM 或原生依赖 /
+> 启动耗时 / 超时行为的审查（做法见 `docs/acceptance/next-phase-flag-and-dependency-review.md`），
+> **没有审查结论不许加**；把 proof artifact 接进 `ConfirmationPanel` / `agentStore` / run event
+> schema 的只读展示；"一份证明该绑到多细的输入"仍未裁决；首批的"共线 / 共面 / 勾股"
+> 表达不出来那条也仍未裁决（见上）。
+
 - [ ] **N5 GREEN 命令：** `npm.cmd exec -- vitest run packages/agent-core/src/proof --maxWorkers=1`; `node scripts/proof-spike/runner.mjs --mode=smoke`。
 
 > **N5 执行记录（2026-10-05，只完成第一步）：** 上面几条检查项**一条都还没勾** ——

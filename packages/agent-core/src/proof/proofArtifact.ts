@@ -28,6 +28,32 @@ import type { ProofGoalKind } from "./proofGoals"
  * 机器可读 `code` 上（"它不是证明"与"它证明了别的东西"是两件事，不许混成一句）。
  */
 
+/**
+ * **这个构建里真正接上的证明后端**（今天是**空**）。
+ *
+ * ## 为什么必须有这张名单（上一版漏掉的那一环）
+ *
+ * 上一版只校验产物的**形状、版本与绑定** —— 而一份**手工编的**产物可以把这些都满足：
+ * `backend.name` 写 `lean4`、`proof` 里放一段字符串、`result.status` 写 `verified`。
+ * 校验器**没有任何办法**从产物本身判断"这段话真的被 Lean 内核接受过"。
+ * 所以"有没有证明"这件事最终只能由**我们这边**回答：这个后端**接上了没有**。
+ * 名单是空的，今天就没有任何产物能升到 `formally_proved` —— 这不是保守，这是事实。
+ *
+ * ## 要把一个后端加进这张名单，先过这几关（计划 N5 的硬要求）
+ *
+ * 许可证与依赖审查、进程 / 线程边界、WASM 或原生依赖、启动耗时、超时与失败行为 ——
+ * 做法见 `docs/acceptance/next-phase-flag-and-dependency-review.md`。
+ * **没有审查结论不许加进来。**
+ */
+export const WIRED_PROOF_BACKENDS: readonly string[] = []
+
+export interface ProofVerifyOptions {
+  /**
+   * 允许哪些后端。**缺省就是"一个都没接"**（`WIRED_PROOF_BACKENDS`），
+   * 于是今天任何 `verified` 产物都过不去。测试可以注入一个假后端来验"这条路本身是通的"。
+   */
+  wiredBackends?: readonly string[]
+}
 /** 产物格式版本。**不匹配就拒**，不做"兼容猜测"。 */
 export const PROOF_ARTIFACT_VERSION = 1
 
@@ -88,6 +114,8 @@ export type ProofRejectionCode =
   | "input-mismatch"
   /** 这条 goal 不在我们声称支持的首批短目标里（`proofGoals.ts`）—— 表外目标绝不升级。 */
   | "undeclared-goal"
+  /** 产物自称来自一个**没有接进这个构建**的后端：形状再合格也不等于真的验过。 */
+  | "backend-not-wired"
   /** 产物自身合法，是**后端**报的 failed / unsupported / timeout。 */
   | "backend-verdict"
 
@@ -137,7 +165,7 @@ function reject(status: ProofCheckStatus, code: ProofRejectionCode, detail: stri
  * 只要任何一步不过，返回的 `artifact` 就是 `null` —— 调用方拿不到"半个产物"去贴到别处。
  * 输入来自不可信的一侧（模型），所以这里**不抛异常**：坏形状退化成 `failed` + `reasons`。
  */
-export function verifyProofArtifact(artifact: unknown, expectation: ProofExpectation): ProofVerification {
+export function verifyProofArtifact(artifact: unknown, expectation: ProofExpectation, options: ProofVerifyOptions = {}): ProofVerification {
   const record = asRecord(artifact)
   if (record === null) return reject("failed", "not-an-object", "证明产物必须是一个对象。")
 
@@ -200,6 +228,14 @@ export function verifyProofArtifact(artifact: unknown, expectation: ProofExpecta
   if (record.proof.trim().length === 0) {
     return reject("failed", "empty-proof", "声称 verified 却拿不出证明正文。")
   }
+  /**
+   * **最后一道，也是最要紧的一道**：这个后端**接上了没有**。
+   * 前面几条只能证明"这份产物长得像一份证明"；只有这一条问的是"我们真的跑过它吗"。
+   */
+  const wired = options.wiredBackends ?? WIRED_PROOF_BACKENDS
+  if (!wired.includes(backend.name)) {
+    return reject("failed", "backend-not-wired", `后端「${backend.name}」没有接进这个构建（当前接上的：${wired.length === 0 ? "一个都没有" : wired.join(" / ")}）：形状合格的产物不等于真的验过。`)
+  }
 
   return { status: "verified", reasons: [], artifact: verified }
 }
@@ -223,11 +259,12 @@ export interface ProofEvidenceOutcome {
 export function evidenceStatusWithProof(
   base: ClaimEvidenceStatus,
   expectation: ProofExpectation,
-  artifacts: readonly unknown[]
+  artifacts: readonly unknown[],
+  options: ProofVerifyOptions = {}
 ): ProofEvidenceOutcome {
   let firstFailure: ProofVerification | null = null
   for (const artifact of artifacts) {
-    const verification = verifyProofArtifact(artifact, expectation)
+    const verification = verifyProofArtifact(artifact, expectation, options)
     if (verification.status === "verified") return { status: "formally_proved", verification }
     if (firstFailure === null) firstFailure = verification
   }

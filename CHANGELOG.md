@@ -5,6 +5,31 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-05 —— N5 第三步：补上"**这个后端接上了没有**"这一环（上一版漏掉的），并给出可跑的 smoke
+
+- **上一版漏了什么（自查发现的真缺口）**：`verifyProofArtifact` 只校验产物的**形状、版本与绑定** ——
+  而一份**手工编的**产物可以把这些都满足：`backend.name` 写 `lean4`、`proof` 里放一段字符串、
+  `result.status` 写 `verified`。校验器**没有任何办法**从产物本身判断"这段话真的被 Lean 内核
+  接受过"。所以"有没有证明"这件事最终只能由**我们这边**回答：这个后端**接上了没有**。
+- **新增** `WIRED_PROOF_BACKENDS`（**空的**）+ `ProofVerifyOptions.wiredBackends` + 新码
+  `backend-not-wired`。生产默认一个后端都没接，所以**今天没有任何产物能升到 `formally_proved`**
+  —— 这不是保守，是事实。测试可以注入一个假后端，用来验"这条路本身是通的"。
+- **新增** `scripts/proof-spike/`（计划 N5 的 `--mode=smoke`）：`smoke.test.ts` + `runner.mjs` +
+  `npm run proof:smoke`（与 `agent-eval` / `bench:agent` 同一条纪律：没有 TS 运行器，所以真正的
+  运行放 `.test.ts`，入口只传命令与退出码）。它验的**不是**"能不能证明"，而是那条不变量：
+  **首批每一个能表达的目标，用一份"看起来完美"的手工产物都升不上去，而且原因必须是
+  `backend-not-wired`**；同时钉住**反方向**（注入假后端后同一份产物必须能升上去）——
+  少了那一条，一个"永远拒"的实现也能让不变量成立，那种绿是假的。
+- **实测输出**：`PROOF_SPIKE {"wiredBackends":[],"firstBatchExpressible":6,"unexpressibleFirstBatch":["collinear","coplanar","pythagorean"],…}`
+  —— 六类目标逐个报出"被拒的理由"，并把上一批查出的"计划点名但表达不出来"的三个也一并打出来。
+- **证据**：proof 目录 **25 条**（原 22 + 3：生产默认拒 / 注入后可通 / 后端名要逐字匹配）；
+  smoke **6 条**；`npm run proof:smoke -- --mode=lean` → **exit 1** 并说明"没有后端模式，
+  假装有比失败更糟"。全库单测 **306 文件 / 3560 通过 + 1 todo / 0 失败**；`typecheck` exit 0；
+  `lint` exit 0（0 error / 13 warning，与基线逐条相同）。
+- **边界**：仍然**没有接任何后端**；要把后端加进那张名单，必须先过依赖 / 许可证 / 进程与线程边界
+  的审查（做法见 [`next-phase-flag-and-dependency-review.md`](docs/acceptance/next-phase-flag-and-dependency-review.md)），
+  **没有审查结论不许加**。
+
 ## 2026-10-05 —— N5 第二步：短目标**词表**，以及"计划点名的三个现在表达不出来"这个事实
 
 - **为什么要有这张表**：证明出口最危险的失效方式不是"证不出来"，而是**把没证的东西说成证过了**。

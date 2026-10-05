@@ -16,6 +16,7 @@
     "test:e2e": "playwright test",
     "eval:agent": "node scripts/agent-eval.mjs",
     "bench:agent": "node scripts/agent-benchmark/runner.mjs",
+    "proof:smoke": "node scripts/proof-spike/runner.mjs",
     "test:rust": "node scripts/toolchain.mjs cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml",
     "test:watch": "vitest",
     "lint": "eslint ."

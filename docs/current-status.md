@@ -13,6 +13,21 @@
 
 ## 一、现在能不能跑（可复核的门禁读数）
 
+**2026-10-05 N5 第三步（后端接线门 + smoke）—— 本批实测：**
+
+| 命令 | 当次结果 |
+| --- | --- |
+| `npm.cmd test -- --maxWorkers=2 --reporter=dot` | **306 文件 / 3560 通过 + 1 todo / 0 失败**（137 s） |
+| `npm.cmd run typecheck` | exit 0（全部工作区 + `e2e/` + `scripts/`） |
+| `npm.cmd run lint` | exit 0，**0 error / 13 warning**（与基线逐条相同） |
+| `npm.cmd run proof:smoke` | exit 0；`PROOF_SPIKE {"wiredBackends":[],"firstBatchExpressible":6,"unexpressibleFirstBatch":["collinear","coplanar","pythagorean"],…}` |
+| `npm.cmd run proof:smoke -- --mode=lean` | **exit 1**（"没有后端模式，假装有比失败更糟"） |
+
+> **补上了上一版漏掉的一环**：`verifyProofArtifact` 原来只校验形状 / 版本 / 绑定，而**手工编的产物**可以把这些都满足。新增 `WIRED_PROOF_BACKENDS`（**空的**）+ `backend-not-wired`：生产默认一个后端都没接，所以**今天没有任何产物能升到 `formally_proved`**。
+> **smoke 验的不是"能不能证明"，而是那条不变量**：首批每一个能表达的目标，用一份"看起来完美"的手工产物都升不上去、且理由必须是 `backend-not-wired`；同时钉住**反方向**（注入假后端后必须能升上去）—— 少了反向那条，一个"永远拒"的实现也能让不变量成立。
+> **证据**：proof 目录 25 条 + smoke 6 条。
+> **边界**：仍然**没有接任何后端**；加后端前必须先过依赖 / 许可证 / 进程与线程边界审查。
+
 **2026-10-05 N5 第二步（短目标词表）—— 本批实测：**
 
 | 命令 | 当次结果 |
