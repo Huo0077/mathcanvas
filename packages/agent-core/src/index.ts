@@ -33,6 +33,20 @@ export * from "./outputParser"
 export * from "./proof/proofArtifact"
 export * from "./proof/proofBackendReview"
 export * from "./proof/proofGoals"
+/**
+ * **Lean 4 适配器**（N5b）。桶导出是**必须**的：`WIRED_PROOF_BACKENDS` 在 `proofArtifact.ts` 里，
+ * 而"接上了谁"与"怎么用它"是同一件事的两半。两个模块都**零 `node:` import**
+ *（runner 由调用方注入），所以浏览器打包不会因为这一行而需要 Node 内置模块。
+ */
+export * from "./proof/lean4Adapter"
+export * from "./proof/lean4Toolchain"
+/**
+ * **Node 那一层**（真的起 `lean.exe`）**刻意不进包根**：它 import `node:child_process` 等内建模块，
+ * 只有在那条**显式调用**的证明路径上才会被用到。桶里少这一行，`apps/web` 的打包图就不会
+ * 因为这个适配器多出 Node 内置依赖（`lean4Adapter.ts` 自己零 `node:` import）。
+ * 用法：`import { createLean4Runner } from "@draw/agent-core/src/proof/lean4Runner"`（测试）或
+ * 从 `scripts/` 里直接用相对路径 import。
+ */
 export * from "./parameterAudit"
 export * from "./planCompiler"
 /**

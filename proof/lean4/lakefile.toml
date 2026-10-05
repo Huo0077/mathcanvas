@@ -1,0 +1,14 @@
+name = "draw-proof"
+version = "0.1.0"
+defaultTargets = ["DrawProof"]
+
+# Lean 4 证明后端的仓内小工程（N5b）。
+#
+# 显式写 git URL：`scope/name` 解析会指向 mathlib3 那个旧仓库，名字一样但不是同一个东西。
+[[require]]
+name = "mathlib"
+git = "https://github.com/leanprover-community/mathlib4"
+rev = "master"
+
+[[lean_lib]]
+name = "DrawProof"

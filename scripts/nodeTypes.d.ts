@@ -15,15 +15,34 @@
  */
 
 declare module "node:child_process" {
-  /** 只声明本仓库用到的形状：起一个子进程、发信号、看它有没有被杀。`stdio` 用数组形式（与 node 一致）。 */
+  /**
+   * 只声明本仓库用到的形状：起一个子进程、看两个输出流、等它关闭或报错。
+   *
+   * **⚠️ 这个形状必须与 `packages/agent-core/src/proof/lean4NodeTypes.d.ts` 里的**逐字相同**。
+   * 理由不是洁癖：一份 `.d.ts` 被另一个程序（这里是 `scripts/tsconfig.json` 的那一次 `tsc`）
+   * 收录时，它**看不到**另一个程序里那份声明 —— 所以两边各写一份时，**谁被收录谁生效**。
+   * 写成同一个超集，结果就与"谁赢"无关（实测撞到过：包里那份的成员在这里被遮蔽，
+   * runner 报了四五个"属性不存在"）。
+   */
   export interface ChildProcessLike {
+    stdout: { on(event: "data", listener: (chunk: unknown) => void): unknown } | null
+    stderr: { on(event: "data", listener: (chunk: unknown) => void): unknown } | null
     killed: boolean
     kill(signal?: string): boolean
+    on(event: "close", listener: (code: number | null) => void): unknown
+    on(event: "error", listener: (error: Error) => void): unknown
+    on(event: "exit", listener: (code: number | null, signal: string | null) => void): unknown
   }
   export function spawn(
     command: string,
     args?: readonly string[],
-    options?: { cwd?: string; stdio?: readonly string[]; env?: Record<string, string | undefined> }
+    options?: {
+      cwd?: string
+      stdio?: readonly string[]
+      env?: Record<string, string | undefined>
+      signal?: unknown
+      windowsHide?: boolean
+    }
   ): ChildProcessLike
 }
 
@@ -32,11 +51,19 @@ declare module "node:events" {
   export function once(emitter: unknown, event: string): Promise<unknown[]>
 }
 
+declare module "node:os" {
+  /**
+   * 系统临时目录。当前用户是 `packages/agent-core/src/proof/lean4Runner.ts`
+   *（把生成的 Lean 文件写在**仓库树之外**，跑完删掉）。
+   */
+  export function tmpdir(): string
+}
+
 declare module "node:fs/promises" {
   export function mkdir(path: string, options?: { recursive?: boolean }): Promise<string | undefined>
   export function mkdtemp(prefix: string): Promise<string>
   export function rm(path: string, options?: { recursive?: boolean; force?: boolean }): Promise<void>
-  export function writeFile(path: string, data: string): Promise<void>
+  export function writeFile(path: string, data: string, encoding?: string): Promise<void>
 }
 
 declare module "node:fs" {
@@ -46,6 +73,11 @@ declare module "node:fs" {
    * 而不是抛一个 `MODULE_NOT_FOUND` 让调用方猜。
    */
   export function existsSync(path: string): boolean
+  /**
+   * 列目录。当前用户是 `scripts/proof-spike/lean4EndToEnd.test.ts`
+   *（判断仓内那个 Lean 工程的 mathlib 缓存有没有展开 —— 那是真实端到端用例的 gate 条件）。
+   */
+  export function readdirSync(path: string): string[]
   /**
    * 读仓库里的文件。当前用户是 `scripts/docs-consistency/*.test.ts`（计划 / `current-status.md` /
    * 三张能力表）与 `scripts/dependency-licences/licences.test.ts`（许可快照与 `Cargo.lock`）。
