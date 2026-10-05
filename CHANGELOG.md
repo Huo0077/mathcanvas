@@ -5,6 +5,32 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-05 —— N5 第五步：又一处**同源误判** —— 「共线 / 共面」不是没有载体，是我只找了一层
+
+- **同一个错法，第二次**：第 46 轮我把计划的"中点"误判成需要扩约束词表（其实**派生点**早就在做）。
+  这一轮我按同一个问法（"**这件事在这个仓库里是不是已经有别的机制在做**"）去查 N5 那三个
+  "表达不出来"的首批目标 —— 果然：
+  **「共线 / 共面」有载体，只是不在解析层，在约束层。**
+- **证据（都要能指到行）**：`ConstraintType`（`packages/dsl/src/types.ts:876`）**本来就有**
+  `collinear` / `coplanar`；内核**既判**（`constraints3d.ts` 的 `collinearResidual` / `coplanarResidual`）
+  **又投影**（`constraints3dProjection.ts` 的 `PROJECTABLE` 与 L246/L267 两条分支）。
+  我第一版只按 `DiagramObligationKind`（解析层）映射，于是把这两个也算成了"一处载体都没有"。
+- **更正后的事实**：**真正一处载体都没有的，今天只有「勾股」一个** —— 它是三条边的代数关系，
+  `fixedDistance` 固定的是**单条边长**，不是 a²+b²=c²。
+- **代码侧改法（不只是改文档）**：
+  1. `ProofGoalSupport` 增加 `constraintTypes` 字段 —— **两种载体都写出来**，而不是只写一层；
+  2. 新增 `declaredProofGoalForConstraint(constraintType)`：同一条门，从**约束层**再问一遍；
+  3. 把原来那个含混的 `unexpressibleFirstBatchGoals()` **拆成两个**：
+     `firstBatchGoalsWithoutObligationCarrier()`（解析层读不出：共线/共面/勾股）与
+     `firstBatchGoalsWithoutAnyCarrier()`（**一处都没有：只有勾股**）。
+     原来混成一个，正是这次误判藏身的地方。
+- **读数里的变化**：`npm run proof:smoke` 现在**分开报两个清单** ——
+  `goalsWithoutObligationCarrier: ["collinear","coplanar","pythagorean"]`、
+  `goalsWithoutAnyCarrier: ["pythagorean"]`。**这把待裁决的范围从"三个目标"缩到了"一个目标"。**
+- **三处文档同步改准**（`current-status.md` §一.2 的裁决表、§四 F、计划文件各一处），
+  都写清"第一版只在解析层找"这个错在哪。
+- **证据**：proof 目录 35 → **36 条**；`proof:smoke` 7 条全绿；全库单测
+  **310 文件 / 3598 通过 + 1 todo / 0 失败**；`typecheck` exit 0；`lint` exit 0（0 error / 13 warning）。
 ## 2026-10-05 —— N3 第七步：改正我自己的一条结论 —— 计划的「中点」**不需要**扩约束词表
 
 - **我怎么错的**：第 28 轮我把计划 N3 的 RED（"拖动保持中点/垂直/固定距离"）逐词对过

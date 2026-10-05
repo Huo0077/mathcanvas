@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { declaredProofGoal, PROOF_GOAL_KINDS, PROOF_GOAL_SUPPORT, unexpressibleFirstBatchGoals } from "./proofGoals"
+import { declaredProofGoal, declaredProofGoalForConstraint, firstBatchGoalsWithoutAnyCarrier, firstBatchGoalsWithoutObligationCarrier, PROOF_GOAL_KINDS, PROOF_GOAL_SUPPORT } from "./proofGoals"
 
 /**
  * **形式证明出口声称支持哪些短目标**（N5）。
@@ -34,14 +34,30 @@ describe("形式证明的短目标词表（N5）", () => {
     expect(declaredProofGoal("乱写的")).toBeNull()
   })
 
-  it("计划点名、但**现在还表达不出来**的三个要如实列出来（不是悄悄当成支持）", () => {
-    // 解析层的 `DiagramObligationKind` 里没有共线 / 共面 / 勾股 —— 所以照计划的话把它们
-    // 列成"支持"，这张表就会变成一句没有载体的话：永远不会有 goal 被分类成它们。
-    expect(unexpressibleFirstBatchGoals()).toEqual(["collinear", "coplanar", "pythagorean"])
-    for (const kind of unexpressibleFirstBatchGoals()) {
+  it("**两种载体要分开报**：解析层读不出的 ≠ 一处载体都没有的", () => {
+    // 第一版把这两件事混成一个函数，于是把"只有约束层载体"的共线/共面也算成了"表达不出来"。
+    expect(firstBatchGoalsWithoutObligationCarrier()).toEqual(["collinear", "coplanar", "pythagorean"])
+    // 而**真的**一处载体都没有的，今天只有勾股一个。
+    expect(firstBatchGoalsWithoutAnyCarrier()).toEqual(["pythagorean"])
+    for (const kind of firstBatchGoalsWithoutAnyCarrier()) {
       const support = PROOF_GOAL_SUPPORT.find((entry) => entry.kind === kind)
       expect(support?.inFirstBatch).toBe(true)
       expect(support?.obligationKinds).toEqual([])
+      expect(support?.constraintTypes).toEqual([])
     }
+  })
+
+  it("**约束层也是载体**：共线 / 共面从约束层问得出来（从解析层问不出来）", () => {
+    // 解析层：读不出这种题设。
+    expect(declaredProofGoal("collinear")).toBeNull()
+    // 约束层：`ConstraintType` 本来就有它们，而内核既判又投影。
+    expect(declaredProofGoalForConstraint("collinear")?.goal).toBe("collinear")
+    expect(declaredProofGoalForConstraint("coplanar")?.goal).toBe("coplanar")
+    // 两层都有的目标，两边都能问到同一个答案。
+    expect(declaredProofGoal("parallel")?.goal).toBe("parallel")
+    expect(declaredProofGoalForConstraint("parallel")?.goal).toBe("parallel")
+    // 约束层没有的，约束层入口也要如实返回 null（不许猜）。
+    expect(declaredProofGoalForConstraint("fixedDistance")).toBeNull()
+    expect(declaredProofGoalForConstraint("乱写的")).toBeNull()
   })
 })

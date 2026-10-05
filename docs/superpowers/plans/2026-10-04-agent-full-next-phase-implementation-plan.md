@@ -387,7 +387,7 @@ export type DragSolveResult =
 > `WIRED_PROOF_BACKENDS`，**必须先过**依赖 / 许可证 / 进程与线程边界 / WASM 或原生依赖 /
 > 启动耗时 / 超时行为的审查（做法见 `docs/acceptance/next-phase-flag-and-dependency-review.md`），
 > **没有审查结论不许加**；把 proof artifact 接进 `ConfirmationPanel` / `agentStore` / run event
-> schema 的只读展示；"一份证明该绑到多细的输入"仍未裁决；首批的"共线 / 共面 / 勾股"
+> schema 的只读展示；"一份证明该绑到多细的输入"仍未裁决；首批的"共线 / 共面 / 勾股"（2026-10-05 更正：**共线/共面在约束层有载体**，只剩**勾股**一处载体都没有）
 > 表达不出来那条也仍未裁决（见上）。
 
 > **第四步（2026-10-05）：后端准入契约。** 逐条核计划时发现：上面那两行要求"先输出版本 / 许可证 /

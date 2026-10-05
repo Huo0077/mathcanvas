@@ -87,7 +87,7 @@
 | # | 要你定什么 | 为什么我定不了 | 定了之后能做什么 |
 | --- | --- | --- | --- |
 | 1 | **`constrainedDrag` 开关怎么打开** | 仓库里**不存在**任何运行期开关约定（没有 `import.meta.env`、没有 localStorage 开关；`agentNextPhaseFlags()` 是 `App.tsx:518` 直接调的常量）。所以"加一个入口"本身就是产品决定；而按 N2 的先例，**测试后门是被禁止的** | N3 的出口（保持约束 / 过约束拒绝 / 冲突恢复 / 一步撤销的**浏览器**正反例）当天就能写；N3 从"代码在、用户看不见"变成"可验收" |
-| 2 | **N5 首批的「共线 / 共面 / 勾股」怎么办**：① 先扩解析层让它们能被表达，② 还是从首批里划掉 | 计划首批点名了这三个，而 `DiagramObligationKind` **根本产生不出它们**（只有 9 种，见 `proofGoals.ts`）。照计划写进"支持"只会得到一句**没有载体的话**；改首批范围则是**计划层面的取舍** | 短目标词表立刻自洽，`unexpressibleFirstBatchGoals()` 那条待办消失（详见 §四 F） |
+| 2 | **N5 首批的「共线 / 共面 / 勾股」怎么办**：① 先扩解析层让它们能被表达，② 还是从首批里划掉 | **（2026-10-05 更正：只剩一个了）** 这三个里，**共线 / 共面已经有载体** —— 不在解析层，在**约束层**：`ConstraintType` 本来就有 `collinear` / `coplanar`，而内核**既判**（`collinearResidual` / `coplanarResidual`）**又投影**。所以我第一版"三个都表达不出来"的结论**只在解析层成立**（`DiagramObligationKind` 里确实没有这三种）。**真正一处载体都没有的今天只有「勾股」一个**（它是三条边的代数关系，`fixedDistance` 固定的是单条边长，不是 a²+b²=c²）。`proof:smoke` 现在把两个清单**分开报**：`goalsWithoutObligationCarrier` 与 `goalsWithoutAnyCarrier`。**要裁决的是「勾股怎么办」** | 短目标词表立刻自洽，`unexpressibleFirstBatchGoals()` 那条待办消失（详见 §四 F） |
 | 3 | **`real_provider` 用哪个 provider、凭据放哪** | 要动凭据与对外调用边界，也是唯一会**花钱**的一项 | N4 的出口（pass@1 / pass@3 / 成本 / 延迟 / 人工复核率）才能有数字；今天那一栏是整批 `not_measured` |
 | 4 | **要不要 `git push`** | 远端写操作，我不自行决定 | 本地领先 `origin/main` **25 个提交**（含两条门禁抖动的修复）才能进远端与 CI |
 
@@ -700,7 +700,7 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
 - **N5 的"只读展示"这一条**（计划要求把 proof artifact 接进 `ConfirmationPanel` / `agentStore` / run event schema）**目前做不了，而且不是"没时间做"**：查下来 `ClaimEvidence` 这套证据词汇**根本没有进过 Web 界面** —— 面板显示的是 `diagramVerification`（另一套词汇，讲的是"这份图核验了吗"），而 `ClaimEvidence` 只在 `witnessSearch` / `solverContracts` / `planCompiler` 这些**核心层**里活着。加上**今天没有任何后端**，产物永远不存在 —— 为一个**不可能出现**的东西先做展示面，属于投机性设计。**这一条与"接一个真实后端"是同一件事，跟着那个决定走。**
 - **两处"约束"模块的分工（免得被误当成重复实现）**：`planar-constraints.ts` 管**"点能待在哪儿"**（一维曲线 + 自然参数，`project`/`evaluate`，拖拽与动画是同一条状态更新），是**点 ↔ 宿主**的一元关系；`constraints3dProjection.ts` 管**"几个对象之间必须保持什么关系"**（⊥ / ∥ / 等长 / 共面…），是**多元**关系，用顺序投影迭代。**两者互补，可以同时出现在同一份文档里**；分工已写进 `constraints3dProjection.ts` 的文件头。
 
-- **N5 待裁决：计划首批的"共线 / 共面 / 勾股"现在表达不出来。** 计划 N5 的首批清单写着"共线/共面、平行/垂直、等长、勾股"，而解析层的 `DiagramObligationKind` 只有
+- **N5 待裁决（2026-10-05 更正：范围小了很多）：只剩「勾股」一处载体都没有。** 计划 N5 的首批清单写着"共线/共面、平行/垂直、等长、勾股"。**共线 / 共面**在**约束层**有完整载体（`ConstraintType` 有这两个、内核既判又投影）—— 我第一版只在解析层找，得出了"三个都表达不出来"的错结论。**勾股**才是真的没有载体：它是三条边的代数关系，不是题设种类、也不是任何一种 `ConstraintType`。至于解析层的 `DiagramObligationKind`，它只有
   `fixedLength | equilateral | equalLength | midpoint | segmentRatio | planePerpendicular | dihedral | perpendicular | parallel` —— **没有共线、共面、勾股**。所以照计划把它们列进"支持"只会得到一句没有载体的话（永远不会有 goal 被分类成它）。处置见 `packages/agent-core/src/proof/proofGoals.ts` 的 `unexpressibleFirstBatchGoals()`，两条路：**① 先扩解析层**（让这三类目标能被表达），或 **② 从首批里划掉**（N5 只声称支持能表达的那几类）。**这一条需要裁决，不是实现细节。**
 
 - **棱柱族恒为"未核验"**：原话解析把 `A′` / `AA₁` 压成单个大写字母，且核验器的点名别名映射只收 `/^[A-Z]$/`，所以 `shape:"prism"` 稳定产出 `unverified_instance`。设计 §5 的 R2 出口本来就规定"**不支持**题稳定产出 `unverified_instance`"，故这是**符合出口**的诚实结果；带撇点名的支持是独立后续项（要动解析层，**不许**在内核或接线层"猜"）。

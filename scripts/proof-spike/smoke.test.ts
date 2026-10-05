@@ -1,4 +1,4 @@
-import { declaredProofGoal, evidenceStatusWithProof, PROOF_ARTIFACT_VERSION, PROOF_GOAL_SUPPORT, proofInputHash, unexpressibleFirstBatchGoals, isReviewPassed, PROOF_BACKEND_REVIEWS, reviewProblems, verifyProofArtifact, WIRED_PROOF_BACKENDS, type ClaimEvidenceStatus, type ProofExpectation } from "@draw/agent-core"
+import { declaredProofGoal, evidenceStatusWithProof, PROOF_ARTIFACT_VERSION, PROOF_GOAL_SUPPORT, proofInputHash, firstBatchGoalsWithoutAnyCarrier, firstBatchGoalsWithoutObligationCarrier, isReviewPassed, PROOF_BACKEND_REVIEWS, reviewProblems, verifyProofArtifact, WIRED_PROOF_BACKENDS, type ClaimEvidenceStatus, type ProofExpectation } from "@draw/agent-core"
 import { describe, expect, it } from "vitest"
 
 /**
@@ -109,7 +109,7 @@ describe("proof spike（一个后端都没接：这一遍只验边界）", () =>
       wiredBackends: WIRED_PROOF_BACKENDS,
       firstBatchExpressible: rows.length,
       /** 计划点名、但解析层现在还表达不出来的 —— 如实报出来，不当作已支持。 */
-      unexpressibleFirstBatch: unexpressibleFirstBatchGoals(),
+      goalsWithoutObligationCarrier: firstBatchGoalsWithoutObligationCarrier(), goalsWithoutAnyCarrier: firstBatchGoalsWithoutAnyCarrier(),
       rows
     })}`)
     expect(rows).toHaveLength(FIRST_BATCH_EXPRESSIBLE.length)
