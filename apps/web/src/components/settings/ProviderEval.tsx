@@ -2,26 +2,46 @@ import { useState } from "react"
 
 import { AGENT_TASK_FIXTURES } from "../../agent/fixtures/agentTaskFixtures"
 import { formatScorecard } from "../../agent/fixtures/agentEvalReport"
+import {
+  PLANNING_EVAL_CASE_COUNT,
+  PLANNING_EVAL_REQUESTS,
+  PLANNING_EVAL_TRIALS,
+  formatPlanningReport,
+  runProviderPlanningEval,
+  type PlanningEvalDependencies
+} from "../../agent/fixtures/benchmarkPlanningEval"
 import { runProviderAgentEval, type ProviderEvalDependencies } from "../../agent/fixtures/providerAgentEval"
 import { resolveActiveProvider } from "../../agent/modelPlanner"
 
 /**
  * **设置 → 真实 provider 评测**（发布门禁第 2 条；用户 2026-10-05 选的方案 C）。
  *
- * ## 这是这个应用里**唯一会花钱**的按钮
+ * ## 这里是这个应用里**唯一会花钱**的地方
  *
- * 所以它的形状是被这条性质决定的，不是审美：
+ * 所以面板的形状是被这条性质决定的，不是审美：
  *
  * 1. **两段式**：先"问"（解析「使用中」的那份配置 —— 这一步**不发**请求），
  *    再**显式确认**才真的跑。确认文案里必须写清**将发出多少次请求**与**发给谁**；
- * 2. **一次都不许提前发**：解析失败时连规划器都不造（`runProviderAgentEval` 的类型保证了这一点），
- *    界面如实显示原因码；
+ * 2. **一次都不许提前发**：解析失败时连规划器都不造（`runProviderAgentEval` /
+ *    `runProviderPlanningEval` 的类型保证了这一点），界面如实显示原因码；
  * 3. **不挂在任何自动路径上**：没有 `useEffect`、没有定时器 —— 只有点击。
+ *
+ * ## 面板里有**两套**评测，两个按钮，各自两段式、各自报自己的请求数
+ *
+ * 这是 2026-10-05 的裁决（N4b）：合并成一个按钮会让"我点了什么、会花多少钱"说不清。
+ *
+ * - **上面那套：agent 工具环**（旧 8 题夹具 × `TRIALS` 轮 = 24 次请求）。它测的是
+ *   "agent 能不能按要求把图形建出来"（pass@1 / pass@3 / 工具选择），**行为一个字没改**；
+ * - **下面那套：题集 planning**（21 条 benchmark 题集里的前 3 条 × 1 轮 = 3 次请求）。
+ *   它测的是"模型产出的计划有没有被 `compilePlan` 接受"，数据来自 `@draw/agent-core`
+ *   的同一份题集 —— **与上面那套不是同一个坐标系**，两边的读数不能混着读。
+ *
+ * 两个数字（24 与 3）都是**算出来的**，规模只在各自的模块里定义一处。
  *
  * ## 读数不许编
  *
- * 跑完显示的是 `formatScorecard` 的原文：延迟有数、**成本写 `not measured`**
- *（这条通道能给 `usage` 的 token 数，但仓里没有价目表 —— 见 `providerAgentEval.ts` 的说明）。
+ * 跑完显示的是 `formatScorecard` / `formatPlanningReport` 的原文：延迟有数、
+ * **成本写 `not measured`**（两条通道都能给 token 数，但仓里没有价目表）。
  */
 const TRIALS = 3
 
@@ -33,8 +53,17 @@ type PanelState =
   | { kind: "done"; report: string }
   | { kind: "unavailable"; code: string; detail: string }
 
-export function ProviderEval({ dependencies }: { dependencies?: ProviderEvalDependencies } = {}) {
+/**
+ * 题集那套的状态。与上面那套**多一个 `failed`**：
+ * 它的解析那一步会碰到 IPC（`resolveActiveProvider`），而"IPC 抛了"与"没配好"是两件事
+ * （后者有原因码，前者只有一句话）。不接住的话面板会永远停在"正在跑…"上 —— 那是
+ * "看起来在跑、实际什么都没发生"，比如实报错坏得多。
+ */
+type PlanningState = PanelState | { kind: "failed"; detail: string }
+
+export function ProviderEval({ dependencies }: { dependencies?: ProviderEvalDependencies & PlanningEvalDependencies } = {}) {
   const [state, setState] = useState<PanelState>({ kind: "idle" })
+  const [planning, setPlanning] = useState<PlanningState>({ kind: "idle" })
   const requests = AGENT_TASK_FIXTURES.length * TRIALS
 
   /** 第一段：只解析「使用中」的那份配置 —— **这一步不发请求**。 */
@@ -59,49 +88,145 @@ export function ProviderEval({ dependencies }: { dependencies?: ProviderEvalDepe
     )
   }
 
+  /** 题集那套的第一段：同样**不发请求**，只是解析配置。 */
+  const askPlanning = async () => {
+    setPlanning({ kind: "asking" })
+    try {
+      const resolution = await (dependencies?.resolveProvider ?? resolveActiveProvider)()
+      if (!resolution.ok) {
+        setPlanning({ kind: "unavailable", code: resolution.code, detail: resolution.detail })
+        return
+      }
+      setPlanning({ kind: "confirming", provider: { id: resolution.provider.id, modelId: resolution.provider.modelId } })
+    } catch (error) {
+      setPlanning({ kind: "failed", detail: error instanceof Error ? error.message : String(error) })
+    }
+  }
+
+  /** 题集那套的第二段：确认之后才真的跑那 3 条题。 */
+  const runPlanning = async () => {
+    setPlanning({ kind: "running" })
+    try {
+      const result = await runProviderPlanningEval(dependencies)
+      setPlanning(
+        result.provider === null
+          ? { kind: "unavailable", code: result.unavailable?.code ?? "unknown", detail: result.unavailable?.detail ?? "" }
+          : { kind: "done", report: formatPlanningReport(result) }
+      )
+    } catch (error) {
+      setPlanning({ kind: "failed", detail: error instanceof Error ? error.message : String(error) })
+    }
+  }
+
   return (
-    <section className="provider-eval" aria-label="真实 provider 评测">
-      <h3>真实 provider 评测</h3>
-      <p>
-        用<strong>真实模型</strong>把同一套评测题跑一遍，得到发布门禁要的 pass@1 / pass@3 与延迟读数。
-        它会真的发出请求并<strong>产生费用</strong> —— 所以要点两下才会开始。
-      </p>
-
-      {state.kind === "idle" && (
-        <button type="button" onClick={() => void ask()}>
-          跑真实评测（将发出 {requests} 次请求）
-        </button>
-      )}
-
-      {state.kind === "asking" && <p role="status">正在读取「使用中」的模型服务…</p>}
-
-      {state.kind === "confirming" && (
-        <div role="alert">
-          <p>
-            将向 <strong>{state.provider.id} / {state.provider.modelId}</strong> 发出 <strong>{requests}</strong> 次请求
-            （{AGENT_TASK_FIXTURES.length} 题 × {TRIALS} 轮），可能产生费用。
-          </p>
-          <button type="button" onClick={() => void run()}>确认开始</button>
-          <button type="button" onClick={() => setState({ kind: "idle" })}>取消</button>
-        </div>
-      )}
-
-      {state.kind === "running" && <p role="status">正在跑…（{requests} 次请求）</p>}
-
-      {state.kind === "done" && (
-        <div>
-          <h4>读数</h4>
-          <pre>{state.report}</pre>
-        </div>
-      )}
-
-      {state.kind === "unavailable" && (
-        <p role="alert">
-          没有测：<code>{state.code}</code> —— {state.detail}
-          <br />
-          <strong>一次请求都没有发出。</strong>
+    <>
+      <section className="provider-eval" aria-label="真实 provider 评测">
+        <h3>真实 provider 评测：agent 工具环</h3>
+        <p>
+          用<strong>真实模型</strong>把 <strong>agent 工具环</strong>那套评测题跑一遍，得到发布门禁要的
+          pass@1 / pass@3 与延迟读数。它测的是"<strong>agent 能不能按要求把图形建出来</strong>"
+          （{AGENT_TASK_FIXTURES.length} 题 × {TRIALS} 轮 = {requests} 次请求）——
+          与下面那套<strong>题集 benchmark 不是同一个坐标系</strong>，两边的数字不能混着读。
+          它会真的发出请求并<strong>产生费用</strong> —— 所以要点两下才会开始。
         </p>
-      )}
-    </section>
+
+        {state.kind === "idle" && (
+          <button type="button" onClick={() => void ask()}>
+            跑真实评测（将发出 {requests} 次请求）
+          </button>
+        )}
+
+        {state.kind === "asking" && <p role="status">正在读取「使用中」的模型服务…</p>}
+
+        {state.kind === "confirming" && (
+          <div role="alert">
+            <p>
+              将向 <strong>{state.provider.id} / {state.provider.modelId}</strong> 发出 <strong>{requests}</strong> 次请求
+              （{AGENT_TASK_FIXTURES.length} 题 × {TRIALS} 轮），可能产生费用。
+            </p>
+            <button type="button" onClick={() => void run()}>确认开始</button>
+            <button type="button" onClick={() => setState({ kind: "idle" })}>取消</button>
+          </div>
+        )}
+
+        {state.kind === "running" && <p role="status">正在跑…（{requests} 次请求）</p>}
+
+        {state.kind === "done" && (
+          <div>
+            <h4>读数</h4>
+            <pre>{state.report}</pre>
+          </div>
+        )}
+
+        {state.kind === "unavailable" && (
+          <p role="alert">
+            没有测：<code>{state.code}</code> —— {state.detail}
+            <br />
+            <strong>一次请求都没有发出。</strong>
+          </p>
+        )}
+      </section>
+
+      {/**
+       * **题集 planning 那套**（N4b）：独立按钮、独立两段式、独立请求数。
+       * 请求数与题数都从 `benchmarkPlanningEval.ts` 的常量来（只有那一处定义）。
+       */}
+      <section className="provider-eval" aria-label="真实 provider 评测：题集 planning">
+        <h3>真实 provider 评测：题集 planning</h3>
+        <p>
+          用<strong>真实模型</strong>跑 <strong>21 条 benchmark 题集里的前 {PLANNING_EVAL_CASE_COUNT} 条</strong>
+          （{PLANNING_EVAL_CASE_COUNT} 题 × {PLANNING_EVAL_TRIALS} 轮 = {PLANNING_EVAL_REQUESTS} 次请求），
+          记录每条题的<strong>计划有没有被编译器接受</strong>（planned / rejected / error）。
+          它测的是"计划是否被编译接受"，**不需要金标准**，也<strong>不是</strong>上面那套 agent 工具环的
+          pass@1 —— 两套题集不同、坐标系不同，读的时候别混。
+        </p>
+
+        {planning.kind === "idle" && (
+          <button type="button" onClick={() => void askPlanning()}>
+            跑题集 planning 评测（将发出 {PLANNING_EVAL_REQUESTS} 次请求）
+          </button>
+        )}
+
+        {planning.kind === "asking" && <p role="status">正在读取「使用中」的模型服务…</p>}
+
+        {planning.kind === "confirming" && (
+          <div role="alert">
+            <p>
+              将向 <strong>{planning.provider.id} / {planning.provider.modelId}</strong> 发出{" "}
+              <strong>{PLANNING_EVAL_REQUESTS}</strong> 次请求
+              （{PLANNING_EVAL_CASE_COUNT} 题 × {PLANNING_EVAL_TRIALS} 轮，题集来自 21 条 benchmark 题集）。
+              这与上面 agent 工具环那 {requests} 次是<strong>两笔不同的开销</strong>，可能产生费用。
+            </p>
+            <button type="button" onClick={() => void runPlanning()}>确认开始（题集 planning）</button>
+            <button type="button" onClick={() => setPlanning({ kind: "idle" })}>取消</button>
+          </div>
+        )}
+
+        {planning.kind === "running" && <p role="status">正在跑…（{PLANNING_EVAL_REQUESTS} 次请求）</p>}
+
+        {planning.kind === "done" && (
+          <div>
+            <h4>读数</h4>
+            <pre>{planning.report}</pre>
+          </div>
+        )}
+
+        {planning.kind === "unavailable" && (
+          <p role="alert">
+            没有测：<code>{planning.code}</code> —— {planning.detail}
+            <br />
+            <strong>一次请求都没有发出。</strong>
+          </p>
+        )}
+
+        {planning.kind === "failed" && (
+          <p role="alert">
+            这一轮没跑完：{planning.detail}
+            <br />
+            <strong>没有拿到任何读数</strong> —— 不要把它当成"跑了但结果不好"。
+          </p>
+        )}
+      </section>
+    </>
   )
 }

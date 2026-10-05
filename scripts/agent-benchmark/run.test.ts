@@ -11,8 +11,15 @@ import { describe, expect, it } from "vitest"
  * ## 这一轮**只**实现了两个模式里的一个半
  *
  * - `deterministic_local`：跑**抽取层** —— 原话 → 题设子句。这是真测量，读数是"抽取覆盖"。
- * - `real_provider`：**适配器还没写**。所以整批如实写 `status: "not_measured"`：
+ * - `real_provider`：**这条 CLI 路径没有接任何适配器**。所以整批如实写 `status: "not_measured"`：
  *   没有凭据（或没有适配器）时编一个数字，等于把"没测"说成"测过了"。
+ *
+ *   **措辞更正（2026-10-05，N4b）**：这里原先写的是"**适配器还没写**"，那句话今天**不成立**了 ——
+ *   生产侧那条适配器早就在（`apps/web/src/agent/modelPlanner.ts` 的 `createModelPlanner`：
+ *   密钥由 Rust 侧从系统凭据库借出、走回环代理，前端碰不到密钥），应用侧也已经有了一条
+ *   跑题集的通道（`apps/web/src/agent/fixtures/benchmarkPlanningEval.ts`，记的是 `planning` 层）。
+ *   **仍然成立**的是：**这个 CLI 入口没有把它接上**（接上要处理凭据与网络，不在本任务内），
+ *   所以这一路继续整批 `not_measured` —— 那是诚实的"没测"，不是"跑过了得 0 分"。
  *
  * ## 为什么不在这里断言"抽取率必须 ≥ X"
  *
@@ -217,7 +224,7 @@ describe(`benchmark 运行入口（mode=${MODE}）`, () => {
     }
   })
 
-  it("real_provider：整批是 not_measured —— 适配器还没写，不伪造数字", () => {
+  it("real_provider：整批是 not_measured —— 这条 CLI 路径没接适配器，不伪造数字", () => {
     if (MODE !== "real_provider") return
     expect(report.realProvider.measured).toBe(0)
     expect(report.realProvider.notMeasured).toBe(cases.length)
