@@ -1,4 +1,4 @@
-import { PROOF_BACKEND_REVIEWS, WIRED_PROOF_BACKENDS } from "@draw/agent-core"
+import { PROOF_BACKEND_REVIEW_FIELDS, PROOF_BACKEND_REVIEWS, WIRED_PROOF_BACKENDS } from "@draw/agent-core"
 import { cleanup, render, screen } from "@testing-library/react"
 import { describe, expect, it } from "vitest"
 
@@ -9,11 +9,13 @@ import { ConfirmationPanel } from "./ConfirmationPanel"
  * **「证明级别」只读状态面**（N5a 的第二件事）。
  *
  * 这一档今天到底是什么状态，**文案必须由真实数据推导**（`WIRED_PROOF_BACKENDS` /
- * `PROOF_BACKEND_REVIEWS`），不许在组件里手写一个数字或一句结论 ——
- * 手写的那一句在接了后端之后就是**留在界面上的谎话**，而它不会有任何东西提醒。
+ * `PROOF_BACKEND_REVIEWS` / `PROOF_BACKEND_REVIEW_FIELDS`），不许手写一个数字、一个名字
+ * 或一句结论 —— 手写的那一句在事实变了之后就是**留在界面上的谎话**，不会有任何东西提醒。
  *
- * 所以这里最要紧的一条是**注入假后端之后文案里必须出现它的名字**：
- * 一个把"当前没有接入任何形式证明后端"写死的实现会让那条用例红。
+ * 所以这里最要紧的两条判据是：
+ * ① **注入假后端之后文案里必须出现它的名字**（把一个结论写死的实现会红）；
+ * ② **审查栏契约是几栏，文案就必须说几栏**（把一个今天恰好为真的数字写死的实现会红 ——
+ *    复核 I1 抓到的正是这一条：原文案写死"十栏"）。
  */
 
 const draft: AgentDraftView = { draftId: "d-1", draftVersion: 1, previewHash: "h", stageCount: 1, undoesInOneStep: true }
@@ -24,26 +26,48 @@ function proofLevelText(container: HTMLElement): string {
   return section?.textContent ?? ""
 }
 
+/**
+ * 「接上了 N 个后端」这一类注入：**`reviewedCount` 必须一起给**。
+ *
+ * 生产里 `WIRED_PROOF_BACKENDS` 是从 `PROOF_BACKEND_REVIEWS` 里**过滤**出来的，所以
+ * `wired.length > reviewedCount` 这个组合**不可能出现**；只传 `proofBackends` 会渲染出
+ * "接上 1 个（交过审查记录 0 个）"那种生产上不存在的读数（复核 M2）。用例只渲染**可达**的组合。
+ */
+function renderWired(wired: readonly string[], reviewedCount: number) {
+  return render(<ConfirmationPanel draft={draft} proofBackends={wired} proofReviewedCount={reviewedCount} />)
+}
+
 describe("证明级别：只读状态面（文案由真实数据推导）", () => {
   it("**这条会咬人**：注入一个假后端之后，文案里必须出现它的名字", () => {
-    const { container } = render(<ConfirmationPanel draft={draft} proofBackends={["fake-lean4-adapter"]} />)
+    const { container } = renderWired(["fake-lean4-adapter"], 1)
 
     // 名字出现 ⇒ 文案是**排**出来的，不是写死的。
     expect(proofLevelText(container)).toContain("fake-lean4-adapter")
     expect(proofLevelText(container)).toContain("1 个")
   })
 
+  it("**这条也会咬人**：审查栏契约是几栏，文案就必须说几栏（不许写死一个今天恰好为真的数字）", () => {
+    // 判据必须**读常量**而不是写 "10"：把栏数常量改掉而文案没跟着变时，它要能红
+    //（已用变异证明：常量加到 11 栏 + 文案冻结在旧数字 ⇒ 只红这一条）。
+    expect(PROOF_BACKEND_REVIEW_FIELDS.length).toBe(10)
+    const { container } = render(<ConfirmationPanel draft={draft} />)
+
+    expect(proofLevelText(container)).toContain(`${PROOF_BACKEND_REVIEW_FIELDS.length} 栏填齐`)
+  })
+
   it("注入两个后端、三条审查记录：数字与名字都跟着变", () => {
-    const { container } = render(<ConfirmationPanel draft={draft} proofBackends={["alpha-prover", "beta-prover"]} proofReviewedCount={3} />)
+    const { container } = renderWired(["alpha-prover", "beta-prover"], 3)
     const text = proofLevelText(container)
 
     expect(text).toContain("2 个")
     expect(text).toContain("alpha-prover")
     expect(text).toContain("beta-prover")
+    // 接上 2 个而审查记录有 3 条 ⇒ 多出来的那一条必须如实说成"其余的没有接上"。
+    expect(text).toContain("3 个")
   })
 
   it("接上后端之后**不许**再说「没有接入任何形式证明后端」", () => {
-    const { container } = render(<ConfirmationPanel draft={draft} proofBackends={["fake-lean4-adapter"]} />)
+    const { container } = renderWired(["fake-lean4-adapter"], 1)
 
     expect(proofLevelText(container)).not.toContain("没有接入任何形式证明后端")
   })
