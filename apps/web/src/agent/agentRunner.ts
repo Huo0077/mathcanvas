@@ -99,7 +99,45 @@ export interface AgentRunner {
 }
 
 /** 阶段 → 给用户看的一句话（与 `RunStatus` 里的表分开：这张用于**轨迹摘要**）。 */
-export const PHASE_SUMMARY: Record<string, string> = {
+export /**
+ * **被拒原因 → 用户看得懂的一句话**（2026-10-05）。
+ *
+ * ## 为什么要在这一层做
+ *
+ * `RunStatus.tsx` 把被拒的提交渲染成「**提交失败：{detail}**」—— 前缀是中文，所以那句 `detail`
+ * 本来就该是中文。而这个前缀**一直是中文、内容一直是英文**：
+ * - 引擎侧给的是**给诊断与修复通道用的原话**（`draftStore.ts` 的
+ *   `"the document changed since the draft was compiled"`、`agentRuntime.ts` 的 `` `${reason}: …` ``）；
+ * - `RunStatus` 的**用例夹具**用的却是中文（`"文档已经被改过"`）—— 于是**测试看不出这个问题**。
+ *
+ * 这与本文件另一处的口径完全一致（`phase === "failed"` 那一支的注释）：
+ * **"引擎的话是给诊断与修复通道用的，中文的用户话在这一层"** —— 提交被拒这一支此前漏了这一步。
+ *
+ * ## 两条纪律
+ *
+ * 1. **不认识的码也要说人话**：兜底是「提交被拒（原因码：X）」，不是把英文原话端出去；
+ * 2. **原因码保留**：诊断与用户话不互相顶替 —— 用户看到中文解释，括号里留着可搜索的码。
+ */
+function commitFailureText(outcome: { status: string; detail?: string }): string {
+  const reason = (outcome.detail ?? "").split(":")[0]?.trim() || outcome.status
+  const known: Record<string, string> = {
+    stale_source: "文档在草稿生成之后被改过，这次提交没有落下去。请重新生成草稿。",
+    stale_conversation: "这份草稿属于另一段对话，不能在这里提交。",
+    stale_preview: "预览已经过期（草稿之后又改过），请重新生成。",
+    missing_consent: "这次提交没有带上同意凭据，已拒绝。",
+    consumed_consent: "同意凭据是一次性的，已经用过了。请重新生成草稿再确认。",
+    unminted_consent: "同意凭据不是系统发出的，已拒绝。",
+    expired_consent: "同意凭据已经过期，请重新生成草稿再确认。",
+    wrong_run: "同意凭据属于另一次运行，已拒绝。",
+    unverified_diagram: "题设尚未核验，不能提交。",
+    unknown_draft: "找不到这份草稿（可能已经被丢弃）。",
+    commit_rejected: "这次提交被文档校验挡下了。"
+  }
+  const text = known[reason]
+  return text === undefined ? `提交被拒（原因码：${reason}）。` : `${text}（原因码：${reason}）`
+}
+
+const PHASE_SUMMARY: Record<string, string> = {
   preflight: "检查环境与目标文档",
   observing: "读取当前场景",
   planning: "规划这一步要做什么",
@@ -821,7 +859,7 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
         ? { status: "committed" }
         : outcome.status === "no_change"
           ? { status: "no_change" }
-          : { status: "failed", detail: outcome.detail ?? outcome.status }, commit.runId, generation())
+          : { status: "failed", detail: commitFailureText(outcome) }, commit.runId, generation())
       /**
        * **只有真的提交了才写长期记忆**（Task 5；规格 §1.2/§10）：
        * 代数与这次创建的对象进事实表，长会话顺带压缩摘要。

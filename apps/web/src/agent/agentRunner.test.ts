@@ -1,4 +1,4 @@
-﻿import { beforeEach, describe, expect, it } from "vitest"
+import { beforeEach, describe, expect, it } from "vitest"
 
 import { createEmptyDocument } from "@draw/dsl"
 import type { PlanEnvelope, PlannerPort, PlanRequest } from "@draw/agent-core"
@@ -1340,5 +1340,21 @@ describe("a committed run leaves long-term memory behind", () => {
     expect(second.detail ?? "").not.toContain("not waiting")
     expect(second.detail).toBe(first.detail)
     expect(runner.hasDraft()).toBe(true)
+
+    /**
+     * **用户实际看到的那句话必须是中文**（2026-10-05 补）。
+     *
+     * `RunStatus.tsx` 渲染的是「**提交失败：{commit.detail}**」—— 前缀是中文，所以 `detail`
+     * 本来就该是中文。而此前这里放的是**引擎的英文原话**
+     *（`"the document changed since the draft was compiled"` 之类）。
+     *
+     * **这条断言此前不存在，而它正好是漏掉的那一半**：原来的用例只断言 `second.detail`
+     *（结构化返回值），而它的夹具在 `RunStatus.test.tsx` 里用的是**中文** detail ——
+     * 于是"真运行时给英文"这件事**两边都看不出来**。
+     */
+    const shown = useAgentStore.getState().activeConversation!.messages.at(-1)!
+    expect(shown.commit?.status).toBe("failed")
+    expect(shown.commit?.detail ?? "").toContain("原因码：stale_source")
+    expect(shown.commit?.detail ?? "", "面向用户的那句话里不该出现引擎的英文原话").not.toMatch(/document changed|draft was invalidated|no draft /i)
   })
 })
