@@ -5,6 +5,29 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-05 —— N6 第三步：把上一轮那两条"不可复现的红"**定位到具体用例**
+
+- **为什么值得单独做**：上一轮如实记下"e2e 与 rust 各红过一次、都没复现"，但那两条红
+  悬在那里是没法处理的：既不能说"已修"，也不能说"无关"。一个**偶尔红一次、没人知道为什么**的
+  发布门禁，本身就是该修的东西。
+- **e2e**：又整跑了一次全量 —— **186 通过 / 0 失败**。所以现象是"两次里一次红"，
+  红的是 `e2e/three-canvas-size.spec.ts:72`（"keeps the canvas size when the status text
+  changes"），而那条**单独跑 3 次全过（12/12）**。**没抓到是哪一条断言**：那次的 Playwright
+  产物被后续运行清掉了（`test-results/` 只剩 `.last-run.json`）。→ **负载下的不稳定，根因未定位**。
+- **rust**：定位到了。上一轮那次失败的签名是"8 passed; 1 failed; 1 ignored"= 10 个用例，
+  与 `tests/secrets.rs`（9 + 1 ignored）对得上；单跑 `--test secrets` **15 次里复现 1 次**，
+  失败在 **`tests/secrets.rs:149` → `lends_the_secret_to_a_closure_and_nothing_else`**：
+  `left: None` / `right: Some(11)` —— **`put` 成功之后 `with_secret` 立刻读回"没有这一条"**。
+  后端实现（`src/secrets/windows.rs`）把 `keyring::Error::NoEntry` 映射成 `Ok(None)`、
+  其余错误映射成 `Backend`，所以是**操作系统在写入成功后立即报了"没有这条凭据"**：
+  **根因在 OS / `keyring` 边界，不在我们的分支里**。
+- **刻意不做的事**：**没有"顺手加一次重试"**把红压下去 —— 那会把一条**真实的不稳定**藏起来，
+  而这个组件是**密钥库**：它报"没有配置"时，调用方会去发一次注定 401 的请求。
+  要么找到根因，要么如实留着这条记录。
+- **文档同步**：`agent-release-gate.md` 第 1 条由"两条不可复现的红"改成"**两条已定位、但未修复的
+  不稳定**"，并把具体用例名写进去；`agent-tool-loop-scorecard.md` 的读数列同步。
+- **只改文档**（外加复跑本身），没有新的可执行产物；**两条不稳定都仍在**。
+
 ## 2026-10-05 —— N6 第二步：**串行**复跑整套门禁，并把两条不可复现的红如实记下
 
 - **为什么要专门跑这一遍**：发布门禁文档（`docs/acceptance/agent-release-gate.md`）里的读数还是 N2 批次的
