@@ -45,7 +45,10 @@ export interface ProofLevelStatus {
   lines: string[]
 }
 
-/** 本构建的真实事实（在模块加载时取一次，就是那两份包根导出）。 */
+/**
+ * 本构建的真实事实（在模块加载时取一次，就是那两份包根导出**本身**，不是副本）。
+ * 界面侧**唯一**的读取点：`ProofLevelNotice` 的缺省值走这里。
+ */
 export const PROOF_LEVEL_CURRENT: ProofLevelFacts = {
   wired: WIRED_PROOF_BACKENDS,
   reviewedCount: PROOF_BACKEND_REVIEWS.length

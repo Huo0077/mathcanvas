@@ -1,5 +1,4 @@
-import { PROOF_BACKEND_REVIEWS, WIRED_PROOF_BACKENDS } from "@draw/agent-core"
-import { describeProofLevel } from "./proofLevelStatus"
+import { describeProofLevel, PROOF_LEVEL_CURRENT } from "./proofLevelStatus"
 
 /**
  * **「证明级别」只读状态面**：把"形式证明这一档今天是什么状态"如实摆在确认面板里。
@@ -8,8 +7,9 @@ import { describeProofLevel } from "./proofLevelStatus"
  * 不给用户任何能点的东西、不宣称任何一条 claim 已被证明。它只把两份包根导出的事实说成人话，
  * 而那两句话**由事实推导**（用例：注入一个假后端之后，文案里必须出现它的名字）。
  *
- * **可注入**是为了让那条用例可写：生产路径（`ConfirmationPanel` 不传 props）用的是
- * `WIRED_PROOF_BACKENDS` / `PROOF_BACKEND_REVIEWS` 本身，没有任何一份副本。
+ * **可注入**是为了让那条用例可写：生产路径（`ConfirmationPanel` 不传 props）走的是
+ * `PROOF_LEVEL_CURRENT` —— 「本构建的事实」这个模块里**唯一**的读取点，它的两个字段就是
+ * 包根那两份导出**本身**（同引用，不是副本）。
  */
 export interface ProofLevelNoticeProps {
   /** 接进这个构建的后端名。缺省＝包根导出的真实事实（今天 `[]`）。 */
@@ -18,7 +18,7 @@ export interface ProofLevelNoticeProps {
   reviewedCount?: number
 }
 
-export function ProofLevelNotice({ wired = WIRED_PROOF_BACKENDS, reviewedCount = PROOF_BACKEND_REVIEWS.length }: ProofLevelNoticeProps) {
+export function ProofLevelNotice({ wired = PROOF_LEVEL_CURRENT.wired, reviewedCount = PROOF_LEVEL_CURRENT.reviewedCount }: ProofLevelNoticeProps) {
   const status = describeProofLevel({ wired, reviewedCount })
 
   return <section className="agent-proof-level" aria-label="证明级别" data-wired-backends={status.wiredCount} data-proof-reachable={status.reachable}>
