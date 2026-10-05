@@ -5,6 +5,50 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-05 —— N2 解析见证构造 + 有界见证搜索 + 默认关闭的接线
+
+- **N2a 内核（`packages/geometry-kernel/src/witness/`）**：题面点名 + 关系（**无显式坐标**）时的解析候选构造 —— 棱锥（三/四边底面、垂足正上方、高由示例值/给定值/**点名侧棱长度**/点名二面角四种来源）与棱柱（底面 + 拉伸向量）；面环按规则生成后由**内核自己的判据**归一化成朝外；拒绝一律是带**机器可读 code** 的值（12 个），从不抛异常。提交 `c2314c9` / `1328088` / `84a6d89` / `e3fdb61`。
+- **N2b 搜索编排（`packages/agent-core/src/solver/`）**：`searchWitness` 按 **seed / 候选上限 / 预算**编排候选，解析构造优先、有界确定性网格兜底（只扫构造器已暴露的自由标量）；每个候选都经**与产品同一条**物化与核验路径（`buildFromPoints` → `compilePlan` → `verifyDiagramObligations`），**只有 `passed` 才可能是 `verified_instance`**。`selectWitness` 降为 facade，polyhedron 的筛选/排序逻辑**只此一份**。提交 `8648a13` / `8b70fa1` / `b6a1388` / `ab05add`。
+- **N2c 接线（默认关闭）**：`witnessSearch` 开关由应用层持有、缺省关，逐跳 `=== true` 才生效，并穿过 Worker 边界。语义三条：**只救不抢**（模型坐标本来就合格时不搜）、**生成物必须再走一遍同一个 verifier**、**没有候选不产生草稿**。提交 `ca1d0b2` / `2f3dd45` / `9c5ae2f`。
+- **真缺陷（复核发现，全部带回归）**：① 搜索器曾用 `unverified: []` 把题设"洗白"后再判，等于**精确关掉**解析器故意留下的那道守卫，于是能对产品会判未核验的题面报 `verified_instance`（RED 实证）；改为传 N1 的 `ObligationIR`，把 residue 与自由点一并交给核验器。② 2D 点自由度按"有没有绑定"而非**绑定种类**判（线上点报 3），与文件头契约矛盾；改为按 `free=2 / onPath=1 / derived=0`。③ **两个新引入的模块环**：`parameterAudit → underdetermined → witnessSearch → planCompiler → parameterAudit` 已用叶子模块切断；`planCompiler ↔ solver/witnessSearch` 是有意保留并记录的，断法（给搜索器注入物化端口）归 N3。④ 二面角求高的"歧义保障"**两版都是空操作**（内核内角由**形心**方向算，与环绕向/参数顺序无关），已删除并改成如实表述；"高由二面角求出"如实写成**有界求根**而非解析闭式。
+- **后端可行性 spike（R14：不加依赖、不接产品）**：独立脚本 `scripts/witness-search-backend-spike.mjs`，原始输出留在工作区 `spike-z3-raw.json`。实测：npm `z3-solver`（WASM）MIT、安装 35,962,287 B（wasm 34,938,413 B）、初始化 160 ms、首次非线性检查 322 ms、1 ms 预算下 `unknown` @680 ms、NLSAT 14 ms、**同步调用阻塞调用方 28 ms**；PyPI `z3-solver`（原生 libz3）MIT、41,035,922 B、import 329.8 ms、首次 6.9 ms、NLSAT 0.73 ms、阻塞 5.6 ms。**`not_measured`（附原因）**：Z3 自身的 `threads` 并行、浏览器内 WASM、内存占用、`z3` CLI（本机不存在）。**没有给任何 package.json 增加依赖**。
+- **与计划原文的偏差（已裁决）**：入参由裸 `GeometryObligation[]` 改为 `ObligationIR`；接线多改 `committerAdapter` + `agentRuntime` 两处（协调器是生产主路，此前**一个开关都不传**，不加则任何 flag 在生产上都是装饰，顺带使 N1 的 `obligationIR` 在主路上第一次真正生效）；新增 `materialisedActions`（救援替换坐标后，草稿层的独立复验必须用实际被物化的那份计划）；`degreesOfFreedom` 保持 `null`（窄豁免：`ConstraintType` 无法表达线⊥面与角度，硬映射只会给出看不出漏项的偏大数字，归 N3）。
+- **门禁**（控制器在 `9c5ae2f` 上复跑，非采信实施者）：全库 **298 文件 / 3449 通过 + 1 todo / 0 失败**（329 s）、`typecheck` exit 0、`lint` exit 0（**0 error / 13 warning**，与基线逐条相同）。**关闭 flag 时编译结果与 `4707b64` 逐字节相同**，由一条对着基线采的 golden 钉住（6 输入 × 2 种生产形状；golden 由 BASE 实现本身跑出）。
+
+## 2026-10-05 —— N1 统一数学状态 IR 与自由度诊断（在默认关闭的 flag 之后）
+
+- 新增 `packages/agent-core/src/obligationIR.ts`（题设/目标/自由选择的统一状态，与旧结构双向兼容且有无损断言）、`constraintIR.ts`（`reportFreeDegrees`：逐对象自由度、约束残差、冲突集合与未支持集合）、`claimEvidence.ts`（证据状态词表 + 候选结果 → 证据状态的显式映射），以及 `apps/web/src/agent/featureFlags.ts`（五个开关，**默认全部关闭**）。
+- **兼容契约**：`parseDiagramObligations` / `DiagramObligationSet` 未改；`verifyDiagramObligations(set, plan, candidate, base?)` 前四个形参逐字未动，IR 经可选尾参与兼容适配层接入。`obligationIR` 缺省为**关**，关闭时报告形状与 `b1ee3d3` 逐字相同（有用例钉住键集合），且开关由**应用层**持有、随既有编译入参穿过 Worker 边界。
+- **三个真缺陷**（复核发现，全部带回归）：① `no_witness` 曾被映射成证据状态 `failed`（把"我还不知道"说成"我知道它不是"），改为 `unknown`，冲突结论留给 N2 的 solver 报 `inconsistent`；② 受约束点的自由度按"有无绑定"而非绑定**种类**计（线上点报 3，与文件头契约的 1 矛盾），已按 `free=2 / onPath=1 / derived=0` 修正，2D 与 3D 两组用例经变异证明互不掩盖；③ 生产 Worker 策略（`createWorkerCompileStrategy`）不转发开关，使开关在真实应用里**永不生效**，已补转发并让**真实策略**驱动跨线程用例，`agentNextPhaseFlags()` 由此有了生产调用点。
+- **门禁**（控制器在 `f997b3f` 上复跑，非采信实施者）：全库 **292 文件 / 3362 通过 + 1 todo / 0 失败**（439 s）、`typecheck` exit 0、`lint` exit 0（**0 error / 13 warning**，与基线逐条相同）。
+- **本批不改变默认行为、也不新增可判定的题型**：题设覆盖面、确认门禁与用户可见文案未变；真实 provider 准确率、求解器状态机与拖动保持关系仍未测。
+
+## 2026-10-04 —— 文档一致性审查（Git 元数据时间戳：2026-10-05 01:48:36 +08:00）：统一当前基线与下一阶段路线
+
+- 对 README、当前状态、功能目录、项目进度归档、CHANGELOG、发布门禁、Agent 评测记分卡和研究进度做了统一审查。
+- 当前代码基线固定为 `b1ee3d3`，上一轮文档路线提交为 `9fb64e0`；当前门禁读数以 `docs/current-status.md` §一为准，历史文档中的旧数字保留为历史记录，不再作为当前状态。
+- README 现在链接完整下一阶段 N1–N6 路线：统一数学 IR、约束/非线性求解、动态拖动保持、开放题编译与真实 provider 评测、形式证明出口。
+- 修正了当前状态中把“修复前问题”与“当前未完成任务”混在一起的表述，明确真实 provider、用户走查和 MSI 验收仍未完成。
+
+## 2026-10-04 —— 下一阶段完整路线设计：把四条暂缓主线纳入实施计划
+
+- 在 `b1ee3d3` 的静态示意图核验之上，补充了四条未来主线：统一 Obligation/Constraint/Claim IR；约束与非线性求解；动态拖动保持关系；开放题编译与真实 provider benchmark；以及形式证明出口。
+- GitHub 调研参考了 SolveSpace 的自由度/冲突求解状态、FreeCAD 的参数化与几何内核分层、Z3 的非线性求解器边界、AlphaGeometry/Newclid 的几何证明分层、mathlib4/Lean 的形式化证明边界。
+- **本条只记录设计，不代表任何暂缓能力已实现。** 具体设计与实施顺序见：
+  - `docs/superpowers/specs/2026-10-04-agent-full-next-phase-design.md`
+  - `docs/superpowers/plans/2026-10-04-agent-full-next-phase-implementation-plan.md`
+  - `docs/research/2026-10-04-github-project-survey.md`
+
+## 2026-10-04 —— b1ee3d3：欠定立体示意图的题设核验与下一轮升级设计
+
+- 本轮已推送 `b1ee3d3`：系统从用户原话建立题设清单，在候选多面体的实际坐标上核验定长、等长、等边、中点、分点比例、线面/面面关系和内二面角；未知写法、缺点名、退化和过期证据不再静默放行。
+- 欠定图形按产品口径处理为“一组符合题设的示意图”：自由点示例值可见，不能称唯一图或普遍证明；宿主同意凭据也对未核验草稿 fail-closed。
+- 新增离线四棱锥正/反浏览器验收、Worker/同步报告等价、多轮草稿回归和题设覆盖反例；最终读数见 `docs/current-status.md` §一。
+- 下一轮只做规划，不宣称已实现：建立 Obligation IR、受支持题型的确定性见证搜索、冲突分类和真实 provider benchmark。设计与计划见：
+  - `docs/superpowers/specs/2026-10-04-agent-next-round-witness-search-design.md`
+  - `docs/superpowers/plans/2026-10-04-agent-next-round-witness-search-implementation-plan.md`
+- 外部调研仅作为设计参考：GeoGebra 的动态几何产品分层、FreeCAD 的参数化/历史/内核分离、mathlib4 的形式证明边界；没有把外部项目代码或能力计入本仓库完成度。
+
 ## 2026-10-04 —— Agent 能画出立体了；但**错图会静默通过全部门禁**（用户现场确认）
 
 - **为什么值得单列一条**：这是这一版**最重要的事实**，而且是一条**负面**事实。用户在现场第一次看到图
@@ -1067,42 +1111,3 @@ commit_rejected: action_compile: envelope.actions[1]: operation 0: section plane
 - 几何 Worker 的契约缺 `completionAssumptions` / `repair` / `planDiagnostics` / `assumptions` / `questions`，缺任何一项都会在接线后**静默降级**（确认面板变空、可修的计划变得不可修、该问用户的被报成"编译失败"）。
 
 **门禁读数**（本机实测，明细见 `docs/current-status.md`）：`npm test` 238 文件 / 2810 用例通过 + 1 todo；`npm run typecheck` 6 workspace + e2e 全 exit 0；`npm run lint` 0 error / **13** warning（基线从 14 降 1 —— 见下"顺手修掉的两处依赖问题"）；`npx playwright test` 42 spec / 141 用例全绿。（**读读数要看每一条自己的 exit code**：把几条门禁串在一条命令里跑时，整条命令的退出码来自**最后一条**，前面某一条失败会被吞掉 —— 本阶段就因此漏看过一次 `tsc` 的失败，后来改成逐条取 `$LASTEXITCODE`。）
-## 2026-10-04 —— b1ee3d3：欠定立体示意图的题设核验与下一轮升级设计
-
-- 本轮已推送 `b1ee3d3`：系统从用户原话建立题设清单，在候选多面体的实际坐标上核验定长、等长、等边、中点、分点比例、线面/面面关系和内二面角；未知写法、缺点名、退化和过期证据不再静默放行。
-- 欠定图形按产品口径处理为“一组符合题设的示意图”：自由点示例值可见，不能称唯一图或普遍证明；宿主同意凭据也对未核验草稿 fail-closed。
-- 新增离线四棱锥正/反浏览器验收、Worker/同步报告等价、多轮草稿回归和题设覆盖反例；最终读数见 `docs/current-status.md` §一。
-- 下一轮只做规划，不宣称已实现：建立 Obligation IR、受支持题型的确定性见证搜索、冲突分类和真实 provider benchmark。设计与计划见：
-  - `docs/superpowers/specs/2026-10-04-agent-next-round-witness-search-design.md`
-  - `docs/superpowers/plans/2026-10-04-agent-next-round-witness-search-implementation-plan.md`
-- 外部调研仅作为设计参考：GeoGebra 的动态几何产品分层、FreeCAD 的参数化/历史/内核分离、mathlib4 的形式证明边界；没有把外部项目代码或能力计入本仓库完成度。
-## 2026-10-04 —— 下一阶段完整路线设计：把四条暂缓主线纳入实施计划
-
-- 在 `b1ee3d3` 的静态示意图核验之上，补充了四条未来主线：统一 Obligation/Constraint/Claim IR；约束与非线性求解；动态拖动保持关系；开放题编译与真实 provider benchmark；以及形式证明出口。
-- GitHub 调研参考了 SolveSpace 的自由度/冲突求解状态、FreeCAD 的参数化与几何内核分层、Z3 的非线性求解器边界、AlphaGeometry/Newclid 的几何证明分层、mathlib4/Lean 的形式化证明边界。
-- **本条只记录设计，不代表任何暂缓能力已实现。** 具体设计与实施顺序见：
-  - `docs/superpowers/specs/2026-10-04-agent-full-next-phase-design.md`
-  - `docs/superpowers/plans/2026-10-04-agent-full-next-phase-implementation-plan.md`
-  - `docs/research/2026-10-04-github-project-survey.md`
-## 2026-10-04 —— 文档一致性审查（Git 元数据时间戳：2026-10-05 01:48:36 +08:00）：统一当前基线与下一阶段路线
-
-- 对 README、当前状态、功能目录、项目进度归档、CHANGELOG、发布门禁、Agent 评测记分卡和研究进度做了统一审查。
-- 当前代码基线固定为 `b1ee3d3`，上一轮文档路线提交为 `9fb64e0`；当前门禁读数以 `docs/current-status.md` §一为准，历史文档中的旧数字保留为历史记录，不再作为当前状态。
-- README 现在链接完整下一阶段 N1–N6 路线：统一数学 IR、约束/非线性求解、动态拖动保持、开放题编译与真实 provider 评测、形式证明出口。
-- 修正了当前状态中把“修复前问题”与“当前未完成任务”混在一起的表述，明确真实 provider、用户走查和 MSI 验收仍未完成。
-## 2026-10-05 —— N1 统一数学状态 IR 与自由度诊断（在默认关闭的 flag 之后）
-
-- 新增 `packages/agent-core/src/obligationIR.ts`（题设/目标/自由选择的统一状态，与旧结构双向兼容且有无损断言）、`constraintIR.ts`（`reportFreeDegrees`：逐对象自由度、约束残差、冲突集合与未支持集合）、`claimEvidence.ts`（证据状态词表 + 候选结果 → 证据状态的显式映射），以及 `apps/web/src/agent/featureFlags.ts`（五个开关，**默认全部关闭**）。
-- **兼容契约**：`parseDiagramObligations` / `DiagramObligationSet` 未改；`verifyDiagramObligations(set, plan, candidate, base?)` 前四个形参逐字未动，IR 经可选尾参与兼容适配层接入。`obligationIR` 缺省为**关**，关闭时报告形状与 `b1ee3d3` 逐字相同（有用例钉住键集合），且开关由**应用层**持有、随既有编译入参穿过 Worker 边界。
-- **三个真缺陷**（复核发现，全部带回归）：① `no_witness` 曾被映射成证据状态 `failed`（把"我还不知道"说成"我知道它不是"），改为 `unknown`，冲突结论留给 N2 的 solver 报 `inconsistent`；② 受约束点的自由度按"有无绑定"而非绑定**种类**计（线上点报 3，与文件头契约的 1 矛盾），已按 `free=2 / onPath=1 / derived=0` 修正，2D 与 3D 两组用例经变异证明互不掩盖；③ 生产 Worker 策略（`createWorkerCompileStrategy`）不转发开关，使开关在真实应用里**永不生效**，已补转发并让**真实策略**驱动跨线程用例，`agentNextPhaseFlags()` 由此有了生产调用点。
-- **门禁**（控制器在 `f997b3f` 上复跑，非采信实施者）：全库 **292 文件 / 3362 通过 + 1 todo / 0 失败**（439 s）、`typecheck` exit 0、`lint` exit 0（**0 error / 13 warning**，与基线逐条相同）。
-- **本批不改变默认行为、也不新增可判定的题型**：题设覆盖面、确认门禁与用户可见文案未变；真实 provider 准确率、求解器状态机与拖动保持关系仍未测。
-## 2026-10-05 —— N2 解析见证构造 + 有界见证搜索 + 默认关闭的接线
-
-- **N2a 内核（`packages/geometry-kernel/src/witness/`）**：题面点名 + 关系（**无显式坐标**）时的解析候选构造 —— 棱锥（三/四边底面、垂足正上方、高由示例值/给定值/**点名侧棱长度**/点名二面角四种来源）与棱柱（底面 + 拉伸向量）；面环按规则生成后由**内核自己的判据**归一化成朝外；拒绝一律是带**机器可读 code** 的值（12 个），从不抛异常。提交 `c2314c9` / `1328088` / `84a6d89` / `e3fdb61`。
-- **N2b 搜索编排（`packages/agent-core/src/solver/`）**：`searchWitness` 按 **seed / 候选上限 / 预算**编排候选，解析构造优先、有界确定性网格兜底（只扫构造器已暴露的自由标量）；每个候选都经**与产品同一条**物化与核验路径（`buildFromPoints` → `compilePlan` → `verifyDiagramObligations`），**只有 `passed` 才可能是 `verified_instance`**。`selectWitness` 降为 facade，polyhedron 的筛选/排序逻辑**只此一份**。提交 `8648a13` / `8b70fa1` / `b6a1388` / `ab05add`。
-- **N2c 接线（默认关闭）**：`witnessSearch` 开关由应用层持有、缺省关，逐跳 `=== true` 才生效，并穿过 Worker 边界。语义三条：**只救不抢**（模型坐标本来就合格时不搜）、**生成物必须再走一遍同一个 verifier**、**没有候选不产生草稿**。提交 `ca1d0b2` / `2f3dd45` / `9c5ae2f`。
-- **真缺陷（复核发现，全部带回归）**：① 搜索器曾用 `unverified: []` 把题设"洗白"后再判，等于**精确关掉**解析器故意留下的那道守卫，于是能对产品会判未核验的题面报 `verified_instance`（RED 实证）；改为传 N1 的 `ObligationIR`，把 residue 与自由点一并交给核验器。② 2D 点自由度按"有没有绑定"而非**绑定种类**判（线上点报 3），与文件头契约矛盾；改为按 `free=2 / onPath=1 / derived=0`。③ **两个新引入的模块环**：`parameterAudit → underdetermined → witnessSearch → planCompiler → parameterAudit` 已用叶子模块切断；`planCompiler ↔ solver/witnessSearch` 是有意保留并记录的，断法（给搜索器注入物化端口）归 N3。④ 二面角求高的"歧义保障"**两版都是空操作**（内核内角由**形心**方向算，与环绕向/参数顺序无关），已删除并改成如实表述；"高由二面角求出"如实写成**有界求根**而非解析闭式。
-- **后端可行性 spike（R14：不加依赖、不接产品）**：独立脚本 `scripts/witness-search-backend-spike.mjs`，原始输出留在工作区 `spike-z3-raw.json`。实测：npm `z3-solver`（WASM）MIT、安装 35,962,287 B（wasm 34,938,413 B）、初始化 160 ms、首次非线性检查 322 ms、1 ms 预算下 `unknown` @680 ms、NLSAT 14 ms、**同步调用阻塞调用方 28 ms**；PyPI `z3-solver`（原生 libz3）MIT、41,035,922 B、import 329.8 ms、首次 6.9 ms、NLSAT 0.73 ms、阻塞 5.6 ms。**`not_measured`（附原因）**：Z3 自身的 `threads` 并行、浏览器内 WASM、内存占用、`z3` CLI（本机不存在）。**没有给任何 package.json 增加依赖**。
-- **与计划原文的偏差（已裁决）**：入参由裸 `GeometryObligation[]` 改为 `ObligationIR`；接线多改 `committerAdapter` + `agentRuntime` 两处（协调器是生产主路，此前**一个开关都不传**，不加则任何 flag 在生产上都是装饰，顺带使 N1 的 `obligationIR` 在主路上第一次真正生效）；新增 `materialisedActions`（救援替换坐标后，草稿层的独立复验必须用实际被物化的那份计划）；`degreesOfFreedom` 保持 `null`（窄豁免：`ConstraintType` 无法表达线⊥面与角度，硬映射只会给出看不出漏项的偏大数字，归 N3）。
-- **门禁**（控制器在 `9c5ae2f` 上复跑，非采信实施者）：全库 **298 文件 / 3449 通过 + 1 todo / 0 失败**（329 s）、`typecheck` exit 0、`lint` exit 0（**0 error / 13 warning**，与基线逐条相同）。**关闭 flag 时编译结果与 `4707b64` 逐字节相同**，由一条对着基线采的 golden 钉住（6 输入 × 2 种生产形状；golden 由 BASE 实现本身跑出）。
