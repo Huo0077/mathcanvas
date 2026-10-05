@@ -13,6 +13,22 @@
 
 ## 一、现在能不能跑（可复核的门禁读数）
 
+**2026-10-05 N4 第二步（benchmark 运行入口与 `layer` 契约）—— 本批实测：**
+
+| 命令 | 当次结果 |
+| --- | --- |
+| `npm.cmd test -- --maxWorkers=2 --reporter=dot` | **303 文件 / 3529 通过 + 1 todo / 0 失败**（135 s） |
+| `npm.cmd run typecheck` | exit 0（全部工作区 + `e2e/` + `scripts/`） |
+| `npm.cmd run lint` | exit 0，**0 error / 13 warning**（与基线逐条相同） |
+| `npm.cmd run bench:agent` | exit 0；**`BENCHMARK_COVERAGE cases=7 covered=5 empty=2 error=0`** |
+| `npm.cmd run bench:agent -- --mode=real_provider` | exit 0；`measured: 0` / `notMeasured: 7`（适配器未实现） |
+| `npm.cmd run bench:agent -- --mode=nonsense` | **exit 1** 并打出可选项 |
+
+> **`layer` 契约**：运行记录分 `extraction` / `witness` 两层，**每层有自己的结局词表**，跨层用词被拒绝 —— 拿见证层的词描述抽取层是范畴错误，而一律写 `not_measured` 又会把"跑了抽取、没跑求解"说成"什么都没测"。
+> **第一个真实读数**：抽取层在七类起步题集上覆盖 5 道、**2 道一条子句都没抽出来**。这是**读数不是门禁**（刻意没有把任何阈值钉成断言）。
+> **`real_provider` 整批 `not_measured`**：适配器还没写；`provider`/`model` 写 `null` 是被允许的，但只要不写 `not_measured` 就必须是非空字符串 —— 没凭据时编一个模型名字等于把"没测"说成"测过了"。
+> **还没做**：真实 provider 一个都没跑；题集只有七类各一条；**没有按题归因那 2 道抽不出子句的是哪两道**。
+
 **2026-10-05 N4 第一步（benchmark 题集与报告契约）—— 本批实测：**
 
 | 命令 | 当次结果 |

@@ -5,6 +5,36 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-05 —— N4 第二步：benchmark 的**运行入口**与 `layer` 契约（跑出第一个真实读数）
+
+- **补上了上一批留下的两件事**：
+  1. **`layer` 契约**。运行记录原来只有一套结局词（见证层的 `verified_instance` / `no_witness` / …），
+     而"只跑原话 → 题设的抽取"那一轮**根本没有见证结论** —— 拿见证层的词去描述抽取结果是
+     **范畴错误**；而一律写 `not_measured` 又会把"跑了抽取、只是没跑求解"说成"什么都没测"。
+     两者都会让报告**读起来是绿的、实际什么都没说**。现在运行记录分 `extraction` / `witness`
+     两层，**每层有自己的词表**，跨层用词会被**拒绝**。
+  2. **`runner.mjs` + `run.test.ts`**：与 `scripts/agent-eval.mjs` **同一条纪律** —— 这个仓库刻意
+     没有 TS 运行器，所以真正的运行放在 `.test.ts` 里（只有 vitest 能 import 工作区的 TS 源码，
+     `@draw/agent-core` 的 `exports` 直接指向 `./src/index.ts`），`runner.mjs` 只把命令接上来、
+     **把退出码如实传出去**。新增 `npm run bench:agent`。
+- **第一个真实读数**（本机实测）：`BENCHMARK_COVERAGE cases=7 covered=5 empty=2 error=0` ——
+  抽取层在七类起步题集上覆盖了 5 道，**2 道一条子句都没抽出来**。这是**读数不是门禁**：
+  我刻意没有把任何阈值钉成断言（把今天的读数钉死，等于让明天必须犯同样的错）。
+- **`real_provider` 仍然整批 `not_measured`**（`measured: 0` / `notMeasured: 7`）：适配器还没写。
+  `provider` / `model` 写 `null` 是**被允许**的（那正是"这一轮没有真实 provider 参与"的诚实写法），
+  而**只要不写 `not_measured`，两者就必须是非空字符串**。没有凭据时编一个模型名字，
+  等于把"没测"说成"测过了"。
+- **三条用法都实测过**：`npm run bench:agent`（exit 0，打印报告与覆盖率）、
+  `-- --mode=real_provider`（exit 0，measured 0 / notMeasured 7）、`--mode=nonsense`
+  （**exit 1** 并打出可选项 —— "一个永远退 0 的测量命令会被当成测过了"）。
+- **证据**：`scripts/agent-benchmark` 共 **33 条**通过（校验器 27 + 运行入口 6）；
+  全库单测 **303 文件 / 3529 通过 + 1 todo / 0 失败**；`typecheck` exit 0；
+  `lint` exit 0（0 error / 13 warning，与基线逐条相同）。
+- **边界（如实）**：**一个真实 provider 都没跑**；题集只有七类各一条（离"基线"还很远）；
+  `run.test.ts` 现在落进默认 glob，所以 `npm test` 也会打印报告 —— 那是**有意**的
+  （与既有的 `agentEvalReport.test.ts` 同一条口径）。**没有按题归因那 2 道"抽不出子句"的是哪两道**，
+  这是下一步。
+
 ## 2026-10-05 —— N6 第一步：五个开关的覆盖矩阵 + 依赖 / 许可证审查
 
 - **为什么先做这个**：N6 是"把前五阶段的能力安全地从实验变成可发布能力"，它的前置事实是：

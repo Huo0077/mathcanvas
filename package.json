@@ -15,6 +15,7 @@
     "test:perf": "vitest run --silent=false packages/scene-graph/src/largeScene.bench.test.ts",
     "test:e2e": "playwright test",
     "eval:agent": "node scripts/agent-eval.mjs",
+    "bench:agent": "node scripts/agent-benchmark/runner.mjs",
     "test:rust": "node scripts/toolchain.mjs cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml",
     "test:watch": "vitest",
     "lint": "eslint ."

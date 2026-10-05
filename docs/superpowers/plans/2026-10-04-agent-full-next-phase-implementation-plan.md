@@ -302,6 +302,17 @@ export type DragSolveResult =
 > （现在只有七类各一条，远不够算覆盖率）、**一个真实 provider 都没跑**（所以报告里没有任何
 > pass@1 / pass@3 / 成本 / 延迟 / 人工可读性数字）、抽取率与题设覆盖率的统计、
 > `agent-tool-loop-scorecard.md` 与 `agent-release-gate.md` 的回填。
+>
+> **第二步（2026-10-05）：运行入口与 `layer` 契约。** 上面那句"`runner.mjs` 没写"**已解决**：
+> 新增 `runner.mjs` + `run.test.ts` + `npm run bench:agent`（与 `scripts/agent-eval.mjs` 同一条
+> 纪律：没有 TS 运行器，真正的运行放 `.test.ts`，入口只传命令与退出码）。
+> **顺带修掉一个契约缺陷**：运行记录原来只有见证层的一套结局词，而"只跑抽取"的那一轮根本没有
+> 见证结论 —— 现在分 `extraction` / `witness` 两层，每层有自己的词表，跨层用词被拒绝。
+> **第一个真实读数**：`BENCHMARK_COVERAGE cases=7 covered=5 empty=2 error=0`。
+>
+> **这一步如实**没有**解决的**：`real_provider` 仍整批 `not_measured`（**适配器没写**，
+> 因为要动 provider 凭据与调用边界，属独立一批）；题集仍是七类各一条；没有按题归因那 2 道
+> 抽不出子句的是哪两道；`agent-tool-loop-scorecard.md` / `agent-release-gate.md` 未回填。
 
 ## Phase N5：形式证明出口
 

@@ -22,6 +22,7 @@ function run(overrides: Record<string, unknown> = {}): Record<string, unknown> {
     model: null,
     seed: 7,
     mode: "deterministic_local",
+    layer: "witness",
     status: "verified_instance",
     evidence: [{ claim: "底面四点共面", status: "verified_instance", evidence: "内核核验通过，残差 0" }],
     cost: null,
@@ -118,8 +119,8 @@ describe("benchmark 报告", () => {
     expect(report.realProvider.notMeasured).toBe(1)
   })
 
-  it("缺 provider / model / seed / status 任何一个都要抛，并点名缺了哪些", () => {
-    for (const field of ["provider", "model", "seed", "status"]) {
+  it("缺 provider / model / seed / status / layer 任何一个都要抛，并点名缺了哪些", () => {
+    for (const field of ["provider", "model", "seed", "status", "layer"]) {
       const broken = run()
       delete broken[field]
       expect(() => buildBenchmarkReport([broken])).toThrow(new RegExp(field))
@@ -140,8 +141,30 @@ describe("benchmark 报告", () => {
     expect(() => buildBenchmarkReport([run({ mode: undefined })])).toThrow(/未标识/)
   })
 
+  it("层必须标识，而且 status 必须属于**那一层**的词表", () => {
+    // 见证层的词拿来描述抽取层是范畴错误 —— 它会让报告读起来是绿的、实际什么都没说。
+    expect(() => buildBenchmarkReport([run({ layer: "extraction", status: "verified_instance" })])).toThrow(/不在词表里/)
+    expect(() => buildBenchmarkReport([run({ layer: "witness", status: "extracted" })])).toThrow(/不在词表里/)
+    expect(() => buildBenchmarkReport([run({ layer: "乱写的" })])).toThrow(/layer/)
+    // 每层自己的词是合法的。
+    expect(() => buildBenchmarkReport([run({ layer: "extraction", status: "partial" })])).not.toThrow()
+  })
+
+  it("按层各自计数（同一批记录里可以混两层）", () => {
+    const report = buildBenchmarkReport([run(), run({ caseId: "b", layer: "extraction", status: "partial" })])
+
+    expect(report.deterministicLocal.byLayer).toEqual({ witness: 1, extraction: 1 })
+    expect(report.deterministicLocal.byStatus).toEqual({ verified_instance: 1, partial: 1 })
+  })
+
   it("real_provider 却说不出 provider / model 要抛（那正是这一轮在测什么）", () => {
     expect(() => buildBenchmarkReport([run({ mode: "real_provider", provider: null, model: null })])).toThrow(/必须是非空字符串/)
+  })
+
+  it("但没凭据时允许 provider / model 为 null —— 逼出一个模型名字就是伪造", () => {
+    expect(() => buildBenchmarkReport([
+      run({ mode: "real_provider", provider: null, model: null, status: "not_measured", evidence: [], cost: null, latency: null })
+    ])).not.toThrow()
   })
 
   it("claim 缺证据要抛", () => {

@@ -27,20 +27,38 @@ export const BENCHMARK_MODES = ["deterministic_local", "real_provider"] as const
 export type BenchmarkMode = (typeof BENCHMARK_MODES)[number]
 
 /**
- * 一轮运行的结局词表。
+ * **这一轮真正跑了哪一层**。
  *
- * 前三个与 `apps/web`/`agent-core` 的见证结论**同词**（`verified_instance` /
- * `unverified_instance` / `no_witness`），第四个是本层自己的：`not_measured` 表示
- * "这一轮没有测量"（例如没有凭据）。后两个是流程性结局：`clarification`（系统老实反问）、
- * `error`（跑了但失败了）。加值时**必须**同时想清楚它和 witness 三值的关系。
+ * 加这个字段是被"写 runner"逼出来的，不是设计洁癖：原来只有一套结局词（见证层的
+ * `verified_instance` / `no_witness` / …），而"只跑原话 → 题设的抽取"那一轮**根本没有见证结论**
+ * —— 拿见证词去描述抽取结果是**范畴错误**，而一律写 `not_measured` 又会把"跑了抽取、
+ * 只是没跑求解"说成"什么都没测"。两者都会让报告读起来是绿的、实际什么都没说。
  */
-export const BENCHMARK_RUN_STATUSES = [
-  "verified_instance", "unverified_instance", "no_witness", "not_measured", "clarification", "error"
-] as const
-export type BenchmarkRunStatus = (typeof BENCHMARK_RUN_STATUSES)[number]
+export const BENCHMARK_LAYERS = ["extraction", "witness"] as const
+export type BenchmarkLayer = (typeof BENCHMARK_LAYERS)[number]
+
+/** 全部结局词（跨层并集）。 */
+export type BenchmarkRunStatus =
+  | "extracted" | "partial" | "empty"
+  | "verified_instance" | "unverified_instance" | "no_witness" | "clarification"
+  | "not_measured" | "error"
+
+/**
+ * **每一层各自的词表**。
+ *
+ * - `extraction`：`extracted`（子句都被处理）/ `partial`（有抽出来的、也有读不出的残留）/
+ *   `empty`（一条都没抽出来）；
+ * - `witness`：三个见证结论与 `clarification` 与 `agent-core` **同词**（那边改了这里要跟着改）；
+ * - `not_measured` / `error` 两层都有：前者是"这一轮没有测量"（例如没有凭据），
+ *   后者是"跑了但失败了"。
+ */
+export const BENCHMARK_STATUSES_BY_LAYER: Record<BenchmarkLayer, readonly BenchmarkRunStatus[]> = {
+  extraction: ["extracted", "partial", "empty", "not_measured", "error"],
+  witness: ["verified_instance", "unverified_instance", "no_witness", "clarification", "not_measured", "error"]
+}
 
 export const BENCHMARK_RUN_REQUIRED_FIELDS = [
-  "caseId", "provider", "model", "seed", "mode", "status", "evidence", "cost", "latency"
+  "caseId", "provider", "model", "seed", "mode", "layer", "status", "evidence", "cost", "latency"
 ] as const
 
 export interface BenchmarkEvidenceEntry {
@@ -55,6 +73,7 @@ export interface BenchmarkRun {
   model: string | null
   seed: number
   mode: BenchmarkMode
+  layer: BenchmarkLayer
   status: BenchmarkRunStatus
   evidence: BenchmarkEvidenceEntry[]
   cost: { currency: string; amount: number } | null
@@ -64,6 +83,7 @@ export interface BenchmarkRun {
 export interface BenchmarkModeReport {
   runs: BenchmarkRun[]
   byStatus: Record<string, number>
+  byLayer: Record<string, number>
 }
 
 export interface BenchmarkReport {
@@ -85,6 +105,12 @@ function nonEmptyString(value: unknown): value is string {
 function countByStatus(runs: readonly BenchmarkRun[]): Record<string, number> {
   const counts: Record<string, number> = {}
   for (const run of runs) counts[run.status] = (counts[run.status] ?? 0) + 1
+  return counts
+}
+
+function countByLayer(runs: readonly BenchmarkRun[]): Record<string, number> {
+  const counts: Record<string, number> = {}
+  for (const run of runs) counts[run.layer] = (counts[run.layer] ?? 0) + 1
   return counts
 }
 
@@ -117,8 +143,14 @@ export function buildBenchmarkReport(runs: readonly unknown[], where = "运行�
       continue
     }
     const mode = record.mode as BenchmarkMode
-    if (!BENCHMARK_RUN_STATUSES.includes(record.status as BenchmarkRunStatus)) {
-      problems.push(`${label} 的 status「${String(record.status)}」不在词表里：${BENCHMARK_RUN_STATUSES.join(" / ")}`)
+    // ②' 层也必须标识：见证层的结局词描述不了抽取层。
+    if (!BENCHMARK_LAYERS.includes(record.layer as BenchmarkLayer)) {
+      problems.push(`${label} 的 layer「${String(record.layer)}」未标识：只能是 ${BENCHMARK_LAYERS.join(" / ")} —— 见证层的结局词描述不了抽取层`)
+      continue
+    }
+    const layer = record.layer as BenchmarkLayer
+    if (!BENCHMARK_STATUSES_BY_LAYER[layer].includes(record.status as BenchmarkRunStatus)) {
+      problems.push(`${label} 在 ${layer} 层里的 status「${String(record.status)}」不在词表里：${BENCHMARK_STATUSES_BY_LAYER[layer].join(" / ")}`)
       continue
     }
     const status = record.status as BenchmarkRunStatus
@@ -126,8 +158,12 @@ export function buildBenchmarkReport(runs: readonly unknown[], where = "运行�
       problems.push(`${label} 的 seed 必须是有限数`)
       continue
     }
-    if (mode === "real_provider" && (!nonEmptyString(record.provider) || !nonEmptyString(record.model))) {
-      problems.push(`${label} 是 real_provider，provider / model 必须是非空字符串（这正是在测什么模型）`)
+    /**
+     * `real_provider` 要说得出 provider / model —— **除非这一轮什么都没测**。
+     * 那样写 `null` 才是诚实的：没有凭据时逼出一个模型名字，等于伪造"这轮用了什么"。
+     */
+    if (mode === "real_provider" && status !== "not_measured" && (!nonEmptyString(record.provider) || !nonEmptyString(record.model))) {
+      problems.push(`${label} 是 real_provider，provider / model 必须是非空字符串（这正是在测什么模型；确实没测就写 status: not_measured）`)
       continue
     }
     // ③ claim 必须有证据；唯一的例外是"这一轮什么都没测"。
@@ -165,6 +201,7 @@ export function buildBenchmarkReport(runs: readonly unknown[], where = "运行�
       model: nonEmptyString(record.model) ? record.model : null,
       seed: record.seed,
       mode,
+      layer,
       status,
       evidence: evidence as BenchmarkEvidenceEntry[],
       cost: (record.cost ?? null) as BenchmarkRun["cost"],
@@ -177,10 +214,11 @@ export function buildBenchmarkReport(runs: readonly unknown[], where = "运行�
   const local = accepted.filter((run) => run.mode === "deterministic_local")
   const real = accepted.filter((run) => run.mode === "real_provider")
   return {
-    deterministicLocal: { runs: local, byStatus: countByStatus(local) },
+    deterministicLocal: { runs: local, byStatus: countByStatus(local), byLayer: countByLayer(local) },
     realProvider: {
       runs: real,
       byStatus: countByStatus(real),
+      byLayer: countByLayer(real),
       measured: real.filter((run) => run.status !== "not_measured").length,
       notMeasured: real.filter((run) => run.status === "not_measured").length
     }
