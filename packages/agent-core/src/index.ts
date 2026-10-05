@@ -1,4 +1,4 @@
-﻿export * from "./actionSchemas"
+export * from "./actionSchemas"
 export * from "./actionIds"
 export * from "./budget"
 export * from "./capabilities"
@@ -21,6 +21,7 @@ export * from "./modelEvents"
 export * from "./modelGateway"
 export * from "./obligationIR"
 export * from "./outputParser"
+export * from "./proof/proofArtifact"
 export * from "./parameterAudit"
 export * from "./planCompiler"
 /**

@@ -5,13 +5,27 @@
 > [`docs/project-progress.md`](project-progress.md) —— 那是**归档**，里面的数字是"当时实测"，
 > 不是当前值。两份文件分工明确：**要当前值看这里，要过程看归档。**
 
-**最后更新：** 2026-10-05（**N4 已开工第一步**：benchmark 的题集 schema / 凭据检查 / 报告契约已落地并复核 —— **还没有跑任何真实 provider**，报告里没有任何 pass@1、成本、延迟数字。**N3 已开工四步**：内核的点投影、拖动层的自由度/冗余诊断、拖动接线的决策层、可证的矛盾判据都已落地；**`constrainedDrag` 开关默认仍关**，关着时逐字走旧路径，所以**产品行为与上一版完全相同**，N3 的出口（`constrainedDrag=true` 的浏览器正/反例）尚未达成。**N2 已交付并复核**：2a / 2b / 2c 全部落地，`witnessSearch` 开关**缺省关**，关闭时编译结果与 `4707b64` 逐字节相同。N2 源码基线 `9c5ae2f`）。
+**最后更新：** 2026-10-05（**N5 已开工第一步**：形式证明出口的**边界**（`packages/agent-core/src/proof/proofArtifact.ts`）落地并复核 —— "`verified_instance`/`sampled` 不得变成 `formally_proved`"这条判据第一次可执行；**没有接任何后端**，所以真实运行只会得到 `unsupported`。**N4 已开工第二步**：benchmark 的题集 schema / 凭据检查 / 报告契约 / 运行入口都已落地，**还没有跑任何真实 provider**。**N3 已开工四步**：内核点投影、拖动层自由度与冗余诊断、拖动接线决策层、可证矛盾判据都已落地；**`constrainedDrag` 开关默认仍关**，产品行为未变，N3 的出口（`constrainedDrag=true` 的浏览器正/反例）尚未达成。**N2 已交付并复核**（`witnessSearch` 缺省关，关闭时与 `4707b64` 逐字节相同）。**N6 两条门禁抖动都已修并有前后计数**）。
 **修复前一版做完了什么**：用户现场"A 字句只有关系、没有数值的立体题面"从**画不出来**推进到**能画出来**。路上推翻了两个自己的设计（见下方"走过的弯路"），并修掉一批真实运行暴露的形式障碍（信封缺字段、平面动作带 `z`、面环绕向不一致、空 `relations`）。
 **修复前一版暴露了什么（更重要）**：用户在真图上确认"**图画出来了，明显画错了**"。实测模型给的坐标：`BD=2`、`O` 是中点、`△OCD` 等边、`AB=AD` 都对，但 `OA·CD = −0.314 ≠ 0`（**第（1）问要证的那件事本身不成立**），且 `A` 的高度取 0.64、而"二面角 45°"要求约 1.33（**差约一倍**）。
 **当时根因（必须写清，不能含糊）**：这道题的七个条件里，机器**真正核验过的只有一条**（`O 为 BD 中点`）。`AB=AD` 的等号写法不在关系词表里、`平面⊥平面` 没有判据、`等边三角形` / `DE=2EA` / `二面角 45°` 是**数值约束**而不在判据范围内 —— 于是**一张错图静默通过了全部门禁**。当次读数：全库单测 **282 文件 / 3277 通过 + 1 todo / 0 失败**、`agent-core`/`scene-graph`/`apps/web` 的 `typecheck` 均 exit 0、`eslint` exit 0。**这些绿读数与"图对不对"无关** —— 这一点此前几轮我没有说清楚，是本轮修正的表述。
 **上一次：** 2026-10-03（欠定图形的见证生成与关系核验：关系表进信封 + 内核残差执行前核验。**其中"要求模型声明 `relations`"的设计已被真实运行推翻**，改为系统自己从原话抽）。
 
 ## 一、现在能不能跑（可复核的门禁读数）
+
+**2026-10-05 N5 第一步（形式证明出口的边界）—— 本批实测：**
+
+| 命令 | 当次结果 |
+| --- | --- |
+| `npm.cmd test -- --maxWorkers=2 --reporter=dot` | **304 文件 / 3544 通过 + 1 todo / 0 失败**（136 s） |
+| `npm.cmd run typecheck` | exit 0（全部工作区 + `e2e/` + `scripts/`） |
+| `npm.cmd run lint` | exit 0，**0 error / 13 warning**（与基线逐条相同） |
+| `npm.cmd exec -- vitest run packages/agent-core/src/proof --maxWorkers=1` | **15 通过 / 0 失败** |
+
+> **N5 的判据第一次可执行了**：`verified_instance` / `sampled` **不能**变成 `formally_proved`；伪造、缺字段、版本不匹配、以及**"证明了别的东西"**（`claimId` 或 `inputHash` 不匹配）的产物一律拒绝。落点是 `packages/agent-core/src/proof/proofArtifact.ts` 的 `verifyProofArtifact` / `evidenceStatusWithProof`。
+> **两条设计决定**：① 校验**必须**带 `expectation`（`claimId` + `inputHash`）—— 否则一份"证明了别的东西"的合格产物贴过来也看不出来；② **拒收不是第五种结局**，只报 `failed` + 机器可读 `reasons`。
+> **证据**：15 条（一半反例）+ 一条定向变异（改成无条件升级 → 3 条红）。
+> **边界**：**没有接任何后端**，所以现在任何真实运行都只会得到 `unsupported`；adapter 要先过依赖与许可证审查。"一份证明该绑到多细的输入"**未裁决**。
 
 **2026-10-05 N6 门禁复跑（**串行**跑完整套）—— 本批实测：**
 
@@ -507,7 +521,7 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
 2. ~~**N2：解析构造与见证搜索**~~ —— **已完成**（内核 `c2314c9`..`e3fdb61`；搜索 `8648a13`..`ab05add`；接线与 spike `ca1d0b2`..`9c5ae2f`；`witnessSearch` 默认关，关闭时与 `4707b64` 逐字节相同）。
 3. **N3：动态拖动保持约束**（自由度、过约束、无解、事务和恢复）—— 并承接 N2 留下的两件事：`planCompiler ↔ solver/witnessSearch` 的模块环（断法：给搜索器注入物化端口）与"**真正算出**自由度"（需先把 `ConstraintType` 扩到能表达线⊥面与角度）。**状态（2026-10-05）：已开工三步** —— 内核的点投影、拖动层的自由度/冗余诊断、**拖动接线的决策层**（`apps/web/src/constrainedDrag3.ts` + `App.tsx` 的 3D `onDragEnd`）都已落地并复核；**但开关缺省关，产品行为未变**，也**没有把开关打开的产品入口**，所以浏览器正/反例仍未达成。上面两件事里，**"真正算出自由度"只解决了拖动层那一半**（文档层的 `witnessSearch.degreesOfFreedom` 仍是 `null`），**模块环仍未动**。
 4. **N4：开放题编译与真实 Provider Benchmark** —— 并承接 N2 的浏览器端验收（flag 打开时救援路径的端到端）与 flag 状态进入 trace/benchmark 记录。
-5. **N5：形式证明出口**（实例、采样、形式证明严格分级）。
+5. **N5：形式证明出口**（实例、采样、形式证明严格分级）。**状态（2026-10-05）：已开工第一步** —— `packages/agent-core/src/proof/proofArtifact.ts` 把判据落成了可执行的（`verified_instance`/`sampled` 不得变成 `formally_proved`；伪造/缺字段/版本不匹配/"证明了别的东西"一律拒）。**没有接任何后端**，所以真实运行只会得到 `unsupported`；adapter 要先过依赖与许可证审查。
 6. **N6：feature flag、依赖/许可证/线程/WASM 审查、发布门槛与维护收口**。**状态（2026-10-05）：已开工第一步** —— 五个开关的覆盖矩阵、JS 运行依赖的许可证清单、WASM/线程边界都查过并写进 [`docs/acceptance/next-phase-flag-and-dependency-review.md`](acceptance/next-phase-flag-and-dependency-review.md)。**那一份里明确写了没回答的**：Rust **传递**依赖的许可扫描（未跑 `cargo-deny`，所以那节只是清单）、并发正确性专项、三个开关的浏览器用例、依赖体积与供应链。另查出两处依赖归位问题（`apps/web` 的 `@vitejs/plugin-react` 放错在 `dependencies`、根 `package.json` 多余一个 `three`），**未修**。
 7. 其他尚未启动的产品探索：题目截图识图、GeoGebra `.ggb` 互操作、平面/函数题型逐题补缺、3D 画面进入 HTML。
 

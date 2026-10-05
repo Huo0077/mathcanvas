@@ -5,6 +5,33 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-05 —— N5 开工第一步：形式证明出口的**边界**（还没有后端）
+
+- **为什么先做这一步**：N5 的出口是"让'实例通过'‘采样'‘形式证明'严格分级"，而分级的前提是
+  **一份产物到底凭什么算数**。计划 N5 的 RED 写的正是这件事：`verified_instance` / `sampled`
+  **不能**变成 `formally_proved`；伪造 / 缺字段 / 版本不匹配的产物一律拒绝。
+- **新增** `packages/agent-core/src/proof/proofArtifact.ts`：产物 schema
+  （`version` / `claimId` / `inputHash` / `backend{name,version}` / `proof` / `result{status,detail}`）
+  \+ `verifyProofArtifact` + `evidenceStatusWithProof` + `proofInputHash`。
+- **两条设计决定值得单说**：
+  1. **校验必须带一个 `expectation`（`claimId` + `inputHash`）** —— 只校验产物自身是不够的：
+     一份"证明了**别的东西**"的合格产物可以被贴到这条 claim 上，而它看起来处处合法。
+     所以没有"只看看形状就算通过"的那条路（fail-closed by construction）。
+  2. **拒收不是第五种结局**：结局只有 `verified` / `failed` / `unsupported` / `timeout`
+     （计划原文的四个），拒收一份产物意味着"这次没有得到证明"，所以报 `failed`，
+     而**为什么拒**逐条落在 `reasons` 的机器可读 `code` 上 —— "它不是证明"与"它证明了别的东西"
+     是两件事，不许混成一句。
+- **输入指纹复用仓库既有的 `canonicalContentHash`**（`hashing.ts`），不另写一套散列 ——
+  两套散列会在"输入到底变没变"这件事上给出两个答案。
+- **证据**：`proofArtifact.test.ts` **15 条**，其中一半是反例（"什么都拒"的校验器同样能让判据成立，
+  所以"合格的必须放行"也被钉住）。**定向变异一条**：把"只有 `verified` 才升级"改成"无条件升级"
+  → **3 条红**，含「贴一份合格产物到别处」那条。全库单测 **304 文件 / 3544 通过 + 1 todo / 0 失败**；
+  `typecheck` exit 0；`lint` exit 0（0 error / 13 warning，与基线逐条相同）。
+- **边界（如实）**：**没有接任何后端** —— adapter（Lean/mathlib 或 AlphaGeometry/Newclid 风格）归后一步，
+  而且计划要求它**先过依赖与许可证审查**；所以现在任何真实运行都只会得到 `unsupported`。
+  另外"一份证明该绑到多细的输入上"（只绑原话？还是连坐标/文档一起绑？）**没有裁决** ——
+  `documentFingerprint` 是**可选**参数，调用方必须显式说清它关心什么。
+
 ## 2026-10-05 —— N6 第七步：`test:rust` 的不稳定也**修掉了**（判别 → 排除 → 修 → 前后计数）
 
 - **判别实验（把范围缩到一件事上）**：`cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml

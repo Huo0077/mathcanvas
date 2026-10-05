@@ -334,6 +334,24 @@ export type DragSolveResult =
 - [ ] **提交检查点：** `git commit -m "feat(proof): add verified proof artifact boundary"`。
 - [ ] **N5 GREEN 命令：** `npm.cmd exec -- vitest run packages/agent-core/src/proof --maxWorkers=1`; `node scripts/proof-spike/runner.mjs --mode=smoke`。
 
+> **N5 执行记录（2026-10-05，只完成第一步）：** 上面几条检查项**一条都还没勾** ——
+> 已交付的是**边界**：`packages/agent-core/src/proof/proofArtifact.ts` 的产物 schema、
+> `verifyProofArtifact`、`evidenceStatusWithProof`、`proofInputHash`，加 **15 条**用例
+> （一半是反例）。计划 RED 那句话现在**可执行**了：`verified_instance` / `sampled` 不能变成
+> `formally_proved`；伪造 / 缺字段 / 版本不匹配 / **"证明了别的东西"**（`claimId` 或 `inputHash`
+> 不匹配）一律拒绝。定向变异一条（改成无条件升级）→ 3 条红。
+>
+> **与计划原文的关系：** 计划把 `verifyProofArtifact()` 的签名写成"只返回
+> `verified/failed/unsupported/timeout`"——**保持了四个结局**，但**加了必填的 `expectation`
+> 参数**（`claimId` + `inputHash`）：只校验产物自身时，一份"证明了别的东西"的合格产物贴过来
+> 是看不出来的。拒收**不新增第五种结局**，报 `failed` + 机器可读 `reasons`。
+>
+> **还没做的（本阶段剩下的全部）：** `scripts/proof-spike/` 与那条 `--mode=smoke` 命令；
+> **任何后端 adapter**（Lean/mathlib 或 AlphaGeometry/Newclid 风格）—— 它必须**先过**
+> 依赖/许可证/进程与线程边界审查（计划里那条硬要求），所以现在真实运行只会得到 `unsupported`；
+> 5–10 个短目标（共线/共面、平行/垂直、等长、勾股）；`ConfirmationPanel` / `agentStore` /
+> run event schema 的接线；"一份证明该绑到多细的输入"这条**未裁决**（`documentFingerprint` 是可选参数）。
+
 ## Phase N6：发布与维护收口（flags 已在 N1 创建）
 
 **目标：** 把前五阶段的能力安全地从实验变成可选择发布能力。
