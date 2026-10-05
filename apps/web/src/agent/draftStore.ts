@@ -120,8 +120,14 @@ export interface DraftStore {
    * 它必须由**应用层**持有并显式传进来 —— 编译层（`agent-core`）是纯函数库，
    * 不读应用级 flag；而 Worker 那条路读不到主线程的 flag，所以这个布尔随编译入参
    * 一起过边界（`workerContracts.ts` 的 `obligationIR` 字段）。
+   *
+   * 第七个参数是 **Phase N2 的见证搜索开关**（`agentNextPhaseFlags.witnessSearch`；
+   * 控制器裁决 R11 / R37）。同一条口径：可选、**缺省 = 关**、只在显式 `true` 时让编译期
+   * 在"模型坐标没通过题设核验"时自己搜一组坐标把草稿救回来。它同样要**过 Worker 那条边界**，
+   * 而且多做一件事：救回会替换被物化的坐标与点名，所以那一遍的再核验（下面）必须对着
+   * `StagedCompileResult.materialisedActions` 而不是调用方给的原始动作。
    */
-  stage(draftId: string, actions: DraftAction[], expectedDraftVersion: number, userMessage?: string, relations?: PlanRelations, obligationIR?: boolean): Promise<StageResult>
+  stage(draftId: string, actions: DraftAction[], expectedDraftVersion: number, userMessage?: string, relations?: PlanRelations, obligationIR?: boolean, witnessSearch?: boolean): Promise<StageResult>
   /** 基础文档变了（手工编辑、撤销、切工作区）→ 草稿过期，不能再提交。 */
   assertFresh(draftId: string, liveHandle: DocumentHandle): FreshnessResult
   /**
@@ -167,6 +173,11 @@ export interface StagedCompileResult {
   questions: PlanCompileResult["questions"]
   /** 编译期补出来的假设（"系统替你定了什么"）。 */
   assumptions: PlanCompileResult["assumptions"]
+  /**
+   * **被物化出 `draftDocument` 的那份动作**（Phase N2）。只有救回路径会带它 ——
+   * 见 `PlanCompileResult.materialisedActions`。缺省表示"调用方给的那份就是被物化的那份"。
+   */
+  materialisedActions?: PlanCompileResult["materialisedActions"]
   /** 一次性修复请求（有可修的字段错误时才给）。 */
   repair?: PlanCompileResult["repair"]
 }
@@ -212,6 +223,11 @@ export type CompileStrategy = (input: {
    * 缺省 = 关：策略实现必须按 `=== true` 处理，不许自己兜底成 true。
    */
   obligationIR?: boolean
+  /**
+   * **Phase N2 的见证搜索开关**（R11）。同一条口径：缺省 = 关，
+   * 策略实现必须按 `=== true` 处理；Worker 那条路要把它放进信封。
+   */
+  witnessSearch?: boolean
 }) => Promise<StagedCompileResult> | StagedCompileResult
 
 /**
@@ -248,6 +264,11 @@ export interface CompileInput {
    * 会在就地路径上静默失效 —— 而那正是 R6 要消灭的那种"开关从不生效"。
    */
   obligationIR?: boolean
+  /**
+   * **Phase N2 的见证搜索开关**（R11）。缺省 = 关，只有显式 `true` 才让编译期
+   * 在模型坐标没通过核验时自己搜一组坐标。同样**必须**原样传下去。
+   */
+  witnessSearch?: boolean
 }
 
 /**
@@ -263,7 +284,8 @@ export function compileInProcess(input: CompileInput): PlanCompileResult {
     documentGeneration: input.document.revision,
     ...(input.allocator === undefined ? {} : { idAllocator: input.allocator }),
     ...(input.userMessage === undefined ? {} : { prompt: input.userMessage }),
-    ...(input.obligationIR === undefined ? {} : { diagramObligationIR: input.obligationIR })
+    ...(input.obligationIR === undefined ? {} : { diagramObligationIR: input.obligationIR }),
+    ...(input.witnessSearch === undefined ? {} : { diagramWitnessSearch: input.witnessSearch })
   })
 }
 
@@ -304,7 +326,7 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
       return { ...record, candidate: cloneDocument(record.candidate) }
     },
 
-    async stage(draftId, actions, expectedDraftVersion, userMessage, relations, obligationIR) {
+    async stage(draftId, actions, expectedDraftVersion, userMessage, relations, obligationIR, witnessSearch) {
       const record = drafts.get(draftId)
       if (!record) return { ok: false, reason: "unknown_draft", detail: `no draft ${draftId}` }
       if (record.draftVersion !== expectedDraftVersion) {
@@ -346,7 +368,9 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
         // **N1 的开关随编译入参一起过边界**（R6）：Worker 那条路读不到主线程的
         // 应用级 flag，所以它必须搭这条既有的参数通道过去；就地那条路由
         // `compileInProcess` 转交给 `compilePlan`。两条路都**只在显式 true 时**开。
-        ...(obligationIR === undefined ? {} : { obligationIR })
+        ...(obligationIR === undefined ? {} : { obligationIR }),
+        // **N2 的开关走同一条通道**（R11）。
+        ...(witnessSearch === undefined ? {} : { witnessSearch })
       })
       if (!compiled.ok || compiled.draftDocument === null) {
         // 编译失败时草稿保持原样 —— 不留"半成品"。
@@ -381,11 +405,18 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
       // Phase N1：解析走 `parseObligationWithLegacy`（一次解析同时给出旧结构与统一 IR），
       // 但**核验仍然在草稿这一层重算** —— Worker 那条路只回带 `draftDocument` 与 `operations`，
       // 所以"两条路等价"靠的还是同一个纯判据在这里重跑，而不是靠把报告搬过线程边界。
+      //
+      // Phase N2：这一遍必须对着**被物化的那份动作**。救回路径会替换多面体的坐标与点名，
+      // 而核验器的点名映射（`candidatePoints`）正是拿计划里的 `vertexNames` 与候选图的顶点
+      // 按下标配对的 —— 拿模型的原始动作去核验救回来的图，会把顶点认错，于是救回来的图
+      // 被报告成"未核验"甚至"失败"（编译器说 passed、草稿层说 failed，两句话打架）。
+      // 缺省时 `materialisedActions` 不存在，用的一直是调用方给的那份（与改动之前逐字相同）。
       const parsed = userMessage && actions.some((action) => action.actionId === "solid.create_polyhedron")
         ? parseObligationWithLegacy(userMessage) : null
       const obligations = parsed?.legacy ?? null
+      const materialised = compiled.materialisedActions === undefined ? plan : { ...plan, actions: compiled.materialisedActions }
       const checked = obligations && (obligations.givens.length > 0 || obligations.unverified.length > 0)
-        ? verifyDiagramObligations(obligations, plan, compiled.draftDocument, record.candidate, { obligationIR: obligationIR === true }) : undefined
+        ? verifyDiagramObligations(obligations, materialised, compiled.draftDocument, record.candidate, { obligationIR: obligationIR === true }) : undefined
       if (checked?.status === "failed") {
         return { ok: false, reason: "compile_failed", diagnostics: checked.checks.filter((item) => item.status === "failed").map((item) => ({ code: "diagram_condition_failed", message: `${item.sourceText}：${item.reason}` })) }
       }

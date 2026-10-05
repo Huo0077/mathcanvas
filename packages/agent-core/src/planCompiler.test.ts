@@ -1,4 +1,5 @@
 ﻿import { createEmptyDocument, type GeometryDocument } from "@draw/dsl"
+import { crossVector3, dotVector3, lengthVector3, subtractVector3 } from "@draw/geometry-kernel"
 import { contentFingerprint } from "@draw/scene-graph"
 import { describe, expect, it } from "vitest"
 
@@ -568,5 +569,163 @@ describe("compile repair advice", () => {
     expect(hint).toContain("`goal` 与 `actions`")
     expect(hint).not.toContain("schemaVersion")
     expect(hint).not.toContain("factIds")
+  })
+})
+
+/**
+ * **N2 子任务 2c：把见证搜索接进编译路径**（裁决 R37 / R11 / R35③）。
+ *
+ * 三条判据逐条对应 R17 点名的出口证据：
+ * ① 开关关着时与改动之前**逐字相同**（含"候选不合格就没有草稿"这条 fail-closed 行为）；
+ * ② 开着、且模型坐标不满足题设时，系统**自己搜一组坐标把草稿救回来** ——
+ *   用户能看出那是系统选的示例值，而且进草稿的坐标**真的**满足题设（这里按内核度量独立回代）；
+ * ③ 搜不到就**不产生草稿**，结果与关着时逐字相同（不许半份草稿）。
+ *
+ * 另外两条守 R37① 的"只救不抢"：模型坐标本来就合格时**连搜索都不调用**（草稿里留下的
+ * 必须还是模型自己那组数）；题面点名的不是棱锥时不许硬套一只棱锥上去
+ * （首批只有棱锥能被构造，见 `task-2b-report.md` §8.2/§8.3）。
+ *
+ * 开关的语义与 N1 的 `diagramObligationIR` 同一条（R6/R11）：**显式为 `true` 才开**。
+ */
+describe("witness search rescue in the compile path", () => {
+  /** P 偏出垂足 `(1, 0, 4)`：PA 不再垂直于底面，模型自己声明的那条关系也不成立。 */
+  const SKEWED_PYRAMID = [{ x: 1, y: 0, z: 4 }, PYRAMID_VERTICES[1], PYRAMID_VERTICES[2], PYRAMID_VERTICES[3], PYRAMID_VERTICES[4]]
+  /**
+   * 2b 用例里的同一道题面。
+   *
+   * 与上面那条 `PYRAMID_PROMPT` 的差别不是措辞：**它点名了底面的直角 `AB ⊥ AD`**，
+   * 而搜索器的解析构造只支持"矩形 / 直角底面"（2a 的 `deriveBasePolygon`），
+   * 少了这一条就构造不出候选（`unsupported-shape`），也就无从救回。
+   */
+  const RESCUE_PROMPT = "在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，BC ∥ AD，AB ⊥ AD，画出这个四棱锥"
+  /** 同一条线段被给了两个长度：题设自相矛盾，搜索器能给出冲突证据（2b 的 `findContradiction`）。 */
+  const CONTRADICTORY_PROMPT = "在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，AB ⊥ AD，BD=2，BD=3，画出这个四棱锥"
+  /** 极端长宽比：内核的尺度判据把候选全拒掉 —— 搜了，但一个可核验的坐标都没拿到。 */
+  const EXTREME_PROMPT = "在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，AB ⊥ AD，AB=1，AD=1000000，画出这个四棱锥"
+  /** 同一组题设，但题面说的是**棱柱**：首批不支持棱柱，接线层不许把它当棱锥救回来。 */
+  const PRISM_PROMPT = "在四棱柱 P-ABCD 中，PA ⊥ 平面 ABCD，BC ∥ AD，AB ⊥ AD，画出这个四棱柱"
+
+  /** 物化出来的多面体顶点的坐标，顺序与 `solid.create_polyhedron` 的 `vertices` 一致。 */
+  function materialisedVertices(document: GeometryDocument): { x: number; y: number; z: number }[] {
+    const solid = document.primitives.find((primitive) => primitive.type === "polyhedron3")
+    if (solid?.type !== "polyhedron3") throw new Error("候选文档里没有多面体")
+    return solid.vertexIds.map((id) => {
+      const vertex = document.primitives.find((primitive) => primitive.id === id)
+      if (vertex?.type !== "point3") throw new Error(`顶点 ${id} 不在候选文档里`)
+      return vertex.position
+    })
+  }
+
+  /** 物化动作里声明的点名（`candidatePoints` 就是按它与 `vertexIds` 一一对应取坐标的）。 */
+  function materialisedNames(result: { actions: readonly { actionId: string; inputs: unknown }[] }): string[] {
+    const action = result.actions.find((entry) => entry.actionId === "solid.create_polyhedron")
+    const inputs = action?.inputs
+    const names = typeof inputs === "object" && inputs !== null && !Array.isArray(inputs) ? (inputs as { vertexNames?: unknown }).vertexNames : undefined
+    if (!Array.isArray(names) || !names.every((name) => typeof name === "string")) throw new Error("物化后的多面体动作没有点名")
+    return names as string[]
+  }
+
+  it("leaves the failing candidate exactly as it was when the switch is off", () => {
+    const document = createEmptyDocument("geometry3d")
+    const input = polyhedronPlan(SKEWED_PYRAMID, PYRAMID_RELATIONS)
+    const withoutSwitch = compilePlan(input, context(document, { prompt: RESCUE_PROMPT }))
+    const explicitOff = compilePlan(input, context(document, { prompt: RESCUE_PROMPT, diagramWitnessSearch: false }))
+
+    // R11：`false` 与"根本没这个开关"必须是**同一份报告**（逐字）。
+    expect(JSON.stringify(explicitOff)).toBe(JSON.stringify(withoutSwitch))
+    // 今天的行为没变：诊断 + **没有草稿**，也没有任何"救回来"的痕迹。
+    expect(withoutSwitch.ok).toBe(false)
+    expect(withoutSwitch.draftDocument).toBeNull()
+    expect(withoutSwitch.materialisedActions).toBeUndefined()
+  })
+
+  it("rescues a candidate that fails the givens with coordinates the system chose and re-verified", () => {
+    const document = createEmptyDocument("geometry3d")
+    const result = compilePlan(polyhedronPlan(SKEWED_PYRAMID, PYRAMID_RELATIONS), context(document, { prompt: RESCUE_PROMPT, diagramWitnessSearch: true }))
+
+    expect(result.ok, result.diagnostics.map((entry) => entry.detail).join("; ")).toBe(true)
+    expect(result.draftDocument).not.toBeNull()
+    // 只有统一核验器说 `passed` 才会走到这里（生成物不豁免核验）。
+    expect(result.diagramVerification?.status).toBe("passed")
+
+    // ① 用户能看出这几个数是**系统选的示例值**（设计 §1 验收判据 4）。
+    const texts = result.assumptions.map((assumption) => assumption.text)
+    expect(texts.join(" ")).toContain("系统自选")
+    /**
+     * ② R35③：`ClaimEvidence.degreesOfFreedom` 是 `null`（2b 如实留空），
+     * 送到用户面前的文案就只能说"未计算"。
+     */
+    const evidenceLine = texts.find((line) => line.includes("solver="))
+    expect(evidenceLine, "证据那一行必须存在，否则用户看不到这次核验的依据").toBeDefined()
+    expect(evidenceLine).toContain("自由度：未计算")
+    expect(evidenceLine).not.toContain("刚性")
+
+    /**
+     * ③ 进草稿的坐标必须**真的是被核验过的那一组**：这里不复用核验器的残差，
+     * 而是拿物化后的坐标按内核自己的度量独立回代（与 2b 的用例同一个手法）。
+     */
+    const vertices = materialisedVertices(result.draftDocument!)
+    const names = materialisedNames(result)
+    const at = (name: string) => vertices[names.indexOf(name)]
+    const pa = subtractVector3(at("P"), at("A"))
+    const ab = subtractVector3(at("B"), at("A"))
+    const ad = subtractVector3(at("D"), at("A"))
+    const bc = subtractVector3(at("C"), at("B"))
+    // PA ⊥ 平面 ABCD：PA 同时垂直于底面内的两条不共线方向。
+    expect(Math.abs(dotVector3(pa, ab))).toBeLessThan(1e-9)
+    expect(Math.abs(dotVector3(pa, ad))).toBeLessThan(1e-9)
+    // BC ∥ AD：叉积的归一化模长（也就是夹角的正弦）为零。
+    expect(lengthVector3(crossVector3(bc, ad)) / (lengthVector3(bc) * lengthVector3(ad))).toBeLessThan(1e-9)
+    // 而模型的 P 偏在 x = 1 且与 A 不同高 —— 救回来的不能还是那一组。
+    expect(at("P").x).toBeCloseTo(at("A").x, 9)
+    expect(at("P").z).toBeGreaterThan(0)
+  })
+
+  it("does not pre-empt a candidate the model already got right", () => {
+    const document = createEmptyDocument("geometry3d")
+    const result = compilePlan(polyhedronPlan(PYRAMID_VERTICES, PYRAMID_RELATIONS), context(document, { prompt: RESCUE_PROMPT, diagramWitnessSearch: true }))
+
+    expect(result.ok).toBe(true)
+    expect(result.diagramVerification?.status).toBe("passed")
+    // 搜索若跑过，配置行会出现在假设里（2b 的 `configLine` 一定带 `seed=`）。
+    expect(result.assumptions.map((assumption) => assumption.text).join(" ")).not.toContain("seed=")
+    expect(result.materialisedActions).toBeUndefined()
+    // 草稿里留下的必须是**模型自己**那组坐标，逐字未动。
+    expect(materialisedVertices(result.draftDocument!)[0]).toEqual(PYRAMID_VERTICES[0])
+  })
+
+  it("produces no draft when the givens contradict each other, exactly as it does with the switch off", () => {
+    const document = createEmptyDocument("geometry3d")
+    const input = polyhedronPlan(SKEWED_PYRAMID, PYRAMID_RELATIONS)
+    const withoutSwitch = compilePlan(input, context(document, { prompt: CONTRADICTORY_PROMPT }))
+    const switchedOn = compilePlan(input, context(document, { prompt: CONTRADICTORY_PROMPT, diagramWitnessSearch: true }))
+
+    expect(switchedOn.ok).toBe(false)
+    expect(switchedOn.draftDocument).toBeNull()
+    expect(JSON.stringify(switchedOn)).toBe(JSON.stringify(withoutSwitch))
+  })
+
+  it("produces no draft when the search constructs no verifiable candidate at all", () => {
+    const document = createEmptyDocument("geometry3d")
+    const input = polyhedronPlan(PYRAMID_VERTICES, PYRAMID_RELATIONS)
+    const withoutSwitch = compilePlan(input, context(document, { prompt: EXTREME_PROMPT }))
+    const switchedOn = compilePlan(input, context(document, { prompt: EXTREME_PROMPT, diagramWitnessSearch: true }))
+
+    expect(switchedOn.ok).toBe(false)
+    expect(switchedOn.draftDocument).toBeNull()
+    expect(switchedOn.materialisedActions).toBeUndefined()
+    expect(JSON.stringify(switchedOn)).toBe(JSON.stringify(withoutSwitch))
+  })
+
+  it("does not turn a prism problem into a pyramid just because the switch is on", () => {
+    const document = createEmptyDocument("geometry3d")
+    const input = polyhedronPlan(SKEWED_PYRAMID, PYRAMID_RELATIONS)
+    const withoutSwitch = compilePlan(input, context(document, { prompt: PRISM_PROMPT }))
+    const switchedOn = compilePlan(input, context(document, { prompt: PRISM_PROMPT, diagramWitnessSearch: true }))
+
+    expect(withoutSwitch.ok).toBe(false)
+    expect(switchedOn.ok).toBe(false)
+    expect(switchedOn.draftDocument).toBeNull()
+    expect(JSON.stringify(switchedOn)).toBe(JSON.stringify(withoutSwitch))
   })
 })

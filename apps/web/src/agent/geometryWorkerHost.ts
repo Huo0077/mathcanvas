@@ -108,7 +108,13 @@ export function createWorkerCompileStrategy(runId: string, factory?: () => Worke
            * 里那条"跨线程"用例用的是**手写 strategy**（它自己会带上），所以整份测试全绿。
            * 少转发一个字段的后果不是"少一个功能"，而是"开关事实上不生效" —— 正是 R6 要消灭的形态。
            */
-          ...(input.obligationIR === undefined ? {} : { obligationIR: input.obligationIR })
+          ...(input.obligationIR === undefined ? {} : { obligationIR: input.obligationIR }),
+          /**
+           * **N2 的见证搜索开关同样必须在这里转发**（裁决 R11）：与上面那条是同一个坑 ——
+           * `CompileStrategy` 的入参有它，而构 Worker 信封时若漏取，生产那条 Worker 路就
+           * 永远看不到这个开关（就地兜底那条路反而看得到，于是"只有这台机器上救得回来"）。
+           */
+          ...(input.witnessSearch === undefined ? {} : { witnessSearch: input.witnessSearch })
         }
       )
     } catch (error) {

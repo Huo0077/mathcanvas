@@ -60,6 +60,15 @@ export interface GeometryCompileRequest extends WorkerMessageEnvelope {
    * 与其他可选字段同一套策略：不给就是没有，`parseWorkerRequest` 不把它当必填。
    */
   obligationIR?: boolean
+  /**
+   * **Phase N2 的见证搜索开关**（`featureFlags.ts` 的 `agentNextPhaseFlags.witnessSearch`；
+   * 控制器裁决 R11 / R37）。
+   *
+   * 与 `obligationIR` 完全同一套理由与同一套处理：Worker 是另一个线程，读不到主线程那份
+   * 应用级开关，而这个能力是在 Worker 里的 `compilePlan` 里生效的 —— 所以它必须随编译入参
+   * 一起交过去。可选，`workerRuntime` 按 `=== true` 处理，畸形载荷一律当关。
+   */
+  witnessSearch?: boolean
 }
 
 export interface GeometryCheckRequest extends WorkerMessageEnvelope {
@@ -115,6 +124,17 @@ export interface WorkerSuccess {
    * `diff`/`changed`/`artifact` 的严格态度刻意不同 —— 那三个缺了调用方就没法正确工作）。
    */
   completionAssumptions?: StructuredAssumption[]
+  /**
+   * **被物化出 `document` 的那份动作**（Phase N2 / 裁决 R37②）。
+   *
+   * 为什么它必须过这条边界：救回路径会把搜索到的坐标与点名替换进计划，于是"这份文档是从
+   * 哪份动作算出来的"与请求里那份**不再相同**。而主线程的 `DraftStore.stage` 会拿调用方给的
+   * 动作**再核验一次**（那是"Worker 的响应不会悄悄丢掉报告"的保证）—— 少了这一项，
+   * 那一遍核验就会把救回来的图判成"未核验/失败"。
+   *
+   * 可缺省：只有真的发生了替换才会带（缺省的含义正是"请求里那份就是被物化的那份"）。
+   */
+  materialisedActions?: DraftAction[]
   /**
    * 编译**失败**时的产物走 `geometry.error`，那里只有一句话的 `detail`。
    * 这条边界目前**不带** `repair` / `planDiagnostics`（逐层诊断与一次性修复请求）——
@@ -228,15 +248,18 @@ export function parseWorkerRequest(input: unknown): WorkerParseResult<GeometryWo
      *
      * 所以这里先把 `obligationIR` 从输入里**摘出去**再重建：只靠"`=== true` 才附上"
      * 是不够的（`...input` 会把 `"true"` 原样带过来），必须显式排除。
+     *
+     * `witnessSearch` 是 N2 的同一条开关（R11），处理方式逐字相同：**两个都要摘**。
      */
-    const { obligationIR, ...rest } = input
+    const { obligationIR, witnessSearch, ...rest } = input
     return {
       ok: true,
       message: {
         ...(rest as unknown as GeometryCompileRequest),
         kind,
         actions: actions as DraftAction[],
-        ...(obligationIR === true ? { obligationIR: true } : {})
+        ...(obligationIR === true ? { obligationIR: true } : {}),
+        ...(witnessSearch === true ? { witnessSearch: true } : {})
       }
     }
   }
@@ -325,6 +348,11 @@ export function parseWorkerResponse(input: unknown, expectedRequestId?: string):
        * 而假设缺了只是"这次没有替你定什么"。
        */
       ...(Array.isArray(input.completionAssumptions) ? { completionAssumptions: input.completionAssumptions as StructuredAssumption[] } : {}),
+      /**
+       * 被物化动作同样是"给错了就不认"：不是数组就当作没给。N2 之前它根本不存在，
+       * 所以缺省这条路径**必须**继续可用（那是所有没走救回的编译）。
+       */
+      ...(Array.isArray(input.materialisedActions) ? { materialisedActions: input.materialisedActions as DraftAction[] } : {}),
       artifact: input.artifact as unknown as WorkerSuccess["artifact"]
     }
   }

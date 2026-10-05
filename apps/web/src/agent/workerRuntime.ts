@@ -34,7 +34,7 @@ export function handleGeometryRequest(request: GeometryWorkerRequest): GeometryW
   const base = { kind: "geometry.error" as const, schemaVersion: WORKER_SCHEMA_VERSION, requestId: request.requestId, code: "unknown", detail: "" }
 
   /** 成功响应的**唯一**构造点：三个信封字段只有一处填法，免得哪天漏掉一个。 */
-  const succeed = (operations: WorkerSuccess["operations"], result: ReturnType<typeof commitTransaction>, problems: string[], completionAssumptions: WorkerSuccess["completionAssumptions"] = []): WorkerSuccess => ({
+  const succeed = (operations: WorkerSuccess["operations"], result: ReturnType<typeof commitTransaction>, problems: string[], completionAssumptions: WorkerSuccess["completionAssumptions"] = [], materialisedActions?: WorkerSuccess["materialisedActions"]): WorkerSuccess => ({
     kind: "geometry.compile.result",
     schemaVersion: WORKER_SCHEMA_VERSION,
     requestId: request.requestId,
@@ -53,6 +53,12 @@ export function handleGeometryRequest(request: GeometryWorkerRequest): GeometryW
      * 而那一份正是确认面板上"系统替你定了什么"。用户会确认一件他没看过的事。
      */
     completionAssumptions,
+    /**
+     * **被物化的动作也要过这条边界**（N2 / R37②）：救回替换过坐标与点名，主线程的再核验
+     * 必须对着替换之后的那一份（见 `WorkerSuccess.materialisedActions`）。
+     * 没有替换时它不存在 —— "缺省"的含义就是"请求里那份就是被物化的那份"。
+     */
+    ...(materialisedActions === undefined ? {} : { materialisedActions }),
     artifact: { runId: request.runId, draftId: request.draftId, draftVersion: request.draftVersion, requestId: request.requestId }
   })
 
@@ -74,6 +80,11 @@ export function handleGeometryRequest(request: GeometryWorkerRequest): GeometryW
            * 免得"Worker 那条路默认产出 IR"又变成另一种事实上的常开。
            */
           diagramObligationIR: request.obligationIR === true,
+          /**
+           * **N2 的见证搜索开关跟着请求过来**（R11）：同一条理由 —— Worker 读不到主线程的
+           * 应用级 flag。`=== true` 才开，缺省/畸形载荷一律当关。
+           */
+          diagramWitnessSearch: request.witnessSearch === true,
           // 占用集来自**基准文档**：worker 的基准非空时，同类新建要接着已有的号往下发，
           // 否则第一个新对象就会撞上 `point-1`（与 `draftStore` 那次真实故障同源）。
           takenIds: request.base.primitives.map((primitive) => primitive.id)
@@ -106,7 +117,7 @@ export function handleGeometryRequest(request: GeometryWorkerRequest): GeometryW
       const result = commitTransaction({ base: request.base, operations: compiled.operations })
       if (result.errors.length > 0) return { ...base, code: "commit_rejected", detail: result.errors.join("; ").slice(0, 512) }
       // 编译期补出来的假设原样回带（`succeed` 的注释里写了为什么不能丢）。
-      return succeed(compiled.operations, result, [], compiled.assumptions)
+      return succeed(compiled.operations, result, [], compiled.assumptions, compiled.materialisedActions)
     } catch (error) {
       return { ...base, code: "worker_threw", detail: describe(error) }
     }

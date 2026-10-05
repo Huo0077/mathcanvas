@@ -19,6 +19,18 @@ import { verifyDiagramObligations, type DiagramVerificationReport } from "./diag
 import { verifyRelations, type RelationLookup } from "./relations"
 import { parsePlanEnvelope, repairRequestFor } from "./schemas"
 /**
+ * **N2 的见证搜索**（子任务 2c）。
+ *
+ * 这一行**有意**造出一个 import 环：`planCompiler → solver/witnessSearch → planCompiler`
+ * （搜索器要用**产品那条**物化路径造候选，见 2b 的报告 §9）。两个方向都只在**函数体内**
+ * 使用对方的绑定（没有任何模块初始化期的读取），ESM 的活绑定下是惰性的；
+ * `searchWitness` / `compilePlan` 都是函数声明，提升之后调用点一定拿得到。
+ * 另有一条替代方案是让编译层通过 `PlanCompileContext` 收一个搜索函数 —— 那等于把
+ * "谁是搜索器"交给应用层去拼，与"搜索编排只有一处"（N2 的 Ownership）相冲突。
+ */
+import { searchWitness } from "./solver/witnessSearch"
+import type { PolyhedronWitness, WitnessSearchResult, WitnessShapeKind } from "./solver/solverContracts"
+/**
  * `isInvariantRequest` 从**叶子模块**导入（复核裁决 R29）。
  *
  * 它原先住在 `./underdetermined`，而那条边会让模块图成环：
@@ -82,6 +94,20 @@ export interface PlanCompileContext {
    * 都冲突。保守方向：生产默认走旧路径，IR 只有显式打开才产出。
    */
   diagramObligationIR?: boolean
+  /**
+   * **Phase N2 的能力开关**（`apps/web/src/agent/featureFlags.ts` 的 `witnessSearch`；
+   * 控制器裁决 R37 / R11）。
+   *
+   * 与 `diagramObligationIR` 同一条口径：由**应用层**持有、作为普通布尔传进来（这个包是纯函数库，
+   * 不读进程环境），而且**显式为 `true` 才开** —— 缺省 / `undefined` / `false` 一律走旧路径，
+   * 与改动之前逐字相同。
+   *
+   * 打开之后只多一件事：**当模型自己给的坐标没能通过题设核验时**，让
+   * `solver/witnessSearch.ts` 按题设搜一组候选，把它**替换进这份计划**再走一遍
+   * 同一个编译路径与同一个核验器，只有第二遍真的 `passed` 才产出草稿（见 `compilePlan`
+   * 与 `rescuedByWitnessSearch` 的注释）。搜索**不会**在模型坐标已经合格时跑（R37①）。
+   */
+  diagramWitnessSearch?: boolean
 }
 
 export interface PlanCompileResult {
@@ -111,6 +137,18 @@ export interface PlanCompileResult {
   verification: PlanVerification | null
   /** 题设逐条核验：欠定不是失败，无法可靠解析才是未核验。 */
   diagramVerification?: DiagramVerificationReport
+  /**
+   * **被物化出 `draftDocument` 的那份动作**（Phase N2 / 裁决 R37②）。
+   *
+   * 只有**救回路径**会带它：见证搜索成功时，编译器把候选的坐标与点名替换进计划，
+   * 于是"这份 `draftDocument` 是从哪份动作算出来的"与调用方交进来的那份**不再相同**。
+   *
+   * 为什么必须回带：草稿层（`DraftStore.stage`）会拿调用方给的动作**再核验一次**
+   * （那是 Worker 那条路"报告不能丢"的保证）。拿原始动作去核验一份被替换过坐标、
+   * 点名的候选图，结论就会与图不符 —— 救回来的图会被显示成"未核验"甚至"失败"。
+   * 缺省（`undefined`）的含义很明确：**调用方给的那份就是被物化的那份**，没有替换发生。
+   */
+  materialisedActions?: DraftAction[]
   /** 一次性修复请求（有可修的字段错误时才给）。 */
   repair?: RepairRequest
 }
@@ -174,42 +212,92 @@ function describeError(error: unknown): string {
  *
  * 返回的结果永远是"一条条说得清的诊断"，绝不抛异常跨边界：调用方（worker / 草稿适配器）
  * 需要的是原因码，而不是一个被打断的通道。
+ *
+ * ## Phase N2：开关打开时多一层"救回"（裁决 R37）
+ *
+ * 六层编译照旧跑一遍（`compileOnce`）。**只有当**这一遍真的物化出了候选、而题设核验
+ * 没能 `passed`、题面指定的题型又受支持时，才去问 `solver/witnessSearch.ts` 要一组候选坐标；
+ * 拿到之后**替换坐标、重跑同一个 `compileOnce`、要求第二遍核验真的 `passed`**。
+ * 三条纪律各有名字：
+ *
+ * ① **只救不抢** —— 模型自己的坐标已经 `passed` 时连搜索都不调用（`diagramVerification`
+ *    `passed` 就原样返回第一遍的结果）；
+ * ② **生成物不豁免核验** —— 替换之后走的是**同一个** `buildFromPoints` → 编译路径 →
+ *    `verifyDiagramObligations`，"是系统自己生成的"不构成任何捷径；
+ * ③ **没有候选就不产生草稿** —— 搜不到（无解 / 不支持的题型 / 预算耗尽 / 构造被拒）
+ *    一律把**第一遍**的结果原样交回去，也就是今天那条 fail-closed 路径，不产出半份草稿。
+ *
+ * 开关关着时（缺省）这个函数就是 `compileOnce(input, context).result` ——
+ * 与改动之前逐字相同。
  */
 export function compilePlan(input: unknown, context: PlanCompileContext): PlanCompileResult {
+  const first = compileOnce(input, context)
+  if (context.diagramWitnessSearch !== true) return first.result
+  return rescuedByWitnessSearch(context, first) ?? first.result
+}
+
+/**
+ * `compileOnce` 的**内部**产出：除了给调用方看的那份结果，还有救回路径需要的两样东西
+ * （解析后的计划、原话解析产出）。它们**不进** `PlanCompileResult`：那是对外契约，
+ * 多一个字段就多一份"看起来可以依赖"的形状。
+ */
+interface CompileOnceOutcome {
+  result: PlanCompileResult
+  /** 解析后的计划（只有 `kind: "plan"` 才有）；救回路径要在它上面替换多面体坐标。 */
+  plan: Extract<PlanEnvelope, { kind: "plan" }> | null
+  /** `parseObligationWithLegacy` 的产出（题设 IR + 旧结构）；救回路径必须喂**同一份**。 */
+  obligations: ReturnType<typeof parseObligationWithLegacy> | null
+}
+
+/**
+ * **六层编译跑一遍**（不含救回）。
+ *
+ * 抽出来是为了让救回路径能"再走一遍**同一段**代码"，而不是另写一条物化路径 ——
+ * 后者一定会与这条分叉（这个项目在"同一个判断写两遍"上已经吃过好几次亏）。
+ */
+function compileOnce(input: unknown, context: PlanCompileContext): CompileOnceOutcome {
   // ---- 1. 传输解析 ------------------------------------------------------
   const parsed = parsePlanEnvelope(input)
   if (!parsed.ok) {
     const diagnostics = parsed.errors.map((error) => planDiagnostic("transport", error.code, error.path, error.detail))
     return {
-      ok: false,
-      actions: [],
       plan: null,
-      assumptions: [],
-      questions: [],
-      completions: [],
-      diagnostics,
-      aliases: {},
-      operations: [],
-      draftDocument: null,
-      verification: null,
-      repair: repairRequestFor(parsed.errors, 1)
+      obligations: null,
+      result: {
+        ok: false,
+        actions: [],
+        plan: null,
+        assumptions: [],
+        questions: [],
+        completions: [],
+        diagnostics,
+        aliases: {},
+        operations: [],
+        draftDocument: null,
+        verification: null,
+        repair: repairRequestFor(parsed.errors, 1)
+      }
     }
   }
 
   if (parsed.value.kind !== "plan") {
     // 澄清 / 只读回答：没有动作可编译，但**不是**失败。
     return {
-      ok: true,
-      actions: [],
-      plan: parsed.value,
-      assumptions: [],
-      questions: parsed.value.kind === "clarification" ? parsed.value.questions.map((text, index) => ({ id: `question-${index}`, text, reason: "规划器要求补充信息。" })) : [],
-      completions: [],
-      diagnostics: [],
-      aliases: {},
-      operations: [],
-      draftDocument: null,
-      verification: null
+      plan: null,
+      obligations: null,
+      result: {
+        ok: true,
+        actions: [],
+        plan: parsed.value,
+        assumptions: [],
+        questions: parsed.value.kind === "clarification" ? parsed.value.questions.map((text, index) => ({ id: `question-${index}`, text, reason: "规划器要求补充信息。" })) : [],
+        completions: [],
+        diagnostics: [],
+        aliases: {},
+        operations: [],
+        draftDocument: null,
+        verification: null
+      }
     }
   }
 
@@ -232,19 +320,23 @@ export function compilePlan(input: unknown, context: PlanCompileContext): PlanCo
 
   if (audit.questions.length > 0 || audit.actions.length === 0) {
     return {
-      ok: false,
-      actions: [],
       plan: null,
-      assumptions,
-      questions,
-      completions: audit.completions,
-      diagnostics,
-      aliases,
-      operations: [],
-      draftDocument: null,
-      verification: null,
-      // 用户能回答的问题不该变成"让模型重发一遍"（规格 §7：区分配置失败与用户取消）。
-      ...(audit.questions.length > 0 ? {} : { repair: repairRequestFor(toParseErrors(audit.diagnostics), 1) })
+      obligations: null,
+      result: {
+        ok: false,
+        actions: [],
+        plan: null,
+        assumptions,
+        questions,
+        completions: audit.completions,
+        diagnostics,
+        aliases,
+        operations: [],
+        draftDocument: null,
+        verification: null,
+        // 用户能回答的问题不该变成"让模型重发一遍"（规格 §7：区分配置失败与用户取消）。
+        ...(audit.questions.length > 0 ? {} : { repair: repairRequestFor(toParseErrors(audit.diagnostics), 1) })
+      }
     }
   }
 
@@ -335,43 +427,210 @@ export function compilePlan(input: unknown, context: PlanCompileContext): PlanCo
   if (failed) {
     const errors = toParseErrors(diagnostics)
     return {
-      ok: false,
-      actions: [],
-      plan: null,
-      assumptions,
-      questions,
-      completions: audit.completions,
-      diagnostics,
-      aliases,
-      operations: [],
-      draftDocument: null,
-      verification: null,
-      ...(diagramVerification === undefined ? {} : { diagramVerification }),
-      repair: repairRequestFor(errors, 1)
+      plan,
+      obligations: obligationParse,
+      result: {
+        ok: false,
+        actions: [],
+        plan: null,
+        assumptions,
+        questions,
+        completions: audit.completions,
+        diagnostics,
+        aliases,
+        operations: [],
+        draftDocument: null,
+        verification: null,
+        ...(diagramVerification === undefined ? {} : { diagramVerification }),
+        repair: repairRequestFor(errors, 1)
+      }
     }
   }
 
   const verification = verifyPlan(compiledActions, context.prompt)
 
   return {
-    ok: true,
-    actions: compiledActions,
-    plan: completedPlan,
-    assumptions,
-    questions,
-    completions: audit.completions,
-    diagnostics,
-    aliases,
-    operations,
-    draftDocument: working,
-    verification,
-    ...(diagramVerification === undefined ? {} : { diagramVerification })
+    plan,
+    obligations: obligationParse,
+    result: {
+      ok: true,
+      actions: compiledActions,
+      plan: completedPlan,
+      assumptions,
+      questions,
+      completions: audit.completions,
+      diagnostics,
+      aliases,
+      operations,
+      draftDocument: working,
+      verification,
+      ...(diagramVerification === undefined ? {} : { diagramVerification })
+    }
   }
 }
 
 /** 只保留 `envelope.` 前缀的诊断路径，用于构造修复请求（修复只认字段路径）。 */
 function toParseErrors(diagnostics: readonly PlanDiagnostic[]): { code: string; path: string; detail: string }[] {
   return diagnostics.filter((entry) => entry.severity === "error").map((entry) => ({ code: entry.code, path: entry.path, detail: entry.detail }))
+}
+
+// ---------------------------------------------------------------- N2 救回路径
+
+/**
+ * 搜索的**固定参数**（R26：同一 seed 必须给出同一结果）。
+ *
+ * 为什么是常量而不是调用方的入参：编译路径没有"时间预算"这种东西可谈（一次暂存就是一次
+ * 用户可见的等待），而把 `maxCandidates` / `timeoutMs` 暴露到 `PlanCompileContext` 会让
+ * 这两条读数散进应用层。取值来自 2b 报告的实测建议（`task-2b-report.md` §8.7：
+ * 池子上界 13，各候选一次 `compilePlan + verify` 在本机是 ~20ms 量级），
+ * 留出余量后取 `24` / `1500ms`。
+ */
+const WITNESS_SEARCH_SEED = 0
+const WITNESS_SEARCH_MAX_CANDIDATES = 24
+const WITNESS_SEARCH_TIMEOUT_MS = 1500
+
+/**
+ * 题面点名的图形族 → 搜索器的 `shape`（计划 N2 的 `WitnessShapeKind`）。
+ *
+ * 判据只看**题面自己说要画什么**：首批只有棱锥能被搜索器构造（2b 的 `searchWitness`
+ * 对 `prism` / `polyhedron` 都如实报"系统尚不支持"）。所以这里宁可把不确定的题面判成
+ * "不是棱锥" —— 判错的代价是**把棱柱题画成棱锥**，那比"这次不救"严重得多。
+ *
+ * 不认"四面体"：那种题面走的是 `solid.create_tetrahedron`，本来就不进这条路径
+ * （救回只在 `solid.create_polyhedron` 上谈），所以不必在这里猜。
+ */
+function witnessShapeFor(prompt: string): WitnessShapeKind {
+  if (/棱锥|pyramid/i.test(prompt)) return "pyramid"
+  if (/棱柱|prism/i.test(prompt)) return "prism"
+  return "polyhedron"
+}
+
+/**
+ * **把搜索到的候选坐标替换进这份计划**（同一条 `solid.create_polyhedron` 动作，别名不动）。
+ *
+ * 四条纪律，每条都在挡一种具体的坏结果：
+ *
+ * 1. **只替换唯一那只多面体**：核验器的点名映射（`diagramVerification.candidatePoints`）
+ *    要求"恰好一只多面体 + 一张点名表"，多了就不是同一道题，宁可放弃救回；
+ * 2. **顶点个数必须一致**：这次替换是"把同一只多面体的坐标换成满足题设的那一组"，
+ *    不是换一只形状。个数对不上说明模型的图和搜索出来的不是同一族，不替换；
+ * 3. **顶点顺序必须保住"模型自己的那个下标空间"**：计划里的 `relations` 用
+ *    `v0`、`v1`…引用顶点（`relations.ts` 的既有约定），而模型那串 `vertexNames`
+ *    正是"下标 → 点名"的声明。若按候选自己的顺序写回去，`v0` 就会指到另一个顶点，
+ *    于是一条本来成立的关系在**第二遍**核验里被报成不成立 —— 那是我们替换顺序造成的假失败。
+ *    所以优先把候选的坐标**按模型声明的点名重排**（`vertexNames` 原样保留）；
+ * 4. **模型没声明点名时，只有"没有任何下标关系可被误解"才允许按候选自己的顺序写**
+ *    （并补上候选的点名）。`plan.relations` 非空就说明下标是有意义的，那时不猜、不替换。
+ *
+ * 替换不了就返回 `null`（调用方据此放弃救回，保持今天的行为）。
+ */
+function withWitnessCoordinates(plan: Extract<PlanEnvelope, { kind: "plan" }>, candidate: PolyhedronWitness): Extract<PlanEnvelope, { kind: "plan" }> | null {
+  const indexes = plan.actions.flatMap((action, index) => (action.actionId === "solid.create_polyhedron" ? [index] : []))
+  if (indexes.length !== 1) return null
+  const [index] = indexes
+  const action = plan.actions[index]
+  const inputs = isRecord(action.inputs) ? (action.inputs as Record<string, unknown>) : {}
+  if (!Array.isArray(inputs.vertices) || inputs.vertices.length !== candidate.vertices.length) return null
+
+  const declared = inputs.vertexNames
+  const declaredNames = Array.isArray(declared) && declared.every((name) => typeof name === "string") ? (declared as string[]) : null
+  /** 模型声明的点名能不能把候选的点名**一一对上**（等价于两张表是同一个集合）。 */
+  const bijective = declaredNames !== null && new Set(declaredNames).size === declaredNames.length && candidate.names.every((name) => declaredNames.includes(name))
+  const declaredRelations = plan.relations ?? []
+
+  let vertices: PolyhedronWitness["vertices"]
+  let faces: PolyhedronWitness["faces"]
+  let vertexNames: string[]
+  if (bijective) {
+    // `permutation[model] = candidate`：按候选的**点名**重排，`v<i>` 因此仍然指向同一个顶点。
+    const permutation = declaredNames!.map((name) => candidate.names.indexOf(name))
+    vertices = permutation.map((position) => ({ ...candidate.vertices[position] }))
+    faces = candidate.faces.map((ring) => ring.map((position) => permutation.indexOf(position)))
+    vertexNames = [...declaredNames!]
+  } else {
+    if (declaredRelations.length > 0) return null
+    vertices = candidate.vertices.map((point) => ({ ...point }))
+    faces = candidate.faces.map((ring) => [...ring])
+    vertexNames = [...candidate.names]
+  }
+
+  const actions = [...plan.actions]
+  actions[index] = { ...action, inputs: { ...inputs, vertices, faces, vertexNames } } as DraftAction
+  return { ...plan, actions }
+}
+
+/**
+ * **救回路径的对外证据**（R35 条件 ③ + 设计 §1 验收判据 4：系统自选的值必须看得见）。
+ *
+ * 两句话分开写，因为它们是两件事：
+ * - `witness.polyhedron`：**系统替用户定了什么**（2a 的自由值 / 2b 的自选网格值 / 搜索配置）。
+ *   与 `underdetermined.ts` 的 polyhedron 见证同一个形状（`kind: "witness"`、可覆盖）。
+ * - `witness.evidence`：**凭什么这么说**。`ClaimEvidence.degreesOfFreedom` 在本轮恒为 `null`
+ *   （2b 如实留空，见 `solver/witnessSearch.ts` 的 `evidenceFor`），所以文案只能是
+ *   **"未计算"** —— 把 `null` 说成"0 自由度"或"图形刚性"就是拿没算过的东西当结论（R35③）。
+ */
+function witnessAssumptions(found: Extract<WitnessSearchResult, { status: "verified_instance" }>): StructuredAssumption[] {
+  return [
+    {
+      id: "witness.polyhedron",
+      text: `系统按题设搜出了这组坐标（题面未给的量是系统自选的示例值，可在属性栏修改）：${found.assumptions.join("；")}`,
+      kind: "witness",
+      value: found.candidate,
+      overridable: true,
+      path: "witness.polyhedron"
+    },
+    {
+      id: "witness.evidence",
+      text: `这组坐标已按候选图逐条核验：证据状态 ${found.evidence.status}，solver=${found.evidence.solver}；自由度：未计算（null 表示没有算过）。`,
+      kind: "witness",
+      value: found.evidence,
+      overridable: false,
+      path: "witness.evidence"
+    }
+  ]
+}
+
+/**
+ * **救回**（裁决 R37）：搜一组坐标、替换、重跑编译与核验；任何一步不成立都返回 `null`
+ * 让调用方交回**第一遍**的结果（也就是今天的行为）。
+ *
+ * 顺序即判据，每一步都在挡一种具体的坏结果：
+ * 1. 第一遍没有核验报告（没原话 / 没有多面体动作 / 题设一条都没解析出来）→ 没得救；
+ * 2. 第一遍已经 `passed` → **连搜索都不调用**（R37①"只救不抢"：模型算对了就别动它）；
+ * 3. 搜索没给出 `verified_instance`（无解 / 不支持 / 预算耗尽 / 全被构造期拒掉）→ 不救；
+ * 4. 计划里不是唯一那只多面体 → 不替换；
+ * 5. 第二遍**必须** `ok` + 有草稿 + 核验 `passed`，三者缺一都不算救回 ——
+ *    生成物与模型给的候选走的是同一个核验器，没有任何"系统生成所以跳过"的豁免。
+ */
+function rescuedByWitnessSearch(context: PlanCompileContext, first: CompileOnceOutcome): PlanCompileResult | null {
+  const report = first.result.diagramVerification
+  if (report === undefined || report.status === "passed") return null
+  if (first.plan === null || first.obligations === null || context.prompt === undefined) return null
+
+  const found = searchWitness({
+    obligations: first.obligations.ir,
+    shape: witnessShapeFor(context.prompt),
+    seed: WITNESS_SEARCH_SEED,
+    maxCandidates: WITNESS_SEARCH_MAX_CANDIDATES,
+    timeoutMs: WITNESS_SEARCH_TIMEOUT_MS
+  })
+  if (found.status !== "verified_instance") return null
+
+  const candidatePlan = withWitnessCoordinates(first.plan, found.candidate)
+  if (candidatePlan === null) return null
+
+  const second = compileOnce(candidatePlan, context)
+  if (!second.result.ok || second.result.draftDocument === null || second.result.diagramVerification?.status !== "passed") return null
+
+  return {
+    ...second.result,
+    assumptions: [...second.result.assumptions, ...witnessAssumptions(found)],
+    /**
+     * 草稿层的再核验要对着**这一份**（R37②）：被替换过坐标与点名的候选图，
+     * 拿模型的原始动作去核验会得出与图不符的结论。
+     */
+    materialisedActions: second.result.actions
+  }
 }
 
 /**

@@ -318,6 +318,76 @@ describe("geometry worker runtime", () => {
     }
   })
 
+  /**
+   * **N2 的见证搜索开关过线程边界**（裁决 R11；与上面 IR 那条同一套判据）。
+   *
+   * Worker 读不到主线程那份 `agentNextPhaseFlags`，所以这个布尔只能随请求过来，
+   * 而 `parseWorkerRequest` 会**逐字段重建**消息：少一个字段就等于"Worker 那条路的开关
+   * 永远是关的"。畸形载荷（`"true"` / `1`）必须当成关 —— 缺省是关，就不该让一个不认识的值
+   * 把它打开。
+   */
+  it("carries the N2 witness-search switch across the worker request boundary, and only as a real boolean", () => {
+    const base = createEmptyDocument("conics")
+    const actions = [{ actionId: "planar.create_point", actionKey: "p", factIds: [], inputs: { alias: "p", points: [{ x: 1, y: 0 }] } }] as never
+    const withSwitch = parseWorkerRequest({ ...createWorkerRequest("geometry.compile", envelope, { base, actions }), witnessSearch: true })
+    expect(withSwitch.ok).toBe(true)
+    if (withSwitch.ok && withSwitch.message.kind === "geometry.compile") expect(withSwitch.message.witnessSearch).toBe(true)
+
+    const withoutSwitch = parseWorkerRequest(createWorkerRequest("geometry.compile", envelope, { base, actions }))
+    expect(withoutSwitch.ok).toBe(true)
+    if (withoutSwitch.ok && withoutSwitch.message.kind === "geometry.compile") {
+      expect(Object.hasOwn(withoutSwitch.message, "witnessSearch")).toBe(false)
+    }
+
+    for (const malformed of ["true", 1, {}, null]) {
+      const parsed = parseWorkerRequest({ ...createWorkerRequest("geometry.compile", envelope, { base, actions }), witnessSearch: malformed })
+      expect(parsed.ok).toBe(true)
+      if (parsed.ok && parsed.message.kind === "geometry.compile") expect(parsed.message.witnessSearch, `${JSON.stringify(malformed)} 被当成了 true`).toBeUndefined()
+    }
+  })
+
+  /**
+   * **Worker 里真的救回了一次，并且把"被物化的那份动作"一起带回来**（裁决 R37②/R11）。
+   *
+   * 主线程要拿这一份重算核验（`DraftStore.stage` 的那道再核验）。少了它，报告会与候选图
+   * 说两件不同的事：救回会替换多面体的坐标**与点名**，而模型的原始动作里点名顺序是它自己的
+   * （这里是 `P,A,B,C,D`，候选的顺序是"底面环 + 顶点"`A,B,C,D,P`）。
+   */
+  it("rescues a failing candidate inside the worker and hands the materialised actions back", () => {
+    const request = createWorkerRequest("geometry.compile", envelope, {
+      base: createEmptyDocument("geometry3d"),
+      prompt: "在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，BC ∥ AD，AB ⊥ AD，画出这个四棱锥",
+      actions: [{
+        actionId: "solid.create_polyhedron",
+        actionKey: "pyramid",
+        factIds: [],
+        inputs: {
+          alias: "pyramid",
+          vertexNames: ["P", "A", "B", "C", "D"],
+          vertices: [{ x: 1, y: 0, z: 4 }, { x: 0, y: 0, z: 0 }, { x: 2, y: 0, z: 0 }, { x: 2, y: 3, z: 0 }, { x: 0, y: 3, z: 0 }],
+          faces: [[1, 2, 3, 4], [0, 2, 1], [0, 3, 2], [0, 4, 3], [0, 1, 4]]
+        }
+      }] as never,
+      witnessSearch: true
+    })
+
+    const response = handleGeometryRequest(request)
+
+    if (response.kind !== "geometry.compile.result") throw new Error(`expected a result, got ${response.code}: ${response.detail}`)
+    expect(response.materialisedActions, "少了它，主线程那道再核验会对着模型的原始动作用算，报告就会与候选图不符").toBeDefined()
+    expect(response.materialisedActions?.[0]?.actionId).toBe("solid.create_polyhedron")
+    // 点名是**模型自己那份**（救回只换坐标，不重排下标：计划里的 relations 用 v0、v1…引用顶点）。
+    expect((response.materialisedActions?.[0]?.inputs as { vertexNames?: string[] }).vertexNames).toEqual(["P", "A", "B", "C", "D"])
+    // 坐标真的换成了候选那一组：P 落在垂足 A 正上方，底面四点回到 z = 0。
+    const rescued = (response.materialisedActions?.[0]?.inputs as { vertices?: { x: number; y: number; z: number }[] }).vertices ?? []
+    expect(rescued[0]?.z).toBeGreaterThan(0)
+    for (const base of rescued.slice(1)) expect(base?.z).toBeCloseTo(0, 9)
+    // 响应还得能原样过解析器 —— 那是主线程**唯一**的入口。
+    const parsed = parseWorkerResponse(response, "req-1")
+    expect(parsed.ok).toBe(true)
+    if (parsed.ok && parsed.message.kind === "geometry.compile.result") expect(parsed.message.materialisedActions).toHaveLength(1)
+  })
+
   it("reports a no-op batch as unchanged instead of pretending something happened", () => {
     // 把可见性设成它已经是的值：语义没有变化。
     const base = createEmptyDocument("conics")

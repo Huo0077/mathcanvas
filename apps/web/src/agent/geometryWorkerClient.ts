@@ -51,6 +51,11 @@ export interface GeometryWorkerRequestEnvelope {
    * 所以这个布尔必须随请求过去。缺省 = 关。
    */
   obligationIR?: boolean
+  /**
+   * **Phase N2 的见证搜索开关**（R11）：同一条理由 —— Worker 读不到主线程的开关，
+   * 只能随请求过去。缺省 = 关。
+   */
+  witnessSearch?: boolean
 }
 
 export type GeometryWorkerOutcome =
@@ -194,7 +199,9 @@ export function createGeometryWorkerClient(worker: WorkerLike, options: Geometry
       base,
       ...(envelope.prompt === undefined ? {} : { prompt: envelope.prompt }),
       // IR 开关随请求过边界（R6）；只在给了的时候带上，缺省就是"没有这一项"。
-      ...(envelope.obligationIR === undefined ? {} : { obligationIR: envelope.obligationIR })
+      ...(envelope.obligationIR === undefined ? {} : { obligationIR: envelope.obligationIR }),
+      // N2 的见证搜索开关走同一条通道（R11）。
+      ...(envelope.witnessSearch === undefined ? {} : { witnessSearch: envelope.witnessSearch })
     }, envelope),
     check: (operations, base, envelope) => send("geometry.check", { operations: [...operations], base }, envelope),
     pendingCount: () => pending.size,

@@ -263,6 +263,57 @@ describe("committer adapter commit", () => {
 
     expect(result.status).not.toBe("committed")
   })
+
+  /**
+   * **协调器那条路也必须带上编译期开关**（N2 / 裁决 R11；N1 的 `obligationIR` 是同一条链）。
+   *
+   * 这条链才是**生产的主路**：`coordinator` 把计划交给 `CommitterPort.stage`，适配器再调
+   * `DraftStore.stage`。开关若只接在"草稿工具"那条路上，生产运行里它**永远不生效** ——
+   * 而那正是 R6/R11 要消灭的形态（"开关事实上不生效"与"没有开关"在产品上无法区分）。
+   */
+  it("passes the next-phase compile switches down to the draft store", async () => {
+    const captured: { userMessage?: string; relations?: unknown; obligationIR?: boolean; witnessSearch?: boolean } = {}
+    const drafts = makeDrafts({
+      stage: vi.fn(async (_draftId: string, _actions: readonly unknown[], _expected: number, userMessage?: string, relations?: unknown, obligationIR?: boolean, witnessSearch?: boolean) => {
+        captured.userMessage = userMessage
+        captured.relations = relations
+        captured.obligationIR = obligationIR
+        captured.witnessSearch = witnessSearch
+        return { ok: true as const, preview: { draftVersion: 2, previewHash: "preview-2" } }
+      })
+    })
+    const adapter = createCommitterAdapter({
+      drafts,
+      host: makeHost(),
+      live: () => ({ handle: handleFor(document()), document: document() }),
+      nextPhaseFlags: { obligationIR: true, witnessSearch: true }
+    })
+
+    const result = await adapter.stage({ run: run(), actionCount: 1, actions, signal, userMessage: "画四棱锥" })
+
+    expect(result.ok).toBe(true)
+    expect(captured.userMessage).toBe("画四棱锥")
+    expect(captured.obligationIR).toBe(true)
+    expect(captured.witnessSearch).toBe(true)
+  })
+
+  it("leaves both switches off when the application injects no flags at all", async () => {
+    const captured: { obligationIR?: boolean; witnessSearch?: boolean } = {}
+    const drafts = makeDrafts({
+      stage: vi.fn(async (_draftId: string, _actions: readonly unknown[], _expected: number, _userMessage?: string, _relations?: unknown, obligationIR?: boolean, witnessSearch?: boolean) => {
+        captured.obligationIR = obligationIR
+        captured.witnessSearch = witnessSearch
+        return { ok: true as const, preview: { draftVersion: 2, previewHash: "preview-2" } }
+      })
+    })
+    const adapter = createCommitterAdapter({ drafts, host: makeHost(), live: () => ({ handle: handleFor(document()), document: document() }) })
+
+    await adapter.stage({ run: run(), actionCount: 1, actions, signal, userMessage: "画四棱锥" })
+
+    // 缺省 = 关，而且**连字段都不给**（"没给"与"给了 false"在 `stage` 那边是同一件事）。
+    expect(captured.obligationIR).toBeUndefined()
+    expect(captured.witnessSearch).toBeUndefined()
+  })
 })
 
 describe("handle helper", () => {

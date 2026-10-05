@@ -266,8 +266,9 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
     },
     async stage(draftId, actions, expectedDraftVersion) {
       // `DraftStore` 的签名收可变数组（它会与已有动作拼接），这里把只读入参拷一份。
-      // 第六个参数是 N1 的统一 IR 开关（R6）：它必须**由应用层显式传**，不能靠编译层兜底。
-      const result = await drafts.stage(draftId, [...actions], expectedDraftVersion, undefined, undefined, nextPhase.obligationIR)
+      // 第六个参数是 N1 的统一 IR 开关（R6）、第七个是 N2 的见证搜索开关（R11）：
+      // 两者都必须**由应用层显式传**，不能靠编译层兜底。
+      const result = await drafts.stage(draftId, [...actions], expectedDraftVersion, undefined, undefined, nextPhase.obligationIR, nextPhase.witnessSearch)
       if (!result.ok) {
         const failure: DraftStageOutcome = { ok: false, reason: result.reason, diagnostics: result.diagnostics ?? [], detail: result.detail, unchanged: true }
         return failure
@@ -279,7 +280,7 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
       const base = dependencies.readDocument()
       if (!base) return { ok: false, diagnostics: [{ code: "no_document", message: "there is no active document" }], detail: "there is no active document" }
       const probe = drafts.create(base, handleFor(base, dependencies.projectId))
-      const result = await drafts.stage(probe.draftId, [...actions], probe.draftVersion, undefined, undefined, nextPhase.obligationIR)
+      const result = await drafts.stage(probe.draftId, [...actions], probe.draftVersion, undefined, undefined, nextPhase.obligationIR, nextPhase.witnessSearch)
       // `DraftStore` 只有 `invalidate`（不是 `discard`）：它把草稿从表里删掉并记下原因。
       drafts.invalidate(probe.draftId, "preflight probe")
       return result.ok
@@ -352,7 +353,21 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
     }
   }
 
-  const committer = createCommitterAdapter({ drafts, host, live })
+  const committer = createCommitterAdapter({
+    drafts,
+    host,
+    live,
+    /**
+     * **协调器那条路也必须带上编译期开关**（N2 / 裁决 R11）。
+     *
+     * 这条链才是生产的主路：协调器把计划交给 `CommitterPort.stage` → 适配器 → `DraftStore.stage`。
+     * 开关只接在"草稿工具"那条路上（上面 `draftTools.stage`）是不够的 —— 那会让
+     * `witnessSearch` 在主路上**永远不生效**，而"开关事实上不生效"与"没有开关"在产品上
+     * 无法区分（正是 R6/R11 要消灭的形态）。两个开关都是 `=== true` 才开，全 false 时
+     * 与改动之前逐字相同。
+     */
+    nextPhaseFlags: { obligationIR: nextPhase.obligationIR, witnessSearch: nextPhase.witnessSearch }
+  })
 
   /**
    * **技能 → 可用动作**（Task 2.2 Step 2/4 的接线）。

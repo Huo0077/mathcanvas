@@ -72,6 +72,11 @@ export interface WorkerCompileEnvelope {
    * 只能由调用方随信封交过来；缺省 = 关。
    */
   obligationIR?: boolean
+  /**
+   * **Phase N2 的见证搜索开关**（R11）。同一条理由、同一条通道：Worker 读不到主线程的
+   * 应用级 flag，只能随信封过去；缺省 = 关。
+   */
+  witnessSearch?: boolean
 }
 
 /**
@@ -98,7 +103,9 @@ export async function compileInWorker(
     draftVersion: envelope.draftVersion,
     ...(envelope.prompt === undefined ? {} : { prompt: envelope.prompt }),
     // IR 开关随请求过线程边界（R6）：Worker 读不到主线程的 flag。
-    ...(envelope.obligationIR === undefined ? {} : { obligationIR: envelope.obligationIR })
+    ...(envelope.obligationIR === undefined ? {} : { obligationIR: envelope.obligationIR }),
+    // N2 的见证搜索开关走同一条通道（R11）。
+    ...(envelope.witnessSearch === undefined ? {} : { witnessSearch: envelope.witnessSearch })
   })
   if (!outcome.ok) {
     return {
@@ -125,6 +132,8 @@ export async function compileInWorker(
     diagnostics: [],
     questions: [],
     // 假设**必须照抄**：它是确认面板上的"系统替你定了什么"（这一项曾经在契约里缺失）。
-    assumptions: [...(result.completionAssumptions ?? [])]
+    assumptions: [...(result.completionAssumptions ?? [])],
+    // 救回路径的"被物化动作"同样必须照抄：草稿层的再核验要对着它（见 `StagedCompileResult`）。
+    ...(result.materialisedActions === undefined ? {} : { materialisedActions: [...result.materialisedActions] })
   }
 }

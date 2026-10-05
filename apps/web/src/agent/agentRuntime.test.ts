@@ -8,6 +8,7 @@ import { DEFAULT_DERIVED_STATUS_LIMIT, SKILL_CATALOGUE_REVISION } from "@draw/ag
 
 import { createAgentRuntime } from "./agentRuntime"
 import type { WorkerLike } from "./geometryWorkerClient"
+import { resetGeometryWorkerForTests } from "./geometryWorkerHost"
 import { handleGeometryRequest } from "./workerRuntime"
 import { createModelPlanner, PLAN_TOOL_NAME } from "./modelPlanner"
 import { CONIC_INVARIANT_PROMPT, OBLIQUE_PRISM_PROMPT, PYRAMID_PROMPT, conicInvariantPlan, obliquePrismEdges, obliquePrismSectionPlan, pyramidPlan } from "./representativeFixtures"
@@ -51,7 +52,7 @@ function exportPreflight(): ExportPreflightPort {
   return { preflight: vi.fn(() => ({ format: "svg", supported: true, requiresUserAcceptance: false, omitted: [], fontLoss: [], approximationNotes: [], blockedReasons: [], projectedEntityCount: 0 })) }
 }
 
-function makeRuntime(options: { envelope?: PlanEnvelope; document?: GeometryDocument | null; planner?: PlannerPort; diagnostics?: (line: string) => void; geometryWorkerFactory?: () => WorkerLike; obligationIR?: boolean } = {}) {
+function makeRuntime(options: { envelope?: PlanEnvelope; document?: GeometryDocument | null; planner?: PlannerPort; diagnostics?: (line: string) => void; geometryWorkerFactory?: () => WorkerLike; obligationIR?: boolean; witnessSearch?: boolean } = {}) {
   let current = options.document === undefined ? geometryDocument() : options.document
   const written: GeometryDocument[] = []
   const runtime = createAgentRuntime({
@@ -65,8 +66,8 @@ function makeRuntime(options: { envelope?: PlanEnvelope; document?: GeometryDocu
     exportPreflight: exportPreflight(),
     ...(options.diagnostics === undefined ? {} : { diagnostics: options.diagnostics }),
     ...(options.geometryWorkerFactory === undefined ? {} : { geometryWorkerFactory: options.geometryWorkerFactory }),
-    // N1 的开关按裁决 R6 由应用层持有；这里用注入点把它打开，好让"接线到底通不通"可测。
-    ...(options.obligationIR === undefined ? {} : { agentNextPhaseFlags: { obligationIR: options.obligationIR, witnessSearch: false, constrainedDrag: false, openProblemCompiler: false, proofExport: false } }),
+    // N1/N2 的开关按裁决 R6/R11 由应用层持有；这里用注入点把它们打开，好让"接线到底通不通"可测。
+    ...(options.obligationIR === undefined && options.witnessSearch === undefined ? {} : { agentNextPhaseFlags: { obligationIR: options.obligationIR ?? false, witnessSearch: options.witnessSearch ?? false, constrainedDrag: false, openProblemCompiler: false, proofExport: false } }),
     projectId,
     runId: "run-1",
     now: () => 1_000
@@ -360,6 +361,43 @@ describe("the assembled runtime actually runs", () => {
     expect(posted).toHaveLength(1)
     // 少这一个字段 = 生产上 Worker 那条路的开关永远不生效（R6 要消灭的形态）。
     expect(posted[0]?.obligationIR).toBe(true)
+  })
+
+  /**
+   * **N2 的 `witnessSearch` 在生产装配上到底通不通**（裁决 R11）。
+   *
+   * 与上面那条同一个观测点：开关过没过去，只有**发到假 Worker 上的请求载荷**看得见
+   * （Worker 的响应里没有"搜没搜过"这种字段）。这条同时覆盖"应用层持有开关 → 编译入参 →
+   * Worker 信封"三跳，而 `geometryWorkerHost.witnessSearch.test.ts` 覆盖"信封 → Worker → 编译期"。
+   */
+  it("hands the application's witness-search flag down to the real worker compile strategy", async () => {
+    // 页面级 Worker 客户端是**模块单例**（`geometryWorkerForPage` 懒建一次）。不清掉它，
+    // 这条用例拿到的会是上一条用例注入的那只假 Worker，于是 `posted` 永远是空的 ——
+    // 一个"测试之间互相污染"的假失败，与被测行为无关。
+    resetGeometryWorkerForTests()
+    const posted: Record<string, unknown>[] = []
+    const { runtime } = makeRuntime({
+      witnessSearch: true,
+      geometryWorkerFactory: () => {
+        const inner = inlineWorker((request) => handleGeometryRequest(request as never))
+        return { ...inner, postMessage(message: unknown) { posted.push(message as Record<string, unknown>); inner.postMessage(message) } }
+      }
+    })
+    const created = runtime.draftTools.create({ projectId, documentId: "doc-1", workspace: "geometry3d", epoch: "epoch:doc-1", generation: 0, contentHash: "" })
+
+    const staged = await runtime.draftTools.stage(created.draftId, [{ actionId: "solid.create_template", actionKey: "cube", factIds: [], inputs: { alias: "cube", template: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 2, z: 2 } } } as never], created.draftVersion)
+
+    expect(staged.ok).toBe(true)
+    expect(posted).toHaveLength(1)
+    expect(posted[0]?.witnessSearch).toBe(true)
+    /**
+     * 另一个开关不受影响（R2：五个开关各自独立）。
+     *
+     * 注意这里判的是"**没被打开**"而不是"字段不在"：应用层持有的是**五个键都有的**一份
+     * （`agentNextPhaseFlags()`），所以 `obligationIR: false` 会随请求过边界 ——
+     * Worker 侧按 `=== true` 处理，`false` 与"没给"在那里是同一件事。
+     */
+    expect(posted[0]?.obligationIR).not.toBe(true)
   })
 
   it("answers export preflight questions through the injected port", async () => {

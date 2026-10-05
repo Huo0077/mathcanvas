@@ -35,7 +35,7 @@ export interface DraftStoreLike {
    * **返回 `Promise`**（方案 3）：编译可以被交给几何 Worker，而 Worker 是异步的。
    * 这一层本来就是 `async`（`CommitterPort.stage` 返回 `Promise`），所以只是把 `await` 加到调用点。
    */
-  stage(draftId: string, actions: readonly unknown[], expectedDraftVersion: number, userMessage?: string, relations?: PlanRelations): Promise<
+  stage(draftId: string, actions: readonly unknown[], expectedDraftVersion: number, userMessage?: string, relations?: PlanRelations, obligationIR?: boolean, witnessSearch?: boolean): Promise<
     | {
         ok: true
         preview: {
@@ -88,6 +88,19 @@ export interface CommitterAdapterDependencies {
   host: HostBridgeLike
   /** 取**当前**活跃文档的句柄 + 本体。每次调用现取，不用快照（快照会让 CAS 永远通过）。 */
   live(): { handle: DocumentHandle; document: unknown } | null
+  /**
+   * **应用层持有的下一阶段能力开关**（N1 的 `obligationIR` / N2 的 `witnessSearch`；
+   * 裁决 R6 / R11）。
+   *
+   * 为什么必须在这一层注入：协调器那条链（`CommitterPort.stage` → 适配器 →
+   * `DraftStore.stage`）才是**生产的主路**，而编译期开关只有 `DraftStore.stage` 这个入口
+   * 能把它交给编译管线。少了这一项，开关就只对"模型自己调草稿工具"那条路生效 ——
+   * 生产运行里它**永远不生效**，那与"没有开关"在产品上无法区分。
+   *
+   * 类型只取这两个布尔（不是应用层的 `AgentNextPhaseFlags`）：agent-core 不依赖 `apps/web`，
+   * 而这一层真正要的也只是"把两个开关原样传下去"。可选；不给 = 两个都不传 = 全关。
+   */
+  nextPhaseFlags?: { obligationIR?: boolean; witnessSearch?: boolean }
 }
 
 export interface CommitterAdapter extends CommitterPort {
@@ -125,7 +138,22 @@ export function createCommitterAdapter(dependencies: CommitterAdapterDependencie
       const preview = dependencies.host.preview(draftId)
       const expectedVersion = preview.ok ? preview.artifact.draftVersion : 1
 
-      const staged = await dependencies.drafts.stage(draftId, request.actions, expectedVersion, request.userMessage, request.relations)
+      /**
+       * **编译期开关随暂存一起下去**（R6 / R11）：`DraftStore.stage` 是编译管线唯一的入口，
+       * 而"编译期要不要产出 IR / 要不要在模型坐标不成立时自己搜一组坐标"都是它那一侧的事。
+       *
+       * 两个都是"缺省 = 关"，所以应用层没注入时这里传 `undefined`（不是 `false`）——
+       * 让 `stage` 那条"没给就不带"的既有语义继续成立（它也决定 Worker 信封上有没有这个字段）。
+       */
+      const staged = await dependencies.drafts.stage(
+        draftId,
+        request.actions,
+        expectedVersion,
+        request.userMessage,
+        request.relations,
+        dependencies.nextPhaseFlags?.obligationIR,
+        dependencies.nextPhaseFlags?.witnessSearch
+      )
       if (!staged.ok) {
         const detail = staged.detail ?? staged.diagnostics?.map((entry) => `${entry.code}: ${entry.message}`).join("; ")
         // 原因码原样映射：`stale_draft_version`（版本对不上）与 `stale_draft`（基础文档变了）是两回事。
