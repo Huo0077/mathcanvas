@@ -31,7 +31,11 @@ function point(map: ReadonlyMap<string, PrimitiveSpec>, id: string): Vector3 | n
   return primitive?.type === "point3" ? primitive.position : null
 }
 
-function lineEndpoints(primitive: LineLike3, map: ReadonlyMap<string, PrimitiveSpec>): [Vector3, Vector3] | null {
+/**
+ * 一条线状图元的两个端点。**导出**是因为 N3 的线状投影要用同一份"怎么从图元读出一条线"的判据
+ *（与 `isLineLike3` 同一条纪律：同一个判断不许写两遍）。
+ */
+export function lineEndpoints(primitive: LineLike3, map: ReadonlyMap<string, PrimitiveSpec>): [Vector3, Vector3] | null {
   if (primitive.type === "line3") {
     if (primitive.definition.kind === "pointDirection") {
       const origin = point(map, primitive.definition.pointId)

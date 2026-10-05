@@ -1,7 +1,7 @@
 import type { ConstraintSpec, Plane3Primitive, PrimitiveSpec, Vector3 } from "@draw/dsl"
 
-import { constraintResidual3, diagnoseConstraint3, findConstraintContradictions, isLineLike3, projectPointOntoLine3, projectPointOntoPlane3, type ConstraintContradiction, type ConstraintDiagnostic3 } from "./constraints3d"
-import { addVector3, dotVector3, lengthVector3, normalizeVector3, planeFromPoints, scaleVector3, subtractVector3 } from "./geometry3d"
+import { constraintResidual3, diagnoseConstraint3, findConstraintContradictions, isLineLike3, lineEndpoints, projectPointOntoLine3, projectPointOntoPlane3, type ConstraintContradiction, type ConstraintDiagnostic3 } from "./constraints3d"
+import { addVector3, crossVector3, dotVector3, lengthVector3, normalizeVector3, planeFromPoints, scaleVector3, subtractVector3 } from "./geometry3d"
 import { rankRows } from "./linear-algebra"
 
 /**
@@ -17,9 +17,13 @@ import { rankRows } from "./linear-algebra"
  *
  * - 不做通用约束求解：没有迭代优化、没有 RNG、没有时钟。顺序投影跑固定次数，
  *   **同一份输入必然给同一份输出**（这一点是刻意的：拖动要可撤销、可重放）。
- * - 不做"把一条线转过去"（`parallel` / `perpendicular` 的线状写法）：那要先决定旋转哪一侧的点，
- *   是一个产品判断，不是数学结论。需要动却没规则时**如实报 `no-projection-rule`**，
- *   绝不假装已经满足。
+ * - **线状写法现在做了**（`parallel` / `perpendicular`，2026-10-05 补）：保持**第一条**线不动、
+ *   把**第二条**转过去 —— 这是 2D 的 `projectLineConstraint` 早就定下的同口径，不是新拍的产品判断。
+ *   转动取最小改动，"没有唯一答案"的两种情形（方向是显式写死的直线；`perpendicular` 而两条线
+ *   已经平行）如实进 `skipped`。
+ * - 需要动却真的没有规则时**如实报 `no-projection-rule`**，绝不假装已经满足。
+ *   **这一支目前不可达**（有空间判据的约束种类现在都有投影规则了，一条用例钉着这件事）——
+ *   留着它是为了下一个新增种类落进这一支，而不是静默通过。
  * - 不报"过约束 / 矛盾"这类结论：本层只说"每条被判过的约束是否在容差内"。
  *   把"没做"说成"矛盾"、把"跳过"说成"满足"，都会让上层的门禁读到假绿。
  *
@@ -39,7 +43,7 @@ export type Point3ProjectionSkipCode =
   | "planar-only"
   /** 点名都取到了，但这组几何退化（方向为零、三点共线……），残差算不出来。 */
   | "no-judge"
-  /** 需要动，而这一版还没有它的投影规则。 */
+  /** 需要动，而还没有它的投影规则。**目前不可达**（有空间判据的种类都有规则了）；留着给下一个新增种类。 */
   | "no-projection-rule"
   /** 这条约束牵涉的点一个都不许动（都在 `anchoredPointIds` 里）。 */
   | "no-movable-point"
@@ -117,7 +121,9 @@ const PROJECTABLE: ReadonlySet<ConstraintSpec["type"]> = new Set<ConstraintSpec[
   "pointOnPlane",
   "collinear",
   "coplanar",
-  "fixedDistance"
+  "fixedDistance",
+  "parallel",
+  "perpendicular"
 ])
 
 type Point3 = Extract<PrimitiveSpec, { type: "point3" }>
@@ -132,6 +138,24 @@ function samePosition(first: Vector3, second: Vector3): boolean {
     && Math.abs(first.z - second.z) <= MOVED_EPSILON
 }
 
+/**
+ * 一条线状图元**由哪两个点定义**。
+ *
+ * 返回 `null` = 它的方向不由两个点决定（`pointDirection` 形式的直线把方向显式写在定义里），
+ * 所以"靠挪点把它转过去"这件事对它**不成立** —— 那就如实跳过，而不是去改一个没有载体的东西。
+ */
+function lineEndpointIds(primitive: PrimitiveSpec): [string, string] | null {
+  if (primitive.type === "line3") {
+    return primitive.definition.kind === "throughPoints" && primitive.definition.pointIds.length >= 2
+      ? [primitive.definition.pointIds[0], primitive.definition.pointIds[1]]
+      : null
+  }
+  if (primitive.type === "ray3") return [primitive.originId, primitive.throughId]
+  if (primitive.type === "segment3" || primitive.type === "edge3") {
+    return primitive.pointIds.length >= 2 ? [primitive.pointIds[0], primitive.pointIds[1]] : null
+  }
+  return null
+}
 /** 把 `target` 的坐标写成 `position`，并如实回答"这一次真的动了吗"。 */
 function moveTo(target: Point3, position: Vector3): boolean {
   if (samePosition(target.position, position)) return false
@@ -246,6 +270,58 @@ function applyConstraint(
     return moved ? { kind: "moved" } : { kind: "nothing" }
   }
 
+  /**
+   * **线状图元的 `parallel` / `perpendicular`**：保持**第一条**线不动，把**第二条**转过去
+   *（与 2D 的 `projectLineConstraint` 同口径：那边也是"动第二个"）。
+   *
+   * 转动取**最小改动**：绕"当前方向与目标方向所张的那根轴"转，并把两个端点绕**中点**摆过去
+   *（所以线段长度不变）。两种"没有唯一答案"的情形如实跳过，不猜：
+   * - 方向不由两个点决定的直线（`pointDirection`）；
+   * - `perpendicular` 而两条线**已经平行** —— 此时"转 90°"有无数个同样好的答案。
+   */
+  if (constraint.type === "parallel" || constraint.type === "perpendicular") {
+    const first = primitive(constraint.targets[0])
+    const second = primitive(constraint.targets[1])
+    if (!isLineLike3(first) || !isLineLike3(second)) {
+      return { kind: "skipped", code: "missing-target", reason: `${constraint.type} 要两条线状图元，这份文档里的点名对不上。` }
+    }
+    const firstEndpoints = lineEndpoints(first, map)
+    const secondEndpoints = lineEndpoints(second, map)
+    const secondIds = lineEndpointIds(second)
+    if (!firstEndpoints || !secondEndpoints || secondIds === null) {
+      return { kind: "skipped", code: "no-judge", reason: `${constraint.type} 的这一侧没法靠挪点转过去：直线方向是显式写死的，或者端点取不到。` }
+    }
+    if (!movable(secondIds[0]) || !movable(secondIds[1])) {
+      return { kind: "skipped", code: "no-movable-point", reason: `${constraint.type} 要同时动这条线的两个端点：只要有一个被锚住，转动就没有唯一答案。` }
+    }
+    const firstDirection = subtractVector3(firstEndpoints[1], firstEndpoints[0])
+    const secondDirection = subtractVector3(secondEndpoints[1], secondEndpoints[0])
+    const firstUnit = normalizeVector3(firstDirection)
+    const secondLength = lengthVector3(secondDirection)
+    if (lengthVector3(firstUnit) <= MOVED_EPSILON || secondLength <= MOVED_EPSILON) {
+      return { kind: "skipped", code: "no-judge", reason: `${constraint.type} 的某一条线退化成一点，方向不确定。` }
+    }
+    const parallelAlready = lengthVector3(crossVector3(firstUnit, secondDirection)) <= MOVED_EPSILON * secondLength
+    let targetDirection: Vector3
+    if (constraint.type === "parallel") {
+      if (parallelAlready) return { kind: "nothing" }
+      // 取与当前朝向更近的那一侧，转动才是"最小改动"。
+      const sign = dotVector3(secondDirection, firstUnit) >= 0 ? 1 : -1
+      targetDirection = scaleVector3(firstUnit, sign * secondLength)
+    } else {
+      if (parallelAlready) {
+        return { kind: "skipped", code: "no-judge", reason: "perpendicular 要转 90°，而这两条线现在平行 —— 绕哪根轴转都同样合理，没有唯一答案。" }
+      }
+      // 目标 = 当前方向在"垂直于第一条线"的那个平面上的投影（这就是最小转动的那一支）。
+      const perpendicularPart = subtractVector3(secondDirection, scaleVector3(firstUnit, dotVector3(secondDirection, firstUnit)))
+      targetDirection = scaleVector3(normalizeVector3(perpendicularPart), secondLength)
+    }
+    const midpoint = scaleVector3(addVector3(secondEndpoints[0], secondEndpoints[1]), 0.5)
+    const half = scaleVector3(targetDirection, 0.5)
+    const movedFirst = moveTo(map.get(secondIds[0]) as Point3, subtractVector3(midpoint, half))
+    const movedSecond = moveTo(map.get(secondIds[1]) as Point3, addVector3(midpoint, half))
+    return movedFirst || movedSecond ? { kind: "moved" } : { kind: "nothing" }
+  }
   // fixedDistance：保留第一个点、挪第二个（与 2D `projectLineConstraint` 的"动第二个"同口径）。
   // 第二个点不许动时反过来挪第一个 —— 否则拖动一个被锚住的点会得到一个"改不动"的死结。
   const first = primitive(constraint.targets[0])

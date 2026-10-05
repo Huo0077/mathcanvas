@@ -141,18 +141,74 @@ describe("3D 约束的点投影", () => {
     expect(result.exhausted).toBe(false)
   })
 
-  it("需要动、但这一批还没有投影规则的约束：如实进 skipped 并 fail-closed", () => {
-    // line-cf 沿 z 轴，与 x 轴不平行 → 残差 1，**必须动**；而"把一条线转过去"本批没做。
+  it("parallel：把**第二条**线转成与第一条平行，长度与中点都不变", () => {
+    // 与 2D 的 `projectLineConstraint` 同口径：保持第一条线不动、动第二条。
     const constraints: ConstraintSpec[] = [{ id: "parallel", type: "parallel", targets: ["line-ab", "line-cf"] }]
     const result = projectPoint3Constraints(withZAxisLine(scene()), constraints)
 
+    // line-cf 原来是 c(0,1,0)→f(0,1,1)（沿 z、长 1、中点 (0,1,0.5)），现在被摆成沿 x。
+    expect(at(result, "c")).toEqual({ x: -0.5, y: 1, z: 0.5 })
+    expect(at(result, "f")).toEqual({ x: 0.5, y: 1, z: 0.5 })
+    // 第一条线一个点都没动。
+    expect(at(result, "a")).toEqual({ x: 0, y: 0, z: 0 })
+    expect(result.skipped).toEqual([])
+    expect(result.satisfied).toBe(true)
+  })
+
+  it("perpendicular：转最小的一步（目标 = 当前方向在垂直于第一条线的那个平面上的投影）", () => {
+    const primitives: PrimitiveSpec[] = [
+      ...scene(),
+      { id: "g", type: "point3", position: { x: 0, y: 1, z: 0 } },
+      { id: "h", type: "point3", position: { x: 1, y: 1, z: 1 } },
+      { id: "line-gh", type: "line3", definition: { kind: "throughPoints", pointIds: ["g", "h"] } }
+    ]
+    const result = projectPoint3Constraints(primitives, [{ id: "perp", type: "perpendicular", targets: ["line-ab", "line-gh"] }])
+
+    const g = at(result, "g")
+    const h = at(result, "h")
+    // 长度必须保持不变：转的是朝向，不是长短。
+    expect(Math.hypot(h.x - g.x, h.y - g.y, h.z - g.z)).toBeCloseTo(Math.SQRT2, 9)
+    expect(result.satisfied).toBe(true)
+  })
+
+  it("本来就垂直的两条线：一个点都不动", () => {
+    // line-ab 沿 x、line-cf 沿 z —— 点积恰好是 0，残差 0，连投影都不进。
+    const result = projectPoint3Constraints(withZAxisLine(scene()), [{ id: "perp", type: "perpendicular", targets: ["line-ab", "line-cf"] }])
+
     expect(result.movedPointIds).toEqual([])
-    expect(result.skipped.map((entry) => entry.code)).toEqual(["no-projection-rule"])
-    // 到定点才停（不是次数用完了），但**没有满足** —— 两条都是实话，不能只报一条。
-    expect(result.exhausted).toBe(false)
+    expect(result.skipped).toEqual([])
+    expect(result.satisfied).toBe(true)
+  })
+
+  it("perpendicular 而两条线**已经平行**：如实跳过 —— 转 90° 有无数个同样好的答案", () => {
+    // line-ce 也沿 x（与 line-ab 平行），所以"把它转成垂直"绕哪根轴转都同样合理。
+    const result = projectPoint3Constraints(scene(), [{ id: "perp", type: "perpendicular", targets: ["line-ab", "line-ce"] }])
+
+    expect(result.skipped.map((entry) => entry.code)).toEqual(["no-judge"])
     expect(result.satisfied).toBe(false)
-    // "这一版修不了"与"它就是错的"是两句话，不许混 —— 文案必须说清是**范围限制**。
-    expect(result.skipped[0]?.reason).toContain("这一版还没有它的投影规则")
+    expect(result.skipped[0]?.reason).toContain("没有唯一答案")
+  })
+
+  it("第二条线有一个端点被锚住：如实跳过 —— 转动要同时动两个端点", () => {
+    const result = projectPoint3Constraints(
+      withZAxisLine(scene()),
+      [{ id: "parallel", type: "parallel", targets: ["line-ab", "line-cf"] }],
+      { anchoredPointIds: ["c"] }
+    )
+
+    expect(result.skipped.map((entry) => entry.code)).toEqual(["no-movable-point"])
+    expect(at(result, "c")).toEqual({ x: 0, y: 1, z: 0 })
+  })
+
+  it("方向是显式写死的直线（pointDirection）：靠挪点转不过去，如实跳过", () => {
+    const primitives: PrimitiveSpec[] = [
+      ...scene(),
+      { id: "dir-line", type: "line3", definition: { kind: "pointDirection", pointId: "a", direction: { x: 0, y: 1, z: 0 } } }
+    ]
+    const result = projectPoint3Constraints(primitives, [{ id: "parallel", type: "parallel", targets: ["line-ab", "dir-line"] }])
+
+    expect(result.skipped.map((entry) => entry.code)).toEqual(["no-judge"])
+    expect(result.satisfied).toBe(false)
   })
 
   it("绝不就地改写入参：调用方拿回的原对象必须一模一样", () => {

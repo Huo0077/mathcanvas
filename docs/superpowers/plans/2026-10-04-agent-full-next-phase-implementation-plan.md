@@ -194,6 +194,16 @@ export type DragSolveResult =
 - [ ] **RED 命令：** `npm.cmd exec -- vitest run packages/geometry-kernel/src/constraints.test.ts packages/geometry-kernel/src/constraints3d.test.ts packages/geometry-kernel/src/planar-constraints.test.ts packages/geometry-kernel/src/reactive/constraints.test.ts packages/scene-graph/src/operations.test.ts packages/scene-graph/src/patches.test.ts packages/scene-graph/src/scene-store.test.ts --maxWorkers=1`；`npm.cmd run test:e2e -- e2e/agent-constrained-drag.spec.ts --workers=1`。
 - [ ] **GREEN：** pointer intent → 临时约束 → solve → commit transaction；禁止直接改 render state。
 - [ ] **GREEN 命令：** 上述定向测试；再跑完整 `npm.cmd run test:e2e -- --workers=3`。
+> **第五步（2026-10-05）：线状 `parallel` / `perpendicular` 的投影。** 计划 RED 里点名的"垂直"
+> 这一半补上了：保持**第一条**线不动、把**第二条**绕中点摆过去（最小改动），长度与中点不变。
+> 与 2D `projectLineConstraint` **同一口径**，所以不需要新的产品裁决 —— 此前把它记成
+> "要先决定旋转哪一侧的点"，那个顾虑其实早就有先例可依。
+> **三种如实跳过**：`pointDirection`（方向显式写死）、`perpendicular` 而两条线已平行（没有唯一答案）、
+> 第二条线有端点被锚住。`no-projection-rule` 这一支**从此不可达**（保留给下一个新增种类）。
+>
+> **本阶段仍未达成的出口**：`constrainedDrag=true` 的**浏览器正/反例** —— 它卡在
+> **没有任何产品入口能把开关打开**（见 §四 D 的裁决项）。**内核侧已经做完了**。
+
 - [ ] **N3 出口：** `constrainedDrag=false` 时旧拖动路径逐字回归；`constrainedDrag=true` 时保持约束、过约束拒绝、冲突恢复和一步撤销的浏览器用例全部通过。
 - [ ] **提交检查点：** `git commit -m "feat(geometry): preserve constraints during drag"`。
 

@@ -13,6 +13,20 @@
 
 ## 一、现在能不能跑（可复核的门禁读数）
 
+**2026-10-05 N3 第五步（线状 `parallel` / `perpendicular` 的投影）—— 本批实测：**
+
+| 命令 | 当次结果 |
+| --- | --- |
+| `npm.cmd test -- --maxWorkers=2 --reporter=dot` | **306 文件 / 3565 通过 + 1 todo / 0 失败**（134 s） |
+| `npm.cmd run typecheck` | exit 0（全部工作区 + `e2e/` + `scripts/`） |
+| `npm.cmd run lint` | exit 0，**0 error / 13 warning**（与基线逐条相同） |
+| `npm.cmd exec -- vitest run packages/geometry-kernel/src/constraints3dProjection.test.ts --maxWorkers=1` | **25 通过 / 0 失败**（原 20） |
+
+> **内核最后一块缺口补上了**：线状 `parallel` / `perpendicular` 现在有投影规则 —— 保持**第一条**线不动、把**第二条**绕中点摆过去（取最小改动），**长度与中点都不变**。这与 2D `projectLineConstraint` 是同一口径，所以不需要新的产品裁决（此前我把它记成"要先决定旋转哪一侧"）。
+> **三种如实跳过**：方向显式写死的直线（`pointDirection`）、`perpendicular` 而两条线已平行（转 90° 没有唯一答案）、第二条线有端点被锚住（转动要同时动两个端点）。
+> **`no-projection-rule` 从此不可达**：有空间判据的约束种类现在都有规则了；代码与文档写明这一点，并**保留**那一支给下一个新增种类。
+> **边界**：`constrainedDrag` 开关**仍默认关**，所以这块能力在产品里依然不可达。
+
 **2026-10-05 N5 第三步（后端接线门 + smoke）—— 本批实测：**
 
 | 命令 | 当次结果 |
