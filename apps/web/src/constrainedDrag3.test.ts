@@ -137,7 +137,7 @@ describe("约束拖动：提交的那一支", () => {
 })
 
 describe("约束拖动：拒绝的那一支", () => {
-  it("矛盾的两条定长约束：拒绝，并说清「没能同时满足」—— 不说「无解」", () => {
+  it("同一条线段的两个长度要求：拒绝，并说清这是**证明过的矛盾**，不是「没算出来」", () => {
     const pair: PrimitiveSpec[] = [
       { id: "a", type: "point3", position: { x: 0, y: 0, z: 0 } },
       { id: "q", type: "point3", position: { x: 3, y: 0, z: 0 } }
@@ -147,6 +147,34 @@ describe("约束拖动：拒绝的那一支", () => {
       { id: "len-3", type: "fixedDistance", targets: ["a", "q"], value: 3 }
     ]
     const outcome = planConstrainedDrag3({ document: documentWith(pair, constraints), draggedId: "q", delta: { x: 1, y: 0, z: 0 }, enabled: true })
+
+    expect(outcome.kind).toBe("refused")
+    if (outcome.kind !== "refused") return
+    // **证明过**的矛盾有它自己的说法，不许与"没算出来"共用一句话。
+    expect(outcome.reason).toContain("不可能同时成立")
+    expect(outcome.reason).toContain("距离只能是一个数")
+  })
+
+  it("两条平行且不相交的线都要求同一个点在上面：拒绝，但只说「没能同时满足」", () => {
+    /**
+     * 这一种**不在**内核可证的两种矛盾里（直线 ∥ 直线 不相交还没做判据），所以只能说
+     * "没能在轮数内满足"，**不许说"无解"**。这条用例就是那个边界的守门人：哪天内核把
+     * 它也算成可证矛盾了，这条会红，届时是**改这条用例**、而不是悄悄改文案。
+     */
+    const primitives: PrimitiveSpec[] = [
+      { id: "a", type: "point3", position: { x: 0, y: 0, z: 0 } },
+      { id: "b", type: "point3", position: { x: 1, y: 0, z: 0 } },
+      { id: "p", type: "point3", position: { x: 2, y: 0, z: 0 } },
+      { id: "e", type: "point3", position: { x: 0, y: 0, z: 1 } },
+      { id: "f", type: "point3", position: { x: 1, y: 0, z: 1 } },
+      { id: "line-ab", type: "line3", definition: { kind: "throughPoints", pointIds: ["a", "b"] } },
+      { id: "line-ef", type: "line3", definition: { kind: "throughPoints", pointIds: ["e", "f"] } }
+    ]
+    const constraints: ConstraintSpec[] = [
+      { id: "on-ab", type: "pointOnLine", targets: ["p", "line-ab"] },
+      { id: "on-ef", type: "pointOnLine", targets: ["p", "line-ef"] }
+    ]
+    const outcome = planConstrainedDrag3({ document: documentWith(primitives, constraints), draggedId: "p", delta: { x: 0, y: 1, z: 0 }, enabled: true })
 
     expect(outcome.kind).toBe("refused")
     if (outcome.kind !== "refused") return

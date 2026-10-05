@@ -1,6 +1,6 @@
 import type { ConstraintSpec, Plane3Primitive, PrimitiveSpec, Vector3 } from "@draw/dsl"
 
-import { constraintResidual3, diagnoseConstraint3, isLineLike3, projectPointOntoLine3, projectPointOntoPlane3, type ConstraintDiagnostic3 } from "./constraints3d"
+import { constraintResidual3, diagnoseConstraint3, findConstraintContradictions, isLineLike3, projectPointOntoLine3, projectPointOntoPlane3, type ConstraintContradiction, type ConstraintDiagnostic3 } from "./constraints3d"
 import { addVector3, dotVector3, lengthVector3, normalizeVector3, planeFromPoints, scaleVector3, subtractVector3 } from "./geometry3d"
 import { rankRows } from "./linear-algebra"
 
@@ -75,6 +75,14 @@ export interface Point3ProjectionResult {
   diagnostics: ConstraintDiagnostic3[]
   /** 没有被投影的约束**及原因**。非空 ⇒ `satisfied` 必为 `false`。 */
   skipped: Point3ProjectionSkip[]
+  /**
+   * **可证的矛盾**（内核 `findConstraintContradictions`）：这些约束在最终构型上
+   * **不可能同时成立**。
+   *
+   * 与 `skipped` / `unsatisfiedConstraintIds` 是两句话："我知道它不成立" ≠ "我还没满足它"。
+   * 顺序投影在矛盾约束上会来回振荡，只看 `exhausted` 会把这两件事混成一句。
+   */
+  contradictions: ConstraintContradiction[]
   /** 每一条约束都被判过且在容差内。fail-closed 的提交门禁。 */
   satisfied: boolean
   /** 轮数用完了还没到定点：结果是半成品（还在动），不要当"停稳了"读。 */
@@ -499,6 +507,7 @@ export function projectPoint3Constraints(
     movedPointIds,
     diagnostics,
     skipped: [...skipped.values()],
+    contradictions: findConstraintContradictions(constraints, map, tolerance),
     satisfied,
     exhausted,
     iterations,

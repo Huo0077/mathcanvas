@@ -260,6 +260,14 @@ export type DragSolveResult =
 > ③ **开关默认仍然关着**（`agentNextPhaseFlags()` 恒返回五关），所以这一批**产品行为未变**；
 > 也**没有浏览器入口**能把它打开，因此计划要求的 `constrainedDrag=true` 浏览器正/反例
 > **仍未达成**。
+>
+> **第四步：可证的矛盾（2026-10-05）** —— 上面"没做的"里那条
+> "`inconsistent` 没做（矛盾约束只会振荡，本层如实报 `exhausted` 而不报'无解'）"**被部分解掉了**：
+> 内核新增 `findConstraintContradictions`，**只报能证明的两种**（同一条线段两个不同长度；
+> 点既在线上又在面上而两者平行且不相交），投影结果新增 `contradictions`，接线层的拒绝文案
+> 先报矛盾。**"部分"是准确的**：直线 ∥ 直线不相交**没有判据**，那种情形仍然只能说
+> "没能同时满足"；而且 `timeout` 仍然不存在（本层没有时钟，也不打算为了凑状态而引入一个）。
+> 计划原文的 `DragSolveResult` 五状态因此**仍未按原样成立**。
 
 ## Phase N4：开放题编译与真实 Provider Benchmark
 

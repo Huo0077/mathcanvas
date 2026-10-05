@@ -84,6 +84,13 @@ function anchorIdsFor(document: GeometryDocument): string[] {
 }
 
 function describeFailure(projection: Point3ProjectionResult, constraints: GeometryDocument["constraints"]): string {
+  /**
+   * **可证的矛盾优先说**：那是"我知道它不成立"，与下面那句"我还没满足它"不是一件事。
+   * 先说后者会把一个**证明过**的结论降级成一句含糊的"没算出来"。
+   */
+  if (projection.contradictions.length > 0) {
+    return projection.contradictions.map((entry) => `${entry.reason}（${entry.constraintIds.join("、")}）`).join("；")
+  }
   const byId = new Map(constraints.map((constraint) => [constraint.id, constraint]))
   const parts = projection.skipped.map((entry) => {
     const constraint = byId.get(entry.constraintId)
@@ -132,6 +139,10 @@ export function planConstrainedDrag3(request: ConstrainedDragRequest): Constrain
   const projection = projectPoint3Constraints(warmStart, spatial, { anchoredPointIds: anchorIdsFor(document) })
   if (!projection.satisfied) {
     const detail = describeFailure(projection, spatial)
+    // 矛盾是**证明过**的结论，文案不许与"没能同时满足"混用同一句话。
+    if (projection.contradictions.length > 0) {
+      return { kind: "refused", reason: `这些约束本身不可能同时成立，已拒绝。${detail}` }
+    }
     return {
       kind: "refused",
       reason: projection.exhausted

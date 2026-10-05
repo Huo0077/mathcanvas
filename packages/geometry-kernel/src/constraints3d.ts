@@ -187,6 +187,115 @@ export function constraintResidual3(constraint: ConstraintSpec, context: Context
   return null
 }
 
+/** 这条约束**本身就与另一条不可能同时成立**的两种可证情形。 */
+export type ConstraintContradictionCode =
+  /** 同一条线段被要求等于两个不同的长度。 */
+  | "same-segment-two-lengths"
+  /** 点既要落在这条线上、又要落在这个平面上，而两者平行且不相交。 */
+  | "line-parallel-to-plane"
+
+export interface ConstraintContradiction {
+  code: ConstraintContradictionCode
+  /** 参与这条矛盾的约束 id（至少两条）。 */
+  constraintIds: string[]
+  reason: string
+}
+
+/**
+ * **可证的矛盾**（N3：把"没能同时满足"与"这两条根本不可能同时成立"分开）。
+ *
+ * ## 为什么必须有这一层
+ *
+ * 顺序投影在矛盾约束上会**来回振荡**（长度 2 与长度 3 把同一个点沿同一根轴反复拽），
+ * 于是求解层停下来时只能说"在轮数内没能同时满足" —— 那是诚实的，但它把"我还不知道"
+ * （可能只是投影没收敛）与"我知道它不成立"压成了同一句话。
+ *
+ * ## 只报能证明的两种，一条都不多报
+ *
+ * 1. **同一条线段两个不同的长度要求**：距离是一个数，`|v₁ − v₂| > 容差` 就是两条不同的要求。
+ * 2. **点既在直线上、又在平面上，而两者平行且不相交**：平行时不交；直线到平面的距离大于
+ *    容差时无公共点。**直线落在平面里不算矛盾**（此时交集就是整条线，随便取一个点都行），
+ *    直线与平面相交于一点也不算（那个交点就是唯一解）。
+ *
+ * 其余情形（例如"三点共线"与"某两点距离非零"的相互作用）**需要更多几何推理**，
+ * 本版不猜 —— 一条编出来的"矛盾"会把一份本来能解的题直接判死。
+ */
+export function findConstraintContradictions(
+  constraints: readonly ConstraintSpec[],
+  context: Context3,
+  tolerance = 1e-6
+): ConstraintContradiction[] {
+  const map = byId(context)
+  const found: ConstraintContradiction[] = []
+
+  // 情形 1：按**无序点对**归组定长约束，组内值不一致就是矛盾。
+  const byPair = new Map<string, { id: string; value: number }[]>()
+  for (const constraint of constraints) {
+    if (constraint.type !== "fixedDistance" || constraint.value === undefined) continue
+    const [first, second] = constraint.targets
+    if (first === undefined || second === undefined || first === second) continue
+    const key = [first, second].sort().join("\u0000")
+    const group = byPair.get(key)
+    if (group) group.push({ id: constraint.id, value: constraint.value })
+    else byPair.set(key, [{ id: constraint.id, value: constraint.value }])
+  }
+  for (const group of byPair.values()) {
+    if (group.length < 2) continue
+    const values = group.map((entry) => entry.value)
+    if (Math.max(...values) - Math.min(...values) <= tolerance) continue
+    found.push({
+      code: "same-segment-two-lengths",
+      constraintIds: group.map((entry) => entry.id),
+      reason: `同一条线段被要求等于 ${values.join(" 与 ")} —— 距离只能是一个数，这两条不可能同时成立。`
+    })
+  }
+
+  // 情形 2：同一个点既在线上又在面上，而线与面平行且不相交。
+  const onLineByPoint = new Map<string, ConstraintSpec[]>()
+  const onPlaneByPoint = new Map<string, ConstraintSpec[]>()
+  for (const constraint of constraints) {
+    const pointId = constraint.targets[0]
+    if (pointId === undefined) continue
+    if (constraint.type === "pointOnLine") {
+      const group = onLineByPoint.get(pointId)
+      if (group) group.push(constraint)
+      else onLineByPoint.set(pointId, [constraint])
+    } else if (constraint.type === "pointOnPlane") {
+      const group = onPlaneByPoint.get(pointId)
+      if (group) group.push(constraint)
+      else onPlaneByPoint.set(pointId, [constraint])
+    }
+  }
+  for (const [pointId, lineConstraints] of onLineByPoint) {
+    const planeConstraints = onPlaneByPoint.get(pointId)
+    if (!planeConstraints) continue
+    for (const lineConstraint of lineConstraints) {
+      const line = map.get(lineConstraint.targets[1] ?? "")
+      const plane = map.get(planeConstraints[0].targets[1] ?? "")
+      if (!isLineLike3(line) || plane?.type !== "plane3") continue
+      const endpoints = lineEndpoints(line, map)
+      const normal = planeNormal(plane, map)
+      const origin = planeOrigin(plane, map)
+      if (!endpoints || !normal || !origin) continue
+      const direction = subtractVector3(endpoints[1], endpoints[0])
+      const directionLength = lengthVector3(direction)
+      const unit = normalizeVector3(normal)
+      if (directionLength <= EPSILON || lengthVector3(unit) <= EPSILON) continue
+      // 平行：方向与法向的点积（除以方向长度做尺度归一）在容差内为 0。
+      if (Math.abs(dotVector3(direction, unit)) / directionLength > tolerance) continue
+      // 直线到平面的距离：大于容差就是"不相交"。
+      if (Math.abs(dotVector3(subtractVector3(endpoints[0], origin), unit)) <= tolerance) continue
+      found.push({
+        code: "line-parallel-to-plane",
+        constraintIds: [planeConstraints[0].id, lineConstraint.id],
+        reason: `点 ${pointId} 既要落在这条线上、又要落在这个平面上，而这条线与这个平面平行且不相交 —— 没有公共点。`
+      })
+    }
+  }
+
+  return found
+}
+
 export function diagnoseConstraint3(constraint: ConstraintSpec, context: Context3, tolerance = constraint.tolerance ?? 1e-6): ConstraintDiagnostic3 {
   const residual = constraintResidual3(constraint, context)
   const satisfied = residual !== null && residual <= tolerance

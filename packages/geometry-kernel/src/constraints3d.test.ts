@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import type { ConstraintSpec, PrimitiveSpec } from "@draw/dsl"
 
-import { constraintResidual3, diagnoseConstraint3, solvePoint3Constraints } from "./constraints3d"
+import { constraintResidual3, diagnoseConstraint3, findConstraintContradictions, solvePoint3Constraints } from "./constraints3d"
 
 const points: PrimitiveSpec[] = [
   { id: "a", type: "point3", position: { x: 0, y: 0, z: 0 } },
@@ -63,5 +63,95 @@ describe("3D constraints", () => {
       { id: "scaled-plane", type: "plane3", definition: { kind: "pointNormal", pointId: "a", normal: { x: 0, y: 0, z: 5 } } }
     ]
     expect(constraintResidual3({ ...constraint, targets: ["d", "scaled-plane"] }, scaled)).toBe(1)
+  })
+})
+
+/**
+ * **可证的矛盾**：把"我还不知道"（可能只是投影没收敛）与"我知道它不成立"分开。
+ *
+ * 这一层的纪律是**只报能证明的**：一条编出来的"矛盾"会把一份本来能解的题直接判死。
+ * 所以这里有一半用例是**反例**（看起来像矛盾、其实能解），它们比正例更重要。
+ *
+ * `points` 里：`line` 是 x 轴，`plane` 是 z = 0 —— 所以 `line` **落在** `plane` 里。
+ */
+describe("3D 约束里可证的矛盾", () => {
+  it("同一条线段两个不同的长度：报矛盾，两条约束都点名", () => {
+    const constraints: ConstraintSpec[] = [
+      { id: "len-2", type: "fixedDistance", targets: ["a", "b"], value: 2 },
+      { id: "len-3", type: "fixedDistance", targets: ["a", "b"], value: 3 }
+    ]
+    const found = findConstraintContradictions(constraints, points)
+
+    expect(found).toHaveLength(1)
+    expect(found[0]?.code).toBe("same-segment-two-lengths")
+    expect(found[0]?.constraintIds).toEqual(["len-2", "len-3"])
+  })
+
+  it("同一个长度写两遍**不是**矛盾 —— 那是冗余，能解", () => {
+    const constraints: ConstraintSpec[] = [
+      { id: "len-2", type: "fixedDistance", targets: ["a", "b"], value: 2 },
+      { id: "len-2-again", type: "fixedDistance", targets: ["a", "b"], value: 2 }
+    ]
+
+    expect(findConstraintContradictions(constraints, points)).toEqual([])
+  })
+
+  it("点对顺序反过来仍是同一条线段", () => {
+    const constraints: ConstraintSpec[] = [
+      { id: "forward", type: "fixedDistance", targets: ["a", "b"], value: 2 },
+      { id: "backward", type: "fixedDistance", targets: ["b", "a"], value: 3 }
+    ]
+
+    expect(findConstraintContradictions(constraints, points).map((entry) => entry.code)).toEqual(["same-segment-two-lengths"])
+  })
+
+  it("不同线段各自的长度要求互不相干", () => {
+    const constraints: ConstraintSpec[] = [
+      { id: "ab", type: "fixedDistance", targets: ["a", "b"], value: 2 },
+      { id: "ac", type: "fixedDistance", targets: ["a", "c"], value: 3 }
+    ]
+
+    expect(findConstraintContradictions(constraints, points)).toEqual([])
+  })
+
+  it("点既在线上又在面上，而线与面平行且不相交：报矛盾", () => {
+    const lifted: PrimitiveSpec[] = [
+      ...points,
+      { id: "e", type: "point3", position: { x: 0, y: 0, z: 1 } },
+      { id: "f", type: "point3", position: { x: 1, y: 0, z: 1 } },
+      { id: "lifted-line", type: "line3", definition: { kind: "throughPoints", pointIds: ["e", "f"] } }
+    ]
+    const constraints: ConstraintSpec[] = [
+      { id: "on-lifted", type: "pointOnLine", targets: ["d", "lifted-line"] },
+      { id: "on-plane", type: "pointOnPlane", targets: ["d", "plane"] }
+    ]
+    const found = findConstraintContradictions(constraints, lifted)
+
+    expect(found).toHaveLength(1)
+    expect(found[0]?.code).toBe("line-parallel-to-plane")
+    expect(found[0]?.constraintIds).toEqual(["on-plane", "on-lifted"])
+  })
+
+  it("直线**落在**平面里不是矛盾：交集就是整条线，随便取一个点都行", () => {
+    const constraints: ConstraintSpec[] = [
+      { id: "on-line", type: "pointOnLine", targets: ["d", "line"] },
+      { id: "on-plane", type: "pointOnPlane", targets: ["d", "plane"] }
+    ]
+
+    expect(findConstraintContradictions(constraints, points)).toEqual([])
+  })
+
+  it("直线与平面相交也不是矛盾：那个交点就是唯一解", () => {
+    const axis: PrimitiveSpec[] = [
+      ...points,
+      { id: "g", type: "point3", position: { x: 0, y: 0, z: 1 } },
+      { id: "z-line", type: "line3", definition: { kind: "throughPoints", pointIds: ["a", "g"] } }
+    ]
+    const constraints: ConstraintSpec[] = [
+      { id: "on-z", type: "pointOnLine", targets: ["d", "z-line"] },
+      { id: "on-plane", type: "pointOnPlane", targets: ["d", "plane"] }
+    ]
+
+    expect(findConstraintContradictions(constraints, axis)).toEqual([])
   })
 })
