@@ -17,6 +17,50 @@ function walk(ledger: ReturnType<typeof createRunLedger>, phases: RunPhase[]) {
   }
 }
 
+/**
+ * **计划 N4：「flag 状态进入 trace/benchmark 记录」。**
+ *
+ * 修前：五个开关只被当作布尔**消费**（`planCompiler` 的 context、`committerAdapter.nextPhaseFlags`），
+ * **没有任何一处把它们写进 trace** —— 于是"这份 trace 是在哪组开关下取的"答不出来。
+ * 现在它随 `RunRevisions` 一起进账本，而**每一条事件都带着 `revisions`**。
+ *
+ * 两条判据一正一反：**给了就一路带上**；**没给就不许编一个"全关"出来** ——
+ * 后者与本节其余字段同一条纪律（"没接线"与"确认过是关的"是两件事）。
+ */
+describe("run revisions carry the next-phase flags (N4)", () => {
+  const FLAGS = { obligationIR: true, witnessSearch: false, constrainedDrag: false, openProblemCompiler: false, proofExport: false }
+
+  it("给了就随**每一条**事件带上（不是只带第一条）", () => {
+    const ledger = createRunLedger({
+      runId: "run-flags",
+      promptMessageId: "msg-flags",
+      revisions: { promptVersion: "p1", toolRegistryRevision: "t1", actionSchemaRevision: "a1", providerCapabilityRevision: "c1", nextPhaseFlags: FLAGS }
+    })
+
+    // 这两行原来被我写成 `transition("planning")` / `transition("acting")` —— 两相都**不合法**，
+    // 于是测试红。修的时候一次 PowerShell 替换又把断言整段删掉，测试反而"通过"了 ——
+    // 那是**假绿**（一个没有断言的空壳）。现在用 `nextPhases` 取合法下一相，并把两条事件都断言掉。
+    const [firstPhase] = nextPhases("created")
+    const firstEvent = ledger.transition(firstPhase, "start")
+    expect(firstEvent.ok).toBe(true)
+    if (firstEvent.ok) expect(firstEvent.event.revisions.nextPhaseFlags).toEqual(FLAGS)
+
+    const [secondPhase] = nextPhases(firstPhase)
+    const secondEvent = ledger.transition(secondPhase, "continue")
+    if (!secondEvent.ok) throw new Error(`expected an event, got ${secondEvent.reason}`)
+    // **每一条**都带，不是只带第一条。
+    expect(secondEvent.event.revisions.nextPhaseFlags).toEqual(FLAGS)
+  })
+
+  it("**没接线就留空**：不许编一份「全关」冒充「确认过是关的」", () => {
+    const ledger = createRunLedger({ runId: "run-no-flags", promptMessageId: "msg-no-flags" })
+    const [phase] = nextPhases("created")
+    const event = ledger.transition(phase, "start")
+
+    if (!event.ok) throw new Error(`expected an event, got ${event.reason}`)
+    expect(event.event.revisions.nextPhaseFlags).toBeUndefined()
+  })
+})
 describe("run ledger happy paths", () => {
   it("walks a read-only run to completion without ever reaching a commit phase", () => {
     const ledger = createRunLedger({ runId: "run-1", promptMessageId: "msg-1" })

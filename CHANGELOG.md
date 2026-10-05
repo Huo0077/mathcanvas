@@ -5,6 +5,29 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-05 —— N4 第六步：**flag 状态进入 trace**（上一轮查实"从没做过"的那一条，不需要裁决）
+
+- **做了什么**：把五个 feature flag 的状态**随 `RunRevisions` 一起写进 run 事件** ——
+  于是**每一条事件都带着"这轮是在哪组开关下跑的"**（`RunEvent` 在每次相变时都 spread 整份
+  `revisions`）。
+- **为什么放在 `RunRevisions`**：那一节的定义就是"**这次运行是在什么条件下发生的**"，
+  而**开关状态与版本号是同一种事后对账信息**。少了它，同一个 runId 在开关前后会有两种截然不同的
+  含义，而"这份 trace 是在哪组开关下取的"**答不出来**。
+- **两条纪律（都有一正一反的用例）**：
+  1. **给了就随每一条事件带上**，不是只带第一条；
+  2. **没接线就留空（`undefined`）**，**不许编一份"全关"** —— 与 `RunRevisions` 其余字段同一条口径：
+     "调用方没接线"与"确认过是关的"是两件事。
+- **落点**：`RunRevisions` 新增可选 `nextPhaseFlags`（**结构声明**五个布尔，不 import `apps/web` 的
+  `AgentNextPhaseFlags` —— 同 `committerAdapter` 的处理）；`StartRequest` 收下它；
+  `agentRunner.ts` 在 `coordinator.start({...})` 处把 `agentNextPhaseFlags()` 传进去。
+- **证据**：`runState.test.ts` **+2 条**（正反各一）；**定向变异**（把 `revisions` 里的
+  `nextPhaseFlags` 抹掉）→ **正好那一条红**；全库单测 **307 文件 / 3583 通过 + 1 todo / 0 失败**；
+  `typecheck` exit 0；`lint` exit 0（0 error / 13 warning，与基线逐条相同）。
+- **一处必须留档的自己的失误**：第一版用例我猜了两条**不合法**的相变（`planning` / `acting`），
+  测试红了；修的时候一次 PowerShell 替换**把断言整段删掉** —— 于是测试"通过"了，
+  而那是个**没有断言的空壳**（**假绿**）。我是在**读改动后的那几行**时发现的，改成用
+  `nextPhases` 取合法相并保留断言。**"测试通过"必须与"测试断言了什么"一起看。**
+
 ## 2026-10-05 —— N6 第十五步：§四（自称"还差什么"的**唯一权威处**）里六处过期，逐条改对
 
 - **为什么优先查这里**：`docs/current-status.md` §四 自己写着"本节是**还差什么**的唯一权威处"。

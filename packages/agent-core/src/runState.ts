@@ -182,6 +182,31 @@ export interface RunRevisions {
   toolRegistryRevision: string
   actionSchemaRevision: string
   providerCapabilityRevision: string
+  /**
+   * **这一轮运行是在哪组 feature flag 下跑的**（计划 N4：「flag 状态进入 trace/benchmark 记录」）。
+   *
+   * 为什么它属于 `RunRevisions` 而不是别处：这一节回答的就是"这次运行是在什么条件下发生的" ——
+   * 而**开关状态与版本号是同一种事后对账信息**。少了它，"这份 trace / 读数是在哪组开关下取的"
+   * 就**答不出来**，同一个 runId 在开关前后会有两种截然不同的含义。
+   *
+   * `undefined` = **调用方没有接线**，如实留空 —— 与本节其余字段同一条纪律：
+   * 编一个"全关"上去，就等于把"没接线"说成"确认过是关的"。
+   */
+  nextPhaseFlags?: RunNextPhaseFlags
+}
+
+/**
+ * 五个开关的结构声明。
+ *
+ * **不 import `apps/web` 的 `AgentNextPhaseFlags`**：agent-core 不依赖应用层
+ *（同 `committerAdapter` 的处理），所以在这里只声明布尔形状。
+ */
+export interface RunNextPhaseFlags {
+  obligationIR: boolean
+  witnessSearch: boolean
+  constrainedDrag: boolean
+  openProblemCompiler: boolean
+  proofExport: boolean
 }
 
 /** 把一段文本收敛成有界的摘要：先折叠空白，再截断并显式标出截断。 */

@@ -1,4 +1,4 @@
-﻿import type { Budget } from "./budget"
+import type { Budget } from "./budget"
 import { buildContext, buildConversationContext, type ConversationContextSource, type Fact } from "./contextBuilder"
 import { parsePlanEnvelope, repairRequestFor } from "./schemas"
 import { MAX_REPAIR_ATTEMPTS, type PlanEnvelope, type RunContext, type VerificationReport } from "./contracts"
@@ -7,7 +7,7 @@ import { createBudget, type BudgetLimits } from "./budget"
 import { describeRepairPrompt } from "./outputParser"
 import { describeCompileRepairPrompt } from "./planCompiler"
 import { createToolRegistry, type ToolRegistry } from "./toolRegistry"
-import { createRunLedger, boundTrace, type RunEvent, type RunLedger, type RunRevisions, type ToolCallTrace } from "./runState"
+import { createRunLedger, boundTrace, type RunEvent, type RunLedger, type RunNextPhaseFlags, type RunRevisions, type ToolCallTrace } from "./runState"
 import { TOOL_REGISTRY_REVISION } from "./toolRegistry"
 import { PLAN_SCHEMA_VERSION } from "./contracts"
 import { verificationGate } from "./verification/completionGate"
@@ -114,6 +114,11 @@ export interface StartRequest {
   run: RunContext
   userMessage: string
   /**
+   * **这一轮用的 feature flag 状态**（计划 N4）。由 app 侧给 —— 开关是**应用层**持有的，
+   * agent-core 不去读它。缺省 = 没接线：trace 里如实留空，不编一个"全关"。
+   */
+  nextPhaseFlags?: RunNextPhaseFlags
+  /**
    * **这次运行的验收条件**（Phase 3 接线）。
    *
    * 缺省 = 没有声明：不跑验证、不拦（行为与接线之前逐字相同）。
@@ -199,7 +204,9 @@ function runRevisions(request: StartRequest): RunRevisions {
     promptVersion: request.promptVersion ?? "",
     toolRegistryRevision: TOOL_REGISTRY_REVISION,
     actionSchemaRevision: PLAN_SCHEMA_VERSION,
-    providerCapabilityRevision: request.run.capabilityRevision
+    providerCapabilityRevision: request.run.capabilityRevision,
+    // 没给就**不写这个键**（`undefined`），而不是写一份"全关" —— 见 `RunRevisions.nextPhaseFlags`。
+    ...(request.nextPhaseFlags === undefined ? {} : { nextPhaseFlags: request.nextPhaseFlags })
   }
 }
 

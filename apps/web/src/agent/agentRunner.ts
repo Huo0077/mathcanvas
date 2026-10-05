@@ -1,4 +1,5 @@
-﻿import { CAPABILITY_REGISTRY_REVISION, PLAN_SCHEMA_VERSION, SKILL_MANIFESTS, TOOL_REGISTRY_REVISION, factBelongsToDocument, type CommitOutcome, type ConversationContextSource, type ConversationDraftView, type DocumentHandle, type PlanEnvelope, type PlannerPort, type RunContext, type WorkspaceId } from "@draw/agent-core"
+import { agentNextPhaseFlags } from "./featureFlags"
+import { CAPABILITY_REGISTRY_REVISION, PLAN_SCHEMA_VERSION, SKILL_MANIFESTS, TOOL_REGISTRY_REVISION, factBelongsToDocument, type CommitOutcome, type ConversationContextSource, type ConversationDraftView, type DocumentHandle, type PlanEnvelope, type PlannerPort, type RunContext, type WorkspaceId } from "@draw/agent-core"
 import type { GeometryDocument } from "@draw/dsl"
 import { contentFingerprint } from "@draw/scene-graph"
 
@@ -571,7 +572,14 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
        */
       const promptVersion = SYSTEM_PROMPT_VERSION
 
-      for await (const event of active.coordinator.start({ run: runContext, userMessage: prompt, promptVersion, ...(acceptance.length === 0 ? {} : { acceptance }) })) {
+      for await (const event of active.coordinator.start({
+        run: runContext,
+        userMessage: prompt,
+        // 计划 N4：把这一轮的开关状态一并交给 trace（开关由应用层持有，协调器只负责记下来）。
+        nextPhaseFlags: agentNextPhaseFlags(),
+        promptVersion,
+        ...(acceptance.length === 0 ? {} : { acceptance })
+      })) {
         // 每一步都回流：用户看到的是"走到哪一步"，而不是一个转圈。
         // 带上 `eventRunId`：用户切走之后，这一步仍然写回**它自己那条会话**（规格 §5.4）。
         useAgentStore.getState().recordRunEvent({
