@@ -1,7 +1,11 @@
-﻿# Agent Tool Loop Progress Snapshot
+# Agent Tool Loop Progress Snapshot
 
 Date: September 29, 2026. Status: **the six-phase checklist is complete, or deferred by a recorded decision.** The final release gate is **not** met — one line lacks real-provider data.
 
+> **时间边界（2026-10-05 补）**：这份文件是**上一版"六阶段清单"的快照**（正文截至 2026-09-29），
+> 加上它自己在 2026-10-04 追加的一段 N1–N6 路线图。**N1–N6 的实际进度不在这里** ——
+> 看 [`docs/current-status.md`](../../current-status.md)。发布判定看 [`agent-release-gate.md`](../../acceptance/agent-release-gate.md)。
+>
 > Follow-up (2026-10-01): the `sphere` document primitive was added in commit `ca03ed5`, but `CAPABILITY_REGISTRY_REVISION` explicitly marks sphere `temporarily_unavailable` because `solid.create_sphere` has no handler yet. Its CI run `36908959733` passed checks/build/rust/e2e. This does **not** change the September 29 tool-loop pause decision or supply real-provider pass@1/pass@3/cost/latency evidence; the historical snapshot below stays dated.
 
 ## Closing statement (2026-09-29)

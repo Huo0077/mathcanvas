@@ -4,7 +4,7 @@
 本文件是门禁的**当前读数**；机器判据在 `packages/agent-core/src/agentReleaseGate.test.ts`。
 
 > **这份文件回答的问题是"能不能放行"，不是"做到哪一步了"。**
-> 做到哪一步看 `docs/current-status.md` 与 `docs/research/2026-09-28-agent-tool-loop-progress.md`。
+> 做到哪一步看 [`docs/current-status.md`](../current-status.md)（**N1–N6 的现状在这里**）与 [`docs/research/2026-09-28-agent-tool-loop-progress.md`](../research/2026-09-28-agent-tool-loop-progress.md) —— **后者只覆盖上一版"六阶段清单"以及它 2026-10-04 追加的那段 N1–N6 路线图，其余内容截至 2026-09-29**（它是快照，不是现况）。
 
 ## 2026-10-04 立体示意图升级补充
 
