@@ -321,6 +321,7 @@
 > **这一批把应用内评测真正接到那 21 条上**：报告契约新增 `planning` 层（词表 `planned` / `rejected` / `error` / `not_measured`，每个词的含义写在 `packages/agent-core/src/benchmark/report.ts` 的定义处）；应用侧新通道 `apps/web/src/agent/fixtures/benchmarkPlanningEval.ts` 跑题集的**前 3 条 × 1 轮**（`seed=7` 与 CLI 同一个、`cost` 显式 `null`、`latency` 实测），路径是 `createModelPlanner` → `plan(request)` → `compilePlan`。
 > **判据只有编译器那一处**："计划被接受" = `compiled.ok` **且**信封是 `kind: "plan"`；**模型只给澄清不算接受**（fail-closed）。三处变异各自抓红（改了什么 → 哪条红）：编译失败写成 `planned` ⇒ 2 条红；澄清当接受 ⇒ 1 条红；拿掉 `rejected` 词 ⇒ 1 条红。全部还原并逐字节核对。
 > **界面**：两套评测**各自独立、各自两段式、各自报请求数**（agent 工具环 **24** 次 / 题集 planning **3** 次）；旧那套 8 题记分卡的**行为一个字未改**（它那 3 条既有用例原样绿）。
+> **读数该怎么读（边界，必须一起读）**：这条通道发出去的是**空画布条件下的规划请求** —— 观察结果是空场景（题集里每条题都从零作图）、技能清单是**全部技能**、而且**没有只读工具**（harness 没有 `ToolPort` 宿主，故 `readToolsAvailable: false`）。所以将来那个数字要读成「**空画布条件下计划被接受的比例**」，**不是**"模型的规划能力"（真实会话里模型有画布观察、有只读工具、技能也可能被裁剪）。差异逐条写在 `apps/web/src/agent/fixtures/benchmarkPlanningEval.ts` 的适配器注释里。（**2026-10-05 控制器补**：这句原来是**只写在模块注释里**的，`current-status` / `CHANGELOG` / 计划三处都没有 —— 一个会被误读成"模型能力"的数字放在状态文档里而不带边界，正是本仓最忌的那类。）
 > **没有跑那次付费运行**：触发点在桌面端界面、密钥在系统凭据库里（浏览器只会得到 `no_desktop_shell`）⇒ **真实 provider 的读数一个都还没有**。
 > **本批发现一处既有缺陷（未修，已上报）**：旧那条通道（`providerAgentEval.ts` + `offlineAgentEval.ts:30`）把请求写成 `{ userMessage } as never` —— 那对 `createLocalPlanner` 成立，对**真实** `createModelPlanner` **不成立**，实测抛 `TypeError: Cannot read properties of undefined (reading 'context')`，而且抛在**任何请求发出之前**。新通道不受影响（用完整 `PlanRequest`，并有"真规划器 + 假 transport"的用例钉着）；旧通道的修法会改变旧评测语义 ⇒ **留待裁决**。
 

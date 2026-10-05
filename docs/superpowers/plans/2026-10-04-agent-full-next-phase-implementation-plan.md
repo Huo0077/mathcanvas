@@ -1,6 +1,6 @@
 # 下一阶段 Agent 完整升级实施计划
 
-> **状态：N1、N2 已实施并复核；N3 已实施并复核（出口已达成，五条浏览器用例全绿）；N4 已把题集与报告契约搬进 `packages/agent-core/src/benchmark/`（一份定义，CLI 与应用共用，提交 `f315cf6`）——`real_provider` 与那次付费运行仍未做；N5/N6 进行中。** N1 提交 `acd3bd5` / `2d62c4d` / `b5b33f9` / `f997b3f`；N2 提交 `c2314c9`…`9c5ae2f`；N3 的收尾提交 `d7fe702` + `2dd89ab`；N4/N5/N6 的进度逐条见各阶段执行记录（`2026-10-05` 那一批以 `git log` 为准）。本计划对应 `docs/superpowers/specs/2026-10-04-agent-full-next-phase-design.md`；每个阶段必须先写 RED，再实现 GREEN，再跑全量门禁，最后单独提交。
+> **状态：N1、N2 已实施并复核；N3 已实施并复核（出口已达成，五条浏览器用例全绿）；N4 已把题集与报告契约搬进 `packages/agent-core/src/benchmark/`（一份定义，CLI 与应用共用，提交 `f315cf6`）**并把应用内评测接到那 21 条上（契约新增 `planning` 层，提交 `e7ce865` / `281ce25` / `c15e99f`）—— 但那一次真实 provider 运行仍未做**；N5/N6 进行中。** N1 提交 `acd3bd5` / `2d62c4d` / `b5b33f9` / `f997b3f`；N2 提交 `c2314c9`…`9c5ae2f`；N3 的收尾提交 `d7fe702` + `2dd89ab`；N4/N5/N6 的进度逐条见各阶段执行记录（`2026-10-05` 那一批以 `git log` 为准）。本计划对应 `docs/superpowers/specs/2026-10-04-agent-full-next-phase-design.md`；每个阶段必须先写 RED，再实现 GREEN，再跑全量门禁，最后单独提交。
 
 **Goal:** 在 `b1ee3d3` 的静态题设核验之上，逐步实现约束求解、动态拖动保持、开放题编译、真实 provider 评测和形式证明出口。
 
@@ -417,6 +417,37 @@ export type DragSolveResult =
 >   `run.test.ts` 的 `real_provider` 仍整批 `not_measured`（那句"适配器还没写"的旧措辞留给下一步改）；
 >   `parseBenchmarkCases()` **没有缓存**（每次解析一次，刻意不引入第二份可漂移的东西；渲染路径上只应调一次）。
 
+> **第六步（2026-10-05）：应用内评测接到统一题集 + 契约新增 `planning` 层。** 提交 `e7ce865` / `281ce25` / `c15e99f`（未含本次文档修正，修正另提）。
+> 这一步把第五步交出去的"一份定义"真正用上：应用侧**不再**只跑自己那套旧 8 题夹具，而是跑**同一份 21 条题集**的前 3 条。
+> - **契约新增第三层 `planning`**（`packages/agent-core/src/benchmark/report.ts`）：词表 `planned` / `rejected` / `error` / `not_measured`，
+>   每个词的含义写在定义处。**判据只有编译器那一个返回值**：`planned` = `compilePlan` 返回 `ok` **且**信封是 `kind: "plan"` ——
+>   **不看模型自述**，也不需要金标准（这正是本条口径被裁决的理由：接受与否是客观的）。
+>   **一处实施者自己的判断（我核过并采纳）**：模型只给**澄清**（`ok` 为真但信封不是计划）记 **`rejected`** 而**不是** `planned` ——
+>   "把澄清记成接受会让'没给计划'读起来像'计划通过了'，错的方向必须朝保守那边偏"。这条是 fail-closed 的落点，且有用例钉着。
+> - **应用侧新通道** `apps/web/src/agent/fixtures/benchmarkPlanningEval.ts`：题集来自 `parseBenchmarkCases()`（**不许**在 `apps/` 下抄题面、**不许** `node:fs`）、
+>   固定 `seed=7`（与 CLI 同一个）、`cost` **显式 `null`**（仓里没有价目表）、`latency` 实测；**先解析 provider 再决定跑不跑**（解析失败 ⇒ 整批 `not_measured` 且**一次请求都不发**）。
+>   规模常量只有**一处**（3 题 × 1 轮）；契约的 `MAX_ROUNDS_PER_CASE = 3` 是另一件事，两者不许混。
+> - **界面**：两套评测**各自独立、各自两段式、各自报请求数**（agent 工具环 8×3 = **24** 次 / 题集 planning 3×1 = **3** 次）；
+>   旧那套 8 题记分卡的**行为一个字未改**（并存不删，两个坐标系）。**合并按钮是不允许的** —— 那会让"我点了什么、会花多少钱"说不清。
+> - **与计划原文的偏差（用户裁决，记录在此）**：计划本节的 `Interfaces` 写的是"`BenchmarkReport` 分开输出 `deterministic_local` 和 `real_provider`"，`BENCHMARK_LAYERS` 原本只有 `extraction` / `witness`。
+>   **新增 `planning` 是用户 2026-10-05 的明确裁决**（三选一里选 A：端到端"计划是否被编译接受"），理由是真实模型产出的是**规划**能力、不是"原话 → 题设子句"的抽取，
+>   塞进 `extraction` 正是 `report.ts:29-36` 自己写明的**范畴错误**。**代价**：多一个层名与一套词要维护；CLI 仍只发两层，所以 `bench:agent` 的三条读数**一字未动**。
+> - **读数边界（必须与数字一起读）**：这条通道发的是**空画布条件下的规划请求** —— 观察结果是空场景、技能是**全部技能**、且**没有只读工具**（harness 没有 `ToolPort` 宿主）。
+>   所以将来那个数字要读成「**空画布条件下计划被接受的比例**」，**不是**"模型的规划能力"。这句原来只写在适配器的注释里，
+>   控制器本次把它补进了 `current-status.md` 与 `CHANGELOG.md`（一个会被误读成"模型能力"的数字，光写在实现注释里不够）。
+> - **本步查出一处既有真缺陷（未修，如实记）**：旧那条通道（`providerAgentEval.ts` + `offlineAgentEval.ts:30`）把请求写成 `{ userMessage } as never` ——
+>   那对 `createLocalPlanner` 成立，对**真实** `createModelPlanner` **不成立**（它要 `request.model.context` / `.tools` / `run` / `budget` / `signal`），
+>   实测抛 `TypeError: Cannot read properties of undefined (reading 'context')`，而且抛在**任何请求发出之前**、`runProviderAgentEval` 不接异常
+>   ⇒ 界面会永远停在"正在跑…（24 次请求）"、**一次请求都不会发**。现有 4 条用例全注入本地规划器，所以从没被照到。
+>   **本批没改它的行为**（改它会动旧评测语义），方向的建议记在 `task-4b-report.md` §7.4：给 agent-core 一个可复用的 `buildPlanRequest`，
+>   而不是在 fixtures 里再拼一份（`coordinatorPorts.ts` 明文说"模型能看到什么"的归属地是协调器）。**新通道不受影响**（用完整 `PlanRequest`，并有"真规划器 + 假 transport"的用例）。
+> - **控制器自跑门禁（当次实测）**：全库 **318 文件 / 3659 通过 + 1 todo / 0 失败**（exit 0）；`typecheck` exit 0；`lint` **0 error / 13 warning**；
+>   `bench:agent` exit 0 且三条读数**逐字不变**（`cases=21 covered=14 empty=7 error=0` / `obligations=24 residue=9 rate=0.727` / `covered=14/21 rate=0.667`）；
+>   `test:e2e` **194 通过 / 0 失败**；定向 **5 文件 / 62 通过** 加 CLI 那 13 条；BOM `mismatches=0`；题集 blob 与 BASE 相同。
+>   哨兵核验：`BENCHMARK_LAYERS` 那条精确钉**被更新成三项**并**补了新层逐项相等的钉子**（不是改成 `toContain`、也不是删掉）。
+> - **本步没有解决的**：**那次真实 provider 运行仍然没跑**（触发点在桌面端、密钥在系统凭据库里；`bench:agent --mode=real_provider` 仍整批 `not_measured`）；
+>   计划第 324 行的"**人工可读性**"仍然**既没有字段也没有标注**（要等有对象可读）；旧那条通道的请求形状缺陷**待裁决**。
+
 ## Phase N5：形式证明出口
 
 **目标：** 让少量短目标产生可独立校验的 proof artifact，不把采样或实例通过冒充证明。
@@ -511,13 +542,14 @@ export type DragSolveResult =
 
 - [x] 五个独立 flag 已由 **N1** 创建（`apps/web/src/agent/featureFlags.ts`，默认关闭）——本阶段只做核对，不再重复创建。
 - [ ] 每个 flag 有单元、浏览器和回退用例；关闭 flag 时旧路径行为逐字不变。
-  > **2026-10-05：只达成一部分，故意不勾。** 逐格核对见 [`docs/acceptance/next-phase-flag-and-dependency-review.md`](../../acceptance/next-phase-flag-and-dependency-review.md) 的覆盖矩阵：**单元用例**三个已实现的开关都有；**关闭回退**也都有证据，但**强度不同**（`witnessSearch` = 黄金样本逐字节；`obligationIR` = 结构 + 单测；`constrainedDrag` = 结构性——离路径就是原来那一行）；**浏览器用例只有 `constrainedDrag` 有**（`e2e/next-phase-flag-entry.spec.ts` 入口 3 条 + `e2e/agent-constrained-drag.spec.ts` 正/反例 2 条），`obligationIR` 与 `witnessSearch` **没有**（它们**没有产品入口**）；`openProblemCompiler` / `proofExport` 是**占位**（零读取点，不该为占位补用例）。**"逐字不变"这句话本身也要分开读**：它**不是一种证据，是三种**（矩阵里那节标题就写着这句）。
+  > **2026-10-05：只达成一部分，故意不勾。** 逐格核对见 [`docs/acceptance/next-phase-flag-and-dependency-review.md`](../../acceptance/next-phase-flag-and-dependency-review.md) 的覆盖矩阵：**单元用例**三个已实现的开关都有；**关闭回退**也都有证据，但**强度不同**（`witnessSearch` = 黄金样本逐字节；`obligationIR` = 结构 + 单测；`constrainedDrag` = 结构性——离路径就是原来那一行）；**浏览器用例只有 `constrainedDrag` 有**（`e2e/next-phase-flag-entry.spec.ts` 入口 3 条 + `e2e/agent-constrained-drag.spec.ts` **5 条** = 正/反例 2 + **N3 出口的三条：过约束拒绝 / 冲突恢复 / 一步撤销**），`obligationIR` 与 `witnessSearch` **没有**（它们**没有产品入口**）；`openProblemCompiler` / `proofExport` 是**占位**（零读取点，不该为占位补用例）。**"逐字不变"这句话本身也要分开读**：它**不是一种证据，是三种**（矩阵里那节标题就写着这句）。
 - [ ] 更新所有进度文档和发布门禁；统一记录真实 provider、动态拖动和 proof artifact 证据。
   > **2026-10-05：文档那一半在做（且刚被独立审查修过 7 处漂移），"真实 provider 证据"仍然没有，不勾。** 已更新：`current-status.md` / `feature-catalog.md` / 发布门禁 / 记分卡 / 本计划 / `CHANGELOG.md` / 新增的开关与依赖审查。**动态拖动**的证据在（浏览器正/反例 + 出口未完整，见 N3 那条）；**proof artifact** 的证据在（边界 + 准入契约，但没接后端）；**真实 provider 一次都没跑** ⇒ 没有任何 pass@1 / pass@3 / 成本 / 延迟 / 人工可读性数字。
 - [x] 运行：`npm.cmd run typecheck`、`npm.cmd test`、`npm.cmd run lint`、`npm.cmd run build --workspace @draw/web`、`npm.cmd run test:e2e -- --workers=3`、`npm.cmd run test:rust`、`npm.cmd run test:perf`、`npm.cmd run eval:agent`。
   > **2026-10-05 勾上**：八道命令都有当次读数（见 `docs/current-status.md` §一 的「当前读数总表」）。**一处如实说明**：独立复核时 `npm.cmd test` 在本机跑出过 **1 条 5 秒超时**（`fileExports.test.ts` 的 CAD 导出用例，该文件未被本批改动、单跑 9/9 通过），属**负载敏感的既有抖动**，按本仓口径不把那次算绿也不算红。
+  > **勾的是"读数存在"，不是"本阶段复跑过"（2026-10-05 控制器加，防误读）**：那八道命令的读数属于**更早那一批**；N6 自己的记录里明写"本阶段未复跑"（见本节末尾）。两句话可以并存，但**不要读成"N6 跑过这八道"**。将来真要收口时，应当**在收口那一刻重跑这八道**并用当次读数。
 - [ ] **提交检查点：** `git commit -m "docs(agent): close next-phase release gate"`。
-  > **2026-10-05：故意不勾** —— 这是**整个计划收尾**的检查点，而 N3/N4/N5 的出口都还没达成（N3 缺过约束拒绝·冲突恢复·一步撤销的浏览器用例；N4 缺一次真实 provider 运行；N5 缺任何后端）。N6 自己的十五步（flag/依赖/WASM 审查、门禁电池、两条抖动修复、并发专项、目录订正）已落地，但"收口"要等那三个出口。
+  > **2026-10-05：故意不勾** —— 这是**整个计划收尾**的检查点，而 N4/N5 的出口都还没达成（**N4 缺一次真实 provider 运行**；N5 缺任何后端）。（**2026-10-05 更正**：这句原来还把"**N3 缺过约束拒绝·冲突恢复·一步撤销的浏览器用例**"列在里面 —— 那三条**已在 N3 出口收尾时交付**，见 `e2e/agent-constrained-drag.spec.ts` 的 5 条用例与提交 `d7fe702` / `2dd89ab`。）。N6 自己的十五步（flag/依赖/WASM 审查、门禁电池、两条抖动修复、并发专项、目录订正）已落地，但"收口"要等**那两个**出口（N4、N5；N3 已达成）。
 
 > **N6 执行记录（2026-10-05，只完成第一步）：** 第 1 条（五个 flag 已由 N1 创建）本来就打了勾，
 > 其余**一条还没勾**。这一批交付的是**核对记录**：
