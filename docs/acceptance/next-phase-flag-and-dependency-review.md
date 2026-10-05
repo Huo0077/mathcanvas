@@ -20,6 +20,23 @@ N6 只核对"每个 flag 有单元 / 浏览器 / 回退用例"，**不重复创�
 **五个开关都没有浏览器用例**，而 `openProblemCompiler` / `proofExport` 是**占位**（只有开关表
 与默认值，没有任何读取点）—— 这是刻意的，N6 不该为占位开关补用例。
 
+### 「关闭 flag 时旧路径行为逐字不变」—— 这句话**不是一种证据，是三种**（2026-10-05 补审）
+
+计划 N6 把它写成一条统一要求。逐条核下来，三个已实现的开关**各自靠的是不同的东西**，
+强度也不同；把它们一律说成"逐字不变"是**过度概括**：
+
+| 开关 | 离路径的保证来自 | 强度 |
+| --- | --- | --- |
+| `witnessSearch` | **黄金样本逐字节**：`planCompiler.offPath.golden.test.ts`（冻时钟、对着基线 commit 比 `JSON.stringify` 的每一个字节，失败时指出**在哪一位**分叉） | **测出来的**（最硬） |
+| `obligationIR` | **结构 + 单测**：`planCompiler.ts` 的 `diagramObligationIR?: boolean` 注释写明"**显式为 `true` 才开** —— 缺省 / `undefined` / `false` 一律走旧路径"；`planCompiler.test.ts` 真的传过 `false`；跨 Worker 那一侧用 `request.obligationIR === true` 归一化，所以 `false` 不会在边界上变成真值 | 结构为主，单测钉着 |
+| `constrainedDrag` | **结构性**：`App.tsx:519` 的离路径**就是原来那一行** `apply({ op: "translatePrimitive3", id, delta })` —— **没有第二份实现可以漂移** | 结构性（不是"测出来的"，但也没有可漂移的东西） |
+| `openProblemCompiler` / `proofExport` | **没有读取点** ⇒ 不存在"旧路径"这回事 | 不适用 |
+
+**为什么这个区分重要**：一份**黄金样本**保证"今天与基线逐字节相同"，但它是**对当时那份基线**的
+快照，改动一旦有意就会过期；而**结构性**保证（离路径就是原代码那一行 / 显式为 `true` 才开）
+不会过期，却也**没有留下"当时到底一样不一样"的证据**。两者都成立，但**不能互相冒充** ——
+尤其不能拿"结构上没变"去充当"测过一样"。
+
 ## 二、JavaScript 侧的运行依赖与许可证（实测）
 
 逐个读 `node_modules/<name>/package.json` 的 `license` 字段（下面的版本是**本机实测装到的**版本）：

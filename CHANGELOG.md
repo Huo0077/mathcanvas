@@ -5,6 +5,28 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-05 —— N6 第十三步：把"关闭 flag 时旧路径逐字不变"这句话**拆成三种证据**（一次过度概括的纠正）
+
+- **怎么查的**：N6 的 `- [ ]` 里写着"每个 flag 有单元、浏览器和回退用例；**关闭 flag 时旧路径行为
+  逐字不变**"。我没把这句当结论读过，而是逐条去核**每个开关的离路径到底靠什么保证**。
+- **核出来的事实：那不是一种证据，是三种，强度也不同**（表已写进
+  `docs/acceptance/next-phase-flag-and-dependency-review.md` §一 之后）：
+  - `witnessSearch` —— **黄金样本逐字节**（`planCompiler.offPath.golden.test.ts`：冻时钟、对着基线
+    commit 比 `JSON.stringify` 的每一个字节）。**这是唯一"测出来的"**。
+  - `obligationIR` —— **结构 + 单测**：`diagramObligationIR?: boolean` 注释写明"**显式为 `true` 才开**"，
+    `planCompiler.test.ts` 真的传过 `false`，跨 Worker 那一侧用 `request.obligationIR === true` 归一化
+    （所以 `false` 不会在边界上变成真值）。
+  - `constrainedDrag` —— **结构性**：`App.tsx:519` 的离路径**就是原来那一行**
+    `apply({ op: "translatePrimitive3", id, delta })`，**没有第二份实现可以漂移**。
+  - `openProblemCompiler` / `proofExport` —— **没有读取点**，不存在"旧路径"这回事。
+- **为什么这次纠正值得写下来**：一份**黄金样本**保证"今天与基线逐字节相同"，但它是对**当时那份
+  基线**的快照，有意改动就会过期；**结构性**保证不会过期，却**没留下"当时到底一样不一样"的证据**。
+  两者都成立，**但不能互相冒充** —— 尤其不能拿"结构上没变"去充当"测过一样"。我此前在汇报里
+  把它们混着说成"都有离路径证据"，那是过度概括。
+- **顺带确认**：`obligationIR` 的严格 `true` 契约确实被单测碰过（不是只有注释），所以它不需要
+  再补一条黄金样本 —— 这一点也写进了那张表。
+- **只改文档**（核对过程本身就是产出），没有可执行产物；`typecheck` / `lint` 不受影响。
+
 ## 2026-10-05 —— N5/N3 核实：一条**判定为现在做不了**（并说清为什么），以及两处"约束"模块的分工
 
 - **先核实计划里 N5 剩下的那条"只读展示"**（把 proof artifact 接进 `ConfirmationPanel` / `agentStore` /
