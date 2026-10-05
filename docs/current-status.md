@@ -22,7 +22,7 @@
 | 单测（全库） | `npm.cmd test -- --maxWorkers=2 --reporter=dot` | **306 文件 / 3567 通过 + 1 todo / 0 失败** | 0 | **第 27 轮**（整批电池） |
 | Rust provider 测试 | `npm.cmd run test:rust` | **238 通过 / 3 ignored / 0 失败**（16 个二进制） | 0 | **第 27 轮**（整批电池） |
 | 全量 e2e | `npm.cmd run test:e2e` | **186 通过 / 0 失败**（54.2 s，16 workers） | 0 | **第 27 轮**（整批电池） |
-| 性能基线 | `npm.cmd run test:perf` | 9/9；`drag/300-frames` **685.9 ms** | 0 | **第 27 轮**（整批电池） |
+| 性能基线 | `npm.cmd run test:perf` | 9/9；`drag/300-frames` **686–711 ms**（**三次采样的区间，不是单点**） | 0 | **第 37 轮重校** |
 | 生产构建（web） | `npm.cmd run build --workspace @draw/web` | **成功**（4.83 s）；产物落 `build-check/`（已 gitignore，构建后工作树干净）；有**既有的**主 chunk 1.8 MB 提示 | 0 | **第 28 轮** |
 | Agent 评测 | `npm.cmd run eval:agent` | `deterministic_local`：pass@1 **4/8**、pass@3 **4/8**、工具选择 45/45、工具错误 3/45 | 0 | **第 27 轮**（整批电池；**未接真实模型**，不是模型准确率） |
 | Agent benchmark | `npm.cmd run bench:agent` | `cases=21 covered=14 empty=7 error=0`；`BENCHMARK_PREMISE obligations=24 residue=9 rate=0.727` | 0 | **第 29 轮** |
@@ -37,6 +37,15 @@
 > 本轮同样把 perf 放在整批最后、却得到 **685.9 ms**，与 2026-10-01 基线的 **682.5 ms** 吻合。
 > 所以那个 1295 ms 是**测量条件造成的离散值，不是回归** —— 这一条现在有反证，不再是"存疑"。
 > **怎么读**：没有一行是"应该没问题"；每一行都是**跑过的**。
+> **第 37 轮：把上面这些读数抽出来重跑了一遍**（因为我在第 35 轮抓到过自己一次"假绿"，所以这些数字也该被抽查，而不是一直往上加新的）。**结论：逐条复现** ——
+> `cargo metadata` **551 包 / 550 第三方 / 33 种表达式 / 0 个缺 `license` 字段 / 5 个 MPL-2.0-only**（与第 16 轮逐字相同）；
+> `test:rust` **238 + 3 ignored / 0 失败**；`eval:agent` **pass@1 4/8、pass@3 4/8、工具选择 45/45、工具错误 3/45**；
+> `proof:smoke` **7 通过** + `PROOF_BACKENDS {"wired":[],"reviewed":0}`；`bench:agent` **三条读数逐字相同**。
+> **唯一动过的是性能**：`drag/300-frames` 这次是 **710.6 ms**（第 27 轮 685.9 ms）。所以那一行改成**区间**：
+> 它是**采样的离散**（两次差 3.6%），不是单点真值 —— 这也进一步说明第 12 轮那个 **1295 ms** 是 1.8 倍的**离群值**。
+> **两条统计性结论也顺带加固了**（它们本来只是"概率上说明"）：
+> Rust 的 secrets 抖动**又跑了 40 次全绿**，累计 **0/100**（修前 1/15；若真率仍是 1/15，连绿 100 次的概率约 **0.1%**）；
+> e2e **又跑了 3 次全绿**，累计 **0/7**（修前 6 次里 4 次红；若真率仍是 4/6，连绿 7 次的概率约 **0.46%**）。
 > `test-results/` 是 gitignore 的：e2e 的 trace 只在本机，**任何一次默认 e2e 跑都会覆盖它**
 >（要留 `error-context.md` 就得用 `--retries=1 --output=...`，见下方过程记录）。
 
