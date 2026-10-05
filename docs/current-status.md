@@ -17,18 +17,24 @@
 
 | 门禁 | 命令 | 最新读数 | 退出码 | 记录于 |
 | --- | --- | --- | --- | --- |
-| 单测（全库） | `npm.cmd test -- --maxWorkers=2 --reporter=dot` | **306 文件 / 3567 通过 + 1 todo / 0 失败**（135 s） | 0 | 2026-10-05（第 24 轮） |
-| 类型检查 | `npm.cmd run typecheck` | 全部工作区 + `e2e/` + `scripts/`，无错 | 0 | 2026-10-05（第 26 轮复跑） |
-| Lint | `npm.cmd run lint` | **0 error / 13 warning**（与基线逐条相同） | 0 | 2026-10-05（第 26 轮复跑） |
-| Rust provider 测试 | `npm.cmd run test:rust` | **238 通过 / 3 ignored / 0 失败** | 0 | 2026-10-05（第 21 轮；此后未改 Rust） |
-| 全量 e2e | `npm.cmd run test:e2e` | **186 通过 / 0 失败**（连续 4 次） | 0 | 2026-10-05（第 20 轮；此后未改 e2e 相关代码） |
-| Agent 评测 | `npm.cmd run eval:agent` | `deterministic_local`：pass@1 **4/8**、pass@3 **4/8**、工具选择 45/45、工具错误 3/45 | 0 | 2026-10-05（第 12 轮；**未接真实模型**，不是模型准确率） |
-| Agent benchmark | `npm.cmd run bench:agent` | `cases=21 covered=14 empty=7 error=0` | 0 | 2026-10-05（第 26 轮复跑） |
-| 证明边界 smoke | `npm.cmd run proof:smoke` | 6 通过 / 0 失败；`wiredBackends=[]` | 0 | 2026-10-05（第 26 轮复跑） |
-| 性能基线 | `npm.cmd run test:perf` | 9/9；`drag/300-frames` 1295 ms | 0 | 2026-10-05（第 12 轮；**测在整批电池之后**，不是回归结论） |
+| 类型检查 | `npm.cmd run typecheck` | 全部工作区 + `e2e/` + `scripts/`，无错 | 0 | **第 27 轮**（整批电池） |
+| Lint | `npm.cmd run lint` | **0 error / 13 warning**（与基线逐条相同） | 0 | **第 27 轮**（整批电池） |
+| 单测（全库） | `npm.cmd test -- --maxWorkers=2 --reporter=dot` | **306 文件 / 3567 通过 + 1 todo / 0 失败** | 0 | **第 27 轮**（整批电池） |
+| Rust provider 测试 | `npm.cmd run test:rust` | **238 通过 / 3 ignored / 0 失败**（16 个二进制） | 0 | **第 27 轮**（整批电池） |
+| 全量 e2e | `npm.cmd run test:e2e` | **186 通过 / 0 失败**（54.2 s，16 workers） | 0 | **第 27 轮**（整批电池） |
+| 性能基线 | `npm.cmd run test:perf` | 9/9；`drag/300-frames` **685.9 ms** | 0 | **第 27 轮**（整批电池） |
+| Agent 评测 | `npm.cmd run eval:agent` | `deterministic_local`：pass@1 **4/8**、pass@3 **4/8**、工具选择 45/45、工具错误 3/45 | 0 | **第 27 轮**（整批电池；**未接真实模型**，不是模型准确率） |
+| Agent benchmark | `npm.cmd run bench:agent` | `cases=21 covered=14 empty=7 error=0` | 0 | **第 27 轮**（整批电池） |
+| 证明边界 smoke | `npm.cmd run proof:smoke` | 6 通过 / 0 失败；`wiredBackends=[]` | 0 | **第 27 轮**（整批电池） |
 
-> **怎么读**：每行都标了**记录于哪一轮** —— 单测 / typecheck / lint / benchmark / smoke 是新鲜的，Rust / e2e / eval / perf 是**当时测过、此后未再改动那一部分**。**没有一行是"应该没问题"。**
-> `test-results/` 是 gitignore 的：e2e 的 trace 只在本机，**任何一次默认 e2e 跑都会覆盖掉它**（要看 `error-context.md` 就得用 `--retries=1 --output=...`，见下方过程记录）。
+> **这一张表现在是同一批读数**（2026-10-05 第 27 轮，九道门禁**串行**跑完，14:47:49 → 14:52:12，
+> 约 4 分 24 秒）。此前那些"当时测过、此后未改动"的说明**不再需要** —— 上面九行都是本轮实测。
+> **`drag/300-frames` 的 1295 ms 不再可信**：第 12 轮那次是在**连跑五遍 `test:rust` 之后**测的，
+> 本轮同样把 perf 放在整批最后、却得到 **685.9 ms**，与 2026-10-01 基线的 **682.5 ms** 吻合。
+> 所以那个 1295 ms 是**测量条件造成的离散值，不是回归** —— 这一条现在有反证，不再是"存疑"。
+> **怎么读**：没有一行是"应该没问题"；每一行都是**跑过的**。
+> `test-results/` 是 gitignore 的：e2e 的 trace 只在本机，**任何一次默认 e2e 跑都会覆盖它**
+>（要留 `error-context.md` 就得用 `--retries=1 --output=...`，见下方过程记录）。
 
 ### 2. 挡路的待裁决（**做完这四件里的任意一件，都能立刻推进一格**）
 
