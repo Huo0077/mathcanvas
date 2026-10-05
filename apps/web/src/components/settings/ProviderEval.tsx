@@ -328,7 +328,7 @@ export function ProviderEval({ dependencies }: { dependencies?: ProviderEvalDepe
                         ? "（这一轮不进可读性分母，所以没有标注）"
                         : "（这一轮没有正文可读 —— 它不进可读性分母，所以也没有标注）"}
                     </p>
-                  ) : (
+                  ) : hasReadableBody(entry) ? (
                     <p>
                       当前标注：{readability[entry.caseId] ?? "未标注"}{" "}
                       {HUMAN_READABILITY_VALUES.map((value) => (
@@ -341,6 +341,21 @@ export function ProviderEval({ dependencies }: { dependencies?: ProviderEvalDepe
                         </button>
                       ))}
                     </p>
+                  ) : (
+                    /**
+                     * **有分组、但没有正文**（fix2 round，复核 §4 的 N5；实测**可达**：
+                     * 坏的 plan 信封 ⇒ `status: "rejected"` ⇒ `group === "rejected"` 且 `text === ""`）。
+                     *
+                     * 上一轮只覆盖了 `group === null` 那一支，于是这一支会**同屏自相矛盾**：
+                     * `<pre>` 里写着"（这一条没有正文可读）"，下面却摆着三个标注按钮 ——
+                     * 那等于让人对着**一个不存在的对象**打分。
+                     *
+                     * 所以"给不给按钮"也交给**同一个谓词** `hasReadableBody`。
+                     * **口径一个字没动**（控制器 fix2 裁决）：报告契约仍按 `status` 把这一条算进
+                     * `rejected` 那一组的分母（`rejected` 含"什么都没给"是已裁决的边界）——
+                     * 于是它会一直显示"未标注"，而那是**诚实的**：没有对象可判，就该一直未标注。
+                     */
+                    <p>（这一条没有正文可读 —— 没有可判的对象，所以不提供标注；它仍然算在这一组的分母里）</p>
                   )}
                 </article>
               ))}

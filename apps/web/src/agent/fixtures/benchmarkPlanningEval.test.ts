@@ -11,6 +11,7 @@ import {
   PLANNING_EVAL_TRIALS,
   annotateReadability,
   formatPlanningReport,
+  hasReadableBody,
   planningEvalCases,
   readableTextForDisplay,
   runProviderPlanningEval,
@@ -107,6 +108,23 @@ const ANSWER_ENVELOPE: PlanEnvelope = {
 const MALFORMED_PLAN_ENVELOPE = { schemaVersion: PLAN_SCHEMA_VERSION, kind: "plan", goal: "缺 actions", factIds: [] } as unknown as PlanEnvelope
 const ANSWER_MISSING_FIELD_ENVELOPE = { schemaVersion: PLAN_SCHEMA_VERSION, kind: "answer", goal: "缺 answer" } as unknown as PlanEnvelope
 const RAW_STRING_ENVELOPE = "这根本不是 JSON，也不是信封" as unknown as PlanEnvelope
+
+/**
+ * **另外两个"过不了闸门"的形状**（fix2 round，复核 §4 的 N1 / N2）。
+ *
+ * 它们与上面三个的区别是**防线不同**：`readableBody` 里
+ * - `CLARIFICATION_MISSING_QUESTIONS` 撞的是 `questions` 那道闸（`!Array.isArray(questions)`）；
+ * - `PLAN_WITHOUT_ACTION_ID` 撞的是 `actionId` 那道闸（`ids.every(…非空字符串)`）。
+ *
+ * 这两道闸**原来一条判据都没有**：删掉它们，本文件既有用例**全绿**，
+ * 而后果分别是"坏澄清被记成 `error`（判题口径被绕过）"与"正文变成 `1. undefined`（I1 原样复现）"。
+ */
+const CLARIFICATION_MISSING_QUESTIONS = { schemaVersion: PLAN_SCHEMA_VERSION, kind: "clarification", goal: "缺 questions", factIds: [] } as unknown as PlanEnvelope
+const PLAN_WITHOUT_ACTION_ID = { schemaVersion: PLAN_SCHEMA_VERSION, kind: "plan", goal: "bad action id", factIds: [], actions: [{ actionKey: "x" }] } as unknown as PlanEnvelope
+
+/** 合法字符串但**是空的**：钉的是 N4 那个"已裁决的边界"（我们自己的标签也算正文）。 */
+const EMPTY_PLAN_ENVELOPE = { schemaVersion: PLAN_SCHEMA_VERSION, kind: "plan", goal: "", factIds: [], actions: [] } as unknown as PlanEnvelope
+const EMPTY_ANSWER_ENVELOPE = { schemaVersion: PLAN_SCHEMA_VERSION, kind: "answer", goal: "空回答", factIds: [], answer: "", toolResultRefs: [] } as unknown as PlanEnvelope
 
 function plannerReturning(envelope: PlanEnvelope, seen: string[] = []) {
   return {
@@ -402,9 +420,86 @@ describe("应用内真实 provider 的题集 planning 通道（N4b）", () => {
     // ② 判题口径**没有被这条健壮性改动绕过**：`actions` 没了 ⇒ 解析失败 ⇒ `rejected`
     //    （不是"跑的时候抛了"，更不是"没测"）—— 编译器自己的诊断照旧留在 `evidence` 里。
     expect(result.runs.map((run) => run.status)).toEqual(["rejected", "rejected", "rejected"])
-    expect(result.runs[0]!.evidence.length).toBeGreaterThan(0)
     // ③ **不许伪造正文**：认不出的形状一律"没有可读正文"。
     expect(result.readable.map((entry) => entry.text)).toEqual(["", "", ""])
+    /**
+     * ④ **诊断的「内容」在场**（fix2 round，复核 §4 的 N3）。
+     *
+     * 这里原来是 `expect(result.runs[0]!.evidence.length).toBeGreaterThan(0)` —— 那是**恒真类**：
+     * 报告契约自己对 `status !== "not_measured"` 的轮次**强制** evidence 非空
+     *（`report.ts` 的 buildBenchmarkReport：非空 evidence 是硬规矩，为空会先抛），
+     * 所以它唯一可能为假的途径是"契约先抛"，那时用例以**另一个**错误红 ——
+     * 它从来没有钉住它自称要钉的那件事（"编译器自己的诊断在场"）。
+     *
+     * 换成内容断言：必须是编译器那一条真实的诊断（逐条拒绝原文），或者是它的兜底句
+     * ——**但兜底句出现就意味着诊断真的丢了**，所以这里把两条分开断言。
+     */
+    const diagnostic = result.runs[0]!.evidence.map((entry) => entry.evidence).join(" | ")
+    expect(diagnostic).not.toContain("模型没有给出计划")
+    expect(diagnostic).toMatch(/@/) // 编译器逐条诊断的形状是 `code@path: detail`
+    expect(diagnostic.length).toBeGreaterThan(10)
+  })
+
+  /**
+   * **fix2 round（复核 §4 N1）**：`clarification` 支路的那道闸没有被任何判据钉住。
+   *
+   * 删掉 `readableBody` 里 `questions` 那道闸之后，本文件**既有用例全绿**（复核实测），
+   * 而后果正是本轮 C1 要守住的那句话被破坏：一个"模型给了坏澄清"的轮次从 `rejected`
+   *（编译器自己的判据）变成 **`error`（跑的时候抛了）**。
+   *
+   * **这条必须断言 `status`** —— 只断言"正文是空串"挡不住它：变异态下那一轮掉进 `catch`，
+   * 而 `text` 的初值**恰好也是 `""`**，只看 `text` 的判据照绿。
+   */
+  it("**坏澄清**：仍记 `rejected`（不是 `error`），正文是空串", async () => {
+    const result = await runProviderPlanningEval({ resolveProvider: async () => RESOLVED, createPlanner: () => plannerReturning(CLARIFICATION_MISSING_QUESTIONS) })
+
+    expect(result.runs.map((run) => run.status)).toEqual(["rejected", "rejected", "rejected"])
+    expect(result.readable.map((entry) => entry.text)).toEqual(["", "", ""])
+    // 分组也跟着走：它仍然是"被拒那一条"，不是"没有对象可读"（分母口径没变）。
+    expect(result.readable.map((entry) => entry.group)).toEqual(["rejected", "rejected", "rejected"])
+  })
+
+  /**
+   * **fix2 round（复核 §4 N2）**：`actionId` 那道闸也没有判据。
+   *
+   * 删掉它之后既有用例全绿，而正文会变成
+   * `目标：bad action id\n动作（1 条）：1. undefined` —— **`1. undefined` 就是我们编出来的正文**，
+   * 而它会被摆进人读区、旁边就是三个三值按钮（I1 原样复现）。
+   */
+  it("**动作没有 `actionId`**：不许渲染出 `1. undefined`，且仍记 `rejected`", async () => {
+    const result = await runProviderPlanningEval({ resolveProvider: async () => RESOLVED, createPlanner: () => plannerReturning(PLAN_WITHOUT_ACTION_ID) })
+    const texts = result.readable.map((entry) => entry.text)
+
+    // 逐字断言：**空串**（不是那句拼出来的 `1. undefined`）。
+    expect(texts).toEqual(["", "", ""])
+    // status 也要断言：这条闸的失效会让正文变脏，但判题口径**必须**仍是 `rejected`。
+    expect(result.runs.map((run) => run.status)).toEqual(["rejected", "rejected", "rejected"])
+    for (const text of texts) expect(text).not.toContain("undefined")
+  })
+
+  /**
+   * **fix2 round（复核 §4 N4）—— 钉子，钉的是「已裁决的边界」，不是"理想行为"。**
+   *
+   * `goal: ""` + `actions: []`（或 `answer: ""`）是**合法字符串但是空**：它们**过闸**，
+   * 于是正文里只剩**我们自己那两句标签**（`目标：` / `动作（0 条）：（这份计划没有动作）`），
+   * 而 `hasReadableBody` 判为"有正文"⇒ 面板会给出三个按钮（人会给我们自己的占位句子打分）。
+   *
+   * **控制器 fix2 裁决：不改行为**（要收窄就得改口径，而"空字符串算不算模型给了内容"是另一件事）。
+   * 所以这里**不修**，而是把当前行为**钉住**：谁要把这条改掉（例如"空 goal 不算正文"），
+   * 红在这里，就必须先读一遍这段注释、显式做一次决定。
+   */
+  it("**空计划 / 空回答仍然算「有正文」**（已知边界：我们自己的标签也算正文）", async () => {
+    const emptyPlan = await runProviderPlanningEval({ resolveProvider: async () => RESOLVED, createPlanner: () => plannerReturning(EMPTY_PLAN_ENVELOPE) })
+    expect(emptyPlan.readable.map((entry) => entry.text)).toEqual([
+      "目标：\n动作（0 条）：（这份计划没有动作）",
+      "目标：\n动作（0 条）：（这份计划没有动作）",
+      "目标：\n动作（0 条）：（这份计划没有动作）"
+    ])
+    expect(hasReadableBody(emptyPlan.readable[0]!)).toBe(true)
+
+    const emptyAnswer = await runProviderPlanningEval({ resolveProvider: async () => RESOLVED, createPlanner: () => plannerReturning(EMPTY_ANSWER_ENVELOPE) })
+    expect(emptyAnswer.readable[0]!.text).toBe("只读回答：")
+    expect(hasReadableBody(emptyAnswer.readable[0]!)).toBe(true)
   })
 
   /**

@@ -211,4 +211,42 @@ describe("设置 → 真实 provider 评测", () => {
     await waitFor(() => expect(planning.textContent).toContain("已标 1 / 未标 2"))
     expect(within(area).getAllByRole("article")[0]!.textContent).toContain("当前标注：readable")
   })
+
+  /**
+   * **fix2 round（复核 §4 的 N5）**：`group !== null` 但**没有正文**的那一条，不许"同屏自相矛盾"。
+   *
+   * 可达性（复核实测 + 本用例实测）：坏的 plan 信封（`actions` 没了）⇒ `status: "rejected"`
+   * ⇒ `group === "rejected"` 而 `text === ""`。上一轮的界面在这一支上会**同时**写着
+   * 「（这一条没有正文可读）」**和**「当前标注：未标注 [readable][partly][unreadable]」——
+   * 等于让人对着一个**不存在的对象**打分。
+   *
+   * 判据三块：① 正文区如实说"没有正文可读"；② **一个标注按钮都不给**；③ **口径没动** ——
+   * 它仍然占着 `rejected` 那一组的分母（控制器已裁决的边界）。
+   */
+  it("**没有正文的条目不给标注按钮**：不许一边说没有正文、一边摆三个按钮", async () => {
+    // 「缺 actions」的信封：不是合法计划，但对这一层来说仍是一条**被编译器拒了**的记录。
+    const malformed = { schemaVersion: PLAN_SCHEMA_VERSION, kind: "plan", goal: "缺 actions", factIds: [] }
+    render(<ProviderEval dependencies={{
+      resolveProvider: async () => resolved,
+      createPlanner: () => ({ plan: async () => ({ plan: malformed as unknown as PlanEnvelope, requestId: "req-1", attemptId: "att-1" }) })
+    }} />)
+
+    fireEvent.click(screen.getByRole("button", { name: /题集 planning/ }))
+    await screen.findByRole("button", { name: "确认开始（题集 planning）" })
+    fireEvent.click(screen.getByRole("button", { name: "确认开始（题集 planning）" }))
+
+    const planning = screen.getByRole("region", { name: "真实 provider 评测：题集 planning" })
+    await waitFor(() => expect(planning.textContent).toContain("rejected          3/3"))
+    const area = screen.getByRole("region", { name: "人读区（只读）" })
+    const blocks = within(area).getAllByRole("article")
+    expect(blocks).toHaveLength(planningEvalCases().length)
+
+    // ① 正文区如实说"没有正文可读"（这一批三条都是）。
+    for (const block of blocks) expect(block.textContent).toContain("（这一条没有正文可读）")
+    // ② ……那就**一个标注按钮都不许有**（这正是 N5 说的那种自相矛盾）。
+    expect(within(area).queryAllByRole("button")).toHaveLength(0)
+    // ③ 口径没动：它们仍然算在 `rejected` 那一组的分母里，于是显示"未标 3"（**不是**被排除）。
+    expect(planning.textContent).toContain("已标 0 / 未标 3")
+    expect(planning.textContent).toMatch(/rejected\s+已标 0 \/ 未标 3/)
+  })
 })
