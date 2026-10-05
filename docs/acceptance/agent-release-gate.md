@@ -22,11 +22,21 @@
 计划的最终阶段门槛原文是"只有所有门禁通过，才允许把 typed tool loop 设为默认运行路径"——
 所以现在**不设**。
 
-> **第 2 条在 2026-10-05 有了路径、但还没有数字**：应用内现在有一个**真实 provider 评测**面板
-> （设置 → 真实 provider 评测；`runProviderAgentEval` 走 `createModelPlanner` → 回环代理，密钥不出凭据库），
-> 它把同一套 8 题 × 3 轮接到**真实模型**上。**但一次都还没跑过** —— 它**会花钱**，所以是**两段式**、
-> 由人显式确认（会先说清"将发出 24 次请求、发给谁"）。跑之前那几栏仍然如实写 `not measured`：
-> 报告里的 `provider`、`average cost` 两行就是这套诚实的口径（成本需要价目表，仓里没有 ⇒ 不许编）。
+> **第 2 条在 2026-10-05 有了路径、并且已经有了一半数字**（**2026-10-05 更正**：这一节原来写"但还没有数字"，
+> 那句在当天就不再成立）。两件事**必须分开读**：
+>
+> 1. **题集 `planning` 轴**（设置 → 真实 provider 评测 → **题集 planning**）：**已经跑过两次**（用户在自己的桌面端跑的），
+>    面板原文 `planned 2/3` / `rejected 1/3` / `error 0/3` / `not measured 0/3`、`average latency 13445 ms`（第一次）/ `8465 ms`（第二次）、
+>    `cost not measured`、provider `deepseek-v4-flash`。**按现在的词表**那 1 条 `rejected` 其实是 **`clarification`**（模型在问、不是失败）。
+>    **边界**：只有 3 条题（n=3）、而且是**空画布条件**下的规划请求 ⇒ 不是"模型规划能力"，也不是全题集结论。
+> 2. **agent 工具环的 pass@1 轴**（同一面板上面那块，8 题 × 3 轮 = **24 次请求**）：**没有任何数字，而且原因不是"没跑"** ——
+>    那条通道把请求写成 `{ userMessage } as never`，对真实 `createModelPlanner` **在发出任何请求之前**就抛
+>    `TypeError: Cannot read properties of undefined (reading 'context')`（复核员用探针独立复现：`runModelCalls=0`），
+>    面板还会永远停在"正在跑…"。**它从来没有真正工作过**；**2026-10-05 已修**（提交 `90eba6e`：请求形状收成
+>    `@draw/agent-core` 的 `buildPlanRequest` 一处，与生产路径同构）。
+>    **修好之后它真的会花钱**（24 次请求，两段式、点两下才发），而**还没有人在修好之后跑过** ⇒ 这一栏仍然如实写 `not measured`。
+>
+> **成本那一栏与上面无关，它永远需要一张价目表**：仓里没有 ⇒ `average cost` 写 `not measured`，不许编。
 
 > **还有一处门槛今天"无法判定"，而且它不是缺工作，是缺决定**（详见下面一节）：
 > **N5 的证明出口**卡在**没有任何后端接入**（接之前要先交一份通过的审查记录）。
@@ -39,7 +49,7 @@
 | # | 计划原文 | 状态 | 判据 / 证据 |
 | --- | --- | --- | --- |
 | 1 | 类型检查、Agent 核心测试、Web Agent 测试、Rust provider 测试必须通过 | ✅ **已守住**（两条抖动都已修，且都有前后计数） | 读数在 `docs/current-status.md` §一「2026-10-05 N6 门禁复跑」与其后三节：单测 **303 文件 / 3529 通过 + 1 todo / 0 失败**、`typecheck` exit 0、`lint` 0 error / 13 warning。**e2e**：原来 6 次全量里 4 次红在同一条断言（`data-preview-hovering`），已修（`projectWorldPoint` 先等相机停稳）→ **修后连续 4 次全量 186 passed**。**`test:rust`**：原来五次里一次红（`tests/secrets.rs:149`），判别实验把范围缩到"并发"（默认并行 15 次红 1 次 / 单线程 20 次全绿）→ 5 处走真实凭据库的用例加锁 → **60 次并行全绿 + 3 次全量 236 通过 / 0 失败**。**两处修的都是测试侧**，产品行为未变。 |
-| 2 | 代表任务 pass@1 和语义验证率达到预先约定阈值 | ❌ **未测（无数据）** | 离线读数由 `npm run eval:agent` 打印：**pass@1 4/8、语义验证 4/8**，模式是 `deterministic_local`。**真实 provider 的 pass@1 仍未测过**，所以"预先约定阈值"没有可对照的基线。**但路径已存在（2026-10-05）**：应用内「设置 → 真实 provider 评测」跑 `runProviderAgentEval`（同一套 8 题 × 3 轮 → `createModelPlanner` → 回环代理，**密钥不出凭据库**），**两段式**、**会花钱**、由人显式确认；跑之前那几栏如实写 `not measured`（含 `provider` 与 `average cost` —— 成本需要价目表，仓里没有） |
+| 2 | 代表任务 pass@1 和语义验证率达到预先约定阈值 | ❌ **未测（无数据）** | 离线读数由 `npm run eval:agent` 打印：**pass@1 4/8、语义验证 4/8**，模式是 `deterministic_local`。**真实 provider 的 pass@1 仍未测过**（**2026-10-05 更正**：这句仍成立，但**原因变了** —— 不是"还没跑"，而是**那条通道以前跑不了**：请求形状对真实规划器不成立，复核员用探针复现过 `TypeError … reading 'context'`、`runModelCalls=0`；**已在 `90eba6e` 修好**，而**修好之后还没人跑过**），所以"预先约定阈值"没有可对照的基线。**但路径已存在（2026-10-05）**：应用内「设置 → 真实 provider 评测」跑 `runProviderAgentEval`（同一套 8 题 × 3 轮 → `createModelPlanner` → 回环代理，**密钥不出凭据库**），**两段式**、**会花钱**、由人显式确认；跑之前那几栏如实写 `not measured`（含 `provider` 与 `average cost` —— 成本需要价目表，仓里没有） |
 | 3 | 不允许出现模型可见但 dispatcher 未实现的工具 | ✅ 已守住（测试） | `agentReleaseGate.test.ts`：模型面发布的**每一个只读工具**都必须有真实执行路径；模型面上**唯一**的非只读工具是 `plan.set_plan`（精确集合，多一个就红）；`draft.confirm_commit` / `draft.stage_actions` / `draft.discard` / `draft.verify` **一个都不许**出现在模型面上 |
 | 4 | 不允许出现未验证却声称完成的运行记录 | ✅ 已守住（测试） | `agentReleaseGate.test.ts` + `verification/completionGate.ts`：声明了验收条件的运行，报告不构成证据时**不得到达 `awaiting_confirmation`** |
 | 5 | 视觉能力不可用时，必须有本地布局验证结果或明确 `not_supported` | ✅ **满足（按原文口径）** | 原文是"**或**"：有本地布局验证结果**或**明确 `not_supported`，两者都不缺。本地布局判据是纯算术、不需 provider vision（`renderEvidence.ts` + `layoutModel.ts`），`visual-fit-drawn` 正是用它拿到的 `clipped_object 0 / label_overlap 0`；provider vision 不可用的路径一律回 `not_supported`（`screenshotForProvider`）。**但仍要如实说明这不是"全都接好了"**：`render.capture` / `render.inspect_layout` 尚未成为 dispatcher handler，**对象出界**那一半用的是候选文档的确定性正投影、不是 live 场景的包围盒（live 场景目前没有任何读数通道暴露给 agent） |

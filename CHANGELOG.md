@@ -5,6 +5,38 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-05 —— 让那个"唯一会花钱的按钮"真的能跑（请求形状收成一处）+ 读数按两条轴纠正
+
+- **修的是"从来没有真正工作过"的通道**（复核员用探针独立复现、控制器读代码确认）：
+  旧「agent 工具环」通道把请求写成 `plan({ userMessage } as never)` —— 对本地规划器成立，
+  对**真实** `createModelPlanner` **不成立**：它在**发出任何网络请求之前**就读 `request.model.context`
+  ⇒ `TypeError: Cannot read properties of undefined (reading 'context')`。后果不只是"报错"：
+  那是应用里**唯一会花钱**的入口，而它从来没有真正发出过一次请求。
+- **一处定义**：新增 `packages/agent-core/src/coordinatorPorts.ts` 的 `buildPlanRequest`，
+  就放在 `PlanRequest` 端口旁（`PlanRequest.model` 的既有注释已经把这件"模型能看到什么"判给协调器）。
+  它调的**就是**协调器原来那三个函数、**同样的顺序**（`buildContext` → 计费 → `buildConversationContext` →
+  `createToolRegistry().forModelPhase("planning", …)`）。**三处收敛**：协调器自己 / 旧 8 题通道 / 题集 planning 通道
+  （后者原先手写的约 60 行组装被完整取代）；`availableActionsFor` 也从两份收成一份。
+- **旧通道语义一个字未改**：8 夹具 / `TRIALS` / `scoreAgentAttempts` / 先解析 provider / 无凭据 `not_measured`，只改请求形状。
+- **一处控制器早读发现的真回归（已修 + 已钉）**：抽出请求构造时把 `dependencies.conversation?.()` 从"计费之后"
+  挪到了"计费之前" ⇒ **预算耗尽的那一轮会多读一次宿主的会话来源**（旧代码在那条路径上根本不碰它）。
+  改成 **thunk**（类型强制惰性）并加了一条**能红**的用例（"预算耗尽时 thunk 调用次数是 0"）。
+  实施者如实申报：**加 thunk 之前那条用例确实红**（`expected 1 to be +0`）—— 那不是理论问题，是真被引入过的回归。
+- **裁决：旧通道固定 `geometry3d` 不改**（实施者按纪律停手上报）。查证：8 条夹具**没有任何 `workspace` 字段**
+  ⇒ 硬编码与夹具一致，是该通道从第一天起的口径 ⇒ **今天不是缺陷，是潜在约束**（加 CAD 夹具时才需要读它）。
+- **读数纠正：真实 provider 必须按"两条轴"读**（这句话在本批之前被写成了一条）：
+  **① 题集 planning 轴已跑两次**（`planned 2/3`；按现在的词表 = **`clarification 1/3`**，那一条是**模型在问、不是失败**；
+  n=3、空画布条件）；**② 工具环 pass@1 轴不是"没跑"而是"以前跑不了"**，本批修好、**修好后仍没人跑过**；
+  **③ 成本**与两者无关（没有价目表 ⇒ 恒 `not measured`）；**④ 人工可读性**仍缺字段与标注（N4e）。
+- **门禁**（控制器自跑）：typecheck 0；lint 0 error / 13 warning；定向 16 文件 / 217 通过；
+  全库 **319 文件 / 3665 通过 + 1 todo**；**`bench:agent` 三条读数逐字不变**；
+  **`eval:agent` 四个数与旧读数逐字相同**（`pass@1 4/8` / `pass@3 4/8` / `tool selection 45/45` / `tool error rate 3/45`）；
+  `test:e2e` **194 通过**；BOM `mismatches=0`。
+  （`eval:agent` 这条门禁是控制器中途补的 —— 本批改了离线那条路径的请求内容，而它是 §一 的在版读数，简报最初漏列。）
+- **用户需要知道的影响**：修好之后那条 **24 次请求**的按钮**真的会花钱**（8×3；题集通道另 3 次），两段式确认仍在；
+  **实施者与控制器都没有跑它**，"真实 provider 上能不能跑成"**仍未被证明**（已证明的只是请求与生产路径同构 +
+  真规划器能走完 24 次、假 transport、零网络）。
+
 ## 2026-10-05 —— 第一次真实 provider 读数（用户跑的）+ 逐条渲染与"钱按钮"不许假装在跑
 
 - **第一次真实 provider 读数**（计划 N4 `:326` 的落点）：**用户在自己的桌面端**跑的应用内

@@ -514,6 +514,46 @@ export type DragSolveResult =
 >   而逐条行本来就含这个词 ⇒ 删掉汇总行它也照样绿（不可能红的断言）；改成 `/^clarification\s+3\/3$/m`。
 > - **本步没做的**：`:324` 的人工可读性（前置仍是"能把计划/澄清正文呈现出来"）；旧那条 24 次通道的**真修**（下一步）。
 
+> **第十步（2026-10-05）：把"请求长什么样"收成一处 —— 让旧那条钱按钮真的能跑。** 提交 `90eba6e`。
+> 这一步修的是**一条从来没有真正工作过的通道**（缺陷由复核员用探针独立复现、控制器读代码确认）：
+> 旧「agent 工具环」通道把请求写成 `plan({ userMessage } as never)` —— 对本地确定性规划器成立，
+> 对**真实** `createModelPlanner` **不成立**：它在**发出任何网络请求之前**就读 `request.model.context`
+>（`modelPlanner.ts:369`）⇒ `TypeError: Cannot read properties of undefined (reading 'context')`。
+> 后果不只是"报错"：那条通道是应用里**唯一会花钱**的入口，而它从来没有真正发出过一次请求
+>（历史上连失败都不显示、面板永远停在"正在跑…" —— 那是第七步修的）。
+> - **一处定义**：新增 `packages/agent-core/src/coordinatorPorts.ts` 的 **`buildPlanRequest`**
+>   （+ `PlanRequestInputs` / `PlanObservationSource`），就放在 `PlanRequest` 端口旁边 ——
+>   因为 `PlanRequest.model` 的既有注释已经把"模型能看到什么"判给协调器。它调的**就是**协调器原来那三个函数、
+>   **同样的顺序**：`buildContext` → 计费回调 → `buildConversationContext` → `createToolRegistry().forModelPhase("planning", …)`。
+> - **三处收敛**：① **协调器自己**改用这个函数（机械替换；账本、预算 token 折算、`repair`/`executeTool`、
+>   `readToolsAvailable` 都留在 `coordinator.ts`）；② **旧 8 题通道**（本步修的）；③ **题集 planning 通道**
+>   （它原先手写的约 60 行组装被完整取代）。`availableActionsFor`（技能清单 → 可用动作）也从两份收成一份。
+> - **协调器语义等价的逐项核验**（控制器做，不是采信自述）：`buildPlanRequest` 内部顺序**逐字同旧**；
+>   计费时机仍在 `buildContext` 之后、会话上下文之前；`budget_context` 那条 `stop` 路径用私有 `BudgetStop`
+>   标记原样还原（不把"组装真抛了"与"预算被拒"混掉）；`repair`/`executeTool` 仍由协调器**按次**补；
+>   `availableActions`/`selectedRefs`/`requestedSkillIds` 缺省与改前一致；**宿主的会话来源改成 thunk**
+>   （`conversation?: () => ConversationContextSource | undefined`），由 `buildPlanRequest` 在**计费之后**才调用。
+> - **一处控制器早读发现的真回归（已修 + 已钉）**：抽出请求构造时，`dependencies.conversation?.()` 被从
+>   "计费之后"挪到了"计费之前" ⇒ **预算耗尽的那一轮会多读一次宿主的会话来源**（旧代码在那条路径上根本不碰它）。
+>   改法是 thunk（**类型强制惰性**，不靠注释），并加了一条**能红**的用例
+>   （"预算耗尽时 `conversation` thunk 的调用次数是 0"）。**实施者如实申报：加 thunk 之前那条用例确实红**
+>   （`expected 1 to be +0`）—— 也就是说这不是理论问题，是**真被引入过的回归**。
+> - **旧通道语义一个字未改**：8 条夹具 / `TRIALS` / `scoreAgentAttempts` / 先解析 provider / 无凭据 `not_measured`。
+> - **控制器自跑门禁（当次实测）**：typecheck 0；lint **0 error / 13 warning**；定向 16 文件 / 217 通过；
+>   全库 **319 文件 / 3665 通过 + 1 todo**（较上批 +1 文件 +3 用例 —— 正是本步新增的 2 条 + 协调器 1 条）；
+>   **`bench:agent` 三条读数逐字不变**；**`eval:agent` 四个数与旧读数逐字相同**
+>   （`pass@1 4/8` / `pass@3 4/8` / `tool selection 45/45` / `tool error rate 3/45`）；
+>   `test:e2e` **194 通过**；BOM `mismatches=0`。
+>   **`eval:agent` 这条门禁是控制器中途补的**：本步改了离线那条路径的请求内容，而它是 §一 的在版读数 ——
+>   简报最初漏列了这条命令；结论是"没变"，且理由由实施者自己核过（本地规划器只解构 `userMessage`；
+>   判分走 `compilePlan` + `evaluateAgentTask`，与请求里的技能/动作菜单无关）。
+> - **裁决：旧通道固定 `geometry3d` 不改**（实施者按"不许改旧通道语义"停手并上报）。控制器查证：
+>   `agentTaskFixtures.ts` 的 **8 条夹具没有任何 `workspace` 字段** ⇒ 硬编码 `geometry3d` 与夹具一致，
+>   是该通道从第一天起的口径。**今天不是缺陷，是潜在约束**（将来若加 CAD 夹具，通道必须读它）。
+> - **用户需要知道的影响**：修好之后那条 **24 次请求**的按钮**真的会花钱**（8×3；题集通道另 3 次）；
+>   两段式确认仍在。**实施者与控制器都没有跑它**；"真实 provider 上能不能跑成"**仍未被证明** ——
+>   已证明的只是"请求与生产路径同构 + 真规划器能走完 24 次（假 transport、零网络）"。
+
 ## Phase N5：形式证明出口
 
 **目标：** 让少量短目标产生可独立校验的 proof artifact，不把采样或实例通过冒充证明。
@@ -609,8 +649,23 @@ export type DragSolveResult =
 - [x] 五个独立 flag 已由 **N1** 创建（`apps/web/src/agent/featureFlags.ts`，默认关闭）——本阶段只做核对，不再重复创建。
 - [ ] 每个 flag 有单元、浏览器和回退用例；关闭 flag 时旧路径行为逐字不变。
   > **2026-10-05：只达成一部分，故意不勾。** 逐格核对见 [`docs/acceptance/next-phase-flag-and-dependency-review.md`](../../acceptance/next-phase-flag-and-dependency-review.md) 的覆盖矩阵：**单元用例**三个已实现的开关都有；**关闭回退**也都有证据，但**强度不同**（`witnessSearch` = 黄金样本逐字节；`obligationIR` = 结构 + 单测；`constrainedDrag` = 结构性——离路径就是原来那一行）；**浏览器用例只有 `constrainedDrag` 有**（`e2e/next-phase-flag-entry.spec.ts` 入口 3 条 + `e2e/agent-constrained-drag.spec.ts` **5 条** = 正/反例 2 + **N3 出口的三条：过约束拒绝 / 冲突恢复 / 一步撤销**），`obligationIR` 与 `witnessSearch` **没有**（它们**没有产品入口**）；`openProblemCompiler` / `proofExport` 是**占位**（零读取点，不该为占位补用例）。**"逐字不变"这句话本身也要分开读**：它**不是一种证据，是三种**（矩阵里那节标题就写着这句）。
+  > **2026-10-05 控制器更正（"没有产品入口"这句话不精确，实测见下）**：逐条查非测试代码里的读取点 ——
+  > `obligationIR` / `witnessSearch` **在生产运行时代码里是被读取的**（`agentRuntime.ts:271/283` 把它们传进 `drafts.stage(...)`，`:369` 放进 `nextPhaseFlags`）；
+  > 缺的**不是代码路径**，而是**用户可见的开关**：`nextPhasePreferences.loadConstrainedDragEnabled` **只认 `constrainedDrag` 这一个键**（`:49`）。
+  > ⇒ 这两个开关的**浏览器用例"不适用"**，理由要写准：**"浏览器里没有任何办法打开它们"**；要补这条判据必须先给它们一个入口，
+  > 而那是一次**产品决定**（把实验性 IR / 见证路径暴露给用户），**本计划没有要求**。
+  > `openProblemCompiler` / `proofExport` 才是**零读取点**（非测试代码 0 命中）—— 那是真正的占位。
 - [ ] 更新所有进度文档和发布门禁；统一记录真实 provider、动态拖动和 proof artifact 证据。
-  > **2026-10-05：文档那一半在做（且刚被独立审查修过 7 处漂移），"真实 provider 证据"仍然没有，不勾。** 已更新：`current-status.md` / `feature-catalog.md` / 发布门禁 / 记分卡 / 本计划 / `CHANGELOG.md` / 新增的开关与依赖审查。**动态拖动**的证据在（浏览器正/反例 + 出口未完整，见 N3 那条）；**proof artifact** 的证据在（边界 + 准入契约，但没接后端）；**真实 provider 一次都没跑** ⇒ 没有任何 pass@1 / pass@3 / 成本 / 延迟 / 人工可读性数字。
+  > **2026-10-05：文档那一半在做（且刚被独立审查修过 7 处漂移）；"真实 provider 证据"这一半**当天就变了**（见下）**。已更新：`current-status.md` / `feature-catalog.md` / 发布门禁 / 记分卡 / 本计划 / `CHANGELOG.md` / 新增的开关与依赖审查。**动态拖动**的证据在（浏览器正/反例 + 出口未完整，见 N3 那条）；**proof artifact** 的证据在（边界 + 准入契约，但没接后端）；**真实 provider 一次都没跑** ⇒ 没有任何 pass@1 / pass@3 / 成本 / 延迟 / 人工可读性数字。
+  > **2026-10-05 控制器更正（"真实 provider 一次都没跑"当天就不成立了，而且这句话混了两条轴）**：
+  > ① **题集 planning 轴已跑两次**（用户在桌面端跑的：`planned 2/3`；按现在的词表读作 **`clarification 1/3`** —— 那一条是**模型在问、不是失败**；
+  > 延迟实测 13445 / 8465 ms；**n=3、空画布条件** ⇒ 不是"模型规划能力"，也不是 21 条的结论）；
+  > ② **agent 工具环的 pass@1 轴**：**不是"没跑"，是"以前跑不了"** —— 请求形状对真实 `createModelPlanner` 不成立，
+  > 在**发请求之前**就抛 `TypeError`（复核用探针复现：`runModelCalls=0`）；**已在 `90eba6e` 修好**（请求形状收成 `buildPlanRequest` 一处），
+  > **修好之后仍没人跑过**；
+  > ③ **成本**与上面都无关：**没有价目表** ⇒ 恒 `not measured`，不许编；
+  > ④ **人工可读性**：字段与正文呈现 = 下一步（N4e）；**标注今天为 0**，报告里该出现"未标注"，**不许**拿 0 或占位比率凑。
+  > 因此这一条**仍然不勾**，但"不勾的理由"已经换成上面四条里的 ②③④（而不是"完全没跑"）。
 - [x] 运行：`npm.cmd run typecheck`、`npm.cmd test`、`npm.cmd run lint`、`npm.cmd run build --workspace @draw/web`、`npm.cmd run test:e2e -- --workers=3`、`npm.cmd run test:rust`、`npm.cmd run test:perf`、`npm.cmd run eval:agent`。
   > **2026-10-05 勾上**：八道命令都有当次读数（见 `docs/current-status.md` §一 的「当前读数总表」）。**一处如实说明**：独立复核时 `npm.cmd test` 在本机跑出过 **1 条 5 秒超时**（`fileExports.test.ts` 的 CAD 导出用例，该文件未被本批改动、单跑 9/9 通过），属**负载敏感的既有抖动**，按本仓口径不把那次算绿也不算红。
   > **勾的是"读数存在"，不是"本阶段复跑过"（2026-10-05 控制器加，防误读）**：那八道命令的读数属于**更早那一批**；N6 自己的记录里明写"本阶段未复跑"（见本节末尾）。两句话可以并存，但**不要读成"N6 跑过这八道"**。将来真要收口时，应当**在收口那一刻重跑这八道**并用当次读数。
