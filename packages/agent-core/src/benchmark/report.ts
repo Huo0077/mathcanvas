@@ -33,14 +33,21 @@ export type BenchmarkMode = (typeof BENCHMARK_MODES)[number]
  * `verified_instance` / `no_witness` / …），而"只跑原话 → 题设的抽取"那一轮**根本没有见证结论**
  * —— 拿见证词去描述抽取结果是**范畴错误**，而一律写 `not_measured` 又会把"跑了抽取、
  * 只是没跑求解"说成"什么都没测"。两者都会让报告读起来是绿的、实际什么都没说。
+ *
+ * **`planning` 是第三个这样的范畴**（N4b；用户 2026-10-05 裁决 A）：应用内那次真实
+ * provider 评测测的是"模型给出的计划有没有被 `compilePlan` 接受"，它**既不是抽取也不是见证** ——
+ * 没有题设子句可数、也没有候选可核验。所以它同样必须是**自己一层、自己一套词**，
+ * 而不是塞进上面两层里凑一个看起来正常的数字：那样报告会读起来是绿的、实际什么都没说
+ * （这正是本文件 `:29-36` 警告的那种范畴错误）。
  */
-export const BENCHMARK_LAYERS = ["extraction", "witness"] as const
+export const BENCHMARK_LAYERS = ["extraction", "witness", "planning"] as const
 export type BenchmarkLayer = (typeof BENCHMARK_LAYERS)[number]
 
 /** 全部结局词（跨层并集）。 */
 export type BenchmarkRunStatus =
   | "extracted" | "partial" | "empty"
   | "verified_instance" | "unverified_instance" | "no_witness" | "clarification"
+  | "planned" | "rejected"
   | "not_measured" | "error"
 
 /**
@@ -49,12 +56,29 @@ export type BenchmarkRunStatus =
  * - `extraction`：`extracted`（子句都被处理）/ `partial`（有抽出来的、也有读不出的残留）/
  *   `empty`（一条都没抽出来）；
  * - `witness`：三个见证结论与 `clarification` 与 `agent-core` **同词**（那边改了这里要跟着改）；
- * - `not_measured` / `error` 两层都有：前者是"这一轮没有测量"（例如没有凭据），
+ * - `planning`（N4b）：`planned` / `rejected` —— 含义见下面那段，**不许含糊**；
+ * - `not_measured` / `error` 每一层都有：前者是"这一轮没有测量"（例如没有凭据），
  *   后者是"跑了但失败了"。
+ *
+ * ## `planning` 层四个词的确切含义
+ *
+ * - **`planned`**：`compilePlan` 返回 `ok === true`，**并且**它产出的信封是 `kind: "plan"`。
+ *   判据只有编译器那一个返回值：**不看模型自述**（"我觉得这个计划对"不算），
+ *   也不需要金标准（这正是用户选这条口径的理由 —— 接受与否是客观的）。
+ * - **`rejected`**：**没被接受**。它覆盖两种，`evidence` 里都带**真实原文**，读者能分辨是哪种：
+ *   ① 编译器拒了（`ok === false`，逐条诊断的 `code@path: detail`）；
+ *   ② 模型根本没给出计划（`ok === true` 但信封是 `clarification` / `answer`）。
+ *   ②也算 `rejected` 而不是 `planned`：这一层测的是"**计划**被编译接受"，
+ *   把澄清记成接受会让"没给计划"读起来像"计划通过了"——错的方向必须朝保守那边偏（fail-closed）。
+ * - **`error`**：这一条题在跑的过程中**抛了**（`evidence` 带错误消息原文）。
+ * - **`not_measured`**：这一轮**什么都没测**（没有 provider / 没有凭据），
+ *   显式写 `null` 的 `provider` / `model` —— 这是 `real_provider` 唯一允许缺身份的一支
+ *   （见本文件 `:235`）。**没有凭据时不许"跳过"，也不许编一个数字**。
  */
 export const BENCHMARK_STATUSES_BY_LAYER: Record<BenchmarkLayer, readonly BenchmarkRunStatus[]> = {
   extraction: ["extracted", "partial", "empty", "not_measured", "error"],
-  witness: ["verified_instance", "unverified_instance", "no_witness", "clarification", "not_measured", "error"]
+  witness: ["verified_instance", "unverified_instance", "no_witness", "clarification", "not_measured", "error"],
+  planning: ["planned", "rejected", "not_measured", "error"]
 }
 
 export const BENCHMARK_RUN_REQUIRED_FIELDS = [
@@ -213,9 +237,15 @@ export function buildBenchmarkReport(runs: readonly unknown[], where = "运行�
       continue
     }
     const mode = record.mode as BenchmarkMode
-    // ②' 层也必须标识：见证层的结局词描述不了抽取层。
+    // ②' 层也必须标识：每一层有自己的结局词表，跨层用词会被拒（拿见证词描述抽取层是范畴错误）。
     if (!BENCHMARK_LAYERS.includes(record.layer as BenchmarkLayer)) {
-      problems.push(`${label} 的 layer「${String(record.layer)}」未标识：只能是 ${BENCHMARK_LAYERS.join(" / ")} —— 见证层的结局词描述不了抽取层`)
+      /**
+       * 这句**刻意不点名"哪两层"**（2026-10-05 N4b 改）：加层之前它写的是
+       * "见证层的结局词描述不了抽取层"，于是加进第三层之后，那句话读起来像"只有这两层"。
+       * 层名清单已经由 `${BENCHMARK_LAYERS.join(" / ")}` 给全，后半句要说的是**道理**
+       *（每一层各有词表），不是再抄一遍名单 —— 下次再加层，这句不用改。
+       */
+      problems.push(`${label} 的 layer「${String(record.layer)}」未标识：只能是 ${BENCHMARK_LAYERS.join(" / ")} —— 每一层有自己的结局词表，跨层用词会被拒`)
       continue
     }
     const layer = record.layer as BenchmarkLayer

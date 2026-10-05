@@ -113,17 +113,43 @@ describe("应用侧：benchmark 题集与报告契约来自 @draw/agent-core（�
   it("词表与状态常量也在应用侧可用（N4b 要按它们分流）", () => {
     expect([...BENCHMARK_CATEGORIES]).toHaveLength(7)
     expect([...BENCHMARK_MODES]).toEqual(["deterministic_local", "real_provider"])
-    expect([...BENCHMARK_LAYERS]).toEqual(["extraction", "witness"])
+    expect([...BENCHMARK_LAYERS]).toEqual(["extraction", "witness", "planning"])
     /**
-     * 两层各自的结局词表：见证层的词描述不了抽取层（这条口径是报告契约的一部分）。
+     * 每一层各自的结局词表：**见证层的词描述不了抽取层，规划层也各自一套**
+     *（这条口径是报告契约的一部分）。
      *
      * **复核更正（2026-10-05）**：这里原来是 `not.toContain("verified_instance")` —— 那是**单词级否定**，
      * 把 extraction 词表改成 `[]`、或塞进一个 `"junk"`，它**都还是绿的**，
      * 而这个用例自称在钉"两层各自的词表"。改成**逐项相等**：词表增删改任何一项都会红。
      * 真实定义在 `packages/agent-core/src/benchmark/report.ts` 的 `BENCHMARK_STATUSES_BY_LAYER`。
+     *
+     * **N4b 新增第三层**：加 `planning` 时这条 `toEqual` **故意先红一次**（它当初是精确相等钉死的，
+     * 不是 `toContain`）—— 那正是它该有的形状。新层照同样的口径补一条**逐项相等**的钉子：
+     * 少一个词（例如 `rejected`）或多一个词都会红。
      */
     expect([...BENCHMARK_STATUSES_BY_LAYER.extraction]).toEqual(["extracted", "partial", "empty", "not_measured", "error"])
     expect([...BENCHMARK_STATUSES_BY_LAYER.witness]).toEqual(["verified_instance", "unverified_instance", "no_witness", "clarification", "not_measured", "error"])
+    /**
+     * `planning` 层的四个词，逐项写出来 —— 它们各自的含义写在 `report.ts` 的定义处
+     *（`planned` = 计划被编译接受；`rejected` = 没被接受，含"模型没给计划"；
+     * `error` = 抛了；`not_measured` = 这一轮什么都没测）。
+     */
+    expect([...BENCHMARK_STATUSES_BY_LAYER.planning]).toEqual(["planned", "rejected", "not_measured", "error"])
+  })
+
+  it("**planning 层**能进报告契约：一条「计划被编译接受」的记录不会被拒收", () => {
+    /**
+     * 这条是 N4b 的**新业务判断**：在此之前 `BENCHMARK_LAYERS` 只有 `extraction` / `witness`，
+     * 而应用内那次真实 provider 评测测的是**第三件事** —— 端到端"模型给的计划有没有被
+     * `compilePlan` 接受"。拿见证层的词去描述它同样是范畴错误（`report.ts:29-36` 自己写着这句），
+     * 所以契约必须新增一层；这条用例就是那一层的入口判据。
+     */
+    const run = synthesisedRun({ mode: "real_provider", provider: "p-eval", model: "m-eval", layer: "planning", status: "planned" })
+    const report: BenchmarkReport = buildBenchmarkReport([run], "应用侧合成记录")
+
+    expect(report.realProvider.byLayer).toEqual({ planning: 1 })
+    expect(report.realProvider.byStatus).toEqual({ planned: 1 })
+    expect(report.realProvider.measured).toBe(1)
   })
 
   it("报告契约可调用：对一份合成的 BenchmarkRun 建出报告", () => {
