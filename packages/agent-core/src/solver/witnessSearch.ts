@@ -5,7 +5,7 @@ import { evidenceStatusForWitness, type ClaimEvidence, type ClaimEvidenceStatus,
 import { PLAN_SCHEMA_VERSION, type PlanEnvelope } from "../contracts"
 import type { DiagramObligationSet } from "../diagramObligations"
 import { verifyDiagramObligations, type DiagramVerificationReport } from "../diagramVerification"
-import { toLegacyObligationSet } from "../obligationIR"
+import { toLegacyObligationSet, type ObligationIR } from "../obligationIR"
 import { compilePlan } from "../planCompiler"
 import { verifyRelations, type RelationLookup } from "../relations"
 import {
@@ -18,7 +18,7 @@ import {
 } from "./solverContracts"
 
 /**
- * **见证搜索的编排层**（N2 子任务 2b；计划 N2 的 Ownership / R13 / R15 / R16 / R25 / R26）。
+ * **见证搜索的编排层**（N2 子任务 2b；计划 N2 的 Ownership / R13 / R15 / R16 / R25 / R26 / R32 / R34）。
  *
  * ## 这一层拥有的东西，与它**不许**拥有的东西
  *
@@ -32,16 +32,19 @@ import {
  * ## 候选的一生（也是判据的唯一路径）
  *
  * ```text
- * GeometryObligation[]                       ← N1 的 IR（题设原话解析的产物）
- *   → toLegacyObligationSet(...)             ← N1 的兼容适配：桥到核验器要的旧结构
- *   → constructWitnessShape(request)         ← 内核 2a：解析构造 / 结构化拒绝
- *   → buildFromPoints(...)                   ← 内核：拓扑构造（绕向 / 共面 / 零体积）
+ * ObligationIR（题设 + 解析残留 + 自由选择）    ← N1 的 IR，与产品路径同一份（R32）
+ *   → toLegacyObligationSet(ir)               ← N1 的兼容适配：桥到核验器要的旧结构
+ *   → constructWitnessShape(request)          ← 内核 2a：解析构造 / 结构化拒绝
+ *   → buildFromPoints(...)                    ← 内核：拓扑构造（绕向 / 共面 / 零体积）
  *   → 一封单动作信封（solid.create_polyhedron，带 vertexNames）
- *   → compilePlan(envelope, ...)             ← **产品用的那条**物化路径，不另造文档
+ *   → compilePlan(envelope, ...)              ← **产品用的那条**物化路径，不另造文档
  *   → verifyDiagramObligations(legacy, envelope, draftDocument)   ← 唯一的判定
  * ```
  *
  * 所以"候选合格了吗"这个问题的答案只有一处，不存在第二套残差或第二个判据。
+ * 注意第一行：入参是 **IR 而不是裸数组**（R32）—— 早先这里只把 `role === "given"` 的
+ * claim 交出去、还写死"没有残留"，那等于关掉核验器里"读不出的子句必须显形"那道强制守卫，
+ * 于是搜索器能对一个产品路径会判 `unverified` 的题面报 `verified_instance`。
  *
  * ## 解析构造优先，有限网格只扫构造器已暴露的自由标量（R26）
  *
@@ -55,6 +58,13 @@ import {
  * 预算耗尽 → `timeout`；题设自相矛盾且能给出冲突证据 → `inconsistent`；
  * 找到候选但验不过 / 无法判定 → `unknown`。每条 `failures` / `reasons` 都以机器可读码开头。
  * **文案纪律**：超时一律写成"在预算内没有找到"，绝不写成"不存在见证"。
+ *
+ * ## 一个仍然开放的出口：自由度（R33）
+ *
+ * Global Constraints 要求保留自由度，而本层**这一轮仍然不填**（`degreesOfFreedom: null`）：
+ * N1 的 `reportFreeDegrees` 收的是 DSL 的 `ConstraintSpec[]`，那套词表装不下线 ⊥ 面与二面角
+ * （详见 `evidenceFor` 的注释与报告 §11.3）。按裁决"诚实努力后仍无法在不编造的前提下填出 ⇒
+ * 停下报告"，这一项归 N3。**不是"忘了算"**：`null` 在这套词表里的含义正是"没有算过"。
  */
 
 /** 自由底面边长的候选值：小整数（规格 §6.3 的优先级），2 是 2a 的默认值。 */
@@ -372,6 +382,12 @@ function candidatePool(structure: PyramidStructure, input: WitnessSearchInput): 
   const grid: CandidatePlan[] = []
   for (const choices of baseOptions) {
     for (const height of heightOptions) {
+      /**
+       * **没有自由标量时不要产候选**（R34 / M4）：`baseOptions = [[]]` 与 `heightOptions = [null]`
+       * 的组合与解析候选**逐字节相同** —— 它会白吃一个 `maxCandidates` 名额，
+       * 还会把 `candidates=N` 报大，让"我试了几种"这句话失真。
+       */
+      if (choices.length === 0 && height === null) continue
       const sizeKey = choices.reduce((total, choice) => total + choice.value * choice.value, 0) + (height ?? 0) ** 2
       grid.push({ request: requestFor(structure, choices, height), freeChoices: choices.map((choice) => ({ edge: choice.edge, value: choice.value })), sizeKey })
     }
@@ -438,6 +454,18 @@ function toWitness(witness: WitnessShapeCandidate): PolyhedronWitness {
 }
 
 /**
+ * **`buildOrder` 恒等吗**（R34 / M7）。
+ *
+ * `faces` 与 `points` 共用同一套下标空间 —— 这正是"按 `buildOrder` 重排坐标、面环原样交给内核"
+ * 这条写法成立的前提（2a 的接口注释写着它当前恒为恒等映射）。前提破了以后，面环与重排后的顶点
+ * 会**错位**，而那未必立刻非法：可能只是换成另一只有效多面体，于是错得静悄悄。
+ * 所以这里把它变成一条可执行的前提检查（导出是为了能单独验它）。
+ */
+export function isIdentityBuildOrder(buildOrder: readonly number[], vertexCount: number): boolean {
+  return buildOrder.length === vertexCount && buildOrder.every((index, position) => index === position)
+}
+
+/**
  * 一个候选的完整判定。三步都不能省，顺序也不能换：
  * 构造（2a）→ 拓扑（内核 `buildFromPoints`）→ 物化（既有编译路径）→ 判定（唯一核验器）。
  */
@@ -447,6 +475,13 @@ function judgeCandidate(plan: CandidatePlan, legacy: DiagramObligationSet): Cand
     return { kind: "rejected", code: constructed.code, message: constructed.message }
   }
   const witness = constructed.witness
+  if (!isIdentityBuildOrder(witness.buildOrder, witness.points.length)) {
+    return {
+      kind: "rejected",
+      code: WITNESS_SEARCH_CODES.buildOrderNotIdentity,
+      message: `2a 给出的 buildOrder 不是恒等映射（${witness.buildOrder.join(", ")}）：faces 与 points 的下标空间前提不成立，本层不猜。`
+    }
+  }
   const vertices = witness.buildOrder.map((index) => witness.points[index])
   const topology = buildFromPoints({ vertices: vertices.map((point) => ({ ...point })), faces: witness.faces.map((ring) => [...ring]) }, createBuilderContext())
   if (topology.diagnostics.length > 0) {
@@ -487,6 +522,13 @@ function nextActionsFor(status: ClaimEvidenceStatus): string[] {
  * R25 允许搜索器覆盖两处，且只有这两处：预算耗尽 → `timeout`；题设自相矛盾 →
  * `inconsistent`（`claimEvidence.ts` 的注释写明"若 N2 的搜索器真能给出冲突证据，
  * 那时由搜索器自己报"）。其余一律由那张表翻译。
+ *
+ * **`SolverStatus` 的五个值里，这一层只产出四个**（R34 / M6 的口径写在这里，不写在报告里）：
+ * `model` / `unknown` / `unsat` / `timeout`。`diverged` 与 `not_run` **不可达**，理由是结构性的：
+ * 候选坐标全部来自内核的**有界解析构造**（2a 会先拒掉非有限值与不可表示的尺度，
+ * 见 `non-finite-value` / `extreme-scale`），网格本身又是固定小整数、无迭代 ——
+ * 没有"迭代发散"这条路径；而走到"出证据"这一步就说明搜索已经跑过，所以也不是 `not_run`。
+ * 为了让枚举看起来用满而编一个永不发生的状态，正是本项目最忌讳的那种"看起来算过"。
  */
 function evidenceFor(
   result: WitnessResultStatus,
@@ -497,13 +539,46 @@ function evidenceFor(
     status: override?.status ?? evidenceStatusForWitness(result),
     solver: override?.solver ?? (result === "verified_instance" ? "model" : "unknown"),
     residuals,
-    // 这一层不算自由度：`null` 的含义正是"没算过"，填 0 会谎报算过一次。
+    /**
+     * **自由度这一轮仍然诚实地留空**（R33 的结论；裁决授权"停下报告，不要伪造"）。
+     *
+     * Global Constraints 要"solver 结果保留自由度"，N1 的唯一实现是
+     * `reportFreeDegrees(document, constraints)`，而它收的是 **DSL 的 `ConstraintSpec[]`**
+     *（`packages/dsl/src/types.ts` 的 `ConstraintType` 只有
+     * parallel / perpendicular / coincident / pointOnLine / pointOnPlane / collinear /
+     * coplanar / fixedDistance，且 `parallel`/`perpendicular` 要的是**线状图元 id**）。
+     *
+     * 这套词表**装不下**本题设里最关键的几条：线 ⊥ 平面（`planePerpendicular` 与 6 点 targets 的
+     * `perpendicular`）与二面角（`dihedral`）根本没有对应类型；`equilateral` / `equalLength` /
+     * `segmentRatio` / `midpoint` 只能用"把**当前实测**长度写死成 `fixedDistance.value`"来表达 ——
+     * 那是拿候选自证，而且会顺手把题面留着的公共尺度自由度算掉。
+     * 部分映射会给出一个**看不出少算了**的数，比 `null` 更误导；`null` 在这套词表里的含义
+     * 正是"没有算过"。所以这里保持 `null`，把 dof 归到 N3（拖动自由度本来就是它的主题），
+     * 等约束词表能表达线 ⊥ 面与角度时再算。
+     */
     degreesOfFreedom: null,
     nextActions: nextActionsFor(override?.status ?? evidenceStatusForWitness(result))
   }
 }
 
 // ---------------------------------------------------------------- 入口
+
+/**
+ * 入参守卫（R32）：`WitnessSearchInput.obligations` 是 N1 的 `ObligationIR`。
+ *
+ * 输入来自不可信的一侧（模型草稿 → Worker → 库），所以**只**做形状守卫：
+ * 坏形状退化成"没有题设 / 没有残留"，绝不抛异常跨边界（这是本包一贯的口径）。
+ * 注意残留字段缺省成空数组**不是**在"洗白题设"：调用方本来就没有给出残留，
+ * 而只要它给了（`parseObligationWithLegacy(prompt).ir` 一定给），就会被原样送到核验器。
+ */
+function normaliseObligationIR(ir: ObligationIR | undefined | null): ObligationIR {
+  const obligations = Array.isArray(ir?.obligations) ? ir.obligations : []
+  const unverified = Array.isArray(ir?.unverified) ? ir.unverified : []
+  return {
+    obligations: [...obligations],
+    unverified: unverified.map((entry) => ({ sourceText: entry.sourceText, reason: entry.reason }))
+  }
+}
 
 /**
  * **搜索一个通过核验的候选**（计划 N2 的 `WitnessSearchInput` / `WitnessSearchResult`）。
@@ -514,17 +589,23 @@ function evidenceFor(
  * - 不给不出的时候，一定说清是哪一种给不出（超时 / 矛盾 / 不支持 / 没验过）。
  */
 export function searchWitness(input: WitnessSearchInput): WitnessSearchResult {
-  const givens = (Array.isArray(input.obligations) ? input.obligations : []).filter((obligation) => obligation.role === "given")
+  /** R32：入参是 N1 的 `ObligationIR`（题设 + 解析残留）。守卫按"库边界"对待，坏形状退化成空。 */
+  const ir = normaliseObligationIR(input.obligations)
+  const givens = ir.obligations.filter((obligation) => obligation.role === "given")
 
   if (input.shape !== "pyramid") {
     /**
      * 首批只做棱锥。另外两族如实报"系统尚不支持"：
-     * - `prism`：题面对侧棱的写法（`AA₁`）经原话解析会压成单个大写字母，拉伸方向无从确定；
+     * - `prism`：题面对侧棱的写法（`AA₁`）经原话解析会压成单个大写字母，拉伸方向无从确定。
+     *   **第二条依赖（R34 / M5，这条以前只写在报告里）**：即使解析层将来能给出方向，
+     *   2a 的棱柱顶面点名写作 `A′`，而核验器的点名映射（`diagramVerification.ts` 的
+     *   `candidatePoints`）只接受 `/^[A-Z]$/` —— 棱柱候选在现有核验器里拿不到 `passed`，
+     *   所以这条边界要同时解开"解析层区分 A′ 与 A"和"核验器的别名契约"才谈得上支持。
      * - `polyhedron`：任意多面体的坐标只能由调用方给出（`selectPolyhedronWitness` 负责筛选），
      *   搜索器不凭空造坐标。
      */
     const reason = input.shape === "prism"
-      ? "棱柱需要题面点名出底面环与拉伸方向，而原话解析只保留单个大写字母点名（A′ 之类会被截成 A），首批无法确定拉伸方向。"
+      ? "棱柱需要题面点名出底面环与拉伸方向，而原话解析只保留单个大写字母点名（A′ 之类会被截成 A），首批无法确定拉伸方向；即使拿到方向，核验器的点名映射也只认单个大写字母。"
       : "任意多面体的候选坐标必须由调用方给出（见 selectPolyhedronWitness），搜索器不自造坐标。"
     const code = input.shape === "prism" ? WITNESS_SEARCH_CODES.unsupportedShape : WITNESS_SEARCH_CODES.requiresCandidates
     return {
@@ -553,8 +634,24 @@ export function searchWitness(input: WitnessSearchInput): WitnessSearchResult {
   }
 
   const structure = derived.structure
-  /** R15/R16：判据与词表都从 N1 来 —— 旧结构过一次兼容适配，判定只有一条路径。 */
-  const legacy = toLegacyObligationSet({ obligations: [...givens], unverified: [] })
+  /**
+   * **R15 / R32：核验器拿到的必须与产品路径同一份题设。**
+   *
+   * 所以这里不再自己拼一个"只有 givens"的旧结构，而是把**整个 IR** 兼容适配过去：
+   * 解析残留（`unverified`）与自由选择（`free_choice`）都跟着走 —— 前者是核验器里那道
+   * "读不出的子句必须显形"的强制守卫，后者是自由点示例值证据（点名对不上时也会变成 unverified）。
+   * 若调用方给的是 `parseObligationWithLegacy(prompt).ir`，那么这一份与
+   * `parseDiagramObligations(prompt)` 逐字段相等（N1 的 `obligationIR.test.ts` 钉着）。
+   */
+  const legacy = toLegacyObligationSet(ir)
+  /**
+   * 判性不是 `supported` 的题设必须在**接受条件**里（R34 / M3）：核验器对不认识的 kind 会退化成
+   * "按 parallel 量"（`diagramVerification.ts` 的 `calculate` 尾部），于是那样一条 claim 会被
+   * 量出来并 `passed` —— 但"系统理解了它"并不成立。在循环之前算出来，它才管得住
+   * "提前返回"与"兜底候选"两条出口（早先它只在循环**之后**的分类里，拦不住已经认定的通过）。
+   */
+  const unjudgeable = givens.filter((obligation) => obligation.judgeability !== "supported")
+  const certifiable = unjudgeable.length === 0
   // 上限在**生成之后、判定之前**截断：`maxCandidates` 是"最多判几个"，不是"最多想几个"。
   const fullPool = candidatePool(structure, input)
   const pool = fullPool.slice(0, Math.max(0, Math.trunc(input.maxCandidates)))
@@ -579,6 +676,8 @@ export function searchWitness(input: WitnessSearchInput): WitnessSearchResult {
       continue
     }
     if (judgement.outcome === "verified") {
+      // 有判性不明的题设时，这一份"通过"不构成认证 —— 既不返回，也不留作兜底。
+      if (!certifiable) continue
       const candidate = toWitness(judgement.witness)
       const readability = readabilityOf(candidate.vertices)
       if (Number.isFinite(readability) && readability >= READABILITY_FLOOR) {
@@ -591,12 +690,11 @@ export function searchWitness(input: WitnessSearchInput): WitnessSearchResult {
     judged.push(judgement)
   }
 
-  if (fallback !== null) {
+  if (certifiable && fallback !== null) {
     return verifiedResult(input, fallback.plan, fallback.judgement, toWitness(fallback.judgement.witness), considered)
   }
 
   const config = configLine(input, considered)
-  const unjudgeable = givens.filter((obligation) => obligation.judgeability !== "supported")
   const unverifiedLines = judged.flatMap((judgement) => judgement.lines.filter((line) => line.startsWith(`${WITNESS_SEARCH_CODES.unverified}:`)))
   const failedLines = judged.flatMap((judgement) => judgement.lines.filter((line) => line.startsWith(`${WITNESS_SEARCH_CODES.failedGiven}:`)))
 

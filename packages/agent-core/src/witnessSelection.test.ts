@@ -53,4 +53,16 @@ describe("compiler-free witness selection (leaf module)", () => {
     }
     expect(typeof typeLevelOnly).toBe("function")
   })
+
+  it("rejects a polyhedron request from an untyped caller instead of returning another kind's witness", () => {
+    // JS 调用方（或 `as` 断言）绕得过类型，绕不过运行时：未类型化的 polyhedron 若掉进
+    // moving_point 的收尾分支，就会返回一个**错误的见证** —— 比拒绝糟得多（裁决 R34 / M8）。
+    const forged = { kind: "polyhedron" } as unknown as Parameters<typeof selectWitnessWithoutSearch>[0]
+
+    const result = selectWitnessWithoutSearch(forged)
+
+    expect(result.status).toBe("rejected")
+    if (result.status !== "rejected") throw new Error("expected a defensive rejection")
+    expect(result.diagnostics[0].code).toBe("unsupported-witness-kind")
+  })
 })

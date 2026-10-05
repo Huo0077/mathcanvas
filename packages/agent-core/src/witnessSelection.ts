@@ -243,6 +243,21 @@ function pointText(point: Point2): string {
 export function selectWitnessWithoutSearch(request: WitnessRequestWithoutSearch): WitnessSelection {
   const considered: string[] = []
 
+  /**
+   * **防御性拒绝**（R34 / M8）：类型上 `polyhedron` 进不来，但 JS 调用方或 `as` 断言绕得过类型。
+   * 少了这一条，未类型化的 polyhedron 会一路掉到最下面的 moving_point 收尾分支，
+   * 返回一个**种类都不对**的见证 —— 一个错的见证比一句拒绝糟得多。
+   * 放在最前面：走到这里就已经说明调用方用错了入口（它该走 `underdetermined.ts` 的 `selectWitness`）。
+   */
+  if ((request.kind as WitnessKind) === "polyhedron") {
+    return rejectedSelection(
+      "polyhedron",
+      "unsupported-witness-kind",
+      "polyhedron 的选择要经过搜索器（因此经过编译器），不属于这个叶子模块；请走 underdetermined.ts 的 selectWitness。",
+      considered
+    )
+  }
+
   if (isInvariantRequest(request.prompt)) {
     considered.push("symbolic: 题目要求任意/恒定，保留符号参数。")
     return symbolicSelection(request.kind, considered)

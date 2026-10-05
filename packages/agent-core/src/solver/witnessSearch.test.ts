@@ -2,10 +2,10 @@ import { crossVector3, dotVector3, lengthVector3, subtractVector3, type Vector3 
 import { describe, expect, it } from "vitest"
 
 import type { GeometryObligation } from "../claimEvidence"
-import { parseObligationIR } from "../obligationIR"
+import { parseObligationWithLegacy } from "../obligationIR"
 import { selectWitness, type PolyhedronWitness } from "../underdetermined"
 import type { WitnessSearchInput } from "./solverContracts"
-import { searchWitness } from "./witnessSearch"
+import { isIdentityBuildOrder, searchWitness } from "./witnessSearch"
 
 /**
  * **见证搜索的 RED 用例**（N2 子任务 2b；计划 N2 的 `Interfaces` / `RED` 与裁决 R13/R15/R16/R25/R26）。
@@ -40,11 +40,28 @@ const PYRAMID_WRONG_DIAGONAL = "在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，A
 const PYRAMID_MIDPOINT = "在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，AB ⊥ AD，O为BD的中点，画出这个四棱锥"
 /** 首批题型之外的真实题面（中点 / 等边 / 面面垂直 / 二面角 / 比例分点）。 */
 const TRIANGLE_PYRAMID = "在三棱锥 A-BCD 中，BD=2，△OCD为等边三角形，AB=AD，O为BD的中点，DE=2EA，平面ABD⊥平面BCD，二面角E-BC-D=45°。求证 OA⊥CD"
+/** `PYRAMID_UNVERIFIED_PROMPT` 那把：可构造的题面后面缀了一个解析器读不出的子句（residue）。 */
+const PYRAMID_RESIDUE = "在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，AB ⊥ AD，画出这个四棱锥，∠ABC=60°"
+/** 点名了一个自由点 Q：构造器不会生成它，核验器的点名映射也点不到。 */
+const PYRAMID_FREE_POINT = "在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，AB ⊥ AD，任取点 Q，画出示意图"
+/** 题面把底面两条边与顶点高都钉死了 ⇒ 一个自由标量都不剩（网格不该再产候选）。 */
+const PYRAMID_FULLY_STATED = "在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，AB ⊥ AD，AB=2，AD=3，PA=10，画出这个四棱锥"
 
 const SEARCH: Omit<WitnessSearchInput, "obligations"> = { shape: "pyramid", seed: 7, maxCandidates: 40, timeoutMs: 5000 }
 
+/**
+ * 题设按**产品路径的同一份形状**取：`parseObligationWithLegacy(prompt).ir`（裁决 R32）。
+ *
+ * 搜索器收 IR（而不是裸 `GeometryObligation[]`）就是为了让残留 `unverified` 与自由选择
+ * 一起进核验器 —— 夹具也照产品的方式构造，免得测试比生产"干净"。
+ */
+function obligationsOf(prompt: string, extra: readonly GeometryObligation[] = []): WitnessSearchInput["obligations"] {
+  const parsed = parseObligationWithLegacy(prompt)
+  return { obligations: [...parsed.ir.obligations, ...extra], unverified: [...parsed.ir.unverified] }
+}
+
 function search(prompt: string, overrides: Partial<WitnessSearchInput> = {}) {
-  return searchWitness({ ...SEARCH, obligations: parseObligationIR(prompt).obligations, ...overrides })
+  return searchWitness({ ...SEARCH, obligations: obligationsOf(prompt), ...overrides })
 }
 
 /** 按点名取坐标：结果里的 `names` / `vertices` 是同一套下标空间。 */
@@ -110,8 +127,22 @@ describe("witness search: analytic construction for the first batch", () => {
     const recorded = search(PYRAMID)
     if (recorded.status !== "verified_instance") throw new Error(describeResult(recorded))
     expect(recorded.assumptions.join(" ")).toContain("seed=7")
-    expect(JSON.stringify(search(PYRAMID, { seed: 8 }))).not.toBe(first)
-    expect(search(PYRAMID, { seed: 8 }).status).toBe("verified_instance")
+  })
+
+  it("lets the seed reorder candidates that tie on every preference key", () => {
+    // `AC=5` 只有 (3,4) 与 (4,3) 两组小整数解，而它们在 sizeKey / 可读性上完全并列 ——
+    // 于是"返回哪一个"完全由 seed 决定的排列说了算。只断言配置行里的 `seed=` 会恒过
+    // （换个 seed 那行必然不同），所以这里断言**同一份题面在不同 seed 下真的出现过两种取向**。
+    const orientations = new Set<string>()
+    for (let seed = 0; seed < 12; seed += 1) {
+      const result = search(PYRAMID_DIAGONAL, { seed })
+      expect(result.status, `seed=${seed}`).toBe("verified_instance")
+      if (result.status !== "verified_instance") throw new Error(describeResult(result))
+      const at = coordinates(result.candidate)
+      const edges = [span(at("A"), at("B")), span(at("A"), at("D"))].map((value) => value.toFixed(6))
+      orientations.add(edges.join("×"))
+    }
+    expect([...orientations].sort()).toEqual(["3.000000×4.000000", "4.000000×3.000000"])
   })
 
   it("does not prefer an extremely stretched candidate that does verify", () => {
@@ -146,6 +177,16 @@ describe("witness search: analytic construction for the first batch", () => {
     expect(edges[1]).toBeCloseTo(4, 9)
     // 网格选出来的自由标量必须写进 assumptions（否则用户看不见系统替他定了什么）。
     expect(result.assumptions.join(" ")).toContain("搜索器自选")
+  })
+
+  it("spends no candidate slot on a grid entry identical to the analytic candidate", () => {
+    // 题面把两条底边与顶点高都钉死了 ⇒ 没有任何自由标量，网格无从变化，不该再产一个
+    // 与解析候选逐字节相同的候选（否则白吃一个 `maxCandidates` 名额、虚增 `candidates=N`）。
+    const result = search(PYRAMID_FULLY_STATED)
+
+    expect(result.status).toBe("verified_instance")
+    if (result.status !== "verified_instance") throw new Error(describeResult(result))
+    expect(result.assumptions.join(" ")).toContain("candidates=1")
   })
 })
 
@@ -260,8 +301,10 @@ describe("witness search: unsupported inputs stay unsupported", () => {
     expect(text).toContain("O为BD的中点")
   })
 
-  it("treats a given whose judgeability is not supported as unjudgeable", () => {
-    const base = parseObligationIR(PYRAMID).obligations
+  it("treats a given the verifier could only 'pass' by its unknown-kind fallback as unjudgeable", () => {
+    // 核验器对不认识的 kind 会退化成"按 parallel 量"（`diagramVerification.ts` 的 calculate 尾部），
+    // 于是这条 claim 会**被量出来并 passed** —— 但它并不是"系统理解了这条题设"。
+    // 判性不是 `supported` 时就绝不能升格成 `verified_instance`（裁决 R34 / M3）。
     const unjudgeable: GeometryObligation = {
       id: "obligation-extra",
       role: "given",
@@ -269,11 +312,12 @@ describe("witness search: unsupported inputs stay unsupported", () => {
       sourceText: "本题另有一个尚未支持的条件",
       start: 0,
       end: 0,
-      targets: ["A"],
+      // 这四个点名正好让"退化成 parallel"量得过（底面 BC ∥ AD），所以它**不是**被核验器拦下的。
+      targets: ["B", "C", "A", "D"],
       judgeability: "ambiguous"
     }
 
-    const result = searchWitness({ ...SEARCH, obligations: [...base, unjudgeable] })
+    const result = searchWitness({ ...SEARCH, obligations: obligationsOf(PYRAMID, [unjudgeable]) })
 
     expect(result.status).toBe("unverified_instance")
     if (result.status !== "unverified_instance") throw new Error("expected an unverified outcome")
@@ -286,6 +330,48 @@ describe("witness search: unsupported inputs stay unsupported", () => {
     expect(result.status).toBe("unverified_instance")
     if (result.status !== "unverified_instance") throw new Error("expected the triangle-pyramid problem to stay unsupported")
     expect(result.evidence.status).toBe("unknown")
+  })
+})
+
+/**
+ * **喂给核验器的题设必须与产品路径**同一份（裁决 R32）。
+ *
+ * 解析器把读不出的子句**故意**留成 residue（`diagramObligations.ts`："必须显形为 unverified，
+ * 不能把非空题面静默变成空通过"），核验器再把 residue 变成**强制的 unverified check**；
+ * 而只要有 unverified 就不可能 `passed`。所以搜索器若把 residue 丢掉，就等于**精确地关掉那道守卫**：
+ * 它能对一个产品路径会判 `unverified` 的题面貌似 `verified_instance`。
+ */
+describe("witness search: the verifier receives the same forced information as the product path", () => {
+  it("refuses to certify a problem whose parse left residue", () => {
+    const result = search(PYRAMID_RESIDUE)
+
+    expect(result.status).not.toBe("verified_instance")
+    expect(result.status).toBe("unverified_instance")
+    if (result.status !== "unverified_instance") throw new Error("expected the residue to block certification")
+    const text = result.reasons.join(" ")
+    expect(text).toContain("unverified-obligation")
+    expect(text).toContain("∠ABC=60°")
+  })
+
+  it("refuses to certify a candidate that cannot map a named free point", () => {
+    const result = search(PYRAMID_FREE_POINT)
+
+    expect(result.status).not.toBe("verified_instance")
+    if (result.status !== "unverified_instance") throw new Error("expected the unmapped free point to block certification")
+    expect(result.reasons.join(" ")).toContain("自由点 Q")
+  })
+})
+
+describe("witness search: kernel interface premises stay asserted", () => {
+  it("treats a non-identity buildOrder as unusable instead of guessing an index space", () => {
+    // `faces` 与 `points` 共用同一套下标空间，这件事的前提是 `buildOrder` 恒等（2a 的接口注释）。
+    // 一旦这条前提破了，`faces` 与重排后的顶点就不再同序 —— 那会**静默**换一组几何，
+    // 所以本层宁可拒绝也不猜。
+    expect(isIdentityBuildOrder([0, 1, 2, 3, 4], 5)).toBe(true)
+    expect(isIdentityBuildOrder([], 0)).toBe(true)
+    expect(isIdentityBuildOrder([1, 0, 2, 3, 4], 5)).toBe(false)
+    expect(isIdentityBuildOrder([0, 1, 2], 5)).toBe(false)
+    expect(isIdentityBuildOrder([0, 1, 2, 3, 5], 5)).toBe(false)
   })
 })
 

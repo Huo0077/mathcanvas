@@ -1,6 +1,7 @@
 import type { Vector3 } from "@draw/geometry-kernel"
 
-import type { ClaimEvidence, GeometryObligation } from "../claimEvidence"
+import type { ClaimEvidence } from "../claimEvidence"
+import type { ObligationIR } from "../obligationIR"
 import type { Relation } from "../relations"
 
 /**
@@ -34,8 +35,24 @@ export interface PolyhedronWitness {
 export type WitnessShapeKind = "polyhedron" | "prism" | "pyramid"
 
 export interface WitnessSearchInput {
-  /** 题设（N1 的 `GeometryObligation`；`role` 决定它是题设、目标还是自由选择）。 */
-  obligations: readonly GeometryObligation[]
+  /**
+   * **题设：N1 的统一 IR，而不是裸的 `GeometryObligation[]`**（复核裁决 R32）。
+   *
+   * 字段名沿用计划里的 `obligations`，但类型是 `ObligationIR`：它同时带着 `obligations` 与
+   * **解析残留** `unverified`。理由是"喂给核验器的题设必须与产品路径同一份" ——
+   * 解析器**故意**把读不出的子句留成 residue（`diagramObligations.ts`："必须显形为 unverified，
+   * 不能把非空题面静默变成空通过"），核验器再把 residue 变成**强制的 unverified check**，
+   * 而只要有 unverified 就不可能 `passed`。
+   *
+   * 早先这里收裸数组、并在内部写死 `unverified: []`，等于**精确地关掉那道守卫**：
+   * 搜索器能对一个产品路径会判 `unverified` 的题面报 `verified_instance`。
+   *
+   * 换成 IR 之后，"同一份输入"是可证的：调用方传 `parseObligationWithLegacy(prompt).ir`，
+   * 而 `toLegacyObligationSet(ir)` 与 `parseDiagramObligations(prompt)` **逐字段相等**
+   * （N1 的 `obligationIR.test.ts` 钉着这条），也就是产品喂给核验器的那一份。
+   * 残留字段是必填的，所以"忘记带"不是一个能默认发生的错误。
+   */
+  obligations: ObligationIR
   shape: WitnessShapeKind
   /** 确定性种子：同一 seed 必须给出同一顺序、同一结果（R26）。 */
   seed: number
@@ -89,7 +106,15 @@ export const WITNESS_SEARCH_CODES = {
   /** 内核 `buildFromPoints` 拒掉了候选拓扑（绕向 / 共面 / 零体积…）。 */
   topologyRejected: "topology-rejected",
   /** 候选没能通过既有编译路径落成文档。 */
-  materialisationFailed: "materialisation-failed"
+  materialisationFailed: "materialisation-failed",
+  /**
+   * 2a 给出的 `buildOrder` 不是恒等映射（R34 / M7）。
+   *
+   * `faces` 与 `points` 共用同一套下标空间，这件事的前提正是"`buildOrder` 恒等"；
+   * 前提一破，面环与重排后的顶点就会错位 —— 那未必立刻非法（可能只是换了一只多面体），
+   * 所以宁可在这里拒绝，也不静默按一个可能不成立的假设继续。
+   */
+  buildOrderNotIdentity: "unexpected-build-order"
 } as const
 
 export type WitnessSearchCode = (typeof WITNESS_SEARCH_CODES)[keyof typeof WITNESS_SEARCH_CODES]
