@@ -1,6 +1,6 @@
 # 下一阶段 Agent 完整升级实施计划
 
-> **状态：N1 已实施并复核（2026-10-05，提交 `acd3bd5` / `2d62c4d` / `b5b33f9` / `f997b3f`）；N2–N6 尚未实施。** 本计划对应 `docs/superpowers/specs/2026-10-04-agent-full-next-phase-design.md`；每个阶段必须先写 RED，再实现 GREEN，再跑全量门禁，最后单独提交。
+> **状态：N1、N2 已实施并复核（2026-10-05）；N3–N6 尚未实施。** N1 提交 `acd3bd5` / `2d62c4d` / `b5b33f9` / `f997b3f`；N2 提交 `c2314c9`…`9c5ae2f`（逐条见各阶段执行记录）。本计划对应 `docs/superpowers/specs/2026-10-04-agent-full-next-phase-design.md`；每个阶段必须先写 RED，再实现 GREEN，再跑全量门禁，最后单独提交。
 
 **Goal:** 在 `b1ee3d3` 的静态题设核验之上，逐步实现约束求解、动态拖动保持、开放题编译、真实 provider 评测和形式证明出口。
 
@@ -149,14 +149,22 @@ export type WitnessSearchResult =
   | { status: "unverified_instance"; evidence: ClaimEvidence; reasons: readonly string[] }
 ```
 
-- [ ] **RED：** 同一 seed 结果稳定；极大长宽比候选不优先；退化/矛盾/超时分别分类；已有 `selectWitness` 行为通过兼容测试。
-- [ ] **RED 命令：** `npm.cmd exec -- vitest run packages/agent-core/src/solver/witnessSearch.test.ts packages/agent-core/src/underdetermined.test.ts --maxWorkers=1`。
-- [ ] **GREEN：** 解析构造优先，有限网格兜底；每个候选依次通过拓扑构造和统一 verifier；没有候选不产生草稿。
-- [ ] **GREEN 命令：** `npm.cmd exec -- vitest run packages/agent-core/src/solver/witnessSearch.test.ts packages/agent-core/src/diagramPipeline.test.ts --maxWorkers=1`。
-- [ ] **Feasibility spike：** 在独立脚本中评估 Z3/NLSAT/WASM/原生依赖，不接默认 UI；记录许可证、线程模型、包体、启动时间和超时行为。
-- [ ] **提交检查点：** `git commit -m "feat(agent): add bounded witness search"`。
+- [x] **RED：** 同一 seed 结果稳定；极大长宽比候选不优先；退化/矛盾/超时分别分类；已有 `selectWitness` 行为通过兼容测试。
+- [x] **RED 命令：** `npm.cmd exec -- vitest run packages/agent-core/src/solver/witnessSearch.test.ts packages/agent-core/src/underdetermined.test.ts --maxWorkers=1`。
+- [x] **GREEN：** 解析构造优先，有限网格兜底；每个候选依次通过拓扑构造和统一 verifier；没有候选不产生草稿。
+- [x] **GREEN 命令：** `npm.cmd exec -- vitest run packages/agent-core/src/solver/witnessSearch.test.ts packages/agent-core/src/diagramPipeline.test.ts --maxWorkers=1`。
+- [x] **Feasibility spike：** 在独立脚本中评估 Z3/NLSAT/WASM/原生依赖，不接默认 UI；记录许可证、线程模型、包体、启动时间和超时行为。
+- [x] **提交检查点：** `git commit -m "feat(agent): add bounded witness search"`。
 
-> **N2 进度（2026-10-05）：** 本阶段拆成三个子任务执行。**2a（内核见证构造，`packages/geometry-kernel/src/witness/`）已交付并复核**（提交 `c2314c9` / `1328088` / `84a6d89` / `e3fdb61`）；2b（agent-core 搜索编排 + `selectWitness` facade 单实现 + 证据分类）与 2c（`witnessSearch` flag 接线 + Z3/NLSAT feasibility spike + 出口证据）**尚未实施**。2a 的导出签名是 2b 的接口来源，见 `.superpowers/sdd/…/task-2a-report.md` §2。门禁读数只写在 `docs/current-status.md` §一。
+> **N2 执行记录（2026-10-05）：** 本阶段拆成三个子任务，全部交付并复核。**2a（内核见证构造）** `c2314c9` / `1328088` / `84a6d89` / `e3fdb61`；**2b（搜索编排 + `selectWitness` facade 单实现 + 证据分类）** `8648a13` / `8b70fa1` / `b6a1388` / `ab05add`；**2c（flag 接线 + spike + 出口证据）** `ca1d0b2` / `2f3dd45` / `9c5ae2f`。门禁读数只写在 `docs/current-status.md` §一。
+>
+> **与计划原文的偏差（已裁决，逐条有据）：**
+> ① `WitnessSearchInput.obligations` 由裸 `GeometryObligation[]` 改为 N1 的 `ObligationIR` —— 否则喂给核验器的题设被"洗白"（residue 被丢成 `unverified: []`），搜索器能对**产品路径会判 `unverified`** 的题面报 `verified_instance`（裁决 R32；RED 实证：带 `∠ABC=60°` 的题面改前确实返回 `verified_instance`）。
+> ② 接线多改了 `committerAdapter.ts` 与 `agentRuntime.ts` 两处（不在计划的 Files 清单里）—— **协调器是生产主路**（`coordinator → CommitterPort.stage → committerAdapter → DraftStore.stage`），而它此前**一个开关都不传**，不加这两处任何 flag 在生产上都是装饰；顺带使 N1 的 `obligationIR` 在这条主路上第一次真正生效（裁决 R39）。
+> ③ 新增 `materialisedActions` 到 `PlanCompileResult` / `StagedCompileResult` / `WorkerSuccess` —— 救援替换了坐标，草稿层的独立复验必须用**实际被物化的那份计划**，否则救援会显示成"未核验"。
+> ④ `planCompiler` 与 `solver/witnessSearch` 之间存在**有意的模块环**（`planCompiler.ts:24-37` 写明理由与安全性）；唯一干净的断法是给 `searchWitness` 注入物化端口，但那要改 2b 已复核的公开 API，故 **park 并归 N3**（裁决 R40）。
+> ⑤ `shape:"prism"` 恒为 `unverified_instance`：原话解析把 `A′` 压成 `A`，且核验器别名映射只收 `/^[A-Z]$/`。设计 §5 的 R2 出口本来就规定"**不支持**题稳定产出 `unverified_instance`"，故如实上报；带撇点名的支持列为本阶段之后的独立项（裁决 R28）。
+> ⑥ `degreesOfFreedom` 保持 `null`（**窄豁免 R35**）：`ConstraintType` 表达不了线⊥面与角度、且 `reportFreeDegrees` 要的是**图元 id**，只映射子集会让数字"看不出漏了什么"；要真算需扩 `dsl` + 内核判据，归 N3。呈现纪律：`null` 必须读作"未计算"，**不得**读作"自由度 0 / 刚性"。
 
 ## Phase N3：动态拖动保持约束
 
