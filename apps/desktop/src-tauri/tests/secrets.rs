@@ -99,6 +99,36 @@ impl Drop for ScratchCredential<'_> {
     }
 }
 
+/// **真的落到同一个 Windows 凭据服务的用例必须串行**（2026-10-05）。
+///
+/// ## 为什么要有这把锁（有实测，不是防御性编程）
+///
+/// 本文件曾以约 1/15 的概率红在 `lends_the_secret_to_a_closure_and_nothing_else`：
+/// `put` 成功之后，紧接着的 `with_secret` 读回 `None`（`keyring::Error::NoEntry`）。
+/// 判别实验把范围缩到"并行"这一件事上：
+///
+/// - **默认并行**跑 `--test secrets`：15 次里红 1 次；
+/// - **`-- --test-threads=1`**：20 次全绿。
+///
+/// 而"别的用例把它删了"这条**已经被排除**：每个用例用各自的 profile 名
+///（见 `SCRATCH_PROFILES` 与那条等集断言），`__probe__` 那条是 `#[ignore]`。
+/// 剩下的是**同一个凭据服务**（`SERVICE = "MathCanvas"`）上的并发操作：
+/// 各用例 target 不同，但共享同一个服务名，而 `keyring` 的 Windows 后端存在
+/// `Error::Ambiguous`（"matched more than one entry"）这种枚举语义 ——
+/// 并发写/删会让另一次查找**瞬时**看不到条目。
+///
+/// ## 这把锁**不**掩盖任何东西
+///
+/// 它只让**测试 harness** 不再制造一个产品里不存在的场景（产品里凭据的存/删是用户逐次触发的）。
+/// 它**不**主张"产品对并发凭据访问是安全的" —— 那件事本文件没有测，也没有因为这把锁变成已测。
+static STORE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// 取那把锁。**中毒也继续**（`into_inner`）：一条用例炸了不该让后面每一条都跟着报错 ——
+/// 那会把一次真失败放大成一片。
+fn store_lock() -> std::sync::MutexGuard<'static, ()> {
+    STORE_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 /// 把上面两条纪律钉成用例：只靠自觉的话，下一个人加一条用例就会再犯一次。
 #[test]
 fn scratch_profiles_are_distinct_and_never_a_real_profile_id() {
@@ -118,6 +148,7 @@ fn scratch_profiles_are_distinct_and_never_a_real_profile_id() {
 /// 计划 Step 1 点名的第一组：put / has / remove 的基本回路。
 #[test]
 fn stores_checks_and_removes_a_secret() {
+    let _guard = store_lock();
     let store = mathcanvas_desktop_lib::secrets::create_store();
     let slot = ScratchCredential::new(&store, SCRATCH_ROUNDTRIP);
 
@@ -130,6 +161,7 @@ fn stores_checks_and_removes_a_secret() {
 /// 缺 key 是**正常状态**，不是错误：界面要显示"还没配置"，而不是弹一个失败。
 #[test]
 fn reports_a_missing_key_as_missing_rather_than_as_a_failure() {
+    let _guard = store_lock();
     let store = mathcanvas_desktop_lib::secrets::create_store();
     let slot = ScratchCredential::new(&store, SCRATCH_MISSING);
 
@@ -140,6 +172,7 @@ fn reports_a_missing_key_as_missing_rather_than_as_a_failure() {
 /// `with_secret` 把明文限制在一次闭包调用里。
 #[test]
 fn lends_the_secret_to_a_closure_and_nothing_else() {
+    let _guard = store_lock();
     let store = mathcanvas_desktop_lib::secrets::create_store();
     let slot = ScratchCredential::new(&store, SCRATCH_LENDING);
     store.put(slot.profile, "sk-ant-test").expect("put");
@@ -158,6 +191,7 @@ fn lends_the_secret_to_a_closure_and_nothing_else() {
 /// **错误信息里不能带明文**（计划："Assert serialized logs and mock IPC responses contain no secret bytes"）。
 #[test]
 fn never_puts_the_secret_into_an_error_message() {
+    let _guard = store_lock();
     let store = mathcanvas_desktop_lib::secrets::create_store();
     let slot = ScratchCredential::new(&store, SCRATCH_LEAK_CHECK);
     let secret = "sk-super-secret-value-9f3a2b";
@@ -174,6 +208,7 @@ fn never_puts_the_secret_into_an_error_message() {
 /// 后者会把"没填"变成"存了一个空密钥"，于是界面显示已配置、而请求必然 401。
 #[test]
 fn refuses_an_empty_profile_id_or_an_empty_secret() {
+    let _guard = store_lock();
     let store = mathcanvas_desktop_lib::secrets::create_store();
 
     // 这条用例**什么都不会写**（三次调用都在校验处就被拒），但名字仍按规矩来：

@@ -5,6 +5,29 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-05 —— N6 第七步：`test:rust` 的不稳定也**修掉了**（判别 → 排除 → 修 → 前后计数）
+
+- **判别实验（把范围缩到一件事上）**：`cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
+  --test secrets` —— **默认并行 15 次里红 1 次**；同一命令加 `-- --test-threads=1`：**20 次全绿**。
+  所以它**需要并发**才能发生。
+- **排除掉"别的用例把它删了"**：读完整份 `tests/secrets.rs` 得到的结论 —— 每个用例用各自的 profile 名
+  （`SCRATCH_PROFILES` 那条等集断言钉着），`__probe__` 那条是 `#[ignore]`，
+  **没有任何用例会删别人的格子**。（这就是上一轮说"根因在 OS / `keyring` 边界"之后能再往前推的一步。）
+- **剩下的是什么**：所有用例共享**同一个凭据服务名**（`windows.rs` 的 `SERVICE = "MathCanvas"`，
+  target 不同但服务相同），而 `keyring` 的 Windows 后端存在 `Error::Ambiguous`
+  （"matched more than one entry"）这种**枚举**语义 —— 并发写/删会让另一次查找**瞬时**看不到条目。
+- **修法**：`tests/secrets.rs` 里 5 处走真实凭据库的用例先取一把 `static STORE_LOCK: Mutex<()>`。
+  **这不是"加重试"**：它只让**测试 harness** 不再制造一个产品里不存在的场景（产品里凭据的存/删是
+  用户逐次触发的）。**它不主张"产品对并发凭据访问是安全的"** —— 那件事本文件没有测，
+  也没有因为这把锁变成已测。这一点写进了代码注释。
+- **证据**：加锁后 **60 次并行 `--test secrets` 全绿**（若真实故障率仍是 1/15，连绿 60 次的概率约
+  **1.6%**），并且**连续 3 次全量 `test:rust` 都是 236 通过 / 0 失败**。
+- **一处工具教训（留档）**：第一次跑"单线程 20 次"拿到 **20/20 失败**，险些写成"单线程必红"——
+  其实是**我自己漏了 `--manifest-path`**，cargo 在仓库根找不到 `Cargo.toml`。
+  **20/20 这种整齐的失败率本身就是警报**；这正是本仓那条纪律（环境错误不能算 RED）的现场例子。
+- **门禁与记分卡同步**：`agent-release-gate.md` 第 1 条由"⚠️ 两条已定位、但未修复"改回
+  **✅ 已守住**，并写明**两处修的都是测试侧、产品行为未变**；`agent-tool-loop-scorecard.md` 读数列同步。
+
 ## 2026-10-05 —— N6 第六步：Rust **传递依赖**的许可证扫描（那一节从"只有清单"变成"有结论"）
 
 - **为什么要补**：`docs/acceptance/next-phase-flag-and-dependency-review.md` 的第三节原来自认

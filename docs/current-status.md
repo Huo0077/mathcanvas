@@ -33,10 +33,31 @@
 | 门禁 | 现象 | 定位 | 判据与边界 |
 | --- | --- | --- | --- |
 | 全量 e2e | **已修**（原来 6 次全量里 4 次红） | 四次现场**全部是同一条断言**：`data-preview-hovering` 期望 `"true"` 实收 `"false"`（`three-canvas-size.spec.ts:90` 与 `geometry3d-section.spec.ts:59` 是同一条） | 机制见下；**修后连续 4 次全量全绿**（186 passed，无 flaky） |
-| `test:rust` | 五次里一次红 | **`tests/secrets.rs:149` → `lends_the_secret_to_a_closure_and_nothing_else`** | 单跑 `--test secrets` **15 次里红 1 次**；断言是 `left: None` / `right: Some(11)` —— **`put` 成功之后 `with_secret` 立刻读回"没有这一条"**。后端实现（`src/secrets/windows.rs`）把 `keyring::Error::NoEntry` 映射成 `Ok(None)`、其余错误映射成 `Backend`，所以是**操作系统在写入成功后立即报了"没有这条凭据"**：根因在 OS / `keyring` 边界，**不在我们的分支里** |
+| `test:rust` | **已修**（原来五次里一次红） | 定位到 `tests/secrets.rs:149`（`put` 成功后 `with_secret` 读回 `None`）。判别实验：**默认并行 15 次红 1 次**、**`--test-threads=1` 20 次全绿** | 见下；**加锁后 60 次并行全绿 + 3 次全量 `test:rust` 236 通过 / 0 失败** |
 
 > **为什么不"顺手加一次重试"把红压下去**：那会把一条**真实的不稳定**藏起来，而这个组件是**密钥库** —— 它报"没有配置"时，调用方会去发一次注定 401 的请求。要么找到根因，要么如实留着这条记录。
 > **下一次要做的**：让 e2e 失败时的产物**在失败当次就留住**（Playwright 的 `error-context.md` 会被下一次运行清掉），至少先拿到**是哪一条断言**。
+
+**2026-10-05 `test:rust` 的不稳定：判别、排除、修法与证据**
+
+- **判别实验（把范围缩到一件事上）**：`node scripts/toolchain.mjs cargo test --manifest-path
+  apps/desktop/src-tauri/Cargo.toml --test secrets` —— **默认并行：15 次里红 1 次**；
+  同一命令加 `-- --test-threads=1`：**20 次全绿**。所以它**需要并发**才能发生。
+- **排除掉"别的用例把它删了"**（读完整份 `tests/secrets.rs` 得到的，不是猜的）：每个用例用各自的
+  profile 名（`SCRATCH_PROFILES` 那条等集断言钉着），`__probe__` 那条是 `#[ignore]`，
+  **没有任何用例会删别人的格子**。
+- **剩下的是什么**：所有用例共享**同一个凭据服务名**（`windows.rs` 的 `SERVICE = "MathCanvas"`，
+  target 不同但服务相同），而 `keyring` 的 Windows 后端存在 `Error::Ambiguous`
+  （"matched more than one entry"）这种**枚举**语义 —— 并发写/删会让另一次查找**瞬时**看不到条目。
+- **修法**：`tests/secrets.rs` 里凡是走真实凭据库的用例（5 处 `create_store()`）先取一把
+  `static STORE_LOCK: Mutex<()>`。**这不是"加重试"**：它只让**测试 harness** 不再制造一个产品里
+  不存在的场景（产品里凭据的存/删是用户逐次触发的）。**它不主张"产品对并发凭据访问是安全的"** ——
+  那件事本文件没有测，也没有因为这把锁变成已测。
+- **证据**：加锁后 **60 次并行 `--test secrets` 全绿**（若真实故障率仍是 1/15，连绿 60 次的概率约
+  **1.6%**），并且**连续 3 次全量 `test:rust` 都是 236 通过 / 0 失败**。
+- **一处工具教训（留档）**：第一次跑"单线程 20 次"时得到 **20/20 失败**，险些当成"单线程必红"——
+  其实是**我自己漏了 `--manifest-path`**，cargo 在仓库根找不到 `Cargo.toml`。这正是本仓那条纪律
+  "环境错误不能算 RED / 每条读数要看自己的退出码"的现场例子：**20/20 这种整齐的失败率本身就是警报**。
 
 **2026-10-05 e2e 抖动：修掉了（一条断言、一个机制、一处调用点）**
 

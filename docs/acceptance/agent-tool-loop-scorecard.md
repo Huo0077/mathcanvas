@@ -47,7 +47,7 @@ Date: October 4, 2026. Status: geometry-instance verification added; real-provid
 
 | Scope | Status | Evidence |
 |---|---|---|
-| Deterministic code/tests | Measured (2026-10-05) | **303 Vitest files, 3529 passed, 1 todo**; `typecheck` and `lint` exit 0; Rust **236 passed / 3 ignored** (5 runs: 4 clean, 1 red — located to `tests/secrets.rs:149`, read-after-write returns `None`, root cause at the OS/`keyring` boundary, **not fixed**); full e2e **186 passed** in 4 consecutive runs after fixing the projection helper to wait for the camera to settle (before: 4 of 6 runs failed the same `data-preview-hovering` assertion) |
+| Deterministic code/tests | Measured (2026-10-05) | **303 Vitest files, 3529 passed, 1 todo**; `typecheck` and `lint` exit 0; Rust **236 passed / 3 ignored** in 3 consecutive full runs after serialising the five tests that hit the real credential store (before: 1 red in 5 runs; discriminator: 1/15 parallel vs 0/20 single-threaded; after: **0/60** parallel); full e2e **186 passed** in 4 consecutive runs after making `projectWorldPoint` wait for the camera to settle (before: 4 of 6 runs failed the same `data-preview-hovering` assertion). **Both fixes are test-side; product behaviour unchanged.** |
 | Offline deterministic pass@1 | Measured **4/8** | `npm run eval:agent`, 2026-09-29 — passes: `create-cube`, `create-tetrahedron`, `reject-degenerate-cube`, `visual-fit-drawn` |
 | Offline deterministic pass@3 | Measured **4/8** | same run, 3 independent trials per task |
 | Offline tool selection | Measured **45/45** | same run |
