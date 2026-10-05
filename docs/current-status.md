@@ -25,10 +25,10 @@
 | 类型检查 | `npm.cmd run typecheck` | 全部工作区 + `e2e/` + `scripts/`，无错 | 0 | **2026-10-05 复核** |
 | Lint | `npm.cmd run lint` | **0 error / 13 warning**（与基线逐条相同） | 0 | **2026-10-05 复核** |
 | 单测（全库） | `npm.cmd test -- --maxWorkers=2 --reporter=dot` | **313 文件 / 3620 通过 + 1 todo / 0 失败** | 0 | **2026-10-05 复核** |
-| Rust provider 测试 | `npm.cmd run test:rust` | **238 通过 / 3 ignored / 0 失败**（16 个二进制） | 0 | **第 27 轮**（整批电池） |
+| Rust provider 测试 | `npm.cmd run test:rust` | **238 通过 / 3 ignored / 0 失败**（16 个二进制） | 0 | **2026-10-05 复核** |
 | 全量 e2e | `npm.cmd run test:e2e` | **191 通过 / 0 失败**（55.7 s，16 workers；含 `next-phase-flag-entry.spec.ts` 3 条与 `agent-constrained-drag.spec.ts` **正/反例 2 条**） | 0 | **2026-10-05 复核** |
-| 性能基线 | `npm.cmd run test:perf` | 9/9；`drag/300-frames` **686–711 ms**（**三次采样的区间，不是单点**） | 0 | **第 37 轮重校** |
-| 生产构建（web） | `npm.cmd run build --workspace @draw/web` | **成功**（4.83 s）；产物落 `build-check/`（已 gitignore，构建后工作树干净）；有**既有的**主 chunk 1.8 MB 提示 | 0 | **第 28 轮** |
+| 性能基线 | `npm.cmd run test:perf` | 9/9；`drag/300-frames` **488.7 ms（单次采样）** —— 比第 37 轮记录的 **686–711 ms** 区间低；**一次采样不足以改那个区间**，故两说并存（性能与机器负载相关） | 0 | **2026-10-05 复核** |
+| 生产构建（web） | `npm.cmd run build --workspace @draw/web` | **成功**（3.92 s）；入口 chunk **1,803.76 kB / gzip 527.62 kB**（比上轮 1,801.18 kB **+2.6 kB**：新增设置组件与偏好模块）；产物落 `build-check/`（已 gitignore，构建后工作树干净） | 0 | **2026-10-05 复核** |
 | Agent 评测 | `npm.cmd run eval:agent` | `deterministic_local`：pass@1 **4/8**、pass@3 **4/8**、工具选择 45/45、工具错误 3/45 | 0 | **第 27 轮**（整批电池；**未接真实模型**，不是模型准确率） |
 | Agent benchmark | `npm.cmd run bench:agent` | 抽取层：`cases=21 covered=14 empty=7 error=0`；`BENCHMARK_PREMISE obligations=24 residue=9 rate=0.727`；`BENCHMARK_EXTRACTION covered=14/21 rate=0.667`。**见证层（第 48 轮新增）**：`BENCHMARK_WITNESS verified=1 unverified=20 no_witness=0 error=0 solveRate=0.048`；`BENCHMARK_JUDGEABILITY supported=21 unsupported=3 ambiguous=0 totalObligations=24`；`BENCHMARK_WITNESS_CODES {"requires-candidates":7,"unsupported-shape":9,"no-candidate-constructed":4,"unsupported-base-shape":4,"witness-search":20}`（**第 51 轮**） | 0 | **第 48 轮** |
 | 证明边界 smoke | `npm.cmd run proof:smoke` | 7 通过 / 0 失败；`PROOF_BACKENDS {"wired":[],"reviewed":0}`；**勾股裁决后新增**：`goalsWithoutAnyRoute: []`、`pythagoreanRoute: {"kind":"via-inference","from":"perpendicular"}` | 0 | **2026-10-05 复核** |
@@ -89,7 +89,7 @@
 | 1 | ~~**`constrainedDrag` 怎么打开**~~ **✅ 全解决（2026-10-05）** | 入口：**设置 → 实验性功能 → 约束拖动**（`ExperimentalFeatures.tsx`，偏好存 `mathcanvas:next-phase-preferences`，`agentNextPhaseFlags()` **只**取这一个）。浏览器验收：`e2e/next-phase-flag-entry.spec.ts`（入口 3 条）+ **`e2e/agent-constrained-drag.spec.ts`（拖动正/反例 2 条）** —— 关着时拖动改变 \|AB\|、打开后同样的拖动 \|AB\| **仍是 1**（且断言 A 真的动过，不许用"没变"冒充"被约束住"）。顺带修掉顶栏那个**死的「设置」按钮** | **默认仍是关**（关着走原来的 `translatePrimitive3`）；**定向变异验证过判据**：把 `enabled` 写死 false ⇒ 正例红（实测 \|AB\|=1.539）；全量 e2e 191 通过 |
 | 2 | ~~**N5 首批的「勾股」怎么办**~~ **✅ 已裁决（2026-10-05，用户决定）：判成 ⊥ 目标 + 用勾股定理那一步把结论接回来** | 代码里落成 **`inference` 字段**（`proofGoals.ts`）：勾股**仍然没有直接载体**（`obligationKinds` / `constraintTypes` 都空），多的是一条**显式推断路线** `{ from: "perpendicular", theorem: "勾股定理及其逆定理" }`；新增 `proofGoalDischargeRoute()`（`direct` / `via-inference` / `none`）。**关键：不做别名** —— 从约束层问 `perpendicular` **只**会得到 ⊥ | **"一处路线都没有"的首批目标现在是空的**（`goalsWithoutAnyRoute: []`）。`proof:smoke` 把路线一起打出来了。**定向变异验证过**：把 `"perpendicular"` 塞进勾股的载体（别名）⇒ **4 条红**；让路线恒为 `direct` ⇒ 1 条红 |
 | 3 | **`real_provider` 用哪个 provider、凭据放哪** | 要动凭据与对外调用边界，也是唯一会**花钱**的一项 | N4 的出口（pass@1 / pass@3 / 成本 / 延迟 / 人工复核率）才能有数字；今天那一栏是整批 `not_measured` |
-| 4 | **要不要 `git push`** | 远端写操作，我不自行决定 | 本地领先 `origin/main` **59 个提交**（含两条门禁抖动的修复）才能进远端与 CI |
+| 4 | ~~**要不要 `git push`**~~ **✅ 已推送（2026-10-05，用户授权）** | `git push origin main`：**`9a65e6d..6a5c2f0`**（**61 个提交**全部上远端；快进，无强推）。推之前把本会话还没量过的门禁跑齐：Rust **238/0/3 ignored（16 个二进制）**、许可 `packages=550 distinctExpressions=33`（exit 0）、构建 exit 0、perf 9/9、`eval:agent` pass@1 **4/8**、`bench:agent` 三行与之前**逐字一致**、`proof:smoke` 7 绿 | 本地与远端**已同步**（领先 0 / 落后 0）。**CI 还不知道结果** —— 这是这批提交第一次见 CI |
 | 5 | **要不要为一句读不通的诊断文案去重新基线化黄金样本** | 那句文案（关系型条件的失败原因说"题设要求 0"）是**用户可见**的（`ConfirmationPanel` 直接渲染 `reason`），但它是**编译器输出的一部分**，被"关闭 flag 时旧路径与 `4707b64` 逐字节相同"那份黄金样本钉着。改它 = 改一个被钉住的契约，**不能顺手做** | 门禁第 1 条与"N2 已交付"的证据链里，"逐字节相同"那句话要改成"除这一处诊断文案外逐字节相同" —— 那是**放宽一条已声明的保证**，得你点头 |
 
 > 这四件我每轮都在问。写在这里，是因为**聊天里的提问会滚掉，这张表不会**。
