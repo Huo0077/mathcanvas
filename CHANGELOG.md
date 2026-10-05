@@ -5,6 +5,31 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-05 —— N4 第四步：题集 7 → **21 条**（每类 3 条），并把"静默丢句"钉成题集级不变量
+
+- **为什么扩**：`covered=5/7` 这个读数说服力不够 —— 每类只有一条时，它测的是"这一条恰好过不过"，
+  不是"这一类行不行"。现在 **7 类 × 3 条 = 21 条**。
+- **扩完先看归因（这次是机器展开，不是我逐条读）**：`cases=21 covered=14 empty=7 error=0`。
+  **7 条 `empty` 全部带着 residue**（`unverified`）—— 也就是说，
+  **14 条新用例里没有一条是"整句凭空消失"**。
+- **这条负面结果本身是读数**：上一轮修掉的静默丢句（"棱长始终相等"）是个案，不是普遍塌陷；
+  新加的 `dynamic-drag-midpoint`（"让 M 始终是 AB 的中点"）与 `dynamic-animate-perpendicular`
+  （"让 PA 始终垂直于平面 ABCD"）**都留下了 residue** —— 这两条是我**特意**按同一类写法挑的
+  （关系词在句子里、但状语把匹配隔开），它们没丢掉，说明上一轮的修法确实在管用。
+- **把不变量钉在题集这一层**（本批第二个产出）：新增一条用例
+  ——**每一条题都必须至少留下一条给定义或一条 residue**。它用的就是跑读数时的同一个
+  `parseObligationIR`（不另写一份判断）。这样以后往 `cases.jsonl` 加新写法，静默丢掉会红在
+  **题集**这一层，而不必等谁去逐条读归因。
+- **一条必须说清的不可比性**：覆盖率**不能**和上一批直接比 ——`5/7`（71%）→ `14/21`（67%）
+  看起来是下降，但题集**换了**：新加的三类（`unsupported-expression`、`dynamic-request`、
+  `dihedral-or-ratio`）是**刻意偏难**的那几类，分母里现在有 9 条这种。所以这两个数字
+  **只记录、不比较**。
+- **归因摘要（21 条）**：`extracted` 14 条；`partial` 2 条（都是 `dihedral-or-ratio`：
+  二面角或线段比读不干净，留下 residue）；`empty` 7 条且**全部带 residue**。
+  `contradictory-three-lengths`（同一条线段三个长度）**没有**被静默合并：读出 3 条 `fixedLength`。
+- **证据**：benchmark 套件 **33 → 34 条**全绿；`npm run bench:agent` exit 0；
+  全库单测读数见 `docs/current-status.md` §一。
+
 ## 2026-10-05 —— N4 第三步：逐条归因，**然后 benchmark 真的查出一个缺陷**
 
 - **先做归因**（"那两个 `empty` 到底是哪两个"这件事欠了好几轮）：`BENCHMARK_REPORT` 里本来就逐条带着

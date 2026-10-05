@@ -13,6 +13,20 @@
 
 ## 一、现在能不能跑（可复核的门禁读数）
 
+**2026-10-05 N4 第四步（题集 7 → 21 条）—— 本批实测：**
+
+| 命令 | 当次结果 |
+| --- | --- |
+| `npm.cmd test -- --maxWorkers=2 --reporter=dot` | **306 文件 / 3567 通过 + 1 todo / 0 失败**（135 s） |
+| `npm.cmd run bench:agent` | exit 0；`BENCHMARK_COVERAGE cases=21 covered=14 empty=7 error=0` |
+| `npm.cmd exec -- vitest run scripts/agent-benchmark --maxWorkers=1` | **34 通过 / 0 失败**（原 33） |
+
+> **题集从 7 条（每类 1 条）扩到 21 条（每类 3 条）**。归因是**机器展开**的（`BENCHMARK_REPORT` 逐条带 `caseId`/`status`/`evidence`）：`extracted` 14 条、`partial` 2 条（都是二面角/线段比，留下 residue）、`empty` 7 条且**全部带 residue**。
+> **14 条新用例里没有一条"整句凭空消失"** —— 包括我**特意**按同一类写法挑的两条（`dynamic-drag-midpoint`「让 M 始终是 AB 的中点」、`dynamic-animate-perpendicular`「让 PA 始终垂直于平面 ABCD」：关系词在句子里、但状语把匹配隔开）。它们都留下了 residue，说明上一轮那个修法确实在管用。
+> **新增一条题集级不变量用例**：每一条题都必须至少留下一条给定义或一条 residue（用的就是跑读数时的同一个 `parseObligationIR`，不另写判断）。以后往 `cases.jsonl` 加新写法，静默丢掉会红在**题集**这一层。
+> **一条不可比性（必须说清）**：`covered` 从 `5/7`（71%）到 `14/21`（67%）**不是下降，是不可比** —— 题集换了，新加的三类是**刻意偏难**的（`unsupported-expression` / `dynamic-request` / `dihedral-or-ratio`，现在占 9 条）。**这两个数字只记录、不比较。**
+> **顺带一条正面的**：`contradictory-three-lengths`（同一条线段被赋三个不同长度）**没有**被静默合并 —— 读出 3 条 `fixedLength`。
+
 **2026-10-05 N4 第三步（逐条归因 + benchmark 查出的缺陷）—— 本批实测：**
 
 | 用例 | 类别 | 状态 | 证据 |

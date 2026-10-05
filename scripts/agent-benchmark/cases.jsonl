@@ -5,3 +5,17 @@
 {"id":"dihedral-forty-five","category":"dihedral-or-ratio","workspace":"geometry3d","prompt":"在三棱锥 P-ABC 中，PA ⊥ 平面 ABC，二面角 P-BC-A 为 45°","note":"数值约束：这类条件过去不在判据范围内，是「错图静默通过」的成因之一。"}
 {"id":"dynamic-drag-request","category":"dynamic-request","workspace":"geometry3d","prompt":"拖动这个正四面体的一个顶点，保持六条棱长始终相等","note":"动态请求：属于 N3 的范围，当前只能如实说未支持。"}
 {"id":"universal-proof-request","category":"universal-proof-request","workspace":"geometry3d","prompt":"证明：对任意四棱锥 P-ABCD，若 PA ⊥ 平面 ABCD，则 PA ⊥ BD","note":"普遍性请求：测「任意 / 恒定」的分流，不要把示意图当成证明。"}
+{"id":"underdetermined-tetra-perp","category":"underdetermined","workspace":"geometry3d","prompt":"在四面体 P-ABC 中，PA ⊥ 平面 ABC，PB ⊥ AC","note":"与第一条同类：一个数字都没有，只有关系 —— 换一个多面体再问一遍。"}
+{"id":"underdetermined-midpoint-only","category":"underdetermined","workspace":"geometry3d","prompt":"在三棱锥 P-ABC 中，M 是 PA 的中点，BM ⊥ AC","note":"把中点关系与垂直混在一句里：两种都能读，但仍无数字。"}
+{"id":"contradictory-parallel-and-perpendicular","category":"contradictory","workspace":"geometry3d","prompt":"在平面 ABCD 中，AB ∥ CD，同时 AB ⊥ CD","note":"两条线既平行又垂直 —— 同一份文档里互相打架，但内核的可证矛盾判据**未必**覆盖这一种。如实记录它落在哪一档。"}
+{"id":"contradictory-three-lengths","category":"contradictory","workspace":"geometry3d","prompt":"作线段 AB，使 AB = 2，同时 AB = 3，同时 AB = 4","note":"同一条线段被赋三个不同的长度：比两条的版本更狠，看它是不是仍然只报一条。"}
+{"id":"unsupported-angle-degree","category":"unsupported-expression","workspace":"geometry3d","prompt":"在四棱锥 P-ABCD 中，∠PAB = 60°","note":"带度数符号的角：应当显形为未核验，而不是被当成线段长度。"}
+{"id":"unsupported-segment-ratio","category":"unsupported-expression","workspace":"geometry3d","prompt":"在四棱锥 P-ABCD 中，AB:AD = 1:2","note":"比值的冒号写法：解析层至今没有可靠读法，必须显形。"}
+{"id":"shuffled-naming-prism","category":"shuffled-naming","workspace":"geometry3d","prompt":"在三棱柱 DEF-ABC 中，DA ⊥ 平面 ABC，BA ∥ CD","note":"棱柱的点名顺序被打乱（DEF-ABC 而非 ABC-DEF）：看命名归一化是否只对四棱锥有效。"}
+{"id":"shuffled-naming-reversed-bottom","category":"shuffled-naming","workspace":"geometry3d","prompt":"在四棱锥 P-BCDA 中，PC ⊥ 平面 BCDA，BA ∥ CD","note":"底面绕了一圈（BCDA）：与既有那条 P-DCBA 不同的一种错序。"}
+{"id":"dihedral-sixty","category":"dihedral-or-ratio","workspace":"geometry3d","prompt":"在三棱锥 P-ABC 中，PA ⊥ 平面 ABC，二面角 P-BC-A 为 60°","note":"与 45° 那条同类，换一个角度值：确认读数不是被某一个数字凑巧命中的。"}
+{"id":"ratio-on-a-segment","category":"dihedral-or-ratio","workspace":"geometry3d","prompt":"在三棱锥 P-ABC 中，M 在 BC 上，BM:MC = 2:3","note":"线段比：这一类的另一半（既有那条是二面角），同样是\"解析层吃力\"的写法。"}
+{"id":"dynamic-drag-midpoint","category":"dynamic-request","workspace":"geometry3d","prompt":"拖动线段 AB 的端点，让 M 始终是 AB 的中点","note":"动态请求 + 中点约束：这一句里\"中点\"是**能被认出的关系词**，所以它必须留下点什么，不许静默变空。"}
+{"id":"dynamic-animate-perpendicular","category":"dynamic-request","workspace":"geometry3d","prompt":"让 PA 始终垂直于平面 ABCD，并拖动点 P","note":"动态请求 + 垂直：同上，关系词在句子里，静默丢掉就是缺陷。"}
+{"id":"universal-proof-tetra","category":"universal-proof-request","workspace":"geometry3d","prompt":"证明：对任意三棱锥 P-ABC，若 PA ⊥ 平面 ABC，则 PA ⊥ BC","note":"与既有那条全称命题同类，换一个多面体：看\"求证\"边界与全称量词的处理是否稳定。"}
+{"id":"universal-proof-prism","category":"universal-proof-request","workspace":"geometry3d","prompt":"证明：对任意三棱柱 ABC-DEF，若 AD ⊥ 平面 ABC，则 AD ⊥ BC","note":"棱柱版本的全称命题。"}

@@ -133,6 +133,16 @@ describe(`benchmark 运行入口（mode=${MODE}）`, () => {
     }
   })
 
+  it("每一条题都至少留下一条痕迹（给定义或 residue）—— 让静默丢句再也过不去", () => {
+    // 这条不变量写在 `diagramObligations.ts` 自己的注释里（"新写法必须显形为 unverified，
+    // 不许把非空题面静默变成空通过"），而题集里**真的**有一条曾经整句消失
+    //（"保持六条棱长始终相等"）。放在题集这一层挡：以后往 `cases.jsonl` 里加的新写法，
+    // 只要静默丢掉就会红在这里，而不必等谁去逐条读归因。
+    for (const entry of cases) {
+      const ir = parseObligationIR(entry.prompt)
+      expect(ir.obligations.length + ir.unverified.length, `${entry.id}：${entry.prompt}`).toBeGreaterThan(0)
+    }
+  })
   it("抽取覆盖率如实报出来（**不是门禁**，是读数）", () => {
     if (MODE !== "deterministic_local") return
     const byStatus = report.deterministicLocal.byStatus
