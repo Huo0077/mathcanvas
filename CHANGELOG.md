@@ -5,6 +5,37 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-05 —— N3 第三步：拖动接线的决策层（`constrainedDrag` 第一次有了读取点）
+
+- **做成了什么**：新增 `apps/web/src/constrainedDrag3.ts`（纯函数 `planConstrainedDrag3`）并把
+  `App.tsx` 的 3D 拖动抬手接上它。拖动不再无条件写一次整体平移，而是先问"这一次拖动能不能在
+  满足已声明约束的前提下落下去"。
+- **被拖点是"暖启动"，不是硬锚**（这一条决定功能可不可用）：先把它放到"原位置 + delta"，
+  再让投影把它**连同别的点**拉回约束上 —— 所以它可能**贴回约束、不在指针正下方**。
+  若改成硬锚，"拖一个被约束在平面上的点"会 **100% 被拒**（这个点自己就违反了它自己的约束），
+  等于把功能做死。设计 §B 的原话本来就是"拖动点**接近**指针"。
+- **四种出口，不压成一个布尔值**：`passthrough`（开关关着 / 非空间点 / 绑定点 / 锁定 /
+  没有空间约束 → **逐字走原来那一次 `apply({ op: "translatePrimitive3", id, delta })`**）、
+  `noop`（约束把这次拖动完全抵消 → **不提交空事务**）、`refused`（拖到这里满足不了 →
+  **一个坐标都不写**，并说清是哪条约束）、`commit`（**一次** `applyBatch`）。
+- **"一步撤销"是白拿的**：接线前先裁决了上一批留下的前置问题 —— `applyBatch` 走
+  `commitTransaction`，而 op 工厂 `patchPoint3(id, position)` **早就存在**，所以
+  "一次改多个点坐标"**不需要新 op**，一次事务就是一步撤销。
+- **顺带**：内核导出 `isPlanarOnlyConstraint3`，让接线层把"不参与 3D 求解的平面约束"挑出来说
+  的时候不必把那份词表再抄一遍。`constrainedDrag` 这个开关**第一次有了读取点**（此前是占位）。
+- **如实不声称的**：`inconsistent` / `timeout` 仍然不报（矛盾约束只会振荡，本层只说"没能同时
+  满足"）；非 `point3` 的被拖对象、绑定点、锁定对象一律交回旧路径；`onHostDragEnd`
+  （提交宿主参数的那条路）**一行未动**。
+- **证据**：新增 `constrainedDrag3.test.ts` **11 条**，其中两条是**行为上的关键判据** ——
+  沿平面法向拖一个被约束在平面上的点 → `noop`；斜着拖 → `commit` 且它**贴回平面**。
+  全库单测 **301 文件 / 3488 通过 + 1 todo / 0 失败**；`typecheck` exit 0；
+  `lint` exit 0（0 error / 13 warning，与基线逐条相同）。
+- **边界（重要，别读错）**：**开关默认仍然关着**（`agentNextPhaseFlags()` 恒返回五关），
+  所以**产品行为与上一版完全相同** —— 这一批是"路修好了、闸门还没开"。
+  也**还没有浏览器用例**（`e2e/agent-constrained-drag.spec.ts` 不存在），因为目前**没有任何
+  产品入口**能把 `constrainedDrag` 打开；计划里 N3 的出口要求 `constrainedDrag=true` 的浏览器
+  正/反例，那一项**未达成**。
+
 ## 2026-10-05 —— N3 第二步：拖动层的**自由度与冗余诊断**（欠约束看得见、过约束分得清）
 
 - **做出了 N3 四条 RED 里的两条**：`projectPoint3Constraints` 的结果新增 `analysis` —— 在**最终构型**上对可动坐标做数值雅可比、算秩，于是"还剩多少自由度"（欠约束）与"约束有没有冗余"（过约束）都成了可读的数，而不是靠猜。

@@ -93,6 +93,16 @@ const MOVED_EPSILON = 1e-9
 /** 内核没有空间判据的约束（与 `constraintIR.ts` 的 `NO_SPATIAL_JUDGE` 同一件事，理由见那里）。 */
 const NO_SPATIAL_JUDGE: ReadonlySet<ConstraintSpec["type"]> = new Set<ConstraintSpec["type"]>(["coincident"])
 
+/**
+ * 这条约束**内核没有空间判据**（平面约束）。
+ *
+ * 拖动层要用它把"不参与 3D 求解"的约束挑出来单说，而不是把上面那份词表再抄一遍 ——
+ * 两处各写一份，就会出现"内核说它有判据、拖动层说它没有"这种最难查的分叉。
+ */
+export function isPlanarOnlyConstraint3(type: ConstraintSpec["type"]): boolean {
+  return NO_SPATIAL_JUDGE.has(type)
+}
+
 /** 这一版**有投影规则**的约束。其余需要动时如实报 `no-projection-rule`。 */
 const PROJECTABLE: ReadonlySet<ConstraintSpec["type"]> = new Set<ConstraintSpec["type"]>([
   "pointOnLine",

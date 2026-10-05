@@ -242,10 +242,24 @@ export type DragSolveResult =
 > **宿主参数**（`binding3.parameter` / `uvw`），坐标由重算从参数算出（注释原话："点永远精确落在
 > 宿主上"）。约束拖动**不许**把它当成"点坐标平移"一起处理。
 >
-> **接线前的一个未裁决前置**：`applyBatch` 收的是 `DomainOperation[]`，而当前动作词表里
-> **没有"一次改多个点坐标"的 op**（`translatePrimitive3` 只动一个图元及其跟随者）。
-> 所以要么复用/新增一个批量点更新的 op，要么确认多条 `updatePrimitive` 能把坐标一次写完 ——
-> 这决定接线的形状，**本阶段尚未裁决**。
+> **那个前置已裁决，接线也做了（2026-10-05 第三步）**：op 工厂 `patchPoint3(id, position)`
+> **早就存在**（`packages/scene-graph/src/operations.ts`），所以"一次改多个点坐标"**不需要新 op** ——
+> `applyBatch([patchPoint3(…), …])` 一次事务写完，一步撤销是白拿的。接线落在
+> `apps/web/src/constrainedDrag3.ts`（纯函数 `planConstrainedDrag3`）与 `App.tsx` 的
+> `commitDrag3End`。
+>
+> **与计划原文的偏差（已裁决，逐条有据）：**
+> ① 计划里的 `DragSolveRequest` / `DragSolveResult`（五个状态）**没有按原样实现**，落地成
+> `ConstrainedDragRequest` / `ConstrainedDragOutcome`，出口是 `passthrough` / `noop` /
+> `refused` / `commit` **四种**。理由：`inconsistent` 与 `timeout` 这两个状态**目前给不出诚实的
+> 判据**（矛盾约束在顺序投影下只会振荡），编一个出来就是"把没算过的说成结论"；而
+> `passthrough`（这一批不管这条路）与 `noop`（约束把拖动完全抵消）是实际会用到的两种真实出口，
+> 计划原文里没有。等冲突检测做出来再谈合并。
+> ② **被拖点是"暖启动"，不是硬锚** —— 计划原文没写这一条，但它决定功能可不可用：做成硬锚时
+> "拖一个被约束在平面上的点"会 100% 被拒（这个点自己就违反了它自己的约束）。
+> ③ **开关默认仍然关着**（`agentNextPhaseFlags()` 恒返回五关），所以这一批**产品行为未变**；
+> 也**没有浏览器入口**能把它打开，因此计划要求的 `constrainedDrag=true` 浏览器正/反例
+> **仍未达成**。
 
 ## Phase N4：开放题编译与真实 Provider Benchmark
 

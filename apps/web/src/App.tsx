@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 
-import { decodeMgeo, type DrawingSheetSpec, type PrimitiveSpec, type Workspace } from "@draw/dsl"
+import { decodeMgeo, type DrawingSheetSpec, type PrimitiveSpec, type Vector3, type Workspace } from "@draw/dsl"
 import { commitPatch, commitTransaction } from "@draw/scene-graph"
 import type { DomainOperation } from "@draw/scene-graph"
 
@@ -55,6 +55,12 @@ import { type SceneControlMode } from "./statusPrompts"
 import { computeIntersectionPreviews3d, type IntersectionPreview3dCache } from "./intersectionPreviews3d"
 import { toScenePreview, toSectionScenePreview, toSelectionLineScenePreview } from "./threeScenePreview"
 import { useSceneStore } from "./store"
+/**
+ * **3D 拖动抬手的提交决策**（N3 的 `constrainedDrag`）在 `./constrainedDrag3`：它是**纯函数**，
+ * 判据全在内核，所以能脱离整棵 App 单独测。开关来自 `./agent/featureFlags` 的那一份。
+ */
+import { planConstrainedDrag3 } from "./constrainedDrag3"
+import { agentNextPhaseFlags } from "./agent/featureFlags"
 /**
  * id 与自动标签的分配、以及键盘判据（Esc / 撤销快捷键 / 焦点是否在输入框）都在
  * `./documentIds`：它们是**纯函数**，此前是这里的模块级函数，`useSceneStore` 只被当作类型用，
@@ -498,6 +504,24 @@ export function App() {
    *    曲线形状就变了 —— 实测：圆被拖成一个不再过定点的圆（定点落进圆内部，距离只剩半径的 0.47 倍）。
    *    整体平移才符合"定点是曲线自己的属性"：曲线跟着定点走，转了多少度、半径多大都不变。
    */
+  /**
+   * **3D 拖动抬手的提交点**（N3 的 `constrainedDrag`）。
+   *
+   * 开关**关着时逐字走原来那一次 `apply({ op: "translatePrimitive3", id, delta })`** ——
+   * 这就是"关闭 flag 时旧路径行为不变"的实现方式，不是靠"看起来没变"。
+   *
+   * 开着时交给 `planConstrainedDrag3`（纯函数，判据全在内核），四种出口如实分开：
+   * `passthrough` 走旧路径、`refused`/`noop` **一个坐标都不写**、`commit` 走**一次**
+   * `applyBatch`（→ `commitTransaction`，所以"一步撤销"是白拿的）。
+   */
+  const commitDrag3End = (id: string, delta: Vector3) => {
+    const outcome = planConstrainedDrag3({ document, draggedId: id, delta, enabled: agentNextPhaseFlags().constrainedDrag })
+    if (outcome.kind === "passthrough") { apply({ op: "translatePrimitive3", id, delta }); return }
+    if (outcome.kind === "refused" || outcome.kind === "noop") { setGuidance(outcome.reason); return }
+    applyBatch(outcome.operations)
+    setGuidance(outcome.note)
+  }
+
   const handleDragEnd = (id: string, action: import("./interaction").DragAction) => {
     /**
      * 拖动"以动点为圆心"的圆 = 拖动那个圆心点。
@@ -851,7 +875,7 @@ export function App() {
           <button type="button" aria-controls="properties-dock" aria-expanded={mobileDock === "properties"} onClick={() => setMobileDock((current) => current === "properties" ? null : "properties")}>属性检查器</button>
         </div>
         {algebraPanel}
-        {document.workspace === "geometry3d" ? <ThreeSceneView document={wizardPreviewDocument} selectedIds={solidWizardOpen ? [] : selectedIds} onSelect={solidWizardOpen ? () => undefined : updateSelection} creationSession={spatialSession} solidWizardOpen={solidWizardOpen} solidPreviewActive={solidWizardOpen && wizardPreviewDocument !== document} onOpenSolidWizard={openSolidWizard} onCreationAnchor={handleSpatialAnchor} onCreationError={setGuidance} onFinishCreation={finishSpatialDrawing} onCancelCreation={() => { updateSpatialSession(null); setActiveCommand(null); setGuidance(null) }} onStepBackCreation={() => { const session = spatialSessionRef.current; if (session) updateSpatialSession(removeLastSpatialAnchor(session)) }} onStatusPromptChange={setSceneControl} previews={solidWizardOpen ? [] : scenePreviews} onPreviewHover={(hovering, preview) => setHoveredPreviewKey(hovering ? preview.key : null)} onPreviewClick={solidWizardOpen ? undefined : createFromPreview} onDragEnd={solidWizardOpen ? undefined : (id, delta) => apply({ op: "translatePrimitive3", id, delta })} onMoveSection={(id, distance) => apply({ op: "moveSectionPlane", id, distance })} onHostDragEnd={(id, parameter) => {
+        {document.workspace === "geometry3d" ? <ThreeSceneView document={wizardPreviewDocument} selectedIds={solidWizardOpen ? [] : selectedIds} onSelect={solidWizardOpen ? () => undefined : updateSelection} creationSession={spatialSession} solidWizardOpen={solidWizardOpen} solidPreviewActive={solidWizardOpen && wizardPreviewDocument !== document} onOpenSolidWizard={openSolidWizard} onCreationAnchor={handleSpatialAnchor} onCreationError={setGuidance} onFinishCreation={finishSpatialDrawing} onCancelCreation={() => { updateSpatialSession(null); setActiveCommand(null); setGuidance(null) }} onStepBackCreation={() => { const session = spatialSessionRef.current; if (session) updateSpatialSession(removeLastSpatialAnchor(session)) }} onStatusPromptChange={setSceneControl} previews={solidWizardOpen ? [] : scenePreviews} onPreviewHover={(hovering, preview) => setHoveredPreviewKey(hovering ? preview.key : null)} onPreviewClick={solidWizardOpen ? undefined : createFromPreview} onDragEnd={solidWizardOpen ? undefined : commitDrag3End} onMoveSection={(id, distance) => apply({ op: "moveSectionPlane", id, distance })} onHostDragEnd={(id, parameter) => {
           const primitive = document.primitives.find((candidate) => candidate.id === id)
           if (primitive?.type !== "point3" || !primitive.binding) return
           // 只提交参数：坐标由重算从参数算出，所以点永远精确落在宿主上。
