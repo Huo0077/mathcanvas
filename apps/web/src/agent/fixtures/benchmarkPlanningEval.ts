@@ -294,6 +294,18 @@ async function runOneCase(
       documentGeneration: document.revision
     })
     const latency = { totalMs: Math.max(0, Date.now() - started) }
+    /**
+     * **三支，不是两支**（2026-10-05 第二次真实运行之后改）：`planned` / `clarification` / `rejected`。
+     *
+     * 澄清**单独一支**的理由见 `report.ts` 的 `planning` 词表说明，一句话：
+     * "**模型发现矛盾、于是提问**"与"**编译器把计划拒了 / 模型压根没给计划**"是**相反**的两件事 ——
+     * 那次真实运行里被记成 `rejected` 的恰恰是前者（模型要求用户二选一），
+     * 合成一个计数会把"模型做对了"读成"模型失败了"。
+     * **fail-closed 那一半一个字不改**：澄清**不是** `planned`（"问了"不等于"计划被接受"）。
+     */
+    if (compiled.ok && compiled.plan?.kind === "clarification") {
+      return { ...base, status: "clarification", evidence: clarificationEvidence(entry.id, compiled.plan), latency }
+    }
     return compiled.ok && compiled.plan?.kind === "plan"
       ? { ...base, status: "planned", evidence: acceptedEvidence(compiled.diagnostics.length, compiled.actions.length, compiled.draftDocument !== null), latency }
       : { ...base, status: "rejected", evidence: rejectionEvidence(entry.id, compiled), latency }
@@ -314,9 +326,22 @@ function acceptedEvidence(diagnostics: number, actions: number, producedDraft: b
 }
 
 /**
+ * 「模型在问」这一支的证据：**把它的原话带上**（问题原文）。
+ *
+ * 它独立于 `rejected`：这一支说的是"模型没给计划，而是要求用户先澄清"，
+ * 不是"计划被拒了"。读者要能一眼看出是哪一种 —— 这也是它独立成一支的**全部**理由。
+ */
+function clarificationEvidence(caseId: string, envelope: { questions: readonly string[] }): BenchmarkEvidenceEntry[] {
+  return [{ claim: caseId, status: "clarification", evidence: `模型没给计划，而是在问：${envelope.questions.join(" / ")}` }]
+}
+
+/**
  * 「被拒」的两种来源，**都带真实原文**（读者要能分辨是哪一种）：
  * - 编译器报了 error ⇒ 逐条 `code@path: detail`（不是我们概括的一句话）；
- * - 模型根本没给计划（澄清 / 只读回答）⇒ 它的**问题原文 / 回答原文**。
+ * - 模型给的是**只读回答**（`kind: "answer"`）或者**什么都没给**。
+ *
+ * **注意**：`kind: "clarification"` **不在这里**（它走 `clarificationEvidence`，是另一支）——
+ * 这一支与那一支说的是相反的两件事。
  */
 function rejectionEvidence(caseId: string, compiled: PlanCompileResult): BenchmarkEvidenceEntry[] {
   if (!compiled.ok) {
@@ -333,11 +358,9 @@ function rejectionEvidence(caseId: string, compiled: PlanCompileResult): Benchma
   return [{
     claim: caseId,
     status: "rejected",
-    evidence: envelope?.kind === "clarification"
-      ? `模型给的是澄清、不是计划，它问的是：${envelope.questions.join(" / ")}`
-      : envelope?.kind === "answer"
-        ? `模型给的是只读回答、不是计划：${envelope.answer}`
-        : "模型没有给出计划。"
+    evidence: envelope?.kind === "answer"
+      ? `模型给的是只读回答、不是计划：${envelope.answer}`
+      : "模型没有给出计划。"
   }]
 }
 
@@ -373,6 +396,9 @@ export function formatPlanningReport(result: PlanningEvalResult): string {
     `cases             ${cases}（layer=planning，seed=${PLANNING_EVAL_SEED}）`,
     "",
     `planned           ${count("planned")}/${total}`,
+    // **澄清单独一行**（2026-10-05 第二次真实运行之后加）：它与 `rejected` 说的是相反的两件事 ——
+    // "模型在问"不是失败。合成一行会把读数方向读反。
+    `clarification     ${count("clarification")}/${total}`,
     `rejected          ${count("rejected")}/${total}`,
     `error             ${count("error")}/${total}`,
     `not measured      ${count("not_measured")}/${total}`,

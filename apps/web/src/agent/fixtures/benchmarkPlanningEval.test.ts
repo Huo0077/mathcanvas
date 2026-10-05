@@ -181,12 +181,30 @@ describe("应用内真实 provider 的题集 planning 通道（N4b）", () => {
     expect(text).toContain("solid.create_unicorn")
   })
 
-  it("模型只给了**澄清**（没给计划）⇒ rejected，不是 planned（fail-closed）", async () => {
+  it("模型只给了**澄清**（没给计划）⇒ 独立记 `clarification`，**不是** planned（fail-closed）", async () => {
+    /**
+     * **2026-10-05 第二次真实运行改的判据**（控制器裁决）：原来这一支记的是 `rejected`。
+     * 那次运行的逐条行显示：被拒的那一条其实是**模型自己发现了矛盾、于是提问**
+     *（"AB 不能同时等于 3 和 5，请二选一"）—— 那是**好**行为，而 `rejected` 这个格里
+     * **同时装着**"编译器把计划拒了 / 模型根本没给计划"（真失败）。
+     * 合成一个计数会把"模型做对了"读成"模型失败了"，方向恰好反过来。
+     *
+     * 所以"澄清"独立成一支（跨层词表里本来就有 `clarification`，见证层在用）。
+     * **fail-closed 那一半一个字不改**：澄清**不是** `planned` —— 它仍然不算"计划被接受"。
+     */
     const result = await runProviderPlanningEval({ resolveProvider: async () => RESOLVED, createPlanner: () => plannerReturning(CLARIFICATION_ENVELOPE) })
 
-    expect(result.runs.map((run) => run.status)).toEqual(["rejected", "rejected", "rejected"])
-    // 澄清的问题原文也要在证据里 —— 否则读者看不出"被拒"到底是"编译器说不行"还是"模型没给计划"。
+    expect(result.runs.map((run) => run.status)).toEqual(["clarification", "clarification", "clarification"])
+    // 澄清的问题原文也要在证据里 —— 否则读者看不出这一支到底是"模型在问"还是"编译器说不行"。
     expect(result.runs[0]!.evidence.map((entry) => entry.evidence).join(" | ")).toContain("请说明底面四边形的形状")
+    // **不是 planned**：这一条是这一支存在的前提（"问了"不等于"计划被接受"）。
+    expect(result.runs.map((run) => run.status)).not.toContain("planned")
+    /**
+     * 汇总里也要有这一支的**计数行** —— 注意这里钉的是 `^clarification\s+3/3$`（整行），
+     * **不是** `toContain("clarification")`：后者会被下面那些**逐条行**满足
+     *（逐条行本来就打 `run.status`），于是删掉汇总行它也照样绿 —— 那是一条不可能红的断言。
+     */
+    expect(formatPlanningReport(result)).toMatch(/^clarification\s+3\/3$/m)
   })
 
   it("某一条**抛了** ⇒ 记 error 带原始消息，其余两条照跑（一条坏题不许拖垮整批）", async () => {

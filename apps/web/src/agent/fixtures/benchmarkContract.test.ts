@@ -130,11 +130,19 @@ describe("应用侧：benchmark 题集与报告契约来自 @draw/agent-core（�
     expect([...BENCHMARK_STATUSES_BY_LAYER.extraction]).toEqual(["extracted", "partial", "empty", "not_measured", "error"])
     expect([...BENCHMARK_STATUSES_BY_LAYER.witness]).toEqual(["verified_instance", "unverified_instance", "no_witness", "clarification", "not_measured", "error"])
     /**
-     * `planning` 层的四个词，逐项写出来 —— 它们各自的含义写在 `report.ts` 的定义处
-     *（`planned` = 计划被编译接受；`rejected` = 没被接受，含"模型没给计划"；
+     * `planning` 层的**五个**词，逐项写出来 —— 它们各自的含义写在 `report.ts` 的定义处
+     *（`planned` = 计划被编译接受；`clarification` = 模型没给计划而是在**问**；
+     * `rejected` = 没被接受且不是在问（编译器拒了 / 只读回答 / 什么都没给）；
      * `error` = 抛了；`not_measured` = 这一轮什么都没测）。
+     *
+     * **2026-10-05 第二次真实运行之后新增 `clarification`**：那次运行的逐条行显示，
+     * 被记成 `rejected` 的那一条其实是**模型自己发现了矛盾、于是要求用户二选一** ——
+     * 那是好行为，而 `rejected` 里同时装着"编译器把计划拒了"（真失败）。
+     * 合成一个计数会把读数方向读反，所以拆开。
+     * **这条 `toEqual` 当时按设计先红了一次**（`expected ['planned','clarification',…] to deeply equal ['planned','rejected',…]`），
+     * 然后才更新成下面这行 —— 精确相等钉死的判据就该这样咬人。
      */
-    expect([...BENCHMARK_STATUSES_BY_LAYER.planning]).toEqual(["planned", "rejected", "not_measured", "error"])
+    expect([...BENCHMARK_STATUSES_BY_LAYER.planning]).toEqual(["planned", "clarification", "rejected", "not_measured", "error"])
   })
 
   it("**planning 层**能进报告契约：一条「计划被编译接受」的记录不会被拒收", () => {

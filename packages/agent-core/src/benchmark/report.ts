@@ -56,20 +56,25 @@ export type BenchmarkRunStatus =
  * - `extraction`：`extracted`（子句都被处理）/ `partial`（有抽出来的、也有读不出的残留）/
  *   `empty`（一条都没抽出来）；
  * - `witness`：三个见证结论与 `clarification` 与 `agent-core` **同词**（那边改了这里要跟着改）；
- * - `planning`（N4b）：`planned` / `rejected` —— 含义见下面那段，**不许含糊**；
+ * - `planning`（N4b）：`planned` / `clarification` / `rejected` —— 含义见下面那段，**不许含糊**；
  * - `not_measured` / `error` 每一层都有：前者是"这一轮没有测量"（例如没有凭据），
  *   后者是"跑了但失败了"。
  *
- * ## `planning` 层四个词的确切含义
+ * ## `planning` 层五个词的确切含义
  *
  * - **`planned`**：`compilePlan` 返回 `ok === true`，**并且**它产出的信封是 `kind: "plan"`。
  *   判据只有编译器那一个返回值：**不看模型自述**（"我觉得这个计划对"不算），
  *   也不需要金标准（这正是用户选这条口径的理由 —— 接受与否是客观的）。
- * - **`rejected`**：**没被接受**。它覆盖两种，`evidence` 里都带**真实原文**，读者能分辨是哪种：
+ * - **`clarification`**（2026-10-05 第二次真实运行之后新增）：模型**没给计划，而是提了问**
+ *   （信封 `kind: "clarification"`，`ok === true`）。
+ *   **为什么要独立成一支**：那次运行的逐条行显示，被记成 `rejected` 的那一条其实是
+ *   **模型自己发现了矛盾、于是要求用户二选一**（"AB 不能同时等于 3 和 5"）—— 那是**好**行为，
+ *   而 `rejected` 这个格里**同时装着**"编译器把计划拒了 / 模型根本没给计划"（真失败）。
+ *   **合成一个计数会把"模型做对了"读成"模型失败了"，方向恰好反过来。**
+ * - **`rejected`**：**没被接受，且不是"在问"**。它覆盖两种，`evidence` 里都带**真实原文**，读者能分辨：
  *   ① 编译器拒了（`ok === false`，逐条诊断的 `code@path: detail`）；
- *   ② 模型根本没给出计划（`ok === true` 但信封是 `clarification` / `answer`）。
- *   ②也算 `rejected` 而不是 `planned`：这一层测的是"**计划**被编译接受"，
- *   把澄清记成接受会让"没给计划"读起来像"计划通过了"——错的方向必须朝保守那边偏（fail-closed）。
+ *   ② 模型给的是**只读回答**（`kind: "answer"`）或者**什么都没给**。
+ *   ②仍然不是 `planned`：这一层测的是"**计划**被编译接受"——错的方向必须朝保守那边偏（fail-closed）。
  * - **`error`**：这一条题在跑的过程中**抛了**（`evidence` 带错误消息原文）。
  * - **`not_measured`**：这一轮**什么都没测**（没有 provider / 没有凭据），
  *   显式写 `null` 的 `provider` / `model` —— 这是 `real_provider` 唯一允许缺身份的一支
@@ -78,7 +83,7 @@ export type BenchmarkRunStatus =
 export const BENCHMARK_STATUSES_BY_LAYER: Record<BenchmarkLayer, readonly BenchmarkRunStatus[]> = {
   extraction: ["extracted", "partial", "empty", "not_measured", "error"],
   witness: ["verified_instance", "unverified_instance", "no_witness", "clarification", "not_measured", "error"],
-  planning: ["planned", "rejected", "not_measured", "error"]
+  planning: ["planned", "clarification", "rejected", "not_measured", "error"]
 }
 
 export const BENCHMARK_RUN_REQUIRED_FIELDS = [
