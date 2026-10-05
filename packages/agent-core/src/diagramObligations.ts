@@ -1,4 +1,4 @@
-﻿/** 题设来自用户原话而不是模型的 relations 声明。只读有确定点名的窄句型。 */
+/** 题设来自用户原话而不是模型的 relations 声明。只读有确定点名的窄句型。 */
 export type DiagramObligationKind =
   | "fixedLength" | "equilateral" | "equalLength" | "midpoint" | "segmentRatio"
   | "planePerpendicular" | "dihedral" | "perpendicular" | "parallel"
@@ -118,7 +118,7 @@ export function parseDiagramObligations(prompt: string): DiagramObligationSet {
   for (const clause of givenText.matchAll(/[^，,。；;\n]+/g)) {
     if (unverified.some((entry) => clause[0].includes(entry.sourceText))) continue
     const leftover = [...clause[0]].map((character, offset) => used.has(clause.index + offset) ? " " : character).join("").trim()
-    if (/[=⊥∥]|二面角|等边|等长|长度相等|线段相等|边相等|中点|垂直|平行|共面|之比|比值|比例|共线|(?:点?[A-Z]\s*在\s*平面)/.test(leftover)) {
+    if (/[=⊥∥]|二面角|等边|等长|长度相等|线段相等|边相等|相等|中点|垂直|平行|共面|之比|比值|比例|共线|(?:点?[A-Z]\s*在\s*平面)/.test(leftover)) {
       unverified.push({ sourceText: leftover, reason: "原题出现了尚未被可靠解析的几何条件，未核验。" })
     }
   }

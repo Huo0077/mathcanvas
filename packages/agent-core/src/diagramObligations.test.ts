@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vitest"
 
 import { parseDiagramObligations } from "./diagramObligations"
 
@@ -74,6 +74,15 @@ describe("parseDiagramObligations", () => {
       const parsed = parseDiagramObligations(`在四棱锥P-ABCD中，${sentence}，画示意图`)
       expect(parsed.givens.length + parsed.unverified.length, sentence).toBeGreaterThan(0)
     }
+  })
+  it("surfaces a bare 相等 phrasing that has no supported judge (由 benchmark 查出的，2026-10-05)", () => {
+    // 原话来自 `scripts/agent-benchmark` 的 dynamic-request 用例。修前它**一个子句都没留下**：
+    // 既没有给定义、也没有 residue —— 而这句话里明明有一个几何条件词（"相等"）。
+    // 这与本文件上面那条纪律冲突：**新写法必须显形，不许把非空题面静默变成空通过**。
+    const parsed = parseDiagramObligations("拖动这个正四面体的一个顶点，保持六条棱长始终相等")
+
+    expect(parsed.givens.length + parsed.unverified.length).toBeGreaterThan(0)
+    expect(parsed.unverified.some((item) => item.sourceText.includes("相等"))).toBe(true)
   })
   it("keeps ordinary explanations outside geometric condition coverage", () => {
     const parsed = parseDiagramObligations("比如画一张四棱锥 P-ABCD 的示意图")

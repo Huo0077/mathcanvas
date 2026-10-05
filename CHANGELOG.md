@@ -5,6 +5,33 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-05 —— N4 第三步：逐条归因，**然后 benchmark 真的查出一个缺陷**
+
+- **先做归因**（"那两个 `empty` 到底是哪两个"这件事欠了好几轮）：`BENCHMARK_REPORT` 里本来就逐条带着
+  `caseId` / `status` / `evidence`，展开就行 —— **不用改代码**。
+- **归因结果**：`underdetermined-pyramid-base` extracted(3 条) / `contradictory-two-lengths`
+  extracted(2) / `unsupported-expression` **empty** / `shuffled-naming` extracted(1) /
+  `dihedral-forty-five` **partial**(2) / `dynamic-drag-request` **empty** /
+  `universal-proof-request` extracted(1)。
+- **先把 `empty` 这个标签的含义写清楚**：它是"**0 条给定义**"，**不等于**"什么都没留下" ——
+  `unsupported-expression` 的 `empty` 旁边就带着一条 residue（"AB"）。
+- **benchmark 查出的真缺陷（本批最有价值的产出）**：`dynamic-drag-request` 的原话是
+  「拖动这个正四面体的一个顶点，**保持六条棱长始终相等**」，修前它 `givens=0` **且** `unverified=0`
+  —— 一个几何条件词（"相等"）**凭空消失**了。而 `diagramObligations.ts` 自己的注释写着：
+  新写法必须显形为 unverified，**不许把非空题面静默变成空通过**。
+- **根因（复现 + 读代码，不是猜）**：residue 的关键词表只认**连续的** `等长` / `长度相等` /
+  `线段相等` / `边相等`，而"棱长始终相等"里一个都没有 —— 只有"相等"，而它**不在表里**。
+- **修法（一个词的改动）**：关键词表补上 `相等`。
+- **按纪律走**：先写**失败**用例（用 benchmark 里的**原话**）→ 确认 RED
+  （`expected 0 to be greater than 0`）→ 再改那一个词 → GREEN。旁边那两条
+  "普通说明文字不许变成 residue"的既有用例仍然全绿，说明没有放宽过头。
+- **修后的读数**：`dynamic-drag-request` 的 `evidence` 从"（没有抽出任何子句）"变成一条
+  `unverified` —— 数字上 `covered=5 empty=2` **没变**（`empty` 的定义就是"0 条给定义"），
+  但记录从"什么都没有"变成了"**有，但没核验**"。
+- **证据**：`diagramObligations.test.ts` 11 → **12 条**；diagram 三个套件 25 条全绿；
+  全库单测 **306 文件 / 3566 通过 + 1 todo / 0 失败**；`typecheck` / `lint` 见
+  `docs/current-status.md` §一。
+
 ## 2026-10-05 —— N3 第五步：线状 `parallel` / `perpendicular` 的投影（内核最后一块缺口）
 
 - **为什么现在能做**：之前我把它记成"要先决定旋转哪一侧的点，是一个产品判断"。**那个判断其实

@@ -13,6 +13,29 @@
 
 ## 一、现在能不能跑（可复核的门禁读数）
 
+**2026-10-05 N4 第三步（逐条归因 + benchmark 查出的缺陷）—— 本批实测：**
+
+| 用例 | 类别 | 状态 | 证据 |
+| --- | --- | --- | --- |
+| `underdetermined-pyramid-base` | underdetermined | extracted | 3 条 |
+| `contradictory-two-lengths` | contradictory | extracted | 2 条 |
+| `unsupported-expression` | unsupported-expression | **empty** | 1 条 **unverified**（"AB"） |
+| `shuffled-naming` | shuffled-naming | extracted | 1 条 |
+| `dihedral-forty-five` | dihedral-or-ratio | **partial** | 2 条 |
+| `dynamic-drag-request` | dynamic-request | **empty** | 1 条 **unverified**（修前是"（没有抽出任何子句）"） |
+| `universal-proof-request` | universal-proof-request | extracted | 1 条 |
+
+| 命令 | 当次结果 |
+| --- | --- |
+| `npm.cmd test -- --maxWorkers=2 --reporter=dot` | **306 文件 / 3566 通过 + 1 todo / 0 失败**（135 s） |
+| `npm.cmd run bench:agent` | exit 0；`BENCHMARK_COVERAGE cases=7 covered=5 empty=2 error=0` |
+| `npm.cmd exec -- vitest run packages/agent-core/src/diagramObligations.test.ts --maxWorkers=1` | **12 通过 / 0 失败**（原 11） |
+
+> **`empty` 的含义要读准**：它是"**0 条给定义**"，**不等于**"什么都没留下" —— 上表两个 `empty` 里都带着一条 residue。
+> **benchmark 查出的真缺陷（已修）**：`dynamic-drag-request` 的原话「…**保持六条棱长始终相等**」修前 `givens=0` **且** `unverified=0` —— 一个几何条件词凭空消失，与 `diagramObligations.ts` 自己的纪律（"新写法必须显形，不许把非空题面静默变成空通过"）冲突。**根因**：residue 关键词表只认连续的 `等长`/`长度相等`/`线段相等`/`边相等`，而"棱长始终相等"里只有"相等"，不在表里。**修法**：表里补上 `相等`（一个词）。
+> **按纪律走的顺序**：先写**失败**用例（用 benchmark 原话）→ 看到 RED（`expected 0 to be greater than 0`）→ 再改那一个词 → GREEN；"普通说明文字不许变成 residue"的既有用例仍全绿，说明没放宽过头。
+> **修后**：该用例的 `evidence` 从"（没有抽出任何子句）"变成一条 `unverified` —— `covered=5 empty=2` 数字未变（定义使然），但记录从"什么都没有"变成"**有，但没核验**"。
+
 **2026-10-05 N3 第五步（线状 `parallel` / `perpendicular` 的投影）—— 本批实测：**
 
 | 命令 | 当次结果 |
