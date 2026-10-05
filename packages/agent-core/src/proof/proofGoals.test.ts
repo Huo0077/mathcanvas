@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { declaredProofGoal, declaredProofGoalForConstraint, firstBatchGoalsWithoutAnyCarrier, firstBatchGoalsWithoutObligationCarrier, PROOF_GOAL_KINDS, PROOF_GOAL_SUPPORT } from "./proofGoals"
+import { declaredProofGoal, declaredProofGoalForConstraint, firstBatchGoalsWithoutAnyCarrier, firstBatchGoalsWithoutAnyRoute, firstBatchGoalsWithoutObligationCarrier, proofGoalDischargeRoute, PROOF_GOAL_KINDS, PROOF_GOAL_SUPPORT } from "./proofGoals"
 
 /**
  * **形式证明出口声称支持哪些短目标**（N5）。
@@ -45,6 +45,56 @@ describe("形式证明的短目标词表（N5）", () => {
       expect(support?.obligationKinds).toEqual([])
       expect(support?.constraintTypes).toEqual([])
     }
+  })
+
+  /**
+   * **勾股的裁决（2026-10-05，用户决定）**：走"**判成 ⊥ 目标 + 用勾股定理那一步把结论接回来**"。
+   *
+   * 这件事**不能**做成"把勾股别名成 ⊥" —— 那就等于把一条**推断**藏在分类函数里，
+   * 而推断应当出现在**证明**里、看得见。所以这一组用例把三件事分开钉：
+   *
+   * 1. **载体**：勾股仍然没有（两个列表都是空）；
+   * 2. **分类**：从约束层问 `perpendicular` 只得到 ⊥，**不许**顺带返回勾股；
+   * 3. **路线**：勾股多出来的是一条**显式的推断路线**（从 ⊥ 出发 + 那一步定理），
+   *    而"路线"与"载体"是两件事。
+   */
+  it("勾股仍然**没有直接载体** —— 裁决不是「把它别名成 ⊥」", () => {
+    const pythagorean = PROOF_GOAL_SUPPORT.find((entry) => entry.kind === "pythagorean")
+
+    expect(pythagorean?.obligationKinds).toEqual([])
+    expect(pythagorean?.constraintTypes).toEqual([])
+  })
+
+  it("**不许别名**：从约束层问垂直只得到垂直，没有任何约束能直接问出勾股", () => {
+    expect(declaredProofGoalForConstraint("perpendicular")?.goal).toBe("perpendicular")
+
+    for (const type of ["perpendicular", "parallel", "collinear", "coplanar", "fixedDistance"]) {
+      expect(declaredProofGoalForConstraint(type)?.goal, type).not.toBe("pythagorean")
+    }
+    expect(declaredProofGoal("perpendicular")?.goal).not.toBe("pythagorean")
+  })
+
+  it("勾股有一条**显式推断路线**：先证 ⊥，再走那一步定理（而且定理要**点名**）", () => {
+    const route = proofGoalDischargeRoute("pythagorean")
+
+    expect(route.kind).toBe("via-inference")
+    if (route.kind !== "via-inference") throw new Error("上面刚断言过")
+    expect(route.from).toBe("perpendicular")
+    // 那一步必须写得出名字、搜得到 —— 不是一句"等价"。
+    expect(route.theorem).toContain("勾股定理")
+    expect(route.note.length).toBeGreaterThan(0)
+  })
+
+  it("**直接有载体的目标不许被标成推断**（否则「哪一步是推断」就说不清了）", () => {
+    for (const kind of ["parallel", "perpendicular", "collinear", "coplanar", "equalLength"] as const) {
+      expect(proofGoalDischargeRoute(kind).kind, kind).toBe("direct")
+    }
+  })
+
+  it("**一处路线都没有**的首批目标：现在**空了**（勾股已经有推断路线）", () => {
+    expect(firstBatchGoalsWithoutAnyRoute()).toEqual([])
+    // 而"没有直接载体"这个事实照旧 —— 它说的是**载体**，不是路线。
+    expect(firstBatchGoalsWithoutAnyCarrier()).toEqual(["pythagorean"])
   })
 
   it("**约束层也是载体**：共线 / 共面从约束层问得出来（从解析层问不出来）", () => {

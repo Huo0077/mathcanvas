@@ -5,6 +5,30 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-05 —— N5「勾股」按裁决落地：**判成 ⊥ + 勾股定理那一步**（而且**没做成别名**）
+
+- **裁决（用户 2026-10-05）**：勾股走"**把目标判成 ⊥，再用勾股定理那一步把结论接回来**"这条路。
+- **怎么落地的（关键在"不别名"）**：我给 `ProofGoalSupport` 加了一个 **`inference`** 字段，而不是往
+  `constraintTypes` 里塞一个 `"perpendicular"`。区别是实质性的：
+  - **别名**会让"从约束层问 ⊥"顺带返回勾股 —— 一条**推断**就这样藏进分类函数里；
+  - **`inference`** 把那条推断变成**有名字的一步**（`{ from: "perpendicular", theorem: "勾股定理及其逆定理" }`），
+    并要求它出现在**证明**里。这正是第 50 轮我在代码注释里写下的那条约束。
+  另外新增 `proofGoalDischargeRoute(kind)`（`direct` / `via-inference` / **`none`**）——
+  `none` 那一档不是装饰，它是 fail-closed 的默认值：将来加一个既没载体、也没推断路线的目标时，
+  它会**如实返回 none**，而不是被当成"直接能判"。
+- **读数里的变化**：`proof:smoke` 现在报 `goalsWithoutAnyRoute: []`（"一处路线都没有的首批目标"**空了**）
+  与 `pythagoreanRoute: {"kind":"via-inference","from":"perpendicular"}`。**裁决在读数里看得见。**
+- **定向变异两次（都验过判据不是空壳）**：
+  ① 把 `"perpendicular"` 塞进勾股的**载体**（也就是我禁止的那个别名）⇒ **4 条红**，
+  含专门那条"勾股仍然没有直接载体 —— 裁决不是把它别名成 ⊥"；
+  ② 让 `proofGoalDischargeRoute` **恒返回 `direct`** ⇒ 1 条红（"勾股有一条显式推断路线"）。
+- **一处操作失误（如实记档）**：更新读数表时我用了一个只按内容匹配的替换，结果**改错了行** ——
+  它命中的是**反证台账**里那条 `proof:smoke --mode=lean`（"没有后端模式，假装有比失败更糟"）的记录，
+  把它覆盖成了读数行。**台账不是读数**，已按行还原。这是本会话**第二次**同型失误（上一次是 e2e 的
+  186→189 改到历史记录上）。两次的处方一样：**改读数要按行号定位，不要按内容全局替换。**
+  顺带把之前几处我自己编的"第 N 轮"换成**日期**（goal 对象早已不存在，轮号是我编的）。
+- **证据**：proof 目录 36 → **41 条**；`proof:smoke` 7 条全绿；全库单测 **3620 通过 + 1 todo / 0 失败**；
+  `typecheck` exit 0；`lint` **0 error / 13 warning**（实测）。
 ## 2026-10-05 —— **N3 计划 RED 的后半段补完**：约束拖动的浏览器正/反例
 
 - **补上了什么**：`e2e/agent-constrained-drag.spec.ts`（2 条，一正一反）。

@@ -127,6 +127,7 @@
   `proof:smoke` **7 通过**。
 - **没有的**：**没有任何后端接入**（要接得先交一份十栏填齐、结论 `passed` 的审查记录），
   所以 `formally_proved` 在今天的构建里**不可达**；计划首批点名的**共线 / 共面 / 勾股在解析层
+> **勾股的裁决（2026-10-05，用户决定）**：走"**判成 ⊥ 目标 + 用勾股定理那一步把结论接回来**"。代码里落成 **`inference`**（`proofGoals.ts`）：勾股**仍然没有直接载体**，多的是一条显式推断路线 `{ from: "perpendicular", theorem: "勾股定理及其逆定理" }`；新增 `proofGoalDischargeRoute()` 把"直接能判"与"要多走一步"分开报。**没做成别名** —— 从约束层问 `perpendicular` 只会得到 ⊥。**定向变异验过**：把 `"perpendicular"` 塞进勾股的载体 ⇒ 4 条红；让路线恒为 `direct` ⇒ 1 条红。`proof:smoke` 现在报 `goalsWithoutAnyRoute: []`。
   表达不出来**（`DiagramObligationKind` 里没有这三种），需要"扩解析层还是从首批划掉"的裁决；
   产物也**没有进过任何界面**（`ClaimEvidence` 这套词汇根本没到过 Web 层）。
 - **为什么这一条不能算"已达成"**：一个**永远不可能产出** `formally_proved` 的系统，

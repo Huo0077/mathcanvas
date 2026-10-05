@@ -22,16 +22,16 @@
 
 | 门禁 | 命令 | 最新读数 | 退出码 | 记录于 |
 | --- | --- | --- | --- | --- |
-| 类型检查 | `npm.cmd run typecheck` | 全部工作区 + `e2e/` + `scripts/`，无错 | 0 | **第 27 轮**（整批电池） |
-| Lint | `npm.cmd run lint` | **0 error / 13 warning**（与基线逐条相同） | 0 | **第 27 轮**（整批电池） |
-| 单测（全库） | `npm.cmd test -- --maxWorkers=2 --reporter=dot` | **306 文件 / 3567 通过 + 1 todo / 0 失败** | 0 | **第 27 轮**（整批电池） |
+| 类型检查 | `npm.cmd run typecheck` | 全部工作区 + `e2e/` + `scripts/`，无错 | 0 | **2026-10-05 复核** |
+| Lint | `npm.cmd run lint` | **0 error / 13 warning**（与基线逐条相同） | 0 | **2026-10-05 复核** |
+| 单测（全库） | `npm.cmd test -- --maxWorkers=2 --reporter=dot` | **313 文件 / 3620 通过 + 1 todo / 0 失败** | 0 | **2026-10-05 复核** |
 | Rust provider 测试 | `npm.cmd run test:rust` | **238 通过 / 3 ignored / 0 失败**（16 个二进制） | 0 | **第 27 轮**（整批电池） |
-| 全量 e2e | `npm.cmd run test:e2e` | **191 通过 / 0 失败**（55.7 s，16 workers；含 `next-phase-flag-entry.spec.ts` 3 条与 `agent-constrained-drag.spec.ts` **正/反例 2 条**） | 0 | **第 60 轮** |
+| 全量 e2e | `npm.cmd run test:e2e` | **191 通过 / 0 失败**（55.7 s，16 workers；含 `next-phase-flag-entry.spec.ts` 3 条与 `agent-constrained-drag.spec.ts` **正/反例 2 条**） | 0 | **2026-10-05 复核** |
 | 性能基线 | `npm.cmd run test:perf` | 9/9；`drag/300-frames` **686–711 ms**（**三次采样的区间，不是单点**） | 0 | **第 37 轮重校** |
 | 生产构建（web） | `npm.cmd run build --workspace @draw/web` | **成功**（4.83 s）；产物落 `build-check/`（已 gitignore，构建后工作树干净）；有**既有的**主 chunk 1.8 MB 提示 | 0 | **第 28 轮** |
 | Agent 评测 | `npm.cmd run eval:agent` | `deterministic_local`：pass@1 **4/8**、pass@3 **4/8**、工具选择 45/45、工具错误 3/45 | 0 | **第 27 轮**（整批电池；**未接真实模型**，不是模型准确率） |
 | Agent benchmark | `npm.cmd run bench:agent` | 抽取层：`cases=21 covered=14 empty=7 error=0`；`BENCHMARK_PREMISE obligations=24 residue=9 rate=0.727`；`BENCHMARK_EXTRACTION covered=14/21 rate=0.667`。**见证层（第 48 轮新增）**：`BENCHMARK_WITNESS verified=1 unverified=20 no_witness=0 error=0 solveRate=0.048`；`BENCHMARK_JUDGEABILITY supported=21 unsupported=3 ambiguous=0 totalObligations=24`；`BENCHMARK_WITNESS_CODES {"requires-candidates":7,"unsupported-shape":9,"no-candidate-constructed":4,"unsupported-base-shape":4,"witness-search":20}`（**第 51 轮**） | 0 | **第 48 轮** |
-| 证明边界 smoke | `npm.cmd run proof:smoke` | 7 通过 / 0 失败；`PROOF_BACKENDS {"wired":[],"reviewed":0}`、`wiredBackends=[]` | 0 | **第 30 轮** |
+| 证明边界 smoke | `npm.cmd run proof:smoke` | 7 通过 / 0 失败；`PROOF_BACKENDS {"wired":[],"reviewed":0}`；**勾股裁决后新增**：`goalsWithoutAnyRoute: []`、`pythagoreanRoute: {"kind":"via-inference","from":"perpendicular"}` | 0 | **2026-10-05 复核** |
 | N3 定向测试（**计划点名的那七件**） | `vitest run constraints / constraints3d / planar-constraints / reactive/constraints / operations / patches / scene-store` | **7 文件 / 241 通过 / 0 失败** | 0 | **第 31 轮** |
 
 > **这一张表现在是同一批读数**（2026-10-05 第 27 轮，九道门禁**串行**跑完，14:47:49 → 14:52:12，
@@ -87,7 +87,7 @@
 | # | 要你定什么 | 为什么我定不了 | 定了之后能做什么 |
 | --- | --- | --- | --- |
 | 1 | ~~**`constrainedDrag` 怎么打开**~~ **✅ 全解决（2026-10-05）** | 入口：**设置 → 实验性功能 → 约束拖动**（`ExperimentalFeatures.tsx`，偏好存 `mathcanvas:next-phase-preferences`，`agentNextPhaseFlags()` **只**取这一个）。浏览器验收：`e2e/next-phase-flag-entry.spec.ts`（入口 3 条）+ **`e2e/agent-constrained-drag.spec.ts`（拖动正/反例 2 条）** —— 关着时拖动改变 \|AB\|、打开后同样的拖动 \|AB\| **仍是 1**（且断言 A 真的动过，不许用"没变"冒充"被约束住"）。顺带修掉顶栏那个**死的「设置」按钮** | **默认仍是关**（关着走原来的 `translatePrimitive3`）；**定向变异验证过判据**：把 `enabled` 写死 false ⇒ 正例红（实测 \|AB\|=1.539）；全量 e2e 191 通过 |
-| 2 | **N5 首批的「勾股」怎么办**：① 判成 ⊥ 目标、再用**勾股定理那一步**把结论接回来，② 还是从首批里划掉 | **（2026-10-05 两轮更正）** ① 原来我把"共线 / 共面 / 勾股"三个都算成"表达不出来"——**错**：**共线 / 共面在约束层有完整载体**（`ConstraintType` 就有这两个，内核**既判**（`collinearResidual` / `coplanarResidual`）**又投影**），我只是**只在解析层找过**。② 剩下那个**勾股**也不再是"缺能力"：对三点 X/Y/Z，**`XY ⊥ YZ` 与 `|XY|²+|YZ|²=|XZ|²` 等价**（勾股定理及其逆定理），而 `perpendicular` 是 `ConstraintType` 的一员；角度本身也有测量载体（`MeasurementNode` 的 `angle`）。所以真正要定的是：**要不要让证明出口走"判成 ⊥ + 用勾股定理接回来"** —— 注意**别把两者别名**，那等于把一条**推断**藏进分类函数；推断应该出现在**证明**里、看得见。`proof:smoke` 分开报两个清单（`goalsWithoutObligationCarrier` / `goalsWithoutAnyCarrier`） | 短目标词表立刻自洽；`unexpressibleFirstBatchGoals()` 那条待办消失（详见 §四 F） |
+| 2 | ~~**N5 首批的「勾股」怎么办**~~ **✅ 已裁决（2026-10-05，用户决定）：判成 ⊥ 目标 + 用勾股定理那一步把结论接回来** | 代码里落成 **`inference` 字段**（`proofGoals.ts`）：勾股**仍然没有直接载体**（`obligationKinds` / `constraintTypes` 都空），多的是一条**显式推断路线** `{ from: "perpendicular", theorem: "勾股定理及其逆定理" }`；新增 `proofGoalDischargeRoute()`（`direct` / `via-inference` / `none`）。**关键：不做别名** —— 从约束层问 `perpendicular` **只**会得到 ⊥ | **"一处路线都没有"的首批目标现在是空的**（`goalsWithoutAnyRoute: []`）。`proof:smoke` 把路线一起打出来了。**定向变异验证过**：把 `"perpendicular"` 塞进勾股的载体（别名）⇒ **4 条红**；让路线恒为 `direct` ⇒ 1 条红 |
 | 3 | **`real_provider` 用哪个 provider、凭据放哪** | 要动凭据与对外调用边界，也是唯一会**花钱**的一项 | N4 的出口（pass@1 / pass@3 / 成本 / 延迟 / 人工复核率）才能有数字；今天那一栏是整批 `not_measured` |
 | 4 | **要不要 `git push`** | 远端写操作，我不自行决定 | 本地领先 `origin/main` **59 个提交**（含两条门禁抖动的修复）才能进远端与 CI |
 | 5 | **要不要为一句读不通的诊断文案去重新基线化黄金样本** | 那句文案（关系型条件的失败原因说"题设要求 0"）是**用户可见**的（`ConfirmationPanel` 直接渲染 `reason`），但它是**编译器输出的一部分**，被"关闭 flag 时旧路径与 `4707b64` 逐字节相同"那份黄金样本钉着。改它 = 改一个被钉住的契约，**不能顺手做** | 门禁第 1 条与"N2 已交付"的证据链里，"逐字节相同"那句话要改成"除这一处诊断文案外逐字节相同" —— 那是**放宽一条已声明的保证**，得你点头 |
@@ -703,7 +703,7 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
 - **N5 的"只读展示"这一条**（计划要求把 proof artifact 接进 `ConfirmationPanel` / `agentStore` / run event schema）**目前做不了，而且不是"没时间做"**：查下来 `ClaimEvidence` 这套证据词汇**根本没有进过 Web 界面** —— 面板显示的是 `diagramVerification`（另一套词汇，讲的是"这份图核验了吗"），而 `ClaimEvidence` 只在 `witnessSearch` / `solverContracts` / `planCompiler` 这些**核心层**里活着。加上**今天没有任何后端**，产物永远不存在 —— 为一个**不可能出现**的东西先做展示面，属于投机性设计。**这一条与"接一个真实后端"是同一件事，跟着那个决定走。**
 - **两处"约束"模块的分工（免得被误当成重复实现）**：`planar-constraints.ts` 管**"点能待在哪儿"**（一维曲线 + 自然参数，`project`/`evaluate`，拖拽与动画是同一条状态更新），是**点 ↔ 宿主**的一元关系；`constraints3dProjection.ts` 管**"几个对象之间必须保持什么关系"**（⊥ / ∥ / 等长 / 共面…），是**多元**关系，用顺序投影迭代。**两者互补，可以同时出现在同一份文档里**；分工已写进 `constraints3dProjection.ts` 的文件头。
 
-- **N5 待裁决（2026-10-05 两轮更正后：范围小到只剩一个取舍）**：计划 N5 的首批清单写着"共线/共面、平行/垂直、等长、勾股"。**共线 / 共面在约束层有完整载体**（`ConstraintType` 就有这两个，内核既判又投影）—— 我第一版只在**解析层**找，得出了"三个都表达不出来"的错结论。**勾股**也不是"缺能力"：对三点 X/Y/Z，**`XY ⊥ YZ` 与 `|XY|²+|YZ|²=|XZ|²` 等价**（勾股定理及其逆定理），而 `perpendicular` 是 `ConstraintType` 的一员，角度也有测量载体（`MeasurementNode` 的 `angle`）。**所以要定的是：要不要让证明出口走"判成 ⊥ + 用勾股定理接回来"这条路 —— 而别把两者别名，那等于把一条推断藏进分类函数里。** 至于解析层的 `DiagramObligationKind`，它只有 `fixedLength | equilateral | equalLength | midpoint | segmentRatio | planePerpendicular | dihedral | perpendicular | parallel` —— 没有共线、共面、勾股：那是**识别**的问题（原话里读不出来），不是**表达**的问题。
+- **N5「勾股」已裁决（2026-10-05，用户决定）**：走"**判成 ⊥ 目标 + 用勾股定理那一步把结论接回来**"。**这件事没有做成别名** —— 勾股仍然**没有直接载体**（两个载体字段都空），它多的是一条**显式的推断路线**（`inference: { from: "perpendicular", theorem: "勾股定理及其逆定理" }`），并且新函数 `proofGoalDischargeRoute()` 把它与"直接能判"分开报。理由写在第 50 轮那段更正里，也在代码注释里：**别名等于把一条推断藏进分类函数，而推断应当出现在证明里、看得见**。于是 `firstBatchGoalsWithoutAnyRoute()` **现在是空的**（`proof:smoke` 的读数里能看到 `goalsWithoutAnyRoute: []` 与 `pythagoreanRoute`）。
   `fixedLength | equilateral | equalLength | midpoint | segmentRatio | planePerpendicular | dihedral | perpendicular | parallel` —— **没有共线、共面、勾股**。所以照计划把它们列进"支持"只会得到一句没有载体的话（永远不会有 goal 被分类成它）。处置见 `packages/agent-core/src/proof/proofGoals.ts` 的 `unexpressibleFirstBatchGoals()`，两条路：**① 先扩解析层**（让这三类目标能被表达），或 **② 从首批里划掉**（N5 只声称支持能表达的那几类）。**这一条需要裁决，不是实现细节。**
 
 - **棱柱族恒为"未核验"**：原话解析把 `A′` / `AA₁` 压成单个大写字母，且核验器的点名别名映射只收 `/^[A-Z]$/`，所以 `shape:"prism"` 稳定产出 `unverified_instance`。设计 §5 的 R2 出口本来就规定"**不支持**题稳定产出 `unverified_instance`"，故这是**符合出口**的诚实结果；带撇点名的支持是独立后续项（要动解析层，**不许**在内核或接线层"猜"）。
