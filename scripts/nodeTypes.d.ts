@@ -58,6 +58,9 @@ declare module "node:path" {
   const path: {
     resolve(...parts: string[]): string
     join(...parts: string[]): string
+  normalize(part: string): string
+  dirname(part: string): string
+  relative(from: string, to: string): string
   }
   export default path
 }

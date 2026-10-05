@@ -1,6 +1,10 @@
 # MathCanvas Agent Tool Loop Scorecard
 
-Date: October 4, 2026. Status: geometry-instance verification added; real-provider evaluation still not run.
+> **这张表只列"门槛与能力对照"。** 具体读数与各阶段做到哪一步，**以
+> [`docs/current-status.md`](../current-status.md) 为准** —— 它是"现在时"的唯一一处。
+> 这里的每一行都是**镜像**：能力前进一格时，这一行要跟着改（第 25 / 33 / 43 轮各漏过一次）。
+
+Date: October 4, 2026. Status: geometry-instance verification added; real-provider evaluation still not run. **最后刷新：2026-10-05**（第 43 轮查出四行能力状态过期并改对：`Formal proof` 从"design only"改成"boundary only (N5, no backend)"、N4 从"step 1–2"改成"step 1–7"、拖动那行补上线状平行/垂直、读数行更新为 308 文件 / 3590 通过）。
 
 ## Metrics
 

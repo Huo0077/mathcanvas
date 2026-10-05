@@ -1,5 +1,10 @@
 # MathCanvas 当前状态
 
+> **同一件事的另外三张表**（各自切面不同，读它们时注意它们都是**镜像**）：
+> [能力目录](feature-catalog.md)（按能力列）、
+> [发布门禁](acceptance/agent-release-gate.md)（按门槛列，回答"能不能放行"）、
+> [记分卡](acceptance/agent-tool-loop-scorecard.md)（按阶段与 flag 列）。
+>
 > **这是"现在时"的唯一一处。** 本文件只回答三个问题：现在能跑吗、已经做完什么、还差什么。
 > 历史过程（每一轮的 RED→GREEN 证据、被推翻的方案、实测读数、误报清单）在
 > [`docs/project-progress.md`](project-progress.md) —— 那是**归档**，里面的数字是"当时实测"，
