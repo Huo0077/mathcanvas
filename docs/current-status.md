@@ -32,11 +32,38 @@
 
 | 门禁 | 现象 | 定位 | 判据与边界 |
 | --- | --- | --- | --- |
-| 全量 e2e | 两次里一次红 | `e2e/three-canvas-size.spec.ts:72`「keeps the canvas size when the status text changes」 | **单独跑 3 次全过（12/12）**，第二次全量也全绿。**没抓到是哪一条断言** —— 那次失败的 Playwright 产物被后续运行清掉了（`test-results/` 里只剩 `.last-run.json`）。→ **负载下的不稳定，根因未定位** |
+| 全量 e2e | **两次里一次红，且红的不止一条** | 第一次红的：`three-canvas-size.spec.ts:72`（单独跑 3 次全过 12/12）。**第二次红的换了另一条**：`geometry3d-section.spec.ts:42` → **第 59 行 `await expect(scene).toHaveAttribute("data-preview-hovering", "true")`**，实收 `"false"`（5 秒轮询超时） | **这一条这次拿到了证据**（见下）。两条都是 `toHaveAttribute` 超时 —— 说明这不是"某一条用例写坏了"，而是一类**时序**问题 |
 | `test:rust` | 五次里一次红 | **`tests/secrets.rs:149` → `lends_the_secret_to_a_closure_and_nothing_else`** | 单跑 `--test secrets` **15 次里红 1 次**；断言是 `left: None` / `right: Some(11)` —— **`put` 成功之后 `with_secret` 立刻读回"没有这一条"**。后端实现（`src/secrets/windows.rs`）把 `keyring::Error::NoEntry` 映射成 `Ok(None)`、其余错误映射成 `Backend`，所以是**操作系统在写入成功后立即报了"没有这条凭据"**：根因在 OS / `keyring` 边界，**不在我们的分支里** |
 
 > **为什么不"顺手加一次重试"把红压下去**：那会把一条**真实的不稳定**藏起来，而这个组件是**密钥库** —— 它报"没有配置"时，调用方会去发一次注定 401 的请求。要么找到根因，要么如实留着这条记录。
 > **下一次要做的**：让 e2e 失败时的产物**在失败当次就留住**（Playwright 的 `error-context.md` 会被下一次运行清掉），至少先拿到**是哪一条断言**。
+
+**2026-10-05 e2e 抖动：拿到了断言现场与复现配方**
+
+- **配方**（这是本批真正有用的产出）：`playwright.config.ts` 里 `retries: process.env.CI ? 2 : 0`、
+  `trace: "on-first-retry"` —— **本机 retries=0，所以一次抖动什么证据都不留**。加两个参数就有：
+  ```
+  npm.cmd run test:e2e -- --workers=3 --retries=1 --output=test-results/flake-probe-1
+  ```
+  `--retries=1` 让 `trace: "on-first-retry"` 生效（第一次失败就落 trace），
+  `--output` 指向一个**新目录**就不会被下一次运行清掉。这一次就是这么拿到 `trace.zip` 与
+  `error-context.md` 的（报告里写的是 `1 flaky`，整轮仍 exit 0）。
+- **现场**：`geometry3d-section.spec.ts:42` 第 59 行 `data-preview-hovering` 期望 `"true"`、实收 `"false"`；
+  失败那一刻场景的读数里 **`data-preview-count="1"`、`data-scene-syncs="5"`、`data-scene-reused="3"`** ——
+  **预览是存在的**，只是"悬停"这个属性没被翻过来。
+- **已经排除的**：自愈那条路是通的 —— `threeScene.tsx:307` 的 effect 依赖里含 `previews`，
+  它调 `runtime.syncContent()`，而那个包装（`threeSceneEffect.ts:452-459`）在 `syncContent()` 之后
+  调了 `refreshPreviewHover()`；`threeScenePreviewHover.ts:137` 确实用最后指针位置重算。
+  **所以"指针先到、预览后到"这条老路已经被堵住了**，这次的 `false` 不是那条。
+- **两个还没证实的假设**（**没有改代码**，因为这条抖动 1/N、拿"跑过一次绿"当证据不算验证）：
+  1. **屏幕坐标是在布局稳定之前算的**：`grabPoint()` 用 `projectWorldPoint` 投影出屏幕点，
+     而画布高度依赖状态栏高度；并行负载下投影时与 `mouse.move` 时的画布尺寸可能不同，
+     同一个屏幕点因此落在预览**边界线之外**（预览的命中区只有那圈虚线）。这条假设能解释
+     为什么"属性一直 false"（事件不会再来一次）以及为什么单独跑必过。
+  2. **预览组的几何在 refresh 那一刻还没就位**：`previewHitAt` 对预览组做射线检测，
+     若组已建、但对象的位置/几何在**同一趟同步的后半段**才写好，自愈那一次也会打空。
+- **下一步**：把 `--retries=1 --output=<新目录>` 固化成抓抖动的常规做法；
+  再拿到 2–3 份现场之后，按两次现场共同点去证伪上面两条假设中的一条 —— **证据不足之前不猜着改**。
 > **性能读数要谨慎比较**：`drag/300-frames` 这次 **1295 ms**，而本文件 2026-10-01 的读数是 **682.5 ms（≈2.3 ms/帧）**。这一次是在**跑完一整套门禁之后**测的（机器不是空闲状态），所以**不能据此断言回归**；要判断趋势得在空闲机器上单独复跑。
 > **`eval:agent` 的数字与 2026-09-29 那次逐项相同**（4/8、4/8、45/45、3/45），模式仍是 `deterministic_local` —— 计划的记分卡原文写明它**与模型能力无关**。
 > **串行纪律**：这一套是**依次**跑的。把 `test:e2e` 与那几条 node 套件并行跑会污染主线程读数（本文件记过：拖动那一档从 16.8 ms 涨到 366.7 ms），那样跑出来的 e2e 不算一次有效验收。

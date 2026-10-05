@@ -110,3 +110,9 @@ npm.cmd run test:perf
 
 > **读法**：`test:e2e` 与那几条 node 套件**不要并行跑**（本机实测过拖动那一档从 16.8 ms 涨到 366.7 ms，
 > 那样跑出来的 e2e 不算一次有效验收）。上面这个顺序是**串行**的。
+>
+> **抓 e2e 抖动要加两个参数**：`playwright.config.ts` 里 `retries: process.env.CI ? 2 : 0` 与
+> `trace: "on-first-retry"` —— **本机 retries=0，所以一次抖动什么证据都不留**。用
+> `npm.cmd run test:e2e -- --workers=3 --retries=1 --output=test-results/flake-probe-N`
+> 就能让第一次失败落 trace，并且**不会被下一次运行清掉**（`--output` 指向新目录）。
+> 报告会把那一轮写成 `1 flaky`、整轮仍 exit 0 —— **`flaky` 不是绿**，它是"这条门禁不稳定"的记录。

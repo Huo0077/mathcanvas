@@ -5,6 +5,35 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-05 —— N6 第四步：e2e 抖动拿到了**断言现场**与**复现配方**
+
+- **为什么值得单独一轮**：上一轮只做到"两条红定位到用例名"，而 e2e 那条连**是哪一条断言**都没拿到。
+  一个"偶尔红一次、且不留证据"的门禁，下一轮还得从零开始查。
+- **配方（本批真正有用的产出）**：`playwright.config.ts` 里 `retries: process.env.CI ? 2 : 0`、
+  `trace: "on-first-retry"` —— **本机 retries=0，所以一次抖动什么证据都不留**。
+  加上两个参数就有：
+  `npm run test:e2e -- --workers=3 --retries=1 --output=test-results/flake-probe-1`
+  （`--retries=1` 让 trace 生效；`--output` 指到新目录就不会被下一次运行清掉）。
+  这一次就是这样拿到 `trace.zip` 与 `error-context.md` 的，报告写成 `1 flaky`、整轮 exit 0 ——
+  **`flaky` 不是绿**。
+- **现场，以及一处对上一轮的更正**：这次红的**不是**上一轮那条，而是
+  `geometry3d-section.spec.ts:42` 第 59 行 `await expect(scene).toHaveAttribute("data-preview-hovering", "true")`，
+  实收 `"false"`（5 秒轮询超时）。失败那一刻场景读数是 **`data-preview-count="1"`、`data-scene-syncs="5"`、
+  `data-scene-reused="3"`** —— **预览存在**，只是"悬停"没被翻过来。
+  所以 **e2e 至少有两处抖动，而且两处都是 `toHaveAttribute` 超时**：这说明它不是"某一条用例写坏了"，
+  而是一类**时序**问题。（上一轮记的那条是 `three-canvas-size.spec.ts:72`。）
+- **已排除的一条**：老的那条"指针先到、预览后到"已经被堵住了 —— `threeScene.tsx:307` 的 effect
+  依赖里含 `previews`，它调 `runtime.syncContent()`，而那个包装（`threeSceneEffect.ts:452-459`）
+  在同步之后调 `refreshPreviewHover()`，`threeScenePreviewHover.ts:137` 确实用最后指针位置重算。
+  **这次的 `false` 不是那条旧路。**
+- **两个还没证实的假设**（**刻意没有改代码**）：① 屏幕坐标是在布局稳定之前算的（`grabPoint()` 的
+  投影与 `mouse.move` 之间画布尺寸可能不同，而预览的命中区只有那圈边界虚线）；② 预览组的几何在
+  自愈那一次还没就位。这条抖动是 1/N，**"跑过一次绿"不算验证**，所以按本仓纪律：
+  **证据不足之前不猜着改**。
+- **文档同步**：`current-status.md` §一新增「e2e 抖动：拿到了断言现场与复现配方」一节（含两个假设与
+  下一步）；`agent-release-gate.md` 的复跑清单补上抓抖动的两个参数，并写明 `flaky` 不是绿。
+- **只改文档**（外加一次带产物的复跑），没有新的可执行产物；**两条不稳定都仍在**。
+
 ## 2026-10-05 —— N6 第三步：把上一轮那两条"不可复现的红"**定位到具体用例**
 
 - **为什么值得单独做**：上一轮如实记下"e2e 与 rust 各红过一次、都没复现"，但那两条红
