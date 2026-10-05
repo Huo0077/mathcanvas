@@ -3,7 +3,17 @@ import type { DraftAction } from "@draw/scene-graph"
 
 import { auditDescriptionFor, fieldPoliciesFor, inferNumberFromText, requiredFieldsFor, type AuditContext, type FieldPolicyReading } from "./defaultPolicies"
 import { DEFAULT_PRISM_HEIGHT } from "./localPlanDefaults"
-import { selectWitness } from "./underdetermined"
+/**
+ * **从叶子模块取选择器**（复核裁决 R29-B）。
+ *
+ * 原先这里 `import { selectWitness } from "./underdetermined"` —— 而那条边让模块图成环
+ * （`parameterAudit → underdetermined → solver/witnessSearch → planCompiler → parameterAudit`）。
+ * 审计只用得到"不需要编译器"的那几个族（下面这里就是 prism），所以改从叶子模块取；
+ * 而且"审计不会请求 polyhedron"这件事现在**由类型保证**
+ *（`selectWitnessWithoutSearch` 只收 `Exclude<WitnessKind, "polyhedron">`）。
+ * 语义一字未变：它仍然走规格 §6.3 的那条判据与同一份文案。
+ */
+import { selectWitnessWithoutSearch } from "./witnessSelection"
 
 /**
  * **参数审计与补全**（Agent DSL 切片 Task 2；规格 §6.3 + Global Constraints）。
@@ -116,13 +126,13 @@ export function completeMissingParameter(action: DraftAction, context: AuditCont
    *
    * 棱柱的底面与向量是同一条几何事实的两半：只补一半（例如向量取默认而底面留着）会得到
    * 一只用户没描述过的实体，而且"题目要求任意/恒定"时**根本不该**给出具体尺寸 ——
-   * 那条判据在 `selectWitness` 里（`symbolic` 分支），所以这里必须走它，
-   * 而不是自己按登记表塞一组数字。
+   * 那条判据在 `selectWitnessWithoutSearch` 里（`symbolic` 分支，见 `witnessSelection.ts`），
+   * 所以这里必须走它，而不是自己按登记表塞一组数字。
    */
   /** witness 回填过的字段（Fix round 1 / I6）：策略循环不再为它们记第二条 `given`，避免重复计数。 */
   const witnessFilled = new Set<string>()
   if (actionId === "solid.create_prism" && (!isProvided(inputs, "basePolygon") || !isProvided(inputs, "vector"))) {
-    const witness = selectWitness({
+    const witness = selectWitnessWithoutSearch({
       kind: "prism",
       prompt: context.prompt,
       constraints: {
