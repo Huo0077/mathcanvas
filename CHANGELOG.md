@@ -5,6 +5,43 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-05 —— 应用内评测接到 21 条题集上，报告契约新增 `planning` 层（N4b）
+
+- **为什么**：上一批把题集与报告契约搬进了 `packages/agent-core/src/benchmark/`，但**应用内那次真实
+  provider 评测仍然跑自己那套旧 8 题夹具**（`AGENT_TASK_FIXTURES`）—— 两边都自称"跑过了"，数字**不可比**。
+  这一批把应用侧真正接到那 21 条上。
+- **契约新增第三层 `planning`**（`packages/agent-core/src/benchmark/report.ts`）。词表四个词，含义写在定义处：
+  `planned`（`compilePlan` 返回 `ok` **且**给的是 `kind:"plan"` 的信封 —— 判据只有编译器那一个返回值，
+  **不看模型自述**）、`rejected`（**没被接受**，含两种且 `evidence` 带真实原文：编译器报了 error，
+  **或**模型根本没给计划 —— 澄清/只读回答也记这一支，fail-closed）、`error`（跑的时候抛了，带原始消息）、
+  `not_measured`（这一轮什么都没测，显式 `null` 的 `provider`/`model`）。**不塞进 `extraction`**：
+  拿见证/抽取的词描述"计划被不被接受"是 `report.ts` 自己写明的**范畴错误**。
+  CLI 仍只发 `extraction` / `witness` 两层 ⇒ `bench:agent` 三条读数**逐字不变**
+  （`cases=21 covered=14 empty=7 error=0` / `obligations=24 residue=9 rate=0.727` / `covered=14/21 rate=0.667`）。
+- **那句报错文案改成与层数无关**：原来写"见证了层的结局词描述不了抽取层"，加第三层之后它只点了两层名。
+  现在写"每一层有自己的结局词表，跨层用词会被拒"——**理由保留**，层名清单仍由
+  `${BENCHMARK_LAYERS.join(" / ")}` 给全（下次再加层不用改这句）。
+- **应用侧新通道**（`apps/web/src/agent/fixtures/benchmarkPlanningEval.ts`）：题集来自
+  `parseBenchmarkCases()` 的**前 3 条**（本次小样本）、固定 `seed=7`（与 CLI 同一个）、
+  `cost` 显式 `null`（**仓里没有价目表，不许编**）、`latency` 实测每条的墙钟毫秒；
+  路径是 `createModelPlanner` → `plan(request)` → `compilePlan`（**判题口径只有一处**）。
+  **先解析 provider，再决定要不要跑**：解析失败 ⇒ 整批 `not_measured` 且**一次请求都不发**。
+- **界面**：设置面板里**两套评测各自独立、各自两段式、各自报自己的请求数**
+  （agent 工具环 8 题 × 3 轮 = **24 次**；题集 planning 3 题 × 1 轮 = **3 次**），
+  旧那套的**行为一个字未改**。合并成一个按钮会让"我点了什么、会花多少钱"说不清，故不允许。
+- **没有跑那次付费运行**：它由人在桌面端点、密钥在系统凭据库里（浏览器只会得到 `no_desktop_shell`）
+  ⇒ **真实 provider 的读数仍然一个都没有**，`not measured` 照旧。
+- **这一批还改了一处过期措辞**：`scripts/agent-benchmark/run.test.ts` 文件头与一条用例标题里写着
+  "适配器还没写"—— 那句话今天不成立（生产侧适配器与应用侧通道都在），改成点名事实：**这条 CLI 入口没接**。
+  **行为未动**（该模式下整批 `not_measured` 是诚实的）。
+- **发现一处既有缺陷，未修、如实记**：`providerAgentEval.ts` / `offlineAgentEval.ts` 那条旧通道把请求写成
+  `{ userMessage } as never`。那对 `createLocalPlanner`（只读 `userMessage`）成立，对**真实**
+  `createModelPlanner` **不成立**（它要 `request.model.context` / `run` / `budget` / `signal`），
+  实测抛 `TypeError: Cannot read properties of undefined (reading 'context')` ——
+  而且抛在**任何请求发出之前**，所以那个"唯一会花钱的按钮"当前用真实规划器会一次都不发就失败。
+  **新通道不受影响**（它用完整的 `PlanRequest`，并有"真规划器 + 假 transport"的用例钉着）；
+  旧通道的修法会改变旧评测的语义，**留待控制器裁决**。
+
 ## 2026-10-05 —— benchmark 题集与报告契约搬进 `agent-core`（一份定义，CLI 与应用共用）
 
 - **为什么搬**：`scripts/` **不是工作区**（根 `package.json` 的 `workspaces` 只有 `apps/*` + `packages/*`），

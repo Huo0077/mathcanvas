@@ -10,7 +10,7 @@
 > [`docs/project-progress.md`](project-progress.md) —— 那是**归档**，里面的数字是"当时实测"，
 > 不是当前值。两份文件分工明确：**要当前值看这里，要过程看归档。**
 
-**最后更新：** 2026-10-05（**要当前读数直接看 §一 的「当前读数总表」，要挡路的事看 §一 的「待裁决」（表里还剩**两件要你点头**：**黄金样本要不要重新基线化** / **要不要加一行 `.gitattributes`**；另有「真实 provider 评测」已经定好方案、只差**一次会花钱的运行**）**。方案进度：**N2 已交付并复核**（`witnessSearch` 缺省关，关闭时与 `4707b64` 逐字节相同）；**N3 五步全做完、出口也补上了**（内核点投影、拖动的自由度/冗余诊断、拖动接线决策层、可证矛盾判据、**线状平行/垂直投影**；产品入口 = 顶栏「设置」→ 实验性功能 → 约束拖动，**默认仍关**，开着与关着**各有一例浏览器用例**）—— 开关怎么打开这条**已解决**；**N4 已开工五步**（题集 schema / 运行入口与 `layer` 契约 / 凭据检查与报告契约 / **题集 7→21 条并逐条归因**）—— `real_provider` 仍整批 `not_measured`；**N5 四步 + 勾股裁决**（产物边界、短目标词表、**后端接线门 + `proof:smoke`**；勾股走"**判成 ⊥ + 勾股定理那一步**"，落成 `inference`，**没做成别名**）—— **没有接任何后端**，所以今天没有任何产物能升到 `formally_proved`；**N6 十五步**（flag/依赖/WASM 审查、门禁电池、**两条抖动都已修并有前后计数**、**并发专项**、目录订正）。）
+**最后更新：** 2026-10-05（**要当前读数直接看 §一 的「当前读数总表」，要挡路的事看 §一 的「待裁决」（表里还剩**两件要你点头**：**黄金样本要不要重新基线化** / **要不要加一行 `.gitattributes`**；另有「真实 provider 评测」已经定好方案、只差**一次会花钱的运行**）**。方案进度：**N2 已交付并复核**（`witnessSearch` 缺省关，关闭时与 `4707b64` 逐字节相同）；**N3 五步全做完、出口也补上了**（内核点投影、拖动的自由度/冗余诊断、拖动接线决策层、可证矛盾判据、**线状平行/垂直投影**；产品入口 = 顶栏「设置」→ 实验性功能 → 约束拖动，**默认仍关**，开着与关着**各有一例浏览器用例**）—— 开关怎么打开这条**已解决**；**N4 已开工五步**（题集 schema / 运行入口与 `layer` 契约 / 凭据检查与报告契约 / **题集 7→21 条并逐条归因**）—— `real_provider` 仍整批 `not_measured`；**N5 四步 + 勾股裁决**（产物边界、短目标词表、**后端接线门 + `proof:smoke`**；勾股走"**判成 ⊥ + 勾股定理那一步**"，落成 `inference`，**没做成别名**）—— **没有接任何后端**，所以今天没有任何产物能升到 `formally_proved`；**N6 十五步**（flag/依赖/WASM 审查、门禁电池、**两条抖动都已修并有前后计数**、**并发专项**、目录订正）。**N4b 已把应用内评测接到那 21 条题集上**（契约新增 `planning` 层，记"计划有没有被 `compilePlan` 接受"；应用侧 3 题 × 1 轮 = 3 次请求，与旧的 agent 工具环 24 次**各占一个按钮、各自两段式、各自报请求数**）—— 但**那次付费运行仍未跑过**（触发点在桌面端界面、由人点），所以真实 provider 的读数**一个都还没有**。）
 **修复前一版做完了什么**：用户现场"A 字句只有关系、没有数值的立体题面"从**画不出来**推进到**能画出来**。路上推翻了两个自己的设计（见下方"走过的弯路"），并修掉一批真实运行暴露的形式障碍（信封缺字段、平面动作带 `z`、面环绕向不一致、空 `relations`）。
 **修复前一版暴露了什么（更重要）**：用户在真图上确认"**图画出来了，明显画错了**"。实测模型给的坐标：`BD=2`、`O` 是中点、`△OCD` 等边、`AB=AD` 都对，但 `OA·CD = −0.314 ≠ 0`（**第（1）问要证的那件事本身不成立**），且 `A` 的高度取 0.64、而"二面角 45°"要求约 1.33（**差约一倍**）。
 **当时根因（必须写清，不能含糊）**：这道题的七个条件里，机器**真正核验过的只有一条**（`O 为 BD 中点`）。`AB=AD` 的等号写法不在关系词表里、`平面⊥平面` 没有判据、`等边三角形` / `DE=2EA` / `二面角 45°` 是**数值约束**而不在判据范围内 —— 于是**一张错图静默通过了全部门禁**。当次读数：全库单测 **282 文件 / 3277 通过 + 1 todo / 0 失败**、`agent-core`/`scene-graph`/`apps/web` 的 `typecheck` 均 exit 0、`eslint` exit 0。**这些绿读数与"图对不对"无关** —— 这一点此前几轮我没有说清楚，是本轮修正的表述。
@@ -24,7 +24,7 @@
 | --- | --- | --- | --- | --- |
 | 类型检查 | `npm.cmd run typecheck` | 全部工作区 + `e2e/` + `scripts/`，无错 | 0 | **2026-10-05 复核** |
 | Lint | `npm.cmd run lint` | **0 error / 13 warning**（与基线逐条相同） | 0 | **2026-10-05 复核** |
-| 单测（全库） | `npm.cmd test -- --maxWorkers=2 --reporter=dot` | **317 文件 / 3645 通过 + 1 todo / 0 失败**（**2026-10-05 N4a 后实测**）。**与上一版记的 315 / 3627 的差额不能全记在 N4a 头上**：文档那个 315 本身已是旧读数 —— 我在 BASE `e96d0f5` 上直接数出 **316** 个被 vitest 收录的测试文件（`packages|apps|scripts` 下的 `*.test.ts(x)`），HEAD `f315cf6` 是 **317**，**唯一新增**是 N4a 那条应用侧判据 `apps/web/src/agent/fixtures/benchmarkContract.test.ts`（+1 文件 / +5 用例）；此外 `scripts/agent-benchmark` 的用例数**本批未变**：BASE `e96d0f5` 就已经是 **40** 条（`benchmark.test.ts` 27 + `run.test.ts` 13），本批只把其中一条断言**改严**（expect 计数 46 → 48）。**（2026-10-05 复核更正**：我上一版这里写成"由 34 条增至 40 条" —— 那个 34 是更早一轮的历史读数（`git show e96d0f5:scripts/agent-benchmark/*.test.ts` 数出来就是 40），被我当成了本批的增量；这是"看起来像实测、其实不存在的 delta"，复核抓出来后已改正。**）**其余差额来自这两个读数之间的其它提交，**不是本批**。**另如实记一次抖动**：独立复核时同一条命令在本机跑出 **1 条 5 秒超时**（`apps/web/src/persistence/fileExports.test.ts` 的 CAD 导出用例）—— 该文件**未被本批任何提交改动**（最后动它是 2026-10-02 的 `fc4df43`），**单跑 9/9 通过、那条用例本身 308 ms**，属**负载敏感的既有抖动**：按本仓口径**超时那次既不算绿也不算红**，但它确实存在、值得记 | 0（抖动那轮为 1） | **2026-10-05 复核（含一次抖动）** |
+| 单测（全库） | `npm.cmd test -- --maxWorkers=2 --reporter=dot` | **318 文件 / 3659 通过 + 1 todo / 0 失败**（**2026-10-05 N4b 后实测**，224 s，**本批 0 抖动**）。**相对 N4a 的 317 / 3645：+1 文件**（新增 `apps/web/src/agent/fixtures/benchmarkPlanningEval.test.ts`，10 条）**/ +14 用例**（另 4 条加在既有文件里：`benchmarkContract.test.ts` +1、`ProviderEval.test.tsx` +3）—— **3645 + 14 = 3659 对得上**。**与上一版记的 315 / 3627 的差额不能全记在 N4a 头上**：文档那个 315 本身已是旧读数 —— 我在 BASE `e96d0f5` 上直接数出 **316** 个被 vitest 收录的测试文件（`packages|apps|scripts` 下的 `*.test.ts(x)`），HEAD `f315cf6` 是 **317**，**唯一新增**是 N4a 那条应用侧判据 `apps/web/src/agent/fixtures/benchmarkContract.test.ts`（+1 文件 / +5 用例）；此外 `scripts/agent-benchmark` 的用例数**本批未变**：BASE `e96d0f5` 就已经是 **40** 条（`benchmark.test.ts` 27 + `run.test.ts` 13），本批只把其中一条断言**改严**（expect 计数 46 → 48）。**（2026-10-05 复核更正**：我上一版这里写成"由 34 条增至 40 条" —— 那个 34 是更早一轮的历史读数（`git show e96d0f5:scripts/agent-benchmark/*.test.ts` 数出来就是 40），被我当成了本批的增量；这是"看起来像实测、其实不存在的 delta"，复核抓出来后已改正。**）**其余差额来自这两个读数之间的其它提交，**不是本批**。**另如实记一次抖动**：独立复核时同一条命令在本机跑出 **1 条 5 秒超时**（`apps/web/src/persistence/fileExports.test.ts` 的 CAD 导出用例）—— 该文件**未被本批任何提交改动**（最后动它是 2026-10-02 的 `fc4df43`），**单跑 9/9 通过、那条用例本身 308 ms**，属**负载敏感的既有抖动**：按本仓口径**超时那次既不算绿也不算红**，但它确实存在、值得记 | 0（抖动那轮为 1） | **2026-10-05 N4b 后实测（本批 0 抖动）** |
 | Rust provider 测试 | `npm.cmd run test:rust` | **238 通过 / 3 ignored / 0 失败**（16 个二进制） | 0 | **2026-10-05 复核** |
 | 全量 e2e | `npm.cmd run test:e2e` | **194 通过 / 0 失败**（1.1 min；含 `next-phase-flag-entry.spec.ts` 3 条与 `agent-constrained-drag.spec.ts` **5 条** = 正/反例 2 + **N3 出口的三条：过约束拒绝 / 冲突恢复 / 一步撤销**） | 0 | **2026-10-05 复核（N3 出口收尾后）** |
 | 性能基线 | `npm.cmd run test:perf` | 9/9；`drag/300-frames` **479–488 ms（三次采样：479.2 / 487.7 / 486.5）** —— 比第 37 轮记录的 **686–711 ms** 区间明显低（同一台机器、同一批用例；性能与机器负载相关，故两说并存） | 0 | **2026-10-05 复核（三次采样）** |
@@ -300,9 +300,29 @@
 | `npm.cmd run bench:agent -- --mode=nonsense` | **exit 1** 并打出可选项 |
 
 > **`layer` 契约**：运行记录分 `extraction` / `witness` 两层，**每层有自己的结局词表**，跨层用词被拒绝 —— 拿见证层的词描述抽取层是范畴错误，而一律写 `not_measured` 又会把"跑了抽取、没跑求解"说成"什么都没测"。
+> **2026-10-05 N4b 追加（这一段是追加，不是改写）**：契约现在有**三层** —— 新增 `planning`（应用内真实 provider 评测记"模型给的计划有没有被 `compilePlan` 接受"）。它**不是**塞进 `extraction` 的：真实模型产出的是**规划**能力，拿抽取/见证的词描述它同样是范畴错误。CLI（`bench:agent`）仍然只发 `extraction` / `witness` 两层，所以上面那三条读数**逐字未变**。
 > **第一个真实读数**：抽取层在七类起步题集上覆盖 5 道、**2 道一条子句都没抽出来**。这是**读数不是门禁**（刻意没有把任何阈值钉成断言）。
 > **`real_provider` 整批 `not_measured`**：适配器还没写；`provider`/`model` 写 `null` 是被允许的，但只要不写 `not_measured` 就必须是非空字符串 —— 没凭据时编一个模型名字等于把"没测"说成"测过了"。
+> **（2026-10-05 N4b 更正）**：上面那句"适配器还没写"**只对这条 CLI 路径成立**。生产侧的适配器早就在（`apps/web/src/agent/modelPlanner.ts` 的 `createModelPlanner`，密钥由 Rust 侧从系统凭据库借出、走回环代理），应用侧也已经有一条跑题集的通道（`apps/web/src/agent/fixtures/benchmarkPlanningEval.ts`，记 `planning` 层、3 题 × 1 轮）。**这条 CLI 入口没有把它接上**，所以这一路继续整批 `not_measured` —— 那是诚实的"没测"。（同一次更正也修了 `scripts/agent-benchmark/run.test.ts` 文件头里那句同样的旧措辞；行为未动。）
 > **还没做**：真实 provider 一个都没跑；题集只有七类各一条；**没有按题归因那 2 道抽不出子句的是哪两道**。
+> **（2026-10-05 N4b 更正）**：这一行里"题集只有七类各一条"与"没有按题归因"**两条已过期** —— 题集现在是 **21 条（七类各 3 条）**，逐条归因也已做完（见 §一 的 benchmark 那一行）。**仍然成立**的是：**那次真实 provider 运行一次都没跑过**（通道已接好、判据已写足，触发点在界面里、由人点）。
+
+**2026-10-05 N4b（应用内评测接到 21 条题集 + 报告契约新增 `planning` 层）—— 本批实测：**
+
+| 命令 | 当次结果 |
+| --- | --- |
+| `npm.cmd exec -- vitest run --maxWorkers=2`（全库） | **318 文件 / 3659 通过 + 1 todo / 0 失败**（224 s，**本批 0 抖动**） |
+| `npm.cmd run typecheck` | exit 0（全部工作区 + `e2e/` + `scripts/`） |
+| `npm.cmd run lint` | exit 0，**0 error / 13 warning**（与基线逐条相同） |
+| `npm.cmd run bench:agent` | exit 0；**13 通过**，三条读数**逐字未变**（见 §一 的 benchmark 那一行） |
+| `npm.cmd run test:e2e` | **194 通过 / 0 失败**（1.1 min） |
+| 定向（`apps/web/src/agent/fixtures` + `ProviderEval.test.tsx` + `scripts/agent-benchmark` + `modelPlanner.test.ts`） | **12 文件 / 138 通过 / 0 失败** |
+
+> **这一批把应用内评测真正接到那 21 条上**：报告契约新增 `planning` 层（词表 `planned` / `rejected` / `error` / `not_measured`，每个词的含义写在 `packages/agent-core/src/benchmark/report.ts` 的定义处）；应用侧新通道 `apps/web/src/agent/fixtures/benchmarkPlanningEval.ts` 跑题集的**前 3 条 × 1 轮**（`seed=7` 与 CLI 同一个、`cost` 显式 `null`、`latency` 实测），路径是 `createModelPlanner` → `plan(request)` → `compilePlan`。
+> **判据只有编译器那一处**："计划被接受" = `compiled.ok` **且**信封是 `kind: "plan"`；**模型只给澄清不算接受**（fail-closed）。三处变异各自抓红（改了什么 → 哪条红）：编译失败写成 `planned` ⇒ 2 条红；澄清当接受 ⇒ 1 条红；拿掉 `rejected` 词 ⇒ 1 条红。全部还原并逐字节核对。
+> **界面**：两套评测**各自独立、各自两段式、各自报请求数**（agent 工具环 **24** 次 / 题集 planning **3** 次）；旧那套 8 题记分卡的**行为一个字未改**（它那 3 条既有用例原样绿）。
+> **没有跑那次付费运行**：触发点在桌面端界面、密钥在系统凭据库里（浏览器只会得到 `no_desktop_shell`）⇒ **真实 provider 的读数一个都还没有**。
+> **本批发现一处既有缺陷（未修，已上报）**：旧那条通道（`providerAgentEval.ts` + `offlineAgentEval.ts:30`）把请求写成 `{ userMessage } as never` —— 那对 `createLocalPlanner` 成立，对**真实** `createModelPlanner` **不成立**，实测抛 `TypeError: Cannot read properties of undefined (reading 'context')`，而且抛在**任何请求发出之前**。新通道不受影响（用完整 `PlanRequest`，并有"真规划器 + 假 transport"的用例钉着）；旧通道的修法会改变旧评测语义 ⇒ **留待裁决**。
 
 **2026-10-05 N4 第一步（benchmark 题集与报告契约）—— 本批实测：**
 
@@ -648,7 +668,7 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
 2. **N2 解析构造与见证搜索（已完成）**：题面点名 + 关系（**无显式坐标**）时，系统自己解析构造候选（棱锥/棱柱）、按 seed/上限/预算做有界搜索，并**只把通过同一个核验器的候选**接进编译路径。提交 `c2314c9`..`e3fdb61`（内核）、`8648a13`..`ab05add`（搜索）、`ca1d0b2`..`9c5ae2f`（接线 + spike）。**`witnessSearch` 缺省关**；关闭时编译结果与 `4707b64` 逐字节相同。后端的可行性评估（Z3/NLSAT）只有**一次运行**的实测数字与原始产物，**没有接入产品**。
 3. **N3 动态拖动保持**：约束进入文档状态，拖动变成临时约束求解和事务提交，显示自由度与冲突原因。
    **已开工（2026-10-05，五步 + 入口）**：内核的点投影、拖动层的自由度/冗余诊断、**拖动接线的决策层** `apps/web/src/constrainedDrag3.ts`（`App.tsx` 的 3D `onDragEnd` 已接上）、可证的矛盾判据、线状平行/垂直的投影都已落地并复核。**开关缺省关，关着时逐字走旧路径**，所以产品行为未变。**产品入口已通**（设置 → 实验性功能 → 约束拖动），浏览器正/反例已有（`e2e/agent-constrained-drag.spec.ts`）。**还没做**：`inconsistent`/`timeout` 的可证判据（矛盾目前只报"没能同时满足"）、拖动连带的撤销/重做与 inspector 提示。（**2026-10-05 更正**：这里原来还把"**过约束拒绝/冲突恢复/一步撤销的浏览器用例**"列在"还没做"里 —— 那三条**已在 N3 出口收尾时交付**，就是 `e2e/agent-constrained-drag.spec.ts` 的 5 条用例。）**秩已与 `reportFreeDegrees` 合流**（共用内核 `linear-algebra.ts` 的 `rankRows`），但两者的"可动集"口径按设计保持不同。
-4. **N4 开放题理解与真实 Provider Benchmark**：自然语言先编译为 Obligation IR，再规划/求解/核验；建立真实 provider 的 pass@1、pass@3、成本、延迟和人工可读性基线。**已开工（2026-10-05，到第五步）**：题集（21 条）与报告契约已在 `packages/agent-core/src/benchmark/`，**CLI 与应用共用同一份**（提交 `f315cf6`；题集文本逐字节未变、`bench:agent` 读数逐字不变）。**还没做**：把应用内评测真正接到这 21 条上、`real_provider` 模式、以及那一次**付费运行**（**已裁决**：契约新增 `planning` 层，端到端记"计划是否被编译接受"；规模 3 题 × 1 轮，且需用户显式确认后才发起）。
+4. **N4 开放题理解与真实 Provider Benchmark**：自然语言先编译为 Obligation IR，再规划/求解/核验；建立真实 provider 的 pass@1、pass@3、成本、延迟和人工可读性基线。**已开工（2026-10-05，到第五步 + N4a/N4b）**：题集（21 条）与报告契约已在 `packages/agent-core/src/benchmark/`，**CLI 与应用共用同一份**（提交 `f315cf6`；题集文本逐字节未变、`bench:agent` 读数逐字不变）。**N4b 已把应用内评测接到这 21 条上**：契约新增 `planning` 层（记"计划有没有被 `compilePlan` 接受"，客观、不需要金标准），应用侧新增题集通道（`benchmarkPlanningEval.ts`：3 题 × 1 轮、seed 7、`cost` 显式 `null`、`latency` 实测），设置面板里两套评测**各自独立、各自两段式、各自报请求数**（agent 工具环 24 次 / 题集 planning 3 次，合并按钮是不允许的）—— 旧那套 8 题记分卡的**行为一个字未改**。**还没做**：那次**付费运行**本身（用户已授权 3 题 × 1 轮，但触发点在桌面端界面里，**由人点**；实施者不代发）。
 5. **N5 形式证明出口**：先支持少量短目标，区分 verified_instance、sampled、formally_proved，证明后端独立校验证书。
 
 完整设计：`docs/superpowers/specs/2026-10-04-agent-full-next-phase-design.md`；实施计划：`docs/superpowers/plans/2026-10-04-agent-full-next-phase-implementation-plan.md`。外部项目调研：`docs/research/2026-10-04-github-project-survey.md`。
@@ -674,6 +694,7 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
 
 1. **真实 provider 开放题现场复核尚未完成**：仍缺 pass@1 / pass@3、成本、延迟、`verified/unverified/no_witness` 分类与人工图面可读性。
    **已有的一半（2026-10-05 更正）**：**题设覆盖率已经有读数了** —— `BENCHMARK_PREMISE obligations=24 residue=9 rate=0.727`（抽取层，21 题，**72.7%**）。所以这一条不再是"一样都没有"：**抽取层的题级覆盖（`covered=14/21`）与题设级覆盖都有数**，缺的是**真实模型那一侧的全部指标**。
+   **另一半"通道"已接好，但读数仍为 0（2026-10-05 N4b）**：应用侧的题集 planning 通道（3 题 × 1 轮 = 3 次请求）已经接线并有判据，**但那一次运行没有跑过** —— 它由人在桌面端点、要花钱、且密钥在系统凭据库里（浏览器里只会得到 `no_desktop_shell`）。所以这一条**不因为代码合入而改变**：真实 provider 的读数**一个都还没有**。
 2. 当前 `deterministic_local` 只用于协议与几何回归，不能作为真实模型准确率。
 
 ### D. 发布与仓库收尾

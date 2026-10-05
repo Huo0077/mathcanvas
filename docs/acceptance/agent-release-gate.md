@@ -99,7 +99,7 @@
 
 **N4 开放题理解：有"载体"与两个覆盖率读数，**还没有任何真实读数**。**
 
-- **已有的**：题集 schema + 校验器、凭据检查、运行记录与报告契约（分 `extraction` / `witness` 两层）、
+- **已有的**：题集 schema + 校验器、凭据检查、运行记录与报告契约（**现在分 `extraction` / `witness` / `planning` 三层** —— `planning` 是 N4b 新增的，记的是"模型给的计划有没有被 `compilePlan` 接受"；CLI 那一路仍然只发前两层，所以下面那几条读数逐字未变）、
   **七类 × 3 条 = 21 条**题集、**每题最多 3 轮**的上限校验、**题设覆盖率**口径、`runner.mjs` + `npm run bench:agent`。
 - **实测（抽取层，`deterministic_local`）**：`BENCHMARK_COVERAGE cases=21 covered=14 empty=7 error=0`；
   `BENCHMARK_PREMISE obligations=24 residue=9 rate=0.727`（题设覆盖率 **72.7%**）。
@@ -120,7 +120,7 @@
 
 **所以"离线求解率 4.8%"这件事已经读完：**它不是"搜索差"、不是"判据不够"、也不是"构造器写坏了"，
 而是**首批设计覆盖面**决定的。**真正待裁决的是"要不要扩覆盖面、以及怎么扩才不违反那条纪律"** —— 而设计本身已经警告过硬扩的风险（把题悄悄改成构造器认得的形状）；
-  `real_provider` 整批 `not_measured`（**2026-10-05 更正：不是"适配器没写"** —— **生产侧的 provider 适配器早就有了**：`apps/desktop/src-tauri/src/providers/adapter.rs`（621 行：拼请求 / 解响应 / 借凭据 / 传输 / 取消 / 解码，含 SSRF 守卫），且**有一次真实往返记录**（2026-09-29，DeepSeek `deepseek-chat`，`tools` 通道验过 5 个模型可见工具）。**"走哪条通道"这个决定已经做了（方案 C）**：不是让脚本自己发请求（那要在 TS 里再写一遍三家方言的拼请求与解码 = **第二条调用路径**，还要把密钥交给脚本进程），而是**把 harness 搬进应用内** —— 已经落地的是**评测那一侧**（`runProviderAgentEval` + 设置面板，**两段式**、会花钱）。**仍然缺的是 benchmark 那一侧的 `real_provider` 模式**：`scripts/agent-benchmark/` 那 21 条题今天只发 `not_measured`，而它的题集与报告契约在 **workspace 之外**，要搬进包里才能给应用共用）（**2026-10-05 后半句已解决**：题集与报告契约**已搬进** `packages/agent-core/src/benchmark/`（提交 `f315cf6`，一份定义、CLI 与应用共用，题集文本逐字节未变、`bench:agent` 读数逐字不变）——**仍然缺的是把应用内评测真正接到这 21 条上、并跑那一次**：`scripts/agent-benchmark/` 的 `real_provider` 模式今天仍整批 `not_measured`）
+  `real_provider` 整批 `not_measured`（**2026-10-05 更正：不是"适配器没写"** —— **生产侧的 provider 适配器早就有了**：`apps/desktop/src-tauri/src/providers/adapter.rs`（621 行：拼请求 / 解响应 / 借凭据 / 传输 / 取消 / 解码，含 SSRF 守卫），且**有一次真实往返记录**（2026-09-29，DeepSeek `deepseek-chat`，`tools` 通道验过 5 个模型可见工具）。**"走哪条通道"这个决定已经做了（方案 C）**：不是让脚本自己发请求（那要在 TS 里再写一遍三家方言的拼请求与解码 = **第二条调用路径**，还要把密钥交给脚本进程），而是**把 harness 搬进应用内** —— 已经落地的是**评测那一侧**（`runProviderAgentEval` + 设置面板，**两段式**、会花钱）。**仍然缺的是 benchmark 那一侧的 `real_provider` 模式**：`scripts/agent-benchmark/` 那 21 条题今天只发 `not_measured`，而它的题集与报告契约在 **workspace 之外**，要搬进包里才能给应用共用）（**2026-10-05 后半句已解决**：题集与报告契约**已搬进** `packages/agent-core/src/benchmark/`（提交 `f315cf6`，一份定义、CLI 与应用共用，题集文本逐字节未变、`bench:agent` 读数逐字不变））（**2026-10-05 N4b 再进一步**：应用侧**已经**接到这 21 条上了 —— 设置面板里新增**题集 planning 通道**（`benchmarkPlanningEval.ts`：21 条题集里的**前 3 条 × 1 轮 = 3 次请求**，`seed=7`、`cost` 显式 `null`、`latency` 实测；与旧的 agent 工具环那套 8 题 × 3 轮 = 24 次**各占一个按钮、各自两段式**，合并按钮是不允许的）。**仍然缺的是那一次运行本身**：它要花钱、触发点在桌面端界面、密钥在系统凭据库里，所以**真实 provider 的读数一个都还没有**；`scripts/agent-benchmark/` 的 `real_provider` 模式也依旧整批 `not_measured`（这是**诚实的**，不是缺陷））
   成本 / 延迟 / 人工可读性同样没有。**不要把 N4 的第一步读成"开放题门槛已过"。**
 
 **N5 形式证明出口：只有"边界"，没有任何后端 —— 所以这一条门槛今天**无法判定**。**
