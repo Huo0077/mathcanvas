@@ -227,6 +227,25 @@ export type DragSolveResult =
 > ⑥ "真正算出自由度"**要分清是哪一层**：新做的 `analysis` 是**拖动层**的自由度（按锚点算、
 > 不扣规范自由度）；N2 那条 `witnessSearch` 里恒为 `null` 的 `degreesOfFreedom` 是**文档层**的
 > 问题，仍然没动 —— 它要先扩 `ConstraintType` 到能表达线⊥面与角度。两者共用秩，但不是一件事。
+>
+> **接线位置已查实（2026-10-05，只侦查、没接线）：**
+> N3 的出口落在 `apps/web/src/App.tsx:854` 那个内联 lambda。3D 拖动是**抬手才提交一次**
+> （`threeSceneInteraction.ts` 文件头写明"拖动期间不提交文档，抬手才回调一次"，
+> 提交点在 `dragEndRef.current?.(session.targetId, session.total)`），现在写的是
+> `(id, delta) => apply({ op: "translatePrimitive3", id, delta })`。
+> 所以约束拖动的接法是：**保留这次平移** → 用它算出被拖点的目标坐标 → 以该点为锚跑
+> `projectPoint3Constraints` → 把其余点的坐标**用一次 `applyBatch` 提交**。
+> `apps/web/src/store.ts` 的 `applyBatch` 走 `commitTransaction`，它的注释就写着"手工 UI 的
+> 批量删除走这里，而不是循环调用 `apply`" —— 于是**"一步撤销"是白拿的**，不需要新机制。
+>
+> **两处必须分清**：紧邻的 `onHostDragEnd`（`App.tsx:855-861`）是**另一条路** —— 它只提交
+> **宿主参数**（`binding3.parameter` / `uvw`），坐标由重算从参数算出（注释原话："点永远精确落在
+> 宿主上"）。约束拖动**不许**把它当成"点坐标平移"一起处理。
+>
+> **接线前的一个未裁决前置**：`applyBatch` 收的是 `DomainOperation[]`，而当前动作词表里
+> **没有"一次改多个点坐标"的 op**（`translatePrimitive3` 只动一个图元及其跟随者）。
+> 所以要么复用/新增一个批量点更新的 op，要么确认多条 `updatePrimitive` 能把坐标一次写完 ——
+> 这决定接线的形状，**本阶段尚未裁决**。
 
 ## Phase N4：开放题编译与真实 Provider Benchmark
 
