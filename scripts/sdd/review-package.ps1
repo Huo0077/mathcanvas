@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
   生成复核包：`BASE..HEAD` 的提交列表 + stat 摘要 + 带上下文的完整 diff，写成**一个文件**并打印其路径。
