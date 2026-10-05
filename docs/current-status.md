@@ -23,12 +23,15 @@
 | Rust provider 测试 | `npm.cmd run test:rust` | **238 通过 / 3 ignored / 0 失败**（16 个二进制） | 0 | **第 27 轮**（整批电池） |
 | 全量 e2e | `npm.cmd run test:e2e` | **186 通过 / 0 失败**（54.2 s，16 workers） | 0 | **第 27 轮**（整批电池） |
 | 性能基线 | `npm.cmd run test:perf` | 9/9；`drag/300-frames` **685.9 ms** | 0 | **第 27 轮**（整批电池） |
+| 生产构建（web） | `npm.cmd run build --workspace @draw/web` | **成功**（4.83 s）；产物落 `build-check/`（已 gitignore，构建后工作树干净）；有**既有的**主 chunk 1.8 MB 提示 | 0 | **第 28 轮** |
 | Agent 评测 | `npm.cmd run eval:agent` | `deterministic_local`：pass@1 **4/8**、pass@3 **4/8**、工具选择 45/45、工具错误 3/45 | 0 | **第 27 轮**（整批电池；**未接真实模型**，不是模型准确率） |
 | Agent benchmark | `npm.cmd run bench:agent` | `cases=21 covered=14 empty=7 error=0` | 0 | **第 27 轮**（整批电池） |
 | 证明边界 smoke | `npm.cmd run proof:smoke` | 6 通过 / 0 失败；`wiredBackends=[]` | 0 | **第 27 轮**（整批电池） |
 
 > **这一张表现在是同一批读数**（2026-10-05 第 27 轮，九道门禁**串行**跑完，14:47:49 → 14:52:12，
-> 约 4 分 24 秒）。此前那些"当时测过、此后未改动"的说明**不再需要** —— 上面九行都是本轮实测。
+> 约 4 分 24 秒）。第 28 轮又补上了**生产构建**这一行 —— 于是**计划里 N6 出口点名的八道命令
+> （`typecheck` / `test` / `lint` / **`build --workspace @draw/web`** / `test:e2e` / `test:rust` /
+> `test:perf` / `eval:agent`）现在都有读数**，`bench:agent` 与 `proof:smoke` 是计划之外额外跑的。
 > **`drag/300-frames` 的 1295 ms 不再可信**：第 12 轮那次是在**连跑五遍 `test:rust` 之后**测的，
 > 本轮同样把 perf 放在整批最后、却得到 **685.9 ms**，与 2026-10-01 基线的 **682.5 ms** 吻合。
 > 所以那个 1295 ms 是**测量条件造成的离散值，不是回归** —— 这一条现在有反证，不再是"存疑"。
