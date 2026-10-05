@@ -1,6 +1,7 @@
 import type { ClaimEvidenceStatus } from "../claimEvidence"
 import { canonicalContentHash } from "../hashing"
 import type { ProofGoalKind } from "./proofGoals"
+import { isReviewPassed, PROOF_BACKEND_REVIEWS } from "./proofBackendReview"
 
 /**
  * **形式证明出口的边界**（实施计划 Phase N5 的第一步；设计 2026-10-04 §4C）。
@@ -45,7 +46,9 @@ import type { ProofGoalKind } from "./proofGoals"
  * 做法见 `docs/acceptance/next-phase-flag-and-dependency-review.md`。
  * **没有审查结论不许加进来。**
  */
-export const WIRED_PROOF_BACKENDS: readonly string[] = []
+export const WIRED_PROOF_BACKENDS: readonly string[] = PROOF_BACKEND_REVIEWS
+  .filter((review) => isReviewPassed(review))
+  .map((review) => review.name)
 
 export interface ProofVerifyOptions {
   /**

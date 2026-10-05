@@ -1,4 +1,4 @@
-import { declaredProofGoal, evidenceStatusWithProof, PROOF_ARTIFACT_VERSION, PROOF_GOAL_SUPPORT, proofInputHash, unexpressibleFirstBatchGoals, verifyProofArtifact, WIRED_PROOF_BACKENDS, type ClaimEvidenceStatus, type ProofExpectation } from "@draw/agent-core"
+import { declaredProofGoal, evidenceStatusWithProof, PROOF_ARTIFACT_VERSION, PROOF_GOAL_SUPPORT, proofInputHash, unexpressibleFirstBatchGoals, isReviewPassed, PROOF_BACKEND_REVIEWS, reviewProblems, verifyProofArtifact, WIRED_PROOF_BACKENDS, type ClaimEvidenceStatus, type ProofExpectation } from "@draw/agent-core"
 import { describe, expect, it } from "vitest"
 
 /**
@@ -82,6 +82,18 @@ describe("proof spike（一个后端都没接：这一遍只验边界）", () =>
     expect(outcome.status).toBe("sampled")
   })
 
+  it("**先输出后端审查状态**（计划 N5：先输出版本/许可证/进程模型/原生依赖/启动耗时/超时状态）", () => {
+    /**
+     * 今天没有任何后端，所以这张表**是空的** —— 而空表本身就是要输出的读数：
+     * "没有审查记录 ⇒ 没有接入 ⇒ 谁也升不到 `formally_proved`" 是**同一件事的三种说法**。
+     * 一个后端要进来，得先在这里出现一份十栏填齐、结论为 passed 的记录。
+     */
+    const rows = PROOF_BACKEND_REVIEWS.map((review) => ({ ...review, problems: reviewProblems(review) }))
+    console.log(`PROOF_BACKENDS ${JSON.stringify({ wired: WIRED_PROOF_BACKENDS, reviewed: rows.length, rows })}`)
+
+    // 接入不变量：接上的每一个，都必须有一份通过的记录（推导，不是手写）。
+    expect(WIRED_PROOF_BACKENDS).toEqual(PROOF_BACKEND_REVIEWS.filter((review) => isReviewPassed(review)).map((review) => review.name))
+  })
   it("打印报告（`--silent=false` 就是给它看的）", () => {
     const rows = FIRST_BATCH_EXPRESSIBLE.map((support) => {
       const expectation = expectationFor(support.kind, support.obligationKinds[0]!)

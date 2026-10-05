@@ -380,6 +380,19 @@ export type DragSolveResult =
 > schema 的只读展示；"一份证明该绑到多细的输入"仍未裁决；首批的"共线 / 共面 / 勾股"
 > 表达不出来那条也仍未裁决（见上）。
 
+> **第四步（2026-10-05）：后端准入契约。** 逐条核计划时发现：上面那两行要求"先输出版本 / 许可证 /
+> 进程模型 / WASM 或原生依赖 / 启动耗时 / 超时状态"、并且"**没有审查结论不得接入默认构建**"，
+> 而我的 smoke 只验了边界 —— **这份审查记录一栏都没有**。
+> 新增 `packages/agent-core/src/proof/proofBackendReview.ts`：十栏审查记录 + `reviewProblems` +
+> `isReviewPassed`。**关键结构改动**：`WIRED_PROOF_BACKENDS` 从**手写数组**改成**由通过的审查记录
+> 推导**（`PROOF_BACKEND_REVIEWS.filter(isReviewPassed).map(name)`）—— 于是"没审查就接上"
+> **在结构上做不到**。今天两份都是空数组：**"没有审查记录 ⇒ 没有接入 ⇒ 谁也升不到 `formally_proved`"
+> 是同一件事的三种说法。** `proof:smoke` 现在打印 `PROOF_BACKENDS {"wired":[],"reviewed":0}`。
+>
+> **本阶段仍未做的**：接任何一个**真实后端**（现在有了一道明确的准入手续：交一份十栏填齐、
+> 结论 `passed` 的记录），以及把 proof artifact 接进 `ConfirmationPanel` / `agentStore` / run event
+> schema 的只读展示。
+
 - [ ] **N5 GREEN 命令：** `npm.cmd exec -- vitest run packages/agent-core/src/proof --maxWorkers=1`; `node scripts/proof-spike/runner.mjs --mode=smoke`。
 
 > **N5 执行记录（2026-10-05，只完成第一步）：** 上面几条检查项**一条都还没勾** ——
