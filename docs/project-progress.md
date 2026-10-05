@@ -4529,3 +4529,28 @@ SolveSpace、FreeCAD、Z3、AlphaGeometry、Newclid、mathlib4/Lean 只作为架
 ### C. 实施顺序
 
 N1 IR → N2 求解 adapter → N3 动态拖动 → N4 开放题与真实 provider benchmark → N5 形式证明 → N6 发布门槛。每一阶段必须保留当前 fail-closed 确认边界和全量门禁。
+## 2026-10-05 —— 下一阶段路线开工：N1 统一数学状态 IR、N2 解析见证构造与有界见证搜索（都在默认关闭的 flag 之后）
+
+本条是**执行归档**，记录 N1/N2 的实际交付、复核抓出的真缺陷与被裁决的偏差。**当前读数只有一个权威处**：`docs/current-status.md` §一。
+
+### A. 交付
+
+- **N1**（`acd3bd5` / `2d62c4d` / `b5b33f9` / `f997b3f`）：`obligationIR.ts`（题设/目标/自由选择的统一状态 + 与旧结构双向兼容）、`constraintIR.ts`（`reportFreeDegrees`：逐对象自由度、残差、冲突、未支持集合）、`claimEvidence.ts`（证据状态词表 + 候选结果→证据状态的显式映射）、`featureFlags.ts`（五个开关，默认全关）。兼容契约：`parseDiagramObligations` / `DiagramObligationSet` 未改，`verifyDiagramObligations(set, plan, candidate, base?)` 前四参逐字未动。
+- **N2**：内核 `witness/`（`c2314c9` / `1328088` / `84a6d89` / `e3fdb61`）、搜索 `solver/`（`8648a13` / `8b70fa1` / `b6a1388` / `ab05add`）、接线与 spike（`ca1d0b2` / `2f3dd45` / `9c5ae2f`）。
+
+### B. 复核抓出并修掉的真缺陷（每条都在当轮有 RED）
+
+1. **搜索器把题设"洗白"后再判**：用 `toLegacyObligationSet({obligations:[...givens], unverified: []})`，而解析器**故意**把读不出的子句留成 residue、核验器会把它变成强制的 `unverified` check。硬写空 residue 等于**精确关掉那道守卫** → 能对产品会判"未核验"的题面报 `verified_instance`。改为传 N1 的 `ObligationIR`。RED 实证：带 `∠ABC=60°` 的题面改前确实返回 `verified_instance`。
+2. **受约束点自由度按"有没有绑定"判而不是按绑定种类**（线上点报 3，文件头契约是 1；`1`/`2` 分支是死代码）。改按 `free=2 / onPath=1 / derived=0`，2D 与 3D 两组用例经变异证明互不掩盖。
+3. **两处"歧义保障"都是空操作**：先是"对四次读数取最小值"，后是"只反转一个面环"—— 而内核 `dihedralAngleDetail3` 的内角由两个面的**形心**方向算，与环绕向和参数顺序都无关（我在 `markers3d.ts:53-83` 独立核实）。两版都删掉，改成如实表述："平面按题面点名的三个点取；用哪三个点命名是题面语义，构造器不能自己发明。"
+4. **"从不抛异常"的契约被 `relations: undefined` 证伪**；**非有限的题面长度被静默换成系统自选值**；**两处尺度守卫把 `diameter²` 当长度比较**（大尺度下误拒/失明）。
+5. **两个新引入的模块环**：`parameterAudit → underdetermined → witnessSearch → planCompiler → parameterAudit`（已用叶子模块 `witnessSelection.ts` 切断，2b 相关模块现在零环）；`planCompiler ↔ solver/witnessSearch`（有意保留并记录，断法归 N3）。
+6. **2c 的"与基线逐字节相同"原本没有真证据**：原断言只比了"新代码内部 `false ≡ 缺省`"。改为**对着基线采 golden**（由 BASE 实现本身跑出，6 输入 × 2 种生产形状，断言逐字节 JSON + key 集合）。
+
+### C. 被裁决的偏差（逐条有据）
+
+入参由裸 `GeometryObligation[]` 改为 `ObligationIR`（否则 residue 被丢）；接线多改 `committerAdapter` + `agentRuntime`（协调器是**生产主路**，此前一个开关都不传，不加则任何 flag 都只是装饰；顺带使 N1 的 `obligationIR` 在主路上第一次生效）；新增 `materialisedActions`（救援替换坐标后草稿层必须用实际被物化的那份计划复验）；`degreesOfFreedom` 保持 `null`（窄豁免：`ConstraintType` 表达不了线⊥面与角度，硬映射给出的是"看不出漏项"的偏大数字，归 N3）；`shape:"prism"` 恒为 `unverified_instance`（带撇点名解析不了；设计出口本来就规定"不支持题 → unverified_instance"）。
+
+### D. 门禁（控制器当次复跑，非采信实施者）
+
+`npm.cmd test -- --maxWorkers=2 --reporter=dot` → **N1 `f997b3f`：292 文件 / 3362 通过 + 1 todo / 0 失败**；**N2 `9c5ae2f`：298 文件 / 3449 通过 + 1 todo / 0 失败**。两次 `typecheck` 均 exit 0；两次 `lint` 均 exit 0（**0 error / 13 warning**，与基线逐条相同）。两批代码**都在默认关闭的 flag 之后**，关闭时行为与 `b1ee3d3` / `4707b64` 相同。

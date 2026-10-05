@@ -14,15 +14,17 @@ Date: October 4, 2026. Status: geometry-instance verification added; real-provid
 | Average latency | Total time to confirmable draft / successful runs | Keep failed-run latency separate |
 | Average cost | Provider billable cost / successful runs | Missing billing data is null, never zero |
 
-## Deferred-capability scorecard (design only)
+## Deferred-capability scorecard
 
 | Capability | Status | Required evidence before enabling |
 | --- | --- | --- |
-| General nonlinear solving | design only | model/unsat/unknown/timeout/diverged, residuals and reproducible seeds |
+| General nonlinear solving | **partial (N2, flag default off)** | model/unsat/unknown/timeout/diverged, residuals and reproducible seeds — **present**; **degrees of freedom still `null`**; no success rate on a real task set; not wired into any user path unless the switch is turned on |
 | Constraint-preserving drag | design only | browser drag suite with DOF/overconstraint/recovery evidence |
 | Open-ended problem compilation | design only | obligation extraction and judgeability rates separate from final drawing rate |
 | Formal proof | design only | independently checked proof artifacts |
 | Real provider | not measured | pass@1/pass@3, cost, latency and human readability |
+
+> **Do not read "partial (N2)" as "the solving gate is passed."** What exists: a bounded, seed-reproducible search that produces a witness only when the same verifier passes it, behind a default-off switch, with a golden pin proving the off path is byte-identical to `4707b64`. What does not: degrees of freedom (always `null`), any real-task success rate, any browser end-to-end of the rescue path, and any product wiring of a solver backend.
 ## Current evidence
 
 ### 2026-10-04 geometry-diagram supplement
@@ -32,7 +34,7 @@ Date: October 4, 2026. Status: geometry-instance verification added; real-provid
 | Supported static-instance verification | 3319 unit assertions + 186 browser assertions in the current workspace | Fixed/ offline candidates; not real-model accuracy |
 | Unknown-condition blocking | Covered by unit, runtime, HostBridge and browser negative paths | Only supported high-precision obligation forms are judged |
 | Real-provider geometry pass@1/pass@3 | Not measured | Requires provider credential and benchmark dataset |
-| Witness-search success rate | Not implemented | Next-round design only |
+| Witness-search success rate | **Implemented, not measured** | The search exists (N2) and only returns a witness the same verifier passes, but it sits behind a **default-off** switch, is not reachable from any UI/CLI, and has no success rate on a real task set |
 
 
 `npm run eval:agent` runs the offline evaluator and prints the scorecard (it reuses vitest because this repo has no TS runner; the report lives in `apps/web/src/agent/fixtures/agentEvalReport.ts`).

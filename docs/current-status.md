@@ -276,19 +276,19 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
 - **（已闭环，留档）「自动取景动画会覆盖用户拖动」那个窗口已修**（2026-10-02，提交 `fd234fd`）：过去 `cancelFitAnimation()` 只在副作用清理（卸载）里被调用，用户拖动不取消进行中的取景，于是"换文档触发取景"之后在 **250 ms 窗口内开始拖**，拖动结束后剩下的帧会把用户刚拖出来的视角覆盖回去。现在 `pointerdown` 与滚轮都会先取消它。**顺带补了可观测状态** `data-fit-animation`（`running` / `done` / `cancelled`）—— 因为这条缺口的第一版用例是**假绿**的（触发条件搞错了：`shouldAutoFit` 只在换文档或内容出界时取景），现在用例要先抓到 `running` 才继续。证据：新增 `threeSceneCamera.test.ts`（该模块此前无测试，3/3，含"取消后不再排帧"）+ `geometry3d-drag.spec.ts` 一条 e2e（变异：去掉取消 → 期望 cancelled 实收 done，红）。
 - **引用进度档案一律用小节标题，不写行号**：`project-progress.md:<行号>` 形式的引用会随任何一次编辑静默失效（本阶段就发生过三处，已全部改成按标题引用）。
 
-## 下一轮 Agent 方向（**N1 已实施**；**N2 进行中**；N3–N5 未实施）
+## 下一轮 Agent 方向（**N1、N2 已实施**；N3–N5 未实施）
 
-这次用户要求把原先暂缓的能力全部纳入路线，已形成完整设计。**N1 已交付**（统一 IR + 自由度诊断 + 五个默认关闭的 flag），其余尚未实现：
+这次用户要求把原先暂缓的能力全部纳入路线，已形成完整设计。**N1 与 N2 已交付并复核**（都在默认关闭的 flag 之后，默认行为未变），其余尚未实现：
 
 1. **N1 统一数学状态（已完成）**：Obligation / Constraint / Claim IR，统一题设、目标、自由点、证据和 solver 状态。提交 `acd3bd5` / `2d62c4d` / `b5b33f9` / `f997b3f`；**在 flag 之后，默认关闭**。
-2. **N2 约束与非线性求解**：解析构造优先，有限预算数值求解，必要时通过 adapter 评估 Z3/NLSAT；返回 model / unsat / unknown / timeout / diverged。
+2. **N2 解析构造与见证搜索（已完成）**：题面点名 + 关系（**无显式坐标**）时，系统自己解析构造候选（棱锥/棱柱）、按 seed/上限/预算做有界搜索，并**只把通过同一个核验器的候选**接进编译路径。提交 `c2314c9`..`e3fdb61`（内核）、`8648a13`..`ab05add`（搜索）、`ca1d0b2`..`9c5ae2f`（接线 + spike）。**`witnessSearch` 缺省关**；关闭时编译结果与 `4707b64` 逐字节相同。后端的可行性评估（Z3/NLSAT）只有**一次运行**的实测数字与原始产物，**没有接入产品**。
 3. **N3 动态拖动保持**：约束进入文档状态，拖动变成临时约束求解和事务提交，显示自由度与冲突原因。
 4. **N4 开放题理解与真实 Provider Benchmark**：自然语言先编译为 Obligation IR，再规划/求解/核验；建立真实 provider 的 pass@1、pass@3、成本、延迟和人工可读性基线。
 5. **N5 形式证明出口**：先支持少量短目标，区分 verified_instance、sampled、formally_proved，证明后端独立校验证书。
 
 完整设计：`docs/superpowers/specs/2026-10-04-agent-full-next-phase-design.md`；实施计划：`docs/superpowers/plans/2026-10-04-agent-full-next-phase-implementation-plan.md`。外部项目调研：`docs/research/2026-10-04-github-project-survey.md`。
 
-**当前明确不承诺**：下一阶段设计不等于已实现；在真实 provider 基线、求解器边界、动态拖动和证明试点完成前，默认 Agent 仍只按当前已验证的静态示意图能力运行。
+**当前明确不承诺**：下一阶段设计不等于已实现；在真实 provider 基线、求解器边界、动态拖动和证明试点完成前，默认 Agent 仍只按当前已验证的静态示意图能力运行。**N2 的能力目前只在把 `witnessSearch` 打开时才生效，而 CLI/界面里没有任何打开它的入口**。
 ## 四、未完成任务总清单（2026-10-04 文档审查后；本节是“还差什么”的唯一权威处）
 
 > 口径：只有在第一节当次真正跑过的内容才写成门禁读数；本节只列当前未完成项。历史过程、失败尝试和旧数字移到 `docs/project-progress.md` / `CHANGELOG.md`，不在这里重复制造“当前状态”。
@@ -317,15 +317,24 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
 
 ### E. 后续功能决策与下一阶段 N1–N6
 
-**N1 已实施并复核（2026-10-05，在默认关闭的 flag 之后，不改变默认行为）。** 以下为尚未实施的部分：
+**N1 与 N2 已实施并复核（2026-10-05，都在默认关闭的 flag 之后，不改变默认行为）。** 以下为尚未实施的部分：
 
 1. ~~**N1：统一数学状态 IR**~~ —— **已完成**（`acd3bd5` / `2d62c4d` / `b5b33f9` / `f997b3f`；flag 默认关）。
-2. **N2 约束与非线性求解**（**进行中**）：解析构造优先、有限预算数值求解、可选 solver adapter；返回 model / unsat / unknown / timeout / diverged。**子任务 2a（内核见证构造）已交付并复核**（提交 `c2314c9`..`e3fdb61`）：`packages/geometry-kernel/src/witness/` 提供棱锥/棱柱的解析候选构造（题面点名 + 关系、无坐标），拒绝一律是带机器可读 code 的值。**子任务 2b（搜索编排 + facade 单实现 + 证据分类）已交付并复核**（提交 `8648a13`..`ab05add`）：`packages/agent-core/src/solver/` 的 `searchWitness` 按 seed/候选上限/预算编排候选，每个候选都经**与产品同一条**物化与核验路径（`buildFromPoints` → `compilePlan` → `verifyDiagramObligations`），**只有 `passed` 才可能是 `verified_instance`**；"没搜到/超预算/矛盾/无法判定"分开报，超时文案明写"在预算内没有找到"而**不**说题设不成立；polyhedron 的筛选/排序逻辑**只此一份**（`selectWitness` 降为 facade）。**2c（`witnessSearch` flag 接线 + Z3/NLSAT feasibility spike + 出口证据）尚未实施** —— 所以 N2 的能力**还没有进入任何产品路径**。
-3. **N3：动态拖动保持约束**（自由度、过约束、无解、事务和恢复）。
-4. **N4：开放题编译与真实 Provider Benchmark**。
+2. ~~**N2：解析构造与见证搜索**~~ —— **已完成**（内核 `c2314c9`..`e3fdb61`；搜索 `8648a13`..`ab05add`；接线与 spike `ca1d0b2`..`9c5ae2f`；`witnessSearch` 默认关，关闭时与 `4707b64` 逐字节相同）。
+3. **N3：动态拖动保持约束**（自由度、过约束、无解、事务和恢复）—— 并承接 N2 留下的两件事：`planCompiler ↔ solver/witnessSearch` 的模块环（断法：给搜索器注入物化端口）与"**真正算出**自由度"（需先把 `ConstraintType` 扩到能表达线⊥面与角度）。
+4. **N4：开放题编译与真实 Provider Benchmark** —— 并承接 N2 的浏览器端验收（flag 打开时救援路径的端到端）与 flag 状态进入 trace/benchmark 记录。
 5. **N5：形式证明出口**（实例、采样、形式证明严格分级）。
 6. **N6：feature flag、依赖/许可证/线程/WASM 审查、发布门槛与维护收口**。
 7. 其他尚未启动的产品探索：题目截图识图、GeoGebra `.ggb` 互操作、平面/函数题型逐题补缺、3D 画面进入 HTML。
+
+### F. N1/N2 的已知边界与 park 项（**不是缺陷，是如实记录**）
+
+- **棱柱族恒为"未核验"**：原话解析把 `A′` / `AA₁` 压成单个大写字母，且核验器的点名别名映射只收 `/^[A-Z]$/`，所以 `shape:"prism"` 稳定产出 `unverified_instance`。设计 §5 的 R2 出口本来就规定"**不支持**题稳定产出 `unverified_instance`"，故这是**符合出口**的诚实结果；带撇点名的支持是独立后续项（要动解析层，**不许**在内核或接线层"猜"）。
+- **`degreesOfFreedom` 目前恒为 `null`**（窄豁免）：N1 的 `reportFreeDegrees` 要的是 DSL `ConstraintSpec[]`（`targets` 是**图元 id**），而 `ConstraintType` 表达不了线⊥面与角度；只映射子集会让数字**看不出漏了什么**，拿实测值冒充更是自证。要真算需扩 `dsl` + 内核判据 → 归 N3。**呈现纪律**：`null` 必须读作"未计算"，**不得**读作"自由度 0 / 刚性"。
+- **有意保留的模块环** `planCompiler ↔ solver/witnessSearch`（`planCompiler.ts:24-37` 写明理由与安全性）：唯一干净的断法是给 `searchWitness` 注入物化端口，但那要改已复核的公开 API，故等 N3 的第二个消费者到场时一次定死。
+- **把 `unverified` 当作救援触发条件**：即"模型给的草稿本身可用、但题面里有一条读不出的子句"时也会被替换成系统选的坐标 —— 这是 R37① 规定的语义，**有意的**。
+- **后端 spike 的 `not_measured`**：Z3 自身的 `threads` 并行、浏览器内 WASM、内存占用、`z3` CLI（本机不存在）；数字是**一次运行**的墙钟读数（WASM 阻塞在两次运行里量到 28 / 139 ms 的差），原始产物在 `.superpowers/sdd/…/spike-z3-raw.json`（工作区产物，不在版本控制里）。
+- **park 的小瑕疵（不影响正确性，留给最终整支复核 triage）**：`planCompiler.ts` 里 1500 ms 的墙钟预算（失败方向保守：超时即不救援）；异步假设项 `value` 仍是**候选序号**而物化后的是模型序号（今天只消费 `.text`）；Worker 契约把非数组 `materialisedActions` 当缺席（只损失纵深防御）；`relations:[null]` / `unverified:[null]` 这类**非类型合法**输入仍会抛；报告 §7.1 有两个 `npm view` 得来的数字不在原始产物里。
 
 完整设计：`docs/superpowers/specs/2026-10-04-agent-full-next-phase-design.md`。
 完整计划：`docs/superpowers/plans/2026-10-04-agent-full-next-phase-implementation-plan.md`。
