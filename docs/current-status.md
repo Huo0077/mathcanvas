@@ -20,8 +20,9 @@
 | `npm.cmd test -- --maxWorkers=2 --reporter=dot` | **301 文件 / 3488 通过 + 1 todo / 0 失败**（135 s） |
 | `npm.cmd run typecheck` | exit 0（全部工作区 + `e2e/` + `scripts/`） |
 | `npm.cmd run lint` | exit 0，**0 error / 13 warning**（与基线逐条相同） |
+| `npm.cmd run test:e2e -- e2e/geometry3d-drag.spec.ts e2e/geometry3d-creation.spec.ts --workers=1` | **19 通过 / 0 失败**（27 s）—— 含"一次自由拖动只撤销一步"与"拖动实体不转相机" |
 
-> **这是第一批**摸到产品路径**的 N3 工作：新增 `apps/web/src/constrainedDrag3.ts`（纯函数 `planConstrainedDrag3`），并把 `App.tsx` 的 3D 拖动抬手（`onDragEnd`）接上它。
+> **这是第一批**摸到产品路径的 N3 工作：新增 `apps/web/src/constrainedDrag3.ts`（纯函数 `planConstrainedDrag3`），并把 `App.tsx` 的 3D 拖动抬手（`onDragEnd`）接上它。
 > **但开关默认仍然关着**（`agentNextPhaseFlags()` 恒返回五关），关着时**逐字**走原来那一次 `apply({ op: "translatePrimitive3", id, delta })` —— 所以**产品行为与上一版完全相同**。
 > **四条语义**：① 被拖点是**暖启动**不是硬锚（先放到"原位置 + delta"，再让投影把它连同别的点拉回约束 —— 所以它会贴回约束、可能不在指针正下方；做成硬锚会让"拖平面上的点"100% 被拒）；② 不许动的是锁定点与绑定点；③ 四种出口 `passthrough` / `noop` / `refused` / `commit` 分开，拒绝时一个坐标都不写、被抵消时不提交空事务；④ 提交走**一次** `applyBatch` → `commitTransaction`，所以一步撤销是白拿的。
 > **前置已裁决**：op 工厂 `patchPoint3` 早就存在，所以"一次改多个点坐标"不需要新 op。
