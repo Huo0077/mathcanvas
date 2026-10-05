@@ -5,6 +5,25 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-05 —— N4 第十步：把「求解率 4.8%」**解释开**（判据不是瓶颈，构造才是）
+
+- **为什么做这个**：第 48 轮我拿到了 `solveRate=0.048`，但一个**孤零零的 4.8%** 看不出该往哪儿使劲
+  —— 是判据覆盖不够？是搜索预算太小？还是别的？所以这一轮把两个**内核已经算好、只是没人读**的字段读出来。
+- **① 判定力（plan N4 第 4 条点名的 `judgeability`）**：
+  `BENCHMARK_JUDGEABILITY supported=21 unsupported=3 ambiguous=0 totalObligations=24`
+  —— **24 条题设里 21 条本来就判得了**。所以 **4.8% 不是判据问题**，这一条假设被排除掉了。
+- **② 失败原因码的分布**（新增读数，第 51 轮）：
+  `BENCHMARK_WITNESS_CODES {"requires-candidates":7,"unsupported-shape":9,"no-candidate-constructed":4,"unsupported-base-shape":4,"witness-search":20}`
+  —— 其中 **`witness-search` 那 20 条是"汇总"条目**（每条 `unverified_instance` 都带一条），
+  **不是一种独立原因**，读的时候要扣掉。真正的三种是：
+  - `requires-candidates`（7）：题面没点名一个**构造器认得的立体**（"任意多面体的候选坐标必须由调用方给出"）；
+  - `unsupported-shape`（9）：缺"**某条线段 ⊥ 某个点名平面**"这种写法 —— 构造器靠它定底面环与垂足；
+  - `no-candidate-constructed`（4）：构造出了候选（13 个），**全在构造期被拒**。
+- **结论（这才是读数的作用）**：卡住的是**构造阶段**，而这三种原因的**下一步完全不同**
+  —— 扩构造器认得的题面写法 / 扩解析（带撇点名）/ 修构造期的约束。
+  **"低"本身不是结论，这张码表才是。**
+- **两处文档同步**：`current-status.md` §一.1 的 benchmark 行、发布门禁的 N4 一节（给 4.8% 一个解释）。
+- **证据**：benchmark 套件 12 → **13 条**；`typecheck` exit 0；`lint` exit 0。
 ## 2026-10-05 —— N5 第六步：最后一个"缺能力"的结论也**缩水**了 —— 勾股有一个**等价近邻**
 
 - **接着上一轮的问法**（"这件事在这个仓库里是不是已经有别的机制在做"），这一轮查最后一条：

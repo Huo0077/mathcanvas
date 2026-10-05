@@ -49,7 +49,7 @@ function extractionRun(caseId: string, prompt: string): BenchmarkRun {
       ...base,
       status: extractionStatus(ir.obligations.length, ir.unverified.length),
       evidence: [
-        ...ir.obligations.map((item) => ({ claim: item.sourceText, status: item.kind, evidence: `角色 ${item.role}` })),
+        ...ir.obligations.map((item) => ({ claim: item.sourceText, status: item.kind, evidence: `角色 ${item.role}；判定力 ${item.judgeability}` })),
         ...ir.unverified.map((item) => ({ claim: item.sourceText, status: EXTRACTION_RESIDUE_STATUS, evidence: item.reason })),
         /**
          * 一条都没抽出来时 `evidence` 会是空的，而"除了 not_measured 每轮都必须给出凭什么这么说"
@@ -152,8 +152,48 @@ describe(`benchmark 运行入口（mode=${MODE}）`, () => {
         `no_witness=${count("no_witness")} error=${count("error")} ` +
         `solveRate=${(verified / witness.length).toFixed(3)}`
     )
+
+    /**
+     * **失败原因码的分布** —— 没有它，"求解率 4.8%" 只是一个孤零零的数，看不出该往哪儿使劲。
+     *
+     * 有了它就能把数字**解释开**（2026-10-05 实测）：判据不是瓶颈（24 条题设里 21 条 `supported`），
+     * 卡住的是**构造阶段** —— `requires-candidates`（题面没点名一个构造器认得的立体）、
+     * `unsupported-shape`（缺"某条线段 ⊥ 某个点名平面"这种写法）、
+     * `no-candidate-constructed`（构造出候选但全被构造期拒掉）。
+     * **这三种指向的下一步完全不同**（扩构造器 vs 扩解析 vs 修约束），所以它是必要的读数。
+     */
+    const codes: Record<string, number> = {}
+    for (const entry of witness) {
+      for (const item of entry.evidence) {
+        const code = /^([a-z][a-z-]*):/.exec(item.evidence)?.[1] ?? "(no-code)"
+        codes[code] = (codes[code] ?? 0) + 1
+      }
+    }
+    console.log(`BENCHMARK_WITNESS_CODES ${JSON.stringify(codes)}`)
     // 计数必须盖满：四种结局不重不漏（否则"求解率"的分母是编出来的）。
     expect(verified + count("unverified_instance") + count("no_witness") + count("error")).toBe(witness.length)
+  })
+  it("**判定力（judgeability）分布**：supported / unsupported / ambiguous 各多少", () => {
+    /**
+     * 计划 N4 第 4 条点名的"judgeability"。它是**内核已经算好**的一个字段
+     *（`obligationIR.ts` 的 `claimOf(..)` 决定 `GeometryObligation.judgeability`），所以这里只是**读出来**，
+     * 不引入任何新判断。
+     *
+     * 它和求解率一起看才有意义：离线求解率只有 4.8%，如果那是因为**多数题设本来就判不了**
+     *（`unsupported`），那 4.8% 就不是"搜索差"而是"判据没覆盖" —— 两种解释指向完全不同的下一步。
+     */
+    const counts = { supported: 0, unsupported: 0, ambiguous: 0 }
+    for (const entry of cases) {
+      for (const obligation of parseObligationIR(entry.prompt).obligations) {
+        counts[obligation.judgeability] += 1
+      }
+    }
+    const total = counts.supported + counts.unsupported + counts.ambiguous
+
+    console.log(`BENCHMARK_JUDGEABILITY supported=${counts.supported} unsupported=${counts.unsupported} ambiguous=${counts.ambiguous} totalObligations=${total}`)
+    // 三种取值不重不漏 —— 否则这个"分布"是编出来的。
+    expect(total).toBeGreaterThan(0)
+    expect(total).toBe(cases.reduce((sum, entry) => sum + parseObligationIR(entry.prompt).obligations.length, 0))
   })
   it("打印报告（`--silent=false` 就是给它看的）", () => {
     console.log(`BENCHMARK_REPORT ${JSON.stringify({ mode: MODE, seed: SEED, cases: cases.length, report }, null, 2)}`)
