@@ -695,6 +695,8 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
 
 ### F. N1/N2 的已知边界与 park 项（**不是缺陷，是如实记录**）
 
+- **离线求解率只有 4.8%，而这是"设计覆盖面"决定的，不是缺陷（2026-10-05 查实）**：第 51 轮的码表显示卡点在构造阶段。第 52 轮去核了构造器本身 —— `packages/geometry-kernel/src/witness/constructors.ts` 的**文件头**写明首批只覆盖"棱锥 / 棱柱、底面 n = 3 或 4、**底面上有点名的直角**、顶点在**点名的垂足**正上方"，并且：**"覆盖不到的形状（斜平行四边形底面、直角不在环首的四边形…）明确拒绝并给出 `reason.code`，而不是悄悄换一个题目没说的形状 —— 那正是'特值化悄悄改题'的老毛病。"** 所以那 9 条 `unsupported-shape` + 4 条 `unsupported-base-shape` 是**落在这个覆盖面之外**（棱柱的带撇点名、只有线⊥线没有线⊥面的题面、没有立体点名的题面）。**要不要扩覆盖面是设计决定**，而且设计本身警告过硬扩的风险。
+
 - **~~`deterministic_local` 的「求解率」缺一个定义~~（2026-10-05 更正：**这个结论错了，已经能跑了**）**：我原来的理由是"见证搜索只在救援路径里触发（`planCompiler.ts:235`），要先有一份模型给的计划失败才有东西可救，所以离线没有输入"。**那个理由错了** —— 救援路径传进去的只有两样：`first.obligations.ir`（**解析结果**）与 `witnessShapeFor(context.prompt)`（**从题面推出来的图形族**）。**两样都不来自模型。** 现在 `agent-core` 导出了离线入口 `searchWitnessForPrompt(prompt)`，`bench:agent` 的**见证层**用它，实测：`BENCHMARK_WITNESS verified=1 unverified=20 no_witness=0 solveRate=0.048`（**离线求解率 4.8%**，21 题里 1 题拿到通过核验的候选）。它与救援路径共用同一份组成（seed / 候选上限 / 超时 / 题面→图形族），不是又写一遍。
 
 - **N5 的"只读展示"这一条**（计划要求把 proof artifact 接进 `ConfirmationPanel` / `agentStore` / run event schema）**目前做不了，而且不是"没时间做"**：查下来 `ClaimEvidence` 这套证据词汇**根本没有进过 Web 界面** —— 面板显示的是 `diagramVerification`（另一套词汇，讲的是"这份图核验了吗"），而 `ClaimEvidence` 只在 `witnessSearch` / `solverContracts` / `planCompiler` 这些**核心层**里活着。加上**今天没有任何后端**，产物永远不存在 —— 为一个**不可能出现**的东西先做展示面，属于投机性设计。**这一条与"接一个真实后端"是同一件事，跟着那个决定走。**
