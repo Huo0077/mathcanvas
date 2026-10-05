@@ -31,7 +31,7 @@
 | 生产构建（web） | `npm.cmd run build --workspace @draw/web` | **成功**（3.92 s）；入口 chunk **1,803.76 kB / gzip 527.62 kB**（比上轮 1,801.18 kB **+2.6 kB**：新增设置组件与偏好模块）；产物落 `build-check/`（已 gitignore，构建后工作树干净） | 0 | **2026-10-05 复核** |
 | Agent 评测 | `npm.cmd run eval:agent` | `deterministic_local`：pass@1 **4/8**、pass@3 **4/8**、工具选择 45/45、工具错误 3/45。报告现在多打两行：`provider          not measured`（还都是离线那条腿）与 `average cost      not measured`（**没有价目表**）。**这一行的数字是离线回归，不是模型准确率**；真实 provider 那两条轴的状态见下面两行（**2026-10-05 更正**：这里原来写"真实 provider 的 harness 已落地，**但一次还没跑**" —— 那句话把两条轴混成一条：**题集 planning 轴已经跑过两次**，而**工具环 pass@1 轴以前根本跑不了**（请求形状缺陷，`90eba6e` 已修），**修好之后也没人跑过**） | 0 | **2026-10-05 复核**（**未接真实模型**，不是模型准确率） |
 | Agent benchmark | `npm.cmd run bench:agent` | 抽取层：`cases=21 covered=14 empty=7 error=0`；`BENCHMARK_PREMISE obligations=24 residue=9 rate=0.727`；`BENCHMARK_EXTRACTION covered=14/21 rate=0.667`。**见证层（第 48 轮新增）**：`BENCHMARK_WITNESS verified=1 unverified=20 no_witness=0 error=0 solveRate=0.048`；`BENCHMARK_JUDGEABILITY supported=21 unsupported=3 ambiguous=0 totalObligations=24`；`BENCHMARK_WITNESS_CODES {"(no-code)":1,"requires-candidates":7,"unsupported-shape":9,"no-candidate-constructed":4,"unsupported-base-shape":4,"witness-search":20}`（**2026-10-05 N4a 后实测**。上一版这行**少记了 `"(no-code)":1` 这一档** —— 那是见证层"给了结论但没留下原因文本"的兜底证据，**实际输出里一直有**（BASE 时的捕获也含它），所以这是**重新测量并改正旧读数**，不是本批引入的差异；同一次实测里 `cases=21 covered=14 empty=7 error=0` 等三条读数与改前**逐字相同**） | 0 | **2026-10-05 N4a 后实测** |
-| **Agent benchmark（真实 provider，`planning`）** | 设置 → 真实 provider 评测：题集 planning | **两次运行（同一天、同一台机器、同一套 3 题）**：面板当时显示的都是 `planned 2/3` / `rejected 1/3` / `error 0/3` / `not measured 0/3`；`average latency` **13445 ms**（第一次）/ **8465 ms**（第二次，逐条渲染上线后那次）；`cost not measured`（**仓里没有价目表**）；provider `deepseek-v4-flash / deepseek-v4-flash`；`cases 3`（`layer=planning`，`seed=7`）。**按今天的词表**，那 1 条 `rejected` 其实是 **`clarification`**（模型在问，不是失败）⇒ 同两次运行现在会读成 `planned 2/3` / **`clarification 1/3`** / `rejected 0/3`。**这是计划 N4「先跑小样本真实 provider」那一条的落点** —— **n=3 的子集**，**不是全题集结论**；下面那段说清 `rejected` 那一格当时为什么会被读反 | 0 | **2026-10-05 用户在桌面端运行并回传读数原文**（控制器**未旁观**该次运行；3=2+1+0+0 自洽、provider 非空、`cost` 如实 `not measured`，由控制器核对） |
+| **Agent benchmark（真实 provider，`planning`）** | 设置 → 真实 provider 评测：题集 planning | **两次运行（同一天、同一台机器、同一套 3 题）**：面板当时显示的都是 `planned 2/3` / `rejected 1/3` / `error 0/3` / `not measured 0/3`；`average latency` **13445 ms**（第一次）/ **8465 ms**（第二次，逐条渲染上线后那次）；`cost not measured`（**仓里没有价目表**）；provider `deepseek-v4-flash / deepseek-v4-flash`；`cases 3`（`layer=planning`，`seed=7`）。**按今天的词表**，那 1 条 `rejected` 其实是 **`clarification`**（模型在问，不是失败）⇒ 同两次运行现在会读成 `planned 2/3` / **`clarification 1/3`** / `rejected 0/3`。**这是计划 N4「先跑小样本真实 provider」那一条的落点** —— **n=3 的子集**，**不是全题集结论**；下面那段说清 `rejected` 那一格当时为什么会被读反。**第三次运行（2026-10-06，带人工可读性标注）**：`planned 1/3` / `clarification 1/3` / `rejected 0/3` / **`error 1/3`** / `not measured 0/3`；`average latency` **18153 ms**；`cost not measured`；**人工可读性第一次有标注**：`plan` 组 `已标 1 / 未标 0`、`clarification` 组 `已标 1 / 未标 0`，两组各 1 条**都判 `unreadable`** ⇒ 两组 `readable 比率 0.000`；`rejected` 组**本轮没有题**（`0/0`）⇒ 如实显示「未标注（分母 = 已标 0，不是 0 分）」，**合计已标 2** | 0 | **2026-10-06 用户在桌面端运行并回传读数原文**（控制器**未旁观**；`3=1+1+0+1+0` 自洽、层与 seed 对得上、非空 provider、`cost` 如实 `not measured`、标注合计 `2=1+1` 自洽，由控制器核对） |
 | **Agent 评测（真实 provider，agent 工具环）** | 设置 → 真实 provider 评测：agent 工具环 | **`pass@1 1/8`** / **`pass@3 2/8`** / `tool selection 45/45` / `tool error rate 4/45` / `average latency 4126 ms (successful runs only)` / `average cost not measured` / `attempts 24`；provider `deepseek-v4-flash / deepseek-v4-flash`。**口径**：`passAt1` = **第 1 轮就过**的题数（`agentEvalRunner.ts:52`）、`passAt3` = **三轮里任一轮过**（`:53`）。**这是 pass@1 轴的第一次真实读数**（那条通道的请求形状缺陷已在 `90eba6e` 修好）。**边界**：8 题 × 3 轮、**单模型单次采样**；与离线 `deterministic_local` 的 `pass@1 4/8` **不可直接比"谁更好"**（离线是确定性、且那是协议/几何回归，不是模型准确率）；**也不是**题集 `planning` 轴（3 题，另一个坐标系） | 0 | **2026-10-05 用户在桌面端运行并回传**（控制器**未旁观**；`2/8 ≥ 1/8` 单调性自洽、成本如实 `not measured`，由控制器核对） |
 | 证明边界 smoke | `npm.cmd run proof:smoke` | 7 通过 / 0 失败；`PROOF_BACKENDS {"wired":[],"reviewed":0}`；**勾股裁决后新增**：`goalsWithoutAnyRoute: []`、`pythagoreanRoute: {"kind":"via-inference","from":"perpendicular"}` | 0 | **2026-10-05 复核** |
 | N3 定向测试（**计划点名的那七件**） | `vitest run constraints / constraints3d / planar-constraints / reactive/constraints / operations / patches / scene-store` | **7 文件 / 241 通过 / 0 失败** | 0 | **第 31 轮** |
@@ -47,6 +47,27 @@
 > **它关掉了什么**：计划 N4 的 `:326`（"先跑小样本真实 provider；无凭据时写 `not_measured`、不伪造数字"）**两半都达成** ⇒ 已勾。
 > **它没关掉什么**：`:324` 的「**人工可读性**」仍然**既没有字段也没有标注** —— 而且这次运行暴露出：
 > 要标注它，得先把**模型给出的计划 / 澄清正文**呈现出来（今天的报告里只有计数与证据串，没有可读的产物）。
+>
+> **（2026-10-06 更正）上面那段最后两行的"仍然既没有字段也没有标注"已过期，分两次关掉**：
+> ① **字段与呈现**由 N4e 补齐（提交 `dbe6fb1`：`BenchmarkRun.humanReadability` + 只读「人读区」）；
+> ② **实际标注**由**用户**在 `2026-10-06` 的那次运行里做出（读数见 §一 那一行的第三次运行）。
+> **标注口径**（写死在代码里，不是事后描述）：三值 `readable` / `partly` / `unreadable`；判断者是**一个不懂实现的人**；
+> 分母**只算有对象可读的轮次**（`not_measured` / `error` **不进**），`plan` 与 `clarification` **各有各的分母**；
+> **没标注 ≠ 0 分**（分母为 0 时比率处写的是「未标注（分母 = 已标 0，不是 0 分）」）。
+> **这一批的实际结果**：`plan` 1 条 → `unreadable`；`clarification` 1 条 → `unreadable`；合计**已标 2**；
+> `rejected` 组本轮**没有题**（不是"漏标"）。
+> **⚠️ 读法边界（别把 0.000 读成趋势）**：这是**每组 n=1** 的两个 0.000 —— 它说明的是"**这一次**有一条计划、一条提问，
+> 判的人都说看不懂"，**不是**"模型的可读性很差"，也不是全题集结论（全题集 21 条，本次只发前 3 条）。
+> **它关掉了什么**：计划 N4 的 `:324`（"每题最多 3 轮，记录抽取率、求解率、题设覆盖率、verified/unverified/no_witness、
+> 成本、延迟和**人工可读性**"）—— **七项里六项此前已在位，人工可读性这一项本次到位** ⇒ `:324` 勾。
+> 仍如实留着的是**成本**：它永远是 `not measured`（仓里没有价目表），这一栏不是"没做"，是"没有可用的价目表"。
+>
+> **⚠️ 这次运行暴露的一条新的传输边界（真发现，已记，未修）**：`unsupported-expression` 这一条**没跑成**，
+> 结局是 **`error`**，原始消息逐字是
+> `ModelPlannerError: 传输失败已尝试 3 次（上限 3）：停下并如实报告。（底层原因：the provider could not be reached: the response exceeded 1048576 bytes）`。
+> 也就是说：**那一次模型响应超过了 1 MiB 的上限**，重试到上限后**如实报错**（这正是 fail-closed 该有的行为 —— 它**没有**把没测到的东西记成 `rejected` 或 `planned`）。
+> 后果是这条通道对**超大响应**的题**测不出来**；要么把上限做成可配、要么换传输方式，**都还没做**。
+> 这条边界同时解释了为什么这次 `planned` 从 2/3 掉到 1/3：**分母没变、是那一条从"有结论"变成了"没测到"**（`error` 不计入 `rejected`）。
 
 > **第二次运行（2026-10-05，逐条渲染上线之后）+ 一个必须说清的读数含义**：用户又跑了一次同样的 3 题，这次面板给出了**逐条行**
 >（这正是第一次运行暴露的缺口、本轮修掉的那处），于是"被拒的那一条**为什么**被拒"第一次有了答案：
@@ -756,6 +777,27 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
    所以这一条现在只差**人工可读性的实际标注**，以及"**成本**"那一栏（它永远需要一张价目表）。
    旧那条 agent 工具环通道（24 次）**仍然是坏的**（请求形状对真实规划器不成立）—— 本轮只做到"失败如实显示、不许假装在跑"，
    **没有**改它的输入语义（那会改变旧评测在测什么，需要单独裁决）。
+
+   > **（2026-10-06 更正一：`N4` 的出口已经达成）** 上面 `773-777` 那几句**已过期**：
+   > ① **人工可读性的实际标注已经发生** —— 用户在 `2026-10-06` 又跑了一次题集 planning（第三次），并在只读「人读区」里
+   > **逐条打了分**：`plan` 1 条 → `unreadable`、`clarification` 1 条 → `unreadable`，**合计已标 2**；
+   > `rejected` 组本轮没有题 ⇒ 如实显示「未标注（分母 = 已标 0，不是 0 分）」。读数原文见 §一 那一行。
+   > ⇒ 「**已标注 = 0**」这句话**不再成立**；报告里出现的也不再只是"未标注"。
+   > **读法边界**：**每组 n=1** 的两个 `readable 比率 0.000` 不是趋势，只能读成"这一次那两条，判的人都说看不懂"。
+   > ② 于是计划 **`:324`**（七项：轮次上限 / 抽取率 / 求解率 / 题设覆盖率 / 三结局计数 / 成本 / 延迟 / 人工可读性）
+   > **六项早就在位、人工可读性这一项本次到位** ⇒ **`:324` 勾**，N4 的收尾检查点 `:347` 随之可勾。
+   > **唯一仍然"没有数字"的是成本** —— 它是 `not measured`，理由是**仓里没有价目表**（不是没做）。
+   >
+   > **（2026-10-06 更正二：`778-779` 那句"仍然是坏的"也过期了）** 那条 24 次请求的通道**在 `90eba6e`（N4d）已经修好**：
+   > 请求形状收成 `coordinatorPorts.ts` 的 `buildPlanRequest` 一处，协调器 / 旧通道 / 题集通道共用它。
+   > 而且**修好之后已经跑过一次**：§一 那一行记着 `pass@1 1/8` / `pass@3 2/8` / 工具选择 45/45 / 工具错误 4/45 / `attempts 24`。
+   > 所以"请求形状对真实规划器不成立"**不再是当前状态**；现在的准确说法是"**修好了，也跑过了**"。
+   > **未改的仍然是**：那条通道的输入语义（`geometry3d` 硬编码、8 题夹具无 `workspace`）—— 那是**潜在约束**，不是缺陷（已裁决）。
+   >
+   > **（2026-10-06 新增一条边界）** 第三次运行里 `unsupported-expression` 那一条**没测到**：结局 `error`，
+   > 原始消息是 `传输失败已尝试 3 次（上限 3）… the response exceeded 1048576 bytes` ⇒ **模型响应超过 1 MiB 上限**。
+   > 它**如实报错**而没有被抓成 `rejected`/`planned`（fail-closed 正确），但**这条通道对超大响应的题今天测不出来** ——
+   > 上限可配或换传输方式**都还没做**。这也是这次 `planned` 从 `2/3` 变成 `1/3` 的原因（**分母没变，是那一条从"有结论"变成"没测到"**）。
    **第二次运行（逐条渲染上线后）给出了被拒那一条的真实原因**：模型对"AB 同时等于 3 和 5"那道题**给的是澄清**（要求用户二选一），
    于是被记成 `rejected`。**⇒ `rejected` 这一格今天是混装**：它同时装着"模型发现矛盾并提问"（好行为）与"编译器拒了计划 / 根本没给计划"（失败）。
    合并计数会让读数方向反过来。**已实施**：`planning` 层新增 `clarification` 一支（模型"在问"独立出来；fail-closed 不变，它**不是** `planned`）。
