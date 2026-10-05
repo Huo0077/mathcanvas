@@ -22,6 +22,11 @@
 计划的最终阶段门槛原文是"只有所有门禁通过，才允许把 typed tool loop 设为默认运行路径"——
 所以现在**不设**。
 
+> **另外两处门槛今天"无法判定"，而且它们不是缺工作，是缺决定**（详见下面两节）：
+> **N3 的浏览器验收**（要"真实浏览器中保持约束 / 拒绝过约束 / 一步撤销 / 恢复路径"）卡在
+> **没有任何产品入口能打开 `constrainedDrag` 开关**；**N5 的证明出口**卡在**没有任何后端接入**
+> （接之前要先交一份通过的审查记录）。**"无法判定"与"已达成"是两件事** —— 这两条都不许读成绿。
+
 ## 逐条状态
 
 | # | 计划原文 | 状态 | 判据 / 证据 |
@@ -85,11 +90,34 @@
   - **恢复路径**：未做。
   - **并且**：`constrainedDrag` 开关**默认关**，`appNextPhaseFlags()` 恒返回全关，**没有任何产品入口能把它打开** —— 所以浏览器正/反例**写不出来**。这一条是 N3 验收的**唯一**障碍，需要产品决定（不是技术问题）。
 
-**N4 开放题理解：只有"载体"，没有任何真实读数。**
+**N4 开放题理解：有"载体"与两个覆盖率读数，**还没有任何真实读数**。**
 
-- **已有的**：题集 schema + 校验器、凭据检查、运行记录与报告契约（分 `extraction` / `witness` 两层）、七类各一条的起步题集、`runner.mjs` + `npm run bench:agent`。
-- **唯一的实测**：`BENCHMARK_COVERAGE cases=7 covered=5 empty=2 error=0`（**抽取层**，`deterministic_local`）。
-- **没有的**：门槛要"抽取率、judgeability、求解率与人工审查分开统计" —— 现在只有抽取层的一个覆盖率读数，**judgeability / 求解率 / 人工审查三样都没有**；`real_provider` 整批 `not_measured`（**适配器没写**，需要先定用哪个 provider、凭据放哪）。**不要把 N4 的第一步读成"开放题门槛已过"。**
+- **已有的**：题集 schema + 校验器、凭据检查、运行记录与报告契约（分 `extraction` / `witness` 两层）、
+  **七类 × 3 条 = 21 条**题集、**每题最多 3 轮**的上限校验、**题设覆盖率**口径、`runner.mjs` + `npm run bench:agent`。
+- **实测（抽取层，`deterministic_local`）**：`BENCHMARK_COVERAGE cases=21 covered=14 empty=7 error=0`；
+  `BENCHMARK_PREMISE obligations=24 residue=9 rate=0.727`（题设覆盖率 **72.7%**）。
+  **读数不可比**：`covered` 从 `5/7` 到 `14/21` 是**题集换了**（新加的三类刻意偏难），只记录、不比较。
+- **没有的**：门槛要"抽取率、judgeability、求解率与人工审查分开统计" —— 现在有抽取层的**题级覆盖**
+  （`covered`）与**题设级覆盖**（premise rate），但 **judgeability / 求解率 / 人工审查三样都没有**；
+  `real_provider` 整批 `not_measured`（**适配器没写**，需要先定用哪个 provider、凭据放哪），
+  成本 / 延迟 / 人工可读性同样没有。**不要把 N4 的第一步读成"开放题门槛已过"。**
+
+**N5 形式证明出口：只有"边界"，没有任何后端 —— 所以这一条门槛今天**无法判定**。**
+
+- **已有的**：证明产物 schema（`version` / `claimId` / `inputHash` / `backend` / `proof` / `result`）、
+  `verifyProofArtifact`、短目标**封闭词表**（`proofGoals.ts`，10 种）、**后端接线门**
+  （`WIRED_PROOF_BACKENDS` 由**通过的审查记录推导**）、后端准入契约（`proofBackendReview.ts`，十栏）、
+  `npm run proof:smoke`。
+- **可复核的读数**：`PROOF_BACKENDS {"wired":[],"reviewed":0,"rows":[]}`、
+  `PROOF_SPIKE {"wiredBackends":[],"firstBatchExpressible":6,"unexpressibleFirstBatch":["collinear","coplanar","pythagorean"]}`、
+  `proof:smoke` **7 通过**。
+- **没有的**：**没有任何后端接入**（要接得先交一份十栏填齐、结论 `passed` 的审查记录），
+  所以 `formally_proved` 在今天的构建里**不可达**；计划首批点名的**共线 / 共面 / 勾股在解析层
+  表达不出来**（`DiagramObligationKind` 里没有这三种），需要"扩解析层还是从首批划掉"的裁决；
+  产物也**没有进过任何界面**（`ClaimEvidence` 这套词汇根本没到过 Web 层）。
+- **为什么这一条不能算"已达成"**：一个**永远不可能产出** `formally_proved` 的系统，
+  "实例 / 采样 / 证明严格分级"是**平凡成立**的 —— 那不算满足了门槛。分级本身已被**双向**验过
+  （注入一个假后端后产物确实能升上去），但**真正有意义的判定要等一个后端接上**。
 
 ## 最终阶段门槛
 
