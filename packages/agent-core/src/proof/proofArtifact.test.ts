@@ -189,13 +189,59 @@ describe("证明产物的校验（N5 的边界）", () => {
     expect(JSON.stringify(parsed)).toBe(snapshot)
   })
 
-  it("输入指纹：同一份输入稳定，换一处就变（换 prompt / claim / goal / 文档都算）", () => {
+  it("输入指纹：同一份输入稳定，换一处就变（换 prompt / claim / goal 都算）", () => {
     const base = { prompt: "题面", claimSourceText: "结论" }
 
     expect(proofInputHash(base)).toBe(proofInputHash({ ...base }))
     expect(proofInputHash(base)).not.toBe(proofInputHash({ ...base, prompt: "另一句题面" }))
     expect(proofInputHash(base)).not.toBe(proofInputHash({ ...base, claimSourceText: "另一个结论" }))
     expect(proofInputHash(base)).not.toBe(proofInputHash({ ...base, goal: "目标" }))
-    expect(proofInputHash(base)).not.toBe(proofInputHash({ ...base, documentFingerprint: "doc-1" }))
+    // 原来这里还有一条 `documentFingerprint: "doc-1"` **必须**改哈希的断言。
+    // 2026-10-05 的 R51 把它反过来裁决了（不绑文档指纹）—— 判据搬到下面那一组里。
+  })
+})
+
+/**
+ * **R51 + R56：一份证明该绑到多细的输入**（2026-10-05 裁决，理由见 `proofInputHash` 的注释）。
+ *
+ * 这一组不是风格偏好，是同一个洞的两面：**绑定太松 ⇒ 过度声称 / 假有效**。
+ * 少了 `assumptions` 那几条，一份"后端带着系统多给的假设证出来的"产物会被摆在一个**更弱**的
+ * 命题旁边；少了 `statement` 那条，适配器把模板改弱之后旧产物**照样匹配**。
+ */
+describe("输入绑定（R51 假设 / R56 被证明的命题）", () => {
+  const base = { prompt: "在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD", claimSourceText: "PA ⊥ BD" }
+
+  it("**R51**：只在 assumptions 上不同的两份输入，必须得到不同的 inputHash", () => {
+    expect(proofInputHash({ ...base, assumptions: ["系统替你定的假设：底面 ABCD 是正方形"] })).not.toBe(proofInputHash(base))
+    expect(proofInputHash({ ...base, assumptions: ["甲"] })).not.toBe(proofInputHash({ ...base, assumptions: ["乙"] }))
+  })
+
+  it("空数组与不传**必须同哈希** —— 同一次输入不许有两个答案", () => {
+    expect(proofInputHash({ ...base, assumptions: [] })).toBe(proofInputHash(base))
+  })
+
+  it("顺序不影响哈希（调用方给的顺序可能不同）", () => {
+    expect(proofInputHash({ ...base, assumptions: ["甲", "乙", "丙"] })).toBe(proofInputHash({ ...base, assumptions: ["丙", "甲", "乙"] }))
+  })
+
+  it("重复项按**一条**算：同名假设出现两次与出现一次同哈希", () => {
+    // 去重的理由写在 `proofInputHash` 的注释里：假设的文本就是这条假设本身，
+    // 重复只可能来自"同一条被推导了两次"，让计数参与哈希只会把它变成**假过期**。
+    expect(proofInputHash({ ...base, assumptions: ["甲", "甲"] })).toBe(proofInputHash({ ...base, assumptions: ["甲"] }))
+  })
+
+  it("**R56**：被证明的那条命题原文进哈希 —— 换了命题就必须失配", () => {
+    expect(proofInputHash({ ...base, statement: "theorem t : PA ⟂ BD := by sorry" }))
+      .not.toBe(proofInputHash({ ...base, statement: "theorem t : True := by trivial" }))
+    expect(proofInputHash({ ...base, statement: "theorem t : True := by trivial" })).not.toBe(proofInputHash(base))
+  })
+
+  it("**R51 的另一半：不绑文档指纹** —— 硬塞一个坐标/标签指纹进去也不改变哈希", () => {
+    // 绑坐标会把"题设下普遍成立"降级成"这一次实例的检查"，还会被改个 label / 重解选到
+    // 另一组坐标刷成**假过期**。这条判据由**入参本身**落地（那个参数已经没有了），
+    // 所以这里连"绕过类型硬塞"都必须无效。
+    const sneaky = { ...base, documentFingerprint: "坐标与标签的那份指纹" } as unknown as Parameters<typeof proofInputHash>[0]
+
+    expect(proofInputHash(sneaky)).toBe(proofInputHash(base))
   })
 })
