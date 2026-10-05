@@ -243,6 +243,15 @@ describe("设置 → 真实 provider 评测", () => {
 
     // ① 正文区如实说"没有正文可读"（这一批三条都是）。
     for (const block of blocks) expect(block.textContent).toContain("（这一条没有正文可读）")
+    /**
+     * ①-b **那一句说明本身也要被钉住**（复核 o2）：上面那条 `toContain("（这一条没有正文可读）")` 会被 `<pre>` 满足，
+     * 所以把这一支新写的那段 `<p>` 整段删掉，它**照样绿** —— 那就等于这句话没有被判据守着。
+     * 这里钉的是它的**两个要点**：为什么没有按钮、以及"仍然算在分母里"这个容易被读反的口径。
+     */
+    for (const block of blocks) {
+      expect(block.textContent).toContain("没有可判的对象")
+      expect(block.textContent).toContain("仍然算在这一组的分母里")
+    }
     // ② ……那就**一个标注按钮都不许有**（这正是 N5 说的那种自相矛盾）。
     expect(within(area).queryAllByRole("button")).toHaveLength(0)
     // ③ 口径没动：它们仍然算在 `rejected` 那一组的分母里，于是显示"未标 3"（**不是**被排除）。

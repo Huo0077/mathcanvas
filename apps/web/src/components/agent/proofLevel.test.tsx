@@ -103,7 +103,9 @@ describe("证明级别：只读状态面（文案由真实数据推导）", () =
     for (const forbidden of [/已证明/, /证明通过/, /形式证明通过/]) expect(screen.queryByText(forbidden)).toBeNull()
     cleanup()
 
-    render(<ConfirmationPanel draft={draft} proofBackends={["fake-lean4-adapter"]} />)
+    // **只渲染可达的组合**（复核 M5）：注入的"事实"必须是生产过程真能产生的形状 ——
+    // `wired` 是从审查记录里**过滤**出来的，所以"接上 1 个、交过审查记录 0 条"在生产里不存在。
+    renderWired(["fake-lean4-adapter"], 1)
     for (const forbidden of [/已证明/, /证明通过/, /形式证明通过/]) expect(screen.queryByText(forbidden)).toBeNull()
   })
 

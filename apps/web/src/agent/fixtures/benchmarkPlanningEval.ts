@@ -624,8 +624,13 @@ export function formatPlanningReport(result: PlanningEvalResult): string {
  *
  * 三条必须能从这五行里读出来：
  * 1. **判断者是谁**：一个**不懂实现的人**（不是实现者）—— 所以那个判断只能由人给；
- * 2. **分母是什么**：只有"有对象可读"的轮次；`not_measured` / `error` 不进；
- *    `plan` 与 `clarification` **各有各的分母**（问法清不清楚 ≠ 计划好不好）；
+ * 2. **分母是什么**：**本层结局**为 `planned` / `clarification` / `rejected` 的轮次；`not_measured` / `error` 不进；
+ *    `plan` 与 `clarification` **各有各的分母**（问法清不清楚 ≠ 计划好不好）。
+ *    **措辞更正（2026-10-06，复核 o1）**：这里原来说"只有**有对象可读**的轮次" —— 那句话与面板上新写的那句
+ *    「**没有可判的对象**…**仍然算在这一组的分母里**」**同屏字面相反**。代码从头到尾只有一套口径（按 `status` 分组），
+ *    矛盾**只在措辞上**：`rejected` 里"模型什么都没给"的那一类**确实没有正文**，但它**仍在分母里**（那是已裁决的边界）。
+ *    所以分母要用**结局**定义，不能用"有没有正文"定义 —— 后者会让读者以为空正文的条目被排除了。
+ *    配套：这条口径在面板那一侧已经有判据钉着（"0 个按钮"+"仍写 `未标 N`"）。
  * 3. **"未标注"与"0 分"可分辨**：一条都没标时比率写的是「未标注（分母 = 已标 0，不是 0 分）」，
  *    而**不是** `0.000`。本批做完的真实状态正是这个 —— 不许拿 0 或占位比率凑。
  */
@@ -633,7 +638,7 @@ function formatReadabilitySection(readability: BenchmarkReport["realProvider"]["
   return [
     "人工可读性（判断者：一个不懂实现的人 —— 只问「它打算建什么、依据是什么」能不能看懂）",
     "  三值 readable / partly / unreadable；没标注就是「未标注」，**不是** 0 分。",
-    "  分母只算有对象可读的轮次：not_measured / error 不进；plan 与 clarification 各有各的分母。",
+    "  分母 = 本层结局为 planned / clarification / rejected 的轮次（not_measured / error 不进；正文为空但结局是 rejected / 没测到 的那些**仍算在分母里**）；plan 与 clarification 各有各的分母。",
     ...readability.groups.map((group) =>
       `  ${group.group.padEnd(14)}已标 ${group.annotated} / 未标 ${group.unannotated}   ` +
       `readable ${group.byValue.readable} / partly ${group.byValue.partly} / unreadable ${group.byValue.unreadable}   ` +
