@@ -276,6 +276,29 @@ export interface ConversationContextInput {
 /** 会话那一半的入参（观察与当前请求由协调器在运行中补上）。 */
 export type ConversationContextSource = Omit<ConversationContextInput, "observation" | "request">
 
+/**
+ * **这一轮生效的会话上下文上限**：来源自己声明的 + 协调器这一轮要求收紧的。
+ *
+ * `derived` 以协调器为准（它设了就用它）：这一条决定了**提示词渲染几条派生读数**
+ *（提示词读的是会话那一份），而"这一轮不该看那么多"只有运行这一层知道。
+ * 两种上限最终都会被组装器夹进硬上限里，所以这里只管把数递下去。
+ *
+ * ## 为什么它从 `coordinator.ts` 搬到这里（N4d）
+ *
+ * "协调器会怎么合并这两个上限"是**组装的一部分**，而 `buildPlanRequest`
+ *（`coordinatorPorts.ts`）要把同一件事对**所有**规划请求的构造方做到一致。
+ * 留在 `coordinator.ts` 里就是第二份：协调器一份、请求构造一份，谁也看不出它们该相等。
+ * 搬过来之后仍**只有协调器会真的传 `coordinatorLimits`**（它是那个"运行这一层"）——
+ * 另外两处传 `undefined` 时函数返回来源自己的那份，行为与从前逐字相同。
+ */
+export function conversationLimitsFor(
+  source: ConversationContextSource | undefined,
+  coordinatorLimits: { facts?: number; refs?: number; derived?: number } | undefined
+): NonNullable<ConversationContextSource["limits"]> | undefined {
+  const merged = { ...(source?.limits ?? {}), ...(coordinatorLimits?.derived === undefined ? {} : { derived: coordinatorLimits.derived }) }
+  return Object.keys(merged).length === 0 ? undefined : merged
+}
+
 export interface ConversationContext {
   binding: ConversationBinding
   summary: string

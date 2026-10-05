@@ -1,13 +1,10 @@
 import {
   buildBenchmarkReport,
-  buildContext,
-  buildConversationContext,
+  buildPlanRequest,
   CAPABILITY_REGISTRY_REVISION,
   compilePlan,
   createBudget,
-  createToolRegistry,
   parseBenchmarkCases,
-  SKILL_MANIFESTS,
   type BenchmarkCase,
   type BenchmarkEvidenceEntry,
   type BenchmarkReport,
@@ -24,6 +21,7 @@ import { contentFingerprint } from "@draw/scene-graph"
 import { MODEL_PLANNER_SKILL_IDS } from "../agentRunner"
 import { createModelPlanner, resolveActiveProvider, type ProviderResolution } from "../modelPlanner"
 import { NOT_MEASURED } from "./agentEvalReport"
+import { availableActionsFor } from "./offlineAgentEval"
 
 /**
  * **应用内真实 provider 的题集 planning 通道**（子任务 N4b）。
@@ -112,30 +110,35 @@ export function workspaceFor(entry: BenchmarkCase): "geometry3d" | "cad" {
 /**
  * **这一轮的 `PlanRequest`** —— 真实模型规划器要的那一份。
  *
+ * ## 请求的形状**不在这个文件里**（N4d 改）
+ *
+ * 这里原先自己拼了一份完整请求（同一批函数、同样的顺序，但是**第二份字面量**）。
+ * 现在它只是 `@draw/agent-core` 的 `buildPlanRequest` 的一层薄封装：那道"模型能看到什么"
+ * 归协调器管（`coordinatorPorts.ts` 的 `PlanRequest.model` 注释点名了这条安全边界），
+ * 而 `buildPlanRequest` 调的就是协调器自己用的那几个函数
+ *（`buildContext` → `buildConversationContext` → `createToolRegistry().forModelPhase("planning", …)`）。
+ *
+ * 这个封装留下的唯一理由是**参数形状**：`runOneCase` 手里是
+ *（题面 / 工作区 / runId / 文档）这四样，而 `buildPlanRequest` 要的是 `RunContext` 与
+ * "这一轮观察到什么"。把四样变成那两样的过程仍然只有一处（就在下面）。
+ *
  * ## 为什么不能只给 `userMessage`
  *
- * 离线评测那条路可以只传 `{ userMessage } as never`（`offlineAgentEval.ts:30`），因为
- * `createLocalPlanner` 只读 `userMessage`。**真实**模型规划器不行：它要
+ * 离线那条路曾经可以只传 `{ userMessage } as never`（`offlineAgentEval.ts` 的注释记着这件事），
+ * 因为本地规划器只读 `userMessage`。**真实**模型规划器不行：它要
  * `request.model.context` 组装提示词、要 `request.run` 拿 runId 与目标句柄、要
  * `request.budget` 记网络/生成预算、要 `request.signal` 挂取消与超时。
  * 少一样就是一次 `TypeError`（实测：`Cannot read properties of undefined (reading 'context')`），
  * 而且它发生在**任何请求发出之前** —— 于是付费按钮会"看起来在跑"，实际一次都没发。
+ * 本批把两处都换成了同一个构造函数，所以那种退化现在只能同时发生在两处（而且有用例钉着）。
  *
- * ## 这不是"第二份判断"
+ * ## 两处**内容**上的差别是诚实写出来的，不是默认值
  *
- * 下面每一步都调**协调器自己用的那几个函数**（`coordinator.ts:263-337`：
- * `buildContext` → `buildConversationContext` → `registry.forModelPhase("planning", …)`），
- * 顺序也一样："哪个阶段发布哪些工具"仍然由 `@draw/agent-core` 的工具注册表决定，
- * 没有搬到应用层来（`coordinatorPorts.ts` 的 `PlanRequest.model` 注释点名了那条安全边界）。
- * 这个 harness 里没有协调器可用（协调器还带账本、暂存、确认、验收），所以由这里替它把
- * **同一批入参**喂给**同一批函数**。
- *
- * 两处**内容**上的差别是诚实写出来的，不是默认值：
  * - **观察结果是空场景**：这条通道从空画布开始（题集里的题都是"从零作图"），所以
  *   `facts` 是空数组、摘要只陈述一件可核对的事（本文档里几个图元）——
  *   它不是观察端口的产物（这里没有场景观察层），所以不假装有事实；
  * - **没有只读工具**：这个 harness 没有 `ToolPort` 宿主，所以 `readToolsAvailable: false`
- *  （协调器在 `dependencies.tools === undefined` 时传的也是这个值）。
+ *   （协调器在 `dependencies.tools === undefined` 时传的也是这个值）。
  *
  * **另外三处差异（2026-10-05 复核要求逐条写明）** —— 不写出来，"这条请求 = 生产请求"就是一句不可核的话：
  * - **`signal` 永不可中止**：这里是 `new AbortController().signal`，永远不会 abort；
@@ -176,23 +179,18 @@ export function planRequestFor(prompt: string, workspace: "geometry3d" | "cad", 
     capabilityRevision: CAPABILITY_REGISTRY_REVISION,
     policyRevision: "local"
   }
-  const budget = createBudget()
-  const requestedSkillIds = MODEL_PLANNER_SKILL_IDS
   // 与运行时那一行**同一口径**（`agentRuntime.ts:384-385`）：技能 id 先过清单，再从清单取动作。
-  const availableActions = [...new Set(SKILL_MANIFESTS.filter((manifest) => requestedSkillIds.includes(manifest.id)).flatMap((manifest) => manifest.actionIds))]
-  const observation = { facts: [], summary: `${document.primitives.length} object(s) in ${document.metadata.id}` }
-  const context = buildContext({ run, observation, requestedSkillIds, selectedRefs: [], availableActions, budget })
-  const conversation = buildConversationContext({
-    binding: { conversationId: run.conversationId, projectId: handle.projectId, documentId: handle.documentId, workspace, generation: handle.generation },
-    summary: "",
-    // 空画布上还没有任何**已确认**事实：题集每一条都是从零开始。
-    facts: [],
-    messages: [],
-    observation,
-    request: prompt
+  // 推导只有一处（`availableActionsFor`），因为它与旧 8 题那条通道共用同一个上下文形状。
+  const requestedSkillIds = MODEL_PLANNER_SKILL_IDS
+  return buildPlanRequest({
+    run,
+    userMessage: prompt,
+    budget: createBudget(),
+    signal: new AbortController().signal,
+    observation: { facts: [], summary: `${document.primitives.length} object(s) in ${document.metadata.id}` },
+    requestedSkillIds,
+    availableActions: availableActionsFor(requestedSkillIds)
   })
-  const tools = createToolRegistry().forModelPhase("planning", { workspace, confirmed: false, readToolsAvailable: false, capabilityRevision: run.capabilityRevision })
-  return { run, userMessage: prompt, budget, signal: new AbortController().signal, model: { context, tools }, conversation }
 }
 
 export interface PlanningEvalResult {

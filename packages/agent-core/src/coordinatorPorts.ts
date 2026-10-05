@@ -1,10 +1,10 @@
 import type { DocumentHandle, PlanDiagnostic, PlanEnvelope, PlanRelations, RepairRequest, RunContext, StructuredAssumption, ToolResult, VerificationReport } from "./contracts"
 import type { DraftAction } from "@draw/scene-graph"
 import type { Budget } from "./budget"
-import type { ConversationContext, ModelContext } from "./contextBuilder"
+import { buildContext, buildConversationContext, conversationLimitsFor, type ConversationContext, type ConversationContextSource, type ModelContext, type ObservationSummary } from "./contextBuilder"
 import type { RunEvent } from "./runState"
 import type { ObservedDerivedStatus } from "./sceneObservation"
-import type { ToolDescriptor } from "./toolRegistry"
+import { createToolRegistry, type ToolDescriptor, type ToolRegistry } from "./toolRegistry"
 import type { AcceptanceCheck } from "./verification/taskAcceptance"
 
 /**
@@ -107,6 +107,198 @@ export interface PlanOutcome {
   plan: PlanEnvelope
   requestId: string
   attemptId: string
+}
+
+/**
+ * **一次规划请求里"场景看到什么"**（N4d）。
+ *
+ * 与 `ObservationSummary`（`contextBuilder.ts`）**同一个形状**，但意图不同：这一份说的是
+ * "调用方手里关于这一轮场景的那几个值"。`factIds` 不在其中 —— 它是协调器做
+ * "计划引用的都是已确认事实"那道检查用的，规划器看不到它（`PlanRequest` 里从来没有这个字段）。
+ *
+ * 为什么要单独起个名字而不是直接写 `ObservationSummary`：两者今天恰好同形，
+ * 但它们的**归属**不同 —— `ObservationSummary` 属于上下文组装，这一份属于请求构造。
+ * 合成一个类型之后，"请求构造该收哪些输入"就只能靠读 `contextBuilder` 才能回答。
+ */
+export interface PlanObservationSource {
+  facts: ObservationSummary["facts"]
+  summary: string
+  /** 派生立体读数（规格 §3.4 / §6.2）。缺省 = 这一轮没有读数，老调用方行为不变。 */
+  derived?: readonly ObservedDerivedStatus[]
+}
+
+/**
+ * **组装一条 `PlanRequest` 需要什么**（N4d）。
+ *
+ * 每一项都是**协调器在构造请求时真正用到的东西** —— 没有"整个依赖对象"这种偷懒的口子，
+ * 否则这个函数就变成了"把协调器搬过来"，而不是"把请求的形状收成一处"。
+ *
+ * 三样**不在**这里，因为选择它们的不是规划请求：
+ * - `repair` / `executeTool`：协调器在**每次尝试**之间才决定（第一次尝试没有修复请求；
+ *   没接只读工具端口时没有 `executeTool`）。它们是"这一次尝试"的输入，由调用方在
+ *   `planner.plan(...)` 那一行补上 —— 见 `coordinator.ts` 的循环体；
+ * - `reportContextSpend`：**计费**不是形状。协调器把 `estimatedCharacters` 折算成 token
+ *   去扣共享预算，而"这是评测，不该扣谁的预算"的那一侧传 `undefined`。计费留在调用方，
+ *   是因为它决定的是"这一次运行为什么停下"，不是"模型看到什么"。
+ */
+export interface PlanRequestInputs {
+  run: RunContext
+  userMessage: string
+  budget: Budget
+  signal: AbortSignal
+  observation: PlanObservationSource
+  /**
+   * 这一轮请求的技能 id。**技能目录校验发生在 `buildContext` 里**：这里给的是"请求了哪些"，
+   * 加载失败的会在上下文的 `warnings` 里留痕，而不是被这个函数静默丢掉。
+   */
+  requestedSkillIds: readonly string[]
+  /**
+   * 只读阶段可用的动作名（来自能力注册表 / 技能清单）。
+   *
+   * 由调用方给，因为"哪些动作现在可用"是**环境的事实**，不是请求构造能推出来的：
+   * 协调器从依赖里拿（`CoordinatorDependencies.availableActions`），应用侧那条运行时路径
+   * 从 `SKILL_MANIFESTS` 按 `requestedSkillIds` 现算（`agentRuntime.ts`）。
+   * 缺省 `[]` 与协调器一直以来的缺省一致。
+   */
+  availableActions?: readonly string[]
+  /** 有序的选中引用。缺省 `[]`：没有宿主给出的选中集时，上下文里就没有引用。 */
+  selectedRefs?: Parameters<typeof buildContext>[0]["selectedRefs"]
+  /**
+   * **这一轮有没有接上只读工具端口**。
+   *
+   * 它决定 `createToolRegistry().forModelPhase` 会不会把只读工具发布给模型
+   * （注册表自己的判据：`environment.readToolsAvailable`）。缺省 `false` ——
+   * 与"没接工具端口的调用方"一致。协调器传的是 `dependencies.tools !== undefined`。
+   */
+  readToolsAvailable?: boolean
+  /**
+   * **会话上下文的来源**（缺省时按 `run` 造一份最小的）。
+   *
+   * ## 为什么是 **thunk** 而不是值（N4d；控制器点名的那条顺序判据）
+   *
+   * 计费时机在 `buildContext` 之后（`reportContextSpend`），而**会话来源必须在计费之后
+   * 才被碰** —— 这是协调器一直以来的顺序（旧代码里 `dependencies.conversation?.()` 就在
+   * `budget_context` 那一支**之后**）。传一个已经取好的值等于把那次读取提前到计费之前：
+   * **预算耗尽的那一轮会先调一次宿主的读取**，而旧代码在那条路径上根本不会调它。
+   *
+   * 今天生产里的那一份是纯读（`agentRunner` 传的是 `runPrompt` 里已经读好的快照），
+   * 所以没有可观测的副作用；但这是一道真实的边界（将来会话来源变成现读 store / 记日志 /
+   * 计费，那一次多余的调用就会变成一个说不清的现象），所以宁可让类型强制它惰性。
+   * 钉住这条性质的用例：`coordinator.test.ts` 的
+   * "never asks the host for the conversation source when the context budget is exhausted"。
+   */
+  conversation?: () => ConversationContextSource | undefined
+  /** 上下文条数上限。只有协调器会传它 —— "这一轮该看多少"是运行那一层的事。 */
+  contextLimits?: { facts?: number; refs?: number; derived?: number }
+  /**
+   * 工具注册表。缺省用真实目录（`createToolRegistry()`）。
+   *
+   * 为什么它必须是**可注入**的：协调器自己有一个可替换的注册表
+   *（`CoordinatorDependencies.toolRegistry`，测试用它观察"哪个阶段发布了哪些工具"），
+   * 而"发布哪些工具"正是 `PlanRequest.model.tools` 的一半内容。不把它递进来，
+   * 协调器就只能绕开这个函数去另拼一次 `model.tools` —— 那正是本批要消灭的"第二份请求构造"。
+   * 应用侧两处调用方不传，用真实目录。
+   */
+  toolRegistry?: ToolRegistry
+  /**
+   * **上下文组装完那一刻的计费机会**（同步）。
+   *
+   * 时机是刻意的：协调器必须在**会话上下文组装之前**就知道预算够不够
+   *（`coordinator.ts` 的 `budget_context` 那一支），所以回调放在 `buildContext` 之后、
+   * `buildConversationContext` 之前。它抛错就是"这一轮不该继续"，调用方自己决定抛什么。
+   * 不传 = 不计费（评测通道就是这样：它没有共享预算可扣）。
+   */
+  reportContextSpend?: (estimatedTokens: number) => void
+}
+
+/**
+ * **一条规划请求只有这一处构造**（N4d）。
+ *
+ * ## 它解决的是哪个洞
+ *
+ * 2026-10-05 复核 I-2 与控制器各自独立复现的缺陷：旧那条「agent 工具环」通道
+ *（`apps/web/src/agent/fixtures/offlineAgentEval.ts`）把请求写成
+ * `plan({ userMessage } as never)` —— 那对本地确定性规划器成立，对**真实**
+ * `createModelPlanner` 不成立：它在发出任何网络请求**之前**就读 `request.model.context`，
+ * 于是抛 `TypeError: Cannot read properties of undefined (reading 'context')`。
+ * 后果不是"报错"，而是**那个唯一会花钱的按钮从来没有真正工作过**。
+ *
+ * 修法不是"去 fixtures 里再拼一份完整请求"（那就是第二份"模型能看到什么"），
+ * 而是把这件事收回它该在的地方：`PlanRequest.model` 的注释写着"模型这一次能看到的一切"
+ * 归协调器管（`contextBuilder` + `toolRegistry` 都是这个包自己的部件，而"哪个阶段发布
+ * 哪些工具"是安全边界）。所以这个函数**只调协调器自己用的那几个函数、同样的顺序**：
+ * `buildContext` → `buildConversationContext` → `createToolRegistry().forModelPhase("planning", …)`。
+ *
+ * ## 它不是什么
+ *
+ * - 它**不是**协调器的替身：账本（`ledger.record`）、预算的 token 折算、暂存、确认、
+ *   验收、只读工具的执行，全都还在 `coordinator.ts` 里。这里只产出"请求长什么样"；
+ * - 它**不发明字段**：`conversation` 缺省时按 `run` 造一份最小绑定（与协调器
+ *   `dependencies.conversation` 缺省时逐字相同的那一份，包括 `summary: ""` 与空
+ *   `facts` / `messages`）—— 不是"忘了传所以随便糊一个"。
+ *
+ * ## 与调用方的关系（三处，逐条）
+ *
+ * 1. **协调器**（`coordinator.ts` 的运行循环）：它自己用这个函数，于是"生产请求长什么样"
+ *    与"评测请求长什么样"在结构上不可能再分叉。`repair` / `executeTool` / 计费仍由它补；
+ * 2. **旧 8 题夹具通道**（`offlineAgentEval.ts`）：本批修的正是它；
+ * 3. **应用内题集 planning 通道**（`benchmarkPlanningEval.ts` 的 `planRequestFor`）：
+ *    它原先自己拼了一份（同一批函数、同样的顺序，但是**第二份字面量**），现在被这一处取代。
+ *
+ * 三处仍然各自决定"这一轮观察到什么""请求了哪些技能"——那是**输入**，
+ * 不是请求的形状；形状只有这一处。
+ */
+export function buildPlanRequest(inputs: PlanRequestInputs): PlanRequest {
+  const { run, userMessage, budget, signal } = inputs
+  const observation: ObservationSummary = {
+    facts: inputs.observation.facts,
+    summary: inputs.observation.summary,
+    ...(inputs.observation.derived === undefined ? {} : { derived: inputs.observation.derived })
+  }
+  const context = buildContext({
+    run,
+    observation,
+    requestedSkillIds: inputs.requestedSkillIds,
+    selectedRefs: inputs.selectedRefs ?? [],
+    availableActions: inputs.availableActions ?? [],
+    budget,
+    ...(inputs.contextLimits === undefined ? {} : { limits: inputs.contextLimits })
+  })
+  /**
+   * 协调器在这里决定"上下文这一笔预算够不够"。放在会话上下文组装**之前**，
+   * 与它原来的顺序逐字相同（那时被拒的运行不会继续组装下去）。
+   */
+  inputs.reportContextSpend?.(Math.ceil(context.estimatedCharacters / 4))
+  /**
+   * **宿主的会话来源在计费之后才被碰**（见 `PlanRequestInputs.conversation` 的注释）：
+   * 预算被拒的那一轮，这个 thunk 一次都不会被调用。
+   */
+  const source = inputs.conversation?.()
+  // 上限的合并口径只有一处（`conversationLimitsFor`）：协调器从前在这里内联过一遍。
+  const conversationLimits = conversationLimitsFor(source, inputs.contextLimits)
+  const conversation = buildConversationContext({
+    binding: source?.binding ?? {
+      conversationId: run.conversationId,
+      projectId: run.target.projectId,
+      documentId: run.target.documentId,
+      workspace: run.target.workspace,
+      generation: run.target.generation
+    },
+    summary: source?.summary ?? "",
+    facts: source?.facts ?? [],
+    messages: source?.messages ?? [],
+    ...(source?.draft === undefined ? {} : { draft: source.draft }),
+    ...(conversationLimits === undefined ? {} : { limits: conversationLimits }),
+    observation,
+    request: userMessage
+  })
+  const tools = (inputs.toolRegistry ?? createToolRegistry()).forModelPhase("planning", {
+    workspace: run.target.workspace,
+    confirmed: false,
+    readToolsAvailable: inputs.readToolsAvailable ?? false,
+    capabilityRevision: run.capabilityRevision
+  })
+  return { run, userMessage, budget, signal, model: { context, tools }, conversation }
 }
 
 export interface PlannerPort {

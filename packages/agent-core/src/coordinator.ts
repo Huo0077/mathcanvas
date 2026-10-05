@@ -1,14 +1,12 @@
-import type { Budget } from "./budget"
-import { buildContext, buildConversationContext, type ConversationContextSource, type Fact } from "./contextBuilder"
+import { createBudget, type Budget, type BudgetLimits } from "./budget"
+import { buildContext, type ConversationContextSource, type Fact } from "./contextBuilder"
+import { buildPlanRequest, type CancelReason, type CancelResult, type CommitterPort, type ConsentToken, type ObserverPort, type PlannerPort, type PlanRequest, type ToolPort } from "./coordinatorPorts"
 import { parsePlanEnvelope, repairRequestFor } from "./schemas"
 import { MAX_REPAIR_ATTEMPTS, type PlanEnvelope, type RunContext, type VerificationReport } from "./contracts"
-import type { CancelReason, CancelResult, CommitterPort, ConsentToken, ObserverPort, PlannerPort, PlanRequest, ToolPort } from "./coordinatorPorts"
-import { createBudget, type BudgetLimits } from "./budget"
 import { describeRepairPrompt } from "./outputParser"
 import { describeCompileRepairPrompt } from "./planCompiler"
-import { createToolRegistry, type ToolRegistry } from "./toolRegistry"
+import { createToolRegistry, TOOL_REGISTRY_REVISION, type ToolRegistry } from "./toolRegistry"
 import { createRunLedger, boundTrace, type RunEvent, type RunLedger, type RunNextPhaseFlags, type RunRevisions, type ToolCallTrace } from "./runState"
-import { TOOL_REGISTRY_REVISION } from "./toolRegistry"
 import { PLAN_SCHEMA_VERSION } from "./contracts"
 import { verificationGate } from "./verification/completionGate"
 import type { AcceptanceCheck } from "./verification/taskAcceptance"
@@ -181,16 +179,34 @@ export interface AgentCoordinator {
 const MAX_PLAN_ATTEMPTS = 1 + MAX_REPAIR_ATTEMPTS
 
 /**
- * **这一轮生效的会话上下文上限**：宿主声明的 + 协调器这一轮要求收紧的。
+ * **"上下文这一笔预算被拒了"** —— 只在 `buildPlanRequest` 的计费回调与它的调用点之间传递。
  *
- * `derived` 以协调器为准（它设了就用它）：这一条决定了**提示词渲染几条派生读数**
- *（提示词读的是会话那一份），而"这一轮不该看那么多"只有运行这一层知道。
- * 两种上限最终都会被组装器夹进硬上限里，所以这里只管把数递下去。
+ * ## 为什么需要它（N4d 抽出请求构造之后）
+ *
+ * `buildPlanRequest` 在 `buildContext` 之后、`buildConversationContext` 之前给出一个
+ * 同步的计费时机（`reportContextSpend`），而**拒绝的方式**必须是"这一轮到此为止"。
+ * 那个函数是普通函数，不是生成器 —— 它没法 `yield` 一条 `stop()` 事件。所以回调抛这个私有
+ * 标记，调用点接住之后走**原来那条** `stop("budget_context")` 路径：
+ * 文档不变、账本如实、事件形状与从前逐字相同。
+ *
+ * 为什么不用一个裸 `Error` 加字符串比较：那样"预算被拒"与"组装真的抛了"就分不开，
+ * 而后者必须继续往上传播（它是一次真失败，不是一次干净的停止）。
  */
-function conversationLimitsFor(source: ConversationContextSource | undefined, limits: CoordinatorDependencies["contextLimits"]): NonNullable<ConversationContextSource["limits"]> | undefined {
-  const merged = { ...(source?.limits ?? {}), ...(limits?.derived === undefined ? {} : { derived: limits.derived }) }
-  return Object.keys(merged).length === 0 ? undefined : merged
+class BudgetStop extends Error {
+  constructor(readonly stopReason: string) {
+    super(stopReason)
+    this.name = "BudgetStop"
+  }
 }
+
+/**
+ * **这一轮生效的会话上下文上限**（宿主声明的 + 协调器这一轮要求收紧的）现在只有一处实现：
+ * `contextBuilder.ts` 的 `conversationLimitsFor`。
+ *
+ * 搬走的理由（N4d）：请求构造 `buildPlanRequest` 也要对**所有**调用方用同一套合并口径，
+ * 而留在这里就是第二份 —— 谁也看不出它们该相等。语义一字未改；协调器仍然是唯一会真的
+ * 传 `coordinatorLimits` 的那一方（`dependencies.contextLimits`）。
+ */
 
 /**
  * **这次运行是在哪几个版本下跑的**（Phase 6 / Task 6.1）。
@@ -256,84 +272,88 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
        * 同一份上下文与同一批工具 —— 否则"第二次机会"其实换了题目，事后没法判断是模型改好了
        * 还是条件变了。
        *
-       * 为什么放在 agent-core 而不是让 app 侧适配器自己组装（见 `PlanRequest.model` 的注释）：
-       * `buildContext` 与 `createToolRegistry` 都是这个包自己的部件，而"哪个阶段发布什么工具"
-       * 是安全边界，不该搬到 app 侧去。
+       * ## 这一段现在是 `buildPlanRequest` 的调用，不再是手写的组装（N4d）
+       *
+       * 请求**长什么样**只有 `coordinatorPorts.ts` 的 `buildPlanRequest` 一处定义
+       * （它调的是这个包自己的 `buildContext` / `buildConversationContext` /
+       * `createToolRegistry().forModelPhase`，顺序与这里从前逐字相同）。这样做是因为
+       * 同一份形状还被另两处需要 —— 旧 8 题夹具通道与应用内的题集 planning 通道 ——
+       * 而"模型能看到什么"的归属地按 `PlanRequest.model` 的注释是协调器。
+       * 手写第二份的下场已经发生过一次：旧通道写成 `{ userMessage } as never`，
+       * 于是**那个唯一会花钱的按钮从来没有真正工作过**。
+       *
+       * 留在这里的只有**协调器自己的那几件事**（它们是"这一次运行为什么这样走"，
+       * 不是"模型看到什么"）：预算的 token 折算与 `budget_context` 判断、账本那一行、
+       * 以及只读工具端口在不在（它同时决定 `readToolsAvailable` 与 `executeTool`）。
        */
       const registry: ToolRegistry = dependencies.toolRegistry ?? createToolRegistry()
-      const modelContext = buildContext({
-        run: request.run,
-        // 观察端口给的事实文本与来源原样带进去（只有 `factIds` 时，上下文里的事实就只剩一串 id）。
-        // **派生立体读数**（内核给出的四态结论）同样从观察结果里搬：它是 §6.2 明令
-        // schema 不许自己重算的东西，所以协调器只负责原样转交，不解释也不补全。
-        observation: {
-          facts: (observation.facts ?? []).map((fact): Fact => ({ id: fact.id, text: fact.text, origin: fact.origin })),
-          summary: observation.summary,
-          ...(observation.derived === undefined ? {} : { derived: observation.derived })
-        },
-        requestedSkillIds: dependencies.requestedSkillIds ?? [],
-        selectedRefs: dependencies.selectedRefs?.() ?? [],
-        availableActions: dependencies.availableActions ?? [],
-        budget,
-        limits: dependencies.contextLimits
-      })
-      /**
-       * **上下文预算真的计费**（外部审查 M2）。
-       *
-       * `buildContext` 一直收着 `budget` 却**从不使用**它，`estimatedCharacters` 也算了出来
-       * （它的注释就写着"供调用方核对预算"）却没人核对 —— 于是 `context` / `time` / `geometry`
-       * 三类永远扣不了费，`budget.exhausted()` 的那三段判断**永远不可能为真**，
-       * 而比上限还长的场景摘要照样发出去。预算模块自己的文档把这种情况叫"装饰"。
-       *
-       * ## 为什么除以 4（这一步是量纲，不是凑数）
-       *
-       * `BudgetKind` 的文档把 `context` 写成"上下文 **token** 估算"，而 `estimatedCharacters`
-       * 是**字符数** —— 直接拿字符去扣是把两种量纲混在一起。实测：这条路径上一个
-       * "13 只立体、读数已经夹到上限"的**正常**场景就已经是 **79,293 字符**，
-       * 拿它去扣 32,000 的额度会把一次完全正常的运行判成预算耗尽 —— 那说明 32,000 这个数
-       * 不可能是字符。按通行的 ~4 字符/token 折算之后它约 19.8k token，落在额度之内。
-       *
-       * 这也让这条额度回到"真正的安全阀"的位置：默认 32k token 对应约 128k 字符，
-       * 只有异常膨胀的上下文才会撞上它 —— 而不是每次正常运行都撞。
-       */
-      const estimatedTokens = Math.ceil(modelContext.estimatedCharacters / 4)
-      if (estimatedTokens > 0 && !spend(budget, "context", estimatedTokens)) return yield* stop("budget_context")
-      /**
-       * **会话上下文**：宿主的来源（消息/摘要/事实/草稿）+ 运行里的观察 + 这一轮的请求。
-       *
-       * 与 `modelContext` 一样**只组装一次**，两次尝试共用同一个对象 —— "第二次机会"
-       * 必须是同一个题目下的第二次尝试。
-       */
-      const source = dependencies.conversation?.()
-      const conversationLimits = conversationLimitsFor(source, dependencies.contextLimits)
-      const conversation = buildConversationContext({
-        binding: source?.binding ?? {
-          conversationId: request.run.conversationId,
-          projectId: request.run.target.projectId,
-          documentId: request.run.target.documentId,
-          workspace: request.run.target.workspace,
-          generation: request.run.target.generation
-        },
-        summary: source?.summary ?? "",
-        facts: source?.facts ?? [],
-        messages: source?.messages ?? [],
-        ...(source?.draft === undefined ? {} : { draft: source.draft }),
-        ...(conversationLimits === undefined ? {} : { limits: conversationLimits }),
-        // 会话上下文那一份也要带派生读数：它是提示词渲染 `scene` 的另一条来源。
-        observation: {
-          facts: (observation.facts ?? []).map((fact): Fact => ({ id: fact.id, text: fact.text, origin: fact.origin })),
-          summary: observation.summary,
-          ...(observation.derived === undefined ? {} : { derived: observation.derived })
-        },
-        request: request.userMessage
-      })
-      const phaseTools = registry.forModelPhase("planning", {
-        workspace: request.run.target.workspace,
-        // 规划阶段还没有确认：提交工具在这个阶段根本不该出现（注册表自己保证）。
-        confirmed: false,
-        readToolsAvailable: dependencies.tools !== undefined,
-        capabilityRevision: request.run.capabilityRevision
-      })
+      let planRequest: PlanRequest
+      try {
+        planRequest = buildPlanRequest({
+          run: request.run,
+          userMessage: request.userMessage,
+          budget,
+          signal,
+          // 观察端口给的事实文本与来源原样带进去（只有 `factIds` 时，上下文里的事实就只剩一串 id）。
+          // **派生立体读数**（内核给出的四态结论）同样从观察结果里搬：它是 §6.2 明令
+          // schema 不许自己重算的东西，所以协调器只负责原样转交，不解释也不补全。
+          observation: {
+            facts: (observation.facts ?? []).map((fact): Fact => ({ id: fact.id, text: fact.text, origin: fact.origin })),
+            summary: observation.summary,
+            ...(observation.derived === undefined ? {} : { derived: observation.derived })
+          },
+          requestedSkillIds: dependencies.requestedSkillIds ?? [],
+          selectedRefs: dependencies.selectedRefs?.() ?? [],
+          availableActions: dependencies.availableActions ?? [],
+          /**
+           * **传 thunk，不传值**：`buildPlanRequest` 在**计费之后**才调它，于是
+           * "`budget_context` 那一轮一次都不碰宿主的会话来源"这条旧行为逐字保住。
+           * 提前取一次（哪怕只是 `?.()`）就会把那次读取挪到计费之前 ——
+           * 钉住它的用例见 `PlanRequestInputs.conversation` 的注释。
+           */
+          conversation: dependencies.conversation,
+          contextLimits: dependencies.contextLimits,
+          // 只读工具**由协调器决定**要不要发布（这一轮有没有接上 `ToolPort`）。
+          readToolsAvailable: dependencies.tools !== undefined,
+          toolRegistry: registry,
+          /**
+           * **上下文预算真的计费**（外部审查 M2）。
+           *
+           * `buildContext` 一直收着 `budget` 却**从不使用**它，`estimatedCharacters` 也算了出来
+           * （它的注释就写着"供调用方核对预算"）却没人核对 —— 于是 `context` / `time` / `geometry`
+           * 三类永远扣不了费，`budget.exhausted()` 的那三段判断**永远不可能为真**，
+           * 而比上限还长的场景摘要照样发出去。预算模块自己的文档把这种情况叫"装饰"。
+           *
+           * ## 为什么除以 4（这一步是量纲，不是凑数）
+           *
+           * `BudgetKind` 的文档把 `context` 写成"上下文 **token** 估算"，而 `estimatedCharacters`
+           * 是**字符数** —— 直接拿字符去扣是把两种量纲混在一起。实测：这条路径上一个
+           * "13 只立体、读数已经夹到上限"的**正常**场景就已经是 **79,293 字符**，
+           * 拿它去扣 32,000 的额度会把一次完全正常的运行判成预算耗尽 —— 那说明 32,000 这个数
+           * 不可能是字符。按通行的 ~4 字符/token 折算之后它约 19.8k token，落在额度之内。
+           *
+           * 这也让这条额度回到"真正的安全阀"的位置：默认 32k token 对应约 128k 字符，
+           * 只有异常膨胀的上下文才会撞上它 —— 而不是每次正常运行都撞。
+           *
+           * ## 为什么它在这里而不是在 `buildPlanRequest` 里
+           *
+           * 它决定的是"**这一次运行为什么停下**"（`budget_context`），不是"模型看到什么"。
+           * 计时点仍然是"上下文组装完那一刻、会话上下文组装之前" —— 由构造器在
+           * `buildContext` 之后、`buildConversationContext` 之前回调（`reportContextSpend`），
+           * 顺序与从前逐字相同。
+           */
+          reportContextSpend: (estimatedTokens) => {
+            if (estimatedTokens > 0 && !spend(budget, "context", estimatedTokens)) throw new BudgetStop("budget_context")
+          }
+        })
+      } catch (error) {
+        // 预算被拒不是"组装失败"：它是协调器用 `stop()` 如实结束这一轮的那条路（文档不变）。
+        if (error instanceof BudgetStop) return yield* stop(error.stopReason)
+        throw error
+      }
+      const modelContext = planRequest.model.context
+      const conversation = planRequest.conversation
+      const phaseTools = planRequest.model.tools
       ledger.record(`context ready: ${modelContext.facts.length} scene fact(s), ${conversation.facts.length} confirmed fact(s), ${conversation.messages.length} message(s), ${phaseTools.length} tool(s)`, { requestId: null })
 
       // ---- 向模型要计划 ------------------------------------------------

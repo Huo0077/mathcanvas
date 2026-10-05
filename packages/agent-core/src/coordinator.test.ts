@@ -378,6 +378,44 @@ describe("coordinator budget enforcement", () => {
     expect(harness.committer.commit).not.toHaveBeenCalled()
   })
 
+  /**
+   * **预算耗尽时，宿主的会话来源**一次都不许被碰**（N4d；控制器点名的顺序判据）。
+   *
+   * ## 这条用例盯的是哪一次改动
+   *
+   * 把请求构造抽成 `buildPlanRequest` 时，宿主的会话来源（`dependencies.conversation`）
+   * 很容易被"顺手提前取一次"再递进去 —— 那样**预算耗尽的那一轮**就会先调一次宿主的读取
+   *（而旧代码在那条路径上**根本不会调它**）。`dependencies.conversation` 在生产里是
+   * `agentRunner` 的 `conversation: () => conversation`（那一份在 `runPrompt` 里已经读过一次的
+   * 快照，本身是纯读），所以今天**没有可观测的副作用**；但"预算耗尽 ⇒ 不碰宿主"是
+   * 旧代码逐字成立的性质，而它是一道**真实的边界**：将来会话来源变成现读 store / 记日志 /
+   * 计费，那一次多余的调用就会变成一个说不清的现象。
+   *
+   * 所以判据不写成"行为不变"（那不可核），而是写成一条**能红的**断言：
+   * 这一轮在计费那一步停下时，`conversation` thunk 的调用次数是 **0**。
+   */
+  it("never asks the host for the conversation source when the context budget is exhausted", async () => {
+    const harness = makeHarness({ limits: { context: 1 } })
+    let conversationReads = 0
+    const coordinator = createCoordinator({
+      planner: harness.planner,
+      observer: harness.observer,
+      committer: harness.committer,
+      budget: harness.budget,
+      conversation: () => {
+        conversationReads += 1
+        return { binding: { conversationId: run.conversationId, projectId: handle.projectId, documentId: handle.documentId, workspace: handle.workspace, generation: handle.generation }, summary: "", facts: [], messages: [] }
+      }
+    })
+
+    const events = await drive(coordinator, { run, userMessage: "draw a point" })
+
+    // 这一轮确实是在**计费那一步**停下的（否则下面那条断言测的就是另一条路径）。
+    expect(events.at(-1)?.detail).toContain("budget_context")
+    expect(coordinator.phase()).toBe("failed")
+    expect(conversationReads).toBe(0)
+  })
+
   it("counts the repair attempt against the same budget", async () => {
     // 修复不该有独立配额：给了就等于把"4 次生成"变成"4 次 + 修复"。
     const harness = makeHarness({ limits: { generation: 1 }, plan: () => ({ plan: { kind: "not-a-plan" } as unknown as PlanEnvelope, requestId: "req-1", attemptId: "attempt-1" }) })
