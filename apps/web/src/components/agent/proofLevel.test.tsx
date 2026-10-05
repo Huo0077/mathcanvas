@@ -50,7 +50,13 @@ describe("证明级别：只读状态面（文案由真实数据推导）", () =
     // 判据必须**读常量**而不是写 "10"：把栏数常量改掉而文案没跟着变时，它要能红
     //（已用变异证明：常量加到 11 栏 + 文案冻结在旧数字 ⇒ 只红这一条）。
     expect(PROOF_BACKEND_REVIEW_FIELDS.length).toBe(10)
-    const { container } = render(<ConfirmationPanel draft={draft} />)
+    /**
+     * **显式注入"接上 0 个"**，而不是依赖"生产今天恰好没有后端"：
+     * 2026-10-06 起生产名单是 `["lean4"]`（N5b 接了第一个后端），而"N 栏填齐"那句话
+     * 只在 `wired.length === 0` 那一支渲染。这条用例要钉的是"**文案里的栏数来自契约**"，
+     * 不该顺带依赖生产的接入状态（那会让它随事实变而红，且红得与主题无关）。
+     */
+    const { container } = renderWired([], 0)
 
     expect(proofLevelText(container)).toContain(`${PROOF_BACKEND_REVIEW_FIELDS.length} 栏填齐`)
   })
@@ -72,10 +78,15 @@ describe("证明级别：只读状态面（文案由真实数据推导）", () =
     expect(proofLevelText(container)).not.toContain("没有接入任何形式证明后端")
   })
 
-  it("今天（默认）：明确说出没有一个后端接上，并说明后果", () => {
-    // 生产默认就是包根导出的那份事实。它今天是空的 —— 这条前提本身也要钉住。
-    expect(WIRED_PROOF_BACKENDS).toEqual([])
-    const { container } = render(<ConfirmationPanel draft={draft} />)
+  it("接上 0 个的那一支：明确说出没有一个后端接上，并说明后果", () => {
+    /**
+     * **这里不再断言生产名单的值。** 原来写的是 `expect(WIRED_PROOF_BACKENDS).toEqual([])`，
+     * 而 2026-10-06 起生产真的接上了 `lean4`（N5b 的第一个后端）⇒ 那句"今天恰好为真"的前提过期了。
+     * 「名单恰好是什么」的**精确钉子只留一处**：`scripts/proof-spike/smoke.test.ts`
+     * （与当初裁决 `proofArtifact.test.ts` 时同一条纪律：**一处字面量，不许两处各写一份**）。
+     * 这一条要钉的是**"接上 0 个"那一支的文案**，所以显式注入 0 个。
+     */
+    const { container } = renderWired([], 0)
     const text = proofLevelText(container)
 
     expect(text).toContain("当前没有接入任何形式证明后端")
@@ -96,8 +107,9 @@ describe("证明级别：只读状态面（文案由真实数据推导）", () =
   })
 
   it("**今天绝不许**出现「已证明 / 证明通过」这类字样（没有 formally_proved 就不许这么说）", () => {
-    // 两个分支都要查：一个后端都没接的今天，与"接上了"那一天 —— 后者最容易顺手写一句
+    // 两个分支都要查：**接上 0 个**的那一支，与"接上了"的那一支 —— 后者最容易顺手写一句
     // "形式证明通过"，而那句话只在**这一条**真的升到 formally_proved 时才成立。
+    // （2026-10-06 更正：原来这里写的是"一个后端都没接的今天"——那时生产确实是空的，现在接上了 `lean4`。）
     const byDefault = render(<ConfirmationPanel draft={draft} />)
     expect(byDefault.container.querySelector(".agent-proof-level")).not.toBeNull()
     for (const forbidden of [/已证明/, /证明通过/, /形式证明通过/]) expect(screen.queryByText(forbidden)).toBeNull()

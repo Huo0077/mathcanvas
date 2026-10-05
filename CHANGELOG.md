@@ -5,6 +5,37 @@
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
+## 2026-10-06 —— N5 出口达成：接上第一个真实后端（Lean 4 过十栏准入）+ 一个目标类的**真内核闭环**
+
+- **提交**：`e401d9e`（十栏准入记录 + 把"接上的名单"钉死）、`051e5fe`（适配器 + `perpendicular` 的**一般命题**闭环 + **仓内** Lean 小工程 `proof/lean4/`）。
+- **十栏准入成立**：`npm run proof:smoke` ⇒ **8 通过**（此前 7），
+  `PROOF_BACKENDS {"wired":["lean4"],"reviewed":1,"rows":[… "verdict":"passed","problems":[]]}` —— 接上名单**由 passed 记录推导**；
+  **形状合格的伪造产物仍全部 `backend-not-wired`**（反方向判据没被"接了一个后端"冲掉）。
+  十栏逐项都是实测值，其中两个不显眼但重要的数：**直调工具链 `bin/lean.exe` 138/134/125 ms vs 走 elan 垫片 1657/1799/1865 ms**
+  （适配器因此**优先解析工具链自己的 `bin/`**，垫片只当兜底）。
+- **闭环成立（真内核裁决）**：`perpendicular` 的**一般命题**（`∀ E D u v`，不是某组坐标）⇒ **`formally_proved`**、
+  `axioms ["propext","Classical.choice","Quot.sound"]`、**68.3 s**；**同一条命题只把正文换成 `sorry` ⇒ `exit=0` 但停在 `verified_instance`** ——
+  **同一退出码、相反结论**，只有 axioms 报告能把它们分开（这正是十栏 `failureBehaviour` 那一栏的全部理由）。
+  端到端用例**显式 gated**（CI 上没有 Lean/mathlib，而 CI 跑 `npm test`、`vitest.config.ts` 含 `scripts/**/*.test.ts`）：
+  不满足条件就**打印理由并 skip**（"一条静默的 skip 与一条静默的通过一样坏"），**判据层全部用假输出，在 CI 上永远跑**。
+- **一次真实的排障（说明"两条判据缺一不可"）**：第一轮端到端**红** —— 生成的证明体最后一步写成 `exact hu v hv`，而**签名里根本没有 `v`**
+  （模板从另一份抽象文件抄了参数名）。**只留"拒 `sorry`"那条判据的话，这个 bug 会被永远掩盖**。
+  控制器**独立复算**过正确形式（自己的探针工程、真内核）：`rw [Submodule.mem_orthogonal'] at hu; exact hu (D - B) hv` ⇒ 只依赖三个白名单公理。
+- **由"接上后端"暴露并修掉的三处**：
+  ① **`eslint` 会去 lint `.lake/`**（它**不读 `.gitignore`**）：mathlib 的依赖包自带 JS ⇒ 建过 Lean 工程的机器上
+     `npm run lint` 从 `0 error / 13 warning` 变成 **14298 problems（14247 errors）**，而 **CI 上（无 `.lake`）仍是 0 error** ——
+     同一提交两处结论不同。已按该文件**既有**的同一条原则（"别人生成的产物不算我们的源码"）加 `"**/.lake/**"`。
+  ② **两条"生产名单是空的"哨兵**（`apps/web/src/components/agent/proofLevel.test.tsx`）：`expect(WIRED_PROOF_BACKENDS).toEqual([])`
+     与一条**硬写** `10 栏填齐` 的断言 ⇒ 改成**显式注入"接上 0 个"**来钉那一支的文案，并**删掉名单字面量**
+     （"名单恰好是什么"的精确钉子**只留 `scripts/proof-spike/smoke.test.ts` 一处**）。
+  ③ **四处已过期的话**（`ConfirmationPanel.tsx` / `ProofLevelNotice.tsx` / `proofLevelStatus.ts`）："今天 `[]`／今天 `0`／**全仓零生产者**"。
+     最后那条**性质变了**：现在**确实有东西能产出 artifact**（适配器的显式调用路径），但**默认路径不调用它**、**也没有产物进界面的通道** ⇒
+     "不做产物查看器"的理由从"没有生产者"改成这两条事实。
+- **仍未达成（不许含糊）**：只覆盖**一个目标类**（一条真目标走通**不泛化**）；**IR → Lean 命题的翻译本身未被证明**（可审计的小模板）；
+  `ProofInput.statement` **仍是可选** ⇒ "必绑"只被"适配器记得传 + 一条用例"堵住、**没被结构堵住**；**强沙箱下的证明运行未测**；
+  **mathlib 的 rev 没有被 pin**（`lakefile.toml` 是 `rev = "master"`，而 `lake-manifest.json` 是**每次运行都会重新生成**的产物，已加进 `proof/lean4/.gitignore`）
+  ⇒ **十栏里那个 mathlib commit 是"实测值"，不是"从仓库可复算"的保证**。
+
 ## 2026-10-06 —— 复核 o1/o2：把"同屏字面相反"的那句口径改准，并钉住新分支的说明文案
 
 - **窄复核结论 `Approved`**（N1/N2/N3 它都自己变异验过咬在正确的地方；无 Important/Critical），带出两条 Minor 观察，

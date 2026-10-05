@@ -20,12 +20,15 @@ import { PROOF_BACKEND_REVIEW_FIELDS, PROOF_BACKEND_REVIEWS, WIRED_PROOF_BACKEND
  *
  * ## 这里**不**做"产物正文查看器"（明确不做，不是漏了）
  *
- * 查证结果：`ProofArtifact` / `proofInputHash` / `evidenceStatusWithProof` 在 `apps/` 与 `packages/` 里
- * 除了 proof 模块自身、它的用例与 `scripts/proof-spike/` 之外**零引用** ——
- * 也就是说**今天没有任何代码会生产 proof artifact**，也没有任何通道能把它送进界面。
- * 为一个**永远跑不到**的生产路径做查看器，只能用注入的假数据测，按本仓口径那是**弱证据**：
+ * **2026-10-06 更正（这条理由变了，事实必须跟着改）**：原文写的是"`ProofArtifact` 一族在 proof 模块之外**零引用**
+ * ⇒ **今天没有任何代码会生产 proof artifact**" —— **那句已经过期**：N5b（提交 `051e5fe`）接上了第一个真实后端，
+ * `packages/agent-core/src/proof/lean4Adapter.ts` 的**显式调用**路径**真的产出了 artifact**，闭环用例里它升到了 `formally_proved`。
+ * **但查看器仍然不做**，理由换成了两条事实（而不是"没有生产者"）：
+ * ① **默认路径不调用它** —— 设计上证明后端不参与普通静态图的默认运行；
+ * ② **没有任何通道把产物送进界面** —— 没有 store、没有 run event、没有面板入口。
+ * ⇒ 今天要做查看器，仍然只能给一条**界面上走不到**的路径写组件，用**注入的假数据**测 —— 按本仓口径那是**弱证据**：
  * 它证明的是"组件能渲染假数据"，不是"用户能看到他的证明"。
- * 等第一个后端过了那份审查准入（那时才有真数据）再做 —— 这条理由也写进了
+ * 等 ① 或 ② 有一条变了（把适配器接进某条产品路径、或给出一个真实的产物通道）再做 —— 这条边界也写在
  * `docs/current-status.md` §四 F。
  *
  * ## 单独成模块的两个理由（与 `confirmationCounts.ts` 同一条纪律）

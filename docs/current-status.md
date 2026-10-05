@@ -33,7 +33,8 @@
 | Agent benchmark | `npm.cmd run bench:agent` | 抽取层：`cases=21 covered=14 empty=7 error=0`；`BENCHMARK_PREMISE obligations=24 residue=9 rate=0.727`；`BENCHMARK_EXTRACTION covered=14/21 rate=0.667`。**见证层（第 48 轮新增）**：`BENCHMARK_WITNESS verified=1 unverified=20 no_witness=0 error=0 solveRate=0.048`；`BENCHMARK_JUDGEABILITY supported=21 unsupported=3 ambiguous=0 totalObligations=24`；`BENCHMARK_WITNESS_CODES {"(no-code)":1,"requires-candidates":7,"unsupported-shape":9,"no-candidate-constructed":4,"unsupported-base-shape":4,"witness-search":20}`（**2026-10-05 N4a 后实测**。上一版这行**少记了 `"(no-code)":1` 这一档** —— 那是见证层"给了结论但没留下原因文本"的兜底证据，**实际输出里一直有**（BASE 时的捕获也含它），所以这是**重新测量并改正旧读数**，不是本批引入的差异；同一次实测里 `cases=21 covered=14 empty=7 error=0` 等三条读数与改前**逐字相同**） | 0 | **2026-10-05 N4a 后实测** |
 | **Agent benchmark（真实 provider，`planning`）** | 设置 → 真实 provider 评测：题集 planning | **两次运行（同一天、同一台机器、同一套 3 题）**：面板当时显示的都是 `planned 2/3` / `rejected 1/3` / `error 0/3` / `not measured 0/3`；`average latency` **13445 ms**（第一次）/ **8465 ms**（第二次，逐条渲染上线后那次）；`cost not measured`（**仓里没有价目表**）；provider `deepseek-v4-flash / deepseek-v4-flash`；`cases 3`（`layer=planning`，`seed=7`）。**按今天的词表**，那 1 条 `rejected` 其实是 **`clarification`**（模型在问，不是失败）⇒ 同两次运行现在会读成 `planned 2/3` / **`clarification 1/3`** / `rejected 0/3`。**这是计划 N4「先跑小样本真实 provider」那一条的落点** —— **n=3 的子集**，**不是全题集结论**；下面那段说清 `rejected` 那一格当时为什么会被读反。**第三次运行（2026-10-06，带人工可读性标注）**：`planned 1/3` / `clarification 1/3` / `rejected 0/3` / **`error 1/3`** / `not measured 0/3`；`average latency` **18153 ms**；`cost not measured`；**人工可读性第一次有标注**：`plan` 组 `已标 1 / 未标 0`、`clarification` 组 `已标 1 / 未标 0`，两组各 1 条**都判 `unreadable`** ⇒ 两组 `readable 比率 0.000`；`rejected` 组**本轮没有题**（`0/0`）⇒ 如实显示「未标注（分母 = 已标 0，不是 0 分）」，**合计已标 2** | 0 | **2026-10-06 用户在桌面端运行并回传读数原文**（控制器**未旁观**；`3=1+1+0+1+0` 自洽、层与 seed 对得上、非空 provider、`cost` 如实 `not measured`、标注合计 `2=1+1` 自洽，由控制器核对） |
 | **Agent 评测（真实 provider，agent 工具环）** | 设置 → 真实 provider 评测：agent 工具环 | **`pass@1 1/8`** / **`pass@3 2/8`** / `tool selection 45/45` / `tool error rate 4/45` / `average latency 4126 ms (successful runs only)` / `average cost not measured` / `attempts 24`；provider `deepseek-v4-flash / deepseek-v4-flash`。**口径**：`passAt1` = **第 1 轮就过**的题数（`agentEvalRunner.ts:52`）、`passAt3` = **三轮里任一轮过**（`:53`）。**这是 pass@1 轴的第一次真实读数**（那条通道的请求形状缺陷已在 `90eba6e` 修好）。**边界**：8 题 × 3 轮、**单模型单次采样**；与离线 `deterministic_local` 的 `pass@1 4/8` **不可直接比"谁更好"**（离线是确定性、且那是协议/几何回归，不是模型准确率）；**也不是**题集 `planning` 轴（3 题，另一个坐标系） | 0 | **2026-10-05 用户在桌面端运行并回传**（控制器**未旁观**；`2/8 ≥ 1/8` 单调性自洽、成本如实 `not measured`，由控制器核对） |
-| 证明边界 smoke | `npm.cmd run proof:smoke` | 7 通过 / 0 失败；`PROOF_BACKENDS {"wired":[],"reviewed":0}`；**勾股裁决后新增**：`goalsWithoutAnyRoute: []`、`pythagoreanRoute: {"kind":"via-inference","from":"perpendicular"}` | 0 | **2026-10-05 复核** |
+| 证明边界 smoke | `npm.cmd run proof:smoke` | **8 通过 / 0 失败**（此前 7）；**`PROOF_BACKENDS {"wired":["lean4"],"reviewed":1,"rows":[{"name":"lean4",…,"verdict":"passed","problems":[]}]}`** —— 接上名单**由 passed 记录推导**（不是手写数组），而**形状合格的伪造产物仍全部 `backend-not-wired`**；`goalsWithoutAnyRoute: []`、`pythagoreanRoute: {"kind":"via-inference","from":"perpendicular"}` | 0 | **2026-10-06 实测（控制器自跑；N5b 接上后端之后）** |
+| **形式证明后端（Lean 4，接上的第一个）** | 仓内 `proof/lean4` + `scripts/proof-spike/lean4EndToEnd.test.ts`（**显式 gated**：没有工具链就打印理由并 skip，**绝不静默通过**） | **真内核闭环成立**：`perpendicular` 的**一般命题**（`∀ E D u v`，不是某组坐标）⇒ **`status=formally_proved` / `judgement=verified` / `axioms ["propext","Classical.choice","Quot.sound"]` / 68277 ms**（另一次 68386 ms）；**同一条命题只把正文换成 `sorry` ⇒ `exit=0` 但 `judgement=failed`、状态**停在 `verified_instance`** —— 同一退出码、相反结论**；`IMPORT-WIDTH narrow=68317 ms / import Mathlib=149532 ms`（另一次 67800 / 157315，**两次都 `exit=0`**）。工具链 `leanprover/lean4:v4.35.0-rc3`（commit `470d5ce1…`；mathlib 的缓存就是它建的）。**⚠️ 口径**：这是**集成用例**（约 6 分钟、GB 级 I/O），**单独跑才是它的口径**；把它放进并行的全库套件里跑会因负载撞上 300 s 墙钟（两次实测）—— 那是负载抖动，不是回归 | 0 | **2026-10-06 实测（控制器读它日志原文；那次运行控制器未旁观）** |
 | N3 定向测试（**计划点名的那七件**） | `vitest run constraints / constraints3d / planar-constraints / reactive/constraints / operations / patches / scene-store` | **7 文件 / 241 通过 / 0 失败** | 0 | **第 31 轮** |
 
 > **2026-10-05 真实 provider 的第一次读数（`planning`，N4）**：上面那行是**用户在自己的桌面端**跑出来、把面板原文回传的 ——
@@ -850,6 +851,25 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
   它证明的是"组件能渲染假数据"，不是"用户能看到他的证明"。**等第一个后端过了十栏准入再做**（那时才有真数据）。
   **仍然没接的**：`agentStore` / run event schema 上的产物通道（`ClaimEvidence` 这套证据词汇至今没有进过 Web 界面）——
   那要等有产物可送，与"接一个真实后端"是同一件事。
+
+> **（2026-10-06 更正：上面 ② 与 ③ 里的"今天"都不再成立 —— N5b 接上了第一个真实后端）**
+> 提交 `e401d9e`（十栏准入记录 ⇒ `WIRED_PROOF_BACKENDS` **推导**出 `["lean4"]`）与 `051e5fe`（适配器 + `perpendicular` 的**一般命题**走完整条闭环）。
+> - 上面那句"今天它如实说'**当前没有接入任何形式证明后端**'"**已过期**：默认现在说的是"**本构建接上了 1 个形式证明后端…**"。
+>   那一支文案**仍然在**（`wired.length === 0`），但现在是**被"显式注入 0 个"的用例钉着**，而不再是"今天的实况"。
+> - 上面"**今天没有任何代码会生产 proof artifact**"**也过期**：`packages/agent-core/src/proof/lean4Adapter.ts` 的**显式调用**路径
+>   真的产出了 artifact（闭环用例里升到 `formally_proved`）。**但"不做查看器"这个决定不变**，理由换成两条事实：
+>   **① 默认路径不调用它**（设计：证明后端不参与普通静态图的默认运行）；**② 仍没有任何通道把产物送进界面**。
+> - **仍未达成（不许含糊）**：只覆盖**一个目标类**（`perpendicular`，一条真目标走通**不泛化**）；
+>   **IR → Lean 命题的翻译本身未被证明**（一份可审计的小模板；`assumptions` **有意不进命题**，方向保守）；
+>   `ProofInput.statement` **仍是可选** ⇒ "必绑"只被"**适配器记得传 + 一条用例**"堵住，**没被结构堵住**；
+>   **强沙箱（只读+无网）下的证明运行未测**；**mathlib 的 rev 没有被 pin**（`lakefile.toml` 是 `rev = "master"`，
+>   而 `lake-manifest.json` 是**每次运行都会重新生成**的产物，已加进 `proof/lean4/.gitignore`）⇒
+>   **十栏里那个 mathlib commit 是"实测值"，不是"从仓库可复算"的保证**。
+> - **仍然没接的**：`agentStore` / run event schema 的产物通道 —— 这一条**仍然成立**（理由与上面 ② 相同）。
+> - 顺带一条由"接上后端"暴露的**工程缺陷（已修）**：`eslint` **不读 `.gitignore`**，于是它会去 lint `.lake/packages/` 里
+>   **mathlib 依赖包自带的 JS** ⇒ 建过 Lean 工程的机器上 `npm run lint` 会从 `0 error / 13 warning` 变成
+>   **14298 problems（14247 errors）**，而 **CI 上（无 `.lake`）仍是 0 error**。已按该文件既有的同一条原则
+>   （"别人生成的产物不算我们的源码"）加 `"**/.lake/**"` 到 `ignores`，复验回到 **0 error / 13 warning**。
 - **两处"约束"模块的分工（免得被误当成重复实现）**：`planar-constraints.ts` 管**"点能待在哪儿"**（一维曲线 + 自然参数，`project`/`evaluate`，拖拽与动画是同一条状态更新），是**点 ↔ 宿主**的一元关系；`constraints3dProjection.ts` 管**"几个对象之间必须保持什么关系"**（⊥ / ∥ / 等长 / 共面…），是**多元**关系，用顺序投影迭代。**两者互补，可以同时出现在同一份文档里**；分工已写进 `constraints3dProjection.ts` 的文件头。
 
 - **N5「勾股」已裁决（2026-10-05，用户决定）**：走"**判成 ⊥ 目标 + 用勾股定理那一步把结论接回来**"。**这件事没有做成别名** —— 勾股仍然**没有直接载体**（两个载体字段都空），它多的是一条**显式的推断路线**（`inference: { from: "perpendicular", theorem: "勾股定理及其逆定理" }`），并且新函数 `proofGoalDischargeRoute()` 把它与"直接能判"分开报。理由写在第 50 轮那段更正里，也在代码注释里：**别名等于把一条推断藏进分类函数，而推断应当出现在证明里、看得见**。于是 `firstBatchGoalsWithoutAnyRoute()` **现在是空的**（`proof:smoke` 的读数里能看到 `goalsWithoutAnyRoute: []` 与 `pythagoreanRoute`）。

@@ -33,13 +33,14 @@ export interface ConfirmationPanelProps {
   targetDocumentId?: string
   sourceDocumentIds?: string[]
   /**
-   * **这个构建里接上的形式证明后端**。缺省＝包根导出的真实事实 `WIRED_PROOF_BACKENDS`（今天 `[]`）。
+   * **这个构建里接上的形式证明后端**。缺省＝包根导出的真实事实 `WIRED_PROOF_BACKENDS`
+   * （2026-10-06 起是 `["lean4"]` —— N5b 接了第一个真实后端，十栏准入记录在案）。
    *
    * 做成可注入的是为了让"文案确实是**排**出来的"这条判据能写：用例注入一个假后端，
    * 文案里就必须出现它的名字。生产路径不传它 —— 于是界面上那句话永远跟着事实走。
    */
   proofBackends?: readonly string[]
-  /** 交过审查记录的后端条数。缺省＝`PROOF_BACKEND_REVIEWS.length`（今天 `0`）。 */
+  /** 交过审查记录的后端条数。缺省＝`PROOF_BACKEND_REVIEWS.length`（2026-10-06 起是 `1`）。 */
   proofReviewedCount?: number
   onConfirm?: () => void
   onDiscard?: () => void
@@ -110,13 +111,18 @@ export function ConfirmationPanel({ draft, assumptions = [], approximationNotes 
       今天是什么状态"。两者不是一回事：核验是**一个实例**的检查，形式证明要的是命题普遍成立。
 
       它**只读**、**不宣称任何一条 claim 已被证明**，而且那几句话由 `WIRED_PROOF_BACKENDS` /
-      `PROOF_BACKEND_REVIEWS` **推导**（见 `proofLevelStatus.ts`）。今天一个后端都没接，
-      所以它会明说"当前没有接入任何形式证明后端"，以及后果：升不到 `formally_proved`。
-      接了后端它就自己变 —— 不留一句会腐烂的假话。
+      `PROOF_BACKEND_REVIEWS` **推导**（见 `proofLevelStatus.ts`）。
+      **2026-10-06 起生产接上了 `lean4`**（N5b 的第一个真实后端，十栏准入记录在案）⇒
+      它现在说的是"本构建接上了 1 个形式证明后端…"；而"当前没有接入任何形式证明后端"那一支
+      仍然在（`wired.length === 0`，测试里显式注入 0 个来钉它）—— 两句话**都由事实推出来**，
+      **不留一句会腐烂的假话**。
 
-      **这里不做产物正文查看器**：今天没有任何代码会生产 proof artifact（全仓零生产者），
-      那会是一条永远跑不到的生产路径，只能用注入的假数据测＝弱证据。理由写在
-      `proofLevelStatus.ts` 的文件头与 `docs/current-status.md` §四 F。
+      **这里仍不做产物正文查看器**：**2026-10-06 起确实有东西能产出 proof artifact 了**
+      （`packages/agent-core/src/proof/lean4Adapter.ts` 的**显式调用**路径；闭环用例里真产出过并升到 `formally_proved`），
+      但 ① **默认路径不调用它**（设计：证明后端不参与普通静态图的默认运行），
+      ② **没有任何通道把产物送进界面**。所以查看器仍然是"给一条今天走不到的展示路径写组件，
+      只能用注入的假数据测＝弱证据"。等这两条之一变了再做。
+      理由写在 `proofLevelStatus.ts` 的文件头与 `docs/current-status.md` §四 F。
     */}
     <ProofLevelNotice wired={proofBackends} reviewedCount={proofReviewedCount} />
     {assumptions.length > 0 && <AssumptionList assumptions={assumptions} />}

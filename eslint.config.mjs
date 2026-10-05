@@ -11,8 +11,18 @@ export default tseslint.config(
      * 这些文件**不是我们的源码**：`tauri build` 一跑就会在里面生成新的 JS，
      * 于是 lint 会在"刚构建过"和"没构建过"之间给出不同的结果 ——
      * 这不是代码质量问题，而是把别人的产物当成了自己的源码在检查。
+     *
+     * **`.lake/` 是同一件事的第二个实例**（把 Lean 4 工程放进仓库之后暴露的，实测）：
+     * Lean 的依赖装在自己的 `.lake/packages/` 下，而**其中有些包自带 JS**
+     * （`importGraph/html-template/vendor/*.min.js`、`proofwidgets/widget/js/*.js`）。
+     * 后果是 `npm run lint` 在**建过 Lean 工程**的机器上会从 `0 error / 13 warning`
+     * 变成 **14298 problems（14247 errors）**，而在 CI 上（`.lake` 从不提交）**仍是 0 error** ——
+     * 同一个提交在两处给出不同结论，正是上面那条原则要挡的事。
+     *
+     * **注意**：`proof/lean4/.gitignore` 里的 `/.lake` **管不到 eslint** ——
+     * eslint（flat config）**不读 `.gitignore`**，所以这条必须写在这里。
      */
-    ignores: ["**/node_modules/**", "**/dist/**", "**/build-check/**", "**/test-results/**", "**/playwright-report/**", "**/vite-cache*/**", "**/src-tauri/target/**", "**/src-tauri/gen/**"]
+    ignores: ["**/node_modules/**", "**/dist/**", "**/build-check/**", "**/test-results/**", "**/playwright-report/**", "**/vite-cache*/**", "**/src-tauri/target/**", "**/src-tauri/gen/**", "**/.lake/**"]
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommended,

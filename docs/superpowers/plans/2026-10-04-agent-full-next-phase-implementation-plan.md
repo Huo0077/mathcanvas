@@ -657,7 +657,15 @@ export type DragSolveResult =
   > **2026-10-05 勾上（词表这一半），但要看清没接后端**：`proofGoals.ts` 的短目标**封闭词表 9 种**（`parallel` / `perpendicular` / `planePerpendicular` / `equalLength` / `midpoint` / `segmentRatio` / `collinear` / `coplanar` / `pythagorean`），落在计划要求的 5–10 区间内；词表与矩阵**同一份键集合**有用例挡着，不在首批的目标（二面角）即使能表达也不放行。**勾股按用户裁决走"判成 ⊥ + 勾股定理那一步"的推断路线**（`inference` 字段 + `proofGoalDischargeRoute()`），**没有做成别名**（"从约束层问垂直只会得到垂直"有专门用例）。适配器那一半**只到准入契约**：`WIRED_PROOF_BACKENDS` 由通过的审查记录推导，今天 `{"wired":[],"reviewed":0}` ⇒ **一个后端都没接、没有任何产物能升到 `formally_proved`**。
 - [x] **依赖审查任务（必须在 GREEN 前完成）：** 记录许可证、进程/线程边界、WASM/原生依赖、缓存/沙箱、启动时间和失败/超时行为；没有审查结论不得接入默认构建。
   > **2026-10-05 勾上**：`packages/agent-core/src/proof/proofBackendReview.ts` 的**十栏准入契约**（含进程模型词表、原生/WASM 依赖必须写**空数组**而不是省掉、启动耗时必须是有限非负数），加一条**接入不变量**："`WIRED_PROOF_BACKENDS` 里每个名字都必须有一份 `passed` 记录" —— 于是"没审查就接上"**在结构上做不到**。依赖侧的实测记录另见 `docs/acceptance/next-phase-flag-and-dependency-review.md`。
-- [ ] **提交检查点：** `git commit -m "feat(proof): add verified proof artifact boundary"`。
+- [x] **提交检查点：** `git commit -m "feat(proof): add verified proof artifact boundary"`。
+  > **2026-10-06 勾上（阶段出口达成）。** 上面那两条此前缺的东西都到位了：
+  > **① 一个过了十栏准入的真实后端**（`lean4`，`PROOF_BACKEND_REVIEWS` 里那份 `verdict: passed` 的记录，十栏逐项实测）；
+  > **② 至少一类目标有可独立校验的 proof artifact** —— `perpendicular` 的一般命题走完整条路后升到 `formally_proved`
+  > 且公理只有 `{propext, Classical.choice, Quot.sound}`，而**同一命题换 `sorry` 则停在 `verified_instance`**。
+  > **提交信息没用过那条建议的**：实际落地是两个提交 `e401d9e`（准入选名单）与 `051e5fe`（适配器+闭环）——
+  > 与 `:347` 同一个口径：**这条检查项的本质是"阶段收尾"，不是"提交信息必须长这样"**。
+  > **勾的是出口，不是"这一档没有缺口"**：仍未达成的六条如实记在下面**第七步 §三**（只覆盖一个目标类、翻译未被证明、
+  > `statement` 可选、"必传"强度有限、强沙箱未测、mathlib rev 未被 pin）。**读者不要把这一勾读成"形式证明出口已经完备"。**
   > **2026-10-05：故意不勾** —— 本阶段收尾的检查点，而**出口未达成**（设计 §5 N5 要求"至少一类目标有可独立验证的 proof artifact"，今天没有任何后端接上，真实运行只会得到 `unsupported`）。本阶段工作已以多次提交落地（`f550972` 产物边界 / `79473ee` 短目标词表 / `2c13158` 后端接线门 + `proof:smoke` / `be22ced` 准入契约 / `6a5c2f0` 勾股按裁决落地），但**没有使用这条建议的提交信息**。
 > **第二步（2026-10-05）：短目标词表。** 新增 `packages/agent-core/src/proof/proofGoals.ts` ——
 > 10 种短目标的**封闭词表**与支持矩阵，映射按**题设种类**走（不做文本关键词匹配，本项目在
@@ -786,7 +794,11 @@ export type DragSolveResult =
 >   **教训**：工作树上有**未提交改动**时用 `git checkout --` 还原变异，会把"你的改动"和"你的变异"**一起抹掉** ——
 >   那种情况下"`git status` 干净"**恰恰意味着还原过头了**。
 >
-> **第六步的窄复核结论：`Approved`**（新发现 2 条 Minor 观察、无 Important/Critical；N1/N2/N3 它都**自己变异**验过咬在正确的地方，
+> **⚠️ 归属更正（2026-10-06）：下面这一节记的是 `N4` 的第二轮复核修正（`c68998e` / `99cf2d8`），不是 N5 的"第六步"。**
+> 控制器当时把它误挂在 N5 这一节下（锚点选错），内容一字未改，只补这一句归属说明 ——
+> **N4 的复核意见（o1/o2）与 N5 的"第六步"是两件事**，读者不该在这里找 N5 的复核结论。
+>
+> **（N4e fix2 的）窄复核结论：`Approved`**（新发现 2 条 Minor 观察、无 Important/Critical；N1/N2/N3 它都**自己变异**验过咬在正确的地方，
 > 并明确"N1 那条用例没有被别的断言顺带满足"）。两条 o 项**控制器直接处置**（都是小改动，不再开一轮）：
 > - **o1（同屏字面相反）**：报告里那句「分母只算**有对象可读**的轮次」与面板新写的「**没有可判的对象**…**仍然算在这一组的分母里**」
 >   在同一屏上**字面相反**。代码从头到尾只有一套口径（按 `status` 分组），矛盾**只在措辞**：
@@ -798,6 +810,69 @@ export type DragSolveResult =
 >   ⇒ 补两条断言（"没有可判的对象" + "仍然算在这一组的分母里"），并**自己变异证明它会咬人**：
 >   把那段 `<p>` 缩回裸句子 ⇒ 该用例红在新断言（`ProviderEval.test.tsx:252/253`），随后**逐字节还原**（blob `05e04106…` == HEAD）。
 > - **还带出一条不在本批范围的同类（如实记）**：`benchmarkPlanningEval.test.ts:217` 的 `evidence.length > 0` 是**同一恒真类**（N4b 遗留），本批没碰。
+
+> **第七步（2026-10-06）：接上第一个真实后端 —— Lean 4 过十栏准入 + 一个目标类的真内核闭环。**
+> 提交 `e401d9e`（十栏准入记录 + 把"接上的名单"钉死）、`051e5fe`（适配器 + 闭环 + **仓内** Lean 小工程 `proof/lean4/`）。
+> **控制器范围核验**：两提交共 21 个路径，**`.lake` 命中 0 条**；`proof/lean4/.gitignore`（`/.lake`）**已进版本库** ⇒
+> "6.3 GB 中间产物被误提交"的风险**从结构上关闭**（不再依赖"工作树里恰好有那个未跟踪文件"）。
+>
+> **一、十栏准入：接上了一个，而且是"由记录推导出来的"**
+> 控制器自跑 `npm run proof:smoke` ⇒ **exit 0 / 8 passed**（此前 7），并打印
+> `PROOF_BACKENDS {"wired":["lean4"],"reviewed":1,"rows":[… "verdict":"passed","problems":[]]}`；
+> **"形状合格的伪造产物仍被拒"那批行一条没变**（仍 `backend-not-wired`）⇒ 反方向判据没被"接了一个后端"冲掉。
+> 十栏逐项都是实测值（version **两条并列**：core-only `4.34.1` commit `5045d005…`／**mathlib 闭包实际用 `v4.35.0-rc3` commit `470d5ce1…`**；
+> license 读自安装目录正文；`child-process`；**20 个**原生文件；**启动耗时两个实测数** —— 直调工具链 `bin/lean.exe` **138/134/125 ms**、
+> 走 elan **垫片** **1657/1799/1865 ms**（适配器因此优先解析工具链自己的 `bin/`，预算取 2000 ms 只为让"垫片变慢"可被发现）；
+> 两层超时；`cacheAndSandbox` 含 **"强沙箱（只读+无网）下未测"**）。**白名单是 `{propext, Classical.choice, Quot.sound}`，不是空列表**
+> （空列表会把真证明也拒掉，是"静默全失败"的坑）。
+> **"不许只看 exit code"落到了代码与注释两层**：适配器明确拒绝"grep 里没有 `sorry`"这种**文本级**判据（`axiom` 一绕就失效），改用 `#print axioms`。
+>
+> **二、一个目标类的闭环（`perpendicular`，一般命题）**
+> 端到端用例**显式 gated**（CI 上没有 Lean/mathlib，而 `vitest.config.ts` 含 `scripts/**/*.test.ts`、CI 跑 `npm test` ⇒ 不 gate 必红）；
+> 真跑 Lean 的三条 `it.skipIf`，并有"环境探针：**找不到就说找不到**（绝不静默通过）"；**判据层全部用假 stdout + 假 runner，在 CI 上永远跑**。
+> 本地实测（控制器读它日志原文）：`Tests 4 passed`；`真证明 ⇒ formally_proved`、`axioms: ["propext","Classical.choice","Quot.sound"]`、**68277 ms**；
+> **同命题换 `sorry`：`exit=0` 但 `judgement=failed`、状态停在 `verified_instance`** —— **同一退出码、相反结论**，只有 axioms 报告能把它们分开；
+> `IMPORT-WIDTH narrow=68317 ms / import Mathlib=149532 ms`（两次都 `exit=0`）。**⇒ 两条判据同时为真，出口才有意义。**
+> **成本口径（必须写清）**：记录注释里早先写的是"窄 ≈**52 s** / `import Mathlib` ≈**118 s**"（另一套测量条件），
+> 而**仓内工程上两次端到端实测**是 **68.3 / 149.5 s** 与 **67.8 / 157.3 s**（都 `exit=0`）⇒ **以仓内实测为准**，并已在代码注释里对账。
+> **一条真实的排障（说明"两条判据缺一不可"）**：第一轮端到端**红** —— 生成的证明体最后一步写成 `exact hu v hv`，而**签名里根本没有 `v`**
+> （模板从另一份抽象文件抄了参数名）。**只保留"拒 `sorry`"那条判据的话，这个 bug 会被永远掩盖**（`sorry` 版无论命题怎么写都能"通过拒收"）。
+> 控制器**独立复算**过正确形式（自己的探针工程、真内核）：`rw [Submodule.mem_orthogonal'] at hu; exact hu (D - B) hv` ⇒ 只依赖三个白名单公理；
+> 适配器最终采用等价形式 `simpa [inner_eq_zero_symm] using hu (D - B) hv`。**适配器为何不自己扫标识符**：那要懂 Lean 保留字/mathlib 名字/语法糖，
+> 等于在适配器里再实现半个解析器 —— 而**权威在内核**（写错就 `unknown identifier` ⇒ 判据层 `failed` ⇒ 不升级）；它另钉了**消息传播**，免得人读到误导说明。
+>
+> **三、这一批仍未达成 / 仍未测（不许含糊）**
+> ① **只覆盖一个目标类**（`perpendicular`），一条真目标走通**不泛化**；
+> ② **"翻译是可信的"这条边界**：IR → Lean 命题的映射**本身没有被证明**，是一份**可审计的小模板**（逐字段表在报告 §8.1）；
+>    `assumptions` **有意不进命题**（方向保守：证不出来，而不是偷偷当公理用）；**模板第一天翻错了，R56 抓不到**（它抓的是"模板被改弱"）；
+> ③ **`ProofInput.statement` 仍是可选**（`proofArtifact.ts` 未改）⇒ "必绑"今天的强度是"**传了就必须进哈希**"，一个忘传的适配器会静默退回绑定前的强度，
+>    而这条**只被"我们的适配器记得传 + 一条用例"堵住，没被结构堵住**；
+> ④ **强沙箱下的证明运行未测**；⑤ **成本对缓存与负载敏感**：常态 68 s，而进程级墙钟上限 300 s 只有 **4.4×** 余量
+>    （第一次最终门禁里那条真证明就**超时**过一次 —— 同一棵树、无并发重活时复跑 **68386 ms** 通过 ⇒ 那是**环境抖动**，不是回归）。
+>    **⚠️ 一条查实的规律（两条独立证据）**：那条真证明**"单独跑"时稳过**（三次成功读数：68277 / 68386 / 67800 ms 量级），
+>    而**在并行的全库套件里跑时会撞上 300 s 墙钟**（两次：一次是它自己的最终门禁 `gates-final.log`；一次是控制器重跑
+>    `vitest run --maxWorkers=2` 全库 ⇒ `Test Files 1 failed | 324 passed`、`Tests 1 failed | 3768 passed`，
+>    红的正是那条 `进程级墙钟超时（300013 ms）`）。
+>    ⇒ **不是代码回归**（单独跑三次都对），而是**"把一条约 6 分钟、GB 级 I/O 的集成用例放进单元测试套件里跑"**带来的
+>    **负载相关抖动**：机器同时被 325 个测试文件占用时，mathlib 导入被拖慢数倍。
+>    **建议的修法（本批未做、未实测，留给收尾）**：让真实端到端**只在显式单独调用时跑**（例如要求一个环境变量），
+>    或给它一个**远大于 300 s** 的墙钟；**两条都要各自实测过才算数** —— 今天能下的结论只有一句：
+>    **它不该在并行全库套件里指望 68 s。**
+> ⑥ **`lakefile.toml` 的 mathlib 钉的是 `rev = "master"`**、`lake-manifest.json` **没有提交**（N5b 的理由：`lake` 每次运行会重新生成它，
+>    而 `rev = "master"` 使它不构成稳定 pin）⇒ **十栏里那个 mathlib commit 是"实测值"，不是"仓库可复算的 pin"**。
+>    **这是一条已知缺口**，修法是"`rev` 钉到 commit + 提交 lockfile"，**本批未做、也未实测**（不许写成"可复现"）。
+>
+> **四、本批顺带修掉的、由"接上后端"暴露出来的三处**
+> ① **`eslint` 会去 lint `.lake/`**：`eslint` 不读 `.gitignore`，而 mathlib 的依赖包自带 JS
+>    （`importGraph/html-template/vendor/*.min.js`、`proofwidgets/widget/js/*.js`）⇒ 建过 Lean 工程的机器上 `npm run lint`
+>    从 `0 error / 13 warning` 变成 **14298 problems（14247 errors）**，而 **CI 上（无 `.lake`）仍是 0 error**（同一提交两处结论不同）。
+>    已按该文件既有原则（"别人生成的产物不算我们的源码"）加 `"**/.lake/**"` 到 `ignores`，复验回到 **0 error / 13 warning**。
+> ② **两条会在"接上后端"后变红的哨兵**（`apps/web/src/components/agent/proofLevel.test.tsx`）：一条 `expect(WIRED_PROOF_BACKENDS).toEqual([])`、
+>    一条断言文案里**硬写**的 `10 栏填齐`。控制器改成**显式注入"接上 0 个"**来钉那一支的文案，并**删掉名单字面量**
+>    （"名单恰好是什么"的精确钉子**只留 `scripts/proof-spike/smoke.test.ts` 一处** —— 与 `proofArtifact.test.ts` 上同一条裁决）。
+> ③ **四处已过期的话**（`ConfirmationPanel.tsx` / `ProofLevelNotice.tsx` / `proofLevelStatus.ts`）："今天 `[]`／今天 `0`／**全仓零生产者**"。
+>    最后那条**性质变了**：现在**确实有东西能产出 artifact**（适配器的显式调用路径），但**默认路径不调用它**、**也没有产物进界面的通道**
+>    ⇒ "不做产物查看器"的理由从"没有生产者"改成这两条事实。
 
 ## Phase N6：发布与维护收口（flags 已在 N1 创建）
 
