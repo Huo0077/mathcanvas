@@ -340,7 +340,7 @@ export type DragSolveResult =
 > **读数不可比**：`5/7`（71%）→ `14/21`（67%）**不是下降，是题集换了**（新加的三类刻意偏难），
 > **只记录、不比较**。
 >
-> **仍然没解决的**：`real_provider` 仍整批 `not_measured`（**2026-10-05 更正：不是"适配器没写"** —— **生产侧的 provider 适配器早就有了**：`providers/adapter.rs`（621 行，含 SSRF 守卫），且**有一次真实往返记录**（2026-09-29，DeepSeek `deepseek-chat`）。**缺的是 benchmark 那一侧的 `real_provider` 模式**（今天只发 `not_measured`），以及"走回环代理还是自己发请求"与凭据位置这两个决定）
+> **仍然没解决的**：`real_provider` 仍整批 `not_measured`（**2026-10-05 更正：不是"适配器没写"** —— **生产侧的 provider 适配器早就有了**：`providers/adapter.rs`（621 行，含 SSRF 守卫），且**有一次真实往返记录**（2026-09-29，DeepSeek `deepseek-chat`）。**"走回环代理还是自己发请求"这个决定做了（方案 C：把 harness 搬进应用内）**，而且**评测那一侧已经落地**（`runProviderAgentEval` + 设置面板，两段式、会花钱、密钥不出凭据库）—— 但**一次都还没跑过**，所以还没有数字。**缺的仍然包括 benchmark 那一侧的 `real_provider` 模式**：那 21 条题的题集与报告契约在 **workspace 之外**，要先搬进包里才能给应用共用）
 > 属独立一批）；报告里仍然没有 pass@1 / pass@3 / 成本 / 延迟 / 人工复核率（**但"求解率"第 48 轮有了**：离线见证层 `solveRate=0.048`；原来把它记成"缺一个定义"是错的）。
 
 ## Phase N5：形式证明出口

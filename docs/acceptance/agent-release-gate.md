@@ -39,7 +39,7 @@
 | # | 计划原文 | 状态 | 判据 / 证据 |
 | --- | --- | --- | --- |
 | 1 | 类型检查、Agent 核心测试、Web Agent 测试、Rust provider 测试必须通过 | ✅ **已守住**（两条抖动都已修，且都有前后计数） | 读数在 `docs/current-status.md` §一「2026-10-05 N6 门禁复跑」与其后三节：单测 **303 文件 / 3529 通过 + 1 todo / 0 失败**、`typecheck` exit 0、`lint` 0 error / 13 warning。**e2e**：原来 6 次全量里 4 次红在同一条断言（`data-preview-hovering`），已修（`projectWorldPoint` 先等相机停稳）→ **修后连续 4 次全量 186 passed**。**`test:rust`**：原来五次里一次红（`tests/secrets.rs:149`），判别实验把范围缩到"并发"（默认并行 15 次红 1 次 / 单线程 20 次全绿）→ 5 处走真实凭据库的用例加锁 → **60 次并行全绿 + 3 次全量 236 通过 / 0 失败**。**两处修的都是测试侧**，产品行为未变。 |
-| 2 | 代表任务 pass@1 和语义验证率达到预先约定阈值 | ❌ **未测（无数据）** | 离线读数由 `npm run eval:agent` 打印：**pass@1 4/8、语义验证 4/8**，模式是 `deterministic_local`。**真实 provider 的 pass@1 仍未测过**，所以"预先约定阈值"没有可对照的基线 |
+| 2 | 代表任务 pass@1 和语义验证率达到预先约定阈值 | ❌ **未测（无数据）** | 离线读数由 `npm run eval:agent` 打印：**pass@1 4/8、语义验证 4/8**，模式是 `deterministic_local`。**真实 provider 的 pass@1 仍未测过**，所以"预先约定阈值"没有可对照的基线。**但路径已存在（2026-10-05）**：应用内「设置 → 真实 provider 评测」跑 `runProviderAgentEval`（同一套 8 题 × 3 轮 → `createModelPlanner` → 回环代理，**密钥不出凭据库**），**两段式**、**会花钱**、由人显式确认；跑之前那几栏如实写 `not measured`（含 `provider` 与 `average cost` —— 成本需要价目表，仓里没有） |
 | 3 | 不允许出现模型可见但 dispatcher 未实现的工具 | ✅ 已守住（测试） | `agentReleaseGate.test.ts`：模型面发布的**每一个只读工具**都必须有真实执行路径；模型面上**唯一**的非只读工具是 `plan.set_plan`（精确集合，多一个就红）；`draft.confirm_commit` / `draft.stage_actions` / `draft.discard` / `draft.verify` **一个都不许**出现在模型面上 |
 | 4 | 不允许出现未验证却声称完成的运行记录 | ✅ 已守住（测试） | `agentReleaseGate.test.ts` + `verification/completionGate.ts`：声明了验收条件的运行，报告不构成证据时**不得到达 `awaiting_confirmation`** |
 | 5 | 视觉能力不可用时，必须有本地布局验证结果或明确 `not_supported` | ✅ **满足（按原文口径）** | 原文是"**或**"：有本地布局验证结果**或**明确 `not_supported`，两者都不缺。本地布局判据是纯算术、不需 provider vision（`renderEvidence.ts` + `layoutModel.ts`），`visual-fit-drawn` 正是用它拿到的 `clipped_object 0 / label_overlap 0`；provider vision 不可用的路径一律回 `not_supported`（`screenshotForProvider`）。**但仍要如实说明这不是"全都接好了"**：`render.capture` / `render.inspect_layout` 尚未成为 dispatcher handler，**对象出界**那一半用的是候选文档的确定性正投影、不是 live 场景的包围盒（live 场景目前没有任何读数通道暴露给 agent） |
@@ -120,7 +120,7 @@
 
 **所以"离线求解率 4.8%"这件事已经读完：**它不是"搜索差"、不是"判据不够"、也不是"构造器写坏了"，
 而是**首批设计覆盖面**决定的。**真正待裁决的是"要不要扩覆盖面、以及怎么扩才不违反那条纪律"** —— 而设计本身已经警告过硬扩的风险（把题悄悄改成构造器认得的形状）；
-  `real_provider` 整批 `not_measured`（**2026-10-05 更正：不是"适配器没写"** —— **生产侧的 provider 适配器早就有了**：`apps/desktop/src-tauri/src/providers/adapter.rs`（621 行：拼请求 / 解响应 / 借凭据 / 传输 / 取消 / 解码，含 SSRF 守卫），且**有一次真实往返记录**（2026-09-29，DeepSeek `deepseek-chat`，`tools` 通道验过 5 个模型可见工具）。**缺的是 benchmark 那一侧的 `real_provider` 模式**：`scripts/agent-benchmark/` 今天只发 `not_measured`；要跑它得先定"走应用的**回环代理**（`proxy/server.rs`，同一份通道）还是自己发请求"，以及凭据放在哪）
+  `real_provider` 整批 `not_measured`（**2026-10-05 更正：不是"适配器没写"** —— **生产侧的 provider 适配器早就有了**：`apps/desktop/src-tauri/src/providers/adapter.rs`（621 行：拼请求 / 解响应 / 借凭据 / 传输 / 取消 / 解码，含 SSRF 守卫），且**有一次真实往返记录**（2026-09-29，DeepSeek `deepseek-chat`，`tools` 通道验过 5 个模型可见工具）。**"走哪条通道"这个决定已经做了（方案 C）**：不是让脚本自己发请求（那要在 TS 里再写一遍三家方言的拼请求与解码 = **第二条调用路径**，还要把密钥交给脚本进程），而是**把 harness 搬进应用内** —— 已经落地的是**评测那一侧**（`runProviderAgentEval` + 设置面板，**两段式**、会花钱）。**仍然缺的是 benchmark 那一侧的 `real_provider` 模式**：`scripts/agent-benchmark/` 那 21 条题今天只发 `not_measured`，而它的题集与报告契约在 **workspace 之外**，要搬进包里才能给应用共用）
   成本 / 延迟 / 人工可读性同样没有。**不要把 N4 的第一步读成"开放题门槛已过"。**
 
 **N5 形式证明出口：只有"边界"，没有任何后端 —— 所以这一条门槛今天**无法判定**。**
