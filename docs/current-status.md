@@ -66,6 +66,33 @@
 > **本次读数**：受限定向 2 文件 86/86；单 spec 浏览器 **6/6**；全库非 Lean **328 文件 / 3835 通过 + 1 todo / 0 失败**（143.88 s）；
 > 全量 e2e **202 通过 / 0 失败**（1.0 m）；`typecheck` exit 0、`lint` 0 error / 13 warning。
 > **V0a 仍未验收**：Lean 慢集成与桌面产物本批未跑，教师/学生走查、MSI、真实 Lean、付费 provider 仍未做。
+>
+> **2026-10-06 V0a 门禁全表复测（本批；取代 §一 中同名命令的更早读数）：**
+>
+> | 门禁 | 本次读数 | 退出码 |
+> | --- | --- | --- |
+> | 生产构建（web） | 成功，4.86 s；入口 `index-*.js` **1,861.85 kB / gzip 548.43 kB**（另 `engineeringExporters` 433.81 kB、`geometry.worker` 384.49 kB、CSS 106.15 kB） | 0 |
+> | Rust provider 测试 | **238 通过 / 3 ignored / 0 失败** | 0 |
+> | 证明边界 smoke | **8 通过** | 0 |
+> | 性能基线 | **9/9**；`drag/300-frames` **625.9 ms** | 0 |
+> | 依赖许可扫描 | 通过；快照重写后工作树**无变化**（说明快照与 `Cargo.lock` 一致） | 0 |
+> | Agent 评测（离线 `deterministic_local`） | `pass@1 4/8`、`pass@3 4/8`、工具选择 `45/45`、工具错误 `3/45`、`average latency 2 ms`、`provider not measured`、`average cost not measured` —— **离线回归读数，不是模型准确率** | 0 |
+> | Agent benchmark（离线） | `BENCHMARK_WITNESS verified=1 unverified=20 no_witness=0 error=0 solveRate=0.048`；`PREMISE rate=0.727`；`EXTRACTION 14/21 = 0.667`；`judgeability supported=21 unsupported=3` | 0 |
+> | 非 Lean 全量单测 | **328 文件 / 3835 通过 + 1 todo / 0 失败**（143.88 s） | 0 |
+> | 全量 e2e | **202 通过 / 0 失败**（1.0 m） | 0 |
+> | typecheck / lint | exit 0 / **0 error · 13 warning** | 0 |
+> | 真实 Lean 端到端（显式 gated） | **skip，不是通过**：环境探针如实打印「本机没有找到 Lean 可执行文件（`resolveLean4Toolchain` 返回 null）」；1 passed / 3 skipped | 0 |
+>
+> **两条必须说清的事**：
+>
+> ① **本机现在没有 Lean 工具链** —— 没有 `elan` / `lean` / `lake`，`proof/lean4/.lake` 也不存在。
+> 因此 §一 里那条「真内核闭环成立（`formally_proved`，68277 ms）」是**更早某台装了 Lean 的机器上的历史读数，本机不可复现**。
+> 好在该用例是**显式 gated** 的：找不到工具链时**跳过并打印理由，绝不静默通过** —— 本次读数正是这个行为本身。
+>
+> ② **离线 benchmark 见证层的码表与文档里记的那一次不同**：本次多出一档 `"unverified-obligation":26`，
+> 同时 `no-candidate-constructed` 由 4 降到 2、`unsupported-base-shape` 由 4 降到 2。
+> 总体仍自洽（`verified=1`、`solveRate=0.048` 未变），但**分布不是同一个** ——
+> 是拉取进来的那批提交改变了码表构成。引用旧码表之前必须知道这一点。
 
 ## 一、现在能不能跑（可复核的门禁读数）
 
