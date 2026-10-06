@@ -54,6 +54,11 @@ export * from "./exact-forms"
 export * from "./witness/constructors"
 export * from "./witness/residuals"
 /**
+ * **形状数据化**（S2）：四层共用的 `SolidShapeSpec`。扁平导出 —— agent-core 的入口语法、
+ * 搜索层与核验器都要读同一份形状描述，命名空间只会让调用点更长。
+ */
+export * from "./witness/solidShapeSpec"
+/**
  * Reactive DAG 切片（设计规格 §4）。
  *
  * 用**命名空间**导出而不是 `export *`：`ReactiveNode` / `ReactiveGraph` 这两个名字已经被

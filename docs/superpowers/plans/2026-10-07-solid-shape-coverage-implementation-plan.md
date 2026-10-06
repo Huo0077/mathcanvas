@@ -107,10 +107,12 @@
 
 **出口**：现有棱锥定向用例与新 spec 用例**逐字不变**地通过；新增 4/5/6 边底面正例；一条"无判据条件 ⇒ `unverified`"反例。**变一条就回退这一块。**
 
-- [ ] **Task 2.1 spec 类型 + 迁移 `derivePyramidStructure`**
-  - 文件：`packages/geometry-kernel/src/witness/solidShapeSpec.ts`（新建，类型定义照设计 §3.1，**带 YAGNI 注释**）、`packages/agent-core/src/solver/witnessSearch.ts`、`packages/geometry-kernel/src/witness/constructors.ts`
-  - 判据：自由标量从 spec 读，不再是写死的"两条底边 + 高"
-  - RED：先写"同一题面在迁移前后产出**相同候选坐标**"的用例（把今天的结果钉成快照），迁移后必须仍逐字相同
+- [ ] **Task 2.1 spec 类型 + 迁移 `derivePyramidStructure`**（**载体已落地，内核侧读取待做**）
+  - **2026-10-07 已完成的部分**：`solidShapeSpec.ts`（类型 + YAGNI 注释，内核 barrel 导出）；搜索层候选池与 `requestFor` 改成读 spec；高的来源从 spec 的 `relations` 读回（不再夹带 `WitnessHeightSpec`）；坐标护栏逐字通过（全库 3895 通过、用例数不变）。
+  - **仍未做**：内核 `constructWitnessShape` 侧读 spec / `derivePyramidStructure` 直接产出 spec（现在还是"结构 → specFor → spec"这一跳）。
+  - 文件：`packages/geometry-kernel/src/witness/solidShapeSpec.ts`（已建）、`packages/agent-core/src/solver/witnessSearch.ts`（已改）、`packages/geometry-kernel/src/witness/constructors.ts`
+  - 判据：自由标量从 spec 读，不再是写死的"两条底边 + 高"（搜索层这一半已做到）
+  - RED：坐标快照（已立，见 `S2 迁移护栏（坐标逐字不变）`）
 - [x] **Task 2.2 内核 `deriveBasePolygon` 支持 n = 3–6**（2026-10-07 完成）
   - n = 5/6 走 `deriveRepresentativePolygon`（正 n 边形代表）；题面点名底面角度/平行、或给两个不同边长 ⇒ 仍拒绝（`unsupported-base-shape`）。
   - **接线也补上了**（原计划漏写这三道闸）：解析器平面子模式 3–6 点名、搜索层 `lineAndPlane` 5–8 targets、核验器线面判据按 3–6 点平面核共面。五棱锥/六棱锥现在端到端 `verified_instance`。

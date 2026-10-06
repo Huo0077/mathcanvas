@@ -7,7 +7,16 @@
 
 
 
-## 2026-10-07 —— S2.1 动手前的迁移护栏 + CI 读数（含一条"取消 = 没拦住"的教训）
+## 2026-10-07 —— S2.1 第一步：形状数据化的**载体**落地（行为逐字不变）
+
+- 新增 `packages/geometry-kernel/src/witness/solidShapeSpec.ts`（设计 §3.1 的 `SolidShapeSpec` / `FreeScalar`，含 YAGNI 约束）并从内核 barrel 扁平导出 —— 这是四层共用的形状词汇。
+- **搜索层的候选池改成读 spec**：`candidatePool(spec, input)` 的网格轴来自 `spec.freeScalars`（0–2 条 `base-edge` + 自由高），`requestFor(spec, …)` 由 spec 构造内核请求；**高的来源从 spec 自己的 relations 读回来**（`PA=10` 已被 `kernelRelations` 译成 `segment-length`）—— 于是不必在 spec 之外再夹带一个 `WitnessHeightSpec`，也就没有"同一个判断写两遍"。
+- **口径写进类型注释**：`candidates` 只存**固定值表**；seed 决定的顺序留在搜索层（放进 spec 会让同一份形状描述随 seed 变形）。
+- **行为逐字不变**：上一轮立的坐标护栏（`A(0,0,0) B(2,0,0) C(2,3,0) D(0,3,0)` + `P(0,0,1)`）**原样通过**；全库非 Lean **3895 通过 + 1 todo / 0 失败**（用例数不变 —— 本批只换载体）。
+- **一处自己造的坑如实记**：替换 `requestFor` 时漏了 `grid.push` 那一行的调用点，`typecheck` 报 `Cannot find name 'structure'`，**18 条用例同时红**（同一个 ReferenceError）。教训：一次机械替换要么全改，要么先跑 `typecheck` 再跑测试 —— 这次是机器先抓住的。
+- 读数：定向 3 文件 / **90 通过**（含坐标护栏）；`typecheck` exit 0；`lint` 0 error / 13 warning。
+
+
 
 - 计划 Task 2.1 的第一步按要求先做：把标准四棱锥题（`PYRAMID`）的**候选坐标钉成逐字快照** —— `A(0,0,0) B(2,0,0) C(2,3,0) D(0,3,0)` + `P(0,0,1)`。接下来把棱锥路径迁到 `SolidShapeSpec` 时，只要自由标量的候选顺序或取值变了，这条必须红。钉**坐标**而不是 assumptions 文案：文案会改，坐标是几何本身。
 - **CI 如实记两条**：#181 / `05a8109` 与 #180 / `82e85ae` 四个 job 全绿；**#182 / `2532c1a` 整条 `cancelled`** —— 而那条提交里**确实有一个类型错误**。结论很直白：**取消 = 没有门禁拦住它**。上一轮是我自己补跑 `typecheck` 才发现的，**不能**把它记成"CI 会拦住"。
