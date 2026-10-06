@@ -3,7 +3,7 @@ import { createEmptyDocument } from "@draw/dsl"
 import { describe, expect, it } from "vitest"
 
 import { createLocalPlanner, LOCAL_INTENTS, localIntentSkillIds, matchLocalIntent, SPHERE_PROMPT } from "./localPlanner"
-import { PYRAMID_PROMPT, PYRAMID_UNVERIFIED_PROMPT, PLANAR_TRIANGLE_PROMPT } from "./representativeFixtures"
+import { CONIC_ELLIPSE_PROMPT, PYRAMID_PROMPT, PYRAMID_UNVERIFIED_PROMPT, PLANAR_TRIANGLE_PROMPT } from "./representativeFixtures"
 
 /**
  * 本地确定性规划器的性质。
@@ -469,6 +469,52 @@ describe("V0b local planar right triangle", () => {
     const moved = { ...result, actions: result.actions.map((action, index) => index === 2 ? { ...action, inputs: { ...action.inputs, points: [{ x: 3, y: 0 }] } } : action) }
     const document = createEmptyDocument("conics")
     const compiled = compilePlan(moved as typeof result, { document, prompt: PLANAR_TRIANGLE_PROMPT, conversationId: "local-planar", documentGeneration: document.revision })
+    expect(compiled.diagramVerification?.status).toBe("failed")
+    expect(compiled.ok).toBe(false)
+  })
+})
+
+/**
+ * **V0c：椭圆的本地入口**。
+ *
+ * 与平面三角那条同一条纪律（精确匹配、不挂实验开关），但有一处**关键不同**：
+ * 题面是**方程**，两个半轴已经被分母钉死，所以**没有"系统自选"**这回事。
+ * 这条用例把那个区别钉住 —— 免得哪天有人给它加一句"系统自选了示例值"，
+ * 而那会让用户以为他看到的是条随手挑的曲线。
+ */
+describe("V0c local ellipse", () => {
+  it("is reachable without enabling any experimental flag", () => {
+    expect(matchLocalIntent(CONIC_ELLIPSE_PROMPT)).not.toBeNull()
+    expect(localIntentSkillIds(CONIC_ELLIPSE_PROMPT)).toContain("conics-tangents")
+  })
+
+  it("builds the one ellipse the equation determines, and says it was not a free choice", async () => {
+    const result = (await createLocalPlanner().plan({ userMessage: CONIC_ELLIPSE_PROMPT } as never)).plan
+    expect(result.kind).toBe("plan")
+    if (result.kind !== "plan") return
+    expect(result.actions.map((action) => action.actionId)).toEqual(["planar.create_conic"])
+    expect(result.actions[0].inputs).toMatchObject({ kind: "ellipse", center: { x: 0, y: 0 }, radiusX: 3, radiusY: 2 })
+    // 题面把半轴钉死了 ⇒ 不许出现"系统自选示例值"那种话。
+    const said = (result.assumptions ?? []).join(" ")
+    expect(said).toContain("唯一确定")
+    expect(said).not.toContain("示例值")
+
+    const document = createEmptyDocument("conics")
+    const compiled = compilePlan(result, { document, prompt: CONIC_ELLIPSE_PROMPT, conversationId: "local-conic", documentGeneration: document.revision })
+    expect(compiled.ok, compiled.diagnostics.map((item) => item.detail).join("; ")).toBe(true)
+    expect(compiled.diagramVerification?.status).toBe("passed")
+    // 判据的说明必须**带上焦点** —— 半轴对调的后果就是焦点换轴。
+    expect(compiled.diagramVerification?.checks[0]?.reason).toContain("焦点")
+  })
+
+  it("does not certify an ellipse whose semi-axes were swapped on the way out", async () => {
+    const result = (await createLocalPlanner().plan({ userMessage: CONIC_ELLIPSE_PROMPT } as never)).plan
+    expect(result.kind).toBe("plan")
+    if (result.kind !== "plan") return
+    // 同一条题面、只把两个半轴对调 —— 焦点随之从 x 轴换到 y 轴，那是**另一条曲线**。
+    const swapped = { ...result, actions: result.actions.map((action) => ({ ...action, inputs: { ...action.inputs, radiusX: 2, radiusY: 3 } })) }
+    const document = createEmptyDocument("conics")
+    const compiled = compilePlan(swapped as typeof result, { document, prompt: CONIC_ELLIPSE_PROMPT, conversationId: "local-conic", documentGeneration: document.revision })
     expect(compiled.diagramVerification?.status).toBe("failed")
     expect(compiled.ok).toBe(false)
   })

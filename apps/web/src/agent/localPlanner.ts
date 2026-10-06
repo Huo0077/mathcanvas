@@ -1,7 +1,7 @@
 import type { PlanEnvelope, PlannerPort } from "@draw/agent-core"
 import { PLAN_SCHEMA_VERSION, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SPAN, DEFAULT_SOLID_SIZE, defaultPrismBasePolygon, cubeCenterFrom, cubeEdgeLengthFrom, searchWitnessForPrompt } from "@draw/agent-core"
 
-import { PLANAR_TRIANGLE_PROMPT, PYRAMID_PROMPT, PYRAMID_UNVERIFIED_PROMPT, conicInvariantPlan, obliquePrismSectionPlan, planarRightTrianglePlan, pyramidPlan } from "./representativeFixtures"
+import { CONIC_ELLIPSE_PROMPT, PLANAR_TRIANGLE_PROMPT, PYRAMID_PROMPT, PYRAMID_UNVERIFIED_PROMPT, conicInvariantPlan, ellipsePlan, obliquePrismSectionPlan, planarRightTrianglePlan, pyramidPlan } from "./representativeFixtures"
 
 /**
  * **本地确定性规划器**（Task 2.5 Step 2 的过渡件）。
@@ -272,6 +272,15 @@ export const LOCAL_INTENTS: readonly LocalIntent[] = [
    * 而这条走的是既有的夹具路径（与 `PYRAMID_PROMPT` 同类），默认就该能跑。
    */
   { all: ["三角形", "ab⊥ac"], exact: PLANAR_TRIANGLE_PROMPT, skillIds: ["planar-basics"], build: () => planarRightTrianglePlan() },
+  /**
+   * **代表题四（计划 V0c）**：椭圆。
+   *
+   * 与上面那条**同一条纪律**（精确匹配 + 不挂实验开关），但有一处**关键不同**：
+   * 题面是**方程**，两个半轴已经被分母钉死（`√9 = 3`、`√4 = 2`），
+   * 所以这里**没有"系统自选示例值"**这回事 —— 夹具的 `assumptions` 明说了这一点，
+   * 免得用户以为自己看到的是一条随手挑的曲线。
+   */
+  { all: ["椭圆", "x²/9+y²/4"], exact: CONIC_ELLIPSE_PROMPT, skillIds: ["conics-tangents"], build: () => ellipsePlan() },
   /**
    * **代表题一（规格 §8.1）**：斜四棱柱 + 三条棱的中点 + 截面 + 棱上动点。
    *

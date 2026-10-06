@@ -336,3 +336,35 @@ export function planarRightTrianglePlan(): PlanEnvelope {
     ] as unknown as DraftAction[]
   }
 }
+
+/**
+ * **代表题四：椭圆**（计划 V0c）。
+ *
+ * 题面给的是**方程**，不是尺寸 —— 方程已经把两个半轴钉死了（分母是半轴的平方：`√9 = 3`、`√4 = 2`），
+ * 所以这里**没有"系统自选"的自由度**。`assumptions` 里如实说明这一点：这条曲线不是挑出来的，
+ * 是题面唯一确定的那一条。
+ *
+ * **焦点不写进动作**：焦点由半轴决定（`c = √(a² − b²)`）。写第二份就等于凭空多出一个
+ * 可能与半轴打架的来源 —— 而核验器正是按半轴自己算焦点的。
+ */
+export const CONIC_ELLIPSE_PROMPT = "椭圆 x²/9+y²/4=1，画示意图"
+
+export function ellipsePlan(): PlanEnvelope {
+  return {
+    schemaVersion: PLAN_SCHEMA_VERSION,
+    kind: "plan",
+    goal: "作椭圆 x²/9 + y²/4 = 1",
+    factIds: [],
+    assumptions: [
+      "半轴由题面方程唯一确定（√9 = 3、√4 = 2），焦点随之确定在 (±√5, 0)。"
+    ],
+    actions: [
+      {
+        actionId: "planar.create_conic",
+        actionKey: "ellipse",
+        factIds: [],
+        inputs: { alias: "ellipse", kind: "ellipse", center: { x: 0, y: 0 }, radiusX: 3, radiusY: 2, label: "椭圆 x²/9+y²/4=1" }
+      }
+    ] as unknown as DraftAction[]
+  }
+}
