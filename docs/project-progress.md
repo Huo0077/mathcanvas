@@ -4598,3 +4598,11 @@ N1 IR → N2 求解 adapter → N3 动态拖动 → N4 开放题与真实 provid
 - **`proof:smoke`**：**8 通过 / 0 失败**，`PROOF_BACKENDS {"wired":["lean4"],"reviewed":1,"rows":[…"verdict":"passed","problems":[]]}`；反方向判据（形状合格的伪造产物仍被拒）**一条没变**。
 - **e2e**：全量基线 **194 通过**（2026-10-05）；N3 出口那两条 spec 的**针对性**读数是 **8 passed / exit 0（27.6 s）**，由控制器自跑。
 - **真实 provider**（用户在桌面端运行，**控制器未旁观**，只核对面板回传原文的自洽性）：题集 `planning` 轴**三轮**（`planned 2/3`、`planned 2/3`、第三次 `planned 1/3` + `clarification 1/3` + `error 1/3`、`average latency 18153 ms`）、agent 工具环 pass@1 轴**一轮**（`pass@1 1/8` / `pass@3 2/8` / 工具选择 45/45 / 工具错误 4/45 / `attempts 24`）；两轴的 `cost` 都是 `not measured`。
+
+
+## 2026-10-06 —— N1 来源追溯补丁：目标与自由点不再丢原文区间
+
+- **问题**：原话解析器把 givens 的位置带进 IR，却把求证目标和显式自由点降成裸字符串；IR 给两类一律写  /0，以后无法在用户原题里高亮或追踪来源。另有设计规格漏写已经落地的 ClaimEvidenceStatus.verified_instance。
+- **处理**：保留旧 goals / reeChoices 字段，解析原话时补充可选来源记录，IR 与反向适配保持一致；没有原话的手工旧输入仍不猜区间；规格和计划词表与代码对齐。
+- **RED → GREEN**：新增精确回切、旧输入  /0、报告目标区间断言；RED 1 条失败（自由点只显示 A），GREEN 定向 6 文件 / 68 项通过，全部工作区类型检查 exit 0。
+- **边界**：只提高来源可追溯性；不改变静态题设验收结果、不启用见证搜索、不把实例当证明。

@@ -33,6 +33,28 @@ describe("parseObligationIR", () => {
     expect(ir.unverified).toEqual([])
   })
 
+  it("preserves exact goal and free-choice source spans through the legacy adapter", () => {
+    const prompt = "在三棱锥A-BCD中，任取点 A，BD=2。求证： OA⊥CD  "
+    const legacy = parseDiagramObligations(prompt)
+    const ir = buildObligationIR(legacy)
+    const free = ir.obligations.find((item) => item.role === "free_choice")
+    const goal = ir.obligations.find((item) => item.role === "goal")
+    expect(free?.sourceText).toBe("任取点 A")
+    expect(goal?.sourceText).toBe("OA⊥CD")
+    for (const item of [free, goal]) {
+      expect(item).toBeDefined()
+      expect(prompt.slice(item!.start, item!.end)).toBe(item!.sourceText)
+      expect(item!.end).toBeGreaterThan(item!.start)
+    }
+    expect(toLegacyObligationSet(ir)).toEqual(legacy)
+    expect(parseObligationIR(prompt)).toEqual(ir)
+  })
+
+  it("keeps unknown provenance honest for a manually supplied legacy set", () => {
+    const ir = buildObligationIR({ givens: [], goals: ["OA⊥CD"], freeChoices: ["A"], unverified: [] })
+    expect(ir.obligations.map(({ start, end }) => [start, end])).toEqual([[0, 0], [0, 0]])
+    expect(toLegacyObligationSet(ir)).toEqual({ givens: [], goals: ["OA⊥CD"], freeChoices: ["A"], unverified: [] })
+  })
   it("keeps an unjudgeable angle as ambiguous instead of silently supported", () => {
     const ir = parseObligationIR("在△ABC中，∠ABC=60°，画出图形")
     expect(ir.obligations).toEqual([])
@@ -82,6 +104,8 @@ describe("legacy compatibility of the obligation IR", () => {
     expect(report.obligationIR).toEqual(parseObligationIR(PYRAMID_PROMPT))
     // 角色必须真的分得开：目标不会被当成"已核验的题设"。
     expect(report.obligationIR?.obligations.filter((item) => item.role === "goal").map((item) => item.sourceText)).toEqual(["OA⊥CD"])
+    const goal = report.obligationIR?.obligations.find((item) => item.role === "goal")
+    expect(PYRAMID_PROMPT.slice(goal!.start, goal!.end)).toBe("OA⊥CD")
   })
 })
 

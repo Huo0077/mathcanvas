@@ -133,10 +133,10 @@ export function buildObligationIR(set: DiagramObligationSet): ObligationIR {
     id: `obligation-free-${index}`,
     role: "free_choice",
     kind: "freeChoice",
-    sourceText: name,
-    // 与目标同因：手上没有原话，区间只能如实留 0/0。
-    start: 0,
-    end: 0,
+    sourceText: set.freeChoiceSources?.[index]?.name === name ? set.freeChoiceSources[index].sourceText : name,
+    // Manually supplied legacy sets have no provenance; never invent offsets for them.
+    start: set.freeChoiceSources?.[index]?.name === name ? set.freeChoiceSources[index].start : 0,
+    end: set.freeChoiceSources?.[index]?.name === name ? set.freeChoiceSources[index].end : 0,
     targets: [name],
     // 自由点的**名字**是原话给的，"取在哪"不是 —— 所以没有 expected。
     judgeability: "unsupported"
@@ -152,10 +152,7 @@ export function buildObligationIR(set: DiagramObligationSet): ObligationIR {
      * 但**判定力仍然是 `unsupported`**：现有核验器从不判定目标（它只核 `givens`），
      * 认出种类不等于有判据。这两件事必须分开，否则界面会把"认出来了"显示成"验过了"。
      *
-     * 目标拿不到区间：`buildObligationIR` 手上只有解析结果，没有原话
-     *（`DiagramObligationSet.goals` 是一串裸字符串）。这里如实留 0/0，而不是拿
-     * `prompt.indexOf` 猜一个 —— 猜出来的区间会让"可追溯"变成一句空话。
-     * 需要在目标上标注区间的调用方（UI 高亮）必须把原话一起带进来自己定位。
+     * 目标原文区间由解析器携带；手工构造的旧集合没有来源，保持 0/0。
      */
     const recognized = recognizeObligationText(goal)
     return {
@@ -163,8 +160,8 @@ export function buildObligationIR(set: DiagramObligationSet): ObligationIR {
       role: "goal",
       kind: recognized?.kind ?? "proposition",
       sourceText: goal,
-      start: 0,
-      end: 0,
+      start: set.goalSources?.[index]?.sourceText === goal ? set.goalSources[index].start : 0,
+      end: set.goalSources?.[index]?.sourceText === goal ? set.goalSources[index].end : 0,
       targets: recognized?.targets ?? [],
       judgeability: "unsupported"
     }
@@ -195,7 +192,13 @@ export function toLegacyObligationSet(ir: ObligationIR): DiagramObligationSet {
   return {
     givens,
     goals: ir.obligations.filter((item) => item.role === "goal").map((item) => item.sourceText),
+    ...(ir.obligations.some((item) => item.role === "goal" && item.end > item.start) ? {
+      goalSources: ir.obligations.filter((item) => item.role === "goal").map(({ sourceText, start, end }) => ({ sourceText, start, end }))
+    } : {}),
     freeChoices: ir.obligations.filter((item) => item.role === "free_choice").flatMap((item) => item.targets),
+    ...(ir.obligations.some((item) => item.role === "free_choice" && item.end > item.start) ? {
+      freeChoiceSources: ir.obligations.filter((item) => item.role === "free_choice").map(({ targets, sourceText, start, end }) => ({ name: targets[0], sourceText, start, end }))
+    } : {}),
     unverified: ir.unverified.map((entry) => ({ sourceText: entry.sourceText, reason: entry.reason }))
   }
 }

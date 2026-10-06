@@ -13,10 +13,19 @@ export interface DiagramObligation {
   planeLengths?: [number, number]
 }
 
+export interface DiagramSourceSpan {
+  sourceText: string
+  start: number
+  end: number
+}
+
 export interface DiagramObligationSet {
   givens: DiagramObligation[]
   goals: string[]
+  /** Optional for legacy/manual sets; parsed prompts carry exact original text and offsets. */
+  goalSources?: DiagramSourceSpan[]
   freeChoices: string[]
+  freeChoiceSources?: (DiagramSourceSpan & { name: string })[]
   unverified: { sourceText: string; reason: string }[]
 }
 
@@ -85,8 +94,21 @@ const UNREAD_CONDITION = /∠\s*[A-Z]{3}\s*=\s*\d+(?:\.\d+)?\s*°|[A-Z]{2}\s*[:�
 export function parseDiagramObligations(prompt: string): DiagramObligationSet {
   const boundary = /(?:求证|证明)/.exec(prompt)
   const givenText = boundary === null ? prompt : prompt.slice(0, boundary.index)
-  const goals = boundary === null ? [] : [prompt.slice(boundary.index + boundary[0].length).trim().replace(/^[：:，,\s]+/, "")].filter(Boolean)
-  const freeChoices = [...new Set([...givenText.matchAll(/(?:任取|任意|自由)(?:一?个)?\s*点\s*([A-Z])/g)].map((match) => match[1]))]
+  const goalRawStart = boundary === null ? -1 : boundary.index + boundary[0].length
+  const goalRaw = goalRawStart < 0 ? "" : prompt.slice(goalRawStart)
+  const prefixLength = /^[：:，,\s]*/.exec(goalRaw)?.[0].length ?? 0
+  const goalText = goalRaw.slice(prefixLength).trim()
+  const goals = goalText ? [goalText] : []
+  const goalSources: DiagramSourceSpan[] = goalText ? [{ sourceText: goalText, start: goalRawStart + prefixLength, end: goalRawStart + prefixLength + goalText.length }] : []
+  const freeChoiceSources: (DiagramSourceSpan & { name: string })[] = []
+  const namedChoices = new Set<string>()
+  for (const match of givenText.matchAll(/(?:任取|任意|自由)(?:一?个)?\s*点\s*([A-Z])/g)) {
+    const name = match[1]
+    if (namedChoices.has(name)) continue
+    namedChoices.add(name)
+    freeChoiceSources.push({ name, sourceText: match[0], start: match.index, end: match.index + match[0].length })
+  }
+  const freeChoices = freeChoiceSources.map(({ name }) => name)
   const givens: DiagramObligation[] = []
   const unverified: DiagramObligationSet["unverified"] = []
   const used = new Set<number>()
@@ -139,5 +161,5 @@ export function parseDiagramObligations(prompt: string): DiagramObligationSet {
     }
   }
   givens.sort((left, right) => left.start - right.start)
-  return { givens, goals, freeChoices, unverified }
+  return { givens, goals, ...(goalSources.length ? { goalSources } : {}), freeChoices, ...(freeChoiceSources.length ? { freeChoiceSources } : {}), unverified }
 }

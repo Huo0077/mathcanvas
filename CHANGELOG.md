@@ -2987,3 +2987,10 @@ commit_rejected: action_compile: envelope.actions[1]: operation 0: section plane
 - 几何 Worker 的契约缺 `completionAssumptions` / `repair` / `planDiagnostics` / `assumptions` / `questions`，缺任何一项都会在接线后**静默降级**（确认面板变空、可修的计划变得不可修、该问用户的被报成"编译失败"）。
 
 **门禁读数**（本机实测，明细见 `docs/current-status.md`）：`npm test` 238 文件 / 2810 用例通过 + 1 todo；`npm run typecheck` 6 workspace + e2e 全 exit 0；`npm run lint` 0 error / **13** warning（基线从 14 降 1 —— 见下"顺手修掉的两处依赖问题"）；`npx playwright test` 42 spec / 141 用例全绿。（**读读数要看每一条自己的 exit code**：把几条门禁串在一条命令里跑时，整条命令的退出码来自**最后一条**，前面某一条失败会被吞掉 —— 本阶段就因此漏看过一次 `tsc` 的失败，后来改成逐条取 `$LASTEXITCODE`。）
+
+
+## 2026-10-06 —— Agent N1 来源追溯与证据契约补丁
+
+- 补齐设计文档与代码的 ClaimEvidenceStatus.verified_instance 一致性。
+- 用户原话中的目标与自由点携带可回切的原文区间；旧手工集合继续如实表示来源未知。
+- RED/GREEN 用例覆盖解析、IR、兼容适配和报告；具体门禁与未交付范围见 docs/current-status.md §四 F。

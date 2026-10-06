@@ -79,7 +79,7 @@ export interface AgentNextPhaseFlags {
 ```ts
 export type ClaimRole = "given" | "construction" | "goal" | "free_choice"
 export type Judgeability = "supported" | "unsupported" | "ambiguous"
-export type ClaimEvidenceStatus = "not_run" | "sampled" | "formally_proved" | "failed" | "unknown" | "inconsistent" | "timeout"
+export type ClaimEvidenceStatus = "not_run" | "verified_instance" | "sampled" | "formally_proved" | "failed" | "unknown" | "inconsistent" | "timeout"
 export type WitnessResultStatus = "verified_instance" | "unverified_instance" | "no_witness"
 export type SolverStatus = "not_run" | "model" | "unsat" | "unknown" | "timeout" | "diverged"
 
@@ -116,6 +116,8 @@ export interface ClaimEvidence {
 > **N1 执行记录（2026-10-05）：** 提交 `acd3bd5`（IR + 兼容层 + flag）、`2d62c4d`（R6 缺省改为关）、`b5b33f9`（把开关穿到真正的 Worker 策略并接线应用层）、`f997b3f`（2D 点自由度按 binding 种类判）。门禁读数只写在 `docs/current-status.md` §一（当次实测）；过程与三次复核的发现见 `docs/project-progress.md`。
 >
 > **与计划原文的偏差（已裁决，未做即是有意不做）：** ① `contracts.ts` / `relations.ts` **未改** —— 设计明文"模型自报 `relations` 不是 IR 的来源，只能作为附加线索"，relation 判据已作为 `perpendicular`/`parallel` 的 obligation 与既有 residual 路径存在，硬塞一等公民属 YAGNI（口径写在 `obligationIR.ts` 头注释）。② `GeometryObligation` 多了一个可选 `geometry.planeLengths` —— 扁平 `targets` 无法还原"每个平面几个点名"，不补就只能猜切点。③ N1 只接线 `obligationIR` 一个开关，另外四个是给 N2–N5 留的占位（不得绕过）。
+
+> **N1 来源追溯补丁（2026-10-06）**：保持 `goals: string[]` / `freeChoices: string[]` 的兼容读口，仅在解析真实原话时附加 `goalSources` / `freeChoiceSources`；IR 和反向适配原样携带区间。手工旧集合仍用 `0/0` 表示未知，不编出处。`ClaimEvidenceStatus` 文档词表补齐已实现的 `verified_instance`；N2 消费这份真实来源，不另写目标解析器。定向测试、Worker 路径与类型检查的当次证据记在 `docs/current-status.md`。
 
 ## Phase N2：解析构造、有限数值求解和 WitnessSearch
 

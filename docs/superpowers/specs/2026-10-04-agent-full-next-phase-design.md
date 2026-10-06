@@ -43,13 +43,13 @@ AlphaGeometry 的公开实现把几何状态、数值引擎和符号/规则搜�
 
 ```ts
 type ClaimRole = "given" | "construction" | "goal" | "free_choice"
-type ClaimEvidenceStatus = "not_run" | "sampled" | "formally_proved"
+type ClaimEvidenceStatus = "not_run" | "verified_instance" | "sampled" | "formally_proved"
   | "failed" | "unknown" | "inconsistent" | "timeout"
 type WitnessResultStatus = "verified_instance" | "unverified_instance" | "no_witness"
 type SolverStatus = "not_run" | "model" | "unsat" | "unknown" | "timeout" | "diverged"
 ```
 
-每条 claim 必须包含：原文范围、结构化目标、坐标/参数引用、判据来源、数值容差、求解器、版本、证据和下一步。任何 UI、Agent trace、确认门禁和长期记忆都只读这份状态，禁止各层重新解释字符串。
+每条 claim 必须包含：原文范围、结构化目标、坐标/参数引用、判据来源、数值容差、求解器、版本、证据和下一步。2026-10-06 的 N1 来源追溯补丁让原话解析得到的目标与显式自由点也携带可回切的区间；手工构造、没有原话的旧集合仍用 `0/0`，不伪造出处。任何 UI、Agent trace、确认门禁和长期记忆都只读这份状态，禁止各层重新解释字符串。
 
 ## 4. 四条升级主线
 
