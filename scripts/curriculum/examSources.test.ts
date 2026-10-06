@@ -39,7 +39,10 @@ it("rejects unknown curricular units and duplicate official source ids", () => {
 /** Break guarded: recorded article URLs are metadata-only, never substituted for exam cases. */
 it("preserves candidate references while the actual past-paper cases remain unmeasured", () => {
   const report = auditExamSources(candidates.sources as ExamSourceRecord[], unitIds)
-  expect(candidates.sources).toHaveLength(2)
+  expect(candidates.sources).toHaveLength(3) // Shanghai, National I and National II remain separate papers
+  expect(candidates.sources.map((record) => record.paperId)).toEqual([
+    "shanghai-autumn-math", "national-I-math", "national-II-math"
+  ])
   expect(report.invalidSources).toEqual([])
   expect(report.duplicateIds).toEqual([])
   expect(report.candidateUnitIds).toContain("selective-analytic-geometry")

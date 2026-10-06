@@ -43,9 +43,9 @@
       ]
     },
     {
-      "sourceId": "exam-2026-national-commentary",
+      "sourceId": "exam-2026-national-I-commentary",
       "examYear": 2026,
-      "paperId": "national-papers-I-II-math",
+      "paperId": "national-I-math",
       "url": "https://www.moe.gov.cn/jyb_xwfb/xw_zt/moe_357/2026/2026_zt08/mtbd/202606/t20260610_1440059.html",
       "publishedOn": "2026-06-10",
       "sourceSha256": "8777CB6E541F78F77F542D1806F07B9FF749E236631F5B711148CE8F45C120DD",
@@ -60,18 +60,27 @@
         {
           "unitId": "compulsory-function-basics",
           "questionId": "全国Ⅰ卷第19题"
-        },
+        }
+      ]
+    },
+    {
+      "sourceId": "exam-2026-national-II-commentary",
+      "examYear": 2026,
+      "paperId": "national-II-math",
+      "url": "https://www.moe.gov.cn/jyb_xwfb/xw_zt/moe_357/2026/2026_zt08/mtbd/202606/t20260610_1440059.html",
+      "publishedOn": "2026-06-10",
+      "sourceSha256": "8777CB6E541F78F77F542D1806F07B9FF749E236631F5B711148CE8F45C120DD",
+      "evidenceKind": "commentary_only",
+      "fullPaperReviewed": false,
+      "answerReviewed": false,
+      "topics": [
         {
           "unitId": "selective-analytic-geometry",
           "questionId": "全国Ⅱ卷第18题"
-        },
-        {
-          "unitId": "compulsory-planar-vectors",
-          "questionId": null
         }
       ]
     }
   ],
   "status": "metadata_only_no_verified_past_paper_question_or_answer",
-  "copyrightNote": "仅保存考试机构评析的出处、年份、卷别与知识点标签，不复制原试题或答案；是否与2025课程标准完全对应尚未核验"
+  "copyrightNote": "仅保存机构评析的出处、年份、明确卷别/题号与知识点线索，不复制原试题或答案；同一篇2026评析按全国Ⅰ/Ⅱ卷分录，未标卷别的泛泛主题不硬归到某卷；是否与2025修订课程标准完全对应尚未核验"
 }
