@@ -104,6 +104,24 @@ describe("五边形底面", () => {
   })
 })
 
+/**
+ * **迁移护栏**（计划 Task 2.1 的第一步）。
+ *
+ * 把"今天这条题产出什么坐标"钉成**逐字**快照。接下来要把棱锥路径迁到 `SolidShapeSpec`
+ * （自由标量从 spec 读，而不是写死的"两条底边 + 高"）—— 那次迁移**不许改变**同一题的结果：
+ * 一旦自由标量的候选顺序或取值变了，这里必须红，而不是靠"看起来还是那个四面体"。
+ *
+ * 为什么钉**坐标**而不是钉 assumptions 文案：文案会随措辞改，坐标是几何本身。
+ */
+describe("S2 迁移护栏（坐标逐字不变）", () => {
+  it("标准四棱锥题：候选坐标与今天逐字相同", () => {
+    const result = search(PYRAMID)
+    expect(result.status, JSON.stringify(result)).toBe("verified_instance")
+    if (result.status !== "verified_instance") return
+    expect(JSON.stringify(result.candidate.vertices)).toBe('[{"x":0,"y":0,"z":0},{"x":2,"y":0,"z":0},{"x":2,"y":3,"z":0},{"x":0,"y":3,"z":0},{"x":0,"y":0,"z":1}]')
+  })
+})
+
 /** 按点名取坐标：结果里的 `names` / `vertices` 是同一套下标空间。 */
 function coordinates(candidate: PolyhedronWitness): (name: string) => Vector3 {
   const byName = new Map(candidate.names.map((name, index) => [name, candidate.vertices[index]]))
