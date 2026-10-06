@@ -26,6 +26,7 @@ export const NEXT_PHASE_PREFERENCES_KEY = "mathcanvas:next-phase-preferences"
 
 interface NextPhasePreferences {
   constrainedDrag?: unknown
+  witnessSearch?: unknown
 }
 
 /** `localStorage` 在非浏览器环境（有些单测、SSR 预渲染）里可能不存在 —— 那就当作没存过。 */
@@ -70,5 +71,32 @@ export function saveConstrainedDragEnabled(enabled: boolean): void {
     store.setItem(NEXT_PHASE_PREFERENCES_KEY, JSON.stringify({ ...base, constrainedDrag: enabled }))
   } catch {
     // 见上：存不下属于可接受降级。
+  }
+}
+/** 显式开启才允许编译期搜索并替换候选坐标；损坏的存储永远不能启用。 */
+export function loadWitnessSearchEnabled(): boolean {
+  const store = storage()
+  if (store === null) return false
+  try {
+    const serialized = store.getItem(NEXT_PHASE_PREFERENCES_KEY)
+    if (serialized === null) return false
+    const parsed = JSON.parse(serialized) as NextPhasePreferences | null
+    return parsed !== null && typeof parsed === "object" && parsed.witnessSearch === true
+  } catch {
+    return false
+  }
+}
+
+/** 只写自己的键，不能清掉已选择的约束拖动和其它偏好。 */
+export function saveWitnessSearchEnabled(enabled: boolean): void {
+  const store = storage()
+  if (store === null) return
+  try {
+    const serialized = store.getItem(NEXT_PHASE_PREFERENCES_KEY)
+    const parsed = serialized === null ? null : (JSON.parse(serialized) as unknown)
+    const base = parsed !== null && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {}
+    store.setItem(NEXT_PHASE_PREFERENCES_KEY, JSON.stringify({ ...base, witnessSearch: enabled }))
+  } catch {
+    // An unwritable preference cannot enable the capability in agentNextPhaseFlags().
   }
 }

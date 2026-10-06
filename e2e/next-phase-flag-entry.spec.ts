@@ -58,14 +58,32 @@ test("打开之后刷新仍然是开（偏好跨会话保留）", async ({ page 
   await expect(page.getByRole("switch", { name: "约束拖动" })).toBeChecked()
 })
 
-test("偏好里只有这一个开关 —— 另外四个不许被它打开", async ({ page }) => {
+test("仅切约束拖动时，偏好里没有见证搜索及其它未启用能力", async ({ page }) => {
   await page.goto("/")
   await page.getByRole("button", { name: "设置" }).click()
   await page.getByRole("switch", { name: "约束拖动" }).click()
 
   const stored = await page.evaluate(() => JSON.parse(localStorage.getItem("mathcanvas:next-phase-preferences") ?? "null"))
 
-  // 存进去的就是这一个键：`witnessSearch` / `openProblemCompiler` / `proofExport` / `obligationIR`
+  // 只切约束拖动时不会连带开启见证搜索，更不能开启尚无产品入口的三个能力。
   // 都不在这里，因为 `agentNextPhaseFlags()` **故意不读**它们。
   expect(stored).toEqual({ constrainedDrag: true })
+})
+test("用户可显式启用见证搜索，刷新保留，且不会同时打开其它能力", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "设置" }).click()
+  const search = page.getByRole("switch", { name: "示意图见证搜索" })
+  await expect(search).not.toBeChecked()
+  await expect(page.getByText(/只覆盖部分棱锥题型/)).toBeVisible()
+  await expect(page.getByText(/题设核验和手动确认不会跳过/)).toBeVisible()
+  await search.click()
+  await expect(search).toBeChecked()
+  const first = await page.evaluate(() => JSON.parse(localStorage.getItem("mathcanvas:next-phase-preferences") ?? "null"))
+  expect(first).toEqual({ witnessSearch: true })
+  await page.reload()
+  await page.getByRole("button", { name: "设置" }).click()
+  await expect(page.getByRole("switch", { name: "示意图见证搜索" })).toBeChecked()
+  await expect(page.getByRole("switch", { name: "约束拖动" })).not.toBeChecked()
+  await page.getByRole("switch", { name: "示意图见证搜索" }).click()
+  await expect(page.getByRole("switch", { name: "示意图见证搜索" })).not.toBeChecked()
 })

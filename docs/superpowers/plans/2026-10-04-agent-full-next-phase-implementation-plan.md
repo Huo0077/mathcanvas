@@ -168,6 +168,8 @@ export type WitnessSearchResult =
 > ⑤ `shape:"prism"` 恒为 `unverified_instance`：原话解析把 `A′` 压成 `A`，且核验器别名映射只收 `/^[A-Z]$/`。设计 §5 的 R2 出口本来就规定"**不支持**题稳定产出 `unverified_instance`"，故如实上报；带撇点名的支持列为本阶段之后的独立项（裁决 R28）。
 > ⑥ `degreesOfFreedom` 保持 `null`（**窄豁免 R35**）：`ConstraintType` 表达不了线⊥面与角度、且 `reportFreeDegrees` 要的是**图元 id**，只映射子集会让数字"看不出漏了什么"；要真算需扩 `dsl` + 内核判据，归 N3。呈现纪律：`null` 必须读作"未计算"，**不得**读作"自由度 0 / 刚性"。
 
+> **N2 后续入口区块（2026-10-06）**：默认关闭的编译救援路径现有独立实验性设置入口，偏好只控制 `witnessSearch`，经既有 `agentNextPhaseFlags → AgentRuntime → DraftStore → Worker` 链路读取。`e2e/next-phase-flag-entry.spec.ts` 4 条通过；未将入口测试误写为开放题真实 provider 成功率。覆盖面扩展属于另一个区块，不因加开关而自动勾为完成。
+
 ## Phase N3：动态拖动保持约束
 
 **目标：** 让已确认的几何关系进入文档，拖动点不会静默破坏它们。

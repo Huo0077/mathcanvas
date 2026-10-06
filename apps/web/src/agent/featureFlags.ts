@@ -1,4 +1,4 @@
-import { loadConstrainedDragEnabled } from "../persistence/nextPhasePreferences"
+import { loadConstrainedDragEnabled, loadWitnessSearchEnabled } from "../persistence/nextPhasePreferences"
 
 /**
  * **下一阶段能力的项目级开关**（设计 2026-10-04 的 Feature flags 一节；控制器裁决 R2）。
@@ -80,23 +80,23 @@ export function createAgentNextPhaseFlags(overrides: Partial<AgentNextPhaseFlags
  * N2 另有一条与本文件无关的注意点：`witnessSearch` 打开后会替换被物化的坐标与点名，
  * 所以草稿层那次再核验必须对着编译器回带的 `materialisedActions`（见 `draftStore.stage`）。
  *
- * N3–N5 的三个开关里，**`constrainedDrag` 已有用户入口**（设置 → 实验性功能，走 `loadConstrainedDragEnabled`），另外两个保持 `false`；**各阶段实现时只允许在自己的开关下启用**。
+ * `constrainedDrag` 与 `witnessSearch` 各有实验入口，另外三项保持 `false`；只有对应阶段有接线与验收证据才能开启。
  *
  * 为什么是**函数**而不是常量对象：开关将来要能由运行配置/实验组驱动，
  * 而"每次调用现取"与"进程启动时冻结一份"在接线处看不出区别，到那时才改就要动一批调用点。
  */
 export function agentNextPhaseFlags(): AgentNextPhaseFlags {
   /**
-   * **只从偏好里取 `constrainedDrag` 这一个**（2026-10-05，用户批准的 N3 入口）。
+   * **偏好只读取 `constrainedDrag` 与 `witnessSearch`**；另外三项不读存储。
    *
-   * 另外四个**故意不读偏好**，理由是各不相同而都必须成立：
+   * 另外三个**故意不读偏好**，防止无产品读取点的能力被本地数据意外打开：
    *
-   * - `witnessSearch` 打开后**会替换被物化的坐标与点名**（见上面的注意点），它有自己的接线前提；
-   * - `openProblemCompiler` / `proofExport` 属于 N4 / N5 的**产品侧**，**至今没有任何读取点**（2026-10-06 复核：N4 交付的是评测面板、N5 交付的是只读「证明级别」状态面，两者都不读这两个 flag）；
+   * `witnessSearch` 虽有独立入口，但默认关；开启后仍走原有题设核验与用户确认。
+   * - `openProblemCompiler` / `proofExport` 属于 N4 / N5 的**产品侧**，目前没有可用的普通 Agent 读取点；
    * - `obligationIR` 同理。
    *
-   * 一个"存了就能全开"的偏好，等于把另外四个开关一起打开（其中两个至今没有任何读取点）——
-   * `featureFlags.test.ts` 里那条"恶意存储"用例就是钉这件事的。
+   * 一个"存了就能全开"的偏好，会把没有产品读取点的能力一起打开 ——
+   * `featureFlags.test.ts` 逐条保证只有明确的两个实验能力可由偏好启用。
    */
-  return createAgentNextPhaseFlags({ constrainedDrag: loadConstrainedDragEnabled() })
+  return createAgentNextPhaseFlags({ constrainedDrag: loadConstrainedDragEnabled(), witnessSearch: loadWitnessSearchEnabled() })
 }

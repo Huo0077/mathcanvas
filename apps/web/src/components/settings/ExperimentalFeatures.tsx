@@ -1,6 +1,6 @@
 import { useState } from "react"
 
-import { loadConstrainedDragEnabled, saveConstrainedDragEnabled } from "../../persistence/nextPhasePreferences"
+import { loadConstrainedDragEnabled, loadWitnessSearchEnabled, saveConstrainedDragEnabled, saveWitnessSearchEnabled } from "../../persistence/nextPhasePreferences"
 
 /**
  * **设置 → 实验性功能**（N3 的第一个产品入口，2026-10-05，用户批准）。
@@ -23,14 +23,16 @@ import { loadConstrainedDragEnabled, saveConstrainedDragEnabled } from "../../pe
  * 而"读不出来就是关"的口径在 `nextPhasePreferences.ts` 里。
  * 点一下**先写存储再更新界面**的顺序不重要，但两件事都必须发生。
  *
- * ## 这里**只**放一个开关，不是五个
+ * ## 为什么这里只有两个开关，不是五个
  *
- * 另外四个（`obligationIR` / `witnessSearch` / `openProblemCompiler` / `proofExport`）**故意不在这里**：
- * 它们要么还没交付，要么有自己的接线前提（`witnessSearch` 打开会替换被物化的坐标与点名）。
- * 给用户一个"存了就能全开"的面板，等于把四个未完成阶段的路一起打开。
+ * `constrainedDrag` 和 `witnessSearch` 已有真实执行路径，但都默认关；
+ * 后者仅限有界题型的候选救援，可能替换模型给的坐标，故必须显式选择。
+ * `obligationIR` / `openProblemCompiler` / `proofExport` 没有可用的用户任务入口，
+ * 不因这一页保存的偏好而被打开。
  */
 export function ExperimentalFeatures() {
   const [constrainedDrag, setConstrainedDrag] = useState(loadConstrainedDragEnabled)
+  const [witnessSearch, setWitnessSearch] = useState(loadWitnessSearchEnabled)
 
   return (
     <section className="experimental-features" aria-label="实验性功能">
@@ -53,6 +55,26 @@ export function ExperimentalFeatures() {
             const next = event.target.checked
             setConstrainedDrag(next)
             saveConstrainedDragEnabled(next)
+          }}
+        />
+      </label>
+      <label className="experimental-feature-row">
+        <span className="experimental-feature-text">
+          <strong>示意图见证搜索</strong>
+          <span className="experimental-feature-hint">
+            关着：使用原来的候选图核验。打开：仅当候选不满足题设时尝试寻找另一组坐标；只覆盖部分棱锥题型，不保证所有高中题都能画。题设核验和手动确认不会跳过。
+          </span>
+        </span>
+        <input
+          type="checkbox"
+          role="switch"
+          aria-label="示意图见证搜索"
+          aria-checked={witnessSearch}
+          checked={witnessSearch}
+          onChange={(event) => {
+            const next = event.target.checked
+            saveWitnessSearchEnabled(next)
+            setWitnessSearch(loadWitnessSearchEnabled())
           }}
         />
       </label>

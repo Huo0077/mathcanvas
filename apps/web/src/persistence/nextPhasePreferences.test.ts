@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest"
 
-import { loadConstrainedDragEnabled, NEXT_PHASE_PREFERENCES_KEY, saveConstrainedDragEnabled } from "./nextPhasePreferences"
+import { loadConstrainedDragEnabled, loadWitnessSearchEnabled, NEXT_PHASE_PREFERENCES_KEY, saveConstrainedDragEnabled, saveWitnessSearchEnabled } from "./nextPhasePreferences"
 
 /**
  * **N3 的第一个产品入口**（开关从哪来）。
@@ -33,6 +33,23 @@ describe("next-phase 偏好（localStorage）", () => {
     expect(loadConstrainedDragEnabled()).toBe(false)
   })
 
+  it("见证搜索默认关闭，必须显式打开并且不覆盖约束拖动", () => {
+    expect(loadWitnessSearchEnabled()).toBe(false)
+    saveConstrainedDragEnabled(true)
+    saveWitnessSearchEnabled(true)
+    expect(loadWitnessSearchEnabled()).toBe(true)
+    expect(loadConstrainedDragEnabled()).toBe(true)
+    saveWitnessSearchEnabled(false)
+    expect(loadWitnessSearchEnabled()).toBe(false)
+    expect(loadConstrainedDragEnabled()).toBe(true)
+  })
+
+  it("畸形见证搜索偏好和字符串 true 都不能启用替换坐标的能力", () => {
+    localStorage.setItem(NEXT_PHASE_PREFERENCES_KEY, '{ bad json')
+    expect(loadWitnessSearchEnabled()).toBe(false)
+    localStorage.setItem(NEXT_PHASE_PREFERENCES_KEY, JSON.stringify({ witnessSearch: "true" }))
+    expect(loadWitnessSearchEnabled()).toBe(false)
+  })
   it("存的是坏东西 → 当作关，不抛异常", () => {
     localStorage.setItem(NEXT_PHASE_PREFERENCES_KEY, "{ 这不是 JSON")
 

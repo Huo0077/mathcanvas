@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { NEXT_PHASE_PREFERENCES_KEY } from "../persistence/nextPhasePreferences"
+import { NEXT_PHASE_PREFERENCES_KEY, saveWitnessSearchEnabled } from "../persistence/nextPhasePreferences"
 
 import { AGENT_NEXT_PHASE_FLAG_NAMES, agentNextPhaseFlags, createAgentNextPhaseFlags, type AgentNextPhaseFlags } from "./featureFlags"
 
@@ -48,14 +48,23 @@ describe("agent next phase feature flags", () => {
   })
 
   /**
-   * **偏好只开 `constrainedDrag` 一个 —— 这一条是本次改动的关键安全性质。**
+   * **偏好可单独打开已验收的两个实验能力，另外三个必须保持关闭。**
    *
    * 存储里可能是任何东西：旧版本写的、手改的、别的程序写的。**那四个开关不许被它打开**，理由是各不相同
    * 而都必须成立：`witnessSearch` 打开后会替换被物化的坐标与点名（它有自己的接线前提，见
    * `featureFlags.ts` 的说明），`openProblemCompiler` / `proofExport` 至今没有任何读取点（N4 / N5 交付的是评测面板与只读状态面，都不读它们），
    * `obligationIR` 同理。**一个"存了就能全开"的偏好等于把另外四个开关一起打开（其中两个至今没有读取点）。**
    */
-  it("opens only constrainedDrag from the stored preference, never the other four", () => {
+  it("enables only the explicitly stored witness-search flag on the real application path", () => {
+    localStorage.clear()
+    saveWitnessSearchEnabled(true)
+    expect(agentNextPhaseFlags()).toEqual({
+      obligationIR: false, witnessSearch: true, constrainedDrag: false, openProblemCompiler: false, proofExport: false
+    })
+    saveWitnessSearchEnabled(false)
+    expect(agentNextPhaseFlags().witnessSearch).toBe(false)
+  })
+  it("ignores other unsupported flags in stored preferences", () => {
     localStorage.setItem(NEXT_PHASE_PREFERENCES_KEY, JSON.stringify({
       obligationIR: true, witnessSearch: true, constrainedDrag: true, openProblemCompiler: true, proofExport: true
     }))
@@ -63,7 +72,7 @@ describe("agent next phase feature flags", () => {
     const flags = agentNextPhaseFlags()
 
     expect(flags.constrainedDrag).toBe(true)
-    for (const name of ["obligationIR", "witnessSearch", "openProblemCompiler", "proofExport"] as const) {
+    for (const name of ["obligationIR", "openProblemCompiler", "proofExport"] as const) {
       expect(flags[name], `${name} 不许被偏好打开`).toBe(false)
     }
     localStorage.clear()

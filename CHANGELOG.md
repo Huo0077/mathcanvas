@@ -2994,3 +2994,8 @@ commit_rejected: action_compile: envelope.actions[1]: operation 0: section plane
 - 补齐设计文档与代码的 ClaimEvidenceStatus.verified_instance 一致性。
 - 用户原话中的目标与自由点携带可回切的原文区间；旧手工集合继续如实表示来源未知。
 - RED/GREEN 用例覆盖解析、IR、兼容适配和报告；具体门禁与未交付范围见 docs/current-status.md §四 F。
+
+## 2026-10-06 —— N2 见证搜索加入默认关闭的实验性入口
+
+- 设置页新增独立开关；保存/刷新、损坏偏好 fail-closed 和不连带打开其它开关有单元与浏览器证据。
+- 只开启既有有界见证救援；题设核验与用户确认仍是提交前硬门禁。当前题集覆盖与真实 provider 成功率未因此改变，后续需独立测量。

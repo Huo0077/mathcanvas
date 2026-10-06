@@ -5,13 +5,13 @@
 
 ## 一、五个开关的覆盖矩阵（N6 点名的核对项）
 
-五个开关由 N1 创建于 `apps/web/src/agent/featureFlags.ts`（`agentNextPhaseFlags()` 恒返回全关）。
+五个开关由 N1 创建于 `apps/web/src/agent/featureFlags.ts`（缺省全关；用户可在实验页独立开启 `constrainedDrag` 或 `witnessSearch`）。
 N6 只核对"每个 flag 有单元 / 浏览器 / 回退用例"，**不重复创建**。
 
 | 开关 | 读它的地方 | 单元用例 | 关闭回退的证据 | 浏览器用例 | 缺什么 |
 | --- | --- | --- | --- | --- | --- |
 | `obligationIR` | `agentRuntime.ts:240`（缺省取应用层那一份）→ `:271`/`:283` 传进 `drafts.stage`；`draftStore.ts:287` → 编译期 `diagramObligationIR`；Worker 链 `workerContracts.ts:51` / `workerRuntime.ts:82` / `geometryWorkerClient.ts:202` / `geometryWorkerHost.ts:111` / `geometryCompileStrategy.ts:106`；产出处 `diagramVerification.ts:176`；`committerAdapter.ts:154` | `featureFlags.test.ts`、`agentRuntime.test.ts:363`、`workerRuntime.test.ts:306`、`geometryWorkerHost.obligationIR.test.ts:101`、`draftStore.test.ts:373`、`planCompiler.test.ts:177`、`obligationIR.test.ts` | ✅ 三条：`planCompiler.test.ts:195`（关时不生成 IR）、`workerRuntime.test.ts:317`（畸形/缺省**不许**当 true）、`committerAdapter.test.ts:314`（不传 → `undefined`） | ❌ 无 | 浏览器端专测 |
-| `witnessSearch` | 同一条通道（`agentRuntime.ts:240` → `draftStore.ts:288` → 编译期 / Worker） | `geometryWorkerHost.witnessSearch.test.ts:121`、`workerRuntime.test.ts:334`、`committerAdapter.test.ts:296` | ✅ **最硬的一条**：`planCompiler.offPath.golden.test.ts` —— 对着基线采的 golden，断言关闭时**逐字节相同** | ❌ 无 | 浏览器端专测 |
+| `witnessSearch` | `agentNextPhaseFlags()` 读取用户单独保存的实验偏好 → `agentRuntime` / `draftStore` → 编译期 / Worker | 偏好、设置、flag、Worker 与搜索器定向测试 | ✅ `planCompiler.offPath.golden.test.ts` 逐字节 golden + 默认关 | ✅ `e2e/next-phase-flag-entry.spec.ts` 第 4 条：默认关、显式打开、刷新保留、与约束拖动隔离 | 浏览器真实 provider 的成功救援尚未测；不能据此宣称提高作图准确率 |
 | `constrainedDrag` | `App.tsx:518`（**N3 第三步新增的第一个读取点**） | `featureFlags.test.ts`（默认关）、`constrainedDrag3.test.ts`（关 → 只 `passthrough`，一个坐标都不写） | ✅ `e2e/geometry3d-drag.spec.ts` + `geometry3d-creation.spec.ts` 共 **19 条**在关闭状态下全绿（含"一次自由拖动只撤销一步"） | ✅ **5 条**（2026-10-05 补，见下） | 无 —— 入口与正/反例都到位了 |
 | `openProblemCompiler` | **无** | 只有 `featureFlags.test.ts` 的"默认全关"与"键集合相等" | 不适用（无行为） | ❌ 无 | N4 实现时才该有读取点 |
 | `proofExport` | **无** | 同上 | 不适用（无行为） | ❌ 无 | N5 实现时才该有读取点 |
@@ -19,7 +19,7 @@ N6 只核对"每个 flag 有单元 / 浏览器 / 回退用例"，**不重复创�
 **2026-10-05 更正（这一份的基线是 `6829f77`，它早于下面这两个提交）**：`constrainedDrag` 那一行原写"❌ 无 / **没有任何产品入口**能把它打开"，**已经过期** —— `fbb7584` 给了产品入口（顶栏「设置」→ 实验性功能 → 约束拖动，偏好存 `mathcanvas:next-phase-preferences`，`agentNextPhaseFlags()` 只取这一个），`96be699` / `6d21847` 补上了浏览器正反例：`e2e/next-phase-flag-entry.spec.ts`（入口本身 **3 条**）+ `e2e/agent-constrained-drag.spec.ts`（**2 条**：关着拖动**真的改变** `|AB|`；打开后同样拖动 `|AB|` **仍是 1**，且先断言 A 确实动过 —— 不许用"没变"冒充"被约束住"）。所以那一格改成 ✅ 5 条。
 
 **结论（同样按 2026-10-05 更正）**：三个已实现的开关都有"关闭回退"的证据，其中 `witnessSearch` 最硬（golden 逐字节）；
-**浏览器用例现在只有 `constrainedDrag` 有**（`obligationIR` 与 `witnessSearch` **没有产品入口**，浏览器专测无从谈起）；
+**在 2026-10-05，当时浏览器用例只有 `constrainedDrag` 有**；2026-10-06 `witnessSearch` 补上默认关闭的实验入口与浏览器用例，`obligationIR` 仍没有用户入口；
 `openProblemCompiler` / `proofExport` 是**占位**（只有开关表与默认值，没有任何读取点）—— 这是刻意的，N6 不该为占位开关补用例。
 
 > **⚠️ 2026-10-06 更正（N4 / N5 出口达成之后复跑这一段）**：上表那两行的"**N4 实现时才该有读取点**" / "**N5 实现时才该有读取点**"，以及上面结论里"`openProblemCompiler` / `proofExport` 是**占位**"这半句，要分开读：
@@ -51,6 +51,8 @@ N6 只核对"每个 flag 有单元 / 浏览器 / 回退用例"，**不重复创�
 快照，改动一旦有意就会过期；而**结构性**保证（离路径就是原代码那一行 / 显式为 `true` 才开）
 不会过期，却也**没有留下"当时到底一样不一样"的证据**。两者都成立，但**不能互相冒充** ——
 尤其不能拿"结构上没变"去充当"测过一样"。
+
+**2026-10-06 更正（见证搜索入口）**：`witnessSearch` 现在有「设置 → 实验性功能」入口及 `e2e/next-phase-flag-entry.spec.ts` 的默认关/显式开/刷新保留/不连带开其它 flag 浏览器用例；另有偏好损坏 fail-closed 与 Worker 接线单测。上方矩阵的 `witnessSearch` 行已经更新为现状；2026-10-05 的「无入口」只作为当时发现保留。**仍未测到**浏览器里真实 provider 触发并成功救援某道开放题，不能把“可开”读成“命中率提高”。
 
 ## 二、JavaScript 侧的运行依赖与许可证（实测）
 
@@ -145,7 +147,7 @@ node scripts/toolchain.mjs cargo metadata --format-version 1 --manifest-path app
   LICENSE 正文、没有 per-crate 的 SPDX 择一解析、没有复核 `bundled` SQLite 的版本与声明。
 - **并发**：Rust 侧有过一轮专项（锁序 + 淘汰分支的守卫，见 §四），但**几何 Worker 那侧的共享可变
   状态没有写成清单**，也没有任何压测 —— 那部分仍然只能读作"我读过、没发现"，不是"已证"。
-- 三个已实现开关的**浏览器**用例（§一）—— 其中 `constrainedDrag` 的入口**2026-10-05 补上了**（设置 → 实验性功能 → 约束拖动，偏好存 `mathcanvas:next-phase-preferences`，且只有这一个开关能被偏好打开）；原先卡在"没有产品入口能把它
+- 三个已实现开关的**浏览器**用例（§一）—— 其中 `constrainedDrag` 的入口**2026-10-05 补上了**（设置 → 实验性功能 → 约束拖动，偏好存 `mathcanvas:next-phase-preferences`，当时只有这个开关能被偏好打开；2026-10-06 `witnessSearch` 也有独立偏好入口）；原先卡在"没有产品入口能把它
   打开"，所以连正/反例都写不出来。
 - `openProblemCompiler` / `proofExport` 的真实依赖 —— **2026-10-06 更新**：N4 / N5 都已交付、出口都已勾，但**这两个开关没有被用上**（依然没有任何读取点），所以"它们真正会牵动什么依赖"**今天仍然答不出来**；等真把它们接进产品时再答（见 §一 的 2026-10-06 更正）。
 - 依赖体积 / 供应链（例如 lockfile 完整性、是否有 postinstall 脚本）—— 未审。

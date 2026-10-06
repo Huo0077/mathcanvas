@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react"
 import { beforeEach, describe, expect, it } from "vitest"
 
-import { loadConstrainedDragEnabled } from "../../persistence/nextPhasePreferences"
+import { loadConstrainedDragEnabled, loadWitnessSearchEnabled } from "../../persistence/nextPhasePreferences"
 import { ExperimentalFeatures } from "./ExperimentalFeatures"
 
 /**
@@ -41,6 +41,17 @@ describe("设置 → 实验性功能", () => {
     expect(screen.getByRole("switch", { name: /约束拖动/ }).getAttribute("aria-checked")).toBe("true")
   })
 
+  it("offers a default-off witness-search switch with honest coverage and persists the choice", () => {
+    render(<ExperimentalFeatures />)
+    const toggle = screen.getByRole("switch", { name: "示意图见证搜索" })
+    expect(toggle.getAttribute("aria-checked")).toBe("false")
+    expect(screen.getByText(/只覆盖部分棱锥题型/)).toBeTruthy()
+    expect(screen.getByText(/题设核验/)).toBeTruthy()
+    fireEvent.click(toggle)
+    expect(loadWitnessSearchEnabled()).toBe(true)
+    expect(toggle.getAttribute("aria-checked")).toBe("true")
+    expect(loadConstrainedDragEnabled()).toBe(false)
+  })
   it("说清打开与关着分别是什么行为（这个开关会换掉拖动路径）", () => {
     render(<ExperimentalFeatures />)
 
