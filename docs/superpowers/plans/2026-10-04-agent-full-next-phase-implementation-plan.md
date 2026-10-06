@@ -1,5 +1,7 @@
 # 下一阶段 Agent 完整升级实施计划
 
+> **范围提示（2026-10-06）**：这是旧 N1–N6 范围的阶段记录，旧复选框状态保持原义。用户新确定的“2025 修订高中课程/高考全题型 + 安全自动调用 Lean”尚未实施；新范围见 [设计](../specs/2026-10-06-high-school-auto-lean-design.md)、[计划](../plans/2026-10-06-agent-next-round-implementation-plan.md) 和 [进度](../../agent-next-round-progress.md)。不要把旧 N5 的一类条件引理当作新目标完成。
+
 > **状态：N1、N2 已实施并复核；N3 已实施并复核（出口已达成，五条浏览器用例全绿）；N4 出口已达成（`:324` / `:347` 已勾，2026-10-06）** —— 题集与报告契约已搬进 `packages/agent-core/src/benchmark/`（一份定义，CLI 与应用共用，提交 `f315cf6`），应用内评测已接到那 21 条上（契约新增 `planning` 层，提交 `e7ce865` / `281ce25` / `c15e99f`），**并且真实 provider 运行已经发生过三次**：planning 轴 `planned 2/3`（前两次）与第三次 `planned 1/3` / `clarification 1/3` / `error 1/3`（2026-10-06，`error` 那条是**模型响应超过 1 MiB 上限**、如实报错而非记成被拒），**pass@1 轴 `1/8`**，**人工可读性第一次有标注**（2026-10-06，`plan` 与 `clarification` 各 1 条、都判 `unreadable`，每组 n=1 ⇒ 不是趋势）。**仍然没有数字的只有成本**（仓里没有价目表）；另记两条已知边界：全题集 21 条只跑了前 3 条、超大响应那类题今天测不出来。**N5 出口已达成（2026-10-06）**：R51/R56 输入绑定与只读「证明级别」状态面已落地（N5a，提交 `b01525e` / `2f69a74` / `8e0c011` / `4e54479` / `24a5866`），**Lean 4 后端的十栏准入记录（N5b，提交 `e401d9e`）与一个目标类（`perpendicular`）的最小闭环（`051e5fe`）已落地 —— 出口 `:616` 已勾**。**N6 已收口：本计划 37 项检查项全部勾选（0 未勾）。** N1 提交 `acd3bd5` / `2d62c4d` / `b5b33f9` / `f997b3f`；N2 提交 `c2314c9`…`9c5ae2f`；N3 的收尾提交 `d7fe702` + `2dd89ab`；N4/N5/N6 的进度逐条见各阶段执行记录（`2026-10-05` 那一批以 `git log` 为准）。本计划对应 `docs/superpowers/specs/2026-10-04-agent-full-next-phase-design.md`；每个阶段必须先写 RED，再实现 GREEN，再跑全量门禁，最后单独提交。
 
 **Goal:** 在 `b1ee3d3` 的静态题设核验之上，逐步实现约束求解、动态拖动保持、开放题编译、真实 provider 评测和形式证明出口。
@@ -170,7 +172,7 @@ export type WitnessSearchResult =
 
 > **N2 后续入口区块（2026-10-06）**：默认关闭的编译救援路径现有独立实验性设置入口，偏好只控制 `witnessSearch`，经既有 `agentNextPhaseFlags → AgentRuntime → DraftStore → Worker` 链路读取。`e2e/next-phase-flag-entry.spec.ts` 4 条通过；未将入口测试误写为开放题真实 provider 成功率。覆盖面扩展属于另一个区块，不因加开关而自动勾为完成。
 
-> **N2 窄覆盖扩展（2026-10-06）**：三角底面存在**唯一点名直角**时可在任意环顶点；`namedRightTriangleBase` 在几何内核归一环的循环起点，搜索器调用同一规则确定自由底边。构造器独立负例确保“侧棱⊥底边”不被读成“底角直角”，最终方案仍调用同一 verifier 与拓扑校验。四边形非环首直角与棱柱撇点名维持未核验，不宣称已有通用求解。详见 `docs/current-status.md` §四 F 的当次门禁。
+> **N2 窄覆盖扩展（2026-10-06）**：三角底面存在**唯一点名直角**时可在任意环顶点；`namedRightTriangleBase` 在几何内核归一环的循环起点，搜索器调用同一规则确定自由底边。构造器独立负例确保“侧棱⊥底边”不被读成“底角直角”，最终方案仍调用同一 verifier 与拓扑校验。四边形非环首直角与棱柱撇点名维持未核验，不宣称已有通用求解。详见 `docs/current-status.md` §四 G 的当次门禁。
 
 ## Phase N3：动态拖动保持约束
 
@@ -683,7 +685,7 @@ export type DragSolveResult =
 > **本批查实的一条事实（需要裁决，不是实现细节）**：计划首批点名的"共线 / 共面 / 勾股"
 > **在解析层表达不出来** —— `DiagramObligationKind` 里没有这三种。所以矩阵如实标注它们为
 > "首批里、但现在表达不出来"，并单列成 `unexpressibleFirstBatchGoals()`。
-> **要么先扩解析层，要么从首批里划掉。** 已记进 `docs/current-status.md` §四 F。
+> **要么先扩解析层，要么从首批里划掉。** 已记进 `docs/current-status.md` §四 G。
 >
 > **本阶段仍未做的（剩下的全部）**：`scripts/proof-spike/` 与 `--mode=smoke`；**任何后端 adapter**
 >（必须先过依赖/许可证/进程与线程边界审查）；把 proof artifact 接进 `ConfirmationPanel` /

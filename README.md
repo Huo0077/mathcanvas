@@ -101,13 +101,16 @@ npm run eval:agent
 
 1. **用户侧验收**：教师/学生走查，包括“三点一面”主操作数、误操作、恢复和未核验提示。
 2. **管理员验收**：MSI 安装→启动→卸载；NSIS 与裸 exe 证据不能替代 MSI。
-3. **真实 Agent 质量基线**：真实 provider 的 pass@1/pass@3、成本、延迟、题设覆盖率和人工图面可读性。
-4. **下一阶段 N3–N6（已全部完成，2026-10-06）**：动态拖动保持约束、开放题编译与真实评测、形式证明出口、feature flag/依赖审查/发布收口。**N1–N6 的计划均已推完**（各阶段实施并复核、N3/N4/N5 出口达成、N6 收口）；但**作为用户可用能力，N2 与 N3 有默认关闭的实验入口**（N2 目前只覆盖窄的棱锥题型；N4 的评测面板可用、读数仍是小样本；N5 的证明没有界面通道；N1 没有入口），其已知边界与偏差逐条写在 [当前状态](docs/current-status.md) §四 F 与 [实施计划](docs/superpowers/plans/2026-10-04-agent-full-next-phase-implementation-plan.md) 的各阶段执行记录里。
+3. **真实 Agent 质量基线**：已有 pass@1/pass@3、延迟和少量人工可读性读数，但仍需扩大至课程/高考题型并取得可复核成本价目表；小样本不等于发布通过。
+4. **新一轮 H0–H4（仅规划、尚未实施）**：按 2025 修订高中课程标准与高考题型重建完整题型目录、可信原题形式化、桌面端自动 Lean、跨域证明策略和真实质量门禁；竞赛题另表。旧 N1–N6 当时的计划出口已达成**不代表**上述全题型或产品自动证明已完成。已知 N2/N3 默认为实验、N4 仅小样本且成本未测、N5 只有垂直性条件引理且无自动产品调用。每个区块须 RED→GREEN、同步进度文档并推送 GitHub。
 
 完整路线见：
 
 - [Agent 发布门禁](docs/acceptance/agent-release-gate.md)
-- [完整下一阶段设计](docs/superpowers/specs/2026-10-04-agent-full-next-phase-design.md)
-- [完整下一阶段计划](docs/superpowers/plans/2026-10-04-agent-full-next-phase-implementation-plan.md)
+- [新一轮高中全题型自动 Lean 设计（待实施）](docs/superpowers/specs/2026-10-06-high-school-auto-lean-design.md)
+- [新一轮实施计划（H0–H4）](docs/superpowers/plans/2026-10-06-agent-next-round-implementation-plan.md)
+- [下一轮任务进度与历史审查问题台账](docs/agent-next-round-progress.md)
+- [旧 N1–N6 设计（历史范围）](docs/superpowers/specs/2026-10-04-agent-full-next-phase-design.md)
+- [旧 N1–N6 实施计划（历史范围）](docs/superpowers/plans/2026-10-04-agent-full-next-phase-implementation-plan.md)
 - [GitHub 项目调研](docs/research/2026-10-04-github-project-survey.md)
 - [项目进度归档](docs/project-progress.md)
