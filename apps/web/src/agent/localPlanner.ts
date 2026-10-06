@@ -199,19 +199,53 @@ const COUNT_ANSWER = (): PlanEnvelope => ({
  * 顺序有意义：**先匹配更具体的**（"正方体"要在"立方体"之前，"棱柱"要在笼统的"体"之前）。
  * 触发词互不相交的条目之间没有顺序依赖。
  */
+/** 显式坐标的写法：`A=(0,0,0)`。**只有底面环上的点名**允许这样写。 */
+const APEX_COORDINATE_SOURCE = "([A-Z])\\s*=\\s*\\(\\s*(-?\\d+(?:\\.\\d+)?)\\s*,\\s*(-?\\d+(?:\\.\\d+)?)\\s*,\\s*(-?\\d+(?:\\.\\d+)?)\\s*\\)"
+
+/**
+ * 坐标段**只允许**是底面环上点的显式坐标，其余一律不认（fail-closed）。
+ *
+ * 为什么顶点不接受坐标：V0a 的顶点是**自由点**，给它写死坐标等于换了一条题设
+ * （题面说"自由点 D"，系统却按一个数把它钉住，那是"特值化悄悄改题"）。
+ * 为什么整段必须被坐标吃干净：只要还剩一个字符没被解释，就说明这句话里有我们没读懂的东西，
+ * 那时**宁可问路**，也不要当成"读懂了"往下画。
+ */
+function baseCoordinatesOnly(segment: string, base: string): boolean {
+  const trimmed = segment.trim()
+  if (trimmed.length === 0) return true
+  const seen = new Set<string>()
+  for (const match of trimmed.matchAll(new RegExp(APEX_COORDINATE_SOURCE, "gi"))) {
+    const name = match[1].toUpperCase()
+    if (!base.includes(name) || seen.has(name)) return false
+    seen.add(name)
+  }
+  return trimmed.replace(new RegExp(APEX_COORDINATE_SOURCE, "gi"), "").replace(/[，,\s]/g, "").length === 0
+}
+
 /** The offline route is explicitly opt-in and accepts only a bounded sentence
- * with a named triangular base, perpendicular foot and named free apex. */
+ * with a named triangular base, perpendicular foot and named free apex.
+ * The base vertices may carry explicit coordinates; the apex stays free. */
 function freeApexIntentFor(prompt: string): LocalIntent | null {
-  const match = /^在三棱锥\s*([A-Z])\s*[-−]\s*([A-Z]{3})\s*中\s*[，,]\s*([A-Z]{2})\s*(?:⊥|垂直于?)\s*平面\s*\2\s*[，,]\s*(?:自由|任取|任意)点\s*\1\s*[，,]\s*画示意图\s*$/i.exec(prompt.trim())
+  const match = /^在三棱锥\s*([A-Z])\s*[-−]\s*([A-Z]{3})\s*中\s*[，,]\s*([\s\S]*?)\s*([A-Z]{2})\s*(?:⊥|垂直于?)\s*平面\s*([A-Z]{3})\s*[，,]\s*(?:自由|任取|任意)点\s*([A-Z])\s*[，,]\s*画示意图\s*$/i.exec(prompt.trim())
   if (!match) return null
   const apex = match[1].toUpperCase()
   const base = match[2].toUpperCase()
-  const line = match[3].toUpperCase()
+  const middle = match[3]
+  const line = match[4].toUpperCase()
+  const plane = match[5].toUpperCase()
+  const freePoint = match[6].toUpperCase()
+  // 平面就是底面、自由点就是顶点、四个名字互不相同 —— 少一条都说明这句话不在承诺范围内。
+  if (plane !== base || freePoint !== apex) return null
   if (new Set([apex, ...base]).size !== 4 || !line.includes(apex) || ![...line].some((name) => base.includes(name))) return null
+  if (!baseCoordinatesOnly(middle, base)) return null
   return {
     all: ["三棱锥", "平面"], skillIds: ["spatial-modeling"],
     build: ({ prompt: words }) => {
-      const found = searchWitnessForPrompt(words)
+      /**
+       * **`spatialPointConditions: true`**：题面里写死的坐标必须由**同一个解析器**看到。
+       * 否则"核验过了"与"图上是什么"就成了两件事 —— 判据与它要判的对象不是同一份输入。
+       */
+      const found = searchWitnessForPrompt(words, { spatialPointConditions: true })
       if (found.status !== "verified_instance") {
         return { schemaVersion: PLAN_SCHEMA_VERSION, kind: "clarification", goal: "自由顶点题设未核验", factIds: [], questions: ["这条题设目前无法生成可核验的三棱锥示意图；请补充或用手工画布。"] }
       }

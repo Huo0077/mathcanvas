@@ -377,4 +377,57 @@ describe("V0a opt-in local free-apex diagram intent", () => {
       expect(result.kind, input).toBe("clarification")
     }
   })
+
+  /**
+   * **原话写死的坐标必须真的进图**（计划 V0a 点名的独立 RED 条件）。
+   *
+   * 只管"这句话认不认"：坐标段固定落在「中，」与「⊥」之间。**开关关着时一个字也不认**，
+   * 所以它不改变默认规划器的行为。
+   */
+  const coordinatePrompt = "在三棱锥D-ABC中，A=(0,0,0)，AD⊥平面ABC，自由点D，画示意图"
+
+  it("keeps the explicit-coordinate sentence invisible while the flag is off", () => {
+    expect(matchLocalIntent(coordinatePrompt)).toBeNull()
+    expect(localIntentSkillIds(coordinatePrompt)).toEqual([])
+  })
+
+  it("accepts the bounded explicit-coordinate sentence and honours the stated coordinate", async () => {
+    expect(localIntentSkillIds(coordinatePrompt, { enableFreeApex: true })).toContain("spatial-modeling")
+    const built = (await createLocalPlanner({ enableFreeApex: true }).plan({ userMessage: coordinatePrompt } as never)).plan
+    expect(built.kind).toBe("plan")
+    if (built.kind !== "plan") return
+    const vertices = (built.actions[0].inputs as unknown as { vertices: { x: number; y: number; z: number }[] }).vertices
+    // 「题面说 A=(0,0,0)」与「候选把 A 放在 (0,0,0)」必须是同一件事，不是各说各的。
+    expect(vertices[0]).toEqual({ x: 0, y: 0, z: 0 })
+    const doc = createEmptyDocument("geometry3d")
+    const compiled = compilePlan(built, { document: doc, prompt: coordinatePrompt, diagramWitnessSearch: true, conversationId: "local-diagram", documentGeneration: doc.revision })
+    expect(compiled.ok).toBe(true)
+    expect(compiled.diagramVerification?.status).toBe("passed")
+    expect(compiled.diagramVerification?.checks.some((check) => check.sourceText === "A=(0,0,0)" && check.status === "passed")).toBe(true)
+  })
+
+  it("refuses any diagram when the stated coordinate is not one the candidate can honour", async () => {
+    // 同一个句式、只改一个数：这一条**不能**因为"形状对得上"就放行。
+    const conflicting = "在三棱锥D-ABC中，A=(5,5,5)，AD⊥平面ABC，自由点D，画示意图"
+    /**
+     * **先把"假绿"堵掉**：如果这句话压根不被认识，`clarification` 也会成立，
+     * 那条断言就什么都没证明。所以先钉住"它**被认出来了**"，再钉"仍然拒绝"。
+     */
+    expect(matchLocalIntent(conflicting, { enableFreeApex: true })).not.toBeNull()
+    const result = (await createLocalPlanner({ enableFreeApex: true }).plan({ userMessage: conflicting } as never)).plan
+    expect(result.kind).toBe("clarification")
+    // 被认出来之后，拒绝的理由必须是"题设没被核验"，而不是"我又不认识这条指令了"。
+    if (result.kind === "clarification") expect(result.questions.join(" ")).toContain("核验")
+  })
+
+  it("does not accept coordinates for the free apex or for a vertex outside the named base", () => {
+    // 顶点是**自由点**：给它写死坐标等于换了一条题设；环外名字更是这套窄语法没承诺过的写法。
+    for (const input of [
+      "在三棱锥D-ABC中，D=(0,0,2)，AD⊥平面ABC，自由点D，画示意图",
+      "在三棱锥D-ABC中，Q=(0,0,0)，AD⊥平面ABC，自由点D，画示意图",
+      "在三棱锥D-ABC中，A=(0,0)，AD⊥平面ABC，自由点D，画示意图"
+    ]) {
+      expect(matchLocalIntent(input, { enableFreeApex: true }), input).toBeNull()
+    }
+  })
 })

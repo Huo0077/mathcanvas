@@ -1,4 +1,3 @@
-import { parseObligationIR } from "./obligationIR"
 import type { GeometryDocument, Workspace } from "@draw/dsl"
 import { commitTransaction, compileAction, createIdAllocator, solidTopology3, type ActionContext, type DomainOperation, type DraftAction, type IdAllocator } from "@draw/scene-graph"
 import { sectionSolid3, validatePrismInput } from "@draw/geometry-kernel"
@@ -649,8 +648,20 @@ function witnessSearchInput(ir: Parameters<typeof searchWitness>[0]["obligations
  * 返回的 `status` 与 benchmark 见证层的词表**逐字对应**（`verified_instance` /
  * `unverified_instance` / `no_witness`），所以那一层不需要任何新判断。
  */
-export function searchWitnessForPrompt(prompt: string): ReturnType<typeof searchWitness> {
-  return searchWitness(witnessSearchInput(parseObligationIR(prompt), prompt))
+export function searchWitnessForPrompt(prompt: string, options: { spatialPointConditions?: boolean } = {}): ReturnType<typeof searchWitness> {
+  /**
+   * **解析入口与救援路径共用同一个函数**（`parseObligationWithLegacy`），只是开关由调用方给。
+   *
+   * 早先这里写的是 `parseObligationIR(prompt)` —— 那等价于"永远不带 `spatialPointConditions`"，
+   * 于是**离线入口与救援路径看到的题设不是同一份**：救援路径在 V0a 开关打开时会认出原话里
+   * 写死的坐标（`planCompiler` 上方那句 `spatialPointConditions: context.diagramWitnessSearch`），
+   * 而离线入口认不出。同一道题两条路给出不同结论，正是本仓"同一个判断不许写两遍"要挡的事。
+   *
+   * 缺省仍然是 `false`：`bench:agent` 的见证层读数是在"开关全关"下取的，改了缺省会让那批历史
+   * 读数不可比。要坐标判据的调用方（V0a 的本地规划器）显式传 `true`。
+   */
+  const parsed = parseObligationWithLegacy(prompt, { spatialPointConditions: options.spatialPointConditions === true })
+  return searchWitness(witnessSearchInput(parsed.ir, prompt))
 }
 function rescuedByWitnessSearch(context: PlanCompileContext, first: CompileOnceOutcome): PlanCompileResult | null {
   const report = first.result.diagramVerification

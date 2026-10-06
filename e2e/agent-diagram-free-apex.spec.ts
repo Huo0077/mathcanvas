@@ -61,6 +61,45 @@ test("the experimental route does not silently discard an unsupported above-the-
   await expect(page.locator(".algebra-panel .object-row")).toHaveCount(0)
 })
 
+/**
+ * **原话写死的坐标：正例**（计划 V0a 的显式坐标 RED 条件）。
+ *
+ * 为什么必须与下面那条反例**成对**：单独一条"错坐标被拒"证明不了任何事 ——
+ * 这句话压根不被认识时，结果同样是"没有草稿"。正例钉住"这个句式是被接受的"，
+ * 反例才谈得上证明"拒绝是因为题设不成立"。
+ */
+test("accepts a bounded explicit-coordinate sentence and lists the stated coordinate as a verified premise", async ({ page }) => {
+  await page.getByRole("button", { name: "设置" }).click()
+  await page.getByRole("switch", { name: "示意图见证搜索" }).click()
+  await openAgent(page)
+  await send(page, "在三棱锥D-ABC中，A=(0,0,0)，AD⊥平面ABC，自由点D，画示意图")
+
+  const panel = page.getByRole("region", { name: "确认改动" }).last()
+  await expect(panel).toBeVisible()
+  const check = panel.getByRole("region", { name: "题设核验" })
+  await expect(check).toHaveAttribute("data-status", "passed")
+  // 题面里写的那个坐标必须**逐字**出现在核验清单里，而不是被静默吞掉。
+  await expect(check).toContainText("A=(0,0,0)")
+  await expect(check).toContainText("AD⊥平面ABC")
+})
+
+/**
+ * **原话写死的坐标：反例**（同一个句式、只改一个数）。
+ *
+ * 构造器把 A 放在原点，而题面说 A=(5,5,5) —— 这不是"图不够好看"，是**题设没被满足**，
+ * 所以必须拒绝，且**不许**留下草稿或占用撤销历史。
+ */
+test("refuses the same sentence when the stated coordinate contradicts the figure", async ({ page }) => {
+  await page.getByRole("button", { name: "设置" }).click()
+  await page.getByRole("switch", { name: "示意图见证搜索" }).click()
+  await openAgent(page)
+  await send(page, "在三棱锥D-ABC中，A=(5,5,5)，AD⊥平面ABC，自由点D，画示意图")
+
+  await expect(page.getByRole("button", { name: "确认并提交" })).toHaveCount(0)
+  await page.getByRole("button", { name: "返回画布" }).click()
+  await expect(page.locator(".algebra-panel .object-row")).toHaveCount(0)
+})
+
 // ---------------------------------------------------------------- 独立回代题设
 
 interface Vec3 { x: number; y: number; z: number }
