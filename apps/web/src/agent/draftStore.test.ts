@@ -1,4 +1,4 @@
-﻿import { compilePlan } from "@draw/agent-core"
+import { compilePlan } from "@draw/agent-core"
 import { createEmptyDocument, type GeometryDocument } from "@draw/dsl"
 import { createDocumentHandle } from "@draw/scene-graph"
 import { describe, expect, it } from "vitest"
@@ -376,5 +376,51 @@ describe("isolated drafts", () => {
     ])
     // 预览那一份也要带着 IR（`previewOf` 是 structuredClone；IR 必须是可克隆的纯数据）。
     expect(store.getPreview(record.draftId)?.diagramVerification?.obligationIR).toEqual(staged.preview.diagramVerification?.obligationIR)
+  })
+})
+
+/**
+ * **草稿层的再核验与编译期核验必须问同一句话**（V0b）。
+ *
+ * ## 这组用例是为一次真实的漏改补的守卫
+ *
+ * 触发条件（"这份计划里有没有能让题面点名拿到坐标的动作"）此前在 `planCompiler` 与
+ * `draftStore` 里**各写了一份** `action.actionId === "solid.create_polyhedron"`。
+ * V0b 只改了编译器那一份，于是：**编译期核验确实跑了，而用户在面板上什么也看不到** ——
+ * 面板那份报告来自**这一层**。
+ *
+ * 当时单元测试抓不到它：`compilePlan` 的用例只走编译期那一条路。
+ * 是浏览器用例先红了一次才暴露出来的。这一组守卫让下次由单元测试抓住。
+ */
+describe("V0b: the draft layer re-verifies planar premises too", () => {
+  const PLANAR_PROMPT = "在三角形ABC中，AB⊥AC，画示意图"
+
+  /** 三个点名平面点；`c` 是唯一变量，用来在"满足题设"与"不满足题设"之间切换。 */
+  function planarTriangle(c: { x: number; y: number }) {
+    return [
+      { actionId: "planar.create_point", actionKey: "A", factIds: [], inputs: { alias: "A", points: [{ x: 0, y: 0 }], label: "A" } },
+      { actionId: "planar.create_point", actionKey: "B", factIds: [], inputs: { alias: "B", points: [{ x: 2, y: 0 }], label: "B" } },
+      { actionId: "planar.create_point", actionKey: "C", factIds: [], inputs: { alias: "C", points: [{ ...c }], label: "C" } }
+    ]
+  }
+
+  it("leaves a passed planar report on the preview the panel reads", async () => {
+    const store = createDraftStore()
+    const record = store.create(baseDocument())
+    const staged = await store.stage(record.draftId, planarTriangle({ x: 0, y: 3 }) as never, record.draftVersion, PLANAR_PROMPT)
+
+    expect(staged.ok).toBe(true)
+    if (!staged.ok) return
+    expect(staged.preview.diagramVerification?.status).toBe("passed")
+    expect(staged.preview.diagramVerification?.checks.map((item) => `${item.sourceText}:${item.status}`)).toEqual(["AB⊥AC:passed"])
+  })
+
+  it("refuses to stage a planar figure whose coordinates contradict the premise", async () => {
+    // C 落在 AB 上 ⇒ 题设不成立。**不许**因为"三条动作都编译过了"就落草稿。
+    const store = createDraftStore()
+    const record = store.create(baseDocument())
+    const staged = await store.stage(record.draftId, planarTriangle({ x: 3, y: 0 }) as never, record.draftVersion, PLANAR_PROMPT)
+
+    expect(staged.ok).toBe(false)
   })
 })

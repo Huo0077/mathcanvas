@@ -1,7 +1,7 @@
 import type { PlanEnvelope, PlannerPort } from "@draw/agent-core"
 import { PLAN_SCHEMA_VERSION, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SPAN, DEFAULT_SOLID_SIZE, defaultPrismBasePolygon, cubeCenterFrom, cubeEdgeLengthFrom, searchWitnessForPrompt } from "@draw/agent-core"
 
-import { PYRAMID_PROMPT, PYRAMID_UNVERIFIED_PROMPT, conicInvariantPlan, obliquePrismSectionPlan, pyramidPlan } from "./representativeFixtures"
+import { PLANAR_TRIANGLE_PROMPT, PYRAMID_PROMPT, PYRAMID_UNVERIFIED_PROMPT, conicInvariantPlan, obliquePrismSectionPlan, planarRightTrianglePlan, pyramidPlan } from "./representativeFixtures"
 
 /**
  * **本地确定性规划器**（Task 2.5 Step 2 的过渡件）。
@@ -264,6 +264,14 @@ function freeApexIntentFor(prompt: string): LocalIntent | null {
 export const LOCAL_INTENTS: readonly LocalIntent[] = [
   { all: ["四棱锥", "PA", "BC", "AD"], exact: PYRAMID_PROMPT, skillIds: ["spatial-modeling"], build: () => pyramidPlan() },
   { all: ["四棱锥", "PA", "BC", "AD", "∠"], exact: PYRAMID_UNVERIFIED_PROMPT, skillIds: ["spatial-modeling"], build: () => pyramidPlan() },
+  /**
+   * **代表题三（计划 V0b）**：平面直角三角形。
+   *
+   * 与上面两条同一条纪律：**精确匹配**一个固定句子，题面只给关系、数字由系统挑并写进 assumptions。
+   * 它**不挂在任何实验开关后面** —— 开关管的是"见证搜索"（欠定题候选的搜索），
+   * 而这条走的是既有的夹具路径（与 `PYRAMID_PROMPT` 同类），默认就该能跑。
+   */
+  { all: ["三角形", "ab⊥ac"], exact: PLANAR_TRIANGLE_PROMPT, skillIds: ["planar-basics"], build: () => planarRightTrianglePlan() },
   /**
    * **代表题一（规格 §8.1）**：斜四棱柱 + 三条棱的中点 + 截面 + 棱上动点。
    *

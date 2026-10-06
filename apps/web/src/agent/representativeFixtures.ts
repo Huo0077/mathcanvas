@@ -1,4 +1,4 @@
-﻿import { buildPrismTopology } from "@draw/geometry-kernel"
+import { buildPrismTopology } from "@draw/geometry-kernel"
 import { PLAN_SCHEMA_VERSION, MIDPOINT_PARAMETER, type DraftAction, type PlanEnvelope } from "@draw/agent-core"
 
 /**
@@ -303,5 +303,36 @@ export function pyramidPlan(withRelations = false): PlanEnvelope {
     ...(withRelations ? { relations: PYRAMID_RELATIONS.map((relation) => ({ ...relation, targets: relation.targets.map((target) => ({ ...target })) })) } : {}),
     // 与其它夹具同一条理由：这是**传输形状**，交给 `parsePlanEnvelope` 校验、由六层编译管线解析。
     actions: actions as unknown as DraftAction[]
+  }
+}
+
+/**
+ * **代表题三：平面直角三角形**（计划 V0b）。
+ *
+ * 题面只给关系、一个数字都没有，所以边长必须由系统挑一组并**写进 `assumptions` 给用户看** ——
+ * 与四棱锥那条夹具同一条纪律。`C` 被取在过 `A` 且垂直于 `AB` 的那条线上，因此 `AB ⊥ AC` 成立；
+ * 题面没有限定 `C` 的具体位置（**欠定**），这里给出的正是那组代表值之一。
+ *
+ * **为什么三个顶点用三条 `planar.create_point` 而不是画线段**：题面点名的是 A、B、C 三个**点**，
+ * 而核验器按**点名表**取坐标；线段动作的端点只是匿名坐标，建不出点名表来 ——
+ * 那样"核验"就只能变成"动作编译成功即视为图正确"，正是 V0b 要堵的洞。
+ */
+export const PLANAR_TRIANGLE_PROMPT = "在三角形ABC中，AB⊥AC，画示意图"
+
+export function planarRightTrianglePlan(): PlanEnvelope {
+  return {
+    schemaVersion: PLAN_SCHEMA_VERSION,
+    kind: "plan",
+    goal: "作三角形 ABC，满足 AB ⊥ AC",
+    factIds: [],
+    assumptions: [
+      "题目没有给定具体尺寸，以下为系统选取的一组示例值（满足题面的直角关系，可在属性栏修改）：A(0, 0)、B(2, 0)、C(0, 3)。",
+      "AB ⊥ AC 只限定 C 落在过 A 且垂直于 AB 的那条线上；题面没有限定 C 的具体位置，这里取的是其中一个示例点。"
+    ],
+    actions: [
+      { actionId: "planar.create_point", actionKey: "A", factIds: [], inputs: { alias: "A", points: [{ x: 0, y: 0 }], label: "A" } },
+      { actionId: "planar.create_point", actionKey: "B", factIds: [], inputs: { alias: "B", points: [{ x: 2, y: 0 }], label: "B" } },
+      { actionId: "planar.create_point", actionKey: "C", factIds: [], inputs: { alias: "C", points: [{ x: 0, y: 3 }], label: "C" } }
+    ] as unknown as DraftAction[]
   }
 }

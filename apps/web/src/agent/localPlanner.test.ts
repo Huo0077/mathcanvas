@@ -3,7 +3,7 @@ import { createEmptyDocument } from "@draw/dsl"
 import { describe, expect, it } from "vitest"
 
 import { createLocalPlanner, LOCAL_INTENTS, localIntentSkillIds, matchLocalIntent, SPHERE_PROMPT } from "./localPlanner"
-import { PYRAMID_PROMPT, PYRAMID_UNVERIFIED_PROMPT } from "./representativeFixtures"
+import { PYRAMID_PROMPT, PYRAMID_UNVERIFIED_PROMPT, PLANAR_TRIANGLE_PROMPT } from "./representativeFixtures"
 
 /**
  * 本地确定性规划器的性质。
@@ -429,5 +429,47 @@ describe("V0a opt-in local free-apex diagram intent", () => {
     ]) {
       expect(matchLocalIntent(input, { enableFreeApex: true }), input).toBeNull()
     }
+  })
+})
+
+/**
+ * **V0b：平面直角三角形的本地入口**。
+ *
+ * 这一条与上一条（三棱锥）最重要的区别：它**不挂在实验开关后面**。
+ * 开关管的是"见证搜索"（欠定题候选的搜索），而这里是既有的夹具路径，
+ * 与 `PYRAMID_PROMPT` 同类 —— 默认就该能跑。
+ */
+describe("V0b local planar right triangle", () => {
+  it("is reachable without enabling any experimental flag", () => {
+    expect(matchLocalIntent(PLANAR_TRIANGLE_PROMPT)).not.toBeNull()
+    expect(localIntentSkillIds(PLANAR_TRIANGLE_PROMPT)).toContain("planar-basics")
+  })
+
+  it("names the three vertices with planar points so the premise verifier has a name table", async () => {
+    const result = (await createLocalPlanner().plan({ userMessage: PLANAR_TRIANGLE_PROMPT } as never)).plan
+    expect(result.kind).toBe("plan")
+    if (result.kind !== "plan") return
+    // 三条**点名**的点动作 —— 线段动作的端点只是匿名坐标，建不出点名表。
+    expect(result.actions.map((action) => action.actionId)).toEqual(["planar.create_point", "planar.create_point", "planar.create_point"])
+    expect(result.actions.map((action) => (action.inputs as { label?: string }).label)).toEqual(["A", "B", "C"])
+
+    const document = createEmptyDocument("conics")
+    const compiled = compilePlan(result, { document, prompt: PLANAR_TRIANGLE_PROMPT, conversationId: "local-planar", documentGeneration: document.revision })
+    expect(compiled.ok, compiled.diagnostics.map((item) => item.detail).join("; ")).toBe(true)
+    // 核验器按**真实落盘**的坐标逐条量，结论必须真的来自那张图。
+    expect(compiled.diagramVerification?.status).toBe("passed")
+    expect(compiled.diagramVerification?.checks.map((item) => `${item.sourceText}:${item.status}`)).toEqual(["AB⊥AC:passed"])
+  })
+
+  it("does not claim a different triangle than the one it draws", async () => {
+    // 反向对照：把夹具挪成 C 落在 AB 上（三点共线），同一条题设**必须**不通过。
+    const result = (await createLocalPlanner().plan({ userMessage: PLANAR_TRIANGLE_PROMPT } as never)).plan
+    expect(result.kind).toBe("plan")
+    if (result.kind !== "plan") return
+    const moved = { ...result, actions: result.actions.map((action, index) => index === 2 ? { ...action, inputs: { ...action.inputs, points: [{ x: 3, y: 0 }] } } : action) }
+    const document = createEmptyDocument("conics")
+    const compiled = compilePlan(moved as typeof result, { document, prompt: PLANAR_TRIANGLE_PROMPT, conversationId: "local-planar", documentGeneration: document.revision })
+    expect(compiled.diagramVerification?.status).toBe("failed")
+    expect(compiled.ok).toBe(false)
   })
 })
