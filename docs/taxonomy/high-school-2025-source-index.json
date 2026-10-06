@@ -853,7 +853,535 @@
       "sourceSection": "五（二）主题四·表2·内容要求",
       "pdfPage": 52,
       "title": "建模或数学探究课题研究"
+    },
+    {
+      "subtypeId": "elective-A-calculus/sequence-limits",
+      "unitId": "elective-A-calculus",
+      "sourceSection": "五（三）A类·内容要求",
+      "pdfPage": 53,
+      "title": "数列极限"
+    },
+    {
+      "subtypeId": "elective-A-calculus/function-limits",
+      "unitId": "elective-A-calculus",
+      "sourceSection": "五（三）A类·内容要求",
+      "pdfPage": 53,
+      "title": "函数极限"
+    },
+    {
+      "subtypeId": "elective-A-calculus/continuity",
+      "unitId": "elective-A-calculus",
+      "sourceSection": "五（三）A类·内容要求",
+      "pdfPage": 53,
+      "title": "连续函数"
+    },
+    {
+      "subtypeId": "elective-A-calculus/derivative-differentials",
+      "unitId": "elective-A-calculus",
+      "sourceSection": "五（三）A类·内容要求",
+      "pdfPage": 53,
+      "title": "导数与微分"
+    },
+    {
+      "subtypeId": "elective-A-calculus/integrals",
+      "unitId": "elective-A-calculus",
+      "sourceSection": "五（三）A类·内容要求",
+      "pdfPage": 53,
+      "title": "定积分"
+    },
+    {
+      "subtypeId": "elective-A-spatial-algebra/vector-algebra",
+      "unitId": "elective-A-spatial-algebra",
+      "sourceSection": "五（三）A类·内容要求",
+      "pdfPage": 56,
+      "title": "空间向量代数"
+    },
+    {
+      "subtypeId": "elective-A-spatial-algebra/matrices",
+      "unitId": "elective-A-spatial-algebra",
+      "sourceSection": "五（三）A类·内容要求",
+      "pdfPage": 56,
+      "title": "三阶矩阵与行列式"
+    },
+    {
+      "subtypeId": "elective-A-spatial-algebra/linear-systems",
+      "unitId": "elective-A-spatial-algebra",
+      "sourceSection": "五（三）A类·内容要求",
+      "pdfPage": 56,
+      "title": "三元一次方程组"
+    },
+    {
+      "subtypeId": "elective-A-spatial-algebra/planes-lines",
+      "unitId": "elective-A-spatial-algebra",
+      "sourceSection": "五（三）A类·内容要求",
+      "pdfPage": 56,
+      "title": "空间平面与直线"
+    },
+    {
+      "subtypeId": "elective-A-spatial-algebra/isometries",
+      "unitId": "elective-A-spatial-algebra",
+      "sourceSection": "五（三）A类·内容要求",
+      "pdfPage": 56,
+      "title": "等距变换"
+    },
+    {
+      "subtypeId": "elective-A-probability-statistics/continuous-rv",
+      "unitId": "elective-A-probability-statistics",
+      "sourceSection": "五（三）A类·内容要求",
+      "pdfPage": 57,
+      "title": "连续型随机变量"
+    },
+    {
+      "subtypeId": "elective-A-probability-statistics/joint-distributions",
+      "unitId": "elective-A-probability-statistics",
+      "sourceSection": "五（三）A类·内容要求",
+      "pdfPage": 57,
+      "title": "二维联合分布"
+    },
+    {
+      "subtypeId": "elective-A-probability-statistics/parameter-estimation",
+      "unitId": "elective-A-probability-statistics",
+      "sourceSection": "五（三）A类·内容要求",
+      "pdfPage": 57,
+      "title": "参数估计"
+    },
+    {
+      "subtypeId": "elective-A-probability-statistics/hypothesis-tests",
+      "unitId": "elective-A-probability-statistics",
+      "sourceSection": "五（三）A类·内容要求",
+      "pdfPage": 57,
+      "title": "假设检验"
+    },
+    {
+      "subtypeId": "elective-A-probability-statistics/bivariate-regression",
+      "unitId": "elective-A-probability-statistics",
+      "sourceSection": "五（三）A类·内容要求",
+      "pdfPage": 57,
+      "title": "二元线性回归模型"
+    },
+    {
+      "subtypeId": "elective-B-calculus/limits",
+      "unitId": "elective-B-calculus",
+      "sourceSection": "五（三）B类·内容要求",
+      "pdfPage": 59,
+      "title": "极限"
+    },
+    {
+      "subtypeId": "elective-B-calculus/derivative-differentials",
+      "unitId": "elective-B-calculus",
+      "sourceSection": "五（三）B类·内容要求",
+      "pdfPage": 59,
+      "title": "导数与微分"
+    },
+    {
+      "subtypeId": "elective-B-calculus/integrals",
+      "unitId": "elective-B-calculus",
+      "sourceSection": "五（三）B类·内容要求",
+      "pdfPage": 59,
+      "title": "定积分"
+    },
+    {
+      "subtypeId": "elective-B-calculus/bivariate-functions",
+      "unitId": "elective-B-calculus",
+      "sourceSection": "五（三）B类·内容要求",
+      "pdfPage": 59,
+      "title": "二元函数"
+    },
+    {
+      "subtypeId": "elective-B-spatial-algebra/vector-algebra",
+      "unitId": "elective-B-spatial-algebra",
+      "sourceSection": "五（三）B类·内容要求",
+      "pdfPage": 61,
+      "title": "空间向量代数"
+    },
+    {
+      "subtypeId": "elective-B-spatial-algebra/matrices",
+      "unitId": "elective-B-spatial-algebra",
+      "sourceSection": "五（三）B类·内容要求",
+      "pdfPage": 61,
+      "title": "三阶矩阵与行列式"
+    },
+    {
+      "subtypeId": "elective-B-spatial-algebra/linear-systems",
+      "unitId": "elective-B-spatial-algebra",
+      "sourceSection": "五（三）B类·内容要求",
+      "pdfPage": 61,
+      "title": "三元一次方程组"
+    },
+    {
+      "subtypeId": "elective-B-applied-statistics/continuous-rv",
+      "unitId": "elective-B-applied-statistics",
+      "sourceSection": "五（三）B类·内容要求",
+      "pdfPage": 62,
+      "title": "连续型随机变量"
+    },
+    {
+      "subtypeId": "elective-B-applied-statistics/joint-distributions",
+      "unitId": "elective-B-applied-statistics",
+      "sourceSection": "五（三）B类·内容要求",
+      "pdfPage": 62,
+      "title": "二维联合分布"
+    },
+    {
+      "subtypeId": "elective-B-applied-statistics/parameter-estimation",
+      "unitId": "elective-B-applied-statistics",
+      "sourceSection": "五（三）B类·内容要求",
+      "pdfPage": 62,
+      "title": "参数估计"
+    },
+    {
+      "subtypeId": "elective-B-applied-statistics/hypothesis-tests",
+      "unitId": "elective-B-applied-statistics",
+      "sourceSection": "五（三）B类·内容要求",
+      "pdfPage": 62,
+      "title": "假设检验"
+    },
+    {
+      "subtypeId": "elective-B-applied-statistics/bivariate-regression",
+      "unitId": "elective-B-applied-statistics",
+      "sourceSection": "五（三）B类·内容要求",
+      "pdfPage": 62,
+      "title": "二元线性回归模型"
+    },
+    {
+      "subtypeId": "elective-B-applied-statistics/clustering",
+      "unitId": "elective-B-applied-statistics",
+      "sourceSection": "五（三）B类·内容要求",
+      "pdfPage": 62,
+      "title": "聚类分析"
+    },
+    {
+      "subtypeId": "elective-B-applied-statistics/orthogonal-design",
+      "unitId": "elective-B-applied-statistics",
+      "sourceSection": "五（三）B类·内容要求",
+      "pdfPage": 62,
+      "title": "正交设计"
+    },
+    {
+      "subtypeId": "elective-B-models/linear",
+      "unitId": "elective-B-models",
+      "sourceSection": "五（三）B类·内容要求",
+      "pdfPage": 64,
+      "title": "线性模型"
+    },
+    {
+      "subtypeId": "elective-B-models/quadratic-curves",
+      "unitId": "elective-B-models",
+      "sourceSection": "五（三）B类·内容要求",
+      "pdfPage": 64,
+      "title": "二次曲线模型"
+    },
+    {
+      "subtypeId": "elective-B-models/exponential",
+      "unitId": "elective-B-models",
+      "sourceSection": "五（三）B类·内容要求",
+      "pdfPage": 64,
+      "title": "指数函数模型"
+    },
+    {
+      "subtypeId": "elective-B-models/trigonometric",
+      "unitId": "elective-B-models",
+      "sourceSection": "五（三）B类·内容要求",
+      "pdfPage": 64,
+      "title": "三角函数模型"
+    },
+    {
+      "subtypeId": "elective-B-models/parametric",
+      "unitId": "elective-B-models",
+      "sourceSection": "五（三）B类·内容要求",
+      "pdfPage": 64,
+      "title": "参变数模型"
+    },
+    {
+      "subtypeId": "elective-C-logic-inference/definition-proposition",
+      "unitId": "elective-C-logic-inference",
+      "sourceSection": "五（三）C类·内容要求",
+      "pdfPage": 66,
+      "title": "数学定义与命题推理"
+    },
+    {
+      "subtypeId": "elective-C-logic-inference/premises",
+      "unitId": "elective-C-logic-inference",
+      "sourceSection": "五（三）C类·内容要求",
+      "pdfPage": 66,
+      "title": "数学推理的前提"
+    },
+    {
+      "subtypeId": "elective-C-logic-inference/inference-types",
+      "unitId": "elective-C-logic-inference",
+      "sourceSection": "五（三）C类·内容要求",
+      "pdfPage": 66,
+      "title": "推理类型"
+    },
+    {
+      "subtypeId": "elective-C-logic-inference/proof-methods",
+      "unitId": "elective-C-logic-inference",
+      "sourceSection": "五（三）C类·内容要求",
+      "pdfPage": 66,
+      "title": "数学证明方法"
+    },
+    {
+      "subtypeId": "elective-C-logic-inference/axioms",
+      "unitId": "elective-C-logic-inference",
+      "sourceSection": "五（三）C类·内容要求",
+      "pdfPage": 66,
+      "title": "公理化思想"
+    },
+    {
+      "subtypeId": "elective-C-models/economic",
+      "unitId": "elective-C-models",
+      "sourceSection": "五（三）C类·内容要求",
+      "pdfPage": 67,
+      "title": "经济数学模型"
+    },
+    {
+      "subtypeId": "elective-C-models/social",
+      "unitId": "elective-C-models",
+      "sourceSection": "五（三）C类·内容要求",
+      "pdfPage": 67,
+      "title": "社会数学模型"
+    },
+    {
+      "subtypeId": "elective-C-social-survey/overview",
+      "unitId": "elective-C-social-survey",
+      "sourceSection": "五（三）C类·内容要求",
+      "pdfPage": 69,
+      "title": "社会调查概论"
+    },
+    {
+      "subtypeId": "elective-C-social-survey/survey-design",
+      "unitId": "elective-C-social-survey",
+      "sourceSection": "五（三）C类·内容要求",
+      "pdfPage": 69,
+      "title": "调查方案设计"
+    },
+    {
+      "subtypeId": "elective-C-social-survey/sample-design",
+      "unitId": "elective-C-social-survey",
+      "sourceSection": "五（三）C类·内容要求",
+      "pdfPage": 69,
+      "title": "抽样设计"
+    },
+    {
+      "subtypeId": "elective-C-social-survey/data-analysis",
+      "unitId": "elective-C-social-survey",
+      "sourceSection": "五（三）C类·内容要求",
+      "pdfPage": 69,
+      "title": "调查数据分析"
+    },
+    {
+      "subtypeId": "elective-C-social-survey/report",
+      "unitId": "elective-C-social-survey",
+      "sourceSection": "五（三）C类·内容要求",
+      "pdfPage": 69,
+      "title": "调查数据报告"
+    },
+    {
+      "subtypeId": "elective-C-social-survey/case-study",
+      "unitId": "elective-C-social-survey",
+      "sourceSection": "五（三）C类·内容要求",
+      "pdfPage": 69,
+      "title": "调查案例选讲"
+    },
+    {
+      "subtypeId": "elective-D-beauty/simplicity",
+      "unitId": "elective-D-beauty",
+      "sourceSection": "五（三）D类·内容要求",
+      "pdfPage": 70,
+      "title": "数学简洁之美"
+    },
+    {
+      "subtypeId": "elective-D-beauty/symmetry",
+      "unitId": "elective-D-beauty",
+      "sourceSection": "五（三）D类·内容要求",
+      "pdfPage": 70,
+      "title": "数学对称之美"
+    },
+    {
+      "subtypeId": "elective-D-beauty/periodicity",
+      "unitId": "elective-D-beauty",
+      "sourceSection": "五（三）D类·内容要求",
+      "pdfPage": 70,
+      "title": "数学周期之美"
+    },
+    {
+      "subtypeId": "elective-D-beauty/harmony",
+      "unitId": "elective-D-beauty",
+      "sourceSection": "五（三）D类·内容要求",
+      "pdfPage": 70,
+      "title": "数学和谐之美"
+    },
+    {
+      "subtypeId": "elective-D-music/sound-sine",
+      "unitId": "elective-D-music",
+      "sourceSection": "五（三）D类·内容要求",
+      "pdfPage": 71,
+      "title": "声波与正弦函数"
+    },
+    {
+      "subtypeId": "elective-D-music/scales-sequences",
+      "unitId": "elective-D-music",
+      "sourceSection": "五（三）D类·内容要求",
+      "pdfPage": 71,
+      "title": "律制音阶与数列"
+    },
+    {
+      "subtypeId": "elective-D-music/rhythm-fractions",
+      "unitId": "elective-D-music",
+      "sourceSection": "五（三）D类·内容要求",
+      "pdfPage": 71,
+      "title": "节拍与分数"
+    },
+    {
+      "subtypeId": "elective-D-music/instruments",
+      "unitId": "elective-D-music",
+      "sourceSection": "五（三）D类·内容要求",
+      "pdfPage": 71,
+      "title": "乐器中的数学"
+    },
+    {
+      "subtypeId": "elective-D-music/music",
+      "unitId": "elective-D-music",
+      "sourceSection": "五（三）D类·内容要求",
+      "pdfPage": 71,
+      "title": "乐曲中的数学"
+    },
+    {
+      "subtypeId": "elective-D-art/painting",
+      "unitId": "elective-D-art",
+      "sourceSection": "五（三）D类·内容要求",
+      "pdfPage": 72,
+      "title": "绘画与数学"
+    },
+    {
+      "subtypeId": "elective-D-art/other-art",
+      "unitId": "elective-D-art",
+      "sourceSection": "五（三）D类·内容要求",
+      "pdfPage": 72,
+      "title": "其他美术作品中的数学"
+    },
+    {
+      "subtypeId": "elective-D-art/computing",
+      "unitId": "elective-D-art",
+      "sourceSection": "五（三）D类·内容要求",
+      "pdfPage": 72,
+      "title": "美术与计算机"
+    },
+    {
+      "subtypeId": "elective-D-art/artists",
+      "unitId": "elective-D-art",
+      "sourceSection": "五（三）D类·内容要求",
+      "pdfPage": 72,
+      "title": "美术家的数学思想"
+    },
+    {
+      "subtypeId": "elective-D-sports/principles",
+      "unitId": "elective-D-sports",
+      "sourceSection": "五（三）D类·内容要求",
+      "pdfPage": 73,
+      "title": "运动场上的数学原理"
+    },
+    {
+      "subtypeId": "elective-D-sports/data",
+      "unitId": "elective-D-sports",
+      "sourceSection": "五（三）D类·内容要求",
+      "pdfPage": 73,
+      "title": "运动成绩的数据分析"
+    },
+    {
+      "subtypeId": "elective-D-sports/scheduling",
+      "unitId": "elective-D-sports",
+      "sourceSection": "五（三）D类·内容要求",
+      "pdfPage": 73,
+      "title": "运动赛事的规划"
+    },
+    {
+      "subtypeId": "elective-D-sports/facilities",
+      "unitId": "elective-D-sports",
+      "sourceSection": "五（三）D类·内容要求",
+      "pdfPage": 73,
+      "title": "体育用具及设施中的数学知识"
+    },
+    {
+      "subtypeId": "elective-E-broader-horizons/robotics",
+      "unitId": "elective-E-broader-horizons",
+      "sourceSection": "五（三）E类·例如",
+      "pdfPage": 74,
+      "title": "机器人与数学",
+      "exampleOnly": true
+    },
+    {
+      "subtypeId": "elective-E-broader-horizons/symmetry-group",
+      "unitId": "elective-E-broader-horizons",
+      "sourceSection": "五（三）E类·例如",
+      "pdfPage": 74,
+      "title": "对称与群",
+      "exampleOnly": true
+    },
+    {
+      "subtypeId": "elective-E-broader-horizons/spherical-geometry",
+      "unitId": "elective-E-broader-horizons",
+      "sourceSection": "五（三）E类·例如",
+      "pdfPage": 74,
+      "title": "球面几何",
+      "exampleOnly": true
+    },
+    {
+      "subtypeId": "elective-E-broader-horizons/euler-surfaces",
+      "unitId": "elective-E-broader-horizons",
+      "sourceSection": "五（三）E类·例如",
+      "pdfPage": 74,
+      "title": "欧拉公式与闭曲面",
+      "exampleOnly": true
+    },
+    {
+      "subtypeId": "elective-E-broader-horizons/finite-differences",
+      "unitId": "elective-E-broader-horizons",
+      "sourceSection": "五（三）E类·例如",
+      "pdfPage": 74,
+      "title": "数列与差分",
+      "exampleOnly": true
+    },
+    {
+      "subtypeId": "elective-E-broader-horizons/number-theory",
+      "unitId": "elective-E-broader-horizons",
+      "sourceSection": "五（三）E类·例如",
+      "pdfPage": 74,
+      "title": "初等数论初步",
+      "exampleOnly": true
+    },
+    {
+      "subtypeId": "elective-E-daily-life/life",
+      "unitId": "elective-E-daily-life",
+      "sourceSection": "五（三）E类·例如",
+      "pdfPage": 74,
+      "title": "生活中的数学",
+      "exampleOnly": true
+    },
+    {
+      "subtypeId": "elective-E-daily-life/finance",
+      "unitId": "elective-E-daily-life",
+      "sourceSection": "五（三）E类·例如",
+      "pdfPage": 74,
+      "title": "家庭理财与数学",
+      "exampleOnly": true
+    },
+    {
+      "subtypeId": "elective-E-local-context/architecture",
+      "unitId": "elective-E-local-context",
+      "sourceSection": "五（三）E类·例如",
+      "pdfPage": 74,
+      "title": "地方建筑与数学",
+      "exampleOnly": true
+    },
+    {
+      "subtypeId": "elective-E-local-context/economic-survey",
+      "unitId": "elective-E-local-context",
+      "sourceSection": "五（三）E类·例如",
+      "pdfPage": 74,
+      "title": "家乡经济调查与数据分析",
+      "exampleOnly": true
     }
   ],
-  "contentIndexScope": "必修与选择性必修内容要求的单元内一级短标题；选修 A–E、正文更细条款及高考题集仍待拆解；星号选学另标"
+  "contentIndexScope": "必修/选择性必修 67 条一级内容要求 + 选修 A–D 64 条一级内容要求 + 选修 E 10 个“例如”举例；E 地方特色与学校课程无固定上限，大学先修三个专题只列上层标题；均不是金标准或支持声明"
 }

@@ -565,7 +565,33 @@
       "theme": "A类课程",
       "title": "微积分",
       "category": "A",
-      "subtypes": []
+      "subtypes": [
+        {
+          "subtypeId": "elective-A-calculus/sequence-limits",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-A-calculus/function-limits",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-A-calculus/continuity",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-A-calculus/derivative-differentials",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-A-calculus/integrals",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        }
+      ]
     },
     {
       "unitId": "elective-A-spatial-algebra",
@@ -575,7 +601,33 @@
       "theme": "A类课程",
       "title": "空间向量与代数",
       "category": "A",
-      "subtypes": []
+      "subtypes": [
+        {
+          "subtypeId": "elective-A-spatial-algebra/vector-algebra",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-A-spatial-algebra/matrices",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-A-spatial-algebra/linear-systems",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-A-spatial-algebra/planes-lines",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-A-spatial-algebra/isometries",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        }
+      ]
     },
     {
       "unitId": "elective-A-probability-statistics",
@@ -585,7 +637,33 @@
       "theme": "A类课程",
       "title": "概率与统计",
       "category": "A",
-      "subtypes": []
+      "subtypes": [
+        {
+          "subtypeId": "elective-A-probability-statistics/continuous-rv",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-A-probability-statistics/joint-distributions",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-A-probability-statistics/parameter-estimation",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-A-probability-statistics/hypothesis-tests",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-A-probability-statistics/bivariate-regression",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        }
+      ]
     },
     {
       "unitId": "elective-B-calculus",
@@ -595,7 +673,28 @@
       "theme": "B类课程",
       "title": "微积分",
       "category": "B",
-      "subtypes": []
+      "subtypes": [
+        {
+          "subtypeId": "elective-B-calculus/limits",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-B-calculus/derivative-differentials",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-B-calculus/integrals",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-B-calculus/bivariate-functions",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        }
+      ]
     },
     {
       "unitId": "elective-B-spatial-algebra",
@@ -605,7 +704,23 @@
       "theme": "B类课程",
       "title": "空间向量与代数",
       "category": "B",
-      "subtypes": []
+      "subtypes": [
+        {
+          "subtypeId": "elective-B-spatial-algebra/vector-algebra",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-B-spatial-algebra/matrices",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-B-spatial-algebra/linear-systems",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        }
+      ]
     },
     {
       "unitId": "elective-B-applied-statistics",
@@ -615,7 +730,43 @@
       "theme": "B类课程",
       "title": "应用统计",
       "category": "B",
-      "subtypes": []
+      "subtypes": [
+        {
+          "subtypeId": "elective-B-applied-statistics/continuous-rv",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-B-applied-statistics/joint-distributions",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-B-applied-statistics/parameter-estimation",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-B-applied-statistics/hypothesis-tests",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-B-applied-statistics/bivariate-regression",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-B-applied-statistics/clustering",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-B-applied-statistics/orthogonal-design",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        }
+      ]
     },
     {
       "unitId": "elective-B-models",
@@ -625,7 +776,33 @@
       "theme": "B类课程",
       "title": "模型",
       "category": "B",
-      "subtypes": []
+      "subtypes": [
+        {
+          "subtypeId": "elective-B-models/linear",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-B-models/quadratic-curves",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-B-models/exponential",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-B-models/trigonometric",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-B-models/parametric",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        }
+      ]
     },
     {
       "unitId": "elective-C-logic-inference",
@@ -635,7 +812,33 @@
       "theme": "C类课程",
       "title": "逻辑推理初步",
       "category": "C",
-      "subtypes": []
+      "subtypes": [
+        {
+          "subtypeId": "elective-C-logic-inference/definition-proposition",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-C-logic-inference/premises",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-C-logic-inference/inference-types",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-C-logic-inference/proof-methods",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-C-logic-inference/axioms",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        }
+      ]
     },
     {
       "unitId": "elective-C-models",
@@ -645,7 +848,18 @@
       "theme": "C类课程",
       "title": "数学模型",
       "category": "C",
-      "subtypes": []
+      "subtypes": [
+        {
+          "subtypeId": "elective-C-models/economic",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-C-models/social",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        }
+      ]
     },
     {
       "unitId": "elective-C-social-survey",
@@ -655,7 +869,38 @@
       "theme": "C类课程",
       "title": "社会调查与数据分析",
       "category": "C",
-      "subtypes": []
+      "subtypes": [
+        {
+          "subtypeId": "elective-C-social-survey/overview",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-C-social-survey/survey-design",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-C-social-survey/sample-design",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-C-social-survey/data-analysis",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-C-social-survey/report",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-C-social-survey/case-study",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        }
+      ]
     },
     {
       "unitId": "elective-D-beauty",
@@ -665,7 +910,28 @@
       "theme": "D类课程",
       "title": "美与数学",
       "category": "D",
-      "subtypes": []
+      "subtypes": [
+        {
+          "subtypeId": "elective-D-beauty/simplicity",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-D-beauty/symmetry",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-D-beauty/periodicity",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-D-beauty/harmony",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        }
+      ]
     },
     {
       "unitId": "elective-D-music",
@@ -675,7 +941,33 @@
       "theme": "D类课程",
       "title": "音乐中的数学",
       "category": "D",
-      "subtypes": []
+      "subtypes": [
+        {
+          "subtypeId": "elective-D-music/sound-sine",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-D-music/scales-sequences",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-D-music/rhythm-fractions",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-D-music/instruments",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-D-music/music",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        }
+      ]
     },
     {
       "unitId": "elective-D-art",
@@ -685,7 +977,28 @@
       "theme": "D类课程",
       "title": "美术中的数学",
       "category": "D",
-      "subtypes": []
+      "subtypes": [
+        {
+          "subtypeId": "elective-D-art/painting",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-D-art/other-art",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-D-art/computing",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-D-art/artists",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        }
+      ]
     },
     {
       "unitId": "elective-D-sports",
@@ -695,7 +1008,28 @@
       "theme": "D类课程",
       "title": "体育运动中的数学",
       "category": "D",
-      "subtypes": []
+      "subtypes": [
+        {
+          "subtypeId": "elective-D-sports/principles",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-D-sports/data",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-D-sports/scheduling",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-D-sports/facilities",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        }
+      ]
     },
     {
       "unitId": "elective-E-broader-horizons",
@@ -706,7 +1040,38 @@
       "title": "拓展视野",
       "category": "E",
       "openEnded": true,
-      "subtypes": []
+      "subtypes": [
+        {
+          "subtypeId": "elective-E-broader-horizons/robotics",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-E-broader-horizons/symmetry-group",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-E-broader-horizons/spherical-geometry",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-E-broader-horizons/euler-surfaces",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-E-broader-horizons/finite-differences",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-E-broader-horizons/number-theory",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        }
+      ]
     },
     {
       "unitId": "elective-E-daily-life",
@@ -717,7 +1082,18 @@
       "title": "日常生活",
       "category": "E",
       "openEnded": true,
-      "subtypes": []
+      "subtypes": [
+        {
+          "subtypeId": "elective-E-daily-life/life",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-E-daily-life/finance",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        }
+      ]
     },
     {
       "unitId": "elective-E-local-context",
@@ -728,7 +1104,18 @@
       "title": "地方特色",
       "category": "E",
       "openEnded": true,
-      "subtypes": []
+      "subtypes": [
+        {
+          "subtypeId": "elective-E-local-context/architecture",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "elective-E-local-context/economic-survey",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        }
+      ]
     },
     {
       "unitId": "elective-E-university-preparation",
@@ -784,5 +1171,5 @@
     "separate": true,
     "status": "not_measured"
   },
-  "indexScope": "表层 43 条、其中必修/选择性必修一级内容要求 67 条已入源索引；所有原子题型仍未判命题性质且无金标，选修 A–E/高考仍待拆分"
+  "indexScope": "43 表层来源项 + 131 条规定性一级要求 + E 类 10 个非穷尽示例；新子型均未分类/无金标，高考标签尚空，开放 E 范围无界，审计不能宣称 ready"
 }

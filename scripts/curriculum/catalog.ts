@@ -4,6 +4,7 @@ export interface SourceUnit {
   category?: "A" | "B" | "C" | "D" | "E"
   sourceSection: string
   pdfPage: number
+  openEnded?: boolean
 }
 
 export interface SourceSubtype {
@@ -13,6 +14,7 @@ export interface SourceSubtype {
   pdfPage: number
   title: string
   optionalForExam?: boolean
+  exampleOnly?: boolean
 }
 
 export interface CurriculumSubtype {
@@ -35,6 +37,8 @@ export interface CurriculumCase {
 export interface CurriculumAudit {
   missingUnits: string[]
   missingSubtypes: string[]
+  missingExamples: string[]
+  openEndedUnits: string[]
   unclassified: string[]
   missingCases: string[]
   duplicateIds: string[]
@@ -52,6 +56,8 @@ export interface CurriculumAudit {
 export function auditCoverage(official: readonly SourceUnit[], catalog: readonly CurriculumUnit[], cases: readonly CurriculumCase[], content: readonly SourceSubtype[] = []): CurriculumAudit {
   const missingUnits: string[] = []
   const missingSubtypes: string[] = []
+  const missingExamples: string[] = []
+  const openEndedUnits: string[] = []
   const unclassified: string[] = []
   const missingCases: string[] = []
   const duplicateIds: string[] = []
@@ -83,6 +89,7 @@ export function auditCoverage(official: readonly SourceUnit[], catalog: readonly
   }
   for (const unit of official) {
     if (!catalog.some((entry) => entry.unitId === unit.unitId)) missingUnits.push(unit.unitId)
+    if (unit.openEnded === true) openEndedUnits.push(unit.unitId)
   }
   for (const unit of catalog) {
     if (catalogIds.has(unit.unitId)) duplicateIds.push(unit.unitId)
@@ -90,7 +97,7 @@ export function auditCoverage(official: readonly SourceUnit[], catalog: readonly
     const source = officialById.get(unit.unitId)
     if (!source) outOfScope.push(unit.unitId)
     if (!source || !Number.isInteger(unit.pdfPage) || unit.pdfPage < 1 || unit.pdfPage > 171
-      || unit.pdfPage !== source.pdfPage || !unit.sourceSection.trim() || unit.sourceSection !== source.sourceSection || unit.track !== source.track || unit.category !== source.category) {
+      || unit.pdfPage !== source.pdfPage || !unit.sourceSection.trim() || unit.sourceSection !== source.sourceSection || unit.track !== source.track || unit.category !== source.category || unit.openEnded !== source.openEnded) {
       invalidSources.push(unit.unitId)
     }
     if (unit.subtypes.length === 0) unclassified.push(unit.unitId)
@@ -111,11 +118,11 @@ export function auditCoverage(official: readonly SourceUnit[], catalog: readonly
     }
   }
   for (const entry of content) {
-    if (!subtypeIds.has(entry.subtypeId)) missingSubtypes.push(entry.subtypeId)
+    if (!subtypeIds.has(entry.subtypeId)) (entry.exampleOnly === true ? missingExamples : missingSubtypes).push(entry.subtypeId)
   }
   for (const entry of cases) {
     if (entry.scope === "curriculum" && (!subtypeIds.has(entry.subtypeId) || !referencedCaseIds.has(entry.caseId))) outOfScope.push(entry.caseId)
   }
-  const ready = official.length > 0 && [missingUnits, missingSubtypes, unclassified, missingCases, duplicateIds, outOfScope, invalidSources].every((issues) => issues.length === 0)
-  return { missingUnits, missingSubtypes, unclassified, missingCases, duplicateIds, outOfScope, invalidSources, nonPropositional, ready }
+  const ready = official.length > 0 && [missingUnits, missingSubtypes, missingExamples, openEndedUnits, unclassified, missingCases, duplicateIds, outOfScope, invalidSources].every((issues) => issues.length === 0)
+  return { missingUnits, missingSubtypes, missingExamples, openEndedUnits, unclassified, missingCases, duplicateIds, outOfScope, invalidSources, nonPropositional, ready }
 }

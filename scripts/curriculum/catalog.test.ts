@@ -131,9 +131,43 @@ it("refuses to count an unclassified atomic content item even with example cases
 /** Break guarded: elective entries alone cannot stand in for compulsory/selective content requirements. */
 it("indexes every reviewed compulsory and selective content heading without claiming cases exist", () => {
   const content = officialIndex.expectedSubtypes as SourceSubtype[]
-  expect(content).toHaveLength(67) // hand-reviewed content-requirement headings on PDF pages 17–52
-  expect(content.filter((entry) => entry.optionalForExam)).toHaveLength(5)
+  const coreContent = content.filter((entry) => !entry.unitId.startsWith("elective-"))
+  expect(coreContent).toHaveLength(67) // hand-reviewed content-requirement headings on PDF pages 17–52
+  expect(coreContent.filter((entry) => entry.optionalForExam)).toHaveLength(5)
   const report = auditCoverage(officialIndex.expectedUnits as SourceUnit[], workingCatalog.units as CurriculumUnit[], [], content)
   expect(report.missingSubtypes).toEqual([])
   expect(report.ready).toBe(false) // zero gold cases, elective subtypes and exam tags still missing
+})
+
+/** Break guarded: school-defined elective E offerings have no finite universal list. */
+it("does not proclaim an open-ended elective E syllabus complete from a finite sample", () => {
+  const e: SourceUnit = { unitId: "elective-E-local", track: "elective", category: "E", sourceSection: "五（三）E类", pdfPage: 74, openEnded: true }
+  const editable: CurriculumUnit = { ...e, subtypes: [{ subtypeId: "school-example", taskKind: "non_propositional", goldCaseIds: ["p", "n", "a"] }] }
+  const cases = validCaseRoles.map((entry) => ({ ...entry, subtypeId: "school-example" }))
+  const report = auditCoverage([e], [editable], cases)
+  expect(report.openEndedUnits).toEqual(["elective-E-local"])
+  expect(report.ready).toBe(false)
+})
+
+/** Break guarded: elective A-D requirements and E illustrative examples are distinct evidence scopes. */
+it("keeps required elective headings separate from open-ended examples", () => {
+  const content = officialIndex.expectedSubtypes as SourceSubtype[]
+  expect(content.filter((item) => item.unitId.startsWith("elective-") && !item.exampleOnly)).toHaveLength(64)
+  expect(content.filter((item) => item.unitId.startsWith("elective-E-") && item.exampleOnly)).toHaveLength(10)
+  const result = auditCoverage(officialIndex.expectedUnits as SourceUnit[], workingCatalog.units as CurriculumUnit[], [], content)
+  expect(result.missingSubtypes).toEqual([])
+  expect(result.openEndedUnits).toEqual([
+    "elective-E-broader-horizons", "elective-E-daily-life", "elective-E-local-context", "elective-E-university-preparation"
+  ])
+  expect(result.ready).toBe(false)
+})
+
+/** Break guarded: an E-class example is a recorded example, not a compulsory theorem type. */
+it("reports an omitted elective E example separately from missing required content", () => {
+  const e: SourceUnit = { unitId: "elective-E-local", track: "elective", category: "E", sourceSection: "五（三）E类", pdfPage: 74, openEnded: true }
+  const example: SourceSubtype = { subtypeId: "elective-E-local/bridge", unitId: e.unitId, sourceSection: "五（三）E类·例如", pdfPage: 74, title: "乡土建筑", exampleOnly: true }
+  const report = auditCoverage([e], [{ ...e, subtypes: [] }], [], [example])
+  expect(report.missingExamples).toEqual(["elective-E-local/bridge"])
+  expect(report.missingSubtypes).toEqual([])
+  expect(report.ready).toBe(false)
 })
