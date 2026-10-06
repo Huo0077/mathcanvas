@@ -52,6 +52,7 @@ export const DRAFT_ACTION_IDS = [
   "dynamic.create_locus",
   "dynamic.set_radius_rule",
   "function.create_tangent",
+  "function.create_graph",
   "function.analyze",
   "section.create",
   "section.materialize",

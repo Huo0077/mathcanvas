@@ -201,6 +201,28 @@
 >
 > **V0c 测试面已齐**（单元 + 草稿层 + Worker 契约路径同样适用 + 浏览器 + 截图目检）；
 > **仍未做**：双曲线 / 抛物线；V0d。
+>
+> **2026-10-06 V0d 起步：Agent 第一次能创建函数图像（动作层已通，V0d 未收口）**
+>
+> **补上一个从入口就断掉的动作**：`packages/dsl` 一直有 `type: "function"` 图元、场景图也能重算它的
+> 导数与切线，但动作表里**只有** `function.analyze` / `function.create_tangent` —— 两个都要求
+> **先有一条曲线**。于是"求 f 的导数"能表达，"先把 f 画出来"不能。新增 `function.create_graph`
+>（表达式 + **有界**定义域）。
+>
+> **跨了七处接线**，其中三处是机器逼着改齐的：`actionIds`（**28 → 29**）、`actionRegistry`
+>（条目 + 新字段种类 `interval`）、`actionInputs`（区间读取：长度 2、两个有限数、`lo < hi`）、
+> `actionSchemas`（区间 → 数字数组；`lo < hi` **不写进 schema** —— JSON Schema 表达不了元素间的关系）、
+> `skills/manifest`（`CAPABILITY_FOR_ACTION` 是 `Record<DraftActionIdName, string>`，**漏登记直接 `tsc` 报错**）、
+> `scene-graph` 的动作类型与编译器、`agentRunner` 的工作区路由（`function.*` → `calculus`）。
+>
+> **解析在编译期做一次**：用内核同一个 `compileExpression` 试解析，失败即结构化拒绝；
+> 反例用例额外断言"错误不是 `unknown_action`"，堵掉假绿。**`functions` 技能已重签**
+>（它的自述一直写着"创建函数图像"，而列表里没有能创建的动作 —— 这就是那个洞）。
+> 顺带收掉 `prepareWorkspaceFor` 里一处**顺序决定行为**：目标工作区原先取 `wanted[0]`。
+>
+> **本次读数**：全库非 Lean **329 文件 / 3854 通过 + 1 todo / 0 失败**（146.94 s，+2 = 新增用例）；
+> 全量 e2e **204 通过 / 0 失败**；`typecheck` 0、`lint` 0 error / 13 warning。
+> **未做**：`f′(1)=0` 的切线判据、本地入口与浏览器证据 —— **V0d 未收口**。
 
 ## 一、现在能不能跑（可复核的门禁读数）
 

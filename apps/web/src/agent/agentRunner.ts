@@ -308,18 +308,21 @@ function awaitingDraftOf(conversation: AgentConversation): ConversationDraftView
  * 这条计划需要哪个工作区。
  *
  * 判据放在这里而不是从计划里"推断"：它取决于**动作名**，而动作名与工作区的对应关系
- * 是动作层的知识。目前只有两类：
+ * 是动作层的知识。目前有三类：
  * - `solid.*` / `section.*` / `dynamic.*`（三维那几族）→ `geometry3d`；
- * - `planar.*` → `conics`。
+ * - `planar.*` → `conics`；
+ * - `function.*` → `calculus`（计划 V0d 补上：此前这一族一条都没有，于是
+ *   `function.create_graph` 落进**当前**工作区，"画出 f(x) 的图像"这类题会画在错的图纸上）。
  *
  * **判据与动作顺序无关**。返回空数组表示"这次不需要切"（例如只读回答，或动作本身不绑定工作区）。
  */
-function planWorkspaces(plan: PlanEnvelope): readonly ("conics" | "geometry3d")[] {
+function planWorkspaces(plan: PlanEnvelope): readonly ("conics" | "geometry3d" | "calculus")[] {
   if (plan.kind !== "plan") return []
-  const wanted = new Set<"conics" | "geometry3d">()
+  const wanted = new Set<"conics" | "geometry3d" | "calculus">()
   for (const action of plan.actions) {
     if (action.actionId.startsWith("solid.") || action.actionId.startsWith("section.") || action.actionId.startsWith("dynamic.")) wanted.add("geometry3d")
     else if (action.actionId.startsWith("planar.")) wanted.add("conics")
+    else if (action.actionId.startsWith("function.")) wanted.add("calculus")
   }
   return [...wanted]
 }
@@ -341,12 +344,21 @@ function planWorkspaces(plan: PlanEnvelope): readonly ("conics" | "geometry3d")[
  */
 function prepareWorkspaceFor(plan: PlanEnvelope): { ok: true } | { ok: false; detail: string } {
   const wanted = planWorkspaces(plan)
-  const target = wanted.includes("geometry3d") ? "geometry3d" : wanted[0]
+  /**
+   * **目标工作区按固定的偏好次序取，不用 `wanted[0]`。**
+   *
+   * `wanted` 是个**集合展开**，成员顺序来自动作在计划里的先后 —— 而那是模型随手写出来的。
+   * 拿它决定切哪个工作区，就把"顺序决定行为"从门口放了回来（这个函数下面那段注释记着
+   * 上一回同类事故：一笔 `planar.*` 写在前面，后面的立体动作必然被工作区守卫拒掉）。
+   * 次序的理由：三维文档同样接受平面动作（反过来的包含关系不成立），所以先取 `geometry3d`；
+   * 剩下的两个都在 2D 那一侧，取 `conics`（平面几何是这两族共同的家）。
+   */
+  const target = wanted.includes("geometry3d") ? "geometry3d" : wanted.includes("conics") ? "conics" : wanted[0]
   if (!target) return { ok: true }
   const current = useSceneStore.getState().document.workspace
   if (current === target) return { ok: true }
   if (current === "cad") {
-    return { ok: false, detail: `这条指令需要在${target === "geometry3d" ? "立体几何" : "平面几何"}工作区执行；请先离开工程制图，或者在图纸里用绘图工具。` }
+    return { ok: false, detail: `这条指令需要在${target === "geometry3d" ? "立体几何" : target === "calculus" ? "函数" : "平面几何"}工作区执行；请先离开工程制图，或者在图纸里用绘图工具。` }
   }
   /**
    * **标明这是 Agent 自己切的工作区**（Fix round 1 / C1）：它是"执行这条计划"的副作用，

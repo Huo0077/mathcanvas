@@ -131,6 +131,14 @@ function schemaForField(field: string, spec: ActionSpec, actionId: ActionId): Js
     case "updatablePatch": return { type: "object", properties: Object.fromEntries(updatableInputFields().map((key) => [key, schemaForPatchField(key)])), additionalProperties: false }
     case "scopedRef": return scopedReferenceSchema
     case "idList": return { type: "array", items: { type: "string" } }
+    /**
+     * **有界区间** `[lo, hi]`（函数图像的定义域）：长度恰好 2、两个数。
+     *
+     * `lo < hi` **不写进 schema** —— JSON Schema 表达不了两个元素之间的大小关系，
+     * 硬凑一条会在模型侧产生一条它做不到的约束。那条判据在解析层（`readByDeclaredKind` 的
+     * `interval` 分支），错在哪一步就说哪一步。
+     */
+    case "interval": return { type: "array", items: { type: "number" }, minItems: 2, maxItems: 2 }
     /** 两个点名 `{from,to}`（按端点名指定棱）：形状与校验那侧的 `normalizeHostEdge` 一致。 */
     case "namePair": return { type: "object", properties: { from: { type: "string" }, to: { type: "string" } }, required: ["from", "to"], additionalProperties: false }
     default:

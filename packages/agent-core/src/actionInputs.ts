@@ -120,6 +120,24 @@ function readByDeclaredKind(spec: ActionSpec, field: string, provided: unknown, 
       return provided
     }
     case "point": return readPoint2(provided, path, errors) ?? undefined
+    /**
+     * **有界区间**：两个**有限**数、且 `lo < hi`（`function.create_graph` 的定义域）。
+     *
+     * 三条都要查，因为每条对应一种具体的坏图：无界 ⇒ 画不出来；倒过来 ⇒ 空集；
+     * 不是数 ⇒ 一路走到编译器才炸。错误落在**这个字段的路径**上，那条一次性修复才够得到它。
+     */
+    case "interval": {
+      if (!Array.isArray(provided) || provided.length !== 2) {
+        errors.push(fail("invalid_type", path, "expected an interval of two numbers"))
+        return undefined
+      }
+      const [low, high] = provided as unknown[]
+      if (typeof low !== "number" || typeof high !== "number" || !Number.isFinite(low) || !Number.isFinite(high) || !(low < high)) {
+        errors.push(fail("invalid_type", path, "expected two finite numbers with low < high"))
+        return undefined
+      }
+      return [low, high]
+    }
     case "vector": return readVector3(provided, path, errors) ?? undefined
     case "pointList": {
       if (!Array.isArray(provided)) {

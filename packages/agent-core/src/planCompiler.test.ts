@@ -988,3 +988,45 @@ describe("V0c: conic figures get their premises verified too", () => {
     expect(compiled.diagramVerification?.checks).toEqual(expect.arrayContaining([expect.objectContaining({ sourceText: "x²/9+y²/4=1", status: "failed" })]))
   })
 })
+
+/**
+ * **V0d：Agent 要能画出函数图像**（计划 `V0d 导数曲线`）。
+ *
+ * ## 这条为什么在动作层就先红
+ *
+ * `packages/dsl` 里一直有 `type: "function"` 图元，场景图也能重算它的导数与切线 ——
+ * 但 Agent 的动作表里**只有** `function.analyze` / `function.create_tangent`，
+ * **没有任何动作能创建那张图**。也就是说："求 f 的导数"这条路是通的，
+ * 而"先画出 f"这一步压根没法表达 —— 函数图像这一类题从入口就是断的。
+ */
+describe("V0d: the agent can create a function graph", () => {
+  /** `x³ − 3x`。写成显式乘号：表达式解析器不承诺把 `3x` 当乘法。 */
+  const CUBIC = "x^3-3*x"
+  const GRAPH_PROMPT = "画出 f(x)=x³−3x 的图像"
+
+  function graph(expression: string) {
+    return [{
+      actionId: "function.create_graph",
+      actionKey: "graph",
+      factIds: [],
+      inputs: { alias: "f", expression, domain: [-2, 2] }
+    }]
+  }
+
+  it("compiles function.create_graph into a real function primitive", () => {
+    const compiled = compilePlan(rawPlan(graph(CUBIC)), context(createEmptyDocument("calculus"), { prompt: GRAPH_PROMPT }))
+    expect(compiled.ok, compiled.diagnostics.map((item) => item.detail).join("; ")).toBe(true)
+    const created = compiled.draftDocument?.primitives.filter((primitive) => primitive.type === "function") ?? []
+    expect(created).toHaveLength(1)
+    expect(created[0]).toMatchObject({ expression: CUBIC, domain: [-2, 2] })
+  })
+
+  it("refuses an expression the app cannot parse instead of staging a blank graph", () => {
+    // 静默落一张画不出来的图，比拒绝更糟：用户会以为"画好了"。
+    const compiled = compilePlan(rawPlan(graph("x^^3")), context(createEmptyDocument("calculus"), { prompt: GRAPH_PROMPT }))
+    // **先把"假绿"堵掉**：动作名不认识时 `ok` 同样是 `false`，那条断言就什么都没证明。
+    expect(compiled.diagnostics.some((item) => item.code === "unknown_action")).toBe(false)
+    expect(compiled.ok).toBe(false)
+    expect(compiled.draftDocument).toBeNull()
+  })
+})

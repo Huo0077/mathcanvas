@@ -160,6 +160,7 @@ export type FieldKind =
   | "updatablePatch" // 对象可改字段的封闭集合
   | "scopedRef"      // {scope:"draft",alias} / {scope:"scene",ref}
   | "idList"         // 同一文档内的裸 id 数组
+  | "interval"       // 有界区间 [lo, hi]，两个有限数且 lo < hi（函数图像的定义域）
 
 /**
  * **按字段名的种类表**（大多数动作共用）。
@@ -172,6 +173,8 @@ export const FIELD_KINDS: Record<string, FieldKind> = {
   // 字符串族
   alias: "string", label: "string", id: "string", expression: "string", analysis: "string",
   parameterId: "string",
+  // 有界区间：函数图像的定义域。**不是两个普通数字** —— "lo < hi" 是它的一部分形状。
+  domain: "interval",
   // 闭集字段：种类是"字符串"，可选值由逐动作的 `enumValues` 决定。
   kind: "string", axis: "string", template: "string",
   // 数字族
@@ -530,6 +533,27 @@ export const ACTIONS = {
     defaults: {
       x: { policy: "safe_default", value: 0, reason: "切点横坐标未指定，取 x = 0。" },
       anchor: { policy: "safe_default", value: { kind: "parameter", parameter: DEFAULT_SLOPE, branch: 0 }, reason: `切点未指定，取曲线参数 ${DEFAULT_SLOPE}（规格 §6.3：未定斜率取水平）。` }
+    }
+  },
+  /**
+   * **新建函数图像**（计划 V0d）。
+   *
+   * 为什么现在才需要它：`function.analyze` / `function.create_tangent` **都要求先有一条曲线**，
+   * 而动作表里没有任何一笔能**创建**那条曲线 —— 函数图像这一类题从入口就是断的。
+   *
+   * 两个字段的风险不同，处理方式也不同：
+   * - `expression` 是**题目本身**，缺了就没得画 ⇒ `ask_user`；
+   * - `domain` 不是"安全"，而是"有代价但可以明说"：取 `[-2, 2]` 走 `safe_default`，
+   *   并**写进 assumptions**（与 `function.create_tangent` 的 `x = 0` 同一条口径）。
+   */
+  "function.create_graph": {
+    inputFields: ["alias", "expression", "domain", "label"],
+    requiresAlias: true,
+    rawFieldTypes: {},
+    required: ["expression"],
+    defaults: {
+      expression: { policy: "ask_user", question: "要画哪个函数的图像？给出表达式（例如 x^3-3*x）。" },
+      domain: { policy: "safe_default", value: [-2, 2], reason: "定义域未指定：取 [-2, 2]，够看清三次曲线的一个完整形态。" }
     }
   },
   "function.analyze": {

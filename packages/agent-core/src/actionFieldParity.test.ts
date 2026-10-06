@@ -82,6 +82,8 @@ describe("registry, published schema and parser agree on fields", () => {
       updatablePatch: (s) => s.type === "object",
       scopedRef: (s) => Array.isArray((s as { oneOf?: unknown[] }).oneOf),
       idList: (s) => s.type === "array",
+      // 有界区间：长度恰好 2 的数字数组。`lo < hi` 在解析层判，schema 表达不了。
+      interval: (s) => s.type === "array" && s.items !== undefined && (s as { minItems?: number }).minItems === 2 && (s as { maxItems?: number }).maxItems === 2,
       namePair: (s) => s.type === "object" && "from" in (s.properties ?? {}) && "to" in (s.properties ?? {})
     }
 

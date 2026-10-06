@@ -45,7 +45,8 @@ export interface SkillCatalog {
 const EXPECTED_HASHES: Record<string, string> = {
   "planar-basics": "5cf804064cb4f4ec083553e8ef03d5d7775d023e8bd60a94431bbd836031ebbd",
   "conics-tangents": "be5c416242eaf9b5099e80e1697edeb433899d01c21779641a30fbaca33720f2",
-  "functions": "853f149c0a47f38277d2bdce0ae4f47a8d19ef0b4987c0fa162e82b8080c8664",
+  /** 2026-10-06 重签：`functions` 的 `actionIds` 加了 `function.create_graph`（计划 V0d）—— 此前这个技能的自述写着"创建函数图像"，而列表里没有任何一笔能创建它。 */
+  "functions": "0d55f158b1112ae1ab78b0e5a33f08e680e9fedfa3f14fe294fd94cd33c66d2b",
   "dynamic-bindings": "a7a25bf79ac9c9cf89256bc1fb8a1876c41287bca21e6a7163ce1022ee47f9e1",
   /** 2026-10-05 重签：`spatial-modeling` 的 `actionIds` 加了 `dynamic.create_bound_point`（用户报的"O 为 BD 中点"那一类题要它）。 */
   "spatial-modeling": "137c5307513614c3e2748956b3fd5cf5b54457682d99adacad09af7ee79ef8f3",

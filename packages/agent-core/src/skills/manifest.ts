@@ -74,7 +74,7 @@ export const SKILL_MANIFESTS: readonly SkillManifest[] = [
     id: "functions",
     title: "函数与分析",
     summary: "创建函数图像，并求它的导数、切线或定积分。定义域必须有界才允许积分。参数（含符号参数）可以新建与修改。",
-    actionIds: ["function.analyze", "function.create_tangent", "parameter.create", "parameter.set", "parameter.set_expression"],
+    actionIds: ["function.create_graph", "function.analyze", "function.create_tangent", "parameter.create", "parameter.set", "parameter.set_expression"],
     limits: DEFAULT_LIMITS,
     successCase: { prompt: "求 f(x)=x² 在 [-1,1] 上的定积分", expectation: "一笔 function.analyze，analysis 为 integral" },
     refusalCase: { prompt: "对一条不是函数的对象求导", expectation: "拒绝：source 必须是函数对象，编译器会报 source_not_function" }
@@ -179,6 +179,7 @@ export const CAPABILITY_FOR_ACTION: Record<DraftActionIdName, string> = {
   "dynamic.create_locus": "create-primitive",
   "dynamic.set_radius_rule": "modify-primitive",
   "function.create_tangent": "create-primitive",
+  "function.create_graph": "create-primitive",
   "function.analyze": "create-primitive",
   "section.create": "create-primitive",
   "section.materialize": "create-primitive",

@@ -309,6 +309,21 @@ export interface FunctionAnalyzeAction extends ActionBase {
   inputs: { alias: DraftAlias; sourceId: string; analysis: "derivative" | "tangent" | "integral" }
 }
 
+/**
+ * **新建函数图像**（计划 V0d）。
+ *
+ * 为什么必须有它：`packages/dsl` 一直有 `type: "function"` 图元，场景图也能重算它的导数与切线，
+ * 但动作表里**只有** `function.analyze` / `function.create_tangent` —— 两个都要求**先有一条曲线**。
+ * 于是"求 f 的导数"能表达，"先把 f 画出来"不能：函数图像这一类题从入口就是断的。
+ *
+ * `domain` 必须有界：无界定义域画不出来，也积不了分 —— 缺省给一段能看清形态的区间，
+ * 并且写进 `assumptions` 让用户知道那是系统选的。
+ */
+export interface FunctionCreateGraphAction extends ActionBase {
+  actionId: "function.create_graph"
+  inputs: { alias: DraftAlias; expression: string; domain?: [number, number]; label?: string }
+}
+
 export interface DynamicBindCurveAction extends ActionBase {
   actionId: "dynamic.bind_curve"
   inputs: {
@@ -374,6 +389,7 @@ export type DraftAction =
   | DynamicSetRadiusRuleAction
   | FunctionCreateTangentAction
   | FunctionAnalyzeAction
+  | FunctionCreateGraphAction
   | SectionCreateAction
   | SectionMaterializeAction
   | ObjectDeleteManyAction

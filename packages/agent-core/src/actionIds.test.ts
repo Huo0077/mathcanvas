@@ -21,9 +21,11 @@ describe("draft action catalogue", () => {
     // **24** 是加上 `planar.create_conic` / `dynamic.create_bound_point` / `parameter.create`
     // （Agent DSL 切片）之后的实测值；**25** 是加上 `solid.create_tetrahedron`（正四面体切片）之后的实测值；
     // **26** 是加上 `solid.create_regular_pyramid`（第 1 层：正 N 棱锥）之后的实测值；
-    // **28** 是加上 `solid.create_sphere`（球体切片 Task 8：解析球，不物化子对象）之后的实测值。
-    expect(DRAFT_ACTION_IDS).toHaveLength(28)
-    expect(new Set(DRAFT_ACTION_IDS).size).toBe(28)
+    // **28** 是加上 `solid.create_sphere`（球体切片 Task 8：解析球，不物化子对象）之后的实测值；
+    // **29** 是加上 `function.create_graph`（计划 V0d：Agent 第一次能**创建**函数图像 ——
+    // 此前 `function.analyze` / `function.create_tangent` 都要求先有一条曲线）之后的实测值。
+    expect(DRAFT_ACTION_IDS).toHaveLength(29)
+    expect(new Set(DRAFT_ACTION_IDS).size).toBe(29)
   })
 
   it("recognises every catalogue action instead of calling it unknown", () => {

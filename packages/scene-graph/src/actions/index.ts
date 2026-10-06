@@ -1,5 +1,5 @@
 import type { GeometryDocument, PrimitiveSpec, Vector3 } from "@draw/dsl"
-import { buildFromPoints, buildPrismTopology, buildSolidTemplate, DEFAULT_SOLID_SEGMENTS, prismEdgeLabel, prismPointLabel, regularPyramidShape, regularTetrahedronShape, templateEdgeLabel, templatePointLabel, validatePrismInput, type BuilderContext, type SolidBuildResult, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
+import { buildFromPoints, buildPrismTopology, buildSolidTemplate, compileExpression, DEFAULT_SOLID_SEGMENTS, prismEdgeLabel, prismPointLabel, regularPyramidShape, regularTetrahedronShape, templateEdgeLabel, templatePointLabel, validatePrismInput, type BuilderContext, type SolidBuildResult, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
 
 import type { DomainOperation } from "../operations"
 import type { ActionContext, ActionDiagnostic, CompileResult, DraftAction, IdAllocator } from "./types"
@@ -673,6 +673,40 @@ function compileTangent(action: Extract<DraftAction, { actionId: "function.creat
   }
 }
 
+/**
+ * **`function.create_graph`：表达式 + 有界定义域 → 一条 `function` 图元**（计划 V0d）。
+ *
+ * **解析在编译期做一次，失败就拒绝**：静默落一张解析不了的图比拒绝更糟 ——
+ * 用户会以为"画好了"，而画布上什么都没有。所以这里用内核同一个 `compileExpression`
+ * 先试一次；失败就是结构化拒绝，不是"先落下去再说"。
+ */
+function compileCreateGraph(action: Extract<DraftAction, { actionId: "function.create_graph" }>, context: ActionContext): CompileResult {
+  const { actionKey, inputs } = action
+  const domain = inputs.domain
+  /**
+   * 定义域必须**有界且递增**：无界定义域画不出来（也积不了分），倒过来的区间是空集。
+   * 这两条都不是"难看"，是"画不出东西"，所以是拒绝而不是纠正。
+   */
+  if (!Array.isArray(domain) || domain.length !== 2 || !domain.every((value) => Number.isFinite(value)) || !(domain[0] < domain[1])) {
+    return { operations: [], diagnostics: [diagnostic(actionKey, "invalid_domain", "a function graph needs a finite, increasing domain")], aliasToId: {} }
+  }
+  try {
+    compileExpression(inputs.expression)
+  } catch {
+    return { operations: [], diagnostics: [diagnostic(actionKey, "invalid_expression", `cannot parse the expression ${inputs.expression}`)], aliasToId: {} }
+  }
+  const id = context.idAllocator.allocate("function", inputs.alias)
+  const primitive = {
+    id,
+    type: "function" as const,
+    expression: inputs.expression,
+    domain: [domain[0], domain[1]] as [number, number],
+    // 外观键**不写 `undefined`**（与 `compileSolidPrism` 同一条纪律）：JSON 往返会丢这种键。
+    ...(inputs.label === undefined ? {} : { label: inputs.label })
+  }
+  return { operations: [{ op: "addPrimitive", primitive }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
+}
+
 /** 函数分析：导函数 / 切线 / 积分区域。三者都"几何留空、由内核重算填"。 */
 function compileFunctionAnalyze(action: Extract<DraftAction, { actionId: "function.analyze" }>, context: ActionContext): CompileResult {
   const { actionKey, inputs } = action
@@ -1050,6 +1084,8 @@ export function compileAction(action: DraftAction, context: ActionContext): Comp
       return compileLocus(action, context)
     case "function.create_tangent":
       return compileTangent(action, context)
+    case "function.create_graph":
+      return compileCreateGraph(action, context)
     case "function.analyze":
       return compileFunctionAnalyze(action, context)
     case "parameter.set":
