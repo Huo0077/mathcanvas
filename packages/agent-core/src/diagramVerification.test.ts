@@ -353,3 +353,59 @@ describe("V0c: hyperbola and parabola premises", () => {
     expect(report.status).toBe("failed")
   })
 })
+
+/**
+ * **带撇 / 带下标的顶点名**（S1.3）。
+ *
+ * 核验器的两处点名判断此前都写死 `/^[A-Z]$/`：`candidatePoints` 里对 `vertexNames` 的检查，
+ * 与"扫带 `label` 的点"那一步。而内核给棱柱顶面起名正是 `A′` 这类写法 —— 于是**点名表根本建不出来**，
+ * `candidatePoints` 返回 `null`，所有依赖点名的题设一律落成
+ * 「候选图缺少唯一、可靠的顶点名映射；不能按题面顺序猜坐标」。
+ *
+ * 两处现在都从内核的 `pointNames` 取同一份定义 —— 与解析层（S1.2）是同一份。
+ */
+describe("带下标 / 带撇的顶点名（S1.3）", () => {
+  // A(0,0,0) B(1,0,0) C(1,1,0) D(0,1,0) 是 z = 0 上的底面，第五个点在 A 正上方。
+  const POSITIONS: Vector3[] = [
+    { x: 0, y: 0, z: 0 },
+    { x: 1, y: 0, z: 0 },
+    { x: 1, y: 1, z: 0 },
+    { x: 0, y: 1, z: 0 },
+    { x: 0, y: 0, z: 1 }
+  ]
+
+  function solidFixture(vertexNames: string[]) {
+    const inputs = { alias: "solid", vertices: POSITIONS, faces: [[0, 1, 2], [0, 2, 3]], vertexNames }
+    const plan: PlanEnvelope = { schemaVersion: PLAN_SCHEMA_VERSION, kind: "plan", goal: "画示意图", factIds: [], actions: [{ actionId: "solid.create_polyhedron", actionKey: "solid", factIds: [], inputs }] }
+    const candidate = createEmptyDocument("geometry3d")
+    candidate.primitives.push(...POSITIONS.map((position, i) => ({ id: `solid-v${i}`, type: "point3" as const, position })))
+    candidate.primitives.push({ id: "solid", type: "polyhedron3", vertexIds: POSITIONS.map((_, i) => `solid-v${i}`), edgeIds: [], faceIds: [] })
+    return { plan, candidate }
+  }
+
+  it("下标顶点名能进点名表：AA₁=1 通过", () => {
+    const { plan, candidate } = solidFixture(["A", "B", "C", "D", "A₁"])
+    const report = verifyDiagramObligations(parseDiagramObligations("在四棱柱ABCD-A₁B₁C₁D₁中，AA₁=1"), plan, candidate)
+    expect(report.checks.find((check) => check.sourceText.includes("AA₁"))?.status).toBe("passed")
+  })
+
+  it("带撇顶点名能进点名表：A′B=1 通过", () => {
+    const { plan, candidate } = solidFixture(["A′", "B", "C", "D", "E"])
+    const report = verifyDiagramObligations(parseDiagramObligations("在棱柱中，A′B=1"), plan, candidate)
+    expect(report.checks.find((check) => check.sourceText.includes("A′B"))?.status).toBe("passed")
+  })
+
+  it("ASCII 下标混进顶点名时**整张表判为不可靠**：宁可未核验，也不按题面顺序猜坐标", () => {
+    const { plan, candidate } = solidFixture(["A", "B", "C", "D", "A1"])
+    const report = verifyDiagramObligations(parseDiagramObligations("在棱柱中，AB=1"), plan, candidate)
+    expect(report.checks.find((check) => check.sourceText === "AB=1")?.status).toBe("unverified")
+  })
+
+  it("带下标的 label 也进点名表：由**别的动作**建的点 O₁ 落在 BD 中点 ⇒ 该题设通过", () => {
+    const { plan, candidate } = solidFixture(["A", "B", "C", "D", "A₁"])
+    // B=(1,0,0) 与 D=(0,1,0) 的中点是 (0.5,0.5,0)。
+    candidate.primitives.push({ id: "point3-o1", type: "point3" as const, position: { x: 0.5, y: 0.5, z: 0 }, label: "O₁" })
+    const report = verifyDiagramObligations(parseDiagramObligations("在四棱柱ABCD-A₁B₁C₁D₁中，O₁为BD的中点"), plan, candidate)
+    expect(report.checks.find((check) => check.sourceText.includes("O₁"))?.status).toBe("passed")
+  })
+})

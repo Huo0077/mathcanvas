@@ -1,5 +1,5 @@
 import type { GeometryDocument, PrimitiveSpec } from "@draw/dsl"
-import { compileExpression, crossVector3, dihedralAngleDetail3, distanceVector3, dotVector3, evaluateExpression, lengthVector3, subtractVector3, type Vector3 } from "@draw/geometry-kernel"
+import { compileExpression, crossVector3, dihedralAngleDetail3, distanceVector3, dotVector3, evaluateExpression, isPointName, lengthVector3, subtractVector3, type Vector3 } from "@draw/geometry-kernel"
 
 import type { PlanEnvelope } from "./contracts"
 import type { DiagramObligation, DiagramObligationKind, DiagramObligationSet } from "./diagramObligations"
@@ -74,7 +74,7 @@ function candidatePoints(plan: PlanEnvelope, candidate: GeometryDocument, base?:
     if (typeof input !== "object" || input === null || !("vertexNames" in input)) return null
     const names = input.vertexNames
     const solid = solids[0]
-    if (!Array.isArray(names) || names.length !== solid.vertexIds.length || !names.every((name) => typeof name === "string" && /^[A-Z]$/.test(name)) || new Set(names).size !== names.length) return null
+    if (!Array.isArray(names) || names.length !== solid.vertexIds.length || !names.every((name) => typeof name === "string" && isPointName(name)) || new Set(names).size !== names.length) return null
     for (const [index, name] of names.entries()) {
       const vertex = candidate.primitives.find((primitive) => primitive.id === solid.vertexIds[index])
       if (vertex?.type !== "point3") return null
@@ -99,7 +99,8 @@ function candidatePoints(plan: PlanEnvelope, candidate: GeometryDocument, base?:
    * 1. **顶点名优先**：`vertexNames` 已经定了的名字，标签不许覆盖它；
    * 2. **同名只许一个**：同一个标签出现两次 ⇒ 这个**名字缺失**（依赖它的题设如实未核验）。
    *    这里**不猜** —— 猜一个就等于把"图里有两个 O"这件事静默吞掉；
-   * 3. **非单字母标签不进表**：点名的形状是 `[A-Z]`，别的标签（"中点"、"O1"）不是题面点名。
+   * 3. **不是点名的标签不进表**：点名 = 一个大写字母 + 可选的撇或下标（内核 `pointNames` 的
+   *    **同一份**定义，与解析层共用），别的标签（"中点"、"O1"、"A1"）不是题面点名。
    */
   const labelled = new Map<string, Vector3 | null>()
   for (const primitive of candidate.primitives) {
@@ -123,7 +124,7 @@ function candidatePoints(plan: PlanEnvelope, candidate: GeometryDocument, base?:
      * 这与本仓那句"同一个判断不许写两遍"是同一条账。
      */
     const label = (primitive as { label?: unknown }).label
-    if (typeof label !== "string" || !/^[A-Z]$/.test(label)) continue
+    if (typeof label !== "string" || !isPointName(label)) continue
     labelled.set(label, labelled.has(label) || ![position.x, position.y, position.z].every(Number.isFinite) ? null : position)
   }
   for (const [label, position] of labelled) {

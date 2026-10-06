@@ -7,7 +7,16 @@
 
 
 
-## 2026-10-07 —— S1.2：解析器接上点名模块（棱柱题面**第一次读得出给定**）
+## 2026-10-07 —— S1.3：核验器接上同一份点名定义（带撇/带下标顶点名终于能进表）
+
+- `diagramVerification.ts` 的两处点名判断（`candidatePoints` 的 `vertexNames` 检查、扫 `label` 的那一步）都从 `/^[A-Z]$/` 改为内核的 `isPointName` —— 与解析层（S1.2）**同一份**定义；注释里那句"点名形状是 `[A-Z]`"也一并改对。
+- **RED 先写、真红**：两条正例（下标 `A₁`、撇 `A′`）实现前实收 `expected 'unverified' to be 'passed'` —— 点名表建不出来时 `candidatePoints` 返回 `null`，所有依赖点名的题设一律落成"候选图缺少唯一、可靠的顶点名映射"。
+- **两处调用点各有证据**：`vertexNames` 那处由**实现前的红**证明；`label` 那处由**变异**证明 —— 把 label 检查改回 `/^[A-Z]$/` ⇒ `O₁` 那条当场红（`unverified` vs `passed`），还原复绿。
+- **一条 ASCII 反例**：顶点名里混进 `A1` ⇒ **整张表判为不可靠**，`AB=1` 如实 `unverified`（不按题面顺序猜坐标）。这是"别顺手多认"的守卫。
+- **一次操作事故如实记**：变异之后的还原被工具守卫连拒（同一调用被判重复），**一度把工作树留在变异态**；下一轮先读文件确认现场，再用同一条 `edit` 还原成功。教训：**变异与还原要成对落地**，被挡就先确认现场，别把它们拆到两轮里。
+- 读数：定向 5 文件 / **130 通过**；全库非 Lean **331 文件 / 3889 通过 + 1 todo / 0 失败**（146.44 s，**+4 = 本批新增用例**）；`typecheck` exit 0；`lint` 0 error / 13 warning。
+
+
 
 - `diagramObligations.ts` 的规则**不再写死** `[A-Z]{2}` / `[A-Z]{3,4}`：线段 / 三角 / 平面三个子模式都从内核的 `POINT_NAME_SOURCE` 拼出来；`names()` 由 `[...value]` 改为 `splitPointNames`；内核 barrel 补 `export * from "./pointNames"`。
 - **RED 先写、真红**：三条新用例（下标 / 撇 / ASCII 边界）先跑 ⇒ 前两条 `expected [] to deeply equal [ 'perpendicular' ]`（今天就是 0 条给定）；第三条（ASCII 写法）**本来就该**没有给定并如实报未核验 —— 它当时已经通过，这正是"别顺手多认"的守卫。
