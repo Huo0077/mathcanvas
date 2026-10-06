@@ -30,7 +30,7 @@
 > 落地结构为**形状数据化**（四层共用一份 `SolidShapeSpec`），不再逐个形状加构造分支。
 > 设计（含已裁决的四条、现状事实、S1–S6 分块、错误处理、明确不做、回退办法）见
 > [立体图形覆盖扩宽设计](superpowers/specs/2026-10-06-solid-shape-coverage-design.md)。
-> **本裁决只写了设计，没有动任何产品代码**；实施计划尚未编写。
+> **本裁决只写了设计，没有动任何产品代码**；实施计划已于 2026-10-07 编写（[立体图形覆盖扩宽实施计划](superpowers/plans/2026-10-07-solid-shape-coverage-implementation-plan.md)，S1–S6 + 每块收口清单），**仍没有产品代码**。
 > **同一次复测的当前读数**（与下方 §一 表里更早时刻的数不是同一次，别混用）：
 > `npm.cmd exec vitest run -- --exclude scripts/proof-spike/lean4EndToEnd.test.ts --maxWorkers=2 --reporter=dot`
 > ⇒ **328 文件 / 3831 通过 + 1 todo / 0 失败**，exit 0，115.32 s；
