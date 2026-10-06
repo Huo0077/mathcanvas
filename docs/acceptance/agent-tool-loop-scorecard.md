@@ -4,7 +4,7 @@
 > [`docs/current-status.md`](../current-status.md) 为准** —— 它是"现在时"的唯一一处。
 > 这里的每一行都是**镜像**：能力前进一格时，这一行要跟着改（第 25 / 33 / 43 轮各漏过一次）。
 
-Updated: 2026-10-06. Old per-axis measurements remain historical; for current numbers see `docs/current-status.md`. New H0–H4 goal (all 2025-curriculum/high-school-exam types and desktop automatic Lean) is **planned, 0 blocks implemented**, not completed by old N1–N6 checkboxes; see [progress](../agent-next-round-progress.md). Real-provider cost is still `null`; the Lean path is a conditional lemma, not full-problem proof.
+Updated: 2026-10-06. Old per-axis measurements remain historical; for current numbers see `docs/current-status.md`. New H0–H4 goal (all 2025-curriculum/high-school-exam types and desktop automatic Lean) has **H0a source-index tooling only** (43 syllabus table entries, no atomic subtypes/cases/exam tags; full H0 and H1–H4 incomplete), not completed by old N1–N6 checkboxes; see [progress](../agent-next-round-progress.md). Real-provider cost is still `null`; the Lean path is a conditional lemma, not full-problem proof.
 
 ## Metrics
 

@@ -10,7 +10,7 @@
 > [`docs/project-progress.md`](project-progress.md) —— 那是**归档**，里面的数字是"当时实测"，
 > 不是当前值。两份文件分工明确：**要当前值看这里，要过程看归档。**
 
-**最后更新：** 2026-10-06。旧 N1–N6 的计划出口是历史阶段状态，**不等于“高中所有题型已证明”**；当前 N2/N3 是默认关闭的实验能力，N4 只有小样本真实 provider 证据且成本未测，N5 只有一类垂直性条件引理的独立 Lean 闭环、产品未自动调用。2026-10-06 重新规划的 H0–H4 **全部未实施**：目标是按 2025 年日常修订高中数学课程标准及高考题型逐项验收、桌面端安全自动调用 Lean；竞赛题另表。详情看 [新进度追踪](agent-next-round-progress.md)、[设计](superpowers/specs/2026-10-06-high-school-auto-lean-design.md) 和 [计划](superpowers/plans/2026-10-06-agent-next-round-implementation-plan.md)。要当次门禁读数看 §一，遗留事项看 §四；新规划不构成当次代码/CI/付费运行证据。
+**最后更新：** 2026-10-06。旧 N1–N6 的计划出口是历史阶段状态，**不等于“高中所有题型已证明”**；当前 N2/N3 是默认关闭的实验能力，N4 只有小样本真实 provider 证据且成本未测，N5 只有一类垂直性条件引理的独立 Lean 闭环、产品未自动调用。2026-10-06 重新规划中 **H0a 课程表来源索引与校验器已实施（43 条均未拆原子题型、高考标签 0、覆盖审计仍 false），完整 H0 与 H1–H4 未完成**：目标是按 2025 年日常修订高中数学课程标准及高考题型逐项验收、桌面端安全自动调用 Lean；竞赛题另表。详情看 [新进度追踪](agent-next-round-progress.md)、[设计](superpowers/specs/2026-10-06-high-school-auto-lean-design.md) 和 [计划](superpowers/plans/2026-10-06-agent-next-round-implementation-plan.md)。要当次门禁读数看 §一，遗留事项看 §四；H0a 有本次代码和定向测试证据，但不构成自动 Lean、真实 provider、CI 或全题型覆盖证据。
 
 **修复前一版做完了什么**：用户现场"A 字句只有关系、没有数值的立体题面"从**画不出来**推进到**能画出来**。路上推翻了两个自己的设计（见下方"走过的弯路"），并修掉一批真实运行暴露的形式障碍（信封缺字段、平面动作带 `z`、面环绕向不一致、空 `relations`）。
 **修复前一版暴露了什么（更重要）**：用户在真图上确认"**图画出来了，明显画错了**"。实测模型给的坐标：`BD=2`、`O` 是中点、`△OCD` 等边、`AB=AD` 都对，但 `OA·CD = −0.314 ≠ 0`（**第（1）问要证的那件事本身不成立**），且 `A` 的高度取 0.64、而"二面角 45°"要求约 1.33（**差约一倍**）。
@@ -25,10 +25,12 @@
 
 | 门禁 | 命令 | 最新读数 | 退出码 | 记录于 |
 | --- | --- | --- | --- | --- |
-| 类型检查 | `npm.cmd run typecheck` | 全部工作区 + `e2e/` + `scripts/`，无错 | 0 | **2026-10-05 复核** |
-| Lint | `npm.cmd run lint` | **0 error / 13 warning**（与基线逐条相同） | 0 | **2026-10-05 复核** |
+| 类型检查 | `npm.cmd run typecheck` | 全部工作区 + `e2e/` + `scripts/`，无错 | 0 | **2026-10-06 H0a 实测** |
+| Lint | `npm.cmd run lint` | **0 error / 13 warning**（与基线逐条相同） | 0 | **2026-10-06 H0a 实测** |
 | 历史全库（含 Lean 慢集成；本批未重跑） | `npm.cmd test -- --maxWorkers=2 --reporter=dot` | **325 文件 / 3769 通过 + 1 todo / 0 失败**（**2026-10-06 实测**，529.54 s 与 568.19 s 两次全绿）。**同日另一次（940.93 s）跑出 1 条 5 秒超时** —— 就是本行下面记过的那条**既有抖动**（`fileExports.test.ts` 的 CAD 导出用例），**单跑三次全过、那条用例本身约 0.69 s**。**相对上一条读数（318 / 3659，2026-10-05）是 +7 文件 / +110 用例**，差额来自这两条读数之间合并的 N5a/N5b/N6 那几批，**本批不为它编归因** —— 本批只改文档、两处注释与一条既有测试的注入，**不改测试文件数也不改用例数**（修复前后两次读数的 325 文件 / 3770 项逐字相同）。**以下为上一条读数的原记录，留档**：**318 文件 / 3659 通过 + 1 todo / 0 失败**（**2026-10-05 N4b 后实测**，224 s，**本批 0 抖动**）。**相对 N4a 的 317 / 3645：+1 文件**（新增 `apps/web/src/agent/fixtures/benchmarkPlanningEval.test.ts`，10 条）**/ +14 用例**（另 4 条加在既有文件里：`benchmarkContract.test.ts` +1、`ProviderEval.test.tsx` +3）—— **3645 + 14 = 3659 对得上**。**与上一版记的 315 / 3627 的差额不能全记在 N4a 头上**：文档那个 315 本身已是旧读数 —— 我在 BASE `e96d0f5` 上直接数出 **316** 个被 vitest 收录的测试文件（`packages|apps|scripts` 下的 `*.test.ts(x)`），HEAD `f315cf6` 是 **317**，**唯一新增**是 N4a 那条应用侧判据 `apps/web/src/agent/fixtures/benchmarkContract.test.ts`（+1 文件 / +5 用例）；此外 `scripts/agent-benchmark` 的用例数**本批未变**：BASE `e96d0f5` 就已经是 **40** 条（`benchmark.test.ts` 27 + `run.test.ts` 13），本批只把其中一条断言**改严**（expect 计数 46 → 48）。**（2026-10-05 复核更正**：我上一版这里写成"由 34 条增至 40 条" —— 那个 34 是更早一轮的历史读数（`git show e96d0f5:scripts/agent-benchmark/*.test.ts` 数出来就是 40），被我当成了本批的增量；这是"看起来像实测、其实不存在的 delta"，复核抓出来后已改正。**）**其余差额来自这两个读数之间的其它提交，**不是本批**。**另如实记一次抖动**：独立复核时同一条命令在本机跑出 **1 条 5 秒超时**（`apps/web/src/persistence/fileExports.test.ts` 的 CAD 导出用例）—— 该文件**未被本批任何提交改动**（最后动它是 2026-10-02 的 `fc4df43`），**单跑 9/9 通过、那条用例本身 308 ms**，属**负载敏感的既有抖动**：按本仓口径**超时那次既不算绿也不算红**，但它确实存在、值得记 | 0（本批三次：两次 0，抖动那次为 1） | **2026-10-06 实测（控制器自跑三次）** |
 | 本区块非 Lean 慢集成单测 | `npm.cmd exec vitest run -- --exclude scripts/proof-spike/lean4EndToEnd.test.ts --maxWorkers=2` | **324 文件 / 3781 通过 + 1 todo / 0 失败**；与含 Lean 慢集成的历史读数口径不同。 | 0 | **2026-10-06 本区块实测** |
+| H0a 定向索引审计（非高中全题型覆盖） | `npm.cmd exec vitest run -- scripts/curriculum/catalog.test.ts scripts/docs-consistency/progress-claims.test.ts --reporter=dot` | **2 文件 / 11 通过**；课程表 43 源条目、0 原子子型和金标、0 高考标签，`ready=false`。源码 SHA 篡改测试单独验证会红；不代表 Lean 或真实模型成功。 | 0 | **2026-10-06 本区块实测** |
+| H0a 非 Lean 慢集成全库回归 | `npm.cmd test -- --maxWorkers=2 --exclude scripts/proof-spike/lean4EndToEnd.test.ts --reporter=dot` | **exit 0**；这次输出过长，未保存可复核的文件/用例总数，不能沿用历史 324/3781 冒充本次计数。Lean 慢集成、浏览器与 Rust 本块未重跑。 | 0 | **2026-10-06 本区块实测** |
 | Rust provider 测试 | `npm.cmd run test:rust` | **238 通过 / 3 ignored / 0 失败**（16 个二进制） | 0 | **2026-10-05 复核** |
 | N3 空间线重合安全边界 | `npm.cmd exec vitest run -- apps/web/src/constrainedDrag3.test.ts`；`npm.cmd run test:e2e` | 定向 18/18；全量浏览器 196/196。关闭开关、无关点、禁用约束、零位移不误拦；相关定义点变更 fail-closed。 | 0 | **2026-10-06 本区块实测** |
 | 全量 e2e | `npm.cmd run test:e2e` | **196 通过 / 0 失败**（新增一条空间线重合安全拒绝浏览器回归；原 194 为历史读数）。 | 0 | **2026-10-06 本区块实测** |
@@ -781,7 +783,7 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
 1. 公开 Release `v3.2.0` 对应较早产物，不能代表当前源码或新规划。下次发布需定版号、构建和签名/哈希、source tag、GitHub Release，并复核**推送后的 CI**；不要从历史 SHA 推断当前 CI 必绿。
 2. **用户侧**教师/学生走查（无需管理员）与**管理员侧** MSI 安装→启动→卸载（NSIS 已有旧证据）是两项独立验收；均未完成，不能互相替代。新自动 Lean 还须有许可证、固定 mathlib 版本、运行隔离、发行包与无工具链的真实桌面证据。
 
-### E. 旧 N1–N6 阶段记录（历史切面；新 H0–H4 仍全部未开始）
+### E. 旧 N1–N6 阶段记录（历史切面；新 H0a 已实施、完整 H0 与 H1–H4 未完成）
 
 **N1 与 N2 已实施并复核（2026-10-05，都在默认关闭的 flag 之后，不改变默认行为）；N3–N6 也已在 2026-10-06 全部实施并复核 —— N3/N4/N5 出口达成、N6 收口。** 以下逐条保留当时的记录，完成状态已就地更正：
 
@@ -795,9 +797,9 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
 6. **N6：feature flag、依赖/许可证/线程/WASM 审查、发布门槛与维护收口**。**状态（2026-10-05 到第十四步；2026-10-06 第十五步 + 全计划收口）** —— 五个开关的覆盖矩阵、JS 运行依赖的许可证清单、WASM/线程边界、**Rust 传递依赖的许可扫描**（`cargo metadata`：551 包 / 33 种表达式 / 无一缺 `license` 字段 / 无 GPL·AGPL·SSPL）、**并发正确性专项**（唯一一处两把锁嵌套的守卫 + 删掉 `drop(runs)` 会自锁的实测）、e2e 与 Rust 两条抖动的修复与前后计数、整批门禁（含**生产构建**）都在，写进 [`docs/acceptance/next-phase-flag-and-dependency-review.md`](acceptance/next-phase-flag-and-dependency-review.md) 与 [`docs/current-status.md`](current-status.md) §一。**那一份里仍然明确写了没回答的**：`obligationIR` / `witnessSearch` 两个开关的**浏览器**用例（它们**没有产品入口**，所以无从谈起；`constrainedDrag` 的已经有了）、依赖体积与供应链。另查出两处依赖归位问题（`apps/web` 的 `@vitejs/plugin-react` 放错在 `dependencies`、根 `package.json` 多余一个 `three`），**未修**。
 7. 其他尚未启动的产品探索：题目截图识图、GeoGebra `.ggb` 互操作、平面/函数题型逐题补缺、3D 画面进入 HTML。
 
-### F. 新一轮 H0–H4：所有高中题型及自动 Lean（均未实施）
+### F. 新一轮 H0–H4：H0a 来源索引/审计器已实施，全题型和自动 Lean 尚未交付
 
-目标由用户重新确定：以 **2025 年日常修订课程标准与高考题型** 为目录与验收范围，竞赛另表；完整清册 H0、可信原题翻译 H1、桌面端自动 Lean H2、跨课程域证明包 H3、N2/N3/N4 遗留与人工/发布门禁 H4 均**未开始**。旧 N1–N6 已勾选的是旧范围，不得用旧 N5 的 `perpendicular` 条件引理宣称全题型或原题证明。新 [设计](superpowers/specs/2026-10-06-high-school-auto-lean-design.md)、[可执行计划](superpowers/plans/2026-10-06-agent-next-round-implementation-plan.md)、[逐项进度/审查问题台账](agent-next-round-progress.md) 分别承担规范、任务和状态。每区块 RED→GREEN、同步权威文档、提交推送。没有授权新的付费 provider 请求。
+目标由用户重新确定：以 **2025 年日常修订课程标准与高考题型** 为目录与验收范围，竞赛另表；**H0a 已建立 43 条课程表来源索引与机器审计（代码 `8826b63`），但所有原子子型/金标准/高考标签仍未登记，故 H0 未完成；H1–H4 尚未开始。**旧 N1–N6 已勾选的是旧范围，不得用旧 N5 的 `perpendicular` 条件引理宣称全题型或原题证明。新 [设计](superpowers/specs/2026-10-06-high-school-auto-lean-design.md)、[可执行计划](superpowers/plans/2026-10-06-agent-next-round-implementation-plan.md)、[逐项进度/审查问题台账](agent-next-round-progress.md) 分别承担规范、任务和状态。每区块 RED→GREEN、同步权威文档、提交推送。没有授权新的付费 provider 请求。
 
 ### G. N1/N2 的已知边界与 park 项（**不是缺陷，是如实记录**）
 

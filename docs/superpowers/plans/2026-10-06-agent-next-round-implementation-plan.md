@@ -1,6 +1,6 @@
 # 高中全题型 Agent 与自动 Lean 分期实施计划
 
-> **状态（复核）：** 2026-10-06 仅完成重新规划，下面复选框均未实施。旧 `2026-10-04-agent-full-next-phase-implementation-plan.md` 的 N1–N6 是历史阶段，不能抵消本计划任何任务。
+> **状态（复核）：** 2026-10-06 H0a 表格层来源索引与审计器已实施（`8826b63`；43 条仍未分类/无金标），完整 H0 未勾，H1–H4 未开始。旧 `2026-10-04-agent-full-next-phase-implementation-plan.md` 的 N1–N6 是历史阶段，不能抵消本计划任何任务。
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. 逐任务先读 [设计规格](../specs/2026-10-06-high-school-auto-lean-design.md)；不得自动委派或跳过人工安全门禁。
 
 **Goal:** 覆盖 2025 高中课程标准与高考题型，桌面端对可形式化目标自动调用可信 Lean，用户能区分实例、辅助引理与原题形式证明；竞赛题另表。
@@ -24,7 +24,7 @@
 
 | 文件/模块 | 职责 | 真实接点 |
 | --- | --- | --- |
-| `docs/taxonomy/high-school-2025.json`（新增）与校验测试 | 标准条目/高考标签、域、任务类型、样本、状态；分母唯一来源 | 新进度矩阵与 benchmark 共用 |
+| `docs/taxonomy/high-school-2025-source-index.json`、`high-school-2025.json` 与 `scripts/curriculum/catalog.ts` | 2025 PDF 来源/页码/哈希与可编辑分类目录**分离**；校验缺项/重复/越界/金标；H0a 先登记 43 条表层来源且如实报未就绪 | 来源 PDF 171 页、SHA256 固定；高考标签仍未测 |
 | `packages/agent-core/src/obligationIR.ts`、`claimEvidence.ts` | 现有来源追溯及互斥状态；新增跨域 MathClaim 映射端口 | `planCompiler.ts` 的编译候选，`apps/web/src/agent/draftStore.ts` 的报告路径；几何 Worker 契约另测 |
 | `packages/agent-core/src/proof/proofGoals.ts`、`lean4Adapter.ts`、`proofArtifact.ts` | 当前十类短目标/一类 Lean 引理；扩为逐域策略/原题前提消解及强制 statement 绑定 | `runLean4ClosedLoop` **只**是显式 Node 测试路径；不在产品运行调用链 |
 | `apps/desktop/src-tauri/src/commands/`、`proof/lean4/` | 固定版本 Lean 与受限执行；不从 WebView 接受任意命令 | `lib.rs` 命令表；需先锁 mathlib rev（目前 `master`） |
@@ -34,9 +34,11 @@
 
 ## H0：课程清册与审查旧问题（先做，不开证明）
 
-**接口**：`CurriculumUnit { version: "2017-2025"; unitId; sourceSection; subtypeId; taskKind: "proposition" | "non_propositional"; goldCaseIds }`；`auditCoverage(units, cases) -> { missing, duplicated, outOfScope }`。完整章节 ID 从标准逐条录入，不以本表十个域名替代。
+**接口（H0a 实际落地）**：`SourceUnit { unitId, track, category?, sourceSection, pdfPage }`；`CurriculumUnit extends SourceUnit { subtypes: { subtypeId, taskKind, goldCaseIds }[] }`；`auditCoverage(official, editable, cases)` 返回 `missingUnits/unclassified/missingCases/duplicateIds/outOfScope/invalidSources/nonPropositional/ready`。`ready` 仅表示目录样本可审计，**不是** Lean 证明或模型质量。完整章节 ID 从标准逐条录入，不以本表十个域名替代。
 
-- [ ] **RED** 新建 `scripts/curriculum/catalog.test.ts`：缺一个标准条目、重复 ID、错分竞赛/课程、无真值的子类型分别报错；断言 `auditCoverage(standardUnits, cases).missing` 为空前用故意缺项数据证明测试会红。命令：`npm.cmd exec vitest run -- scripts/curriculum/catalog.test.ts --reporter=dot`。
+- [x] **RED（H0a 基础规则）** 新建 `scripts/curriculum/catalog.test.ts`：缺一个标准条目、重复 ID、错分竞赛/课程、无真值的子类型分别报错；断言 `auditCoverage(official, editable, cases).missingUnits` 点名遗漏并验证 `.ready=false` 前用故意缺项数据证明测试会红。命令：`npm.cmd exec vitest run -- scripts/curriculum/catalog.test.ts --reporter=dot`。
+> **H0a 中间记录（不勾 H0 GREEN）**：PDF 171 页和 SHA256 已记；独立来源/可编辑索引登记 43 条表层来源（必修 14、选择性必修 8、选修 21），目录审计 `ready=false`；行为断言先后 6 红、3 红，定向 9/9 绿；篡改源 SHA 1 红/8 绿、恢复 9/9。**仍缺正文每一条原子子型、金标准/高考来源，不能以 43 条标题完成 H0。**
+
 - [ ] **GREEN** 创建版本化目录、来源索引、机器校验和跨章标签；新增高考样本的出题年与去重规则，公开版权只留题目元数据/短摘要（原题文本合法来源单列）。每子类型至少正例/反例/歧义，标记 `not_measured` 而不是虚构通过。
 - [ ] **审查台账**逐项确认此前审查 ① N1/N2 状态三词表、IR 调用点、feature flag；② N3 测试路径/负例/安全拒绝；③ N4 Vitest 与 CI、真实 provider 数据/成本；④ N5 许可证/线程/WASM/版本固定；⑤ 文档分类/日期/换行/BOM。已有证据标已解决但保留残余，缺证据列下一项。
 - [ ] **门禁、同步与推送**：本阶段仅数据/规则，不改变产品；`npm.cmd run typecheck`、定向单测、文档一致性、`git diff --check`，再更新所有权威文档并核对远端 SHA。
