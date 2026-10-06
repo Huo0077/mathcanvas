@@ -29,18 +29,38 @@
 | 见证搜索只认 `shape: "pyramid"`，棱柱走进去被**明确拒绝** | `packages/agent-core/src/solver/witnessSearch.ts`（`searchWitness` 的 `input.shape !== "pyramid"` 分支） |
 | 内核构造器支持棱锥与棱柱，但底面只收 **3 或 4** 个点名顶点，四边形还要求直角在**环首** | `packages/geometry-kernel/src/witness/constructors.ts`（`deriveBasePolygon`） |
 | 核验器的点名映射只接受 `/^[A-Z]$/`，而内核棱柱顶面点名写作 `A′` | `packages/agent-core/src/diagramVerification.ts`（`candidatePoints`） |
-| 解析层用 `[...value]` 逐字拆点名、用 `[A-Z]{2}` 这类片段匹配，于是 `AA₁` 被压成两个 `A`、重名后被丢弃 | `packages/agent-core/src/diagramObligations.ts`（`names`） |
+| 解析层**根本不匹配**带撇/带下标的点名：`AA₁`、`AA1`、`AA′` 三种写法下，`AA₁⊥平面ABCD` 都**一条 given 都产不出**，只作为 `unverified` 残留显形 | `packages/agent-core/src/diagramObligations.ts`（`names` = `[...value]` 与 `[A-Z]{2}` 片段） |
 | 原文题设核验**只在** `solid.create_polyhedron` 后触发 | `packages/agent-core/src/planCompiler.ts:418` |
 | 圆柱/圆锥**已有模板实体**（DSL 图元 + `buildSolidTemplate` + `solid.create_template`） | `packages/dsl/src/schema.ts`、`packages/geometry-kernel/src/solid-builders.ts`、`packages/agent-core/src/actionRegistry.ts` |
 | 内核**已有** `solveCircumsphere3` / `solveInsphere3`，`sceneObservation` 已在给多面体报外接球/内切球读数 | `packages/geometry-kernel/src/solidDerived.ts`、`packages/agent-core/src/sceneObservation.ts` |
 | DSL 的实体类型里**没有台体** | `packages/dsl/src/schema.ts`（`solidTypes` = cube/pyramid/cylinder/cone/polyhedron3/sphere） |
 | Agent 入口只认一句固定句式，且藏在默认关闭的开关后 | `apps/web/src/agent/localPlanner.ts`（`freeApexIntentFor`）、`apps/web/src/agent/featureFlags.ts` |
 
+### 1.1 已实测核对（2026-10-06，一次性探针，跑完即删）
+
+上面那张表里有一条**我原先写错了**，探针纠回来，记在这里以免下次又照错的写：
+
+| 喂进去的东西 | 实测结果 |
+| --- | --- |
+| `在三棱柱ABCD-A₁B₁C₁D₁中，AA₁⊥平面ABCD` | `givens: []`，残留 `["AA₁⊥平面ABCD"]` → **一条给定都产不出** |
+| `在三棱柱ABCD-A1B1C1D1中，AA1⊥平面ABCD` | 同上（`givens: []`） |
+| `在三棱柱ABCD-A′B′C′D′中，AA′⊥平面ABCD` | 同上（`givens: []`） |
+| `searchWitness({ shape: "prism", … })` | `unverified_instance` / `unsupported-shape`，`candidates=0` |
+| `constructWitnessShape` 五边形底面 | `rejected` / `unsupported-base-shape`：`"首批只支持三 / 四边形的底面，收到 5 个顶点。"` |
+
+**我原先写的"`AA₁` 被压成两个 `A`、重名后被丢弃"是错的。** 真实行为是**根本不匹配**，
+而那条条件作为 `unverified` 残留**如实显形**了 —— 这是 fail-closed，比"悄悄压成一个字母"好。
+`witnessSearch.ts` 那句代码注释（"经原话解析会压成单个大写字母"）也不准确，
+S3 动到那个分支时一并改正。
+
+**这条纠错本身也是一条证据**：把设计建在"代码注释说了什么"上是不够的，注释也会说错。
+所以 §四 每一块的出口都要求跑出真实读数，而不是引用注释。
+
 **"只会三棱锥"的成因**：加一种形状要同时改**四处**——入口句式表、搜索层 `derivePyramidStructure`、
 内核 `deriveBasePolygon`、核验器点名契约。四处各写一份判断，任一处漏改就不通
-（棱柱现在就卡在"解析层把 `A′` 压成 `A`"+ "核验器只认单字母"这两处）。
+（棱柱现在就卡在"解析层产不出带撇点名"与"核验器只认单字母"这两处）。
 
-## 二、已裁决的决策（用户三次裁决，记录在案）
+## 二、已裁决的决策（用户四次裁决，记录在案）
 
 | # | 决策 | 用户的裁决 |
 | --- | --- | --- |
@@ -121,7 +141,7 @@ export function splitPointNames(value: string): string[]
 
 | 块 | 内容 | 出口证据 |
 | --- | --- | --- |
-| **S1** | **接缝先行**：新增点名模块，解析器 `names()` 改用它，核验器 `candidatePoints` 与标签扫描改用它，修掉 `AA₁` 被压成 `AA` 而重名丢弃 | 单元正反例；变异（改回 `/^[A-Z]$/` ⇒ 红）；**现有形状行为逐字不变**（快照 + 171 条定向） |
+| **S1** | **接缝先行**：新增点名模块，解析器 `names()` 改用它，核验器 `candidatePoints` 与标签扫描改用它，让带撇/带下标点名在**解析**与**核验**两侧都成立 | 单元正反例；变异（把 `isPointName` 改回 `/^[A-Z]$/` ⇒ 红）；**现有形状行为逐字不变**（快照 + 171 条定向） |
 | **S2** | `SolidShapeSpec` 骨架 + **棱锥路径迁移**：`derivePyramidStructure` 改为产出 spec，四层改读 spec；内核 `deriveBasePolygon` 支持 n=3–6 | 现有 171 条定向与新 spec 3/3 **逐字不变**；新增 4/5/6 边底面正例；一条"无判据条件 ⇒ unverified"反例 |
 | **S3** | **棱柱**：解开 `searchWitness` 对 `prism` 的两条依赖（解析层区分 `A′`、核验器点名契约已在 S1 解开）；支持斜棱柱、正棱柱、任意 n 边底面 | 斜棱柱/正棱柱/菱形底面/正六边形底面正反例；关开关旧路径不变 |
 | **S4** | **台体**：棱台与圆台走 `polyhedron3`（底环 + 顶环），**不新增 DSL 图元**；如实声明圆台是多边形近似 | 正例 + 明确拒绝"上下底关系说不清"的题面；文档里写明近似口径 |
@@ -163,9 +183,16 @@ export function splitPointNames(value: string): string[]
   在测试里**独立回代**题设（例如自己算 `AD · (AB × AC) ≈ 0`），不读系统自报的结论。
 - **每块浏览器反例**：错参数必须拒绝，且**不占撤销历史**、草稿坐标逐字未变。
 - **变异验证**：每块至少一次"把判据破坏掉，看该红的是不是真红"。
-- **全量回归**：非 Lean 全量单测 + 全量 e2e。收口时的基线是
-  **325 文件 / 3769 通过 + 1 todo / 0 失败**、e2e **196 通过**（2026-10-06 读数）；
-  每块收口都重跑并**如实报当次数**，不沿用历史数字。
+- **全量回归**：非 Lean 全量单测 + 全量 e2e。**本设计定稿时（`3968a99`）的实测基线**是：
+
+  | 命令 | 读数 | 退出码 |
+  | --- | --- | --- |
+  | `npm.cmd exec vitest run -- --exclude scripts/proof-spike/lean4EndToEnd.test.ts --maxWorkers=2 --reporter=dot` | **328 文件 / 3831 通过 + 1 todo / 0 失败**（115.32 s） | 0 |
+  | `npm.cmd run test:e2e` | **199 通过 / 0 失败**（1.1 m） | 0 |
+
+  这两个数与 `current-status.md` 里记的 325 文件 / 3769、e2e 196 **不一样**，
+  因为那两条是更早时刻的读数、之后合并进了 curriculum / benchmark / lean4 那几批提交。
+  **每块收口都重跑并如实报当次数**，不沿用任何历史数字（包括本节这两个）。
 
 ## 七、明确不做（写进文档，避免"没说不算不做"）
 
