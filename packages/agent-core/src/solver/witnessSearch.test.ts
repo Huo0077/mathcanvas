@@ -375,6 +375,19 @@ describe("直棱柱", () => {
     // 理由要**说得出怎么改**：按内核的顶面命名约定写 `A′`。
     expect(result.reasons.join(" ")).toContain("A′")
   })
+
+  it("六边形底面的直棱柱：底面走**正六边形代表**（与棱锥共用同一条底面规则）", () => {
+    const result = search("在六棱柱ABCDEF-A′B′C′D′E′F′中，AA′⊥平面ABCDEF，画出这个六棱柱", { shape: "prism" })
+    expect(result.status, JSON.stringify(result)).toBe("verified_instance")
+  })
+
+  it("底面点名了直角时仍拒绝：正五边形代表满足不了它（棱柱与棱锥共用同一条规则）", () => {
+    const result = search("在五棱柱ABCDE-A′B′C′D′E′中，AA′⊥平面ABCDE，AB⊥BC，画出这个五棱柱", { shape: "prism" })
+    expect(result.status, JSON.stringify(result)).not.toBe("verified_instance")
+    if (result.status !== "unverified_instance") return
+    // 拒绝要说得出是"底面形状满足不了"，而不是含糊的"没找到"。
+    expect(result.reasons.join(" "), JSON.stringify(result)).toContain("unsupported-base-shape")
+  })
 })
 
 describe("witness search: unsupported inputs stay unsupported", () => {
