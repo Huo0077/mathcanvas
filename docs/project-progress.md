@@ -4554,3 +4554,45 @@ N1 IR → N2 求解 adapter → N3 动态拖动 → N4 开放题与真实 provid
 ### D. 门禁（控制器当次复跑，非采信实施者）
 
 `npm.cmd test -- --maxWorkers=2 --reporter=dot` → **N1 `f997b3f`：292 文件 / 3362 通过 + 1 todo / 0 失败**；**N2 `9c5ae2f`：298 文件 / 3449 通过 + 1 todo / 0 失败**。两次 `typecheck` 均 exit 0；两次 `lint` 均 exit 0（**0 error / 13 warning**，与基线逐条相同）。两批代码**都在默认关闭的 flag 之后**，关闭时行为与 `b1ee3d3` / `4707b64` 相同。
+
+## 2026-10-06 —— 三个出口收尾：N3 拖动的浏览器证据、N4 真实 provider 与人工可读性、N5 Lean 4 后端；N6 收口
+
+本条是**执行归档**，记录 N3/N4/N5 三个出口与 N6 收口的实际交付、复核抓出的真缺陷与被裁决的偏差。**当前读数只有一个权威处**：`docs/current-status.md` §一；这一条里的数字是**当时实测**，不是当前值。
+
+### A. 交付
+
+- **N3 出口**（`d7fe702` + `2dd89ab`）：计划出口点名的三条**浏览器**用例补齐 —— 过约束拒绝（会**点名冲突的约束 id**，且草稿坐标逐字未变）、冲突恢复（拒绝**不写文档、不占一步历史**，修掉冲突后同一次拖动正常提交）、一步撤销（一次 Ctrl+Z 让四个点回到拖动前、历史只占一步）。落点是 `e2e/agent-constrained-drag.spec.ts`（现在 5 条）加上入口 spec 3 条。**这三条是回归钉子而不是 RED**（首跑即绿，如实申报），每条都有**变异**证明会咬人（六个变异各自命中对应断言，全部还原）。
+- **N4 出口**：**人工可读性**这一项到位（`dbe6fb1`）—— 报告契约新增 `humanReadability`（**键必须在、值可 `null`、词表外拒收**），面板有只读「人读区」与三个标注按钮；`docs/current-status.md` §一 记下了用户对第三次运行产物的实际标注。计划 N4 的 `:324`（人工可读性）与收尾检查点 `:347` 随之勾选。
+- **N5 出口**：**形式证明后端第一次真的接上** —— 十栏准入记录（`e401d9e`）+ `lean4` 适配器与一个目标类的最小闭环（`051e5fe`），仓内新增 `proof/lean4`（`lakefile.toml` / `lean-toolchain` = `leanprover/lean4:v4.35.0-rc3` / `DrawProof.lean` / `README.md`）。接上名单**由通过的审查记录推导**，不是手写数组；出口 `:616` 勾选。
+- **N6 收口**：本计划 **37 项检查项全部勾选（0 未勾）**。
+
+### B. 复核抓出并修掉的真缺陷
+
+1. **证明正文引用了不存在的变量**：生成的 Lean 那句 `exact hu v hv` 里的 `v` 并不在上下文（且缩进不一致）。改为 `simpa [inner_eq_zero_symm] using hu (D - B) hv`；控制器另在**自己搭的探针**里用 `rw [Submodule.mem_orthogonal'] at hu; exact hu (D - B) hv` 复核了等价形式。
+2. **`git stash -u` 把未跟踪的 `proof/lean4/.gitignore` 一起收走**，于是 6.3 GB 的 `.lake` 一度**不再被忽略**。用 `git status -uall` 发现，并核实**没有任何 `.lake` 内容进过任何提交**，随后逐字节恢复那个 6 字节的 ignore 文件。
+3. **`.lake` 被 eslint 扫到**（eslint **不读** `.gitignore`）⇒ `eslint.config.mjs` 的 `ignores` 增加 `**/.lake/**`。
+4. **三份无 BOM 的 `.ps1` 会静默吃掉一行代码**：`scripts/sdd/*.ps1` 是 BOM-less UTF-8 且带中文注释，PS 5.1 按 GBK 解码时**连换行一起吃掉**，**下一行代码被静默删除**（用 `Parser::ParseFile` 证明；Node 的 `TextDecoder('gbk')` 是宽松的，会给假「安全」）。三份都补了 BOM（提交 `1232e43`）。
+5. **两条哨兵断言假设了"生产里什么后端都没接"**：`apps/web/src/components/agent/proofLevel.test.tsx` 原来钉 `toEqual([])`，接上 `lean4` 后全量套件因此变红。改成**显式注入 0-wired** 来测同一条不变量，**唯一的精确名单钉子**留在 `scripts/proof-spike/smoke.test.ts`。
+6. **界面里的过期断言**：`ConfirmationPanel.tsx` / `ProofLevelNotice.tsx` / `proofLevelStatus.ts` 里写着的「今天 `[]`」「今天 `0`」「全仓零生产者」都不再成立，就地更正。
+7. **准入记录里的成本数字与实测对不上**：`proofBackendReview.ts` 的 `startupBudgetMs` 注释还写着旧的 52 / 118 s，实测是 **68317 / 149532 ms**（另一次 67800 / 157315 ms，两次都 `exit=0`），按实测改。
+8. **`lake-manifest.json` 会把工作树弄脏**：Lake **每次运行都会重写**它，只忽略 `/.lake` 不够 ⇒ 一并忽略。**代价是 mathlib 的 rev 没有被 pin**（`rev = "master"`），如实记下。
+
+### C. 被裁决的偏差与仍未关的事
+
+- **勾股**走 `inference`（⊥ 目标 + 勾股定理那一步把结论接回来），**不做别名** —— 2026-10-05 用户裁决。
+- **`statement` 仍是可选字段**：`ProofInput` 的题面绑定靠**适配器纪律 + 一条测试**，不是靠类型结构。
+- **可达范围只有一类目标**：`perpendicular` 可达；共线 / 共面 / 勾股在解析层表达不出来；**IR → Lean 命题的翻译本身未被证明**；**产品里既没有证明入口、也没有产物通道**。
+- **成本永远 `not measured`**：仓里没有价目表，不许编。
+- **仍待用户裁决**：读不通的诊断文案要不要重新基线化黄金样本 / 要不要加一行 `.gitattributes`（`docs/current-status.md` §一 待裁决表第 5、6 行）。
+- **查出未修**：两处依赖归位问题（`apps/web` 的 `@vitejs/plugin-react` 放错在 `dependencies`、根 `package.json` 多余一个 `three`）—— 2026-10-06 复核**仍在**。
+- **测不出来的题**：第三次运行里 `unsupported-expression` 那条结局 `error`，原因是**模型响应超过 1 MiB 上限**（`the response exceeded 1048576 bytes`）。**fail-closed 是对的**（没被记成 `rejected` / `planned`），但**这类题今天测不出来**，修法未做。
+- **全题集只跑了前 3 条**（21 条中）；**人工可读性每组 n=1** ⇒ 不是趋势。
+
+### D. 门禁（控制器当次复跑，非采信实施者）
+
+- **单测**：`npm.cmd test -- --maxWorkers=2 --reporter=dot` → **1 failed | 324 passed** 文件、**1 failed | 3768 passed | 1 todo** 测试。**唯一失败是 Lean 端到端**：它放进**并行的**全量套件里会撞 300 s 墙钟（两次实测），而**单独跑**是成功的（68277 / 68386 / 67800 ms，`exit=0`）⇒ 判为**负载抖动，不是回归**，并且如实写进口径（那一格的有效口径是单独跑）。
+- **`typecheck`** exit 0；**`lint`** exit 0（**0 error / 13 warning**，与基线逐条相同）。
+- **Rust**：**238 passed / 3 ignored**。
+- **`proof:smoke`**：**8 通过 / 0 失败**，`PROOF_BACKENDS {"wired":["lean4"],"reviewed":1,"rows":[…"verdict":"passed","problems":[]]}`；反方向判据（形状合格的伪造产物仍被拒）**一条没变**。
+- **e2e**：全量基线 **194 通过**（2026-10-05）；N3 出口那两条 spec 的**针对性**读数是 **8 passed / exit 0（27.6 s）**，由控制器自跑。
+- **真实 provider**（用户在桌面端运行，**控制器未旁观**，只核对面板回传原文的自洽性）：题集 `planning` 轴**三轮**（`planned 2/3`、`planned 2/3`、第三次 `planned 1/3` + `clarification 1/3` + `error 1/3`、`average latency 18153 ms`）、agent 工具环 pass@1 轴**一轮**（`pass@1 1/8` / `pass@3 2/8` / 工具选择 45/45 / 工具错误 4/45 / `attempts 24`）；两轴的 `cost` 都是 `not measured`。

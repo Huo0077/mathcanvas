@@ -92,10 +92,10 @@ export function agentNextPhaseFlags(): AgentNextPhaseFlags {
    * 另外四个**故意不读偏好**，理由是各不相同而都必须成立：
    *
    * - `witnessSearch` 打开后**会替换被物化的坐标与点名**（见上面的注意点），它有自己的接线前提；
-   * - `openProblemCompiler` / `proofExport` 属于 N4 / N5，**还没交付**；
+   * - `openProblemCompiler` / `proofExport` 属于 N4 / N5 的**产品侧**，**至今没有任何读取点**（2026-10-06 复核：N4 交付的是评测面板、N5 交付的是只读「证明级别」状态面，两者都不读这两个 flag）；
    * - `obligationIR` 同理。
    *
-   * 一个"存了就能全开"的偏好，等于把四个未完成阶段的路一起打开 ——
+   * 一个"存了就能全开"的偏好，等于把另外四个开关一起打开（其中两个至今没有任何读取点）——
    * `featureFlags.test.ts` 里那条"恶意存储"用例就是钉这件事的。
    */
   return createAgentNextPhaseFlags({ constrainedDrag: loadConstrainedDragEnabled() })

@@ -49,22 +49,22 @@
 >    `TypeError: Cannot read properties of undefined (reading 'context')`（复核员用探针独立复现：`runModelCalls=0`），
 >    面板还会永远停在"正在跑…"。**它从来没有真正工作过**；**2026-10-05 已修**（提交 `90eba6e`：请求形状收成
 >    `@draw/agent-core` 的 `buildPlanRequest` 一处，与生产路径同构）。
->    **修好之后它真的会花钱**（24 次请求，两段式、点两下才发），而**还没有人在修好之后跑过** ⇒ 这一栏仍然如实写 `not measured`。
+>    **修好之后它真的会花钱**（24 次请求，两段式、点两下才发），**修好之后已经跑过一轮**（2026-10-05 第三次真实运行，用户运行、控制器未旁观：`pass@1 1/8` / `pass@3 2/8` / 工具选择 45/45 / 工具错误 4/45 / `attempts 24`）⇒ **这一栏已有读数**；仍然如实写 `not measured` 的只剩**成本**那一段（没有价目表）。
 >
 > **成本那一栏与上面无关，它永远需要一张价目表**：仓里没有 ⇒ `average cost` 写 `not measured`，不许编。
 
 > **还有一处门槛今天"无法判定"，而且它不是缺工作，是缺决定**（详见下面一节）：
-> **N5 的证明出口**卡在**没有任何后端接入**（接之前要先交一份通过的审查记录）。
+> ~~**N5 的证明出口**卡在**没有任何后端接入**（接之前要先交一份通过的审查记录）~~ **（2026-10-06：已接上 `lean4` —— 十栏准入记录 + 一个目标类的最小闭环；逐条更正见下面「N5 形式证明出口」那一节）**。
 > ~~**N3 的浏览器验收**~~ **（2026-10-05 已补齐：入口 = 设置 → 实验性功能 → 约束拖动；浏览器正/反例见
 > `e2e/agent-constrained-drag.spec.ts` —— 关着时同样的拖动改变 |AB|、打开后 |AB| 仍是 1）**。
-> **"无法判定"与"已达成"是两件事** —— N5 那一条不许读成绿。
+> **"无法判定"与"已达成"是两件事** —— N5 那一条**到 2026-10-06 才可判定**，而且只判到**一类目标**（`perpendicular` 可达；共线 / 共面 / 勾股在解析层表达不出来）⇒ **仍然不许读成绿**。
 
 ## 逐条状态
 
 | # | 计划原文 | 状态 | 判据 / 证据 |
 | --- | --- | --- | --- |
 | 1 | 类型检查、Agent 核心测试、Web Agent 测试、Rust provider 测试必须通过 | ✅ **已守住**（两条抖动都已修，且都有前后计数） | 读数在 `docs/current-status.md` §一「2026-10-05 N6 门禁复跑」与其后三节：单测 **303 文件 / 3529 通过 + 1 todo / 0 失败**、`typecheck` exit 0、`lint` 0 error / 13 warning。**e2e**：原来 6 次全量里 4 次红在同一条断言（`data-preview-hovering`），已修（`projectWorldPoint` 先等相机停稳）→ **修后连续 4 次全量 186 passed**。**`test:rust`**：原来五次里一次红（`tests/secrets.rs:149`），判别实验把范围缩到"并发"（默认并行 15 次红 1 次 / 单线程 20 次全绿）→ 5 处走真实凭据库的用例加锁 → **60 次并行全绿 + 3 次全量 236 通过 / 0 失败**。**两处修的都是测试侧**，产品行为未变。 |
-| 2 | 代表任务 pass@1 和语义验证率达到预先约定阈值 | ❌ **未测（无数据）** | 离线读数由 `npm run eval:agent` 打印：**pass@1 4/8、pass@3 4/8、工具选择 45/45、工具错误率 3/45**（**2026-10-05 更正**：这一格原来还写"**语义验证 4/8**" —— 那是**报告里 `semantic verify` 那一行，而它打的就是 `pass@1` 本身**（同一个 `percent(scorecard.passAt1)` 打印了两遍）。它不是第二个指标：`AgentEvalScorecard` 里没有独立的语义验证字段。**那一行已删除**（留白比留一个错的数诚实），而"**语义验证率**"这个被本条点名的指标**今天仍然没有被实现** —— 判据在仓里（`verification/taskVerification.ts` 的任务级语义验证器 + 记分卡给它的定义），要做就得真的去算它），模式是 `deterministic_local`。**真实 provider 的 pass@1 仍未测过**（**2026-10-05 更正**：这句仍成立，但**原因变了** —— 不是"还没跑"，而是**那条通道以前跑不了**：请求形状对真实规划器不成立，复核员用探针复现过 `TypeError … reading 'context'`、`runModelCalls=0`；**已在 `90eba6e` 修好**，而**修好之后还没人跑过**），所以"预先约定阈值"没有可对照的基线。**但路径已存在（2026-10-05）**：应用内「设置 → 真实 provider 评测」跑 `runProviderAgentEval`（同一套 8 题 × 3 轮 → `createModelPlanner` → 回环代理，**密钥不出凭据库**），**两段式**、**会花钱**、由人显式确认；跑之前那几栏如实写 `not measured`（含 `provider` 与 `average cost` —— 成本需要价目表，仓里没有） |
+| 2 | 代表任务 pass@1 和语义验证率达到预先约定阈值 | ❌ **有读数，但未达阈值（阈值本身也从未预先约定）** | 离线读数由 `npm run eval:agent` 打印：**pass@1 4/8、pass@3 4/8、工具选择 45/45、工具错误率 3/45**（**2026-10-05 更正**：这一格原来还写"**语义验证 4/8**" —— 那是**报告里 `semantic verify` 那一行，而它打的就是 `pass@1` 本身**（同一个 `percent(scorecard.passAt1)` 打印了两遍）。它不是第二个指标：`AgentEvalScorecard` 里没有独立的语义验证字段。**那一行已删除**（留白比留一个错的数诚实），而"**语义验证率**"这个被本条点名的指标**今天仍然没有被实现** —— 判据在仓里（`verification/taskVerification.ts` 的任务级语义验证器 + 记分卡给它的定义），要做就得真的去算它），模式是 `deterministic_local`。~~**真实 provider 的 pass@1 仍未测过**~~（**2026-10-06 更正**：**这一句已过期** —— pass@1 轴跑过一轮、`1/8`，见本节末与 §一；**2026-10-05 更正**：写它时仍成立，但**原因变了** —— 不是"还没跑"，而是**那条通道以前跑不了**：请求形状对真实规划器不成立，复核员用探针复现过 `TypeError … reading 'context'`、`runModelCalls=0`；**已在 `90eba6e` 修好**，而**修好之后还没人跑过**（**2026-10-06：已过期** —— 修好之后跑过一轮，`pass@1 1/8`）），所以"预先约定阈值"没有可对照的基线。**但路径已存在（2026-10-05）**：应用内「设置 → 真实 provider 评测」跑 `runProviderAgentEval`（同一套 8 题 × 3 轮 → `createModelPlanner` → 回环代理，**密钥不出凭据库**），**两段式**、**会花钱**、由人显式确认；跑之前那几栏如实写 `not measured`（含 `provider` 与 `average cost` —— 成本需要价目表，仓里没有）。**（2026-10-06 更正：这一格已经不是「无数据」）** 应用内两条真实通道都跑过了 —— 题集 `planning` 轴**三轮**（`planned 2/3`、`planned 2/3`、`planned 1/3` + `clarification 1/3` + `error 1/3`）、agent 工具环 pass@1 轴**一轮**（`pass@1 1/8` / `pass@3 2/8` / 工具选择 45/45 / 工具错误 4/45 / `attempts 24`），读数与口径逐条在 `docs/current-status.md` §一。**为什么这一格仍不判通过**：都是**小样本**（planning n=3；工具环 8 题、只跑了一轮），而且「**预先约定阈值**」这件事**从未发生** ⇒ 没有可对照的基线，**也绝不能把 `1/8` 追认成「达到阈值」**。 |
 | 3 | 不允许出现模型可见但 dispatcher 未实现的工具 | ✅ 已守住（测试） | `agentReleaseGate.test.ts`：模型面发布的**每一个只读工具**都必须有真实执行路径；模型面上**唯一**的非只读工具是 `plan.set_plan`（精确集合，多一个就红）；`draft.confirm_commit` / `draft.stage_actions` / `draft.discard` / `draft.verify` **一个都不许**出现在模型面上 |
 | 4 | 不允许出现未验证却声称完成的运行记录 | ✅ 已守住（测试） | `agentReleaseGate.test.ts` + `verification/completionGate.ts`：声明了验收条件的运行，报告不构成证据时**不得到达 `awaiting_confirmation`** |
 | 5 | 视觉能力不可用时，必须有本地布局验证结果或明确 `not_supported` | ✅ **满足（按原文口径）** | 原文是"**或**"：有本地布局验证结果**或**明确 `not_supported`，两者都不缺。本地布局判据是纯算术、不需 provider vision（`renderEvidence.ts` + `layoutModel.ts`），`visual-fit-drawn` 正是用它拿到的 `clipped_object 0 / label_overlap 0`；provider vision 不可用的路径一律回 `not_supported`（`screenshotForProvider`）。**但仍要如实说明这不是"全都接好了"**：`render.capture` / `render.inspect_layout` 尚未成为 dispatcher handler，**对象出界**那一半用的是候选文档的确定性正投影、不是 live 场景的包围盒（live 场景目前没有任何读数通道暴露给 agent） |

@@ -52,8 +52,8 @@ describe("agent next phase feature flags", () => {
    *
    * 存储里可能是任何东西：旧版本写的、手改的、别的程序写的。**那四个开关不许被它打开**，理由是各不相同
    * 而都必须成立：`witnessSearch` 打开后会替换被物化的坐标与点名（它有自己的接线前提，见
-   * `featureFlags.ts` 的说明），`openProblemCompiler` / `proofExport` 根本还没交付，
-   * `obligationIR` 同理。**一个"存了就能全开"的偏好等于把四个未完成阶段的路一起打开。**
+   * `featureFlags.ts` 的说明），`openProblemCompiler` / `proofExport` 至今没有任何读取点（N4 / N5 交付的是评测面板与只读状态面，都不读它们），
+   * `obligationIR` 同理。**一个"存了就能全开"的偏好等于把另外四个开关一起打开（其中两个至今没有读取点）。**
    */
   it("opens only constrainedDrag from the stored preference, never the other four", () => {
     localStorage.setItem(NEXT_PHASE_PREFERENCES_KEY, JSON.stringify({

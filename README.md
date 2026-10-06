@@ -64,7 +64,7 @@ npm run dev
 - **已具备**：平面和立体几何编辑（含球体）、函数分析、工程制图、本地文档保存/恢复，以及“计划 → 草稿 → 人工确认”的 Agent 基础链路。导出支持 `.mgeo` / SVG / CSV / PNG / 工程图 SVG·DXF·PDF，以及 **HTML 自包含快照**（v3.2.0，兼作可再导入存档）。具体功能范围以 [功能目录](docs/feature-catalog.md) 为准。
 - **高中几何交互**：六类教学代表题已用 7 条浏览器用例逐题验收；创建状态机 / 拾取边界 / 教学线型 / 单顶点编辑 / 体积画布数字 / 相机标签同步都已交付，**功能分支已合并进 `main`，并随 v3.1.0 与 v3.2.0 打包发布**（NSIS 的"装 → 启动 → 卸载"已在本机实测走完）。**仍需用户侧教师/学生走查**（"三点一面"目标 ≤8 次主操作），**MSI 的安装验收未做**（缺管理员权限）。可复核读数与未完成清单见 [当前状态](docs/current-status.md)；旧专题过程见 [高中几何进度](docs/research/2026-09-29-high-school-geometry-interaction-progress.md)。
 - **Agent 已有阶段成果**：只读场景工具、类型化工具调用、确定性的局部验收与发布门禁已有实现和测试；离线评估可用。但工具能力和真实模型绘图质量是两回事，不能把离线得分当成真实模型准确率。
-- **仍有限制**：增量草稿工具尚未作为模型可用工具开放；真实场景截图/相机证据与完整视觉检查尚未接通；代表任务的真实 provider pass@1、pass@3、成本和延迟还没有形成可用于放行的测量数据。因此类型化工具循环**尚未满足默认启用的发布门禁**。当前门禁及缺口见 [Agent 发布前门禁](docs/acceptance/agent-release-gate.md)，过程见 [Agent tool-loop 进度记录](docs/research/2026-09-28-agent-tool-loop-progress.md)。
+- **仍有限制**：增量草稿工具尚未作为模型可用工具开放；真实场景截图/相机证据与完整视觉检查尚未接通；代表任务的真实 provider pass@1、pass@3 与延迟**已有小样本读数**（2026-10-05 / 10-06，见 [当前状态](docs/current-status.md) §一），但**成本仍没有价目表**，这些读数**也还不足以形成放行依据**。因此类型化工具循环**尚未满足默认启用的发布门禁**。当前门禁及缺口见 [Agent 发布前门禁](docs/acceptance/agent-release-gate.md)，过程见 [Agent tool-loop 进度记录](docs/research/2026-09-28-agent-tool-loop-progress.md)。
 - **其他已知边界**：没有云端同步；球体能力已在 **v3.1.0** 整体交付（画布创建、解析截面、工程投影、Agent 动作都在），但**球不参与布尔运算**（明确拒绝并留诊断）；部分高级几何输入、精确曲面互交、DWG/B-rep 导入和自动尺寸布局仍未提供。用户侧与管理侧那两件待办见上一条与 [当前状态](docs/current-status.md) §四。
 
 公开 GitHub Release 目前最新为 **`v3.2.0`**（[发布说明](docs/release/v3.2.0.md)）—— 这一版带来 **HTML 导出**（自包含快照 + 可再导入存档，立体几何明确拒绝）与三处修复（拖动取消进行中的自动取景、悬停读数随内容自愈、本地规划器不再把分析题当建模指令）。历史版本见 `docs/release/`。过程记录见 [CHANGELOG](CHANGELOG.md) 与 [项目进度归档](docs/project-progress.md)，历史数字不能直接当作当前测试结果。
@@ -94,7 +94,7 @@ npm run eval:agent
 1. **用户侧验收**：教师/学生走查，包括“三点一面”主操作数、误操作、恢复和未核验提示。
 2. **管理员验收**：MSI 安装→启动→卸载；NSIS 与裸 exe 证据不能替代 MSI。
 3. **真实 Agent 质量基线**：真实 provider 的 pass@1/pass@3、成本、延迟、题设覆盖率和人工图面可读性。
-4. **下一阶段 N3–N6**：动态拖动保持约束、开放题编译与真实评测、形式证明出口、feature flag/依赖审查/发布收口。**N1、N2 已完成**，其已知边界与偏差逐条写在 [当前状态](docs/current-status.md) §四 F 与 [实施计划](docs/superpowers/plans/2026-10-04-agent-full-next-phase-implementation-plan.md) 的各阶段执行记录里。
+4. **下一阶段 N3–N6（已全部完成，2026-10-06）**：动态拖动保持约束、开放题编译与真实评测、形式证明出口、feature flag/依赖审查/发布收口。**N1–N6 的计划均已推完**（各阶段实施并复核、N3/N4/N5 出口达成、N6 收口）；但**作为用户可用能力，只有 N3 有产品入口**（N4 的评测面板可用、读数仍是小样本；N5 的证明没有界面通道；N1/N2 没有入口），其已知边界与偏差逐条写在 [当前状态](docs/current-status.md) §四 F 与 [实施计划](docs/superpowers/plans/2026-10-04-agent-full-next-phase-implementation-plan.md) 的各阶段执行记录里。
 
 完整路线见：
 
