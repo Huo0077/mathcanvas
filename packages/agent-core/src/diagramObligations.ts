@@ -3,6 +3,7 @@ export type DiagramObligationKind =
   | "fixedLength" | "equilateral" | "equalLength" | "midpoint" | "segmentRatio"
   | "planePerpendicular" | "dihedral" | "perpendicular" | "parallel" | "pointCoordinate"
   | "conicAxes"
+  | "tangentAt"
 
 /**
  * 题面写下的圆锥曲线参数。
@@ -105,6 +106,20 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
   {
     pattern: /y\s*(?:\^2|²)\s*\/\s*(\d+(?:\.\d+)?)\s*\+\s*x\s*(?:\^2|²)\s*\/\s*(\d+(?:\.\d+)?)\s*=\s*1/g,
     read: (m) => ellipseAxes(Number(m[2]), Number(m[1]))
+  },
+  /**
+   * **在某点处的切线**：`在 x=1 处的切线`。
+   *
+   * 这条 obligation 只记**横坐标**，斜率一个字都不记 —— 因为它不由题面给出，而由函数决定。
+   * 判据也不读图元里存的那个 `slope`（那是内核自己填的，拿它当判据就是拿系统自证），
+   * 而是由核验器**自己对该函数数值求导**再比。详见 `diagramVerification` 的 `tangentAt` 分支。
+   */
+  {
+    pattern: /x\s*=\s*(-?\d+(?:\.\d+)?)\s*处[^，,。；;\n]{0,4}的?切线/g,
+    read: (m) => {
+      const x = Number(m[1])
+      return Number.isFinite(x) ? { kind: "tangentAt", targets: [], value: x } : null
+    }
   },  {
     pattern: /二面角\s*([A-Z])\s*[-−]\s*([A-Z])([A-Z])\s*[-−]\s*([A-Z])\s*=\s*(\d+(?:\.\d+)?)\s*°/g,
     read: (m) => { const value = finitePositive(m[5]); return value === null || value >= 180 ? null : { kind: "dihedral", targets: m.slice(1, 5), value } }
@@ -181,8 +196,8 @@ export function parseDiagramObligations(prompt: string, options: DiagramParseOpt
       if (next && /[A-Z°+*/√π^%]/.test(next)) continue
       if (Array.from({ length: end - start }, (_, offset) => start + offset).some((at) => used.has(at))) continue
       const result = read(match)
-      // 圆锥曲线与点坐标都**不带点名**：它们自己就是被核验的对象，不能拿"至少两个名字"去卡。
-      if (result === null || (result.kind !== "pointCoordinate" && result.kind !== "conicAxes" && new Set(result.targets).size < 2)) continue
+      // 圆锥曲线、点坐标与切线都**不带点名**：它们自己就是被核验的对象，不能拿"至少两个名字"去卡。
+      if (result === null || (result.kind !== "pointCoordinate" && result.kind !== "conicAxes" && result.kind !== "tangentAt" && new Set(result.targets).size < 2)) continue
       givens.push({ ...result, sourceText: match[0], start, end })
       for (let at = start; at < end; at++) used.add(at)
     }

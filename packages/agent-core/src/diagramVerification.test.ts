@@ -190,3 +190,73 @@ describe("V0a numeric coordinate judgement on materialized named points", () => 
     expect(report.checks[0]).toMatchObject({ kind: "pointCoordinate", sourceText: "A=(0,0,2)", status: "failed", expected: 0, actual: 1 })
   })
 })
+
+/**
+ * **V0d：切线要按题面核验**（计划 `V0d 导数曲线`：`f(x) = x³ − 3x` 在 `x = 1` 处的切线）。
+ *
+ * ## 判据为什么不读图元里存的那个斜率
+ *
+ * 内核重算切线时会把 `slope` 填进图元。**拿它当判据就是拿系统自证** ——
+ * 无论那条切线画在哪、斜率算成什么，它都"符合"自己写下的数。
+ * 所以这里由**核验器自己**用中心差分数值求导，再与图元里的斜率比。
+ *
+ * 两个数都比：切点的**横坐标**，以及该点的**导数**。前者管"切在不在题面说的那个位置"，
+ * 后者管"斜率对不对" —— 对 `x³ − 3x` 来说 `f′(1) = 0`（水平切线），
+ * 而 `f′(2) = 9`；两者的区别正是"画对了"与"画在别处"。
+ */
+describe("V0d: tangent premises are checked against the function itself", () => {
+  const TANGENT_PROMPT = "作函数在 x=1 处的切线，画示意图"
+
+  /** `f(x) = x³ − 3x` 与它在 `x = touchX` 处的切线；`slope` 由调用方给，可以故意给错。 */
+  function tangentFixture(touchX: number, slope: number) {
+    const plan: PlanEnvelope = {
+      schemaVersion: PLAN_SCHEMA_VERSION,
+      kind: "plan",
+      goal: "画函数图与切线",
+      factIds: [],
+      actions: [
+        { actionId: "function.create_graph", actionKey: "f", factIds: [], inputs: { alias: "f", expression: "x^3-3*x", domain: [-2, 2] } },
+        { actionId: "function.create_tangent", actionKey: "t", factIds: [], inputs: { alias: "t", sourceId: "f", x: touchX } }
+      ] as never
+    }
+    const candidate = createEmptyDocument("calculus")
+    candidate.primitives.push({ id: "f", type: "function", expression: "x^3-3*x", domain: [-2, 2] })
+    candidate.primitives.push({
+      id: "t", type: "tangent", sourceId: "f", x: touchX,
+      point: { x: touchX, y: touchX ** 3 - 3 * touchX },
+      slope, a: { x: 0, y: 0 }, b: { x: 1, y: slope }, status: "approximate"
+    })
+    return { plan, candidate }
+  }
+
+  it("passes when the tangent really touches the curve at x = 1 with the slope f′(1) = 0", () => {
+    const { plan, candidate } = tangentFixture(1, 0)
+    const report = verifyDiagramObligations(parseDiagramObligations(TANGENT_PROMPT), plan, candidate)
+    expect(report.checks.map((check) => `${check.sourceText}:${check.status}`)).toEqual(["x=1 处的切线:passed"])
+    expect(report.status).toBe("passed")
+  })
+
+  it("fails when the stored slope is not the derivative the verifier computes itself", () => {
+    // 斜率 3（就是 f′(2)）而题面要的是 x=1 处那条 —— 这是**另一条切线**。
+    const { plan, candidate } = tangentFixture(1, 3)
+    const report = verifyDiagramObligations(parseDiagramObligations(TANGENT_PROMPT), plan, candidate)
+    expect(report.status).toBe("failed")
+    expect(report.checks[0]).toMatchObject({ kind: "tangentAt", status: "failed" })
+  })
+
+  it("fails when the tangent touches the curve somewhere else entirely", () => {
+    // 切在 x=2、斜率也对（f′(2) = 9），但那不是题面要的那条切线。
+    const { plan, candidate } = tangentFixture(2, 9)
+    const report = verifyDiagramObligations(parseDiagramObligations(TANGENT_PROMPT), plan, candidate)
+    expect(report.status).toBe("failed")
+  })
+
+  it("reports unverified when the tangent has no source curve to differentiate", () => {
+    // 没有来源就**算不出** f′(x)：这时必须如实说"未核验"，不许按"没有就跳过"处理成通过。
+    const { plan, candidate } = tangentFixture(1, 0)
+    candidate.primitives = candidate.primitives.filter((primitive) => primitive.type !== "function")
+    const report = verifyDiagramObligations(parseDiagramObligations(TANGENT_PROMPT), plan, candidate)
+    expect(report.status).toBe("unverified")
+    expect(report.checks[0]).toMatchObject({ kind: "tangentAt", status: "unverified" })
+  })
+})

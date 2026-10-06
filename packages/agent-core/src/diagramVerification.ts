@@ -1,5 +1,5 @@
 import type { GeometryDocument, PrimitiveSpec } from "@draw/dsl"
-import { crossVector3, dihedralAngleDetail3, distanceVector3, dotVector3, lengthVector3, subtractVector3, type Vector3 } from "@draw/geometry-kernel"
+import { compileExpression, crossVector3, dihedralAngleDetail3, distanceVector3, dotVector3, evaluateExpression, lengthVector3, subtractVector3, type Vector3 } from "@draw/geometry-kernel"
 
 import type { PlanEnvelope } from "./contracts"
 import type { DiagramObligation, DiagramObligationKind, DiagramObligationSet } from "./diagramObligations"
@@ -164,6 +164,60 @@ function formatNumber(value: number): string {
   return Number.isInteger(value) ? String(value) : Number(value.toFixed(6)).toString()
 }
 
+/** 候选图里那条切线。同样**不含"是否满足题设"的结论**。 */
+interface FigureTangent {
+  /** 切点的横坐标（函数来源时就是它）。 */
+  x: number
+  /** 图元里存着的斜率。**判据不直接信它** —— 见 `derivativeAt`。 */
+  slope: number
+  /** 来源函数那条曲线；没有就是"切线的来源不是函数"，算不出导数 ⇒ 未核验。 */
+  source: { expression: string } | null
+}
+
+/**
+ * **候选图里那条唯一的、新画出来的切线**（V0d）。
+ *
+ * 与多面体、圆锥曲线同一条纪律：恰好一条才谈得上"题面说的就是它"。
+ * 同时把它的**来源函数**一并取出来：没有来源就求不了导，那条路必须如实走到"未核验"。
+ */
+function candidateTangent(plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument): FigureTangent | null {
+  if (plan.kind !== "plan") return null
+  if (!plan.actions.some((action) => action.actionId === "function.create_tangent")) return null
+  const priorIds = new Set(base?.primitives.map((primitive) => primitive.id) ?? [])
+  const tangents = candidate.primitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "tangent" }> => primitive.type === "tangent" && !priorIds.has(primitive.id))
+  if (tangents.length !== 1) return null
+  const [tangent] = tangents
+  const source = candidate.primitives.find((primitive) => primitive.id === tangent.sourceId)
+  return {
+    x: tangent.x,
+    slope: tangent.slope,
+    source: source?.type === "function" ? { expression: source.expression } : null
+  }
+}
+
+/**
+ * **核验器自己算的导数**（中心差分）。
+ *
+ * ## 为什么不用内核那个
+ *
+ * 内核重算切线时会把 `slope` **写进图元**。若判据去读那个数，就是在拿系统自证：
+ * 无论切点画在哪、斜率算成什么，图元里的数都会"符合"它自己。所以这里独立地
+ * 从**表达式**出发数值求导 —— 与内核那条符号路径是两套实现，能互相证伪。
+ *
+ * 步长取 `1e-5 · max(1, |x|)`：对三次函数，中心差分的截断误差在这个步长下约 `1e-10`，
+ * 远小于判据容差；而太小会让浮点相消吃掉全部有效位。
+ */
+function derivativeAt(source: { expression: string }, x: number): number | null {
+  try {
+    const compiled = compileExpression(source.expression)
+    const step = 1e-5 * Math.max(1, Math.abs(x))
+    const value = (evaluateExpression(compiled, { x: x + step }) - evaluateExpression(compiled, { x: x - step })) / (2 * step)
+    return Number.isFinite(value) ? value : null
+  } catch {
+    return null
+  }
+}
+
 /**
  * 椭圆的**人话描述**：半轴 + 由半轴决定的焦点。
  *
@@ -178,7 +232,13 @@ function describeEllipse(radiusX: number, radiusY: number): string {
   return `半轴 (${formatNumber(radiusX)}, ${formatNumber(radiusY)})、焦点 ${foci}`
 }
 
-function calculate(item: DiagramObligation, points: Map<string, Vector3>, conic: FigureConic | null): { actual: number; expected: number; tolerance: number; detail?: string } | null {
+/** 没有点名、由"恰好一条"确定的那几类图形。它们各自独立，缺谁就只有谁判不了。 */
+interface FigureContext {
+  conic: FigureConic | null
+  tangent: FigureTangent | null
+}
+
+function calculate(item: DiagramObligation, points: Map<string, Vector3>, figures: FigureContext): { actual: number; expected: number; tolerance: number; detail?: string } | null {
   /**
    * **圆锥曲线不走点名表**（V0c）：它没有顶点名，自己就是被核验的对象。
    *
@@ -188,13 +248,46 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, conic:
    */
   if (item.kind === "conicAxes") {
     const stated = item.conic
-    if (stated === undefined || conic === null || conic.kind !== stated.kind) return null
-    const gap = Math.max(Math.abs(conic.radiusX - stated.radiusX), Math.abs(conic.radiusY - stated.radiusY))
+    if (stated === undefined || figures.conic === null || figures.conic.kind !== stated.kind) return null
+    const gap = Math.max(Math.abs(figures.conic.radiusX - stated.radiusX), Math.abs(figures.conic.radiusY - stated.radiusY))
     return {
       actual: gap,
       expected: 0,
       tolerance: distanceTolerance(1),
-      detail: `实测 ${describeEllipse(conic.radiusX, conic.radiusY)}；题设要求 ${describeEllipse(stated.radiusX, stated.radiusY)}。`
+      detail: `实测 ${describeEllipse(figures.conic.radiusX, figures.conic.radiusY)}；题设要求 ${describeEllipse(stated.radiusX, stated.radiusY)}。`
+    }
+  }
+  /**
+   * **切线**（V0d）：题面只说"在 `x = 1` 处的切线"，斜率由**函数**决定。
+   *
+   * 所以两个数都要比，而且都不许读图元里那个自报的 `slope`：
+   * ① 切点的横坐标必须就是题面说的那个 `x`（管"切在不在题面说的位置"）；
+   * ② 斜率必须等于核验器**自己数值求出来**的 `f′(x)`（管"斜率对不对"）。
+   *
+   * 没有来源函数 ⇒ 求不了导 ⇒ 返回 `null`，由调用方如实报"未核验"。
+   * **不许**退化成"那就只查横坐标吧" —— 那只核验了一半，却看起来像全过了。
+   */
+  if (item.kind === "tangentAt") {
+    const stated = item.value
+    const tangent = figures.tangent
+    if (stated === undefined || tangent === null || tangent.source === null) return null
+    const abscissaGap = Math.abs(tangent.x - stated)
+    const expectedSlope = derivativeAt(tangent.source, stated)
+    if (expectedSlope === null) return null
+    if (abscissaGap > 1e-9) {
+      return {
+        actual: abscissaGap,
+        expected: 0,
+        tolerance: distanceTolerance(1),
+        detail: `切点画在 x = ${formatNumber(tangent.x)}，题设要求 x = ${formatNumber(stated)}。`
+      }
+    }
+    const slopeGap = Math.abs(tangent.slope - expectedSlope)
+    return {
+      actual: slopeGap,
+      expected: 0,
+      tolerance: distanceTolerance(expectedSlope),
+      detail: `切线斜率实测 ${formatNumber(tangent.slope)}；由函数算得 f′(${formatNumber(stated)}) = ${formatNumber(expectedSlope)}。`
     }
   }
   const vertices = item.targets.map((name) => points.get(name))
@@ -278,11 +371,15 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, conic:
 
 export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument, options: DiagramVerificationOptions = {}): DiagramVerificationReport {
   const points = candidatePoints(plan, candidate, base)
-  const conic = candidateConic(plan, candidate, base)
+  const figures: FigureContext = { conic: candidateConic(plan, candidate, base), tangent: candidateTangent(plan, candidate, base) }
   const checks: DiagramCheck[] = set.givens.map((item) => {
-    // 圆锥曲线**不带点名**：拿"点表建不出来"当理由会给出一个与它无关的解释。
-    if (item.kind !== "conicAxes" && points === null) return { kind: item.kind, sourceText: item.sourceText, status: "unverified", reason: "候选图缺少唯一、可靠的顶点名映射；不能按题面顺序猜坐标。" }
-    const result = calculate(item, points ?? new Map(), conic)
+    /**
+     * 圆锥曲线与切线都**不带点名**：拿"点表建不出来"当理由会给出一个与它们无关的解释。
+     * （切线的来源是**函数**，不是点名点集。）
+     */
+    const pointBased = item.kind !== "conicAxes" && item.kind !== "tangentAt"
+    if (pointBased && points === null) return { kind: item.kind, sourceText: item.sourceText, status: "unverified", reason: "候选图缺少唯一、可靠的顶点名映射；不能按题面顺序猜坐标。" }
+    const result = calculate(item, points ?? new Map(), figures)
     if (result === null) {
       return {
         kind: item.kind,
@@ -290,7 +387,9 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
         status: "unverified",
         reason: item.kind === "conicAxes"
           ? "候选图里没有唯一、可读的圆锥曲线（少了或多了一条），未核验。"
-          : "点名缺失、图形退化或角度无法计算，未核验。"
+          : item.kind === "tangentAt"
+            ? "候选图里没有唯一、可读的切线，或那条切线没有函数来源（求不了导），未核验。"
+            : "点名缺失、图形退化或角度无法计算，未核验。"
       }
     }
     const status = Math.abs(result.actual - result.expected) <= result.tolerance ? "passed" : "failed"

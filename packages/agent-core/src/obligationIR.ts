@@ -61,7 +61,7 @@ import type { ClaimRole, GeometryObligation, Judgeability, ObligationTolerance }
 const JUDGED_KINDS: ReadonlySet<DiagramObligationKind> = new Set<DiagramObligationKind>([
   "fixedLength", "equilateral", "equalLength", "midpoint", "segmentRatio",
   "planePerpendicular", "dihedral", "perpendicular", "parallel", "pointCoordinate",
-  "conicAxes"
+  "conicAxes", "tangentAt"
 ])
 
 /** 与 `diagramVerification.ts` 的常量同值（容差不能有两套；两处一起改）。 */
@@ -76,6 +76,8 @@ function toleranceFor(kind: DiagramObligationKind, value: number | undefined): O
   if (kind === "pointCoordinate") return { kind: "absolute", value: distanceTolerance(1) }
   // 半轴是长度量 ⇒ 与点坐标同一条绝对容差；用相对容差会让"半轴差 0.3"这种明显错误通过。
   if (kind === "conicAxes") return { kind: "absolute", value: distanceTolerance(1) }
+  // 切线的判据落在"横坐标差"与"斜率差"上，两个都是绝对量。
+  if (kind === "tangentAt") return { kind: "absolute", value: distanceTolerance(1) }
   if (kind === "segmentRatio" || kind === "planePerpendicular" || kind === "perpendicular" || kind === "parallel") {
     return { kind: "relative", value: UNITLESS_TOLERANCE }
   }
