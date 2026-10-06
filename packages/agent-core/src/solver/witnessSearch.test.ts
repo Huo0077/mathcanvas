@@ -349,11 +349,39 @@ describe("witness search: budget and classification", () => {
   })
 })
 
+/**
+ * **直棱柱**（S3 第一刀）。
+ *
+ * 旧注释把棱柱卡住的原因写成两条依赖：解析层认不出 `A′`、核验器只认 `/^[A-Z]$/`。
+ * **两条都已由 S1.2 / S1.3 解开**，所以这里钉的是新能力本身 ——
+ * 题面写 `AA′⊥平面ABC` 时，搜索层要能读出底面环与拉伸方向并产出**通过核验**的候选。
+ *
+ * 斜棱柱这一批**不做**：内核的 `{kind:"points"}` 拉伸分支按设计不可用（底面顶点全在 z = 0），
+ * 需要先有"环外点名顶点"的概念 —— 那是后续批次的事，不在这里硬凑。
+ */
+describe("直棱柱", () => {
+  const PRISM = "在三棱柱ABC-A′B′C′中，AA′⊥平面ABC，画出这个三棱柱"
+
+  it("侧棱⊥底面的写法能读出底面环与拉伸方向并产出候选", () => {
+    const result = search(PRISM, { shape: "prism" })
+    expect(result.status, JSON.stringify(result)).toBe("verified_instance")
+  })
+
+  it("顶面点名与内核约定不一致（AA₁）时如实拒绝，不擅自改名", () => {
+    const result = search("在三棱柱ABC-A₁B₁C₁中，AA₁⊥平面ABC，画出这个三棱柱", { shape: "prism" })
+    expect(result.status, JSON.stringify(result)).toBe("unverified_instance")
+    if (result.status !== "unverified_instance") return
+    expect(result.reasons.join(" "), JSON.stringify(result)).toContain("unsupported-shape")
+    // 理由要**说得出怎么改**：按内核的顶面命名约定写 `A′`。
+    expect(result.reasons.join(" ")).toContain("A′")
+  })
+})
+
 describe("witness search: unsupported inputs stay unsupported", () => {
   it("does not invent coordinates for the shapes it cannot derive from the givens", () => {
     const prism = search(PYRAMID, { shape: "prism" })
     expect(prism.status).toBe("unverified_instance")
-    if (prism.status !== "unverified_instance") throw new Error("expected prisms to be unsupported in the first batch")
+    if (prism.status !== "unverified_instance") throw new Error("expected a pyramid prompt under the prism family to stay unverified")
     expect(prism.reasons.join(" ")).toContain("unsupported-shape")
     expect(prism.evidence.status).toBe("unknown")
 

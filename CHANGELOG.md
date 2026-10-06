@@ -7,7 +7,15 @@
 
 
 
-## 2026-10-07 —— S2.1 第一步：形状数据化的**载体**落地（行为逐字不变）
+## 2026-10-07 —— S3 第一刀：**直棱柱走通**（并揭开一段写在注释里的过期依赖）
+
+- 搜索层此前对 `shape: "prism"` **直接提前返回**，理由写在注释里：① "原话解析只保留单个大写字母（`A′` 会被截成 `A`）"；② "核验器的点名映射只接受 `/^[A-Z]$/`"。**两条都已由 S1.2 / S1.3 解开** —— 注释却还留着，正是本仓最警惕的那类"过期的话"。
+- 新增 `derivePrismStructure`：从"侧棱 ⊥ 底面"那句读**底面环**（平面点名）与**拉伸方向**（垂足 → 顶面点）；底面环上的自由底边与棱锥**共用同一份规则**（把 `orderedBaseWithFreeEdges` 从 `derivePyramidStructure` 抽出来，两族各写一遍必然分叉）。
+- **只做直棱柱**（`AA′⊥底面` 那句就是直棱柱的定义）：内核 `WitnessExtrusionSpec` 的 `{kind:"points"}` 分支**按设计不可用**（底面顶点一律建在 z = 0，`to − from` 必落在底面内 ⇒ 零体积判据），所以拉伸只能给向量 ⇒ **斜棱柱要等"环外点名顶点"的概念**。这条边界写在拒绝文案与代码注释里，不硬凑一个题面没说的形状。
+- **顶面点名约定**：内核顶面命名由 `withPrimes` 生成（`A` → `A′`），题面写 `AA′` 与内核一致；写 `AA₁` 时**如实拒绝并说清怎么改**（"本批不做名字映射"）—— 不擅自把题面写的名字换掉。ASCII 撇 `'` 与 `′` 视为同一后缀的两种字形，比较前归一。
+- 读数：该文件 **28/28**（新增 2 条：直棱柱通过核验、`AA₁` 的诚实拒绝）；全库非 Lean **3897 通过 + 1 todo / 0 失败**（148.47 s，**+2 = 新用例**）；`typecheck` exit 0；`lint` 0 error / 13 warning。
+
+
 
 - 新增 `packages/geometry-kernel/src/witness/solidShapeSpec.ts`（设计 §3.1 的 `SolidShapeSpec` / `FreeScalar`，含 YAGNI 约束）并从内核 barrel 扁平导出 —— 这是四层共用的形状词汇。
 - **搜索层的候选池改成读 spec**：`candidatePool(spec, input)` 的网格轴来自 `spec.freeScalars`（0–2 条 `base-edge` + 自由高），`requestFor(spec, …)` 由 spec 构造内核请求；**高的来源从 spec 自己的 relations 读回来**（`PA=10` 已被 `kernelRelations` 译成 `segment-length`）—— 于是不必在 spec 之外再夹带一个 `WitnessHeightSpec`，也就没有"同一个判断写两遍"。

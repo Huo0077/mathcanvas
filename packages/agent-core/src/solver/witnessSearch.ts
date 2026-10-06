@@ -258,6 +258,82 @@ interface PyramidStructure {
 
 type StructureResult = { status: "ok"; structure: PyramidStructure } | { status: "rejected"; code: string; message: string }
 
+type StructureResultOf<T> = { status: "ok"; structure: T } | { status: "rejected"; code: string; message: string }
+
+interface PrismStructure {
+  base: string[]
+  /** 题面点名的那个**顶面**顶点（`AA′` 里的 `A′`）。其余顶面点名由内核按同一规则生成，spec 不预判。 */
+  top: string
+  foot: string
+  relations: WitnessRelation[]
+  freeBaseEdges: [string, string][]
+  /** 侧棱的给定长度（题面写了 `AA′=5` 才有），`null` = 自由。 */
+  statedHeight: number | null
+}
+
+/**
+ * **直棱柱的结构**（S3 第一刀）。
+ *
+ * 只收"侧棱 ⊥ 底面"这一种写法（`AA′⊥平面ABC`）—— 那**就是直棱柱的定义**，也正好对上内核
+ * 现有的拉伸接口：`WitnessExtrusionSpec` 的 `{kind:"points"}` 分支**按设计就是不可用的**
+ * （底面顶点一律建在 z = 0，`to − from` 永远落在底面内，必被零体积判据拒成 `degenerate-extrusion`；
+ * 见 `constructors.ts` 里那段"首批边界"）。所以**斜棱柱这一批不做**，理由写在拒绝文案里，
+ * 不硬凑一个题面没说的形状。
+ */
+function derivePrismStructure(givens: readonly GeometryObligation[]): StructureResultOf<PrismStructure> {
+  const entries = givens.map(lineAndPlane).filter((entry): entry is LineAndPlane => entry !== null)
+  const usable = entries.find((entry) => entry.plane.includes(entry.line[0]) !== entry.plane.includes(entry.line[1]))
+  if (!usable) {
+    return {
+      status: "rejected",
+      code: WITNESS_SEARCH_CODES.unsupportedShape,
+      message: entries.length === 0
+        ? "题面没有给出「某条侧棱 ⊥ 底面」的写法（例如 `AA′⊥平面ABC`），无法确定底面环与拉伸方向。"
+        : "题面里那条「侧棱 ⊥ 平面」的两个端点都不在所点名的平面内，无法确定底面环与拉伸方向。"
+    }
+  }
+  const base = usable.plane
+  const foot = base.includes(usable.line[0]) ? usable.line[0] : usable.line[1]
+  const top = foot === usable.line[0] ? usable.line[1] : usable.line[0]
+  /**
+   * 顶面点名必须是底面那个点的**带撇写法**：内核的顶面命名由 `withPrimes` 生成（`A` → `A′`），
+   * 与 `AA′` 这种题面一致。写成 `AA₁` 时内核仍生成 `A′` —— 同一个点、两套写法，
+   * **本批不擅自改名**（改名等于把题面写的名字换掉），如实拒绝并说清怎么改题面。
+   * ASCII 撇 `'` 与 `′` 是同一种后缀的两种字形（`pointNames` 已如此定义），比较前归一。
+   */
+  const normalized = top.replace(/'/g, "′")
+  if (normalized !== `${foot}′`) {
+    return {
+      status: "rejected",
+      code: WITNESS_SEARCH_CODES.unsupportedShape,
+      message: `顶面点名 ${top} 与内核的顶面命名约定（${foot}′）不一致；本批不做名字映射，请按 ${foot}′ 出题。`
+    }
+  }
+  const relations = kernelRelations(givens)
+  let lateral: number | null = null
+  for (const relation of relations) {
+    // 显式循环而不是 `find` 里的 `&&` 链：`WitnessRelation` 的判别在箭头函数里收不窄（TS2339）。
+    if (relation.kind !== "segment-length" || typeof relation.value !== "number") continue
+    const segment = relation.segments[0] ?? []
+    if (segment.includes(foot) && segment.includes(normalized)) {
+      lateral = relation.value
+      break
+    }
+  }
+  const { freeBaseEdges } = orderedBaseWithFreeEdges(base, relations)
+  return {
+    status: "ok",
+    structure: {
+      base: [...base],
+      top: normalized,
+      foot,
+      relations,
+      freeBaseEdges,
+      statedHeight: lateral
+    }
+  }
+}
+
 /** 高的来源：题面点名的那条含顶点的定长线段（解析式），否则自由。 */
 function heightSpecFor(givens: readonly GeometryObligation[], apex: string): WitnessHeightSpec {
   for (const obligation of givens) {
@@ -295,26 +371,37 @@ function derivePyramidStructure(givens: readonly GeometryObligation[]): Structur
   const foot = base.includes(usable.line[0]) ? usable.line[0] : usable.line[1]
   const apex = foot === usable.line[0] ? usable.line[1] : usable.line[0]
   const relations = kernelRelations(givens)
-  // A unique explicitly named triangular right corner may differ from the ring start.
-  // Use the kernel rule so free-edge choices and materialised coordinates agree.
-  const orderedBase = namedRightTriangleBase(base, relations)
-  const stated = new Set(relations.filter((relation) => relation.kind === "segment-length").flatMap((relation) => relation.segments.map((segment) => [...segment].sort().join("|"))))
-  const first = orderedBase[0]
-  const second = orderedBase[1]
-  const third = orderedBase.length === 4 ? orderedBase[3] : orderedBase[2]
-  /**
-   * **n ≥ 5 的底面没有"可选的底边"**：内核走**正 n 边形代表**（一条边长定全部），
-   * 那条边长由内核自己写进 `freeValues`。旧的 `[3] : [2]` 规则在 n = 5 时会把**对角线** `AC`
-   * 当成自由底边 —— 正五边形里 `AC` 由边长决定，把它说成"系统自选"是**假的自由**。
-   */
-  const freeBaseEdges = orderedBase.length >= 5
-    ? []
-    : ([[first, second], [first, third]] as [string, string][]).filter((edge) => !stated.has([...edge].sort().join("|")))
+  const { orderedBase, freeBaseEdges } = orderedBaseWithFreeEdges(base, relations)
 
   return {
     status: "ok",
     structure: { base: [...orderedBase], apex, foot, relations, freeBaseEdges, heightSpec: heightSpecFor(givens, apex) }
   }
+}
+
+/**
+ * 底面环（按内核口径旋转到"点名直角在环首"）+ 环上**题面没给长度**的那两条边。
+ *
+ * 棱锥与棱柱**共用这一份判断**：底面的解析构造本来就只有一条规则（内核的 `deriveBasePolygon`），
+ * 两族各写一遍必然分叉。
+ */
+function orderedBaseWithFreeEdges(base: readonly string[], relations: readonly WitnessRelation[]): { orderedBase: string[]; freeBaseEdges: [string, string][] } {
+  // A unique explicitly named triangular right corner may differ from the ring start.
+  // Use the kernel rule so free-edge choices and materialised coordinates agree.
+  const orderedBase = namedRightTriangleBase(base, relations)
+  /**
+   * **n ≥ 5 的底面没有"可选的底边"**：内核走**正 n 边形代表**（一条边长定全部），
+   * 那条边长由内核自己写进 `freeValues`。旧的 `[3] : [2]` 规则在 n = 5 时会把**对角线** `AC`
+   * 当成自由底边 —— 正五边形里 `AC` 由边长决定，把它说成"系统自选"是**假的自由**。
+   */
+  if (orderedBase.length >= 5) return { orderedBase, freeBaseEdges: [] }
+  const stated = new Set(relations.filter((relation) => relation.kind === "segment-length").flatMap((relation) => relation.segments.map((segment) => [...segment].sort().join("|"))))
+  const first = orderedBase[0]
+  const second = orderedBase[1]
+  const third = orderedBase.length === 4 ? orderedBase[3] : orderedBase[2]
+  if (first === undefined || second === undefined || third === undefined) return { orderedBase, freeBaseEdges: [] }
+  const freeBaseEdges = ([[first, second], [first, third]] as [string, string][]).filter((edge) => !stated.has([...edge].sort().join("|")))
+  return { orderedBase, freeBaseEdges }
 }
 
 // ---------------------------------------------------------------- 候选池（解析优先 + 有限网格）
@@ -359,15 +446,24 @@ function seededOrder<T>(values: readonly T[], seed: number): T[] {
  * 候选值表存的是**固定值表**（`FREE_BASE_VALUES` / `FREE_HEIGHT_VALUES`）；
  * "这一次按什么顺序试"仍留在搜索层的 `seededOrder` 里 —— 放进 spec 会让同一份形状描述随 seed 变形。
  */
-function specFor(structure: PyramidStructure): SolidShapeSpec {
+function specFor(structure: PyramidStructure | PrismStructure): SolidShapeSpec {
   const freeScalars: FreeScalar[] = structure.freeBaseEdges.map((edge, index) => ({
     id: `base-edge-${index + 1}`,
     kind: "base-edge" as const,
     targets: [...edge],
     candidates: [...FREE_BASE_VALUES]
   }))
-  if (structure.heightSpec.kind === "free") {
-    freeScalars.push({ id: "apex-height", kind: "height", targets: [structure.apex], candidates: [...FREE_HEIGHT_VALUES] })
+  const heightIsFree = "top" in structure ? structure.statedHeight === null : structure.heightSpec.kind === "free"
+  if (heightIsFree) {
+    const targets = "top" in structure ? [structure.top] : [structure.apex]
+    freeScalars.push({ id: "height", kind: "height", targets, candidates: [...FREE_HEIGHT_VALUES] })
+  }
+  if ("top" in structure) {
+    /**
+     * `top` 只记**题面点名出来的那一个**顶面顶点：其余顶面点名由内核 `withPrimes` 按同一规则生成，
+     * spec 不预判 —— 预判就会在"底面已经用了 `A′`"那种冲突回退里与内核给出不同答案。
+     */
+    return { family: "prism", base: [...structure.base], top: [structure.top], relations: [...structure.relations], freeScalars }
   }
   return {
     family: "pyramid",
@@ -396,12 +492,37 @@ function heightSpecFromSpec(spec: SolidShapeSpec): WitnessHeightSpec {
   return { kind: "free" }
 }
 
+/** 棱柱：题面点名的那条侧棱长度（`AA′=5`），`null` = 自由。 */
+function statedLateralHeight(spec: SolidShapeSpec): number | null {
+  const top = spec.top?.[0]
+  if (top === undefined) return null
+  for (const relation of spec.relations) {
+    if (relation.kind !== "segment-length" || typeof relation.value !== "number") continue
+    if ((relation.segments[0] ?? []).includes(top)) return relation.value
+  }
+  return null
+}
+
 function requestFor(spec: SolidShapeSpec, choices: readonly { edge: [string, string]; value: number }[], heightValue: number | null): WitnessConstructRequest {
-  const apex = spec.apex?.at ?? ""
   const relations: WitnessRelation[] = [...spec.relations]
   for (const choice of choices) {
     relations.push({ kind: "segment-length", segments: [[choice.edge[0], choice.edge[1]]], value: choice.value })
   }
+  if (spec.family === "prism") {
+    /**
+     * **直棱柱的拉伸是竖直向量**：题面写 `AA′⊥底面`，那正是"侧棱垂直于底面"。
+     * 内核的 `{kind:"points"}` 分支按设计不可用（底面顶点全在 z = 0），所以这里只能给向量；
+     * 高没定又没扫到值时给 `{kind:"unknown"}` —— 由内核**如实拒**成缺拉伸，而不是猜一个高度。
+     */
+    const height = heightValue ?? statedLateralHeight(spec)
+    return {
+      shape: "prism",
+      base: [...spec.base],
+      relations,
+      extrusion: height === null ? { kind: "unknown" } : { kind: "vector", vector: { x: 0, y: 0, z: height } }
+    }
+  }
+  const apex = spec.apex?.at ?? ""
   const stated = heightSpecFromSpec(spec)
   const height: WitnessHeightSpec = heightValue === null || stated.kind !== "free" ? stated : { kind: "free", value: heightValue }
   // `specFor` 总会写上顶点与垂足；这里的兜底只是不让类型上的"可选"变成运行期异常。
@@ -655,25 +776,21 @@ export function searchWitness(input: WitnessSearchInput): WitnessSearchResult {
   const ir = normaliseObligationIR(input.obligations)
   const givens = ir.obligations.filter((obligation) => obligation.role === "given")
 
-  if (input.shape !== "pyramid") {
+  /**
+   * **棱柱那两条旧依赖都已解开**（2026-10-07）：这段原先写着两句话 ——
+   * ① "原话解析只保留单个大写字母点名（`A′` 会被截成 `A`）" ⇒ **S1.2 起解析器认 `A′` / `A₁`**；
+   * ② "核验器的点名映射只接受 `/^[A-Z]$/`" ⇒ **S1.3 起两边共用 `pointNames` 的同一份定义**。
+   * 两条都不再成立，所以 `prism` 现在走 `derivePrismStructure`，不再从这里提前返回。
+   */
+  if (input.shape !== "pyramid" && input.shape !== "prism") {
     /**
-     * 首批只做棱锥。另外两族如实报"系统尚不支持"：
-     * - `prism`：题面对侧棱的写法（`AA₁`）经原话解析会压成单个大写字母，拉伸方向无从确定。
-     *   **第二条依赖（R34 / M5，这条以前只写在报告里）**：即使解析层将来能给出方向，
-     *   2a 的棱柱顶面点名写作 `A′`，而核验器的点名映射（`diagramVerification.ts` 的
-     *   `candidatePoints`）只接受 `/^[A-Z]$/` —— 棱柱候选在现有核验器里拿不到 `passed`，
-     *   所以这条边界要同时解开"解析层区分 A′ 与 A"和"核验器的别名契约"才谈得上支持。
-     * - `polyhedron`：任意多面体的坐标只能由调用方给出（`selectPolyhedronWitness` 负责筛选），
-     *   搜索器不凭空造坐标。
+     * 只剩"任意多面体"这一族如实报"系统尚不支持"：它的候选坐标只能由调用方给出
+     * （`selectPolyhedronWitness` 负责筛选），搜索器不凭空造坐标。
      */
-    const reason = input.shape === "prism"
-      ? "棱柱需要题面点名出底面环与拉伸方向，而原话解析只保留单个大写字母点名（A′ 之类会被截成 A），首批无法确定拉伸方向；即使拿到方向，核验器的点名映射也只认单个大写字母。"
-      : "任意多面体的候选坐标必须由调用方给出（见 selectPolyhedronWitness），搜索器不自造坐标。"
-    const code = input.shape === "prism" ? WITNESS_SEARCH_CODES.unsupportedShape : WITNESS_SEARCH_CODES.requiresCandidates
     return {
       status: "unverified_instance",
       evidence: evidenceFor("unverified_instance", {}),
-      reasons: [`${code}: ${reason}`, configLine(input, 0)]
+      reasons: [`${WITNESS_SEARCH_CODES.requiresCandidates}: 任意多面体的候选坐标必须由调用方给出（见 selectPolyhedronWitness），搜索器不自造坐标。`, configLine(input, 0)]
     }
   }
 
@@ -686,7 +803,7 @@ export function searchWitness(input: WitnessSearchInput): WitnessSearchResult {
     }
   }
 
-  const derived = derivePyramidStructure(givens)
+  const derived = input.shape === "prism" ? derivePrismStructure(givens) : derivePyramidStructure(givens)
   if (derived.status === "rejected") {
     return {
       status: "unverified_instance",
