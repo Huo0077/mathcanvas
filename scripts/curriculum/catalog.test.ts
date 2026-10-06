@@ -1,6 +1,6 @@
 import { expect, it } from "vitest"
 
-import { auditCoverage, type CurriculumCase, type CurriculumUnit, type SourceUnit } from "./catalog"
+import { auditCoverage, type CurriculumCase, type CurriculumUnit, type SourceUnit, type SourceSubtype } from "./catalog"
 import officialIndex from "../../docs/taxonomy/high-school-2025-source-index.json"
 import workingCatalog from "../../docs/taxonomy/high-school-2025.json"
 
@@ -88,7 +88,9 @@ it("registers 2025 course rows independently and reports every unsplit row hones
   expect(officialIndex.pdfSha256).toBe("FC9258BB37ED2E052A4B1BE608865A5481F770AE7E28CE536E835D2354353F86")
   const report = auditCoverage(official, editable, [])
   expect(report.missingUnits).toEqual([])
-  expect(report.unclassified).toEqual(editable.filter((unit) => unit.subtypes.length === 0).map((unit) => unit.unitId))
+  expect(report.unclassified).toEqual(editable.flatMap((unit) => unit.subtypes.length === 0
+    ? [unit.unitId]
+    : unit.subtypes.filter((subtype) => subtype.taskKind === "unclassified").map((subtype) => subtype.subtypeId)))
   expect(report.ready).toBe(false)
   expect(workingCatalog.exam.status).toBe("not_measured")
 })
@@ -106,4 +108,32 @@ it("does not silently relabel an elective A row as elective B", () => {
   const result = auditCoverage([original], [{ ...original, category: "B", subtypes: [] }], [])
   expect(result.invalidSources).toContain("elective-calculus")
   expect(result.ready).toBe(false)
+})
+
+/** Break guarded: removing a required content item must not shrink the atomic denominator. */
+it("reports an official content item omitted from the editable subtype list", () => {
+  const officialContent: SourceSubtype[] = [{ subtypeId: "quadratic-range", unitId: "required-functions", sourceSection: "五（一）主题二", pdfPage: 21, title: "二次函数取值范围" }]
+  const result = auditCoverage([source[0]!], [units[0]!], [], officialContent)
+  expect(result.missingSubtypes).toEqual(["quadratic-range"])
+  expect(result.ready).toBe(false)
+})
+
+/** Break guarded: a named content heading has not yet been adjudicated as a theorem or open task. */
+it("refuses to count an unclassified atomic content item even with example cases", () => {
+  const assigned: CurriculumUnit = {
+    ...units[0]!, subtypes: [{ subtypeId: "domain", taskKind: "unclassified", goldCaseIds: ["p", "n", "a"] }]
+  }
+  const result = auditCoverage([source[0]!], [assigned], validCaseRoles)
+  expect(result.unclassified).toEqual(["domain"])
+  expect(result.ready).toBe(false)
+})
+
+/** Break guarded: elective entries alone cannot stand in for compulsory/selective content requirements. */
+it("indexes every reviewed compulsory and selective content heading without claiming cases exist", () => {
+  const content = officialIndex.expectedSubtypes as SourceSubtype[]
+  expect(content).toHaveLength(67) // hand-reviewed content-requirement headings on PDF pages 17–52
+  expect(content.filter((entry) => entry.optionalForExam)).toHaveLength(5)
+  const report = auditCoverage(officialIndex.expectedUnits as SourceUnit[], workingCatalog.units as CurriculumUnit[], [], content)
+  expect(report.missingSubtypes).toEqual([])
+  expect(report.ready).toBe(false) // zero gold cases, elective subtypes and exam tags still missing
 })

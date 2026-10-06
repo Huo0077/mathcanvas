@@ -9,7 +9,23 @@
       "pdfPage": 16,
       "theme": "预备知识",
       "title": "集合",
-      "subtypes": []
+      "subtypes": [
+        {
+          "subtypeId": "compulsory-sets/concept",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "compulsory-sets/relations",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "compulsory-sets/operations",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        }
+      ]
     },
     {
       "unitId": "compulsory-logic",
@@ -18,7 +34,23 @@
       "pdfPage": 16,
       "theme": "预备知识",
       "title": "常用逻辑用语",
-      "subtypes": []
+      "subtypes": [
+        {
+          "subtypeId": "compulsory-logic/conditions",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "compulsory-logic/quantifiers",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "compulsory-logic/negation",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        }
+      ]
     },
     {
       "unitId": "compulsory-equal-inequal",
@@ -27,7 +59,18 @@
       "pdfPage": 16,
       "theme": "预备知识",
       "title": "相等关系与不等关系",
-      "subtypes": []
+      "subtypes": [
+        {
+          "subtypeId": "compulsory-equal-inequal/properties",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "compulsory-equal-inequal/mean-inequality",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        }
+      ]
     },
     {
       "unitId": "compulsory-quadratic",
@@ -36,7 +79,18 @@
       "pdfPage": 16,
       "theme": "预备知识",
       "title": "二次方程与一元二次不等式",
-      "subtypes": []
+      "subtypes": [
+        {
+          "subtypeId": "compulsory-quadratic/equations",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "compulsory-quadratic/inequalities",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        }
+      ]
     },
     {
       "unitId": "compulsory-function-basics",
@@ -45,7 +99,23 @@
       "pdfPage": 16,
       "theme": "函数",
       "title": "函数概念与性质",
-      "subtypes": []
+      "subtypes": [
+        {
+          "subtypeId": "compulsory-function-basics/concept",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "compulsory-function-basics/properties",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "compulsory-function-basics/history",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        }
+      ]
     },
     {
       "unitId": "compulsory-power-exponential-logarithm",
@@ -54,7 +124,23 @@
       "pdfPage": 16,
       "theme": "函数",
       "title": "幂函数、指数函数、对数函数",
-      "subtypes": []
+      "subtypes": [
+        {
+          "subtypeId": "compulsory-power-exponential-logarithm/powers",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "compulsory-power-exponential-logarithm/exponential",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "compulsory-power-exponential-logarithm/logarithmic",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        }
+      ]
     },
     {
       "unitId": "compulsory-trigonometry",
@@ -63,7 +149,33 @@
       "pdfPage": 16,
       "theme": "函数",
       "title": "三角函数",
-      "subtypes": []
+      "subtypes": [
+        {
+          "subtypeId": "compulsory-trigonometry/angles",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "compulsory-trigonometry/functions",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "compulsory-trigonometry/basic-identities",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "compulsory-trigonometry/transformations",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "compulsory-trigonometry/applications",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        }
+      ]
     },
     {
       "unitId": "compulsory-function-applications",
@@ -72,7 +184,18 @@
       "pdfPage": 16,
       "theme": "函数",
       "title": "函数应用",
-      "subtypes": []
+      "subtypes": [
+        {
+          "subtypeId": "compulsory-function-applications/bisection",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "compulsory-function-applications/modeling",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        }
+      ]
     },
     {
       "unitId": "compulsory-planar-vectors",
@@ -81,7 +204,28 @@
       "pdfPage": 17,
       "theme": "几何与代数",
       "title": "平面向量及其应用",
-      "subtypes": []
+      "subtypes": [
+        {
+          "subtypeId": "compulsory-planar-vectors/concept",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "compulsory-planar-vectors/operations",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "compulsory-planar-vectors/coordinates",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "compulsory-planar-vectors/applications",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        }
+      ]
     },
     {
       "unitId": "compulsory-complex",
@@ -90,7 +234,23 @@
       "pdfPage": 17,
       "theme": "几何与代数",
       "title": "复数",
-      "subtypes": []
+      "subtypes": [
+        {
+          "subtypeId": "compulsory-complex/concept",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "compulsory-complex/operations",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "compulsory-complex/polar",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        }
+      ]
     },
     {
       "unitId": "compulsory-solid-geometry",
@@ -99,7 +259,23 @@
       "pdfPage": 17,
       "theme": "几何与代数",
       "title": "立体几何初步",
-      "subtypes": []
+      "subtypes": [
+        {
+          "subtypeId": "compulsory-solid-geometry/solids",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "compulsory-solid-geometry/relations",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "compulsory-solid-geometry/history",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        }
+      ]
     },
     {
       "unitId": "compulsory-probability",
@@ -108,7 +284,18 @@
       "pdfPage": 17,
       "theme": "概率与统计",
       "title": "概率",
-      "subtypes": []
+      "subtypes": [
+        {
+          "subtypeId": "compulsory-probability/events",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "compulsory-probability/independence",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        }
+      ]
     },
     {
       "unitId": "compulsory-statistics",
@@ -117,7 +304,28 @@
       "pdfPage": 17,
       "theme": "概率与统计",
       "title": "统计",
-      "subtypes": []
+      "subtypes": [
+        {
+          "subtypeId": "compulsory-statistics/data",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "compulsory-statistics/sampling",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "compulsory-statistics/charts",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "compulsory-statistics/inference",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        }
+      ]
     },
     {
       "unitId": "compulsory-modeling-inquiry",
@@ -126,7 +334,18 @@
       "pdfPage": 17,
       "theme": "数学建模与探究",
       "title": "数学建模活动与数学探究活动",
-      "subtypes": []
+      "subtypes": [
+        {
+          "subtypeId": "compulsory-modeling-inquiry/modeling",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "compulsory-modeling-inquiry/inquiry",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        }
+      ]
     },
     {
       "unitId": "selective-sequences",
@@ -135,7 +354,28 @@
       "pdfPage": 38,
       "theme": "函数",
       "title": "数列",
-      "subtypes": []
+      "subtypes": [
+        {
+          "subtypeId": "selective-sequences/concept",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "selective-sequences/arithmetic",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "selective-sequences/geometric",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "selective-sequences/induction",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        }
+      ]
     },
     {
       "unitId": "selective-derivatives",
@@ -144,7 +384,28 @@
       "pdfPage": 38,
       "theme": "函数",
       "title": "一元函数导数及其应用",
-      "subtypes": []
+      "subtypes": [
+        {
+          "subtypeId": "selective-derivatives/concept",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "selective-derivatives/rules",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "selective-derivatives/applications",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "selective-derivatives/history",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        }
+      ]
     },
     {
       "unitId": "selective-spatial-vectors",
@@ -153,7 +414,28 @@
       "pdfPage": 38,
       "theme": "几何与代数",
       "title": "空间向量与立体几何",
-      "subtypes": []
+      "subtypes": [
+        {
+          "subtypeId": "selective-spatial-vectors/coordinates",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "selective-spatial-vectors/operations",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "selective-spatial-vectors/basis",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "selective-spatial-vectors/applications",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        }
+      ]
     },
     {
       "unitId": "selective-analytic-geometry",
@@ -162,7 +444,28 @@
       "pdfPage": 38,
       "theme": "几何与代数",
       "title": "平面解析几何",
-      "subtypes": []
+      "subtypes": [
+        {
+          "subtypeId": "selective-analytic-geometry/lines",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "selective-analytic-geometry/circles",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "selective-analytic-geometry/conics",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "selective-analytic-geometry/history",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        }
+      ]
     },
     {
       "unitId": "selective-counting",
@@ -171,7 +474,23 @@
       "pdfPage": 39,
       "theme": "概率与统计",
       "title": "计数原理",
-      "subtypes": []
+      "subtypes": [
+        {
+          "subtypeId": "selective-counting/principles",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "selective-counting/permutations",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "selective-counting/binomial",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        }
+      ]
     },
     {
       "unitId": "selective-probability",
@@ -180,7 +499,23 @@
       "pdfPage": 39,
       "theme": "概率与统计",
       "title": "概率",
-      "subtypes": []
+      "subtypes": [
+        {
+          "subtypeId": "selective-probability/conditional",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "selective-probability/discrete",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "selective-probability/normal",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        }
+      ]
     },
     {
       "unitId": "selective-statistics",
@@ -189,7 +524,23 @@
       "pdfPage": 39,
       "theme": "概率与统计",
       "title": "统计",
-      "subtypes": []
+      "subtypes": [
+        {
+          "subtypeId": "selective-statistics/correlation",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "selective-statistics/regression",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        },
+        {
+          "subtypeId": "selective-statistics/contingency",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        }
+      ]
     },
     {
       "unitId": "selective-modeling-inquiry",
@@ -198,7 +549,13 @@
       "pdfPage": 39,
       "theme": "数学建模与探究",
       "title": "数学建模活动与数学探究活动",
-      "subtypes": []
+      "subtypes": [
+        {
+          "subtypeId": "selective-modeling-inquiry/research-project",
+          "taskKind": "unclassified",
+          "goldCaseIds": []
+        }
+      ]
     },
     {
       "unitId": "elective-A-calculus",
@@ -427,5 +784,5 @@
     "separate": true,
     "status": "not_measured"
   },
-  "indexScope": "仅登记课程表/专题和E类公开列举项；原子题型尚未拆分，不能声称覆盖"
+  "indexScope": "表层 43 条、其中必修/选择性必修一级内容要求 67 条已入源索引；所有原子题型仍未判命题性质且无金标，选修 A–E/高考仍待拆分"
 }

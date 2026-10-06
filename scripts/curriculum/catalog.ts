@@ -6,9 +6,18 @@ export interface SourceUnit {
   pdfPage: number
 }
 
+export interface SourceSubtype {
+  subtypeId: string
+  unitId: string
+  sourceSection: string
+  pdfPage: number
+  title: string
+  optionalForExam?: boolean
+}
+
 export interface CurriculumSubtype {
   subtypeId: string
-  taskKind: "proposition" | "non_propositional"
+  taskKind: "proposition" | "non_propositional" | "unclassified"
   goldCaseIds: string[]
 }
 
@@ -25,6 +34,7 @@ export interface CurriculumCase {
 
 export interface CurriculumAudit {
   missingUnits: string[]
+  missingSubtypes: string[]
   unclassified: string[]
   missingCases: string[]
   duplicateIds: string[]
@@ -39,8 +49,9 @@ export interface CurriculumAudit {
  * from the working catalogue must not also silently shrink the official denominator.
  * "ready" means that the catalogue has audited examples, NOT that Lean can prove them.
  */
-export function auditCoverage(official: readonly SourceUnit[], catalog: readonly CurriculumUnit[], cases: readonly CurriculumCase[]): CurriculumAudit {
+export function auditCoverage(official: readonly SourceUnit[], catalog: readonly CurriculumUnit[], cases: readonly CurriculumCase[], content: readonly SourceSubtype[] = []): CurriculumAudit {
   const missingUnits: string[] = []
+  const missingSubtypes: string[] = []
   const unclassified: string[] = []
   const missingCases: string[] = []
   const duplicateIds: string[] = []
@@ -48,6 +59,12 @@ export function auditCoverage(official: readonly SourceUnit[], catalog: readonly
   const invalidSources: string[] = []
   const nonPropositional: string[] = []
   const officialById = new Map<string, SourceUnit>()
+  const contentById = new Map<string, SourceSubtype>()
+  for (const entry of content) {
+    if (contentById.has(entry.subtypeId)) duplicateIds.push(entry.subtypeId)
+    contentById.set(entry.subtypeId, entry)
+    if (!official.some((unit) => unit.unitId === entry.unitId) || !Number.isInteger(entry.pdfPage) || entry.pdfPage < 1 || entry.pdfPage > 171 || !entry.sourceSection.trim() || !entry.title.trim()) invalidSources.push(entry.subtypeId)
+  }
   for (const unit of official) {
     if (officialById.has(unit.unitId)) duplicateIds.push(unit.unitId)
     officialById.set(unit.unitId, unit)
@@ -80,6 +97,9 @@ export function auditCoverage(official: readonly SourceUnit[], catalog: readonly
     for (const subtype of unit.subtypes) {
       if (subtypeIds.has(subtype.subtypeId)) duplicateIds.push(subtype.subtypeId)
       subtypeIds.add(subtype.subtypeId)
+      if (subtype.taskKind === "unclassified") unclassified.push(subtype.subtypeId)
+      const expected = contentById.get(subtype.subtypeId)
+      if (content.length > 0 && (!expected || expected.unitId !== unit.unitId)) outOfScope.push(subtype.subtypeId)
       if (subtype.taskKind === "non_propositional") nonPropositional.push(subtype.subtypeId)
       for (const id of subtype.goldCaseIds) referencedCaseIds.add(id)
       for (const role of ["positive", "negative", "ambiguous"] as const) {
@@ -90,9 +110,12 @@ export function auditCoverage(official: readonly SourceUnit[], catalog: readonly
       }
     }
   }
+  for (const entry of content) {
+    if (!subtypeIds.has(entry.subtypeId)) missingSubtypes.push(entry.subtypeId)
+  }
   for (const entry of cases) {
     if (entry.scope === "curriculum" && (!subtypeIds.has(entry.subtypeId) || !referencedCaseIds.has(entry.caseId))) outOfScope.push(entry.caseId)
   }
-  const ready = official.length > 0 && [missingUnits, unclassified, missingCases, duplicateIds, outOfScope, invalidSources].every((issues) => issues.length === 0)
-  return { missingUnits, unclassified, missingCases, duplicateIds, outOfScope, invalidSources, nonPropositional, ready }
+  const ready = official.length > 0 && [missingUnits, missingSubtypes, unclassified, missingCases, duplicateIds, outOfScope, invalidSources].every((issues) => issues.length === 0)
+  return { missingUnits, missingSubtypes, unclassified, missingCases, duplicateIds, outOfScope, invalidSources, nonPropositional, ready }
 }
