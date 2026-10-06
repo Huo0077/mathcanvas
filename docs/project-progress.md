@@ -4681,7 +4681,7 @@ N1 IR → N2 求解 adapter → N3 动态拖动 → N4 开放题与真实 provid
 - **可达范围只有一类目标**：`perpendicular` 可达；共线 / 共面 / 勾股在解析层表达不出来；**IR → Lean 命题的翻译本身未被证明**；**产品里既没有证明入口、也没有产物通道**。
 - **成本永远 `not measured`**：仓里没有价目表，不许编。
 - **仍待用户裁决**：读不通的诊断文案要不要重新基线化黄金样本 / 要不要加一行 `.gitattributes`（`docs/current-status.md` §一 待裁决表第 5、6 行）。
-- **查出未修**：两处依赖归位问题（`apps/web` 的 `@vitejs/plugin-react` 放错在 `dependencies`、根 `package.json` 多余一个 `three`）—— 2026-10-06 复核**仍在**。
+- **查出未修**：两处依赖归位问题（`apps/web` 的 `@vitejs/plugin-react` 放错在 `dependencies`、根 `package.json` 多余一个 `three`）—— 2026-10-06 复核**仍在**；**2026-10-07 两处均已修**（`npm install` exit 0、lock 只多出 dev 标记且未增删包、typecheck/lint/构建/全库非 Lean 全过，见同日 CHANGELOG 与审查 §五）。
 - **测不出来的题**：第三次运行里 `unsupported-expression` 那条结局 `error`，原因是**模型响应超过 1 MiB 上限**（`the response exceeded 1048576 bytes`）。**fail-closed 是对的**（没被记成 `rejected` / `planned`），但**这类题今天测不出来**，修法未做。
 - **全题集只跑了前 3 条**（21 条中）；**人工可读性每组 n=1** ⇒ 不是趋势。
 

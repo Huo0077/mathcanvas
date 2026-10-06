@@ -7,6 +7,19 @@
 
 
 
+## 2026-10-07 —— 两处依赖归位落地；全量 e2e 那条偶发**拿到了现场**
+
+- **依赖归位**（旧审查 §五 记的「未修」两条）：`apps/web` 的 `@vitejs/plugin-react` 由 `dependencies` 移到 `devDependencies`；根 `package.json` 上多余的 `three` 删掉 —— 真正 import `three` 的全在 `apps/web`，`packages/*` 一处都没有。
+- **动依赖就要重跑整轮**（审查自己写的要求）：`npm install` exit 0；`package-lock.json` 的改动**逐行核过 —— 只有 112 处 `"dev": true` 翻转 + 5 行声明搬家，没有增删任何包**；`npm ls three` 现在只经 `@draw/web` 解析；typecheck exit 0；lint 0 error / 13 warning（与基线相同）；web 生产构建 exit 0（4.97 s）；全库非 Lean **330 文件 / 3878 通过 + 1 todo / 0 失败**（146.74 s）。
+- **顺带的好处（就是审查点名的那个后果）**：插件归位后，它那条 Babel 链在 lockfile 里被标成 `dev` —— **生产安装（`--omit=dev`）不会再带上构建期依赖**。
+- **全量 e2e 首跑 1 红，而这次手里有现场**（上一批把本地 `trace` 改成 `retain-on-failure` 就是为了这一天）：`geometry3d-drag.spec.ts:95` 断言 `cancelled`、实收 **`done`**。
+  - trace 里的属性序列是 `running` → `done` →（`data-drag-target` 出现，说明按下**确实落在画布上**）仍是 `done`：**动画在鼠标按下之前就自己跑完了**，根本没有"在飞的动画"可取消。
+  - 读代码确认**产品行为正确**：`threeSceneCamera.ts` 的 `cancelFitAnimation()` 在 `fitAnimation === null` 时直接返回、**不报任何状态**，而取景动画只有约 250 ms。
+  - 所以这是**用例侧的竞态**：`waitForFunction` 看见 `running` 要一次往返，`page.mouse.down()` 再要一次，负载高时两者之和超过动画剩余时间。单独跑该文件 **9/9 通过（18.8 s）**；随后全量 e2e 重跑 **207 通过 / 0 失败**。
+  - **本批不修它**：改测试要有自己的 RED 与变异证据，不塞进依赖批次。下一批的改法方向已定：输了竞速就重跑整轮，**但"按下时仍在 `running` 却没变成 `cancelled`"必须红**，并配变异证明判据还在咬人。
+  - 原始现场（那份 2.3 MB trace 解包后重新打包）留在工作区 `flake-evidence/`，**不在版本控制里**；上面引用的就是它。
+- **一处如实说明**：本批只改依赖归属、不触及运行时代码；那条红由 trace 直接给出机制，是用例竞态，不是本批引入的。
+
 ## 2026-10-06 —— 让本地偶发**可诊断**：失败时留下 trace
 
 - **现象**：全量 e2e 连续两轮各出现一条单条偶发（重跑即绿），两次都**没能查下去**。

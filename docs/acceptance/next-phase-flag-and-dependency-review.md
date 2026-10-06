@@ -68,7 +68,7 @@ N6 只核对"每个 flag 有单元 / 浏览器 / 回退用例"，**不重复创�
 | `pdf-lib` | 1.17.1 | MIT | 工程图 PDF 导出 |
 | `@tauri-apps/api` | 2.11.1 | Apache-2.0 OR MIT | 桌面外壳桥 |
 | `robust-predicates` | 3.0.3 | Unlicense | 几何内核的精确谓词 |
-| `@vitejs/plugin-react` | 5.2.0 | MIT | 构建期（**但被列在 `dependencies`，见 §五**） |
+| `@vitejs/plugin-react` | 5.2.0 | MIT | 构建期（**2026-10-07 已归位到 `devDependencies`**，见 §五） |
 
 **结论（仅限这一层）**：全部是 MIT / Apache-2.0 / Unlicense 这类宽松许可，**没有 copyleft**
 （GPL / LGPL / AGPL / MPL）出现在 JS 运行依赖里。
@@ -133,15 +133,13 @@ node scripts/toolchain.mjs cargo metadata --format-version 1 --manifest-path app
     没有共享锁，但这份结论**没有**写成清单）；也没有任何并发压测。
     **"没有共享锁"是好消息，可它是我读代码得出的，不是机器挡住的。**
 
-## 五、顺手查出的两处依赖归位问题（未修）
+## 五、顺手查出的两处依赖归位问题（**2026-10-07 已修**）
 
-1. `apps/web/package.json` 把 `@vitejs/plugin-react` 列在 **`dependencies`**（它是构建期插件，
-   应在 `devDependencies`）。后果不是"功能坏了"，而是发行包会多带上一个构建期依赖。
-2. 根 `package.json` 有一个 `three` 运行时依赖，而真正用 `three` 的是 `apps/web`。
-   根上这一份是多余声明。
+1. ~~`apps/web/package.json` 把 `@vitejs/plugin-react` 列在 **`dependencies`**~~（它是构建期插件）—— **已移到 `devDependencies`**。
+2. ~~根 `package.json` 有一个 `three` 运行时依赖~~ —— **已删除**。真正用 `three` 的是 `apps/web`（`packages/*` 一处都没 import 过），`npm ls three` 现在只经 `@draw/web` 解析。
 
-两处都**没有改**：动依赖会牵动 `package-lock.json` 与安装结果，属于需要单独验证的一批
-（改完必须重跑安装 + 全量门禁），不该塞在审查里顺手做。
+**当时的理由保留**：两处都**没有**在审查里顺手改，因为动依赖会牵动 `package-lock.json` 与安装结果，属于需要单独验证的一批（改完必须重跑安装 + 全量门禁）。
+**2026-10-07 按这条要求执行**：`npm install` exit 0；lock 改动**逐行核过 —— 只有 112 处 `"dev": true` 翻转 + 5 行声明搬家，没有增删任何包**；typecheck exit 0、lint 0 error / 13 warning（基线）、web 生产构建 exit 0、全库非 Lean **330 文件 / 3878 通过 + 1 todo / 0 失败**。副作用是好的：插件那条 Babel 链现在带 `dev` 标记，**生产安装不再带上构建期依赖**。
 
 ## 六、这一份**没有**回答的问题（如实）
 
