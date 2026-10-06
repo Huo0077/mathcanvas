@@ -454,15 +454,24 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
     return detail === null ? null : { actual: detail.interiorDegrees, expected: numeric, tolerance: ANGLE_TOLERANCE_DEGREES }
   }
   const kind = item.kind === "perpendicular" ? "perpendicular" : "parallel"
-  // A plane can be named by four vertices: check coplanarity of the fourth,
-  // then use the three-point plane expected by the existing line-plane residual.
-  if (vertices.length === 6) {
+  /**
+   * **平面可以用 3–6 个点名**（S2：底面支持 3–6 边）。多余的点先核**共面性**，
+   * 再把前三个点交给既有的"线面残差"（它只认三点平面）。
+   *
+   * 此前只处理了"恰好四点"（`vertices.length === 6`）：五边形底面的 `PA ⊥ 平面 ABCDE`
+   * 于是掉进 `checkedTargets = 全部 7 个` 那一支，残差认不出来 ⇒ 一律"未核验"。
+   */
+  const planeCount = vertices.length - 2
+  if (planeCount > 3) {
     const origin = at(2)
     const normal = crossVector3(subtractVector3(at(3), origin), subtractVector3(at(4), origin))
     const magnitude = lengthVector3(normal)
-    if (magnitude <= 1e-10 || Math.abs(dotVector3(normal, subtractVector3(at(5), origin))) / magnitude > distanceTolerance(1)) return null
+    if (magnitude <= 1e-10) return null
+    for (let index = 5; index < vertices.length; index += 1) {
+      if (Math.abs(dotVector3(normal, subtractVector3(at(index), origin))) / magnitude > distanceTolerance(1)) return null
+    }
   }
-  const checkedTargets = vertices.length === 6 ? item.targets.slice(0, 5) : item.targets
+  const checkedTargets = planeCount > 3 ? item.targets.slice(0, 5) : item.targets
   const residual = relationResidual({ kind, targets: checkedTargets.map((vertex) => ({ vertex })) }, (target) => points.get(target.vertex) ?? null)
   return residual === null ? null : { actual: residual, expected: 0, tolerance: UNITLESS_TOLERANCE }
 }

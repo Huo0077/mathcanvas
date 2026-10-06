@@ -169,9 +169,10 @@ interface LineAndPlane {
 function lineAndPlane(obligation: GeometryObligation): LineAndPlane | null {
   if (obligation.kind !== "perpendicular") return null
   const targets = obligation.targets
-  if (targets.length !== 5 && targets.length !== 6) return null
+  // 线段 2 个点名 + 平面 3–6 个点名 ⇒ 5–8 个；长度 4 一律是"线段 ⊥ 线段"。
+  if (targets.length < 5 || targets.length > 8) return null
   const plane = targets.slice(2)
-  if (plane.length !== 3 && plane.length !== 4) return null
+  if (plane.length < 3 || plane.length > 6) return null
   if (new Set(plane).size !== plane.length) return null
   const lengths = obligation.geometry?.planeLengths
   if (lengths && (lengths[0] !== 2 || lengths[1] !== plane.length)) return null
@@ -301,7 +302,14 @@ function derivePyramidStructure(givens: readonly GeometryObligation[]): Structur
   const first = orderedBase[0]
   const second = orderedBase[1]
   const third = orderedBase.length === 4 ? orderedBase[3] : orderedBase[2]
-  const freeBaseEdges = ([[first, second], [first, third]] as [string, string][]).filter((edge) => !stated.has([...edge].sort().join("|")))
+  /**
+   * **n ≥ 5 的底面没有"可选的底边"**：内核走**正 n 边形代表**（一条边长定全部），
+   * 那条边长由内核自己写进 `freeValues`。旧的 `[3] : [2]` 规则在 n = 5 时会把**对角线** `AC`
+   * 当成自由底边 —— 正五边形里 `AC` 由边长决定，把它说成"系统自选"是**假的自由**。
+   */
+  const freeBaseEdges = orderedBase.length >= 5
+    ? []
+    : ([[first, second], [first, third]] as [string, string][]).filter((edge) => !stated.has([...edge].sort().join("|")))
 
   return {
     status: "ok",

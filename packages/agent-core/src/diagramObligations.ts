@@ -91,7 +91,12 @@ const names = (value: string): string[] => splitPointNames(value)
 const POINT_NAME = POINT_NAME_SOURCE
 const SEGMENT_NAME = `${POINT_NAME}${POINT_NAME}`
 const TRIANGLE_NAME = `${POINT_NAME}${POINT_NAME}${POINT_NAME}`
-const PLANE_NAME = `${TRIANGLE_NAME}(?:${POINT_NAME})?`
+/**
+ * 平面点名的个数是 **3–6**：首批底面范围是 3–6 边（用户裁决），`平面ABCDE` 这种五边形底面
+ * 必须能读出来。此前只到 4 —— 于是"五棱锥 + `PA ⊥ 平面 ABCDE`"在解析层整句消失，
+ * 搜索层只能报"题面没有给出线段⊥平面的写法"（**题面明明给了**，是解析层没产出来）。
+ */
+const PLANE_NAME = `${TRIANGLE_NAME}(?:${POINT_NAME}){0,3}`
 const finitePositive = (value: string): number | null => {
   const number = Number(value)
   return Number.isFinite(number) && number > 0 ? number : null

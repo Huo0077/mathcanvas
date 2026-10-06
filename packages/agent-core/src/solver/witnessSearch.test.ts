@@ -64,6 +64,23 @@ function search(prompt: string, overrides: Partial<WitnessSearchInput> = {}) {
   return searchWitness({ ...SEARCH, obligations: obligationsOf(prompt), ...overrides })
 }
 
+/**
+ * **五边形底面**（S2 接线；内核已支持 n = 3–6，这里验"题面能不能走到内核"）。
+ *
+ * 2026-10-07 读码查实：内核 `deriveBasePolygon` 已支持 5 / 6 边，但这条能力**当时从产品路径走不到** ——
+ * ① 解析器的平面子模式只认 3–4 个点名（`平面ABCDE` 匹配不上）；
+ * ② 搜索层 `lineAndPlane` 只认 5 / 6 个 targets（= 线段 2 + 平面 3/4）。
+ * 这条用例钉的就是整条链：一句"五棱锥 + `PA ⊥ 平面 ABCDE`"必须能产出通过核验的候选。
+ */
+describe("五边形底面", () => {
+  const PENTAGON = "在五棱锥 P-ABCDE 中，PA ⊥ 平面 ABCDE，画出这个五棱锥"
+
+  it("五棱锥的题面能走到内核并产出候选", () => {
+    const result = search(PENTAGON)
+    expect(result.status, JSON.stringify(result)).toBe("verified_instance")
+  })
+})
+
 /** 按点名取坐标：结果里的 `names` / `vertices` 是同一套下标空间。 */
 function coordinates(candidate: PolyhedronWitness): (name: string) => Vector3 {
   const byName = new Map(candidate.names.map((name, index) => [name, candidate.vertices[index]]))
