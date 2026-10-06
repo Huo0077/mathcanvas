@@ -4,6 +4,8 @@ Date: September 29, 2026. Historical status then: **the six-phase checklist is c
 
 > **2026-10-06 新一轮范围提示**：本文件全是上一版历史快照（含当年“无真实 provider 数据”的旧结论），不记录 H0–H4；现况看 [当前状态](../current-status.md)，新任务看 [执行追踪](../agent-next-round-progress.md)。
 >
+> **2026-10-06 V0a 说明**：此处仍是 2026-09-29 的历史快照，**不记录**当前 V0a 的中途代码/浏览器结果；请读 [当前状态](../current-status.md) 和 [现行任务进度](../agent-next-round-progress.md)，勿将下方旧“无真实 provider”结论读成今天的事实。
+>
 > **时间边界（2026-10-05 补）**：这份文件是**上一版"六阶段清单"的快照**（正文截至 2026-09-29），
 > 加上它自己在 2026-10-04 追加的一段 N1–N6 路线图。**N1–N6 的实际进度不在这里** ——
 > 看 [`docs/current-status.md`](../current-status.md)。发布判定看 [`agent-release-gate.md`](../acceptance/agent-release-gate.md)。

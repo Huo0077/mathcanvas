@@ -50,12 +50,14 @@
 
 | 次序 | 首个可复核图 | 写入职责 / RED | 产品出口（未达） |
 | --- | --- | --- | --- |
-| V0a 立体自由顶点 | 第一条题面仅声明线面垂直与自由点 D（不擅自把正高度当题设）；内部候选可取 D(0,0,2)。**另把显式 A=(0,0,0) 与 D 在底面上方列为独立 RED 条件**，错误坐标或 D 下方不得凭“AD⊥平面”过关 | `packages/agent-core/src/planCompiler.test.ts`、`apps/web/src/agent/draftStore.test.ts`、`e2e/agent-diagram-math.spec.ts`：逐项核验现有可识别线面关系，坐标/上方若未可靠解析必须报 `unverified` 并拒绝正常确认；补判据后才放行。正例图不唯一、错误 D 与空报告拒绝，关旗旧路径不变 | 真浏览器看到四面体、条件状态一致；拒绝不占撤销历史；合法自由点图可确认但不宣称唯一；文字坐标/方位不能静默丢 |
+| V0a 立体自由顶点 | 第一条题面仅声明线面垂直与自由点 D（不擅自把正高度当题设）；内部候选可取 D(0,0,2)。**另把显式 A=(0,0,0) 与 D 在底面上方列为独立 RED 条件**，错误坐标或 D 下方不得凭“AD⊥平面”过关 | `packages/agent-core/src/planCompiler.test.ts`、`apps/web/src/agent/draftStore.test.ts`、`e2e/agent-diagram-free-apex.spec.ts`：逐项核验现有可识别线面关系，坐标/上方若未可靠解析必须报 `unverified` 并拒绝正常确认；补判据后才放行。正例图不唯一、错误 D 与空报告拒绝，关旗旧路径不变 | 真浏览器看到四面体、条件状态一致；拒绝不占撤销历史；合法自由点图可确认但不宣称唯一；文字坐标/方位不能静默丢 |
 | V0b 平面三角 | A/B/C 实际点线段、AB⊥AC 与欠定 C | `packages/geometry-kernel/src/planar-constraints.test.ts`、`packages/agent-core/src/planCompiler.test.ts`、`apps/web/src/agent/workerContracts.test.ts`、`apps/web/src/agent/draftStore.test.ts` + e2e：三点真实坐标点积正确，AB∥AC 反例红；未支持题设列 unverified | 图像存在、条件逐项核验、欠定 C 允许一张示意图 |
 | V0c 圆锥曲线 | 椭圆半轴 3/2，焦点 ±√5 与焦点轴反例 | 复用 `planar.create_conic`，在几何内核加独立判据、解析题面 IR 与草稿重算；新 e2e 需对错焦点拒绝及浏览器真实椭圆判据，不读模型自报证据 | 真椭圆 + 焦点/退化可判，关旗旧路径不变 |
 | V0d 导数曲线 | `f(x)=x³−3x` 真图与 x=1 水平切线 | 新 `function.create_graph`（名字可在 RED 时定）须经过 `actionIds.ts`、`actionRegistry.ts`、`actionInputs.ts`、编译器、`agentRunner.ts` 工作区/Worker；对切线 `f′(1)=0` 做内核/草稿正反验证 + e2e | 真函数图和切线同时显示，错误斜率不能正常确认 |
 
-**每块 RED 运行**：先新建能执行的断言文件（不存在文件/权限报错不算行为 RED），再运行 `npm.cmd exec vitest run -- packages/agent-core/src/planCompiler.test.ts apps/web/src/agent/draftStore.test.ts apps/web/src/agent/workerContracts.test.ts --reporter=dot` 和新增内核文件；浏览器 `npm.cmd run test:e2e -- e2e/agent-diagram-math.spec.ts --workers=1`。关 flag 必须钉旧拖动与旧静态示意图路径，默认不触发自动 Lean。所有 RED 要点名原题条件/具体图元/残差或不支持原因；**创建了一个图元**从来不等于**题设全部验证通过**。
+**每块 RED 运行**：先新建能执行的断言文件（不存在文件/权限报错不算行为 RED），再运行 `npm.cmd exec vitest run -- packages/agent-core/src/planCompiler.test.ts apps/web/src/agent/draftStore.test.ts apps/web/src/agent/workerContracts.test.ts --reporter=dot` 和新增内核文件；浏览器 V0a `npm.cmd run test:e2e -- e2e/agent-diagram-free-apex.spec.ts --workers=1`（V0b–V0d 实施时另建对应文件）。关 flag 必须钉旧拖动与旧静态示意图路径，默认不触发自动 Lean。所有 RED 要点名原题条件/具体图元/残差或不支持原因；**创建了一个图元**从来不等于**题设全部验证通过**。
+
+> **V0a 暂存（2026-10-06，未勾选 V0 出口/收口）**：已落地受限自由顶点三棱锥的实验性本地意图、一般位置三角底面示例、坐标来源 IR 与实际点核验、草稿/Worker 再核验和 3 条开关正反浏览器用例；定向 7 文件/171、单份 e2e 3/3，typecheck 和 lint 通过。**仍缺**浏览器真实点坐标独立回代与截图目检、错误坐标浏览器拒绝反例、全库/全量 e2e 及教师可读性走查。`D在底面ABC上方` 目前为 `unverified`，不是已算空间方位；四家族整体及自动 Lean 均未达成。此条只留中途恢复证据，不修改未勾的产品出口复选框。
 
 ## V1：画图与约束求解扩大到这四类题
 

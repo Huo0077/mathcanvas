@@ -10,7 +10,7 @@
 > [`docs/project-progress.md`](project-progress.md) —— 那是**归档**，里面的数字是"当时实测"，
 > 不是当前值。两份文件分工明确：**要当前值看这里，要过程看归档。**
 
-**最后更新：** 2026-10-06。**用户新范围只含需要作图的高中数学题**：三角/三角函数图、圆锥曲线、导数/函数图像及立体几何是首批；每题的实际作图需要优先于章节默认分类。旧 2025 课程 43 条来源/141 一级项是历史参考，不是本轮发布分母。现行 [V0–V3 设计](superpowers/specs/2026-10-06-diagram-scope-addendum.md)、[实施计划](superpowers/plans/2026-10-06-diagram-agent-auto-lean-implementation-plan.md)、[任务进度](agent-next-round-progress.md) 中，V0 仅完成内部数据与测试：4 个图形候选子型、3 个默认非图、134 个尚未审题型；四类各 3 条原创建模候选（包含 4 条可取自由参数的欠定例）。**尚未跑产品图元生成/核验、教师目视或新 Lean 自动证明，不能称用户已能完成四家族题。**此前 N1–N6 旧范围的有限见证/拖动安全、provider 小样本/费用空缺及只证明一类条件引理均是基线，不可平移为 V0–V3 完成。当前门禁读数在 §一、未完成项在 §四。
+**最后更新：** 2026-10-06。**用户新范围只含需要作图的高中数学题**：三角/三角函数图、圆锥曲线、导数/函数图像及立体几何是首批；每题的实际作图需要优先于章节默认分类。旧 2025 课程 43 条来源/141 一级项是历史参考，不是本轮发布分母。现行 [V0–V3 设计](superpowers/specs/2026-10-06-diagram-scope-addendum.md)、[实施计划](superpowers/plans/2026-10-06-diagram-agent-auto-lean-implementation-plan.md)、[任务进度](agent-next-round-progress.md) 中，V0 的四家族覆盖仅有内部数据与测试，V0a 另有受限三棱锥的进行中产品路径：4 个图形候选子型、3 个默认非图、134 个尚未审题型；四类各 3 条原创建模候选（包含 4 条可取自由参数的欠定例）。**V0a 已有一条实验性真草稿和定向浏览器记录，但没有四家族全量图元/题设核验、浏览器独立坐标回代、教师目视或新 Lean 自动证明，不能称四家族交付。**此前 N1–N6 旧范围的有限见证/拖动安全、provider 小样本/费用空缺及只证明一类条件引理均是基线，不可平移为 V0–V3 完成。当前门禁读数在 §一、未完成项在 §四。
 
 **修复前一版做完了什么**：用户现场"A 字句只有关系、没有数值的立体题面"从**画不出来**推进到**能画出来**。路上推翻了两个自己的设计（见下方"走过的弯路"），并修掉一批真实运行暴露的形式障碍（信封缺字段、平面动作带 `z`、面环绕向不一致、空 `relations`）。
 **修复前一版暴露了什么（更重要）**：用户在真图上确认"**图画出来了，明显画错了**"。实测模型给的坐标：`BD=2`、`O` 是中点、`△OCD` 等边、`AB=AD` 都对，但 `OA·CD = −0.314 ≠ 0`（**第（1）问要证的那件事本身不成立**），且 `A` 的高度取 0.64、而"二面角 45°"要求约 1.33（**差约一倍**）。
@@ -19,14 +19,17 @@
 
 > **2026-10-06 N3 增量：** 实验性约束拖动开启时，空间直线的 `coincident` 尚无 3D 判据，现在涉及其定义点的拖动（包括投影连带移动）会拒绝且保留文档和撤销历史。这是安全拒绝，**不是空间线重合求解**。本区块非 Lean 慢集成全库 324 文件 / 3781 通过 + 1 todo，e2e 196/196；Lean 慢集成本区块未单独重跑。下方历史读数仍保留原时刻。
 
+> **2026-10-06 V0a 暂存状态（未收口，不放行）：** 已在本地为实验性见证搜索加入自由三棱锥顶点候选、明确坐标原文核验、未支持“在底面上方”条件的 `unverified` 提示；只接受受限点名句型，关闭开关保持旧路径。本次定向 7 文件 / 171 通过，全部工作区 typecheck exit 0，lint 0 error / 13 条旧 warning，**仅新 spec** 浏览器 3/3（开启后确认与一步撤销、关闭时不建草稿、上方条件不静默放行）。**没有**全库/全量 e2e、独立截图目检、对提交后坐标的浏览器独立回代、教师/学生走查、MSI、真实 Lean 或付费 provider 证据；测试通过并不意味着所有高中立体题可画，更不意味着 V0a/V0 出口完成。本区块代码快照为 WIP `4ee71e8`，属于进行中记录，不能作为 V0a/V0 完成证据。
+
 ## 一、现在能不能跑（可复核的门禁读数）
 
 ### 1. 当前读数总表（**这一张是现在时**；下面按轮的「本批实测」一律是过程记录）
 
 | 门禁 | 命令 | 最新读数 | 退出码 | 记录于 |
 | --- | --- | --- | --- | --- |
-| 类型检查 | `npm.cmd run typecheck` | 全部工作区 + `e2e/` + `scripts/`，无错 | 0 | **2026-10-06 V0 本地实测** |
-| Lint | `npm.cmd run lint` | **0 error / 13 warning**（与基线逐条相同） | 0 | **2026-10-06 V0 本地实测** |
+| 类型检查 | `npm.cmd run typecheck` | 全部工作区 + `e2e/` + `scripts/`，无错 | 0 | **2026-10-06 V0a 工作树复验** |
+| Lint | `npm.cmd run lint` | **0 error / 13 warning**（与基线逐条相同） | 0 | **2026-10-06 V0a 工作树复验** |
+| V0a **进行中**定向（不是阶段出口） | `npm.cmd exec vitest run -- packages/agent-core/src/diagramObligations.test.ts packages/agent-core/src/obligationIR.test.ts packages/agent-core/src/diagramVerification.test.ts packages/agent-core/src/planCompiler.test.ts packages/geometry-kernel/src/witness/constructors.test.ts apps/web/src/agent/diagramDraftStage.test.ts apps/web/src/agent/localPlanner.test.ts --reporter=dot`；`npm.cmd run test:e2e -- e2e/agent-diagram-free-apex.spec.ts --workers=1` | **7 文件 / 171 单测**、**仅新浏览器 spec 3/3**；尚未浏览器逐点坐标回代、截图目视、全量 e2e/全库、真 Lean。`V0a`/`V0` **未验收**。 | 0（所列命令） | **2026-10-06 工作树复验** |
 | 历史全库（含 Lean 慢集成；本批未重跑） | `npm.cmd test -- --maxWorkers=2 --reporter=dot` | **325 文件 / 3769 通过 + 1 todo / 0 失败**（**2026-10-06 实测**，529.54 s 与 568.19 s 两次全绿）。**同日另一次（940.93 s）跑出 1 条 5 秒超时** —— 就是本行下面记过的那条**既有抖动**（`fileExports.test.ts` 的 CAD 导出用例），**单跑三次全过、那条用例本身约 0.69 s**。**相对上一条读数（318 / 3659，2026-10-05）是 +7 文件 / +110 用例**，差额来自这两条读数之间合并的 N5a/N5b/N6 那几批，**本批不为它编归因** —— 本批只改文档、两处注释与一条既有测试的注入，**不改测试文件数也不改用例数**（修复前后两次读数的 325 文件 / 3770 项逐字相同）。**以下为上一条读数的原记录，留档**：**318 文件 / 3659 通过 + 1 todo / 0 失败**（**2026-10-05 N4b 后实测**，224 s，**本批 0 抖动**）。**相对 N4a 的 317 / 3645：+1 文件**（新增 `apps/web/src/agent/fixtures/benchmarkPlanningEval.test.ts`，10 条）**/ +14 用例**（另 4 条加在既有文件里：`benchmarkContract.test.ts` +1、`ProviderEval.test.tsx` +3）—— **3645 + 14 = 3659 对得上**。**与上一版记的 315 / 3627 的差额不能全记在 N4a 头上**：文档那个 315 本身已是旧读数 —— 我在 BASE `e96d0f5` 上直接数出 **316** 个被 vitest 收录的测试文件（`packages|apps|scripts` 下的 `*.test.ts(x)`），HEAD `f315cf6` 是 **317**，**唯一新增**是 N4a 那条应用侧判据 `apps/web/src/agent/fixtures/benchmarkContract.test.ts`（+1 文件 / +5 用例）；此外 `scripts/agent-benchmark` 的用例数**本批未变**：BASE `e96d0f5` 就已经是 **40** 条（`benchmark.test.ts` 27 + `run.test.ts` 13），本批只把其中一条断言**改严**（expect 计数 46 → 48）。**（2026-10-05 复核更正**：我上一版这里写成"由 34 条增至 40 条" —— 那个 34 是更早一轮的历史读数（`git show e96d0f5:scripts/agent-benchmark/*.test.ts` 数出来就是 40），被我当成了本批的增量；这是"看起来像实测、其实不存在的 delta"，复核抓出来后已改正。**）**其余差额来自这两个读数之间的其它提交，**不是本批**。**另如实记一次抖动**：独立复核时同一条命令在本机跑出 **1 条 5 秒超时**（`apps/web/src/persistence/fileExports.test.ts` 的 CAD 导出用例）—— 该文件**未被本批任何提交改动**（最后动它是 2026-10-02 的 `fc4df43`），**单跑 9/9 通过、那条用例本身 308 ms**，属**负载敏感的既有抖动**：按本仓口径**超时那次既不算绿也不算红**，但它确实存在、值得记 | 0（本批三次：两次 0，抖动那次为 1） | **2026-10-06 实测（控制器自跑三次）** |
 | 本区块非 Lean 慢集成单测 | `npm.cmd exec vitest run -- --exclude scripts/proof-spike/lean4EndToEnd.test.ts --maxWorkers=2` | **324 文件 / 3781 通过 + 1 todo / 0 失败**；与含 Lean 慢集成的历史读数口径不同。 | 0 | **2026-10-06 本区块实测** |
 | V0 内部作图范围与候选案例（**非产品已画图**） | `npm.cmd exec vitest run -- scripts/curriculum/diagramScope.test.ts scripts/curriculum/goldCases.test.ts scripts/curriculum/catalog.test.ts scripts/curriculum/examSources.test.ts scripts/docs-consistency/progress-claims.test.ts --reporter=dot` | **5 文件 / 35 通过**；4 个视觉候选、3 默认非图、134 未审；4 家族 × 正反欠定 = 12 条内部描述/坐标候选，其中欠定 4 条允许自由选择；**无真实图元/Lean/新付费 provider 结果**。 | 0 | **2026-10-06 当前本块定向复验** |
@@ -804,7 +807,7 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
 ### F. 现行 V0–V3：只处理需要作图的题（产品能力尚未交付）
 
 - [x] **V0 内部基础**：保留 2025 课程来源清册作候选参考，但独立 `diagram-scope-2025.json` 的 4 个宽泛图形领域只标 `helpful`，不能把同章节纯计算强制画图；3 个默认非图子型可由题目明确绘图请求覆盖，另 134 子型仍 `unknown`。内部题集已用三角、椭圆、导数曲线与四面体的 **12 条**原创正/反/欠定**文字/坐标候选**替代尚未推送的纯集合/数列/恒等式九例，4 条欠定例给出可行自由点/参数样本。这里的候选还**没有内核/画布核验**，`verified_instance` 不可仅凭文本产生；Lean 更未自动调用。
-> **2026-10-06 产品接线只读审计（未实施）**：`planCompiler.ts` 和 `draftStore.ts` 的原文题设核验只在 `solid.create_polyhedron` 触发；平面曲线虽有创建动作，却未接相同的原文条件复核；DSL 能表示函数图像，但 Agent 无 `function.create_graph`，现有分析/切线动作需要来源。V0a–V0d 已按真实调用点写入新计划；另发现线面垂直可识别但“上方”和显式点坐标未有同等可靠判据，V0a 将把错坐标/下方顶点设为 RED，未支持则列未核验阻止确认。**还没有任何产品四家族真图通过记录**。
+> **2026-10-06 产品接线只读审计（未实施）**：`planCompiler.ts` 和 `draftStore.ts` 的原文题设核验只在 `solid.create_polyhedron` 触发；平面曲线虽有创建动作，却未接相同的原文条件复核；DSL 能表示函数图像，但 Agent 无 `function.create_graph`，现有分析/切线动作需要来源。V0a–V0d 已按真实调用点写入新计划；另发现线面垂直可识别但“上方”和显式点坐标未有同等可靠判据，V0a 将把错坐标/下方顶点设为 RED，未支持则列未核验阻止确认。**V0a 仅有自由三棱锥的定向产品路径 3/3 浏览器记录；四家族完整真图、浏览器坐标独立回代与目视验收均未完成**。
 
 - [ ] **V0 产品出口**：实际生成 2D/函数/圆锥曲线/3D 图元，逐条核验题设与证据来源；负例拒绝，欠定自由点允许一张符合直觉且满足题设的示意图，旧路径关旗回归和浏览器可视/撤销正反验收齐备。
 - [ ] **V1/V2/V3**：四类作图约束/拖动，限定作图主张可信形式化后桌面受限自动 Lean，真实 provider 作图图面可读性与成本门禁。教师/学生目视走查与管理员 MSI 仍分别未验；付费 provider 需要用户单独批准。各块具体文件/RED/接口见 [新实施计划](superpowers/plans/2026-10-06-diagram-agent-auto-lean-implementation-plan.md)。
