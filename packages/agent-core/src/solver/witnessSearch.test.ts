@@ -92,13 +92,15 @@ describe("五边形底面", () => {
      * 而不是画一张看起来正常、却不符合题意的图（本仓最忌讳的"悄悄换一个题面没说的形状"）。
      */
     const result = search("在五棱锥 P-ABCDE 中，PA ⊥ 平面 ABCDE，AB ⊥ BC，画出这个五棱锥")
-    expect(result.status, JSON.stringify(result)).not.toBe("verified_instance")
+    expect(result.status, JSON.stringify(result)).toBe("unverified_instance")
+    // 收窄到带 `reasons` 的那一支（`WitnessSearchResult` 是判别联合，`reasons` 只在未核验这一支上）。
+    if (result.status !== "unverified_instance") return
     /**
      * 而且要**说得出**是哪一种给不出：候选池照常枚举（3 个），但**每一个都在构造期被拒**，
      * 拒绝理由带机器可读的 `unsupported-base-shape`，句子明说"满足不了它、不换一个题面没说的形状"。
      * 钉这条是因为：给不出**不是问题**，说不出为什么才是 —— 用户得知道改哪一句。
      */
-    expect(JSON.stringify(result.reasons), JSON.stringify(result)).toContain("unsupported-base-shape")
+    expect(result.reasons.join(" "), JSON.stringify(result)).toContain("unsupported-base-shape")
   })
 })
 
