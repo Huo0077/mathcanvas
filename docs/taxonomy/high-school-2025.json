@@ -22,12 +22,8 @@
         },
         {
           "subtypeId": "compulsory-sets/operations",
-          "taskKind": "proposition",
-          "goldCaseIds": [
-            "compulsory-sets/intersection-true",
-            "compulsory-sets/intersection-false",
-            "compulsory-sets/intersection-missing"
-          ]
+          "taskKind": "unclassified",
+          "goldCaseIds": []
         }
       ]
     },
@@ -166,12 +162,8 @@
         },
         {
           "subtypeId": "compulsory-trigonometry/basic-identities",
-          "taskKind": "proposition",
-          "goldCaseIds": [
-            "compulsory-trigonometry/pythagorean-identity",
-            "compulsory-trigonometry/sum-identity-false",
-            "compulsory-trigonometry/angle-interval-missing"
-          ]
+          "taskKind": "unclassified",
+          "goldCaseIds": []
         },
         {
           "subtypeId": "compulsory-trigonometry/transformations",
@@ -180,8 +172,12 @@
         },
         {
           "subtypeId": "compulsory-trigonometry/applications",
-          "taskKind": "unclassified",
-          "goldCaseIds": []
+          "taskKind": "proposition",
+          "goldCaseIds": [
+            "compulsory-trigonometry/right-true",
+            "compulsory-trigonometry/parallel-false",
+            "compulsory-trigonometry/free-corner"
+          ]
         }
       ]
     },
@@ -275,8 +271,12 @@
         },
         {
           "subtypeId": "compulsory-solid-geometry/relations",
-          "taskKind": "unclassified",
-          "goldCaseIds": []
+          "taskKind": "proposition",
+          "goldCaseIds": [
+            "compulsory-solid-geometry/edge-plane-true",
+            "compulsory-solid-geometry/edge-plane-false",
+            "compulsory-solid-geometry/free-height"
+          ]
         },
         {
           "subtypeId": "compulsory-solid-geometry/history",
@@ -370,12 +370,8 @@
         },
         {
           "subtypeId": "selective-sequences/arithmetic",
-          "taskKind": "proposition",
-          "goldCaseIds": [
-            "selective-sequences/term-five-true",
-            "selective-sequences/term-five-false",
-            "selective-sequences/term-five-missing"
-          ]
+          "taskKind": "unclassified",
+          "goldCaseIds": []
         },
         {
           "subtypeId": "selective-sequences/geometric",
@@ -409,8 +405,12 @@
         },
         {
           "subtypeId": "selective-derivatives/applications",
-          "taskKind": "unclassified",
-          "goldCaseIds": []
+          "taskKind": "proposition",
+          "goldCaseIds": [
+            "selective-derivatives/cubic-horizontal-true",
+            "selective-derivatives/cubic-slope-false",
+            "selective-derivatives/increasing-free-graph"
+          ]
         },
         {
           "subtypeId": "selective-derivatives/history",
@@ -469,8 +469,12 @@
         },
         {
           "subtypeId": "selective-analytic-geometry/conics",
-          "taskKind": "unclassified",
-          "goldCaseIds": []
+          "taskKind": "proposition",
+          "goldCaseIds": [
+            "selective-analytic-geometry/ellipse-focus-true",
+            "selective-analytic-geometry/ellipse-focus-false",
+            "selective-analytic-geometry/ellipse-free-axes"
+          ]
         },
         {
           "subtypeId": "selective-analytic-geometry/history",
@@ -1183,5 +1187,5 @@
     "separate": true,
     "status": "not_measured"
   },
-  "indexScope": "43 表层来源、131 条规定性一级要求、E 10 个非穷尽举例；3 个跨领域子型附内部数学检查的原创正反歧义案例各三条，其余子型未分类；高考逐题金标和原题 Lean 证明均未测"
+  "indexScope": "141 条来源正文仅供发现作图题；本轮覆盖分母由 diagram-scope-2025 按具体题目入选，非作图内容不入本轮发布范围；4 个作图候选子型各三条原创正反欠定样例，其余仍未审；高考金标/Lean 证明未测"
 }

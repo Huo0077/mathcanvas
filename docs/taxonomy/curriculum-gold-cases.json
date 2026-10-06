@@ -1,157 +1,312 @@
 {
   "version": "2017-2025",
-  "scope": "internally_checked_authored_curriculum_cases_not_exam_teacher_or_lean",
+  "scope": "drawing_required_internal_cases_not_exam_teacher_or_lean",
   "cases": [
     {
-      "caseId": "compulsory-sets/intersection-true",
-      "subtypeId": "compulsory-sets/operations",
-      "unitId": "compulsory-sets",
-      "scope": "curriculum",
-      "role": "positive",
-      "taskKind": "proposition",
-      "curriculumVersion": "2017-2025",
-      "origin": "authored",
-      "prompt": "设 A={1,2}、B={2,3}，判断 A∩B={2} 是否成立。",
-      "goldGoal": {
-        "verdict": "true",
-        "rationale": "两个集合共同的元素只有 2，所以交集恰为 {2}。"
-      },
-      "reviewStatus": "internally_checked"
-    },
-    {
-      "caseId": "compulsory-sets/intersection-false",
-      "subtypeId": "compulsory-sets/operations",
-      "unitId": "compulsory-sets",
-      "scope": "curriculum",
-      "role": "negative",
-      "taskKind": "proposition",
-      "curriculumVersion": "2017-2025",
-      "origin": "authored",
-      "prompt": "设 A={1,2}、B={2,3}，判断 A∩B={1,3} 是否成立。",
-      "goldGoal": {
-        "verdict": "false",
-        "rationale": "1 不属于 B，3 不属于 A，二者不能是交集元素。",
-        "counterexample": "1∉B 且 3∉A；实际交集为 {2}。"
-      },
-      "reviewStatus": "internally_checked"
-    },
-    {
-      "caseId": "compulsory-sets/intersection-missing",
-      "subtypeId": "compulsory-sets/operations",
-      "unitId": "compulsory-sets",
-      "scope": "curriculum",
-      "role": "ambiguous",
-      "taskKind": "proposition",
-      "curriculumVersion": "2017-2025",
-      "origin": "authored",
-      "prompt": "已知 A={1,2}，计算 A∩B 的具体元素。",
-      "goldGoal": {
-        "verdict": "underdetermined",
-        "rationale": "第二个集合未定义，不同的 B 会给出不同交集。",
-        "missingCondition": "给出 B 的定义或其元素。"
-      },
-      "reviewStatus": "internally_checked"
-    },
-    {
-      "caseId": "selective-sequences/term-five-true",
-      "subtypeId": "selective-sequences/arithmetic",
-      "unitId": "selective-sequences",
-      "scope": "curriculum",
-      "role": "positive",
-      "taskKind": "proposition",
-      "curriculumVersion": "2017-2025",
-      "origin": "authored",
-      "prompt": "等差数列首项为 3、公差为 2。判断第五项是 11 是否成立。",
-      "goldGoal": {
-        "verdict": "true",
-        "rationale": "由第五项等于首项加四倍公差，得到 3+4×2=11。"
-      },
-      "reviewStatus": "internally_checked"
-    },
-    {
-      "caseId": "selective-sequences/term-five-false",
-      "subtypeId": "selective-sequences/arithmetic",
-      "unitId": "selective-sequences",
-      "scope": "curriculum",
-      "role": "negative",
-      "taskKind": "proposition",
-      "curriculumVersion": "2017-2025",
-      "origin": "authored",
-      "prompt": "等差数列首项为 3、公差为 2。判断第五项是 12 是否成立。",
-      "goldGoal": {
-        "verdict": "false",
-        "rationale": "由通项公式得第五项为 11，而不是 12。",
-        "counterexample": "a₅=3+4×2=11，与 12 不等。"
-      },
-      "reviewStatus": "internally_checked"
-    },
-    {
-      "caseId": "selective-sequences/term-five-missing",
-      "subtypeId": "selective-sequences/arithmetic",
-      "unitId": "selective-sequences",
-      "scope": "curriculum",
-      "role": "ambiguous",
-      "taskKind": "proposition",
-      "curriculumVersion": "2017-2025",
-      "origin": "authored",
-      "prompt": "某等差数列公差为 2，求其第五项的确定数值。",
-      "goldGoal": {
-        "verdict": "underdetermined",
-        "rationale": "第五项还取决于首项，仅有公差不能唯一确定。",
-        "missingCondition": "还需给出首项或另一个已知项。"
-      },
-      "reviewStatus": "internally_checked"
-    },
-    {
-      "caseId": "compulsory-trigonometry/pythagorean-identity",
-      "subtypeId": "compulsory-trigonometry/basic-identities",
+      "caseId": "compulsory-trigonometry/right-true",
+      "subtypeId": "compulsory-trigonometry/applications",
       "unitId": "compulsory-trigonometry",
       "scope": "curriculum",
       "role": "positive",
       "taskKind": "proposition",
       "curriculumVersion": "2017-2025",
       "origin": "authored",
-      "prompt": "判断对任意实数 θ，sin²θ+cos²θ=1 是否成立。",
+      "prompt": "请画 A(0,0)、B(4,0)、C(0,3) 构成的三角形，判断 AB⊥AC。",
       "goldGoal": {
         "verdict": "true",
-        "rationale": "单位圆点 (cosθ,sinθ) 到原点距离为 1，平方和因此为 1。"
+        "rationale": "AB 的方向 (4,0) 与 AC 的方向 (0,3) 点积为零。"
       },
-      "reviewStatus": "internally_checked"
+      "reviewStatus": "internally_checked",
+      "diagram": {
+        "family": "triangle",
+        "intent": "required",
+        "witnessCandidate": {
+          "description": "将 A、B、C 放在上述三处并连成平面三角形。",
+          "freeChoices": []
+        }
+      }
     },
     {
-      "caseId": "compulsory-trigonometry/sum-identity-false",
-      "subtypeId": "compulsory-trigonometry/basic-identities",
+      "caseId": "compulsory-trigonometry/parallel-false",
+      "subtypeId": "compulsory-trigonometry/applications",
       "unitId": "compulsory-trigonometry",
       "scope": "curriculum",
       "role": "negative",
       "taskKind": "proposition",
       "curriculumVersion": "2017-2025",
       "origin": "authored",
-      "prompt": "判断对任意实数 θ，sinθ+cosθ=1 是否成立。",
+      "prompt": "请画 A(0,0)、B(4,0)、C(0,3) 构成的三角形，判断 AB∥AC。",
       "goldGoal": {
         "verdict": "false",
-        "rationale": "取 θ=π 时正弦为 0、余弦为 −1，与 1 不等。",
-        "counterexample": "θ=π 时左边为 −1、右边为 1。"
+        "rationale": "AB 沿横轴而 AC 沿纵轴，不可能平行。",
+        "counterexample": "两方向向量的二维叉积为 4×3−0=12，非零。"
       },
-      "reviewStatus": "internally_checked"
+      "reviewStatus": "internally_checked",
+      "diagram": {
+        "family": "triangle",
+        "intent": "required",
+        "witnessCandidate": {
+          "description": "同一组三角形点位显示两条边在 A 处相交。",
+          "freeChoices": []
+        }
+      }
     },
     {
-      "caseId": "compulsory-trigonometry/angle-interval-missing",
-      "subtypeId": "compulsory-trigonometry/basic-identities",
+      "caseId": "compulsory-trigonometry/free-corner",
+      "subtypeId": "compulsory-trigonometry/applications",
       "unitId": "compulsory-trigonometry",
       "scope": "curriculum",
       "role": "ambiguous",
       "taskKind": "proposition",
       "curriculumVersion": "2017-2025",
       "origin": "authored",
-      "prompt": "已知 sinθ=1/2，填写一个唯一的角 θ 的数值。",
+      "prompt": "请画 A(0,0)、B(4,0)，使 ∠A 为直角且 C 在 AB 上方；判断 C 是否唯一。",
       "goldGoal": {
         "verdict": "underdetermined",
-        "rationale": "多个角有相同的正弦值，缺少取值区间不能唯一确定。",
-        "missingCondition": "给出 θ 的区间或限制，如 0<θ<π/2。"
+        "rationale": "点 C 沿过 A 的向上垂线可自由选择，图可画但 C 不唯一。",
+        "missingCondition": "要唯一确定 C 还需给出 AC 长度或 C 的具体坐标。"
       },
-      "reviewStatus": "internally_checked"
+      "reviewStatus": "internally_checked",
+      "diagram": {
+        "family": "triangle",
+        "intent": "required",
+        "witnessCandidate": {
+          "description": "取 C(0,3)，连成直角三角形即可作为一张合条件的示意图。",
+          "freeChoices": [
+            "AC=3"
+          ]
+        }
+      }
+    },
+    {
+      "caseId": "selective-analytic-geometry/ellipse-focus-true",
+      "subtypeId": "selective-analytic-geometry/conics",
+      "unitId": "selective-analytic-geometry",
+      "scope": "curriculum",
+      "role": "positive",
+      "taskKind": "proposition",
+      "curriculumVersion": "2017-2025",
+      "origin": "authored",
+      "prompt": "画出椭圆 x²/9+y²/4=1，判断其焦点是否为 (±√5,0)。",
+      "goldGoal": {
+        "verdict": "true",
+        "rationale": "长半轴 3 沿 x 轴，短半轴 2，焦距满足 c²=9−4=5。"
+      },
+      "reviewStatus": "internally_checked",
+      "diagram": {
+        "family": "conic",
+        "intent": "required",
+        "witnessCandidate": {
+          "description": "以原点为中心画水平长轴椭圆，标顶点 (±3,0) 与 (0,±2)。",
+          "freeChoices": []
+        }
+      }
+    },
+    {
+      "caseId": "selective-analytic-geometry/ellipse-focus-false",
+      "subtypeId": "selective-analytic-geometry/conics",
+      "unitId": "selective-analytic-geometry",
+      "scope": "curriculum",
+      "role": "negative",
+      "taskKind": "proposition",
+      "curriculumVersion": "2017-2025",
+      "origin": "authored",
+      "prompt": "画出椭圆 x²/9+y²/4=1，判断其焦点是否为 (0,±√5)。",
+      "goldGoal": {
+        "verdict": "false",
+        "rationale": "长轴沿 x 轴，两个焦点不在 y 轴。",
+        "counterexample": "实际焦点为 (±√5,0)，与所给 y 轴点不同。"
+      },
+      "reviewStatus": "internally_checked",
+      "diagram": {
+        "family": "conic",
+        "intent": "required",
+        "witnessCandidate": {
+          "description": "标出 x 轴顶点 ±3 与 y 轴顶点 ±2，并沿水平长轴标焦点。",
+          "freeChoices": []
+        }
+      }
+    },
+    {
+      "caseId": "selective-analytic-geometry/ellipse-free-axes",
+      "subtypeId": "selective-analytic-geometry/conics",
+      "unitId": "selective-analytic-geometry",
+      "scope": "curriculum",
+      "role": "ambiguous",
+      "taskKind": "proposition",
+      "curriculumVersion": "2017-2025",
+      "origin": "authored",
+      "prompt": "已知椭圆中心在原点、长轴水平且轴长未给；画一张示意图并判断椭圆是否唯一。",
+      "goldGoal": {
+        "verdict": "underdetermined",
+        "rationale": "满足中心和方向的椭圆有无穷多组半轴参数。",
+        "missingCondition": "要唯一确定椭圆还需半轴长度或足以推出半轴的条件。"
+      },
+      "reviewStatus": "internally_checked",
+      "diagram": {
+        "family": "conic",
+        "intent": "required",
+        "witnessCandidate": {
+          "description": "可取 a=3、b=2，画 x²/9+y²/4=1 的水平椭圆作为示意。",
+          "freeChoices": [
+            "a=3",
+            "b=2"
+          ]
+        }
+      }
+    },
+    {
+      "caseId": "selective-derivatives/cubic-horizontal-true",
+      "subtypeId": "selective-derivatives/applications",
+      "unitId": "selective-derivatives",
+      "scope": "curriculum",
+      "role": "positive",
+      "taskKind": "proposition",
+      "curriculumVersion": "2017-2025",
+      "origin": "authored",
+      "prompt": "画 f(x)=x³−3x 的图像及 x=1 处切线，判断切线是否水平。",
+      "goldGoal": {
+        "verdict": "true",
+        "rationale": "f′(x)=3x²−3，故 f′(1)=0，切线斜率为零。"
+      },
+      "reviewStatus": "internally_checked",
+      "diagram": {
+        "family": "derivative_graph",
+        "intent": "required",
+        "witnessCandidate": {
+          "description": "曲线过 (1,−2)，该点处画水平切线 y=−2。",
+          "freeChoices": []
+        }
+      }
+    },
+    {
+      "caseId": "selective-derivatives/cubic-slope-false",
+      "subtypeId": "selective-derivatives/applications",
+      "unitId": "selective-derivatives",
+      "scope": "curriculum",
+      "role": "negative",
+      "taskKind": "proposition",
+      "curriculumVersion": "2017-2025",
+      "origin": "authored",
+      "prompt": "画 f(x)=x³−3x 的图像及 x=1 处切线，判断切线斜率是否为 2。",
+      "goldGoal": {
+        "verdict": "false",
+        "rationale": "x=1 处导数为零，非 2。",
+        "counterexample": "f′(1)=3×1²−3=0≠2。"
+      },
+      "reviewStatus": "internally_checked",
+      "diagram": {
+        "family": "derivative_graph",
+        "intent": "required",
+        "witnessCandidate": {
+          "description": "仍在 (1,−2) 处画水平切线而非斜率为 2 的线。",
+          "freeChoices": []
+        }
+      }
+    },
+    {
+      "caseId": "selective-derivatives/increasing-free-graph",
+      "subtypeId": "selective-derivatives/applications",
+      "unitId": "selective-derivatives",
+      "scope": "curriculum",
+      "role": "ambiguous",
+      "taskKind": "proposition",
+      "curriculumVersion": "2017-2025",
+      "origin": "authored",
+      "prompt": "只知 x>0 时 f′(x)>0，画一条可能的函数图像并判断图像是否唯一。",
+      "goldGoal": {
+        "verdict": "underdetermined",
+        "rationale": "递增条件允许多条曲线，能画代表图但不定唯一函数。",
+        "missingCondition": "若要唯一图像需补足具体函数或等价的充分条件。"
+      },
+      "reviewStatus": "internally_checked",
+      "diagram": {
+        "family": "derivative_graph",
+        "intent": "required",
+        "witnessCandidate": {
+          "description": "可画 x>0 上的直线 f(x)=x；导数恒为 1>0。",
+          "freeChoices": [
+            "f(x)=x"
+          ]
+        }
+      }
+    },
+    {
+      "caseId": "compulsory-solid-geometry/edge-plane-true",
+      "subtypeId": "compulsory-solid-geometry/relations",
+      "unitId": "compulsory-solid-geometry",
+      "scope": "curriculum",
+      "role": "positive",
+      "taskKind": "proposition",
+      "curriculumVersion": "2017-2025",
+      "origin": "authored",
+      "prompt": "画四面体 A(0,0,0)、B(1,0,0)、C(0,1,0)、D(0,0,2)，判断 AD⊥平面ABC。",
+      "goldGoal": {
+        "verdict": "true",
+        "rationale": "ABC 位于 z=0 平面，AD 沿 z 轴，方向是该平面的法向。"
+      },
+      "reviewStatus": "internally_checked",
+      "diagram": {
+        "family": "solid3d",
+        "intent": "required",
+        "witnessCandidate": {
+          "description": "以 ABC 为水平三角底面，D 在 A 正上方，连结 AD、BD、CD。",
+          "freeChoices": []
+        }
+      }
+    },
+    {
+      "caseId": "compulsory-solid-geometry/edge-plane-false",
+      "subtypeId": "compulsory-solid-geometry/relations",
+      "unitId": "compulsory-solid-geometry",
+      "scope": "curriculum",
+      "role": "negative",
+      "taskKind": "proposition",
+      "curriculumVersion": "2017-2025",
+      "origin": "authored",
+      "prompt": "画四面体 A(0,0,0)、B(1,0,0)、C(0,1,0)、D(0,0,2)，判断 AD∥平面ABC。",
+      "goldGoal": {
+        "verdict": "false",
+        "rationale": "AD 的方向为 z 轴法向，与底面不平行。",
+        "counterexample": "AD 向量 (0,0,2) 与平面 z=0 的法向 (0,0,1) 平行，故不在平面方向内。"
+      },
+      "reviewStatus": "internally_checked",
+      "diagram": {
+        "family": "solid3d",
+        "intent": "required",
+        "witnessCandidate": {
+          "description": "底面置于 z=0，AD 竖直向上。",
+          "freeChoices": []
+        }
+      }
+    },
+    {
+      "caseId": "compulsory-solid-geometry/free-height",
+      "subtypeId": "compulsory-solid-geometry/relations",
+      "unitId": "compulsory-solid-geometry",
+      "scope": "curriculum",
+      "role": "ambiguous",
+      "taskKind": "proposition",
+      "curriculumVersion": "2017-2025",
+      "origin": "authored",
+      "prompt": "已知 A(0,0,0)、B(1,0,0)、C(0,1,0)，D 在 A 上方且 AD⊥平面ABC；画一张示意图并判断 D 是否唯一。",
+      "goldGoal": {
+        "verdict": "underdetermined",
+        "rationale": "高度 z>0 可以自由取，条件允许作图但不唯一。",
+        "missingCondition": "还需指定 AD 的长度或顶点 D 高度才能唯一确定。"
+      },
+      "reviewStatus": "internally_checked",
+      "diagram": {
+        "family": "solid3d",
+        "intent": "required",
+        "witnessCandidate": {
+          "description": "取 D(0,0,2) 连结三棱形成四面体，满足上方及垂直。",
+          "freeChoices": [
+            "AD=2"
+          ]
+        }
+      }
     }
   ],
-  "reviewBoundary": "数学结论经内部人工推导并用独立算术/符号检查复核；教师场景走查与原题 Lean 证明均尚未完成，不能用于发布宣称"
+  "reviewBoundary": "题面均明确要求画图；候选示意图目前是文字/坐标说明，不是内核已核验图元；四条欠定例可有自由选择；教师评审、真实高考原题与 Lean 原题证明未做"
 }

@@ -1,6 +1,16 @@
 import type { CurriculumCase } from "./catalog"
+import type { DiagramFamily } from "./diagramScope"
+
+/** A sample diagram is a candidate illustration; kernel verification is a later gate. */
+export interface DiagramCaseWitness {
+  family: DiagramFamily
+  intent: "required"
+  witnessCandidate: { description: string; freeChoices: string[] }
+}
 
 export interface GoldCase extends CurriculumCase {
+  /** Optional at the serialized boundary so missing diagram data can be rejected explicitly. */
+  diagram?: DiagramCaseWitness
   unitId: string
   curriculumVersion: "2017-2025"
   taskKind: "proposition" | "non_propositional"
@@ -15,6 +25,7 @@ export interface GoldCaseAudit {
   duplicateIds: string[]
   internalCaseIds: string[]
   teacherReviewedCaseIds: string[]
+  freeWitnessCandidateCaseIds: string[]
 }
 
 /**
@@ -26,6 +37,7 @@ export function auditGoldCases(cases: readonly GoldCase[], knownSubtypes: Readon
   const invalidCases: string[] = []
   const duplicateIds: string[] = []
   const internalCaseIds: string[] = []
+  const freeWitnessCandidateCaseIds: string[] = []
   const seen = new Set<string>()
   for (const entry of cases) {
     if (seen.has(entry.caseId)) duplicateIds.push(entry.caseId)
@@ -44,10 +56,17 @@ export function auditGoldCases(cases: readonly GoldCase[], knownSubtypes: Readon
       && entry.prompt.trim().length > 0
       && entry.goldGoal.rationale.trim().length > 0
       && entry.goldGoal.verdict === expectedVerdict
+      && entry.diagram?.intent === "required"
+      && (["triangle", "conic", "derivative_graph", "solid3d"] as const).some((family) => family === entry.diagram?.family)
+      && (entry.diagram?.witnessCandidate.description.trim().length ?? 0) > 0
       && (entry.role !== "negative" || (entry.goldGoal.counterexample?.trim().length ?? 0) > 0)
-      && (entry.role !== "ambiguous" || (entry.goldGoal.missingCondition?.trim().length ?? 0) > 0)
+      && (entry.role !== "ambiguous" || ((entry.goldGoal.missingCondition?.trim().length ?? 0) > 0
+        && (entry.diagram?.witnessCandidate.freeChoices.length ?? 0) > 0))
     if (!valid) invalidCases.push(entry.caseId)
-    else internalCaseIds.push(entry.caseId)
+    else {
+      internalCaseIds.push(entry.caseId)
+      if (entry.role === "ambiguous") freeWitnessCandidateCaseIds.push(entry.caseId)
+    }
   }
-  return { invalidCases, duplicateIds, internalCaseIds, teacherReviewedCaseIds: [] }
+  return { invalidCases, duplicateIds, internalCaseIds, teacherReviewedCaseIds: [], freeWitnessCandidateCaseIds }
 }

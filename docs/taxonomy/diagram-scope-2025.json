@@ -1,0 +1,48 @@
+{
+  "sourceVersion": "2017-2025",
+  "status": "in_review",
+  "decisions": [
+    {
+      "subtypeId": "compulsory-trigonometry/applications",
+      "defaultIntent": "helpful",
+      "family": "triangle",
+      "reviewBasis": "三角形关系可用几何图验证；具体题目仍须判断是否需要画图"
+    },
+    {
+      "subtypeId": "selective-analytic-geometry/conics",
+      "defaultIntent": "helpful",
+      "family": "conic",
+      "reviewBasis": "焦点、切线与曲线位置题常需圆锥曲线图；非每道方程代数题都必画"
+    },
+    {
+      "subtypeId": "selective-derivatives/applications",
+      "defaultIntent": "helpful",
+      "family": "derivative_graph",
+      "reviewBasis": "单调、极值及切线题可验证函数图像；纯求导计算不自动入图"
+    },
+    {
+      "subtypeId": "compulsory-solid-geometry/relations",
+      "defaultIntent": "helpful",
+      "family": "solid3d",
+      "reviewBasis": "空间点线面关系题可绘制示意图；是否需要图按具体问题判定"
+    },
+    {
+      "subtypeId": "compulsory-sets/operations",
+      "defaultIntent": "none",
+      "reviewBasis": "纯集合运算缺省不画；题目点名维恩图时显式覆盖"
+    },
+    {
+      "subtypeId": "selective-sequences/arithmetic",
+      "defaultIntent": "none",
+      "reviewBasis": "纯数列求项缺省不画；数列图像任务显式覆盖"
+    },
+    {
+      "subtypeId": "compulsory-trigonometry/basic-identities",
+      "defaultIntent": "none",
+      "reviewBasis": "纯恒等式证明缺省不画；几何或图像解释任务显式覆盖"
+    }
+  ],
+  "scopeRule": "按具体题意判断是否必须作图；章节级 helpful 只是候选，不意味着同章节每道题必须绘图；题目明确要求绘图可覆盖默认 none",
+  "reviewedFrom": "2025 日常修订高中数学课程标准来源索引；仍有未逐项审查的子型",
+  "unreviewedSourceItems": "其余 134/141 个来源子型仍待逐条决定；不得归 none 后缩小分母"
+}
