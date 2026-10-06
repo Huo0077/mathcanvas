@@ -1,4 +1,6 @@
-# 高中全题型 Agent 与自动 Lean 分期实施计划
+# 高中全题型 Agent 与自动 Lean 分期实施计划（历史范围，已被作图题 V0–V3 替代）
+
+> **2026-10-06 最新用户裁决**：只处理需要画图的高中题。本文 H0–H4 的全科覆盖目标停止执行；之前真实课程索引与题型线索保留为候选来源。现行文件职责、RED/命令/分块出口请读 [作图题 V0–V3 计划](2026-10-06-diagram-agent-auto-lean-implementation-plan.md)。
 
 > **状态（复核）：** 2026-10-06 H0a 表格层 43 条、H0b1 必修/选择性必修 67 条和 H0b2 选修 A–D 64 条规定性一级要求及 E 类 10 个非穷尽举例已入索引（`8826b63` / `8a8fe3e` / `f5e0e75`），仍全部未分类/无金标，4 类 E 开放范围与高考题型未穷尽；H0b3a 仅记录 2 篇考试机构评析拆 3 份卷别线索/8 个候选标签，0 已核验试题或答案；完整 H0 未勾，H1–H4 未开始。旧 `2026-10-04-agent-full-next-phase-implementation-plan.md` 的 N1–N6 是历史阶段，不能抵消本计划任何任务。
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. 逐任务先读 [设计规格](../specs/2026-10-06-high-school-auto-lean-design.md)；不得自动委派或跳过人工安全门禁。

@@ -1,0 +1,62 @@
+# 高中作图题 Agent 与自动 Lean 实施计划
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Each task uses `- [ ]` checkboxes, RED→GREEN and an independently reviewable commit; do not spawn agents unless the user separately asks.
+> **状态（2026-10-06）**：按用户最新裁决只覆盖确实需要作图的题；V0 已有作图候选目录与四家族 12 条**内部文字/坐标候选**，还不是图元运行证据；V1–V3 未实施。原 [全课程路线](2026-10-06-agent-next-round-implementation-plan.md) 除已核实的来源与之前审查记录外均为历史范围。
+
+**Goal:** 让 Agent 在高中**需作图题**生成、核验且解释符合题设的直觉图；条件欠定允许自由点，形式证明只在可靠地形式化原题后对有关作图目标自动调用 Lean；不是让 Lean 解所有高中非作图题。
+
+**Architecture:** 题目级作图意图 + 可复核的来源子型目录 → 图形场景候选/逐条判据 → 示意图/普遍证明严格分级 → 桌面受限 Lean 自动任务 → 可读证据与真实模型评测。章节标签只是候选；用户明确要求画图可以覆盖非图默认值，未知状态不能自动归入“无需图”。
+
+**Tech Stack:** TypeScript/React/Vitest、geometry-kernel、scene-graph、Tauri Rust、Lean 4/mathlib、Playwright。
+
+**Spec:** [作图范围修订](../specs/2026-10-06-diagram-scope-addendum.md)（最新范围）+[原统一 IR 设计历史前提](../specs/2026-10-04-agent-full-next-phase-design.md)。**当前任务与残余风险：** [下一轮追踪](../../agent-next-round-progress.md)。
+
+## Global Constraints
+
+- **分母**：按题目是否需要图，不以旧全课程 43/141 目录或包含集合、数列的全科题集充数；高考评析只有候选线索，未得原题+答案时不称高考金标。
+- **欠定可画**：自由点可选直觉位置，但候选须满足所有可判题设；若图无法确定唯一答案，图可以仍画，唯一答案另报 `underdetermined`；实例图不可变成普遍证明。
+- **证明**：自动 Lean 只服务作图题关联主张；前提不能从模板偷偷加给题目，辅助引理不得冒充原题证明；`sorry`/超时/无后端不可升级证据。
+- **开关与评测**：默认行为旧路径原样，浏览器缺桌面桥如实报 unavailable；付费 provider 测试必须另获显式许可，离线分数不等于真实成功率。
+- **每完成一个独立区块**：RED 失败原因有执行证据 → 最小 GREEN → 定向/所涉工作区/浏览器真验 → 更新 current-status/agent-next-round-progress/feature-catalog/project-progress/README/门禁相应处 → 单独 commit/push 并核对远端 SHA；慢 Lean 集成独立运行。
+
+## 文件职责与真实调用点
+
+| 文件/模块 | 责任与边界 | 测试/调用点 |
+| --- | --- | --- |
+| `docs/taxonomy/high-school-2025-source-index.json`、`high-school-2025.json` | **历史来源清册**（2025 标准元数据），不再是新覆盖分母；不删除之前可核对的来源 | `scripts/curriculum/catalog.test.ts` |
+| `docs/taxonomy/diagram-scope-2025.json`、`scripts/curriculum/diagramScope.ts` | 每个子型默认意图与未知缺口；实际入选由题目级 `required` 决定，不接受关键词/章节自报已核验 | `scripts/curriculum/diagramScope.test.ts`；V1 接到 `apps/web/src/agent/agentRunner.ts` |
+| `docs/taxonomy/curriculum-gold-cases.json`、`scripts/curriculum/goldCases.ts` | 三角、圆锥曲线、导数函数图像、空间关系的正反欠定**内部**案例；文字/坐标候选不等于 kernel 验证 | `scripts/curriculum/goldCases.test.ts` |
+| `packages/agent-core/src/obligationIR.ts` / `planCompiler.ts`；`apps/web/src/agent/draftStore.ts` | 原文→约束/目标/自由点与报告的真实调用点；未知图形条件 fail-closed | 工作区和几何 Worker 契约测试、宿主真实草稿确认 |
+| `packages/geometry-kernel/src/`、`packages/scene-graph/src/` | 四类场景的判据、自由点见证与事务/拖动；无判据不静默提交 | 正反核验和拖动撤销浏览器用例 |
+| `packages/agent-core/src/proof/`、`proof/lean4/`、`apps/desktop/src-tauri/src/commands/` | Lean 来源、前提消解、后端版本/许可/受限进程、artifact | `npm.cmd run proof:smoke` + 独立真 Lean + Rust + 产品 UI |
+| `apps/web/src/agent/fixtures/benchmarkPlanningEval.ts`、`packages/agent-core/src/benchmark/report.ts` | 同一作图题集的真实 provider/人工教学可读性/成本证据，绝不混作形式证明 | 人显式确认付费请求后的独立报告 |
+
+## V0：作图题分母、四类正反/自由点候选（当前区块）
+
+**接口**：`DiagramIntent = required|helpful|none|unknown`；`resolveDiagramIntent(defaultIntent, explicitDrawRequest)`；`auditDiagramScope(sourceIds, decisions)` 返回 `visualCandidateSubtypes/requiredSubtypes/nonDiagramDefaults/unknownSubtypes/duplicateIds/outOfScope/ready`；`GoldCase.diagram = { family, intent:"required", witnessCandidate:{description,freeChoices} }`。文案“候选”表示尚无核验图元。
+
+- [x] **RED 已实测**：四类候选漏报、helpful 缺图形族别、所有目标被标非图却假通过、none 遇题目明确画图不升级、未审 134 项被默认为排除，先分别失败；原有纯集合/数列九例不能满足新 12 条作图数据；欠定自由点或无图候选的反向断言先失败。命令：`npm.cmd exec vitest run -- scripts/curriculum/diagramScope.test.ts scripts/curriculum/goldCases.test.ts --reporter=dot`。
+- [x] **内部 GREEN（尚未对外发布）**：4 个视觉候选子型 `helpful`，纯集合/数列/三角恒等式默认 `none`，其余 134 项 `unknown`；原创 4×3 个文字/坐标候选包含 4 条欠定自由选择；`auditCoverage` 仍因大批未审返回 false。**不得勾成产品图正确。**
+- [ ] **V0 出口**：让每例生成可重放的实际图元/函数图，内核逐条核验题设与候选位置；模糊输入反例拒绝确认，欠定自由点“有可用图”与“答案不唯一”同时为真；关旗旧路径有真浏览器反例。没有 e2e 与人看图确认时此项保持未勾。
+- [ ] **V0 区块收口**：定向 + typecheck/lint/需要的 e2e；文档、来源/数据卫生/截图目视核对；commit/push/核对远端。
+
+## V1：画图与约束求解扩大到这四类题
+
+- [ ] **RED**：对同一组三角、椭圆焦点/退化、三次曲线切线/极值、空间线面关系，用错误参数生成候选必须红，合法自由点图要绿；无空间判据约束不得被拖坏。将 `verified_instance/unverified_instance/no_witness` 与主张状态分离，不把未核验当通过。落点 `packages/geometry-kernel/src/*.test.ts`、`apps/web/src/agent/agentRuntime.test.ts` 和 `e2e/` 对应场景。
+- [ ] **GREEN**：复用现有解析点/圆锥曲线/导数切线/3D 图元，先解析构造受支持题，再用有界数值见证处理自由点；若条件不足而存在多图，选择一组直觉代表，列出自由度与未核验义务；若矛盾/超时/不支持按独立状态拒绝伪提交。
+- [ ] **本块发布前条件**：四家族正反/欠定示例各有实际浏览器图、数学条件核验与失败说明，默认 flag 关闭旧路径不变；进度与 GitHub 同步。不要拿 12 条内部文本例声称完成 V1。
+
+## V2：限定作图题的自动 Lean
+
+- [ ] **RED**：模板凭空增前提、证明了别的图形主张、删题设/换目标、`sorry`/未接后端/超时/旧 run 回包，均不得将**原题**升到 `formally_proved`；辅助引理可单独标明。对应 `packages/agent-core/src/proof/*.test.ts`、`apps/web/src/agent/*.test.ts`、Rust 命令测试。
+- [ ] **GREEN**：按作图题目标（几何关系、曲线性质、切线/导数、立体关系）逐类做可信翻译、前提消解、受限桌面 Lean 调用和绑定产物；关闭 proof flag 或浏览器无工具链时不阻塞作图。mathlib revision pin、许可证/体量/线程/WASM/超时与隔离审查必须在默认启用前完成。
+- [ ] **实测**：真实工具链单独集成和桌面真 UI；无法完整翻译原题时只能显示实例图或“辅助引理已证”，而不是普遍证明。各阶段都按文档与远端 SHA 提交。
+
+## V3：作图题真实质量与发布
+
+- [ ] **旧问题归属**：N1 证据互斥与来源区间、N2 撇点名/自由点及文档自由度、N3 其它未支持空间约束安全拖动、N4 多题真实 provider 质量/成本/超大响应、N5 实际产物通道及版本固定、文件卫生全部分块跑 RED/GREEN；历史已修项保留证据不重做。
+- [ ] **评测与发布**：真实 provider 仅经人确认付费，按作图家族和题设覆盖/可读性/错图率/成本/延迟各报分母；教师/学生图形直觉走查与管理员 MSI 安装验收分开。没有完整金标和真实用户/端到端数据前不宣称“支持全部需要画图的题”。
+
+## 已废止的旧范围与后续分块
+
+2026-10-06 用户将“全课程所有题型”收窄为“**需要画图的内容即可**”。[旧全课程计划](2026-10-06-agent-next-round-implementation-plan.md) 的 H0–H4 / 43 表层 / 141 一级要求只记录此前真实来源盘点，不再作为新产品完成目标；高考评析 8 候选主题也不等于已核验的作图高考题。下一独立区块先补 V0 产品图元+核验，再走 V1/V2/V3；每块有单独文档、门禁、提交与推送。

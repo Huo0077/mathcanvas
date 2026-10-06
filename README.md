@@ -101,14 +101,16 @@ npm run eval:agent
 
 1. **用户侧验收**：教师/学生走查，包括“三点一面”主操作数、误操作、恢复和未核验提示。
 2. **管理员验收**：MSI 安装→启动→卸载；NSIS 与裸 exe 证据不能替代 MSI。
-3. **真实 Agent 质量基线**：已有 pass@1/pass@3、延迟和少量人工可读性读数，但仍需扩大至课程/高考题型并取得可复核成本价目表；小样本不等于发布通过。
-4. **新一轮 H0–H4（H0a 来源索引、H0b1/H0b2 正文索引和 H0b3a 高考评析线索分级已实现；H0 整体仍未完成）**：按 2025 修订高中课程标准与高考题型重建完整题型目录、可信原题形式化、桌面端自动 Lean、跨域证明策略和真实质量门禁；竞赛题另表。H0a 已核对课程表层 43 条来源索引，并新增必修/选择性必修 67 条、选修 A–D 64 条**未分类一级要求**及 E 类 10 个非穷尽举例；高考评析仅提及 8 个候选课程标签、**0 逐题核验的高考题目/答案、0 金标准**，E 地方/学校课程开放范围未穷尽，不能宣称全题型覆盖。旧 N1–N6 当时的计划出口已达成**不代表**上述全题型或产品自动证明已完成。已知 N2/N3 默认为实验、N4 仅小样本且成本未测、N5 只有垂直性条件引理且无自动产品调用。每个区块须 RED→GREEN、同步进度文档并推送 GitHub。
+3. **真实 Agent 质量基线**：已有 pass@1/pass@3、延迟和少量人工可读性读数，但仍需改用真实作图题题集并取得可复核成本价目表；小样本不等于发布通过。
+4. **当前只做需作图的高中数学题（V0–V3）**：按具体题意判断是否要画图，重点是三角/三角函数图像、圆锥曲线、导数函数图像/切线、立体几何等；纯集合运算、纯数列求项、纯恒等式不再是本轮覆盖目标，题目明确要画图时仍可入选。此前全科来源索引 43 上层/141 一级项仅供发现候选，不是本轮发布分母。目前只审 4 个“可能需图”子型、3 个默认非图子型，其余 134 未审；四类各 3 条**原创、内部文字/坐标示意候选**，不是程序已画出核验的图。欠定题允许选一个符合题设的自由点示意图；旧 N2/N3 默认实验、N4 provider 小样本/无成本、N5 仅一类条件引理且没有自动产品调用的限制依旧。每区块验证、更新进度文档并推送 GitHub。
 
 完整路线见：
 
 - [Agent 发布门禁](docs/acceptance/agent-release-gate.md)
-- [新一轮高中全题型自动 Lean 设计（待实施）](docs/superpowers/specs/2026-10-06-high-school-auto-lean-design.md)
-- [新一轮实施计划（H0–H4）](docs/superpowers/plans/2026-10-06-agent-next-round-implementation-plan.md)
+- [现行作图题设计修订](docs/superpowers/specs/2026-10-06-diagram-scope-addendum.md)
+- [现行作图题实施计划（V0–V3）](docs/superpowers/plans/2026-10-06-diagram-agent-auto-lean-implementation-plan.md)
+- [旧全课程设计（已被作图范围替代）](docs/superpowers/specs/2026-10-06-high-school-auto-lean-design.md)
+- [旧全课程计划（历史范围）](docs/superpowers/plans/2026-10-06-agent-next-round-implementation-plan.md)
 - [下一轮任务进度与历史审查问题台账](docs/agent-next-round-progress.md)
 - [旧 N1–N6 设计（历史范围）](docs/superpowers/specs/2026-10-04-agent-full-next-phase-design.md)
 - [旧 N1–N6 实施计划（历史范围）](docs/superpowers/plans/2026-10-04-agent-full-next-phase-implementation-plan.md)

@@ -10,7 +10,7 @@
 > [`docs/project-progress.md`](project-progress.md) —— 那是**归档**，里面的数字是"当时实测"，
 > 不是当前值。两份文件分工明确：**要当前值看这里，要过程看归档。**
 
-**最后更新：** 2026-10-06。旧 N1–N6 的计划出口是历史阶段状态，**不等于“高中所有题型已证明”**；当前 N2/N3 是默认关闭的实验能力，N4 只有小样本真实 provider 证据且成本未测，N5 只有一类垂直性条件引理的独立 Lean 闭环、产品未自动调用。2026-10-06 重新规划中 **H0a 建了 43 条课程表来源，H0b1/H0b2 已分别登记 67 条必修/选择性必修、64 条选修 A–D 规定性一级要求及 10 个 E 类非穷尽举例（全部 `unclassified`、无金标；4 类 E 开放范围无界；H0b3a 将 2 篇考试机构评析拆成 3 份卷别线索、8 个候选课程标签，但**经原题/答案核验的高考标签与金标仍是 0**，目录审计 `ready=false`），完整 H0 与 H1–H4 未完成**：目标是按 2025 年日常修订高中数学课程标准及高考题型逐项验收、桌面端安全自动调用 Lean；竞赛题另表。详情看 [新进度追踪](agent-next-round-progress.md)、[设计](superpowers/specs/2026-10-06-high-school-auto-lean-design.md) 和 [计划](superpowers/plans/2026-10-06-agent-next-round-implementation-plan.md)。要当次门禁读数看 §一，遗留事项看 §四；H0a/H0b1/H0b2 有代码和定向测试证据，但不构成自动 Lean、真实 provider、CI 或全题型覆盖证据。
+**最后更新：** 2026-10-06。**用户新范围只含需要作图的高中数学题**：三角/三角函数图、圆锥曲线、导数/函数图像及立体几何是首批；每题的实际作图需要优先于章节默认分类。旧 2025 课程 43 条来源/141 一级项是历史参考，不是本轮发布分母。现行 [V0–V3 设计](superpowers/specs/2026-10-06-diagram-scope-addendum.md)、[实施计划](superpowers/plans/2026-10-06-diagram-agent-auto-lean-implementation-plan.md)、[任务进度](agent-next-round-progress.md) 中，V0 仅完成内部数据与测试：4 个图形候选子型、3 个默认非图、134 个尚未审题型；四类各 3 条原创建模候选（包含 4 条可取自由参数的欠定例）。**尚未跑产品图元生成/核验、教师目视或新 Lean 自动证明，不能称用户已能完成四家族题。**此前 N1–N6 旧范围的有限见证/拖动安全、provider 小样本/费用空缺及只证明一类条件引理均是基线，不可平移为 V0–V3 完成。当前门禁读数在 §一、未完成项在 §四。
 
 **修复前一版做完了什么**：用户现场"A 字句只有关系、没有数值的立体题面"从**画不出来**推进到**能画出来**。路上推翻了两个自己的设计（见下方"走过的弯路"），并修掉一批真实运行暴露的形式障碍（信封缺字段、平面动作带 `z`、面环绕向不一致、空 `relations`）。
 **修复前一版暴露了什么（更重要）**：用户在真图上确认"**图画出来了，明显画错了**"。实测模型给的坐标：`BD=2`、`O` 是中点、`△OCD` 等边、`AB=AD` 都对，但 `OA·CD = −0.314 ≠ 0`（**第（1）问要证的那件事本身不成立**），且 `A` 的高度取 0.64、而"二面角 45°"要求约 1.33（**差约一倍**）。
@@ -25,11 +25,12 @@
 
 | 门禁 | 命令 | 最新读数 | 退出码 | 记录于 |
 | --- | --- | --- | --- | --- |
-| 类型检查 | `npm.cmd run typecheck` | 全部工作区 + `e2e/` + `scripts/`，无错 | 0 | **2026-10-06 H0b3a 实测** |
-| Lint | `npm.cmd run lint` | **0 error / 13 warning**（与基线逐条相同） | 0 | **2026-10-06 H0b3a 实测** |
+| 类型检查 | `npm.cmd run typecheck` | 全部工作区 + `e2e/` + `scripts/`，无错 | 0 | **2026-10-06 V0 本地实测** |
+| Lint | `npm.cmd run lint` | **0 error / 13 warning**（与基线逐条相同） | 0 | **2026-10-06 V0 本地实测** |
 | 历史全库（含 Lean 慢集成；本批未重跑） | `npm.cmd test -- --maxWorkers=2 --reporter=dot` | **325 文件 / 3769 通过 + 1 todo / 0 失败**（**2026-10-06 实测**，529.54 s 与 568.19 s 两次全绿）。**同日另一次（940.93 s）跑出 1 条 5 秒超时** —— 就是本行下面记过的那条**既有抖动**（`fileExports.test.ts` 的 CAD 导出用例），**单跑三次全过、那条用例本身约 0.69 s**。**相对上一条读数（318 / 3659，2026-10-05）是 +7 文件 / +110 用例**，差额来自这两条读数之间合并的 N5a/N5b/N6 那几批，**本批不为它编归因** —— 本批只改文档、两处注释与一条既有测试的注入，**不改测试文件数也不改用例数**（修复前后两次读数的 325 文件 / 3770 项逐字相同）。**以下为上一条读数的原记录，留档**：**318 文件 / 3659 通过 + 1 todo / 0 失败**（**2026-10-05 N4b 后实测**，224 s，**本批 0 抖动**）。**相对 N4a 的 317 / 3645：+1 文件**（新增 `apps/web/src/agent/fixtures/benchmarkPlanningEval.test.ts`，10 条）**/ +14 用例**（另 4 条加在既有文件里：`benchmarkContract.test.ts` +1、`ProviderEval.test.tsx` +3）—— **3645 + 14 = 3659 对得上**。**与上一版记的 315 / 3627 的差额不能全记在 N4a 头上**：文档那个 315 本身已是旧读数 —— 我在 BASE `e96d0f5` 上直接数出 **316** 个被 vitest 收录的测试文件（`packages|apps|scripts` 下的 `*.test.ts(x)`），HEAD `f315cf6` 是 **317**，**唯一新增**是 N4a 那条应用侧判据 `apps/web/src/agent/fixtures/benchmarkContract.test.ts`（+1 文件 / +5 用例）；此外 `scripts/agent-benchmark` 的用例数**本批未变**：BASE `e96d0f5` 就已经是 **40** 条（`benchmark.test.ts` 27 + `run.test.ts` 13），本批只把其中一条断言**改严**（expect 计数 46 → 48）。**（2026-10-05 复核更正**：我上一版这里写成"由 34 条增至 40 条" —— 那个 34 是更早一轮的历史读数（`git show e96d0f5:scripts/agent-benchmark/*.test.ts` 数出来就是 40），被我当成了本批的增量；这是"看起来像实测、其实不存在的 delta"，复核抓出来后已改正。**）**其余差额来自这两个读数之间的其它提交，**不是本批**。**另如实记一次抖动**：独立复核时同一条命令在本机跑出 **1 条 5 秒超时**（`apps/web/src/persistence/fileExports.test.ts` 的 CAD 导出用例）—— 该文件**未被本批任何提交改动**（最后动它是 2026-10-02 的 `fc4df43`），**单跑 9/9 通过、那条用例本身 308 ms**，属**负载敏感的既有抖动**：按本仓口径**超时那次既不算绿也不算红**，但它确实存在、值得记 | 0（本批三次：两次 0，抖动那次为 1） | **2026-10-06 实测（控制器自跑三次）** |
 | 本区块非 Lean 慢集成单测 | `npm.cmd exec vitest run -- --exclude scripts/proof-spike/lean4EndToEnd.test.ts --maxWorkers=2` | **324 文件 / 3781 通过 + 1 todo / 0 失败**；与含 Lean 慢集成的历史读数口径不同。 | 0 | **2026-10-06 本区块实测** |
-| H0b3a 高考来源分级（只读官方评析，非高考金标） | `npm.cmd exec vitest run -- scripts/curriculum/examSources.test.ts scripts/curriculum/catalog.test.ts scripts/docs-consistency/progress-claims.test.ts --reporter=dot` | **3 文件 / 22 通过**：2 篇评析拆 3 卷别来源，8 个候选单元；**完整题目/答案均未审定、金标 0**，不会混进高考题型已覆盖分母。本块未复跑全库/Lean/e2e/Rust。 | 0 | **2026-10-06 H0b3a 实测** |
+| V0 内部作图范围与候选案例（**非产品已画图**） | `npm.cmd exec vitest run -- scripts/curriculum/diagramScope.test.ts scripts/curriculum/goldCases.test.ts scripts/curriculum/catalog.test.ts scripts/curriculum/examSources.test.ts scripts/docs-consistency/progress-claims.test.ts --reporter=dot` | **5 文件 / 35 通过**；4 个视觉候选、3 默认非图、134 未审；4 家族 × 正反欠定 = 12 条内部描述/坐标候选，其中欠定 4 条允许自由选择；**无真实图元/Lean/新付费 provider 结果**。 | 0 | **2026-10-06 当前本块定向复验** |
+| H0b3a 高考来源分级（旧来源清册快照，不属现行分母） | `npm.cmd exec vitest run -- scripts/curriculum/examSources.test.ts scripts/curriculum/catalog.test.ts scripts/docs-consistency/progress-claims.test.ts --reporter=dot` | **3 文件 / 22 通过**：2 篇评析拆 3 卷别来源，8 个候选单元；**完整题目/答案均未审定、金标 0**，不会混进高考题型已覆盖分母。本块未复跑全库/Lean/e2e/Rust。 | 0 | **2026-10-06 H0b3a 实测** |
 | H0b2 定向选修正文与 E 类开放边界（历史快照） | `npm.cmd exec vitest run -- scripts/curriculum/catalog.test.ts scripts/docs-consistency/progress-claims.test.ts --reporter=dot` | **2 文件 / 17 通过**：43 表层来源、131 规定性一级要求和 E 类 10 举例；4 类开放 E 范围不报穷尽，0 金标/高考标签，`ready=false`。本块未复跑全量 Vitest、Lean、浏览器或 Rust。 | 0 | **2026-10-06 H0b2 当时实测** |
 | H0b1 定向正文索引（历史快照，详见 H0b2 当前读数） | `npm.cmd exec vitest run -- scripts/curriculum/catalog.test.ts scripts/docs-consistency/progress-claims.test.ts --reporter=dot` | **2 文件 / 14 通过**：课程表 43 来源条目，必修/选择性必修 67 条未分类正文一级条目，0 金标/0 高考标签；审计 `ready=false`。本块未复跑全量 Vitest、Lean、浏览器或 Rust。 | 0 | **2026-10-06 H0b1 实测** |
 | H0a 定向索引审计（历史快照，详见 H0b1 当前读数） | `npm.cmd exec vitest run -- scripts/curriculum/catalog.test.ts scripts/docs-consistency/progress-claims.test.ts --reporter=dot` | **2 文件 / 11 通过**；课程表 43 源条目、0 原子子型和金标、0 高考标签，`ready=false`。源码 SHA 篡改测试单独验证会红；不代表 Lean 或真实模型成功。 | 0 | **2026-10-06 本区块实测** |
@@ -172,7 +173,7 @@
 | --- | --- | --- | --- |
 | 1 | ~~**`constrainedDrag` 怎么打开**~~ **✅ 全解决（2026-10-05）** | 入口：**设置 → 实验性功能 → 约束拖动**（`ExperimentalFeatures.tsx`，偏好存 `mathcanvas:next-phase-preferences`，`agentNextPhaseFlags()` **只**取这一个）。浏览器验收：`e2e/next-phase-flag-entry.spec.ts`（入口 3 条）+ **`e2e/agent-constrained-drag.spec.ts`（拖动正/反例 2 条）** —— 关着时拖动改变 \|AB\|、打开后同样的拖动 \|AB\| **仍是 1**（且断言 A 真的动过，不许用"没变"冒充"被约束住"）。顺带修掉顶栏那个**死的「设置」按钮** | **默认仍是关**（关着走原来的 `translatePrimitive3`）；**定向变异验证过判据**：把 `enabled` 写死 false ⇒ 正例红（实测 \|AB\|=1.539）；全量 e2e 191 通过 |
 | 2 | ~~**N5 首批的「勾股」怎么办**~~ **✅ 已裁决（2026-10-05，用户决定）：判成 ⊥ 目标 + 用勾股定理那一步把结论接回来** | 代码里落成 **`inference` 字段**（`proofGoals.ts`）：勾股**仍然没有直接载体**（`obligationKinds` / `constraintTypes` 都空），多的是一条**显式推断路线** `{ from: "perpendicular", theorem: "勾股定理及其逆定理" }`；新增 `proofGoalDischargeRoute()`（`direct` / `via-inference` / `none`）。**关键：不做别名** —— 从约束层问 `perpendicular` **只**会得到 ⊥ | **"一处路线都没有"的首批目标现在是空的**（`goalsWithoutAnyRoute: []`）。`proof:smoke` 把路线一起打出来了。**定向变异验证过**：把 `"perpendicular"` 塞进勾股的载体（别名）⇒ **4 条红**；让路线恒为 `direct` ⇒ 1 条红 |
-| 3 | ~~**`real_provider` 用哪个 provider、凭据放哪**~~ **已裁决** | 应用内两段式评测复用凭据库；planning 三轮与工具环一轮由用户运行过，CLI 侧未运行真实 provider。 | **仍缺**课程/高考全题型实测、可核对价目表与更多人工判读；新付费请求必须再获明确授权，见 §四 C。 |
+| 3 | ~~**`real_provider` 用哪个 provider、凭据放哪**~~ **已裁决** | 应用内两段式评测复用凭据库；planning 三轮与工具环一轮由用户运行过，CLI 侧未运行真实 provider。 | **仍缺**作图题真实题集实测、可核对价目表与更多人工判读；新付费请求必须再获明确授权，见 §四 C。 |
 | 4 | ~~**旧阶段要不要 `git push`**~~ **已授权并曾执行** | 旧提交已推送，最近 N3 区块为 `7823682`；历史 CI 数不能当当前 CI。 | 此后每区块均更新文档、提交推送并以 `git ls-remote` 核对远端 SHA，发布另行验收。 |
 | 5 | **要不要为一句读不通的诊断文案去重新基线化黄金样本** | 那句文案（关系型条件的失败原因说"题设要求 0"）是**用户可见**的（`ConfirmationPanel` 直接渲染 `reason`），但它是**编译器输出的一部分**，被"关闭 flag 时旧路径与 `4707b64` 逐字节相同"那份黄金样本钉着。改它 = 改一个被钉住的契约，**不能顺手做** | 门禁第 1 条与"N2 已交付"的证据链里，"逐字节相同"那句话要改成"除这一处诊断文案外逐字节相同" —— 那是**放宽一条已声明的保证**，得你点头 |
 | 6 | **要不要加一行 `.gitattributes`** | 扫描器写出的 `scripts/dependency-licences/rust-licences.json` 是 **LF**，而本仓 `core.autocrlf=true` 期望工作树 **CRLF**，于是 `git status` 长期报"**假脏**"（`git diff` 是空的、两次扫描的 SHA256 相同）。修法是给这一份生成物加 `eol=lf`，但它**改的是全仓的行尾约定**，不只是这一份文件 —— 这种"假脏"会掩盖真改动（上一轮就先按"可能是真改动"查过 diff 才敢下结论） | 修掉长期噪声；已核实仓里**没有** `.gitattributes`。不修也不会错，只是每次 `git status` 都要多查一次 |
@@ -745,9 +746,9 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
 - **（已闭环，留档）「自动取景动画会覆盖用户拖动」那个窗口已修**（2026-10-02，提交 `fd234fd`）：过去 `cancelFitAnimation()` 只在副作用清理（卸载）里被调用，用户拖动不取消进行中的取景，于是"换文档触发取景"之后在 **250 ms 窗口内开始拖**，拖动结束后剩下的帧会把用户刚拖出来的视角覆盖回去。现在 `pointerdown` 与滚轮都会先取消它。**顺带补了可观测状态** `data-fit-animation`（`running` / `done` / `cancelled`）—— 因为这条缺口的第一版用例是**假绿**的（触发条件搞错了：`shouldAutoFit` 只在换文档或内容出界时取景），现在用例要先抓到 `running` 才继续。证据：新增 `threeSceneCamera.test.ts`（该模块此前无测试，3/3，含"取消后不再排帧"）+ `geometry3d-drag.spec.ts` 一条 e2e（变异：去掉取消 → 期望 cancelled 实收 done，红）。
 - **引用进度档案一律用小节标题，不写行号**：`project-progress.md:<行号>` 形式的引用会随任何一次编辑静默失效（本阶段就发生过三处，已全部改成按标题引用）。
 
-## 旧一轮 N1–N6 的历史阶段记录（非新 H0–H4 的完成判定）
+## 旧一轮 N1–N6 的历史阶段记录（非现行 V0–V3 的完成判定）
 
-以下只说明**旧计划**的实现与已知限制；新版课程全题型目标与进度以 [新任务追踪](agent-next-round-progress.md) 为准。旧 N1–N6 的检查项曾按当时范围完成，默认 Agent 与证明能力都没有因此自动升级：
+以下只说明**旧计划**的实现与已知限制；新版作图题目标与进度以 [新任务追踪](agent-next-round-progress.md) 为准。旧 N1–N6 的检查项曾按当时范围完成，默认 Agent 与证明能力都没有因此自动升级：
 
 1. **N1 统一数学状态（已完成）**：Obligation / Constraint / Claim IR，统一题设、目标、自由点、证据和 solver 状态。提交 `acd3bd5` / `2d62c4d` / `b5b33f9` / `f997b3f`；**在 flag 之后，默认关闭**。
 2. **N2 解析构造与见证搜索（已完成）**：题面点名 + 关系（**无显式坐标**）时，系统自己解析构造候选（棱锥/棱柱）、按 seed/上限/预算做有界搜索，并**只把通过同一个核验器的候选**接进编译路径。提交 `c2314c9`..`e3fdb61`（内核）、`8648a13`..`ab05add`（搜索）、`ca1d0b2`..`9c5ae2f`（接线 + spike）。**`witnessSearch` 缺省关**；关闭时编译结果与 `4707b64` 逐字节相同。后端的可行性评估（Z3/NLSAT）只有**一次运行**的实测数字与原始产物，**没有接入产品**。
@@ -761,7 +762,7 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
 **当前明确不承诺**：下一阶段设计不等于已实现；**即使 N3–N6 的能力已交付，默认 Agent 仍只按当前已验证的静态示意图能力运行**（新能力全部在缺省关闭的 flag 之后）。**N2 的 `witnessSearch` 仍默认关闭，但设置 → 实验性功能现有独立入口；仅显式启用时允许替换候选，核验与人工确认不变。当前覆盖面仍很窄，不能称为通用解题。**
 ## 四、未完成任务总清单（2026-10-04 文档审查后；本节是“还差什么”的唯一权威处）
 
-> 口径：只有在第一节当次真正跑过的内容才写成门禁读数。A–D、F–G 是未完成/边界，E 明确标注为**旧 N1–N6 历史阶段记录**，不能作 H0–H4 已完成证据；历史过程与失败尝试看 `docs/project-progress.md` / `CHANGELOG.md`。
+> 口径：只有在第一节当次真正跑过的内容才写成门禁读数。A–D、F–G 是未完成/边界，E 明确标注为**旧 N1–N6 历史阶段记录**，不能作 V0–V3 已完成证据；历史过程与失败尝试看 `docs/project-progress.md` / `CHANGELOG.md`。
 
 ### 先保留一条关键教训
 
@@ -777,9 +778,9 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
 
 ### C. 真实 provider 与 Agent 质量基线
 
-1. **已有但远不足发布**：应用内真实 provider 的 planning 轴曾由用户运行三轮（一次只取 21 题的前 3 题），工具环另一次得 `pass@1 1/8`、`pass@3 2/8`；人工可读性只标注两条、每组 `n=1`。抽取层 `covered=14/21`、题设覆盖率 72.7% 是**离线抽取判据**，不是模型作图正确率。这些历史数只证明“确实测过这些小样本”，不是全课程真实成功率；逐次时间和原始口径在 §一与归档。
+1. **已有但远不足发布**：应用内真实 provider 的 planning 轴曾由用户运行三轮（一次只取 21 题的前 3 题），工具环另一次得 `pass@1 1/8`、`pass@3 2/8`；人工可读性只标注两条、每组 `n=1`。抽取层 `covered=14/21`、题设覆盖率 72.7% 是**离线抽取判据**，不是模型作图正确率。这些历史数只证明“确实测过这些小样本”，不是现行作图题的真实成功率；逐次时间和原始口径在 §一与归档。
 2. **明确未测/测不到**：费用仍 `null`（有 token usage，无经审定价目表），其余 18 条题集及新增高中课程/高考类尚无真实 provider 完整读数，`>1 MiB` 响应那类在现有传输上报错，不能算 planned/rejected。开放题图形正确率、人工图面可读性的大样本与证明可信翻译均未放行。CLI `real_provider` 因不走应用凭据通道仍整批 `not_measured`；离线 `deterministic_local` 不能充当真人模型通过率。再付费运行需另经人确认。
-3. 下一阶段完整任务与归属见 [H0–H4 进度追踪](agent-next-round-progress.md)；**成本、延迟、pass@k、人工可读性必须各报自己的分母和提供者，不能合并成一个“质量已通过”状态**。
+3. 下一阶段完整任务与归属见 [V0–V3 作图题进度追踪](agent-next-round-progress.md)；**成本、延迟、pass@k、人工可读性必须各报自己的分母和提供者，不能合并成一个“质量已通过”状态**。
 
 ### D. 发布与仓库收尾
 
@@ -800,9 +801,11 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
 6. **N6：feature flag、依赖/许可证/线程/WASM 审查、发布门槛与维护收口**。**状态（2026-10-05 到第十四步；2026-10-06 第十五步 + 全计划收口）** —— 五个开关的覆盖矩阵、JS 运行依赖的许可证清单、WASM/线程边界、**Rust 传递依赖的许可扫描**（`cargo metadata`：551 包 / 33 种表达式 / 无一缺 `license` 字段 / 无 GPL·AGPL·SSPL）、**并发正确性专项**（唯一一处两把锁嵌套的守卫 + 删掉 `drop(runs)` 会自锁的实测）、e2e 与 Rust 两条抖动的修复与前后计数、整批门禁（含**生产构建**）都在，写进 [`docs/acceptance/next-phase-flag-and-dependency-review.md`](acceptance/next-phase-flag-and-dependency-review.md) 与 [`docs/current-status.md`](current-status.md) §一。**那一份里仍然明确写了没回答的**：`obligationIR` / `witnessSearch` 两个开关的**浏览器**用例（它们**没有产品入口**，所以无从谈起；`constrainedDrag` 的已经有了）、依赖体积与供应链。另查出两处依赖归位问题（`apps/web` 的 `@vitejs/plugin-react` 放错在 `dependencies`、根 `package.json` 多余一个 `three`），**未修**。
 7. 其他尚未启动的产品探索：题目截图识图、GeoGebra `.ggb` 互操作、平面/函数题型逐题补缺、3D 画面进入 HTML。
 
-### F. 新一轮 H0–H4：H0a 来源索引/审计器已实施，全题型和自动 Lean 尚未交付
+### F. 现行 V0–V3：只处理需要作图的题（产品能力尚未交付）
 
-目标由用户重新确定：以 **2025 年日常修订课程标准与高考题型** 为目录与验收范围，竞赛另表；**H0a 建立 43 条来源索引；H0b1/H0b2（代码 `8a8fe3e` / `f5e0e75`）登记必修/选择性必修 67 条、选修 A–D 64 条一级要求，E 类仅 10 个非穷尽举例；全部未分类/无金标，4 类 E 范围开放，高考经原题/答案审定标签 0（H0b3a 只有 8 个官方评析候选标签），故 H0 未完成、H1–H4 尚未开始。**旧 N1–N6 已勾选的是旧范围，不得用旧 N5 的 `perpendicular` 条件引理宣称全题型或原题证明。新 [设计](superpowers/specs/2026-10-06-high-school-auto-lean-design.md)、[可执行计划](superpowers/plans/2026-10-06-agent-next-round-implementation-plan.md)、[逐项进度/审查问题台账](agent-next-round-progress.md) 分别承担规范、任务和状态。每区块 RED→GREEN、同步权威文档、提交推送。没有授权新的付费 provider 请求。
+- [x] **V0 内部基础**：保留 2025 课程来源清册作候选参考，但独立 `diagram-scope-2025.json` 的 4 个宽泛图形领域只标 `helpful`，不能把同章节纯计算强制画图；3 个默认非图子型可由题目明确绘图请求覆盖，另 134 子型仍 `unknown`。内部题集已用三角、椭圆、导数曲线与四面体的 **12 条**原创正/反/欠定**文字/坐标候选**替代尚未推送的纯集合/数列/恒等式九例，4 条欠定例给出可行自由点/参数样本。这里的候选还**没有内核/画布核验**，`verified_instance` 不可仅凭文本产生；Lean 更未自动调用。
+- [ ] **V0 产品出口**：实际生成 2D/函数/圆锥曲线/3D 图元，逐条核验题设与证据来源；负例拒绝，欠定自由点允许一张符合直觉且满足题设的示意图，旧路径关旗回归和浏览器可视/撤销正反验收齐备。
+- [ ] **V1/V2/V3**：四类作图约束/拖动，限定作图主张可信形式化后桌面受限自动 Lean，真实 provider 作图图面可读性与成本门禁。教师/学生目视走查与管理员 MSI 仍分别未验；付费 provider 需要用户单独批准。各块具体文件/RED/接口见 [新实施计划](superpowers/plans/2026-10-06-diagram-agent-auto-lean-implementation-plan.md)。
 
 ### G. N1/N2 的已知边界与 park 项（**不是缺陷，是如实记录**）
 
