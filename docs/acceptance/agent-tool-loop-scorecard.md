@@ -4,7 +4,7 @@
 > [`docs/current-status.md`](../current-status.md) 为准** —— 它是"现在时"的唯一一处。
 > 这里的每一行都是**镜像**：能力前进一格时，这一行要跟着改（第 25 / 33 / 43 轮各漏过一次）。
 
-Updated: 2026-10-06. **现行任务只覆盖需要画图的高中题。** 旧全课程 H0–H4 的 43/141 来源盘点只供寻找候选；V0 已有四家族 12 条内部文字/坐标候选和 134 未审子型，**实际图元/真实 provider 作图质量/自动 Lean 均未交付**。既有真实 provider 成本仍 `null`、条件垂直引理不是整题证明；具体门禁读数与发布结论分别看 [当前状态](../current-status.md) / [发布门禁](agent-release-gate.md)，新设计 [V0–V3](../superpowers/specs/2026-10-06-diagram-scope-addendum.md)。
+Updated: 2026-10-06. **现行任务只覆盖需要画图的高中题。** 旧全课程 H0–H4 的 43/141 来源盘点只供寻找候选；V0 已有四家族 12 条内部文字/坐标候选和 134 未审子型，**实际图元/真实 provider 作图质量/自动 Lean 均未交付**；现有原文核验仅限多面体调用点，2D 曲线与导数 Agent 入口需 V0a–V0d 分别补。既有真实 provider 成本仍 `null`、条件垂直引理不是整题证明；具体门禁读数与发布结论分别看 [当前状态](../current-status.md) / [发布门禁](agent-release-gate.md)，新设计 [V0–V3](../superpowers/specs/2026-10-06-diagram-scope-addendum.md)。
 
 ## Metrics
 

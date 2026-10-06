@@ -40,6 +40,23 @@
 - [ ] **V0 出口**：让每例生成可重放的实际图元/函数图，内核逐条核验题设与候选位置；模糊输入反例拒绝确认，欠定自由点“有可用图”与“答案不唯一”同时为真；关旗旧路径有真浏览器反例。没有 e2e 与人看图确认时此项保持未勾。
 - [ ] **V0 区块收口**：定向 + typecheck/lint/需要的 e2e；文档、来源/数据卫生/截图目视核对；commit/push/核对远端。
 
+### V0 产品路径的实地审查（2026-10-06，仅调用点定位，不是能力交付）
+
+- `packages/agent-core/src/planCompiler.ts` 的原话清单/`verifyDiagramObligations` 只在 `solid.create_polyhedron` 后执行；`apps/web/src/agent/draftStore.ts` 对同一动作重算。**其它三家族现阶段不能因为“动作编译成功”就算题设已核验**。四面体另有 `solid.create_tetrahedron`，不能未经测试假设它自动进入上述校验。
+- 现有 `planar.create_point/segment/conic` 能产生 2D 图元；圆锥曲线的创建动作在 `actionRegistry.ts` 与编译器可用，但题目焦点、半轴、退化与原文对应的报告缺乏统一验证。三角形用点/线段形成候选，也须证垂直及自由点条件。
+- `packages/dsl/src/types.ts` 有 `type:"function"`，场景图可重算函数曲线/切线；Agent 动作表只有 `function.analyze` / `function.create_tangent`，**没有创建函数图像动作**。`apps/web/src/agent/agentRunner.ts` 的自动切工作区目前只认 `planar.*`、`solid.*`、`section.*`、`dynamic.*`；新动作要同时进入动作名/Schema/编译器/工作区/Worker 传输/端到端，不能只加按钮。
+
+### V0a–V0d 可独立拒收的实施区块（**每一块**先 RED→GREEN、更新文档并推送）
+
+| 次序 | 首个可复核图 | 写入职责 / RED | 产品出口（未达） |
+| --- | --- | --- | --- |
+| V0a 立体自由顶点 | 固定三角底面、顶点在法线 z>0 且高度未给；可取 D(0,0,2) | `packages/agent-core/src/planCompiler.test.ts`、`apps/web/src/agent/draftStore.test.ts`、`e2e/agent-diagram-math.spec.ts`：候选真实点棱面被核验；矛盾的 D 与缺判据拒绝，图可非唯一；两处入口只读同一义务；关旗旧路径 | 真浏览器看到四面体；拒绝不占撤销历史；有自由点但合法图可确认（不宣称唯一） |
+| V0b 平面三角 | A/B/C 实际点线段、AB⊥AC 与欠定 C | `packages/geometry-kernel/src/planar-constraints.test.ts`、`packages/agent-core/src/planCompiler.test.ts`、`apps/web/src/agent/workerContracts.test.ts`、`apps/web/src/agent/draftStore.test.ts` + e2e：三点真实坐标点积正确，AB∥AC 反例红；未支持题设列 unverified | 图像存在、条件逐项核验、欠定 C 允许一张示意图 |
+| V0c 圆锥曲线 | 椭圆半轴 3/2，焦点 ±√5 与焦点轴反例 | 复用 `planar.create_conic`，在几何内核加独立判据、解析题面 IR 与草稿重算；新 e2e 需对错焦点拒绝及浏览器真实椭圆判据，不读模型自报证据 | 真椭圆 + 焦点/退化可判，关旗旧路径不变 |
+| V0d 导数曲线 | `f(x)=x³−3x` 真图与 x=1 水平切线 | 新 `function.create_graph`（名字可在 RED 时定）须经过 `actionIds.ts`、`actionRegistry.ts`、`actionInputs.ts`、编译器、`agentRunner.ts` 工作区/Worker；对切线 `f′(1)=0` 做内核/草稿正反验证 + e2e | 真函数图和切线同时显示，错误斜率不能正常确认 |
+
+**每块 RED 运行**：先新建能执行的断言文件（不存在文件/权限报错不算行为 RED），再运行 `npm.cmd exec vitest run -- packages/agent-core/src/planCompiler.test.ts apps/web/src/agent/draftStore.test.ts apps/web/src/agent/workerContracts.test.ts --reporter=dot` 和新增内核文件；浏览器 `npm.cmd run test:e2e -- e2e/agent-diagram-math.spec.ts --workers=1`。关 flag 必须钉旧拖动与旧静态示意图路径，默认不触发自动 Lean。所有 RED 要点名原题条件/具体图元/残差或不支持原因；**创建了一个图元**从来不等于**题设全部验证通过**。
+
 ## V1：画图与约束求解扩大到这四类题
 
 - [ ] **RED**：对同一组三角、椭圆焦点/退化、三次曲线切线/极值、空间线面关系，用错误参数生成候选必须红，合法自由点图要绿；无空间判据约束不得被拖坏。将 `verified_instance/unverified_instance/no_witness` 与主张状态分离，不把未核验当通过。落点 `packages/geometry-kernel/src/*.test.ts`、`apps/web/src/agent/agentRuntime.test.ts` 和 `e2e/` 对应场景。

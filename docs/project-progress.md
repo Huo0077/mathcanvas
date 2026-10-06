@@ -10,6 +10,11 @@
 
 > 下方 2026-09-22 的"最后更新 / 当前阶段 / 总体状态"三行保留为**当时快照**，不再维护。
 
+## 2026-10-06 —— V0a–V0d 产品调用点审计：动作存在 ≠ 题设已验证（文档块）
+
+- 逐文件检查 `packages/agent-core/src/planCompiler.ts` / `apps/web/src/agent/draftStore.ts`：原文题设→`verifyDiagramObligations` 条件是含 `solid.create_polyhedron`。现有 `planar.create_conic`、平面点/线与 `solid.create_tetrahedron` 不自动进入这同一入口，不能推断“动作执行成功=图符合原题”。`packages/dsl/src/types.ts` 有 `function` 图元，但 Agent 动作名只有 `function.analyze` 与 `function.create_tangent`，且 `agentRunner.ts` 自动工作区判据只识别平面/立体/截面/动态动作族。分 V0a 立体自由顶点、V0b 平面三角、V0c 圆锥曲线、V0d 函数图/切线，分别列真实 RED 测试路径和浏览器验收。
+- 此块**仅改设计/进度文档，不改产品代码**；不得记录 V0 产品通过、e2e/Lean 运行或真实 provider 请求。文档一致性/链接/BOM/换行与远端 SHA 核对完成后推送。
+
 ## 2026-10-06 —— 用户改定只做作图题（V0–V3）：全课程范围停止执行
 
 - 用户明确只要需要画图的高中内容，例如三角、圆锥曲线、导数函数图、立体几何；此前“所有高中课程题型+Lean”路线被 [作图范围修订](superpowers/specs/2026-10-06-diagram-scope-addendum.md) 覆盖。43 个上层/141 个一级来源仍可追踪，但**不再作为本轮产品支持率分母**；2025 上海和 2026 全国卷的官方评析仅作来源线索，完整题面/答案未核验。
