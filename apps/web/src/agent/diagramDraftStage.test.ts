@@ -269,3 +269,48 @@ describe("the witness-search switch on the real draft staging path", () => {
     } finally { client.dispose() }
   })
 })
+
+
+describe("V0a real draft and Worker boundaries", () => {
+  const action = { actionId: "solid.create_polyhedron", actionKey: "free-apex", factIds: [], inputs: {
+    alias: "free-apex", vertexNames: ["D", "A", "B", "C"],
+    vertices: [{ x: 1, y: 0, z: 2 }, { x: 0, y: 0, z: 0 }, { x: 3, y: 0, z: 0 }, { x: 1, y: 2, z: 0 }],
+    faces: [[1, 2, 3], [0, 2, 1], [0, 3, 2], [0, 1, 3]]
+  } } as const
+  const prompt = "在三棱锥D-ABC中，AD⊥平面ABC，自由点D，画示意图"
+
+  it("stages the same genuinely reverified free-apex diagram in-process and through the Worker", async () => {
+    const direct = setup()
+    const first = await direct.store.stage(direct.draft.draftId, [action] as never, direct.draft.draftVersion, prompt, undefined, true, true)
+    expect(first.ok, JSON.stringify(first)).toBe(true)
+    if (!first.ok) return
+    expect(first.preview.diagramVerification?.status).toBe("passed")
+    expect(first.preview.diagramVerification?.sampleValues.join(" ")).toContain("自由点 D")
+    expect(first.preview.completionAssumptions.map((item) => item.text).join(" ")).toContain("系统自选")
+    expect(first.preview.candidate.primitives.some((item) => item.type === "polyhedron3")).toBe(true)
+
+    const client = createGeometryWorkerClient(inlineWorker((request) => handleGeometryRequest(request as never)))
+    const store = createDraftStore(createIdAllocator, async ({ plan, document, conversationId, draftVersion, userMessage, obligationIR, witnessSearch }) =>
+      compileInWorker(client, { plan, document }, { runId: "worker-run", draftId: conversationId, draftVersion, prompt: userMessage, obligationIR, witnessSearch }))
+    const secondDraft = store.create(createEmptyDocument("geometry3d"))
+    try {
+      const second = await store.stage(secondDraft.draftId, [action] as never, secondDraft.draftVersion, prompt, undefined, true, true)
+      expect(second.ok, JSON.stringify(second)).toBe(true)
+      if (!second.ok) return
+      expect(second.preview.diagramVerification).toEqual(first.preview.diagramVerification)
+      expect(second.preview.candidate.primitives).toEqual(first.preview.candidate.primitives)
+    } finally { client.dispose() }
+  })
+
+  it("does not stage a solid that is perpendicular but contradicts named original coordinates", async () => {
+    const { store, draft } = setup()
+    const wrong = { ...action, inputs: { ...action.inputs, vertices: [
+      { x: 1, y: 0, z: 2 }, { x: 1, y: 0, z: 0 }, { x: 3, y: 0, z: 0 }, { x: 1, y: 2, z: 0 }
+    ] } }
+    const input = "在三棱锥D-ABC中，A=(0,0,0)，B=(3,0,0)，C=(1,2,0)，AD⊥平面ABC，画示意图"
+    const result = await store.stage(draft.draftId, [wrong] as never, draft.draftVersion, input, undefined, true, true)
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.diagnostics?.some((item) => item.code === "diagram_condition_failed" && item.message.includes("A=(0,0,0)"))).toBe(true)
+    expect(store.getPreview(draft.draftId)?.candidate.primitives).toEqual([])
+  })
+})

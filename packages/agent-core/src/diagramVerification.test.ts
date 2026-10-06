@@ -173,3 +173,20 @@ describe("verifyDiagramObligations", () => {
     expect(report.checks[0].sourceText).toBe("∠ABC=60°")
   })
 })
+
+
+describe("V0a numeric coordinate judgement on materialized named points", () => {
+  it("passes a stated coordinate only when the candidate really places that point there", () => {
+    const { plan, candidate } = fixture()
+    const report = verifyDiagramObligations(parseDiagramObligations("在三棱锥A-BCD中，A=(0,0,1)，画示意图", { spatialPointConditions: true }), plan, candidate)
+    expect(report.status).toBe("passed")
+    expect(report.checks).toEqual([expect.objectContaining({ kind: "pointCoordinate", sourceText: "A=(0,0,1)", status: "passed", expected: 0, actual: 0 })])
+  })
+
+  it("fails a wrong coordinate rather than letting an unrelated perpendicular claim hide it", () => {
+    const { plan, candidate } = fixture()
+    const report = verifyDiagramObligations(parseDiagramObligations("在三棱锥A-BCD中，A=(0,0,2)，画示意图", { spatialPointConditions: true }), plan, candidate)
+    expect(report.status).toBe("failed")
+    expect(report.checks[0]).toMatchObject({ kind: "pointCoordinate", sourceText: "A=(0,0,2)", status: "failed", expected: 0, actual: 1 })
+  })
+})

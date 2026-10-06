@@ -101,8 +101,15 @@ describe("constructPyramidWitness", () => {
       base: ["A", "B", "C"], apex: { at: "P", foot: "B" },
       relations: [{ kind: "perpendicular", segments: [["P", "B"], ["A", "B"], ["B", "C"]] }]
     }))
-    expect(result.status).toBe("rejected")
-    if (result.status === "rejected") expect(result.code).toBe("unsupported-base-shape")
+    expect(result.status, result.status === "rejected" ? result.message : "constructed").toBe("candidate")
+    if (result.status !== "candidate") return
+    const at = (name: string) => result.witness.points[indexOf(result.witness, name)]
+    const ab = subtractVector3(at("B"), at("A"))
+    const ac = subtractVector3(at("C"), at("A"))
+    const pb = subtractVector3(at("P"), at("B"))
+    expect(Math.abs(dotVector3(ab, ac))).toBeGreaterThan(0.1) // no unstated right corner
+    expect(Math.abs(dotVector3(pb, ab))).toBeLessThan(TOLERANCE)
+    expect(Math.abs(dotVector3(pb, subtractVector3(at("C"), at("B"))))).toBeLessThan(TOLERANCE)
   })
   it("reconstructs the representative P-ABCD pyramid exactly, and the kernel accepts the topology", () => {
     const result = constructPyramidWitness(
@@ -815,5 +822,25 @@ describe("residual scope (R15)", () => {
     })
     expect(report.acceptable).toBe(true)
     expect(report.source).toBe("free-choice")
+  })
+})
+
+
+describe("V0a free triangular base with no stated angle", () => {
+  it("chooses a reproducible non-degenerate, non-right, non-isosceles witness without inventing a right corner", () => {
+    const request: PyramidConstructRequest = { shape: "pyramid", base: ["A", "B", "C"], apex: { at: "D", foot: "A" }, relations: [] }
+    const first = constructPyramidWitness(request)
+    const second = constructPyramidWitness(request)
+    expect(first.status, first.status === "rejected" ? first.message : "constructed").toBe("candidate")
+    expect(second).toEqual(first)
+    if (first.status !== "candidate") return
+    const at = (name: string) => first.witness.points[indexOf(first.witness, name)]
+    const ab = subtractVector3(at("B"), at("A")), ac = subtractVector3(at("C"), at("A"))
+    const lengths = [distanceVector3(at("A"), at("B")), distanceVector3(at("A"), at("C")), distanceVector3(at("B"), at("C"))]
+    expect(vectorLength(crossVector3(ab, ac))).toBeGreaterThan(0.1)
+    expect(Math.abs(dotVector3(ab, ac))).toBeGreaterThan(0.1)
+    expect(new Set(lengths.map((value) => value.toFixed(6))).size).toBe(3)
+    expect(at("D").z).toBeGreaterThan(at("A").z)
+    expect(buildFromPoints({ vertices: orderedPoints(first.witness), faces: first.witness.faces }, createBuilderContext()).diagnostics).toEqual([])
   })
 })

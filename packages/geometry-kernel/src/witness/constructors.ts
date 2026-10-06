@@ -655,6 +655,40 @@ function freeLength(stated: WitnessStatedValue | null, other: WitnessStatedValue
  * 这两种是"只有关系、没有数值"的第一批代表形状。覆盖不到的（斜平行四边形底、直角不在环首、
  * 五边形以上）返回 `unsupported-base-shape` —— 明确拒绝好过悄悄换一个题面没说的形状。
  */
+/** A plain triangular base with free side lengths needs a representative, not a
+ * fabricated right angle. Any stated base relation we cannot honor stays rejected. */
+function deriveRepresentativeTriangle(
+  names: readonly string[],
+  relations: readonly WitnessRelation[]
+): { status: "ok"; polygon: Vector3[]; freeValues: string[]; assumptions: string[] } | WitnessConstructRejection {
+  const [first, second, third] = names as [string, string, string]
+  const unsupportedAngle = relations.some((relation) => (relation.kind === "perpendicular" || relation.kind === "parallel")
+    && relation.segments.length > 0 && relation.segments.every((segment) => segment.every((name) => names.includes(name))))
+  if (unsupportedAngle) return reject("unsupported-base-shape", "底面另有点名的角度或平行条件，不能凭普通三角形示例取代。", [...names])
+  const ab = statedLength(relations, [first, second])
+  const ac = statedLength(relations, [first, third])
+  const bc = statedLength(relations, [second, third])
+  for (const side of [ab, ac, bc]) if (side.kind === "invalid") return side.rejection
+  if (bc.kind === "value") return reject("unsupported-base-shape", `${second}${third} 给定长度时需要与其它边联合构造，普通示意值不能替代题设。`, [...names])
+  const abStated = ab.kind === "value" ? ab.stated : null
+  const acStated = ac.kind === "value" ? ac.stated : null
+  const width = freeLength(abStated, acStated, 0)
+  const depth = freeLength(acStated, abStated, 1)
+  if (!width || !depth || !(width.value > 0) || !(depth.value > 0)) return reject("degenerate-base", "底面自由边长必须为有限正数。", [...names])
+  // cos(angle A) = 2/5: deliberately neither right nor an elementary special angle.
+  const cosine = 0.4
+  const polygon: Vector3[] = [
+    { x: 0, y: 0, z: 0 },
+    { x: width.value, y: 0, z: 0 },
+    { x: depth.value * cosine, y: depth.value * Math.sqrt(1 - cosine * cosine), z: 0 }
+  ]
+  const freeValues = [
+    ...(!abStated ? [`底面边长 ${first}${second} = ${formatNumber(width.value)}（系统自选）`] : []),
+    ...(!acStated ? [`底面边长 ${first}${third} = ${formatNumber(depth.value)}（系统自选）`] : [])
+  ]
+  return { status: "ok", polygon, freeValues, assumptions: [`底面 ${names.join("")} 取一组非直角、非退化的普通三角形示例（题面未限定底角）。`] }
+}
+
 function deriveBasePolygon(
   names: readonly string[],
   relations: readonly WitnessRelation[]
@@ -683,6 +717,7 @@ function deriveBasePolygon(
   const third = names.length === 4 ? names[3] : names[2]
   const rightAngleAtFirst = baseEdgePerpendicular(relations, names, [first, second]) && baseEdgePerpendicular(relations, names, [first, third])
   if (!rightAngleAtFirst) {
+    if (names.length === 3) return deriveRepresentativeTriangle(names, relations)
     return reject(
       "unsupported-base-shape",
       `底面缺少「点名在 ${first} 处的直角」（${first}${second} ⊥ ${first}${third}）：首批不做通用非线性求解，无法唯一确定底面。`,

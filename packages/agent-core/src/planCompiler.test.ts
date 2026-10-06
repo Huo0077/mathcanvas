@@ -847,3 +847,59 @@ describe("按点名指定棱（hostEdge）", () => {
     expect(positionOf(compiled, "O")).toEqual({ x: 0, y: 0, z: 0 })
   })
 })
+
+
+describe("V0a: a free apex and every coordinate given must be judged", () => {
+  const base = [{ x: 0, y: 0, z: 0 }, { x: 3, y: 0, z: 0 }, { x: 1, y: 2, z: 0 }]
+  const makePlan = (apex: { x: number; y: number; z: number }, floor = base) => rawPlan([{
+    actionId: "solid.create_polyhedron", actionKey: "free-apex", factIds: [], inputs: {
+      alias: "free-apex", vertexNames: ["D", "A", "B", "C"], vertices: [apex, ...floor],
+      faces: [[1, 2, 3], [0, 2, 1], [0, 3, 2], [0, 1, 3]]
+    }
+  }])
+
+  it("rescues a skew apex without inventing an unstated right angle in the triangular base", () => {
+    const prompt = "在三棱锥D-ABC中，AD⊥平面ABC，自由点D，画示意图"
+    const result = compilePlan(makePlan({ x: 1, y: 0, z: 2 }), context(createEmptyDocument("geometry3d"), { prompt, diagramWitnessSearch: true }))
+    expect(result.ok, result.diagnostics.map((item) => item.detail).join("; ")).toBe(true)
+    expect(result.diagramVerification?.status).toBe("passed")
+    expect(result.materialisedActions).toBeDefined()
+    const action = result.materialisedActions!.find((item) => item.actionId === "solid.create_polyhedron")
+    const names = (action?.inputs as { vertexNames: string[] }).vertexNames
+    const solid = result.draftDocument!.primitives.find((item) => item.type === "polyhedron3")
+    expect(solid?.type).toBe("polyhedron3")
+    const at = (name: string) => {
+      if (solid?.type !== "polyhedron3") throw new Error("missing materialized solid")
+      const id = solid.vertexIds[names.indexOf(name)]
+      const point = result.draftDocument!.primitives.find((item) => item.id === id)
+      if (point?.type !== "point3") throw new Error(`missing named point ${name}`)
+      return point.position
+    }
+    const ab = subtractVector3(at("B"), at("A"))
+    const ac = subtractVector3(at("C"), at("A"))
+    const ad = subtractVector3(at("D"), at("A"))
+    expect(lengthVector3(crossVector3(ab, ac))).toBeGreaterThan(0.1)
+    expect(Math.abs(dotVector3(ab, ac))).toBeGreaterThan(0.1) // an unstated base right angle is not assumed
+    expect(Math.abs(dotVector3(ad, ab))).toBeLessThan(1e-8)
+    expect(Math.abs(dotVector3(ad, ac))).toBeLessThan(1e-8)
+    expect(at("D").z).toBeGreaterThan(at("A").z)
+  })
+
+  it("measures every explicitly stated vertex coordinate instead of passing a different valid perpendicular", () => {
+    const prompt = "在三棱锥D-ABC中，A=(0,0,0)，B=(3,0,0)，C=(1,2,0)，AD⊥平面ABC，画示意图"
+    const wrong = compilePlan(makePlan({ x: 1, y: 0, z: 2 }, [{ x: 1, y: 0, z: 0 }, base[1]!, base[2]!]), context(createEmptyDocument("geometry3d"), { prompt, diagramWitnessSearch: true }))
+    expect(wrong.diagramVerification?.status).toBe("failed")
+    expect(wrong.diagramVerification?.checks).toEqual(expect.arrayContaining([expect.objectContaining({ sourceText: "A=(0,0,0)", status: "failed" })]))
+    const correct = compilePlan(makePlan({ x: 0, y: 0, z: 2 }), context(createEmptyDocument("geometry3d"), { prompt, diagramWitnessSearch: true }))
+    expect(correct.ok, correct.diagnostics.map((item) => item.detail).join("; ")).toBe(true)
+    expect(correct.diagramVerification?.status).toBe("passed")
+    expect(correct.diagramVerification?.checks.filter((item) => item.kind === "pointCoordinate")).toHaveLength(3)
+  })
+
+  it("does not silently certify above-the-base wording before a reliable oriented judge exists", () => {
+    const prompt = "在三棱锥D-ABC中，AD⊥平面ABC，D在底面ABC上方，画示意图"
+    const result = compilePlan(makePlan({ x: 0, y: 0, z: 2 }), context(createEmptyDocument("geometry3d"), { prompt, diagramWitnessSearch: true }))
+    expect(result.diagramVerification?.status).toBe("unverified")
+    expect(result.diagramVerification?.checks.some((item) => item.sourceText.includes("D在底面ABC上方") && item.status === "unverified")).toBe(true)
+  })
+})

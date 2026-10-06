@@ -416,7 +416,7 @@ function compileOnce(input: unknown, context: PlanCompileContext): CompileOnceOu
    * 不可能分叉。`obligations` 的判据（有 polyhedron 动作 + 有原话）一字未改。
    */
   const obligationParse = context.prompt && compiledActions.some((action) => action.actionId === "solid.create_polyhedron")
-    ? parseObligationWithLegacy(context.prompt) : null
+    ? parseObligationWithLegacy(context.prompt, { spatialPointConditions: context.diagramWitnessSearch === true }) : null
   const obligations = obligationParse?.legacy ?? null
   const diagramVerification = obligations && (obligations.givens.length > 0 || obligations.unverified.length > 0)
     ? verifyDiagramObligations(obligations, plan, working, context.document, { obligationIR: context.diagramObligationIR === true }) : undefined

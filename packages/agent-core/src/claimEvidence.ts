@@ -83,6 +83,8 @@ export interface ObligationTolerance {
  */
 export interface ObligationGeometry {
   planeLengths?: [number, number]
+  /** Explicit coordinates from the user's words, not from the model's plan. */
+  coordinate?: { x: number; y: number; z: number }
 }
 
 /**

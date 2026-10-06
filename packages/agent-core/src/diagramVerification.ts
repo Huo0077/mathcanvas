@@ -118,6 +118,11 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>): { act
   if (vertices.some((point) => point === undefined)) return null
   const at = (index: number): Vector3 => vertices[index]!
   const numeric = item.value
+  if (item.kind === "pointCoordinate") {
+    const coordinate = item.coordinate
+    if (item.targets.length !== 1 || coordinate === undefined || ![coordinate.x, coordinate.y, coordinate.z].every(Number.isFinite)) return null
+    return { actual: length(at(0), coordinate), expected: 0, tolerance: distanceTolerance(1) }
+  }
   if (item.kind === "fixedLength") {
     if (numeric === undefined) return null
     return { actual: length(at(0), at(1)), expected: numeric, tolerance: distanceTolerance(numeric) }

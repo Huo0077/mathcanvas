@@ -3,7 +3,8 @@ import {
   parseDiagramObligations,
   type DiagramObligation,
   type DiagramObligationKind,
-  type DiagramObligationSet
+  type DiagramObligationSet,
+  type DiagramParseOptions
 } from "./diagramObligations"
 import type { ClaimRole, GeometryObligation, Judgeability, ObligationTolerance } from "./claimEvidence"
 
@@ -58,7 +59,7 @@ import type { ClaimRole, GeometryObligation, Judgeability, ObligationTolerance }
 /** 有现成判据的题设种类（`diagramVerification.ts` 的 `calculate` 覆盖这些）。 */
 const JUDGED_KINDS: ReadonlySet<DiagramObligationKind> = new Set<DiagramObligationKind>([
   "fixedLength", "equilateral", "equalLength", "midpoint", "segmentRatio",
-  "planePerpendicular", "dihedral", "perpendicular", "parallel"
+  "planePerpendicular", "dihedral", "perpendicular", "parallel", "pointCoordinate"
 ])
 
 /** 与 `diagramVerification.ts` 的常量同值（容差不能有两套；两处一起改）。 */
@@ -70,6 +71,7 @@ const distanceTolerance = (value: number): number => Math.max(1e-6, 1e-6 * Math.
 function toleranceFor(kind: DiagramObligationKind, value: number | undefined): ObligationTolerance | undefined {
   if (kind === "dihedral") return { kind: "angular", value: ANGLE_TOLERANCE_DEGREES }
   if (kind === "fixedLength") return { kind: "absolute", value: distanceTolerance(value ?? 1) }
+  if (kind === "pointCoordinate") return { kind: "absolute", value: distanceTolerance(1) }
   if (kind === "segmentRatio" || kind === "planePerpendicular" || kind === "perpendicular" || kind === "parallel") {
     return { kind: "relative", value: UNITLESS_TOLERANCE }
   }
@@ -79,6 +81,10 @@ function toleranceFor(kind: DiagramObligationKind, value: number | undefined): O
 
 function claimOf(item: DiagramObligation, index: number, role: ClaimRole, judgeability: Judgeability): GeometryObligation {
   const tolerance = toleranceFor(item.kind, item.value)
+  const geometry = {
+    ...(item.planeLengths === undefined ? {} : { planeLengths: [...item.planeLengths] as [number, number] }),
+    ...(item.coordinate === undefined ? {} : { coordinate: { ...item.coordinate } })
+  }
   return {
     id: `obligation-${index}`,
     role,
@@ -93,7 +99,7 @@ function claimOf(item: DiagramObligation, index: number, role: ClaimRole, judgea
     judgeability,
     ...(tolerance === undefined ? {} : { tolerance }),
     // 兼容适配（R4）要的已解析结构：见 `ObligationGeometry` 的注释。
-    ...(item.planeLengths === undefined ? {} : { geometry: { planeLengths: [...item.planeLengths] as [number, number] } })
+    ...(Object.keys(geometry).length === 0 ? {} : { geometry })
   }
 }
 
@@ -187,7 +193,8 @@ export function toLegacyObligationSet(ir: ObligationIR): DiagramObligationSet {
     end: item.end,
     targets: [...item.targets],
     ...(typeof item.expected === "number" ? { value: item.expected } : {}),
-    ...(item.geometry?.planeLengths === undefined ? {} : { planeLengths: [...item.geometry.planeLengths] as [number, number] })
+    ...(item.geometry?.planeLengths === undefined ? {} : { planeLengths: [...item.geometry.planeLengths] as [number, number] }),
+    ...(item.geometry?.coordinate === undefined ? {} : { coordinate: { ...item.geometry.coordinate } })
   }))
   return {
     givens,
@@ -204,8 +211,8 @@ export function toLegacyObligationSet(ir: ObligationIR): DiagramObligationSet {
 }
 
 /** 一次解析，同时拿到旧结构（核验器要吃它）与新 IR（trace / UI / 后续阶段要吃它）。 */
-export function parseObligationWithLegacy(prompt: string): { legacy: DiagramObligationSet; ir: ObligationIR } {
-  const legacy = parseDiagramObligations(prompt)
+export function parseObligationWithLegacy(prompt: string, options: DiagramParseOptions = {}): { legacy: DiagramObligationSet; ir: ObligationIR } {
+  const legacy = parseDiagramObligations(prompt, options)
   return { legacy, ir: buildObligationIR(legacy) }
 }
 

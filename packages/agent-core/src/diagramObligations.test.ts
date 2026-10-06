@@ -111,3 +111,37 @@ describe("parseDiagramObligations", () => {
     expect(parsed.unverified).toEqual([])
   })
 })
+
+
+describe("V0a experimental spatial point conditions", () => {
+  it("reads explicitly named 3D coordinates with original spans rather than guessing from a model plan", () => {
+    const prompt = "在三棱锥D-ABC中，A=(0,0,0)，B=(3,0,0)，C=(1,2,0)，AD⊥平面ABC，画示意图"
+    const result = parseDiagramObligations(prompt, { spatialPointConditions: true })
+    const coordinates = result.givens.filter((item) => item.kind === "pointCoordinate")
+    expect(coordinates.map((item) => [item.targets, item.coordinate])).toEqual([
+      [["A"], { x: 0, y: 0, z: 0 }], [["B"], { x: 3, y: 0, z: 0 }], [["C"], { x: 1, y: 2, z: 0 }]
+    ])
+    expect(coordinates.map((item) => prompt.slice(item.start, item.end))).toEqual(["A=(0,0,0)", "B=(3,0,0)", "C=(1,2,0)"])
+    expect(result.unverified).toEqual([])
+  })
+
+  it("exposes an above-the-base condition until an oriented half-space judge is available", () => {
+    const parsed = parseDiagramObligations("在三棱锥D-ABC中，AD⊥平面ABC，D在底面ABC上方，画示意图", { spatialPointConditions: true })
+    expect(parsed.givens.map((item) => item.kind)).toContain("perpendicular")
+    expect(parsed.unverified.some((item) => item.sourceText.includes("D在底面ABC上方"))).toBe(true)
+  })
+
+  it("exposes an unrecognized no-equals coordinate spelling instead of treating it as decoration", () => {
+    const parsed = parseDiagramObligations("在三棱锥D-ABC中，A(0,0,0)，AD⊥平面ABC，画示意图", { spatialPointConditions: true })
+    expect(parsed.unverified.some((item) => item.sourceText.includes("A(0,0,0)"))).toBe(true)
+  })
+
+  it("keeps the opt-out path unchanged and recognises an explicitly free apex", () => {
+    const prompt = "在三棱锥D-ABC中，AD⊥平面ABC，自由点D，画示意图"
+    expect(parseDiagramObligations(prompt, { spatialPointConditions: false })).toEqual(parseDiagramObligations(prompt))
+    const parsed = parseDiagramObligations(prompt, { spatialPointConditions: true })
+    expect(parsed.givens.map((item) => item.sourceText)).toEqual(["AD⊥平面ABC"])
+    expect(parsed.freeChoices).toEqual(["D"])
+    expect(parsed.unverified).toEqual([])
+  })
+})

@@ -1,4 +1,4 @@
-﻿import { DEFAULT_SOLID_SIZE, compilePlan, parsePlanEnvelope, SKILL_MANIFESTS } from "@draw/agent-core"
+import { DEFAULT_SOLID_SIZE, compilePlan, parsePlanEnvelope, SKILL_MANIFESTS } from "@draw/agent-core"
 import { createEmptyDocument } from "@draw/dsl"
 import { describe, expect, it } from "vitest"
 
@@ -338,5 +338,43 @@ describe("analysis questions", () => {
     const envelope = await plan(SPHERE_PROMPT)
 
     expect(envelope.kind).toBe("plan")
+  })
+})
+
+
+describe("V0a opt-in local free-apex diagram intent", () => {
+  const prompt = "在三棱锥D-ABC中，AD⊥平面ABC，自由点D，画示意图"
+  it("does not alter the default local planner when witness search is off", async () => {
+    expect(matchLocalIntent(prompt)).toBeNull()
+    const result = (await createLocalPlanner().plan({ userMessage: prompt } as never)).plan
+    expect(result.kind).toBe("clarification")
+  })
+
+  it("uses named points and verified candidate construction once explicitly enabled", async () => {
+    expect(localIntentSkillIds(prompt, { enableFreeApex: true })).toContain("spatial-modeling")
+    const result = (await createLocalPlanner({ enableFreeApex: true }).plan({ userMessage: prompt } as never)).plan
+    expect(result.kind).toBe("plan")
+    if (result.kind !== "plan") return
+    expect(result.actions[0].actionId).toBe("solid.create_polyhedron")
+    expect(result.actions[0].inputs).toMatchObject({ vertexNames: ["A", "B", "C", "D"] })
+    const doc = createEmptyDocument("geometry3d")
+    const compiled = compilePlan(result, { document: doc, prompt, diagramWitnessSearch: true, conversationId: "local-diagram", documentGeneration: doc.revision })
+    expect(compiled.ok).toBe(true)
+    expect(compiled.diagramVerification?.status).toBe("passed")
+    expect(compiled.draftDocument?.primitives.some((item) => item.type === "polyhedron3")).toBe(true)
+  })
+
+  it("takes vertex names from a bounded grammar rather than hardcoding D-ABC", async () => {
+    const another = "在三棱锥P-XYZ中，PX⊥平面XYZ，自由点P，画示意图"
+    const result = (await createLocalPlanner({ enableFreeApex: true }).plan({ userMessage: another } as never)).plan
+    expect(result.kind).toBe("plan")
+    if (result.kind === "plan") expect(result.actions[0].inputs).toMatchObject({ vertexNames: ["X", "Y", "Z", "P"] })
+  })
+
+  it("does not silently drop an extra length, above-plane condition or pure analysis request", async () => {
+    for (const input of [`${prompt}，AB=7`, "在三棱锥D-ABC中，AD⊥平面ABC，D在底面ABC上方，画示意图", "在三棱锥D-ABC中，AD⊥平面ABC，求高是多少"]) {
+      const result = (await createLocalPlanner({ enableFreeApex: true }).plan({ userMessage: input } as never)).plan
+      expect(result.kind, input).toBe("clarification")
+    }
   })
 })

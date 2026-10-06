@@ -412,7 +412,7 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
       // 被报告成"未核验"甚至"失败"（编译器说 passed、草稿层说 failed，两句话打架）。
       // 缺省时 `materialisedActions` 不存在，用的一直是调用方给的那份（与改动之前逐字相同）。
       const parsed = userMessage && actions.some((action) => action.actionId === "solid.create_polyhedron")
-        ? parseObligationWithLegacy(userMessage) : null
+        ? parseObligationWithLegacy(userMessage, { spatialPointConditions: witnessSearch === true }) : null
       const obligations = parsed?.legacy ?? null
       const materialised = compiled.materialisedActions === undefined ? plan : { ...plan, actions: compiled.materialisedActions }
       const checked = obligations && (obligations.givens.length > 0 || obligations.unverified.length > 0)

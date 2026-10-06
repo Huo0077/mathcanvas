@@ -1,5 +1,5 @@
-﻿import type { PlanEnvelope, PlannerPort } from "@draw/agent-core"
-import { PLAN_SCHEMA_VERSION, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SPAN, DEFAULT_SOLID_SIZE, defaultPrismBasePolygon, cubeCenterFrom, cubeEdgeLengthFrom } from "@draw/agent-core"
+import type { PlanEnvelope, PlannerPort } from "@draw/agent-core"
+import { PLAN_SCHEMA_VERSION, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SPAN, DEFAULT_SOLID_SIZE, defaultPrismBasePolygon, cubeCenterFrom, cubeEdgeLengthFrom, searchWitnessForPrompt } from "@draw/agent-core"
 
 import { PYRAMID_PROMPT, PYRAMID_UNVERIFIED_PROMPT, conicInvariantPlan, obliquePrismSectionPlan, pyramidPlan } from "./representativeFixtures"
 
@@ -199,6 +199,34 @@ const COUNT_ANSWER = (): PlanEnvelope => ({
  * 顺序有意义：**先匹配更具体的**（"正方体"要在"立方体"之前，"棱柱"要在笼统的"体"之前）。
  * 触发词互不相交的条目之间没有顺序依赖。
  */
+/** The offline route is explicitly opt-in and accepts only a bounded sentence
+ * with a named triangular base, perpendicular foot and named free apex. */
+function freeApexIntentFor(prompt: string): LocalIntent | null {
+  const match = /^在三棱锥\s*([A-Z])\s*[-−]\s*([A-Z]{3})\s*中\s*[，,]\s*([A-Z]{2})\s*(?:⊥|垂直于?)\s*平面\s*\2\s*[，,]\s*(?:自由|任取|任意)点\s*\1\s*[，,]\s*画示意图\s*$/i.exec(prompt.trim())
+  if (!match) return null
+  const apex = match[1].toUpperCase()
+  const base = match[2].toUpperCase()
+  const line = match[3].toUpperCase()
+  if (new Set([apex, ...base]).size !== 4 || !line.includes(apex) || ![...line].some((name) => base.includes(name))) return null
+  return {
+    all: ["三棱锥", "平面"], skillIds: ["spatial-modeling"],
+    build: ({ prompt: words }) => {
+      const found = searchWitnessForPrompt(words)
+      if (found.status !== "verified_instance") {
+        return { schemaVersion: PLAN_SCHEMA_VERSION, kind: "clarification", goal: "自由顶点题设未核验", factIds: [], questions: ["这条题设目前无法生成可核验的三棱锥示意图；请补充或用手工画布。"] }
+      }
+      return {
+        schemaVersion: PLAN_SCHEMA_VERSION, kind: "plan", goal: "按点名关系画一组三棱锥示意图", factIds: [],
+        assumptions: found.assumptions,
+        actions: [{
+          actionId: "solid.create_polyhedron", actionKey: "free-apex", factIds: [],
+          inputs: { alias: "free-apex", vertexNames: found.candidate.names, vertices: found.candidate.vertices, faces: found.candidate.faces }
+        }]
+      }
+    }
+  }
+}
+
 export const LOCAL_INTENTS: readonly LocalIntent[] = [
   { all: ["四棱锥", "PA", "BC", "AD"], exact: PYRAMID_PROMPT, skillIds: ["spatial-modeling"], build: () => pyramidPlan() },
   { all: ["四棱锥", "PA", "BC", "AD", "∠"], exact: PYRAMID_UNVERIFIED_PROMPT, skillIds: ["spatial-modeling"], build: () => pyramidPlan() },
@@ -236,7 +264,7 @@ export const LOCAL_INTENTS: readonly LocalIntent[] = [
   { all: ["立方体"], skillIds: ["spatial-modeling"], build: (input) => CUBE({ ...input, size: sizeFrom(input.prompt, 2) }) },
   { all: ["正方体"], skillIds: ["spatial-modeling"], build: (input) => CUBE({ ...input, size: sizeFrom(input.prompt, 2) }) },
   { all: ["cube"], skillIds: ["spatial-modeling"], build: (input) => CUBE({ ...input, size: sizeFrom(input.prompt, 2) }) },
-  { all: ["点"], any: ["画", "作", "建", "添加"], skillIds: ["planar-basics"], build: (input) => PLANAR_POINT({ ...input, size: sizeFrom(input.prompt, 1) }) },
+  { all: ["点"], any: ["画一个点", "画个点", "作一个点", "建一个点", "添加一个点", "画一点", "画点", "添加点"], skillIds: ["planar-basics"], build: (input) => PLANAR_POINT({ ...input, size: sizeFrom(input.prompt, 1) }) },
   // 只读提问不产生动作，因此**不请求任何技能** —— 上下文里不该出现用不上的动作菜单。
   { all: ["有什么"], skillIds: [], build: () => COUNT_ANSWER() }
 ]
@@ -270,7 +298,9 @@ export function isAnalysisQuestion(prompt: string): boolean {
 /**
  * 找出这条指令命中的那一条（认不出返回 `null`）。**匹配规则只有这一处**。
  */
-export function matchLocalIntent(prompt: string): LocalIntent | null {
+export function matchLocalIntent(prompt: string, options: { enableFreeApex?: boolean } = {}): LocalIntent | null {
+  const freeApex = options.enableFreeApex === true ? freeApexIntentFor(prompt) : null
+  if (freeApex !== null) return freeApex
   const normalized = prompt.toLowerCase()
   // 只在问读数、又没说要画：**请求技能的建模意图一律不认**（认不出的结果是"老实问路"）。
   // 不求技能的意图（例如"有什么"那条只读回答）不受影响 —— 它们本来就要在问句里命中。
@@ -293,13 +323,15 @@ export function matchLocalIntent(prompt: string): LocalIntent | null {
  * "包含哪些词"的判断（两份判断一旦分叉，就会出现"上下文里没有这个技能，但规划器产出了
  * 它的动作"，表现为莫名其妙的编译失败）。
  */
-export function localIntentSkillIds(prompt: string): readonly string[] {
-  return matchLocalIntent(prompt)?.skillIds ?? []
+export function localIntentSkillIds(prompt: string, options: { enableFreeApex?: boolean } = {}): readonly string[] {
+  return matchLocalIntent(prompt, options)?.skillIds ?? []
 }
 
 export interface LocalPlannerOptions {
   /** 命中指令表之外的输入时是否给出"认不出"的回答（缺省 true）。 */
   explainRefusal?: boolean
+  /** Experimental V0a, never on for a default/local run. */
+  enableFreeApex?: boolean
 }
 
 /**
@@ -319,7 +351,7 @@ export function createLocalPlanner(options: LocalPlannerOptions = {}): PlannerPo
       const attemptId = `local-attempt-${sequence}`
 
       // 与 `localIntentSkillIds` **共用同一个匹配函数**（两份判断会分叉）。
-      const intent = matchLocalIntent(userMessage)
+      const intent = matchLocalIntent(userMessage, { enableFreeApex: options.enableFreeApex === true })
       if (intent) return { plan: intent.build({ prompt: userMessage, size: 0 }), requestId, attemptId }
 
       if (!explainRefusal) {

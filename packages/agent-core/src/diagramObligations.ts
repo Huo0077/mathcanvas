@@ -1,7 +1,7 @@
 /** 题设来自用户原话而不是模型的 relations 声明。只读有确定点名的窄句型。 */
 export type DiagramObligationKind =
   | "fixedLength" | "equilateral" | "equalLength" | "midpoint" | "segmentRatio"
-  | "planePerpendicular" | "dihedral" | "perpendicular" | "parallel"
+  | "planePerpendicular" | "dihedral" | "perpendicular" | "parallel" | "pointCoordinate"
 
 export interface DiagramObligation {
   kind: DiagramObligationKind
@@ -11,6 +11,7 @@ export interface DiagramObligation {
   targets: string[]
   value?: number
   planeLengths?: [number, number]
+  coordinate?: { x: number; y: number; z: number }
 }
 
 export interface DiagramSourceSpan {
@@ -31,7 +32,20 @@ export interface DiagramObligationSet {
 
 interface Matcher {
   pattern: RegExp
-  read: (match: RegExpExecArray) => Pick<DiagramObligation, "kind" | "targets" | "value" | "planeLengths"> | null
+  read: (match: RegExpExecArray) => Pick<DiagramObligation, "kind" | "targets" | "value" | "planeLengths" | "coordinate"> | null
+}
+
+export interface DiagramParseOptions { spatialPointConditions?: boolean }
+
+/** Only the explicit V0a experimental path recognizes these narrow 3D coordinates. */
+const POINT_COORDINATE_MATCHER: Matcher = {
+  pattern: /([A-Z])\s*=\s*\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)/g,
+  read: (match) => {
+    const values = match.slice(2, 5).map(Number)
+    return values.every(Number.isFinite)
+      ? { kind: "pointCoordinate", targets: [match[1]], coordinate: { x: values[0], y: values[1], z: values[2] } }
+      : null
+  }
 }
 
 const names = (value: string): string[] => [...value]
@@ -91,7 +105,7 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
 
 const UNREAD_CONDITION = /∠\s*[A-Z]{3}\s*=\s*\d+(?:\.\d+)?\s*°|[A-Z]{2}\s*[:：]\s*[A-Z]{2}\s*=\s*\d+(?:\.\d+)?|[A-Z]{2}\s*=\s*-?\d+(?:\.\d+)?/g
 
-export function parseDiagramObligations(prompt: string): DiagramObligationSet {
+export function parseDiagramObligations(prompt: string, options: DiagramParseOptions = {}): DiagramObligationSet {
   const boundary = /(?:求证|证明)/.exec(prompt)
   const givenText = boundary === null ? prompt : prompt.slice(0, boundary.index)
   const goalRawStart = boundary === null ? -1 : boundary.index + boundary[0].length
@@ -113,7 +127,8 @@ export function parseDiagramObligations(prompt: string): DiagramObligationSet {
   const unverified: DiagramObligationSet["unverified"] = []
   const used = new Set<number>()
 
-  for (const { pattern, read } of DIAGRAM_OBLIGATION_MATCHERS) {
+  const matchers = options.spatialPointConditions === true ? [POINT_COORDINATE_MATCHER, ...DIAGRAM_OBLIGATION_MATCHERS] : DIAGRAM_OBLIGATION_MATCHERS
+  for (const { pattern, read } of matchers) {
     for (const match of givenText.matchAll(pattern)) {
       const start = match.index
       const end = start + match[0].length
@@ -123,7 +138,7 @@ export function parseDiagramObligations(prompt: string): DiagramObligationSet {
       if (next && /[A-Z°+*/√π^%]/.test(next)) continue
       if (Array.from({ length: end - start }, (_, offset) => start + offset).some((at) => used.has(at))) continue
       const result = read(match)
-      if (result === null || new Set(result.targets).size < 2) continue
+      if (result === null || (result.kind !== "pointCoordinate" && new Set(result.targets).size < 2)) continue
       givens.push({ ...result, sourceText: match[0], start, end })
       for (let at = start; at < end; at++) used.add(at)
     }
@@ -151,12 +166,24 @@ export function parseDiagramObligations(prompt: string): DiagramObligationSet {
     unverified.push({ sourceText, reason: "这个条件没有被可靠解析或数值非法，未核验。" })
   }
 
+  if (options.spatialPointConditions === true) {
+    // A bare A(0,0,0) has no equals sign; clause scanning splits on commas,
+    // so capture the whole tuple before it can silently disappear in three pieces.
+    for (const match of givenText.matchAll(/[A-Z]\s*\(\s*-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?\s*\)/g)) {
+      if ([...match[0]].some((_, offset) => used.has(match.index + offset))) continue
+      unverified.push({ sourceText: match[0], reason: "这个点的坐标写法尚未可靠解析，未核验。" })
+    }
+  }
+
   // Scan the portions no reliable matcher consumed. A new textbook notation must
   // become visible as unverified, not silently turn a non-empty problem into an empty pass.
   for (const clause of givenText.matchAll(/[^，,。；;\n]+/g)) {
     if (unverified.some((entry) => clause[0].includes(entry.sourceText))) continue
     const leftover = [...clause[0]].map((character, offset) => used.has(clause.index + offset) ? " " : character).join("").trim()
-    if (/[=⊥∥]|二面角|等边|等长|长度相等|线段相等|边相等|相等|中点|垂直|平行|共面|之比|比值|比例|共线|(?:点?[A-Z]\s*在\s*平面)/.test(leftover)) {
+    const unknownPointCondition = options.spatialPointConditions === true
+      && (/[A-Z]\s*\(\s*-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?\s*\)/.test(leftover)
+        || /[A-Z]\s*(?:在|位于)[^，,。；;\n]{0,30}(?:上方|下方)/.test(leftover))
+    if (/[=⊥∥]|二面角|等边|等长|长度相等|线段相等|边相等|相等|中点|垂直|平行|共面|之比|比值|比例|共线|(?:点?[A-Z]\s*在\s*平面)/.test(leftover) || unknownPointCondition) {
       unverified.push({ sourceText: leftover, reason: "原题出现了尚未被可靠解析的几何条件，未核验。" })
     }
   }

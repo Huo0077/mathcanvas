@@ -459,7 +459,10 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
 
     const resolution = await (dependencies.modelPlanner?.resolveProvider ?? resolveActiveProvider)()
     if (!resolution.ok) {
-      return { planner: createLocalPlanner(), requestedSkillIds: localIntentSkillIds(prompt), textProfileId: "local-planner" }
+      // This opt-in path is only reachable after the user enables witness search;
+      // a browser without a provider must not silently turn on diagram rescue.
+      const options = { enableFreeApex: agentNextPhaseFlags().witnessSearch }
+      return { planner: createLocalPlanner(options), requestedSkillIds: localIntentSkillIds(prompt, options), textProfileId: "local-planner" }
     }
     return {
       planner: createModelPlanner({

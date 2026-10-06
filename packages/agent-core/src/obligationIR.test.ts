@@ -134,3 +134,17 @@ function candidateOf() {
   candidate.primitives.push({ id: "solid", type: "polyhedron3", vertexIds: vertices.map((_, index) => `solid-v${index}`), edgeIds: [], faceIds: [] })
   return candidate
 }
+
+
+describe("V0a coordinate obligation IR", () => {
+  it("keeps a named point's full coordinate and original span through IR ↔ legacy", () => {
+    const prompt = "在三棱锥D-ABC中，A=(0,0,0)，AD⊥平面ABC，画示意图"
+    const legacy = parseDiagramObligations(prompt, { spatialPointConditions: true })
+    const ir = buildObligationIR(legacy)
+    const point = ir.obligations.find((item) => item.kind === "pointCoordinate")
+    expect(point).toMatchObject({ role: "given", targets: ["A"], judgeability: "supported", geometry: { coordinate: { x: 0, y: 0, z: 0 } }, tolerance: { kind: "absolute", value: expect.any(Number) } })
+    expect(point).toBeDefined()
+    expect(prompt.slice(point!.start, point!.end)).toBe("A=(0,0,0)")
+    expect(toLegacyObligationSet(ir)).toEqual(legacy)
+  })
+})
