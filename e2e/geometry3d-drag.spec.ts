@@ -88,9 +88,17 @@ test("returns left-drag to orbiting when the toggle is off", async ({ page }) =>
  *
  * 这条用例的第一版是**假绿**的：我用"添加立方体"去触发取景，而 `shouldAutoFit` 只在
  * **换文档或内容出界**时取景（编辑不算，`dragging` 时也不算），于是动画根本没在跑，
- * "相机没被覆盖"自然成立。现在的判据分两步、且由画布自己的读数给：
- * ① 先抓到 `data-fit-animation="running"`（证明动画**确实在跑**，抓不到就**明确失败**）；
- * ② 按下鼠标后断言它变成 `"cancelled"` —— 与动画"自己跑完"的 `"done"` 是两回事。
+ * "相机没被覆盖"自然成立。
+ *
+ * **判据（2026-10-07 收敛，替换掉"先抓窗口、再用真实鼠标按下"的老写法）**：仍由画布自己的读数给，
+ * 但**读数与按下必须落在同一个页内任务里** —— 见测试体内那段注释。要点：`before === "running"`
+ * 却拿不到 `"cancelled"` 才算失败（**真红**）；`before` 已经是 `"done"` 只是**没抢到窗口**，
+ * 换一轮重试。`"cancelled"` 与动画"自己跑完"的 `"done"` 仍是两回事，但"没抢到窗口"不再被误判成失败。
+ *
+ * **这一类竞速在本仓的通用解法是"先让读数停稳"**（`helpers/projection.ts` 文件头的"连续两次一致"
+ * 口径，那里记着四次同类抖动；`geometry3d-camera-memory` / `geometry3d-autofit` 也按同一口径等稳定）。
+ * 本条是**唯一不能 settle 的场合** —— 要断言的恰恰是"动画还在跑的时候按下会怎样"，
+ * 所以改用"同任务内夹住一次同步取消"。
  */
 test("stops an in-flight auto-fit as soon as the user starts dragging", async ({ page }) => {
   await page.goto("/")
@@ -100,25 +108,69 @@ test("stops an in-flight auto-fit as soon as the user starts dragging", async ({
 
   // 换文档才会取景；两次用**不同夹具**，否则第二遍是同一份文档、`documentChanged` 为假。
   const fixtures = ["e2e/fixtures/tetrahedron.mgeo", "e2e/fixtures/cube-cylinder.mgeo"]
-  const box = (await page.locator("[data-3d-scene] canvas").boundingBox())!
-  // 指针**先**挪到画布中央：抓窗口和按下之间不能再夹别的慢动作（第一版就死在
-  // `boundingBox()` 那一百多毫秒上 —— 抓到 `running` 时动画已经跑完了）。
-  await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5)
 
-  let caught = false
-  for (let attempt = 0; attempt < fixtures.length * 3 && !caught; attempt += 1) {
+  /**
+   * **按下与读数必须在同一个 JS 任务里**（2026-10-07 收敛）。
+   *
+   * 现场：这条用例原先用真实 `page.mouse.down()`，于是"抓到 `running`"与"按下生效"之间隔着两次
+   * CDP 往返；取景动画只有约 250 ms，负载高时这两次往返之和会超过剩余时间 —— **动画自己跑完了
+   * （`done`），按下时已经没有在飞的动画可取消**，用例红。2026-10-07 的 trace 给出证据：属性序列
+   * `running` → `done` →（`data-drag-target` 出现，说明按下确实落在画布上）仍是 `done`。
+   * 读码确认**产品行为正确**：`threeSceneCamera.ts` 的 `cancelFitAnimation()` 在
+   * `fitAnimation === null` 时直接返回、不报状态，而 `threeSceneEffect.ts` 把它挂在 `pointerdown`
+   * 的**第一行**、同步执行。
+   *
+   * 所以判据改成：在页内同一个任务里**先读 `before`、再派发 pointerdown、立刻读 `after`** ——
+   * 监听器是同步的，`before === "running"` 却拿不到 `"cancelled"` 就只能是产品没取消（真红）；
+   * 若 `before` 已经是 `"done"`，那只是没抢到窗口，**换一轮重试**而不是判失败。
+   * 这样"竞速"只决定**能不能拿到窗口**，不再决定**断言真假**。
+   *
+   * 为什么不用真实鼠标事件：真实事件的到达时刻在页外，测试无从知道它落下时动画还在不在跑 ——
+   * 那正是原来假红（以及更早一版假绿）的来源。真实拖动由本文件其余用例覆盖。
+   */
+  const pressWhileReadingFitState = () =>
+    page.evaluate(() => {
+      const shell = document.querySelector("[data-3d-scene]")!
+      const canvas = shell.querySelector("canvas")!
+      const rect = canvas.getBoundingClientRect()
+      const before = shell.getAttribute("data-fit-animation")
+      canvas.dispatchEvent(
+        new PointerEvent("pointerdown", {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          clientX: rect.left + rect.width * 0.5,
+          clientY: rect.top + rect.height * 0.5,
+          pointerId: 1,
+          pointerType: "mouse",
+          isPrimary: true,
+          button: 0,
+          buttons: 1
+        })
+      )
+      const after = shell.getAttribute("data-fit-animation")
+      canvas.dispatchEvent(
+        new PointerEvent("pointerup", { bubbles: true, pointerId: 1, pointerType: "mouse", isPrimary: true, button: 0, buttons: 0 })
+      )
+      return { before, after }
+    })
+
+  let landed: { before: string | null; after: string | null } | null = null
+  for (let attempt = 0; attempt < fixtures.length * 4 && landed === null; attempt += 1) {
     await page.locator('input[type="file"]').setInputFiles(fixtures[attempt % fixtures.length]!)
     // `waitForFunction` 按帧轮询（`toHaveAttribute` 是约 100 ms 一次），能贴着动画起步那一刻返回。
-    caught = await page
+    const caught = await page
       .waitForFunction(() => document.querySelector("[data-3d-scene]")?.getAttribute("data-fit-animation") === "running", null, { timeout: 400 })
       .then(() => true)
       .catch(() => false)
+    if (!caught) continue
+    const outcome = await pressWhileReadingFitState()
+    // 只有"按下那一刻动画真的在跑"才算拿到窗口；没拿到就换下一轮，这一轮不构成结论。
+    if (outcome.before === "running") landed = outcome
   }
-  expect(caught, "没能抓到取景动画正在跑的窗口").toBe(true)
 
-  await page.mouse.down()
-  await expect(scene).toHaveAttribute("data-fit-animation", "cancelled")
-  await page.mouse.up()
+  expect(landed, "8 次都没抢到取景动画正在跑的窗口（属负载问题，不是取消失效）").not.toBeNull()
+  expect(landed!.after, "按下时取景动画正在跑，却没有被取消").toBe("cancelled")
 })
 
 test("drags only the solid under the pointer", async ({ page }) => {  await page.goto("/")

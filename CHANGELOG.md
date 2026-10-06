@@ -7,7 +7,16 @@
 
 
 
-## 2026-10-07 —— 两处依赖归位落地；全量 e2e 那条偶发**拿到了现场**
+## 2026-10-07 —— 取景取消那条用例的竞速**按构造消除**（含变异证明）
+
+- **改法不是调大超时、也不是重试到绿**：把"读状态"和"派发按下"放进**同一个页内 JS 任务** —— 先读 `before`、`dispatchEvent("pointerdown")`、立刻读 `after`。`threeSceneEffect.ts` 把 `cancelFitAnimation()` 挂在 `pointerdown` 监听器的**第一行**、同步执行，所以这两个读数精确夹住这一次取消：**`before === "running"` 却拿不到 `"cancelled"` 就是真红**；`before` 已是 `"done"` 只说明没抢到窗口，换一轮重试。竞速从此只决定"能不能拿到窗口"，不再决定"断言真假"。
+- **为什么不用真实 `page.mouse.down()`**：真实事件的到达时刻在页外，测试无从知道它落下时动画还在不在跑 —— 那正是上一批那条假红的来源（trace 里 `running` → `done`）。真实拖动由 `geometry3d-drag.spec.ts` 其余 8 条用例覆盖。
+- **变异证明判据仍然咬人**：把 `handlePointerDownForCamera` 里的 `cancelFitAnimation()` 注释掉 ⇒ 该用例当场红，消息是「按下时取景动画正在跑，却没有被取消」、`Expected "cancelled" / Received "running"`；还原后复绿，且**工作树里不留任何源码改动**（`git status` 只剩那条 spec）。
+- **顺带查了一遍同类竞速（结果是"没有第二处"）**：全仓 `e2e/` 里 `waitForFunction` 只有本条一处；相机相关的用例（`geometry3d-camera-memory` / `geometry3d-autofit` / `helpers/projection.ts`）**早已**用"读数连续两次一致"的 settle 口径处理同一类竞速（`projection.ts` 文件头记着四次同类抖动）。**本条是唯一不能 settle 的场合** —— 要断言的正是"动画还在跑时按下会怎样" —— 所以它用同任务内夹住同步取消。同时把这条用例上方那段已经说错的旧判据注释（"抓不到就明确失败"）改成与新写法一致，免得注释替代码说谎。
+- 读数：该用例 `--repeat-each=5` **5/5 通过**（每次约 0.8 s；原先一次约 13 s，因为它过去要等满 5 秒的失败轮询）；还原后 `--repeat-each=3` **3/3**；全量 e2e **207 通过 / 0 失败**（1.8 m）；`typecheck` exit 0。
+- **CI 一并补记**：`9e05ea4` 的 **run #176 四个 job 全绿**（`build` / `checks` / `e2e` / `rust`）；前一条 `98a0055` 的 #175 同样全绿；`e238ac0` 的 #174 被随后的推送按 concurrency 取消，`e2e` 的 `steps` 为空 —— **那次并没有真的跑过**，既不能说绿也不能说红。§一 那行仍写着 run #136 的 CI 读数已按本次实测改写。
+
+
 
 - **依赖归位**（旧审查 §五 记的「未修」两条）：`apps/web` 的 `@vitejs/plugin-react` 由 `dependencies` 移到 `devDependencies`；根 `package.json` 上多余的 `three` 删掉 —— 真正 import `three` 的全在 `apps/web`，`packages/*` 一处都没有。
 - **动依赖就要重跑整轮**（审查自己写的要求）：`npm install` exit 0；`package-lock.json` 的改动**逐行核过 —— 只有 112 处 `"dev": true` 翻转 + 5 行声明搬家，没有增删任何包**；`npm ls three` 现在只经 `@draw/web` 解析；typecheck exit 0；lint 0 error / 13 warning（与基线相同）；web 生产构建 exit 0（4.97 s）；全库非 Lean **330 文件 / 3878 通过 + 1 todo / 0 失败**（146.74 s）。
