@@ -13,11 +13,15 @@ export type DiagramObligationKind =
  * 焦点位置**不单独存** —— 它由这两个半轴决定（`c = √(a² − b²)`），
  * 存第二份就会多出一个可能与第一份打架的来源。
  */
-export interface DiagramConicStated {
-  kind: "ellipse"
-  radiusX: number
-  radiusY: number
-}
+export type DiagramConicStated =
+  | { kind: "ellipse"; radiusX: number; radiusY: number }
+  /**
+   * 双曲线：**轴是曲线的一部分**，不是摆设 —— `x²/a² − y²/b² = 1` 与它的轴对调版
+   * 是两条互为镜像的曲线，半轴一模一样也一样不是同一条。
+   */
+  | { kind: "hyperbola"; radiusX: number; radiusY: number; axis: "x" | "y" }
+  /** 抛物线：焦准距 `p`（`y² = 2px` 里的 `p`，所以 `y² = 4x` 的 `p = 2`）与对称轴。 */
+  | { kind: "parabola"; focalParameter: number; axis: "x" | "y" }
 
 export interface DiagramObligation {
   kind: DiagramObligationKind
@@ -85,6 +89,21 @@ function ellipseAxes(denominatorX: number, denominatorY: number): Pick<DiagramOb
   return { kind: "conicAxes", targets: [], conic: { kind: "ellipse", radiusX: Math.sqrt(denominatorX), radiusY: Math.sqrt(denominatorY) } }
 }
 
+/** 双曲线的两个半轴（同样从分母开方）。`axis` 由**写法**决定：`x²/… − y²/… = 1` 的实轴沿 x。 */
+function hyperbolaAxes(denominatorX: number, denominatorY: number, axis: "x" | "y"): Pick<DiagramObligation, "kind" | "targets" | "conic"> | null {
+  if (!Number.isFinite(denominatorX) || !Number.isFinite(denominatorY) || denominatorX <= 0 || denominatorY <= 0) return null
+  return { kind: "conicAxes", targets: [], conic: { kind: "hyperbola", radiusX: Math.sqrt(denominatorX), radiusY: Math.sqrt(denominatorY), axis } }
+}
+
+/**
+ * 抛物线：题面写的是 `y² = 4x`，那个 `4` 是 **`2p`** —— 焦准距 `p = 4/2 = 2`。
+ * **直接拿系数当 `p` 是错的**，而且错得很像对的（`y² = 4x` 的 `p` 看上去就是 4）。
+ */
+function parabolaAxis(coefficient: number, axis: "x" | "y"): Pick<DiagramObligation, "kind" | "targets" | "conic"> | null {
+  if (!Number.isFinite(coefficient) || coefficient === 0) return null
+  return { kind: "conicAxes", targets: [], conic: { kind: "parabola", focalParameter: coefficient / 2, axis } }
+}
+
 /**
  * **把题面写的表达式整理成表达式解析器认得的写法**（V0d）。
  *
@@ -130,6 +149,33 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
   {
     pattern: /y\s*(?:\^2|²)\s*\/\s*(\d+(?:\.\d+)?)\s*\+\s*x\s*(?:\^2|²)\s*\/\s*(\d+(?:\.\d+)?)\s*=\s*1/g,
     read: (m) => ellipseAxes(Number(m[2]), Number(m[1]))
+  },
+  /**
+   * **双曲线**：`x²/9 − y²/4 = 1`（减号与 y 在前的写法都收）。
+   *
+   * 与椭圆分开写、而不是把它并进一个"±"的通配里：那样"读到的到底是椭圆还是双曲线"
+   * 会变成登记之外的第二个判断，而这两条曲线的判据**本来就不一样**（双曲线要额外比轴）。
+   */
+  {
+    pattern: /x\s*(?:\^2|²)\s*\/\s*(\d+(?:\.\d+)?)\s*[-−–]\s*y\s*(?:\^2|²)\s*\/\s*(\d+(?:\.\d+)?)\s*=\s*1/g,
+    read: (m) => hyperbolaAxes(Number(m[1]), Number(m[2]), "x")
+  },
+  {
+    pattern: /y\s*(?:\^2|²)\s*\/\s*(\d+(?:\.\d+)?)\s*[-−–]\s*x\s*(?:\^2|²)\s*\/\s*(\d+(?:\.\d+)?)\s*=\s*1/g,
+    read: (m) => hyperbolaAxes(Number(m[2]), Number(m[1]), "y")
+  },
+  /**
+   * **抛物线**：`y² = 4x`（对称轴 x）与 `x² = 4y`（对称轴 y）。
+   *
+   * 系数是 `2p`，不是 `p` —— 见 `parabolaAxis` 的注释。
+   */
+  {
+    pattern: /y\s*(?:\^2|²)\s*=\s*(-?\d+(?:\.\d+)?)\s*x(?![a-zA-Z])/g,
+    read: (m) => parabolaAxis(Number(m[1]), "x")
+  },
+  {
+    pattern: /x\s*(?:\^2|²)\s*=\s*(-?\d+(?:\.\d+)?)\s*y(?![a-zA-Z])/g,
+    read: (m) => parabolaAxis(Number(m[1]), "y")
   },
   /**
    * **在某点处的切线**：`在 x=1 处的切线`。

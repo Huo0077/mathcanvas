@@ -92,7 +92,10 @@ export interface ObligationGeometry {
    * 而只留 `value` 一个数就得把"哪条半轴在哪个轴上"丢掉 —— 那正好是判"焦点在不在 x 轴"
    * 所需要的信息，丢了它，半轴对调的图会被判成通过。
    */
-  conic?: { kind: "ellipse"; radiusX: number; radiusY: number }
+  conic?:
+    | { kind: "ellipse"; radiusX: number; radiusY: number }
+    | { kind: "hyperbola"; radiusX: number; radiusY: number; axis: "x" | "y" }
+    | { kind: "parabola"; focalParameter: number; axis: "x" | "y" }
   /**
    * 题面写下的函数表达式（**已规范化**：上标转 `^`、`4x` 补成 `4*x`）。
    *

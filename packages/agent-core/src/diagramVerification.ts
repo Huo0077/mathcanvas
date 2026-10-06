@@ -133,11 +133,10 @@ function candidatePoints(plan: PlanEnvelope, candidate: GeometryDocument, base?:
 }
 
 /** 候选图里那条圆锥曲线。**不含"是否满足题设"的结论** —— 那是 `calculate` 的事。 */
-interface FigureConic {
-  kind: "ellipse"
-  radiusX: number
-  radiusY: number
-}
+type FigureConic =
+  | { kind: "ellipse"; radiusX: number; radiusY: number }
+  | { kind: "hyperbola"; radiusX: number; radiusY: number; axis: "x" | "y" }
+  | { kind: "parabola"; focalParameter: number; axis: "x" | "y" }
 
 /**
  * **候选图里那条唯一的、新画出来的圆锥曲线**（V0c）。
@@ -156,7 +155,12 @@ function candidateConic(plan: PlanEnvelope, candidate: GeometryDocument, base?: 
   const conics = candidate.primitives.filter((primitive) => (primitive.type === "ellipse" || primitive.type === "hyperbola" || primitive.type === "parabola") && !priorIds.has(primitive.id))
   if (conics.length !== 1) return null
   const [conic] = conics
-  return conic.type === "ellipse" ? { kind: "ellipse", radiusX: conic.radiusX, radiusY: conic.radiusY } : null
+  // 逐种显式分支，而不是靠"剩下的一定是抛物线" —— 上面那个 `filter` 没有做类型守卫，
+  // 兜底分支拿不到窄化，`focalParameter` / `axis` 会报"不存在于联合类型上"。
+  if (conic.type === "ellipse") return { kind: "ellipse", radiusX: conic.radiusX, radiusY: conic.radiusY }
+  if (conic.type === "hyperbola") return { kind: "hyperbola", radiusX: conic.radiusX, radiusY: conic.radiusY, axis: conic.axis }
+  if (conic.type === "parabola") return { kind: "parabola", focalParameter: conic.focalParameter, axis: conic.axis }
+  return null
 }
 
 /** 数字的可读写法：整数不带小数点，其余最多六位。 */
@@ -286,6 +290,13 @@ function describeEllipse(radiusX: number, radiusY: number): string {
   return `半轴 (${formatNumber(radiusX)}, ${formatNumber(radiusY)})、焦点 ${foci}`
 }
 
+/** 三类圆锥曲线的人话描述。**都把"由参数决定、但用户真正关心"的那个量一起说出来**。 */
+function describeConic(conic: FigureConic): string {
+  if (conic.kind === "ellipse") return describeEllipse(conic.radiusX, conic.radiusY)
+  if (conic.kind === "hyperbola") return `半轴 (${formatNumber(conic.radiusX)}, ${formatNumber(conic.radiusY)})、实轴沿 ${conic.axis} 轴`
+  return `焦准距 p = ${formatNumber(conic.focalParameter)}、对称轴为 ${conic.axis} 轴`
+}
+
 /** 没有点名、由"恰好一条"确定的那几类图形。它们各自独立，缺谁就只有谁判不了。 */
 interface FigureContext {
   conic: FigureConic | null
@@ -303,14 +314,33 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
    */
   if (item.kind === "conicAxes") {
     const stated = item.conic
-    if (stated === undefined || figures.conic === null || figures.conic.kind !== stated.kind) return null
-    const gap = Math.max(Math.abs(figures.conic.radiusX - stated.radiusX), Math.abs(figures.conic.radiusY - stated.radiusY))
-    return {
-      actual: gap,
-      expected: 0,
-      tolerance: distanceTolerance(1),
-      detail: `实测 ${describeEllipse(figures.conic.radiusX, figures.conic.radiusY)}；题设要求 ${describeEllipse(stated.radiusX, stated.radiusY)}。`
+    const drawn = figures.conic
+    if (stated === undefined || drawn === null) return null
+    const tolerance = distanceTolerance(1)
+    if (stated.kind === "ellipse" && drawn.kind === "ellipse") {
+      const gap = Math.max(Math.abs(drawn.radiusX - stated.radiusX), Math.abs(drawn.radiusY - stated.radiusY))
+      return { actual: gap, expected: 0, tolerance, detail: `实测 ${describeConic(drawn)}；题设要求 ${describeConic(stated)}。` }
     }
+    if (stated.kind === "hyperbola" && drawn.kind === "hyperbola") {
+      /**
+       * **轴单独判、不与数值差混在一起**：混进去的话"轴反了"会被当成"差了多少"报出来，
+       * 而用户看到的两个半轴其实**一模一样** —— 那句话会让人以为系统算错了数。
+       */
+      if (drawn.axis !== stated.axis) {
+        return { actual: 1, expected: 0, tolerance: 1e-9, detail: `实测 ${describeConic(drawn)}；题设要求 ${describeConic(stated)} —— 半轴相同也是另一条曲线。` }
+      }
+      const gap = Math.max(Math.abs(drawn.radiusX - stated.radiusX), Math.abs(drawn.radiusY - stated.radiusY))
+      return { actual: gap, expected: 0, tolerance, detail: `实测 ${describeConic(drawn)}；题设要求 ${describeConic(stated)}。` }
+    }
+    if (stated.kind === "parabola" && drawn.kind === "parabola") {
+      if (drawn.axis !== stated.axis) {
+        return { actual: 1, expected: 0, tolerance: 1e-9, detail: `实测 ${describeConic(drawn)}；题设要求 ${describeConic(stated)} —— 开口方向不同就是另一条曲线。` }
+      }
+      const gap = Math.abs(drawn.focalParameter - stated.focalParameter)
+      return { actual: gap, expected: 0, tolerance, detail: `实测 ${describeConic(drawn)}；题设要求 ${describeConic(stated)}。` }
+    }
+    // 种类不同 ⇒ 图上根本不是题面说的那种曲线。
+    return null
   }
   /**
    * **切线**（V0d）：题面只说"在 `x = 1` 处的切线"，斜率由**函数**决定。

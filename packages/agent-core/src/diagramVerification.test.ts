@@ -292,3 +292,64 @@ describe("V0d: tangent premises are checked against the function itself", () => 
     expect(report.checks[0]).toMatchObject({ kind: "functionGraph", status: "passed" })
   })
 })
+
+/**
+ * **V0c 续：双曲线与抛物线**。
+ *
+ * 椭圆只比两个半轴就够了（轴由长短轴决定）。这两种不一样：**轴本身是曲线的一部分** ——
+ * `x²/a² − y²/b² = 1` 与 `y²/b² − x²/a² = 1` 是两条互为镜像的曲线，
+ * `y² = 2px` 与 `x² = 2py` 更是开口方向不同。所以判据必须**既比数值、又比轴**。
+ */
+describe("V0c: hyperbola and parabola premises", () => {
+  /** 双曲线/抛物线共用的候选图：一条 `planar.create_conic` + 一张只放了那条曲线的文档。 */
+  function conicFixture(primitive: Record<string, unknown>, prompt: string) {
+    const plan: PlanEnvelope = {
+      schemaVersion: PLAN_SCHEMA_VERSION,
+      kind: "plan",
+      goal: "画圆锥曲线",
+      factIds: [],
+      actions: [{ actionId: "planar.create_conic", actionKey: "c", factIds: [], inputs: { alias: "c", ...primitive } }] as never
+    }
+    const candidate = createEmptyDocument("conics")
+    candidate.primitives.push({ id: "c", ...primitive } as never)
+    return verifyDiagramObligations(parseDiagramObligations(prompt), plan, candidate)
+  }
+
+  const HYPERBOLA_PROMPT = "双曲线 x²/9−y²/4=1，画示意图"
+  const PARABOLA_PROMPT = "抛物线 y²=4x，画示意图"
+
+  it("verifies a hyperbola's semi-axes together with the axis it opens along", () => {
+    const report = conicFixture({ type: "hyperbola", center: { x: 0, y: 0 }, radiusX: 3, radiusY: 2, axis: "x" }, HYPERBOLA_PROMPT)
+    expect(report.checks.map((check) => `${check.sourceText}:${check.status}`)).toEqual(["x²/9−y²/4=1:passed"])
+    expect(report.status).toBe("passed")
+  })
+
+  it("fails the same hyperbola when it opens along the other axis", () => {
+    // 半轴一模一样，轴反了 —— 那是**另一条曲线**，不能因为"两个数都对"就放行。
+    const report = conicFixture({ type: "hyperbola", center: { x: 0, y: 0 }, radiusX: 3, radiusY: 2, axis: "y" }, HYPERBOLA_PROMPT)
+    expect(report.status).toBe("failed")
+  })
+
+  it("fails a hyperbola whose semi-axes are swapped", () => {
+    const report = conicFixture({ type: "hyperbola", center: { x: 0, y: 0 }, radiusX: 2, radiusY: 3, axis: "x" }, HYPERBOLA_PROMPT)
+    expect(report.status).toBe("failed")
+  })
+
+  it("verifies a parabola's focal parameter and axis", () => {
+    // `y² = 4x` ⇒ 2p = 4 ⇒ p = 2，对称轴是 x 轴。
+    const report = conicFixture({ type: "parabola", vertex: { x: 0, y: 0 }, focalParameter: 2, axis: "x" }, PARABOLA_PROMPT)
+    expect(report.checks.map((check) => `${check.sourceText}:${check.status}`)).toEqual(["y²=4x:passed"])
+    expect(report.status).toBe("passed")
+  })
+
+  it("fails the same parabola when it opens along the other axis", () => {
+    const report = conicFixture({ type: "parabola", vertex: { x: 0, y: 0 }, focalParameter: 2, axis: "y" }, PARABOLA_PROMPT)
+    expect(report.status).toBe("failed")
+  })
+
+  it("fails a parabola with the wrong focal parameter", () => {
+    // `p = 1` 对应 `y² = 2x`，不是题面那条。
+    const report = conicFixture({ type: "parabola", vertex: { x: 0, y: 0 }, focalParameter: 1, axis: "x" }, PARABOLA_PROMPT)
+    expect(report.status).toBe("failed")
+  })
+})
