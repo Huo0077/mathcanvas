@@ -14,8 +14,8 @@
 - **改法**：本地 `trace: "retain-on-failure"`，CI 保持 `"on-first-retry"`（那边有重试，对"第一次尝试"留证更省体积）。**这不掩盖失败** —— retries 仍是 0，红就是红；它只保证下一次红的时候有一份可看的现场。
 - **没有顺手做的事（说清楚为什么不）**：没有调大 Playwright 默认的 5 秒 `expect` 超时。调大等于**放宽门禁**，而我们现在还不知道那两次红到底是"负载下超时"还是"真的错了"——**先拿到证据再决定**，不先改判据。仓库里已经记过一次"5 秒超时在负载下会偶发"，但"见过类似现象"不等于"这次就是它"。
 - 读数：本批全量 e2e **207 通过 / 0 失败**（含两次全绿复跑）；`typecheck` exit 0（提交前本轮又复跑一次，仍 exit 0）；文档一致性 `scripts/docs-consistency/` **2 文件 / 7 通过**。
-- **一并在案的未完成**：本批之前两个提交（`d78fa94`、`8b51ec2`）推送时网络不通，仍在本地；本批提交同样待推（本轮再探 `git ls-remote origin refs/heads/main` 仍报 `Recv failure: Connection was reset`，exit 128）。
-- **顺手修掉一处文档漂移**：`agent-next-round-progress.md` 那张表写着「`docs/evidence/` 五张」，实际已是 **6 张**（上一批补了双曲线与抛物线两张截图，只同步了 `current-status`，漏了这张表）；同表「待查偶发」那格补上"本地已留 trace"这件事，远端列改成 3 个提交未上传。
+- **一并在案的未完成 → 2026-10-07 已解除**：本批之前两个提交（`d78fa94`、`8b51ec2`）与本批提交当时确实推不上去（`git ls-remote` 报 `Recv failure: Connection was reset`，exit 128）；次日网络恢复后**连同镜像同步批次一并推送成功**，`git ls-remote origin refs/heads/main` 与本地 HEAD 均为 `e238ac0`。
+- **顺手修掉一处文档漂移**：`agent-next-round-progress.md` 那张表写着「`docs/evidence/` 五张」，实际已是 **6 张**（上一批补了双曲线与抛物线两张截图，只同步了 `current-status`，漏了这张表）；同表「待查偶发」那格补上"本地已留 trace"这件事，远端列改为不再逐一枚举未推送的提交（改列最后已推送的 SHA，避免再加一个提交就又过期）。
 
 ## 2026-10-06 —— V0c 三类圆锥曲线各有浏览器证据（补上不对称）
 
