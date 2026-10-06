@@ -40,7 +40,7 @@
 
 ## V0 产品调用点审计（2026-10-06，只有设计，没有新图）
 
-现有 `planCompiler.ts` / `draftStore.ts` 只对 `solid.create_polyhedron` 触发原文题设核验；`planar.create_conic` 及平面点/线虽能创建图元，却没有自动沿同一原文核验路径。DSL 中有函数图像 primitive，但 Agent 动作名只有 `function.analyze` / `function.create_tangent`，没有 `function.create_graph`；工作区切换也只识别 `planar.*`/`solid.*`/`section.*`/`dynamic.*`。详见 [实施计划 V0a–V0d](superpowers/plans/2026-10-06-diagram-agent-auto-lean-implementation-plan.md)。这些是读代码得出的接口事实，**不是用户已能画对四类题的证据**。先从多面体已有核验链做 V0a 自由顶点的真图、条件复核与 e2e，再逐块补平面三角、圆锥曲线和函数图像/导数切线；每块闭环即更新文档并推送。
+现有 `planCompiler.ts` / `draftStore.ts` 只对 `solid.create_polyhedron` 触发原文题设核验；`planar.create_conic` 及平面点/线虽能创建图元，却没有自动沿同一原文核验路径。DSL 中有函数图像 primitive，但 Agent 动作名只有 `function.analyze` / `function.create_tangent`，没有 `function.create_graph`；工作区切换也只识别 `planar.*`/`solid.*`/`section.*`/`dynamic.*`。详见 [实施计划 V0a–V0d](superpowers/plans/2026-10-06-diagram-agent-auto-lean-implementation-plan.md)。这些是读代码得出的接口事实，**不是用户已能画对四类题的证据**。另查 `diagramObligations.ts`：线面垂直能解析，绝对坐标与“D 在底面上方”没有同等可靠的空间判据；仅把 D 选在 z>0 并不证明原题所有条件已验。V0a 的 RED 要用错坐标与 D 下方负例钉住不静默放行；没有判据时返回未核验而不是绿。先从多面体已有核验链做 V0a 自由顶点的真图、条件复核与 e2e，再逐块补平面三角、圆锥曲线和函数图像/导数切线；每块闭环即更新文档并推送。
 
 ## 每完成一区块的更新纪律
 

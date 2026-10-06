@@ -42,7 +42,7 @@
 
 ### V0 产品路径的实地审查（2026-10-06，仅调用点定位，不是能力交付）
 
-- `packages/agent-core/src/planCompiler.ts` 的原话清单/`verifyDiagramObligations` 只在 `solid.create_polyhedron` 后执行；`apps/web/src/agent/draftStore.ts` 对同一动作重算。**其它三家族现阶段不能因为“动作编译成功”就算题设已核验**。四面体另有 `solid.create_tetrahedron`，不能未经测试假设它自动进入上述校验。
+- `packages/agent-core/src/planCompiler.ts` 的原话清单/`verifyDiagramObligations` 只在 `solid.create_polyhedron` 后执行；`apps/web/src/agent/draftStore.ts` 对同一动作重算。**其它三家族现阶段不能因为“动作编译成功”就算题设已核验**。四面体另有 `solid.create_tetrahedron`，不能未经测试假设它自动进入上述校验。`diagramObligations.ts` 当前可读 `AD⊥平面ABC`，但没有可证已核验原文中“D 在上方”以及点坐标的一整套判据；带 `=` 的坐标可能留下未核验残项，不带 `=`/方位短句有静默遗漏风险。V0a 必须通过反例钉住**所有原话条件**，而不是只守一条垂直关系。
 - 现有 `planar.create_point/segment/conic` 能产生 2D 图元；圆锥曲线的创建动作在 `actionRegistry.ts` 与编译器可用，但题目焦点、半轴、退化与原文对应的报告缺乏统一验证。三角形用点/线段形成候选，也须证垂直及自由点条件。
 - `packages/dsl/src/types.ts` 有 `type:"function"`，场景图可重算函数曲线/切线；Agent 动作表只有 `function.analyze` / `function.create_tangent`，**没有创建函数图像动作**。`apps/web/src/agent/agentRunner.ts` 的自动切工作区目前只认 `planar.*`、`solid.*`、`section.*`、`dynamic.*`；新动作要同时进入动作名/Schema/编译器/工作区/Worker 传输/端到端，不能只加按钮。
 
@@ -50,7 +50,7 @@
 
 | 次序 | 首个可复核图 | 写入职责 / RED | 产品出口（未达） |
 | --- | --- | --- | --- |
-| V0a 立体自由顶点 | 固定三角底面、顶点在法线 z>0 且高度未给；可取 D(0,0,2) | `packages/agent-core/src/planCompiler.test.ts`、`apps/web/src/agent/draftStore.test.ts`、`e2e/agent-diagram-math.spec.ts`：候选真实点棱面被核验；矛盾的 D 与缺判据拒绝，图可非唯一；两处入口只读同一义务；关旗旧路径 | 真浏览器看到四面体；拒绝不占撤销历史；有自由点但合法图可确认（不宣称唯一） |
+| V0a 立体自由顶点 | 第一条题面仅声明线面垂直与自由点 D（不擅自把正高度当题设）；内部候选可取 D(0,0,2)。**另把显式 A=(0,0,0) 与 D 在底面上方列为独立 RED 条件**，错误坐标或 D 下方不得凭“AD⊥平面”过关 | `packages/agent-core/src/planCompiler.test.ts`、`apps/web/src/agent/draftStore.test.ts`、`e2e/agent-diagram-math.spec.ts`：逐项核验现有可识别线面关系，坐标/上方若未可靠解析必须报 `unverified` 并拒绝正常确认；补判据后才放行。正例图不唯一、错误 D 与空报告拒绝，关旗旧路径不变 | 真浏览器看到四面体、条件状态一致；拒绝不占撤销历史；合法自由点图可确认但不宣称唯一；文字坐标/方位不能静默丢 |
 | V0b 平面三角 | A/B/C 实际点线段、AB⊥AC 与欠定 C | `packages/geometry-kernel/src/planar-constraints.test.ts`、`packages/agent-core/src/planCompiler.test.ts`、`apps/web/src/agent/workerContracts.test.ts`、`apps/web/src/agent/draftStore.test.ts` + e2e：三点真实坐标点积正确，AB∥AC 反例红；未支持题设列 unverified | 图像存在、条件逐项核验、欠定 C 允许一张示意图 |
 | V0c 圆锥曲线 | 椭圆半轴 3/2，焦点 ±√5 与焦点轴反例 | 复用 `planar.create_conic`，在几何内核加独立判据、解析题面 IR 与草稿重算；新 e2e 需对错焦点拒绝及浏览器真实椭圆判据，不读模型自报证据 | 真椭圆 + 焦点/退化可判，关旗旧路径不变 |
 | V0d 导数曲线 | `f(x)=x³−3x` 真图与 x=1 水平切线 | 新 `function.create_graph`（名字可在 RED 时定）须经过 `actionIds.ts`、`actionRegistry.ts`、`actionInputs.ts`、编译器、`agentRunner.ts` 工作区/Worker；对切线 `f′(1)=0` 做内核/草稿正反验证 + e2e | 真函数图和切线同时显示，错误斜率不能正常确认 |

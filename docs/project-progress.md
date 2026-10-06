@@ -10,6 +10,10 @@
 
 > 下方 2026-09-22 的"最后更新 / 当前阶段 / 总体状态"三行保留为**当时快照**，不再维护。
 
+## 2026-10-06 —— V0a 题设边界复核：一条线面垂直不足以代表整个题面（计划补丁）
+
+- `diagramObligations.ts` 可匹配 `AD⊥平面ABC`，但顶点坐标/“D 在底面上方”无同等可证的残差判据；带等号的坐标可能被 leftover 标未核验，不带等号与上方短句有静默遗漏风险。`witnessSearch` 的正高度只是系统选择的展示见证，不会自动证明上方是原题已核验条件。V0a 计划补上错坐标、下方顶点的 RED 反例与 `unverified` 门禁。**本批只更正计划与现状，没运行真图/浏览器或 Lean，不能说缺口已修。**
+
 ## 2026-10-06 —— V0a–V0d 产品调用点审计：动作存在 ≠ 题设已验证（文档块）
 
 - 逐文件检查 `packages/agent-core/src/planCompiler.ts` / `apps/web/src/agent/draftStore.ts`：原文题设→`verifyDiagramObligations` 条件是含 `solid.create_polyhedron`。现有 `planar.create_conic`、平面点/线与 `solid.create_tetrahedron` 不自动进入这同一入口，不能推断“动作执行成功=图符合原题”。`packages/dsl/src/types.ts` 有 `function` 图元，但 Agent 动作名只有 `function.analyze` 与 `function.create_tangent`，且 `agentRunner.ts` 自动工作区判据只识别平面/立体/截面/动态动作族。分 V0a 立体自由顶点、V0b 平面三角、V0c 圆锥曲线、V0d 函数图/切线，分别列真实 RED 测试路径和浏览器验收。
