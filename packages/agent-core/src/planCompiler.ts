@@ -30,7 +30,12 @@ import { parsePlanEnvelope, repairRequestFor } from "./schemas"
  * 去核验并不存在的点名，而且会改变 `planCompiler.offPath.golden.test.ts` 钉住的关旗逐字节行为。
  * 模板实体的原文核验是**另一件工作**，要单独做、单独取证据。
  */
-const POINT_NAMING_ACTION_IDS: ReadonlySet<string> = new Set(["solid.create_polyhedron", "planar.create_point"])
+const VERIFIABLE_FIGURE_ACTION_IDS: ReadonlySet<string> = new Set([
+  "solid.create_polyhedron",
+  "planar.create_point",
+  // 圆锥曲线**没有点名** —— 那条曲线自己就是被核验的对象（见 `candidateConic`）。
+  "planar.create_conic"
+])
 
 /**
  * **这份计划里有没有"能让题面点名的顶点拿到坐标"的动作** —— 这个问题只有这一处判断。
@@ -41,8 +46,8 @@ const POINT_NAMING_ACTION_IDS: ReadonlySet<string> = new Set(["solid.create_poly
  * 因为面板那份报告来自草稿层，那里仍然认死多面体。这正是本仓"同一个判断写两遍必然分叉"的现场样本，
  * 而且是**单元测试抓不到**的那种：`compilePlan` 的用例只走编译期那一条。
  */
-export function declaresPointNames(actions: readonly { actionId: string }[]): boolean {
-  return actions.some((action) => POINT_NAMING_ACTION_IDS.has(action.actionId))
+export function planHasVerifiableFigure(actions: readonly { actionId: string }[]): boolean {
+  return actions.some((action) => VERIFIABLE_FIGURE_ACTION_IDS.has(action.actionId))
 }
 /**
  * **N2 的见证搜索**（子任务 2c）。
@@ -440,7 +445,7 @@ function compileOnce(input: unknown, context: PlanCompileContext): CompileOnceOu
    * 旧结构（核验器要吃它）与统一 IR（trace / UI / N2 要吃它），所以"解析一次、两种形状"
    * 不可能分叉。`obligations` 的判据（有 polyhedron 动作 + 有原话）一字未改。
    */
-  const obligationParse = context.prompt && declaresPointNames(compiledActions)
+  const obligationParse = context.prompt && planHasVerifiableFigure(compiledActions)
     ? parseObligationWithLegacy(context.prompt, { spatialPointConditions: context.diagramWitnessSearch === true }) : null
   const obligations = obligationParse?.legacy ?? null
   const diagramVerification = obligations && (obligations.givens.length > 0 || obligations.unverified.length > 0)

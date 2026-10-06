@@ -1,5 +1,5 @@
 import type { GeometryDocument } from "@draw/dsl"
-import { canonicalContentHash, compilePlan, declaresPointNames, parseObligationWithLegacy, verifyDiagramObligations, PLAN_SCHEMA_VERSION, type PlanCompileResult, type PlanDiagnostic, type PlanEnvelope, type PlanRelations, type RepairRequest, type StructuredAssumption, type DiagramVerificationReport } from "@draw/agent-core"
+import { canonicalContentHash, compilePlan, planHasVerifiableFigure, parseObligationWithLegacy, verifyDiagramObligations, PLAN_SCHEMA_VERSION, type PlanCompileResult, type PlanDiagnostic, type PlanEnvelope, type PlanRelations, type RepairRequest, type StructuredAssumption, type DiagramVerificationReport } from "@draw/agent-core"
 import { createIdAllocator, type DocumentHandle } from "@draw/scene-graph"
 
 import type { DraftAction, DomainOperation, IdAllocator } from "@draw/scene-graph"
@@ -411,7 +411,7 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
       // 按下标配对的 —— 拿模型的原始动作去核验救回来的图，会把顶点认错，于是救回来的图
       // 被报告成"未核验"甚至"失败"（编译器说 passed、草稿层说 failed，两句话打架）。
       // 缺省时 `materialisedActions` 不存在，用的一直是调用方给的那份（与改动之前逐字相同）。
-      const parsed = userMessage && declaresPointNames(actions)
+      const parsed = userMessage && planHasVerifiableFigure(actions)
         ? parseObligationWithLegacy(userMessage, { spatialPointConditions: witnessSearch === true }) : null
       const obligations = parsed?.legacy ?? null
       const materialised = compiled.materialisedActions === undefined ? plan : { ...plan, actions: compiled.materialisedActions }

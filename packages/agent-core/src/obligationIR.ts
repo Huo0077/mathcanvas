@@ -28,7 +28,8 @@ import type { ClaimRole, GeometryObligation, Judgeability, ObligationTolerance }
  *
  * `supported` 的含义**很窄**：现有 verifier 能在这份 IR 上给出一个有意义的数
  *（`diagramVerification.ts` 的 `calculate`）。所以：
- * - 9 种有现成判据的题设种类（定长/等边/等长/中点/比例/面⊥面/二面角/线线垂直/线线平行）→ `supported`；
+ * - **有现成判据的题设种类**（`diagramVerification.ts` 的 `calculate` 覆盖的那些）→ `supported`；
+ *   这份名单就是代码里的 `JUDGED_KINDS` —— **不要在注释里另抄一份**（抄过一次，抄漏了 `pointCoordinate`）。
  * - 解析器将来看得懂、但还没有判据的种类 → `ambiguous`（现在一条都没有）；
  * - **目标和自由选择一律 `unsupported`** —— 现有核验**从不判定目标**（目标的核验是
  *   N2/N5 的事），把目标标成 `supported` 会让界面以为"系统验证了这道题"。
@@ -59,7 +60,8 @@ import type { ClaimRole, GeometryObligation, Judgeability, ObligationTolerance }
 /** 有现成判据的题设种类（`diagramVerification.ts` 的 `calculate` 覆盖这些）。 */
 const JUDGED_KINDS: ReadonlySet<DiagramObligationKind> = new Set<DiagramObligationKind>([
   "fixedLength", "equilateral", "equalLength", "midpoint", "segmentRatio",
-  "planePerpendicular", "dihedral", "perpendicular", "parallel", "pointCoordinate"
+  "planePerpendicular", "dihedral", "perpendicular", "parallel", "pointCoordinate",
+  "conicAxes"
 ])
 
 /** 与 `diagramVerification.ts` 的常量同值（容差不能有两套；两处一起改）。 */
@@ -72,6 +74,8 @@ function toleranceFor(kind: DiagramObligationKind, value: number | undefined): O
   if (kind === "dihedral") return { kind: "angular", value: ANGLE_TOLERANCE_DEGREES }
   if (kind === "fixedLength") return { kind: "absolute", value: distanceTolerance(value ?? 1) }
   if (kind === "pointCoordinate") return { kind: "absolute", value: distanceTolerance(1) }
+  // 半轴是长度量 ⇒ 与点坐标同一条绝对容差；用相对容差会让"半轴差 0.3"这种明显错误通过。
+  if (kind === "conicAxes") return { kind: "absolute", value: distanceTolerance(1) }
   if (kind === "segmentRatio" || kind === "planePerpendicular" || kind === "perpendicular" || kind === "parallel") {
     return { kind: "relative", value: UNITLESS_TOLERANCE }
   }
@@ -83,7 +87,8 @@ function claimOf(item: DiagramObligation, index: number, role: ClaimRole, judgea
   const tolerance = toleranceFor(item.kind, item.value)
   const geometry = {
     ...(item.planeLengths === undefined ? {} : { planeLengths: [...item.planeLengths] as [number, number] }),
-    ...(item.coordinate === undefined ? {} : { coordinate: { ...item.coordinate } })
+    ...(item.coordinate === undefined ? {} : { coordinate: { ...item.coordinate } }),
+    ...(item.conic === undefined ? {} : { conic: { ...item.conic } })
   }
   return {
     id: `obligation-${index}`,
@@ -194,7 +199,8 @@ export function toLegacyObligationSet(ir: ObligationIR): DiagramObligationSet {
     targets: [...item.targets],
     ...(typeof item.expected === "number" ? { value: item.expected } : {}),
     ...(item.geometry?.planeLengths === undefined ? {} : { planeLengths: [...item.geometry.planeLengths] as [number, number] }),
-    ...(item.geometry?.coordinate === undefined ? {} : { coordinate: { ...item.geometry.coordinate } })
+    ...(item.geometry?.coordinate === undefined ? {} : { coordinate: { ...item.geometry.coordinate } }),
+    ...(item.geometry?.conic === undefined ? {} : { conic: { ...item.geometry.conic } })
   }))
   return {
     givens,

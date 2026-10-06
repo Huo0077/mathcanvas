@@ -85,6 +85,14 @@ export interface ObligationGeometry {
   planeLengths?: [number, number]
   /** Explicit coordinates from the user's words, not from the model's plan. */
   coordinate?: { x: number; y: number; z: number }
+  /**
+   * 题面写下的圆锥曲线参数（`x²/9+y²/4=1` ⇒ 半轴 3 与 2）。
+   *
+   * 与 `coordinate` 同一条理由：它是**原话里的结构信息**。generic 字段装不下两个数，
+   * 而只留 `value` 一个数就得把"哪条半轴在哪个轴上"丢掉 —— 那正好是判"焦点在不在 x 轴"
+   * 所需要的信息，丢了它，半轴对调的图会被判成通过。
+   */
+  conic?: { kind: "ellipse"; radiusX: number; radiusY: number }
 }
 
 /**

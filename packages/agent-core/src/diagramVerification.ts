@@ -53,8 +53,7 @@ const ANGLE_TOLERANCE_DEGREES = 1e-3
 const distanceTolerance = (value: number): number => Math.max(1e-6, 1e-6 * Math.max(1, value))
 const length = (first: Vector3, second: Vector3): number => distanceVector3(first, second)
 
-function candidatePoints(plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument): Map<string, Vector3> | null {
-  if (plan.kind !== "plan") return null
+function candidatePoints(plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument): Map<string, Vector3> | null {  if (plan.kind !== "plan") return null
   const actions = plan.actions.filter((action) => action.actionId === "solid.create_polyhedron")
   const priorIds = new Set(base?.primitives.map((primitive) => primitive.id) ?? [])
   const solids = candidate.primitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "polyhedron3" }> => primitive.type === "polyhedron3" && !priorIds.has(primitive.id))
@@ -133,7 +132,71 @@ function candidatePoints(plan: PlanEnvelope, candidate: GeometryDocument, base?:
   return points
 }
 
-function calculate(item: DiagramObligation, points: Map<string, Vector3>): { actual: number; expected: number; tolerance: number } | null {
+/** 候选图里那条圆锥曲线。**不含"是否满足题设"的结论** —— 那是 `calculate` 的事。 */
+interface FigureConic {
+  kind: "ellipse"
+  radiusX: number
+  radiusY: number
+}
+
+/**
+ * **候选图里那条唯一的、新画出来的圆锥曲线**（V0c）。
+ *
+ * 与多面体那条同一条纪律：**恰好一个**才谈得上"题面说的就是它"。多一条就说不清
+ * 判的是哪一条，宁可返回 `null`（报告里表现为"未核验"，而不是"通过"）。
+ *
+ * 只认 `ellipse`：`hyperbola` / `parabola` 的题面写法与判据都还没做，
+ * 把它们也收进来只会让"我支持圆锥曲线"听起来比实际宽 —— 而它们会走
+ * "解析器不认识 ⇒ 未核验"那条诚实路径。
+ */
+function candidateConic(plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument): FigureConic | null {
+  if (plan.kind !== "plan") return null
+  if (!plan.actions.some((action) => action.actionId === "planar.create_conic")) return null
+  const priorIds = new Set(base?.primitives.map((primitive) => primitive.id) ?? [])
+  const conics = candidate.primitives.filter((primitive) => (primitive.type === "ellipse" || primitive.type === "hyperbola" || primitive.type === "parabola") && !priorIds.has(primitive.id))
+  if (conics.length !== 1) return null
+  const [conic] = conics
+  return conic.type === "ellipse" ? { kind: "ellipse", radiusX: conic.radiusX, radiusY: conic.radiusY } : null
+}
+
+/** 数字的可读写法：整数不带小数点，其余最多六位。 */
+function formatNumber(value: number): string {
+  return Number.isInteger(value) ? String(value) : Number(value.toFixed(6)).toString()
+}
+
+/**
+ * 椭圆的**人话描述**：半轴 + 由半轴决定的焦点。
+ *
+ * 焦点必须一起说：半轴对调时用户看到的是"两个数换了位置"，而后果其实是"焦点换了轴" ——
+ * 后者才是他关心的事。
+ */
+function describeEllipse(radiusX: number, radiusY: number): string {
+  const major = Math.max(radiusX, radiusY)
+  const minor = Math.min(radiusX, radiusY)
+  const focal = Math.sqrt(Math.max(0, major * major - minor * minor))
+  const foci = radiusX >= radiusY ? `(±${formatNumber(focal)}, 0)` : `(0, ±${formatNumber(focal)})`
+  return `半轴 (${formatNumber(radiusX)}, ${formatNumber(radiusY)})、焦点 ${foci}`
+}
+
+function calculate(item: DiagramObligation, points: Map<string, Vector3>, conic: FigureConic | null): { actual: number; expected: number; tolerance: number; detail?: string } | null {
+  /**
+   * **圆锥曲线不走点名表**（V0c）：它没有顶点名，自己就是被核验的对象。
+   *
+   * 判据只比**半轴**，但结论包含**焦点** —— 因为焦点是半轴的函数（`c = √(a² − b²)`），
+   * 两个半轴对调会把焦点从 `(±√5, 0)` 挪到 `(0, ±√5)`，那是另一条曲线。
+   * 把这两个数一起写进 `detail`，用户才看得出"为什么半轴错了等于焦点错了"。
+   */
+  if (item.kind === "conicAxes") {
+    const stated = item.conic
+    if (stated === undefined || conic === null || conic.kind !== stated.kind) return null
+    const gap = Math.max(Math.abs(conic.radiusX - stated.radiusX), Math.abs(conic.radiusY - stated.radiusY))
+    return {
+      actual: gap,
+      expected: 0,
+      tolerance: distanceTolerance(1),
+      detail: `实测 ${describeEllipse(conic.radiusX, conic.radiusY)}；题设要求 ${describeEllipse(stated.radiusX, stated.radiusY)}。`
+    }
+  }
   const vertices = item.targets.map((name) => points.get(name))
   if (vertices.some((point) => point === undefined)) return null
   const at = (index: number): Vector3 => vertices[index]!
@@ -215,12 +278,26 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>): { act
 
 export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument, options: DiagramVerificationOptions = {}): DiagramVerificationReport {
   const points = candidatePoints(plan, candidate, base)
+  const conic = candidateConic(plan, candidate, base)
   const checks: DiagramCheck[] = set.givens.map((item) => {
-    if (points === null) return { kind: item.kind, sourceText: item.sourceText, status: "unverified", reason: "候选图缺少唯一、可靠的顶点名映射；不能按题面顺序猜坐标。" }
-    const result = calculate(item, points)
-    if (result === null) return { kind: item.kind, sourceText: item.sourceText, status: "unverified", reason: "点名缺失、图形退化或角度无法计算，未核验。" }
+    // 圆锥曲线**不带点名**：拿"点表建不出来"当理由会给出一个与它无关的解释。
+    if (item.kind !== "conicAxes" && points === null) return { kind: item.kind, sourceText: item.sourceText, status: "unverified", reason: "候选图缺少唯一、可靠的顶点名映射；不能按题面顺序猜坐标。" }
+    const result = calculate(item, points ?? new Map(), conic)
+    if (result === null) {
+      return {
+        kind: item.kind,
+        sourceText: item.sourceText,
+        status: "unverified",
+        reason: item.kind === "conicAxes"
+          ? "候选图里没有唯一、可读的圆锥曲线（少了或多了一条），未核验。"
+          : "点名缺失、图形退化或角度无法计算，未核验。"
+      }
+    }
     const status = Math.abs(result.actual - result.expected) <= result.tolerance ? "passed" : "failed"
-    return { kind: item.kind, sourceText: item.sourceText, status, reason: status === "passed" ? "已按候选图坐标核验。" : `实测 ${result.actual.toPrecision(5)}，题设要求 ${result.expected}。`, expected: result.expected, actual: result.actual }
+    const reason = result.detail !== undefined
+      ? (status === "passed" ? result.detail : `${result.detail}最大偏差 ${result.actual.toPrecision(5)}，容差 ${result.tolerance.toPrecision(5)}。`)
+      : (status === "passed" ? "已按候选图坐标核验。" : `实测 ${result.actual.toPrecision(5)}，题设要求 ${result.expected}。`)
+    return { kind: item.kind, sourceText: item.sourceText, status, reason, expected: result.expected, actual: result.actual }
   })
   checks.push(...set.unverified.map((entry): DiagramCheck => ({ kind: "unparsed", sourceText: entry.sourceText, status: "unverified", reason: entry.reason })))
   const sampleValues: string[] = []

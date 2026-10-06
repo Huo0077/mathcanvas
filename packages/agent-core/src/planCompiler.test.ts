@@ -950,3 +950,41 @@ describe("V0b: planar figures get the same per-premise verification as solids", 
     expect(compiled.diagramVerification?.checks).toEqual(expect.arrayContaining([expect.objectContaining({ sourceText: "AB⊥AC", status: "unverified" })]))
   })
 })
+
+/**
+ * **V0c：圆锥曲线也要按原话逐条核验**（计划 `V0c 圆锥曲线`）。
+ *
+ * 题面给的是方程 `x²/9+y²/4=1`，判据必须落在**画出来的那条椭圆**的真实参数上。
+ * 重点不是"半轴对不对"，而是**焦点在哪个轴**：把两个半轴对调，焦点就从 `(±√5, 0)`
+ * 变成 `(0, ±√5)` —— 那是另一条曲线，绝不能被判成"通过"。
+ */
+describe("V0c: conic figures get their premises verified too", () => {
+  const ELLIPSE_PROMPT = "椭圆 x²/9+y²/4=1，画示意图"
+
+  /** 一只椭圆；两个半轴就是这里唯一的变量。 */
+  function ellipse(radiusX: number, radiusY: number) {
+    return [{
+      actionId: "planar.create_conic",
+      actionKey: "ellipse",
+      factIds: [],
+      inputs: { alias: "ellipse", kind: "ellipse", center: { x: 0, y: 0 }, radiusX, radiusY, label: "椭圆" }
+    }]
+  }
+
+  const conicContext = () => context(createEmptyDocument("conics"), { prompt: ELLIPSE_PROMPT })
+
+  it("verifies the stated semi-axes against the ellipse that was actually drawn", () => {
+    const compiled = compilePlan(rawPlan(ellipse(3, 2)), conicContext())
+    expect(compiled.ok, compiled.diagnostics.map((item) => item.detail).join("; ")).toBe(true)
+    expect(compiled.diagramVerification?.status).toBe("passed")
+    expect(compiled.diagramVerification?.checks.map((item) => `${item.sourceText}:${item.status}`)).toEqual(["x²/9+y²/4=1:passed"])
+  })
+
+  it("fails the same premise when the figure swaps the two semi-axes, which moves the foci", () => {
+    // 半轴对调 ⇒ 焦点从 (±√5, 0) 变成 (0, ±√5)。这是**另一条曲线**，不能判通过。
+    const compiled = compilePlan(rawPlan(ellipse(2, 3)), conicContext())
+    expect(compiled.diagramVerification?.status).toBe("failed")
+    expect(compiled.ok).toBe(false)
+    expect(compiled.diagramVerification?.checks).toEqual(expect.arrayContaining([expect.objectContaining({ sourceText: "x²/9+y²/4=1", status: "failed" })]))
+  })
+})

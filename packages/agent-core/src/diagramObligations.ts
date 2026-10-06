@@ -2,6 +2,20 @@
 export type DiagramObligationKind =
   | "fixedLength" | "equilateral" | "equalLength" | "midpoint" | "segmentRatio"
   | "planePerpendicular" | "dihedral" | "perpendicular" | "parallel" | "pointCoordinate"
+  | "conicAxes"
+
+/**
+ * 题面写下的圆锥曲线参数。
+ *
+ * 只收**方程直接给出的**那一组：`x²/9+y²/4=1` ⇒ 沿 x 的半轴 3、沿 y 的半轴 2。
+ * 焦点位置**不单独存** —— 它由这两个半轴决定（`c = √(a² − b²)`），
+ * 存第二份就会多出一个可能与第一份打架的来源。
+ */
+export interface DiagramConicStated {
+  kind: "ellipse"
+  radiusX: number
+  radiusY: number
+}
 
 export interface DiagramObligation {
   kind: DiagramObligationKind
@@ -12,6 +26,7 @@ export interface DiagramObligation {
   value?: number
   planeLengths?: [number, number]
   coordinate?: { x: number; y: number; z: number }
+  conic?: DiagramConicStated
 }
 
 export interface DiagramSourceSpan {
@@ -32,7 +47,7 @@ export interface DiagramObligationSet {
 
 interface Matcher {
   pattern: RegExp
-  read: (match: RegExpExecArray) => Pick<DiagramObligation, "kind" | "targets" | "value" | "planeLengths" | "coordinate"> | null
+  read: (match: RegExpExecArray) => Pick<DiagramObligation, "kind" | "targets" | "value" | "planeLengths" | "coordinate" | "conic"> | null
 }
 
 export interface DiagramParseOptions { spatialPointConditions?: boolean }
@@ -55,6 +70,18 @@ const finitePositive = (value: string): number | null => {
 }
 
 /**
+ * 从方程的分母还原半轴：`x²/9 + y²/4 = 1` 的分母是**半轴的平方**（`a²` / `b²`），
+ * 所以半轴是 `√9 = 3` 与 `√4 = 2`。**直接拿分母当半轴是错的**，而那个错误看起来完全合理 ——
+ * 实测就是这么错的：`(9, 4)` 被当成半轴报了出去，直到用例把正确答案摆出来才发现。
+ *
+ * 分母必须是有限正数：`x²/0+…` 不是椭圆，`x²/-1+…` 更不是 —— 一律不认，交回未核验。
+ */
+function ellipseAxes(denominatorX: number, denominatorY: number): Pick<DiagramObligation, "kind" | "targets" | "conic"> | null {
+  if (!Number.isFinite(denominatorX) || !Number.isFinite(denominatorY) || denominatorX <= 0 || denominatorY <= 0) return null
+  return { kind: "conicAxes", targets: [], conic: { kind: "ellipse", radiusX: Math.sqrt(denominatorX), radiusY: Math.sqrt(denominatorY) } }
+}
+
+/**
  * 更具体的模式排在普通等号/垂直之前，避免截取比例式或面-面句式的一部分。
  *
  * **导出而不是私有**：Phase N1 的 IR 要用**同一张表**给"求证段"里的目标句定种类
@@ -62,7 +89,23 @@ const finitePositive = (value: string): number | null => {
  * 而分叉的症状是"题设认平行、目标认垂直"这种最难查的错。
  */
 export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
+  /**
+   * **椭圆的方程**：`x²/9 + y²/4 = 1`（`x^2` 那种写法也收）。
+   *
+   * 为什么必须认它、而不是留给"未核验"：方程里带 `=`，而下面的残留扫描把**带 `=` 的整句**
+   * 一律标成未核验 —— 不认它，用户每次都会看到一句"尚未被可靠解析"。认了它，判据才有东西可量。
+   *
+   * 两条分开写、而不是一条带分支：`x²/a² + y²/b² = 1` 与 `y²/b² + x²/a² = 1` 说的是**同一条曲线**，
+   * 但半轴分别落在哪个轴上不同。合成一条会让"读哪一组"变成第二个判断。
+   */
   {
+    pattern: /x\s*(?:\^2|²)\s*\/\s*(\d+(?:\.\d+)?)\s*\+\s*y\s*(?:\^2|²)\s*\/\s*(\d+(?:\.\d+)?)\s*=\s*1/g,
+    read: (m) => ellipseAxes(Number(m[1]), Number(m[2]))
+  },
+  {
+    pattern: /y\s*(?:\^2|²)\s*\/\s*(\d+(?:\.\d+)?)\s*\+\s*x\s*(?:\^2|²)\s*\/\s*(\d+(?:\.\d+)?)\s*=\s*1/g,
+    read: (m) => ellipseAxes(Number(m[2]), Number(m[1]))
+  },  {
     pattern: /二面角\s*([A-Z])\s*[-−]\s*([A-Z])([A-Z])\s*[-−]\s*([A-Z])\s*=\s*(\d+(?:\.\d+)?)\s*°/g,
     read: (m) => { const value = finitePositive(m[5]); return value === null || value >= 180 ? null : { kind: "dihedral", targets: m.slice(1, 5), value } }
   },
@@ -138,7 +181,8 @@ export function parseDiagramObligations(prompt: string, options: DiagramParseOpt
       if (next && /[A-Z°+*/√π^%]/.test(next)) continue
       if (Array.from({ length: end - start }, (_, offset) => start + offset).some((at) => used.has(at))) continue
       const result = read(match)
-      if (result === null || (result.kind !== "pointCoordinate" && new Set(result.targets).size < 2)) continue
+      // 圆锥曲线与点坐标都**不带点名**：它们自己就是被核验的对象，不能拿"至少两个名字"去卡。
+      if (result === null || (result.kind !== "pointCoordinate" && result.kind !== "conicAxes" && new Set(result.targets).size < 2)) continue
       givens.push({ ...result, sourceText: match[0], start, end })
       for (let at = start; at < end; at++) used.add(at)
     }

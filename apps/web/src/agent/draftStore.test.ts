@@ -424,3 +424,45 @@ describe("V0b: the draft layer re-verifies planar premises too", () => {
     expect(staged.ok).toBe(false)
   })
 })
+
+/**
+ * **V0c：圆锥曲线也要在草稿层被核验**。
+ *
+ * 与 V0b 那组同一条理由：草稿层是**用户看得到**的那份报告的来源，
+ * 编译期验过不等于面板上会出现。圆锥曲线还多一层：它**没有点名**，
+ * 所以"点表建不出来"绝不能成为它跳过核验的理由。
+ */
+describe("V0c: the draft layer re-verifies conic premises too", () => {
+  const ELLIPSE_PROMPT = "椭圆 x²/9+y²/4=1，画示意图"
+
+  function ellipse(radiusX: number, radiusY: number) {
+    return [{
+      actionId: "planar.create_conic",
+      actionKey: "ellipse",
+      factIds: [],
+      inputs: { alias: "ellipse", kind: "ellipse", center: { x: 0, y: 0 }, radiusX, radiusY, label: "椭圆" }
+    }]
+  }
+
+  it("leaves a passed conic report on the preview the panel reads", async () => {
+    const store = createDraftStore()
+    const record = store.create(baseDocument())
+    const staged = await store.stage(record.draftId, ellipse(3, 2) as never, record.draftVersion, ELLIPSE_PROMPT)
+
+    expect(staged.ok).toBe(true)
+    if (!staged.ok) return
+    expect(staged.preview.diagramVerification?.status).toBe("passed")
+    expect(staged.preview.diagramVerification?.checks.map((item) => `${item.sourceText}:${item.status}`)).toEqual(["x²/9+y²/4=1:passed"])
+    // 判据的说明里必须**带上焦点**：半轴对调的后果就是焦点换轴，只说"两个数换了位置"看不出来。
+    expect(staged.preview.diagramVerification?.checks[0]?.reason).toContain("焦点")
+  })
+
+  it("refuses to stage the ellipse whose two semi-axes are swapped", async () => {
+    // 题目说 x²/9+y²/4=1（焦点在 x 轴），画出来的却是焦点在 y 轴的那条 —— 拒绝。
+    const store = createDraftStore()
+    const record = store.create(baseDocument())
+    const staged = await store.stage(record.draftId, ellipse(2, 3) as never, record.draftVersion, ELLIPSE_PROMPT)
+
+    expect(staged.ok).toBe(false)
+  })
+})
