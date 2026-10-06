@@ -77,3 +77,9 @@ export { createTransientTrace, type TransientTrace } from "./reactive/locus"
  * 用同一份域语义，否则"圆周角 π/2 + 4π"在两条路径上会落在不同的点（fix round 1 / I5）。
  */
 export { normalizeHostParameter } from "./reactive/constraints"
+/**
+ * **点名语法的唯一来源**（S1，立体图形覆盖扩宽）。扁平导出：解析器（`diagramObligations`）、
+ * 核验器（`diagramVerification`）与内核自己的顶面命名要的是**同一份**判断，
+ * 而这三处此前各写一份（`[...value]` 按码位拆字 / `/^[A-Z]$/` / 自己拼 `A′`）。
+ */
+export * from "./pointNames"

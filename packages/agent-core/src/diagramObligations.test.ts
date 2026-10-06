@@ -145,3 +145,44 @@ describe("V0a experimental spatial point conditions", () => {
     expect(parsed.unverified).toEqual([])
   })
 })
+
+/**
+ * **带撇 / 带下标点名**（S1 接缝先行）。
+ *
+ * 实测（设计 §1.1）：`在三棱柱ABCD-A₁B₁C₁D₁中，AA₁⊥平面ABCD` 在 `AA₁` / `AA1` / `AA′`
+ * 三种写法下都产出 **0 条给定**，只能作为 `unverified` 残留显形。机制是两处各写了一份点名判断：
+ * 规则里写死了 `[A-Z]{2}` / `[A-Z]{3,4}`，而 `names()` 又按**码位**拆字（`A′` → `A` + `′`）。
+ * 两处现在都从内核的 `pointNames` 取同一份定义。
+ */
+describe("带撇与带下标的点名", () => {
+  it("下标写法能读出线面垂直，且下游按**点名个数**切得出平面", () => {
+    const parsed = parseDiagramObligations("在三棱柱ABCD-A₁B₁C₁D₁中，AA₁⊥平面ABCD")
+    expect(parsed.givens.map((item) => item.kind)).toEqual(["perpendicular"])
+    expect(parsed.givens[0]!.sourceText).toBe("AA₁⊥平面ABCD")
+    expect(parsed.givens[0]!.targets).toEqual(["A", "A₁", "A", "B", "C", "D"])
+    /**
+     * 下游（`witnessSearch.lineAndPlane`）按**点名个数**把 targets 切成"线段 + 平面"：
+     * 前两个是线段端点、后三个或四个是平面。带下标时**字串长度**会骗人（`A₁B₁C₁D₁` 长 8），
+     * 点名个数不会 —— 所以这里钉的是"后四个正好是平面"这条性质。
+     *
+     * 注意：`planeLengths` 是 `平面X⊥平面Y` 才有的字段，线面垂直**不带**它（那是既有契约，
+     * 下游按长度还原切点；见 `witnessSearch.lineAndPlane` 的文件内注释）。
+     */
+    expect(parsed.givens[0]!.targets.slice(2)).toEqual(["A", "B", "C", "D"])
+    expect(parsed.unverified.filter((item) => item.sourceText.includes("AA₁"))).toEqual([])
+  })
+
+  it("撇写法同样读得出；平面⊥平面的长度按**点名个数**算而不是字串长度", () => {
+    const parsed = parseDiagramObligations("在正方体中，平面A₁B₁C₁D₁⊥平面ABCD")
+    expect(parsed.givens.map((item) => item.kind)).toEqual(["planePerpendicular"])
+    expect(parsed.givens[0]!.targets).toEqual(["A₁", "B₁", "C₁", "D₁", "A", "B", "C", "D"])
+    // 4 与 4 —— 按**字串长度**算会得到 8 与 4，而那会让下游把平面切错。
+    expect(parsed.givens[0]!.planeLengths).toEqual([4, 4])
+  })
+
+  it("ASCII 下标不是本仓写法：不许被凑合成给定，必须如实报未核验", () => {
+    const parsed = parseDiagramObligations("在三棱柱ABCD-A1B1C1D1中，AA1⊥平面ABCD")
+    expect(parsed.givens).toEqual([])
+    expect(parsed.unverified.some((item) => item.sourceText.includes("AA1"))).toBe(true)
+  })
+})

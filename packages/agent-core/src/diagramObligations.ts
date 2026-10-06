@@ -1,3 +1,5 @@
+import { POINT_NAME_SOURCE, splitPointNames } from "@draw/geometry-kernel"
+
 /** 题设来自用户原话而不是模型的 relations 声明。只读有确定点名的窄句型。 */
 export type DiagramObligationKind =
   | "fixedLength" | "equilateral" | "equalLength" | "midpoint" | "segmentRatio"
@@ -71,7 +73,25 @@ const POINT_COORDINATE_MATCHER: Matcher = {
   }
 }
 
-const names = (value: string): string[] => [...value]
+/**
+ * 点名串 → 点名列表。
+ *
+ * **不再按码位拆字**：`[...value]` 会把 `A′B` 切成 `["A","′","B"]`，于是带撇 / 带下标的点名
+ * 在解析层**根本读不出来**（棱柱题面 `AA₁⊥平面ABCD` 实测 0 条给定，只能作为 `unverified` 残留）。
+ * 现在与核验器、内核顶面命名共用内核的 `pointNames`（S1，设计 §3.3）。
+ */
+const names = (value: string): string[] => splitPointNames(value)
+
+/**
+ * 规则里拼点名子模式的**唯一**来源 —— 与 `names()` 同出一处。
+ *
+ * 为什么不能继续写死 `[A-Z]{2}`：那个字面量就是"三处各写一份判断"里的第一处。
+ * 线段 = 两个点名；三角/平面 = 三到四个点名（平面多为四点，但要收三点的写法）。
+ */
+const POINT_NAME = POINT_NAME_SOURCE
+const SEGMENT_NAME = `${POINT_NAME}${POINT_NAME}`
+const TRIANGLE_NAME = `${POINT_NAME}${POINT_NAME}${POINT_NAME}`
+const PLANE_NAME = `${TRIANGLE_NAME}(?:${POINT_NAME})?`
 const finitePositive = (value: string): number | null => {
   const number = Number(value)
   return Number.isFinite(number) && number > 0 ? number : null
@@ -215,38 +235,39 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
     read: (m) => { const value = finitePositive(m[5]); return value === null || value >= 180 ? null : { kind: "dihedral", targets: m.slice(1, 5), value } }
   },
   {
-    pattern: /平面\s*([A-Z]{3,4})\s*(?:⊥|垂直于?)\s*平面\s*([A-Z]{3,4})/g,
-    read: (m) => ({ kind: "planePerpendicular", targets: [...names(m[1]), ...names(m[2])], planeLengths: [m[1].length, m[2].length] })
+    pattern: new RegExp(`平面\\s*(${PLANE_NAME})\\s*(?:⊥|垂直于?)\\s*平面\\s*(${PLANE_NAME})`, "g"),
+    // `planeLengths` 必须是**点名个数**，不是字串长度：`A₁B₁C₁D₁` 是 4 个点、字串长 8。
+    read: (m) => ({ kind: "planePerpendicular", targets: [...names(m[1]), ...names(m[2])], planeLengths: [names(m[1]).length, names(m[2]).length] })
   },
   {
-    pattern: /(?:△|三角形)\s*([A-Z]{3})\s*(?:为|是)?\s*等边三角形/g,
+    pattern: new RegExp(`(?:△|三角形)\\s*(${TRIANGLE_NAME})\\s*(?:为|是)?\\s*等边三角形`, "g"),
     read: (m) => ({ kind: "equilateral", targets: names(m[1]) })
   },
   {
-    pattern: /([A-Z])\s*(?:为|是)\s*([A-Z]{2})\s*的?\s*中点/g,
+    pattern: new RegExp(`(${POINT_NAME})\\s*(?:为|是)\\s*(${SEGMENT_NAME})\\s*的?\\s*中点`, "g"),
     read: (m) => ({ kind: "midpoint", targets: [m[1], ...names(m[2])] })
   },
   {
-    pattern: /([A-Z]{2})\s*=\s*(\d+(?:\.\d+)?)\s*([A-Z]{2})(?![A-Z])/g,
+    pattern: new RegExp(`(${SEGMENT_NAME})\\s*=\\s*(\\d+(?:\\.\\d+)?)\\s*(${SEGMENT_NAME})(?![A-Z])`, "g"),
     read: (m) => { const value = finitePositive(m[2]); return value === null ? null : { kind: "segmentRatio", targets: [...names(m[1]), ...names(m[3])], value } }
   },
   {
-    pattern: /([A-Z]{2})\s*=\s*(\d+(?:\.\d+)?)(?![\d.A-Z])/g,
+    pattern: new RegExp(`(${SEGMENT_NAME})\\s*=\\s*(\\d+(?:\\.\\d+)?)(?![\\d.A-Z])`, "g"),
     read: (m) => { const value = finitePositive(m[2]); return value === null ? null : { kind: "fixedLength", targets: names(m[1]), value } }
   },
   {
-    pattern: /([A-Z]{2})\s*(?:与|和)\s*([A-Z]{2})\s*(?:长度相等|线段相等|边相等|等长)/g,
+    pattern: new RegExp(`(${SEGMENT_NAME})\\s*(?:与|和)\\s*(${SEGMENT_NAME})\\s*(?:长度相等|线段相等|边相等|等长)`, "g"),
     read: (m) => ({ kind: "equalLength", targets: [...names(m[1]), ...names(m[2])] })
   },  {
-    pattern: /([A-Z]{2})\s*=\s*([A-Z]{2})(?![A-Z])/g,
+    pattern: new RegExp(`(${SEGMENT_NAME})\\s*=\\s*(${SEGMENT_NAME})(?![A-Z])`, "g"),
     read: (m) => ({ kind: "equalLength", targets: [...names(m[1]), ...names(m[2])] })
   },
   {
-    pattern: /([A-Z]{2})\s*(⊥|∥|垂直于?|平行于?)\s*平面\s*([A-Z]{3,4})/g,
+    pattern: new RegExp(`(${SEGMENT_NAME})\\s*(⊥|∥|垂直于?|平行于?)\\s*平面\\s*(${PLANE_NAME})`, "g"),
     read: (m) => ({ kind: m[2].includes("平行") || m[2] === "∥" ? "parallel" : "perpendicular", targets: [...names(m[1]), ...names(m[3])] })
   },
   {
-    pattern: /([A-Z]{2})\s*(⊥|∥|垂直于?|平行于?)\s*([A-Z]{2})(?![A-Z])/g,
+    pattern: new RegExp(`(${SEGMENT_NAME})\\s*(⊥|∥|垂直于?|平行于?)\\s*(${SEGMENT_NAME})(?![A-Z])`, "g"),
     read: (m) => ({ kind: m[2].includes("平行") || m[2] === "∥" ? "parallel" : "perpendicular", targets: [...names(m[1]), ...names(m[3])] })
   }
 ]
