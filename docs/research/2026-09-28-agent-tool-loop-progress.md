@@ -2,9 +2,7 @@
 
 Date: September 29, 2026. Historical status then: **the six-phase checklist is complete, or deferred by a recorded decision.** The final release gate is **not** met — one line lacks real-provider data.
 
-> **2026-10-06 新一轮范围提示**：本文件全是上一版历史快照（含当年“无真实 provider 数据”的旧结论），不记录 H0–H4；现况看 [当前状态](../current-status.md)，新任务看 [执行追踪](../agent-next-round-progress.md)。
->
-> **2026-10-06 V0a 说明**：此处仍是 2026-09-29 的历史快照，**不记录**当前 V0a 的中途代码/浏览器结果；请读 [当前状态](../current-status.md) 和 [现行任务进度](../agent-next-round-progress.md)，勿将下方旧“无真实 provider”结论读成今天的事实。
+> **2026-10-06 当前范围提示**：本文件是 2026-09-29 旧 tool-loop 阶段快照（含当时“无真实 provider 数据”）；不记录现行作图题 V0a–V3。当前 V0a WIP 与真实 provider 小样本以 [当前状态](../current-status.md)、[任务追踪](../agent-next-round-progress.md) 及 [发布门禁](../acceptance/agent-release-gate.md) 为准，旧 H0–H4 全课程计划也已被作图题范围修订取代。
 >
 > **时间边界（2026-10-05 补）**：这份文件是**上一版"六阶段清单"的快照**（正文截至 2026-09-29），
 > 加上它自己在 2026-10-04 追加的一段 N1–N6 路线图。**N1–N6 的实际进度不在这里** ——

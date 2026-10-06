@@ -4,6 +4,8 @@ Date: September 28, 2026.
 
 This document is the Phase 0 baseline plus the current pause snapshot. It is not a claim that the final Agent is complete.
 
+> **Historical boundary (2026-10-06):** This is the September 28 baseline/pause snapshot, not the current provider or V0a result. For current evidence and V0a remaining work use [current status](../current-status.md) and [next-round progress](../agent-next-round-progress.md).
+
 ## Baseline facts before the loop work
 
 - The native provider path sent only the final `plan_set_plan` tool.

@@ -6,6 +6,7 @@
 > [记分卡](acceptance/agent-tool-loop-scorecard.md)（按阶段与 flag 列）。
 >
 > **这是"现在时"的唯一一处。** 本文件只回答三个问题：现在能跑吗、已经做完什么、还差什么。
+> **阅读职责（2026-10-06 复核）**：现时证据以本页为准；逐块 V0a–V3 状态看 [下一轮任务追踪](agent-next-round-progress.md)；能否放行看 [发布门禁](acceptance/agent-release-gate.md)，旧 N1–N6 的开关/依赖实测见 [历史核查](acceptance/next-phase-flag-and-dependency-review.md)。旧 [Agent tool-loop](research/2026-09-28-agent-tool-loop-progress.md)、[高中立体交互](research/2026-09-29-high-school-geometry-interaction-progress.md) 与 [第一周验收](acceptance/2026-09-12-week-one.md) 均只代表各自当时快照。
 > 历史过程（每一轮的 RED→GREEN 证据、被推翻的方案、实测读数、误报清单）在
 > [`docs/project-progress.md`](project-progress.md) —— 那是**归档**，里面的数字是"当时实测"，
 > 不是当前值。两份文件分工明确：**要当前值看这里，要过程看归档。**
@@ -782,7 +783,7 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
 ### C. 真实 provider 与 Agent 质量基线
 
 1. **已有但远不足发布**：应用内真实 provider 的 planning 轴曾由用户运行三轮（一次只取 21 题的前 3 题），工具环另一次得 `pass@1 1/8`、`pass@3 2/8`；人工可读性只标注两条、每组 `n=1`。抽取层 `covered=14/21`、题设覆盖率 72.7% 是**离线抽取判据**，不是模型作图正确率。这些历史数只证明“确实测过这些小样本”，不是现行作图题的真实成功率；逐次时间和原始口径在 §一与归档。
-2. **明确未测/测不到**：费用仍 `null`（有 token usage，无经审定价目表），其余 18 条题集及新增高中课程/高考类尚无真实 provider 完整读数，`>1 MiB` 响应那类在现有传输上报错，不能算 planned/rejected。开放题图形正确率、人工图面可读性的大样本与证明可信翻译均未放行。CLI `real_provider` 因不走应用凭据通道仍整批 `not_measured`；离线 `deterministic_local` 不能充当真人模型通过率。再付费运行需另经人确认。
+2. **明确未测/测不到**：费用仍 `null`（有 token usage，无经审定价目表），其余 18 条旧题集与现行作图题集尚无真实 provider 完整读数，`>1 MiB` 响应那类在现有传输上报错，不能算 planned/rejected。开放题图形正确率、人工图面可读性的大样本与证明可信翻译均未放行。CLI `real_provider` 因不走应用凭据通道仍整批 `not_measured`；离线 `deterministic_local` 不能充当真人模型通过率。再付费运行需另经人确认。
 3. 下一阶段完整任务与归属见 [V0–V3 作图题进度追踪](agent-next-round-progress.md)；**成本、延迟、pass@k、人工可读性必须各报自己的分母和提供者，不能合并成一个“质量已通过”状态**。
 
 ### D. 发布与仓库收尾
@@ -801,18 +802,20 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
 4. ~~**N4：开放题编译与真实 Provider Benchmark**~~ **✅ 已完成，出口已达成（2026-10-06）** —— 并承接 N2 的浏览器端验收（flag 打开时救援路径的端到端）与 **flag 状态进入 trace/benchmark 记录**。
    **（2026-10-05，已完成）**后一条**已经做掉了**：五个开关的状态随 `RunRevisions` 一起进 run 事件（`RunEvent` 每次相变都 spread 整份 `revisions`），落点是 `runState.ts` 的 `RunRevisions.nextPhaseFlags` + `StartRequest.nextPhaseFlags` + `agentRunner.ts` 的调用点。**没接线就留空（`undefined`），不编一份"全关"** —— 正反两条用例钉着。所以"这份 trace 是在哪组开关下取的"现在**答得出来**了。
 5. **N5：形式证明出口**（实例、采样、形式证明严格分级）。**状态（2026-10-05 到第四步；2026-10-06 出口已达成）**：① `proofArtifact.ts` 把判据落成可执行的（`verified_instance`/`sampled` 不得变成 `formally_proved`；伪造/缺字段/版本不匹配/"证明了别的东西"一律拒）；② `proofGoals.ts` 的**短目标封闭词表**（10 种）；③ **后端接线门** —— `WIRED_PROOF_BACKENDS` 由**通过的审查记录推导**；④ **后端准入契约**（`proofBackendReview.ts` 十栏，缺一栏就拒）。`npm run proof:smoke` 打印 `PROOF_BACKENDS {"wired":["lean4"],"reviewed":1}`、**8 通过**（此前 7 通过 / `{"wired":[]}`）。**已接一个后端 `lean4`（Lean 4 + mathlib）**：走的是**十栏准入记录**（`e401d9e`）+ 适配器闭环（`051e5fe`）；可达范围**只有一类目标**（`perpendicular`），其它目标真实运行仍得到 `unsupported`。
-6. **N6：feature flag、依赖/许可证/线程/WASM 审查、发布门槛与维护收口**。**状态（2026-10-05 到第十四步；2026-10-06 第十五步 + 全计划收口）** —— 五个开关的覆盖矩阵、JS 运行依赖的许可证清单、WASM/线程边界、**Rust 传递依赖的许可扫描**（`cargo metadata`：551 包 / 33 种表达式 / 无一缺 `license` 字段 / 无 GPL·AGPL·SSPL）、**并发正确性专项**（唯一一处两把锁嵌套的守卫 + 删掉 `drop(runs)` 会自锁的实测）、e2e 与 Rust 两条抖动的修复与前后计数、整批门禁（含**生产构建**）都在，写进 [`docs/acceptance/next-phase-flag-and-dependency-review.md`](acceptance/next-phase-flag-and-dependency-review.md) 与 [`docs/current-status.md`](current-status.md) §一。**那一份里仍然明确写了没回答的**：`obligationIR` / `witnessSearch` 两个开关的**浏览器**用例（它们**没有产品入口**，所以无从谈起；`constrainedDrag` 的已经有了）、依赖体积与供应链。另查出两处依赖归位问题（`apps/web` 的 `@vitejs/plugin-react` 放错在 `dependencies`、根 `package.json` 多余一个 `three`），**未修**。
+6. **N6：feature flag、依赖/许可证/线程/WASM 审查、发布门槛与维护收口**。**状态（2026-10-05 到第十四步；2026-10-06 第十五步 + 全计划收口）** —— 五个开关的覆盖矩阵、JS 运行依赖的许可证清单、WASM/线程边界、**Rust 传递依赖的许可扫描**（`cargo metadata`：551 包 / 33 种表达式 / 无一缺 `license` 字段 / 无 GPL·AGPL·SSPL）、**并发正确性专项**（唯一一处两把锁嵌套的守卫 + 删掉 `drop(runs)` 会自锁的实测）、e2e 与 Rust 两条抖动的修复与前后计数、整批门禁（含**生产构建**）都在，写进 [`docs/acceptance/next-phase-flag-and-dependency-review.md`](acceptance/next-phase-flag-and-dependency-review.md) 与 [`docs/current-status.md`](current-status.md) §一。**那一份当时尚未回答的**：`obligationIR` / `witnessSearch` 两个开关的浏览器用例（**2026-10-05 的历史基线**；后来 `witnessSearch` 有设置入口及 V0a 狭窄浏览器 3/3，`obligationIR` 仍无用户入口）；依赖体积与供应链范围仍应逐项审查。另查出两处依赖归位问题（`apps/web` 的 `@vitejs/plugin-react` 放错在 `dependencies`、根 `package.json` 多余一个 `three`），**未修**。
 7. 其他尚未启动的产品探索：题目截图识图、GeoGebra `.ggb` 互操作、平面/函数题型逐题补缺、3D 画面进入 HTML。
 
-### F. 现行 V0–V3：只处理需要作图的题（产品能力尚未交付）
+### F. 现行 V0–V3：只处理需要作图的题（V0a 狭窄实验路径 WIP；整阶段未交付）
 
-- [x] **V0 内部基础**：保留 2025 课程来源清册作候选参考，但独立 `diagram-scope-2025.json` 的 4 个宽泛图形领域只标 `helpful`，不能把同章节纯计算强制画图；3 个默认非图子型可由题目明确绘图请求覆盖，另 134 子型仍 `unknown`。内部题集已用三角、椭圆、导数曲线与四面体的 **12 条**原创正/反/欠定**文字/坐标候选**替代尚未推送的纯集合/数列/恒等式九例，4 条欠定例给出可行自由点/参数样本。这里的候选还**没有内核/画布核验**，`verified_instance` 不可仅凭文本产生；Lean 更未自动调用。
-> **2026-10-06 产品接线只读审计（未实施）**：`planCompiler.ts` 和 `draftStore.ts` 的原文题设核验只在 `solid.create_polyhedron` 触发；平面曲线虽有创建动作，却未接相同的原文条件复核；DSL 能表示函数图像，但 Agent 无 `function.create_graph`，现有分析/切线动作需要来源。V0a–V0d 已按真实调用点写入新计划；另发现线面垂直可识别但“上方”和显式点坐标未有同等可靠判据，V0a 将把错坐标/下方顶点设为 RED，未支持则列未核验阻止确认。**V0a 仅有自由三棱锥的定向产品路径 3/3 浏览器记录；四家族完整真图、浏览器坐标独立回代与目视验收均未完成**。
+- [x] **V0 内部基础**：保留 2025 课程来源清册作候选参考，但独立 `diagram-scope-2025.json` 的 4 个宽泛图形领域只标 `helpful`，不能把同章节纯计算强制画图；3 个默认非图子型可由题目明确绘图请求覆盖，另 134 子型仍 `unknown`。内部题集已用三角、椭圆、导数曲线与四面体的 **12 条**原创正/反/欠定**文字/坐标候选**替代旧提交 `89b57f8` 中的纯集合/数列/恒等式九例，4 条欠定例给出可行自由点/参数样本。这里的候选还**没有内核/画布核验**，`verified_instance` 不可仅凭文本产生；Lean 更未自动调用。
+> **2026-10-06 产品接线初审（当时未实施；现 V0a 仍为 WIP）**：`planCompiler.ts` 和 `draftStore.ts` 的原文题设核验只在 `solid.create_polyhedron` 触发；平面曲线虽有创建动作，却未接相同的原文条件复核；DSL 能表示函数图像，但 Agent 无 `function.create_graph`，现有分析/切线动作需要来源。V0a–V0d 已按真实调用点写入新计划；当时发现线面垂直可识别而“上方”及显式坐标未有同等判据；V0a WIP 已在显式见证搜索开关下核验受限坐标写法，未知“上方”保持未核验，浏览器错坐标/下方反例仍欠。**V0a 仅有自由三棱锥的定向产品路径 3/3 浏览器记录；四家族完整真图、浏览器坐标独立回代与目视验收均未完成**。
 
 - [ ] **V0 产品出口**：实际生成 2D/函数/圆锥曲线/3D 图元，逐条核验题设与证据来源；负例拒绝，欠定自由点允许一张符合直觉且满足题设的示意图，旧路径关旗回归和浏览器可视/撤销正反验收齐备。
 - [ ] **V1/V2/V3**：四类作图约束/拖动，限定作图主张可信形式化后桌面受限自动 Lean，真实 provider 作图图面可读性与成本门禁。教师/学生目视走查与管理员 MSI 仍分别未验；付费 provider 需要用户单独批准。各块具体文件/RED/接口见 [新实施计划](superpowers/plans/2026-10-06-diagram-agent-auto-lean-implementation-plan.md)。
 
-### G. N1/N2 的已知边界与 park 项（**不是缺陷，是如实记录**）
+### G. N1/N2 旧阶段边界与 park 项（历史快照，不替代 V0a 当前进展）
+
+> 本节原本记于 V0a 实现前；其中“仅支持点名直角/没有原话坐标判据”等旧结论只对应当时的旧路径。当前 V0a 狭窄自由三角底面和坐标写法的事实见 §四 F / §一；四家族全部完成仍无证据。
 
 - **2026-10-06 N2 窄题型扩展（独立子区块）**：明确给出三角底面唯一一个直角、但直角不在原面环首位时，内核按点名循环旋转三角环后解析构造；搜索层复用同一规则选择自由底边，最终坐标仍经拓扑和原话题设双重核验。新增 `PB⊥平面ABC`、`AB⊥BC`（B 角直角）内核/搜索/真实编译链正例，以及“只有侧棱与底边垂直不能冒充底角”反例。定向 3 文件 / 97 项、全库不含慢 Lean 集成 324 文件 / 3775 项通过 + 1 todo，typecheck/build exit 0，lint 0 error / 13 warning；全量浏览器 195/195 通过。**仍不支持**四边形直角不在环首及带撇点名的棱柱；这道新题尚未收入 21 题 benchmark，4.8% 历史读数不能据此宣称改变。
 

@@ -3,6 +3,8 @@
 > 日期：2026-10-05 ｜ 基线：`6829f77`（`main`）
 > **这一份是核对记录，不是发布批准。** 每一格都写明"实测到了什么"，没测的写"没测"并给出原因。
 
+> **现行 V0a 状态（2026-10-06）**：`witnessSearch` 已可由用户开启受限自由三棱锥本地入口，定向浏览器 3/3；**V0a 未验收**：缺坐标独立回代、图面目检与全量回归。下方部分 2026-10-05 的措辞只代表历史测试时刻；新方向只做需作图的题，证据见 [当前状态](../current-status.md) 和 [新任务追踪](../agent-next-round-progress.md)。
+
 ## 一、五个开关的覆盖矩阵（N6 点名的核对项）
 
 五个开关由 N1 创建于 `apps/web/src/agent/featureFlags.ts`（缺省全关；用户可在实验页独立开启 `constrainedDrag` 或 `witnessSearch`）。
@@ -11,14 +13,14 @@ N6 只核对"每个 flag 有单元 / 浏览器 / 回退用例"，**不重复创�
 | 开关 | 读它的地方 | 单元用例 | 关闭回退的证据 | 浏览器用例 | 缺什么 |
 | --- | --- | --- | --- | --- | --- |
 | `obligationIR` | `agentRuntime.ts:240`（缺省取应用层那一份）→ `:271`/`:283` 传进 `drafts.stage`；`draftStore.ts:287` → 编译期 `diagramObligationIR`；Worker 链 `workerContracts.ts:51` / `workerRuntime.ts:82` / `geometryWorkerClient.ts:202` / `geometryWorkerHost.ts:111` / `geometryCompileStrategy.ts:106`；产出处 `diagramVerification.ts:176`；`committerAdapter.ts:154` | `featureFlags.test.ts`、`agentRuntime.test.ts:363`、`workerRuntime.test.ts:306`、`geometryWorkerHost.obligationIR.test.ts:101`、`draftStore.test.ts:373`、`planCompiler.test.ts:177`、`obligationIR.test.ts` | ✅ 三条：`planCompiler.test.ts:195`（关时不生成 IR）、`workerRuntime.test.ts:317`（畸形/缺省**不许**当 true）、`committerAdapter.test.ts:314`（不传 → `undefined`） | ❌ 无 | 浏览器端专测 |
-| `witnessSearch` | `agentNextPhaseFlags()` 读取用户单独保存的实验偏好 → `agentRuntime` / `draftStore` → 编译期 / Worker | 偏好、设置、flag、Worker 与搜索器定向测试 | ✅ `planCompiler.offPath.golden.test.ts` 逐字节 golden + 默认关 | ✅ `e2e/next-phase-flag-entry.spec.ts` 第 4 条：默认关、显式打开、刷新保留、与约束拖动隔离 | 浏览器真实 provider 的成功救援尚未测；不能据此宣称提高作图准确率 |
-| `constrainedDrag` | `App.tsx:518`（**N3 第三步新增的第一个读取点**） | `featureFlags.test.ts`（默认关）、`constrainedDrag3.test.ts`（关 → 只 `passthrough`，一个坐标都不写） | ✅ `e2e/geometry3d-drag.spec.ts` + `geometry3d-creation.spec.ts` 共 **19 条**在关闭状态下全绿（含"一次自由拖动只撤销一步"） | ✅ **5 条**（2026-10-05 补，见下） | 无 —— 入口与正/反例都到位了 |
-| `openProblemCompiler` | **无** | 只有 `featureFlags.test.ts` 的"默认全关"与"键集合相等" | 不适用（无行为） | ❌ 无 | N4 实现时才该有读取点 |
-| `proofExport` | **无** | 同上 | 不适用（无行为） | ❌ 无 | N5 实现时才该有读取点 |
+| `witnessSearch` | 设置页独立偏好 → `agentNextPhaseFlags()` → 本地规划器/草稿/编译期/Worker，默认关 | 偏好、开关、草稿/Worker 和搜索器定向测试 | ✅ `planCompiler.offPath.golden.test.ts` 关旗逐字节黄金样本 | ✅ 入口 `e2e/next-phase-flag-entry.spec.ts` + V0a 受限自由顶点 `e2e/agent-diagram-free-apex.spec.ts` 定向 3 条（开/关与未知“上方”不确认） | V0a 还缺浏览器坐标独立回代/图形目检与全量回归；真实 provider 成功救援开放题尚未测，不能宣称通用作图。 |
+| `constrainedDrag` | `App.tsx` 使用独立实验开关（默认关） | `featureFlags.test.ts`、`constrainedDrag3.test.ts`、场景/事务相关测试 | ✅ 旧自由拖动路径有结构与浏览器回归 | ✅ 仓内 `e2e/agent-constrained-drag.spec.ts` 现有 6 条和 `e2e/next-phase-flag-entry.spec.ts` 现有 4 条（仅文件内声明数量，**本轮未单独重跑这些 spec**） | 已有过约束拒绝、冲突恢复与一步撤销；空间线 `coincident` 缺 3D 判据仅安全拒绝，其它空间关系与真实题集成功率未验。 |
+| `openProblemCompiler` | 目前无普通 Agent 产品读取点 | 只守默认全关及名称等集 | 不适用（无产品行为） | 无产品行为可测 | 旧 N4 评测面板不读此开关；现行 V3 作图题质量与开关启用另行设计，不能标已放行。 |
+| `proofExport` | 目前无普通 Agent 产品读取点 | 只守默认全关及名称等集 | 不适用（无产品行为） | 无产品行为可测 | 旧 N5 仅独立 Lean 条件引理，现行 V2 自动证明尚未接入产品；不可写“证明出口已可用”。 |
 
 **2026-10-05 更正（这一份的基线是 `6829f77`，它早于下面这两个提交）**：`constrainedDrag` 那一行原写"❌ 无 / **没有任何产品入口**能把它打开"，**已经过期** —— `fbb7584` 给了产品入口（顶栏「设置」→ 实验性功能 → 约束拖动，偏好存 `mathcanvas:next-phase-preferences`，`agentNextPhaseFlags()` 只取这一个），`96be699` / `6d21847` 补上了浏览器正反例：`e2e/next-phase-flag-entry.spec.ts`（入口本身 **3 条**）+ `e2e/agent-constrained-drag.spec.ts`（**2 条**：关着拖动**真的改变** `|AB|`；打开后同样拖动 `|AB|` **仍是 1**，且先断言 A 确实动过 —— 不许用"没变"冒充"被约束住"）。所以那一格改成 ✅ 5 条。
 
-**结论（同样按 2026-10-05 更正）**：三个已实现的开关都有"关闭回退"的证据，其中 `witnessSearch` 最硬（golden 逐字节）；
+**当时结论（2026-10-05；下文历史按当时记录保留，现时读表格与本页顶部）**：三个已实现的开关都有"关闭回退"的证据，其中 `witnessSearch` 最硬（golden 逐字节）；
 **在 2026-10-05，当时浏览器用例只有 `constrainedDrag` 有**；2026-10-06 `witnessSearch` 补上默认关闭的实验入口与浏览器用例，`obligationIR` 仍没有用户入口；
 `openProblemCompiler` / `proofExport` 是**占位**（只有开关表与默认值，没有任何读取点）—— 这是刻意的，N6 不该为占位开关补用例。
 
