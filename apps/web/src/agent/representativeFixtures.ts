@@ -332,7 +332,17 @@ export function planarRightTrianglePlan(): PlanEnvelope {
     actions: [
       { actionId: "planar.create_point", actionKey: "A", factIds: [], inputs: { alias: "A", points: [{ x: 0, y: 0 }], label: "A" } },
       { actionId: "planar.create_point", actionKey: "B", factIds: [], inputs: { alias: "B", points: [{ x: 2, y: 0 }], label: "B" } },
-      { actionId: "planar.create_point", actionKey: "C", factIds: [], inputs: { alias: "C", points: [{ x: 0, y: 3 }], label: "C" } }
+      { actionId: "planar.create_point", actionKey: "C", factIds: [], inputs: { alias: "C", points: [{ x: 0, y: 3 }], label: "C" } },
+      /**
+       * **三条边也要真的画出来**（2026-10-06 补）。
+       *
+       * 计划 V0b 的措辞是"A/B/C 实际点**线段**"。此前只建了三个点，于是画布上是**三个孤立的点** ——
+       * 题面说"三角形"，图上却读不出三角形（我在把截图留成长期证据、逐张目视时才发现）。
+       * 边不影响核验（点名表只认**带标签的点**），但**图上有没有那个形状**是另一回事。
+       */
+      { actionId: "planar.create_segment", actionKey: "AB", factIds: [], inputs: { alias: "AB", points: [{ x: 0, y: 0 }, { x: 2, y: 0 }] } },
+      { actionId: "planar.create_segment", actionKey: "AC", factIds: [], inputs: { alias: "AC", points: [{ x: 0, y: 0 }, { x: 0, y: 3 }] } },
+      { actionId: "planar.create_segment", actionKey: "BC", factIds: [], inputs: { alias: "BC", points: [{ x: 2, y: 0 }, { x: 0, y: 3 }] } }
     ] as unknown as DraftAction[]
   }
 }

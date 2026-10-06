@@ -449,9 +449,17 @@ describe("V0b local planar right triangle", () => {
     const result = (await createLocalPlanner().plan({ userMessage: PLANAR_TRIANGLE_PROMPT } as never)).plan
     expect(result.kind).toBe("plan")
     if (result.kind !== "plan") return
-    // 三条**点名**的点动作 —— 线段动作的端点只是匿名坐标，建不出点名表。
-    expect(result.actions.map((action) => action.actionId)).toEqual(["planar.create_point", "planar.create_point", "planar.create_point"])
-    expect(result.actions.map((action) => (action.inputs as { label?: string }).label)).toEqual(["A", "B", "C"])
+    /**
+     * 断言"**点名的点都在**"，而不是"动作列表恰好是三笔"。
+     *
+     * 原先钉的是后者，于是夹具后来补上三条边（计划 V0b 的措辞是"A/B/C 实际点**线段**"，
+     * 只画三个点的话题面说"三角形"而图上读不出三角形）时，这条会**误伤** ——
+     * 加边、加标注都不该让它红。要守的性质是"核验器拿得到点名表"，不是"动作只有三笔"。
+     */
+    const points = result.actions.filter((action) => action.actionId === "planar.create_point")
+    expect(points.map((action) => (action.inputs as { label?: string }).label)).toEqual(["A", "B", "C"])
+    // 边是**另外的动作**：它们不给点名表贡献名字（端点只是匿名坐标），但图上得有那个形状。
+    expect(result.actions.filter((action) => action.actionId === "planar.create_segment")).toHaveLength(3)
 
     const document = createEmptyDocument("conics")
     const compiled = compilePlan(result, { document, prompt: PLANAR_TRIANGLE_PROMPT, conversationId: "local-planar", documentGeneration: document.revision })
