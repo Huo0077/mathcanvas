@@ -3,7 +3,7 @@ import { createEmptyDocument } from "@draw/dsl"
 import { describe, expect, it } from "vitest"
 
 import { createLocalPlanner, LOCAL_INTENTS, localIntentSkillIds, matchLocalIntent, SPHERE_PROMPT } from "./localPlanner"
-import { CONIC_ELLIPSE_PROMPT, FUNCTION_TANGENT_PROMPT, PYRAMID_PROMPT, PYRAMID_UNVERIFIED_PROMPT, PLANAR_TRIANGLE_PROMPT } from "./representativeFixtures"
+import { CONIC_ELLIPSE_PROMPT, FUNCTION_TANGENT_PROMPT, HYPERBOLA_PROMPT, PARABOLA_PROMPT, PYRAMID_PROMPT, PYRAMID_UNVERIFIED_PROMPT, PLANAR_TRIANGLE_PROMPT } from "./representativeFixtures"
 
 /**
  * 本地确定性规划器的性质。
@@ -581,5 +581,58 @@ describe("V0d local function graph with its tangent", () => {
     const tangent = compiled.draftDocument?.primitives.find((primitive) => primitive.type === "tangent") as { x: number; slope: number } | undefined
     expect(tangent?.x).toBeCloseTo(2, 9)
     expect(tangent?.slope).toBeCloseTo(9, 6)
+  })
+})
+
+/**
+ * **V0c 续：双曲线与抛物线的本地入口**。
+ *
+ * 与椭圆同一条纪律（精确匹配、不挂实验开关、参数由题面方程钉死）。
+ * 这两条额外要钉的是**轴真的被传下去了**：动作层对 `axis` 有 `safe_default: "x"`，
+ * 而这两道题的轴恰好都是 x —— 如果夹具没把题面写明的轴传进去，"默认值恰好对"
+ * 会把"题面的轴根本没被读进去"这件事盖住。所以下面另拿一个**轴为 y** 的变体做反例。
+ */
+describe("V0c local hyperbola and parabola", () => {
+  it("reaches both without any experimental flag", () => {
+    expect(matchLocalIntent(HYPERBOLA_PROMPT)).not.toBeNull()
+    expect(matchLocalIntent(PARABOLA_PROMPT)).not.toBeNull()
+    expect(localIntentSkillIds(HYPERBOLA_PROMPT)).toContain("conics-tangents")
+  })
+
+  it("builds the hyperbola the equation determines, with its stated axis", async () => {
+    const result = (await createLocalPlanner().plan({ userMessage: HYPERBOLA_PROMPT } as never)).plan
+    expect(result.kind).toBe("plan")
+    if (result.kind !== "plan") return
+    expect(result.actions[0].inputs).toMatchObject({ kind: "hyperbola", radiusX: 3, radiusY: 2, axis: "x" })
+    const document = createEmptyDocument("conics")
+    const compiled = compilePlan(result, { document, prompt: HYPERBOLA_PROMPT, conversationId: "local-hyperbola", documentGeneration: document.revision })
+    expect(compiled.ok, compiled.diagnostics.map((item) => item.detail).join("; ")).toBe(true)
+    expect(compiled.diagramVerification?.status).toBe("passed")
+    expect(compiled.diagramVerification?.checks.map((check) => `${check.sourceText}:${check.status}`)).toEqual(["x²/9−y²/4=1:passed"])
+  })
+
+  it("refuses a hyperbola whose axis was flipped on the way out", async () => {
+    const result = (await createLocalPlanner().plan({ userMessage: HYPERBOLA_PROMPT } as never)).plan
+    expect(result.kind).toBe("plan")
+    if (result.kind !== "plan") return
+    // 半轴一个没动，只把轴反过来 —— 两条互为镜像的曲线，**不能**因为"两个数都对"就放行。
+    const flipped = { ...result, actions: result.actions.map((action) => ({ ...action, inputs: { ...action.inputs, axis: "y" } })) }
+    const document = createEmptyDocument("conics")
+    const compiled = compilePlan(flipped as typeof result, { document, prompt: HYPERBOLA_PROMPT, conversationId: "local-hyperbola", documentGeneration: document.revision })
+    expect(compiled.diagramVerification?.status).toBe("failed")
+    expect(compiled.ok).toBe(false)
+  })
+
+  it("builds the parabola with p = 2 (the equation's 4 is 2p) and its stated axis", async () => {
+    const result = (await createLocalPlanner().plan({ userMessage: PARABOLA_PROMPT } as never)).plan
+    expect(result.kind).toBe("plan")
+    if (result.kind !== "plan") return
+    // `y² = 4x` 里的 4 是 **2p** ⇒ p = 2。直接把 4 当 p 会在这里红。
+    expect(result.actions[0].inputs).toMatchObject({ kind: "parabola", focalParameter: 2, axis: "x" })
+    const document = createEmptyDocument("conics")
+    const compiled = compilePlan(result, { document, prompt: PARABOLA_PROMPT, conversationId: "local-parabola", documentGeneration: document.revision })
+    expect(compiled.ok, compiled.diagnostics.map((item) => item.detail).join("; ")).toBe(true)
+    expect(compiled.diagramVerification?.status).toBe("passed")
+    expect(compiled.diagramVerification?.checks.map((check) => `${check.sourceText}:${check.status}`)).toEqual(["y²=4x:passed"])
   })
 })

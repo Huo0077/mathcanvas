@@ -12,11 +12,16 @@
 **怎么重新生成**：先跑对应的 spec，再把 `test-results/` 里的图拷到这里，然后**逐张目视核对**再提交。
 图的文件名与 spec 里 `page.screenshot({ path: ... })` 写的一致。
 
+**V0c 的三类圆锥曲线各有浏览器证据**（椭圆 / 双曲线 / 抛物线）——
+原先只有椭圆那一张，于是文档里"V0c 三类已覆盖"那句话的举证是不对称的；这两张是补上的。
+
 | 图 | 由哪个 spec 生成 | 题面 | 看图时该确认什么 |
 | --- | --- | --- | --- |
 | `v0a-free-apex-tetrahedron.png` | `e2e/agent-diagram-free-apex.spec.ts` | 在三棱锥 D-ABC 中，AD⊥平面 ABC，自由点 D，画示意图 | 顶点 **D 在 A 的正上方**、A 是垂足、B/C 在底面；对象清单 **15 项**（4 点 + 6 棱 + 4 面 + 1 多面体） |
 | `v0b-planar-right-triangle.png` | `e2e/agent-planar-triangle.spec.ts` | 在三角形 ABC 中，AB⊥AC，画示意图 | **是一个三角形**（A/B/C 三点 + 三条边，共 6 个对象），直角在 A：AB 水平、AC 竖直 |
 | `v0c-ellipse.png` | `e2e/agent-conic-ellipse.spec.ts` | 椭圆 x²/9+y²/4=1，画示意图 | 椭圆**明显宽于高**（长轴在 x 轴）；对象清单 1 项、标签就是那个方程 |
+| `v0c-hyperbola.png` | `e2e/agent-conic-kinds.spec.ts` | 双曲线 x²/9−y²/4=1，画示意图 | **两支上下开口**（实轴沿 x 轴）；对象清单 1 项、标签就是那个方程 |
+| `v0c-parabola.png` | `e2e/agent-conic-kinds.spec.ts` | 抛物线 y²=4x，画示意图 | 抛物线**向右开口**（顶点在左、对称轴为 x 轴）；对象清单 1 项、标签就是那个方程 |
 | `v0d-function-tangent.png` | `e2e/agent-function-tangent.spec.ts` | 画出 f(x)=x³−3x 的图像与它在 x=1 处的切线 | 三次曲线（一极大一极小）与切在**右侧极小点**上的**水平切线**同时显示；对象清单 2 项 |
 
 ## 两条记录在案的"看图才发现"的事

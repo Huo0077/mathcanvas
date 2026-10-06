@@ -405,3 +405,56 @@ export function functionTangentPlan(): PlanEnvelope {
     ] as unknown as DraftAction[]
   }
 }
+
+/**
+ * **代表题六、七：双曲线与抛物线**（计划 V0c 的另外两类）。
+ *
+ * 与椭圆同一条纪律：题面是**方程**，参数被方程钉死，所以没有"系统自选"的自由度。
+ * 唯一要写进 assumptions 的是"这条曲线由题面唯一确定"。
+ *
+ * **轴必须显式写出来**：`axis` 是这两类曲线的一部分（`x²/9−y²/4=1` 的实轴沿 x、
+ * `y²=4x` 的对称轴是 x 轴），而动作层对它有 `safe_default`。夹具把题面**写明的**那个轴传下去，
+ * 免得"默认值恰好对"掩盖了"题面的轴根本没被读进去"。
+ */
+export const HYPERBOLA_PROMPT = "双曲线 x²/9−y²/4=1，画示意图"
+export const PARABOLA_PROMPT = "抛物线 y²=4x，画示意图"
+
+export function hyperbolaPlan(): PlanEnvelope {
+  return {
+    schemaVersion: PLAN_SCHEMA_VERSION,
+    kind: "plan",
+    goal: "作双曲线 x²/9 − y²/4 = 1",
+    factIds: [],
+    assumptions: [
+      "半轴由题面方程唯一确定（√9 = 3、√4 = 2），实轴沿 x 轴；不是系统自选的示例值。"
+    ],
+    actions: [
+      {
+        actionId: "planar.create_conic",
+        actionKey: "hyperbola",
+        factIds: [],
+        inputs: { alias: "hyperbola", kind: "hyperbola", center: { x: 0, y: 0 }, radiusX: 3, radiusY: 2, axis: "x", label: "双曲线 x²/9−y²/4=1" }
+      }
+    ] as unknown as DraftAction[]
+  }
+}
+
+export function parabolaPlan(): PlanEnvelope {
+  return {
+    schemaVersion: PLAN_SCHEMA_VERSION,
+    kind: "plan",
+    goal: "作抛物线 y² = 4x",
+    factIds: [],
+    assumptions: [
+      "焦准距由题面方程唯一确定：y² = 4x 里的 4 是 2p，所以 p = 2，对称轴是 x 轴；不是系统自选的示例值。"
+    ],
+    actions: [
+      {
+        actionId: "planar.create_conic",
+        actionKey: "parabola",
+        factIds: [],
+        inputs: { alias: "parabola", kind: "parabola", vertex: { x: 0, y: 0 }, focalParameter: 2, axis: "x", label: "抛物线 y²=4x" }
+      }
+    ] as unknown as DraftAction[]
+  }
+}
