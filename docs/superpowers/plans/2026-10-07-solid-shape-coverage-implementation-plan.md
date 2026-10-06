@@ -111,10 +111,13 @@
   - 文件：`packages/geometry-kernel/src/witness/solidShapeSpec.ts`（新建，类型定义照设计 §3.1，**带 YAGNI 注释**）、`packages/agent-core/src/solver/witnessSearch.ts`、`packages/geometry-kernel/src/witness/constructors.ts`
   - 判据：自由标量从 spec 读，不再是写死的"两条底边 + 高"
   - RED：先写"同一题面在迁移前后产出**相同候选坐标**"的用例（把今天的结果钉成快照），迁移后必须仍逐字相同
-- [ ] **Task 2.2 内核 `deriveBasePolygon` 支持 n = 3–6**
+- [x] **Task 2.2 内核 `deriveBasePolygon` 支持 n = 3–6**（2026-10-07 完成）
+  - n = 5/6 走 `deriveRepresentativePolygon`（正 n 边形代表）；题面点名底面角度/平行、或给两个不同边长 ⇒ 仍拒绝（`unsupported-base-shape`）。
+  - **接线也补上了**（原计划漏写这三道闸）：解析器平面子模式 3–6 点名、搜索层 `lineAndPlane` 5–8 targets、核验器线面判据按 3–6 点平面核共面。五棱锥/六棱锥现在端到端 `verified_instance`。
+  - RED：`首批只支持三 / 四边形的底面，收到 5 个顶点。`；变异：短路"点名角度就拒绝" ⇒ 既有的五边形用例红（题面明说 `AB ⊥ AE` 却被画成正五边形）。
   - RED：五边形底面**今天**返回 `rejected` / `unsupported-base-shape`（设计 §1.1 已实测），新用例要求正例成立
   - 反例：n > 6 仍明确拒绝，且 `code` 逐条点名，**不换形状**
-- [ ] **Task 2.3 无判据条件反例**：题面含判不了的条件 ⇒ `unverified`，**不许**因其余条件通过就整体放行
+- [x] **Task 2.3 无判据条件反例**（2026-10-07 完成底面这一支）：题面含判不了/满足不了的条件 ⇒ **不给通过核验的候选**，且**说得出为什么**。实测：点名底面直角时候选池照常枚举 3 个、**每个都在构造期被拒**，理由带 `unsupported-base-shape` 与"满足不了它、不换一个题面没说的形状"。其余"读不出判据 ⇒ `unverified`"由既有 V0a 用例覆盖。
 - [ ] **Task 2.4 收口**：全库 + e2e + 变异（把"自由标量从 spec 读"改回写死 ⇒ 新底面用例红），文档与 commit/push
 
 ---

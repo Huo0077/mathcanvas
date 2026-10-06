@@ -79,6 +79,27 @@ describe("五边形底面", () => {
     const result = search(PENTAGON)
     expect(result.status, JSON.stringify(result)).toBe("verified_instance")
   })
+
+  it("六棱锥同样走得通（上界 6 也验一条）", () => {
+    const result = search("在六棱锥 P-ABCDEF 中，PA ⊥ 平面 ABCDEF，画出这个六棱锥")
+    expect(result.status, JSON.stringify(result)).toBe("verified_instance")
+  })
+
+  it("题面点名了底面直角时**不许**拿正五边形顶替（fail-closed）", () => {
+    /**
+     * 正五边形的边既不垂直也不平行。题面若在底面上点名了 `AB ⊥ BC`，
+     * 正五边形代表**满足不了它** —— 此时正确行为是**不给通过核验的候选**，
+     * 而不是画一张看起来正常、却不符合题意的图（本仓最忌讳的"悄悄换一个题面没说的形状"）。
+     */
+    const result = search("在五棱锥 P-ABCDE 中，PA ⊥ 平面 ABCDE，AB ⊥ BC，画出这个五棱锥")
+    expect(result.status, JSON.stringify(result)).not.toBe("verified_instance")
+    /**
+     * 而且要**说得出**是哪一种给不出：候选池照常枚举（3 个），但**每一个都在构造期被拒**，
+     * 拒绝理由带机器可读的 `unsupported-base-shape`，句子明说"满足不了它、不换一个题面没说的形状"。
+     * 钉这条是因为：给不出**不是问题**，说不出为什么才是 —— 用户得知道改哪一句。
+     */
+    expect(JSON.stringify(result.reasons), JSON.stringify(result)).toContain("unsupported-base-shape")
+  })
 })
 
 /** 按点名取坐标：结果里的 `names` / `vertices` 是同一套下标空间。 */
