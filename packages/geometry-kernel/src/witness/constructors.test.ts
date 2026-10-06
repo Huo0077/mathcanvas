@@ -396,8 +396,29 @@ describe("constructPyramidWitness", () => {
     if (skewed.status === "rejected") expect(skewed.code).toBe("unsupported-base-shape")
   })
 
-  it("accepts `PB ⊥ AB` / `PB ⊥ BC` (line-perpendicular-to-base) instead of reading them as a base corner", () => {
+  it("supports a pentagon / hexagon base as a regular representative when the base states no angle", () => {
     /**
+     * S2：用户裁决的首批范围是**任意 3–6 边底面**。n = 5 / 6 且题面**没有**点名底面上的角度时，
+     * 取一组**正 n 边形**代表 —— 与三角形的"普通三角形示例"同一个口径：题面没限定形状时，
+     * 给一张符合直觉、且满足全部可核条件的图（用户早先的裁决）。
+     *
+     * 题面**点名了**底面上的角度或平行条件时仍拒绝（正 n 边形满足不了它），
+     * 那条由上面"五边形底面 + 环首直角"的用例守着 —— 明确拒绝好过悄悄换一个形状。
+     */
+    for (const ring of [["A", "B", "C", "D", "E"], ["A", "B", "C", "D", "E", "F"]]) {
+      const result = constructPyramidWitness(pyramidRequest({ base: ring, relations: [] }))
+      expect(result.status, `ring ${ring.length}: ${JSON.stringify(result)}`).toBe("candidate")
+      if (result.status !== "candidate") continue
+      const { names, points } = result.witness
+      expect(names.slice(0, ring.length)).toEqual(ring)
+      const at = (name: string): Vector3 => points[names.indexOf(name)]!
+      const sides = ring.map((name, index) => distanceVector3(at(name), at(ring[(index + 1) % ring.length]!)))
+      for (const side of sides) expect(side).toBeCloseTo(sides[0]!, 9)
+      for (const name of ring) expect(at(name).z).toBe(0)
+    }
+  })
+
+  it("accepts `PB ⊥ AB` / `PB ⊥ BC` (line-perpendicular-to-base) instead of reading them as a base corner", () => {    /**
      * 复核 round 2 / Important A（R21）的**正例**：`PB ⊥ AB` 与 `PB ⊥ BC` 是"侧棱 ⊥ 平面 ABCD"
      * 的自然写法（两条件一起才说明 PB 垂直于底面），不是"底面在 B 处有直角"。
      * 垂足不在环首（这里垂足是 B）是被支持的，所以这个输入必须能建出候选 ——

@@ -654,15 +654,18 @@ function freeLength(stated: WitnessStatedValue | null, other: WitnessStatedValue
 /**
  * **底面的解析构造**。
  *
- * 首批支持两种底面：
+ * 首批支持三种底面：
  * 1. 四边形的**环首直角**（`AB ⊥ AD`）⇒ 矩形：`A` 在原点，`AB` 沿 +x、`AD` 沿 +y；
  *    对边的平行声明（`BC ∥ AD` 或 `AB ∥ DC`，方向不限）与这个构造一致，因此接受并**写在 assumptions 里**。
  *    只声明一组对边平行时构造出来的是矩形而不是一般梯形 —— 那是一条**比题面更强**的假设，
  *    所以拒绝（`unsupported-base-shape`），不把"额外特殊性"悄悄塞进图里。
  * 2. 三角形的唯一点名直角（可不在原环首）⇒ 循环旋转到该角，先沿 +x/+y 构造，再按原顶点顺序映回。
+ * 3. **正 n 边形代表**（S2，n = 5、6；见 `deriveRepresentativePolygon`）：题面没限定底面形状时
+ *    给一组正 n 边形，并在 assumptions 里写明"这是代表形状"；题面点名了底面上的角度/平行
+ *    或给了两个不同边长时拒绝 —— 正 n 边形满足不了它。
  *
- * 这两种是"只有关系、没有数值"的第一批代表形状。覆盖不到的（斜平行四边形底、直角不在环首、
- * 五边形以上）返回 `unsupported-base-shape` —— 明确拒绝好过悄悄换一个题面没说的形状。
+ * 覆盖不到的（斜平行四边形底、直角不在环首的四边形、七边形以上）返回 `unsupported-base-shape`
+ * —— 明确拒绝好过悄悄换一个题面没说的形状。
  */
 /** A plain triangular base with free side lengths needs a representative, not a
  * fabricated right angle. Any stated base relation we cannot honor stays rejected. */
@@ -698,6 +701,68 @@ function deriveRepresentativeTriangle(
   return { status: "ok", polygon, freeValues, assumptions: [`底面 ${names.join("")} 取一组非直角、非退化的普通三角形示例（题面未限定底角）。`] }
 }
 
+/**
+ * **正 n 边形代表底面**（S2；n = 5、6）。
+ *
+ * 用户裁决的首批范围是**任意 3–6 边底面**。题面没有限定底面形状时，取一组正 n 边形 ——
+ * 与三角形的"普通三角形示例"同一个口径：欠定时给一张**符合直觉且满足全部可核条件**的图，
+ * 而不是因为"不唯一"就拒收。
+ *
+ * **满足不了就拒绝，绝不换形状**（设计 §5 第 2 条）：
+ * - 底面上点名了**角度或平行条件** ⇒ 正 n 边形满足不了它（正五边形的边既不平行也不垂直），拒绝；
+ * - 环上给了**两个不同**的边长 ⇒ 正 n 边形所有边等长，也满足不了，拒绝；
+ * - 只给一个边长 ⇒ 按它取正 n 边形（那条长度不是系统自选，因此不写进 `freeValues`）。
+ *
+ * 与 3/4 边那套的关系：那条路靠"点名的直角"把底面**解出来**；这里没有可解的约束，
+ * 于是明说"这是一张代表图"——假设文案里写清楚，用户不会把它当成题面唯一确定的图形。
+ */
+/**
+ * 把浮点噪声按回 0。
+ *
+ * `cos(π/2)` / `sin(π)` 算出来是 6.1e-17 / 1.2e-16 这种量级。正六边形若留着它，内核的
+ * "候选坐标量级跨度过大"守卫会**如实拒绝**这张图 —— 那条守卫是对的（双精度下拿 1e-16 与 1
+ * 去比距离和角度不可靠），所以修在**构造侧**：把噪声按回 0，而不是去放宽守卫。
+ */
+function snapToZero(value: number): number {
+  return Math.abs(value) < 1e-12 ? 0 : value
+}
+
+function deriveRepresentativePolygon(
+  names: readonly string[],
+  relations: readonly WitnessRelation[]
+): { status: "ok"; polygon: Vector3[]; freeValues: string[]; assumptions: string[] } | WitnessConstructRejection {
+  const unsupportedAngle = relations.some((relation) => (relation.kind === "perpendicular" || relation.kind === "parallel")
+    && relation.segments.length > 0 && relation.segments.every((segment) => segment.every((name) => names.includes(name))))
+  if (unsupportedAngle) {
+    return reject("unsupported-base-shape", `底面点名了角度或平行条件，正 ${names.length} 边形代表满足不了它，不换一个题面没说的形状。`, [...names])
+  }
+  const stated: WitnessStatedValue[] = []
+  for (let index = 0; index < names.length; index += 1) {
+    const length = statedLength(relations, [names[index]!, names[(index + 1) % names.length]!])
+    if (length.kind === "invalid") return length.rejection
+    if (length.kind === "value") stated.push(length.stated)
+  }
+  // 按**数值**去重，但保留题面写法（`raw`）用于文案：同一个数写法不同不算两个长度。
+  const distinct = [...new Map(stated.map((entry) => [entry.value, entry])).values()]
+  if (distinct.length > 1) {
+    const shown = distinct.map((entry) => entry.raw ?? formatNumber(entry.value)).join("、")
+    return reject("unsupported-base-shape", `题面给了不同的底面边长（${shown}），正 ${names.length} 边形底面满足不了它们。`, [...names])
+  }
+  const sideStated = distinct.length === 1 ? distinct[0]! : null
+  const side = sideStated?.value ?? 1
+  if (!Number.isFinite(side) || !(side > 0)) return reject("degenerate-base", "底面自由边长必须为有限正数。", [...names])
+  const polygon: Vector3[] = names.map((_, index) => {
+    const angle = (2 * Math.PI * index) / names.length
+    return { x: snapToZero(side * Math.cos(angle)), y: snapToZero(side * Math.sin(angle)), z: 0 }
+  })
+  return {
+    status: "ok",
+    polygon,
+    freeValues: sideStated === null ? [`底面边长（正 ${names.length} 边形） = ${formatNumber(side)}（系统自选）`] : [],
+    assumptions: [`底面 ${names.join("")} 取一组**正 ${names.length} 边形**示例（题面未限定底面形状）；这是系统自选的代表形状，不是题面唯一确定的图形。`]
+  }
+}
+
 function deriveBasePolygon(
   names: readonly string[],
   relations: readonly WitnessRelation[]
@@ -711,9 +776,17 @@ function deriveBasePolygon(
       return { ...constructed, polygon: names.map((name) => constructed.polygon[rotated.indexOf(name)]) }
     }
   }
-  if (names.length !== 3 && names.length !== 4) {
-    return reject("unsupported-base-shape", `首批只支持三 / 四边形的底面，收到 ${names.length} 个顶点。`, [...names])
+  if (names.length < 3 || names.length > 6) {
+    return reject("unsupported-base-shape", `底面顶点数只支持 3–6（用户裁决的首批范围），收到 ${names.length} 个。`, [...names])
   }
+  /**
+   * **n = 5 / 6 先分流到"正 n 边形代表"**（S2）。
+   *
+   * 下面那套"环首直角 + 两条边 ⇒ 矩形"只对 3 / 4 边成立：四边形取 `names[3]` 当第二条边是对的
+   * （它是 `AB` 的对边端点），而五边形以上 `names[2]` / `names[3]` **不再是环首的两条邻边**，
+   * 沿用会把底面构造成一个题面没说的形状。所以在这里分流，n ≥ 5 不进入只适用 3/4 的分支。
+   */
+  if (names.length >= 5) return deriveRepresentativePolygon(names, relations)
   /**
    * **归一化后环首直角的两条边**：三角形可先循环旋转到该角；四边形仍只收原环首。
    *
