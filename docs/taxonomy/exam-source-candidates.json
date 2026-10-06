@@ -1,0 +1,77 @@
+{
+  "scope": "source_only_not_past_paper_gold",
+  "sources": [
+    {
+      "sourceId": "exam-2025-shanghai-commentary",
+      "examYear": 2025,
+      "paperId": "shanghai-autumn-math",
+      "url": "https://www.shmeea.edu.cn/page/02200/20250608/19462.html",
+      "publishedOn": "2025-06-08",
+      "sourceSha256": "E8EE022A64E3568DF262DE2ADB5F6604DBA2ABD28E581F4EE0017DFDEE80DAD1",
+      "evidenceKind": "commentary_only",
+      "fullPaperReviewed": false,
+      "answerReviewed": false,
+      "topics": [
+        {
+          "unitId": "compulsory-probability",
+          "questionId": null
+        },
+        {
+          "unitId": "selective-probability",
+          "questionId": null
+        },
+        {
+          "unitId": "selective-sequences",
+          "questionId": null
+        },
+        {
+          "unitId": "selective-analytic-geometry",
+          "questionId": null
+        },
+        {
+          "unitId": "compulsory-solid-geometry",
+          "questionId": null
+        },
+        {
+          "unitId": "selective-derivatives",
+          "questionId": null
+        },
+        {
+          "unitId": "compulsory-complex",
+          "questionId": null
+        }
+      ]
+    },
+    {
+      "sourceId": "exam-2026-national-commentary",
+      "examYear": 2026,
+      "paperId": "national-papers-I-II-math",
+      "url": "https://www.moe.gov.cn/jyb_xwfb/xw_zt/moe_357/2026/2026_zt08/mtbd/202606/t20260610_1440059.html",
+      "publishedOn": "2026-06-10",
+      "sourceSha256": "8777CB6E541F78F77F542D1806F07B9FF749E236631F5B711148CE8F45C120DD",
+      "evidenceKind": "commentary_only",
+      "fullPaperReviewed": false,
+      "answerReviewed": false,
+      "topics": [
+        {
+          "unitId": "selective-sequences",
+          "questionId": "全国Ⅰ卷第14题"
+        },
+        {
+          "unitId": "compulsory-function-basics",
+          "questionId": "全国Ⅰ卷第19题"
+        },
+        {
+          "unitId": "selective-analytic-geometry",
+          "questionId": "全国Ⅱ卷第18题"
+        },
+        {
+          "unitId": "compulsory-planar-vectors",
+          "questionId": null
+        }
+      ]
+    }
+  ],
+  "status": "metadata_only_no_verified_past_paper_question_or_answer",
+  "copyrightNote": "仅保存考试机构评析的出处、年份、卷别与知识点标签，不复制原试题或答案；是否与2025课程标准完全对应尚未核验"
+}
