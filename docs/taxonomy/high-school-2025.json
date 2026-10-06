@@ -22,8 +22,12 @@
         },
         {
           "subtypeId": "compulsory-sets/operations",
-          "taskKind": "unclassified",
-          "goldCaseIds": []
+          "taskKind": "proposition",
+          "goldCaseIds": [
+            "compulsory-sets/intersection-true",
+            "compulsory-sets/intersection-false",
+            "compulsory-sets/intersection-missing"
+          ]
         }
       ]
     },
@@ -162,8 +166,12 @@
         },
         {
           "subtypeId": "compulsory-trigonometry/basic-identities",
-          "taskKind": "unclassified",
-          "goldCaseIds": []
+          "taskKind": "proposition",
+          "goldCaseIds": [
+            "compulsory-trigonometry/pythagorean-identity",
+            "compulsory-trigonometry/sum-identity-false",
+            "compulsory-trigonometry/angle-interval-missing"
+          ]
         },
         {
           "subtypeId": "compulsory-trigonometry/transformations",
@@ -362,8 +370,12 @@
         },
         {
           "subtypeId": "selective-sequences/arithmetic",
-          "taskKind": "unclassified",
-          "goldCaseIds": []
+          "taskKind": "proposition",
+          "goldCaseIds": [
+            "selective-sequences/term-five-true",
+            "selective-sequences/term-five-false",
+            "selective-sequences/term-five-missing"
+          ]
         },
         {
           "subtypeId": "selective-sequences/geometric",
@@ -1171,5 +1183,5 @@
     "separate": true,
     "status": "not_measured"
   },
-  "indexScope": "43 表层来源项 + 131 条规定性一级要求 + E 类 10 个非穷尽示例；新子型均未分类/无金标，高考标签尚空，开放 E 范围无界，审计不能宣称 ready"
+  "indexScope": "43 表层来源、131 条规定性一级要求、E 10 个非穷尽举例；3 个跨领域子型附内部数学检查的原创正反歧义案例各三条，其余子型未分类；高考逐题金标和原题 Lean 证明均未测"
 }
