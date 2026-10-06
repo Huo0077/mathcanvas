@@ -6,6 +6,25 @@
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
 
 
+
+## 2026-10-06 —— 修掉 CI 上第一次真跑就红的 6 条：`lean4Toolchain.test.ts` 偷偷依赖了宿主平台
+
+- **怎么发现的**：推送 `ab0721e` 后核对 CI（run #135）—— `build` / `rust` / `e2e` 三个 job 全绿，**`checks` 红在 "Unit and UI tests (Vitest)"**（同一个 job 里 typecheck 与 lint 都是 success）。
+- **红了什么**：`packages/agent-core/src/proof/lean4Toolchain.test.ts` 的六条断言 ——
+  `expected undefined to be 'elan-shim' / 'PATH' / 'env:DRAW_LEAN4_TOOLCHAIN_BIN' / 'elan-toolchain:…'`。
+- **根因（不是抖动）**：那六条用例的假文件系统写的是 `lean.exe` / `lake.exe`，**但后缀是从宿主平台推的**
+  （`process.platform === "win32" ? ".exe" : ""`）。Linux 上拼出来的候选是 `.../lean`，而假文件系统里只有 `.../lean.exe`
+  ⇒ 解析返回 `null` ⇒ 断言读到 `undefined`。**它们一直在偷偷依赖"跑测试的机器是 Windows"**，所以开发机上一路全绿。
+  这不是新引入的行为，而是**这批测试第一次真正在 Linux 上跑**（上一批的 CI run #134 四个 job 全是 `cancelled`、steps 为空）。
+- **修法（最小）**：六条 Windows 形状的用例**显式注入** `exeSuffix: ".exe"`（PATH 那条再加 `pathSeparator: ";"`）；
+  文件头把这条规则写下来（"新加 Windows 形状的用例必须注入后缀"），免得下次再漏。
+  **生产代码一行未动** —— 解析器的平台推断本身是对的，错的是测试没把自己那台"假机器"说清楚。
+- **本地证据（RED 与 GREEN 都做实）**：控制器把 `process.platform` 伪装成 `linux` 再跑同一条文件
+  ⇒ **复现 CI 的 `6 failed | 5 passed`**（同样六条、同样报错文本）；注入后缀后**同一伪装下 `11 passed`**；
+  拆掉伪装后在真实 Windows 上 **`11 passed`**。
+- **故意没有加的东西**：**没有**加"宿主平台无关"那种会 mutate `process` 全局的回归测试 ——
+  它自己就注入后缀，**bug 在也照样绿（那是假门禁）**；而且 CI 跑 Node 22，`process.platform` 是否可写没有保证，
+  加进去等于用一个新的平台假设去换掉旧的。**假门禁比没有门禁更坏**，这一条按那条纪律办。
 ## 2026-10-06 —— 进度文档全量校对：把活文档里仍在说假话的**状态句**改对，并补 N3–N6 的归档条目
 
 - **怎么找的**：对 `docs/**/*.md` 做了一次关键词扫（`N4` / `N5` / `N6` / `not_measured` / `未测` / `门禁` / `后端` / `pass@1` …），逐行判断是**历史引用**还是**现行状态句** —— 历史引用（过程记录、当时的实测）一律保留，**现行状态句里已经为假的就地改对**，而不是只在后面追加一条更正。

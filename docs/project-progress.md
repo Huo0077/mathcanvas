@@ -4577,6 +4577,8 @@ N1 IR → N2 求解 adapter → N3 动态拖动 → N4 开放题与真实 provid
 7. **准入记录里的成本数字与实测对不上**：`proofBackendReview.ts` 的 `startupBudgetMs` 注释还写着旧的 52 / 118 s，实测是 **68317 / 149532 ms**（另一次 67800 / 157315 ms，两次都 `exit=0`），按实测改。
 8. **`lake-manifest.json` 会把工作树弄脏**：Lake **每次运行都会重写**它，只忽略 `/.lake` 不够 ⇒ 一并忽略。**代价是 mathlib 的 rev 没有被 pin**（`rev = "master"`），如实记下。
 
+9. **`lean4Toolchain.test.ts` 的六条用例在 CI 上第一次真跑就红了**（2026-10-06，CI run #135 / `ab0721e`；上一批的 run #134 四个 job 全是 `cancelled`、steps 为空 ⇒ 这是这批测试**第一次真正在 Linux 上跑**）：六条断言都是 `expected undefined to be 'elan-shim' / 'PATH' / 'env:DRAW_LEAN4_TOOLCHAIN_BIN' …`。**根因是测试依赖了宿主平台** —— 假文件系统写的是 `lean.exe` / `lake.exe`，而解析器的后缀是**从平台推的**（`process.platform === "win32" ? ".exe" : ""`），于是 Linux 上拼出来的候选是 `.../lean`、假文件系统里只有 `.../lean.exe` ⇒ 解析返回 `null` ⇒ 断言读到 `undefined`；开发机（Windows）上因此一直全绿。**修法是测试侧的最小改动**：六条 Windows 形状的用例**显式注入** `exeSuffix: ".exe"`（PATH 那条再加 `pathSeparator: ";"`），并在文件头把这条规则写成"新加 Windows 形状的用例必须注入后缀"；**生产代码一行未动**（解析器的平台推断本身是对的）。**RED / GREEN 都在本地做实**：控制器把 `process.platform` 伪装成 `linux` 跑同一条文件 ⇒ **复现 CI 的 `6 failed | 5 passed`**；注入后缀后同一伪装下 **`11 passed`**；拆掉伪装后在真实 Windows 上 **`11 passed`**。**故意没加**"宿主平台无关"那种会 mutate `process` 全局的回归测试 —— 它自己就注入后缀，**bug 在也照样绿（假门禁）**；且 CI 用 Node 22，`process.platform` 是否可写没有保证。
+
 ### C. 被裁决的偏差与仍未关的事
 
 - **勾股**走 `inference`（⊥ 目标 + 勾股定理那一步把结论接回来），**不做别名** —— 2026-10-05 用户裁决。
