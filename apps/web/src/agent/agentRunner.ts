@@ -308,21 +308,25 @@ function awaitingDraftOf(conversation: AgentConversation): ConversationDraftView
  * 这条计划需要哪个工作区。
  *
  * 判据放在这里而不是从计划里"推断"：它取决于**动作名**，而动作名与工作区的对应关系
- * 是动作层的知识。目前有三类：
+ * 是动作层的知识。目前有两类：
  * - `solid.*` / `section.*` / `dynamic.*`（三维那几族）→ `geometry3d`；
- * - `planar.*` → `conics`；
- * - `function.*` → `calculus`（计划 V0d 补上：此前这一族一条都没有，于是
- *   `function.create_graph` 落进**当前**工作区，"画出 f(x) 的图像"这类题会画在错的图纸上）。
+ * - `planar.*` / `function.*` → `conics`（平面几何）。
+ *
+ * **`function.*` 也去 `conics`，不是 `calculus`** —— 这一条是本文件里最容易写错、也最贵的一处：
+ * DSL 的 `Workspace` 里确实有个 `calculus`，函数图像历史上也确实住在那里；
+ * 但**它已经退役**（`App.test.tsx` 钉着"外壳里不再提供"，`draftStorage` 钉着"旧草稿不许重开它"，
+ * `useAgentDocumentBinding` 只给三个在役工作区做绑定）。把 `function.*` 路由到 `calculus`，
+ * 就是让 Agent 把用户切进一个界面上根本不存在的工作区 —— 而全量测试**不会**替你发现它，
+ * 因为没有任何用例问过"这个动作该去哪个工作区"。**现在有了**（`planWorkspaces` 的用例）。
  *
  * **判据与动作顺序无关**。返回空数组表示"这次不需要切"（例如只读回答，或动作本身不绑定工作区）。
  */
-function planWorkspaces(plan: PlanEnvelope): readonly ("conics" | "geometry3d" | "calculus")[] {
+export function planWorkspaces(plan: PlanEnvelope): readonly ("conics" | "geometry3d")[] {
   if (plan.kind !== "plan") return []
-  const wanted = new Set<"conics" | "geometry3d" | "calculus">()
+  const wanted = new Set<"conics" | "geometry3d">()
   for (const action of plan.actions) {
     if (action.actionId.startsWith("solid.") || action.actionId.startsWith("section.") || action.actionId.startsWith("dynamic.")) wanted.add("geometry3d")
-    else if (action.actionId.startsWith("planar.")) wanted.add("conics")
-    else if (action.actionId.startsWith("function.")) wanted.add("calculus")
+    else if (action.actionId.startsWith("planar.") || action.actionId.startsWith("function.")) wanted.add("conics")
   }
   return [...wanted]
 }
@@ -358,7 +362,7 @@ function prepareWorkspaceFor(plan: PlanEnvelope): { ok: true } | { ok: false; de
   const current = useSceneStore.getState().document.workspace
   if (current === target) return { ok: true }
   if (current === "cad") {
-    return { ok: false, detail: `这条指令需要在${target === "geometry3d" ? "立体几何" : target === "calculus" ? "函数" : "平面几何"}工作区执行；请先离开工程制图，或者在图纸里用绘图工具。` }
+    return { ok: false, detail: `这条指令需要在${target === "geometry3d" ? "立体几何" : "平面几何"}工作区执行；请先离开工程制图，或者在图纸里用绘图工具。` }
   }
   /**
    * **标明这是 Agent 自己切的工作区**（Fix round 1 / C1）：它是"执行这条计划"的副作用，

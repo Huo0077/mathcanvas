@@ -61,7 +61,7 @@ import type { ClaimRole, GeometryObligation, Judgeability, ObligationTolerance }
 const JUDGED_KINDS: ReadonlySet<DiagramObligationKind> = new Set<DiagramObligationKind>([
   "fixedLength", "equilateral", "equalLength", "midpoint", "segmentRatio",
   "planePerpendicular", "dihedral", "perpendicular", "parallel", "pointCoordinate",
-  "conicAxes", "tangentAt"
+  "conicAxes", "tangentAt", "functionGraph"
 ])
 
 /** 与 `diagramVerification.ts` 的常量同值（容差不能有两套；两处一起改）。 */
@@ -78,6 +78,8 @@ function toleranceFor(kind: DiagramObligationKind, value: number | undefined): O
   if (kind === "conicAxes") return { kind: "absolute", value: distanceTolerance(1) }
   // 切线的判据落在"横坐标差"与"斜率差"上，两个都是绝对量。
   if (kind === "tangentAt") return { kind: "absolute", value: distanceTolerance(1) }
+  // 函数曲线比的是"两条曲线在采样点上的**函数值差**"，也是绝对量。
+  if (kind === "functionGraph") return { kind: "absolute", value: distanceTolerance(1) }
   if (kind === "segmentRatio" || kind === "planePerpendicular" || kind === "perpendicular" || kind === "parallel") {
     return { kind: "relative", value: UNITLESS_TOLERANCE }
   }
@@ -90,7 +92,8 @@ function claimOf(item: DiagramObligation, index: number, role: ClaimRole, judgea
   const geometry = {
     ...(item.planeLengths === undefined ? {} : { planeLengths: [...item.planeLengths] as [number, number] }),
     ...(item.coordinate === undefined ? {} : { coordinate: { ...item.coordinate } }),
-    ...(item.conic === undefined ? {} : { conic: { ...item.conic } })
+    ...(item.conic === undefined ? {} : { conic: { ...item.conic } }),
+    ...(item.expression === undefined ? {} : { expression: item.expression })
   }
   return {
     id: `obligation-${index}`,
@@ -202,7 +205,8 @@ export function toLegacyObligationSet(ir: ObligationIR): DiagramObligationSet {
     ...(typeof item.expected === "number" ? { value: item.expected } : {}),
     ...(item.geometry?.planeLengths === undefined ? {} : { planeLengths: [...item.geometry.planeLengths] as [number, number] }),
     ...(item.geometry?.coordinate === undefined ? {} : { coordinate: { ...item.geometry.coordinate } }),
-    ...(item.geometry?.conic === undefined ? {} : { conic: { ...item.geometry.conic } })
+    ...(item.geometry?.conic === undefined ? {} : { conic: { ...item.geometry.conic } }),
+    ...(item.geometry?.expression === undefined ? {} : { expression: item.geometry.expression })
   }))
   return {
     givens,

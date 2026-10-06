@@ -4,6 +4,7 @@ export type DiagramObligationKind =
   | "planePerpendicular" | "dihedral" | "perpendicular" | "parallel" | "pointCoordinate"
   | "conicAxes"
   | "tangentAt"
+  | "functionGraph"
 
 /**
  * 题面写下的圆锥曲线参数。
@@ -28,6 +29,8 @@ export interface DiagramObligation {
   planeLengths?: [number, number]
   coordinate?: { x: number; y: number; z: number }
   conic?: DiagramConicStated
+  /** 题面写下的函数表达式（**已规范化**：上标转 `^`、隐式乘号补 `*`）。 */
+  expression?: string
 }
 
 export interface DiagramSourceSpan {
@@ -75,11 +78,32 @@ const finitePositive = (value: string): number | null => {
  * 所以半轴是 `√9 = 3` 与 `√4 = 2`。**直接拿分母当半轴是错的**，而那个错误看起来完全合理 ——
  * 实测就是这么错的：`(9, 4)` 被当成半轴报了出去，直到用例把正确答案摆出来才发现。
  *
- * 分母必须是有限正数：`x²/0+…` 不是椭圆，`x²/-1+…` 更不是 —— 一律不认，交回未核验。
+ * 分母必须是有限正数：`x²/0+y²/4=1` 不是椭圆，`x²/-1+…` 更不是 —— 一律不认，交回未核验。
  */
 function ellipseAxes(denominatorX: number, denominatorY: number): Pick<DiagramObligation, "kind" | "targets" | "conic"> | null {
   if (!Number.isFinite(denominatorX) || !Number.isFinite(denominatorY) || denominatorX <= 0 || denominatorY <= 0) return null
   return { kind: "conicAxes", targets: [], conic: { kind: "ellipse", radiusX: Math.sqrt(denominatorX), radiusY: Math.sqrt(denominatorY) } }
+}
+
+/**
+ * **把题面写的表达式整理成表达式解析器认得的写法**（V0d）。
+ *
+ * 教科书里写 `x³ − 3x`，而解析器只认 `x^3-3*x`。这一步只做**纯字形替换**，
+ * 不做任何数学变形 —— 因为一旦开始"化简"，判据就不再是"图是不是题面那条曲线"，
+ * 而是"我的化简对不对"了。
+ *
+ * 隐式乘号**只补 `数字×x` 这一种**（`3x` → `3*x`）。不补宽：`log10(x)` 里那个 `0(`
+ * 一旦被当成乘法，表达式就悄悄变了意思 —— 宁可让不认识的写法落回"未核验"。
+ */
+function normalizeStatedExpression(raw: string): string | null {
+  const trimmed = raw.trim()
+  if (trimmed.length === 0) return null
+  const normalized = trimmed
+    .replace(/²/g, "^2").replace(/³/g, "^3").replace(/⁴/g, "^4")
+    .replace(/[−–—]/g, "-")
+    .replace(/[×·⋅]/g, "*")
+    .replace(/(\d)\s*x/g, "$1*x")
+  return normalized.length === 0 ? null : normalized
 }
 
 /**
@@ -119,6 +143,26 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
     read: (m) => {
       const x = Number(m[1])
       return Number.isFinite(x) ? { kind: "tangentAt", targets: [], value: x } : null
+    }
+  },
+  /**
+   * **函数定义**：`f(x)=x³−3x`。
+   *
+   * 为什么必须认它，而不是留给"未核验"：题面里这一句带 `=`，而残留扫描把**带 `=` 的整句**
+   * 一律标成未核验 —— 不认它，用户每次都会看到一句"尚未被可靠解析"，
+   * 而他真正想知道的是"画出来的曲线是不是这条函数"。
+   *
+   * 捕获到的是**非中文、非标点**的一段，再交给 `normalizeStatedExpression` 整理字形。
+   * 这样 `f(x) = x^3 - 3x`（带空格）与 `f(x)=x³−3x`（上标紧凑）都能收。
+   */
+  {
+    // 末位要求"非空白**且非中文**"：`\S` 不够 —— 中文的"的"也不是空白，会被它吃掉。
+    // 否则 `match[0]`（也就是报告里的 `sourceText`）会变成 `f(x)=x³−3x 的`，
+    // 而题面引文多一个字，用户在报告里看不出来，只会让断言莫名其妙地失败。
+    pattern: /f\s*\(\s*x\s*\)\s*=\s*([^，,。；;\u4e00-\u9fff]*[^，,。；;\u4e00-\u9fff\s])/g,
+    read: (m) => {
+      const expression = normalizeStatedExpression(m[1])
+      return expression === null ? null : { kind: "functionGraph", targets: [], expression }
     }
   },  {
     pattern: /二面角\s*([A-Z])\s*[-−]\s*([A-Z])([A-Z])\s*[-−]\s*([A-Z])\s*=\s*(\d+(?:\.\d+)?)\s*°/g,
@@ -196,8 +240,8 @@ export function parseDiagramObligations(prompt: string, options: DiagramParseOpt
       if (next && /[A-Z°+*/√π^%]/.test(next)) continue
       if (Array.from({ length: end - start }, (_, offset) => start + offset).some((at) => used.has(at))) continue
       const result = read(match)
-      // 圆锥曲线、点坐标与切线都**不带点名**：它们自己就是被核验的对象，不能拿"至少两个名字"去卡。
-      if (result === null || (result.kind !== "pointCoordinate" && result.kind !== "conicAxes" && result.kind !== "tangentAt" && new Set(result.targets).size < 2)) continue
+      // 圆锥曲线、切线、函数定义与点坐标都**不带点名**：它们自己就是被核验的对象，不能拿"至少两个名字"去卡。
+      if (result === null || (result.kind !== "pointCoordinate" && result.kind !== "conicAxes" && result.kind !== "tangentAt" && result.kind !== "functionGraph" && new Set(result.targets).size < 2)) continue
       givens.push({ ...result, sourceText: match[0], start, end })
       for (let at = start; at < end; at++) used.add(at)
     }

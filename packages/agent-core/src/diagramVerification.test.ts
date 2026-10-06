@@ -259,4 +259,36 @@ describe("V0d: tangent premises are checked against the function itself", () => 
     expect(report.status).toBe("unverified")
     expect(report.checks[0]).toMatchObject({ kind: "tangentAt", status: "unverified" })
   })
+
+  /**
+   * **完整题面**：`画出 f(x)=x³−3x 的图像与它在 x=1 处的切线`。
+   *
+   * 两句话都要判：① 画出来的曲线**就是**题面那条函数；② 切线是它在该点的切线。
+   * 只判①会让"切线画错了"混过去，只判②会让"曲线根本不是 f"混过去。
+   */
+  const FULL_PROMPT = "画出 f(x)=x³−3x 的图像与它在 x=1 处的切线"
+
+  it("judges both clauses: the curve is the stated function and the tangent is its", () => {
+    const { plan, candidate } = tangentFixture(1, 0)
+    const report = verifyDiagramObligations(parseDiagramObligations(FULL_PROMPT), plan, candidate)
+    // 按原话里的先后排序：函数定义那一句在前。
+    expect(report.checks.map((check) => `${check.sourceText}:${check.status}`)).toEqual(["f(x)=x³−3x:passed", "x=1 处的切线:passed"])
+    expect(report.status).toBe("passed")
+  })
+
+  it("fails when the drawn curve is a different function, even if the tangent is right", () => {
+    // 画的是 x³−3（少了一项）：题面第一句就不成立 ⇒ 整句不能通过。
+    const { plan, candidate } = tangentFixture(1, 0)
+    const wrong = { ...candidate, primitives: candidate.primitives.map((primitive) => primitive.type === "function" ? { ...primitive, expression: "x^3-3" } : primitive) }
+    const report = verifyDiagramObligations(parseDiagramObligations(FULL_PROMPT), plan, wrong)
+    expect(report.status).toBe("failed")
+    expect(report.checks).toEqual(expect.arrayContaining([expect.objectContaining({ kind: "functionGraph", status: "failed" })]))
+  })
+
+  it("accepts a differently spelled but equal expression", () => {
+    // 题面写 `x³−3x`（上标 + 隐式乘号），图元里存的是 `x^3-3*x` —— 同一条曲线，必须判通过。
+    const { plan, candidate } = tangentFixture(1, 0)
+    const report = verifyDiagramObligations(parseDiagramObligations(FULL_PROMPT), plan, candidate)
+    expect(report.checks[0]).toMatchObject({ kind: "functionGraph", status: "passed" })
+  })
 })

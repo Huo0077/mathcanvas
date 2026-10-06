@@ -195,6 +195,60 @@ function candidateTangent(plan: PlanEnvelope, candidate: GeometryDocument, base?
   }
 }
 
+/** 候选图里那条函数曲线。 */
+interface FigureFunction {
+  expression: string
+  domain: [number, number]
+}
+
+/** **候选图里那条唯一的、新画出来的函数曲线**（V0d）。与其它几类同一条"恰好一条"纪律。 */
+function candidateCurve(plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument): FigureFunction | null {
+  if (plan.kind !== "plan") return null
+  if (!plan.actions.some((action) => action.actionId === "function.create_graph")) return null
+  const priorIds = new Set(base?.primitives.map((primitive) => primitive.id) ?? [])
+  const curves = candidate.primitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "function" }> => primitive.type === "function" && !priorIds.has(primitive.id))
+  if (curves.length !== 1) return null
+  const [curve] = curves
+  if (!Number.isFinite(curve.domain[0]) || !Number.isFinite(curve.domain[1]) || !(curve.domain[0] < curve.domain[1])) return null
+  return { expression: curve.expression, domain: [curve.domain[0], curve.domain[1]] }
+}
+
+/** 采样点数。判的是**函数值**，不是字符串。 */
+const CURVE_SAMPLES = 9
+
+/**
+ * **两条曲线在定义域上的最大函数值差**。
+ *
+ * ## 为什么是采样，而不是字符串比较、也不是我自己化简
+ *
+ * 题面写 `x³ − 3x`、图元里存 `x^3-3*x` —— **同一条曲线、两种写法**。字符串比会把它们判成
+ * "不是这条函数"；而"先化简再比"要我另写一套化简，判据就变成"我的化简对不对"了。
+ *
+ * ## 边界（如实写在这里，不含糊）
+ *
+ * 采样等价**不是**符号证明 —— 两个不同的表达式恰好在 9 个点上取值相同是可能的。
+ * 对高中阶段的有理 / 三角曲线，9 个点足以把"少一项""系数写错"这类错分开；
+ * 但它证明的是"**在这 9 个点上没发现差异**"，不是"处处相同"。
+ */
+function curveGap(stated: string, drawn: FigureFunction): number | null {
+  try {
+    const expected = compileExpression(stated)
+    const actual = compileExpression(drawn.expression)
+    const [low, high] = drawn.domain
+    let worst = 0
+    for (let index = 0; index < CURVE_SAMPLES; index += 1) {
+      const x = low + (high - low) * (index / (CURVE_SAMPLES - 1))
+      const left = evaluateExpression(expected, { x })
+      const right = evaluateExpression(actual, { x })
+      if (!Number.isFinite(left) || !Number.isFinite(right)) return null
+      worst = Math.max(worst, Math.abs(left - right))
+    }
+    return worst
+  } catch {
+    return null
+  }
+}
+
 /**
  * **核验器自己算的导数**（中心差分）。
  *
@@ -236,6 +290,7 @@ function describeEllipse(radiusX: number, radiusY: number): string {
 interface FigureContext {
   conic: FigureConic | null
   tangent: FigureTangent | null
+  curve: FigureFunction | null
 }
 
 function calculate(item: DiagramObligation, points: Map<string, Vector3>, figures: FigureContext): { actual: number; expected: number; tolerance: number; detail?: string } | null {
@@ -288,6 +343,18 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
       expected: 0,
       tolerance: distanceTolerance(expectedSlope),
       detail: `切线斜率实测 ${formatNumber(tangent.slope)}；由函数算得 f′(${formatNumber(stated)}) = ${formatNumber(expectedSlope)}。`
+    }
+  }
+  if (item.kind === "functionGraph") {
+    const stated = item.expression
+    if (stated === undefined || figures.curve === null) return null
+    const gap = curveGap(stated, figures.curve)
+    if (gap === null) return null
+    return {
+      actual: gap,
+      expected: 0,
+      tolerance: distanceTolerance(1),
+      detail: `图上画的是 ${figures.curve.expression}；题设要求 ${stated}（在 ${CURVE_SAMPLES} 个采样点上比函数值）。`
     }
   }
   const vertices = item.targets.map((name) => points.get(name))
@@ -371,13 +438,13 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
 
 export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument, options: DiagramVerificationOptions = {}): DiagramVerificationReport {
   const points = candidatePoints(plan, candidate, base)
-  const figures: FigureContext = { conic: candidateConic(plan, candidate, base), tangent: candidateTangent(plan, candidate, base) }
+  const figures: FigureContext = { conic: candidateConic(plan, candidate, base), tangent: candidateTangent(plan, candidate, base), curve: candidateCurve(plan, candidate, base) }
   const checks: DiagramCheck[] = set.givens.map((item) => {
     /**
-     * 圆锥曲线与切线都**不带点名**：拿"点表建不出来"当理由会给出一个与它们无关的解释。
-     * （切线的来源是**函数**，不是点名点集。）
+     * 圆锥曲线、切线与函数曲线都**不带点名**：拿"点表建不出来"当理由会给出一个与它们无关的解释。
+     * （切线的来源是**函数**，曲线的来源是**表达式**，都不是点名点集。）
      */
-    const pointBased = item.kind !== "conicAxes" && item.kind !== "tangentAt"
+    const pointBased = item.kind !== "conicAxes" && item.kind !== "tangentAt" && item.kind !== "functionGraph"
     if (pointBased && points === null) return { kind: item.kind, sourceText: item.sourceText, status: "unverified", reason: "候选图缺少唯一、可靠的顶点名映射；不能按题面顺序猜坐标。" }
     const result = calculate(item, points ?? new Map(), figures)
     if (result === null) {
@@ -389,7 +456,9 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
           ? "候选图里没有唯一、可读的圆锥曲线（少了或多了一条），未核验。"
           : item.kind === "tangentAt"
             ? "候选图里没有唯一、可读的切线，或那条切线没有函数来源（求不了导），未核验。"
-            : "点名缺失、图形退化或角度无法计算，未核验。"
+            : item.kind === "functionGraph"
+              ? "候选图里没有唯一、可读的函数曲线（少了或多了一条），或题面表达式解析不了，未核验。"
+              : "点名缺失、图形退化或角度无法计算，未核验。"
       }
     }
     const status = Math.abs(result.actual - result.expected) <= result.tolerance ? "passed" : "failed"

@@ -93,6 +93,14 @@ export interface ObligationGeometry {
    * 所需要的信息，丢了它，半轴对调的图会被判成通过。
    */
   conic?: { kind: "ellipse"; radiusX: number; radiusY: number }
+  /**
+   * 题面写下的函数表达式（**已规范化**：上标转 `^`、`4x` 补成 `4*x`）。
+   *
+   * 与 `coordinate` / `conic` 同一条理由：这是原话里的结构信息，generic 字段装不下。
+   * 判据不拿它做字符串比较 —— `x^3-3*x` 与 `x^3-3x` 是**同一条曲线**，
+   * 字符串比会让题面与图元各写一种写法时误判为"不是这条函数"。
+   */
+  expression?: string
 }
 
 /**
