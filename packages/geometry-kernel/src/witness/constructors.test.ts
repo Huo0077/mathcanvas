@@ -5,6 +5,7 @@ import { dihedralAngleDetail3 } from "../markers3d"
 import { buildFromPoints, createBuilderContext } from "../solid-builders"
 
 import { constructPrismWitness, constructPyramidWitness, constructWitnessShape, type PrismConstructRequest, type PyramidConstructRequest, type WitnessConstructRequest, type WitnessRelation } from "./constructors"
+import { isPointName } from "../pointNames"
 import { candidateResiduals, polygonResiduals } from "./residuals"
 
 /**
@@ -541,6 +542,8 @@ describe("constructPrismWitness", () => {
     // 顶点顺序 [A, B, C, A′, B′, C′]（与 `buildPrismTopology` 的 B 环 + T 环同序）。
     expect(result.witness.buildOrder).toEqual([0, 1, 2, 3, 4, 5])
     expect(names).toEqual(["A", "B", "C", "A′", "B′", "C′"])
+    // 顶面点名必须满足内核的**共享**定义（`pointNames`）：否则核验器的 `vertexNames` 检查会把整张表判为不可靠。
+    expect(names.every((name) => isPointName(name))).toBe(true)
     expect(orderedPoints(result.witness)).toEqual([at("A"), at("B"), at("C"), at("A′"), at("B′"), at("C′")])
 
     // 每个顶面顶点 = 底面对应点 + 向量（用内核距离独立回代）。
@@ -634,6 +637,16 @@ describe("constructPrismWitness", () => {
     expect(names.slice(0, 3)).toEqual(["A", "B", "A′"])
     expect(new Set(names).size).toBe(names.length)
     expect(names.slice(3)).toEqual(["A′2", "B′", "A′′"])
+    /**
+     * **已知缺口（S1.4 查实，未裁决）**：下面这条记录的是**今天的行为**，不是认可 ——
+     * `A′2` 与 `A′′` 都**不在**共享定义里（点名 = 一个字母 + **一个**可选撇或下标），
+     * 于是核验器的 `vertexNames` 检查会把**整张表**判为不可靠（fail-closed，未核验）。
+     *
+     * 两条修法都需要裁决：① 扩语法（允许第二个后缀）；② 明确拒绝这种底面并给 `code`。
+     * **本块不擅自选**：那会改掉一个被注释与用例同时钉住的行为。
+     * 这条断言的作用是：谁改动这里的命名，就必须同时处理这个缺口，而不是让它悄悄变化。
+     */
+    expect(names.filter((name) => !isPointName(name))).toEqual(["A′2", "A′′"])
   })
 })
 

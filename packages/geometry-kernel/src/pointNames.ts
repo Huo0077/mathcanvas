@@ -31,6 +31,15 @@
 /** 单个点名的模式。**不要**在各调用点重写它 —— 那正是本模块要消灭的东西。 */
 export const POINT_NAME_SOURCE = "[A-Z](?:[′']|[₁₂₃₄₅₆])?"
 
+/**
+ * 撇字符本身（内核给顶面顶点起名时用的那一笔）。
+ *
+ * 单独导出它的理由很窄：内核 `witness/constructors.ts` 的 `withPrimes` 现在**仍然自己写**
+ * `"′"` 这个字面量（两处）。把字面量收进来，是为了让"点名由哪些字符组成"只有一处定义 ——
+ * 与 `POINT_NAME_SOURCE` 是同一件事的两面。
+ */
+export const POINT_NAME_PRIME = "′"
+
 const POINT_NAME = new RegExp(`^${POINT_NAME_SOURCE}$`)
 const POINT_NAME_RUN = new RegExp(POINT_NAME_SOURCE, "g")
 

@@ -31,6 +31,7 @@
 
 import { crossVector3, distanceVector3, dotVector3, lengthVector3, normalizeVector3, subtractVector3, type Vector3 } from "../geometry3d"
 import { dihedralAngleDetail3 } from "../markers3d"
+import { POINT_NAME_PRIME } from "../pointNames"
 import { candidateResiduals, polygonResiduals, type WitnessResidualDiagnostic } from "./residuals"
 
 /** 题目已给出的数值：`value` 是数值本身，`raw` 保留题面写法（进 freeValues / trace）。 */
@@ -315,7 +316,7 @@ export function constructPrismWitness(request: PrismConstructRequest): WitnessCo
   return assembleCandidate({
     baseNames: base.names,
     basePoints: derived.polygon,
-    extraNames: withPrimes(base.names, ["′"]),
+    extraNames: withPrimes(base.names, [POINT_NAME_PRIME]),
     extraPoints: topPoints,
     apex: false,
     freeValues: derived.freeValues,
@@ -518,14 +519,22 @@ function polygonDiameter(points: readonly Vector3[]): number {
  *
  * 只用名字区分底面与顶面顶点 —— 坐标本身是严格平移，不靠"位置略不同"来区分。
  * 与底面名冲突时退化成 `′2`、`′3`（用户点名 `A′` 的题面极罕见，但不能因此重名）。
+ *
+ * **已知缺口（2026-10-07，S1 查实，未裁决）**：那条冲突回退还产 `A′2` / `A′′`，
+ * 而它们**不在** `pointNames` 的共享定义里（点名 = 一个字母 + **一个**可选撇或下标）。
+ * 后果是核验器的 `vertexNames` 检查会把**整张表**判为不可靠（fail-closed，未核验），
+ * 于是"底面本身就带撇"的棱柱拿不到逐条核验。修法有两条、都需要裁决：
+ * ① 扩语法（允许第二个后缀，`A′′` / `A′₁` 合法）；② 明确拒绝这种底面（`code` 点名理由）。
+ * **本块不擅自选**：那会改掉一个被注释与用例同时钉住的行为。
+ * 正常路径（底面无撇）产出的名字**都**满足共享定义 —— 见下面的用例。
  */
 function withPrimes(names: readonly string[], suffixes: readonly string[]): string[] {
   const used = new Set(names)
   return names.map((name, index) => {
-    let candidate = `${name}${suffixes[index % suffixes.length] ?? "′"}`
+    let candidate = `${name}${suffixes[index % suffixes.length] ?? POINT_NAME_PRIME}`
     let suffix = 2
     while (used.has(candidate)) {
-      candidate = `${name}′${suffix}`
+      candidate = `${name}${POINT_NAME_PRIME}${suffix}`
       suffix += 1
     }
     used.add(candidate)

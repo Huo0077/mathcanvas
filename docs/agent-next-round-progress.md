@@ -7,7 +7,7 @@
 > 入口扩宽到**常见自然语言说法**（本地解析，不依赖模型），**默认行为先沿用现有开关**，落地结构为**形状数据化**。
 > 设计见 [立体图形覆盖扩宽设计](superpowers/specs/2026-10-06-solid-shape-coverage-design.md)（S1–S6 分块）。
 > **它取代的是“只支持受限三棱锥”这条形状边界，不取消 V0a 的未完成项**（当时列的三项是浏览器逐点坐标回代、截图目检、全量回归；**前两项已于 `851e4cf` 补上**，明细见下表与 [当前状态](current-status.md)）；
-> V0a 收口与 S2 的棱锥路径迁移是同一段代码的两面。**2026-10-07 已补实施计划**（[立体图形覆盖扩宽实施计划](superpowers/plans/2026-10-07-solid-shape-coverage-implementation-plan.md)，S1 点名语法收口 → S6 入口语法收口，每块带 RED/GREEN/变异/收口清单）；**S1 进行中**：点名模块 `packages/geometry-kernel/src/pointNames.ts` 已落地，**解析器与核验器都已接线**（`diagramObligations` 的线段/三角/平面子模式与 `names()`；`diagramVerification` 的 `vertexNames` 检查与 `label` 扫描）；棱柱题面 `AA₁⊥平面ABCD` 从 0 条给定变成 1 条，带 `A₁` / `A′` 顶点名的点名表也能建出来（混进 ASCII `A1` 时整张表判为不可靠）。**只剩内核顶面命名（S1.4）**；**四族形状本身仍无产品代码。**
+> V0a 收口与 S2 的棱锥路径迁移是同一段代码的两面。**2026-10-07 已补实施计划**（[立体图形覆盖扩宽实施计划](superpowers/plans/2026-10-07-solid-shape-coverage-implementation-plan.md)，S1 点名语法收口 → S6 入口语法收口，每块带 RED/GREEN/变异/收口清单）；**S1 进行中**：点名模块 `packages/geometry-kernel/src/pointNames.ts` 已落地，**解析器与核验器都已接线**（`diagramObligations` 的线段/三角/平面子模式与 `names()`；`diagramVerification` 的 `vertexNames` 检查与 `label` 扫描）；棱柱题面 `AA₁⊥平面ABCD` 从 0 条给定变成 1 条，带 `A₁` / `A′` 顶点名的点名表也能建出来（混进 ASCII `A1` 时整张表判为不可靠）。**只剩内核顶面命名（S1.4）**：撇字符已收进共享词表；**但查实一处需要裁决的缺口** —— 冲突回退产出的 `A′2` / `A′′` 不在共享定义里，核验器因此把整张表判为不可靠（"底面本身带撇"的棱柱拿不到逐条核验）；扩语法还是明确拒绝，**需要裁决**。**四族形状本身仍无产品代码。**
 
 ## 目标与统计分母
 
