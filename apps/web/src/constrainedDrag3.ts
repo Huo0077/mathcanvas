@@ -56,7 +56,7 @@ export interface ConstrainedDragRequest {
 export type ConstrainedDragOutcome =
   | { kind: "passthrough"; reason: string }
   | { kind: "noop"; reason: string }
-  | { kind: "refused"; reason: string }
+  | { kind: "refused"; code: "unsupported_spatial_constraint" | "constraint_inconsistent" | "projection_exhausted" | "constraint_unsatisfied"; reason: string }
   | { kind: "commit"; operations: DomainOperation[]; note: string }
 
 /** 浮点尾巴：与内核判定"这个点被挪过"的阈值同量级。 */
@@ -73,6 +73,28 @@ function isBoundPoint(primitive: Extract<PrimitiveSpec, { type: "point3" }>): bo
   return primitive.binding !== undefined && primitive.binding.kind !== "free"
 }
 
+/** A planar-only constraint has no 3D judge. Follow its named lines to their
+ * defining point3s so a constrained drag cannot silently invalidate it. */
+function unverifiedSpatialConstraints(document: GeometryDocument, planar: GeometryDocument["constraints"], moving: ReadonlySet<string>): string[] {
+  const byId = new Map(document.primitives.map((primitive) => [primitive.id, primitive]))
+  const affects = (id: string): boolean => {
+    if (moving.has(id)) return true
+    const primitive = byId.get(id)
+    if (primitive?.type === "line3") {
+      return primitive.definition.kind === "throughPoints"
+        ? primitive.definition.pointIds.some((pointId) => moving.has(pointId))
+        : moving.has(primitive.definition.pointId)
+    }
+    if (primitive?.type === "segment3" || primitive?.type === "edge3") return primitive.pointIds.some((pointId) => moving.has(pointId))
+    if (primitive?.type === "ray3") return moving.has(primitive.originId) || moving.has(primitive.throughId)
+    return false
+  }
+  return planar.filter((constraint) => constraint.enabled !== false && constraint.targets.some(affects)).map((constraint) => constraint.id)
+}
+
+function unsupportedSpatialReason(ids: readonly string[]): string {
+  return `3D 中这些约束尚无空间判据：${ids.join("、")}。本次拖动可能改变其定义点，题设未核验，已拒绝且未改文档。`
+}
 /** 锚点集：被拖动的那个点**不在**里面（它是暖启动），锁定点与绑定点在。 */
 function anchorIdsFor(document: GeometryDocument): string[] {
   const ids: string[] = []
@@ -123,6 +145,9 @@ export function planConstrainedDrag3(request: ConstrainedDragRequest): Constrain
 
   const planar = document.constraints.filter((constraint) => isPlanarOnlyConstraint3(constraint.type))
   const spatial = document.constraints.filter((constraint) => !isPlanarOnlyConstraint3(constraint.type))
+  const intendedMove = Math.abs(delta.x) > SAME_POSITION_EPSILON || Math.abs(delta.y) > SAME_POSITION_EPSILON || Math.abs(delta.z) > SAME_POSITION_EPSILON
+  const uncheckedDragged = intendedMove ? unverifiedSpatialConstraints(document, planar, new Set([draggedId])) : []
+  if (uncheckedDragged.length > 0) return { kind: "refused", code: "unsupported_spatial_constraint", reason: unsupportedSpatialReason(uncheckedDragged) }
   if (spatial.length === 0) {
     return {
       kind: "passthrough",
@@ -141,10 +166,11 @@ export function planConstrainedDrag3(request: ConstrainedDragRequest): Constrain
     const detail = describeFailure(projection, spatial)
     // 矛盾是**证明过**的结论，文案不许与"没能同时满足"混用同一句话。
     if (projection.contradictions.length > 0) {
-      return { kind: "refused", reason: `这些约束本身不可能同时成立，已拒绝。${detail}` }
+      return { kind: "refused", code: "constraint_inconsistent", reason: `这些约束本身不可能同时成立，已拒绝。${detail}` }
     }
     return {
       kind: "refused",
+      code: projection.exhausted ? "projection_exhausted" : "constraint_unsatisfied",
       reason: projection.exhausted
         ? `拖到这里，约束在轮数内没能同时满足（还在动，这不等于"无解"）。${detail}`
         : `拖到这里会破坏已声明的约束，已拒绝。${detail}`
@@ -156,12 +182,16 @@ export function planConstrainedDrag3(request: ConstrainedDragRequest): Constrain
    * "它相对暖启动动了"和"它相对原文档动了"是两个不同的判断，而事务要写的是后者。
    */
   const operations: DomainOperation[] = []
+  const movedPointIds = new Set<string>()
   for (const primitive of document.primitives) {
     if (primitive.type !== "point3") continue
     const finalPosition = projection.positions.get(primitive.id)
     if (finalPosition === undefined || samePosition(finalPosition, primitive.position)) continue
     operations.push(patchPoint3(primitive.id, finalPosition))
+    movedPointIds.add(primitive.id)
   }
+  const uncheckedMoved = unverifiedSpatialConstraints(document, planar, movedPointIds)
+  if (uncheckedMoved.length > 0) return { kind: "refused", code: "unsupported_spatial_constraint", reason: unsupportedSpatialReason(uncheckedMoved) }
   if (operations.length === 0) {
     return { kind: "noop", reason: "约束把这次拖动完全抵消了：没有可提交的坐标变化。" }
   }

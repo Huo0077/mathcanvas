@@ -7,6 +7,11 @@
 
 
 
+## 2026-10-06 —— N3 空间线重合约束缺少判据时安全拒绝
+
+- 实验性约束拖动下，空间线 `coincident` 的定义点（含投影连带点）发生位移将按独立原因码拒绝，保留草稿与撤销历史；关闭开关、禁用约束、无关点、零位移不误拦。未实现 3D 线重合求解。
+- 定向单测 18/18；非 Lean 慢集成全库 324 文件 / 3781 通过 + 1 todo；浏览器 196/196；类型检查、lint（0 error / 13 warning）和 web 构建 exit 0。Lean 慢集成本区块未单独重跑。
+
 ## 2026-10-06 —— 修掉 CI 上第一次真跑就红的 6 条：`lean4Toolchain.test.ts` 偷偷依赖了宿主平台
 
 - **怎么发现的**：推送 `ab0721e` 后核对 CI（run #135）—— `build` / `rust` / `e2e` 三个 job 全绿，**`checks` 红在 "Unit and UI tests (Vitest)"**（同一个 job 里 typecheck 与 lint 都是 success）。

@@ -234,6 +234,8 @@ export type DragSolveResult =
 > 那三类行为在浏览器里被验过，而不是 `DragSolveResult` 的五个状态全部存在（那一条计划的原文仍未按原样成立，
 > 见第四步的记录）。
 
+> **2026-10-06 后续安全加固，不是新求解类型：** 若显式开启约束拖动，空间 `coincident` 无 3D 判据时，定义点拖动或投影连带移动将拒绝并保留文档与历史；关闭开关的旧路径不变。定向 18/18，非 Lean 慢集成 324 文件 / 3781 通过 + 1 todo，完整 e2e 196/196；Lean 慢集成本区块未单独重跑。
+
 - [x] **N3 出口：** `constrainedDrag=false` 时旧拖动路径逐字回归；`constrainedDrag=true` 时保持约束、过约束拒绝、冲突恢复和一步撤销的浏览器用例全部通过。
   > **2026-10-05 勾上**：五条浏览器用例全绿（`5 passed (29.5 s)` 单跑；我自己复跑过），全量 e2e **194 通过 / 0 失败**（控制器实测）。`=false` 的回归、`=true` 的保持约束与上面三条都在同一份 spec 里。
 - [x] **提交检查点：** `git commit -m "feat(geometry): preserve constraints during drag"`。

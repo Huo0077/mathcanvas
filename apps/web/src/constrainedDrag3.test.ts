@@ -199,6 +199,61 @@ describe("约束拖动：拒绝的那一支", () => {
   })
 })
 
+describe("约束拖动：没有空间判据的线重合条件", () => {
+  const points: PrimitiveSpec[] = [
+    { id: "a", type: "point3", position: { x: 0, y: 0, z: 0 } },
+    { id: "b", type: "point3", position: { x: 1, y: 0, z: 0 } },
+    { id: "c", type: "point3", position: { x: 0, y: 0, z: 0 } },
+    { id: "d", type: "point3", position: { x: 1, y: 0, z: 0 } },
+    { id: "line-ab", type: "line3", definition: { kind: "throughPoints", pointIds: ["a", "b"] } },
+    { id: "line-cd", type: "line3", definition: { kind: "throughPoints", pointIds: ["c", "d"] } }
+  ]
+  const coincident: ConstraintSpec = { id: "same-line", type: "coincident", targets: ["line-ab", "line-cd"] }
+
+  it("refuses to move a defining 3D point rather than passing over its unchecked coincidence", () => {
+    const document = documentWith(points, [coincident])
+    const before = JSON.stringify(document)
+    const outcome = planConstrainedDrag3({ document, draggedId: "a", delta: { x: 0, y: 1, z: 0 }, enabled: true })
+    expect(outcome.kind).toBe("refused")
+    if (outcome.kind !== "refused") return
+    expect(outcome.code).toBe("unsupported_spatial_constraint")
+    expect(outcome.reason).toContain("same-line")
+    expect(outcome.reason).toContain("未核验")
+    expect(JSON.stringify(document)).toBe(before)
+  })
+
+  it("does not report an unsupported-constraint failure for a zero-distance gesture", () => {
+    const outcome = planConstrainedDrag3({ document: documentWith(points, [coincident]), draggedId: "a", delta: { x: 0, y: 0, z: 0 }, enabled: true })
+    expect(outcome.kind).toBe("passthrough")
+  })
+
+  it("does not block a drag based on a disabled planar-only constraint", () => {
+    const outcome = planConstrainedDrag3({ document: documentWith(points, [{ ...coincident, enabled: false }]), draggedId: "a", delta: { x: 0, y: 1, z: 0 }, enabled: true })
+    expect(outcome.kind).toBe("passthrough")
+  })
+  it("does not block an unrelated point when only other lines have an unsupported constraint", () => {
+    const document = documentWith([...points, { id: "q", type: "point3", position: { x: 5, y: 5, z: 0 } }], [coincident])
+    const outcome = planConstrainedDrag3({ document, draggedId: "q", delta: { x: 1, y: 0, z: 0 }, enabled: true })
+    expect(outcome.kind).toBe("passthrough")
+  })
+
+  it("blocks when projecting an unrelated dragged point would move a different point in an unchecked line", () => {
+    const q: PrimitiveSpec = { id: "q", type: "point3", position: { x: 0, y: 1, z: 0 } }
+    const document = documentWith([...points, q], [coincident, { id: "q-to-a", type: "fixedDistance", targets: ["q", "a"], value: 1 }])
+    const outcome = planConstrainedDrag3({ document, draggedId: "q", delta: { x: 0, y: 1, z: 0 }, enabled: true })
+    expect(outcome.kind).toBe("refused")
+    if (outcome.kind !== "refused") return
+    expect(outcome.code).toBe("unsupported_spatial_constraint")
+    expect(outcome.reason).toContain("same-line")
+    expect(document.primitives.find((item) => item.id === "a")).toMatchObject({ position: { x: 0, y: 0, z: 0 } })
+  })
+  it("blocks a spatial projection that would also move a point defining an unchecked line", () => {
+    const document = documentWith(points, [coincident, { id: "length-ab", type: "fixedDistance", targets: ["a", "b"], value: 1 }])
+    const outcome = planConstrainedDrag3({ document, draggedId: "a", delta: { x: 0, y: 1, z: 0 }, enabled: true })
+    expect(outcome.kind).toBe("refused")
+    if (outcome.kind === "refused") expect(outcome.code).toBe("unsupported_spatial_constraint")
+  })
+})
 describe("约束拖动：绝不改写入参", () => {
   it("求解过程不会就地改写调用方的文档", () => {
     const document = documentWith(scene(), ON_PLANE)

@@ -100,7 +100,7 @@ const CONFLICT_AB: ConstraintSeed = { id: "fixed-ab-two", type: "fixedDistance",
  * 载入三棱锥 → 只留四个点（这样拖的是**独立点**，不是多面体的顶点）
  * → 装上一组约束（默认只有 `|AB| = 1`）→ 打开/关掉应用自己的开关。
  */
-async function seedPair(page: Page, options: { constrainedDrag: boolean; constraints?: ConstraintSeed[] }): Promise<void> {
+async function seedPair(page: Page, options: { constrainedDrag: boolean; constraints?: ConstraintSeed[]; coincidentLines?: boolean }): Promise<void> {
   await page.goto("/")
   await page.getByRole("button", { name: "跳转到立体几何" }).click()
   await page.locator('input[type="file"]').setInputFiles("e2e/fixtures/tetrahedron.mgeo")
@@ -108,16 +108,26 @@ async function seedPair(page: Page, options: { constrainedDrag: boolean; constra
 
   await expect.poll(async () => page.evaluate(() => localStorage.getItem("mathcanvas:draft:geometry3d"))).not.toBeNull()
 
-  await page.evaluate(({ constrained, constraints }) => {
+  await page.evaluate(({ constrained, constraints, coincidentLines }) => {
     const key = "mathcanvas:draft:geometry3d"
     const parsed = JSON.parse(localStorage.getItem(key) as string) as Record<string, unknown>
-    const document = (parsed.document ?? parsed) as { primitives: { type: string }[]; constraints: unknown[] }
+    const document = (parsed.document ?? parsed) as { primitives: { id: string; type: string; position?: { x: number; y: number; z: number }; definition?: unknown }[]; constraints: unknown[] }
     document.primitives = document.primitives.filter((primitive) => primitive.type === "point3")
+    if (coincidentLines) {
+      // 原夹具 D=(1,1,1) 与 A 沿默认相机视线重叠，点击 A 会实际抓到 D。
+      // D 与这两条线无关，单独移开它，让用例真的拖到 A。
+      const distant = document.primitives.find((primitive) => primitive.id === "point3-D")
+      if (distant) distant.position = { x: 5, y: 0, z: 0 }
+      document.primitives.push(
+        { id: "line-ab", type: "line3", definition: { kind: "throughPoints", pointIds: ["point3-A", "point3-B"] } },
+        { id: "line-through-b", type: "line3", definition: { kind: "pointDirection", pointId: "point3-B", direction: { x: 0, y: 0, z: 1 } } }
+      )
+    }
     document.constraints = constraints
     localStorage.setItem(key, JSON.stringify(parsed))
     // 开关走**应用自己的偏好键**（入口本身的用户路径由 `next-phase-flag-entry.spec.ts` 覆盖）。
     localStorage.setItem("mathcanvas:next-phase-preferences", JSON.stringify({ constrainedDrag: constrained }))
-  }, { constrained: options.constrainedDrag, constraints: options.constraints ?? [FIXED_AB] })
+  }, { constrained: options.constrainedDrag, constraints: options.constraints ?? [FIXED_AB], coincidentLines: options.coincidentLines ?? false })
 
   await page.reload()
   await expect(page.locator("[data-3d-scene]")).toBeVisible()
@@ -231,6 +241,22 @@ test("过约束拒绝：同一条线段被赋两个长度，拖动 A 被拒绝�
  *
  * ② 是①的反面证据：少了它，"拒绝之后什么都没变"既可能是"被拒绝了"，也可能是"这条路从此死了"。
  */
+test("未核验的 3D 线重合约束：拒绝拖动，不改文档也不占撤销历史", async ({ page }) => {
+  await seedPair(page, {
+    constrainedDrag: true,
+    coincidentLines: true,
+    constraints: [{ id: "same-line", type: "coincident", targets: ["line-ab", "line-through-b"] }]
+  })
+  const before = await storedPoints(page)
+  const undo = undoButton(page)
+  await expect(undo).toBeDisabled()
+  await dragPointA(page, 90, 60)
+  await expect(guidance(page)).toContainText("same-line")
+  await expect(guidance(page)).toContainText("尚无空间判据")
+  await expect(guidance(page)).toContainText("未核验")
+  expect(await storedPoints(page)).toEqual(before)
+  await expect(undo).toBeDisabled()
+})
 test("冲突恢复：拒绝不写文档也不占历史；修掉冲突之后同样的拖动正常提交", async ({ page }) => {
   await seedPair(page, { constrainedDrag: true, constraints: [FIXED_AB, CONFLICT_AB] })
   const undo = undoButton(page)
