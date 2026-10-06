@@ -1,6 +1,6 @@
 # 高中全题型 Agent 与自动 Lean 分期实施计划
 
-> **状态（复核）：** 2026-10-06 H0a 表格层来源索引与审计器已实施（`8826b63`；43 条仍未分类/无金标），完整 H0 未勾，H1–H4 未开始。旧 `2026-10-04-agent-full-next-phase-implementation-plan.md` 的 N1–N6 是历史阶段，不能抵消本计划任何任务。
+> **状态（复核）：** 2026-10-06 H0a 表格层 43 条与 H0b1 必修/选择性必修 67 条正文一级要求索引已实施（`8826b63` / `8a8fe3e`），67 条仍未分类、无金标，选修正文未拆；完整 H0 未勾，H1–H4 未开始。旧 `2026-10-04-agent-full-next-phase-implementation-plan.md` 的 N1–N6 是历史阶段，不能抵消本计划任何任务。
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. 逐任务先读 [设计规格](../specs/2026-10-06-high-school-auto-lean-design.md)；不得自动委派或跳过人工安全门禁。
 
 **Goal:** 覆盖 2025 高中课程标准与高考题型，桌面端对可形式化目标自动调用可信 Lean，用户能区分实例、辅助引理与原题形式证明；竞赛题另表。
@@ -34,10 +34,10 @@
 
 ## H0：课程清册与审查旧问题（先做，不开证明）
 
-**接口（H0a 实际落地）**：`SourceUnit { unitId, track, category?, sourceSection, pdfPage }`；`CurriculumUnit extends SourceUnit { subtypes: { subtypeId, taskKind, goldCaseIds }[] }`；`auditCoverage(official, editable, cases)` 返回 `missingUnits/unclassified/missingCases/duplicateIds/outOfScope/invalidSources/nonPropositional/ready`。`ready` 仅表示目录样本可审计，**不是** Lean 证明或模型质量。完整章节 ID 从标准逐条录入，不以本表十个域名替代。
+**接口（H0a 实际落地）**：`SourceUnit { unitId, track, category?, sourceSection, pdfPage }`；`CurriculumUnit extends SourceUnit { subtypes: { subtypeId, taskKind, goldCaseIds }[] }`；`SourceSubtype { subtypeId, unitId, sourceSection, pdfPage, title, optionalForExam? }` 在独立来源索引里；`CurriculumSubtype.taskKind` 含 `unclassified`；`auditCoverage(official, editable, cases, expectedSubtypes?)` 返回 `missingUnits/missingSubtypes/unclassified/missingCases/duplicateIds/outOfScope/invalidSources/nonPropositional/ready`。`ready` 仅表示目录样本可审计，**不是** Lean 证明或模型质量。完整章节 ID 从标准逐条录入，不以本表十个域名替代。
 
 - [x] **RED（H0a 基础规则）** 新建 `scripts/curriculum/catalog.test.ts`：缺一个标准条目、重复 ID、错分竞赛/课程、无真值的子类型分别报错；断言 `auditCoverage(official, editable, cases).missingUnits` 点名遗漏并验证 `.ready=false` 前用故意缺项数据证明测试会红。命令：`npm.cmd exec vitest run -- scripts/curriculum/catalog.test.ts --reporter=dot`。
-> **H0a 中间记录（不勾 H0 GREEN）**：PDF 171 页和 SHA256 已记；独立来源/可编辑索引登记 43 条表层来源（必修 14、选择性必修 8、选修 21），目录审计 `ready=false`；行为断言先后 6 红、3 红，定向 9/9 绿；篡改源 SHA 1 红/8 绿、恢复 9/9。**仍缺正文每一条原子子型、金标准/高考来源，不能以 43 条标题完成 H0。**
+> **H0a 中间记录（不勾 H0 GREEN）**：PDF 171 页和 SHA256 已记；独立来源/可编辑索引登记 43 条表层来源（必修 14、选择性必修 8、选修 21），目录审计 `ready=false`；行为断言先后 6 红、3 红，定向 9/9 绿；篡改源 SHA 1 红/8 绿、恢复 9/9。**H0b1 另补必修/选择性必修正文一级要求 67 条（选学 5），均 `unclassified`/无金标；选修正文/高考标签仍缺，不能以 43 条标题或 67 条一级要求完成 H0。**
 
 - [ ] **GREEN** 创建版本化目录、来源索引、机器校验和跨章标签；新增高考样本的出题年与去重规则，公开版权只留题目元数据/短摘要（原题文本合法来源单列）。每子类型至少正例/反例/歧义，标记 `not_measured` 而不是虚构通过。
 - [ ] **审查台账**逐项确认此前审查 ① N1/N2 状态三词表、IR 调用点、feature flag；② N3 测试路径/负例/安全拒绝；③ N4 Vitest 与 CI、真实 provider 数据/成本；④ N5 许可证/线程/WASM/版本固定；⑤ 文档分类/日期/换行/BOM。已有证据标已解决但保留残余，缺证据列下一项。
