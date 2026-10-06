@@ -1,0 +1,431 @@
+{
+  "version": "2017-2025",
+  "scopeStatus": "incomplete",
+  "units": [
+    {
+      "unitId": "compulsory-sets",
+      "track": "compulsory",
+      "sourceSection": "五（一）主题一·表1",
+      "pdfPage": 16,
+      "theme": "预备知识",
+      "title": "集合",
+      "subtypes": []
+    },
+    {
+      "unitId": "compulsory-logic",
+      "track": "compulsory",
+      "sourceSection": "五（一）主题一·表1",
+      "pdfPage": 16,
+      "theme": "预备知识",
+      "title": "常用逻辑用语",
+      "subtypes": []
+    },
+    {
+      "unitId": "compulsory-equal-inequal",
+      "track": "compulsory",
+      "sourceSection": "五（一）主题一·表1",
+      "pdfPage": 16,
+      "theme": "预备知识",
+      "title": "相等关系与不等关系",
+      "subtypes": []
+    },
+    {
+      "unitId": "compulsory-quadratic",
+      "track": "compulsory",
+      "sourceSection": "五（一）主题一·表1",
+      "pdfPage": 16,
+      "theme": "预备知识",
+      "title": "二次方程与一元二次不等式",
+      "subtypes": []
+    },
+    {
+      "unitId": "compulsory-function-basics",
+      "track": "compulsory",
+      "sourceSection": "五（一）主题二·表1",
+      "pdfPage": 16,
+      "theme": "函数",
+      "title": "函数概念与性质",
+      "subtypes": []
+    },
+    {
+      "unitId": "compulsory-power-exponential-logarithm",
+      "track": "compulsory",
+      "sourceSection": "五（一）主题二·表1",
+      "pdfPage": 16,
+      "theme": "函数",
+      "title": "幂函数、指数函数、对数函数",
+      "subtypes": []
+    },
+    {
+      "unitId": "compulsory-trigonometry",
+      "track": "compulsory",
+      "sourceSection": "五（一）主题二·表1",
+      "pdfPage": 16,
+      "theme": "函数",
+      "title": "三角函数",
+      "subtypes": []
+    },
+    {
+      "unitId": "compulsory-function-applications",
+      "track": "compulsory",
+      "sourceSection": "五（一）主题二·表1",
+      "pdfPage": 16,
+      "theme": "函数",
+      "title": "函数应用",
+      "subtypes": []
+    },
+    {
+      "unitId": "compulsory-planar-vectors",
+      "track": "compulsory",
+      "sourceSection": "五（一）主题三·表1",
+      "pdfPage": 17,
+      "theme": "几何与代数",
+      "title": "平面向量及其应用",
+      "subtypes": []
+    },
+    {
+      "unitId": "compulsory-complex",
+      "track": "compulsory",
+      "sourceSection": "五（一）主题三·表1",
+      "pdfPage": 17,
+      "theme": "几何与代数",
+      "title": "复数",
+      "subtypes": []
+    },
+    {
+      "unitId": "compulsory-solid-geometry",
+      "track": "compulsory",
+      "sourceSection": "五（一）主题三·表1",
+      "pdfPage": 17,
+      "theme": "几何与代数",
+      "title": "立体几何初步",
+      "subtypes": []
+    },
+    {
+      "unitId": "compulsory-probability",
+      "track": "compulsory",
+      "sourceSection": "五（一）主题四·表1",
+      "pdfPage": 17,
+      "theme": "概率与统计",
+      "title": "概率",
+      "subtypes": []
+    },
+    {
+      "unitId": "compulsory-statistics",
+      "track": "compulsory",
+      "sourceSection": "五（一）主题四·表1",
+      "pdfPage": 17,
+      "theme": "概率与统计",
+      "title": "统计",
+      "subtypes": []
+    },
+    {
+      "unitId": "compulsory-modeling-inquiry",
+      "track": "compulsory",
+      "sourceSection": "五（一）主题五·表1",
+      "pdfPage": 17,
+      "theme": "数学建模与探究",
+      "title": "数学建模活动与数学探究活动",
+      "subtypes": []
+    },
+    {
+      "unitId": "selective-sequences",
+      "track": "selective",
+      "sourceSection": "五（二）主题一·表2",
+      "pdfPage": 38,
+      "theme": "函数",
+      "title": "数列",
+      "subtypes": []
+    },
+    {
+      "unitId": "selective-derivatives",
+      "track": "selective",
+      "sourceSection": "五（二）主题一·表2",
+      "pdfPage": 38,
+      "theme": "函数",
+      "title": "一元函数导数及其应用",
+      "subtypes": []
+    },
+    {
+      "unitId": "selective-spatial-vectors",
+      "track": "selective",
+      "sourceSection": "五（二）主题二·表2",
+      "pdfPage": 38,
+      "theme": "几何与代数",
+      "title": "空间向量与立体几何",
+      "subtypes": []
+    },
+    {
+      "unitId": "selective-analytic-geometry",
+      "track": "selective",
+      "sourceSection": "五（二）主题二·表2",
+      "pdfPage": 38,
+      "theme": "几何与代数",
+      "title": "平面解析几何",
+      "subtypes": []
+    },
+    {
+      "unitId": "selective-counting",
+      "track": "selective",
+      "sourceSection": "五（二）主题三·表2",
+      "pdfPage": 39,
+      "theme": "概率与统计",
+      "title": "计数原理",
+      "subtypes": []
+    },
+    {
+      "unitId": "selective-probability",
+      "track": "selective",
+      "sourceSection": "五（二）主题三·表2",
+      "pdfPage": 39,
+      "theme": "概率与统计",
+      "title": "概率",
+      "subtypes": []
+    },
+    {
+      "unitId": "selective-statistics",
+      "track": "selective",
+      "sourceSection": "五（二）主题三·表2",
+      "pdfPage": 39,
+      "theme": "概率与统计",
+      "title": "统计",
+      "subtypes": []
+    },
+    {
+      "unitId": "selective-modeling-inquiry",
+      "track": "selective",
+      "sourceSection": "五（二）主题四·表2",
+      "pdfPage": 39,
+      "theme": "数学建模与探究",
+      "title": "数学建模活动与数学探究活动",
+      "subtypes": []
+    },
+    {
+      "unitId": "elective-A-calculus",
+      "track": "elective",
+      "sourceSection": "五（三）A类",
+      "pdfPage": 53,
+      "theme": "A类课程",
+      "title": "微积分",
+      "category": "A",
+      "subtypes": []
+    },
+    {
+      "unitId": "elective-A-spatial-algebra",
+      "track": "elective",
+      "sourceSection": "五（三）A类",
+      "pdfPage": 55,
+      "theme": "A类课程",
+      "title": "空间向量与代数",
+      "category": "A",
+      "subtypes": []
+    },
+    {
+      "unitId": "elective-A-probability-statistics",
+      "track": "elective",
+      "sourceSection": "五（三）A类",
+      "pdfPage": 57,
+      "theme": "A类课程",
+      "title": "概率与统计",
+      "category": "A",
+      "subtypes": []
+    },
+    {
+      "unitId": "elective-B-calculus",
+      "track": "elective",
+      "sourceSection": "五（三）B类",
+      "pdfPage": 59,
+      "theme": "B类课程",
+      "title": "微积分",
+      "category": "B",
+      "subtypes": []
+    },
+    {
+      "unitId": "elective-B-spatial-algebra",
+      "track": "elective",
+      "sourceSection": "五（三）B类",
+      "pdfPage": 61,
+      "theme": "B类课程",
+      "title": "空间向量与代数",
+      "category": "B",
+      "subtypes": []
+    },
+    {
+      "unitId": "elective-B-applied-statistics",
+      "track": "elective",
+      "sourceSection": "五（三）B类",
+      "pdfPage": 62,
+      "theme": "B类课程",
+      "title": "应用统计",
+      "category": "B",
+      "subtypes": []
+    },
+    {
+      "unitId": "elective-B-models",
+      "track": "elective",
+      "sourceSection": "五（三）B类",
+      "pdfPage": 64,
+      "theme": "B类课程",
+      "title": "模型",
+      "category": "B",
+      "subtypes": []
+    },
+    {
+      "unitId": "elective-C-logic-inference",
+      "track": "elective",
+      "sourceSection": "五（三）C类",
+      "pdfPage": 65,
+      "theme": "C类课程",
+      "title": "逻辑推理初步",
+      "category": "C",
+      "subtypes": []
+    },
+    {
+      "unitId": "elective-C-models",
+      "track": "elective",
+      "sourceSection": "五（三）C类",
+      "pdfPage": 67,
+      "theme": "C类课程",
+      "title": "数学模型",
+      "category": "C",
+      "subtypes": []
+    },
+    {
+      "unitId": "elective-C-social-survey",
+      "track": "elective",
+      "sourceSection": "五（三）C类",
+      "pdfPage": 68,
+      "theme": "C类课程",
+      "title": "社会调查与数据分析",
+      "category": "C",
+      "subtypes": []
+    },
+    {
+      "unitId": "elective-D-beauty",
+      "track": "elective",
+      "sourceSection": "五（三）D类",
+      "pdfPage": 70,
+      "theme": "D类课程",
+      "title": "美与数学",
+      "category": "D",
+      "subtypes": []
+    },
+    {
+      "unitId": "elective-D-music",
+      "track": "elective",
+      "sourceSection": "五（三）D类",
+      "pdfPage": 71,
+      "theme": "D类课程",
+      "title": "音乐中的数学",
+      "category": "D",
+      "subtypes": []
+    },
+    {
+      "unitId": "elective-D-art",
+      "track": "elective",
+      "sourceSection": "五（三）D类",
+      "pdfPage": 72,
+      "theme": "D类课程",
+      "title": "美术中的数学",
+      "category": "D",
+      "subtypes": []
+    },
+    {
+      "unitId": "elective-D-sports",
+      "track": "elective",
+      "sourceSection": "五（三）D类",
+      "pdfPage": 73,
+      "theme": "D类课程",
+      "title": "体育运动中的数学",
+      "category": "D",
+      "subtypes": []
+    },
+    {
+      "unitId": "elective-E-broader-horizons",
+      "track": "elective",
+      "sourceSection": "五（三）E类",
+      "pdfPage": 74,
+      "theme": "E类课程",
+      "title": "拓展视野",
+      "category": "E",
+      "openEnded": true,
+      "subtypes": []
+    },
+    {
+      "unitId": "elective-E-daily-life",
+      "track": "elective",
+      "sourceSection": "五（三）E类",
+      "pdfPage": 74,
+      "theme": "E类课程",
+      "title": "日常生活",
+      "category": "E",
+      "openEnded": true,
+      "subtypes": []
+    },
+    {
+      "unitId": "elective-E-local-context",
+      "track": "elective",
+      "sourceSection": "五（三）E类",
+      "pdfPage": 74,
+      "theme": "E类课程",
+      "title": "地方特色",
+      "category": "E",
+      "openEnded": true,
+      "subtypes": []
+    },
+    {
+      "unitId": "elective-E-university-preparation",
+      "track": "elective",
+      "sourceSection": "五（三）E类",
+      "pdfPage": 74,
+      "theme": "E类课程",
+      "title": "大学数学先修课程",
+      "category": "E",
+      "openEnded": true,
+      "subtypes": []
+    },
+    {
+      "unitId": "elective-E-pre-calculus",
+      "track": "elective",
+      "sourceSection": "五（三）E类·大学数学先修课程",
+      "pdfPage": 74,
+      "theme": "大学数学先修课程",
+      "title": "微积分先修",
+      "category": "E",
+      "parentId": "elective-E-university-preparation",
+      "subtypes": []
+    },
+    {
+      "unitId": "elective-E-pre-analytic-linear",
+      "track": "elective",
+      "sourceSection": "五（三）E类·大学数学先修课程",
+      "pdfPage": 74,
+      "theme": "大学数学先修课程",
+      "title": "解析几何与线性代数先修",
+      "category": "E",
+      "parentId": "elective-E-university-preparation",
+      "subtypes": []
+    },
+    {
+      "unitId": "elective-E-pre-probability-statistics",
+      "track": "elective",
+      "sourceSection": "五（三）E类·大学数学先修课程",
+      "pdfPage": 74,
+      "theme": "大学数学先修课程",
+      "title": "概率论与数理统计先修",
+      "category": "E",
+      "parentId": "elective-E-university-preparation",
+      "subtypes": []
+    }
+  ],
+  "exam": {
+    "status": "not_measured",
+    "tags": [],
+    "reason": "高考题型年份和原题合法来源尚未逐题核对；考试范围=必修+选择性必修，选修单列"
+  },
+  "competition": {
+    "separate": true,
+    "status": "not_measured"
+  },
+  "indexScope": "仅登记课程表/专题和E类公开列举项；原子题型尚未拆分，不能声称覆盖"
+}
