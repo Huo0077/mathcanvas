@@ -7,7 +7,7 @@
 > 入口扩宽到**常见自然语言说法**（本地解析，不依赖模型），**默认行为先沿用现有开关**，落地结构为**形状数据化**。
 > 设计见 [立体图形覆盖扩宽设计](superpowers/specs/2026-10-06-solid-shape-coverage-design.md)（S1–S6 分块）。
 > **它取代的是“只支持受限三棱锥”这条形状边界，不取消 V0a 的未完成项**（当时列的三项是浏览器逐点坐标回代、截图目检、全量回归；**前两项已于 `851e4cf` 补上**，明细见下表与 [当前状态](current-status.md)）；
-> V0a 收口与 S2 的棱锥路径迁移是同一段代码的两面。**2026-10-07 已补实施计划**（[立体图形覆盖扩宽实施计划](superpowers/plans/2026-10-07-solid-shape-coverage-implementation-plan.md)，S1 点名语法收口 → S6 入口语法收口，每块带 RED/GREEN/变异/收口清单）；**目前仍只有设计，没有产品代码。**
+> V0a 收口与 S2 的棱锥路径迁移是同一段代码的两面。**2026-10-07 已补实施计划**（[立体图形覆盖扩宽实施计划](superpowers/plans/2026-10-07-solid-shape-coverage-implementation-plan.md)，S1 点名语法收口 → S6 入口语法收口，每块带 RED/GREEN/变异/收口清单）；**S1 已开工**：点名模块 `packages/geometry-kernel/src/pointNames.ts` 与新用例已落地（行为未变，尚未接线）；**四族形状本身仍无产品代码。**
 
 ## 目标与统计分母
 
