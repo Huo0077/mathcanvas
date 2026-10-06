@@ -13,6 +13,17 @@ async function send(page: import("@playwright/test").Page, prompt: string): Prom
   await page.getByRole("button", { name: "发送" }).click()
 }
 
+/**
+ * 「撤销」按钮的可用性 = 历史里有没有东西。
+ *
+ * 这是浏览器里**唯一**能"看见"撤销栈的读数（`canUndo = store.history.length > 0`），
+ * 所以"拒绝一步历史都不占"这条出口条件只能拿它当正向信号 —— 不能只断言"画布上没东西"，
+ * 那与"画了又被撤掉"看起来一模一样。
+ */
+function undoButton(page: import("@playwright/test").Page) {
+  return page.getByRole("button", { name: "撤销", exact: true })
+}
+
 test.beforeEach(async ({ page }) => {
   await page.goto("/")
   await page.evaluate(() => localStorage.clear())
@@ -59,6 +70,8 @@ test("the experimental route does not silently discard an unsupported above-the-
   await expect(page.getByRole("button", { name: "确认并提交" })).toHaveCount(0)
   await page.getByRole("button", { name: "返回画布" }).click()
   await expect(page.locator(".algebra-panel .object-row")).toHaveCount(0)
+  // 「没东西」与「画了又被撤掉」在画布上长得一样，所以还要读撤销栈：拒绝**一步历史都不占**。
+  await expect(undoButton(page)).toBeDisabled()
 })
 
 /**
@@ -98,6 +111,8 @@ test("refuses the same sentence when the stated coordinate contradicts the figur
   await expect(page.getByRole("button", { name: "确认并提交" })).toHaveCount(0)
   await page.getByRole("button", { name: "返回画布" }).click()
   await expect(page.locator(".algebra-panel .object-row")).toHaveCount(0)
+  // 同上：错坐标被拒之后撤销栈也必须是空的（拒绝不留痕、不占一步历史）。
+  await expect(undoButton(page)).toBeDisabled()
 })
 
 // ---------------------------------------------------------------- 独立回代题设
