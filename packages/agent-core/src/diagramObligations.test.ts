@@ -185,4 +185,19 @@ describe("带撇与带下标的点名", () => {
     expect(parsed.givens).toEqual([])
     expect(parsed.unverified.some((item) => item.sourceText.includes("AA1"))).toBe(true)
   })
+
+  /**
+   * **撇这一支单独钉一条**（2026-10-07 补：块级变异发现的覆盖缺口）。
+   *
+   * 下面这条是被变异逼出来的：把共享词表里的**撇**去掉（只留下标）时，
+   * 内核、核验器与词表自身都有用例变红，**只有解析层全绿** —— 说明"解析器认撇"
+   * 此前没有任何用例真的咬住过。补上它，三层的覆盖才是对称的。
+   */
+  it("撇写法在解析层也单独成立（与下标写法各有一条）", () => {
+    const parsed = parseDiagramObligations("在三棱柱ABCD-A′B′C′D′中，AA′⊥平面ABCD")
+    expect(parsed.givens.map((item) => item.kind)).toEqual(["perpendicular"])
+    expect(parsed.givens[0]!.sourceText).toBe("AA′⊥平面ABCD")
+    expect(parsed.givens[0]!.targets).toEqual(["A", "A′", "A", "B", "C", "D"])
+    expect(parsed.unverified.filter((item) => item.sourceText.includes("AA′"))).toEqual([])
+  })
 })
