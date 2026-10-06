@@ -903,3 +903,50 @@ describe("V0a: a free apex and every coordinate given must be judged", () => {
     expect(result.diagramVerification?.checks.some((item) => item.sourceText.includes("D在底面ABC上方") && item.status === "unverified")).toBe(true)
   })
 })
+
+/**
+ * **平面图形也要逐条核验题设**（计划 V0b）。
+ *
+ * ## 为什么这组用例必须存在
+ *
+ * 原文核验的触发条件此前写死了 `solid.create_polyhedron` —— 于是**任何平面图形都从不进入核验**：
+ * 动作编译成功就等于"图符合题意"。这与 V0a 修掉的是**同一类洞**，只是换了一个工作区。
+ * 三点的坐标是**真实落盘**的那一份，核验器按点名表逐条量，不读构造方的自述。
+ */
+describe("V0b: planar figures get the same per-premise verification as solids", () => {
+  const PLANAR_PROMPT = "在三角形ABC中，AB⊥AC，画示意图"
+
+  /** 三个**点名**的平面点。A 与 B 钉在坐标轴上，C 由调用方给 —— 它就是这里唯一的变量。 */
+  function planarTriangle(c: { x: number; y: number }) {
+    return [
+      { actionId: "planar.create_point", actionKey: "A", factIds: [], inputs: { alias: "A", points: [{ x: 0, y: 0 }], label: "A" } },
+      { actionId: "planar.create_point", actionKey: "B", factIds: [], inputs: { alias: "B", points: [{ x: 2, y: 0 }], label: "B" } },
+      { actionId: "planar.create_point", actionKey: "C", factIds: [], inputs: { alias: "C", points: [{ ...c }], label: "C" } }
+    ]
+  }
+
+  const planarContext = () => context(createEmptyDocument("conics"), { prompt: PLANAR_PROMPT })
+
+  it("verifies AB ⊥ AC from the real coordinates of the three named points", () => {
+    const compiled = compilePlan(rawPlan(planarTriangle({ x: 0, y: 3 })), planarContext())
+    expect(compiled.ok, compiled.diagnostics.map((item) => item.detail).join("; ")).toBe(true)
+    expect(compiled.diagramVerification?.status).toBe("passed")
+    expect(compiled.diagramVerification?.checks.map((item) => `${item.sourceText}:${item.status}`)).toEqual(["AB⊥AC:passed"])
+  })
+
+  it("fails the very same premise when the figure puts C on the ray AB instead", () => {
+    // 同一句话、同一套动作，只把 C 挪到 AB 上 —— 这条**不能**因为"动作都编译过了"就通过。
+    const compiled = compilePlan(rawPlan(planarTriangle({ x: 3, y: 0 })), planarContext())
+    expect(compiled.diagramVerification?.status).toBe("failed")
+    expect(compiled.ok).toBe(false)
+    expect(compiled.diagramVerification?.checks).toEqual(expect.arrayContaining([expect.objectContaining({ sourceText: "AB⊥AC", status: "failed" })]))
+  })
+
+  it("stays unverified when the named points never reach the document", () => {
+    // 只给两个点：题面点名了 C，而候选图里没有它 —— 必须如实报"未核验"，不许按"没有就跳过"处理。
+    const plan = rawPlan(planarTriangle({ x: 0, y: 3 }).slice(0, 2))
+    const compiled = compilePlan(plan, planarContext())
+    expect(compiled.diagramVerification?.status).toBe("unverified")
+    expect(compiled.diagramVerification?.checks).toEqual(expect.arrayContaining([expect.objectContaining({ sourceText: "AB⊥AC", status: "unverified" })]))
+  })
+})

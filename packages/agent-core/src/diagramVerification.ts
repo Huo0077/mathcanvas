@@ -58,20 +58,31 @@ function candidatePoints(plan: PlanEnvelope, candidate: GeometryDocument, base?:
   const actions = plan.actions.filter((action) => action.actionId === "solid.create_polyhedron")
   const priorIds = new Set(base?.primitives.map((primitive) => primitive.id) ?? [])
   const solids = candidate.primitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "polyhedron3" }> => primitive.type === "polyhedron3" && !priorIds.has(primitive.id))
-  // Without a unique solid there is no reliable alias → candidate solid mapping.
-  if (actions.length !== 1 || solids.length !== 1) return null
-  const input = actions[0].inputs
-  if (typeof input !== "object" || input === null || !("vertexNames" in input)) return null
-  const names = input.vertexNames
-  const solid = solids[0]
-  if (!Array.isArray(names) || names.length !== solid.vertexIds.length || !names.every((name) => typeof name === "string" && /^[A-Z]$/.test(name)) || new Set(names).size !== names.length) return null
   const points = new Map<string, Vector3>()
-  for (const [index, name] of names.entries()) {
-    const vertex = candidate.primitives.find((primitive) => primitive.id === solid.vertexIds[index])
-    if (vertex?.type !== "point3") return null
-    const position = vertex.position
-    if (![position.x, position.y, position.z].every(Number.isFinite)) return null
-    points.set(name as string, position)
+  /**
+   * **多面体这一支只在计划里真的有它时才跑**（V0b）：平面图形没有 `solid.create_polyhedron`，
+   * 若照旧**无条件**要求"恰好一只新多面体"，平面图就永远拿不到点名表 ——
+   * 而那正是"平面作图从不进入核验"的机制本身。
+   *
+   * **多面体在场时的守卫逐字未改**：数量不是恰好一个、或点名表建不出来，仍然返回 `null`。
+   * `null` 的含义是"这份候选图没有可靠的点名映射"，与"点名表恰好是空的"是两件事，
+   * 混起来会让失败的**理由**变味（前者是映射不可靠，后者是图上没这个点）。
+   */
+  if (actions.length > 0) {
+    // Without a unique solid there is no reliable alias → candidate solid mapping.
+    if (actions.length !== 1 || solids.length !== 1) return null
+    const input = actions[0].inputs
+    if (typeof input !== "object" || input === null || !("vertexNames" in input)) return null
+    const names = input.vertexNames
+    const solid = solids[0]
+    if (!Array.isArray(names) || names.length !== solid.vertexIds.length || !names.every((name) => typeof name === "string" && /^[A-Z]$/.test(name)) || new Set(names).size !== names.length) return null
+    for (const [index, name] of names.entries()) {
+      const vertex = candidate.primitives.find((primitive) => primitive.id === solid.vertexIds[index])
+      if (vertex?.type !== "point3") return null
+      const position = vertex.position
+      if (![position.x, position.y, position.z].every(Number.isFinite)) return null
+      points.set(name as string, position)
+    }
   }
 
   /**
@@ -93,8 +104,17 @@ function candidatePoints(plan: PlanEnvelope, candidate: GeometryDocument, base?:
    */
   const labelled = new Map<string, Vector3 | null>()
   for (const primitive of candidate.primitives) {
-    if (primitive.type !== "point3") continue
-    const label = (primitive as { label?: unknown }).label
+    /**
+     * **2D 与 3D 的点都要收**（V0b）：`point3` 自带 `position`，平面 `point` 用 `x`/`y`。
+     * 平面点补上 `z = 0` 之后交给**同一套**判据 —— 平面题的垂直/平行本来就在 z = 0 的平面上算，
+     * 为"2D"再开一条数学分支等于把同一个判断写两遍。
+     */
+    const position: Vector3 | undefined = primitive.type === "point3"
+      ? primitive.position
+      : primitive.type === "point"
+        ? { x: primitive.x, y: primitive.y, z: 0 }
+        : undefined
+    if (position === undefined) continue
     /**
      * **"顶点名优先"只在这一处判**（收集时**不**跳过与顶点同名的标签，只在下面写入时挡）。
      *
@@ -103,8 +123,8 @@ function candidatePoints(plan: PlanEnvelope, candidate: GeometryDocument, base?:
      * 于是那条"顶点名优先"的用例**看着有守卫、实际抓不到任何东西**（试过，变异两次都全绿）。
      * 这与本仓那句"同一个判断不许写两遍"是同一条账。
      */
+    const label = (primitive as { label?: unknown }).label
     if (typeof label !== "string" || !/^[A-Z]$/.test(label)) continue
-    const position = primitive.position
     labelled.set(label, labelled.has(label) || ![position.x, position.y, position.z].every(Number.isFinite) ? null : position)
   }
   for (const [label, position] of labelled) {

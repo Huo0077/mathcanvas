@@ -19,6 +19,19 @@ import { verifyDiagramObligations, type DiagramVerificationReport } from "./diag
 import { verifyRelations, type RelationLookup } from "./relations"
 import { parsePlanEnvelope, repairRequestFor } from "./schemas"
 /**
+ * **哪些动作能让"题面点名的顶点"在候选图里有坐标**（计划 V0b）。
+ *
+ * 原文题设只有在这些动作在场时才谈得上逐条核验 —— 否则核验器拿不到点名表，
+ * 所谓"核验"就退化成"动作编译成功即视为图正确"。此前这里写死了 `solid.create_polyhedron`，
+ * 于是**任何平面图形都从不进入核验**：那是与 V0a 同一类的洞，只是换了一个工作区。
+ *
+ * **为什么刻意不含 `solid.create_template`**：它也会给子对象编 `A`、`B`、`C`… 的标签，
+ * 但那是**模板自己的顺序编号**，与题面点名不是一回事。把它算进来会让"画个立方体"这类题面
+ * 去核验并不存在的点名，而且会改变 `planCompiler.offPath.golden.test.ts` 钉住的关旗逐字节行为。
+ * 模板实体的原文核验是**另一件工作**，要单独做、单独取证据。
+ */
+const POINT_NAMING_ACTION_IDS: ReadonlySet<string> = new Set(["solid.create_polyhedron", "planar.create_point"])
+/**
  * **N2 的见证搜索**（子任务 2c）。
  *
  * 这一行**有意**造出一个 import 环：`planCompiler → solver/witnessSearch → planCompiler`
@@ -414,7 +427,7 @@ function compileOnce(input: unknown, context: PlanCompileContext): CompileOnceOu
    * 旧结构（核验器要吃它）与统一 IR（trace / UI / N2 要吃它），所以"解析一次、两种形状"
    * 不可能分叉。`obligations` 的判据（有 polyhedron 动作 + 有原话）一字未改。
    */
-  const obligationParse = context.prompt && compiledActions.some((action) => action.actionId === "solid.create_polyhedron")
+  const obligationParse = context.prompt && compiledActions.some((action) => POINT_NAMING_ACTION_IDS.has(action.actionId))
     ? parseObligationWithLegacy(context.prompt, { spatialPointConditions: context.diagramWitnessSearch === true }) : null
   const obligations = obligationParse?.legacy ?? null
   const diagramVerification = obligations && (obligations.givens.length > 0 || obligations.unverified.length > 0)
