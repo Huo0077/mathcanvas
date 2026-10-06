@@ -34,7 +34,14 @@ const VERIFIABLE_FIGURE_ACTION_IDS: ReadonlySet<string> = new Set([
   "solid.create_polyhedron",
   "planar.create_point",
   // 圆锥曲线**没有点名** —— 那条曲线自己就是被核验的对象（见 `candidateConic`）。
-  "planar.create_conic"
+  "planar.create_conic",
+  /**
+   * 函数族**两笔都要**：曲线自己要被判（是不是题面那条函数），切线也要（斜率与切点）。
+   * 只放其中一笔，另一笔的判据就会因为"图里没有对应物"而**永远报未核验** ——
+   * 那不是保守，是把一条本来能判的题设变成永远判不了。
+   */
+  "function.create_graph",
+  "function.create_tangent"
 ])
 
 /**

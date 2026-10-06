@@ -1,7 +1,7 @@
 import type { PlanEnvelope, PlannerPort } from "@draw/agent-core"
 import { PLAN_SCHEMA_VERSION, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SPAN, DEFAULT_SOLID_SIZE, defaultPrismBasePolygon, cubeCenterFrom, cubeEdgeLengthFrom, searchWitnessForPrompt } from "@draw/agent-core"
 
-import { CONIC_ELLIPSE_PROMPT, PLANAR_TRIANGLE_PROMPT, PYRAMID_PROMPT, PYRAMID_UNVERIFIED_PROMPT, conicInvariantPlan, ellipsePlan, obliquePrismSectionPlan, planarRightTrianglePlan, pyramidPlan } from "./representativeFixtures"
+import { CONIC_ELLIPSE_PROMPT, FUNCTION_TANGENT_PROMPT, PLANAR_TRIANGLE_PROMPT, PYRAMID_PROMPT, PYRAMID_UNVERIFIED_PROMPT, conicInvariantPlan, ellipsePlan, functionTangentPlan, obliquePrismSectionPlan, planarRightTrianglePlan, pyramidPlan } from "./representativeFixtures"
 
 /**
  * **本地确定性规划器**（Task 2.5 Step 2 的过渡件）。
@@ -281,6 +281,13 @@ export const LOCAL_INTENTS: readonly LocalIntent[] = [
    * 免得用户以为自己看到的是一条随手挑的曲线。
    */
   { all: ["椭圆", "x²/9+y²/4"], exact: CONIC_ELLIPSE_PROMPT, skillIds: ["conics-tangents"], build: () => ellipsePlan() },
+  /**
+   * **代表题五（计划 V0d）**：函数图像与它在某点的切线。
+   *
+   * 要 `functions` 与 `conics-tangents` **两份清单**：曲线由前者创建，切线由后者作 ——
+   * 少给一份，模型上下文里就少一个动作，编译时才发现（而那时已经晚了）。
+   */
+  { all: ["f(x)", "切线"], exact: FUNCTION_TANGENT_PROMPT, skillIds: ["functions", "conics-tangents"], build: () => functionTangentPlan() },
   /**
    * **代表题一（规格 §8.1）**：斜四棱柱 + 三条棱的中点 + 截面 + 棱上动点。
    *

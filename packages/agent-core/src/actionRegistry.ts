@@ -1,4 +1,4 @@
-import { DEFAULT_CENTER_2D, DEFAULT_DYNAMIC_POINT_PARAMETER, DEFAULT_ORIGIN_3D, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SPAN, DEFAULT_SLOPE, DEFAULT_SOLID_HEIGHT, DEFAULT_SOLID_SIZE, defaultPrismBasePolygon, defaultPrismVector } from "./localPlanDefaults"
+import { DEFAULT_CENTER_2D, DEFAULT_DYNAMIC_POINT_PARAMETER, DEFAULT_ORIGIN_3D, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SPAN, DEFAULT_SOLID_HEIGHT, DEFAULT_SOLID_SIZE, defaultPrismBasePolygon, defaultPrismVector } from "./localPlanDefaults"
 import type { DraftActionId } from "@draw/scene-graph"
 import type { PlanDefaultPolicy } from "./contracts"
 
@@ -531,8 +531,18 @@ export const ACTIONS = {
     references: [{ field: "sourceId", kind: "id", nested: { outer: "anchor", inner: "pointId", when: { field: "kind", equals: "point" } } }],
     required: ["sourceId"],
     defaults: {
-      x: { policy: "safe_default", value: 0, reason: "切点横坐标未指定，取 x = 0。" },
-      anchor: { policy: "safe_default", value: { kind: "parameter", parameter: DEFAULT_SLOPE, branch: 0 }, reason: `切点未指定，取曲线参数 ${DEFAULT_SLOPE}（规格 §6.3：未定斜率取水平）。` }
+      x: { policy: "safe_default", value: 0, reason: "切点横坐标未指定，取 x = 0。" }
+      /**
+       * **`anchor` 刻意没有默认值**（2026-10-06 修）。
+       *
+       * 它原来有一个 `{ kind: "parameter", parameter: 0 }` 的默认，而那会**盖掉题面写明的 `x`**：
+       * 计划里写 `x: 1`、没写 `anchor` ⇒ 审计补上默认 anchor ⇒ 编译器走 anchor 那条路
+       * ⇒ 切线画在参数 0 的位置。实测症状：题面说"在 `x = 1` 处"，草稿里那条切线的 `x` 是 0。
+       * 更糟的是它让 `compileTangent` 里"都不给就按 `x` 定位"那一支**永远不可达**。
+       *
+       * 去掉默认之后：给了 `x` 就按 `x`；两样都没给仍然落到 `x = 0`（与原来同解），
+       * 所以这是**纯修复**，不是行为变更。
+       */
     }
   },
   /**

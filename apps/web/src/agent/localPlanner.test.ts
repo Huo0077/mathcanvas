@@ -3,7 +3,7 @@ import { createEmptyDocument } from "@draw/dsl"
 import { describe, expect, it } from "vitest"
 
 import { createLocalPlanner, LOCAL_INTENTS, localIntentSkillIds, matchLocalIntent, SPHERE_PROMPT } from "./localPlanner"
-import { CONIC_ELLIPSE_PROMPT, PYRAMID_PROMPT, PYRAMID_UNVERIFIED_PROMPT, PLANAR_TRIANGLE_PROMPT } from "./representativeFixtures"
+import { CONIC_ELLIPSE_PROMPT, FUNCTION_TANGENT_PROMPT, PYRAMID_PROMPT, PYRAMID_UNVERIFIED_PROMPT, PLANAR_TRIANGLE_PROMPT } from "./representativeFixtures"
 
 /**
  * 本地确定性规划器的性质。
@@ -517,5 +517,61 @@ describe("V0c local ellipse", () => {
     const compiled = compilePlan(swapped as typeof result, { document, prompt: CONIC_ELLIPSE_PROMPT, conversationId: "local-conic", documentGeneration: document.revision })
     expect(compiled.diagramVerification?.status).toBe("failed")
     expect(compiled.ok).toBe(false)
+  })
+})
+
+/**
+ * **V0d：函数图像与切线一起画出来**（计划点名的出口："真函数图和切线同时显示"）。
+ *
+ * ## 这里夹带了一次探针
+ *
+ * 内核 `compileTangent` 的注释写着"几何留空、只写 anchor：**重算**会把真正的切点与切向填进去"。
+ * 那就意味着：**编译完的草稿里那条切线的 `slope` 可能是占位值**（0），
+ * 而我的切线判据正是拿它与自己算的 `f′(x)` 比。
+ *
+ * 于是有两条路：真值被填进去了（判据在比真东西），或者没填（判据在比一个占位 0）。
+ * **`x = 1` 这一例分不出这两者** —— `f′(1) = 0`，占位值恰好也是 0。
+ * 所以在下面用 **`x = 2`**（`f′(2) = 9`）再试一次：若重算没发生，这一例会被误判为"错斜率"。
+ */
+describe("V0d local function graph with its tangent", () => {
+  it("is reachable without any experimental flag and asks for both skill lists", () => {
+    expect(matchLocalIntent(FUNCTION_TANGENT_PROMPT)).not.toBeNull()
+    // 曲线由 `functions` 创建、切线由 `conics-tangents` 作 —— 少给一份，模型就少一个动作。
+    expect(localIntentSkillIds(FUNCTION_TANGENT_PROMPT)).toEqual(expect.arrayContaining(["functions", "conics-tangents"]))
+  })
+
+  it("compiles into a real curve plus its tangent and passes both clauses", async () => {
+    const result = (await createLocalPlanner().plan({ userMessage: FUNCTION_TANGENT_PROMPT } as never)).plan
+    expect(result.kind).toBe("plan")
+    if (result.kind !== "plan") return
+    const document = createEmptyDocument("conics")
+    const compiled = compilePlan(result, { document, prompt: FUNCTION_TANGENT_PROMPT, conversationId: "local-fn", documentGeneration: document.revision })
+    expect(compiled.ok, compiled.diagnostics.map((item) => item.detail).join("; ")).toBe(true)
+    expect(compiled.draftDocument?.primitives.filter((primitive) => primitive.type === "function")).toHaveLength(1)
+    expect(compiled.draftDocument?.primitives.filter((primitive) => primitive.type === "tangent")).toHaveLength(1)
+    expect(compiled.diagramVerification?.status).toBe("passed")
+    expect(compiled.diagramVerification?.checks.map((check) => `${check.sourceText}:${check.status}`)).toEqual(["f(x)=x³−3x:passed", "x=1 处的切线:passed"])
+  })
+
+  it("also accepts a tangent at x = 2, which is where a placeholder slope would show up", async () => {
+    const result = (await createLocalPlanner().plan({ userMessage: FUNCTION_TANGENT_PROMPT } as never)).plan
+    expect(result.kind).toBe("plan")
+    if (result.kind !== "plan") return
+    /**
+     * 同一份计划，但**题面与切点一起**挪到 `x = 2`：那里 `f′(2) = 9`，而编译器留的占位斜率是 0。
+     * 判据若比的是占位值，这一例必然红；只有真的按函数求了导才会通过。
+     *
+     * **不能只挪切点、不挪题面** —— 那造出的是"图画在 x=2、题面要 x=1"，
+     * 判据拒绝它才是对的（我第一版就是这么写的，红得理直气壮，是我错了）。
+     */
+    const movedPrompt = FUNCTION_TANGENT_PROMPT.replace("x=1", "x=2")
+    const moved = { ...result, actions: result.actions.map((action) => action.actionId === "function.create_tangent" ? { ...action, inputs: { ...action.inputs, x: 2 } } : action) }
+    const document = createEmptyDocument("conics")
+    const compiled = compilePlan(moved as typeof result, { document, prompt: movedPrompt, conversationId: "local-fn", documentGeneration: document.revision })
+    expect(compiled.diagramVerification?.status, compiled.diagnostics.map((item) => item.detail).join("; ")).toBe("passed")
+    // 而且真的是"在那一点的切线"：斜率 9 ≈ f′(2)，不是占位 0。
+    const tangent = compiled.draftDocument?.primitives.find((primitive) => primitive.type === "tangent") as { x: number; slope: number } | undefined
+    expect(tangent?.x).toBeCloseTo(2, 9)
+    expect(tangent?.slope).toBeCloseTo(9, 6)
   })
 })

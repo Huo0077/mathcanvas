@@ -368,3 +368,30 @@ export function ellipsePlan(): PlanEnvelope {
     ] as unknown as DraftAction[]
   }
 }
+
+/**
+ * **代表题五：函数图像与它在某点的切线**（计划 V0d）。
+ *
+ * 题面把函数**用方程写死**、切点也写死了，所以图没有自由度：
+ * 唯一"系统挑的"是**定义域**（题面没说画多宽），它写进 `assumptions`。
+ *
+ * 两笔动作是**有先后**的：切线引用那条曲线，所以曲线必须先建
+ *（`function.create_tangent` 的 `sourceId` 指向同一份计划里的别名）。
+ */
+export const FUNCTION_TANGENT_PROMPT = "画出 f(x)=x³−3x 的图像与它在 x=1 处的切线"
+
+export function functionTangentPlan(): PlanEnvelope {
+  return {
+    schemaVersion: PLAN_SCHEMA_VERSION,
+    kind: "plan",
+    goal: "作 f(x) = x³ − 3x 的图像与它在 x = 1 处的切线",
+    factIds: [],
+    assumptions: [
+      "定义域未指定：取 [-2, 2]（够看清这条三次曲线的完整形态）。函数与切点由题面方程唯一确定，不是系统自选的。"
+    ],
+    actions: [
+      { actionId: "function.create_graph", actionKey: "f", factIds: [], inputs: { alias: "f", expression: "x^3-3*x", domain: [-2, 2] } },
+      { actionId: "function.create_tangent", actionKey: "tangent-at-1", factIds: [], inputs: { alias: "tangent-at-1", sourceId: "draft:f", x: 1 } }
+    ] as unknown as DraftAction[]
+  }
+}

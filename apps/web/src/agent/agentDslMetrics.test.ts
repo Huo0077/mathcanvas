@@ -108,9 +108,15 @@ describe("the Agent DSL slice metrics", () => {
     expect(results[0].result.ok).toBe(true)
     expect(results[1].result.ok).toBe(true)
     // 分母口径：从登记表推导（含 ask_user/reject 槽位），不是只数 completions。
-    expect(metrics.auditedSlots).toBe(55)
+    /**
+     * **55 → 54**（2026-10-06）：`function.create_tangent` 的登记表里去掉了 `anchor` 的默认策略
+     *（那个默认会盖掉题面写明的 `x`：计划里写 `x: 1`、审计补上默认 anchor ⇒ 切线画到参数 0 去）。
+     * 少一个默认字段 ⇒ 少一个受审计的槽位 ⇒ 分母与遗漏率各动一格。
+     * **这不是"为了让它变绿而调数"**：改的是被测实现，代价在这里如实记账。
+     */
+    expect(metrics.auditedSlots).toBe(54)
     expect(metrics.filledSlots).toBe(3)
-    expect(metrics.parameterOmissionRate).toBe(0.055)
+    expect(metrics.parameterOmissionRate).toBe(0.056)
     // 澄清 1/5（截面缺平面）、修复 1/5（模型发明字段）。
     expect(metrics.clarificationRate).toBe(0.2)
     expect(metrics.repairRate).toBe(0.2)
