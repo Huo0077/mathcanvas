@@ -86,6 +86,20 @@ function describeResult(result: ReturnType<typeof search>): string {
 }
 
 describe("witness search: analytic construction for the first batch", () => {
+  it("verifies an explicitly right-angled triangular base at B without guessing another condition", () => {
+    const prompt = "在三棱锥 P-ABC 中，PB⊥平面ABC，AB⊥BC，画出示意图"
+    const result = search(prompt)
+    expect(result.status, describeResult(result)).toBe("verified_instance")
+    if (result.status !== "verified_instance") return
+    const at = coordinates(result.candidate)
+    const ba = subtractVector3(at("A"), at("B"))
+    const bc = subtractVector3(at("C"), at("B"))
+    expect(Math.abs(dotVector3(ba, bc)) / (lengthVector3(ba) * lengthVector3(bc))).toBeLessThan(1e-9)
+    expect(at("P").x).toBeCloseTo(at("B").x, 10)
+    expect(at("P").y).toBeCloseTo(at("B").y, 10)
+    expect(result.evidence.residuals).toHaveProperty("AB⊥BC")
+    expect(result.evidence.residuals).toHaveProperty("PB⊥平面ABC")
+  })
   it("answers a fully relational pyramid with a verified instance judged by the shared verifier", () => {
     const result = search(PYRAMID)
 

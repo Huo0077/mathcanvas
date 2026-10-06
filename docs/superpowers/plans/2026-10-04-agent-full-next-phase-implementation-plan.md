@@ -170,6 +170,8 @@ export type WitnessSearchResult =
 
 > **N2 后续入口区块（2026-10-06）**：默认关闭的编译救援路径现有独立实验性设置入口，偏好只控制 `witnessSearch`，经既有 `agentNextPhaseFlags → AgentRuntime → DraftStore → Worker` 链路读取。`e2e/next-phase-flag-entry.spec.ts` 4 条通过；未将入口测试误写为开放题真实 provider 成功率。覆盖面扩展属于另一个区块，不因加开关而自动勾为完成。
 
+> **N2 窄覆盖扩展（2026-10-06）**：三角底面存在**唯一点名直角**时可在任意环顶点；`namedRightTriangleBase` 在几何内核归一环的循环起点，搜索器调用同一规则确定自由底边。构造器独立负例确保“侧棱⊥底边”不被读成“底角直角”，最终方案仍调用同一 verifier 与拓扑校验。四边形非环首直角与棱柱撇点名维持未核验，不宣称已有通用求解。详见 `docs/current-status.md` §四 F 的当次门禁。
+
 ## Phase N3：动态拖动保持约束
 
 **目标：** 让已确认的几何关系进入文档，拖动点不会静默破坏它们。

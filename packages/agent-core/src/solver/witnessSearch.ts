@@ -1,4 +1,4 @@
-import { buildFromPoints, constructWitnessShape, createBuilderContext, type Vector3, type WitnessConstructRequest, type WitnessHeightSpec, type WitnessRelation, type WitnessShapeCandidate } from "@draw/geometry-kernel"
+import { buildFromPoints, constructWitnessShape, createBuilderContext, namedRightTriangleBase, type Vector3, type WitnessConstructRequest, type WitnessHeightSpec, type WitnessRelation, type WitnessShapeCandidate } from "@draw/geometry-kernel"
 import { createEmptyDocument } from "@draw/dsl"
 
 import { evidenceStatusForWitness, type ClaimEvidence, type ClaimEvidenceStatus, type GeometryObligation, type SolverStatus, type WitnessResultStatus } from "../claimEvidence"
@@ -294,15 +294,18 @@ function derivePyramidStructure(givens: readonly GeometryObligation[]): Structur
   const foot = base.includes(usable.line[0]) ? usable.line[0] : usable.line[1]
   const apex = foot === usable.line[0] ? usable.line[1] : usable.line[0]
   const relations = kernelRelations(givens)
+  // A unique explicitly named triangular right corner may differ from the ring start.
+  // Use the kernel rule so free-edge choices and materialised coordinates agree.
+  const orderedBase = namedRightTriangleBase(base, relations)
   const stated = new Set(relations.filter((relation) => relation.kind === "segment-length").flatMap((relation) => relation.segments.map((segment) => [...segment].sort().join("|"))))
-  const first = base[0]
-  const second = base[1]
-  const third = base.length === 4 ? base[3] : base[2]
+  const first = orderedBase[0]
+  const second = orderedBase[1]
+  const third = orderedBase.length === 4 ? orderedBase[3] : orderedBase[2]
   const freeBaseEdges = ([[first, second], [first, third]] as [string, string][]).filter((edge) => !stated.has([...edge].sort().join("|")))
 
   return {
     status: "ok",
-    structure: { base: [...base], apex, foot, relations, freeBaseEdges, heightSpec: heightSpecFor(givens, apex) }
+    structure: { base: [...orderedBase], apex, foot, relations, freeBaseEdges, heightSpec: heightSpecFor(givens, apex) }
   }
 }
 

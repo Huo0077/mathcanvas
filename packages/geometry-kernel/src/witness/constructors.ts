@@ -9,7 +9,7 @@
  *
  * 首批覆盖（棱锥 / 棱柱，底面 n = 3 或 4）：
  *
- * - 底面的**点名的直角**（`AB ⊥ AD`）把底面钉成一个矩形（或直角三角形），只余两个自由长度；
+ * - 底面的**点名的直角**把底面构造成矩形（仅四边形环首）或直角三角形（三角形任一唯一明确点名的顶点），只余两个自由长度；
  * - 顶点在**点名的垂足**正上方，高来自四种来源：自由示例值、题面给定的高、
  *   由**点名的侧棱长度**解析求出（`h = √(L² − d²)`）、由**点名的二面角**在**有界区间内求根**求出
  *   （**不是闭式 `h = d·tanθ`** —— 见 `solveDihedralHeight`：那个闭式对常见取法给出的是补角）；
@@ -609,6 +609,20 @@ function baseEdgePerpendicular(relations: readonly WitnessRelation[], baseNames:
   })
 }
 
+/** Rotate only a triangular base with one explicitly named right corner. A cyclic
+ * rotation preserves its face orientation; two claimed corners are ambiguous
+ * and must stay unsupported rather than silently picking one. */
+export function namedRightTriangleBase(names: readonly string[], relations: readonly WitnessRelation[]): string[] {
+  if (names.length !== 3) return [...names]
+  const corners = names.filter((name, index) => {
+    const before = names[(index + 2) % 3]
+    const after = names[(index + 1) % 3]
+    return baseEdgePerpendicular(relations, names, [before, name]) && baseEdgePerpendicular(relations, names, [name, after])
+  })
+  if (corners.length !== 1) return [...names]
+  const index = names.indexOf(corners[0])
+  return [...names.slice(index), ...names.slice(0, index)]
+}
 function interpretValue(value: number | WitnessStatedValue | undefined, fallback: number | null): WitnessStatedValue | null {
   if (value === undefined || value === null) return fallback === null ? null : { value: fallback }
   if (typeof value === "number") return Number.isFinite(value) ? { value } : null
@@ -636,7 +650,7 @@ function freeLength(stated: WitnessStatedValue | null, other: WitnessStatedValue
  *    对边的平行声明（`BC ∥ AD` 或 `AB ∥ DC`，方向不限）与这个构造一致，因此接受并**写在 assumptions 里**。
  *    只声明一组对边平行时构造出来的是矩形而不是一般梯形 —— 那是一条**比题面更强**的假设，
  *    所以拒绝（`unsupported-base-shape`），不把"额外特殊性"悄悄塞进图里。
- * 2. 三角形的环首直角 ⇒ 直角三角形（直角边分别沿 +x、+y）。
+ * 2. 三角形的唯一点名直角（可不在原环首）⇒ 循环旋转到该角，先沿 +x/+y 构造，再按原顶点顺序映回。
  *
  * 这两种是"只有关系、没有数值"的第一批代表形状。覆盖不到的（斜平行四边形底、直角不在环首、
  * 五边形以上）返回 `unsupported-base-shape` —— 明确拒绝好过悄悄换一个题面没说的形状。
@@ -646,11 +660,19 @@ function deriveBasePolygon(
   relations: readonly WitnessRelation[]
 ): { status: "ok"; polygon: Vector3[]; freeValues: string[]; assumptions: string[] } | WitnessConstructRejection {
   const [first, second] = names
+  if (names.length === 3) {
+    const rotated = namedRightTriangleBase(names, relations)
+    if (rotated[0] !== first) {
+      const constructed = deriveBasePolygon(rotated, relations)
+      if (constructed.status === "rejected") return constructed
+      return { ...constructed, polygon: names.map((name) => constructed.polygon[rotated.indexOf(name)]) }
+    }
+  }
   if (names.length !== 3 && names.length !== 4) {
     return reject("unsupported-base-shape", `首批只支持三 / 四边形的底面，收到 ${names.length} 个顶点。`, [...names])
   }
   /**
-   * **环首直角的两条边**：三边形是 `AB` 与 `AC`，四边形是 `AB` 与 `AD`。
+   * **归一化后环首直角的两条边**：三角形可先循环旋转到该角；四边形仍只收原环首。
    *
    * 四边形的第 3 个点 `C` 是 `AB` 的对边端点，不是直角的另一条边 —— 用它去要求 `AB ⊥ AC`
    * 会把这个最常见矩形的直角判错（第一版就是这么错的，RED 里 5 条构造用例一起失败）。

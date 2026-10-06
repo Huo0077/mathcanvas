@@ -639,6 +639,24 @@ describe("witness search rescue in the compile path", () => {
     expect(withoutSwitch.materialisedActions).toBeUndefined()
   })
 
+  it("rescues a triangular-base pyramid whose right corner is explicitly B, then verifies the materialised figure", () => {
+    const document = createEmptyDocument("geometry3d")
+    const prompt = "在三棱锥 P-ABC 中，PB⊥平面ABC，AB⊥BC，画出示意图"
+    const plan = rawPlan([{
+      actionId: "solid.create_polyhedron", actionKey: "pyramid", factIds: [],
+      inputs: {
+        alias: "pyramid", vertexNames: ["P", "A", "B", "C"],
+        vertices: [{ x: 1, y: 0, z: 4 }, { x: 0, y: 0, z: 0 }, { x: 2, y: 0, z: 0 }, { x: 2, y: 3, z: 0 }],
+        faces: [[1, 2, 3], [0, 2, 1], [0, 3, 2], [0, 1, 3]]
+      }
+    }])
+    const result = compilePlan(plan, context(document, { prompt, diagramWitnessSearch: true }))
+    expect(result.ok, result.diagnostics.map((entry) => entry.detail).join(" / ")).toBe(true)
+    expect(result.diagramVerification?.status).toBe("passed")
+    expect(result.materialisedActions).toBeDefined()
+    expect(result.draftDocument?.primitives.some((item) => item.type === "polyhedron3")).toBe(true)
+    expect(document.primitives).toHaveLength(0)
+  })
   it("rescues a candidate that fails the givens with coordinates the system chose and re-verified", () => {
     const document = createEmptyDocument("geometry3d")
     const result = compilePlan(polyhedronPlan(SKEWED_PYRAMID, PYRAMID_RELATIONS), context(document, { prompt: RESCUE_PROMPT, diagramWitnessSearch: true }))

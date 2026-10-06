@@ -75,6 +75,35 @@ function pyramidRequest(overrides: {
 }
 
 describe("constructPyramidWitness", () => {
+  it("constructs a triangle with an explicitly named right angle at B, not only at ring start A", () => {
+    const request = pyramidRequest({
+      base: ["A", "B", "C"], apex: { at: "P", foot: "B", height: { kind: "fixed", value: 4 } },
+      relations: [
+        { kind: "perpendicular", segments: [["P", "B"], ["A", "B"], ["B", "C"]] },
+        { kind: "perpendicular", segments: [["A", "B"], ["B", "C"]] }
+      ]
+    })
+    const result = constructPyramidWitness(request)
+    expect(result.status, result.status === "rejected" ? result.message : "constructed").toBe("candidate")
+    if (result.status !== "candidate") return
+    const at = (name: string) => result.witness.points[indexOf(result.witness, name)]
+    const ba = subtractVector3(at("A"), at("B"))
+    const bc = subtractVector3(at("C"), at("B"))
+    expect(dotVector3(ba, bc)).toBeCloseTo(0, 10)
+    expect(at("P").x).toBeCloseTo(at("B").x, 10)
+    expect(at("P").y).toBeCloseTo(at("B").y, 10)
+    expect(at("P").z).toBeGreaterThan(0)
+    expect(result.witness.names).toEqual(["A", "B", "C", "P"])
+    expect(buildFromPoints({ vertices: orderedPoints(result.witness), faces: result.witness.faces }, createBuilderContext()).diagnostics).toEqual([])
+  })
+  it("does not invent a base right corner from apex-to-base perpendicular relations", () => {
+    const result = constructPyramidWitness(pyramidRequest({
+      base: ["A", "B", "C"], apex: { at: "P", foot: "B" },
+      relations: [{ kind: "perpendicular", segments: [["P", "B"], ["A", "B"], ["B", "C"]] }]
+    }))
+    expect(result.status).toBe("rejected")
+    if (result.status === "rejected") expect(result.code).toBe("unsupported-base-shape")
+  })
   it("reconstructs the representative P-ABCD pyramid exactly, and the kernel accepts the topology", () => {
     const result = constructPyramidWitness(
       pyramidRequest({ apex: { at: "P", foot: "A", height: { kind: "fixed", value: 4 } } })
