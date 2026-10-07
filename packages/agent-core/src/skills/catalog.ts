@@ -49,7 +49,8 @@ const EXPECTED_HASHES: Record<string, string> = {
   "functions": "0d55f158b1112ae1ab78b0e5a33f08e680e9fedfa3f14fe294fd94cd33c66d2b",
   "dynamic-bindings": "a7a25bf79ac9c9cf89256bc1fb8a1876c41287bca21e6a7163ce1022ee47f9e1",
   /** 2026-10-05 重签：`spatial-modeling` 的 `actionIds` 加了 `dynamic.create_bound_point`（用户报的"O 为 BD 中点"那一类题要它）。 */
-  "spatial-modeling": "137c5307513614c3e2748956b3fd5cf5b54457682d99adacad09af7ee79ef8f3",
+  /** 2026-10-07 重签：再加 `derived.create_circumsphere` / `derived.create_insphere`（S5：外接球 / 内切球由宿主算出来，不编球）。 */
+  "spatial-modeling": "ae1acdff4c1a0d3e9e7152e2d23bbfd28953c764b8a1207e50f8ae491a9b4fdf",
   "sections-intersections": "fd8e09ed0e1cedc332b61391d8c831c8064277eb4979a6d2d61e35c417aea8e9",
   "engineering-drawing": "da543684eba13b401042859ebedb67f1d92296d0dbbe32f248846cbd1a5fd50e",
   "image-evidence": "2808d6bb4d56335a4dc33ea57eaace75d776d7bad27b51dcbaff2a41e0f2fa3d",

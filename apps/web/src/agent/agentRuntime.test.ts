@@ -516,10 +516,13 @@ describe("the assembled runtime actually runs", () => {
 
     const context = seen[0].model.context
     expect(context.skills.map((skill) => skill.id)).toEqual(["spatial-modeling"])
-    // 清单声明的动作就是上下文里的可用动作（`spatial-modeling` 声明模板实体、拉伸式棱柱、球、正四面体、正 N 棱锥、任意多面体，
-    // 以及**2026-10-05 补的** `dynamic.create_bound_point` —— 题面点名了实体上的点（棱的中点 / 棱上的分点）时，
-    // 原先这个菜单里**一个建点动作都没有**，于是"O 为 BD 的中点"这类题必然停在"点名缺失…未核验"）。
-    expect([...context.availableActions]).toEqual(["solid.create_template", "solid.create_prism", "solid.create_sphere", "solid.create_tetrahedron", "solid.create_regular_pyramid", "solid.create_polyhedron", "dynamic.create_bound_point"])
+    // 清单声明的动作就是上下文里的可用动作（`spatial-modeling` 声明模板实体、拉伸式棱柱、球、正四面体、正 N 棱锥、任意多面体、
+    // **派生球**、以及 `dynamic.create_bound_point`）。
+    // `dynamic.create_bound_point` 是 **2026-10-05 补的** —— 题面点名了实体上的点（棱的中点 / 棱上的分点）时，
+    // 原先这个菜单里**一个建点动作都没有**，于是"O 为 BD 的中点"这类题必然停在"点名缺失…未核验"。
+    // 两个派生球是 **2026-10-07 补的**（S5）：**给模型开闸之前**先修好了那条"宿主引用"接缝
+    //（校验层收作用域引用、编译层读已解析的 `{documentId, entityId}`），否则模型每次调用都会被拒。
+    expect([...context.availableActions]).toEqual(["solid.create_template", "solid.create_prism", "solid.create_sphere", "solid.create_tetrahedron", "solid.create_regular_pyramid", "solid.create_polyhedron", "derived.create_circumsphere", "derived.create_insphere", "dynamic.create_bound_point"])
     // 没有请求的技能不该出现，而且**不该**变成一条"未登记"警告（那是给清单本身有问题用的）。
     expect(context.warnings).toEqual([])
   })

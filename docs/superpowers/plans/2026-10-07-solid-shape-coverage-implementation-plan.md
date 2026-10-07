@@ -159,7 +159,8 @@
 - [x] **Task 5.1 派生球接进依赖图**（`graph.ts` 的 `primitiveDependencies` / `getAffectedPrimitiveIds`）（2026-10-07 完成）：DSL 的 `SpherePrimitive.derivedFrom`（`{kind, solidId}`）+ 依赖图一条边（球 → 宿主实体；顶点 → 实体 → 球的传递闭包自动成立）+ `recompute.ts` 的球分支（**与 `solidStatusReport` 同一个求解器**，解不出来保留上一次几何、不伪造近似球）。判据自己算（盒子 `(1,2,3)`/`√14`；四面体移顶点后 `(1,1,2)`/`√6` 且球心到四顶点等距），`derivedSphereRule.test.ts` 4/4。
   - **上一批那条"缺口"已定性（2026-10-07）**：长方体 `2 × 4 × 6` 的内切球返回 `undefined` **既不是夹具绕向、也不是求解器错** —— 它**根本没有内切球**（到三对面的距离是 1/2/3，找不到到六面等距的点），而规格 §3.4 的口径正是"不满足时返回 `undefined`"，不许把最大内接球当成内切球交出去。用例改成：立方体（真有内切球）走正例，长方体显式钉住"没有内切球 ⇒ 保留占位几何"。
   - **创建球的动作（2026-10-07 完成）**：`derived.create_circumsphere` / `derived.create_insphere` 五层贯通（动作层类型 / `actionIds` / `actionRegistry`（`solidId` 走作用域引用）/ `actionInputs`（只收 `solidId`）/ `actions/index.ts` 的构造与分派 + `manifest` 能力映射）。**解不出对应球就拒绝整条动作**（不编球）；落盘带 `derivedFrom` 绑定 ⇒ 跟着宿主重算。`derivedSphereCompile.test.ts` 4/4；`actionAudit` 两条"承载不了"删除。
-  - **仍是缺口**：① 这两个动作**还没交给模型**（不在空间建模技能的动作清单里 —— 会改可用动作与提示词，属需单独测量的行为变更）；② 派生球在**面板与画布**上的呈现未做。
+  - **交给模型（2026-10-07 完成）**：两个动作进入 `spatial-modeling` 的 `actionIds`，自述写明用法与拒绝口径（**不要改用 `solid.create_sphere` 编一个球**）；`EXPECTED_HASHES` 按纪律重签（`catalog.test.ts` 的 `hash_mismatch` 拦住过）；`agentRuntime.test.ts` 的可用动作清单更新到 9 个。**性质是行为变更**：模型工具箱变了，真实 provider 质量基线要重测。
+  - **仍是缺口**：派生球在**面板与画布**上没有专门的呈现（落盘与渲染走 `sphere` 图元的既有路径）。
 - [ ] **Task 5.2 接进唯一重算入口**（`packages/scene-graph/src/recompute.ts`）：改源多面体 ⇒ 球跟着变；**过期读数必须不可能出现**
 - [ ] **Task 5.3 核验**：外接球核验"到各顶点等距"、内切球核验"到各面相切"；非 `exact` ⇒ `unverified` + 面板明说
 - [ ] **Task 5.4 若 `recomputeDerivedObjects` 这条路接不进去 ⇒ 停下报告**，不改走物化（设计 §八 已写死）
