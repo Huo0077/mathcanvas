@@ -510,12 +510,30 @@ describe("点名的立体图形族（S6.3）", () => {
     for (const prompt of [FRUSTUM, PENTAGON]) expect(matchLocalIntent(prompt), prompt).toBeNull()
   })
 
-  it("夹具优先：`在三棱柱…` 仍走既有棱柱夹具，不被这一层接管", () => {
-    const intent = matchLocalIntent("在三棱柱ABC-A′B′C′中，AA′⊥平面ABC，画出这个三棱柱", { enableFreeApex: true })
+  /**
+   * **带撇点名的题面归形状族，简短请求仍走夹具**（S3.4 落地时改的规则）。
+   *
+   * 原来这条钉的是反过来的行为（"在三棱柱…" 被那只固定斜棱柱接走）。实测那样做的后果是：
+   * 题面里的 `AA′ ⊥ 平面ABC` **永远不会被核验** —— 用户拿到一只固定尺寸的斜四棱柱，
+   * 面板里**连"题设核验"那一块都没有**，而他想画的三棱柱既不是那个形状、也没有题设回代。
+   * 所以给夹具加了 `exclude: /[A-Za-z]′/`：有撇 = 这是题面，让形状族接。
+   */
+  it("带撇点名的题面归形状族；简短的『画一个斜棱柱』仍走夹具", () => {
+    const prompt = "在三棱柱ABC-A′B′C′中，AA′⊥平面ABC，画出这个三棱柱"
+    const intent = matchLocalIntent(prompt, { enableFreeApex: true })
     expect(intent).not.toBeNull()
-    const envelope = intent!.build({ prompt: "在三棱柱ABC-A′B′C′中，AA′⊥平面ABC，画出这个三棱柱", size: DEFAULT_SOLID_SIZE })
-    expect(envelope.kind).toBe("plan")
-    if (envelope.kind === "plan") expect(envelope.actions[0]?.actionId).toBe("solid.create_prism")
+    const envelope = intent!.build({ prompt, size: DEFAULT_SOLID_SIZE })
+    expect(envelope.kind, JSON.stringify(envelope)).toBe("plan")
+    if (envelope.kind === "plan") {
+      // 形状由**见证搜索**给出（题设被核验过），不是那只固定斜棱柱。
+      expect(envelope.actions[0]?.actionId).toBe("solid.create_polyhedron")
+      expect(envelope.assumptions?.join(" ")).toContain("自选")
+    }
+    // 简短请求（没有撇）照旧命中夹具：它就是要一只示例斜棱柱。
+    const terse = matchLocalIntent("画一个斜棱柱", { enableFreeApex: true })
+    expect(terse).not.toBeNull()
+    const terseEnvelope = terse!.build({ prompt: "画一个斜棱柱", size: DEFAULT_SOLID_SIZE })
+    if (terseEnvelope.kind === "plan") expect(terseEnvelope.actions[0]?.actionId).toBe("solid.create_prism")
   })
 
   it("V0a 的地盘不抢：自由点整句仍归 V0a，普通三棱锥这里不接", () => {

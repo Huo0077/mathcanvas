@@ -400,6 +400,27 @@ describe("直棱柱", () => {
     const result = search("在三棱柱A′B′C′-A′′B′′C′′中，A′A′′⊥平面A′B′C′，画出这个三棱柱", { shape: "prism" })
     expect(result.status, JSON.stringify(result)).toBe("verified_instance")
   })
+
+  /**
+   * **S3.3 反例：题面自称"侧棱 ⊥ 底面"，但它自己给的数据让底面根本立不起来**。
+   *
+   * `AB=BC=1, AC=2` ⇒ A、B、C **共线**，那个"底面"面积为 0 —— 棱柱不存在。
+   * 这一条要拦的是最坏的一种错：**照着题面的字面把图摆出来**（三个点确实能在一条线上摆好），
+   * 于是用户看到一只扁成一片的"棱柱"，而画面上没有任何东西提示它是退化的。
+   * 正确的行为是**拒绝**，并且说得出是底面的数据自相矛盾。
+   */
+  it("底面三点共线时**拒绝**，不把退化的『棱柱』画出来", () => {    const result = search("在三棱柱ABC-A′B′C′中，AA′⊥平面ABC，AB=1，BC=1，AC=2，画出这个三棱柱", { shape: "prism" })
+    expect(result.status, JSON.stringify(result)).not.toBe("verified_instance")
+    /**
+     * 拒绝的**种类**也要对：`no-candidate-constructed` 说的是"候选都在**构造期**被拒"，
+     * 也就是内核看出那个底面立不起来 —— 不是"搜完了没找到"（`no-candidate-verified`），
+     * 更不是"预算用尽"（`candidate-cap-exhausted`）。三种拒绝的含义不同，混起来就等于没说清原因。
+     */
+    if (result.status === "unverified_instance") {
+      expect(result.reasons.join(" "), JSON.stringify(result)).toContain("no-candidate-constructed")
+      expect(result.reasons.join(" ").length).toBeGreaterThan(0)
+    }
+  })
 })
 
 /**

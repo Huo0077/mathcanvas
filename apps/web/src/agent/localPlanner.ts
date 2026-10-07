@@ -36,6 +36,16 @@ export interface LocalIntent {
   /** 至少出现一个（缺省表示不需要）。 */
   any?: readonly string[]
   /**
+   * **出现就一票否决**（缺省表示不设限制）。
+   *
+   * 为什么需要它：单关键词夹具（如"棱柱"那条）是为**简短请求**写的（"画一个斜棱柱"），
+   * 而题面里**点名了顶点**的那些说法（`在三棱柱 ABC-A′B′C′ 中，AA′ ⊥ 平面 ABC`）属于
+   * 入口语法 + 见证搜索那一条线 —— 两者都含"棱柱"，夹具一抢先，题设就永远不会被核验
+   *（实测：这类题面拿到的是夹具那只固定斜棱柱，**面板里连"题设核验"都没有**）。
+   * 于是给它一个判据：**带撇的点名**说明这是题面，让形状族去接。
+   */
+  exclude?: RegExp
+  /**
    * 这条指令**用到的技能清单 id**（`SKILL_MANIFESTS` 里那些）。
    *
    * 为什么规划器要声明它：运行时的 `requestedSkillIds` 会决定模型上下文里
@@ -424,7 +434,12 @@ export const LOCAL_INTENTS: readonly LocalIntent[] = [
    *（用户要的是读数，却被新建了一只球）。理由与上面那条"不认裸四面体"完全相同。
    */
   { all: ["球体"], skillIds: ["spatial-modeling"], build: SPHERE },
-  { all: ["棱柱"], skillIds: ["spatial-modeling"], build: PRISM },
+  /**
+   * `exclude` 的判据是**带撇的点名**：`在三棱柱 ABC-A′B′C′ 中，…` 这类题面要走
+   * 入口语法 + 见证搜索那条线（有核验面板、有题设回代），不能在这里被一只固定斜棱柱接走。
+   * 简短请求（"画一个斜棱柱" / "画一个四棱柱"）里没有撇，照旧命中这条夹具。
+   */
+  { all: ["棱柱"], exclude: /[A-Za-z]′/, skillIds: ["spatial-modeling"], build: PRISM },
   { all: ["prism"], skillIds: ["spatial-modeling"], build: PRISM },
   { all: ["立方体"], skillIds: ["spatial-modeling"], build: (input) => CUBE({ ...input, size: sizeFrom(input.prompt, 2) }) },
   { all: ["正方体"], skillIds: ["spatial-modeling"], build: (input) => CUBE({ ...input, size: sizeFrom(input.prompt, 2) }) },
@@ -475,6 +490,7 @@ export function matchLocalIntent(prompt: string, options: { enableFreeApex?: boo
     if (intent.exact !== undefined && normalized.trim() !== intent.exact.toLowerCase()) continue
     if (!intent.all.every((token) => normalized.includes(token.toLowerCase()))) continue
     if (intent.any && !intent.any.some((token) => normalized.includes(token.toLowerCase()))) continue
+    if (intent.exclude !== undefined && intent.exclude.test(prompt)) continue
     return intent
   }
   /**
