@@ -7,6 +7,15 @@
 
 
 
+## 2026-10-07 —— S4.3 开闸：把**圆台**交给模型（并重签清单哈希）
+
+- `spatial-modeling` 的 `actionIds` 加上 `solid.create_round_frustum`，自述里补一句**怎么用**：给 `center` / `radiusBottom` / `radiusTop` / `height`（`segments` 可省，默认 48），形状由内核按**多边形近似**物化 —— **不要自己写几十个顶点**；**两个半径相等会被当场拒绝**（那是圆柱）。
+- **清单是签名的**：改 `actionIds` 必须重签 `EXPECTED_HASHES`（哈希只覆盖动作名与上限）。新哈希用 `manifestHash(manifest)` 现算（`ae1acdff…` → `4532e2f5…`）。
+- `agentRuntime.test.ts` 那条**逐字钉住可用动作清单**的用例同步到 **10 个**，并把"圆台为什么是今天补的"写进注释。
+- 读数：技能目录 + 运行时 + 输入校验三个文件 **55/55**；全库非 Lean **3962 通过 + 1 todo / 0 失败**（149.96 s）；`typecheck` exit 0；`lint` 0 error / 13 warning。
+- **如实记其性质**：这是**行为变更** —— 模型看到的工具箱又变了一次。本地规划器与浏览器用例不读这份清单，所以本地读数不变；**真实 provider 的质量基线要重测**（需用户批准付费运行）。
+- **S4.3 到此收口**：内核构造 → 文档路径（多边形近似 + 既有多面体动作）→ 参数化动作 → 交给模型；"近似"这件事在**假设与对象标签**上如实声明（含弦高误差），浏览器证据（`agent-round-frustum.spec.ts`）证明从一句话到画布上那 96 顶点 / 50 面真的走通。
+
 ## 2026-10-07 —— S4.3 第三刀：**圆台成为参数化动作**（模型/规划器给三个数，形状由内核算）
 
 - 新增 `solid.create_round_frustum`（`{center, radiusBottom, radiusTop, height, segments?}`）：**参数化动作 → 内核形状 → 物化成 `polyhedron3`**，与 `solid.create_prism` / `solid.create_tetrahedron` / `solid.create_regular_pyramid` 同一条路。于是"圆台"不再要求调用方自己写 96 个顶点，也**不需要新图元**。

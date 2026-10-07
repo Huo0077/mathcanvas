@@ -522,7 +522,9 @@ describe("the assembled runtime actually runs", () => {
     // 原先这个菜单里**一个建点动作都没有**，于是"O 为 BD 的中点"这类题必然停在"点名缺失…未核验"。
     // 两个派生球是 **2026-10-07 补的**（S5）：**给模型开闸之前**先修好了那条"宿主引用"接缝
     //（校验层收作用域引用、编译层读已解析的 `{documentId, entityId}`），否则模型每次调用都会被拒。
-    expect([...context.availableActions]).toEqual(["solid.create_template", "solid.create_prism", "solid.create_sphere", "solid.create_tetrahedron", "solid.create_regular_pyramid", "solid.create_polyhedron", "derived.create_circumsphere", "derived.create_insphere", "dynamic.create_bound_point"])
+    // `solid.create_round_frustum` 也是 **2026-10-07 补的**（S4.3）：圆台由"三个数"造出来，
+    // 形状交给内核的多边形近似 —— 模型不必自己写 96 个顶点。
+    expect([...context.availableActions]).toEqual(["solid.create_template", "solid.create_prism", "solid.create_sphere", "solid.create_tetrahedron", "solid.create_regular_pyramid", "solid.create_polyhedron", "solid.create_round_frustum", "derived.create_circumsphere", "derived.create_insphere", "dynamic.create_bound_point"])
     // 没有请求的技能不该出现，而且**不该**变成一条"未登记"警告（那是给清单本身有问题用的）。
     expect(context.warnings).toEqual([])
   })
