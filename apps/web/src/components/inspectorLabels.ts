@@ -42,7 +42,13 @@ export const intersectionFaceAreaPrecisionLabels: Record<string, string> = { "tr
 export const derivedCodeLabels: Record<string, string> = {
   "derived.circumsphere": "外接球",
   "derived.insphere": "内切球",
-  "derived.section": "截面"
+  "derived.section": "截面",
+  /**
+   * **派生球与宿主对不上**（S5 核验）。它的 `status` 走 `undefined`（"这条结论不成立"），
+   * 所以**具体是什么意思全在那句 message 里**（"宿主现在没有外接球…" / "球心到各顶点的距离不一致…"）——
+   * 行标题只负责让用户看出"这是关于那只派生球的事"，而不是把内部枚举名甩到界面上。
+   */
+  "derived.sphere_stale": "派生球"
 }
 
 /**
@@ -82,6 +88,13 @@ export const DERIVED_REASON_MISSING = "内核没有给出原因。"
  * 其它图元（点、面、量…）没有派生读数 —— 返回空数组，界面那一块就不出现。
  */
 export function derivedSolidIdsOf(primitive: PrimitiveSpec, document: GeometryDocument): string[] {
+  /**
+   * **派生球**（S5）：选中那只球时，用户要看的正是它**与宿主的关系**。
+   * 读数按宿主归档（`derived.circumsphere` / `derived.insphere` / `derived.sphere_stale` 都挂宿主），
+   * 所以这里把宿主 id 一起交出去 —— 否则"点开那只球，面板一片空白"，
+   * 而它恰恰是最该看到"这只球还算不算数"的时候。
+   */
+  if (primitive.type === "sphere") return primitive.derivedFrom ? [primitive.derivedFrom.solidId, primitive.id] : []
   if (primitive.type === "polyhedron3") {
     const owner = ownerOfTopology(primitive)
     return owner !== undefined && owner !== primitive.id ? [primitive.id, owner] : [primitive.id]

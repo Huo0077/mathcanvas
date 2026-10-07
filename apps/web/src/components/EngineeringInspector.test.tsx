@@ -368,6 +368,34 @@ describe("engineering inspector", () => {
       expect(reading(container, "derived.circumsphere").text).toMatch(/没有外接球|找不到/)
     })
 
+    /**
+     * **派生球与宿主对不上时，界面必须说出来**（S5 核验）。
+     *
+     * 两件事一起钉：
+     * ① 读数**在不成立时才出现**（`derived.sphere_stale`，状态 `undefined`），而且理由说得出差在哪；
+     * ② **选中那只球自己**时也要看得到 —— 这只球的读数按**宿主**归档，若"选中的图元 → 实体 id"
+     *    那一跳不认 `sphere`，用户点开球会看到一片空白，而那时恰恰最该看到"这球还算不算数"。
+     */
+    it("surfaces a derived sphere that no longer matches its host, when the sphere itself is selected", () => {
+      const cube = { id: "cube-1", type: "cube" as const, origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 2, z: 2 }, label: "立方体 1" }
+      const built = buildSolidTemplate(cube)
+      // 立方体（棱长 2、一角在原点）的外接球是 `(1,1,1)`/`√3`；这里故意把半径写成 5 ⇒ 它**过不了**那些顶点。
+      const sphere = { id: "sphere-1", type: "sphere" as const, center: { x: 1, y: 1, z: 1 }, radius: 5, label: "外接球", derivedFrom: { kind: "circumsphere" as const, solidId: built.polyhedronId! } }
+      storeDocument([cube, ...built.primitives, sphere])
+      renderInspector({ properties: { selectedPrimitive: sphere, selectedIds: [sphere.id], selectedCount: 1 } })
+
+      const container = globalThis.document.querySelector("[data-derived-panel]") as HTMLElement
+      expect(container).toBeTruthy()
+      const stale = reading(container, "derived.sphere_stale")
+      expect(stale.status).toBe("undefined")
+      // 行标题用的是**那只球自己的标签**（读数带 `sourceId`，面板按它取名字）—— 用户点开的是球，标题就该是它。
+      expect(stale.text).toContain("外接球")
+      // 内部枚举名绝不进界面。
+      expect(stale.text).not.toContain("derived.sphere_stale")
+      // 理由要同时说出两边的数（到顶点的距离 vs 这只球声称的半径），否则用户不知道信谁。
+      expect(stale.text).toMatch(/半径|距离/)
+    })
+
     it("reports a cube's exact readings as exact, so exact and undefined stay distinguishable", () => {
       const cube = { id: "cube-1", type: "cube" as const, origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 2, z: 2 }, label: "立方体 1" }
       // 截面挂在**模板实体**上（`sourceId` 是 `cube-1`），而外接球 / 内切球挂在物化出来的
