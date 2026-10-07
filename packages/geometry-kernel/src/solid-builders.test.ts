@@ -293,6 +293,63 @@ describe("solid builders", () => {
   })
 
   /**
+   * **圆台**（S4.3）：两个平行圆面 + 侧面，**多边形近似**（与圆柱 / 圆锥同一套分段口径）。
+   *
+   * 判据一律从**落盘的顶点坐标**自己算，不读构造方的自述：
+   * ① 下底 `segments` 个点到中心轴等距 `radiusBottom` 且同高；上底同理 `radiusTop`、`z + height`；
+   * ② 面数 = `segments` + 2，且每个侧面都是**四边形**（三角形的话那是圆锥，不是圆台）；
+   * ③ **体积**与解析公式 `πh(R² + Rr + r²)/3` 相符（多边形近似**略小**，误差 2% 以内）——
+   *    这一条才真正说明"它是一只圆台"，而不是"两个同轴圆环叠在一起"；
+   * ④ 两个半径相等 ⇒ **明确拒绝**（那是圆柱，不是圆台）。
+   */
+  it("builds a round frustum whose two rings, faces and volume match the analytic frustum", () => {
+    const segments = 64
+    const radiusBottom = 2
+    const radiusTop = 1
+    const height = 3
+    const built = buildSolid("roundFrustum", { center: { x: 0, y: 0, z: 0 }, radiusBottom, radiusTop, height, segments }, createBuilderContext("roundFrustum"))
+    expect(built.diagnostics).toEqual([])
+
+    const points = built.primitives.filter((primitive) => primitive.type === "point3")
+    const indexOf = new Map(points.map((point, index) => [point.id, index]))
+    const positions = points.map((point) => point.position)
+    expect(positions).toHaveLength(segments * 2)
+    for (const point of positions.slice(0, segments)) {
+      expect(Math.hypot(point.x, point.y)).toBeCloseTo(radiusBottom, 9)
+      expect(point.z).toBeCloseTo(0, 9)
+    }
+    for (const point of positions.slice(segments)) {
+      expect(Math.hypot(point.x, point.y)).toBeCloseTo(radiusTop, 9)
+      expect(point.z).toBeCloseTo(height, 9)
+    }
+
+    const rings = built.primitives.filter((primitive) => primitive.type === "face3").map((face) => face.pointIds.map((id) => indexOf.get(id)!))
+    expect(rings).toHaveLength(segments + 2)
+    expect(rings.filter((ring) => ring.length === 4)).toHaveLength(segments)
+
+    // 体积：闭合多面体按"原点四面体"求和（绕向一致由 `buildFromPoints` 保证）。
+    let total = 0
+    for (const ring of rings) {
+      for (let index = 1; index + 1 < ring.length; index += 1) {
+        const first = positions[ring[0]!]!
+        const second = positions[ring[index]!]!
+        const third = positions[ring[index + 1]!]!
+        total += (first.x * (second.y * third.z - second.z * third.y) + first.y * (second.z * third.x - second.x * third.z) + first.z * (second.x * third.y - second.y * third.x)) / 6
+      }
+    }
+    const analytic = Math.PI * height * (radiusBottom ** 2 + radiusBottom * radiusTop + radiusTop ** 2) / 3
+    const volume = Math.abs(total)
+    expect(volume).toBeLessThan(analytic)
+    expect(analytic - volume).toBeLessThan(analytic * 0.02)
+  })
+
+  it("refuses a round frustum whose two radii are equal, because that is a cylinder", () => {
+    const built = buildSolid("roundFrustum", { center: { x: 0, y: 0, z: 0 }, radiusBottom: 2, radiusTop: 2, height: 3, segments: 16 }, createBuilderContext("roundFrustum"))
+    expect(built.diagnostics.map((entry) => entry.code)).toContain("invalid-input")
+    expect(built.diagnostics.map((entry) => entry.message).join(" ")).toContain("cylinder")
+  })
+
+  /**
    * **正四面体**（用户口径："画一个正四面体 ABCD，棱长为 3"）。
    *
    * 判据不是"看起来像"：**六条棱逐对量过都等于棱长**，而面数是 4、顶点数是 4 —— 这就是"正四面体"的定义。

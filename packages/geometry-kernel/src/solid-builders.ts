@@ -74,6 +74,22 @@ export interface RoundSolidInput {
   segments: number
 }
 
+/**
+ * **圆台**的输入（S4.3）：两个圆面半径 + 高 + 分段数。
+ *
+ * 与 `RoundSolidInput` 的唯一区别就是"上底不再是同一个半径" —— 所以它是圆柱 / 圆锥的**兄弟**，
+ * 而不是另一套体系。两个半径必须**不同**：相等时那是圆柱，画一只叫"圆台"的圆柱是悄悄改题。
+ */
+export interface RoundFrustumInput {
+  center: Vector3
+  /** 下底半径。 */
+  radiusBottom: number
+  /** 上底半径。 */
+  radiusTop: number
+  height: number
+  segments: number
+}
+
 export type TemplateSolidPrimitive = CubePrimitive | PyramidPrimitive | CylinderPrimitive | ConePrimitive
 
 /**
@@ -528,6 +544,35 @@ function buildCone(input: RoundSolidInput, context: BuilderContext): SolidBuildR
 }
 
 /**
+ * **圆台**（S4.3）：两个平行圆面 + 侧面，**多边形近似**（与圆柱 / 圆锥同一套分段口径）。
+ *
+ * 几何真相是"两个不同半径的圆"，文档里存的是那个多面体近似 —— 所以**必须如实声明是近似**
+ *（与 `cylinder` 那条"圆柱近似"同一个理由）：用户要的是看得见、量得出的圆台，
+ * 而不是一个假装自己是圆的 48 边形。
+ *
+ * 绕向照抄 `buildCone` 那一支：下底**反向**（法向朝 −z）、上底**正向**（朝 +z）、侧面四边形。
+ * 顶点/棱/面的编号、共面性、非零体积、自交这些校验全交给既有的 `buildFromPoints`。
+ */
+function buildRoundFrustum(input: RoundFrustumInput, context: BuilderContext): SolidBuildResult {
+  const ring = (radius: number, z: number): Vector3[] => Array.from({ length: input.segments }, (_, index) => {
+    const angle = index * Math.PI * 2 / input.segments
+    return { x: input.center.x + radius * Math.cos(angle), y: input.center.y + radius * Math.sin(angle), z }
+  })
+  const segments = input.segments
+  const bottom = ring(input.radiusBottom, input.center.z)
+  const top = ring(input.radiusTop, input.center.z + input.height)
+  const faces: number[][] = [
+    Array.from({ length: segments }, (_, index) => segments - 1 - index),
+    Array.from({ length: segments }, (_, index) => segments + index)
+  ]
+  for (let index = 0; index < segments; index += 1) {
+    const next = (index + 1) % segments
+    faces.push([index, next, segments + next, segments + index])
+  }
+  return buildFromPoints({ vertices: [...bottom, ...top], faces }, context)
+}
+
+/**
  * 圆近似分段数的上限。
  *
  * 与 DSL schema 的 `<type> geometry is invalid`（3..256）保持一致：内核是公开 API，
@@ -562,6 +607,23 @@ const solidBuilders = new Map<string, SolidBuilder<unknown>>([
     const roundInput = input as RoundSolidInput
     if (!roundInput || !Number.isInteger(roundInput.segments) || roundInput.segments < 3 || roundInput.segments > MAX_SOLID_SEGMENTS || !isFiniteVector(roundInput.center) || !Number.isFinite(roundInput.radius) || roundInput.radius <= 0 || !Number.isFinite(roundInput.height) || roundInput.height <= 0) return emptyResult([diagnostic("invalid-input", `cone parameters are invalid (segments must be an integer in 3..${MAX_SOLID_SEGMENTS})`)])
     return buildCone(roundInput, context)
+  } }],
+  ["roundFrustum", { id: "roundFrustum", label: "圆台近似", create: (input, context) => {
+    const roundInput = input as RoundFrustumInput
+    const invalid = !roundInput || !Number.isInteger(roundInput.segments) || roundInput.segments < 3 || roundInput.segments > MAX_SOLID_SEGMENTS
+      || !isFiniteVector(roundInput.center)
+      || !Number.isFinite(roundInput.radiusBottom) || roundInput.radiusBottom <= 0
+      || !Number.isFinite(roundInput.radiusTop) || roundInput.radiusTop <= 0
+      || !Number.isFinite(roundInput.height) || roundInput.height <= 0
+    if (invalid) return emptyResult([diagnostic("invalid-input", `round frustum parameters are invalid (segments must be an integer in 3..${MAX_SOLID_SEGMENTS}, radii and height positive)`)])
+    /**
+     * **两个半径相等 ⇒ 那是圆柱**：拒绝而不是画一只叫"圆台"的圆柱。
+     * 容差按半径的相对量级给，免得"差 1e-16 的浮点噪声"也被当成合法的圆台。
+     */
+    if (Math.abs(roundInput.radiusBottom - roundInput.radiusTop) <= 1e-9 * Math.max(1, roundInput.radiusBottom)) {
+      return emptyResult([diagnostic("invalid-input", "round frustum needs two different radii: equal radii make a cylinder, not a frustum")])
+    }
+    return buildRoundFrustum(roundInput, context)
   } }]
 ])
 
