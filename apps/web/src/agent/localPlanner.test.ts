@@ -2,7 +2,7 @@ import { DEFAULT_SOLID_SIZE, compilePlan, parsePlanEnvelope, SKILL_MANIFESTS } f
 import { createEmptyDocument } from "@draw/dsl"
 import { describe, expect, it } from "vitest"
 
-import { createLocalPlanner, LOCAL_INTENTS, localIntentSkillIds, matchLocalIntent, SPHERE_PROMPT } from "./localPlanner"
+import { createLocalPlanner, LOCAL_INTENTS, localIntentSkillIds, matchLocalIntent, ROUND_FRUSTUM_PROMPT, SPHERE_PROMPT } from "./localPlanner"
 import { CONIC_ELLIPSE_PROMPT, FUNCTION_TANGENT_PROMPT, HYPERBOLA_PROMPT, PARABOLA_PROMPT, PYRAMID_PROMPT, PYRAMID_UNVERIFIED_PROMPT, PLANAR_TRIANGLE_PROMPT } from "./representativeFixtures"
 
 /**
@@ -311,6 +311,43 @@ describe("the local planner declares which skills an instruction needs", () => {
  *
  * 判据刻意不是"答得对不对"（本地规划器不接模型、答不了读数），而是**不许悄悄改文档**。
  */
+/**
+ * **圆台**（S4.3）：没有点名顶点的那种台体，走**多边形近似 + 既有多面体动作**。
+ *
+ * 钉三件事：① 这一句认得出；② 产出的是 `solid.create_polyhedron`，而且是**两个 48 边形**
+ *（96 个顶点 / 50 个面）——不是新图元；③ **假设里如实写明这是近似、差多少**（弦高误差），
+ * 因为设计 §S4.3 要求"在文档与面板上声明是近似"。
+ */
+describe("圆台（S4.3）", () => {
+  it("matches the sentence and emits a polygon-approximated polyhedron whose assumptions state the approximation", () => {
+    const intent = matchLocalIntent(ROUND_FRUSTUM_PROMPT)
+    expect(intent).not.toBeNull()
+    const envelope = intent!.build({ prompt: ROUND_FRUSTUM_PROMPT, size: DEFAULT_SOLID_SIZE })
+    expect(envelope.kind).toBe("plan")
+    if (envelope.kind !== "plan") return
+
+    const action = envelope.actions[0]!
+    expect(action.actionId).toBe("solid.create_polyhedron")
+    const inputs = action.inputs as { vertices: { x: number; y: number; z: number }[]; faces: number[][]; label?: string }
+    expect(inputs.vertices).toHaveLength(96)
+    expect(inputs.faces).toHaveLength(50)
+    expect(inputs.label).toContain("近似")
+
+    /**
+     * **上下底不能画反**：题面写的是"上底半径 1、下底半径 2"，所以前 48 个顶点（下底环）
+     * 到轴心距离必须是 **2**、后 48 个（上底环）必须是 **1**。只数顶点个数是拦不住对调的。
+     */
+    expect(Math.hypot(inputs.vertices[0]!.x, inputs.vertices[0]!.y)).toBeCloseTo(2, 9)
+    expect(Math.hypot(inputs.vertices[48]!.x, inputs.vertices[48]!.y)).toBeCloseTo(1, 9)
+    expect(inputs.vertices[0]!.z).toBeCloseTo(0, 9)
+    expect(inputs.vertices[48]!.z).toBeCloseTo(3, 9)
+
+    const assumptions = (envelope.assumptions ?? []).join(" ")
+    expect(assumptions).toContain("近似")
+    expect(assumptions).toContain("弦高")
+  })
+})
+
 describe("analysis questions", () => {
   it("does not turn an inscribed-sphere question into a new cube", async () => {
     const envelope = await plan("这个正方体的内切球半径是多少")

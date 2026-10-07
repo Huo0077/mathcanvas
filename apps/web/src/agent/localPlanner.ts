@@ -1,5 +1,5 @@
 import type { PlanEnvelope, PlannerPort } from "@draw/agent-core"
-import { PLAN_SCHEMA_VERSION, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SPAN, DEFAULT_SOLID_SIZE, defaultPrismBasePolygon, cubeCenterFrom, cubeEdgeLengthFrom, parseShapeClause, searchWitnessForPrompt } from "@draw/agent-core"
+import { PLAN_SCHEMA_VERSION, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SPAN, DEFAULT_SOLID_SIZE, defaultPrismBasePolygon, cubeCenterFrom, cubeEdgeLengthFrom, parseShapeClause, roundFrustumPolyhedron, searchWitnessForPrompt } from "@draw/agent-core"
 
 import { CONIC_ELLIPSE_PROMPT, FUNCTION_TANGENT_PROMPT, HYPERBOLA_PROMPT, PARABOLA_PROMPT, PLANAR_TRIANGLE_PROMPT, PYRAMID_CIRCUMSPHERE_PROMPT, PYRAMID_PROMPT, PYRAMID_UNVERIFIED_PROMPT, conicInvariantPlan, ellipsePlan, functionTangentPlan, hyperbolaPlan, obliquePrismSectionPlan, parabolaPlan, planarRightTrianglePlan, pyramidCircumspherePlan, pyramidPlan } from "./representativeFixtures"
 
@@ -123,6 +123,38 @@ const SPHERE = (input: LocalIntentInput): PlanEnvelope => {
       actionKey: "sphere",
       factIds: [],
       inputs: { alias: "sphere", center: { x: 0, y: 0, z: 0 }, radius }
+    }]
+  }
+}
+
+/**
+ * **圆台**（S4.3）：题面点名上底半径、下底半径与高。
+ *
+ * 与**棱台**的区别是"没有点名顶点" —— 所以它的两个环由**内核的多边形近似**生成
+ *（`roundFrustumPolyhedron`，与圆柱 / 圆锥同一套分段口径），再交给既有的 `solid.create_polyhedron`：
+ * **不新增 DSL 图元**（设计里台体那一条写死的）。
+ *
+ * 假设里**如实写出这是近似、差多少**（设计 §S4.3 点名的"在文档与面板上声明是近似"）：
+ * 光说"近似"没用，弦高误差才是用户能拿去判断"这张图够不够用"的那个数。
+ */
+export const ROUND_FRUSTUM_PROMPT = "画一个圆台，上底半径 1、下底半径 2、高 3"
+
+const ROUND_FRUSTUM = (): PlanEnvelope => {
+  const shape = roundFrustumPolyhedron({ radiusBottom: 2, radiusTop: 1, height: 3 })
+  return {
+    schemaVersion: PLAN_SCHEMA_VERSION,
+    kind: "plan",
+    goal: "作一个下底半径 2、上底半径 1、高 3 的圆台",
+    factIds: [],
+    assumptions: [
+      `圆台用**正 ${shape.segments} 边形近似**（与圆柱 / 圆锥同一套分段口径）：两个底面是内接于圆的 ${shape.segments} 边形，侧面是 ${shape.segments} 个等腰梯形。`,
+      `下底处弦高误差 ${shape.chordError.toPrecision(3)} —— 多边形的边到理想圆弧的最大距离。它是近似，不是那个真的圆台。`
+    ],
+    actions: [{
+      actionId: "solid.create_polyhedron",
+      actionKey: "round-frustum",
+      factIds: [],
+      inputs: { alias: "round-frustum", vertices: shape.vertices, faces: shape.faces, label: "圆台（近似）" }
     }]
   }
 }
@@ -325,6 +357,7 @@ function solidShapeIntentFor(prompt: string): LocalIntent | null {
 }
 
 export const LOCAL_INTENTS: readonly LocalIntent[] = [
+  { all: ["圆台"], exact: ROUND_FRUSTUM_PROMPT, skillIds: ["spatial-modeling"], build: () => ROUND_FRUSTUM() },
   { all: ["四棱锥", "PA", "BC", "AD"], exact: PYRAMID_PROMPT, skillIds: ["spatial-modeling"], build: () => pyramidPlan() },
   /**
    * **代表题五（S5）**：同一只四棱锥 + 它的**外接球**。
