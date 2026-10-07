@@ -4,8 +4,9 @@ import { areCoplanar, crossVector3, distanceVector3, dotVector3, subtractVector3
 import { dihedralAngleDetail3 } from "../markers3d"
 import { buildFromPoints, createBuilderContext } from "../solid-builders"
 
-import { constructPrismWitness, constructPyramidWitness, constructWitnessShape, type PrismConstructRequest, type PyramidConstructRequest, type WitnessConstructRequest, type WitnessRelation } from "./constructors"
+import { constructPrismWitness, constructPyramidWitness, constructShapeFromSpec, constructWitnessShape, type PrismConstructRequest, type PyramidConstructRequest, type WitnessConstructRequest, type WitnessRelation } from "./constructors"
 import { isPointName } from "../pointNames"
+import type { SolidShapeSpec } from "./solidShapeSpec"
 import { candidateResiduals, polygonResiduals } from "./residuals"
 
 /**
@@ -873,5 +874,52 @@ describe("V0a free triangular base with no stated angle", () => {
     expect(new Set(lengths.map((value) => value.toFixed(6))).size).toBe(3)
     expect(at("D").z).toBeGreaterThan(at("A").z)
     expect(buildFromPoints({ vertices: orderedPoints(first.witness), faces: first.witness.faces }, createBuilderContext()).diagnostics).toEqual([])
+  })
+})
+
+/**
+ * **按 `SolidShapeSpec` 构造**（S2.1 内核侧）。
+ *
+ * 编排层从此只交两样：**形状描述**与**它替自由标量选定的值**。这里钉两件事：
+ * ① 它和"调用方自己拼请求"**产出同一组坐标**（换接口不换行为）；
+ * ② 未知的标量 id **明确拒绝** —— 不凭空取值，也不静默忽略。
+ */
+describe("constructShapeFromSpec", () => {
+  const SPEC: SolidShapeSpec = {
+    family: "pyramid",
+    base: ["A", "B", "C", "D"],
+    apex: { at: "P", foot: "A" },
+    relations: [{ kind: "perpendicular", segments: [["A", "B"], ["A", "D"]] }],
+    freeScalars: [
+      { id: "base-edge-1", kind: "base-edge", targets: ["A", "B"], candidates: [2, 3, 4] },
+      { id: "height", kind: "height", targets: ["P"], candidates: [2, 3] }
+    ]
+  }
+
+  it("spec + 取值 ⇒ 与手工拼请求产出**同一组坐标**", () => {
+    const fromSpec = constructShapeFromSpec(SPEC, [{ id: "base-edge-1", value: 2 }, { id: "height", value: 3 }])
+    const byHand = constructWitnessShape({
+      shape: "pyramid",
+      base: ["A", "B", "C", "D"],
+      apex: { at: "P", foot: "A", height: { kind: "free", value: 3 } },
+      relations: [
+        { kind: "perpendicular", segments: [["A", "B"], ["A", "D"]] },
+        { kind: "segment-length", segments: [["A", "B"]], value: 2 }
+      ]
+    })
+    expect(fromSpec.status).toBe("candidate")
+    expect(byHand.status).toBe("candidate")
+    if (fromSpec.status !== "candidate" || byHand.status !== "candidate") return
+    expect(fromSpec.witness.points).toEqual(byHand.witness.points)
+    expect(fromSpec.witness.names).toEqual(byHand.witness.names)
+  })
+
+  it("未知的自由标量 id ⇒ 明确拒绝，不凭空取值", () => {
+    const result = constructShapeFromSpec(SPEC, [{ id: "not-a-scalar", value: 1 }])
+    expect(result.status).toBe("rejected")
+    if (result.status === "rejected") {
+      expect(result.code).toBe("invalid-input")
+      expect(result.message.length).toBeGreaterThan(0)
+    }
   })
 })

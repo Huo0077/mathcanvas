@@ -32,6 +32,7 @@
 import { crossVector3, distanceVector3, dotVector3, lengthVector3, normalizeVector3, subtractVector3, type Vector3 } from "../geometry3d"
 import { dihedralAngleDetail3 } from "../markers3d"
 import { canonicalPointName, POINT_NAME_SUFFIXES, pointNameSuffixCount } from "../pointNames"
+import type { ShapeScalarChoice, SolidShapeSpec } from "./solidShapeSpec"
 import { candidateResiduals, polygonResiduals, type WitnessResidualDiagnostic } from "./residuals"
 
 /** 题目已给出的数值：`value` 是数值本身，`raw` 保留题面写法（进 freeValues / trace）。 */
@@ -175,6 +176,101 @@ export function constructWitnessShape(request: WitnessConstructRequest): Witness
   if (request.shape === "pyramid") return constructPyramidWitness(request)
   if (request.shape === "prism") return constructPrismWitness(request)
   return reject("invalid-input", `未知的图形族：${String((request as { shape?: unknown }).shape)}`)
+}
+
+/**
+ * 高的来源**从 spec 自己的 relations 读回来**：题面点名 `PA=10` 这类定长侧棱时，
+ * 编排层已经把它翻成 `segment-length`。于是**一份 spec 就够了** ——
+ * 不必在 spec 之外再夹带一个 `WitnessHeightSpec`（那正是"同一个判断写两遍"的开端）。
+ */
+function heightSpecFromSpec(spec: SolidShapeSpec): WitnessHeightSpec {
+  const apex = spec.apex?.at
+  if (apex === undefined) return { kind: "free" }
+  for (const relation of spec.relations) {
+    if (relation.kind !== "segment-length" || typeof relation.value !== "number") continue
+    const segment = relation.segments[0]
+    if (segment === undefined || segment.length !== 2 || !segment.includes(apex)) continue
+    const other = segment[0] === apex ? segment[1]! : segment[0]!
+    return { kind: "lateral-edge", edge: [apex, other], length: relation.value }
+  }
+  return { kind: "free" }
+}
+
+/** 棱柱：题面点名的那条侧棱长度（`AA′=5`），`null` = 自由。 */
+function statedLateralHeight(spec: SolidShapeSpec): number | null {
+  const top = spec.top?.[0]
+  if (top === undefined) return null
+  for (const relation of spec.relations) {
+    if (relation.kind !== "segment-length" || typeof relation.value !== "number") continue
+    if ((relation.segments[0] ?? []).includes(top)) return relation.value
+  }
+  return null
+}
+
+/**
+ * **题面有没有定住"高"**（棱锥看顶点那条定长侧棱，棱柱看侧棱长度）。
+ *
+ * 导出它是为了让**编排层**能问同一个问题（决定要不要把 `height` 列成自由标量），
+ * 而不是各自再写一遍"`relations` 里有没有包含顶点的 `segment-length`" ——
+ * 那正是本仓最忌讳的"同一个判断写两遍，然后两处慢慢分叉"。
+ */
+export function shapeHeightIsFree(spec: SolidShapeSpec): boolean {
+  return spec.top !== undefined ? statedLateralHeight(spec) === null : heightSpecFromSpec(spec).kind === "free"
+}
+
+/**
+ * **按 `SolidShapeSpec` 构造**（S2.1 内核侧）。
+ *
+ * 编排层从此只交两样东西：**形状描述**（spec）与**它替自由标量选定的值**（`ShapeScalarChoice`）。
+ *
+ * 为什么"取值 → 内核请求"这张翻译表**放在内核**：它整张都是内核自己的词汇
+ * （`segment-length` 关系、`WitnessHeightSpec`、`WitnessExtrusionSpec` 的两种拉伸来源）。
+ * 留在编排层等于让每个调用方各维护一份内核词汇表 —— 加一族形状就要改一遍，
+ * 而设计 §3.2 的表里写着"加新形状时：**不改**"。
+ *
+ * 未知的标量 id **明确拒绝**（`invalid-input`），不凭空取值。
+ */
+export function constructShapeFromSpec(spec: SolidShapeSpec, choices: readonly ShapeScalarChoice[] = []): WitnessConstructResult {
+  const relations: WitnessRelation[] = [...spec.relations]
+  const chosen = new Map<string, number>()
+  for (const choice of choices) {
+    const scalar = spec.freeScalars.find((entry) => entry.id === choice.id)
+    if (scalar === undefined) return reject("invalid-input", `自由标量 ${choice.id} 不在形状描述里，不能凭空取值。`, [...spec.base])
+    chosen.set(scalar.id, choice.value)
+    if (scalar.kind !== "base-edge") continue
+    const [first, second] = scalar.targets
+    if (first === undefined || second === undefined) {
+      return reject("invalid-input", `底面边自由标量 ${scalar.id} 没有两个端点。`, [...spec.base])
+    }
+    relations.push({ kind: "segment-length", segments: [[first, second]], value: choice.value })
+  }
+  const heightScalar = spec.freeScalars.find((scalar) => scalar.kind === "height")
+  const heightValue = heightScalar === undefined ? null : (chosen.get(heightScalar.id) ?? null)
+  if (spec.family === "prism") {
+    /**
+     * **直棱柱的拉伸是竖直向量**：题面写 `AA′⊥底面`，那正是"侧棱垂直于底面"的定义。
+     * 内核的 `{kind:"points"}` 分支**按设计不可用**（底面顶点全在 z = 0，`to − from` 必落在底面内），
+     * 所以这里只能给向量；高既没给定值又没扫到值时给 `{kind:"unknown"}` ——
+     * 由本层**如实拒**成缺拉伸，而不是替题面猜一个高度。
+     */
+    const height = heightValue ?? statedLateralHeight(spec)
+    return constructWitnessShape({
+      shape: "prism",
+      base: [...spec.base],
+      relations,
+      extrusion: height === null ? { kind: "unknown" } : { kind: "vector", vector: { x: 0, y: 0, z: height } }
+    })
+  }
+  const apex = spec.apex
+  if (apex === undefined) return reject("missing-apex", "棱锥的形状描述里没有顶点。", [...spec.base])
+  const stated = heightSpecFromSpec(spec)
+  const height: WitnessHeightSpec = heightValue === null || stated.kind !== "free" ? stated : { kind: "free", value: heightValue }
+  return constructWitnessShape({
+    shape: "pyramid",
+    base: [...spec.base],
+    apex: { at: apex.at, foot: apex.foot ?? spec.base[0] ?? apex.at, height },
+    relations
+  })
 }
 
 export function constructPyramidWitness(request: PyramidConstructRequest): WitnessConstructResult {

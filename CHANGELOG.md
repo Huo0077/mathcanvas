@@ -7,7 +7,17 @@
 
 
 
-## 2026-10-07 —— S1.4 收口：**按用户裁决扩语法**（顶面可以叫 `A′′`），并取消词表外的名字
+## 2026-10-07 —— S2.1 内核侧：内核按 `SolidShapeSpec` 构造（编排层的请求拼装退场）
+
+- 内核新增 `constructShapeFromSpec(spec, choices)`：编排层只交**形状描述**与**它替自由标量选定的值**（`ShapeScalarChoice { id, value }`，id 与 `spec.freeScalars[].id` 对应）。未知 id **明确拒绝**（`invalid-input`），不凭空取值。
+- **"取值 → 内核请求"那张翻译表搬进内核**：它整张都是内核词汇（`segment-length` / `WitnessHeightSpec` / `WitnessExtrusionSpec` 的两种拉伸来源）。留在编排层等于让每个调用方各维护一份内核词汇表 —— 与设计 §3.2"加新形状时**不改编排层**"直接冲突。
+- **agent-core 删掉三处拼装代码**：`requestFor`、`heightSpecFromSpec`、`statedLateralHeight`；`PyramidStructure.heightSpec` 与 `PrismStructure.statedHeight` 两个字段一并删除（结构只留"底面环 + 顶点/垂足 + 关系 + 自由底边"）。`CandidatePlan` 从"带着一个内核请求"改成"带着 spec + 取值"。
+- **"高是不是自由的"只在一处判**：内核导出 `shapeHeightIsFree(spec)`，编排层用它决定要不要把 `height` 列成自由标量 —— 否则这句话会在两处各写一遍，然后慢慢分叉。
+- **行为逐字不变**：坐标护栏（四棱锥那五个坐标）与全部既有用例原样通过；新增两条内核用例：① spec + 取值与"手工拼请求"产出**同一组坐标**；② 未知 id 明确拒绝。
+- **一次返工如实记**：删 `heightSpecFor` 时我漏了它本身（只改了调用点），`typecheck` 报 `Cannot find name 'WitnessHeightSpec'` 才逼出来 —— 与我上一批"机械替换漏调用点"是同一类错，教训也一样：**改完先跑 typecheck**。
+- 读数：内核该文件 **35/35**（+2）；全库非 Lean **3904 通过 + 1 todo / 0 失败**（152.81 s，**+2 = 新用例**）；`typecheck` exit 0；`lint` 0 error / 13 warning。
+
+
 
 - **用户裁决**：底面点名里已经用了 `A′` 时，顶面对应点叫 **`A′′`** —— 走**扩语法**那条路（"明确拒绝整道题"被否掉）。
 - 词表随之扩到 **字母 + 至多两个后缀**：`A`、`A′`、`A₁`、`A′′`、`A′₁` 合法；**三层不算**（`A′′′`）。ASCII 数字后缀（`A′2`、`A1`）**任何时候**都不算。

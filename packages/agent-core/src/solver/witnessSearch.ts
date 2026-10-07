@@ -1,4 +1,4 @@
-import { buildFromPoints, constructWitnessShape, createBuilderContext, namedRightTriangleBase, type FreeScalar, type SolidShapeSpec, type Vector3, type WitnessConstructRequest, type WitnessHeightSpec, type WitnessRelation, type WitnessShapeCandidate } from "@draw/geometry-kernel"
+import { buildFromPoints, constructShapeFromSpec, createBuilderContext, namedRightTriangleBase, shapeHeightIsFree, type FreeScalar, type ShapeScalarChoice, type SolidShapeSpec, type Vector3, type WitnessRelation, type WitnessShapeCandidate } from "@draw/geometry-kernel"
 import { createEmptyDocument } from "@draw/dsl"
 
 import { evidenceStatusForWitness, type ClaimEvidence, type ClaimEvidenceStatus, type GeometryObligation, type SolverStatus, type WitnessResultStatus } from "../claimEvidence"
@@ -253,7 +253,6 @@ interface PyramidStructure {
   relations: WitnessRelation[]
   /** 题面**没有**给长度的底面两条边（`AB` 与 `AD`）：它们才是网格可以扫的自由标量。 */
   freeBaseEdges: [string, string][]
-  heightSpec: WitnessHeightSpec
 }
 
 type StructureResult = { status: "ok"; structure: PyramidStructure } | { status: "rejected"; code: string; message: string }
@@ -267,8 +266,6 @@ interface PrismStructure {
   foot: string
   relations: WitnessRelation[]
   freeBaseEdges: [string, string][]
-  /** 侧棱的给定长度（题面写了 `AA′=5` 才有），`null` = 自由。 */
-  statedHeight: number | null
 }
 
 /**
@@ -310,39 +307,9 @@ function derivePrismStructure(givens: readonly GeometryObligation[]): StructureR
     }
   }
   const relations = kernelRelations(givens)
-  let lateral: number | null = null
-  for (const relation of relations) {
-    // 显式循环而不是 `find` 里的 `&&` 链：`WitnessRelation` 的判别在箭头函数里收不窄（TS2339）。
-    if (relation.kind !== "segment-length" || typeof relation.value !== "number") continue
-    const segment = relation.segments[0] ?? []
-    if (segment.includes(foot) && segment.includes(normalized)) {
-      lateral = relation.value
-      break
-    }
-  }
   const { freeBaseEdges } = orderedBaseWithFreeEdges(base, relations)
-  return {
-    status: "ok",
-    structure: {
-      base: [...base],
-      top: normalized,
-      foot,
-      relations,
-      freeBaseEdges,
-      statedHeight: lateral
-    }
-  }
-}
-
-/** 高的来源：题面点名的那条含顶点的定长线段（解析式），否则自由。 */
-function heightSpecFor(givens: readonly GeometryObligation[], apex: string): WitnessHeightSpec {
-  for (const obligation of givens) {
-    if (obligation.kind !== "fixedLength" || obligation.targets.length !== 2 || typeof obligation.expected !== "number") continue
-    if (!obligation.targets.includes(apex)) continue
-    const other = obligation.targets[0] === apex ? obligation.targets[1] : obligation.targets[0]
-    return { kind: "lateral-edge", edge: [apex, other], length: obligation.expected }
-  }
-  return { kind: "free" }
+  // 侧棱长度**不在这一层判**：它就在 `relations` 里，由内核的 `shapeHeightIsFree` 读（一份判断，一处写）。
+  return { status: "ok", structure: { base: [...base], top: normalized, foot, relations, freeBaseEdges } }
 }
 
 /**
@@ -375,7 +342,7 @@ function derivePyramidStructure(givens: readonly GeometryObligation[]): Structur
 
   return {
     status: "ok",
-    structure: { base: [...orderedBase], apex, foot, relations, freeBaseEdges, heightSpec: heightSpecFor(givens, apex) }
+    structure: { base: [...orderedBase], apex, foot, relations, freeBaseEdges }
   }
 }
 
@@ -407,9 +374,15 @@ function orderedBaseWithFreeEdges(base: readonly string[], relations: readonly W
 // ---------------------------------------------------------------- 候选池（解析优先 + 有限网格）
 
 interface CandidatePlan {
-  request: WitnessConstructRequest
-  /** 这个候选**自己选定**的自由标量（解析候选为空）—— 必须写进 assumptions 给用户看。 */
-  freeChoices: { edge: [string, string]; value: number }[]
+  /**
+   * **形状描述 + 这一候选选定的自由标量** —— 内核 `constructShapeFromSpec` 的全部输入。
+   *
+   * 这里**不再**由本层拼 `WitnessConstructRequest`：那张翻译表整张都是内核词汇
+   * （`segment-length` / `WitnessHeightSpec` / `WitnessExtrusionSpec`），放在这里
+   * 等于让每个调用方各维护一份 —— 与设计 §3.2"加新形状时不改编排层"直接冲突。
+   */
+  spec: SolidShapeSpec
+  choices: ShapeScalarChoice[]
   /** 排序键：只累加我们选定的自由标量；题面已定的部分对所有候选都一样，比它没有意义。 */
   sizeKey: number
 }
@@ -453,80 +426,18 @@ function specFor(structure: PyramidStructure | PrismStructure): SolidShapeSpec {
     targets: [...edge],
     candidates: [...FREE_BASE_VALUES]
   }))
-  const heightIsFree = "top" in structure ? structure.statedHeight === null : structure.heightSpec.kind === "free"
-  if (heightIsFree) {
-    const targets = "top" in structure ? [structure.top] : [structure.apex]
-    freeScalars.push({ id: "height", kind: "height", targets, candidates: [...FREE_HEIGHT_VALUES] })
+  const isPrism = "top" in structure
+  const skeleton: SolidShapeSpec = isPrism
+    ? { family: "prism", base: [...structure.base], top: [structure.top], relations: [...structure.relations], freeScalars }
+    : { family: "pyramid", base: [...structure.base], apex: { at: structure.apex, foot: structure.foot }, relations: [...structure.relations], freeScalars }
+  /**
+   * "高是不是自由的"**问内核**（`shapeHeightIsFree`）：它才是"`relations` → `WitnessHeightSpec`"
+   * 那份判断的持有者。编排层再写一遍就是同一个判断写两遍，而两处迟早会分叉。
+   */
+  if (shapeHeightIsFree(skeleton)) {
+    freeScalars.push({ id: "height", kind: "height", targets: isPrism ? [structure.top] : [structure.apex], candidates: [...FREE_HEIGHT_VALUES] })
   }
-  if ("top" in structure) {
-    /**
-     * `top` 只记**题面点名出来的那一个**顶面顶点：其余顶面点名由内核 `withPrimes` 按同一规则生成，
-     * spec 不预判 —— 预判就会在"底面已经用了 `A′`"那种冲突回退里与内核给出不同答案。
-     */
-    return { family: "prism", base: [...structure.base], top: [structure.top], relations: [...structure.relations], freeScalars }
-  }
-  return {
-    family: "pyramid",
-    base: [...structure.base],
-    apex: { at: structure.apex, foot: structure.foot },
-    relations: [...structure.relations],
-    freeScalars
-  }
-}
-
-/**
- * 高的来源**从 spec 自己的 relations 读回来**：题面点名 `PA=10` 这类定长侧棱时，
- * `kernelRelations` 已经把它翻成 `segment-length`。于是**一份 spec 就够了** ——
- * 不必在 spec 之外再夹带一个 `WitnessHeightSpec`（那正是"同一个判断写两遍"的开端）。
- */
-function heightSpecFromSpec(spec: SolidShapeSpec): WitnessHeightSpec {
-  const apex = spec.apex?.at
-  if (apex === undefined) return { kind: "free" }
-  for (const relation of spec.relations) {
-    if (relation.kind !== "segment-length" || typeof relation.value !== "number") continue
-    const segment = relation.segments[0]
-    if (segment === undefined || segment.length !== 2 || !segment.includes(apex)) continue
-    const other = segment[0] === apex ? segment[1]! : segment[0]!
-    return { kind: "lateral-edge", edge: [apex, other], length: relation.value }
-  }
-  return { kind: "free" }
-}
-
-/** 棱柱：题面点名的那条侧棱长度（`AA′=5`），`null` = 自由。 */
-function statedLateralHeight(spec: SolidShapeSpec): number | null {
-  const top = spec.top?.[0]
-  if (top === undefined) return null
-  for (const relation of spec.relations) {
-    if (relation.kind !== "segment-length" || typeof relation.value !== "number") continue
-    if ((relation.segments[0] ?? []).includes(top)) return relation.value
-  }
-  return null
-}
-
-function requestFor(spec: SolidShapeSpec, choices: readonly { edge: [string, string]; value: number }[], heightValue: number | null): WitnessConstructRequest {
-  const relations: WitnessRelation[] = [...spec.relations]
-  for (const choice of choices) {
-    relations.push({ kind: "segment-length", segments: [[choice.edge[0], choice.edge[1]]], value: choice.value })
-  }
-  if (spec.family === "prism") {
-    /**
-     * **直棱柱的拉伸是竖直向量**：题面写 `AA′⊥底面`，那正是"侧棱垂直于底面"。
-     * 内核的 `{kind:"points"}` 分支按设计不可用（底面顶点全在 z = 0），所以这里只能给向量；
-     * 高没定又没扫到值时给 `{kind:"unknown"}` —— 由内核**如实拒**成缺拉伸，而不是猜一个高度。
-     */
-    const height = heightValue ?? statedLateralHeight(spec)
-    return {
-      shape: "prism",
-      base: [...spec.base],
-      relations,
-      extrusion: height === null ? { kind: "unknown" } : { kind: "vector", vector: { x: 0, y: 0, z: height } }
-    }
-  }
-  const apex = spec.apex?.at ?? ""
-  const stated = heightSpecFromSpec(spec)
-  const height: WitnessHeightSpec = heightValue === null || stated.kind !== "free" ? stated : { kind: "free", value: heightValue }
-  // `specFor` 总会写上顶点与垂足；这里的兜底只是不让类型上的"可选"变成运行期异常。
-  return { shape: "pyramid", base: [...spec.base], apex: { at: apex, foot: spec.apex?.foot ?? spec.base[0] ?? apex, height }, relations }
+  return skeleton
 }
 
 /**
@@ -537,23 +448,22 @@ function requestFor(spec: SolidShapeSpec, choices: readonly { edge: [string, str
  * 但取值表是固定的小整数（各 3 / 2 个），所以池子的规模有上界，`maxCandidates` 只会在尾部截断。
  */
 function candidatePool(spec: SolidShapeSpec, input: WitnessSearchInput): CandidatePlan[] {
-  const pool: CandidatePlan[] = [{ request: requestFor(spec, [], null), freeChoices: [], sizeKey: 0 }]
+  const pool: CandidatePlan[] = [{ spec, choices: [], sizeKey: 0 }]
   const baseScalars = spec.freeScalars.filter((scalar) => scalar.kind === "base-edge")
   const heightScalar = spec.freeScalars.find((scalar) => scalar.kind === "height")
-  const edgeOf = (scalar: FreeScalar): [string, string] => [scalar.targets[0]!, scalar.targets[1]!]
-  const baseOptions: { edge: [string, string]; value: number }[][] = []
+  const baseOptions: ShapeScalarChoice[][] = []
   if (baseScalars.length === 2) {
     const [widthScalar, depthScalar] = baseScalars as [FreeScalar, FreeScalar]
     for (const width of seededOrder(widthScalar.candidates, input.seed)) {
       for (const depth of seededOrder(depthScalar.candidates, input.seed + 1)) {
         // 两条边都自由时不许取相等：那会顺带把底面做成正方形 —— 题面没说的额外特殊性。
         if (width === depth) continue
-        baseOptions.push([{ edge: edgeOf(widthScalar), value: width }, { edge: edgeOf(depthScalar), value: depth }])
+        baseOptions.push([{ id: widthScalar.id, value: width }, { id: depthScalar.id, value: depth }])
       }
     }
   } else if (baseScalars.length === 1) {
     const [scalar] = baseScalars as [FreeScalar]
-    for (const value of seededOrder(scalar.candidates, input.seed)) baseOptions.push([{ edge: edgeOf(scalar), value }])
+    for (const value of seededOrder(scalar.candidates, input.seed)) baseOptions.push([{ id: scalar.id, value }])
   } else {
     baseOptions.push([])
   }
@@ -563,16 +473,20 @@ function candidatePool(spec: SolidShapeSpec, input: WitnessSearchInput): Candida
     : seededOrder(heightScalar.candidates, input.seed + 2)
 
   const grid: CandidatePlan[] = []
-  for (const choices of baseOptions) {
+  for (const baseChoice of baseOptions) {
     for (const height of heightOptions) {
       /**
        * **没有自由标量时不要产候选**（R34 / M4）：`baseOptions = [[]]` 与 `heightOptions = [null]`
        * 的组合与解析候选**逐字节相同** —— 它会白吃一个 `maxCandidates` 名额，
        * 还会把 `candidates=N` 报大，让"我试了几种"这句话失真。
        */
-      if (choices.length === 0 && height === null) continue
-      const sizeKey = choices.reduce((total, choice) => total + choice.value * choice.value, 0) + (height ?? 0) ** 2
-      grid.push({ request: requestFor(spec, choices, height), freeChoices: choices.map((choice) => ({ edge: choice.edge, value: choice.value })), sizeKey })
+      if (baseChoice.length === 0 && height === null) continue
+      const choices: ShapeScalarChoice[] = heightScalar === undefined || height === null
+        ? [...baseChoice]
+        : [...baseChoice, { id: heightScalar.id, value: height }]
+      // 排序键只累加我们选定的自由标量；题面已定的部分对所有候选都一样。
+      const sizeKey = choices.reduce((total, choice) => total + choice.value * choice.value, 0)
+      grid.push({ spec, choices, sizeKey })
     }
   }
   // 小整数优先（规格 §6.3 的优先级）：同键的先后由 seed 决定（上面那两次排列 + 这里的稳定排序）。
@@ -653,7 +567,7 @@ export function isIdentityBuildOrder(buildOrder: readonly number[], vertexCount:
  * 构造（2a）→ 拓扑（内核 `buildFromPoints`）→ 物化（既有编译路径）→ 判定（唯一核验器）。
  */
 function judgeCandidate(plan: CandidatePlan, legacy: DiagramObligationSet): CandidateJudgement {
-  const constructed = constructWitnessShape(plan.request)
+  const constructed = constructShapeFromSpec(plan.spec, plan.choices)
   if (constructed.status === "rejected") {
     return { kind: "rejected", code: constructed.code, message: constructed.message }
   }
@@ -948,7 +862,11 @@ function verifiedResult(
     ...witness.freeValues,
     // 网格候选注入的自由值在 2a 眼里是"题面给的"（我们就是用长度告诉它的），
     // 所以那几行**必须**由这一层补上，否则用户看不到系统替他定了什么。
-    ...plan.freeChoices.map((choice) => `${choice.edge[0]}${choice.edge[1]} = ${String(choice.value)}（搜索器自选，题面未给）`),
+    // 文案里的点名从 spec 的自由标量取（choice 只带 id + 值）。
+    ...plan.choices.map((choice) => {
+      const scalar = plan.spec.freeScalars.find((entry) => entry.id === choice.id)
+      return `${(scalar?.targets ?? [choice.id]).join("")} = ${String(choice.value)}（搜索器自选，题面未给）`
+    }),
     configLine(input, considered)
   ]
   return {

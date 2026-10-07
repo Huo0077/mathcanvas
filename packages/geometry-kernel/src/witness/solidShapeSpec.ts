@@ -43,3 +43,14 @@ export interface SolidShapeSpec {
   relations: WitnessRelation[]
   freeScalars: FreeScalar[]
 }
+
+/**
+ * 编排层为某个自由标量**选定**的值：`id` 与 `freeScalars[].id` 对应。
+ *
+ * 放在 spec 旁边而不是散在各调用点：内核 `constructShapeFromSpec` 就是按这个契约把
+ * "形状描述 + 取值"翻成构造请求的；id 对不上时它**明确拒绝**，不凭空取值。
+ */
+export interface ShapeScalarChoice {
+  id: string
+  value: number
+}
