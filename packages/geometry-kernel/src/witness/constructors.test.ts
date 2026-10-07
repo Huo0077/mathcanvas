@@ -643,8 +643,12 @@ describe("constructPrismWitness", () => {
 
   it("names the top-face vertices without collisions when the base already uses primed names", () => {
     /**
-     * 复核 round 1 Minor 8：`withPrimes` 的冲突回退（底面点名里已经有 `A′`）没有用例。
-     * 题面罕见，但一旦发生，重名会让顶面与底面无法区分 —— 必须是**唯一**的名字。
+     * 底面点名里已经有 `A′`（题面 `ABCD-A′B′C′D′` 那一类）时，顶面必须另起名字。
+     *
+     * **用户 2026-10-07 裁决：按扩语法处理** —— 顶面叫 `A′′`（字母 + 两个后缀合法）。
+     * 于是本用例从"记录一处已知缺口"变成"钉住裁决后的正确行为"：
+     * ① 每个名字都必须在共享词表里；② 底面第三个名已经占了 `A′`，
+     * 所以 `A` 的顶面走**下一个一层后缀**（`A₁`），而 `A′` 的顶面正好是裁决点名的 `A′′`。
      */
     const result = constructPrismWitness({
       shape: "prism",
@@ -657,17 +661,10 @@ describe("constructPrismWitness", () => {
     const { names } = result.witness
     expect(names.slice(0, 3)).toEqual(["A", "B", "A′"])
     expect(new Set(names).size).toBe(names.length)
-    expect(names.slice(3)).toEqual(["A′2", "B′", "A′′"])
-    /**
-     * **已知缺口（S1.4 查实，未裁决）**：下面这条记录的是**今天的行为**，不是认可 ——
-     * `A′2` 与 `A′′` 都**不在**共享定义里（点名 = 一个字母 + **一个**可选撇或下标），
-     * 于是核验器的 `vertexNames` 检查会把**整张表**判为不可靠（fail-closed，未核验）。
-     *
-     * 两条修法都需要裁决：① 扩语法（允许第二个后缀）；② 明确拒绝这种底面并给 `code`。
-     * **本块不擅自选**：那会改掉一个被注释与用例同时钉住的行为。
-     * 这条断言的作用是：谁改动这里的命名，就必须同时处理这个缺口，而不是让它悄悄变化。
-     */
-    expect(names.filter((name) => !isPointName(name))).toEqual(["A′2", "A′′"])
+    expect(names.slice(3)).toEqual(["A₁", "B′", "A′′"])
+    // 裁决之后**不许**再有词表外的名字：`A′2` 那种写法（字母 + 撇 + ASCII 数字）已经不该出现。
+    expect(names.filter((name) => !isPointName(name))).toEqual([])
+    expect(names).not.toContain("A′2")
   })
 })
 

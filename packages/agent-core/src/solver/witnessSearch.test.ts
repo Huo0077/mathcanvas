@@ -388,6 +388,18 @@ describe("直棱柱", () => {
     // 拒绝要说得出是"底面形状满足不了"，而不是含糊的"没找到"。
     expect(result.reasons.join(" "), JSON.stringify(result)).toContain("unsupported-base-shape")
   })
+
+  /**
+   * **S1.4 裁决的端到端落点**（用户 2026-10-07：底面已用 `A′` 时顶面叫 `A′′`，按**扩语法**处理）。
+   *
+   * 这条题面的底面**自己**就带撇（`A′B′C′`），顶面因此只能是 `A′′B′′C′′`。裁决之前内核会退化出
+   * `A′2` 那种词表外的名字，核验器于是把整张点名表判为不可靠 —— 这条路永远拿不到核验；
+   * 现在两后缀合法（`A′′` 在词表里），整条链走通。
+   */
+  it("底面自己带撇时（A′B′C′-A′′B′′C′′）也走通：顶面按裁决叫 A′′", () => {
+    const result = search("在三棱柱A′B′C′-A′′B′′C′′中，A′A′′⊥平面A′B′C′，画出这个三棱柱", { shape: "prism" })
+    expect(result.status, JSON.stringify(result)).toBe("verified_instance")
+  })
 })
 
 describe("witness search: unsupported inputs stay unsupported", () => {

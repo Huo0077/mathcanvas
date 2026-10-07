@@ -31,7 +31,7 @@
 
 import { crossVector3, distanceVector3, dotVector3, lengthVector3, normalizeVector3, subtractVector3, type Vector3 } from "../geometry3d"
 import { dihedralAngleDetail3 } from "../markers3d"
-import { POINT_NAME_PRIME } from "../pointNames"
+import { canonicalPointName, POINT_NAME_SUFFIXES, pointNameSuffixCount } from "../pointNames"
 import { candidateResiduals, polygonResiduals, type WitnessResidualDiagnostic } from "./residuals"
 
 /** 题目已给出的数值：`value` 是数值本身，`raw` 保留题面写法（进 freeValues / trace）。 */
@@ -313,10 +313,26 @@ export function constructPrismWitness(request: PrismConstructRequest): WitnessCo
     z: point.z + vector.z
   }))
 
+  /**
+   * **造不出顶面点名就明确拒绝**（不是硬拼一个词表外的名字）。
+   *
+   * 走到这里意味着底面点名把该字母的一层与两层后缀**全占满了** —— 罕见，但一旦发生，
+   * 硬拼 `A′2` 这种名字的后果是核验器判整张表不可靠、用户拿到一张永远核验不了的图。
+   * 明确拒绝好过那样。
+   */
+  const extraNames = withPrimes(base.names)
+  if (extraNames === null) {
+    return reject(
+      "unsupported-base-shape",
+      `底面点名 ${base.names.join("、")} 占满了可用的后缀组合（一个字母 + 至多两个后缀），顶面无法在不重名的前提下命名。`,
+      [...base.names]
+    )
+  }
+
   return assembleCandidate({
     baseNames: base.names,
     basePoints: derived.polygon,
-    extraNames: withPrimes(base.names, [POINT_NAME_PRIME]),
+    extraNames,
     extraPoints: topPoints,
     apex: false,
     freeValues: derived.freeValues,
@@ -515,31 +531,48 @@ function polygonDiameter(points: readonly Vector3[]): number {
 }
 
 /**
- * 顶面顶点的**名字**：底面名 + 上标（`A′`、`B′`…）。
+ * **一个底面名可以派生出的顶面名**（按优先顺序）。
+ *
+ * 名字的形状与共享词表一致：**字母 + 至多两个后缀**。所以：
+ * - 底面无后缀（`A`）：先试一层（`A′`、`A₁`、…），再试两层（`A′′`、`A′₁`、…）；
+ * - 底面已带一层（`A′`，即题面自己写了撇的那种）：**只剩一层可加** ⇒ `A′′`、`A′₁`、… 。
+ *
+ * 这正是用户 2026-10-07 裁决的那条：底面已用 `A′` 时顶面叫 **`A′′`**（扩语法），
+ * 而不是把整道题拒掉。三层及以上**不在词表里**，所以这里不去造。
+ */
+function derivedNameCandidates(name: string): string[] {
+  const used = pointNameSuffixCount(name)
+  if (used < 0 || used >= 2) return []
+  const single = POINT_NAME_SUFFIXES.map((suffix) => `${name}${suffix}`)
+  if (used === 1) return single
+  const double: string[] = []
+  for (const first of POINT_NAME_SUFFIXES) for (const second of POINT_NAME_SUFFIXES) double.push(`${name}${first}${second}`)
+  return [...single, ...double]
+}
+
+/**
+ * 顶面顶点的**名字**：底面名派生（`A′`、`B′`…）。
  *
  * 只用名字区分底面与顶面顶点 —— 坐标本身是严格平移，不靠"位置略不同"来区分。
- * 与底面名冲突时退化成 `′2`、`′3`（用户点名 `A′` 的题面极罕见，但不能因此重名）。
  *
- * **已知缺口（2026-10-07，S1 查实，未裁决）**：那条冲突回退还产 `A′2` / `A′′`，
- * 而它们**不在** `pointNames` 的共享定义里（点名 = 一个字母 + **一个**可选撇或下标）。
- * 后果是核验器的 `vertexNames` 检查会把**整张表**判为不可靠（fail-closed，未核验），
- * 于是"底面本身就带撇"的棱柱拿不到逐条核验。修法有两条、都需要裁决：
- * ① 扩语法（允许第二个后缀，`A′′` / `A′₁` 合法）；② 明确拒绝这种底面（`code` 点名理由）。
- * **本块不擅自选**：那会改掉一个被注释与用例同时钉住的行为。
- * 正常路径（底面无撇）产出的名字**都**满足共享定义 —— 见下面的用例。
+ * **两条纪律**：
+ * - **比较按规范字形**（`canonicalPointName`）：`A'` 与 `A′` 是同一个名字的两种字形，
+ *   不归一就会出现"同一个点以两种写法同时进点名表"。
+ * - **造不出来就返回 `null`**（而不是硬拼一个词表外的名字）：候选耗尽时由调用方**明确拒绝**。
+ *   此前这里会退化成 `A′2` 这种名字 —— 它不在共享词表里，核验器于是把整张表判为不可靠，
+ *   用户拿到的是一张**永远核验不了**的图。用户裁决扩语法之后，`A′′` 这类名字合法了，
+ *   而词表外的名字仍然一个都不许造。
  */
-function withPrimes(names: readonly string[], suffixes: readonly string[]): string[] {
-  const used = new Set(names)
-  return names.map((name, index) => {
-    let candidate = `${name}${suffixes[index % suffixes.length] ?? POINT_NAME_PRIME}`
-    let suffix = 2
-    while (used.has(candidate)) {
-      candidate = `${name}${POINT_NAME_PRIME}${suffix}`
-      suffix += 1
-    }
-    used.add(candidate)
-    return candidate
-  })
+function withPrimes(names: readonly string[]): string[] | null {
+  const used = new Set(names.map(canonicalPointName))
+  const out: string[] = []
+  for (const name of names) {
+    const picked = derivedNameCandidates(name).find((candidate) => !used.has(canonicalPointName(candidate)))
+    if (picked === undefined) return null
+    used.add(canonicalPointName(picked))
+    out.push(picked)
+  }
+  return out
 }
 
 function formatNumber(value: number): string {

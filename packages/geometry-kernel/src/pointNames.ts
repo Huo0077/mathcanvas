@@ -14,11 +14,17 @@
  * 实测（设计 §1.1）：`在三棱柱ABCD-A₁B₁C₁D₁中，AA₁⊥平面ABCD` 在三种写法下都是
  * `givens: []` + `unverified` 残留。**这是 fail-closed，但没有一条能读懂。**
  *
- * ## 契约
+ * ## 契约（2026-10-07 按用户裁决扩宽）
  *
- * - 点名 = **一个大写字母 + 可选的撇或下标**：`A`、`A′`、`A'`、`A₁`。
+ * - 点名 = **一个大写字母 + 至多两个后缀**，后缀是撇或下标：`A`、`A′`、`A₁`、**`A′′`**、`A′₁` 都算；
+ *   **三个后缀不算**（`A′′′`）。
+ * - **为什么需要第二层**：内核给棱柱顶面起名的方式是"底面名 + 一个后缀"，而**底面本身**可能已经带撇
+ *   （题面 `ABCD-A′B′C′D′` 这一类）。此时 `A′` 已被占，顶面只能是 `A′′` —— 用户 2026-10-07 裁决
+ *   **按扩语法处理**（另一条路是明确拒绝整道题，那条被否掉了）。三层及以上没有真实来源，不收。
  * - **ASCII 下标 `A1` 不算点名**。它必须留在"读不出"那一侧（进 `unverified` 显形），
  *   不许在这里被凑合解析成 `A₁` —— 那正是"悄悄改题"的老毛病。
+ * - `′` 与 `'` 是**同一个后缀的两种字形**：两者都合法，但**比较时必须按规范字形**
+ *   （`canonicalPointName`），否则同一个点会以两种写法同时进点名表。
  * - `splitPointNames` 只在拆出来的点名**正好铺满输入**时返回结果；有看不懂的字符就返回 `[]`
  *   （"拆不出"），而不是把看不懂的部分丢掉、把剩下的当成功。
  *
@@ -29,16 +35,34 @@
  */
 
 /** 单个点名的模式。**不要**在各调用点重写它 —— 那正是本模块要消灭的东西。 */
-export const POINT_NAME_SOURCE = "[A-Z](?:[′']|[₁₂₃₄₅₆])?"
+export const POINT_NAME_SOURCE = "[A-Z](?:[′']|[₁₂₃₄₅₆]){0,2}"
 
 /**
  * 撇字符本身（内核给顶面顶点起名时用的那一笔）。
  *
- * 单独导出它的理由很窄：内核 `witness/constructors.ts` 的 `withPrimes` 现在**仍然自己写**
- * `"′"` 这个字面量（两处）。把字面量收进来，是为了让"点名由哪些字符组成"只有一处定义 ——
- * 与 `POINT_NAME_SOURCE` 是同一件事的两面。
+ * 单独导出它的理由很窄：内核 `witness/constructors.ts` 的 `withPrimes` 需要"首选的"那一笔。
+ * 把字面量收进来，是为了让"点名由哪些字符组成"只有一处定义 —— 与 `POINT_NAME_SOURCE` 是同一件事的两面。
  */
 export const POINT_NAME_PRIME = "′"
+
+/** 后缀字母表（内核给顶面起名时按它枚举）。**顺序即优先顺序**：先撇，再下标。 */
+export const POINT_NAME_SUFFIXES: readonly string[] = [POINT_NAME_PRIME, "₁", "₂", "₃", "₄", "₅", "₆"]
+
+/**
+ * 后缀的**规范字形**：ASCII 撇 `'` 与 `′` 视为同一个。
+ *
+ * 用于**比较与去重**，不用于输出 —— 输出的字形由调用方决定（内核一律写 `′`）。
+ * 不做这一步的后果很具体：`A'` 与 `A′` 是不同字串，`Set` 会当成两个名字，
+ * 于是同一个点以两种写法同时进点名表。
+ */
+export function canonicalPointName(value: string): string {
+  return value.replace(/'/g, POINT_NAME_PRIME)
+}
+
+/** 这个名字已经带了几层后缀（0–2）。不是点名时返回 `-1`。 */
+export function pointNameSuffixCount(value: string): number {
+  return isPointName(value) ? [...value].length - 1 : -1
+}
 
 const POINT_NAME = new RegExp(`^${POINT_NAME_SOURCE}$`)
 const POINT_NAME_RUN = new RegExp(POINT_NAME_SOURCE, "g")
