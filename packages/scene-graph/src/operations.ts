@@ -242,6 +242,21 @@ export function solidStatusReport(document: GeometryDocument, scope?: SolidDeriv
     report.push({ solidId: primitive.id, code: "derived.insphere", status: insphere.status, message: sphereStatusMessage("内切球", insphere) })
   }
 
+  /**
+   * **过期的派生球**（S5；设计 §4.1 的"物化但不重算被否决"）。
+   *
+   * 正常时这一段**一行都不产出**（没问题就不该多噪声）。一旦产出，意思很具体：
+   * 画面上那只球**已经不再是宿主的球**（宿主现在没有这种球了，或者球被改过 / 重算没跑到）。
+   * 判据在 `derivedSphereLink.ts`，它从文档自己的坐标独立复核，不读构造方的自述。
+   *
+   * 归属写在**宿主实体**上（这条读数说的是"这只实体的球过期了"），
+   * 具体是哪只球由 `sourceId` 指出 —— 与 `derived.section` 的记法一致。
+   */
+  for (const stale of staleDerivedSpheres(document)) {
+    if (solidFilter && !solidFilter.has(stale.hostId)) continue
+    report.push({ solidId: stale.hostId, code: "derived.sphere_stale", status: "undefined", message: stale.link.reason, sourceId: stale.sphereId })
+  }
+
   for (const primitive of document.primitives) {
     if (primitive.type !== "section") continue
     if (sectionFilter && !sectionFilter.has(primitive.id)) continue
@@ -300,6 +315,7 @@ export { EDITABLE_GEOMETRY_TYPES, isFreeDraggable3, isRotatable3, managedPointId
 
 // 截面与交的重算在 `./sectionRecompute`（评审方案 2 拆出来的）。
 import { solidTopology3 } from "./sectionRecompute"
+import { staleDerivedSpheres } from "./derivedSphereLink"
 export { intersectionFaceRings, solidTopology3 } from "./sectionRecompute"
 
 

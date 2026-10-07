@@ -161,8 +161,9 @@
   - **创建球的动作（2026-10-07 完成）**：`derived.create_circumsphere` / `derived.create_insphere` 五层贯通（动作层类型 / `actionIds` / `actionRegistry`（`solidId` 走作用域引用）/ `actionInputs`（只收 `solidId`）/ `actions/index.ts` 的构造与分派 + `manifest` 能力映射）。**解不出对应球就拒绝整条动作**（不编球）；落盘带 `derivedFrom` 绑定 ⇒ 跟着宿主重算。`derivedSphereCompile.test.ts` 4/4；`actionAudit` 两条"承载不了"删除。
   - **交给模型（2026-10-07 完成）**：两个动作进入 `spatial-modeling` 的 `actionIds`，自述写明用法与拒绝口径（**不要改用 `solid.create_sphere` 编一个球**）；`EXPECTED_HASHES` 按纪律重签（`catalog.test.ts` 的 `hash_mismatch` 拦住过）；`agentRuntime.test.ts` 的可用动作清单更新到 9 个。**性质是行为变更**：模型工具箱变了，真实 provider 质量基线要重测。
   - **仍是缺口**：派生球在**面板与画布**上没有专门的呈现（落盘与渲染走 `sphere` 图元的既有路径）。
-- [ ] **Task 5.2 接进唯一重算入口**（`packages/scene-graph/src/recompute.ts`）：改源多面体 ⇒ 球跟着变；**过期读数必须不可能出现**
-- [ ] **Task 5.3 核验**：外接球核验"到各顶点等距"、内切球核验"到各面相切"；非 `exact` ⇒ `unverified` + 面板明说
+- [x] **Task 5.2 接进唯一重算入口**（2026-10-07 完成）：`recompute.ts` 的球分支 + 依赖图一条边（球 → 宿主；顶点 → 实体 → 球是传递闭包）；`derivedSphereRule.test.ts` 证明"改源多面体 ⇒ 球跟着变"，并且**过期看得出来**（见下）。
+- [x] **Task 5.3 核验**（2026-10-07 完成）：`derivedSphereLink.ts` 从文档坐标**直接几何**复核 —— 外接球验"到各顶点等距且等于半径"、内切球验"到各面等距且等于半径"；**刻意不拿求解器复核它自己算的球**（那等于没复核），求解器只回答"宿主现在还有没有这种球"。非精确 ⇒ `outdated`（"画面上这一只是上一次能解出来的那一个"），直接几何不成立 ⇒ `violated`（两边数都写出来）。接进 `solidStatusReport` 成 `derived.sphere_stale`，**只在出问题时出现**。4/4 + 变异。
+  - **仍是缺口**：界面上还没有这一行的**专门呈现**。
 - [ ] **Task 5.4 若 `recomputeDerivedObjects` 这条路接不进去 ⇒ 停下报告**，不改走物化（设计 §八 已写死）
 - [x] **Task 5.5（e2e 那一半）**（2026-10-07 **部分完成**）：新增代表题五（四棱锥 + 外接球，宿主走草稿内引用）与 `e2e/agent-derived-sphere.spec.ts`（1/1）：核验面板 `passed`、假说明写"球由内核算出来"、提交后**自己从落盘坐标算**"球心到五个顶点等距且等于半径"、对象列表里确认它在。
   - **没做成的一半如实记**：浏览器里"拖宿主 ⇒ 球跟着变"试了三次（拖顶点 / 拖实体 / 先选中再拖）**都没让实体动起来**，所以**不写成通过**；该性质在单元层有证据（`derivedSphereRule.test.ts` 的顶点移动用例 + 依赖链），缺的是这一版界面的操作路径。
