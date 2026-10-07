@@ -455,9 +455,16 @@ function compileDerivedSphereAction(
     return { operations: [], diagnostics: [diagnostic(actionKey, "workspace_mismatch", "a derived sphere can only be created in the solid workspace")], aliasToId: {} }
   }
   const what = action.actionId === "derived.create_circumsphere" ? "外接球" : "内切球"
-  const host = context.targetDocument.primitives.find((primitive) => primitive.id === inputs.solidId)
+  /**
+   * 宿主引用是**已解析的 `{documentId, entityId}`**（与 `dynamic.create_bound_point` 的 `host` 同一套）。
+   * 先核文档身份再找实体：拿另一份文档的 id 算球，会算出一只与眼前这张图无关的球。
+   */
+  if (inputs.solidId.documentId !== context.targetDocument.metadata.id) {
+    return { operations: [], diagnostics: [diagnostic(actionKey, "host_not_found", `派生${what}的宿主不在目标文档里（${inputs.solidId.documentId}）。`)], aliasToId: {} }
+  }
+  const host = context.targetDocument.primitives.find((primitive) => primitive.id === inputs.solidId.entityId)
   if (host === undefined || host.type !== "polyhedron3") {
-    return { operations: [], diagnostics: [diagnostic(actionKey, "missing_host", `派生${what}的宿主必须是一只已有多面体（收到 ${inputs.solidId}）。`)], aliasToId: {} }
+    return { operations: [], diagnostics: [diagnostic(actionKey, "missing_host", `派生${what}的宿主必须是一只已有多面体（收到 ${inputs.solidId.entityId}）。`)], aliasToId: {} }
   }
   const primitiveMap = new Map(context.targetDocument.primitives.map((primitive) => [primitive.id, primitive]))
   const topology = solidTopology3(host, primitiveMap)

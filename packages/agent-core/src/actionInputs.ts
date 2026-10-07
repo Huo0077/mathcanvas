@@ -324,7 +324,13 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
        * 而它是不是一只真的多面体、算不算得出球，留给构造层逐条诊断。
        */
       const out: Record<string, unknown> = withAlias({})
-      const solidId = boundedString(value.solidId, `${path}.solidId`, errors)
+      /**
+       * **宿主是作用域引用，不是裸字符串**（与 `dynamic.create_bound_point` 的 `host` 同一套读法）：
+       * `{scope:"draft", alias}` 或 `{scope:"scene", ref:{documentId, entityId}}`。
+       * 本切片第一版这里写成 `boundedString`，于是**规划器根本填不进这个字段** ——
+       * 单元用例直接构造动作对象，绕过了校验层，所以没红。
+       */
+      const solidId = readScopedReference(value.solidId, `${path}.solidId`, errors)
       if (solidId === null) return null
       out.solidId = solidId
       if (value.label !== undefined) {

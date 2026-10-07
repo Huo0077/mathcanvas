@@ -122,6 +122,29 @@ describe("tool inputs reuse the actual plan parser", () => {
     if (!result.ok) expect(result.errors).toEqual(expect.arrayContaining([expect.objectContaining({ code: "invalid_type", path: "tool.inputs.radius" })]))
   })
 
+  /**
+   * **派生球：宿主是作用域引用，不是裸字符串**（S5）。
+   *
+   * 这条用例存在的理由很具体：这一族的编译层读的是**已解析的** `{documentId, entityId}`，
+   * 而规划器写的是 `{scope:"draft", alias}` / `{scope:"scene", ref}`。第一版我把 `solidId` 当
+   * `boundedString` 收，于是**规划器根本填不进去** —— 而单元用例直接构造动作对象、绕过了这一层，
+   * 所以全绿。**这一条走的就是被绕过的那一层。**
+   */
+  it("accepts a drafted host reference for a derived sphere, and refuses an unscoped one", () => {
+    const drafted = parseActionToolInput("derived.create_circumsphere", { alias: "O", solidId: { scope: "draft", alias: "pyramid" } }, "step-sphere-der1")
+    expect(drafted.ok).toBe(true)
+    if (drafted.ok) expect(drafted.value).toMatchObject({ actionId: "derived.create_circumsphere", inputs: { alias: "O", solidId: { scope: "draft", alias: "pyramid" } } })
+
+    const scene = parseActionToolInput("derived.create_insphere", { alias: "I", solidId: { scope: "scene", ref: { documentId: "doc-1", entityId: "solid-1" } } }, "step-sphere-der2")
+    expect(scene.ok).toBe(true)
+    if (scene.ok) expect(scene.value).toMatchObject({ inputs: { solidId: { documentId: "doc-1", entityId: "solid-1" } } })
+
+    // 裸字符串 / 不带作用域的对象都不是合法引用 —— 拒绝的理由要说得出是"引用没作用域"。
+    const bare = parseActionToolInput("derived.create_circumsphere", { alias: "O", solidId: "solid-1" }, "step-sphere-der3")
+    expect(bare.ok).toBe(false)
+    if (!bare.ok) expect(bare.errors).toEqual(expect.arrayContaining([expect.objectContaining({ path: "tool.inputs.solidId" })]))
+  })
+
   it("rejects an unscoped object reference before staging a draft", () => {
     const result = parseActionToolInput("object.update_inputs", { target: { entityId: "cube-1" }, patch: { x: 2 } }, "step-3")
     expect(result.ok).toBe(false)

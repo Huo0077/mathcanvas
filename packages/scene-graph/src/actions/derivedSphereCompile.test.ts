@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest"
 
 import { createFace3, createPoint3, createPolyhedron3 } from "../index"
 import { compileActions } from "./index"
-import type { ActionContext, DraftAction, IdAllocator } from "./types"
+import type { ActionContext, DraftAction, IdAllocator, SceneReference } from "./types"
 
 /**
  * **`derived.create_circumsphere` / `derived.create_insphere`**（S5 派生球）。
@@ -14,9 +14,16 @@ import type { ActionContext, DraftAction, IdAllocator } from "./types"
  *（宿主动了才会跟着重算）；
  * ② 宿主算不出（例：长方体没有内切球）→ **一条操作都不产出**，诊断说清"这只实体没有内切球"，
  *    **不编一个球**（设计 §4.1）；
- * ③ 宿主不存在 / 不是多面体、或工作区不对 → 明确诊断。
+ * ③ 宿主引用指向别的文档 / 找不到实体 / 非多面体、或工作区不对 → 明确诊断。
  *
- * （文件名不是 `derivedSphereAction.test.ts`：那个路径被我上一轮的 PowerShell 文本替换写坏过，
+ * ## `solidId` 是**已解析的引用**（`{documentId, entityId}`），不是裸字符串
+ *
+ * 这一条是本切片第一版**写错**的地方：校验层收的是 `{scope:"draft", alias}` / `{scope:"scene", ref}`，
+ * 编译层读的是解析后的 `{documentId, entityId}`（与 `dynamic.create_bound_point` 的 `host` 同一套）。
+ * 直接把 `"solid-1"` 当 id 用，**只有走一遍校验层才看得出来** —— 所以下面专门有一条走
+ * `parseActionToolInput` 的用例把这条接缝钉住。
+ *
+ * （文件名不是 `derivedSphereAction.test.ts`：那个路径被上一轮的 PowerShell 文本替换写坏过，
  * 删掉之后工具的快照还停在旧状态；换个名字不改变它测的东西。）
  */
 
@@ -42,6 +49,9 @@ function contextWith(document: GeometryDocument): ActionContext {
 
 const action = (actionId: string, inputs: Record<string, unknown>): DraftAction =>
   ({ actionKey: "k1", factIds: [], actionId, inputs }) as unknown as DraftAction
+
+/** 指向本文档里某只实体的**已解析引用**。 */
+const ref = (document: GeometryDocument, entityId: string): SceneReference => ({ documentId: document.metadata.id, entityId })
 
 const addedPrimitives = (result: ReturnType<typeof compileActions>) =>
   result.operations.flatMap((entry) => (entry.op === "addPrimitives" ? entry.primitives : []))
@@ -85,7 +95,8 @@ function brickDocument(): GeometryDocument {
 
 describe("derived.create_circumsphere / derived.create_insphere", () => {
   it("writes exactly one bound sphere, with the geometry the kernel solved for the host", () => {
-    const result = compile(cubeDocument(), [action("derived.create_circumsphere", { alias: "O", solidId: "solid-1" })])
+    const document = cubeDocument()
+    const result = compile(document, [action("derived.create_circumsphere", { alias: "O", solidId: ref(document, "solid-1") })])
     expect(result.diagnostics).toEqual([])
     const primitives = addedPrimitives(result)
     expect(primitives).toHaveLength(1)
@@ -98,7 +109,8 @@ describe("derived.create_circumsphere / derived.create_insphere", () => {
   })
 
   it("solves the insphere of a cube", () => {
-    const result = compile(cubeDocument(), [action("derived.create_insphere", { alias: "I", solidId: "solid-1" })])
+    const document = cubeDocument()
+    const result = compile(document, [action("derived.create_insphere", { alias: "I", solidId: ref(document, "solid-1") })])
     expect(result.diagnostics).toEqual([])
     const sphere = addedPrimitives(result)[0] as { center: { x: number; y: number; z: number }; radius: number }
     expect(sphere.center).toEqual({ x: 1, y: 1, z: 1 })
@@ -110,21 +122,27 @@ describe("derived.create_circumsphere / derived.create_insphere", () => {
      * 长方体**没有内切球**：正确行为是**拒绝整条动作**并说清理由，
      * 而不是交一个半径 1 的"最大内接球" —— 那会让用户读成"这个长方体的内切球半径是 1"。
      */
-    const result = compile(brickDocument(), [action("derived.create_insphere", { alias: "I", solidId: "solid-1" })])
+    const document = brickDocument()
+    const result = compile(document, [action("derived.create_insphere", { alias: "I", solidId: ref(document, "solid-1") })])
     expect(addedPrimitives(result)).toHaveLength(0)
     expect(result.diagnostics.map((entry) => entry.code)).toContain("no_derived_sphere")
     expect(result.diagnostics.map((entry) => entry.message).join(" ")).toContain("内切球")
   })
 
-  it("refuses a missing host and an off-workspace document", () => {
-    const missing = compile(cubeDocument(), [action("derived.create_circumsphere", { alias: "O", solidId: "nope" })])
+  it("refuses a reference to another document, a missing host and an off-workspace document", () => {
+    const document = cubeDocument()
+    const foreign = compile(document, [action("derived.create_circumsphere", { alias: "O", solidId: { documentId: "some-other-document", entityId: "solid-1" } })])
+    expect(addedPrimitives(foreign)).toHaveLength(0)
+    expect(foreign.diagnostics.map((entry) => entry.code)).toContain("host_not_found")
+
+    const missing = compile(document, [action("derived.create_circumsphere", { alias: "O", solidId: ref(document, "nope") })])
     expect(addedPrimitives(missing)).toHaveLength(0)
     expect(missing.diagnostics.map((entry) => entry.code)).toContain("missing_host")
 
     // 非立体几何工作区：`conics` 是合法的另一种工作区（**不能瞎写 "geometry"** ——
     // `Workspace` 是闭集，写错的字面量只有 `typecheck` 拦得住，vitest 不查类型）。
     const planar = createEmptyDocument("conics")
-    const wrongWorkspace = compile(planar, [action("derived.create_circumsphere", { alias: "O", solidId: "solid-1" })])
+    const wrongWorkspace = compile(planar, [action("derived.create_circumsphere", { alias: "O", solidId: ref(planar, "solid-1") })])
     expect(addedPrimitives(wrongWorkspace)).toHaveLength(0)
     expect(wrongWorkspace.diagnostics.map((entry) => entry.code)).toContain("workspace_mismatch")
   })

@@ -7,6 +7,16 @@
 
 
 
+## 2026-10-07 —— 修掉上一批"只在测试里成立"的缺陷：派生球的宿主字段是**作用域引用**
+
+- **上一批我发出去的动作，规划器其实填不进去**。`derived.create_circumsphere` / `derived.create_insphere` 的 `solidId`：
+  - 校验层收的是**作用域引用**（`{scope:"draft", alias}` 或 `{scope:"scene", ref:{documentId, entityId}}`，与 `dynamic.create_bound_point` 的 `host` **同一套**），我却写成了 `boundedString` —— 一个对象进来会被判 `invalid_type`；
+  - 编译层读的是**已解析**的 `{documentId, entityId}`（"引用解析"那一层的产物），我却在编译里把这个字段当裸 id 去查实体。
+  - 两处叠起来，**规划器/模型根本没有办法引用宿主**；而我的单元用例是**直接构造动作对象**交给 `compileActions` 的，**绕过了校验层**，所以全绿。这正是"vitest 不查类型、也不替你走接缝"的又一种表现。
+- 修法三处：动作层类型 `solidId: SceneReference`；校验层改 `readScopedReference`；编译层读 `inputs.solidId.entityId` 并**先核文档身份**（拿别的文档的 id 算球，会算出一只与眼前这张图无关的球 ⇒ `host_not_found`）。
+- **补一条走接缝的用例**（这才是防复发的关键）：`actionSchemas.test.ts` 新增一条 —— `{scope:"draft", alias}` 收得下、`{scope:"scene", ref}` 被摊平成 `{documentId, entityId}`、**裸字符串被拒且路径落在 `tool.inputs.solidId`**。教训写进代码注释：**"直接构造动作对象"的用例看不见校验层，凡是新动作都要有一条从 `parseActionToolInput` 走的用例。**
+- 读数：`derivedSphereCompile.test.ts` **4/4**（宿主引用按已解析形状给，另加"引用指向别的文档"这条反例）；`actionSchemas.test.ts` 全绿；全库非 Lean **3949 通过 + 1 todo / 0 失败**（154.17 s，**+1 = 新用例**）；`typecheck` exit 0；`lint` 0 error / 13 warning。
+
 ## 2026-10-07 —— S5 第二刀：**派生球成为可编译的动作**（外接球 / 内切球，解不出就拒绝）
 
 - 新增 `derived.create_circumsphere` / `derived.create_insphere`：输入**只有宿主实体的 id** —— 球心与半径由内核从宿主算出来（`solveCircumsphere3` / `solveInsphere3`，与 `solidStatusReport` 给模型看的那两条读数**同一个求解器**）。**不让调用方填球心半径**：填得出来就等于允许编一个不成立的球。

@@ -191,8 +191,15 @@ export interface DerivedCreateCircumsphereAction extends ActionBase {
   actionId: "derived.create_circumsphere"
   inputs: {
     alias: DraftAlias
-    /** 宿主实体的 id（作用域引用：只能是同一份计划里已建的 `polyhedron3`）。 */
-    solidId: string
+    /**
+     * 宿主实体的**已解析引用**（`{documentId, entityId}`）。
+     *
+     * 规划器写的是 `{scope:"draft", alias}`，由"引用解析"那一层落成这个形状 —— 与
+     * `dynamic.create_bound_point` 的 `host` **同一套**。**不能写成裸字符串**：那样
+     * 校验层收下的引用与编译层要读的东西不是一回事（本切片第一版就是这么错的，只有把
+     * 输入走一遍 `parseActionToolInput` 才看得出来）。
+     */
+    solidId: SceneReference
     label?: string
   }
 }
@@ -202,7 +209,7 @@ export interface DerivedCreateInsphereAction extends ActionBase {
   actionId: "derived.create_insphere"
   inputs: {
     alias: DraftAlias
-    solidId: string
+    solidId: SceneReference
     label?: string
   }
 }
