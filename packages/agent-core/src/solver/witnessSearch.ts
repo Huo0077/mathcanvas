@@ -966,7 +966,20 @@ function verifiedResult(
     // 文案里的点名从 spec 的自由标量取（choice 只带 id + 值）。
     ...plan.choices.map((choice) => {
       const scalar = plan.spec.freeScalars.find((entry) => entry.id === choice.id)
-      return `${(scalar?.targets ?? [choice.id]).join("")} = ${String(choice.value)}（搜索器自选，题面未给）`
+      /**
+       * **文案要读得懂**：底面边写点名（`AB = 2`）没问题，但另外两类不行 ——
+       * 高与相似比**不是某个顶点或某条线的名字**。早先这里一律写 `targets.join("")`，
+       * 于是面板上出现 `A′ = 2`（其实是**高**）与 `A′B′C′D′ = 0.5`（其实是**相似比**）：
+       * 两句话都把用户往错的方向引。这是浏览器证据里查实的（`e2e/agent-solid-family-path.spec.ts`）。
+       */
+      const label = scalar === undefined
+        ? choice.id
+        : scalar.kind === "height"
+          ? "高"
+          : scalar.kind === "top-scale"
+            ? "顶面相似比"
+            : scalar.targets.join("")
+      return `${label} = ${String(choice.value)}（搜索器自选，题面未给）`
     }),
     configLine(input, considered)
   ]
