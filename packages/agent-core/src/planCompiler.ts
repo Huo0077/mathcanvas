@@ -66,7 +66,7 @@ export function planHasVerifiableFigure(actions: readonly { actionId: string }[]
  * 另有一条替代方案是让编译层通过 `PlanCompileContext` 收一个搜索函数 —— 那等于把
  * "谁是搜索器"交给应用层去拼，与"搜索编排只有一处"（N2 的 Ownership）相冲突。
  */
-import { searchWitness } from "./solver/witnessSearch"
+import { searchWitness, specForPrompt } from "./solver/witnessSearch"
 import type { PolyhedronWitness, WitnessSearchResult, WitnessShapeKind } from "./solver/solverContracts"
 /**
  * `isInvariantRequest` 从**叶子模块**导入（复核裁决 R29）。
@@ -530,9 +530,11 @@ const WITNESS_SEARCH_TIMEOUT_MS = 1500
 /**
  * 题面点名的图形族 → 搜索器的 `shape`（计划 N2 的 `WitnessShapeKind`）。
  *
- * 判据只看**题面自己说要画什么**：首批只有棱锥能被搜索器构造（2b 的 `searchWitness`
- * 对 `prism` / `polyhedron` 都如实报"系统尚不支持"）。所以这里宁可把不确定的题面判成
- * "不是棱锥" —— 判错的代价是**把棱柱题画成棱锥**，那比"这次不救"严重得多。
+ * **首选入口语法**（S6）：`specForPrompt` 认得出形状从句、也推得出几何时，族与 spec 都由它给 ——
+ * 一份解析，救援路径与离线入口共用。这里的两条正则只是**兜底**：形状从句缺失、或读不出时，
+ * 才退回"题面里提到哪个词"这个更弱的判据。
+ *
+ * 判据只看**题面自己说要画什么**：判错的代价是**把棱柱题画成棱锥**，那比"这次不救"严重得多。
  *
  * 不认"四面体"：那种题面走的是 `solid.create_tetrahedron`，本来就不进这条路径
  * （救回只在 `solid.create_polyhedron` 上谈），所以不必在这里猜。
@@ -540,6 +542,12 @@ const WITNESS_SEARCH_TIMEOUT_MS = 1500
 function witnessShapeFor(prompt: string): WitnessShapeKind {
   if (/棱锥|pyramid/i.test(prompt)) return "pyramid"
   if (/棱柱|prism/i.test(prompt)) return "prism"
+  /**
+   * 台体走兜底时也报 `frustum`（而不是"任意多面体"）：这样拒绝的理由是**台体自己的那句**
+   * （"需要底环 / 顶环 / 相似比"），而不是"任意多面体的坐标要由调用方给" —— 后者对台体是假话，
+   * 没人会手写台体坐标。
+   */
+  if (/棱台/i.test(prompt)) return "frustum"
   return "polyhedron"
 }
 
@@ -661,9 +669,18 @@ function witnessAssumptions(found: Extract<WitnessSearchResult, { status: "verif
  * 救援路径的结果不可比，要么有人改了一边忘了另一边。
  */
 function witnessSearchInput(ir: Parameters<typeof searchWitness>[0]["obligations"], prompt: string): Parameters<typeof searchWitness>[0] {
+  /**
+   * **入口语法先行**（S6 接线）：认得出形状从句时，族与 spec 都由 `specForPrompt` 给。
+   *
+   * 这一份解析同时被**救援路径**与**离线入口**使用 —— 两个读数才可比（设计 §3.2）。
+   * 认不出时（没有形状从句 / 点名表与数词对不上 / 两处读出来的底环不是同一组顶点）
+   * **退回**"题面提到哪个词"这个更弱的判据：接线之前的行为逐字不变。
+   */
+  const shaped = specForPrompt(prompt, ir.obligations.filter((obligation) => obligation.role === "given"))
   return {
     obligations: ir,
-    shape: witnessShapeFor(prompt),
+    shape: shaped.status === "ok" ? shaped.recognised.family : witnessShapeFor(prompt),
+    ...(shaped.status === "ok" ? { spec: shaped.spec } : {}),
     seed: WITNESS_SEARCH_SEED,
     maxCandidates: WITNESS_SEARCH_MAX_CANDIDATES,
     timeoutMs: WITNESS_SEARCH_TIMEOUT_MS

@@ -7,6 +7,15 @@
 
 
 
+## 2026-10-07 —— S6.2：入口语法接进**离线入口**（台体第一次从题面走通到通过核验的候选）
+
+- `witnessSearchInput`（`planCompiler.ts`）—— **救援路径与离线入口共用的那一处** —— 现在先问入口语法（`specForPrompt`）：认得出形状从句时，**族与 spec 都由它给**；认不出时退回"题面提到哪个词"那条更弱的正则。**接线之前的行为逐字不变**（`planCompiler` / benchmark / 搜索三处 105 条用例原样通过）。
+- **台体因此第一次能从题面走通**：`在四棱台ABCD-A′B′C′D′中，AB⊥AD，画出这个四棱台` ⇒ `searchWitnessForPrompt` ⇒ **`verified_instance`**。接线之前 `棱台` 落到"任意多面体"那条，只会报"系统尚不支持"。
+- **兜底也认 `棱台`** ⇒ 报 `frustum`（而不是"任意多面体"）：于是读不出的台体题面拿到的理由是**台体自己的那句**（"需要底环 / 顶环 / 相似比"），而不是对台体来说是假话的"任意多面体的坐标要由调用方给"。
+- 变异：把 `witnessSearchInput` 恢复成"只用正则" ⇒ 台体那条用例当场红（`unverified_instance` + "台体需要调用方给出形状描述"）—— 证明这条接线是承重的。
+- 读数：`planCompiler.test.ts` **57/57**（+3）；全库非 Lean **3935 通过 + 1 todo / 0 失败**（152.31 s，**+3 = 新用例**）；`typecheck` exit 0；`lint` 0 error / 13 warning。
+- **仍未做**：`localPlanner` 里"用户在界面上说一句就出草稿"那条路径（今天台体只在**离线入口 / 救援路径**可达，规划器夹具还没接）；`freeApexIntentFor` 窄正则退役；"问路"的浏览器判据。
+
 ## 2026-10-07 —— S6 接线：**题面 → 形状描述 → 通过核验的候选**（台体整条链走通）
 
 - 新增 `specForPrompt(prompt, givens)`（`witnessSearch.ts`）：把**入口语法**（`parseShapeClause`）、形状推导、自由标量表三样接起来。规划器与离线 benchmark 都从这里拿 spec，再交给 `searchWitness({ shape, spec })` —— **一份解析两处用**，两个读数才可比（设计 §3.2）。

@@ -4,7 +4,7 @@ import { contentFingerprint } from "@draw/scene-graph"
 import { describe, expect, it } from "vitest"
 
 import { PLAN_SCHEMA_VERSION } from "./contracts"
-import { compilePlan, describeCompileRepairPrompt, type PlanCompileContext } from "./planCompiler"
+import { compilePlan, describeCompileRepairPrompt, searchWitnessForPrompt, type PlanCompileContext } from "./planCompiler"
 import { createDraftTools } from "./tools/draftTools"
 
 /**
@@ -901,6 +901,40 @@ describe("V0a: a free apex and every coordinate given must be judged", () => {
     const result = compilePlan(makePlan({ x: 0, y: 0, z: 2 }), context(createEmptyDocument("geometry3d"), { prompt, diagramWitnessSearch: true }))
     expect(result.diagramVerification?.status).toBe("unverified")
     expect(result.diagramVerification?.checks.some((item) => item.sourceText.includes("D在底面ABC上方") && item.status === "unverified")).toBe(true)
+  })
+})
+
+/**
+ * **离线入口接上入口语法**（S6 接线）。
+ *
+ * `searchWitnessForPrompt` 是"题面 → 图形族 → 有界搜索"的离线入口，**救援路径用的是同一份口径**
+ * （`witnessSearchInput`）。接线之后它先问入口语法（`specForPrompt`）：
+ * 认得出形状从句时，族与 spec 都由那里给。
+ *
+ * 最直接的证据是**台体**：它的两个环不是从某一句题设读出来的，所以接线之前
+ * `棱台` 会落到"任意多面体"那条、只会报"系统尚不支持"；现在能从题面一路走到**通过核验的候选**。
+ */
+describe("离线入口：入口语法接线", () => {
+  it("四棱台的题面 ⇒ 通过核验的候选", () => {
+    const result = searchWitnessForPrompt("在四棱台ABCD-A′B′C′D′中，AB⊥AD，画出这个四棱台")
+    expect(result.status, JSON.stringify(result)).toBe("verified_instance")
+  })
+
+  it("棱锥题面的读数不变（接线只是把**同一份** spec 交给搜索层）", () => {
+    const result = searchWitnessForPrompt("在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，BC ∥ AD，AB ⊥ AD，画出这个四棱锥")
+    expect(result.status, JSON.stringify(result)).toBe("verified_instance")
+  })
+
+  it("读不出的台体题面：拒绝理由是**台体自己的**那句，不是『任意多面体』", () => {
+    /**
+     * `A₁` 系列点名与内核的顶面命名约定（`A′`）对不上 ⇒ 入口语法认不出 ⇒ 走兜底。
+     * 兜底**也报 `frustum`**，于是用户看到的是"台体需要底环 / 顶环 / 相似比"，
+     * 而不是对台体来说是假话的"任意多面体的坐标要由调用方给"。
+     */
+    const result = searchWitnessForPrompt("在四棱台ABCD-A₁B₁C₁D₁中，AB⊥AD，画出这个四棱台")
+    expect(result.status).toBe("unverified_instance")
+    if (result.status !== "unverified_instance") return
+    expect(result.reasons.join(" "), JSON.stringify(result)).toContain("台体")
   })
 })
 
