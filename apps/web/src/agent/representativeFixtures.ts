@@ -307,6 +307,42 @@ export function pyramidPlan(withRelations = false): PlanEnvelope {
 }
 
 /**
+ * **代表题五：四棱锥的**外接球**（S5）。
+ *
+ * 与 `PYRAMID_PROMPT` 是**同一只四棱锥**，只多要一件东西：由宿主算出来的外接球。
+ * 多出来的那一笔是 `derived.create_circumsphere`，宿主写成**草稿内引用**
+ *（`{scope:"draft", alias:"pyramid"}`，与 `dynamic.create_bound_point` 的 `host` 同一套）——
+ * 球心与半径**不在计划里**，由内核从四棱锥的五个顶点解出来。
+ *
+ * 这条夹具存在的意义是让"派生球"这条链在**浏览器里**可验证：球必须真的出现在画布上，
+ * 而且**宿主一动它就跟着变**（设计 §4.1 明确否决"物化但不重算"）。
+ */
+export const PYRAMID_CIRCUMSPHERE_PROMPT = `${PYRAMID_PROMPT}的外接球`
+
+export function pyramidCircumspherePlan(): PlanEnvelope {
+  const plan = pyramidPlan()
+  // `PlanEnvelope` 是判别联合：先收窄到 `plan` 那一支，才谈得上往 `actions` 里加一笔。
+  if (plan.kind !== "plan") return plan
+  return {
+    ...plan,
+    goal: "作四棱锥 P-ABCD，并作出它的外接球",
+    assumptions: [
+      ...(plan.assumptions ?? []),
+      "外接球由内核从四棱锥的五个顶点解出来（球心到五个顶点等距），不是系统挑的一个近似球。"
+    ],
+    actions: [
+      ...plan.actions,
+      {
+        actionId: "derived.create_circumsphere",
+        actionKey: "circumsphere",
+        factIds: [],
+        inputs: { alias: "circumsphere", solidId: { scope: "draft", alias: "pyramid" }, label: "外接球" }
+      } as unknown as DraftAction
+    ]
+  }
+}
+
+/**
  * **代表题三：平面直角三角形**（计划 V0b）。
  *
  * 题面只给关系、一个数字都没有，所以边长必须由系统挑一组并**写进 `assumptions` 给用户看** ——

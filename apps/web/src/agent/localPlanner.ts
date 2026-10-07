@@ -1,7 +1,7 @@
 import type { PlanEnvelope, PlannerPort } from "@draw/agent-core"
 import { PLAN_SCHEMA_VERSION, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SPAN, DEFAULT_SOLID_SIZE, defaultPrismBasePolygon, cubeCenterFrom, cubeEdgeLengthFrom, parseShapeClause, searchWitnessForPrompt } from "@draw/agent-core"
 
-import { CONIC_ELLIPSE_PROMPT, FUNCTION_TANGENT_PROMPT, HYPERBOLA_PROMPT, PARABOLA_PROMPT, PLANAR_TRIANGLE_PROMPT, PYRAMID_PROMPT, PYRAMID_UNVERIFIED_PROMPT, conicInvariantPlan, ellipsePlan, functionTangentPlan, hyperbolaPlan, obliquePrismSectionPlan, parabolaPlan, planarRightTrianglePlan, pyramidPlan } from "./representativeFixtures"
+import { CONIC_ELLIPSE_PROMPT, FUNCTION_TANGENT_PROMPT, HYPERBOLA_PROMPT, PARABOLA_PROMPT, PLANAR_TRIANGLE_PROMPT, PYRAMID_CIRCUMSPHERE_PROMPT, PYRAMID_PROMPT, PYRAMID_UNVERIFIED_PROMPT, conicInvariantPlan, ellipsePlan, functionTangentPlan, hyperbolaPlan, obliquePrismSectionPlan, parabolaPlan, planarRightTrianglePlan, pyramidCircumspherePlan, pyramidPlan } from "./representativeFixtures"
 
 /**
  * **本地确定性规划器**（Task 2.5 Step 2 的过渡件）。
@@ -326,6 +326,14 @@ function solidShapeIntentFor(prompt: string): LocalIntent | null {
 
 export const LOCAL_INTENTS: readonly LocalIntent[] = [
   { all: ["四棱锥", "PA", "BC", "AD"], exact: PYRAMID_PROMPT, skillIds: ["spatial-modeling"], build: () => pyramidPlan() },
+  /**
+   * **代表题五（S5）**：同一只四棱锥 + 它的**外接球**。
+   *
+   * 与上面那条同一条纪律（精确匹配、不挂实验开关），差别只在于**多一笔派生动作**：
+   * `derived.create_circumsphere` 的宿主是同一份计划里的那只四棱锥，球心与半径由内核算出来。
+   * 浏览器用例要**自己从落盘坐标算一遍**才谈得上判过（不读面板结论）。
+   */
+  { all: ["四棱锥", "外接球"], exact: PYRAMID_CIRCUMSPHERE_PROMPT, skillIds: ["spatial-modeling"], build: () => pyramidCircumspherePlan() },
   { all: ["四棱锥", "PA", "BC", "AD", "∠"], exact: PYRAMID_UNVERIFIED_PROMPT, skillIds: ["spatial-modeling"], build: () => pyramidPlan() },
   /**
    * **代表题三（计划 V0b）**：平面直角三角形。
