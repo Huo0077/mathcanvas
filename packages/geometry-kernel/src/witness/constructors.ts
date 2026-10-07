@@ -106,7 +106,26 @@ export interface PrismConstructRequest {
   extrusion: WitnessExtrusionSpec
 }
 
-export type WitnessConstructRequest = PyramidConstructRequest | PrismConstructRequest
+/**
+ * **台体**（S4）：底面环 + 与底面**平行**的顶面环，顶面是底面的相似缩小。
+ *
+ * 台的几何定义就是"用平行于底面的平面截棱锥，取截面与底面之间那一段"，
+ * 所以它只比棱柱多**一个**自由标量：相似比 `scale`（`0 < scale < 1`）。
+ * `scale → 1` 就退化回棱柱，`scale → 0` 退化成棱锥顶点 —— 两个端点都**不是**台体，必须拒绝。
+ *
+ * 顶面环的点名不在这里给：与棱柱一样由 `withPrimes` 从底面名派生，
+ * 于是"顶面叫 `A′` 还是别的"只有一处规则（题面用的也是同一套字形）。
+ */
+export interface FrustumConstructRequest {
+  shape: "frustum"
+  base: readonly string[]
+  relations: readonly WitnessRelation[]
+  extrusion: WitnessExtrusionSpec
+  /** 顶面相对底面的相似比，`0 < scale < 1`。 */
+  scale: number
+}
+
+export type WitnessConstructRequest = PyramidConstructRequest | PrismConstructRequest | FrustumConstructRequest
 
 /** 构造出的候选形状。**不含"是否满足题设"的结论**（R15）。 */
 export interface WitnessShapeCandidate {
@@ -175,6 +194,7 @@ export function constructWitnessShape(request: WitnessConstructRequest): Witness
   }
   if (request.shape === "pyramid") return constructPyramidWitness(request)
   if (request.shape === "prism") return constructPrismWitness(request)
+  if (request.shape === "frustum") return constructFrustumWitness(request)
   return reject("invalid-input", `未知的图形族：${String((request as { shape?: unknown }).shape)}`)
 }
 
@@ -259,6 +279,27 @@ export function constructShapeFromSpec(spec: SolidShapeSpec, choices: readonly S
       base: [...spec.base],
       relations,
       extrusion: height === null ? { kind: "unknown" } : { kind: "vector", vector: { x: 0, y: 0, z: height } }
+    })
+  }
+  if (spec.family === "frustum") {
+    /**
+     * 台体的**高只从自由标量取**。题面若点名侧棱长度（`AA′=5`），那个长度**不等于高** ——
+     * 侧棱还带水平分量（`√(h² + (1−k)²r²)`），要与相似比联立才能解出高。
+     * 本批不做这个联立，于是**如实拒绝**，绝不把侧棱长当成高用（那会画出一个错的台体还自称通过）。
+     */
+    if (statedLateralHeight(spec) !== null) {
+      return reject("unsupported-base-shape", "台体这一批不收「给定侧棱长度」的题面：侧棱长与高、相似比是联立关系，本层不做这个求解。", [...spec.base])
+    }
+    const ratioScalar = spec.freeScalars.find((scalar) => scalar.kind === "top-scale")
+    const ratio = ratioScalar === undefined ? null : (chosen.get(ratioScalar.id) ?? null)
+    if (ratio === null) return reject("missing-extrusion", "台体的相似比未由编排层给出：首批不做通用猜测。", [...spec.base])
+    if (heightValue === null) return reject("missing-extrusion", "台体的高未由编排层给出：首批不做通用猜测。", [...spec.base])
+    return constructFrustumWitness({
+      shape: "frustum",
+      base: [...spec.base],
+      relations,
+      extrusion: { kind: "vector", vector: { x: 0, y: 0, z: heightValue } },
+      scale: ratio
     })
   }
   const apex = spec.apex
@@ -435,6 +476,96 @@ export function constructPrismWitness(request: PrismConstructRequest): WitnessCo
     assumptions: [
       ...derived.assumptions,
       `顶面由底面沿向量 (${formatNumber(vector.x)}, ${formatNumber(vector.y)}, ${formatNumber(vector.z)}) 平移得到（棱柱定义）。`
+    ]
+  })
+}
+
+/**
+ * **台体**（S4）：把棱柱的"纯平移"换成"**按质心相似缩小 + 平移**"。
+ *
+ * 与棱柱共用同一套守卫（拉伸向量先于底面判、退化判据、顶面命名的词表纪律），只多一条台体自己的：
+ * **相似比必须严格落在 `(0, 1)` 内** —— `1` 是棱柱、`0` 是棱锥顶点，两个端点都**不是**台体。
+ *
+ * 相似中心取**质心**而不是环首点：换一个环首不应该改变这张图（同一个台体）。
+ */
+export function constructFrustumWitness(request: FrustumConstructRequest): WitnessConstructResult {
+  const base = validateNames(request.base, "底面")
+  if (base.status === "rejected") return base
+  if (!Array.isArray(request.relations)) {
+    return reject("invalid-input", "台体请求的 relations 必须是数组。", base.names)
+  }
+  const ratio = request.scale
+  if (typeof ratio !== "number" || !Number.isFinite(ratio) || !(ratio > 0) || !(ratio < 1)) {
+    return reject(
+      "invalid-input",
+      `台体的相似比必须严格在 (0, 1) 内（收到 ${String(ratio)}）：1 是棱柱、0 是棱锥顶点，两个端点都不是台体。`,
+      base.names
+    )
+  }
+  const extrusionSpec = request.extrusion
+  if (!extrusionSpec || extrusionSpec.kind === "unknown") {
+    return reject("missing-extrusion", "台体的高未由题面给出：首批不做通用猜测，交给编排层的有界网格决定。", base.names)
+  }
+  if (extrusionSpec.kind === "vector") {
+    const maybeVector = (extrusionSpec as { vector?: unknown }).vector
+    if (!maybeVector || typeof maybeVector !== "object" || !isFiniteVector(maybeVector as Vector3)) {
+      return reject("invalid-input", "拉伸向量 spec 缺少有限的 vector 字段。", base.names)
+    }
+  }
+
+  const derived = deriveBasePolygon(base.names, request.relations)
+  if (derived.status === "rejected") return derived
+  const baseResiduals = polygonResiduals(derived.polygon)
+  if (baseResiduals.diagnostics.length > 0) return rejectFromDiagnostics(baseResiduals.diagnostics, base.names)
+
+  if (extrusionSpec.kind !== "vector") {
+    /**
+     * 台体**不收** `{kind:"points"}`：那两个端点都在底面环上，而内核把底面一律建在 z = 0，
+     * 差向量必落在底面内 —— 与棱柱那条"首批边界"同源。如实拒绝，不猜一个高。
+     */
+    return reject("unsupported-base-shape", "台体的高需要编排层给出向量：`{kind:\"points\"}` 的两个端点都在底面环上，差向量落在底面内。", base.names)
+  }
+  const vector = extrusionSpec.vector
+  if (!isFiniteVector(vector)) return reject("non-finite-value", "拉伸向量的分量必须是有限数值。", base.names)
+  const normal = polygonNormal(derived.polygon)
+  if (!normal) return reject("degenerate-base", "底面没有非零面积的平面法向，拉不出实体。", base.names)
+  const vectorLength = lengthVector3(vector)
+  const diameter = Math.max(polygonDiameter(derived.polygon), vectorLength)
+  if (vectorLength <= diameter * DEGENERATE_TOLERANCE) {
+    return reject("degenerate-extrusion", `台体的高为 ${vectorLength}：两底重合，不是台体。`, base.names)
+  }
+  if (Math.abs(dotVector3(vector, normal)) <= DEGENERATE_TOLERANCE * vectorLength * lengthVector3(normal)) {
+    return reject("degenerate-extrusion", "拉伸向量平行于底面：台体的两底必须平行且不共面。", base.names)
+  }
+
+  const count = derived.polygon.length
+  const sums = derived.polygon.reduce<Vector3>((total, point) => ({ x: total.x + point.x, y: total.y + point.y, z: total.z + point.z }), { x: 0, y: 0, z: 0 })
+  const centroid: Vector3 = { x: sums.x / count, y: sums.y / count, z: sums.z / count }
+  const extraPoints = derived.polygon.map((point) => ({
+    x: centroid.x + (point.x - centroid.x) * ratio + vector.x,
+    y: centroid.y + (point.y - centroid.y) * ratio + vector.y,
+    z: centroid.z + (point.z - centroid.z) * ratio + vector.z
+  }))
+
+  const extraNames = withPrimes(base.names)
+  if (extraNames === null) {
+    return reject(
+      "unsupported-base-shape",
+      `底面点名 ${base.names.join("、")} 占满了可用的后缀组合（一个字母 + 至多两个后缀），顶面无法在不重名的前提下命名。`,
+      [...base.names]
+    )
+  }
+
+  return assembleCandidate({
+    baseNames: base.names,
+    basePoints: derived.polygon,
+    extraNames,
+    extraPoints,
+    apex: false,
+    freeValues: derived.freeValues,
+    assumptions: [
+      ...derived.assumptions,
+      `顶面是底面按**质心**相似缩小 ${formatNumber(ratio)} 倍、再沿向量 (${formatNumber(vector.x)}, ${formatNumber(vector.y)}, ${formatNumber(vector.z)}) 平移得到的平行截面（台体定义）。`
     ]
   })
 }

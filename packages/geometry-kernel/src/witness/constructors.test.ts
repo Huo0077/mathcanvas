@@ -4,7 +4,7 @@ import { areCoplanar, crossVector3, distanceVector3, dotVector3, subtractVector3
 import { dihedralAngleDetail3 } from "../markers3d"
 import { buildFromPoints, createBuilderContext } from "../solid-builders"
 
-import { constructPrismWitness, constructPyramidWitness, constructShapeFromSpec, constructWitnessShape, type PrismConstructRequest, type PyramidConstructRequest, type WitnessConstructRequest, type WitnessRelation } from "./constructors"
+import { constructFrustumWitness, constructPrismWitness, constructPyramidWitness, constructShapeFromSpec, constructWitnessShape, type FrustumConstructRequest, type PrismConstructRequest, type PyramidConstructRequest, type WitnessConstructRequest, type WitnessRelation } from "./constructors"
 import { isPointName } from "../pointNames"
 import type { SolidShapeSpec } from "./solidShapeSpec"
 import { candidateResiduals, polygonResiduals } from "./residuals"
@@ -921,5 +921,59 @@ describe("constructShapeFromSpec", () => {
       expect(result.code).toBe("invalid-input")
       expect(result.message.length).toBeGreaterThan(0)
     }
+  })
+})
+
+/**
+ * **台体**（S4）：底面环 + 平行顶面环，顶面是底面的**相似缩小**。
+ *
+ * 判据一律**自己在测试里重算**（质心、相似比、两底平行、顶棱 = 底棱 × k），
+ * 不读构造过程中的中间量 —— 那等于拿实现自证。
+ */
+describe("constructFrustumWitness", () => {
+  const SQUARE: FrustumConstructRequest = {
+    shape: "frustum",
+    base: ["A", "B", "C", "D"],
+    relations: [{ kind: "perpendicular", segments: [["A", "B"], ["A", "D"]] }],
+    extrusion: { kind: "vector", vector: { x: 0, y: 0, z: 2 } },
+    scale: 0.5
+  }
+
+  it("顶面 = 底面按**质心**相似缩小 0.5 再上移 2（自己算一遍回代）", () => {
+    const result = constructFrustumWitness(SQUARE)
+    expect(result.status, JSON.stringify(result)).toBe("candidate")
+    if (result.status !== "candidate") return
+    const { names, points, faces } = result.witness
+    const at = (name: string): Vector3 => points[names.indexOf(name)]!
+    const ring = ["A", "B", "C", "D"]
+    const count = ring.length
+    const sums = ring.reduce((total, name) => ({ x: total.x + at(name).x, y: total.y + at(name).y, z: total.z + at(name).z }), { x: 0, y: 0, z: 0 })
+    const centroid: Vector3 = { x: sums.x / count, y: sums.y / count, z: sums.z / count }
+    for (const name of ring) {
+      const top = at(`${name}′`)
+      expect(top.x).toBeCloseTo(centroid.x + (at(name).x - centroid.x) * 0.5, 9)
+      expect(top.y).toBeCloseTo(centroid.y + (at(name).y - centroid.y) * 0.5, 9)
+      expect(top.z).toBeCloseTo(at(name).z + 2, 9)
+    }
+    // 两底平行：顶面四点同高；顶棱 = 底棱 × 0.5。
+    expect(new Set(ring.map((name) => at(`${name}′`).z)).size).toBe(1)
+    expect(distanceVector3(at("A′"), at("B′"))).toBeCloseTo(distanceVector3(at("A"), at("B")) * 0.5, 9)
+    expect(distanceVector3(at("B′"), at("C′"))).toBeCloseTo(distanceVector3(at("B"), at("C")) * 0.5, 9)
+    // 拓扑由规则生成，内核必须接受。
+    expect(buildFromPoints({ vertices: orderedPoints(result.witness), faces }, createBuilderContext()).diagnostics).toEqual([])
+  })
+
+  it("相似比不是 (0,1) ⇒ 明确拒绝：1 是棱柱、0 是棱锥顶点，两个端点都不是台体", () => {
+    for (const scale of [1, 0, -0.5, Number.NaN]) {
+      const result = constructFrustumWitness({ ...SQUARE, scale })
+      expect(result.status, `scale=${String(scale)}`).toBe("rejected")
+      if (result.status === "rejected") expect(result.code).toBe("invalid-input")
+    }
+  })
+
+  it("`{kind:\"points\"}` 的拉伸来源 ⇒ 如实拒绝（底面顶点全在 z = 0，差向量落在底面内）", () => {
+    const result = constructFrustumWitness({ ...SQUARE, extrusion: { kind: "points", from: "A", to: "B" } })
+    expect(result.status).toBe("rejected")
+    if (result.status === "rejected") expect(result.code).toBe("unsupported-base-shape")
   })
 })
