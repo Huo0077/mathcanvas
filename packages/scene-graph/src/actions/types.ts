@@ -214,6 +214,31 @@ export interface DerivedCreateInsphereAction extends ActionBase {
   }
 }
 
+/**
+ * **圆台**（S4.3）：两个半径 + 高 + 分段数，形状由**内核的多边形近似**算出来。
+ *
+ * 它既不是 `solid.create_polyhedron`（那要求调用方自己写 96 个顶点），也不是新图元：
+ * 参数化动作 → 内核形状 → **物化成 `polyhedron3`**，与 `solid.create_prism` /
+ * `solid.create_tetrahedron` / `solid.create_regular_pyramid` 同一条路。
+ *
+ * 两个半径**必须不同**：相等时那是圆柱 —— 那条判断在核心里，形状算不出来就一条操作都不产出。
+ */
+export interface SolidCreateRoundFrustumAction extends ActionBase {
+  actionId: "solid.create_round_frustum"
+  inputs: {
+    alias: DraftAlias
+    center: { x: number; y: number; z: number }
+    /** 下底半径。 */
+    radiusBottom: number
+    /** 上底半径（与下底必须不同）。 */
+    radiusTop: number
+    height: number
+    /** 分段数（默认 48、上限 256）；它决定"多边形离圆有多远"。 */
+    segments?: number
+    label?: string
+  }
+}
+
 export interface SolidCreatePolyhedronAction extends ActionBase {
   actionId: "solid.create_polyhedron"
   inputs: {
@@ -421,6 +446,7 @@ export type DraftAction =
   | SolidCreateTetrahedronAction
   | SolidCreateRegularPyramidAction
   | SolidCreatePolyhedronAction
+  | SolidCreateRoundFrustumAction
   | DynamicBindPointAction
   | DynamicCreateBoundPointAction
   | DynamicCreateLocusAction

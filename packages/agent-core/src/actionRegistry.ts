@@ -1,3 +1,4 @@
+import { DEFAULT_SOLID_SEGMENTS } from "@draw/geometry-kernel"
 import { DEFAULT_CENTER_2D, DEFAULT_DYNAMIC_POINT_PARAMETER, DEFAULT_ORIGIN_3D, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SPAN, DEFAULT_SOLID_HEIGHT, DEFAULT_SOLID_SIZE, defaultPrismBasePolygon, defaultPrismVector } from "./localPlanDefaults"
 import type { DraftActionId } from "@draw/scene-graph"
 import type { PlanDefaultPolicy } from "./contracts"
@@ -177,13 +178,13 @@ export const FIELD_KINDS: Record<string, FieldKind> = {
   domain: "interval",
   // 闭集字段：种类是"字符串"，可选值由逐动作的 `enumValues` 决定。
   kind: "string", axis: "string", template: "string",
-  // 数字族
-  radius: "number", radiusX: "number", radiusY: "number", height: "number", edge: "number",
+  // 数字族（`radiusBottom` / `radiusTop` 是圆台的两个半径：同名同义的两个数字字段，登记在这里而不是逐动作里）
+  radius: "number", radiusX: "number", radiusY: "number", radiusBottom: "number", radiusTop: "number", height: "number", edge: "number",
   focalParameter: "number", rotation: "number", startAngle: "number", endAngle: "number",
   x: "number", factor: "number", parameter: "number", value: "number", min: "number",
   max: "number", step: "number",
-  // 整数族
-  sides: "integer", hostSub: "integer",
+  // 整数族（`segments` 是圆类的分段数：正整数，与 `sides` 同一档）
+  sides: "integer", hostSub: "integer", segments: "integer",
   // 平面点 / 空间向量
   center: "point", vertex: "point",
   origin: "vector", baseCenter: "vector", size: "vector", vector: "vector",
@@ -433,6 +434,25 @@ export const ACTIONS = {
     required: ["solidId"],
     references: [{ field: "solidId", kind: "scoped" }],
     defaults: {}
+  },
+  /**
+   * **圆台**（S4.3）：两个半径 + 高 + 分段数 ⇒ 一只**多边形近似**的多面体。
+   *
+   * `segments` 走默认（与圆柱 / 圆锥同一个数），两个半径与高**必须问用户或从题面读** ——
+   * 形状就是这三个数，替用户挑等于替他改题。两个半径相等时内核会拒（那是圆柱）。
+   */
+  "solid.create_round_frustum": {
+    inputFields: ["alias", "center", "radiusBottom", "radiusTop", "height", "segments", "label"],
+    requiresAlias: true,
+    rawFieldTypes: { center: "vector" },
+    required: [],
+    defaults: {
+      center: { policy: "safe_default", value: { ...DEFAULT_ORIGIN_3D }, reason: "底面中心未指定：取原点。" },
+      radiusBottom: { policy: "ask_user", question: "下底半径是多少？（必须大于 0）" },
+      radiusTop: { policy: "ask_user", question: "上底半径是多少？（必须大于 0，且与下底半径不同 —— 相等时那是圆柱）" },
+      height: { policy: "infer_from_facts", infer: "height", value: DEFAULT_SOLID_HEIGHT, reason: `高度未指定：先从你的话里读，读不到取 ${DEFAULT_SOLID_HEIGHT}。` },
+      segments: { policy: "safe_default", value: DEFAULT_SOLID_SEGMENTS, reason: `分段数未指定：取 ${DEFAULT_SOLID_SEGMENTS}（与圆柱 / 圆锥同一个数）。` }
+    }
   },
   "solid.create_tetrahedron": {
     inputFields: ["alias", "baseCenter", "edge", "label"],

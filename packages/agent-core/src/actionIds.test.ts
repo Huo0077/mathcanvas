@@ -26,8 +26,10 @@ describe("draft action catalogue", () => {
     // 此前 `function.analyze` / `function.create_tangent` 都要求先有一条曲线）之后的实测值。
     // **31** 是加上 `derived.create_circumsphere` / `derived.create_insphere`（S5：派生球 ——
     // 球心与半径**由宿主算出来**，解不出来就拒绝，不编一个球）之后的实测值。
-    expect(DRAFT_ACTION_IDS).toHaveLength(31)
-    expect(new Set(DRAFT_ACTION_IDS).size).toBe(31)
+    // **32** 是加上 `solid.create_round_frustum`（S4.3：圆台 —— **参数化动作 + 内核多边形近似** ⇒
+    // 物化成 `polyhedron3`，不是新图元，也不用调用方自己写 96 个顶点）之后的实测值。
+    expect(DRAFT_ACTION_IDS).toHaveLength(32)
+    expect(new Set(DRAFT_ACTION_IDS).size).toBe(32)
   })
 
   it("recognises every catalogue action instead of calling it unknown", () => {

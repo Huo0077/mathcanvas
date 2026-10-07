@@ -1,5 +1,5 @@
 import type { GeometryDocument, PrimitiveSpec, Vector3 } from "@draw/dsl"
-import { buildFromPoints, buildPrismTopology, buildSolidTemplate, compileExpression, DEFAULT_SOLID_SEGMENTS, prismEdgeLabel, prismPointLabel, regularPyramidShape, regularTetrahedronShape, solveCircumsphere3, solveInsphere3, templateEdgeLabel, templatePointLabel, validatePrismInput, type BuilderContext, type SolidBoundary, type SolidBuildResult, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
+import { buildFromPoints, buildPrismTopology, buildSolidTemplate, compileExpression, DEFAULT_SOLID_SEGMENTS, prismEdgeLabel, prismPointLabel, regularPyramidShape, regularTetrahedronShape, roundFrustumShape, solveCircumsphere3, solveInsphere3, templateEdgeLabel, templatePointLabel, validatePrismInput, type BuilderContext, type SolidBoundary, type SolidBuildResult, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
 
 import type { DomainOperation } from "../operations"
 import { solidTopology3 } from "../sectionRecompute"
@@ -503,6 +503,46 @@ function compileSolidTetrahedronAction(action: Extract<DraftAction, { actionId: 
   }
   const id = context.idAllocator.allocate("solid", inputs.alias)
   const built = compileSolidTetrahedron(id, { baseCenter: inputs.baseCenter, edge: inputs.edge }, inputs.label)
+  if (built.diagnostics.length > 0) return { operations: [], diagnostics: built.diagnostics.map((entry) => diagnostic(actionKey, entry.code, entry.message)), aliasToId: {} }
+  return { operations: [{ op: "addPrimitives", primitives: built.primitives }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
+}
+
+/**
+ * `solid.create_round_frustum`：**两个半径 + 高 + 分段数** → 一只 `polyhedron3` 与它的全部子对象。
+ *
+ * 形状来自内核的 `roundFrustumShape`（**多边形近似**，与圆柱 / 圆锥同一套分段口径）——
+ * 于是"圆台长什么样"只有一处定义，动作层只负责 id、标签与包装（与正四面体 / 正 N 棱锥同一条纪律）。
+ *
+ * 三条口径：
+ * 1. 工作区必须是立体几何；
+ * 2. 输入不合法时**一条操作都不产出** —— 形状算不出来就拒绝，而不是硬画一个；
+ * 3. **两个半径相等 ⇒ 内核返回 null ⇒ 拒绝**（那是圆柱，不是圆台）。
+ */
+export function compileSolidRoundFrustum(solidId: string, input: { center: Vector3; radiusBottom: number; radiusTop: number; height: number; segments: number }, label?: string): ActionSolidBuildResult {
+  const shape = roundFrustumShape(input)
+  if (!shape) {
+    return { primitives: [], vertexIds: [], edgeIds: [], faceIds: [], solidId, diagnostics: [diagnostic(solidId, "invalid_round_frustum", "圆台需要两个**不同**的正半径、一个正的高，以及 3..256 的分段数（两个半径相等时那是圆柱）。")] }
+  }
+  const built = buildFromPoints(shape, solidChildIds(solidId))
+  if (built.diagnostics.length > 0) {
+    return { primitives: [], vertexIds: built.vertexIds, edgeIds: built.edgeIds, faceIds: built.faceIds, solidId, diagnostics: built.diagnostics.map((entry) => diagnostic(solidId, "degenerate_round_frustum", entry.message)) }
+  }
+  return { primitives: labelSolidChildren(built.primitives, label), vertexIds: built.vertexIds, edgeIds: built.edgeIds, faceIds: built.faceIds, solidId, diagnostics: [] }
+}
+
+function compileSolidRoundFrustumAction(action: Extract<DraftAction, { actionId: "solid.create_round_frustum" }>, context: ActionContext): CompileResult {
+  const { actionKey, inputs } = action
+  if (context.targetWorkspace !== "geometry3d") {
+    return { operations: [], diagnostics: [diagnostic(actionKey, "workspace_mismatch", "a round frustum can only be created in the solid workspace")], aliasToId: {} }
+  }
+  const id = context.idAllocator.allocate("solid", inputs.alias)
+  const built = compileSolidRoundFrustum(id, {
+    center: inputs.center,
+    radiusBottom: inputs.radiusBottom,
+    radiusTop: inputs.radiusTop,
+    height: inputs.height,
+    segments: inputs.segments ?? DEFAULT_SOLID_SEGMENTS
+  }, inputs.label)
   if (built.diagnostics.length > 0) return { operations: [], diagnostics: built.diagnostics.map((entry) => diagnostic(actionKey, entry.code, entry.message)), aliasToId: {} }
   return { operations: [{ op: "addPrimitives", primitives: built.primitives }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
 }
@@ -1127,6 +1167,8 @@ export function compileAction(action: DraftAction, context: ActionContext): Comp
     case "derived.create_circumsphere":
     case "derived.create_insphere":
       return compileDerivedSphereAction(action, context)
+    case "solid.create_round_frustum":
+      return compileSolidRoundFrustumAction(action, context)
     case "solid.create_tetrahedron":
       return compileSolidTetrahedronAction(action, context)
     case "solid.create_regular_pyramid":

@@ -55,6 +55,7 @@ describe("roundFrustumPolyhedron", () => {
   })
 
   it("throws with the kernel's own reason when the two radii are equal, instead of quietly drawing a cylinder", () => {
-    expect(() => roundFrustumPolyhedron({ radiusBottom: 2, radiusTop: 2, height: 3 })).toThrow(/是圆柱|different radii/)
+    // 理由来自内核（`roundFrustumShape` 返回 null ⇒ 注册表那句），所以这里只钉"它说得出是圆柱"。
+    expect(() => roundFrustumPolyhedron({ radiusBottom: 2, radiusTop: 2, height: 3 })).toThrow(/cylinder/)
   })
 })

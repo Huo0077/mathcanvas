@@ -1,4 +1,5 @@
 import { type ParseError } from "./contracts"
+import { MAX_SOLID_SEGMENTS } from "@draw/geometry-kernel"
 import { updatableInputFields } from "@draw/scene-graph"
 import { ACTIONS, CONIC_KINDS, SOLID_TEMPLATES, declaredFieldKind, type ActionSpec, type ActionId } from "./actionRegistry"
 import { boundedString, fail, finiteNumber, isPlainObject, optionalFiniteNumber, quotedName, readPoint2, readScopedReference, readVector3, rejectUnknownFields } from "./schemaReaders"
@@ -311,6 +312,43 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
         }
         out.radius = radius
       }
+      return out
+    }
+
+    case "solid.create_round_frustum": {
+      /**
+       * 圆台：两个半径 + 高 + 分段数。与圆柱 / 圆锥**同一套分工** —— 这里只挡**明显畸形**
+       *（非有限数、半径/高非正、分段数越界），而"**两个半径相等**"留给内核
+       *（`roundFrustumShape` 返回 null）：那是几何语义，且容差要按半径量级给，
+       * 不是这一层该定的事。
+       */
+      const out: Record<string, unknown> = withAlias({})
+      if (value.center !== undefined) {
+        const center = readVector3(value.center, `${path}.center`, errors)
+        if (center === null) return null
+        out.center = center
+      }
+      for (const field of ["radiusBottom", "radiusTop", "height"] as const) {
+        if (value[field] === undefined) continue
+        const read = finiteNumber(value[field], `${path}.${field}`, errors)
+        if (read === null) return null
+        if (read <= 0) {
+          errors.push(fail("invalid_type", `${path}.${field}`, `${field} must be a positive finite number`))
+          return null
+        }
+        out[field] = read
+      }
+      if (value.segments !== undefined) {
+        const segments = finiteNumber(value.segments, `${path}.segments`, errors)
+        if (segments === null) return null
+        if (!Number.isInteger(segments) || segments < 3 || segments > MAX_SOLID_SEGMENTS) {
+          errors.push(fail("invalid_type", `${path}.segments`, `segments must be an integer in 3..${MAX_SOLID_SEGMENTS}`))
+          return null
+        }
+        out.segments = segments
+      }
+      const roundFrustumLabel = boundLabel(value.label, `${path}.label`, errors)
+      if (roundFrustumLabel !== undefined) out.label = roundFrustumLabel
       return out
     }
 

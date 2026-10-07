@@ -7,6 +7,15 @@
 
 
 
+## 2026-10-07 —— S4.3 第三刀：**圆台成为参数化动作**（模型/规划器给三个数，形状由内核算）
+
+- 新增 `solid.create_round_frustum`（`{center, radiusBottom, radiusTop, height, segments?}`）：**参数化动作 → 内核形状 → 物化成 `polyhedron3`**，与 `solid.create_prism` / `solid.create_tetrahedron` / `solid.create_regular_pyramid` 同一条路。于是"圆台"不再要求调用方自己写 96 个顶点，也**不需要新图元**。
+- **一处几何、两处用法**：抽出内核的 `roundFrustumShape(input)`（只算顶点与面环），注册表入口 `buildSolid("roundFrustum", …)` 与动作层的 `compileSolidRoundFrustum` **共用它** —— 与 `regularPyramidShape` / `regularTetrahedronShape` 同一个角色。顺带把校验收进那个函数（`null` = 不合法），注册表那条分支因此缩成一行。
+- **两条拒绝口径**：两个半径相等 ⇒ 形状为 `null` ⇒ **一条操作都不产出**，诊断写"那是圆柱"（`invalid_round_frustum`）；非立体几何工作区 ⇒ `workspace_mismatch`。
+- **工具链又逼出两处必须登记的字段**（`actionSchemas.test.ts` 直接报 `no field kind registered for …radiusBottom` / `…segments`）：`FIELD_KINDS` 里补了 `radiusBottom` / `radiusTop`（数字）与 `segments`（整数）。这正是那张表存在的理由 —— 新增同义字段时必须显式说一句，否则 schema 生成与校验会各说各话。
+- 读数：定向 12 个文件 **214/214**（含新用例：一条 `polyhedron3` + 96 点 + 50 面、两环半径与高度**按顶点顺序**自算、上下底不许反、相等半径全拒、工作区拒绝）；`actionIds.test.ts` 计数 31 → **32**；全库非 Lean **3962 通过 + 1 todo / 0 失败**（151.29 s，**+3**）；`typecheck` exit 0；`lint` 0 error / 13 warning。
+- **仍未做**：把它**交给模型**（进 `spatial-modeling` 的 `actionIds` + 重签清单哈希 + 运行时那条逐字清单）—— 与派生球那次同样的"先修接缝、再开闸"的顺序，本批已经把动作与校验这一侧做完了。
+
 ## 2026-10-07 —— S4.3 第二刀：**圆台走到画布上**（多边形近似 + 既有多面体动作，不加新图元）
 
 - 新增 `roundFrustumPolyhedron`（`agent-core/localPlanDefaults.ts`，本仓"只放数值与构造"的那个文件）：调内核 `buildSolid("roundFrustum", …)`，把**两个环的顶点**与**面环下标**整理出来交给 `solid.create_polyhedron` —— 设计里台体那一条写死的"**不新增 DSL 图元**"因此成立。

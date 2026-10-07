@@ -179,6 +179,8 @@ export const CAPABILITY_FOR_ACTION: Record<DraftActionIdName, string> = {
   "solid.create_tetrahedron": "create-primitive",
   "solid.create_regular_pyramid": "create-primitive",
   "solid.create_polyhedron": "create-primitive",
+  /** **圆台**（S4.3）：参数化动作 + 内核的多边形近似 ⇒ 物化成 `polyhedron3`，与棱柱 / 正四面体同一条能力。 */
+  "solid.create_round_frustum": "create-primitive",
   "dynamic.bind_point": "create-primitive",
   "dynamic.create_bound_point": "create-primitive",
   "dynamic.bind_curve": "create-primitive",
