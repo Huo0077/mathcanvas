@@ -504,6 +504,19 @@ export interface SpherePrimitive extends PrimitivePresentation {
   type: "sphere"
   center: Vector3
   radius: number
+  /**
+   * **派生球**（S5 的设计口径：球是派生量，走"派生绑定 + `recomputeDerivedObjects` 重算"）。
+   *
+   * `center` / `radius` 在这条绑定下是**派生缓存**，真值是宿主多面体的顶点 ——
+   * 与 2D 圆的 `radiusFrom` 同一个形状（那里也有"三角形一动，圆跟着重算"）。
+   * **"物化但不重算"被否决**：那会让球在宿主动了之后静默停在旧位置，
+   * 而用户看到的是一只"看起来还在那儿"的错球。
+   *
+   * 解不出来时（一般多面体不一定有外接球 / 内切球）**保留上一次的几何**，
+   * 并**不伪造**一个近似的球 —— 与文档层"来源解析不了就保持不动"的既有约定一致；
+   * 结构化诊断由 `solidStatusReport`（`derived.circumsphere` / `derived.insphere`）负责。
+   */
+  derivedFrom?: { kind: "circumsphere" | "insphere"; solidId: string }
 }
 
 /**

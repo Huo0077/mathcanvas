@@ -156,7 +156,8 @@
 
 **额外约束（设计 §4.1 已裁决，违反即停）**：球是**派生量**，走"派生绑定 + `recomputeDerivedObjects` 重算"，**"物化但不重算"被否决**（会静默过期）。解不出来时**如实报"没有外接球/内切球"**，不编一个球。
 
-- [ ] **Task 5.1 派生球接进依赖图**（`packages/scene-graph/src/graph.ts` 的 `primitiveDependencies` / `getAffectedPrimitiveIds`）
+- [x] **Task 5.1 派生球接进依赖图**（`graph.ts` 的 `primitiveDependencies` / `getAffectedPrimitiveIds`）（2026-10-07 完成）：DSL 的 `SpherePrimitive.derivedFrom`（`{kind, solidId}`）+ 依赖图一条边（球 → 宿主实体；顶点 → 实体 → 球的传递闭包自动成立）+ `recompute.ts` 的球分支（**与 `solidStatusReport` 同一个求解器**，解不出来保留上一次几何、不伪造近似球）。判据自己算（盒子 `(1,2,3)`/`√14`；四面体移顶点后 `(1,1,2)`/`√6` 且球心到四顶点等距），`derivedSphereRule.test.ts` 4/4。
+  - **仍是缺口**：① 手工盒子的**内切球**在该夹具下 `solveInsphere3` 返回 `undefined`（待查：夹具面绕向 or 求解器）；② **创建球**的动作与界面入口未做（`derived.create_circumsphere` / `derived.create_insphere` 仍只在 `actionAudit` 里声明未实现）。
 - [ ] **Task 5.2 接进唯一重算入口**（`packages/scene-graph/src/recompute.ts`）：改源多面体 ⇒ 球跟着变；**过期读数必须不可能出现**
 - [ ] **Task 5.3 核验**：外接球核验"到各顶点等距"、内切球核验"到各面相切"；非 `exact` ⇒ `unverified` + 面板明说
 - [ ] **Task 5.4 若 `recomputeDerivedObjects` 这条路接不进去 ⇒ 停下报告**，不改走物化（设计 §八 已写死）

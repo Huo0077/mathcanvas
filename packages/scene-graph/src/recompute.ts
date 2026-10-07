@@ -1,8 +1,8 @@
 import type { GeometryDocument, Measurement3, PrimitiveSpec } from "@draw/dsl"
-import { evaluateLineParameters, entityResolverFor, evaluateParameterExpressions, evaluatePlanarMeasurement, intersectSampledPrimitives, placedConic, solveLineConstraints, triangleCenter2, triangleRadius2, calculateMeasurement3, type PlanarMetric, type PlaceableConic } from "@draw/geometry-kernel"
+import { evaluateLineParameters, entityResolverFor, evaluateParameterExpressions, evaluatePlanarMeasurement, intersectSampledPrimitives, placedConic, solveCircumsphere3, solveInsphere3, solveLineConstraints, triangleCenter2, triangleRadius2, calculateMeasurement3, type PlanarMetric, type PlaceableConic, type SolidBoundary } from "@draw/geometry-kernel"
 import { curveRotationPivotId, placementResolver } from "./curveRotation"
 import { isPlaceableConic } from "./primitiveKinds"
-import { recomputeIntersectionFace, recomputeIntersectionLine, recomputeIntersectionPoint3, recomputeIntersectionSolid, recomputeSection } from "./sectionRecompute"
+import { recomputeIntersectionFace, recomputeIntersectionLine, recomputeIntersectionPoint3, recomputeIntersectionSolid, recomputeSection, solidTopology3 } from "./sectionRecompute"
 import { MIN_DYNAMIC_CIRCLE_RADIUS, recomputeAnalysisSet, recomputeCurveTangent, recomputeDerivative, recomputeIntegral, recomputeSecant, recomputeTangent, sampledSource } from "./analysisRecompute"
 import { resolveBoundPoint, resolveBoundPoint3, resolveIntersection, syncTemplateTopology } from "./resolve3d"
 import { getAffectedPrimitiveIds, topologicalRecomputeOrder } from "./graph"
@@ -184,6 +184,28 @@ const recomputePrimitive = (primitive: PrimitiveSpec): PrimitiveSpec | undefined
         ? Math.max(MIN_DYNAMIC_CIRCLE_RADIUS, Math.hypot(driver.x - center.x, driver.y - center.y) * distanceRule.factor)
         : primitive.radius
       if (center.x === primitive.center.x && center.y === primitive.center.y && radius === primitive.radius) return primitive
+      return { ...primitive, center, radius }
+    }
+    /**
+     * **派生球**（S5.1）：外接球 / 内切球都由宿主多面体的顶点算出来。
+     *
+     * 解与诊断都来自内核的同一份判据（`solveCircumsphere3` / `solveInsphere3`），
+     * 与 `solidStatusReport` 给模型看的那两条读数**同源** —— 不然"面板说有这么个球"与
+     * "画布上那个球"会是两个结论。
+     *
+     * 姿态：**解不出来就保留上一次的几何**，不伪造一个近似的球（一般多面体不一定有外接球 / 内切球）。
+     * 这与文档层"来源解析不了就保持不动"的既有约定一致（同上面那条三角形圆）。
+     */
+    if (primitive.type === "sphere" && primitive.derivedFrom) {
+      const host = primitiveMap.get(primitive.derivedFrom.solidId)
+      const topology = host ? solidTopology3(host, primitiveMap) : null
+      // 宿主还没长齐（缺顶点 / 缺面环）时什么都不做：那不是"没有球"，而是"还算不出来"。
+      if (!topology) return primitive
+      const boundary: SolidBoundary = { vertices: topology.vertices, faces: topology.faces }
+      const solved = primitive.derivedFrom.kind === "circumsphere" ? solveCircumsphere3(boundary) : solveInsphere3(boundary)
+      if (solved.status !== "exact") return primitive
+      const { center, radius } = solved.value
+      if (center.x === primitive.center.x && center.y === primitive.center.y && center.z === primitive.center.z && radius === primitive.radius) return primitive
       return { ...primitive, center, radius }
     }
     if (primitive.type === "derivative") {

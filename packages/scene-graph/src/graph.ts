@@ -68,6 +68,14 @@ function primitiveDependencies(primitive: PrimitiveSpec, relations?: { owners: M
   if (primitive.type === "intersectionPoint3") dependencies.push(...primitive.sourceIds)
   if (primitive.type === "derivative" || primitive.type === "tangent" || primitive.type === "normal" || primitive.type === "secant" || primitive.type === "integral" || primitive.type === "analysisSet" || primitive.type === "section") dependencies.push(primitive.sourceId)
   /**
+   * **派生球依赖宿主多面体**（S5.1）。
+   *
+   * 只写"球 → 实体"这一条边就够了：实体本身已经依赖它的顶点 / 棱 / 面（上面那条 `polyhedron3`），
+   * 而 `getAffectedPrimitiveIds` 取的是**传递闭包** —— 于是"拖一个顶点 ⇒ 实体 ⇒ 球"整条链自动成立。
+   * 多写"球 → 每个顶点"反而会绕过实体那一层，让球在被删掉的实体上还算得出来。
+   */
+  if (primitive.type === "sphere" && primitive.derivedFrom) dependencies.push(primitive.derivedFrom.solidId)
+  /**
    * 曲线切线如果由**一个动点**定位，就依赖那个点：动点一动，切线跟着重算。
    * 少了这条边，切点会停在旧位置 —— 而"切线随动点动态变化"正是用户要的那个性质。
    */
