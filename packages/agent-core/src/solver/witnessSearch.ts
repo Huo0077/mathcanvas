@@ -449,47 +449,43 @@ function specFor(structure: PyramidStructure | PrismStructure): SolidShapeSpec {
  */
 function candidatePool(spec: SolidShapeSpec, input: WitnessSearchInput): CandidatePlan[] {
   const pool: CandidatePlan[] = [{ spec, choices: [], sizeKey: 0 }]
-  const baseScalars = spec.freeScalars.filter((scalar) => scalar.kind === "base-edge")
-  const heightScalar = spec.freeScalars.find((scalar) => scalar.kind === "height")
-  const baseOptions: ShapeScalarChoice[][] = []
-  if (baseScalars.length === 2) {
-    const [widthScalar, depthScalar] = baseScalars as [FreeScalar, FreeScalar]
-    for (const width of seededOrder(widthScalar.candidates, input.seed)) {
-      for (const depth of seededOrder(depthScalar.candidates, input.seed + 1)) {
-        // 两条边都自由时不许取相等：那会顺带把底面做成正方形 —— 题面没说的额外特殊性。
-        if (width === depth) continue
-        baseOptions.push([{ id: widthScalar.id, value: width }, { id: depthScalar.id, value: depth }])
+  /**
+   * **对 spec 里的每个自由标量做笛卡尔积**（按它们在 spec 里的顺序），取值顺序由 seed 决定。
+   *
+   * 写在 spec 的自由标量上、而不是写死"两条底边 + 高"，是为了让**加一族形状时这一层不用改** ——
+   * 台体的 `top-scale`（相似比）就是靠这条进来的。这正是"形状数据化"要换来的东西。
+   *
+   * **一条特例保留**：两条底面边同时自由时不许取相等 —— 那会顺带把底面做成正方形，
+   * 是题面没说的额外特殊性。判据只看 `base-edge` 这一类，别的标量可以相等。
+   */
+  const kindById = new Map(spec.freeScalars.map((scalar) => [scalar.id, scalar.kind]))
+  const axes = spec.freeScalars.map((scalar, index) => seededOrder(scalar.candidates, input.seed + index))
+  let combos: ShapeScalarChoice[][] = [[]]
+  spec.freeScalars.forEach((scalar, index) => {
+    const next: ShapeScalarChoice[][] = []
+    for (const combo of combos) {
+      for (const value of axes[index]!) {
+        const clashesWithFreeEdge = scalar.kind === "base-edge"
+          && combo.some((choice) => kindById.get(choice.id) === "base-edge" && choice.value === value)
+        if (clashesWithFreeEdge) continue
+        next.push([...combo, { id: scalar.id, value }])
       }
     }
-  } else if (baseScalars.length === 1) {
-    const [scalar] = baseScalars as [FreeScalar]
-    for (const value of seededOrder(scalar.candidates, input.seed)) baseOptions.push([{ id: scalar.id, value }])
-  } else {
-    baseOptions.push([])
-  }
-
-  const heightOptions: (number | null)[] = heightScalar === undefined
-    ? [null]
-    : seededOrder(heightScalar.candidates, input.seed + 2)
+    combos = next
+  })
 
   const grid: CandidatePlan[] = []
-  for (const baseChoice of baseOptions) {
-    for (const height of heightOptions) {
-      /**
-       * **没有自由标量时不要产候选**（R34 / M4）：`baseOptions = [[]]` 与 `heightOptions = [null]`
-       * 的组合与解析候选**逐字节相同** —— 它会白吃一个 `maxCandidates` 名额，
-       * 还会把 `candidates=N` 报大，让"我试了几种"这句话失真。
-       */
-      if (baseChoice.length === 0 && height === null) continue
-      const choices: ShapeScalarChoice[] = heightScalar === undefined || height === null
-        ? [...baseChoice]
-        : [...baseChoice, { id: heightScalar.id, value: height }]
-      // 排序键只累加我们选定的自由标量；题面已定的部分对所有候选都一样。
-      const sizeKey = choices.reduce((total, choice) => total + choice.value * choice.value, 0)
-      grid.push({ spec, choices, sizeKey })
-    }
+  for (const choices of combos) {
+    /**
+     * **没有自由标量时不要产候选**（R34 / M4）：空组合与解析候选**逐字节相同** ——
+     * 它会白吃一个 `maxCandidates` 名额，还会把 `candidates=N` 报大，让"我试了几种"这句话失真。
+     */
+    if (choices.length === 0) continue
+    // 排序键只累加我们选定的自由标量；题面已定的部分对所有候选都一样。
+    const sizeKey = choices.reduce((total, choice) => total + choice.value * choice.value, 0)
+    grid.push({ spec, choices, sizeKey })
   }
-  // 小整数优先（规格 §6.3 的优先级）：同键的先后由 seed 决定（上面那两次排列 + 这里的稳定排序）。
+  // 小整数优先（规格 §6.3 的优先级）：同键的先后由 seed 决定（上面那几次排列 + 这里的稳定排序）。
   grid.sort((left, right) => left.sizeKey - right.sizeKey)
   pool.push(...grid)
   return pool
@@ -696,15 +692,42 @@ export function searchWitness(input: WitnessSearchInput): WitnessSearchResult {
    * ② "核验器的点名映射只接受 `/^[A-Z]$/`" ⇒ **S1.3 起两边共用 `pointNames` 的同一份定义**。
    * 两条都不再成立，所以 `prism` 现在走 `derivePrismStructure`，不再从这里提前返回。
    */
-  if (input.shape !== "pyramid" && input.shape !== "prism") {
+  const providedSpec = input.spec
+  if (providedSpec !== undefined && providedSpec.family !== input.shape) {
+    return {
+      status: "unverified_instance",
+      evidence: evidenceFor("unverified_instance", {}),
+      reasons: [`${WITNESS_SEARCH_CODES.unsupportedShape}: 调用方给的形状描述是 ${providedSpec.family}，与 shape=${input.shape} 不一致；不猜。`, configLine(input, 0)]
+    }
+  }
+  if (input.shape === "polyhedron") {
     /**
-     * 只剩"任意多面体"这一族如实报"系统尚不支持"：它的候选坐标只能由调用方给出
+     * "任意多面体"这一族如实报"系统尚不支持"：它的候选坐标只能由调用方给出
      * （`selectPolyhedronWitness` 负责筛选），搜索器不凭空造坐标。
      */
     return {
       status: "unverified_instance",
       evidence: evidenceFor("unverified_instance", {}),
       reasons: [`${WITNESS_SEARCH_CODES.requiresCandidates}: 任意多面体的候选坐标必须由调用方给出（见 selectPolyhedronWitness），搜索器不自造坐标。`, configLine(input, 0)]
+    }
+  }
+  if (providedSpec === undefined && input.shape === "frustum") {
+    /**
+     * **台体只能由调用方给出形状描述**：它的几何不是从某一句题设读出来的
+     * （棱锥/棱柱靠"侧棱 ⊥ 底面"那句定底环与拉伸，台体没有对应的一句）。
+     * 题面语法进 spec 是 S6 的活，本层不替它猜底环、顶环与相似比。
+     */
+    return {
+      status: "unverified_instance",
+      evidence: evidenceFor("unverified_instance", {}),
+      reasons: [`${WITNESS_SEARCH_CODES.unsupportedShape}: 台体需要调用方给出形状描述（底环 / 顶环 / 相似比）：本层不替题面语法猜这三个。`, configLine(input, 0)]
+    }
+  }
+  if (providedSpec === undefined && input.shape !== "pyramid" && input.shape !== "prism") {
+    return {
+      status: "unverified_instance",
+      evidence: evidenceFor("unverified_instance", {}),
+      reasons: [`${WITNESS_SEARCH_CODES.requiresCandidates}: 这一族既没有内置推导、也没有调用方给的形状描述，搜索器不自造坐标。`, configLine(input, 0)]
     }
   }
 
@@ -717,16 +740,25 @@ export function searchWitness(input: WitnessSearchInput): WitnessSearchResult {
     }
   }
 
-  const derived = input.shape === "prism" ? derivePrismStructure(givens) : derivePyramidStructure(givens)
-  if (derived.status === "rejected") {
-    return {
-      status: "unverified_instance",
-      evidence: evidenceFor("unverified_instance", {}),
-      reasons: [`${derived.code}: ${derived.message}`, configLine(input, 0)]
+  /**
+   * **形状描述的两个来源，优先级明确**：调用方给了 spec 就用它（入口语法 S6 与台体走这条），
+   * 否则从题面推（棱锥/棱柱今天的产品路径）。
+   */
+  let spec: SolidShapeSpec
+  if (providedSpec !== undefined) {
+    spec = providedSpec
+  } else {
+    const derived = input.shape === "prism" ? derivePrismStructure(givens) : derivePyramidStructure(givens)
+    if (derived.status === "rejected") {
+      return {
+        status: "unverified_instance",
+        evidence: evidenceFor("unverified_instance", {}),
+        reasons: [`${derived.code}: ${derived.message}`, configLine(input, 0)]
+      }
     }
+    spec = specFor(derived.structure)
   }
 
-  const structure = derived.structure
   /**
    * **R15 / R32：核验器拿到的必须与产品路径同一份题设。**
    *
@@ -746,7 +778,7 @@ export function searchWitness(input: WitnessSearchInput): WitnessSearchResult {
   const unjudgeable = givens.filter((obligation) => obligation.judgeability !== "supported")
   const certifiable = unjudgeable.length === 0
   // 上限在**生成之后、判定之前**截断：`maxCandidates` 是"最多判几个"，不是"最多想几个"。
-  const fullPool = candidatePool(specFor(structure), input)
+  const fullPool = candidatePool(spec, input)
   const pool = fullPool.slice(0, Math.max(0, Math.trunc(input.maxCandidates)))
   const judged: Extract<CandidateJudgement, { kind: "judged" }>[] = []
   const rejections = new Map<string, { count: number; message: string }>()

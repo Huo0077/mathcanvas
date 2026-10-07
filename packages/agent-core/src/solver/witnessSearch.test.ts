@@ -1,4 +1,4 @@
-import { crossVector3, dotVector3, lengthVector3, subtractVector3, type Vector3 } from "@draw/geometry-kernel"
+import { crossVector3, dotVector3, lengthVector3, subtractVector3, type SolidShapeSpec, type Vector3 } from "@draw/geometry-kernel"
 import { describe, expect, it } from "vitest"
 
 import type { GeometryObligation } from "../claimEvidence"
@@ -402,8 +402,58 @@ describe("直棱柱", () => {
   })
 })
 
-describe("witness search: unsupported inputs stay unsupported", () => {
-  it("does not invent coordinates for the shapes it cannot derive from the givens", () => {
+/**
+ * **台体（S4）：由调用方给出形状描述。**
+ *
+ * 台体的几何**不是从某一句题设读出来的**（棱锥/棱柱靠"侧棱 ⊥ 底面"那句定底环与拉伸），
+ * 所以它走"调用方交 spec"那条路 —— 将来由入口语法（S6）从题面产出这份 spec。
+ * 这里钉三件事：① spec 驱动能产出**通过核验**的候选；② 图真的是台体（顶棱短于底棱，自己量）；
+ * ③ 没有 spec、或 spec 的 family 与 shape 不一致时**明确拒绝**，不猜。
+ */
+describe("台体（调用方给出形状描述）", () => {
+  const FRUSTUM_SPEC: SolidShapeSpec = {
+    family: "frustum",
+    base: ["A", "B", "C", "D"],
+    top: ["A′", "B′", "C′", "D′"],
+    relations: [{ kind: "perpendicular", segments: [["A", "B"], ["A", "D"]] }],
+    freeScalars: [
+      { id: "height", kind: "height", targets: ["A′"], candidates: [2, 3] },
+      { id: "top-scale", kind: "top-scale", targets: ["A′", "B′", "C′", "D′"], candidates: [0.5, 0.6] }
+    ]
+  }
+  const PROMPT = "在四棱台ABCD-A′B′C′D′中，AB⊥AD，画出这个四棱台"
+
+  it("spec 驱动的台体产出通过核验的候选，且顶棱**真的**比底棱短", () => {
+    const result = searchWitness({ ...SEARCH, shape: "frustum", spec: FRUSTUM_SPEC, obligations: obligationsOf(PROMPT) })
+    expect(result.status, JSON.stringify(result)).toBe("verified_instance")
+    if (result.status !== "verified_instance") return
+    const at = coordinates(result.candidate)
+    const base = lengthVector3(subtractVector3(at("B"), at("A")))
+    const top = lengthVector3(subtractVector3(at("B′"), at("A′")))
+    expect(top).toBeGreaterThan(0)
+    expect(top).toBeLessThan(base)
+    // 两底平行：四个顶面点同高，且高 > 0。
+    const heights = ["A′", "B′", "C′", "D′"].map((name) => at(name).z)
+    expect(new Set(heights.map((value) => value.toFixed(9))).size).toBe(1)
+    expect(heights[0]!).toBeGreaterThan(0)
+  })
+
+  it("没有形状描述 ⇒ 如实拒绝：不替题面语法猜底环 / 顶环 / 相似比", () => {
+    const result = searchWitness({ ...SEARCH, shape: "frustum", obligations: obligationsOf(PROMPT) })
+    expect(result.status).toBe("unverified_instance")
+    if (result.status !== "unverified_instance") return
+    expect(result.reasons.join(" "), JSON.stringify(result)).toContain("unsupported-shape")
+  })
+
+  it("spec 的 family 与 shape 不一致 ⇒ 明确拒绝，不猜哪一个对", () => {
+    const result = searchWitness({ ...SEARCH, shape: "pyramid", spec: FRUSTUM_SPEC, obligations: obligationsOf(PROMPT) })
+    expect(result.status).toBe("unverified_instance")
+    if (result.status !== "unverified_instance") return
+    expect(result.reasons.join(" "), JSON.stringify(result)).toContain("不一致")
+  })
+})
+
+describe("witness search: unsupported inputs stay unsupported", () => {  it("does not invent coordinates for the shapes it cannot derive from the givens", () => {
     const prism = search(PYRAMID, { shape: "prism" })
     expect(prism.status).toBe("unverified_instance")
     if (prism.status !== "unverified_instance") throw new Error("expected a pyramid prompt under the prism family to stay unverified")

@@ -1,4 +1,4 @@
-import type { Vector3 } from "@draw/geometry-kernel"
+import type { SolidShapeSpec, Vector3 } from "@draw/geometry-kernel"
 
 import type { ClaimEvidence } from "../claimEvidence"
 import type { ObligationIR } from "../obligationIR"
@@ -32,7 +32,7 @@ export interface PolyhedronWitness {
 }
 
 /** 首批图形族。`polyhedron` 表示"任意多面体"，它的坐标只能由调用方给出（见下）。 */
-export type WitnessShapeKind = "polyhedron" | "prism" | "pyramid"
+export type WitnessShapeKind = "polyhedron" | "prism" | "pyramid" | "frustum"
 
 export interface WitnessSearchInput {
   /**
@@ -54,6 +54,16 @@ export interface WitnessSearchInput {
    */
   obligations: ObligationIR
   shape: WitnessShapeKind
+  /**
+   * **调用方给出的形状描述**（可选）。
+   *
+   * 有它时搜索层**不再自己从题面推形状**（那是入口语法 S6 的活），直接按 spec 枚举自由标量、
+   * 交给内核 `constructShapeFromSpec` 构造 —— 这正是"四层共读一份 spec"要走的那条路。
+   * 台体（S4）今天就走它：题面里**没有**"侧棱 ⊥ 底面"那种能把底环与拉伸读出来的句子。
+   *
+   * 它必须与 `shape` 一致，不一致时**明确拒绝**（不猜）。没有它时行为与从前逐字相同。
+   */
+  spec?: SolidShapeSpec
   /** 确定性种子：同一 seed 必须给出同一顺序、同一结果（R26）。 */
   seed: number
   /** 候选数上限：真的生效（在候选之间检查），耗尽时如实报"没试完"。 */
