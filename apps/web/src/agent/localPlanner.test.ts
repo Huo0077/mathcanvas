@@ -439,6 +439,60 @@ describe("V0a opt-in local free-apex diagram intent", () => {
  * 开关管的是"见证搜索"（欠定题候选的搜索），而这里是既有的夹具路径，
  * 与 `PYRAMID_PROMPT` 同类 —— 默认就该能跑。
  */
+/**
+ * **点名的立体图形族**（S6.3）：形状从句认得出时，**界面路径**也能画了 —— 这是"用户能画"的那一跳。
+ *
+ * 钉四件事：
+ * ① 开关开着时认得出台体 / 五棱锥 / 直棱柱，而且产出的是**真的作图动作**（`solid.create_polyhedron`）；
+ * ② 开关**关着**时一律不认 —— 实验路径不许在默认路径上生效（照旧"老实问路"）；
+ * ③ **V0a 的地盘不抢**：三棱锥与自由点题面仍走 V0a 自己的口径（它那套刻意拒绝照旧）；
+ * ④ 裸词与问读数的句子不认（"画一个棱锥""这个四棱台的体积是多少"）。
+ */
+describe("点名的立体图形族（S6.3）", () => {
+  const FRUSTUM = "在四棱台ABCD-A′B′C′D′中，AB⊥AD，画出这个四棱台"
+  const PENTAGON = "在五棱锥 P-ABCDE 中，PA ⊥ 平面 ABCDE，画出这个五棱锥"
+  /**
+   * **棱柱不在这条线里**：既有的棱柱夹具用的是宽松触发词（`all: ["棱柱", …]`，不是 `exact`），
+   * 所以**任何**棱柱题面都被它先接走 —— 这一层永远看不到棱柱。这是**既有行为**，不改它；
+   * 于是这一层的实际增量是**台体**与**五 / 六棱锥**（三棱锥的地盘归 V0a）。
+   */
+
+  it("开关开着：台体 / 五棱锥认得出，并产出真的作图动作", () => {
+    for (const prompt of [FRUSTUM, PENTAGON]) {
+      const intent = matchLocalIntent(prompt, { enableFreeApex: true })
+      expect(intent, prompt).not.toBeNull()
+      const envelope = intent!.build({ prompt, size: DEFAULT_SOLID_SIZE })
+      expect(envelope.kind, prompt).toBe("plan")
+      if (envelope.kind !== "plan") continue
+      expect(envelope.actions[0]?.actionId, prompt).toBe("solid.create_polyhedron")
+      expect(localIntentSkillIds(prompt, { enableFreeApex: true }), prompt).toContain("spatial-modeling")
+    }
+  })
+
+  it("开关关着：一律不认（实验路径不许在默认路径上生效）", () => {
+    for (const prompt of [FRUSTUM, PENTAGON]) expect(matchLocalIntent(prompt), prompt).toBeNull()
+  })
+
+  it("夹具优先：`在三棱柱…` 仍走既有棱柱夹具，不被这一层接管", () => {
+    const intent = matchLocalIntent("在三棱柱ABC-A′B′C′中，AA′⊥平面ABC，画出这个三棱柱", { enableFreeApex: true })
+    expect(intent).not.toBeNull()
+    const envelope = intent!.build({ prompt: "在三棱柱ABC-A′B′C′中，AA′⊥平面ABC，画出这个三棱柱", size: DEFAULT_SOLID_SIZE })
+    expect(envelope.kind).toBe("plan")
+    if (envelope.kind === "plan") expect(envelope.actions[0]?.actionId).toBe("solid.create_prism")
+  })
+
+  it("V0a 的地盘不抢：自由点整句仍归 V0a，普通三棱锥这里不接", () => {
+    expect(matchLocalIntent("在三棱锥D-ABC中，AD⊥平面ABC，自由点D，画示意图", { enableFreeApex: true })).not.toBeNull()
+    expect(matchLocalIntent("在三棱锥 A-BCD 中，BD=2，画出这个三棱锥", { enableFreeApex: true })).toBeNull()
+  })
+
+  it("裸词与问读数都不认", () => {
+    expect(matchLocalIntent("画一个棱锥", { enableFreeApex: true })).toBeNull()
+    expect(matchLocalIntent("画一个四棱台", { enableFreeApex: true })).toBeNull()
+    expect(matchLocalIntent("这个四棱台的体积是多少", { enableFreeApex: true })).toBeNull()
+  })
+})
+
 describe("V0b local planar right triangle", () => {
   it("is reachable without enabling any experimental flag", () => {
     expect(matchLocalIntent(PLANAR_TRIANGLE_PROMPT)).not.toBeNull()

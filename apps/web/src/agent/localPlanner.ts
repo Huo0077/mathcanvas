@@ -1,5 +1,5 @@
 import type { PlanEnvelope, PlannerPort } from "@draw/agent-core"
-import { PLAN_SCHEMA_VERSION, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SPAN, DEFAULT_SOLID_SIZE, defaultPrismBasePolygon, cubeCenterFrom, cubeEdgeLengthFrom, searchWitnessForPrompt } from "@draw/agent-core"
+import { PLAN_SCHEMA_VERSION, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SPAN, DEFAULT_SOLID_SIZE, defaultPrismBasePolygon, cubeCenterFrom, cubeEdgeLengthFrom, parseShapeClause, searchWitnessForPrompt } from "@draw/agent-core"
 
 import { CONIC_ELLIPSE_PROMPT, FUNCTION_TANGENT_PROMPT, HYPERBOLA_PROMPT, PARABOLA_PROMPT, PLANAR_TRIANGLE_PROMPT, PYRAMID_PROMPT, PYRAMID_UNVERIFIED_PROMPT, conicInvariantPlan, ellipsePlan, functionTangentPlan, hyperbolaPlan, obliquePrismSectionPlan, parabolaPlan, planarRightTrianglePlan, pyramidPlan } from "./representativeFixtures"
 
@@ -261,6 +261,69 @@ function freeApexIntentFor(prompt: string): LocalIntent | null {
   }
 }
 
+/**
+ * **这条题设为什么给不出可核验的图形**：把见证搜索自己的理由带上，不另写一句含糊的话。
+ */
+function witnessRefusalQuestion(found: ReturnType<typeof searchWitnessForPrompt>): string {
+  const detail = found.status === "no_witness" ? found.failures.join("；") : found.status === "unverified_instance" ? found.reasons.join("；") : ""
+  return `这条题设目前给不出可核验的图形：${detail.length > 0 ? detail : "搜索没有给出原因文本。"}`
+}
+
+/**
+ * **V0a 的地盘让给 V0a**。
+ *
+ * `freeApexIntentFor` 认的是**三棱锥 + 自由点 / 任取点 + 画示意图**这一族整句，而它对
+ * **自己地盘内**的题面有一套明确的拒绝口径：顶点不许写坐标（写死坐标等于换一条题设）、
+ * 多一条长度不认、"D 在底面 ABC 上方"这类空间条件也不认。那些拒绝是**刻意**的（自由点是实验特性）。
+ *
+ * 所以这一层**不抢它的活**，判据取**整个三棱锥族**：
+ * - 带 `自由点 / 任取点 / 任意点` 的句子（地盘标记）一律不接；
+ * - **三棱锥**本身也不接 —— 那正是 V0a 的族（它的拒绝口径是按这个族写的），
+ *   这一层接四 / 五 / 六棱锥、棱柱、棱台。
+ *
+ * 否则上面那些刻意拒绝会被"另一端能画"悄悄推翻，而那是行为变更，不是新增能力。
+ */
+const V0A_TERRITORY = /自由点|任取点|任意点|三棱锥/
+
+/**
+ * **点名的立体图形族**（S6.3）：题面里认得出形状从句（`在四棱台ABCD-A′B′C′D′中` 这类）时，
+ * 交给**入口语法 + 见证搜索**那条线 —— 于是台体、五 / 六棱锥、直棱柱这些题面第一次有了界面路径。
+ *
+ * 与 `freeApexIntentFor` 的分工：那条只认 V0a 的**自由顶点三棱锥整句**（一条固定句式），
+ * 这条认的是**整族形状**，判据是入口语法（`parseShapeClause`），而且**避开 V0a 的地盘**。
+ * 两者走的是**同一个**见证搜索，所以"系统替你定了什么"（assumptions）与面板证据是同一份。
+ *
+ * 与既有点名同一条纪律：**不认裸词**。"画一个棱锥"没有点名表，入口语法认不出 ⇒ 不认（老实问路）。
+ */
+function solidShapeIntentFor(prompt: string): LocalIntent | null {
+  if (V0A_TERRITORY.test(prompt)) return null
+  const shape = parseShapeClause(prompt)
+  if (shape === null) return null
+  const keyword = shape.family === "pyramid" ? "棱锥" : shape.family === "prism" ? "棱柱" : "棱台"
+  const label = shape.family === "frustum" ? "台体" : keyword
+  return {
+    all: [keyword],
+    skillIds: ["spatial-modeling"],
+    build: ({ prompt: words }) => {
+      const found = searchWitnessForPrompt(words)
+      if (found.status !== "verified_instance") {
+        return {
+          schemaVersion: PLAN_SCHEMA_VERSION, kind: "clarification", goal: `${label}题设未核验`, factIds: [],
+          questions: [witnessRefusalQuestion(found)]
+        }
+      }
+      return {
+        schemaVersion: PLAN_SCHEMA_VERSION, kind: "plan", goal: `按点名关系画一组${label}示意图`, factIds: [],
+        assumptions: found.assumptions,
+        actions: [{
+          actionId: "solid.create_polyhedron", actionKey: "named-shape", factIds: [],
+          inputs: { alias: "named-shape", vertexNames: found.candidate.names, vertices: found.candidate.vertices, faces: found.candidate.faces }
+        }]
+      }
+    }
+  }
+}
+
 export const LOCAL_INTENTS: readonly LocalIntent[] = [
   { all: ["四棱锥", "PA", "BC", "AD"], exact: PYRAMID_PROMPT, skillIds: ["spatial-modeling"], build: () => pyramidPlan() },
   { all: ["四棱锥", "PA", "BC", "AD", "∠"], exact: PYRAMID_UNVERIFIED_PROMPT, skillIds: ["spatial-modeling"], build: () => pyramidPlan() },
@@ -373,6 +436,15 @@ export function matchLocalIntent(prompt: string, options: { enableFreeApex?: boo
     if (intent.any && !intent.any.some((token) => normalized.includes(token.toLowerCase()))) continue
     return intent
   }
+  /**
+   * **兜底：点名的立体图形族**（S6.3）。放在**精确夹具之后**是刻意的 ——
+   * 夹具是逐字钉住的代表题，让形状族抢先会把它们从既有路径上挤走（那是行为变更，不是新增）。
+   * 所以这条只在**没有夹具认领**时接：台体、五 / 六棱锥、直棱柱这些题面。
+   *
+   * 它挂在**同一个实验开关**后面：走的是同一个见证搜索（系统要替题面选几个自由值），
+   * 而"要不要让系统替用户选值"正是这个开关管的事。开关关着时照旧"老实问路"。
+   */
+  if (options.enableFreeApex === true && !analysis) return solidShapeIntentFor(prompt)
   return null
 }
 

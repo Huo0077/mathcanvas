@@ -95,6 +95,13 @@ export * from "./skills/manifest"
  *（Worker / `draftStore`）必须能只依赖包根拿到 `WitnessSearchInput` 与 `searchWitness`。
  */
 export * from "./solver/solverContracts"
+/**
+ * **入口语法**（S6；设计 §3.2 的第一层）：自然语言 → 形状描述。
+ *
+ * 与搜索层一起出现在包根的理由同上面那条：本地规划器（`apps/web`）与离线 benchmark
+ * **必须共用同一份解析**，两边都只从这里拿（`parseShapeClause` / `specForPrompt`）。
+ */
+export * from "./solver/shapeGrammar"
 export * from "./solver/witnessSearch"
 export * from "./toolContracts"
 export * from "./toolDispatch"

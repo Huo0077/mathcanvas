@@ -172,7 +172,8 @@
   - **接线（2026-10-07 完成）**：`specForPrompt(prompt, givens)` —— 入口语法 + 形状推导 + 自由标量表接成一条线，规划器与离线 benchmark 共用。台体走这条（两个环只能来自入口语法）：`在四棱台ABCD-A′B′C′D′中，AB⊥AD` ⇒ spec ⇒ `verified_instance`。**交叉校验**：形状从句与"侧棱 ⊥ 底面"读出来的底环不是同一组顶点 ⇒ 问路（变异证明短路它就会静默用错底环）。
   - **仍未做**：接进 `localPlanner`（规划器仍走既有夹具）；"底面是菱形、侧棱垂直底面的四棱柱"这类**无点名表**的说法仍走既有夹具。
 - [x] **Task 6.2 `localPlanner.freeApexIntentFor` 的窄正则退役，改调 `shapeGrammar`**（2026-10-07 **离线入口那一半完成**）：`planCompiler.witnessSearchInput`（**救援路径与离线入口共用**）改为先问 `specForPrompt`，认得出形状从句时族与 spec 都由入口语法给；认不出时退回原正则（行为逐字不变）。兜底也认 `棱台` ⇒ 报 `frustum`，于是读不出的台体题面得到的是**台体自己的**理由。端到端：`在四棱台ABCD-A′B′C′D′中，AB⊥AD` ⇒ `searchWitnessForPrompt` ⇒ `verified_instance`；变异（恢复成只用正则）⇒ 该用例红。
-  - **仍未做**：`localPlanner` 的**界面路径**（用户在界面上说一句就出草稿）；`freeApexIntentFor` 那条窄正则的退役。
+  - **界面路径（2026-10-07 完成，S6.3）**：`localPlanner` 新增意图 `solidShapeIntentFor`（挂既有实验开关，**关着一律不认**），放在**精确夹具之后**（夹具优先；棱柱的宽松夹具因此仍接走所有棱柱题面）并**避开 V0a 的地盘（整个三棱锥族）** —— 后者是被 V0a 两条既有用例逼出来的：最初的兜底把 V0a 刻意拒绝的自由点/空间条件题面也画了，那是行为变更。产出真的 `solid.create_polyhedron`；`localPlanner.test.ts` 57/57（+5），变异（短路兜底）⇒ 用例红。
+  - **仍未做**：`freeApexIntentFor` 那条窄正则的退役（今天两条路并存，各有各的地盘）；"问路"的浏览器判据。
 - [ ] **Task 6.3 反例**：分析题 / 非立体题 / 说法对不上的题 ⇒ 问路，**不产出草稿、不占撤销历史**
 - [ ] **Task 6.4 浏览器正例**：读真实落盘坐标独立回代题设（每族至少一条）
 - [ ] **Task 6.5 收口**：全库 + e2e + 变异 + 文档 + commit/push
