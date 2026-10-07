@@ -5,7 +5,7 @@ import type { GeometryObligation } from "../claimEvidence"
 import { parseObligationWithLegacy } from "../obligationIR"
 import { selectWitness, type PolyhedronWitness } from "../underdetermined"
 import type { WitnessSearchInput } from "./solverContracts"
-import { isIdentityBuildOrder, searchWitness } from "./witnessSearch"
+import { isIdentityBuildOrder, searchWitness, specForPrompt } from "./witnessSearch"
 
 /**
  * **见证搜索的 RED 用例**（N2 子任务 2b；计划 N2 的 `Interfaces` / `RED` 与裁决 R13/R15/R16/R25/R26）。
@@ -450,6 +450,66 @@ describe("台体（调用方给出形状描述）", () => {
     expect(result.status).toBe("unverified_instance")
     if (result.status !== "unverified_instance") return
     expect(result.reasons.join(" "), JSON.stringify(result)).toContain("不一致")
+  })
+})
+
+/**
+ * **S6 接线：题面 → 形状描述**（`specForPrompt`）。
+ *
+ * 这条链是"题面 → 入口语法 → spec → 搜索 → 通过核验的候选"，也是**规划器要用的那根线**。
+ * 钉四件事：
+ * ① 台体整条链走通（它那两个环只能来自入口语法，没有别的来源）；
+ * ② 棱锥 / 棱柱的 spec 与既有推导给出**同一组顶点**（入口语法只是又读了一遍，不是另一套判断）；
+ * ③ 认不出 ⇒ 问路，**不产出 spec**；
+ * ④ 两处各读一遍、读出来的底环**不是同一组顶点** ⇒ 也问路，不挑一个信。
+ */
+describe("S6 接线：题面 → 形状描述", () => {
+  const givensOf = (prompt: string) => obligationsOf(prompt).obligations.filter((obligation) => obligation.role === "given")
+
+  it("四棱台的题面：spec ⇒ 通过核验的候选（整条链走通）", () => {
+    const prompt = "在四棱台ABCD-A′B′C′D′中，AB⊥AD，画出这个四棱台"
+    const shaped = specForPrompt(prompt, givensOf(prompt))
+    expect(shaped.status, JSON.stringify(shaped)).toBe("ok")
+    if (shaped.status !== "ok") return
+    expect(shaped.spec.family).toBe("frustum")
+    // 自由标量里必须有相似比：没有它台体根本构造不出来（内核会以缺相似比拒掉）。
+    expect(shaped.spec.freeScalars.map((scalar) => scalar.kind)).toContain("top-scale")
+    const result = searchWitness({ ...SEARCH, shape: "frustum", spec: shaped.spec, obligations: obligationsOf(prompt) })
+    expect(result.status, JSON.stringify(result)).toBe("verified_instance")
+    if (result.status !== "verified_instance") return
+    const at = coordinates(result.candidate)
+    expect(lengthVector3(subtractVector3(at("B′"), at("A′")))).toBeLessThan(lengthVector3(subtractVector3(at("B"), at("A"))))
+  })
+
+  it("棱锥 / 棱柱：spec 的底环与既有推导同集合，且这份 spec 真能搜出通过核验的候选", () => {
+    const pyramid = specForPrompt(PYRAMID, givensOf(PYRAMID))
+    expect(pyramid.status, JSON.stringify(pyramid)).toBe("ok")
+    if (pyramid.status === "ok") expect([...pyramid.spec.base].sort()).toEqual(["A", "B", "C", "D"])
+
+    const prismPrompt = "在三棱柱ABC-A′B′C′中，AA′⊥平面ABC，画出这个三棱柱"
+    const prism = specForPrompt(prismPrompt, givensOf(prismPrompt))
+    expect(prism.status, JSON.stringify(prism)).toBe("ok")
+    if (prism.status !== "ok") return
+    expect([...prism.spec.base].sort()).toEqual(["A", "B", "C"])
+    const result = searchWitness({ ...SEARCH, shape: "prism", spec: prism.spec, obligations: obligationsOf(prismPrompt) })
+    expect(result.status, JSON.stringify(result)).toBe("verified_instance")
+  })
+
+  it("认不出的题面 ⇒ 问路（不产出 spec）", () => {
+    const shaped = specForPrompt("画一个四棱锥", [])
+    expect(shaped.status).toBe("unrecognised")
+    if (shaped.status === "unrecognised") expect(shaped.reason).toContain("形状从句")
+  })
+
+  it("形状从句与『侧棱 ⊥ 底面』读出来的底环不是同一组顶点 ⇒ 问路，不挑一个信", () => {
+    /**
+     * 题面写 `P-ABCD`，而"⊥"那句点名的是 `PEFG` 那一套 —— 两处**各读一遍，读不一样**。
+     * 这种题面本身自相矛盾，正确行为是问路（而不是挑一边当准）。
+     */
+    const prompt = "在四棱锥P-ABCD中，PE⊥平面EFG，画出这个四棱锥"
+    const shaped = specForPrompt(prompt, givensOf(prompt))
+    expect(shaped.status, JSON.stringify(shaped)).toBe("unrecognised")
+    if (shaped.status === "unrecognised") expect(shaped.reason).toContain("不是同一组顶点")
   })
 })
 

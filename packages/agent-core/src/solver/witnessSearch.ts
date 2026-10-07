@@ -1,4 +1,6 @@
 import { buildFromPoints, constructShapeFromSpec, createBuilderContext, namedRightTriangleBase, shapeHeightIsFree, type FreeScalar, type ShapeScalarChoice, type SolidShapeSpec, type Vector3, type WitnessRelation, type WitnessShapeCandidate } from "@draw/geometry-kernel"
+
+import { parseShapeClause, type RecognisedShape } from "./shapeGrammar"
 import { createEmptyDocument } from "@draw/dsl"
 
 import { evidenceStatusForWitness, type ClaimEvidence, type ClaimEvidenceStatus, type GeometryObligation, type SolverStatus, type WitnessResultStatus } from "../claimEvidence"
@@ -438,6 +440,73 @@ function specFor(structure: PyramidStructure | PrismStructure): SolidShapeSpec {
     freeScalars.push({ id: "height", kind: "height", targets: isPrism ? [structure.top] : [structure.apex], candidates: [...FREE_HEIGHT_VALUES] })
   }
   return skeleton
+}
+
+/**
+ * **台体的相似比取值表**：表里全是"明显不是 1、也不接近 0"的比例。
+ * `1` 是棱柱、`0` 是棱锥顶点，两个端点都**不是**台体（内核会拒），所以一个都不放。
+ */
+const FREE_TOP_SCALE_VALUES: readonly number[] = [0.5, 0.6, 0.75]
+
+/**
+ * **台体：由入口语法给的底环 / 顶环 + 解析器给的关系组出 spec**（S6 的接线）。
+ *
+ * 台体的几何**不是从某一句题设读出来的**（棱锥 / 棱柱靠"侧棱 ⊥ 底面"那句定底环与拉伸），
+ * 所以它的两个环只能来自**入口语法**（`在四棱台ABCD-A′B′C′D′中`）。
+ * 自由标量与其他族同一个口径：题面没定长的底边、未定的高，外加台体自己的相似比。
+ */
+function specForFrustum(rings: RecognisedShape, relations: readonly WitnessRelation[]): SolidShapeSpec {
+  const { orderedBase, freeBaseEdges } = orderedBaseWithFreeEdges(rings.base, relations)
+  const top = [...(rings.top ?? [])]
+  const freeScalars: FreeScalar[] = freeBaseEdges.map((edge, index) => ({
+    id: `base-edge-${index + 1}`,
+    kind: "base-edge" as const,
+    targets: [...edge],
+    candidates: [...FREE_BASE_VALUES]
+  }))
+  const skeleton: SolidShapeSpec = { family: "frustum", base: orderedBase, top, relations: [...relations], freeScalars }
+  // "高是不是自由的"**问内核**（与棱锥 / 棱柱同一个判据），不在这一层再判一遍。
+  if (shapeHeightIsFree(skeleton)) {
+    freeScalars.push({ id: "height", kind: "height", targets: [top[0] ?? orderedBase[0]!], candidates: [...FREE_HEIGHT_VALUES] })
+  }
+  freeScalars.push({ id: "top-scale", kind: "top-scale", targets: top, candidates: [...FREE_TOP_SCALE_VALUES] })
+  return skeleton
+}
+
+/** `specForPrompt` 的结果：要么一份可用的 spec，要么**问路**的理由。 */
+export type PromptShapeResult =
+  | { status: "ok"; spec: SolidShapeSpec; recognised: RecognisedShape }
+  | { status: "unrecognised"; reason: string }
+
+/**
+ * **题面 → 形状描述**（S6 接线的入口）：把入口语法、形状推导、自由标量表三样接起来。
+ *
+ * 规划器与离线 benchmark 都从这里拿 spec，再交给 `searchWitness({ shape, spec })` ——
+ * **一份解析两处用**，两个读数才可比（设计 §3.2）。
+ *
+ * 两条纪律：
+ * - 认不出形状从句 ⇒ `unrecognised`（问路），**不猜**；
+ * - 形状从句与"侧棱 ⊥ 底面"那句**各读一遍**，读出来的底环**不是同一组顶点** ⇒ 也问路。
+ *   顺序可以不同（环首由内核规则定），**集合不同**说明有一边读错了，那时不挑一个信。
+ */
+export function specForPrompt(prompt: string, givens: readonly GeometryObligation[]): PromptShapeResult {
+  const recognised = parseShapeClause(prompt)
+  if (recognised === null) {
+    return { status: "unrecognised", reason: "题面里没有可识别的『在…中』形状从句（或缺点名表 / 数词与环长对不上）。" }
+  }
+  const relations = kernelRelations(givens)
+  if (recognised.family === "frustum") return { status: "ok", spec: specForFrustum(recognised, relations), recognised }
+  const derived = recognised.family === "prism" ? derivePrismStructure(givens) : derivePyramidStructure(givens)
+  if (derived.status === "rejected") return { status: "unrecognised", reason: `${derived.code}: ${derived.message}` }
+  const spec = specFor(derived.structure)
+  const key = (names: readonly string[]): string => [...names].sort().join("|")
+  if (key(spec.base) !== key(recognised.base)) {
+    return {
+      status: "unrecognised",
+      reason: `形状从句的底环 ${recognised.base.join("")} 与「侧棱 ⊥ 底面」那句读出来的底环 ${spec.base.join("")} 不是同一组顶点：两处各读一遍，读不一样就问路。`
+    }
+  }
+  return { status: "ok", spec, recognised }
 }
 
 /**
