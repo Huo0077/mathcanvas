@@ -24,8 +24,10 @@ describe("draft action catalogue", () => {
     // **28** 是加上 `solid.create_sphere`（球体切片 Task 8：解析球，不物化子对象）之后的实测值；
     // **29** 是加上 `function.create_graph`（计划 V0d：Agent 第一次能**创建**函数图像 ——
     // 此前 `function.analyze` / `function.create_tangent` 都要求先有一条曲线）之后的实测值。
-    expect(DRAFT_ACTION_IDS).toHaveLength(29)
-    expect(new Set(DRAFT_ACTION_IDS).size).toBe(29)
+    // **31** 是加上 `derived.create_circumsphere` / `derived.create_insphere`（S5：派生球 ——
+    // 球心与半径**由宿主算出来**，解不出来就拒绝，不编一个球）之后的实测值。
+    expect(DRAFT_ACTION_IDS).toHaveLength(31)
+    expect(new Set(DRAFT_ACTION_IDS).size).toBe(31)
   })
 
   it("recognises every catalogue action instead of calling it unknown", () => {

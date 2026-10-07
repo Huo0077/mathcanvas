@@ -177,6 +177,36 @@ export interface SolidCreateRegularPyramidAction extends ActionBase {
  *（共面 / 自交 / 非零体积 / 绕向一致 / 未用顶点 / 连通性）—— 模型算错时报的是**逐条诊断**，
  * 还能走那一次修复，而不是产出一份坏文档。
  */
+/**
+ * **派生外接球 / 内切球**（S5）：由**一只既有实体**决定，自己不带球心与半径。
+ *
+ * 与 `solid.create_sphere` 的分工是"谁决定几何"：那只球的球心与半径由调用方给；
+ * 这一族的两个数**只能由宿主算出来**（`solveCircumsphere3` / `solveInsphere3`），
+ * 所以输入里只有宿主 id —— 让模型填球心半径，等于允许它编一个不成立的球。
+ *
+ * 落到文档里是**一个** `sphere` 图元，带 `derivedFrom` 绑定：宿主动了它跟着重算
+ *（`recomputeDerivedObjects`），这正是设计 §4.1 那条"派生绑定 + 重算"的落点。
+ */
+export interface DerivedCreateCircumsphereAction extends ActionBase {
+  actionId: "derived.create_circumsphere"
+  inputs: {
+    alias: DraftAlias
+    /** 宿主实体的 id（作用域引用：只能是同一份计划里已建的 `polyhedron3`）。 */
+    solidId: string
+    label?: string
+  }
+}
+
+/** 内切球：与上面同形，只是取的球不同（到**每个面**等距的那个）。 */
+export interface DerivedCreateInsphereAction extends ActionBase {
+  actionId: "derived.create_insphere"
+  inputs: {
+    alias: DraftAlias
+    solidId: string
+    label?: string
+  }
+}
+
 export interface SolidCreatePolyhedronAction extends ActionBase {
   actionId: "solid.create_polyhedron"
   inputs: {
@@ -379,6 +409,8 @@ export type DraftAction =
   | SolidCreateTemplateAction
   | SolidCreatePrismAction
   | SolidCreateSphereAction
+  | DerivedCreateCircumsphereAction
+  | DerivedCreateInsphereAction
   | SolidCreateTetrahedronAction
   | SolidCreateRegularPyramidAction
   | SolidCreatePolyhedronAction

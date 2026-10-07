@@ -412,6 +412,28 @@ export const ACTIONS = {
       radius: { policy: "ask_user", question: "球的半径是多少？（必须大于 0）" }
     }
   },
+  /**
+   * **派生外接球 / 内切球**（S5）：输入里**只有宿主实体** —— 球心与半径由内核从宿主算出来，
+   * 不让调用方填（填得出来就等于允许编一个不成立的球）。
+   *
+   * 解不出对应的球时**明确拒绝整条动作**（设计 §4.1"解不出来如实报没有，不编一个球"）。
+   */
+  "derived.create_circumsphere": {
+    inputFields: ["alias", "solidId", "label"],
+    requiresAlias: true,
+    rawFieldTypes: {},
+    required: ["solidId"],
+    references: [{ field: "solidId", kind: "scoped" }],
+    defaults: {}
+  },
+  "derived.create_insphere": {
+    inputFields: ["alias", "solidId", "label"],
+    requiresAlias: true,
+    rawFieldTypes: {},
+    required: ["solidId"],
+    references: [{ field: "solidId", kind: "scoped" }],
+    defaults: {}
+  },
   "solid.create_tetrahedron": {
     inputFields: ["alias", "baseCenter", "edge", "label"],
     requiresAlias: true,

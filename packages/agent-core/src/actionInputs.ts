@@ -314,6 +314,27 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
       return out
     }
 
+    case "derived.create_circumsphere":
+    case "derived.create_insphere": {
+      /**
+       * **派生球只收宿主 id**（S5）：球心与半径由内核从宿主算出来。
+       *
+       * 这里**不像** `solid.create_sphere` 那样收 `center` / `radius` —— 多收一个数就多一条
+       * "模型编一个不成立的球"的路。宿主必须给（它是这份动作的**全部**信息），
+       * 而它是不是一只真的多面体、算不算得出球，留给构造层逐条诊断。
+       */
+      const out: Record<string, unknown> = withAlias({})
+      const solidId = boundedString(value.solidId, `${path}.solidId`, errors)
+      if (solidId === null) return null
+      out.solidId = solidId
+      if (value.label !== undefined) {
+        const label = boundedString(value.label, `${path}.label`, errors)
+        if (label === null) return null
+        out.label = label
+      }
+      return out
+    }
+
     case "solid.create_prism": {
       /**
        * 载荷形状**逐字段**读出来（不做类型断言）：底面是一串空间点、向量是一个空间向量。

@@ -10,9 +10,7 @@ import { ACTIONS, type ActionAuditDescription, type ActionSpec, type ActionId } 
  */
 
 export const UNSUPPORTED_ACTION_IDS: Readonly<Record<string, string>> = {
-  "derived.create_sphere": "球体是派生量：内核能解外接球/内切球（solveCircumsphere3 / solveInsphere3），但 DSL 还没有承载球的图元与重算路径。",
-  "derived.create_circumsphere": "外接球是派生量：内核能解（solveCircumsphere3），但还没有承载它的图元与重算路径。",
-  "derived.create_insphere": "内切球是派生量：内核能解（solveInsphere3），但还没有承载它的图元与重算路径。",
+  "derived.create_sphere": "球体是派生量。**外接球 / 内切球已经有承载了**（`derived.create_circumsphere` / `derived.create_insphere`：DSL 的 `sphere.derivedFrom` + 依赖图 + 重算路径，2026-10-07）；这个笼统的名字不再需要 —— 要哪个球就说哪个。",
   "derived.create_triangle_center": "三角形五心是派生量：内核有纯函数（triangleCenter2），但还没有派生点特征与重算路径。",
   "derived.create_triangle_circle": "三角形的内切圆/外接圆目前只能作为派生圆规则存在，还没有独立动作。"
 }

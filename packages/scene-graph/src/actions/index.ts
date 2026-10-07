@@ -1,7 +1,8 @@
 import type { GeometryDocument, PrimitiveSpec, Vector3 } from "@draw/dsl"
-import { buildFromPoints, buildPrismTopology, buildSolidTemplate, compileExpression, DEFAULT_SOLID_SEGMENTS, prismEdgeLabel, prismPointLabel, regularPyramidShape, regularTetrahedronShape, templateEdgeLabel, templatePointLabel, validatePrismInput, type BuilderContext, type SolidBuildResult, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
+import { buildFromPoints, buildPrismTopology, buildSolidTemplate, compileExpression, DEFAULT_SOLID_SEGMENTS, prismEdgeLabel, prismPointLabel, regularPyramidShape, regularTetrahedronShape, solveCircumsphere3, solveInsphere3, templateEdgeLabel, templatePointLabel, validatePrismInput, type BuilderContext, type SolidBoundary, type SolidBuildResult, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
 
 import type { DomainOperation } from "../operations"
+import { solidTopology3 } from "../sectionRecompute"
 import type { ActionContext, ActionDiagnostic, CompileResult, DraftAction, IdAllocator } from "./types"
 
 // 动作层的类型契约对外可见：草稿存储（`draftStore`）与 Agent 适配器都要引用它们。
@@ -430,6 +431,56 @@ function compileSolidSphereAction(action: Extract<DraftAction, { actionId: "soli
   const id = context.idAllocator.allocate("sphere", inputs.alias)
   const primitive: Extract<PrimitiveSpec, { type: "sphere" }> = { id, type: "sphere", center: { ...center }, radius, ...(inputs.label === undefined ? {} : { label: inputs.label }) }
   return { operations: [{ op: "addPrimitives", primitives: [primitive] }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
+}
+
+/**
+ * `derived.create_circumsphere` / `derived.create_insphere`：**由宿主实体算出球**（S5）。
+ *
+ * 与 `solid.create_sphere` 的分工是"谁决定几何"：那只球的球心与半径由调用方给；
+ * 这一族的两个数**只能由宿主算出来**，用的是 `solveCircumsphere3` / `solveInsphere3` ——
+ * 与 `solidStatusReport` 给模型看的那两条读数**同一个求解器**（否则面板与画布会是两个结论）。
+ *
+ * **解不出来就拒绝整条动作**（设计 §4.1："解不出来时如实报'没有外接球/内切球'，不编一个球"）。
+ * 这与"已经存在的球在宿主动了、但一时算不出来时保留旧几何"不冲突：那是**跟踪**（有旧值可留），
+ * 这里是**新造** —— 新造没有旧几何，编一个出来就是给用户一句错话。
+ *
+ * 落盘的球带 `derivedFrom` 绑定，所以它以后会跟着宿主重算；这条动作只负责"第一次算出来"。
+ */
+function compileDerivedSphereAction(
+  action: Extract<DraftAction, { actionId: "derived.create_circumsphere" | "derived.create_insphere" }>,
+  context: ActionContext
+): CompileResult {
+  const { actionKey, inputs } = action
+  if (context.targetWorkspace !== "geometry3d") {
+    return { operations: [], diagnostics: [diagnostic(actionKey, "workspace_mismatch", "a derived sphere can only be created in the solid workspace")], aliasToId: {} }
+  }
+  const what = action.actionId === "derived.create_circumsphere" ? "外接球" : "内切球"
+  const host = context.targetDocument.primitives.find((primitive) => primitive.id === inputs.solidId)
+  if (host === undefined || host.type !== "polyhedron3") {
+    return { operations: [], diagnostics: [diagnostic(actionKey, "missing_host", `派生${what}的宿主必须是一只已有多面体（收到 ${inputs.solidId}）。`)], aliasToId: {} }
+  }
+  const primitiveMap = new Map(context.targetDocument.primitives.map((primitive) => [primitive.id, primitive]))
+  const topology = solidTopology3(host, primitiveMap)
+  // 拓扑还没长齐（缺顶点 / 缺面环）时那不是"没有球"，而是"还算不出来"：两种理由要分得开。
+  if (topology === null) {
+    return { operations: [], diagnostics: [diagnostic(actionKey, "incomplete_host_topology", `宿主实体的拓扑还没长齐，算不出${what}。`)], aliasToId: {} }
+  }
+  const boundary: SolidBoundary = { vertices: topology.vertices, faces: topology.faces }
+  const solved = action.actionId === "derived.create_circumsphere" ? solveCircumsphere3(boundary) : solveInsphere3(boundary)
+  if (solved.status !== "exact") {
+    const reason = "reason" in solved ? solved.reason : "解不存在"
+    return { operations: [], diagnostics: [diagnostic(actionKey, "no_derived_sphere", `这只实体没有${what}：${reason}`)], aliasToId: {} }
+  }
+  const id = context.idAllocator.allocate("sphere", inputs.alias)
+  const sphere: Extract<PrimitiveSpec, { type: "sphere" }> = {
+    id,
+    type: "sphere",
+    center: { ...solved.value.center },
+    radius: solved.value.radius,
+    derivedFrom: { kind: action.actionId === "derived.create_circumsphere" ? "circumsphere" : "insphere", solidId: host.id },
+    ...(inputs.label === undefined ? {} : { label: inputs.label })
+  }
+  return { operations: [{ op: "addPrimitives", primitives: [sphere] }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
 }
 
 /**
@@ -1066,6 +1117,9 @@ export function compileAction(action: DraftAction, context: ActionContext): Comp
       return compileSolidPrismAction(action, context)
     case "solid.create_sphere":
       return compileSolidSphereAction(action, context)
+    case "derived.create_circumsphere":
+    case "derived.create_insphere":
+      return compileDerivedSphereAction(action, context)
     case "solid.create_tetrahedron":
       return compileSolidTetrahedronAction(action, context)
     case "solid.create_regular_pyramid":

@@ -170,6 +170,12 @@ export const CAPABILITY_FOR_ACTION: Record<DraftActionIdName, string> = {
   "solid.create_prism": "create-primitive",
   /** 球走**自己的**能力条目（`create-solid-sphere`）：它是解析体，与"模板实体 + 物化拓扑"那条路不同。 */
   "solid.create_sphere": "create-solid-sphere",
+  /**
+   * **派生球**（S5）：与 `solid.create_sphere` 同一条能力 —— 两者都落成一只 `sphere` 图元，
+   * 区别只在"谁决定球心与半径"（调用方给 / 由宿主算出来）。
+   */
+  "derived.create_circumsphere": "create-solid-sphere",
+  "derived.create_insphere": "create-solid-sphere",
   "solid.create_tetrahedron": "create-primitive",
   "solid.create_regular_pyramid": "create-primitive",
   "solid.create_polyhedron": "create-primitive",

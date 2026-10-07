@@ -555,8 +555,17 @@ describe("action registry coverage for the agent plan families", () => {
     }
   })
 
-  it("recognises the derived sphere and triangle-centre vocabulary and explains why it cannot be carried", () => {
-    for (const actionId of ["derived.create_sphere", "derived.create_insphere", "derived.create_triangle_center"]) {
+  it("now carries the derived spheres, and still explains the vocabulary it cannot carry", () => {
+    /**
+     * S5 之后这两个**有承载**了：DSL 的 `sphere.derivedFrom` + 依赖图 + 重算路径
+     *（`derivedSphereRule.test.ts` 钉住），所以它们既登记在册、也不再是"认得出但承载不了"。
+     */
+    for (const actionId of ["derived.create_circumsphere", "derived.create_insphere"]) {
+      expect(isRegisteredActionId(actionId), `${actionId} should be registered`).toBe(true)
+      expect(unsupportedActionReason(actionId), `${actionId} should no longer be unsupported`).toBeNull()
+    }
+    // 而这两个仍如实说"承载不了"：笼统的"球"（该说外接球还是内切球）与三角形五心。
+    for (const actionId of ["derived.create_sphere", "derived.create_triangle_center"]) {
       expect(unsupportedActionReason(actionId), `${actionId} should have a reason`).toBeTruthy()
 
       const result = parseDraftAction({ actionId, actionKey: "k", factIds: [], inputs: {} })
