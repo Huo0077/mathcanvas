@@ -922,6 +922,42 @@ describe("constructShapeFromSpec", () => {
       expect(result.message.length).toBeGreaterThan(0)
     }
   })
+
+  const FRUSTUM: SolidShapeSpec = {
+    family: "frustum",
+    base: ["A", "B", "C", "D"],
+    top: ["A′", "B′", "C′", "D′"],
+    relations: [{ kind: "perpendicular", segments: [["A", "B"], ["A", "D"]] }],
+    freeScalars: [
+      { id: "height", kind: "height", targets: ["A′"], candidates: [2] },
+      { id: "top-scale", kind: "top-scale", targets: ["A′", "B′", "C′", "D′"], candidates: [0.5] }
+    ]
+  }
+  const FRUSTUM_CHOICES = [{ id: "height", value: 2 }, { id: "top-scale", value: 0.5 }]
+
+  it("台体：顶环**逐一对应**底环时构造成功", () => {
+    const result = constructShapeFromSpec(FRUSTUM, FRUSTUM_CHOICES)
+    expect(result.status, JSON.stringify(result)).toBe("candidate")
+  })
+
+  it("台体：顶环点数与底环不同 ⇒ 拒绝（对应关系说不清）", () => {
+    const result = constructShapeFromSpec({ ...FRUSTUM, top: ["A′", "B′", "C′"] }, FRUSTUM_CHOICES)
+    expect(result.status).toBe("rejected")
+    if (result.status === "rejected") expect(result.message).toContain("点数不同")
+  })
+
+  it("台体：顶环名字对不上 ⇒ 拒绝，**不按顺序硬配**", () => {
+    /**
+     * `ABCD-A′C′B′D′` 这种写法：点数一样，但第 2 位对不上。
+     * 按顺序硬配会画出一张**顶环错配**的图，而且看起来还挺像那么回事 —— 那正是 S4.2 要拦的。
+     */
+    const result = constructShapeFromSpec({ ...FRUSTUM, top: ["A′", "C′", "B′", "D′"] }, FRUSTUM_CHOICES)
+    expect(result.status).toBe("rejected")
+    if (result.status === "rejected") {
+      expect(result.code).toBe("unsupported-base-shape")
+      expect(result.message).toContain("不按顺序硬配")
+    }
+  })
 })
 
 /**

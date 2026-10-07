@@ -146,7 +146,7 @@
 - [x] **Task 4.1 台体走 `polyhedron3`（底环 + 顶环）**，**不新增 DSL 图元**（2026-10-07 **内核侧完成**）：`constructFrustumWitness` + `FrustumConstructRequest`（`scale ∈ (0,1)`）；顶面 = 底面按**质心**相似缩小再平移；`constructShapeFromSpec` 增加 `family === "frustum"` 分支；`constructWitnessShape` 分派同步。变异（相似中心改成环首点）⇒ 用例红。
   - **搜索层（2026-10-07 完成）**：`WitnessSearchInput.spec?: SolidShapeSpec` —— 调用方给形状描述，搜索层按它枚举自由标量并交内核构造（family 与 shape 不一致 ⇒ 拒绝；没有 spec 的 `frustum` ⇒ 拒绝并说明需要什么）。**候选池抽成泛型**（对 spec 的每个自由标量做笛卡尔积），所以 `top-scale` 进网格**不需要改编排层**。端到端：`shape: "frustum"` + spec ⇒ `verified_instance`（用例自己量顶棱短于底棱、两底平行）。
   - **仍未做**：题面点名侧棱长度时**如实拒绝**（侧棱长 ≠ 高，要与相似比联立，本批不解）；**从题面产出这份 spec** 是 S6 的活。
-- [ ] **Task 4.2 反例**：上下底对应关系无法确定 ⇒ 拒绝并给 `code`；不许默认"按顺序对应"（内核侧已按 `withPrimes` 的命名约定派生顶面名，题面侧判据待做）
+- [x] **Task 4.2 反例**：上下底对应关系无法确定 ⇒ 拒绝并给 `code`；不许默认"按顺序对应"（2026-10-07 完成）：`constructShapeFromSpec` 的台体分支在**构造之前**逐一核对 `spec.top` 与 `spec.base` —— 点数不同 / 任一位对不上 ⇒ `unsupported-base-shape`；判据用命名约定（`A′` 对应 `A`），与 `withPrimes` **同源**。变异（短路判据）⇒ 两条反例红（没有它就会静默造出错配的图）。
 - [ ] **Task 4.3 圆台近似口径**：沿用 `ROUND_SOLID_SEGMENTS` 的多边形近似，并在文档与面板上**如实声明是近似**
 - [ ] **Task 4.4 收口**：全库 + e2e + 变异 + 文档 + commit/push
 

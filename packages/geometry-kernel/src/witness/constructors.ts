@@ -283,6 +283,36 @@ export function constructShapeFromSpec(spec: SolidShapeSpec, choices: readonly S
   }
   if (spec.family === "frustum") {
     /**
+     * **上下底的对应关系必须说得清**（S4.2）：题面给的顶环要能**逐一对应**到底环。
+     *
+     * 判据就是命名约定（`A′` 对应 `A`），与内核 `withPrimes` 派生顶面名的那条规则**同源**：
+     * - 点数不同 ⇒ 说不清；
+     * - 任一位对不上 ⇒ 说不清 —— **不按顺序硬配**。硬配正是"默认按顺序对应"那个老毛病：
+     *   它会把 `ABCD-A′C′B′D′` 这种题面画成一张顶环错配的图，而且看起来还挺像那么回事。
+     *
+     * 说不清就**明确拒绝**，让用户看清是"名字对不上"，而不是给一张错图。
+     */
+    const declaredTop = spec.top
+    if (declaredTop !== undefined) {
+      if (declaredTop.length !== spec.base.length) {
+        return reject(
+          "unsupported-base-shape",
+          `台体的顶环 ${declaredTop.join("、")} 与底环 ${spec.base.join("、")} 点数不同，上下底对应关系说不清。`,
+          [...spec.base, ...declaredTop]
+        )
+      }
+      for (const [index, name] of declaredTop.entries()) {
+        const foot = spec.base[index]
+        if (foot === undefined || canonicalPointName(name) !== `${canonicalPointName(foot)}′`) {
+          return reject(
+            "unsupported-base-shape",
+            `台体顶面点名 ${name} 与底面点名 ${String(foot)} 对不上（约定是 ${String(foot)}′ 对应 ${String(foot)}）：本层不按顺序硬配。`,
+            [...spec.base, ...declaredTop]
+          )
+        }
+      }
+    }
+    /**
      * 台体的**高只从自由标量取**。题面若点名侧棱长度（`AA′=5`），那个长度**不等于高** ——
      * 侧棱还带水平分量（`√(h² + (1−k)²r²)`），要与相似比联立才能解出高。
      * 本批不做这个联立，于是**如实拒绝**，绝不把侧棱长当成高用（那会画出一个错的台体还自称通过）。
