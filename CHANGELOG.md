@@ -7,6 +7,24 @@
 
 
 
+## 2026-10-10 —— V2 GREEN ③ 第一半：库里的**自动调用与产物通道**（通道端口 + 编排 + 判据）；产品路径**仍未接**
+
+**这一块加一个新模块**（`packages/agent-core/src/proof/automaticProof.ts`），把已有的三块接成一条链：**题设 → 前提桥 → 适配器（生成命题 / 跑 / 判公理 / 造产物 / 过校验器）→ 证据状态**。**如实说清：这是缺口③的**第一半** —— 库里有一条会去调 Lean 的路了，但**还没有任何产品代码调用它**。**
+
+**顺序是刻意的：先问该不该跑，再看跑出来什么。** 四道门任何一道不过，通道**一次都不会被调用**（不是"先花三分钟再说不行"）：① 旗关着（`proofExport` 默认关）⇒ `flag_off`；② 后端没给正文 ⇒ `no_proof_body`；③ 目标类不在适配器覆盖范围 ⇒ `goal_unsupported`；④ **前提桥说有一条前提指不出出处 ⇒ `premises_unresolved`**（拒绝理由点名那条凭空编的前提）。
+
+**通道是端口，不是实现**：`ProofChannel` 是注入的（桌面壳里是 Tauri 命令 `check_lean_proof`；浏览器里是 `unavailableProofChannel(理由)` ⇒ 如实报"这台机器上没法跑"）。`channelAsRunner` 把通道翻译成适配器要的 `Lean4Runner`；通道的 `failed`（起不来）**会把说明放进 `stderr`** —— 否则人只会看到一句"退出码 null"却不知道为什么。**结局词表封闭**：`flag_off / no_proof_body / goal_unsupported / premises_unresolved / toolchain_unavailable / timeout / rejected / verified / internal_error`。
+
+**三条边界写在模块头**：① **不判定**（成没成只由公理白名单说）；② **不猜前提**；③ **不阻塞作图**（这个函数**不抛**，最坏情况是 `internal_error` + 状态原样返回 —— 通道抛、模板抛都被接住）。
+
+**顺带核实并钉住一条上游性质（很要紧）**：解析层**会跳过"求证"从句** —— 实测 `求证 PA ⊥ 平面 ABC` ⇒ **0 条给定**，而 `已知 PA ⊥ 平面 ABC，求证 PA ⊥ BC` ⇒ 给定里**有** `PA ⊥ 平面 ABC`。少了这条性质，前提桥会**拿目标的结论当自己的前提**（循环证明），而那是静默的。这条已写成用例里的一个断言（`expect(obligations.givens).toEqual([])`）。
+
+**判据（11 条，`automaticProof.test.ts`，全部用假通道 —— CI 上没有 Lean）**：旗关着/没正文/前提指不出出处/表外目标类 ⇒ **通道一次都没被调用**；送进通道的源码**确实是模板生成的那种**（生成标记 + 唯一允许的 import + 白名单定理名 + 正文原样照抄）；真报告 ⇒ `formally_proved` 且产物 `claimId` 对得上、**过了校验器**；`sorry` 的报告 ⇒ 停在原地；工具链没配 ⇒ `toolchain_unavailable`；超时 ⇒ `timeout`；通道自己抛 ⇒ `internal_error` 且状态照旧。
+
+**门禁**：`packages/agent-core/src/proof` **8 文件 / 136 通过**（比上一读数 +11 = 这个新模块的用例）；`typecheck` exit 0；`lint` 0 error / 13 warning（基线）；全库非 Lean **340 文件 / 4012 通过 + 1 todo / 1 failed**（521.03 s）——**那一条红是既有抖动**：`apps/web/src/persistence/fileExports.test.ts:189`（CAD 导出用例）报 `Test timed out in 5000ms`，**孤立复跑两次全过**（各 9 passed，用例本身 843 ms）——本仓 `current-status` 早已记过这条抖动（单跑三次全过、约 0.69 s），**不是本块引入的回归**；全量 e2e 见下一条读数。
+
+**仍未做（缺口的另一半）**：**没有任何产品路径调用它** —— 桌面壳里跑完一次作图之后"对可证明的 claim 调一次"这件事没做，`proofLevelStatus.ts` 里那条"默认路径不调用它"**今天仍然成立**。
+
 ## 2026-10-10 —— V2 GREEN ④：桌面上有了一条**窄的**证明运行命令（Rust 侧第一次有 proof 入口）
 
 **这一块改 Rust**（`apps/desktop/src-tauri/`），把 V2 GREEN 缺口④从"Rust 侧一个 proof / lean 命令都没有"变成"有一条**受限的**命令"。**它不接产品路径**（那是缺口③，仍未做）。

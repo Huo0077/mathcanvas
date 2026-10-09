@@ -39,6 +39,11 @@ export * from "./proof/proofGoals"
  */
 export * from "./proof/proofPremiseBridge"
 /**
+ * **产品侧自动调用与产物通道**（V2 GREEN 缺口③）：先问该不该跑（旗 / 正文 / 目标类 / 前提），
+ * 再看跑出来什么；通道是注入的端口（桌面壳里是 Tauri 命令，浏览器里"不可用"）。
+ */
+export * from "./proof/automaticProof"
+/**
  * **Lean 4 适配器**（N5b）。桶导出是**必须**的：`WIRED_PROOF_BACKENDS` 在 `proofArtifact.ts` 里，
  * 而"接上了谁"与"怎么用它"是同一件事的两半。两个模块都**零 `node:` import**
  *（runner 由调用方注入），所以浏览器打包不会因为这一行而需要 Node 内置模块。
