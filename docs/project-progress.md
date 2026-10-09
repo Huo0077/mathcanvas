@@ -10,6 +10,20 @@
 
 > 下方 2026-09-22 的"最后更新 / 当前阶段 / 总体状态"三行保留为**当时快照**，不再维护。
 
+## 2026-10-10 —— V2 GREEN ④：桌面侧第一条**窄的**证明运行命令（Rust）
+
+**这一块改 Rust**，把缺口④从"Rust 侧一个 proof / lean 命令都没有"变成"有一条受限的命令"。**不接产品路径**（缺口③仍未做）。
+
+**设计核心：为什么必须窄。** Lean 能执行代码（`#eval` / `IO.Process.run` / `@[extern]`），所以"把一段文本交给编译器执行"是一个**代码执行面**。三条约束：① `proof/source.rs` 在**起进程之前**查形状 —— 生成标记、恰好一条允许的 `import`、一条有上限的 `maxHeartbeats`（≤4_000_000）、一条针对**白名单定理名**的 `#print axioms`，外加 15 个"一个字都不许出现"的关键字（`#eval`/`IO.`/`System.`/`unsafe`/`extern`/`run_cmd`/`elab`/`macro`/`syntax`/`initialize`/`include`…），**形状不过就什么都不执行**；② 工具链**配置而非发现**（只认 `DRAW_LEAN_LAKE`/`DRAW_LEAN_PROJECT`，**不搜 PATH** —— 从 PATH 捡 `lake` 等于让能改 PATH 的人决定我们执行什么），没配 ⇒ `unavailable` 并点名缺哪一个；③ 固定 argv（`lake env lean <临时文件>`，无 shell、无拼接）+ 墙钟上限（默认 180 s，传入值再夹到 10 分钟）+ 输出只留尾部 4 KB（UTF-8 切边修好）。
+
+**这一层不做判定**：只报"进程怎么结束的"（`exited`/`failed`/`timeout`/`unavailable` + exit code + 输出）。**成立与否仍只在 TS 侧判**（公理白名单）——判据不复制第二份，所以 Rust 侧**没有 `verified` 这个词**（`exit=0` 连 `sorry` 都满足）。
+
+**命令与治理摩擦**：`check_lean_proof` + `lean_proof_availability`；两个名字**逐字写进** `tests/shell_smoke.rs` 的 `named` 清单（那份清单守的是"新增命令必须在那里写名字"），并注册进唯一的 `generate_handler!`。都不接受可执行路径、不接受 shell 文本。`tokio` 加 `process` feature（同 crate，无新依赖）。
+
+**门禁（Rust）**：`npm run test:rust` ⇒ **247 passed / 0 failed / 3 ignored**；新增 `tests/proof_command.rs` **9 条**（模板形状收；8 个逃逸关键字逐个拒；四种"不是我们的模板"拒法；**别的定理的 `#print axioms` 与删掉报告都拒**；预算写成摆设拒；超大文件拒；工具链"配置而非发现"四条分支；`tail_of` 不切坏 UTF-8；**形状不过一个字都不执行**）。**本块没改任何 TS 文件**（只有 Rust 与文档）⇒ TS 那几条门禁（typecheck / lint / 非 Lean 全库 / e2e）不重跑，沿用同日读数；文档门禁重跑（文档改了）。
+
+**如实留着**：**真起 `lake env lean` 的那条路本块没有在测试里跑过**（要配两个环境变量，而且冷缓存第一次会撞超时）。交付/打包怎么带 Lean 与 mathlib（7.5 GB、许可证、发行环境）属"默认启用前"那批审查，**未决**。
+
 ## 2026-10-10 —— V2 GREEN ② 第二刀：前提桥（每条前提指得出出处；凭空编的前提直接失败）
 
 **这一块加一个新模块** `packages/agent-core/src/proof/proofPremiseBridge.ts`。它把 adapter 文件头那句"模板里的前提是模板给的"从**一句注释**变成**四类来源的机器判据**：

@@ -28,6 +28,9 @@ pub mod proxy;
 pub mod repository;
 /// 密钥库（Task 1.2）。**明文没有出口** —— 见 `secrets/mod.rs` 的三条设计决定。
 pub mod secrets;
+/// **受限的证明运行**（V2 GREEN 缺口④）：只接受我们自己模板生成的那种 Lean 文件，
+/// 工具链由环境变量**配置**（不从 PATH 里找）。见 `proof/mod.rs` 开头那几条。
+pub mod proof;
 /// IPC 命令的分组（按"它碰的是哪一份托管状态"分文件）：代理、密钥，其余仍在根模块。
 pub mod commands;
 
@@ -160,7 +163,9 @@ pub fn run() {
             commands::conversations::archive_conversation,
             commands::conversations::delete_conversation,
             commands::proxy::proxy_session,
-            commands::proxy::proxy_cancel
+            commands::proxy::proxy_cancel,
+            commands::proof::check_lean_proof,
+            commands::proof::lean_proof_availability
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

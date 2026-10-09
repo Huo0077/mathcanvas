@@ -201,7 +201,12 @@ fn exposes_only_named_ipc_commands_and_no_generic_one() {
         "archive_conversation",
         "delete_conversation",
         "proxy_session",
-        "proxy_cancel"
+        "proxy_cancel",
+        // 受限的证明运行（V2 GREEN 缺口④）。**有意加的两个名字**：一个跑（只接受我们模板
+        // 生成的那种 Lean 文件，形状检查在跑之前）、一个只回答「这台机器配没配工具链」。
+        // 它们都**不接受**可执行文件路径、不接受 shell 文本 —— 跑什么由环境变量决定，不由请求决定。
+        "check_lean_proof",
+        "lean_proof_availability"
     ];
 
     // 注册块的内容按**顺序**逐字核对。

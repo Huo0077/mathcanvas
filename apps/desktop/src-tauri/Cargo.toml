@@ -35,7 +35,7 @@ rusqlite = { version = "0.37", features = ["bundled"] }
 # - `reqwest` + `rustls-tls`：出站 HTTP。**刻意不用系统 TLS**（native-tls）：
 #   那会依赖机器上的 OpenSSL/SChannel，而"云端必须 HTTPS 且要验证证书"这条判据
 #   不该随用户机器的 TLS 配置变化。rustls 把这份实现编进二进制里。
-tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "time", "macros"] }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "time", "macros", "process"] }
 axum = { version = "0.8", features = ["json"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream", "json"] }
 futures-util = "0.3"

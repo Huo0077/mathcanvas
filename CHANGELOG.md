@@ -7,6 +7,22 @@
 
 
 
+## 2026-10-10 —— V2 GREEN ④：桌面上有了一条**窄的**证明运行命令（Rust 侧第一次有 proof 入口）
+
+**这一块改 Rust**（`apps/desktop/src-tauri/`），把 V2 GREEN 缺口④从"Rust 侧一个 proof / lean 命令都没有"变成"有一条**受限的**命令"。**它不接产品路径**（那是缺口③，仍未做）。
+
+**为什么这条命令必须窄**（这是本块的设计核心）：Lean 不是计算器 —— `#eval`、`IO.Process.run`、`@[extern]` 都能让它去干编译之外的事，所以"把一段文本交给编译器执行"本身就是一个**代码执行面**。做法是三条：
+
+1. **只接受我们自己模板生成的那种文件**（`proof/source.rs` 的 `inspect_template_source`，**在起进程之前**跑）：必须带生成标记、恰好一条允许的 `import`、一条有上限的 `set_option maxHeartbeats`（≤ 4_000_000）、一条针对**白名单定理名**（`draw_perpendicular_goal` / `draw_line_plane_perpendicular_goal`）的 `#print axioms`；并且**一个字都不许出现**能执行代码 / 反射 / 扩语法的关键字（`#eval` / `IO.` / `System.` / `unsafe` / `extern` / `run_cmd` / `elab` / `macro` / `syntax` / `initialize` / `include` 等 15 个）。**形状不对 ⇒ 不执行任何东西**（有一条用例专门钉这个：给一个绝不存在的 lake 路径，结果仍是"没有执行任何东西"）。
+2. **工具链是"配上去的"，不是"从 PATH 里捡来的"**：只认 `DRAW_LEAN_LAKE` / `DRAW_LEAN_PROJECT` 两个环境变量。**刻意不做 PATH 搜索** —— 从 PATH 捡一个叫 `lake` 的东西，等于让任何能改 PATH 的人决定我们执行什么。没配置 ⇒ `unavailable`（**不是**"证不出来"），理由点名缺哪一个。
+3. **固定 argv + 两层上限**：`lake env lean <临时文件>`（没有 shell、没有可拼接参数）、墙钟超时（默认 180 s，前端给的值再夹到 10 分钟）、输出只留尾部 4 KB（并把 UTF-8 切边修好）。
+
+**这一层不做判定**：它只回答"进程怎么结束的"（`exited` / `failed` / `timeout` / `unavailable` + `exit_code` + stdout/stderr）。**"这条证明算不算成立"仍只在 TS 侧判定**（`checkAxiomsReport` 的公理白名单）—— 判据只有一处，Rust 不复制一份。所以这里**没有 `verified` 这个词**：`exit=0` 连 `sorry` 都满足。
+
+**命令与治理**：`check_lean_proof`（跑一次）与 `lean_proof_availability`（只回答"这台机器配没配"）。两个名字都**逐字写进** `tests/shell_smoke.rs` 的 `named` 清单（那份清单要守的就是"新增命令必须在那里写下名字"这条摩擦），并注册进唯一的 `generate_handler!`。两条都**不接受可执行文件路径、不接受 shell 文本**——跑什么由环境变量决定，不由请求决定。为 `tokio` 加了 `process` feature（同一个 crate，没有新增依赖）。
+
+**门禁（Rust 侧）**：`npm run test:rust` ⇒ **247 passed / 0 failed / 3 ignored**，其中 `tests/proof_command.rs` 新增 **9 条**（接受模板形状；逐个拒 8 个逃逸关键字；拒"不是我们的模板"的四种写法（没有标记 / 换宽 import / 两条 import / 多一条 set_option）；**拒针对别的定理的 `#print axioms` 与干脆删掉报告**；拒把预算写成摆设的 `maxHeartbeats`；拒超大文件；工具链"配置而非发现"的四条分支；`tail_of` 不切坏 UTF-8；**形状不过的文件一个字都不执行**）。**本块没有改任何 TS 文件**（只有 Rust 与文档），所以 TS 那几条门禁（typecheck / lint / 非 Lean 全库 / e2e）**不重跑**，沿用同日上一条读数。**如实留着的**：**真去起 `lake env lean` 的那条路，本块没有在测试里跑过**（要配上两个环境变量；而且冷缓存第一次会撞超时）—— 交付/打包里怎么带 Lean 与 mathlib（7.5 GB、许可证、发行环境）属于"默认启用前"那批审查，**未决**。
+
 ## 2026-10-10 —— V2 GREEN ② 第二刀：**前提桥**（每条前提指得出出处，凭空编的前提直接失败）
 
 **这一块加一个新模块**（`packages/agent-core/src/proof/proofPremiseBridge.ts`），把 adapter 文件头一直写着的那条诚实边界（"模板里的前提是模板给的"）变成**机器可查**的东西。
