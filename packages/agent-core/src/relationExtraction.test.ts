@@ -131,4 +131,51 @@ describe("extractRelations", () => {
     expect(kinds).not.toContain("coplanar")
     expect(kinds).not.toContain("equalLength")
   })
+
+  /**
+   * **带撇的点名**（S1 的点名词表；S3.4 那个真阻塞的根因就在这里）。
+   *
+   * `AA′` 是一条线段（A 到 A′）。抽取器原先的"点名块"字母表是 `[A-Z][A-Z0-9]*`，
+   * 而 `′` 不在其中 —— 于是 `AA′` 被切成 `"AA"`、读成**自己到自己**的退化线段：
+   * `perpendicular` 的 targets 成了 `v0,v0,…`，残差算不出来，计划被判
+   * `relation_not_satisfied`（一次**失败**，不是"未核验"），吃掉唯一一次修复，
+   * 于是题面驱动的棱柱在界面上永远到不了确认面板。
+   */
+  it("reads a primed point name as one point, not a degenerate segment", () => {
+    const order = ["A", "B", "C", "A′", "B′", "C′"]
+    const { relations, unverified } = extractRelations("在三棱柱ABC-A′B′C′中，AA′⊥平面ABC，画出这个三棱柱", indexOf(order))
+
+    expect(unverified).toEqual([])
+    const perpendicular = relations.find((entry) => entry.relation.kind === "perpendicular")
+    expect(perpendicular, JSON.stringify(relations)).toBeTruthy()
+    // `AA′ ⊥ 平面ABC`：线 A–A′（下标 0 与 3）⊥ 面 ABC（下标 0、1、2）。
+    expect(perpendicular!.relation.targets.map((target) => target.vertex)).toEqual(["v0", "v3", "v0", "v1", "v2"])
+  })
+
+  /**
+   * **ASCII 下标仍然读不出**（S1 契约：`A1` 不是点名，不许凑合成 `A₁`）。
+   *
+   * 上一条改动会把"点名块"的字母表扩到带撇/下标的字形；这条钉住它的边界 ——
+   * 扩宽的是**认得出**的写法，不是"把读不出的猜成读得出的"。
+   */
+  it("still refuses ASCII subscript names instead of reinterpreting them", () => {
+    const result = extractRelations("在三棱柱A1B1C1中，AA1⊥平面ABC", indexOf(["A", "B", "C"]))
+
+    expect(result.relations).toEqual([])
+    expect(result.unverified.length).toBeGreaterThan(0)
+  })
+
+  /**
+   * 同一根因的姊妹写法：`平面A′B′C′`。带走撇点名的**面**必须是面（3 个点），
+   * 被读成 1 个点就等于把"线⊥面"降级成"线⊥点"，那条关系只会进 `unverified`。
+   */
+  it("reads a primed plane as a plane, not as a single point", () => {
+    const order = ["A", "B", "C", "A′", "B′", "C′"]
+    const { relations, unverified } = extractRelations("在三棱柱ABC-A′B′C′中，AA′⊥平面A′B′C′", indexOf(order))
+
+    expect(unverified).toEqual([])
+    const perpendicular = relations.find((entry) => entry.relation.kind === "perpendicular")
+    expect(perpendicular, JSON.stringify(relations)).toBeTruthy()
+    expect(perpendicular!.relation.targets.map((target) => target.vertex)).toEqual(["v0", "v3", "v3", "v4", "v5"])
+  })
 })

@@ -1,10 +1,12 @@
-﻿import { createEmptyDocument } from "@draw/dsl"
+import { DEFAULT_SOLID_SIZE } from "@draw/agent-core"
+import { createEmptyDocument } from "@draw/dsl"
 import { createIdAllocator } from "@draw/scene-graph"
 import { describe, expect, it } from "vitest"
 
 import { createDraftStore } from "./draftStore"
 import { compileInWorker } from "./geometryCompileStrategy"
 import { createGeometryWorkerClient } from "./geometryWorkerClient"
+import { matchLocalIntent } from "./localPlanner"
 import { handleGeometryRequest } from "./workerRuntime"
 import { inlineWorker } from "./testing/inlineWorker"
 
@@ -203,6 +205,38 @@ describe("the witness-search switch on the real draft staging path", () => {
     for (const base of vertices.slice(1)) expect(base?.z).toBeCloseTo(0, 9)
     expect(Math.abs((vertices[0]?.x ?? Number.NaN) - (vertices[1]?.x ?? Number.NaN))).toBeLessThan(1e-9)
     expect(Math.abs((vertices[0]?.y ?? Number.NaN) - (vertices[1]?.y ?? Number.NaN))).toBeLessThan(1e-9)
+  })
+
+  /**
+   * **S3.4：题面驱动的直棱柱必须能暂存成功，而且关系真的被核验过。**
+   *
+   * 它此前到不了确认面板，根因在**关系抽取**这一层：抽取器的点名块字母表不含 `′`，
+   * 于是 `AA′` 被切成 `AA` ⇒ 读成**自己到自己**的退化线段 ⇒ `AA′ ⊥ 平面ABC` 的 targets
+   * 成了 `v0,v0,…`、残差算不出来 ⇒ 判 `relation_not_satisfied`（一次**失败**，不是"未核验"）
+   * ⇒ 编译失败 ⇒ 协调器把那唯一一次修复交给模型，而这条关系是**系统从原话抽的**、
+   * `envelope.relations` 只是个投影 ⇒ 模型改不动 ⇒ 运行失败 ⇒ 面板永不出现。
+   *
+   * 这条用例把整条链钉在**产品那一侧**（本地规划器 → 真实暂存路径），
+   * 而不是只钉抽取器的一个返回值。
+   */
+  it("stages the prism sentence and reports a passed relation check instead of a degenerate segment", async () => {
+    const { store, draft } = setup()
+    const prompt = "在三棱柱ABC-A′B′C′中，AA′⊥平面ABC，画出这个三棱柱"
+    const intent = matchLocalIntent(prompt, { enableFreeApex: true })
+    expect(intent, "这句题面必须由本地规划器认领").not.toBeNull()
+    const envelope = intent!.build({ prompt, size: DEFAULT_SOLID_SIZE })
+    expect(envelope.kind).toBe("plan")
+    if (envelope.kind !== "plan") return
+
+    // 与运行时同一条口径：`obligationIR` 关、见证搜索开（界面上那个开关就是它）。
+    const result = await store.stage(draft.draftId, envelope.actions as never, draft.draftVersion, prompt, envelope.relations, false, true)
+
+    expect(result.ok, JSON.stringify(result)).toBe(true)
+    if (result.ok) {
+      expect(result.preview.diagramVerification?.status).toBe("passed")
+      // 侧棱⊥底面是真的被核验过，不是"没有关系可验"的空报告。
+      expect(result.preview.diagramVerification?.checks.some((check) => check.kind === "perpendicular")).toBe(true)
+    }
   })
 
   /**

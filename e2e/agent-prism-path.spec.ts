@@ -66,20 +66,24 @@ test.beforeEach(async ({ page }) => {
 })
 
 /**
- * ## ⚠ 这条用例**暂时挂着（`fixme`），因为它撞上了一个真阻塞**（S3.4 未完成）
+ * ## ✅ S3.4 阻塞已解除（2026-10-10）：这条用例从 `fixme` 转正
  *
- * 实测（本文件，2026-10-07）：这句题面在界面上**走得到规划**（页面读数：`规划 asking for a plan 成功`、
- * `暂存草稿 staging 1 action(s) 成功`），但**属性面板那块"确认改动"始终不出现**（等到 30 s 超时仍无）。
- * 对照：台体与五棱锥那两句（`agent-solid-family-path.spec.ts`）**同样走见证搜索**，面板照常出现 ——
- * 所以差别不在"这条线慢"，而在这一句产出的计划与它们不同。
+ * **曾经的现场**（2026-10-07）：这句题面在界面上走得到规划（`规划 asking for a plan 成功`、
+ * `暂存草稿 staging 1 action(s) 成功`），但"确认改动"面板**始终不出现**（30 s 超时）。
+ * 对照台体与五棱锥那两句同样走见证搜索却正常 ⇒ 差别在这一句产出的计划与它们不同。
  *
- * **单元层是通的**（`localPlanner.test.ts` 那条新用例）：同样这句题面 ⇒ `kind: "plan"`、
- * 动作为 `solid.create_polyhedron`、假设里有"自选"。也就是说**卡在"计划 → 面板"之间**，
- * 不是卡在规划本身 —— 下一批要查的就是那一段（很可能是"这一句没有可核验的题设 ⇒ 面板换了个形态"）。
+ * **根因**（在单测里用真实暂存路径确定性复现后落到具体那条规则）：不在几何、不在模型，
+ * 而在**关系抽取**那一层 —— 抽取器的"点名块"字母表是 `[A-Z][A-Z0-9]*`，`′` 不在其中，
+ * 于是 `AA′` 被切成 `AA`，读成**自己到自己**的退化线段。`AA′ ⊥ 平面ABC` 的 targets 因此是
+ * `v0,v0,…`，残差算不出来 ⇒ `planCompiler` 判 `relation_not_satisfied`（一次**失败**，
+ * 而不是"未核验"）⇒ 编译失败 ⇒ 协调器把那唯一一次修复交给模型 —— 可这条关系是**系统从原话
+ * 抽出来的**，`envelope.relations` 只是投影，模型改不动 ⇒ `run_failed` ⇒ 面板永不出现。
  *
- * 在此之前**不写成通过**：几何判据（下面那三条）已经写好，等面板能出来再开。
+ * **修法**：抽取器的点名块改用 `pointNames.ts` 的唯一定义（S1），`AA′` 于是读成线段 A–A′。
+ * 判据钉在三处：`relationExtraction.test.ts`（抽出来的 targets）、
+ * `diagramDraftStage.test.ts`（真实暂存路径 `passed`）、以及本文件（浏览器里自己算几何）。
  */
-test.fixme("a right prism from a sentence commits coordinates whose lateral edges really are perpendicular to the base", async ({ page }) => {
+test("a right prism from a sentence commits coordinates whose lateral edges really are perpendicular to the base", async ({ page }) => {
   // 实验开关（`enableFreeApex` 在界面上就是这一个）：题面驱动的见证搜索这条路。
   await page.getByRole("button", { name: "设置" }).click()
   await page.getByRole("switch", { name: "示意图见证搜索" }).click()

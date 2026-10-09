@@ -7,6 +7,39 @@
 
 
 
+## 2026-10-10 —— S3.4 解除：题面驱动的直棱柱到不了面板，根因是**关系抽取的点名块字母表**（已修）
+
+**症状**：`在三棱柱ABC-A′B′C′中，AA′⊥平面ABC，画出这个三棱柱` 在界面上走得到规划、也走得到暂存，
+但"确认改动"面板始终不出现 —— `e2e/agent-prism-path.spec.ts` 从 2026-10-07 起以 `test.fixme` 挂着。
+
+**根因**（先把那份**已知的本地计划**塞进真实暂存路径做确定性复现，再把诊断落到具体规则）：
+`relationExtraction.ts` 的"点名块"字母表是 `[A-Z][A-Z0-9]*`，**`′` 不在其中** ⇒ `AA′` 被切成 `AA`
+⇒ 读成**自己到自己**的退化线段 ⇒ `AA′ ⊥ 平面ABC` 的 targets 成了 `v0,v0,…`、残差算不出来
+⇒ `planCompiler` 判 `relation_not_satisfied`（一次**失败**，不是"未核验"）⇒ 编译失败 ⇒
+协调器把那唯一一次修复交给模型 —— 而这条关系是**系统从原话抽出来的**，`envelope.relations` 只是投影，
+模型根本改不动 ⇒ `run_failed` ⇒ 面板永不出现。**上一轮的定位"卡在计划 → 面板之间"到此收到具体一行代码。**
+
+**修法（一处，最小）**：抽取器的点名块与拆分改为复用 **S1 的唯一定义**（`pointNames.ts` 的
+`POINT_NAME_SUFFIXES` + `splitPointNames`），四处写死的 `[A-Z][A-Z0-9]*`（点名块 / 两种中点句型 /
+`平面` 前缀）**并到同一份**。**数字仍留在块里**：`A1B1` 这类 ASCII 下标必须整块交给 `splitPointNames`
+否掉 —— 块一旦在数字处断开，`AA1` 会被读成 `AA`（同一个退化线段），"读不出"就被悄悄升级成"读成了一个错的"。
+
+**判据（三处，红→绿都看过）**：
+- `relationExtraction.test.ts`：带撇线段 `AA′` ⇒ targets `v0,v3,…`（修前 `v0,v0,…`）；带撇平面
+  `平面A′B′C′` ⇒ 仍是面（修前被读成 1 个点）；`A1B1` 仍读不出（S1 契约的诚实性护栏）。
+- `diagramDraftStage.test.ts`：同一句题面走**真实暂存路径** ⇒ `ok` 且 `diagramVerification.status = passed`
+  （修复前这条逐字复现 `compile_failed` + `relation_not_satisfied` + 那条改不动的修复请求）。
+- `e2e/agent-prism-path.spec.ts`：`test.fixme` 转正 ⇒ **1 passed（18.2 s）** —— 面板出现、
+  `题设核验 = passed`、提交后浏览器里**自算**的几何判据（三条侧棱彼此相等、每条都与底面法向平行）全过。
+
+**读数**：全库非 Lean **337 文件 / 3968 通过 + 1 todo / 0 失败**；`typecheck` exit 0；
+`lint` 0 error / 13 warning（基线）；关旗逐字不变契约 `planCompiler.offPath.golden` 仍 **13/13**；
+相关 e2e（`agent-solid-family-path` / `agent-derived-sphere` / `agent-round-frustum` / `next-phase-flag-entry`）**9 passed**；
+**全量 e2e 213 passed / 0 failed**（2.5 m —— 那条 `test.fixme` 转正之后不再有 skipped）。
+
+**仍未做**：斜棱柱（要"环外点名顶点"概念）、菱形底面、S6 收口、`freeApexIntentFor` 窄正则退役；
+画布顶点标签与 `vertexNames` 错位、球状态词表仍待裁决。**本次不宣称 S3 整块收口** —— Task 3.4 只是那一格。
+
 ## 2026-10-07 —— S3.4 调试轮：把"题面驱动的棱柱画不出来"的根因**缩小到运行时校验那一步**（无代码提交）
 
 **这一轮不提交代码**，只把根因查实（三处临时插桩已全部还原，工作树干净）。上一轮给的定位是"卡在计划 → 面板之间"，太粗；现在有四条证据：

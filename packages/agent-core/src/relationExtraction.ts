@@ -1,3 +1,5 @@
+import { POINT_NAME_SUFFIXES, splitPointNames } from "@draw/geometry-kernel"
+
 import type { PlanRelation, PlanRelationKind, PlanRelationTarget } from "./contracts"
 
 /**
@@ -62,14 +64,46 @@ export interface RelationExtraction {
   unverified: string[]
 }
 
-/** 连续的大写字母/数字串（`PA`、`ABCD`、`AD`）—— 几何里点名就是这个形状。 */
+/**
+ * **点名块**：以一个大写字母开头、由字母/数字与**后缀字形**组成的极大串
+ * （`PA`、`ABCD`、`AA′`、`A₁B₁`）。几何里点名就是这个形状。
+ *
+ * ## 为什么后缀字形必须进块，而数字必须留在块里
+ *
+ * 字母表里的后缀取自 `pointNames.ts` 的 `POINT_NAME_SUFFIXES`（**不在这里重抄一份** ——
+ * S1 的教训正是同一个判断分叉到三处）。ASCII 撇 `'` 是 `′` 的另一种字形，一并收进来，
+ * 归一由 `splitPointNames` 负责。
+ *
+ * 而**数字必须留在块里**：`A1B1` 这类 ASCII 下标要**整块**交给 `splitPointNames` 去否掉
+ * （S1 契约：`A1` 不是点名，不许凑合成 `A₁`）。块一旦在数字处断开，`AA1` 会被读成 `AA`
+ * —— 也就是**线段 A–A**（退化线段），于是"读不出"被悄悄升级成"读成了一个错的"。
+ * 那正是 S3.4 阻塞的成因：`AA′` 里的 `′` 不在旧字母表里，`AA′` 被切成 `AA`，
+ * 关系核验拿到 `v0,v0,…` ⇒ 残差算不出来 ⇒ 计划被判 `relation_not_satisfied`（失败），
+ * 吃掉唯一一次修复，题面驱动的棱柱在界面上永远到不了确认面板。
+ */
+const POINT_NAME_BLOB = `[A-Z][A-Z0-9${POINT_NAME_SUFFIXES.join("")}']*`
+
+const POINT_NAME_BLOB_RUN = new RegExp(POINT_NAME_BLOB, "g")
+
+/** 中点句型的两种写法（`O为 BD的中点` / `M是中点 AD`）；块字母表与上面同一份。 */
+const MIDPOINT_BEFORE = new RegExp(`(${POINT_NAME_BLOB})\\s*(?:为|是|乃)?\\s*(${POINT_NAME_BLOB})\\s*的中点`)
+const MIDPOINT_AFTER = new RegExp(`(${POINT_NAME_BLOB})\\s*(?:为|是|乃)?\\s*中点\\s*(${POINT_NAME_BLOB})`)
+/** `平面 ABD` / `面 A′B′C′`：前缀与点名之间允许空白（实测有空格的真实题面）。 */
+const PLANE_PREFIX = new RegExp(`^\\s*(?:平面|面)\\s*(${POINT_NAME_BLOB})`)
+
+/** 全文里的点名块。 */
 function pointRuns(text: string): string[] {
-  return [...text.matchAll(/[A-Z][A-Z0-9]*/g)].map((match) => match[0])
+  return [...text.matchAll(POINT_NAME_BLOB_RUN)].map((match) => match[0])
 }
 
-/** `ABCD` → `["A","B","C","D"]`；单个字母原样返回。 */
+/**
+ * `ABCD` → `["A","B","C","D"]`；`AA′` → `["A","A′"]`；`A1B1`（ASCII 下标）→ `[]`。
+ *
+ * 拆分**只认** `pointNames.ts` 的语法：拆不出就返回空数组（"读不出"），
+ * 调用方照既有纪律把它报成 `unverified`，而不是拿半截结果当成功。
+ */
 function splitRun(run: string): string[] {
-  return run.length <= 1 ? [run] : [...run]
+  return splitPointNames(run)
 }
 
 type Shape = { kind: "point" | "line" | "plane"; names: string[] }
@@ -114,8 +148,8 @@ export function extractRelations(prompt: string, indexOf: (name: string) => numb
            * - `O为 BD的中点`（点在词前、线段夹在"的"两侧）
            * - `M是中点 AD`（点在词前、线段**在词后**）
            */
-          const before = /([A-Z][A-Z0-9]*)\s*(?:为|是|乃)?\s*([A-Z][A-Z0-9]*)\s*的中点/.exec(window)
-          const after = /([A-Z][A-Z0-9]*)\s*(?:为|是|乃)?\s*中点\s*([A-Z][A-Z0-9]*)/.exec(window)
+          const before = MIDPOINT_BEFORE.exec(window)
+          const after = MIDPOINT_AFTER.exec(window)
           const match: RegExpExecArray | null = before ?? after
           if (match) {
             const pointShape = asShape(match[1], known)
@@ -150,7 +184,7 @@ export function extractRelations(prompt: string, indexOf: (name: string) => numb
         // 紧跟名字，实测在真实题面上**完全失效**：`平面 ABD⊥平面 BCD` 这类写法里
         // `平面` 与 `ABD` 之间有空格，正则匹配不上，于是 `right` 为空、整条垂直关系被丢掉，
         // 而它**不会报错**（只进 unverified）。用户现场那一句正是这种写法。
-        const planePrefix = /^\s*(?:平面|面)\s*([A-Z][A-Z0-9]*)/.exec(rightText)
+        const planePrefix = PLANE_PREFIX.exec(rightText)
         const trailing = planePrefix ? planePrefix[1] : pointRuns(rightText).at(0)
 
         const left = entry.suffix ? leftRuns.at(-2) : leftRuns.at(-1)
@@ -214,7 +248,7 @@ export function extractRelations(prompt: string, indexOf: (name: string) => numb
            * `leftRuns` 为空、整条中点关系丢掉，而且**不报错**。中点的写法在几何题里高度固定
            *（`O为BD的中点` / `M是AD中点`），所以直接认这个句型最可靠。
            */
-          const pattern = /([A-Z][A-Z0-9]*)\s*(?:为|是|乃)?\s*([A-Z][A-Z0-9]*)\s*的中点/.exec(prompt.slice(Math.max(0, at - 20), at + word.length + 2))
+          const pattern = MIDPOINT_BEFORE.exec(prompt.slice(Math.max(0, at - 20), at + word.length + 2))
           const pointName = pattern ? pattern[1] : null
           const segmentRun = pattern ? pattern[2] : null
           const pointShape = pointName ? asShape(pointName, known) : null
