@@ -55,9 +55,12 @@ export interface DiagramObligationSet {
   unverified: { sourceText: string; reason: string }[]
 }
 
+/** 读取器的产物：一条判据，或**多条**（一个句型蕴含多条判据时用 —— 例如"底面 ABCD 是菱形" ⇒ 三条等长）。 */
+type ObligationDraft = Pick<DiagramObligation, "kind" | "targets" | "value" | "planeLengths" | "coordinate" | "conic">
+
 interface Matcher {
   pattern: RegExp
-  read: (match: RegExpExecArray) => Pick<DiagramObligation, "kind" | "targets" | "value" | "planeLengths" | "coordinate" | "conic"> | null
+  read: (match: RegExpExecArray) => ObligationDraft | ObligationDraft[] | null
 }
 
 export interface DiagramParseOptions { spatialPointConditions?: boolean }
@@ -268,6 +271,32 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
     read: (m) => ({ kind: "equalLength", targets: [...names(m[1]), ...names(m[2])] })
   },
   {
+    /**
+     * **「底面 ABCD 是菱形」**（S3）：菱形 = 四条边两两相等。
+     *
+     * 为什么拆成三条**已有的** `equalLength`，而不是新造一个 `rhombus` 判据：
+     * "等长"的数学与判定全仓只有一处（`relations.ts` 的残差 + `diagramVerification` 的
+     * `equalLength` 分支），新造一个就是把同一件事写第二遍。而"菱形 ⇒ 四边相等"这一步
+     * 是**定义**，不是新的几何 —— 题面直接写 `AB=BC=CD=DA` 时走的是**同一套**核验。
+     *
+     * 三条链起来（`AB=BC`、`BC=CD`、`CD=DA`）就覆盖了四条边（传递性）。
+     *
+     * **只认恰好四个点名**：`菱形` 是四边形专有说法，`底面ABCDE是菱形` 是自相矛盾的题面；
+     * 那种句子由下面那道"未被消费的强几何信号 ⇒ `unverified`"扫描**显形**，不静默丢掉。
+     */
+    pattern: new RegExp(`底面\\s*(${POINT_NAME}${POINT_NAME}${POINT_NAME}${POINT_NAME})\\s*(?:是|为)\\s*菱形`, "g"),
+    read: (m) => {
+      const ring = names(m[1])
+      if (ring.length !== 4) return null
+      const [a, b, c, d] = ring as [string, string, string, string]
+      return [
+        { kind: "equalLength" as const, targets: [a, b, b, c] },
+        { kind: "equalLength" as const, targets: [b, c, c, d] },
+        { kind: "equalLength" as const, targets: [c, d, d, a] }
+      ]
+    }
+  },
+  {
     pattern: new RegExp(`(${SEGMENT_NAME})\\s*(⊥|∥|垂直于?|平行于?)\\s*平面\\s*(${PLANE_NAME})`, "g"),
     read: (m) => ({ kind: m[2].includes("平行") || m[2] === "∥" ? "parallel" : "perpendicular", targets: [...names(m[1]), ...names(m[3])] })
   },
@@ -312,9 +341,12 @@ export function parseDiagramObligations(prompt: string, options: DiagramParseOpt
       if (next && /[A-Z°+*/√π^%]/.test(next)) continue
       if (Array.from({ length: end - start }, (_, offset) => start + offset).some((at) => used.has(at))) continue
       const result = read(match)
+      // 一个句型可以蕴含多条判据（`底面ABCD是菱形` ⇒ 三条等长），所以读取器允许返回数组。
+      const drafts = result === null ? [] : Array.isArray(result) ? result : [result]
       // 圆锥曲线、切线、函数定义与点坐标都**不带点名**：它们自己就是被核验的对象，不能拿"至少两个名字"去卡。
-      if (result === null || (result.kind !== "pointCoordinate" && result.kind !== "conicAxes" && result.kind !== "tangentAt" && result.kind !== "functionGraph" && new Set(result.targets).size < 2)) continue
-      givens.push({ ...result, sourceText: match[0], start, end })
+      const accepted = drafts.filter((result) => result.kind === "pointCoordinate" || result.kind === "conicAxes" || result.kind === "tangentAt" || result.kind === "functionGraph" || new Set(result.targets).size >= 2)
+      for (const draft of accepted) givens.push({ ...draft, sourceText: match[0], start, end })
+      if (accepted.length === 0) continue
       for (let at = start; at < end; at++) used.add(at)
     }
   }
@@ -358,7 +390,7 @@ export function parseDiagramObligations(prompt: string, options: DiagramParseOpt
     const unknownPointCondition = options.spatialPointConditions === true
       && (/[A-Z]\s*\(\s*-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?\s*\)/.test(leftover)
         || /[A-Z]\s*(?:在|位于)[^，,。；;\n]{0,30}(?:上方|下方)/.test(leftover))
-    if (/[=⊥∥]|二面角|等边|等长|长度相等|线段相等|边相等|相等|中点|垂直|平行|共面|之比|比值|比例|共线|(?:点?[A-Z]\s*在\s*平面)/.test(leftover) || unknownPointCondition) {
+    if (/[=⊥∥]|二面角|等边|等长|长度相等|线段相等|边相等|相等|中点|垂直|平行|共面|之比|比值|比例|共线|菱形|(?:点?[A-Z]\s*在\s*平面)/.test(leftover) || unknownPointCondition) {
       unverified.push({ sourceText: leftover, reason: "原题出现了尚未被可靠解析的几何条件，未核验。" })
     }
   }

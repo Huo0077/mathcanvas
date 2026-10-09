@@ -502,6 +502,53 @@ describe("S6 接线：题面 → 形状描述", () => {
     expect(lengthVector3(subtractVector3(at("B′"), at("A′")))).toBeLessThan(lengthVector3(subtractVector3(at("B"), at("A"))))
   })
 
+  /**
+   * **菱形底面**（S3）：题面「底面 ABCD 是菱形」⇒ spec ⇒ **通过核验**的候选。
+   *
+   * 判据自己算（不读核验器的结论）：四条边两两相等、且**不是正方形**（A 处不是直角）。
+   * 「菱形」在解析层被拆成三条链式 `equalLength`（见 `diagramObligations`），
+   * 于是它走的是**既有**的等长判据 —— 没有第二套"菱形数学"。
+   */
+  it("菱形的题面：spec ⇒ 通过核验的候选，且四边真的相等、不是正方形", () => {
+    const prompt = "在四棱柱ABCD-A′B′C′D′中，底面ABCD是菱形，AA′⊥平面ABCD，画出这个四棱柱"
+    const shaped = specForPrompt(prompt, givensOf(prompt))
+    expect(shaped.status, JSON.stringify(shaped)).toBe("ok")
+    if (shaped.status !== "ok") return
+    expect(shaped.spec.family).toBe("prism")
+    /**
+     * **四边相等 ⇒ 自由底边只有一条**：`AD` 由 `AB` 决定。把它也标成"系统自选"是**假的自由**，
+     * 而且候选池那条"两条自由底边不许取相等"会让每个候选都与"四边相等"打架。
+     */
+    expect(shaped.spec.freeScalars.filter((scalar) => scalar.kind === "base-edge")).toHaveLength(1)
+
+    const result = searchWitness({ ...SEARCH, shape: "prism", spec: shaped.spec, obligations: obligationsOf(prompt) })
+    expect(result.status, JSON.stringify(result)).toBe("verified_instance")
+    if (result.status !== "verified_instance") return
+    const at = coordinates(result.candidate)
+    const sides = [["A", "B"], ["B", "C"], ["C", "D"], ["D", "A"]].map(([from, to]) => lengthVector3(subtractVector3(at(to!), at(from!))))
+    for (const side of sides) expect(side, JSON.stringify(sides)).toBeCloseTo(sides[0]!, 6)
+    const alongAb = subtractVector3(at("B"), at("A"))
+    const alongAd = subtractVector3(at("D"), at("A"))
+    const cosine = Math.abs(dotVector3(alongAb, alongAd)) / (lengthVector3(alongAb) * lengthVector3(alongAd))
+    expect(cosine, "A 处不能是直角 —— 那说明菱形被悄悄画成了正方形").toBeGreaterThan(0.1)
+  })
+
+  /**
+   * **反例**：菱形 + 点名直角 = 正方形。题面说的是菱形，**不许**把更强的形状画出来；
+   * 而这条路径此前会走"环首直角 ⇒ 矩形"把题面静默画成矩形（本批的内核 RED 里实测）。
+   */
+  it("菱形 + 点名直角 ⇒ 不给通过核验的候选，理由是「正方形」", () => {
+    const prompt = "在四棱柱ABCD-A′B′C′D′中，底面ABCD是菱形，AB⊥AD，AA′⊥平面ABCD，画出这个四棱柱"
+    const shaped = specForPrompt(prompt, givensOf(prompt))
+    if (shaped.status !== "ok") {
+      expect(JSON.stringify(shaped)).toContain("unsupported-base-shape")
+      return
+    }
+    const result = searchWitness({ ...SEARCH, shape: "prism", spec: shaped.spec, obligations: obligationsOf(prompt) })
+    expect(result.status, JSON.stringify(result)).not.toBe("verified_instance")
+    expect(JSON.stringify(result)).toContain("unsupported-base-shape")
+  })
+
   it("棱锥 / 棱柱：spec 的底环与既有推导同集合，且这份 spec 真能搜出通过核验的候选", () => {
     const pyramid = specForPrompt(PYRAMID, givensOf(PYRAMID))
     expect(pyramid.status, JSON.stringify(pyramid)).toBe("ok")

@@ -200,4 +200,27 @@ describe("带撇与带下标的点名", () => {
     expect(parsed.givens[0]!.targets).toEqual(["A", "A′", "A", "B", "C", "D"])
     expect(parsed.unverified.filter((item) => item.sourceText.includes("AA′"))).toEqual([])
   })
+
+  /**
+   * **「底面 ABCD 是菱形」（S3）**：菱形就是"四条边两两相等"。
+   *
+   * 判据**不新造**：拆成三条**已有的** `equalLength`（`AB=BC` / `BC=CD` / `CD=DA`，链起来覆盖四条边），
+   * 交给既有唯一判据（`diagramVerification` 的 `equalLength` 分支）逐条核验 —— 与题面直接写
+   * `AB=BC=CD=DA` 走**同一套**数学。这样"菱形"既不是别名，也不是一句自证。
+   */
+  it("底面 ABCD 是菱形 ⇒ 三条 equalLength（链起来覆盖四条边）", () => {
+    const parsed = parseDiagramObligations("在四棱柱ABCD-A′B′C′D′中，底面ABCD是菱形，AA′⊥平面ABCD，画出这个四棱柱")
+
+    const equal = parsed.givens.filter((item) => item.kind === "equalLength").map((item) => item.targets.join(""))
+    expect(equal).toEqual(["ABBC", "BCCD", "CDDA"])
+    expect(parsed.givens.map((item) => item.kind)).toEqual(["equalLength", "equalLength", "equalLength", "perpendicular"])
+    expect(parsed.unverified).toEqual([])
+  })
+
+  it("菱形从句里的环不是四边形（五边形）⇒ 读不出，且**显形为 unverified**", () => {
+    const parsed = parseDiagramObligations("在五棱锥 P-ABCDE 中，底面ABCDE是菱形")
+
+    expect(parsed.givens.filter((item) => item.kind === "equalLength")).toEqual([])
+    expect(parsed.unverified.some((item) => item.sourceText.includes("菱形"))).toBe(true)
+  })
 })

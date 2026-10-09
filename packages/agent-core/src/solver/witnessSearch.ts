@@ -1,4 +1,4 @@
-import { buildFromPoints, constructShapeFromSpec, createBuilderContext, namedRightTriangleBase, shapeHeightIsFree, type FreeScalar, type ShapeScalarChoice, type SolidShapeSpec, type Vector3, type WitnessRelation, type WitnessShapeCandidate } from "@draw/geometry-kernel"
+import { buildFromPoints, constructShapeFromSpec, createBuilderContext, hasEqualSideChain, namedRightTriangleBase, shapeHeightIsFree, type FreeScalar, type ShapeScalarChoice, type SolidShapeSpec, type Vector3, type WitnessRelation, type WitnessShapeCandidate } from "@draw/geometry-kernel"
 
 import { parseShapeClause, type RecognisedShape } from "./shapeGrammar"
 import { createEmptyDocument } from "@draw/dsl"
@@ -235,6 +235,10 @@ function kernelRelations(givens: readonly GeometryObligation[]): WitnessRelation
       relations.push({ kind: "parallel", segments: [[targets[0], targets[1]], [targets[2], targets[3]]] })
       continue
     }
+    if (obligation.kind === "equalLength" && targets.length === 4) {
+      relations.push({ kind: "equal-length", segments: [[targets[0], targets[1]], [targets[2], targets[3]]] })
+      continue
+    }
     if (obligation.kind === "fixedLength" && targets.length === 2 && typeof obligation.expected === "number") {
       relations.push({ kind: "segment-length", segments: [[targets[0], targets[1]]], value: obligation.expected })
     }
@@ -369,7 +373,15 @@ function orderedBaseWithFreeEdges(base: readonly string[], relations: readonly W
   const second = orderedBase[1]
   const third = orderedBase.length === 4 ? orderedBase[3] : orderedBase[2]
   if (first === undefined || second === undefined || third === undefined) return { orderedBase, freeBaseEdges: [] }
-  const freeBaseEdges = ([[first, second], [first, third]] as [string, string][]).filter((edge) => !stated.has([...edge].sort().join("|")))
+  /**
+   * **菱形只有一条自由底边**（S3）：四边相等，`AD` 由 `AB` 决定 —— 把 `AD` 也说成"系统自选"
+   * 是**假的自由**，而且候选池那条"两条自由底边不许取相等"会保证 `AB ≠ AD`，
+   * 于是每个候选都在构造期与"四边相等"打架（RED 里实测：整池被拒、搜索报 `no_witness`）。
+   * 与上面 n ≥ 5 那条"没有可选底边"同源：自由标量必须真的自由。
+   */
+  const rhombus = orderedBase.length === 4 && hasEqualSideChain(orderedBase, relations)
+  const candidates = (rhombus ? [[first, second]] : [[first, second], [first, third]]) as [string, string][]
+  const freeBaseEdges = candidates.filter((edge) => !stated.has([...edge].sort().join("|")))
   return { orderedBase, freeBaseEdges }
 }
 

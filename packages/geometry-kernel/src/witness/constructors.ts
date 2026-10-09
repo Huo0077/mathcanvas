@@ -53,6 +53,14 @@ export type WitnessPlaneTarget = readonly string[]
 export type WitnessRelation =
   | { kind: "perpendicular"; segments: readonly (readonly string[])[] }
   | { kind: "parallel"; segments: readonly (readonly string[])[] }
+  /**
+   * **两段等长**（S3）：由题面的 `AB=BC` / 「底面 ABCD 是菱形」拆出来的三条链式关系进来。
+   *
+   * 语义与 `segment-length` 的分工：`segment-length` 说"这一段有多长"（**值**），
+   * 本档说"这两段一样长"（**关系**，没有值）—— 菱形的四条边只有"相等"这一个约束，
+   * 边长本身仍是自由的（由 `freeBaseEdges` 给一个示例值）。
+   */
+  | { kind: "equal-length"; segments: readonly (readonly string[])[] }
   | { kind: "segment-length"; segments: readonly (readonly string[])[]; value?: number | WitnessStatedValue }
   | { kind: "dihedral"; segments: readonly WitnessPlaneTarget[]; value?: number | WitnessStatedValue; unit?: string }
 
@@ -942,6 +950,101 @@ function freeLength(stated: WitnessStatedValue | null, other: WitnessStatedValue
 }
 
 /**
+ * **菱形的代表角**（S3）：题面只说"菱形"，没说角是多少 —— 取 60° 并写进 assumptions。
+ *
+ * 与 n ≥ 5 的"正 n 边形代表"同一条口径（`deriveRepresentativePolygon`）：题面没限定的自由度，
+ * 由系统取一个**代表值**并**如实声明**，而不是假装题面说了。**不许取 90°**：
+ * 四边相等 + 直角 = 正方形，那是题面没说的额外特殊性（与候选池里"两条自由底边不许取相等"同一条账）。
+ */
+const RHOMBUS_REPRESENTATIVE_ANGLE = Math.PI / 3
+
+/**
+ * **四边形的四条边两两相等**（题面的「底面 ABCD 是菱形」拆出来的三条链式 `equal-length`）。
+ *
+ * 三条链式（`AB=BC`、`BC=CD`、`CD=DA`）经传递性就覆盖了四条边；**少一条不算**：
+ * 只声明"两组对边分别相等"的四边形可能是别的形状，按菱形构造就是一句比题面更强的假设。
+ */
+export function hasEqualSideChain(names: readonly string[], relations: readonly WitnessRelation[]): boolean {
+  const pairs = new Set<string>()
+  for (const relation of relations) {
+    if (relation.kind !== "equal-length") continue
+    const segments = relation.segments.map(segmentOf).filter((pair): pair is [string, string] => pair !== null)
+    if (segments.length !== 2) continue
+    const [left, right] = segments as [[string, string], [string, string]]
+    pairs.add(`${[...left].sort().join("|")}=${[...right].sort().join("|")}`)
+  }
+  const linked = (left: readonly string[], right: readonly string[]): boolean => {
+    const first = [...left].sort().join("|")
+    const second = [...right].sort().join("|")
+    return pairs.has(`${first}=${second}`) || pairs.has(`${second}=${first}`)
+  }
+  const sides = names.map((name, index) => [name, names[(index + 1) % names.length]!] as [string, string])
+  return sides.slice(0, sides.length - 1).every((side, index) => linked(side, sides[index + 1]!))
+}
+
+/**
+ * **菱形底面**（S3）：边长自由（或题面给定）+ 代表角 60°，四边相等由构造保证。
+ *
+ * 三条拒绝都是 fail-closed，理由各不相同（用户看到的句子必须对得上）：
+ * - 同时点名直角 ⇒ 那是**正方形**，题面说的是菱形，不画一个更强的形状；
+ * - 题面给了两个不同的边长 ⇒ 与"四边相等"自相矛盾；
+ * - 边长零或负 ⇒ 围不出面积。
+ */
+function deriveRhombusBase(
+  names: readonly string[],
+  relations: readonly WitnessRelation[]
+): { status: "ok"; polygon: Vector3[]; freeValues: string[]; assumptions: string[] } | WitnessConstructRejection {
+  const first = names[0]!
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index]!
+    const before = names[(index + names.length - 1) % names.length]!
+    const after = names[(index + 1) % names.length]!
+    if (baseEdgePerpendicular(relations, names, [before, name]) && baseEdgePerpendicular(relations, names, [name, after])) {
+      return reject(
+        "unsupported-base-shape",
+        `底面四边相等、又在 ${name} 处点名了直角：那要求把它做成**正方形**，而题面说的是菱形 —— 首批不造正方形，不把比题面更强的形状画出来。`,
+        [...names]
+      )
+    }
+  }
+
+  const sides = names.map((name, index) => [name, names[(index + 1) % names.length]!] as [string, string])
+  const stated = sides.map((side) => ({ side, lookup: statedLength(relations, side) }))
+  for (const entry of stated) if (entry.lookup.kind === "invalid") return entry.lookup.rejection
+  const values = stated.flatMap((entry) => (entry.lookup.kind === "value" ? [entry.lookup.stated] : []))
+  const distinct = [...new Set(values.map((value) => value.value))]
+  if (distinct.length > 1) {
+    return reject(
+      "unsupported-base-shape",
+      `底面是菱形，但题面给了不同的边长（${distinct.map((value) => formatNumber(value)).join(" / ")}）：四边必须一样长，这两条对不上。`,
+      [...names]
+    )
+  }
+  const side = values.length > 0 ? values[0]! : freeLength(null, null, 0)
+  if (side === null || !(side.value > 0)) return reject("degenerate-base", "底面点名了零或负的边长，围不出面积。", [...names])
+
+  const angle = RHOMBUS_REPRESENTATIVE_ANGLE
+  const freeValues: string[] = []
+  const assumptions: string[] = []
+  if (values.length === 0) freeValues.push(`底面边长 ${sides[0]![0]}${sides[0]![1]} = ${formatNumber(side.value)}（系统自选）`)
+  assumptions.push(`底面 ${names.join("")} 取菱形：四边相等，取 ${first} 处 ${formatNumber((angle * 180) / Math.PI)}°（系统自选的代表角 —— 题面只说"菱形"，没说角）。`)
+
+  const cos = Math.cos(angle)
+  const sin = Math.sin(angle)
+  return {
+    status: "ok",
+    polygon: [
+      { x: 0, y: 0, z: 0 },
+      { x: side.value, y: 0, z: 0 },
+      { x: side.value + side.value * cos, y: side.value * sin, z: 0 },
+      { x: side.value * cos, y: side.value * sin, z: 0 }
+    ],
+    freeValues,
+    assumptions
+  }
+}
+
+/**
  * **底面的解析构造**。
  *
  * 首批支持三种底面：
@@ -1077,6 +1180,13 @@ function deriveBasePolygon(
    * 沿用会把底面构造成一个题面没说的形状。所以在这里分流，n ≥ 5 不进入只适用 3/4 的分支。
    */
   if (names.length >= 5) return deriveRepresentativePolygon(names, relations)
+  /**
+   * **菱形**（S3）：四边两两相等时**先**走这一支。
+   *
+   * 必须排在"环首直角 ⇒ 矩形"**之前**：`菱形 + 直角` 落进矩形那一支会构造出**四边不等**的图形
+   * —— 题面明说的"菱形"被静默画成矩形（本批的 RED 里实测过：那条反例当时是 `candidate`）。
+   */
+  if (names.length === 4 && hasEqualSideChain(names, relations)) return deriveRhombusBase(names, relations)
   /**
    * **归一化后环首直角的两条边**：三角形可先循环旋转到该角；四边形仍只收原环首。
    *

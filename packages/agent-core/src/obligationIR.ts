@@ -132,6 +132,14 @@ function recognizeObligationText(text: string): RecognizedObligation | null {
     pattern.lastIndex = saved
     if (match === null) continue
     const result = read(match)
+    /**
+     * **一个句型蕴含多条判据时，这里返回 `null`（= 认不出），不取第一条。**
+     *
+     * 这一层认的是**求证段里的目标句**，而目标句是**单条主张**。"底面 ABCD 是菱形"拆开是三条等长，
+     * 拿第一条当目标就等于把"证明它是菱形"**降级**成"证明 AB=BC" —— 那正是本仓禁止的悄悄弱化
+     * （与"静默丢句""特值化改题"同一类）。认不出就走既有的未支持路径，如实显示。
+     */
+    if (Array.isArray(result)) return null
     if (result !== null) return result
   }
   return null

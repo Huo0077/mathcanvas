@@ -544,6 +544,64 @@ describe("constructPyramidWitness", () => {
   })
 })
 
+/**
+ * **底面是菱形**（S3）：四条边两两相等 ⇒ 菱形，边长自由、**角度取代表值**。
+ *
+ * 为什么角度不自由：`菱形` 只约束"四边相等"，没说角是多少 —— 取一个代表值（60°）并写进假设，
+ * 与 n ≥ 5 的"正 n 边形代表"同一条口径（`deriveRepresentativePolygon`）。
+ * 而**直角不许取**：四边相等 + 直角 = 正方形，那是题面没说的额外特殊性
+ * （与候选池里"两条自由底边不许取相等"是同一条账）。
+ */
+describe("底面是菱形（S3）", () => {
+  const chain = [
+    { kind: "equal-length" as const, segments: [["A", "B"], ["B", "C"]] },
+    { kind: "equal-length" as const, segments: [["B", "C"], ["C", "D"]] },
+    { kind: "equal-length" as const, segments: [["C", "D"], ["D", "A"]] }
+  ]
+
+  it("四边相等 + 给定边长 ⇒ 构造出菱形（四边彼此相等，且**不是**正方形）", () => {
+    const result = constructPrismWitness({
+      shape: "prism",
+      base: ["A", "B", "C", "D"],
+      relations: [...chain, { kind: "segment-length", segments: [["A", "B"]], value: 2 }],
+      extrusion: { kind: "vector", vector: { x: 0, y: 0, z: 3 } }
+    })
+
+    expect(result.status, JSON.stringify(result)).toBe("candidate")
+    if (result.status !== "candidate") return
+    const { points, names } = result.witness
+    const at = (name: string): Vector3 => points[names.indexOf(name)]!
+
+    const sides = [["A", "B"], ["B", "C"], ["C", "D"], ["D", "A"]].map(([from, to]) => distanceVector3(at(from!), at(to!)))
+    for (const side of sides) expect(side, JSON.stringify(sides)).toBeCloseTo(sides[0]!, 9)
+    expect(sides[0]).toBeCloseTo(2, 9)
+
+    // 不是正方形：A 处的内角不是直角（否则题面说的"菱形"被悄悄升级成正方形）。
+    const alongAb = subtractVector3(at("B"), at("A"))
+    const alongAd = subtractVector3(at("D"), at("A"))
+    expect(Math.abs(dotVector3(alongAb, alongAd))).toBeGreaterThan(1e-6)
+
+    // 底面非退化、且这确实是菱形（对角线互相垂直平分 —— 菱形的等价判据，用内核自己的向量算子算）。
+    expect(distanceVector3(at("A"), at("C"))).toBeGreaterThan(1e-6)
+    const ac = subtractVector3(at("C"), at("A"))
+    const bd = subtractVector3(at("D"), at("B"))
+    expect(Math.abs(dotVector3(ac, bd))).toBeLessThan(1e-6)
+  })
+
+  it("菱形**同时点名直角** ⇒ 明确拒绝（那是正方形，首批不造）", () => {
+    const result = constructPrismWitness({
+      shape: "prism",
+      base: ["A", "B", "C", "D"],
+      relations: [...chain, { kind: "perpendicular", segments: [["A", "B"], ["A", "D"]] }],
+      extrusion: { kind: "vector", vector: { x: 0, y: 0, z: 3 } }
+    })
+
+    expect(result.status).toBe("rejected")
+    if (result.status !== "rejected") return
+    expect(result.code).toBe("unsupported-base-shape")
+  })
+})
+
 describe("constructPrismWitness", () => {
   it("extrudes the base ring by the stated vector and re-verifies the prism properties", () => {
     const result = constructPrismWitness({
