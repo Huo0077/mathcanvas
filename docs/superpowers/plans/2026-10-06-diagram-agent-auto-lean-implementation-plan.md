@@ -38,7 +38,19 @@
 - [x] **RED 已实测**：四类候选漏报、helpful 缺图形族别、所有目标被标非图却假通过、none 遇题目明确画图不升级、未审 134 项被默认为排除，先分别失败；原有纯集合/数列九例不能满足新 12 条作图数据；欠定自由点或无图候选的反向断言先失败。命令：`npm.cmd exec vitest run -- scripts/curriculum/diagramScope.test.ts scripts/curriculum/goldCases.test.ts --reporter=dot`。
 - [x] **内部 GREEN（尚未对外发布）**：4 个视觉候选子型 `helpful`，纯集合/数列/三角恒等式默认 `none`，其余 134 项 `unknown`；原创 4×3 个文字/坐标候选包含 4 条欠定自由选择；`auditCoverage` 仍因大批未审返回 false。**不得勾成产品图正确。**
 - [ ] **V0 出口**：让每例生成可重放的实际图元/函数图，内核逐条核验题设与候选位置；模糊输入反例拒绝确认，欠定自由点“有可用图”与“答案不唯一”同时为真；关旗旧路径有真浏览器反例。没有 e2e 与人看图确认时此项保持未勾。
-- [ ] **V0 区块收口**：定向 + typecheck/lint/需要的 e2e；文档、来源/数据卫生/截图目视核对；commit/push/核对远端。
+  - **2026-10-10 逐条对账（机器那半已齐；**出口仍不勾**，缺的是人那半）**：
+
+    | 出口条件 | 证据（当次实跑） |
+    | --- | --- |
+    | 每例生成**可重放**的实际图元 / 函数图 | 四家族浏览器正例 **15 passed**（`agent-diagram-free-apex` 6 条 / `agent-planar-triangle` 1 / `agent-conic-ellipse` + `agent-conic-kinds` 3 / `agent-function-tangent` 1 / `agent-underdetermined-diagram` 2 / `agent-conic-invariant` 2），每条都**提交后重放**：读落盘坐标/参数、由测试自己算 |
+    | 内核**逐条核验**题设与候选位置 | 定向 **6 文件 / 157 通过**（`planCompiler` + `draftStore` + `workerContracts` + `planar-constraints` + `diagramScope` + `goldCases`）；四家族的核验在浏览器里也各有一条"独立回代"（如 `agent-diagram-free-apex` 的"re-verifies the committed tetrahedron from the document's own coordinates, independently of the panel"） |
+    | 模糊输入**拒绝确认**（反例） | `agent-underdetermined-diagram`（"additional unsupported condition is visible and cannot be committed"）、`agent-conic-invariant`（符号参数保留、数值采样如实标注、等用户）、`agent-diagram-free-apex`（"above the base" 不静默丢 + 与题面矛盾的坐标被拒） |
+    | 欠定自由点"**有可用图**"与"**答案不唯一**"同时为真 | `agent-underdetermined-diagram`（欠定四棱锥通过核验、**以示例呈现**、可确认、一步撤销）+ `agent-diagram-free-apex`（自由点取示例值、面板写明"不是普遍证明"） |
+    | 关旗旧路径有**真浏览器反例** | `agent-diagram-free-apex`（"when disabled, the same previously unsupported prompt does not create a point or a draft"）+ `agent-solid-family-path`（开关关着时同一句台体题面不产草稿、不占撤销历史） |
+    | 每例的**可目检图** | `docs/evidence/` 六张（V0a/V0b/V0c×3/V0d）。**2026-10-10 逐张看过并记录所见**：V0a 底面 B/A/C 在地面网格、顶点 D 在其上方（15 个对象）；V0b C 在 A 正上方 ⇒ AC⊥AB；V0c 椭圆横长竖短（半轴 3/2）、双曲线左右两支、抛物线开口朝 +x；V0d 三次曲线 + **过局部极小点的水平切线**（与 f′(1)=0 一致）。**逐张与它自己的标签/方程相符。** |
+    | **人看图确认（教师 / 学生走查）** | **未做** —— 这一条是本项保持未勾的唯一原因。它记在 [当前状态](../../current-status.md) §四 A（用户侧验收），不需要管理员权限，但**必须由人来做**：给教师/学生看这四类图，确认"图看得懂、直觉对"。**本项不得由机器证据顶替。** |
+
+- [x] **V0 区块收口**（2026-10-10 完成）：定向 **6 文件 / 157 通过**（V0 点名的那几个：`planCompiler` / `draftStore` / `workerContracts` / `planar-constraints` / `diagramScope` / `goldCases`）；四家族 + 反例 e2e **15 passed**；全库非 Lean + 全量 e2e + `typecheck` + `lint` 的当次读数见本块提交的 CHANGELOG；文档（`current-status` §四 A/F、`agent-next-round-progress`、`project-progress`）同步；**数据卫生**（BOM / 行尾 / 断链 / 引用 SHA）当次扫过；**截图六张逐张目视核对**（见上表最后一行）；单独 commit + push 后以 `git ls-remote` 与本地 HEAD 当场比对一致。
 
 ### V0 产品路径的实地审查（2026-10-06，仅调用点定位，不是能力交付）
 
