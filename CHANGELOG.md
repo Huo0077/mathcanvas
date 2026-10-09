@@ -7,9 +7,25 @@
 
 
 
+## 2026-10-10 —— V2 GREEN ② 第一刀：按**点名形状**消解目标；修掉「面⊥面被当成线⊥面」这个真错配（并把上一块的类**改名**）
+
+**这一块改代码 + 改一处（错的）语义映射**：第二份计划 V2 GREEN 的缺口②（前提消解）的第一刀。**只做了"题设 → 目标"这一步，原题前提桥仍未做**。
+
+**查实的错配（这是本块最要紧的一条）**：解析层 `diagramObligations.ts` 里 ① `perpendicular` 这**一个**题设种类承载**两种**题设 —— 「线⊥线」（点名 = 2+2）与「线⊥面」（点名 = 2+3..6），读的是同一批正则；② `parallel` 同样承载「线∥线」与「线∥面」；③ `planePerpendicular` 是**面⊥面**（`diagramVerification.ts:436` 比的是**两个法向量**）。
+而证明目标词表里那条写着"线垂直于平面"的目标**原来叫 `planePerpendicular`**，并且把解析层的 `planePerpendicular` 声明成了它的载体 —— **那是错的**：一条"平面⊥平面"的题设会被读成"线⊥面"这个目标，拿它去配模板就会**证一条别的命题**。今天没有产品路径去自动调用（缺口③），所以一直没被触发；**但缺口③一旦接上，第一步就会踩到它**。RED 用例把这条错配当场钉了下来（`expected { goal: 'planePerpendicular', … } to be null`）。
+
+**改法（四条）**：① 目标**改名** `planePerpendicular` → `linePlanePerpendicular`（解析层那个 kind 不动，它叫得没错）；② **去掉那条错的载体声明**：面⊥面今天**没有**证明目标，如实返回 `null`；③ 新增 **`declaredProofGoalForObligation({ kind, targets })`** —— 按**点名个数**分流（4 = 线与线，≥5 = 线与面），与 `diagramVerification` 里 `planeCount = vertices.length - 2` 那套判法**同一口径**、不是新发明；读不出模板的读法（线∥面、面⊥面、点名个数不对）**一律 `null`**；④ 只给 kind 时，`declaredProofGoal` 在 **`ambiguous`** 那一栏如实标 `true`（`perpendicular` / `parallel`），**不静默按一种读法下结论**。
+
+**连带改名（同一提交）**：上一块（`03a7a87`）加的 Lean 目标类跟着改名 —— `goalKind: "linePlanePerpendicular"`、输入字段 `linePlanePerpendicular`、定理名 `draw_line_plane_perpendicular_goal`、`buildLinePlanePerpendicularStatement`。**改名后真跑复验**：`status=formally_proved` / `judgement=verified` / `exit=0` / **68321 ms**（改名前的读数是 68392 ms，同一量级）。**理由写在校验点**：名不副实会直接变成"证错命题"，所以名字必须跟着语义走。
+
+**RED → GREEN**：`proofGoals.test.ts` 新增一组 5 条（面⊥面不许被当成线⊥面、4 vs ≥5 两种读法、线∥面如实 null、只有 kind 时要标歧义、消解出的目标真在词表里）—— RED 时 **5 failed**（含那条真错配），实现后全绿；`packages/agent-core/src/proof` 六个文件 **118 passed**。
+
+**门禁**：`typecheck` exit 0；`lint` 0 error / 13 warning（基线）；`proof:smoke` **8/8**、`PROOF_BACKENDS {"wired":["lean4"],"reviewed":1}`；全库非 Lean 见下一条读数；全量 e2e 见下一条。**变异**：把错的载体加回去 ⇒ 错配那条红；让形状入口不看点名个数 ⇒ 两种读法那两条红；把 `ambiguous` 恒为 `false` ⇒ 歧义那条红（详见 [进度归档](docs/project-progress.md)）。
+
 ## 2026-10-10 —— V2 GREEN 第一刀：证明出口从**一类**加到**两类**（判定定理在本机真跑通过）
 
 **这一块改代码**：第二份计划 V2 GREEN 的缺口①（"逐类可信翻译只到一类"）的第一刀。**只补一类，缺口①仍未补完**。
+> **⚠️ 本块里的那个类名当天就改了**：`planePerpendicular` → `linePlanePerpendicular`（原因见上一条：解析层同名 kind 指的是面⊥面），定理名也随之改为 `draw_line_plane_perpendicular_goal`。**下面这段正文保留当时的名字，是历史记录。**
 
 **加了什么**：`planePerpendicular`（`packages/agent-core/src/proof/lean4Adapter.ts`）—— **判定定理**那一半："线 ⊥ 平面内两条**相交**直线 ⇒ 线 ⊥ 该平面"。它与原有那一类是**方向相反的两个定理**：`perpendicular` 是**性质定理**（已知 ⊥ 面 ⇒ ⊥ 面内任意线，前提 `hu` 是模板塞的），新类是**判定定理**（前提是两个内积为 0，**正好就是题面里那两条垂直**）。生成的命题形状：
 

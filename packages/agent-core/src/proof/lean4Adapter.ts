@@ -21,17 +21,24 @@ import type { ProofGoalKind } from "./proofGoals"
  * | 结论"线 ⊥ 线" | 目标 `inner ℝ u v = 0` |
  * | `proof`（后端给的正文） | 定理的 `:= by ...` 那一段，**原样照抄，一个字都不解释** |
  *
- * **第二个目标类**（`planePerpendicular`，2026-10-10 加；判定定理那一半）：
+ * **第二个目标类**（`linePlanePerpendicular`，2026-10-10 加；判定定理那一半）：
+ *
+ * **⚠️ 名字的来历（改过一次，值得读）**：它一开始叫 `planePerpendicular`，与目标词表里那条旧的
+ * 同名目标一致。**那是个错配** —— 解析层（`diagramObligations.ts`）里 `planePerpendicular`
+ * 这个**题设种类**指的是**面 ⊥ 面**（`diagramVerification.ts` 比的是两个法向量），
+ * 而这一支证的是**线 ⊥ 面**。旧名字让两者同名，还会让"平面⊥平面"的题设被读成"线⊥面"这个目标
+ * （详见 `proofGoals.ts` 里那次改名与 `declaredProofGoalForObligation`）。
+ * 所以这里的类名、输入字段名与定理名**都跟着改成 `line` + `Plane`** —— 名不副实会直接变成证错命题。
  *
  * | 这一层用的东西 | 变成 Lean 里的什么 |
  * | --- | --- |
- * | `goalKind === "planePerpendicular"` | 命题形状：`(A B C P : E) (h1 : inner ℝ (A - P) (B - A) = 0) (h2 : inner ℝ (A - P) (C - A) = 0) : (A - P) ∈ (span {B - A, C - A})ᗮ` |
- * | `planePerpendicular.line`（那条声称⊥面的线） | 结论里的向量 `A - P`，也是两个前提里的左因子 |
- * | `planePerpendicular.planeLines`（平面内**相交**的两条线） | 两个前提的右因子；它们张成的子空间就是结论里那个 `D` |
+ * | `goalKind === "linePlanePerpendicular"` | 命题形状：`(A B C P : E) (h1 : inner ℝ (A - P) (B - A) = 0) (h2 : inner ℝ (A - P) (C - A) = 0) : (A - P) ∈ (span {B - A, C - A})ᗮ` |
+ * | `linePlanePerpendicular.line`（那条声称⊥面的线） | 结论里的向量 `A - P`，也是两个前提里的左因子 |
+ * | `linePlanePerpendicular.planeLines`（平面内**相交**的两条线） | 两个前提的右因子；它们张成的子空间就是结论里那个 `D` |
  * | 结论"线 ⊥ 面" | 目标 `(A - P) ∈ (span …)ᗮ` |
  *
  * **两类是两条方向相反的定理**：`perpendicular` 是性质定理（已知⊥面 ⇒ ⊥面内任意线），
- * `planePerpendicular` 是判定定理（⊥面内两条相交线 ⇒ ⊥面）。**它们的定理名不同**，
+ * `linePlanePerpendicular` 是判定定理（⊥面内两条相交线 ⇒ ⊥面）。**它们的定理名不同**，
  * 所以一份 `#print axioms` 报告**不可能**互相冒充（有用例钉住）。
  *
  * ### 逐字段：**哪些字段参与了翻译**
@@ -69,7 +76,7 @@ import type { ProofGoalKind } from "./proofGoals"
  * ### 覆盖范围
  *
  * **覆盖两个目标类**（2026-10-10 起）：`perpendicular`（性质定理："线 ⊥ 面 ⇒ 线 ⊥ 线"）
- * 与 `planePerpendicular`（判定定理："线 ⊥ 面内两条**相交**线 ⇒ 线 ⊥ 面"）。
+ * 与 `linePlanePerpendicular`（判定定理："线 ⊥ 面内两条**相交**线 ⇒ 线 ⊥ 面"）。
  * 走通两个类**不等于**证明出口对别的类可用（`parallel` / `equalLength` / 曲线性质 / 切线·导数
  * 今天**没有**模板）—— 这一条是 V2 GREEN 的缺口①，**只补上了第一刀，没补完**。
  *
@@ -102,7 +109,7 @@ export interface Lean4PerpendicularGoal {
 }
 
 /**
- * `planePerpendicular` 目标类要的东西（**判定定理那一半**）。
+ * `linePlanePerpendicular` 目标类要的东西（**判定定理那一半**）。
  *
  * - `line`：那条**声称垂直于平面**的线（两个点名点，方向 = 第二点 − 第一点）；
  * - `planeLines`：平面内两条**相交**的线，**每条都是题面点名说它 ⊥ 那条线**的那两条
@@ -116,7 +123,7 @@ export interface Lean4PerpendicularGoal {
  * **只能检查点名的共用关系**：两条线必须**恰好共用一个点名点**（那就是"相交"这件事在输入里的痕迹）。
  * 共点为零个（平行/异面）或两个（同一条线写了两遍）⇒ **抛**，不猜。
  */
-export interface Lean4PlanePerpendicularGoal {
+export interface Lean4LinePlanePerpendicularGoal {
   line: Lean4NamedLine
   planeLines: readonly [Lean4NamedLine, Lean4NamedLine]
 }
@@ -127,14 +134,14 @@ export interface Lean4ProofGoalInput {
   prompt: string
   /** 这条 claim 的原话。**进哈希，不进命题**。 */
   claimSourceText: string
-  /** 这条 goal 属于哪一类（`proofGoals.ts` 的封闭词表）。今天支持 `"perpendicular"` / `"planePerpendicular"`。 */
+  /** 这条 goal 属于哪一类（`proofGoals.ts` 的封闭词表）。今天支持 `"perpendicular"` / `"linePlanePerpendicular"`。 */
   goalKind: ProofGoalKind | string
   /** 系统替用户定的假设。**进哈希（R51），不进命题**（见文件头"哪些字段参与了翻译"）。 */
   assumptions?: readonly string[]
   /** 后端给出的证明正文（草稿）。**原样照抄进命题文件的 `:= by` 那一段**。 */
   proof: string
   perpendicular?: Lean4PerpendicularGoal
-  planePerpendicular?: Lean4PlanePerpendicularGoal
+  linePlanePerpendicular?: Lean4LinePlanePerpendicularGoal
 }
 
 // ---------------------------------------------------------------- Lean 源码生成
@@ -291,7 +298,7 @@ export function checkAxiomsReport(stdout: string, queryName: string): Lean4Axiom
 }
 
 /**
- * **一个目标类生成出来的东西**（`perpendicular` 与 `planePerpendicular` 共用这个形状）。
+ * **一个目标类生成出来的东西**（`perpendicular` 与 `linePlanePerpendicular` 共用这个形状）。
  *
  * 原来是按第一个类命名（`Lean4PerpendicularSpec`）；加第二个类时**改名**而不是复制一份 ——
  * 复制会让"两类共用同一套绑定语义"这件事在类型上悄悄分叉。
@@ -346,10 +353,10 @@ export const LEAN4_BINDER_NAMES: readonly string[] = ["hu", "hv"]
  * 两类如果共用一个名字，那么"第一类的一条真报告"就能让第二类的目标升到 `formally_proved` ——
  * 而它证的根本不是同一条命题。这是 `checkAxiomsReport` 里"名字逐字对上"那条判据的**前提**。
  */
-export const LEAN4_PLANE_PERPENDICULAR_THEOREM_NAME = "draw_plane_perpendicular_goal"
+export const LEAN4_LINE_PLANE_PERPENDICULAR_THEOREM_NAME = "draw_line_plane_perpendicular_goal"
 
 /** 第二个目标类生成文件里的**两个前提名**（导出给用例交叉核对，与 `LEAN4_BINDER_NAMES` 同理）。 */
-export const LEAN4_PLANE_PERPENDICULAR_BINDER_NAMES: readonly string[] = ["h1", "h2"]
+export const LEAN4_LINE_PLANE_PERPENDICULAR_BINDER_NAMES: readonly string[] = ["h1", "h2"]
 
 function assertPointName(what: string, value: unknown): asserts value is string {
   if (typeof value !== "string" || !/^[A-Za-z_][A-Za-z0-9_']*$/.test(value)) {
@@ -447,7 +454,7 @@ function sharedPointNames(a: Lean4NamedLine, b: Lean4NamedLine): string[] {
  * 生成的就是这个形状：
  *
  * ```lean
- * theorem draw_plane_perpendicular_goal {E : Type*} [NormedAddCommGroup E] [InnerProductSpace ℝ E]
+ * theorem draw_line_plane_perpendicular_goal {E : Type*} [NormedAddCommGroup E] [InnerProductSpace ℝ E]
  *     (A B C P : E) (h1 : inner ℝ (A - P) (B - A) = 0) (h2 : inner ℝ (A - P) (C - A) = 0) :
  *     (A - P) ∈ (Submodule.span ℝ ({B - A, C - A} : Set E))ᗮ
  * ```
@@ -466,14 +473,14 @@ function sharedPointNames(a: Lean4NamedLine, b: Lean4NamedLine): string[] {
  * **抛异常**与第一类同理：点名不像点名、平面线不共点，都是**调用方给错了**，
  * 不是"证明失败"—— 两者的证据状态完全不同，不压成同一个返回值。
  */
-export function buildPlanePerpendicularStatement(input: Lean4ProofGoalInput, maxHeartbeats: number): Lean4GeneratedStatement {
-  const goal = input.planePerpendicular
+export function buildLinePlanePerpendicularStatement(input: Lean4ProofGoalInput, maxHeartbeats: number): Lean4GeneratedStatement {
+  const goal = input.linePlanePerpendicular
   if (goal === undefined) {
-    throw new Error("planePerpendicular 目标类必须给出 planePerpendicular: { line, planeLines }（模板缺了它就无从生成命题）。")
+    throw new Error("linePlanePerpendicular 目标类必须给出 linePlanePerpendicular: { line, planeLines }（模板缺了它就无从生成命题）。")
   }
   const [lineA, lineB] = goal.planeLines
   if (lineA === undefined || lineB === undefined) {
-    throw new Error("planePerpendicular 需要平面内**两条**相交直线（`planeLines` 恰好两项）。")
+    throw new Error("linePlanePerpendicular 需要平面内**两条**相交直线（`planeLines` 恰好两项）。")
   }
   assertPointName("line.first", goal.line.first)
   assertPointName("line.second", goal.line.second)
@@ -491,12 +498,12 @@ export function buildPlanePerpendicularStatement(input: Lean4ProofGoalInput, max
   const shared = sharedPointNames(lineA, lineB)
   if (shared.length === 0) {
     throw new Error(
-      `planePerpendicular 的两条平面线必须**相交**（共用一个点名点）：收到 [${lineA.first}${lineA.second}] 与 [${lineB.first}${lineB.second}]，没有共点 —— 两条平行/异面的线张不出平面，判定定理的前提不成立。`
+      `linePlanePerpendicular 的两条平面线必须**相交**（共用一个点名点）：收到 [${lineA.first}${lineA.second}] 与 [${lineB.first}${lineB.second}]，没有共点 —— 两条平行/异面的线张不出平面，判定定理的前提不成立。`
     )
   }
   if (shared.length > 1) {
     throw new Error(
-      `planePerpendicular 的两条平面线是同一条线（共点 ${shared.join(" / ")}）—— 那不是"两条相交直线"，其中一个前提是多余的。`
+      `linePlanePerpendicular 的两条平面线是同一条线（共点 ${shared.join(" / ")}）—— 那不是"两条相交直线"，其中一个前提是多余的。`
     )
   }
   // 两条平面线按"从共用点出发"的方向写：这样结论里的子空间就是由它们张成的那个平面。
@@ -510,17 +517,17 @@ export function buildPlanePerpendicularStatement(input: Lean4ProofGoalInput, max
 
   const u = `(${goal.line.second} - ${goal.line.first})`
   const dSpan = `Submodule.span ℝ ({${dirA}, ${dirB}} : Set E)`
-  const [h1, h2] = LEAN4_PLANE_PERPENDICULAR_BINDER_NAMES as readonly [string, string]
+  const [h1, h2] = LEAN4_LINE_PLANE_PERPENDICULAR_BINDER_NAMES as readonly [string, string]
 
   const statement = [
-    `theorem ${LEAN4_PLANE_PERPENDICULAR_THEOREM_NAME} {E : Type*} [NormedAddCommGroup E] [InnerProductSpace ℝ E]`,
+    `theorem ${LEAN4_LINE_PLANE_PERPENDICULAR_THEOREM_NAME} {E : Type*} [NormedAddCommGroup E] [InnerProductSpace ℝ E]`,
     `    ${pointParams} (${h1} : inner ℝ ${u} (${dirA}) = 0) (${h2} : inner ℝ ${u} (${dirB}) = 0) :`,
     `    ${u} ∈ (${dSpan})ᗮ`
   ].join("\n")
 
   return {
-    theoremName: LEAN4_PLANE_PERPENDICULAR_THEOREM_NAME,
-    ...assembleSource(statement, LEAN4_PLANE_PERPENDICULAR_THEOREM_NAME, input.proof, maxHeartbeats)
+    theoremName: LEAN4_LINE_PLANE_PERPENDICULAR_THEOREM_NAME,
+    ...assembleSource(statement, LEAN4_LINE_PLANE_PERPENDICULAR_THEOREM_NAME, input.proof, maxHeartbeats)
   }
 }
 
@@ -718,7 +725,7 @@ export interface Lean4ClosedLoopOutcome {
 }
 
 /** 这个适配器**声称覆盖**的目标类。**加一个必须显式改这里**（见文件头"覆盖范围"）。 */
-export const LEAN4_SUPPORTED_GOAL_KINDS: readonly ProofGoalKind[] = ["perpendicular", "planePerpendicular"]
+export const LEAN4_SUPPORTED_GOAL_KINDS: readonly ProofGoalKind[] = ["perpendicular", "linePlanePerpendicular"]
 
 /**
  * **目标类 → 模板**的分发表。
@@ -730,8 +737,8 @@ function specForGoalKind(input: Lean4ProofGoalInput, maxHeartbeats: number): Lea
   switch (input.goalKind) {
     case "perpendicular":
       return buildPerpendicularStatement(input, maxHeartbeats)
-    case "planePerpendicular":
-      return buildPlanePerpendicularStatement(input, maxHeartbeats)
+    case "linePlanePerpendicular":
+      return buildLinePlanePerpendicularStatement(input, maxHeartbeats)
     default:
       throw new Error(
         `Lean 4 适配器今天只覆盖 ${LEAN4_SUPPORTED_GOAL_KINDS.map((kind) => `\`${kind}\``).join(" / ")} 这些目标类，收到「${String(input.goalKind)}」—— 表外目标不许悄悄走到这里。`

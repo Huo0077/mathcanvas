@@ -10,6 +10,24 @@
 
 > 下方 2026-09-22 的"最后更新 / 当前阶段 / 总体状态"三行保留为**当时快照**，不再维护。
 
+## 2026-10-10 —— V2 GREEN ② 第一刀：按点名形状消解目标；修掉「面⊥面被当成线⊥面」
+
+**这一块改代码**：V2 GREEN 缺口②（前提消解）的第一刀 —— 只做"题设 → 证明目标"这一步。**原题前提桥仍未做。**
+
+**查实的错配（一条真缺陷，不是命名口味）**：解析层里 `planePerpendicular` 这个**题设种类**是**面⊥面**（`diagramVerification.ts:436` 比的是两个法向量），而证明目标词表里那条"线垂直于平面"**原来也叫 `planePerpendicular`**，还把解析层的同名 kind 声明成自己的载体。于是 `declaredProofGoal("planePerpendicular")` 会给出一条**"线⊥面"的目标** —— 一条"平面⊥平面"的题设被读成了另一件事。今天没有产品路径自动调用（缺口③）所以没被触发，**但缺口③一接上第一步就踩它**。同一层还有第二处歧义：`perpendicular` / `parallel` 各承载「线与线」与「线与面」两种题设（同一批正则，差别只在点名分组）。
+
+**RED（先写用例，跑出 5 failed）**：其中第一条的失败输出本身就是证据 —— `AssertionError: expected { goal: 'planePerpendicular', …(1) } to be null`。
+
+**GREEN（四条改动）**：① 目标改名 `linePlanePerpendicular`（解析层 kind 不动）；② 删掉错的载体声明 ⇒ 面⊥面如实 `null`；③ 新增 `declaredProofGoalForObligation({ kind, targets })`，按点名个数分流（4 = 线与线；≥5 = 线与面），与 `diagramVerification` 的 `planeCount = vertices.length - 2` **同一口径**；线∥面 / 面⊥面 / 形状不全**一律 `null`**，不借别的目标；④ `declaredProofGoal` 返回 `ambiguous` 与 `note` 两栏，只给 kind 时**说得出这是歧义**。
+
+**连带改名与复验**：上一块加的 Lean 类跟着改名（`goalKind` / 输入字段 / `draw_line_plane_perpendicular_goal` / `buildLinePlanePerpendicularStatement`）。**改名后重跑真 Lean**：`1 passed` / `formally_proved` / `verified` / `exit=0` / **68321 ms**（改名前的 68392 ms，同一量级）—— 名字变了，命题形状与内核结论不变。
+
+**门禁**：`packages/agent-core/src/proof` 六文件 **118 passed**；`typecheck` exit 0；`lint` 0 error / 13 warning；`proof:smoke` 8/8（`PROOF_BACKENDS {"wired":["lean4"],"reviewed":1}`）；全库非 Lean **338 文件 / 3995 通过 + 1 todo / 0 失败 / exit 0**（520.00 s；比上一读数 +5 条，正好是这 5 条新用例）；全量 e2e **218 通过 / 0 失败**（2.6 m）。
+
+**变异验证（三次，逐个还原 —— 用反向编辑，不用 `git checkout`）**：① 把错的载体声明加回去（`linePlanePerpendicular` 的 `obligationKinds` 改回 `["planePerpendicular"]`）⇒ "面⊥面不许被当成线⊥面"那条红；② 让形状入口不看点名个数（`perpendicular` 直接委托 kind-only）⇒ "一个 kind 两种读法"那条红；③ 把 `ambiguous` 恒为 `false` ⇒ "只有 kind 时要说得出歧义"那条红。**三次都当场红、还原后 118 passed / exit 0，并 grep 确认源码无变异残留。**
+
+**过程里的一条小事（照实记）**：批量改名时用 `Set-Content -Encoding UTF8` 写回，**三个文件都被加上了 BOM**（与之前那次提交标题带 BOM 同源）。当场用字节检查（`EF BB BF`）发现并去掉，改回 BOM-less —— 说明这种批量改写之后**必须看一眼文件头**，不能只看 diff。
+
 ## 2026-10-10 —— V2 GREEN 第一刀：证明出口加第二类（判定定理），真跑通过 + 变异验证
 
 **这一块改代码**：V2 GREEN 缺口①的第一刀 —— 逐类可信翻译从**一类**到**两类**。**缺口① 未补完**（曲线性质 / 切线·导数 / 其余立体关系仍无模板），GREEN 不勾。

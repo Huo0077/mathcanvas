@@ -1,6 +1,6 @@
 import type { ConstraintType } from "@draw/dsl"
 
-import type { DiagramObligationKind } from "../diagramObligations"
+import type { DiagramObligation, DiagramObligationKind } from "../diagramObligations"
 
 /**
  * **形式证明出口声称支持哪些短目标**（实施计划 N5："先支持 5–10 个短目标"；
@@ -51,7 +51,7 @@ import type { DiagramObligationKind } from "../diagramObligations"
 export type ProofGoalKind =
   | "parallel"
   | "perpendicular"
-  | "planePerpendicular"
+  | "linePlanePerpendicular"
   | "equalLength"
   | "midpoint"
   | "segmentRatio"
@@ -61,7 +61,7 @@ export type ProofGoalKind =
   | "dihedral"
 
 export const PROOF_GOAL_KINDS: readonly ProofGoalKind[] = [
-  "parallel", "perpendicular", "planePerpendicular", "equalLength", "midpoint", "segmentRatio",
+  "parallel", "perpendicular", "linePlanePerpendicular", "equalLength", "midpoint", "segmentRatio",
   "collinear", "coplanar", "pythagorean", "dihedral"
 ]
 
@@ -121,7 +121,29 @@ export type ProofGoalDischargeRoute =
 export const PROOF_GOAL_SUPPORT: readonly ProofGoalSupport[] = [
   { kind: "parallel", description: "两条线平行", obligationKinds: ["parallel"], constraintTypes: ["parallel"], inFirstBatch: true },
   { kind: "perpendicular", description: "两条线垂直", obligationKinds: ["perpendicular"], constraintTypes: ["perpendicular"], inFirstBatch: true },
-  { kind: "planePerpendicular", description: "线垂直于平面", obligationKinds: ["planePerpendicular"], constraintTypes: [], inFirstBatch: true },
+  /**
+   * **线 ⊥ 平面**（2026-10-10 由 `planePerpendicular` **改名**而来）。
+   *
+   * ## 为什么必须改名：那是一个真实的错配
+   *
+   * 解析层（`diagramObligations.ts`）里 `planePerpendicular` 这个 kind 是**面 ⊥ 面**
+   * （`diagramVerification.ts` 比的是**两个法向量**），而这条目标说的是**线 ⊥ 面**。
+   * 旧名字让两者同名，还把解析层的 `planePerpendicular` 声明成了这条目标的载体 ——
+   * 于是一条"平面 ⊥ 平面"的题设会被读成"线垂直于平面"这个目标，
+   * 拿它去配"线⊥面"的模板就会**证一条别的命题**。
+   * 今天没有产品路径去自动调用（V2 缺口③），所以一直没被触发；
+   * **但缺口③一旦接上，第一步就会踩到它。**
+   *
+   * ## 载体这一栏为什么写 `perpendicular`
+   *
+   * "线 ⊥ 平面"在解析层读得出来，但它与"线 ⊥ 线"**共用 `perpendicular` 这一个 kind**
+   * （同一个正则，差别只在点名分组：2+3..6 vs 2+2）。所以：
+   * - **只有 kind 时是不够的** —— `declaredProofGoal("perpendicular")` 会返回**线⊥线**那条并标
+   *   `ambiguous: true`（这是记录下来的默认读法，不是判断）；
+   * - **要按题设形状问**：`declaredProofGoalForObligation({ kind, targets })` 按点名个数分流，
+   *   与 `diagramVerification` 里那套判法**同一口径**。
+   */
+  { kind: "linePlanePerpendicular", description: "线垂直于平面", obligationKinds: ["perpendicular"], constraintTypes: [], inFirstBatch: true },
   { kind: "equalLength", description: "两条线段等长（含等边三角形）", obligationKinds: ["equalLength", "equilateral"], constraintTypes: [], inFirstBatch: true },
   { kind: "midpoint", description: "某点是某线段的中点", obligationKinds: ["midpoint"], constraintTypes: [], inFirstBatch: true },
   { kind: "segmentRatio", description: "两条线段的比", obligationKinds: ["segmentRatio"], constraintTypes: [], inFirstBatch: true },
@@ -150,20 +172,82 @@ export const PROOF_GOAL_SUPPORT: readonly ProofGoalSupport[] = [
 ]
 
 /**
+ * **一次消解的结论**：命中了哪个目标，以及**这次消解有多确定**。
+ *
+ * `ambiguous` 不是装饰：解析层的 `perpendicular` / `parallel` 各承载两种读法
+ * （线⊥线 vs 线⊥面、线∥线 vs 线∥面），只给 kind 时不能真的"判"出是哪一个。
+ * 把这件事写在返回值里，是为了让调用方**看见**它、必要时改用 `declaredProofGoalForObligation`。
+ */
+export interface ProofGoalResolution {
+  goal: ProofGoalKind
+  support: ProofGoalSupport
+  /** 只按 kind 消解时，这个 kind 是否承载多种读法（`true` = 这个答案只是**记录的默认读法**）。 */
+  ambiguous: boolean
+  /** 为什么歧义 / 该怎么进一步消解（给人与日志看）。 */
+  note: string
+}
+
+const AMBIGUOUS_CARRIERS: Record<string, string> = {
+  perpendicular: "解析层的 `perpendicular` 同时承载「线⊥线」（2+2 个点名）与「线⊥面」（2+3..6 个点名）；只按 kind 消解时这里返回的是**线⊥线**，要按题设形状消解请用 `declaredProofGoalForObligation`。",
+  parallel: "解析层的 `parallel` 同时承载「线∥线」与「线∥面」；只按 kind 消解时这里返回的是**线∥线**，要按题设形状消解请用 `declaredProofGoalForObligation`。"
+}
+
+/**
  * **这条题设种类算不算一个"已声明的短目标"** —— 证明出口升级证据状态前**必须**过的门。
  *
  * 返回 `null` 的三种情形分开说（都返回 `null`，但原因不同，便于诊断）：
  * ① 这种题设根本不映射到任何证明目标；② 映射到了但**不在首批**（`dihedral`）；
  * ③ 映射到了、也在首批，但**解析层读不出它** —— 那时用 `declaredProofGoalForConstraint`
  * 从**约束层**再问一次（例如"共线"只能由文档里的约束承载，不能由原话承载）。
+ *
+ * **⚠️ 还有第四种"不能只按 kind 下结论"的情形**（2026-10-10 查实）：`perpendicular` / `parallel`
+ * 各承载两种读法。这时它**不返回 null**（那是"没有目标"的意思，会误伤），而是在 `ambiguous`
+ * 那一栏标 `true` 并给出 `note` —— 详见 `declaredProofGoalForObligation`（那个才是按题设形状消解的入口）。
  */
-export function declaredProofGoal(obligationKind: string): { goal: ProofGoalKind; support: ProofGoalSupport } | null {
+export function declaredProofGoal(obligationKind: string): ProofGoalResolution | null {
   for (const support of PROOF_GOAL_SUPPORT) {
     if (!support.obligationKinds.includes(obligationKind as DiagramObligationKind)) continue
     if (!support.inFirstBatch) return null
-    return { goal: support.kind, support }
+    const note = AMBIGUOUS_CARRIERS[obligationKind]
+    return { goal: support.kind, support, ambiguous: note !== undefined, note: note ?? "" }
   }
   return null
+}
+
+/**
+ * **按题设的形状消解目标**（点名个数 = 解析层已经用来分辨读法的那件事）。
+ *
+ * 为什么需要它：`perpendicular` 与 `parallel` 这两种 kind **各自承载两种题设**
+ * （线与线 / 线与平面）。解析层读的是同一批正则，差别只在**点名分组**；
+ * `diagramVerification` 也是按同一件事分流的（`planeCount = vertices.length - 2`）。
+ * 所以这里是那条**已有口径**的第二处使用，不是新发明一套判读法。
+ *
+ * **读不出来的读法如实返回 `null`**：
+ * - 线∥面：今天**没有**证明模板（缺口①），不许借"线∥线"的目标；
+ * - 面⊥面（`planePerpendicular` 这个 kind）：也**没有**模板，且它与"线⊥面"不是一回事；
+ * - 点名个数既不是 4 也不是 ≥5 的（例如 3 个）：形状不完整，**不猜**。
+ */
+export function declaredProofGoalForObligation(
+  obligation: Pick<DiagramObligation, "kind" | "targets">
+): ProofGoalResolution | null {
+  const { kind, targets } = obligation
+  if (kind === "perpendicular" || kind === "parallel") {
+    const word = kind === "perpendicular" ? "⊥" : "∥"
+    if (targets.length === 4) return declaredProofGoal(kind)
+    if (targets.length >= 5) {
+      if (kind === "parallel") return null // 线∥面：没有模板，不许借线∥线的目标。
+      return declaredProofGoalForGoal("linePlanePerpendicular", `解析层把它读成"线${word}面"（点名 ${targets.length} 个 = 线段 2 + 平面 3..6）。`)
+    }
+    return null
+  }
+  return declaredProofGoal(kind)
+}
+
+/** 直接按**目标**取一次消解结论（形状已经判清时用；目标不在词表里 ⇒ `null`）。 */
+export function declaredProofGoalForGoal(goal: ProofGoalKind, note = ""): ProofGoalResolution | null {
+  const support = PROOF_GOAL_SUPPORT.find((entry) => entry.kind === goal)
+  if (support === undefined || !support.inFirstBatch) return null
+  return { goal: support.kind, support, ambiguous: false, note }
 }
 
 /**

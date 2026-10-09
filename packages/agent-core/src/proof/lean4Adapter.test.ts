@@ -3,12 +3,12 @@ import { describe, expect, it } from "vitest"
 import { evidenceStatusWithProof, proofInputHash, PROOF_ARTIFACT_VERSION, verifyProofArtifact, type ProofExpectation, type ProofRejectionCode } from "./proofArtifact"
 import {
   buildPerpendicularStatement,
-  buildPlanePerpendicularStatement,
+  buildLinePlanePerpendicularStatement,
   checkAxiomsReport,
   judgeLean4Run,
   LEAN4_ALLOWED_AXIOMS,
   LEAN4_BACKEND_NAME,
-  LEAN4_PLANE_PERPENDICULAR_THEOREM_NAME,
+  LEAN4_LINE_PLANE_PERPENDICULAR_THEOREM_NAME,
   LEAN4_SUPPORTED_GOAL_KINDS,
   LEAN4_THEOREM_NAME,
   produceLean4Artifact,
@@ -309,16 +309,16 @@ describe("第二个目标类：线⊥面（判定定理那一半）", () => {
   const PLANE_GOAL: Lean4ProofGoalInput = {
     prompt: "在三棱锥 P-ABC 中，PA ⊥ AB，PA ⊥ AC，求证 PA ⊥ 平面 ABC",
     claimSourceText: "PA ⊥ 平面 ABC",
-    goalKind: "planePerpendicular",
+    goalKind: "linePlanePerpendicular",
     proof: "rw [Submodule.mem_orthogonal']\n  intro y hy\n  induction hy using Submodule.span_induction with\n  | mem z hz =>\n      rcases hz with rfl | rfl\n      · simpa using h1\n      · simpa using h2\n  | zero => simp\n  | add x y hx hy ihx ihy => rw [inner_add_right, ihx, ihy, add_zero]\n  | smul a x hx ih => rw [inner_smul_right, ih, mul_zero]",
-    planePerpendicular: {
+    linePlanePerpendicular: {
       line: { first: "P", second: "A" },
       planeLines: [{ first: "A", second: "B" }, { first: "A", second: "C" }]
     }
   }
 
   it("生成的命题里**两个前提正好是题面那两条垂直**，结论是「线 ⊥ 那个平面」", () => {
-    const spec = buildPlanePerpendicularStatement(PLANE_GOAL, 400_000)
+    const spec = buildLinePlanePerpendicularStatement(PLANE_GOAL, 400_000)
 
     // 前提：同一条线的方向向量，分别与平面内两条线的方向向量内积为 0。
     expect(spec.statement).toContain("h1 : inner ℝ (A - P) (B - A) = 0")
@@ -331,7 +331,7 @@ describe("第二个目标类：线⊥面（判定定理那一半）", () => {
   })
 
   it("**两类用两个不同的定理名** —— 否则一份 `#print axioms` 报告能互相冒充", () => {
-    const plane = buildPlanePerpendicularStatement(PLANE_GOAL, 400_000)
+    const plane = buildLinePlanePerpendicularStatement(PLANE_GOAL, 400_000)
 
     expect(plane.theoremName).not.toBe(LEAN4_THEOREM_NAME)
     expect(plane.source).toContain(`#print axioms ${plane.theoremName}`)
@@ -340,29 +340,29 @@ describe("第二个目标类：线⊥面（判定定理那一半）", () => {
 
   it("**「相交」这件事是输入必须给的**：两条平面线不共点 / 是同一对点 ⇒ 抛（不猜一个平面出来）", () => {
     const withLines = (planeLines: readonly [{ first: string; second: string }, { first: string; second: string }]) =>
-      ({ ...PLANE_GOAL, planePerpendicular: { ...PLANE_GOAL.planePerpendicular!, planeLines } })
+      ({ ...PLANE_GOAL, linePlanePerpendicular: { ...PLANE_GOAL.linePlanePerpendicular!, planeLines } })
 
     // 两条平行线（AB 与 CD）张不出"由两条相交直线确定的平面"——判定定理的前提不成立。
-    expect(() => buildPlanePerpendicularStatement(withLines([{ first: "A", second: "B" }, { first: "C", second: "D" }]), 400_000))
+    expect(() => buildLinePlanePerpendicularStatement(withLines([{ first: "A", second: "B" }, { first: "C", second: "D" }]), 400_000))
       .toThrow(/相交|共点/)
     // 同一对点写两遍：那是同一条线，其中一个前提是多余的。
-    expect(() => buildPlanePerpendicularStatement(withLines([{ first: "A", second: "B" }, { first: "A", second: "B" }]), 400_000))
+    expect(() => buildLinePlanePerpendicularStatement(withLines([{ first: "A", second: "B" }, { first: "A", second: "B" }]), 400_000))
       .toThrow(/相交|共点|同一条/)
   })
 
   it("缺字段 / 点名不像点名 ⇒ 抛（调用方给错了，不是「证明失败」）", () => {
-    expect(() => buildPlanePerpendicularStatement({ ...PLANE_GOAL, planePerpendicular: undefined }, 400_000)).toThrow(/必须给出 planePerpendicular/)
-    expect(() => buildPlanePerpendicularStatement({ ...PLANE_GOAL, planePerpendicular: { ...PLANE_GOAL.planePerpendicular!, line: { first: "1x", second: "A" } } }, 400_000)).toThrow(/点名/)
+    expect(() => buildLinePlanePerpendicularStatement({ ...PLANE_GOAL, linePlanePerpendicular: undefined }, 400_000)).toThrow(/必须给出 linePlanePerpendicular/)
+    expect(() => buildLinePlanePerpendicularStatement({ ...PLANE_GOAL, linePlanePerpendicular: { ...PLANE_GOAL.linePlanePerpendicular!, line: { first: "1x", second: "A" } } }, 400_000)).toThrow(/点名/)
   })
 
   it("`planePerpendicular` 进**声称覆盖**的清单（覆盖范围是一处改、覆盖消息跟着变）", () => {
-    expect(LEAN4_SUPPORTED_GOAL_KINDS).toContain("planePerpendicular")
+    expect(LEAN4_SUPPORTED_GOAL_KINDS).toContain("linePlanePerpendicular")
     expect(LEAN4_SUPPORTED_GOAL_KINDS).toContain("perpendicular")
   })
 
   it("闭环（假 runner）：真报告 ⇒ `formally_proved`；`sorry` ⇒ 停在原地", async () => {
-    const planeStdout = `'${LEAN4_PLANE_PERPENDICULAR_THEOREM_NAME}' depends on axioms: [propext, Classical.choice, Quot.sound]\n`
-    const planeCheat = `'${LEAN4_PLANE_PERPENDICULAR_THEOREM_NAME}' depends on axioms: [propext, sorryAx, Classical.choice, Quot.sound]\n`
+    const planeStdout = `'${LEAN4_LINE_PLANE_PERPENDICULAR_THEOREM_NAME}' depends on axioms: [propext, Classical.choice, Quot.sound]\n`
+    const planeCheat = `'${LEAN4_LINE_PLANE_PERPENDICULAR_THEOREM_NAME}' depends on axioms: [propext, sorryAx, Classical.choice, Quot.sound]\n`
 
     const good = await runLean4ClosedLoop("verified_instance", PLANE_GOAL, "claim-plane", {
       ...PRODUCE,

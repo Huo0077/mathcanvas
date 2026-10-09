@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest"
 
 import {
   buildPerpendicularStatement,
-  buildPlanePerpendicularStatement,
+  buildLinePlanePerpendicularStatement,
   resolveLean4Toolchain,
   runLean4ClosedLoop,
   type Lean4ProofGoalInput
@@ -157,7 +157,7 @@ describe("真实 Lean 端到端（显式 gated）", () => {
     const planeGoal: Lean4ProofGoalInput = {
       prompt: "在三棱锥 P-ABC 中，PA ⊥ AB，PA ⊥ AC，求证 PA ⊥ 平面 ABC",
       claimSourceText: "PA ⊥ 平面 ABC",
-      goalKind: "planePerpendicular",
+      goalKind: "linePlanePerpendicular",
       assumptions: [],
       /**
        * 证明正文。**这三行不是猜的，是内核逼出来的**（三步都在本机跑红过）：
@@ -180,7 +180,7 @@ describe("真实 Lean 端到端（显式 gated）", () => {
         "| add x y hx hy ihx ihy => rw [inner_add_right, ihx, ihy, add_zero]",
         "| smul a x hx ih => rw [inner_smul_right, ih, mul_zero]"
       ].join("\n"),
-      planePerpendicular: {
+      linePlanePerpendicular: {
         line: { first: "P", second: "A" },
         planeLines: [{ first: "A", second: "B" }, { first: "A", second: "C" }]
       }
@@ -188,7 +188,7 @@ describe("真实 Lean 端到端（显式 gated）", () => {
 
     const runner = createLean4Runner()
     // 先把模板生成的那串字符本身钉一下（这一步不花时间），再拿去交给内核。
-    const spec = buildPlanePerpendicularStatement(planeGoal, 400_000)
+    const spec = buildLinePlanePerpendicularStatement(planeGoal, 400_000)
     expect(spec.statement).toContain("h1 : inner ℝ (A - P) (B - A) = 0")
     const outcome = await runLean4ClosedLoop("verified_instance", planeGoal, "claim-lean4-plane-e2e", {
       runner,
@@ -207,7 +207,7 @@ describe("真实 Lean 端到端（显式 gated）", () => {
     expect(outcome.status).toBe("formally_proved")
     // 命题形状也逐字钉住：它必须是**这一类**的定理名与**这一类**的结论，
     // 而不是"随便生成了一条能过的命题"。
-    expect(outcome.statement).toContain("theorem draw_plane_perpendicular_goal")
+    expect(outcome.statement).toContain("theorem draw_line_plane_perpendicular_goal")
     expect(outcome.statement).toContain("(A - P) ∈ (Submodule.span ℝ ({B - A, C - A} : Set E))ᗮ")
     for (const axiom of outcome.judgement.axioms ?? []) expect(["propext", "Classical.choice", "Quot.sound"]).toContain(axiom)
   }, 600_000)

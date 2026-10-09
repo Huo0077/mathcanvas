@@ -22,7 +22,12 @@ import Mathlib.Analysis.InnerProductSpace.Orthogonal
 **注意方向**：命题把"那个平面的点落在 π 上"用的是 `v ∈ D` 这条**假设** ——
 那是模板给的，不是这里证出来的（适配器文件头写明了这条边界）。
 
-## 命题二：判定定理（`planePerpendicular` 目标类，2026-10-10 加）
+## 命题二：判定定理（`linePlanePerpendicular` 目标类，2026-10-10 加）
+
+**名字说明**：这个目标类一开始叫 `planePerpendicular`，后来**改名**成 `linePlanePerpendicular` ——
+因为解析层里 `planePerpendicular` 这个**题设种类**指的是**面 ⊥ 面**（比的是两个法向量），
+与"线 ⊥ 面"同名会把两种题设混成一件（详见 `packages/agent-core/src/proof/proofGoals.ts`）。
+Lean 侧的定理名 `plane_perpendicular_general` 保留（它说的是"线⊥面"这件事，不含歧义）。
 
 > 线 ⊥ 平面内两条**相交**直线 ⇒ 线 ⊥ 该平面
 
