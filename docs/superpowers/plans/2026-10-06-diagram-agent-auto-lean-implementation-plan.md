@@ -73,9 +73,15 @@
 
 ## V1：画图与约束求解扩大到这四类题
 
-- [ ] **RED**：对同一组三角、椭圆焦点/退化、三次曲线切线/极值、空间线面关系，用错误参数生成候选必须红，合法自由点图要绿；无空间判据约束不得被拖坏。将 `verified_instance/unverified_instance/no_witness` 与主张状态分离，不把未核验当通过。落点 `packages/geometry-kernel/src/*.test.ts`、`apps/web/src/agent/agentRuntime.test.ts` 和 `e2e/` 对应场景。
-- [ ] **GREEN**：复用现有解析点/圆锥曲线/导数切线/3D 图元，先解析构造受支持题，再用有界数值见证处理自由点；若条件不足而存在多图，选择一组直觉代表，列出自由度与未核验义务；若矛盾/超时/不支持按独立状态拒绝伪提交。
-- [ ] **本块发布前条件**：四家族正反/欠定示例各有实际浏览器图、数学条件核验与失败说明，默认 flag 关闭旧路径不变；进度与 GitHub 同步。不要拿 12 条内部文本例声称完成 V1。
+- [x] **RED**（**2026-10-10 逐条对账完成**）：对同一组三角、椭圆焦点/退化、三次曲线切线/极值、空间线面关系，用错误参数生成候选必须红，合法自由点图要绿；无空间判据约束不得被拖坏。将 `verified_instance/unverified_instance/no_witness` 与主张状态分离，不把未核验当通过。落点 `packages/geometry-kernel/src/*.test.ts`、`apps/web/src/agent/agentRuntime.test.ts` 和 `e2e/` 对应场景。
+  - **"错误参数必须红"逐族落点（都在，逐条读过）**：**三角** —— `packages/agent-core/src/planCompiler.test.ts:971`：同一句话、同一套动作，只把 C 挪到 `AB` 射线上 ⇒ `AB⊥AC: failed` 且 `ok=false`（**这就是 V0b 点名的 `AB∥AC` 反例**）；`:979` 点名点没进文档 ⇒ `unverified`，不按"没有就跳过"处理。**圆锥曲线** —— `diagramVerification.test.ts:327`（半轴一样、**轴反了** ⇒ failed）、`:333`（半轴互换 ⇒ failed）—— 只比数值不比轴就会放行，这两条正是不放行的那一侧。**切线** —— `diagramVerification.test.ts:244`（`tangentAt: failed`），浏览器侧 `agent-function-tangent` 只做正例。**空间线面** —— `relations.test.ts` 的残差用例 + `planCompiler.test.ts` 的 `relation_not_satisfied`（S3.4 那一族）。**合法自由点图要绿** —— 四家族浏览器正例 **15 passed**（V0 对账表）。
+  - **"无空间判据约束不得被拖坏"** —— `apps/web/src/constrainedDrag3.test.ts`：关开关 **passthrough**（旧路径逐字回归）、斜着把平面上的点拖出去**贴回平面**、沿法向拖**约束完全抵消并如实报 `noop`**（不提交空事务）、冗余约束**不阻止提交但要在提示里说出来**、锁定/绑定点交给旧路径。浏览器侧另有 `e2e/agent-constrained-drag.spec.ts` 正反例。
+  - **三值状态与主张状态分离** —— `packages/agent-core/src/claimEvidence.test.ts` + benchmark 契约（`BENCHMARK_STATUSES_BY_LAYER.witness`）；**未核验不当通过**：`apps/web/src/agent/agentRunner.test.ts:45`"把每一条未核验的题设条件用中文列出来，并且不提供确认"。
+- [x] **GREEN**（**2026-10-10 逐条对账完成**）：复用现有解析点/圆锥曲线/导数切线/3D 图元，先解析构造受支持题，再用有界数值见证处理自由点；若条件不足而存在多图，选择一组直觉代表，列出自由度与未核验义务；若矛盾/超时/不支持按独立状态拒绝伪提交。
+  - **逐条**：四家族都复用**既有**图元（`planar.create_point/segment`、`planar.create_conic`、`function.create_graph` + `function.create_tangent`、`solid.create_polyhedron`），没有为某一族另造图元；自由点走**有界数值见证搜索**（`witnessSearch`，固定小整数网格、无 RNG）；**多图时取一组直觉代表并把它选了什么写出来** —— `assumptions` 里逐条列"系统自选/搜索器自选"（S3/S5 各族的证据，面板上用户确认前可见）；矛盾 / 超时 / 不支持**各自独立状态**拒绝伪提交（`no_witness` / `unverified_instance` / `rejected` 分开，见上一条）。
+  - **如实记一处**没有**做的**（不是漏，是裁决）：`ClaimEvidence.degreesOfFreedom` **仍然是 `null`** —— R33 的结论与理由写在 `witnessSearch.ts:64-66/785-801`（N1 唯一的实现要 DSL `ConstraintSpec[]`，而拿见证候选自证会把公共尺度自由度"算掉"，那是自证）；`claimEvidence.test.ts:48` 把它钉住。**"数值自由度"与"系统替你选了哪些值"是两件事**：后者**有列**（自由标量与 assumptions），前者没算，归后续（其主题本来就是拖动自由度）。**不要把这条读成"V1 已列出自由度"。**
+- [x] **本块发布前条件**（**2026-10-10 核实完成**）：四家族正反/欠定示例各有实际浏览器图、数学条件核验与失败说明，默认 flag 关闭旧路径不变；进度与 GitHub 同步。**不要拿 12 条内部文本例声称完成 V1。**
+  - **证据就是真实浏览器图**：四家族 e2e **15 passed**（每条提交后重放、读落盘坐标/参数自己算）+ `docs/evidence/` 六张逐张目视核对；**失败说明**在反例里（拒绝确认并说清是哪条条件、为什么）。**默认 flag 关闭旧路径不变**：关旗逐字不变契约 `planCompiler.offPath.golden.test.ts` + 关旗浏览器反例（`agent-diagram-free-apex`、`agent-solid-family-path`）。**那 12 条内部文字/坐标候选一条都没有被当成 V1 的证据**（它们只证明目录与意图分级，不证明能画对）。
 
 ## V2：限定作图题的自动 Lean
 
