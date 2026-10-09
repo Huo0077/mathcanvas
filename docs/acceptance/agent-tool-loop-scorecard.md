@@ -4,7 +4,7 @@
 > [`docs/current-status.md`](../current-status.md) 为准** —— 它是"现在时"的唯一一处。
 > 这里的每一行都是**镜像**：能力前进一格时，这一行要跟着改（第 25 / 33 / 43 轮各漏过一次）。
 
-Updated: 2026-10-07. **现行任务只覆盖需要画图的高中题。** 旧全课程 H0–H4 的 43/141 来源盘点只供寻找候选；V0 已有四家族 12 条内部文字/坐标候选和 134 未审子型，**四家族的实际作图交付仍未完成**（题设核验与浏览器证据已齐，差教师/学生目视走查）；**真实 provider 作图质量与自动 Lean 均未交付**。原文核验已由 `planHasVerifiableFigure` 一处判断覆盖多面体 / 平面点 / 圆锥曲线 / 函数曲线与切线（V0b–V0d 的 Agent 入口已补），`solid.create_template` 的模板实体**仍刻意不进核验**。既有真实 provider 成本仍 `null`、条件垂直引理不是整题证明；具体门禁读数与发布结论分别看 [当前状态](../current-status.md) / [发布门禁](agent-release-gate.md)，新设计 [V0–V3](../superpowers/specs/2026-10-06-diagram-scope-addendum.md)。
+Updated: 2026-10-10 (S3.4 unblocked; earlier entries through 2026-10-07). **现行任务只覆盖需要画图的高中题。** 旧全课程 H0–H4 的 43/141 来源盘点只供寻找候选；V0 已有四家族 12 条内部文字/坐标候选和 134 未审子型，**四家族的实际作图交付仍未完成**（题设核验与浏览器证据已齐，差教师/学生目视走查）；**真实 provider 作图质量与自动 Lean 均未交付**。原文核验已由 `planHasVerifiableFigure` 一处判断覆盖多面体 / 平面点 / 圆锥曲线 / 函数曲线与切线（V0b–V0d 的 Agent 入口已补），`solid.create_template` 的模板实体**仍刻意不进核验**。既有真实 provider 成本仍 `null`、条件垂直引理不是整题证明；S1/S2 已落地、S4/S5 有分块浏览器证据，**S3.4 题面驱动的棱柱正例已于 2026-10-10 解除**（浏览器用例由 `test.fixme` 转正），S6 未收口；具体门禁读数与发布结论分别看 [当前状态](../current-status.md) / [发布门禁](agent-release-gate.md)，新设计 [V0–V3](../superpowers/specs/2026-10-06-diagram-scope-addendum.md)。
 
 > **2026-10-06 V0a 中途记录**：受限三棱锥草稿与开关正反例已有针对性证据（7 文件/171 定向、单 spec 3/3）；浏览器坐标回代、图形目视与全量回归**已于同日补齐**（见 [当前状态](../current-status.md)），**V0a/V0 仍不计完成**。Lean 未自动调用；provider 成本及大样本读数不变。现时唯一读数/放行状态见 [当前状态](../current-status.md) 与 [发布门禁](agent-release-gate.md)。
 

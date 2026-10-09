@@ -10,6 +10,37 @@
 
 > 下方 2026-09-22 的"最后更新 / 当前阶段 / 总体状态"三行保留为**当时快照**，不再维护。
 
+## 2026-10-10 —— S6.3 反例收口：认不出来就问路（**只加判据，不改行为**）
+
+设计 §6 的纪律"认不出一律问路、绝不悄悄改文档"，在浏览器里此前只有一条判据，而且它验的是**实验开关关着**（不是读不懂）。S6 出口要求"两类反例齐全"，于是补了 `e2e/agent-unreadable-prompt.spec.ts`：分析题 / 非立体题 / 说法与形状对不上三类各一条，每条四条判据（无确认面板 / 运行落定且对用户有话说 / 草稿键 `mathcanvas:draft:geometry3d` 逐字未变 / 回画布后对象为空且「撤销」禁用），**3 passed**。
+
+**如实记：一写就绿，没有 RED** —— 规划器层（`shapeGrammar.test.ts` 的反例 + `localPlanner` 的"裸词与问读数不认"）与运行时单元层（`agentRunner.test.ts` 的"认不出 ⇒ `waiting` + 无草稿 + 文档 0 图元"）本来就对，缺的是**这份浏览器判据本身**；把它写成本批"修好了"会是假的。
+
+补的过程里**查实一条待裁决**：`waiting` 经 `failPendingReply({code:"needs_more_information"})` 收尾（`agentRunner.ts:801`），而 `RunStatus` 的 failure 分支把标签写成"**没有完成**"（`data-status="error"`）—— "我问你一个问题"与"这次没做成"在界面上共用同一个词。判据刻意不钉它。
+
+## 2026-10-10 —— S3.4 解除：题面驱动的棱柱到不了面板，根因是**关系抽取的点名块字母表**（一次真修，不是文档修订）
+
+**症状**：`在三棱柱ABC-A′B′C′中，AA′⊥平面ABC，画出这个三棱柱` 在界面上走得到规划、也走得到暂存，但"确认改动"面板始终不出现 —— `e2e/agent-prism-path.spec.ts` 自 2026-10-07 起以 `test.fixme` 挂着。
+
+**复现（计划 Task 3.4 点名的下一手，一次成功）**：把那份**已知的本地计划**（本地规划器给的信封原样）塞进**真实暂存路径**（`draftStore.stage`，见证搜索开），确定性拿到 `compile_failed` + `relation_not_satisfied @ envelope.relations` + 一条 `allowedChanges: ["envelope.relations"]` 的修复请求 —— 与浏览器里那句读数**逐字相同**。本地计划本身是干净的（六点互不重合），所以问题在**核验**这一侧。
+
+**根因**：`relationExtraction.ts` 的"点名块"字母表是 `[A-Z][A-Z0-9]*`，**`′` 不在其中** ⇒ `AA′` 被切成 `AA` ⇒ 读成**自己到自己**的退化线段 ⇒ `AA′ ⊥ 平面ABC` 的 targets 成了 `v0,v0,…`、残差算不出来 ⇒ `planCompiler` 判 `relation_not_satisfied`（一次**失败**，不是"未核验"）⇒ 编译失败 ⇒ 协调器把那唯一一次修复交给模型 —— 可这条关系是**系统从原话抽出来的**，`envelope.relations` 只是投影 ⇒ 模型根本改不动 ⇒ `run_failed` ⇒ 面板永不出现。**上一轮"卡在计划 → 面板之间"的定位，到此收到具体一行代码。** 另外记一条：设计 §5 的 R2 出口原本规定"不支持的题面稳定产出 `unverified_instance`"，而实测是**硬失败并吃掉唯一一次修复** —— 两者不是同一种对待，这次修完才与出口一致。
+
+**修法（一处，最小）**：抽取器的点名块与拆分改为复用 **S1 的唯一定义**（`pointNames.ts` 的 `POINT_NAME_SUFFIXES` + `splitPointNames`），四处写死的 `[A-Z][A-Z0-9]*`（点名块 / 两种中点句型 / `平面` 前缀）**并到同一份**。**数字仍留在块里**：`A1B1` 这类 ASCII 下标必须整块交给 `splitPointNames` 否掉 —— 块一旦在数字处断开，`AA1` 会被读成 `AA`（同一个退化线段），"读不出"就被悄悄升级成"读成了一个错的"。这正是本仓第 N 次"同一个判断写在两处就必然分叉"的现场（S1 已经把另外三处并掉了，抽取器是漏掉的第四处）。
+
+**红→绿（三处都看过红，不是"写完再补测"）**：
+- `relationExtraction.test.ts`：带撇线段 `AA′` ⇒ targets `v0,v3,…`（**修前 `v0,v0,…`**）；带撇平面 `平面A′B′C′` ⇒ 仍是面（**修前被读成 1 个点**）；`A1B1` 仍读不出（S1 契约的诚实性护栏）。
+- `diagramDraftStage.test.ts`：同一句题面走**真实暂存路径**（临时 stash 掉源码改动验证过 RED）⇒ **修前逐字复现** `compile_failed` + `relation_not_satisfied` + 那条改不动的修复请求；修后 `ok` 且 `diagramVerification.status = passed`。
+- `e2e/agent-prism-path.spec.ts`：`test.fixme` 转正 ⇒ **1 passed（18.2 s）**，面板 `题设核验 = passed`、提交后浏览器里**自算**的几何判据（三条侧棱彼此相等、每条都与底面法向平行）全过。
+
+**读数（本批实测）**：全库非 Lean **337 文件 / 3968 通过 + 1 todo / 0 失败**（exit 0）；**全量 e2e 213 通过 / 0 失败**（2.5 m —— fixme 转正之后不再有 skipped）；`typecheck` exit 0；`lint` 0 error / 13 warning（基线）；关旗逐字不变契约 `planCompiler.offPath.golden` 仍 **13/13**；相关 e2e（`agent-solid-family-path` / `agent-derived-sphere` / `agent-round-frustum` / `next-phase-flag-entry`）**9 passed**。
+
+**仍未做**：斜棱柱（要"环外点名顶点"概念）、菱形底面、S6 收口、`freeApexIntentFor` 窄正则退役；画布顶点标签与 `vertexNames` 错位、球"存在但主张不成立"的状态词表仍待裁决。**本次不宣称 S3 整块收口** —— 解开的只是 Task 3.4 那一格。
+
+## 2026-10-09 —— 进度文档现时口径复核（仅文档，不是新增功能）
+
+对照 `04bfed9` 所含的现时摘要、S3.4 阻塞记录与已跟踪的入口/浏览器用例，修正当前状态 §四 F、分块追踪、功能目录、README、发布门禁及记分卡的旧快照语句。S1/S2 已落地，S4/S5 有受限浏览器证据，S6 部分入口已接；但 S3.4 题面驱动棱柱浏览器正例仍因运行时校验拒绝而阻塞，S6 未收口，V0 教师/学生目视走查、自动 Lean 与真实 provider 作图质量未完成。旧研究快照及下列 RED→GREEN 数字不改写；本次没有新产品代码、没有宣称新门禁读数。
+
 ## 2026-10-07 —— 立体图形扩宽 S1–S3：点名语法收口 → 形状数据化 → 直棱柱走通
 
 用户裁决"要能处理大部分形状"后的前三块。设计 [`2026-10-06-solid-shape-coverage-design.md`](superpowers/specs/2026-10-06-solid-shape-coverage-design.md)，

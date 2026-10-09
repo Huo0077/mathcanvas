@@ -957,7 +957,7 @@ export type DragSolveResult =
 > **回退用例齐、浏览器用例一个都没有**；而 `openProblemCompiler` / `proofExport` 是**占位**
 > （零读取点），给它们补浏览器用例是没有意义的 —— 所以那两格记"不适用"，而不是补一堆空测试。
 > 另外顺手查出两处依赖归位问题（`@vitejs/plugin-react` 在 `apps/web` 的 `dependencies`、
-> 根 `package.json` 多余 `three`），**未修**（动依赖要单独一批验证）。
+> 根 `package.json` 多余 `three`），~~**未修**（动依赖要单独一批验证）~~ **（2026-10-10 更正：两处已于 2026-10-07 修掉 —— `@vitejs/plugin-react` 移进 `apps/web` 的 `devDependencies`、根 `package.json` 多余的 `three` 删除；lock 只多出 `"dev": true` 翻转、**未增删任何包**。详见 `docs/acceptance/next-phase-flag-and-dependency-review.md` §五）**。
 >
 > **还没做的（本阶段剩下的全部）：** 第 2 条三个已实现开关的浏览器用例（`constrainedDrag` 还卡在
 > "没有产品入口能打开它"）；第 3 条进度文档与发布门禁的统一回填（`agent-release-gate.md`、
