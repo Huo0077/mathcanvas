@@ -1064,3 +1064,43 @@ describe("V0d: the agent can create a function graph", () => {
     expect(compiled.draftDocument).toBeNull()
   })
 })
+
+/**
+ * **`spatialPointConditions` 是承重的**（S6.2 评估"窄正则退役"时量出来的）。
+ *
+ * 选项开着时，解析器才把题面里**写死的坐标**与**空间条件**（"在底面上面"）当题设看。
+ * 实测（本批逐句量过，两侧都会变，方向相反）：
+ *
+ * | 题面写法 | 默认 | 带选项 |
+ * | --- | --- | --- |
+ * | `A=(0,0,0)` / `D=(0,0,2)`（等号坐标） | `unverified_instance` | **`verified_instance`** |
+ * | `自由点D在底面ABC上方` / `D(0,0,2)`（无等号） | **`verified_instance`** ⚠ | `unverified_instance` |
+ *
+ * 读法：**左列两种"通过"与两次"未核验"都不是无所谓**。丢了选项，写死的坐标**进不了图**
+ * （题面说了 A 在原点，图上却不是），而"在底面上方"与没带等号的坐标会**静默通过** ——
+ * 前者是"核验过了 ≠ 图上是什么"，后者正是本仓最忌的静默放宽。这就是 V0a 那条窄正则
+ * **不能盲删**的理由：把 `spatialPointConditions: true` 传下来是它契约的一部分。
+ * 谁要让形状族接管那族句子，必须先接管这件事。
+ */
+describe("空间点条件：这个开关是承重的（不是可选项）", () => {
+  it("等号坐标：只有打开选项才会被当成题设（默认进不了图）", () => {
+    const baseCoordinate = "在三棱锥D-ABC中，A=(0,0,0)，AD⊥平面ABC，自由点D，画示意图"
+    const apexCoordinate = "在三棱锥D-ABC中，D=(0,0,2)，AD⊥平面ABC，自由点D，画示意图"
+
+    expect(searchWitnessForPrompt(baseCoordinate).status).toBe("unverified_instance")
+    expect(searchWitnessForPrompt(baseCoordinate, { spatialPointConditions: true }).status).toBe("verified_instance")
+    expect(searchWitnessForPrompt(apexCoordinate).status).toBe("unverified_instance")
+    expect(searchWitnessForPrompt(apexCoordinate, { spatialPointConditions: true }).status).toBe("verified_instance")
+  })
+
+  it("空间条件与无等号坐标：默认会**静默通过**，打开选项才如实报未核验", () => {
+    const above = "在三棱锥D-ABC中，AD⊥平面ABC，自由点D在底面ABC上方，画示意图"
+    const bareCoordinate = "在三棱锥D-ABC中，D(0,0,2)，AD⊥平面ABC，自由点D，画示意图"
+
+    // ⚠ 左列这两个 `verified_instance` **就是被钉住的陷阱**，不是"正确行为"的背书。
+    expect(searchWitnessForPrompt(above).status, "空间条件被静默忽略").toBe("verified_instance")
+    expect(searchWitnessForPrompt(above, { spatialPointConditions: true }).status).toBe("unverified_instance")
+    expect(searchWitnessForPrompt(bareCoordinate).status, "无等号坐标被静默忽略").toBe("verified_instance")
+    expect(searchWitnessForPrompt(bareCoordinate, { spatialPointConditions: true }).status).toBe("unverified_instance")
+  })
+})

@@ -211,12 +211,26 @@
   - **仍未做**：接进 `localPlanner`（规划器仍走既有夹具）；"底面是菱形、侧棱垂直底面的四棱柱"这类**无点名表**的说法仍走既有夹具。
 - [x] **Task 6.2 `localPlanner.freeApexIntentFor` 的窄正则退役，改调 `shapeGrammar`**（2026-10-07 **离线入口那一半完成**）：`planCompiler.witnessSearchInput`（**救援路径与离线入口共用**）改为先问 `specForPrompt`，认得出形状从句时族与 spec 都由入口语法给；认不出时退回原正则（行为逐字不变）。兜底也认 `棱台` ⇒ 报 `frustum`，于是读不出的台体题面得到的是**台体自己的**理由。端到端：`在四棱台ABCD-A′B′C′D′中，AB⊥AD` ⇒ `searchWitnessForPrompt` ⇒ `verified_instance`；变异（恢复成只用正则）⇒ 该用例红。
   - **界面路径（2026-10-07 完成，S6.3）**：`localPlanner` 新增意图 `solidShapeIntentFor`（挂既有实验开关，**关着一律不认**），放在**精确夹具之后**（夹具优先；棱柱的宽松夹具因此仍接走所有棱柱题面）并**避开 V0a 的地盘（整个三棱锥族）** —— 后者是被 V0a 两条既有用例逼出来的：最初的兜底把 V0a 刻意拒绝的自由点/空间条件题面也画了，那是行为变更。产出真的 `solid.create_polyhedron`；`localPlanner.test.ts` 57/57（+5），变异（短路兜底）⇒ 用例红。
-  - **仍未做**：`freeApexIntentFor` 那条窄正则的退役（今天两条路并存，各有各的地盘）。**"问路的浏览器判据"已于 2026-10-10 补上**（`e2e/agent-unreadable-prompt.spec.ts`，S6.3）。
+  - **`freeApexIntentFor` 窄正则的去留：2026-10-10 评估后决定"保留"，理由与证据如下（不是漏做）。**
+    当时用探针把 V0a 那族句子逐条喂给**两条路**，量出关键差别：那条窄正则的契约里有一件**不能丢**的事 —— 它必须把 `spatialPointConditions: true` 传下去。实测（两侧都会变，方向相反）：
+
+    | 题面写法 | 见证搜索（默认） | 带 `spatialPointConditions` |
+    | --- | --- | --- |
+    | `A=(0,0,0)` / `D=(0,0,2)`（等号坐标） | `unverified_instance` | **`verified_instance`** |
+    | `自由点D在底面ABC上方` / `D(0,0,2)`（无等号） | **`verified_instance`** ⚠ | `unverified_instance` |
+
+    读法：丢了选项，写死的坐标**进不了图**（题面说 A 在原点、图上不是），而"在底面上方"会**静默通过** —— 前者是"核验过了 ≠ 图上是什么"，后者正是本仓最忌的静默放宽。而 `solidShapeIntentFor` 那一层**刻意避开整个三棱锥族**（`V0A_TERRITORY`，见 S6.3），两条路各有各的契约与拒绝口径。**所以"退役"要做的不是删 35 行，而是把 V0a 的契约整体搬进形状族**（含这条选项、含那套刻意拒绝、还要改 V0a 的单元与 e2e），风险落在**一个实验开关后的既有能力**上，收益只是删掉一段并不重复的代码。**决定：保留，并把承重性钉住** —— 新增两条判据在 `packages/agent-core/src/planCompiler.test.ts`（"空间点条件：这个开关是承重的"），把上表两个方向都钉成永久读数；谁以后要接管这件事，这两条会先红。**"问路的浏览器判据"已于 2026-10-10 补上**（`e2e/agent-unreadable-prompt.spec.ts`，S6.3）。
 - [x] **Task 6.3 反例**（**2026-10-10 完成**）：分析题 / 非立体题 / 说法对不上的题 ⇒ 问路，**不产出草稿、不占撤销历史**。新增 `e2e/agent-unreadable-prompt.spec.ts`（三类各一条，**3/3**）：确认面板不出现；运行状态卡落定且对用户有话说；草稿键 `mathcanvas:draft:geometry3d` 前后**逐字相同**；回画布后对象列表为空且「撤销」仍禁用。
   - **如实记：这三条一写就绿，不是修了一个坏行为。** 规划器层（`shapeGrammar.test.ts` 那批反例 + `localPlanner` 的"裸词与问读数不认"）与运行时单元层（`agentRunner.test.ts` 的"认不出 ⇒ `waiting` + 无草稿 + 文档 0 图元"）本来就已经是对的；本批补的是 **S6 出口点名要的那份浏览器判据**本身。
   - **一条待裁决（本批查实，未改）**：`waiting` 这一支经 `failPendingReply({code:"needs_more_information"})` 收尾 ⇒ 状态卡标签显示**"没有完成"**（`data-status="error"`）。"我问你一个问题"与"这次没做成"在界面上是同一个词；判据**刻意不钉**这个标签（钉死文案会造出"一改措辞就红"的假门禁）。
-- [ ] **Task 6.4 浏览器正例**：读真实落盘坐标独立回代题设（每族至少一条）
-- [ ] **Task 6.5 收口**：全库 + e2e + 变异 + 文档 + commit/push
+- [x] **Task 6.4 浏览器正例**（**2026-10-10 核实完成**）：出口要的是"读真实落盘坐标独立回代题设（每族至少一条）"，逐族对账如下（每条都是**测试自己从落盘坐标算**，不读面板结论）：
+  - **棱锥**：`e2e/agent-solid-family-path.spec.ts` 的五棱锥那条（五点为共面底面 + `PA ⊥ 底面`）；
+  - **棱柱**：`e2e/agent-prism-path.spec.ts`（三条侧棱彼此相等且都与底面法向平行）、`agent-oblique-prism-from-sentence.spec.ts`（斜棱柱：三条侧棱同一条向量且不平行法向）、`agent-rhombus-base.spec.ts`（底面四边两两相等且不是正方形）；
+  - **棱台**：`e2e/agent-solid-family-path.spec.ts` 的台体那条（顶棱 = 底棱 × 同一比例且 < 1）；
+  - **球**：`e2e/agent-derived-sphere.spec.ts`（球心到五个顶点等距且等于半径；**并在本批补上"拖宿主 ⇒ 球跟着重算"**，见 S5）。
+  四族各有至少一条，且都是"落盘坐标 → 测试自己算"的写法。
+- [x] **Task 6.5 收口**（2026-10-10 完成）：本区块的定向 + 全库非 Lean + `typecheck` + `lint` + 全量 e2e 当次读数见本块提交的 CHANGELOG；文档四处同步（`current-status` / `agent-next-round-progress` / `feature-catalog` / `project-progress`）与计划勾选一并落地；单独 commit + push 后以 `git ls-remote origin refs/heads/main` 与本地 HEAD 当场比对一致。
+  - **⚠ S6 整块"出口"另有一条要分开看**："`shapeGrammar` 覆盖四族的常见自然语言说法"——四族（棱锥/棱柱/棱台 + 球的派生关系）的正例都在，但**"常见说法"的覆盖度没有穷尽口径**（例如无点名表的说法仍走夹具、`球` 的关系仍有意不认）。这一点按设计 §6 的纪律**如实留着**：认不出就问路。
 
 ---
 
