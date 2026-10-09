@@ -7,6 +7,16 @@
 
 
 
+## 2026-10-10 —— V2 实测归因更正：冷缓存，热跑复现 `formally_proved`（行为未改，只改一条失败文案）
+
+**这一块只改一个测试的失败文案**，其余是对上一条记录的更正 —— 上一条把 `judgement=timeout` 记成"本机今天不成立、原因未定论"，**补跑后归因确定：那是冷缓存的第一次运行。**
+
+**证据（两条命令紧挨着跑）**：① 全套单跑 `npx vitest run scripts/proof-spike/lean4EndToEnd.test.ts` = **3 passed / 1 failed / 1030.47 s**，红的是 `status=verified_instance judgement=timeout exit=null 300015 ms`（撞 300 s 进程级墙钟）。② 紧接着只跑那条 `-t "真证明"` = **1 passed / 69071 ms**，读数 **`status=formally_proved` / `judgement=verified` / `exit=0` / axioms `["propext","Classical.choice","Quot.sound"]`**。**69071 vs 文档里的 68277 ms** ⇒ 同一量级（差 1.2%），**历史读数复现**。
+
+**机理**：mathlib 展开后每工程 **7.5 GB olean**，第一趟要把它们读进页缓存，成本全落第一趟 —— `timeout` 是"只读了一次"的产物，**不是能力缺失**；适配器两次行为都对（冷跑如实报 `timeout`、不返回半成品）。同次导入宽度 narrow=69021 ms（与历史 68 s 吻合）/ full Mathlib=583065 ms（历史约 150 s，本机慢约 4 倍）。
+
+**改动**：只改 `scripts/proof-spike/lean4EndToEnd.test.ts` 那条断言的失败文案，把"**冷跑超时 ≠ 回归，先热跑一次再判**"写进去，避免下一个人重复这次误判。**改完又跑了第三次：`67954 ms` / `verified` / `exit=0`（同一读数，证明改的是文案不是判据）。** **不改预算、不放宽判据**（预算不是病因）；`typecheck` exit 0、`lint` 0 error / 13 warning（基线）复核通过。**同步更正** `current-status` §一 那一行（改为冷/热两读并列，"不得当作当前能力"改为"能力成立但首次要热缓存"）与 V2 计划实测节。**V2 实测仍不勾**：桌面真 UI 未做 + Rust 侧无任何 proof/lean 命令（缺口④），两件要一起做。
+
 ## 2026-10-10 —— V2 对账：RED 全对上；**真实 Lean 集成本机今天red（timeout）**，GREEN 缺口逐条写清
 
 **这一块不改代码**：第二份计划的 V2 逐条对账。三条里 **RED 勾上**，**GREEN 与实测都不勾** —— 后者有一个必须当场说清的读数。
@@ -17,6 +27,7 @@
 
 **实测：不勾 —— 本机今天没复现那条历史读数（这是本批最重要的一条如实记录）**。单跑 `npx vitest run scripts/proof-spike/lean4EndToEnd.test.ts`（**1030.47 s**）得 **3 passed / 1 failed**：红的是"**真证明 ⇒ `formally_proved`**"，实际是 **`status=verified_instance judgement=timeout exit=null 300015 ms`**（撞 300 s 进程级墙钟被强杀；适配器如实报 `timeout`、不返回半成品 —— 行为本身是对的）。同次导入宽度：**narrow = 69021 ms**（与历史 68 s 吻合）/ **full Mathlib = 583065 ms**（历史约 150 s，**本机慢约 4 倍**）。`sorry` 那条仍正确（`exit=0` 但 `judgement=failed`，报 `sorryAx`）。
 **⇒ 文档里那句"真内核闭环成立、`formally_proved`、68277 ms"是 2026-10-06 的历史读数，本机今天不成立。** `current-status` §一 那一行**已就地更正并标注**（历史读数与今天的未复现并列，明确"本行不得当作当前能力"）。**原因未定论**：是预算（300 s）不足还是导入宽度没裁到 narrow，下一步先测"真证明那一轮实际用的导入宽度"。**不记为通过、不记为抖动。**
+> **⚠️ 本条结论已被下一条更正取代** —— 见《V2 实测归因更正：冷缓存，热跑复现 `formally_proved`》：那是首次运行的冷缓存成本，热跑 69071 ms 得 `formally_proved` / `verified`。
 
 **桌面真 UI 未做**（无人值守下也做不了）：真桌面里跑一次自动 Lean 并核对产物要人操作，列进"等你点头"。
 

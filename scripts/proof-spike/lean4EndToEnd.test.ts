@@ -124,7 +124,20 @@ describe("真实 Lean 端到端（显式 gated）", () => {
     console.log(`E2E axioms: ${JSON.stringify(outcome.judgement.axioms)}`)
     console.log(`E2E statement:\n${outcome.statement}`)
 
-    expect(outcome.judgement.status, `判定不是 verified：${outcome.judgement.detail}`).toBe("verified")
+    expect(
+      outcome.judgement.status,
+      `判定不是 verified：${outcome.judgement.detail}` +
+        /**
+         * **超时这一支要自己解释"冷"与"真的慢"的区别**（2026-10-10 实测）：
+         * 同一棵树、同一条命题 —— **冷缓存的第一次跑**撞上 300 s 墙钟被杀（实测 300015 ms），
+         * 紧接着**热跑**只用 **69071 ms** 就 `verified`（与历史 68277 ms 吻合）。
+         * mathlib 展开后每工程 7.5 GB，第一次要把那些 olean 从磁盘读进页缓存，成本全在这一趟。
+         * **所以红一次不要急着改预算或改判据**：再跑一次就能把两者分开 —— 这条提示就是为此写的。
+         */
+        (outcome.judgement.status === "timeout"
+          ? "（**本机实测**：冷缓存的第一次跑会超预算 —— 冷跑 300015 ms 被杀、随后热跑 69071 ms 通过。**再跑一次**即可区分「冷」与「真的慢」；不要因此调预算或放宽判据。）"
+          : "")
+    ).toBe("verified")
     expect(outcome.status).toBe("formally_proved")
     expect(outcome.verification.artifact?.backend.name).toBe("lean4")
     // 真证明依赖的公理必须**全部**在白名单里（否则判据层会把它拒掉，这里就看不到 verified）。

@@ -10,6 +10,20 @@
 
 > 下方 2026-09-22 的"最后更新 / 当前阶段 / 总体状态"三行保留为**当时快照**，不再维护。
 
+## 2026-10-10 —— V2 实测归因更正：那是**冷缓存**，热跑复现 `formally_proved`（**不改行为，只改一条失败文案**）
+
+**被推翻的是我自己上一节的结论。** 上一节把 `judgement=timeout` 记成"本机今天不成立、原因未定论"。补跑后归因确定：**那是冷缓存的第一次运行**。
+
+**证据（两条命令，先后紧挨着跑）**：
+1. 全套单跑 `npx vitest run scripts/proof-spike/lean4EndToEnd.test.ts` = **3 passed / 1 failed / 1030.47 s**，红的那条 `status=verified_instance judgement=timeout exit=null 300015 ms`（撞 300 s 进程级墙钟被强杀）。
+2. 紧接着只跑那一条 `npx vitest run scripts/proof-spike/lean4EndToEnd.test.ts -t "真证明"` = **1 passed / 69071 ms**，读数 **`status=formally_proved` / `judgement=verified` / `exit=0` / axioms `["propext","Classical.choice","Quot.sound"]`**。
+
+**⇒ 与文档里 68277 ms 的历史读数吻合**（69071 vs 68277，差 1.2%，同一量级）。**机理**：mathlib 展开后每工程 **7.5 GB olean**，第一趟要把它们读进页缓存，成本全落第一趟；`timeout` 是"只读了一次"的产物，**不是能力缺失**。适配器两次的行为都对（冷跑如实报 `timeout` 而不是返回半成品）。
+
+**改了什么**：只改 `scripts/proof-spike/lean4EndToEnd.test.ts` 里那条断言的失败文案，把"**冷跑超时 ≠ 回归，先热跑一次再判**"写进去，避免下一个人重复这次误判。**改完又跑第三次 `-t "真证明"`：`1 passed` / `67954 ms` / `verified` / `exit=0`** —— 证明改的是文案不是判据。**不改预算、不放宽判据** —— 预算不是病因，调大它只会掩盖冷启动成本。`npm run typecheck` exit 0、`npm run lint` 0 error / 13 warning（基线）复核过。
+
+**同步更正处**：`current-status` §一 那一行（改成冷/热两读并列，删掉"不得当作当前能力"，改为"能力成立但首次要热缓存"）、V2 计划 实测节（"原因未定论/不复现"作废）。**仍然不勾 V2 实测**：桌面真 UI 未做，且 Rust 侧没有任何 proof/lean 命令（缺口④）—— 这两件要一起做。
+
 ## 2026-10-10 —— V2 对账：RED 全对上；真实 Lean 集成本机今天红（timeout），GREEN 缺口逐条写清
 
 **不改代码**：V2 三条里 **RED 勾上**，**GREEN 与实测都不勾**。
@@ -19,6 +33,7 @@
 **GREEN 部分（四条缺口）**：① 逐类翻译只到一类（只有 `perpendicular` 那条带假设的垂直性引理）；② **前提消解/原题前提桥没有**（今天是一般命题，不是"这道题"）；③ 产品侧自动调用与产物通道没有；④ **受限桌面调用没有 —— Rust 侧一个 proof/lean 命令都没有**（241 个 Rust 测试里没有证明相关）。已有那半：报告白名单 + `#print axioms`、目标词表、产物绑定、名单由 passed 记录推导、无工具链 ⇒ gated 跳过、`proofExport` 默认 false。**"默认启用前"的审查记录很详细，但里面自己写着"强沙箱下的证明运行未测"。**
 
 **实测不勾 —— 本批最重要的一条如实记录**：单跑 `lean4EndToEnd.test.ts`（**1030.47 s**）**3 passed / 1 failed**，红的是"真证明 ⇒ `formally_proved`"：实际 **`judgement=timeout`（300015 ms 撞墙钟被杀，如实报 timeout）**；同次 **narrow=69021 ms / full=583065 ms**（narrow 与历史吻合、full 慢约 4 倍）。`sorry` 那条仍正确。**⇒ 文档里"真内核闭环成立 / `formally_proved` / 68277 ms"是 2026-10-06 的历史读数，本机今天不成立**；`current-status` §一 那一行已就地更正并标注"不得当作当前能力"。原因未定论（预算 vs 导入裁剪），下一步先测真证明那轮用的导入宽度。**不记为通过、不记为抖动。桌面真 UI 未做（要人操作）。**
+> **⚠️ 本节结论已被推翻 —— 见上一节《V2 实测归因更正》：那是冷缓存，热跑 69071 ms 得 `formally_proved` / `verified`，与历史读数吻合。**
 
 ## 2026-10-10 —— V1 对账：四类题可重复构造/拒绝、拖动不被拖坏、一步撤销（并修正我自己留下的过期摘要）
 
