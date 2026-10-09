@@ -172,7 +172,11 @@
 - [x] **Task 4.2 反例**：上下底对应关系无法确定 ⇒ 拒绝并给 `code`；不许默认"按顺序对应"（2026-10-07 完成）：`constructShapeFromSpec` 的台体分支在**构造之前**逐一核对 `spec.top` 与 `spec.base` —— 点数不同 / 任一位对不上 ⇒ `unsupported-base-shape`；判据用命名约定（`A′` 对应 `A`），与 `withPrimes` **同源**。变异（短路判据）⇒ 两条反例红（没有它就会静默造出错配的图）。
 - [x] **Task 4.3 圆台近似口径**（2026-10-07 完成）：内核 `roundFrustumShape` / `buildSolid("roundFrustum", …)`（**多边形近似**，注册标签"圆台近似"；两个半径相等 ⇒ 拒绝，那是圆柱）+ 文档路径（`roundFrustumPolyhedron` → 既有的 `solid.create_polyhedron`，**不加新图元**）+ 参数化动作 `solid.create_round_frustum`（三处共用同一个形状函数）+ **交给模型**（`spatial-modeling` 的 `actionIds` + 重签哈希 + 运行时清单 10 个）。**"近似"如实声明**：假设里给段数与**弦高误差**、对象标签写"（近似）"。证据：内核 37/37、`localPlanDefaults` 3/3、规划器 58/58、动作 214/214（12 文件）、**浏览器 1/1**。
   - **仍未做**：真实 provider 下的质量基线（模型自己选这三个数选得好不好）—— 需用户批准付费运行。
-- [ ] **Task 4.4 收口**：全库 + e2e + 变异 + 文档 + commit/push
+- [x] **Task 4.4 收口**（2026-10-10 完成）
+  - **出口三条逐条核实**：① **正例成立** —— `constructShapeFromSpec` 的台体正例（`constructors.test.ts`「台体：顶环**逐一对应**底环时构造成功」）与浏览器 `e2e/agent-solid-family-path.spec.ts` 的台体那条（落盘坐标自算顶棱 = 底棱 × 同一比例且小于 1）；② **上下底关系说不清明确拒绝** —— 点数不同、名字对不上两条反例（`constructors.test.ts`）；③ **文档写明圆台是多边形近似** —— `current-status` §一 的 S4 行（"假设里给段数与弦高误差、对象标签写（近似）"）与本批补进的 `feature-catalog`（S4 行现在写明"圆台是内核的多边形近似"）。
+  - **变异（当场做，两个方向都看过）**：短路 `constructShapeFromSpec` 里"上下底**逐一对应**"那条判据 ⇒ **2 条真红**，而且红法是"`expected 'candidate' to be 'rejected'`" —— 也就是**没有这条判据就会静默造出一只张冠李戴的台体**（这正是判据要拦的那种错）。反向编辑还原 ⇒ 复绿。
+  - **定向**：内核构造 43、实体内核 `solid-builders`、搜索 `witnessSearch`、规划器、关旗 golden ⇒ **5 文件 / 194 通过**。
+  - **本块读数**：见本块提交那条 CHANGELOG（全库非 Lean + 全量 e2e + typecheck + lint 的当次数）。
 
 ---
 
