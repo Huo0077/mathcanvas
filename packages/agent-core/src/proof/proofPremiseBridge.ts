@@ -1,0 +1,223 @@
+import type { DiagramObligation, DiagramObligationSet } from "../diagramObligations"
+
+import type { ProofGoalKind } from "./proofGoals"
+
+/**
+ * **前提桥**（V2 GREEN 缺口②的后半）：把"命题要的前提"逐条对照**原题题面**。
+ *
+ * ## 为什么需要它（这条边界原来只写在注释里）
+ *
+ * `lean4Adapter.ts` 的文件头一直写着：**模板里的前提是"模板给的"，不是从题设消解出来的**。
+ * 一句注释解决不了这件事 —— 解决它要**把每一条前提标出来源**，让"哪些来自题面、哪些是系统补的"
+ * 变成机器可查的东西。这一层就是干这个的。
+ *
+ * ## 三类来源，缺一不可
+ *
+ * - **`fromText`**：这条前提**就是题面里的哪一句话**，带 `sourceText`（能指给用户看）；
+ * - **`fromFigure`**：题面**没说**，但由图形自身的构造蕴含（"B、D 都是底面上的顶点" ⇒
+ *   "BD 落在底面内"）。**必须列出来** —— 它确实是系统补的，不许默认掉；
+ * - **`invented`**：既不在题面、也不由图形蕴含 ⇒ **凭空加前提**。
+ *
+ * ## fail-closed 的那一条
+ *
+ * **只要有一条前提是 `invented`，`ok` 就是 `false`** —— 这时不许生成命题，更不许"先证了再说"。
+ * 注意它与"证不出来"是两件不同的事：那是 Lean 跑完之后的结论，这里说的是**我们连命题都还没资格生成**。
+ *
+ * ## 与目标消解的关系（同一个口径）
+ *
+ * 匹配前提时只认**已经分好读法**的题设：`perpendicular` 且点名 ≥5 才是"线⊥面"
+ * （面⊥面是另一个 kind，**不在**这里）。这条口径与 `declaredProofGoalForObligation`、
+ * 与 `diagramVerification` 的 `planeCount` 是同一件事。
+ */
+
+/** 一条点名线（与 `lean4Adapter` 的 `Lean4NamedLine` 结构一致；这里不 import 它，免得多一条依赖）。 */
+export interface BridgedNamedLine {
+  first: string
+  second: string
+}
+
+/** 桥的输入：**已经分类好**的一条目标（形状与 Lean 模板的输入一一对应）。 */
+export type PremiseBridgeGoal =
+  | { goalKind: "perpendicular"; lineA: BridgedNamedLine; planePoints: readonly string[]; lineB: BridgedNamedLine }
+  | { goalKind: "linePlanePerpendicular"; line: BridgedNamedLine; planeLines: readonly [BridgedNamedLine, BridgedNamedLine] }
+
+export interface PremiseFromText {
+  /** 这条前提的读法（例如 `PA ⊥ 平面 ABCD`）—— **按题面那条题设自己的点名生成**，不是按目标的点名。 */
+  premise: string
+  /** 题面里那一句原文（可以指给用户看）。 */
+  sourceText: string
+  obligationKind: string
+}
+
+export interface PremiseFromFigure {
+  premise: string
+  /** 为什么它算"图形蕴含"而不是"凭空编"（写给读日志的人）。 */
+  reason: string
+}
+
+export interface PremiseInvented {
+  premise: string
+  /** 为什么它既不在题面、也不由图形蕴含。 */
+  why: string
+}
+
+export interface PremiseFromDerivation {
+  premise: string
+  /**
+   * **那一步叫什么定理**（必须点名 —— 与 `pythagorean` 的处理同一条纪律：
+   * 推断要出现在证明里、看得见，不许**别名**掉）。
+   */
+  theorem: string
+  /** 那一步的**出发点**（仍然指回题面里的一句话）。 */
+  viaSourceText: string
+}
+
+export interface PremiseBridgeResult {
+  goalKind: ProofGoalKind
+  fromText: PremiseFromText[]
+  /** 题面没**直接**说、但**一步定理**就能接出来的前提（今天只有"线⊥面 ⇒ 线⊥面内任意线"这一条路）。 */
+  fromDerivation: PremiseFromDerivation[]
+  fromFigure: PremiseFromFigure[]
+  invented: PremiseInvented[]
+  /** **每一条前提都指得出出处**才为 `true`（`invented` 非空 ⇒ `false`）。 */
+  ok: boolean
+}
+
+/** 那条一步定理的**名字**（点名的，不是一句"等价"）。 */
+export const PLANE_PERPENDICULAR_PROPERTY_THEOREM = "线面垂直的性质定理（线 ⊥ 面 ⇒ 它 ⊥ 平面内任意一条线）"
+
+/** 两个点名集合是不是同一条线段（**无序**：题面写 `AB`、目标写 `BA` 是同一件事）。 */
+function sameSegment(pair: readonly string[], line: BridgedNamedLine): boolean {
+  const wanted = [line.first, line.second]
+  if (pair.length !== 2) return false
+  return pair.every((name) => wanted.includes(name))
+}
+
+function labelOfSegment(pair: readonly string[]): string {
+  return `${pair[0] ?? "?"}${pair[1] ?? "?"}`
+}
+
+/** 一条"线 ⊥ 平面"题设的读法（点名 = 线 2 个 + 平面 3..6 个）。 */
+function labelOfPlanePerpendicular(given: DiagramObligation): string {
+  return `${labelOfSegment(given.targets.slice(0, 2))} ⊥ 平面 ${given.targets.slice(2).join("")}`
+}
+
+/** 题面里所有被点名过的点（用来判断"图形蕴含"与"凭空编"）。 */
+function knownPoints(set: DiagramObligationSet, goal: PremiseBridgeGoal): Set<string> {
+  const names = new Set<string>()
+  for (const given of set.givens) for (const name of given.targets) names.add(name)
+  for (const goalText of set.goals) for (const name of goalText.match(/[A-Z][A-Z0-9′'₁₂₃₄₅₆]*/g) ?? []) names.add(name)
+  if (goal.goalKind === "perpendicular") {
+    for (const name of [goal.lineA.first, goal.lineA.second, goal.lineB.first, goal.lineB.second, ...goal.planePoints]) names.add(name)
+  } else {
+    for (const name of [goal.line.first, goal.line.second, ...goal.planeLines.flatMap((line) => [line.first, line.second])]) names.add(name)
+  }
+  return names
+}
+
+/**
+ * **把一条目标的前提逐条对照题面**（这是这一层的唯一入口）。
+ *
+ * 不认识的目标类 ⇒ 抛：桥**没有**"默认放行"这一支（那等于把 fail-closed 变成 fail-open）。
+ */
+export function bridgeProofPremises(goal: PremiseBridgeGoal, set: DiagramObligationSet): PremiseBridgeResult {
+  if (goal.goalKind === "linePlanePerpendicular") return bridgeLinePlane(goal, set)
+  if (goal.goalKind === "perpendicular") return bridgePerpendicular(goal, set)
+  throw new Error(`前提桥今天只覆盖 \`perpendicular\` 与 \`linePlanePerpendicular\` 两类目标，收到「${String((goal as { goalKind: string }).goalKind)}」—— 表外目标不许默认放行。`)
+}
+
+/** 判定定理：两个前提都是"那条线 ⊥ 平面内的一条线"；先找**直接给的**，再找**一步导出的**。 */
+function bridgeLinePlane(goal: Extract<PremiseBridgeGoal, { goalKind: "linePlanePerpendicular" }>, set: DiagramObligationSet): PremiseBridgeResult {
+  const premises = [goal.planeLines[0], goal.planeLines[1]]
+  const fromText: PremiseFromText[] = []
+  const fromDerivation: PremiseFromDerivation[] = []
+  const invented: PremiseInvented[] = []
+
+  /**
+   * **一步定理**：题面给的是"那条线 ⊥ **整个平面**"时，"它 ⊥ 平面内任意一条线"是**性质定理**那一步。
+   * 这条与 `lean4Adapter` 的第一个目标类（`perpendicular`）**是同一个定理** ——
+   * 所以这里不是新发明一条推断，而是把已有那个目标类**当成一步用**。
+   * 只认点名 ≥5 的那种读法（面⊥面是另一个 kind，不算）。
+   */
+  const propertySource = set.givens.find((given) => {
+    if (given.kind !== "perpendicular" || given.targets.length < 5) return false
+    return sameSegment(given.targets.slice(0, 2), goal.line)
+  })
+  const propertyPlaneNames = propertySource === undefined ? [] : propertySource.targets.slice(2)
+
+  for (const planeLine of premises) {
+    const hit = set.givens.find((given) => {
+      if (given.kind !== "perpendicular" || given.targets.length !== 4) return false
+      const first = given.targets.slice(0, 2)
+      const second = given.targets.slice(2)
+      // **方向可以反过来**：题面写 `AB ⊥ PA`、目标写 `PA ⊥ AB` 是同一件事。
+      return (sameSegment(first, goal.line) && sameSegment(second, planeLine)) || (sameSegment(first, planeLine) && sameSegment(second, goal.line))
+    })
+
+    if (hit !== undefined) {
+      fromText.push({ premise: `${labelOfSegment(hit.targets.slice(0, 2))} ⊥ ${labelOfSegment(hit.targets.slice(2))}`, sourceText: hit.sourceText, obligationKind: hit.kind })
+      continue
+    }
+
+    // 直接给的没找到 ⇒ 看能不能由"线 ⊥ 整个平面"那一步接出来（平面里必须**真的**有这两条线的端点）。
+    const derivable = propertySource !== undefined && [planeLine.first, planeLine.second].every((point) => propertyPlaneNames.includes(point))
+    if (derivable) {
+      fromDerivation.push({
+        premise: `${labelOfSegment([goal.line.first, goal.line.second])} ⊥ ${labelOfSegment([planeLine.first, planeLine.second])}`,
+        theorem: PLANE_PERPENDICULAR_PROPERTY_THEOREM,
+        viaSourceText: propertySource!.sourceText
+      })
+      continue
+    }
+
+    invented.push({
+      premise: `${labelOfSegment([goal.line.first, goal.line.second])} ⊥ ${labelOfSegment([planeLine.first, planeLine.second])}`,
+      why: "题面里没有这一条垂直，也不能由「线 ⊥ 面」那一步接出来（判定定理的两个前提必须**有着落**：要么题面直接给，要么由那个平面上的题设一步导出）。"
+    })
+  }
+
+  return { goalKind: goal.goalKind, fromText, fromDerivation, fromFigure: [], invented, ok: invented.length === 0 }
+}
+
+/** 性质定理：前提一是"线 ⊥ 面"（要在题面里找得到），前提二是"目标线落在那个平面内"（题面一般不会写）。 */
+function bridgePerpendicular(goal: Extract<PremiseBridgeGoal, { goalKind: "perpendicular" }>, set: DiagramObligationSet): PremiseBridgeResult {
+  const fromText: PremiseFromText[] = []
+  const fromFigure: PremiseFromFigure[] = []
+  const invented: PremiseInvented[] = []
+  const known = knownPoints(set, goal)
+
+  // 前提一：线 ⊥ 面 —— 只认"线 ⊥ 面"那一种读法（`perpendicular` 且点名 ≥ 5）。
+  const planeGiven = set.givens.find((given) => {
+    if (given.kind !== "perpendicular" || given.targets.length < 5) return false
+    if (!sameSegment(given.targets.slice(0, 2), goal.lineA)) return false
+    const planeNames = given.targets.slice(2)
+    return goal.planePoints.length >= 3 && goal.planePoints.every((point) => planeNames.includes(point))
+  })
+
+  if (planeGiven !== undefined) {
+    fromText.push({ premise: labelOfPlanePerpendicular(planeGiven), sourceText: planeGiven.sourceText, obligationKind: planeGiven.kind })
+  } else {
+    invented.push({
+      premise: `${labelOfSegment([goal.lineA.first, goal.lineA.second])} ⊥ 平面 ${goal.planePoints.join("")}`,
+      why: "题面里没有这条「线 ⊥ 面」的题设，而它是这条性质定理**唯一**的前提 —— 系统不许替题面补一条。"
+    })
+  }
+
+  // 前提二：目标线的两个端点都落在那个平面上。题面**通常不会**单独写这句话（它是图形结构）。
+  const planeNames = planeGiven === undefined ? [...goal.planePoints] : planeGiven.targets.slice(2)
+  const endpoints = [goal.lineB.first, goal.lineB.second]
+  const label = `${labelOfSegment(endpoints)} 落在平面 ${planeNames.join("")} 内`
+  if (endpoints.every((point) => planeNames.includes(point))) {
+    // 两个端点都在平面点名里 ⇒ 这条其实是**题面点名结构**直接给的（例如平面四点环）。
+    fromFigure.push({ premise: label, reason: "两个端点都出现在题面给的平面点表里，所以「落在这个平面上」是点名结构直接蕴含的（题面没有再说一遍）。" })
+  } else if (endpoints.every((point) => known.has(point))) {
+    fromFigure.push({
+      premise: label,
+      reason: "题面没有单独说这句话；它由图形自身的构造蕴含（这些点都是题面点名造出来的顶点）。**这是系统补的前提，必须如实列出来。**"
+    })
+  } else {
+    invented.push({ premise: label, why: "有端点根本不在题面点名的点集里 —— 那说明这条线的位置是凭空来的。" })
+  }
+
+  return { goalKind: goal.goalKind, fromText, fromDerivation: [], fromFigure, invented, ok: invented.length === 0 }
+}

@@ -34,6 +34,11 @@ export * from "./proof/proofArtifact"
 export * from "./proof/proofBackendReview"
 export * from "./proof/proofGoals"
 /**
+ * **前提桥**（V2 GREEN 缺口②的后半）：把"命题要的前提"逐条对照原题题面，
+ * 分成「题面给的 / 图形蕴含的 / 凭空编的」三类；有第三类就不许往下走。
+ */
+export * from "./proof/proofPremiseBridge"
+/**
  * **Lean 4 适配器**（N5b）。桶导出是**必须**的：`WIRED_PROOF_BACKENDS` 在 `proofArtifact.ts` 里，
  * 而"接上了谁"与"怎么用它"是同一件事的两半。两个模块都**零 `node:` import**
  *（runner 由调用方注入），所以浏览器打包不会因为这一行而需要 Node 内置模块。
