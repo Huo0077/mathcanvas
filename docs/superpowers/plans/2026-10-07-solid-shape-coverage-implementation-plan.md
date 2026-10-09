@@ -52,9 +52,13 @@
 
 **出口**：带撇/带下标点名在**解析**与**核验**两侧都成立；**现有形状行为逐字不变**；变异（把 `isPointName` 改回 `/^[A-Z]$/`）必定变红。
 
-> **2026-10-10 审查复核（只记事实，不代勾）**：本节 S1 的复选框**落后于仓库实际** —— `packages/geometry-kernel/src/pointNames.ts` 已在，且被 `constructors.ts` / `diagramObligations.ts` / `diagramVerification.ts` 引用（Task 1.1–1.3 的产物在）；"关旗逐字不变"护栏 `planCompiler.offPath.golden.test.ts` 由复核者当次复跑 **13/13 通过**（Task 1.5 的证据）。**Task 1.6「S1 收口」不在复核者手上**，仍开。
+> **2026-10-10 —— S1 已收口（当时的复核注记保留在下面）。** 1.1–1.6 **逐条**核实并勾选：产物在、判据在，且**当场做了变异**（`POINT_NAME_SOURCE` 改回 `[A-Z]` ⇒ 11 条真红、还原 100/100 复绿）。当次读数见 Task 1.6。
+>
+> > **2026-10-10 审查复核（只记事实，不代勾）**：本节 S1 的复选框**落后于仓库实际** —— `packages/geometry-kernel/src/pointNames.ts` 已在，且被 `constructors.ts` / `diagramObligations.ts` / `diagramVerification.ts` 引用（Task 1.1–1.3 的产物在）；"关旗逐字不变"护栏 `planCompiler.offPath.golden.test.ts` 由复核者当次复跑 **13/13 通过**（Task 1.5 的证据）。**Task 1.6「S1 收口」不在复核者手上**，仍开。
 
-- [ ] **Task 1.1 新建点名模块 + 行为 RED**
+- [x] **Task 1.1 新建点名模块 + 行为 RED**（2026-10-10 逐条核实后勾选）
+  - **产物**：`packages/geometry-kernel/src/pointNames.ts` + `pointNames.test.ts` 都在；计划 Step 1 点名的六条断言逐条在位（`pointNames.test.ts:20` `splitPointNames("A′B")`、`:21` `splitPointNames("AA₁")`、`:59` `isPointName("AB") === false`、`:60` `isPointName("A1") === false`，另两条带撇/带下标为真）。
+  - **一处与计划原文不同（后来按用户裁决扩的）**：Step 3 当时写 `"[A-Z](?:[′']|[₁₂₃₄₅₆])?"`（一层后缀），S1.4 用户裁决"扩语法"之后落成 **`{0,2}`**（至多两层，`A′′` 合法、`A′′′` 不算）。
   - 文件：新建 `packages/geometry-kernel/src/pointNames.ts`、新建 `packages/geometry-kernel/src/pointNames.test.ts`
   - Step 1 写失败用例（`pointNames.test.ts`）：
     ```ts
@@ -73,7 +77,8 @@
     Run: 同上 → PASS
   - Step 4 提交：`feat(agent): give point names one definition instead of three`
 
-- [ ] **Task 1.2 解析器改用点名模块**
+- [x] **Task 1.2 解析器改用点名模块**（2026-10-10 逐条核实后勾选）
+  - **判据在位**：`diagramObligations.test.ts:152-199` —— `AA₁⊥平面ABCD` ⇒ 1 条 given（`:159-161`）、`:172` unverified 里不再残留；**反例** `AA1` 写法仍进 `unverified`（`:184-186`）；`AA′` 写法同样 1 条 given（`:197-199`）。
   - 文件：`packages/agent-core/src/diagramObligations.ts`（`names()` / `[A-Z]{2}` 片段）、`packages/agent-core/src/diagramObligations.test.ts`
   - RED 用例（**先写用例，跑出 `givens: []`，再改实现**）：`在三棱柱ABCD-A₁B₁C₁D₁中，AA₁⊥平面ABCD` 必须产出 1 条 given；`AA′` / `AA1` 两种写法各一条
     Run: `npm.cmd exec vitest run -- packages/agent-core/src/diagramObligations.test.ts --reporter=dot`
@@ -81,7 +86,8 @@
   - GREEN 后补**反例**：`isPointName("A1") === false` 那类写法仍走 `unverified`，**不许**被凑合解析成 `A₁`
   - 顺带改正 `witnessSearch.ts` 里那句不准确的注释（"经原话解析会压成单个大写字母"）—— 实测是**不匹配**，S3 会动到那个分支
 
-- [ ] **Task 1.3 核验器点名映射改用点名模块**
+- [x] **Task 1.3 核验器点名映射改用点名模块**（2026-10-10 逐条核实后勾选）
+  - **判据在位**：`diagramVerification.test.ts:386`（`AA₁=1` 通过）与 `:392`（`A′B=1` 通过）—— 带下标 / 带撇的点名都能进点名表并逐条核验；映射不上仍返回"没有可靠映射"，没有被顺手放宽。
   - 文件：`packages/agent-core/src/diagramVerification.ts`（`candidatePoints`）、`packages/agent-core/src/diagramVerification.test.ts`
   - RED：带 `A′` 的点名表此前映射不出来（`null` / 未核验），现在必须能映射并逐条核验
   - **不许顺手放宽**：映射不上时仍返回 `null` 表示"没有可靠映射"，与"点名表恰好是空的"保持今天的区分
@@ -93,16 +99,19 @@
   - 落地：`derivedNameCandidates` 在词表内按"先一层、再两层"枚举；比较按 **规范字形**（`′` 与 `'` 归一）；**候选耗尽 ⇒ 明确拒绝**，不再造 `A′2` 这类词表外的名字。
   - 证据：端到端用例（底面自己带撇的棱柱 `A′B′C′-A′′B′′C′′`）`verified_instance`；变异（词表退回一层）⇒ **三层 4 条红**。
 
-- [ ] **Task 1.5 逐字不变 + 定向回归 + 变异**
+- [x] **Task 1.5 逐字不变 + 定向回归 + 变异**（2026-10-10 当场复跑）
+  - **当次定向**：计划点名的七个文件 + `planCompiler.offPath.golden.test.ts` ⇒ **8 文件 / 248 通过 / 0 失败**（8.27 s）。关旗逐字不变契约在这一次里仍在。
+  - **变异（当场做，两个方向都看过）**：把 `POINT_NAME_SOURCE` 改回 `[A-Z]`（**改完仍能解析**，不是解析失败）⇒ **11 条真红**：点名模块 3（按点名切、带撇/下标算点名、两层后缀）+ 解析器 3（下标/撇/平面切分）+ 核验器 3（下标 / 带撇 / 别的动作建的 `O₁`）+ 内核 2（棱柱顶面命名、带撇底面的顶面不撞名）。`git checkout --` 还原 ⇒ **100/100 复绿**，`git status` 干净。
   - 定向（以**当次**实测为准，**不沿用**历史 171 条）：
     `npm.cmd exec vitest run -- packages/geometry-kernel/src/pointNames.test.ts packages/geometry-kernel/src/witness/constructors.test.ts packages/agent-core/src/diagramObligations.test.ts packages/agent-core/src/diagramVerification.test.ts packages/agent-core/src/planCompiler.test.ts apps/web/src/agent/draftStore.test.ts apps/web/src/agent/localPlanner.test.ts --reporter=dot`
   - 关旗逐字不变：`planCompiler.offPath.golden.test.ts` 必须仍逐字节相同
   - 全库非 Lean + `typecheck` + `lint`
   - **变异**：把 `POINT_NAME_SOURCE` 改回 `[A-Z]` ⇒ 带撇/带下标用例必须红；还原后复绿（**破坏性验证要保证改完仍能解析**，否则你看到的红是解析失败而不是判据命中）
 
-- [ ] **Task 1.6 S1 收口**
-  - 同步 `current-status` / `agent-next-round-progress`（S1 勾选与读数）/ `project-progress`（过程与失败尝试）
-  - 单独 commit + push，`git ls-remote origin refs/heads/main` 与本地 HEAD 一致后才写"已上传"
+- [x] **Task 1.6 S1 收口**（2026-10-10 完成）
+  - **当次读数（本块实测，不沿用任何历史数）**：定向 **8 文件 / 248 通过**；全库非 Lean **337 文件 / 3968 通过 + 1 todo / 0 失败**（exit 0，431.94 s）；全量 e2e **216 passed / 0 failed**（2.4 m）；`typecheck` exit 0；`lint` 0 error / 13 warning；关旗逐字不变契约在定向那一次里（13/13）。
+  - **同步**：`current-status`（S1 那一行 + 门禁读数）、`agent-next-round-progress`（S1 措辞）、`project-progress`（本块过程记录）、`feature-catalog`（无变化 —— S1 是接缝，不是新能力）。
+  - **单独 commit + push，并当场以 `git ls-remote origin refs/heads/main` 与本地 HEAD 比对一致**后才写"已上传"（哈希见本块那条 `docs(plan): close S1` 提交）。
 
 ---
 
