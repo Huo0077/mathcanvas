@@ -14,6 +14,25 @@ import { pickRaycastHit3, pickSectionAt, resolveSelectableHit, previewBeatsPick 
 import { sectionUnitNormal } from "./threePrimitives"
 
 /**
+ * **这次按下，这个用户级对象能不能开一次拖动会话**（S5；拖动拾取的过滤与拖动分支**共用这一条口径**）。
+ *
+ * 为什么不能直接用 `isFreeDraggable3`：它回答的是"**自由**拖动能不能动它"。而拖动分支还有**另一条**
+ * 会话 —— **绑定点**沿宿主 / 轨道拖（走参数域那条路，`binding.kind !== "free"`），
+ * `isFreeDraggable3` 对绑定点**说不**，但它确实能拖。
+ *
+ * 本批把它抽出来，是因为"只抓最近命中"曾经让拖动抓错东西：**派生球**包住宿主时，
+ * 用户按在实体上其实按在球上，而球拖不动（球心半径由宿主算出来）。过滤若只认
+ * `isFreeDraggable3`，就会把绑定点一起筛掉 —— 实测打红 `three-orbit-tracks`（拾取落到圆周上：
+ * `data-drag-target` 读作 `line:circle3-1->circle3`）与 `geometry3d-host-drag`。**两条一起认才对。**
+ */
+function canStartDragSession(primitive: PrimitiveSpec | undefined, points: Map<string, Point3Primitive>, generated: Set<string>): boolean {
+  if (primitive === undefined) return false
+  // 点：自由的走"自由拖动"，绑定的走"沿宿主 / 轨道拖" —— 两种都能开拖动会话。
+  if (primitive.type === "point3") return true
+  return isFreeDraggable3(primitive, points, generated)
+}
+
+/**
  * **指针交互**（从 `threeSceneEffect.ts` 里按阶段切出来的第五块，评审方案 2）：按下 / 移动 / 抬起、
  * 自由拖动与旋转环 / 轨道半径手柄的拖拽会话、以及"指针在哪个对象上"的拾取判定。
  *
@@ -170,7 +189,23 @@ function buildHostPointGraph(pointId: string, host: Host3): { graph: reactive.Re
         }
       }
       if (dragModeRef.current && event.button === 0) {
-        const hit = pickRaycastHit3(scene, camera, point, { tolerance: pickTolerance() })
+        /**
+         * **拖动只抓"能拖的那个"**（S5 拖动那一半挖出来的）。
+         *
+         * 不给拾取过滤的话，射线命中的**最近**物体常常是**拖不动**的那一个 —— 最典型的是**派生球**：
+         * 它把宿主整个包住，用户想拖宿主，却永远先按到球（而球是派生量，拖它只会被重算覆盖）。
+         * 症状就是"按在实体上怎么拖都不动"（本仓为此记过三次失败尝试），而它看着像"这一版不支持"。
+         * 过滤按**解析后的用户级对象**判，与下面真正开拖动会话用的是同一条判据（`isFreeDraggable3`）。
+         */
+        const generated = templateTopologyIds(documentRef.current)
+        const hit = pickRaycastHit3(scene, camera, point, {
+          tolerance: pickTolerance(),
+          accept: (primitiveId) => {
+            const resolved = resolveSelectableHit(primitiveId, topologyOwners)
+            const candidate = resolved === null ? undefined : documentRef.current.primitives.find((primitive) => primitive.id === resolved)
+            return canStartDragSession(candidate, points, generated)
+          }
+        })
         const targetId = resolveSelectableHit(hit?.primitiveId ?? null, topologyOwners)
         const target = targetId ? documentRef.current.primitives.find((primitive) => primitive.id === targetId) : undefined
         // 拖动排查用读数：这一次按下到底抓到了什么。

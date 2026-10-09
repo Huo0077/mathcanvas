@@ -220,7 +220,10 @@ export function isFreeDraggable3(primitive: PrimitiveSpec, points: Map<string, P
   if (primitive.type === "point3") return !primitive.binding || primitive.binding.kind === "free"
   if (primitive.type === "cube" || primitive.type === "pyramid" || primitive.type === "cylinder" || primitive.type === "cone") return true
   // 球与模板实体同类：几何是**它自己的**（球心坐标 + 半径），不依赖任何点能不能动。
-  if (primitive.type === "sphere") return true
+  // **但派生球不是**：球心与半径由宿主算出来（`derivedFrom`），拖它只会被下一次重算覆盖 ——
+  // 那是"看起来能拖、其实是假的"。拒绝它，并让拖动拾取顺势抓到底下的宿主
+  // （`threeSceneInteraction` 的拖动分支按"可拖"过滤射线命中）。
+  if (primitive.type === "sphere") return primitive.derivedFrom === undefined
   // 轨道圆与模板实体同类：几何是**它自己的**（圆心坐标 / 半径 / 法向），不依赖任何点能不能动。
   if (primitive.type === "circle3") return true
   if (!["line3", "segment3", "ray3", "plane3", "face3", "polyhedron3", "edge3"].includes(primitive.type)) return false

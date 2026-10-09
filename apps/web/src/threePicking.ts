@@ -32,6 +32,15 @@ export function pointHandleWorldRadius(camera: THREE.PerspectiveCamera, distance
 export interface RaycastPickOptions {
   /** Click tolerance in world units at the picked depth; callers convert from PICK_TOLERANCE_PX. */
   tolerance?: number
+  /**
+   * **这次拾取只接受哪些图元**（可选）。给了它，命中的候选会先按它过滤，再按深度排序。
+   *
+   * 为什么要这一条（S5 拖动那一半挖出来的）：拖动必须抓"**能拖的那个东西**"，而射线命中的
+   * **最近**物体不一定能拖 —— 典型是**派生球**：它把宿主整个包住，用户想拖宿主，射线却永远先命中球，
+   * 而球是派生量（`derivedFrom`，拖它只会被重算覆盖）。不给拖动这条路过滤，用户看到的就是
+   * "按在实体上怎么拖都不动"，本仓为此记过三次失败尝试。
+   */
+  accept?: (primitiveId: string) => boolean
 }
 
 export function pickPrimitiveAt(scene: THREE.Scene, camera: THREE.Camera, normalizedPoint: { x: number; y: number }, options: RaycastPickOptions = {}): string | null {
@@ -70,9 +79,11 @@ export function pickRaycastHit3(scene: THREE.Scene, camera: THREE.Camera, normal
   raycaster.setFromCamera(new THREE.Vector2(normalizedPoint.x * 2 - 1, -(normalizedPoint.y * 2 - 1)), camera)
   scene.updateMatrixWorld(true)
   const intersections = raycaster.intersectObjects(scene.children, true)
+  const accept = options.accept
   const hits = intersections.flatMap((intersection) => {
     const primitiveId = intersection.object.userData.primitiveId
     if (typeof primitiveId !== "string") return []
+    if (accept !== undefined && !accept(primitiveId)) return []
     const kind = pickKind(intersection.object.userData.primitiveType)
     return [{ primitiveId, partId: typeof intersection.object.userData.partId === "string" ? intersection.object.userData.partId : undefined, depth: intersection.distance, worldPoint: { x: intersection.point.x, y: intersection.point.y, z: intersection.point.z }, kind, score: intersection.distance - pickKindAllowance[kind] * tolerance }]
   })

@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test"
 
+import { projectWorldPoint } from "./helpers/projection"
+
 /**
  * **派生球的浏览器证据**（S5；设计 §4.1 的硬约束）。
  *
@@ -117,15 +119,50 @@ test("a named solid's derived circumsphere is created, rendered, and follows its
   await expect.poll(() => page.locator(".algebra-panel .object-row").count()).toBeGreaterThan(0)
 
   /**
-   * ## ③ "宿主一动，球跟着变" —— **本轮没在浏览器里做成，如实记**
+   * ## ③ **宿主一动，球跟着变** —— 本批把它在浏览器里做成了
    *
-   * 试了三次都没让实体动起来：先拖**多面体顶点**（俯角投影后按下拖动 ⇒ 顶点坐标一模一样，
-   * 说明本版应用里多面体的顶点不单独可拖）、再拖**实体本身**（未选中 ⇒ 不动）、
-   * 再"先选中对象行再拖"（仍不动）。**三次都没动，就不写"通过"。**
+   * 上一轮试了三次都没让实体动起来，根因不是"这一版不支持"，而是**两件事叠在一起**（本批用
+   * `data-drag-target` 探针查实）：
    *
-   * 这条性质在**单元层**是有证据的（`derivedSphereRule.test.ts`：移动四面体一个顶点后，
-   * 球心独立解出 `(1,1,2)` 且到四个顶点等距，依赖链 `顶点 → 实体 → 球` 也在用例里钉住）。
-   * 缺的是"这一版界面上怎么把宿主弄动"的操作路径 —— 记为待办，而不是用一条没跑通的断言冒充。
+   * 1. **外接球把宿主整个包住**：射线命中的**最近**物体永远是那只球（探针读数 `solid:sphere-1->sphere`），
+   *    所以按住宿主的位置其实按在球上；
+   * 2. **而那只球是派生量**（`derivedFrom`），几何由宿主算出来 —— 拖它只会被下一次重算覆盖，
+   *    看着就是"怎么拖都不动"。
+   *
+   * 修法两处：`isFreeDraggable3` 不再把**派生球**算作可自由拖动（它本来就不自由，见
+   * `packages/scene-graph/src/transforms.test.ts`）；拖动的拾取按"**可拖**"过滤候选
+   * （`pickRaycastHit3` 的 `accept`），于是射线顺势抓到球底下的宿主。
+   *
+   * 判据自己算，四条：**顶点真的动了**；**只有它动**（拖的是那一个顶点，不是"整只实体悄悄平移"）；
+   * 球**跟着重算**（不再是旧的那一只）；而且它**仍然是新顶点组的外接球** —— 这才是"不是过期数据"。
+   *
+   * 拖**顶点**（而不是实体中点）是刻意的：外接球的顶点本来就在球面上，顶点一动，球心或半径**必须**变，
+   * 于是"有没有重算"这件事在读数上不可含糊。
    */
-  expect(first.solidId).toBe(before.sphere!.solidId)
+  await page.evaluate(() => (document.querySelector('button[aria-label="自动取景"]') as HTMLButtonElement).click())
+  await page.getByRole("button", { name: "自由拖动" }).click()
+  const grab = await projectWorldPoint(page, before.byIndex[0]!)
+  await page.mouse.move(grab.x, grab.y)
+  await page.mouse.down()
+  await page.mouse.move(grab.x + 60, grab.y + 20, { steps: 8 })
+  await page.mouse.up()
+
+  // 等落盘跟上（拖动是异步写的），然后按**最终**读数断言。
+  await expect.poll(async () => {
+    const current = await readDraft(page)
+    return distance(current.byIndex[0]!, before.byIndex[0]!)
+  }, { timeout: 8000, message: "拖动之后宿主顶点没有动 —— 操作路径又断了" }).toBeGreaterThan(0.2)
+
+  const after = await readDraft(page)
+  expect(after.sphere, JSON.stringify(after)).not.toBeNull()
+  for (const [index, vertex] of after.byIndex.entries()) {
+    if (index === 0) continue
+    expect(distance(vertex, before.byIndex[index]!), `顶点 ${index} 不该动 —— 拖的是一个顶点`).toBeLessThan(1e-6)
+  }
+  const sphereMoved = distance(after.sphere!.center, first.center) > 1e-6 || Math.abs(after.sphere!.radius - first.radius) > 1e-6
+  expect(sphereMoved, "宿主顶点动了，球却和拖动前一模一样 ⇒ 没有跟着重算").toBe(true)
+  expect(after.sphere!.radius).toBeGreaterThan(0)
+  // 这才是"不是过期数据"的证据：球是**新顶点组**的外接球（测试自己算，不读面板结论）。
+  for (const vertex of after.byIndex) expect(distance(after.sphere!.center, vertex)).toBeCloseTo(after.sphere!.radius, 6)
+  expect(after.sphere!.solidId).toBe(first.solidId)
 })
