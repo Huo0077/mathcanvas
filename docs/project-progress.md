@@ -10,6 +10,18 @@
 
 > 下方 2026-09-22 的"最后更新 / 当前阶段 / 总体状态"三行保留为**当时快照**，不再维护。
 
+## 2026-10-10 —— V2 GREEN ③ 第二半：web 侧接线（桌面通道 + 不可信 IPC 回包校验）
+
+**这一块加 `apps/web/src/agent/desktopProofChannel.ts`**（+ 7 条用例）：把库里的 `ProofChannel` 端口接到桌面命令上。**接线有了，但没有任何产品流程在跑完作图之后调用它** —— 缺口③只差一个调用点。
+
+**三条边界**：① 浏览器里**不是错误而是状态** —— 没有 `__TAURI_INTERNALS__` 就是浏览器，通道返回 `unavailable` + 人能读的理由，**不抛、不假装**；② **IPC 回包是不可信输入** —— `check_lean_proof` 的返回值逐字段校验（`outcome` 四个词之一、`exitCode` 数字或 `null`、`stdout`/`stderr` 字符串、`durationMs` 有限数字），形状不对一律 `failed` 并**指明哪一栏**不对，**畸形回包绝不许变成"验证通过"**；③ 命令名与参数**逐字固定**（`check_lean_proof` + `{ source, timeoutMs }`），不接受可执行路径、不接受 shell 文本。
+
+**一处分流**：外壳在但 IPC 抛了 ⇒ `failed`（"没调到"，可能是 bug），**不是** `unavailable`（"没配"，是环境）。
+
+**判据**：浏览器里一个 IPC 都不发；桌面里命令名/参数固定且送出去的是模板生成的源码；**9 种畸形回包逐个按失败处理**；形状对的回包逐字段原样交回（判据要看 `#print axioms` 原文）；IPC 抛 ⇒ `rejected` 状态照旧；桌面说"没配" ⇒ 照抄那句话。
+
+**门禁**：`typecheck` exit 0（**又抓到一条 vitest 看不见的错**：测试常量里 `planeLines` 是数组而非元组 ⇒ TS2345，与上一块同型）；`lint` 0 error / 13 warning；targeted 7 passed；全库非 Lean **341 文件 / 4020 通过 + 1 todo / 0 失败 / exit 0**（519.39 s；+1 文件 / +8 通过，其中 7 条是本块新增、1 条是上一轮那条既有抖动这次没再现）；全量 e2e **217 通过 / 1 failed** —— 那条红是**既有抖动** `main-thread-responsiveness.spec.ts:108`（帧间隔阈值被负载顶破），**孤立复跑两次均 1 passed / 23.9 s**，与本块无关。
+
 ## 2026-10-10 —— V2 GREEN ③ 第一半：库里的自动调用与产物通道（产品路径仍未接）
 
 **这一块加 `packages/agent-core/src/proof/automaticProof.ts`**：把"题设 → 前提桥 → 适配器（生成/跑/判公理/造产物/过校验器）→ 证据状态"接成一条链。**这是缺口③的第一半 —— 库里有一条会去调 Lean 的路，但没有任何产品代码调用它。**
