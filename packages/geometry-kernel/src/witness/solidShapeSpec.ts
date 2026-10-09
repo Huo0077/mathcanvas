@@ -42,6 +42,14 @@ export interface SolidShapeSpec {
   /** 已解析的题设关系（与既有 `WitnessRelation` 同一套）。 */
   relations: WitnessRelation[]
   freeScalars: FreeScalar[]
+  /**
+   * **斜棱柱的代表斜向**（S3）：侧棱与底面法向的夹角（度）。缺省 = 直棱柱（侧棱 ⊥ 底面）。
+   *
+   * 题面只说"斜"、没说斜多少 ⇒ 由入口层取一个**代表值**并写进假设（与"正 n 边形代表""菱形代表角"
+   * 同一条口径）。这是本文件的 YAGNI 约束要求的那一次"顶层字段落地"：
+   * **新增顶层字段必须先有一次对应的形状块落地**，斜棱柱就是那一次。
+   */
+  lateralTiltDegrees?: number
 }
 
 /**

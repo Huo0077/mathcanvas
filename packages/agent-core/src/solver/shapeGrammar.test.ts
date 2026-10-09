@@ -91,4 +91,20 @@ describe("入口语法：形状说法", () => {
       expect(parseShapeClause("求三棱锥 P-ABC 的外接球半径")).toBeNull()
     })
   })
+
+  /**
+   * **「正 / 斜 / 直」修饰词必须被保留**（S3 斜棱柱那一刀）。
+   *
+   * 此前它在正则里是个**非捕获组**、`RecognisedShape` 里也没有这个字段 —— 于是
+   * `在斜三棱柱ABC-A′B′C′中，AA′⊥平面ABC` 会被**当成普通（直）棱柱画出来**：
+   * 题面说"斜"、系统画"直"，而且一路绿到提交。这是"静默换一个题面没说的形状"，
+   * 所以修饰词必须成为**读得出来的字段**，让下游能就"斜 + 侧棱⊥底面"这种自相矛盾发话。
+   */
+  it("保留「正 / 斜 / 直」修饰词（此前被正则吃掉，下游看不见）", () => {
+    expect(parseShapeClause("在斜三棱柱ABC-A′B′C′中，AB=2，画出这个斜三棱柱")?.modifier).toBe("斜")
+    expect(parseShapeClause("在正四棱柱ABCD-A′B′C′D′中，AB=2")?.modifier).toBe("正")
+    expect(parseShapeClause("在直三棱柱ABC-A′B′C′中，AA′⊥平面ABC")?.modifier).toBe("直")
+    // 没写修饰词就是没写：不许默认成"直"（那同样是把题面没说的事替用户定了）。
+    expect(parseShapeClause("在三棱柱ABC-A′B′C′中，AA′⊥平面ABC")?.modifier).toBeUndefined()
+  })
 })

@@ -485,8 +485,51 @@ function specForFrustum(rings: RecognisedShape, relations: readonly WitnessRelat
   return skeleton
 }
 
-/** `specForPrompt` 的结果：要么一份可用的 spec，要么**问路**的理由。 */
-export type PromptShapeResult =
+/**
+ * **斜棱柱的代表斜向**（S3）：侧棱与底面法向的夹角。
+ *
+ * 题面只说"斜"、没说斜多少 ⇒ 取一个**代表值**并写进假设（系统自选），与"正 n 边形代表"
+ * （n ≥ 5 的底面）、"菱形代表角 60°"同一条口径。**不取 0**（那是直棱柱，与题面矛盾），
+ * 也不取 90°（侧棱躺进底面，围不出体积）。
+ */
+const OBLIQUE_TILT_DEGREES = 60
+
+/**
+ * **斜棱柱：由入口语法给的底环 / 顶环 + 解析器给的关系组出 spec**（S3）。
+ *
+ * 与台体同一条理由：斜棱柱的拉伸方向**不是从某句题设读出来的**（题面只说"斜"），
+ * 所以两个环只能来自**入口语法**（`在斜三棱柱ABC-A′B′C′中`）。斜向由 `lateralTiltDegrees`
+ * 交给内核（那里的拉伸向量按它算），其余自由标量与其他族同一个口径。
+ */
+function specForObliquePrism(rings: RecognisedShape, relations: readonly WitnessRelation[]): SolidShapeSpec {
+  const { orderedBase, freeBaseEdges } = orderedBaseWithFreeEdges(rings.base, relations)
+  const top = [...(rings.top ?? [])]
+  const freeScalars: FreeScalar[] = freeBaseEdges.map((edge, index) => ({
+    id: `base-edge-${index + 1}`,
+    kind: "base-edge" as const,
+    targets: [...edge],
+    candidates: [...FREE_BASE_VALUES]
+  }))
+  /**
+   * `top` 沿用直棱柱那一支的形状（**单个**顶面点名，即拉伸的落点）：内核的棱柱分支只吃
+   * `base` + 拉伸向量，顶面其余点名由 `withPrimes` 按同一规则生成 —— spec 不预判。
+   */
+  const skeleton: SolidShapeSpec = {
+    family: "prism",
+    base: orderedBase,
+    top: [top[0] ?? `${orderedBase[0]!}′`],
+    relations: [...relations],
+    freeScalars,
+    lateralTiltDegrees: OBLIQUE_TILT_DEGREES
+  }
+  // "高是不是自由的"**问内核**（与棱锥 / 棱柱 / 台体同一个判据），不在这一层再判一遍。
+  if (shapeHeightIsFree(skeleton)) {
+    freeScalars.push({ id: "height", kind: "height", targets: [top[0] ?? orderedBase[0]!], candidates: [...FREE_HEIGHT_VALUES] })
+  }
+  return skeleton
+}
+
+/** `specForPrompt` 的结果：要么一份可用的 spec，要么**问路**的理由。 */export type PromptShapeResult =
   | { status: "ok"; spec: SolidShapeSpec; recognised: RecognisedShape }
   | { status: "unrecognised"; reason: string }
 
@@ -505,6 +548,31 @@ export function specForPrompt(prompt: string, givens: readonly GeometryObligatio
   const recognised = parseShapeClause(prompt)
   if (recognised === null) {
     return { status: "unrecognised", reason: "题面里没有可识别的『在…中』形状从句（或缺点名表 / 数词与环长对不上）。" }
+  }
+  /**
+   * **「斜」与「侧棱 ⊥ 底面」互相矛盾**（S3 斜棱柱第一刀）。
+   *
+   * "斜棱柱"的定义就是**侧棱不垂直于底面**；同一句里再写 `AA′⊥平面ABC` 是自相矛盾的题面。
+   * 修饰词此前在正则里被非捕获组吃掉，于是这种句子会被**当成直棱柱画出来**并一路绿到提交
+   * （题面说斜、系统画直）—— 正是本仓最忌的"悄悄换一个题面没说的形状"。
+   * 判据：**入口层问路**（`unrecognised`）并说清矛盾在哪，与"认不出就问路"同一条纪律。
+   */
+  if (recognised.family === "prism" && recognised.modifier === "斜") {
+    const linePlane = givens.map(lineAndPlane).filter((entry): entry is LineAndPlane => entry !== null)
+    if (linePlane.length > 0) {
+      return {
+        status: "unrecognised",
+        reason: "题面写的是「斜…棱柱」，同时又给出了「线段 ⊥ 平面」（这里读成了侧棱 ⊥ 底面）—— 斜棱柱的侧棱不垂直于底面，这两句互相矛盾，请确认要哪一种。"
+      }
+    }
+    /**
+     * **斜棱柱的正例**（用户裁决：**代表斜向 + 假设**，不引入"环外点名顶点"概念）。
+     *
+     * 没有"侧棱 ⊥ 底面"那句可读时，两个环只能来自**入口语法**（与台体同一条理由）：
+     * `在斜三棱柱ABC-A′B′C′中` 已经把底环与顶环都写清楚了；"斜多少"题面没说，
+     * 由 `OBLIQUE_TILT_DEGREES` 取一个**代表值**并写进 assumptions（系统自选，不是题面说的）。
+     */
+    return { status: "ok", spec: specForObliquePrism(recognised, kernelRelations(givens)), recognised }
   }
   const relations = kernelRelations(givens)
   if (recognised.family === "frustum") return { status: "ok", spec: specForFrustum(recognised, relations), recognised }

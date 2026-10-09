@@ -282,12 +282,32 @@ export function constructShapeFromSpec(spec: SolidShapeSpec, choices: readonly S
      * 由本层**如实拒**成缺拉伸，而不是替题面猜一个高度。
      */
     const height = heightValue ?? statedLateralHeight(spec)
-    return constructWitnessShape({
-      shape: "prism",
-      base: [...spec.base],
-      relations,
-      extrusion: height === null ? { kind: "unknown" } : { kind: "vector", vector: { x: 0, y: 0, z: height } }
-    })
+    if (height === null) {
+      return constructWitnessShape({ shape: "prism", base: [...spec.base], relations, extrusion: { kind: "unknown" } })
+    }
+    /**
+     * **斜棱柱**（S3）：题面说"斜"，斜向由入口层给（`spec.lateralTiltDegrees`，代表值）。
+     *
+     * 侧棱长度 = 拉伸向量的**模长**（与直棱柱同一个"高"的口径），方向 = 竖直方向朝 **+x** 倾
+     * 该角度 —— 朝哪边斜本身也是题面没说的自由度，取 +x 作代表。`undefined` = 直棱柱（原路径逐字不变）。
+     */
+    const tilt = spec.lateralTiltDegrees
+    const vector = tilt === undefined
+      ? { x: 0, y: 0, z: height }
+      : { x: height * Math.sin((tilt * Math.PI) / 180), y: 0, z: height * Math.cos((tilt * Math.PI) / 180) }
+    const constructed = constructWitnessShape({ shape: "prism", base: [...spec.base], relations, extrusion: { kind: "vector", vector } })
+    if (constructed.status !== "candidate" || tilt === undefined) return constructed
+    /**
+     * **代表斜向必须让用户看见**（与"系统自选"同一条纪律）：题面只说了"斜"，
+     * 斜多少是系统定的 —— 写进 `freeValues`（那一列就是"系统替你定了什么"），不藏在代码里。
+     */
+    return {
+      ...constructed,
+      witness: {
+        ...constructed.witness,
+        freeValues: [`侧棱方向：题面只说「斜棱柱」，系统取代表斜向 —— 侧棱与底面法向成 ${formatNumber(tilt)}°、朝底面 +x 一侧倾斜。`, ...constructed.witness.freeValues]
+      }
+    }
   }
   if (spec.family === "frustum") {
     /**

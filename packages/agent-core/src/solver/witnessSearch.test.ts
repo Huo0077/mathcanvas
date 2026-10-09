@@ -534,6 +534,53 @@ describe("S6 接线：题面 → 形状描述", () => {
   })
 
   /**
+   * **斜棱柱第一刀：自相矛盾的题面必须被拒**（S3）。
+   *
+   * `在斜三棱柱ABC-A′B′C′中，AA′⊥平面ABC` 里，"斜"说侧棱**不**垂直于底面，
+   * 而 `AA′⊥平面ABC` 说它垂直 —— 两句互相矛盾。修饰词此前被正则吃掉，
+   * 于是这种句子会被**当成直棱柱画出来**并一路绿到提交（题面说斜、系统画直）。
+   * 判据：入口层就**问路**（`unrecognised`），并说清矛盾在哪。
+   */
+  it("斜三棱柱 + 「侧棱 ⊥ 底面」⇒ 入口层就拒绝（题面自相矛盾），不静默画成直棱柱", () => {
+    const prompt = "在斜三棱柱ABC-A′B′C′中，AA′⊥平面ABC，画出这个斜三棱柱"
+    const shaped = specForPrompt(prompt, givensOf(prompt))
+
+    expect(shaped.status, JSON.stringify(shaped)).toBe("unrecognised")
+    if (shaped.status === "unrecognised") {
+      expect(shaped.reason).toContain("斜")
+      expect(shaped.reason).toContain("⊥")
+    }
+  })
+
+  /**
+   * **斜棱柱正例**（S3）：题面只说"斜"、没说斜多少 ⇒ 系统取**代表斜向**并写进假设
+   * （与"正 n 边形代表""菱形代表角 60°"同一条口径）。
+   *
+   * 判据自己在候选坐标上算，两条：
+   * - **真的斜**：侧棱与底面法向的夹角余弦明显小于 1（直棱柱会是 1）；
+   * - **是棱柱**：三条侧棱是同一条向量（顶面 = 底面的平移），不是各自拉长。
+   */
+  it("斜三棱柱：spec 带代表斜向 ⇒ 通过核验的候选，侧棱真的斜、且顶面是底面的平移", () => {
+    const prompt = "在斜三棱柱ABC-A′B′C′中，AB=2，画出这个斜三棱柱"
+    const shaped = specForPrompt(prompt, givensOf(prompt))
+    expect(shaped.status, JSON.stringify(shaped)).toBe("ok")
+    if (shaped.status !== "ok") return
+    expect(shaped.spec.lateralTiltDegrees, JSON.stringify(shaped.spec)).toBeGreaterThan(0)
+
+    const result = searchWitness({ ...SEARCH, shape: "prism", spec: shaped.spec, obligations: obligationsOf(prompt) })
+    expect(result.status, JSON.stringify(result)).toBe("verified_instance")
+    if (result.status !== "verified_instance") return
+    const at = coordinates(result.candidate)
+    const normal = crossVector3(subtractVector3(at("B"), at("A")), subtractVector3(at("C"), at("A")))
+    const lateral = subtractVector3(at("A′"), at("A"))
+    const cosine = Math.abs(dotVector3(lateral, normal)) / (lengthVector3(lateral) * lengthVector3(normal))
+    expect(cosine, "侧棱与底面法向平行 ⇒ 画成了直棱柱").toBeLessThan(0.99)
+    for (const [foot, top] of [["A", "A′"], ["B", "B′"], ["C", "C′"]] as [string, string][]) {
+      const edge = subtractVector3(at(top), at(foot))
+      expect(lengthVector3(subtractVector3(edge, lateral)), `${foot}${top} 不是同一条平移向量`).toBeLessThan(1e-9)
+    }
+  })
+  /**
    * **反例**：菱形 + 点名直角 = 正方形。题面说的是菱形，**不许**把更强的形状画出来；
    * 而这条路径此前会走"环首直角 ⇒ 矩形"把题面静默画成矩形（本批的内核 RED 里实测）。
    */

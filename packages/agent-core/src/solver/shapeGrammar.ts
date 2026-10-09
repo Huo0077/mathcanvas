@@ -33,6 +33,15 @@ import { canonicalPointName, isPointName, splitPointNames } from "@draw/geometry
 
 export type RecognisedFamily = "pyramid" | "prism" | "frustum"
 
+/**
+ * **立体图形的修饰词**（S3 斜棱柱那一刀）：`正`（正棱柱 / 正棱锥）、`斜`（斜棱柱）、`直`（直棱柱）。
+ *
+ * 它必须**读得出来**而不是被正则吃掉：`斜三棱柱 + AA′⊥平面ABC` 是自相矛盾的题面，
+ * 而"下游看不见修饰词"会让这种句子被**静默画成直棱柱**（题面说斜、系统画直）——
+ * 那正是本仓最忌的"悄悄换一个题面没说的形状"。
+ */
+export type ShapeModifier = "正" | "斜" | "直"
+
 export interface RecognisedShape {
   family: RecognisedFamily
   /** 题面里那段"在…中"的**原文**（给面板与日志用，不改写题面）。 */
@@ -43,6 +52,8 @@ export interface RecognisedShape {
   apex?: string
   /** 棱柱 / 棱台：顶面环（`ABCD-A′B′C′D′` 的后半）。 */
   top?: string[]
+  /** 题面写的修饰词；**没写就是 `undefined`**（不许默认成"直"）。 */
+  modifier?: ShapeModifier
 }
 
 /** 中文数词 → 边数。只收首批范围内的 3–6。 */
@@ -52,7 +63,7 @@ const NUMERALS: Record<string, number> = { 三: 3, 四: 4, 五: 5, 六: 6 }
  * `在…中` 从句。点名表里**允许**撇 / 下标 / `-` 这些字符，但不允许空白与标点 ——
  * 遇到空白或逗号就说明点名表在那里结束了。
  */
-const SHAPE_CLAUSE = /在\s*(?:正|斜|直)?\s*([三四五六])?\s*(棱锥|棱柱|棱台)\s*([A-Z][^\s，,。；;、]*?)\s*中/
+const SHAPE_CLAUSE = /在\s*(正|斜|直)?\s*([三四五六])?\s*(棱锥|棱柱|棱台)\s*([A-Z][^\s，,。；;、]*?)\s*中/
 
 const DASH = /[-−—–]/
 
@@ -73,8 +84,9 @@ export function parseShapeClause(prompt: string): RecognisedShape | null {
   if (typeof prompt !== "string") return null
   const match = SHAPE_CLAUSE.exec(prompt)
   if (match === null) return null
-  const [, numeral, keyword, nameList] = match
+  const [, modifier, numeral, keyword, nameList] = match
   if (keyword === undefined || nameList === undefined) return null
+  const stated = modifier === undefined ? {} : { modifier: modifier as ShapeModifier }
 
   const parts = nameList.split(DASH).map((part) => part.trim())
   if (parts.length !== 2) return null
@@ -90,7 +102,7 @@ export function parseShapeClause(prompt: string): RecognisedShape | null {
     // 锥顶不能同时是底面顶点：`A-ABCD` 这种写法自相矛盾。
     if (base.includes(apex)) return null
     if (numeral !== undefined && NUMERALS[numeral] !== base.length) return null
-    return { family: "pyramid", phrase: match[0], base, apex }
+    return { family: "pyramid", phrase: match[0], base, apex, ...stated }
   }
 
   const base = ringOf(head)
@@ -108,5 +120,5 @@ export function parseShapeClause(prompt: string): RecognisedShape | null {
     const foot = base[index]
     if (foot === undefined || canonicalPointName(name) !== `${canonicalPointName(foot)}′`) return null
   }
-  return { family: keyword === "棱柱" ? "prism" : "frustum", phrase: match[0], base, top }
+  return { family: keyword === "棱柱" ? "prism" : "frustum", phrase: match[0], base, top, ...stated }
 }
