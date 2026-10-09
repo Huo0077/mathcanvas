@@ -10,6 +10,30 @@
 
 > 下方 2026-09-22 的"最后更新 / 当前阶段 / 总体状态"三行保留为**当时快照**，不再维护。
 
+## 2026-10-10 —— V2 GREEN 第一刀：证明出口加第二类（判定定理），真跑通过 + 变异验证
+
+**这一块改代码**：V2 GREEN 缺口①的第一刀 —— 逐类可信翻译从**一类**到**两类**。**缺口① 未补完**（曲线性质 / 切线·导数 / 其余立体关系仍无模板），GREEN 不勾。
+
+**两类是两个方向相反的定理（这是加它的理由，不是凑数）**：`perpendicular` 是**性质定理**（`hu : u ∈ Dᗮ` ⇒ 线 ⊥ 面内任意线；**前提是模板塞的**），新的 `planePerpendicular` 是**判定定理**（线 ⊥ 面内两条**相交**线 ⇒ 线 ⊥ 面；**前提就是题面那两条垂直**）。合起来才是立体几何里关于线面垂直的那两步。
+
+**RED（7 条新用例，写代码之前跑过一次）**：`buildPlanePerpendicularStatement is not a function` —— 7 failed，逐条都是我待实现的行为（命题形状、两类不同定理名、相交判据、缺字段抛、覆盖清单、闭环真报告升级、报告冒充被拒）。**GREEN 之后 49 passed。**
+
+**Lean 侧不是猜出来的（两次真实失败，值得记）**：
+- 第一版 `refine Submodule.span_induction hy ?_ ?_ ?_ ?_` ⇒ **Type mismatch**：`hy` 被当成目标为 `∀ x ∈ ?m, inner ℝ (Q - P) y = 0` 的东西。**真因**：`refine` 的 `?_` 让 Lean 去猜 motive，猜成了"对成员证明的谓词"。
+- 第二版显式给 `p := fun z => inner ℝ (Q - P) z = 0` ⇒ 还是错：**这个 mathlib revision 的 `span_induction` 的 `p` 作用在成员证明上**（`p : ∀ x, x ∈ span … → Prop`），所以 `<;>` 那种写法不适用。
+- 第三版 `induction hy using Submodule.span_induction with | mem/_/zero/add/smul` 通过（见 `proof/lean4/DrawProof.lean` 里的注释）。**这两条是内核逼出来的，不是我读文档读出来的。**
+
+**真跑（唯一算数的证据）**：`npx vitest run scripts/proof-spike/lean4EndToEnd.test.ts -t "第二个目标类"` ⇒ **1 passed / 68392 ms**，读数 **`status=formally_proved` / `judgement=verified` / `exit=0` / axioms `["propext","Classical.choice","Quot.sound"]`**。仓内对照文件 `DrawProof.lean` 加同一条命题后 `lake env lean DrawProof.lean` ⇒ **exit 0**，三行报告分别是 `perpendicular_general` / `plane_perpendicular_general`（都是那三个公理）与 `perpendicular_cheat`（含 `sorryAx`）。
+
+**变异验证（两次，都当场红、都完全还原 —— 用反向编辑还原，不用 `git checkout`）**：
+- **A：摘掉"相交"判据**（两条 guard 分别弄坏）⇒ 那一组用例红，且**两个方向分别验过**：先弄坏"零共用点"那一支 ⇒ 红在第一条断言；还原后再只弄坏"共点两个"那一支 ⇒ 红在第二条断言。**不是"一组里只有一条在咬人"。**
+- **B：让新类与第一类同名**（`draw_perpendicular_goal`）⇒ **2 failed**："两类用两个不同的定理名" + "报告是另一类的 ⇒ 拒"。这条正是"定理名共用一个常量就能张冠李戴"那个洞的钉子。
+- 还原后 `49 passed / exit 0`，并再次 grep 确认源码里没有变异残留。
+
+**门禁**：`typecheck` exit 0（**过程中真抓到一条错**：测试辅助函数的 `planeLines` 写成数组而非元组 ⇒ `tsc` 报 TS2345，而 vitest 运行时全绿 —— "跑过测试"确实不等于"过了类型门"）；`lint` 0 error / 13 warning；全库非 Lean **338 文件 / 3990 通过 + 1 todo / 0 失败**（524.30 s，**exit code 用文件重定向单独验过 = 0**：管道里那个 `exit 1` 是 PowerShell 把 stderr 当 NativeCommandError 的假象，不是 vitest 的退出码）；全量 e2e **218 通过 / 0 失败**（2.6 m）；`proof:smoke` 8/8。
+
+**如实留着的**：**前提桥仍未做** —— 判定定理那两个前提**确实**是题面那两条垂直，但原题其余题设不在命题里；**产品侧自动调用与产物通道没有**；**Rust 侧没有任何 proof/lean 命令**（缺口④）。**这一块只把缺口①的第一刀切下去。**
+
 ## 2026-10-10 —— V2 实测归因更正：那是**冷缓存**，热跑复现 `formally_proved`（**不改行为，只改一条失败文案**）
 
 **被推翻的是我自己上一节的结论。** 上一节把 `judgement=timeout` 记成"本机今天不成立、原因未定论"。补跑后归因确定：**那是冷缓存的第一次运行**。

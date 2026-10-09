@@ -7,6 +7,26 @@
 
 
 
+## 2026-10-10 —— V2 GREEN 第一刀：证明出口从**一类**加到**两类**（判定定理在本机真跑通过）
+
+**这一块改代码**：第二份计划 V2 GREEN 的缺口①（"逐类可信翻译只到一类"）的第一刀。**只补一类，缺口①仍未补完**。
+
+**加了什么**：`planePerpendicular`（`packages/agent-core/src/proof/lean4Adapter.ts`）—— **判定定理**那一半："线 ⊥ 平面内两条**相交**直线 ⇒ 线 ⊥ 该平面"。它与原有那一类是**方向相反的两个定理**：`perpendicular` 是**性质定理**（已知 ⊥ 面 ⇒ ⊥ 面内任意线，前提 `hu` 是模板塞的），新类是**判定定理**（前提是两个内积为 0，**正好就是题面里那两条垂直**）。生成的命题形状：
+
+```lean
+theorem draw_plane_perpendicular_goal {E : Type*} [NormedAddCommGroup E] [InnerProductSpace ℝ E]
+    (P A B C : E) (h1 : inner ℝ (A - P) (B - A) = 0) (h2 : inner ℝ (A - P) (C - A) = 0) :
+    (A - P) ∈ (Submodule.span ℝ ({B - A, C - A} : Set E))ᗮ
+```
+
+**实测（本机真跑，不是判据层的假 runner）**：`scripts/proof-spike/lean4EndToEnd.test.ts` 新增一条 gated 用例 —— **`status=formally_proved` / `judgement=verified` / `exit=0` / 68392 ms / axioms `["propext","Classical.choice","Quot.sound"]`**；同一条命题也写进仓内对照文件 `proof/lean4/DrawProof.lean`（`lake env lean DrawProof.lean` exit 0，报告逐字同形）。**证明正文不是猜的**：`induction hy using Submodule.span_induction` 必须**显式给 motive**（`refine … ?_ ?_ ?_ ?_` 会让 Lean 把目标猜成 `∀ x ∈ ?m, …`，实测 Type mismatch），且这个 mathlib revision 的 `p` 作用在**成员证明**上 —— 这两条是内核逼出来的，记在文件与用例注释里。
+
+**三条判据（新增 7 条单元用例，`lean4Adapter.test.ts` 42 → 49）**：① **两类用两个不同的定理名**，否则一份 `#print axioms` 报告能让另一类升到 `formally_proved`（"报告是另一类的 ⇒ 拒"有用例）；② **"相交"必须是输入给的**：两条平面线不共点（平行/异面）或共点两个（同一条线写两遍）⇒ **抛**，不猜一个平面出来；③ 命题形状逐字钉住（两个前提的表达、结论里的 `span`、一般命题无坐标）。
+
+**如实留着的**：**前提桥仍然没做** —— 判定定理那两个前提**确实**是题面那两条垂直（比性质定理更接近原题），但**原题其余题设**（底面形状、P 在平面外…）仍不在命题里；**曲线性质 / 切线·导数 / 其余立体关系仍无模板**；产品侧自动调用与产物通道、Rust 侧 proof/lean 命令**都没做**。**不许把这一块读成"V2 GREEN 做完了"。**
+
+**门禁**：`typecheck` exit 0（**它抓出一条 vitest 看不见的错**：测试辅助函数的 `planeLines` 写成数组而非元组，运行期全绿、只有 `tsc` 报 TS2345 —— 这就是"跑过测试"不等于"过了类型门"的现成例子）；`lint` 0 error / 13 warning（基线）；全库非 Lean **338 文件 / 3990 通过 + 1 todo / 0 失败 / exit 0**（524.30 s；比上次读数 +7 条，正好是新增用例）；全量 e2e **218 通过 / 0 失败**（2.6 m）；`proof:smoke` 8/8。**变异**：摘掉"相交"判据 ⇒ 那两条用例变红；把新类改成与第一类**同名** ⇒ "两类同名"与"报告冒充"两条变红（详见 [进度归档](docs/project-progress.md)）。
+
 ## 2026-10-10 —— V2 实测归因更正：冷缓存，热跑复现 `formally_proved`（行为未改，只改一条失败文案）
 
 **这一块只改一个测试的失败文案**，其余是对上一条记录的更正 —— 上一条把 `judgement=timeout` 记成"本机今天不成立、原因未定论"，**补跑后归因确定：那是冷缓存的第一次运行。**

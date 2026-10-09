@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest"
 
 import {
   buildPerpendicularStatement,
+  buildPlanePerpendicularStatement,
   resolveLean4Toolchain,
   runLean4ClosedLoop,
   type Lean4ProofGoalInput
@@ -141,6 +142,73 @@ describe("真实 Lean 端到端（显式 gated）", () => {
     expect(outcome.status).toBe("formally_proved")
     expect(outcome.verification.artifact?.backend.name).toBe("lean4")
     // 真证明依赖的公理必须**全部**在白名单里（否则判据层会把它拒掉，这里就看不到 verified）。
+    for (const axiom of outcome.judgement.axioms ?? []) expect(["propext", "Classical.choice", "Quot.sound"]).toContain(axiom)
+  }, 600_000)
+
+  it.skipIf(!REAL_AVAILABLE)("**第二个目标类（线⊥面）也真的被内核接受**（判定定理那一半，2026-10-10 加）", async () => {
+    /**
+     * 这一条是 V2 GREEN 缺口①（"逐类可信翻译只到一类"）的**实测那一半**：
+     * 光有单元测试只能说"模板生成了我们以为的那串字符"，**能不能被内核接受只有真跑才知道**。
+     *
+     * 与第一类的关系：第一类是**性质定理**（已知⊥面 ⇒ ⊥面内任意线，前提 `hu` 是模板给的），
+     * 这一条是**判定定理**（⊥面内两条相交线 ⇒ ⊥面，两个前提正好是题面那两条垂直）。
+     * **前提桥仍未完成**（原题别的题设不在命题里），这里不冒充。
+     */
+    const planeGoal: Lean4ProofGoalInput = {
+      prompt: "在三棱锥 P-ABC 中，PA ⊥ AB，PA ⊥ AC，求证 PA ⊥ 平面 ABC",
+      claimSourceText: "PA ⊥ 平面 ABC",
+      goalKind: "planePerpendicular",
+      assumptions: [],
+      /**
+       * 证明正文。**这三行不是猜的，是内核逼出来的**（三步都在本机跑红过）：
+       * ① `induction hy using Submodule.span_induction` 必须**显式给 motive**
+       *    （`refine … ?_ ?_ ?_ ?_` 会让 Lean 把目标猜成 `∀ x ∈ ?m, …`，报 Type mismatch）；
+       * ② 这个 mathlib revision 的 `span_induction` 的 `p` 作用在**成员证明**上
+       *    （`p : ∀ x, x ∈ span … → Prop`），所以要用 `induction … with | mem/_/add/smul` 那种写法；
+       * ③ 两个前提的**方向恰好和结论一致**（都是 `inner (A - P) _`），所以 `simpa using h1` 就够 ——
+       *    不需要第一类里那个 `inner_eq_zero_symm`（那一类要它是因为 `ᗮ` 给的是反过来的方向）。
+       */
+      proof: [
+        "rw [Submodule.mem_orthogonal']",
+        "intro y hy",
+        "induction hy using Submodule.span_induction with",
+        "| mem z hz =>",
+        "    rcases hz with rfl | rfl",
+        "    · simpa using h1",
+        "    · simpa using h2",
+        "| zero => simp",
+        "| add x y hx hy ihx ihy => rw [inner_add_right, ihx, ihy, add_zero]",
+        "| smul a x hx ih => rw [inner_smul_right, ih, mul_zero]"
+      ].join("\n"),
+      planePerpendicular: {
+        line: { first: "P", second: "A" },
+        planeLines: [{ first: "A", second: "B" }, { first: "A", second: "C" }]
+      }
+    }
+
+    const runner = createLean4Runner()
+    // 先把模板生成的那串字符本身钉一下（这一步不花时间），再拿去交给内核。
+    const spec = buildPlanePerpendicularStatement(planeGoal, 400_000)
+    expect(spec.statement).toContain("h1 : inner ℝ (A - P) (B - A) = 0")
+    const outcome = await runLean4ClosedLoop("verified_instance", planeGoal, "claim-lean4-plane-e2e", {
+      runner,
+      projectDir: LEAN4_PROJECT_DIR,
+      toolchain,
+      backendVersion: `Lean (reported by ${toolchain!.resolvedBy})`,
+      timeoutMs: 300_000,
+      maxHeartbeats: 400_000
+    })
+
+    console.log(`E2E 线⊥面：status=${outcome.status} judgement=${outcome.judgement.status} exit=${String(outcome.run?.exitCode)} ${outcome.run?.durationMs} ms`)
+    console.log(`E2E 线⊥面 axioms: ${JSON.stringify(outcome.judgement.axioms)}`)
+    console.log(`E2E 线⊥面 statement:\n${outcome.statement}`)
+
+    expect(outcome.judgement.status, `判定不是 verified：${outcome.judgement.detail}`).toBe("verified")
+    expect(outcome.status).toBe("formally_proved")
+    // 命题形状也逐字钉住：它必须是**这一类**的定理名与**这一类**的结论，
+    // 而不是"随便生成了一条能过的命题"。
+    expect(outcome.statement).toContain("theorem draw_plane_perpendicular_goal")
+    expect(outcome.statement).toContain("(A - P) ∈ (Submodule.span ℝ ({B - A, C - A} : Set E))ᗮ")
     for (const axiom of outcome.judgement.axioms ?? []) expect(["propext", "Classical.choice", "Quot.sound"]).toContain(axiom)
   }, 600_000)
 
