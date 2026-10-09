@@ -85,9 +85,16 @@
 
 ## V2：限定作图题的自动 Lean
 
-- [ ] **RED**：模板凭空增前提、证明了别的图形主张、删题设/换目标、`sorry`/未接后端/超时/旧 run 回包，均不得将**原题**升到 `formally_proved`；辅助引理可单独标明。对应 `packages/agent-core/src/proof/*.test.ts`、`apps/web/src/agent/*.test.ts`、Rust 命令测试。
-- [ ] **GREEN**：按作图题目标（几何关系、曲线性质、切线/导数、立体关系）逐类做可信翻译、前提消解、受限桌面 Lean 调用和绑定产物；关闭 proof flag 或浏览器无工具链时不阻塞作图。mathlib revision pin、许可证/体量/线程/WASM/超时与隔离审查必须在默认启用前完成。
-- [ ] **实测**：真实工具链单独集成和桌面真 UI；无法完整翻译原题时只能显示实例图或“辅助引理已证”，而不是普遍证明。各阶段都按文档与远端 SHA 提交。
+- [x] **RED**（**2026-10-10 逐条对上**）：模板凭空增前提、证明了别的图形主张、删题设/换目标、`sorry`/未接后端/超时/旧 run 回包，均不得将**原题**升到 `formally_proved`；辅助引理可单独标明。对应 `packages/agent-core/src/proof/*.test.ts`、`apps/web/src/agent/*.test.ts`、Rust 命令测试。
+  - **逐条落点（每条都在文件里读过，`proof:smoke` 8/8 通过）**：**`sorry`** —— `lean4Adapter.test.ts:86`"`sorry` 必须被拒（它的 exit code 是 0，所以退出码在这里不算数）"；用户自定义 `axiom` 也拒（`:94`）；**"证明了别的图形主张"** —— `:116`"报告是**别的定理**的（例如只报了一个引理）也拒：名字必须逐字对上"；**删题设/换目标** —— `:258`"命题原文进 `statement` 那一栏 —— 模板一改它必变"（产物与命题原文绑定，改了就对不上）；**未接后端** —— `:190`"后端不可用 ⇒ `unsupported`，而且不是 `failed`" + `proofArtifact.test.ts:97`"形状合格 ≠ 真的验过：**没接入**的后端送的产物过不去"；**超时** —— `:178`"进程级墙钟超时 ⇒ `timeout`，绝不把被杀掉的那次算作通过"与 `:358`；**旧 run 回包** —— `workerContracts.test.ts:125`"rejects a stale result that answers a different request"；**升级边界** —— `proofArtifact.test.ts:77/97/187` 与 `lean4Adapter.test.ts:329/479`（篡改过的产物喂回闭环 ⇒ 状态**不升**）。
+  - **"辅助引理可单独标明"**：`proofGoals.test.ts` 的推断路线（勾股"先证 ⊥、再走那一步定理"且定理要**点名**）与 `lean4Adapter.test.ts:220`"生成的命题**是一般命题**（任意内积空间 + 任意子空间），不是某一组坐标"。
+- [ ] **GREEN**（**2026-10-10 部分：现状与缺口逐条写清，不勾**）：按作图题目标（几何关系、曲线性质、切线/导数、立体关系）逐类做可信翻译、前提消解、受限桌面 Lean 调用和绑定产物；关闭 proof flag 或浏览器无工具链时不阻塞作图。mathlib revision pin、许可证/体量/线程/WASM/超时与隔离审查必须在默认启用前完成。
+  - **已有**：`lean4Adapter`（报告白名单 + `#print axioms` 检查）、`proofGoals`（目标词表与载体）、`proofArtifact`（产物绑定与升级判据）、`proofBackendAdmission` / `proofBackendReview`（接入名单**由 passed 记录推导**，不是手写数组）、`lean4Toolchain`（找不到工具链 ⇒ `null` ⇒ 显式 gated 跳过，**不静默通过**）。**"关 proof flag / 无工具链不阻塞作图"**：`proofExport` 默认 `false`（`featureFlags.test.ts:30`、`nextPhaseEntry.test.tsx:46` 钉住），工具链缺失返回 `null`（`lean4Toolchain.test.ts:124/129`），后端不可用是 `unsupported` 而不是 `failed`（适配器用例）；四家族浏览器正例都在默认（proof 关）下通过。
+  - **缺口（四条，逐条指得出落点）**：① **逐类可信翻译只到一类** —— 现在只有"一类带假设的垂直性引理"（`perpendicular`），**曲线性质 / 切线·导数 / 立体关系都还没有**；② **前提消解 / 原题前提桥没有**（把原题题设翻成 Lean 命题的前提这件事没做，今天的命题是**一般命题**，不是"这道题"）；③ **产品侧自动调用与产物通道没有**（没有任何一条产品路径会去调 Lean）；④ **受限桌面调用没有** —— Rust 侧**一个 proof / lean 命令都没有**（`apps/desktop/src-tauri/src` 全树 grep 只有一处无关的 "proof" 字样；241 个 Rust 测试里没有证明相关）。**"默认启用前"那批审查**（mathlib revision pin / 许可证 / 体量 / 线程 / WASM / 超时 / 隔离）**已有一份很详细的 `proofBackendReview` 记录**（`proof:smoke` 打印：版本逐字、许可证读自安装目录正文、进程模型、原生依赖清单、启动预算、两层超时策略、`sorry`/`axiom` 的失败行为、工具链 3095.9 MB / mathlib 每工程 7.52 GB），**但其中一条自己就写着未测**：**"强沙箱（只读 + 无网络）下的证明运行未测"**。
+- [ ] **实测**（**2026-10-10 部分：真实工具链这一半在本机今天没复现，不勾**）：真实工具链单独集成和桌面真 UI；无法完整翻译原题时只能显示实例图或“辅助引理已证”，而不是普遍证明。各阶段都按文档与远端 SHA 提交。
+  - **本批实跑（单跑 `npx vitest run scripts/proof-spike/lean4EndToEnd.test.ts`，1030.47 s）**：**3 passed / 1 failed**。红的是"**真证明 ⇒ `formally_proved`**"那一条：**`status=verified_instance judgement=timeout exit=null 300015 ms`** —— 撞上进程级墙钟上限（300 s）被强杀，适配器**如实报 `timeout`、不返回半成品**（这是它该有的行为）。同一次运行里的导入宽度测量：**narrow = 69021 ms**（与文档里那次 68 s 吻合）/ **full Mathlib = 583065 ms**（文档里那次约 150 s）。
+  - **⇒ 结论如实写**：文档里那句"真内核闭环成立、`formally_proved`、68277 ms"**是更早某次的历史读数，本机今天没有复现**；`sorry` 那条仍然正确（`exit=0` 但 `judgement=failed`，报 `sorryAx` 表外公理），导入宽度两侧都 `exit=0`（**Lean 本身是能跑的，红的是预算**）。**原因未定论**：本机 full-import 路径比当时慢约 4 倍，而真证明那一轮超过了 300 s —— 需要下一步测"真证明那次到底走的是哪种导入宽度"，再决定是调预算还是修导入裁剪。**不把这条记为通过。**
+  - **桌面真 UI 未做**（也无法在无人值守下做）：真桌面（Tauri 窗口）里跑一次自动 Lean 并核对产物，需要人操作；列进"等你点头"那一栏。
 
 ## V3：作图题真实质量与发布
 
