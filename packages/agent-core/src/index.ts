@@ -48,6 +48,10 @@ export * from "./proof/automaticProof"
  */
 export * from "./proof/proofGoalReader"
 /**
+ * **系统按类给出的证明正文**（canonical）：产品侧自动调用不一定有模型在场。
+ */
+export * from "./proof/canonicalProof"
+/**
  * **Lean 4 适配器**（N5b）。桶导出是**必须**的：`WIRED_PROOF_BACKENDS` 在 `proofArtifact.ts` 里，
  * 而"接上了谁"与"怎么用它"是同一件事的两半。两个模块都**零 `node:` import**
  *（runner 由调用方注入），所以浏览器打包不会因为这一行而需要 Node 内置模块。

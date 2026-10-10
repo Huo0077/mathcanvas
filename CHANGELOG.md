@@ -7,6 +7,22 @@
 
 
 
+## 2026-10-10 —— V2 GREEN ③ 第四半：**系统按类给出的证明正文**（canonical）——链路不再依赖模型
+
+**这一块加 `packages/agent-core/src/proof/canonicalProof.ts`**：三类的证明正文由**系统**给出（它们本来就是一行的数学步骤）。这样"读目标 → 前提桥 → 跑 Lean"这条链**不需要模型在场**也能走完 —— **缺口③ 现在只差一个产品调用点**（那一步会改掉 `proofLevelStatus.ts` 的"默认路径不调用它"这条不变量，所以仍等裁决）。
+
+**正文的来源如实标出来**：`AutomaticProofResult.proofSource` 是 `"model"` 或 `"system-canonical"`，而 `verified` 时的 `detail` 里也会写明"正文由**系统**按这一类给出" —— 内核验的是正文本身（判据那层**刻意不看正文**），但"这条证明是模型想出来的还是系统照抄的"是用户有权知道的事。
+
+**两份正文是常量、一份按目标生成**：判定定理与切线那两份与题面点名无关（对生成子空间做归纳 / mathlib 现成那一步）；**性质定理那一份必须按目标生成**（要写出目标线那一段的具体表达式 `(D - B)`，还要带 `inner_eq_zero_symm` —— 这两条都是实测撞出来的，见适配器 `LEAN4_BINDER_NAMES` 注释）。
+
+**两条被用例逼出来的设计更正（都记在代码里）**：
+1. 第一版写的是"`proof` 空 ⇒ **自动**用系统那份"。**用例当场红了**：调用方给空正文的意思是"**别跑**"，静默替换会让这条意图消失。改成**显式开关**（只有明说 `proofSource: "system-canonical"` 才走系统表；否则空正文如实 `no_proof_body`）。
+2. 表外目标类的判据**原来排在正文之后** ⇒ 一条"我们不支持这一类"会被报成"没有正文"（误导）。已把 `goal_unsupported` 提到最前。
+
+**判据（+6 条，`canonicalProof.test.ts`）**：三类正文的形状（判定定理含 `span_induction` 与两个前提名；切线含 `hasDerivAt_iff_tendsto_slope`；性质定理含 `inner_eq_zero_symm` 与**当前目标线**的表达式，换一条线正文就变）；明说用系统正文时链路**真跑得动**且 `proofSource` 是 `system-canonical`、送出的源码里就是那份正文；模型给了正文时 `proofSource` 是 `model`（既有调用方行为不变）。
+
+**门禁**：`packages/agent-core/src/proof` **10 文件 / 157 通过**；`typecheck` exit 0；`lint` 0 error / 13 warning（基线）；全库非 Lean 与全量 e2e 见下一条。**变异两次**：把性质定理那份正文写成常量 ⇒ "按目标生成"那条红；把"空正文自动用系统表"改回去 ⇒ "没有正文 ⇒ 不跑"那条红（都当场还原、复跑全绿）。
+
 ## 2026-10-10 —— V2 GREEN ③ 第三半：**题面目标句 → 结构化目标**（读目标那一层）；并修掉类型门抓出的"切线类走不通产品链路"
 
 **这一块加 `packages/agent-core/src/proof/proofGoalReader.ts`**：把"求证 PA ⊥ 平面 ABC"这种**自然语言目标**读成适配器要的形状。**缺口③ 仍差最后一步（产品调用点）**，但"要证什么"这件事现在有答案了。

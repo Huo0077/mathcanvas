@@ -3,6 +3,7 @@ import type { DiagramObligationSet } from "../diagramObligations"
 
 import { LEAN4_SUPPORTED_GOAL_KINDS, runLean4ClosedLoop, type Lean4ProofGoalInput, type Lean4RunResult, type Lean4Runner } from "./lean4Adapter"
 import type { ProofArtifact, ProofVerifyOptions } from "./proofArtifact"
+import { canonicalProofBody } from "./canonicalProof"
 import { bridgeProofPremises, type PremiseBridgeGoal, type PremiseBridgeResult } from "./proofPremiseBridge"
 
 /**
@@ -87,8 +88,15 @@ export interface AutomaticProofRequest {
   goal: PremiseBridgeGoal
   /** 这份题面读出来的题设（前提桥要用）。 */
   obligations: DiagramObligationSet
-  /** 后端给的正文草稿。**空 ⇒ 不跑。** */
-  proof: string
+  /**
+   * **正文草稿**：模型给的那一份。
+   *
+   * **可以不给**（2026-10-10 改）：不给就走 `canonicalProofBody`（系统按类给的那一份）——
+   * 产品侧那条自动调用不一定有模型在场。两样都没有 ⇒ `no_proof_body`（不跑）。
+   */
+  proof?: string
+  /** 正文从哪来。缺省按 `proof` 在不在推：有就用它（`model`），没有就用系统那份（`system-canonical`）。 */
+  proofSource?: ProofSource
   /** 产品开关（`featureFlags` 的 `proofExport`）。**关着就什么都不做。** */
   flagEnabled: boolean
   /** 桌面壳的 Lean 通道；浏览器里传"不可用"那条。 */
@@ -99,6 +107,9 @@ export interface AutomaticProofRequest {
   verifyOptions?: ProofVerifyOptions
 }
 
+/** 正文的来源（**用户有权知道**：这条证明是模型想出来的，还是系统照抄的）。 */
+export type ProofSource = "model" | "system-canonical"
+
 export interface AutomaticProofResult {
   outcome: AutomaticProofOutcome
   /** 升之后的证据状态（没升就是 `base`）。 */
@@ -107,6 +118,8 @@ export interface AutomaticProofResult {
   artifact: ProofArtifact | null
   /** 产物是不是真的过了 `verifyProofArtifact`（不是"刚生成的所以肯定行"）。 */
   verified: boolean
+  /** 这一次用的是谁的正文（没跑就是 `null`）。 */
+  proofSource: ProofSource | null
   /** 给人看的一句话。 */
   detail: string
   /** 前提桥的结论（跑没跑都留着：调用方要能显示"哪些前提是系统补的"）。 */
@@ -149,12 +162,12 @@ export function channelAsRunner(channel: ProofChannel, timeoutMs: number): Lean4
 }
 
 /** 目标类 → 适配器的输入形状（**只做搬运**，不做任何补全）。 */
-function adapterInputFor(request: AutomaticProofRequest): Lean4ProofGoalInput {
+function adapterInputFor(request: AutomaticProofRequest, proof: string): Lean4ProofGoalInput {
   const shared = {
     prompt: request.prompt,
     claimSourceText: request.claimSourceText,
     assumptions: request.assumptions,
-    proof: request.proof
+    proof
   }
   if (request.goal.goalKind === "perpendicular") {
     return {
@@ -185,6 +198,7 @@ export async function attemptAutomaticProof(request: AutomaticProofRequest): Pro
     status: request.base,
     artifact: null,
     verified: false,
+    proofSource: null,
     detail,
     bridge
   })
@@ -192,13 +206,36 @@ export async function attemptAutomaticProof(request: AutomaticProofRequest): Pro
   if (!request.flagEnabled) {
     return unchanged("flag_off", "证明导出开关没开（`proofExport` 默认关）—— 默认路径不调用形式证明后端。")
   }
-  if (request.proof.trim().length === 0) {
-    return unchanged("no_proof_body", "后端没有给证明正文 —— 空正文不值得花几分钟去跑（也不该假装证过）。")
-  }
+
+  /**
+   * **先问"这一类能不能试"**（2026-10-10 把顺序调过来的）：表外目标类连正文都不该有 ——
+   * 先判正文会让"这一类我们不支持"被报成"没有正文"，那是**误导**。
+   */
   if (!LEAN4_SUPPORTED_GOAL_KINDS.includes(request.goal.goalKind)) {
-    // 类型上今天进不来（`PremiseBridgeGoal` 只有两类），但**先判一次**：桥对表外类是抛，
+    // 类型上今天进不来（`PremiseBridgeGoal` 只有那几类），但**先判一次**：桥对表外类是抛，
     // 而"我们不支持这一类"是**结局**，不是"这一层出岔子"（那会被报成 internal_error）。
     return unchanged("goal_unsupported", `目标类「${request.goal.goalKind}」不在适配器覆盖范围 ${LEAN4_SUPPORTED_GOAL_KINDS.join(" / ")} 内。`)
+  }
+
+  /**
+   * **正文从哪来**（改成**显式开关**，2026-10-10；起因是一条用例红了）。
+   *
+   * 第一版写的是"`proof` 空 ⇒ 自动用系统那份"。用例当场指出了问题：调用方给一个**空正文**时
+   * 的意思是"**别跑**"，而静默换成系统正文会让这条意图消失（它可能是有意的）。
+   * 所以现在只有**明说** `proofSource: "system-canonical"` 才走系统那张表；
+   * 否则 `proof` 是空的就如实 `no_proof_body`。
+   */
+  const wantsCanonical = request.proofSource === "system-canonical"
+  const canonical = wantsCanonical ? canonicalProofBody(request.goal) : null
+  const proof = wantsCanonical ? canonical?.body ?? "" : request.proof ?? ""
+  const proofSource: ProofSource = wantsCanonical && canonical !== null ? "system-canonical" : "model"
+  if (proof.trim().length === 0) {
+    return unchanged(
+      "no_proof_body",
+      wantsCanonical
+        ? "这一类今天没有系统 canonical 正文，而调用方也没有给模型正文 —— 空正文不值得花几分钟去跑（也不该假装证过）。"
+        : "没有证明正文 —— 空正文不值得花几分钟去跑（也不该假装证过）。要用系统按类给的那份，请显式传 `proofSource: system-canonical`。"
+    )
   }
 
   let bridge: PremiseBridgeResult
@@ -214,7 +251,7 @@ export async function attemptAutomaticProof(request: AutomaticProofRequest): Pro
 
   const timeoutMs = request.timeoutMs ?? DEFAULT_PROOF_TIMEOUT_MS
   try {
-    const outcome = await runLean4ClosedLoop(request.base, adapterInputFor(request), request.claimId, {
+    const outcome = await runLean4ClosedLoop(request.base, adapterInputFor(request, proof), request.claimId, {
       // 通道自己决定跑什么（桌面命令）；这里只告诉适配器"工具链存在"。
       runner: channelAsRunner(request.channel, timeoutMs),
       toolchain: { leanPath: "channel://desktop", lakePath: "channel://desktop" },
@@ -227,12 +264,22 @@ export async function attemptAutomaticProof(request: AutomaticProofRequest): Pro
 
     const verifiedArtifact = outcome.verification.status === "verified" ? outcome.verification.artifact : null
     if (verifiedArtifact !== null) {
-      return { outcome: "verified", status: outcome.status, artifact: verifiedArtifact, verified: true, detail: outcome.judgement.detail, bridge }
+      return {
+        outcome: "verified",
+        status: outcome.status,
+        artifact: verifiedArtifact,
+        verified: true,
+        proofSource,
+        // **正文的来源要写进说明**：内核验的是正文本身（判据那层刻意不看正文），
+        // 但"这条证明是模型想出来的还是系统照抄的"是用户有权知道的事。
+        detail: proofSource === "system-canonical" ? `${outcome.judgement.detail}（正文由**系统**按这一类给出：${canonical?.note ?? ""}）` : outcome.judgement.detail,
+        bridge
+      }
     }
 
     const mapped: AutomaticProofOutcome =
       outcome.judgement.status === "unsupported" ? "toolchain_unavailable" : outcome.judgement.status === "timeout" ? "timeout" : "rejected"
-    return { outcome: mapped, status: outcome.status, artifact: null, verified: false, detail: outcome.judgement.detail, bridge }
+    return { outcome: mapped, status: outcome.status, artifact: null, verified: false, proofSource, detail: outcome.judgement.detail, bridge }
   } catch (error) {
     // **最坏情况不许变成"证过了"**：如实报这一层出了岔子，状态原样交回。
     return unchanged("internal_error", `自动证明这条路自己出错了：${error instanceof Error ? error.message : String(error)}`, bridge)
