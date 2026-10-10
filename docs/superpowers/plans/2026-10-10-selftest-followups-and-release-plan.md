@@ -77,9 +77,10 @@
   3. 因此**推荐路径**是：**先让用户走一遍当前构建**（三件修复 + 形式证明入口）→ 再定版号（建议 **`3.3.11`**：
      它是"现场修复批次之后的新一批"，不是回填 3.3.10）→ 构建 **bundle**（MSI/NSIS）→ 记三份哈希 →
      写 `docs/release/v3.3.11.md` → 建 tag 与 GitHub Release → 复核 `releases/latest`。
-- **当前构建（不是 release，只是本机 exe）**：`apps/desktop/src-tauri/target/release/mathcanvas-desktop.exe`，
-  构建于 2026-10-11 01:29，**SHA-256 `46EF42571646B6A764A9DECA782BF2446383C2C404FAAA5194846086FE6242F3`**
-  （此前 01:06 那一版是 `498769549DFB…393B1D`，已被本版取代；**每次重建都会换哈希，所以这里记的是"当前那一版"**）。
+- **当前构建（不是 release，只是本机 exe）**：`apps/desktop/src-tauri/target/release/mathcanvas-desktop.exe`。
+  **这里不再记一个具体哈希** —— 它每次重建都会变（本会话就已经换了三次：01:06 / 01:29 / 01:55），
+  记在这里只会得到一行**过期数字**。要核对就现算：`Get-FileHash <exe> -Algorithm SHA256`；
+  **真正需要留档的哈希属于 release 产物**（见上一条：定版号 → 出 bundle → 三份哈希一起写进 `docs/release/`）。
   **注意 `bundle/` 下的 MSI/NSIS 是 10-10 11:48 那一批（3.3.10）的，比当前源码旧** —— 不能当这一版的产物。
 
 ### B. 门禁与发布（现状：不放行）
