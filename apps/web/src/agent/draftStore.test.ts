@@ -374,6 +374,39 @@ describe("isolated drafts", () => {
     expect("proofAttempt" in staged.preview).toBe(false)
   })
 
+  /**
+   * **题面改写要走到草稿层**（2026-10-10 第二件）。
+   *
+   * 草稿层**会自己重算一遍题设核验**（Worker 那条路只回带候选文档与操作），所以改写必须也到这一层 ——
+   * 否则编译器说"读懂了"、草稿层说"没读懂"，两句话打架，门禁反而把这一轮拦住。
+   * 这组用例同时钉住另一面：**没有改写时连 `promptNormalisation` 这一栏都不存在**。
+   */
+  const REWRITE_PROMPT = "在三棱锥A-BCD中，AD:AB=1，画示意图"
+  const REWRITES = [{ original: "AD:AB=1", normalized: "AD=AB" }]
+
+  it("题面改写走到草稿层：那条题设从「未核验」变成「通过」，预览里也带着它", async () => {
+    const store = createDraftStore()
+    const record = store.create(createEmptyDocument("geometry3d"))
+    const staged = await store.stage(record.draftId, [IR_TETRAHEDRON] as never, record.draftVersion, REWRITE_PROMPT, undefined, undefined, undefined, undefined, REWRITES)
+
+    expect(staged.ok).toBe(true)
+    if (!staged.ok) return
+    // `AD:AB=1` 原本读不出来；改写成 `AD=AB` 之后在那组坐标下真的成立。
+    expect(staged.preview.diagramVerification?.status).toBe("passed")
+    expect(staged.preview.promptNormalisation?.accepted).toEqual([{ original: "AD:AB=1", normalized: "AD=AB", givens: 1 }])
+  })
+
+  it("**没有改写时行为逐字不变**：那条照旧未核验，且没有 `promptNormalisation` 这一栏", async () => {
+    const store = createDraftStore()
+    const record = store.create(createEmptyDocument("geometry3d"))
+    const staged = await store.stage(record.draftId, [IR_TETRAHEDRON] as never, record.draftVersion, REWRITE_PROMPT)
+
+    expect(staged.ok).toBe(true)
+    if (!staged.ok) return
+    expect(staged.preview.diagramVerification?.status).toBe("unverified")
+    expect("promptNormalisation" in staged.preview).toBe(false)
+  })
+
   it("**形式证明开关开着 ⇒ 有一次尝试，而且不阻塞作图**（跑不了就如实记一条）", async () => {
     const calls: string[] = []
     const store = createDraftStore(undefined, undefined, {

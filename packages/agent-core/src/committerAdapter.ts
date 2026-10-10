@@ -1,7 +1,7 @@
 import { createDocumentHandle, type DocumentHandle } from "@draw/scene-graph"
 
 import type { CommitOutcome, CommitRequest, CommitterPort, ConsentToken } from "./coordinatorPorts"
-import type { PlanDiagnostic, PlanRelations, RepairRequest, StructuredAssumption, VerificationReport } from "./contracts"
+import type { PlanDiagnostic, PlanRelations, PromptNormalisations, RepairRequest, StructuredAssumption, VerificationReport } from "./contracts"
 import type { DiagramVerificationReport } from "./diagramVerification"
 import { runAcceptance, type AcceptanceDocument } from "./verification/taskAcceptance"
 
@@ -35,7 +35,7 @@ export interface DraftStoreLike {
    * **返回 `Promise`**（方案 3）：编译可以被交给几何 Worker，而 Worker 是异步的。
    * 这一层本来就是 `async`（`CommitterPort.stage` 返回 `Promise`），所以只是把 `await` 加到调用点。
    */
-  stage(draftId: string, actions: readonly unknown[], expectedDraftVersion: number, userMessage?: string, relations?: PlanRelations, obligationIR?: boolean, witnessSearch?: boolean): Promise<
+  stage(draftId: string, actions: readonly unknown[], expectedDraftVersion: number, userMessage?: string, relations?: PlanRelations, obligationIR?: boolean, witnessSearch?: boolean, proofExport?: boolean, normalisations?: PromptNormalisations): Promise<
     | {
         ok: true
         preview: {
@@ -152,7 +152,14 @@ export function createCommitterAdapter(dependencies: CommitterAdapterDependencie
         request.userMessage,
         request.relations,
         dependencies.nextPhaseFlags?.obligationIR,
-        dependencies.nextPhaseFlags?.witnessSearch
+        dependencies.nextPhaseFlags?.witnessSearch,
+        // `proofExport`：证明那一次尝试由草稿层按它自己的开关做，不经过这里（保持既有语义）。
+        undefined,
+        /**
+         * **题面改写随暂存一起下去**（2026-10-10 第二件）：草稿层会自己重算一遍题设核验，
+         * 它必须读**与编译器同一份题面**，否则两句话打架（见 `DraftStore.stage` 的签名注释）。
+         */
+        request.normalisations
       )
       if (!staged.ok) {
         const detail = staged.detail ?? staged.diagnostics?.map((entry) => `${entry.code}: ${entry.message}`).join("; ")

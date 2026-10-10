@@ -1,5 +1,5 @@
 import type { GeometryDocument } from "@draw/dsl"
-import { canonicalContentHash, compilePlan, planHasVerifiableFigure, parseObligationWithLegacy, verifyDiagramObligations, PLAN_SCHEMA_VERSION, type PlanCompileResult, type PlanDiagnostic, type PlanEnvelope, type PlanRelations, type RepairRequest, type StructuredAssumption, type DiagramVerificationReport } from "@draw/agent-core"
+import { canonicalContentHash, compilePlan, planHasVerifiableFigure, parseObligationWithLegacy, verifyDiagramObligations, PLAN_SCHEMA_VERSION, applyNormalisation, parseDiagramObligations, parseNormalisationReply, type PlanCompileResult, type PlanDiagnostic, type PlanEnvelope, type PlanRelations, type PromptNormalisations, type RepairRequest, type StructuredAssumption, type DiagramVerificationReport } from "@draw/agent-core"
 import { createIdAllocator, type DocumentHandle } from "@draw/scene-graph"
 
 import type { DraftAction, DomainOperation, IdAllocator } from "@draw/scene-graph"
@@ -162,7 +162,15 @@ export interface DraftStore {
     relations?: PlanRelations,
     obligationIR?: boolean,
     witnessSearch?: boolean,
-    proofExport?: boolean
+    proofExport?: boolean,
+    /**
+     * **模型给的题面改写**（2026-10-10 第二件）：只换说法、不许改条件。
+     *
+     * 为什么要走到这一层：草稿层**会自己重算一遍题设核验**（Worker 那条路只回带候选文档与操作），
+     * 而编译器那边已经在用它了。两处必须读**同一份题面** —— 否则编译器说"读懂了"、草稿层说
+     * "没读懂"，两句话打架，门禁反而不放行（与上面 `relations` 那条注释同源）。
+     */
+    normalisations?: PromptNormalisations
   ): Promise<StageResult>
   /** 基础文档变了（手工编辑、撤销、切工作区）→ 草稿过期，不能再提交。 */
   assertFresh(draftId: string, liveHandle: DocumentHandle): FreshnessResult
@@ -370,7 +378,7 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
       return { ...record, candidate: cloneDocument(record.candidate) }
     },
 
-    async stage(draftId, actions, expectedDraftVersion, userMessage, relations, obligationIR, witnessSearch, proofExport) {
+    async stage(draftId, actions, expectedDraftVersion, userMessage, relations, obligationIR, witnessSearch, proofExport, normalisations) {
       const record = drafts.get(draftId)
       if (!record) return { ok: false, reason: "unknown_draft", detail: `no draft ${draftId}` }
       if (record.draftVersion !== expectedDraftVersion) {
@@ -399,6 +407,8 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
         // 于是每一份声明了关系的计划都在真实路径上被报 `relation_not_declared`
         // （直接调 `compilePlan` 却一切正常，所以单元测试全绿也发现不了）。
         ...(relations === undefined ? {} : { relations }),
+        // **题面改写也要一起带上**（同上）：编译期读的就是这一份信封。
+        ...(normalisations === undefined || normalisations.length === 0 ? {} : { normalisations }),
         actions
       }
       const compiled = await compile({
@@ -455,8 +465,24 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
       // 按下标配对的 —— 拿模型的原始动作去核验救回来的图，会把顶点认错，于是救回来的图
       // 被报告成"未核验"甚至"失败"（编译器说 passed、草稿层说 failed，两句话打架）。
       // 缺省时 `materialisedActions` 不存在，用的一直是调用方给的那份（与改动之前逐字相同）。
-      const parsed = userMessage && planHasVerifiableFigure(actions)
-        ? parseObligationWithLegacy(userMessage, { spatialPointConditions: witnessSearch === true }) : null
+      /**
+       * **题面改写在这里对"重算用的题面"生效**（2026-10-10 第二件）。
+       *
+       * 编译器那边已经用了同一份改写；这一层**必须读同一份题面** —— 否则编译器说"读懂了"、
+       * 草稿层说"没读懂"，两句话打架，门禁反而不放行（与 `stage` 签名上那段注释同源）。
+       * 没有改写、或全被拒 ⇒ `effectivePrompt` 就是原文，行为与改动之前逐字相同。
+       */
+      const unreadClauses = userMessage === undefined ? [] : parseDiagramObligations(userMessage).unverified
+      const normalisation = userMessage === undefined || normalisations === undefined || normalisations.length === 0 || unreadClauses.length === 0
+        ? null
+        : parseNormalisationReply({ clauses: normalisations }, userMessage, unreadClauses)
+      const effectivePrompt = normalisation === null || normalisation.accepted.length === 0 || userMessage === undefined
+        ? userMessage
+        : applyNormalisation(userMessage, normalisation.accepted)
+      if (normalisation !== null && (normalisation.accepted.length > 0 || normalisation.rejected.length > 0)) record.promptNormalisation = normalisation
+
+      const parsed = effectivePrompt && planHasVerifiableFigure(actions)
+        ? parseObligationWithLegacy(effectivePrompt, { spatialPointConditions: witnessSearch === true }) : null
       const obligations = parsed?.legacy ?? null
       const materialised = compiled.materialisedActions === undefined ? plan : { ...plan, actions: compiled.materialisedActions }
       const checked = obligations && (obligations.givens.length > 0 || obligations.unverified.length > 0)

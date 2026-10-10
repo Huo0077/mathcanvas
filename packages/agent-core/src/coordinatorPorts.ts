@@ -1,4 +1,4 @@
-import type { DocumentHandle, PlanDiagnostic, PlanEnvelope, PlanRelations, RepairRequest, RunContext, StructuredAssumption, ToolResult, VerificationReport } from "./contracts"
+import type { DocumentHandle, PlanDiagnostic, PlanEnvelope, PlanRelations, PromptNormalisations, RepairRequest, RunContext, StructuredAssumption, ToolResult, VerificationReport } from "./contracts"
 import type { DraftAction } from "@draw/scene-graph"
 import type { Budget } from "./budget"
 import { buildContext, buildConversationContext, conversationLimitsFor, type ConversationContext, type ConversationContextSource, type ModelContext, type ObservationSummary } from "./contextBuilder"
@@ -374,6 +374,13 @@ export interface CommitRequest {
    * 不传下去，那三条在真实管线里恒不生效（只有提示词在兜，机制是死的）。
    */
   userMessage?: string
+  /**
+   * **模型给的题面改写**（2026-10-10 第二件）。
+   *
+   * 随 `stage` 一路传到草稿层：那里**会自己重算一遍题设核验**，必须读与编译器同一份题面
+   *（否则编译器说"读懂了"、草稿层说"没读懂"，门禁反而不放行）。缺省 = 模型没给改写。
+   */
+  normalisations?: PromptNormalisations
   /**
    * **这次运行要用哪几条验收条件来判定"做完了"**（Phase 3 接线）。
    *
