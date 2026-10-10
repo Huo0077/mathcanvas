@@ -71,7 +71,8 @@ describe("diagram checks on the real draft staging path", () => {
   })
   it("keeps unsupported conditions visible, never labeling them passed", async () => {
     const { store, draft } = setup()
-    const result = await store.stage(draft.draftId, [action] as never, draft.draftVersion, "在三棱锥A-BCD中，∠ABC=60°，画示意图")
+    // 样本换成**真正读不出来**的那一类（三角函数值不是角本身）：`∠ABC=60°` 现在读得懂、判得了。
+    const result = await store.stage(draft.draftId, [action] as never, draft.draftVersion, "在三棱锥A-BCD中，sin∠ABC=0.5，画示意图")
     expect(result.ok).toBe(true)
     if (result.ok) expect(result.preview.diagramVerification?.status).toBe("unverified")
   })

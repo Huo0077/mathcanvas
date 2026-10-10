@@ -62,6 +62,17 @@ export type WitnessRelation =
    */
   | { kind: "equal-length"; segments: readonly (readonly string[])[] }
   | { kind: "segment-length"; segments: readonly (readonly string[])[]; value?: number | WitnessStatedValue }
+  /**
+   * **点名的数值角**（§3-F，2026-10-10）：`∠ABC=60°`。
+   *
+   * `targets` **恰好三个点名**，中间那个是顶点（`["A","B","C"]` 读作 `∠ABC`）。
+   * 语义是**内部角**、取值 `(0°, 180°)` —— 与"两条直线的夹角"（取 `[0°,90°]`）**不是一回事**，
+   * 所以它是独立的一档，不借 `perpendicular` / `parallel` 的名字（判据写混了不会红）。
+   *
+   * **本批只支持三角形底面**把它闭式造出来（见 `deriveAngledTriangleBase`）；
+   * 四边形底部与涉及环外点的角一律拒绝，理由由那些分支的文案说清。
+   */
+  | { kind: "planarAngle"; targets: readonly string[]; value?: number | WitnessStatedValue; unit?: string }
   | { kind: "dihedral"; segments: readonly WitnessPlaneTarget[]; value?: number | WitnessStatedValue; unit?: string }
 
 /** 高（棱锥）的来源。 */
@@ -1197,6 +1208,85 @@ function deriveRepresentativePolygon(
   }
 }
 
+/**
+ * **底面点名了一个数值角的三角形**（§3-F，2026-10-10）：`∠ABC=60°` ⇒ 闭式放出来。
+ *
+ * 为什么这一支能现在做：三角形底面的三条边**本来就有两个自由度**（两条边取代表值），
+ * 而"一个角"恰好把它们之外的那件事钉住 —— 把两条邻边按题面那个角摆开就行，
+ * **不需要解题器**（与"环首直角 ⇒ 矩形""菱形取代表角"同一条口径）。
+ *
+ * 放置方式（全部在 `z = 0` 上）：顶点 `B` 落在原点、`BA` 沿 `+x`、`BC` 与它成 θ；
+ * 两个边长取题面给的，没给就取**两个不等**的代表值（等长是等腰三角形 —— 题面没说）。
+ *
+ * **返回 `null` 表示"这一支不管"**：没有角关系、角不在 `(0°,180°)`、点名的三个点不在底面环上、
+ * 或者题面还点了别的底面条件（平行/垂直/等长）—— 那些情况交给既有的分支去拒绝，
+ * 而不是在这里猜一个形状出来。
+ */
+function deriveAngledTriangleBase(
+  names: readonly string[],
+  relations: readonly WitnessRelation[]
+): { status: "ok"; polygon: Vector3[]; freeValues: string[]; assumptions: string[] } | WitnessConstructRejection | null {
+  if (names.length !== 3) return null
+  const angle = relations.find((relation) => relation.kind === "planarAngle" && relation.targets.length === 3 && relation.targets.every((name) => names.includes(name)))
+  if (angle === undefined || angle.kind !== "planarAngle") return null
+  const [first, vertex, third] = angle.targets as [string, string, string]
+  /**
+   * **别的底面条件在场时这一支不管**：把角摆好之后，平行/垂直/等长还得同时成立，
+   * 那是联立问题（本层不做）—— 交给既有的拒绝分支，文案由它们给。
+   */
+  const otherBaseCondition = relations.some((relation) => {
+    if (relation === angle) return false
+    if (relation.kind === "segment-length") return false
+    // 第二个角也是联立问题（两个角一起把底面钉住），本支不管。
+    if (relation.kind === "planarAngle") return true
+    return relation.segments.some((segment) => segment.every((name) => names.includes(name)))
+  })
+  if (otherBaseCondition) return null
+  const stated = interpretValue(angle.value, null)
+  if (stated === null) return reject("unsupported-base-shape", `底面点名的角 ${angle.targets.join("")} 没有可用的度数。`, [...names])
+  if (!(stated.value > 0) || stated.value >= 180) {
+    return reject("degenerate-base", `底面点名的角是 ${formatNumber(stated.value)}°：角的内部角必须在 0° 与 180° 之间（0 与 180 都是退化）。`, [...names])
+  }
+  const radians = (stated.value * Math.PI) / 180
+  /**
+   * 两条邻边的长度：题面给就用题面，没给取**不相等**的代表值 ——
+   * 等长就是等腰三角形，那是题面没说的额外特殊性（与候选池"两条自由底边不许取相等"同一条账）。
+   */
+  const firstLength = statedLength(relations, [vertex, first])
+  const thirdLength = statedLength(relations, [vertex, third])
+  for (const side of [firstLength, thirdLength]) if (side.kind === "invalid") return side.rejection
+  const firstStated = firstLength.kind === "value" ? firstLength.stated : null
+  const thirdStated = thirdLength.kind === "value" ? thirdLength.stated : null
+  const alongFirst = freeLength(firstStated, thirdStated, 0)
+  const alongThird = freeLength(thirdStated, firstStated, 1)
+  if (!alongFirst || !alongThird || !(alongFirst.value > 0) || !(alongThird.value > 0)) {
+    return reject("degenerate-base", "底面自由边长必须为有限正数。", [...names])
+  }
+  /**
+   * **第三条边（`${first}${third}`）不能是题面给的**：它由两条邻边与那个角决定，
+   * 给了就得联立核对，本层不做 —— 如实拒绝而不是挑一个形状。
+   */
+  const acrossStated = statedLength(relations, [first, third])
+  if (acrossStated.kind === "invalid") return acrossStated.rejection
+  if (acrossStated.kind === "value") {
+    return reject("unsupported-base-shape", `底面同时给了 ${first}${third} 的长度与 ${angle.targets.join("")} 的度数：第三条边由两条邻边与那个角决定（联立关系），本层不做这个求解。`, [...names])
+  }
+  const positions = new Map<string, Vector3>([
+    [vertex, { x: 0, y: 0, z: 0 }],
+    [first, { x: alongFirst.value, y: 0, z: 0 }],
+    [third, { x: snapToZero(alongThird.value * Math.cos(radians)), y: snapToZero(alongThird.value * Math.sin(radians)), z: 0 }]
+  ])
+  const freeValues: string[] = []
+  if (!firstStated) freeValues.push(`底面边长 ${vertex}${first} = ${formatNumber(alongFirst.value)}（系统自选）`)
+  if (!thirdStated) freeValues.push(`底面边长 ${vertex}${third} = ${formatNumber(alongThird.value)}（系统自选）`)
+  return {
+    status: "ok",
+    polygon: names.map((name) => positions.get(name)!),
+    freeValues,
+    assumptions: [`底面 ${names.join("")} 按题面点名的角 ${angle.targets.join("")} = ${formatNumber(stated.value)}° 放出来（顶点 ${vertex} 处、两条邻边按该角摆开；${freeValues.length === 0 ? "两条邻边的长度都来自题面" : "未给定的边长取系统自选的代表值"}）。`]
+  }
+}
+
 function deriveBasePolygon(
   names: readonly string[],
   relations: readonly WitnessRelation[]
@@ -1240,6 +1330,12 @@ function deriveBasePolygon(
   const third = names.length === 4 ? names[3] : names[2]
   const rightAngleAtFirst = baseEdgePerpendicular(relations, names, [first, second]) && baseEdgePerpendicular(relations, names, [first, third])
   if (!rightAngleAtFirst) {
+    /**
+     * **点名了数值角**（§3-F）：三角形底面闭式可做 —— 放在"普通三角形示例"**之前**，
+     * 否则题面写的那个角会被一组代表值顶掉（那正是"悄悄换一个题面没说的形状"）。
+     */
+    const angled = deriveAngledTriangleBase(names, relations)
+    if (angled !== null) return angled
     if (names.length === 3) return deriveRepresentativeTriangle(names, relations)
     return reject(
       "unsupported-base-shape",

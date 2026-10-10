@@ -204,11 +204,29 @@ describe("verifyDiagramObligations", () => {
     const report = verifyDiagramObligations(parseDiagramObligations(prompt), plan, candidate, base)
     expect(report.status).toBe("passed")
   })
-  it("does not interpret an unknown angle condition as a successful empty verification", () => {
+  /**
+   * **平面数值角现在会被真的量一遍**（§3-F，2026-10-10 更新）。
+   *
+   * 原来这条钉的是"未知角条件 ⇒ `unverified`"（不许变成空成功）。角现在读得懂了，
+   * 于是它分成两半，各自钉一件事：
+   * ① 题面说 60°、而这份候选图不是 60° ⇒ **`failed`**，并且**报出量到的度数**
+   *    （不许静默；这正是"错图不能通过"那条纪律）；
+   * ② **真正读不懂**的条件（`sin∠ABC=0.5`）仍旧 `unverified`，整句原样引用 ——
+   *    "读不懂 ≠ 通过"这条意图原封不动。
+   */
+  it("measures a stated planar angle against the candidate, and keeps an unreadable clause unverified", () => {
     const { plan, candidate } = fixture()
     const report = verifyDiagramObligations(parseDiagramObligations("在△ABC中，∠ABC=60°，画出图形"), plan, candidate)
-    expect(report.status).toBe("unverified")
+    expect(report.status).toBe("failed")
     expect(report.checks[0].sourceText).toBe("∠ABC=60°")
+    expect(report.checks[0].status).toBe("failed")
+    // 报出来的是**量到的度数**（有限数、且确实不是 60）。
+    expect(Number.isFinite(report.checks[0].actual)).toBe(true)
+    expect(report.checks[0].actual).not.toBeCloseTo(60, 3)
+
+    const unreadable = verifyDiagramObligations(parseDiagramObligations("在△ABC中，sin∠ABC=0.5，画出图形"), plan, candidate)
+    expect(unreadable.status).toBe("unverified")
+    expect(unreadable.checks[0].sourceText).toBe("sin∠ABC=0.5")
   })
 })
 

@@ -55,10 +55,24 @@ describe("parseObligationIR", () => {
     expect(ir.obligations.map(({ start, end }) => [start, end])).toEqual([[0, 0], [0, 0]])
     expect(toLegacyObligationSet(ir)).toEqual({ givens: [], goals: ["OA⊥CD"], freeChoices: ["A"], unverified: [] })
   })
-  it("keeps an unjudgeable angle as ambiguous instead of silently supported", () => {
+  /**
+   * **平面数值角是"判得了的"**（§3-F，2026-10-10 更新）。
+   *
+   * 这条用例原名"keeps an unjudgeable angle as ambiguous instead of silently supported" ——
+   * 拿 `∠ABC=60°` 当"判不了"的样本。现在它**判得了**（核验器能按坐标量出来），
+   * 所以样本换成真正读不出来的那一类（`sin∠ABC=0.5`），**意图一字未改**：
+   * 读不出来的东西不许被当成"支持"。
+   */
+  it("carries a planar numeric angle as a supported given, and keeps an unreadable one unverified", () => {
     const ir = parseObligationIR("在△ABC中，∠ABC=60°，画出图形")
-    expect(ir.obligations).toEqual([])
-    expect(ir.unverified.map((item) => item.sourceText)).toEqual(["∠ABC=60°"])
+    expect(ir.obligations.map((item) => [item.role, item.kind, item.targets, item.expected, item.judgeability])).toEqual([
+      ["given", "planarAngle", ["A", "B", "C"], 60, "supported"]
+    ])
+    expect(ir.unverified).toEqual([])
+
+    const unreadable = parseObligationIR("在△ABC中，sin∠ABC=0.5，画出图形")
+    expect(unreadable.obligations).toEqual([])
+    expect(unreadable.unverified.map((item) => item.sourceText)).toEqual(["sin∠ABC=0.5"])
   })
 
   it("carries an explicit free point as a free_choice obligation with no expected value", () => {

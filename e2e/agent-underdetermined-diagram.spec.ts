@@ -42,7 +42,7 @@ test("an additional unsupported condition is visible and cannot be committed", a
   const status = page.getByRole("region", { name: "运行状态" }).last()
   await expect(status.locator(".agent-run-state")).toHaveText("没有完成")
   await expect(status).toContainText("题设尚未核验")
-  await expect(status).toContainText("∠ABC=60°")
+  await expect(status).toContainText("sin∠PAB=0.5")
   await expect(page.getByRole("button", { name: "确认并提交" })).toHaveCount(0)
   await page.getByRole("button", { name: "返回画布" }).click()
   await expect(page.locator(".algebra-panel .object-row")).toHaveCount(0)

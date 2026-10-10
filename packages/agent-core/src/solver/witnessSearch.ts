@@ -243,6 +243,14 @@ function kernelRelations(givens: readonly GeometryObligation[]): WitnessRelation
       relations.push({ kind: "segment-length", segments: [[targets[0], targets[1]]], value: obligation.expected })
     }
     /**
+     * **平面上的数值角**（§3-F）：三个点名原样交给内核，顶点是中间那个。
+     * 内核那一侧只支持三角形底面闭式造出来（四边形与涉及环外点的角会拒绝）——
+     * 这里不替它筛，否则"读得出但造不出"这件事就没有一行文案说得出口。
+     */
+    if (obligation.kind === "planarAngle" && targets.length === 3 && typeof obligation.expected === "number") {
+      relations.push({ kind: "planarAngle", targets: [targets[0], targets[1], targets[2]], value: obligation.expected, unit: "degree" })
+    }
+    /**
      * "线段 ⊥ 平面"**不翻译**：内核构造器的 `WitnessRelation` 只有两两写法，
      * 硬拆成"线段 ⊥ 平面上的某条边"会把一个更强的命题降级成一条更弱的、可能不成立的命题。
      * 它由判定侧逐字核验（`verifyDiagramObligations` 的线面垂直残差），构造侧只需要

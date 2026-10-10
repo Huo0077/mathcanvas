@@ -27,10 +27,36 @@ describe("parseDiagramObligations", () => {
     }
   })
 
+  /**
+   * **"读不懂的条件"与"空成功"必须分得开**（2026-10-10 更新）。
+   *
+   * 这条用例原先拿 `∠ABC=60°` 当"读不懂"的样本 —— 它现在是**读得懂的**（`planarAngle`，
+   * 见下面那条），所以样本换成**真正读不懂**的那一类：`sin∠PAB = 0.5`（三角函数值，
+   * 不是角本身）。**意图一字未改**：不管读不读得懂，都不许出现"什么都没读到却算通过"。
+   */
   it("does not confuse an unrecognized geometric condition with an empty success", () => {
-    const parsed = parseDiagramObligations("在三角形 ABC 中，∠ABC=60°，画出图形")
+    const parsed = parseDiagramObligations("在三角形 ABC 中，sin∠ABC=0.5，画出图形")
     expect(parsed.givens).toEqual([])
-    expect(parsed.unverified).toEqual([{ sourceText: "∠ABC=60°", reason: expect.any(String) }])
+    expect(parsed.unverified).toEqual([{ sourceText: "sin∠ABC=0.5", reason: expect.any(String) }])
+  })
+
+  /**
+   * **平面上的数值角现在读得懂**（§3-F，2026-10-10）：`∠ABC=60°` ⇒ `planarAngle` 一条 given，
+   * 三个点名原样给出（**中间那个是顶点**）、度数是 `value`；`unverified` 里**不再有它**。
+   *
+   * 判据里同时钉住"三种退化写法读不出来"：0°、180°、以及三点名重复 —— 句法对但几何退化，
+   * 如实留在未核验，而不是当成一个角放行。
+   */
+  it("reads a planar numeric angle as a judged given, and leaves degenerate ones unverified", () => {
+    const parsed = parseDiagramObligations("在三角形 ABC 中，∠ABC=60°，画出图形")
+    expect(parsed.givens).toEqual([expect.objectContaining({ kind: "planarAngle", targets: ["A", "B", "C"], value: 60 })])
+    expect(parsed.unverified).toEqual([])
+
+    for (const degenerate of ["∠ABC=0°", "∠ABC=180°", "∠ABA=60°"]) {
+      const text = `在三角形 ABC 中，${degenerate}，画出图形`
+      expect(parseDiagramObligations(text).givens, degenerate).toEqual([])
+      expect(parseDiagramObligations(text).unverified.some((item) => item.sourceText.includes(degenerate)), degenerate).toBe(true)
+    }
   })
 
   it("flags unmatched conditions and invalid dimensions rather than dropping them", () => {
@@ -87,14 +113,19 @@ describe("parseDiagramObligations", () => {
     expect(missingUnit.unverified.some((item) => item.sourceText.includes("二面角E-BC-D=45"))).toBe(true)
   })
   it("**带空格的条件也要整句引用** —— 这串文字会**原样显示给用户**（`diagramVerification` 把 residue 的 sourceText 直接当 check 文案）", () => {
-    // 修前这里是 ["∠PAB"]：**值被截掉**，而用户的"题设尚未核验"列表里显示的就是这一串。
-    const parsed = parseDiagramObligations("在四棱锥 P-ABCD 中，∠PAB = 60°")
+    /**
+     * 修前这里是 `["∠PAB"]`：**值被截掉**。样本换成"仍然读不懂"的那一类（`sin∠PAB = 0.5`）——
+     * `∠PAB = 60°`（带空格）现在**整条读得懂**了（`planarAngle`），于是它根本不会出现在 residue 里，
+     * 拿它当样本就测不到"整句引用"这件事了。
+     */
+    const parsed = parseDiagramObligations("在四棱锥 P-ABCD 中，sin∠PAB = 0.5")
 
-    expect(parsed.unverified.map((item) => item.sourceText)).toEqual(["∠PAB = 60°"])
+    expect(parsed.unverified.map((item) => item.sourceText)).toEqual(["sin∠PAB = 0.5"])
   })
 
   it("同一类写法，**带不带空格都要拿到整条**（既有用例只覆盖了不带空格那位 —— 缺陷正好藏在另一侧）", () => {
-    for (const prompt of ["在四棱锥 P-ABCD 中，∠ABC=60°", "在四棱锥 P-ABCD 中，sin∠PAB = 0.5", "在四棱锥 P-ABCD 中，AB:AD = 1:2"]) {
+    // `∠ABC=60°` 那一支现在是 given（读得懂），所以这一组只留"仍然读不懂"的两种形状。
+    for (const prompt of ["在四棱锥 P-ABCD 中，sin∠PAB = 0.5", "在四棱锥 P-ABCD 中，AB:AD = 1:2"]) {
       const text = parseDiagramObligations(prompt).unverified[0]?.sourceText ?? ""
 
       // 每条都是"某个量 = 某个值"的形状：整句引用必然含 `=`，碎片则不会。

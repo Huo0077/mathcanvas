@@ -75,10 +75,37 @@ describe("diagram acceptance in plan compilation", () => {
     expect(result.diagramVerification?.status).toBe("unverified")
     expect(result.diagnostics.some((item) => item.code === "relation_not_satisfied")).toBe(false)
   })
+  /**
+   * **平面上的数值角：这一支现在真的判得动**（§3-F，2026-10-10）。
+   *
+   * 原来这条钉的是"`∠ABC=60°` 读不懂 ⇒ 整份候选如实 `unverified`"。角读得懂之后，
+   * 同一条用例必须**分成正反两半**，否则它守的那件事（不许把没核的东西说成通过）就没人守了：
+   *
+   * ① **图真的满足题面** ⇒ `passed`（这是新能力：这类题从"永远有一条未核验"变成可以提交）；
+   * ② **图不满足** ⇒ `ok=false` + 诊断点名那条条件 —— 而且这**不是**"读不懂"，
+   *    是"量出来不是 60°"，两者的用户文案完全不同。
+   *
+   * 夹具用同一个三棱锥：`B=(-1,0,0)`、`A=(0,0,1)`；`C` 取 `(0.5,1.5,0)` 时
+   * `BA=(1,0,1)`、`BC=(1.5,1.5,0)` ⇒ `cos∠ABC = 1.5/(√2·1.5√2) = 0.5` ⇒ **正好 60°**；
+   * 取原来的 `(0.5,√3/2,0)` 则是约 **52.24°**。
+   */
+  it("judges a stated planar angle on the figure, instead of leaving it unverified", () => {
+    const sixty = pyramid()
+    sixty.actions[0].inputs.vertices[2] = { x: 0.5, y: 1.5, z: 0 }
+    const passed = compilePlan(sixty, context("在三棱锥A-BCD中，∠ABC=60°，画一张示意图"))
+    expect(passed.diagramVerification?.status).toBe("passed")
+    expect(passed.diagramVerification?.checks.map((item) => item.sourceText)).toEqual(["∠ABC=60°"])
+
+    const wrong = compilePlan(pyramid(), context("在三棱锥A-BCD中，∠ABC=60°，画一张示意图"))
+    expect(wrong.ok).toBe(false)
+    expect(wrong.diagnostics.some((item) => item.code === "diagram_condition_failed" && item.detail.includes("∠ABC=60°"))).toBe(true)
+  })
+
   it("retains a preview as unverified instead of declaring unsupported conditions passed", () => {
-    const compiled = compilePlan(pyramid(), context("在三棱锥A-BCD中，∠ABC=60°，画一张示意图"))
+    // 样本换成**真正读不出来**的那一类（三角函数值不是角本身）：意图与原来一字不差。
+    const compiled = compilePlan(pyramid(), context("在三棱锥A-BCD中，sin∠ABC=0.5，画一张示意图"))
     expect(compiled.ok).toBe(true)
     expect(compiled.diagramVerification?.status).toBe("unverified")
-    expect(compiled.diagramVerification?.checks[0].sourceText).toBe("∠ABC=60°")
+    expect(compiled.diagramVerification?.checks[0].sourceText).toBe("sin∠ABC=0.5")
   })
 })

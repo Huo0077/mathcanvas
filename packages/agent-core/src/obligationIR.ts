@@ -60,7 +60,7 @@ import type { ClaimRole, GeometryObligation, Judgeability, ObligationTolerance }
 /** 有现成判据的题设种类（`diagramVerification.ts` 的 `calculate` 覆盖这些）。 */
 const JUDGED_KINDS: ReadonlySet<DiagramObligationKind> = new Set<DiagramObligationKind>([
   "fixedLength", "equilateral", "equalLength", "midpoint", "segmentRatio",
-  "planePerpendicular", "dihedral", "perpendicular", "parallel", "pointCoordinate",
+  "planePerpendicular", "dihedral", "planarAngle", "perpendicular", "parallel", "pointCoordinate",
   "conicAxes", "tangentAt", "functionGraph"
 ])
 
@@ -72,6 +72,8 @@ const distanceTolerance = (value: number): number => Math.max(1e-6, 1e-6 * Math.
 /** 逐条 claim 的容差：与核验器同一套判据（长度用绝对、关系用无量纲、角度用度）。 */
 function toleranceFor(kind: DiagramObligationKind, value: number | undefined): ObligationTolerance | undefined {
   if (kind === "dihedral") return { kind: "angular", value: ANGLE_TOLERANCE_DEGREES }
+  // 平面角与二面角同一把尺子（都是"度"，容差不能有两套）。
+  if (kind === "planarAngle") return { kind: "angular", value: ANGLE_TOLERANCE_DEGREES }
   if (kind === "fixedLength") return { kind: "absolute", value: distanceTolerance(value ?? 1) }
   if (kind === "pointCoordinate") return { kind: "absolute", value: distanceTolerance(1) }
   // 半轴是长度量 ⇒ 与点坐标同一条绝对容差；用相对容差会让"半轴差 0.3"这种明显错误通过。

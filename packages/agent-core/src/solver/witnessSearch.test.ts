@@ -40,8 +40,13 @@ const PYRAMID_WRONG_DIAGONAL = "在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，A
 const PYRAMID_MIDPOINT = "在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，AB ⊥ AD，O为BD的中点，画出这个四棱锥"
 /** 首批题型之外的真实题面（中点 / 等边 / 面面垂直 / 二面角 / 比例分点）。 */
 const TRIANGLE_PYRAMID = "在三棱锥 A-BCD 中，BD=2，△OCD为等边三角形，AB=AD，O为BD的中点，DE=2EA，平面ABD⊥平面BCD，二面角E-BC-D=45°。求证 OA⊥CD"
-/** `PYRAMID_UNVERIFIED_PROMPT` 那把：可构造的题面后面缀了一个解析器读不出的子句（residue）。 */
-const PYRAMID_RESIDUE = "在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，AB ⊥ AD，画出这个四棱锥，∠ABC=60°"
+/**
+ * `PYRAMID_UNVERIFIED_PROMPT` 那把：可构造的题面后面缀了一个解析器读不出的子句（residue）。
+ *
+ * **2026-10-10 更正**：这里原来缀的是 `∠ABC=60°` —— 它现在**读得懂**了（`planarAngle`），
+ * 于是这条题面**没有 residue**，测不到"residue 挡住认证"这件事。样本换成真正读不出的那一类。
+ */
+const PYRAMID_RESIDUE = "在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，AB ⊥ AD，画出这个四棱锥，sin∠PAB=0.5"
 /** 点名了一个自由点 Q：构造器不会生成它，核验器的点名映射也点不到。 */
 const PYRAMID_FREE_POINT = "在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，AB ⊥ AD，任取点 Q，画出示意图"
 /** 题面把底面两条边与顶点高都钉死了 ⇒ 一个自由标量都不剩（网格不该再产候选）。 */
@@ -731,7 +736,8 @@ describe("witness search: the verifier receives the same forced information as t
     if (result.status !== "unverified_instance") throw new Error("expected the residue to block certification")
     const text = result.reasons.join(" ")
     expect(text).toContain("unverified-obligation")
-    expect(text).toContain("∠ABC=60°")
+    // 理由要点名**那条读不出的子句**（原样引用），不是一句含糊的"没找到"。
+    expect(text).toContain("sin∠PAB=0.5")
   })
 
   it("refuses to certify a candidate that cannot map a named free point", () => {

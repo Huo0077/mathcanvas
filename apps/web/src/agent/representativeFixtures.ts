@@ -231,7 +231,16 @@ export function conicInvariantPlan(): PlanEnvelope {
  */
 export const PYRAMID_PROMPT = "在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，BC ∥ AD，AB ⊥ AD，画出这个四棱锥"
 /** 离线负例：同一张图外加尚未支持的角度条件，必须停在未核验。 */
-export const PYRAMID_UNVERIFIED_PROMPT = `${PYRAMID_PROMPT}，∠ABC=60°`
+/**
+ * 那把"**有一条读不出来的条件**"的题面：可构造的四棱锥 + 一个解析器读不懂的子句。
+ *
+ * **2026-10-10 换样本**：原来缀的是 `∠ABC=60°` —— 它现在**读得懂**了（`planarAngle`，
+ * 核验器会拿坐标真的量一遍），于是这条题面不再"有一条未核验"，用它当样本的用例全都测不到
+ * 它们要测的那件事（未核验可见、不能提交、不签同意票…）。换成 `sin∠PAB=0.5`：
+ * **三角函数值不是角本身**，仍然读不懂 ⇒ 该有的那道守卫照旧。
+ * 意图关键词里的 `∠` 仍在（`localPlanner` 那条 intent 靠它命中）。
+ */
+export const PYRAMID_UNVERIFIED_PROMPT = `${PYRAMID_PROMPT}，sin∠PAB=0.5`
 
 /**
  * 一组满足全部所述关系的坐标。**顶点用下标引用**（`v0`…`v4` 依次是 P、A、B、C、D）。

@@ -4,6 +4,11 @@ import { POINT_NAME_SOURCE, splitPointNames } from "@draw/geometry-kernel"
 export type DiagramObligationKind =
   | "fixedLength" | "equilateral" | "equalLength" | "midpoint" | "segmentRatio"
   | "planePerpendicular" | "dihedral" | "perpendicular" | "parallel" | "pointCoordinate"
+  /**
+   * **平面上的数值角**（§3-F，2026-10-10）：`∠ABC=60°` ⇒ `targets: ["A","B","C"]`（中间是顶点）、
+   * `value` 是度数。它与 `dihedral`（二面角）是两件事：这一档说的是**同一个平面内**两条边的内部角。
+   */
+  | "planarAngle"
   | "conicAxes"
   | "tangentAt"
   | "functionGraph"
@@ -241,6 +246,26 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
   },  {
     pattern: /二面角\s*([A-Z])\s*[-−]\s*([A-Z])([A-Z])\s*[-−]\s*([A-Z])\s*=\s*(\d+(?:\.\d+)?)\s*°/g,
     read: (m) => { const value = finitePositive(m[5]); return value === null || value >= 180 ? null : { kind: "dihedral", targets: m.slice(1, 5), value } }
+  },
+  {
+    /**
+     * **平面上的数值角**：`∠ABC=60°`（§3-F）。
+     *
+     * 三点名必须**互异**（`∠ABA` 不是角）；度数按度收，`0` 与 `≥180` **读不出来** ⇒ 落 `unverified`
+     * （"认不出就如实说未核验"这条纪律不因为多认了一种写法而松动 —— 句法对、几何退化的那些，
+     * 由核验器与构造器各自拒绝）。
+     *
+     * **它必须排在 `UNREAD_CONDITION` 能够到它之前**（读取器表本来就在前面按序试），
+     * 否则这句会同时进 `givens` 与 `unverified` 两处。
+     */
+    pattern: /∠\s*([A-Z][A-Z0-9′'₁₂₃₄₅₆₇₈₉]*)\s*([A-Z][A-Z0-9′'₁₂₃₄₅₆₇₈₉]*)\s*([A-Z][A-Z0-9′'₁₂₃₄₅₆₇₈₉]*)\s*=\s*(\d+(?:\.\d+)?)\s*°/g,
+    read: (m) => {
+      const value = finitePositive(m[4])
+      if (value === null || value >= 180) return null
+      const targets = [m[1], m[2], m[3]]
+      if (new Set(targets).size !== 3) return null
+      return { kind: "planarAngle", targets, value }
+    }
   },
   {
     pattern: new RegExp(`(?:平面|底面|面)\\s*(${PLANE_NAME})\\s*(?:⊥|垂直于?)\\s*(?:平面|底面|面)\\s*(${PLANE_NAME})`, "g"),

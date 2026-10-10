@@ -504,6 +504,23 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
     const detail = dihedralAngleDetail3([b, c, e], [b, c, d], b, c)
     return detail === null ? null : { actual: detail.interiorDegrees, expected: numeric, tolerance: ANGLE_TOLERANCE_DEGREES }
   }
+  /**
+   * **平面上的数值角**（§3-F）：`targets` 恰好三个点名、中间那个是顶点，量的是**内部角**。
+   *
+   * 判据**自己算**（`acos` 两条边的方向向量），不读任何构造过程留下的量 —— 与二面角那条同一条纪律。
+   * 三点里有重合（方向向量退化为 0）时返回 `null`（如实"未核验"，而不是把一个 0/0 说成一个角）。
+   */
+  if (item.kind === "planarAngle") {
+    if (numeric === undefined) return null
+    const [first, vertex, third] = vertices as Vector3[]
+    const alongFirst = subtractVector3(first, vertex)
+    const alongThird = subtractVector3(third, vertex)
+    const magnitudes = lengthVector3(alongFirst) * lengthVector3(alongThird)
+    if (!(magnitudes > 1e-12)) return null
+    const cosine = dotVector3(alongFirst, alongThird) / magnitudes
+    const degrees = (Math.acos(Math.min(1, Math.max(-1, cosine))) * 180) / Math.PI
+    return { actual: degrees, expected: numeric, tolerance: ANGLE_TOLERANCE_DEGREES }
+  }
   const kind = item.kind === "perpendicular" ? "perpendicular" : "parallel"
   /**
    * **平面可以用 3–6 个点名**（S2：底面支持 3–6 边）。多余的点先核**共面性**，

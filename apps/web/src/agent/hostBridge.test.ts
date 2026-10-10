@@ -59,7 +59,7 @@ describe("host bridge consent", () => {
       alias: "solid", vertexNames: ["A", "B", "C", "D"],
       vertices: [{ x: 0, y: 0, z: 1 }, { x: -1, y: 0, z: 0 }, { x: 0.5, y: 0.8, z: 0 }, { x: 1, y: 0, z: 0 }],
       faces: [[0, 1, 2], [0, 3, 1], [0, 2, 3], [1, 3, 2]]
-    } }], record.draftVersion, "在三棱锥A-BCD中，∠ABC=60°，画示意图")
+    } }], record.draftVersion, "在三棱锥A-BCD中，sin∠PAB=0.5，画示意图")
     expect(staged.ok).toBe(true)
     if (staged.ok) expect(staged.preview.diagramVerification?.status).toBe("unverified")
     expect(bridge.requestConsent(record.draftId)).toEqual({ ok: false, reason: "unverified_diagram" })

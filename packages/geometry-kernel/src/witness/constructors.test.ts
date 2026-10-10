@@ -1091,3 +1091,63 @@ describe("constructFrustumWitness", () => {
     if (result.status === "rejected") expect(result.code).toBe("unsupported-base-shape")
   })
 })
+
+/**
+ * **底面点名一个数值角**（§3-F，2026-10-10）：`∠ABC=60°`。
+ *
+ * 判据**自算**：拿构造出来的坐标自己量那个内部角（`acos` 两条边的方向向量），
+ * 不读构造过程留下的任何量。另加两条"没有多加题面没说的东西"：两条邻边**不等长**
+ * （等长就是等腰三角形）与三角形非退化。
+ */
+describe("底面点名数值角（§3-F）", () => {
+  const angleAt = (result: { witness: { points: Vector3[]; names: string[] } }, vertex: string, first: string, third: string): number => {
+    const at = (name: string): Vector3 => result.witness.points[result.witness.names.indexOf(name)]!
+    const alongFirst = subtractVector3(at(first), at(vertex))
+    const alongThird = subtractVector3(at(third), at(vertex))
+    const cosine = dotVector3(alongFirst, alongThird) / (Math.hypot(alongFirst.x, alongFirst.y, alongFirst.z) * Math.hypot(alongThird.x, alongThird.y, alongThird.z))
+    return (Math.acos(Math.min(1, Math.max(-1, cosine))) * 180) / Math.PI
+  }
+
+  it("放出来的三角形真的满足那个角，而且没有多加「等腰」这种题面没说的特殊性", () => {
+    const result = constructPyramidWitness(pyramidRequest({
+      base: ["A", "B", "C"],
+      relations: [{ kind: "planarAngle", targets: ["A", "B", "C"], value: 60, unit: "degree" }]
+    }))
+
+    expect(result.status, JSON.stringify(result)).toBe("candidate")
+    if (result.status !== "candidate") return
+    expect(angleAt(result, "B", "A", "C")).toBeCloseTo(60, 6)
+    // 两条邻边不等长（等长是等腰三角形 —— 题面只说了那个角）。
+    const at = (name: string): Vector3 => result.witness.points[result.witness.names.indexOf(name)]!
+    expect(Math.abs(distanceVector3(at("B"), at("A")) - distanceVector3(at("B"), at("C")))).toBeGreaterThan(1e-6)
+    // 三点不共线（角的内部角不是 0/180）。
+    expect(Math.abs(crossVector3(subtractVector3(at("A"), at("B")), subtractVector3(at("C"), at("B"))).z)).toBeGreaterThan(1e-6)
+  })
+
+  it("角在哪个顶点都认（顶点是 `targets` 的中间那个），且退化与超范围一律拒绝", () => {
+    // 顶点换成 A：`∠BAC=45°`。
+    const atApexA = constructPyramidWitness(pyramidRequest({
+      base: ["A", "B", "C"],
+      relations: [{ kind: "planarAngle", targets: ["B", "A", "C"], value: 45, unit: "degree" }]
+    }))
+    expect(atApexA.status, JSON.stringify(atApexA)).toBe("candidate")
+    if (atApexA.status === "candidate") expect(angleAt(atApexA, "A", "B", "C")).toBeCloseTo(45, 6)
+
+    for (const value of [0, 180, -30]) {
+      const result = constructPyramidWitness(pyramidRequest({
+        base: ["A", "B", "C"],
+        relations: [{ kind: "planarAngle", targets: ["A", "B", "C"], value, unit: "degree" }]
+      }))
+      expect(result.status, `value=${String(value)}`).toBe("rejected")
+      if (result.status === "rejected") expect(result.code).toBe("degenerate-base")
+    }
+  })
+
+  it("四边形底面点名数值角 ⇒ 如实拒绝（本批只支持三角形底面把它闭式造出来）", () => {
+    const result = constructPyramidWitness(pyramidRequest({
+      relations: [{ kind: "planarAngle", targets: ["A", "B", "C"], value: 60, unit: "degree" }]
+    }))
+    expect(result.status).toBe("rejected")
+    if (result.status === "rejected") expect(result.code).toBe("unsupported-base-shape")
+  })
+})

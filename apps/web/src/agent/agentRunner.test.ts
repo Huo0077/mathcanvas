@@ -47,11 +47,11 @@ describe("the confirm and commit cycle", () => {
       plan: async () => ({ plan: pyramidPlan(), requestId: "pyramid-eval", attemptId: "attempt-1" })
     }
     const runner = createAgentRunner({ planner })
-    const result = await runAndWait(runner, `${PYRAMID_PROMPT}，∠ABC=60°，平面ABC∥平面PAD`)
+    const result = await runAndWait(runner, `${PYRAMID_PROMPT}，sin∠PAB=0.5，平面ABC∥平面PAD`)
     expect(result.phase).toBe("failed")
     const assistant = useAgentStore.getState().activeConversation!.messages.at(-1)!
     expect(assistant.failure?.message).toContain("题设尚未核验")
-    expect(assistant.failure?.message).toContain("∠ABC=60°")
+    expect(assistant.failure?.message).toContain("sin∠PAB=0.5")
     expect(assistant.failure?.message).toContain("平面ABC∥平面PAD")
     expect(runner.hasDraft()).toBe(false)
     expect(useSceneStore.getState().document.primitives).toHaveLength(0)
