@@ -7,6 +7,23 @@
 
 
 
+## 2026-10-10 —— 共面容差：多面体与棱柱统一到"按尺度取"，报错说清"哪个环、偏多少"
+
+**现场**（3.3.7，用户那句平面四边形）：`compile_failed: degenerate_polyhedron: action_compile: envelope.actions[0]: polygon face vertices must be coplanar`。**进展是真实的** —— 预算那关过了（A 生效），运行走完了"暂存 → 修复 → 再暂存"，死在**多面体面环的共面校验**上。
+
+**根因是口径分叉**：同一件事有两个写法 —— 棱柱那条（`prism.ts` 的 `validatePrismInput`）早就用**按尺度**的容差 `scale * 1e-9`，而多面体的面环用 `areCoplanar` 的**默认绝对容差 `1e-10`**。后果：模型自己算的坐标（8 量级、末位差 1e-9）**做成棱柱能过、做成多面体被拒**。
+
+**改法**：
+
+1. **判据尺度收成一个家**：`extentOf` 移到 `geometry3d.ts`，棱柱与多面体共用（原先各写一份）；`areCoplanar` 改为委托 `maxPlaneDeviation` —— "找平面"也不再写两遍。
+2. 多面体的面环校验改用 `scale * 1e-9`（与棱柱**同一口径**）。
+3. **报错说清哪个环、偏多少**：`face ring [0,1,2,3] is not coplanar: deviation 5.00e-1 exceeds the tolerance 1.0e-8` —— 模型只有**一次**修复机会，原来那句 `must be coplanar` 等于没说（它不知道该改哪个环、差多远）。
+4. **3D 技能自述逐字写明这条规则**（手算坐标优先用三角形、四点环必须真共面、诊断码 `non-planar-base`），并在 `catalog.test.ts` 里钉住这三个词 —— 文字被删掉，问题就会回来。
+
+**判据**：`solid-builders.test.ts` 两条**先红后绿**（末位差 1e-9 的环现在被**接受**；报错里含环下标与 deviation）+ 一条文案判据。读数：全库非 Lean **4112 通过 + 1 todo / 0 失败**；几何内核 **715 通过**；全量 e2e **218 通过 / 0 失败**；`typecheck` 干净。
+
+**仍未覆盖（别误读）**：`翻折至 … PC=4√3` 的语义，以及 `AE:AD=2:5` / `AF:AB=1:2` 这种 `X:Y=a:b` 写法（后者靠题面规范化通道）。
+
 ## 2026-10-10 —— A：只读工具不再吃"生成"额度；C：立体工作区有了**平面面片**（`solid.create_face`）
 
 **A（用户现场的死因）**：`apps/web/src/agent/modelPlanner.ts` 原来**按每个只读工具调用**各扣 1 代 `generation`（预检也按调用数判 `remaining < calls.length`）。现场：首次规划 1 + 3 个只读工具 3 = 4 = `generation` 上限 ⇒ 需要修复时**扣不动** ⇒ 用户看到 `budget exhausted: budget_repair`，而那份计划本身只是"平面四边形被写成多面体"、**本该能被修好**。改：**一批只扣一次**（这批工具之后只多**一次**模型生成）；工具调用次数仍由 `tool`（上限 24）管 —— 两本账从此不再互相打架。判据：3 个工具 ⇒ `used.generation === 1`；**变异**（改回按次扣）实测 `expected 3 to be 1` **真红**。

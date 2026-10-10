@@ -207,6 +207,49 @@ describe("solid builders", () => {
     expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain("non-planar-base")
   })
 
+  /**
+   * **共面容差按模型自身尺度取 —— 与棱柱同一条口径**（2026-10-10 用户现场）。
+   *
+   * 棱柱那条（`prism.ts` 的 `validatePrismInput`）早就用 `scale * 1e-9`；而多面体的面环用的是
+   * `areCoplanar` 的**默认绝对容差 1e-10** —— 同一件事两个写法。现场后果：模型自己算的坐标
+   * （8 量级、末位差 1e-9）被多面体判"不共面"，而**同样的形状做成棱柱就能过**。
+   */
+  it("accepts a face ring whose deviation is within the model's own scale", () => {
+    const result = buildFromPoints({
+      vertices: [
+        { x: 0, y: 0, z: 0 },
+        { x: 8, y: 0, z: 0 },
+        { x: 8, y: 8, z: 0 },
+        { x: 0, y: 8, z: 1e-9 },
+        { x: 0, y: 0, z: 4 }
+      ],
+      faces: [[0, 1, 2, 3], [0, 1, 4], [1, 2, 4], [2, 3, 4]]
+    }, createBuilderContext("tiny-deviation"))
+
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).not.toContain("non-planar-base")
+  })
+
+  /**
+   * **报错要说清"哪个面、偏多少"**（同上现场）：模型那一次修复只有一次机会，
+   * 而原话只给了一句 `polygon face vertices must be coplanar` —— 它不知道该改哪个环、差多远。
+   */
+  it("names the offending ring and its deviation", () => {
+    const result = buildFromPoints({
+      vertices: [
+        { x: 0, y: 0, z: 0 },
+        { x: 1, y: 0, z: 0 },
+        { x: 1, y: 1, z: 1 },
+        { x: 0, y: 1, z: 0 },
+        { x: 0, y: 0, z: 2 }
+      ],
+      faces: [[0, 1, 2, 3], [0, 1, 4], [1, 2, 4], [2, 3, 4]]
+    }, createBuilderContext("non-planar-named"))
+
+    const entry = result.diagnostics.find((diagnostic) => diagnostic.code === "non-planar-base")
+    expect(entry?.message).toContain("[0,1,2,3]")
+    expect(entry?.message).toMatch(/deviation/i)
+  })
+
   it("rejects unused vertices and disconnected closed shells", () => {
     const tetrahedronFaces = [[2, 1, 0], [0, 1, 3], [1, 2, 3], [2, 0, 3]]
     const result = buildFromPoints({

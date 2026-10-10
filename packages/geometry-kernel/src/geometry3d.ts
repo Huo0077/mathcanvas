@@ -46,18 +46,44 @@ export function normalizeVector3(vector: Vector3): Vector3 {
   return length > 1e-12 ? scaleVector3(vector, 1 / length) : { x: 0, y: 0, z: 0 }
 }
 
-export function areCoplanar(points: Vector3[], tolerance = 1e-10): boolean {
-  if (points.length < 4) return true
+/**
+ * 判据的**尺度**：模型自身有多大（各分量绝对值的最大值）。
+ *
+ * 固定小数位在 1e6 量级的坐标上会把合法的形状判成退化（浮点残差随尺度增长），而绝对容差在
+ * 1e-3 量级的模型上又会放过真正退化的输入 —— 所以容差一律**按尺度取**（与 `sections3d.ts` 的
+ * `quantumFor` 同一套思路）。
+ *
+ * **这份定义只有一个家**（2026-10-10 用户现场）：棱柱与多面体原先各写一份，连共面容差都不同
+ *（棱柱 `scale * 1e-9`、多面体用 `areCoplanar` 的默认绝对 `1e-10`），于是**同样的形状
+ * 做成棱柱能过、做成多面体被拒** —— 而模型只有一次修复机会。
+ */
+export function extentOf(points: readonly Vector3[]): number {
+  return points.reduce((largest, point) => Math.max(largest, Math.abs(point.x), Math.abs(point.y), Math.abs(point.z)), 0)
+}
+
+/**
+ * 一组点里**离最佳平面最远**的那个有多远（单位与坐标一致）。
+ *
+ * 两个用途：`areCoplanar` 的判据本体（免得"找平面"写两遍），以及**把话说清楚** ——
+ * 不共面时模型与用户都需要知道"偏了多少"，否则那句"不共面"在只有一次修复机会时等于没说。
+ */
+export function maxPlaneDeviation(points: readonly Vector3[]): number {
+  if (points.length < 4) return 0
   const first = points[0]
-  let plane: Plane3 | null = null
-  for (let secondIndex = 1; secondIndex < points.length && !plane; secondIndex += 1) {
+  let candidate: Plane3 | null = null
+  for (let secondIndex = 1; secondIndex < points.length && !candidate; secondIndex += 1) {
     for (let thirdIndex = secondIndex + 1; thirdIndex < points.length; thirdIndex += 1) {
-      plane = planeFromPoints(first, points[secondIndex], points[thirdIndex])
-      if (plane) break
+      candidate = planeFromPoints(first, points[secondIndex], points[thirdIndex])
+      if (candidate) break
     }
   }
-  if (!plane) return true
-  return points.every((point) => Math.abs(dotVector3(plane.normal, point) + plane.constant) <= tolerance)
+  if (!candidate) return 0
+  const plane = candidate
+  return points.reduce((largest, point) => Math.max(largest, Math.abs(dotVector3(plane.normal, point) + plane.constant)), 0)
+}
+
+export function areCoplanar(points: Vector3[], tolerance = 1e-10): boolean {
+  return maxPlaneDeviation(points) <= tolerance
 }
 
 export function planeFromPoints(first: Vector3, second: Vector3, third: Vector3): Plane3 | null {

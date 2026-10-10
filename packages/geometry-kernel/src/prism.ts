@@ -1,4 +1,4 @@
-import { areCoplanar, crossVector3, dotVector3, lengthVector3, normalizeVector3, subtractVector3, type Vector3 } from "./geometry3d"
+import { areCoplanar, crossVector3, dotVector3, extentOf, lengthVector3, normalizeVector3, subtractVector3, type Vector3 } from "./geometry3d"
 
 /**
  * **棱柱的纯拓扑构造**（Solid/Prism 切片 Task 2；设计规格 §3.3）。
@@ -54,17 +54,6 @@ export interface PrismDiagnostic {
 export type PrismValidation =
   | { ok: true }
   | { ok: false; diagnostics: PrismDiagnostic[] }
-
-/**
- * 判据的**尺度**。
- *
- * 固定小数位在 1e6 量级的坐标上会把合法的棱柱判成退化（浮点残差随尺度增长），
- * 而绝对容差在 1e-3 量级的模型上又会放过真正退化的输入。所以容差按模型自身尺度取，
- * 与 `sections3d.ts` 的 `quantumFor` 同一套思路。
- */
-function extentOf(points: readonly Vector3[]): number {
-  return points.reduce((largest, point) => Math.max(largest, Math.abs(point.x), Math.abs(point.y), Math.abs(point.z)), 0)
-}
 
 /** 平面内的二维点（规格 §3.2 的底面写法）。 */
 export interface PrismPlaneCoordinate {

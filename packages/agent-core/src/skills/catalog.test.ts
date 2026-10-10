@@ -70,8 +70,22 @@ describe("skill manifests", () => {
     }
   })
 
-  it("keeps the read-only skills free of actions", () => {
-    // 工程制图与图像证据是**只读**技能：它们存在，但一个动作都不该有。
+  /**
+   * **面环共面这条规则必须写在 3D 技能的自述里**（2026-10-10 用户现场）。
+   *
+   * 约束它的不是"文案好看"：模型只有**一次**修复机会，而它就是靠这段文字知道
+   * "四个点以上的环要真的共面、拿不准就拆成三角形"的。文字被删掉，那条现场问题就会回来 ——
+   * 所以这里逐字钉住三个词（共面 / 三角形 / 诊断码）。
+   */
+  it("keeps the face-ring coplanarity rule in the 3D skill text", () => {
+    const manifest = SKILL_MANIFESTS.find((candidate) => candidate.id === "spatial-modeling")!
+
+    expect(manifest.summary).toContain("共面")
+    expect(manifest.summary).toContain("三角形")
+    expect(manifest.summary).toContain("non-planar-base")
+  })
+
+  it("keeps the read-only skills free of actions", () => {    // 工程制图与图像证据是**只读**技能：它们存在，但一个动作都不该有。
     for (const id of ["engineering-drawing", "image-evidence"]) {
       const manifest = SKILL_MANIFESTS.find((candidate) => candidate.id === id)!
       expect(manifest.actionIds, id).toHaveLength(0)

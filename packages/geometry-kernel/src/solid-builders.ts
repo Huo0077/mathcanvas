@@ -1,6 +1,6 @@
 import type { ConePrimitive, CubePrimitive, CylinderPrimitive, PrimitiveSpec, PyramidPrimitive } from "@draw/dsl"
 
-import { areCoplanar, crossVector3, subtractVector3, type Vector3 } from "./geometry3d"
+import { areCoplanar, crossVector3, extentOf, maxPlaneDeviation, subtractVector3, type Vector3 } from "./geometry3d"
 
 export type GeometryDiagnosticCode =
   | "invalid-input"
@@ -304,14 +304,25 @@ export function buildFromPoints(input: FromPointsInput, context: BuilderContext)
   if (!Array.isArray(input?.vertices) || input.vertices.length < 4 || input.vertices.some((vertex) => !isFiniteVector(vertex)) || !hasDistinctPositions(input.vertices)) diagnostics.push(diagnostic("invalid-input", "vertices must be distinct finite points"))
   if (!Array.isArray(input?.faces) || input.faces.length < 4) diagnostics.push(diagnostic("missing-face-rings", "a solid requires at least four explicit face rings"))
   if (diagnostics.length > 0) return emptyResult(diagnostics)
+  /** 判据的尺度只算一次：容差按模型自身大小取（见下面面环那段的注释）。 */
+  const scale = extentOf(input.vertices)
   for (const face of input.faces) {
     if (!Array.isArray(face) || face.length < 3 || new Set(face).size !== face.length || face.some((index) => !Number.isInteger(index) || index < 0 || index >= input.vertices.length)) {
       diagnostics.push(diagnostic("invalid-input", "face rings must contain distinct vertex indexes"))
       continue
     }
     const points = face.map((index) => input.vertices[index])
+    /**
+     * **容差按模型自身尺度取 —— 与棱柱那条同一口径**（2026-10-10 用户现场）。
+     *
+     * 原先这里用 `areCoplanar` 的默认**绝对**容差 `1e-10`，而棱柱用 `scale * 1e-9`：
+     * 同样的形状做成棱柱能过、做成多面体被拒。现场后果是模型自己算的坐标（8 量级、末位差 1e-9）
+     * 被判"不共面"，而那次修复只有一次机会 —— 报错还只给一句"must be coplanar"，
+     * **不说哪个环、偏多少**，于是第二次照样错。所以这里连"偏了多少"一起说出去。
+     */
+    const deviation = maxPlaneDeviation(points)
     if (!hasNonZeroArea(points)) diagnostics.push(diagnostic("degenerate-base", "face rings must have non-zero area"))
-    else if (points.length >= 4 && !areCoplanar(points)) diagnostics.push(diagnostic("non-planar-base", "polygon face vertices must be coplanar"))
+    else if (points.length >= 4 && deviation > scale * 1e-9) diagnostics.push(diagnostic("non-planar-base", `face ring [${face.join(",")}] is not coplanar: deviation ${deviation.toExponential(2)} exceeds the tolerance ${(scale * 1e-9).toExponential(1)}`))
     else if (hasSelfIntersectingPolygon(points)) diagnostics.push(diagnostic("self-intersection", "face rings must not self-intersect"))
   }
   if (diagnostics.length > 0) return emptyResult(diagnostics)
