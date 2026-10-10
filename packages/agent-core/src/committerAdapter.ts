@@ -97,10 +97,10 @@ export interface CommitterAdapterDependencies {
    * 能把它交给编译管线。少了这一项，开关就只对"模型自己调草稿工具"那条路生效 ——
    * 生产运行里它**永远不生效**，那与"没有开关"在产品上无法区分。
    *
-   * 类型只取这两个布尔（不是应用层的 `AgentNextPhaseFlags`）：agent-core 不依赖 `apps/web`，
-   * 而这一层真正要的也只是"把两个开关原样传下去"。可选；不给 = 两个都不传 = 全关。
+   * 类型只取这三个布尔（不是应用层的 `AgentNextPhaseFlags`）：agent-core 不依赖 `apps/web`，
+   * 而这一层真正要的也只是"把开关原样传下去"。可选；不给 = 都不传 = 全关。
    */
-  nextPhaseFlags?: { obligationIR?: boolean; witnessSearch?: boolean }
+  nextPhaseFlags?: { obligationIR?: boolean; witnessSearch?: boolean; proofExport?: boolean }
 }
 
 export interface CommitterAdapter extends CommitterPort {
@@ -139,11 +139,16 @@ export function createCommitterAdapter(dependencies: CommitterAdapterDependencie
       const expectedVersion = preview.ok ? preview.artifact.draftVersion : 1
 
       /**
-       * **编译期开关随暂存一起下去**（R6 / R11）：`DraftStore.stage` 是编译管线唯一的入口，
-       * 而"编译期要不要产出 IR / 要不要在模型坐标不成立时自己搜一组坐标"都是它那一侧的事。
+       * **编译期开关随暂存一起下去**（R6 / R11 / §3-D）：`DraftStore.stage` 是编译管线唯一的入口，
+       * 而"编译期要不要产出 IR / 要不要在模型坐标不成立时自己搜一组坐标 / 跑完作图要不要顺手证一次"
+       * 都是它那一侧的事。
        *
-       * 两个都是"缺省 = 关"，所以应用层没注入时这里传 `undefined`（不是 `false`）——
+       * 三个都是"缺省 = 关"，所以应用层没注入时这里传 `undefined`（不是 `false`）——
        * 让 `stage` 那条"没给就不带"的既有语义继续成立（它也决定 Worker 信封上有没有这个字段）。
+       *
+       * **`proofExport` 这一格原先写的是 `undefined`**，注释还写着"由草稿层按它自己的开关做" ——
+       * **那句话是错的**：草稿层没有自己的开关，它收的就是调用方传进来的这个布尔。
+       * 于是"设置里打开形式证明导出"在主路上什么也不会发生（2026-10-10 §3-D 查实）。
        */
       const staged = await dependencies.drafts.stage(
         draftId,
@@ -153,8 +158,7 @@ export function createCommitterAdapter(dependencies: CommitterAdapterDependencie
         request.relations,
         dependencies.nextPhaseFlags?.obligationIR,
         dependencies.nextPhaseFlags?.witnessSearch,
-        // `proofExport`：证明那一次尝试由草稿层按它自己的开关做，不经过这里（保持既有语义）。
-        undefined,
+        dependencies.nextPhaseFlags?.proofExport,
         /**
          * **题面改写随暂存一起下去**（2026-10-10 第二件）：草稿层会自己重算一遍题设核验，
          * 它必须读**与编译器同一份题面**，否则两句话打架（见 `DraftStore.stage` 的签名注释）。

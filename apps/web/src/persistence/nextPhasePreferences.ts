@@ -27,6 +27,7 @@ export const NEXT_PHASE_PREFERENCES_KEY = "mathcanvas:next-phase-preferences"
 interface NextPhasePreferences {
   constrainedDrag?: unknown
   witnessSearch?: unknown
+  proofExport?: unknown
 }
 
 /** `localStorage` 在非浏览器环境（有些单测、SSR 预渲染）里可能不存在 —— 那就当作没存过。 */
@@ -98,5 +99,39 @@ export function saveWitnessSearchEnabled(enabled: boolean): void {
     store.setItem(NEXT_PHASE_PREFERENCES_KEY, JSON.stringify({ ...base, witnessSearch: enabled }))
   } catch {
     // An unwritable preference cannot enable the capability in agentNextPhaseFlags().
+  }
+}
+
+/**
+ * 读「形式证明导出」这个实验性开关（§3-D，2026-10-10）。
+ *
+ * 与上面两个同一条口径：**没存过 / 坏数据 / 存不下，一律 `false`**（判定用 `=== true`）。
+ * 这一条尤其要紧：打开它意味着"跑完作图之后会去起一个 Lean 进程"，而"读偏好"绝不允许
+ * 把坏数据变成"开"。
+ */
+export function loadProofExportEnabled(): boolean {
+  const store = storage()
+  if (store === null) return false
+  try {
+    const serialized = store.getItem(NEXT_PHASE_PREFERENCES_KEY)
+    if (serialized === null) return false
+    const parsed = JSON.parse(serialized) as NextPhasePreferences | null
+    return parsed !== null && typeof parsed === "object" && parsed.proofExport === true
+  } catch {
+    return false
+  }
+}
+
+/** 只写自己的键（与 `saveWitnessSearchEnabled` 同样的理由：写一个键不许把别的抹掉）。 */
+export function saveProofExportEnabled(enabled: boolean): void {
+  const store = storage()
+  if (store === null) return
+  try {
+    const serialized = store.getItem(NEXT_PHASE_PREFERENCES_KEY)
+    const parsed = serialized === null ? null : (JSON.parse(serialized) as unknown)
+    const base = parsed !== null && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {}
+    store.setItem(NEXT_PHASE_PREFERENCES_KEY, JSON.stringify({ ...base, proofExport: enabled }))
+  } catch {
+    // 存不下 ⇒ 下次读到的是关（安全的那一侧）。
   }
 }

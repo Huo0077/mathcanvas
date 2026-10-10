@@ -1,4 +1,4 @@
-import { loadConstrainedDragEnabled, loadWitnessSearchEnabled } from "../persistence/nextPhasePreferences"
+import { loadConstrainedDragEnabled, loadProofExportEnabled, loadWitnessSearchEnabled } from "../persistence/nextPhasePreferences"
 
 /**
  * **下一阶段能力的项目级开关**（设计 2026-10-04 的 Feature flags 一节；控制器裁决 R2）。
@@ -87,20 +87,24 @@ export function createAgentNextPhaseFlags(overrides: Partial<AgentNextPhaseFlags
  */
 export function agentNextPhaseFlags(): AgentNextPhaseFlags {
   /**
-   * **偏好只读取 `constrainedDrag` 与 `witnessSearch`**；另外三项不读存储。
+   * **偏好只读取有三个入口的那三个**（`constrainedDrag` / `witnessSearch` / `proofExport`）；
+   * 另外两项**故意不读偏好**，防止无产品读取点的能力被本地数据意外打开。
    *
-   * 另外三个**故意不读偏好**，防止无产品读取点的能力被本地数据意外打开：
-   *
-   * `witnessSearch` 虽有独立入口，但默认关；开启后仍走原有题设核验与用户确认。
-   * - `proofExport` **2026-10-10 起有一个读取点了** —— `draftStore.stage` 的第八个参数（跑完作图后顺手问一次
-   *   "这道题的目标能不能形式证明"，见 `automaticProofStage.ts`）；但**偏好仍然打不开它**：要开得有实验入口 +
-   *   验收证据，而那份证据还差一步（桌面命令 `check_lean_proof` 今天不报 Lean 的版本 ⇒ 产物绑不上，
-   *   见 `automaticProofStage.test.ts` 里那条判据）；
+   * - `witnessSearch` 有独立入口（设置 → 实验性功能），默认关；开启后仍走原有题设核验与用户确认；
+   * - `proofExport` **2026-10-10（§3-D）起也有入口了**：设置 → 实验性功能 → 形式证明导出，
+   *   面板会把那一次尝试的结局 / 正文来源 / 系统替用户做的选择摆出来。
+   *   **它在默认关与"关着时一个字节都不动"这两点上与其它开关一致**：关着时 `draftStore.stage`
+   *   连 `proofAttempt` 这一栏都不写。打开的代价写在开关文案里（跑完作图会去起一个 Lean 进程，
+   *   只有桌面版能真跑，且**原题其余题设不进命题**）；
    * - `openProblemCompiler` 属于 N4 的产品侧，目前没有可用的普通 Agent 读取点；
    * - `obligationIR` 同理。
    *
    * 一个"存了就能全开"的偏好，会把没有产品读取点的能力一起打开 ——
-   * `featureFlags.test.ts` 逐条保证只有明确的两个实验能力可由偏好启用。
+   * `featureFlags.test.ts` 逐条保证只有**有入口的那三个**可由偏好启用。
    */
-  return createAgentNextPhaseFlags({ constrainedDrag: loadConstrainedDragEnabled(), witnessSearch: loadWitnessSearchEnabled() })
+  return createAgentNextPhaseFlags({
+    constrainedDrag: loadConstrainedDragEnabled(),
+    witnessSearch: loadWitnessSearchEnabled(),
+    proofExport: loadProofExportEnabled()
+  })
 }

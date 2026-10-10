@@ -58,6 +58,11 @@ export type PreviewArtifact = {
   /** **题面改写（原件 → 我这样读）**：改写要看得见，所以它随预览一起回带给界面。 */
   promptNormalisation?: import("@draw/agent-core").NormalisationReport
   /**
+   * **形式证明那一次尝试**（§3-D，2026-10-10）：开关关着时这个键不存在。
+   * 面板要显示"证了没有 / 正文是谁给的 / 系统替你选了哪些值"，而这三样只在**这一次草稿**上才有意义。
+   */
+  proofAttempt?: import("./automaticProofStage").DraftProofAttempt
+  /**
    * 候选文档里各类对象的**精确计数**（用户可编辑 / 隐藏 / 派生 / 内部近似）。
    *
    * 计划 Step 4 要求确认面板给出 "exact changed IDs/counts"。数字**必须来自真实候选文档**，
@@ -155,6 +160,7 @@ export function createHostBridge(dependencies: HostBridgeDependencies): HostBrid
           stageCount: artifact.stageCount,
           ...(artifact.diagramVerification === undefined ? {} : { diagramVerification: artifact.diagramVerification }),
           ...(artifact.promptNormalisation === undefined ? {} : { promptNormalisation: artifact.promptNormalisation }),
+          ...(artifact.proofAttempt === undefined ? {} : { proofAttempt: artifact.proofAttempt }),
           counts: countDraftObjects(artifact.candidate),
           baseCounts: current ? countDraftObjects(current.document) : emptyCounts
         }

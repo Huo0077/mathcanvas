@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test"
 
+import { CONIC_INVARIANT_PROMPT } from "../apps/web/src/agent/representativeFixtures"
+
 /**
  * **N3 的产品入口：浏览器验收**（2026-10-05）。
  *
@@ -65,8 +67,8 @@ test("仅切约束拖动时，偏好里没有见证搜索及其它未启用能�
 
   const stored = await page.evaluate(() => JSON.parse(localStorage.getItem("mathcanvas:next-phase-preferences") ?? "null"))
 
-  // 只切约束拖动时不会连带开启见证搜索，更不能开启尚无产品入口的三个能力。
-  // 都不在这里，因为 `agentNextPhaseFlags()` **故意不读**它们。
+  // 只切约束拖动时不会连带开启见证搜索，更不能开启**仍然没有产品入口的两个**能力
+  //（`obligationIR` / `openProblemCompiler`）—— 都不在这里，因为 `agentNextPhaseFlags()` **故意不读**它们。
   expect(stored).toEqual({ constrainedDrag: true })
 })
 test("用户可显式启用见证搜索，刷新保留，且不会同时打开其它能力", async ({ page }) => {
@@ -86,4 +88,70 @@ test("用户可显式启用见证搜索，刷新保留，且不会同时打开�
   await expect(page.getByRole("switch", { name: "约束拖动" })).not.toBeChecked()
   await page.getByRole("switch", { name: "示意图见证搜索" }).click()
   await expect(page.getByRole("switch", { name: "示意图见证搜索" })).not.toBeChecked()
+})
+
+/**
+ * **形式证明导出的入口 + 它真的走到了面板上**（§3-D，2026-10-10）。
+ *
+ * 这一块此前是"库里有、草稿层也支持、但**旗打不开**"：`draftStore.stage` 的第八个参数
+ * 在主路上被传成 `undefined`（`committerAdapter` 里那句注释还写着"由草稿层按它自己的开关做"，
+ * 而草稿层根本没有自己的开关）。所以这里证两件事：
+ * ① 开关是**用户点得到**的，且只写自己那个键、刷新后仍在；
+ * ② 打开之后，那一次尝试**真的出现在确认面板上**（这一段以前在界面上不存在）。
+ *
+ * 用的是**没有"求证"句**的那道圆锥曲线题：它必然走到"题面里没有可形式化的目标句"，
+ * 于是**不会去起任何证明进程**，浏览器里也能稳定复现 —— 而"开关关着时面板上连这一段都没有"
+ * 是同一条判据的另一半。
+ */
+test("形式证明导出：默认关、能打开、刷新保留，且只开它自己", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "设置" }).click()
+
+  const proof = page.getByRole("switch", { name: "形式证明导出" })
+  await expect(proof).not.toBeChecked()
+  await expect(page.getByText(/不会调用证明后端/)).toBeVisible()
+  await expect(page.getByText(/原题其余题设不会进命题/)).toBeVisible()
+
+  await proof.click()
+  await expect(proof).toBeChecked()
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("mathcanvas:next-phase-preferences") ?? "null"))).toEqual({ proofExport: true })
+
+  await page.reload()
+  await page.getByRole("button", { name: "设置" }).click()
+  await expect(page.getByRole("switch", { name: "形式证明导出" })).toBeChecked()
+  await expect(page.getByRole("switch", { name: "示意图见证搜索" })).not.toBeChecked()
+  await expect(page.getByRole("switch", { name: "约束拖动" })).not.toBeChecked()
+})
+
+test("开关关着时确认面板上没有形式证明那一段（默认路径逐字不变）", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "Agent 工作区" }).click()
+  await page.getByRole("textbox", { name: "对话输入" }).fill(CONIC_INVARIANT_PROMPT)
+  await page.getByRole("button", { name: "发送" }).click()
+
+  const draft = page.getByRole("region", { name: "确认改动" }).last()
+  await expect(draft).toBeVisible()
+  // 这一段**根本不存在**（不是显示一句"已关闭"）。
+  await expect(draft.getByRole("region", { name: "形式证明" })).toHaveCount(0)
+})
+
+test("打开之后，同一句话的确认面板上真的出现形式证明那一段", async ({ page }) => {
+  await page.goto("/")
+  // ① 用**用户点得到的那条路**打开开关（不是测试后门）。
+  await page.getByRole("button", { name: "设置" }).click()
+  await page.getByRole("switch", { name: "形式证明导出" }).click()
+  await expect(page.getByRole("switch", { name: "形式证明导出" })).toBeChecked()
+
+  // ② 回传统工作区 → Agent 区，发同一句话。
+  await page.getByRole("button", { name: "传统工作区" }).click()
+  await page.getByRole("button", { name: "Agent 工作区" }).click()
+  await page.getByRole("textbox", { name: "对话输入" }).fill(CONIC_INVARIANT_PROMPT)
+  await page.getByRole("button", { name: "发送" }).click()
+
+  // ③ 那一段出现，并如实说"没有目标句"（这道题**没有"求证"那一句**，所以不去起任何证明进程）。
+  const proofSection = page.getByRole("region", { name: "确认改动" }).last().getByRole("region", { name: "形式证明" })
+  await expect(proofSection).toBeVisible()
+  await expect(proofSection).toContainText("题面里没有可形式化的目标句")
+  // 边界那一句必须一起在：这是那一条受限目标的形式证明，不等于整题已证明。
+  await expect(proofSection).toContainText("原题其余题设没有进命题")
 })

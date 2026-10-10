@@ -64,7 +64,30 @@ describe("agent next phase feature flags", () => {
     saveWitnessSearchEnabled(false)
     expect(agentNextPhaseFlags().witnessSearch).toBe(false)
   })
-  it("ignores other unsupported flags in stored preferences", () => {
+  /**
+   * **形式证明导出也有自己的入口了**（§3-D，2026-10-10）：设置 → 实验性功能 → 形式证明导出。
+   *
+   * 与 `witnessSearch` 同一条口径：**只有明确存过的那个键能打开它**，其余一律关着。
+   * 打开它的理由与代价都写在开关文案里（关着不调用证明后端；打开后跑完作图顺手问一次，
+   * 只有桌面版能真跑，且**原题其余题设不进命题**）。
+   */
+  it("enables the proof-export flag from its own preference, leaving the rest off", () => {
+    localStorage.clear()
+    localStorage.setItem(NEXT_PHASE_PREFERENCES_KEY, JSON.stringify({ proofExport: true }))
+
+    expect(agentNextPhaseFlags()).toEqual({
+      obligationIR: false, witnessSearch: false, constrainedDrag: false, openProblemCompiler: false, proofExport: true
+    })
+
+    localStorage.setItem(NEXT_PHASE_PREFERENCES_KEY, JSON.stringify({ proofExport: false }))
+    expect(agentNextPhaseFlags().proofExport).toBe(false)
+    // 坏数据不许变成"开"。
+    localStorage.setItem(NEXT_PHASE_PREFERENCES_KEY, JSON.stringify({ proofExport: "yes" }))
+    expect(agentNextPhaseFlags().proofExport).toBe(false)
+    localStorage.clear()
+  })
+
+  it("ignores the flags that still have no product entry", () => {
     localStorage.setItem(NEXT_PHASE_PREFERENCES_KEY, JSON.stringify({
       obligationIR: true, witnessSearch: true, constrainedDrag: true, openProblemCompiler: true, proofExport: true
     }))
@@ -72,7 +95,10 @@ describe("agent next phase feature flags", () => {
     const flags = agentNextPhaseFlags()
 
     expect(flags.constrainedDrag).toBe(true)
-    for (const name of ["obligationIR", "openProblemCompiler", "proofExport"] as const) {
+    // 有入口的两个（见证搜索 / 形式证明导出）可以被偏好打开；**没有入口的两个仍然不行**。
+    expect(flags.witnessSearch).toBe(true)
+    expect(flags.proofExport).toBe(true)
+    for (const name of ["obligationIR", "openProblemCompiler"] as const) {
       expect(flags[name], `${name} 不许被偏好打开`).toBe(false)
     }
     localStorage.clear()

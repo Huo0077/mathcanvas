@@ -787,6 +787,9 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
           baseCounts: preview.ok ? preview.artifact.baseCounts : undefined,
           diagramVerification: preview.ok ? preview.artifact.diagramVerification : undefined,
           promptNormalisation: preview.ok ? preview.artifact.promptNormalisation : undefined,
+          // **形式证明那一次尝试**（§3-D）：关着时**连这个键都不写**（不是"值是 undefined"）——
+          // 与草稿记录里那条口径一致，免得"默认路径逐字不变"在视图这一层被一个空键破坏。
+          ...(preview.ok && preview.artifact.proofAttempt !== undefined ? { proofAttempt: preview.artifact.proofAttempt } : {}),
           // 假设在**计划解析成功那一刻**就知道，而草稿是运行结束之后才拿到的 —— 中间没有第二条路。
           assumptions: active.assumptions()
         }, eventRunId, generation())

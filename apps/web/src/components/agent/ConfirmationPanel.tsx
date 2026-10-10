@@ -4,6 +4,24 @@ import { countDeltas, removedObjectCount, summarizeDraftScale } from "./confirma
 import { ProofLevelNotice } from "./ProofLevelNotice"
 
 /**
+ * **形式证明那一次尝试的结局词表**（§3-D）。
+ *
+ * 每个词都对应库里那一层的封闭结局（见 `automaticProofStage.DraftProofAttempt`）；
+ * 界面**只做翻译，不判定** —— 成立与否由内核与适配器给出，这里多一句解读就可能把"没跑成"
+ * 说成"证不出来"。
+ */
+const PROOF_OUTCOME_LABEL: Record<NonNullable<AgentDraftView["proofAttempt"]>["outcome"], string> = {
+  verified: "已验证",
+  rejected: "没通过内核检验",
+  timeout: "超时",
+  toolchain_unavailable: "没跑成（这台机器上没有配置工具链）",
+  premises_unresolved: "前提没能从题面里落实",
+  no_goal: "题面里没有可形式化的目标句",
+  internal_error: "内部错误",
+  capability_off: "开关没开"
+}
+
+/**
  * **确认面板**（Task 2.5 Step 4）。
  *
  * 计划原文要求它给出："**exact changed IDs/counts**, assumptions, source/target,
@@ -124,6 +142,33 @@ export function ConfirmationPanel({ draft, assumptions = [], approximationNotes 
         <strong>{item.sourceText}</strong>：{item.status === "passed" ? "通过" : item.status === "failed" ? "不满足" : "未核验"}。{item.reason}
       </li>)}</ul>
       {draft.diagramVerification.sampleValues.length > 0 && <div><h4>本图选用的示例值</h4><ul>{draft.diagramVerification.sampleValues.map((value) => <li key={value}>{value}</li>)}</ul></div>}
+    </section>}
+
+    {/*
+      **形式证明那一次尝试**（§3-D，2026-10-10）。
+
+      它回答三个问题：**这一条证了没有**、**正文是谁给的**（系统按类给的，还是模型写的）、
+      **系统替用户做了哪些选择**（读了哪条目标、平面内取了哪两条相交线）。
+
+      三处刻意的措辞：
+      - 结局词只做**翻译**，判定在内核与适配器那一侧（界面多一句解读就可能把"没跑成"说成"证不出来"）；
+      - 库里的 `detail` **原样显示** —— 它是用户判断"接下来该怎么办"的唯一依据；
+      - 末句那条边界**必须在**：这是题面里那一条受限目标的形式证明，**原题其余题设没有进命题**，
+        不等于整题已证明。少了它，"已验证"三个字会被读成比事实更强的东西。
+
+      开关关着时 `draft.proofAttempt` **根本不存在**，这一段也就不存在。
+    */}
+    {draft.proofAttempt && <section className="agent-proof-attempt" aria-label="形式证明" data-outcome={draft.proofAttempt.outcome}>
+      <h4>形式证明：{PROOF_OUTCOME_LABEL[draft.proofAttempt.outcome]}</h4>
+      <p>{draft.proofAttempt.detail}</p>
+      {draft.proofAttempt.proofSource !== null && <p data-proof-source={draft.proofAttempt.proofSource}>
+        正文来源：{draft.proofAttempt.proofSource === "system-canonical" ? "系统按这一类给出的（不是模型写的）" : "模型给的"}
+      </p>}
+      {draft.proofAttempt.choices.length > 0 && <div>
+        <h5>系统替你做的选择</h5>
+        <ul>{draft.proofAttempt.choices.map((choice) => <li key={choice}>{choice}</li>)}</ul>
+      </div>}
+      <p role="note">这只是题面里那一条受限目标的形式证明：原题其余题设没有进命题，不等于整题已证明；它也不影响这次作图的提交。</p>
     </section>}
 
     {/*

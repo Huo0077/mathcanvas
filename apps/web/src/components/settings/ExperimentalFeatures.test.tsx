@@ -52,6 +52,33 @@ describe("设置 → 实验性功能", () => {
     expect(toggle.getAttribute("aria-checked")).toBe("true")
     expect(loadConstrainedDragEnabled()).toBe(false)
   })
+  /**
+   * **形式证明导出**（§3-D，2026-10-10 接上产品入口）。
+   *
+   * 这条链路此前是"库里有、产品路径也有一条、但**旗打不开**"：`draftStore.stage` 的第八个参数
+   * 早就接上了，偏好却读不到它。这个开关就是那个入口。
+   *
+   * 三件事都要在：**默认关**（关着一个字节都不动）、**说清两边行为**（关着不调用证明后端；
+   * 打开后跑完作图顺手问一次，只有桌面版能真跑，而且**原题其余题设不进命题**）、
+   * **只开自己**（不许顺带打开见证搜索或约束拖动）。
+   */
+  it("形式证明导出：默认关、说清两边行为、打开后只开它自己", () => {
+    render(<ExperimentalFeatures />)
+    const toggle = screen.getByRole("switch", { name: "形式证明导出" })
+    expect(toggle.getAttribute("aria-checked")).toBe("false")
+    expect(screen.getByText(/不会调用证明后端/)).toBeTruthy()
+    expect(screen.getByText(/原题其余题设/)).toBeTruthy()
+
+    fireEvent.click(toggle)
+
+    expect(toggle.getAttribute("aria-checked")).toBe("true")
+    // 落到存储里（面板读的是存储，不是自己那份 state）。
+    expect(JSON.parse(localStorage.getItem("mathcanvas:next-phase-preferences") ?? "{}")).toMatchObject({ proofExport: true })
+    // 而且**只开这一个**。
+    expect(loadWitnessSearchEnabled()).toBe(false)
+    expect(loadConstrainedDragEnabled()).toBe(false)
+  })
+
   it("说清打开与关着分别是什么行为（这个开关会换掉拖动路径）", () => {
     render(<ExperimentalFeatures />)
 

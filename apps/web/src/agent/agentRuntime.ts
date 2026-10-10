@@ -266,9 +266,10 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
     },
     async stage(draftId, actions, expectedDraftVersion) {
       // `DraftStore` 的签名收可变数组（它会与已有动作拼接），这里把只读入参拷一份。
-      // 第六个参数是 N1 的统一 IR 开关（R6）、第七个是 N2 的见证搜索开关（R11）：
-      // 两者都必须**由应用层显式传**，不能靠编译层兜底。
-      const result = await drafts.stage(draftId, [...actions], expectedDraftVersion, undefined, undefined, nextPhase.obligationIR, nextPhase.witnessSearch)
+      // 第六个参数是 N1 的统一 IR 开关（R6）、第七个是 N2 的见证搜索开关（R11）、
+      // 第八个是 N5/§3-D 的形式证明开关：**三者都必须由应用层显式传**，不能靠编译层兜底。
+      // （第八个此前**一个调用点都没传** ⇒ 设置里打开"形式证明导出"什么也不会发生。）
+      const result = await drafts.stage(draftId, [...actions], expectedDraftVersion, undefined, undefined, nextPhase.obligationIR, nextPhase.witnessSearch, nextPhase.proofExport)
       if (!result.ok) {
         const failure: DraftStageOutcome = { ok: false, reason: result.reason, diagnostics: result.diagnostics ?? [], detail: result.detail, unchanged: true }
         return failure
@@ -280,7 +281,12 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
       const base = dependencies.readDocument()
       if (!base) return { ok: false, diagnostics: [{ code: "no_document", message: "there is no active document" }], detail: "there is no active document" }
       const probe = drafts.create(base, handleFor(base, dependencies.projectId))
-      const result = await drafts.stage(probe.draftId, [...actions], probe.draftVersion, undefined, undefined, nextPhase.obligationIR, nextPhase.witnessSearch)
+      /**
+       * **预检不跑形式证明**（第八个参数显式 `false`）：预检的用途是"这份计划能不能编"，
+       * 而证明是**跑完作图之后**那一次顺手问的事 —— 在这里跑会让同一轮计划去起两次进程，
+       * 而预检的结果本来就要丢掉。
+       */
+      const result = await drafts.stage(probe.draftId, [...actions], probe.draftVersion, undefined, undefined, nextPhase.obligationIR, nextPhase.witnessSearch, false)
       // `DraftStore` 只有 `invalidate`（不是 `discard`）：它把草稿从表里删掉并记下原因。
       drafts.invalidate(probe.draftId, "preflight probe")
       return result.ok
@@ -366,7 +372,7 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
      * 无法区分（正是 R6/R11 要消灭的形态）。两个开关都是 `=== true` 才开，全 false 时
      * 与改动之前逐字相同。
      */
-    nextPhaseFlags: { obligationIR: nextPhase.obligationIR, witnessSearch: nextPhase.witnessSearch }
+    nextPhaseFlags: { obligationIR: nextPhase.obligationIR, witnessSearch: nextPhase.witnessSearch, proofExport: nextPhase.proofExport }
   })
 
   /**

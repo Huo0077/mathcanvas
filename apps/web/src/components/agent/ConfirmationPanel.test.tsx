@@ -141,6 +141,58 @@ describe("assumptions, approximation and export omissions", () => {
   })
 })
 
+describe("形式证明那一次尝试（§3-D）", () => {
+  /**
+   * 这一段的用途是**让"证了没有"看得见**：在这之前，`draftStore` 已经把结果压成
+   * `DraftProofAttempt` 随预览回带了，但面板上没有一处显示它 —— 用户只能从别处猜。
+   *
+   * 三样必须摆出来：**结局**（证了 / 没证 / 这台机器跑不了）、**正文是谁给的**
+   * （系统按类给的还是模型写的）、**系统替他做了哪些选择**（读了哪条目标、平面内取了哪两条相交线）。
+   * 外加一句**不能省的边界**：这是题面里那一条受限目标的形式证明，**原题其余题设没有进命题**。
+   */
+  it("把结局、正文来源、系统替你做的选择和边界都摆出来", () => {
+    render(<ConfirmationPanel draft={draft({
+      proofAttempt: {
+        outcome: "verified",
+        detail: "内核验证通过（三个白名单公理）。",
+        claimId: "draft-goal:goal-1",
+        proofSource: "system-canonical",
+        choices: ["平面内取第 1+2 条相交直线"]
+      }
+    })} />)
+
+    const section = screen.getByRole("region", { name: "形式证明" })
+    expect(section.textContent).toContain("已验证")
+    expect(section.textContent).toContain("内核验证通过")
+    expect(section.textContent).toContain("系统按这一类给出的")
+    expect(section.textContent).toContain("平面内取第 1+2 条相交直线")
+    expect(section.textContent).toContain("原题其余题设没有进命题")
+  })
+
+  it("说得清'不是证不出来，是这台机器跑不了'这一类结局", () => {
+    render(<ConfirmationPanel draft={draft({
+      proofAttempt: {
+        outcome: "toolchain_unavailable",
+        detail: "这台机器上没有配置 Lean 工具链（桌面版才能跑）。",
+        claimId: null,
+        proofSource: null,
+        choices: []
+      }
+    })} />)
+
+    const section = screen.getByRole("region", { name: "形式证明" })
+    expect(section.textContent).toContain("没跑成")
+    // 库里的原话要原样显示 —— 它是用户判断"该怎么办"的唯一依据。
+    expect(section.textContent).toContain("这台机器上没有配置 Lean 工具链")
+  })
+
+  it("开关关着时连这一段都不存在（不是显示一句'已关闭'）", () => {
+    render(<ConfirmationPanel draft={draft()} />)
+
+    expect(screen.queryByRole("region", { name: "形式证明" })).toBeNull()
+  })
+})
+
 describe("one-undo statement and actions", () => {
   it("states the exact one-undo promise", () => {
     render(<ConfirmationPanel draft={draft()} />)

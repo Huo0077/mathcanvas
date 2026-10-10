@@ -52,7 +52,7 @@ function exportPreflight(): ExportPreflightPort {
   return { preflight: vi.fn(() => ({ format: "svg", supported: true, requiresUserAcceptance: false, omitted: [], fontLoss: [], approximationNotes: [], blockedReasons: [], projectedEntityCount: 0 })) }
 }
 
-function makeRuntime(options: { envelope?: PlanEnvelope; document?: GeometryDocument | null; planner?: PlannerPort; diagnostics?: (line: string) => void; geometryWorkerFactory?: () => WorkerLike; obligationIR?: boolean; witnessSearch?: boolean } = {}) {
+function makeRuntime(options: { envelope?: PlanEnvelope; document?: GeometryDocument | null; planner?: PlannerPort; diagnostics?: (line: string) => void; geometryWorkerFactory?: () => WorkerLike; obligationIR?: boolean; witnessSearch?: boolean; proofExport?: boolean } = {}) {
   let current = options.document === undefined ? geometryDocument() : options.document
   const written: GeometryDocument[] = []
   const runtime = createAgentRuntime({
@@ -67,7 +67,7 @@ function makeRuntime(options: { envelope?: PlanEnvelope; document?: GeometryDocu
     ...(options.diagnostics === undefined ? {} : { diagnostics: options.diagnostics }),
     ...(options.geometryWorkerFactory === undefined ? {} : { geometryWorkerFactory: options.geometryWorkerFactory }),
     // N1/N2 的开关按裁决 R6/R11 由应用层持有；这里用注入点把它们打开，好让"接线到底通不通"可测。
-    ...(options.obligationIR === undefined && options.witnessSearch === undefined ? {} : { agentNextPhaseFlags: { obligationIR: options.obligationIR ?? false, witnessSearch: options.witnessSearch ?? false, constrainedDrag: false, openProblemCompiler: false, proofExport: false } }),
+    ...(options.obligationIR === undefined && options.witnessSearch === undefined && options.proofExport === undefined ? {} : { agentNextPhaseFlags: { obligationIR: options.obligationIR ?? false, witnessSearch: options.witnessSearch ?? false, constrainedDrag: false, openProblemCompiler: false, proofExport: options.proofExport ?? false } }),
     projectId,
     runId: "run-1",
     now: () => 1_000
@@ -809,6 +809,37 @@ describe("representative tasks from the design", () => {
     }
     const onBoundary = section.points.some((_, index) => distanceToSegment(movingPoint.position, section.points[index], section.points[(index + 1) % section.points.length]) < 1e-9)
     expect(onBoundary, "P is on the section boundary").toBe(true)
+  })
+
+  /**
+   * **形式证明开关要真的走到草稿层**（§3-D，2026-10-10）。
+   *
+   * `draftStore.stage` 的第八个参数早就接上了、`attemptProofForStage` 也早就写好了，
+   * 但**运行器的两个 `stage` 调用点一个都没传它** —— 于是"设置里打开开关"什么也不会发生。
+   * 这条用例钉的就是那一根线：**开着 ⇒ 预览里带着那一次尝试；关着 ⇒ 连这一栏都没有**。
+   *
+   * 浏览器里那次尝试的结局必然是"这台机器跑不了"（没有 Tauri 外壳），这正是产品路径的真实形状；
+   * 这一段**不影响作图** —— 草稿照样进到 `awaiting_confirmation`。
+   */
+  it("passes the proof-export flag into staging, and writes no field at all when it is off", async () => {
+    // 用**有可核验图元**的那条题（`pyramidPlan` + `PYRAMID_PROMPT`）：形式证明那一次尝试
+    // 只在"跑完作图、题设核验过了"之后才发生，立方体那条路连 `parsed` 都是 null。
+    const enabled = makeRuntime({ envelope: pyramidPlan(), document: createEmptyDocument("geometry3d"), proofExport: true })
+    const enabledEvents = await drive(enabled.runtime.coordinator, { run: runContext(createEmptyDocument("geometry3d")), userMessage: PYRAMID_PROMPT })
+    expect(enabledEvents.at(-1)).toBe("awaiting_confirmation")
+    const enabledId = enabled.runtime.draftId()
+    const enabledPreview = enabledId === null ? null : enabled.runtime.drafts.getPreview(enabledId)
+    expect(enabledPreview?.proofAttempt).toBeDefined()
+    // 这道题**没有"求证"那一句** ⇒ 如实报"没有可形式化的目标"，不是失败。
+    expect(enabledPreview?.proofAttempt?.outcome).toBe("no_goal")
+
+    const disabled = makeRuntime({ envelope: pyramidPlan(), document: createEmptyDocument("geometry3d"), proofExport: false })
+    const disabledEvents = await drive(disabled.runtime.coordinator, { run: runContext(createEmptyDocument("geometry3d")), userMessage: PYRAMID_PROMPT })
+    expect(disabledEvents.at(-1)).toBe("awaiting_confirmation")
+    const disabledId = disabled.runtime.draftId()
+    const disabledPreview = disabledId === null ? null : disabled.runtime.drafts.getPreview(disabledId)
+    // **"不存在这一栏"与"这一栏是 undefined"不是一回事**：默认路径逐字不变靠的是前者。
+    expect(disabledPreview === null ? null : Object.hasOwn(disabledPreview, "proofAttempt")).toBe(false)
   })
 
   it("keeps the conic parameter symbolic and labels the invariant as numeric sampling", async () => {

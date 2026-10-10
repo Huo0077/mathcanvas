@@ -100,6 +100,14 @@ export interface AgentDraftView {
    * "系统把他那句话读成了什么"。没有改写时**不存在这个键**。
    */
   promptNormalisation?: import("@draw/agent-core").NormalisationReport
+  /**
+   * **形式证明那一次尝试的结果**（§3-D，2026-10-10）。
+   *
+   * 与 `diagramVerification` 同一层：它只有与**这份草稿**一起看才有意义（"这一条目标证了没有"），
+   * 所以随预览回带、由确认面板显示。**开关关着时这个键不存在**（不是"值是 undefined"）——
+   * 默认路径逐字不变靠的就是这一条。
+   */
+  proofAttempt?: import("./agent/automaticProofStage").DraftProofAttempt
 }
 
 /** 提交回执：成功与否、有没有真的改动、失败原因。 */

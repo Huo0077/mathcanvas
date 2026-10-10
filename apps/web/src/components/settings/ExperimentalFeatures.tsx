@@ -1,6 +1,6 @@
 import { useState } from "react"
 
-import { loadConstrainedDragEnabled, loadWitnessSearchEnabled, saveConstrainedDragEnabled, saveWitnessSearchEnabled } from "../../persistence/nextPhasePreferences"
+import { loadConstrainedDragEnabled, loadProofExportEnabled, loadWitnessSearchEnabled, saveConstrainedDragEnabled, saveProofExportEnabled, saveWitnessSearchEnabled } from "../../persistence/nextPhasePreferences"
 
 /**
  * **设置 → 实验性功能**（N3 的第一个产品入口，2026-10-05，用户批准）。
@@ -23,16 +23,18 @@ import { loadConstrainedDragEnabled, loadWitnessSearchEnabled, saveConstrainedDr
  * 而"读不出来就是关"的口径在 `nextPhasePreferences.ts` 里。
  * 点一下**先写存储再更新界面**的顺序不重要，但两件事都必须发生。
  *
- * ## 为什么这里只有两个开关，不是五个
+ * ## 为什么这里只有三个开关，不是五个
  *
- * `constrainedDrag` 和 `witnessSearch` 已有真实执行路径，但都默认关；
- * 后者仅限有界题型的候选救援，可能替换模型给的坐标，故必须显式选择。
- * `obligationIR` / `openProblemCompiler` / `proofExport` 没有可用的用户任务入口，
+ * `constrainedDrag` / `witnessSearch` / `proofExport` 都有真实执行路径与产品入口，但都默认关；
+ * 见证搜索仅限有界题型的候选救援，可能替换模型给的坐标；
+ * **形式证明导出**会在跑完作图之后去起一个 Lean 进程（只有桌面版能真跑），
+ * 两条都必须显式选择。`obligationIR` / `openProblemCompiler` 没有可用的用户任务入口，
  * 不因这一页保存的偏好而被打开。
  */
 export function ExperimentalFeatures() {
   const [constrainedDrag, setConstrainedDrag] = useState(loadConstrainedDragEnabled)
   const [witnessSearch, setWitnessSearch] = useState(loadWitnessSearchEnabled)
+  const [proofExport, setProofExport] = useState(loadProofExportEnabled)
 
   return (
     <section className="experimental-features" aria-label="实验性功能">
@@ -75,6 +77,27 @@ export function ExperimentalFeatures() {
             const next = event.target.checked
             saveWitnessSearchEnabled(next)
             setWitnessSearch(loadWitnessSearchEnabled())
+          }}
+        />
+      </label>
+      <label className="experimental-feature-row">
+        <span className="experimental-feature-text">
+          <strong>形式证明导出</strong>
+          <span className="experimental-feature-hint">
+            关着：跑完作图不会调用证明后端。打开：题面里那一条能形式化的目标会顺手去证一次（只有桌面版能真跑），
+            结果与"正文是谁给的、系统替你选了哪些值"一起摆在确认面板上。原题其余题设不会进命题，所以那是这一条目标的形式证明，不等于整题已证明；作图与人工确认都不受影响。
+          </span>
+        </span>
+        <input
+          type="checkbox"
+          role="switch"
+          aria-label="形式证明导出"
+          aria-checked={proofExport}
+          checked={proofExport}
+          onChange={(event) => {
+            const next = event.target.checked
+            saveProofExportEnabled(next)
+            setProofExport(loadProofExportEnabled())
           }}
         />
       </label>
