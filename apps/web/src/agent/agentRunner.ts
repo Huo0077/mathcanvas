@@ -309,8 +309,20 @@ function awaitingDraftOf(conversation: AgentConversation): ConversationDraftView
  *
  * 判据放在这里而不是从计划里"推断"：它取决于**动作名**，而动作名与工作区的对应关系
  * 是动作层的知识。目前有两类：
- * - `solid.*` / `section.*` / `dynamic.*`（三维那几族）→ `geometry3d`；
+ * - `solid.*` / `section.*`（立体那两族）→ `geometry3d`；
  * - `planar.*` / `function.*` → `conics`（平面几何）。
+ *
+ * **`dynamic.*` 不投票**（2026-10-10 更正）。它此前与 `solid.*` 并列被算作"要立体几何"，
+ * 依据是"动点绑在实体上"这个**最常见的用法**；但那不是这一族的性质：
+ * `dynamic.create_bound_point` / `bind_curve` / `create_locus` 自己不要工作区，工作区由**宿主**决定
+ * （绑在椭圆上是平面题，绑在棱柱的棱上是立体题），而宿主**总是同一份计划里的另一笔动作** ——
+ * 所以"要不要立体几何"由 `solid.*` / `section.*` 那一笔记就够了。
+ *
+ * 让 `dynamic.*` 自己投一票的代价是**用户看得见**的：本地规划器在
+ * 「椭圆…上任意点 P 处的切线 + 恒/定值」那句话上给出 `conicInvariantPlan`（椭圆 + 两轴 + 三个动点 + 切线），
+ * 它因此被判成"又要平面又要立体"⇒ `prepareWorkspaceFor` **三维优先** ⇒ 一道圆锥曲线题被画在**立体几何**工作区里。
+ * 而 3D 文档接受平面图元，图照样画得出来 —— **全量测试全绿，只有用户看得见工作区是错的**。
+ * 判据在 `planWorkspaces.test.ts`（拿真夹具钉住）。
  *
  * **`function.*` 也去 `conics`，不是 `calculus`** —— 这一条是本文件里最容易写错、也最贵的一处：
  * DSL 的 `Workspace` 里确实有个 `calculus`，函数图像历史上也确实住在那里；
@@ -319,13 +331,14 @@ function awaitingDraftOf(conversation: AgentConversation): ConversationDraftView
  * 就是让 Agent 把用户切进一个界面上根本不存在的工作区 —— 而全量测试**不会**替你发现它，
  * 因为没有任何用例问过"这个动作该去哪个工作区"。**现在有了**（`planWorkspaces` 的用例）。
  *
- * **判据与动作顺序无关**。返回空数组表示"这次不需要切"（例如只读回答，或动作本身不绑定工作区）。
+ * **判据与动作顺序无关**。返回空数组表示"这次不需要切"（例如只读回答，或者只有 `dynamic.*` /
+ * `parameter.*` 这类中性动作 —— 那时**不动**用户的工作区，比替他猜一个更诚实）。
  */
 export function planWorkspaces(plan: PlanEnvelope): readonly ("conics" | "geometry3d")[] {
   if (plan.kind !== "plan") return []
   const wanted = new Set<"conics" | "geometry3d">()
   for (const action of plan.actions) {
-    if (action.actionId.startsWith("solid.") || action.actionId.startsWith("section.") || action.actionId.startsWith("dynamic.")) wanted.add("geometry3d")
+    if (action.actionId.startsWith("solid.") || action.actionId.startsWith("section.")) wanted.add("geometry3d")
     else if (action.actionId.startsWith("planar.") || action.actionId.startsWith("function.")) wanted.add("conics")
   }
   return [...wanted]

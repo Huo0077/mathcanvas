@@ -45,7 +45,7 @@ test("keeps the symbolic parameter, labels the invariant as numeric sampling, an
   await page.getByRole("button", { name: "返回画布" }).click()
   await expect(objectRows(page)).toHaveCount(0)
 
-  // 4) 确认 → 椭圆 / 动点 / 切线 / 轴交点真的落进文档（工作区被切到圆锥曲线）。
+  // 4) 确认 → 椭圆 / 动点 / 切线 / 轴交点真的落进文档。
   await page.getByRole("button", { name: "Agent 工作区" }).click()
   await draft.getByRole("button", { name: "确认并提交" }).click()
   await expect(page.getByText("已提交")).toBeVisible()
@@ -53,7 +53,19 @@ test("keeps the symbolic parameter, labels the invariant as numeric sampling, an
   await expect.poll(() => objectRows(page).count()).toBeGreaterThan(2)
 
   /**
-   * 5) **P、A、B 都由文档参数驱动**（Fix round 1 / C1）：
+   * 5) **这道平面题落在平面几何工作区**（2026-10-10 用户自测："平面与立体不主动区分"）。
+   *
+   * 这句话的计划里有**三笔** `dynamic.create_bound_point`（A/B/P 绑在两条坐标轴与椭圆上）。
+   * 工作区判据原先把 `dynamic.*` 与 `solid.*` 并列算作"要立体几何"，于是这道圆锥曲线题被判成
+   * "又要平面又要立体" ⇒ `prepareWorkspaceFor` 三维优先 ⇒ **画在立体几何里**。
+   * 而 3D 文档接受平面图元，图照样画得出来 —— 单元与这条 e2e 都照样绿：
+   * 第一版这句注释只是**写着**"工作区被切到圆锥曲线"，没有任何断言看向工作区本身。
+   */
+  await expect(page.getByRole("button", { name: "跳转到平面几何" })).toHaveAttribute("aria-pressed", "true")
+  await expect(page.getByRole("button", { name: "跳转到立体几何" })).toHaveAttribute("aria-pressed", "false")
+
+  /**
+   * 6) **P、A、B 都由文档参数驱动**（Fix round 1 / C1）：
    * 第一版根本没有 A/B，而且不变量表达式算出来是 `sec²θ+csc²θ`（≈7.77）。
    * 现在 θ、OA、OB 与不变量都出现在参数区里，P/A/B 的绑定参数指向它们。
    */
@@ -62,7 +74,7 @@ test("keeps the symbolic parameter, labels the invariant as numeric sampling, an
   const parameterIds = await parameterRows.evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-parameter-id")))
   for (const id of ["theta", "OA", "OB", "invariant"]) expect(parameterIds, id).toContain(id)
 
-  // 6) 整批一步撤销。
+  // 7) 整批一步撤销。
   await page.keyboard.press("Control+z")
   await expect.poll(() => objectRows(page).count()).toBe(0)
 })

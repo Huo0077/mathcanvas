@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import { DRAFT_ACTION_IDS, PLAN_SCHEMA_VERSION, type PlanEnvelope } from "@draw/agent-core"
 
 import { planWorkspaces } from "./agentRunner"
+import { conicInvariantPlan } from "./representativeFixtures"
 
 /**
  * **"这条计划要去哪个工作区"必须有用例**（V0d）。
@@ -45,6 +46,29 @@ describe("planWorkspaces", () => {
     expect(second).toEqual(first)
     // 只涉及 2D 两族时，集合就是平面几何一个。
     expect(planWorkspaces(planWith("function.create_graph", "planar.create_point"))).toEqual(["conics"])
+  })
+
+  /**
+   * **平面圆锥曲线题不许因为"里面有个动点"被切到立体几何**（2026-10-10 用户自测：平面与立体不主动区分）。
+   *
+   * `dynamic.create_bound_point` / `dynamic.create_locus` 这些是**中性**动作：它们自己不要工作区，
+   * 工作区由**宿主**决定（绑在椭圆上 ⇒ 平面几何；绑在棱柱的棱上 ⇒ 立体几何）。而宿主**总是同一份计划里的
+   * 另一笔动作**（`planar.create_*` 或 `solid.create_*`），所以"要不要立体几何"由那一笔记就够了 ——
+   * 让 `dynamic.*` 自己投一票立体几何，等于把每一道带动点的平面题都拖进 3D。
+   *
+   * 这里用**真夹具**而不是手搓动作：`conicInvariantPlan` 是本地规划器在
+   * 「椭圆 + 切线 + 恒/定值/任意」那句话上给出的计划（`localPlanner.ts` 的那条意图），
+   * 里面有三笔 `dynamic.create_bound_point`。修之前这一行返回 `["conics","geometry3d"]`，
+   * 而 `prepareWorkspaceFor` **三维优先** ⇒ 用户在立体几何工作区里看到一道圆锥曲线题：
+   * 图照样画出来（3D 文档接受平面图元），所以**全量测试全绿而用户看得见错**。
+   */
+  it("keeps a planar conic plan in the plane workspace even though it has bound points", () => {
+    const plan = conicInvariantPlan()
+    // `PlanEnvelope` 是判别联合（plan / clarification / answer）—— 先收到 `plan` 这一支，
+    // 否则 `plan.actions` 在类型上不存在（vitest 跑得过、`tsc` 不过，这一层必须过）。
+    if (plan.kind !== "plan") throw new Error("the conic fixture is expected to be a plan")
+    expect(plan.actions.some((action) => action.actionId === "dynamic.create_bound_point")).toBe(true)
+    expect(planWorkspaces(plan)).toEqual(["conics"])
   })
 
   it("never routes any action family to the retired calculus workspace", () => {

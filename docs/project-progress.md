@@ -10,6 +10,30 @@
 
 > 下方 2026-09-22 的"最后更新 / 当前阶段 / 总体状态"三行保留为**当时快照**，不再维护。
 
+## 2026-10-10 —— 自测问题 P1-B：平面与立体不主动区分 —— **判据缺失**（`dynamic.*` 拖走了每一道带动点的平面题）
+
+**用户报的是现象**："图能画出来，但平面题该在平面、立体题该在立体没被主动区分。" 计划里给的第一步是**先分清"说明问题 vs 判据缺失"**，这一步当场就有结论：**判据缺失**。
+
+**读代码得到的机制**：`apps/web/src/agent/agentRunner.ts` 的 `planWorkspaces` 按**动作族**投票 —— `solid.*` / `section.*` / **`dynamic.*`** → 立体几何，`planar.*` / `function.*` → 平面几何；两类同时出现时 `prepareWorkspaceFor` **三维优先**（3D 文档接受平面图元，包含关系单向）。问题就在那一票 `dynamic.*` 上：**这一族自己不要工作区**，工作区由**宿主**决定（`dynamic.create_bound_point` 绑在椭圆上是平面题、绑在棱柱的棱上是立体题），而宿主**总是同一份计划里的另一笔 `planar.*` / `solid.*`** —— 那一笔已经投过票了。
+
+**这个判据缺口在产品路径上真的发生**：`localPlanner.ts` 在「椭圆 + 切线 + 恒/定值/任意」那句话上给出 `conicInvariantPlan`（椭圆 + 两条坐标轴 + **三个** `dynamic.create_bound_point` + 切线），于是判成"又要平面又要立体" ⇒ 切到**立体几何**。而**图照样画得出来**（3D 文档收平面图元），所以：单元全绿、e2e 全绿、用户在立体工作区里看一道圆锥曲线题。`e2e/agent-conic-invariant.spec.ts` 里那句"（工作区被切到圆锥曲线）"**只是注释**，从来没有断言看过工作区本身 —— 这正是"文档写着、判据没有"的现成例子。
+
+**RED（两层，都先跑出了失败）**：
+- 单元（真夹具，不是手搓动作）：`planWorkspaces(conicInvariantPlan())` ⇒ 实收 `[ 'conics', 'geometry3d' ]`，期望 `[ 'conics' ]`；
+- 浏览器：提交后 `跳转到平面几何` 的 `aria-pressed` 实收 `"false"`。
+
+**GREEN（一处）**：`dynamic.*` 从判据里去掉（与 `parameter.*` / `object.*` 同属中性动作）；只有中性动作的计划**不切工作区**（不替用户猜）。`systemPrompt.ts` 里那句"计划里有 `solid.*` / `section.*` / `dynamic.*` 就切立体几何"的**注释**同步更正（给模型的指示本身不受影响：它要求的是"画立体就用 `solid.*`"）。
+
+**变异（两层同时真红）**：把 `dynamic.` 加回判据 ⇒ 单元又一次 `expected [ 'conics', 'geometry3d' ] to deeply equal [ 'conics' ]`，浏览器 `Expected: "true" / Received: "false"`（**就是用户看到的现象**）；隔离还原后定向 **91 通过**（`planWorkspaces` / `agentRuntime` / `localPlanner`）+ **11 条** agent e2e 复绿。
+
+**门禁**：`typecheck` exit 0；`lint` 0 error / 13 warning；全库非 Lean **353 文件 / 4118 通过 + 1 todo / 0 失败**（404.24 s）；全量 e2e **218 通过 / 0 失败**（2.5 m）；关旗逐字契约 `planCompiler.offPath.golden` 在同一趟全库里通过（本块**没有**动 golden）。
+
+**两条如实记账（照实写，因为都差点被读成别的东西）**：
+1. **新用例第一版让类型门红了**：`conicInvariantPlan()` 的类型是判别联合 `PlanEnvelope`，我直接读了 `.actions` ⇒ `tsc` 报 **TS2339**；而 vitest 跑得好好的。**"跑过测试"确实不等于"过了类型门"** —— 这个仓已经栽过同型的跟头（上一批的 `planeLines` 元组），所以这一次按纪律**先修类型再重跑全库**，上面那个 4118 是修完之后的读数。
+2. **首跑全库有两个红**：`fileExports.test.ts:189`（CAD 导出 5 s 超时）与 e2e `main-thread-responsiveness.spec.ts:28`（帧间隔阈值被负载顶破）。两条都是本仓**早已记过**的既有抖动，**各自孤立复跑一次即通过**（9 passed / 1 passed）—— 记在这里，免得下一个读日志的人把它当成 P1-B 的回归。
+
+**仍未修（本块的边界）**：P0-A（切线题在桌面版失败）与 P2-C（点名与画布标签错位）。P0-A 在本次拿到了**用户给的报错原文**：`invalid_type@envelope.actions[1].inputs.sourceId: expected a string`（`run_failed`）—— 这一句把原先"采样区间/取景数值范围溢出"的猜测**当场推翻**，方向见下一块。
+
 ## 2026-10-10 —— 人工自测结果归档 + 下一步计划（**不改产品代码**）
 
 **这一块只写文档**：把用户 2026-10-10 的自测结果如实归档，并写出下一步计划（[`2026-10-10-selftest-followups-and-release-plan.md`](superpowers/plans/2026-10-10-selftest-followups-and-release-plan.md)）。

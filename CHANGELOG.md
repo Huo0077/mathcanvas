@@ -7,6 +7,20 @@
 
 
 
+## 2026-10-10 —— 平面题不再被切进立体几何（工作区判据：`dynamic.*` 不再投"立体"那一票）
+
+**现场**（用户自测）："平面与立体不主动区分"。**归因**：这是**判据缺失**，不是"说明问题"。`apps/web/src/agent/agentRunner.ts` 的 `planWorkspaces` 把 `dynamic.*` 与 `solid.*` / `section.*` 并列算作"要立体几何"，而 `dynamic.create_bound_point` / `dynamic.bind_curve` / `dynamic.create_locus` 这一族**自己不要工作区** —— 工作区由**宿主**决定（绑在椭圆上是平面题，绑在棱柱的棱上是立体题），宿主又**总在同一份计划里**由 `planar.*` 或 `solid.*` 建出来。
+
+**症状链**：本地规划器在「椭圆…上任意点 P 处的切线 + 恒/定值」那句上给出 `conicInvariantPlan`（椭圆 + 两轴 + **三个**动点 + 切线）⇒ 判成"又要平面又要立体" ⇒ `prepareWorkspaceFor` **三维优先** ⇒ 一道圆锥曲线题画在**立体几何**工作区里。3D 文档接受平面图元，所以**图照样画得出来**：所有单元与 e2e 全绿，只有用户看得见工作区是错的。`e2e/agent-conic-invariant.spec.ts` 里"（工作区被切到圆锥曲线）"原来只是一句**注释**。
+
+**改**：`dynamic.*` 从判据里去掉（与 `parameter.*` / `object.*` 同属中性动作）；只由 `solid.*` / `section.*` 与 `planar.*` / `function.*` 两族投票。一条计划只有中性动作时**不切工作区** —— 不替用户猜一个。
+
+**判据**：① 单元用**真夹具**：`planWorkspaces(conicInvariantPlan())` 必须恰好是 `["conics"]`（先红：实收 `["conics","geometry3d"]`）；② 浏览器：提交后 `跳转到平面几何` 的 `aria-pressed=true`（工作区本身，不是"图在不在"）。**变异验证**：把 `dynamic.` 加回判据 ⇒ **两层同时真红**，浏览器那条报 `Expected "true" / Received "false"`（就是用户看到的现象）；还原后定向 91 条 + 11 条 agent e2e 复绿。
+
+**读数**：`typecheck` exit 0；`lint` 0 error / 13 warning；全库非 Lean **353 文件 / 4118 通过 + 1 todo / 0 失败**（404.24 s）；全量 e2e **218 通过 / 0 失败**（2.5 m）；关旗 golden 在同一趟全库里逐字通过。
+
+**两条如实记账**：新用例第一版在 `PlanEnvelope` 判别联合上直接读 `.actions` ⇒ `tsc` 报 **TS2339**（vitest 全绿、类型门红）；首跑全库里 `fileExports.test.ts:189`（CAD 导出 5 s 超时）与 e2e `main-thread-responsiveness.spec.ts:28`（帧间隔阈值被负载顶破）各红一次，**孤立复跑均通过**，是既有抖动的同两条。
+
 ## 2026-10-10 —— 退化面环的报错补上"为什么"（现场第三次：四个点本身就是共线的）
 
 **现场**（3.3.9）：三条坏环**一次全报**、每条**指名 + 量出面积**（`0.00e+0` = 精确为零）—— 前两次的修复都生效了。而且三条环的顶点集合是 `{0,3,4,7}`：**那四个点本身就共线**。所以这一次不是判据的毛病：内核拒得**对**（一条线不是面），是模型给的坐标退化，而它那唯一一次修复没能纠正过来。
