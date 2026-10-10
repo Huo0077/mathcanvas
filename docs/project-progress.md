@@ -20,6 +20,8 @@
 
 **门禁**：`typecheck` exit 0；`lint` 0 error / 13 warning；全库非 Lean **353 文件 / 4140 通过 + 1 todo / 0 失败**（比上一条 +1 用例 = 本条把原来那条"四边形 ⇒ 拒绝"的用例拆成正反两条）；全量 e2e **221 通过 / 0 失败**。**离线 benchmark 逐字复查**：`BENCHMARK_WITNESS verified=1 unverified=20 no_witness=0 error=0 solveRate=0.048` 与 `BENCHMARK_WITNESS_CODES {"(no-code)":1,"requires-candidates":7,"witness-search":20,"unsupported-shape":9,"no-candidate-constructed":2,"unsupported-base-shape":2,"unverified-obligation":26}` **改前改后一字未变**（题集里没有"四边形底面 + 点名数值角"这种案例，所以这一支动不到码表）。
 
+**两条如实记账**：① 改完文档后跑 `scripts/docs-consistency` **首跑 1 failed**，红的正是 `file-hygiene` 那条"读全部受跟踪文件查 BOM"的用例 —— 它是本文档早已记过的**负载敏感用例**（同文件另有 5 s 超时那条的记法）。当次我只过滤了行名、**没有留下错误原文**，所以按本仓口径记成"**抖动那次既不算绿也不算红**"：孤立复跑 **12/12 通过**，并事后用 `ReadAllBytes` 逐个核对本批 **7 个改动文件的头三字节都不带 BOM**（"受跟踪文件编码"这条判据现在是过的）。② 桌面端**重新构建并重启**时第一次**构建失败**：`failed to remove file …\mathcanvas-desktop.exe` / `os error 5`（拒绝访问）—— 原因是**旧实例还在跑、exe 被占用**，不是代码问题；先 `Stop-Process` 停掉旧进程（PID 48220）再构建 ⇒ **exit 0**，新 exe 时间戳 **03:40:04**，重启后 **PID 55632 / `Responding=True`**。**CI**：`48c2ee9` ⇒ **#265，四个 job（build / e2e / rust / checks）逐 job 查过，全 `success`**。
+
 **边界（如实留着）**：只做**四边形底面环上、角在环上第二位**这一支；**五边形以上**（走代表正多边形那条路）与**环上其它位置的角**仍旧拒绝；**涉及顶点／环外点的角**（`∠PAB`）是**阶段 B**，要有界求根，设计里另开一页 —— 这两条都没有变。
 
 ## 2026-10-10 —— §3-F 阶段 A：平面数值角 —— 读、造、量**同一块落地**（12 处样本要换）
@@ -66,14 +68,15 @@
 
 **边界（不许含糊）**：这一块**只改文档**，产品代码一行未动；**这次提交自己的 CI 也没重跑**（推送之后才有结论，见 §一 那一行"按定义滞后一次提交"的口径）。**Lean 慢集成**（`lean4EndToEnd.test.ts`）今天仍未跑 —— 它是显式 gated 的集成用例（约 6 分钟、GB 级 I/O），要在意它就得单独跑，见 §一 那一行的冷/热两读。
 
-## 2026-10-10 —— CI 逐个提交核对（本会话 9 个提交；**不看推断，查 API**）
+## 2026-10-10 —— CI 逐个提交核对（本会话 10 个提交；**不看推断，查 API**）
 
 **为什么要单独做这一块**：`current-status` 的 CI 行一直写着"§一 CI 行的最近列举 SHA 早于该 HEAD，**未在本次审核核对该 HEAD 的 CI 结果**"。也就是说，本会话推上去的每一个提交，**没有一个有 CI 结论被记下来过** —— 而仓库自己的纪律是"不要从历史 SHA 推断当前 CI 必绿"。
 
-**做法**：用 GitHub API 按 `head_sha` 逐个查（`/actions/runs?head_sha=<full sha>`），而不是按分支列表猜。9 个提交的结论：
+**做法**：用 GitHub API 按 `head_sha` 逐个查（`/actions/runs?head_sha=<full sha>`），而不是按分支列表猜。10 个提交的结论：
 
 | 提交 | run | 结论 |
 |---|---|---|
+| `48c2ee9` §3-F 四边形底面数值角 | **#265** | **四 job 全绿**（build / e2e / rust / checks，逐 job 查过 `success`）—— 本批补记 |
 | `b699544` §3-F 圆台近似声明 | **#259** | **四 job 全绿**（build / e2e / rust / checks；逐 job 查过） |
 | `549c85c` docs（哈希不再记） | #258 | 绿 |
 | `8db3cce` §3-F 直角梯形 | #257 | **cancelled** |
