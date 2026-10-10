@@ -314,7 +314,7 @@ export function buildFromPoints(input: FromPointsInput, context: BuilderContext)
      * 每一条都说清**哪个环、差多少** —— 与共面那条同一个标准。
      */
     const deviation = maxPlaneDeviation(points)
-    if (!hasNonZeroArea(points, span)) diagnostics.push(diagnostic("degenerate-base", `face ring [${face.join(",")}] has zero area (largest triangle ${maxTriangleArea(points).toExponential(2)})`))
+    if (!hasNonZeroArea(points, span)) diagnostics.push(diagnostic("degenerate-base", `face ring [${face.join(",")}] has zero area (largest triangle ${maxTriangleArea(points).toExponential(2)}): these vertices are collinear, and a face needs three points that are not collinear`))
     if (points.length >= 4 && deviation > span * 1e-9) diagnostics.push(diagnostic("non-planar-base", `face ring [${face.join(",")}] is not coplanar: deviation ${deviation.toExponential(2)} exceeds the tolerance ${(span * 1e-9).toExponential(1)}`))
     if (hasSelfIntersectingPolygon(points)) diagnostics.push(diagnostic("self-intersection", `face ring [${face.join(",")}] self-intersects`))
   }

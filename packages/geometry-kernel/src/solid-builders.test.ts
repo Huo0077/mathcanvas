@@ -270,6 +270,8 @@ describe("solid builders", () => {
     const entry = result.diagnostics.find((diagnostic) => diagnostic.code === "degenerate-base")
     expect(entry?.message).toContain("[0,1,2]")
     expect(entry?.message).toMatch(/area/i)
+    // **还要说清"为什么"**：模型只有一次修复机会，光知道"面积为零"它不知道该改成什么。
+    expect(entry?.message).toMatch(/collinear/i)
   })
 
   /**
