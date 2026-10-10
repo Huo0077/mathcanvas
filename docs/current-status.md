@@ -1213,7 +1213,7 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
 > - **仍未达成（不许含糊）**：只覆盖**一个目标类**（`perpendicular`，一条真目标走通**不泛化**）；
 >   **IR → Lean 命题的翻译本身未被证明**（一份可审计的小模板；`assumptions` **有意不进命题**，方向保守）；
 >   `ProofInput.statement` **仍是可选** ⇒ "必绑"只被"**适配器记得传 + 一条用例**"堵住，**没被结构堵住**；
->   **强沙箱（只读+无网）下的证明运行未测**；**mathlib 的 rev 没有被 pin**（`lakefile.toml` 是 `rev = "master"`，
+>   **强沙箱（只读+无网）下的证明运行未测**（这条仍在）；**mathlib 的 rev 已于 2026-10-10 钉住**（`rev = "c20717eaa791af9dd3f7847f5ba91623bda9ab6b"`，`lake-manifest.json` 一并提交；实测该 rev 下真证明仍 `formally_proved`）—— 原来那句话写的是"没有被 pin"（`rev = "master"`，
 >   而 `lake-manifest.json` 是**每次运行都会重新生成**的产物，已加进 `proof/lean4/.gitignore`）⇒
 >   **十栏里那个 mathlib commit 是"实测值"，不是"从仓库可复算"的保证**。
 > - **仍然没接的**：`agentStore` / run event schema 的产物通道 —— 这一条**仍然成立**（理由与上面 ② 相同）。

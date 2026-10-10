@@ -153,7 +153,7 @@ export const PROOF_BACKEND_REVIEWS: readonly ProofBackendReview[] = [
      * ⇒ **core-only 证明用 4.34.1，mathlib 证明用 4.35.0-rc3**，而运行时到底用哪个由
      * 工程自己的 `lean-toolchain` 决定（适配器读 `lean --version` 得实际值，不猜）。
      */
-    version: "Lean 4.34.1 (x86_64-w64-windows-gnu, commit 5045d0056413266e57c625dcd7c365b10e377c52, Release); mathlib 闭包实际用 leanprover/lean4:v4.35.0-rc3 (commit 470d5ce1400764999581fd26d5d72b00d990b0f4)",
+    version: "Lean 4.34.1 (x86_64-w64-windows-gnu, commit 5045d0056413266e57c625dcd7c365b10e377c52, Release); mathlib 闭包实际用 leanprover/lean4:v4.35.0-rc3 (commit 470d5ce1400764999581fd26d5d72b00d990b0f4)；**mathlib 的 revision 已 pin**（`lakefile.toml` 的 `rev = c20717eaa791af9dd3f7847f5ba91623bda9ab6b`，`lake-manifest.json` 一并提交）—— 2026-10-10 实测该 rev 下 `DrawProof.lean` exit 0、三条真命题都只依赖白名单里的三个公理",
     /** **实测**：读安装目录里的 LICENSE 首行 ⇒ `Apache License 2.0 (Apache)`。 */
     license: "Apache License 2.0（读自工具链安装目录里的 LICENSE 正文，不是引用官网）",
     /** 我们**起子进程**跑 `lean` / `lake`：证明状态不在本进程的内存里，产物必须靠正文 + axioms 报告。 */

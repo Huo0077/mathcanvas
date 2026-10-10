@@ -10,6 +10,17 @@
 
 > 下方 2026-09-22 的"最后更新 / 当前阶段 / 总体状态"三行保留为**当时快照**，不再维护。
 
+## 2026-10-10 —— V3 / N5 收尾：mathlib revision 钉住了（rev="master" → 具体 commit + 提交 lockfile）
+
+**关掉"旧问题归属"里唯一未完成的一项。** 原状：`lakefile.toml` 是 `rev = "master"`、`lake-manifest.json` 被 ignore ⇒ "用的是哪一版 mathlib"只是**实测值**，仓库里复算不出来（`.gitignore` 自己写着这条代价与"要真钉住得怎么做；本批没做也没实测"）。
+
+**现在**：`rev = "c20717eaa791af9dd3f7847f5ba91623bda9ab6b"`（= 当时磁盘上 mathlib 的 HEAD ⇒ **这次 pin 没顺带升级任何东西**）；lockfile 取消 ignore 并提交；`.gitignore` 改成"为什么现在可以跟踪它 + 不许加回 ignore"。
+
+**一次真实弯路**：只改 `rev` 不够 —— `lake env lean` 立刻报 **`manifest out of date: git revision of dependency 'mathlib' changed`**（lockfile 的 `inputRev` 还是 `master`）。跑 `lake update mathlib` 触发了 mathlib 的 **post-update hook**（取/建缓存），6 分钟没跑完被我掐掉；查状态发现**该落盘的已经落了**：manifest 只变**一行**（mathlib `inputRev` → 钉住的 commit），**没有依赖被顺带升级**，checkout 与 olean 完好。正确做法是"改 rev → 跑一次对齐 → 只接受那一行变化"。
+
+**实测（改 pin 之后必须重跑真证明）**：`lake env lean DrawProof.lean` exit 0（三条真命题仍只依赖三个白名单公理）、**不再报 manifest 警告**；经适配器 gated 真跑 ⇒ **`formally_proved` / `verified` / `exit=0` / 68607 ms**。十栏记录的 `version` 栏补上了这条 pin。
+
+**仍如实留着**：强沙箱（只读 + 无网）下的证明运行未测；打包发行怎么带 Lean + 7.5 GB mathlib 未决。
 ## 2026-10-10 —— V3 第一项：旧问题归属（N1–N5 + 文件卫生）
 
 **逐条对账；历史已修项保留证据不重做。** 落点：文件卫生的编码/日期（**本块修**）、N3 的覆盖判据（**本块修**）、N4（**卡用户**）、N5 的 revision 固定（**仍缺**）。

@@ -5,10 +5,15 @@ defaultTargets = ["DrawProof"]
 # Lean 4 证明后端的仓内小工程（N5b）。
 #
 # 显式写 git URL：`scope/name` 解析会指向 mathlib3 那个旧仓库，名字一样但不是同一个东西。
+#
+# **revision 钉住**（2026-10-10）：原来写 `rev = "master"`，于是"我们到底用的哪一版 mathlib"
+# 只是个**实测值**，在仓库里复算不出来（`.gitignore` 那份注释当时就写明了这条代价）。
+# 现在钉到具体 commit，并把 `lake-manifest.json` 一起提交（那份 lockfile 把整棵依赖树逐条钉住）。
+# **改这一行等于升级 mathlib**：改完必须重跑真证明用例（`scripts/proof-spike/lean4EndToEnd.test.ts`）。
 [[require]]
 name = "mathlib"
 git = "https://github.com/leanprover-community/mathlib4"
-rev = "master"
+rev = "c20717eaa791af9dd3f7847f5ba91623bda9ab6b"
 
 [[lean_lib]]
 name = "DrawProof"
