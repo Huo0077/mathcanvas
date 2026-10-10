@@ -1143,9 +1143,50 @@ describe("底面点名数值角（§3-F）", () => {
     }
   })
 
-  it("四边形底面点名数值角 ⇒ 如实拒绝（本批只支持三角形底面把它闭式造出来）", () => {
+  it("四边形底面也认（角在环上第二位）：那个角成立，而且没有顺手做出平行/直角/等腰", () => {
     const result = constructPyramidWitness(pyramidRequest({
       relations: [{ kind: "planarAngle", targets: ["A", "B", "C"], value: 60, unit: "degree" }]
+    }))
+
+    expect(result.status, JSON.stringify(result)).toBe("candidate")
+    if (result.status !== "candidate") return
+    const at = (name: string): Vector3 => result.witness.points[result.witness.names.indexOf(name)]!
+    // ① 题面那个角成立（自算）。
+    expect(angleAt(result, "B", "A", "C")).toBeCloseTo(60, 6)
+
+    // ② **没有顺手做出别的特殊关系** —— 这是这一支最要紧的判据。
+    const cross = (from: Vector3, to: Vector3, other: Vector3, onto: Vector3): number => {
+      const first = subtractVector3(to, from)
+      const second = subtractVector3(onto, other)
+      return first.x * second.y - first.y * second.x
+    }
+    // 两组对边都不平行（否则就成了梯形/平行四边形）。
+    expect(Math.abs(cross(at("A"), at("D"), at("B"), at("C"))), "AD ∦ BC").toBeGreaterThan(1e-6)
+    expect(Math.abs(cross(at("A"), at("B"), at("D"), at("C"))), "AB ∦ DC").toBeGreaterThan(1e-6)
+    // 四个顶点都不是直角，也没有两条相邻边等长。
+    const corner = (before: string, vertexName: string, after: string): number =>
+      dotVector3(subtractVector3(at(before), at(vertexName)), subtractVector3(at(after), at(vertexName)))
+    for (const [before, name, after] of [["A", "B", "C"], ["B", "C", "D"], ["C", "D", "A"], ["D", "A", "B"]] as const) {
+      expect(Math.abs(corner(before, name, after)), `${name} 处不是直角`).toBeGreaterThan(1e-6)
+    }
+    const sides = [["A", "B"], ["B", "C"], ["C", "D"], ["D", "A"]].map(([from, to]) => distanceVector3(at(from!), at(to!)))
+    for (let index = 0; index < sides.length; index += 1) {
+      expect(Math.abs(sides[index]! - sides[(index + 1) % sides.length]!), `相邻边 ${String(index)} 不等长`).toBeGreaterThan(1e-6)
+    }
+    // ③ 环是凸的（连续三条边的转向同号）且非退化。
+    const turn = (from: string, to: string, next: string): number => {
+      const first = subtractVector3(at(to), at(from))
+      const second = subtractVector3(at(next), at(to))
+      return first.x * second.y - first.y * second.x
+    }
+    const turns = [turn("A", "B", "C"), turn("B", "C", "D"), turn("C", "D", "A"), turn("D", "A", "B")]
+    expect(Math.abs(turns[0]!)).toBeGreaterThan(1e-6)
+    for (const value of turns) expect(Math.sign(value), JSON.stringify(turns)).toBe(Math.sign(turns[0]!))
+  })
+
+  it("四边形底面的角不在环上第二位 ⇒ 如实拒绝（代表方向那条规则在那里不成立）", () => {
+    const result = constructPyramidWitness(pyramidRequest({
+      relations: [{ kind: "planarAngle", targets: ["B", "C", "D"], value: 60, unit: "degree" }]
     }))
     expect(result.status).toBe("rejected")
     if (result.status === "rejected") expect(result.code).toBe("unsupported-base-shape")

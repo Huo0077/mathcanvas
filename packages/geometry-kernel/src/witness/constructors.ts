@@ -1226,10 +1226,16 @@ function deriveAngledTriangleBase(
   names: readonly string[],
   relations: readonly WitnessRelation[]
 ): { status: "ok"; polygon: Vector3[]; freeValues: string[]; assumptions: string[] } | WitnessConstructRejection | null {
-  if (names.length !== 3) return null
+  if (names.length !== 3 && names.length !== 4) return null
   const angle = relations.find((relation) => relation.kind === "planarAngle" && relation.targets.length === 3 && relation.targets.every((name) => names.includes(name)))
   if (angle === undefined || angle.kind !== "planarAngle") return null
   const [first, vertex, third] = angle.targets as [string, string, string]
+  /**
+   * **四边形只认"角在环上第二位"**（`∠ABC` 那种最常见的写法）：第四条边是按"从 `A` 出发、
+   * 与 `BC` 成一个代表夹角"放出来的，顶点在别的位置时这条规则不再成立 —— 那时交给既有分支拒绝，
+   * 而不是硬套一个形状。
+   */
+  if (names.length === 4 && vertex !== names[1]) return null
   /**
    * **别的底面条件在场时这一支不管**：把角摆好之后，平行/垂直/等长还得同时成立，
    * 那是联立问题（本层不做）—— 交给既有的拒绝分支，文案由它们给。
@@ -1276,6 +1282,31 @@ function deriveAngledTriangleBase(
     [first, { x: alongFirst.value, y: 0, z: 0 }],
     [third, { x: snapToZero(alongThird.value * Math.cos(radians)), y: snapToZero(alongThird.value * Math.sin(radians)), z: 0 }]
   ])
+  /**
+   * **四边形底面**（2026-10-10 补）：第四条边由一条**代表方向**给出 —— 从 `A` 出发、
+   * 与 `BC` 的方向再转 **35°**、长度取 `AB` 的 **0.8**。
+   *
+   * 为什么是这个规则：四边形比三角形多一个自由度，而题面**只说了那个角**，
+   * 所以剩下的必须取代表值；关键在于**不能顺手做出别的特殊关系**。这一组取值
+   * （35° / 0.8）刻意避开三件事，并且**由判据逐条自算钉住**：
+   * - **不与任何已有边平行**（`AD ∦ BC`、`AB ∦ DC`）—— 否则会悄悄把它变成梯形/平行四边形；
+   * - **不出现直角**（四个顶点都不），也不出现两条相邻边等长（等腰/菱形那类）；
+   * - 环仍然**凸**且不退化（四个叉积同号、面积非零）。
+   *
+   * 一个具体的反例说明为什么不能图省事：`D = A + k·C`（让第四条边顺着 `C` 的方向）
+   * 会顺带做出 `AD ∥ BC` —— 那是题面没说的事（本仓对"悄悄加特殊性"一贯按缺陷处理）。
+   */
+  if (names.length === 4) {
+    const leftover = names.find((name) => !positions.has(name))
+    if (leftover === undefined) return reject("unsupported-base-shape", `底面点名表 ${names.join("")} 与角 ${angle.targets.join("")} 对不上。`, [...names])
+    const representative = radians + (35 * Math.PI) / 180
+    const reach = 0.8 * alongFirst.value
+    positions.set(leftover, {
+      x: snapToZero(positions.get(first)!.x + reach * Math.cos(representative)),
+      y: snapToZero(positions.get(first)!.y + reach * Math.sin(representative)),
+      z: 0
+    })
+  }
   const freeValues: string[] = []
   if (!firstStated) freeValues.push(`底面边长 ${vertex}${first} = ${formatNumber(alongFirst.value)}（系统自选）`)
   if (!thirdStated) freeValues.push(`底面边长 ${vertex}${third} = ${formatNumber(alongThird.value)}（系统自选）`)
@@ -1283,7 +1314,7 @@ function deriveAngledTriangleBase(
     status: "ok",
     polygon: names.map((name) => positions.get(name)!),
     freeValues,
-    assumptions: [`底面 ${names.join("")} 按题面点名的角 ${angle.targets.join("")} = ${formatNumber(stated.value)}° 放出来（顶点 ${vertex} 处、两条邻边按该角摆开；${freeValues.length === 0 ? "两条邻边的长度都来自题面" : "未给定的边长取系统自选的代表值"}）。`]
+    assumptions: [`底面 ${names.join("")} 按题面点名的角 ${angle.targets.join("")} = ${formatNumber(stated.value)}° 放出来（顶点 ${vertex} 处、两条邻边按该角摆开；${freeValues.length === 0 ? "两条邻边的长度都来自题面" : "未给定的边长取系统自选的代表值"}）。${names.length === 4 ? "第四条边取代表方向（与另一条邻边再转 35°、长度取 0.8 倍），刻意不与任何已有边平行、也不做出直角 —— 那些都是题面没说的。" : ""}`]
   }
 }
 
