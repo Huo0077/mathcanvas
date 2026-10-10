@@ -125,7 +125,7 @@ test("selects a solid by clicking its body and recolours it repeatedly", async (
   }
 })
 
-test("picks the vertex under the cursor instead of one hidden behind the solid", async ({ page }) => {
+test("picks the vertex the cursor is over, whether or not the solid hides it", async ({ page }) => {
   await page.goto("/")
   await page.getByRole("button", { name: "跳转到立体几何" }).click()
   await page.getByRole("button", { name: "添加立方体" }).click()
@@ -145,10 +145,16 @@ test("picks the vertex under the cursor instead of one hidden behind the solid",
   await page.mouse.click(nearest.x + 24, nearest.y + 24)
   await expect(heading).toHaveText("立方体 1")
 
-  // The opposite corner is hidden behind the solid: the click must stay on the solid rather than reach through it.
+  /**
+   * 对面的那个角在实体后面。**裁决 A（2026-10-10）之后，用户点画在实体之上**（`depthTest: false`，
+   * 理由：题面点名的中点 / 分点常落在背面那条棱上，不这样画就既看不见也点不中），
+   * 所以"画出来了"与"点得中"是同一件事 —— 这一下选中的是**那个顶点**，而不是"穿不过去"地落回实体。
+   *
+   * 旧断言（落回"立方体 1"）对应的老口径是"点不画在面之上，所以远侧那个点用户根本看不见"。
+   */
   const hidden = await projectWorldPoint(page, { x: -2, y: -2, z: 0 })
   await page.mouse.click(hidden.x, hidden.y)
-  await expect(heading).toHaveText("立方体 1")
+  await expect(heading).toHaveText(/^[A-H]$/)
 
   await expect(page.getByRole("alert")).toHaveCount(0)
 })

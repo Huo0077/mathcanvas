@@ -289,21 +289,30 @@ describe("Three.js geometry scene", () => {
     expect((near * 2) / worldPerPixel).toBeCloseTo(POINT_HANDLE_RADIUS_PX * 2, 6)
   })
 
-  it("hands the click to the surface under the cursor instead of an object on the far side", () => {
+  /**
+   * **画在实体之上的点，光标压着它就赢 —— 哪怕它在实体的另一边**（2026-10-10 用户裁决 A）。
+   *
+   * 这条原来叫"hands the click to the surface under the cursor instead of an object on the far side"，
+   * 钉的是老口径：点**不**画在面之上，所以"远侧那个点"用户根本看不见，不该偷这一下点击。
+   * 裁决 A 之后用户点统一 `depthTest: false` 画在实体之上（理由见 `createPoint3Mesh`：中点 / 分点
+   * 常落在背面那条棱上，不这样画就既看不见也点不中），于是**这个点此刻就画在光标底下** ——
+   * 点它才是"看到什么点什么"。反面那一半（光标没压着点 ⇒ 面赢）由上面那条用例钉着。
+   */
+  it("lets a point that is drawn over the surface win, even from the far side", () => {
     const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100)
     camera.position.set(0, 0, 8)
     camera.lookAt(0, 0, 0)
     const scene = new THREE.Scene()
     const points = new Map([["p0", { id: "p0", type: "point3" as const, position: { x: -1, y: -1, z: 0 } }], ["p1", { id: "p1", type: "point3" as const, position: { x: 1, y: -1, z: 0 } }], ["p2", { id: "p2", type: "point3" as const, position: { x: 1, y: 1, z: 0 } }], ["p3", { id: "p3", type: "point3" as const, position: { x: -1, y: 1, z: 0 } }]])
     const face = createFace3Mesh({ id: "face-front", type: "face3", pointIds: ["p0", "p1", "p2", "p3"] }, points, false)!
-    // A handle four units behind the face must not win just because it is a point.
+    // 四个单位在面后面的一个手柄：它**画在面上**（`depthTest: false`），所以它赢。
     const behind = createPoint3Mesh({ id: "point-behind", type: "point3", position: { x: 0, y: 0, z: -4 } }, false, 0.05)
     scene.add(face, behind)
 
     const hit = pickRaycastHit3(scene, camera, { x: 0.5, y: 0.5 })
 
-    expect(hit?.primitiveId).toBe("face-front")
-    expect(hit?.kind).toBe("face")
+    expect(hit?.primitiveId).toBe("point-behind")
+    expect(hit?.kind).toBe("point")
 
     scene.traverse((object) => {
       if (object instanceof THREE.Mesh) object.geometry.dispose()
@@ -311,7 +320,17 @@ describe("Three.js geometry scene", () => {
     })
   })
 
-  it("still lets a handle that sits on a surface win the click", () => {
+  /**
+   * **画出来的点就要点得中**（2026-10-10 用户裁决 A）。
+   *
+   * 旧口径是"沉在面后面的手柄只在容差够大时才赢" —— 那时点**不画**在面之上，所以光标底下最近的
+   * 那个面确实就是用户看到的东西。现在用户点（`point3`）统一 `depthTest: false` 画在实体之上
+   * （中点 / 分点常落在背面那条棱上，不这样画就既看不见也点不中，见 `createPoint3Mesh`），
+   * 于是"画出来了"与"点得中"必须是同一件事。
+   *
+   * 同时钉住反面：**光标没压在那个点上时，它不许偷这一下点击**。
+   */
+  it("lets a point win the click even when it sits behind the surface it is drawn over", () => {
     const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100)
     camera.position.set(0, 0, 8)
     camera.lookAt(0, 0, 0)
@@ -330,13 +349,13 @@ describe("Three.js geometry scene", () => {
     })
 
     const tight = build()
-    expect(pickRaycastHit3(tight, camera, { x: 0.5, y: 0.5 }, { tolerance: 0.01 })?.primitiveId).toBe("face-front")
+    expect(pickRaycastHit3(tight, camera, { x: 0.5, y: 0.5 }, { tolerance: 0.01 })?.primitiveId).toBe("point-sunk")
     dispose(tight)
 
-    // The screen-space allowance is what makes a small handle grabbable through its own surface.
-    const forgiving = build()
-    expect(pickRaycastHit3(forgiving, camera, { x: 0.5, y: 0.5 }, { tolerance: 0.3 })?.primitiveId).toBe("point-sunk")
-    dispose(forgiving)
+    // 光标挪开：那个点不再是"画在光标底下的东西"，面赢。
+    const away = build()
+    expect(pickRaycastHit3(away, camera, { x: 0.36, y: 0.5 }, { tolerance: 0.01 })?.primitiveId).toBe("face-front")
+    dispose(away)
   })
 
   it("does not let a line the cursor never touched steal the click", () => {

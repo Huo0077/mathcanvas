@@ -91,7 +91,20 @@ export function pickRaycastHit3(scene: THREE.Scene, camera: THREE.Camera, normal
   // over the surface the user clicked; the per-kind allowance keeps small handles grabbable without that.
   const hit = hits.sort((first, second) => first.score - second.score)[0]
   if (!hit) return null
-  return { primitiveId: hit.primitiveId, partId: hit.partId, depth: hit.depth, worldPoint: hit.worldPoint, kind: hit.kind }
+  /**
+   * **一个例外：画在实体之上的点赢下点击**（2026-10-10 用户裁决 A）。
+   *
+   * 上面那条"按光标底下的东西排"有一个前提：**画出来的就是最近的**。用户点（`point3`）从这一天起
+   * 统一 `depthTest: false` 画在实体之上（中点 / 分点常常落在背面的棱上，不这样画就既看不见也点不中，
+   * 见 `createPoint3Mesh`）—— 前提变了，规则也要跟着变：**画在光标底下的那个点，就是用户看到的东西**，
+   * 所以只要射线真的覆盖了某个点（球半径就是画出来的那 3px），最近的那个点赢，哪怕它在一张面后面。
+   *
+   * 这不是把当年删掉的"固定种类优先级"搬回来：那条的教训是"**没画在光标底下的**手柄不许偷点击"，
+   * 下面 `threeScene.test.ts` 那条用例的反面（光标挪开 ⇒ 面赢）仍然钉着这一条。
+   */
+  const nearestPoint = hits.filter((entry) => entry.kind === "point").sort((first, second) => first.depth - second.depth)[0]
+  const winner = nearestPoint ?? hit
+  return { primitiveId: winner.primitiveId, partId: winner.partId, depth: winner.depth, worldPoint: winner.worldPoint, kind: winner.kind }
 }
 
 /**

@@ -68,14 +68,30 @@ export function sectionUnitNormal(normal: Vector3): THREE.Vector3 | null {
 }
 
 export function createPoint3Mesh(primitive: Point3Primitive, selected: boolean, worldRadius = DEFAULT_POINT_HANDLE_RADIUS): THREE.Mesh {
-  // A unit sphere plus a scale keeps the handle resizable every frame without rebuilding geometry.
-  const mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), new THREE.MeshBasicMaterial({ color: selected ? "#4c3ac7" : strokeFor(primitive), transparent: opacityFor(primitive) < 1, opacity: opacityFor(primitive) }))
+  /**
+   * **用户点画在实体之上**（2026-10-10 用户裁决 A）。
+   *
+   * 现场：题面点名 `O为 BD的中点` 之后，系统把它建出来了、坐标也对，但**画布上看不见、也点不中**
+   * —— 因为中点 / 分点常常落在背面的那条棱上，而标记原来是参与深度测试的，实体面又不透明。
+   * （实测：同一个点，打开「透明面」就出现；同一份文档在 jsdom 用例里坐标全对。）
+   *
+   * 与手柄那一族同一条口径（`createRotationHandles` / 轨道手柄都写着 `depthTest: false` +
+   * 高 `renderOrder`，"被实体挡住也要看得见、抓得到"）；`renderOrder` 取在手柄（30）之下、
+   * 实体之上，编辑手柄仍然压在点上面。`depthWrite: false`：点不该挡住任何后来画的东西。
+   *
+   * 配套的一半在拾取那一侧（`pickRaycastHit3`）：**画出来的点就必须点得中**。
+   */
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), new THREE.MeshBasicMaterial({ color: selected ? "#4c3ac7" : strokeFor(primitive), transparent: opacityFor(primitive) < 1, opacity: opacityFor(primitive), depthTest: false, depthWrite: false }))
   mesh.scale.setScalar(worldRadius)
   mesh.position.set(primitive.position.x, primitive.position.y, primitive.position.z)
+  mesh.renderOrder = POINT3_RENDER_ORDER
   mesh.userData.primitiveId = primitive.id
   mesh.userData.primitiveType = primitive.type
   return mesh
 }
+
+/** 用户点的绘制层：在实体（默认 0）之上、编辑器手柄（30/31）之下。 */
+export const POINT3_RENDER_ORDER = 20
 
 function point3ById(points: Map<string, Point3Primitive>, id: string): Vector3 | null {
   return points.get(id)?.position ?? null
