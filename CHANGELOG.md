@@ -7,6 +7,26 @@
 
 
 
+## 2026-10-10 —— 底面点名两个直角 ⇒ 造**直角梯形**（不再是"矩形是更强的假设 ⇒ 拒绝"）
+
+**原来的行为（内核那侧的原话）**：底面点名了两个内部直角时拒绝 —— `unsupported-base-shape`，"那与「环首直角 ⇒ 矩形」的构造冲突（可能是直角梯形，也可能是冗余的特殊性），首批按更强的假设处理 —— 拒绝"，并且**逐字钉在两条用例里**（`constructors.test.ts` 的梯形与"拆分编码"两条）。
+
+**那条理由没错，结论过宽**：环首直角（`AB ⊥ AD`）加 B 处直角（`AB ⊥ BC`）把 `AB` 钉成了两条平行边的**公垂线**，底面**闭式可构造**：`A=(0,0)`、`B=(w,0)`、`C=(w,c)`、`D=(0,d)`。所以"首批不做通用非线性求解"这个借口在这一支上不成立 —— 它需要的只是一次减法。而 `perpendicular` / `parallel` 两条判据核验器本来就有，于是这条能力**能端到端走完**（构造 → 逐条核验），不是"造出来看看"。
+
+**改法（`deriveBasePolygon` 的四边形分支）**：
+- 第二个内部直角在 **B** 处 ⇒ 直角梯形（`c ≠ d` 才不是矩形；**相等就是题面没说的额外特殊性**，与候选池"两条自由底边不许取相等"同一条账）；
+- 题面另外点名 `AB ∥ DC` ⇒ 四个角都是直角，**那就是矩形**，按矩形造（`c = d`）—— 此时若题面又给了两个**不同**的 `AD` / `BC`，就是**自相矛盾**，如实拒绝，不替它挑一个；
+- 题面点名 `CD` 的长度 ⇒ 拒绝（它在梯形里由另外三条边决定，是联立关系）；
+- 第二个直角在 **C / D** 处 ⇒ 仍旧拒绝（配上环首直角推出来的就是矩形，而题面没说那件事）。
+
+**判据**：内核一条（`constructors.test.ts`：两种编码都判成 `candidate`，并且**自算** `AB ⊥ AD`、`AB ⊥ BC`、`BC ∥ AD` 三条 + **没有多加题面没说的东西**：`AD ≠ BC`、C/D 处不是直角）；**管线级三条**（`witnessSearch.test.ts`：直角梯形句 ⇒ `verified_instance`；矩形那一支 ⇒ `verified_instance`；`AB ∥ DC` + `AD=3`/`BC=5` 矛盾 ⇒ **不给通过核验的候选**）。**变异**：把新分支短路（`internalRightAngle === 99`）⇒ 内核报 `rejected`、管线降成 `unverified_instance`（12 个候选全在构造期被拒），**两层同时真红**，还原复绿。
+
+**读数**：`typecheck` exit 0；`lint` 0 error / 13 warning；全库非 Lean **353 文件 / 4130 通过 + 1 todo / 0 失败**（474.56 s，+3 = 三条管线判据）；全量 e2e 首跑 **220 通过 / 1 失败**（`conversation-isolation.spec.ts:52`，**已记过的抖动**，孤立复跑 1 passed）。
+
+**离线 benchmark 如实复查（结论：本块没有移动它）**：`BENCHMARK_WITNESS verified=1 unverified=20 solveRate=0.048` 与码表 `{"(no-code)":1,"requires-candidates":7,"witness-search":20,"unsupported-shape":9,"no-candidate-constructed":2,"unsupported-base-shape":2,"unverified-obligation":26}` —— 用 `git stash` 只 stash 内核源码跑了一遍**改前**，两次**逐字相同** ⇒ 那批题面里没有"两个底角直角"这一类。**顺带改正一处陈旧读数**：`docs/current-status.md` §一 记的 `no-candidate-constructed:4 / unsupported-base-shape:4` 是更早某次的分布（文档自己就记过"码表构成变过"），今天实测是 **2 / 2**。
+
+**一条过程教训（本会话第三次同型）**：新用例的辅助函数把参数类型写成 `PyramidConstructRequest["relations"]`（readonly），而 `pyramidRequest` 收可变数组 ⇒ `tsc` 报 **TS4104**，而 vitest 全绿。**"跑过测试"第三次不等于"过了类型门"** —— 三次都是先跑全库、再补类型。
+
 ## 2026-10-10 —— 球的状态词表：新增第五个词 `stale`（"不再成立"），与"不存在"分开说
 
 **原来的毛病是一句用户看得见的假话**：派生球与宿主对不上时（`derived.sphere_stale`）报告**借 `undefined`**，而界面把 `undefined` 说成"**不存在**"—— 可那只球**就画在屏幕上**。用户看到的是"球不存在"，而球明明在。

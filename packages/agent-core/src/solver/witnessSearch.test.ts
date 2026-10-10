@@ -381,6 +381,37 @@ describe("直棱柱", () => {
     expect(result.status, JSON.stringify(result)).toBe("verified_instance")
   })
 
+  /**
+   * **底面点名两个直角的直角梯形**（2026-10-10 §3-F）。
+   *
+   * 2026-10-10 之前这一族**逐条拒绝**（内核那侧的原话是"矩形是比题面更强的假设 ⇒ 拒绝"，
+   * 参数见 `constructors.test.ts` 的同名判据）。那条理由没错，但结论过宽：环首直角 +
+   * B 处直角把 `AB` 钉成了两条平行边的**公垂线**，底面闭式可构造，而且 `parallel` /
+   * `perpendicular` 两条判据核验器本来就有。
+   *
+   * 这一条证的是**端到端**：句子进去 ⇒ 造出来 ⇒ **核验器逐条查过** ⇒ `verified_instance`。
+   * 内核那侧只证"造出了候选"，"核验通过"是另一回事。
+   */
+  it("底面点名两个直角的直角梯形也走通（构造 + 逐条核验）", () => {
+    const result = search("在四棱柱ABCD-A′B′C′D′中，AA′⊥平面ABCD，AB⊥AD，AB⊥BC，画出这个四棱柱", { shape: "prism" })
+    expect(result.status, describeResult(result)).toBe("verified_instance")
+  })
+
+  it("底面两个直角 + 另一组对边平行 ⇒ 题面自己说的就是矩形，照样走通", () => {
+    const result = search("在四棱柱ABCD-A′B′C′D′中，AA′⊥平面ABCD，AB⊥AD，AB⊥BC，AB∥DC，画出这个四棱柱", { shape: "prism" })
+    expect(result.status, describeResult(result)).toBe("verified_instance")
+  })
+
+  /**
+   * **自相矛盾的题面要拒，不许挑一个**：`AB ∥ DC` 与两条直角合起来**推出**矩形
+   *（四条边两两垂直 ⇒ 对边相等），而题面又给了 `AD=3`、`BC=5`。
+   * 挑一个就是把矛盾静默吞掉 —— 那正是这一层最不该做的事。
+   */
+  it("矩形那一支里两条高度给了不同值 ⇒ 如实拒绝，不替题面挑一个", () => {
+    const result = search("在四棱柱ABCD-A′B′C′D′中，AA′⊥平面ABCD，AB⊥AD，AB⊥BC，AB∥DC，AD=3，BC=5，画出这个四棱柱", { shape: "prism" })
+    expect(result.status, describeResult(result)).not.toBe("verified_instance")
+  })
+
   it("底面点名了直角时仍拒绝：正五边形代表满足不了它（棱柱与棱锥共用同一条规则）", () => {
     const result = search("在五棱柱ABCDE-A′B′C′D′E′中，AA′⊥平面ABCDE，AB⊥BC，画出这个五棱柱", { shape: "prism" })
     expect(result.status, JSON.stringify(result)).not.toBe("verified_instance")

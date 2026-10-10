@@ -936,8 +936,29 @@ function baseEdgePerpendicular(relations: readonly WitnessRelation[], baseNames:
   })
 }
 
-/** Rotate only a triangular base with one explicitly named right corner. A cyclic
- * rotation preserves its face orientation; two claimed corners are ambiguous
+/**
+ * **只看底面的**平行判据（与 `baseEdgePerpendicular` 同一口径）：跨所有 `parallel` 关系找
+ * "这两条边互相平行"，而且**要求两条边都被同一条关系点到**、**忽略任何点名了环外顶点的关系**。
+ *
+ * 为什么要求"同一条关系点到两条"：`parallel` 的语义就是一对，而"两条独立的关系各说一条边平行"
+ * 在题面里没有意义（没有平行对象）。方向不限（`BC ∥ AD` 与 `AD ∥ BC` 同义），所以用 `sameSegment`。
+ */
+function baseEdgeParallel(
+  relations: readonly WitnessRelation[],
+  baseNames: readonly string[],
+  first: readonly [string, string],
+  second: readonly [string, string]
+): boolean {
+  return relations.some((relation) => {
+    if (relation.kind !== "parallel") return false
+    const segments = relation.segments.map(segmentOf).filter((pair): pair is [string, string] => pair !== null)
+    const allInBase = segments.length > 0 && segments.every(([from, to]) => baseNames.includes(from) && baseNames.includes(to))
+    if (!allInBase) return false
+    return segments.some((pair) => sameSegment(pair, first)) && segments.some((pair) => sameSegment(pair, second))
+  })
+}
+
+/** Rotate only a triangular base with one explicitly named right corner. A cyclic * rotation preserves its face orientation; two claimed corners are ambiguous
  * and must stay unsupported rather than silently picking one. */
 export function namedRightTriangleBase(names: readonly string[], relations: readonly WitnessRelation[]): string[] {
   if (names.length !== 3) return [...names]
@@ -1269,9 +1290,86 @@ function deriveBasePolygon(
       }
     }
     if (internalRightAngle > 0) {
+      /**
+       * **直角梯形底面**（2026-10-10 §3-F）：题面点名了**两个**底面上的直角，
+       * 其中第二个在 **B** 处（`AB ⊥ BC`）。环首那条（`AB ⊥ AD`）已经由上面的判据要求过，
+       * 于是 `AB` 被钉成 `AD` 与 `BC` 的**公垂线**，底面**闭式可构造**：
+       * `A=(0,0)`、`B=(w,0)`、`C=(w,c)`、`D=(0,d)`（`c ≠ d` 才不是矩形）。
+       *
+       * 所以原先那句"首批不做通用非线性求解"在这一支上**不成立** —— 拒绝的理由
+       *（"矩形是比题面更强的假设"）本身没错，错的是把它当成了只能拒的情形：
+       * 这里能造出一个**只满足题面、不额外加直角**的图形，而且核验器查得了它
+       *（`perpendicular` / `parallel` 都在既有判据里）。
+       *
+       * 三种输入各有各的正确答案：
+       * - 只点这两条垂直 ⇒ 直角梯形（`AD ∥ BC` 是**推论**，不是我们额外加的假设）；
+       * - 另外点名了 `BC ∥ AD` ⇒ 同上（与推论一致）；
+       * - 另外点名了 `AB ∥ DC` ⇒ 四个角都是直角，**那就是矩形**，按矩形造（`c = d`）。
+       *
+       * **其余内部直角（在 C 或 D 处）仍旧拒绝**：配上环首直角，它们推出来的就是矩形，
+       * 而题面没说那件事。
+       */
+      if (internalRightAngle === 1) {
+        const third = names[2]!
+        const fourth = names[3]!
+        const statedOtherPair = baseEdgeParallel(relations, names, [first, second], [third, fourth])
+        const statedDiagonal = statedLength(relations, [third, fourth])
+        if (statedDiagonal.kind === "value") {
+          return reject(
+            "unsupported-base-shape",
+            `底面点名了 ${third}${fourth} 的长度：它在直角梯形里由 ${first}${second}、${fourth}${first}、${second}${third} 决定（联立关系），本层不做这个求解。`,
+            [...names]
+          )
+        }
+        const statedOther = statedLength(relations, [second, third])
+        if (statedOther.kind === "invalid") return statedOther.rejection
+        const otherStated = statedOther.kind === "value" ? statedOther.stated : null
+        /**
+         * 与 `AD` 平行的 `BC` 取多长：
+         * - 题面另外点名了 `AB ∥ DC` ⇒ 底面是矩形 ⇒ `c = d`（此时 `AD` 与 `BC` 必须一致，
+         *   题面给了两个不同的长度就是**自相矛盾**，如实拒绝而不是挑一个）；
+         * - 否则取**与 `AD` 不等**的代表值 —— 相等就不是梯形而是矩形，那是题面没说的额外特殊性
+         *  （与候选池"两条自由底边不许取相等"同一条账）。
+         */
+        const other = statedOtherPair
+          ? (otherStated && Math.abs(otherStated.value - depth.value) > 1e-12
+            ? null // 落在下面统一拒绝：题面说自己矛盾了
+            : { value: depth.value })
+          : freeLength(otherStated, depth, 1)
+        if (other === null) {
+          return reject(
+            "unsupported-base-shape",
+            `底面同时点名了「${first}${second} ⊥ ${first}${third}」与「${second}${third} ⊥ ${first}${second}」，又说 ${first}${second} ∥ ${third}${fourth}` +
+            `（那把底面推成矩形），可 ${names[3]}${first} 与 ${second}${third} 的长度给得不一样 —— 题面自相矛盾，不替它挑一个。`,
+            [...names]
+          )
+        }
+        if (!(other.value > 0)) return reject("degenerate-base", "底面自由边长必须为有限正数。", [...names])
+        const freeValues: string[] = []
+        if (!widthStated) freeValues.push(`底面边长 ${first}${second} = ${formatNumber(width.value)}（系统自选）`)
+        if (!depthStated) freeValues.push(`底面边长 ${fourth}${first} = ${formatNumber(depth.value)}（系统自选）`)
+        if (!otherStated) freeValues.push(`底面边长 ${second}${third} = ${formatNumber(other.value)}（系统自选）`)
+        const shape = statedOtherPair ? "矩形" : "直角梯形"
+        const because = statedOtherPair
+          ? `题面点名了 ${first}${second} ∥ ${third}${fourth}，与两条垂直合起来就是矩形。`
+          : `${first}${second} ⊥ ${first}${third} 且 ${first}${second} ⊥ ${second}${third} ⇒ ${fourth}${first} ∥ ${second}${third}（题面的推论，不是额外假设）；` +
+            `${fourth}${first} 与 ${second}${third} 的长度不同（相等就成了矩形 —— 题面没说）。`
+        return {
+          status: "ok",
+          polygon: [
+            { x: 0, y: 0, z: 0 },
+            { x: width.value, y: 0, z: 0 },
+            { x: width.value, y: other.value, z: 0 },
+            { x: 0, y: depth.value, z: 0 }
+          ],
+          freeValues,
+          assumptions: [`底面 ${names.join("")} 取**${shape}**：${because}`]
+        }
+      }
       return reject(
         "unsupported-base-shape",
-        `底面在 ${names[internalRightAngle]} 处另有一个点名直角：那与「环首直角 ⇒ 矩形」的构造冲突（可能是直角梯形，也可能是冗余的特殊性），首批按更强的假设处理 —— 拒绝。`,
+        `底面在 ${names[internalRightAngle]} 处另有一个点名直角：只有「${second} 处直角」那一支（直角梯形／矩形）能闭式构造，` +
+        `在 ${names[2]} / ${names[3]} 处点直角配上环首直角会把底面推成矩形 —— 那是题面没说的特殊性，首批按更强的假设处理：拒绝。`,
         [...names]
       )
     }

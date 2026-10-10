@@ -327,40 +327,60 @@ describe("constructPyramidWitness", () => {
     if (repeatedApex.status === "rejected") expect(repeatedApex.code).toBe("duplicate-name")
 
     /**
-     * 底面点名了两个**内部直角** ⇒ 直角梯形（矩形是更强的假设）⇒ 拒绝。
+     * **直角梯形底面 ⇒ 构造出来，而不是拒绝**（2026-10-10 §3-F；这一段此前钉的是"拒绝"）。
      *
-     * 两条直角边分别点名在 A 与 B 处：`AB ⊥ AD` 与 `AB ⊥ BC`。这正是"用 `relation.segments.some`
-     * 直接查两个端点"会漏判的那种输入 —— 一个关系里含多条边时，两次独立查询会各自命中同一条边。
+     * 底面点名了两个**内部直角**：`AB ⊥ AD` 与 `AB ⊥ BC`（外加 `BC ∥ AD`）。
+     * 2026-10-10 之前这里拒绝，理由写在当时的注释里 ——"矩形是比题面更强的假设"。
+     * 那个理由本身没错，**错的是结论**：这两条垂直把 `AB` 钉成了两条平行边的**公垂线**，
+     * 底面是**闭式可构造**的直角梯形（`A=(0,0)`、`B=(w,0)`、`C=(w,c)`、`D=(0,d)`，`c ≠ d`），
+     * 不需要"通用非线性求解"。所以"首批不做求解"这个借口在这一支上不成立 —— 改成构造，
+     * 并把代表值（`AB` 与两条平行边的长）写进 `freeValues` / `assumptions`。
+     *
+     * 判据全部**自算**，不读构造方的自述：题面那三条逐条成立，
+     * 外加两条"没有多加题面没说的东西"——`AD ≠ BC`（等长就是矩形）与 `C`、`D` 处**不是**直角。
+     *
+     * 两种编码都要认：一条关系里给全（`AB ⊥ AD` 与 `AB ⊥ BC`），
+     * 或把"在 B 处垂直"拆成两条单段关系（复核 round 1 Minor 9 的那条编码轴）。
      */
-    const trapezoid = constructPyramidWitness(
-      pyramidRequest({
-        relations: [
-          { kind: "perpendicular", segments: [["A", "B"], ["A", "D"]] },
-          { kind: "parallel", segments: [["B", "C"], ["A", "D"]] },
-          { kind: "perpendicular", segments: [["A", "B"], ["B", "C"]] }
-        ]
-      })
-    )
-    expect(trapezoid.status, `trapezoid: ${JSON.stringify(trapezoid)}`).toBe("rejected")
-    if (trapezoid.status === "rejected") expect(trapezoid.code).toBe("unsupported-base-shape")
+    const rightTrapezoid = (relations: WitnessRelation[]) => {
+      const result = constructPyramidWitness(pyramidRequest({ relations }))
+      expect(result.status, `right-trapezoid: ${JSON.stringify(result)}`).toBe("candidate")
+      if (result.status !== "candidate") throw new Error("unreachable")
+      const { points, names } = result.witness
+      const at = (name: string): Vector3 => points[names.indexOf(name)]!
+      const ab = subtractVector3(at("B"), at("A"))
+      const ad = subtractVector3(at("D"), at("A"))
+      const bc = subtractVector3(at("C"), at("B"))
+      const cd = subtractVector3(at("D"), at("C"))
+      // ① 题面点名的三条，逐条自己算。
+      expect(Math.abs(dotVector3(ab, ad)), "AB ⊥ AD").toBeLessThan(TOLERANCE)
+      expect(Math.abs(dotVector3(ab, bc)), "AB ⊥ BC").toBeLessThan(TOLERANCE)
+      expect(Math.abs(crossVector3(bc, ad).z), "BC ∥ AD").toBeLessThan(TOLERANCE)
+      // ② 没有多加题面没说的特殊性。
+      expect(Math.abs(distanceVector3(at("A"), at("D")) - distanceVector3(at("B"), at("C"))), "AD ≠ BC（等长就是矩形）").toBeGreaterThan(1e-6)
+      expect(Math.abs(dotVector3(bc, cd)), "C 处不是直角").toBeGreaterThan(1e-6)
+      expect(Math.abs(dotVector3(ad, cd)), "D 处不是直角").toBeGreaterThan(1e-6)
+      // ③ 底面非退化（四个点互异、面积不为零）。
+      expect(Math.abs(crossVector3(ab, ad).z)).toBeGreaterThan(1e-6)
+    }
+
+    rightTrapezoid([
+      { kind: "perpendicular", segments: [["A", "B"], ["A", "D"]] },
+      { kind: "parallel", segments: [["B", "C"], ["A", "D"]] },
+      { kind: "perpendicular", segments: [["A", "B"], ["B", "C"]] }
+    ])
 
     /**
      * 同一句物理事实的**另一种编码**：把"在 B 处两条边互相垂直"拆成两条单段关系。
      * 复核 round 1 Minor 9：早先要求"一条关系同时含两条边"，这种编码会 fail-open ——
-     * 题面明说的直角梯形会被静默建成矩形。
+     * 题面明说的直角梯形会被静默建成矩形。现在两支走**同一个构造**，所以两条都要判到底。
      */
-    const splitEncoding = constructPyramidWitness(
-      pyramidRequest({
-        relations: [
-          { kind: "perpendicular", segments: [["A", "B"], ["A", "D"]] },
-          { kind: "parallel", segments: [["B", "C"], ["A", "D"]] },
-          { kind: "perpendicular", segments: [["B", "A"]] },
-          { kind: "perpendicular", segments: [["B", "C"]] }
-        ]
-      })
-    )
-    expect(splitEncoding.status, `split-encoding: ${JSON.stringify(splitEncoding)}`).toBe("rejected")
-    if (splitEncoding.status === "rejected") expect(splitEncoding.code).toBe("unsupported-base-shape")
+    rightTrapezoid([
+      { kind: "perpendicular", segments: [["A", "B"], ["A", "D"]] },
+      { kind: "parallel", segments: [["B", "C"], ["A", "D"]] },
+      { kind: "perpendicular", segments: [["B", "A"]] },
+      { kind: "perpendicular", segments: [["B", "C"]] }
+    ])
 
     /**
      * **环首直角也可以拆成两条单段关系**（与上面梯形用例同一编码轴的反面）：
