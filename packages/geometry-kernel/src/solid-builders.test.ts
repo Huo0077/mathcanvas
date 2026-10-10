@@ -250,6 +250,46 @@ describe("solid builders", () => {
     expect(entry?.message).toMatch(/deviation/i)
   })
 
+  /**
+   * **退化面环也要指名道姓**（2026-10-10 用户现场，第二次）：模型只有一次修复机会，
+   * 而那句 `face rings must have non-zero area` 不说**哪个环**、也不说**面积多小** ——
+   * 于是它第二次照样交了一个退化环。判据：报错里必须有环下标与量出来的面积。
+   */
+  it("names the ring and the measured area when a face ring is degenerate", () => {
+    const result = buildFromPoints({
+      vertices: [
+        { x: 0, y: 0, z: 0 },
+        { x: 1, y: 0, z: 0 },
+        { x: 2, y: 0, z: 0 },
+        { x: 0, y: 1, z: 0 },
+        { x: 0, y: 0, z: 2 }
+      ],
+      faces: [[0, 1, 2], [0, 1, 4], [1, 2, 4], [2, 0, 4]]
+    }, createBuilderContext("degenerate-named"))
+
+    const entry = result.diagnostics.find((diagnostic) => diagnostic.code === "degenerate-base")
+    expect(entry?.message).toContain("[0,1,2]")
+    expect(entry?.message).toMatch(/area/i)
+  })
+
+  /**
+   * **"点互异"也按尺度判**（同上：棱柱那条用 `scale * 1e-12`，多面体这条用**字符串全等**）。
+   * 尺度 8 下相差 1e-13 的两个顶点**就是同一个点** —— 那是一只退化实体，不是"两个点"。
+   */
+  it("treats vertices closer than the model's own scale as the same point", () => {
+    const result = buildFromPoints({
+      vertices: [
+        { x: 0, y: 0, z: 0 },
+        { x: 8, y: 0, z: 0 },
+        { x: 0, y: 8, z: 0 },
+        { x: 8 + 1e-13, y: 0, z: 0 }
+      ],
+      faces: [[0, 1, 2], [0, 1, 3], [0, 2, 3], [1, 2, 3]]
+    }, createBuilderContext("near-duplicate"))
+
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain("invalid-input")
+  })
+
   it("rejects unused vertices and disconnected closed shells", () => {
     const tetrahedronFaces = [[2, 1, 0], [0, 1, 3], [1, 2, 3], [2, 0, 3]]
     const result = buildFromPoints({

@@ -1,6 +1,6 @@
 import type { ConePrimitive, CubePrimitive, CylinderPrimitive, PrimitiveSpec, PyramidPrimitive } from "@draw/dsl"
 
-import { areCoplanar, crossVector3, extentOf, maxPlaneDeviation, subtractVector3, type Vector3 } from "./geometry3d"
+import { areCoplanar, crossVector3, extentOf, hasDistinctPoints, hasNonZeroArea, maxPlaneDeviation, maxTriangleArea, modelSpan, subtractVector3, type Vector3 } from "./geometry3d"
 
 export type GeometryDiagnosticCode =
   | "invalid-input"
@@ -133,21 +133,6 @@ function isFiniteVector(vector: unknown): vector is Vector3 {
 
 function isNonZeroVector(vector: unknown): vector is Vector3 {
   return isFiniteVector(vector) && (vector.x !== 0 || vector.y !== 0 || vector.z !== 0)
-}
-
-function hasDistinctPositions(points: Vector3[]): boolean {
-  return new Set(points.map((point) => [point.x, point.y, point.z].join(","))).size === points.length
-}
-
-function hasNonZeroArea(points: Vector3[]): boolean {
-  if (points.length < 3) return false
-  const first = points[0]
-  for (let secondIndex = 1; secondIndex < points.length; secondIndex += 1) {
-    for (let thirdIndex = secondIndex + 1; thirdIndex < points.length; thirdIndex += 1) {
-      if (isNonZeroVector(crossVector3(subtractVector3(points[secondIndex], first), subtractVector3(points[thirdIndex], first)))) return true
-    }
-  }
-  return false
 }
 
 function pointPrimitive(id: string, position: Vector3): Extract<PrimitiveSpec, { type: "point3" }> {
@@ -301,11 +286,19 @@ export function createBuilderContext(prefix = "solid"): BuilderContext {
 
 export function buildFromPoints(input: FromPointsInput, context: BuilderContext): SolidBuildResult {
   const diagnostics: GeometryDiagnostic[] = []
-  if (!Array.isArray(input?.vertices) || input.vertices.length < 4 || input.vertices.some((vertex) => !isFiniteVector(vertex)) || !hasDistinctPositions(input.vertices)) diagnostics.push(diagnostic("invalid-input", "vertices must be distinct finite points"))
+  /**
+   * **判据的尺度只算一次**（2026-10-10 用户现场，第二次）：下面三条判据（点互异 / 面环面积 /
+   * 面环共面）**全部按模型自身大小取容差** —— 与棱柱那条同一口径。原先三条各一套写法
+   *（坐标字符串全等 / 叉积**精确**非零 / `areCoplanar` 的绝对 `1e-10`），于是同一个退化环
+   * 在两个入口会得到两个答案。
+   */
+  const vertices = Array.isArray(input?.vertices) ? input.vertices : []
+  /** 两种尺度各司其职（见 `modelSpan` 的注释）：噪声看坐标量级，几何退化看形状尺寸。 */
+  const scale = extentOf(vertices)
+  const span = modelSpan(vertices)
+  if (!Array.isArray(input?.vertices) || vertices.length < 4 || vertices.some((vertex) => !isFiniteVector(vertex)) || !hasDistinctPoints(vertices, scale)) diagnostics.push(diagnostic("invalid-input", "vertices must be distinct finite points"))
   if (!Array.isArray(input?.faces) || input.faces.length < 4) diagnostics.push(diagnostic("missing-face-rings", "a solid requires at least four explicit face rings"))
   if (diagnostics.length > 0) return emptyResult(diagnostics)
-  /** 判据的尺度只算一次：容差按模型自身大小取（见下面面环那段的注释）。 */
-  const scale = extentOf(input.vertices)
   for (const face of input.faces) {
     if (!Array.isArray(face) || face.length < 3 || new Set(face).size !== face.length || face.some((index) => !Number.isInteger(index) || index < 0 || index >= input.vertices.length)) {
       diagnostics.push(diagnostic("invalid-input", "face rings must contain distinct vertex indexes"))
@@ -313,17 +306,17 @@ export function buildFromPoints(input: FromPointsInput, context: BuilderContext)
     }
     const points = face.map((index) => input.vertices[index])
     /**
-     * **容差按模型自身尺度取 —— 与棱柱那条同一口径**（2026-10-10 用户现场）。
+     * **三条判据各自独立收集**（与棱柱那条同一教训，见 `prism.ts` 的 M7 注释）：
+     * `else if` 链只会报**第一条**，而模型只有**一次**修复机会 —— 一次只告诉它一个问题，
+     * 就等于逼它把唯一的机会花在"猜下一个问题是什么"上。现场就是这么连锁失败的：
+     * 第一次报"不共面"、修好之后第二次报"面积为零"。
      *
-     * 原先这里用 `areCoplanar` 的默认**绝对**容差 `1e-10`，而棱柱用 `scale * 1e-9`：
-     * 同样的形状做成棱柱能过、做成多面体被拒。现场后果是模型自己算的坐标（8 量级、末位差 1e-9）
-     * 被判"不共面"，而那次修复只有一次机会 —— 报错还只给一句"must be coplanar"，
-     * **不说哪个环、偏多少**，于是第二次照样错。所以这里连"偏了多少"一起说出去。
+     * 每一条都说清**哪个环、差多少** —— 与共面那条同一个标准。
      */
     const deviation = maxPlaneDeviation(points)
-    if (!hasNonZeroArea(points)) diagnostics.push(diagnostic("degenerate-base", "face rings must have non-zero area"))
-    else if (points.length >= 4 && deviation > scale * 1e-9) diagnostics.push(diagnostic("non-planar-base", `face ring [${face.join(",")}] is not coplanar: deviation ${deviation.toExponential(2)} exceeds the tolerance ${(scale * 1e-9).toExponential(1)}`))
-    else if (hasSelfIntersectingPolygon(points)) diagnostics.push(diagnostic("self-intersection", "face rings must not self-intersect"))
+    if (!hasNonZeroArea(points, span)) diagnostics.push(diagnostic("degenerate-base", `face ring [${face.join(",")}] has zero area (largest triangle ${maxTriangleArea(points).toExponential(2)})`))
+    if (points.length >= 4 && deviation > span * 1e-9) diagnostics.push(diagnostic("non-planar-base", `face ring [${face.join(",")}] is not coplanar: deviation ${deviation.toExponential(2)} exceeds the tolerance ${(span * 1e-9).toExponential(1)}`))
+    if (hasSelfIntersectingPolygon(points)) diagnostics.push(diagnostic("self-intersection", `face ring [${face.join(",")}] self-intersects`))
   }
   if (diagnostics.length > 0) return emptyResult(diagnostics)
   if (areCoplanar(input.vertices)) diagnostics.push(diagnostic("degenerate-volume", "solid vertices must not be coplanar"))
@@ -368,7 +361,11 @@ export function buildFromPoints(input: FromPointsInput, context: BuilderContext)
 
 export function buildPrism(input: PrismInput, context: BuilderContext): SolidBuildResult {
   const diagnostics: GeometryDiagnostic[] = []
-  if (!Array.isArray(input?.base) || input.base.length < 3 || input.base.some((point) => !isFiniteVector(point)) || !hasDistinctPositions(input.base) || !hasNonZeroArea(input.base)) diagnostics.push(diagnostic("degenerate-base", "prism base must contain distinct finite points with non-zero area"))
+  /** 与 `buildFromPoints` 同一条口径：底面判据的容差按底面自身尺度取（2026-10-10 现场）。 */
+  const base = Array.isArray(input?.base) ? input.base : []
+  const baseScale = extentOf(base)
+  const baseSpan = modelSpan(base)
+  if (!Array.isArray(input?.base) || base.length < 3 || base.some((point) => !isFiniteVector(point)) || !hasDistinctPoints(base, baseScale) || !hasNonZeroArea(base, baseSpan)) diagnostics.push(diagnostic("degenerate-base", "prism base must contain distinct finite points with non-zero area"))
   if (!isNonZeroVector(input?.vector)) diagnostics.push(diagnostic("degenerate-vector", "prism vector must be finite and non-zero"))
   if (diagnostics.length > 0) return emptyResult(diagnostics)
   /**

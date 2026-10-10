@@ -1,4 +1,4 @@
-import { areCoplanar, crossVector3, dotVector3, extentOf, lengthVector3, normalizeVector3, subtractVector3, type Vector3 } from "./geometry3d"
+import { areCoplanar, crossVector3, dotVector3, extentOf, hasDistinctPoints, hasNonZeroArea, lengthVector3, modelSpan, normalizeVector3, subtractVector3, type Vector3 } from "./geometry3d"
 
 /**
  * **棱柱的纯拓扑构造**（Solid/Prism 切片 Task 2；设计规格 §3.3）。
@@ -257,29 +257,6 @@ function hasSelfIntersectingPolygon(points: readonly Vector3[]): boolean {
   return false
 }
 
-/** 底面是否有非零面积：存在一组三点不共线即可（尺度的平方用于把判据归一化）。 */
-function hasNonZeroArea(points: readonly Vector3[], scale: number): boolean {
-  if (points.length < 3) return false
-  const first = points[0]
-  for (let secondIndex = 1; secondIndex < points.length; secondIndex += 1) {
-    for (let thirdIndex = secondIndex + 1; thirdIndex < points.length; thirdIndex += 1) {
-      const normal = crossVector3(subtractVector3(points[secondIndex], first), subtractVector3(points[thirdIndex], first))
-      if (lengthVector3(normal) > scale * scale * 1e-12) return true
-    }
-  }
-  return false
-}
-
-function hasDistinctPoints(points: readonly Vector3[], scale: number): boolean {
-  const epsilon = scale * 1e-12
-  for (let firstIndex = 0; firstIndex < points.length; firstIndex += 1) {
-    for (let secondIndex = firstIndex + 1; secondIndex < points.length; secondIndex += 1) {
-      if (lengthVector3(subtractVector3(points[firstIndex], points[secondIndex])) <= epsilon) return false
-    }
-  }
-  return true
-}
-
 /**
  * 棱柱输入的**结构化校验**（规格 §6.2：几何语义只保留在确定性这一层）。
  *
@@ -296,7 +273,9 @@ export function validatePrismInput(basePolygon: readonly Vector3[], vector: Vect
   if (!isFiniteVector(vector)) return { ok: false, diagnostics: [diagnostic("invalid-input", "棱柱的拉伸向量必须是有限坐标。")] }
 
   const diagnostics: PrismDiagnostic[] = []
+  /** 噪声尺度（坐标量级）与形状尺度（尺寸）分开取 —— 见 `modelSpan` 的注释。 */
   const scale = Math.max(extentOf(basePolygon), extentOf([vector]))
+  const span = Math.max(modelSpan(basePolygon), modelSpan([vector]))
   const vectorLength = lengthVector3(vector)
   /**
    * 底面的平面法向：体积判据与自交投影都要它（见 `baseNormal`）。
@@ -304,11 +283,11 @@ export function validatePrismInput(basePolygon: readonly Vector3[], vector: Vect
    */
   const normal = baseNormal(basePolygon)
   const normalLength = lengthVector3(normal)
-  const baseUsable = hasDistinctPoints(basePolygon, scale) && hasNonZeroArea(basePolygon, scale) && normalLength > 0
+  const baseUsable = hasDistinctPoints(basePolygon, scale) && hasNonZeroArea(basePolygon, span) && normalLength > 0
 
   if (!hasDistinctPoints(basePolygon, scale)) diagnostics.push(diagnostic("degenerate-base", "棱柱底面存在重合的顶点，无法确定多边形。"))
-  if (!hasNonZeroArea(basePolygon, scale)) diagnostics.push(diagnostic("degenerate-base", "棱柱底面的面积为零，拉伸不出实体。"))
-  if (baseUsable && basePolygon.length >= 4 && !areCoplanar([...basePolygon], scale * 1e-9)) diagnostics.push(diagnostic("non-planar-base", "棱柱底面的顶点不共面。"))
+  if (!hasNonZeroArea(basePolygon, span)) diagnostics.push(diagnostic("degenerate-base", "棱柱底面的面积为零，拉伸不出实体。"))
+  if (baseUsable && basePolygon.length >= 4 && !areCoplanar([...basePolygon], span * 1e-9)) diagnostics.push(diagnostic("non-planar-base", "棱柱底面的顶点不共面。"))
   if (baseUsable && hasSelfIntersectingPolygon(basePolygon)) diagnostics.push(diagnostic("self-intersection", "棱柱底面多边形自交。"))
 
   // 零向量拉伸出来的是"两片重合的多边形"，不是实体（规格 §3.2：向量有限且非零）。

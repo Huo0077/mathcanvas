@@ -62,4 +62,21 @@ describe("面环共面容差（用户现场：degenerate_polyhedron）", () => {
     expect(detail).toContain("[1,2,3,4]")
     expect(detail).toMatch(/deviation/i)
   })
+
+  /**
+   * **退化面环同样要说清"哪个环、面积多小"**（2026-10-10 第二次现场：`face rings must have non-zero area`）。
+   *
+   * 底面四点**全在一条直线上**（A、B、C、D 都在 x 轴上）—— 那不是一个面。内核照旧拒（这是对的），
+   * 但报错必须指出**是哪个环**：模型只有一次修复机会，一句不点名的"面积为零"等于让它猜。
+   */
+  it("**退化面环照旧拒**，报错也指名道姓", () => {
+    const collinear = [PYRAMID_VERTICES[0], { x: 0, y: 0, z: 0 }, { x: 2, y: 0, z: 0 }, { x: 4, y: 0, z: 0 }, { x: 6, y: 0, z: 0 }]
+
+    const result = compile(collinear)
+
+    expect(result.ok).toBe(false)
+    const detail = JSON.stringify(result.diagnostics)
+    expect(detail).toContain("[1,2,3,4]")
+    expect(detail).toMatch(/zero area/i)
+  })
 })
