@@ -98,7 +98,16 @@ const PRIMITIVE_CAPABILITIES = {
   intersectionFace: describeCapability("create-intersection-face", "available", SOLID, ["two solids sharing a face patch"]),
   intersectionPoint3: describeCapability("create-intersection-point-3d", "available", SOLID, ["two objects meeting at a point"]),
   edge3: describeCapability("generated-solid-edge", "temporarily_unavailable", SOLID, ["no action handler: edges are materialised by the kernel"]),
-  face3: describeCapability("generated-solid-face", "temporarily_unavailable", SOLID, ["no action handler: faces are materialised by the kernel"]),
+  /**
+   * **空间面**（2026-10-10）：原先这里是 `temporarily_unavailable`，理由正是"没有 action handler：
+   * 面只由内核物化"。现在 `solid.create_face`（顶点环 → 一只 `face3`）就是那个 handler，
+   * 所以它走上一条与 `polyhedron3` 相同的路：文本从"没有入口"改成"**怎么用**"。
+   *
+   * 手工工具（工具条「绘制空间面」）与这条动作**同口径**：至少三点、互异、不共线、共面。
+   * 它是"平面四边形 + 翻折片"这类**开放曲面**唯一的表达方式 —— 拿 `solid.create_polyhedron`
+   * 去套必然被拒（至少四个面、内核还要体积）。
+   */
+  face3: describeCapability("create-spatial-face", "available", SOLID, ["workspace is geometry3d", "at least three distinct coplanar vertices"], [...CORE_TESTS]),
   /**
    * 任意多面体：**第 2 层之前**它是 `temporarily_unavailable`（理由就是"没有 action handler：
    * 拓扑只由内核物化"）。现在 `solid.create_polyhedron`（顶点 + 面环 → 内核 `fromPoints`）

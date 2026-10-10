@@ -64,7 +64,14 @@ describe("agent capability registry", () => {
     expect(byId["export-png-3d"]?.status).toBe("unsupported")
     // 没有 action handler 的图元类型必须显式标成暂不可用，而不是"看起来可用"。
     expect(getCapabilityRegistry().byPrimitiveType.edge3?.status).toBe("temporarily_unavailable")
-    expect(getCapabilityRegistry().byPrimitiveType.face3?.status).toBe("temporarily_unavailable")
+    /**
+     * **face3 在 2026-10-10 拿到了自己的 handler**（`solid.create_face`：顶点环 → 一只面），
+     * 所以它从 `temporarily_unavailable`（理由原文："no action handler: faces are materialised
+     * by the kernel"）变成 `available` —— 与 `polyhedron3` 当年那条路一样：文本从"没有入口"
+     * 改成"怎么用"。**`edge3` 那条留着**：这条判据要守的是"没有 handler 的图元不许看起来可用"，
+     * 而不是"face3 永远不可用"。
+     */
+    expect(getCapabilityRegistry().byPrimitiveType.face3?.status).toBe("available")
     // 球在球体切片 Task 8 之后是**真的可用**了（`solid.create_sphere` 三层都接通），不再是"看起来可用"。
     expect(getCapabilityRegistry().byPrimitiveType.sphere?.status).toBe("available")
   })

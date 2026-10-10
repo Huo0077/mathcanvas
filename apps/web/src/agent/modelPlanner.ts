@@ -509,7 +509,13 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
             }
           }
           if (request.signal.aborted) throw new ModelPlannerError("cancelled", "run cancelled")
-          if (request.budget.remaining("generation") < calls.length || request.budget.remaining("network") < calls.length) {
+          /**
+           * **一批只扣一次**（2026-10-10 用户现场）：`generation` 数的是**模型生成次数** ——
+           * 这批工具之后只多**一次**生成。原先按**每个工具调用**各扣一次，于是 3 个只读工具
+           * 就吃掉 3 代（上限 4），模型**自己看场景就把"改错"的额度用光了**，运行报
+           * `budget exhausted: budget_repair`。工具调用次数由 `tool` 那本账管（协调器按次扣）。
+           */
+          if (request.budget.remaining("generation") < 1 || request.budget.remaining("network") < 1) {
             throw new ModelPlannerError("provider_failed", "budget exhausted before the model could use the tool results")
           }
 
@@ -529,11 +535,14 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
             messages.push({ role: "tool_call", content: "", toolCallId: call.toolCallId, toolName: call.toolId, toolInput: call.input })
             messages.push({ role: "tool_result", toolCallId: call.toolCallId, toolName: call.toolId,
               content: boundedExcerpt(JSON.stringify(toolResult), 6000) })
-            // 预检已按整批长度判过 `remaining`，所以这里不该失败；留断言是为了
-            // 万一预算语义将来变了，**立刻响亮地失败**，而不是静默少扣一笔。
-            if (!request.budget.consume("generation").ok || !request.budget.consume("network").ok) {
-              throw new ModelPlannerError("provider_failed", "budget accounting disagreed with the batch pre-check")
-            }
+          }
+          /**
+           * **整批只扣一次**（见上面那段）：这批工具之后只多**一次**模型生成。
+           * 预检已判过 `remaining`，所以这里不该失败；留断言是为了语义将来变了能
+           * **立刻响亮地失败**，而不是静默少扣一笔。
+           */
+          if (!request.budget.consume("generation").ok || !request.budget.consume("network").ok) {
+            throw new ModelPlannerError("provider_failed", "budget accounting disagreed with the batch pre-check")
           }
           continue
         }

@@ -1,5 +1,5 @@
 import type { GeometryDocument, PrimitiveSpec, Vector3 } from "@draw/dsl"
-import { buildFromPoints, buildPrismTopology, buildSolidTemplate, compileExpression, DEFAULT_SOLID_SEGMENTS, prismEdgeLabel, prismPointLabel, regularPyramidShape, regularTetrahedronShape, roundFrustumShape, solveCircumsphere3, solveInsphere3, templateEdgeLabel, templatePointLabel, validatePrismInput, type BuilderContext, type SolidBoundary, type SolidBuildResult, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
+import { areCoplanar, buildFromPoints, buildPrismTopology, buildSolidTemplate, compileExpression, DEFAULT_SOLID_SEGMENTS, prismEdgeLabel, prismPointLabel, regularPyramidShape, regularTetrahedronShape, roundFrustumShape, solveCircumsphere3, solveInsphere3, templateEdgeLabel, templatePointLabel, validatePrismInput, type BuilderContext, type SolidBoundary, type SolidBuildResult, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
 
 import type { DomainOperation } from "../operations"
 import { solidTopology3 } from "../sectionRecompute"
@@ -686,6 +686,62 @@ function signedVolume(vertices: Vector3[], faces: number[][]): number {
  * 这是**不规则图形的通用入口**（第 2 层）：正八面体、棱台、题面直接给了坐标的形状都走它。
  * 与另外三个立体动作同一套纪律：工作区必须是立体几何；内核报错时**一条操作都不产出**。
  */
+/**
+ * `solid.create_face`：**平面多边形** → 一只 `face3` 与它的顶点 / 棱（2026-10-10 用户现场）。
+ *
+ * 三项校验与手工工具（`spatialCreationCommands` 的「绘制空间面」）**同口径**：至少三个顶点、
+ * 互异、不共线、共面。同一件事的第二个入口，口径分叉就等于"同样的输入，手工能建、agent 建不了"。
+ * 不合法时**一条图元都不产出** —— 与其余动作同一条纪律：宁可不做，也不做一半。
+ */
+export function compileSolidFace(
+  faceId: string,
+  vertices: readonly Vector3[],
+  label?: string,
+  vertexNames?: readonly string[]
+): { primitives: PrimitiveSpec[]; pointIds: string[]; edgeIds: string[]; diagnostics: ActionDiagnostic[] } {
+  const refuse = (message: string) => ({ primitives: [] as PrimitiveSpec[], pointIds: [] as string[], edgeIds: [] as string[], diagnostics: [diagnostic(faceId, "degenerate_face", message)] })
+  if (vertices.length < 3) return refuse("空间面至少需要三个顶点。")
+  if (vertices.some((vertex) => !Number.isFinite(vertex.x) || !Number.isFinite(vertex.y) || !Number.isFinite(vertex.z))) return refuse("空间面的顶点坐标必须是有限数。")
+  // 重合的点会让面退化；而 `face3` 的闭合性校验也会因此拒绝整份文档。
+  if (new Set(vertices.map((vertex) => `${vertex.x},${vertex.y},${vertex.z}`)).size !== vertices.length) return refuse("空间面的顶点必须互异。")
+  /**
+   * **共面与共线分开判**：三个共线的点"当然共面"（`areCoplanar` 会放行），
+   * 但那样的"面"没有面积，是退化图元。取任一组"相邻三点"看叉积即可。
+   */
+  if (!areCoplanar([...vertices])) return refuse("空间面的顶点必须共面。")
+  const hasArea = vertices.some((_, index) => {
+    const a = vertices[index]!
+    const b = vertices[(index + 1) % vertices.length]!
+    const c = vertices[(index + 2) % vertices.length]!
+    const ab = { x: b.x - a.x, y: b.y - a.y, z: b.z - a.z }
+    const ac = { x: c.x - a.x, y: c.y - a.y, z: c.z - a.z }
+    const cross = { x: ab.y * ac.z - ab.z * ac.y, y: ab.z * ac.x - ab.x * ac.z, z: ab.x * ac.y - ab.y * ac.x }
+    return Math.hypot(cross.x, cross.y, cross.z) > 1e-9
+  })
+  if (!hasArea) return refuse("空间面的顶点不能共线。")
+
+  const pointIds = vertices.map((_, index) => `${faceId}:v${index}`)
+  const edgeIds = vertices.map((_, index) => `${faceId}:e${index}`)
+  const points: PrimitiveSpec[] = vertices.map((position, index) => {
+    const name = vertexNames?.[index]
+    return { id: pointIds[index]!, type: "point3", position: { ...position }, binding: { kind: "free" }, ...(name === undefined || name.length === 0 ? {} : { label: name }) }
+  })
+  const edges: PrimitiveSpec[] = vertices.map((_, index) => ({ id: edgeIds[index]!, type: "edge3", pointIds: [pointIds[index]!, pointIds[(index + 1) % pointIds.length]!], faceIds: [faceId] }))
+  const face: PrimitiveSpec = { id: faceId, type: "face3", pointIds, edgeIds, ...(label === undefined ? {} : { label }) }
+  return { primitives: [...points, ...edges, face], pointIds, edgeIds, diagnostics: [] }
+}
+
+function compileSolidFaceAction(action: Extract<DraftAction, { actionId: "solid.create_face" }>, context: ActionContext): CompileResult {
+  const { actionKey, inputs } = action
+  if (context.targetWorkspace !== "geometry3d") {
+    return { operations: [], diagnostics: [diagnostic(actionKey, "workspace_mismatch", "a planar face can only be created in the solid workspace")], aliasToId: {} }
+  }
+  const id = context.idAllocator.allocate("face", inputs.alias)
+  const built = compileSolidFace(id, inputs.vertices, inputs.label, inputs.vertexNames)
+  if (built.diagnostics.length > 0) return { operations: [], diagnostics: built.diagnostics.map((entry) => diagnostic(actionKey, entry.code, entry.message)), aliasToId: {} }
+  return { operations: [{ op: "addPrimitives", primitives: built.primitives }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
+}
+
 function compileSolidPolyhedronAction(action: Extract<DraftAction, { actionId: "solid.create_polyhedron" }>, context: ActionContext): CompileResult {
   const { actionKey, inputs } = action
   if (context.targetWorkspace !== "geometry3d") {
@@ -1175,6 +1231,8 @@ export function compileAction(action: DraftAction, context: ActionContext): Comp
       return compileSolidRegularPyramidAction(action, context)
     case "solid.create_polyhedron":
       return compileSolidPolyhedronAction(action, context)
+    case "solid.create_face":
+      return compileSolidFaceAction(action, context)
     case "dynamic.bind_point":
       return compileBindPoint(action, context)
     case "dynamic.create_bound_point":

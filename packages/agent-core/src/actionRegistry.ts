@@ -441,6 +441,24 @@ export const ACTIONS = {
    * `segments` 走默认（与圆柱 / 圆锥同一个数），两个半径与高**必须问用户或从题面读** ——
    * 形状就是这三个数，替用户挑等于替他改题。两个半径相等时内核会拒（那是圆柱）。
    */
+  /**
+   * **平面多边形 / 面片**（2026-10-10 用户现场）。
+   *
+   * `geometry3d` 原先只能建**闭合多面体**，而"平面四边形 + 一个翻折片"这类**开放曲面**没有入口：
+   * 模型只能拿 `solid.create_polyhedron` 去套，于是必然被信封拒（现场原话
+   * `a polyhedron needs at least four faces`，用户看到的是 `budget exhausted: budget_repair`）。
+   * 图元层（`face3`）早就有 —— 缺的只是这个动作，而登记表里那条
+   * "temporarily_unavailable（no action handler）"也随这一条改成 available。
+   *
+   * 形状校验只挡"点数 ≥ 3 / 有限坐标 / 点名与点数一一对应且不重名"；
+   * **互异 / 不共线 / 共面**留给内核（与多面体那条边界同源：几何语义不在传输层抄第二遍）。
+   */
+  "solid.create_face": {
+    inputFields: ["alias", "vertices", "vertexNames", "label"],
+    requiresAlias: true,
+    rawFieldTypes: {},
+    required: ["vertices"]
+  },
   "solid.create_round_frustum": {
     inputFields: ["alias", "center", "radiusBottom", "radiusTop", "height", "segments", "label"],
     requiresAlias: true,

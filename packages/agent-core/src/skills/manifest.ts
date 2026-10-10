@@ -91,8 +91,8 @@ export const SKILL_MANIFESTS: readonly SkillManifest[] = [
   {
     id: "spatial-modeling",
     title: "空间建模",
-    summary: "在立体几何工作区创建立方体、棱锥、正四面体、正 N 棱锥、圆柱、圆锥，用底面多边形 + 拉伸向量构造棱柱，或用**顶点 + 面环**构造任意多面体（不规则图形走这一条）。实体都会物化出顶点、棱、面；棱柱的侧面由内核按底面与向量生成，不能自己拼。**题面点名了实体上的点**（棱的中点、棱上的分点、面上的点、体内的点）时用 `dynamic.create_bound_point`：`host` 指实体、**指定哪条棱优先用 `hostEdge`（两个点名，例如 B 与 D）**（两个点名、顺序无关）—— 它在同一个 stage 里就能查到，所以**先建实体、再绑点时不必等观察**；`hostSub`（第几条棱，从 0 数）只在拿不到点名时用。`parameter` 是那点在这条棱上的位置（**0.5 就是中点**，0 与 1 是两个端点）。两个都写、或点名对不上，都会被**当场拒绝**（不许猜）。**要画某只实体的外接球 / 内切球**时用 `derived.create_circumsphere` / `derived.create_insphere`：`solidId` 写**宿主实体的引用**（同一份计划里刚建的那只，形如 `{scope:\"draft\",alias:\"...\"}`）—— 球心与半径**由内核从宿主算出来，你不用给也不收**；宿主没有对应的球（例如长方体没有内切球）时那笔会被**当场拒绝**并说明理由，这时不要改用 `solid.create_sphere` 编一个球。**圆台**（有两个不同半径的平行底面）用 `solid.create_round_frustum`：给 `center`、`radiusBottom`、`radiusTop`、`height`（`segments` 可省，默认 48）—— 它由内核按**多边形近似**物化成多面体，你**不要**自己写几十个顶点；**两个半径相等时会被当场拒绝**（那是圆柱）。",
-    actionIds: ["solid.create_template", "solid.create_prism", "solid.create_sphere", "solid.create_tetrahedron", "solid.create_regular_pyramid", "solid.create_polyhedron", "solid.create_round_frustum", "derived.create_circumsphere", "derived.create_insphere", "dynamic.create_bound_point"],
+    summary: "在立体几何工作区创建立方体、棱锥、正四面体、正 N 棱锥、圆柱、圆锥，用底面多边形 + 拉伸向量构造棱柱，或用**顶点 + 面环**构造任意多面体（不规则图形走这一条）。实体都会物化出顶点、棱、面；棱柱的侧面由内核按底面与向量生成，不能自己拼。**题面点名了实体上的点**（棱的中点、棱上的分点、面上的点、体内的点）时用 `dynamic.create_bound_point`：`host` 指实体、**指定哪条棱优先用 `hostEdge`（两个点名，例如 B 与 D）**（两个点名、顺序无关）—— 它在同一个 stage 里就能查到，所以**先建实体、再绑点时不必等观察**；`hostSub`（第几条棱，从 0 数）只在拿不到点名时用。`parameter` 是那点在这条棱上的位置（**0.5 就是中点**，0 与 1 是两个端点）。两个都写、或点名对不上，都会被**当场拒绝**（不许猜）。**要画某只实体的外接球 / 内切球**时用 `derived.create_circumsphere` / `derived.create_insphere`：`solidId` 写**宿主实体的引用**（同一份计划里刚建的那只，形如 `{scope:\"draft\",alias:\"...\"}`）—— 球心与半径**由内核从宿主算出来，你不用给也不收**；宿主没有对应的球（例如长方体没有内切球）时那笔会被**当场拒绝**并说明理由，这时不要改用 `solid.create_sphere` 编一个球。**圆台**（有两个不同半径的平行底面）用 `solid.create_round_frustum`：给 `center`、`radiusBottom`、`radiusTop`、`height`（`segments` 可省，默认 48）—— 它由内核按**多边形近似**物化成多面体，你**不要**自己写几十个顶点；**两个半径相等时会被当场拒绝**（那是圆柱）。 **平面图元**（「平面四边形 ABCD」「翻折出来的面片」这类**开放曲面**）用 `solid.create_face`：给 `vertices`（至少三个互异、不共线的**共面**空间点）与可选的 `vertexNames`，它会物化出顶点、棱与一只 `face3`（渲染 / 拾取 / 面板都通）。**不要**为了画一个平面片去套 `solid.create_polyhedron` —— 它要求至少四个面，平面片会被当场拒绝。",
+    actionIds: ["solid.create_template", "solid.create_prism", "solid.create_sphere", "solid.create_tetrahedron", "solid.create_regular_pyramid", "solid.create_polyhedron", "solid.create_face", "solid.create_round_frustum", "derived.create_circumsphere", "derived.create_insphere", "dynamic.create_bound_point"],
     limits: { actionsPerStage: 4, actionsPerRun: 16 },
     successCase: { prompt: "画一个棱长 4 的立方体，中心在原点", expectation: "一笔 solid.create_template，template 为 cube，给 origin 与 size" },
     refusalCase: { prompt: "画一个棱长 0 的立方体", expectation: "拒绝：尺寸必须为正，编译器不接受退化实体" }
@@ -179,6 +179,7 @@ export const CAPABILITY_FOR_ACTION: Record<DraftActionIdName, string> = {
   "solid.create_tetrahedron": "create-primitive",
   "solid.create_regular_pyramid": "create-primitive",
   "solid.create_polyhedron": "create-primitive",
+  "solid.create_face": "create-primitive",
   /** **圆台**（S4.3）：参数化动作 + 内核的多边形近似 ⇒ 物化成 `polyhedron3`，与棱柱 / 正四面体同一条能力。 */
   "solid.create_round_frustum": "create-primitive",
   "dynamic.bind_point": "create-primitive",

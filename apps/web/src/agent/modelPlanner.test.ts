@@ -695,8 +695,7 @@ describe("native observation tool loop", () => {
     expect(parsePlanEnvelope(result.plan).ok).toBe(true)
   })
 
-  it("still refuses a duplicate tool call id inside one batch", async () => {
-    // 幂等不能被批次执行削弱：同一个 id 出现两次仍旧是拒绝。
+  it("still refuses a duplicate tool call id inside one batch", async () => {    // 幂等不能被批次执行削弱：同一个 id 出现两次仍旧是拒绝。
     const requests: SentRequest[] = []
     const executeTool = vi.fn(async () => ({ status: "success" as const, summary: "ok", next_actions: [], artifacts: [], payload: [], diagnostics: [] }))
     const planner = createModelPlanner({
@@ -732,6 +731,44 @@ describe("native observation tool loop", () => {
     expect(requests[1].messages.at(-2)).toMatchObject({ role: "tool_call", toolCallId: "call-1", toolName: "scene_inspect", toolInput: { documentId: "doc-1" } })
     expect(requests[1].messages.at(-1)).toMatchObject({ role: "tool_result", toolCallId: "call-1", toolName: "scene_inspect", content: expect.stringContaining("cube-1") })
     expect(parsePlanEnvelope(result.plan).ok).toBe(true)
+  })
+
+  /**
+   * **一批只读工具只花掉"一次生成"**（2026-10-10 用户现场）。
+   *
+   * 现场：模型在**一轮**里要了 3 个只读工具（`scene.inspect` / `search_entities` /
+   * `describe_entities`），而扣费是**按每个工具调用**各扣 1 代 + 1 网 ⇒ 首次规划 1 + 3 = 4 =
+   * `generation` 上限 ⇒ **它自己看场景就把"改错"的额度用光了**，运行报
+   * `budget exhausted: budget_repair`（计划本身只是"平面四边形被写成多面体"，本该能修）。
+   *
+   * 口径：`generation` 数的是**模型生成次数** —— 一批工具之后只多**一次**生成；工具调用次数由
+   * `tool` 那本账（上限 24，协调器按次扣）管。两本账各管各的，才不互相打架。
+   */
+  it("charges one generation per read-tool batch, not one per tool call", async () => {
+    const budget = createBudget()
+    const requests: SentRequest[] = []
+    const executeTool = vi.fn(async () => ({ status: "success" as const, summary: "ok", next_actions: [], artifacts: [], payload: [], diagnostics: [] }))
+    const planner = createModelPlanner({
+      resolveProvider: async () => ({ ok: true, provider: withTools }),
+      runModel: async (sent) => {
+        requests.push(sent)
+        return requests.length === 1
+          ? { ok: true, events: [
+              { kind: "tool_call", requestId: "r1", attemptId: "a1", toolCallId: "call-1", toolId: "scene_inspect", input: { documentId: "doc-1" } },
+              { kind: "tool_call", requestId: "r1", attemptId: "a1", toolCallId: "call-2", toolId: "scene_inspect", input: { documentId: "doc-1" } },
+              { kind: "tool_call", requestId: "r1", attemptId: "a1", toolCallId: "call-3", toolId: "scene_inspect", input: { documentId: "doc-1" } }
+            ] }
+          : { ok: true, events: [{ kind: "tool_call", requestId: "r2", attemptId: "a2", toolCallId: "plan-1", toolId: PLAN_TOOL_NAME, input: JSON.parse(goodEnvelope) }] }
+      }
+    })
+
+    const result = await planner.plan(request({ budget, model: { context: context(), tools: [planTool, inspectTool] }, executeTool }))
+
+    expect(executeTool).toHaveBeenCalledTimes(3)
+    expect(parsePlanEnvelope(result.plan).ok).toBe(true)
+    // 三个工具、**一次**生成：多出来的那一次是"带着工具结果再问一遍"。
+    expect(budget.snapshot().used.generation).toBe(1)
+    expect(budget.snapshot().used.network).toBe(1)
   })
 
   it("does not execute a read tool if no budget remains for returning its result", async () => {

@@ -85,6 +85,33 @@ function candidatePoints(plan: PlanEnvelope, candidate: GeometryDocument, base?:
   }
 
   /**
+   * **平面多边形这一支**（2026-10-10 用户现场）：`solid.create_face` 物化出来的是一只 `face3`，
+   * 点名表与多面体**同一口径** —— `vertexNames` 与 `pointIds` 按下标配对。
+   *
+   * 与多面体那一支同一条纪律：计划里真有几笔、候选图里就必须有几只**新增**的面；
+   * 数量对不上、或点名不可靠，返回 `null`（"映射不可靠"与"图上没这个点"是两件事）。
+   */
+  const faceActions = plan.actions.filter((action) => action.actionId === "solid.create_face")
+  if (faceActions.length > 0) {
+    const faces = candidate.primitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "face3" }> => primitive.type === "face3" && !priorIds.has(primitive.id))
+    if (faces.length !== faceActions.length) return null
+    for (const [faceIndex, action] of faceActions.entries()) {
+      const input = action.inputs
+      if (typeof input !== "object" || input === null || !("vertexNames" in input)) return null
+      const names = input.vertexNames
+      const face = faces[faceIndex]!
+      if (!Array.isArray(names) || names.length !== face.pointIds.length || !names.every((name) => typeof name === "string" && isPointName(name)) || new Set(names).size !== names.length) return null
+      for (const [nameIndex, name] of names.entries()) {
+        const vertex = candidate.primitives.find((primitive) => primitive.id === face.pointIds[nameIndex])
+        if (vertex?.type !== "point3") return null
+        const position = vertex.position
+        if (![position.x, position.y, position.z].every(Number.isFinite)) return null
+        points.set(name as string, position)
+      }
+    }
+  }
+
+  /**
    * **再扫一遍带 `label` 的点**（2026-10-05，用户报的现场）。
    *
    * ## 为什么必须有这一步

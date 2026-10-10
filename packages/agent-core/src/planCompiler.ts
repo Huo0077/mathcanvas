@@ -34,6 +34,12 @@ import { parsePlanEnvelope, repairRequestFor } from "./schemas"
  */
 const VERIFIABLE_FIGURE_ACTION_IDS: ReadonlySet<string> = new Set([
   "solid.create_polyhedron",
+  /**
+   * **平面面片**（2026-10-10 用户现场）：`solid.create_face` 同样产出带点名的自由坐标
+   *（顶点 + 一只 `face3`），而"平面四边形 + 翻折片"这类**开放曲面只能用它表达** ——
+   * 不含它等于"用面片画的图一律不核验"，与上面那条平面图形的洞是同一类。
+   */
+  "solid.create_face",
   "planar.create_point",
   // 圆锥曲线**没有点名** —— 那条曲线自己就是被核验的对象（见 `candidateConic`）。
   "planar.create_conic",
@@ -1320,10 +1326,14 @@ function validateRelations(plan: PlanEnvelope, prompt: string | undefined): Plan
   /**
    * ③ 抽到了关系、但**这份计划不产出任何自由坐标**时，没得验。
    *    这不是"关系成立"，如实标成 warning，不当成通过。
+   *
+   * **2026-10-10 扩到平面面片**：`solid.create_face` 同样产出带点名的自由坐标
+   *（"平面四边形 + 翻折片"这类开放曲面的唯一表达方式），把它排除在外等于
+   * "用面片画的图一律不核验"—— 那正是这条判据要防的事。
    */
-  const hasPolyhedron = actions.some((action) => action.actionId === "solid.create_polyhedron")
-  if (!hasPolyhedron && (relations.length > 0 || /⊥|∥|垂直|平行/.test(prompt ?? ""))) {
-    return [planDiagnostic("geometry_validation", "relation_not_checkable", "envelope.actions", `题目里读到了 ${relations.length} 条几何关系，但这份计划没有产出可核验的顶点（缺少 solid.create_polyhedron），关系未被核验。`, "warning")]
+  const hasVerifiableVertices = actions.some((action) => action.actionId === "solid.create_polyhedron" || action.actionId === "solid.create_face")
+  if (!hasVerifiableVertices && (relations.length > 0 || /⊥|∥|垂直|平行/.test(prompt ?? ""))) {
+    return [planDiagnostic("geometry_validation", "relation_not_checkable", "envelope.actions", `题目里读到了 ${relations.length} 条几何关系，但这份计划没有产出可核验的顶点（缺少 solid.create_polyhedron / solid.create_face），关系未被核验。`, "warning")]
   }
   if (relations.length === 0) return diagnostics
 

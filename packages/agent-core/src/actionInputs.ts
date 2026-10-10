@@ -492,6 +492,51 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
       return withAlias({ target, patch })
     }
 
+    /**
+     * **平面多边形 / 面片**（2026-10-10 用户现场）。
+     *
+     * 只挡**形状**：点数 ≥ 3、每个是有限三维向量、点名（可选）与点数一一对应且不重名。
+     * **几何语义**（互异 / 不共线 / 共面）留给内核 —— 与 `solid.create_polyhedron` 那条边界同源，
+     * 不在传输层抄第二遍。
+     */
+    case "solid.create_face": {
+      const out: Record<string, unknown> = withAlias({})
+      if (!Array.isArray(value.vertices)) {
+        errors.push(fail("invalid_type", `${path}.vertices`, "expected an array of spatial points"))
+        return null
+      }
+      if (value.vertices.length < 3) {
+        errors.push(fail("invalid_type", `${path}.vertices`, "a planar face needs at least three vertices"))
+        return null
+      }
+      const vertices: { x: number; y: number; z: number }[] = []
+      for (const [index, point] of value.vertices.entries()) {
+        const read = readVector3(point, `${path}.vertices[${index}]`, errors)
+        if (read === null) return null
+        vertices.push(read)
+      }
+      out.vertices = vertices
+      if (value.vertexNames !== undefined) {
+        if (!Array.isArray(value.vertexNames) || value.vertexNames.length !== vertices.length) {
+          errors.push(fail("invalid_type", `${path}.vertexNames`, `expected an array of ${vertices.length} names, one per vertex`))
+          return null
+        }
+        const names: string[] = []
+        for (const [index, name] of value.vertexNames.entries()) {
+          const read = boundedString(name, `${path}.vertexNames[${index}]`, errors)
+          if (read === null) return null
+          if (names.includes(read)) {
+            // 重名会让"名字 → 下标"不是函数，判据无法唯一定位顶点。
+            errors.push(fail("duplicate_name", `${path}.vertexNames[${index}]`, `vertex name ${quotedName(read)} is used twice`))
+            return null
+          }
+          names.push(read)
+        }
+        out.vertexNames = names
+      }
+      return out
+    }
+
     case "solid.create_polyhedron": {
       /**
        * 任意多面体：`vertices` 是一串空间点、`faces` 是**二层整数数组**（顶点下标，0 起）。

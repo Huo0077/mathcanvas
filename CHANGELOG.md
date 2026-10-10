@@ -7,6 +7,21 @@
 
 
 
+## 2026-10-10 —— A：只读工具不再吃"生成"额度；C：立体工作区有了**平面面片**（`solid.create_face`）
+
+**A（用户现场的死因）**：`apps/web/src/agent/modelPlanner.ts` 原来**按每个只读工具调用**各扣 1 代 `generation`（预检也按调用数判 `remaining < calls.length`）。现场：首次规划 1 + 3 个只读工具 3 = 4 = `generation` 上限 ⇒ 需要修复时**扣不动** ⇒ 用户看到 `budget exhausted: budget_repair`，而那份计划本身只是"平面四边形被写成多面体"、**本该能被修好**。改：**一批只扣一次**（这批工具之后只多**一次**模型生成）；工具调用次数仍由 `tool`（上限 24）管 —— 两本账从此不再互相打架。判据：3 个工具 ⇒ `used.generation === 1`；**变异**（改回按次扣）实测 `expected 3 to be 1` **真红**。
+
+**B：复核后确认不需要改** —— `coordinator.ts` 的 364-365 在 `for (attempt…)` **之外**（首次规划的扣费），修复那一步只在 435 扣一次；既有判据（`coordinator.test.ts`「counts the repair against the same generation and network budget」）早钉着"修复后 `used.generation === 2`"。上一轮我把它读成"重复扣费"是**看错了行序**，在此更正：没有为了"做 abc"去改一处正确的代码。
+
+**C：立体工作区新增 `solid.create_face`（平面多边形 / 面片）**。关键事实：`face3` 图元、渲染、拾取、属性面板、导出、宿主绑定**早就都有**（手工工具「绘制空间面」），能力登记表里那条理由写得很明白 —— `temporarily_unavailable: no action handler: faces are materialised by the kernel`：**缺的只是 agent 的入口**。所以"平面四边形 + 翻折片"这类**开放曲面**从今天起可以被表达（此前模型只能拿 `solid.create_polyhedron` 去套，必然被信封拒）。
+
+- **scene-graph**：`SolidCreateFaceAction` + `compileSolidFace` + 分发；校验与手工工具**同口径**（≥3 点、互异、**不共线**、共面）；alias 指向那只面。
+- **agent-core**：`actionIds`（32→33）、`actionRegistry`、`actionInputs` 形状校验、3D 技能清单（动作 + 能力映射 + 提示文本）、能力登记表 `face3` 改为 **available**、`planCompiler` 的可核验图形集合与关系诊断文本、`diagramVerification.candidatePoints` 的**面片点名表**（语义与多面体一致：**计划里的点名优先于图上的标签**）。
+- **判据**：`packages/scene-graph/src/actions/solidFaceAction.test.ts` 4 条 + `packages/agent-core/src/planCompiler.face.test.ts` 3 条；**5 次变异**全部真红（去标签 / 跳共面 / 跳共线 / 关掉面片点名表 / A 的按次扣费）。清单类用例跟着改：`actionIds` 32→33、`capabilities` 的 face3→available、`spatial-modeling` 清单**重签**（哈希只覆盖 `actionIds`/`limits`）、`agentRuntime` 的可用动作清单。
+- **读数**：全库非 Lean **4109 通过 + 1 todo / 0 失败**；全量 e2e 217 通过 / 1 failed（既有的 `main-thread-responsiveness` 帧间隙抖动，**单跑复绿**）；`typecheck` 与改动文件 lint 干净。
+
+**边界（别误读）**：`翻折至 … 使得 PC=4√3` 这类语义、以及 `AE:AD=2:5` / `AF:AB=1:2` 这种 `X:Y=a:b` 写法仍不在覆盖内 —— 后者正是刚做完的**题面规范化通道**要救的形状。
+
 ## 2026-10-10 —— 题面规范化（第二件）第三步补完：改写随 `stage` 走到草稿层，「原件 → 我这样读」真的显示出来
 
 - **接上那条线**：改写现在随 `CommitRequest.normalisations` → `coordinator`（从计划的 `normalisations` 取）→ `committerAdapter` → 草稿层 `stage` 一路下去（**与既有 `relations` 完全同一条路径**）。草稿层**自己重算题设核验时读的是同一份"改写后的题面"** —— 否则编译器说"读懂了"、草稿层说"没读懂"，两句话打架、门禁反而不放行（这正是上一轮停下来的原因）。

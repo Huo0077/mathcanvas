@@ -28,8 +28,10 @@ describe("draft action catalogue", () => {
     // 球心与半径**由宿主算出来**，解不出来就拒绝，不编一个球）之后的实测值。
     // **32** 是加上 `solid.create_round_frustum`（S4.3：圆台 —— **参数化动作 + 内核多边形近似** ⇒
     // 物化成 `polyhedron3`，不是新图元，也不用调用方自己写 96 个顶点）之后的实测值。
-    expect(DRAFT_ACTION_IDS).toHaveLength(32)
-    expect(new Set(DRAFT_ACTION_IDS).size).toBe(32)
+    // **33** 是加上 `solid.create_face`（2026-10-10 用户现场：立体工作区里的**平面多边形 / 面片** ——
+    // "平面四边形 + 翻折片"这类**开放曲面**原先没有入口，模型只能拿多面体去套、必然被拒）之后的实测值。
+    expect(DRAFT_ACTION_IDS).toHaveLength(33)
+    expect(new Set(DRAFT_ACTION_IDS).size).toBe(33)
   })
 
   it("recognises every catalogue action instead of calling it unknown", () => {

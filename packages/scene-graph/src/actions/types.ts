@@ -259,6 +259,32 @@ export interface SolidCreatePolyhedronAction extends ActionBase {
   }
 }
 
+/**
+ * **在立体工作区里建一个"平面多边形 / 面片"**（2026-10-10 用户现场）。
+ *
+ * 为什么需要它：`geometry3d` 原先只能建**闭合多面体**（`solid.create_polyhedron` 要求至少 4 个面、
+ * 内核还要体积），而题面里常见"平面四边形 ABCD + 一个翻折片"这种**开放曲面** —— 模型只能去套多面体，
+ * 于是**必然**被信封拒掉（现场原话：`a polyhedron needs at least four faces`，用户看到的则是
+ * `budget exhausted: budget_repair`）。
+ *
+ * 而图元层**早就有** `face3`（手工工具「绘制空间面」用的就是它，渲染 / 拾取 / 面板 / 导出全都通）——
+ * 缺的只是"**agent 能建它**"。
+ *
+ * 三项校验与手工工具**同口径**（至少三个互异顶点、不共线、共面）：
+ * 同一件事的第二个入口，口径分叉就等于"同样的输入，手工能建、agent 建不了"。
+ */
+export interface SolidCreateFaceAction extends ActionBase {
+  actionId: "solid.create_face"
+  inputs: {
+    alias: DraftAlias
+    /** 顶点（世界坐标），至少 3 个、互异、共面。 */
+    vertices: Array<{ x: number; y: number; z: number }>
+    /** 与 `vertices` 一一对应的点名（可选，理由同 `solid.create_polyhedron`：关系按下标认顶点）。 */
+    vertexNames?: string[]
+    label?: string
+  }
+}
+
 /** 既有的、指向文档内对象的引用（必须带 documentId，名称不是 ID）。 */
 export interface SceneReference {
   documentId: string
@@ -446,6 +472,7 @@ export type DraftAction =
   | SolidCreateTetrahedronAction
   | SolidCreateRegularPyramidAction
   | SolidCreatePolyhedronAction
+  | SolidCreateFaceAction
   | SolidCreateRoundFrustumAction
   | DynamicBindPointAction
   | DynamicCreateBoundPointAction
