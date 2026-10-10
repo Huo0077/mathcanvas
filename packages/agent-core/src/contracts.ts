@@ -299,7 +299,7 @@ export interface StructuredAssumption {
   id: string
   /** 会进 `EnvelopeAssumptions` 的那句话（人话，一句）。 */
   text: string
-  kind: "safe_default" | "inferred" | "witness" | "symbolic"
+  kind: "safe_default" | "inferred" | "witness" | "symbolic" | "approximation"
   /** 被定下来的值（可 JSON 序列化）。 */
   value: unknown
   /** 用户改口之后能不能覆盖（默认特值可以；"题目要求恒定"这类不可以）。 */

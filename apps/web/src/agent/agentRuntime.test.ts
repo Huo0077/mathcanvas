@@ -842,6 +842,37 @@ describe("representative tasks from the design", () => {
     expect(disabledPreview === null ? null : Object.hasOwn(disabledPreview, "proofAttempt")).toBe(false)
   })
 
+  /**
+   * **圆台的"这是近似、差多少"要走到用户看得见的那条通道上**（§3-F）。
+   *
+   * 编译期补出来的假设只有经 `completionAssumptions` → 预览 → `runtime.assumptions()` 这一跳
+   * 才会出现在确认面板上（`assumptions()` 会把预览里那几条并进来）。所以在运行器这一层再钉一次：
+   * 编排、编译、草稿、预览四层接起来之后，那句话**真的在**。
+   */
+  it("carries the round frustum's approximation note all the way to the user-visible assumptions", async () => {
+    const frustum: PlanEnvelope = {
+      schemaVersion: "mathcanvas.plan.v1",
+      kind: "plan",
+      goal: "作一个圆台",
+      factIds: [],
+      actions: [{
+        actionId: "solid.create_round_frustum",
+        actionKey: "frustum",
+        factIds: [],
+        inputs: { alias: "frustum", center: { x: 0, y: 0, z: 0 }, radiusBottom: 2, radiusTop: 1, height: 3 }
+      }] as never
+    }
+    const document = createEmptyDocument("geometry3d")
+    const { runtime } = makeRuntime({ envelope: frustum, document })
+
+    const events = await drive(runtime.coordinator, { run: runContext(document), userMessage: "画一个圆台，上底半径 1、下底半径 2、高 3" })
+
+    expect(events.at(-1)).toBe("awaiting_confirmation")
+    const text = (runtime.assumptions() ?? []).join(" ")
+    expect(text).toContain("近似")
+    expect(text).toContain("弦高")
+  })
+
   it("keeps the conic parameter symbolic and labels the invariant as numeric sampling", async () => {
     const document = createEmptyDocument("conics")
     const { runtime, written, current } = makeRuntime({ envelope: conicInvariantPlan(), document })

@@ -157,7 +157,14 @@ const ROUND_FRUSTUM = (): PlanEnvelope => {
     goal: "作一个下底半径 2、上底半径 1、高 3 的圆台",
     factIds: [],
     assumptions: [
-      `圆台用**正 ${shape.segments} 边形近似**（与圆柱 / 圆锥同一套分段口径）：两个底面是内接于圆的 ${shape.segments} 边形，侧面是 ${shape.segments} 个等腰梯形。`,
+      /**
+       * 两句话：**段数**与**差多少**。后者才是用户判断"这张图够不够用"的依据。
+       *
+       * 文案里**不要写 markdown**（`**…**`）：这一段是**逐字渲染**在确认面板上的，
+       * 星号会原样出现在用户眼前（2026-10-10 顺手清掉）。数字由 `roundFrustumChordError` 算 ——
+       * 与编译期那条路（模型给三个数时补的那条声明）**同一个公式**。
+       */
+      `圆台用正 ${shape.segments} 边形近似（与圆柱 / 圆锥同一套分段口径）：两个底面是内接于圆的 ${shape.segments} 边形，侧面是 ${shape.segments} 个等腰梯形。`,
       `下底处弦高误差 ${shape.chordError.toPrecision(3)} —— 多边形的边到理想圆弧的最大距离。它是近似，不是那个真的圆台。`
     ],
     actions: [{

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import { DEFAULT_SOLID_SEGMENTS } from "@draw/geometry-kernel"
 
-import { roundFrustumPolyhedron } from "./localPlanDefaults"
+import { roundFrustumChordError, roundFrustumPolyhedron } from "./localPlanDefaults"
 
 /**
  * **圆台的多边形近似**（S4.3）。
@@ -57,5 +57,22 @@ describe("roundFrustumPolyhedron", () => {
   it("throws with the kernel's own reason when the two radii are equal, instead of quietly drawing a cylinder", () => {
     // 理由来自内核（`roundFrustumShape` 返回 null ⇒ 注册表那句），所以这里只钉"它说得出是圆柱"。
     expect(() => roundFrustumPolyhedron({ radiusBottom: 2, radiusTop: 2, height: 3 })).toThrow(/cylinder/)
+  })
+
+  /**
+   * **弦高误差按两个半径里较大的那一个算**（2026-10-10，§3-F 的近似口径）。
+   *
+   * 原实现写死按**下底**半径算，并且理由写着"它是两个环里较大的那个风险" —— 那句话只在
+   * `R下 > R上` 时成立。题面完全可以给一只**上底更大**的圆台（合法），那时按小的那一环报误差
+   * 就是**少报**：用户据此判断"这张图够不够用"会被误导。
+   *
+   * 公式本身抽成 `roundFrustumChordError`，夹具那条路与编译期那条路共用一个真源。
+   */
+  it("measures the chord error at the larger of the two rings, and shares one formula", () => {
+    const flipped = roundFrustumPolyhedron({ radiusBottom: 1, radiusTop: 2, height: 3 })
+    expect(flipped.chordError).toBeCloseTo(roundFrustumChordError(2, DEFAULT_SOLID_SEGMENTS), 12)
+    // 与"下底更大"那一版**同一个数**（只是环换了一个）—— 说明它真的取了较大的那个。
+    const normal = roundFrustumPolyhedron({ radiusBottom: 2, radiusTop: 1, height: 3 })
+    expect(flipped.chordError).toBeCloseTo(normal.chordError, 12)
   })
 })

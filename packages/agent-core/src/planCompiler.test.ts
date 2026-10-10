@@ -4,6 +4,7 @@ import { contentFingerprint } from "@draw/scene-graph"
 import { describe, expect, it } from "vitest"
 
 import { PLAN_SCHEMA_VERSION } from "./contracts"
+import { roundFrustumChordError } from "./localPlanDefaults"
 import { compilePlan, describeCompileRepairPrompt, searchWitnessForPrompt, type PlanCompileContext } from "./planCompiler"
 import { createDraftTools } from "./tools/draftTools"
 
@@ -402,6 +403,55 @@ describe("plan compilation", () => {
     const merged = withDeclared.plan?.kind === "plan" ? withDeclared.plan.assumptions : []
     expect(merged?.[0]).toBe(declared)
     expect(merged).toHaveLength(1 + withDeclared.assumptions.length)
+  })
+
+  /**
+   * **圆台是近似，近似必须在 assumptions 里说清"差多少"**（§3-F；设计 §S4.3 的"如实声明是近似"）。
+   *
+   * 夹具那条路早就写了（`localPlanner` 的圆台夹具：段数 + 弦高误差，标签也带"（近似）"），
+   * 而**动作那条路（模型给三个数）此前一个字都没说** —— 确认面板上什么都没有，
+   * 用户会把一只 48 边形的多面体当成理想圆台。
+   *
+   * 这一层走的是"编译期补出来的假设"那条既有通道
+   *（`completionAssumptions` → 预览 → 运行时 `assumptions()` → 确认面板），所以修在这里就够了。
+   */
+  it("declares the round frustum's polygon approximation and its chord error", () => {
+    const result = compilePlan(rawPlan([{
+      actionId: "solid.create_round_frustum",
+      actionKey: "frustum",
+      factIds: [],
+      inputs: { alias: "frustum", center: { x: 0, y: 0, z: 0 }, radiusBottom: 2, radiusTop: 1, height: 3 }
+    }]), context(createEmptyDocument("geometry3d")))
+
+    expect(result.ok, JSON.stringify(result.diagnostics)).toBe(true)
+    const text = result.assumptions.map((assumption) => assumption.text).join(" ")
+    expect(text).toContain("近似")
+    expect(text).toContain("弦高")
+    // 段数要说出来（没给就是默认那一个）。
+    expect(text).toContain("48")
+    /**
+     * **数字必须与同一个公式算出来的一致**（`R(1 − cos(π/N))`，取两个半径里较大的那个）——
+     * 两边各写一份公式就会分叉，而分叉出来的数字看起来一样"像那么回事"。
+     */
+    expect(text).toContain(roundFrustumChordError(2, 48).toPrecision(3))
+    // 半径更小的那一环**不是**风险所在：文案要指名用的是哪个半径。
+    expect(text).toContain("下底")
+  })
+
+  it("keeps the stated segment count in the approximation note", () => {
+    const result = compilePlan(rawPlan([{
+      actionId: "solid.create_round_frustum",
+      actionKey: "frustum",
+      factIds: [],
+      inputs: { alias: "frustum", center: { x: 0, y: 0, z: 0 }, radiusBottom: 1, radiusTop: 2, height: 3, segments: 16 }
+    }]), context(createEmptyDocument("geometry3d")))
+
+    expect(result.ok, JSON.stringify(result.diagnostics)).toBe(true)
+    const text = result.assumptions.map((assumption) => assumption.text).join(" ")
+    expect(text).toContain("16")
+    // 顶半径更大 ⇒ 风险在**上底**那一环，文案不能照抄"下底"。
+    expect(text).toContain("上底")
+    expect(text).toContain(roundFrustumChordError(2, 16).toPrecision(3))
   })
 
   it("distinguishes numeric sampling from an exact construction", () => {

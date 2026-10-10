@@ -99,8 +99,25 @@ export interface RoundFrustumPolyhedron {
   faces: number[][]
   /** 实际用的分段数（调用方要写进 assumption）。 */
   segments: number
-  /** 弦高误差：多边形的边到理想圆弧的最大距离（按**下底**半径算，它是两个环里较大的那个风险）。 */
+  /**
+   * 弦高误差：多边形的边到理想圆弧的最大距离。
+   *
+   * **按两个半径里较大的那一个算**（2026-10-10 更正）：原先写死按**下底**算，理由写着
+   * "它是两个环里较大的那个风险" —— 那句话只在 `R下 > R上` 时成立，而题面完全可以给一只
+   * **上底更大**的圆台。按小的那一环报误差是**少报**：用户据此判断"这张图够不够用"会被误导。
+   */
   chordError: number
+}
+
+/**
+ * **圆台近似的弦高误差** `R(1 − cos(π/N))`：多边形的那条边离理想圆弧最远的那一点。
+ *
+ * 真源只留这一处 —— 夹具那条路（`roundFrustumPolyhedron`）与编译期那条路
+ *（`planCompiler` 给模型造出来的圆台补的近似声明）都调它。两边各写一份公式就会分叉，
+ * 而分叉出来的数字看起来一样"像那么回事"。
+ */
+export function roundFrustumChordError(radius: number, segments: number): number {
+  return radius * (1 - Math.cos(Math.PI / segments))
 }
 
 export function roundFrustumPolyhedron(input: {
@@ -134,5 +151,5 @@ export function roundFrustumPolyhedron(input: {
       return position
     })
   })
-  return { vertices, faces, segments, chordError: input.radiusBottom * (1 - Math.cos(Math.PI / segments)) }
+  return { vertices, faces, segments, chordError: roundFrustumChordError(Math.max(input.radiusBottom, input.radiusTop), segments) }
 }

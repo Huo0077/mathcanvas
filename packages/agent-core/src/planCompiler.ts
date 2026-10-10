@@ -1,6 +1,6 @@
 import type { GeometryDocument, PrimitiveSpec, Workspace } from "@draw/dsl"
 import { commitTransaction, compileAction, createIdAllocator, solidTopology3, type ActionContext, type DomainOperation, type DraftAction, type IdAllocator } from "@draw/scene-graph"
-import { sectionSolid3, validatePrismInput } from "@draw/geometry-kernel"
+import { sectionSolid3, validatePrismInput, DEFAULT_SOLID_SEGMENTS } from "@draw/geometry-kernel"
 
 import {
   MAX_REPAIR_ATTEMPTS,
@@ -12,6 +12,7 @@ import {
   type StructuredAssumption
 } from "./contracts"
 import { auditDescriptionFor, type AuditContext } from "./defaultPolicies"
+import { roundFrustumChordError } from "./localPlanDefaults"
 import { DRAFT_ID_PREFIX } from "./schemaReaders"
 import { auditPlan, type FieldCompletion } from "./parameterAudit"
 import { extractRelations } from "./relationExtraction"
@@ -384,7 +385,7 @@ function compileOnce(input: unknown, context: PlanCompileContext): CompileOnceOu
   // ---- 2. 字段审计（+ 4. 参数补全：审计的回填就是补全，见 `parameterAudit.ts`） ----
   const audit = auditPlan(plan, auditContext)
   const diagnostics: PlanDiagnostic[] = [...audit.diagnostics]
-  const assumptions = [...audit.assumptions]
+  const assumptions = [...audit.assumptions, ...approximationAssumptions(audit.actions)]
   const questions = [...audit.questions]
   const aliases: Record<string, string> = {}
 
@@ -560,8 +561,61 @@ function compileOnce(input: unknown, context: PlanCompileContext): CompileOnceOu
   }
 }
 
-/** 只保留 `envelope.` 前缀的诊断路径，用于构造修复请求（修复只认字段路径）。 */
-function toParseErrors(diagnostics: readonly PlanDiagnostic[]): { code: string; path: string; detail: string }[] {
+/**
+ * **画出来的东西里，哪些是"近似"**（§3-F；设计 §S4.3 的"在文档与面板上如实声明是近似"）。
+ *
+ * ## 为什么要有它
+ *
+ * 圆台不是"画出来的圆台"，而是**内接多边形近似**。夹具那条路（`localPlanner` 的圆台夹具）
+ * 早就把段数与**弦高误差**写进了假设，而**动作那条路（模型给三个数）此前一个字都没说** ——
+ * 确认面板上什么都没有，用户会把一只 48 边形的多面体当成理想圆台。
+ *
+ * ## 为什么修在编译期
+ *
+ * 动作层（`compileSolidRoundFrustum`）只产出图元与诊断，**没有"假设"这条通道**；
+ * 而编译期补出来的假设有一条既有的、能走到用户眼前的路：
+ * `completionAssumptions` → 草稿预览 → 运行时 `assumptions()` → 确认面板。
+ *
+ * ## 数字只有一个真源
+ *
+ * 弦高误差由 `roundFrustumChordError` 算（与夹具那条路同一个函数），并取**两个半径里较大的
+ * 那一个** —— 风险在较大半径那一环，而题面完全可能给一只上底更大的圆台。
+ */
+function approximationAssumptions(actions: readonly DraftAction[]): StructuredAssumption[] {
+  const out: StructuredAssumption[] = []
+  for (const action of actions) {
+    if (action.actionId !== "solid.create_round_frustum") continue
+    const inputs = (action.inputs ?? {}) as { radiusBottom?: unknown; radiusTop?: unknown; segments?: unknown }
+    const bottom = typeof inputs.radiusBottom === "number" && Number.isFinite(inputs.radiusBottom) ? inputs.radiusBottom : null
+    const top = typeof inputs.radiusTop === "number" && Number.isFinite(inputs.radiusTop) ? inputs.radiusTop : null
+    // 两个半径缺一个就没什么可说的（那一笔本来就编不过，诊断在别处报）。
+    if (bottom === null || top === null) continue
+    const segments = typeof inputs.segments === "number" && Number.isInteger(inputs.segments) && inputs.segments >= 3
+      ? inputs.segments : DEFAULT_SOLID_SEGMENTS
+    const radius = Math.max(bottom, top)
+    // 指名用的是哪一环：只说"弦高误差"而不说按哪个半径算，用户没法对照自己的题面。
+    const where = radius === bottom ? "下底" : "上底"
+    const chordError = roundFrustumChordError(radius, segments)
+    out.push({
+      id: `${action.actionKey}.round-frustum-approximation`,
+      /**
+       * 它既不是"缺省字段的默认值"，也不是"搜出来的一组坐标"：它说的是**这份几何本身是近似的**。
+       * 所以新开一个 `kind`，而不是借 `witness` / `symbolic` 的名字。
+       */
+      kind: "approximation",
+      value: { segments, radius, chordError },
+      /**
+       * 段数是一个**用户可以开口改**的旋钮（"用 96 段"），所以可覆盖 ——
+       * 与"题目要求恒定"那类不可覆盖的取舍不同。
+       */
+      overridable: true,
+      text: `圆台用正 ${segments} 边形近似（与圆柱 / 圆锥同一套分段口径）：两个底面是内接于圆的 ${segments} 边形，侧面是 ${segments} 个等腰梯形；${where}处弦高误差 ${chordError.toPrecision(3)} —— 多边形的边到理想圆弧的最大距离。它是近似，不是那个真的圆台。`
+    })
+  }
+  return out
+}
+
+/** 只保留 `envelope.` 前缀的诊断路径，用于构造修复请求（修复只认字段路径）。 */function toParseErrors(diagnostics: readonly PlanDiagnostic[]): { code: string; path: string; detail: string }[] {
   return diagnostics.filter((entry) => entry.severity === "error").map((entry) => ({ code: entry.code, path: entry.path, detail: entry.detail }))
 }
 
