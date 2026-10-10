@@ -115,6 +115,44 @@ describe("verifyDiagramObligations", () => {
     expect(oStatus(report)).toBe("passed")
   })
 
+  it("**两条不同线段的倍数**也判：`AD=2AB`（2026-10-10 用户现场；此前永远未核验）", () => {
+    /**
+     * 同一个 `segmentRatio` 装了两种写法：
+     * - `DE=2EA` —— 一个点把一条线段分开（targets `[D,E,E,A]`，中间点名重复）；
+     * - `AD=2AB` —— **两条不同线段的倍数**（targets `[A,D,A,B]`）。
+     *
+     * 判据原先只认第一种（`e !== eAgain` 直接 `return null`），于是第二种**永远**未核验 ⇒
+     * 只要题面里有它，门禁就永远不放行。
+     */
+    const prompt = "在三棱锥 A-BCD中，AD=2AB，画示意图"
+    const vertices = [{ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, { x: 0, y: 0, z: 1 }, { x: 0, y: 2, z: 0 }]
+    const plan = {
+      schemaVersion: PLAN_SCHEMA_VERSION,
+      kind: "plan",
+      goal: "画示意图",
+      factIds: [],
+      actions: [{ actionId: "solid.create_polyhedron", actionKey: "solid", factIds: [], inputs: { alias: "solid", vertices, faces: [[0, 1, 2]], vertexNames: ["A", "B", "C", "D"] } }]
+    } as unknown as PlanEnvelope
+    const candidate = () => {
+      const document = createEmptyDocument("geometry3d")
+      document.primitives.push(...vertices.map((position, index) => ({ id: `p-${index}`, type: "point3" as const, position: { ...position }, label: ["A", "B", "C", "D"][index] })))
+      document.primitives.push({ id: "solid", type: "polyhedron3", vertexIds: vertices.map((_, index) => `p-${index}`), edgeIds: [], faceIds: [] })
+      return document
+    }
+
+    // |AD| = 2、|AB| = 1 ⇒ AD=2AB 成立。
+    const passing = verifyDiagramObligations(parseDiagramObligations(prompt), plan, candidate())
+    expect(passing.checks.find((check) => check.sourceText.includes("AD=2AB"))?.status).toBe("passed")
+
+    // 把 B 挪远一倍 ⇒ 比例变成 1，该条要**真红**（不是退回"未核验"）。
+    const moved = candidate()
+    const b = moved.primitives.find((primitive) => primitive.id === "p-1")
+    if (b?.type !== "point3") throw new Error("missing B")
+    b.position.x = 2
+    const failing = verifyDiagramObligations(parseDiagramObligations(prompt), plan, moved)
+    expect(failing.checks.find((check) => check.sourceText.includes("AD=2AB"))?.status).toBe("failed")
+  })
+
   it("detects the wrong dihedral even when the other six conditions hold", () => {
     const { plan, candidate } = fixture(0.64)
     const report = verifyDiagramObligations(parseDiagramObligations(prompt), plan, candidate)

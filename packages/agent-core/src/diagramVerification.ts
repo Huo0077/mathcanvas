@@ -426,7 +426,22 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
   if (item.kind === "segmentRatio") {
     if (numeric === undefined) return null
     const [d, e, eAgain, a] = vertices as Vector3[]
-    if (e !== eAgain) return null
+    /**
+     * **同一个 kind 装两种写法**（2026-10-10 用户现场）：
+     * - `DE=2EA` —— **一个点把一条线段分开**：targets `[D,E,E,A]`（中间那个点名重复），判 `DE/EA`，
+     *   而且要求 E **在线段 DA 上**（只看比值会把"斜着放在旁边"也判过）；
+     * - `AD=2AB` —— **两条不同线段的倍数**：targets `[A,D,A,B]`（不重复），判 `|AD|/|AB|`。
+     *
+     * 判据原先只有第一支（`e !== eAgain` 直接 `return null`），于是第二支**永远核不了** ——
+     * 只要题面里写了「AD=2AB」这种"两条线段成倍数"，门禁就永远不放行。抽取器早就把两种形状
+     * 编得不一样（重复 / 不重复），缺的只是判据这一支。
+     */
+    if (e !== eAgain) {
+      const numerator = length(d, e)
+      const denominator = length(eAgain, a)
+      if (denominator <= 1e-10) return null
+      return { actual: numerator / denominator, expected: numeric, tolerance: UNITLESS_TOLERANCE }
+    }
     const de = length(d, e)
     const ea = length(e, a)
     const da = length(d, a)

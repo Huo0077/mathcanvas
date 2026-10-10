@@ -243,7 +243,7 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
     read: (m) => { const value = finitePositive(m[5]); return value === null || value >= 180 ? null : { kind: "dihedral", targets: m.slice(1, 5), value } }
   },
   {
-    pattern: new RegExp(`平面\\s*(${PLANE_NAME})\\s*(?:⊥|垂直于?)\\s*平面\\s*(${PLANE_NAME})`, "g"),
+    pattern: new RegExp(`(?:平面|底面|面)\\s*(${PLANE_NAME})\\s*(?:⊥|垂直于?)\\s*(?:平面|底面|面)\\s*(${PLANE_NAME})`, "g"),
     // `planeLengths` 必须是**点名个数**，不是字串长度：`A₁B₁C₁D₁` 是 4 个点、字串长 8。
     read: (m) => ({ kind: "planePerpendicular", targets: [...names(m[1]), ...names(m[2])], planeLengths: [names(m[1]).length, names(m[2]).length] })
   },
@@ -254,6 +254,25 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
   {
     pattern: new RegExp(`(${POINT_NAME})\\s*(?:为|是)\\s*(${SEGMENT_NAME})\\s*的?\\s*中点`, "g"),
     read: (m) => ({ kind: "midpoint", targets: [m[1], ...names(m[2])] })
+  },
+  {
+    /**
+     * **`AD=2AB=2`：倍数 + 后置长度，一次给两条判据**（2026-10-10 用户现场）。
+     *
+     * 用户把同一件事写全时会带上长度（`设 AD=2AB=2（即 AB=BC=1, AD=2）`）。原先只认前半截的
+     * 倍数，剩下的 `=2` 在残留里变成一条"未核验的条件" ⇒ 门禁不放行。这里把它读成**AD 的长度**。
+     * 必须排在下一条"纯倍数"句型**之前**：先长的、再短的，否则 `=2` 永远吃不到。
+     */
+    pattern: new RegExp(`(${SEGMENT_NAME})\\s*=\\s*(\\d+(?:\\.\\d+)?)\\s*(${SEGMENT_NAME})\\s*=\\s*(\\d+(?:\\.\\d+)?)(?![\\d.A-Z])`, "g"),
+    read: (m) => {
+      const ratio = finitePositive(m[2])
+      const stated = finitePositive(m[4])
+      if (ratio === null || stated === null) return null
+      return [
+        { kind: "segmentRatio", targets: [...names(m[1]), ...names(m[3])], value: ratio },
+        { kind: "fixedLength", targets: names(m[1]), value: stated }
+      ]
+    }
   },
   {
     pattern: new RegExp(`(${SEGMENT_NAME})\\s*=\\s*(\\d+(?:\\.\\d+)?)\\s*(${SEGMENT_NAME})(?![A-Z])`, "g"),
@@ -297,7 +316,7 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
     }
   },
   {
-    pattern: new RegExp(`(${SEGMENT_NAME})\\s*(⊥|∥|垂直于?|平行于?)\\s*平面\\s*(${PLANE_NAME})`, "g"),
+    pattern: new RegExp(`(${SEGMENT_NAME})\\s*(⊥|∥|垂直于?|平行于?)\\s*(?:平面|底面|面)\\s*(${PLANE_NAME})`, "g"),
     read: (m) => ({ kind: m[2].includes("平行") || m[2] === "∥" ? "parallel" : "perpendicular", targets: [...names(m[1]), ...names(m[3])] })
   },
   {
@@ -380,6 +399,19 @@ export function parseDiagramObligations(prompt: string, options: DiagramParseOpt
       if ([...match[0]].some((_, offset) => used.has(match.index + offset))) continue
       unverified.push({ sourceText: match[0], reason: "这个点的坐标写法尚未可靠解析，未核验。" })
     }
+  }
+
+  /**
+   * **「（即 …）」是重述，不是一条新条件**（2026-10-10 用户现场）。
+   *
+   * 用户常把同一批条件再写一遍：`设 AD=2AB=2（即 AB=BC=1, AD=2）`。里面的等式照旧由上面的句型认
+   *（认得出就进 `givens`），但**这个外壳本身**不该在残留里变成一条"未核验的条件" ——
+   * 于是把整段括号标成"已用"，残留自然就干净了。
+   *
+   * **只认带重述标记的括号**（`即 / 也就是 / 亦即`）：普通括号里可能是真条件，不许一律豁免。
+   */
+  for (const match of givenText.matchAll(/[（(]\s*(?:即|也就是|亦即)[^）)]*[）)]/g)) {
+    for (let offset = 0; offset < match[0].length; offset += 1) used.add((match.index ?? 0) + offset)
   }
 
   // Scan the portions no reliable matcher consumed. A new textbook notation must

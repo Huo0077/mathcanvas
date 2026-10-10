@@ -42,6 +42,35 @@ describe("parseDiagramObligations", () => {
     expect(impossibleLength.givens).toEqual([])
     expect(impossibleLength.unverified.some(({ sourceText }) => sourceText.includes("AB=0"))).toBe(true)
   })
+
+  /**
+   * **三种用户随手就会打的写法**（2026-10-10 现场：四棱锥那句题面）。
+   *
+   * 它们此前都落进"未核验"，而门禁是"全部核验通过才提交" ⇒ 用户永远拿不到图。
+   * 三条各钉一条判据（都不是"图不对"，而是"我们读不懂"）。
+   */
+  it("reads 「底面」 as the plane word, not only 「平面」", () => {
+    const parsed = parseDiagramObligations("在四棱锥 P-ABCD 中，PA⊥底面 ABCD，画出这个四棱锥")
+
+    expect(parsed.unverified).toEqual([])
+    expect(parsed.givens.some((given) => given.kind === "perpendicular")).toBe(true)
+  })
+
+  it("reads a trailing length on a ratio clause: `AD=2AB=2`", () => {
+    const parsed = parseDiagramObligations("在四棱锥 P-ABCD 中，设 AD=2AB=2，画示意图")
+
+    expect(parsed.unverified).toEqual([])
+    expect(parsed.givens).toContainEqual(expect.objectContaining({ kind: "segmentRatio", targets: ["A", "D", "A", "B"], value: 2 }))
+    expect(parsed.givens).toContainEqual(expect.objectContaining({ kind: "fixedLength", targets: ["A", "D"], value: 2 }))
+  })
+
+  it("treats 「（即 …）」 as a restatement, not as an unread condition", () => {
+    const parsed = parseDiagramObligations("在四棱锥 P-ABCD 中，设 AD=2AB=2（即 AB=BC=1, AD=2），画出这个四棱锥")
+
+    expect(parsed.unverified).toEqual([])
+    // 括号里的等式照旧被认成条件（不是被丢掉）。
+    expect(parsed.givens.filter((given) => given.kind === "fixedLength").length).toBeGreaterThanOrEqual(2)
+  })
   it("recognizes an explicitly free point as a choice, not an unverified condition", () => {
     const parsed = parseDiagramObligations("在三棱锥A-BCD中，BD=2，任取点A，画一张示意图")
     expect(parsed.givens.map((item) => item.sourceText)).toEqual(["BD=2"])
