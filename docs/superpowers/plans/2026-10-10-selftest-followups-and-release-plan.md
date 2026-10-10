@@ -78,7 +78,8 @@
      它是"现场修复批次之后的新一批"，不是回填 3.3.10）→ 构建 **bundle**（MSI/NSIS）→ 记三份哈希 →
      写 `docs/release/v3.3.11.md` → 建 tag 与 GitHub Release → 复核 `releases/latest`。
 - **当前构建（不是 release，只是本机 exe）**：`apps/desktop/src-tauri/target/release/mathcanvas-desktop.exe`，
-  构建于 2026-10-11 01:06，**SHA-256 `498769549DFB790BB93786906E8BCD2070BB2B71FB7957ADACAFAFDA18393B1D`**。
+  构建于 2026-10-11 01:29，**SHA-256 `46EF42571646B6A764A9DECA782BF2446383C2C404FAAA5194846086FE6242F3`**
+  （此前 01:06 那一版是 `498769549DFB…393B1D`，已被本版取代；**每次重建都会换哈希，所以这里记的是"当前那一版"**）。
   **注意 `bundle/` 下的 MSI/NSIS 是 10-10 11:48 那一批（3.3.10）的，比当前源码旧** —— 不能当这一版的产物。
 
 ### B. 门禁与发布（现状：不放行）
