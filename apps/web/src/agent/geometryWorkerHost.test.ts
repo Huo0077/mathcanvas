@@ -1,4 +1,4 @@
-﻿import { PLAN_SCHEMA_VERSION, type PlanEnvelope } from "@draw/agent-core"
+import { PLAN_SCHEMA_VERSION, type PlanEnvelope } from "@draw/agent-core"
 import { createEmptyDocument, type GeometryDocument } from "@draw/dsl"
 import { createIdAllocator } from "@draw/scene-graph"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"

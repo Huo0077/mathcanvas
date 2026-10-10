@@ -44,6 +44,12 @@ declare module "node:child_process" {
       windowsHide?: boolean
     }
   ): ChildProcessLike
+  /**
+   * **同步跑一个命令并取回它的输出**（2026-10-10 加，用户是 `docs-consistency/file-hygiene.test.ts`：
+   * 它用 `git ls-files -z` 列举**受跟踪**的文件 —— untracked 的构建产物不该进那条判据）。
+   * 不传 `encoding` 时返回**字节**（那条用例要的就是字节：BOM 是三个字节的事）。
+   */
+  export function execFileSync(command: string, args?: readonly string[], options?: { cwd?: string }): Uint8Array
 }
 
 declare module "node:events" {
@@ -90,6 +96,8 @@ declare module "node:fs" {
    * 不是 `file:` 协议，传 URL 给 `readFileSync` 会抛 ERR_INVALID_URL_SCHEME。
    */
   export function readFileSync(path: string, encoding: "utf8"): string
+  /** 不传 `encoding` 时返回**字节**（用户：`file-hygiene.test.ts` 查 BOM —— 那是三个字节的事）。 */
+  export function readFileSync(path: string): Uint8Array
 }
 
 declare module "node:path" {
@@ -98,6 +106,8 @@ declare module "node:path" {
     join(...parts: string[]): string
   normalize(part: string): string
   dirname(part: string): string
+  /** 取扩展名（用户：`file-hygiene.test.ts` 要按扩展名分档 —— `.ps1` 允许带 BOM）。 */
+  extname(part: string): string
   relative(from: string, to: string): string
   }
   export default path

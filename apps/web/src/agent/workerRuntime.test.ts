@@ -1,4 +1,4 @@
-﻿import { createEmptyDocument } from "@draw/dsl"
+import { createEmptyDocument } from "@draw/dsl"
 import { describe, expect, it } from "vitest"
 
 import { createWorkerRequest, parseWorkerRequest, parseWorkerResponse, WORKER_SCHEMA_VERSION } from "./workerContracts"

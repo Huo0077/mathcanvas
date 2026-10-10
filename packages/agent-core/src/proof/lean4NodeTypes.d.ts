@@ -51,6 +51,8 @@ declare module "node:child_process" {
       windowsHide?: boolean
     }
   ): ChildProcessLike
+  /** 与 `scripts/nodeTypes.d.ts` 逐字相同（合并后仍是这个形状 —— 见文件头那条纪律）。 */
+  export function execFileSync(command: string, args?: readonly string[], options?: { cwd?: string }): Uint8Array
 }
 
 declare module "node:fs/promises" {
@@ -71,6 +73,7 @@ declare module "node:path" {
     normalize(part: string): string
     dirname(part: string): string
     relative(from: string, to: string): string
+    extname(part: string): string
   }
   export default path
 }

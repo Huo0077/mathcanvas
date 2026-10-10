@@ -1,4 +1,4 @@
-﻿import { describe, expect, it, vi } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 
 import { createBudget, type BudgetLimits } from "./budget"
 import { createCoordinator } from "./coordinator"

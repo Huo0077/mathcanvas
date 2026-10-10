@@ -130,16 +130,45 @@ export function isPlanarOnlyConstraint3(type: ConstraintSpec["type"]): boolean {
   return NO_SPATIAL_JUDGE.has(type)
 }
 
+/**
+ * **每一条约束类型的投影决定**（2026-10-10 加；起因是一句只写在文档里的断言）。
+ *
+ * ## 它解决什么
+ *
+ * 文档里一直有一句"按 `ConstraintType` 现有的全部 8 个成员枚举核过：7 个可投影 +
+ * `coincident`（平面内专有）⇒ **「没有投影规则」那一支不可达**"。但那句话**只是文案**：
+ * 下面那份集合原先是手写的，哪天有人加第 9 个成员，它会**静默**落进 `no-projection-rule` 那一支
+ *（那本身是安全方向，但"我们决定过它"就不成立了 —— 而"某条约束悄悄没有判据"正是 N3 要防的事）。
+ *
+ * 所以这里把"决定"写成 `Record<ConstraintType, …>`：**少一个键就编译不过**，
+ * 而 `PROJECTABLE` 由它**推导**（单一来源，不再有第二份手写清单）。
+ *
+ * ## 两个取值的含义
+ *
+ * - `project`：内核能把点真的投影到这条约束上（改坐标）；
+ * - `planar-only`：**3D 里没有判据**（`coincident` 是平面内专有 —— 空间里"重合"没有唯一投影）。
+ *   需要动它时如实进 `skipped`，绝不假装已经满足。
+ */
+export const CONSTRAINT_PROJECTION_DECISION: Record<ConstraintSpec["type"], "project" | "planar-only"> = {
+  parallel: "project",
+  perpendicular: "project",
+  coincident: "planar-only",
+  pointOnLine: "project",
+  pointOnPlane: "project",
+  collinear: "project",
+  coplanar: "project",
+  fixedDistance: "project"
+}
+
+/** 导出给用例：`PROJECTABLE` 那份集合的**推导结果**（它必须与上表一致，别处不许再写第二份）。 */
+export const PROJECTABLE_CONSTRAINT_TYPES: readonly ConstraintSpec["type"][] = Object.freeze(
+  Object.entries(CONSTRAINT_PROJECTION_DECISION)
+    .filter(([, verdict]) => verdict === "project")
+    .map(([type]) => type as ConstraintSpec["type"])
+)
+
 /** 这一版**有投影规则**的约束。其余需要动时如实报 `no-projection-rule`。 */
-const PROJECTABLE: ReadonlySet<ConstraintSpec["type"]> = new Set<ConstraintSpec["type"]>([
-  "pointOnLine",
-  "pointOnPlane",
-  "collinear",
-  "coplanar",
-  "fixedDistance",
-  "parallel",
-  "perpendicular"
-])
+const PROJECTABLE: ReadonlySet<ConstraintSpec["type"]> = new Set<ConstraintSpec["type"]>(PROJECTABLE_CONSTRAINT_TYPES)
 
 type Point3 = Extract<PrimitiveSpec, { type: "point3" }>
 

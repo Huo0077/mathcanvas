@@ -1,4 +1,4 @@
-﻿import { createDocumentHandle, type DocumentHandle } from "@draw/scene-graph"
+import { createDocumentHandle, type DocumentHandle } from "@draw/scene-graph"
 
 import type { CommitOutcome, CommitRequest, CommitterPort, ConsentToken } from "./coordinatorPorts"
 import type { PlanDiagnostic, PlanRelations, RepairRequest, StructuredAssumption, VerificationReport } from "./contracts"

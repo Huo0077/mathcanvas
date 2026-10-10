@@ -1,4 +1,4 @@
-﻿import type { AgentDraftView } from "../../agentStore"
+import type { AgentDraftView } from "../../agentStore"
 import { AssumptionList } from "./AssumptionList"
 import { countDeltas, removedObjectCount, summarizeDraftScale } from "./confirmationCounts"
 import { ProofLevelNotice } from "./ProofLevelNotice"

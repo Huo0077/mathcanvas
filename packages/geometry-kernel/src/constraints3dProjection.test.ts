@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import type { ConstraintSpec, PrimitiveSpec } from "@draw/dsl"
 
-import { projectPoint3Constraints } from "./constraints3dProjection"
+import { CONSTRAINT_PROJECTION_DECISION, projectPoint3Constraints, PROJECTABLE_CONSTRAINT_TYPES } from "./constraints3dProjection"
 
 /**
  * **N3（动态拖动保持约束）的第一块内核砖**：把点真的投影到约束上。
@@ -381,5 +381,29 @@ describe("3D 约束的自由度与冗余诊断", () => {
     expect(result.ranked).toBe(0)
     expect(result.unaffectedConstraintIds).toEqual([])
     expect(result.unsatisfiedConstraintIds).toEqual([])
+  })
+
+  /**
+   * **覆盖判据：每一条 `ConstraintType` 都必须被"决定过"**（2026-10-10 加）。
+   *
+   * 文档里那句"按 `ConstraintType` 现有的全部 8 个成员枚举核过：7 个可投影 + `coincident`（平面内专有）
+   * ⇒「没有投影规则」那一支不可达"**原来只是文案** —— 集合是手写的，哪天有人加第 9 个成员，
+   * 它会**静默**落进 `no-projection-rule` 那一支（那本身是安全的方向，但"我们决定过它"这句话就不成立了）。
+   *
+   * 这张表把"决定"变成**编译期**的事：`Record<ConstraintType, …>` 少一个键就编译不过。
+   */
+  it("**每条约束类型都有决定**（加新类型却不定投影 ⇒ 编译不过；这里再钉一次运行时读数）", () => {
+    const decision = CONSTRAINT_PROJECTION_DECISION
+    expect(Object.keys(decision).sort()).toEqual([
+      "coincident", "collinear", "coplanar", "fixedDistance", "parallel", "perpendicular", "pointOnLine", "pointOnPlane"
+    ])
+    // `coincident` 是**平面内专有**（3D 里"重合"没有唯一投影），其余全部可投影。
+    expect(decision.coincident).toBe("planar-only")
+    for (const [type, verdict] of Object.entries(decision)) {
+      if (type === "coincident") continue
+      expect(verdict, type).toBe("project")
+    }
+    // 而 `PROJECTABLE` **是从这张表推出来的**（不是第二份手写清单）。
+    expect([...PROJECTABLE_CONSTRAINT_TYPES].sort()).toEqual(Object.keys(decision).filter((type) => type !== "coincident").sort())
   })
 })

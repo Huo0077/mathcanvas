@@ -1,4 +1,4 @@
-﻿import type { VerificationReport } from "../contracts"
+import type { VerificationReport } from "../contracts"
 
 /**
  * **"没有验证证据就不许进入确认"**（Phase 3 / Task 3.3）。

@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vitest"
 
 import { PLAN_SCHEMA_VERSION, type PlanEnvelope } from "./contracts"
 import { auditPlan, completeMissingParameter, type AuditContext } from "./parameterAudit"

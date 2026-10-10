@@ -1,4 +1,4 @@
-﻿import type { DraftObjectCounts } from "@draw/agent-core"
+import type { DraftObjectCounts } from "@draw/agent-core"
 
 /**
  * **隔离草稿的预览面板**（Task 0.8 Step 4）。

@@ -1,4 +1,4 @@
-﻿import type { GeometryDocument } from "@draw/dsl"
+import type { GeometryDocument } from "@draw/dsl"
 import { countDraftObjects, type DraftObjectCounts } from "@draw/agent-core"
 import { commitTransaction, type DocumentHandle } from "@draw/scene-graph"
 

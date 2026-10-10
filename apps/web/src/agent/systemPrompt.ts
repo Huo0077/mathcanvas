@@ -1,4 +1,4 @@
-﻿import { MAX_CONVERSATION_FACTS, PLAN_SCHEMA_VERSION, describeActions, describeDefaultPolicies, type ConversationContext, type ModelChannel, type ModelContext, type PlanRequest } from "@draw/agent-core"
+import { MAX_CONVERSATION_FACTS, PLAN_SCHEMA_VERSION, describeActions, describeDefaultPolicies, type ConversationContext, type ModelChannel, type ModelContext, type PlanRequest } from "@draw/agent-core"
 
 /**
  * **生产系统提示词**（Agent DSL 切片 Task 5；规格 §6/§7）。

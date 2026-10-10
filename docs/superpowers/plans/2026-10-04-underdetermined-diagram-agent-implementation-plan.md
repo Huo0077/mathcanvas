@@ -1,4 +1,4 @@
-﻿# 欠定高中几何示意图 Agent 升级 Implementation Plan
+# 欠定高中几何示意图 Agent 升级 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. 当前任务由主会话直接执行，不授权额外 subagent；每项按 RED→GREEN→复核前进。
 

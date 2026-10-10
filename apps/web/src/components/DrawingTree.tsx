@@ -1,4 +1,4 @@
-﻿import type { DrawingSheetSpec, DrawingViewSpec } from "@draw/dsl"
+import type { DrawingSheetSpec, DrawingViewSpec } from "@draw/dsl"
 
 import { TreeEyeIcon } from "./LayerTree"
 

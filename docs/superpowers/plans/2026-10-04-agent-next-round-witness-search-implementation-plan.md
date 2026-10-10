@@ -1,4 +1,4 @@
-﻿> **路线更新：** 本文是较窄的第一版见证搜索路线，已被 `2026-10-04-agent-full-next-phase-design.md` 与 `2026-10-04-agent-full-next-phase-implementation-plan.md` 扩展为完整阶段路线；保留本文作为 N2/N4 的早期拆解。
+> **路线更新：** 本文是较窄的第一版见证搜索路线，已被 `2026-10-04-agent-full-next-phase-design.md` 与 `2026-10-04-agent-full-next-phase-implementation-plan.md` 扩展为完整阶段路线；保留本文作为 N2/N4 的早期拆解。
 
 # 下一轮 Agent 升级实施计划：见证搜索与真实 Provider 评测
 

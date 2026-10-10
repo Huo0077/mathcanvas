@@ -1,4 +1,4 @@
-﻿import { render, screen } from "@testing-library/react"
+import { render, screen } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
 
 import { createEmptyDocument } from "@draw/dsl"

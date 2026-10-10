@@ -1,4 +1,4 @@
-﻿import { isInvariantRequest } from "./invariantRequest"
+import { isInvariantRequest } from "./invariantRequest"
 import type { PolyhedronWitness } from "./solver/solverContracts"
 import { selectPolyhedronWitness } from "./solver/witnessSearch"
 import { rejectedSelection, selectWitnessWithoutSearch, symbolicSelection, type WitnessRequest, type WitnessSelection } from "./witnessSelection"

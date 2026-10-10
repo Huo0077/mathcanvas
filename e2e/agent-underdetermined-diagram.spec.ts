@@ -1,4 +1,4 @@
-﻿import { expect, test } from "@playwright/test"
+import { expect, test } from "@playwright/test"
 
 import { PYRAMID_PROMPT, PYRAMID_UNVERIFIED_PROMPT } from "../apps/web/src/agent/representativeFixtures"
 

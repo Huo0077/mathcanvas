@@ -1,4 +1,4 @@
-﻿import { createEmptyDocument } from "@draw/dsl"
+import { createEmptyDocument } from "@draw/dsl"
 import { describe, expect, it } from "vitest"
 
 import { PLAN_SCHEMA_VERSION } from "./contracts"

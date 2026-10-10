@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vitest"
 
 import type { VerificationReport } from "../contracts"
 import { verificationGate, type VerificationGateCode } from "./completionGate"
