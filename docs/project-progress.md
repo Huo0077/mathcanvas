@@ -10,6 +10,20 @@
 
 > 下方 2026-09-22 的"最后更新 / 当前阶段 / 总体状态"三行保留为**当时快照**，不再维护。
 
+## 2026-10-10 —— V2 GREEN ③ 收尾：桌面命令报版本了（产物终于绑得上）
+
+**关掉上一轮钉出来的缺口**："这条链能跑、但绑不上" —— 适配器要求实测版本串才产出产物，而桌面命令不报版本。
+
+**Rust**：`LeanRunOutcome.backendVersion`（`lake env lean --version` 的第一行）；`run_lean` **先问版本再跑证明**（适配器跑完之后才读版本，顺序不能反）；拿不到 ⇒ `None`（不猜）。`lean_proof_availability` 改成 async 并把版本问回来。
+
+**TS**：`Lean4RunResult.backendVersion`（放**运行结果**里 —— 只有起进程那层知道执行了哪个二进制）；`produceLean4Artifact` = `options.backendVersion ?? run.backendVersion ?? ""`；`ProofChannelResult` 也带上，web 的 IPC 回包校验对它是 **fail-closed** 的。
+
+**一次接错线被用例抓出**：第一版"传同一个 options 对象、让通道回调补版本" —— 失败，因为 `runLean4ClosedLoop` 会 `{ ...options, claimId }` **拷贝**，改原对象到不了适配器。改成"结果自己带版本"。
+
+**判据 +6 条**（Rust 2 / 适配器 3 / 产品级 1 / web 1），其中产品级那条是"**调用方不给版本、版本由桌面命令带回来 ⇒ 产物绑得上**"。
+
+**门禁**：`test:rust` **250 passed / 0 failed / 3 ignored**；定向 **172 通过**；`typecheck` 0；`lint` 0 error / 13 warning；全库非 Lean **345 文件 / 4056 通过 + 1 todo / 0 失败 / exit 0**（537.98 s）；全量 e2e **217 通过 / 1 failed** —— 那条红是 `agent-diagram-free-apex.spec.ts:57` 的 **`beforeEach` 加载超时**（`page.goto("/")` 30 s 没回，不是断言失败），**孤立复跑两次均 6 passed（24.2 / 24.5 s）**，与本块无关。**变异**：通道不把版本交回去 ⇒ 产品级那条红（还原复绿）。
+
 ## 2026-10-10 —— V2 GREEN ③ 收口：产品调用点接上了（草稿暂存顺手问一次形式证明）
 
 **这一块把 ③ 接上产品路径**：`draftStore.stage` 新增**第八个参数** `proofExport`（与 `obligationIR` / `witnessSearch` 同一条通道）；跑完作图、题设核验过之后顺手问一次"这道题的目标能不能形式证明"。调用点逻辑在新模块 `apps/web/src/agent/automaticProofStage.ts`（复用 `proofGoalReader` + `canonicalProof` + 桌面通道），结果压成 `DraftProofAttempt` 随**预览**回带。

@@ -72,6 +72,19 @@ pub struct LeanRunOutcome {
     pub duration_ms: u64,
     /// 给人看的一句话（缺配置时写清**缺哪一个**）。
     pub detail: String,
+    /**
+     * **跑这次证明用的那个二进制的版本串**（`lake env lean --version` 的第一行）。
+     *
+     * ## 为什么这个字段非有不可
+     *
+     * TS 侧的适配器要求**实测的后端版本串**才产出产物（"没有版本的证明不算证明"）——
+     * 而 2026-10-10 之前这条命令根本不报版本，于是产品链"能跑、但绑不上"（那条缺口当时被写成了一条判据）。
+     * 版本串由**这里**给出（而不是让前端自己拼一个），因为"我们到底执行了哪个二进制"只有这一层知道。
+     *
+     * 取不到就是 `None`（配错了、超时、输出读不出）—— 那是**如实**的"不知道版本"，
+     * 下游会因此不产出产物（而不是拿一个猜的版本糊过去）。
+     */
+    pub backend_version: Option<String>,
 }
 
 /// **从环境变量解析配置**（注入 `get` 与 `exists`，所以这条判据可以在任何机器上跑）。
@@ -140,6 +153,7 @@ pub async fn run_lean(configuration: &LeanConfiguration, source: &str, timeout_m
             stderr: String::new(),
             duration_ms: 0,
             detail: format!("生成的命题文件没有通过模板形状检查（**没有执行任何东西**）：{reason}"),
+            backend_version: None,
         };
     }
 
@@ -152,14 +166,57 @@ pub async fn run_lean(configuration: &LeanConfiguration, source: &str, timeout_m
             stderr: String::new(),
             duration_ms: 0,
             detail: format!("临时命题文件写不出来：{error}"),
+            backend_version: None,
         };
     }
 
     let started = Instant::now();
-    let outcome = spawn_and_wait(configuration, &file, timeout_ms, started).await;
+    /**
+     * **先问一次工具链自己的版本**（`lake env lean --version` 的第一行），再跑证明。
+     *
+     * 顺序是刻意的：适配器**跑完之后**才读版本串（它要先知道证明成没成），所以版本必须在跑之前拿到。
+     * 成本实测量级 ~1.7 s（工具链走 elan 垫片时 `--version` 的耗时，记在 `lean4Toolchain.ts` 的注释里），
+     * 相对一次真证明的 ~68 s 可以忽略。**拿不到就是 `None`**，下游因此不产出产物 —— 不猜版本。
+     */
+    let version = lean_version(configuration, VERSION_PROBE_TIMEOUT_MS).await;
+
+    let mut outcome = spawn_and_wait(configuration, &file, timeout_ms, started).await;
+    outcome.backend_version = version;
     // 无论什么结局都清掉临时文件（那个目录里只有我们写的这一个文件）。
     let _ = std::fs::remove_file(&file);
     outcome
+}
+
+/// 问版本那一次调用的墙钟上限。**短**：它只是打印一行版本，不该拖住整条链。
+pub const VERSION_PROBE_TIMEOUT_MS: u64 = 15_000;
+
+/**
+ * **问一次工具链的版本**：`lake env lean --version` 的**第一行**。
+ *
+ * 拿不到（起不来 / 超时 / 输出空）⇒ `None`。**不缓存**：这条命令每次调用都可能在不同的配置下跑，
+ * 缓存会让"报出来的版本"与"真正跑的那个二进制"脱钩 —— 而那正是这个字段的意义。
+ */
+pub async fn lean_version(configuration: &LeanConfiguration, timeout_ms: u64) -> Option<String> {
+    let mut command = tokio::process::Command::new(&configuration.lake);
+    // 同样**固定 argv**：`lake env lean --version`。
+    command.arg("env").arg("lean").arg("--version");
+    command.current_dir(&configuration.project_dir);
+    command.stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
+    command.kill_on_drop(true);
+
+    let child = command.spawn().ok()?;
+    let output = tokio::time::timeout(Duration::from_millis(timeout_ms.max(1)), child.wait_with_output())
+        .await
+        .ok()?
+        .ok()?;
+    // 版本可能落在 stdout 也可能落在 stderr（不同版本的 lean 不一样），两处都看，取第一行非空。
+    for stream in [&output.stdout, &output.stderr] {
+        let text = String::from_utf8_lossy(stream);
+        if let Some(line) = text.lines().map(str::trim).find(|line| !line.is_empty()) {
+            return Some(tail_of(line, 200));
+        }
+    }
+    None
 }
 
 async fn spawn_and_wait(configuration: &LeanConfiguration, file: &Path, timeout_ms: u64, started: Instant) -> LeanRunOutcome {
@@ -180,6 +237,7 @@ async fn spawn_and_wait(configuration: &LeanConfiguration, file: &Path, timeout_
                 stderr: String::new(),
                 duration_ms: started.elapsed().as_millis() as u64,
                 detail: format!("起不来：{}（{}）", configuration.lake.display(), error),
+                backend_version: None,
             }
         }
     };
@@ -192,6 +250,7 @@ async fn spawn_and_wait(configuration: &LeanConfiguration, file: &Path, timeout_
             stderr: String::new(),
             duration_ms: started.elapsed().as_millis() as u64,
             detail: format!("进程级墙钟超时（{timeout_ms} ms）：已杀进程，**不返回半成品证明**。"),
+            backend_version: None,
         },
         Ok(Err(error)) => LeanRunOutcome {
             outcome: LeanOutcome::Failed,
@@ -200,6 +259,7 @@ async fn spawn_and_wait(configuration: &LeanConfiguration, file: &Path, timeout_
             stderr: String::new(),
             duration_ms: started.elapsed().as_millis() as u64,
             detail: format!("等进程结束时出错：{error}"),
+            backend_version: None,
         },
         Ok(Ok(output)) => LeanRunOutcome {
             outcome: LeanOutcome::Exited,
@@ -208,6 +268,7 @@ async fn spawn_and_wait(configuration: &LeanConfiguration, file: &Path, timeout_
             stderr: tail_of(&String::from_utf8_lossy(&output.stderr), OUTPUT_TAIL_BYTES),
             duration_ms: started.elapsed().as_millis() as u64,
             detail: "进程跑完了。**这还不是判定** —— 「证明成没成立」看 TS 侧对 `#print axioms` 报告的判据（`exit=0` 连 `sorry` 都满足）。".to_string(),
+            backend_version: None,
         },
     }
 }

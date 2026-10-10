@@ -70,6 +70,17 @@ export function normalizeProofChannelResult(raw: unknown): ProofChannelResult {
   if (typeof stderr !== "string") return rejected("stderr 不是字符串")
   const durationMs = raw.durationMs
   if (typeof durationMs !== "number" || !Number.isFinite(durationMs)) return rejected(`durationMs=${JSON.stringify(durationMs)} 不是有限数字`)
+  /**
+   * **版本串**（2026-10-10 加）：桌面命令问回来的"跑这次证明用的那个二进制"。
+   *
+   * 它**可以缺席**（老版本命令、或问不到），但**一旦出现就必须是字符串或 `null`** ——
+   * 一个数字或对象混进来会让适配器把它当版本用（`String(x)` 之后恰好非空），
+   * 那就是"拿一个不是版本的字符串当版本"。所以这里是 fail-closed 的。
+   */
+  const backendVersion = raw.backendVersion
+  if (backendVersion !== undefined && backendVersion !== null && typeof backendVersion !== "string") {
+    return rejected(`backendVersion=${JSON.stringify(backendVersion)} 既不是字符串也不是 null`)
+  }
 
   return {
     outcome: outcome as ProofChannelOutcome,
@@ -77,7 +88,8 @@ export function normalizeProofChannelResult(raw: unknown): ProofChannelResult {
     stdout,
     stderr,
     durationMs,
-    detail: typeof raw.detail === "string" ? raw.detail : ""
+    detail: typeof raw.detail === "string" ? raw.detail : "",
+    ...(backendVersion === undefined ? {} : { backendVersion: backendVersion as string | null })
   }
 }
 

@@ -85,6 +85,16 @@ describe("产品侧调用点：跑完作图顺手证一下（旗关着就什么�
     // 理由要说清是**缺版本**，而不是"证明不成立"。
     expect(result?.detail).toContain("版本")
   })
+  it("**版本串由桌面命令带回来 ⇒ 产物绑得上**（这才是这条产品路径修好之后的样子）", async () => {
+    const { channel } = fakeChannel([
+      { outcome: "exited", exitCode: 0, stdout: OK_STDOUT, stderr: "", durationMs: 68_000, detail: "", backendVersion: "Lean (version 4.35.0-rc3, commit 470d5ce1)" }
+    ])
+    // **注意：调用方没有给 `backendVersion`** —— 版本是从通道回来的那一个。
+    const result = await attemptProofForStage({ prompt: PROMPT, obligations: parseDiagramObligations(PROMPT), flagEnabled: true, channel })
+
+    expect(result?.outcome).toBe("verified")
+    expect(result?.claimId).toContain("PA ⊥ 平面 ABC")
+  })
   it("**浏览器里跑不了 ⇒ 如实说「要桌面版」**（不是错误、也不阻塞作图）", async () => {
     const { channel } = fakeChannel([{ outcome: "unavailable", exitCode: null, stdout: "", stderr: "", durationMs: 0, detail: "这个构建跑在浏览器里" }])
     const result = await attemptProofForStage({ prompt: PROMPT, obligations: parseDiagramObligations(PROMPT), flagEnabled: true, channel })

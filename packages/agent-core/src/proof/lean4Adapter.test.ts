@@ -483,6 +483,35 @@ describe("第三个目标类：切线/导数（换了数学塔）", () => {
   })
 })
 
+/**
+ * **版本串的优先顺序**（2026-10-10 加；起因是一次接错线被用例抓出来）。
+ *
+ * 产物要求**实测的版本串**。它有两个来源：调用方显式给的 `options.backendVersion`，
+ * 与**运行结果**里的 `run.backendVersion`（桌面命令问回来的那个）。顺序是"显式的优先"——
+ * 这一条钉住它，免得哪天变成"结果覆盖显式"（那会让测试与固定版本场景失控）。
+ */
+describe("版本串：显式的优先于运行结果带回来的", () => {
+  const RUN = { exitCode: 0, stdout: HONEST_STDOUT, stderr: "", durationMs: 12, timedOut: false, backendVersion: "Lean（运行结果里的那个）" }
+
+  it("调用方给了版本 ⇒ 用它（运行结果那个不覆盖它）", async () => {
+    const produced = await produceLean4Artifact(GOAL, { ...PRODUCE, runner: fakeRunner([RUN]), claimId: "claim-v" })
+
+    expect(produced.artifact?.backend.version).toBe(PRODUCE.backendVersion)
+  })
+
+  it("调用方没给 ⇒ 用运行结果带回来的那个（这就是桌面命令那条路）", async () => {
+    const produced = await produceLean4Artifact(GOAL, { ...PRODUCE, backendVersion: undefined, runner: fakeRunner([RUN]), claimId: "claim-v" })
+
+    expect(produced.artifact?.backend.version).toBe("Lean（运行结果里的那个）")
+  })
+
+  it("两处都没有 ⇒ **不产出产物**（不猜版本）", async () => {
+    const produced = await produceLean4Artifact(GOAL, { ...PRODUCE, backendVersion: undefined, runner: fakeRunner([{ ...RUN, backendVersion: null }]), claimId: "claim-v" })
+
+    expect(produced.artifact).toBeNull()
+    expect(produced.judgement.detail).toContain("版本")
+  })
+})
 describe("产物与绑定（假 runner，CI 上跑）", () => {
   it("真报告 ⇒ 产出**合格产物**，且 `inputHash` 覆盖了 `statement`", async () => {
     const produced = await produceLean4Artifact(GOAL, { ...PRODUCE, runner: fakeRunner([okRun(HONEST_STDOUT)]), claimId: "claim-1" })

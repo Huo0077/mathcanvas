@@ -96,6 +96,22 @@ describe("桌面证明通道（web 侧接线）", () => {
     expect(normalized).toEqual({ outcome: "timeout", exitCode: null, stdout: "半截", stderr: "错误", durationMs: 180_001, detail: "墙钟超时" })
   })
 
+  it("**版本串跟着回包走**（给对了就交回，给错了按失败处理）", () => {
+    // 给对：字符串或 null 都收。
+    expect(normalizeProofChannelResult({ outcome: "exited", exitCode: 0, stdout: "", stderr: "", durationMs: 1, detail: "", backendVersion: "Lean (version 4.35.0-rc3)" }).backendVersion)
+      .toBe("Lean (version 4.35.0-rc3)")
+    expect(normalizeProofChannelResult({ outcome: "exited", exitCode: 0, stdout: "", stderr: "", durationMs: 1, detail: "", backendVersion: null }).backendVersion)
+      .toBeNull()
+    // 没这一栏 ⇒ 交回的对象里也**没有**这一栏（不是 `undefined` 这一项）。
+    expect("backendVersion" in normalizeProofChannelResult({ outcome: "exited", exitCode: 0, stdout: "", stderr: "", durationMs: 1, detail: "" })).toBe(false)
+
+    // 给错（数字 / 对象）⇒ **按失败处理**：拿一个不是版本的字符串当版本，正是这条判据要挡的。
+    for (const wrong of [42, { version: "x" }, ["v"]]) {
+      const normalized = normalizeProofChannelResult({ outcome: "exited", exitCode: 0, stdout: "", stderr: "", durationMs: 1, detail: "", backendVersion: wrong })
+      expect(normalized.outcome, JSON.stringify(wrong)).toBe("failed")
+      expect(normalized.detail).toContain("backendVersion")
+    }
+  })
   it("**IPC 抛了 ⇒ 失败而不是「不可用」**（外壳在、这一趟没成，是两件不同的事）", async () => {
     installInvoke(async () => {
       throw new Error("IPC 断了")

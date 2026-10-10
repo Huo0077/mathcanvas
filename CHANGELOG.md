@@ -7,6 +7,20 @@
 
 
 
+## 2026-10-10 —— V2 GREEN ③ 收尾：桌面命令**报版本**了，产物终于绑得上（并抓出一次接错线）
+
+**这一块关掉上一轮钉出来的那个缺口**："这条链能跑、但绑不上"—— 原因是适配器要求**实测的后端版本串**才产出产物，而桌面命令不报 Lean 的版本。
+
+**Rust 侧**：`LeanRunOutcome` 新增 `backendVersion`，由 `lake env lean --version` 的**第一行**给出（先问版本**再**跑证明 —— 顺序是刻意的：适配器在**跑完之后**才读版本串，它要先知道证明成没成）。拿不到（起不来/超时/输出空）⇒ `None`，**不猜**。`lean_proof_availability` 也从同步变异步，顺手把版本问回来（多花 ~1.7 s 的 `--version`，这个量级记在 `lean4Toolchain.ts` 的注释里），于是"不用先跑一次 68 s 的证明就知道将执行哪个二进制"。
+
+**TS 侧**：`Lean4RunResult` 新增 `backendVersion`（**放在运行结果里** —— "我们到底执行了哪个二进制"只有起进程的那一层知道），`produceLean4Artifact` 的取法变成 `options.backendVersion ?? run.backendVersion ?? ""`；`ProofChannelResult` 同样带上它，web 侧的 IPC 回包校验（`normalizeProofChannelResult`）对它 **fail-closed**（不是字符串也不是 `null` 就按失败处理 —— "拿一个不是版本的字符串当版本"正是要挡的）。
+
+**一次接错线被用例当场抓出（值得记）**：第一版想的是"传**同一个** options 对象进去、让通道回调把 `backendVersion` 补上"。测试红了 —— 因为 `runLean4ClosedLoop` 会 `{ ...options, claimId }` **拷贝**一份再往下传，改原对象**到不了**适配器。改成"运行结果自己带版本"之后顺序天然对（版本本来就来自刚刚那次运行）。这段推理写进了代码注释。
+
+**判据（+6 条）**：Rust 两条（没有工具链时 `run_lean` 的 `backend_version` 是 `None`；`lean_version` 起不来时返回 `None` 而不是 `""`/`"unknown"`/从路径猜一个）；适配器三条（**显式版本优先于运行结果**；没有显式就用运行结果那个；两处都没有 ⇒ 不产出产物且理由点名"版本"）；产品级一条（**版本串由桌面命令带回来 ⇒ 产物绑得上** —— 调用方没有给 `backendVersion`，版本是从通道回来的）；web 一条（回包里的版本给对了照抄、给错了按失败处理）。
+
+**门禁**：`test:rust` **250 passed / 0 failed / 3 ignored**；`packages/agent-core/src/proof` + 两个 web 模块定向 **172 通过**；`typecheck` exit 0；`lint` 0 error / 13 warning（基线）；全库非 Lean **345 文件 / 4056 通过 + 1 todo / 0 失败 / exit 0**（537.98 s）；全量 e2e **217 通过 / 1 failed** —— 那条红是 `agent-diagram-free-apex.spec.ts:57` 的 **`beforeEach` 加载超时**（`page.goto("/")` 30 s 没回，不是断言失败），**孤立复跑两次均 6 passed（24.2 s / 24.5 s）**，与本块无关（本块只动了证明链的版本串）。**变异**：让通道**不把版本交回去** ⇒ 产品级那条"产物绑得上"红（当场还原、复跑全绿）。
+
 ## 2026-10-10 —— V2 GREEN ③ 收口：**产品调用点接上了**（草稿暂存顺手问一次形式证明）；并钉出一个真实缺口（桌面命令不报版本）
 
 **这一块把 ③ 接上产品路径**：`draftStore.stage` 新增**第八个参数** `proofExport`（与 `obligationIR` / `witnessSearch` 同一条通道），跑完作图、题设也核验过之后，顺手问一次"这道题的目标能不能形式证明"。调用点的逻辑落在新模块 `apps/web/src/agent/automaticProofStage.ts`（复用 `proofGoalReader` + `canonicalProof` + 桌面通道），结果压成 `DraftProofAttempt` 随**预览**回带（用户看得到"证了没有、正文是谁给的、系统替他选了哪两条相交线"）。

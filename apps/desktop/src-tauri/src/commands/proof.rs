@@ -8,7 +8,7 @@
 
 use crate::proof::{self, LeanOutcome, LeanRunOutcome};
 
-/// **跑一次受限的 Lean 检查**。
+/// **跑一次受限的 Lean 检查**（结果里带着**跑这次用的那个二进制的版本串**：TS 侧没有它就不产出产物）。
 ///
 /// `timeout_ms` 由调用方给（前端有它自己的预算），但**上限**在这里再夹一次（10 分钟）——
 /// 前端传一个巨大的数不该能把进程永远挂着。
@@ -25,6 +25,7 @@ pub async fn check_lean_proof(source: String, timeout_ms: Option<u64>) -> Result
                 stderr: String::new(),
                 duration_ms: 0,
                 detail: reason,
+                backend_version: None,
             });
         }
     };
@@ -33,27 +34,36 @@ pub async fn check_lean_proof(source: String, timeout_ms: Option<u64>) -> Result
 }
 
 /// 让"这台机器上配没配工具链"这件事**可以被前端问一次**（免得它先跑一次才知道）。
+///
+/// **它现在是异步的**（2026-10-10）：为了顺手把**版本串**也问回来。多花的是 `lake env lean --version`
+/// 那一次（实测量级 ~1.7 s），而"不用先跑一次 68 s 的证明就知道将执行哪个二进制"值这个价。
 #[tauri::command]
-pub fn lean_proof_availability() -> Result<LeanRunOutcome, String> {
+pub async fn lean_proof_availability() -> Result<LeanRunOutcome, String> {
     match proof::resolve_configuration(&|name| std::env::var(name).ok(), &|path| path.exists()) {
-        Ok(configuration) => Ok(LeanRunOutcome {
-            outcome: LeanOutcome::Unavailable,
-            exit_code: None,
-            stdout: String::new(),
-            stderr: String::new(),
-            duration_ms: 0,
-            detail: format!(
-                "配好了：lake={}、工程={}。**配好不等于能证出来** —— 真的跑一次才知道（而且冷缓存的第一次会撞超时）。工具链版本与 mathlib revision 的固定仍属「默认启用前」那批审查。",
-                configuration.lake.display(),
-                configuration.project_dir.display()
-            ),
-        }),
+        Ok(configuration) => {
+            let version = proof::lean_version(&configuration, proof::VERSION_PROBE_TIMEOUT_MS).await;
+            Ok(LeanRunOutcome {
+                outcome: LeanOutcome::Unavailable,
+                exit_code: None,
+                stdout: String::new(),
+                stderr: String::new(),
+                duration_ms: 0,
+                backend_version: version.clone(),
+                detail: format!(
+                    "配好了：lake={}、工程={}、版本={}。**配好不等于能证出来** —— 真的跑一次才知道（而且冷缓存的第一次会撞超时）。工具链版本与 mathlib revision 的固定仍属「默认启用前」那批审查。",
+                    configuration.lake.display(),
+                    configuration.project_dir.display(),
+                    version.as_deref().unwrap_or("（问不到 —— 起不来/超时/输出空）")
+                ),
+            })
+        }
         Err(reason) => Ok(LeanRunOutcome {
             outcome: LeanOutcome::Unavailable,
             exit_code: None,
             stdout: String::new(),
             stderr: String::new(),
             duration_ms: 0,
+            backend_version: None,
             detail: reason,
         }),
     }

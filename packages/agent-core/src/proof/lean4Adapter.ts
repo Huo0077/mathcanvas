@@ -190,6 +190,16 @@ export interface Lean4RunResult {
   stderr: string
   /** 墙钟耗时（毫秒）。 */
   durationMs: number
+  /**
+   * **跑这次用的那个二进制的版本串**（2026-10-10 加）。
+   *
+   * 为什么放在**运行结果**里而不是 options 里：版本串只有**真正起进程的那一层**知道
+   *（桌面命令问一次 `lake env lean --version`），而调用方在发起运行**之前**不可能知道它。
+   * 放在结果里，产物那一栏就能用"刚刚那次运行的版本"，而不是上游猜的一个。
+   *
+   * `null` / 缺席 = **问不到**（起不来、超时、输出空）—— 那时不产出产物（不猜版本）。
+   */
+  backendVersion?: string | null
   /** 命中了进程级墙钟上限（**不是** Lean 自己的 heartbeats 超时）。 */
   timedOut: boolean
   /** 根本没有可用的 Lean 可执行文件 ⇒ "后端不可用"，**不是**"证明失败"。 */
@@ -780,7 +790,7 @@ export async function produceLean4Artifact(input: Lean4ProofGoalInput, options: 
     return { artifact: null, judgement: { ...judgement, detail }, statement: spec.statement, inputHash, run }
   }
 
-  const backendVersion = options.backendVersion ?? ""
+  const backendVersion = options.backendVersion ?? run.backendVersion ?? ""
   if (backendVersion.trim().length === 0) {
     return {
       artifact: null,

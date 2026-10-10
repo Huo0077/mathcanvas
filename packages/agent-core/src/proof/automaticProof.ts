@@ -43,6 +43,13 @@ export interface ProofChannelResult {
   stderr: string
   durationMs: number
   detail: string
+  /**
+   * **跑这次证明用的那个二进制的版本串**（桌面命令问回来的）。
+   *
+   * 适配器要求**实测的版本串**才产出产物（"没有版本的证明不算证明"），而调用的那一刻前端还不知道它是多少
+   * —— 所以它随通道回来，由 `attemptAutomaticProof` 在跑完之后补进产物那一栏。
+   */
+  backendVersion?: string | null
 }
 
 export interface ProofChannelRequest {
@@ -134,9 +141,14 @@ export function unavailableProofChannel(reason: string): ProofChannel {
 /**
  * **把通道当 runner 用**（适配器的闭环只认 `Lean4Runner`，所以这里做一次翻译）。
  *
- * 翻译里只有一处要动脑子：**通道的 `failed`（起不来）要留下它的说明**。
- * 适配器看的是 `exitCode` / `timedOut` / `unavailableReason` 三件事，`detail` 不在其中 ——
- * 所以把它放进 `stderr`，判据那层会原样带进失败说明里（否则人会看到一句"退出码 null"却不知道为什么）。
+ * 翻译里有两处要动脑子：
+ *
+ * 1. **通道的 `failed`（起不来）要留下它的说明** —— 适配器看的是 `exitCode` / `timedOut` /
+ *    `unavailableReason` 三件事，`detail` 不在其中，所以把它放进 `stderr`（否则人会看到
+ *    一句"退出码 null"却不知道为什么）。
+ * 2. **版本串要捞出来交给调用方**（`onBackendVersion` 回调）：适配器要求实测版本才产出产物，
+ *    而"我们到底执行了哪个二进制"只有通道知道。回调而不是返回值，是因为 runner 的返回类型
+ *    是适配器定的（`Lean4RunResult` 里没有版本这一栏）。
  */
 export function channelAsRunner(channel: ProofChannel, timeoutMs: number): Lean4Runner {
   return async (request): Promise<Lean4RunResult> => {
@@ -156,7 +168,9 @@ export function channelAsRunner(channel: ProofChannel, timeoutMs: number): Lean4
       stdout: result.stdout,
       stderr: result.outcome === "failed" && result.stderr.trim().length === 0 ? result.detail : result.stderr,
       durationMs: result.durationMs,
-      timedOut: false
+      timedOut: false,
+      // **版本串随结果交回**：它是"我们执行了哪个二进制"的唯一来源。
+      ...(result.backendVersion === undefined ? {} : { backendVersion: result.backendVersion })
     }
   }
 }
@@ -251,6 +265,16 @@ export async function attemptAutomaticProof(request: AutomaticProofRequest): Pro
 
   const timeoutMs = request.timeoutMs ?? DEFAULT_PROOF_TIMEOUT_MS
   try {
+    /**
+     * **版本串的接线（2026-10-10，第一版写错了、被用例抓出来）**：
+     *
+     * 第一版想的是"传同一个 options 对象进去、让通道回调把 `backendVersion` 补上"。**那行不通**：
+     * `runLean4ClosedLoop` 会 `{ ...options, claimId }` **拷贝**一份再往下传，所以改原对象到不了适配器。
+     * 现在改成让**运行结果自己带版本**（`Lean4RunResult.backendVersion`，由通道填），
+     * 适配器在跑完之后读它 —— 顺序天然对：版本本来就来自"刚刚那次运行"。
+     *
+     * 调用方显式给的 `backendVersion` **优先**（测试与将来的固定版本场景要用它）。
+     */
     const outcome = await runLean4ClosedLoop(request.base, adapterInputFor(request, proof), request.claimId, {
       // 通道自己决定跑什么（桌面命令）；这里只告诉适配器"工具链存在"。
       runner: channelAsRunner(request.channel, timeoutMs),

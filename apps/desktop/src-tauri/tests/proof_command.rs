@@ -186,4 +186,16 @@ async fn a_file_that_fails_inspection_is_never_executed() {
     let outcome = proof::run_lean(&configuration, "theorem x : True := by trivial", 1_000).await;
     assert_eq!(outcome.outcome, proof::LeanOutcome::Failed);
     assert!(outcome.detail.contains("没有执行任何东西"), "应当是形状检查拦下的：{}", outcome.detail);
+    // **没有版本串**（没跑起来就不知道版本）—— 下游会因此不产出产物，而不是拿一个猜的版本糊过去。
+    assert!(outcome.backend_version.is_none());
+}
+
+#[tokio::test]
+async fn asking_for_the_version_of_a_toolchain_that_is_not_there_is_none_not_a_guess() {
+    // 这一条钉的是"版本串要么来自**真的那个二进制**，要么就是没有"：
+    // 起不来 ⇒ `None`（不是 `""`、不是 `"unknown"`、更不是从路径名里猜一个）。
+    let configuration = proof::LeanConfiguration { lake: PathBuf::from("C:/definitely/not/here/lake.exe"), project_dir: PathBuf::from("C:/definitely/not/here") };
+    let version = proof::lean_version(&configuration, 1_000).await;
+
+    assert!(version.is_none(), "起不来就应当是 None，实际是 {version:?}");
 }
