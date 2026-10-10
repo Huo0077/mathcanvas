@@ -11,7 +11,7 @@
 
 ## 0. 今天到底发生什么（**探针实测 + 读码**，不是推测）
 
-### 0.1 内核那一侧：没有判据，而且**连"没有判据"都不在诊断列表里**
+### 0.1 内核那一侧：没有判据；而且**两个诊断入口对同一份文档给两个答案**
 
 探针（2026-10-10 实测，跑完即删）拿两条**异面**线段建一条 `coincident` 与一条 `parallel`：
 
@@ -19,18 +19,22 @@
 | --- | --- |
 | `constraintResidual3(coincident)` | **`null`** |
 | `constraintResidual3(parallel)` | `0.7071067811865475`（**无量纲**：`\|u×v\|/(\|u\|\|v\|)`） |
-| `diagnoseConstraints3([coincident, parallel])` | **只返回 `parallel` 那一条** —— `coincident` 被 `filter` 掉了，**不是**返回"未核验" |
+| `diagnoseConstraints3([coincident, parallel])`（**复数**那个） | **只返回 `parallel` 那一条** —— `coincident` 被 `filter` 掉了，**不是**返回"未核验" |
+| `diagnoseConstraint3(coincident)`（**单数**那个） | 返回一条诊断：`residual: null`、`satisfied: false`、说明文字 `"缺少有效空间来源，无法计算约束残差。"` |
 
-**第二条比第一条严重**：`diagnoseConstraints3` 里那句 `.filter((constraint) => constraint.type !== "coincident")`
-意味着下游（拖动门禁、报告）**分不清"重合已满足"与"这一条根本没判过"** —— 这正是拖动层只能
-"一律拒绝"的原因。
+**这两行合起来才是准确的事实**（第一版这里写成"下游分不清 ⇒ 所以拖动只能一律拒绝"，**因果说错了**，见下）：
+同一份文档，**单数**入口说"这一条算不出来"，**复数**入口干脆不提它 —— 两个公开 API 对"文档里有没有一条没判过的约束"给出**不同答案**。
+`diagnoseConstraints3` 目前只有两个消费者：`solvePoint3Constraints`（**只有用例在用**）与 `relations.test.ts` 的同源核对，
+所以这是**一处潜在的口径分叉，不是今天拖动拒绝的原因**。
 
-### 0.2 拖动那一侧：碰到就拒绝，且理由说的是"没有空间判据"
+### 0.2 拖动那一侧：碰到就拒绝，原因是**它被分类成 `planar-only`**（与上面的诊断列表无关）
 
 `apps/web/src/constrainedDrag3.ts` 用 `isPlanarOnlyConstraint3` 把约束分成两拨：
 平面那一拨（就是 `coincident`）**不参与 3D 求解**；一旦被拖的点与它沾边，
-就返回 `unsupported_spatial_constraint`（文案来自 `constraints3dProjection` 的 `skipped` 条目）。
-**没沾边的拖动照旧通过**，注脚写"N 条平面约束不参与 3D 拖动"。
+就返回 `unsupported_spatial_constraint`（文案来自 `constraints3dProjection` 的 `skipped` 条目，
+里面写着 `planar-only` 的理由）。**没沾边的拖动照旧通过**，注脚写"N 条平面约束不参与 3D 拖动"。
+也就是说：**拖动层读的是那张 `planar-only` 分类表，不是 `diagnoseConstraints3` 的返回值** ——
+把 §0.1 那条分叉修好，**不会**自动改变拖动行为；拖动那一侧要改的是分类表本身（§2 阶段 A）。
 
 ### 0.3 入口那一侧：**今天没有入口**（这一条改变这一项的优先级）
 
@@ -73,8 +77,9 @@
 ### 阶段 A：**判据**（把"没判过"变成"判过"）
 
 - `constraintResidual3` 补 `coincident`（按 §1 的式子）；
-- `diagnoseConstraints3` **不再 `filter` 掉它** —— 要么给真实诊断，要么**显式给一条"未核验"**，
-  但**不许静默消失**（今天正是静默消失，下游才分不清）；
+- `diagnoseConstraints3`（复数那个）**不再 `filter` 掉它** —— 让两个诊断入口对同一份文档给**同一个答案**
+  （今天单数说"算不出来"、复数不提它；`solvePoint3Constraints` 与 `relations.test.ts` 是它的两个消费者）。
+  这一条是**口径统一**，不是拖动行为的原因（§0.1/§0.2 已说清）；
 - 那两份 `NO_SPATIAL_JUDGE`（`constraints3dProjection.ts:121` 与 `constraintIR.ts:75`）与拖动层的
   `isPlanarOnlyConstraint3` **必须一起重新决定**，而且**只留一处真源**（现在两处各写一份，
   文件里已有注释承认这是"同一个判断写两遍"）；
