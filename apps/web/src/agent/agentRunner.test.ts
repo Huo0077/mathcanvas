@@ -57,6 +57,26 @@ describe("the confirm and commit cycle", () => {
     expect(useSceneStore.getState().document.primitives).toHaveLength(0)
   })
 
+  /**
+   * **缺的是"图上没有的点"时，话要说给对的人**（2026-10-10，用户现场）。
+   *
+   * 原先把门禁那句话原样端出去、再补一句"请补充明确点名" —— 而那正是用户**已经做过**的事
+   *（题面里点名了 `X`）。真正缺的是图上那个对象，那句话对用户没有可操作性。
+   */
+  it("点名缺失时不再叫用户「补充明确点名」：说清缺的是图上没有的那个点", async () => {
+    const planner: PlannerPort = {
+      plan: async () => ({ plan: pyramidPlan(), requestId: "missing-point", attemptId: "attempt-1" })
+    }
+    const runner = createAgentRunner({ planner })
+    // `AX=AB` 点到了一个图上没有的点，而**等长不是系统会补建的构造**（只补中点与比例分点）。
+    const result = await runAndWait(runner, `${PYRAMID_PROMPT}，AX=AB`)
+
+    expect(result.phase).toBe("failed")
+    const assistant = useAgentStore.getState().activeConversation!.messages.at(-1)!
+    expect(assistant.failure?.message).toContain("点名缺失：X")
+    expect(assistant.failure?.message).not.toContain("请补充明确点名")
+  })
+
   beforeEach(() => {
     resetScene()
     resetAgent()

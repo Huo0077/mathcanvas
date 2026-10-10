@@ -476,29 +476,89 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
   return residual === null ? null : { actual: residual, expected: 0, tolerance: UNITLESS_TOLERANCE }
 }
 
+/**
+ * **圆锥曲线 / 切线 / 函数曲线都不带点名**：拿"点表建不出来"当理由会给出一个与它们无关的解释。
+ * （切线的来源是**函数**，曲线的来源是**表达式**，都不是点名点集。）
+ *
+ * 抽成一个函数是因为它现在有**两处**消费者：核验本身，与"题设点到、图上却没有的点名"那条
+ * 查询（`missingNamedPoints`）—— 两处各写一遍就是"同一个判断写了两遍"。
+ */
+function isPointBased(kind: DiagramObligationKind): boolean {
+  return kind !== "conicAxes" && kind !== "tangentAt" && kind !== "functionGraph"
+}
+
+/** 题设点到、而候选图上**没有**的那个点名。 */
+export interface MissingNamedPoint {
+  kind: DiagramObligationKind
+  /** 题设原文（面板与假设文案都要用它）。 */
+  sourceText: string
+  /** 这条题设点到的全部点名，按题面顺序。 */
+  targets: readonly string[]
+  /** 其中图上的点名表里确实没有的那些（去重、保持题面顺序）。 */
+  missing: readonly string[]
+  /** 题面写下的数值（`DE=2EA` 的 `2`）—— 比例分点的构造参数由它算出来。 */
+  value?: number
+}
+
+/**
+ * **题设点到、而候选图上没有的点名**（2026-10-10）。
+ *
+ * 现场（用户这台机器上 7 次、逐字相同的失败）：模型只交了一笔四面体，题面里的
+ * `O为 BD的中点` 是**系统自己**从原话抽的题设，而 `O` 在图上不存在 ⇒ 那条题设永远无法核验
+ * ⇒ 门禁判 `failed`、整轮不提交。这一条查询就是"缺哪些名字"的唯一来源：
+ * 编译器拿它去**按题设补建**（只补题设唯一确定了构造的那些，见 `planCompiler`），
+ * 核验器拿它把理由**说清缺谁**。
+ *
+ * **点名表建不出来时（`null`）返回空数组**：那时"缺谁"根本无从谈起，报告给的是另一句理由
+ *（"候选图缺少唯一、可靠的顶点名映射"），两边不许混。
+ */
+export function missingNamedPoints(set: DiagramObligationSet, plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument): MissingNamedPoint[] {
+  const points = candidatePoints(plan, candidate, base)
+  if (points === null) return []
+  const out: MissingNamedPoint[] = []
+  for (const item of set.givens) {
+    if (!isPointBased(item.kind)) continue
+    const missing = [...new Set(item.targets.filter((name) => !points.has(name)))]
+    if (missing.length === 0) continue
+    out.push({
+      kind: item.kind,
+      sourceText: item.sourceText,
+      targets: item.targets,
+      missing,
+      ...(item.value === undefined ? {} : { value: item.value })
+    })
+  }
+  return out
+}
+
 export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument, options: DiagramVerificationOptions = {}): DiagramVerificationReport {
   const points = candidatePoints(plan, candidate, base)
   const figures: FigureContext = { conic: candidateConic(plan, candidate, base), tangent: candidateTangent(plan, candidate, base), curve: candidateCurve(plan, candidate, base) }
   const checks: DiagramCheck[] = set.givens.map((item) => {
-    /**
-     * 圆锥曲线、切线与函数曲线都**不带点名**：拿"点表建不出来"当理由会给出一个与它们无关的解释。
-     * （切线的来源是**函数**，曲线的来源是**表达式**，都不是点名点集。）
-     */
-    const pointBased = item.kind !== "conicAxes" && item.kind !== "tangentAt" && item.kind !== "functionGraph"
+    const pointBased = isPointBased(item.kind)
     if (pointBased && points === null) return { kind: item.kind, sourceText: item.sourceText, status: "unverified", reason: "候选图缺少唯一、可靠的顶点名映射；不能按题面顺序猜坐标。" }
     const result = calculate(item, points ?? new Map(), figures)
     if (result === null) {
+      /**
+       * **先说清缺谁**（2026-10-10）：原先只有一句把三种成因混起来的
+       * "点名缺失、图形退化或角度无法计算"，用户与模型都读不出下一步。
+       * 点名表在手上时，"缺谁"是**算得出来的**，所以这一段把它写出来；
+       * 退化 / 算不出角度仍然落回原句（那时缺的不是名字）。
+       */
+      const missing = pointBased && points !== null ? [...new Set(item.targets.filter((name) => !points.has(name)))] : []
       return {
         kind: item.kind,
         sourceText: item.sourceText,
         status: "unverified",
-        reason: item.kind === "conicAxes"
-          ? "候选图里没有唯一、可读的圆锥曲线（少了或多了一条），未核验。"
-          : item.kind === "tangentAt"
-            ? "候选图里没有唯一、可读的切线，或那条切线没有函数来源（求不了导），未核验。"
-            : item.kind === "functionGraph"
-              ? "候选图里没有唯一、可读的函数曲线（少了或多了一条），或题面表达式解析不了，未核验。"
-              : "点名缺失、图形退化或角度无法计算，未核验。"
+        reason: missing.length > 0
+          ? `点名缺失：${missing.join("、")} —— 题面点到了它${missing.length > 1 ? "们" : ""}，图上没有这个对象，未核验。`
+          : item.kind === "conicAxes"
+            ? "候选图里没有唯一、可读的圆锥曲线（少了或多了一条），未核验。"
+            : item.kind === "tangentAt"
+              ? "候选图里没有唯一、可读的切线，或那条切线没有函数来源（求不了导），未核验。"
+              : item.kind === "functionGraph"
+                ? "候选图里没有唯一、可读的函数曲线（少了或多了一条），或题面表达式解析不了，未核验。"
+                : "点名缺失、图形退化或角度无法计算，未核验。"
       }
     }
     const status = Math.abs(result.actual - result.expected) <= result.tolerance ? "passed" : "failed"

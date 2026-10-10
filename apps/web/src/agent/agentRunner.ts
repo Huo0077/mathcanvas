@@ -819,13 +819,24 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
          * 判据放在这一层而不是引擎里：引擎的话是给诊断与修复通道用的，中文的用户话在这一层
          *（与上面 `waiting` 那一支同一条口径）。
          */
+        /**
+         * **缺的是"图上没有的点"时，话要说给对的人**（2026-10-10，用户现场）。
+         *
+         * 题设是**系统自己**从原话抽的，点也是题面点到的 —— 用户早就点过名了，
+         * "请补充明确点名"对他没有可操作性（真正缺的是图上那个**对象**）。
+         * 系统只会补建位置被题设**唯一确定**的那些点（棱的中点、定比分点），
+         * 所以这一支要说清"缺的是哪个点、以及系统为什么不补这一个"。
+         */
+        const incomplete = detail.includes("verification is incomplete:") ? (detail.split("verification is incomplete:").at(-1)?.trim() ?? "") : null
         useAgentStore.getState().failPendingReply({
           code: "run_failed",
-          message: detail.includes("verification is incomplete:")
-            ? `题设尚未核验，本次不会提交。${detail.split("verification is incomplete:").at(-1)?.trim() ?? ""} 请补充明确点名，或改用受支持的条件表达。`
-            : detail.includes("never matched the schema")
-            ? `模型的回答不符合计划合同的形状，所以这一轮停下了。计划必须是一个 JSON 对象（schemaVersion / kind / goal，外加 actions 或 questions 或 answer）。引擎的原话：${detail}`
-            : detail,
+          message: incomplete === null
+            ? detail.includes("never matched the schema")
+              ? `模型的回答不符合计划合同的形状，所以这一轮停下了。计划必须是一个 JSON 对象（schemaVersion / kind / goal，外加 actions 或 questions 或 answer）。引擎的原话：${detail}`
+              : detail
+            : incomplete.includes("点名缺失：")
+              ? `题设还没核验，本次不会提交。${incomplete} 题面点到、图上却没有的点，系统只补建位置被题设唯一确定了的那几类（例如某条棱的中点、定比的分点）；这一点没能补上。`
+              : `题设尚未核验，本次不会提交。${incomplete} 请补充明确点名，或改用受支持的条件表达。`,
           retryable: false
         }, eventRunId, generation())
       } else if (phase === "completed") {

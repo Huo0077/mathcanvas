@@ -1,4 +1,4 @@
-import type { GeometryDocument, Workspace } from "@draw/dsl"
+import type { GeometryDocument, PrimitiveSpec, Workspace } from "@draw/dsl"
 import { commitTransaction, compileAction, createIdAllocator, solidTopology3, type ActionContext, type DomainOperation, type DraftAction, type IdAllocator } from "@draw/scene-graph"
 import { sectionSolid3, validatePrismInput } from "@draw/geometry-kernel"
 
@@ -15,7 +15,7 @@ import { auditDescriptionFor, type AuditContext } from "./defaultPolicies"
 import { auditPlan, type FieldCompletion } from "./parameterAudit"
 import { extractRelations } from "./relationExtraction"
 import { parseObligationWithLegacy } from "./obligationIR"
-import { verifyDiagramObligations, type DiagramVerificationReport } from "./diagramVerification"
+import { missingNamedPoints, verifyDiagramObligations, type DiagramVerificationReport, type MissingNamedPoint } from "./diagramVerification"
 import { verifyRelations, type RelationLookup } from "./relations"
 import { parsePlanEnvelope, repairRequestFor } from "./schemas"
 /**
@@ -265,11 +265,24 @@ function describeError(error: unknown): string {
  * ③ **没有候选就不产生草稿** —— 搜不到（无解 / 不支持的题型 / 预算耗尽 / 构造被拒）
  *    一律把**第一遍**的结果原样交回去，也就是今天那条 fail-closed 路径，不产出半份草稿。
  *
- * 开关关着时（缺省）这个函数就是 `compileOnce(input, context).result` ——
- * 与改动之前逐字相同。
+ * ## 两条救援，顺序固定
+ *
+ * 1. **补建题面点到、图上没有的点**（`rescueWithMaterialisedPoints`，2026-10-10）：**默认路径**就跑，
+ *    不挂开关 —— 它是**修缺陷**（题面点到的点必须真的存在），不是实验特性。它只做题设唯一确定了
+ *    构造的两种点，而且第二遍核验必须真的 `passed` 才算数。
+ * 2. **见证搜索**（`rescuedByWitnessSearch`，开关打开时）：坐标整体不合格时按题设搜一组候选。
+ *
+ * 补建排在前面，因为它比搜索便宜、而且是确定性的；它救不回来时**原样交回第一遍**，下面那条
+ * 照旧按自己的开关决定要不要跑。
+ *
+ * 开关关着、又不需要补建时（缺省），这个函数就是 `compileOnce(input, context).result` ——
+ * 与改动之前逐字相同；`planCompiler.offPath.golden.test.ts` 钉住这一点（含"off 路径上不存在
+ * `materialisedActions`"）。
  */
 export function compilePlan(input: unknown, context: PlanCompileContext): PlanCompileResult {
   const first = compileOnce(input, context)
+  const materialised = rescueWithMaterialisedPoints(context, first)
+  if (materialised !== null) return materialised
   if (context.diagramWitnessSearch !== true) return first.result
   return rescuedByWitnessSearch(context, first) ?? first.result
 }
@@ -647,6 +660,179 @@ function witnessAssumptions(found: Extract<WitnessSearchResult, { status: "verif
       path: "witness.evidence"
     }
   ]
+}
+
+/**
+ * **补建题面点名、而图上没有的点**（2026-10-10 设计；用户现场：7 次逐字相同的失败）。
+ *
+ * ## 它挡的是什么
+ *
+ * 题设是**系统自己**从原话抽的（`O为 BD的中点`），而**没有任何一处**要求"题面点到的点必须真的
+ * 建出来"——提示词只说"让坐标满足关系、用 `vertexNames` 说出顶点名"。于是模型交一笔四面体
+ * 就能让计划合法地编译通过，那条题设却**永远无法核验**，门禁把整轮判 `failed`。
+ *
+ * ## 判据（缺一不补）
+ *
+ * 1. 第一遍编译**物化出了候选**、核验**不是 `passed`**、题面与题设都在手上；
+ * 2. 确实存在"题设点到、图上没有"的名字（`missingNamedPoints`）；
+ * 3. 那条题设的种类**唯一确定**该点的构造 —— 只做两种：
+ *    `midpoint`（在两只端点之间取参数 `0.5`）与 `segmentRatio`（比值 `r` ⇒ 参数 `r/(1+r)`，
+ *    方向由题设点序定）。**构造不唯一的一律不补**（交点、点到面的关系…那些要几何求解，不是补一笔动作）；
+ * 4. 宿主是**那一只** `solid.create_polyhedron`（与核验器建点名表用的是同一只、同一份 `vertexNames`），
+ *    且两只端点名都在它的 `vertexNames` 里；
+ * 5. **要么全补、要么不补**：有一处算不出来就整批不补（宁可失败，不半补）。
+ *
+ * ## 两条纪律（与见证搜索那条救援同源）
+ *
+ * - **生成物不豁免核验**：补完**再跑同一个 `compileOnce`**，第二遍必须真的 `passed`，
+ *   否则丢弃、把第一遍的结果原样交回；
+ * - **系统替用户做的选择要显形**：一句人话进 `assumptions`，真实动作回写 `materialisedActions`
+ *   （草稿层的再核验对着它，见 R37②）。
+ */
+interface MaterialisedPoint {
+  name: string
+  from: string
+  to: string
+  parameter: number
+  kind: "midpoint" | "segmentRatio"
+  sourceText: string
+  /** 这笔动作在**补建后**的计划里的下标（假设文案要指出落在哪个字段）。 */
+  index: number
+}
+
+/** 一条"题设点到、图上没有"的名字能不能补 —— 能就给出构造，不能就 `null`（整批因此不补）。 */
+function constructiblePoint(entry: MissingNamedPoint, vertexNames: readonly string[], index: number): MaterialisedPoint | null {
+  if (entry.missing.length !== 1) return null
+  const name = entry.missing[0]
+  if (entry.kind === "midpoint" && entry.targets.length === 3) {
+    // `midpoint`：targets = [中点, 端点1, 端点2]。
+    const [middle, first, second] = entry.targets
+    if (middle !== name || !vertexNames.includes(first) || !vertexNames.includes(second) || first === second) return null
+    return { name, from: first, to: second, parameter: 0.5, kind: "midpoint", sourceText: entry.sourceText, index }
+  }
+  if (entry.kind === "segmentRatio" && entry.targets.length === 4) {
+    // `segmentRatio`：targets = [D, E, E, A]、`value` = DE/EA ⇒ 参数 = DE/DA = r/(1+r)，方向 D→A。
+    const [from, middle, middleAgain, to] = entry.targets
+    const ratio = entry.value
+    if (middle !== name || middle !== middleAgain || from === to) return null
+    if (ratio === undefined || !Number.isFinite(ratio) || ratio <= 0) return null
+    if (!vertexNames.includes(from) || !vertexNames.includes(to)) return null
+    return { name, from, to, parameter: ratio / (1 + ratio), kind: "segmentRatio", sourceText: entry.sourceText, index }
+  }
+  return null
+}
+
+/** 把补出来的点写成动作。宿主那只多面体的 `alias` / `vertexNames` / **棱的方向**都由这里判（**唯一一处**）。 */
+function materialisedPointActions(
+  entries: readonly MissingNamedPoint[],
+  plan: Extract<PlanEnvelope, { kind: "plan" }>,
+  document: GeometryDocument,
+  aliases: Record<string, string>
+): { actions: readonly Record<string, unknown>[]; points: MaterialisedPoint[] } | null {
+  const solids = plan.actions.filter((action) => action.actionId === "solid.create_polyhedron")
+  if (solids.length !== 1) return null
+  const inputs = solids[0].inputs
+  if (typeof inputs !== "object" || inputs === null) return null
+  const alias = (inputs as { alias?: unknown }).alias
+  const names = (inputs as { vertexNames?: unknown }).vertexNames
+  if (typeof alias !== "string" || !Array.isArray(names) || !names.every((name) => typeof name === "string")) return null
+  const vertexNames = names as string[]
+  const hostId = aliases[alias]
+  if (typeof hostId !== "string") return null
+
+  /**
+   * **棱的方向决定了参数往哪边量**（2026-10-10，实测踩到）。
+   *
+   * `hostEdge` 的解析是**顺序无关**的（`{from,to}` 与 `{to,from}` 是同一条棱），但 `parameter` 是
+   * **沿那条棱自己的 `pointIds` 顺序**量的。于是 `DE=2EA` 若按 `D→A` 算参数 `2/3`，而内核那条棱
+   * 的 `pointIds` 是 `A→D`，点就落到了 `1/3` 的位置 —— 第二遍核验于是 `failed`（不是 `passed`），
+   * 救援如实放弃。中点（`0.5`）正好与方向无关，所以这个坑**只在比例分点上现形**。
+   *
+   * 判据写在**第一遍编译出来的候选文档**上（宿主是同一只、坐标没被改过），返回 `+1` 表示这条棱
+   * 的方向就是 `from → to`，`-1` 表示反过来，`null` 表示**这条棱找不到或不唯一** ⇒ 不补。
+   */
+  const edges = document.primitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "edge3" }> => primitive.type === "edge3" && primitive.id.startsWith(`${hostId}:e`) && primitive.pointIds.length === 2)
+  const labelOf = (id: string): string | undefined => {
+    const primitive = document.primitives.find((candidate) => candidate.id === id)
+    return primitive?.type === "point3" ? (primitive as { label?: string }).label : undefined
+  }
+  const orientation = (from: string, to: string): 1 | -1 | null => {
+    const matches = edges.filter((edge) => {
+      const labels = edge.pointIds.map(labelOf)
+      return labels.every((label) => label === from || label === to) && new Set(labels).size === 2
+    })
+    if (matches.length !== 1) return null
+    return labelOf(matches[0]!.pointIds[0]!) === from ? 1 : -1
+  }
+
+  const points: MaterialisedPoint[] = []
+  for (const entry of entries) {    const built = constructiblePoint(entry, vertexNames, plan.actions.length + points.length)
+    /**
+     * **要么全补、要么不补**（设计 §3.2）：有一条算不出来就整批不补。
+     *
+     * 说清这一支**真正挡住的是什么**（免得被读成第二道保险）：这些条目都来自"某条题设
+     * 因为缺点名而未核验"，所以只要有一条补不了，**第二遍核验就不可能 `passed`**
+     * ——下面那道 `second.result.diagramVerification?.status !== "passed"` 已经把结果拦住了。
+     * 这里的提前返回**不改结论**，只是不去白跑那第二遍编译。**它没有独立的可观测判据**
+     *（变异试过：改成 `continue` 全绿），这一点如实写在这里。
+     */
+    if (built === null) return null
+    const direction = orientation(built.from, built.to)
+    if (direction === null) return null
+    points.push(direction === 1 ? built : { ...built, parameter: 1 - built.parameter })
+  }
+  if (points.length === 0) return null
+  return {
+    points,
+    actions: points.map((point) => ({
+      actionId: "dynamic.create_bound_point",
+      actionKey: point.name,
+      factIds: [],
+      inputs: {
+        alias: point.name,
+        host: { scope: "draft", alias },
+        hostEdge: { from: point.from, to: point.to },
+        parameter: point.parameter,
+        label: point.name
+      }
+    }))
+  }
+}
+
+/** 补建这件事**必须看得见**：一句人话 + 被定下来的值 + 落在哪个字段。 */
+function materialisedAssumptions(points: readonly MaterialisedPoint[]): StructuredAssumption[] {
+  return points.map((point) => ({
+    id: `materialised.${point.name}`,
+    text: point.kind === "midpoint"
+      ? `题面点到了 ${point.name}，图上原本没有这个点：系统按题设把它建在棱 ${point.from}${point.to} 的中点上。`
+      : `题面点到了 ${point.name}（${point.sourceText}），图上原本没有这个点：系统按题设把它建在棱 ${point.from}${point.to} 上。`,
+    kind: "witness",
+    value: { name: point.name, from: point.from, to: point.to, parameter: point.parameter },
+    overridable: true,
+    path: `envelope.actions[${point.index}].inputs.parameter`
+  }))
+}
+
+function rescueWithMaterialisedPoints(context: PlanCompileContext, first: CompileOnceOutcome): PlanCompileResult | null {
+  const report = first.result.diagramVerification
+  if (report === undefined || report.status === "passed") return null
+  if (first.plan === null || first.obligations === null || context.prompt === undefined) return null
+  if (first.result.draftDocument === null) return null
+
+  const entries = missingNamedPoints(first.obligations.legacy, first.plan, first.result.draftDocument, context.document)
+  if (entries.length === 0) return null
+  const built = materialisedPointActions(entries, first.plan, first.result.draftDocument, first.result.aliases)
+  if (built === null) return null
+
+  const planned = { ...first.plan, actions: [...first.plan.actions, ...built.actions] }
+  const second = compileOnce(planned, context)
+  if (!second.result.ok || second.result.draftDocument === null || second.result.diagramVerification?.status !== "passed") return null
+
+  return {
+    ...second.result,
+    assumptions: [...second.result.assumptions, ...materialisedAssumptions(built.points)],
+    materialisedActions: second.result.actions
+  }
 }
 
 /**
