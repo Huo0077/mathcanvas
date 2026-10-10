@@ -3,6 +3,9 @@ import { canonicalContentHash, compilePlan, planHasVerifiableFigure, parseObliga
 import { createIdAllocator, type DocumentHandle } from "@draw/scene-graph"
 
 import type { DraftAction, DomainOperation, IdAllocator } from "@draw/scene-graph"
+import type { ProofChannel } from "@draw/agent-core"
+
+import { attemptProofForStage, type DraftProofAttempt } from "./automaticProofStage"
 
 /**
  * **隔离草稿**（Task 0.7 Step 4）。
@@ -52,6 +55,14 @@ export interface DraftRecord {
   /** 编译期补全出来的假设（跨 `stage` 累积，随预览回带）。 */
   completionAssumptions: StructuredAssumption[]
   diagramVerification?: DiagramVerificationReport
+  /**
+   * **形式证明的一次尝试**（V2 GREEN 缺口③ 的产品调用点）。
+   *
+   * **旗关着时这个字段根本不存在**（不是 `undefined` 而是没有这一栏）—— "默认路径逐字不变"
+   * 这条验收条件靠的就是它，与 `diagramVerification` 同一条纪律（`previewOf` 里那个
+   * `...(x === undefined ? {} : { x })`）。
+   */
+  proofAttempt?: DraftProofAttempt
 }
 
 export interface DraftPreview {
@@ -75,6 +86,8 @@ export interface DraftPreview {
    */
   completionAssumptions: StructuredAssumption[]
   diagramVerification?: DiagramVerificationReport
+  /** 同 `DraftRecord`：预览是给界面看的，所以那一次证明尝试也跟着走。 */
+  proofAttempt?: DraftProofAttempt
 }
 
 export type StageReason = "unknown_draft" | "stale_draft_version" | "compile_failed"
@@ -126,8 +139,22 @@ export interface DraftStore {
    * 在"模型坐标没通过题设核验"时自己搜一组坐标把草稿救回来。它同样要**过 Worker 那条边界**，
    * 而且多做一件事：救回会替换被物化的坐标与点名，所以那一遍的再核验（下面）必须对着
    * `StagedCompileResult.materialisedActions` 而不是调用方给的原始动作。
+   *
+   * 第八个参数是 **Phase N5 的形式证明开关**（`agentNextPhaseFlags.proofExport`；2026-10-10 接上）。
+   * 前七个参数都只影响"图怎么画、核验怎么写"，**这一个不同**：它会让产品路径去**起一个外部进程**
+   *（桌面壳里的 Lean）。所以它的口径更严：**缺省关**，关着时**连通道都不构造**、草稿里
+   * **不写任何字段**（"默认路径逐字不变"），开着而跑不了时**如实记一条**、**绝不阻塞作图**。
    */
-  stage(draftId: string, actions: DraftAction[], expectedDraftVersion: number, userMessage?: string, relations?: PlanRelations, obligationIR?: boolean, witnessSearch?: boolean): Promise<StageResult>
+  stage(
+    draftId: string,
+    actions: DraftAction[],
+    expectedDraftVersion: number,
+    userMessage?: string,
+    relations?: PlanRelations,
+    obligationIR?: boolean,
+    witnessSearch?: boolean,
+    proofExport?: boolean
+  ): Promise<StageResult>
   /** 基础文档变了（手工编辑、撤销、切工作区）→ 草稿过期，不能再提交。 */
   assertFresh(draftId: string, liveHandle: DocumentHandle): FreshnessResult
   /**
@@ -292,7 +319,13 @@ export function compileInProcess(input: CompileInput): PlanCompileResult {
 /** 默认策略：在**当前线程**上同步算（与接线之前逐字相同的行为）。 */
 const compileOnCallerThread: CompileStrategy = (input) => compileInProcess(input)
 
-export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) => IdAllocator = createIdAllocator, compile: CompileStrategy = compileOnCallerThread): DraftStore {
+/** `createDraftStore` 的可选依赖：证明通道与实测后端版本（只在 `proofExport` 开着时才会用到）。 */
+export interface DraftStoreProofOptions {
+  channel?: ProofChannel
+  backendVersion?: string
+}
+
+export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) => IdAllocator = createIdAllocator, compile: CompileStrategy = compileOnCallerThread, proof: DraftStoreProofOptions = {}): DraftStore {
   const drafts = new Map<string, DraftRecord>()
   const invalidated = new Map<string, string>()
 
@@ -304,7 +337,8 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
     stageCount: record.operations.length,
     operations: [...record.compiledOperations],
     completionAssumptions: [...record.completionAssumptions],
-    ...(record.diagramVerification === undefined ? {} : { diagramVerification: structuredClone(record.diagramVerification) })
+    ...(record.diagramVerification === undefined ? {} : { diagramVerification: structuredClone(record.diagramVerification) }),
+  ...(record.proofAttempt === undefined ? {} : { proofAttempt: structuredClone(record.proofAttempt) })
   })
 
   return {
@@ -326,7 +360,7 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
       return { ...record, candidate: cloneDocument(record.candidate) }
     },
 
-    async stage(draftId, actions, expectedDraftVersion, userMessage, relations, obligationIR, witnessSearch) {
+    async stage(draftId, actions, expectedDraftVersion, userMessage, relations, obligationIR, witnessSearch, proofExport) {
       const record = drafts.get(draftId)
       if (!record) return { ok: false, reason: "unknown_draft", detail: `no draft ${draftId}` }
       if (record.draftVersion !== expectedDraftVersion) {
@@ -440,6 +474,25 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
        * 列表里堆出多条一模一样的"我替你定了…"，而用户看到的是一列假设，重复条目只会让他
        * 以为系统定了两次。同一条假设（同 `id`）后写的那份覆盖前一份。
        */
+      /**
+       * **形式证明那一次尝试**（V2 GREEN 缺口③ 的产品调用点，2026-10-10 接上）：
+       * 跑完作图、题设也核验过了之后，如果开关开着，就顺手问一次"这道题的目标能不能形式证明"。
+       *
+       * 三条口径与上层一致：**旗关着时 `attemptProofForStage` 返回 `null`**（这里就一个字段都不写）；
+       * **它不抛、也不改图**（最坏情况只是"没有证明"）；**结果随预览回带**（用户看得到"证了没有、
+       * 是谁给的正文、系统替他选了哪两条相交线"）。
+       */
+      if (proofExport === true && parsed !== null) {
+        const attempt = await attemptProofForStage({
+          prompt: userMessage ?? "",
+          obligations: parsed.legacy,
+          flagEnabled: true,
+          ...(proof.channel === undefined ? {} : { channel: proof.channel }),
+          ...(proof.backendVersion === undefined ? {} : { backendVersion: proof.backendVersion })
+        })
+        if (attempt !== null) record.proofAttempt = attempt
+      }
+
       const merged = new Map(record.completionAssumptions.map((assumption) => [assumption.id, assumption]))
       for (const assumption of compiled.assumptions) merged.set(assumption.id, assumption)
       record.completionAssumptions = [...merged.values()]

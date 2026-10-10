@@ -52,7 +52,7 @@ describe("agent next phase feature flags", () => {
    *
    * 存储里可能是任何东西：旧版本写的、手改的、别的程序写的。**那四个开关不许被它打开**，理由是各不相同
    * 而都必须成立：`witnessSearch` 打开后会替换被物化的坐标与点名（它有自己的接线前提，见
-   * `featureFlags.ts` 的说明），`openProblemCompiler` / `proofExport` 至今没有任何读取点（N4 / N5 交付的是评测面板与只读状态面，都不读它们），
+   * `featureFlags.ts` 的说明），`openProblemCompiler` 至今没有读取点（N4 交付的是评测面板与只读状态面），而 `proofExport` **2026-10-10 起有了一个读取点**（`draftStore.stage` 的第八个参数）—— 但它**仍然不许被偏好打开**：要开得有实验入口 + 验收证据，而那份证据还差一步（桌面命令不报后端版本 ⇒ 产物绑不上），
    * `obligationIR` 同理。**一个"存了就能全开"的偏好等于把另外四个开关一起打开（其中两个至今没有读取点）。**
    */
   it("enables only the explicitly stored witness-search flag on the real application path", () => {

@@ -363,8 +363,37 @@ describe("isolated drafts", () => {
     expect(Object.keys(staged.preview.diagramVerification ?? {}).sort()).toEqual(["checks", "sampleValues", "status"])
   })
 
-  it("stages the unified obligation IR when the application passes its switch on", async () => {
+  it("**形式证明开关关着 ⇒ 预览里连 `proofAttempt` 这一栏都没有**（默认路径逐字不变）", async () => {
     const store = createDraftStore()
+    const record = store.create(createEmptyDocument("geometry3d"))
+    const staged = await store.stage(record.draftId, [IR_TETRAHEDRON] as never, record.draftVersion, IR_PROMPT)
+
+    expect(staged.ok).toBe(true)
+    if (!staged.ok) return
+    // **不是 `undefined`，是没有这一栏** —— 与 `diagramVerification` 同一条纪律。
+    expect("proofAttempt" in staged.preview).toBe(false)
+  })
+
+  it("**形式证明开关开着 ⇒ 有一次尝试，而且不阻塞作图**（跑不了就如实记一条）", async () => {
+    const calls: string[] = []
+    const store = createDraftStore(undefined, undefined, {
+      channel: async (request) => {
+        calls.push(request.source)
+        return { outcome: "unavailable", exitCode: null, stdout: "", stderr: "", durationMs: 0, detail: "这个构建跑在浏览器里" }
+      }
+    })
+    const record = store.create(createEmptyDocument("geometry3d"))
+    const staged = await store.stage(record.draftId, [IR_TETRAHEDRON] as never, record.draftVersion, IR_PROMPT, undefined, undefined, undefined, true)
+
+    // **作图照样成功**（这是最要紧的一条：证明那条路坏成什么样都不许挡作图）。
+    expect(staged.ok).toBe(true)
+    if (!staged.ok) return
+    // 这道题面没有"求证"段 ⇒ 如实报"没有可形式化的目标"，**连通道都不碰**。
+    expect(staged.preview.proofAttempt?.outcome).toBe("no_goal")
+    expect(calls).toEqual([])
+  })
+
+  it("stages the unified obligation IR when the application passes its switch on", async () => {    const store = createDraftStore()
     const record = store.create(createEmptyDocument("geometry3d"))
     const staged = await store.stage(record.draftId, [IR_TETRAHEDRON] as never, record.draftVersion, IR_PROMPT, undefined, true)
 

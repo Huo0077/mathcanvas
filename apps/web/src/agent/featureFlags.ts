@@ -92,7 +92,11 @@ export function agentNextPhaseFlags(): AgentNextPhaseFlags {
    * 另外三个**故意不读偏好**，防止无产品读取点的能力被本地数据意外打开：
    *
    * `witnessSearch` 虽有独立入口，但默认关；开启后仍走原有题设核验与用户确认。
-   * - `openProblemCompiler` / `proofExport` 属于 N4 / N5 的**产品侧**，目前没有可用的普通 Agent 读取点；
+   * - `proofExport` **2026-10-10 起有一个读取点了** —— `draftStore.stage` 的第八个参数（跑完作图后顺手问一次
+   *   "这道题的目标能不能形式证明"，见 `automaticProofStage.ts`）；但**偏好仍然打不开它**：要开得有实验入口 +
+   *   验收证据，而那份证据还差一步（桌面命令 `check_lean_proof` 今天不报 Lean 的版本 ⇒ 产物绑不上，
+   *   见 `automaticProofStage.test.ts` 里那条判据）；
+   * - `openProblemCompiler` 属于 N4 的产品侧，目前没有可用的普通 Agent 读取点；
    * - `obligationIR` 同理。
    *
    * 一个"存了就能全开"的偏好，会把没有产品读取点的能力一起打开 ——

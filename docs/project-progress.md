@@ -10,6 +10,20 @@
 
 > 下方 2026-09-22 的"最后更新 / 当前阶段 / 总体状态"三行保留为**当时快照**，不再维护。
 
+## 2026-10-10 —— V2 GREEN ③ 收口：产品调用点接上了（草稿暂存顺手问一次形式证明）
+
+**这一块把 ③ 接上产品路径**：`draftStore.stage` 新增**第八个参数** `proofExport`（与 `obligationIR` / `witnessSearch` 同一条通道）；跑完作图、题设核验过之后顺手问一次"这道题的目标能不能形式证明"。调用点逻辑在新模块 `apps/web/src/agent/automaticProofStage.ts`（复用 `proofGoalReader` + `canonicalProof` + 桌面通道），结果压成 `DraftProofAttempt` 随**预览**回带。
+
+**于是 ③ 的原话（"没有任何一条产品路径会去调 Lean"）不再成立** —— 但**不能读成"自动证明可用了"**，两条理由都写在代码里：① **旗仍然打不开**（`agentNextPhaseFlags()` 照旧不读偏好里的 `proofExport`）；② **产物今天绑不上**（见下）。
+
+**钉出来的真实缺口**：适配器要求**实测的后端版本串**才产出产物（"没有版本的证明不算证明"），而桌面命令 `check_lean_proof` **不报 Lean 的版本** ⇒ 这条链**能跑、但绑不上**：Lean 真验过了也升不了证据状态。**写成判据**（`automaticProofStage.test.ts`：缺版本 ⇒ `rejected` 且理由点名"版本"），下一步是让桌面命令把版本报回来（跑一次 `lean --version` 或读 `lean-toolchain`）。
+
+**三条"不阻塞作图"的判据（本块核心验收）**：旗关着 ⇒ **预览里连 `proofAttempt` 这一栏都没有**（不是 `undefined`）；没有可证目标 ⇒ 如实 `no_goal` 且**通道零调用**；跑不了（浏览器/没工具链）⇒ 如实记一条、`stage` 照样 `ok`。调用点模块**永不抛**。
+
+**门禁**：定向 3 文件 / 34 通过；`typecheck` 0；`lint` 0 error / 13 warning；全库非 Lean **345 文件 / 4051 通过 + 1 todo / 0 失败 / exit 0**（526.39 s）；全量 e2e **218 通过 / 0 失败**。**变异**：让 `stage` 不看开关就跑证明 ⇒ "关旗时预览里没有那一栏"红（当场还原、复跑全绿）。
+
+**旗治理的文档同步**：`featureFlags.ts` 与 `featureFlags.test.ts` 里那句"`proofExport` 至今没有任何读取点"**已按事实更正**（现在有一个读取点），并写清"偏好仍然打不开它、缺的是实验入口 + 验收证据（证据差上一条那个版本串）"。
+
 ## 2026-10-10 —— V2 GREEN ③ 第四半：系统按类给出的证明正文（canonical）——链路不再依赖模型
 
 **这一块加 `packages/agent-core/src/proof/canonicalProof.ts`**：三类的证明正文由**系统**给出（本来就是一行的数学步骤）。这样"读目标 → 前提桥 → 跑 Lean"这条链**不需要模型在场**也能走完；**缺口③ 现在只差一个产品调用点**。
