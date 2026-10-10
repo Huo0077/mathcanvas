@@ -97,6 +97,27 @@
    "`∠DAB=60°`"）。这一支必须**拒绝并说出矛盾在哪**，而不是先满足一个再看另一个 ——
    与直角梯形那一支"两条高度给了不同值就是自相矛盾，如实拒绝"同一条账。
 
+5. **实施顺序是硬约束：读、构造、判据必须落在同一块里，不能分三次提交。**
+   原因是**只加"读"就会造成回归**：角一旦进 `givens`，核验器就会拿现有坐标去量它 ——
+   量不过就是 `failed`，而 `failed` 会让整份计划 `compile_failed`（确认面板根本不出现）。
+   今天这些句子只是 `unverified`（面板说"有一条没核"，图照样画出来），
+   所以**"只加读"会把'画得出来但没核'变成'什么都出不来'** —— 那是更坏的 UX。
+
+   同一条约束的另一面：**夹具也要在同一块里改**。仓库里带着 `∠ABC=60°` 这句话的用例至少有这些
+   （它们各自有一份"并不满足 60°"的坐标，读进来之后会当场变成 `failed`）：
+
+   | 文件 | 那一句在哪 |
+   | --- | --- |
+   | `packages/agent-core/src/diagramObligations.test.ts:31` / `:97` | 解析层（只读，不涉坐标 ⇒ 只需改期望） |
+   | `packages/agent-core/src/obligationIR.test.ts`（同一族断言） | IR 层（同上） |
+   | `packages/agent-core/src/diagramVerification.test.ts:209` | 核验器（**要正反两条**：满足 ⇒ `passed`，57° ⇒ `failed`） |
+   | `packages/agent-core/src/diagramPipeline.test.ts:79` | 编译管线（**夹具坐标要真的满足 60°**，或那句话改成不点名角度） |
+   | `packages/agent-core/src/committerAdapter.test.ts:87-95` | 适配器（同上） |
+   | `packages/agent-core/src/coordinator.test.ts:819-821` | 协调器（同上） |
+
+   也就是：**3 处只改期望、3 处连夹具一起改**（后者的坐标要么满足题面、要么把那句话从题面里去掉 ——
+   两条都行，但必须**明确选一条并写进用例注释**，不能含糊过去）。
+
 ## 7. 出口（做完算完成的标准）
 
 1. 底面环上的 `∠ABC=θ°` **能读、能构造、能核验**，且**实测度数写进结论**；
