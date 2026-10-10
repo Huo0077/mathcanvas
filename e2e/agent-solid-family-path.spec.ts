@@ -168,14 +168,17 @@ test("a named frustum produces a verified draft whose committed coordinates real
   expect(ratios[0]!).toBeLessThan(1)
 
   /**
-   * **查实的缺陷：标签与题面对不上**（`A…H` 而不是 `A…D, A′…D′`）。
+   * **标签与题面点名对上了**（2026-10-10 修；此前这一段钉住的是缺陷本身）。
    *
-   * 这条断言的作用不是"认可它"，而是**让它显形**：用户看到的是 `E/F/G/H`，
-   * 而核验面板按 `A′/B′/C′/D′` 核过了题设 —— 两套点名指的是同一批顶点，但有一步没对上。
-   * 修法（扩标签词表 / 标签跟随 `vertexNames`）牵动 DSL 与渲染，属**待裁决**，本用例不替它选。
+   * 这条断言原先的作用是"让它显形"：用户看到的是 `E/F/G/H`，而核验面板按 `A′/B′/C′/D′`
+   * 核过了题设 —— 两套点名指的是同一批顶点，但有一步没对上。现在标签跟随 `vertexNames`
+   *（内核那侧的判据在 `packages/scene-graph/src/actions/actions.test.ts`），
+   * 所以这里直接要求**名字与下标一一对上**：顶环那四个点就叫 `A′…D′`。
    */
-  expect(Object.keys(solid.byLabel).sort()).toEqual(["A", "B", "C", "D", "E", "F", "G", "H"])
-  expect(solid.byLabel["A′"]).toBeUndefined()
+  expect(Object.keys(solid.byLabel).sort()).toEqual(["A", "A′", "B", "B′", "C", "C′", "D", "D′"])
+  for (const [index, name] of ["A", "B", "C", "D", "A′", "B′", "C′", "D′"].entries()) {
+    expect(solid.byLabel[name], `${name} 应当就是下标 ${String(index)} 那个顶点`).toEqual(solid.byIndex[index])
+  }
 })
 
 /**
@@ -192,24 +195,22 @@ test("a named pentagonal pyramid commits a five-sided base with a base-perpendic
   const solid = await committedSolid(page)
   expect(solid.byIndex).toHaveLength(6)
   /**
-   * **查实的缺陷（比台体那条更直接）**：草稿里的标签是**按位置顺延的字母**，
-   * 与题面/计划的 `vertexNames` **无关** —— 底面五个点恰好是 `A…E`（与题面同名，纯属位置巧合），
-   * 而题面的顶点 **`P` 在画布上被写成 `F`**。
+   * **顶点就叫题面点名的 `P`**（2026-10-10 修；此前这一段钉住的是缺陷本身）。
    *
-   * 后果是具体的：学生看到的第五个底面点与"顶点"无法区分，`P-ABCDE` 这套点名在画布上不存在。
-   * 修法（标签跟随 `vertexNames` / 扩标签词表）牵动动作编译与渲染，属**待裁决**，
-   * 本用例不替它选 —— 只把它逐字钉住，并**用位置标签**把几何判据照常判完（图是对的，名字不对）。
+   * 原先草稿里的标签是**按位置顺延的字母**，与题面/计划的 `vertexNames` **无关** ——
+   * 底面五个点恰好是 `A…E`（与题面同名，纯属位置巧合），而题面的顶点 **`P` 在画布上被写成 `F`**：
+   * 学生看到的第五个底面点与"顶点"无法区分，`P-ABCDE` 这套点名在画布上**不存在**。
+   * 现在标签跟随 `vertexNames`，所以下面**用点名**判几何（不再靠位置标签）。
    */
-  expect(Object.keys(solid.byLabel).sort()).toEqual(["A", "B", "C", "D", "E", "F"])
-  expect(solid.byLabel["P"]).toBeUndefined()
+  expect(["A", "B", "C", "D", "E", "P"].map((name) => solid.byLabel[name])).toEqual(solid.byIndex)
   const point = (name: string): Vec3 => {
     const found = solid.byLabel[name]
     if (found === undefined) throw new Error(`草稿里没有点名 ${name}`)
     return found
   }
-  /** `A…E` 是底面环、`F` 是位置标签下的**顶点**（题面叫它 `P`）。 */
+  /** `A…E` 是底面环、`P` 是**顶点**（拓扑下标 5，见本用例开头）。 */
   const base = ["A", "B", "C", "D", "E"].map(point)
-  const apex = point("F")
+  const apex = point("P")
 
   // ① 底面真的是五个互不重合的点。
   expect(new Set(base.map((point) => `${point.x.toFixed(6)},${point.y.toFixed(6)},${point.z.toFixed(6)}`)).size).toBe(5)

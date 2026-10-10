@@ -249,6 +249,45 @@ describe("solid family", () => {
   })
 
   /**
+   * **题面点名的顶点名就是画布上的标签**（2026-10-10 用户自测："点的名称对不上"；裁决：修）。
+   *
+   * ## 这条缺陷的形状（早在本仓记录在案，一直没修）
+   *
+   * 画布标签原先由 `templatePointLabel(index)` 按**下标顺序**生成 `A`、`B`、`C`…，
+   * 与计划里的 `vertexNames` **无关**；而题设核验器是**按 `vertexNames` 的下标**认顶点的。
+   * 题面把顶点写在前面时（`P-ABCD`、`P-ABCDE` 这类），两套名字整体错位一格：
+   * 用户在画布上读到的 `A` 是**顶点**，而面板说的 `A` 是底面那个点 ——
+   * "题设核验通过"因此挂在了**另一个顶点**上（核验本身没错，错的是它与用户看到的名字不同）。
+   *
+   * ## 判据
+   *
+   * ① 给了 `vertexNames` ⇒ 点标签**逐字**就是那串名字（按下标一一对应）；
+   * ② 没给 ⇒ 仍是按位置顺延的 `A`、`B`…（既有行为不变，模板/迁移那条路不受影响）。
+   */
+  it("labels the vertices with the names the plan declared, and falls back to positional letters", () => {
+    const document = createEmptyDocument("geometry3d")
+    // `P-ABCD`：**顶点写在前面**，正是错位一格的那一类题面。
+    const vertices = [
+      { x: 0, y: 0, z: 2 }, // P（顶点）
+      { x: 1, y: 1, z: 0 }, // A
+      { x: -1, y: 1, z: 0 }, // B
+      { x: -1, y: -1, z: 0 } // C
+    ]
+    const faces = [[0, 1, 2], [0, 2, 3], [0, 3, 1], [1, 2, 3]]
+
+    const named = compileActions(document, [action({ actionId: "solid.create_polyhedron", inputs: { alias: "pyramid", vertices, faces, vertexNames: ["P", "A", "B", "C"] } })], contextWith(document))
+    expect(named.diagnostics).toEqual([])
+    const namedPoints = named.operations.flatMap((entry) => (entry.op === "addPrimitives" ? entry.primitives : [])).filter((primitive) => primitive.type === "point3")
+    expect(namedPoints.map((primitive) => primitive.label)).toEqual(["P", "A", "B", "C"])
+
+    // 没给点名时**仍旧**按位置顺延 —— 模板迁移那条路靠 `A…` 认"自动标签"，不能被改掉。
+    const anonymous = compileActions(document, [action({ actionId: "solid.create_polyhedron", inputs: { alias: "anon", vertices, faces } })], contextWith(document))
+    expect(anonymous.diagnostics).toEqual([])
+    const anonymousPoints = anonymous.operations.flatMap((entry) => (entry.op === "addPrimitives" ? entry.primitives : [])).filter((primitive) => primitive.type === "point3")
+    expect(anonymousPoints.map((primitive) => primitive.label)).toEqual(["A", "B", "C", "D"])
+  })
+
+  /**
    * **绕向不一致时机械修正**（2026-10-04，真实运行）。
    *
    * 用户现场的模型给了正确的三棱锥顶点与四个面，但四个面的顶点顺序**有正有反**，

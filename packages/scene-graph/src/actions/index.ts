@@ -357,12 +357,26 @@ function compileSolidPrismAction(action: Extract<DraftAction, { actionId: "solid
  * 看的是 `construction.kind === "template"`，这些实体的构造是 `fromPoints`，
  * **不会被模板迁移当成自己的子对象**重命名。
  */
-function labelSolidChildren(primitives: PrimitiveSpec[], label?: string): PrimitiveSpec[] {
+function labelSolidChildren(primitives: PrimitiveSpec[], label?: string, vertexNames?: readonly string[]): PrimitiveSpec[] {
   let vertices = 0
   let edges = 0
   let faces = 0
   return primitives.map((primitive) => {
-    if (primitive.type === "point3") return { ...primitive, label: templatePointLabel(vertices++) }
+    /**
+     * **给了点名就用点名**（2026-10-10，用户自测"点的名称对不上"；裁决：修）。
+     *
+     * 顶点标签与 `vertexNames` 是两套东西，曾经**整体错位一格**：题面把顶点写在前面
+     *（`P-ABCD` / `P-ABCDE`）时，画布上那个 `A` 其实是**顶点**，而题设核验器说的 `A`
+     * 是底面上那个点 —— "核验通过"因此与用户读到的名字不是同一批顶点。
+     * 按**下标**对齐（`vertexNames[i]` 给第 i 个顶点）与核验器、与题面的约定是同一个。
+     *
+     * 没给点名时**仍旧**按位置顺延 `A`、`B`…：那条 `A…Z` 是**模板迁移**判"这是不是自动标签"
+     * 的依据（`apps/web/src/solidTemplates.ts`），手工工具与旧文档都靠它，不能改。
+     */
+    if (primitive.type === "point3") {
+      const index = vertices++
+      return { ...primitive, label: vertexNames?.[index] ?? templatePointLabel(index) }
+    }
     if (primitive.type === "edge3") return { ...primitive, label: templateEdgeLabel(edges++) }
     if (primitive.type === "face3") return { ...primitive, label: `面 ${(faces += 1)}` }
     return label === undefined ? primitive : { ...primitive, label }
@@ -572,10 +586,10 @@ function compileSolidRegularPyramidAction(action: Extract<DraftAction, { actionI
  * 逐条报诊断（`degenerate_polyhedron`），于是"模型把面环写错了"的结局是**一次修复**，
  * 而不是一份画不出来的文档。
  */
-export function compileSolidPolyhedron(solidId: string, input: { vertices: Vector3[]; faces: number[][] }, label?: string): ActionSolidBuildResult {
+export function compileSolidPolyhedron(solidId: string, input: { vertices: Vector3[]; faces: number[][]; vertexNames?: readonly string[] }, label?: string): ActionSolidBuildResult {
   const built = buildFromPoints({ vertices: input.vertices, faces: input.faces }, solidChildIds(solidId))
   if (built.diagnostics.length === 0) {
-    return { primitives: labelSolidChildren(built.primitives, label), vertexIds: built.vertexIds, edgeIds: built.edgeIds, faceIds: built.faceIds, solidId, diagnostics: [] }
+    return { primitives: labelSolidChildren(built.primitives, label, input.vertexNames), vertexIds: built.vertexIds, edgeIds: built.edgeIds, faceIds: built.faceIds, solidId, diagnostics: [] }
   }
 
   /**
@@ -594,7 +608,7 @@ export function compileSolidPolyhedron(solidId: string, input: { vertices: Vecto
   if (normalized !== null) {
     const retried = buildFromPoints({ vertices: input.vertices, faces: normalized }, solidChildIds(solidId))
     if (retried.diagnostics.length === 0) {
-      return { primitives: labelSolidChildren(retried.primitives, label), vertexIds: retried.vertexIds, edgeIds: retried.edgeIds, faceIds: retried.faceIds, solidId, diagnostics: [] }
+      return { primitives: labelSolidChildren(retried.primitives, label, input.vertexNames), vertexIds: retried.vertexIds, edgeIds: retried.edgeIds, faceIds: retried.faceIds, solidId, diagnostics: [] }
     }
   }
 
@@ -748,7 +762,7 @@ function compileSolidPolyhedronAction(action: Extract<DraftAction, { actionId: "
     return { operations: [], diagnostics: [diagnostic(actionKey, "workspace_mismatch", "a polyhedron can only be created in the solid workspace")], aliasToId: {} }
   }
   const id = context.idAllocator.allocate("solid", inputs.alias)
-  const built = compileSolidPolyhedron(id, { vertices: inputs.vertices, faces: inputs.faces }, inputs.label)
+  const built = compileSolidPolyhedron(id, { vertices: inputs.vertices, faces: inputs.faces, ...(inputs.vertexNames === undefined ? {} : { vertexNames: inputs.vertexNames }) }, inputs.label)
   if (built.diagnostics.length > 0) return { operations: [], diagnostics: built.diagnostics.map((entry) => diagnostic(actionKey, entry.code, entry.message)), aliasToId: {} }
   return { operations: [{ op: "addPrimitives", primitives: built.primitives }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
 }

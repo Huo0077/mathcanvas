@@ -32,6 +32,19 @@ import { compilePlan } from "./planCompiler"
  *
  * 基线样本只在这次修复里抓取一次就固定下来 —— 它不随被测代码变化，所以它能发现回归，
  * 而"新代码自己跟自己比"不能。
+ *
+ * ## 2026-10-10 有据修订（**唯一一次**）：顶点标签跟随 `vertexNames`
+ *
+ * 那批输入里有 `P-ABCD` 那类题面（顶点写在前面），样本记下的标签原是**按位置顺延**的 `A…E` ——
+ * 而"核验里那个顶点 = 画布上那个标签"是一条**被裁决要修的真缺陷**（用户自测"点的名称对不上"）。
+ * 所以标签必须变，基线也就必须重抓一次。
+ *
+ * **重抓之前先证明"差异只有那一处"**（临时探针逐字段对读，跑完即删）：7 个用例里只有
+ * `pyramid-verified` 与 `pyramid-verified-with-ir-on` 有差异，每个恰好 `5` 个 `label`
+ * ×（`operations[0].primitives` 与 `draftDocument.primitives`）= **20 处**，
+ * 一律是 `A,B,C,D,E` → `P,A,B,C,D`（题面声明的点名）；其余 5 个用例**零差异**，
+ * 报错文案 / 别名 / 键集合 / 题设报告一个字都没动。这 20 处记在样本的 `revised` 里，
+ * 下面那条用例会**要求它确实存在** —— 基线可以修订，但不能"悄悄修订"。
  */
 interface GoldenCase {
   name: string
@@ -43,7 +56,7 @@ interface GoldenCase {
   diagramVerificationKeys: string[] | null
 }
 
-const golden = goldenRaw as unknown as { baselineCommit: string; cases: GoldenCase[] }
+const golden = goldenRaw as unknown as { baselineCommit: string; revised?: { date: string; reason: string; changedLabels: number; cases: string[] }; cases: GoldenCase[] }
 
 /**
  * **时钟必须冻住**（第一次抓取踩到的坑，与抓取用例同一个时刻）。
@@ -68,10 +81,17 @@ const VARIANTS: { label: string; override: { diagramWitnessSearch?: boolean } }[
   { label: "显式 false（应用层实际传的形状）", override: { diagramWitnessSearch: false } }
 ]
 
-describe(`the witness-search-off path is byte-identical to ${golden.baselineCommit}`, () => {
+describe(`the witness-search-off path matches its recorded baseline (${golden.baselineCommit}${golden.revised === undefined ? "" : ` + the ${golden.revised.date} label revision`})`, () => {
   it("has a baseline sample that really covers both a success and a failure", () => {
     // 只覆盖一侧的黄金样本证明不了"off 路径没变"——所以先把样本本身的覆盖度钉住。
     expect(golden.baselineCommit).toBe("4707b64")
+    /**
+     * **基线修订必须是"有据"的**（2026-10-10）：样本里带着修订说明、改了多少处、改了哪些用例。
+     * 这一条挡的是"重抓一遍就当没事发生" —— 那正是这份文件存在的理由（不能被自己绕过）。
+     */
+    expect(golden.revised?.reason.length ?? 0).toBeGreaterThan(0)
+    expect(golden.revised?.changedLabels).toBe(20)
+    expect(golden.revised?.cases).toEqual(["pyramid-verified", "pyramid-verified-with-ir-on"])
     expect(golden.cases.length).toBeGreaterThanOrEqual(6)
     const results = golden.cases.map((entry) => JSON.parse(entry.resultJson) as { ok: boolean; draftDocument: unknown })
     expect(results.some((entry) => entry.ok)).toBe(true)

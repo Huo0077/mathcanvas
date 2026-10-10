@@ -7,6 +7,22 @@
 
 
 
+## 2026-10-10 —— 画布顶点标签跟随 `vertexNames`（自测问题 P2-C；golden 有据重抓）
+
+**现场**（用户自测）："点的名称对不上"。**这条早在本仓记录在案**（三轮实测），一直卡在"改它会撞 `planCompiler.offPath.golden` 的逐字契约"上 —— 本次按裁决**修 + 有据重抓基线**。
+
+**根因**：`solid.create_polyhedron` 的顶点标签由 `labelSolidChildren` 按**下标顺序**生成 `A`、`B`、`C`…（`templatePointLabel`），而题设核验器按 `vertexNames` 的**下标**认顶点。题面把顶点写在前面时（`P-ABCD`、`P-ABCDE`、`ABCD-A′B′C′D′`），两套名字**整体错位一格**：学生在画布上把**顶点**读成 `A`，而面板说的 `A` 是底面上那个点。**核验一直是对的**（点名表只从 `vertexNames` 建、且"顶点名优先"），错的是它与用户看到的名字不是同一批 —— 所以这是"绿门禁挂在错的对象上"那一类。
+
+**改（一处）**：`labelSolidChildren(primitives, label, vertexNames)` —— 给了点名就按下标用点名，没给仍按位置顺延。`compileSolidPolyhedron` 收 `vertexNames`，动作层把 `inputs.vertexNames` 传下去。**没给点名的路一律不变**：手工工具（`spatialSolidCommands`）与旧文档的 `A…Z` 是**模板迁移**判"这是不是自动标签"的依据，动它会把用户改过的名字覆盖掉。
+
+**判据**：① 内核一条（`P,A,B,C` ⇒ 标签逐字对；**同一批顶点不点名仍出 `A…D`**）；② `e2e/agent-derived-sphere`（`P-ABCD` 外接球题：`byLabel[names[i]] === byIndex[i]`）—— 这一段原来钉住的是缺陷本身；③ **三处"钉住缺陷"的用例反向**：`agent-prism-path`（`A,B,C,A′,B′,C′`）、`agent-solid-family-path` 的台体（`A…D′`）与五棱锥（顶点就叫 `P`）。**变异**：标签改回按位置 ⇒ 内核 / golden / 浏览器**三层同时真红**。
+
+**golden 有据重抓（本块最该说清的一处）**：重抓**之前**先用临时探针逐字段对读（跑完即删），证明差异**只有**两例 × 各 5 个 `label` ×（`operations[0].primitives` 与 `draftDocument.primitives`）= **20 处**，一律 `A,B,C,D,E` → `P,A,B,C,D`；其余 5 例**零差异** —— 报错文案、别名、键集合、题设报告**一个字都没动**。这 20 处连同理由写进样本的 `revised` 字段，并**加了一条用例要求它存在**（`changedLabels === 20`、`cases === [pyramid-verified, pyramid-verified-with-ir-on]`、`reason` 非空）：**基线可以修订，但不能悄悄修订**。
+
+**读数**：`typecheck` exit 0；`lint` 0 error / 13 warning；全库非 Lean **353 文件 / 4119 通过 + 1 todo / 2 失败**（451.29 s）—— 两条都是**负载超时**（`file-hygiene.test.ts` 的 5 s、既有 `fileExports.test.ts:189` 的 CAD 导出 5 s），**孤立复跑 12 通过**；全量 e2e 首跑 **217 通过 / 1 失败** —— `agent-diagram-free-apex.spec.ts:84` 的 **`beforeEach`** `page.goto` 被 `ERR_ABORTED`（**既有抖动**那一类），孤立复跑 **6 passed**。
+
+**至此用户自测的三个问题全部修掉**：P0-A（切线题的引用写法）、P1-B（平面题被切进立体）、P2-C（顶点标签）。
+
 ## 2026-10-10 —— 切线题的真实死因：源曲线引用写了另一种写法（`kind:"id"` 字段两种写法都收）
 
 **现场**（用户桌面版回传的报错原文，把先前三条猜测一次推翻）：`run_failed` —— **`the plan never matched the schema: invalid_type@envelope.actions[1].inputs.sourceId: expected a string`**。轨迹是：检查环境 ✓ → 读取场景 ✓ → 规划 ✓ → **暂存草稿 2 action(s) ✓** → 修复轮（shape 1/1）✓ → 失败。先前猜的"采样区间过宽 ⇒ 取景数值溢出"因此**全部作废**：失败不在几何、也不在数值，而在**计划形状**，而且卡在切线**指它刚建出来的那条曲线**这一栏上。

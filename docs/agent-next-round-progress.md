@@ -37,7 +37,7 @@
 | N5 Lean | **四种受限目标**（`perpendicular` / `linePlanePerpendicular` / `tangentSlope` / `lineInPlane`）已有本机真跑证据；`proofExport` 接在草稿层但默认关，设置页不可打开，桌面真实 UI 往返未验。来源标记的前提桥已做，**原题其余题设仍未完整进命题**；mathlib revision 已 pin，发行工具链/产物呈现仍缺。不能把实例图、辅助引理或 `sorry` 当原题证明。现行 V2 判定见上表与 [发布门禁](acceptance/agent-release-gate.md)。 |
 | 高考线索 | `exam-source-candidates.json` 两篇官方评析拆三卷别、八个候选课程标签，只代表主题被提及；无完整卷面/答案，**经原题与答案独立复核的高考作图题金标仍为 0**；非作图的候选标签不计 V0–V3 成功率。 |
 | 历史标准索引 | 2025 标准 PDF 43 上层条目、131 规定性一级要求、E 类 10 个不穷尽举例，是**历史盘点/候选来源**，不再要求把纯集合、纯数列等都形式证明。E 地方开放课程需按具体“是否作图”分类，不得静默排除 unknown。旧 H0a/b1/b2/b3a 的真实提交留 [归档](project-progress.md)。 |
-| 顶点标签与点名 | **2026-10-06 新查实（未修）**：画布顶点标签按**下标顺序**自动生成（`templatePointLabel(index)`），而核验器用 `vertexNames` 的下标。两者顺序不同时（如 `P-ABCD` 这类顶点写在前面的题面），"题设核验通过"指的是**另一个顶点**。已探针实测出整体错位一格；**修它会撞上 `planCompiler.offPath.golden.test.ts` 的"关旗与 `4707b64` 逐字节相同"契约**，故需单独裁决与重新基线。V0a 路径因顶点名恰为 `A,B,C,D` 顺序而不受影响，且新用例已钉住"下标顺序 = 标签"。 |
+| 顶点标签与点名 | **2026-10-10 已修**（用户自测"点的名称对不上"）。原缺陷：画布顶点标签按**下标顺序**自动生成（`templatePointLabel(index)`），而核验器用 `vertexNames` 的下标 —— 两者顺序不同时（如 `P-ABCD` 这类顶点写在前面的题面），"题设核验通过"指的是**另一个顶点**。**修法**：`labelSolidChildren` 给了点名就用点名（按下标），没给仍按位置顺延（模板迁移靠 `A…` 认自动标签，不能动）；**core 判据** `packages/scene-graph/src/actions/actions.test.ts`，**浏览器判据** `e2e/agent-derived-sphere`（`byLabel[names[i]] === byIndex[i]`），另有三处原来"钉住缺陷"的用例反向成"名字与下标一一对上"（`agent-prism-path` / `agent-solid-family-path` 的台体与五棱锥）。**golden 有据重抓**：差异恰好 20 个 `label`（两例 × 5 × 2 处），写进样本 `revised` 并要求它存在。变异（改回按位置）⇒ 内核 / golden / 浏览器三层同时真红。 |
 | 计划审查 | 旧计划曾出现 N1/N2 状态接缝、witnessSearch 归属误写、错误的 N3 RED 路径、N4 第二运行器不进 CI、flag 时序、N5 缺接口/许可证/线程/WASM、README 列表与文档 BOM/日期/断链问题；新计划文件职责/RED/命令逐项纠正，未核验处继续记未完成。 |
 | 人工与发布 | 教师/学生图面走查无需管理员；MSI 安装→启动→卸载需管理员，NSIS 结果不能替代。两者是独立状态；旧 Release v3.2.0 不是现在源码。 |
 

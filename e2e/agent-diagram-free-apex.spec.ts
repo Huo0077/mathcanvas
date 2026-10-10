@@ -220,9 +220,13 @@ test("re-verifies the committed tetrahedron from the document's own coordinates,
   expect(D.y).toBeCloseTo(A.y, 9)
 
   /**
-   * **下标顺序与标签必须指同一个顶点**（这一条抓的是一类具体的错：核验器用 `vertexNames` 的下标
-   * 认顶点，而画布标签是**按下标顺序**自动生成的 `A`、`B`…；两者一旦错位，
+   * **下标顺序与标签必须指同一个顶点**（这一条抓的是一类具体的错：核验器按 `vertexNames` 的下标
+   * 认顶点，而画布标签曾经是**按下标顺序**自动生成的 `A`、`B`…；两者一旦错位，
    * "题设核验通过"说的就是另一个顶点，而用户按标签读图会读到别的结论）。
+   *
+   * 2026-10-10 起标签**跟随 `vertexNames`**（内核那侧的判据在
+   * `packages/scene-graph/src/actions/actions.test.ts`）。这条句子点名的恰好就是 `A…D`，
+   * 所以这里的断言形式上没变 —— 但它现在钉的是"名字与实际那个顶点一致"，而不再是"位置巧合"。
    */
   expect(solid.byIndex[0]).toEqual(solid.byLabel["A"])
   expect(solid.byIndex[1]).toEqual(solid.byLabel["B"])

@@ -10,6 +10,37 @@
 
 > 下方 2026-09-22 的"最后更新 / 当前阶段 / 总体状态"三行保留为**当时快照**，不再维护。
 
+## 2026-10-10 —— 自测问题 P2-C：顶点标签跟随 `vertexNames` —— **修了一处判据，重抓了一次基线**
+
+**用户报的是**："点的名称对不上"。这条**早就查实**（本文档里记了三轮，最近一次写着"不能顺手修"），卡点在 `planCompiler.offPath.golden.test.ts`：它要求关着开关时与 `4707b64` **逐字节相同**，而草稿文档（含标签）就在比较范围内。本次按裁决**修 + 有据重抓**。
+
+**根因（一处）**：`solid.create_polyhedron` 的顶点标签由 `packages/scene-graph/src/actions/index.ts` 的 `labelSolidChildren` 按**下标顺序**生成 `A`、`B`、`C`…，而题设核验器（`diagramVerification.candidatePoints`）按 `vertexNames` 的**下标**认顶点。题面把顶点写在前面时（`P-ABCD` / `P-ABCDE` / `ABCD-A′B′C′D′`），两套名字**整体错位一格**：学生在画布上把**顶点**读成 `A`，面板说的 `A` 却是底面上那个点。
+
+**一件必须先说清的事**：**核验一直是对的**。点名表只从 `vertexNames` 建；标签扫描那一步是"补名字"，而且写入时**顶点名优先**（`!points.has(label)`）—— 所以错位**没有**污染核验结论，它污染的是"面板说的名字"与"用户读到的名字"之间的关系。这正是"绿门禁挂在错的对象上"那一类，也解释了它为什么能活这么久：所有机器判据都是绿的。
+
+**GREEN（一处 + 一处接线）**：`labelSolidChildren(primitives, label, vertexNames?)` —— 给了点名就按下标用点名，没给仍按位置顺延；`compileSolidPolyhedron` 收 `vertexNames`；`compileSolidPolyhedronAction` 把 `inputs.vertexNames` 传下去。**没给点名的路一律不变**：手工工具（`spatialSolidCommands` 用选中的底面 + 顶点建棱锥）与旧文档都靠 `A…Z` 这一套，而 `apps/web/src/solidTemplates.ts` 的迁移正是拿 `templatePointLabel(index)` 判"这个标签是不是自动生成的、能不能重编"—— 动它会覆盖用户自己改过的名字。
+
+**RED → GREEN 的读数**（三层）：内核一条用例——`vertexNames: ["P","A","B","C"]`，实收 `[ 'A', 'B', 'C', 'D' ]`、期望 `[ 'P', 'A', 'B', 'C' ]`；浏览器一条（`agent-derived-sphere`，`P-ABCD` 的外接球题）——`Object.keys(byLabel).sort()` 实收 `["A","B","C","D","E"]`、期望含 `P`。修完两层都绿。
+
+**三处"钉住缺陷"的用例反向（这是本块的真实代价，逐条说明）**：本仓此前把这条缺陷**逐字钉在**三条浏览器用例里，写明"修法牵动 DSL 与渲染，属**待裁决**，本用例不替它选"。裁决下来是"修"，所以它们必须反向，而且**反向成"名字与下标一一对上"**，不是把期望字符串换个字：
+- `e2e/agent-prism-path.spec.ts`：`A…F` → **`A,B,C,A′,B′,C′`**（顺序即点名顺序）；
+- `e2e/agent-solid-family-path.spec.ts` 台体：`A…H` → **`A…D′`**，并逐条断言 `byLabel[names[i]] === byIndex[i]`；
+- 同文件五棱锥：底面 `A…E`、**顶点就叫 `P`**（原来是 `F`）——几何判据因此**改用点名**，不再靠位置标签；
+- `e2e/agent-diagram-free-apex.spec.ts` 的注释同步更正（那条断言形式没变，但含义从"位置巧合"变成"名字一致"）。
+
+**变异**：把标签改回按位置（`templatePointLabel(index)`）⇒ **内核、golden、浏览器三层同时真红**，还原后复绿。
+
+**golden 有据重抓（本块最需要证据的一处）**：重抓**之前**先写了临时探针（跑完即删）逐字段对读黄金样本与当前代码的输出，得到：
+- `pyramid-verified` 与 `pyramid-verified-with-ir-on` **各 10 处**差异 = 5 个 `label` ×（`operations[0].primitives` 与 `draftDocument.primitives`），一律 `A,B,C,D,E` → `P,A,B,C,D`；
+- 其余 5 个用例 **0 差异**（含 `pyramid-fail-closed` / `pyramid-unverified-without-names` / `transport-invalid` / `audit-completes-defaults`）；
+- 报错文案、别名、`resultKeys`、`diagramVerificationKeys` 一处都没动。
+
+然后才重抓，并把修订写进样本的 `revised`：`{date, reason, fieldPath, changedLabels: 20, cases}`。用例那边**加了一条断言要求它存在**（`changedLabels === 20`、`cases` 逐字、`reason` 非空），describe 标题也改成"matches its recorded baseline（`4707b64` + the 2026-10-10 label revision）"。**理由**：这份文件的全部价值就是"不随被测代码变化"；悄悄重抓一次，它就退化成"新代码自己跟自己比" —— 所以修订必须留痕、且可核对。
+
+**门禁**：`typecheck` exit 0；`lint` 0 error / 13 warning；全库非 Lean **353 文件 / 4119 通过 + 1 todo / 2 失败**（451.29 s）—— 两条都是**负载超时**（`scripts/docs-consistency/file-hygiene.test.ts` 的 5 s、既有 `fileExports.test.ts:189` 的 CAD 导出 5 s），两条**孤立复跑 12 通过**；全量 e2e 首跑 **217 通过 / 1 失败** —— `agent-diagram-free-apex.spec.ts:84` 的 **`beforeEach`**（`page.goto` 30 s 被 `ERR_ABORTED`，不是断言失败），**孤立复跑 6 passed**。
+
+**至此自测的三个问题全部修掉**（P0-A 引用写法、P1-B 工作区判据、P2-C 顶点标签）。**仍如实留着的**：用户在修好之前跑过的那一版桌面构建已经被替换（同一句切线题在桌面版已能出图，用户当场确认）；**教师/学生正式走查、人工可读性标注**这两项等人，不因本块而改变。
+
 ## 2026-10-10 —— 自测问题 P0-A：切线题的真实死因 —— **引用写法的两种方言**（报错原文推翻三条猜测）
 
 **用户回传的报错原文（这是本块的全部起点）**：`run_failed` —— **`the plan never matched the schema: invalid_type@envelope.actions[1].inputs.sourceId: expected a string`**；轨迹是 检查环境 ✓ → 读取场景 ✓ → 规划 ✓ → **暂存草稿 2 action(s) ✓** → 修复轮（shape 1/1, geometry 1/1）✓ → 失败。
@@ -60,7 +91,7 @@
 1. **新用例第一版让类型门红了**：`conicInvariantPlan()` 的类型是判别联合 `PlanEnvelope`，我直接读了 `.actions` ⇒ `tsc` 报 **TS2339**；而 vitest 跑得好好的。**"跑过测试"确实不等于"过了类型门"** —— 这个仓已经栽过同型的跟头（上一批的 `planeLines` 元组），所以这一次按纪律**先修类型再重跑全库**，上面那个 4118 是修完之后的读数。
 2. **首跑全库有两个红**：`fileExports.test.ts:189`（CAD 导出 5 s 超时）与 e2e `main-thread-responsiveness.spec.ts:28`（帧间隔阈值被负载顶破）。两条都是本仓**早已记过**的既有抖动，**各自孤立复跑一次即通过**（9 passed / 1 passed）—— 记在这里，免得下一个读日志的人把它当成 P1-B 的回归。
 
-**仍未修（本块的边界）**：P0-A（切线题在桌面版失败）与 P2-C（点名与画布标签错位）。P0-A 在本次拿到了**用户给的报错原文**：`invalid_type@envelope.actions[1].inputs.sourceId: expected a string`（`run_failed`）—— 这一句把原先"采样区间/取景数值范围溢出"的猜测**当场推翻**，方向见下一块。
+**仍未修（本块的边界）**：P0-A（切线题在桌面版失败）与 P2-C（点名与画布标签错位）—— **两者都在同一天随后的区块里修掉了**（见上方同名块）。P0-A 在本次拿到了**用户给的报错原文**：`invalid_type@envelope.actions[1].inputs.sourceId: expected a string`（`run_failed`）—— 这一句把原先"采样区间/取景数值范围溢出"的猜测**当场推翻**，方向见下一块。
 
 ## 2026-10-10 —— 人工自测结果归档 + 下一步计划（**不改产品代码**）
 
@@ -533,7 +564,7 @@
 - **用户当日追加裁决**：「智能体只能处理三棱锥的问题也要解决，要能处理大部分形状」。四问四答定下范围：① 只做**立体几何**（棱锥任意 3–6 边底面 / 棱柱含 `A′` 带撇顶面 / 台体 / 球与多面体的内切外接关系）；② 入口**本地解析器扩宽到常见自然语言说法**，不依赖模型；③ **默认行为先沿用现有开关**，四类全做完再定；④ 落地结构选**形状数据化**（四层共用一份 `SolidShapeSpec`），不再逐个形状加构造分支。
 - 设计写入 `docs/superpowers/specs/2026-10-06-solid-shape-coverage-design.md`。自检时改掉两处自己的问题：点名模块必须落在最底层 `geometry-kernel`（内核自己也是调用方，不能反向依赖 agent-core）；S5 的「派生球要不要重算」原本被我留成二选一，翻代码后发现仓库已有 `recomputeDerivedObjects` 这条现成路径，于是直接裁决，不留活口。
 - **探针实测纠了一条错的承重结论**：设计里我原先写「`AA₁` 被压成两个 `A`、重名后被丢弃」。探针实测三种写法（`A₁` / `A1` / `A′`）**全部根本不匹配**，条件作为 `unverified` 残留如实显形——是 fail-closed，比我说的情况好。`witnessSearch.ts` 里那句代码注释说错了同一件事，留待 S3 动到该分支时改正。**教训**：把设计建在「代码注释说了什么」上是不够的，注释也会说错。
-- **另查出并实测一个真缺陷（未修）**：画布顶点标签由 `templatePointLabel(index)` 按**下标顺序**自动生成，而核验器用 `vertexNames` 的下标。探针实测声明 `["P","A","B","C","D"]` 配 `[P(0,0,4), A(0,0,0), B(2,0,0), C(2,3,0), D(0,3,0)]`，落盘标签却是 `A@(0,0,4)`、`B@(0,0,0)`…**整体错位一格** —— 也就是说「题设核验通过」指向的顶点与用户按标签读到的**不是同一个**。**不能顺手修**：`planCompiler.offPath.golden.test.ts` 要求关着开关时与 `4707b64` 逐字节相同，而草稿文档（含标签）就在比较范围内。V0a 这条路径因顶点名恰为 `A,B,C,D` 顺序而不受影响，且新用例已把「下标顺序 = 标签」钉成判据。
+- **另查出并实测一个真缺陷（2026-10-10 已修 + golden 有据重抓，见页头同名块）**：画布顶点标签由 `templatePointLabel(index)` 按**下标顺序**自动生成，而核验器用 `vertexNames` 的下标。探针实测声明 `["P","A","B","C","D"]` 配 `[P(0,0,4), A(0,0,0), B(2,0,0), C(2,3,0), D(0,3,0)]`，落盘标签却是 `A@(0,0,4)`、`B@(0,0,0)`…**整体错位一格** —— 也就是说「题设核验通过」指向的顶点与用户按标签读到的**不是同一个**。**当时不能顺手修**：`planCompiler.offPath.golden.test.ts` 要求关着开关时与 `4707b64` 逐字节相同，而草稿文档（含标签）就在比较范围内（**后来按裁决修了，并逐字段证明差异只有那 20 个 `label`**）。
 - **门禁全表复测，两处读数的含义变了（不是跑绿了）**：① **本机现在没有 Lean 工具链**（无 `elan`/`lean`/`lake`，`proof/lean4/.lake` 不存在），文档里「真内核闭环成立（`formally_proved`，68277 ms）」是更早某台装了 Lean 的机器上的历史读数，**本机不可复现**；该用例显式 gated，本次如实打印理由并 skip（1 passed / 3 skipped），没有静默通过。② **离线 benchmark 见证层码表与旧记录不同**：多出 `"unverified-obligation":26`，`no-candidate-constructed` 4→2、`unsupported-base-shape` 4→2；总量仍自洽（`verified=1`、`solveRate=0.048` 未变），是拉取进来的那批提交改变了构成。
 - 其余读数复现：Rust **238 通过 / 3 ignored / 0 失败**；`proof:smoke` **8 通过**；性能 **9/9**、`drag/300-frames` **625.9 ms**；生产构建 4.86 s、入口 **1,861.85 kB / gzip 548.43 kB**（比上次记的 1,803.76 kB 又长约 58 kB）；许可扫描通过且快照重写后工作树无变化；离线评测 `pass@1 4/8`、`pass@3 4/8`、工具选择 `45/45`、工具错误 `3/45`。
 - **本区块只有设计，没有产品代码**；按规矩，spec 未获用户评审前不进 `writing-plans`。

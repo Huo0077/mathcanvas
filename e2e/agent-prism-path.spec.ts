@@ -11,11 +11,12 @@ import { expect, test } from "@playwright/test"
  * - **棱柱**：三条侧棱向量**彼此相等**（对，是"平移"不是"各自拉长"）；
  * - 底面**非退化**（三点不共线，面积不为 0）。
  *
- * ## 为什么几何判据按拓扑下标写
+ * ## 顶点名与标签现在指的是同一批顶点（2026-10-10 修）
  *
- * 本仓**已记录、待裁决**的"顶点标签错位"缺陷（本文件第三次实测）：计划里的点名是
- * `A,B,C,A′,B′,C′`，落盘标签却是按位置顺延的 `A…F`。判据一律走 `polyhedron3.vertexIds` 的
- * **下标顺序**（= 内核构造时的点名顺序），并把标签不一致逐字钉住，不让它继续静默。
+ * 本仓**已记录**的"顶点标签错位"缺陷（本文件第三次实测）：计划里的点名是 `A,B,C,A′,B′,C′`，
+ * 落盘标签却曾经是按位置顺延的 `A…F`。当时把不一致逐字钉住；现在标签跟随 `vertexNames`
+ *（真缺陷已修，内核那侧的判据在 `packages/scene-graph/src/actions/actions.test.ts`），
+ * 所以下面**同时**按下标与按标签读，并要求两者一一对上。
  */
 
 /**
@@ -102,8 +103,13 @@ test("a right prism from a sentence commits coordinates whose lateral edges real
 
   const prism = await readPrism(page)
   expect(prism.vertices).toHaveLength(6)
-  // 标签：计划里点名 `A,B,C,A′,B′,C′`，落盘是按位置顺延的 `A…F` —— **已记录的缺陷**，本用例只钉住它。
-  expect([...prism.labels].sort()).toEqual(["A", "B", "C", "D", "E", "F"])
+  /**
+   * **标签就是题面点名的那些名字**（2026-10-10 修；此前这一段钉住的是缺陷本身）。
+   *
+   * 计划点名 `A,B,C,A′,B′,C′`，曾经落盘成按位置顺延的 `A…F` ——
+   * 学生在画布上看到的 `D` 其实是 `A′`。现在按下标一一对上（顺序即点名顺序）。
+   */
+  expect(prism.labels).toEqual(["A", "B", "C", "A′", "B′", "C′"])
 
   const [a, b, c, aTop, bTop, cTop] = prism.vertices as [Vec3, Vec3, Vec3, Vec3, Vec3, Vec3]
   // ① 底面非退化：三点不共线。

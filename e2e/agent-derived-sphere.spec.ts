@@ -12,12 +12,14 @@ import { projectWorldPoint } from "./helpers/projection"
  *    —— 不读面板结论，也不读构造方的自述（"系统说它有外接球"正是要复核的对象）；
  * ③ **宿主一动，球跟着变**，而且变完仍然是**新的**顶点组的外接球（这一条才是"不是过期数据"的证据）。
  *
- * ## 为什么按**拓扑下标**认顶点，不按标签
+ * ## 顶点名与画布标签现在指的是同一批顶点（2026-10-10 修）
  *
  * 本文件第一次跑就撞上了本仓**已记录**的那条缺陷：画布顶点标签是**按位置顺延的字母**，
  * 与计划里的 `vertexNames` 无关 —— 题面写 `P-ABCD`，草稿里的标签却是 `A…E`（下表同序）。
- * 所以几何判据一律用 `polyhedron3.vertexIds` 的**下标顺序**（=`vertices` 的给出顺序，
- * 也就是 `vertexNames` 的顺序），并把标签不一致**逐字钉住**，让它显形而不是被绕过。
+ * 当时把不一致**逐字钉住**，让它显形而不是被绕过。现在标签跟随 `vertexNames`
+ *（真缺陷已修，内核那侧的判据在 `packages/scene-graph/src/actions/actions.test.ts`），
+ * 所以下面**同时**按下标与按标签读，并要求两者一一对上 —— 那就是
+ * "题设核验里说的那个顶点 = 用户在画布上看到的那个标签"。
  */
 
 const PROMPT = "在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，BC ∥ AD，AB ⊥ AD，画出这个四棱锥的外接球"
@@ -105,11 +107,16 @@ test("a named solid's derived circumsphere is created, rendered, and follows its
   const before = await readDraft(page)
   expect(before.byIndex).toHaveLength(5)
   /**
-   * **查实的缺陷（与 R10 同一处）**：计划给的点名是 `["P","A","B","C","D"]`，落盘标签却是 `A…E` ——
-   * 标签按位置顺延、与 `vertexNames` 无关。所以几何判据只能按下标写；这里把不一致钉住。
+   * **画布标签就是题面点名的那些名字**（2026-10-10 修；此前这一段钉住的是缺陷本身）。
+   *
+   * 计划给的点名是 `["P","A","B","C","D"]`，而落盘标签曾经是 `A…E` ——
+   * 于是学生在画布上把**顶点**读成 `A`，而面板说的 `A` 是底面上那个点：
+   * 核验本身没错，错的是它与用户看到的名字不是同一批。
+   * 现在按下标一一对上（`byLabel[names[i]] === byIndex[i]`）。
    */
-  expect(Object.keys(before.byLabel).sort()).toEqual(["A", "B", "C", "D", "E"])
-  expect(before.byLabel["P"]).toBeUndefined()
+  const NAMES = ["P", "A", "B", "C", "D"]
+  expect(Object.keys(before.byLabel).sort()).toEqual(["A", "B", "C", "D", "P"])
+  expect(NAMES.map((name) => before.byLabel[name])).toEqual(before.byIndex)
 
   expect(before.sphere).not.toBeNull()
   const first = before.sphere!
