@@ -176,7 +176,11 @@ export interface AgentCoordinator {
  * 绑在一起而不是各写一个数字：两处各写一份，迟早会出现"给了修复却还允许第三次尝试"
  * 或者反过来"修复额度说 0 但这里还在问"。修复**共用运行预算**，不另开配额（见 `budget.ts`）。
  */
-const MAX_PLAN_ATTEMPTS = 1 + MAX_REPAIR_ATTEMPTS
+/**
+ * **每个模型往返的最多次数**（2026-10-10）：一次原始尝试 + **每类失败各一次**修复
+ *（"形状/JSON 写错"与"几何算错"是两类，各有自己的额度，见 `schemaRepairs` / `compileRepairs`）。
+ */
+const MAX_PLAN_ATTEMPTS = 1 + MAX_REPAIR_ATTEMPTS * 2
 
 /**
  * **"上下文这一笔预算被拒了"** —— 只在 `buildPlanRequest` 的计费回调与它的调用点之间传递。
@@ -400,22 +404,29 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
        */
       let repair: PlanRequest["repair"]
       /**
-       * **已经开始的修复次数**（整次运行**只允许一次**）。
+       * **两类失败各自的修复次数**（整次运行**每类一次**）。
        *
        * 计划 Global Constraints："Repair is limited to one request and shares the run budget."
        * 计数放在协调器而不是各端口里：只有它同时知道"这一次是原始尝试还是修复"与"预算还剩多少"。
+       *
+       * **2026-10-10 改：两类不再共用同一个计数**（用户现场）。现场是模型第一次交的计划**连信封都不合法**
+       *（它把第二只多面体写成少于四个顶点）⇒ 用掉了那唯一一次修复；第二次交的计划能编译、但
+       * `平面 ABD⊥平面 BCD` **实测 0.27735**（坐标自己算错）⇒ 编译期发现时**没有额度了**，运行直接失败。
+       * 两次失败是**两类**：一次"JSON 形状写错"、一次"几何算错"，让前者的笔误吃掉后者唯一的机会，
+       * 用户看到的就是"没有完成"。现在各给一次：`schemaRepairs` 管信封，`compileRepairs` 管编译。
        */
-      let repairsStarted = 0
+      let schemaRepairs = 0
+      let compileRepairs = 0
 
       /**
-       * **一次原始尝试 + 一次可见修复**的循环。
+       * **一次原始尝试 + 每类各一次可见修复**的循环。
        *
-       * 修复可能发生在**两个位置**，但永远不会重来第三次：
-       * - 计划连信封都不合法（传输解析这一层就拒）→ 修的是形状；
+       * 修复可能发生在**两个位置**，每个位置最多一次：
+       * - 计划连信封都不合法（传输解析这一层就拒）→ 修的是形状（`schemaRepairs`）；
        * - 计划合法但编译阶段拒了它（字段审计 / 引用解析 / 参数补全 / 几何语义 / 动作编译）
-       *   → 修的是字段，请求来自编译器。
+       *   → 修的是字段与坐标，请求来自编译器（`compileRepairs`）。
        *
-       * 两条路径共用 `repair` 与 `repairsStarted`，所以"总共只修一次"是结构性的，
+       * 两条路径各自记自己的次数，所以"每一类只修一次"是结构性的，
        * 而不是靠每个分支各自记得别多问一次。
        */
       for (let attempt = 1; attempt <= MAX_PLAN_ATTEMPTS && stagedPlan === null; attempt += 1) {
@@ -429,7 +440,7 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
            * 上一次失败发生在传输解析时账本仍在 `planning`，不需要（也不允许）再转移一次。
            */
           if (ledger.phase() !== "planning") {
-            const replanning = ledger.transition("planning", `asking for the one repair (${repairsStarted}/${MAX_REPAIR_ATTEMPTS})`)
+            const replanning = ledger.transition("planning", `asking for the repair (shape ${schemaRepairs}/${MAX_REPAIR_ATTEMPTS}, geometry ${compileRepairs}/${MAX_REPAIR_ATTEMPTS})`)
             if (replanning.ok) yield replanning.event
           }
         }
@@ -508,9 +519,9 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
            * 请求本身走已注册的 `repairRequestFor`：于是"允许改哪几处"（`allowedChanges`）
            * 与编译阶段那一份是同一个算法，不再是这里手写的一句话。
            */
-          const next = repairRequestFor(result.errors, repairsStarted + 1)
-          if (repairsStarted >= MAX_REPAIR_ATTEMPTS || next.attempt > MAX_REPAIR_ATTEMPTS) break
-          repairsStarted += 1
+          const next = repairRequestFor(result.errors, schemaRepairs + 1)
+          if (schemaRepairs >= MAX_REPAIR_ATTEMPTS || next.attempt > MAX_REPAIR_ATTEMPTS) break
+          schemaRepairs += 1
           /**
            * **把被拒的那份东西本当"证据"传下去**（2026-10-04，来自真实运行）。
            *
@@ -640,15 +651,15 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
          * 没有请求就**不再问模型** —— 那只是一次盲目的重复；"用户能回答的澄清问题"
          * 正是这种形状（规格 §7：无安全默认时返回 clarification，问用户比让模型重发好）。
          *
-         * `attempt` 由协调器写死成它自己的计数：`MAX_REPAIR_ATTEMPTS` 是**整次运行**的额度，
-         * 不是某个端口的。编译器那一份给的是 1，两处在这里对齐。
+         * `attempt` 由协调器写死成**几何这一类**自己的计数：`MAX_REPAIR_ATTEMPTS` 是**每类失败**的额度，
+         * 不再与"形状写错"共享。编译器那一份给的是 1，两处在这里对齐。
          */
         const compileRepair = stagedResult.repair
-        if (stagedResult.reason === "compile_failed" && compileRepair !== undefined && compileRepair.attempt <= MAX_REPAIR_ATTEMPTS && repairsStarted < MAX_REPAIR_ATTEMPTS) {
-          repairsStarted += 1
+        if (stagedResult.reason === "compile_failed" && compileRepair !== undefined && compileRepair.attempt <= MAX_REPAIR_ATTEMPTS && compileRepairs < MAX_REPAIR_ATTEMPTS) {
+          compileRepairs += 1
           repair = {
             ...compileRepair,
-            attempt: repairsStarted,
+            attempt: compileRepairs,
             hint: describeCompileRepairPrompt(compileRepair, stagedResult.planDiagnostics ?? []),
             ...(stagedResult.planDiagnostics === undefined ? {} : { diagnostics: stagedResult.planDiagnostics }),
             ...(stagedResult.assumptions === undefined ? {} : { assumptions: stagedResult.assumptions })

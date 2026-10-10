@@ -7,6 +7,18 @@
 
 
 
+## 2026-10-10 —— 形状写错不再吃掉几何那一次修复（`compile_failed: 平面 ABD⊥平面 BCD` 的真因）
+
+**现场**（3.3.2，用户开发者视图）：模型第一次交的计划**连信封都不合法**（它把第二只多面体 `OBCD` 写成少于四个顶点）⇒ 用掉了那唯一一次修复；第二次的计划能编译，但题设核验判 `平面 ABD⊥平面 BCD` **实测 0.27735**（坐标自己算错）⇒ 编译期发现时**已经没有修复额度**，运行直接 `failed`，用户看到的是"没有完成"。
+
+**读数（用户日志逐行）**：`5. observing → planning` → `[model] …failed the envelope check: invalid_type@envelope.actions[1].inputs.vertices: a polyhedron needs at least four vertices` → `6. planning → planning` → `10. planning → compiling: staging 1 action(s)` → `12. compiling → failed: … 实测 0.27735`。**中间没有 `asking for the one repair` 那一行** —— 额度已用尽。代码侧的依据：`MAX_PLAN_ATTEMPTS = 1 + MAX_REPAIR_ATTEMPTS`，而 `MAX_REPAIR_ATTEMPTS = 1` 原本由**两条路共用**。
+
+**改法**：`MAX_REPAIR_ATTEMPTS` 仍是 1，但**每类失败各一份**（`schemaRepairs` / `compileRepairs`），`MAX_PLAN_ATTEMPTS = 1 + 2 × 1 = 3`。原来的结构性理由是"总共只修一次"，现在改成"**每一类各修一次**"—— "JSON 形状写错"与"几何算错"是两类不同的失败，前者的笔误不该吃掉后者唯一的机会，而这正是现场发生的事。
+
+**判据**：新增一条协调器用例（第 1 次信封不合法 → 第 2 次编译拒 → 第 3 次成功）⇒ 改前 `planCalls = 2`、直接 `failed`（当天必红），改后 `planCalls = 3`、停在等确认。既有的三条"只修一次"用例（形状那一类、编译那一类）**原样通过**：每类仍然只有一次。`agent-core` **65 文件 / 990 通过**。
+
+**仍未做（如实）**：这一步只是把**机会**还给模型 —— 它第二次仍然可能算错（那时如实失败）。要让这一类**稳定**画出来，还需要"两条救援接力"（先按题设搜坐标、再补建题面点名的点），而那一步会把**见证搜索**的能力带进默认路径 ⇒ 碰发布门禁，等裁决。
+
 ## 2026-10-10 —— 三维图里的**平面点**不算数（"仍然没有 O 点"的真因）
 
 **现场**（3.3.1 打包之后，用户截图）：对象树里有 `O`、属性栏也认它，但**画布上永远看不见**；底部还提示"空间直线需要 2 个空间点，当前 0 个"。

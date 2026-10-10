@@ -359,6 +359,42 @@ describe("coordinator budget enforcement", () => {
   })
 
   /**
+   * **形状写错不该吃掉几何那一次**（2026-10-10 用户现场）。
+   *
+   * 现场：模型第一次交的计划**连信封都不合法**（它把第二只多面体写成少于四个顶点）⇒ 用掉了那唯一一次
+   * 修复；它第二次交的计划能编译，但 `平面 ABD⊥平面 BCD` **实测 0.27735**（坐标自己算错了）⇒
+   * 编译期发现时**已经没有修复额度**，运行直接失败。用户看到的就是"没有完成"。
+   *
+   * 两次失败是**两类**：一次是"JSON 形状写错"，一次是"几何算错"。判据：各给一次机会 ——
+   * 三条命（原始 + 形状修复 + 几何修复）走完，最后停在等确认。
+   */
+  it("does not let a malformed envelope spend the compile repair", async () => {
+    let planCalls = 0
+    let stageCalls = 0
+    const harness = makeHarness({
+      plan: async () => {
+        planCalls += 1
+        // 第 1 次：连信封都不合法（传输解析这一层就拒）。
+        if (planCalls === 1) return { plan: { kind: "not-a-plan" } as unknown as PlanEnvelope, requestId: "req-1", attemptId: "attempt-1" }
+        return { plan: planEnvelope(1), requestId: `req-${planCalls}`, attemptId: `attempt-${planCalls}` }
+      },
+      stage: async () => {
+        stageCalls += 1
+        // 第 1 次暂存：编译拒绝（现场：平面 ABD⊥平面 BCD 实测 0.27735）。
+        return stageCalls === 1
+          ? { ok: false as const, reason: "compile_failed" as const, detail: "compile_failed: diagram_condition_failed", repair: { reason: "compile_failed", errors: [{ code: "bad_field", path: "envelope.actions[0].inputs", detail: "x" }], allowedChanges: [], attempt: 1 } }
+          : { ok: true as const, draftVersion: 2, previewHash: "preview-1" }
+      }
+    })
+
+    await drive(harness.coordinator, { run, userMessage: "在三棱锥 A-BCD中，平面 ABD⊥平面 BCD，且 AB=AD，O为 BD的中点。" })
+
+    expect(planCalls).toBe(3)
+    expect(stageCalls).toBe(2)
+    expect(harness.coordinator.phase()).toBe("awaiting_confirmation")
+  })
+
+  /**
    * **上下文预算真的会被扣**（外部审查 M2）。
    *
    * `buildContext` 收着 `budget` 却从不使用它、`estimatedCharacters` 也从没人核对，
