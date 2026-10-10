@@ -174,6 +174,17 @@ export type WitnessConstructRejectionCode =
   | "degenerate-base"
   | "degenerate-height"
   | "missing-height-reference"
+  /**
+   * **平面数值角那一族**（§3-F 阶段 B）：角里出现了**顶点**（环外点）。
+   *
+   * - `contradictory-angle`：**算出来的**矛盾 —— 那个角与顶点的高**无关**（实测在两个不同的高上读数相同），
+   *   而那个恒定值不等于题面要的值。它与"没找到"是两回事，所以单独一个码。
+   * - `unsupported-angle-shape`：这一层不做或找不到 —— 角的**点名形状**出了本层的范围
+   *   （顶点本身是角的顶点、两个角条件同时在场），或者**允许范围内没有满足它的高**。
+   *   文案里说清是哪一种，**绝不**给近似值。
+   */
+  | "contradictory-angle"
+  | "unsupported-angle-shape"
   | "missing-extrusion"
   | "degenerate-extrusion"
   | "non-finite-value"
@@ -434,9 +445,11 @@ export function constructPyramidWitness(request: PyramidConstructRequest): Witne
     ? "（系统自选示例值）"
     : heightDerived === "dihedral"
       ? `（按题面二面角对内核的二面角度量做有界求根求出，非解析闭式${heightNote ? `；${heightNote}` : ""}）`
-      : heightDerived === "lateral-edge"
-        ? "（由题面的侧棱长度解析求出）"
-        : "（题面直接给定）"
+      : heightDerived === "planar-angle"
+        ? `（按题面点名的角对内核自己的角度量做有界求根求出，非解析闭式${heightNote ? `；${heightNote}` : ""}）`
+        : heightDerived === "lateral-edge"
+          ? "（由题面的侧棱长度解析求出）"
+          : "（题面直接给定）"
 
   return assembleCandidate({
     baseNames: base.names,
@@ -1368,9 +1381,23 @@ function deriveBasePolygon(
     const angled = deriveAngledTriangleBase(names, relations)
     if (angled !== null) return angled
     if (names.length === 3) return deriveRepresentativeTriangle(names, relations)
+    /**
+     * **两件事分开报**（§3-F 阶段 B 设计 §5.3）：底面缺什么，和"题面那个角为什么帮不上忙"。
+     *
+     * 原先只说"底面缺少点名在 A 处的直角" —— 当题面确实点名了一个角、只是那个角**不在环上**
+     * （顶点／环外点参与）时，这句话会让用户去补一个错的条件。探针实测过这种误读
+     *（`PA⊥平面ABCD，∠PBA=60°` 报的就是这一句，见阶段 B 设计 §0）。
+     */
+    const outOfRing = relations.find(
+      (relation) => relation.kind === "planarAngle" && relation.targets.length === 3 && relation.targets.some((name) => !names.includes(name))
+    )
     return reject(
       "unsupported-base-shape",
-      `底面缺少「点名在 ${first} 处的直角」（${first}${second} ⊥ ${first}${third}）：首批不做通用非线性求解，无法唯一确定底面。`,
+      `底面缺少「点名在 ${first} 处的直角」（${first}${second} ⊥ ${first}${third}）：首批不做通用非线性求解，无法唯一确定底面。${
+        outOfRing === undefined || outOfRing.kind !== "planarAngle"
+          ? ""
+          : `题面点名的角 ${outOfRing.targets.join("")} 帮不上忙：它含底面环外的点（${outOfRing.targets.filter((name) => !names.includes(name)).join("、")}），所以它不能当底面的定形条件。`
+      }`,
       [...names]
     )
   }
@@ -1532,7 +1559,7 @@ function deriveApexHeight(input: {
   relations: readonly WitnessRelation[]
   base: readonly Vector3[]
   baseNames: readonly string[]
-}): { status: "ok"; value: number; note: string | null; assumed: boolean; derived: "none" | "lateral-edge" | "dihedral" } | WitnessConstructRejection {
+}): { status: "ok"; value: number; note: string | null; assumed: boolean; derived: "none" | "lateral-edge" | "dihedral" | "planar-angle" } | WitnessConstructRejection {
   const { apexName, foot, base, baseNames } = input
   const at = (name: string): Vector3 | null => {
     const index = baseNames.indexOf(name)
@@ -1541,8 +1568,18 @@ function deriveApexHeight(input: {
 
   switch (input.heightSpec.kind) {
     case "free": {
+      /**
+       * **§3-F 阶段 B（B1）：题面点名了一个"顶点在环上、恰一条腿的另一个端点是本题顶点"的平面角**
+       * （`∠PBA=60°`）时，先按那个角**有界求根**定高。
+       *
+       * 为什么放在 `free` 这一支：题面没给高时高本来就是个自由量，而这条角恰好**只含一个未知量**
+       * （顶点在垂足正上方 ⇒ 位置由一个标量 `h` 决定）。题面**给了**高的时候不在这里动它 ——
+       * 那时角是否成立由核验器如实判（构造期不做联立，见设计 §9）。
+       */
       const fallback = interpretValue(input.heightSpec.value, 1)
       if (!fallback || !(fallback.value > 0)) return reject("degenerate-height", "自由高必须是一个正数。", [apexName, foot])
+      const angled = solveApexAngleHeight({ apexName, foot, base, baseNames, relations: input.relations, freeHeight: fallback.value })
+      if (angled !== null) return angled
       return { status: "ok", value: fallback.value, note: `${apexName} 的高 = ${formatNumber(fallback.value)}（系统自选）`, assumed: true, derived: "none" }
     }
     case "fixed": {
@@ -1787,6 +1824,258 @@ function solveDihedralHeight(request: {
     previousResidual = residual
   }
   return null
+}
+
+/**
+ * **§3-F 阶段 B 的求根预算**：与二面角同一套口径 —— 固定步数、无 RNG、失败返回 `null`
+ *（由调用方转成结构化拒绝，不给近似值）。
+ */
+const APEX_ANGLE_SCAN_STEPS = 2048
+const APEX_ANGLE_BISECTION_STEPS = 200
+const APEX_ANGLE_HEIGHT_LIMIT = 1e3
+/**
+ * **常性判据的容差**（度）与两个采样高（相对底面尺度）。
+ *
+ * 为什么要有常性判据：`∠DAB` 这种角的腿可能**恰好沿底面法向**（`A` 是垂足），
+ * 于是那个角**与高无关**、恒为 90°。这时"扫描没找到根"是**必然**的，而真正的信息是
+ * "题面那条与其它条件不可能同时成立"（或"它本来就必然成立"）—— 两句话对用户完全不同。
+ * 判据是**算出来的**：在两个明显不同的高上量同一个角，读数相同才算恒定。
+ */
+const APEX_ANGLE_CONSTANCY_TOLERANCE = 1e-6
+const APEX_ANGLE_CONSTANCY_LOW = 1
+const APEX_ANGLE_CONSTANCY_HIGH = 16
+
+/** 一条含顶点（环外点）的平面角，按**点名形状**分类的结果。 */
+type ApexAngleShape =
+  | { kind: "solve"; vertex: string; apexEndpoint: string; ringEndpoint: string; degrees: number; label: string }
+  /** 不是这一族（例如三个点名都在环上 = 阶段 A 的事），调用方照旧走自己的分支。 */
+  | { kind: "skip" }
+  /** 形状出了本层范围 / 联立 / 度数不可用：如实拒绝（把结构化拒绝原样带出去）。 */
+  | { kind: "rejected"; rejection: WitnessConstructRejection }
+
+/**
+ * **认一认这条角属不属于 B1**：顶点在底面环上、**恰一条腿的另一个端点是本题顶点**（`∠PBA`）。
+ *
+ * 为什么分类放在这一层而不是解析层：**读**（`planarAngle`）不区分点名在不在环上，
+ * 而"谁在环外"要看**底面环** —— 那是构造期才知道的事（设计 §1）。
+ *
+ * 三件事在这里一次说清（各自一个码/文案，不混成一句）：
+ * - 两条以上的含顶点角同时在场 ⇒ **联立**（两个方程一个未知量），本层不做；
+ * - 顶点本身是角的顶点、或两条腿的端点都在环外 ⇒ 要**两个以上未知量**，本层不做；
+ * - 度数不可用 / 不在 `(0°, 180°)` ⇒ 如实拒绝（与阶段 A 同一条口径）。
+ */
+function classifyApexAngle(input: {
+  apexName: string
+  baseNames: readonly string[]
+  relations: readonly WitnessRelation[]
+}): ApexAngleShape {
+  const angled = input.relations.filter(
+    (relation): relation is Extract<WitnessRelation, { kind: "planarAngle" }> =>
+      relation.kind === "planarAngle" && relation.targets.length === 3
+  )
+  const touching = angled.filter((relation) => relation.targets.some((name) => !input.baseNames.includes(name)))
+  /** 这一层的拒绝都走同一个码（机器可读：形状出了范围）；具体是哪一种由文案说清。 */
+  const refuse = (message: string, points: readonly string[]): ApexAngleShape => ({
+    kind: "rejected",
+    rejection: reject("unsupported-angle-shape", message, [...points])
+  })
+  if (touching.length === 0) return { kind: "skip" }
+  if (touching.length > 1) {
+    return refuse(
+      `题面同时点名了 ${String(touching.length)} 个含顶点的角（${touching.map((relation) => relation.targets.join("")).join("、")}）：两个方程一个未知量是联立，本层不做。`,
+      [...input.baseNames, input.apexName]
+    )
+  }
+  const relation = touching[0]!
+  const [first, vertex, third] = relation.targets as [string, string, string]
+  const apexEndpoint = first === input.apexName ? first : third === input.apexName ? third : null
+  const ringEndpoint = apexEndpoint === first ? third : first
+  if (apexEndpoint === null || !input.baseNames.includes(vertex) || !input.baseNames.includes(ringEndpoint)) {
+    return refuse(
+      `点名角 ${relation.targets.join("")} 的形状出了本层范围：本层只做"角的顶点在底面环上、恰一条腿的另一个端点是本题顶点 ${input.apexName}"的角（如 ∠${input.apexName}AB）。顶点本身是角的顶点、或两条腿的端点都在环外时，位置要两个以上未知量才能定。`,
+      [...relation.targets, input.apexName]
+    )
+  }
+  if (new Set(relation.targets).size !== 3) {
+    return refuse(`点名角 ${relation.targets.join("")} 的点名有重复，本层不猜它指哪个角。`, relation.targets)
+  }
+  const stated = interpretValue(relation.value, null)
+  if (stated === null) {
+    return refuse(`点名角 ${relation.targets.join("")} 没有可用的度数。`, relation.targets)
+  }
+  if (!(stated.value > 0) || stated.value >= 180) {
+    return refuse(`点名角 ${relation.targets.join("")} 是 ${formatNumber(stated.value)}°：角的内部角必须在 0° 与 180° 之间。`, relation.targets)
+  }
+  return { kind: "solve", vertex, apexEndpoint, ringEndpoint, degrees: stated.value, label: relation.targets.join("") }
+}
+
+/**
+ * 求根与常性判定的读数：`root` 是扫到的**最小正根**（没有就是 `null`），
+ * `lowDegrees` / `highDegrees` 是**两个不同的高**上量到的同一个角（用来判"这个角与高无关"）。
+ */
+interface ApexAngleProbe {
+  root: number | null
+  lowDegrees: number | null
+  highDegrees: number | null
+}
+
+/**
+ * 在"顶点在垂足正上方"这一族里，对**内核自己的角度量**做有界求根，并顺带量两个高上的读数。
+ *
+ * 与 `solveDihedralHeight` 同一条口径：先固定步数扫描找第一个符号变化区间，再固定步数二分；
+ * **单调性不假设**（只认符号变化），**取最小正根**（可复现）。量的是**候选的最终坐标**，
+ * 不读构造过程的中间量。
+ *
+ * **两个读数为什么要一起给**：`∠DAB` 那种角的腿可能沿底面法向（`A` 是垂足），于**任何**高都满足它
+ * —— 那时扫描会"立刻找到一个根"，而真相是"**这个角定不了高**"。调用方拿这两个读数就能把
+ * "角把高定住了"与"角本来必然成立"分开说，而不是把后者说成前者（本块第一版就是那么说的，实测被自己的判据抓住）。
+ */
+function probeApexAngleHeight(request: {
+  vertexPoint: Vector3
+  ringPoint: Vector3
+  footPoint: Vector3
+  targetDegrees: number
+  scale: number
+}): ApexAngleProbe {
+  const apexAt = (height: number): Vector3 => ({ x: request.footPoint.x, y: request.footPoint.y, z: request.footPoint.z + height })
+  const measuredAt = (height: number): number | null => interiorAngleDegrees(request.vertexPoint, apexAt(height), request.ringPoint)
+  const residualAt = (height: number): number | null => {
+    const measured = measuredAt(height)
+    return measured === null ? null : measured - request.targetDegrees
+  }
+  const sampleScale = Math.max(request.scale, 1)
+  const lowDegrees = measuredAt(sampleScale * APEX_ANGLE_CONSTANCY_LOW)
+  const highDegrees = measuredAt(sampleScale * APEX_ANGLE_CONSTANCY_HIGH)
+
+  const limit = sampleScale * APEX_ANGLE_HEIGHT_LIMIT
+  if (!Number.isFinite(limit) || limit <= 0) return { root: null, lowDegrees, highDegrees }
+  let previousHeight = 0
+  let previousResidual = residualAt(0)
+  if (previousResidual !== null && Math.abs(previousResidual) <= ANGLE_TOLERANCE_DEGREES) {
+    return { root: 0, lowDegrees, highDegrees }
+  }
+  for (let step = 1; step <= APEX_ANGLE_SCAN_STEPS; step += 1) {
+    const height = (limit * step) / APEX_ANGLE_SCAN_STEPS
+    const residual = residualAt(height)
+    if (residual === null) break
+    if (Math.abs(residual) <= ANGLE_TOLERANCE_DEGREES) return { root: height, lowDegrees, highDegrees }
+    if (previousResidual !== null && Math.sign(previousResidual) !== Math.sign(residual)) {
+      let low = previousHeight
+      let high = height
+      let lowResidual = previousResidual
+      for (let iteration = 0; iteration < APEX_ANGLE_BISECTION_STEPS; iteration += 1) {
+        const middle = (low + high) / 2
+        const middleResidual = residualAt(middle)
+        if (middleResidual === null) break
+        if (Math.abs(middleResidual) <= ANGLE_TOLERANCE_DEGREES) return { root: middle, lowDegrees, highDegrees }
+        if (Math.sign(middleResidual) === Math.sign(lowResidual)) {
+          low = middle
+          lowResidual = middleResidual
+        } else {
+          high = middle
+        }
+      }
+      return { root: (low + high) / 2, lowDegrees, highDegrees }
+    }
+    previousHeight = height
+    previousResidual = residual
+  }
+  return { root: null, lowDegrees, highDegrees }
+}
+
+/**
+ * **空间里三点的内角**（度）：角在 `vertex` 处，两条边分别指向 `first` 与 `second`。
+ *
+ * **为什么不用 `dynamic-measurements` 的 `angleBetween`**：那个原语吃的是**二维** `Coordinate`
+ * （只读 `x` / `y`）。顶点沿 `z` 抬高时，它在投影上与原方向**完全重合**，于是把那个角**恒量成 0°** ——
+ * 本块第一版就是这么写的，四条判据当场红（"角与高无关、恒为 0°"）。教训照旧：
+ * **一个原语在它自己的那条路上验过，不等于它在另一条路上也成立**。
+ *
+ * 这里与统一核验器的 `planarAngle` 判据**同一条规则**（归一化点积取 `acos`、夹到 `[-1, 1]`、出度），
+ * 量的也是**最终坐标** —— 构造器与核验器算的是同一个角，才不会出现"构造说成立、核验说不是"。
+ */
+function interiorAngleDegrees(vertex: Vector3, first: Vector3, second: Vector3): number | null {
+  const alongFirst = subtractVector3(first, vertex)
+  const alongSecond = subtractVector3(second, vertex)
+  const magnitudes = lengthVector3(alongFirst) * lengthVector3(alongSecond)
+  if (!(magnitudes > 1e-12)) return null
+  const cosine = dotVector3(alongFirst, alongSecond) / magnitudes
+  return (Math.acos(Math.min(1, Math.max(-1, cosine))) * 180) / Math.PI
+}
+
+/**
+ * **§3-F 阶段 B（B1）的入口**：题面点名了一条含顶点的平面角时，按它定高。
+ *
+ * 返回 `null` 表示"这一支不管这件事"（没有这种角，或角全在底面环上 = 阶段 A 的事），
+ * 调用方照旧取自己的代表值 —— **不是**静默通过。
+ *
+ * 三种结局（设计 §4）：
+ * - **角与高有关** ⇒ 用扫到的最小正根定高（最确定的那个）；
+ * - **角与高无关且等于题面值** ⇒ **冗余成立**：高照旧取系统自选值，文案说明"它本来必然成立"；
+ * - **角与高无关且不等于题面值** ⇒ **如实报矛盾**（说出恒为多少度），**不是**"没找到"。
+ *   还有第四种：角随高变、但允许范围内取不到题面要的值 ⇒ 如实拒绝并报出**实测的变化范围**。
+ */
+function solveApexAngleHeight(input: {
+  apexName: string
+  foot: string
+  base: readonly Vector3[]
+  baseNames: readonly string[]
+  relations: readonly WitnessRelation[]
+  freeHeight: number
+}): { status: "ok"; value: number; note: string | null; assumed: boolean; derived: "planar-angle" | "none" } | WitnessConstructRejection | null {
+  const shape = classifyApexAngle({ apexName: input.apexName, baseNames: input.baseNames, relations: input.relations })
+  if (shape.kind === "skip") return null
+  if (shape.kind === "rejected") return shape.rejection
+
+  const indexOfBase = (name: string): number => input.baseNames.indexOf(name)
+  const vertexPoint = input.base[indexOfBase(shape.vertex)]
+  const ringPoint = input.base[indexOfBase(shape.ringEndpoint)]
+  const footPoint = input.base[indexOfBase(input.foot)]
+  if (!vertexPoint || !ringPoint || !footPoint) {
+    return reject("missing-height-reference", `点名角 ${shape.label} 的顶点 ${shape.vertex}、${shape.ringEndpoint} 或垂足 ${input.foot} 不在底面环上。`, [...shape.label.split("")])
+  }
+  const scale = Math.max(input.base.reduce((largest, point) => Math.max(largest, Math.abs(point.x), Math.abs(point.y), Math.abs(point.z)), 1), 1)
+  const probe = probeApexAngleHeight({ vertexPoint, ringPoint, footPoint, targetDegrees: shape.degrees, scale })
+
+  /**
+   * **先看"这个角是不是与高无关"**（两点实测），因为它决定**话怎么说**，而根决定**图画不画得出来**：
+   * 角恒定时扫描必然"立刻找到根"（任何高都满足），如果照根那套文案说，就会把
+   * "这个角定不了高"说成"高由这个角求出" —— 本块第一版正是这么说的，被自己的判据当场抓住。
+   */
+  const constant =
+    probe.lowDegrees !== null && probe.highDegrees !== null && Math.abs(probe.lowDegrees - probe.highDegrees) <= APEX_ANGLE_CONSTANCY_TOLERANCE
+      ? probe.lowDegrees
+      : null
+  if (constant !== null) {
+    if (Math.abs(constant - shape.degrees) <= APEX_ANGLE_CONSTANCY_TOLERANCE) {
+      return {
+        status: "ok",
+        value: input.freeHeight,
+        note: `题面点名的角 ${shape.label} = ${formatNumber(shape.degrees)}° 由其它题设必然成立（实测它与顶点的高无关，恒为 ${formatNumber(constant)}°），高照旧取系统自选的 ${formatNumber(input.freeHeight)}`,
+        assumed: true,
+        derived: "none"
+      }
+    }
+    return reject(
+      "contradictory-angle",
+      `点名角 ${shape.label} = ${formatNumber(shape.degrees)}° 与其它题设不可能同时成立：那个角与顶点的高无关（实测在两个不同的高上恒为 ${formatNumber(constant)}°），而它不等于题面要的值。`,
+      [shape.vertex, shape.ringEndpoint, input.apexName]
+    )
+  }
+  if (probe.root !== null) {
+    return {
+      status: "ok",
+      value: probe.root,
+      note: `高由题面点名的角 ${shape.label} = ${formatNumber(shape.degrees)}° 求出：在垂足 ${input.foot} 正上方对内核自己的角度量做有界求根，得 h = ${formatNumber(probe.root)}（非解析闭式）`,
+      assumed: false,
+      derived: "planar-angle"
+    }
+  }
+  return reject(
+    "unsupported-angle-shape",
+    `点名角 ${shape.label} = ${formatNumber(shape.degrees)}° 在"顶点在 ${input.foot} 正上方"这一族里没有找到解：把高从 ${formatNumber(scale * APEX_ANGLE_CONSTANCY_LOW)} 扫到 ${formatNumber(scale * APEX_ANGLE_HEIGHT_LIMIT)}，实测这个角只在 ${formatNumber(probe.lowDegrees ?? 0)}° 到 ${formatNumber(probe.highDegrees ?? 0)}° 之间变化，取不到题面要的值。`,
+    [shape.vertex, shape.ringEndpoint, input.apexName]
+  )
 }
 
 /**

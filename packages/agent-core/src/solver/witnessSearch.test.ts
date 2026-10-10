@@ -801,3 +801,86 @@ describe("witness search: the legacy polyhedron facade delegates instead of dupl
     expect(result.considered.join(" ")).toContain("未满足 PA-perp-base")
   })
 })
+
+/**
+ * **环外点参与的平面数值角（§3-F 阶段 B）在整条链上的表现。**
+ *
+ * 这一层要钉两件事，而且**第二件比第一件重要**：
+ * 1. 顶点在环上、一条腿到顶点的角（`∠DBA` / `∠PBA`）现在**能求出高度**、能拿到通过核验的候选，
+ *    核验器的结论照旧由它自己量（不读构造方的自述）；
+ * 2. **棱柱那条路不许被顺手打开**：`∠A′AB` 的方程形状与这一族**一模一样**
+ *    （顶点在环上、一条腿的端点在环外），但它是"用角把侧棱方向钉死"，早已裁决不做。
+ *    所以这里同时钉住"带角的那句仍然不通过"与"去掉角的那句仍然通过"这一对对照。
+ */
+describe("环外点参与的数值角（§3-F 阶段 B）", () => {
+  /** 形状描述只吃"题面明说的条件"（`role === "given"`），与 S6 那一组同一条取法。 */
+  const givensOf = (prompt: string) => obligationsOf(prompt).obligations.filter((obligation) => obligation.role === "given")
+
+  const interiorAngle = (candidate: PolyhedronWitness, vertex: string, first: string, second: string): number => {
+    const at = coordinates(candidate)
+    const alongFirst = subtractVector3(at(first), at(vertex))
+    const alongSecond = subtractVector3(at(second), at(vertex))
+    return (Math.acos(Math.min(1, Math.max(-1, dotVector3(alongFirst, alongSecond) / (lengthVector3(alongFirst) * lengthVector3(alongSecond))))) * 180) / Math.PI
+  }
+
+  it("三棱锥：∠DBA=60° 从题面走到通过核验的候选，且那个角由测试自己算出来是 60°", () => {
+    // 题面必须带「线段 ⊥ 点名平面」那一句：见证搜索靠它定底面环、垂足与顶点。
+    const prompt = "在三棱锥D-ABC中，AD⊥平面ABC，∠DBA=60°，画示意图"
+    const shaped = specForPrompt(prompt, givensOf(prompt))
+    expect(shaped.status, JSON.stringify(shaped)).toBe("ok")
+    if (shaped.status !== "ok") return
+    expect(shaped.spec.family).toBe("pyramid")
+
+    const result = search(prompt, { shape: "pyramid", spec: shaped.spec })
+    expect(result.status, JSON.stringify(result)).toBe("verified_instance")
+    if (result.status !== "verified_instance") return
+    expect(interiorAngle(result.candidate, "B", "D", "A")).toBeCloseTo(60, 4)
+  })
+
+  it("四棱锥（底面有环上直角）：∠PBA=60° 同样能走到通过核验的候选", () => {
+    const prompt = "在四棱锥P-ABCD中，PA⊥平面ABCD，AB⊥AD，∠PBA=60°，画出这个四棱锥"
+    const shaped = specForPrompt(prompt, givensOf(prompt))
+    expect(shaped.status, JSON.stringify(shaped)).toBe("ok")
+    if (shaped.status !== "ok") return
+
+    const result = search(prompt, { shape: "pyramid", spec: shaped.spec })
+    expect(result.status, JSON.stringify(result)).toBe("verified_instance")
+    if (result.status !== "verified_instance") return
+    expect(interiorAngle(result.candidate, "B", "P", "A")).toBeCloseTo(60, 4)
+  })
+
+  it("真矛盾的角：∠DAB=60°（A 是垂足 ⇒ 恒 90°）不给通过核验的候选，并说出「不可能同时成立」", () => {
+    const prompt = "在三棱锥D-ABC中，AD⊥平面ABC，∠DAB=60°，画示意图"
+    const shaped = specForPrompt(prompt, givensOf(prompt))
+    if (shaped.status !== "ok") {
+      expect(JSON.stringify(shaped)).toContain("contradictory-angle")
+      return
+    }
+    const result = search(prompt, { shape: "pyramid", spec: shaped.spec })
+    expect(result.status, JSON.stringify(result)).not.toBe("verified_instance")
+    expect(JSON.stringify(result)).toContain("contradictory-angle")
+  })
+
+  it("护栏：斜棱柱 + 菱形底面 + ∠A′AB=60° 仍然不通过，而**去掉角**的那句仍然通过", () => {
+    const withAngle = "在斜四棱柱ABCD-A′B′C′D′中，底面ABCD是菱形，∠A′AB=60°，画出这个四棱柱"
+    const withoutAngle = "在斜四棱柱ABCD-A′B′C′D′中，底面ABCD是菱形，画出这个四棱柱"
+
+    const shapedWithout = specForPrompt(withoutAngle, givensOf(withoutAngle))
+    expect(shapedWithout.status, JSON.stringify(shapedWithout)).toBe("ok")
+    if (shapedWithout.status === "ok") {
+      const control = search(withoutAngle, { shape: "prism", spec: shapedWithout.spec })
+      expect(control.status, JSON.stringify(control)).toBe("verified_instance")
+    }
+
+    const shapedWith = specForPrompt(withAngle, givensOf(withAngle))
+    if (shapedWith.status !== "ok") {
+      // 认不出形状也算"不打开这条路"，但要说清是哪一种 —— 这里如实两条都接受，并钉住"不是 verified"。
+      expect(JSON.stringify(shapedWith)).not.toContain("verified_instance")
+      return
+    }
+    const result = search(withAngle, { shape: "prism", spec: shapedWith.spec })
+    expect(result.status, JSON.stringify(result)).not.toBe("verified_instance")
+    // 理由必须落在那个角上（而不是"什么都没算"）。
+    expect(JSON.stringify(result)).toContain("∠A′AB=60°")
+  })
+})

@@ -1192,3 +1192,123 @@ describe("底面点名数值角（§3-F）", () => {
     if (result.status === "rejected") expect(result.code).toBe("unsupported-base-shape")
   })
 })
+
+/**
+ * **环外点参与的数值角（§3-F 阶段 B / B1）**：顶点在底面环上、**恰一条腿的另一个端点是本题顶点**
+ * （`∠DBA`、`∠PBA`）。未知量只有**顶点的高** `h`，用与二面角 `solveDihedralHeight` **同一套**的
+ * 有界求根解出来（固定步数、无 RNG、失败如实拒绝，不给近似值）。
+ *
+ * 判据一律**自算**（拿返回的坐标算内部角，不读构造方的自述），并要求**旁证**：
+ * 顶点在垂足正上方时那个角随 `h` 单调（`h=|AB|·tan θ`），所以解析解必须与求根结果一致。
+ *
+ * 这一族今天**什么都出不来**（设计 §0 的探针实测：搜索里的自由高是个常量，根本试不到别的高），
+ * 所以下面每条在改动前都是红的。
+ */
+describe("环外点参与的数值角（§3-F 阶段 B）", () => {
+  /** 拿返回的坐标自己算内部角（与核验器同一个定义），**不读**构造方的任何自述。 */
+  const interiorAngle = (result: { witness: { points: Vector3[]; names: string[] } }, vertex: string, first: string, second: string): number => {
+    const at = (name: string): Vector3 => result.witness.points[indexOf(result.witness, name)]!
+    const alongFirst = subtractVector3(at(first), at(vertex))
+    const alongSecond = subtractVector3(at(second), at(vertex))
+    const magnitudes = vectorLength(alongFirst) * vectorLength(alongSecond)
+    return (Math.acos(Math.min(1, Math.max(-1, dotVector3(alongFirst, alongSecond) / magnitudes))) * 180) / Math.PI
+  }
+
+  /** 三角形底面 `ABC` + 顶点 `D` 在 `A` 正上方：`∠DBA` 就是这一族的代表题面。 */
+  const apexAngleRequest = (targets: string[], value: number): PyramidConstructRequest => ({
+    shape: "pyramid",
+    base: ["A", "B", "C"],
+    apex: { at: "D", foot: "A" },
+    relations: [{ kind: "planarAngle", targets, value, unit: "degree" }]
+  })
+
+  /** 用户在面板上看得见的那两段文字（"系统自选了哪些值"与"系统替你做了什么"）合起来读。 */
+  const userVisibleText = (result: { witness: { freeValues: string[]; assumptions: string[] } }): string =>
+    [...result.witness.freeValues, ...result.witness.assumptions].join("；")
+
+  it("∠DBA=60°：按那个角有界求根求高，角自算成立，且与解析解 h=|AB|·tanθ 一致", () => {
+    const result = constructPyramidWitness(apexAngleRequest(["D", "B", "A"], 60))
+    expect(result.status, result.status === "rejected" ? `${result.code}: ${result.message}` : "constructed").toBe("candidate")
+    if (result.status !== "candidate") return
+
+    // ① 题面那个角**自算**成立。
+    expect(interiorAngle(result, "B", "D", "A")).toBeCloseTo(60, 6)
+
+    // ② 旁证：顶点在垂足正上方 ⇒ 解析解就是 |AB|·tan60°，求根结果必须与它一致。
+    const at = (name: string): Vector3 => result.witness.points[indexOf(result.witness, name)]!
+    const height = at("D").z - at("A").z
+    const expected = distanceVector3(at("A"), at("B")) * Math.tan((60 * Math.PI) / 180)
+    expect(height, `求根得到 h=${String(height)}，解析解 h=${String(expected)}`).toBeCloseTo(expected, 6)
+
+    // ③ 用户要看得见"这个高是怎么来的"（不是系统随手挑的一个值）。
+    expect(userVisibleText(result)).toContain("有界求根")
+  })
+
+  it("∠DBA=120°：允许范围内没有满足它的高 ⇒ 如实拒绝，不编一个近似值", () => {
+    const result = constructPyramidWitness(apexAngleRequest(["D", "B", "A"], 120))
+    expect(result.status).toBe("rejected")
+    if (result.status === "rejected") {
+      expect(result.code).toBe("unsupported-angle-shape")
+      expect(result.message).toContain("120")
+    }
+  })
+
+  it("∠DAB=60°（A 是垂足）⇒ 如实报矛盾，并说出那个角恒为多少度", () => {
+    const result = constructPyramidWitness(apexAngleRequest(["D", "A", "B"], 60))
+    expect(result.status).toBe("rejected")
+    if (result.status === "rejected") {
+      expect(result.code).toBe("contradictory-angle")
+      expect(result.message).toContain("恒为 90")
+      expect(result.message).toContain("60")
+    }
+  })
+
+  it("∠DAB=90°（A 是垂足）⇒ 仍然通过，并说明它由其它条件必然成立", () => {
+    const result = constructPyramidWitness(apexAngleRequest(["D", "A", "B"], 90))
+    expect(result.status, result.status === "rejected" ? `${result.code}: ${result.message}` : "constructed").toBe("candidate")
+    if (result.status !== "candidate") return
+    expect(interiorAngle(result, "A", "D", "B")).toBeCloseTo(90, 6)
+    expect(userVisibleText(result)).toContain("必然成立")
+    expect(userVisibleText(result)).toContain("90")
+  })
+
+  it("∠ADB=60°（顶点本身是角的顶点）⇒ 如实拒绝，文案指到「两个未知量」", () => {
+    const result = constructPyramidWitness(apexAngleRequest(["A", "D", "B"], 60))
+    expect(result.status).toBe("rejected")
+    if (result.status === "rejected") {
+      expect(result.code).toBe("unsupported-angle-shape")
+      expect(result.message).toContain("顶点")
+    }
+  })
+
+  it("两个点名角同时在场 ⇒ 如实拒绝（本层不做联立）", () => {
+    const result = constructPyramidWitness({
+      shape: "pyramid",
+      base: ["A", "B", "C"],
+      apex: { at: "D", foot: "A" },
+      relations: [
+        { kind: "planarAngle", targets: ["D", "B", "A"], value: 60, unit: "degree" },
+        { kind: "planarAngle", targets: ["D", "C", "A"], value: 50, unit: "degree" }
+      ]
+    })
+    expect(result.status).toBe("rejected")
+    if (result.status === "rejected") {
+      expect(result.code).toBe("unsupported-angle-shape")
+      expect(result.message).toContain("联立")
+    }
+  })
+
+  it("题面同时给了高又给 B1 角 ⇒ 高仍按题面（构造期不做联立），角由核验器如实判", () => {
+    const result = constructPyramidWitness({
+      shape: "pyramid",
+      base: ["A", "B", "C"],
+      apex: { at: "D", foot: "A", height: { kind: "fixed", value: 1 } },
+      relations: [{ kind: "planarAngle", targets: ["D", "B", "A"], value: 60, unit: "degree" }]
+    })
+    expect(result.status, result.status === "rejected" ? `${result.code}: ${result.message}` : "constructed").toBe("candidate")
+    if (result.status !== "candidate") return
+    // 高就是题面给的 1：**不**为了那个角去改题面给的值。
+    const at = (name: string): Vector3 => result.witness.points[indexOf(result.witness, name)]!
+    expect(at("D").z - at("A").z).toBeCloseTo(1, 10)
+  })
+})

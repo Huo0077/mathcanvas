@@ -37,7 +37,7 @@
 | 见证关系有五种 kind：`perpendicular` / `parallel` / `equal-length` / `segment-length` / `dihedral` —— **没有平面角** | `packages/geometry-kernel/src/witness/constructors.ts` 的 `WitnessRelation` |
 | 题设种类里有 `dihedral`（**二面角**）与 `perpendicular` / `parallel`，**没有平面角** | `packages/agent-core/src/diagramObligations.ts` 的 `DiagramObligationKind` |
 | `∠ABC=60°` 由 `UNREAD_CONDITION` 接住 ⇒ 进 `unverified`，并被四条用例 + 一条 benchmark 案例钉住 | `diagramObligations.ts:328` 起；用例见 §5 |
-| **量角的工具早就有**：`angleBetween(vertex, first, second, "interior")`、`measureAngle3`、反应式那边的 `angleBetween(points[1], points[0], points[2])` | `dynamic-measurements.ts` / `measurements3d.ts` / `reactive/derivedNodes.ts` |
+| **量角的工具早就有**：`angleBetween(vertex, first, second, "interior")`、`measureAngle3`、反应式那边的 `angleBetween(points[1], points[0], points[2])` | `dynamic-measurements.ts` / `measurements3d.ts` / `reactive/derivedNodes.ts`。**⚠️ 2026-10-10 更正**：其中 `dynamic-measurements` 的 `angleBetween` 是**二维**原语（只读 `x` / `y`），**不能**用来量立体里随高度变化的角；核验器的 `planarAngle` 判据实际用的是自己算的**空间内角**（`subtractVector3` + 归一化点积 `acos`）。阶段 B 实施时正是踩了这个坑（见[阶段 B 设计](2026-10-10-out-of-ring-angle-conditions-design.md) §3 的更正） |
 
 **一句话结论**：**判据那一侧几乎是白送的，难的是构造** —— 而构造在两个底面族上本来就是闭式的
 （环首直角 ⇒ 矩形、菱形取代表角、直角梯形取两条不等的高），所以"底面环上的角"这一支可以现在就做。
