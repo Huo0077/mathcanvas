@@ -151,4 +151,28 @@ describe("题面点名的点由系统兜底补建", () => {
     // 补不了就一个都不补（"要么全补、要么不补"）。
     expect(Object.hasOwn(result, "materialisedActions")).toBe(false)
   })
+
+  it("**三维图里的平面点不算数**：它顶不掉题设核验，也不该让系统什么都不建（用户现场）", () => {
+    /**
+     * 现场（2026-10-10，桌面端 3.3.1）：对象树里有 `O`、属性栏也认它，但**画布上永远看不见**、
+     * 也点不中；底部还提示"空间直线需要 2 个空间点，当前 0 个"。
+     *
+     * 真因：那个 `O` 是一个**平面点**（属性栏显示的是「点坐标 + 创建动圆」那一套，而不是
+     * 「空间点坐标 + 宿主绑定」）—— 三维画布只画 `point3`，而核验的点名表却**把 2D 点按 `z = 0`
+     * 也收了进来**（V0b 为平面图形加的那一支）。于是"O为 BD 的中点"被这个平面点**满足**了
+     * ⇒ 兜底补建根本没触发 ⇒ 图上没有那个点。
+     *
+     * 判据：三维文档里平面点不进点名表 ⇒ 名字缺失 ⇒ 系统按题设补建一个**空间点** `O`。
+     */
+    const base = createEmptyDocument("geometry3d")
+    base.primitives.push({ id: "planar-o", type: "point", x: 0, y: 0, label: "O" })
+
+    const result = compile(polyhedronPlan(["A", "B", "C", "D"]), O_PROMPT, base)
+
+    expect(result.diagramVerification?.status).toBe("passed")
+    const document = result.draftDocument
+    if (document === null) throw new Error("补建之后必须真的有候选文档")
+    const spatial = document.primitives.filter((primitive) => primitive.type === "point3" && (primitive as { label?: unknown }).label === "O")
+    expect(spatial).toHaveLength(1)
+  })
 })

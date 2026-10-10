@@ -108,10 +108,19 @@ function candidatePoints(plan: PlanEnvelope, candidate: GeometryDocument, base?:
      * **2D 与 3D 的点都要收**（V0b）：`point3` 自带 `position`，平面 `point` 用 `x`/`y`。
      * 平面点补上 `z = 0` 之后交给**同一套**判据 —— 平面题的垂直/平行本来就在 z = 0 的平面上算，
      * 为"2D"再开一条数学分支等于把同一个判断写两遍。
+     *
+     * **但只在平面工作区收**（2026-10-10 用户现场）。三维文档里的一个平面点**画不出来**
+     * （三维画布只画 `point3`，属性栏给它的也是「点坐标 + 创建动圆」那一套），把它按 `z = 0`
+     * 收进点名表，就等于让"题设已核验"挂在一个用户**根本看不见的对象**上：现场就是
+     * `O为 BD的中点` 被一个平面 `O` 满足了 ⇒ 兜底补建不触发 ⇒ 图上永远没有那个点，
+     * 底部还提示"空间直线需要 2 个空间点，当前 0 个"。
+     * 判据：三维工作区里平面点不进表 ⇒ 名字"缺失"，由 `missingNamedPoints` 如实报出、
+     * 由编译器按题设补建一个**空间点**。
      */
+    const planarPointsCount = candidate.workspace !== "geometry3d"
     const position: Vector3 | undefined = primitive.type === "point3"
       ? primitive.position
-      : primitive.type === "point"
+      : primitive.type === "point" && planarPointsCount
         ? { x: primitive.x, y: primitive.y, z: 0 }
         : undefined
     if (position === undefined) continue
