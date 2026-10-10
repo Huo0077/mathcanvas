@@ -115,6 +115,8 @@ npm run eval:agent
 - [现行作图题设计修订](docs/superpowers/specs/2026-10-06-diagram-scope-addendum.md)
 - [立体图形覆盖扩宽设计（形状数据化；**S1–S6 已按计划实施并收口**，2026-10-10）](docs/superpowers/specs/2026-10-06-solid-shape-coverage-design.md)
 - [现行作图题实施计划（V0–V3）](docs/superpowers/plans/2026-10-06-diagram-agent-auto-lean-implementation-plan.md)
+- [**下一步计划（人工自测跟进 + 未完成项 + 发布准备）**](docs/superpowers/plans/2026-10-10-selftest-followups-and-release-plan.md)
+- [人工验收走查手册（逐步操作）](docs/acceptance/human-acceptance-walkthrough.md)
 - [旧全课程设计（已被作图范围替代）](docs/superpowers/specs/2026-10-06-high-school-auto-lean-design.md)
 - [旧全课程计划（历史范围）](docs/superpowers/plans/2026-10-06-agent-next-round-implementation-plan.md)
 - [下一轮任务进度与历史审查问题台账](docs/agent-next-round-progress.md)
