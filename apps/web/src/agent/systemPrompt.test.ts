@@ -557,8 +557,12 @@ describe("production system prompt", () => {
    * **"不许把近似说成精确"这一条只能靠提示词**（§10）：模型拿到 `approximate` 之后仍然可以
    * 在回答里写成"外接球半径 1.5"。所以策略文本里必须逐字给出四种状态的说法，
    * 而且**不只在"能出计划"的那一支**里（只读作答同样会转述读数）。
+   *
+   * **2026-10-10 加了第五个词 `stale`**：派生球还在、但"它是宿主的球"这条主张不成立了。
+   * 少了它，模型只能借 `undefined` 的读法说"不存在" —— 而那对着一只画面上看得见的球说，
+   * 是用户眼里最直接的那种假话。
    */
-  it("tells the model how to speak about each of the four kernel statuses", () => {
+  it("tells the model how to speak about each of the kernel statuses", () => {
     for (const canPlan of [true, false]) {
       const policy = buildPolicyText({ channel: "strict_json", canPlan, actionIds: ["solid.create_prism"] })
       expect(policy).toContain("exact")
@@ -566,6 +570,9 @@ describe("production system prompt", () => {
       expect(policy).toContain("undefined")
       expect(policy).toContain("degenerate")
       expect(policy).toContain("残差")
+      // 第五个词：`stale` ＝ 结论还在、但已经不成立（与"不存在"必须分开说）。
+      expect(policy).toContain("stale")
+      expect(policy).toContain("不再成立")
     }
   })
 

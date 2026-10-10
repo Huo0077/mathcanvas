@@ -359,6 +359,8 @@ describe("engineering inspector", () => {
       // 斜棱柱：一般多面体不一定有外接球 / 内切球 → 两个都如实报"不存在"，并带上原因。
       expect(reading(container, "derived.circumsphere").status).toBe("undefined")
       expect(reading(container, "derived.circumsphere").text).toContain("外接球")
+      // **"真的没有这只球"读作"不存在"** —— 这一句是下面那条 `stale` 的对照。
+      expect(reading(container, "derived.circumsphere").text).toContain("不存在")
       expect(reading(container, "derived.insphere").status).toBe("undefined")
       expect(reading(container, "derived.insphere").text).toContain("内切球")
       // 截面读数是**内核算的**（不是图元上那个可能过期的 `classification` 字段）。
@@ -372,9 +374,13 @@ describe("engineering inspector", () => {
      * **派生球与宿主对不上时，界面必须说出来**（S5 核验）。
      *
      * 两件事一起钉：
-     * ① 读数**在不成立时才出现**（`derived.sphere_stale`，状态 `undefined`），而且理由说得出差在哪；
+     * ① 读数**在不成立时才出现**（`derived.sphere_stale`），而且理由说得出差在哪；
      * ② **选中那只球自己**时也要看得到 —— 这只球的读数按**宿主**归档，若"选中的图元 → 实体 id"
      *    那一跳不认 `sphere`，用户点开球会看到一片空白，而那时恰恰最该看到"这球还算不算数"。
+     *
+     * **2026-10-10 加了第三个词**：这一条的状态是 `stale`（"不再成立"），**不是** `undefined` ——
+     * 借 `undefined` 会让徽章写出"不存在"，而那只球就在画面上（用户当场会以为界面坏了）。
+     * 上面那条 `undefined` 用例是它的对照：**两件事必须仍然分得开**。
      */
     it("surfaces a derived sphere that no longer matches its host, when the sphere itself is selected", () => {
       const cube = { id: "cube-1", type: "cube" as const, origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 2, z: 2 }, label: "立方体 1" }
@@ -387,7 +393,10 @@ describe("engineering inspector", () => {
       const container = globalThis.document.querySelector("[data-derived-panel]") as HTMLElement
       expect(container).toBeTruthy()
       const stale = reading(container, "derived.sphere_stale")
-      expect(stale.status).toBe("undefined")
+      expect(stale.status).toBe("stale")
+      // **徽章不许说"不存在"**：那只球就在文档里，不成立的是"它是这只实体的球"。
+      expect(stale.text).not.toContain("不存在")
+      expect(stale.text).toContain("不再成立")
       // 行标题用的是**那只球自己的标签**（读数带 `sourceId`，面板按它取名字）—— 用户点开的是球，标题就该是它。
       expect(stale.text).toContain("外接球")
       // 内部枚举名绝不进界面。

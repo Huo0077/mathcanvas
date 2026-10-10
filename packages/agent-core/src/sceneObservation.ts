@@ -73,9 +73,13 @@ export const DEFAULT_DERIVED_STATUS_LIMIT = 12
  *
  * 形状刻意与 `@draw/scene-graph` 的 `SolidDerivedStatus` 对齐（`entityId` 由它的 `solidId` 来、
  * `sourceId` 由它的 `sourceId` 来），因为**结论只能有一个来源**：这里是搬运，不是重新求解。
- * 四个状态原样保留 —— `exact`（确定的结论：闭式解或已核验的解）/ `approximate`（数值解，
+ * 状态原样保留 —— `exact`（确定的结论：闭式解或已核验的解）/ `approximate`（数值解，
  * 带残差）/ `undefined`（解不存在）/ `degenerate`（输入本身退化）折叠任何一个，
  * 模型就没有办法如实转述（规格 §10）。
+ *
+ * **第五个词 `stale`**（2026-10-10 裁决）：派生球还在文档里，但"它是这只实体的球"这条主张
+ * 已经不成立（`derived.sphere_stale`）。它与 `undefined`（**根本没有**这种球）是两件事 ——
+ * 少了这个词，模型只能借"不存在"去说它，而那对着一只画面上看得见的球说是假话。
  */
 export interface ObservedDerivedStatus {
   /**
@@ -86,7 +90,7 @@ export interface ObservedDerivedStatus {
   entityId: string
   /** `derived.circumsphere` / `derived.insphere` / `derived.section`。 */
   code: string
-  status: "exact" | "approximate" | "undefined" | "degenerate"
+  status: "exact" | "approximate" | "undefined" | "degenerate" | "stale"
   /** 一句话结论或原因（`exact` 给结论，其余给原因）。 */
   message: string
   /**

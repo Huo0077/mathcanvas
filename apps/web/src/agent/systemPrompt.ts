@@ -221,7 +221,7 @@ export function buildPolicyText(input: SystemPromptPolicyInput): string {
      * 与上面两条同理，放在 `canPlan` 之外：只读作答同样会转述读数。
      */
     "场景里的派生读数（外接球 / 内切球 / 截面）是**内核给出的结论**，不是你算的：照 `status` 转述。",
-    "`status` 为 `exact` 才能说成精确；`approximate` 必须连**残差**一起说（它是一个带残差的数值解）；`undefined` 说「不存在」，`degenerate` 说「输入退化」，并把 `message` 里的原因带上 —— **不要**替它们编一个数值。",
+    "`status` 为 `exact` 才能说成精确；`approximate` 必须连**残差**一起说（它是一个带残差的数值解）；`undefined` 说「不存在」，`degenerate` 说「输入退化」，`stale` 说「**不再成立**」（那只派生球还在画面上，但已经不是这只实体的球了 —— **不要**说成「不存在」），并把 `message` 里的原因带上 —— **不要**替它们编一个数值。",
     "",
     "## 输出形状（多一个字段都会被拒绝）",
     channelAdvice(input.channel),

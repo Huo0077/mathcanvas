@@ -72,7 +72,16 @@ describe("derivedSphereLink", () => {
     }
 
     const reading = solidStatusReport(broken).find((entry) => entry.code === "derived.sphere_stale")
-    expect(reading).toMatchObject({ solidId: "solid-1", sourceId: "sphere-out", status: "undefined" })
+    /**
+     * **状态词是 `stale`，不是 `undefined`**（2026-10-10 裁决，S5 的那条待办）。
+     *
+     * 这只球**就在文档里**（`sourceId: "sphere-out"`），不成立的是"它是宿主的球"这条主张。
+     * 借 `undefined` 的后果是**用户看得见的一句假话**：徽章把 `undefined` 说成"不存在"，
+     * 而画面上那只球明明还在。四个求解器状态（`exact` / `approximate` / `undefined` / `degenerate`）
+     * 说的是"解怎么了"，而这一条说的是"**解还在，但已经不是这只实体的解了**" —— 它是
+     * **报告**自己的第五个词，不是任何求解器的返回值。
+     */
+    expect(reading).toMatchObject({ solidId: "solid-1", sourceId: "sphere-out", status: "stale" })
   })
 
   it("violates a sphere whose centre was shifted, naming the unequal distances", () => {

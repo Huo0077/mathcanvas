@@ -189,7 +189,17 @@ export interface SolidDerivedStatus {
   solidId: string
   /** `derived.circumsphere` / `derived.insphere` / `derived.section`。 */
   code: string
-  status: DerivedSolidResult<unknown>["status"]
+  /**
+   * **这份报告自己的状态词表** = 求解器那四个 + `stale`（2026-10-10 裁决）。
+   *
+   * 前四个（`exact` / `approximate` / `undefined` / `degenerate`）是内核求解器的返回值，
+   * 说的是"**解**怎么了"；`stale` 不是任何求解器的返回 —— 它说的是"**解还在，但已经不成立了**"
+   * （`derived.sphere_stale`：那只派生球还画在屏幕上，只是不再是宿主的球）。
+   *
+   * 为什么不能借 `undefined`：界面把 `undefined` 说成"不存在"，那对着一只**看得见的**球说，
+   * 是用户眼里最直接的那种假话（S5 遗留的待裁决项，至此结清）。
+   */
+  status: DerivedSolidResult<unknown>["status"] | "stale"
   /** 给人看的一句话：为什么是这个状态（`exact` 时给出结论，其余带上原因）。 */
   message: string
   /**
@@ -254,7 +264,7 @@ export function solidStatusReport(document: GeometryDocument, scope?: SolidDeriv
    */
   for (const stale of staleDerivedSpheres(document)) {
     if (solidFilter && !solidFilter.has(stale.hostId)) continue
-    report.push({ solidId: stale.hostId, code: "derived.sphere_stale", status: "undefined", message: stale.link.reason, sourceId: stale.sphereId })
+    report.push({ solidId: stale.hostId, code: "derived.sphere_stale", status: "stale", message: stale.link.reason, sourceId: stale.sphereId })
   }
 
   for (const primitive of document.primitives) {

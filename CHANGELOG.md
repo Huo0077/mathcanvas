@@ -7,6 +7,24 @@
 
 
 
+## 2026-10-10 —— 球的状态词表：新增第五个词 `stale`（"不再成立"），与"不存在"分开说
+
+**原来的毛病是一句用户看得见的假话**：派生球与宿主对不上时（`derived.sphere_stale`）报告**借 `undefined`**，而界面把 `undefined` 说成"**不存在**"—— 可那只球**就画在屏幕上**。用户看到的是"球不存在"，而球明明在。
+
+**词表的边界**：四个求解器状态（`exact` / `approximate` / `undefined` / `degenerate`）说的是"**解**怎么了"；这一条说的是"**解还在，但已经不是这只实体的解了**"。所以它是**报告**自己的第五个词，不是任何求解器的返回值 —— `SolidDerivedStatus["status"]` 因此写成 `DerivedSolidResult["status"] | "stale"`。
+
+**改法（一个词，四处同一个口径）**：
+1. `solidStatusReport` 里那条读数 `status: "stale"`；
+2. `derivedStatusLabels` 那张 `Record<SolidDerivedStatus["status"], string>` **因此编译不过**，必须补上 `stale: "不再成立"` —— 这正是当年把这张表写成 `Record` 的理由（"内核多一个状态，这里会编译不过，而不是静默少一行"），第五个词就是被它逼出来的；
+3. `ObservedDerivedStatus`（模型看到的读数）同步 —— 模型与界面**同一个词表**，否则模型还是只能说"不存在"；
+4. `systemPrompt` 的读数口径加一句"`stale` 说「不再成立」，**不要**说成「不存在」"；面板脚注补上第五种。
+
+**判据（三层）**：报告（`derivedSphereLink.test.ts`：`status: "stale"`）；界面（`EngineeringInspector.test.tsx`：徽章是 `stale`、**不含"不存在"**、含"不再成立"；**并留一条对照**：真的没有那种球时仍旧 `undefined`、仍旧读作"不存在" —— 两件事必须仍然分得开）；提示词（`systemPrompt.test.ts`：策略文本含 `stale` 与"不再成立"）。
+
+**变异**：把报告那一格改回 `undefined` ⇒ **报告与界面两层同时真红**；提示词那条**不随它动**（它守的是"话有没有说到"，不是报告本身）—— 照实记。
+
+**读数**：`typecheck` exit 0；`lint` 0 error / 13 warning；全库非 Lean **353 文件 / 4127 通过 + 1 todo / 0 失败**（537.26 s）；全量 e2e 首跑 **220 通过 / 1 失败** —— 那一条是**已记过**的 `agent-oblique-prism.spec.ts:35`（提交后等"已提交"标签 5 s 可见性超时），**孤立复跑 3 passed**。
+
 ## 2026-10-10 —— `proofExport` 有了实验入口与产物呈现（并修掉一处让开关"事实上不生效"的断线）
 
 **做了两件事（计划 §3-D 要求的正是这两件一起做）**：
