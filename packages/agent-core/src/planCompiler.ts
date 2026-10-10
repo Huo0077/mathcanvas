@@ -16,6 +16,8 @@ import { auditPlan, type FieldCompletion } from "./parameterAudit"
 import { extractRelations } from "./relationExtraction"
 import { parseObligationWithLegacy } from "./obligationIR"
 import { missingNamedPoints, verifyDiagramObligations, type DiagramVerificationReport, type MissingNamedPoint } from "./diagramVerification"
+import { parseDiagramObligations } from "./diagramObligations"
+import { applyNormalisation, parseNormalisationReply, type NormalisationReport } from "./promptNormalization"
 import { verifyRelations, type RelationLookup } from "./relations"
 import { parsePlanEnvelope, repairRequestFor } from "./schemas"
 /**
@@ -175,6 +177,11 @@ export interface PlanCompileResult {
   verification: PlanVerification | null
   /** 题设逐条核验：欠定不是失败，无法可靠解析才是未核验。 */
   diagramVerification?: DiagramVerificationReport
+  /**
+   * **模型给的题面改写**（2026-10-10 第二件）：界面要把「原件 → 我这样读」摆给用户看。
+   * 没有改写时**不存在这个键**（不是 `undefined`）—— 与 `materialisedActions` 同一条纪律。
+   */
+  promptNormalisation?: NormalisationReport
   /**
    * **被物化出 `draftDocument` 的那份动作**（Phase N2 / 裁决 R37②）。
    *
@@ -458,15 +465,34 @@ function compileOnce(input: unknown, context: PlanCompileContext): CompileOnceOu
     Object.assign(aliases, compiled.aliasToId)
   }
 
-  diagnostics.push(...verifyExplicitCubeRequest(compiledActions, context.prompt))
-  diagnostics.push(...validateRelations(plan, context.prompt))
+  /**
+   * **题面规范化**（2026-10-10 第二件；设计见 `promptNormalization.ts` 的模块头）。
+   *
+   * 计划里带着模型给的改写时，用它把"我们读不懂"的从句换成标准写法，然后**照旧走同一个解析器与
+   * 核验器** —— 判据（指不回原文 / 编造点名 / 关系换弱 / 改写后仍读不出）全在 `promptNormalization`，
+   * 这里只负责"换文本、接着往下走"。没有任何改写、或全被拒 ⇒ 用**原文**，行为与今天逐字相同。
+   */
+  const promptText = context.prompt
+  const declaredNormalisations = plan.kind === "plan" ? plan.normalisations ?? [] : []
+  const unreadClauses = promptText === undefined || declaredNormalisations.length === 0 ? [] : parseDiagramObligations(promptText).unverified
+  const normalisation = promptText === undefined || unreadClauses.length === 0
+    ? null
+    : parseNormalisationReply({ clauses: declaredNormalisations }, promptText, unreadClauses)
+  const effectivePrompt = normalisation === null || normalisation.accepted.length === 0 || promptText === undefined
+    ? promptText
+    : applyNormalisation(promptText, normalisation.accepted)
+
+  diagnostics.push(...verifyExplicitCubeRequest(compiledActions, effectivePrompt))
+  diagnostics.push(...validateRelations(plan, effectivePrompt))
   /**
    * **原话清单的解析入口在这里收成一个**（Phase N1）：`parseObligationWithLegacy` 同时给出
    * 旧结构（核验器要吃它）与统一 IR（trace / UI / N2 要吃它），所以"解析一次、两种形状"
    * 不可能分叉。`obligations` 的判据（有 polyhedron 动作 + 有原话）一字未改。
+   *
+   * 这里读的是 `effectivePrompt`（原文，或规范化之后的题面）—— 两处都只有这一个来源。
    */
-  const obligationParse = context.prompt && planHasVerifiableFigure(compiledActions)
-    ? parseObligationWithLegacy(context.prompt, { spatialPointConditions: context.diagramWitnessSearch === true }) : null
+  const obligationParse = effectivePrompt && planHasVerifiableFigure(compiledActions)
+    ? parseObligationWithLegacy(effectivePrompt, { spatialPointConditions: context.diagramWitnessSearch === true }) : null
   const obligations = obligationParse?.legacy ?? null
   const diagramVerification = obligations && (obligations.givens.length > 0 || obligations.unverified.length > 0)
     ? verifyDiagramObligations(obligations, plan, working, context.document, { obligationIR: context.diagramObligationIR === true }) : undefined
@@ -492,6 +518,7 @@ function compileOnce(input: unknown, context: PlanCompileContext): CompileOnceOu
         operations: [],
         draftDocument: null,
         verification: null,
+        ...(normalisation === null ? {} : { promptNormalisation: normalisation }),
         ...(diagramVerification === undefined ? {} : { diagramVerification }),
         repair: repairRequestFor(errors, 1)
       }
@@ -515,6 +542,7 @@ function compileOnce(input: unknown, context: PlanCompileContext): CompileOnceOu
       operations,
       draftDocument: working,
       verification,
+      ...(normalisation === null ? {} : { promptNormalisation: normalisation }),
       ...(diagramVerification === undefined ? {} : { diagramVerification })
     }
   }

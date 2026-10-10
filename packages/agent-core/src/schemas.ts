@@ -1,4 +1,4 @@
-import { PLAN_SCHEMA_VERSION, type DraftAction, type ParseError, type ParseResult, type PlanEnvelope, type PlanRelation, type PlanRelationKind, type PlanRelationTarget } from "./contracts"
+import { PLAN_SCHEMA_VERSION, type DraftAction, type ParseError, type ParseResult, type PlanEnvelope, type PlanRelation, type PlanRelationKind, type PlanRelationTarget, type PromptNormalisations } from "./contracts"
 // 可改字段白名单只有动作层那一份（Fix round 1 / I14）：传输层不再手抄一份更窄的。
 
 import { ACTIONS, type ActionSpec } from "./actionRegistry"
@@ -125,6 +125,29 @@ const RELATION_KINDS: readonly PlanRelationKind[] = ["perpendicular", "parallel"
  * **几何含义**留给 `relations.ts` 的残差 —— 那条边界与 `solid.create_polyhedron` 的注释同源：
  * 传输层不抄一遍几何语义。
  */
+/**
+ * **模型给的题面改写**的形状校验（2026-10-10 第二件）。
+ *
+ * 这里只校验"两条非空字符串"这一层；**语义**（指不回原文 / 编造点名 / 关系换弱 / 改写后仍读不出）
+ * 由 `promptNormalization.ts` 判 —— 那些判据只有一个家，这里不抄第二遍。
+ */
+function readNormalisations(value: unknown, path: string, errors: ParseError[]): PromptNormalisations | null {
+  const items = boundedArray(value, path, errors)
+  if (!items) return null
+  const out: PromptNormalisations = []
+  for (const [index, entry] of items.entries()) {
+    if (!isPlainObject(entry)) { errors.push(fail("invalid_type", `${path}[${index}]`, "a normalisation must be an object")); continue }
+    const original = entry.original
+    const normalized = entry.normalized
+    if (typeof original !== "string" || typeof normalized !== "string" || original.trim().length === 0 || normalized.trim().length === 0) {
+      errors.push(fail("invalid_type", `${path}[${index}]`, "a normalisation needs non-empty original and normalized strings"))
+      continue
+    }
+    out.push({ original, normalized })
+  }
+  return out
+}
+
 function readRelations(value: unknown, path: string, errors: ParseError[]): PlanRelation[] | null {
   const items = boundedArray(value, path, errors)
   if (!items) return null
@@ -206,7 +229,7 @@ export function parsePlanEnvelope(input: unknown): ParseResult<PlanEnvelope> {
   }
 
   const allowed = kind === "plan"
-    ? ["schemaVersion", "kind", "goal", "factIds", "assumptions", "relations", "actions"]
+    ? ["schemaVersion", "kind", "goal", "factIds", "assumptions", "relations", "normalisations", "actions"]
     : kind === "clarification"
       ? ["schemaVersion", "kind", "goal", "factIds", "assumptions", "questions"]
       : ["schemaVersion", "kind", "goal", "factIds", "assumptions", "answer", "toolResultRefs"]
@@ -263,6 +286,17 @@ export function parsePlanEnvelope(input: unknown): ParseResult<PlanEnvelope> {
     : undefined
   const relations = !rawRelations || rawRelations.length === 0 ? undefined : rawRelations
 
+  /**
+   * **模型给的题面改写**（2026-10-10 第二件）。与 `relations` 同一条口径：只放行这一个具名字段，
+   * 形状在这里校验（两条非空字符串），**语义**由 `promptNormalization.ts` 判 ——
+   * "指不回原文 / 编造点名 / 关系换弱"那些判据只有一个家，不在这里再写一遍。
+   * 缺省 / 空数组都当"没写"。
+   */
+  const rawNormalisations = "normalisations" in input && input.normalisations !== undefined
+    ? readNormalisations(input.normalisations, "envelope.normalisations", errors)
+    : undefined
+  const normalisations = !rawNormalisations || rawNormalisations.length === 0 ? undefined : rawNormalisations
+
   if (kind === "plan") {
     const rawActions = boundedArray(input.actions, "envelope.actions", errors)
     if (rawActions && rawActions.length === 0) errors.push(fail("empty_actions", "envelope.actions", "a plan needs at least one action"))
@@ -280,7 +314,7 @@ export function parsePlanEnvelope(input: unknown): ParseResult<PlanEnvelope> {
       actions.push(parsed.value)
     }
     if (errors.length > 0) return { ok: false, errors }
-    return { ok: true, value: { schemaVersion: PLAN_SCHEMA_VERSION, kind, goal: goal as string, factIds: factIds as string[], assumptions, relations, actions } }
+    return { ok: true, value: { schemaVersion: PLAN_SCHEMA_VERSION, kind, goal: goal as string, factIds: factIds as string[], assumptions, relations, ...(normalisations === undefined ? {} : { normalisations }), actions } }
   }
 
   if (kind === "clarification") {

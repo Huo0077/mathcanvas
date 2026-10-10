@@ -225,8 +225,17 @@ import type { DraftAction } from "@draw/scene-graph"
  */
 export type EnvelopeAssumptions = string[]
 
+/**
+ * **模型给的题面改写**（2026-10-10 第二件：题面规范化通道）。
+ *
+ * 只换说法、**不许改条件**：每条的 `original` 必须是用户原文里**逐字**出现的片段。
+ * 语义校验（指不回原文 / 编造点名 / 关系换弱 / 改写后仍读不出）全在 `promptNormalization.ts`，
+ * 这里只放类型。题面里没有"读不懂"的从句时，这一栏**不写**。
+ */
+export type PromptNormalisations = { original: string; normalized: string }[]
+
 export type PlanEnvelope =
-  | { schemaVersion: string; kind: "plan"; goal: string; factIds: string[]; assumptions?: EnvelopeAssumptions; relations?: PlanRelations; actions: DraftAction[] }
+  | { schemaVersion: string; kind: "plan"; goal: string; factIds: string[]; assumptions?: EnvelopeAssumptions; relations?: PlanRelations; normalisations?: PromptNormalisations; actions: DraftAction[] }
   | { schemaVersion: string; kind: "clarification"; goal: string; factIds: string[]; assumptions?: EnvelopeAssumptions; questions: string[] }
   | { schemaVersion: string; kind: "answer"; goal: string; factIds: string[]; assumptions?: EnvelopeAssumptions; answer: string; toolResultRefs: string[] }
 
