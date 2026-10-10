@@ -163,6 +163,9 @@ function adapterInputFor(request: AutomaticProofRequest): Lean4ProofGoalInput {
       perpendicular: { lineA: request.goal.lineA, planePoints: [...request.goal.planePoints], lineB: request.goal.lineB }
     }
   }
+  if (request.goal.goalKind === "tangentSlope") {
+    return { ...shared, goalKind: "tangentSlope", tangentSlope: { functionName: request.goal.tangentSlope.functionName } }
+  }
   return {
     ...shared,
     goalKind: "linePlanePerpendicular",

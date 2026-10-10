@@ -116,7 +116,7 @@ function claimOf(item: DiagramObligation, index: number, role: ClaimRole, judgea
 type RecognizedObligation = Pick<DiagramObligation, "kind" | "targets" | "value" | "planeLengths">
 
 /**
- * 用**题设那一张句型表**去认一段话（当前只用于"求证"段里的目标句）。
+ * 用**题设那一张句型表**去认一段话（当前用于"求证"段里的目标句，以及证明出口读目标那一层）。
  *
  * 与 `parseDiagramObligations` 的差别只有一个：这里**不做**"前后字符是不是别的记号的一部分"
  * 那些边界判断 —— 目标句是独立切片出来的（`求证` 之后到句末），没有 `BD=2` 那种
@@ -124,8 +124,11 @@ type RecognizedObligation = Pick<DiagramObligation, "kind" | "targets" | "value"
  *
  * `pattern` 是**共享的带 `g` 正则**（`lastIndex` 是可变状态），所以借完必须还原：
  * 留着非零的 `lastIndex` 会让下一次调用从字符串中间开始找，症状是"同一句话第二次认不出来"。
+ *
+ * **导出是为了让证明出口读目标那一层复用它**（`proof/proofGoalReader.ts`）——
+ * 一张句型表认两处，正是这个仓反复强调的那条纪律（"同一句话不许有两个解析器"）。
  */
-function recognizeObligationText(text: string): RecognizedObligation | null {
+export function recognizeObligationText(text: string): RecognizedObligation | null {
   for (const { pattern, read } of DIAGRAM_OBLIGATION_MATCHERS) {
     const saved = pattern.lastIndex
     const match = pattern.exec(text)

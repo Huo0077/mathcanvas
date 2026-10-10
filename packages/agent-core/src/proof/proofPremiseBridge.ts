@@ -40,6 +40,15 @@ export interface BridgedNamedLine {
 export type PremiseBridgeGoal =
   | { goalKind: "perpendicular"; lineA: BridgedNamedLine; planePoints: readonly string[]; lineB: BridgedNamedLine }
   | { goalKind: "linePlanePerpendicular"; line: BridgedNamedLine; planeLines: readonly [BridgedNamedLine, BridgedNamedLine] }
+  /**
+   * **切线/导数那一类**（2026-10-10 加，起因是**类型门**抓到它"能生成命题却走不了这条路"）。
+   *
+   * 它的前提和另两类**不一样**：命题 `HasDerivAt f m x → Tendsto (slope f x) …` 是**条件命题**，
+   * 那个前提（"f 在 x 处可导"）只活在命题的假设里，模板不去证明它。
+   * 所以桥在这里要回答的是："题面说了这条函数可导吗？"—— 今天**没有任何句型读"可导"**，
+   * 于是它如实落到 `invented`（详见 `bridgeTangentSlope`）。
+   */
+  | { goalKind: "tangentSlope"; tangentSlope: { functionName: string } }
 
 export interface PremiseFromText {
   /** 这条前提的读法（例如 `PA ⊥ 平面 ABCD`）—— **按题面那条题设自己的点名生成**，不是按目标的点名。 */
@@ -109,9 +118,10 @@ function knownPoints(set: DiagramObligationSet, goal: PremiseBridgeGoal): Set<st
   for (const goalText of set.goals) for (const name of goalText.match(/[A-Z][A-Z0-9′'₁₂₃₄₅₆]*/g) ?? []) names.add(name)
   if (goal.goalKind === "perpendicular") {
     for (const name of [goal.lineA.first, goal.lineA.second, goal.lineB.first, goal.lineB.second, ...goal.planePoints]) names.add(name)
-  } else {
+  } else if (goal.goalKind === "linePlanePerpendicular") {
     for (const name of [goal.line.first, goal.line.second, ...goal.planeLines.flatMap((line) => [line.first, line.second])]) names.add(name)
   }
+  // 切线那一类**没有点名**（题目里的点是数轴上的一个数，不是图形的顶点）—— 它没有要加的名字。
   return names
 }
 
@@ -123,7 +133,40 @@ function knownPoints(set: DiagramObligationSet, goal: PremiseBridgeGoal): Set<st
 export function bridgeProofPremises(goal: PremiseBridgeGoal, set: DiagramObligationSet): PremiseBridgeResult {
   if (goal.goalKind === "linePlanePerpendicular") return bridgeLinePlane(goal, set)
   if (goal.goalKind === "perpendicular") return bridgePerpendicular(goal, set)
-  throw new Error(`前提桥今天只覆盖 \`perpendicular\` 与 \`linePlanePerpendicular\` 两类目标，收到「${String((goal as { goalKind: string }).goalKind)}」—— 表外目标不许默认放行。`)
+  return bridgeTangentSlope(goal, set)
+}
+
+/**
+ * **切线/导数那一类的前提**（2026-10-10 加）。
+ *
+ * 这条命题是**条件命题**：`HasDerivAt f m x → Tendsto (slope f x) (𝓝[≠] x) (𝓝 m)`。
+ * 那个前提（"`f` 在 `x` 处可导"）不在模板里被证明，所以桥要回答的是：
+ * **题面说了这条函数可导吗？**
+ *
+ * ## 今天答案几乎总是"没有"，而这**不是** bug
+ *
+ * 解析层的句型表里**没有任何一条读"可导"**（题面通常只说"已知函数 `f(x)=x³−3x`"）。
+ * "多项式处处可导"是**数学事实**，但它**不在题面里**、也**还没被形式化**（要在 Lean 里算出
+ * 那条多项式的导数，得另做一层）。所以这里**如实落到 `invented`** ⇒ `ok:false` ⇒
+ * 产品链路**不会**去调 Lean。
+ *
+ * **这正是这套判据该有的样子**：类有了、模板真跑通了（`DrawProof.lean` 里那条一般命题），
+ * 但**这道题的前提没有被题面说出来** —— 系统不许替它补一条。
+ */
+function bridgeTangentSlope(goal: Extract<PremiseBridgeGoal, { goalKind: "tangentSlope" }>, set: DiagramObligationSet): PremiseBridgeResult {
+  void set
+  const invented: PremiseInvented[] = [{
+    premise: `${goal.tangentSlope.functionName} 可导`,
+    why: "题面没有说这条函数可导，而它是这条命题**唯一**的前提（命题是条件命题：可导 ⇒ 割线斜率趋于导数）。「多项式处处可导」是数学事实，但它不在题面里、也还没被形式化 —— 系统不许替题面补一条它没说的。"
+  }]
+  /**
+   * **为什么这里没有"去题设里找'可导'"的那一支**（2026-10-10 实测后删掉的）：
+   * 解析层的句型表**没有任何一条读"可导"**，所以那种句子会整句落进 `unverified`
+   *（不是 `givens`）。写一支"找得到就用"的代码，今天**永远走不到**，却会让读代码的人以为
+   * "题面写了可导就能走通"。**这里如实是"一律没有出处"**；哪天解析层真的有了那样的句型，
+   * 这一支再连到 `fromText` 上（那时它才有东西可指）。
+   */
+  return { goalKind: goal.goalKind, fromText: [], fromDerivation: [], fromFigure: [], invented, ok: false }
 }
 
 /** 判定定理：两个前提都是"那条线 ⊥ 平面内的一条线"；先找**直接给的**，再找**一步导出的**。 */

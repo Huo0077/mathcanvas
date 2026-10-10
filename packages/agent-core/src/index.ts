@@ -44,6 +44,10 @@ export * from "./proof/proofPremiseBridge"
  */
 export * from "./proof/automaticProof"
 /**
+ * **题面的目标句 → 结构化的证明目标**（复用题设那张句型表，不新写解析器）。
+ */
+export * from "./proof/proofGoalReader"
+/**
  * **Lean 4 适配器**（N5b）。桶导出是**必须**的：`WIRED_PROOF_BACKENDS` 在 `proofArtifact.ts` 里，
  * 而"接上了谁"与"怎么用它"是同一件事的两半。两个模块都**零 `node:` import**
  *（runner 由调用方注入），所以浏览器打包不会因为这一行而需要 Node 内置模块。

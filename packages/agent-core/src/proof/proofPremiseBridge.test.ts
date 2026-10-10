@@ -151,6 +151,29 @@ describe("前提桥：每条前提都要指得出出处", () => {
     expect(bridge.ok).toBe(false)
   })
 
+  it("**切线那一类今天走不通产品链路**：命题是条件命题，而「可导」题面没给（也不许替它编）", () => {
+    const set = parseDiagramObligations("已知函数 f(x)=x³−3x，求曲线在 x=1 处的切线")
+    const bridge = bridgeProofPremises({ goalKind: "tangentSlope", tangentSlope: { functionName: "f" } }, set)
+
+    expect(bridge.ok).toBe(false)
+    expect(bridge.fromText).toEqual([])
+    expect(bridge.invented).toHaveLength(1)
+    // 理由要点名**缺哪一条**，并说清它是这条命题唯一的前提。
+    expect(bridge.invented[0]!.premise).toContain("可导")
+    expect(bridge.invented[0]!.why).toContain("唯一")
+    expect(bridge.invented[0]!.why).toContain("数学事实")
+  })
+
+  it("**题面写了「可导」也一样走不通**（解析层没有读它的句型，所以那句话进的是 `unverified`）", () => {
+    const set = parseDiagramObligations("已知函数 f(x)=x³−3x 可导，求曲线在 x=1 处的切线")
+    const bridge = bridgeProofPremises({ goalKind: "tangentSlope", tangentSlope: { functionName: "f" } }, set)
+
+    // **先钉住上游那件事**：这句话没有被解析成题设（`givens` 里没有它）——
+    // 所以桥不能"假装查到了"，只能如实说"没有出处"。
+    expect(set.givens.some((given) => given.sourceText.includes("可导"))).toBe(false)
+    expect(bridge.ok).toBe(false)
+    expect(bridge.invented).toHaveLength(1)
+  })
   it("题面把两条垂直写成**没有共享端点**的两句 ⇒ 也不能当判定定理的前提（相交是前提的一部分）", () => {
     const set = parseDiagramObligations("在三棱锥 P-ABC 中，PA ⊥ AB，PB ⊥ BC")
     const bridge = bridgeProofPremises(
