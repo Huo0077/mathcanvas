@@ -1,15 +1,26 @@
 import Mathlib.Analysis.InnerProductSpace.Orthogonal
+import Mathlib.Analysis.Calculus.Deriv.Slope
+
+open Filter
+open scoped Topology
 
 /-!
-# `DrawProof` —— 形式证明出口用的那**两条**一般命题（N5b）
+# `DrawProof` —— 形式证明出口用的那**三条**一般命题（N5b）
 
 这个文件是**仓内**仅有的 Lean 命题，也是适配器模板（`packages/agent-core/src/proof/lean4Adapter.ts`）
-生成命题时用的那两种形状。它单独存在有两个理由：
+生成命题时用的那三种形状。它单独存在有两个理由：
 
 1. **可复算**：它的 axioms 报告就是各目标类"证明到底依赖什么"的基线读数。
    适配器生成的文件与它**逐字同形**（只换点名、换定理名），所以这里的读数可以外推。
 2. **它就是"模板是否可信"的对照物**：读这个文件的人可以拿它和适配器生成的源码对比，
    判断"IR → 命题"那一步有没有多出或少掉什么（那是本任务最大的诚实边界，见适配器文件头）。
+
+## ⚠️ 这个文件现在是**三条命题的并集**（2026-10-10 加第三类时改的）
+
+前两条住在**内积空间**里（共用一条窄 import），第三条住在**实分析**里（另一条 import + 两行 `open`）。
+所以这个文件带着**并集**（两条 import、两行 open），而**适配器生成的文件是按类取子集**的 ——
+"逐字同形"这句话从此要按**每一类各自**去比，不能拿这个文件的头几行去比第三类生成的文件。
+（生成文件长什么样，看 `lean4Adapter.ts` 的 `assembleSource`：骨架一处，import 与 prelude 由调用方给。）
 
 ## 命题一：性质定理（`perpendicular` 目标类）
 
@@ -44,8 +55,7 @@ Lean 侧的定理名 `plane_perpendicular_general` 保留（它说的是"线⊥�
 完整前提桥（V2 缺口②）仍未做，不许把这条读成"前提桥已完成"。
 
 三个定理：
-- `perpendicular_general`：命题一的真证明（`Submodule.mem_orthogonal'`）。
-- `plane_perpendicular_general`：命题二的真证明（对生成子空间做归纳）。
+- `perpendicular_general`：命题一的真证明（`Submodule.mem_orthogonal'`）。- `plane_perpendicular_general`：命题二的真证明（对生成子空间做归纳）。
 - `perpendicular_cheat`：命题一 + `sorry`。它**存在**是为了让"只看退出码"这件事
   在这个仓里有一条**可复跑的反例**：两条都 exit 0，只有 `#print axioms` 能把它们分开。
 
@@ -83,6 +93,11 @@ theorem plane_perpendicular_general {E : Type*} [NormedAddCommGroup E] [InnerPro
   | add x y hx hy ihx ihy => rw [inner_add_right, ihx, ihy, add_zero]
   | smul a x hx ih => rw [inner_smul_right, ih, mul_zero]
 
+/-- **命题三（切线/导数的定义性质，2026-10-10 加）**：可导 ⇒ 割线斜率趋于导数。 -/
+theorem tangent_slope_general {f : ℝ → ℝ} {m x : ℝ} (h : HasDerivAt f m x) :
+    Tendsto (slope f x) (nhdsWithin x {x}ᶜ) (𝓝 m) :=
+  hasDerivAt_iff_tendsto_slope.mp h
+
 /-- **命题一 + `sorry`**：`sorryAx` 会出现在它的 axioms 报告里，而退出码仍是 0。 -/
 theorem perpendicular_cheat {E : Type*} [NormedAddCommGroup E] [InnerProductSpace ℝ E]
     (D : Submodule ℝ E) (u v : E) (hu : u ∈ Dᗮ) (hv : v ∈ D) :
@@ -91,4 +106,5 @@ theorem perpendicular_cheat {E : Type*} [NormedAddCommGroup E] [InnerProductSpac
 
 #print axioms perpendicular_general
 #print axioms plane_perpendicular_general
+#print axioms tangent_slope_general
 #print axioms perpendicular_cheat

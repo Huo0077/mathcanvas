@@ -14,14 +14,25 @@
 /// 适配器生成文件的第一行标记（`lean4Adapter.ts` 里的那一串，**逐字**）。
 pub const GENERATED_MARKER: &str = "由 @draw/agent-core 的 Lean 4 适配器生成";
 
-/// 唯一允许的 `import`（窄导入：整包 Mathlib 要慢约 4 倍，实测）。
-pub const ALLOWED_IMPORT: &str = "import Mathlib.Analysis.InnerProductSpace.Orthogonal";
-
-/// **允许出现在 `#print axioms` 后面的定理名**（就是适配器现在生成的那两个）。
+/// **允许的 `import`**（都是一条窄导入：整包 Mathlib 要慢约 4 倍，实测）。
 ///
-/// 加第三个目标类时**必须**在这里加一行 —— 那条摩擦是故意的：这个名字决定"我们能问哪个定理
+/// 2026-10-10 加第三类（切线/导数）时从"一条常量"改成"一张表"：那一类**换了一座数学塔**
+/// （实分析而不是内积空间），import 与它需要的两行 `open` 都不同。
+/// **能用 ≠ 允许执行** —— 表外的 import 一律拒，哪怕它也是 mathlib 的一部分（有用例钉住）。
+pub const ALLOWED_IMPORTS: [&str; 2] = [
+    "import Mathlib.Analysis.InnerProductSpace.Orthogonal",
+    "import Mathlib.Analysis.Calculus.Deriv.Slope",
+];
+
+/// **允许出现在 `#print axioms` 后面的定理名**（适配器现在生成的那三个）。
+///
+/// 加目标类时**必须**在这里加一行 —— 那条摩擦是故意的：这个名字决定"我们能问哪个定理
 /// 到底依赖什么公理"，名字对不上就得不到报告，而"没有报告"必须判失败。
-pub const ALLOWED_THEOREM_NAMES: [&str; 2] = ["draw_perpendicular_goal", "draw_line_plane_perpendicular_goal"];
+pub const ALLOWED_THEOREM_NAMES: [&str; 3] = [
+    "draw_perpendicular_goal",
+    "draw_line_plane_perpendicular_goal",
+    "draw_tangent_slope_goal",
+];
 
 /// `maxHeartbeats` 的**上限**：模板默认 400_000；给到 4_000_000 已是很宽的余地。
 /// 超过它就拒 —— 那是"把确定性预算当摆设"的写法。
@@ -57,8 +68,8 @@ pub fn inspect_template_source(source: &str) -> Result<(), String> {
     }
 
     let imports: Vec<&str> = source.lines().map(str::trim).filter(|line| line.starts_with("import ")).collect();
-    if imports.len() != 1 || imports[0] != ALLOWED_IMPORT {
-        return Err(format!("`import` 必须恰好一条且是「{ALLOWED_IMPORT}」，实际 {imports:?}。"));
+    if imports.len() != 1 || !ALLOWED_IMPORTS.contains(&imports[0]) {
+        return Err(format!("`import` 必须恰好一条且在白名单 {ALLOWED_IMPORTS:?} 里，实际 {imports:?}。"));
     }
 
     let heartbeats: Vec<&str> = source.lines().map(str::trim).filter(|line| line.starts_with("set_option ")).collect();

@@ -212,6 +212,48 @@ describe("真实 Lean 端到端（显式 gated）", () => {
     for (const axiom of outcome.judgement.axioms ?? []) expect(["propext", "Classical.choice", "Quot.sound"]).toContain(axiom)
   }, 600_000)
 
+  it.skipIf(!REAL_AVAILABLE)("**第三个目标类（切线/导数）也真的被内核接受**（换了一座数学塔，2026-10-10 加）", async () => {
+    /**
+     * 前两类住在**内积空间**里，这一条住在**实分析**里（`HasDerivAt` / `Tendsto` / `slope`），
+     * 所以它的 import 与两行 `open` 都不同 —— 桌面命令的白名单也跟着加了（那是这块的台阶之一）。
+     *
+     * **诚实的边界（比另两类更远）**：命题关于**任意**函数与**任意**横坐标 ——
+     * 题面那条具体曲线（`f(x)=x³−3x`）与那个点都**不进命题**。它证的是"切线斜率就是导数"
+     * 这条**定义性质**，不是"这道题的结论"。
+     */
+    const tangentGoal: Lean4ProofGoalInput = {
+      prompt: "已知函数 f(x)=x³−3x，求曲线在 x=1 处的切线",
+      claimSourceText: "在 x=1 处的切线斜率等于 f′(1)",
+      goalKind: "tangentSlope",
+      assumptions: [],
+      /**
+       * 证明正文就是 mathlib 里现成的那一步。**两行 `open` 不在正文里** —— 它们在生成文件的前导里
+       *（`buildTangentSlopeStatement` 负责），这是实测逼出来的：不加就报 `unknown identifier`，
+       * 而报错之后 Lean 会补一个 `sorry`，于是在 axioms 报告里**看起来像"证明是空的"**。
+       */
+      proof: "exact hasDerivAt_iff_tendsto_slope.mp h",
+      tangentSlope: { functionName: "f" }
+    }
+
+    const runner = createLean4Runner()
+    const outcome = await runLean4ClosedLoop("verified_instance", tangentGoal, "claim-lean4-tangent-e2e", {
+      runner,
+      projectDir: LEAN4_PROJECT_DIR,
+      toolchain,
+      backendVersion: `Lean (reported by ${toolchain!.resolvedBy})`,
+      timeoutMs: 300_000,
+      maxHeartbeats: 400_000
+    })
+
+    console.log(`E2E 切线斜率：status=${outcome.status} judgement=${outcome.judgement.status} exit=${String(outcome.run?.exitCode)} ${outcome.run?.durationMs} ms`)
+    console.log(`E2E 切线斜率 axioms: ${JSON.stringify(outcome.judgement.axioms)}`)
+
+    expect(outcome.judgement.status, `判定不是 verified：${outcome.judgement.detail}`).toBe("verified")
+    expect(outcome.status).toBe("formally_proved")
+    expect(outcome.statement).toContain("theorem draw_tangent_slope_goal")
+    for (const axiom of outcome.judgement.axioms ?? []) expect(["propext", "Classical.choice", "Quot.sound"]).toContain(axiom)
+  }, 600_000)
+
   it.skipIf(!REAL_AVAILABLE)("**`sorry` 的正文 ⇒ 绝不升级**（同一台机器、同一条命题，只换正文）", async () => {
     const runner = createLean4Runner()
     const outcome = await runLean4ClosedLoop(

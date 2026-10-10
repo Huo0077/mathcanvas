@@ -4,11 +4,13 @@ import { evidenceStatusWithProof, proofInputHash, PROOF_ARTIFACT_VERSION, verify
 import {
   buildPerpendicularStatement,
   buildLinePlanePerpendicularStatement,
+  buildTangentSlopeStatement,
   checkAxiomsReport,
   judgeLean4Run,
   LEAN4_ALLOWED_AXIOMS,
   LEAN4_BACKEND_NAME,
   LEAN4_LINE_PLANE_PERPENDICULAR_THEOREM_NAME,
+  LEAN4_TANGENT_SLOPE_THEOREM_NAME,
   LEAN4_SUPPORTED_GOAL_KINDS,
   LEAN4_THEOREM_NAME,
   produceLean4Artifact,
@@ -387,6 +389,95 @@ describe("第二个目标类：线⊥面（判定定理那一半）", () => {
       runner: fakeRunner([okRun(HONEST_STDOUT)])
     })
 
+    expect(wrong.status).toBe("verified_instance")
+    expect(wrong.judgement.status).toBe("failed")
+  })
+})
+
+/**
+ * **第三个目标类：切线/导数**（`tangentSlope`）—— ① 的第三刀，**换了一座数学塔**。
+ *
+ * ## 为什么它是"另一个类"，而不是前两类的变体
+ *
+ * 前两类住在**内积空间**里（点、向量、`ᗮ`）；这一类住在**实分析**里
+ * （`HasDerivAt` / `Tendsto` / `slope`）。加它要同时动四样：模板、目标词表、
+ * **桌面命令的白名单**（import 与定理名都要显式加）、以及仓内对照文件 ——
+ * 这条摩擦值得走一遍：它说明"加第三个类"是一条**有台阶的路**，不是改一个数组。
+ *
+ * ## 这一类**证的是什么**（诚实边界比前两类更显眼，必须写清）
+ *
+ * 它证的是切线斜率的**定义性质**：
+ * `f 在 x 处可导、导数为 m ⇒ 割线斜率 slope f x t 当 t → x（t ≠ x）时趋于 m`。
+ *
+ * **题面那条具体曲线（`f(x)=x³−3x`）与那个点（`x=1`）不进命题** —— 命题关于**任意** `f` 与
+ * **任意** `x`。前两类至少把**题面的点名**带进了命题，这一类连那个都没有 ⇒ **它离"这道题被证明了"更远**，不许被读成原题证明。
+ *
+ * ## 一条被测出来的设计更正（值得读）
+ *
+ * 第一版给这一类留了个 `atX` 字段，文档还写着"它进 `proofInputHash`"。**用例当场红了**：
+ * 两条只有 `atX` 不同的目标算出**同一个哈希** —— 因为 `ProofInput` 里根本没有这一栏
+ * （它绑的是 `prompt` / `claimSourceText` / `goal` / `assumptions` / `statement`）。
+ * 也就是说那个字段**不影响任何东西**，却会让人以为"这份凭证绑在 x=1 上"。
+ * 所以**把它删掉**：绑定靠 `claimSourceText`（下面那条用例钉的就是这个）。
+ */
+const TANGENT_STDOUT = `'${LEAN4_TANGENT_SLOPE_THEOREM_NAME}' depends on axioms: [propext, Classical.choice, Quot.sound]\n`
+
+describe("第三个目标类：切线/导数（换了数学塔）", () => {
+  const TANGENT_GOAL: Lean4ProofGoalInput = {
+    prompt: "已知函数 f(x)=x³−3x，求曲线在 x=1 处的切线",
+    claimSourceText: "在 x=1 处的切线斜率等于 f′(1)",
+    goalKind: "tangentSlope",
+    proof: "exact hasDerivAt_iff_tendsto_slope.mp h",
+    tangentSlope: { functionName: "f" }
+  }
+
+  it("命题形状：可导 ⇒ 割线斜率趋于导数（题面的函数名进命题、横坐标**不进**）", () => {
+    const spec = buildTangentSlopeStatement(TANGENT_GOAL, 400_000)
+
+    expect(spec.statement).toContain("{f : ℝ → ℝ} {m x : ℝ} (h : HasDerivAt f m x) :")
+    expect(spec.statement).toContain("Tendsto (slope f x)")
+    // **横坐标不进命题**（命题关于任意 x）——题面那个 1 不许出现在命题里。
+    expect(spec.statement).not.toContain("1")
+    expect(spec.statement).toContain("ℝ → ℝ")
+  })
+
+  it("**三个类三个定理名**（报告不能互相冒充），而这一类的 **import 也不同**", () => {
+    const tangent = buildTangentSlopeStatement(TANGENT_GOAL, 400_000)
+
+    expect(new Set([LEAN4_THEOREM_NAME, LEAN4_LINE_PLANE_PERPENDICULAR_THEOREM_NAME, tangent.theoremName]).size).toBe(3)
+    expect(tangent.source).toContain(`#print axioms ${tangent.theoremName}`)
+    // 换了数学塔 ⇒ 换了一条 import；**桌面命令的白名单要跟着加**，不然它会被形状检查拒掉。
+    expect(tangent.source).toContain("import Mathlib.Analysis.Calculus.Deriv.Slope")
+  })
+
+  it("**绑定靠 `claimSourceText`**：命题一样而题面那句话不同 ⇒ 哈希不同；只换函数名 ⇒ 两者都变", async () => {
+    const run = (input: Lean4ProofGoalInput) => produceLean4Artifact(input, { ...PRODUCE, runner: fakeRunner([okRun(TANGENT_STDOUT)]), claimId: "c" })
+
+    const one = await run(TANGENT_GOAL)
+    // 同一个函数名、不同的题面 claim（x=1 vs x=2）——命题是一样的（都关于任意 x），
+    // **绑定却分得开**：因为 `claimSourceText` 进 `ProofInput`。这就是"不单独存横坐标"不掉信息的原因。
+    const otherClaim = await run({ ...TANGENT_GOAL, claimSourceText: "在 x=2 处的切线斜率等于 f′(2)" })
+    expect(one.statement).toBe(otherClaim.statement)
+    expect(one.inputHash).not.toBe(otherClaim.inputHash)
+
+    // 函数名**进命题**：换一个名字，命题与哈希**都**变。
+    const otherName = await run({ ...TANGENT_GOAL, tangentSlope: { functionName: "g" } })
+    expect(otherName.statement).not.toBe(one.statement)
+    expect(otherName.inputHash).not.toBe(one.inputHash)
+  })
+
+  it("函数名不像 Lean 标识符 / 缺字段 ⇒ 抛（调用方给错了，不是「证明失败」）", () => {
+    expect(() => buildTangentSlopeStatement({ ...TANGENT_GOAL, tangentSlope: { functionName: "1x" } }, 400_000)).toThrow(/函数名/)
+    expect(() => buildTangentSlopeStatement({ ...TANGENT_GOAL, tangentSlope: undefined }, 400_000)).toThrow(/必须给出 tangentSlope/)
+  })
+
+  it("闭环（假 runner）：真报告 ⇒ `formally_proved`；**别的类的报告** ⇒ 拒", async () => {
+    const good = await runLean4ClosedLoop("verified_instance", TANGENT_GOAL, "claim-tan", { ...PRODUCE, runner: fakeRunner([okRun(TANGENT_STDOUT)]) })
+    expect(good.status).toBe("formally_proved")
+    expect(good.verification.artifact?.claimId).toBe("claim-tan")
+
+    // 拿第一类（内积空间那条）的报告来充这一类 ⇒ 名字对不上 ⇒ 停在原地。
+    const wrong = await runLean4ClosedLoop("verified_instance", TANGENT_GOAL, "claim-tan", { ...PRODUCE, runner: fakeRunner([okRun(HONEST_STDOUT)]) })
     expect(wrong.status).toBe("verified_instance")
     expect(wrong.judgement.status).toBe("failed")
   })

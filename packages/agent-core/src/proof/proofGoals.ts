@@ -58,11 +58,12 @@ export type ProofGoalKind =
   | "collinear"
   | "coplanar"
   | "pythagorean"
+  | "tangentSlope"
   | "dihedral"
 
 export const PROOF_GOAL_KINDS: readonly ProofGoalKind[] = [
   "parallel", "perpendicular", "linePlanePerpendicular", "equalLength", "midpoint", "segmentRatio",
-  "collinear", "coplanar", "pythagorean", "dihedral"
+  "collinear", "coplanar", "pythagorean", "tangentSlope", "dihedral"
 ]
 
 /**
@@ -168,7 +169,23 @@ export const PROOF_GOAL_SUPPORT: readonly ProofGoalSupport[] = [
       note: "对三点 X/Y/Z：`XY ⊥ YZ` ⟺ `|XY|² + |YZ|² = |XZ|²`。证明里必须先有 ⊥ 的结论，再用这一步接过去。**不许把勾股直接判成 ⊥** —— 那等于把这条推断藏进分类函数。"
     }
   },
-  { kind: "dihedral", description: "二面角", obligationKinds: ["dihedral"], constraintTypes: [], inFirstBatch: false }
+  { kind: "dihedral", description: "二面角", obligationKinds: ["dihedral"], constraintTypes: [], inFirstBatch: false },
+  /**
+   * **切线斜率 = 导数**（2026-10-10 加；作图四家族里的"切线/导数"那一族）。
+   *
+   * ## 载体这一栏说的是什么，以及它**不**是什么
+   *
+   * 解析层的 `tangentAt`（"在 `x=1` 处的切线"）是一条**作图要求**，它并没有断言"斜率等于导数"。
+   * 这条目标说的是：**所画的那条切线的定义性质**就是"割线斜率趋于导数"。
+   * 所以这一栏的意思是"这类题设相关的可证明主张是这条"，**不是**"这条题设本身断言的结论"
+   * —— 两者不是同一句话，这一句差别写在这里，免得下游把它读成"题面已经说了斜率等于导数"。
+   *
+   * ## 它证明的是**一般命题**，离原题最远
+   *
+   * 适配器生成的命题关于**任意**函数与**任意**横坐标（题面那条具体曲线与那个点都不进命题）。
+   * 另两类至少把题面的点名带进了命题 —— 这一类连那个都没有，**不许**被读成"这道题被证明了"。
+   */
+  { kind: "tangentSlope", description: "曲线在某点的切线斜率等于该点的导数（割线斜率的极限）", obligationKinds: ["tangentAt"], constraintTypes: [], inFirstBatch: true }
 ]
 
 /**

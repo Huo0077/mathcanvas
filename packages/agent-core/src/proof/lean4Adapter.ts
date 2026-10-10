@@ -134,7 +134,7 @@ export interface Lean4ProofGoalInput {
   prompt: string
   /** 这条 claim 的原话。**进哈希，不进命题**。 */
   claimSourceText: string
-  /** 这条 goal 属于哪一类（`proofGoals.ts` 的封闭词表）。今天支持 `"perpendicular"` / `"linePlanePerpendicular"`。 */
+  /** 这条 goal 属于哪一类（`proofGoals.ts` 的封闭词表）。今天支持 `"perpendicular"` / `"linePlanePerpendicular"` / `"tangentSlope"`。 */
   goalKind: ProofGoalKind | string
   /** 系统替用户定的假设。**进哈希（R51），不进命题**（见文件头"哪些字段参与了翻译"）。 */
   assumptions?: readonly string[]
@@ -142,6 +142,29 @@ export interface Lean4ProofGoalInput {
   proof: string
   perpendicular?: Lean4PerpendicularGoal
   linePlanePerpendicular?: Lean4LinePlanePerpendicularGoal
+  tangentSlope?: Lean4TangentSlopeGoal
+}
+
+/**
+ * `tangentSlope` 目标类要的东西（**切线/导数**那一类，2026-10-10 加）。
+ *
+ * - `functionName`：题面里那条曲线的名字（`f` / `g` …）—— 它**进命题**（作为那个函数变量），
+ *   与另两类把**点名**带进命题是同一条纪律；
+ * - **题面那个横坐标「不在这里」**（2026-10-10 改，起因是一条用例）：它不进命题（命题关于任意 `x`），
+ *   而 `proofInputHash` 的 `ProofInput` 里也没有它的位置 —— 所以给它留一个字段，就会变成一个
+ *   **不影响任何东西的字段**：调用方会以为"这份凭证绑在 x=1 上"，其实没有。
+ *   它属于题面：绑定靠 `claimSourceText`（"在 x=1 处的切线斜率等于 f′(1)" 与 x=2 那句是**不同的字符串**）。
+ *
+ * ## 这一类与另两类**不在同一座塔里**
+ *
+ * 前两类是内积空间（点、向量、`ᗮ`）；这一类是实分析（`HasDerivAt` / `Tendsto` / `slope`）。
+ * 所以它有自己的 import 与两行 `open` —— 那两行不是装饰：实测**不加就报 `unknown identifier`**
+ *（`Tendsto` 要 `open Filter`、`𝓝` 要 `open scoped Topology`；而报错之后 Lean 会补一个 `sorry`，
+ * 于是在 axioms 报告里**看起来像"证明是空的"** —— 与 `DrawProof.lean` 里记的那次同型）。
+ */
+export interface Lean4TangentSlopeGoal {
+  /** 题面里那条曲线的名字（`f` / `g` …）—— **进命题**（作为那个函数变量）。 */
+  functionName: string
 }
 
 // ---------------------------------------------------------------- Lean 源码生成
@@ -355,6 +378,9 @@ export const LEAN4_BINDER_NAMES: readonly string[] = ["hu", "hv"]
  */
 export const LEAN4_LINE_PLANE_PERPENDICULAR_THEOREM_NAME = "draw_line_plane_perpendicular_goal"
 
+/** **第三个目标类的定理名**（切线/导数）。同样**必须与另两个不同**。 */
+export const LEAN4_TANGENT_SLOPE_THEOREM_NAME = "draw_tangent_slope_goal"
+
 /** 第二个目标类生成文件里的**两个前提名**（导出给用例交叉核对，与 `LEAN4_BINDER_NAMES` 同理）。 */
 export const LEAN4_LINE_PLANE_PERPENDICULAR_BINDER_NAMES: readonly string[] = ["h1", "h2"]
 
@@ -409,23 +435,35 @@ export function buildPerpendicularStatement(input: Lean4ProofGoalInput, maxHeart
     `    inner ℝ ${u} ${v} = 0`
   ].join("\n")
 
-  return { theoremName: LEAN4_THEOREM_NAME, ...assembleSource(statement, LEAN4_THEOREM_NAME, input.proof, maxHeartbeats) }
+  return { theoremName: LEAN4_THEOREM_NAME, ...assembleSource(statement, LEAN4_THEOREM_NAME, input.proof, maxHeartbeats, LEAN4_INNER_PRODUCT_IMPORT) }
 }
 
 /**
- * **把 `statement` + 正文拼成一份可交给 Lean 的文件**（两个目标类共用这一段）。
+ * **把 `statement` + 正文拼成一份可交给 Lean 的文件**（三个目标类共用这一段）。
  *
- * 抽出来是为了让"生成的文件长什么样"只有一处定义 —— 两类如果各写一份，`import` 行、
- * `set_option`、`#print axioms` 那三处就会悄悄分叉，而**判据恰恰依赖它们**。
+ * 抽出来是为了让"生成的文件长什么样"只有一处定义 —— 各写一份的话，`import` 行、
+ * `set_option`、`#print axioms` 那几处就会悄悄分叉，而**判据恰恰依赖它们**。
+ *
+ * **`importLine` 与 `prelude` 由调用方给**（2026-10-10 加第三个类时改的）：前两类住在内积空间里，
+ * 共用一条窄 import；第三类（切线/导数）住在实分析里，**import 与 open 都不一样**。
+ * 差异集中在这两个参数上，文件骨架仍然只有这一份。
  *
  * **`maxHeartbeats` 是 Lean 自己的确定性预算**（十栏 `timeoutPolicy` 的①）：
  * 触发时 Lean 报 `(deterministic) timeout at ...` 并 **exit 1**，不是挂死。
  * 进程级墙钟兜底在 runner 里（②）。
  */
-function assembleSource(statement: string, theoremName: string, proof: string, maxHeartbeats: number): { source: string; statement: string } {
+function assembleSource(
+  statement: string,
+  theoremName: string,
+  proof: string,
+  maxHeartbeats: number,
+  importLine: string,
+  prelude: readonly string[] = []
+): { source: string; statement: string } {
   const source = [
     "-- 由 @draw/agent-core 的 Lean 4 适配器生成（N5b）。**每次运行都是新的临时文件**，不进仓库树。",
-    "import Mathlib.Analysis.InnerProductSpace.Orthogonal",
+    importLine,
+    ...prelude,
     "",
     `set_option maxHeartbeats ${Math.max(0, Math.floor(maxHeartbeats))}`,
     "",
@@ -441,6 +479,12 @@ function assembleSource(statement: string, theoremName: string, proof: string, m
   ].join("\n")
   return { source, statement }
 }
+
+/** 前两类共用的那条窄 import（实测：整包 `Mathlib` 要慢约 4 倍）。 */
+export const LEAN4_INNER_PRODUCT_IMPORT = "import Mathlib.Analysis.InnerProductSpace.Orthogonal"
+
+/** 第三类（切线/导数）的 import —— **换了一座数学塔**，所以是另一条。 */
+export const LEAN4_TANGENT_SLOPE_IMPORT = "import Mathlib.Analysis.Calculus.Deriv.Slope"
 
 /** 两条点名线的**共用点**（用来把"相交"这件事从输入里读出来）。 */
 function sharedPointNames(a: Lean4NamedLine, b: Lean4NamedLine): string[] {
@@ -527,7 +571,58 @@ export function buildLinePlanePerpendicularStatement(input: Lean4ProofGoalInput,
 
   return {
     theoremName: LEAN4_LINE_PLANE_PERPENDICULAR_THEOREM_NAME,
-    ...assembleSource(statement, LEAN4_LINE_PLANE_PERPENDICULAR_THEOREM_NAME, input.proof, maxHeartbeats)
+    ...assembleSource(statement, LEAN4_LINE_PLANE_PERPENDICULAR_THEOREM_NAME, input.proof, maxHeartbeats, LEAN4_INNER_PRODUCT_IMPORT)
+  }
+}
+
+/**
+ * **第三个目标类：切线/导数的定义性质**（2026-10-10 加）。
+ *
+ * 生成的就是这个形状：
+ *
+ * ```lean
+ * theorem draw_tangent_slope_goal {f : ℝ → ℝ} {m x : ℝ} (h : HasDerivAt f m x) :
+ *     Tendsto (slope f x) (nhdsWithin x {x}ᶜ) (𝓝 m)
+ * ```
+ *
+ * 读法：曲线在 `x` 处的**割线斜率** `slope f x t`（`t ≠ x`）趋于 `m` —— 那正是"切线斜率就是导数"
+ * 这条**定义性质**。证明是 mathlib 里现成的那一步（`hasDerivAt_iff_tendsto_slope`）。
+ *
+ * ## 三处必须写清的讲究（都是实测逼出来的）
+ *
+ * 1. **`open Filter` 与 `open scoped Topology` 是必需的**：不加就报 `unknown identifier`
+ *    （`Tendsto` / `𝓝`）。而**报错之后 Lean 会补一个 `sorry`**，于是 axioms 报告里出现 `sorryAx`
+ *    —— 看起来像"证明是空的"，真因却是少了两行 open。这与 `DrawProof.lean` 里记的那次同型。
+ * 2. **`𝓝[≠] x` 这个记号的写法在这里不能用**（独立文件里报 `unexpected token '≠'`），
+ *    所以写成它展开后的样子 `nhdsWithin x {x}ᶜ`（mathlib 自己的 `Slope.lean` 能用那个记号，
+ *    是因为它处在 `open scoped` 生效的上下文里）。
+ * 3. **题面那个横坐标不进命题**（命题关于任意 `x`），这里也**不为它留字段** —— 理由见 `Lean4TangentSlopeGoal`。
+ *
+ * **诚实的边界（比另两类更远）**：题面那条**具体曲线**（`f(x)=x³−3x`）也不进命题 ——
+ * 命题里的 `f` 是**任意函数**。另两类至少把题面的**点名**带进了命题，这一类连那个都没有。
+ * 所以它证的是"切线斜率这件事的定义性质"，**不是"这道题的结论"**。
+ */
+export function buildTangentSlopeStatement(input: Lean4ProofGoalInput, maxHeartbeats: number): Lean4GeneratedStatement {
+  const goal = input.tangentSlope
+  if (goal === undefined) {
+    throw new Error("tangentSlope 目标类必须给出 tangentSlope: { functionName }（模板缺了它就无从生成命题）。")
+  }
+  // 函数名是**进命题**的那一个（作为函数变量），所以它必须像 Lean 标识符。
+  if (typeof goal.functionName !== "string" || !/^[A-Za-z_][A-Za-z0-9_']*$/.test(goal.functionName)) {
+    throw new Error(`函数名必须是 Lean 能接受的标识符（字母/数字/下划线，且不以数字开头），实际是：${String(goal.functionName)}`)
+  }
+
+  const statement = [
+    `theorem ${LEAN4_TANGENT_SLOPE_THEOREM_NAME} {${goal.functionName} : ℝ → ℝ} {m x : ℝ} (h : HasDerivAt ${goal.functionName} m x) :`,
+    `    Tendsto (slope ${goal.functionName} x) (nhdsWithin x {x}ᶜ) (𝓝 m)`
+  ].join("\n")
+
+  return {
+    theoremName: LEAN4_TANGENT_SLOPE_THEOREM_NAME,
+    ...assembleSource(statement, LEAN4_TANGENT_SLOPE_THEOREM_NAME, input.proof, maxHeartbeats, LEAN4_TANGENT_SLOPE_IMPORT, [
+      "open Filter",
+      "open scoped Topology"
+    ])
   }
 }
 
@@ -725,7 +820,7 @@ export interface Lean4ClosedLoopOutcome {
 }
 
 /** 这个适配器**声称覆盖**的目标类。**加一个必须显式改这里**（见文件头"覆盖范围"）。 */
-export const LEAN4_SUPPORTED_GOAL_KINDS: readonly ProofGoalKind[] = ["perpendicular", "linePlanePerpendicular"]
+export const LEAN4_SUPPORTED_GOAL_KINDS: readonly ProofGoalKind[] = ["perpendicular", "linePlanePerpendicular", "tangentSlope"]
 
 /**
  * **目标类 → 模板**的分发表。
@@ -739,6 +834,8 @@ function specForGoalKind(input: Lean4ProofGoalInput, maxHeartbeats: number): Lea
       return buildPerpendicularStatement(input, maxHeartbeats)
     case "linePlanePerpendicular":
       return buildLinePlanePerpendicularStatement(input, maxHeartbeats)
+    case "tangentSlope":
+      return buildTangentSlopeStatement(input, maxHeartbeats)
     default:
       throw new Error(
         `Lean 4 适配器今天只覆盖 ${LEAN4_SUPPORTED_GOAL_KINDS.map((kind) => `\`${kind}\``).join(" / ")} 这些目标类，收到「${String(input.goalKind)}」—— 表外目标不许悄悄走到这里。`

@@ -26,11 +26,49 @@ fn template_source(theorem: &str) -> String {
 
 #[test]
 fn accepts_a_template_shaped_file() {
-    // 两个白名单定理名都要收（第二个是 2026-10-10 加的判定定理）。
+    // 白名单里的**每一个**定理名都要收（第三个是 2026-10-10 加的切线/导数那一类）。
     for theorem in source::ALLOWED_THEOREM_NAMES {
         let inspected = source::inspect_template_source(&template_source(theorem));
         assert!(inspected.is_ok(), "{theorem} 应当通过：{inspected:?}");
     }
+}
+
+/// **换了数学塔的那一类**（切线/导数）：import 与 `open` 都不同，但它**仍然必须是我们的模板产物**。
+///
+/// 这条用例是"加第三个类"这块摩擦的落点：新增一类时，**桌面命令的白名单必须显式跟着加**
+///（`ALLOWED_IMPORTS` 与 `ALLOWED_THEOREM_NAMES`）—— 忘了加，那一类在桌面侧会被形状检查拒掉，
+/// 而这是**故意的**：白名单就是"我们允许执行哪些文本"这件事的唯一记录。
+fn tangent_template_source() -> String {
+    "-- 由 @draw/agent-core 的 Lean 4 适配器生成（N5b）。**每次运行都是新的临时文件**，不进仓库树。\n\
+     import Mathlib.Analysis.Calculus.Deriv.Slope\n\
+     open Filter\n\
+     open scoped Topology\n\n\
+     set_option maxHeartbeats 400000\n\n\
+     theorem draw_tangent_slope_goal {f : ℝ → ℝ} {m x : ℝ} (h : HasDerivAt f m x) :\n\
+     \x20   Tendsto (slope f x) (nhdsWithin x {x}ᶜ) (𝓝 m)\n\
+     \x20 := by\n\
+     \x20 exact hasDerivAt_iff_tendsto_slope.mp h\n\n\
+     #print axioms draw_tangent_slope_goal\n"
+        .to_string()
+}
+
+#[test]
+fn accepts_the_tangent_class_template() {
+    let inspected = source::inspect_template_source(&tangent_template_source());
+    assert!(inspected.is_ok(), "切线/导数那一类的模板产物应当通过形状检查：{inspected:?}");
+}
+
+#[test]
+fn rejects_an_import_that_is_not_on_the_allow_list() {
+    // 换一条**不在**白名单里的 import（哪怕它也是 mathlib 的一部分）⇒ 拒。
+    // 这条钉的是"白名单就是白名单"：能用 ≠ 允许执行。
+    let mutated = tangent_template_source().replace(
+        "import Mathlib.Analysis.Calculus.Deriv.Slope",
+        "import Mathlib.Analysis.Calculus.Deriv.Basic",
+    );
+    let inspected = source::inspect_template_source(&mutated);
+    assert!(inspected.is_err(), "表外 import ⇒ 拒");
+    assert!(inspected.unwrap_err().contains("import"));
 }
 
 #[test]

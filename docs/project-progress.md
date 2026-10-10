@@ -10,6 +10,22 @@
 
 > 下方 2026-09-22 的"最后更新 / 当前阶段 / 总体状态"三行保留为**当时快照**，不再维护。
 
+## 2026-10-10 —— V2 GREEN ① 第三刀：第三个目标类**切线/导数**（换了数学塔）
+
+**这一块加第三个目标类** `tangentSlope`（作图四家族里"切线/导数"那一族的可证明主张）：`f 在 x 处可导、导数为 m ⇒ 割线斜率 slope f x t（t ≠ x）趋于 m`。**① 仍未补完**（曲线性质、其余立体关系没有模板）。
+
+**它是"另一个类"的证据是台阶**：前两类在内积空间，这一类在实分析 —— 加它要同时动**四样**（模板 / 目标词表 `tangentSlope`（载体 = 解析层 `tangentAt`）/ **桌面白名单**的 import 与定理名 / 仓内对照文件）。
+
+**Lean 侧三次真实迭代**：① `𝓝[≠] x` 在独立文件里**解析不了**（`unexpected token '≠'`）⇒ 写成展开形 `nhdsWithin x {x}ᶜ`；② 缺 `open Filter` ⇒ `Tendsto` unknown；③ 缺 `open scoped Topology` ⇒ `𝓝` unknown。**而且每次报错后 Lean 都会补一个 `sorry`** ⇒ axioms 报告里出现 `sorryAx`，**看起来像"证明是空的"**（与 `DrawProof.lean` 里记的那次同型）。冷 import **254 s**、热跑 **65 s**。
+
+**真跑**：gated 用例 ⇒ `formally_proved` / `verified` / `exit=0` / **64702 ms** / 三个白名单公理；`DrawProof.lean`（现在带并集 import）`lake env lean` exit 0，三条真命题 + 一条 `sorry` 反例。
+
+**一条被用例抓出来的设计更正**：第一版留了 `atX` 字段并写着"它进 `proofInputHash`" —— 用例红了：两条只有 `atX` 不同的目标哈希**相同**（`ProofInput` 里没这一栏）。那个字段**不影响任何东西**却会让人以为凭证绑在 x=1 上 ⇒ **删掉**，绑定靠 `claimSourceText`（有用例钉）。**这是"文档说的"与"代码做的"不一致被用例当场抓住的现成例子。**
+
+**新增跨语言判据**（`scripts/proof-spike/lean4TemplateAllowlist.test.ts`，2 条，不需要 Lean）：适配器生成的每条 import/定理名都在桌面白名单里；**反过来**白名单里每条也都要有人生成（挡"白名单越攒越长"）。住在 `scripts/` 是因为 `packages/agent-core` 的 tsconfig 没有 node 类型（typecheck 报 TS2307/TS2580）。
+
+**门禁**：proof **8 文件 / 142 通过**（+6）；`test:rust` **249 passed / 0 failed / 3 ignored**（+2）；`typecheck` 0；`lint` 0 error / 13 warning；全库非 Lean **342 文件 / 4027 通过 + 1 todo / 0 失败 / exit 0**（523.59 s）；全量 e2e **218 通过 / 0 失败**（2.4 m）。**变异两次**：第三类从 Rust 白名单删掉 ⇒ 跨语言判据红；往白名单加一条没人生成的名字 ⇒ "反过来对得上"红（都还原、复跑全绿）。
+
 ## 2026-10-10 —— V2 GREEN ③ 第二半：web 侧接线（桌面通道 + 不可信 IPC 回包校验）
 
 **这一块加 `apps/web/src/agent/desktopProofChannel.ts`**（+ 7 条用例）：把库里的 `ProofChannel` 端口接到桌面命令上。**接线有了，但没有任何产品流程在跑完作图之后调用它** —— 缺口③只差一个调用点。

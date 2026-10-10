@@ -7,6 +7,27 @@
 
 
 
+## 2026-10-10 —— V2 GREEN ① 第三刀：第三个目标类**切线/导数**（**换了数学塔**，真跑通过）
+
+**这一块加第三个目标类** `tangentSlope`：曲线在某点的**切线斜率的定义性质** ——
+`f 在 x 处可导、导数为 m ⇒ 割线斜率 slope f x t（t ≠ x）趋于 m`。它是作图四家族里**切线/导数**那一族的可证明主张。**① 仍未补完**（曲线性质、其余立体关系没有模板）。
+
+**为什么它算"另一个类"而不是前两类的变体**：前两类住在**内积空间**里（点、向量、`ᗮ`）；
+这一类住在**实分析**里（`HasDerivAt` / `Tendsto` / `slope`）。加它要同时动**四样**：
+模板、目标词表（`tangentSlope`，载体是解析层的 `tangentAt`）、**桌面命令的白名单**（import 与定理名都要显式加）、
+仓内对照文件 —— 这条台阶本身是这一块的价值之一：它说明"加第三个类"是一条**有台阶的路**。
+
+**实测（本机真跑）**：gated 用例 ⇒ **`status=formally_proved` / `judgement=verified` / `exit=0` / 64702 ms** /
+axioms `["propext","Classical.choice","Quot.sound"]`；仓内对照文件 `DrawProof.lean` 加第三条后 `lake env lean` exit 0（三条真命题都是那三个公理，`sorry` 那条仍是 `sorryAx`）。
+
+**三处实测逼出来的讲究（都写进代码注释了）**：① **`open Filter` 与 `open scoped Topology` 是必需的** —— 不加报 `unknown identifier`（`Tendsto` / `𝓝`），而**报错之后 Lean 会补一个 `sorry`**，于是在 axioms 报告里**看起来像"证明是空的"**（与 `DrawProof.lean` 里记的那次同型）；② mathlib 写法里的 `𝓝[≠] x` 在独立文件里**解析不了**（实测 `unexpected token '≠'`），所以生成文件里写成展开形 `nhdsWithin x {x}ᶜ`；③ 冷 import 实测 **254 s**、热跑 **65 s**（这条排在 gated 用例的第 4 位，不会白等冷启动）。
+
+**一条被用例抓出来的设计更正（值得记）**：第一版给这一类留了个 `atX` 字段，文档还写着"它进 `proofInputHash`"。**用例当场红了** —— 两条只有 `atX` 不同的目标算出**同一个哈希**，因为 `ProofInput` 里根本没有这一栏。也就是说那个字段**不影响任何东西**，却会让人以为"凭证绑在 x=1 上"。**删掉它**：绑定靠 `claimSourceText`（"在 x=1 处的切线…" 与 x=2 那句是不同的字符串），有一条用例专门钉这个。
+
+**新增一条跨语言判据（`scripts/proof-spike/lean4TemplateAllowlist.test.ts`，2 条）**：适配器生成的**每一条 import 与每一个定理名**都必须在桌面白名单里，**反过来白名单里的每一条也都得还真的有人生成**（挡"白名单越攒越长"）。它**不需要 Lean**，每次全库都跑。住在 `scripts/` 是因为 `packages/agent-core` 的 tsconfig 没有 node 类型（`typecheck` 实测报 TS2307/TS2580 —— 这条也是类型门抓出来的）。
+
+**门禁**：`packages/agent-core/src/proof` **8 文件 / 142 通过**（+6）；`test:rust` **249 passed / 0 failed / 3 ignored**（+2）；`typecheck` exit 0；`lint` 0 error / 13 warning；全库非 Lean 与全量 e2e 见下一条。**变异两次**：把第三类从 Rust 白名单删掉 ⇒ 跨语言判据红；往白名单**加一条没人生成的名字** ⇒ "反过来也要对得上"红（都当场还原、复跑全绿）。
+
 ## 2026-10-10 —— V2 GREEN ③ 第二半：web 侧接线（桌面通道 + **不可信 IPC 回包**的逐字段校验）；**仍然只差一个调用点**
 
 **这一块加 `apps/web/src/agent/desktopProofChannel.ts`**：把库里的端口接到桌面命令上。**如实说清：接线有了，但**没有任何产品流程在跑完作图之后调用它** —— 缺口③还差最后那一步（一个调用点）。**
