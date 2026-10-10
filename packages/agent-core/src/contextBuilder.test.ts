@@ -10,6 +10,7 @@ import {
   MAX_CONVERSATION_FACTS,
   MAX_FACT_LIMIT,
   MAX_MESSAGE_LIMIT,
+  MAX_UNREAD_CLAUSES,
   type BuildContextInput,
   type ConversationContextInput,
   type Fact,
@@ -531,5 +532,20 @@ describe("conversation context", () => {
 
     expect(context.summary).toBe("")
     expect(context.warnings.some((entry) => entry.code === "truncated_summary")).toBe(true)
+  })
+
+  /**
+   * **"我们读不懂的从句"要进上下文**（2026-10-10 第二件）：模型据此给 `normalisations`（只换说法）。
+   * 两条判据：有就带上（超上限截断）；**没有就不出现这个键** —— 与 `materialisedActions` 同一条纪律，
+   * "没有"与"值是 undefined"是两件事。
+   */
+  it("carries the clauses the parser could not read, and omits the key when there are none", () => {
+    const unread = [{ sourceText: "PA⊥底面 ABCD", reason: "未核验。" }]
+
+    expect(buildContext(input({ unreadClauses: unread })).unreadClauses).toEqual(unread)
+    expect(Object.hasOwn(buildContext(input()), "unreadClauses")).toBe(false)
+
+    const many = Array.from({ length: MAX_UNREAD_CLAUSES + 3 }, (_, index) => ({ sourceText: `条件 ${index}`, reason: "未核验。" }))
+    expect(buildContext(input({ unreadClauses: many })).unreadClauses).toHaveLength(MAX_UNREAD_CLAUSES)
   })
 })

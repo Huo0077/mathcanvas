@@ -2,6 +2,7 @@ import type { DocumentHandle, PlanDiagnostic, PlanEnvelope, PlanRelations, Repai
 import type { DraftAction } from "@draw/scene-graph"
 import type { Budget } from "./budget"
 import { buildContext, buildConversationContext, conversationLimitsFor, type ConversationContext, type ConversationContextSource, type ModelContext, type ObservationSummary } from "./contextBuilder"
+import { parseDiagramObligations } from "./diagramObligations"
 import type { RunEvent } from "./runState"
 import type { ObservedDerivedStatus } from "./sceneObservation"
 import { createToolRegistry, type ToolDescriptor, type ToolRegistry } from "./toolRegistry"
@@ -262,6 +263,11 @@ export function buildPlanRequest(inputs: PlanRequestInputs): PlanRequest {
     selectedRefs: inputs.selectedRefs ?? [],
     availableActions: inputs.availableActions ?? [],
     budget,
+    /**
+     * **题面里"我们读不懂"的从句**（2026-10-10 第二件）：从**同一份题面**上算一次，交给模型，
+     * 让它在计划里给出 `normalisations`。判据不在这里 —— 改写要过 `promptNormalization` 的四道阀。
+     */
+    unreadClauses: parseDiagramObligations(userMessage).unverified,
     ...(inputs.contextLimits === undefined ? {} : { limits: inputs.contextLimits })
   })
   /**

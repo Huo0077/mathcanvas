@@ -24,7 +24,7 @@ import { MAX_CONVERSATION_FACTS, PLAN_SCHEMA_VERSION, describeActions, describeD
  */
 
 /** 提示词版本。**改内容就要改它** —— 这是"模型当时看到的是哪一版"的唯一依据。 */
-export const SYSTEM_PROMPT_VERSION = "mathcanvas.agent.prompt.v8"
+export const SYSTEM_PROMPT_VERSION = "mathcanvas.agent.prompt.v9"
 
 const MAX_PROMPT_FACTS = 12
 const MAX_PROMPT_REFS = 16
@@ -301,6 +301,13 @@ export function buildPolicyText(input: SystemPromptPolicyInput): string {
       "",
       "**关系由系统自己从题面里读，你不需要声明它们**（这一条是 2026-10-03 改的：以前要求你用 `relations` 表逐条声明，实测模型做不到，于是几何正确的计划也被拒）。你要做的只是让坐标**真的满足**题面那些关系 —— 系统抽出来后会逐条算残差，不满足会被拒。",
       "计划顶层的 `relations` 字段仍然接受（自愿声明也行，系统会一并核验），但**它不是必填、也不该为了它去猜**。",
+      /**
+       * **题面规范化**（2026-10-10 第二件）。上下文里有 `unreadClauses` 时才有这一栏 ——
+       * 那些是**系统读不懂**的从句（用户写的是课本中文，我们句型没那么宽）。
+       * 明确写出"只换说法、不许改条件"：模型既能规划又能改写时，它有动机把题面改弱成自己能画的样子，
+       * 而那是本仓最忌讳的失效方式。判据在 `promptNormalization.ts` 的四道阀里，这里只把话说清。
+       */
+      "上下文里**有** `unreadClauses`（我们读不懂的题面从句）时，请在计划顶层给出 `normalisations`：`[{\"original\":\"原话里逐字出现的那一段\",\"normalized\":\"同一件事的标准写法\"}]`。**只换说法，不许改条件**（不许新增、删除或弱化任何条件）—— 指不回原文、引入原文没有的点名、或把关系换弱的条目，系统会**直接丢弃**，那条题设照旧算「未核验」。没有 `unreadClauses` 时不要写这个字段。",
       "**请用 `vertexNames` 说出每个顶点的名字**（例如 `[\"P\",\"A\",\"B\",\"C\",\"D\"]`，与 `vertices` 一一对应）。系统靠它把题面里的「AB ⊥ AD」对上具体哪两个顶点；**不给 `vertexNames` 时系统无法核验这些关系**，不会靠猜题面点名顺序认顶点；请明确给出每个坐标对应的名字。"
     )
   }
@@ -364,6 +371,11 @@ function contextJson(context: ModelContext, conversation?: ConversationContext):
     }),
     scene: {
       summary: conversation?.observation.summary ?? "",
+      /**
+       * **我们读不懂的题面从句**（2026-10-10 第二件）：只在存在时出现。
+       * 模型据此给 `normalisations`；判据在 `promptNormalization.ts` 的四道阀里。
+       */
+      ...(context.unreadClauses === undefined ? {} : { unreadClauses: context.unreadClauses }),
       facts: context.facts.slice(0, MAX_PROMPT_FACTS).map((fact) => ({ id: fact.id, text: fact.text, origin: fact.origin })),
       /**
        * **派生立体读数**（规格 §3.4 / §6.2）。

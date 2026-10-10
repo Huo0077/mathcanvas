@@ -91,6 +91,14 @@ export interface ModelContext {
   skills: readonly { id: string; title: string; summary: string; limits: SkillBundle["manifest"]["limits"] }[]
   /** 只读出：可用动作名。 */
   availableActions: readonly string[]
+  /**
+   * **我们读不懂的题面从句**（2026-10-10 第二件：题面规范化通道）。
+   *
+   * 只在这类从句存在时才有这个键（与 `materialisedActions` 同一条纪律：没有就是**不存在**）。
+   * 模型据此在计划顶层给出 `normalisations`：逐条把那段原文换成标准写法。
+   * **它不是判据** —— 改写要过 `promptNormalization.ts` 的四道阀，核验照旧由内核做。
+   */
+  unreadClauses?: readonly { sourceText: string; reason: string }[]
   /** 截断、过期、未知技能等如实记录。 */
   warnings: readonly ContextWarning[]
   /** 估算的字符数，供调用方核对预算。 */
@@ -104,6 +112,11 @@ export interface BuildContextInput {
   selectedRefs: readonly SelectedRef[]
   /** 只读阶段可用的动作名（来自技能清单与能力注册表）。 */
   availableActions: readonly string[]
+  /**
+   * **题面里"我们读不懂"的从句**（可选；缺省 = 没有，于是模型看不到这一栏）。
+   * 由调用方从**同一份题面**上算出来（`parseDiagramObligations`），不在这里再解析一遍。
+   */
+  unreadClauses?: readonly { sourceText: string; reason: string }[]
   budget: Budget
   /**
    * 单次上下文最多几条事实 / 几条引用 / **几条派生读数**。
@@ -116,6 +129,13 @@ export interface BuildContextInput {
 
 /** 上限：条数与字节都要有界，否则"预算"只是说说。 */
 export const DEFAULT_FACT_LIMIT = 12
+/**
+ * 一次最多把几条"我们读不懂的从句"交给模型（2026-10-10 第二件）。
+ *
+ * 只传给模型看，不进核验 —— 但它是**提示词预算**的一部分，所以有硬上限：题面里的从句通常两三条，
+ * 多了说明要么题面确实很长、要么解析层出了别的问题，都不该靠"多塞几条"来解决。
+ */
+export const MAX_UNREAD_CLAUSES = 6
 export const DEFAULT_REF_LIMIT = 16
 export const MAX_FACT_LIMIT = 32
 export const MAX_REF_LIMIT = 32
@@ -193,6 +213,7 @@ export function buildContext(input: BuildContextInput): ModelContext {
     selectedRefs,
     skills,
     availableActions: [...input.availableActions],
+    ...(input.unreadClauses === undefined || input.unreadClauses.length === 0 ? {} : { unreadClauses: input.unreadClauses.slice(0, MAX_UNREAD_CLAUSES) }),
     warnings,
     estimatedCharacters: 0
   }
@@ -203,6 +224,7 @@ export function buildContext(input: BuildContextInput): ModelContext {
 /** 字符数估算：只统计会进提示词的部分。 */
 function estimate(context: ModelContext): number {
   const parts: string[] = [context.preamble, context.workspace]
+  if (context.unreadClauses !== undefined) parts.push(JSON.stringify(context.unreadClauses))
   parts.push(JSON.stringify(context.handles))
   parts.push(JSON.stringify(context.binding))
   parts.push(...context.facts.map((fact) => fact.text))

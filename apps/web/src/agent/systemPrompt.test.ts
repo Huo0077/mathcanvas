@@ -568,4 +568,26 @@ describe("production system prompt", () => {
       expect(policy).toContain("残差")
     }
   })
+
+  /**
+   * **题面规范化只能靠提示词说清**（2026-10-10 第二件）：模型既能规划又能改写时，它有动机把题面
+   * 改弱成自己能画的样子（本仓吃过最大的亏就是"一张错图静默通过全部门禁"）。判据（四道阀）在内核，
+   * 但**话必须说到**：字段名、"只换说法、不许改条件"、以及"没有 `unreadClauses` 就别写"。
+   */
+  it("tells the model how to hand back a prompt rewrite, and forbids changing conditions", () => {
+    const policy = buildPolicyText({ channel: "strict_json", canPlan: true, actionIds: ["solid.create_prism"] })
+
+    expect(policy).toContain("normalisations")
+    expect(policy).toContain("不许改条件")
+    expect(policy).toContain("unreadClauses")
+    // 只读那一支根本不产出计划，不该出现这个字段的说明。
+    expect(buildPolicyText({ channel: "strict_json", canPlan: false, actionIds: [] })).not.toContain("normalisations")
+  })
+
+  it("shows the unread clauses in the scene the model reads", () => {
+    const prompt = buildSystemPrompt({ context: context({ unreadClauses: [{ sourceText: "PA⊥底面 ABCD", reason: "未核验。" }] }), channel: "strict_json", canPlan: true })
+
+    expect(JSON.stringify(prompt)).toContain("PA⊥底面 ABCD")
+    expect(prompt.policy).toContain("normalisations")
+  })
 })
