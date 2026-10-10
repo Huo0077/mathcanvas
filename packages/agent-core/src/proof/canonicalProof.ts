@@ -65,7 +65,14 @@ export function canonicalProofBody(goal: PremiseBridgeGoal): CanonicalProof | nu
       note: "性质定理那一类的正文由**系统**给出（`ᗮ` 给的方向与结论相反，所以要带 `inner_eq_zero_symm`；目标线那一段要写成生成文件里真有的表达式），不是模型写的。"
     }
   }
-  if (goal.goalKind === "tangentSlope") {
+  if (goal.goalKind === "lineInPlane") {
+    return {
+      body: `have h : ${goal.line.second} - ${goal.line.first} = (${goal.line.second} - ${goal.planePoints[0]}) - (${goal.line.first} - ${goal.planePoints[0]}) := by abel
+rw [h]
+exact Submodule.sub_mem _ h2 h1`,
+      note: "线在平面内那一类的正文由**系统**给出（把连线方向拆成「两个端点各自减去基点」再交给子空间的 `sub_mem`；**每一行都不带内部缩进**（适配器会给每行统一加两个空格；第一行带 0、后几行带 2 会让后几行被算进 `have` 的证明块里，实测真跑报 `unsolved goals` + 语法错）），不是模型写的。"
+    }
+  }  if (goal.goalKind === "tangentSlope") {
     return {
       body: TANGENT_BODY,
       note: "切线/导数那一类的正文由**系统**给出（mathlib 里现成的那一步：`hasDerivAt_iff_tendsto_slope`），不是模型写的。"

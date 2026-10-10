@@ -28,10 +28,11 @@ pub const ALLOWED_IMPORTS: [&str; 2] = [
 ///
 /// 加目标类时**必须**在这里加一行 —— 那条摩擦是故意的：这个名字决定"我们能问哪个定理
 /// 到底依赖什么公理"，名字对不上就得不到报告，而"没有报告"必须判失败。
-pub const ALLOWED_THEOREM_NAMES: [&str; 3] = [
+pub const ALLOWED_THEOREM_NAMES: [&str; 4] = [
     "draw_perpendicular_goal",
     "draw_line_plane_perpendicular_goal",
     "draw_tangent_slope_goal",
+    "draw_line_in_plane_goal",
 ];
 
 /// `maxHeartbeats` 的**上限**：模板默认 400_000；给到 4_000_000 已是很宽的余地。

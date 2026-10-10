@@ -143,6 +143,24 @@ export interface Lean4ProofGoalInput {
   perpendicular?: Lean4PerpendicularGoal
   linePlanePerpendicular?: Lean4LinePlanePerpendicularGoal
   tangentSlope?: Lean4TangentSlopeGoal
+  lineInPlane?: Lean4LineInPlaneGoal
+}
+
+/**
+ * `lineInPlane` 目标类要的东西（**立体关系**那一族的第四类，2026-10-10 加）。
+ *
+ * 它证的是那一步 **「平面内两点的连线仍在这个平面内」**：`D`、`E` 都在平面 `ABC` 里 ⇒
+ * 方向向量 `E - D` 落在由 `B - A`、`C - A` 张成的那个子空间里。
+ *
+ * **为什么它值得一个类**：它是**判定定理那条路的前置**（"线 ⊥ 面"要先承认那条线在该平面内），
+ * 而在此之前，"`BD` 落在底面内"这件事在前提桥里只能标成 `fromFigure`（图形蕴含、系统补的）。
+ * 有了这一类，它成了**可证**的一步（前提仍是"两个端点在该平面内"—— 那件事由题面/图形给）。
+ */
+export interface Lean4LineInPlaneGoal {
+  /** 那条要证明"落在平面内"的线（`first` = D、`second` = E，结论是 `E - D` 在平面内）。 */
+  line: Lean4NamedLine
+  /** 那个平面的点名（至少三个：第一个是基点，另两点给出两个方向）。 */
+  planePoints: readonly string[]
 }
 
 /**
@@ -391,6 +409,9 @@ export const LEAN4_LINE_PLANE_PERPENDICULAR_THEOREM_NAME = "draw_line_plane_perp
 /** **第三个目标类的定理名**（切线/导数）。同样**必须与另两个不同**。 */
 export const LEAN4_TANGENT_SLOPE_THEOREM_NAME = "draw_tangent_slope_goal"
 
+/** **第四个目标类的定理名**（线在平面内）。同样必须与另三个不同。 */
+export const LEAN4_LINE_IN_PLANE_THEOREM_NAME = "draw_line_in_plane_goal"
+
 /** 第二个目标类生成文件里的**两个前提名**（导出给用例交叉核对，与 `LEAN4_BINDER_NAMES` 同理）。 */
 export const LEAN4_LINE_PLANE_PERPENDICULAR_BINDER_NAMES: readonly string[] = ["h1", "h2"]
 
@@ -636,6 +657,55 @@ export function buildTangentSlopeStatement(input: Lean4ProofGoalInput, maxHeartb
   }
 }
 
+/**
+ * **第四个目标类：线在平面内**（2026-10-10 加）。
+ *
+ * 生成的就是这个形状：
+ *
+ * ```lean
+ * theorem draw_line_in_plane_goal {E : Type*} [NormedAddCommGroup E] [InnerProductSpace ℝ E]
+ *     (A B C D E' : E) (h1 : (D - A) ∈ span {B - A, C - A}) (h2 : (E' - A) ∈ span {B - A, C - A}) :
+ *     (E' - D) ∈ span {B - A, C - A}
+ * ```
+ *
+ * 读法：`A` 是那个平面上的基点，`B - A` / `C - A` 给出平面的两个方向；两个端点都在这个子空间里 ⇒
+ * **它们的连线方向也在**（子空间对减法封闭）。证明就一行（`Submodule.sub_mem`），实测只依赖三个白名单公理。
+ *
+ * **它与另三类的关系**：另三类证"垂直/平行/切线"这类**关系**，这一类证的是**位置**（这条线在那个面上）
+ * —— 而"线在面上"正是判定定理那条路的前置。**边界照旧**：命题是关于任意点的**一般命题**，
+ * 没有坐标、没有具体图形；"这两个端点在不在那个面上"由题面/图形给（那一步不在命题里）。
+ */
+export function buildLineInPlaneStatement(input: Lean4ProofGoalInput, maxHeartbeats: number): Lean4GeneratedStatement {
+  const goal = input.lineInPlane
+  if (goal === undefined) {
+    throw new Error("lineInPlane 目标类必须给出 lineInPlane: { line, planePoints }（模板缺了它就无从生成命题）。")
+  }
+  if (goal.planePoints.length < 3) {
+    throw new Error(`平面至少要有三个点才能生成方向子空间，实际给了 ${goal.planePoints.length} 个。`)
+  }
+  assertPointName("line.first", goal.line.first)
+  assertPointName("line.second", goal.line.second)
+  for (const point of goal.planePoints) assertPointName("planePoints 的每一项", point)
+
+  const [p1, p2, p3] = goal.planePoints as readonly [string, string, string]
+  const pointNames = new Set<string>([goal.line.first, goal.line.second, p1, p2, p3])
+  const pointParams = [...pointNames].map((name) => `(${name} : E)`).join(" ")
+  const dSpan = `Submodule.span ℝ ({${p2} - ${p1}, ${p3} - ${p1}} : Set E)`
+  const first = goal.line.first
+  const second = goal.line.second
+
+  const statement = [
+    `theorem ${LEAN4_LINE_IN_PLANE_THEOREM_NAME} {E : Type*} [NormedAddCommGroup E] [InnerProductSpace ℝ E]`,
+    `    ${pointParams} (h1 : (${first} - ${p1}) ∈ ${dSpan}) (h2 : (${second} - ${p1}) ∈ ${dSpan}) :`,
+    `    (${second} - ${first}) ∈ ${dSpan}`
+  ].join("\n")
+
+  return {
+    theoremName: LEAN4_LINE_IN_PLANE_THEOREM_NAME,
+    ...assembleSource(statement, LEAN4_LINE_IN_PLANE_THEOREM_NAME, input.proof, maxHeartbeats, LEAN4_INNER_PRODUCT_IMPORT)
+  }
+}
+
 // ---------------------------------------------------------------- 结果 → 证据
 
 /** Lean 一次运行的判定结果 —— **这就是"证明到底成没成"的唯一答案**。 */
@@ -830,7 +900,7 @@ export interface Lean4ClosedLoopOutcome {
 }
 
 /** 这个适配器**声称覆盖**的目标类。**加一个必须显式改这里**（见文件头"覆盖范围"）。 */
-export const LEAN4_SUPPORTED_GOAL_KINDS: readonly ProofGoalKind[] = ["perpendicular", "linePlanePerpendicular", "tangentSlope"]
+export const LEAN4_SUPPORTED_GOAL_KINDS: readonly ProofGoalKind[] = ["perpendicular", "linePlanePerpendicular", "tangentSlope", "lineInPlane"]
 
 /**
  * **目标类 → 模板**的分发表。
@@ -846,6 +916,8 @@ function specForGoalKind(input: Lean4ProofGoalInput, maxHeartbeats: number): Lea
       return buildLinePlanePerpendicularStatement(input, maxHeartbeats)
     case "tangentSlope":
       return buildTangentSlopeStatement(input, maxHeartbeats)
+    case "lineInPlane":
+      return buildLineInPlaneStatement(input, maxHeartbeats)
     default:
       throw new Error(
         `Lean 4 适配器今天只覆盖 ${LEAN4_SUPPORTED_GOAL_KINDS.map((kind) => `\`${kind}\``).join(" / ")} 这些目标类，收到「${String(input.goalKind)}」—— 表外目标不许悄悄走到这里。`

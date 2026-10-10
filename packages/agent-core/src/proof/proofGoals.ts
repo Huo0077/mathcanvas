@@ -59,11 +59,12 @@ export type ProofGoalKind =
   | "coplanar"
   | "pythagorean"
   | "tangentSlope"
+  | "lineInPlane"
   | "dihedral"
 
 export const PROOF_GOAL_KINDS: readonly ProofGoalKind[] = [
   "parallel", "perpendicular", "linePlanePerpendicular", "equalLength", "midpoint", "segmentRatio",
-  "collinear", "coplanar", "pythagorean", "tangentSlope", "dihedral"
+  "collinear", "coplanar", "pythagorean", "tangentSlope", "lineInPlane", "dihedral"
 ]
 
 /**
@@ -185,7 +186,17 @@ export const PROOF_GOAL_SUPPORT: readonly ProofGoalSupport[] = [
    * 适配器生成的命题关于**任意**函数与**任意**横坐标（题面那条具体曲线与那个点都不进命题）。
    * 另两类至少把题面的点名带进了命题 —— 这一类连那个都没有，**不许**被读成"这道题被证明了"。
    */
-  { kind: "tangentSlope", description: "曲线在某点的切线斜率等于该点的导数（割线斜率的极限）", obligationKinds: ["tangentAt"], constraintTypes: [], inFirstBatch: true }
+  { kind: "tangentSlope", description: "曲线在某点的切线斜率等于该点的导数（割线斜率的极限）", obligationKinds: ["tangentAt"], constraintTypes: [], inFirstBatch: true },
+  /**
+   * **线在平面内**（立体关系的第四类，2026-10-10 加）：平面内两点的连线仍在该平面内。
+   *
+   * 载体只有**约束层**的 `coplanar`（"这些点共面"）；而这条目标说的是"该平面内两点连线仍在面内"
+   * —— 两者不是同一句话，所以这一栏的意思是"这类题设相关的可证明主张是这条"（与 `tangentSlope` 同一条口径）。
+   *
+   * **它的用处**：判定定理（"线 ⊥ 面内两条相交线 ⇒ 线 ⊥ 面"）要求先承认那条线在该平面内 ——
+   * 在那之前这件事只能标成"图形蕴含"（系统补的），现在它是**可证**的一步。
+   */
+  { kind: "lineInPlane", description: "平面内两点的连线在该平面内", obligationKinds: [], constraintTypes: ["coplanar"], inFirstBatch: true }
 ]
 
 /**

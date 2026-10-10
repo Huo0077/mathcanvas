@@ -35,7 +35,7 @@ describe("形式证明的短目标词表（N5）", () => {
 
   it("**两种载体要分开报**：解析层读不出的 ≠ 一处载体都没有的", () => {
     // 第一版把这两件事混成一个函数，于是把"只有约束层载体"的共线/共面也算成了"表达不出来"。
-    expect(firstBatchGoalsWithoutObligationCarrier()).toEqual(["collinear", "coplanar", "pythagorean"])
+    expect(firstBatchGoalsWithoutObligationCarrier()).toEqual(["collinear", "coplanar", "pythagorean", "lineInPlane"])
     // 而**真的**一处载体都没有的，今天只有勾股一个。
     expect(firstBatchGoalsWithoutAnyCarrier()).toEqual(["pythagorean"])
     for (const kind of firstBatchGoalsWithoutAnyCarrier()) {

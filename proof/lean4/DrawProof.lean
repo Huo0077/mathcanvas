@@ -98,6 +98,16 @@ theorem tangent_slope_general {f : ℝ → ℝ} {m x : ℝ} (h : HasDerivAt f m 
     Tendsto (slope f x) (nhdsWithin x {x}ᶜ) (𝓝 m) :=
   hasDerivAt_iff_tendsto_slope.mp h
 
+/-- **命题四（线在平面内，2026-10-10 加）**：平面内两点的连线仍在该平面内。 -/
+theorem line_in_plane_general {E : Type*} [NormedAddCommGroup E] [InnerProductSpace ℝ E]
+    (A B C D P : E)
+    (h1 : (D - A) ∈ Submodule.span ℝ ({B - A, C - A} : Set E))
+    (h2 : (P - A) ∈ Submodule.span ℝ ({B - A, C - A} : Set E)) :
+    (P - D) ∈ Submodule.span ℝ ({B - A, C - A} : Set E) := by
+  have h : (P - A) - (D - A) = P - D := by abel
+  rw [← h]
+  exact Submodule.sub_mem _ h2 h1
+
 /-- **命题一 + `sorry`**：`sorryAx` 会出现在它的 axioms 报告里，而退出码仍是 0。 -/
 theorem perpendicular_cheat {E : Type*} [NormedAddCommGroup E] [InnerProductSpace ℝ E]
     (D : Submodule ℝ E) (u v : E) (hu : u ∈ Dᗮ) (hv : v ∈ D) :
@@ -107,4 +117,5 @@ theorem perpendicular_cheat {E : Type*} [NormedAddCommGroup E] [InnerProductSpac
 #print axioms perpendicular_general
 #print axioms plane_perpendicular_general
 #print axioms tangent_slope_general
+#print axioms line_in_plane_general
 #print axioms perpendicular_cheat

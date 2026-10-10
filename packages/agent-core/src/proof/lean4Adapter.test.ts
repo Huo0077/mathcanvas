@@ -4,12 +4,14 @@ import { evidenceStatusWithProof, proofInputHash, PROOF_ARTIFACT_VERSION, verify
 import {
   buildPerpendicularStatement,
   buildLinePlanePerpendicularStatement,
+  buildLineInPlaneStatement,
   buildTangentSlopeStatement,
   checkAxiomsReport,
   judgeLean4Run,
   LEAN4_ALLOWED_AXIOMS,
   LEAN4_BACKEND_NAME,
   LEAN4_LINE_PLANE_PERPENDICULAR_THEOREM_NAME,
+  LEAN4_LINE_IN_PLANE_THEOREM_NAME,
   LEAN4_TANGENT_SLOPE_THEOREM_NAME,
   LEAN4_SUPPORTED_GOAL_KINDS,
   LEAN4_THEOREM_NAME,
@@ -510,6 +512,54 @@ describe("版本串：显式的优先于运行结果带回来的", () => {
 
     expect(produced.artifact).toBeNull()
     expect(produced.judgement.detail).toContain("版本")
+  })
+})
+/**
+ * **第四个目标类：线在平面内**（2026-10-10 加）—— 立体关系那一族的第四类，也是**判定定理的前置**。
+ *
+ * 它证的东西比另三类"朴素"：平面内两点的连线仍在该平面内。但正因为它朴素，它是那条路上**必须**的一步
+ *（在此之前，"`BD` 落在底面内"在前提桥里只能标成"图形蕴含"）。
+ */
+describe("第四个目标类：线在平面内（子空间对减法封闭）", () => {
+  const LINE_GOAL: Lean4ProofGoalInput = {
+    prompt: "在正方体 ABCD-A′B′C′D′ 中，求证 直线 BD 在平面 ABCD 内",
+    claimSourceText: "BD 在平面 ABCD 内",
+    goalKind: "lineInPlane",
+    proof: "have h : D - B = (D - A) - (B - A) := by abel\nrw [h]\nexact Submodule.sub_mem _ h2 h1",
+    lineInPlane: { line: { first: "B", second: "D" }, planePoints: ["A", "B", "C"] }
+  }
+
+  it("命题形状：两个端点都在子空间里 ⇒ 连线方向也在（一般命题，无坐标）", () => {
+    const spec = buildLineInPlaneStatement(LINE_GOAL, 400_000)
+
+    expect(spec.statement).toContain("(h1 : (B - A) ∈ Submodule.span ℝ ({B - A, C - A} : Set E))")
+    expect(spec.statement).toContain("(h2 : (D - A) ∈ Submodule.span ℝ ({B - A, C - A} : Set E))")
+    expect(spec.statement).toContain("(D - B) ∈ Submodule.span ℝ ({B - A, C - A} : Set E)")
+    expect(spec.statement).not.toMatch(/\d+\.\d+/)
+  })
+
+  it("**四个类四个定理名**（报告不能互相冒充）", () => {
+    const spec = buildLineInPlaneStatement(LINE_GOAL, 400_000)
+    const names = new Set([LEAN4_THEOREM_NAME, LEAN4_LINE_PLANE_PERPENDICULAR_THEOREM_NAME, LEAN4_TANGENT_SLOPE_THEOREM_NAME, spec.theoremName])
+
+    expect(names.size).toBe(4)
+    expect(spec.theoremName).toBe(LEAN4_LINE_IN_PLANE_THEOREM_NAME)
+  })
+
+  it("平面点少于三个 / 点名不像点名 ⇒ 抛（调用方给错了，不是「证明失败」）", () => {
+    expect(() => buildLineInPlaneStatement({ ...LINE_GOAL, lineInPlane: { line: { first: "B", second: "D" }, planePoints: ["A", "B"] } }, 400_000)).toThrow(/至少要有三个点/)
+    expect(() => buildLineInPlaneStatement({ ...LINE_GOAL, lineInPlane: { line: { first: "1x", second: "D" }, planePoints: ["A", "B", "C"] } }, 400_000)).toThrow(/点名/)
+    expect(() => buildLineInPlaneStatement({ ...LINE_GOAL, lineInPlane: undefined }, 400_000)).toThrow(/必须给出 lineInPlane/)
+  })
+
+  it("闭环（假 runner）：真报告 ⇒ `formally_proved`；别的类的报告 ⇒ 拒", async () => {
+    const stdout = `'${LEAN4_LINE_IN_PLANE_THEOREM_NAME}' depends on axioms: [propext, Classical.choice, Quot.sound]\n`
+    const good = await runLean4ClosedLoop("verified_instance", LINE_GOAL, "claim-lip", { ...PRODUCE, runner: fakeRunner([okRun(stdout)]) })
+    expect(good.status).toBe("formally_proved")
+
+    const wrong = await runLean4ClosedLoop("verified_instance", LINE_GOAL, "claim-lip", { ...PRODUCE, runner: fakeRunner([okRun(HONEST_STDOUT)]) })
+    expect(wrong.status).toBe("verified_instance")
+    expect(wrong.judgement.status).toBe("failed")
   })
 })
 describe("产物与绑定（假 runner，CI 上跑）", () => {

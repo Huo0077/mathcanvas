@@ -254,6 +254,40 @@ describe("真实 Lean 端到端（显式 gated）", () => {
     for (const axiom of outcome.judgement.axioms ?? []) expect(["propext", "Classical.choice", "Quot.sound"]).toContain(axiom)
   }, 600_000)
 
+  it.skipIf(!REAL_AVAILABLE)("**第四个目标类（线在平面内）也真的被内核接受**（判定定理的前置那一步，2026-10-10 加）", async () => {
+    /**
+     * 这一条证明的东西比另三条朴素：**平面内两点的连线仍在该平面内**（子空间对减法封闭）。
+     * 它值得一个类的理由是位置：判定定理要求先承认那条线在该平面内，而在这一类之前，
+     * 那件事在前提桥里只能标成"图形蕴含"（系统补的）。
+     */
+    const lineGoal: Lean4ProofGoalInput = {
+      prompt: "在正方体 ABCD-A′B′C′D′ 中，求证 直线 BD 在平面 ABCD 内",
+      claimSourceText: "BD 在平面 ABCD 内",
+      goalKind: "lineInPlane",
+      assumptions: [],
+      /** 一行：`(P - A) - (D - A) = P - D`（`abel`）之后交给 `Submodule.sub_mem`。 */
+      proof: "have h : D - B = (D - A) - (B - A) := by abel\nrw [h]\nexact Submodule.sub_mem _ h2 h1",
+      lineInPlane: { line: { first: "B", second: "D" }, planePoints: ["A", "B", "C"] }
+    }
+
+    const runner = createLean4Runner()
+    const outcome = await runLean4ClosedLoop("verified_instance", lineGoal, "claim-lean4-line-in-plane-e2e", {
+      runner,
+      projectDir: LEAN4_PROJECT_DIR,
+      toolchain,
+      backendVersion: `Lean (reported by ${toolchain!.resolvedBy})`,
+      timeoutMs: 300_000,
+      maxHeartbeats: 400_000
+    })
+
+    console.log(`E2E 线在面内：status=${outcome.status} judgement=${outcome.judgement.status} exit=${String(outcome.run?.exitCode)} ${outcome.run?.durationMs} ms`)
+    console.log(`E2E 线在面内 axioms: ${JSON.stringify(outcome.judgement.axioms)}`)
+
+    expect(outcome.judgement.status, `判定不是 verified：${outcome.judgement.detail}`).toBe("verified")
+    expect(outcome.status).toBe("formally_proved")
+    expect(outcome.statement).toContain("theorem draw_line_in_plane_goal")
+    for (const axiom of outcome.judgement.axioms ?? []) expect(["propext", "Classical.choice", "Quot.sound"]).toContain(axiom)
+  }, 600_000)
   it.skipIf(!REAL_AVAILABLE)("**`sorry` 的正文 ⇒ 绝不升级**（同一台机器、同一条命题，只换正文）", async () => {
     const runner = createLean4Runner()
     const outcome = await runLean4ClosedLoop(

@@ -49,6 +49,14 @@ export type PremiseBridgeGoal =
    * 于是它如实落到 `invented`（详见 `bridgeTangentSlope`）。
    */
   | { goalKind: "tangentSlope"; tangentSlope: { functionName: string } }
+  /**
+   * **线在平面内**（2026-10-10 加）：两个端点在不在那个平面上。
+   *
+   * 它的两个前提（"这两个端点在该平面内"）**通常不会在题面里被单独说出来** —— 它们是点名的
+   * 顶点结构蕴含的（与 `bridgePerpendicular` 的第二条前提同一条口径）⇒ 如实标 `fromFigure`，
+   * **不是** `invented`（那会让这一类永远不可用）。
+   */
+  | { goalKind: "lineInPlane"; line: BridgedNamedLine; planePoints: readonly string[] }
 
 export interface PremiseFromText {
   /** 这条前提的读法（例如 `PA ⊥ 平面 ABCD`）—— **按题面那条题设自己的点名生成**，不是按目标的点名。 */
@@ -133,6 +141,7 @@ function knownPoints(set: DiagramObligationSet, goal: PremiseBridgeGoal): Set<st
 export function bridgeProofPremises(goal: PremiseBridgeGoal, set: DiagramObligationSet): PremiseBridgeResult {
   if (goal.goalKind === "linePlanePerpendicular") return bridgeLinePlane(goal, set)
   if (goal.goalKind === "perpendicular") return bridgePerpendicular(goal, set)
+  if (goal.goalKind === "lineInPlane") return bridgeLineInPlane(goal, set)
   return bridgeTangentSlope(goal, set)
 }
 
@@ -153,6 +162,29 @@ export function bridgeProofPremises(goal: PremiseBridgeGoal, set: DiagramObligat
  * **这正是这套判据该有的样子**：类有了、模板真跑通了（`DrawProof.lean` 里那条一般命题），
  * 但**这道题的前提没有被题面说出来** —— 系统不许替它补一条。
  */
+/**
+ * **线在平面内**：两个前提是"两个端点都在那个平面上"。题面通常不会单独写这句话 ——
+ * 它由点名结构蕴含（这两个点都是题面点名造出来的顶点）⇒ 如实标 `fromFigure` 并说明理由。
+ */
+function bridgeLineInPlane(goal: Extract<PremiseBridgeGoal, { goalKind: "lineInPlane" }>, set: DiagramObligationSet): PremiseBridgeResult {
+  const known = knownPoints(set, goal)
+  const plane = goal.planePoints.join("")
+  const endpoints = [goal.line.first, goal.line.second]
+  const fromFigure: PremiseFromFigure[] = []
+  const invented: PremiseInvented[] = []
+  for (const endpoint of endpoints) {
+    const premise = `${endpoint} 落在平面 ${plane} 内`
+    if (goal.planePoints.includes(endpoint)) {
+      fromFigure.push({ premise, reason: "这个点就在题面给的平面点表里 —— 点名结构直接蕴含。" })
+    } else if (known.has(endpoint)) {
+      fromFigure.push({ premise, reason: "题面没有单独说这句话；它由图形自身的构造蕴含（这个点是题面点名造出来的顶点）。**这是系统补的前提，如实列出来。**" })
+    } else {
+      invented.push({ premise, why: "这个点根本不在题面点名的点集里。" })
+    }
+  }
+  return { goalKind: goal.goalKind, fromText: [], fromDerivation: [], fromFigure, invented, ok: invented.length === 0 }
+}
+
 function bridgeTangentSlope(goal: Extract<PremiseBridgeGoal, { goalKind: "tangentSlope" }>, set: DiagramObligationSet): PremiseBridgeResult {
   void set
   const invented: PremiseInvented[] = [{

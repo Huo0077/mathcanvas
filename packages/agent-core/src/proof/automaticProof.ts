@@ -190,6 +190,9 @@ function adapterInputFor(request: AutomaticProofRequest, proof: string): Lean4Pr
       perpendicular: { lineA: request.goal.lineA, planePoints: [...request.goal.planePoints], lineB: request.goal.lineB }
     }
   }
+  if (request.goal.goalKind === "lineInPlane") {
+    return { ...shared, goalKind: "lineInPlane", lineInPlane: { line: request.goal.line, planePoints: [...request.goal.planePoints] } }
+  }
   if (request.goal.goalKind === "tangentSlope") {
     return { ...shared, goalKind: "tangentSlope", tangentSlope: { functionName: request.goal.tangentSlope.functionName } }
   }

@@ -4,6 +4,7 @@ import path from "node:path"
 import { describe, expect, it } from "vitest"
 
 import {
+  buildLineInPlaneStatement,
   buildLinePlanePerpendicularStatement,
   buildPerpendicularStatement,
   buildTangentSlopeStatement,
@@ -54,7 +55,8 @@ describe("适配器输出 与 桌面白名单 的一致性（读 Rust 源文件�
         },
         400_000
       ),
-      buildTangentSlopeStatement({ ...MINIMAL, goalKind: "tangentSlope", tangentSlope: { functionName: "f" } }, 400_000)
+      buildTangentSlopeStatement({ ...MINIMAL, goalKind: "tangentSlope", tangentSlope: { functionName: "f" } }, 400_000),
+      buildLineInPlaneStatement({ ...MINIMAL, goalKind: "lineInPlane", lineInPlane: { line: { first: "B", second: "D" }, planePoints: ["A", "B", "C"] } }, 400_000)
     ]
 
     for (const spec of specs) {
@@ -94,7 +96,8 @@ describe("适配器输出 与 桌面白名单 的一致性（读 Rust 源文件�
           },
           1
         ),
-        buildTangentSlopeStatement({ ...MINIMAL, goalKind: "tangentSlope", tangentSlope: { functionName: "f" } }, 1)
+        buildTangentSlopeStatement({ ...MINIMAL, goalKind: "tangentSlope", tangentSlope: { functionName: "f" } }, 1),
+        buildLineInPlaneStatement({ ...MINIMAL, goalKind: "lineInPlane", lineInPlane: { line: { first: "B", second: "D" }, planePoints: ["A", "B", "C"] } }, 1)
       ].map((spec) => spec.theoremName)
     )
 
