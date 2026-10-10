@@ -55,6 +55,8 @@ export type PreviewArtifact = {
   candidate: GeometryDocument
   stageCount: number
   diagramVerification?: import("@draw/agent-core").DiagramVerificationReport
+  /** **题面改写（原件 → 我这样读）**：改写要看得见，所以它随预览一起回带给界面。 */
+  promptNormalisation?: import("@draw/agent-core").NormalisationReport
   /**
    * 候选文档里各类对象的**精确计数**（用户可编辑 / 隐藏 / 派生 / 内部近似）。
    *
@@ -152,6 +154,7 @@ export function createHostBridge(dependencies: HostBridgeDependencies): HostBrid
           candidate: artifact.candidate,
           stageCount: artifact.stageCount,
           ...(artifact.diagramVerification === undefined ? {} : { diagramVerification: artifact.diagramVerification }),
+          ...(artifact.promptNormalisation === undefined ? {} : { promptNormalisation: artifact.promptNormalisation }),
           counts: countDraftObjects(artifact.candidate),
           baseCounts: current ? countDraftObjects(current.document) : emptyCounts
         }

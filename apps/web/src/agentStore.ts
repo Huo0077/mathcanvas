@@ -93,6 +93,13 @@ export interface AgentDraftView {
   assumptions?: string[]
   /** 只含题设文字和结果；候选文档仍留在宿主。 */
   diagramVerification?: import("@draw/agent-core").DiagramVerificationReport
+  /**
+   * **题面改写（原件 → 我这样读）**（2026-10-10 第二件）。
+   *
+   * 模型只换说法、不许改条件（判据在 `promptNormalization.ts` 的四道阀），但用户有权知道
+   * "系统把他那句话读成了什么"。没有改写时**不存在这个键**。
+   */
+  promptNormalisation?: import("@draw/agent-core").NormalisationReport
 }
 
 /** 提交回执：成功与否、有没有真的改动、失败原因。 */

@@ -773,6 +773,7 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
           counts: preview.ok ? preview.artifact.counts : undefined,
           baseCounts: preview.ok ? preview.artifact.baseCounts : undefined,
           diagramVerification: preview.ok ? preview.artifact.diagramVerification : undefined,
+          promptNormalisation: preview.ok ? preview.artifact.promptNormalisation : undefined,
           // 假设在**计划解析成功那一刻**就知道，而草稿是运行结束之后才拿到的 —— 中间没有第二条路。
           assumptions: active.assumptions()
         }, eventRunId, generation())

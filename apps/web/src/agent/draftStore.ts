@@ -56,6 +56,13 @@ export interface DraftRecord {
   completionAssumptions: StructuredAssumption[]
   diagramVerification?: DiagramVerificationReport
   /**
+   * **题面改写（原件 → 我这样读）**（2026-10-10 第二件）。
+   *
+   * 与 `diagramVerification` / `proofAttempt` 同一条纪律：**模型没给改写时这一栏根本不存在**
+   *（不是 `undefined`）。它必须一路走到界面 —— 改写要看得见，否则就是"悄悄改了用户的题面"。
+   */
+  promptNormalisation?: import("@draw/agent-core").NormalisationReport
+  /**
    * **形式证明的一次尝试**（V2 GREEN 缺口③ 的产品调用点）。
    *
    * **旗关着时这个字段根本不存在**（不是 `undefined` 而是没有这一栏）—— "默认路径逐字不变"
@@ -86,6 +93,8 @@ export interface DraftPreview {
    */
   completionAssumptions: StructuredAssumption[]
   diagramVerification?: DiagramVerificationReport
+  /** 同 `DraftRecord`：改写要看得见，所以随预览一起回带。 */
+  promptNormalisation?: import("@draw/agent-core").NormalisationReport
   /** 同 `DraftRecord`：预览是给界面看的，所以那一次证明尝试也跟着走。 */
   proofAttempt?: DraftProofAttempt
 }
@@ -338,6 +347,7 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
     operations: [...record.compiledOperations],
     completionAssumptions: [...record.completionAssumptions],
     ...(record.diagramVerification === undefined ? {} : { diagramVerification: structuredClone(record.diagramVerification) }),
+    ...(record.promptNormalisation === undefined ? {} : { promptNormalisation: structuredClone(record.promptNormalisation) }),
   ...(record.proofAttempt === undefined ? {} : { proofAttempt: structuredClone(record.proofAttempt) })
   })
 

@@ -97,6 +97,26 @@ export function ConfirmationPanel({ draft, assumptions = [], approximationNotes 
       （`canonicalContentHash`）之后再把它露出来。详见 `docs/project-progress.md`。
     */}
 
+    {/*
+      **题面改写：「原件 → 我这样读」**（2026-10-10 第二件）。
+
+      模型只换说法、**不许改条件**（判据在 `promptNormalization.ts` 的四道阀：指不回原文 /
+      编造点名 / 换弱关系 / 改完仍读不出，任何一条不过就丢掉那一条）。但**改写必须看得见** ——
+      用户有权知道系统把他那句话读成了什么，也有权看到哪几条被拒了、为什么被拒。
+      没有改写时这一段**根本不出现**（`promptNormalisation` 这个键不存在）。
+    */}
+    {draft.promptNormalisation && <section className="agent-prompt-normalisation" aria-label="题面改写">
+      <h4>系统把你的题面读成了这样</h4>
+      <ul>
+        {draft.promptNormalisation.accepted.map((entry) => <li key={`ok:${entry.original}`}>
+          <strong>{entry.original}</strong> → <strong>{entry.normalized}</strong>（读出 {entry.givens} 条条件）
+        </li>)}
+        {draft.promptNormalisation.rejected.map((entry) => <li key={`no:${entry.original}`} data-rejected="true">
+          <strong>{entry.original}</strong>：这条改写被拒了 —— {entry.reason}
+        </li>)}
+      </ul>
+    </section>}
+
     {draft.diagramVerification && <section className="agent-diagram-verification" aria-label="题设核验" data-status={draft.diagramVerification.status}>
       <h4>{draft.diagramVerification.status === "passed" ? "符合题设的一组示意图（不是普遍证明）" : "题设尚未全部核验，不能正式确认"}</h4>
       <p>通过 {draft.diagramVerification.checks.filter((item) => item.status === "passed").length} / 失败 {draft.diagramVerification.checks.filter((item) => item.status === "failed").length} / 未核验 {draft.diagramVerification.checks.filter((item) => item.status === "unverified").length}</p>
