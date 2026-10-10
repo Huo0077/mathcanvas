@@ -22,6 +22,8 @@
 
 **判据**：`solid-builders.test.ts` 两条**先红后绿**（末位差 1e-9 的环现在被**接受**；报错里含环下标与 deviation）+ 一条文案判据。读数：全库非 Lean **4112 通过 + 1 todo / 0 失败**；几何内核 **715 通过**；全量 e2e **218 通过 / 0 失败**；`typecheck` 干净。
 
+**自测（管线层复现现场）**：新增 `packages/agent-core/src/planCompiler.coplanar.test.ts`，用**已知合法**的四棱锥夹具把现场原样跑一遍 —— 底面差 `1e-9` 现在**编译通过**；差 `0.5` 照旧被拒且报错含环下标与 deviation。**变异**（把容差改回绝对 `1e-10`）实测报出与现场**同一个码**：`{"stage":"action_compile","code":"degenerate_polyhedron","path":"envelope.actions[0]","detail":"face ring [1,2,3,4] is not coplanar: …"}` —— 证明这条自测确实复现了用户那次失败，而不是"另写了一条好过的用例"。
+
 **仍未覆盖（别误读）**：`翻折至 … PC=4√3` 的语义，以及 `AE:AD=2:5` / `AF:AB=1:2` 这种 `X:Y=a:b` 写法（后者靠题面规范化通道）。
 
 ## 2026-10-10 —— A：只读工具不再吃"生成"额度；C：立体工作区有了**平面面片**（`solid.create_face`）
