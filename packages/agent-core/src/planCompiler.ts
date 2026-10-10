@@ -12,6 +12,7 @@ import {
   type StructuredAssumption
 } from "./contracts"
 import { auditDescriptionFor, type AuditContext } from "./defaultPolicies"
+import { DRAFT_ID_PREFIX } from "./schemaReaders"
 import { auditPlan, type FieldCompletion } from "./parameterAudit"
 import { extractRelations } from "./relationExtraction"
 import { parseObligationWithLegacy } from "./obligationIR"
@@ -238,8 +239,13 @@ function referenceFieldsFor(actionId: string): ReferenceField[] {
   }))
 }
 
-/** 草稿别名写成 `draft:<alias>`（**这是唯一的别名写法**，来源是 `{scope:"draft"}` 引用）。 */
-export const DRAFT_ID_PREFIX = "draft:"
+/**
+ * 草稿别名写成 `draft:<alias>`（**这是唯一的别名写法**，来源是 `{scope:"draft"}` 引用）。
+ *
+ * 真源搬去 `schemaReaders`（2026-10-10）：`readIdReference` 也要把 `{scope:"draft",alias}`
+ * 收成这个字符串，两处各写一份字面量就又多一处会漂移的真源。这里转出去只为既有引用不改。
+ */
+export { DRAFT_ID_PREFIX } from "./schemaReaders"
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)

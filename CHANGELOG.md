@@ -7,6 +7,27 @@
 
 
 
+## 2026-10-10 —— 切线题的真实死因：源曲线引用写了另一种写法（`kind:"id"` 字段两种写法都收）
+
+**现场**（用户桌面版回传的报错原文，把先前三条猜测一次推翻）：`run_failed` —— **`the plan never matched the schema: invalid_type@envelope.actions[1].inputs.sourceId: expected a string`**。轨迹是：检查环境 ✓ → 读取场景 ✓ → 规划 ✓ → **暂存草稿 2 action(s) ✓** → 修复轮（shape 1/1）✓ → 失败。先前猜的"采样区间过宽 ⇒ 取景数值溢出"因此**全部作废**：失败不在几何、也不在数值，而在**计划形状**，而且卡在切线**指它刚建出来的那条曲线**这一栏上。
+
+**根因是我们自己教出来的**：动作表里有**两种**引用写法。`dynamic.create_bound_point.host` / `derived.*.solidId` 这些字段发布给模型的是**对象** `{scope:"draft",alias:"…"}`（技能自述里还明确这么写），而 `function.create_tangent.sourceId` / `function.analyze.sourceId` / `section.create.sourceId` 是**裸 id 字符串**。模型按前者的样子写后者 ⇒ 传输层 `boundedString` 判 `invalid_type`，而那句 `expected a string` **没告诉它该写什么**，唯一一次修复机会也就白花了。
+
+**为什么离线一直照不出来**：夹具写的是合规的 `sourceId: "draft:f"` —— **离线替模型写对了**，所以 `e2e/agent-function-tangent.spec.ts` 一直是绿的。
+
+**改**：新增 `schemaReaders.readIdReference` —— `kind:"id"` 引用收**两种**写法，草稿作用域对象收成 `draft:<alias>`（那是编译器认的唯一别名写法），同一把尺子用在**平铺引用**、**嵌套的 `anchor.pointId`** 与 **`section.create.sourceId`** 三处（同一个判断不许有两个实现）。配套两件：
+
+1. **发布出去的 schema 同步**成 `oneOf: [string, {scope:"draft",alias}]` —— 这个文件里写着"发布出去的 schema 与真正接受的载荷必须是同一种东西"，收了不发布就是让模型继续猜；
+2. **拒绝时说出收哪两种写法**（`expected an id string, or a draft reference {scope:"draft", alias}`）—— 模型只有一次修复机会。
+
+**三条边界（不是放宽校验）**：`scope:"scene"` 照旧拒绝（摊平成裸 id 会丢掉"跨文档"那条判据，它有独立错误码）；`parameter` 引用照旧只收字符串（参数不是草稿别名）；长度与去空判据仍走 `boundedString`。
+
+**判据两层，先红后绿**：传输层 —— 对象 ⇒ `sourceId` 变 `draft:f`，而 `scene` / 数字 / 数组 / 缺 alias 逐个拒绝且路径落在那个字段上；**管线级** —— `function.create_graph` + 对象写法的切线 ⇒ **真编出切线**（`sourceId` = 那张图的 id，不是字面量 `draft:f`）。**变异**：把草稿作用域那一支短路 ⇒ **两层同时真红**，管线那条报出的正是用户看到的那句 `invalid_type@envelope.actions[1].inputs.sourceId`。
+
+**读数**：`typecheck` exit 0；`lint` 0 error / 13 warning；全库非 Lean **353 文件 / 4120 通过 + 1 todo / 0 失败**（398.11 s）；全量 e2e 首跑 **215 通过 / 3 失败** —— `agent-diagram-free-apex:33` / `agent-oblique-prism:35` / `main-thread-responsiveness:28`，**三条都是已记过的负载敏感抖动**，`--workers=1` 孤立复跑 **10 passed**；关旗 golden 在同一趟全库里逐字通过（未动基线）。
+
+**边界（如实说）**：这一块修的是"**我们收不收这种写法**"。模型是否会换别的错法（例如写一个不存在的别名）不在此列 —— 那仍旧由引用解析如实拒绝（`unresolved_alias`）。
+
 ## 2026-10-10 —— 平面题不再被切进立体几何（工作区判据：`dynamic.*` 不再投"立体"那一票）
 
 **现场**（用户自测）："平面与立体不主动区分"。**归因**：这是**判据缺失**，不是"说明问题"。`apps/web/src/agent/agentRunner.ts` 的 `planWorkspaces` 把 `dynamic.*` 与 `solid.*` / `section.*` 并列算作"要立体几何"，而 `dynamic.create_bound_point` / `dynamic.bind_curve` / `dynamic.create_locus` 这一族**自己不要工作区** —— 工作区由**宿主**决定（绑在椭圆上是平面题，绑在棱柱的棱上是立体题），宿主又**总在同一份计划里**由 `planar.*` 或 `solid.*` 建出来。

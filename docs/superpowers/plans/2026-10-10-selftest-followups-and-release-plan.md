@@ -22,15 +22,16 @@
 
 ## 1. P0/P1/P2：人工自测发现的三个问题（**用户报告，控制器未旁观**）
 
-### P0-A（真 bug）切线题在桌面版失败 —— **报错原文已到手，原先的"数值溢出"猜测被推翻**
+### P0-A（真 bug）切线题在桌面版失败 —— **已修（2026-10-10）：`kind:"id"` 引用两种写法都收**
 
 - **现象**：7 道自测题里，`画出 f(x)=x³−3x 的图像与它在 x=1 处的切线` 失败，用户描述为"溢出了"。
-- **报错原文（2026-10-10 用户从桌面版回传）**：`run_failed` —— **`the plan never matched the schema: invalid_type@envelope.actions[1].inputs.sourceId: expected a string`**。轨迹是：检查环境 ✓ → 读取场景 ✓ → 规划 ✓ → 暂存草稿 **2 action(s)** ✓ → 修复轮（shape 1/1, geometry 1/1）✓ → **失败**。
-- **这个原文当场推翻了本计划原先的三条嫌疑**（采样区间过宽 / 取景数值溢出 / 工作区停在 3D）：失败**不在几何或数值层**，而在**计划形状**这一层，而且失败的是 `actions[1]` 的 `inputs.sourceId`（切线的 **源曲线引用**），不是坐标。
-- **根因（读代码，已核）**：我们自己的动作表里有**两种**引用写法 —— `dynamic.create_bound_point.host` / `derived.*.solidId` 发布给模型的是**对象** `{scope:"draft",alias:"…"}`（技能自述里还明确这么教），而 `function.create_tangent.sourceId` 是**裸 id 字符串**（`references: [{field:"sourceId", kind:"id"}]`）。模型按前者的样子写了 `{scope:"draft",alias:"f"}` ⇒ 传输层 `boundedString` 判 `invalid_type`，**一次修复轮也没救回来**（错误只说 "expected a string"，没说该写什么）。
-- **证据强度**：`e2e/agent-function-tangent.spec.ts` 通过，是因为**夹具**写的是 `sourceId: "draft:f"`（合规写法）——离线夹具替模型写对了，所以这条路径**离线永远照不出来**。
-- **修法与判据（下一步动手）**：`kind:"id"` 引用字段**两种写法都收**（草稿作用域对象 ⇒ 摊成 `draft:<alias>`，那是编译器认的唯一别名写法；`scope:"scene"` 照旧拒绝，因为摊平会丢掉跨文档判据），并把**接受的形状**同时写进发布出去的 schema 与拒绝时的报错文本；判据两层 —— 传输层一条（对象写法 ⇒ `sourceId` 解析成 `draft:f`）+ **管线级一条**（`function.create_graph` + 对象写法的切线 ⇒ 真的编出切线，不是"少一条诊断"）。
-- **最小复现（不写产品代码的那一步）**：桌面版同一句已由用户跑过并给了原文；浏览器侧按上面那条管线用例复现即可（离线夹具走的是合规写法，所以要**显式喂对象写法**）。
+- **报错原文（2026-10-10 用户从桌面版回传，推翻了本计划原先的三条猜测）**：`run_failed` —— **`the plan never matched the schema: invalid_type@envelope.actions[1].inputs.sourceId: expected a string`**。轨迹：检查环境 ✓ → 读取场景 ✓ → 规划 ✓ → 暂存草稿 **2 action(s)** ✓ → 修复轮（shape 1/1, geometry 1/1）✓ → **失败**。草稿都暂存了，说明几何与工作区通；死在**计划形状**，卡在切线指它刚建的那条曲线的 `sourceId` 上。**"采样区间过宽 / 取景数值溢出 / 工作区停在 3D"三条嫌疑全部作废。**
+- **根因（我们自己的两种方言）**：`dynamic.create_bound_point.host` / `derived.*.solidId` 发布给模型的是**对象** `{scope:"draft",alias}`（技能自述还明确这么写），而 `function.create_tangent.sourceId` / `function.analyze.sourceId` / `section.create.sourceId` 是**裸 id 字符串**。模型按前者写后者 ⇒ `invalid_type`，而 `expected a string` **没告诉它该写什么**，唯一一次修复机会也白花。
+- **为什么离线照不出来**：夹具写的是合规的 `sourceId: "draft:f"` —— 离线替模型写对了。
+- **已落地**：`schemaReaders.readIdReference`（两种写法 ⇒ `draft:<alias>`；`scope:"scene"` 照旧拒绝、`parameter` 照旧只收字符串、长度判据不变），三处接线（平铺引用 / 嵌套 `anchor.pointId` / `section.create.sourceId`），`actionSchemas` 同步发布 `oneOf: [string, {scope:"draft",alias}]`，拒绝时的报错说出两种写法。
+- **判据**：传输层一条（对象 ⇒ `sourceId` 变 `draft:f`；scene / 数字 / 数组 / 缺 alias 逐个拒且路径对）+ **管线级**一条（`function.create_graph` + 对象写法的切线 ⇒ 真编出切线）。
+- **变异**：短路草稿作用域那一支 ⇒ 两层同时真红（管线那条报出用户那一行），还原复绿。
+- **读数**：`typecheck` 0；`lint` 0 error / 13 warning；全库非 Lean **353 文件 / 4120 通过 + 1 todo / 0 失败**；全量 e2e 首跑 215 / 3（三条均为已记过的负载抖动，`--workers=1` 孤立复跑 10 passed）；关旗 golden 未动。
 
 ### P1-B 平面 vs 立体：系统不主动区分 —— **已修（2026-10-10），归类为"判据缺失"**
 

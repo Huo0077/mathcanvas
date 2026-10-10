@@ -664,6 +664,59 @@ describe("action registry coverage for the agent plan families", () => {
     expect(auditEntryFor("dynamic.set_radius_rule")?.references.map((reference) => reference.field)).toEqual(["circleId", "pointId"])
   })
 
+  /**
+   * **`kind:"id"` 引用字段：草稿作用域那种写法也收**（2026-10-10 真实 provider 现场）。
+   *
+   * 现场原文（用户在桌面版回传）：`the plan never matched the schema:
+   * invalid_type@envelope.actions[1].inputs.sourceId: expected a string`，整轮 `run_failed`。
+   * 那句话的 `actions[1]` 是切线，`sourceId` 指的是它刚建出来的那条曲线。
+   *
+   * **根因是我们自己教出来的**：动作表里 `dynamic.create_bound_point.host` / `derived.*.solidId`
+   * 这些字段发布给模型的是**对象**（`{scope:"draft",alias:"…"}`，技能自述里还明确这么写），
+   * 而 `function.create_tangent.sourceId` 是**裸 id 字符串**。模型按前者的样子写了对象，
+   * 传输层一句 `expected a string` 把它挡在门外 —— 而那句话**没告诉它该写什么**，
+   * 于是那唯一一次修复机会也没救回来。
+   *
+   * 收下它**不是放宽校验**：草稿作用域对象与字符串别名 `draft:<alias>` 说的是同一件事
+   *（那是 `planCompiler` 认的唯一别名写法）。三条边界都在用例里：`scope:"scene"` 仍旧拒绝
+   *（它带着 documentId，摊平成裸 id 会丢掉"跨文档"这条判据）、形状不对的仍拒绝、
+   * 而且拒绝时必须**说出收哪两种写法**。
+   */
+  it("reads the draft-scoped spelling of an id reference, and still refuses the scene spelling", () => {
+    const tangent = (sourceId: unknown) => parseDraftAction({
+      actionId: "function.create_tangent",
+      actionKey: "tangent-at-1",
+      factIds: [],
+      inputs: { alias: "tangent-at-1", sourceId, x: 1 }
+    })
+
+    // ① 模型现场实际写的那种：对象 ⇒ 收下，并摊成编译器认的别名写法。
+    const scoped = tangent({ scope: "draft", alias: "f" })
+    expect(scoped.ok, JSON.stringify(scoped.ok ? [] : scoped.errors)).toBe(true)
+    if (scoped.ok) expect(scoped.value.inputs).toMatchObject({ alias: "tangent-at-1", sourceId: "draft:f", x: 1 })
+
+    // ② 字符串写法照旧（夹具与既有计划都是这一种）。
+    const bare = tangent("draft:f")
+    expect(bare.ok).toBe(true)
+    if (bare.ok) expect(bare.value.inputs).toMatchObject({ sourceId: "draft:f" })
+
+    // ③ **场景引用仍旧拒绝**：它带着 `documentId`，摊平成裸 id 会把跨文档判据弄丢。
+    const scene = tangent({ scope: "scene", ref: { documentId: "document-1", entityId: "function-1" } })
+    expect(scene.ok).toBe(false)
+    if (!scene.ok) {
+      expect(scene.errors[0].path).toBe("action.inputs.sourceId")
+      // 报错必须说出收哪两种写法 —— 只写 "expected a string" 等于让模型猜。
+      expect(scene.errors[0].detail).toContain('{scope:"draft", alias}')
+    }
+
+    // ④ 别的不成形写法照旧拒绝（数字、数组都不行）。
+    for (const bad of [7, ["f"], { alias: "f" }]) {
+      const rejected = tangent(bad)
+      expect(rejected.ok, JSON.stringify(bad)).toBe(false)
+      if (!rejected.ok) expect(rejected.errors[0].path).toBe("action.inputs.sourceId")
+    }
+  })
+
   it("accepts a point bound to a draft host and rejects an unscoped host with its exact path", () => {
     const action = {
       actionId: "dynamic.create_bound_point",

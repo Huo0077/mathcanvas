@@ -444,6 +444,30 @@ describe("plan compilation", () => {
   })
 
   /**
+   * **切线题的源曲线写成"草稿作用域对象"也要编得出来**（2026-10-10 真实 provider 现场）。
+   *
+   * 用户的报错原文：`the plan never matched the schema:
+   * invalid_type@envelope.actions[1].inputs.sourceId: expected a string`（整轮 `run_failed`）。
+   * `actions[0]` 是 `function.create_graph`、`actions[1]` 是切线 —— 模型把"刚建的那条曲线"
+   * 写成了 `{scope:"draft",alias:"f"}`，而这一族字段发布出去的是**裸 id 字符串**。
+   *
+   * 传输层那条用例钉的是**形状**（对象 ⇒ `draft:f`）；**这一条钉的是结局**：
+   * 整份计划真的编出切线，而不是"少一条诊断"、也不是"切线还指着字面量 `draft:f`"。
+   */
+  it("compiles the tangent of a curve whose source is written as a draft-scoped reference", () => {
+    const result = compilePlan(rawPlan([
+      { actionId: "function.create_graph", actionKey: "graph", factIds: [], inputs: { alias: "f", expression: "x^3-3*x", domain: [-2, 2] } },
+      { actionId: "function.create_tangent", actionKey: "tangent-at-1", factIds: [], inputs: { alias: "at-1", sourceId: { scope: "draft", alias: "f" }, x: 1 } }
+    ]), context(createEmptyDocument("conics")))
+
+    expect(result.ok, JSON.stringify(result.diagnostics)).toBe(true)
+    const tangent = result.actions.find((action) => action.actionId === "function.create_tangent")
+    // 引用真的指到那张图上（不是字面量 `draft:f`，也不是 undefined）。
+    expect(tangent?.inputs).toMatchObject({ sourceId: result.aliases.f })
+    expect(result.draftDocument?.primitives.some((primitive) => primitive.type === "tangent")).toBe(true)
+  })
+
+  /**
    * **每一个登记了的引用都要解析，不只第一个**（外部审查 A2）。
    *
    * `dynamic.bind_curve` 登记了**两个**引用：`target`（scoped）与 `pathId`（id）。

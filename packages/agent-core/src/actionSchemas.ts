@@ -78,6 +78,25 @@ const scopedReferenceSchema: JsonSchema = {
   ]
 }
 
+/**
+ * **草稿作用域引用**的两种发布形状。
+ *
+ * `scopedReferenceSchema` 是 scoped **字段**（`dynamic.bind_point.target` / `host`）的完整两种：
+ * 新对象用 `{scope:"draft",alias}`、既有对象用 `{scope:"scene",ref:{documentId,entityId}}`。
+ *
+ * `draftAliasReferenceSchema` 只留前一种 —— 它是**单个 `id` 引用字段**接受的第二种写法：
+ * 那一族字段不接场景引用（摊平成裸 id 会丢掉跨文档判据），所以不能把两种都发布出去。
+ */
+const draftAliasReferenceSchema: JsonSchema = {
+  type: "object",
+  properties: { scope: { type: "string", enum: ["draft"] }, alias: { type: "string" } },
+  required: ["scope", "alias"],
+  additionalProperties: false
+}
+
+/** 单个 `id` 引用字段的发布形状：裸字符串，或草稿别名对象。与 `readIdReference` 一一对应。 */
+const idReferenceSchema: JsonSchema = { oneOf: [{ type: "string" }, draftAliasReferenceSchema] }
+
 const planeSchema: JsonSchema = {
   oneOf: [
     { type: "object", properties: { normal: vectorSchema, constant: { type: "number" } }, required: ["normal", "constant"], additionalProperties: false },
@@ -113,6 +132,21 @@ function schemaForField(field: string, spec: ActionSpec, actionId: ActionId): Js
    */
   const reference = spec.references?.find((entry) => entry.field === field && entry.nested === undefined)
   if (reference?.list) return { type: "array", items: reference.kind === "scoped" ? scopedReferenceSchema : { type: "string" } }
+  /**
+   * **单个 `id` 引用：两种写法都发布**（2026-10-10 真实 provider 现场）。
+   *
+   * 解析层收两种（裸 id 字符串，或草稿作用域对象 `{scope:"draft",alias}` ⇒ 收成 `draft:<alias>`，
+   * 见 `schemaReaders.readIdReference`），所以**发布出去的也必须是这两种** —— 这条纪律在这个文件里
+   * 就写着（"发布出去的 schema 与真正接受的载荷必须是同一种东西"）。
+   *
+   * 为什么不是只发布字符串：模型在切线那条路径上**真的**写了对象（`dynamic.create_bound_point.host`
+   * 与 `derived.*.solidId` 就是对象，技能自述里也这么教），结果整轮以
+   * `invalid_type@envelope.actions[1].inputs.sourceId: expected a string` 收场。
+   * 发布两种写法，模型就不必在同一个动作表里猜"这个字段是对象还是字符串"。
+   *
+   * `parameter` 引用（`parameter.set.id`）**不在其中**：参数不是草稿别名，`draft:` 前缀对它没有意义。
+   */
+  if (reference !== undefined && reference.kind === "id") return idReferenceSchema
   const kind = declaredFieldKind(spec, field)
   switch (kind) {
     case "string": return { type: "string" }

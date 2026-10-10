@@ -73,11 +73,27 @@ describe("published schemas match the existing action parser", () => {
     expect(variants.find((variant) => variant.properties?.origin)).toMatchObject({ required: ["origin", "normal"] })
   })
 
-  it("uses scoped references only for fields registered as scoped", () => {
+  /**
+   * **每类引用字段发布的写法，必须与解析层真正接受的一一对应**（2026-10-10 更新）。
+   *
+   * 这条用例原先只钉"scoped 才是对象、`id` 是字符串"。真实 provider 现场把它改了：
+   * 模型给切线写了 `sourceId: {scope:"draft",alias:"f"}`（它在别处就是这么教它的），
+   * 整轮以 `invalid_type@envelope.actions[1].inputs.sourceId: expected a string` 失败。
+   * 解析层现在两种都收（见 `schemaReaders.readIdReference`），所以发布的也必须是两种 ——
+   * "发布出去的 schema 与真正接受的载荷必须是同一种东西"就是这个文件里的纪律。
+   */
+  it("publishes exactly the reference spellings each field class accepts", () => {
+    // ① scoped 字段：完整两种（草稿别名 / 场景引用）。
     const scoped = actionToolSchema("dynamic.bind_point").inputSchema.properties?.target
-    const bareId = actionToolSchema("section.create").inputSchema.properties?.sourceId
     expect(scoped?.oneOf).toHaveLength(2)
-    expect(bareId?.type).toBe("string")
+    // ② 单个 id 引用字段：裸 id 字符串 + 草稿别名对象。**不发布 scene**（摊平成裸 id 会丢掉跨文档判据）。
+    const idRef = actionToolSchema("section.create").inputSchema.properties?.sourceId
+    expect(idRef?.oneOf).toHaveLength(2)
+    expect(idRef?.oneOf?.[0]).toEqual({ type: "string" })
+    expect(idRef?.oneOf?.[1]).toMatchObject({ properties: { scope: { enum: ["draft"] } }, required: ["scope", "alias"], additionalProperties: false })
+    // ③ `parameter` 引用不是草稿别名：仍旧只发布字符串。
+    const parameterRef = actionToolSchema("parameter.set").inputSchema.properties?.id
+    expect(parameterRef?.type).toBe("string")
   })
 })
 

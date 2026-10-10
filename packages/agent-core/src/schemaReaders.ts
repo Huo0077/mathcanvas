@@ -170,6 +170,57 @@ export function readScopedReference(value: unknown, path: string, errors: ParseE
 }
 
 /**
+ * 草稿别名写成 `draft:<alias>` —— **这是唯一的别名写法**，来源是 `{scope:"draft"}` 引用。
+ *
+ * 真源在这一层，是因为**两个方向都要用它**：`planCompiler` 的引用解析要把
+ * `draft:<alias>` 换成真 id，`readIdReference` 要把 `{scope:"draft",alias}` 收成这个字符串。
+ * 各写一份字面量的话，"哪种写法算别名"就又有两处真源了。
+ */
+export const DRAFT_ID_PREFIX = "draft:"
+
+/**
+ * **`kind:"id"` 引用字段：草稿作用域那种写法也收**（2026-10-10 真实 provider 现场）。
+ *
+ * ## 现场
+ *
+ * 用户的桌面版报错原文：`the plan never matched the schema:
+ * invalid_type@envelope.actions[1].inputs.sourceId: expected a string`（整轮 `run_failed`）。
+ * 那句话的 `actions[1]` 是切线，`sourceId` 指的是它刚建出来的那条曲线。
+ *
+ * ## 根因：两种引用写法，而模型只被教了其中一种
+ *
+ * 动作表里 `dynamic.create_bound_point.host` / `derived.*.solidId` 这些字段发布给模型的是
+ * **对象**（`{scope:"draft",alias:"…"}`，技能自述里就是这么写的），而
+ * `function.create_tangent.sourceId` / `function.analyze.sourceId` / `section.create.sourceId`
+ * 这些是**裸 id 字符串**。模型按前者的样子写后者 —— 传输层一句 `expected a string` 挡住，
+ * 而那句话**没告诉它该写什么**，于是唯一一次修复机会也没救回来。
+ *
+ * 离线夹具替模型写的是合规的 `"draft:f"`，所以**这条路径在任何离线用例里都照不出来**。
+ *
+ * ## 收下它不是放宽校验
+ *
+ * 草稿作用域对象与字符串别名 `draft:<alias>` 说的是**同一件事**，后者正是 `planCompiler`
+ * 引用解析认的那个写法。三条边界：
+ * - **只认 `scope:"draft"`**：`scope:"scene"` 引用带着 `documentId`，摊平成裸 id 会丢掉
+ *   "跨文档"这条判据（它有独立的错误码 `cross_document_reference`），照旧拒绝；
+ * - **形状不对的一律照旧拒绝**，而且**报错要说清收哪两种写法**（模型只有一次修复机会）；
+ * - 结果仍走 `boundedString`：长度与去空判据一条不少。
+ */
+export function readIdReference(value: unknown, path: string, errors: ParseError[]): string | null {
+  if (isPlainObject(value)) {
+    if (value.scope === "draft") {
+      rejectUnknownFields(value, ["scope", "alias"], path, errors)
+      const alias = boundedString(value.alias, `${path}.alias`, errors)
+      if (alias === null) return null
+      return boundedString(`${DRAFT_ID_PREFIX}${alias}`, path, errors)
+    }
+    errors.push(fail("invalid_type", path, `expected an id string, or a draft reference {scope:"draft", alias}`))
+    return null
+  }
+  return boundedString(value, path, errors)
+}
+
+/**
  * **模型写的名字能不能原样写进诊断**（修复轮 1 / M3）。
  *
  * `unexpected field '<键名>'`、`unregistered action '<动作名>'`、`unexpected kind '<kind>'`、

@@ -10,6 +10,34 @@
 
 > 下方 2026-09-22 的"最后更新 / 当前阶段 / 总体状态"三行保留为**当时快照**，不再维护。
 
+## 2026-10-10 —— 自测问题 P0-A：切线题的真实死因 —— **引用写法的两种方言**（报错原文推翻三条猜测）
+
+**用户回传的报错原文（这是本块的全部起点）**：`run_failed` —— **`the plan never matched the schema: invalid_type@envelope.actions[1].inputs.sourceId: expected a string`**；轨迹是 检查环境 ✓ → 读取场景 ✓ → 规划 ✓ → **暂存草稿 2 action(s) ✓** → 修复轮（shape 1/1, geometry 1/1）✓ → 失败。
+
+**它推翻了什么（照实记）**：计划里原写的三条嫌疑 —— ① 采样区间过宽 ⇒ 三次函数取值极大 ⇒ 取景/坐标**数值溢出**；② 切线被曲线量级压扁；③ 桌面版工作区停在 3D —— **一条都不成立**。草稿**已经暂存了两笔动作**，说明几何与工作区都走通了；死在**计划形状**上，而且卡在 `actions[1]`（切线）的 `sourceId`（它指的那条曲线）这一栏。
+
+**根因：两种引用写法，而模型只被教了其中一种。** 动作表里 `dynamic.create_bound_point.host` / `derived.create_circumsphere.solidId` 发布给模型的是**对象** `{scope:"draft",alias:"…"}` —— `skills/manifest.ts` 里还逐字写着"`solidId` 写宿主实体的引用（形如 `{scope:\"draft\",alias:\"...\"}`）"。而 `function.create_tangent.sourceId` / `function.analyze.sourceId` / `section.create.sourceId` 登记为 `{kind:"id"}`，**是裸 id 字符串**。模型把同一套语法用在了 `sourceId` 上 ⇒ 传输层 `boundedString` 判 `invalid_type`；那句 `expected a string` **没有告诉它该写什么**，于是唯一一次修复机会也没救回来。
+
+**"为什么离线永远照不出来"这件事也查清了**：夹具写的是**合规**的 `sourceId: "draft:f"`（`representativeFixtures.ts` / `agent-function-tangent.spec.ts`）—— **离线替模型把这句话写对了**。这正是"离线夹具全绿 ≠ 真模型那条路通"的又一个现成例子。
+
+**RED（两条，都先跑出与用户同一句话的失败）**：
+- 传输层：`parseDraftAction` 给 `function.create_tangent` 传 `sourceId: {scope:"draft",alias:"f"}` ⇒ 实收 `invalid_type @ action.inputs.sourceId / expected a string`；
+- 管线级：`function.create_graph` + 同样的对象写法 ⇒ 实收 `[{"stage":"transport","code":"invalid_type","path":"envelope.actions[1].inputs.sourceId","detail":"expected a string"}]` —— **与用户回传的那一行逐字相同**。
+
+**GREEN（一处判据 + 三处接线 + 两处发布/报错）**：
+1. `schemaReaders.readIdReference`：`kind:"id"` 引用收**两种**写法，草稿作用域对象收成 `draft:<alias>`（编译器认的唯一别名写法）；`DRAFT_ID_PREFIX` 的真源也搬来这一层（`planCompiler` 转出去），**免得"哪种写法算别名"再多一处真源**；
+2. 三处接线共用它：默认分支的平铺引用、**嵌套的** `anchor.pointId`、`section.create` 自己那个分支（同一个判断不许有两个实现 —— 那个分支的旧注释还把"对象形状一律拒"当成设计）；
+3. `actionSchemas` 把**接受的形状**发布出去（`oneOf: [string, {scope:"draft",alias}]`），因为"发布出去的 schema 与真正接受的载荷必须是同一种东西"就写在这个文件里；
+4. 拒绝时把**两种写法**写进报错。
+
+**三条边界（都不是放宽校验）**：`scope:"scene"` 照旧拒绝（它带着 `documentId`，摊平成裸 id 会丢掉跨文档判据 `cross_document_reference`）；`parameter` 引用照旧只收字符串（参数不是草稿别名）；长度与去空仍走 `boundedString`。
+
+**变异**：把草稿作用域那一支短路（`scope === "draft"` → `scope === "never"`）⇒ **两层同时真红**，管线那条报出的正是用户那一行；还原后 `agent-core` **68 文件 / 1016 通过**、`typecheck` exit 0。
+
+**门禁**：`typecheck` exit 0；`lint` 0 error / 13 warning；全库非 Lean **353 文件 / 4120 通过 + 1 todo / 0 失败**（398.11 s，+2 = 本块两条判据）；全量 e2e 首跑 **215 通过 / 3 失败** —— 三条是 `agent-diagram-free-apex:33` / `agent-oblique-prism:35` / `main-thread-responsiveness:28`，**都是本文档早已按轮记过的负载敏感抖动**（前两条的原文分别是"`page.goto` 30 s 没回"与"提交后等『已提交』标签 5 s 可见性超时"），`--workers=1` **孤立复跑 10 passed**；关旗逐字契约 `planCompiler.offPath.golden` 在同一趟全库里通过 —— **本块没有动 golden 基线**。
+
+**边界（如实说，别读成"这道题从此必成"）**：这一块修的是"**我们收不收模型写的这种写法**"。它是否会在别处换一种错法（写一个不存在的别名、或干脆编个 id）不在本块范围内 —— 那些仍旧由引用解析如实拒绝（`unresolved_alias`）。**真桌面往返仍要人跑**：本机的桌面构建已按本块重出，用户可用同一句题面复测。
+
 ## 2026-10-10 —— 自测问题 P1-B：平面与立体不主动区分 —— **判据缺失**（`dynamic.*` 拖走了每一道带动点的平面题）
 
 **用户报的是现象**："图能画出来，但平面题该在平面、立体题该在立体没被主动区分。" 计划里给的第一步是**先分清"说明问题 vs 判据缺失"**，这一步当场就有结论：**判据缺失**。

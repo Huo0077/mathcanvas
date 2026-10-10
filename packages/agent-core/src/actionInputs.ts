@@ -2,7 +2,7 @@ import { type ParseError } from "./contracts"
 import { MAX_SOLID_SEGMENTS } from "@draw/geometry-kernel"
 import { updatableInputFields } from "@draw/scene-graph"
 import { ACTIONS, CONIC_KINDS, SOLID_TEMPLATES, declaredFieldKind, type ActionSpec, type ActionId } from "./actionRegistry"
-import { boundedString, fail, finiteNumber, isPlainObject, optionalFiniteNumber, quotedName, readPoint2, readScopedReference, readVector3, rejectUnknownFields } from "./schemaReaders"
+import { boundedString, fail, finiteNumber, isPlainObject, optionalFiniteNumber, quotedName, readIdReference, readPoint2, readScopedReference, readVector3, rejectUnknownFields } from "./schemaReaders"
 
 /**
  * **逐个动作的 inputs 校验**（从 `schemas.ts` 拆出，评审方案 2）。
@@ -243,13 +243,15 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
     case "section.create": {
       const out: Record<string, unknown> = withAlias({})
       /**
-       * `sourceId` 只收**裸 id 字符串**（登记表里是 `{field:"sourceId", kind:"id"}`），
-       * 这一点与默认分支同一个判据：给对象形状（场景引用那种）在这里就报 `invalid_type`，
-       * 而不是拖到引用解析时变成一句 `target_not_found`（症状完全两样）。
-       * 缺字段仍旧放行 —— 它登记在 `required` 里，由审计去问。
+       * `sourceId` 是**引用字段**（登记表里 `{field:"sourceId", kind:"id"}`）：既收裸 id 字符串，
+       * 也收**草稿作用域对象** `{scope:"draft",alias}`（收成 `draft:<alias>`）—— 理由与边界见
+       * `schemaReaders.readIdReference`：模型在切线那条路径上真的写过对象，而整轮因此失败。
+       * 仍然在这里报错（而不是拖到引用解析变成一句 `target_not_found`）：形状不对时错误落在
+       * **这个字段的路径**上，那条一次性修复才够得到它。缺字段仍旧放行 —— 它登记在 `required` 里，
+       * 由审计去问。
        */
       if (value.sourceId !== undefined) {
-        const sourceId = boundedString(value.sourceId, `${path}.sourceId`, errors)
+        const sourceId = readIdReference(value.sourceId, `${path}.sourceId`, errors)
         if (sourceId === null) return null
         out.sourceId = sourceId
       }
@@ -691,7 +693,14 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
           out[reference.field] = resolved
           continue
         }
-        const id = boundedString(provided, `${path}.${reference.field}`, errors)
+        /**
+         * `kind:"id"` 的引用：裸 id 字符串，或**草稿作用域对象**（收成 `draft:<alias>`）——
+         * 见 `schemaReaders.readIdReference`。`parameter` 引用走 `boundedString`：
+         * 参数不是草稿别名，`draft:` 前缀对它没有意义。
+         */
+        const id = reference.kind === "id"
+          ? readIdReference(provided, `${path}.${reference.field}`, errors)
+          : boundedString(provided, `${path}.${reference.field}`, errors)
         if (id === null) return null
         out[reference.field] = id
       }
@@ -703,11 +712,11 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
         if (!isPlainObject(outer) || outer[reference.nested.when.field] !== reference.nested.when.equals) continue
         const inner = outer[reference.nested.inner]
         if (inner === undefined) continue
-        if (typeof inner !== "string") {
-          errors.push(fail("invalid_type", `${path}.${reference.nested.outer}.${reference.nested.inner}`, "expected an id"))
-          return null
-        }
-        out[reference.nested.outer] = { ...outer, [reference.nested.inner]: boundedString(inner, `${path}.${reference.nested.outer}.${reference.nested.inner}`, errors) }
+        // 嵌套引用与平铺引用**同一把尺子**（`readIdReference`）：`anchor.pointId` 也可以写成
+        // `{scope:"draft",alias:"P"}` —— 模型在同一个 `anchor` 对象里没有理由换一种语法。
+        const nested = readIdReference(inner, `${path}.${reference.nested.outer}.${reference.nested.inner}`, errors)
+        if (nested === null) return null
+        out[reference.nested.outer] = { ...outer, [reference.nested.inner]: nested }
       }
 
       /**
