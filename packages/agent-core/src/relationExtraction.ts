@@ -116,7 +116,19 @@ function asShape(run: string, known: (name: string) => boolean): Shape | null {
   return names.length >= 3 && names.every(known) ? { kind: "plane", names } : null
 }
 
-export function extractRelations(prompt: string, indexOf: (name: string) => number): RelationExtraction {
+export function extractRelations(text: string, indexOf: (name: string) => number): RelationExtraction {
+  /**
+   * **在「求证 / 证明」处截断**（2026-10-10 用户现场）：那之后是**要证的结论**，不是题设。
+   *
+   * 实测的代价：`（1）证明：BD⊥平面 PAC；` 里的目标被当成一条**必须成立的关系**，而它在题面给的
+   * 数值下根本不成立（`BD·AC = 1 ≠ 0`）⇒ 任何计划都过不了门禁，用户永远画不出这张图。
+   * 题设那一层早就是这么做的（`diagramObligations` 的 `/(?:求证|证明)/` 边界），这里对齐它 ——
+   * 两个方向不一致正是本仓最忌讳的"同一个判断两处写法"。
+   *
+   * 下面函数体里所有 `prompt.…` 读的都是**截断后**这一份，所以后面的抽取逻辑一行都不用改。
+   */
+  const boundary = /(?:求证|证明)/.exec(text)
+  const prompt = boundary === null ? text : text.slice(0, boundary.index)
   const relations: ExtractedRelation[] = []
   const unverified: string[] = []
   const known = (name: string) => indexOf(name) >= 0

@@ -42,6 +42,24 @@ describe("extractRelations", () => {
     expect(relations[0].relation.targets.map((target) => target.vertex)).toEqual(["v0", "v1", "v1", "v2", "v3"])
   })
 
+  /**
+   * **求证段的目标句不是题设**（2026-10-10 用户现场，3.3.3）。
+   *
+   * `（1）证明：BD⊥平面 PAC；` 里的**目标**被当成了**必须成立的关系**，而它在题面给的数值下
+   * 根本不成立（`BD·AC = 1 ≠ 0`）⇒ 任何计划都过不了，用户永远画不出这张图。
+   * 题设那一层早就截断了（`diagramObligations` 的 `/(?:求证|证明)/` 边界），这里对齐它。
+   */
+  it("stops at 「求证 / 证明」: the target sentence is not a given", () => {
+    const { relations, unverified } = extractRelations("在四棱锥 P-ABCD 中，PA⊥平面 ABCD，AB⊥AD，求证 BD⊥平面 PAC", indexOf(PYRAMID_ORDER))
+    const keys = relations.map((entry) => entry.relation.targets.map((target) => target.vertex).join(">"))
+
+    // 目标句 `BD⊥平面 PAC`（线 BD + 平面 PAC）不许出现。
+    expect(keys).not.toContain("v2>v4>v0>v1>v3")
+    // 题面真的给了的关系照旧抽到 —— 否则这条用例会因为"什么都没抽到"而假绿。
+    expect(keys).toContain("v1>v2>v1>v4")
+    expect(unverified).toEqual([])
+  })
+
   it("reads a midpoint spelled as point-plus-segment", () => {
     const names = ["A", "B", "C", "M", "P", "D"]
     const { relations } = extractRelations("M是中点 AD", indexOf(names))
