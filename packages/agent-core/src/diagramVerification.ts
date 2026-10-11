@@ -1,5 +1,6 @@
 import type { GeometryDocument, PrimitiveSpec } from "@draw/dsl"
 import { compileExpression, crossVector3, dihedralAngleDetail3, distanceVector3, dotVector3, evaluateExpression, isPointName, lengthVector3, subtractVector3, type Vector3 } from "@draw/geometry-kernel"
+import { foldVertexNames } from "@draw/scene-graph"
 
 import type { PlanEnvelope } from "./contracts"
 import type { DiagramObligation, DiagramObligationKind, DiagramObligationSet } from "./diagramObligations"
@@ -53,6 +54,20 @@ const ANGLE_TOLERANCE_DEGREES = 1e-3
 const distanceTolerance = (value: number): number => Math.max(1e-6, 1e-6 * Math.max(1, value))
 const length = (first: Vector3, second: Vector3): number => distanceVector3(first, second)
 
+/**
+ * **折那一笔的名字换算**：把 `vertexNames` 里被带走的那个（`apex`）改成 `apexAs`。
+ *
+ * 入参来自传输层（`unknown`），所以这里只做**形状**判断：读不出来返回 `undefined`，
+ * 由调用方照旧把整张表判为"映射不可靠"——**不猜**。
+ * 真正的换算规则在 `foldVertexNames`（编译器用的也是它），这里只是把它接到松类型的入参上。
+ */
+function foldedNamesOf(input: Record<string, unknown>): unknown {
+  const { vertexNames, apex, apexAs } = input
+  if (!Array.isArray(vertexNames) || typeof apex !== "string" || typeof apexAs !== "string") return undefined
+  if (!vertexNames.every((name) => typeof name === "string")) return undefined
+  return foldVertexNames(vertexNames as string[], apex, apexAs)
+}
+
 function candidatePoints(plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument): Map<string, Vector3> | null {  if (plan.kind !== "plan") return null
   const actions = plan.actions.filter((action) => action.actionId === "solid.create_polyhedron")
   const priorIds = new Set(base?.primitives.map((primitive) => primitive.id) ?? [])
@@ -91,14 +106,27 @@ function candidatePoints(plan: PlanEnvelope, candidate: GeometryDocument, base?:
    * 与多面体那一支同一条纪律：计划里真有几笔、候选图里就必须有几只**新增**的面；
    * 数量对不上、或点名不可靠，返回 `null`（"映射不可靠"与"图上没这个点"是两件事）。
    */
-  const faceActions = plan.actions.filter((action) => action.actionId === "solid.create_face")
+  /**
+   * **产出面的动作**：`solid.create_face` **与** `solid.fold`（2026-10-11 用户现场）。
+   *
+   * 折也物化出**一只新的 `face3`**。原先这里只认 `create_face`，于是"计划里 1 笔建面 + 1 笔折"
+   * 对应"候选图里 **2** 只新面"，下面的数量判据当场对不上 ⇒ 整张表判为不可靠 ⇒
+   * 用户看到的是八条题设**全部**报「候选图缺少唯一、可靠的顶点名映射」，
+   * 而题面明明每条都读懂了、图也画出来了。**那句话与真实原因无关**。
+   */
+  const faceActions = plan.actions.filter((action) => action.actionId === "solid.create_face" || action.actionId === "solid.fold")
   if (faceActions.length > 0) {
     const faces = candidate.primitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "face3" }> => primitive.type === "face3" && !priorIds.has(primitive.id))
     if (faces.length !== faceActions.length) return null
     for (const [faceIndex, action] of faceActions.entries()) {
-      const input = action.inputs
+      const input = action.inputs as unknown as Record<string, unknown>
       if (typeof input !== "object" || input === null || !("vertexNames" in input)) return null
-      const names = input.vertexNames
+      /**
+       * **折多一层"改名"**：被带走的那个点折后叫 `apexAs`（题面里的 `A` 折完就叫 `P`），
+       * 所以表里该出现的是**折后**那个名字。换算用编译器**同一份**规则（`foldVertexNames`）——
+       * 在这里另写一遍就是本仓最忌讳的"同一件事两个口径"。
+       */
+      const names = action.actionId === "solid.fold" ? foldedNamesOf(input) : input.vertexNames
       const face = faces[faceIndex]!
       if (!Array.isArray(names) || names.length !== face.pointIds.length || !names.every((name) => typeof name === "string" && isPointName(name)) || new Set(names).size !== names.length) return null
       for (const [nameIndex, name] of names.entries()) {

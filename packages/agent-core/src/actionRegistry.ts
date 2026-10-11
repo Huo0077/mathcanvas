@@ -191,6 +191,11 @@ export const FIELD_KINDS: Record<string, FieldKind> = {
   // 数组族
   points: "pointList", basePolygon: "vectorList", vertices: "vertexList", faces: "faceRings",
   vertexNames: "stringList",
+  // 折（2026-10-11）：被带走的那个点名，以及它折后叫什么 —— 都是点名。
+  apex: "string", apexAs: "string",
+  // 折角（度）。与 `rotation` 分开登记：那个是"把整只实体转多少"，这个是"把一片绕折痕折多少"，
+  // 语义不同，共用一个名字只会让两边都不敢改。
+  angle: "number",
   targets: "idList",
   // 结构族
   plane: "plane", anchor: "tangentAnchor", patch: "updatablePatch"
@@ -238,6 +243,14 @@ export interface RawFieldTypes {
   hostSub?: "integer"
   /** `hostEdge` 是"哪两个点之间的棱"：两个点名（`{ from, to }`），不是数字。 */
   hostEdge?: "namePair"
+  /**
+   * `solid.fold.hinge` 是"哪两个点之间那条折痕"：与 `hostEdge` **同一种约定**（`{ from, to }`）。
+   *
+   * 为什么复用而不是新造：同一件事（"哪两个点之间那条线"）造第二种方言，正是本仓踩过的坑 ——
+   * `function.create_tangent.sourceId` 收裸字符串、`dynamic.*.host` 收对象，模型按后者写前者，
+   * 整轮以 `invalid_type … expected a string` 收场。
+   */
+  hinge?: "namePair"
 }
 
 /** 平面圆锥曲线的闭集（规格 §8.2）。 */
@@ -458,6 +471,25 @@ export const ACTIONS = {
     requiresAlias: true,
     rawFieldTypes: {},
     required: ["vertices"]
+  },
+  /**
+   * **把一只平面片沿折痕折起来**（2026-10-11 用户现场）。
+   *
+   * 现场那句话「将三角形AEF沿EF翻折至三角形PEF」连发 7 次、7 次死因各不相同，其中查实的一条是
+   * 模型**在自己手算折后的空间坐标**（同一份计划里它给的 `C` 两个条件一个都不满足）。
+   * 这一条把"算坐标"从模型手里拿走：它只报**折前**的平面坐标、折痕、被带走的点与折角，
+   * 折后的坐标由内核的刚体旋转算出来。
+   *
+   * 形状校验只挡"点数 ≥ 3 / 有限坐标 / 点名齐全不重名 / `angle` 是有限数"；
+   * **几何语义**（折痕在不在片上、顶点在不在折痕上、折角在不在 `(0°,180°]`、折完退不退化）
+   * 全部留给内核 —— 与 `solid.create_face` 那条边界同源，不在传输层抄第二遍。
+   */
+  "solid.fold": {
+    inputFields: ["alias", "vertices", "vertexNames", "hinge", "apex", "apexAs", "angle", "label"],
+    requiresAlias: true,
+    /** `hinge` 是"哪两个点之间那条折痕"：两个点名（`{ from, to }`），与 `hostEdge` 同一种约定。 */
+    rawFieldTypes: { hinge: "namePair" },
+    required: ["vertices", "vertexNames", "hinge", "apex", "apexAs", "angle"]
   },
   "solid.create_round_frustum": {
     inputFields: ["alias", "center", "radiusBottom", "radiusTop", "height", "segments", "label"],

@@ -67,8 +67,14 @@ function ringNormal(points: Vector3[]): Vector3 | null {
   return lengthVector3(normal) > EPSILON ? normalizeVector3(normal) : null
 }
 
-/** Rodrigues rotation of `point` around the axis through `origin`; the shared hinge stays fixed by construction. */
-function rotateAboutAxis(point: Vector3, origin: Vector3, axis: Vector3, angle: number): Vector3 {
+/**
+ * Rodrigues rotation of `point` around the axis through `origin`; the shared hinge stays fixed by construction.
+ *
+ * **导出是给"折"用的**（2026-10-11）：`solid.fold` 与展开走的是**同一个**刚体旋转原语 ——
+ * 展开是"把闭合多面体摊平"、折是"把一片绕折痕转起来"，方向相反，旋转本身是同一件事。
+ * 另写一份就是本仓最忌讳的"同一件事两个口径"。
+ */
+export function rotateAboutAxis(point: Vector3, origin: Vector3, axis: Vector3, angle: number): Vector3 {
   if (Math.abs(angle) <= EPSILON) return point
   const offset = subtractVector3(point, origin)
   const cosine = Math.cos(angle)

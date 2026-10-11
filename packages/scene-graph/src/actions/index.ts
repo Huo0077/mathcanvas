@@ -1,5 +1,5 @@
 import type { GeometryDocument, PrimitiveSpec, Vector3 } from "@draw/dsl"
-import { areCoplanar, buildFromPoints, buildPrismTopology, buildSolidTemplate, compileExpression, DEFAULT_SOLID_SEGMENTS, prismEdgeLabel, prismPointLabel, regularPyramidShape, regularTetrahedronShape, roundFrustumShape, solveCircumsphere3, solveInsphere3, templateEdgeLabel, templatePointLabel, validatePrismInput, type BuilderContext, type SolidBoundary, type SolidBuildResult, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
+import { areCoplanar, buildFromPoints, buildPrismTopology, buildSolidTemplate, compileExpression, DEFAULT_SOLID_SEGMENTS, prismEdgeLabel, prismPointLabel, regularPyramidShape, regularTetrahedronShape, rotateAboutAxis, roundFrustumShape, solveCircumsphere3, solveInsphere3, templateEdgeLabel, templatePointLabel, validatePrismInput, type BuilderContext, type SolidBoundary, type SolidBuildResult, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
 
 import type { DomainOperation } from "../operations"
 import { solidTopology3 } from "../sectionRecompute"
@@ -756,6 +756,87 @@ function compileSolidFaceAction(action: Extract<DraftAction, { actionId: "solid.
   return { operations: [{ op: "addPrimitives", primitives: built.primitives }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
 }
 
+/**
+ * **折之后每个顶点叫什么**：被带走的那个（`apex`）改成 `apexAs`，其余不动。
+ *
+ * 单独导出是为了让**核验器**用同一份规则去建点名表：折产出的那只面里，被带走的那个点
+ * **已经改名了**（题面里的 `A` 折完就叫 `P`）。核验器若照 `vertexNames` 原样建表，
+ * 就会把一个图上不存在的名字放进表里、同时漏掉真实存在的那个 —— 而这两件事都必须发生
+ * 在同一份规则里，各写一遍必然分叉（2026-10-11 用户现场：八条题设全部报"映射不可靠"）。
+ */
+export function foldVertexNames(vertexNames: readonly string[], apex: string, apexAs: string): string[] {
+  return vertexNames.map((name) => (name === apex ? apexAs : name))
+}
+
+/**
+ * `solid.fold`：**把一只平面片沿折痕折起来**（2026-10-11 用户现场）。
+ *
+ * 三步，每一步失败都**一条图元都不产出**：
+ *
+ * 1. **折角**必须是 `(0°, 180°]` 里的有限数（`0°` 是没折、`180°` 是折平，两者都在边界上）；
+ * 2. **折痕两端与那个被带走的顶点都必须是这只片上的点名**，且顶点不能落在折痕上 ——
+ *    否则就是拿一条题面里不存在的线去折，或者"折一个本来不动的点"；
+ * 3. 折完的片仍要过 `compileSolidFace` 那三条校验（互异 / 不共线 / 共面）——
+ *    **同一口径，不在这里另写一遍**。折过头把片折成一条线时，拒它的就是那三条。
+ *
+ * **折痕上的点不动**（它们就在轴上）；其余顶点绕轴刚体旋转，用的是与展开**同一个**
+ * `rotateAboutAxis`。旋转方向取 `hinge[0] → hinge[1]` 的**右手定则**：正角从这一侧折起。
+ * 题面要的是另一侧时，把 `hinge` 的两个点名**对调**即可 —— `hinge` 是有序的，这一条写进技能自述。
+ */
+export function compileSolidFold(
+  faceId: string,
+  vertices: readonly Vector3[],
+  vertexNames: readonly string[],
+  hinge: { from: string; to: string },
+  apex: string,
+  apexAs: string,
+  angleDegrees: number,
+  label?: string
+): { primitives: PrimitiveSpec[]; pointIds: string[]; edgeIds: string[]; diagnostics: ActionDiagnostic[] } {
+  const refuse = (code: string, message: string) => ({ primitives: [] as PrimitiveSpec[], pointIds: [] as string[], edgeIds: [] as string[], diagnostics: [diagnostic(faceId, code, message)] })
+
+  if (!Number.isFinite(angleDegrees) || angleDegrees <= 0 || angleDegrees > 180) {
+    return refuse("invalid_fold_angle", `折角必须落在 (0°, 180°] 内，收到 ${angleDegrees}°。`)
+  }
+
+  const firstIndex = vertexNames.indexOf(hinge.from)
+  const secondIndex = vertexNames.indexOf(hinge.to)
+  const apexIndex = vertexNames.indexOf(apex)
+  if (firstIndex < 0 || secondIndex < 0 || apexIndex < 0) {
+    return refuse("fold_reference_missing", `折痕两端与顶点都必须是这只片上的点名（这片上有 ${vertexNames.join("、")}）。`)
+  }
+  if (firstIndex === secondIndex) return refuse("degenerate_fold_axis", "折痕的两个端点不能是同一个点。")
+  if (apexIndex === firstIndex || apexIndex === secondIndex) {
+    return refuse("fold_apex_on_hinge", `${apex} 落在折痕上，而折痕上的点不动 —— 没有可折的顶点。`)
+  }
+  if (apexAs.length === 0) return refuse("fold_reference_missing", "折后的点名不能为空。")
+
+  const origin = vertices[firstIndex]!
+  const far = vertices[secondIndex]!
+  const axisVector = { x: far.x - origin.x, y: far.y - origin.y, z: far.z - origin.z }
+  const axisLength = Math.hypot(axisVector.x, axisVector.y, axisVector.z)
+  // 折痕两端重合 ⇒ 定不出方向。这里必须挡住：拿零向量当轴，Rodrigues 会把点搬到原点上去。
+  if (axisLength <= 1e-9) return refuse("degenerate_fold_axis", "折痕的两个端点重合，定不出折痕方向。")
+  const axis = { x: axisVector.x / axisLength, y: axisVector.y / axisLength, z: axisVector.z / axisLength }
+  const radians = (angleDegrees * Math.PI) / 180
+
+  const moved = vertices.map((vertex, index) =>
+    index === firstIndex || index === secondIndex ? { ...vertex } : rotateAboutAxis({ ...vertex }, origin, axis, radians))
+  const names = foldVertexNames(vertexNames, apex, apexAs)
+  return compileSolidFace(faceId, moved, label, names)
+}
+
+function compileSolidFoldAction(action: Extract<DraftAction, { actionId: "solid.fold" }>, context: ActionContext): CompileResult {
+  const { actionKey, inputs } = action
+  if (context.targetWorkspace !== "geometry3d") {
+    return { operations: [], diagnostics: [diagnostic(actionKey, "workspace_mismatch", "a fold can only happen in the solid workspace")], aliasToId: {} }
+  }
+  const id = context.idAllocator.allocate("face", inputs.alias)
+  const built = compileSolidFold(id, inputs.vertices, inputs.vertexNames, inputs.hinge, inputs.apex, inputs.apexAs, inputs.angle, inputs.label)
+  if (built.diagnostics.length > 0) return { operations: [], diagnostics: built.diagnostics.map((entry) => diagnostic(actionKey, entry.code, entry.message)), aliasToId: {} }
+  return { operations: [{ op: "addPrimitives", primitives: built.primitives }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
+}
+
 function compileSolidPolyhedronAction(action: Extract<DraftAction, { actionId: "solid.create_polyhedron" }>, context: ActionContext): CompileResult {
   const { actionKey, inputs } = action
   if (context.targetWorkspace !== "geometry3d") {
@@ -1247,6 +1328,8 @@ export function compileAction(action: DraftAction, context: ActionContext): Comp
       return compileSolidPolyhedronAction(action, context)
     case "solid.create_face":
       return compileSolidFaceAction(action, context)
+    case "solid.fold":
+      return compileSolidFoldAction(action, context)
     case "dynamic.bind_point":
       return compileBindPoint(action, context)
     case "dynamic.create_bound_point":

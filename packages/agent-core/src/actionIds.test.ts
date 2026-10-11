@@ -30,8 +30,10 @@ describe("draft action catalogue", () => {
     // 物化成 `polyhedron3`，不是新图元，也不用调用方自己写 96 个顶点）之后的实测值。
     // **33** 是加上 `solid.create_face`（2026-10-10 用户现场：立体工作区里的**平面多边形 / 面片** ——
     // "平面四边形 + 翻折片"这类**开放曲面**原先没有入口，模型只能拿多面体去套、必然被拒）之后的实测值。
-    expect(DRAFT_ACTION_IDS).toHaveLength(33)
-    expect(new Set(DRAFT_ACTION_IDS).size).toBe(33)
+    // **34** 是加上 `solid.fold`（2026-10-11 用户现场：「将三角形AEF沿EF翻折至三角形PEF」连发 7 次都不通；
+    // 折后的坐标由内核的刚体旋转算出来，模型不再手算 —— 它手算的那几次给出的都是退化几何）之后的实测值。
+    expect(DRAFT_ACTION_IDS).toHaveLength(34)
+    expect(new Set(DRAFT_ACTION_IDS).size).toBe(34)
   })
 
   it("recognises every catalogue action instead of calling it unknown", () => {

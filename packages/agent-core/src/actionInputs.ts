@@ -539,6 +539,75 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
       return out
     }
 
+    /**
+     * **把一只平面片沿折痕折起来**（2026-10-11 用户现场）。
+     *
+     * 只挡**形状**：顶点 ≥ 3 且是有限三维向量、`vertexNames` 与顶点一一对应且不重名、
+     * `hinge` 恰好两个非空点名、`apex` / `apexAs` 各一个非空点名、`angle` 是一个有限数。
+     *
+     * **几何语义一律留给内核**：折痕两端在不在片上、顶点在不在折痕上、折角在不在 `(0°, 180°]`、
+     * 折完退不退化 —— 全部由 `compileSolidFold` 判并给出可读的拒绝码。在这里抄一遍就是
+     * 本仓最忌讳的"同一件事两个口径"。
+     */
+    case "solid.fold": {
+      const out: Record<string, unknown> = withAlias({})
+      if (!Array.isArray(value.vertices)) {
+        errors.push(fail("invalid_type", `${path}.vertices`, "expected an array of spatial points"))
+        return null
+      }
+      if (value.vertices.length < 3) {
+        errors.push(fail("invalid_type", `${path}.vertices`, "a folded flap needs at least three vertices"))
+        return null
+      }
+      const vertices: { x: number; y: number; z: number }[] = []
+      for (const [index, point] of value.vertices.entries()) {
+        const read = readVector3(point, `${path}.vertices[${index}]`, errors)
+        if (read === null) return null
+        vertices.push(read)
+      }
+      out.vertices = vertices
+      if (!Array.isArray(value.vertexNames) || value.vertexNames.length !== vertices.length) {
+        errors.push(fail("invalid_type", `${path}.vertexNames`, `expected an array of ${vertices.length} names, one per vertex`))
+        return null
+      }
+      const names: string[] = []
+      for (const [index, name] of value.vertexNames.entries()) {
+        const read = boundedString(name, `${path}.vertexNames[${index}]`, errors)
+        if (read === null) return null
+        if (names.includes(read)) {
+          // 重名会让"名字 → 下标"不是函数：折痕与顶点的指认都会变得没有唯一解。
+          errors.push(fail("duplicate_name", `${path}.vertexNames[${index}]`, `vertex name ${quotedName(read)} is used twice`))
+          return null
+        }
+        names.push(read)
+      }
+      out.vertexNames = names
+      const hingeRaw = value.hinge
+      if (typeof hingeRaw !== "object" || hingeRaw === null || Array.isArray(hingeRaw)) {
+        errors.push(fail("invalid_type", `${path}.hinge`, "expected the two hinge endpoints as { from, to }"))
+        return null
+      }
+      const hingeFields = hingeRaw as Record<string, unknown>
+      const hinge: Record<string, string> = {}
+      for (const endpoint of ["from", "to"] as const) {
+        const read = boundedString(hingeFields[endpoint], `${path}.hinge.${endpoint}`, errors)
+        if (read === null) return null
+        hinge[endpoint] = read
+      }
+      out.hinge = hinge
+      for (const field of ["apex", "apexAs"] as const) {
+        const read = boundedString(value[field], `${path}.${field}`, errors)
+        if (read === null) return null
+        out[field] = read
+      }
+      if (typeof value.angle !== "number" || !Number.isFinite(value.angle)) {
+        errors.push(fail("invalid_type", `${path}.angle`, "expected a finite fold angle in degrees"))
+        return null
+      }
+      out.angle = value.angle
+      return out
+    }
+
     case "solid.create_polyhedron": {
       /**
        * 任意多面体：`vertices` 是一串空间点、`faces` 是**二层整数数组**（顶点下标，0 起）。

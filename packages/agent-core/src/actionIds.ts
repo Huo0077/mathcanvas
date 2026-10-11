@@ -47,6 +47,7 @@ export const DRAFT_ACTION_IDS = [
   "solid.create_regular_pyramid",
   "solid.create_polyhedron",
   "solid.create_face",
+  "solid.fold",
   "solid.create_round_frustum",
   "derived.create_circumsphere",
   "derived.create_insphere",

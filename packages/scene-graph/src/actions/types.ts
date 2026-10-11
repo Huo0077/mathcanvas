@@ -285,6 +285,49 @@ export interface SolidCreateFaceAction extends ActionBase {
   }
 }
 
+/**
+ * **把一只平面片沿折痕折起来**（2026-10-11 用户现场）。
+ *
+ * 现场那句话：「将三角形AEF沿EF翻折至三角形PEF，使得PC=4√3」—— 同一句连发 7 次、
+ * 7 次死因各不相同。查实的一条是：模型**在自己手算折后的空间坐标**，而它算不对
+ *（同一份计划里它给的 `C` 两个条件一个都不满足；后面几次给出四个共线的点）。
+ *
+ * 这个动作把"算坐标"从模型手里拿走：模型只报**折前**的平面坐标、**哪条线是折痕**、
+ * **哪个点被带走、它折后叫什么**，以及**折多少度**；折后的坐标由内核的刚体旋转算出来。
+ *
+ * 折痕上的两个点**不动**（它们就在轴上），其余顶点绕轴旋转 —— 与展开（`unfold3d`）
+ * **共用同一个** Rodrigues 原语。折完仍走 `solid.create_face` 那一套退化校验
+ *（互异 / 不共线 / 共面），失败时**一条图元都不产出**。
+ */
+export interface SolidFoldAction extends ActionBase {
+  actionId: "solid.fold"
+  inputs: {
+    alias: DraftAlias
+    /** 翻折片**折前**（平面）的顶点，至少 3 个。 */
+    vertices: Array<{ x: number; y: number; z: number }>
+    /** 与 `vertices` 一一对应的点名。折痕与顶点都按**名字**指认，所以这一项必填。 */
+    vertexNames: string[]
+    /**
+     * 折痕：**按两个端点名**指定（`{ from, to }`）。
+     *
+     * 这里刻意**复用**仓库既有的那个约定（`dynamic.create_bound_point.hostEdge` 就是它）——
+     * 同一件事（"哪两个点之间那条线"）造第二种方言，正是本仓踩过的坑：
+     * `function.create_tangent.sourceId` 收裸字符串、而 `dynamic.*.host` 收对象，
+     * 模型按后者写前者，整轮以 `invalid_type … expected a string` 收场。
+     *
+     * `hinge` 是**有序**的：折角的正方向取 `from → to` 的右手定则。
+     */
+    hinge: { from: string; to: string }
+    /** 被带走的那个点名（不能落在折痕上）。 */
+    apex: string
+    /** 它折后叫什么（题面里通常叫 `P`）。 */
+    apexAs: string
+    /** 折角（度），取值 `(0, 180]`。 */
+    angle: number
+    label?: string
+  }
+}
+
 /** 既有的、指向文档内对象的引用（必须带 documentId，名称不是 ID）。 */
 export interface SceneReference {
   documentId: string
@@ -473,6 +516,7 @@ export type DraftAction =
   | SolidCreateRegularPyramidAction
   | SolidCreatePolyhedronAction
   | SolidCreateFaceAction
+  | SolidFoldAction
   | SolidCreateRoundFrustumAction
   | DynamicBindPointAction
   | DynamicCreateBoundPointAction
