@@ -463,6 +463,26 @@ function specFor(structure: PyramidStructure | PrismStructure): SolidShapeSpec {
 }
 
 /**
+ * **平面图形的构造规格**（乙案 Task 2）。
+ *
+ * 与台体那一支同一条理由：几何**不是从某一句题设读出来的**（棱锥 / 棱柱靠"侧棱 ⊥ 底面"
+ * 那句定底环与拉伸），平面图形的环只能来自**入口语法**（`平面四边形ABCD中`），
+ * 而钉死它的条件全部来自**解析器已经抽好的 `givens`** —— **不需要模型复述**。
+ *
+ * `freeScalars` 为空是**刻意的**：这一支的每条边、每个角都由题面给定。
+ * 钉不全（欠定）时**内核如实报缺什么**，编排层不替它编一个自由量 ——
+ * 编了就等于把"题面没说"悄悄变成一个系统自选的数，而用户看不见。
+ */
+function specForPlanarFigure(recognised: RecognisedShape, relations: readonly WitnessRelation[]): SolidShapeSpec {
+  const ring = new Set(recognised.base)
+  const onRing = relations.filter((relation) => {
+    const names = "segments" in relation ? relation.segments.flat() : relation.targets
+    return names.every((name) => ring.has(name))
+  })
+  return { family: "planar-figure", base: [...recognised.base], relations: [...onRing], freeScalars: [] }
+}
+
+/**
  * **台体的相似比取值表**：表里全是"明显不是 1、也不接近 0"的比例。
  * `1` 是棱柱、`0` 是棱锥顶点，两个端点都**不是**台体（内核会拒），所以一个都不放。
  */
@@ -585,17 +605,20 @@ export function specForPrompt(prompt: string, givens: readonly GeometryObligatio
   const relations = kernelRelations(givens)
   if (recognised.family === "frustum") return { status: "ok", spec: specForFrustum(recognised, relations), recognised }
   /**
-   * **平面图形这一支还没有构造器**（2026-10-11：Task 1 只**认出**了它，构造规格是 Task 2）。
+   * **平面图形：由度量条件钉死的环**（2026-10-11 用户现场；乙案 Task 2）。
    *
-   * 这里必须**拦住并如实说**：不拦的话它会掉进下面棱锥那一支，`derivePyramidStructure`
-   * 给出的是一句**对平面题是假话**的理由（"缺锥顶 / 缺侧棱⊥底面"）——
-   * 用户会照着去补一个题面根本没提的立体条件。与本仓"报错要说清下一步"同一条纪律。
+   * 与立体那几族**共用同一套关系词表** —— `kernelRelations` 早就把 `fixedLength` 读成
+   * `segment-length`、把 `planarAngle` 读成带值的角，所以这一支**不新造任何东西**，
+   * 只把**环上点名**的那些条件挑出来交给内核。
+   *
+   * **环外的条件一律不收**：`PC=4√3` 属于折、不属于这个四边形；收进来会让"读得出但造不出"
+   * 变成一句没有下一步的失败。
+   *
+   * 自由标量为空：这一支的每条边、每个角都由题面钉死；**钉不全时由内核如实报"缺条件"**，
+   * 编排层不替它编一个自由量。
    */
   if (recognised.family === "planar-figure") {
-    return {
-      status: "unrecognised",
-      reason: `认出了平面图形（${recognised.phrase}），但**这一类还没有构造器**：目前只认得棱锥 / 棱柱 / 棱台与任意多面体。`
-    }
+    return { status: "ok", spec: specForPlanarFigure(recognised, relations), recognised }
   }
   const derived = recognised.family === "prism" ? derivePrismStructure(givens) : derivePyramidStructure(givens)
   if (derived.status === "rejected") return { status: "unrecognised", reason: `${derived.code}: ${derived.message}` }

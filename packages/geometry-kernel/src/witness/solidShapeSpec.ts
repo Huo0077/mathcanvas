@@ -17,7 +17,14 @@
  */
 import type { WitnessRelation } from "./constructors"
 
-export type SolidShapeFamily = "pyramid" | "prism" | "frustum" | "sphere-relation"
+/**
+ * 图形族。
+ *
+ * `planar-figure`（2026-10-11，乙案 Task 2）是**裸的平面图形**：一个环，
+ * 每条边、每个角都由题面条件钉死。它与立体那几族**共用同一套关系词表**
+ *（`segment-length` / `planarAngle` / …），所以多出来的只是一个"没有锥顶、没有顶环"的族名。
+ */
+export type SolidShapeFamily = "pyramid" | "prism" | "frustum" | "sphere-relation" | "planar-figure"
 
 export type FreeScalarKind = "base-edge" | "base-angle" | "height" | "top-scale" | "radius"
 
