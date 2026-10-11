@@ -209,6 +209,19 @@ export type WitnessConstructRejectionCode =
    */
   | "contradictory-angle"
   | "unsupported-angle-shape"
+  /**
+   * **平面图形那一族的三分**（乙案 Task 4 / 设计 §5）。三种成因**各自一个码**，
+   * 因为它们的处置完全不同 —— 混成一个码就等于把"下一步怎么办"也一起丢掉：
+   *
+   * - `underdetermined-planar`：条件不足以定形 ⇒ 说清**还缺哪一类**条件（缺定长 / 缺角）；
+   * - `contradictory-planar`：条件互相不可能同时成立 ⇒ 说清**是哪两条、差多少**（含实测值）；
+   * - `unsupported-planar-condition`：这一族还没有对应条件的构造器 ⇒ 如实说，并**列出认得哪几类**。
+   *
+   * **不许**把"构造不出"降级成"未核验"（那是两件事）；**不许**把"没找到"升级成"矛盾"。
+   */
+  | "underdetermined-planar"
+  | "contradictory-planar"
+  | "unsupported-planar-condition"
   | "missing-extrusion"
   | "degenerate-extrusion"
   | "non-finite-value"
@@ -756,11 +769,16 @@ export function constructPlanarWitness(request: PlanarFigureConstructRequest): W
 
   /**
    * **只收两类条件**（定长边与点名的角）。其余（平行 / 垂直 / 等长 / 二面角…）
-   * 本层**还没有对应的构造** —— 如实拒绝，而不是收下之后当它不存在。
+   * 本层**还没有对应的构造** —— 如实说"这一族还没有构造器"、**列出它认得哪几类**，
+   * 而不是收下之后当它不存在（设计 §5 的第三种成因）。
    */
   const unsupported = request.relations.find((relation) => relation.kind !== "segment-length" && relation.kind !== "planarAngle")
   if (unsupported !== undefined) {
-    return reject("unsupported-base-shape", `平面图形这一支只收「定长」与「点名的角」两类条件，收到 ${unsupported.kind}：本层还没有这一类的构造。`, [...names])
+    return reject(
+      "unsupported-planar-condition",
+      `平面图形：条件「${planarConditionName(unsupported)}」这一族还没有构造器 —— 它目前只认得两类条件：定长（形如 AB=8）与点名的角（形如 ∠BAD=30°）。请改用这两类条件，或换一条能表达它的路径。`,
+      [...names]
+    )
   }
   /** 环外的点名不进这一族：环是这一族的形状本身，环外的点属于别的阶段（例如折）。 */
   for (const relation of request.relations) {
@@ -797,48 +815,57 @@ export function constructPlanarWitness(request: PlanarFigureConstructRequest): W
   ])
 
   /**
-   * **分支枚举**：逐点用 `nextPlanarRule` 找一条能把下一个点定出来的规则，多解就展开。
+   * **分支枚举**：逐点用 `planarNextStep` 找一条能把下一个点定出来的规则，多解就展开。
    * 先序展开、选项按"正转在前"排，所以**同一份输入永远得到同一个顺序**（确定性）。
    *
-   * 走到头（没有规则可用）但有没定出的点时，这一支作废 —— 是"条件不足以定形"的形态之一，
-   * 由下面按 `deadEnds` 如实报，不静默丢掉。
+   * 两种走不下去的形态**分开记**（Task 4 的失败三分靠它）：
+   * - 这个点**一条规则都用不上** ⇒ 条件不足以定形（欠定）；
+   * - 有规则但**一个解都没有**（两条定长的两个圆不相交）⇒ 这几条条件不可能同时成立（矛盾）。
    */
   const placements: Array<Map<string, PlanarPosition>> = []
-  let unresolvedDeadEnds = 0
-  let unsolvableDeadEnds = 0
+  const stalled: Array<Map<string, PlanarPosition>> = []
+  let blockedWithoutRule = 0
+  let blockedWithoutSolution = 0
   const walk = (positions: Map<string, PlanarPosition>): void => {
     if (placements.length >= PLANAR_MAX_PLACEMENTS) return
-    const rule = nextPlanarRule(positions, names, request.relations)
-    if (rule === null) {
-      if (positions.size === names.length) placements.push(new Map(positions))
-      else unresolvedDeadEnds += 1
+    const step = planarNextStep(positions, names, request.relations)
+    if (step === null) {
+      placements.push(new Map(positions))
       return
     }
-    const options = planarRuleOptions(rule, positions)
-    if (options.length === 0) {
-      unsolvableDeadEnds += 1
+    if (step.kind === "blocked") {
+      if (step.hadRule) blockedWithoutSolution += 1
+      else blockedWithoutRule += 1
+      if (stalled.length < 8) stalled.push(new Map(positions))
       return
     }
-    for (const option of options) {
+    for (const option of step.options) {
       const next = new Map(positions)
-      next.set(rule.point, option)
+      next.set(step.rule.point, option)
       walk(next)
     }
   }
   walk(initial)
 
   if (placements.length === 0) {
-    const unplaced = names.filter((name) => name !== start && name !== second)
-    if (unsolvableDeadEnds > 0) {
-      return reject("unsupported-angle-shape", `平面图形：按题面已点名的条件，顶点 ${unplaced.join("、")} 的位置**解不出来**（两条定长的两个圆没有交点）：这几条条件互相不可能同时成立。`, [...names])
+    const conflict = planarDirectConflict(request.relations)
+    if (conflict !== null) return reject("contradictory-planar", planarConflictMessage(conflict), [...names])
+    if (blockedWithoutSolution > 0) {
+      return reject(
+        "contradictory-planar",
+        `平面图形：按题面已点名的条件（两条定长、或一个角加一条定长）去解，顶点 ${names.filter((name) => !(stalled[0] ?? initial).has(name)).join("、")} 的位置解不出来 —— 这几条条件互相不可能同时成立。`,
+        [...names]
+      )
     }
-    return reject("unsupported-base-shape", `平面图形：按题面已点名的条件，顶点 ${unplaced.join("、")} 没有被任何条件定出来；本层只做每条边、每个角都由题面钉死的情形。`, [...names])
+    return reject("underdetermined-planar", planarUnderdeterminedMessage(stalled[0] ?? initial, names, request.relations), [...names])
   }
 
   /** **逐条回代**：用最终坐标逐条量一遍题面条件，一条对不上就不要这一组。 */
   const consistent = placements.filter((positions) => planarRelationsHold(positions, names, request.relations))
   if (consistent.length === 0) {
-    return reject("unsupported-angle-shape", "平面图形：把条件逐条回代到构造出来的坐标上，每一条都有对不上的地方 —— 这份条件在平面上不可能同时成立。", [...names])
+    const conflict = planarDirectConflict(request.relations)
+    if (conflict !== null) return reject("contradictory-planar", planarConflictMessage(conflict, placements[0]), [...names])
+    return reject("contradictory-planar", planarResidualMessage(placements[0]!, names, request.relations), [...names])
   }
 
   /**
@@ -869,24 +896,52 @@ function planarPoint3(positions: ReadonlyMap<string, PlanarPosition>, name: stri
 }
 
 /**
- * **下一个能落位的点**（按环顺序找第一个"有规则可用"的点）。
+ * **下一步怎么走**：环顺序找第一个"能用规则定出来"的点。
+ *
+ * 三种结局：
+ * - `step`：定得出来（可能多解）；
+ * - `blocked` 且 `hadRule`：**有规则但一个解都没有**（两条定长的两个圆不相交）⇒ 这几条条件不可能同时成立；
+ * - `blocked` 且没有规则：这个点没有任何条件能定出来 ⇒ 条件不足以定形。
  *
  * 顺序是刻意的：**环顺序**决定先定哪个点，规则顺序（角优先、再到两段定长）决定用哪条 ——
- * 两处都是固定的，所以同一份条件永远得到同一个解。找不到返回 `null`，由调用方按"定不出来"处理。
+ * 两处都固定，所以同一份条件永远得到同一个解。
  */
-function nextPlanarRule(
+function planarNextStep(
   positions: ReadonlyMap<string, PlanarPosition>,
   names: readonly string[],
   relations: readonly WitnessRelation[]
-): PlanarPlacementRule | null {
+): { kind: "step"; rule: PlanarPlacementRule; options: PlanarPosition[] } | { kind: "blocked"; hadRule: boolean } | null {
+  /** `hadRule` 收在整个环上：只要**有一个**没定出的点"有规则但解不出来"，就是条件互相矛盾。 */
+  let blockedHadRule = false
   for (const point of names) {
     if (positions.has(point)) continue
-    const fromAngle = planarRuleFromAngle(point, positions, relations)
-    if (fromAngle !== null) return fromAngle
-    const fromDistances = planarRuleFromDistances(point, positions, relations)
-    if (fromDistances !== null) return fromDistances
+    let hadRule = false
+    for (const rule of planarRulesFor(point, positions, relations)) {
+      hadRule = true
+      const options = planarRuleOptions(rule, positions)
+      /** 一条规则无解**不挡**别的规则：由"有没有任何一条规则给得出解"决定能不能定出来。 */
+      if (options.length > 0) return { kind: "step", rule, options }
+    }
+    /** 这个点定不出来**也不停**：环里别的点可能还能定（`D` 定完 `C` 才有条件，反之亦然）。 */
+    if (hadRule) blockedHadRule = true
   }
-  return null
+  /** 全都落位了 ⇒ 这一步走完了（环里没有重复点名，所以"落位数 = 环长"就是全落位）。 */
+  if (positions.size === names.length) return null
+  return { kind: "blocked", hadRule: blockedHadRule }
+}
+
+/** 一个还没落位的点**能用的全部规则**（顺序固定：角优先，再到两段定长）。 */
+function planarRulesFor(
+  point: string,
+  positions: ReadonlyMap<string, PlanarPosition>,
+  relations: readonly WitnessRelation[]
+): PlanarPlacementRule[] {
+  const rules: PlanarPlacementRule[] = []
+  const fromAngle = planarRuleFromAngle(point, positions, relations)
+  if (fromAngle !== null) rules.push(fromAngle)
+  const fromDistances = planarRuleFromDistances(point, positions, relations)
+  if (fromDistances !== null) rules.push(fromDistances)
+  return rules
 }
 
 /** 规则之一：顶点处**点名的角**（另一条臂已落位）+ 一条**定长**边。两支解，见 `planarRuleOptions`。 */
@@ -1023,6 +1078,184 @@ function planarRelationsHold(
     }
   }
   return true
+}
+
+/**
+ * **条件的人话名字**：`unsupported` 那条文案要给用户看的是「二面角」，不是 `dihedral`。
+ *
+ * 机器词留给 `code`（调用方按码分流），面向用户的那一句必须是题面里认得出的说法 ——
+ * 把 `dihedral` 原样印给用户，等于让他去猜我们的词表。
+ */
+function planarConditionName(relation: WitnessRelation): string {
+  if (relation.kind === "dihedral") return "二面角"
+  if (relation.kind === "perpendicular") return "垂直"
+  if (relation.kind === "parallel") return "平行"
+  if (relation.kind === "equal-length") return "等长"
+  if (relation.kind === "segment-length") return "定长"
+  if (relation.kind === "planarAngle") return "点名的角"
+  return relation.kind
+}
+
+/** 一条条件**写出来的样子**（与题面同一套字形）：`AB`、`∠ADC`。给用户看的文案用它。 */
+function planarWrittenForm(relation: WitnessRelation): string {
+  if (relation.kind === "planarAngle") return `∠${relation.targets.join("")}`
+  if ("segments" in relation) {
+    const parts = relation.segments.map((segment) => segment.length >= 2 ? `${segment[0]}${segment[1]}` : segment.join(""))
+    return parts.join("、")
+  }
+  return relation.kind
+}
+
+/** 两条条件的**直接冲突**（同一件事被给了两个值）：找到第一对就返回，附上可复测的那一条。 */
+interface PlanarDirectConflict {
+  message: string
+  /** 可用来给出"实测"的那一条角（哪两条冲突时才有）。 */
+  angle?: { first: string; vertex: string; third: string }
+}
+
+/**
+ * **不用构造就能断定的冲突**：同一个角 / 同一条边被题面给了两个不同的值。
+ *
+ * 与 `witnessSearch.ts` 的 `findContradiction` 同一条纪律：**只说得出证据的那些** ——
+ * 说不清的留给"逐条回代"，绝不把"我没解出来"升级成"题面自相矛盾"。
+ */
+function planarDirectConflict(relations: readonly WitnessRelation[]): PlanarDirectConflict | null {
+  const angles = new Map<string, { written: string; value: number }>()
+  for (const relation of relations) {
+    if (relation.kind !== "planarAngle" || relation.targets.length !== 3) continue
+    const stated = interpretValue(relation.value, null)
+    if (stated === null) continue
+    const [first, vertex, third] = relation.targets as [string, string, string]
+    const seen = angles.get(`${vertex}|${[first, third].sort().join("|")}`)
+    if (seen === undefined) {
+      angles.set(`${vertex}|${[first, third].sort().join("|")}`, { written: planarWrittenForm(relation), value: stated.value })
+      continue
+    }
+    if (Math.abs(seen.value - stated.value) > PLANAR_ANGLE_TOLERANCE_DEGREES) {
+      const delta = Math.abs(seen.value - stated.value)
+      return {
+        message: `平面图形：题面同时点名了 ${seen.written} = ${formatNumber(seen.value)}° 与 ${planarWrittenForm(relation)} = ${formatNumber(stated.value)}°（差 ${formatNumber(delta)}°）—— 同一个角不可能同时等于两个值，这两条自相矛盾。`,
+        angle: { first, vertex, third }
+      }
+    }
+  }
+  const lengths = new Map<string, { written: string; value: number }>()
+  for (const relation of relations) {
+    if (relation.kind !== "segment-length") continue
+    const stated = interpretValue(relation.value, null)
+    if (stated === null) continue
+    for (const segment of relation.segments) {
+      const pair = segmentOf(segment)
+      if (pair === null) continue
+      const key = planarSegmentKey(pair[0], pair[1])
+      const seen = lengths.get(key)
+      if (seen === undefined) {
+        lengths.set(key, { written: planarWrittenForm(relation), value: stated.value })
+        continue
+      }
+      if (Math.abs(seen.value - stated.value) > PLANAR_METRIC_TOLERANCE * Math.max(1, stated.value)) {
+        const delta = Math.abs(seen.value - stated.value)
+        return { message: `平面图形：题面同时点名了 ${seen.written} = ${formatNumber(seen.value)} 与 ${planarWrittenForm(relation)} = ${formatNumber(stated.value)}（差 ${formatNumber(delta)}）—— 同一条线段不可能同时等于两个长度，这两条自相矛盾。` }
+      }
+    }
+  }
+  return null
+}
+
+/**
+ * 冲突文案的**收尾**：能实测就补上实测值（设计 §5 那句"实测 90°，题面要求 60°"）。
+ *
+ * 实测值只在真的构造出了坐标时才给 —— 给不出就说给不出，不编一个。
+ */
+function planarConflictMessage(conflict: PlanarDirectConflict, sample?: ReadonlyMap<string, PlanarPosition>): string {
+  if (conflict.angle === undefined || sample === undefined) return conflict.message
+  const measured = interiorAngleDegrees(
+    planarPoint3(sample, conflict.angle.vertex),
+    planarPoint3(sample, conflict.angle.first),
+    planarPoint3(sample, conflict.angle.third)
+  )
+  if (measured === null) return conflict.message
+  return `${conflict.message}按其中一条构造出来的坐标上，∠${conflict.angle.first}${conflict.angle.vertex}${conflict.angle.third} 实测 ${formatNumber(measured)}°。`
+}
+
+/**
+ * **欠定**的文案：说清**还缺哪一类条件**（缺定长 / 缺角），而不是"没找到"。
+ *
+ * 逐点给理由：这个点要么"有角但缺那条边长"，要么"只给了一条定长、缺第二个已定点或一个角"，
+ * 要么"压根没有任何条件提到它"。三种都写成人话，用户照着补条件就能往下走。
+ */
+function planarUnderdeterminedMessage(
+  positions: ReadonlyMap<string, PlanarPosition>,
+  names: readonly string[],
+  relations: readonly WitnessRelation[]
+): string {
+  const parts = names.filter((name) => !positions.has(name)).map((name) => `${name}：${planarMissingReason(name, positions, relations)}`)
+  return `平面图形：条件不足以定形 —— ${parts.join("；")}。本层只做每条边、每个角都由题面钉死的情形。`
+}
+
+/** 一个还没定出来的点**缺什么**。 */
+function planarMissingReason(point: string, positions: ReadonlyMap<string, PlanarPosition>, relations: readonly WitnessRelation[]): string {
+  const missingLengths: string[] = []
+  const unplaced: string[] = []
+  for (const relation of relations) {
+    if (relation.kind !== "planarAngle" || relation.targets.length !== 3) continue
+    const [first, vertex, third] = relation.targets as [string, string, string]
+    if (first !== point && third !== point) continue
+    if (!positions.has(vertex)) {
+      unplaced.push(vertex)
+      continue
+    }
+    const other = first === point ? third : first
+    if (!positions.has(other)) {
+      unplaced.push(other)
+      continue
+    }
+    if (statedLength(relations, [vertex, point]).kind !== "value") missingLengths.push(`${vertex}${point}`)
+  }
+  const anchored = relations.filter((relation) => relation.kind === "segment-length" && relation.segments.some((segment) => {
+    const pair = segmentOf(segment)
+    if (pair === null) return false
+    return pair[0] === point ? positions.has(pair[1]) : pair[1] === point ? positions.has(pair[0]) : false
+  })).length
+  if (missingLengths.length > 0) return `角已经点名，但缺一条定长 ${missingLengths.join("、")}（定位它要么靠这条定长，要么靠另外一条到已定点的定长）`
+  if (anchored === 1) return "只给了一条定长（到已经定出来的那个点），缺第二个已经定出来的点，或缺一个点名的角"
+  if (anchored === 0 && unplaced.length > 0) return `相关点的位置本身还没有定出来（${[...new Set(unplaced)].join("、")}）`
+  return "没有任何条件把它定出来（缺定长，或缺一个点名的角）"
+}
+
+/**
+ * **逐条回代之后仍对不上**的文案：说出是**哪一条**、**实测多少**、**差多少**。
+ *
+ * 走到这里说明构造是**做完了**的（`placements` 非空），所以这不是"没找到" ——
+ * 是这几条条件在平面上不可能同时成立。文案按这个口径写。
+ */
+function planarResidualMessage(positions: ReadonlyMap<string, PlanarPosition>, names: readonly string[], relations: readonly WitnessRelation[]): string {
+  const lines: string[] = []
+  for (const relation of relations) {
+    if (relation.kind === "segment-length") {
+      const stated = interpretValue(relation.value, null)
+      if (stated === null) continue
+      for (const segment of relation.segments) {
+        const pair = segmentOf(segment)
+        if (pair === null) continue
+        const actual = distanceVector3(planarPoint3(positions, pair[0]), planarPoint3(positions, pair[1]))
+        if (Math.abs(actual - stated.value) <= PLANAR_METRIC_TOLERANCE * Math.max(1, stated.value)) continue
+        lines.push(`线段 ${pair[0]}${pair[1]} 实测 ${formatNumber(actual)}，题面要求 ${formatNumber(stated.value)}（差 ${formatNumber(Math.abs(actual - stated.value))}）`)
+      }
+      continue
+    }
+    if (relation.kind !== "planarAngle" || relation.targets.length !== 3) continue
+    const stated = interpretValue(relation.value, null)
+    if (stated === null) continue
+    const [first, vertex, third] = relation.targets as [string, string, string]
+    const actual = interiorAngleDegrees(planarPoint3(positions, vertex), planarPoint3(positions, first), planarPoint3(positions, third))
+    if (actual === null || Math.abs(actual - stated.value) <= PLANAR_ANGLE_TOLERANCE_DEGREES) continue
+    lines.push(`角 ∠${first}${vertex}${third} 实测 ${formatNumber(actual)}°，题面要求 ${formatNumber(stated.value)}°（差 ${formatNumber(Math.abs(actual - stated.value))}°）`)
+  }
+  const detail = lines.length > 0 ? `逐条回代的结果是：${lines.join("；")}。` : ""
+  const leftover = names.filter((name) => !positions.has(name))
+  const unfinished = leftover.length > 0 ? `另有顶点 ${leftover.join("、")} 没有被任何条件定出来。` : ""
+  return `平面图形：这份条件在平面上不可能同时成立 —— ${detail}${unfinished}`
 }
 
 /**

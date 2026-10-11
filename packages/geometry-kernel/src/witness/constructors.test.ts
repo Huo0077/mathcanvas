@@ -1461,4 +1461,74 @@ describe("constructPlanarWitness（乙案 Task 3A）", () => {
       expect(JSON.stringify(constructPlanarWitness(planarRequest()))).toBe(first)
     }
   })
+
+  /**
+   * **失败三分**（乙案 Task 4 / 设计 §5）：欠定 / 矛盾 / 未覆盖，三种成因各自报清楚。
+   *
+   * 两条禁止写在设计里，也写在这里：**不许**把"构造不出"降级成"未核验"（那是两件事，
+   * 处置完全不同）；**不许**把"没找到"升级成"矛盾"（与 `findContradiction` 那条既有纪律一致）。
+   * 所以三条各有一个**机器可读**的码，文案都给到"下一步怎么改"。
+   */
+  it("欠定：条件不足以定形 ⇒ 说清还缺哪一类条件（缺定长 / 缺角）", () => {
+    const result = constructPlanarWitness(planarRequest([
+      { kind: "segment-length", segments: [["A", "B"]], value: 8 },
+      { kind: "planarAngle", targets: ["B", "A", "D"], value: 30, unit: "degree" }
+    ]))
+    expect(result.status).toBe("rejected")
+    if (result.status !== "rejected") return
+    expect(result.code).toBe("underdetermined-planar")
+    expect(result.message).toContain("缺")
+    // 说清缺的是**哪一类**：`D` 有角没边长（缺定长），`C` 一个条件都没有（缺定长或角）。
+    expect(result.message).toMatch(/定长|长度/)
+    expect(result.message).toMatch(/角/)
+    expect(result.message).toContain("D")
+    expect(result.message).toContain("C")
+  })
+
+  it("矛盾：同一个角被给了两个值 ⇒ 说清是哪两条、差多少、实测是多少", () => {
+    const result = constructPlanarWitness(planarRequest([
+      ...QUADRILATERAL,
+      { kind: "planarAngle", targets: ["A", "D", "C"], value: 60, unit: "degree" }
+    ]))
+    expect(result.status).toBe("rejected")
+    if (result.status !== "rejected") return
+    expect(result.code).toBe("contradictory-planar")
+    expect(result.message).toContain("∠ADC")   // 是哪两条（写出来的形状与题面一致）
+    expect(result.message).toContain("90")
+    expect(result.message).toContain("60")
+    expect(result.message).toContain("差 30")
+    expect(result.message).toContain("实测 90") // 实测值，不是"没找到"
+  })
+
+  it("矛盾（不是「没找到」）：构造出来之后逐条回代对不上 ⇒ 说出是哪一条、实测多少、差多少", () => {
+    const result = constructPlanarWitness(planarRequest([
+      ...QUADRILATERAL,
+      { kind: "segment-length", segments: [["B", "D"]], value: 7 }
+    ]))
+    expect(result.status).toBe("rejected")
+    if (result.status !== "rejected") return
+    expect(result.code).toBe("contradictory-planar")
+    expect(result.message).toContain("BD")
+    expect(result.message).toContain("实测")
+    expect(result.message).toContain("7")
+  })
+
+  it("未覆盖：环里出现这一族还没有构造器的条件 ⇒ 说清没有构造器，并列出认得哪几族", () => {
+    const result = constructPlanarWitness(planarRequest([
+      { kind: "segment-length", segments: [["A", "B"]], value: 8 },
+      { kind: "segment-length", segments: [["B", "C"]], value: 5 },
+      { kind: "planarAngle", targets: ["A", "B", "C"], value: 60, unit: "degree" },
+      { kind: "dihedral", segments: [["A", "B", "C"], ["A", "B", "D"]], value: 60, unit: "degree" }
+    ]))
+    expect(result.status).toBe("rejected")
+    if (result.status !== "rejected") return
+    expect(result.code).toBe("unsupported-planar-condition")
+    expect(result.message).toContain("还没有")
+    // 人话，不是机器词：用户看到的是「二面角」，不该看到 `dihedral`。
+    expect(result.message).toContain("二面角")
+    expect(result.message).not.toContain("dihedral")
+    // 列出它**认得**的那几类条件。
+    expect(result.message).toContain("定长")
+    expect(result.message).toContain("点名的角")
+  })
 })
