@@ -203,6 +203,51 @@ describe("repair prompt", () => {
     expect(prompt).toContain("kind")
   })
 
+  /**
+   * **开放曲面不要拿多面体去套**（2026-10-11 用户现场，实测四次尝试里三次死在这一堵）。
+   *
+   * 用户那道题是"平面四边形 + 翻折片"——**开放的**平面图形。模型每次都拿
+   * `solid.create_polyhedron` 去表达，而它要求至少四个面、围出体积，于是每次都收到
+   * 同一句 `a polyhedron needs at least four faces`。**那句话没告诉它正确答案**：
+   * 我们其实有 `solid.create_face`（能力表里就有）。修复提示是唯一能让下一轮不同的东西，
+   * 所以它必须在这里说出那个动作的名字。
+   */
+  it("names solid.create_face when the failure is an open figure forced into a polyhedron", () => {
+    const openFigure = JSON.stringify({
+      schemaVersion: "mathcanvas.plan.v1",
+      kind: "plan",
+      goal: "平面四边形 ABCD 与翻折片",
+      factIds: [],
+      actions: [{
+        actionId: "solid.create_polyhedron",
+        actionKey: "quad",
+        factIds: [],
+        inputs: {
+          alias: "quad",
+          faces: [[0, 1, 2, 3]],
+          vertexNames: ["A", "B", "C", "D"],
+          vertices: [{ x: 0, y: 0, z: 0 }, { x: 8, y: 0, z: 0 }, { x: 9, y: Math.sqrt(3), z: 0 }, { x: 7.5, y: 2.5 * Math.sqrt(3), z: 0 }]
+        }
+      }]
+    })
+    const result = parseStrictJsonEnvelope(openFigure)
+    if (result.ok) throw new Error("expected a failure")
+
+    const prompt = describeRepairPrompt(result)
+
+    expect(prompt).toContain("solid.create_face")
+    expect(prompt).toContain("闭合多面体")
+  })
+
+  it("does not mention solid.create_face for unrelated failures", () => {
+    // 泛谈会稀释提示：只在真的撞上那堵墙时才说这一句。
+    const unrelated = JSON.stringify({ ...validPlan, actions: [{ ...validPlan.actions[0], actionId: "planar.create_dragon" }] })
+    const result = parseStrictJsonEnvelope(unrelated)
+    if (result.ok) throw new Error("expected a failure")
+
+    expect(describeRepairPrompt(result)).not.toContain("solid.create_face")
+  })
+
   it("stays silent about missing fields when the payload is unreadable", () => {
     // 不是合法 JSON / 不是对象时**不猜** —— 只给原有的字段路径错误。
     const result = parseStrictJsonEnvelope("not json at all")

@@ -165,9 +165,31 @@ export function describeRepairPrompt(failure: EnvelopeParseFailure): string {
      * 所以第二次照样漏。这里把**具体缺的键**列出来 —— 这是唯一能让第二轮真正不同的信息。
      */
     ...missingEnvelopeFields(failure.payload),
+    ...targetedTransportAdvice(failure.errors),
     "请只返回一个 JSON 对象，不要附加任何解释文字。",
     formatAdvice
   ].join("\n")
+}
+
+/**
+ * **按错误签名补一句"下一步怎么改"**（2026-10-11 用户现场）。
+ *
+ * 现场：同一条题连做四次，**三次**死在同一个签名上 —— 模型拿 `solid.create_polyhedron`
+ * 去画"平面四边形 + 翻折片"这种**开放曲面**，而多面体要求至少四个面、围出体积。
+ * 引擎只回一句 `a polyhedron needs at least four faces`，那句话**没告诉它正确答案**
+ *（我们其实有 `solid.create_face`，能力表里就有），于是下一轮它照样拿多面体去套，
+ * 第三次还是同一堵墙 —— 而每一轮只有一次修复机会。
+ *
+ * 与 `planCompiler` 的 `targetedRepairAdvice` 同一条思路：**只按真实出现过的签名**给提醒，
+ * 不做通用泛谈。判据里两个数都收（面 / 顶点）：它们不够的根因是同一个 —— 那只图形没围起来。
+ */
+function targetedTransportAdvice(errors: readonly ParseError[]): string[] {
+  const advice: string[] = []
+  const openFigure = errors.some((error) => error.path.includes(".inputs.") && /polyhedron needs at least four (faces|vertices)/.test(error.detail))
+  if (openFigure) {
+    advice.push("提醒：`solid.create_polyhedron` 建的是**闭合多面体**（至少四个面、要围出体积）。要画**开放的平面图形**（四边形、三角形片、翻折片）请改用 `solid.create_face`：给 `vertices`（至少三个**共面**、互不共线的点）与 `vertexNames` 就行，它**不收 `faces`**。一张平面的四边形或三角形片，用多面体是套不上的。")
+  }
+  return advice
 }
 
 /**
