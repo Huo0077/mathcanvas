@@ -595,3 +595,150 @@ describe("geometry worker runtime", () => {
     expect(ids).toContain("solid-1")
   })
 })
+
+/**
+ * **管线级证据：B、C、D 真的出现在图上**（乙案 Task 6 / 设计 §8 一期的出口）。
+ *
+ * ## 这一条与 `planCompiler.test.ts` 那两条的分工
+ *
+ * 那边钉的是**编译层**（一份计划 + 一段原话 → 构造出来的坐标落进草稿）；
+ * 这里跑的是**装配好的运行时** —— 主线程发下来的 `geometry.compile` 请求原样进
+ * `handleGeometryRequest`，看的是**响应里那份文档**。中间隔着 worker 契约那一层
+ *（`witnessSearch` 开关要走请求带过去、`materialisedActions` 要能回来），
+ * 而"开关在应用层接上了没有"正是这一层唯一能回答的问题。
+ *
+ * ## 它模拟的是**新的分工**（设计 §2）
+ *
+ * 模型仍然声明**图形结构**（有哪些点、哪个环、哪里折），但**不写坐标** —— 或者写了也不算数。
+ * 坐标由内核按题面条件构造出来再替换进去。这就是一期要拿的那个读数：
+ * 用户那句题面里的 `B`、`C`、`D` 原先**从来没被造出来**（设计 §0.3 实测：图上只有 A、E、F、P），
+ * 现在它们出现在文档里，而且 `C` 同时满足 `∠ADC = 90°` 与 `CD = 3`。
+ *
+ * **这一条覆盖不到的地方（如实写明）**：模型若压根**没有声明**那只平面四边形（现场那一版就是），
+ * 救回路径没有宿主可以替换 —— "把整只平面图形补进计划"不是替换，是另一件事，不在这份计划里。
+ * 折那一笔的坐标也仍旧是模型给的（二期：定比分点与折）。
+ */
+describe("平面四边形：题面驱动 ⇒ B、C、D 出现在图上（乙案 Task 6）", () => {
+  const PROMPT = "平面四边形ABCD中，AB=8，AD=5√3，∠BAD=30°，∠ADC=90°，CD=3"
+
+  /** 模型**手写**的一组坐标：`|AB| = 4`（题面要 8），`C` 两个条件一个都不满足。 */
+  const MODEL_VERTICES = [{ x: 0, y: 0, z: 0 }, { x: 4, y: 0, z: 0 }, { x: 4, y: 4, z: 0 }, { x: 1, y: 4, z: 0 }]
+
+  /**
+   * 现场那句题面画出来的图还有一只折片（`AEF` 沿 `EF` 折成 `PEF`）。
+   * 这一笔也放进计划里：救回要在**多笔动作**的计划上工作，而不是只在一笔动作的玩具计划上。
+   * 折前的 `A` 与四边形共用 —— 所以这里让模型把 `A` 放在原点，与构造出来的那一组一致
+   *（构造的坐标系规范取法就是"A 在原点、AB 沿 +x"）。折自己的坐标是二期的事。
+   */
+  const FOLD = {
+    actionId: "solid.fold",
+    actionKey: "flap",
+    factIds: [],
+    inputs: {
+      alias: "flap",
+      vertices: [{ x: 0, y: 0, z: 0 }, { x: 3, y: Math.sqrt(3), z: 0 }, { x: 4, y: 0, z: 0 }],
+      vertexNames: ["A", "E", "F"],
+      hinge: { from: "E", to: "F" },
+      apex: "A",
+      apexAs: "P",
+      angle: 60
+    }
+  }
+
+  function request(witnessSearch: boolean) {
+    return createWorkerRequest("geometry.compile", envelope, {
+      base: createEmptyDocument("geometry3d"),
+      prompt: PROMPT,
+      actions: [
+        { actionId: "solid.create_face", actionKey: "quad", factIds: [], inputs: { alias: "quad", vertices: MODEL_VERTICES, vertexNames: ["A", "B", "C", "D"], label: "平面四边形 ABCD" } },
+        FOLD
+      ] as never,
+      ...(witnessSearch ? { witnessSearch: true } : {})
+    })
+  }
+
+  it("落盘的文档里有 A、B、C、D、E、F、P，且 C 同时满足 ∠ADC = 90° 与 CD = 3", () => {
+    const response = handleGeometryRequest(request(true))
+
+    if (response.kind !== "geometry.compile.result") throw new Error(`expected a result, got ${response.code}: ${response.detail}`)
+    const at = new Map(
+      response.document.primitives
+        .filter((primitive): primitive is Extract<typeof primitive, { type: "point3" }> => primitive.type === "point3")
+        .map((point) => [String(point.label), point.position])
+    )
+    // `B`、`C`、`D` **真的在图上**（现场那一版它们一个都不在）。
+    expect([...at.keys()].sort()).toEqual(["A", "B", "C", "D", "E", "F", "P"])
+    const distance = (first: string, second: string): number => {
+      const left = at.get(first)!
+      const right = at.get(second)!
+      return Math.hypot(left.x - right.x, left.y - right.y, left.z - right.z)
+    }
+    const angle = (vertex: string, first: string, second: string): number => {
+      const corner = at.get(vertex)!
+      const alongFirst = { x: at.get(first)!.x - corner.x, y: at.get(first)!.y - corner.y, z: at.get(first)!.z - corner.z }
+      const alongSecond = { x: at.get(second)!.x - corner.x, y: at.get(second)!.y - corner.y, z: at.get(second)!.z - corner.z }
+      const cosine = (alongFirst.x * alongSecond.x + alongFirst.y * alongSecond.y + alongFirst.z * alongSecond.z) / (Math.hypot(alongFirst.x, alongFirst.y, alongFirst.z) * Math.hypot(alongSecond.x, alongSecond.y, alongSecond.z))
+      return (Math.acos(Math.min(1, Math.max(-1, cosine))) * 180) / Math.PI
+    }
+    // 模型给的是 `B = (4,0,0)`、`C = (4,4,0)`、`D = (1,4,0)` —— 落盘的不是那一组。
+    expect(distance("A", "B")).toBeCloseTo(8, 9)
+    expect(angle("D", "A", "C")).toBeCloseTo(90, 9)
+    expect(distance("C", "D")).toBeCloseTo(3, 9)
+    // 报告里也要说清这组坐标是**系统按题面条件构造**的。
+    expect(response.completionAssumptions.some((entry) => entry.text.includes("按题面条件构造"))).toBe(true)
+  })
+
+  /**
+   * **反证：这条读数不是"本来就对"**。同一份计划、同一句原话，只把开关关掉 ——
+   * 模型那组坐标过不了核验，编译就到此为止（`compile_failed`），
+   * 所以上面那一条的绿色**只能**来自救回路径。
+   */
+  it("开关关掉时同一份计划过不去（所以上面那条的绿是开关挣来的）", () => {
+    const response = handleGeometryRequest(request(false))
+
+    expect(response.kind).toBe("geometry.error")
+    if (response.kind !== "geometry.error") return
+    expect(response.code).toBe("compile_failed")
+    expect(response.detail).toContain("AB=8")
+  })
+
+  /**
+   * **⚠ 这一条钉住的是一个**仍然存在**的缺口，不是"正确行为"的背书。**
+   *
+   * 现场那一版计划**压根没有声明那只平面四边形**（只有折片 `AEF`）。救回路径做的是
+   * "把同一只图形的坐标换掉"（顶点个数与点名都要对得上），而这里连宿主都没有 ——
+   * 所以 `B`、`C`、`D` **仍然不在图上**，图上还是设计 §0.3 实测的那个形态：`A`、`E`、`F`、`P`。
+   *
+   * 两条读数都是**量出来的**（探针跑完即删）：
+   * - 这一轮编译**成功**（`ok: true`）—— 五条题设全部是**未核验**（`点名缺失：B —— 题面点到了它，
+   *   图上没有这个对象`），而"未核验"按本仓的口径**不是失败**（欠定不是失败）；
+   * - 报告里**有**那句来源标注（`witness.coordinate-source`），走的是成功路径的
+   *   `completionAssumptions`，不是失败路径的 `assumptions`。
+   *
+   * 这与上面那条的区别就是设计 §2 的分工：模型必须**声明结构**（有哪些点、哪个环），
+   * 系统才谈得上替它算坐标。"模型什么都没声明、系统把整只图形补出来"是另一件事
+   *（它要面对"补出来的点与图上已有的同名点怎么共存"），不在这份计划里。
+   */
+  it("⚠ 缺口：模型没声明那只四边形时，B、C、D 仍然不在图上（如实标注来源）", () => {
+    const response = handleGeometryRequest(createWorkerRequest("geometry.compile", envelope, {
+      base: createEmptyDocument("geometry3d"),
+      prompt: PROMPT,
+      actions: [
+        { actionId: "solid.create_face", actionKey: "triangle", factIds: [], inputs: { alias: "triangle", vertices: [{ x: 0, y: 0, z: 0 }, { x: 3, y: Math.sqrt(3), z: 0 }, { x: 4, y: 0, z: 0 }], vertexNames: ["A", "E", "F"], label: "三角形 AEF" } },
+        FOLD
+      ] as never,
+      witnessSearch: true
+    }))
+
+    // 未核验 ≠ 失败：这一轮照样产出草稿（那条纪律写在 `diagramVerification` 的注释里）。
+    expect(response.kind).toBe("geometry.compile.result")
+    if (response.kind !== "geometry.compile.result") return
+    const labels = response.document.primitives
+      .filter((primitive): primitive is Extract<typeof primitive, { type: "point3" }> => primitive.type === "point3")
+      .map((point) => String(point.label))
+    // 就是设计 §0.3 那个形态：`B`、`C`、`D` 一个都不在。
+    expect([...new Set(labels)].sort()).toEqual(["A", "E", "F", "P"])
+    // 而报告必须说清这组坐标是谁给的（设计 §6 的"永不静默采信"）。
+    expect(response.completionAssumptions.some((entry) => entry.text.includes("未经条件构造")), "构造不出时必须标注来源").toBe(true)
+  })
+})
