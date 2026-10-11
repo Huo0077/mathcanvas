@@ -31,7 +31,7 @@ import { canonicalPointName, isPointName, splitPointNames } from "@draw/geometry
  * 否则两个读数不可比 —— 设计 §3.2 的账。
  */
 
-export type RecognisedFamily = "pyramid" | "prism" | "frustum"
+export type RecognisedFamily = "pyramid" | "prism" | "frustum" | "planar-figure"
 
 /**
  * **立体图形的修饰词**（S3 斜棱柱那一刀）：`正`（正棱柱 / 正棱锥）、`斜`（斜棱柱）、`直`（直棱柱）。
@@ -65,6 +65,18 @@ const NUMERALS: Record<string, number> = { 三: 3, 四: 4, 五: 5, 六: 6 }
  */
 const SHAPE_CLAUSE = /在\s*(正|斜|直)?\s*([三四五六])?\s*(棱锥|棱柱|棱台)\s*([A-Z][^\s，,。；;、]*?)\s*中/
 
+/**
+ * **裸的平面图形**（2026-10-11 用户现场；乙案 Task 1）：`平面四边形ABCD中` / `三角形ABC中`。
+ *
+ * 为什么单独一条：`SHAPE_CLAUSE` 要求 `棱锥 | 棱柱 | 棱台`，所以"平面四边形 ABCD"这类
+ * **只有点名、没有立体家族**的题面在词表里**没有分支接它** ⇒ `specForPrompt` 返回
+ * `unrecognised` ⇒ 构造从未发生（探针实测：那句题面八个从句全读得懂，图上却只有 A、E、F、P）。
+ *
+ * **`平面` 二字可省**，多边形名必须与环长对得上（与立体那一支同一条纪律：
+ * 数词与环长不符就问路，不替用户编一套）。
+ */
+const PLANAR_CLAUSE = /(?:平面)?\s*(四边形|三角形|五边形|六边形)\s*([A-Z][^\s，,。；;、]*?)\s*中/
+
 const DASH = /[-−—–]/
 
 /** 内核底面环的上界（`deriveBasePolygon`）：超出就不是我们做得出的形状。 */
@@ -78,12 +90,39 @@ function ringOf(segment: string): string[] | null {
 }
 
 /**
+ * 识别「平面四边形ABCD」这类**裸的平面图形**从句（乙案 Task 1）。
+ *
+ * 与立体那一支**同一条纪律**：多边形名必须与环长对得上（`四边形` 却给 5 个点名 ⇒ 问路），
+ * 认不出返回 `null`，不抛异常、不改写题面。
+ *
+ * 返回的形状只有 `base`（环）是必填的：平面图形没有锥顶、没有顶环、没有立体修饰词，
+ * 那三个字段留 `undefined` —— **不编一个**。
+ */
+function parsePlanarClause(prompt: string): RecognisedShape | null {
+  const match = PLANAR_CLAUSE.exec(prompt)
+  if (match === null) return null
+  const [, keyword, nameList] = match
+  if (keyword === undefined || nameList === undefined) return null
+  const expected = NUMERALS[keyword[0]!]
+  if (expected === undefined) return null
+  const base = ringOf(nameList)
+  if (base === null || base.length !== expected) return null
+  return { family: "planar-figure", phrase: match[0], base }
+}
+
+/**
  * 认形状说法。**认不出返回 `null`**（= 问路），不抛异常、不改写题面。
  */
 export function parseShapeClause(prompt: string): RecognisedShape | null {
   if (typeof prompt !== "string") return null
   const match = SHAPE_CLAUSE.exec(prompt)
-  if (match === null) return null
+  /**
+   * **立体那一支找不到时，才试平面图形那一支。**
+   *
+   * 顺序是刻意的：立体家族的识别**逐字不变**（既有的 17 条用例是护栏），
+   * 新分支只在"原来看不见的那种题面"上生效。
+   */
+  if (match === null) return parsePlanarClause(prompt)
   const [, modifier, numeral, keyword, nameList] = match
   if (keyword === undefined || nameList === undefined) return null
   const stated = modifier === undefined ? {} : { modifier: modifier as ShapeModifier }

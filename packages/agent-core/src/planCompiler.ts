@@ -655,6 +655,14 @@ function witnessShapeFor(prompt: string): WitnessShapeKind {
    * 没人会手写台体坐标。
    */
   if (/棱台/i.test(prompt)) return "frustum"
+  /**
+   * **裸的平面图形**（2026-10-11，乙案 Task 1）：题面只给了环与度量条件，没有立体家族。
+   *
+   * 这一支**排在立体之后**：`在四棱锥P-ABCD中` 那类题面先由上面三条接住，不会被它抢走。
+   * 走到这里说明既没有立体字样、又提到了多边形 —— 报 `planar-figure` 比报 `polyhedron` 诚实：
+   * 后者会给出"任意多面体的坐标要由调用方给"那句**对平面题是假话**的理由（与台体那条同源）。
+   */
+  if (/四边形|三角形|五边形|六边形/.test(prompt)) return "planar-figure"
   return "polyhedron"
 }
 

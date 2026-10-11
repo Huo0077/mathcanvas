@@ -31,8 +31,14 @@ export interface PolyhedronWitness {
   faces: number[][]
 }
 
-/** 首批图形族。`polyhedron` 表示"任意多面体"，它的坐标只能由调用方给出（见下）。 */
-export type WitnessShapeKind = "polyhedron" | "prism" | "pyramid" | "frustum"
+/**
+ * 首批图形族。`polyhedron` 表示"任意多面体"，它的坐标只能由调用方给出（见下）。
+ *
+ * `planar-figure`（2026-10-11，乙案 Task 1）是**裸的平面图形**：只有环与度量条件，
+ * 没有立体家族 —— 用户那句「平面四边形ABCD中…」原先在这个词表里**没有位置**，
+ * 于是 `specForPrompt` 只能返回"问路"，构造从未发生。
+ */
+export type WitnessShapeKind = "polyhedron" | "prism" | "pyramid" | "frustum" | "planar-figure"
 
 export interface WitnessSearchInput {
   /**

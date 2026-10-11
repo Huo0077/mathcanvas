@@ -108,3 +108,42 @@ describe("入口语法：形状说法", () => {
     expect(parseShapeClause("在三棱柱ABC-A′B′C′中，AA′⊥平面ABC")?.modifier).toBeUndefined()
   })
 })
+
+/**
+ * **裸的平面图形**（2026-10-11 用户现场；乙案实施计划 Task 1）。
+ *
+ * 探针实测：用户那句题面八个从句全读得懂，但 `specForPrompt` 返回
+ * `unrecognised`，理由是「题面里没有可识别的『在…中』形状从句」——
+ * 而那句题面**有**「平面四边形ABCD中」。原因在这个文件的词表里：
+ * `RecognisedFamily` 只有 `pyramid | prism | frustum`，`SHAPE_CLAUSE` 也要求
+ * `棱锥 | 棱柱 | 棱台`，所以**平面图形这一类根本没有分支接它**。
+ *
+ * 这一支只**新增**一条分支，立体那三族的识别**逐字不变**（下面那条护栏钉住它）。
+ */
+describe("平面图形从句（乙案 Task 1）", () => {
+  it("认出「平面四边形ABCD中」", () => {
+    const shape = parseShapeClause("平面四边形ABCD中，AB=8，AD=5√3，∠BAD=30°")
+    expect(shape?.family).toBe("planar-figure")
+    expect(shape?.base).toEqual(["A", "B", "C", "D"])
+    // 原文照留（面板与日志要引题面原话，不改写）。
+    expect(shape?.phrase).toBe("平面四边形ABCD中")
+  })
+
+  it("不带「平面」二字的写法也认", () => {
+    expect(parseShapeClause("四边形ABCD中，AB=8")?.base).toEqual(["A", "B", "C", "D"])
+  })
+
+  it("三角形也认", () => {
+    expect(parseShapeClause("在三角形ABC中，AB=3")?.family).toBe("planar-figure")
+    expect(parseShapeClause("在三角形ABC中，AB=3")?.base).toEqual(["A", "B", "C"])
+  })
+
+  it("护栏：立体那三族与既有问路**逐字不变**", () => {
+    expect(parseShapeClause("在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，画出这个四棱锥")?.family).toBe("pyramid")
+    expect(parseShapeClause("在三棱柱ABC-A′B′C′中，AA′⊥平面ABC")?.family).toBe("prism")
+    expect(parseShapeClause("在四棱台ABCD-A′B′C′D′中，AB⊥AD，画出这个四棱台")?.family).toBe("frustum")
+    // 「在球O中」不是多边形：仍然问路，不许被新分支顺手收进来。
+    expect(parseShapeClause("在球O中，AB=2")).toBeNull()
+    expect(parseShapeClause("画一个四棱锥")).toBeNull()
+  })
+})
