@@ -37,8 +37,8 @@ import {
  * ObligationIR（题设 + 解析残留 + 自由选择）    ← N1 的 IR，与产品路径同一份（R32）
  *   → toLegacyObligationSet(ir)               ← N1 的兼容适配：桥到核验器要的旧结构
  *   → constructWitnessShape(request)          ← 内核 2a：解析构造 / 结构化拒绝
- *   → buildFromPoints(...)                    ← 内核：拓扑构造（绕向 / 共面 / 零体积）
- *   → 一封单动作信封（solid.create_polyhedron，带 vertexNames）
+ *   → buildFromPoints(...)                    ← 内核：拓扑构造（绕向 / 共面 / 零体积）；**平面图形不走这一关**
+ *   → 一封单动作信封（solid.create_polyhedron，带 vertexNames；平面图形是 solid.create_face）
  *   → compilePlan(envelope, ...)              ← **产品用的那条**物化路径，不另造文档
  *   → verifyDiagramObligations(legacy, envelope, draftDocument)   ← 唯一的判定
  * ```
@@ -699,7 +699,34 @@ type CandidateJudgement =
     lines: string[]
   }
 
-function envelopeFor(names: readonly string[], vertices: readonly Vector3[], faces: readonly (readonly number[])[]): PlanEnvelope {
+/**
+ * **候选 → 一封单动作信封**（乙案 Task 3A 起按 `family` 分派）。
+ *
+ * 立体那几族用 `solid.create_polyhedron`（顶点 + 面环 → 内核 `fromPoints`）；
+ * **平面图形用 `solid.create_face`** —— 它是一只**开放**的多边形，不是多面体：
+ * 拿多面体去套必然被信封拒（`a polyhedron needs at least four faces`，
+ * 用户现场看到的就是这一句，`planCompiler.face.test.ts` 记着同一个读数）。
+ * 两条路都在**产品用的那一条**物化路径上（`compilePlan`），不另造文档。
+ */
+function envelopeFor(spec: SolidShapeSpec, names: readonly string[], vertices: readonly Vector3[], faces: readonly (readonly number[])[]): PlanEnvelope {
+  if (spec.family === "planar-figure") {
+    return {
+      schemaVersion: PLAN_SCHEMA_VERSION,
+      kind: "plan",
+      goal: "按题设关系构造一组候选坐标（见证搜索）",
+      factIds: [],
+      actions: [{
+        actionId: "solid.create_face",
+        actionKey: "witness-search",
+        factIds: [],
+        inputs: {
+          alias: "witness-search",
+          vertexNames: [...names],
+          vertices: vertices.map((point) => ({ ...point }))
+        }
+      }]
+    }
+  }
   return {
     schemaVersion: PLAN_SCHEMA_VERSION,
     kind: "plan",
@@ -769,13 +796,23 @@ function judgeCandidate(plan: CandidatePlan, legacy: DiagramObligationSet): Cand
     }
   }
   const vertices = witness.buildOrder.map((index) => witness.points[index])
-  const topology = buildFromPoints({ vertices: vertices.map((point) => ({ ...point })), faces: witness.faces.map((ring) => [...ring]) }, createBuilderContext())
-  if (topology.diagnostics.length > 0) {
-    const [first] = topology.diagnostics
-    return { kind: "rejected", code: WITNESS_SEARCH_CODES.topologyRejected, message: `${first.code}：${first.message}` }
+  /**
+   * **平面图形不走 `buildFromPoints`**（乙案 Task 3A）。
+   *
+   * 那一关判的是**闭合多面体**：至少四个顶点、**至少四个面环**、顶点不共面（体积非零）。
+   * 平面图形三条都不满足，而且三条都**不该**满足 —— 它是一只开放的多边形。
+   * 它的形状判据在物化那一步（`compileSolidFace`：互异 / 不共线 / 共面），
+   * 以及构造器自己的自交判据 —— 都是**同一份**实现，这里不再抄第三份。
+   */
+  if (plan.spec.family !== "planar-figure") {
+    const topology = buildFromPoints({ vertices: vertices.map((point) => ({ ...point })), faces: witness.faces.map((ring) => [...ring]) }, createBuilderContext())
+    if (topology.diagnostics.length > 0) {
+      const [first] = topology.diagnostics
+      return { kind: "rejected", code: WITNESS_SEARCH_CODES.topologyRejected, message: `${first.code}：${first.message}` }
+    }
   }
 
-  const envelope = envelopeFor(witness.buildOrder.map((index) => witness.names[index]), vertices, witness.faces)
+  const envelope = envelopeFor(plan.spec, witness.buildOrder.map((index) => witness.names[index]), vertices, witness.faces)
   const compiled = compilePlan(envelope, { document: createEmptyDocument("geometry3d"), conversationId: "witness-search" })
   if (compiled.draftDocument === null) {
     const detail = compiled.diagnostics.map((entry) => `${entry.code}@${entry.path}: ${entry.detail}`).join("；")

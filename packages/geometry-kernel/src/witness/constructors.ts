@@ -15,6 +15,11 @@
  *   （**不是闭式 `h = d·tanθ`** —— 见 `solveDihedralHeight`：那个闭式对常见取法给出的是补角）；
  * - 棱柱 = 底面多边形 + 拉伸向量（显式给出，或由一对点名顶点给出）。
  *
+ * **平面图形**（乙案 Task 3A，2026-10-11）是第四族，也是唯一**没有立体**的一族：
+ * 环 + 题面的定长与点名的角 → `z = 0` 上的坐标（`constructPlanarWitness`）。
+ * 它排在最后是因为它与上面那三族**没有共用词汇**：没有顶点、没有拉伸向量、没有高，
+ * 多解也由"不许自交"取舍，而不是由"取代表值"取舍。
+ *
  * 覆盖不到的形状（斜平行四边形底面、直角不在环首的四边形…）**明确拒绝**并给出
  * `reason.code`，而不是悄悄换一个题目没说的形状 —— 那正是"特值化悄悄改题"的老毛病。
  *
@@ -32,6 +37,7 @@
 import { crossVector3, distanceVector3, dotVector3, lengthVector3, normalizeVector3, subtractVector3, type Vector3 } from "../geometry3d"
 import { dihedralAngleDetail3 } from "../markers3d"
 import { canonicalPointName, POINT_NAME_SUFFIXES, pointNameSuffixCount } from "../pointNames"
+import { hasSelfIntersectingPolygon } from "../solid-builders"
 import type { ShapeScalarChoice, SolidShapeSpec } from "./solidShapeSpec"
 import { candidateResiduals, polygonResiduals, type WitnessResidualDiagnostic } from "./residuals"
 
@@ -144,7 +150,25 @@ export interface FrustumConstructRequest {
   scale: number
 }
 
-export type WitnessConstructRequest = PyramidConstructRequest | PrismConstructRequest | FrustumConstructRequest
+/**
+ * **平面图形**（乙案 Task 3A / 设计 §4）：一只环 + **钉住它的度量条件**。
+ *
+ * 与上面那三族的分工：这里没有顶点、没有拉伸向量、没有高 —— 坐标一律落在 `z = 0` 平面上，
+ * 由题面的**定长**与**点名的角**逐点定出来。环本身就是那只多边形，所以 `faces` 只有一只环，
+ * 物化走的是 `solid.create_face` 那条（平面片），不是多面体。
+ *
+ * **它为什么是一个独立成员**：Task 3 第一步的探针实测，平面规格喂进内核时落到
+ * `constructPyramidWitness`，被 `missing-apex` 拒掉 —— 那说明候选构造这一层缺的不是一个函数，
+ * 而是一条**按 family 分派**的分支。
+ */
+export interface PlanarFigureConstructRequest {
+  shape: "planar-figure"
+  /** 环，按题面点名顺序（`["A","B","C","D"]`）。 */
+  base: readonly string[]
+  relations: readonly WitnessRelation[]
+}
+
+export type WitnessConstructRequest = PyramidConstructRequest | PrismConstructRequest | FrustumConstructRequest | PlanarFigureConstructRequest
 
 /** 构造出的候选形状。**不含"是否满足题设"的结论**（R15）。 */
 export interface WitnessShapeCandidate {
@@ -225,6 +249,7 @@ export function constructWitnessShape(request: WitnessConstructRequest): Witness
   if (request.shape === "pyramid") return constructPyramidWitness(request)
   if (request.shape === "prism") return constructPrismWitness(request)
   if (request.shape === "frustum") return constructFrustumWitness(request)
+  if (request.shape === "planar-figure") return constructPlanarWitness(request)
   return reject("invalid-input", `未知的图形族：${String((request as { shape?: unknown }).shape)}`)
 }
 
@@ -296,6 +321,14 @@ export function constructShapeFromSpec(spec: SolidShapeSpec, choices: readonly S
   }
   const heightScalar = spec.freeScalars.find((scalar) => scalar.kind === "height")
   const heightValue = heightScalar === undefined ? null : (chosen.get(heightScalar.id) ?? null)
+  /**
+   * **平面图形**（乙案 Task 3A）：这一族的坐标不在"底面 + 顶点 / 拉伸"那套词汇里，
+   * 所以按 `family` 分派到自己的构造器。此前它落到下面那条棱锥支，
+   * 被 `missing-apex` 拒掉（Task 3 第一步的探针读数，逐字如此）。
+   */
+  if (spec.family === "planar-figure") {
+    return constructWitnessShape({ shape: "planar-figure", base: [...spec.base], relations })
+  }
   if (spec.family === "prism") {
     /**
      * **直棱柱的拉伸是竖直向量**：题面写 `AA′⊥底面`，那正是"侧棱垂直于底面"的定义。
@@ -650,6 +683,386 @@ export function constructFrustumWitness(request: FrustumConstructRequest): Witne
       `顶面是底面按**质心**相似缩小 ${formatNumber(ratio)} 倍、再沿向量 (${formatNumber(vector.x)}, ${formatNumber(vector.y)}, ${formatNumber(vector.z)}) 平移得到的平行截面（台体定义）。`
     ]
   })
+}
+
+/**
+ * 平面构造的**度量容差**：与 `residuals.ts` 的相对容差同一个数量级（那里是 `1e-9`）。
+ *
+ * 它是"构造器自己回代"这一关的判据，**不是**题设验收（那一关只有统一核验器）。
+ * 取 1e-9 是因为闭式构造算出来的量与题面值之间只差浮点噪声（1e-15 量级），
+ * 而任何真的"对不上"都远大于它。
+ */
+const PLANAR_METRIC_TOLERANCE = 1e-9
+
+/**
+ * 平面构造里**角的容差**（度）。
+ *
+ * 核验器用的是 `1e-3` 度（`diagramVerification` 的 `ANGLE_TOLERANCE_DEGREES`）。
+ * 构造器这一关取 `1e-6` —— 比核验器更严：**回代通过 ⇒ 核验器也会通过**，
+ * 而不是反过来让构造器放行一个核验器要拒的坐标。
+ */
+const PLANAR_ANGLE_TOLERANCE_DEGREES = 1e-6
+
+/** 多解组合的上限：`±` 两支逐点展开，环再长也不该出现组合爆炸；到顶即停，不静默截断。 */
+const PLANAR_MAX_PLACEMENTS = 64
+
+/** 一个点名在 `z = 0` 上的位置。平面构造全程只用两个分量，第三个恒为 `0`。 */
+interface PlanarPosition {
+  x: number
+  y: number
+}
+
+/**
+ * **一次"落位"的规则**：把某个还没定出位置的点名定出来。两种来源（设计 §4 的"能闭式解的就闭式解"）：
+ *
+ * 1. `angle`：顶点处**点名的角** + 一条定长边 —— 把 `point` 放在与 `reference` 成 `degrees` 的方向上；
+ * 2. `distances`：到两个**已落位**点的定长 —— 两圆交点。
+ *
+ * 角的两支给出的是**同一个无向角**（`∠` 是 `(0°,180°)` 的内部角），所以"取哪一支"不能靠角本身判，
+ * 只能靠**逐条回代 + 不许自交**判 —— 见 `constructPlanarWitness`。
+ */
+type PlanarPlacementRule =
+  | { kind: "angle"; point: string; vertex: string; reference: string; degrees: number; distance: number }
+  | { kind: "distances"; point: string; first: string; firstDistance: number; second: string; secondDistance: number }
+
+/** 定长边的键（与 `statedLength` 的 `sameSegment` 同一口径：顺序无关）。 */
+function planarSegmentKey(first: string, second: string): string {
+  return [first, second].sort().join("|")
+}
+
+/**
+ * **由度量条件构造平面图形**（乙案 Task 3A / 设计 §4）。
+ *
+ * 读数在先（Task 0 的探针实测）：那句题面的五条条件按"先放 `A` 在原点、`AB` 沿 `x` 轴，
+ * 再定 `D`、再定 `C`"的顺序闭式解出，逐条回代全过；`C` 由 `∠ADC=90°` 与 `CD=3` 定出**两个**解，
+ * 只有 `(9, √3)` 不自交。所以这一支的规则是：
+ *
+ * 1. **先定形、再落位**：`A` 在原点、`AB` 沿 `+x`（坐标系的规范取法，不改变图形）；
+ * 2. 之后**逐点**用 `PlanarPlacementRule` 的两条规则定出来，每条多解就**分支**；
+ * 3. 每一条走到底的组合都要**按最终坐标逐条回代**（题面条件一条都不许漏）——
+ *    "构造出来了" ≠ "满足题设"，构造器这一关只做自检，权威判据仍是统一核验器；
+ * 4. 回代通过的组合里**只有不自交的**才可用（除相邻边外不许有边相交）—— 这正是那句题面里
+ *    `C` 两个解的取舍判据（设计 §4 实测：恰好留下一个）；
+ * 5. 仍有多组时取**第一组**，并把"有几组"写进 `assumptions`，不静默挑一个。
+ *
+ * **明确不做**（设计 §9 的红线）：不引入通用非线性求解器；闭式拿不到的条件一律**如实拒绝**，
+ * 不猜一个形状出来。
+ */
+export function constructPlanarWitness(request: PlanarFigureConstructRequest): WitnessConstructResult {
+  const ring = validateNames(request.base, "图形")
+  if (ring.status === "rejected") return ring
+  if (!Array.isArray(request.relations)) return reject("invalid-input", "平面图形请求的 relations 必须是数组。", ring.names)
+  const names = ring.names
+
+  /**
+   * **只收两类条件**（定长边与点名的角）。其余（平行 / 垂直 / 等长 / 二面角…）
+   * 本层**还没有对应的构造** —— 如实拒绝，而不是收下之后当它不存在。
+   */
+  const unsupported = request.relations.find((relation) => relation.kind !== "segment-length" && relation.kind !== "planarAngle")
+  if (unsupported !== undefined) {
+    return reject("unsupported-base-shape", `平面图形这一支只收「定长」与「点名的角」两类条件，收到 ${unsupported.kind}：本层还没有这一类的构造。`, [...names])
+  }
+  /** 环外的点名不进这一族：环是这一族的形状本身，环外的点属于别的阶段（例如折）。 */
+  for (const relation of request.relations) {
+    const targets: readonly string[] = relation.kind === "segment-length" ? relation.segments.flat() : relation.kind === "planarAngle" ? [...relation.targets] : []
+    const outside = targets.find((name) => !names.includes(name))
+    if (outside !== undefined) {
+      return reject("unsupported-angle-shape", `平面图形的条件里点名了环外的点 ${outside}：环外的点不属于这一族。`, [...names])
+    }
+  }
+  /** 角的度数守卫：内部角必须落在 `(0°, 180°)`（两个端点都是退化）。 */
+  for (const relation of request.relations) {
+    if (relation.kind !== "planarAngle") continue
+    const stated = interpretValue(relation.value, null)
+    if (stated === null) return reject("unsupported-angle-shape", `点名的角 ${relation.targets.join("")} 没有可用的度数。`, [...names])
+    if (!(stated.value > 0) || stated.value >= 180) {
+      return reject("degenerate-base", `点名的角 ${relation.targets.join("")} 是 ${formatNumber(stated.value)}°：内部角必须在 0° 与 180° 之间（0 与 180 都是退化）。`, [...names])
+    }
+  }
+
+  /**
+   * **环首边必须由题面给定**：它是"先定形"那一步的尺度来源。没给就**不猜一个尺度** ——
+   * 那会让"题面没说"悄悄变成一个系统自选的数，而用户看不见（与 `freeScalars` 为空的理由同源）。
+   */
+  const start = names[0]!
+  const second = names[1]!
+  const firstEdge = statedLength(request.relations, [start, second])
+  if (firstEdge.kind === "invalid") return firstEdge.rejection
+  if (firstEdge.kind !== "value" || !(firstEdge.stated.value > 0)) {
+    return reject("unsupported-base-shape", `平面图形的环首边 ${start}${second} 没有给定长度：这一支不猜尺度。`, [...names])
+  }
+  const initial = new Map<string, PlanarPosition>([
+    [start, { x: 0, y: 0 }],
+    [second, { x: firstEdge.stated.value, y: 0 }]
+  ])
+
+  /**
+   * **分支枚举**：逐点用 `nextPlanarRule` 找一条能把下一个点定出来的规则，多解就展开。
+   * 先序展开、选项按"正转在前"排，所以**同一份输入永远得到同一个顺序**（确定性）。
+   *
+   * 走到头（没有规则可用）但有没定出的点时，这一支作废 —— 是"条件不足以定形"的形态之一，
+   * 由下面按 `deadEnds` 如实报，不静默丢掉。
+   */
+  const placements: Array<Map<string, PlanarPosition>> = []
+  let unresolvedDeadEnds = 0
+  let unsolvableDeadEnds = 0
+  const walk = (positions: Map<string, PlanarPosition>): void => {
+    if (placements.length >= PLANAR_MAX_PLACEMENTS) return
+    const rule = nextPlanarRule(positions, names, request.relations)
+    if (rule === null) {
+      if (positions.size === names.length) placements.push(new Map(positions))
+      else unresolvedDeadEnds += 1
+      return
+    }
+    const options = planarRuleOptions(rule, positions)
+    if (options.length === 0) {
+      unsolvableDeadEnds += 1
+      return
+    }
+    for (const option of options) {
+      const next = new Map(positions)
+      next.set(rule.point, option)
+      walk(next)
+    }
+  }
+  walk(initial)
+
+  if (placements.length === 0) {
+    const unplaced = names.filter((name) => name !== start && name !== second)
+    if (unsolvableDeadEnds > 0) {
+      return reject("unsupported-angle-shape", `平面图形：按题面已点名的条件，顶点 ${unplaced.join("、")} 的位置**解不出来**（两条定长的两个圆没有交点）：这几条条件互相不可能同时成立。`, [...names])
+    }
+    return reject("unsupported-base-shape", `平面图形：按题面已点名的条件，顶点 ${unplaced.join("、")} 没有被任何条件定出来；本层只做每条边、每个角都由题面钉死的情形。`, [...names])
+  }
+
+  /** **逐条回代**：用最终坐标逐条量一遍题面条件，一条对不上就不要这一组。 */
+  const consistent = placements.filter((positions) => planarRelationsHold(positions, names, request.relations))
+  if (consistent.length === 0) {
+    return reject("unsupported-angle-shape", "平面图形：把条件逐条回代到构造出来的坐标上，每一条都有对不上的地方 —— 这份条件在平面上不可能同时成立。", [...names])
+  }
+
+  /**
+   * **不许自交**（设计 §4）：`C` 的两个解里只有一个不自交，而两个解都满足那五条条件 ——
+   * 所以这一条判据是真在起作用的那一条，不是装饰。判据与 `buildFromPoints` 对每个面环用的
+   * 是**同一个** `hasSelfIntersectingPolygon`：各写一份就会"构造器说不自交、拓扑检查说自交"。
+   */
+  const simple = consistent.filter((positions) => !hasSelfIntersectingPolygon(names.map((name) => planarPoint3(positions, name))))
+  if (simple.length === 0) {
+    return reject("degenerate-base", `平面图形：满足全部条件的 ${consistent.length} 组坐标都是自交的多边形（除相邻边外还有边相交），这一支取不到可用的图形。`, [...names])
+  }
+
+  const chosen = simple[0]!
+  const points = names.map((name) => planarPoint3(chosen, name))
+  const assumptions = [
+    `平面图形 ${names.join("")} 的坐标由题面条件构造：${start} 取在原点、${start}${second} 沿 +x 轴（这两条是坐标系的规范取法，不改变图形）。`,
+    `第一个由角定出的顶点取**正转**那一侧；镜像的那一支与它全等，取哪一侧是坐标约定。`
+  ]
+  if (simple.length > 1) assumptions.push(`满足全部条件的坐标有 ${simple.length} 组，系统取第一组（各组都满足题面，差别只在镜像 / 另一支）。`)
+  if (consistent.length > simple.length) assumptions.push(`另有 ${consistent.length - simple.length} 组坐标也满足全部条件，但它们是自交多边形，已按「不许自交」排除。`)
+  return assemblePlanarCandidate({ ringNames: names, points, freeValues: [], assumptions })
+}
+
+/** 平面位置 → 空间点（`z = 0`）。平面这一族全程在同一个平面上，所以只有一个入口做这件事。 */
+function planarPoint3(positions: ReadonlyMap<string, PlanarPosition>, name: string): Vector3 {
+  const position = positions.get(name)
+  return { x: position?.x ?? Number.NaN, y: position?.y ?? Number.NaN, z: 0 }
+}
+
+/**
+ * **下一个能落位的点**（按环顺序找第一个"有规则可用"的点）。
+ *
+ * 顺序是刻意的：**环顺序**决定先定哪个点，规则顺序（角优先、再到两段定长）决定用哪条 ——
+ * 两处都是固定的，所以同一份条件永远得到同一个解。找不到返回 `null`，由调用方按"定不出来"处理。
+ */
+function nextPlanarRule(
+  positions: ReadonlyMap<string, PlanarPosition>,
+  names: readonly string[],
+  relations: readonly WitnessRelation[]
+): PlanarPlacementRule | null {
+  for (const point of names) {
+    if (positions.has(point)) continue
+    const fromAngle = planarRuleFromAngle(point, positions, relations)
+    if (fromAngle !== null) return fromAngle
+    const fromDistances = planarRuleFromDistances(point, positions, relations)
+    if (fromDistances !== null) return fromDistances
+  }
+  return null
+}
+
+/** 规则之一：顶点处**点名的角**（另一条臂已落位）+ 一条**定长**边。两支解，见 `planarRuleOptions`。 */
+function planarRuleFromAngle(
+  point: string,
+  positions: ReadonlyMap<string, PlanarPosition>,
+  relations: readonly WitnessRelation[]
+): PlanarPlacementRule | null {
+  for (const relation of relations) {
+    if (relation.kind !== "planarAngle" || relation.targets.length !== 3) continue
+    const [first, vertex, third] = relation.targets as [string, string, string]
+    if (!positions.has(vertex)) continue
+    const reference = first === point ? third : third === point ? first : null
+    if (reference === null || !positions.has(reference)) continue
+    const stated = interpretValue(relation.value, null)
+    if (stated === null) continue
+    const distance = statedLength(relations, [vertex, point])
+    if (distance.kind !== "value" || !(distance.stated.value > 0)) continue
+    return { kind: "angle", point, vertex, reference, degrees: stated.value, distance: distance.stated.value }
+  }
+  return null
+}
+
+/** 规则之二：到两个**已落位**点的定长（两圆交点）。 */
+function planarRuleFromDistances(
+  point: string,
+  positions: ReadonlyMap<string, PlanarPosition>,
+  relations: readonly WitnessRelation[]
+): PlanarPlacementRule | null {
+  const anchored: Array<{ name: string; distance: number }> = []
+  for (const relation of relations) {
+    if (relation.kind !== "segment-length") continue
+    for (const segment of relation.segments) {
+      const pair = segmentOf(segment)
+      if (pair === null) continue
+      const other = pair[0] === point ? pair[1] : pair[1] === point ? pair[0] : null
+      if (other === null || !positions.has(other)) continue
+      if (anchored.some((entry) => entry.name === other)) continue
+      const stated = interpretValue(relation.value, null)
+      if (stated === null || !(stated.value > 0)) continue
+      anchored.push({ name: other, distance: stated.value })
+      if (anchored.length === 2) {
+        return {
+          kind: "distances",
+          point,
+          first: anchored[0]!.name,
+          firstDistance: anchored[0]!.distance,
+          second: anchored[1]!.name,
+          secondDistance: anchored[1]!.distance
+        }
+      }
+    }
+  }
+  return null
+}
+
+/**
+ * 一条规则的**解**：0 个（解不出）、1 个（相切 / 唯一）、2 个（两支）。
+ *
+ * 角那一支的两解是**同一个无向角**的两侧；定长那一支的两解是两个圆的交点。
+ * 顺序固定（正转在前 / 正向在前），确定性由它保证。
+ */
+function planarRuleOptions(rule: PlanarPlacementRule, positions: ReadonlyMap<string, PlanarPosition>): PlanarPosition[] {
+  if (rule.kind === "distances") {
+    return circleIntersections(positions.get(rule.first)!, rule.firstDistance, positions.get(rule.second)!, rule.secondDistance)
+  }
+  const vertex = positions.get(rule.vertex)!
+  const reference = positions.get(rule.reference)!
+  const along = { x: reference.x - vertex.x, y: reference.y - vertex.y }
+  const span = Math.hypot(along.x, along.y)
+  if (!(span > 0)) return []
+  const unit = { x: along.x / span, y: along.y / span }
+  const radians = (rule.degrees * Math.PI) / 180
+  return [1, -1].map((sign) => {
+    const cosine = Math.cos(sign * radians)
+    const sine = Math.sin(sign * radians)
+    return {
+      x: vertex.x + rule.distance * (unit.x * cosine - unit.y * sine),
+      y: vertex.y + rule.distance * (unit.x * sine + unit.y * cosine)
+    }
+  })
+}
+
+/** 两圆交点（`z = 0` 平面内）：相离 / 内含 ⇒ 0 个，相切 ⇒ 1 个，相交 ⇒ 2 个。 */
+function circleIntersections(first: PlanarPosition, firstDistance: number, second: PlanarPosition, secondDistance: number): PlanarPosition[] {
+  const along = { x: second.x - first.x, y: second.y - first.y }
+  const span = Math.hypot(along.x, along.y)
+  if (!(span > 0)) return []
+  const coordinate = (firstDistance * firstDistance - secondDistance * secondDistance + span * span) / (2 * span)
+  const heightSquared = firstDistance * firstDistance - coordinate * coordinate
+  const tolerance = PLANAR_METRIC_TOLERANCE * Math.max(1, firstDistance * firstDistance)
+  if (heightSquared < -tolerance) return []
+  const height = Math.sqrt(Math.max(0, heightSquared))
+  const unit = { x: along.x / span, y: along.y / span }
+  const foot = { x: first.x + coordinate * unit.x, y: first.y + coordinate * unit.y }
+  if (height <= PLANAR_METRIC_TOLERANCE * Math.max(1, firstDistance)) return [foot]
+  const perpendicular = { x: -unit.y, y: unit.x }
+  return [
+    { x: foot.x + height * perpendicular.x, y: foot.y + height * perpendicular.y },
+    { x: foot.x - height * perpendicular.x, y: foot.y - height * perpendicular.y }
+  ]
+}
+
+/**
+ * **逐条回代**：题面条件一条都不许漏地量一遍（用**最终坐标**，不是构造过程中的中间量）。
+ *
+ * 角用的是 `interiorAngleDegrees` —— 与统一核验器的 `planarAngle` 判据**同一条规则**
+ * （同一个 `acos` 口径）。各写一份就会出现"构造器说成立、核验器说不是"。
+ */
+function planarRelationsHold(
+  positions: ReadonlyMap<string, PlanarPosition>,
+  names: readonly string[],
+  relations: readonly WitnessRelation[]
+): boolean {
+  const scale = Math.max(1, ...names.map((name) => Math.hypot(positions.get(name)?.x ?? 0, positions.get(name)?.y ?? 0)))
+  for (const relation of relations) {
+    if (relation.kind === "segment-length") {
+      const stated = interpretValue(relation.value, null)
+      if (stated === null) continue
+      for (const segment of relation.segments) {
+        const pair = segmentOf(segment)
+        if (pair === null) continue
+        const actual = distanceVector3(planarPoint3(positions, pair[0]), planarPoint3(positions, pair[1]))
+        if (Math.abs(actual - stated.value) > PLANAR_METRIC_TOLERANCE * Math.max(1, stated.value, scale)) return false
+      }
+      continue
+    }
+    if (relation.kind === "planarAngle" && relation.targets.length === 3) {
+      const stated = interpretValue(relation.value, null)
+      if (stated === null) continue
+      const [first, vertex, third] = relation.targets as [string, string, string]
+      const actual = interiorAngleDegrees(planarPoint3(positions, vertex), planarPoint3(positions, first), planarPoint3(positions, third))
+      if (actual === null || Math.abs(actual - stated.value) > PLANAR_ANGLE_TOLERANCE_DEGREES) return false
+    }
+  }
+  return true
+}
+
+/**
+ * **平面候选的组装与自检**（与 `assembleCandidate` 同一套纪律，只有一处不同）：
+ * 面环**就是那只环本身**，只有一只 —— 平面图形是一只**开放**的多边形，不是多面体。
+ *
+ * 绕向不做归一化：平面片没有"朝外"这回事（`solid.create_face` 也不收绕向），
+ * 手推一个只会凭空多出一个约定。形状 / 尺度自检走的仍是 `residuals.ts` 那一份。
+ */
+function assemblePlanarCandidate(input: {
+  ringNames: readonly string[]
+  points: readonly Vector3[]
+  freeValues: string[]
+  assumptions: string[]
+}): WitnessConstructResult {
+  const names = [...input.ringNames]
+  const points = input.points.map((point) => ({ ...point }))
+  if (names.length !== points.length) return reject("invalid-input", "构造出的顶点名与坐标数量不一致。", names)
+  for (const point of points) {
+    if (!isFiniteVector(point)) return reject("non-finite-value", "构造出的候选坐标里出现非有限数值。", names)
+  }
+  const faces = [names.map((_, index) => index)]
+  const report = candidateResiduals({
+    points,
+    faces: faces.map((ring) => ({ indexes: ring })),
+    source: input.freeValues.length > 0 ? "free-choice" : "stated"
+  })
+  if (!report.acceptable) return rejectFromDiagnostics(report.diagnostics, names)
+  return {
+    status: "candidate",
+    witness: {
+      points,
+      names,
+      /** 与 `assembleCandidate` 同一条：`points` / `faces` / `buildOrder` 永远共用同一套下标。 */
+      buildOrder: names.map((_, index) => index),
+      faces,
+      freeValues: [...input.freeValues],
+      assumptions: [...input.assumptions]
+    }
+  }
 }
 
 /** 顶点名列表的守卫：至少三个、名字非空、互不重复。 */

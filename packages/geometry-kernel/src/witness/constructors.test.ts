@@ -4,7 +4,7 @@ import { areCoplanar, crossVector3, distanceVector3, dotVector3, subtractVector3
 import { dihedralAngleDetail3 } from "../markers3d"
 import { buildFromPoints, createBuilderContext } from "../solid-builders"
 
-import { constructFrustumWitness, constructPrismWitness, constructPyramidWitness, constructShapeFromSpec, constructWitnessShape, type FrustumConstructRequest, type PrismConstructRequest, type PyramidConstructRequest, type WitnessConstructRequest, type WitnessRelation } from "./constructors"
+import { constructFrustumWitness, constructPlanarWitness, constructPrismWitness, constructPyramidWitness, constructShapeFromSpec, constructWitnessShape, type FrustumConstructRequest, type PlanarFigureConstructRequest, type PrismConstructRequest, type PyramidConstructRequest, type WitnessConstructRequest, type WitnessRelation } from "./constructors"
 import { isPointName } from "../pointNames"
 import type { SolidShapeSpec } from "./solidShapeSpec"
 import { candidateResiduals, polygonResiduals } from "./residuals"
@@ -1310,5 +1310,155 @@ describe("环外点参与的数值角（§3-F 阶段 B）", () => {
     // 高就是题面给的 1：**不**为了那个角去改题面给的值。
     const at = (name: string): Vector3 => result.witness.points[indexOf(result.witness, name)]!
     expect(at("D").z - at("A").z).toBeCloseTo(1, 10)
+  })
+})
+
+/**
+ * **平面度量图形的构造**（乙案 Task 3A；设计 §4）。
+ *
+ * 读数在先：设计 §4 的"闭式优先"已由 Task 0 的探针量过 —— 那五条四边形条件按
+ * "先放 `A` 在原点、`AB` 沿 `x` 轴，再定 `D`、再定 `C`"的顺序闭式解出，逐条回代全过；
+ * `C` 由 `∠ADC=90°` 与 `CD=3` 定出**两个**解，只有 `(9, √3)` 不自交。
+ *
+ * 所以这一支不是"复用既有构造器"（Task 3 第一步的探针实测：平面规格落到棱锥那条支，
+ * 被 `missing-apex` 拒掉），而是内核里**新增的一族**：环 + 度量条件 → `z = 0` 上的坐标。
+ */
+describe("constructPlanarWitness（乙案 Task 3A）", () => {
+  /**
+   * 用户那句题面里的五条四边形条件（设计 §0.1 的读数，逐条照抄）。
+   * 顺序照题面写：`AB=8`、`AD=5√3`、`∠BAD=30°`、`∠ADC=90°`、`CD=3`。
+   */
+  const QUADRILATERAL: WitnessRelation[] = [
+    { kind: "segment-length", segments: [["A", "B"]], value: 8 },
+    { kind: "segment-length", segments: [["A", "D"]], value: 5 * Math.sqrt(3) },
+    { kind: "planarAngle", targets: ["B", "A", "D"], value: 30, unit: "degree" },
+    { kind: "planarAngle", targets: ["A", "D", "C"], value: 90, unit: "degree" },
+    { kind: "segment-length", segments: [["C", "D"]], value: 3 }
+  ]
+
+  function planarRequest(relations: readonly WitnessRelation[] = QUADRILATERAL, base: readonly string[] = ["A", "B", "C", "D"]): PlanarFigureConstructRequest {
+    return { shape: "planar-figure", base: [...base], relations: [...relations] }
+  }
+
+  function positionsOf(witness: { names: string[]; points: Vector3[] }): Map<string, Vector3> {
+    return new Map(witness.names.map((name, index) => [name, witness.points[index]!]))
+  }
+
+  /** 平面内两点距离：与构造器无关，用例自己算。 */
+  function planarDistance(first: Vector3, second: Vector3): number {
+    return Math.hypot(first.x - second.x, first.y - second.y)
+  }
+
+  /** 角的量法**用例自己写**（只用最终坐标）：构造器的中间量一个都不借。 */
+  function planarAngleDegrees(vertex: Vector3, first: Vector3, second: Vector3): number {
+    const alongFirst = { x: first.x - vertex.x, y: first.y - vertex.y }
+    const alongSecond = { x: second.x - vertex.x, y: second.y - vertex.y }
+    const cosine = (alongFirst.x * alongSecond.x + alongFirst.y * alongSecond.y) / (Math.hypot(alongFirst.x, alongFirst.y) * Math.hypot(alongSecond.x, alongSecond.y))
+    return (Math.acos(Math.min(1, Math.max(-1, cosine))) * 180) / Math.PI
+  }
+
+  /**
+   * 自交判据也**各写一份**（相邻边共享端点不算）：判据与构造器相同，这一条用例才有判别力
+   * —— 借构造器的函数来断言它自己的选择，等于什么都没断言。
+   */
+  function ringSelfIntersects(ring: readonly Vector3[]): boolean {
+    const cross = (origin: Vector3, first: Vector3, second: Vector3): number => (first.x - origin.x) * (second.y - origin.y) - (first.y - origin.y) * (second.x - origin.x)
+    const properCrossing = (first: Vector3, second: Vector3, third: Vector3, fourth: Vector3): boolean => {
+      const firstSide = cross(third, fourth, first)
+      const secondSide = cross(third, fourth, second)
+      const thirdSide = cross(first, second, third)
+      const fourthSide = cross(first, second, fourth)
+      return ((firstSide > 0 && secondSide < 0) || (firstSide < 0 && secondSide > 0)) && ((thirdSide > 0 && fourthSide < 0) || (thirdSide < 0 && fourthSide > 0))
+    }
+    for (let firstIndex = 0; firstIndex < ring.length; firstIndex += 1) {
+      for (let secondIndex = firstIndex + 1; secondIndex < ring.length; secondIndex += 1) {
+        if (secondIndex === firstIndex + 1 || (firstIndex === 0 && secondIndex === ring.length - 1)) continue
+        const crosses = properCrossing(ring[firstIndex]!, ring[(firstIndex + 1) % ring.length]!, ring[secondIndex]!, ring[(secondIndex + 1) % ring.length]!)
+        if (crosses) return true
+      }
+    }
+    return false
+  }
+
+  it("由 AB、AD、∠BAD、∠ADC、CD 造出平面四边形，且逐条回代（用最终坐标）", () => {
+    const result = constructPlanarWitness(planarRequest())
+    expect(result.status, result.status === "rejected" ? `${result.code}: ${result.message}` : "constructed").toBe("candidate")
+    if (result.status !== "candidate") return
+    const at = positionsOf(result.witness)
+
+    // 坐标系是**规范取法**（不改变图形）：`A` 在原点、`AB` 沿 `+x`。
+    expect(at.get("A")).toMatchObject({ x: 0, y: 0, z: 0 })
+    expect(at.get("B")!.y).toBeCloseTo(0, 12)
+
+    // 五条条件逐条回代 —— 全部按**最终坐标**量。
+    expect(planarDistance(at.get("A")!, at.get("B")!)).toBeCloseTo(8, 9)
+    expect(planarDistance(at.get("A")!, at.get("D")!)).toBeCloseTo(5 * Math.sqrt(3), 9)
+    expect(planarDistance(at.get("C")!, at.get("D")!)).toBeCloseTo(3, 9)
+    expect(planarAngleDegrees(at.get("A")!, at.get("B")!, at.get("D")!)).toBeCloseTo(30, 9)
+    expect(planarAngleDegrees(at.get("D")!, at.get("A")!, at.get("C")!)).toBeCloseTo(90, 9)
+
+    // 平面图形落在 `z = 0` 上；面就是那只环（不是多面体那一套）。
+    for (const point of result.witness.points) expect(point.z).toBe(0)
+    expect(result.witness.faces).toEqual([[0, 1, 2, 3]])
+  })
+
+  it("C 有两个解时取不让四边形自交的那一个", () => {
+    const result = constructPlanarWitness(planarRequest())
+    expect(result.status, result.status === "rejected" ? `${result.code}: ${result.message}` : "constructed").toBe("candidate")
+    if (result.status !== "candidate") return
+    const at = positionsOf(result.witness)
+    const [a, b, c, d] = [at.get("A")!, at.get("B")!, at.get("C")!, at.get("D")!]
+
+    /**
+     * 用例自己算**另一支**：把 `D → A` 的方向转 `−90°` 再走 `CD = 3`。
+     * 它与构造器无关，就是"另一个解"。
+     */
+    const along = { x: a.x - d.x, y: a.y - d.y }
+    const reach = 3 / Math.hypot(along.x, along.y)
+    const other: Vector3 = { x: d.x + along.y * reach, y: d.y - along.x * reach, z: 0 }
+
+    expect(other.x).toBeCloseTo(6, 9)
+    expect(other.y).toBeCloseTo(4 * Math.sqrt(3), 9)
+    expect(ringSelfIntersects([a, b, other, d]), "另一支必须真的自交，这条用例才有判别力").toBe(true)
+
+    expect(planarDistance(other, c), "没有取那一支").toBeGreaterThan(1e-6)
+    expect(ringSelfIntersects([a, b, c, d]), "取的那一支必须不自交").toBe(false)
+    expect(c.x).toBeCloseTo(9, 9)
+    expect(c.y).toBeCloseTo(Math.sqrt(3), 9)
+  })
+
+  it("构造器不自证：题面多给一条与最终坐标对不上的条件时必须拒绝", () => {
+    const contradicted = [...QUADRILATERAL, { kind: "segment-length", segments: [["B", "D"]], value: 7 } as WitnessRelation]
+    const rejected = constructPlanarWitness(planarRequest(contradicted))
+    expect(rejected.status, "多给一条对不上的条件时，构造器必须按最终坐标查出来").toBe("rejected")
+
+    /**
+     * 对照组：把那条改成**真实值**（`|BD| = √19`，由 `AB`、`AD` 与 `∠BAD` 决定）就不拒 ——
+     * 说明上面拒的是"这一条对不上"，而不是"多给了一条条件"。
+     */
+    const consistent = [...QUADRILATERAL, { kind: "segment-length", segments: [["B", "D"]], value: Math.sqrt(19) } as WitnessRelation]
+    const accepted = constructPlanarWitness(planarRequest(consistent))
+    expect(accepted.status, accepted.status === "rejected" ? `${accepted.code}: ${accepted.message}` : "constructed").toBe("candidate")
+    if (accepted.status !== "candidate") return
+    const at = positionsOf(accepted.witness)
+    expect(planarDistance(at.get("B")!, at.get("D")!)).toBeCloseTo(Math.sqrt(19), 9)
+  })
+
+  it("constructShapeFromSpec 的 planar-figure 分派走同一条构造（不再落进棱锥那条 missing-apex）", () => {
+    const spec: SolidShapeSpec = { family: "planar-figure", base: ["A", "B", "C", "D"], relations: QUADRILATERAL, freeScalars: [] }
+    const result = constructShapeFromSpec(spec)
+    expect(result.status, result.status === "rejected" ? `${result.code}: ${result.message}` : "constructed").toBe("candidate")
+    if (result.status !== "candidate") return
+    expect(result.witness.faces).toEqual([[0, 1, 2, 3]])
+    const at = positionsOf(result.witness)
+    expect(planarDistance(at.get("C")!, at.get("D")!)).toBeCloseTo(3, 9)
+    expect(planarAngleDegrees(at.get("D")!, at.get("A")!, at.get("C")!)).toBeCloseTo(90, 9)
+  })
+
+  it("确定性：同一请求连跑 25 次逐字节相同", () => {
+    const first = JSON.stringify(constructPlanarWitness(planarRequest()))
+    for (let attempt = 0; attempt < 24; attempt += 1) {
+      expect(JSON.stringify(constructPlanarWitness(planarRequest()))).toBe(first)
+    }
   })
 })

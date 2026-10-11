@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { parseObligationWithLegacy } from "../obligationIR"
-import { specForPrompt } from "./witnessSearch"
+import { searchWitness, specForPrompt } from "./witnessSearch"
 
 /**
  * 题设按**产品路径的同一份形状**取：`parseObligationWithLegacy(prompt).ir`
@@ -64,5 +64,56 @@ describe("平面图形（乙案）", () => {
     expect(result.status).toBe("ok")
     if (result.status !== "ok") return
     expect(result.spec.family).toBe("pyramid")
+  })
+
+  /**
+   * **接线**（乙案 Task 3A）：一份平面规格喂进 `searchWitness`，要能拿到**通过核验**的坐标。
+   *
+   * 这一条同时钉住两件事，缺一条它就红：
+   * 1. 内核按 `family` 分派到平面构造器（否则是 `missing-apex`）；
+   * 2. 物化走的是 `solid.create_face`（平面片）而**不是** `solid.create_polyhedron` ——
+   *    后者要求至少四个面，一张四边形的环当场被拒（这正是用户现场那句
+   *    `a polyhedron needs at least four faces`），于是候选会以 `materialisation-failed` 收场。
+   *
+   * 所以这里断言的是"**端到端真能通过**"，而不是某一个中间函数的返回值：
+   * 只要物化那一步还挂在多面体上，`status` 就不可能是 `verified_instance`。
+   */
+  it("平面规格喂进搜索器能拿到通过核验的坐标（物化走平面片那一条）", () => {
+    const parsed = parseObligationWithLegacy(PROMPT)
+    const shaped = specForPrompt(PROMPT, givensOf(PROMPT))
+    expect(shaped.status).toBe("ok")
+    if (shaped.status !== "ok") return
+
+    const result = searchWitness({
+      obligations: parsed.ir,
+      shape: "planar-figure",
+      spec: shaped.spec,
+      seed: 1,
+      maxCandidates: 8,
+      timeoutMs: 10_000
+    })
+    expect(result.status, result.status === "unverified_instance" ? result.reasons.join(" / ") : "已经拿到核验通过的候选").toBe("verified_instance")
+    if (result.status !== "verified_instance") return
+
+    const at = new Map(result.candidate.names.map((name, index) => [name, result.candidate.vertices[index]!]))
+    // 系统自己把 B、C、D 造出来了（用户那句题面原先只画得出 A、E、F、P）。
+    expect([...at.keys()]).toEqual(["A", "B", "C", "D"])
+    const distance = (first: string, second: string): number => {
+      const left = at.get(first)!
+      const right = at.get(second)!
+      return Math.hypot(left.x - right.x, left.y - right.y, left.z - right.z)
+    }
+    const angle = (vertex: string, first: string, second: string): number => {
+      const corner = at.get(vertex)!
+      const alongFirst = { x: at.get(first)!.x - corner.x, y: at.get(first)!.y - corner.y }
+      const alongSecond = { x: at.get(second)!.x - corner.x, y: at.get(second)!.y - corner.y }
+      const cosine = (alongFirst.x * alongSecond.x + alongFirst.y * alongSecond.y) / (Math.hypot(alongFirst.x, alongFirst.y) * Math.hypot(alongSecond.x, alongSecond.y))
+      return (Math.acos(Math.min(1, Math.max(-1, cosine))) * 180) / Math.PI
+    }
+    expect(distance("A", "B")).toBeCloseTo(8, 9)
+    expect(distance("A", "D")).toBeCloseTo(5 * Math.sqrt(3), 9)
+    expect(distance("C", "D")).toBeCloseTo(3, 9)
+    expect(angle("A", "B", "D")).toBeCloseTo(30, 9)
+    expect(angle("D", "A", "C")).toBeCloseTo(90, 9)
   })
 })

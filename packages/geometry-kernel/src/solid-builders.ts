@@ -150,7 +150,7 @@ function edgeKey(firstIndex: number, secondIndex: number): string {
  * 那时 `cross(p1-p0, p2-p0)` 是零向量，投影轴会塌成"丢掉 x 轴"，水平底面于是被压成一条线，
  * 自交判定把它误报成"自交"（评审 I2；`prism.ts` 里同一个修法）。
  */
-function polygonNormal(points: Vector3[]): Vector3 {
+function polygonNormal(points: readonly Vector3[]): Vector3 {
   for (let second = 1; second < points.length; second += 1) {
     for (let third = second + 1; third < points.length; third += 1) {
       const normal = crossVector3(subtractVector3(points[second], points[0]), subtractVector3(points[third], points[0]))
@@ -160,7 +160,7 @@ function polygonNormal(points: Vector3[]): Vector3 {
   return { x: 0, y: 0, z: 0 }
 }
 
-function projectedFacePoints(points: Vector3[]): Array<{ x: number; y: number }> {
+function projectedFacePoints(points: readonly Vector3[]): Array<{ x: number; y: number }> {
   const normal = polygonNormal(points)
   const absolute = { x: Math.abs(normal.x), y: Math.abs(normal.y), z: Math.abs(normal.z) }
   if (absolute.x > 0 || absolute.y > 0 || absolute.z > 0) {
@@ -196,7 +196,16 @@ function segmentsIntersect(firstStart: { x: number; y: number }, firstEnd: { x: 
   return firstOrientation === 0 && onSegment(firstStart, firstEnd, secondStart) || secondOrientation === 0 && onSegment(firstStart, firstEnd, secondEnd) || thirdOrientation === 0 && onSegment(secondStart, secondEnd, firstStart) || fourthOrientation === 0 && onSegment(secondStart, secondEnd, firstEnd)
 }
 
-function hasSelfIntersectingPolygon(points: Vector3[]): boolean {
+/**
+ * **多边形是否自交**（Bowtie 那种）：相邻边共享端点，跳过；首尾相邻的那一对也跳过。
+ * 少于四个点时不可能自交。
+ *
+ * 导出它是为了**只有一个口径**：平面图形的构造器（`witness/constructors.ts` 的
+ * `constructPlanarWitness`）要按"不许自交"在多个解里取一支 —— 那正是本文件在
+ * `buildFromPoints` 里对每个面环用的同一个判据。各写一份的话，同一张图会在
+ * "构造器认为不自交、拓扑检查认为自交"之间摇摆。
+ */
+export function hasSelfIntersectingPolygon(points: readonly Vector3[]): boolean {
   if (points.length < 4) return false
   const projected = projectedFacePoints(points)
   for (let firstIndex = 0; firstIndex < projected.length; firstIndex += 1) {
