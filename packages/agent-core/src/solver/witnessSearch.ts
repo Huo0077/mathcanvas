@@ -584,6 +584,19 @@ export function specForPrompt(prompt: string, givens: readonly GeometryObligatio
   }
   const relations = kernelRelations(givens)
   if (recognised.family === "frustum") return { status: "ok", spec: specForFrustum(recognised, relations), recognised }
+  /**
+   * **平面图形这一支还没有构造器**（2026-10-11：Task 1 只**认出**了它，构造规格是 Task 2）。
+   *
+   * 这里必须**拦住并如实说**：不拦的话它会掉进下面棱锥那一支，`derivePyramidStructure`
+   * 给出的是一句**对平面题是假话**的理由（"缺锥顶 / 缺侧棱⊥底面"）——
+   * 用户会照着去补一个题面根本没提的立体条件。与本仓"报错要说清下一步"同一条纪律。
+   */
+  if (recognised.family === "planar-figure") {
+    return {
+      status: "unrecognised",
+      reason: `认出了平面图形（${recognised.phrase}），但**这一类还没有构造器**：目前只认得棱锥 / 棱柱 / 棱台与任意多面体。`
+    }
+  }
   const derived = recognised.family === "prism" ? derivePrismStructure(givens) : derivePyramidStructure(givens)
   if (derived.status === "rejected") return { status: "unrecognised", reason: `${derived.code}: ${derived.message}` }
   const spec = specFor(derived.structure)
