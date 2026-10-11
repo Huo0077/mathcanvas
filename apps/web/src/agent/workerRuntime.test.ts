@@ -685,7 +685,7 @@ describe("平面四边形：题面驱动 ⇒ B、C、D 出现在图上（乙案 
     expect(angle("D", "A", "C")).toBeCloseTo(90, 9)
     expect(distance("C", "D")).toBeCloseTo(3, 9)
     // 报告里也要说清这组坐标是**系统按题面条件构造**的。
-    expect(response.completionAssumptions.some((entry) => entry.text.includes("按题面条件构造"))).toBe(true)
+    expect(response.completionAssumptions?.some((entry) => entry.text.includes("按题面条件构造"))).toBe(true)
   })
 
   /**
@@ -739,6 +739,6 @@ describe("平面四边形：题面驱动 ⇒ B、C、D 出现在图上（乙案 
     // 就是设计 §0.3 那个形态：`B`、`C`、`D` 一个都不在。
     expect([...new Set(labels)].sort()).toEqual(["A", "E", "F", "P"])
     // 而报告必须说清这组坐标是谁给的（设计 §6 的"永不静默采信"）。
-    expect(response.completionAssumptions.some((entry) => entry.text.includes("未经条件构造")), "构造不出时必须标注来源").toBe(true)
+    expect(response.completionAssumptions?.some((entry) => entry.text.includes("未经条件构造")), "构造不出时必须标注来源").toBe(true)
   })
 })

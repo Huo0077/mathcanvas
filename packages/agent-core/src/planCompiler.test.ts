@@ -1206,7 +1206,7 @@ describe("空间点条件：这个开关是承重的（不是可选项）", () =
 describe("平面图形：构造的坐标与来源标注（乙案 Task 5）", () => {
   const PLANAR_PROMPT = "平面四边形ABCD中，AB=8，AD=5√3，∠BAD=30°，∠ADC=90°，CD=3"
 
-  const facePlan = (vertices: { x: number; y: number; z: number }[], prompt: string) => ({
+  const facePlan = (vertices: { x: number; y: number; z: number }[]) => ({
     schemaVersion: PLAN_SCHEMA_VERSION,
     kind: "plan",
     goal: "画示意图",
@@ -1224,7 +1224,7 @@ describe("平面图形：构造的坐标与来源标注（乙案 Task 5）", () 
   }
 
   it("构造成功时用构造的坐标，而不是模型给的（并在报告里说明来源）", () => {
-    const result = compilePlan(facePlan(WRONG, PLANAR_PROMPT), context(createEmptyDocument("geometry3d"), { prompt: PLANAR_PROMPT, diagramWitnessSearch: true }))
+    const result = compilePlan(facePlan(WRONG), context(createEmptyDocument("geometry3d"), { prompt: PLANAR_PROMPT, diagramWitnessSearch: true }))
 
     // 模型那组坐标过不了核验；能 `passed` 只可能是因为**被换成了构造出来的那一组**。
     expect(result.diagramVerification?.status).toBe("passed")
@@ -1257,7 +1257,7 @@ describe("平面图形：构造的坐标与来源标注（乙案 Task 5）", () 
      * 以及报告里那句来源标注 + 为什么没构造出来。
      */
     const underdetermined = "平面四边形ABCD中，AB=8，CD=3，画示意图"
-    const result = compilePlan(facePlan(WRONG, underdetermined), context(createEmptyDocument("geometry3d"), { prompt: underdetermined, diagramWitnessSearch: true }))
+    const result = compilePlan(facePlan(WRONG), context(createEmptyDocument("geometry3d"), { prompt: underdetermined, diagramWitnessSearch: true }))
 
     expect(result.diagramVerification?.status).toBe("failed")
     expect(result.materialisedActions, "没有替换：这一轮的坐标还是模型那一组").toBeUndefined()

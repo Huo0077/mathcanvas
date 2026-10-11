@@ -824,7 +824,6 @@ export function constructPlanarWitness(request: PlanarFigureConstructRequest): W
    */
   const placements: Array<Map<string, PlanarPosition>> = []
   const stalled: Array<Map<string, PlanarPosition>> = []
-  let blockedWithoutRule = 0
   let blockedWithoutSolution = 0
   const walk = (positions: Map<string, PlanarPosition>): void => {
     if (placements.length >= PLANAR_MAX_PLACEMENTS) return
@@ -835,7 +834,6 @@ export function constructPlanarWitness(request: PlanarFigureConstructRequest): W
     }
     if (step.kind === "blocked") {
       if (step.hadRule) blockedWithoutSolution += 1
-      else blockedWithoutRule += 1
       if (stalled.length < 8) stalled.push(new Map(positions))
       return
     }
