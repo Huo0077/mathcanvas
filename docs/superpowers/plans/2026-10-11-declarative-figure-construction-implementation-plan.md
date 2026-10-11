@@ -201,6 +201,21 @@ git commit -m "feat(agent-core): turn metric clauses into a planar construction 
 
 ## Task 3A：闭式构造（**Task 0 判定为"闭式可解"时走这一支**）
 
+> **Task 3 的第一步已量过（2026-10-11 探针实测，跑完即删）**：拿 Task 2 造出的那份规格
+> 直接喂 `searchWitness`，结果是
+>
+> ```
+> status: "unverified_instance"
+> reasons: ["no-candidate-constructed: 1 个候选都在构造期被拒，没有得到任何可核验的坐标。",
+>           "missing-apex: 棱锥的形状描述里没有顶点。（1 个候选）"]
+> ```
+>
+> **读数是**：`specForPrompt` 那一半通了（规格原样造出来了，见下面那五条关系），
+> 但**内核那一半没有平面这一支** —— 候选池把 `planar-figure` 交给了**棱锥**的构造器，
+> 于是被"没有顶点"拒掉。所以这一任务**不是"复用既有的就行"**，
+> 要在内核的候选构造里**新增一条按 `family` 分派的平面分支**。
+> 这条读数把 Task 3 从"可能很小"改判成"确实要写内核代码"，也把它的形状钉死了。
+
 **Files:**
 - Modify: `packages/geometry-kernel/src/witness/constructors.ts`（新增 `constructPlanarPolygon`）
 - Test: `packages/geometry-kernel/src/witness/constructors.test.ts`
