@@ -9,7 +9,7 @@ import { summaryOfDocument } from "../conversationSummary"
 import { readConversation } from "../services/conversationClient"
 import { useSceneStore } from "../store"
 import { createAgentRunner } from "./agentRunner"
-import { PYRAMID_PROMPT, pyramidPlan } from "./representativeFixtures"
+import { FUNCTION_TANGENT_PROMPT, functionTangentPlan, PYRAMID_PROMPT, pyramidPlan } from "./representativeFixtures"
 
 /**
  * **确认提交这条链路**（Task 2.5 Step 4，计划 G2 Gate 的"preview → confirm → commit → undo"）。
@@ -39,6 +39,35 @@ async function runAndWait(runner: ReturnType<typeof createAgentRunner>, prompt: 
    */
   const userMessage = [...conversation.messages].reverse().find((message) => message.role === "user")!
   return runner.run(prompt, userMessage.id)
+}
+
+/**
+ * 立体计划，但**面环退化**（C 与 B 重合）。
+ *
+ * 用途只有一个：造出"**过一次传输层、过一次编译器之外的那一层**"的计划 ——
+ * 传输层只看类型，所以它放行；几何内核拒它，于是协调器拿到一次修复机会、
+ * 会去要**第二份计划**。这正是用户现场那条 `degenerate_polyhedron` 的形状
+ *（[`CHANGELOG.md`](../../../CHANGELOG.md) 2026-10-10 第三批）。
+ */
+function degeneratePyramidPlan() {
+  const base = pyramidPlan()
+  if (base.kind !== "plan") return base
+  return {
+    ...base,
+    actions: base.actions.map((action) => ({
+      ...action,
+      inputs: {
+        ...(action.inputs as Record<string, unknown>),
+        vertices: [
+          { x: 0, y: 0, z: 4 },
+          { x: 0, y: 0, z: 0 },
+          { x: 2, y: 0, z: 0 },
+          { x: 2, y: 0, z: 0 },
+          { x: 0, y: 3, z: 0 }
+        ]
+      }
+    }))
+  } as never
 }
 
 describe("the confirm and commit cycle", () => {
@@ -430,6 +459,84 @@ describe("a run in flight survives the panel being used", () => {
     expect(result.phase).toBe("awaiting_confirmation")
     expect(runner.confirm().status).toBe("committed")
     expect(useSceneStore.getState().document.primitives.length).toBeGreaterThan(0)
+  })
+
+  /**
+   * **修复轮换了工作区：草稿必须重来，而不是整轮失败**（2026-10-11 用户现场）。
+   *
+   * 现场：桌面端跑「平面四边形 ABCD … 翻折至 PEF，使 PC=4√3」时，末态是
+   * `stale_draft: the document was replaced since the draft was created`。
+   *
+   * 链子：草稿**只在第一次暂存时建一次**、绑死在当时的文档上（`committerAdapter`），
+   * 而 `epoch` 由 `epoch:${document.metadata.id}` 派生（`agentRuntime` 的 `live()`）
+   * ⇒ **换工作区就是换文档**；协调器**每一次**暂存前都会按计划的动作族重算目标工作区
+   *（`prepareWorkspaceFor`），于是修复轮一旦换了动作族（现场是 1 个动作 → 8 个动作），
+   * 工作区就被切走，已经建好的草稿立刻过期，而适配器**刻意不静默重建** ⇒ 整轮 `stale_draft`。
+   *
+   * 判据：**这一轮自己切的工作区**（不是用户改文档）且**草稿还没给用户看过**
+   *（能走到第二次 `stage`，就说明第一次没成功、确认面板上从来没有出现过预览）
+   * ⇒ 重建是对的。用户手工改过文档那条路**照旧拒绝**（`committerAdapter.test.ts` 钉着）。
+   */
+  it("redrafts when the repair round moves the plan to another workspace", async () => {
+    // 起点是立体几何：第一份计划走立体那一族 ⇒ 不切工作区 ⇒ 草稿建在立体几何那份文档上。
+    const spatial = createEmptyDocument("geometry3d")
+    useSceneStore.setState({ document: spatial, workspaceDocuments: { geometry3d: spatial }, history: [], future: [], error: null })
+
+    let call = 0
+    const planner: PlannerPort = {
+      plan: async () => {
+        call += 1
+        // 第一份：立体几何，但面环退化 ⇒ 过传输层、过不了内核 ⇒ 拿到一次修复机会。
+        // 第二份：函数图像 + 切线 ⇒ 目标工作区是**平面几何** ⇒ 两次的目标不同。
+        return call === 1
+          ? { plan: degeneratePyramidPlan(), requestId: "r1", attemptId: "a1" }
+          : { plan: functionTangentPlan(), requestId: "r2", attemptId: "a2" }
+      }
+    }
+    const runner = createAgentRunner({ planner })
+
+    const result = await runAndWait(runner, FUNCTION_TANGENT_PROMPT)
+
+    // 真的走了修复轮 —— 不然下面那条断言什么都没证明。
+    expect(call).toBe(2)
+    // 修好之前：这里以 `stale_draft: the document was replaced since the draft was created` 结束。
+    expect(result.phase).toBe("awaiting_confirmation")
+    // 草稿重建在**切过去之后**的那份文档上：画布也停在那个工作区。
+    expect(useSceneStore.getState().document.workspace).toBe("conics")
+
+    /**
+     * **重建之后整条路要真的走通**（不只是"不再报错"）。
+     *
+     * 同意记录绑的是 `baseHandleOf(draftId)` —— 重建之后它指向**新**文档，
+     * 所以确认时的 CAS 比对的是同一份，能提交；而如果重建只做了一半
+     *（例如只换了内部 id、没让 HostBridge 看见），这一步会以 `stale_source` 被拒。
+     * 用户要的是"图画出来"，不是"错误信息换了一句"。
+     */
+    expect(runner.confirm().status).toBe("committed")
+    expect(useSceneStore.getState().document.primitives.length).toBeGreaterThan(0)
+  })
+
+  /**
+   * **用户自己改过文档时仍然拒绝**（同一条判据的另一半）。
+   *
+   * 上一条放宽的是"**这一轮自己**换的工作区"，而用户手工编辑 / 撤销 / 导入**没有**经过
+   * `prepareWorkspaceFor` ⇒ 没有任何"是我们自己换的"标记 ⇒ 照旧 `stale_draft`。
+   * 少了这一条，上一条的放松就变成了"任何文档变化都静默重建"。
+   */
+  it("still refuses a draft whose base document the user replaced", async () => {
+    const planner: PlannerPort = {
+      plan: async () => ({ plan: pyramidPlan(), requestId: "r1", attemptId: "a1" })
+    }
+    const runner = createAgentRunner({ planner })
+    const result = await runAndWait(runner, PYRAMID_PROMPT)
+    expect(result.phase).toBe("awaiting_confirmation")
+
+    // 用户换了一份文档（等价于导入 / 打开文件：epoch 变、工作区也可能变），
+    // 而**这一轮没有**再暂存 —— 这份草稿绑的是旧文档，提交必须被拒（`stale_source`）。
+    const other = createEmptyDocument("conics")
+    useSceneStore.setState({ document: other, workspaceDocuments: { conics: other }, history: [], future: [], error: null })
+
+    expect(runner.confirm().status).toBe("stale_source")
   })
 })
 

@@ -127,6 +127,81 @@ describe("committer adapter staging", () => {
     expect(drafts.stage).not.toHaveBeenCalled()
   })
 
+  /**
+   * **这一轮自己切的工作区 ⇒ 重建草稿，而不是整轮失败**（2026-10-11 用户现场）。
+   *
+   * 现场：桌面端跑「平面四边形 ABCD … 翻折」时末态是
+   * `stale_draft: the document was replaced since the draft was created`。
+   * 链子：草稿只在第一次暂存时建一次、绑死在当时的文档上，而**换工作区就是换文档**
+   *（`epoch` 由文档 id 派生）；协调器每次暂存前都会按计划的动作族重算目标工作区，
+   * 于是修复轮一换动作族，工作区就被切走、草稿立刻过期。
+   *
+   * 判据只有两条**同时**成立才重建：
+   * ①换的是"这一世"（`kind: "epoch"`）；②是**这一轮自己**换的（协调器带来 `runSwitchedWorkspace`）。
+   * 第二条挡的是"用户导入 / 打开文件"那条路 —— 那不是这一轮干的。
+   */
+  it("redrafts when the run itself switched the workspace, because that preview was never shown", async () => {
+    const host = makeHost()
+    let created = 0
+    /**
+     * 有状态的替身：**第一次**暂存时文档还好好的（草稿相对它是新鲜的），
+     * **第二次**暂存之前这一轮切了工作区 ⇒ 换了一份文档 ⇒ 旧草稿的 `epoch` 对不上。
+     * 恒返回过期的替身是不真实的（刚建的草稿不可能相对刚取到的句柄过期），
+     * 而它会把"第一次暂存"也一起判死 —— 那样测的就不是这条路径了。
+     */
+    let checked = 0
+    const drafts = makeDrafts({
+      create: vi.fn(() => ({ draftId: `draft_${(created += 1)}`, draftVersion: 1 })),
+      assertFresh: vi.fn(() => {
+        checked += 1
+        // 换工作区 = 换文档 ⇒ epoch 变；detail 与 `draftStore.assertFresh` 的那一句逐字一致。
+        return checked === 1
+          ? { ok: true as const }
+          : { ok: false as const, reason: "stale_source" as const, kind: "epoch" as const, detail: "the document was replaced since the draft was created" }
+      })
+    }, (version) => host.setVersion(version))
+    const adapter = createCommitterAdapter({ drafts, host, live: () => ({ handle: handleFor(document()), document: document() }) })
+
+    // 第一次暂存：建草稿（还没有"切换"这回事）。
+    await adapter.stage({ run: run(), actionCount: 1, actions, signal })
+    // 第二次暂存：这一轮在两次之间切了工作区。
+    const second = await adapter.stage({ run: run(), actionCount: 1, actions, signal, runSwitchedWorkspace: true })
+
+    expect(second.ok).toBe(true)
+    expect(drafts.create).toHaveBeenCalledTimes(2)
+    // 重建之后用的是**新**草稿 —— 提交时提交的才是用户看到的那一份。
+    expect(adapter.draftIdFor()).toBe("draft_2")
+  })
+
+  it("refuses the same epoch change when this run did not switch the workspace", async () => {
+    // 用户自己导入 / 打开文件：换的也是"这一世"，但那**不是这一轮干的** ⇒ 照旧拒绝。
+    const drafts = makeDrafts({ assertFresh: vi.fn(() => ({ ok: false as const, reason: "stale_source" as const, kind: "epoch" as const, detail: "the document was replaced since the draft was created" })) })
+    const adapter = createCommitterAdapter({ drafts, host: makeHost(), live: () => ({ handle: handleFor(document()), document: document() }) })
+
+    await adapter.stage({ run: run(), actionCount: 1, actions, signal })
+    const second = await adapter.stage({ run: run(), actionCount: 1, actions, signal })
+
+    expect(second.ok).toBe(false)
+    if (!second.ok) expect(second.reason).toBe("stale_draft")
+  })
+
+  it("still refuses a user edit even when the run switched the workspace", async () => {
+    // **安全边界**：`kind: "generation"` 是"同一份文档被改过"（手工编辑 / 撤销）。
+    // 重建会把用户刚做的事丢掉，而且这时该做的是"重看文档"，不是"重来一遍"。
+    const drafts = makeDrafts({ assertFresh: vi.fn(() => ({ ok: false as const, reason: "stale_source" as const, kind: "generation" as const, detail: "the document changed since the draft was created" })) })
+    const adapter = createCommitterAdapter({ drafts, host: makeHost(), live: () => ({ handle: handleFor(document()), document: document() }) })
+
+    await adapter.stage({ run: run(), actionCount: 1, actions, signal })
+    const second = await adapter.stage({ run: run(), actionCount: 1, actions, signal, runSwitchedWorkspace: true })
+
+    expect(second.ok).toBe(false)
+    if (!second.ok) {
+      expect(second.reason).toBe("stale_draft")
+      expect(second.detail).toContain("the document changed")
+    }
+    expect(drafts.create).toHaveBeenCalledTimes(1)
+  })
+
   it("keeps stale_draft_version distinct from stale_draft", async () => {
     // 两种过期的处置不同：一个是"重读预览"，一个是"重看文档"。合并会让协调器选错分支。
     const drafts = makeDrafts()

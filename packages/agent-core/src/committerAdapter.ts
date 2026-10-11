@@ -73,7 +73,7 @@ export interface DraftStoreLike {
       }
   >
   /** 基础文档变了（手工编辑 / 撤销 / 切工作区）→ 草稿过期。 */
-  assertFresh?(draftId: string, liveHandle: DocumentHandle): { ok: true } | { ok: false; reason: "stale_source"; detail: string }
+  assertFresh?(draftId: string, liveHandle: DocumentHandle): { ok: true } | { ok: false; reason: "stale_source"; kind?: "invalidated" | "epoch" | "generation" | "content"; detail: string }
 }
 
 /** `HostBridge` 里适配器用到的部分。 */
@@ -126,14 +126,46 @@ export function createCommitterAdapter(dependencies: CommitterAdapterDependencie
       const live = dependencies.live()
       if (!live) return { ok: false, reason: "unsupported" as const, detail: "there is no active document to draft against" }
 
-      // 第一次阶段调用建草稿；之后复用同一个 —— 否则 `commit` 会提交一个用户没看过的预览。
+      /**
+       * 第一次阶段调用建草稿；之后复用同一个 —— 否则 `commit` 会提交一个用户没看过的预览。
+       *
+       * **唯一的例外：这一轮自己换了工作区**（2026-10-11 用户现场）。
+       *
+       * 切工作区在这个应用里**就是换文档**（`switchWorkspace` 换掉 `document`，
+       * 第一次访问某个工作区还会铸一个新的 `metadata.id`），而草稿是**绑定在文档上的**
+       *（`baseHandle`）。于是有一条真实可达的路径：协调器在**每一次**暂存前都会按计划的
+       * 动作族重算目标工作区（`prepareWorkspaceFor`），而**修复轮会换动作族** ——
+       * 于是工作区在两次暂存之间被切走，已经建好的草稿立刻过期，整轮以
+       * `stale_draft: the document was replaced since the draft was created` 收场
+       *（用户现场：1 个动作 → 8 个动作，两次计划要的工作区不同）。
+       *
+       * 这里放宽的判据**只有两条同时成立**才重建：
+       * ①换的是"这一世"（`kind === "epoch"`，即**换了一份文档**，而不是同一份被改过）；
+       * ②**这一轮自己**换的（协调器带来 `runSwitchedWorkspace`）—— 用户导入 / 打开文件
+       *   换的也是"这一世"，但那不是这一轮干的，照旧拒绝。
+       *
+       * 为什么重建在这里是安全的（而"不静默重建"那条纪律仍然成立）：**能走到第二次
+       * `stage`，就说明第一次没有成功** —— 协调器只在暂存失败并拿到修复请求后才会再问一次，
+       * 而预览只有在暂存成功之后才会摆到确认面板上。也就是说这份被丢弃的草稿**从来没有
+       * 给用户看过**，"重建等于把用户看过的预览换掉"那条理由在这里不成立。
+       * 一旦暂存成功、预览进了确认面板，就不会再有 `stage` 调用 —— 那条路走的是 `commit`，
+       * 而它有 `HostBridge` 自己的同意校验与 CAS。
+       */
       if (draftId === null) {
         draftId = dependencies.drafts.create(live.document, live.handle).draftId
       }
 
       // 手工编辑过的基础文档 → 草稿过期。**不静默重建**：重建等于把用户看过的预览换掉。
+      // （不变式：**每一次**暂存之前，草稿都必须相对当前文档是新鲜的 —— 上面那次刚建的
+      //   草稿在这里必然通过，因为它的 `baseHandle` 就是刚取到的这个句柄。）
       const freshness = dependencies.drafts.assertFresh?.(draftId, live.handle)
-      if (freshness && !freshness.ok) return { ok: false, reason: "stale_draft" as const, detail: freshness.detail }
+      if (freshness && !freshness.ok) {
+        if (!(request.runSwitchedWorkspace === true && freshness.kind === "epoch")) {
+          return { ok: false, reason: "stale_draft" as const, detail: freshness.detail }
+        }
+        // 这一轮自己换了工作区 ⇒ 换了一份文档 ⇒ 草稿必须对着**新的**那一份重来。
+        draftId = dependencies.drafts.create(live.document, live.handle).draftId
+      }
 
       const preview = dependencies.host.preview(draftId)
       const expectedVersion = preview.ok ? preview.artifact.draftVersion : 1

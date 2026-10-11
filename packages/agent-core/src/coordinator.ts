@@ -105,7 +105,7 @@ export interface CoordinatorDependencies {
    * 它拿得到的是**已校验的计划**（不是模型的原始输出），所以准备逻辑可以放心读 `actions`。
    * 返回 `ok: false` 时协调器停在 `failed` 并把原因带出来（例如"这条指令需要先离开工程制图"）。
    */
-  prepare?: (plan: PlanEnvelope) => { ok: true } | { ok: false; detail: string }
+  prepare?: (plan: PlanEnvelope) => { ok: true; switched?: boolean } | { ok: false; detail: string }
 }
 
 export interface StartRequest {
@@ -600,6 +600,16 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
         // ---- 草稿：编译 → 校验 → 等确认 → 提交 -------------------------------
         // 编译之前给宿主一次准备机会（例如切到这条计划需要的工作区）。
         // 放在编译**之前**是必须的：工作区不匹配的动作会被编译器直接拒。
+        /**
+         * **这一轮自己切了工作区吗**（2026-10-11）。
+         *
+         * 切工作区 = 换文档（`epoch` 变），而草稿绑在文档上 —— 适配器必须能分辨
+         * "是这一轮为了执行计划换的"与"是用户自己换的"，只有前者可以重建草稿。
+         *
+         * **每次尝试都重新取值**，只报**这一次**的真实情况：`prepare` 是逐次调用的，
+         * 上一次切过不代表这一次也切过（目标工作区是按这条计划的动作族现算的）。
+         */
+        let runSwitchedWorkspace = false
         if (dependencies.prepare) {
           const prepared = dependencies.prepare(plan)
           if (!prepared.ok) {
@@ -607,6 +617,7 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
             if (failed.ok) yield failed.event
             return
           }
+          runSwitchedWorkspace = prepared.switched === true
         }
 
         const actionCount = plan.actions.length
@@ -630,7 +641,7 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
 
         // 用户原话随暂存一起下去：参数审计的三条判据（符号参数 / 从原话读数字 / 采样≠证明）
         // 都在编译这一层，而原话只有协调器手里有（Fix round 1 / C3）。
-        const stagedResult = await dependencies.committer.stage({ run: request.run, actionCount, actions: plan.actions, ...(plan.relations === undefined ? {} : { relations: plan.relations }), ...(plan.normalisations === undefined ? {} : { normalisations: plan.normalisations }), userMessage: request.userMessage, signal, ...(request.acceptance === undefined ? {} : { acceptance: request.acceptance }) })
+        const stagedResult = await dependencies.committer.stage({ run: request.run, actionCount, actions: plan.actions, ...(plan.relations === undefined ? {} : { relations: plan.relations }), ...(plan.normalisations === undefined ? {} : { normalisations: plan.normalisations }), userMessage: request.userMessage, signal, ...(runSwitchedWorkspace ? { runSwitchedWorkspace } : {}), ...(request.acceptance === undefined ? {} : { acceptance: request.acceptance }) })
         if (cancelled) return
         if (stagedResult.ok) {
           staged = stagedResult

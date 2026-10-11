@@ -359,7 +359,7 @@ export function planWorkspaces(plan: PlanEnvelope): readonly ("conics" | "geomet
  * **工程制图不参与自动切换**：在工图里说"建一个立方体"时，直接切走会让用户当前的图纸上下文消失，
  * 而这条指令本来就不属于那个工作区 —— 如实拒绝比悄悄切走更尊重用户。
  */
-function prepareWorkspaceFor(plan: PlanEnvelope): { ok: true } | { ok: false; detail: string } {
+function prepareWorkspaceFor(plan: PlanEnvelope): { ok: true; switched?: boolean } | { ok: false; detail: string } {
   const wanted = planWorkspaces(plan)
   /**
    * **目标工作区按固定的偏好次序取，不用 `wanted[0]`。**
@@ -381,9 +381,14 @@ function prepareWorkspaceFor(plan: PlanEnvelope): { ok: true } | { ok: false; de
    * **标明这是 Agent 自己切的工作区**（Fix round 1 / C1）：它是"执行这条计划"的副作用，
    * 不是用户换了上下文。App 那一层据此**不**把 Agent 区的会话列表换走 ——
    * 否则用户正在读的那条会话与它的确认面板会在这一轮还没落地时被换掉。
+   *
+   * **`switched: true` 是给下游的第二件事**（2026-10-11 用户现场）：切工作区**就是换文档**，
+   * 而 Agent 的草稿是绑在文档上的。协调器把"这一次是**我们**换的"如实带进暂存请求里，
+   * 让适配器能把这件事与"用户自己换了文档"分开 —— 只有前者可以重建草稿。
+   * 不报这一位，修复轮里换工作区就会让整轮以 `stale_draft` 失败（现场那次）。
    */
   useSceneStore.getState().switchWorkspace(target, "agent")
-  return { ok: true }
+  return { ok: true, switched: true }
 }
 
 /**

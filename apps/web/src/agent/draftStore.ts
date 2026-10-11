@@ -123,7 +123,22 @@ export type StageResult =
       assumptions?: StructuredAssumption[]
     }
 
-export type FreshnessResult = { ok: true } | { ok: false; reason: "stale_source"; detail: string }
+/**
+ * **草稿为什么过期**（2026-10-11 用户现场）。
+ *
+ * 原先只能从 `detail` 那句话里猜，而两种过期的处置**完全不同**：
+ * - `epoch`：**换了一份文档**（Agent 自己切工作区 / 用户导入 / 打开文件）——
+ *   换了"这一世"，`metadata.id` 都不同了；
+ * - `generation` / `content`：**同一份文档被改过**（手工编辑、撤销）；
+ * - `invalidated`：这份草稿已经被显式丢弃（预检探针 / 用户丢弃）。
+ *
+ * 上层要靠这个把"**这一轮自己**为了执行计划切了工作区"（可以重建 —— 那份预览从来
+ * 没有摆到用户面前过）与"用户动了文档"（必须拒绝）分开。拿 `detail` 的字符串去分辨是脆的：
+ * 那句话是给人读的，改一个字判据就失效，而且是**静默**失效。
+ */
+export type FreshnessKind = "invalidated" | "epoch" | "generation" | "content"
+
+export type FreshnessResult = { ok: true } | { ok: false; reason: "stale_source"; kind: FreshnessKind; detail: string }
 
 export interface DraftStore {
   create(base: GeometryDocument, baseHandle?: DocumentHandle): DraftRecord
@@ -538,12 +553,12 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
 
     assertFresh(draftId, liveHandle) {
       const record = drafts.get(draftId)
-      if (!record) return { ok: false, reason: "stale_source", detail: `no draft ${draftId}` }
-      if (invalidated.has(draftId)) return { ok: false, reason: "stale_source", detail: `draft was invalidated: ${invalidated.get(draftId)}` }
+      if (!record) return { ok: false, reason: "stale_source", kind: "invalidated", detail: `no draft ${draftId}` }
+      if (invalidated.has(draftId)) return { ok: false, reason: "stale_source", kind: "invalidated", detail: `draft was invalidated: ${invalidated.get(draftId)}` }
       if (!record.baseHandle) return { ok: true }
-      if (record.baseHandle.epoch !== liveHandle.epoch) return { ok: false, reason: "stale_source", detail: "the document was replaced since the draft was created" }
-      if (record.baseHandle.generation !== liveHandle.generation) return { ok: false, reason: "stale_source", detail: "the document changed since the draft was created" }
-      if (record.baseHandle.contentHash !== liveHandle.contentHash) return { ok: false, reason: "stale_source", detail: "the document content changed since the draft was created" }
+      if (record.baseHandle.epoch !== liveHandle.epoch) return { ok: false, reason: "stale_source", kind: "epoch", detail: "the document was replaced since the draft was created" }
+      if (record.baseHandle.generation !== liveHandle.generation) return { ok: false, reason: "stale_source", kind: "generation", detail: "the document changed since the draft was created" }
+      if (record.baseHandle.contentHash !== liveHandle.contentHash) return { ok: false, reason: "stale_source", kind: "content", detail: "the document content changed since the draft was created" }
       return { ok: true }
     },
 
