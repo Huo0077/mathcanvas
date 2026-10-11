@@ -217,7 +217,13 @@ git commit -m "feat(agent-core): turn metric clauses into a planar construction 
 > 这条读数把 Task 3 从"可能很小"改判成"确实要写内核代码"，也把它的形状钉死了。
 
 **Files:**
-- Modify: `packages/geometry-kernel/src/witness/constructors.ts`（新增 `constructPlanarPolygon`）
+- Modify: `packages/geometry-kernel/src/witness/constructors.ts`
+  - `WitnessConstructRequest`（**:147**）加一个平面成员 —— 今天只有 `Pyramid | Prism | Frustum`；
+  - `constructShapeFromSpec`（**:283**）加一条 `spec.family === "planar-figure"` 的分派 ——
+    今天它只处理 `prism`（`:299`）与 `frustum`（`:334`），**平面规格因此落到 `constructPyramidWitness`
+    并在 `:386` 被 `missing-apex` 拒掉**（这就是上一轮探针那句报错的来源）；
+  - 新增 `constructPlanarWitness`：闭式照 Task 0 已经量过的那套（先放 A 在原点、AB 沿 x 轴，
+    再定 D、再定 C 的两支取不合自交的那一支），逐条回代用**最终坐标**。
 - Test: `packages/geometry-kernel/src/witness/constructors.test.ts`
 - Modify: `packages/agent-core/src/solver/witnessSearch.ts`（`searchWitness` 里 `planar-figure` 那一支）
 
