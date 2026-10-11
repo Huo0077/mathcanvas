@@ -17,6 +17,68 @@ describe("parseDiagramObligations", () => {
     expect(parsed.unverified).toEqual([])
   })
 
+  /**
+   * **根号数字**（2026-10-11 用户现场）。
+   *
+   * `AD=5√3` 今天读不出来：长度句型匹配到 `AD=5` 之后，紧跟的 `√` 命中那道
+   * 「这个数字后面还跟着东西」的守卫（`diagramObligations.ts` 里那个含 `√`、`°`、`π` 的字符类），
+   * **整条匹配被丢弃** ⇒ 这句落进残留、变成一条"未核验的条件" ⇒ 门禁不放行
+   *（`题设尚未核验，本次不会提交`）。
+   *
+   * 缺的不是那道守卫（它拦得对：`AD=5√3` 不是"AD 等于 5"），是**根号数字**本身。
+   */
+  it("reads a length written with a radical instead of leaving the clause unverified", () => {
+    const parsed = parseDiagramObligations("AB=8，AD=5√3")
+    expect(parsed.givens.map(({ kind, sourceText }) => [kind, sourceText])).toEqual([
+      ["fixedLength", "AB=8"],
+      ["fixedLength", "AD=5√3"]
+    ])
+    const radical = parsed.givens[1] as { targets: string[]; value: number }
+    expect(radical.targets).toEqual(["A", "D"])
+    expect(radical.value).toBeCloseTo(5 * Math.sqrt(3), 12)
+    expect(parsed.unverified).toEqual([])
+  })
+
+  it("reads a bare radical as well", () => {
+    const parsed = parseDiagramObligations("AD=√3")
+    const given = parsed.givens[0] as { kind: string; targets: string[]; value: number }
+    expect(given.kind).toBe("fixedLength")
+    expect(given.targets).toEqual(["A", "D"])
+    expect(given.value).toBeCloseTo(Math.sqrt(3), 12)
+    expect(parsed.unverified).toEqual([])
+  })
+
+  /**
+   * **冒号比例**（2026-10-11 用户现场）：`点E在AD上，且AE:AD=2:5`。
+   *
+   * 残留扫描器（`UNREAD_CONDITION`）**早就把 `AE:AD=2` 这种形状当条件看**，只是没有读取器
+   * 接它 —— 于是它必然变成一条"未核验的条件"。判据形状沿用已有的 `segmentRatio`：
+   * 四个点名 = 两条线段，值 = 前比后（与 `AD=2AB` 判 `|AD|/|AB|` 同一条约定）。
+   */
+  it("reads a colon ratio between two segments", () => {
+    const parsed = parseDiagramObligations("AE:AD=2:5")
+    const given = parsed.givens[0] as { kind: string; targets: string[]; value: number }
+    expect(given.kind).toBe("segmentRatio")
+    expect(given.targets).toEqual(["A", "E", "A", "D"])
+    expect(given.value).toBeCloseTo(2 / 5, 12)
+    expect(parsed.unverified).toEqual([])
+  })
+
+  it("reads both radicals and both colon ratios from the real user sentence", () => {
+    const prompt = [
+      "平面四边形ABCD中，AB=8，AD=5√3，∠BAD=30°，∠ADC=90°，CD=3。",
+      "点E在AD上，且AE:AD=2:5；",
+      "点F在AB上，且AF:AB=1:2。",
+      "将三角形AEF沿EF翻折至三角形PEF，使得PC=4√3。"
+    ].join("")
+    const parsed = parseDiagramObligations(prompt)
+    expect(parsed.givens.map(({ sourceText }) => sourceText)).toEqual([
+      "AB=8", "AD=5√3", "∠BAD=30°", "∠ADC=90°", "CD=3", "AE:AD=2:5", "AF:AB=1:2", "PC=4√3"
+    ])
+    // **这一句是整条链的关口**：只要还有一条读不懂，门禁就会把整轮拦下。
+    expect(parsed.unverified).toEqual([])
+  })
+
   it("retains numeric values, named targets and traceable source ranges", () => {
     const parsed = parseDiagramObligations(USER_PROMPT)
     expect(parsed.givens[0]).toMatchObject({ kind: "fixedLength", targets: ["B", "D"], value: 2 })
@@ -124,8 +186,15 @@ describe("parseDiagramObligations", () => {
   })
 
   it("同一类写法，**带不带空格都要拿到整条**（既有用例只覆盖了不带空格那位 —— 缺陷正好藏在另一侧）", () => {
-    // `∠ABC=60°` 那一支现在是 given（读得懂），所以这一组只留"仍然读不懂"的两种形状。
-    for (const prompt of ["在四棱锥 P-ABCD 中，sin∠PAB = 0.5", "在四棱锥 P-ABCD 中，AB:AD = 1:2"]) {
+    /**
+     * 样本必须选"**仍然读不懂**"的形状：这一条测的是 residue 的整句引用。
+     *
+     * **2026-10-11 改**：第二个样本原先是 `AB:AD = 1:2`，它现在**读得懂了**
+     *（冒号比例的读取器，见下方那条用例）⇒ 它不再进 residue，拿它当样本就测不到这件事。
+     * 换成同样带空格的 `AB:AD = 1:2:3`：**三段比没有判据**（`segmentRatio` 是两条线段之比），
+     * 如实读不懂 —— 而且它必须整条留下，不许被半吃成 `AB:AD = 1:2`。
+     */
+    for (const prompt of ["在四棱锥 P-ABCD 中，sin∠PAB = 0.5", "在四棱锥 P-ABCD 中，AB:AD = 1:2:3"]) {
       const text = parseDiagramObligations(prompt).unverified[0]?.sourceText ?? ""
 
       // 每条都是"某个量 = 某个值"的形状：整句引用必然含 `=`，碎片则不会。
@@ -133,11 +202,23 @@ describe("parseDiagramObligations", () => {
     }
   })
   it("does not accept a prefix of an unsupported algebraic value as an exact given", () => {
-    for (const expression of ["AB=1/2", "AB=2√3", "AB=AD+1", "DE=2EA/3"]) {
+    /**
+     * **2026-10-11 改**：样本里的 `AB=2√3` 改了归属 —— 根号是**支持**的写法
+     *（见「reads a length written with a radical」那条），它整条读得懂，不再属于"不支持"这一组。
+     *
+     * 这一条要守的一直是"**不支持**的代数式不许被读成它的前缀"（`AB=1/2` 不许读成 `AB=1`）。
+     * 根号那一位现在守的是同一件事的另一半：`AB=2√3` 必须读成 `2√3`，**不许**读成 `2`。
+     */
+    for (const expression of ["AB=1/2", "AB=AD+1", "DE=2EA/3"]) {
       const parsed = parseDiagramObligations(`在四棱锥P-ABCD中，${expression}，画示意图`)
       expect(parsed.givens, expression).toEqual([])
       expect(parsed.unverified.some((item) => item.sourceText.includes(expression)), expression).toBe(true)
     }
+    // 根号那一位：读的是**整个** `2√3`，不是它的前缀 `2`。
+    const radical = parseDiagramObligations("在四棱锥P-ABCD中，AB=2√3，画示意图")
+    expect(radical.givens).toHaveLength(1)
+    expect((radical.givens[0] as { value: number }).value).toBeCloseTo(2 * Math.sqrt(3), 12)
+    expect(radical.unverified).toEqual([])
   })
   it("never drops the legacy equal-length spelling when the plan omits names", () => {
     const parsed = parseDiagramObligations("在四棱锥P-ABCD中，BC与AD等长，画示意图")

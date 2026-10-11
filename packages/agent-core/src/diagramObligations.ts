@@ -117,6 +117,24 @@ const finitePositive = (value: string): number | null => {
  *
  * 分母必须是有限正数：`x²/0+y²/4=1` 不是椭圆，`x²/-1+…` 更不是 —— 一律不认，交回未核验。
  */
+/**
+ * **根号数字**（2026-10-11 用户现场）。
+ *
+ * `AD=5√3` 此前读不出来，而原因不是"没人想到"：长度句型匹配到 `AD=5` 之后，紧跟的 `√`
+ * 命中句型表里那道**刻意的守卫**（"这个数字后面还跟着东西就不算一个长度"），整条匹配被丢弃 ⇒
+ * 这一句落进残留、变成一条"未核验的条件" ⇒ 门禁把整轮拦下（`题设尚未核验，本次不会提交`）。
+ *
+ * 守卫拦得对（`AD=5√3` 确实不是"AD 等于 5"），**缺的是根号数字本身**。
+ *
+ * 写法只收三种，且**整条必须被吃干净**：`5√3`、`√3`、`5`。
+ * `5√`、`5√3√2`、`√` 一律不认 —— 由负向断言与 `radicalValue` 双重把关，
+ * 认不出来就照旧落进残留、如实报"未核验"，不许猜一个数出来。
+ *
+ * 它必须定义在 `DIAGRAM_OBLIGATION_MATCHERS` **之前**：那张表在模块初始化时就构造正则，
+ * 放到后面会是一个 `Cannot access … before initialization`（本轮实测踩到）。
+ */
+const RADICAL_NUMBER_SOURCE = String.raw`(\d+(?:\.\d+)?\s*√\s*\d+(?:\.\d+)?|√\s*\d+(?:\.\d+)?|\d+(?:\.\d+)?)`
+
 function ellipseAxes(denominatorX: number, denominatorY: number): Pick<DiagramObligation, "kind" | "targets" | "conic"> | null {
   if (!Number.isFinite(denominatorX) || !Number.isFinite(denominatorY) || denominatorX <= 0 || denominatorY <= 0) return null
   return { kind: "conicAxes", targets: [], conic: { kind: "ellipse", radiusX: Math.sqrt(denominatorX), radiusY: Math.sqrt(denominatorY) } }
@@ -282,6 +300,30 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
   },
   {
     /**
+     * **`AE:AD=2:5`：冒号写法的线段比**（2026-10-11 用户现场）。
+     *
+     * 残留扫描器（`UNREAD_CONDITION`）**早就把 `AE:AD=2` 这种形状当条件看** ——
+     * 也就是说"这是一条条件"这件事一直是知道的，缺的只是接它的读取器，于是它必然变成
+     * 一条"未核验的条件"，门禁因此不放行。
+     *
+     * 判据沿用已有的 `segmentRatio`：四个点名 = 两条线段，值 = **前比后**
+     *（与 `AD=2AB` 判 `|AD|/|AB|` 同一条约定，见 `diagramVerification` 那一支）。
+     *
+     * **必须排在下一条"倍数"句型之前**：两者都以 `SEGMENT` 开头，先长的、再短的。
+     *
+     * 末尾的负向断言**还要挡一个 `:`**：`AB:AD=1:2:3` 这种三段比不许被半吃成 `1:2` 再留一截
+     * `:3` —— 那截残留里没有 `=`，残留扫描器看不见它，就成了"静默丢掉一个条件"。
+     */
+    pattern: new RegExp(`(${SEGMENT_NAME})\\s*[:：]\\s*(${SEGMENT_NAME})\\s*=\\s*(\\d+(?:\\.\\d+)?)\\s*[:：]\\s*(\\d+(?:\\.\\d+)?)(?![\\d.:：])`, "g"),
+    read: (m) => {
+      const numerator = finitePositive(m[3])
+      const denominator = finitePositive(m[4])
+      if (numerator === null || denominator === null) return null
+      return { kind: "segmentRatio", targets: [...names(m[1]), ...names(m[2])], value: numerator / denominator }
+    }
+  },
+  {
+    /**
      * **`AD=2AB=2`：倍数 + 后置长度，一次给两条判据**（2026-10-10 用户现场）。
      *
      * 用户把同一件事写全时会带上长度（`设 AD=2AB=2（即 AB=BC=1, AD=2）`）。原先只认前半截的
@@ -304,8 +346,14 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
     read: (m) => { const value = finitePositive(m[2]); return value === null ? null : { kind: "segmentRatio", targets: [...names(m[1]), ...names(m[3])], value } }
   },
   {
-    pattern: new RegExp(`(${SEGMENT_NAME})\\s*=\\s*(\\d+(?:\\.\\d+)?)(?![\\d.A-Z])`, "g"),
-    read: (m) => { const value = finitePositive(m[2]); return value === null ? null : { kind: "fixedLength", targets: names(m[1]), value } }
+    /**
+     * **长度**：`AB=8`、`AD=5√3`、`AD=√3`（根号写法 2026-10-11 用户现场）。
+     *
+     * 末尾的负向断言比原来多带一个 `√`：`AD=5√3√2` 这种畸形写法**不许被半吃掉** ——
+     * 吃成 `5√3` 再留一截 `√2`，会让残留扫描器看不见它，那就成了"静默丢掉一个条件"。
+     */
+    pattern: new RegExp(`(${SEGMENT_NAME})\\s*=\\s*${RADICAL_NUMBER_SOURCE}(?![\\d.A-Z√])`, "g"),
+    read: (m) => { const value = radicalValue(m[2]); return value === null ? null : { kind: "fixedLength", targets: names(m[1]), value } }
   },
   {
     pattern: new RegExp(`(${SEGMENT_NAME})\\s*(?:与|和)\\s*(${SEGMENT_NAME})\\s*(?:长度相等|线段相等|边相等|等长)`, "g"),
@@ -349,6 +397,18 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
     read: (m) => ({ kind: m[2].includes("平行") || m[2] === "∥" ? "parallel" : "perpendicular", targets: [...names(m[1]), ...names(m[3])] })
   }
 ]
+
+/** 把 `5√3` / `√3` / `5` 求值；畸形写法返回 `null`（**不猜**）。 */
+function radicalValue(text: string): number | null {
+  const normalized = text.replace(/\s+/g, "")
+  const match = /^(?:(\d+(?:\.\d+)?)√(\d+(?:\.\d+)?)|√(\d+(?:\.\d+)?)|(\d+(?:\.\d+)?))$/.exec(normalized)
+  if (match === null) return null
+  const value = match[1] !== undefined
+    ? Number(match[1]) * Math.sqrt(Number(match[2]))
+    : match[3] !== undefined ? Math.sqrt(Number(match[3])) : Number(match[4])
+  // 与 `finitePositive` 同一条口径：必须是有限正数，否则这条条件不成立。
+  return Number.isFinite(value) && value > 0 ? value : null
+}
 
 const UNREAD_CONDITION = /∠\s*[A-Z]{3}\s*=\s*\d+(?:\.\d+)?\s*°|[A-Z]{2}\s*[:：]\s*[A-Z]{2}\s*=\s*\d+(?:\.\d+)?|[A-Z]{2}\s*=\s*-?\d+(?:\.\d+)?/g
 
