@@ -1267,3 +1267,38 @@ describe("平面图形：构造的坐标与来源标注（乙案 Task 5）", () 
     expect(label?.overridable, "来源是事实，不许被当成自选值覆盖掉").toBe(false)
   })
 })
+
+/**
+ * **一条不认识的关系词，不该作废整份计划**（2026-10-11 用户现场）。
+ *
+ * 现场读数（桌面端同一条题的第 4 次尝试，逐条读数在 `docs/current-status.md`）：模型那一次
+ * **把四边形画对了**（`|AB|=8`、`|AD|=5√3`、`∠BAD=30°`、`|CD|=3`、`∠ADC=90°` 按它给的坐标
+ * 逐条自算全中），却在 `relations[2]` 里写了一个内核不认识的词 ⇒ **整份计划被拒**，
+ * 而那一轮仅有的修复额度已经花在另一处（"多面体至少四个面/顶点"）⇒ 整轮什么都没有。
+ *
+ * 处置改成：**丢掉那一条、以 warning 如实报告**，图照旧编译。判据必须在**用户看得见的那一层**
+ * 钉住 —— 解析器丢掉它是 `schemas.test.ts` 的事，"它真的变成一条 warning 而不是消失"是这里的事。
+ */
+describe("关系表里不认识的一条：只丢它、如实报告，不作废整份计划", () => {
+  const CUBE = { actionId: "solid.create_template", actionKey: "c", factIds: [], inputs: { alias: "c", template: "cube", origin: { x: 0, y: 0, z: 0 } } }
+
+  it("计划照旧编译，丢弃这件事以 warning 露出来", () => {
+    const input = {
+      schemaVersion: PLAN_SCHEMA_VERSION,
+      kind: "plan",
+      goal: "画一个立方体",
+      factIds: [],
+      actions: [CUBE],
+      relations: [{ kind: "planarAngle", targets: [{ vertex: "v0" }], value: 30 }]
+    }
+
+    const result = compilePlan(input, context(createEmptyDocument("geometry3d")))
+
+    expect(result.ok, result.diagnostics.map((entry) => entry.detail).join(" / ")).toBe(true)
+    const note = result.diagnostics.find((entry) => entry.code === "unknown_relation_kind")
+    expect(note, "丢弃必须露出来，不能静默").toBeDefined()
+    expect(note?.severity).toBe("warning")
+    expect(note?.path).toBe("envelope.relations[0].kind")
+    expect(note?.detail).toContain("planarAngle")
+  })
+})

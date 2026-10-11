@@ -390,11 +390,42 @@ describe("envelope assumptions", () => {
     if (result.ok && result.value.kind === "plan") expect(result.value.relations).toBeUndefined()
   })
 
-  it("rejects a relation whose kind is not one we can verify", () => {
-    // 白名单只放行具名字段，**不放行任意 kind**：内核没有判据的关系不许悄悄进来当"已满足"。
+  /**
+   * **期望在 2026-10-11 有意改了：从"整份计划作废"改成"只丢这一条、并如实报告"。**
+   *
+   * 原来那句判据（"内核没有判据的关系不许悄悄进来当已满足"）本身没错，但**处置过重**：
+   * `relations` 是**自愿补充**的字段（系统提示词原话："关系由系统自己从题面里读，
+   * 你不需要声明它们"），而一条多余的、内核不认识的条目却能让**整份计划**作废。
+   *
+   * 用户现场（桌面端同一条题的第 4 次尝试，逐条读数在 `docs/current-status.md`）：模型那一次
+   * **把四边形画对了**（五条条件按它给的坐标逐条自算全中），却在 `relations[2]` 里写了一个
+   * 不认识的词 ⇒ 整份计划被拒 ⇒ 而那一轮**仅有的修复额度已经花在另一处** ⇒ 整轮什么都没有。
+   *
+   * 所以改成：**丢掉那一条、在 `notes` 里如实报告**，计划照旧通过。丢掉它**不可能**放走
+   * 一条本该被核验的关系 —— 覆盖度判据（`relation_not_declared`）认的是 ⊥ / ∥ / 共面，
+   * 而那三个都在白名单里，永远走不到这条丢弃分支。
+   *
+   * 仍然严格的是**形状**：`targets` 为空、多带一个字段，照旧整份拒（下面那条用例）。
+   */
+  it("drops a relation whose kind is not one we can verify, and reports it", () => {
     const plan = validPlan() as Record<string, unknown>
-    plan.relations = [{ kind: "tangent", targets: [{ vertex: "v0" }] }]
-    expectRejected(parsePlanEnvelope(plan), "invalid_type")
+    plan.relations = [
+      { kind: "parallel", targets: [{ vertex: "v2" }, { vertex: "v3" }, { vertex: "v1" }, { vertex: "v4" }] },
+      { kind: "tangent", targets: [{ vertex: "v0" }] }
+    ]
+
+    const result = parsePlanEnvelope(plan)
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    if (result.value.kind === "plan") {
+      // 认得的那一条原样留下，不认得的那一条**不在结果里**（不是被当成"已满足"收下）。
+      expect(result.value.relations).toEqual([{ kind: "parallel", targets: [{ vertex: "v2" }, { vertex: "v3" }, { vertex: "v1" }, { vertex: "v4" }] }])
+    }
+    // 而丢掉这件事**必须说出来**：静默丢掉一条模型写过的东西是本仓最忌的那种静默。
+    expect(result.notes?.map((note) => note.code)).toEqual(["unknown_relation_kind"])
+    expect(result.notes?.[0]?.path).toBe("envelope.relations[1].kind")
+    expect(result.notes?.[0]?.detail).toContain("tangent")
   })
 
   it("rejects a relation with no targets, and one with an unknown field", () => {

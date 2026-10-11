@@ -271,7 +271,24 @@ export interface ParseError {
   detail: string
 }
 
-export type ParseResult<T> = { ok: true; value: T } | { ok: false; errors: ParseError[] }
+/**
+ * **非致命提示**（2026-10-11）：这条东西**被丢弃了**，但整份输入照旧通过。
+ *
+ * 形状与 `ParseError` 相同，因为下游渲染的是同一套（层 + 码 + 字段路径 + 原因）。
+ * 它必须能一路走到用户面前 —— **静默丢掉一条模型写过的东西**，正是本仓最忌的那种静默。
+ *
+ * 第一个用途是 `relations` 里出现内核不认识的 `kind`：详见 `schemas.ts` 的 `readRelations`
+ * 与 `schemas.test.ts` 里那条改了期望的用例（用户现场：画对的图因为一个可选字段被整份丢掉）。
+ */
+export type ParseNote = ParseError
+
+/**
+ * 解析结果。`ok: true` 时 `notes` 里是**被丢弃但已如实报告**的条目，缺省 = 一条都没有。
+ *
+ * 为什么要给成功分支加这一个通道：原先"丢掉一条不认识的 `relations`"与"整份计划作废"
+ * 是同一条路（都进 `errors`），而那让一个**可选**字段有了作废整份计划的本事。
+ */
+export type ParseResult<T> = { ok: true; value: T; notes?: ParseNote[] } | { ok: false; errors: ParseError[] }
 
 // ---------------------------------------------------------------- 参数审计的公共词汇（规格 §6.2/§6.3）
 

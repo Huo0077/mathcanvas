@@ -1,4 +1,4 @@
-import { PLAN_SCHEMA_VERSION, type DraftAction, type ParseError, type ParseResult, type PlanEnvelope, type PlanRelation, type PlanRelationKind, type PlanRelationTarget, type PromptNormalisations } from "./contracts"
+import { PLAN_SCHEMA_VERSION, type DraftAction, type ParseError, type ParseNote, type ParseResult, type PlanEnvelope, type PlanRelation, type PlanRelationKind, type PlanRelationTarget, type PromptNormalisations } from "./contracts"
 // 可改字段白名单只有动作层那一份（Fix round 1 / I14）：传输层不再手抄一份更窄的。
 
 import { ACTIONS, type ActionSpec } from "./actionRegistry"
@@ -148,7 +148,7 @@ function readNormalisations(value: unknown, path: string, errors: ParseError[]):
   return out
 }
 
-function readRelations(value: unknown, path: string, errors: ParseError[]): PlanRelation[] | null {
+function readRelations(value: unknown, path: string, errors: ParseError[], notes: ParseNote[]): PlanRelation[] | null {
   const items = boundedArray(value, path, errors)
   if (!items) return null
   /**
@@ -173,7 +173,27 @@ function readRelations(value: unknown, path: string, errors: ParseError[]): Plan
 
     const kind = item.kind
     if (typeof kind !== "string" || !RELATION_KINDS.includes(kind as PlanRelationKind)) {
-      errors.push(fail("invalid_type", `${itemPath}.kind`, `expected one of ${RELATION_KINDS.join(" | ")}`))
+      /**
+       * **只丢这一条，不作废整份计划**（2026-10-11 用户现场）。
+       *
+       * 原来这里 push 的是 `errors`，于是**一个不认识的词就能让整份计划作废**。两条理由说明
+       * 那处置过重、而丢弃是安全的：
+       *
+       * ① `relations` 是**自愿补充**的字段 —— 系统提示词原话是"关系由系统自己从题面里读，
+       *    你不需要声明它们"。一个可选的补充字段不该有作废整份计划的本事。用户现场：模型那一次
+       *    **把四边形画对了**（五条条件按它给的坐标逐条自算全中），却在 `relations[2]` 里写了
+       *    一个不认识的词 ⇒ 整份被拒 ⇒ 而那一轮仅有的修复额度已经花在另一处 ⇒ 整轮什么都没有。
+       * ② 丢掉它**不可能**放走一条本该被核验的关系：覆盖度判据（`relation_not_declared`）认的是
+       *    ⊥ / ∥ / 共面，而那三个**都在白名单里**，永远走不到这条分支。
+       *
+       * 但丢弃**必须说出来**（进 `notes`，由编译层变成 `warning`）：静默丢掉一条模型写过的
+       * 东西，正是本仓最忌的那种静默。**形状**仍然严格 —— `targets` 为空、多带字段照旧整份拒。
+       */
+      notes.push(fail(
+        "unknown_relation_kind",
+        `${itemPath}.kind`,
+        `不认识的 relation kind ${quotedName(String(kind))}：这一条已丢弃、不参与核验。允许的是 ${RELATION_KINDS.join(" | ")}`
+      ))
       continue
     }
     const relationKind = kind as PlanRelationKind
@@ -212,6 +232,8 @@ function readRelations(value: unknown, path: string, errors: ParseError[]): Plan
 /** 解析整个 PlanEnvelope；三个分支的字段集**互不混杂**。 */
 export function parsePlanEnvelope(input: unknown): ParseResult<PlanEnvelope> {
   const errors: ParseError[] = []
+  /** **被丢弃但已如实报告**的条目（见 `readRelations` 的 `unknown_relation_kind`）。 */
+  const notes: ParseNote[] = []
   if (!isPlainObject(input)) return { ok: false, errors: [fail("invalid_type", "envelope", `expected the plan envelope object, got ${describePlanShape(input)}`)] }
 
   /**
@@ -282,7 +304,7 @@ export function parsePlanEnvelope(input: unknown): ParseResult<PlanEnvelope> {
    * 是同一件事 —— 原先报 `empty_relations` 会让模型白跑一轮修复）。
    */
   const rawRelations = "relations" in input && input.relations !== undefined
-    ? readRelations(input.relations, "envelope.relations", errors)
+    ? readRelations(input.relations, "envelope.relations", errors, notes)
     : undefined
   const relations = !rawRelations || rawRelations.length === 0 ? undefined : rawRelations
 
@@ -314,19 +336,19 @@ export function parsePlanEnvelope(input: unknown): ParseResult<PlanEnvelope> {
       actions.push(parsed.value)
     }
     if (errors.length > 0) return { ok: false, errors }
-    return { ok: true, value: { schemaVersion: PLAN_SCHEMA_VERSION, kind, goal: goal as string, factIds: factIds as string[], assumptions, relations, ...(normalisations === undefined ? {} : { normalisations }), actions } }
+    return { ok: true, value: { schemaVersion: PLAN_SCHEMA_VERSION, kind, goal: goal as string, factIds: factIds as string[], assumptions, relations, ...(normalisations === undefined ? {} : { normalisations }), actions }, ...(notes.length === 0 ? {} : { notes }) }
   }
 
   if (kind === "clarification") {
     const questions = readStringArray(input.questions, "envelope.questions", errors)
     if (questions && questions.length === 0) errors.push(fail("empty_questions", "envelope.questions", "ask at least one concrete question"))
     if (errors.length > 0) return { ok: false, errors }
-    return { ok: true, value: { schemaVersion: PLAN_SCHEMA_VERSION, kind, goal: goal as string, factIds: factIds as string[], assumptions, questions: questions as string[] } }
+    return { ok: true, value: { schemaVersion: PLAN_SCHEMA_VERSION, kind, goal: goal as string, factIds: factIds as string[], assumptions, questions: questions as string[] }, ...(notes.length === 0 ? {} : { notes }) }
   }
 
   const answer = boundedString(input.answer, "envelope.answer", errors, { allowEmpty: true })
   const toolResultRefs = readStringArray(input.toolResultRefs, "envelope.toolResultRefs", errors)
   if (errors.length > 0) return { ok: false, errors }
-  return { ok: true, value: { schemaVersion: PLAN_SCHEMA_VERSION, kind, goal: goal as string, factIds: factIds as string[], assumptions, answer: answer as string, toolResultRefs: toolResultRefs as string[] } }
+  return { ok: true, value: { schemaVersion: PLAN_SCHEMA_VERSION, kind, goal: goal as string, factIds: factIds as string[], assumptions, answer: answer as string, toolResultRefs: toolResultRefs as string[] }, ...(notes.length === 0 ? {} : { notes }) }
 }
 

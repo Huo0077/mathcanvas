@@ -400,7 +400,14 @@ function compileOnce(input: unknown, context: PlanCompileContext): CompileOnceOu
 
   // ---- 2. 字段审计（+ 4. 参数补全：审计的回填就是补全，见 `parameterAudit.ts`） ----
   const audit = auditPlan(plan, auditContext)
-  const diagnostics: PlanDiagnostic[] = [...audit.diagnostics]
+  /**
+   * **传输层的非致命提示**（2026-10-11）：解析器丢掉了它认不出的条目（今天只有一种 ——
+   * `relations` 里出现内核不认识的 `kind`）。它必须以 `warning` 走到用户面前：
+   * 静默丢掉一条模型写过的东西，正是本仓最忌的那种静默；而它**不该**把整份计划作废
+   *（那个决定的读数与理由写在 `schemas.ts` 的 `readRelations`）。
+   */
+  const transportNotes = (parsed.notes ?? []).map((note) => planDiagnostic("transport", note.code, note.path, note.detail, "warning"))
+  const diagnostics: PlanDiagnostic[] = [...transportNotes, ...audit.diagnostics]
   const assumptions = [...audit.assumptions, ...approximationAssumptions(audit.actions)]
   const questions = [...audit.questions]
   const aliases: Record<string, string> = {}
