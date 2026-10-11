@@ -626,7 +626,19 @@ describe("the compile stage's one-shot repair", () => {
     expect(handed!.hint).toContain("envelope.actions[0].inputs.basePolygon")
   })
 
-  it("attempts exactly one repair, then fails instead of repairing again", async () => {
+  /**
+   * **期望按 2026-10-11 的裁决改了**（用户当场说"可以"）。
+   *
+   * 原来这一条钉的是"编译类**只修一次**，第二次就停"，理由是计划里那条 Global Constraint。
+   * 现场读数把它推翻了（桌面端同一条题的第 5 次尝试）：一轮里模型先犯一次几何错（花掉编译类
+   * 那唯一一次修复），修复轮又把计划**写成了字符串**（花掉信封类那一次），第三次交上来的计划
+   * 死在 `action_compile` 的"面塌了" —— **没有额度了**，整轮什么都没有。而这与 2026-10-10
+   * 修好的那个病是同一个（"前者的笔误吃掉后者唯一的机会"），只是病在更高一层：
+   * **编译类里还分好几层**，两层各自出错时，一层会吃掉另一层的机会。
+   *
+   * 所以编译类给两次；信封类仍是 1（那条路上重发一次就能改对，再放宽只会拖更多往返）。
+   */
+  it("编译类给两次修复，第三次仍失败才停", async () => {
     let attempts = 0
     const harness = compileHarness({
       stage: async () => {
@@ -638,11 +650,41 @@ describe("the compile stage's one-shot repair", () => {
     const events = await drive(harness.coordinator, { run, userMessage: "draw a point" })
 
     expect(harness.coordinator.phase()).toBe("failed")
-    expect(harness.seen).toHaveLength(2)
-    expect(harness.committer.stage).toHaveBeenCalledTimes(2)
-    // 第二次尝试**必须**带着请求（"可见的修复"），而不是把同一份请求再发一遍。
+    // 一次原始尝试 + **两次**编译修复。
+    expect(harness.seen).toHaveLength(3)
+    expect(harness.committer.stage).toHaveBeenCalledTimes(3)
+    // 后两次尝试**必须**带着请求（"可见的修复"），而不是把同一份请求再发一遍。
     expect(harness.seen[1].repair).toBeDefined()
+    expect(harness.seen[2].repair).toBeDefined()
     expect(events.at(-1)?.detail).toContain("degenerate_prism")
+  })
+
+  /**
+   * **现场那个形状：一次几何错 + 一次格式写错，第 4 次回答仍然会来。**
+   *
+   * 四份输出依此：① 合法计划但编译失败（花掉编译类第 1 次）→ ② **不是信封**（花掉信封类唯一一次）
+   * → ③ 合法计划又编译失败（花掉编译类第 2 次）→ ④ 合法且编译通过 ⇒ 停在确认。
+   * 改之前，第 ③ 步就会撞上"编译类额度 1/1 已用完"而整轮失败 —— 那正是用户看到的现象。
+   */
+  it("一次几何错 + 一次格式写错，仍然给到第 4 次回答", async () => {
+    const plans = [planEnvelope(1), { kind: "not-a-plan" } as unknown as PlanEnvelope, planEnvelope(1), planEnvelope(1)]
+    let stages = 0
+    const harness = compileHarness({
+      plans,
+      stage: async () => {
+        stages += 1
+        return stages <= 2 ? { ...compileFailure, repair: { ...repair, attempt: stages } } : { ok: true as const, draftVersion: 3, previewHash: "preview-2" }
+      }
+    })
+
+    await drive(harness.coordinator, { run, userMessage: "draw a point" })
+
+    expect(harness.seen, "第 4 次回答必须真的被问出去").toHaveLength(4)
+    expect(harness.coordinator.phase()).toBe("awaiting_confirmation")
+    // 第 2 次是**信封类**的修复（形状写错），第 3 次是**编译类**的第二次修复 —— 两类各记各的。
+    expect(harness.seen[1].repair).toBeDefined()
+    expect(harness.seen[2].repair).toBeDefined()
+    expect(harness.seen[3].repair).toBeDefined()
   })
 
   it("does not re-ask the model when the failure carries no repair request", async () => {

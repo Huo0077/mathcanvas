@@ -2,7 +2,7 @@ import { createBudget, type Budget, type BudgetLimits } from "./budget"
 import { buildContext, type ConversationContextSource, type Fact } from "./contextBuilder"
 import { buildPlanRequest, type CancelReason, type CancelResult, type CommitterPort, type ConsentToken, type ObserverPort, type PlannerPort, type PlanRequest, type ToolPort } from "./coordinatorPorts"
 import { parsePlanEnvelope, repairRequestFor } from "./schemas"
-import { MAX_REPAIR_ATTEMPTS, type PlanEnvelope, type RunContext, type VerificationReport } from "./contracts"
+import { MAX_COMPILE_REPAIR_ATTEMPTS, MAX_REPAIR_ATTEMPTS, type PlanEnvelope, type RunContext, type VerificationReport } from "./contracts"
 import { describeRepairPrompt } from "./outputParser"
 import { describeCompileRepairPrompt } from "./planCompiler"
 import { createToolRegistry, TOOL_REGISTRY_REVISION, type ToolRegistry } from "./toolRegistry"
@@ -177,10 +177,11 @@ export interface AgentCoordinator {
  * 或者反过来"修复额度说 0 但这里还在问"。修复**共用运行预算**，不另开配额（见 `budget.ts`）。
  */
 /**
- * **每个模型往返的最多次数**（2026-10-10）：一次原始尝试 + **每类失败各一次**修复
- *（"形状/JSON 写错"与"几何算错"是两类，各有自己的额度，见 `schemaRepairs` / `compileRepairs`）。
+ * **每个模型往返的最多次数**（2026-10-10，2026-10-11 调整）：一次原始尝试 +
+ * **信封类一次 + 编译类两次**（两类各有自己的额度，见 `schemaRepairs` / `compileRepairs`，
+ * 理由写在 `MAX_COMPILE_REPAIR_ATTEMPTS`）。
  */
-const MAX_PLAN_ATTEMPTS = 1 + MAX_REPAIR_ATTEMPTS * 2
+const MAX_PLAN_ATTEMPTS = 1 + MAX_REPAIR_ATTEMPTS + MAX_COMPILE_REPAIR_ATTEMPTS
 
 /**
  * **"上下文这一笔预算被拒了"** —— 只在 `buildPlanRequest` 的计费回调与它的调用点之间传递。
@@ -440,7 +441,7 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
            * 上一次失败发生在传输解析时账本仍在 `planning`，不需要（也不允许）再转移一次。
            */
           if (ledger.phase() !== "planning") {
-            const replanning = ledger.transition("planning", `asking for the repair (shape ${schemaRepairs}/${MAX_REPAIR_ATTEMPTS}, geometry ${compileRepairs}/${MAX_REPAIR_ATTEMPTS})`)
+            const replanning = ledger.transition("planning", `asking for the repair (shape ${schemaRepairs}/${MAX_REPAIR_ATTEMPTS}, geometry ${compileRepairs}/${MAX_COMPILE_REPAIR_ATTEMPTS})`)
             if (replanning.ok) yield replanning.event
           }
         }
@@ -662,11 +663,12 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
          * 没有请求就**不再问模型** —— 那只是一次盲目的重复；"用户能回答的澄清问题"
          * 正是这种形状（规格 §7：无安全默认时返回 clarification，问用户比让模型重发好）。
          *
-         * `attempt` 由协调器写死成**几何这一类**自己的计数：`MAX_REPAIR_ATTEMPTS` 是**每类失败**的额度，
+         * `attempt` 由协调器写死成**几何这一类**自己的计数：两类的额度**各自**算
+         *（`MAX_REPAIR_ATTEMPTS` 管信封、`MAX_COMPILE_REPAIR_ATTEMPTS` 管编译），
          * 不再与"形状写错"共享。编译器那一份给的是 1，两处在这里对齐。
          */
         const compileRepair = stagedResult.repair
-        if (stagedResult.reason === "compile_failed" && compileRepair !== undefined && compileRepair.attempt <= MAX_REPAIR_ATTEMPTS && compileRepairs < MAX_REPAIR_ATTEMPTS) {
+        if (stagedResult.reason === "compile_failed" && compileRepair !== undefined && compileRepair.attempt <= MAX_COMPILE_REPAIR_ATTEMPTS && compileRepairs < MAX_COMPILE_REPAIR_ATTEMPTS) {
           compileRepairs += 1
           repair = {
             ...compileRepair,

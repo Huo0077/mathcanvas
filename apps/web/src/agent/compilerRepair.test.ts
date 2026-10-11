@@ -218,15 +218,26 @@ describe("the compile stage's repair request drives the one repair attempt", () 
     expect(repair!.hint).toContain("envelope.actions[1].inputs.basePolygon")
   })
 
-  it("ends the run as failed when the repaired plan fails the compile stage again, without a second repair", async () => {
-    const harness = makeRuntime([repairablePlan(), repairablePlan()])
+  /**
+   * **期望按 2026-10-11 的裁决改了**（用户当场说"可以"）：编译类从"只修一次"改成**两次**。
+   *
+   * 现场读数（桌面端同一条题）：一轮里先犯一次几何错（花掉编译类那唯一一次修复），修复轮又把
+   * 计划**写成了字符串**（花掉信封类那一次），第三次交上来的计划死在 `action_compile` 的
+   * "面塌了" —— **没有额度了**，整轮什么都没有。所以这一类给两次；**信封类仍是 1**。
+   *
+   * 这一条的**意图没变**：它守的是"额度真的会用完，用完就如实失败、绝不静默重试"。
+   * 变的只是"用完"发生在第几次 —— 现在是第三次编译失败（一次原始 + 两次修复）。
+   */
+  it("ends the run as failed when the compile stage fails a third time, without a third repair", async () => {
+    const harness = makeRuntime([repairablePlan(), repairablePlan(), repairablePlan()])
     const events = await drive(harness.runtime.coordinator, { run: runContext(harness.document), userMessage: PROMPT })
 
     expect(events.at(-1)).toBe("failed")
-    // 两次往返之后**没有**第三次：修复只有一次（全局约束）。
-    expect(harness.requests).toHaveLength(2)
+    // 一次原始 + **两次**编译修复；第三次失败之后**没有**第四次（额度用完就停）。
+    expect(harness.requests).toHaveLength(3)
     expect(harness.requests[1].repair).toBeDefined()
-    // 第二次失败如实落账，并指出卡在哪一层。
+    expect(harness.requests[2].repair).toBeDefined()
+    // 最后一次失败如实落账，并指出卡在哪一层。
     expect(harness.runtime.coordinator.ledger().at(-1)?.detail).toContain("degenerate_prism")
     expect(harness.current().primitives).toHaveLength(0)
   })
