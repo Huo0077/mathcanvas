@@ -1412,6 +1412,16 @@ function targetedRepairAdvice(errors: readonly { code: string; path: string; det
   if (envelopeFailure) {
     advice.push("提醒：`kind` 为 `plan` 时顶层必须有 `goal` 与 `actions`（数组，至少一项）。")
   }
+  /**
+   * **面塌了**（2026-10-11 用户现场，第三堵墙）：`face ring [0,1,5] has zero area …
+   * these vertices are collinear`。那句话很准，但**没告诉模型为什么塌** —— 现场是模型一直在拿
+   * `solid.create_polyhedron` 去拼一只**开放**的图形（平面四边形 + 翻折片），而拼闭合体时
+   * 最容易造出来的就是三点共线的面。所以这里与"多面体面数 / 顶点数不够"那一条说**同一件事**。
+   */
+  const collapsedFace = errors.some((error) => /face ring/i.test(error.detail) && /zero area|collinear/i.test(error.detail))
+  if (collapsedFace) {
+    advice.push("提醒：有一只**面塌了**（三个点共线、面积为零）。要画**开放的**平面图形（四边形、三角形片、翻折片）就**不要**把它们拼成一只闭合多面体 —— 用 `solid.create_face` **一张一张**建（每张给 `vertices` 与 `vertexNames`，它不收 `faces`）。硬拼闭合体时，最容易造出来的就是三点共线的面。")
+  }
   return advice
 }
 

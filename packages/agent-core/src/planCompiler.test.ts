@@ -1302,3 +1302,32 @@ describe("关系表里不认识的一条：只丢它、如实报告，不作废�
     expect(note?.detail).toContain("planarAngle")
   })
 })
+
+/**
+ * **面塌了的时候，修复提示要点名对的那条路**（2026-10-11 用户现场，第三堵墙）。
+ *
+ * 现场：那一轮先交了 **14 个动作**的计划（信封这次过了 —— 上一条修复的正是它），死在几何校验上；
+ * 修复轮模型把计划**写成了字符串**（又吃掉一类额度）；第三次交了 3 个动作，死在
+ * `action_compile`：`face ring [0,1,5] has zero area … these vertices are collinear`。
+ *
+ * 那句话说得很准，但它**没告诉模型为什么塌**：模型一直在拿 `solid.create_polyhedron` 去拼
+ * 一只**开放**的图形（四边形 + 翻折片），拼闭合体时最容易造出来的就是三点共线的面。
+ * 所以这一句要跟"多面体面数不够"那一条说**同一件事**：开放图形请用 `solid.create_face` 分张建。
+ */
+describe("面塌了的修复提示", () => {
+  const ask = (errors: { code: string; path: string; detail: string }[]) =>
+    describeCompileRepairPrompt({ reason: "compile_failed", errors, allowedChanges: ["envelope.actions"], attempt: 1 })
+
+  it("三点共线的面 ⇒ 点名 solid.create_face（而不是只说这三个点共线）", () => {
+    const prompt = ask([{ code: "degenerate_polyhedron", path: "envelope.actions[0]", detail: "face ring [0,1,5] has zero area (largest triangle 0.00e+0): these vertices are collinear, and a face needs three points that are not collinear" }])
+
+    expect(prompt).toContain("solid.create_face")
+    expect(prompt).toContain("闭合多面体")
+  })
+
+  it("别的编译错不带上这一句（泛谈会稀释提示）", () => {
+    const prompt = ask([{ code: "unresolved_alias", path: "envelope.actions[1].inputs.host", detail: "no object has been created under the alias 'p1' before this action" }])
+
+    expect(prompt).not.toContain("solid.create_face")
+  })
+})
