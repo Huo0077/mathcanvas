@@ -1,5 +1,7 @@
 # 高中数学绘图与立体交互进度记录
 
+> **2026-10-11 四家族真题驱动升级：本页只保留此前传统几何交互/发行过程。** 现已完成的[真题作图需求调研](2026-10-11-four-family-exam-diagram-survey.md)与[GitHub 源码/测试取舍](2026-10-11-github-agent-implementation-survey.md)与[作图/旧功能兼容/Lean/缺陷的 18 张任务卡](../superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)另列；这里“六类代表题通过”不能当新真题四族 Agent 覆盖，现时看[当前状态](../current-status.md)。
+
 > **更新：2026-10-02 —— 这条线已收尾并发布。** 高中几何交互的功能分支早先经 PR #1 合并进 `main`；此后球体与球截面整条线交付并作为 **v3.1.0** 发布，HTML 导出与三处修复作为 **v3.2.0** 发布（两个版本的 tag、Release、三件套哈希复核都有记录，见 [`docs/release/`](../release/)）。**代码侧已布置的任务全部完成**：本专题的 Task 1 / 2 / 3 / 4 / 5 / 7 全勾，六类代表题 7 条 e2e 全绿，创建状态机 / 拾取边界 / 教学线型 / 单顶点数值编辑 / 体积画布数字 / 相机标签同步均有当次 RED→GREEN 与 CI 证据。**仍未做的只剩三类**：教师/学生走查（用户侧）、MSI 安装验收（需管理员；NSIS 那半已实测走完）、以及从未启动的功能（截图识图、GeoGebra `.ggb`、平面/函数逐题补缺）。**当前口径一律看 [`docs/current-status.md`](../current-status.md)**（§四 是"还差什么"的唯一权威处）；下文各批次读数都是**当时快照**。
 
 > **2026-10-06 范围说明**：本页只归档 2026-09-29–10-02 的传统高中几何交互/旧发行验收；不包含现行 V0a Agent 自由顶点 WIP。现行状态、门禁与作图目标分别看 [当前状态](../current-status.md)、[发布门禁](../acceptance/agent-release-gate.md)、[任务追踪](../agent-next-round-progress.md)。以下每条“完成”仅指旧任务范围。

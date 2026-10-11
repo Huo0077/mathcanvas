@@ -1,6 +1,6 @@
 # `proof/lean4/` —— 形式证明后端用的那个**仓内 Lean 小工程**（N5b）
 
-这个目录**只有四个文件**（`lakefile.toml` / `lean-toolchain` / `.gitignore` / `DrawProof.lean`）。
+本目录除本 README 外的工程文件共有**五个**（`lakefile.toml` / `lake-manifest.json` / `lean-toolchain` / `.gitignore` / `DrawProof.lean`）；`lake-manifest.json` 与钉住的 mathlib revision 共同固定依赖闭包。
 **7 GB 的 mathlib 不在仓库里**：它展开在 `.lake/`，而这一层被上面那份 `.gitignore`（一行 `/.lake`）挡住。
 
 ## 它为什么在仓库里（而不是像探针那样放在仓外）

@@ -1,5 +1,7 @@
 # MathCanvas
 
+> **Agent 升级范围（2026-10-11，设计状态）**：下一阶段只面向高中数学需作图的**三角形、圆锥曲线、函数/导数、立体几何**。已从可回指的高考卷面完成[四家族真题作图需求调研](docs/research/2026-10-11-four-family-exam-diagram-survey.md)，实施步骤及实际进度统一见[四家族 Agent 下一步计划](docs/superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)。这两份文档不是功能发布或真题全覆盖证明；最近用户的折面题仍无法由真实 Agent 稳定画出，当前能力和发布门禁以[当前状态](docs/current-status.md)为准。
+
 MathCanvas 是面向数学学习与工程绘图的交互式工作台。你可以在平面画布上绘制函数和几何图形，在立体画布中构造、观察和测量三维对象，也可以制作工程图纸。项目仍在持续开发；浏览器版本可以本地运行，部分 Agent 和桌面功能仍处于验证阶段。
 
 ## 开始使用
@@ -58,6 +60,12 @@ npm run dev
 | `packages/agent-core` | 能力目录、规划与工具契约、草稿、验收和提交门禁的纯逻辑。 |
 
 传统编辑遵循“界面操作 → 几何/场景计算 → 文档事务 → 画布重绘”的路径。Agent 路径会先观察场景、生成计划并编译为**隔离草稿**；只有草稿通过相应校验且用户明确确认后，宿主才会提交到文档。模型不能直接绕过确认修改现场。关于设计取舍，参见 [增量几何与多会话 Agent 设计](docs/superpowers/specs/2026-09-21-incremental-geometry-agent-and-conversations-design.md) 和 [Agent tool-loop 设计](docs/superpowers/specs/2026-09-28-agent-tool-loop-design.md)。
+
+## 下一步：作图 Agent、旧功能兼容、Lean 和缺陷修复（仍是计划）
+
+**稳定执行顺序：下一项只做 Task 14 的当前版旧功能基线；再按[主计划 O1 固定波次](docs/superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)实施 W1→W2→四族→产品验收，Lean 在合同稳定后另行推进。任务编号不重排，未取得门禁证据不得跳波次。**
+
+[四家族真题需求](docs/research/2026-10-11-four-family-exam-diagram-survey.md)和[GitHub 源码/测试调研](docs/research/2026-10-11-github-agent-implementation-survey.md)已在本轮完成。可直接从[下一步计划第 7–8 节的 18 张任务卡](docs/superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)开工：**先跑旧功能兼容基线**，用用户 `solid.create_segment` 等协议错误做第一条 RED 并修可操作反馈；再实现可追溯的图形结构、E/F 派生分点及 PC 目标折角；按三角形、圆锥曲线、函数/导数、立体几何分别从真题需求派生单元/浏览器/错误图验收，最后独立跑视觉和真实模型质量门禁。Lean 的四类受限目标**已有实验入口而非尚未实现**，另按 Task 15–17 验原题前提、证明产物过期、真桌面和工具链发行；Task 18 处理有复现的旧 bug。证明不可用不能阻止正确作图。本轮复跑已有证明路径的定向单元 **7 文件/88 项通过**，但**没有**运行真实 Lean、Rust 或桌面 UI，所以 Task 15–17 仍未完成。每块**先见业务 RED，再做 GREEN，随后跑页面与回归**；文档/调研完成不等于功能完成，不会擅自增加默认模型预算或付费请求。
 
 ## 项目进度与能力边界
 

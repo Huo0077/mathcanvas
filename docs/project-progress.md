@@ -1,8 +1,24 @@
 # MathCanvas 项目进度（归档）
 
+> **2026-10-11 四家族真题驱动升级：本轮过程记录（只改文档）**。用户将目标限定为四家族，真题的原卷/转载题号与作图难点已归入[调研报告](research/2026-10-11-four-family-exam-diagram-survey.md)；未解决的模型动作合同、共享预算、缺宿主与目标折角等按[新实施/进度计划](superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)分块。此处**没有**记录新的功能 RED→GREEN、真实 provider/浏览器结果或真题成功率；历史数字继续只在原来的时刻有效。
+
 > **这是归档，不是当前状态。** [**`docs/current-status.md`**](current-status.md) 是"现在时"的唯一一处
 > —— 当前门禁读数、各方案做到哪一步、还没做什么，都在那里。
 >
+## 2026-10-11 再对账：稳定实施顺序（只改计划）
+
+上一版 18 张任务卡有文件/命令，但 Task 12 与 13 把可提前做的 Worker 合同/离线工件与需等四族完成的真实画布/付费评测放在同一块，Task 18 也混了必须先修的 null 边界和需用户裁决的文案。现于[主计划 O1 波次表](superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)固定前置和退出门槛、不重排 Task ID：先 Task 14 基线，后 W1 协议/18a，W2 图形合同/12a，W3 家族按依赖并进，W4 画布/13b/13c；Lean 自 Task 4 锚点与 Task 12a 版本合同稳定后走 Task 15→16→17 的独立门禁。**这里只改计划，不声称任一波已实施或已解决 bug。**
+
+## 2026-10-11 同日追加：保护旧能力、Lean 独立收口与已确认缺陷（只改文档）
+
+用户指出“下一步不只是新 Agent 作图”：旧 2D/3D/CAD/保存导出及已有 Agent/实验开关须兼容；证明已有**四目标类、默认关且可从设置开启的实验入口/面板、受限 Rust 命令、pin 的 Lean/mathlib 工程**，不能再误称“设置打不开”或“尚未 pin”；真正未完的是**原题其余前提未完整进 Lean 命题、慢证明结果/改题旧图 stale、真桌面自动往返、干净机无网/许可/发行**。旧能力先跑当前 HEAD 基线，然后新修复才有资格说“不回退”。此外 `constraint-authoring` 空间能力表无实际入口、非法 `relations`/`unverified` 边界和诊断 golden 要分别复现/裁决。
+
+[下一步计划](superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)从 Task 1–13 扩为 **Task 1–18**，新增 Task 14 兼容、Task 15–17 Lean 正确性/生命周期/发行、Task 18 已知缺陷；[GitHub 源码取舍](research/2026-10-11-github-agent-implementation-survey.md)补 Lean/mathlib 的官方来源。不改任何产品代码/预算，不运行 Lean 慢集成或付费 provider；`proof/lean4/README.md` 原“四个工程文件”按已跟踪的 `lake-manifest.json` 修为五个工程文件（另有 README），**这只是文案纠错**，不等于完成干净机安装或任何新证明验收。同一轮定向旧证明路径 `vitest` **7 文件 / 88 项通过**（桥接/产物/自动阶段/桌面通道假体/设置与确认面板），未运行真 `lake env lean`、Rust 或桌面真实 UI，不能把这组单元当 Task 15–17 的出口。
+
+## 2026-10-11 新计划改为源码级任务卡（过程记录，文档批次）
+
+用户指出仅列升级目标不足以执行。本轮在[已完成的四家族真题研究](research/2026-10-11-four-family-exam-diagram-survey.md)上，核对 [GeoGebra、SolveSpace、SymPy、JSXGraph、Mafs 与 Z3 的仓库/源码](research/2026-10-11-github-agent-implementation-survey.md)，明确仅借鉴依赖传播、状态区分、数值边界和视觉回归，不复制外部代码/增加依赖。将[新计划](superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)扩成 13 张逐文件任务卡，分别列现有文件、新测试、RED、最小 GREEN、具体复跑命令与停止条件。**没有产品代码提交、没有用户折面题成功画出的证据、没有付费 provider 请求。**旧 V0–V3 与发布历史数字保持不动。
+
 > 这份文件保留**过程**：每一轮的 RED→GREEN 证据、被实测推翻的方案、当时的门禁数字、
 > 误报与如实缺口。**下面任何数字都只代表"写它的那一刻"**，不要当作当前值。
 >

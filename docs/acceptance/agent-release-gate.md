@@ -1,5 +1,22 @@
 # Agent 发布前门禁
 
+> **2026-10-11 四家族真题驱动升级（文档裁决，默认 Agent/自动 Lean 仍不放行）**：本轮已完成[真题需求调研](../research/2026-10-11-four-family-exam-diagram-survey.md)，[下一步实施计划](../superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)分别列作图 Agent 更新、已交付功能兼容、Lean 证明和确证 bug 修复，不把原题转载或评析算成功案例。22:36 最新用户现场的未知 `solid.create_segment`、平面片误用多面体和共享修复预算仍未解决；从现有局部能力推不出原翻折题可用。当前状态/逐项实测仍以[当前状态](../current-status.md)为准；新增付费 provider 请求仍须另获同意。
+
+## 2026-10-11 作图、兼容、Lean 与旧缺陷的独立放行门禁（新门禁本轮未获实测）
+
+| 门禁 | 真正需要的产品证据 | 现在 |
+| --- | --- | --- |
+| **A：安全合同** | 用户 `solid.create_polyhedron` 开放面误用和三条虚构 `solid.create_segment` 的完整轨迹以正确错误/建议安全结束；工具注册表与处理器一致、预算未悄悄增加。 | **未满足**；[Task 1–3](../superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)尚未实施。 |
+| **B/C：题设到真实图** | 包括“缺 ABCD 宿主”的负例，E/F 按比例派生，PC 目标反求折角；八条原文各有来源和物化图元回代或显式未核验；错误图不能标全部通过。 | **未满足**；给定角折叠单测不等于原用户题成功。 |
+| **D：四家族真题变形** | 每族真实卷面来源、正确图/错图/欠定/换数、独立核验与浏览器画布；评析或答案未审记录不得充金标。 | **未满足**；[真题调研](../research/2026-10-11-four-family-exam-diagram-survey.md)已做但不算产品成功。 |
+| **E：用户可读与成本** | 同草稿截图/Worker/桌面、教师/学生走查、按族真实 provider pass@k/延迟/成功题成本；付费前冻结口径与用户批准。 | **未满足**，默认 Agent/自动 Lean 继续不放行。 |
+| **F：旧功能不退化（Task 14）** | 当前 HEAD 的人工 2D/3D/CAD、`.mgeo`/HTML、旧 Agent/实验开关、确认/撤销及点名的定向/浏览器基线；每块新实现后受影响旧路径复跑。 | **尚未建立本批当前代码基线**；不能用旧发布包和旧 CI 替代。 |
+| **G1：Lean 命题范围（Task 15）** | 已有四类受限引理原有单测继续绿；原题未形式化的必要前提、图中自选自由值均明确显示；只有命题真的涵盖全题前提且 Lean 验证过才允许“原题已证”。 | **未满足**；前提桥“有出处”并非“原题都进命题”。 |
+| **G2：Lean 产物/发行（Task 16–17）** | 已有实验入口默认关；慢证明迟到/改图/切文档导致产物 stale，claim/inputHash/工具链版本一致；真实桌面往返、冷机/无网/沙箱/许可/发行验证分别有证据，错误不会挡正确作图。 | **未满足**；`mathlib` rev/manifest **已 pin**，不是新缺口；完整桌面/发行未验收。 |
+| **H：老缺陷（Task 18）** | 空间 authoring 可用性与真实入口一致；非法 `relations`/`unverified` 安全拒绝；已修历史问题有真回归。改变旧 golden 文案或模型/安全额度先获裁决。 | **未满足/部分待复现**；无 RED 的推断不写成已修 bug。 |
+
+[GitHub 取舍](../research/2026-10-11-github-agent-implementation-survey.md)只借依赖传播、求解状态和视觉回归的方法，不引入外部项目即宣称有它们的能力。每道门禁的最小 RED/期望 GREEN、文件和命令见[第 7 节实施任务卡](../superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)；下方保留旧门禁的历史上下文，当前实测仍以[当前状态](../current-status.md)为准。
+
 计划条目：`docs/superpowers/plans/2026-09-28-agent-tool-loop-implementation-plan.md` 的 **Task 6.3**
 本文件是门禁的**当前读数**；机器判据在 `packages/agent-core/src/agentReleaseGate.test.ts`。
 
@@ -135,7 +152,7 @@
 
 **N5/V2 形式证明出口（2026-10-10 当前：四种受限目标已有本机证据；自动 Lean 仍不放行）。**
 
-现有产物 schema、`verifyProofArtifact` 与受限 Lean 适配器可处理四类目标：`perpendicular`（线⊥线）、`linePlanePerpendicular`（线⊥面）、`tangentSlope`（切线/导数）、`lineInPlane`（线在面内）；相关本机真跑及证明边界见 [当前状态](../current-status.md) 与 [后续计划快照](../superpowers/plans/2026-10-10-selftest-followups-and-release-plan.md)。`sorry`/编造公理不能升级；前提桥把来源标为 `fromText` / `fromDerivation` / `fromFigure` / `invented`，但**没有把原题其余题设全部形式化进命题**。产品侧已有 `draftStore.stage` 的 `proofExport` 调用点及 Rust 窄命令和版本信息，然而开关默认关且设置页不可开启，真实桌面 UI 往返、产物呈现与工具链发行验收未完成。mathlib revision 已 pin；冷缓存超时与热跑成功须按各自运行记录解释，不得从四条受限引理外推到所有作图题。
+现有产物 schema、`verifyProofArtifact` 与受限 Lean 适配器可处理四类目标：`perpendicular`（线⊥线）、`linePlanePerpendicular`（线⊥面）、`tangentSlope`（切线/导数）、`lineInPlane`（线在面内）；相关本机真跑及证明边界见 [当前状态](../current-status.md) 与 [后续计划快照](../superpowers/plans/2026-10-10-selftest-followups-and-release-plan.md)。`sorry`/编造公理不能升级；前提桥把来源标为 `fromText` / `fromDerivation` / `fromFigure` / `invented`，但**没有把原题其余题设全部形式化进命题**。产品侧已有 `draftStore.stage` 的 `proofExport` 调用点及 Rust 窄命令和版本信息，开关默认关，但**设置页的实验入口与确认面板产物呈现已于 2026-10-10 接上**；仍未验收的是真实桌面 UI 自动往返、原题必要前提的完整命题、证明产物迟到/过期和工具链发行。mathlib revision 已 pin；冷缓存超时与热跑成功须按各自运行记录解释，不得从四条受限引理外推到所有作图题。
 
 ## 最终阶段门槛
 

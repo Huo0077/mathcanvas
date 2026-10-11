@@ -1,12 +1,29 @@
 # MathCanvas Agent Tool Loop Scorecard
 
+Updated: 2026-10-11 (**四家族真题驱动升级仅调研与文档设计**；默认 Agent/自动 Lean 仍未放行)。[真题需求调研](../research/2026-10-11-four-family-exam-diagram-survey.md)本轮已完成；[下一步 Agent 实施/进度](../superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)列合同/预算、图形意图、四族构造、旧能力兼容、Lean 证明边界及现存 bug 的独立验收，不把旧 8×3/3 条 provider 小样本当四族真题 pass@k。最新 22:36 用户原题仍因开放面/未知动作修复失败；逐项现状和证据看[当前状态](../current-status.md)。
+
 > **这张表只列"门槛与能力对照"。** 具体读数与各阶段做到哪一步，**以
 > [`docs/current-status.md`](../current-status.md) 为准** —— 它是"现在时"的唯一一处。
 > 这里的每一行都是**镜像**：能力前进一格时，这一行要跟着改（第 25 / 33 / 43 轮各漏过一次）。
 
-Updated: 2026-10-10 (S1–S6 all closed; §3-F numeric angles implemented with browser evidence; earlier entries through 2026-10-07). **现行任务只覆盖需要画图的高中题。** 旧全课程 H0–H4 的 43/141 来源盘点只供寻找候选；V0 已有四家族 12 条内部文字/坐标候选和 134 未审子型，**四家族的实际作图交付仍未完成**（题设核验与浏览器证据已齐，差教师/学生目视走查）；**真实 provider 作图质量与自动 Lean 均未交付**。原文核验已由 `planHasVerifiableFigure` 一处判断覆盖多面体 / 平面点 / 圆锥曲线 / 函数曲线与切线（V0b–V0d 的 Agent 入口已补），`solid.create_template` 的模板实体**仍刻意不进核验**。既有真实 provider 成本仍 `null`、条件垂直引理不是整题证明；**S1–S6 已于 2026-10-10 全部收口**（含 S3.4 题面驱动的棱柱正例、菱形底面、斜棱柱、S6 入口语法与"认不出就问路"的浏览器反例）；**§3-F 的底面点名数值角同日做到"能读、能造、能核"**（阶段 A + B1，含两条浏览器 spec 与各自的对照实验），**空间线重合的判据与求解设计已写但记"暂不实施"**（查实没有任何产品入口能声明该约束，见下表的约束拖动一行）；具体门禁读数与发布结论分别看 [当前状态](../current-status.md) / [发布门禁](agent-release-gate.md)，新设计 [V0–V3](../superpowers/specs/2026-10-06-diagram-scope-addendum.md)。
+Previous capability snapshot (2026-10-10): S1–S6 all closed; §3-F numeric angles implemented with browser evidence; earlier entries through 2026-10-07. **现行任务只覆盖需要画图的高中题。** 旧全课程 H0–H4 的 43/141 来源盘点只供寻找候选；V0 已有四家族 12 条内部文字/坐标候选和 134 未审子型，**四家族的实际作图交付仍未完成**（题设核验与浏览器证据已齐，差教师/学生目视走查）；**真实 provider 作图质量与自动 Lean 均未交付**。原文核验已由 `planHasVerifiableFigure` 一处判断覆盖多面体 / 平面点 / 圆锥曲线 / 函数曲线与切线（V0b–V0d 的 Agent 入口已补），`solid.create_template` 的模板实体**仍刻意不进核验**。既有真实 provider 成本仍 `null`、条件垂直引理不是整题证明；**S1–S6 已于 2026-10-10 全部收口**（含 S3.4 题面驱动的棱柱正例、菱形底面、斜棱柱、S6 入口语法与"认不出就问路"的浏览器反例）；**§3-F 的底面点名数值角同日做到"能读、能造、能核"**（阶段 A + B1，含两条浏览器 spec 与各自的对照实验），**空间线重合的判据与求解设计已写但记"暂不实施"**（查实没有任何产品入口能声明该约束，见下表的约束拖动一行）；具体门禁读数与发布结论分别看 [当前状态](../current-status.md) / [发布门禁](agent-release-gate.md)，新设计 [V0–V3](../superpowers/specs/2026-10-06-diagram-scope-addendum.md)。
 
 > **2026-10-06 V0a 中途记录**：受限三棱锥草稿与开关正反例已有针对性证据（7 文件/171 定向、单 spec 3/3）；浏览器坐标回代、图形目视与全量回归**已于同日补齐**（见 [当前状态](../current-status.md)），**V0a/V0 仍不计完成**。Lean 未自动调用；provider 成本及大样本读数不变。现时唯一读数/放行状态见 [当前状态](../current-status.md) 与 [发布门禁](agent-release-gate.md)。
+
+## 四家族 Agent 新任务计分镜像（2026-10-11；只标计划）
+
+| 面 | 观察指标及不能误算的分母 | 当前读数/状态 |
+| --- | --- | --- |
+| 动作/修复安全（Task 1–3） | 真实失败轨迹在 schema、动作、编译、预算各层的根因/安全下一步；未知动作不得静默执行。 | **尚无新测试读数**；用户的 `solid.create_segment` 仍失败。 |
+| 条件→图（Task 4–7） | 原题条件已读/可判/实际核验/未核验的计数分开；缺宿主/欠定/冲突/超时互斥，最终图元自测八条原用户题设。 | **未实施**；局部四边形与给定角折叠不能折算整题成功。 |
+| 四家族覆盖（Task 8–11） | 三角、圆锥、函数/导数、立体各按许可的真题来源、正/反/欠定/换数和实际画布统计，不拿旧课程 141 条或内部 12 例充真题。 | [调研报告](../research/2026-10-11-four-family-exam-diagram-survey.md)已完成；**真实产品通过率未测**。 |
+| 视觉/真实 provider（Task 12–13） | 同草稿截图、可读标注、人评、按族 pass@1/pass@3/成本/耗时；样本、阈值、付费次数先冻结并获授权。 | **未测**；旧 planning 3 条和工具环 8×3 不是四族真题结果。 |
+| 旧功能兼容（Task 14） | 当前 HEAD 的人工 2D/3D/CAD、保存导出、旧 Agent 开关/草稿与撤销功能不得因新构造/证明回退；旧提交日志不充当新运行。 | **历史有局部证据，本批基线未重跑**。 |
+| Lean 有效范围（Task 15） | 四类模板目标的必要前提与原题全部条件逐条对账；输出分 `limited_lemma / whole_problem / unsupported`，未入命题的条件不得被“系统补上”后宣布整题完成。 | **四目标历史本机真跑、前提桥已存在；本轮旧证明路径定向 Vitest 7 文件/88 项通过，但不含真 Lean 编译/桌面；原题完整命题未验收**。 |
+| Lean 生命周期/发行（Task 16–17） | `proofExport` 默认关且设置入口存在；慢证明与编辑/换图竞争时产物 stale，后端工具链/源码白名单/超时/离线/干净机一致。证明不可用不影响作图。 | **配置与受限产物历史有证据，真实桌面/发行/无网未验收**。 |
+| 老缺陷与安全边界（Task 18） | 可见能力需真入口，坏 `relations:[null]`/`unverified:[null]` 不抛，已修错位/工作区/草稿 stale 有回归，安全拒绝不能为提高通过率而取消。 | **需要独立 RED 与用户裁决的分开列账**。 |
+
+这些是[下一步 18 张作图/兼容/Lean/缺陷逐文件 RED→GREEN 任务卡](../superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)的状态镜像；[GitHub 源码实施调研](../research/2026-10-11-github-agent-implementation-survey.md)是设计证据，不能当 MathCanvas 跑过的测试。
 
 ## Metrics
 
