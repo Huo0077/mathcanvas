@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest"
 
-import { parseDiagramObligations } from "../diagramObligations"
+import { parseObligationWithLegacy } from "../obligationIR"
 import { specForPrompt } from "./witnessSearch"
+
+/**
+ * 题设按**产品路径的同一份形状**取：`parseObligationWithLegacy(prompt).ir`
+ *（与 `planCompiler.witnessSearchInput` 逐字一致）。用 `parseDiagramObligations` 的
+ * `givens` 会拿到**另一种类型**，`tsc` 会当场拒绝 —— 这条我踩过一次。
+ */
+const givensOf = (prompt: string) =>
+  parseObligationWithLegacy(prompt).ir.obligations.filter((obligation) => obligation.role === "given")
 
 /**
  * **平面图形这一族**（乙案实施计划 Task 1 / Task 2）。
@@ -15,7 +23,7 @@ const PROMPT = "平面四边形ABCD中，AB=8，AD=5√3，∠BAD=30°，∠ADC=
 
 describe("平面图形（乙案）", () => {
   it("认出之后：如实说这一类还没有构造器，而不是给一句立体题的理由", () => {
-    const result = specForPrompt(PROMPT, parseDiagramObligations(PROMPT).givens)
+    const result = specForPrompt(PROMPT, givensOf(PROMPT))
 
     expect(result.status).toBe("unrecognised")
     if (result.status !== "unrecognised") return
@@ -28,7 +36,7 @@ describe("平面图形（乙案）", () => {
 
   it("护栏：立体题面仍然照旧推出 spec（新分支没抢走它们）", () => {
     const solid = "在四棱锥P-ABCD中，PA⊥平面ABCD，底面ABCD是菱形，画出这个四棱锥"
-    const result = specForPrompt(solid, parseDiagramObligations(solid).givens)
+    const result = specForPrompt(solid, givensOf(solid))
     expect(result.status).toBe("ok")
     if (result.status !== "ok") return
     expect(result.spec.family).toBe("pyramid")
