@@ -1,6 +1,6 @@
 # Agent Tool Loop Progress Snapshot
 
-> **2026-10-11 四家族真题驱动升级：本页保留旧 tool-loop 时点的过程快照。** 新的[真题需求调研](2026-10-11-four-family-exam-diagram-survey.md)和[GitHub 源码实施调研](2026-10-11-github-agent-implementation-survey.md)与[18 张作图/兼容/Lean/缺陷任务卡](../superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)另行记录；不可把本页旧样本分数当四家族真题作图成功率，现时仍以[当前状态](../current-status.md)为准。
+> **2026-10-11 四家族真题驱动升级：本页保留旧 tool-loop 时点的过程快照。** 新的[真题需求调研](2026-10-11-four-family-exam-diagram-survey.md)和[GitHub 源码实施调研](2026-10-11-github-agent-implementation-survey.md)与[连续编号 Task 1–21 的作图/兼容/Lean/缺陷任务卡](../superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)另行记录；不可把本页旧样本分数当四家族真题作图成功率，现时仍以[当前状态](../current-status.md)为准。
 
 Date: September 29, 2026. Historical status then: **the six-phase checklist is complete, or deferred by a recorded decision.** The final release gate is **not** met — one line lacks real-provider data.
 

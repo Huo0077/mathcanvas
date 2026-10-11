@@ -7,6 +7,12 @@
 
 
 
+## 2026-10-11 —— 下一步任务严格重编号为连续 Task 1→21（只改文档）
+
+- 用户要求只按数字顺序实施。将此前 Task 14 前置、12a/12b、13a/13b/13c、18a/18b 等跨波次任务拆开并**按真实依赖连续编号为 21 项**；主计划附旧→新迁移表，但只有新 Task 1→21 可指挥实施。
+- [主计划](docs/superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)唯一执行指针为 Task 1 旧功能基线；无 RED/GREEN/兼容证据不得跳到下一个。保留 Lean 限定目标与历史已修功能，Task 19 无工具链时安全关闭、Task 20 未获付费批准时暂停、Task 21 对作图与自动 Lean 分别裁决。
+- 同步 README、当前状态、新旧进度镜像、能力目录、门禁和记分卡；旧 CHANGELOG/归档中的 13/18/W0–W4 只描述历史版本。**本批没有产品代码改动、没有执行 Task 1 或新付费调用。**
+
 ## 2026-10-11 —— 下一步计划执行顺序锁定（仅文档）
 
 - 保留 Task 1–18 ID 与旧进度链接，在[主计划 O1](docs/superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)写明 W0=Task 14 旧功能基线、W1=协议/输入边界、W2=图形意图/Worker、W3=四家族有条件并进、W4=视觉/真实模型；Lean 独立支线 Task 15→16→17，不阻塞正常作图。

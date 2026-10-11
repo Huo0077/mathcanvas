@@ -30,4 +30,4 @@
 - [Lean Lake 官方仓库文档](https://github.com/leanprover/lean4/blob/master/src/lake/README.md)介绍 `lake-manifest.json` 固定依赖修订；[mathlib4 仓库](https://github.com/leanprover-community/mathlib4)有自己的 Lean 工具链和预编译缓存流程。**本仓已经 pin** `proof/lean4/lakefile.toml` 的 mathlib commit、`lean-toolchain` 和 `lake-manifest.json`：不是把它们再列作“尚未 pin”的 bug；实际缺口是冷机、离线、许可与完整桌面发行验收，绝不因本次设计自动更新版本或下载 GB 级缓存。
 - 结合 [GeoGebra 输入/输出依赖](https://github.com/geogebra/geogebra/blob/main/source/shared/common/src/main/java/org/geogebra/common/kernel/algos/AlgoElement.java) 的启发，证明尝试必须绑定草稿文档 ID、原题条件/目标 ID、图元/选择和后端版本。异步跑完若图/题/工作区变了就 stale，浏览器“没有本地 Lean”与桌面“Lean 验证失败”不能混为一谈；旧作图的可提交性不依赖证明后端。
 
-具体的文件、先红后绿、真桌面/无网验证和旧功能兼容/缺陷任务见[总计划 Task 14–18](../superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)。
+具体的文件、先红后绿、真桌面/无网验证和旧功能兼容/缺陷任务见[总计划中 Lean/兼容对应的 Task 1、17–19](../superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)。

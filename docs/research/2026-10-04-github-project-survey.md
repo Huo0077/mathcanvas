@@ -3,7 +3,7 @@
 > 调研日期：2026-10-04
 > 目的：为 MathCanvas 下一轮“约束驱动见证搜索 + 真实 provider 评测”提供结构参考，不复制外部代码，也不把外部项目能力计入本仓库完成度。
 
-> **2026-10-11 源码级复核入口**：本页是旧的架构方向；[四家族 Agent 实施取舍](2026-10-11-github-agent-implementation-survey.md)已经进一步核对 GitHub 源码/维护者文档、逐一落到本仓文件和 RED/预期 GREEN，实施次序见[18 张可执行任务卡](../superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)。旧页不代表我们已接入任何外部项目。
+> **2026-10-11 源码级复核入口**：本页是旧的架构方向；[四家族 Agent 实施取舍](2026-10-11-github-agent-implementation-survey.md)已经进一步核对 GitHub 源码/维护者文档、逐一落到本仓文件和 RED/预期 GREEN，实施次序见[连续 Task 1–21 的可执行任务卡](../superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)。旧页不代表我们已接入任何外部项目。
 
 ## 1. 参考项目
 

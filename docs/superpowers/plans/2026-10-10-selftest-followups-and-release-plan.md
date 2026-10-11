@@ -1,6 +1,6 @@
 # 下一步计划：人工自测跟进 + 未完成项 + 发布准备
 
-> **2026-10-11 四家族真题驱动升级：这份 2026-10-10 计划是历史快照，不再是当前待办顺序。** 当前[真题调研](../../research/2026-10-11-four-family-exam-diagram-survey.md)已做，后续按[GitHub 实施取舍](../../research/2026-10-11-github-agent-implementation-survey.md)和[作图 Task 1–13 + 兼容/Lean/缺陷 Task 14–18](2026-10-11-four-family-agent-upgrade-progress.md)推进；本页原来的修复、走查与版号数据须按[当前状态](../../current-status.md)核实，不能照旧误报完成。
+> **2026-10-11 四家族真题驱动升级：这份 2026-10-10 计划是历史快照，不再是当前待办顺序。** 当前[真题调研](../../research/2026-10-11-four-family-exam-diagram-survey.md)已做，后续按[GitHub 实施取舍](../../research/2026-10-11-github-agent-implementation-survey.md)和[唯一顺序 Task 1–21（旧编号见对照表）](2026-10-11-four-family-agent-upgrade-progress.md)推进；本页原来的修复、走查与版号数据须按[当前状态](../../current-status.md)核实，不能照旧误报完成。
 
 > **历史执行计划，不再直接作为当前待办顺序。** 该快照写于 3.3.0→3.3.10 现场修复之前；以下 §1 的三项用户报告、§4 当时顺序均须先按当前代码和用户复测重新对账，不能从“计划写了”推断已修好。当前状态看 [当前状态](../../current-status.md)，能否放行看 [发布门禁](../../acceptance/agent-release-gate.md)。
 > 每一条都写了：**现象 / 证据 / 归类 / 最小复现 / 修法与判据 / 风险**。
