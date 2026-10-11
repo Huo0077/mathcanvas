@@ -1085,25 +1085,28 @@ function planarRelationsHold(
  *
  * 机器词留给 `code`（调用方按码分流），面向用户的那一句必须是题面里认得出的说法 ——
  * 把 `dihedral` 原样印给用户，等于让他去猜我们的词表。
+ *
+ * 写成 `Record<WitnessRelation["kind"], string>` 是刻意的：**加一种条件就必须在这里给个名字**，
+ * 漏掉编译期就红（`if` 链的尾巴只能写一句永远到不了的兜底，那种漏是查不出来的）。
  */
+const PLANAR_CONDITION_NAMES: Record<WitnessRelation["kind"], string> = {
+  "segment-length": "定长",
+  planarAngle: "点名的角",
+  perpendicular: "垂直",
+  parallel: "平行",
+  "equal-length": "等长",
+  dihedral: "二面角"
+}
+
 function planarConditionName(relation: WitnessRelation): string {
-  if (relation.kind === "dihedral") return "二面角"
-  if (relation.kind === "perpendicular") return "垂直"
-  if (relation.kind === "parallel") return "平行"
-  if (relation.kind === "equal-length") return "等长"
-  if (relation.kind === "segment-length") return "定长"
-  if (relation.kind === "planarAngle") return "点名的角"
-  return relation.kind
+  return PLANAR_CONDITION_NAMES[relation.kind]
 }
 
 /** 一条条件**写出来的样子**（与题面同一套字形）：`AB`、`∠ADC`。给用户看的文案用它。 */
 function planarWrittenForm(relation: WitnessRelation): string {
   if (relation.kind === "planarAngle") return `∠${relation.targets.join("")}`
-  if ("segments" in relation) {
-    const parts = relation.segments.map((segment) => segment.length >= 2 ? `${segment[0]}${segment[1]}` : segment.join(""))
-    return parts.join("、")
-  }
-  return relation.kind
+  if (relation.kind === "dihedral") return "二面角"
+  return relation.segments.map((segment) => (segment.length >= 2 ? `${segment[0]}${segment[1]}` : segment.join(""))).join("、")
 }
 
 /** 两条条件的**直接冲突**（同一件事被给了两个值）：找到第一对就返回，附上可复测的那一条。 */

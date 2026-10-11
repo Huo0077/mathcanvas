@@ -66,6 +66,20 @@ const VERIFIABLE_FIGURE_ACTION_IDS: ReadonlySet<string> = new Set([
 export function planHasVerifiableFigure(actions: readonly { actionId: string }[]): boolean {
   return actions.some((action) => VERIFIABLE_FIGURE_ACTION_IDS.has(action.actionId))
 }
+
+/**
+ * **自己写坐标的动作**：这两笔的 `vertices` 是**模型给的自由坐标**（不是模板 / 内核算出来的）。
+ *
+ * 设计 §6 的"坐标来源标注"只对它们有意义 —— 别的动作根本没有坐标可以被"构造"替换，
+ * 对它们说"这份坐标未经条件构造"是**假话**（它们没有可构造的坐标）。
+ * 与上面那张表的分工：那张表回答"题面点名的顶点有没有坐标可核验"，这张表回答
+ * "这组坐标是不是模型自己写的" —— 平面工作区的 `planar.create_point` 在前者里、不在这里。
+ */
+const FREE_COORDINATE_ACTION_IDS: ReadonlySet<string> = new Set(["solid.create_polyhedron", "solid.create_face"])
+
+function planHasFreeCoordinates(plan: Extract<PlanEnvelope, { kind: "plan" }>): boolean {
+  return plan.actions.some((action) => FREE_COORDINATE_ACTION_IDS.has(action.actionId))
+}
 /**
  * **N2 的见证搜索**（子任务 2c）。
  *
@@ -304,7 +318,9 @@ export function compilePlan(input: unknown, context: PlanCompileContext): PlanCo
   const materialised = rescueWithMaterialisedPoints(context, first)
   if (materialised !== null) return materialised
   if (context.diagramWitnessSearch !== true) return first.result
-  return rescuedByWitnessSearch(context, first) ?? first.result
+  const rescue = rescuedByWitnessSearch(context, first)
+  /** 第 ③ 条纪律的**另一半**：救不回来时不但原样交回第一遍，还要**说清这组坐标是谁给的**。 */
+  return rescue.status === "rescued" ? rescue.result : rescue.status === "not-needed" ? first.result : labelModelCoordinates(first, rescue.reason)
 }
 
 /**
@@ -686,9 +702,23 @@ function witnessShapeFor(prompt: string): WitnessShapeKind {
  * 替换不了就返回 `null`（调用方据此放弃救回，保持今天的行为）。
  */
 function withWitnessCoordinates(plan: Extract<PlanEnvelope, { kind: "plan" }>, candidate: PolyhedronWitness): Extract<PlanEnvelope, { kind: "plan" }> | null {
-  const indexes = plan.actions.flatMap((action, index) => (action.actionId === "solid.create_polyhedron" ? [index] : []))
-  if (indexes.length !== 1) return null
-  const [index] = indexes
+  /**
+   * **宿主是"恰好一笔自己写坐标的动作"**（乙案 Task 5）：多面体那一支与平面片那一支**互斥** ——
+   * 同一个图形不会被两笔动作声明，两种都在场就说明这份计划里不止一个候选宿主，那时不猜。
+   *
+   * 平面片这一支是 Task 5 补上的：用户那句题面画的就是**平面四边形 + 翻折片**，
+   * 模型声明它的动作是 `solid.create_face`（多面体根本表达不了开放曲面）。
+   * 只认多面体的话，这一族**永远接不进候选替换** —— 内核已经把坐标造出来了，却落不了盘。
+   */
+  const polyhedra = plan.actions.flatMap((action, index) => (action.actionId === "solid.create_polyhedron" ? [index] : []))
+  const faceIndexes = plan.actions.flatMap((action, index) => (action.actionId === "solid.create_face" ? [index] : []))
+  const host = polyhedra.length === 1 && faceIndexes.length === 0
+    ? { index: polyhedra[0]!, planar: false }
+    : faceIndexes.length === 1 && polyhedra.length === 0
+      ? { index: faceIndexes[0]!, planar: true }
+      : null
+  if (host === null) return null
+  const index = host.index
   const action = plan.actions[index]
   const inputs = isRecord(action.inputs) ? (action.inputs as Record<string, unknown>) : {}
   if (!Array.isArray(inputs.vertices) || inputs.vertices.length !== candidate.vertices.length) return null
@@ -715,6 +745,10 @@ function withWitnessCoordinates(plan: Extract<PlanEnvelope, { kind: "plan" }>, c
   let vertices: PolyhedronWitness["vertices"]
   let faces: PolyhedronWitness["faces"]
   let vertexNames: string[]
+  /**
+   * **平面片没有 `faces`**：环就是 `vertices` 的顺序。所以平面宿主只写回坐标与点名，
+   * 不往 `inputs` 里塞一个它不认的字段（多面体那一支的 `faces` 是它自己的）。
+   */
   if (sameNameSet) {
     // `permutation[model] = candidate`：按候选的**点名**重排，`v<i>` 因此仍然指向同一个顶点。
     const permutation = declaredNames!.map((name) => candidate.names.indexOf(name))
@@ -729,7 +763,9 @@ function withWitnessCoordinates(plan: Extract<PlanEnvelope, { kind: "plan" }>, c
   }
 
   const actions = [...plan.actions]
-  actions[index] = { ...action, inputs: { ...inputs, vertices, faces, vertexNames } } as DraftAction
+  actions[index] = host.planar
+    ? ({ ...action, inputs: { ...inputs, vertices, vertexNames } } as DraftAction)
+    : ({ ...action, inputs: { ...inputs, vertices, faces, vertexNames } } as DraftAction)
   return { ...plan, actions }
 }
 
@@ -747,7 +783,12 @@ function witnessAssumptions(found: Extract<WitnessSearchResult, { status: "verif
   return [
     {
       id: "witness.polyhedron",
-      text: `系统按题设搜出了这组坐标（题面未给的量是系统自选的示例值，可在属性栏修改）：${found.assumptions.join("；")}`,
+      /**
+       * **必须说清"这组坐标是谁给的"**（设计 §6 的落点）：用户有权知道图上那组坐标
+       * 是**系统按题面条件构造**出来的，不是模型手写的 —— 那正是这一案要换掉的东西。
+       * 早先这句只写"搜出了这组坐标"，没说与模型的关系，"构造成功"与"模型给对了"就分不开。
+       */
+      text: `这份图上的坐标由**系统按题面条件构造**（不是模型给的；题面未给的量是系统自选的示例值，可在属性栏修改）：${found.assumptions.join("；")}`,
       kind: "witness",
       value: found.candidate,
       overridable: true,
@@ -1006,29 +1047,82 @@ export function searchWitnessForPrompt(prompt: string, options: { spatialPointCo
   const parsed = parseObligationWithLegacy(prompt, { spatialPointConditions: options.spatialPointConditions === true })
   return searchWitness(witnessSearchInput(parsed.ir, prompt))
 }
-function rescuedByWitnessSearch(context: PlanCompileContext, first: CompileOnceOutcome): PlanCompileResult | null {
+function rescuedByWitnessSearch(context: PlanCompileContext, first: CompileOnceOutcome): WitnessRescue {
   const report = first.result.diagramVerification
-  if (report === undefined || report.status === "passed") return null
-  if (first.plan === null || first.obligations === null || context.prompt === undefined) return null
+  /** 模型自己的坐标已经过核验 ⇒ 连搜索都不调用（"只救不抢"），也**没有任何来源要标注**。 */
+  if (report === undefined || report.status === "passed") return { status: "not-needed" }
+  if (first.plan === null || first.obligations === null || context.prompt === undefined) {
+    return { status: "declined", reason: "这一轮没有拿到可用的题面或计划，无法按题面条件构造坐标。" }
+  }
 
   const found = searchWitness(witnessSearchInput(first.obligations.ir, context.prompt))
 
-  if (found.status !== "verified_instance") return null
+  if (found.status !== "verified_instance") {
+    const why = found.status === "no_witness" ? found.failures : found.reasons
+    return { status: "declined", reason: `没能按题面条件构造出坐标（${found.status}）：${(why[0] ?? "").slice(0, 300)}` }
+  }
 
   const candidatePlan = withWitnessCoordinates(first.plan, found.candidate)
-  if (candidatePlan === null) return null
+  if (candidatePlan === null) {
+    return { status: "declined", reason: "构造出了坐标，但这份计划里没有能承接它的那一笔动作（既不是唯一的多面体，也不是唯一的平面片，或顶点个数 / 点名对不上）。" }
+  }
 
   const second = compileOnce(candidatePlan, context)
-  if (!second.result.ok || second.result.draftDocument === null || second.result.diagramVerification?.status !== "passed") return null
+  if (!second.result.ok || second.result.draftDocument === null || second.result.diagramVerification?.status !== "passed") {
+    return { status: "declined", reason: "构造出的坐标替换进去之后，第二遍核验没有通过 —— 按纪律丢弃，不产出半份草稿。" }
+  }
 
   return {
-    ...second.result,
-    assumptions: [...second.result.assumptions, ...witnessAssumptions(found)],
-    /**
-     * 草稿层的再核验要对着**这一份**（R37②）：被替换过坐标与点名的候选图，
-     * 拿模型的原始动作去核验会得出与图不符的结论。
-     */
-    materialisedActions: second.result.actions
+    status: "rescued",
+    result: {
+      ...second.result,
+      assumptions: [...second.result.assumptions, ...witnessAssumptions(found)],
+      /**
+       * 草稿层的再核验要对着**这一份**（R37②）：被替换过坐标与点名的候选图，
+       * 拿模型的原始动作去核验会得出与图不符的结论。
+       */
+      materialisedActions: second.result.actions
+    }
+  }
+}
+
+/** 见证搜索这条救援的三种结局（第三种带**为什么没救成**，见 `compilePlan` 的来源标注）。 */
+type WitnessRescue =
+  | { status: "rescued"; result: PlanCompileResult }
+  /** 模型自己的坐标已经通过核验：什么都没发生，也就没有来源可标。 */
+  | { status: "not-needed" }
+  | { status: "declined"; reason: string }
+
+/**
+ * **退回模型坐标时如实标注来源**（设计 §6 的硬约束：**永不静默采信**）。
+ *
+ * 只在"这份计划真的有模型手写的坐标、而系统没能按题面条件构造出更好的那一组"时才标注 ——
+ * 没有可构造的坐标（模板 / 内核生成）时说这句话是假话；已经通过核验时（`not-needed`）
+ * 也没有"退回"这回事。
+ */
+function labelModelCoordinates(first: CompileOnceOutcome, reason: string): PlanCompileResult {
+  if (first.plan === null || !planHasFreeCoordinates(first.plan)) return first.result
+  return {
+    ...first.result,
+    assumptions: [
+      ...first.result.assumptions,
+      {
+        id: "witness.coordinate-source",
+        text: `这份图上的坐标是**模型给的、未经条件构造**（系统尝试按题面条件构造，但没有拿到可用的坐标：${reason}）—— 这组坐标没有经过题面条件的构造，请按需核对。`,
+        kind: "witness",
+        /**
+         * 值就是"这份坐标从哪来"这个事实本身（`source` + 为什么没构造出来）——
+         * `value` 在 `StructuredAssumption` 里是必填的，而这里能填的也只有这件事。
+         */
+        value: { source: "model", constructed: false, reason },
+        /**
+         * **不可覆盖**：它是"这份坐标从哪来"的事实陈述，不是系统替用户选的一个值。
+         * 允许覆盖等于让用户把来源信息改掉 —— 那正是 §6 要挡的静默。
+         */
+        overridable: false,
+        path: "witness.coordinate-source"
+      }
+    ]
   }
 }
 

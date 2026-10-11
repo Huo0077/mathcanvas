@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest"
 
 import { PLAN_SCHEMA_VERSION } from "./contracts"
 import { roundFrustumChordError } from "./localPlanDefaults"
-import { compilePlan, describeCompileRepairPrompt, searchWitnessForPrompt, type PlanCompileContext } from "./planCompiler"
+import { compilePlan, describeCompileRepairPrompt, searchWitnessForPrompt, type PlanCompileContext, type PlanCompileResult } from "./planCompiler"
 import { createDraftTools } from "./tools/draftTools"
 
 /**
@@ -30,6 +30,17 @@ function context(document: GeometryDocument = createEmptyDocument("geometry3d"),
 
 function rawPlan(actions: unknown[]): unknown {
   return { schemaVersion: PLAN_SCHEMA_VERSION, kind: "plan", goal: "代表题", factIds: [], actions }
+}
+
+/**
+ * **期望在 Task 5 有意改了**：那三条"开关打开 = 开关关闭"的逐字节断言当年守的是
+ * "开关不会悄悄换掉这张图"。乙案 Task 5 给开关打开时**新增**了一句坐标来源标注
+ *（设计 §6：构造不出 ⇒ 如实标注"未经条件构造"），所以两份结果不再逐字节相同 ——
+ * 但**只有那一句**不同。于是判据改成"去掉来源标注之后逐字节相同"：
+ * 原有的纪律一条没丢，新增的那一条也一并钉住。
+ */
+function withoutCoordinateSourceLabel(result: PlanCompileResult): string {
+  return JSON.stringify({ ...result, assumptions: result.assumptions.filter((entry) => entry.id !== "witness.coordinate-source") })
 }
 
 const PRISM = {
@@ -794,7 +805,8 @@ describe("witness search rescue in the compile path", () => {
 
     expect(switchedOn.ok).toBe(false)
     expect(switchedOn.draftDocument).toBeNull()
-    expect(JSON.stringify(switchedOn)).toBe(JSON.stringify(withoutSwitch))
+    expect(switchedOn.assumptions.filter((entry) => entry.id === "witness.coordinate-source"), "构造不出必须标注来源（设计 §6）").toHaveLength(1)
+    expect(withoutCoordinateSourceLabel(switchedOn)).toBe(JSON.stringify(withoutSwitch))
   })
 
   it("produces no draft when the search constructs no verifiable candidate at all", () => {
@@ -806,7 +818,8 @@ describe("witness search rescue in the compile path", () => {
     expect(switchedOn.ok).toBe(false)
     expect(switchedOn.draftDocument).toBeNull()
     expect(switchedOn.materialisedActions).toBeUndefined()
-    expect(JSON.stringify(switchedOn)).toBe(JSON.stringify(withoutSwitch))
+    expect(switchedOn.assumptions.filter((entry) => entry.id === "witness.coordinate-source"), "构造不出必须标注来源（设计 §6）").toHaveLength(1)
+    expect(withoutCoordinateSourceLabel(switchedOn)).toBe(JSON.stringify(withoutSwitch))
   })
 
   it("does not turn a prism problem into a pyramid just because the switch is on", () => {
@@ -818,7 +831,7 @@ describe("witness search rescue in the compile path", () => {
     expect(withoutSwitch.ok).toBe(false)
     expect(switchedOn.ok).toBe(false)
     expect(switchedOn.draftDocument).toBeNull()
-    expect(JSON.stringify(switchedOn)).toBe(JSON.stringify(withoutSwitch))
+    expect(withoutCoordinateSourceLabel(switchedOn)).toBe(JSON.stringify(withoutSwitch))
   })
 })
 
@@ -1176,5 +1189,81 @@ describe("空间点条件：这个开关是承重的（不是可选项）", () =
     expect(searchWitnessForPrompt(above, { spatialPointConditions: true }).status).toBe("unverified_instance")
     expect(searchWitnessForPrompt(bareCoordinate).status, "无等号坐标被静默忽略").toBe("verified_instance")
     expect(searchWitnessForPrompt(bareCoordinate, { spatialPointConditions: true }).status).toBe("unverified_instance")
+  })
+})
+
+/**
+ * **坐标来源：构造成功就用构造的，构造不出**必须**标明（乙案 Task 5 / 设计 §6）。**
+ *
+ * 设计 §6 的取舍是"坐标可选，但**永不静默采信**"。所以这一组守两条：
+ *
+ * 1. **构造成功 ⇒ 落盘的是构造出来的那一组**（模型给的那一组被换掉），报告里说明来源；
+ * 2. **构造不出 ⇒ 才退回模型坐标，并且如实标注"未经条件构造"** ——
+ *    这一条是整个设计里唯一会让现状变差的地方（覆盖面不够时用户从"画出一个错的"
+ *    变成"什么都没有"），所以"标注"不是礼貌，是硬约束：绝不出现"看着像构造成功、
+ *    其实是模型坐标"的静默成功。
+ */
+describe("平面图形：构造的坐标与来源标注（乙案 Task 5）", () => {
+  const PLANAR_PROMPT = "平面四边形ABCD中，AB=8，AD=5√3，∠BAD=30°，∠ADC=90°，CD=3"
+
+  const facePlan = (vertices: { x: number; y: number; z: number }[], prompt: string) => ({
+    schemaVersion: PLAN_SCHEMA_VERSION,
+    kind: "plan",
+    goal: "画示意图",
+    factIds: [],
+    actions: [{ actionId: "solid.create_face", actionKey: "quad", factIds: [], inputs: { alias: "quad", vertices, vertexNames: ["A", "B", "C", "D"], label: "平面四边形 ABCD" } }]
+  })
+
+  /** 模型**给错**的一组坐标：`|AB| = 4`（题面要 8），其余也不满足那两条角。 */
+  const WRONG = [{ x: 0, y: 0, z: 0 }, { x: 4, y: 0, z: 0 }, { x: 4, y: 4, z: 0 }, { x: 1, y: 4, z: 0 }]
+
+  /** 落盘的坐标：按图上的点名（`compileSolidFace` 用 `vertexNames` 给点打标签）。 */
+  function placedPoints(document: GeometryDocument | null): Map<string, { x: number; y: number; z: number }> {
+    const points = (document?.primitives ?? []).filter((primitive): primitive is Extract<typeof primitive, { type: "point3" }> => primitive.type === "point3")
+    return new Map(points.map((point) => [String(point.label), point.position]))
+  }
+
+  it("构造成功时用构造的坐标，而不是模型给的（并在报告里说明来源）", () => {
+    const result = compilePlan(facePlan(WRONG, PLANAR_PROMPT), context(createEmptyDocument("geometry3d"), { prompt: PLANAR_PROMPT, diagramWitnessSearch: true }))
+
+    // 模型那组坐标过不了核验；能 `passed` 只可能是因为**被换成了构造出来的那一组**。
+    expect(result.diagramVerification?.status).toBe("passed")
+    const at = placedPoints(result.draftDocument)
+    const distance = (first: string, second: string): number => {
+      const left = at.get(first)!
+      const right = at.get(second)!
+      return Math.hypot(left.x - right.x, left.y - right.y, left.z - right.z)
+    }
+    const angle = (vertex: string, first: string, second: string): number => {
+      const corner = at.get(vertex)!
+      const alongFirst = { x: at.get(first)!.x - corner.x, y: at.get(first)!.y - corner.y }
+      const alongSecond = { x: at.get(second)!.x - corner.x, y: at.get(second)!.y - corner.y }
+      const cosine = (alongFirst.x * alongSecond.x + alongFirst.y * alongSecond.y) / (Math.hypot(alongFirst.x, alongFirst.y) * Math.hypot(alongSecond.x, alongSecond.y))
+      return (Math.acos(Math.min(1, Math.max(-1, cosine))) * 180) / Math.PI
+    }
+    expect(distance("A", "B")).toBeCloseTo(8, 9)          // 模型给的是 4
+    expect(distance("C", "D")).toBeCloseTo(3, 9)
+    expect(angle("D", "A", "C")).toBeCloseTo(90, 9)
+    expect(result.assumptions.some((entry) => entry.text.includes("按题面条件构造"))).toBe(true)
+  })
+
+  it("构造不出时不许静默采信：没有任何替换发生，且报告标明这组坐标未经条件构造", () => {
+    /**
+     * 题面只给了两条长度（`AB=8`、`CD=3`）—— 四边形的形状定不出来（欠定），
+     * 而模型给的那组坐标又过不了 `AB=8`，所以这一轮一定走到"想构造、但构造不出"。
+     *
+     * **能看的证据是两样**（这一轮编译本身没过几何校验，所以没有草稿可看）：
+     * 救回路径专用的 `materialisedActions` **不存在**（没有任何东西被悄悄替换），
+     * 以及报告里那句来源标注 + 为什么没构造出来。
+     */
+    const underdetermined = "平面四边形ABCD中，AB=8，CD=3，画示意图"
+    const result = compilePlan(facePlan(WRONG, underdetermined), context(createEmptyDocument("geometry3d"), { prompt: underdetermined, diagramWitnessSearch: true }))
+
+    expect(result.diagramVerification?.status).toBe("failed")
+    expect(result.materialisedActions, "没有替换：这一轮的坐标还是模型那一组").toBeUndefined()
+    const label = result.assumptions.find((entry) => entry.text.includes("未经条件构造"))
+    expect(label, "报告必须说出来").toBeDefined()
+    expect(label?.text, "要带上为什么没构造出来").toMatch(/欠定|条件不足以定形|没能按题面条件构造/)
+    expect(label?.overridable, "来源是事实，不许被当成自选值覆盖掉").toBe(false)
   })
 })
