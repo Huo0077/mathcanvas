@@ -22,9 +22,11 @@ import type { VerificationCheck, VerificationReport } from "../contracts"
  *    这里刻意不给它任何序列化入口，也没有把它写进会话事实的类型。
  * 2. **没有视觉能力时如实说 `not_supported`**，绝不伪造"我看到了"。
  *    `mode: "structured_only"` 就是这句话的类型化形式。
- * 3. **证据必须绑在某一版草稿上**。`draftVersion` 是必填，缺了连构造都不该发生 ——
+ * 3. **证据必须绑在某一版草稿上**。`draftVersion` 与 `documentHash` 都是必填，缺了连构造都不该发生 ——
  *    否则"用户确认的是不是他看过的那一份"这个问题会重新变成猜想
  *    （同一条理由见 `draftStore.ts` 的 `previewHash` 与 `workerContracts.ts` 的 `artifact`）。
+ *    **Task 16 补上后半句**：绑了还要能**判过期** —— 判据是 `renderEvidenceStaleness`，
+ *    它只看内容哈希（见那个函数的注释："改题或撤销后旧图证据 stale"）。
  */
 
 /** 屏幕坐标里的一个矩形（像素）。布局判定的基本单位。 */
@@ -89,6 +91,14 @@ export interface RenderEvidence {
   runId: string
   draftId: string
   draftVersion: number
+  /**
+   * **被渲染文档的内容哈希**（`canonicalContentHash`，64 位小写十六进制）。**必填**（Task 16）。
+   *
+   * 为什么版本号不够：**改题**与**撤销**都会让版本号往前走，而"这张图是不是现在这一份"
+   * 只有内容哈希答得出来；反过来，暂存了同一份内容（版本变了、内容没变）时，
+   * 拿版本号当判据会把"什么都没改"误报成过期。见 `renderEvidenceStaleness`。
+   */
+  documentHash: string
   viewport: Viewport
   boxes: readonly LayoutBox[]
   screenshot?: ScreenshotArtifact
@@ -254,14 +264,65 @@ export function screenshotForProvider(evidence: RenderEvidence, visionVerified: 
 }
 
 /**
- * 证据身份是否完整（Task 4.1：「screenshot artifact 缺少 mime type、runId 或 draftVersion 时拒绝」）。
+ * 证据身份是否完整（Task 4.1：「screenshot artifact 缺少 mime type、runId 或 draftVersion 时拒绝」；
+ * Task 16 把**内容哈希**也纳入身份）。
  *
  * 单独成一个函数，是因为这条判据要在**两个**地方用：构造证据时，以及从消息边界收到证据时。
  * 写成两遍必然会漂移，而漂移的后果是"一边接受、一边拒绝"（最难查的一类分叉）。
  */
-export function evidenceIdentityProblem(evidence: Pick<RenderEvidence, "runId" | "draftId" | "draftVersion">): string | null {
+const CONTENT_HASH_PATTERN = /^[0-9a-f]{64}$/
+
+export function evidenceIdentityProblem(evidence: Pick<RenderEvidence, "runId" | "draftId" | "draftVersion" | "documentHash">): string | null {
   if (evidence.runId.length === 0) return "render evidence has no runId"
   if (evidence.draftId.length === 0) return "render evidence has no draftId"
   if (!Number.isInteger(evidence.draftVersion) || evidence.draftVersion < 1) return "render evidence has an invalid draftVersion"
+  if (!CONTENT_HASH_PATTERN.test(evidence.documentHash)) return "render evidence has no valid documentHash (expected 64 lowercase hex characters)"
   return null
+}
+
+/** 旧图证据相对**当前文档**的过期结论。 */
+export type RenderEvidenceStaleness =
+  | { stale: false; kind: "fresh" }
+  | { stale: true; kind: "draft_replaced" | "document_changed"; detail: string }
+
+/**
+ * **这份旧图证据还算不算数**（Task 16；计划退出条件："改题或撤销后旧图证据 stale"）。
+ *
+ * ## 判据看内容哈希，不看版本号
+ *
+ * 版本号只说明"暂存过几次"，内容哈希才说明"是不是同一份图"。两个方向都会错：
+ * 拿版本号当判据 ⇒ 暂存了同一份内容也报过期（噪声，用户会学会忽略这条提示）；
+ * 只看版本号不看哈希 ⇒ 撤销一次又画回原样的两份图分不出来。
+ *
+ * ## 两种 stale 分开说
+ *
+ * `document_changed`（同一份草稿、内容变了 —— **改题**与**撤销**都走这条）与
+ * `draft_replaced`（台上换成了另一份草稿 —— **切文档**）要做的事不一样：
+ * 前者重新画一遍就新了，后者那份证据属于别的文档、不该拿来参与这一份的判断。
+ *
+ * ## 截图不改变结论
+ *
+ * 截图是"当时看过的样子"，不是"现在的内容" —— 所以这条判据**只读身份与哈希**，
+ * 一条都不读 `screenshot`（与"截图不能替代条件回代"是同一条纪律。
+ * 用例："stays stale even when the old evidence carries a screenshot"）。
+ */
+export function renderEvidenceStaleness(
+  evidence: Pick<RenderEvidence, "draftId" | "draftVersion" | "documentHash">,
+  current: { draftId: string; documentHash: string }
+): RenderEvidenceStaleness {
+  if (evidence.draftId !== current.draftId) {
+    return {
+      stale: true,
+      kind: "draft_replaced",
+      detail: `这份证据属于草稿 ${evidence.draftId}（第 ${evidence.draftVersion} 版），现在台上是 ${current.draftId} —— 它是另一份文档的证据。`
+    }
+  }
+  if (evidence.documentHash !== current.documentHash) {
+    return {
+      stale: true,
+      kind: "document_changed",
+      detail: `证据绑在内容 ${evidence.documentHash.slice(0, 12)}…（第 ${evidence.draftVersion} 版），当前内容是 ${current.documentHash.slice(0, 12)}… —— 改题或撤销之后，旧图证据已经过期。`
+    }
+  }
+  return { stale: false, kind: "fresh" }
 }

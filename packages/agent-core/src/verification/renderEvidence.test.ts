@@ -6,6 +6,7 @@ import {
   evidenceIdentityProblem,
   layoutVerificationReport,
   overlapRatio,
+  renderEvidenceStaleness,
   screenshotForProvider,
   visibleRatio,
   type LayoutBox,
@@ -25,6 +26,9 @@ import {
 const viewport: Viewport = { width: 1000, height: 800 }
 const object = (id: string, x: number, y: number, width: number, height: number): LayoutBox => ({ id, kind: "object", x, y, width, height })
 const label = (id: string, x: number, y: number, width: number, height: number): LayoutBox => ({ id, kind: "label", x, y, width, height })
+/** 两个可辨认的内容哈希（`canonicalContentHash` 的形状：64 位小写十六进制）。 */
+const HASH_A = "a".repeat(64)
+const HASH_B = "b".repeat(64)
 
 describe("local layout diagnostics", () => {
   it("reports an empty canvas when no drawable object is in the viewport", () => {
@@ -138,6 +142,7 @@ describe("screenshots never reach a provider without verified vision", () => {
     runId: "run-1",
     draftId: "draft_1",
     draftVersion: 3,
+    documentHash: HASH_A,
     viewport,
     boxes: [object("cube-1", 10, 10, 100, 100)],
     screenshot: { mimeType: "image/png", base64: "AAAA", width: 1000, height: 800 }
@@ -177,16 +182,73 @@ describe("screenshots never reach a provider without verified vision", () => {
 describe("render evidence identity", () => {
   it("rejects evidence that is not bound to a run, a draft and a draft version", () => {
     // 证据绑不上草稿时，"用户确认的是不是他看过的那一份"又变成猜想。
-    expect(evidenceIdentityProblem({ runId: "", draftId: "d", draftVersion: 1 })).toContain("runId")
-    expect(evidenceIdentityProblem({ runId: "r", draftId: "", draftVersion: 1 })).toContain("draftId")
-    expect(evidenceIdentityProblem({ runId: "r", draftId: "d", draftVersion: 0 })).toContain("draftVersion")
-    expect(evidenceIdentityProblem({ runId: "r", draftId: "d", draftVersion: 1.5 })).toContain("draftVersion")
-    expect(evidenceIdentityProblem({ runId: "r", draftId: "d", draftVersion: 1 })).toBeNull()
+    expect(evidenceIdentityProblem({ runId: "", draftId: "d", draftVersion: 1, documentHash: HASH_A })).toContain("runId")
+    expect(evidenceIdentityProblem({ runId: "r", draftId: "", draftVersion: 1, documentHash: HASH_A })).toContain("draftId")
+    expect(evidenceIdentityProblem({ runId: "r", draftId: "d", draftVersion: 0, documentHash: HASH_A })).toContain("draftVersion")
+    expect(evidenceIdentityProblem({ runId: "r", draftId: "d", draftVersion: 1.5, documentHash: HASH_A })).toContain("draftVersion")
+    expect(evidenceIdentityProblem({ runId: "r", draftId: "d", draftVersion: 1, documentHash: HASH_A })).toBeNull()
+  })
+
+  /**
+   * **证据还要绑"哪一版内容"**（Task 16）。
+   *
+   * 只有 `draftVersion` 时，"这份截图是哪份文档的"仍然答不出来：**改题**与**撤销**
+   * 都会让版本号往前走一格，而"改的是不是这张图上那些东西"要靠**内容哈希**才说得清。
+   * 所以哈希是**必填**，而且格式不对（不是 64 位十六进制）也要当场拒。
+   */
+  it("rejects evidence that is not bound to a document content hash", () => {
+    expect(evidenceIdentityProblem({ runId: "r", draftId: "d", draftVersion: 1, documentHash: "" })).toContain("documentHash")
+    expect(evidenceIdentityProblem({ runId: "r", draftId: "d", draftVersion: 1, documentHash: "deadbeef" })).toContain("documentHash")
+    expect(evidenceIdentityProblem({ runId: "r", draftId: "d", draftVersion: 1, documentHash: HASH_A })).toBeNull()
   })
 
   it("exposes the default thresholds it judges with", () => {
     // 阈值必须是可读的常数，而不是散在判据里的字面量（否则没法解释"为什么这条没报"）。
     expect(DEFAULT_LAYOUT_THRESHOLDS.minVisibleAreaRatio).toBeGreaterThan(0)
     expect(DEFAULT_LAYOUT_THRESHOLDS.labelOverlapRatio).toBeGreaterThan(0)
+  })
+})
+
+/**
+ * **旧图证据"过期"的判据**（Task 16）。
+ *
+ * 计划退出条件：**"改题或撤销后旧图证据 stale"**。这一组钉四件事：
+ *
+ * ① 判据看的是**内容哈希**，不是版本号 —— 版本往前走但内容没变（暂存了同一份图）时，
+ *    旧证据**依然新鲜**。拿版本号当判据会把"什么都没改"报成过期，那种噪声会让用户
+ *    学会忽略这条提示（与 `diagnoseLayout` 刻意保守是同一条理由）。
+ * ② 内容变了（`document_changed`）与**换了另一份草稿**（`draft_replaced`）分开说：
+ *    前者是"改题 / 撤销"，后者是"切文档"，用户要做的事不一样。
+ * ③ 理由里必须能看见**两个哈希的前缀** —— 否则用户不知道该拿哪一份去比。
+ * ④ **带截图也不改变结论**：截图是"看过的样子"，不是"现在的内容"。
+ */
+describe("render evidence staleness", () => {
+  const evidence = { draftId: "draft_1", draftVersion: 3, documentHash: HASH_A, screenshot: { mimeType: "image/png", base64: "AAAA", width: 10, height: 10 } }
+
+  it("treats a newer draft version with the same content as fresh", () => {
+    const verdict = renderEvidenceStaleness(evidence, { draftId: "draft_1", documentHash: HASH_A })
+    expect(verdict.stale).toBe(false)
+    expect(verdict.kind).toBe("fresh")
+  })
+
+  it("goes stale when the document content changes, and names both hashes", () => {
+    const verdict = renderEvidenceStaleness(evidence, { draftId: "draft_1", documentHash: HASH_B })
+    expect(verdict).toMatchObject({ stale: true, kind: "document_changed" })
+    // 判别联合要先收窄再读 `detail`（`tsc` 会抓，vitest 不会）。
+    if (!verdict.stale) throw new Error("改题/撤销之后这份证据必须过期")
+    expect(verdict.detail).toContain(HASH_A.slice(0, 12))
+    expect(verdict.detail).toContain(HASH_B.slice(0, 12))
+  })
+
+  it("goes stale when another draft is on screen now", () => {
+    const verdict = renderEvidenceStaleness(evidence, { draftId: "draft_2", documentHash: HASH_B })
+    expect(verdict.stale).toBe(true)
+    expect(verdict.kind).toBe("draft_replaced")
+  })
+
+  it("stays stale even when the old evidence carries a screenshot", () => {
+    // "截图不能替代条件回代"的另一种形态：截图也不能让旧图证据变新鲜。
+    const withShot = { ...evidence, screenshot: { mimeType: "image/png", base64: "AAAABBBB", width: 800, height: 600 } }
+    expect(renderEvidenceStaleness(withShot, { draftId: "draft_1", documentHash: HASH_B }).stale).toBe(true)
   })
 })

@@ -1,5 +1,7 @@
 import * as THREE from "three"
 import { useEffect, useRef, useState } from "react"
+
+import { canvasEvidenceAttributes, canvasEvidenceOf } from "./canvasEvidence"
 import type { GeometryDocument, Point3Primitive, Vector3 } from "@draw/dsl"
 import { dihedralAngleDegrees, type Host3Parameter } from "@draw/geometry-kernel"
 import { planeThroughPoints } from "@draw/scene-graph"
@@ -311,6 +313,33 @@ export function ThreeSceneView({ document, selectedIds, onSelect, creationSessio
     runtimeRef.current?.syncCreationPreview()
   }, [creationSession])
 
+  /**
+   * **真实画布证据（3D 那一份）**（Task 16）。
+   *
+   * 与 2D 同一条纪律：量的是**已经渲染出来的 DOM**。3D 的图形在 WebGL 里、DOM 量不到，
+   * 所以这里只量**点标注覆盖层**，并且明确写上 `objectsMeasurable=false` ——
+   * 不许把"量不到对象"说成"画布是空的"（那会让诊断变成噪声）。
+   *
+   * 视图口取容器的实际像素尺寸；还没排版（0×0）时**如实**走 `degenerate_viewport`
+   * 那条判据，而不是编一个尺寸出来。
+   */
+  const [canvasEvidence, setCanvasEvidence] = useState<Record<string, string>>({})
+  /**
+   * **刻意不给依赖表**：3D 的点标注是渲染循环在 WebGL 里投影后写进覆盖层的，
+   * **转视角**会让"哪些点名在画面里"变掉，而相机状态在 ref 上、不是 React 状态 ——
+   * 任何依赖表都抓不到它。循环风险由 `setCanvasEvidence` 里那道"签名没变就返回原对象"
+   * 的闸挡住（同一个对象 ⇒ React 跳过重渲染）。
+   */
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const shell = containerRef.current
+    if (!shell) return
+    const root = pointLabelOverlayRef.current ?? shell
+    const viewport = { width: shell.clientWidth, height: shell.clientHeight }
+    const measured = canvasEvidenceAttributes(canvasEvidenceOf({ document, root, viewport, objectsMeasurable: false }), false)
+    setCanvasEvidence((current) => (JSON.stringify(current) === JSON.stringify(measured) ? current : measured))
+  })
+
   const selectedFace = document.primitives.find((primitive) => selectedIds.includes(primitive.id) && primitive.type === "face3")
   const facePoints = selectedFace?.type === "face3" ? selectedFace.pointIds.map((id) => document.primitives.find((candidate) => candidate.id === id)).filter((point): point is Point3Primitive => point?.type === "point3").map((point) => point.position) : []
   const selectedPlane = facePoints.length >= 3 ? planeThroughPoints(facePoints) : null
@@ -326,7 +355,7 @@ export function ThreeSceneView({ document, selectedIds, onSelect, creationSessio
   /** 「以面为剖切面」需要有选中的截面作为目标。 */
   const hasSelectedSection = selectedIds.some((id) => document.primitives.some((primitive) => primitive.id === id && primitive.type === "section"))
   const angle = dihedralAngleDegrees({ x: 1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 })
-  return <div className="three-canvas-shell" ref={containerRef} data-3d-scene="true" data-canvas-surface="graph-paper" data-pan-mode={panMode ? "true" : "false"} data-drag-mode={dragMode ? "true" : "false"} data-creation-tool={creationSession?.tool ?? ""} data-creation-anchors={String(creationSession?.anchors.length ?? 0)} data-work-plane={workPlaneName} data-solid-preview={solidPreviewActive ? "true" : "false"} aria-label="3D 几何场景"
+  return <div className="three-canvas-shell" ref={containerRef} data-3d-scene="true" data-canvas-surface="graph-paper" data-pan-mode={panMode ? "true" : "false"} data-drag-mode={dragMode ? "true" : "false"} data-creation-tool={creationSession?.tool ?? ""} data-creation-anchors={String(creationSession?.anchors.length ?? 0)} data-work-plane={workPlaneName} data-solid-preview={solidPreviewActive ? "true" : "false"} {...canvasEvidence} aria-label="3D 几何场景"
     onPointerDownCapture={(event) => {
       if (!creationSession || event.button !== 0 || event.shiftKey || !isCreationCanvasTarget(event.target)) return
       event.stopPropagation()

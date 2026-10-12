@@ -1,4 +1,6 @@
 import { type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react"
+
+import { canvasEvidenceAttributes, canvasEvidenceOf } from "../canvasEvidence"
 import type { Coordinate, GeometryDocument, PrimitiveSpec } from "@draw/dsl"
 import { adaptiveSampleFunctionSegments, createTransientTrace, evaluateParameterExpression, hyperbolaDomain, sampleEllipse, sampleHyperbolaBranches, sampleParabola } from "@draw/geometry-kernel"
 import { applyOperation, getAffectedPrimitiveIds, pathConstraint, type DomainOperation } from "@draw/scene-graph"
@@ -436,6 +438,24 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
     setDragStart(null)
     setDragCurrent(null)
   }
+  /**
+   * **真实画布证据**（Task 16）：每一次渲染之后，从**已经画出来的 SVG** 上量一遍，
+   * 把内容哈希、盒子/标签个数、布局诊断码、以及"文档里有名字而画布没画出来"的点名
+   * 挂到根元素上。
+   *
+   * 为什么要读 DOM 而不是读 `document`：计划原话是**"仅查内存文档不算视觉通过"** ——
+   * 一个"文档里有 5 个点"的断言在画布什么都没画出来时同样成立。这里量的是渲染结果。
+   *
+   * 状态用"签名没变就不 setState"挡住重渲染循环（属性一样时返回同一个对象，React 会跳过）。
+   */
+  const [canvasEvidence, setCanvasEvidence] = useState<Record<string, string>>({})
+  useEffect(() => {
+    const svg = svgRef.current
+    if (!svg) return
+    const measured = canvasEvidenceAttributes(canvasEvidenceOf({ document, root: svg, viewport: { width: VIEWBOX.width, height: VIEWBOX.height } }))
+    setCanvasEvidence((current) => (JSON.stringify(current) === JSON.stringify(measured) ? current : measured))
+    // 这三样就是"画出来的东西"的全部输入：内容、视野变换、选中态（影响描边宽度）。
+  }, [document, viewport, selectedIds])
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => { if (event.code === "Space") { event.preventDefault(); setSpacePressed(true) } }
     const handleKeyUp = (event: KeyboardEvent) => { if (event.code === "Space") setSpacePressed(false) }
@@ -542,7 +562,7 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
   const measurementLabels = planarMeasurementVisuals(document, selectedIds)
   const gridStroke = { minor: "var(--color-graph-grid-minor)", major: "var(--color-graph-grid-major)", axis: "var(--color-graph-axis)" }
   return <main className="graphics" data-canvas-surface={graphPaper ? "graph-paper" : "workbench"}><div className="canvas-card">{hoverCoordinate && <div className="coordinate-readout" data-coordinate-readout="true" role="presentation">{hoverPrimitiveType ? `${hoverPrimitiveType} · ` : ""}({hoverCoordinate.x.toFixed(2)}, {hoverCoordinate.y.toFixed(2)})</div>}
-<div className="canvas-viewport-controls" role="group" aria-label="画布缩放"><button type="button" aria-label="缩小画布" title="缩小画布（滚轮向下）" onClick={() => setViewport((current) => zoomViewport(current, 1 / 1.25))}>−</button><span className="zoom-readout" data-zoom-readout="true" aria-live="polite">{zoomPercentage}</span><button type="button" aria-label="放大画布" title="放大画布（滚轮向上）" onClick={() => setViewport((current) => zoomViewport(current, 1.25))}>＋</button><button type="button" aria-label="重置视图" title="重置视图（居中并恢复默认缩放）" onClick={() => setViewport(DEFAULT_VIEWPORT)}>重置</button></div><svg ref={svgRef} className={panState ? "is-panning" : dragState ? "is-dragging" : undefined} data-viewport-center={`${viewport.center.x},${viewport.center.y}`} data-viewport-scale={viewport.scale} data-grid-cell={GRID_CELL} data-grid-major={GRID_MAJOR_EVERY} data-measurement-labels={measurementLabels.length} viewBox={`0 0 ${VIEWBOX.width} ${VIEWBOX.height}`} role="img" aria-label="几何画布" onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerLeave={() => { setHoverCoordinate(null); setHoverPrimitiveType(null); onPointerCoordinate?.(null) }} onPointerUp={finishDrag} onPointerCancel={finishDrag} onDoubleClick={(event) => creationMode === "polyline" && onCanvasDoubleClick(eventToWorld(event, viewport))} onClick={(event) => { if (suppressClick.current) { suppressClick.current = false; return }; if (creationMode) onCanvasClick(eventToWorld(event, viewport)); else if (!dragStart) onSelect(null) }}>
+<div className="canvas-viewport-controls" role="group" aria-label="画布缩放"><button type="button" aria-label="缩小画布" title="缩小画布（滚轮向下）" onClick={() => setViewport((current) => zoomViewport(current, 1 / 1.25))}>−</button><span className="zoom-readout" data-zoom-readout="true" aria-live="polite">{zoomPercentage}</span><button type="button" aria-label="放大画布" title="放大画布（滚轮向上）" onClick={() => setViewport((current) => zoomViewport(current, 1.25))}>＋</button><button type="button" aria-label="重置视图" title="重置视图（居中并恢复默认缩放）" onClick={() => setViewport(DEFAULT_VIEWPORT)}>重置</button></div><svg ref={svgRef} className={panState ? "is-panning" : dragState ? "is-dragging" : undefined} data-viewport-center={`${viewport.center.x},${viewport.center.y}`} data-viewport-scale={viewport.scale} data-grid-cell={GRID_CELL} data-grid-major={GRID_MAJOR_EVERY} data-measurement-labels={measurementLabels.length} {...canvasEvidence} viewBox={`0 0 ${VIEWBOX.width} ${VIEWBOX.height}`} role="img" aria-label="几何画布" onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerLeave={() => { setHoverCoordinate(null); setHoverPrimitiveType(null); onPointerCoordinate?.(null) }} onPointerUp={finishDrag} onPointerCancel={finishDrag} onDoubleClick={(event) => creationMode === "polyline" && onCanvasDoubleClick(eventToWorld(event, viewport))} onClick={(event) => { if (suppressClick.current) { suppressClick.current = false; return }; if (creationMode) onCanvasClick(eventToWorld(event, viewport)); else if (!dragStart) onSelect(null) }}>
     <g data-grid-layer="minor" stroke={gridStroke.minor} strokeWidth="1">{verticalGrid.filter((x) => !isMajorGridLine(x)).map((x) => <line key={`v-${x}`} x1={toX(x)} y1={VIEWBOX.top} x2={toX(x)} y2={VIEWBOX.bottom} />)}{horizontalGrid.filter((y) => !isMajorGridLine(y)).map((y) => <line key={`h-${y}`} x1={VIEWBOX.left} y1={toY(y)} x2={VIEWBOX.right} y2={toY(y)} />)}</g>
     <g data-grid-layer="major" stroke={gridStroke.major} strokeWidth="1">{verticalGrid.filter(isMajorGridLine).map((x) => <line key={`vm-${x}`} x1={toX(x)} y1={VIEWBOX.top} x2={toX(x)} y2={VIEWBOX.bottom} />)}{horizontalGrid.filter(isMajorGridLine).map((y) => <line key={`hm-${y}`} x1={VIEWBOX.left} y1={toY(y)} x2={VIEWBOX.right} y2={toY(y)} />)}</g>
     <line x1={VIEWBOX.left} y1={toY(0)} x2={VIEWBOX.right} y2={toY(0)} stroke={gridStroke.axis} strokeWidth="1.25" /><line x1={toX(0)} y1={VIEWBOX.top} x2={toX(0)} y2={VIEWBOX.bottom} stroke={gridStroke.axis} strokeWidth="1.25" />
