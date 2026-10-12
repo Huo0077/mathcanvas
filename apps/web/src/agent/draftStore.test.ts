@@ -376,6 +376,44 @@ describe("isolated drafts", () => {
   })
 
   /**
+   * **证明那一栏会跟着草稿内容一起过期**（Task 18）。
+   *
+   * 现场形态：开着形式证明导出跑了一次（这一栏写进去了），**然后改题** —— 第二次暂存的题面
+   * 读不出可核验的题设 ⇒ 证明那一段**不会被重写**，可是草稿的候选内容已经换了一份。
+   * 那时如果那一栏还写着"已验证"，用户读到的就是一句关于**旧图**的话。
+   *
+   * 判据：候选取了 `parameter.create` 那一笔（它**不是**"可核验图形"那样的一笔），
+   * 所以 `parsed === null` ⇒ 证明块跳过；候选哈希变了 ⇒ 那一栏必须标 `stale`，理由指名
+   * `document_changed`，而且**产物本身不被抹掉**（谁证的、正文来源都留着，便于排查）。
+   */
+  it("**证明跑完之后草稿内容又变了 ⇒ 那一栏标 `stale`，不留在新图上说'已验证'**", async () => {
+    const store = createDraftStore(undefined, undefined, {
+      // 浏览器里那条通道本来就不存在 ⇒ 结局是"没跑成"，但**这一栏照样要绑身份**。
+      backendVersion: "lean4 test-version"
+    })
+    const record = store.create(createEmptyDocument("geometry3d"))
+    const first = await store.stage(record.draftId, [IR_TETRAHEDRON] as never, record.draftVersion, IR_PROMPT, undefined, undefined, undefined, true)
+
+    expect(first.ok).toBe(true)
+    if (!first.ok) return
+    expect(first.preview.proofAttempt).toBeDefined()
+    expect(first.preview.proofAttempt?.stale).toBeNull()
+    const firstHash = first.preview.previewHash
+
+    // 第二次：**改题**，这一笔动作不构成"可核验图形" ⇒ 证明块跳过、那一栏保持上一轮的值。
+    const parameter = { actionId: "parameter.create", actionKey: "theta", factIds: [], inputs: { id: "theta", value: 1, label: "θ" } }
+    const second = await store.stage(record.draftId, [parameter] as never, first.preview.draftVersion, "设 θ = 1", undefined, undefined, undefined, true)
+
+    expect(second.ok).toBe(true)
+    if (!second.ok) return
+    expect(second.preview.previewHash, "候选内容确实换了一份").not.toBe(firstHash)
+    expect(second.preview.proofAttempt?.outcome).toBe("stale")
+    expect(second.preview.proofAttempt?.stale?.kind).toBe("document_changed")
+    // 产物本身留着（过期的是"还算不算数"，不是"有没有这回事"）。
+    expect(second.preview.proofAttempt?.detail).toContain("过期")
+  })
+
+  /**
    * **题面改写要走到草稿层**（2026-10-10 第二件）。
    *
    * 草稿层**会自己重算一遍题设核验**（Worker 那条路只回带候选文档与操作），所以改写必须也到这一层 ——

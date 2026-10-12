@@ -159,16 +159,26 @@ describe("形式证明那一次尝试（§3-D）", () => {
         detail: "内核验证通过（三个白名单公理）。",
         claimId: "draft-goal:goal-1",
         proofSource: "system-canonical",
-        choices: ["平面内取第 1+2 条相交直线"]
+        choices: ["平面内取第 1+2 条相交直线"],
+        // Task 17/18：范围报告说这一次只是受限引理，而且有一条题面条件没进命题。
+        scope: { outcome: "limited_lemma", goalSourceId: "obligation-goal-0", detail: "受限引理", outside: ["AB=2"] },
+        stale: null
       }
     })} />)
 
     const section = screen.getByRole("region", { name: "形式证明" })
-    expect(section.textContent).toContain("已验证")
+    /**
+     * **"证成了"要分两档说**（Task 17/18）：`verified` + `limited_lemma` 的标题是
+     * "受限引理已证（不是整道题）"，**不是**"原题完整证明" —— 这一条就是那句判据的界面形态。
+     */
+    expect(section.textContent).toContain("受限引理已证")
+    expect(section.textContent).not.toContain("原题完整证明")
+    expect(section.textContent).toContain("AB=2")
     expect(section.textContent).toContain("内核验证通过")
     expect(section.textContent).toContain("系统按这一类给出的")
     expect(section.textContent).toContain("平面内取第 1+2 条相交直线")
     expect(section.textContent).toContain("原题其余题设没有进命题")
+    expect(section.getAttribute("data-proof-scope")).toBe("limited_lemma")
   })
 
   it("说得清'不是证不出来，是这台机器跑不了'这一类结局", () => {
@@ -178,7 +188,9 @@ describe("形式证明那一次尝试（§3-D）", () => {
         detail: "这台机器上没有配置 Lean 工具链（桌面版才能跑）。",
         claimId: null,
         proofSource: null,
-        choices: []
+        choices: [],
+        scope: null,
+        stale: null
       }
     })} />)
 
@@ -186,6 +198,32 @@ describe("形式证明那一次尝试（§3-D）", () => {
     expect(section.textContent).toContain("没跑成")
     // 库里的原话要原样显示 —— 它是用户判断"该怎么办"的唯一依据。
     expect(section.textContent).toContain("这台机器上没有配置 Lean 工具链")
+  })
+
+  /**
+   * **迟到的结果过期时，界面必须说"过期"，而不是"已验证"**（Task 18）。
+   *
+   * 判据在草稿层（`proofAttemptStaleness` 复查实时句柄），这里钉的是**读法**：
+   * 标题不出现"已验证"，`data-proof-stale` 带上原因种类，理由原样显示。
+   */
+  it("旧产物过期时标题与原因都说得出，绝不显示成'已验证'", () => {
+    render(<ConfirmationPanel draft={draft({
+      proofAttempt: {
+        outcome: "stale",
+        detail: "内核验证通过。【过期：改题/改图/撤销之后，这一轮的 claim 不能凭它升级。】",
+        claimId: "draft-goal:goal-1",
+        proofSource: "system-canonical",
+        choices: [],
+        scope: { outcome: "limited_lemma", goalSourceId: "obligation-goal-0", detail: "受限引理", outside: [] },
+        stale: { kind: "document_changed", detail: "证明跑的是内容 aaaa…，现在这张图是 bbbb…" }
+      }
+    })} />)
+
+    const section = screen.getByRole("region", { name: "形式证明" })
+    expect(section.getAttribute("data-proof-stale")).toBe("document_changed")
+    expect(section.textContent).toContain("过期")
+    expect(section.textContent).not.toContain("已验证")
+    expect(section.textContent).toContain("现在这张图是")
   })
 
   it("开关关着时连这一段都不存在（不是显示一句'已关闭'）", () => {

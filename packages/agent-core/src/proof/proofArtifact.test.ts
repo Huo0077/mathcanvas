@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import type { ClaimEvidenceStatus } from "../claimEvidence"
-import { evidenceStatusWithProof, proofInputHash, verifyProofArtifact, PROOF_ARTIFACT_VERSION, WIRED_PROOF_BACKENDS, type ProofExpectation } from "./proofArtifact"
+import { evidenceStatusWithProof, proofAttemptStaleness, proofInputHash, verifyProofArtifact, PROOF_ARTIFACT_VERSION, WIRED_PROOF_BACKENDS, type ProofAttemptIdentity, type ProofExpectation } from "./proofArtifact"
 
 /**
  * **N5 第一步的 RED**（实施计划 Phase N5）：
@@ -269,5 +269,85 @@ describe("输入绑定（R51 假设 / R56 被证明的命题）", () => {
     const sneaky = { ...base, documentFingerprint: "坐标与标签的那份指纹" } as unknown as Parameters<typeof proofInputHash>[0]
 
     expect(proofInputHash(sneaky)).toBe(proofInputHash(base))
+  })
+})
+
+/**
+ * **一次异步证明"回来时还算不算数"**（Task 18）。
+ *
+ * ## 与上面那条绑定判据的分工（**两者不是一回事，都要有**）
+ *
+ * - `verifyProofArtifact` 判的是**命题一级**：这份产物证的是不是**这条命题**（`inputHash`）。
+ *   它**刻意不绑文档指纹**（R51/R56 的裁决：绑了会把"普遍成立"降级成"这一次实例"，
+ *   还会被无关编辑刷成假过期）。
+ * - `proofAttemptStaleness` 判的是**这一轮/这一份图**：这条**迟到的**结果还配不配
+ *   升级**现在**这条 claim。改题、改图、撤销、切工作区、导入别的文档之后，
+ *   图与命题的对应关系已经不是它当初跑的那一份了 —— 所以标 `stale`，
+ *   但**不许**因此说"那条命题不再成立"（那两句话分开写）。
+ *
+ * 版本号与内容哈希的分工沿用它处同一条口径：**看哈希、不看版本号**（暂存了同一份内容
+ * 不算过期；`revision` 只留作显示用）。
+ */
+describe("Task 18: 迟到的证明产物还算不算数", () => {
+  const HASH_A = "a".repeat(64)
+  const HASH_B = "b".repeat(64)
+  const ATTEMPT: ProofAttemptIdentity = {
+    draftId: "draft-1",
+    documentHash: HASH_A,
+    revision: 3,
+    claimId: "draft-goal:求证 PA ⊥ BD",
+    goalSourceId: "obligation-goal-0",
+    inputHash: proofInputHash({ prompt: "在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD", claimSourceText: "PA ⊥ BD" }),
+    backendVersion: "lean4 4.11.0"
+  }
+
+  it("内容没变就是新鲜：版本号往前走一格不算过期", () => {
+    const verdict = proofAttemptStaleness(ATTEMPT, { ...ATTEMPT, revision: 9 })
+    expect(verdict.stale).toBe(false)
+    expect(verdict.kind).toBe("fresh")
+  })
+
+  it("**改题 / 改图 / 撤销 ⇒ document_changed**，理由里两个哈希前缀都在", () => {
+    const verdict = proofAttemptStaleness(ATTEMPT, { ...ATTEMPT, documentHash: HASH_B, revision: 4 })
+    expect(verdict.stale).toBe(true)
+    expect(verdict.kind).toBe("document_changed")
+    if (!verdict.stale) throw new Error("内容变了就必须过期")
+    expect(verdict.detail).toContain(HASH_A.slice(0, 12))
+    expect(verdict.detail).toContain(HASH_B.slice(0, 12))
+  })
+
+  it("**切工作区 / 导入别的文档 ⇒ draft_replaced**（那是另一份草稿的证据）", () => {
+    const verdict = proofAttemptStaleness(ATTEMPT, { ...ATTEMPT, draftId: "draft-2", documentHash: HASH_B })
+    expect(verdict.stale).toBe(true)
+    expect(verdict.kind).toBe("draft_replaced")
+  })
+
+  it("claim 或原文条件换了 ⇒ 各自一档（产物绑的是那一条，不是这一条）", () => {
+    expect(proofAttemptStaleness(ATTEMPT, { ...ATTEMPT, claimId: "draft-goal:求证 AB ⊥ CD" })).toMatchObject({ stale: true, kind: "claim_replaced" })
+    expect(proofAttemptStaleness(ATTEMPT, { ...ATTEMPT, goalSourceId: "obligation-goal-1" })).toMatchObject({ stale: true, kind: "condition_replaced" })
+  })
+
+  it("命题/假设变了 ⇒ input_changed；后端版本换了 ⇒ backend_replaced", () => {
+    expect(proofAttemptStaleness(ATTEMPT, { ...ATTEMPT, inputHash: HASH_B })).toMatchObject({ stale: true, kind: "input_changed" })
+    expect(proofAttemptStaleness(ATTEMPT, { ...ATTEMPT, backendVersion: "lean4 4.12.0" })).toMatchObject({ stale: true, kind: "backend_replaced" })
+  })
+
+  it("草稿没绑上时不新鲜也不假装新鲜", () => {
+    const verdict = proofAttemptStaleness(ATTEMPT, { ...ATTEMPT, draftId: "" })
+    expect(verdict.stale).toBe(true)
+  })
+
+  it("**没绑内容哈希 ⇒ 一律过期**（说不清是哪一张图就不许升级，fail-closed）", () => {
+    const verdict = proofAttemptStaleness({ ...ATTEMPT, documentHash: "" }, ATTEMPT)
+    expect(verdict.stale).toBe(true)
+    expect(verdict.kind).toBe("document_changed")
+    if (!verdict.stale) throw new Error("没绑内容哈希必须过期")
+    expect(verdict.detail).toContain("内容哈希")
+  })
+
+  it("**没捕获的那几栏不参与判定**（调用方拿不到的就不许拿它当判据）", () => {
+    // 只绑了草稿与内容（这是产品侧那一步真正拿得到的两样）：照样能判新鲜。
+    const thin: ProofAttemptIdentity = { ...ATTEMPT, claimId: "", goalSourceId: null, inputHash: "", backendVersion: "" }
+    expect(proofAttemptStaleness(thin, ATTEMPT)).toMatchObject({ stale: false, kind: "fresh" })
   })
 })

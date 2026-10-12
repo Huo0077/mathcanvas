@@ -230,6 +230,23 @@ export function conicInvariantPlan(): PlanEnvelope {
  * 而"挑得对不对"由 `relations` 表 + 内核残差核验。
  */
 export const PYRAMID_PROMPT = "在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，BC ∥ AD，AB ⊥ AD，画出这个四棱锥"
+
+/**
+ * **同一只四棱锥，外加一句可以形式化的目标**（Task 18）。
+ *
+ * 为什么需要它：浏览器里那条证明通道**本来就不存在**（要桌面版），而"不在也不会挡作图"
+ * 这句话得有**真实浏览器读数** —— 那就要一道题，它的目标句能过 `readProofGoal`、
+ * 于是证明那一段会真的走到面板上（结局如实是"这台机器上没配工具链"）。
+ *
+ * 目标取 `PA ⊥ BD`（线 ⊥ 线）：它是四类受限目标里靠**性质定理**那一类，
+ * 前提由题面那条 `PA ⊥ 平面 ABCD` 与点名结构给出 —— 与 `PYRAMID_PROMPT` 同一张图，
+ * 所以复用 `pyramidPlan(true)`（带 relations 的那一份）。
+ *
+ * **"画出这个四棱锥"那一句不能省**：`localPlanner.isAnalysisQuestion` 认"求"这个字
+ * （读数问法），没有作图动词时整句会被当成"只在问读数"的分析题 ⇒ 本地规划器**不认**
+ * 这条意图、面板根本不出现（这一条是实测踩出来的）。
+ */
+export const PROOF_GOAL_PROMPT = "在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，BC ∥ AD，AB ⊥ AD，画出这个四棱锥，求证 PA ⊥ BD"
 /** 离线负例：同一张图外加尚未支持的角度条件，必须停在未核验。 */
 /**
  * 那把"**有一条读不出来的条件**"的题面：可构造的四棱锥 + 一个解析器读不懂的子句。

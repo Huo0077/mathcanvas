@@ -1,4 +1,4 @@
-import { attemptAutomaticProof, readProofGoal, type DiagramObligationSet, type ProofChannel } from "@draw/agent-core"
+import { attemptAutomaticProof, readProofGoal, type DiagramObligationSet, type ProofChannel, type ProofScopeOutcome } from "@draw/agent-core"
 
 import { createDesktopProofChannel } from "./desktopProofChannel"
 
@@ -27,8 +27,13 @@ import { createDesktopProofChannel } from "./desktopProofChannel"
 
 /** 草稿要带着走的那一小段（**故意做小**：不把通道、桥、产物塞进草稿记录）。 */
 export interface DraftProofAttempt {
-  /** 结局词表与库里那一层同源（多一个 `no_goal`：这道题没有可证的目标句）。 */
-  outcome: "no_goal" | "verified" | "rejected" | "timeout" | "toolchain_unavailable" | "premises_unresolved" | "internal_error" | "capability_off"
+  /**
+   * 结局词表与库里那一层同源（多两个：`no_goal` 这道题没有可证的目标句、`stale` 旧产物过期）。
+   *
+   * **`stale` 由草稿层判**（Task 18）：证明跑完时复查实时句柄，台上换了另一份内容/另一份草稿
+   * 就把结局改成它 —— 迟到的结果**不许**把"已验证"贴到新图上。
+   */
+  outcome: "no_goal" | "verified" | "rejected" | "timeout" | "toolchain_unavailable" | "premises_unresolved" | "internal_error" | "capability_off" | "stale"
   /** 给用户看的一句话（面板/诊断直接显示它）。 */
   detail: string
   /** 证成了才有：产物绑在哪条 claim 上。 */
@@ -37,6 +42,13 @@ export interface DraftProofAttempt {
   proofSource: "model" | "system-canonical" | null
   /** 系统替用户做的选择（读了哪条目标、平面内取了哪两条相交线…）。 */
   choices: string[]
+  /**
+   * **这一次证的是哪一档**（Task 17）：受限引理 / 整题 / 不支持，外加目标句的出处与
+   * **没进命题的那些条件**。面板据此分开显示"受限引理已证"与"原题完整证明"。
+   */
+  scope: { outcome: ProofScopeOutcome; goalSourceId: string | null; detail: string; outside: string[] } | null
+  /** 过期时的结论（非空 ⇒ `outcome` 一定是 `stale`）。 */
+  stale: { kind: string; detail: string } | null
 }
 
 export interface ProofStageRequest {
@@ -68,14 +80,16 @@ export async function attemptProofForStage(request: ProofStageRequest): Promise<
       detail: "题面里没有可形式化的目标句（今天支持：线⊥面、线⊥线、在某点处的切线）—— 作图不受影响。",
       claimId: null,
       proofSource: null,
-      choices: []
+      choices: [],
+      scope: null,
+      stale: null
     }
   }
   const read = readProofGoal(goalText, request.obligations)
   if (!read.ok) {
     // `find` 已经保证这一条读得出；走到这里说明两次读的结果不一致（上游有状态）——
     // 如实报成内部问题，而不是假装"没有目标"。
-    return { outcome: "internal_error", detail: `同一条目标句两次读的结果不一致：${read.reason}`, claimId: null, proofSource: null, choices: [] }
+    return { outcome: "internal_error", detail: `同一条目标句两次读的结果不一致：${read.reason}`, claimId: null, proofSource: null, choices: [], scope: null, stale: null }
   }
 
   const result = await attemptAutomaticProof({
@@ -89,7 +103,9 @@ export async function attemptProofForStage(request: ProofStageRequest): Promise<
     proofSource: "system-canonical",
     flagEnabled: true,
     channel: request.channel ?? createDesktopProofChannel(),
-    backendVersion: request.backendVersion
+    backendVersion: request.backendVersion,
+    // Task 17/18：范围报告要带出"目标句出自题面哪一条"，读法与假设也一起交进去。
+    reading: read
   })
 
   return {
@@ -97,6 +113,15 @@ export async function attemptProofForStage(request: ProofStageRequest): Promise<
     detail: result.detail,
     claimId: result.artifact?.claimId ?? null,
     proofSource: result.proofSource,
-    choices: read.reading.choices
+    choices: read.reading.choices,
+    scope: {
+      outcome: result.scope.outcome,
+      goalSourceId: result.scope.goalSourceId,
+      detail: result.scope.detail,
+      outside: result.scope.conditions
+        .filter((entry) => entry.scope !== "formalized" && entry.scope !== "dischargedByNamedDerivation")
+        .map((entry) => entry.sourceText)
+    },
+    stale: null
   }
 }

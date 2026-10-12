@@ -355,3 +355,104 @@ export function evidenceStatusWithProof(
     verification: firstFailure ?? reject("unsupported", "backend-verdict", "没有任何与本条 claim、这份输入绑定的证明产物。")
   }
 }
+
+/**
+ * **发起一次证明时捕获的身份**（Task 18）。
+ *
+ * 一次真证明要跑几十秒到几分钟，而用户在这段时间里**照样能改题、改图、撤销、切工作区、
+ * 导入别的文档**。回包回来时如果只看 `inputHash`，那份结果就会被贴到一张**已经不是它当初
+ * 跑的那一份**图上 —— 于是"证明"变成了一句关于旧图的话，而用户读到的是现在这张图已验证。
+ */
+export interface ProofAttemptIdentity {
+  /** 哪一份草稿（切工作区 / 导入别的文档都会换掉它）。 */
+  draftId: string
+  /** 被证明时那份文档的**内容哈希**（`canonicalContentHash`）。 */
+  documentHash: string
+  /** 版本号只留作显示（**判过期看哈希，不看它** —— 与画布证据同一条口径）。 */
+  revision: number
+  /** 目标 claim。 */
+  claimId: string
+  /** 目标句出自题面的哪一条原文条件（Task 17 `ProofScopeReport.goalSourceId`）。 */
+  goalSourceId: string | null
+  /** 命题一级的绑定（`proofInputHash`）。 */
+  inputHash: string
+  /** 实测的后端版本串（换了工具链就不是同一次证明）。 */
+  backendVersion: string
+}
+
+export type ProofAttemptStaleKind =
+  /** 台上换成了另一份草稿（切工作区 / 导入别的文档）。 */
+  | "draft_replaced"
+  /** 同一份草稿、内容变了（**改题 / 改图 / 撤销**）。 */
+  | "document_changed"
+  /** 目标 claim 换了。 */
+  | "claim_replaced"
+  /** 目标句的出处的原文条件换了。 */
+  | "condition_replaced"
+  /** 命题或假设变了（`inputHash`）。 */
+  | "input_changed"
+  /** 后端版本换了。 */
+  | "backend_replaced"
+
+export type ProofAttemptStaleness =
+  | { stale: false; kind: "fresh" }
+  | { stale: true; kind: ProofAttemptStaleKind; detail: string }
+
+/**
+ * **这份迟到的结果还配不配升级现在这条 claim**（Task 18）。
+ *
+ * ## 与 `verifyProofArtifact` 的分工（两句话，都要说）
+ *
+ * `verifyProofArtifact` 判的是**命题一级**：这份产物证的是不是**这条命题**。它刻意
+ * **不绑文档指纹**（R51/R56 的裁决：形式证明的对象是命题，不是某一张图；绑坐标会把
+ * "普遍成立"降级成"这一次实例"，还会被改个 `label` 刷成**假过期**）。
+ *
+ * 这一条判的是**这一轮/这一份图**：结果回包时，台上还是不是它当初跑的那一份。
+ * 所以 `document_changed` 的措辞刻意写成"**这一轮的 claim 不能凭它升级**"，
+ * **不是**"那条命题不再成立" —— 两件事分开放着，谁也不冒充谁。
+ *
+ * ## 版本号不参与（沿用它处同一条口径）
+ *
+ * 暂存了同一份内容（版本号往前走）**不算过期**：拿版本号当判据会把"什么都没改"报成过期，
+ * 而假过期与假绿同源 —— 它会训练人忽略失效提示。
+ */
+export function proofAttemptStaleness(attempt: ProofAttemptIdentity, live: ProofAttemptIdentity): ProofAttemptStaleness {
+  if (live.draftId.length === 0 || attempt.draftId.length === 0 || attempt.draftId !== live.draftId) {
+    return {
+      stale: true,
+      kind: "draft_replaced",
+      detail: `这份证明是草稿 ${attempt.draftId || "（没绑上）"} 的，现在台上是 ${live.draftId || "（没有草稿）"} —— 它属于另一份文档，不能拿来升级这一条。`
+    }
+  }
+  /**
+   * **没绑上内容哈希 ⇒ 一律过期**（fail-closed）：那样才谈得上"这份结果说的是哪一张图"。
+   * 反方向（绑了、而且一样）才是新鲜。
+   */
+  if (attempt.documentHash.length === 0) {
+    return { stale: true, kind: "document_changed", detail: "这次尝试没有绑上被证明那份文档的内容哈希 —— 说不清它说的是哪一张图，所以不许据此升级。" }
+  }
+  if (attempt.documentHash !== live.documentHash) {
+    return {
+      stale: true,
+      kind: "document_changed",
+      detail: `证明跑的是内容 ${attempt.documentHash.slice(0, 12)}…（第 ${attempt.revision} 版），现在这张图是 ${live.documentHash.slice(0, 12)}… —— 改题/改图/撤销之后，这一轮的 claim 不能凭它升级（那条命题本身成不成立是另一句话，由输入绑定单独判）。`
+    }
+  }
+  /**
+   * 下面几栏**没捕获就不参与判定**（调用方拿不到就不许拿它当判据），
+   * 但只要捕获到了、又对不上，就是过期。
+   */
+  if (attempt.claimId.length > 0 && live.claimId.length > 0 && attempt.claimId !== live.claimId) {
+    return { stale: true, kind: "claim_replaced", detail: `这份产物绑的是 claim「${attempt.claimId}」，现在这条是「${live.claimId}」。` }
+  }
+  if (attempt.goalSourceId !== null && attempt.goalSourceId !== live.goalSourceId) {
+    return { stale: true, kind: "condition_replaced", detail: `目标句当初出自题面的 ${attempt.goalSourceId}，现在是 ${live.goalSourceId ?? "（没有出处）"}。` }
+  }
+  if (attempt.inputHash.length > 0 && live.inputHash.length > 0 && attempt.inputHash !== live.inputHash) {
+    return { stale: true, kind: "input_changed", detail: "命题或系统替你定的假设变了（inputHash 不同）—— 旧产物的那一步已经不在说同一件事。" }
+  }
+  if (attempt.backendVersion.length > 0 && live.backendVersion.length > 0 && attempt.backendVersion !== live.backendVersion) {
+    return { stale: true, kind: "backend_replaced", detail: `这份产物来自后端版本「${attempt.backendVersion}」，现在是「${live.backendVersion}」—— 换了工具链就不是同一次证明。` }
+  }
+  return { stale: false, kind: "fresh" }
+}

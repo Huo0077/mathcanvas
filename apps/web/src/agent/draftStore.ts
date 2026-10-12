@@ -1,12 +1,11 @@
 import type { GeometryDocument } from "@draw/dsl"
-import { canonicalContentHash, compilePlan, planHasVerifiableFigure, parseObligationWithLegacy, proofScopeOf, verifyDiagramObligations, PLAN_SCHEMA_VERSION, applyNormalisation, parseDiagramObligations, parseNormalisationReply, type PlanCompileResult, type PlanDiagnostic, type PlanEnvelope, type PlanRelations, type PromptNormalisations, type RepairRequest, type StructuredAssumption, type DiagramVerificationReport } from "@draw/agent-core"
+import { canonicalContentHash, compilePlan, planHasVerifiableFigure, parseObligationWithLegacy, proofAttemptStaleness, proofScopeOf, verifyDiagramObligations, PLAN_SCHEMA_VERSION, applyNormalisation, parseDiagramObligations, parseNormalisationReply, type PlanCompileResult, type PlanDiagnostic, type PlanEnvelope, type PlanRelations, type PromptNormalisations, type RepairRequest, type StructuredAssumption, type DiagramVerificationReport } from "@draw/agent-core"
 import { createIdAllocator, type DocumentHandle } from "@draw/scene-graph"
 
 import type { DraftAction, DomainOperation, IdAllocator } from "@draw/scene-graph"
 import type { ProofChannel } from "@draw/agent-core"
 
 import { attemptProofForStage, type DraftProofAttempt } from "./automaticProofStage"
-
 /**
  * **隔离草稿**（Task 0.7 Step 4）。
  *
@@ -70,6 +69,12 @@ export interface DraftRecord {
    * `...(x === undefined ? {} : { x })`）。
    */
   proofAttempt?: DraftProofAttempt
+  /**
+   * **那次证明是给哪一份图跑的**（Task 18）：草稿 id + 候选内容哈希 + 版本 + claim/条件出处。
+   *
+   * 留着它才能在后续 `stage` 里复查"这一栏还配不配写'已验证'"（见 `proofAttemptFor`）。
+   */
+  proofAttemptIdentity?: import("@draw/agent-core").ProofAttemptIdentity
 }
 
 export interface DraftPreview {
@@ -361,6 +366,34 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
   const drafts = new Map<string, DraftRecord>()
   const invalidated = new Map<string, string>()
 
+  /**
+   * **证明那一栏在每一次读预览时重新判一次过期**（Task 18）。
+   *
+   * 为什么不是"设置时判一次就完"：`proofAttempt` 会**留在草稿记录上**，而草稿的候选内容
+   * 在后续 `stage` 里还会变（改题、补一笔、换一句题面）。那时的候选已经不是证明跑的那一份了，
+   * 可是那一栏还写着"已验证" —— 这次复查就是不让这句话留在新图上。
+   *
+   * 判据与库里那层同一个（`proofAttemptStaleness`）：**看内容哈希，不看版本号**，
+   * 而且过期时**只改结局与理由**，不改产物本身（谁证的、正文来源都留着，便于排查）。
+   */
+  const proofAttemptFor = (record: DraftRecord): DraftProofAttempt | undefined => {
+    if (record.proofAttempt === undefined) return undefined
+    const identity = record.proofAttemptIdentity
+    const markStale = (kind: string, detail: string): DraftProofAttempt => ({
+      ...record.proofAttempt!,
+      outcome: "stale",
+      detail: record.proofAttempt!.detail.includes("【过期：") ? record.proofAttempt!.detail : `${record.proofAttempt!.detail}【过期：${detail}】`,
+      stale: { kind, detail }
+    })
+    if (identity === undefined) {
+      // 没有身份的旧记录：如实标过期（说不清它说的是哪一张图）。
+      return markStale("document_changed", "这条证明没有记录它是给哪一份图的（旧记录）—— 不能据此升级现在这张图。")
+    }
+    const verdict = proofAttemptStaleness(identity, { ...identity, documentHash: canonicalContentHash(record.candidate), revision: record.candidate.revision })
+    if (!verdict.stale) return record.proofAttempt
+    return markStale(verdict.kind, verdict.detail)
+  }
+
   const previewOf = (record: DraftRecord): DraftPreview => ({
     draftId: record.draftId,
     draftVersion: record.draftVersion,
@@ -371,7 +404,7 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
     completionAssumptions: [...record.completionAssumptions],
     ...(record.diagramVerification === undefined ? {} : { diagramVerification: structuredClone(record.diagramVerification) }),
     ...(record.promptNormalisation === undefined ? {} : { promptNormalisation: structuredClone(record.promptNormalisation) }),
-  ...(record.proofAttempt === undefined ? {} : { proofAttempt: structuredClone(record.proofAttempt) })
+    ...(record.proofAttempt === undefined ? {} : { proofAttempt: structuredClone(proofAttemptFor(record) ?? record.proofAttempt) })
   })
 
   return {
@@ -537,6 +570,13 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
        * 是谁给的正文、系统替他选了哪两条相交线"）。
        */
       if (proofExport === true && parsed !== null) {
+        /**
+         * **发起之前先捕获"这次证明是给哪一份图的"**（Task 18），跑完之后**复查实时句柄**。
+         *
+         * 这段时间用户照样能改题、改图、撤销、切工作区、导入别的文档 —— 结果回来时如果
+         * 台上已经不是它当初跑的那一份，就标 `stale`，**不许**把"已验证"贴到新图上。
+         */
+        const attemptIdentity = { draftId: record.draftId, documentHash: canonicalContentHash(record.candidate), revision: record.candidate.revision }
         const attempt = await attemptProofForStage({
           prompt: userMessage ?? "",
           obligations: parsed.legacy,
@@ -544,7 +584,15 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
           ...(proof.channel === undefined ? {} : { channel: proof.channel }),
           ...(proof.backendVersion === undefined ? {} : { backendVersion: proof.backendVersion })
         })
-        if (attempt !== null) record.proofAttempt = attempt
+        if (attempt !== null) {
+          const live = { ...attemptIdentity, documentHash: canonicalContentHash(record.candidate), revision: record.candidate.revision }
+          const identity = { ...attemptIdentity, claimId: attempt.claimId ?? "", goalSourceId: attempt.scope?.goalSourceId ?? null, inputHash: "", backendVersion: "" }
+          const verdict = proofAttemptStaleness(identity, { ...live, claimId: attempt.claimId ?? "", goalSourceId: attempt.scope?.goalSourceId ?? null, inputHash: "", backendVersion: "" })
+          record.proofAttempt = verdict.stale
+            ? { ...attempt, outcome: "stale", detail: `${attempt.detail}【过期：${verdict.detail}】`, stale: { kind: verdict.kind, detail: verdict.detail } }
+            : attempt
+          record.proofAttemptIdentity = identity
+        }
       }
 
       const merged = new Map(record.completionAssumptions.map((assumption) => [assumption.id, assumption]))

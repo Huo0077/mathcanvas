@@ -19,7 +19,23 @@ const PROOF_OUTCOME_LABEL: Record<NonNullable<AgentDraftView["proofAttempt"]>["o
   premises_unresolved: "前提没能从题面里落实",
   no_goal: "题面里没有可形式化的目标句",
   internal_error: "内部错误",
-  capability_off: "开关没开"
+  capability_off: "开关没开",
+  /** Task 18：回包时台上已经换成另一份内容/另一份草稿 ⇒ 这份结果不算数。 */
+  stale: "过期（这份结果说的是另一张图）"
+}
+
+/**
+ * **"证成了"还要分两档说**（Task 17 + Task 18 的界面那一半）。
+ *
+ * `outcome: "verified"` 只说明"模板定理成立、产物过了校验器"。用户真正要知道的是
+ * **这一次证的是受限引理还是整道题** —— 所以标题按范围报告分档：
+ * `limited_lemma` 写"受限引理已证"，`whole_problem` 才写"原题完整证明"，
+ * `unsupported` 如实说这一类没有模板。**不许**把前者显示成后者。
+ */
+function proofHeading(attempt: NonNullable<AgentDraftView["proofAttempt"]>): string {
+  if (attempt.outcome !== "verified") return PROOF_OUTCOME_LABEL[attempt.outcome]
+  if (attempt.scope?.outcome === "whole_problem") return "原题完整证明"
+  return "受限引理已证（不是整道题）"
 }
 
 /**
@@ -165,9 +181,23 @@ export function ConfirmationPanel({ draft, assumptions = [], approximationNotes 
 
       开关关着时 `draft.proofAttempt` **根本不存在**，这一段也就不存在。
     */}
-    {draft.proofAttempt && <section className="agent-proof-attempt" aria-label="形式证明" data-outcome={draft.proofAttempt.outcome}>
-      <h4>形式证明：{PROOF_OUTCOME_LABEL[draft.proofAttempt.outcome]}</h4>
+    {draft.proofAttempt && <section className="agent-proof-attempt" aria-label="形式证明" data-outcome={draft.proofAttempt.outcome} data-proof-scope={draft.proofAttempt.scope?.outcome ?? "none"} data-proof-stale={draft.proofAttempt.stale?.kind ?? ""}>
+      <h4>形式证明：{proofHeading(draft.proofAttempt)}</h4>
       <p>{draft.proofAttempt.detail}</p>
+      {/*
+        **"没进命题的那些条件"要摆出来**（Task 17 的范围报告 + Task 18 的界面）：
+        用户看到"受限引理已证"时，最该知道的就是**哪些题面条件不在这一步里**。
+      */}
+      {draft.proofAttempt.scope !== null && <p data-proof-scope-detail={draft.proofAttempt.scope.outcome}>
+        证明范围：{draft.proofAttempt.scope.outcome === "whole_problem"
+          ? "全题每条必要条件都进了这份命题。"
+          : draft.proofAttempt.scope.outcome === "limited_lemma"
+            ? "只证了模板那一条受限引理。"
+            : "这一类今天没有可用的模板（如实停在原地）。"}
+        {draft.proofAttempt.scope.outside.length > 0 && <>没进命题的题面条件：{draft.proofAttempt.scope.outside.join("、")}。</>}
+      </p>}
+      {/* 过期**为什么**过期要说出来（只标"过期"会让人以为是系统随机丢结果）。 */}
+      {draft.proofAttempt.stale !== null && <p data-proof-stale-reason>{draft.proofAttempt.stale.detail}</p>}
       {draft.proofAttempt.proofSource !== null && <p data-proof-source={draft.proofAttempt.proofSource}>
         正文来源：{draft.proofAttempt.proofSource === "system-canonical" ? "系统按这一类给出的（不是模型写的）" : "模型给的"}
       </p>}
