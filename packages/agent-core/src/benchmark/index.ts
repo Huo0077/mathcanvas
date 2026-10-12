@@ -64,6 +64,27 @@ export {
   type OracleCheck,
   type OracleVerdict
 } from "./examSet"
+/**
+ * **事先冻结的样本与阈值 + 付费授权闸**（Task 20，2026-10-12）。
+ *
+ * 计划那句"**在**看到付费结果前冻结每族样本、阈值并取得用户对请求数及最高费用的授权，
+ * 方可运行真实 provider"落成代码：`assertPaidRunAllowed` 就是那道闸（未授权一律拒）。
+ */
+export {
+  assertPaidRunAllowed,
+  examCaseFor,
+  familyFreeze,
+  frozenCaseIds,
+  frozenFamilyOf,
+  frozenSample,
+  FROZEN_FAMILIES,
+  FROZEN_THRESHOLDS,
+  type FamilyFreeze,
+  type FrozenBenchmarkPlan,
+  type FrozenSample,
+  type PaidRunDecision,
+  type PaidRunRequest
+} from "./frozenThresholds"
 export {
   BENCHMARK_LAYERS,
   BENCHMARK_MODES,
