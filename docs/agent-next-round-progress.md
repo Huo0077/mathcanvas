@@ -4,7 +4,7 @@
 
 ## 2026-10-11 当前实施顺序镜像（唯一新编号）
 
-> **Task 1–19 已完成（2026-10-12；Task 19 为本机那一半 —— 真桌面发行验收未做，不标"已发布自动证明"）；下一项 Task 20：四族真实模型质量（停车条件：先要付费 provider 授权）。** 本文件以下 V0–V3 记录与旧 Task 14/W0 起步都只保留当时口径；当前 Task 1→21 的前置、测试命令和完成定义见[主计划](superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)。**严格串行，不另设平行支线。**
+> **Task 1–19 已完成（2026-10-12；Task 19 为本机那一半 —— 真桌面发行验收未做，不标"已发布自动证明"）；Task 20 进行中：免授权那一半（事先冻结 + 离线分布 + 授权闸）已完成，付费那一步等授权（请求 36 个 / 最高 $12）—— 未点头不跑、不跳 Task 21。** 本文件以下 V0–V3 记录与旧 Task 14/W0 起步都只保留当时口径；当前 Task 1→21 的前置、测试命令和完成定义见[主计划](superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)。**严格串行，不另设平行支线。**
 
 | 当前编号 | 本页所记状态（仅镜像，不代替主计划验收） |
 | --- | --- |
@@ -15,7 +15,7 @@
 | Task 17 ✅ | **已完成（2026-10-12）**：`ProofScopeReport`（每条原题条件四档 + 源 span + 系统选择；结局 `limited_lemma` / `whole_problem` / `unsupported`）、`AutomaticProofResult.scope` 必填、升级文案写明"受限引理"；后端没验过永远不是整题，`whole_problem` 产品路径不可达（无完整命题产物）。 |
 | Task 18 ✅ | **已完成（2026-10-12）**：`ProofAttemptIdentity` + `proofAttemptStaleness`（六档、看哈希不看版本号、没绑哈希一律过期）、草稿层每次读预览都重判、面板按范围分档并列出没进命题的条件、浏览器"证明不可用不挡作图" e2e 2 passed。**边界**：桌面真跑一次 Lean 后改题/撤销的 UI/IPC/版本证据未做。 |
 | Task 19 ✅ | **已完成本机那一半（2026-10-12）**：工程定义钉住（`lean4Pin.test.ts` 4 条）+ README 矛盾段改掉；`lean --version` == `lake env lean --version` == `4.35.0-rc3`、`.lake` 7.00 GB ⇒ 零下载；安全判据 74 通过、`test:rust` 250 通过、`proof:smoke` 8 通过、`test:lean` 8 passed / 1195.4 s。**未做**：打包后干净/无网桌面验收 ⇒ 不标"已发布自动证明"。 |
-| Task 20 | **下一项（停车条件）**：四族真实模型质量 —— 先决条件是**付费 provider 授权**。 |
+| Task 20 | **进行中（免授权部分已完成）**：样本按题号冻结 + 每族阈值 + `paidRuns: 0`；`assertPaidRunAllowed` **未授权一律拒**；离线分布 **12/12 仍需真实 provider**（唯一被本地回应那条拿到的是夹具图）。**请求 36 个 / 最高 $12，等授权**。 |
 | Task 17–19 | Lean 四受限目标历史存在；原题完整前提、产物 stale 和干净机发行未验。 |
 | Task 20–21 | 真实 provider 未获新授权、正式发布未放行；不跳号。 |
 

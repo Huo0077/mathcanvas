@@ -2,7 +2,7 @@
 
 > **2026-10-11 四家族真题驱动升级（下一步，不是已实现功能）**：新增作图目标只含三角形、圆锥曲线、函数/导数和立体几何；既有工作区/导出/实验 Lean 继续兼容和补完；[真题需求调研](research/2026-10-11-four-family-exam-diagram-survey.md)已在本轮完成，[下一步 Agent 实施计划/进度](superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)列出动作合同、声明式图形、求解/核验及四族纵向验收。下文各条“已实现”仍以[当前状态](current-status.md)当次证据为准：**Task 1–13 已于 2026-10-12 完成**（原用户折面题已端到端通过，逐条读数见[当前状态](current-status.md)）；真题样本≠真实 provider 成功率。
 
-## 下一步能力顺序（Task 1–19 已完成；Task 20–21 仅计划）
+## 下一步能力顺序（Task 1–19 已完成；Task 20 进行中；Task 21 仅计划）
 
 | 当前唯一任务编号 | 既有与计划边界 |
 | --- | --- |
@@ -13,7 +13,7 @@
 | **Task 17** ✅ | **已完成（2026-10-12）**：`ProofScopeReport`（每条原题条件 `formalized` / `dischargedByNamedDerivation` / `figureAssumption` / `notRepresented` 四档 + 源 span + 系统选择；结局 `limited_lemma` / `whole_problem` / `unsupported`）、`AutomaticProofResult.scope` **必填**、升级文案写明"受限引理"；题面多一条必要条件时产物照出但范围报告说它没进命题；后端没验过永远不是整题。四受限目标原例保持（proof 全目录 172 通过）。**边界**：`whole_problem` 在产品路径不可达（无完整命题产物）；"题设与图矛盾"不在范围报告里判。 |
 | **Task 18** ✅ | **已完成（2026-10-12）**：`ProofAttemptIdentity` + `proofAttemptStaleness`（六档：草稿/内容/claim/条件/命题/后端版本；看哈希不看版本号；没绑哈希一律过期）、草稿层发起前捕获 + 跑完复查 + `previewOf` 每次重判、面板按范围分档（"受限引理已证"/"原题完整证明"/"过期"）并列出没进命题的条件、`e2e/agent-proof-lifecycle.spec.ts` 2 passed（浏览器降级 + 不挡作图）。**边界**：桌面真跑一次 Lean 后改题/撤销的 UI/IPC/版本证据未做。 |
 | **Task 19** ✅ | **已完成本机那一半（2026-10-12）**：`lean4Pin.test.ts` 4 条钉住 `proof/lean4` 的工程定义（两处 rev 逐字相同且是 40 位 commit、mathlib4 URL、工具链具体版本、README 不许说过期的话）并把 README 里与事实矛盾的一段改掉；实测 `lean --version` 与 `lake env lean --version` 同为 `4.35.0-rc3 / commit 470d5ce1…`、`.lake` 展开 7.00 GB ⇒ **零下载**；安全判据复核 74 通过 + `test:rust` 250 通过；`proof:smoke` 8 通过；`test:lean` 8 passed / 1195.4 s（四类目标全 `formally_proved`、公理恰好三个白名单、`sorry` exit 0 判 `failed`）。**未做**：打包后干净/无网桌面验收 ⇒ **不标"已发布自动证明"**。 |
-| **Task 20** | **下一项（停车条件）**：四族真实 provider 质量 —— 先决条件是**付费 provider 授权**；未获授权则停在本编号。 |
+| **Task 20** | **进行中（免授权部分已完成）**：样本按题号冻结（8 开发 + 4 留出，逐题带离线可跑性）、每族阈值 + `paidRuns: 0` 写死、`assertPaidRunAllowed` 四道门（**未授权一律拒**）、离线分布实测 **12/12 仍需真实 provider**。**请求 36 个 / 最高 $12，等授权**；未点头不跑真实 provider、也不跳 Task 21。 |
 | **Task 17–19** | 四受限 Lean 目标、默认关的实验入口、确认面板与 pin 的工具链配置已经存在；原题完整前提、迟到产物和桌面/无网发行未验收。证明失败不阻挡正确画图。 |
 | **Task 20–21** | 真实 provider 需要先冻结样本并获付费授权；作图与自动 Lean 在最终任务分别裁决。 |
 
