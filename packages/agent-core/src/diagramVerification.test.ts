@@ -465,3 +465,78 @@ describe("带下标 / 带撇的顶点名（S1.3）", () => {
     expect(report.checks.find((check) => check.sourceText.includes("O₁"))?.status).toBe("passed")
   })
 })
+
+/**
+ * **Task 14：直线与圆锥曲线的交点**。
+ *
+ * 最要紧的一条是「**丢一个交点必须真红**」：旧的核验器根本没有交点这一层，
+ * 这种图只会走 `null` ⇒ `unverified`，**永远不会红** —— 而"图看起来很像、其实少一个交点"
+ * 恰恰是这一族最典型的错误图。判据本身走**代数**（`intersectLineWithConic` 的判别式给重数），
+ * 不是数采样出来的点。
+ */
+describe("Task 14: 直线与圆锥曲线的交点", () => {
+  /** 一张只放了那条曲线的候选图，外加题面点名的那几个交点。 */
+  function chordFixture(prompt: string, primitive: Record<string, unknown>, points: { name: string; x: number; y: number }[] = []) {
+    const plan: PlanEnvelope = {
+      schemaVersion: PLAN_SCHEMA_VERSION,
+      kind: "plan",
+      goal: "画圆锥曲线",
+      factIds: [],
+      actions: [{ actionId: "planar.create_conic", actionKey: "c", factIds: [], inputs: { alias: "c", ...primitive } }] as never
+    }
+    const candidate = createEmptyDocument("conics")
+    candidate.primitives.push({ id: "c", ...primitive } as never)
+    for (const point of points) candidate.primitives.push({ id: `p-${point.name}`, type: "point", x: point.x, y: point.y, label: point.name } as never)
+    return verifyDiagramObligations(parseDiagramObligations(prompt), plan, candidate)
+  }
+
+  const ELLIPSE = { type: "ellipse", center: { x: 0, y: 0 }, radiusX: 3, radiusY: 2 }
+  const SECANT_PROMPT = "椭圆 x²/9+y²/4=1 与直线 y=0 相交于 A、B 两点"
+  const chordCheck = (report: ReturnType<typeof verifyDiagramObligations>) => report.checks.find((check) => check.sourceText.includes("直线"))
+
+  it("两个交点都画对了 ⇒ passed", () => {
+    const report = chordFixture(SECANT_PROMPT, ELLIPSE, [{ name: "A", x: -3, y: 0 }, { name: "B", x: 3, y: 0 }])
+    expect(chordCheck(report)?.status).toBe("passed")
+    expect(report.status).toBe("passed")
+  })
+
+  it("**丢一个交点 ⇒ failed**（旧实现只会是 unverified、永远不会红）", () => {
+    const report = chordFixture(SECANT_PROMPT, ELLIPSE, [{ name: "A", x: -3, y: 0 }])
+    const check = chordCheck(report)
+    expect(check?.status).toBe("failed")
+    expect(check?.reason).toContain("丢了 1 个交点")
+  })
+
+  it("两个点都在、但**名字挂错了** ⇒ failed（位置对而名字错，对用户仍然是错的图）", () => {
+    const report = chordFixture(SECANT_PROMPT, ELLIPSE, [{ name: "A", x: 3, y: 0 }, { name: "B", x: 3, y: 0 }])
+    expect(chordCheck(report)?.status).toBe("failed")
+  })
+
+  it("**错轴**：半轴一模一样、轴反了的双曲线 ⇒ 交点判据也红（切点根本不在那条曲线上）", () => {
+    const prompt = "双曲线 x²/9−y²/4=1 与直线 y=0 相交于 A、B 两点"
+    // 正确的那条：实轴沿 x ⇒ 与 y=0 交于 (±3, 0)。
+    const right = chordFixture(prompt, { type: "hyperbola", center: { x: 0, y: 0 }, radiusX: 3, radiusY: 2, axis: "x" }, [{ name: "A", x: -3, y: 0 }, { name: "B", x: 3, y: 0 }])
+    expect(chordCheck(right)?.status).toBe("passed")
+    // 轴反了：`x²/9 − y²/4 = 1` 变成 `y²/4 − x²/9 = 1`，与 `y=0` 的交点是 (0, ±2) —— 给的还是 (±3, 0)。
+    const wrongAxis = chordFixture(prompt, { type: "hyperbola", center: { x: 0, y: 0 }, radiusX: 3, radiusY: 2, axis: "y" }, [{ name: "A", x: -3, y: 0 }, { name: "B", x: 3, y: 0 }])
+    expect(chordCheck(wrongAxis)?.status).toBe("failed")
+  })
+
+  it("**竖直线**：`x = 3` 与椭圆相切 ⇒ passed；同一条线当割线读 ⇒ failed", () => {
+    const tangent = chordFixture("椭圆 x²/9+y²/4=1 与直线 x=3 相切", ELLIPSE)
+    expect(chordCheck(tangent)?.status).toBe("passed")
+    const asSecant = chordFixture("椭圆 x²/9+y²/4=1 与直线 x=3 相交于 A、B 两点", ELLIPSE)
+    expect(chordCheck(asSecant)?.status).toBe("failed")
+    expect(chordCheck(asSecant)?.reason).toContain("相切")
+  })
+
+  it("「没有交点」：图上也确实没有 ⇒ passed", () => {
+    const report = chordFixture("椭圆 x²/9+y²/4=1 与直线 y=3 没有交点", ELLIPSE)
+    expect(chordCheck(report)?.status).toBe("passed")
+  })
+
+  it("题面只写「相切」而没点名 ⇒ 只判定性那一层，不要求图上多一个切点", () => {
+    const report = chordFixture("椭圆 x²/9+y²/4=1 与直线 y=2 相切", ELLIPSE)
+    expect(chordCheck(report)?.status).toBe("passed")
+  })
+})

@@ -1,5 +1,5 @@
 import type { GeometryDocument, PrimitiveSpec } from "@draw/dsl"
-import { compileExpression, crossVector3, dihedralAngleDetail3, distanceVector3, dotVector3, evaluateExpression, isPointName, lengthVector3, subtractVector3, type Vector3 } from "@draw/geometry-kernel"
+import { compileExpression, crossVector3, dihedralAngleDetail3, distanceVector3, dotVector3, evaluateExpression, intersectLineWithConic, isPointName, lengthVector3, subtractVector3, type PlanarConic, type Vector3 } from "@draw/geometry-kernel"
 import { foldVertexNames } from "@draw/scene-graph"
 
 import type { PlanEnvelope } from "./contracts"
@@ -197,11 +197,20 @@ function candidatePoints(plan: PlanEnvelope, candidate: GeometryDocument, base?:
   return points
 }
 
-/** 候选图里那条圆锥曲线。**不含"是否满足题设"的结论** —— 那是 `calculate` 的事。 */
-type FigureConic =
+/**
+ * 描述一条圆锥曲线**只需要这几个数**（半轴 / 焦准距 / 轴）。
+ *
+ * 与 `FigureConic` 分开的理由：题面那一条（`DiagramConicStated`）只有这几个数，
+ * 没有、也不该有图元；而候选图那一条要能拿去算交点，所以额外带 `primitive`。
+ * 合成一个类型就得让题面那侧也伪造一个 `primitive` —— 那正是"为了让类型过得去而编造数据"。
+ */
+type ConicDescription =
   | { kind: "ellipse"; radiusX: number; radiusY: number }
   | { kind: "hyperbola"; radiusX: number; radiusY: number; axis: "x" | "y" }
   | { kind: "parabola"; focalParameter: number; axis: "x" | "y" }
+
+/** 候选图里那条圆锥曲线。**不含"是否满足题设"的结论** —— 那是 `calculate` 的事。 */
+type FigureConic = ConicDescription & { primitive: PlanarConic }
 
 /**
  * **候选图里那条唯一的、新画出来的圆锥曲线**（V0c）。
@@ -223,10 +232,23 @@ function candidateConic(plan: PlanEnvelope, candidate: GeometryDocument, base?: 
   const [conic] = conics
   // 逐种显式分支，而不是靠"剩下的一定是抛物线" —— 上面那个 `filter` 没有做类型守卫，
   // 兜底分支拿不到窄化，`focalParameter` / `axis` 会报"不存在于联合类型上"。
-  if (conic.type === "ellipse") return { kind: "ellipse", radiusX: conic.radiusX, radiusY: conic.radiusY }
-  if (conic.type === "hyperbola") return { kind: "hyperbola", radiusX: conic.radiusX, radiusY: conic.radiusY, axis: conic.axis }
-  if (conic.type === "parabola") return { kind: "parabola", focalParameter: conic.focalParameter, axis: conic.axis }
+  if (conic.type === "ellipse") return { kind: "ellipse", radiusX: conic.radiusX, radiusY: conic.radiusY, primitive: conic }
+  if (conic.type === "hyperbola") return { kind: "hyperbola", radiusX: conic.radiusX, radiusY: conic.radiusY, axis: conic.axis, primitive: conic }
+  if (conic.type === "parabola") return { kind: "parabola", focalParameter: conic.focalParameter, axis: conic.axis, primitive: conic }
   return null
+}
+
+/**
+ * 交点情形的人话（`conicChord` 的失败文案要用它）。
+ *
+ * **不把机器词甩给用户**：`single` 那一档尤其要说清"为什么只有一个" —— 直线与抛物线的对称轴
+ * 平行时，另一个交点在无穷远，那与"相切"是两件完全不同的事。
+ */
+function describeChordExpectation(kind: "secant" | "tangent" | "single" | "none"): string {
+  if (kind === "secant") return "相交于两点"
+  if (kind === "tangent") return "相切（一个二重交点）"
+  if (kind === "single") return "只有一个交点（直线与对称轴平行，另一交点在无穷远）"
+  return "没有交点"
 }
 
 /** 数字的可读写法：整数不带小数点，其余最多六位。 */
@@ -357,7 +379,7 @@ function describeEllipse(radiusX: number, radiusY: number): string {
 }
 
 /** 三类圆锥曲线的人话描述。**都把"由参数决定、但用户真正关心"的那个量一起说出来**。 */
-function describeConic(conic: FigureConic): string {
+function describeConic(conic: ConicDescription): string {
   if (conic.kind === "ellipse") return describeEllipse(conic.radiusX, conic.radiusY)
   if (conic.kind === "hyperbola") return `半轴 (${formatNumber(conic.radiusX)}, ${formatNumber(conic.radiusY)})、实轴沿 ${conic.axis} 轴`
   return `焦准距 p = ${formatNumber(conic.focalParameter)}、对称轴为 ${conic.axis} 轴`
@@ -368,6 +390,14 @@ interface FigureContext {
   conic: FigureConic | null
   tangent: FigureTangent | null
   curve: FigureFunction | null
+  /**
+   * **候选图里带点名的平面点**（`point` 图元的 `label` 就是点名）。
+   *
+   * 为什么不用 `candidatePoints` 那张表：它只从**多面体 / 面片**的 `vertexNames` 建出来，
+   * 而圆锥曲线文档里没有那些动作 ⇒ 表是空的。"图上有没有这个交点"必须问**候选图自己**，
+   * 不能问一张按别的图形建的映射表（2026-10-12 实测：拿那张表会把"两条都画对了"判成"丢了两个交点"）。
+   */
+  planarPoints: readonly { name: string; x: number; y: number }[]
 }
 
 function calculate(item: DiagramObligation, points: Map<string, Vector3>, figures: FigureContext): { actual: number; expected: number; tolerance: number; detail?: string } | null {
@@ -407,6 +437,70 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
     }
     // 种类不同 ⇒ 图上根本不是题面说的那种曲线。
     return null
+  }
+  /**
+   * **直线与圆锥曲线的交点**（Task 14）。
+   *
+   * 判据分两层，两层缺一不可：
+   *
+   * ① **定性**：把题面那条直线与**最终落盘的**那条曲线交给内核的**代数**求解器
+   *   （`intersectLineWithConic`，判别式给重数），档位必须与题面声称的**同名**
+   *   —— `相交于 A、B 两点` ⇒ `secant`、`相切` ⇒ `tangent`、`只有一点` ⇒ `single`、`没有交点` ⇒ `none`。
+   *   **不用采样**：采样法区分不开"相切"与"两个极近的交点"，而"相切"恰恰是题面会明说的东西。
+   * ② **定量**：代数算出来的**每一个**交点，最终图上都得有个点名落在那儿（容差内）。
+   *   **少一个就是失败** —— 这正是计划点名的"丢一交点必须真红"：图看起来很像、数少一个，
+   *   在旧实现里只会走 `null` ⇒ **未核验**，永远不会红。
+   *
+   * 题面点了名（`相交于 A、B 两点`）时还要核对那两个名字都落在算出来的交点上：
+   * 位置对而名字错，对用户来说仍然是错的图。
+   */
+  if (item.kind === "conicChord") {
+    const stated = item.line
+    const expectation = item.expectation
+    const figure = figures.conic
+    if (stated === undefined || expectation === undefined || figure === null) return null
+    // 竖直线必须单独构造：斜截式里它是一条竖到无法表达的线。
+    const line = stated.kind === "vertical"
+      ? { a: { x: stated.x, y: 0 }, b: { x: stated.x, y: 1 } }
+      : { a: { x: 0, y: stated.intercept }, b: { x: 1, y: stated.slope + stated.intercept } }
+    const algebraic = intersectLineWithConic(line, figure.primitive)
+    // 退化（零长直线 / 退化的曲线）⇒ 如实说"未核验"，不硬判。
+    if (algebraic.kind === "degenerate") return null
+    const tolerance = distanceTolerance(1)
+    const expectedPoints = algebraic.kind === "secant"
+      ? [...algebraic.points]
+      : algebraic.kind === "tangent" || algebraic.kind === "single"
+        ? [algebraic.point]
+        : []
+    if (algebraic.kind !== expectation) {
+      return { actual: 1, expected: 0, tolerance: 1e-9, detail: `题面说这条直线与曲线${describeChordExpectation(expectation)}，实测是${describeChordExpectation(algebraic.kind)}。` }
+    }
+    const drawn = figures.planarPoints
+    const near = (entry: { x: number; y: number }, point: { x: number; y: number }) => Math.hypot(entry.x - point.x, entry.y - point.y) <= tolerance
+    /**
+     * **题面点了名，才要求"图上必须有这些点"**。只写"相切"时题面主张的是这条直线与曲线的相对
+     * 位置，那件事由上面那一层回答就够了 —— 再要求图上多一个切点，是替题面加戏。
+     */
+    const missing = item.targets.length > 0 ? expectedPoints.filter((point) => !drawn.some((entry) => near(entry, point))) : []
+    if (missing.length > 0) {
+      const where = expectedPoints.map((point) => `(${formatNumber(point.x)}, ${formatNumber(point.y)})`).join("、")
+      return {
+        actual: missing.length,
+        expected: 0,
+        tolerance,
+        detail: `题面说这条直线与曲线${describeChordExpectation(expectation)}：代数上确实有 ${expectedPoints.length} 个交点（${where}），但图上只找到 ${expectedPoints.length - missing.length} 个 —— 丢了 ${missing.length} 个交点。`
+      }
+    }
+    if (item.targets.length > 0) {
+      const unmatched = item.targets.filter((name) => {
+        const entry = drawn.find((candidatePoint) => candidatePoint.name === name)
+        return entry === undefined || !expectedPoints.some((point) => near(entry, point))
+      })
+      if (unmatched.length > 0) {
+        return { actual: 1, expected: 0, tolerance, detail: `题面点了 ${item.targets.join("、")}，但 ${unmatched.join("、")} 没有落在算出来的交点上。` }
+      }
+    }
+    return { actual: 0, expected: 0, tolerance, detail: `已按候选图坐标核验：这条直线与曲线${describeChordExpectation(expectation)}，交点个数与位置都对得上。` }
   }
   /**
    * **切线**（V0d）：题面只说"在 `x = 1` 处的切线"，斜率由**函数**决定。
@@ -598,7 +692,7 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
  * 查询（`missingNamedPoints`）—— 两处各写一遍就是"同一个判断写了两遍"。
  */
 function isPointBased(kind: DiagramObligationKind): boolean {
-  return kind !== "conicAxes" && kind !== "tangentAt" && kind !== "functionGraph"
+  return kind !== "conicAxes" && kind !== "conicChord" && kind !== "tangentAt" && kind !== "functionGraph"
 }
 
 /** 题设点到、而候选图上**没有**的那个点名。 */
@@ -647,7 +741,16 @@ export function missingNamedPoints(set: DiagramObligationSet, plan: PlanEnvelope
 
 export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument, options: DiagramVerificationOptions = {}): DiagramVerificationReport {
   const points = candidatePoints(plan, candidate, base)
-  const figures: FigureContext = { conic: candidateConic(plan, candidate, base), tangent: candidateTangent(plan, candidate, base), curve: candidateCurve(plan, candidate, base) }
+  const figures: FigureContext = {
+    conic: candidateConic(plan, candidate, base),
+    tangent: candidateTangent(plan, candidate, base),
+    curve: candidateCurve(plan, candidate, base),
+    planarPoints: candidate.primitives.flatMap((primitive) =>
+      primitive.type === "point" && typeof primitive.label === "string" && Number.isFinite(primitive.x) && Number.isFinite(primitive.y)
+        ? [{ name: primitive.label, x: primitive.x, y: primitive.y }]
+        : []
+    )
+  }
   const checks: DiagramCheck[] = set.givens.map((item) => {
     const pointBased = isPointBased(item.kind)
     if (pointBased && points === null) return { kind: item.kind, sourceText: item.sourceText, status: "unverified", reason: "候选图缺少唯一、可靠的顶点名映射；不能按题面顺序猜坐标。" }
@@ -668,7 +771,9 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
           ? `点名缺失：${missing.join("、")} —— 题面点到了它${missing.length > 1 ? "们" : ""}，图上没有这个对象，未核验。`
           : item.kind === "conicAxes"
             ? "候选图里没有唯一、可读的圆锥曲线（少了或多了一条），未核验。"
-            : item.kind === "tangentAt"
+            : item.kind === "conicChord"
+              ? "候选图里没有唯一、可读的圆锥曲线，或题面那条直线的写法没读出来，未核验。"
+              : item.kind === "tangentAt"
               ? "候选图里没有唯一、可读的切线，或那条切线没有函数来源（求不了导），未核验。"
               : item.kind === "functionGraph"
                 ? "候选图里没有唯一、可读的函数曲线（少了或多了一条），或题面表达式解析不了，未核验。"

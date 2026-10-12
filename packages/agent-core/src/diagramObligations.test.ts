@@ -365,3 +365,50 @@ describe("带撇与带下标的点名", () => {
     expect(parsed.unverified.some((item) => item.sourceText.includes("菱形"))).toBe(true)
   })
 })
+
+/**
+ * **Task 14：直线与圆锥曲线的交点义务**（`conicChord`）。
+ *
+ * 这一组里最要紧的一条是「**不会吃掉曲线那条义务**」：解析器按**字符占位**去重，
+ * 新匹配器只要把曲线方程也圈进自己的匹配范围，`conicAxes` 那条就会被整条吞掉 ——
+ * 症状是"圆锥曲线的半轴/轴突然不再核验了"，而且只在带直线的那种题面上出现。
+ */
+describe("Task 14：直线与圆锥曲线的交点义务", () => {
+  const chordOf = (prompt: string) => parseDiagramObligations(prompt).givens.find((item) => item.kind === "conicChord")
+
+  it("斜截式 + 「相交于 A、B 两点」，且曲线那条义务**并存**", () => {
+    const parsed = parseDiagramObligations("椭圆 x²/9+y²/4=1 与直线 y=x+1 相交于 A、B 两点")
+    const chord = parsed.givens.find((item) => item.kind === "conicChord")
+    expect(chord?.line).toEqual({ kind: "slope", slope: 1, intercept: 1 })
+    expect(chord?.expectation).toBe("secant")
+    expect(chord?.targets).toEqual(["A", "B"])
+    expect(parsed.givens.some((item) => item.kind === "conicAxes")).toBe(true)
+  })
+
+  it("`y = x` 的斜率是 1、`y = −x` 是 −1（省略系数与只写符号都不能读成 0）", () => {
+    expect(chordOf("椭圆 x²/9+y²/4=1 与直线 y=x 相交于 A、B 两点")?.line).toEqual({ kind: "slope", slope: 1, intercept: 0 })
+    expect(chordOf("椭圆 x²/9+y²/4=1 与直线 y=-x 相交于 A、B 两点")?.line).toEqual({ kind: "slope", slope: -1, intercept: 0 })
+  })
+
+  it("水平线 `y = 2` 不会被斜截式那条读成 `y = 2x`", () => {
+    expect(chordOf("椭圆 x²/9+y²/4=1 与直线 y=2 相切")?.line).toEqual({ kind: "slope", slope: 0, intercept: 2 })
+  })
+
+  it("竖直线 `x = 3` 单独成支（斜截式表达不了它）", () => {
+    const chord = chordOf("双曲线 x²/9−y²/4=1 与直线 x=3 相切")
+    expect(chord?.line).toEqual({ kind: "vertical", x: 3 })
+    expect(chord?.expectation).toBe("tangent")
+    expect(chord?.targets).toEqual([])
+  })
+
+  it("「没有交点」也读得出来", () => {
+    expect(chordOf("椭圆 x²/9+y²/4=1 与直线 y=3 没有交点")?.expectation).toBe("none")
+  })
+
+  it("直线写在曲线前面 ⇒ 这条认不出来，如实落进未核验（不猜）", () => {
+    const parsed = parseDiagramObligations("直线 y=x+1 与椭圆 x²/9+y²/4=1 相交于 A、B 两点")
+    expect(parsed.givens.some((item) => item.kind === "conicChord")).toBe(false)
+    // 曲线那条照样读得出来：两条义务各是各的模式，谁也不该因为另一条认不出而消失。
+    expect(parsed.givens.some((item) => item.kind === "conicAxes")).toBe(true)
+  })
+})

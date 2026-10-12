@@ -17,8 +17,28 @@ export type DiagramObligationKind =
    */
   | "area"
   | "conicAxes"
+  /**
+   * **直线与这条圆锥曲线的交点**（Task 14）。
+   *
+   * 为什么单开一种、而不是并进 `conicAxes`：`conicAxes` 比的是**曲线自己的参数**，
+   * 这一条比的是**交点的个数与位置** —— 两件事的判据、失败文案和错法都不一样
+   *（轴反了 vs 丢了一个交点）。计划对 Task 14 点名的"相切 / 无交 / 竖直线 / 丢一交点"
+   * 全都落在这条上。
+   */
+  | "conicChord"
   | "tangentAt"
   | "functionGraph"
+
+/**
+ * 题面写下的**直线**（用于 `conicChord`）。
+ *
+ * 只收两种写法：斜截式（`y = kx + m`，`k` 省略即 1、`m` 省略即 0）与竖直线（`x = c`）。
+ * **竖直线必须单独一支**：它是斜截式表达不了的那一半，而真题里恰恰常见
+ *（双曲线顶点处的切线就是竖直的）。
+ */
+export type DiagramStatedLine =
+  | { kind: "slope"; slope: number; intercept: number }
+  | { kind: "vertical"; x: number }
 
 /**
  * 题面写下的圆锥曲线参数。
@@ -47,6 +67,10 @@ export interface DiagramObligation {
   planeLengths?: [number, number]
   coordinate?: { x: number; y: number; z: number }
   conic?: DiagramConicStated
+  /** `conicChord` 专用：题面写下的那条直线。 */
+  line?: DiagramStatedLine
+  /** `conicChord` 专用：题面声称的交点情形（**代数重数**那一套，与 `intersectLineWithConic` 的档位同名）。 */
+  expectation?: "secant" | "tangent" | "single" | "none"
   /** 题面写下的函数表达式（**已规范化**：上标转 `^`、隐式乘号补 `*`）。 */
   expression?: string
 }
@@ -68,7 +92,7 @@ export interface DiagramObligationSet {
 }
 
 /** 读取器的产物：一条判据，或**多条**（一个句型蕴含多条判据时用 —— 例如"底面 ABCD 是菱形" ⇒ 三条等长）。 */
-type ObligationDraft = Pick<DiagramObligation, "kind" | "targets" | "value" | "planeLengths" | "coordinate" | "conic">
+type ObligationDraft = Pick<DiagramObligation, "kind" | "targets" | "value" | "planeLengths" | "coordinate" | "conic" | "line" | "expectation">
 
 interface Matcher {
   pattern: RegExp
@@ -190,6 +214,45 @@ function normalizeStatedExpression(raw: string): string | null {
  *（`求证 OA⊥CD` → `perpendicular`）。让 IR 自己再写一套匹配规则，两份规则必然分叉，
  * 而分叉的症状是"题设认平行、目标认垂直"这种最难查的错。
  */
+/**
+ * `conicChord` 用的两段模式（Task 14）。
+ *
+ * 点名那一段**复用内核的字母表**（`POINT_NAME_SOURCE`，含撇与下标），不另抄一份 ——
+ * 抄一份的后果在本仓出现过：关系抽取的"点名块"字母表漏了 `′`，`AA′` 被读成退化的 A–A 线段。
+ */
+const CHORD_NAMES = `(?:${POINT_NAME_SOURCE}(?:\\s*[、,，]\\s*${POINT_NAME_SOURCE})*)`
+const CHORD_CLAIM = `(相切[^，,。；;\\n]{0,6}|相交于\\s*(${CHORD_NAMES})\\s*两点|交于\\s*(${CHORD_NAMES})\\s*两点|相交于一点|交于一点|没有交点|无交点)`
+
+/**
+ * 斜截式里的斜率：`y = kx + m` 的 `k` 可以**整个省略**（`y = x` ⇒ 1），也可以只写一个符号
+ *（`y = −x` ⇒ −1）。`Number("")` 是 0 —— 直接用它会把 `y = x` 读成水平线。
+ */
+function statedSlope(raw: string | undefined): number | null {
+  const text = (raw ?? "").replace(/\s+/g, "")
+  if (text === "" || text === "+") return 1
+  if (text === "-") return -1
+  const value = Number(text)
+  return Number.isFinite(value) ? value : null
+}
+
+/** 把「直线 + 情形」两段读成一条 `conicChord` 义务；情形认不出来就返回 `null`（那条直线不当作义务）。 */
+function chordDraft(
+  line: DiagramStatedLine,
+  claim: string,
+  names: string | undefined
+): Pick<DiagramObligation, "kind" | "targets" | "line" | "expectation"> | null {
+  const targets = names === undefined ? [] : [...names.matchAll(new RegExp(POINT_NAME_SOURCE, "g"))].map((entry) => entry[0])
+  if (names !== undefined && targets.length === 0) return null
+  const expectation: NonNullable<DiagramObligation["expectation"]> = claim.includes("相切")
+    ? "tangent"
+    : claim.includes("两点")
+      ? "secant"
+      : claim.includes("一点")
+        ? "single"
+        : "none"
+  return { kind: "conicChord", targets, line, expectation }
+}
+
 export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
   /**
    * **椭圆的方程**：`x²/9 + y²/4 = 1`（`x^2` 那种写法也收）。
@@ -234,6 +297,47 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
   {
     pattern: /x\s*(?:\^2|²)\s*=\s*(-?\d+(?:\.\d+)?)\s*y(?![a-zA-Z])/g,
     read: (m) => parabolaAxis(Number(m[1]), "y")
+  },
+  /**
+   * **直线与圆锥曲线的交点**（Task 14）：`…与直线 y = x + 1 相交于 A、B 两点` / `…与直线 x = 3 相切`。
+   *
+   * 两条讲究：
+   *
+   * 1. **匹配范围只到"直线 + 情形"那一段，绝不把曲线方程圈进来**。解析器是按**字符占位**去重的
+   *   （`used`），把方程也圈进来的话，曲线自己那条义务（`conicAxes`，比半轴/轴的那条）会被整条吃掉。
+   *    所以支持的题面写法是**曲线在前、直线在后**：`椭圆 x²/9+y²/4=1 与直线 y=x 相交于 A、B 两点`。
+   *    直线写在前面时这一条认不出来，会照旧落进"未核验"的残留里（**不猜**）。
+   * 2. **竖直线（`x = c`）与水平线（`y = m`）各自一条模式**：斜截式那一条表达不了它们，
+   *    而"竖直切线"在真题里是常态（双曲线顶点处的切线就是竖直的）。
+   *
+   * 它记的是**代数重数**那一套档位（`secant` / `tangent` / `single` / `none`），
+   * 与内核 `intersectLineWithConic` 的返回同名 —— 判据才有东西可对。
+   */
+  {
+    pattern: new RegExp(`直线\\s*y\\s*=\\s*([+-]?\\s*\\d*(?:\\.\\d+)?)\\s*\\*?\\s*x\\s*(?:([+-])\\s*(\\d+(?:\\.\\d+)?))?\\s*${CHORD_CLAIM}`, "g"),
+    read: (m) => {
+      const slope = statedSlope(m[1])
+      if (slope === null) return null
+      const intercept = m[3] === undefined ? 0 : Number(m[3]) * (m[2] === "-" ? -1 : 1)
+      return chordDraft({ kind: "slope", slope, intercept }, m[4] ?? "", m[5] ?? m[6])
+    }
+  },
+  {
+    // 水平线：数字后面**不能**再跟 `x`（否则 `y = 2x + 1` 会被读成 `y = 2`）。
+    pattern: new RegExp(`直线\\s*y\\s*=\\s*([+-]?\\d+(?:\\.\\d+)?)(?!\\s*\\*?\\s*x)\\s*${CHORD_CLAIM}`, "g"),
+    read: (m) => {
+      const intercept = Number(m[1])
+      if (!Number.isFinite(intercept)) return null
+      return chordDraft({ kind: "slope", slope: 0, intercept }, m[2] ?? "", m[3] ?? m[4])
+    }
+  },
+  {
+    pattern: new RegExp(`直线\\s*x\\s*=\\s*([+-]?\\d+(?:\\.\\d+)?)\\s*${CHORD_CLAIM}`, "g"),
+    read: (m) => {
+      const x = Number(m[1])
+      if (!Number.isFinite(x)) return null
+      return chordDraft({ kind: "vertical", x }, m[2] ?? "", m[3] ?? m[4])
+    }
   },
   /**
    * **在某点处的切线**：`在 x=1 处的切线`。
@@ -470,7 +574,7 @@ export function parseDiagramObligations(prompt: string, options: DiagramParseOpt
       // 一个句型可以蕴含多条判据（`底面ABCD是菱形` ⇒ 三条等长），所以读取器允许返回数组。
       const drafts = result === null ? [] : Array.isArray(result) ? result : [result]
       // 圆锥曲线、切线、函数定义与点坐标都**不带点名**：它们自己就是被核验的对象，不能拿"至少两个名字"去卡。
-      const accepted = drafts.filter((result) => result.kind === "pointCoordinate" || result.kind === "conicAxes" || result.kind === "tangentAt" || result.kind === "functionGraph" || new Set(result.targets).size >= 2)
+      const accepted = drafts.filter((result) => result.kind === "pointCoordinate" || result.kind === "conicAxes" || result.kind === "conicChord" || result.kind === "tangentAt" || result.kind === "functionGraph" || new Set(result.targets).size >= 2)
       for (const draft of accepted) givens.push({ ...draft, sourceText: match[0], start, end })
       if (accepted.length === 0) continue
       for (let at = start; at < end; at++) used.add(at)
