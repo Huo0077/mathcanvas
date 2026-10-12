@@ -1,0 +1,6 @@
+# 扫描器（`scripts/dependency-licences/scan.mjs`）把这份生成物写成 **LF**，而本仓
+# `core.autocrlf=true` 期望工作树是 CRLF ⇒ 每次跑完 `licences:scan`，`git status`
+# 都会报一条**假脏**（`git diff` 是空的、两次扫描的 SHA256 相同）。2026-10-12 实测复现并裁决。
+#
+# 这一条是**按路径**的窄规则，不动全仓行尾约定（2026-10-12 裁决）。
+scripts/dependency-licences/rust-licences.json text eol=lf
