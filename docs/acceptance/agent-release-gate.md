@@ -162,6 +162,7 @@
 ```
 npm.cmd run typecheck
 npm.cmd test
+npm.cmd run test:lean
 npm.cmd run test:rust
 npm.cmd run eval:agent
 npm.cmd run bench:agent
@@ -169,7 +170,10 @@ npm.cmd run test:e2e -- --workers=3
 npm.cmd run test:perf
 ```
 
-> **读法**：`test:e2e` 与那几条 node 套件**不要并行跑**（本机实测过拖动那一档从 16.8 ms 涨到 366.7 ms，
+> **读法**：`test:lean` 是**单列**的那一条 —— `vitest.config.ts` 已把 `scripts/proof-spike/lean4EndToEnd.test.ts`
+> 排除在默认全量之外（为什么、代价多大，写在那份配置里），它自己会跑真的 `lake env lean`，
+> 只有在装了 Lean 且展开过 mathlib 的机器上才有意义；`npm.cmd test` 不再包含它。
+> `test:e2e` 与那几条 node 套件**不要并行跑**（本机实测过拖动那一档从 16.8 ms 涨到 366.7 ms，
 > 那样跑出来的 e2e 不算一次有效验收）。上面这个顺序是**串行**的。
 >
 > **抓 e2e 抖动要加两个参数**：`playwright.config.ts` 里 `retries: process.env.CI ? 2 : 0` 与

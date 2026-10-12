@@ -13,6 +13,7 @@
     "typecheck": "npm run typecheck --workspaces && tsc -p e2e/tsconfig.json && tsc -p scripts/tsconfig.json",
     "test": "vitest run",
     "test:perf": "vitest run --silent=false packages/scene-graph/src/largeScene.bench.test.ts",
+    "test:lean": "vitest run --config vitest.lean.config.ts --maxWorkers=1",
     "test:e2e": "playwright test",
     "eval:agent": "node scripts/agent-eval.mjs",
     "bench:agent": "node scripts/agent-benchmark/runner.mjs",
