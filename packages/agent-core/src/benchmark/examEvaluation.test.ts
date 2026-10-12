@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest"
 
 import { assertExamSet, EXAM_CASES, HELD_OUT_CASES } from "./examSet"
-import { examRequestPlan, runExamEvaluation, summarizeExamEvaluation, type ExamTrialObservation } from "./examEvaluation"
+import { examRequestPlan, examTrialOutcomeOf, runExamEvaluation, summarizeExamEvaluation, type ExamTrialObservation } from "./examEvaluation"
 import { FROZEN_THRESHOLDS, type FrozenBenchmarkPlan } from "./frozenThresholds"
 
 /**
@@ -105,6 +105,15 @@ describe("Task 20: 真实 provider 那一跑怎么记账", () => {
     expect(result.report.totals.costUsd).toBeCloseTo(36 * 0.08, 9)
     // 每次都第一次就成 ⇒ 各族 pass@1 = 1。
     for (const family of result.report.families) expect(family.passAt1).toBe(1)
+  })
+
+  it("**单次规划请求的结局映射只有一处**（含「修复过就单独记」）", () => {
+    expect(examTrialOutcomeOf({ kind: "plan" })).toBe("planned")
+    expect(examTrialOutcomeOf({ kind: "plan", repaired: true })).toBe("planned_after_repair")
+    expect(examTrialOutcomeOf({ kind: "clarification" })).toBe("clarification")
+    // 模型回了一段解释而不是计划 ⇒ 这一次没画出图（记 `rejected`，不是"成功"也不是"问路"）。
+    expect(examTrialOutcomeOf({ kind: "answer" })).toBe("rejected")
+    expect(examTrialOutcomeOf({ kind: "error" })).toBe("error")
   })
 
   it("**请求清单**：36 个请求、最坏 $10.35（这是给用户点头用的分母）", () => {

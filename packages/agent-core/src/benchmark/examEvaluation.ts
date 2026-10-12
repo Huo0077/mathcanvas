@@ -207,8 +207,31 @@ export function summarizeExamEvaluation(plan: FrozenBenchmarkPlan, observations:
   }
 }
 
-/** **请求清单**（给用户点头用的分母：多少请求、最坏多少钱）。 */
-export interface ExamRequestPlan {
+/**
+ * **一次规划请求的原始结局 → 记账用的试验结局**（Task 20 的适配层判据）。
+ *
+ * 为什么要单独一个纯函数：真正的 provider 调用那一侧会变（今天走 `PlannerPort`，
+ * 将来可能走协调器那条带修复的路），而**"什么算成功"这句话只能有一处**。
+ *
+ * ## 这一档记不下"同轮修复"
+ *
+ * `repaired` 由**调用方**给：修复发生在协调器的编译回路里，规划器端口看不到它。
+ * 所以：
+ * - 端口这一层（单次 `plan()`）永远传 `repaired: false`；
+ * - 走协调器那条路时，把它的修复标记原样传进来 ⇒ 结局就是 `planned_after_repair`
+ *   （**单独一档**，既不算 pass@1、也不算独立的 pass@3）。
+ *
+ * **边界（如实写）**：今天产品侧那条适配器只覆盖**单次规划请求**，所以"同轮修复"这一档
+ * 在真跑时会是 0 —— 要么把协调器的修复标记接进来，要么在报告里如实读成"这一轮没走协调器"。
+ */
+export function examTrialOutcomeOf(attempt: { kind: "plan" | "clarification" | "answer" | "error"; repaired?: boolean }): ExamTrialOutcome {
+  if (attempt.kind === "plan") return attempt.repaired === true ? EXAM_REPAIRED_OUTCOME : "planned"
+  if (attempt.kind === "clarification") return "clarification"
+  if (attempt.kind === "answer") return "rejected"
+  return "error"
+}
+
+/** **请求清单**（给用户点头用的分母：多少请求、最坏多少钱）。 */export interface ExamRequestPlan {
   cases: number
   trialsPerCase: number
   requests: number

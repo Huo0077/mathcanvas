@@ -92,6 +92,7 @@ export {
  */
 export {
   examRequestPlan,
+  examTrialOutcomeOf,
   EXAM_REPAIRED_OUTCOME,
   EXAM_SUCCESS_OUTCOMES,
   runExamEvaluation,
