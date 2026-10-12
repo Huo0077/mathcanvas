@@ -1,6 +1,6 @@
 # MathCanvas
 
-> **Agent 升级范围（2026-10-11，设计状态）**：下一阶段只面向高中数学需作图的**三角形、圆锥曲线、函数/导数、立体几何**。已从可回指的高考卷面完成[四家族真题作图需求调研](docs/research/2026-10-11-four-family-exam-diagram-survey.md)，实施步骤及实际进度统一见[四家族 Agent 下一步计划](docs/superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)。这两份文档不是功能发布或真题全覆盖证明；最近用户的折面题仍无法由真实 Agent 稳定画出，当前能力和发布门禁以[当前状态](docs/current-status.md)为准。
+> **Agent 升级范围（2026-10-11，设计状态）**：下一阶段只面向高中数学需作图的**三角形、圆锥曲线、函数/导数、立体几何**。已从可回指的高考卷面完成[四家族真题作图需求调研](docs/research/2026-10-11-four-family-exam-diagram-survey.md)，实施步骤及实际进度统一见[四家族 Agent 下一步计划](docs/superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)。这两份文档不是功能发布或真题全覆盖证明；**Task 1–13 已于 2026-10-12 完成，其中那道折面题已在真实浏览器端到端通过**，但真题四族的真实 provider 质量与发布门禁仍以[当前状态](docs/current-status.md)为准。
 
 MathCanvas 是面向数学学习与工程绘图的交互式工作台。你可以在平面画布上绘制函数和几何图形，在立体画布中构造、观察和测量三维对象，也可以制作工程图纸。项目仍在持续开发；浏览器版本可以本地运行，部分 Agent 和桌面功能仍处于验证阶段。
 
@@ -61,11 +61,11 @@ npm run dev
 
 传统编辑遵循“界面操作 → 几何/场景计算 → 文档事务 → 画布重绘”的路径。Agent 路径会先观察场景、生成计划并编译为**隔离草稿**；只有草稿通过相应校验且用户明确确认后，宿主才会提交到文档。模型不能直接绕过确认修改现场。关于设计取舍，参见 [增量几何与多会话 Agent 设计](docs/superpowers/specs/2026-09-21-incremental-geometry-agent-and-conversations-design.md) 和 [Agent tool-loop 设计](docs/superpowers/specs/2026-09-28-agent-tool-loop-design.md)。
 
-## 下一步：按 Task 1→21 严格实施（仍是计划）
+## 下一步：按 Task 1→21 严格实施（Task 1–13 已完成，下一项 Task 14）
 
-[真题需求调研](docs/research/2026-10-11-four-family-exam-diagram-survey.md)和[GitHub 源码/测试调研](docs/research/2026-10-11-github-agent-implementation-survey.md)已完成。唯一[实施计划](docs/superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)按数字顺序执行：**Task 1 先量旧功能兼容基线**；Task 2–5 修动作合同、预算及有复现的输入/能力声明错误；Task 6–9 建结构、Worker 同版与离线评测；Task 10–16 逐项交付三角、目标翻折、立体、圆锥、函数及真实画布；Task 17–19 独立收口已有的受限 Lean；Task 20 在批准费用后才测真实模型；Task 21 分别决定作图与自动 Lean 是否放行。
+[真题需求调研](docs/research/2026-10-11-four-family-exam-diagram-survey.md)和[GitHub 源码/测试调研](docs/research/2026-10-11-github-agent-implementation-survey.md)已完成。唯一[实施计划](docs/superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)按数字顺序执行：**Task 1–13 已于 2026-10-12 完成**（兼容基线、动作合同与预算账本、来源意图、安全宿主、Worker 同版、离线真题工件、分点依赖，以及三角与立体两族的纵向交付和目标折角反求；**那道折面题已端到端通过**）；**下一项 Task 14：圆锥曲线真题纵向**；Task 15–16 交付函数与真实画布；Task 17–19 独立收口已有的受限 Lean；Task 20 在批准费用后才测真实模型；Task 21 分别决定作图与自动 Lean 是否放行。
 
-**Task n 没有 RED、GREEN、受影响旧能力复跑及退出记录时，Task n+1 不开始；不设并行跳号。** Lean 默认关且已有实验入口，但原题完整前提和干净机发行仍未验收；证明不可用不能阻挡已核验的普通作图。此次调整只改文档，没有新功能、真实 Lean 运行或付费 provider 请求。
+**Task n 没有 RED、GREEN、受影响旧能力复跑及退出记录时，Task n+1 不开始；不设并行跳号。** Lean 默认关且已有实验入口，但原题完整前提和干净机发行仍未验收；证明不可用不能阻挡已核验的普通作图。Task 1–13 各轮只改产品/测试与文档，**没有增加模型预算、没有发起付费 provider 请求**；Lean 的读数只对当次运行有效。
 
 ## 项目进度与能力边界
 
@@ -75,7 +75,7 @@ npm run dev
 - **仍有限制**：增量草稿工具尚未作为模型可用工具开放；真实场景截图/相机证据与完整视觉检查尚未接通；代表任务的真实 provider pass@1、pass@3 与延迟**已有小样本读数**（2026-10-05 / 10-06，见 [当前状态](docs/current-status.md) §一），但**成本仍没有价目表**，这些读数**也还不足以形成放行依据**。因此类型化工具循环**尚未满足默认启用的发布门禁**。当前门禁及缺口见 [Agent 发布前门禁](docs/acceptance/agent-release-gate.md)，过程见 [Agent tool-loop 进度记录](docs/research/2026-09-28-agent-tool-loop-progress.md)。
 - **其他已知边界**：没有云端同步；球体能力已在 **v3.1.0** 整体交付（画布创建、解析截面、工程投影、Agent 动作都在），但**球不参与布尔运算**（明确拒绝并留诊断）；部分高级几何输入、精确曲面互交、DWG/B-rep 导入和自动尺寸布局仍未提供。用户侧走查与正式发布余项见 [当前状态](docs/current-status.md) §四。
 
-远端可见最新版本标签仍为 **`v3.2.0`**（[v3.2.0 发布说明](docs/release/v3.2.0.md)）；`3.3.10` 只是后续现场构建批次，不等于已发布的 GitHub Release—— 这一版带来 **HTML 导出**（自包含快照 + 可再导入存档，立体几何明确拒绝）与三处修复（拖动取消进行中的自动取景、悬停读数随内容自愈、本地规划器不再把分析题当建模指令）。历史版本见 `docs/release/`。过程记录见 [CHANGELOG](CHANGELOG.md) 与 [项目进度归档](docs/project-progress.md)，历史数字不能直接当作当前测试结果。
+远端可见最新版本标签仍为 **`v3.2.0`**（[v3.2.0 发布说明](docs/release/v3.2.0.md)）；仓内声明的版号已是 `3.3.14`，它只是后续现场构建批次，不等于已发布的 GitHub Release—— 这一版带来 **HTML 导出**（自包含快照 + 可再导入存档，立体几何明确拒绝）与三处修复（拖动取消进行中的自动取景、悬停读数随内容自愈、本地规划器不再把分析题当建模指令）。历史版本见 `docs/release/`。过程记录见 [CHANGELOG](CHANGELOG.md) 与 [项目进度归档](docs/project-progress.md)，历史数字不能直接当作当前测试结果。
 
 ## 开发者进度与参与开发
 
