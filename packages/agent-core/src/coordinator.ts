@@ -3,7 +3,7 @@ import { buildContext, type ConversationContextSource, type Fact } from "./conte
 import { buildPlanRequest, type CancelReason, type CancelResult, type CommitterPort, type ConsentToken, type ObserverPort, type PlannerPort, type PlanRequest, type ToolPort } from "./coordinatorPorts"
 import { parsePlanEnvelope, repairRequestFor } from "./schemas"
 import { MAX_COMPILE_REPAIR_ATTEMPTS, MAX_REPAIR_ATTEMPTS, type PlanEnvelope, type RunContext, type VerificationReport } from "./contracts"
-import { describeRepairPrompt } from "./outputParser"
+import { describeRepairPrompt, schemaFailureDetail } from "./outputParser"
 import { describeCompileRepairPrompt } from "./planCompiler"
 import { createToolRegistry, TOOL_REGISTRY_REVISION, type ToolRegistry } from "./toolRegistry"
 import { createRunLedger, boundTrace, type RunEvent, type RunLedger, type RunNextPhaseFlags, type RunRevisions, type ToolCallTrace } from "./runState"
@@ -433,7 +433,9 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
       for (let attempt = 1; attempt <= MAX_PLAN_ATTEMPTS && stagedPlan === null; attempt += 1) {
         if (attempt > 1) {
           // 第二次尝试是**可见的修复**：它花掉的是同一份预算的另一个名额。
-          if (!spend(budget, "generation") || !spend(budget, "network")) return yield* stop("budget_repair")
+          if (!spend(budget, "generation") || !spend(budget, "network")) {
+            return yield* stop("budget_repair", lastDetail, { generation: budget.remaining("generation"), network: budget.remaining("network") })
+          }
           /**
            * 上一次失败发生在**编译阶段**时账本现在停在 `compiling`，而这一次是重新提问 ——
            * 所以先回到 `planning`（`compiling → planning` 这条边只由这条路径用到，
@@ -507,7 +509,7 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
            *（`invalid_type@envelope`），看不出模型到底回了什么形状 —— 而那句 `detail` 里现在
            * 就写着形状（`schemas.ts` 的 `describePlanShape`）。修复通道也拿它说事。
            */
-          lastDetail = result.errors.map((error) => `${error.code}@${error.path}: ${error.detail}`).join(", ").slice(0, 512)
+          lastDetail = schemaFailureDetail(result.errors)
           ledger.record(`plan attempt ${attempt} was rejected: ${lastDetail}`)
           /**
            * 组装**下一次**要用的修复提示。
@@ -771,9 +773,24 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
     return budget.consume(kind, amount).ok
   }
 
-  /** 预算被拒：**什么都不做**（不改文档），如实落到 failed 并说明是哪一项额度用尽。 */
-  function* stop(reason: string): Generator<RunEvent> {
-    const failed = ledger?.transition("failed", `budget exhausted: ${reason}`)
+  /**
+   * 预算被拒：**什么都不做**（不改文档），如实落到 failed 并说明是哪一项额度用尽。
+   *
+   * **Task 4（2026-10-12）：预算不是"最有用"的那句话 —— 原始错误与余量都要一起留下。**
+   *
+   * 现场读数：22:36 的第 6 次尝试死在 `budget exhausted: budget_repair`，而它**真正**的失败
+   * 是编译期那句几何诊断。那一句被盖掉之后，用户与下一次修复都看不到"到底哪儿画错了"，
+   * 只能看到一个关于额度的内部词 —— 而这正是"错误停止时保留最有用的原始错误"要挡的事。
+   *
+   * 余量由**调用点**传进来（那里 `budget` 就在手边），而不是在这个闭包里现取：
+   * 取法只有一处，读起来也不依赖闭包外还有哪些名字活着。
+   */
+  function* stop(reason: string, lastError = "", remaining?: { generation: number; network: number }): Generator<RunEvent> {
+    const quota = remaining === undefined
+      ? []
+      : [`额度：generation 还剩 ${remaining.generation}、network 还剩 ${remaining.network}`]
+    const original = lastError.length > 0 ? [`预算用尽之前，最后一次真实的失败是：${lastError}`] : []
+    const failed = ledger?.transition("failed", [`budget exhausted: ${reason}`, ...quota, ...original].join("；"))
     if (failed?.ok) yield failed.event
   }
 

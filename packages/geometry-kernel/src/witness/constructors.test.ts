@@ -4,10 +4,103 @@ import { areCoplanar, crossVector3, distanceVector3, dotVector3, subtractVector3
 import { dihedralAngleDetail3 } from "../markers3d"
 import { buildFromPoints, createBuilderContext } from "../solid-builders"
 
-import { constructFrustumWitness, constructPlanarWitness, constructPrismWitness, constructPyramidWitness, constructShapeFromSpec, constructWitnessShape, type FrustumConstructRequest, type PlanarFigureConstructRequest, type PrismConstructRequest, type PyramidConstructRequest, type WitnessConstructRequest, type WitnessRelation } from "./constructors"
+import { constructFrustumWitness, constructPlanarWitness, constructPrismWitness, constructPyramidWitness, constructShapeFromSpec, constructWitnessShape, ratioParameterFor, type FrustumConstructRequest, type PlanarFigureConstructRequest, type PrismConstructRequest, type PyramidConstructRequest, type WitnessConstructRequest, type WitnessRelation } from "./constructors"
 import { isPointName } from "../pointNames"
 import type { SolidShapeSpec } from "./solidShapeSpec"
 import { candidateResiduals, polygonResiduals } from "./residuals"
+
+/**
+ * **Task 10（2026-10-12）：边上分点 —— "按比例产生"只有一种判据。**
+ *
+ * `segmentRatio` 的四条点名（`[p1,p2,p3,p4]`，`value = |p1p2| / |p3p4|`）在**纸上**只有一种
+ * 含义，但**写起来**有好几种锚法，而它们指向同一个点：
+ *
+ * | 题面写法 | 解析出来的 targets | 锚（出现两次的名字） |
+ * | --- | --- | --- |
+ * | `AE:AD = 2:5` | `[A,E,A,D]` | `A`（**已知点**）⇒ 部分/整体 ⇒ 参数 = r |
+ * | `AE:ED = 2:3` | `[A,E,E,D]` | `E`（**就是那个未知点**）⇒ 部分/部分 ⇒ 参数 = r/(1+r) |
+ * | `EA:DA = 2:5` | `[E,A,D,A]` | `A`（已知点）⇒ 与第一行**同一个点** |
+ *
+ * 原先 `planCompiler.constructiblePoint` **只认第二行那一种**（要求未知点出现在第 1、2 位），
+ * 于是 `AE:AD=2:5` 这种**最常见的写法**根本补不出来。这一层把判据收成**一处**：
+ * 认出"哪条点名把两条线段钉在同一条直线上"，再由它决定方向与分母。
+ *
+ * 四条边界都在这里钉住（计划 Task 10 的 RED）：**方向不许乱**、**没有公共端点就拒绝**、
+ * **端点重合拒绝**、**比例越界（点不在线段上）拒绝**。
+ */
+describe("Task 10 — 边上分点：四条点名 → 一个无量纲参数", () => {
+  it("reads part-to-whole as the parameter itself (AE:AD = 2:5 ⇒ t = 2/5)", () => {
+    const result = ratioParameterFor(["A", "E", "A", "D"], "E", 2 / 5)
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error(result.detail)
+    expect(result.from).toBe("A")
+    expect(result.to).toBe("D")
+    expect(result.parameter).toBeCloseTo(2 / 5, 12)
+  })
+
+  it("reads part-to-part through the shared point (AE:ED = 2:3 ⇒ t = 2/5)", () => {
+    const result = ratioParameterFor(["A", "E", "E", "D"], "E", 2 / 3)
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error(result.detail)
+    expect(result.from).toBe("A")
+    expect(result.to).toBe("D")
+    // AE:ED = 2:3 ⇒ AE/AD = 2/(2+3)。
+    expect(result.parameter).toBeCloseTo(2 / 5, 12)
+  })
+
+  it("keeps the direction when the same ratio is written from the other end (EA:DA = 2:5)", () => {
+    const forward = ratioParameterFor(["A", "E", "A", "D"], "E", 2 / 5)
+    const backward = ratioParameterFor(["E", "A", "D", "A"], "E", 2 / 5)
+
+    expect(forward.ok && backward.ok).toBe(true)
+    if (!forward.ok || !backward.ok) throw new Error("expected both to resolve")
+    // **同一个点**：方向写成 `EA`/`DA` 不许把它翻到线段另一端去。
+    expect([backward.from, backward.to, backward.parameter]).toEqual([forward.from, forward.to, forward.parameter])
+  })
+
+  it("refuses two segments that share no endpoint, instead of guessing a direction", () => {
+    // `AE:BD` 里的两条线段没有公共端点 ⇒ 分点在哪条线上都说不清。
+    const result = ratioParameterFor(["A", "E", "B", "D"], "E", 0.5)
+
+    expect(result.ok).toBe(false)
+    if (result.ok) throw new Error("expected a refusal")
+    expect(result.code).toBe("no_shared_endpoint")
+  })
+
+  it("refuses a point that would fall outside the segment", () => {
+    // `AE:AD = 3:2` ⇒ AE 比 AD 还长 ⇒ 那个点**不在线段上**。
+    const result = ratioParameterFor(["A", "E", "A", "D"], "E", 3 / 2)
+
+    expect(result.ok).toBe(false)
+    if (result.ok) throw new Error("expected a refusal")
+    expect(result.code).toBe("point_outside_segment")
+  })
+
+  it("refuses a degenerate edge whose two ends are the same point", () => {
+    const result = ratioParameterFor(["A", "E", "A", "A"], "E", 0.4)
+
+    expect(result.ok).toBe(false)
+    if (result.ok) throw new Error("expected a refusal")
+    expect(result.code === "degenerate_endpoints" || result.code === "ambiguous_anchor").toBe(true)
+  })
+
+  it("refuses a non-positive or non-finite ratio instead of inventing a point", () => {
+    for (const value of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const result = ratioParameterFor(["A", "E", "A", "D"], "E", value)
+      expect(result.ok, `value=${String(value)}`).toBe(false)
+    }
+  })
+
+  it("refuses when the name to construct is not even in the ratio", () => {
+    const result = ratioParameterFor(["A", "E", "A", "D"], "F", 0.4)
+
+    expect(result.ok).toBe(false)
+    if (result.ok) throw new Error("expected a refusal")
+    expect(result.code).toBe("missing_point_not_in_ratio")
+  })
+})
 
 /**
  * **解析见证构造**（N2 子任务 2a；计划 N2 RED 项）。

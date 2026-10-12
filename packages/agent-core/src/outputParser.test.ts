@@ -1,6 +1,42 @@
 import { describe, expect, it } from "vitest"
 
-import { CANONICAL_FENCE, describeRepairPrompt, parseFencedTextEnvelope, parseModelEnvelope, parseStrictJsonEnvelope } from "./outputParser"
+import {
+  CANONICAL_FENCE, describeRepairPrompt, describeSchemaFailureForUser, parseFencedTextEnvelope,
+  parseModelEnvelope, parseStrictJsonEnvelope, readSchemaFailureDetail, schemaFailureDetail
+} from "./outputParser"
+
+/**
+ * **Task 2：22:36 那两轮失败**（计划 §6 Task 2）。
+ *
+ * 夹具只保留**动作名、必需字段与两次状态迁移** —— 原话、题目参数与坐标一律不进来
+ *（计划原话："从用户轨迹只摘动作名、必需字段和两次状态迁移制成脱敏夹具"）。
+ *
+ * 现场的形状：第一轮模型拿 `solid.create_polyhedron` 去拼**开放**的平面图形（四边形 + 翻折片），
+ * 死在"至少四个面"；**引擎给了正确建议**（改用 `solid.create_face`）之后，第二轮它**自己造了一个
+ * 动作名** `solid.create_segment` ×3。而用户在界面上看到的是"模型的回答不符合计划合同的形状……
+ * 计划必须是一个 JSON 对象（schemaVersion / kind / goal，外加 actions）" —— **那是一句误诊**：
+ * 那一份信封的顶层形状**完全合法**，错的是三个动作名。
+ */
+const ROUND_ONE_OPEN_FIGURE = JSON.stringify({
+  schemaVersion: "mathcanvas.plan.v1",
+  kind: "plan",
+  goal: "平面四边形与翻折片（脱敏）",
+  factIds: [],
+  actions: [{
+    actionId: "solid.create_polyhedron",
+    actionKey: "quad",
+    factIds: [],
+    inputs: { alias: "quad", faces: [[0, 1, 2, 3]], vertexNames: ["A", "B", "C", "D"] }
+  }]
+})
+
+const ROUND_TWO_INVENTED_SEGMENT = JSON.stringify({
+  schemaVersion: "mathcanvas.plan.v1",
+  kind: "plan",
+  goal: "平面四边形与翻折片（脱敏）",
+  factIds: [],
+  actions: [0, 1, 2].map((index) => ({ actionId: "solid.create_segment", actionKey: `seg-${index}`, factIds: [], inputs: {} }))
+})
 
 /**
  * Task 2.3 Step 1 里属于解析器的几条：**strict JSON、one repair、provider downgrade**，
@@ -15,6 +51,48 @@ const validPlan = {
 }
 
 const json = JSON.stringify(validPlan)
+
+describe("Task 2 — an unregistered action is not a malformed envelope", () => {
+  it("round-trips the ledger's schema-failure line back into field errors", () => {
+    const failed = parseStrictJsonEnvelope(ROUND_TWO_INVENTED_SEGMENT)
+    if (failed.ok) throw new Error("expected a failure")
+
+    const detail = schemaFailureDetail(failed.errors)
+    const read = readSchemaFailureDetail(detail)
+
+    // 生产方与消费方是同一个模块里的一对；解析回来的路径必须逐条对得上。
+    expect(read.map((entry) => entry.path)).toEqual(["envelope.actions[0].actionId", "envelope.actions[1].actionId", "envelope.actions[2].actionId"])
+    expect(read.every((entry) => entry.code === "unknown_action")).toBe(true)
+  })
+
+  it("names the invented action and all three of its paths, instead of blaming the envelope's shape", () => {
+    const first = parseStrictJsonEnvelope(ROUND_ONE_OPEN_FIGURE)
+    const second = parseStrictJsonEnvelope(ROUND_TWO_INVENTED_SEGMENT)
+    if (first.ok || second.ok) throw new Error("expected both rounds to fail")
+
+    const message = describeSchemaFailureForUser(schemaFailureDetail(second.errors), [schemaFailureDetail(first.errors)])
+
+    // ① 点名那个不存在的动作。
+    expect(message).toContain("solid.create_segment")
+    // ② 三个路径都要在（用户/模型才知道是三笔都写错了，不是一笔）。
+    for (const index of [0, 1, 2]) expect(message).toContain(`envelope.actions[${index}].actionId`)
+    // ③ 上一轮引擎已经给过的建议要一起回到用户面前 —— 那正是模型走偏的原因。
+    expect(message).toContain("solid.create_face")
+    // ④ **不许**把"动作名不认识"说成"顶层 JSON 形状不合法"。
+    expect(message).not.toContain("计划必须是一个 JSON 对象")
+  })
+
+  it("still blames the top-level shape when the top-level shape really is wrong", () => {
+    const array = parseStrictJsonEnvelope("[1, 2, 3]")
+    if (array.ok) throw new Error("expected a failure")
+
+    const message = describeSchemaFailureForUser(schemaFailureDetail(array.errors), [])
+
+    // 反例：真的不是对象时，原来那句"计划必须是一个 JSON 对象"是对的，必须留下。
+    expect(message).toContain("计划必须是一个 JSON 对象")
+    expect(message).not.toContain("solid.create_face")
+  })
+})
 
 describe("strict JSON channel", () => {
   it("accepts a bare JSON object", () => {
@@ -237,6 +315,28 @@ describe("repair prompt", () => {
 
     expect(prompt).toContain("solid.create_face")
     expect(prompt).toContain("闭合多面体")
+  })
+
+  /**
+   * **Task 2：模型自己造动作名时，提示里必须点名那个名字并说"别造"。**
+   *
+   * 现场第二轮：模型把 `solid.create_segment` 写了三次。原提示只给出三条路径
+   *（`envelope.actions[0..2].actionId: unregistered action '…'`），**没有说"这个动作不存在、
+   * 你该用哪个"** —— 而它上一轮刚被同一类问题挡过一次，每一轮只有一次修复机会。
+   */
+  it("names the invented solid action and tells the model not to look for it", () => {
+    const invented = JSON.stringify({
+      ...validPlan,
+      actions: [0, 1, 2].map((index) => ({ actionId: "solid.create_segment", actionKey: `seg-${index}`, factIds: [], inputs: {} }))
+    })
+    const result = parseStrictJsonEnvelope(invented)
+    if (result.ok) throw new Error("expected a failure")
+
+    const prompt = describeRepairPrompt(result)
+
+    expect(prompt).toContain("solid.create_segment")
+    expect(prompt).toContain("solid.create_face")
+    expect(prompt).toContain("不要自己造动作名")
   })
 
   it("does not mention solid.create_face for unrelated failures", () => {

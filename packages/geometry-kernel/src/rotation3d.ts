@@ -19,6 +19,114 @@ import type { Vector3 } from "@draw/dsl"
 export type WorldAxis3 = "x" | "y" | "z"
 
 /**
+ * **从目标距离反求折角**（Task 12，2026-10-12）的结果。
+ *
+ * 四档是**刻意分开**的（计划原文："把找不到根与不能证明无解分开"）：
+ * - `solved`：求到了，且在允许区间内；
+ * - `outside-range`：方程**有**根，但都不在允许区间（例如只有 θ=0 才对）——
+ *   与"无解"是两件事，用户该看到的是"把折叠起来才行"；
+ * - `unreachable`：**证明无解** —— 目标距离落在可达区间之外，并把区间**报出来**；
+ * - `degenerate`：待折点就在折痕上（转多少度它都不动），没有"角"可言。
+ */
+export type FoldAngleOutcome =
+  | { status: "solved"; degrees: number[] }
+  | { status: "outside-range"; degrees: number[] }
+  | { status: "unreachable"; minimum: number; maximum: number }
+  | { status: "degenerate"; detail: string }
+
+/**
+ * **折角解析求解**：绕一条**任意**折痕转一个点，问"转多少度才能让 `|P(θ)Q| = d`"。
+ *
+ * ## 为什么是解析的
+ *
+ * 计划原文："对**固定点到旋转后点的距离**优先利用 `rotateAboutAxis` 所确定的三角关系解析枚举候选角"。
+ * 设折痕过 `pivot`、方向 `a`（单位化），待折点 `moving`、目标点 `target`：
+ *
+ * ```text
+ * v = moving − pivot,  v∥ = (v·a)a,  v⊥ = v − v∥,  r = |v⊥|
+ * P(θ) = pivot + v∥ + cosθ·v⊥ + sinθ·(a × v⊥)
+ * |P(θ) − target|² = K + A·cosθ + B·sinθ
+ *   K = |w|² + r²,  w = (pivot − target) + v∥,  A = 2(w·v⊥),  B = 2(w·(a × v⊥))
+ * ```
+ *
+ * 于是 `A·cosθ + B·sinθ = d² − K` 就是 `R·cos(θ − φ) = d² − K`（`R = √(A²+B²)`、`φ = atan2(B, A)`），
+ * **闭式**给出至多两支角 —— 不需要区间搜索，也就不会把"没搜到"说成"无解"。
+ *
+ * **`a` 不必是单位向量**（求解器自己归一化）；`a` 取反得到的是同一个图形（旋转角取反）。
+ * 折痕退化（`r = 0`，待折点就在折痕上）单独报 `degenerate`，**不许**给出一个假角。
+ */
+export function foldAnglesForTargetDistance(
+  moving: Vector3,
+  pivot: Vector3,
+  axis: Vector3,
+  target: Vector3,
+  distance: number,
+  range: { minimumDegrees: number; maximumDegrees: number } = { minimumDegrees: 0, maximumDegrees: 180 }
+): FoldAngleOutcome {
+  const axisLength = Math.hypot(axis.x, axis.y, axis.z)
+  if (!(axisLength > 0)) return { status: "degenerate", detail: "折痕方向是零向量：没有折痕可言。" }
+  const a = { x: axis.x / axisLength, y: axis.y / axisLength, z: axis.z / axisLength }
+  const v = { x: moving.x - pivot.x, y: moving.y - pivot.y, z: moving.z - pivot.z }
+  const along = v.x * a.x + v.y * a.y + v.z * a.z
+  const parallel = { x: a.x * along, y: a.y * along, z: a.z * along }
+  const perpendicular = { x: v.x - parallel.x, y: v.y - parallel.y, z: v.z - parallel.z }
+  const radiusSquared = perpendicular.x * perpendicular.x + perpendicular.y * perpendicular.y + perpendicular.z * perpendicular.z
+  if (!(radiusSquared > 1e-18)) return { status: "degenerate", detail: "待折点就在折痕上：绕折痕怎么转它都不动。" }
+
+  const w = { x: pivot.x - target.x + parallel.x, y: pivot.y - target.y + parallel.y, z: pivot.z - target.z + parallel.z }
+  const wSquared = w.x * w.x + w.y * w.y + w.z * w.z
+  const cross = { x: a.y * perpendicular.z - a.z * perpendicular.y, y: a.z * perpendicular.x - a.x * perpendicular.z, z: a.x * perpendicular.y - a.y * perpendicular.x }
+  const constant = wSquared + radiusSquared
+  const first = 2 * (w.x * perpendicular.x + w.y * perpendicular.y + w.z * perpendicular.z)
+  const second = 2 * (w.x * cross.x + w.y * cross.y + w.z * cross.z)
+  const amplitude = Math.hypot(first, second)
+  const targetSquared = distance * distance
+  const scale = Math.max(1, constant, targetSquared)
+  const slack = Math.abs(targetSquared - constant)
+
+  /**
+   * `R = 0`（目标点到折痕轴的距离恰好等于 `r`）时 `|P(θ)Q|` **与 θ 无关** ——
+   * 要么这个距离恒等于目标值（任何角都可以，交给调用方的区间），要么永远够不到。
+   */
+  if (amplitude <= 1e-12 * scale) {
+    if (slack <= 1e-9 * scale) {
+      return { status: "solved", degrees: [range.maximumDegrees] }
+    }
+    const reachable = Math.sqrt(Math.max(0, constant))
+    return { status: "unreachable", minimum: reachable, maximum: reachable }
+  }
+
+  if (slack > amplitude * (1 + 1e-12)) {
+    return { status: "unreachable", minimum: Math.sqrt(Math.max(0, constant - amplitude)), maximum: Math.sqrt(constant + amplitude) }
+  }
+
+  const phi = Math.atan2(second, first)
+  const alpha = Math.acos(Math.min(1, Math.max(-1, (targetSquared - constant) / amplitude)))
+  const candidates: number[] = []
+  for (const theta of [phi + alpha, phi - alpha]) {
+    // 归一到 `[0, 360)`，再按允许区间过滤（区间是**度**，与题面同一套单位）。
+    let degrees = ((theta * 180) / Math.PI) % 360
+    if (degrees < 0) degrees += 360
+    if (degrees <= range.minimumDegrees + 1e-9 || degrees > range.maximumDegrees + 1e-9) continue
+    if (candidates.some((existing) => Math.abs(existing - degrees) <= 1e-7)) continue
+    candidates.push(degrees)
+  }
+  candidates.sort((left, right) => left - right)
+  if (candidates.length === 0) {
+    // 有根、但都不在允许区间 —— 与"无解"分开报。
+    const all: number[] = []
+    for (const theta of [phi + alpha, phi - alpha]) {
+      let degrees = ((theta * 180) / Math.PI) % 360
+      if (degrees < 0) degrees += 360
+      if (!all.some((existing) => Math.abs(existing - degrees) <= 1e-7)) all.push(degrees)
+    }
+    all.sort((left, right) => left - right)
+    return { status: "outside-range", degrees: all }
+  }
+  return { status: "solved", degrees: candidates }
+}
+
+/**
  * 欧拉角（X → Y → Z，绕原点）→ 行主序 3×3 旋转矩阵。
  *
  * 与 `solid-builders.ts` 的 `rotateAboutPivot` 逐行同源：先用 `Rx` 把点转一次，再用 `Ry`、最后 `Rz`。

@@ -1,8 +1,38 @@
 import { describe, expect, it, vi } from "vitest"
-import { PLAN_SCHEMA_VERSION, createBudget, parsePlanEnvelope, type ModelContext, type PlanRequest, type ToolDescriptor } from "@draw/agent-core"
+import { DRAFT_ACTION_IDS, PLAN_SCHEMA_VERSION, createBudget, parsePlanEnvelope, type ModelContext, type PlanRequest, type ToolDescriptor } from "@draw/agent-core"
 
 import type { ProviderHealth, ProviderProfile } from "../services/providerProfileClient"
-import { createModelPlanner, toGateCapabilities, PLAN_TOOL_NAME, PLAN_TOOL_SCHEMA, type ModelPlannerProvider } from "./modelPlanner"
+import { createModelPlanner, toGateCapabilities, buildPlanToolSchema, PLAN_TOOL_NAME, PLAN_TOOL_SCHEMA, type ModelPlannerProvider } from "./modelPlanner"
+
+/**
+ * **Task 3：工具发布面与动作目录必须是同一个集合**（2026-10-12）。
+ *
+ * 原生工具通道下，模型**只能**看见 `buildPlanToolSchema` 发布的那些动作
+ *（每一项是一个 `actionId` 枚举分支）。所以这一面漏掉一个动作的后果与"提示词菜单漏掉它"
+ * 一样静默：模型永远不会产出它。反过来，发布一个谁都没实现的名字，就是**请模型写一个
+ * 必然被拒的动作**（现场：`solid.create_segment`）。
+ */
+/** 从发布的工具 schema 里取出所有被发布的 actionId。 */
+function publishedActionIds(schema: ReturnType<typeof buildPlanToolSchema>): string[] {
+  const actions = (schema.function.parameters.properties as { actions?: { items?: { oneOf?: unknown[] } } }).actions
+  const branches = (actions?.items?.oneOf ?? []) as { properties?: { actionId?: { enum?: string[] } } }[]
+  return branches.map((branch) => branch.properties?.actionId?.enum?.[0]).filter((id): id is string => typeof id === "string")
+}
+
+describe("Task 3 — the published tool schema and the action catalogue are the same set", () => {
+  it("publishes every catalogue action, so no implemented action is unreachable through the tool channel", () => {
+    const published = publishedActionIds(buildPlanToolSchema([...DRAFT_ACTION_IDS]))
+
+    expect(new Set(published)).toEqual(new Set(DRAFT_ACTION_IDS))
+  })
+
+  it("never publishes a name that no action implements", () => {
+    const published = publishedActionIds(buildPlanToolSchema(["solid.create_segment", "planar.create_point"]))
+
+    expect(published).toEqual(["planar.create_point"])
+    expect(published).not.toContain("solid.create_segment")
+  })
+})
 
 /**
  * **模型规划器的判据**（G2 接线）。

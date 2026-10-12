@@ -113,12 +113,33 @@ export async function compileInWorker(
       draftDocument: null,
       operations: [],
       /**
-       * **逐层诊断要映射过来**：`stage` 的失败分支靠 `diagnostics` 里**有没有 error**
-       * 决定"报编译失败"还是"把澄清问题交给界面"。少了这一项，明明有诊断的失败会退化成
-       * "the plan produced no compilable action" 这种说不清的话
-       *（实测被用例抓出来：映射前 `worker.diagnostics` 是空的）。
+       * **回包被拒的理由必须跟着走**（Task 8，2026-10-12）。
+       *
+       * `geometryWorkerClient` 会逐项核对 `requestId + runId + draftId + draftVersion`，
+       * 不属于当前这一版的回包一律拒（`stale_artifact`）。**那条闸已经在** —— 但原先这里
+       * 只映射了 `planDiagnostics` / `questions` / `assumptions` / `repair`，
+       * **`code` 与 `detail` 一个都没搬**：于是"回包属于另一版"到草稿层变成**诊断为空**，
+       * `stage` 只能说 "the plan produced no compilable action"。
+       *
+       * 那是一句**误诊**，而且两种处置完全不同：计划没问题时该**重试**，
+       * 计划有问题时才该改计划。所以 Worker 没给逐层诊断时，用回包自己的
+       * `code` + `detail` 造一条 —— `stage` 取 `transport`：它说的正是
+       * "这个回包在传输边界上没被接受"，而**层名只有那六个**（规格 §6.2），
+       * 为它发明第七个名字会让"卡在哪一层"这句话失去意义。
+       *
+       * `path` 写 `worker` 而不是某个字段路径：**没有哪个字段要改** ——
+       * 这一条说的是回包本身（字段路径的用途是"一次性修复只允许改这几处"，
+       * 而这里一处都不该改）。
        */
-      diagnostics: [...(outcome.planDiagnostics ?? [])],
+      diagnostics: outcome.planDiagnostics !== undefined && outcome.planDiagnostics.length > 0
+        ? [...outcome.planDiagnostics]
+        : [{
+            stage: "transport" as const,
+            code: outcome.code,
+            path: "worker",
+            detail: outcome.detail,
+            severity: "error" as const
+          }],
       questions: [...(outcome.questions ?? [])],
       assumptions: [...(outcome.assumptions ?? [])],
       ...(outcome.repair === undefined ? {} : { repair: outcome.repair })

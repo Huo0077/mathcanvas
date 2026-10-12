@@ -9,6 +9,13 @@ export type DiagramObligationKind =
    * `value` 是度数。它与 `dihedral`（二面角）是两件事：这一档说的是**同一个平面内**两条边的内部角。
    */
   | "planarAngle"
+  /**
+   * **面积**（Task 11，2026-10-12）：`△ABC的面积为6` ⇒ `targets: ["A","B","C"]`、`value` 是面积。
+   *
+   * 调研 §2.1 的硬要求："只满足正弦定理而**不核面积**的图是**错误图**" —— 所以面积必须
+   * 从"读不懂的残留"变成一条**有读取器、有核验**的条件。
+   */
+  | "area"
   | "conicAxes"
   | "tangentAt"
   | "functionGraph"
@@ -320,6 +327,21 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
       const denominator = finitePositive(m[4])
       if (numerator === null || denominator === null) return null
       return { kind: "segmentRatio", targets: [...names(m[1]), ...names(m[2])], value: numerator / denominator }
+    }
+  },
+  {
+    /**
+     * **面积**（Task 11，2026-10-12）：`△ABC的面积为6` / `三角形ABC的面积是6`。
+     *
+     * 只收**中文"面积"**那两种写法（`△` 与 `三角形` 前缀可省）。
+     * **不收**代数式 `S△ABC=6` —— 那是另一种记号，硬塞进同一个正则会把
+     * "读不懂"变成"读错"，而读错比读不懂更贵（用户看不到自己被误解了）。
+     */
+    pattern: /(?:△\s*)?(?:三角形\s*)?([A-Z]{3})\s*的面积\s*(?:为|是|=|：|:)\s*(-?\d+(?:\.\d+)?)/g,
+    read: (m) => {
+      const value = finitePositive(m[2])
+      if (value === null) return null
+      return { kind: "area", targets: names(m[1]), value }
     }
   },
   {

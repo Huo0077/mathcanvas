@@ -1,6 +1,6 @@
 import type { GeometryDocument, PrimitiveSpec, Workspace } from "@draw/dsl"
 import { commitTransaction, compileAction, createIdAllocator, solidTopology3, type ActionContext, type DomainOperation, type DraftAction, type IdAllocator } from "@draw/scene-graph"
-import { sectionSolid3, validatePrismInput, DEFAULT_SOLID_SEGMENTS } from "@draw/geometry-kernel"
+import { ratioParameterFor, sectionSolid3, validatePrismInput, DEFAULT_SOLID_SEGMENTS, foldAnglesForTargetDistance } from "@draw/geometry-kernel"
 
 import {
   MAX_REPAIR_ATTEMPTS,
@@ -19,6 +19,8 @@ import { extractRelations } from "./relationExtraction"
 import { parseObligationWithLegacy } from "./obligationIR"
 import { missingNamedPoints, verifyDiagramObligations, type DiagramVerificationReport, type MissingNamedPoint } from "./diagramVerification"
 import { parseDiagramObligations } from "./diagramObligations"
+import { buildFigureIntent } from "./figureIntent"
+import { materialisedHostAction, planFigureMaterialisation } from "./figureMaterialisation"
 import { applyNormalisation, parseNormalisationReply, type NormalisationReport } from "./promptNormalization"
 import { verifyRelations, type RelationLookup } from "./relations"
 import { parsePlanEnvelope, repairRequestFor } from "./schemas"
@@ -63,8 +65,28 @@ const VERIFIABLE_FIGURE_ACTION_IDS: ReadonlySet<string> = new Set([
  * 因为面板那份报告来自草稿层，那里仍然认死多面体。这正是本仓"同一个判断写两遍必然分叉"的现场样本，
  * 而且是**单元测试抓不到**的那种：`compilePlan` 的用例只走编译期那一条。
  */
-export function planHasVerifiableFigure(actions: readonly { actionId: string }[]): boolean {
-  return actions.some((action) => VERIFIABLE_FIGURE_ACTION_IDS.has(action.actionId))
+export function planHasVerifiableFigure(actions: readonly { actionId: string; inputs?: unknown }[]): boolean {
+  return actions.some((action) =>
+    VERIFIABLE_FIGURE_ACTION_IDS.has(action.actionId)
+    /**
+     * **棱柱要单独判：带了点名才算**（Task 13，2026-10-12）。
+     *
+     * 实测洞：棱柱的顶点原先叫 `P1…P6`（**模板自己的顺序编号**，与题面点名不是一回事），
+     * 于是题面里 `AB=2` 一条都拿不到坐标 —— 而这一轮 `ok=true`、**核验一条都没跑**（静默通过）。
+     *
+     * **为什么不能把它直接加进上面那个集合**：那会让"只画个棱柱"的题面也去核验并不存在的点名，
+     * 把本来能过的挡住 —— 这与那条"刻意不含 `solid.create_template`"的理由是**同一条**。
+     * 所以判据落在**这一笔动作有没有带点名**上，而不是落在动作名上。
+     */
+    || (action.actionId === "solid.create_prism" && prismCarriesVertexNames(action.inputs))
+  )
+}
+
+/** 棱柱这一笔有没有带点名（`vertexNames`，底面 n 个 + 顶面 n 个）。 */
+function prismCarriesVertexNames(inputs: unknown): boolean {
+  if (inputs === null || typeof inputs !== "object") return false
+  const names = (inputs as { vertexNames?: unknown }).vertexNames
+  return Array.isArray(names) && names.length >= 6
 }
 
 /**
@@ -317,6 +339,12 @@ export function compilePlan(input: unknown, context: PlanCompileContext): PlanCo
   const first = compileOnce(input, context)
   const materialised = rescueWithMaterialisedPoints(context, first)
   if (materialised !== null) return materialised
+  /**
+   * **折角反求**排在见证搜索之前：它是**解析**的、确定的、也不吃候选预算（Task 12）。
+   * 它同样"只救不抢"：第一遍通过了就一步都不动。
+   */
+  const solvedFold = rescueWithSolvedFoldAngle(context, first)
+  if (solvedFold !== null) return solvedFold
   if (context.diagramWitnessSearch !== true) return first.result
   const rescue = rescuedByWitnessSearch(context, first)
   /** 第 ③ 条纪律的**另一半**：救不回来时不但原样交回第一遍，还要**说清这组坐标是谁给的**。 */
@@ -535,6 +563,18 @@ function compileOnce(input: unknown, context: PlanCompileContext): CompileOnceOu
   for (const check of diagramVerification?.checks ?? []) {
     if (check.status === "failed") diagnostics.push(planDiagnostic("geometry_validation", "diagram_condition_failed", "envelope.actions", `${check.sourceText}：${check.reason}`))
     if (check.status === "unverified") diagnostics.push(planDiagnostic("geometry_validation", "diagram_condition_unverified", "envelope.actions", `${check.sourceText}：${check.reason}`, "warning"))
+  }
+  /**
+   * **题面说的是"翻折"，那就必须真的折过**（Task 13，2026-10-12）。
+   *
+   * 判据来自 `figureIntent` 的 `fold` 变换（题面那句话的唯一机器可读形状），量的是**最终坐标**：
+   * 折是刚体运动 ⇒ `apexAs` 到折痕两端的距离必须与 `apex` 的一样。
+   * 没有这一条时，"模型绕开 `solid.fold`、直接把 `P` 写在某个满足 `PC=4√3` 的地方"会**通过核验** ——
+   * 实测读数：八条条件全 `passed`，而 `|PE| = 12.93` 对 `|AE| = 3.46`（差 3.7 倍），
+   * 图根本不是折出来的。
+   */
+  if (effectivePrompt !== undefined && obligationParse !== null) {
+    diagnostics.push(...foldRigidityDiagnostics(effectivePrompt, obligationParse.ir, working))
   }
   const failed = diagnostics.some((entry) => entry.severity === "error")
   if (failed) {
@@ -860,14 +900,19 @@ function constructiblePoint(entry: MissingNamedPoint, vertexNames: readonly stri
     if (middle !== name || !vertexNames.includes(first) || !vertexNames.includes(second) || first === second) return null
     return { name, from: first, to: second, parameter: 0.5, kind: "midpoint", sourceText: entry.sourceText, index }
   }
-  if (entry.kind === "segmentRatio" && entry.targets.length === 4) {
-    // `segmentRatio`：targets = [D, E, E, A]、`value` = DE/EA ⇒ 参数 = DE/DA = r/(1+r)，方向 D→A。
-    const [from, middle, middleAgain, to] = entry.targets
-    const ratio = entry.value
-    if (middle !== name || middle !== middleAgain || from === to) return null
-    if (ratio === undefined || !Number.isFinite(ratio) || ratio <= 0) return null
-    if (!vertexNames.includes(from) || !vertexNames.includes(to)) return null
-    return { name, from, to, parameter: ratio / (1 + ratio), kind: "segmentRatio", sourceText: entry.sourceText, index }
+  if (entry.kind === "segmentRatio") {
+    /**
+     * **判据只有一处**（Task 10，2026-10-12）：四种锚法（`AE:AD` / `AE:ED` / `EA:DA` …）里
+     * 哪一种、方向朝哪、分母是谁，全部由内核的 `ratioParameterFor` 说了算。
+     *
+     * 原先这里自己写了一遍、而且**只认未知点落在第 1、2 位那一种**（`[D,E,E,A]`），
+     * 于是最常见的 `AE:AD=2:5`（解析成 `[A,E,A,D]`）根本补不出来 —— 偏偏那就是用户那句题面里的写法。
+     * 收成一处之后，"两条路必然分叉"这件事在这一格上不可能再发生。
+     */
+    const resolved = ratioParameterFor(entry.targets, name, entry.value)
+    if (!resolved.ok) return null
+    if (!vertexNames.includes(resolved.from) || !vertexNames.includes(resolved.to)) return null
+    return { name, from: resolved.from, to: resolved.to, parameter: resolved.parameter, kind: "segmentRatio", sourceText: entry.sourceText, index }
   }
   return null
 }
@@ -879,9 +924,20 @@ function materialisedPointActions(
   document: GeometryDocument,
   aliases: Record<string, string>
 ): { actions: readonly Record<string, unknown>[]; points: MaterialisedPoint[] } | null {
-  const solids = plan.actions.filter((action) => action.actionId === "solid.create_polyhedron")
-  if (solids.length !== 1) return null
-  const inputs = solids[0].inputs
+  /**
+   * **宿主可以是多面体，也可以是平面片**（Task 13，2026-10-12）。
+   *
+   * 原先这里只要 `solid.create_polyhedron` —— 而用户那道题的宿主是一只**平面四边形**
+   *（`solid.create_face`），于是"点在边上且 `AE:AD=2:5`"这条**永远补不出来**
+   *（实测：五条四边形条件 `passed`，两条定比分点停在 `unverified`）。
+   *
+   * 两种宿主本来就是**同一个形状**：都带 `vertexNames` + `vertices`，棱的 id 都是 `${宿主}:eN`
+   *（`scene-graph` 的 `compileSolidFace` 与 `buildFromPoints` 用的是同一条命名约定），
+   * 所以判据仍然是"**恰好一笔**能给出点名与棱的宿主"。
+   */
+  const hosts = plan.actions.filter((action) => action.actionId === "solid.create_polyhedron" || action.actionId === "solid.create_face")
+  if (hosts.length !== 1) return null
+  const inputs = hosts[0].inputs
   if (typeof inputs !== "object" || inputs === null) return null
   const alias = (inputs as { alias?: unknown }).alias
   const names = (inputs as { vertexNames?: unknown }).vertexNames
@@ -929,7 +985,28 @@ function materialisedPointActions(
     if (built === null) return null
     const direction = orientation(built.from, built.to)
     if (direction === null) return null
-    points.push(direction === 1 ? built : { ...built, parameter: 1 - built.parameter })
+    /**
+     * **这里不再自己翻参数**（Task 13，2026-10-12）。
+     *
+     * 朝向归一已经收在**写绑定的那一处**（`compileCreateBoundPoint` 按 `hostEdge` 的 `{from,to}` 判；
+     * 实测过：面片的 `A—D` 棱存成 `D→A`，所以那里必须翻）。两边各翻一次会**翻回去** ——
+     * 这正是"同一个判断写两遍必然分叉"：补建里翻一次、动作里再翻一次，`E` 就落到了 `3/5` 处，
+     * 第二遍核验 `failed`、救援如实放弃，`AE:AD` 停在 `unverified`（本轮实测到的症状）。
+     *
+     * `orientation` 那一问**保留**：它问的是"这条棱找不找得到、唯不唯一"，
+     * 找不到就**不该补**（动作那一步同样会拒）—— 与"从哪头量"是两件事。
+     */
+    const resolved = built
+    /**
+     * **同一个名字只补一次**（Task 10，2026-10-12）。
+     *
+     * 两条题设可能给出**同一个位置**（`AE:AD=2:5` 与 `AE:ED=2:3` 都指向 AD 的 2/5 处）——
+     * 那是重复，不是冲突。原先这里会 push 两次，于是造出**两个都叫 `E` 的点**：
+     * 点名表指到两个不同的位置，而这类重复在图上是看不出来的。
+     * **真正的不相容由 `conflictingMaterialisedPoints` 在动手之前拒掉**（见那一处）。
+     */
+    if (points.some((point) => point.name === resolved.name)) continue
+    points.push(resolved)
   }
   if (points.length === 0) return null
   return {
@@ -949,8 +1026,53 @@ function materialisedPointActions(
   }
 }
 
-/** 补建这件事**必须看得见**：一句人话 + 被定下来的值 + 落在哪个字段。 */
-function materialisedAssumptions(points: readonly MaterialisedPoint[]): StructuredAssumption[] {
+/**
+ * **同一个名字被两条以上题设算到不同的位置 ⇒ 不相容，拒绝**（Task 10，2026-10-12）。
+ *
+ * 计划 Task 10 的 RED 最后一条。今天的行为**不是拒绝**：`AE:AD=2:5`（E 在 AD 的 2/5 处）
+ * 与 `AE:ED=3:1`（E 在 AD 的 3/4 处）同时出现时，整轮照旧 `ok`（实测读数 `expected true to be false`），
+ * 而 `E` 一个都没落到图上 —— 用户看到的是一段"没有报错、但题设未核验"的运行。
+ *
+ * 两种错误的处置都要挡住：
+ * - **静默挑一个**（后者覆盖前者）＝ 替用户改了题；
+ * - **造两个都叫 `E` 的点** ＝ 点名表指到两个不同的位置，而图上看不出来。
+ *
+ * 比较用**规范形**（`from`/`to` 排序 + 参数折到同侧），所以同一条棱的两种写法
+ *（`A→D` 的 0.4 与 `D→A` 的 0.6）不会被误判成冲突 —— 它们是**同一个点**。
+ */
+function conflictingMaterialisedPoints(
+  entries: readonly MissingNamedPoint[],
+  vertexNames: readonly string[],
+  indexBase: number
+): { name: string; detail: string } | null {
+  const canonical = (point: MaterialisedPoint): string => {
+    const swapped = point.from > point.to
+    const from = swapped ? point.to : point.from
+    const to = swapped ? point.from : point.to
+    const parameter = swapped ? 1 - point.parameter : point.parameter
+    return `${from}|${to}|${parameter.toFixed(12)}`
+  }
+  const seen = new Map<string, MaterialisedPoint>()
+  for (const entry of entries) {
+    if (entry.missing.length !== 1) continue
+    const built = constructiblePoint(entry, vertexNames, indexBase)
+    if (built === null) continue
+    const previous = seen.get(built.name)
+    if (previous === undefined) {
+      seen.set(built.name, built)
+      continue
+    }
+    if (canonical(previous) !== canonical(built)) {
+      return {
+        name: built.name,
+        detail: `${previous.sourceText} 把它定在 ${previous.from}→${previous.to} 的 ${previous.parameter}，而 ${built.sourceText} 把它定在 ${built.from}→${built.to} 的 ${built.parameter}`
+      }
+    }
+  }
+  return null
+}
+
+/** 补建这件事**必须看得见**：一句人话 + 被定下来的值 + 落在哪个字段。 */function materialisedAssumptions(points: readonly MaterialisedPoint[]): StructuredAssumption[] {
   return points.map((point) => ({
     id: `materialised.${point.name}`,
     text: point.kind === "midpoint"
@@ -963,6 +1085,196 @@ function materialisedAssumptions(points: readonly MaterialisedPoint[]): Structur
   }))
 }
 
+/**
+ * **"翻折"必须是刚体运动**（Task 13，2026-10-12）—— 从**最终坐标**量的那一条判据。
+ *
+ * 题面里"将三角形AEF沿EF翻折至三角形PEF"这句话的唯一机器可读形状是
+ * `figureIntent` 的 `fold` 变换（`{ face, hinge, apex, apexAs }`）。折是刚体运动，所以
+ * `apexAs` 到折痕两端的距离必须与 `apex` 的一样 —— 这条判据**不管 `P` 是怎么来的**：
+ * 走 `solid.fold` 的必然满足，手写坐标的就不一定。
+ *
+ * **为什么需要它**：没有这一条时，模型绕开 `solid.fold`、把 `P` 直接写在某个满足
+ * `PC = 4√3` 的地方，**八条题设会条条通过**（实测：`|PE| = 12.93` 对 `|AE| = 3.46`），
+ * 而图根本不是折出来的 —— 正是计划 RED 点名的"图形很像但**折后 `P` 错**"。
+ *
+ * 点名不全时不在这里判（那属于"未核验"那一套：缺谁、为什么缺，已有各自的文案）。
+ */
+function foldRigidityDiagnostics(
+  prompt: string,
+  ir: Parameters<typeof buildFigureIntent>[0]["ir"],
+  document: GeometryDocument
+): PlanDiagnostic[] {
+  const at = (label: string): { x: number; y: number; z: number } | null => {
+    const found = document.primitives.find((primitive) => primitive.type === "point3" && (primitive as { label?: unknown }).label === label)
+    return found?.type === "point3" ? found.position : null
+  }
+  const distance = (left: { x: number; y: number; z: number }, right: { x: number; y: number; z: number }): number =>
+    Math.hypot(left.x - right.x, left.y - right.y, left.z - right.z)
+
+  const out: PlanDiagnostic[] = []
+  for (const transformation of buildFigureIntent({ prompt, ir, family: "solid" }).transformations) {
+    if (transformation.kind !== "fold") continue
+    const apex = at(transformation.apex)
+    const apexAs = at(transformation.apexAs)
+    const from = at(transformation.hinge.from)
+    const to = at(transformation.hinge.to)
+    if (apex === null || apexAs === null || from === null || to === null) continue
+
+    const before = [distance(apex, from), distance(apex, to)]
+    const after = [distance(apexAs, from), distance(apexAs, to)]
+    if (!after.every(Number.isFinite) || !before.every(Number.isFinite)) continue
+    const tolerance = Math.max(1e-6, 1e-6 * Math.max(...before, ...after))
+    if (Math.abs(after[0]! - before[0]!) <= tolerance && Math.abs(after[1]! - before[1]!) <= tolerance) continue
+
+    out.push(planDiagnostic(
+      "geometry_validation",
+      "fold_not_rigid",
+      "envelope.actions",
+      `题面说的是沿 ${transformation.hinge.from}${transformation.hinge.to} 把 ${transformation.apex} 翻折到 ${transformation.apexAs}，而折是**刚体运动**：到折痕两端的距离必须一样。实测 ${transformation.apexAs}${transformation.hinge.from}=${after[0]!.toFixed(6)} 而 ${transformation.apex}${transformation.hinge.from}=${before[0]!.toFixed(6)}，${transformation.apexAs}${transformation.hinge.to}=${after[1]!.toFixed(6)} 而 ${transformation.apex}${transformation.hinge.to}=${before[1]!.toFixed(6)} —— 这一只 ${transformation.apexAs} 不是折出来的，请用 solid.fold 让内核按折痕与折角算。`
+    ))
+  }
+  return out
+}
+
+/**
+ * **折角反求**（Task 12，2026-10-12）：题面给了"折完以后 `PC = 4√3`"，却**没给折角** ——
+ * 那就把它**求**出来，而不是让模型自己手算（现场"连发 7 次、7 次死因各不相同"，
+ * 查实的一条正是模型在自己手算折后坐标）。
+ *
+ * 判据顺序即护栏，每一步都在挡一种具体的坏结果：
+ * 1. 第一遍没核验报告、或**已经通过** ⇒ 不管（"只救不抢"）；
+ * 2. 计划里没有 `solid.fold` ⇒ 不是这一支的事；
+ * 3. 折痕两端、待折点、目标点**都得在编译出来的文档里有点名坐标** —— 缺一个就不猜；
+ * 4. 目标距离那条题设必须**逐字来自原话**（`fixedLength` 且两个点名、其中一个就是折后的名字）——
+ *    绝不从"哪个数看起来像"去凑；
+ * 5. 求解器说 `unreachable` / `degenerate` ⇒ **不救**（那是**证明无解**，与"没找到"分开）；
+ * 6. 第二遍**必须** `ok` + 有草稿 + 核验 `passed`，三者缺一都不算救回 ——
+ *    换句话说：**折角是求出来的，但"对不对"仍由既有核验器按最终坐标说了算**，
+ *    没有任何"系统算的所以跳过核验"的豁免。
+ *
+ * 求出来的角**写进 `assumptions`**（一句人话 + 被定下来的值），因为题面没给过它。
+ */
+function rescueWithSolvedFoldAngle(context: PlanCompileContext, first: CompileOnceOutcome): PlanCompileResult | null {
+  const report = first.result.diagramVerification
+  if (report === undefined || report.status === "passed") return null
+  if (first.plan === null || first.obligations === null || context.prompt === undefined) return null
+  /**
+   * **不要求 `draftDocument` 非空**（本轮实测踩到）：核验**没通过**时草稿往往是 `null`，
+   * 而"没通过"恰恰是这一支**唯一**该管的场景 —— 早先那一句 `if (document === null) return null`
+   * 把整条救援挡在门外（症状：`assumptions` 是空的，看着像"没救"，其实是**门都没进**）。
+   * 坐标本来就从**计划的动作**上取（`planPoint`），不需要文档。
+   */
+
+  /**
+   * **点名 → 坐标**从**计划自己的 `vertices` / `vertexNames`** 上取，不从文档的 `label` 上取。
+   *
+   * 理由（本轮实测踩到）：文档里的点**不一定带 `label`** —— 折那一笔的点名是靠
+   * `diagramVerification` 的**点名表**（由动作推出来的）认出来的，而那张表在核验器里。
+   * 计划里的 `vertices[index]` 与 `vertexNames[index]` 是**同一份输入的两个平行数组**，
+   * 本来就是"这个点叫什么、在哪"的唯一来源，读它既准确又不必猜标签。
+   */
+  const plan = first.plan
+  /**
+   * **还有一条更全的取点路子：把折叠那几笔摘掉、编译一次，从那份"折之前"的文档里按点名取。**
+   *
+   * 为什么需要它（Task 13，2026-10-12）：`E`/`F` 现在可以由**前面几笔**
+   * `dynamic.create_bound_point` 按定比分点建出来 —— 那种动作**没有 `vertices` 数组**，
+   * 所以 `planPoint` 在他们身上取不到坐标。而它们的坐标本来就被算出来了：
+   * `compileOnce` 的成功路径一定会给出 `working` 文档（`draftDocument: null` 只属于**动作报错**那条路），
+   * 摘掉折叠之后那些条件本来就还不成立，所以这里**只看文档、不看结论**。
+   *
+   * 复用 `compileOnce` 而不是自己再写一遍"点在棱上的位置怎么算"：那套判据只有一份
+   *（宿主棱的朝向、平面路径的弧长），抄第二份必然分叉 —— 本轮刚因为"两边各翻一次"栽过。
+   */
+  const withoutFold: Extract<PlanEnvelope, { kind: "plan" }> = {
+    ...plan,
+    actions: plan.actions.filter((action) => action.actionId !== "solid.fold") as typeof plan.actions
+  }
+  const beforeFold = compileOnce(withoutFold, context).result.draftDocument
+  const fromDocument = (label: string): { x: number; y: number; z: number } | null => {
+    if (beforeFold === null) return null
+    const found = beforeFold.primitives.find((primitive) => primitive.type === "point3" && (primitive as { label?: unknown }).label === label)
+    return found?.type === "point3" ? found.position : null
+  }
+  /** 先问"折之前"的文档（能覆盖点名建点），问不到再退回计划里那两个平行数组。 */
+  const at = (label: string): { x: number; y: number; z: number } | null => fromDocument(label) ?? planPoint(label)
+  const planPoint = (label: string): { x: number; y: number; z: number } | null => {
+    for (const action of plan.actions) {
+      const inputs = action.inputs as { vertices?: unknown; vertexNames?: unknown }
+      if (!Array.isArray(inputs.vertices) || !Array.isArray(inputs.vertexNames)) continue
+      const index = inputs.vertexNames.indexOf(label)
+      if (index < 0) continue
+      const point = inputs.vertices[index] as { x?: unknown; y?: unknown; z?: unknown } | undefined
+      if (point === undefined) continue
+      if (typeof point.x !== "number" || typeof point.y !== "number" || typeof point.z !== "number") continue
+      return { x: point.x, y: point.y, z: point.z }
+    }
+    return null
+  }
+
+  for (const fold of first.plan.actions) {
+    if (fold.actionId !== "solid.fold") continue
+    const inputs = fold.inputs as { hinge?: { from?: unknown; to?: unknown }; apex?: unknown; apexAs?: unknown }
+    const hinge = inputs.hinge
+    const apex = inputs.apex
+    const apexAs = inputs.apexAs
+    if (typeof apex !== "string" || typeof apexAs !== "string") continue
+    if (typeof hinge?.from !== "string" || typeof hinge.to !== "string") continue
+
+    const moving = at(apex)
+    const pivot = at(hinge.from)
+    const alongTo = at(hinge.to)
+    if (moving === null || pivot === null || alongTo === null) continue
+
+    for (const obligation of first.obligations.ir.obligations) {
+      /**
+       * **`role` 不能限定成 `given`**：用户那句是"**使得** PC=4√3" —— 它是**要达成的目标**，
+       * 解析器完全可能把它归成 target 而不是 given（这也正是它该有的语义）。
+       * 两种角色都同样**逐字来自原话**，所以这里只要求"是原话里的定长条件 + 含折后点名"。
+       */
+      if (obligation.kind !== "fixedLength") continue
+      if (obligation.judgeability !== "supported") continue
+      if (typeof obligation.expected !== "number" || !(obligation.expected > 0)) continue
+      const targets: readonly string[] = obligation.targets
+      if (targets.length !== 2 || !targets.includes(apexAs)) continue
+      const otherLabel: string = targets[0] === apexAs ? targets[1]! : targets[0]!
+      if (otherLabel === apexAs) continue
+      const target = at(otherLabel)
+      if (target === null) continue
+
+      const outcome = foldAnglesForTargetDistance(moving, pivot, { x: alongTo.x - pivot.x, y: alongTo.y - pivot.y, z: alongTo.z - pivot.z }, target, obligation.expected)
+      if (outcome.status !== "solved") continue
+      const degrees = outcome.degrees[0]
+      if (degrees === undefined) continue
+
+      const actionIndex = first.plan.actions.indexOf(fold)
+      const patched: Extract<PlanEnvelope, { kind: "plan" }> = {
+        ...first.plan,
+        actions: first.plan.actions.map((action) => action === fold
+          ? { ...action, inputs: { ...(action.inputs as Record<string, unknown>), angle: degrees } }
+          : action) as typeof first.plan.actions
+      }
+      const second = compileOnce(patched, context)
+      if (!second.result.ok || second.result.draftDocument === null || second.result.diagramVerification?.status !== "passed") continue
+      return {
+        ...second.result,
+        assumptions: [
+          ...second.result.assumptions,
+          {
+            id: `solved-fold-angle.${apexAs}`,
+            text: `题面给的是折完之后的距离（${obligation.sourceText}），没有直接给折角：系统按「绕 ${hinge.from}${hinge.to} 旋转、${apex} 折到 ${apexAs}」把它**反求**出来，得到折角 ${degrees}°。`,
+            kind: "witness",
+            value: { apexAs, hingeFrom: hinge.from, hingeTo: hinge.to, angleDegrees: degrees },
+            overridable: true,
+            path: `envelope.actions[${actionIndex}].inputs.angle`
+          }
+        ]
+      }
+    }
+  }
+  return null
+}
+
 function rescueWithMaterialisedPoints(context: PlanCompileContext, first: CompileOnceOutcome): PlanCompileResult | null {
   const report = first.result.diagramVerification
   if (report === undefined || report.status === "passed") return null
@@ -971,6 +1283,26 @@ function rescueWithMaterialisedPoints(context: PlanCompileContext, first: Compil
 
   const entries = missingNamedPoints(first.obligations.legacy, first.plan, first.result.draftDocument, context.document)
   if (entries.length === 0) return null
+  /**
+   * **动手之前先查不相容**（Task 10）：两条题设把同一个点算到不同位置时，
+   * 这一轮**拒绝**并把两条来源都摆出来 —— 而不是"挑一个"或"造两个都叫这个名字的点"。
+   * 放在 `materialisedPointActions` **之前**：那一步只负责造，判据不归它。
+   */
+  const conflict = conflictingMaterialisedPoints(entries, vertexNamesOf(first.plan) ?? [], first.plan.actions.length)
+  if (conflict !== null) {
+    return {
+      ...first.result,
+      ok: false,
+      draftDocument: null,
+      operations: [],
+      diagnostics: [...first.result.diagnostics, planDiagnostic(
+        "geometry_validation",
+        "incompatible_materialised_point",
+        "envelope.actions",
+        `题面里有两条以上的题设给同一个点 ${conflict.name} 算出了不相容的位置（${conflict.detail}）—— 不挑一个、也不造两个，这一轮停下。`
+      )]
+    }
+  }
   const built = materialisedPointActions(entries, first.plan, first.result.draftDocument, first.result.aliases)
   if (built === null) return null
 
@@ -1069,7 +1401,23 @@ function rescuedByWitnessSearch(context: PlanCompileContext, first: CompileOnceO
     return { status: "declined", reason: `没能按题面条件构造出坐标（${found.status}）：${(why[0] ?? "").slice(0, 300)}` }
   }
 
-  const candidatePlan = withWitnessCoordinates(first.plan, found.candidate)
+  let candidatePlan = withWitnessCoordinates(first.plan, found.candidate)
+  /**
+   * **宿主缺席时补一个**（Task 7，2026-10-12）。
+   *
+   * 现场：题面点了 `B`、`C`、`D`，而模型交的计划**根本没有声明那个平面四边形**
+   *（图上只有 `A`、`E`、`F`、`P`）。`withWitnessCoordinates` 要求**恰好一笔宿主动作在场**
+   * 才谈得上替换坐标 —— 于是内核把坐标造出来了也**落不了盘**。
+   *
+   * 三条纪律（判据全在 `figureMaterialisation.ts` 那一层，这里只负责接线）：
+   * - 只有**上一句失败之后**才试（成功时一个字都不动，"只救不抢"）；
+   * - 形状从句认不出、或认出来的**不是平面图形** ⇒ 不补（不猜拓扑）；
+   * - 补出来的那一笔**坐标取内核构造的那一份**，本处一个数字都不算。
+   */
+  if (candidatePlan === null) {
+    const withHost = synthesisedHostPlan(first.plan, context.prompt, first.obligations.ir, found.candidate)
+    if (withHost !== null) candidatePlan = withWitnessCoordinates(withHost, found.candidate)
+  }
   if (candidatePlan === null) {
     return { status: "declined", reason: "构造出了坐标，但这份计划里没有能承接它的那一笔动作（既不是唯一的多面体，也不是唯一的平面片，或顶点个数 / 点名对不上）。" }
   }
@@ -1093,8 +1441,56 @@ function rescuedByWitnessSearch(context: PlanCompileContext, first: CompileOnceO
   }
 }
 
-/** 见证搜索这条救援的三种结局（第三种带**为什么没救成**，见 `compilePlan` 的来源标注）。 */
-type WitnessRescue =
+/**
+ * **按题面补一个缺掉的宿主**（Task 7）。返回 `null` 表示"不该补"或"补不了"。
+ *
+ * 三件事按顺序：
+ * 1. **形状从句**（`specForPrompt`）认得出、**且是平面图形** —— 认不出就不猜拓扑；
+ * 2. `planFigureMaterialisation` 判"能不能补"（名字唯一、环合法、点名都在题面里、
+ *    没有既有宿主抢名字、没有读不懂的题设）；判据全在那一层，这里不重复；
+ * 3. `materialisedHostAction` 把判断变成一笔真动作，**坐标取内核构造的那一份**。
+ *
+ * 别名写死成 `materialised-face`：它是**系统补的**，不是模型起的名字 ——
+ * 用一个固定的、看得出来源的别名，账本与面板上就能一眼认出这一笔从哪来。
+ */
+const MATERIALISED_HOST_ALIAS = "materialised-face"
+
+function synthesisedHostPlan(
+  plan: Extract<PlanEnvelope, { kind: "plan" }>,
+  prompt: string,
+  ir: Parameters<typeof searchWitness>[0]["obligations"],
+  candidate: PolyhedronWitness
+): Extract<PlanEnvelope, { kind: "plan" }> | null {
+  const shaped = specForPrompt(prompt, ir.obligations.filter((obligation) => obligation.role === "given"))
+  if (shaped.status !== "ok" || shaped.recognised.family !== "planar-figure") return null
+
+  const decision = planFigureMaterialisation({
+    intent: buildFigureIntent({ prompt, ir, family: "solid" }),
+    candidates: [{ shape: shaped.recognised.phrase, names: shaped.recognised.base, closed: false, sourceClauseIds: [] }],
+    /**
+     * 既有动作只交出"动作名 + 点名"两样：这一层不去看动作的其余字段
+     *（它要判的只是"名字有没有被占用 / 是不是已经有一只图形"）。
+     *
+     * **"宿主"的定义必须与 `withWitnessCoordinates` 那一份逐字一致**（就是这两族动作）——
+     * 第一版这里把**所有**动作都算成宿主，于是夹具里的 `planar.create_point` 让它判成
+     * `existing_host`，**判据把自己挡住了**：一个点根本不是宿主。同一个词在两处含义不同，
+     * 必然出现"一边说有、一边说没有"。
+     */
+    existingHosts: plan.actions
+      .filter((action) => action.actionId === "solid.create_polyhedron" || action.actionId === "solid.create_face")
+      .map((action) => {
+        const inputs = isRecord(action.inputs) ? (action.inputs as Record<string, unknown>) : {}
+        const declared = Array.isArray(inputs.vertexNames) ? inputs.vertexNames.filter((name): name is string => typeof name === "string") : []
+        return { actionId: action.actionId, vertexNames: declared }
+      })
+  })
+
+  const adapted = materialisedHostAction(decision, { names: candidate.names, vertices: candidate.vertices }, MATERIALISED_HOST_ALIAS)
+  if (!adapted.ok) return null
+  return { ...plan, actions: [...plan.actions, adapted.action] }
+}
+
+/** 见证搜索这条救援的三种结局（第三种带**为什么没救成**，见 `compilePlan` 的来源标注）。 */type WitnessRescue =
   | { status: "rescued"; result: PlanCompileResult }
   /** 模型自己的坐标已经通过核验：什么都没发生，也就没有来源可标。 */
   | { status: "not-needed" }

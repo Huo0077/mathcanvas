@@ -288,7 +288,7 @@ export interface SolidPrismBuildResult {
 }
 
 /** 外观键（`label`/`style`…）一律**不写 `undefined`**：JSON 往返会丢这种键，内存与磁盘就成了两份数据。 */
-export function compileSolidPrism(solidId: string, basePolygon: readonly Vector3[], vector: Vector3, label?: string): SolidPrismBuildResult {
+export function compileSolidPrism(solidId: string, basePolygon: readonly Vector3[], vector: Vector3, label?: string, vertexNames?: readonly string[]): SolidPrismBuildResult {
   const validation = validatePrismInput(basePolygon, vector)
   if (!validation.ok) {
     return { primitives: [], vertexIds: [], edgeIds: [], faceIds: [], solidId, diagnostics: validation.diagnostics.map((entry) => diagnostic(solidId, "degenerate_prism", entry.message)) }
@@ -309,7 +309,25 @@ export function compileSolidPrism(solidId: string, basePolygon: readonly Vector3
   const edgeIndexBetween = (first: number, second: number) => topology.edges.findIndex((edge) =>
     (edge.pointIndexes[0] === first && edge.pointIndexes[1] === second) || (edge.pointIndexes[1] === first && edge.pointIndexes[0] === second))
 
-  const points: PrimitiveSpec[] = topology.vertices.map((position, index) => ({ id: vertexIds[index], type: "point3", position, binding: { kind: "free" }, label: prismPointLabel(index) }))
+  /**
+   * **点名**（Task 13，2026-10-12）：题面写 `ABC-A′B′C′` 时，棱柱的顶点就该叫这些名字。
+   *
+   * 没有名字时它们叫 `P1…P6`（模板自己的顺序编号）—— 而核验器是**按点名查表**的，
+   * 于是题面里 `AB=2` 这类条件**一条都拿不到坐标**（实测：`ok=true；核验=[]`，静默通过）。
+   *
+   * 给了名字就**必须**与顶点一一对应：长度不符**当场拒绝**（底面 + 顶面，逐一对应），不许猜。
+   */
+  if (vertexNames !== undefined && vertexNames.length !== topology.vertices.length) {
+    return {
+      primitives: [],
+      vertexIds: [],
+      edgeIds: [],
+      faceIds: [],
+      solidId,
+      diagnostics: [diagnostic(solidId, "vertex_names_mismatch", `点名有 ${vertexNames.length} 个，而这只棱柱有 ${topology.vertices.length} 个顶点（底面 + 顶面，逐一对应）。`)]
+    }
+  }
+  const points: PrimitiveSpec[] = topology.vertices.map((position, index) => ({ id: vertexIds[index], type: "point3", position, binding: { kind: "free" }, label: vertexNames?.[index] ?? prismPointLabel(index) }))
   const edges: PrimitiveSpec[] = topology.edges.map((edge, index) => ({ id: edgeIds[index], type: "edge3", pointIds: [vertexIds[edge.pointIndexes[0]], vertexIds[edge.pointIndexes[1]]], faceIds: edge.faceIndexes.map((faceIndex) => faceIds[faceIndex]), label: prismEdgeLabel(index) }))
   const faces: PrimitiveSpec[] = topology.faces.map((ring, index) => ({
     id: faceIds[index],
@@ -344,7 +362,7 @@ function compileSolidPrismAction(action: Extract<DraftAction, { actionId: "solid
     return { operations: [], diagnostics: [diagnostic(actionKey, "workspace_mismatch", "a prism can only be created in the solid workspace")], aliasToId: {} }
   }
   const id = context.idAllocator.allocate("solid", inputs.alias)
-  const built = compileSolidPrism(id, inputs.basePolygon, inputs.vector, inputs.label)
+  const built = compileSolidPrism(id, inputs.basePolygon, inputs.vector, inputs.label, inputs.vertexNames)
   if (built.diagnostics.length > 0) return { operations: [], diagnostics: built.diagnostics.map((entry) => diagnostic(actionKey, entry.code, entry.message)), aliasToId: {} }
   return { operations: [{ op: "addPrimitives", primitives: built.primitives }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
 }
@@ -826,13 +844,47 @@ export function compileSolidFold(
   return compileSolidFace(faceId, moved, label, names)
 }
 
+/**
+ * **省略 `vertices` 时按点名从文档找点**（Task 13，2026-10-12）。
+ *
+ * 一个名字找不到就返回 `null`（**整体拒绝**）—— 不许拿别处的坐标凑，也不许猜。
+ * 这与 `resolveEdgeByNames` 是同一条纪律：点名指认不到就如实拒绝。
+ */
+function resolveFlapVertices(document: ActionContext["targetDocument"], names: readonly string[]): Array<{ x: number; y: number; z: number }> | null {
+  const byName = new Map<string, { x: number; y: number; z: number }>()
+  for (const primitive of document.primitives) {
+    if (primitive.type !== "point3") continue
+    const label = (primitive as { label?: unknown }).label
+    if (typeof label === "string") byName.set(label, primitive.position)
+  }
+  const out: Array<{ x: number; y: number; z: number }> = []
+  for (const name of names) {
+    const found = byName.get(name)
+    if (found === undefined) return null
+    out.push({ ...found })
+  }
+  return out
+}
+
 function compileSolidFoldAction(action: Extract<DraftAction, { actionId: "solid.fold" }>, context: ActionContext): CompileResult {
   const { actionKey, inputs } = action
   if (context.targetWorkspace !== "geometry3d") {
     return { operations: [], diagnostics: [diagnostic(actionKey, "workspace_mismatch", "a fold can only happen in the solid workspace")], aliasToId: {} }
   }
+  /**
+   * **`vertices` 省了就按点名从文档取**（Task 13）：那些点通常是同一份计划里前面几笔
+   * 刚建出来的（`dynamic.create_bound_point` 按定比分点建在边上）。取不到就**整体拒绝**。
+   */
+  const flapVertices = inputs.vertices ?? resolveFlapVertices(context.targetDocument, inputs.vertexNames)
+  if (flapVertices === null) {
+    return {
+      operations: [],
+      diagnostics: [diagnostic(actionKey, "fold_reference_missing", `折片的这些点名在这份文档里没有坐标：${inputs.vertexNames.join("、")} —— 省略 vertices 时，它们必须由前面几笔（例如按点名建点）先建出来。`)],
+      aliasToId: {}
+    }
+  }
   const id = context.idAllocator.allocate("face", inputs.alias)
-  const built = compileSolidFold(id, inputs.vertices, inputs.vertexNames, inputs.hinge, inputs.apex, inputs.apexAs, inputs.angle, inputs.label)
+  const built = compileSolidFold(id, flapVertices, inputs.vertexNames, inputs.hinge, inputs.apex, inputs.apexAs, inputs.angle, inputs.label)
   if (built.diagnostics.length > 0) return { operations: [], diagnostics: built.diagnostics.map((entry) => diagnostic(actionKey, entry.code, entry.message)), aliasToId: {} }
   return { operations: [{ op: "addPrimitives", primitives: built.primitives }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
 }
@@ -1212,14 +1264,41 @@ function compileCreateBoundPoint(action: Extract<DraftAction, { actionId: "dynam
    * 提示词渲染。**这个缺口记在 CHANGELOG 里**。
    */
   const label = { label: inputs.label ?? inputs.alias }
+  /**
+   * **`hostEdge` 给的方向决定 `parameter` 从哪一头量**（Task 13，2026-10-12）。
+   *
+   * `parameter` 是沿宿主棱**自己的 `pointIds` 顺序**量的，而 `hostEdge: { from, to }` 是
+   * **题面/计划里**那个方向 —— 两者可以相反。实测踩到：面片的 `A—D` 那条棱存的是 `D→A`，
+   * 于是"从 `A` 量 2/5"被算成了 `DE = 2/5·AD`（`AE:AD` 量出来是 `3/5`），核验 `failed`。
+   *
+   * 判据只有这一处：**谁写的绑定谁按 `hostEdge` 归一**。补建那一支（`planCompiler` 的
+   * `materialisedPointActions`）因此**不再自己翻**——两边各翻一次会翻回去，
+   * 这正是"同一个判断写两遍必然分叉"的老坑。
+   *
+   * 名字对不上（棱的两端不是 `{from,to}`）时**不动**：那不是"方向相反"，是另一条棱，
+   * 上一步的 `resolveEdgeByNames` 已经保证了它只返回按名字找得到的那一条。
+   */
+  let parameter = inputs.parameter
+  if (inputs.hostEdge !== undefined && parameter !== undefined) {
+    const edge = context.targetDocument.primitives.find((primitive) => primitive.id === hostId)
+    if (edge?.type === "edge3" && edge.pointIds.length === 2) {
+      const labelOf = (pointId: string): string | undefined => {
+        const point = context.targetDocument.primitives.find((candidate) => candidate.id === pointId)
+        return point?.type === "point3" ? (point as { label?: string }).label : undefined
+      }
+      if (labelOf(edge.pointIds[0]!) === inputs.hostEdge.to && labelOf(edge.pointIds[1]!) === inputs.hostEdge.from) {
+        parameter = 1 - parameter
+      }
+    }
+  }
   if (PLANAR_HOST_TYPES.has(host.type)) {
     const id = context.idAllocator.allocate("point", inputs.alias)
-    const binding = { kind: "onPath", pathId: hostId, parameter: inputs.parameter, ...(inputs.parameterId === undefined ? {} : { parameterId: inputs.parameterId }) }
+    const binding = { kind: "onPath", pathId: hostId, parameter, ...(inputs.parameterId === undefined ? {} : { parameterId: inputs.parameterId }) }
     return { operations: [{ op: "addPrimitive", primitive: { id, type: "point", x: 0, y: 0, binding, ...label } as unknown as PrimitiveSpec }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
   }
   if (SPATIAL_HOST_TYPES.has(host.type)) {
     const id = context.idAllocator.allocate("point3", inputs.alias)
-    const binding = { kind: "onHost", hostId, parameter: inputs.parameter, ...(inputs.parameterId === undefined ? {} : { parameterId: inputs.parameterId }) }
+    const binding = { kind: "onHost", hostId, parameter, ...(inputs.parameterId === undefined ? {} : { parameterId: inputs.parameterId }) }
     return { operations: [{ op: "addPrimitive", primitive: { id, type: "point3", position: { x: 0, y: 0, z: 0 }, binding, ...label } as unknown as PrimitiveSpec }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
   }
   return { operations: [], diagnostics: [diagnostic(actionKey, "unsupported_host", `a point cannot be bound to a ${host.type}`)], aliasToId: {} }

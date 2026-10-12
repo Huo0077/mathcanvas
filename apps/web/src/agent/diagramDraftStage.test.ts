@@ -1,6 +1,6 @@
 import { DEFAULT_SOLID_SIZE } from "@draw/agent-core"
 import { createEmptyDocument } from "@draw/dsl"
-import { createIdAllocator } from "@draw/scene-graph"
+import { createIdAllocator, recomputeDerivedObjects } from "@draw/scene-graph"
 import { describe, expect, it } from "vitest"
 
 import { createDraftStore } from "./draftStore"
@@ -291,8 +291,113 @@ describe("the witness-search switch on the real draft staging path", () => {
     } finally { client.dispose() }
   })
 
-  it("leaves the failing candidate alone through the Worker too when the switch is off", async () => {
+  /**
+   * **Task 8（2026-10-12）：宿主缺席时补出来的那一笔，两条路必须同版。**
+   *
+   * 这条补的是 Task 7 **没有覆盖的那一格**：同一份"缺宿主"的输入，经主线程与 Worker
+   * 各自物化之后，**图元逐字相同、报告（含条件 ID）逐字相同、点名一致**。
+   *
+   * 为什么值得单列 —— 这一格正是"同一个判断写两遍必然分叉"最容易咬人的地方：
+   * 补宿主发生在 `compilePlan` 内部，而两条路给它的是**两份不同的入参**
+   *（就地那条直接从草稿拿用户原话；Worker 那条要先装进信封、跨过线程边界）。
+   * **少传一样**（缺 `prompt`、或缺 `witnessSearch`），结果就是"主线程补了、Worker 没补"，
+   * 而**两边都不会报错** —— 只会一边有图、一边没有。既有那族用例逐个字段丢过一次，
+   * 这一条把新的这条支路也纳进同一个判据。
+   */
+  it("synthesises the same missing host on both paths, primitives and report alike", async () => {
+    const prompt = "平面四边形ABCD中，AB=8，AD=5√3，∠BAD=30°，∠ADC=90°，CD=3"
+    /** 计划里**只有一笔点**：可核验、却不产出面 ⇒ 正好是"缺宿主"那个形状。 */
+    const pointOnly = [{ actionId: "planar.create_point", actionKey: "p", factIds: [], inputs: { alias: "p", points: [{ x: 0, y: 0 }] } }] as never
+
+    const direct = setup()
+    const directResult = await direct.store.stage(direct.draft.draftId, pointOnly, direct.draft.draftVersion, prompt, undefined, undefined, true)
+    expect(directResult.ok, JSON.stringify(directResult)).toBe(true)
+    if (!directResult.ok) return
+
     const client = createGeometryWorkerClient(inlineWorker((request) => handleGeometryRequest(request as never)))
+    const workerStore = createDraftStore(createIdAllocator, async ({ plan, document, conversationId, draftVersion, userMessage, witnessSearch }) =>
+      compileInWorker(client, { plan, document }, { runId: "worker-run", draftId: conversationId, draftVersion, prompt: userMessage, witnessSearch }))
+    const workerDraft = workerStore.create(createEmptyDocument("geometry3d"))
+    try {
+      const workerResult = await workerStore.stage(workerDraft.draftId, pointOnly, workerDraft.draftVersion, prompt, undefined, undefined, true)
+      expect(workerResult.ok, JSON.stringify(workerResult)).toBe(true)
+      if (!workerResult.ok) return
+
+      // ① **图元逐字相同**（含系统补出来的那一笔）。
+      expect(workerResult.preview.candidate.primitives).toEqual(directResult.preview.candidate.primitives)
+      // ② **条件 ID 与报告逐字相同**。
+      expect(workerResult.preview.diagramVerification).toEqual(directResult.preview.diagramVerification)
+      // ③ **点名**：两条路上补出来的都是 A/B/C/D。
+      const labels = directResult.preview.candidate.primitives
+        .filter((primitive) => primitive.type === "point3")
+        .map((primitive) => String((primitive as { label?: string }).label))
+      for (const name of ["A", "B", "C", "D"]) expect(labels, `${name} 没被补出来`).toContain(name)
+    } finally { client.dispose() }
+  })
+
+  /**
+   * **Task 10（2026-10-12）：宿主动了，补出来的分点跟着动，比例不变。**
+   *
+   * 这是 Task 10 唯一还需要**读数**的那一条：前面已经证明"补出来的点是派生对象
+   *（`onHost` + 无量纲参数）"，而这条要的是**亲眼看见它跟着动** ——
+   * 把宿主顶点 `A` 挪走、跑一遍既有的依赖重算，再从**最终坐标**自己算 `AE/AD`。
+   *
+   * 为什么放在这一侧：`packages/agent-core` 不依赖 `@draw/scene-graph`（那是上层），
+   * 而这里本来就依赖它。
+   *
+   * **这条能咬人**：若有人把派生点改写成写死的坐标（`binding: free`），
+   * 重算之后 `E` 会停在原地，`AE/AD` 立刻不再是 2/5。
+   */
+  it("moves the materialised ratio point when the host vertex moves, keeping AE/AD", async () => {
+    const prompt = "在三棱锥 A-BCD中，AB=AD，AE:AD=2:5。"
+    /**
+     * **宿主必须是那只多面体**：`materialisedPointActions` 要求"恰好一笔能给出点名的宿主"
+     *（`solid.create_polyhedron` 或 `solid.create_face`），所以这里照 `namedPoints` 那一族的夹具给。
+     */
+    const host = [{
+      actionId: "solid.create_polyhedron",
+      actionKey: "solid",
+      factIds: [],
+      inputs: {
+        alias: "solid",
+        vertexNames: ["A", "B", "C", "D"],
+        vertices: [{ x: 0, y: 0, z: 1 }, { x: -1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }, { x: 1, y: 0, z: 0 }],
+        faces: [[0, 1, 2], [0, 3, 1], [0, 2, 3], [1, 3, 2]]
+      }
+    }] as never
+    const { store, draft } = setup()
+
+    const staged = await store.stage(draft.draftId, host, draft.draftVersion, prompt, undefined, undefined, true)
+    expect(staged.ok, JSON.stringify(staged)).toBe(true)
+    if (!staged.ok) return
+    const before = staged.preview.candidate
+
+    const at = (document: typeof before, label: string): { x: number; y: number; z: number } => {
+      const point = document.primitives.find((primitive) => primitive.type === "point3" && (primitive as { label?: unknown }).label === label)
+      if (point?.type !== "point3") throw new Error(`候选图里没有点名 ${label}`)
+      return point.position
+    }
+    const distance = (left: { x: number; y: number; z: number }, right: { x: number; y: number; z: number }): number =>
+      Math.hypot(left.x - right.x, left.y - right.y, left.z - right.z)
+
+    // 宿主动了：把顶点 A 挪走（题面一个字没改）。
+    const moved = structuredClone(before) as typeof before
+    const aPrimitive = moved.primitives.find((primitive) => primitive.type === "point3" && (primitive as { label?: unknown }).label === "A") as { position: { x: number; y: number; z: number } }
+    aPrimitive.position = { x: aPrimitive.position.x + 3, y: aPrimitive.position.y - 1, z: aPrimitive.position.z + 2 }
+
+    const after = recomputeDerivedObjects(moved as never) as typeof before
+    const a = at(after, "A")
+    const d = at(after, "D")
+    const e = at(after, "E")
+
+    // ① A 真的动了 —— 否则这一条什么也没测。
+    expect(distance(a, at(before, "A"))).toBeGreaterThan(1)
+    // ② E 跟着动到**新的** 2/5 处（不是停在旧位置）。
+    expect(distance(a, e) / distance(a, d)).toBeCloseTo(2 / 5, 9)
+    expect(distance(a, e) + distance(e, d)).toBeCloseTo(distance(a, d), 9)
+  })
+
+  it("leaves the failing candidate alone through the Worker too when the switch is off", async () => {    const client = createGeometryWorkerClient(inlineWorker((request) => handleGeometryRequest(request as never)))
     const workerStore = createDraftStore(createIdAllocator, async ({ plan, document, conversationId, draftVersion, userMessage: prompt, witnessSearch }) =>
       compileInWorker(client, { plan, document }, { runId: "worker-run", draftId: conversationId, draftVersion, prompt, witnessSearch }))
     const workerDraft = workerStore.create(createEmptyDocument("geometry3d"))

@@ -183,11 +183,33 @@ export function describeRepairPrompt(failure: EnvelopeParseFailure): string {
  * 与 `planCompiler` 的 `targetedRepairAdvice` 同一条思路：**只按真实出现过的签名**给提醒，
  * 不做通用泛谈。判据里两个数都收（面 / 顶点）：它们不够的根因是同一个 —— 那只图形没围起来。
  */
+/** 各动作族的**正确出口**：模型造了一个不存在的动作名时，这就是它真正该用的那一个。 */
+const SOLID_EXITS = "要画**开放的平面图形**（四边形、三角形片、翻折片）请用 `solid.create_face` —— 它**自带面、也自带边**，所以不需要再找一个 3D 线段动作去补边；闭合实体用 `solid.create_polyhedron`；沿折痕翻折用 `solid.fold`。"
+
 function targetedTransportAdvice(errors: readonly ParseError[]): string[] {
   const advice: string[] = []
   const openFigure = errors.some((error) => error.path.includes(".inputs.") && /polyhedron needs at least four (faces|vertices)/.test(error.detail))
   if (openFigure) {
     advice.push("提醒：`solid.create_polyhedron` 建的是**闭合多面体**（至少四个面、要围出体积）。要画**开放的平面图形**（四边形、三角形片、翻折片）请改用 `solid.create_face`：给 `vertices`（至少三个**共面**、互不共线的点）与 `vertexNames` 就行，它**不收 `faces`**。一张平面的四边形或三角形片，用多面体是套不上的。")
+  }
+  /**
+   * **模型自己造了一个动作名**（Task 2，2026-10-12）。
+   *
+   * 现场第二轮：上一轮刚被"开放图形别用闭合多面体"挡过，这一轮它**换了个不存在的动作** ——
+   * `solid.create_segment` ×3。原提示只把三条路径列出来（`unregistered action '…'`），
+   * **没有说"这个动作不存在"，也没有说该用哪个**，于是那唯一一次修复机会照样浪费。
+   *
+   * 与上面那条同一条纪律：**只按真实出现过的签名给建议**。造的是平面动作名时不说 3D 的出口
+   *（那会把提示引到另一个族去）；这一点由 `outputParser.test.ts` 的反例钉住。
+   */
+  const invented = [...new Set(errors
+    .filter((error) => error.code === "unknown_action")
+    .map((error) => /unregistered action '([^']+)'/.exec(error.detail)?.[1])
+    .filter((name): name is string => typeof name === "string"))]
+  if (invented.length > 0) {
+    const named = invented.map((name) => `\`${name}\``).join("、")
+    const solidOnes = invented.filter((name) => name.startsWith("solid."))
+    advice.push(`提醒：动作表里**没有** ${named} —— **不要自己造动作名**。${solidOnes.length > 0 ? SOLID_EXITS : "请只用上面列出的、已发布的那几个动作。"}`)
   }
   return advice
 }
@@ -229,4 +251,107 @@ function missingEnvelopeFields(payload: string): string[] {
   const missing = required.filter((field) => !(field in record))
   if (missing.length === 0) return []
   return [`你这一份**缺了顶层必填字段**：${missing.join("、")}。${kind === "plan" ? "kind 为 plan 时 actions 必填，且必须是数组。" : ""}`]
+}
+
+/**
+ * **Task 2（2026-10-12）："动作名不认识"不是"顶层 JSON 形状不合法"。**
+ *
+ * ## 现场
+ *
+ * 22:36 那条轨迹的第二轮：模型自己造了一个动作名 `solid.create_segment` 用了**三次**。
+ * 那一份信封的**顶层形状完全合法**（`schemaVersion` / `kind` / `goal` / `actions` 一个不缺），
+ * 错的只是三个动作名。而用户看到的是"模型的回答不符合计划合同的形状……计划必须是一个 JSON 对象
+ * （schemaVersion / kind / goal，外加 actions 或 questions 或 answer）" —— **一句误诊**：
+ * 它把模型指向了信封格式，而真正该改的是动作名，且**引擎手里有正确答案**
+ *（`solid.create_face` 一张面片自带面边，根本不需要一条 3D 线段动作）。
+ *
+ * ## 为什么是"生产方与消费方成对写在一个模块里"
+ *
+ * 用户话要在应用层说（`agentRunner`），而错误列表在引擎层（`coordinator`）——
+ * 中间只隔着账本事件的那一句 `detail`，而**事件形状由 Rust 侧定死**（`deny_unknown_fields`），
+ * 加不了结构化字段。所以这里把**渲染与还原这一对**放进同一个模块：
+ * `schemaFailureDetail` 是账本那一句的**唯一生产方**，`readSchemaFailureDetail` 是它的逆运算。
+ * 两边的格式由这两条函数与它们自己的用例钉住 —— 比在下游用 `detail.includes(...)` 猜要硬得多。
+ *
+ * **只分类，不猜内容**：认不出的错误原样交给通用的那一句，绝不把未知情况说成"动作名错"。
+ */
+export interface EnvelopeFieldError {
+  code: string
+  path: string
+  detail: string
+}
+
+/** 账本里"计划没通过校验"那一句的**唯一生产方**。改这个格式必须同时改 `readSchemaFailureDetail`。 */
+export function schemaFailureDetail(errors: readonly ParseError[], limit = 512): string {
+  return errors.map((error) => `${error.code}@${error.path}: ${error.detail}`).join(", ").slice(0, limit)
+}
+
+/**
+ * `schemaFailureDetail` 的逆运算。**容忍被截断的尾巴**（生产方会 `slice`）：
+ * 读得出几条算几条，不抛、不猜。
+ *
+ * 切分不用 `split(", ")`：`detail` 本身可能带逗号。只有在 `, ` 后面**紧跟**
+ * `码@路径: ` 这个形状时才切一刀。
+ */
+export function readSchemaFailureDetail(detail: string): EnvelopeFieldError[] {
+  const starts: number[] = []
+  const pattern = /(?:^|, )([A-Za-z_]+)@([^:,]+): /g
+  const matches: { index: number; end: number; code: string; path: string }[] = []
+  let match: RegExpExecArray | null
+  while ((match = pattern.exec(detail)) !== null) {
+    starts.push(match.index)
+    matches.push({ index: match.index, end: match.index + match[0].length, code: match[1], path: match[2] })
+  }
+  return matches.map((entry, index) => {
+    const next = matches[index + 1]
+    // 下一条的起点回退掉分隔用的 ", "（没有下一条时吃到结尾）。
+    const stop = next === undefined ? detail.length : next.index
+    return { code: entry.code, path: entry.path, detail: detail.slice(entry.end, stop).replace(/, $/, "").trim() }
+  })
+}
+
+/** 从错误列表里认出**模型自己造的动作名**（`schemas.ts` 那句 `unregistered action '…'`）。 */
+function unregisteredActions(errors: readonly EnvelopeFieldError[]): { actionIds: string[]; paths: string[] } {
+  const actionIds: string[] = []
+  const paths: string[] = []
+  for (const error of errors) {
+    if (error.code !== "unknown_action") continue
+    const named = /unregistered action '([^']+)'/.exec(error.detail)
+    if (named === null) continue
+    actionIds.push(named[1])
+    paths.push(error.path)
+  }
+  return { actionIds, paths }
+}
+
+/** "开放图形被硬塞进闭合多面体"那个签名（与 `targetedTransportAdvice` 同一个判据）。 */
+function isOpenFigureForcedIntoPolyhedron(errors: readonly EnvelopeFieldError[]): boolean {
+  return errors.some((error) => error.path.includes(".inputs.") && /polyhedron needs at least four (faces|vertices)/.test(error.detail))
+}
+
+/**
+ * **给用户看的那一句话**（`agentRunner` 的 `failed` 分支用它，取代原先的 `detail.includes(...)` 猜法）。
+ *
+ * - 真·顶层形状不对（数组、散文、不是对象）⇒ 保留原来那句"计划必须是一个 JSON 对象"；
+ * - 动作名不认识 ⇒ 点名那个动作、列出**它出现的每一条路径**，并说出正确出口；
+ * - 传了 `earlierDetails` 且上一轮是"开放图形硬塞多面体" ⇒ 把上一轮那句建议一起摆出来 ——
+ *   那正是模型走偏的原因，用户看得见因果才判断得了该不该重试。
+ */
+export function describeSchemaFailureForUser(detail: string, earlierDetails: readonly string[] = []): string {
+  const errors = readSchemaFailureDetail(detail)
+  const { actionIds, paths } = unregisteredActions(errors)
+  if (actionIds.length === 0) {
+    return `模型的回答不符合计划合同的形状，所以这一轮停下了。计划必须是一个 JSON 对象（schemaVersion / kind / goal，外加 actions 或 questions 或 answer）。引擎的原话：${detail}`
+  }
+  const named = [...new Set(actionIds)].join("、")
+  const where = paths.join("、")
+  const earlierOpenFigure = earlierDetails.some((earlier) => isOpenFigureForcedIntoPolyhedron(readSchemaFailureDetail(earlier)))
+  const lines = [
+    `模型用了一个**不存在的动作**：${named}（出现在 ${where}）。动作表里没有这个名字，所以这一轮停下了。`,
+    // 说清"不是信封的错"——否则用户与下一次修复都会被引到格式上去。
+    "这一份信封的顶层形状（schemaVersion / kind / goal / actions）是合法的，问题只在动作名。",
+    ...(actionIds.some((actionId) => actionId.startsWith("solid.")) || earlierOpenFigure ? [SOLID_EXITS] : []),
+    ...(earlierOpenFigure ? ["上一轮引擎其实已经给过这句话 —— 这一轮它换了个不存在的动作名，而不是改用它。"] : [])
+  ]
+  return `${lines.join(" ")} 引擎的原话：${detail}`
 }

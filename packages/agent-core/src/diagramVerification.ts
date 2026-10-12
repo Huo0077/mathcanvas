@@ -549,6 +549,23 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
     const degrees = (Math.acos(Math.min(1, Math.max(-1, cosine))) * 180) / Math.PI
     return { actual: degrees, expected: numeric, tolerance: ANGLE_TOLERANCE_DEGREES }
   }
+  /**
+   * **面积**（Task 11，2026-10-12）：三个点名 ⇒ 三角形面积 = ½·|AB × AC|，**从最终坐标自己算**。
+   *
+   * 与角那一条同一条纪律：不读构造过程留下的量 —— 否则"造出来的面积"与"量出来的面积"
+   * 是同一份数据，"只满足正弦定理而不核面积的图是错误图"（调研 §2.1）就永远抓不到。
+   * 三点共线时面积是 0：那是**合法读数**（不是"算不出"），所以照实返回。
+   */
+  if (item.kind === "area") {
+    if (numeric === undefined) return null
+    if (vertices.length !== 3) return null
+    const [first, second, third] = vertices as Vector3[]
+    const cross = crossVector3(subtractVector3(second, first), subtractVector3(third, first))
+    const area = lengthVector3(cross) / 2
+    if (!Number.isFinite(area)) return null
+    // 面积是 L²（不是无量纲），所以容差随量级走 —— 与 `obligationIR.toleranceFor` 同一把尺子。
+    return { actual: area, expected: numeric, tolerance: Math.max(UNITLESS_TOLERANCE, UNITLESS_TOLERANCE * Math.max(1, numeric)) }
+  }
   const kind = item.kind === "perpendicular" ? "perpendicular" : "parallel"
   /**
    * **平面可以用 3–6 个点名**（S2：底面支持 3–6 边）。多余的点先核**共面性**，

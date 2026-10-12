@@ -49,6 +49,86 @@ function compile(plan: unknown, prompt: string, document: GeometryDocument = cre
   return compilePlan(plan, { document, prompt, conversationId: "named-points", documentGeneration: document.revision })
 }
 
+/**
+ * **Task 10（2026-10-12）：`AE:AD = 2:5` 这种"部分比整体"的写法以前根本补不出来。**
+ *
+ * 上面那条 `DE=2EA` 是**部分比部分**（两条线段共用一个端点，而那个端点就是未知点本身），
+ * 旧实现只认这一种；而用户那句题面写的偏偏是 **`AE:AD = 2:5`**（部分比整体），
+ * 解析出来是 `[A,E,A,D]` —— 未知点只出现一次，锚是**已知点** `A`。旧实现要求
+ * "未知点恰好落在第 1、2 位"，于是这一条整批不补，`E` 从来不在图上。
+ *
+ * 判据照这一族的老规矩：**读编译后的文档坐标自己算**，不读面板结论、不读计划里写了什么。
+ *
+ * > **这一组用例曾经丢过一次**（2026-10-12）：我用 PowerShell 直接改文件，把整份文件的中文写成了
+ * > 乱码，`git checkout` 恢复时把我刚加的三条一起丢了。重加时改用编辑工具（UTF-8 安全）。
+ */
+describe("Task 10 — 部分比整体的分点也能补出来", () => {
+  const PART_WHOLE_PROMPT = "在三棱锥 A-BCD中，AB=AD，AE:AD=2:5。"
+
+  it("materialises E on AD from AE:AD = 2:5, and the landed coordinates satisfy it", () => {
+    const result = compile(polyhedronPlan(["A", "B", "C", "D"]), PART_WHOLE_PROMPT)
+
+    expect(result.ok, result.diagnostics.map((item) => item.detail).join("; ")).toBe(true)
+    const document = result.draftDocument
+    if (document === null) throw new Error("expected a draft document")
+
+    const a = labelled(document, "A")
+    const d = labelled(document, "D")
+    // 系统补出来的那一笔（图上原先只有 A/B/C/D 四个顶点）。
+    const e = labelled(document, "E")
+
+    // 自己算：E 在 AD 上，且 AE/AD = 2/5。
+    expect(distance(a, e) / distance(a, d)).toBeCloseTo(2 / 5, 9)
+    // **在**线段上（不是延长线上）：E 到 A、D 的距离之和等于 AD。
+    expect(distance(a, e) + distance(e, d)).toBeCloseTo(distance(a, d), 9)
+  })
+
+  /**
+   * **补出来的点是一个"派生对象"，不是一组写死的坐标**（计划 Task 10："非模型手写点坐标"）。
+   *
+   * 判据落在**编译后的文档**上：那个点带着 `onHost` 绑定 + 一个**无量纲**参数，宿主是那条棱本身。
+   * 也就是说"`E` 在 `AD` 的 2/5 处"记的是**比例**，不是两个数。
+   *
+   * **诚实边界**：这条证明的是"定义是派生的、参数是无量纲的"，**不是**"我亲眼看见它跟着宿主动了" ——
+   * 后者要一条依赖重算的读数，本任务没做（见 CHANGELOG 的"仍未做"）。
+   */
+  it("leaves the materialised E as a derived object carrying a dimensionless parameter", () => {
+    const result = compile(polyhedronPlan(["A", "B", "C", "D"]), PART_WHOLE_PROMPT)
+    expect(result.ok, result.diagnostics.map((item) => item.detail).join("; ")).toBe(true)
+    const document = result.draftDocument
+    if (document === null) throw new Error("expected a draft document")
+
+    const point = document.primitives.find((primitive) => primitive.type === "point3" && (primitive as { label?: unknown }).label === "E")
+    const binding = (point as { binding?: { kind?: string; parameter?: number; hostId?: string } } | undefined)?.binding
+
+    expect(binding?.kind, "补出来的点必须是**派生**的（onHost），不是一组写死的坐标").toBe("onHost")
+    expect(binding?.parameter).toBeCloseTo(2 / 5, 9)
+    // 宿主是**那条棱**（宿主实体下的棱 id），所以"2/5"永远相对于当前那条棱。
+    expect(typeof binding?.hostId).toBe("string")
+  })
+
+  /**
+   * **两条题设给同一个点算出两个不同的位置**（计划 Task 10 的 RED 最后一条）。
+   *
+   * `AE:AD = 2:5` ⇒ `E` 在 `AD` 的 2/5 处；`AE:ED = 3:1` ⇒ `E` 在 `AD` 的 3/4 处。
+   * 两条都点名 `E`，而它们**不相容**。合理的处置只有一种：**拒绝**。
+   * 静默挑一个（后者覆盖前者）或造出两个都叫 `E` 的点都是错的 ——
+   * 前者是替用户改了题，后者是让点名表指到两个不同的位置。
+   *
+   * **先红读数**（改动之前）：`expected true to be false` —— 那时这一轮**编译成功**，
+   * 而 `E` 一个都没落到图上，用户看到的是一段"没有报错、但题设未核验"的运行。
+   */
+  it("refuses two premises that place the same name at incompatible positions", () => {
+    const result = compile(polyhedronPlan(["A", "B", "C", "D"]), "在三棱锥 A-BCD中，AB=AD，AE:AD=2:5，AE:ED=3:1。")
+
+    expect(result.ok).toBe(false)
+    const text = (result.diagnostics ?? []).map((item) => `${item.code} ${item.detail}`).join(" ")
+    // **说清是哪一条不相容** —— 只说"失败"等于没说。
+    expect(text, `今天的诊断是：${text}`).toMatch(/E/)
+    expect(text, `今天的诊断是：${text}`).toMatch(/不相容|冲突|conflict/)
+  })
+})
+
 /** 按**标签**从编译后的文档里取点（文档里没有这个名字就抛，免得断言静默跳过）。 */
 function labelled(document: GeometryDocument, label: string): Vector3 {
   const found = document.primitives.find((primitive) => primitive.type === "point3" && (primitive as { label?: unknown }).label === label)

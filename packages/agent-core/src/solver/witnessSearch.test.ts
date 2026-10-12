@@ -77,6 +77,52 @@ function search(prompt: string, overrides: Partial<WitnessSearchInput> = {}) {
  * ② 搜索层 `lineAndPlane` 只认 5 / 6 个 targets（= 线段 2 + 平面 3/4）。
  * 这条用例钉的就是整条链：一句"五棱锥 + `PA ⊥ 平面 ABCDE`"必须能产出通过核验的候选。
  */
+/**
+ * **Task 5（2026-10-12）：坏输入必须 fail-closed，绝不抛异常跨边界。**
+ *
+ * `normaliseObligationIR` 自己的注释写着"坏形状退化成'没有题设 / 没有残留'，
+ * **绝不抛异常跨边界**（这是本包一贯的口径）" —— 而它读 `entry.sourceText` 时**不查形状**：
+ * `unverified: [null]` 直接 `TypeError`；`obligations: [null]` 也活过那一次 `[...obligations]`
+ * （引用复制，不是拷贝），然后在 `obligation.role` 上炸。
+ *
+ * 入参来自**不可信的一侧**（模型草稿 → Worker → 库），所以这是边界问题：
+ * 搜索器要如实说"我拿到的题设是坏的"，而不是把异常扔过边界 —— 异常跨边界之后
+ * 上层只会看到一句 `TypeError`，既没有路径也没有可执行的下一步。
+ */
+describe("Task 5 — 坏输入 fail-closed，不抛异常跨边界", () => {
+  /** 降级后的行为必须与"本来就没有题设 / 没有残留"**逐字同一种结局**。 */
+  const EMPTY = { obligations: [], unverified: [] }
+
+  it("survives a null entry in the residue list instead of throwing", () => {
+    const baseline = searchWitness({ ...SEARCH, obligations: EMPTY })
+    const result = searchWitness({ ...SEARCH, obligations: { obligations: [], unverified: [null as never] } })
+
+    // 坏条目被丢掉 ⇒ 与"没有残留"同一种结局（不是另一种诊断，更不是异常）。
+    expect(result.status).toBe(baseline.status)
+  })
+
+  it("survives a null entry in the obligations list instead of throwing", () => {
+    const baseline = searchWitness({ ...SEARCH, obligations: EMPTY })
+    const result = searchWitness({ ...SEARCH, obligations: { obligations: [null as never], unverified: [] } })
+
+    expect(result.status).toBe(baseline.status)
+  })
+
+  it("survives junk entries that are objects but carry the wrong shape", () => {
+    const baseline = searchWitness({ ...SEARCH, obligations: EMPTY })
+    const result = searchWitness({
+      ...SEARCH,
+      obligations: {
+        obligations: [42 as never, "AB=2" as never],
+        unverified: [{ sourceText: 42 as never, reason: null as never }]
+      }
+    })
+
+    // 形状不对的条目一条都不许进核验器 —— 也一条都不许把这一层炸掉。
+    expect(result.status).toBe(baseline.status)
+  })
+})
+
 describe("五边形底面", () => {
   const PENTAGON = "在五棱锥 P-ABCDE 中，PA ⊥ 平面 ABCDE，画出这个五棱锥"
 

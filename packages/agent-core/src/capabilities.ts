@@ -178,7 +178,19 @@ const OPERATION_ONLY_CAPABILITIES: CapabilityDescriptor[] = [
   describeCapability("batch-primitive-style", "available", [...PLANAR, ...SOLID, ...CAD_WORKSPACE], ["at least one selected primitive"]),
   describeCapability("annotation-authoring", "available", [...PLANAR, ...SOLID], ["target primitive exists"]),
   describeCapability("engineering-annotation", "available", CAD_WORKSPACE, ["a drawing view with measurable sources exists"]),
-  describeCapability("constraint-authoring", "available", [...PLANAR, ...SOLID], ["targets exist in the same document"]),
+  /**
+   * **收窄到平面**（Task 5，2026-10-12）。
+   *
+   * 原先这里写的是 `[...PLANAR, ...SOLID]`，宣称**立体**侧也能"创建约束" ——
+   * 而 2026-10-10 查实的结论是：**没有任何入口能声明一条空间约束**
+   *（题面解析不产出它、`DRAFT_ACTION_IDS` 里没有一个约束类动作、`apps/web/src` 下没有约束编辑器组件）。
+   * 能力表是给调用方（Agent 策略、模型上下文）看的承诺，**承诺一件做不到的事比不说更贵** ——
+   * 下游会据此规划，然后在执行时撞墙。
+   *
+   * 收窄口径是**按可到达的操作**：平面侧的约束操作与约束拖动仍在役，所以只拿掉立体那一半。
+   * **不为修这条元数据去实现一个无人能用的隐形求解器**（计划原话）。
+   */
+  describeCapability("constraint-authoring", "available", [...PLANAR], ["targets exist in the same document", "平面侧才有作者入口；立体侧没有任何题面 / 动作 / 界面能声明一条空间约束"]),
   describeCapability("measurement-authoring", "available", [...PLANAR, ...SOLID], ["sources are valid for the requested metric"]),
   describeCapability("cad-layer-authoring", "available", CAD_WORKSPACE, ["workspace is cad"]),
   describeCapability("cad-drawing-authoring", "available", CAD_WORKSPACE, ["workspace is cad", "the sheet exists"]),

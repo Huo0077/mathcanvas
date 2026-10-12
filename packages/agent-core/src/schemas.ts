@@ -247,7 +247,21 @@ export function parsePlanEnvelope(input: unknown): ParseResult<PlanEnvelope> {
    */
   const kind = input.kind ?? ("actions" in input ? "plan" : "questions" in input ? "clarification" : "answer" in input ? "answer" : undefined)
   if (kind !== "plan" && kind !== "clarification" && kind !== "answer") {
-    return { ok: false, errors: [fail("unknown_kind", "envelope.kind", `unexpected kind ${quotedName(String(input.kind))}`)] }
+    /**
+     * **`kind` 读不出来时，仍要把"你不该带的字段"一起报出来**（Task 3，2026-10-12）。
+     *
+     * 现场（22:36 那条轨迹的第 6 次，脱敏）：模型把整份计划**包进了工具通道的壳**里 ——
+     * `{"arguments": "<计划字符串>"}`。原先这里**立刻返回**，只报一句
+     * `unknown_kind@envelope.kind: unexpected kind 'undefined'`，于是"壳整个不该有"这件事
+     * 一个字都没说，下一次它还会照那个壳再写一遍。
+     *
+     * 修法：读不出 `kind` 时按**所有 kind 的字段并集**查一次未知字段，两条错误一起给。
+     * 并集是**故意放宽**的一侧：这一支马上要拒绝，多列几个合法字段名不会放走任何东西。
+     */
+    const anyKindFields = ["schemaVersion", "kind", "goal", "factIds", "assumptions", "relations", "normalisations", "actions", "questions", "answer", "toolResultRefs"]
+    const strayFields: ParseError[] = []
+    rejectUnknownFields(input, anyKindFields, "envelope", strayFields)
+    return { ok: false, errors: [fail("unknown_kind", "envelope.kind", `unexpected kind ${quotedName(String(input.kind))}`), ...strayFields] }
   }
 
   const allowed = kind === "plan"

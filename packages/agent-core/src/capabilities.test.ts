@@ -3,6 +3,7 @@ import { DOMAIN_OPERATION_NAMES } from "@draw/scene-graph"
 import { describe, expect, it } from "vitest"
 
 import { CAPABILITY_STATUSES, getCapabilityRegistry, type CapabilityDescriptor } from "./capabilities"
+import { DRAFT_ACTION_IDS } from "./actionIds"
 
 /**
  * Task 0.1 的**覆盖测试**（先失败、后实现）。
@@ -26,6 +27,30 @@ describe("agent capability registry", () => {
     for (const op of DOMAIN_OPERATION_NAMES) {
       expect(registry.byOperation[op], `operation not mapped: ${op}`).toBeDefined()
     }
+  })
+
+  /**
+   * **Task 5（2026-10-12）：能力表不许说一件产品面上做不到的事。**
+   *
+   * 2026-10-10 查实：`constraint-authoring` 记着 `available`，而且**平面与立体都算** ——
+   * 可是**没有任何入口能声明一条空间约束**：题面解析不产出它、`DRAFT_ACTION_IDS` 里
+   * 没有约束类动作、`apps/web/src` 下没有一个约束编辑器组件。于是能力表在向调用方
+   *（Agent 的策略、模型的上下文）承诺一件它在几何工作区里**做不到**的事 ——
+   * 而"承诺一件做不到的事"正是这张表最贵的失效方式：下游会据此规划，然后在执行时撞墙。
+   *
+   * 收窄口径是**按可到达的操作**：平面侧的约束操作与拖动仍在役，所以只把**立体**那一半拿掉。
+   * **不为修这条元数据去实现一个无人能用的隐形求解器**（计划原话）。
+   */
+  it("does not claim spatial constraint authoring while nothing can create one", () => {
+    const entry = getCapabilityRegistry().capabilities.find((capability) => capability.id === "constraint-authoring")
+    expect(entry, "constraint-authoring 必须还在表里（收窄，不是删掉）").toBeDefined()
+
+    // 上面那条不是拍脑袋：**整个动作目录里没有一个约束类动作**。
+    expect(DRAFT_ACTION_IDS.some((actionId) => actionId.includes("constraint"))).toBe(false)
+    // 所以立体那一半不许再宣称可用。
+    expect(entry?.workspaces).not.toContain("geometry3d")
+    // 而平面那一半照旧在役 —— 收窄不等于整条停掉。
+    expect(entry?.workspaces).toContain("conics")
   })
 
   it("gives every descriptor a status, a workspace, preconditions and at least one test id", () => {

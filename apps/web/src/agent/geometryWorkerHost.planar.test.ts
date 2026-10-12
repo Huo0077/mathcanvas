@@ -113,3 +113,62 @@ describe("V0b: the worker compile strategy verifies planar premises too", () => 
     expect(result.diagnostics.map((item) => item.detail).join(" ")).toContain("AB⊥AC")
   })
 })
+
+/**
+ * **Task 7（2026-10-12）：宿主缺席时补出来的那一笔，在 Worker 里同样发生。**
+ *
+ * 计划 Task 7 的退出条件里有一条是"**Worker 和主线程不得不同判**"。两条编译路调的是
+ * 同一个 `compilePlan`，所以按构造同判 —— 但"按构造"是推理，不是读数。
+ * 这条用例把读数补上：同一份**没有宿主**的计划，跨过线程边界之后，
+ * 图上照样出现系统补出来的 `A`/`B`/`C`/`D`。
+ *
+ * 为什么它比主线程那条更能说明问题：Worker 侧要能补，得先有**两样东西过边界** ——
+ * 原话（`prompt`）与构造函数构造坐标的开关（`witnessSearch`）。少了任何一样，
+ * Worker 里都只会有模型那一笔孤零零的点。
+ */
+describe("Task 7: the worker synthesises the missing host too", () => {
+  const QUAD_PROMPT = "平面四边形ABCD中，AB=8，AD=5√3，∠BAD=30°，∠ADC=90°，CD=3"
+
+  /** 计划里**只有一笔点**：它可核验、却不产出面 ⇒ 正好是"缺宿主"那个形状。 */
+  function noHostInput() {
+    const document = createEmptyDocument("geometry3d")
+    document.metadata.id = "doc-worker-synthesis"
+    const plan: StagedPlanEnvelope = {
+      schemaVersion: "mathcanvas.plan.v1",
+      kind: "plan",
+      goal: "作平面四边形 ABCD",
+      factIds: [],
+      actions: [
+        { actionId: "planar.create_point", actionKey: "p", factIds: [], inputs: { alias: "p", points: [{ x: 0, y: 0 }], label: "p" } }
+      ] as unknown as StagedPlanEnvelope["actions"]
+    }
+    return {
+      plan,
+      document,
+      capabilityRevision: "draft",
+      conversationId: "draft-host-synthesis",
+      draftVersion: 1,
+      userMessage: QUAD_PROMPT,
+      witnessSearch: true,
+      allocator: createIdAllocator(document.primitives.map((primitive) => primitive.id))
+    }
+  }
+
+  it("synthesises the missing host inside the worker, exactly as it does on the main thread", async () => {
+    const { factory, posted } = await recordingWorker()
+    const strategy = createWorkerCompileStrategy("run-worker-synthesis", factory)
+
+    const result = await strategy(noHostInput())
+
+    expect(result.ok, result.diagnostics.map((item) => item.detail).join("; ")).toBe(true)
+    // 模型那版里**没有面**；图上出现 A/B/C/D ⇒ 那一笔只可能是在 Worker 里补出来的。
+    const labels = (result.draftDocument?.primitives ?? [])
+      .filter((primitive) => primitive.type === "point3")
+      .map((primitive) => String((primitive as { label?: string }).label))
+    for (const name of ["A", "B", "C", "D"]) {
+      expect(labels, `${name} 没有在 Worker 里被补出来`).toContain(name)
+    }
+    // 开关本身也必须过边界 —— 少了它，Worker 侧根本不会去构造坐标。
+    expect(posted[0]?.witnessSearch).toBe(true)
+  })
+})

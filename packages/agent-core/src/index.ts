@@ -24,6 +24,13 @@ export * from "./diagramObligations"
 export * from "./diagramVerification"
 export * from "./draftCounts"
 export * from "./events"
+/**
+ * **Task 6（2026-10-12）**：来源可追溯的四族图形意图。这一层是**只读映射** ——
+ * 它不改 `diagramObligations` / `obligationIR` / `contracts` 里任何既有类型，
+ * 只把它们的产物收成一份"不含坐标、每一句都能追回原话"的结构（见该文件头）。
+ * 与既有的 `geometryIntent`（三条立方体专用的原话读取函数）不是同一个东西。
+ */
+export * from "./figureIntent"
 export * from "./geometryIntent"
 export * from "./localPlanDefaults"
 export * from "./modelEvents"

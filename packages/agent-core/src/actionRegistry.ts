@@ -387,7 +387,12 @@ export const ACTIONS = {
    * 传输层连这个字段都不接受，模型就没有"把散面拼成 Prism"的入口（规格 §7）。
    */
   "solid.create_prism": {
-    inputFields: ["alias", "basePolygon", "vector", "label"],
+    /**
+     * **`vertexNames` 是可选的**（Task 13，2026-10-12）：底面 n 个 + 顶面 n 个名字。
+     * 省略时顶点叫 `P1…P6`（模板自己的顺序编号）—— 那种棱柱**题面点不到它**，
+     * 核验器按点名查表，`AB=2` 这类条件一条都拿不到坐标。
+     */
+    inputFields: ["alias", "basePolygon", "vector", "vertexNames", "label"],
     requiresAlias: true,
     rawFieldTypes: {},
     required: ["basePolygon", "vector"],
@@ -489,7 +494,13 @@ export const ACTIONS = {
     requiresAlias: true,
     /** `hinge` 是"哪两个点之间那条折痕"：两个点名（`{ from, to }`），与 `hostEdge` 同一种约定。 */
     rawFieldTypes: { hinge: "namePair" },
-    required: ["vertices", "vertexNames", "hinge", "apex", "apexAs", "angle"]
+    /**
+     * **`vertices` 不在必填里**（Task 13，2026-10-12）：省了就按 `vertexNames` 从文档取点
+     *（那些点通常是同一份计划里前面几笔按定比分点建出来的 `E`、`F`）。让模型把系统已经算好的
+     * 坐标再抄一遍只会抄错 —— 现场 7 次失败里查实的一条正是"**模型在自己手算折后坐标**"。
+     * 不写它的代价是：这些点名必须**由前面几笔真的建出来**，取不到就整体拒绝（`fold_reference_missing`）。
+     */
+    required: ["vertexNames", "hinge", "apex", "apexAs", "angle"]
   },
   "solid.create_round_frustum": {
     inputFields: ["alias", "center", "radiusBottom", "radiusTop", "height", "segments", "label"],

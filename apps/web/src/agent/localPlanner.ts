@@ -1,7 +1,7 @@
 import type { PlanEnvelope, PlannerPort } from "@draw/agent-core"
 import { PLAN_SCHEMA_VERSION, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SPAN, DEFAULT_SOLID_SIZE, defaultPrismBasePolygon, cubeCenterFrom, cubeEdgeLengthFrom, parseShapeClause, roundFrustumPolyhedron, searchWitnessForPrompt } from "@draw/agent-core"
 
-import { CONIC_ELLIPSE_PROMPT, FUNCTION_TANGENT_PROMPT, HYPERBOLA_PROMPT, PARABOLA_PROMPT, PLANAR_TRIANGLE_PROMPT, PYRAMID_CIRCUMSPHERE_PROMPT, PYRAMID_PROMPT, PYRAMID_UNVERIFIED_PROMPT, conicInvariantPlan, ellipsePlan, functionTangentPlan, hyperbolaPlan, obliquePrismSectionPlan, parabolaPlan, planarRightTrianglePlan, pyramidCircumspherePlan, pyramidPlan } from "./representativeFixtures"
+import { CONIC_ELLIPSE_PROMPT, EXAM_TRIANGLE_PROMPT, FUNCTION_TANGENT_PROMPT, HYPERBOLA_PROMPT, PARABOLA_PROMPT, PLANAR_TRIANGLE_PROMPT, PYRAMID_CIRCUMSPHERE_PROMPT, PYRAMID_PROMPT, PYRAMID_UNVERIFIED_PROMPT, USER_FOLD_PROMPT, conicInvariantPlan, ellipsePlan, examTrianglePlan, functionTangentPlan, hyperbolaPlan, obliquePrismSectionPlan, parabolaPlan, planarRightTrianglePlan, pyramidCircumspherePlan, pyramidPlan, userFoldPlan } from "./representativeFixtures"
 
 /**
  * **本地确定性规划器**（Task 2.5 Step 2 的过渡件）。
@@ -393,6 +393,21 @@ export const LOCAL_INTENTS: readonly LocalIntent[] = [
    * 而这条走的是既有的夹具路径（与 `PYRAMID_PROMPT` 同类），默认就该能跑。
    */
   { all: ["三角形", "ab⊥ac"], exact: PLANAR_TRIANGLE_PROMPT, skillIds: ["planar-basics"], build: () => planarRightTrianglePlan() },
+  /**
+   * **Task 11（2026-10-12）：一边 + 一角 + 一面积**（调研 §2.1 的"解三角形条件与面积条件联立"）。
+   *
+   * 与上面那条**同一条纪律**（精确匹配一个固定句子、不挂实验开关），但它有一处关键不同：
+   * 夹具给的坐标是**错的**，所以**只有**按题面把坐标构造出来（见证搜索那条救援路径，
+   * 现在会把面积也算进去）才可能通过核验 —— 这条 e2e 因此真的在测"面积进了链"。
+   */
+  { all: ["三角形", "面积"], exact: EXAM_TRIANGLE_PROMPT, skillIds: ["planar-basics"], build: () => examTrianglePlan() },
+  /**
+   * **Task 13（2026-10-12）：原用户那道题**（平面四边形 + 定比分点 + 沿 EF 翻折，`PC=4√3`）。
+   *
+   * 夹具故意填**错的折角**（30°），所以这一条走的正是 **Task 12 的折角反求**：
+   * 浏览器里能通过核验，就只可能是因为系统按 `PC=4√3` 把角算出来了。
+   */
+  { all: ["四边形", "翻折"], exact: USER_FOLD_PROMPT, skillIds: ["planar-basics", "spatial-modeling"], build: () => userFoldPlan() },
   /**
    * **代表题四（计划 V0c）**：椭圆。
    *

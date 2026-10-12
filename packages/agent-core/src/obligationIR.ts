@@ -61,7 +61,9 @@ import type { ClaimRole, GeometryObligation, Judgeability, ObligationTolerance }
 const JUDGED_KINDS: ReadonlySet<DiagramObligationKind> = new Set<DiagramObligationKind>([
   "fixedLength", "equilateral", "equalLength", "midpoint", "segmentRatio",
   "planePerpendicular", "dihedral", "planarAngle", "perpendicular", "parallel", "pointCoordinate",
-  "conicAxes", "tangentAt", "functionGraph"
+  "conicAxes", "tangentAt", "functionGraph",
+  /** Task 11：面积由核验器**从最终坐标自己算**（`diagramVerification.calculate` 的 `area` 支）。 */
+  "area"
 ])
 
 /** 与 `diagramVerification.ts` 的常量同值（容差不能有两套；两处一起改）。 */
@@ -85,6 +87,8 @@ function toleranceFor(kind: DiagramObligationKind, value: number | undefined): O
   if (kind === "segmentRatio" || kind === "planePerpendicular" || kind === "perpendicular" || kind === "parallel") {
     return { kind: "relative", value: UNITLESS_TOLERANCE }
   }
+  // 面积是 L²：与核验器同一把相对尺子（构造满足到数值精度）。
+  if (kind === "area") return { kind: "relative", value: UNITLESS_TOLERANCE }
   // 等长/等边/中点：核验器按"第一个线段长度"缩放，绝对容差随实例变化 —— 这里如实不给。
   return undefined
 }

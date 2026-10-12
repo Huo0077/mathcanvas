@@ -224,6 +224,70 @@ describe("the confirm and commit cycle", () => {
     expect(assistant.failure?.message).toContain("solid-not-observed")
   })
 
+  /**
+   * **Task 2（2026-10-12）：用户不该被告知"计划不是一个 JSON 对象"，当真正的问题是动作名。**
+   *
+   * 22:36 那条轨迹的两次迁移（脱敏夹具：只留动作名与必需字段）——
+   * 第一轮 `solid.create_polyhedron` 拼开放图形死在"至少四个面"，
+   * 第二轮模型**自己造了** `solid.create_segment` ×3。
+   * 原先界面说的是"模型的回答不符合计划合同的形状……计划必须是一个 JSON 对象"，
+   * 而那一份信封的顶层形状**一个字段都不缺**。
+   */
+  it("blames the invented action, not the envelope's shape, and repeats the advice the model ignored", async () => {
+    let attempt = 0
+    const planner: PlannerPort = {
+      plan: async () => {
+        attempt += 1
+        return {
+          plan: (attempt === 1
+            ? {
+              schemaVersion: "mathcanvas.plan.v1",
+              kind: "plan",
+              goal: "平面四边形与翻折片（脱敏）",
+              factIds: [],
+              actions: [{ actionId: "solid.create_polyhedron", actionKey: "quad", factIds: [], inputs: { alias: "quad", faces: [[0, 1, 2, 3]], vertexNames: ["A", "B", "C", "D"] } }]
+            }
+            : {
+              schemaVersion: "mathcanvas.plan.v1",
+              kind: "plan",
+              goal: "平面四边形与翻折片（脱敏）",
+              factIds: [],
+              actions: [0, 1, 2].map((index) => ({ actionId: "solid.create_segment", actionKey: `seg-${index}`, factIds: [], inputs: {} }))
+            }) as unknown as PlanEnvelope,
+          requestId: `req-${attempt}`,
+          attemptId: `attempt-${attempt}`
+        }
+      }
+    }
+    const runner = createAgentRunner({ planner })
+
+    const result = await runAndWait(runner, "画平面四边形与翻折片")
+
+    expect(result.phase).toBe("failed")
+    const message = useAgentStore.getState().activeConversation!.messages.at(-1)!.failure?.message ?? ""
+    // ① 点名那个不存在的动作，② 三个路径一个不少。
+    expect(message).toContain("solid.create_segment")
+    for (const index of [0, 1, 2]) expect(message).toContain(`envelope.actions[${index}].actionId`)
+    // ③ 上一轮引擎已经给过的正确出口要一起回到用户面前。
+    expect(message).toContain("solid.create_face")
+    // ④ **不许**再把"动作名不认识"说成"顶层 JSON 形状不合法"。
+    expect(message).not.toContain("计划必须是一个 JSON 对象")
+  })
+
+  it("still says the envelope's shape is wrong when the model returned something that is not an object", async () => {
+    const planner: PlannerPort = {
+      plan: async () => ({ plan: [1, 2, 3] as unknown as PlanEnvelope, requestId: "req-1", attemptId: "attempt-1" })
+    }
+    const runner = createAgentRunner({ planner })
+
+    const result = await runAndWait(runner, "画一个立方体")
+
+    expect(result.phase).toBe("failed")
+    const message = useAgentStore.getState().activeConversation!.messages.at(-1)!.failure?.message ?? ""
+    // 反例：真的不是对象时，原来那句话是对的，必须留着。
+    expect(message).toContain("计划必须是一个 JSON 对象")
+  })
+
   it("records a committed receipt on the assistant message", async () => {
     const runner = createAgentRunner()
     await runAndWait(runner, "建一个棱长 3 的立方体")

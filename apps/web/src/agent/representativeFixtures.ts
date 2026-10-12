@@ -364,6 +364,103 @@ export function pyramidCircumspherePlan(): PlanEnvelope {
  */
 export const PLANAR_TRIANGLE_PROMPT = "在三角形ABC中，AB⊥AC，画示意图"
 
+/**
+ * **Task 11（2026-10-12）：真题结构的三角形 —— 一边、一角、一面积。**
+ *
+ * 对应调研 §2.1 那句"解三角形条件与**面积**条件联立"（2024 新课标Ⅰ卷第 15 题的难点，
+ * 以及"只满足正弦定理而**不核面积**的图是错误图"）。
+ *
+ * 夹具故意给一组**不满足题面**的坐标：`AB = 4`（题面要 8）、面积也不是 6 ——
+ * 这样这一轮只有**按题面把坐标构造出来**才可能通过核验（与 `PLANAR_PROMPT` 那条同一条纪律：
+ * "能 `passed` 只可能是因为被换成了构造出来的那一组"）。
+ */
+export const EXAM_TRIANGLE_PROMPT = "平面三角形ABC中，AB=8，∠BAC=30°，△ABC的面积为6"
+
+/**
+ * **Task 13（2026-10-12）：原用户那道题** —— 平面四边形 + 边上定比分点 + 沿 EF 翻折。
+ *
+ * 逐字就是用户现场那一句（"连发 7 次、7 次死因各不相同"）。这份夹具把**折角填成 30°**（错的）：
+ * 于是浏览器里"能通过核验"就只可能是因为 **Task 12 的折角反求**按 `PC=4√3` 把角算出来并换掉了它。
+ *
+ * 五个四边形条件用的就是**那组真坐标**（`A=(0,0,0)`、`B=(8,0,0)`、`D=(7.5,5√3/2,0)`、
+ * `C=(9,√3,0)`），`E`、`F` 按定比分点的位置给（`E=(3,√3,0)`、`F=(4,0,0)`）——
+ * 与 `solidFoldAction.test.ts` 逐字相同。
+ */
+export const USER_FOLD_PROMPT = [
+  "平面四边形ABCD中，AB=8，AD=5√3，∠BAD=30°，∠ADC=90°，CD=3。",
+  "点E在AD上，且AE:AD=2:5；点F在AB上，且AF:AB=1:2。",
+  "将三角形AEF沿EF翻折至三角形PEF，使得PC=4√3。"
+].join("")
+
+export function userFoldPlan(): PlanEnvelope {
+  return {
+    schemaVersion: PLAN_SCHEMA_VERSION,
+    kind: "plan",
+    goal: "四边形 ABCD，三角形 AEF 沿 EF 翻折成 PEF，且 PC=4√3",
+    factIds: [],
+    actions: [
+      {
+        actionId: "solid.create_face",
+        actionKey: "quad",
+        factIds: [],
+        inputs: {
+          alias: "quad",
+          vertexNames: ["A", "B", "C", "D"],
+          vertices: [{ x: 0, y: 0, z: 0 }, { x: 8, y: 0, z: 0 }, { x: 9, y: Math.sqrt(3), z: 0 }, { x: 7.5, y: (5 * Math.sqrt(3)) / 2, z: 0 }],
+          label: "四边形 ABCD"
+        }
+      },
+      /**
+       * **`E`、`F` 的坐标一个字都不给**（2026-10-12 起）：只报"哪条边上的几分点"。
+       * 坐标由系统按宿主棱算出来 —— 与 Task 10 在实体上补点的口径**同一个判断**
+       *（朝向归一收在写绑定那一处）。
+       */
+      { actionId: "dynamic.create_bound_point", actionKey: "E", factIds: [], inputs: { alias: "E", host: { scope: "draft", alias: "quad" }, hostEdge: { from: "A", to: "D" }, parameter: 2 / 5, label: "E" } },
+      { actionId: "dynamic.create_bound_point", actionKey: "F", factIds: [], inputs: { alias: "F", host: { scope: "draft", alias: "quad" }, hostEdge: { from: "A", to: "B" }, parameter: 1 / 2, label: "F" } },
+      {
+        actionId: "solid.fold",
+        actionKey: "flap",
+        factIds: [],
+        /**
+         * **连折片的坐标也不给**：只有点名、折痕、顶点与**错的折角**（30°）。
+         * 坐标按 `vertexNames` 从文档取（`E`、`F` 是上面两笔刚建的）；
+         * 折角由 Task 12 的反求按 `PC=4√3` 算出来。
+         */
+        inputs: {
+          alias: "flap",
+          vertexNames: ["A", "E", "F"],
+          hinge: { from: "E", to: "F" },
+          apex: "A",
+          apexAs: "P",
+          angle: 30
+        }
+      }
+    ]
+  } as unknown as PlanEnvelope
+}
+
+
+export function examTrianglePlan(): PlanEnvelope {
+  return {
+    schemaVersion: PLAN_SCHEMA_VERSION,
+    kind: "plan",
+    goal: "作三角形 ABC，满足 AB=8、∠BAC=30° 且面积为 6",
+    factIds: [],
+    actions: [{
+      actionId: "solid.create_face",
+      actionKey: "tri",
+      factIds: [],
+      inputs: {
+        alias: "tri",
+        // 模型给的一组**错的**坐标（AB=4、面积也不对）：等着被按题面构造出来的那一组替掉。
+        vertices: [{ x: 0, y: 0, z: 0 }, { x: 4, y: 0, z: 0 }, { x: 1, y: 1, z: 0 }],
+        vertexNames: ["A", "B", "C"],
+        label: "平面三角形 ABC"
+      }
+    }]
+  } as unknown as PlanEnvelope
+}
+
 export function planarRightTrianglePlan(): PlanEnvelope {
   return {
     schemaVersion: PLAN_SCHEMA_VERSION,

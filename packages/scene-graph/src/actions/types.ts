@@ -101,6 +101,15 @@ export interface SolidCreatePrismAction extends ActionBase {
     basePolygon: Array<{ x: number; y: number; z: number }>
     /** 拉伸向量：直棱柱平行底面法向，斜棱柱带水平分量。 */
     vector: { x: number; y: number; z: number }
+    /**
+     * **点名**（Task 13，2026-10-12）：底面环的 n 个名字 + 顶面环的 n 个名字，**按顺序一一对应**
+     *（题面写 `ABC-A′B′C′` 就是这个顺序）。
+     *
+     * **可以省略** —— 省了顶点就叫 `P1…P6`（模板自己的顺序编号）。但那种棱柱**题面点不到它**：
+     * 核验器按点名查表，`AB=2` 这类条件一条都拿不到坐标（实测 `ok=true；核验=[]`，静默通过）。
+     * 给了名字就**必须**与顶点数一致（底面 + 顶面），否则当场拒绝。
+     */
+    vertexNames?: string[]
     label?: string
   }
 }
@@ -303,8 +312,16 @@ export interface SolidFoldAction extends ActionBase {
   actionId: "solid.fold"
   inputs: {
     alias: DraftAlias
-    /** 翻折片**折前**（平面）的顶点，至少 3 个。 */
-    vertices: Array<{ x: number; y: number; z: number }>
+    /**
+     * 翻折片**折前**（平面）的顶点，至少 3 个。
+     *
+     * **可以省略**（Task 13，2026-10-12）：省了就**按 `vertexNames` 从文档里找点** ——
+     * 那些点通常是同一份计划里**前面几笔**刚建出来的（例如按定比分点建在边上的 `E`、`F`）。
+     * 让模型把系统已经算好的坐标再抄一遍，只会抄错：现场 7 次失败里查实的一条正是
+     * "**模型在自己手算折后的空间坐标**"。这条与 Task 10（多面体上按定比分点补点）
+     * 是**同一个判断**，不是为某一道题新造的机制。
+     */
+    vertices?: Array<{ x: number; y: number; z: number }>
     /** 与 `vertices` 一一对应的点名。折痕与顶点都按**名字**指认，所以这一项必填。 */
     vertexNames: string[]
     /**

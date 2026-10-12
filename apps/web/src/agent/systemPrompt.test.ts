@@ -1,7 +1,58 @@
-import { MAX_MESSAGE_LIMIT, PLAN_SCHEMA_VERSION, describeRepairPrompt, parsePlanEnvelope, repairRequestFor, type ModelContext } from "@draw/agent-core"
+import { MAX_MESSAGE_LIMIT, PLAN_SCHEMA_VERSION, DRAFT_ACTION_IDS, describeRepairPrompt, parsePlanEnvelope, repairRequestFor, type ModelContext } from "@draw/agent-core"
 import { describe, expect, it } from "vitest"
 
 import { SYSTEM_PROMPT_VERSION, buildPolicyText, buildSystemPrompt } from "./systemPrompt"
+
+/**
+ * **Task 3：提示词菜单与动作目录必须是同一个集合**（2026-10-12）。
+ *
+ * 菜单是模型**唯一**能看到的动作清单（`buildPolicyText` 的"本轮允许的动作"一节），
+ * 而登记表是传输层真正认的名字。两者一旦不同步，两种失败都是静默的：
+ * 目录里有、菜单里没有 ⇒ 那个动作**模型永远想不起来**；菜单里有、目录里没有 ⇒
+ * 模型照着菜单写却被判 `unknown_action`（看起来像它在瞎编）。
+ *
+ * 所以这里对**全部** `DRAFT_ACTION_IDS` 枚举一遍。四个发布面各由何处守：
+ * ①**处理器**（动作层认得哪些）由 `actionIds.ts` 的 `satisfies DraftActionId` 反向守卫；
+ * ②**输入 schema** 由 `ACTIONS` 登记表；③**工具发布**由 `buildPlanToolSchema`
+ *（判据在 `modelPlanner.test.ts`）；④**提示词菜单**就是这里。
+ */
+describe("Task 3 — the prompt menu and the action catalogue are the same set", () => {
+  it("lists every catalogue action when this round offers all of them", () => {
+    const policy = buildPolicyText({ channel: "strict_json", canPlan: true, actionIds: [...DRAFT_ACTION_IDS] })
+
+    for (const actionId of DRAFT_ACTION_IDS) {
+      expect(policy, `${actionId} 没出现在菜单里 —— 模型永远想不起这个动作`).toContain(actionId)
+    }
+  })
+
+  it("keeps the menu scoped to this round's actions, and never offers a name nobody implements", () => {
+    const narrow = buildPolicyText({ channel: "strict_json", canPlan: true, actionIds: ["planar.create_point"] })
+
+    expect(narrow).toContain("planar.create_point")
+    // 菜单是本轮范围：别的动作不许漏进来（否则模型会写一个这一轮不给它的动作）。
+    expect(narrow).not.toContain("solid.create_face")
+    // 而**谁都没实现的**名字一个字都不许出现（现场模型就是照自己的想象造了它）。
+    expect(narrow).not.toContain("solid.create_segment")
+  })
+
+  it("spells out the open-face / closed-solid / fold split, and keeps the planar segment apart", () => {
+    const policy = buildPolicyText({
+      channel: "strict_json",
+      canPlan: true,
+      actionIds: ["solid.create_face", "solid.create_polyhedron", "solid.fold", "planar.create_segment"]
+    })
+
+    // 三者各有各的出口，不许混用 —— 现场把**开放图形**硬塞进闭合多面体，连撞三次同一堵墙。
+    expect(policy).toContain("solid.create_face")
+    expect(policy).toContain("solid.create_polyhedron")
+    expect(policy).toContain("solid.fold")
+    expect(policy).toContain("开放的面")
+    expect(policy).toContain("闭合实体")
+    // 立体里**没有**线段动作；平面线段才叫 `planar.create_segment`。
+    expect(policy).toContain("planar.create_segment")
+    expect(policy).not.toContain("solid.create_segment")
+  })
+})
 
 /**
  * **生产系统提示词**（Agent DSL 切片 Task 5；规格 §6/§7）。

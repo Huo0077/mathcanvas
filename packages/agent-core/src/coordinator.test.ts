@@ -45,6 +45,17 @@ function answerEnvelope(): PlanEnvelope {
   return { schemaVersion: "mathcanvas.plan.v1", kind: "answer", goal: "count", factIds: ["fact-1"], answer: "1", toolResultRefs: [] }
 }
 
+/** Task 2 的第二轮：模型**自己造的动作名**，用了三次。 */
+function inventedSegmentEnvelope(): PlanEnvelope {
+  return {
+    schemaVersion: "mathcanvas.plan.v1",
+    kind: "plan",
+    goal: "平面四边形与翻折片（脱敏）",
+    factIds: ["fact-1"],
+    actions: [0, 1, 2].map((index) => ({ actionId: "solid.create_segment", actionKey: `seg-${index}`, factIds: ["fact-1"], inputs: {} }))
+  } as unknown as PlanEnvelope
+}
+
 function makeHarness(options: { plan?: () => Promise<PlanOutcome> | PlanOutcome; stage?: CommitterPort["stage"]; commit?: CommitterPort["commit"]; observation?: Observation; limits?: Parameters<typeof createBudget>[0] } = {}) {
   const calls: string[] = []
   const planner: PlannerPort = {
@@ -194,6 +205,34 @@ describe("coordinator refusal paths", () => {
     // 恰好两次：一次原始 + 一次可见修复（计划 Task 2.3 的一次性修复）。
     expect(harness.planner.plan).toHaveBeenCalledTimes(2)
     expect(events.at(-1)?.detail).toContain("never matched the schema")
+  })
+
+  /**
+   * **Task 2（2026-10-12）：模型自己造动作名时，账本那句话与下一次修复提示都要点名它。**
+   *
+   * 22:36 那条轨迹的两次状态迁移（脱敏，只留动作名与必需字段）：第一轮拿
+   * `solid.create_polyhedron` 去拼**开放**图形 ⇒ 死在"至少四个面"；第二轮模型**换了个不存在的动作名**
+   * `solid.create_segment` ×3。用户界面原先把后者说成"计划必须是一个 JSON 对象"——一句误诊。
+   *
+   * 这里钉两件事：① 账本那句话里**三个路径一个不少**；② 第二次问出去时的修复提示
+   * **点名那个动作并说"不要自己造动作名"**（否则那唯一一次修复机会照旧浪费）。
+   */
+  it("names an invented action with every one of its paths, and warns the next attempt instead of blaming the envelope", async () => {
+    // 两次都交同一个坏计划：于是**第一次失败**就是"造了动作名"，而修复提示正是为它写的
+    //（提示是 `calls[n]` 描述第 n-1 次失败的，信封类修复只有一次机会，所以要看的是第 2 次调用）。
+    const harness = makeHarness({ plan: () => ({ plan: inventedSegmentEnvelope(), requestId: "req-1", attemptId: "attempt-1" }) })
+
+    const events = await drive(harness.coordinator, { run, userMessage: "画平面四边形与翻折片" })
+
+    expect(harness.coordinator.phase()).toBe("failed")
+    const failure = events.at(-1)?.detail ?? ""
+    expect(failure).toContain("solid.create_segment")
+    for (const index of [0, 1, 2]) expect(failure).toContain(`envelope.actions[${index}].actionId`)
+
+    const secondRequest = vi.mocked(harness.planner.plan).mock.calls[1][0] as PlanRequest
+    // 光有路径不够：必须**点名那个动作并说"别造"**，否则第二次照样浪费。
+    expect(secondRequest.repair?.hint).toContain("不要自己造动作名")
+    expect(secondRequest.repair?.hint).toContain("solid.create_face")
   })
 
   it("accepts a repaired plan on the second attempt", async () => {
@@ -723,6 +762,52 @@ describe("the compile stage's one-shot repair", () => {
     expect(tight.seen).toHaveLength(1)
     expect(tight.coordinator.phase()).toBe("failed")
     expect(tightEvents.at(-1)?.detail).toContain("budget")
+    /**
+     * **Task 4（2026-10-12）：预算不是"最有用"的那句话。**
+     *
+     * 现场读数：22:36 的第 6 次尝试死在 `budget exhausted: budget_repair` ——
+     * 而它**真正**的失败是编译期那句几何诊断。那一句被盖掉之后，用户与下一次修复
+     * 都看不到"到底哪儿画错了"，只能看到一个关于额度的内部词。
+     * 所以失败事件必须同时给出：**用尽之前最后一次真实失败** + **余量/上限**。
+     */
+    expect(tightEvents.at(-1)?.detail).toContain("compile_failed: degenerate_prism")
+    expect(tightEvents.at(-1)?.detail).toContain("generation 还剩")
+    expect(tightEvents.at(-1)?.detail).toContain("network 还剩")
+    // 原始错误是**附加上去**的，不是替换掉预算原因 —— 两件事实都要留。
+    expect(tightEvents.at(-1)?.detail).toContain("budget_repair")
+  })
+
+  /**
+   * **Task 4 的账本合同：一次 provider 往返 = 恰好一次 `(generation, network)` 计费，由恰好一层记。**
+   *
+   * 分工是两处，各管**自己发出去的那一次请求**：
+   * - **协调器**：每次调 `planner.plan(...)` 之前记一次（`coordinator.ts` 那一对 `spend`）；
+   * - **规划器**：它为"把只读工具结果送回去"而多发的每一次往返各记一次
+   *   （`modelPlanner.ts` 那一次 `consume`）。"**每批一次、不是每个工具一次**"由
+   *   `modelPlanner.test.ts` 的「charges one generation per read-tool batch」钉住。
+   *
+   * 于是总数必须**对得上**：协调器这一侧的计费次数 == 它调用 `plan()` 的次数
+   *（规划器内部多发的那几次由它自己付，这里不重复扣）。
+   *
+   * **这就是"没有重复计费"的正面证据** —— 若哪天有人在上游再加一次 `spend`，
+   * 下面两个等式立刻不成立。反过来，这条也说明第 6 次尝试的闸**不是**重复计费，
+   * 而是 `generation: 4` 本身：原始 1 + 工具批 1 + 修复 1 + 修复里的工具批 1 = 4。
+   * **额度要不要加，是用户的成本决定**，本任务一行都没有动它。
+   */
+  it("charges exactly one generation and one network per provider round trip, from exactly one layer", async () => {
+    const harness = compileHarness({ stage: failThenSucceed() })
+
+    await drive(harness.coordinator, { run, userMessage: "draw a point" })
+
+    const roundTrips = 2
+    const used = harness.budget.snapshot().used
+    // 原始一次 + 修复一次 = 两次往返 ⇒ 两笔，不多不少。
+    expect(used.generation).toBe(roundTrips)
+    expect(used.network).toBe(roundTrips)
+    // 两本账必须同步：一次请求既算一次 generation 也算一次 network。
+    expect(used.generation).toBe(used.network)
+    // 而且这一轮是**成功停下来等确认**的 —— 说明计费没有被任何失败/重试路径多记一笔。
+    expect(harness.coordinator.phase()).toBe("awaiting_confirmation")
   })
 
   /**

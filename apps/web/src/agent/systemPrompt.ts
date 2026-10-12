@@ -272,6 +272,26 @@ export function buildPolicyText(input: SystemPromptPolicyInput): string {
        * 删除、派生读数、截面全都失去依据（那次用户点任意一片都删不掉）。
        */
       "**立体图形必须由 `solid.*` 动作创建**：立方体 / 四棱锥 / 圆柱 / 圆锥用 `solid.create_template`、棱柱用 `solid.create_prism`、正四面体用 `solid.create_tetrahedron`、正 N 棱锥用 `solid.create_regular_pyramid`、**任意多面体用 `solid.create_polyhedron`** —— 它们一次物化出实体与它的顶点 / 棱 / 面。**不要**用散落的 `planar.*` / `dynamic.*` 点、棱、面去拼一只实体：那样文档里没有实体本身，删除与读数都会失去依据。",
+      /**
+       * **面分三种，别混**（Task 3，2026-10-12）。
+       *
+       * 现场：模型拿 `solid.create_polyhedron` 去表达**开放**的平面图形（四边形 + 翻折片），
+       * 连撞三次"至少四个面" —— 而正确入口 `solid.create_face` 当时就在能力表里。
+       * 上一批只在**报错之后**才把这句话补进修复提示（`targetedTransportAdvice`）；
+       * 这一条把它放进**菜单本身**：第一次就该知道哪个动作管哪一类。
+       *
+       * 最后一句同样来自现场：模型随后**自己造了** `solid.create_segment` 想给面片补边 ——
+       * 而面片**自带边**，立体里根本没有线段动作（平面线段才叫 `planar.create_segment`）。
+       */
+      /**
+       * **只在**这一轮真的给了立体动作时**才说这一段**（Task 3）。
+       *
+       * 与"按场景只发布相关动作"同一条口径：一道纯平面题不该被提示词推向 3D 动作 ——
+       * 那段规则本身会点名 `solid.create_face`，而它并不在本轮菜单里。
+       */
+      ...(input.actionIds.some((actionId) => actionId.startsWith("solid."))
+        ? ["**面分三种，别混**：**开放的面**（四边形、三角形片、翻折片这类不围出体积的平面图形）用 `solid.create_face`（每张给 `vertices` 与 `vertexNames`，它**自带面、也自带边**）；**闭合实体**（要围出体积的多面体）用 `solid.create_polyhedron`；沿折痕**折**用 `solid.fold`（折后坐标由内核算，不要手写）。立体里**没有**线段动作 —— 平面的线段才叫 `planar.create_segment`；**不要自己造动作名**。"]
+        : []),
       "## 本轮允许的动作（`actionId` 只能从这里选）",
       ...(input.actionIds.length > 0 ? input.actionIds.map((action) => `- ${action}`) : ["（这一轮没有任何可用动作：只能提问或作答）"]),
       "",

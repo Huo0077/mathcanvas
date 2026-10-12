@@ -79,6 +79,13 @@ export type WitnessRelation =
    * 四边形底部与涉及环外点的角一律拒绝，理由由那些分支的文案说清。
    */
   | { kind: "planarAngle"; targets: readonly string[]; value?: number | WitnessStatedValue; unit?: string }
+  /**
+   * **面积**（Task 11，2026-10-12）：`△ABC的面积为6` ⇒ `targets` 三个点名、`value` 是面积。
+   *
+   * 它在平面构造里的作用是**把一条自由的臂定下来**：`面积 = ½·底·臂·sin(夹角)`
+   * ⇒ 已知底、夹角与面积时臂长唯一（见 `planarRuleFromArea`）。
+   */
+  | { kind: "area"; targets: readonly string[]; value?: number | WitnessStatedValue }
   | { kind: "dihedral"; segments: readonly WitnessPlaneTarget[]; value?: number | WitnessStatedValue; unit?: string }
 
 /** 高（棱锥）的来源。 */
@@ -280,6 +287,20 @@ function heightSpecFromSpec(spec: SolidShapeSpec): WitnessHeightSpec {
     if (segment === undefined || segment.length !== 2 || !segment.includes(apex)) continue
     const other = segment[0] === apex ? segment[1]! : segment[0]!
     return { kind: "lateral-edge", edge: [apex, other], length: relation.value }
+  }
+  /**
+   * **二面角**（Task 13，2026-10-12）：题面给了二面角 ⇒ 高由它**求**，不是一个自由量。
+   *
+   * 这里原先只认"定长侧棱"，别的一律落到 `free` —— 于是**内核自己**那一支
+   * `deriveApexHeight` 的 `dihedral` 分支（连它的单测都在）在整条产品路径上**够不着**：
+   * 编排层就算把二面角翻成了 `dihedral` 关系，这里也读不出来，高照样自由取。
+   * 实测症状：题面写 45° 与写 60°，候选量出来**都是 45.000**（高是那条自由标量给的）。
+   */
+  for (const relation of spec.relations) {
+    if (relation.kind !== "dihedral") continue
+    const plane = relation.segments.find((segment) => segment.includes(apex))
+    if (plane === undefined) continue
+    return { kind: "dihedral", angleRelation: plane.join("") }
   }
   return { kind: "free" }
 }
@@ -737,6 +758,18 @@ interface PlanarPosition {
 type PlanarPlacementRule =
   | { kind: "angle"; point: string; vertex: string; reference: string; degrees: number; distance: number }
   | { kind: "distances"; point: string; first: string; firstDistance: number; second: string; secondDistance: number }
+  /**
+   * **SSA：角给方向、另一条到已定点的定长给距离**（Task 11，2026-10-12）。
+   *
+   * `AB=8，∠BAC=30°，BC=4` 这种"两边一对角、角不在两边之间"的题面：
+   * 角只给出一条**射线**，而 `BC` 给一个**圆** —— 射线与圆相交**最多两解**。
+   * 这正是调研 §3.2 那句"多解与边界是常态"在构造侧的落点。
+   *
+   * 在这条规则之前，这一层只会"角 + **那条臂**的定长"或"两条到已定点的定长"，
+   * 于是 SSA 被报成 `underdetermined-planar`（"缺一条定长 AC"）——
+   * **那句话是假话**：AC 由另外三条算得出来。
+   */
+  | { kind: "ray-circle"; point: string; vertex: string; reference: string; degrees: number; center: string; radius: number }
 
 /** 定长边的键（与 `statedLength` 的 `sameSegment` 同一口径：顺序无关）。 */
 function planarSegmentKey(first: string, second: string): string {
@@ -768,15 +801,18 @@ export function constructPlanarWitness(request: PlanarFigureConstructRequest): W
   const names = ring.names
 
   /**
-   * **只收两类条件**（定长边与点名的角）。其余（平行 / 垂直 / 等长 / 二面角…）
+   * **只收三类条件**（定长边、点名的角、面积）。其余（平行 / 垂直 / 等长 / 二面角…）
    * 本层**还没有对应的构造** —— 如实说"这一族还没有构造器"、**列出它认得哪几类**，
    * 而不是收下之后当它不存在（设计 §5 的第三种成因）。
+   *
+   * **面积是 Task 11 加进来的第三类**（2026-10-12）：它在构造里的作用是
+   * "把一条自由的臂定下来"（见 `planarRuleFromArea`），所以它**有**构造器，不该再被这一关拒掉。
    */
-  const unsupported = request.relations.find((relation) => relation.kind !== "segment-length" && relation.kind !== "planarAngle")
+  const unsupported = request.relations.find((relation) => relation.kind !== "segment-length" && relation.kind !== "planarAngle" && relation.kind !== "area")
   if (unsupported !== undefined) {
     return reject(
       "unsupported-planar-condition",
-      `平面图形：条件「${planarConditionName(unsupported)}」这一族还没有构造器 —— 它目前只认得两类条件：定长（形如 AB=8）与点名的角（形如 ∠BAD=30°）。请改用这两类条件，或换一条能表达它的路径。`,
+      `平面图形：条件「${planarConditionName(unsupported)}」这一族还没有构造器 —— 它目前只认得三类条件：定长（形如 AB=8）、点名的角（形如 ∠BAD=30°）与面积（形如 △ABC 的面积为 6）。请改用这几类条件，或换一条能表达它的路径。`,
       [...names]
     )
   }
@@ -937,6 +973,18 @@ function planarRulesFor(
   const rules: PlanarPlacementRule[] = []
   const fromAngle = planarRuleFromAngle(point, positions, relations)
   if (fromAngle !== null) rules.push(fromAngle)
+  /**
+   * **面积排在角之后、两段定长之前**（Task 11）。顺序固定 ⇒ 同一份条件永远同一个解；
+   * 而"面积那条给出的正是角那条缺的那个长度"，所以它在角之后恰好补上。
+   */
+  const fromArea = planarRuleFromArea(point, positions, relations)
+  if (fromArea !== null) rules.push(fromArea)
+  /**
+   * **SSA 排在最后**（Task 11）：它是"角 + 别的点给的距离"，比前几条**弱** ——
+   * 前几条能用时不该轮到它（顺序固定 ⇒ 同一份条件永远同一个解）。
+   */
+  const fromAngleAndDistance = planarRuleFromAngleAndDistance(point, positions, relations)
+  if (fromAngleAndDistance !== null) rules.push(fromAngleAndDistance)
   const fromDistances = planarRuleFromDistances(point, positions, relations)
   if (fromDistances !== null) rules.push(fromDistances)
   return rules
@@ -963,8 +1011,98 @@ function planarRuleFromAngle(
   return null
 }
 
-/** 规则之二：到两个**已落位**点的定长（两圆交点）。 */
-function planarRuleFromDistances(
+/**
+ * **规则之三：面积**（Task 11，2026-10-12）。
+ *
+ * `面积 = ½ · |底| · |臂| · sin(夹角)` ⇒ 已知底、已知夹角、已知面积时，**臂长唯一**：
+ * `|臂| = 2·面积 / (|底| · sin(夹角))`。算出来的臂长与那个角正好是"角那一支规则"要的两样东西，
+ * 所以这里**返回一条角规则**（`kind: "angle"`），而不是另造一种规则形状 ——
+ * 形状只有一种，判据才不会分叉（本仓反复吃亏的那件事）。
+ *
+ * **为什么需要它**：题面常写"两边一角 + 面积"，而面积那一条其实**把第三条边定死了**；
+ * 没有这条规则时那个点会被判成 `underdetermined-planar`（欠定），而题面给的信息明明够。
+ *
+ * 三处一致性检查都不省：面积与角必须说**同一只三角形**、顶点必须已落位、底不能是零长。
+ */
+function planarRuleFromArea(
+  point: string,
+  positions: ReadonlyMap<string, PlanarPosition>,
+  relations: readonly WitnessRelation[]
+): PlanarPlacementRule | null {
+  for (const area of relations) {
+    if (area.kind !== "area" || area.targets.length !== 3 || !area.targets.includes(point)) continue
+    const statedArea = interpretValue(area.value, null)
+    if (statedArea === null || !(statedArea.value > 0)) continue
+    const others = area.targets.filter((name) => name !== point)
+    if (others.length !== 2 || !others.every((name) => positions.has(name))) continue
+    for (const angle of relations) {
+      if (angle.kind !== "planarAngle" || angle.targets.length !== 3) continue
+      const [armA, vertex, armB] = angle.targets as [string, string, string]
+      // 顶点必须**已落位**（才谈得上以它量臂），而且不能就是待求的那个点。
+      if (!positions.has(vertex) || vertex === point) continue
+      const arms = [armA, armB]
+      if (!arms.includes(point)) continue
+      const reference = arms[0] === point ? arms[1]! : arms[0]!
+      if (!positions.has(reference)) continue
+      if (![point, vertex, reference].every((name) => area.targets.includes(name))) continue
+      const statedAngle = interpretValue(angle.value, null)
+      if (statedAngle === null) continue
+      const base = Math.hypot(positions.get(vertex)!.x - positions.get(reference)!.x, positions.get(vertex)!.y - positions.get(reference)!.y)
+      const sine = Math.abs(Math.sin((statedAngle.value * Math.PI) / 180))
+      if (!(base > 1e-12) || !(sine > 1e-12)) continue
+      const distance = (2 * statedArea.value) / (base * sine)
+      if (!(distance > 0) || !Number.isFinite(distance)) continue
+      return { kind: "angle", point, vertex, reference, degrees: statedAngle.value, distance }
+    }
+  }
+  return null
+}
+
+/**
+ * **规则之四：SSA（角 + 另一条到已定点的定长）**（Task 11，2026-10-12）。
+ *
+ * 两条前提都不省：
+ * - 角那条臂的**定长必须没有** —— 有的话规则二已经给出唯一解，轮不到这一条（顺序即判据）；
+ * - 距离必须来自**另一个已落位点**（不是角的顶点，那又变成规则二）。
+ *
+ * 满足时就交给 `ray-circle`：射线与圆相交 ⇒ 0 / 1 / 2 个解，多解**照实分支**
+ *（核验器随后会逐条量，选中的那一支必须自己满足全部题设）。
+ */
+function planarRuleFromAngleAndDistance(
+  point: string,
+  positions: ReadonlyMap<string, PlanarPosition>,
+  relations: readonly WitnessRelation[]
+): PlanarPlacementRule | null {
+  for (const angle of relations) {
+    if (angle.kind !== "planarAngle" || angle.targets.length !== 3) continue
+    const [armA, vertex, armB] = angle.targets as [string, string, string]
+    if (!positions.has(vertex) || vertex === point) continue
+    const arms = [armA, armB]
+    if (!arms.includes(point)) continue
+    const reference = arms[0] === point ? arms[1]! : arms[0]!
+    if (!positions.has(reference)) continue
+    // 角那条臂已经有定长 ⇒ 规则二管，这一条不抢。
+    if (statedLength(relations, [vertex, point]).kind === "value") continue
+    const statedAngle = interpretValue(angle.value, null)
+    if (statedAngle === null) continue
+    for (const other of relations) {
+      if (other.kind !== "segment-length") continue
+      for (const segment of other.segments) {
+        const pair = segmentOf(segment)
+        if (pair === null) continue
+        const center = pair[0] === point ? pair[1] : pair[1] === point ? pair[0] : null
+        // 端点就是角的顶点 ⇒ 那是规则二（角 + 那条臂），不是 SSA。
+        if (center === null || center === vertex || !positions.has(center)) continue
+        const stated = interpretValue(other.value, null)
+        if (stated === null || !(stated.value > 0)) continue
+        return { kind: "ray-circle", point, vertex, reference, degrees: statedAngle.value, center, radius: stated.value }
+      }
+    }
+  }
+  return null
+}
+
+/** 规则之二：到两个**已落位**点的定长（两圆交点）。 */function planarRuleFromDistances(
   point: string,
   positions: ReadonlyMap<string, PlanarPosition>,
   relations: readonly WitnessRelation[]
@@ -1005,6 +1143,44 @@ function planarRuleFromDistances(
 function planarRuleOptions(rule: PlanarPlacementRule, positions: ReadonlyMap<string, PlanarPosition>): PlanarPosition[] {
   if (rule.kind === "distances") {
     return circleIntersections(positions.get(rule.first)!, rule.firstDistance, positions.get(rule.second)!, rule.secondDistance)
+  }
+  /**
+   * **SSA：射线 ∩ 圆**（Task 11）。方向与角那一支**同一套取法**（`±degrees`，正转在前），
+   * 所以两条规则的"两支"顺序口径一致，确定性不会被这条破坏。
+   *
+   * 圆与射线的交点：把圆心投到射线上得 `projection`，垂距平方 `perp²`，
+   * 则 `t = projection ± √(r² − perp²)`，只取 `t > 0`（**射线**，不是整条直线）。
+   */
+  if (rule.kind === "ray-circle") {
+    const vertex = positions.get(rule.vertex)!
+    const reference = positions.get(rule.reference)!
+    const center = positions.get(rule.center)!
+    const along = { x: reference.x - vertex.x, y: reference.y - vertex.y }
+    const span = Math.hypot(along.x, along.y)
+    if (!(span > 0)) return []
+    const base = { x: along.x / span, y: along.y / span }
+    const radians = (rule.degrees * Math.PI) / 180
+    const scale = Math.max(1, rule.radius)
+    const solutions: PlanarPosition[] = []
+    for (const sign of [1, -1]) {
+      const cosine = Math.cos(sign * radians)
+      const sine = Math.sin(sign * radians)
+      const unit = { x: base.x * cosine - base.y * sine, y: base.x * sine + base.y * cosine }
+      const toCenter = { x: center.x - vertex.x, y: center.y - vertex.y }
+      const projection = toCenter.x * unit.x + toCenter.y * unit.y
+      const perpendicularSquared = toCenter.x * toCenter.x + toCenter.y * toCenter.y - projection * projection
+      const remaining = rule.radius * rule.radius - perpendicularSquared
+      if (remaining < -PLANAR_METRIC_TOLERANCE * scale * scale) continue
+      const offset = Math.sqrt(Math.max(0, remaining))
+      for (const distance of [projection - offset, projection + offset]) {
+        if (!(distance > PLANAR_METRIC_TOLERANCE * scale)) continue
+        const candidate = { x: vertex.x + distance * unit.x, y: vertex.y + distance * unit.y }
+        // 两个方向可能落到同一点（角为 0 的退化情形）—— 去重，免得报出"两解"其实是同一个。
+        if (solutions.some((entry) => Math.hypot(entry.x - candidate.x, entry.y - candidate.y) <= 1e-9 * scale)) continue
+        solutions.push(candidate)
+      }
+    }
+    return solutions
   }
   const vertex = positions.get(rule.vertex)!
   const reference = positions.get(rule.reference)!
@@ -1093,7 +1269,9 @@ const PLANAR_CONDITION_NAMES: Record<WitnessRelation["kind"], string> = {
   perpendicular: "垂直",
   parallel: "平行",
   "equal-length": "等长",
-  dihedral: "二面角"
+  dihedral: "二面角",
+  /** Task 11：面积的"写出来的样子"是「△ABC 的面积」—— 与题面同一套字形。 */
+  area: "面积"
 }
 
 function planarConditionName(relation: WitnessRelation): string {
@@ -1104,6 +1282,7 @@ function planarConditionName(relation: WitnessRelation): string {
 function planarWrittenForm(relation: WitnessRelation): string {
   if (relation.kind === "planarAngle") return `∠${relation.targets.join("")}`
   if (relation.kind === "dihedral") return "二面角"
+  if (relation.kind === "area") return `△${relation.targets.join("")} 的面积`
   return relation.segments.map((segment) => (segment.length >= 2 ? `${segment[0]}${segment[1]}` : segment.join(""))).join("、")
 }
 
@@ -1629,6 +1808,116 @@ function baseEdgeParallel(
   })
 }
 
+/**
+ * **边上分点：四条点名 → 一个无量纲参数**（Task 10，2026-10-12）。
+ *
+ * ## 为什么要有这一处
+ *
+ * `segmentRatio` 的四条点名 `[p1,p2,p3,p4]` 配一个 `value = |p1p2| / |p3p4|`，
+ * 而**同一个点**可以有好几种写法：
+ *
+ * | 题面 | targets | 锚（出现两次的名字） |
+ * | --- | --- | --- |
+ * | `AE:AD = 2:5` | `[A,E,A,D]` | `A`（已知点）⇒ 部分/整体 ⇒ `t = r` |
+ * | `AE:ED = 2:3` | `[A,E,E,D]` | `E`（就是未知点）⇒ 部分/部分 ⇒ `t = r/(1+r)` |
+ * | `EA:DA = 2:5` | `[E,A,D,A]` | `A`（已知点）⇒ 与第一行**同一个点** |
+ *
+ * 原先 `planCompiler.constructiblePoint` **只认第二行**（它要求未知点恰好落在第 1、2 位），
+ * 于是最常见的 `AE:AD=2:5` 根本补不出来 —— 而"判据写两遍必然分叉"正是本仓反复吃亏的地方。
+ * 所以这里收成**一处**：先认出"哪条点名把两条线段钉在同一条直线上"（**恰好一条名字出现两次**），
+ * 再由它决定方向与分母。
+ *
+ * ## 四条纪律
+ *
+ * 1. **方向不许乱**：`EA`/`DA` 与 `AE`/`AD` 必须落到**同一个点**（锚决定方向，不是书写顺序）；
+ * 2. **没有公共端点就拒绝**：两条线段不相交时，"这个点在哪条线上"说不清 ⇒ 不猜；
+ * 3. **端点是同一个点就拒绝**：那样的线段没有方向；
+ * 4. **比例越界就拒绝**：`t` 必须严格落在 `(0,1)` 内 —— `t = 1` 意味着这个点与端点重合，
+ *    而"分点恰好落在端点上"不是分点。
+ *
+ * 参数是**无量纲**的：这一层不知道任何坐标，所以宿主怎么变，`t` 都不用改
+ *（运行时的投影由既有的 `onHost` / `onPath` 绑定负责，见 `packages/dsl/src/types.ts`）。
+ */
+export type RatioParameterRefusalCode =
+  | "not_four_targets"
+  | "not_a_ratio"
+  | "missing_point_not_in_ratio"
+  | "no_shared_endpoint"
+  | "ambiguous_anchor"
+  | "degenerate_endpoints"
+  | "point_outside_segment"
+
+export type RatioParameterResult =
+  | { ok: true; from: string; to: string; parameter: number }
+  | { ok: false; code: RatioParameterRefusalCode; detail: string }
+
+function refuseRatio(code: RatioParameterRefusalCode, detail: string): RatioParameterResult {
+  return { ok: false, code, detail }
+}
+
+export function ratioParameterFor(targets: readonly string[], missing: string, value: number | undefined): RatioParameterResult {
+  if (targets.length !== 4) return refuseRatio("not_four_targets", `按比例分点要两条线段（四条点名），这里给了 ${targets.length} 条。`)
+  if (value === undefined || !Number.isFinite(value) || value <= 0) {
+    return refuseRatio("not_a_ratio", `比值必须是正的有限数（给的是 ${String(value)}）—— 编一个比值等于替题面改数。`)
+  }
+  if (!targets.includes(missing)) {
+    return refuseRatio("missing_point_not_in_ratio", `要补的点 ${missing} 不在这条比例里（${targets.join("、")}）。`)
+  }
+
+  const [s1a, s1b, s2a, s2b] = targets as [string, string, string, string]
+  if (s1a === s1b || s2a === s2b) {
+    return refuseRatio("degenerate_endpoints", `线段的两端是同一个点（${s1a === s1b ? s1a : s2a}）—— 这样的线段没有方向。`)
+  }
+
+  const counts = new Map<string, number>()
+  for (const name of targets) counts.set(name, (counts.get(name) ?? 0) + 1)
+  const repeated = [...counts.entries()].filter(([, times]) => times === 2).map(([name]) => name)
+  if (repeated.length !== 1) {
+    return refuseRatio("no_shared_endpoint", `四条点名（${targets.join("、")}）里出现两次的名字有 ${repeated.length} 个 —— 认不出"哪条点名把两条线段钉在同一条直线上"，方向说不清，不补。`)
+  }
+  const anchor = repeated[0]!
+  /** 下标 `i` 与 `i ^ 1` 是同一条线段的两个端点（0↔1、2↔3）。 */
+  const indices = targets.map((name, index) => (name === anchor ? index : -1)).filter((index) => index >= 0)
+  if (indices.length !== 2 || indices[0]! >> 1 === indices[1]! >> 1) {
+    return refuseRatio("ambiguous_anchor", `点名 ${anchor} 的两次出现没有分落在两条线段上 —— 这样的写法没有可用的锚。`)
+  }
+
+  let from: string
+  let to: string
+  let parameter: number
+  if (anchor === missing) {
+    // 锚**就是**那个未知点 ⇒ 两条线段各给出一个已知端点，逐段分成 r : 1 ⇒ `t = r/(1+r)`。
+    const other = (index: number): string => targets[index ^ 1]!
+    from = other(indices[0]!)
+    to = other(indices[1]!)
+    parameter = value / (1 + value)
+  } else {
+    /**
+     * 锚是**已知点** ⇒ 部分/整体：未知点必须是与锚同段的那一个（否则"从哪量起"说不清），
+     * 而另一段的非锚端点就是分母那一段的终点。
+     */
+    const missingIndex = targets.indexOf(missing)
+    if (targets[missingIndex ^ 1] !== anchor) {
+      return refuseRatio("ambiguous_anchor", `未知点 ${missing} 与锚 ${anchor} 不在同一条线段上 —— "从哪量起"说不清，不补。`)
+    }
+    /**
+     * 锚的另一处必须落在**另一条线段**上（`index >> 1` 就是线段号）——
+     * 取"下标不同的那一处"是不够的：`[A,E,A,D]` 里锚 `A` 的两处是 0 与 2，
+     * 而与未知点同段的那一处正是 0，取错了会把 `to` 指回未知点自己。
+     */
+    const anchorOtherIndex = indices.find((index) => (index >> 1) !== (missingIndex >> 1))!
+    from = anchor
+    to = targets[anchorOtherIndex ^ 1]!
+    parameter = value
+  }
+
+  if (from === to) return refuseRatio("degenerate_endpoints", `分点的两个端点都是 ${from} —— 没有可分的线段。`)
+  if (!(parameter > 0 && parameter < 1)) {
+    return refuseRatio("point_outside_segment", `按这个比值算出来的分点落在 ${from}${to} 的**外面或端点上**（参数 ${parameter}）—— 那不是这条线段上的分点。`)
+  }
+  return { ok: true, from, to, parameter }
+}
+
 /** Rotate only a triangular base with one explicitly named right corner. A cyclic * rotation preserves its face orientation; two claimed corners are ambiguous
  * and must stay unsupported rather than silently picking one. */
 export function namedRightTriangleBase(names: readonly string[], relations: readonly WitnessRelation[]): string[] {
@@ -1905,6 +2194,8 @@ function deriveAngledTriangleBase(
     if (relation.kind === "segment-length") return false
     // 第二个角也是联立问题（两个角一起把底面钉住），本支不管。
     if (relation.kind === "planarAngle") return true
+    // 面积同样点名了底环上的三个点 ⇒ 也是联立问题，本支不管（它属于平面图形那一支）。
+    if (relation.kind === "area") return true
     return relation.segments.some((segment) => segment.every((name) => names.includes(name)))
   })
   if (otherBaseCondition) return null

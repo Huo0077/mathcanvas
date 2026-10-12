@@ -1247,8 +1247,37 @@ describe("平面图形：构造的坐标与来源标注（乙案 Task 5）", () 
     expect(result.assumptions.some((entry) => entry.text.includes("按题面条件构造"))).toBe(true)
   })
 
-  it("构造不出时不许静默采信：没有任何替换发生，且报告标明这组坐标未经条件构造", () => {
-    /**
+  /**
+   * **Task 7（2026-10-12）：模型没有声明宿主动作时，系统按题面把那个四边形补出来。**
+   *
+   * 现场形状：题面点了 `B`、`C`、`D`，而模型那版计划里**没有**那个平面四边形
+   *（图上只有 `A`、`E`、`F`、`P`）。`withWitnessCoordinates` 要求**恰好一笔宿主动作在场**
+   * 才谈得上替换坐标，所以那一族原先永远接不进去 —— 内核把坐标造出来了也落不了盘。
+   *
+   * 夹具：计划里只有一笔 `planar.create_point`（它**在**可核验动作表里，却不产出面），
+   * 于是解析、核验、补救都会走到，而"没有宿主"这一条正好成立。
+   */
+  it("补一个缺掉的宿主：模型只画了一个点，系统按题面把那个平面四边形补出来", () => {
+    const pointOnly = {
+      schemaVersion: PLAN_SCHEMA_VERSION,
+      kind: "plan",
+      goal: "画示意图",
+      factIds: [],
+      actions: [{ actionId: "planar.create_point", actionKey: "p", factIds: [], inputs: { alias: "p", points: [{ x: 0, y: 0 }] } }]
+    }
+    const result = compilePlan(pointOnly as never, context(createEmptyDocument("geometry3d"), { prompt: PLANAR_PROMPT, diagramWitnessSearch: true }))
+
+    // 模型那版里**没有任何能承接坐标的动作**；`passed` 只可能是因为系统补了一笔。
+    expect(result.diagramVerification?.status).toBe("passed")
+    const at = placedPoints(result.draftDocument)
+    for (const name of ["A", "B", "C", "D"]) expect(at.get(name), `${name} 没有被补出来`).toBeDefined()
+    // 补出来的四个点仍然满足题面（**自算**，不看报告）。
+    const distance = (first: string, second: string): number => Math.hypot(at.get(first)!.x - at.get(second)!.x, at.get(first)!.y - at.get(second)!.y)
+    expect(distance("A", "B")).toBeCloseTo(8, 9)
+    expect(distance("C", "D")).toBeCloseTo(3, 9)
+  })
+
+  it("构造不出时不许静默采信：没有任何替换发生，且报告标明这组坐标未经条件构造", () => {    /**
      * 题面只给了两条长度（`AB=8`、`CD=3`）—— 四边形的形状定不出来（欠定），
      * 而模型给的那组坐标又过不了 `AB=8`，所以这一轮一定走到"想构造、但构造不出"。
      *

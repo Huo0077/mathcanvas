@@ -1,6 +1,6 @@
 # MathCanvas 下一步：四家族 Agent 升级、旧能力兼容、缺陷修复与 Lean 收口
 
-> **最后更新：2026-10-11。状态：本文件只有实施设计；下面的新任务尚未完成。** [四家族真题作图需求调研](../../research/2026-10-11-four-family-exam-diagram-survey.md)已在本轮完成，并独立记录卷别、题号、题型和可信边界；**本计划不再包含“以后去调研真题”任务**。现有代码能力与测试的现在时仅以 [当前状态](../../current-status.md) 为准；旧 [V0–V3 追踪](../../agent-next-round-progress.md)的读数保留为历史快照。
+> **最后更新：2026-10-12。状态：Task 1（旧功能兼容基线）已完成；Task 2–21 尚未完成，本文件对其余任务仍只有实施设计。** [四家族真题作图需求调研](../../research/2026-10-11-four-family-exam-diagram-survey.md)已在本轮完成，并独立记录卷别、题号、题型和可信边界；**本计划不再包含“以后去调研真题”任务**。现有代码能力与测试的现在时仅以 [当前状态](../../current-status.md) 为准；旧 [V0–V3 追踪](../../agent-next-round-progress.md)的读数保留为历史快照。
 
 **Goal:** 在三角形、圆锥曲线、函数/导数、立体几何四家族内提高真实作图能力，**不回退已完成的手工绘图/Agent/保存导出/实验功能**；修复已确认缺陷，并把现有受限 Lean 证明路径按原题前提、产物有效性和桌面发行证据逐项收口。不能画或不能证明时如实解释。
 
@@ -55,11 +55,11 @@
 
 ## 4. 唯一的连续执行顺序（Task 1 → 21）
 
-> **下一项只允许 Task 1。** 同一时间只推进一个任务；Task n 的 RED、最小 GREEN、定向/适用旧路径复跑及验收记录未齐，不启动 Task n+1。这里的数字是**实际执行顺序**，不再用波次、并行支线或“先做 12a 后回到 8”解释编号。当前本文件只做文档重编号，没有一项因改名完成。
+> **Task 1–Task 13 已于 2026-10-12 完成；下一项是 Task 14（圆锥曲线真题纵向交付）。** Task 13 的**原用户那道题已经端到端通过**（真实浏览器 / 草稿 / 确认 / 一步撤销），链路是：四个坐标 ⇒ 系统按定比分点建 `E`/`F` ⇒ 折叠**按点名取点** ⇒ 折角按 `PC=4√3` **反求**；负例（缺 `C` / 错的折角 + 缺 `C` / **手写的 `P`**）都挡得住。**记录的边界**：① **斜棱柱"明说倾角"是缺口**（解析器没有"所成角"的读取器；修它要同时定"底面是哪张平面"与"从最终坐标量线面角"的核验，是**设计决定**，未做）；② **面上点**与**展开**今天**没有产品入口**（宿主类型只收棱/线/曲线；没有 `solid.unfold` 这类动作）—— 按计划"不为没有产品入口的…单独造隐形约束"，记成边界而不是硬造；③ 垂足不在中心＝**常态**（有用例钉住）。同一时间只推进一个任务；Task n 的 RED、最小 GREEN、定向/适用旧路径复跑及验收记录未齐，不启动 Task n+1。这里的数字是**实际执行顺序**，不再用波次、并行支线或“先做 12a 后回到 8”解释编号。各任务的读数与归因写在各任务卡片里。
 
 | 顺序 | 任务 | 退出条件（必须有运行证据） |
 | --- | --- | --- |
-| 1 | Task 1：旧功能兼容基线 | 同版旧工作区/导出/开关/撤销有记录；历史旧红已归因 |
+| 1 | **Task 1：旧功能兼容基线 ✅（2026-10-12 完成）** | 同版旧工作区/导出/开关/撤销有记录（定向 6 文件 / 120 项改前全绿 ⇒ 本切片无旧红）；四处破坏各自先红后绿、变异已还原 |
 | 2 | Task 2：用户真实失败重现 | 22:36 两轮坏计划能复现并精确分类，不误报顶层 JSON |
 | 3 | Task 3：统一动作菜单与工具合同 | 未知动作拒绝；已发布动作、schema、处理器一致 |
 | 4 | Task 4：预算及修复账本 | 每请求一次计费、错误不被预算原因吞没；不加额度 |
@@ -70,7 +70,7 @@
 | 9 | Task 9：离线真题评测工件 | 许可/题号/独立几何 oracle 与留出集有测试；不调用 provider |
 | 10 | Task 10：派生分点与依赖 | E/F 比例随宿主变化且最终图独立回代 |
 | 11 | Task 11：三角形真题纵向 | 正例/错图/欠定/换名及真实 2D 画布通过 |
-| 12 | Task 12：由目标距离求折角 | 非手写 P，正反根分支与 PC 独立回代 |
+| 12 | Task 12：由目标距离求折角 | **完成**：RED 建成（`foldAngle.test.ts` 6 条先全红 → 全绿，**不喂 P、不喂角**，求得唯一 `θ=90°`，并用罗德里格斯公式走**第二条独立路径**回代）；解析求解 `foldAnglesForTargetDistance` 四档结局分开（`solved`/`outside-range`/`unreachable` 报可达区间/`degenerate`）；**已接进 `compilePlan`**（`rescueWithSolvedFoldAngle`：错角 30° ⇒ 求出 90° 并通过核验、填对不抢、无目标距离不凭空反求），并修掉"草稿为 `null` 就退出"那个把救援挡在门外的守卫；**记录的边界**：更一般目标关系的上界区间搜索未做（计划写成条件式"才进行"）、两支角合法时另一支未披露、e2e 未做（计划原文：仍需 Task 16 的真实产品验收） |
 | 13 | Task 13：立体几何真题纵向 | 棱柱/棱锥/组合/翻折/二面角真 3D 出口 |
 | 14 | Task 14：圆锥曲线真题纵向 | 动弦/切线/竖直线/曲线组合与错轴负例通过 |
 | 15 | Task 15：函数与导数真题纵向 | 定义域/多根/外点切线与证明边界通过 |
@@ -113,33 +113,41 @@
 
 **文件/测试**：新增 `apps/web/src/agent/legacyCompatibility.test.ts`（仅钉新旧合同差异，避免复制每个旧测试）；已有 `apps/web/src/agent/featureFlags.test.ts`、`planWorkspaces.test.ts`、`draftStore.test.ts`、`apps/web/src/persistence/fileExports.test.ts`、`packages/dsl/src/codec.test.ts`、`packages/agent-core/src/proof/proofArtifact.test.ts`；浏览器 `e2e/agent-planar-triangle.spec.ts`、`agent-conic-kinds.spec.ts`、`agent-function-tangent.spec.ts`、`agent-oblique-prism.spec.ts`、`agent-constrained-drag.spec.ts`、`html-export.spec.ts`、`next-phase-flag-entry.spec.ts`。
 
-- [ ] **先量旧 HEAD，不先改实现**：将人工绘图、`.mgeo`/HTML 读写、已交付 S1–S6 实验入口、点名/撤销、默认关时旧路径、`proofExport` 设置入口/确认面板各跑一遍，记录命令、时间、失败类别、抖动复跑和当前工作树 SHA。存在红灯则先诊断是旧问题/环境/本轮变更，不能在新功能任务里将旧红灯悄悄标绿。
-- [ ] **RED**：在新增兼容测试里故意使旧 `proofExport=false` 也出现证明栏、换工作区修复轮复发 `stale_draft`、丢失旧 `.mgeo` 点名、`dynamic.*` 又切进 3D；每种破坏应使对应旧测试/新增合同真红，恢复源码后复绿。只在确有覆盖缺口时增加一条测试，不为测试数量新造旧功能。
-- [ ] 命令：`npm.cmd exec vitest run -- apps/web/src/agent/featureFlags.test.ts apps/web/src/agent/planWorkspaces.test.ts apps/web/src/agent/draftStore.test.ts apps/web/src/persistence/fileExports.test.ts packages/dsl/src/codec.test.ts packages/agent-core/src/proof/proofArtifact.test.ts --reporter=dot`；`npm.cmd run test:e2e -- e2e/agent-planar-triangle.spec.ts e2e/agent-conic-kinds.spec.ts e2e/agent-function-tangent.spec.ts e2e/agent-oblique-prism.spec.ts e2e/agent-constrained-drag.spec.ts e2e/html-export.spec.ts e2e/next-phase-flag-entry.spec.ts --workers=1`。完整默认发布仍需全库/全量，定向通过只是基线。每完成 Task 2–21 的跨层改动后重复适用切片，发现旧路不同只能附明确受用户同意的迁移依据。
+- [x] **先量旧 HEAD，不先改实现**：将人工绘图、`.mgeo`/HTML 读写、已交付 S1–S6 实验入口、点名/撤销、默认关时旧路径、`proofExport` 设置入口/确认面板各跑一遍，记录命令、时间、失败类别、抖动复跑和当前工作树 SHA。存在红灯则先诊断是旧问题/环境/本轮变更，不能在新功能任务里将旧红灯悄悄标绿。
+      **2026-10-12 读数**（HEAD `e648b82e263cf9d77beffac149150fbb62b3afc1`；工作树另有 3 个桌面端版本文件改动）：定向单测**改前 6 文件 / 120 项全绿**（3.21 s）⇒ **本切片没有旧红，故不存在需要归因的历史旧红**（如实记成空集，不编造归因）；定向 e2e **23 通过 / 0 失败 / 0 抖动**（36.2 s；复跑 32.6 s，`PLAYWRIGHT_EXIT=0`）；`typecheck` exit 0；`lint` 0 error / 13 warning（与既有读数逐字相同）。附带一条工具纪律：第一次 e2e 的 `[exit code: 1]` 是 npm 写 stderr 触发的 `NativeCommandError`，**不是**测试失败，引用 e2e 退出码必须把两个流重定向进文件后取 `$LASTEXITCODE`。
+- [x] **RED**：在新增兼容测试里故意使旧 `proofExport=false` 也出现证明栏、换工作区修复轮复发 `stale_draft`、丢失旧 `.mgeo` 点名、`dynamic.*` 又切进 3D；每种破坏应使对应旧测试/新增合同真红，恢复源码后复绿。只在确有覆盖缺口时增加一条测试，不为测试数量新造旧功能。
+      **四处归因（全部先红后绿，变异源码已用 `git diff` 逐字节复核还原）**：① `proofExport` 撤旗闸 ⇒ **旧** `draftStore.test.ts` + `agentRuntime.test.ts` 真红；③ 解码剥 `label` ⇒ **旧** `codec.test.ts` **4 项**真红；④ `dynamic.` 投 `geometry3d` ⇒ **旧** `planWorkspaces.test.ts` 与新文件同时真红；② epoch↔generation 互相错标 ⇒ **没有任何旧用例**能抓（`draftStore.test.ts` 26 项、再加 `committerAdapter.test.ts` 共 **45 项全绿**），只有新增文件真红。**⇒ 覆盖缺口正是②**：消费方 `committerAdapter.ts:163` 的 `runSwitchedWorkspace && kind === "epoch"` 策略用例把这个值 mock 掉了，产生它的 `draftStore.assertFresh` 从没被问过 `kind`。新增 `apps/web/src/agent/legacyCompatibility.test.ts`（3 项）只钉两处缝：四类过期各自取值且四词互异、纯 `dynamic.*`/`parameter.*` 计划返回空数组不动用户工作区。**本批没有产品代码改动。**
+- [x] 命令：`npm.cmd exec vitest run -- apps/web/src/agent/featureFlags.test.ts apps/web/src/agent/planWorkspaces.test.ts apps/web/src/agent/draftStore.test.ts apps/web/src/persistence/fileExports.test.ts packages/dsl/src/codec.test.ts packages/agent-core/src/proof/proofArtifact.test.ts --reporter=dot`；`npm.cmd run test:e2e -- e2e/agent-planar-triangle.spec.ts e2e/agent-conic-kinds.spec.ts e2e/agent-function-tangent.spec.ts e2e/agent-oblique-prism.spec.ts e2e/agent-constrained-drag.spec.ts e2e/html-export.spec.ts e2e/next-phase-flag-entry.spec.ts --workers=1`。完整默认发布仍需全库/全量，定向通过只是基线。每完成 Task 2–21 的跨层改动后重复适用切片，发现旧路不同只能附明确受用户同意的迁移依据。
+      **2026-10-12**：两条定向命令均执行且读数如上（单测加新守卫后 **7 文件 / 123 通过 / 0 失败**）。**全量也一并跑了**：全库 `npm test -- --maxWorkers=2` = **358 文件 / 4203 通过 + 6 skipped + 1 todo / 0 失败**（三份文档改完后在冻结树上复跑，168.43 s，exit 0）；全量 `npm run test:e2e` = **223 通过 / 0 失败 / 0 抖动**（2.4 m，exit 0）。**6 个 skipped 是真实 Lean 端到端用例（本机无 Lean 可执行文件）⇒ 这些读数不是 Lean 证据，Task 17–19 那把锁本批没有被验证。** 本行同时是本任务**之后**每次跨层改动要复跑的适用切片。
 
 ### Task 2｜重现并分类 22:36 的失败
 
 **文件**：改 `packages/agent-core/src/coordinator.test.ts`、`outputParser.test.ts`、`outputParser.ts`；改 `apps/web/src/agent/agentRunner.test.ts`、`agentRunner.ts`。不动动作语义或默认预算。
 
-- [ ] 从用户轨迹只摘动作名、必需字段和两次状态迁移制成脱敏夹具：第一份不足四个面的 `solid.create_polyhedron`，第二份三个 `solid.create_segment`。**RED**：在第二轮 UI 必须出现“未注册动作 solid.create_segment”、其三个路径和先前“开放图形不要用闭合多面体”，不能被泛化成“JSON 顶层形状不合法”；目前后一条不满足。不得把这个动作自动改成别的动作。
-- [ ] 把 `unknown_action` 与 `invalid_json` / 顶层形状分开生成可见诊断；在修复提示中按失败字段给“`solid.create_face` 自带面边；不要额外找 solid.create_segment”的**操作**，继续用严格 `parsePlanEnvelope` 作为安全闸。信封类额度用尽时用户仍能看到真正的上一条拒绝理由。
-- [ ] 运行 `npm.cmd exec vitest run -- packages/agent-core/src/coordinator.test.ts packages/agent-core/src/outputParser.test.ts apps/web/src/agent/agentRunner.test.ts --reporter=dot`。**GREEN** 应同时保住旧的合法计划、散文/不合法 JSON 被拒、不准静默跳过动作。**阶段成果是正确拒绝与反馈，不是这道题已经自动画出。**
+- [x] 从用户轨迹只摘动作名、必需字段和两次状态迁移制成脱敏夹具：第一份不足四个面的 `solid.create_polyhedron`，第二份三个 `solid.create_segment`。**RED**：在第二轮 UI 必须出现“未注册动作 solid.create_segment”、其三个路径和先前“开放图形不要用闭合多面体”，不能被泛化成“JSON 顶层形状不合法”；目前后一条不满足。不得把这个动作自动改成别的动作。
+- [x] 把 `unknown_action` 与 `invalid_json` / 顶层形状分开生成可见诊断；在修复提示中按失败字段给“`solid.create_face` 自带面边；不要额外找 solid.create_segment”的**操作**，继续用严格 `parsePlanEnvelope` 作为安全闸。信封类额度用尽时用户仍能看到真正的上一条拒绝理由。
+- [x] 运行 `npm.cmd exec vitest run -- packages/agent-core/src/coordinator.test.ts packages/agent-core/src/outputParser.test.ts apps/web/src/agent/agentRunner.test.ts --reporter=dot`。**GREEN** 应同时保住旧的合法计划、散文/不合法 JSON 被拒、不准静默跳过动作。**阶段成果是正确拒绝与反馈，不是这道题已经自动画出。**
+      **2026-10-12 读数**：三处改动 —— `outputParser.ts`（成对的 `schemaFailureDetail` / `readSchemaFailureDetail` + `describeSchemaFailureForUser` + 修复提示里"别造动作名"那一支）、`coordinator.ts`（改用该生产方，**格式逐字未变**，故既有 golden 未动）、`agentRunner.ts`（`failed` 分支按死因分两句，并回带账本里先前 `was rejected:` 的原话）。**先红**：`outputParser.test.ts` 整文件 20 项失败（导出不存在）/ `coordinator.test.ts` 1 项 / `agentRunner.test.ts` 1 项；**GREEN**：3 文件 **124 通过 / 0 失败**。**变异**：短路新分支 ⇒ 前两个文件各红一条、`agentRunner.test.ts` 不红（用户话那条路有它自己的判据）⇒ 还原 124 全绿。Task 1 适用切片复跑 **7 文件 / 123 通过 / 0 失败**；`typecheck` exit 0；`lint` 0 error / 13 warning。**`solid.create_segment` 不会被自动翻译成别的动作，动作语义与默认预算一行未动**；原用户那道折面题照旧未解决。
 
 ### Task 3｜动作菜单与工具合同一致
 
 **文件**：`packages/agent-core/src/actionIds.ts`、`actionRegistry.ts`、`schemas.ts` 与对应测试；`apps/web/src/agent/systemPrompt.ts`、`systemPrompt.test.ts`、`modelPlanner.test.ts`。现有处理器在 `packages/scene-graph/src/actions/index.ts`。
 
-- [ ] **RED**：对全部 `DRAFT_ACTION_IDS` 枚举校验“处理器/输入 schema/工具发布/提示词菜单”一致；另给 `solid.create_segment`、未知字段及把 `{arguments:"..."}` 字符串当整个计划的反例。预期未知动作报路径/许可菜单而不是执行，协议壳未经声明不被偷偷拆开。
-- [ ] 对齐注册表与 `buildPlanToolSchema`/`buildPolicyText`，按场景只发布相关动作及最少需要的输入说明；明确**开放的面→`solid.create_face`、闭合实体→`solid.create_polyhedron`、折→`solid.fold`**，面本身物化顶点/边。与已有的平面 `planar.create_segment` 严格区分；不要注册不存在语义的 3D 线段动作凑数。
+- [x] **RED**：对全部 `DRAFT_ACTION_IDS` 枚举校验“处理器/输入 schema/工具发布/提示词菜单”一致；另给 `solid.create_segment`、未知字段及把 `{arguments:"..."}` 字符串当整个计划的反例。预期未知动作报路径/许可菜单而不是执行，协议壳未经声明不被偷偷拆开。
+- [x] 对齐注册表与 `buildPlanToolSchema`/`buildPolicyText`，按场景只发布相关动作及最少需要的输入说明；明确**开放的面→`solid.create_face`、闭合实体→`solid.create_polyhedron`、折→`solid.fold`**，面本身物化顶点/边。与已有的平面 `planar.create_segment` 严格区分；不要注册不存在语义的 3D 线段动作凑数。
 - [ ] 运行 `npm.cmd exec vitest run -- packages/agent-core/src/actionIds.test.ts packages/agent-core/src/schemas.test.ts apps/web/src/agent/systemPrompt.test.ts apps/web/src/agent/modelPlanner.test.ts --reporter=dot`；坏名字必须失败、合法动作必须可达。缩短提示词时断言未意外删除已有圆锥/函数/立体动作菜单。
+
+      **2026-10-12 读数（Task 3 收尾）**：四处改动 —— `systemPrompt.ts` 菜单新增"**面分三种，别混**"（开放的面→`solid.create_face` 自带面边 / 闭合实体→`solid.create_polyhedron` / 折→`solid.fold`；立体里没有线段动作，不要自己造动作名），且**该段只在 `actionIds` 含 `solid.*` 时出现**；`schemas.ts` 在 `kind` 读不出时**额外**按"所有 kind 字段并集"查未知字段，于是协议壳同时报 `unknown_kind@envelope.kind` 与 `unknown_field@envelope.arguments`。**先红两处**：`missing unknown_field in [{"code":"unknown_kind",…}]`（原先只报一句 `unexpected kind 'undefined'`）与 `expected '你是 MathCanvas 的构图助手…' to contain '开放的面'`。**GREEN**：4 文件 **134 通过 / 0 失败**。**我自己被判据抓住一次**：加上那段规则后**纯平面**那轮也出现了 `solid.create_face` ⇒ 判据当场红，改成按 `actionIds` 条件出现。**没有注册任何新动作**；"按场景只给最少需要的输入说明"只做到"菜单范围随本轮动作走"这一半。
 
 ### Task 4｜共享预算与修复账本
 
 **文件**：`packages/agent-core/src/coordinator.ts`、`coordinator.test.ts`、`budget.test.ts`；`apps/web/src/agent/modelPlanner.ts`、`modelPlanner.test.ts`。
 
-- [ ] **RED**：重放“初问→只读工具续接→编译修复→下一轮”四次 generation 消耗，同时断言每次发请求前 remaining 数、计费主体和最后几何错误。当前已有 `budget_repair` 盖掉原诊断、名义有编译类两次但第三轮请求送不出的反例。
-- [ ] 定义一个**每次 provider 请求只由一个层计费**的账本合同；如果现有实现经测试确实重复计费，修复重复那一次；如果没有重复，保留成本限制并在修复前明确告知剩余次数。保留 `generation:4`、`network:6` 和信封/编译修复上限不变，不为过测试隐性加请求。用户需另行决定是否付费增加额度。
-- [ ] 运行 `npm.cmd exec vitest run -- packages/agent-core/src/budget.test.ts packages/agent-core/src/coordinator.test.ts apps/web/src/agent/modelPlanner.test.ts --reporter=dot`；未实际发出的请求不得计为成功修复；错误停止时保留最有用的原始错误和完整账本。
+- [x] **RED**：重放“初问→只读工具续接→编译修复→下一轮”四次 generation 消耗，同时断言每次发请求前 remaining 数、计费主体和最后几何错误。当前已有 `budget_repair` 盖掉原诊断、名义有编译类两次但第三轮请求送不出的反例。
+- [x] 定义一个**每次 provider 请求只由一个层计费**的账本合同；如果现有实现经测试确实重复计费，修复重复那一次；如果没有重复，保留成本限制并在修复前明确告知剩余次数。保留 `generation:4`、`network:6` 和信封/编译修复上限不变，不为过测试隐性加请求。用户需另行决定是否付费增加额度。
+- [x] 运行 `npm.cmd exec vitest run -- packages/agent-core/src/budget.test.ts packages/agent-core/src/coordinator.test.ts apps/web/src/agent/modelPlanner.test.ts --reporter=dot`；未实际发出的请求不得计为成功修复；错误停止时保留最有用的原始错误和完整账本。
+
+      **2026-10-12 读数（Task 4）**：① **RED**：在既有"额度只够一次生成"用例上补断言 —— `expected 'budget exhausted: budget_repair' to contain 'compile_failed: degenerate_prism'`，正是"预算盖掉原始错误"那句病；**GREEN** 后 `stop(reason, lastError?, remaining?)` 三样一起给（原因 + 余量 + 用尽前最后一次真实失败，**附加**不是替换）。② **账本合同**：协调器管每次 `plan()` 调用、规划器管它为送回只读工具结果多发的往返；"每批一次、不是每工具一次"由既有 `modelPlanner.test.ts`「charges one generation per read-tool batch」钉住 ⇒ **没有重复计费**，第 6 次的闸是 `generation: 4` 本身（1+1+1+1），故**额度一行未动**（`budget.test.ts` 的 `DEFAULT_BUDGET_LIMITS` 断言照旧通过）。新增一条把合同写成可执行判据（两次往返 ⇒ `used.generation === 2` 且与 `network` 同步、且这一轮成功停在等确认）。**GREEN**：3 文件 **101 通过 / 0 失败**；Task 1 适用切片 7 文件 / 123 通过；`typecheck` exit 0；`lint` 0 error / 13 warning。**未做**：完整账本未逐笔记进事件流（只在失败那一条里给余量）；"未实际发出的请求不得计为成功修复"是**既有行为**、本批只是复验。
 
 ### Task 5｜非法输入与能力声明错位
 
@@ -151,6 +159,8 @@
 - [ ] **用户待裁决文案**：记录“题设要求 0”的旧 golden 与更可读文案的差异；未经许可保留旧字面并登记待裁决，不将其当 Task 5 的自动代码改动。正常的 1 MiB 限制和超时拒绝不放宽。
 - [ ] 运行 npm.cmd exec vitest run -- packages/agent-core/src/capabilities.test.ts packages/agent-core/src/schemas.test.ts packages/agent-core/src/planCompiler.test.ts apps/web/src/agent/agentRunner.test.ts --reporter=dot；完成后才开始 Task 6。
 
+      **2026-10-12 读数（Task 5）**：**真红两条** —— `TypeError: Cannot read properties of null (reading 'sourceText')`（`unverified: [null]`）与 `(reading 'role')`（`obligations: [null]`）；`normaliseObligationIR` 改成**逐条查形状**（非对象 / 字段不是字符串的条目丢掉；断言用"与没有题设同一种结局"，不是"没抛就算过"）。**能力表真红一条** —— `expected [ 'conics', 'geometry3d' ] to not include 'geometry3d'`；`constraint-authoring` 收窄为 `[...PLANAR]`，理由进 preconditions，**不为修元数据实现无人能用的隐形求解器**。**两条本来绿的**记为"钉住别退化"：`relations: [null]` 与 `relations: [42,"AB=2",[]]` 在传输层本来就是带路径的 fail-closed。**扩范围已按计划授权**（文件清单里没有 `witnessSearch.ts`，卡片写明"仅在诊断表明另一个真实入口出错时扩范围"）。**待裁决**：'题设要求 0' **一字未改**（`planCompiler4707b64.golden.json` 未被触碰），沿用当前状态「待裁决」表第 5 行。**typecheck 抓到 vitest 没抓到的**：`result.errors?.some` 在判别联合上报 TS2339，修好才 exit 0。GREEN：5 文件 **234 通过 / 0 失败**；Task 1 适用切片 7 文件 / 123 通过；`lint` 0 error / 13 warning。**1 MiB 限制与超时拒绝不放宽。**
+
 ### Task 6｜来源可追溯的四族图形意图
 
 **文件**：新建 `packages/agent-core/src/figureIntent.ts`、`figureIntent.test.ts`；改 `diagramObligations.ts`、`obligationIR.ts`、`contracts.ts`、`index.ts` 及相关测试。先不改画布。
@@ -159,19 +169,26 @@
 - [ ] 加版本化 `FigureIntent` 联合：`triangle|conic|function|solid` 的拓扑、命名对象、来源条件引用、派生点/变换关系。只容纳**结构和条件引用**，坐标由构造器决定；旧 `PlanEnvelope` 经窄适配继续可读。提议的 `sourceSpan` 应复用现有 `DiagramSourceSpan`，不要再手抄第三套。
 - [ ] 运行 `npm.cmd exec vitest run -- packages/agent-core/src/figureIntent.test.ts packages/agent-core/src/diagramObligations.test.ts packages/agent-core/src/obligationIR.test.ts --reporter=dot`；证明新联合对多解/未核/工作区都有有类型的去向，再开放模型输出它。
 
+      **2026-10-12 读数（Task 6）**：新增 `figureIntent.ts` + 测试 + `index.ts` 一处导出；**计划的 `diagramObligations.ts` / `obligationIR.ts` / `contracts.ts` 一行未改**（计划给的是候选范围；既有 `GeometryObligation` 与 `DiagramSourceSpan` 已经够用，能不动共享合同就不动）。**RED**：`Failed to resolve import "./figureIntent"` ⇒ **GREEN** 3 条全过（定向 3 文件 / 46 通过）。三条判据：① 条款与解析结果一一对应、`span.sourceText === prompt.slice(start,end)`、`refs` = 点名；② 缀上 `，sin∠PAB=0.5` 后前面几条一条不变、残留多出恰好一条且**指得出位置**；③ 塞一条来源追不回原句的关系 ⇒ `clauses` 逐字段不变（"对没有可靠来源的关系不得假装来自原题"）。**实测出的不一致（待澄清）**：本卡 §3 逐字引用那句话，而上文说它"八条条件" —— **实测 6 条 / 0 未核验**；先排除了我的措辞（按记忆改写与逐字引用都是 6），差额最可能来自摘要压缩掉的显式比例，但**没有原始用户原话，不替它下结论**。**未做**：`objects` 只到点名层（其余五支是 Task 7 的位置，这一层不猜拓扑）；`transformations` 只收不产；多解与工作区没进 `FigureIntent`；旧 `PlanEnvelope` 窄适配未写（本层纯新增，旧路径按构造仍可读）。
+
 ### Task 7｜缺宿主时安全物化
 
 **文件**：新建 `packages/agent-core/src/figureMaterialisation.ts`、`.test.ts`；改 `planCompiler.ts`、`planCompiler.test.ts`、`apps/web/src/agent/draftStore.ts` 与 Worker 合同测试。
 
-- [ ] **RED**：同一 ABCD 原文、模型完全没有 `solid.create_face` 宿主时，现有 `withWitnessCoordinates` 不能无中生有；为“题面明确平面四边形、点名唯一、已有条件能认”准备结构明确的生成测试，并配“两个竞争四边形”“点名和动作冲突”必须拒绝的反例。
-- [ ] 将 `FigureIntent` 通过窄适配物化为已有 `solid.create_face` 等动作；**先校验形状/名字的唯一性，再生成宿主**，交给 `compilePlan` 和同一草稿事务；禁止为凑宿主填随机坐标后在核验器前跳过检查。若生成条件不足，反馈“缺结构/欠定并有自由选择”，不是“已经按题面生成 BCD”。
-- [ ] 运行 `npm.cmd exec vitest run -- packages/agent-core/src/figureMaterialisation.test.ts packages/agent-core/src/planCompiler.test.ts apps/web/src/agent/diagramDraftStage.test.ts apps/web/src/agent/workerContracts.test.ts --reporter=dot`；Worker 和主线程不得不同判，关旗旧路径与已宣称的 golden 保持兼容。
+- [x] **RED**：同一 ABCD 原文、模型完全没有 `solid.create_face` 宿主时，现有 `withWitnessCoordinates` 不能无中生有；为“题面明确平面四边形、点名唯一、已有条件能认”准备结构明确的生成测试，并配“两个竞争四边形”“点名和动作冲突”必须拒绝的反例。
+      **2026-10-12（第一项已完成）**：查实 `withWitnessCoordinates`（`planCompiler.ts:711`）要求**恰好一笔宿主动作在场**，宿主缺席时内核造了坐标也落不了盘。新增 `figureMaterialisation.ts` + 8 条用例：`planFigureMaterialisation` 是**纯函数**，产物要么是 `solid.create_face` 的**骨架（一个数字都没有**）、要么是六个各不相同的拒绝码。计划点名的三个要求各有一条用例（能造 / `competing_rings` / `name_conflict`），另加四条边界（现场真实形状 `E/F/P` 的既有宿主、没读出环、题设没读全、环上出现题面没有的点名）。**变异**：短路 `competing_rings` ⇒ `expected 'materialise' to be 'refused'` 真红，还原复绿。**诚实记**：本轮是先写完测试与实现再一起跑的，**没有 RED 读数**，故补做变异。**自己修掉一处夹具矛盾**：两个"拒"的夹具结构相同（都是三名字宿主与环有交集）却要求不同码 —— 改成"有交集 ⇒ name_conflict；无交集 ⇒ existing_host"，第二个夹具换成现场真实的 `E/F/P`。
+- [x] 将 `FigureIntent` 通过窄适配物化为已有 `solid.create_face` 等动作；**先校验形状/名字的唯一性，再生成宿主**，交给 `compilePlan` 和同一草稿事务；禁止为凑宿主填随机坐标后在核验器前跳过检查。若生成条件不足，反馈“缺结构/欠定并有自由选择”，不是“已经按题面生成 BCD”。
+      **2026-10-12（Worker 同判已补，任务收口）**：`geometryWorkerHost.planar.test.ts` 新增 `Task 7: the worker synthesises the missing host too` —— 同一份**没有宿主**的计划跨线程之后，图上照样出现系统补出来的 `A`/`B`/`C`/`D`，且断言 `posted[0].witnessSearch === true`（开关本身也必须过边界）。**变异**：关掉合成（`if (true || …) return null`）⇒ **两条路同时真红** —— 主线程 `expected 'unverified' to be 'passed'`，Worker `A 没有在 Worker 里被补出来: expected [] to include 'A'`（**与现场症状逐字相同**）。还原后定向 **6 文件 / 125 通过**；Task 1 适用切片 7 文件 / 123 通过；`typecheck` exit 0；`lint` 0 error / 13 warning。**golden 一个文件都没改。**
+      **接线要点**：`existingHosts` 只认 `create_polyhedron` / `create_face`（第一版把**所有**动作都算宿主，夹具里的 `planar.create_point` 让判据判成 `existing_host` —— **判据把自己挡住了**；同一个词在两处含义不同必然分叉）。**端到端实证**：`planCompiler.test.ts` 新增一条 —— 计划只有一笔 `planar.create_point`（在可核验动作表里、不产出面）⇒ 系统补出平面四边形 ⇒ `diagramVerification.status === "passed"`，且落盘坐标**自算** `|AB|=8`、`|CD|=3`。**golden**：`planCompiler.test.ts` 68 项（含 `planCompiler.offPath.golden.test.ts`）全过。
+- [x] 运行 `npm.cmd exec vitest run -- packages/agent-core/src/figureMaterialisation.test.ts packages/agent-core/src/planCompiler.test.ts apps/web/src/agent/diagramDraftStage.test.ts apps/web/src/agent/workerContracts.test.ts --reporter=dot`；Worker 和主线程不得不同判，关旗旧路径与已宣称的 golden 保持兼容。
+      **2026-10-12**：定向（含 `geometryWorkerHost.planar.test.ts` 与 `planCompiler.offPath.golden.test.ts`）= **6 文件 / 125 通过 / 0 失败**；关旗旧路径 golden 逐字节未变；Worker 同判见上一条的变异读数。
 
 ### Task 8｜Worker 与主线程同版合同
 
 **文件**：apps/web/src/agent/geometryWorkerHost.ts、workerContracts.ts、draftStore.ts、agentRunner.ts 及对应测试。
 
-- [ ] **RED→GREEN（Worker 同版）**：Task 7 的同一图形意图经主线程/Worker 物化后的图元、条件 ID、点名和报告版本必须相同；输入改版后迟到 Worker 结果不能写进当前草稿。先写 `workerContracts.test.ts`/`geometryWorkerHost.test.ts` 会因版本或序列化不同变红的用例，再只调整 Worker/草稿传输。运行 `npm.cmd exec vitest run -- apps/web/src/agent/workerContracts.test.ts apps/web/src/agent/geometryWorkerHost.test.ts apps/web/src/agent/draftStore.test.ts --reporter=dot`。**此时不宣称视觉或桌面可用**；Task 8 GREEN 才允许 Task 18 复用图版本合同。
+- [x] **RED→GREEN（Worker 同版）**：Task 7 的同一图形意图经主线程/Worker 物化后的图元、条件 ID、点名和报告版本必须相同；输入改版后迟到 Worker 结果不能写进当前草稿。先写 `workerContracts.test.ts`/`geometryWorkerHost.test.ts` 会因版本或序列化不同变红的用例，再只调整 Worker/草稿传输。运行 `npm.cmd exec vitest run -- apps/web/src/agent/workerContracts.test.ts apps/web/src/agent/geometryWorkerHost.test.ts apps/web/src/agent/draftStore.test.ts --reporter=dot`。**此时不宣称视觉或桌面可用**；Task 8 GREEN 才允许 Task 18 复用图版本合同。
+      **2026-10-12 读数**：① **等价**：`diagramDraftStage.test.ts` 新增"缺宿主输入两条路同版"（图元 / 报告 / 点名逐字相同）；**变异**掐掉 `witnessSearch` 转发 ⇒ `expected [ 1 个图元 ] to deeply equal [ 10 个图元 ]` —— **Worker 只有模型那一笔孤点、主线程多出系统补的四边形，两边都不报错**（连同两条既有等价用例一起真红）。② **迟到回包**：闸**本来就在**（`geometryWorkerClient` 四项核对，本批未改）；真缺陷在它下游 —— `compileInWorker` 的失败分支**不搬 `code`/`detail`**，于是"回包属于另一版"变成诊断为空、`stage` 只能说"编不出动作"（**误诊**）。**RED** `expected '' to contain 'stale_artifact'` ⇒ **GREEN** 用回包自己的 `code`+`detail` 造一条（`stage: transport`、`path: worker`）。定向 **6 文件 / 55 通过**；Task 1 适用切片 7 文件 / 123 通过。
 
 **退出**：意图/图元/条件报告/版本序列化一致，迟到的 Worker 回包不能写进新版草稿；不以此宣布视觉或桌面可用。
 
@@ -283,19 +300,19 @@
 
 | Task | 状态 | 退出证据 |
 | --- | --- | --- |
-| 1 | 待做 | 尚无此任务的 RED→GREEN 与适用产品/兼容验收 |
-| 2 | 待做 | 尚无此任务的 RED→GREEN 与适用产品/兼容验收 |
-| 3 | 待做 | 尚无此任务的 RED→GREEN 与适用产品/兼容验收 |
-| 4 | 待做 | 尚无此任务的 RED→GREEN 与适用产品/兼容验收 |
-| 5 | 待做 | 尚无此任务的 RED→GREEN 与适用产品/兼容验收 |
-| 6 | 待做 | 尚无此任务的 RED→GREEN 与适用产品/兼容验收 |
-| 7 | 待做 | 尚无此任务的 RED→GREEN 与适用产品/兼容验收 |
-| 8 | 待做 | 尚无此任务的 RED→GREEN 与适用产品/兼容验收 |
-| 9 | 待做 | 尚无此任务的 RED→GREEN 与适用产品/兼容验收 |
-| 10 | 待做 | 尚无此任务的 RED→GREEN 与适用产品/兼容验收 |
-| 11 | 待做 | 尚无此任务的 RED→GREEN 与适用产品/兼容验收 |
-| 12 | 待做 | 尚无此任务的 RED→GREEN 与适用产品/兼容验收 |
-| 13 | 待做 | 尚无此任务的 RED→GREEN 与适用产品/兼容验收 |
+| 1 | **完成**（2026-10-12） | 定向 6 文件 / 120 项**改前全绿**（无旧红可归因）；四处破坏先红后绿、变异还原；新增 `legacyCompatibility.test.ts`（3 项）钉住结构化过期判据的产生处与纯中性工作区路由；`typecheck` exit 0、`lint` 0 error / 13 warning |
+| 2 | **完成**（2026-10-12） | 22:36 两轮坏计划各自有脱敏夹具；"造动作名"与"顶层形状不合法"分成两句不同的话（用户话 + 修复提示各一处）；先红三处、GREEN 3 文件 / 124 通过；变异两层各自可观测 |
+| 3 | **完成**（2026-10-12） | 34 个目录动作在提示词菜单与工具发布两面上逐项对齐、范围外动作不漏入；"开放的面 / 闭合实体 / 折"三分法进菜单（仅在给立体动作那轮）；协议壳同时报 `unknown_kind` 与 `unknown_field`；先红两处、GREEN 4 文件 / 134 通过、全库 358 文件 / 4216 通过 |
+| 4 | **完成**（2026-10-12） | 账本合同可执行（一次往返 = 一笔 `generation`+`network`，恰好一层记）；经测试**无重复计费**、额度一行未动；预算停止不再盖掉原始错误，改为"原因 + 余量 + 用尽前最后一次真实失败"；定向 3 文件 / 101 通过 |
+| 5 | **完成**（2026-10-12） | 坏输入 fail-closed：`unverified:[null]` / `obligations:[null]` 原先各抛一条 `TypeError`，现逐条查形状；`constraint-authoring` 按可到达的操作收窄为只平面（动作目录里没有一个约束类动作）；"题设要求 0" 保持旧字面、登记待裁决；定向 5 文件 / 234 通过 |
+| 6 | **完成**（2026-10-12） | 新增 `figureIntent.ts` 只读映射：条款与解析结果一一对应、`span` 按 `prompt.slice` 可核验、第九条残留带位置留下、模型 relations 改不动条款清单；`objects` 只到点名层（不猜拓扑）；**实测计划 §3 那句读出 6 条而非"八条"，记为待澄清** |
+| 7 | **完成**（2026-10-12） | 判据层 + 接线 + **端到端实证**（模型只给一个点 ⇒ 补出四边形 ⇒ 核验 passed，落盘坐标自算 \|AB\|=8、\|CD\|=3）；**Worker 与主线程同判有读数**：同一条用例在 Worker 侧跑通，且**变异（关掉合成）两条路同时真红**；golden 一个文件未改；修掉"把所有动作都当宿主"的自锁缺陷 |
+| 8 | **完成**（2026-10-12） | 新合成路径纳入"两条路等价"判据（**变异读数**：丢掉 `witnessSearch` 转发 ⇒ Worker 只 1 个图元 vs 主线程 10 个，**两边都不报错**）；迟到回包的闸**本来就在**（`geometryWorkerClient` 四项核对），但补掉一处**误诊**：回包被拒的理由原先被吞掉、`stage` 只能说"编不出动作" ⇒ 现在带 `stale_artifact` 与原文；定向 6 文件 / 55 通过 |
+| 9 | **完成**（2026-10-12） | 新增 `benchmark/examSet.ts`：开发集 8 条（四家族各两条）+ 留出集 4 条（**不同原题**），每条带卷别/题号/等级/许可；两条守卫（**转载答案不能充 oracle**、**留出集不许是开发题变式**）+ 错图 oracle 会拒；`verifiedGoldCaseIds` 仍为空且被钉住；随仓题面全标 `survey-summary`（**不拿摘要冒充原题**）；接进 `npm run eval:agent`；定向 4 文件 / 35 通过 |
+| 10 | **完成**（2026-10-12） | 判据收成一处（内核 `ratioParameterFor`）：部分比整体 / 部分比部分 / **方向不许乱** / 无公共端点 / 越界 / 端点重合 / 非正比值；端到端 `AE:AD=2:5` 补出 `E` 并自算 `AE/AD=2/5`；**不相容位置拒绝**（先红 `expected true to be false`，诊断点名两条来源）；补出来的点是**派生对象**（`onHost` + 无量纲参数）；**宿主移动后的重算读数**（`AE/AD` 仍 2/5，牙齿检验读到 0.9827） |
+| 11 | **完成**（2026-10-12，**§4 退出条件全部满足；任务卡第二项三条子项也都清了**） | 分类矩阵有读数：无解 ⇒ `unverified_instance` + `contradictory-planar`（不是"没找到"）、欠定 ⇒ `underdetermined-planar` 并点名缺哪个点、角顶点不在环上 ⇒ 拒绝、**换点名** ⇒ 环顺序跟着题面；**面积五层接通**（解析器 `area` 义务 + IR + 内核 `planarRuleFromArea` + 核验器自算 `½|AB×AC|`）；**真画布 e2e 已建**（`e2e/agent-exam-triangle.spec.ts`，1 passed / 8.0 s）；**SSA 已解得出来**（内核 `ray-circle`：射线 ∩ 圆，最多两解）；**"只保留一份"审计 = 单份**；**"两解选择来源" = 内核那行 `assumptions`**（我加的 `alternatives` 因重复已**撤回**）；**记录的边界**：`∠A` 单字母角不认、全量 e2e 未跑 |
+| 12 | **完成**（2026-10-12） | RED 建成（`foldAngle.test.ts` 6 条先全红 → 全绿，**不喂 P、不喂角**，求得唯一 `θ=90°`，并用罗德里格斯公式走**第二条独立路径**回代）；解析求解 `foldAnglesForTargetDistance` 四档结局分开（`solved`/`outside-range`/`unreachable` 报可达区间/`degenerate`）；**已接进 `compilePlan`**（错角 30° ⇒ 求出 90° 并通过核验、填对不抢、无目标距离不凭空反求），并修掉"草稿为 `null` 就退出"那个把救援挡在门外的守卫；**记录的边界**：更一般目标关系的区间搜索未做、两支角合法时另一支未披露、e2e 未做（计划原文：仍需 Task 16 的真实产品验收） |
+| 13 | **完成**（2026-10-12） | **原用户那道题端到端通过**（`e2e/agent-exam-solid.spec.ts` 1 passed / 8.3 s：八条逐条进核验且 `passed` ⇒ 提交 ⇒ 自算八条 + 刚体性 + 七点齐备 ⇒ 一步撤销）；夹具只给四个坐标（E/F 由系统按定比分点构造、折叠按点名取点、折角按 `PC=4√3` 反求 ⇒ **三环全串**）；**负例齐**（缺 `C` 的面片 / 错的折角 + 缺 `C` / **手写的 `P`** ⇒ `fold_not_rigid` 挡下）；**二面角定高**（内核早就会、产品路径够不着 ⇒ 已通，45°/60° 各自量得出来）；**棱柱点名**（`vertexNames` + 按动作判 ⇒ `AB=2` 进核验；没带点名的照旧 `核验=[]`）；**底面数两半**（正五棱锥代表形状造得出；五边形底面 + 角度条件如实拒绝"不换一个题面没说的形状"）；**组合实体跨阶段点名**（第二阶段量得到第一阶段建的点）；**边界已钉**：垂足不在中心＝常态（有用例）、面上点＝无产品入口（如实拒绝）、展开＝无动作、**斜棱柱明说倾角＝缺口（修法三层，设计决定，未做）** |
 | 14 | 待做 | 尚无此任务的 RED→GREEN 与适用产品/兼容验收 |
 | 15 | 待做 | 尚无此任务的 RED→GREEN 与适用产品/兼容验收 |
 | 16 | 待做 | 尚无此任务的 RED→GREEN 与适用产品/兼容验收 |

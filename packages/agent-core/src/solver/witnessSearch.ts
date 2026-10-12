@@ -251,6 +251,31 @@ function kernelRelations(givens: readonly GeometryObligation[]): WitnessRelation
       relations.push({ kind: "planarAngle", targets: [targets[0], targets[1], targets[2]], value: obligation.expected, unit: "degree" })
     }
     /**
+     * **二面角**（Task 13，2026-10-12）：`targets` 是**四个点名** `[一侧, 折痕1, 折痕2, 另一侧]`，
+     * 两个半平面即 `(t0,t1,t2)` 与 `(t3,t1,t2)`（与 `diagramVerification` 量它的口径一致）。
+     *
+     * **原先这一档根本没有映射** —— 于是内核里早就写好的"**由二面角求顶点高**"
+     *（`solveDihedralHeight` / `deriveApexHeight` 的 `dihedral` 支，连它的单测都在）
+     * 从**产品路径上根本够不着**：题面给了二面角，搜索层却当它不存在，高只能自由取。
+     * 这是计划 Task 13 RED 点名的"二面角"那一格。
+     */
+    if (obligation.kind === "dihedral" && targets.length === 4 && typeof obligation.expected === "number") {
+      relations.push({
+        kind: "dihedral",
+        segments: [[targets[0], targets[1], targets[2]], [targets[3], targets[1], targets[2]]],
+        value: obligation.expected,
+        unit: "degree"
+      })
+    }
+    /**
+     * **面积**（Task 11，2026-10-12）：三个点名 + 一个面积，原样交给内核。
+     * 内核用它把"角已知、另一条臂的长度自由"那个点**定下来**
+     *（`面积 = ½·底·臂·sin(夹角)` ⇒ 臂长唯一）。
+     */
+    if (obligation.kind === "area" && targets.length === 3 && typeof obligation.expected === "number") {
+      relations.push({ kind: "area", targets: [targets[0], targets[1], targets[2]], value: obligation.expected })
+    }
+    /**
      * "线段 ⊥ 平面"**不翻译**：内核构造器的 `WitnessRelation` 只有两两写法，
      * 硬拆成"线段 ⊥ 平面上的某条边"会把一个更强的命题降级成一条更弱的、可能不成立的命题。
      * 它由判定侧逐字核验（`verifyDiagramObligations` 的线面垂直残差），构造侧只需要
@@ -895,11 +920,35 @@ function evidenceFor(
  * 而只要它给了（`parseObligationWithLegacy(prompt).ir` 一定给），就会被原样送到核验器。
  */
 function normaliseObligationIR(ir: ObligationIR | undefined | null): ObligationIR {
-  const obligations = Array.isArray(ir?.obligations) ? ir.obligations : []
-  const unverified = Array.isArray(ir?.unverified) ? ir.unverified : []
+  const rawObligations = Array.isArray(ir?.obligations) ? ir.obligations : []
+  const rawUnverified = Array.isArray(ir?.unverified) ? ir.unverified : []
+  /**
+   * **Task 5（2026-10-12）：逐条查形状，坏条目丢掉 —— 绝不读它的字段。**
+   *
+   * 上面那段注释写着"坏形状退化成'没有题设 / 没有残留'，**绝不抛异常跨边界**"，
+   * 而原先的实现只查了**容器**是不是数组、没查**元素**：
+   * `unverified: [null]` 直接 `TypeError: Cannot read properties of null (reading 'sourceText')`，
+   * `obligations: [null]` 也活过 `[...obligations]`（那是引用复制、不是拷贝），
+   * 然后在下面 `obligation.role` 上炸。
+   *
+   * 入参来自**不可信的一侧**（模型草稿 → Worker → 库），所以这是边界问题：
+   * 异常跨过边界之后，上层只看到一句 `TypeError` —— 没有路径、没有可执行的下一步，
+   * 而按本包口径它本该得到"没有题设"这个**可用**的结局。
+   *
+   * **丢弃 ≠ 洗白**：合法的题设一条都不动（下面只是把非对象/缺字段的条目滤掉），
+   * 而"丢掉了坏条目"这件事由核验器的既有诊断承担（题设没进核验器，就不可能被判通过）。
+   */
+  const obligations = rawObligations.filter((entry): entry is (typeof rawObligations)[number] => typeof entry === "object" && entry !== null)
+  const unverified = rawUnverified
+    .filter((entry): entry is { sourceText: string; reason: string } => {
+      if (typeof entry !== "object" || entry === null) return false
+      const candidate = entry as { sourceText?: unknown; reason?: unknown }
+      return typeof candidate.sourceText === "string" && typeof candidate.reason === "string"
+    })
+    .map((entry) => ({ sourceText: entry.sourceText, reason: entry.reason }))
   return {
     obligations: [...obligations],
-    unverified: unverified.map((entry) => ({ sourceText: entry.sourceText, reason: entry.reason }))
+    unverified
   }
 }
 

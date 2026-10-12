@@ -1,5 +1,5 @@
 import { agentNextPhaseFlags } from "./featureFlags"
-import { CAPABILITY_REGISTRY_REVISION, PLAN_SCHEMA_VERSION, SKILL_MANIFESTS, TOOL_REGISTRY_REVISION, factBelongsToDocument, type CommitOutcome, type ConversationContextSource, type ConversationDraftView, type DocumentHandle, type PlanEnvelope, type PlannerPort, type RunContext, type WorkspaceId } from "@draw/agent-core"
+import { CAPABILITY_REGISTRY_REVISION, PLAN_SCHEMA_VERSION, SKILL_MANIFESTS, TOOL_REGISTRY_REVISION, describeSchemaFailureForUser, factBelongsToDocument, type CommitOutcome, type ConversationContextSource, type ConversationDraftView, type DocumentHandle, type PlanEnvelope, type PlannerPort, type RunContext, type WorkspaceId } from "@draw/agent-core"
 import type { GeometryDocument } from "@draw/dsl"
 import { contentFingerprint } from "@draw/scene-graph"
 
@@ -850,11 +850,33 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
          * 所以这一支要说清"缺的是哪个点、以及系统为什么不补这一个"。
          */
         const incomplete = detail.includes("verification is incomplete:") ? (detail.split("verification is incomplete:").at(-1)?.trim() ?? "") : null
+        /**
+         * **上一轮"计划没被接受"的那些原话**（Task 2，2026-10-12）。
+         *
+         * 为什么要把它们取出来：模型走偏往往**紧跟在一条正确建议之后** —— 现场第二轮它造了一个
+         * 不存在的动作名，而上一轮引擎刚说过"开放图形要用 `solid.create_face`"。
+         * 只报最后那一次失败，用户看不到因果，会以为模型在乱撞。
+         *
+         * 取法：账本里 `plan attempt N was rejected: …` 那一族事件，**去掉最后一条**
+         *（最后一条正是这次失败自己的那一句，由 `detail` 带着）。
+         */
+        const earlierRejections = active.coordinator.ledger()
+          .filter((event) => event.detail.includes("was rejected: "))
+          .map((event) => event.detail.slice(event.detail.indexOf("was rejected: ") + "was rejected: ".length))
+          .slice(0, -1)
         useAgentStore.getState().failPendingReply({
           code: "run_failed",
           message: incomplete === null
             ? detail.includes("never matched the schema")
-              ? `模型的回答不符合计划合同的形状，所以这一轮停下了。计划必须是一个 JSON 对象（schemaVersion / kind / goal，外加 actions 或 questions 或 answer）。引擎的原话：${detail}`
+              /**
+               * **"动作名不认识"与"顶层形状不合法"必须说成两句不同的话**（Task 2）。
+               *
+               * 原先这一支对两种失败都只说"计划必须是一个 JSON 对象（schemaVersion / kind / goal …）"——
+               * 而当死因是三个不存在的动作名时，那句话把用户与下一次修复一起引到格式上去。
+               * 分类与措辞现在住在 `@draw/agent-core` 的 `describeSchemaFailureForUser` 里
+               *（与账本那句话的唯一生产方 `schemaFailureDetail` 同一个模块，成对维护）。
+               */
+              ? describeSchemaFailureForUser(detail, earlierRejections)
               : detail
             : incomplete.includes("点名缺失：")
               ? `题设还没核验，本次不会提交。${incomplete} 题面点到、图上却没有的点，系统只补建位置被题设唯一确定了的那几类（例如某条棱的中点、定比的分点）；这一点没能补上。`

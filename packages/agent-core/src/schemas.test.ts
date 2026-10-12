@@ -62,6 +62,54 @@ describe("plan envelope parsing", () => {
   })
 
   /**
+   * **Task 3：协议壳不许被偷偷拆开**（22:36 那条轨迹的第 6 次，脱敏）。
+   *
+   * 现场模型把整份计划**包进了工具通道的壳**里：`{"arguments": "<计划字符串>"}` ——
+   * 于是 `envelope.kind` 读出来是 `undefined`，界面报 `unknown_kind@envelope.kind`。
+   * 这一条钉住"壳就是壳"：解析器**不会**把 `arguments` 里的字符串解开当成计划。
+   * 解开就是"替模型猜它想说什么"，与 `outputParser` 那句"绝不抠取、绝不修补"同一条纪律 ——
+   * 而抠出来的东西一旦进入执行链，用户确认的就不是模型原样说的话。
+   */
+  it("refuses the tool-channel shell instead of unwrapping the plan inside it", () => {
+    const shell = { arguments: JSON.stringify(validPlan()) }
+
+    // ① 顶层没有我们认得的 kind；② 那个壳字段本身也不在白名单里（两条都要说）。
+    expectRejected(parsePlanEnvelope(shell), "unknown_kind")
+    expectRejected(parsePlanEnvelope(shell), "unknown_field")
+    // ③ 姿态是"拒绝"，不是"猜出来"：结果里不许出现一个成功的计划。
+    expect(parsePlanEnvelope(shell).ok).toBe(false)
+    expect(parsePlanEnvelope({ arguments: validPlan() }).ok).toBe(false)
+  })
+
+  /**
+   * **Task 5（2026-10-12）：坏条目走公共入口必须是 fail-closed 的、带路径的诊断。**
+   *
+   * 要求三件事同时成立：**不抛**、**路径指到那一条**、且**不许**把它说成"题设矛盾"
+   *（那是几何层的诊断，而这里连形状都还没读出来 —— 混称会让下游去查题面而不是查输入）。
+   */
+  it("rejects a null relation entry with a path instead of throwing or calling it a contradiction", () => {
+    const result = parsePlanEnvelope({ ...(validPlan() as object), relations: [null] })
+    // `ParseResult` 是判别联合：先收到失败那一支，`errors` 才在类型上存在。
+    if (result.ok) throw new Error("expected a rejection")
+
+    expect(result.errors.some((error) => error.path === "envelope.relations[0]")).toBe(true)
+    // 同一句话里既有路径也有一句能照着改的原因。
+    expect(result.errors.some((error) => error.path === "envelope.relations[0]" && error.detail.length > 0)).toBe(true)
+    // **不是**几何层的"题设矛盾"。
+    expect(result.errors.some((error) => error.code === "contradictory")).toBe(false)
+  })
+
+  it("survives junk entries in the relation list without throwing", () => {
+    // 数字 / 字符串 / 数组都不是 relation 对象：一条一条如实拒绝，绝不抛。
+    const result = parsePlanEnvelope({ ...(validPlan() as object), relations: [42, "AB=2", []] })
+    if (result.ok) throw new Error("expected a rejection")
+
+    for (const index of [0, 1, 2]) {
+      expect(result.errors.some((error) => error.path === `envelope.relations[${index}]`)).toBe(true)
+    }
+  })
+
+  /**
    * **样板字段漏了就当默认值**（2026-10-04，用户同意放宽）。
    *
    * 实测模型连续四次在不同的顶层样板字段上翻车（`kind` / `actions` / `factIds`），

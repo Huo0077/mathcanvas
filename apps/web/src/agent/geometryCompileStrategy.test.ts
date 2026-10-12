@@ -32,6 +32,46 @@ import { WORKER_SCHEMA_VERSION } from "./workerContracts"
 const document3d = (): GeometryDocument => createEmptyDocument("geometry3d")
 
 /**
+ * **Task 8（2026-10-12）：Worker 回了一份"不属于这一版"的结果时，理由不许被吞掉。**
+ *
+ * `geometryWorkerClient` 会逐项核对 `requestId + runId + draftId + draftVersion`，
+ * 不属于当前这一版的回包一律拒（`stale_artifact`）—— **那条闸已经在**，且有用例钉住
+ *（`geometryWorkerClient.test.ts`：另一版 / 另一个 run / 另一份草稿各一条）。
+ *
+ * 但拒完之后：`compileInWorker` 的失败分支只映射了
+ * `planDiagnostics` / `questions` / `assumptions` / `repair` —— **`code` 与 `detail` 一个都没搬**。
+ * 于是"回包属于另一版"这件事到草稿层就变成了**诊断为空**，`stage` 只能说
+ * "the plan produced no compilable action"。那是一句**误诊**：计划本身没问题，
+ * 是回包过期了 —— 而这两件事的处置完全不同（重试 / 改计划）。
+ */
+describe("Task 8 — a stale worker artifact keeps its reason", () => {
+  /** 只回一份过期结果的假 Worker 客户端（这一条测的是**映射**，不是线程）。 */
+  const staleClient = {
+    compile: async () => ({ ok: false as const, code: "stale_artifact" as const, detail: "result belongs to a different draftVersion" }),
+    dispose: () => {},
+    pendingCount: () => 0
+  }
+
+  it("carries the stale reason into the strategy's diagnostics instead of an empty compile failure", async () => {
+    const document = document3d()
+    const envelope: StagedPlanEnvelope = {
+      schemaVersion: PLAN_SCHEMA_VERSION,
+      kind: "plan",
+      goal: "画一个点",
+      factIds: [],
+      actions: [{ actionId: "planar.create_point", actionKey: "p", factIds: [], inputs: { alias: "p", points: [{ x: 0, y: 0 }] } }] as never
+    }
+
+    const result = await compileInWorker(staleClient as never, { plan: envelope, document }, { runId: "run-1", draftId: "draft-1", draftVersion: 1 })
+
+    expect(result.ok).toBe(false)
+    // `stage` 靠 `diagnostics` 里**有没有 error** 决定说不说得清 —— 空数组等于把理由丢了。
+    const text = (result.diagnostics ?? []).map((item) => `${item.code} ${item.detail}`).join(" ")
+    expect(text, `诊断里必须说清是回包过期，而不是"编不出动作"：${text}`).toContain("stale_artifact")
+  })
+})
+
+/**
  * 把两条路的产物归一成可比的东西。
  *
  * 收的是 `StagedCompileResult` 那一对字段（`operations` + `draftDocument`）——

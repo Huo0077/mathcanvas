@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest"
 
+import { checkExamSet, EXAM_CASES, HELD_OUT_CASES } from "@draw/agent-core"
+
 import { formatAttemptFailures, formatScorecard, evalModeBanner, REAL_PROVIDER_GAPS } from "./agentEvalReport"
 import { runOfflineAgentEval } from "./offlineAgentEval"
 
@@ -20,6 +22,23 @@ import { runOfflineAgentEval } from "./offlineAgentEval"
  * 前者红了说明评测器坏了，后者红了说明模型能力或几何能力退化了。
  */
 describe("agent evaluation scorecard report", () => {
+  /**
+   * **Task 9（2026-10-12）：真题离线工件随 `npm run eval:agent` 一起复跑。**
+   *
+   * 为什么放在这条入口里：`scripts/agent-eval.mjs` 跑的就是这个文件，而计划 Task 9
+   * 要求把调研许可的真题需求"接到 `benchmarkPlanningEval.ts` 和 `scripts/agent-eval.mjs`"。
+   * 这条**不发任何 provider 请求**（纯数据 + 纯判据），符合"本任务不得发送真实 provider 请求"。
+   *
+   * 打印出来是给读报告的人看的：**四家族各几条、有没有留出集**。
+   */
+  it("re-runs the exam-derived offline artifact without touching a provider", () => {
+    const problems = checkExamSet(EXAM_CASES, HELD_OUT_CASES)
+    expect(problems, JSON.stringify(problems)).toEqual([])
+
+    const families = [...new Set(EXAM_CASES.map((entry) => entry.family))].sort()
+    console.log(`\n=== 真题离线工件（Task 9） ===\n开发集 ${EXAM_CASES.length} 条（${families.join(" / ")}），留出集 ${HELD_OUT_CASES.length} 条；oracle 一条都没有（调研 §3.5：尚无独立复核答案）\n`)
+  })
+
   it("renders every metric without inventing a number for anything unmeasured", async () => {
     const result = await runOfflineAgentEval(3)
     const report = formatScorecard(result)

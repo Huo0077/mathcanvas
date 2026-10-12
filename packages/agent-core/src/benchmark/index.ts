@@ -36,6 +36,34 @@ export {
   type BenchmarkCase
 } from "./dataset"
 export { assertNoSecrets, findSecrets, type SecretFinding } from "./redaction"
+/**
+ * **真题离线评测工件**（Task 9，2026-10-12）。
+ *
+ * 与 `./dataset`（21 条**合成**题集）分开导出，因为它是另一种东西：条目带**来源锚点**
+ * （卷别 / 题号 / 证据等级 / 输入许可），而"够不够格当金标"是它自己的判据
+ *（转载方的答案不能充 oracle、留出集不许是开发题的变式）。详见该文件头。
+ */
+export {
+  assertExamSet,
+  checkExamSet,
+  EXAM_CASES,
+  EXAM_FAMILIES,
+  EXAM_PROMPT_KINDS,
+  EXAM_SOURCE_LEVELS,
+  HELD_OUT_CASES,
+  judgeAgainstOracle,
+  verifiedGoldCaseIds,
+  type ExamCase,
+  type ExamCaseSourceSpan,
+  type ExamFamily,
+  type ExamPromptKind,
+  type ExamProvenance,
+  type ExamSetProblem,
+  type ExamSetProblemCode,
+  type ExamSourceLevel,
+  type OracleCheck,
+  type OracleVerdict
+} from "./examSet"
 export {
   BENCHMARK_LAYERS,
   BENCHMARK_MODES,

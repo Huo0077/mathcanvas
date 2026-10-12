@@ -417,6 +417,35 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
       }
       const label = boundLabel(value.label, `${path}.label`, errors)
       if (label !== undefined) out.label = label
+      /**
+       * **点名**（Task 13，2026-10-12）：题面写 `正三棱柱ABC-A′B′C′` 时，棱柱的顶点就该叫这些名字。
+       *
+       * 没有名字时它们叫 `P1…P6`（模板自己的顺序编号），而核验器**按点名查表** ——
+       * 于是题面里 `AB=2` 这类条件一条都拿不到坐标（实测 `ok=true；核验=[]`，静默通过）。
+       * 这里只挡形状（是不是一串非空、互不重名的字符串）；**"个数对不对"留给动作编译器**
+       *（底面与顶点数在那儿才都齐，此处 `basePolygon` 还可能缺省、待审计回填）。
+       */
+      if (value.vertexNames !== undefined) {
+        if (!Array.isArray(value.vertexNames)) {
+          errors.push(fail("invalid_type", `${path}.vertexNames`, "expected an array of vertex names"))
+          return null
+        }
+        const names: string[] = []
+        for (const [index, name] of value.vertexNames.entries()) {
+          const read = boundedString(name, `${path}.vertexNames[${index}]`, errors)
+          if (read === null) return null
+          if (names.includes(read)) {
+            errors.push(fail("duplicate_name", `${path}.vertexNames[${index}]`, `vertex name ${quotedName(read)} is used twice`))
+            return null
+          }
+          names.push(read)
+        }
+        if (names.length < 6 || names.length % 2 !== 0) {
+          errors.push(fail("invalid_type", `${path}.vertexNames`, "a prism has a base ring and a matching top ring: expected an even number of at least six names"))
+          return null
+        }
+        out.vertexNames = names
+      }
       return out
     }
 
@@ -551,23 +580,39 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
      */
     case "solid.fold": {
       const out: Record<string, unknown> = withAlias({})
-      if (!Array.isArray(value.vertices)) {
+      /**
+       * **`vertices` 可以省**（Task 13，2026-10-12）：省了就按 `vertexNames` **从文档里找点**。
+       *
+       * 那些点通常是同一份计划里**前面几笔**刚建出来的（例如按定比分点建在边上的 `E`、`F`）——
+       * 坐标本来就该由系统算（`dynamic.create_bound_point`），让模型再抄一遍只会抄错，
+       * 而"**模型手算折前坐标**"正是现场 7 次失败里查实的那一条。
+       * 这条与 Task 10（多面体上按定比分点补点）是**同一个判断**，不是为某一道题新造的机制。
+       */
+      const rawVertices = value.vertices
+      if (rawVertices !== undefined && !Array.isArray(rawVertices)) {
         errors.push(fail("invalid_type", `${path}.vertices`, "expected an array of spatial points"))
         return null
       }
-      if (value.vertices.length < 3) {
+      if (Array.isArray(rawVertices) && rawVertices.length < 3) {
         errors.push(fail("invalid_type", `${path}.vertices`, "a folded flap needs at least three vertices"))
         return null
       }
-      const vertices: { x: number; y: number; z: number }[] = []
-      for (const [index, point] of value.vertices.entries()) {
-        const read = readVector3(point, `${path}.vertices[${index}]`, errors)
-        if (read === null) return null
-        vertices.push(read)
+      if (Array.isArray(rawVertices)) {
+        const vertices: { x: number; y: number; z: number }[] = []
+        for (const [index, point] of rawVertices.entries()) {
+          const read = readVector3(point, `${path}.vertices[${index}]`, errors)
+          if (read === null) return null
+          vertices.push(read)
+        }
+        out.vertices = vertices
       }
-      out.vertices = vertices
-      if (!Array.isArray(value.vertexNames) || value.vertexNames.length !== vertices.length) {
-        errors.push(fail("invalid_type", `${path}.vertexNames`, `expected an array of ${vertices.length} names, one per vertex`))
+      if (!Array.isArray(value.vertexNames)) {
+        errors.push(fail("invalid_type", `${path}.vertexNames`, "expected the flap's vertex names"))
+        return null
+      }
+      const requiredNames = Array.isArray(rawVertices) ? rawVertices.length : 3
+      if (value.vertexNames.length < requiredNames) {
+        errors.push(fail("invalid_type", `${path}.vertexNames`, `expected an array of ${requiredNames} names, one per vertex`))
         return null
       }
       const names: string[] = []
