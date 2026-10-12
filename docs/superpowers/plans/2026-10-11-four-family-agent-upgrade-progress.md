@@ -1,6 +1,6 @@
 # MathCanvas 下一步：四家族 Agent 升级、旧能力兼容、缺陷修复与 Lean 收口
 
-> **最后更新：2026-10-12。状态：Task 1–14 已完成；Task 15–21 尚未完成，本文件对其余任务仍只有实施设计。** [四家族真题作图需求调研](../../research/2026-10-11-four-family-exam-diagram-survey.md)已在本轮完成，并独立记录卷别、题号、题型和可信边界；**本计划不再包含“以后去调研真题”任务**。现有代码能力与测试的现在时仅以 [当前状态](../../current-status.md) 为准；旧 [V0–V3 追踪](../../agent-next-round-progress.md)的读数保留为历史快照。
+> **最后更新：2026-10-12。状态：Task 1–15 已完成；Task 16–21 尚未完成，本文件对其余任务仍只有实施设计。** [四家族真题作图需求调研](../../research/2026-10-11-four-family-exam-diagram-survey.md)已在本轮完成，并独立记录卷别、题号、题型和可信边界；**本计划不再包含“以后去调研真题”任务**。现有代码能力与测试的现在时仅以 [当前状态](../../current-status.md) 为准；旧 [V0–V3 追踪](../../agent-next-round-progress.md)的读数保留为历史快照。
 
 **Goal:** 在三角形、圆锥曲线、函数/导数、立体几何四家族内提高真实作图能力，**不回退已完成的手工绘图/Agent/保存导出/实验功能**；修复已确认缺陷，并把现有受限 Lean 证明路径按原题前提、产物有效性和桌面发行证据逐项收口。不能画或不能证明时如实解释。
 
@@ -55,7 +55,7 @@
 
 ## 4. 唯一的连续执行顺序（Task 1 → 21）
 
-> **Task 1–Task 14 已于 2026-10-12 完成；下一项是 Task 15（函数与导数真题纵向交付）。** Task 13 的**原用户那道题已经端到端通过**（真实浏览器 / 草稿 / 确认 / 一步撤销），链路是：四个坐标 ⇒ 系统按定比分点建 `E`/`F` ⇒ 折叠**按点名取点** ⇒ 折角按 `PC=4√3` **反求**；负例（缺 `C` / 错的折角 + 缺 `C` / **手写的 `P`**）都挡得住。**记录的边界**：① **斜棱柱"明说倾角"是缺口**（解析器没有"所成角"的读取器；修它要同时定"底面是哪张平面"与"从最终坐标量线面角"的核验，是**设计决定**，未做）；② **面上点**与**展开**今天**没有产品入口**（宿主类型只收棱/线/曲线；没有 `solid.unfold` 这类动作）—— 按计划"不为没有产品入口的…单独造隐形约束"，记成边界而不是硬造；③ 垂足不在中心＝**常态**（有用例钉住）。同一时间只推进一个任务；Task n 的 RED、最小 GREEN、定向/适用旧路径复跑及验收记录未齐，不启动 Task n+1。这里的数字是**实际执行顺序**，不再用波次、并行支线或“先做 12a 后回到 8”解释编号。各任务的读数与归因写在各任务卡片里。
+> **Task 1–Task 15 已于 2026-10-12 完成；下一项是 Task 16（真实画布和过期证据）。** Task 15 交付的是**函数与导数的证据分级**：新模块 `function-evidence.ts` 把"外点双切线（2021 新高考Ⅰ卷 7 题）/ 公切线（2024 新课标Ⅰ卷 13 题）/ 多交点（2022 新高考Ⅰ卷 22 题、2024 新课标Ⅰ卷 7 题）"做成有读数的内核能力，每条读数带 `grade`（代数判别式 / 数值回代 / 只有采样折线）与 `complete`（**个数能不能当个数用**）两个字段；四类反例 —— **断点被连线**（题面 `(x²−1)/(x−1)`、图上画成连续的 `x+1`）、**错切点**（`|x|` 在尖点处被旧的中心差分判成"斜率 0 通过"）、**漏近重根**（分辨不出时报 `complete: false`，**不许报"零个根"**）、**参数实例 ≠ 全称**（`upheld: false` 且报告写明范围）—— 都先真红后转绿；判据侧 `functionGraph` 新增断点集合一致、`tangentAt` 新增可导性与"整条直线是否相切"，报告新增 `proofScope`/`universalClaims`/`proofScopeNote`（`universalClaims` **只有** `not-proven`），产品面板把证据等级与范围显示出来；新建 `e2e/agent-exam-function.spec.ts`（断点题走完整产品路径 + 尖点题 fail-closed），黄金样本按"差异恰好是那三个字段"有据修订一次。**边界**：代数档只覆盖次数 ≤ 2 的多项式、`complete` 是数值完备性而非全区间证明、函数∩直线的交点数尚无义务种类、外点/公切线没有产品动作。Task 13 的**原用户那道题已经端到端通过**（真实浏览器 / 草稿 / 确认 / 一步撤销），链路是：四个坐标 ⇒ 系统按定比分点建 `E`/`F` ⇒ 折叠**按点名取点** ⇒ 折角按 `PC=4√3` **反求**；负例（缺 `C` / 错的折角 + 缺 `C` / **手写的 `P`**）都挡得住。**记录的边界**：① **斜棱柱"明说倾角"是缺口**（解析器没有"所成角"的读取器；修它要同时定"底面是哪张平面"与"从最终坐标量线面角"的核验，是**设计决定**，未做）；② **面上点**与**展开**今天**没有产品入口**（宿主类型只收棱/线/曲线；没有 `solid.unfold` 这类动作）—— 按计划"不为没有产品入口的…单独造隐形约束"，记成边界而不是硬造；③ 垂足不在中心＝**常态**（有用例钉住）。同一时间只推进一个任务；Task n 的 RED、最小 GREEN、定向/适用旧路径复跑及验收记录未齐，不启动 Task n+1。这里的数字是**实际执行顺序**，不再用波次、并行支线或“先做 12a 后回到 8”解释编号。各任务的读数与归因写在各任务卡片里。
 
 | 顺序 | 任务 | 退出条件（必须有运行证据） |
 | --- | --- | --- |
@@ -73,7 +73,7 @@
 | 12 | Task 12：由目标距离求折角 | **完成**：RED 建成（`foldAngle.test.ts` 6 条先全红 → 全绿，**不喂 P、不喂角**，求得唯一 `θ=90°`，并用罗德里格斯公式走**第二条独立路径**回代）；解析求解 `foldAnglesForTargetDistance` 四档结局分开（`solved`/`outside-range`/`unreachable` 报可达区间/`degenerate`）；**已接进 `compilePlan`**（`rescueWithSolvedFoldAngle`：错角 30° ⇒ 求出 90° 并通过核验、填对不抢、无目标距离不凭空反求），并修掉"草稿为 `null` 就退出"那个把救援挡在门外的守卫；**记录的边界**：更一般目标关系的上界区间搜索未做（计划写成条件式"才进行"）、两支角合法时另一支未披露、e2e 未做（计划原文：仍需 Task 16 的真实产品验收） |
 | 13 | Task 13：立体几何真题纵向 | 棱柱/棱锥/组合/翻折/二面角真 3D 出口 |
 | 14 | **Task 14：圆锥曲线真题纵向 ✅（2026-10-12 完成）** | 动弦/切线/竖直线/曲线组合与错轴负例通过 |
-| 15 | Task 15：函数与导数真题纵向 | 定义域/多根/外点切线与证明边界通过 |
+| 15 | **Task 15：函数与导数真题纵向 ✅（2026-10-12 完成）** | 外点双切线/公切线/多交点、断点与错切点反例、参数实例≠全称通过 |
 | 16 | Task 16：真实画布和 stale 证据 | 四族截图/标签/相机与草稿同版，修改/撤销后失效 |
 | 17 | Task 17：Lean 原题前提与受限引理分级 | 四受限目标保持；漏前提绝不称原题已证 |
 | 18 | Task 18：Lean 产物生命周期/UI | 迟到/错 claim/版本被拒；浏览器不可用不挡作图 |
@@ -250,9 +250,12 @@
 
 **文件**：`packages/geometry-kernel/src/calculus.ts`、`evaluate.ts`、`curve-intersections.ts` 及测试；`packages/agent-core/src/diagramVerification.ts`；`apps/web/src/agent/localPlanner.ts` 与现有函数图入口；扩 `e2e/agent-function-tangent.spec.ts`，新建 `e2e/agent-exam-function.spec.ts`。
 
-- [ ] **RED**：2021Ⅰ-7 外点双切线、2022Ⅰ-22 多交点、2024Ⅰ-7 三角图相交和第 13 题公切线；反例为断点被连线、错切点、漏近重根、把一个参数实例写成“所有参数成立”。
-- [ ] 为函数定义域/参数来源/分段与切点建立类型化关系；可由代数或经独立验算的数值根构造切线/交点时才称已核验，“数值图像”与“全区间根数/单调性已证明”分开状态。图像随参数重绘、切点标签与导数读数同源；未覆盖的抽象函数题安全解释，不能编出唯一图。
-- [ ] `npm.cmd exec vitest run -- packages/geometry-kernel/src/calculus.test.ts packages/geometry-kernel/src/curve-intersections.test.ts packages/agent-core/src/diagramVerification.test.ts --reporter=dot`；`npm.cmd run test:e2e -- e2e/agent-function-tangent.spec.ts e2e/agent-exam-function.spec.ts --workers=1`。同一题的数值画图成功不得升级为形式证明。
+- [x] **RED**：2021Ⅰ-7 外点双切线、2022Ⅰ-22 多交点、2024Ⅰ-7 三角图相交和第 13 题公切线；反例为断点被连线、错切点、漏近重根、把一个参数实例写成“所有参数成立”。
+      **2026-10-12 完成**：`packages/geometry-kernel/src/function-evidence.test.ts`（19 条，先真红：模块不存在）逐条钉住四个真题形状与四类反例；判据层的四条红例写在 `packages/agent-core/src/diagramVerification.test.ts` 的 `Task 15: function-family premises`（先真红读数：断点题 `expected 'unverified' to be 'passed'` / 反例 `expected 'unverified' to be 'failed'`；尖点 `expected 'passed' to be 'failed'`；范围字段 `expected undefined to be 'figure-instance'`）。
+- [x] 为函数定义域/参数来源/分段与切点建立类型化关系；可由代数或经独立验算的数值根构造切线/交点时才称已核验，“数值图像”与“全区间根数/单调性已证明”分开状态。图像随参数重绘、切点标签与导数读数同源；未覆盖的抽象函数题安全解释，不能编出唯一图。
+      **2026-10-12 完成**：`EvidenceGrade = algebraic | verified-numeric | plot-only` 与 `complete` 两个字段分开；`functionLineRoots` / `functionIntersections` 在多项式次数 ≤ 2 时走**判别式**（重数结构精确，近重根 2e-5 也分得开），其余走"采样定界 + 牛顿抛光 + 独立回代"，`complete` 由"两分辨率一致 + 无落进判零带却不变号的格子"合成；`functionGraphEvidence` 给出分段与断点；`tangentsFromPoint` / `commonTangents` / `verifyTangentLine` / `differentiabilityAt` 各自独立回代。**边界（如实记）**：`complete` 是数值完备性、不是全区间根数/单调性的证明；抽象函数题**没有**实现"不能编出唯一图"的处置（今天没有产品入口产出这类图像 ⇒ 记成边界而不是造一个隐形判据）。**图像随参数重绘**由既有 `parameter.*` + 派生节点承担（本任务未改），**切点标签与导数读数同源**指面板里那条 `verified-numeric` 读数由核验器自己求导、不使用图元自报的 `slope`。
+- [x] `npm.cmd exec vitest run -- packages/geometry-kernel/src/calculus.test.ts packages/geometry-kernel/src/curve-intersections.test.ts packages/agent-core/src/diagramVerification.test.ts --reporter=dot`；`npm.cmd run test:e2e -- e2e/agent-function-tangent.spec.ts e2e/agent-exam-function.spec.ts --workers=1`。同一题的数值画图成功不得升级为形式证明。
+      **2026-10-12 完成**：定向 `calculus.test.ts`（9）+ `curve-intersections.test.ts` + `diagramVerification.test.ts`（46）+ 新 `function-evidence.test.ts`（19）全绿；两个 e2e **3 passed**（26.9 s）、**全量 e2e 229 通过**（2.6 m，0 抖动）；全量单测 **368 文件 / 4364 通过 + 1 todo / 0 失败**（125.34 s，exit 0）；`typecheck` exit 0；`lint` **0 error / 13 warning**（与基线同数：新模块里那条 unused 已清）；`docs-consistency` 4 文件 12 通过。**"数值画图不得升级成形式证明"是类型上的**：`universalClaims` 只有 `not-proven` 一个取值，`grade` 把"折线上的比较"单列一档。
 
 ### Task 16｜真实画布和过期证据
 
@@ -320,7 +323,7 @@
 | 12 | **完成**（2026-10-12） | RED 建成（`foldAngle.test.ts` 6 条先全红 → 全绿，**不喂 P、不喂角**，求得唯一 `θ=90°`，并用罗德里格斯公式走**第二条独立路径**回代）；解析求解 `foldAnglesForTargetDistance` 四档结局分开（`solved`/`outside-range`/`unreachable` 报可达区间/`degenerate`）；**已接进 `compilePlan`**（错角 30° ⇒ 求出 90° 并通过核验、填对不抢、无目标距离不凭空反求），并修掉"草稿为 `null` 就退出"那个把救援挡在门外的守卫；**记录的边界**：更一般目标关系的区间搜索未做、两支角合法时另一支未披露、e2e 未做（计划原文：仍需 Task 16 的真实产品验收） |
 | 13 | **完成**（2026-10-12） | **原用户那道题端到端通过**（`e2e/agent-exam-solid.spec.ts` 1 passed / 8.3 s：八条逐条进核验且 `passed` ⇒ 提交 ⇒ 自算八条 + 刚体性 + 七点齐备 ⇒ 一步撤销）；夹具只给四个坐标（E/F 由系统按定比分点构造、折叠按点名取点、折角按 `PC=4√3` 反求 ⇒ **三环全串**）；**负例齐**（缺 `C` 的面片 / 错的折角 + 缺 `C` / **手写的 `P`** ⇒ `fold_not_rigid` 挡下）；**二面角定高**（内核早就会、产品路径够不着 ⇒ 已通，45°/60° 各自量得出来）；**棱柱点名**（`vertexNames` + 按动作判 ⇒ `AB=2` 进核验；没带点名的照旧 `核验=[]`）；**底面数两半**（正五棱锥代表形状造得出；五边形底面 + 角度条件如实拒绝"不换一个题面没说的形状"）；**组合实体跨阶段点名**（第二阶段量得到第一阶段建的点）；**边界已钉**：垂足不在中心＝常态（有用例）、面上点＝无产品入口（如实拒绝）、展开＝无动作、**斜棱柱明说倾角＝缺口（修法三层，设计决定，未做）** |
 | 14 | **完成**（2026-10-12） | ① 先修掉一条**真缺陷**（双曲线 `axis` 在三处实现里与声明相差 90°）；② **代数**直线∩圆锥曲线（五档含**竖直线**）；③ **条件反求曲线参数**（两焦点+一点 / 焦点+准线 / 焦点+准线+离心率）；④ **`conicChord` 义务与判据** —— **"丢一交点现在真的会红"**；⑤ **`e2e/agent-exam-conic.spec.ts` 已建**（正例走完整产品路径并从落盘坐标自算两个交点 + 一步撤销；反例共用同一份计划、只改题面里的直线 ⇒ **fail-closed，不给确认面板**）。读数见任务卡；全量 **367 文件 / 4338 通过 + 1 todo / 0 失败**，全量 e2e **227 通过**（首跑一条斜棱柱用例抖动、单独跑 3/3 绿、复跑全量 227/0），`typecheck` exit 0、`lint` 0 error / 13 warning |
-| 15 | 待做 | 尚无此任务的 RED→GREEN 与适用产品/兼容验收 |
+| 15 | **完成**（2026-10-12） | 新模块 `packages/geometry-kernel/src/function-evidence.ts`（+ 19 条用例，**先真红**）：四真题形状都有读数 —— **2021 新高考Ⅰ卷 7 题**外点双切线（`(0, 0.5)` 向 `eˣ` 两条、`(0, 1)` 临界一条且报**退化**、`(0, 2)` 如实 `none`、`(0, −1)` 唯一一条）、**2022 新高考Ⅰ卷 22 题 / 2024 新课标Ⅰ卷 7 题**多交点（`sin x = 0.5` 在 `[−5,5]` 三条、`sin = cos` 三条，判据自己解 `π/6+2kπ`、`π/4+kπ` 回代）、**2024 新课标Ⅰ卷 13 题**公切线（`y=x²` 与 `y=−(x−2)²+1` 两条，斜率 **2±√2**，测试自己算两个切点与截距回代两条曲线）。**证据分两档字段**：`grade`（`algebraic` / `verified-numeric` / `plot-only`）+ `complete`（个数能不能当个数用）。**四类反例**：**断点被连线**（题面 `(x²−1)/(x−1)` 在 `x=1` 没定义、图上画成连续的 `x+1` ⇒ **红**，旧实现只会是"未核验"）、**错切点**（`|x|` 在 `x=0` 是尖点 ⇒ 旧判据用**中心差分**得到"斜率 0"从而**放行**，现在由**单侧差商**判"左右导数 −1 / +1" ⇒ **红**；另有"切点纵坐标不在曲线上"⇒ 红）、**漏近重根**（`(x−1)²−1e-10` 由判别式解出 1±1e-5；`cos x−1+1e-12` 这种分辨不出的情形如实 `complete: false` 而**不报"零个根"**）、**参数实例≠全称**（`judgeUniversalClaim` 把全称主张一律降级成 `at-parameters` + `plot-only` + `upheld: false`）。**判据侧**：`functionGraph` 新增**断点集合必须一致**（正例 `1/x` 从"未核验"变成 `passed` 并说清断在 x=0；反例红）、`tangentAt` 新增**可导性**与**整条直线是否相切**两问；每条函数族读数带 `evidence`；报告新增 `proofScope` / `universalClaims` / `proofScopeNote`（**`universalClaims` 只有 `not-proven` 一个取值**）并由 `proofScopeOf` **唯一**产出（`draftStore` 拼旧证据那条路用同一个函数）。**产品面**：面板显示证据等级与范围；两道夹具题（`1/x` 断点、`|x|` 尖点负例）。**e2e**：新建 `e2e/agent-exam-function.spec.ts`（2 passed：断点题走完整产品路径 + 测试自己在定义域上扫 129 点自算"恰好一处无定义"；尖点题 **fail-closed**）、扩 `e2e/agent-function-tangent.spec.ts`（两个证据等级 + 范围断言）。**黄金样本有据修订一次**：报告多出的三个字段进了 `planCompiler4707b64.golden.json`，重抓前用临时探针**逐字段对读**证明"差异恰好是那三个"（4 个有报告的用例各 3 条、其余 2 个零差异）并把这条写成断言，样本的修订记录改为 `revisions` 数组（2026-10-10 那条逐字保留）。**记录的边界**：① `algebraic` 只覆盖**多项式且次数 ≤ 2**（判别式给重数结构），次数 ≥ 3 与超越函数走 `verified-numeric`；② `complete` 是**数值完备性**（两个分辨率一致 + 无落进判零带却不变号的格子），**不是**"全区间根数已证明"（单调性/介值定理的证明没做）；③ 函数与直线的**交点数**尚未有义务种类与匹配器（`diagramObligations.ts` 不在本任务文件清单里）⇒ 真题里"多交点"那一型的产品入口仍是作图 + 内核读数，未进核验面板；④ 外点双切线/公切线**没有产品动作**（`function.create_tangent` 只表达"在某 x 处"），所以它们的产品面读数在本任务里是内核 + 单测，真画布验收归 Task 16；⑤ 反例在浏览器一侧的读数是 **fail-closed**（确认面板不出现），"面板上出现一条红"由单测钉住 |
 | 16 | 待做 | 尚无此任务的 RED→GREEN 与适用产品/兼容验收 |
 | 17 | 待做 | 尚无此任务的 RED→GREEN 与适用产品/兼容验收 |
 | 18 | 待做 | 尚无此任务的 RED→GREEN 与适用产品/兼容验收 |
