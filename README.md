@@ -63,7 +63,7 @@ npm run dev
 
 ## 下一步：按 Task 1→21 严格实施（Task 1–14 已完成，下一项 Task 15）
 
-[真题需求调研](docs/research/2026-10-11-four-family-exam-diagram-survey.md)和[GitHub 源码/测试调研](docs/research/2026-10-11-github-agent-implementation-survey.md)已完成。唯一[实施计划](docs/superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)按数字顺序执行：**Task 1–15 已于 2026-10-12 完成**（兼容基线、动作合同与预算账本、来源意图、安全宿主、Worker 同版、离线真题工件、分点依赖，三角/立体/圆锥三族的纵向交付和目标折角反求，以及**函数与导数那一族**：证据分级、外点切线与公切线、多交点、四类反例（断点被连线 / 错切点 / 漏近重根 / 参数实例≠全称）与报告的证明范围；**那道折面题已端到端通过**）；**下一项 Task 16：四族真实画布与 stale 证据**；Task 17–19 独立收口已有的受限 Lean；Task 20 在批准费用后才测真实模型；Task 21 分别决定作图与自动 Lean 是否放行。
+[真题需求调研](docs/research/2026-10-11-four-family-exam-diagram-survey.md)和[GitHub 源码/测试调研](docs/research/2026-10-11-github-agent-implementation-survey.md)已完成。唯一[实施计划](docs/superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)按数字顺序执行：**Task 1–15 已于 2026-10-12 完成**（兼容基线、动作合同与预算账本、来源意图、安全宿主、Worker 同版、离线真题工件、分点依赖，三角/立体/圆锥三族的纵向交付和目标折角反求，以及**函数与导数那一族**：证据分级、外点切线与公切线、多交点、四类反例（断点被连线 / 错切点 / 漏近重根 / 参数实例≠全称）与报告的证明范围；**那道折面题已端到端通过**）；**Task 16（四族真实画布与 stale 证据）进行中**（第一批已交：画布证据面、证据绑内容哈希与过期判据、四族 e2e 6 passed）；Task 17–19 独立收口已有的受限 Lean；Task 20 在批准费用后才测真实模型；Task 21 分别决定作图与自动 Lean 是否放行。
 
 **Task n 没有 RED、GREEN、受影响旧能力复跑及退出记录时，Task n+1 不开始；不设并行跳号。** Lean 默认关且已有实验入口，但原题完整前提和干净机发行仍未验收；证明不可用不能阻挡已核验的普通作图。Task 1–13 各轮只改产品/测试与文档，**没有增加模型预算、没有发起付费 provider 请求**；Lean 的读数只对当次运行有效。
 
