@@ -85,6 +85,28 @@ export {
   type PaidRunDecision,
   type PaidRunRequest
 } from "./frozenThresholds"
+/**
+ * **Task 20 的记账与执行骨架**（2026-10-12）：pass@1/pass@3 的定义、"同轮修复"单独计、
+ * 人评没标就是 `null`、阈值只对照不改写，以及**授权闸在执行入口上**（未授权时 `runCase`
+ * 一次都不会被调用）。不碰网络：真正的调用由注入的 `runCase` 承担。
+ */
+export {
+  examRequestPlan,
+  EXAM_REPAIRED_OUTCOME,
+  EXAM_SUCCESS_OUTCOMES,
+  runExamEvaluation,
+  summarizeExamEvaluation,
+  type ExamEvaluationContext,
+  type ExamEvaluationReport,
+  type ExamFamilyResult,
+  type ExamRequestPlan,
+  type ExamRunCaseResult,
+  type ExamRunOutcome,
+  type ExamRunRequest,
+  type ExamTrialObservation,
+  type ExamTrialOutcome,
+  type ExamVerdict
+} from "./examEvaluation"
 export {
   BENCHMARK_LAYERS,
   BENCHMARK_MODES,
