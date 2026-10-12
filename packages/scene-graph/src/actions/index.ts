@@ -809,7 +809,16 @@ export function compileSolidFold(
   apex: string,
   apexAs: string,
   angleDegrees: number,
-  label?: string
+  label?: string,
+  /**
+   * **不要给这些下标的顶点打标签**（2026-10-12，Task 16 的画布读数）。
+   *
+   * 折痕两端往往在原图上**已经有同名点**（用户那道题里 E/F 是按定比分点先建出来的），
+   * 而折片是从那些坐标再建一份副本 ⇒ 同一个字母在文档里出现两次、在画布上画两遍
+   *（画布证据因此报 `label_overlap`），更要紧的是"E 是哪一点"不再唯一
+   *（`resolveFlapVertices` 自己就是后写覆盖）。名字已经有人说了，副本就不要再挂一次。
+   */
+  suppressedNames: readonly number[] = []
 ): { primitives: PrimitiveSpec[]; pointIds: string[]; edgeIds: string[]; diagnostics: ActionDiagnostic[] } {
   const refuse = (code: string, message: string) => ({ primitives: [] as PrimitiveSpec[], pointIds: [] as string[], edgeIds: [] as string[], diagnostics: [diagnostic(faceId, code, message)] })
 
@@ -840,7 +849,7 @@ export function compileSolidFold(
 
   const moved = vertices.map((vertex, index) =>
     index === firstIndex || index === secondIndex ? { ...vertex } : rotateAboutAxis({ ...vertex }, origin, axis, radians))
-  const names = foldVertexNames(vertexNames, apex, apexAs)
+  const names = foldVertexNames(vertexNames, apex, apexAs).map((name, index) => (suppressedNames.includes(index) ? "" : name))
   return compileSolidFace(faceId, moved, label, names)
 }
 
@@ -884,7 +893,29 @@ function compileSolidFoldAction(action: Extract<DraftAction, { actionId: "solid.
     }
   }
   const id = context.idAllocator.allocate("face", inputs.alias)
-  const built = compileSolidFold(id, flapVertices, inputs.vertexNames, inputs.hinge, inputs.apex, inputs.apexAs, inputs.angle, inputs.label)
+  /**
+   * **折痕两端在原图上已经有同名点（坐标逐位相同）⇒ 折片副本不再挂标签**（Task 16）。
+   *
+   * 只对**折痕两端**做这件事：被带走的那个顶点换了名字（`apexAs`，例如 A ⇒ P），
+   * 它在图上确实是**新**的一点，标签必须留着。而折痕上的两点由刚体运动**不动**，
+   * 原图上那两个同名点就在同一个位置 —— 再挂一次只是把同一串字母画两遍。
+   *
+   * 反方向也守住：原图上没有同名点时（`vertices` 是计划直接给的坐标，或那些点还没建出来），
+   * 这一支**一个都不抑制**，字母照旧由折片来说（上面那些用例就是这种情形）。
+   */
+  const hingeIndexes = [inputs.hinge.from, inputs.hinge.to]
+    .map((name) => inputs.vertexNames.indexOf(name))
+    .filter((index) => index >= 0)
+  const suppressedNames = hingeIndexes.filter((index) => {
+    const name = inputs.vertexNames[index]
+    const vertex = flapVertices[index]
+    if (name === undefined || vertex === undefined) return false
+    return context.targetDocument.primitives.some((primitive) => primitive.type === "point3" && primitive.label === name
+      && Math.abs(primitive.position.x - vertex.x) < 1e-9
+      && Math.abs(primitive.position.y - vertex.y) < 1e-9
+      && Math.abs(primitive.position.z - vertex.z) < 1e-9)
+  })
+  const built = compileSolidFold(id, flapVertices, inputs.vertexNames, inputs.hinge, inputs.apex, inputs.apexAs, inputs.angle, inputs.label, suppressedNames)
   if (built.diagnostics.length > 0) return { operations: [], diagnostics: built.diagnostics.map((entry) => diagnostic(actionKey, entry.code, entry.message)), aliasToId: {} }
   return { operations: [{ op: "addPrimitives", primitives: built.primitives }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
 }

@@ -1,5 +1,3 @@
-import { createHash } from "node:crypto"
-
 import { expect, test, type Page } from "@playwright/test"
 
 /**
@@ -47,6 +45,10 @@ const SOLID_FOLD = [
  * 口径来自 `packages/agent-core/src/hashing.ts` 的注释与常量：键排序、丢掉
  * `viewport/zoom/selection/updatedAt/...` 这一类视图与时间字段、`undefined` 视同没有这个字段、
  * 数组保序、非有限数拒绝。
+ *
+ * 摘要这一步**交给浏览器**（`crypto.subtle`）：既不用在 e2e 里引 Node 类型，
+ * 又让"同一个规范串"分别过**两份不同的 SHA-256 实现**（内核那份是手写的，
+ * 页面这份是平台给的）—— 两边一致才说明画布报的确实是这一份文档。
  */
 const IGNORED_KEYS = new Set([
   "viewport", "zoom", "panX", "panY", "selection", "selectedIds", "hoveredId",
@@ -71,8 +73,12 @@ function canonicalize(value: unknown): string {
   throw new Error(`unsupported value of type ${typeof value}`)
 }
 
-function contentHash(document: unknown): string {
-  return createHash("sha256").update(canonicalize(document), "utf8").digest("hex")
+async function contentHash(page: Page, document: unknown): Promise<string> {
+  return page.evaluate(async (canonical) => {
+    const bytes = new TextEncoder().encode(canonical)
+    const digest = await crypto.subtle.digest("SHA-256", bytes)
+    return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("")
+  }, canonicalize(document))
 }
 
 async function openAgent(page: Page, workspace: "平面几何" | "立体几何"): Promise<void> {
@@ -159,7 +165,7 @@ test("the 2D canvas reports the version it is drawing, and the test re-derives t
 
   // ① 画布与草稿**同版本**：画布自己报的哈希 == 测试自己算出来的那一份。
   expect(evidence.hash, "画布没有报出内容哈希").toMatch(/^[0-9a-f]{64}$/)
-  expect(evidence.hash, "画布渲染的不是落盘的那一份文档").toBe(contentHash(document))
+  expect(evidence.hash, "画布渲染的不是落盘的那一份文档").toBe(await contentHash(page, document))
   // ② 每个数字都来自**渲染结果**：对象盒子与点名标签都画出来了。
   expect(Number(evidence.boxes)).toBeGreaterThan(0)
   expect(Number(evidence.labels)).toBeGreaterThan(0)
@@ -192,7 +198,7 @@ test("undoing the commit changes the canvas version, so the old figure evidence 
 test("changing the statement draws a different figure, and the previous reading is no longer about it", async ({ page }) => {
   await commit(page, FUNCTION_CURVE, "平面几何")
   const first = await canvasEvidence(page)
-  expect(first.hash).toBe(contentHash(await committedDocument(page, "conics")))
+  expect(first.hash).toBe(await contentHash(page, await committedDocument(page, "conics")))
   const firstExpressions = await functionExpressions(page)
 
   // **改题**：换成另一道题面（同一族、同一条产品路径）。这一版画的是另一条曲线。
@@ -208,7 +214,7 @@ test("changing the statement draws a different figure, and the previous reading 
   const second = await canvasEvidence(page)
   expect(second.hash, "改题之后画布必须换成另一版内容").not.toBe(first.hash)
   // 画布自己报的哈希 == 测试自己算的这一份（改题后的那一份）。
-  expect(second.hash).toBe(contentHash(await committedDocument(page, "conics")))
+  expect(second.hash).toBe(await contentHash(page, await committedDocument(page, "conics")))
   // 测试自己读落盘的表达式：这一版多了 1/x 那条曲线 —— 旧证据不再描述现在这张图。
   expect(firstExpressions).toEqual(["x^3-3*x"])
   const secondExpressions = await functionExpressions(page)
@@ -224,30 +230,32 @@ test("the 3D canvas reports its version and its point labels, and says which rea
   const evidence = await canvasEvidence(page)
   // ① 同版本：画布报的哈希 == 测试自己算的那份 3D 文档。
   expect(evidence.hash).toMatch(/^[0-9a-f]{64}$/)
-  expect(evidence.hash).toBe(contentHash(await committedDocument(page, "geometry3d")))
+  expect(evidence.hash).toBe(await contentHash(page, await committedDocument(page, "geometry3d")))
   // ② 3D 的图形在 WebGL 里，DOM 量不到 —— 画布**如实标注**，而不是把"量不到"说成"画布是空的"。
   expect(evidence.measurable).toBe("false")
   expect(evidence.errors).not.toContain("empty_canvas")
 
   /**
-   * ③ 标签是 DOM：题面那**七个点名**都在画面上。
+   * ③ 标签是 DOM：题面那**七个点名各一次**。
    *
-   * **2026-10-12 实测到一条真问题（本任务的新读数抓出来的）**：题面的七个点名**各画了两次中的两个**——
-   * 落盘的 `point3` 有 **9** 个：`face-1:v0…v3`（A/B/C/D）、`point3-1`/`point3-2`（E/F）、
-   * `face-2:v0…v2`（折片自己的 P/E/F）。折片是**另建**的一块面片，它自己的 E/F 与边上那两个点
-   * **位置重合**，于是同一串字母在同一个屏幕位置被画了两次。
-   *
-   * 这条读数正是"点名遮挡"那类反例：`data-canvas-diagnostics` 里因此出现 `label_overlap`
-   * （判据没有失灵，是图上有两个标签压在一起）。**修法与 RED 记在任务卡上，属本任务未完成的部分。**
+   * **2026-10-12 这一批修掉的缺陷**（读数抓出来的）：早先落盘文档有 **9** 个 `point3` ——
+   * 折片 `face-2:v1/v2` 是另建的面片、又给 `E`/`F` 挂了一次同名标签，且与边上那两个点
+   * 坐标逐位相同 ⇒ 同一串字母在画布上被画两遍（画布证据如实报 `label_overlap`），
+   * 文档里"E 是哪一点"也有歧义。修法：**折痕两端在原图上已有同名点时，折片副本不再挂标签**
+   *（新顶点 `P` 照挂），RED 在 `packages/scene-graph/src/actions/solidFoldAction.test.ts`。
    */
   const labels = await page.evaluate(() => [...document.querySelectorAll('[data-3d-scene="true"] [data-point-id]')].map((element) => (element.textContent ?? "").trim()).filter(Boolean))
-  expect([...new Set(labels)].sort(), `画布上的不同点名：${JSON.stringify(labels)}`).toEqual(["A", "B", "C", "D", "E", "F", "P"])
-  expect(labels, `画布上的标签（含重复）：${JSON.stringify(labels)}`).toHaveLength(9)
-  expect(labels.filter((label) => label === "E")).toHaveLength(2)
-  expect(labels.filter((label) => label === "F")).toHaveLength(2)
-  expect(evidence.labels).toBe("9")
-  expect(evidence.diagnostics).toContain("label_overlap")
-  // 但**这一档不是"看不见"**：图形都在画面上，只是有一处标签重复。
+  expect([...labels].sort(), `画布上的点标签：${JSON.stringify(labels)}`).toEqual(["A", "B", "C", "D", "E", "F", "P"])
+  expect(labels, "同一个点名不许画两遍").toHaveLength(7)
+  expect(evidence.labels).toBe("7")
+  // 文档侧也读一次：带名字的 point3 恰好七个（点名到坐标唯一）。
+  const namedCount = await page.evaluate(() => {
+    const raw = window.localStorage.getItem("mathcanvas:draft:geometry3d")
+    const parsed = JSON.parse(raw ?? "{}") as { document?: { primitives?: { type: string; label?: string }[] } }
+    return (parsed.document?.primitives ?? []).filter((primitive) => primitive.type === "point3" && typeof primitive.label === "string" && primitive.label.length > 0).length
+  })
+  expect(namedCount, "带名字的点恰好七个").toBe(7)
+  expect(evidence.diagnostics).not.toContain("label_overlap")
   expect(evidence.errors).toBe("")
 })
 
@@ -259,7 +267,7 @@ test("the triangle family draws on the canvas the same version that was committe
 
   await expect(page.locator('[data-3d-scene="true"]')).toBeVisible()
   const evidence = await canvasEvidence(page)
-  expect(evidence.hash).toBe(contentHash(await committedDocument(page, "geometry3d")))
+  expect(evidence.hash).toBe(await contentHash(page, await committedDocument(page, "geometry3d")))
   expect(evidence.measurable).toBe("false")
   expect(evidence.errors).toBe("")
   // 三个点名都在画布上（三角形那一族：A、B、C）。

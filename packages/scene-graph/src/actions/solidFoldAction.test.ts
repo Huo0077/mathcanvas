@@ -150,4 +150,47 @@ describe("solid.fold", () => {
     expect(result.operations).toEqual([])
     expect(result.diagnostics.map((entry) => entry.code)).toContain("workspace_mismatch")
   })
+
+  /**
+   * **折痕两端在原图上已经有同名点 ⇒ 折片上的副本不再带一次标签**（2026-10-12，Task 16 的画布读数抓到）。
+   *
+   * ## 现场症状
+   *
+   * 用户那道题的落盘文档里有 **9** 个 `point3`：四边形的 `face-1:v0…v3`（A/B/C/D）、
+   * 定比分点造出来的两个 `point3-1`/`point3-2`（E/F），以及折片自己的 `face-2:v0…v2`（P/E/F）。
+   * 折片的 E/F 由 `resolveFlapVertices` **按名字从文档里取坐标**再建一份副本 ⇒ 与边上那两点
+   * **坐标逐位相同、标签也相同**。后果有两层：
+   *
+   * ① **画布上同一串字母画两遍**（画布证据如实报 `label_overlap`：两个标签压在一起）；
+   * ② **点名到坐标不再唯一** —— `resolveFlapVertices` 自己就是"后写覆盖"（`byName.set`），
+   *    也就是说"E 是哪一点"这件事在文档里已经有歧义了。
+   *
+   * ## 判据
+   *
+   * 折片**仍然要**有三个顶点（几何上它就是那块三角形），但**只有新顶点 `P` 带标签**：
+   * 折痕上的那两个名字已经由原图上的点在说。反方向也要守住：原图上**没有**同名点时
+   * （上面那些用例就是这种），折片照旧带标签 —— 不许把字母丢掉。
+   */
+  it("**折痕两端原图已有同名点 ⇒ 折片副本不再带标签**（点名到坐标必须唯一）", () => {
+    const document = createEmptyDocument("geometry3d")
+    const named = (id: string, position: { x: number; y: number; z: number }, label: string) => ({ id, type: "point3" as const, position, binding: { kind: "free" as const }, label })
+    document.primitives.push(
+      named("q:v0", A, "A"),
+      named("q:v1", { x: 0, y: 8, z: 0 }, "B"),
+      named("q:v2", C, "C"),
+      named("q:v3", { x: 7.5, y: (5 * Math.sqrt(3)) / 2, z: 0 }, "D"),
+      named("point3-1", E, "E"),
+      named("point3-2", F, "F")
+    )
+
+    const result = compileActions(document, [foldAction()], context())
+    expect(result.diagnostics).toEqual([])
+    const primitives = result.operations.flatMap((operation) => (operation.op === "addPrimitives" ? operation.primitives : [])) as unknown as Point3[]
+    const flap = primitives.filter((primitive) => primitive.type === "point3")
+    // 折片的三个顶点都建出来了（几何上一块三角形），但只有新顶点带名字。
+    expect(flap).toHaveLength(3)
+    expect(flap.map((primitive) => primitive.label).filter((label): label is string => typeof label === "string")).toEqual(["P"])
+    // 折痕两端仍然在**原来那两个点**上，坐标逐位相同（副本不许把点搬走）。
+    expect(flap.some((primitive) => primitive.position.x === E.x && primitive.position.y === E.y)).toBe(true)
+  })
 })

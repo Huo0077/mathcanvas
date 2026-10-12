@@ -733,11 +733,18 @@ describe("平面四边形：题面驱动 ⇒ B、C、D 出现在图上（乙案 
     // 未核验 ≠ 失败：这一轮照样产出草稿（那条纪律写在 `diagramVerification` 的注释里）。
     expect(response.kind).toBe("geometry.compile.result")
     if (response.kind !== "geometry.compile.result") return
-    const labels = response.document.primitives
+    const points = response.document.primitives
       .filter((primitive): primitive is Extract<typeof primitive, { type: "point3" }> => primitive.type === "point3")
-      .map((point) => String(point.label))
+    const labels = points.map((point) => point.label).filter((label): label is string => typeof label === "string" && label.length > 0)
     // 就是设计 §0.3 那个形态：`B`、`C`、`D` 一个都不在。
     expect([...new Set(labels)].sort()).toEqual(["A", "E", "F", "P"])
+    /**
+     * **带名字的点恰好四个**（2026-10-12，Task 16）：折片的折痕两端在原图上已经有同名点，
+     * 折片上的副本因此**不再各挂一遍名字**（早先那样会在画布上把同一串字母画两遍，
+     * 文档里"E 是哪一点"也有歧义）。副本本身照旧存在（几何上那块三角形需要三个顶点）。
+     */
+    expect(labels, "带名字的点不许重复两次").toHaveLength(4)
+    expect(points.length, "折片副本仍然在（只是没有名字）").toBeGreaterThan(labels.length)
     // 而报告必须说清这组坐标是谁给的（设计 §6 的"永不静默采信"）。
     expect(response.completionAssumptions?.some((entry) => entry.text.includes("未经条件构造")), "构造不出时必须标注来源").toBe(true)
   })
