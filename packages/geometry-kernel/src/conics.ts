@@ -151,15 +151,71 @@ export function sampleEllipse(ellipse: EllipsePrimitive, steps = 128): Coordinat
   })
 }
 
+/**
+ * **双曲线的采样：参数扫的是「实轴」那条坐标**（Task 14，2026-10-12 修正）。
+ *
+ * ## 修的是什么
+ *
+ * 旧实现把参数扫在 x 上、却把 `radiusY·√(1 + t²/radiusX²)` 加到 y 上，于是算出来的曲线满足
+ * `y²/radiusY² − x²/radiusX² = 1` —— **实轴在 y**。而 `axis` 的语义（题面侧唯一声明，
+ * `diagramObligations.ts:150`）是**实轴**：`x²/… − y²/… = 1` 解析成 `axis: "x"`，注释原文
+ * 「实轴沿 x」。核验文案（`diagramVerification.ts:361`）与焦点/顶点标记
+ * （`GraphicsView.tsx:79`、`annotations.ts:18`）也都按实轴用。所以旧代码画出来的曲线与它
+ * 自己的实轴、焦点**相差 90°**（`conicCoefficients` 的隐式形式同病，见那里）。
+ *
+ * ## 现在的口径
+ *
+ * - `axis: "x"` ⇒ `x'²/radiusX² − y'²/radiusY² = 1`（半实轴 `radiusX`，顶点 `(±radiusX, 0)`）；
+ * - `axis: "y"` ⇒ `y'²/radiusY² − x'²/radiusX² = 1`（半实轴 `radiusY`，顶点 `(0, ±radiusY)`）。
+ *
+ * `domain` 是**那条坐标**的取值范围（`axis: "x"` 时是 x 范围，`axis: "y"` 时是 y 范围），
+ * 只有 `|坐标| ≥ 半实轴` 的部分才存在，所以先夹到顶点。
+ *
+ * 返回**一支**：从下半支的外端扫到顶点、再从顶点扫到上半支的外端 —— 一个连通的 V，
+ * 顶点只出现一次。**不能**把"参数落在顶点之间"的点也吐出来：那一段曲线根本不存在，
+ * 而折线会把两侧连起来画出一条假的横线段。另一支由 `sampleHyperbolaBranches` 关于中心镜像。
+ */
 export function sampleHyperbola(hyperbola: HyperbolaPrimitive, domain: [number, number], steps = 64): Coordinate[] {
-  const points: Coordinate[] = []
-  for (let index = 0; index <= steps; index += 1) {
-    const parameter = domain[0] + (domain[1] - domain[0]) * index / steps
-    const value = hyperbola.radiusY * Math.sqrt(1 + (parameter * parameter) / (hyperbola.radiusX * hyperbola.radiusX))
-    const local = hyperbola.axis === "x" ? { x: hyperbola.center.x + parameter, y: hyperbola.center.y + value } : { x: hyperbola.center.x + value, y: hyperbola.center.y + parameter }
-    points.push(rotateAround(local, hyperbola.center, hyperbola.rotation ?? 0))
+  const { center } = hyperbola
+  const rotation = hyperbola.rotation ?? 0
+  const alongX = hyperbola.axis === "x"
+  const semiTransverse = alongX ? hyperbola.radiusX : hyperbola.radiusY
+  const semiConjugate = alongX ? hyperbola.radiusY : hyperbola.radiusX
+  if (!(semiTransverse > 0) || !(semiConjugate > 0)) return []
+  const near = semiTransverse
+  /**
+   * 取 `domain` 的**绝对值上界**：调用方递进来的通常是视野框（`[minX, maxX]` 这种），
+   * 而那条实轴坐标可能整段落在负半轴（用户只想看左支时）。取绝对值上界、再靠镜像补另一支，
+   * 两种视野都能画全。
+   */
+  const far = Math.max(Math.abs(domain[0]), Math.abs(domain[1]))
+  if (!(far > near)) return []
+  const sweep = (sign: 1 | -1, from: number, to: number): Coordinate[] => {
+    const points: Coordinate[] = []
+    for (let index = 0; index <= steps; index += 1) {
+      const parameter = from + (to - from) * index / steps
+      const ratio = (parameter * parameter) / (semiTransverse * semiTransverse) - 1
+      const offset = semiConjugate * Math.sqrt(Math.max(0, ratio))
+      const local = alongX ? { x: center.x + parameter, y: center.y + sign * offset } : { x: center.x + sign * offset, y: center.y + parameter }
+      points.push(rotateAround(local, center, rotation))
+    }
+    return points
   }
-  return points
+  return [...sweep(-1, far, near), ...sweep(1, near, far).slice(1)]
+}
+
+/**
+ * 视野框 → `sampleHyperbola` / `sampleHyperbolaBranches` 要的那个参数范围。
+ *
+ * 参数扫的是**实轴那条坐标**（见 `sampleHyperbola` 的说明），所以 `axis: "x"` 给 x 范围、
+ * `axis: "y"` 给 y 范围。画布与导出共用这一份 —— 两处各写一份时，`axis: "y"` 那半一定会有人
+ * 把 x 范围递进去（2026-10-12 修双曲线轴向时就是这么发现的）。
+ */
+export function hyperbolaDomain(
+  bounds: { minX: number; maxX: number; minY: number; maxY: number },
+  hyperbola: HyperbolaPrimitive
+): [number, number] {
+  return hyperbola.axis === "x" ? [bounds.minX, bounds.maxX] : [bounds.minY, bounds.maxY]
 }
 
 export function sampleHyperbolaBranches(hyperbola: HyperbolaPrimitive, domain: [number, number], steps = 64): [Coordinate[], Coordinate[]] {

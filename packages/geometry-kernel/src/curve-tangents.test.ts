@@ -87,11 +87,16 @@ describe("curve tangents", () => {
 
   it("gives a hyperbola's tangent on both branches", () => {
     const hyperbola: HyperbolaPrimitive = { id: "h", type: "hyperbola", center: { x: 0, y: 0 }, radiusX: 3, radiusY: 2, axis: "x" }
-    for (const branch of [0, 1]) for (const parameter of [-2, 0, 2.5]) expectTangentToConic(hyperbola, parameter, branch)
-    // 两支在同一个参数处给出关于横轴对称的点，切向也随之镜像（这是这一支参数化的定义）。
+    /**
+     * **参数必须落在实轴之外**：`|u| ≥ 半实轴 = 3`（2026-10-12 起参数扫的是实轴那条坐标，
+     * `|u| < 3` 在曲线上没有点、`evaluate` 返回 `null`）。旧参数 `[-2, 0, 2.5]` 是旧参数化
+     * （参数扫 x、实轴在 y）下的合法值，在这个口径下全部落在曲线之外。
+     */
+    for (const branch of [0, 1]) for (const parameter of [-3.5, 3, 4.5]) expectTangentToConic(hyperbola, parameter, branch)
+    // 两支在同一个参数处给出关于实轴对称的点，切向也随之镜像（这一支参数化的定义）。
     const constraint = hyperbolaConstraint("h", hyperbola)
-    const upper = constraintTangentAt(constraint, 2, 0)!
-    const lower = constraintTangentAt(constraint, 2, 1)!
+    const upper = constraintTangentAt(constraint, 4, 0)!
+    const lower = constraintTangentAt(constraint, 4, 1)!
     expect(upper.point.x).toBeCloseTo(lower.point.x, 9)
     expect(upper.point.y).toBeCloseTo(-lower.point.y, 9)
     expect(upper.direction.y).toBeCloseTo(-lower.direction.y, 9)

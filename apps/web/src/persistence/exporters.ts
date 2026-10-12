@@ -1,5 +1,5 @@
 import type { Coordinate, GeometryDocument, PrimitiveSpec } from "@draw/dsl"
-import { adaptiveSampleFunctionSegments, evaluateParameterExpression, sampleHyperbolaBranches, sampleParabola } from "@draw/geometry-kernel"
+import { adaptiveSampleFunctionSegments, evaluateParameterExpression, hyperbolaDomain, sampleHyperbolaBranches, sampleParabola } from "@draw/geometry-kernel"
 
 import { DRAWING_INK, svgStyleFor } from "../primitiveStyle"
 import { resolveAnnotationPoint } from "../annotations"
@@ -31,7 +31,8 @@ function sampledSegments(primitive: Extract<PrimitiveSpec, { type: "parabola" | 
   try {
     if (primitive.type === "parabola") return [sampleParabola(primitive, [WORLD_BOUNDS.minX, WORLD_BOUNDS.maxX], 128)]
     if (primitive.type === "hyperbola") {
-      return sampleHyperbolaBranches(primitive, [WORLD_BOUNDS.minX, WORLD_BOUNDS.maxX], 128)
+      // 参数扫的是**实轴那条坐标**：`axis: "y"` 时递 x 范围会画出错误的区域（2026-10-12）。
+      return sampleHyperbolaBranches(primitive, hyperbolaDomain(WORLD_BOUNDS, primitive), 128)
     }
     if (primitive.type === "derivative") return [primitive.points]
     if (primitive.type === "tangent" || primitive.type === "normal" || primitive.type === "secant") return [[primitive.a, primitive.b]]

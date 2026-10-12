@@ -16,9 +16,16 @@ function conicFeaturePoint(primitive: Extract<PrimitiveSpec, { type: "parabola" 
   }
   if (feature === "center") return primitive.center
   const alongX = primitive.type === "hyperbola" ? primitive.axis === "x" : primitive.radiusX >= primitive.radiusY
+  /**
+   * 焦点：`c = √(a² ± b²)`（椭圆减、双曲线加）。
+   *
+   * 顶点：**实轴上的那个半轴**，双曲线尤其不能说成"两个半轴里大的那个" ——
+   * `axis: "y"` 的双曲线半实轴是 `radiusY`，取 `max` 会把顶点放到实轴之外。
+   * （2026-10-12 修正：这里原先的三元式两支写的是同一个值。）
+   */
   const distance = feature === "focus"
     ? primitive.type === "ellipse" ? Math.sqrt(Math.max(primitive.radiusX ** 2, primitive.radiusY ** 2) - Math.min(primitive.radiusX ** 2, primitive.radiusY ** 2)) : Math.sqrt(primitive.radiusX ** 2 + primitive.radiusY ** 2)
-    : alongX ? Math.max(primitive.radiusX, primitive.radiusY) : Math.max(primitive.radiusX, primitive.radiusY)
+    : primitive.type === "hyperbola" ? (alongX ? primitive.radiusX : primitive.radiusY) : Math.max(primitive.radiusX, primitive.radiusY)
   const sign = index % 2 === 0 ? 1 : -1
   return rotateFeature(primitive.center, alongX ? sign * distance : 0, alongX ? 0 : sign * distance, primitive.rotation ?? 0)
 }

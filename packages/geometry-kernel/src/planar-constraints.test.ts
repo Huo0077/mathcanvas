@@ -315,23 +315,37 @@ describe("conic constraints", () => {
   it("gives a hyperbola two branches that are reflections through the centre", () => {
     const constraint = hyperbolaConstraint("h", hyperbola)
     expect(constraint.branchCount).toBe(2)
-    expect(constraint.evaluate(0, 0)).toEqual({ x: 0, y: 2 })
-    expect(constraint.evaluate(0, 1)).toEqual({ x: 0, y: -2 })
+    /**
+     * **参数扫的是实轴那条坐标**（2026-10-12 起）：`|u| < 半实轴 = 3` 那一段曲线上没有点。
+     * 旧断言 `evaluate(0, ·) = (0, ±2)` 是"实轴在 y"的旧约定，已不成立。
+     *
+     * 约束层**把参数夹到 ±半实轴**（它必须满射：投影/切线/残差都靠它），
+     * 所以 `u = 0` 落到**右顶点**；`u = ±半实轴` 也是顶点 —— 这就是"实轴沿 x"的定义。
+     */
+    expect(constraint.evaluate(0, 0)).toEqual({ x: 3, y: 0 })
+    expect(constraint.evaluate(3, 0)).toEqual({ x: 3, y: 0 })
     // Branch 1 at u is the reflection through the centre of branch 0 at -u.
-    const image = constraint.evaluate(3, 1)!
-    const source = constraint.evaluate(-3, 0)!
+    const image = constraint.evaluate(4, 1)!
+    const source = constraint.evaluate(-4, 0)!
     expect(image.x).toBeCloseTo(-source.x, 12)
     expect(image.y).toBeCloseTo(-source.y, 12)
-    expect(source.y).toBeCloseTo(2 * Math.sqrt(2), 12)
+    // 实轴外 `u = 4` 处的纵向偏移是 `b√(u²/a² − 1) = 2√(16/9 − 1) = 2√7/3`。
+    expect(source.y).toBeCloseTo((2 * Math.sqrt(7)) / 3, 12)
   })
 
   it("stays on the requested branch when previousBranch is given", () => {
     const constraint = hyperbolaConstraint("h", hyperbola)
-    const desired = { x: 0, y: 2 }
-    expect(constraint.project(desired)?.branch).toBe(0)
-    const locked = constraint.project(desired, { previousBranch: 1 })
-    expect(locked?.branch).toBe(1)
-    expect(locked?.point.y).toBeCloseTo(-2, 6)
+    const desired = { x: 4, y: 3 }
+    // 自由投影选**上面那一支**（离 (4, 3) 更近）。
+    const free = constraint.project(desired)!
+    expect(free.branch).toBe(0)
+    const locked = constraint.project(desired, { previousBranch: 1 })!
+    expect(locked.branch).toBe(1)
+    // 锁定确实换了落点；两支的落点各自都在曲线上：`x²/9 − y²/4 = 1`（自己算，不读约束自报的残差）。
+    expect(locked.point).not.toEqual(free.point)
+    for (const point of [free.point, locked.point]) {
+      expect(point.x * point.x / 9 - point.y * point.y / 4).toBeCloseTo(1, 6)
+    }
   })
 
   it("matches the existing parabola sampling convention for both axes and a rotation", () => {
@@ -372,7 +386,9 @@ describe("implicit conic form agrees with the parameterisation", () => {
     for (const axis of ["x", "y"] as const) {
       const primitive: HyperbolaPrimitive = { id: "h", type: "hyperbola", center: { x: 2, y: 1 }, radiusX: 3, radiusY: 2, axis, rotation: 0.5 }
       const coefficients = conicCoefficients(primitive)
-      const branches = [sampleHyperbola(primitive, [-3, 3], 32), ...sampleHyperbolaBranches(primitive, [-3, 3], 32)]
+      // `domain` 是**实轴那条坐标**的范围，`|坐标| < 半实轴` 的部分不存在（2026-10-12 起）：
+      // 取 [3, 6] 对两个方向都落在实轴之外（axis "x" 半实轴 3、axis "y" 半实轴 2）。
+      const branches = [sampleHyperbola(primitive, [3, 6], 32), ...sampleHyperbolaBranches(primitive, [3, 6], 32)]
       for (const branch of branches) for (const point of branch) expect(conicValue(coefficients, point)).toBeCloseTo(0, 6)
     }
   })

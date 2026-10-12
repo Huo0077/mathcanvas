@@ -605,14 +605,21 @@ export function ellipseConicCoefficients(ellipse: EllipsePrimitive): ConicCoeffi
 /**
  * 双曲线的隐式系数。
  *
- * `sampleHyperbola` 的坐标约定容易被字面误读：`axis: "x"` 表示**参数沿 x 方向跑**，
- * 局部点是 `(u, ±b√(1 + u²/a²))`，于是**横轴其实落在 y 方向**上：
+ * **`axis` 是实轴**（Task 14，2026-10-12 裁决）：题面 `x²/a² − y²/b² = 1` 解析成
+ * `radiusX = a, radiusY = b, axis: "x"`（`diagramObligations.ts:150` 原文「实轴沿 x」），
+ * 所以 `axis: "x"` 的隐式形式是
  *
- *     axis "x":  Y²/b² − X²/a² = 1   →   a²Y² − b²X² − a²b² = 0
- *     axis "y":  X²/b² − Y²/a² = 1   →   a²X² − b²Y² − a²b² = 0
+ *     axis "x":  X²/a² − Y²/b² = 1   →   b²X² − a²Y² − a²b² = 0
+ *     axis "y":  Y²/b² − X²/a² = 1   →   b²Y² − a²X² − a²b² = 0
  *
- * 两边同乘 `a²b²` 后，A、C 直接就是 X²、Y² 的系数，常数项两种情形都是 `−a²b²`。
- * （按字面取 `axis "x" → b²X² − a²Y²` 是错的：在 u=0 的顶点 (0, b) 上会算出 −72 而不是 0。）
+ * 两边同乘 `a²b²` 后，x²、y² 的系数就是 A、C，常数项两种情形都是 `−a²b²`。
+ *
+ * ⚠️ **这两行原先写反了，旧注释还专门论证过"按字面取是错的"**（当时把 `axis` 读成
+ * "参数往哪边跑"，于是 `axis: "x"` 给出的是实轴在 **y** 的另一条曲线）。它与同病的
+ * `sampleHyperbola` **自洽**，所以两处一起错、测试也全绿 —— 但解析器、核验文案
+ *（`diagramVerification.ts:361` 的「实轴沿 … 轴」）与焦点/顶点标记（`GraphicsView.tsx:79`、
+ * `annotations.ts:18`）**全都按实轴用**，净效果是**画出来的曲线与它自己的实轴、焦点相差 90°**。
+ * 两处已按实轴口径改正，判据在 `conics.test.ts` 的「双曲线的 axis 语义」一组。
  */
 export function hyperbolaConicCoefficients(hyperbola: HyperbolaPrimitive): ConicCoefficients {
   const a = hyperbola.radiusX
@@ -621,8 +628,13 @@ export function hyperbolaConicCoefficients(hyperbola: HyperbolaPrimitive): Conic
   const cos = Math.cos(rotation)
   const sin = Math.sin(rotation)
   const parameterAlongX = hyperbola.axis === "x"
-  const qxx = parameterAlongX ? -b * b : a * a
-  const qyy = parameterAlongX ? a * a : -b * b
+  /**
+   * `axis "x"` ⇒ `b²X² − a²Y² = a²b²`；`axis "y"` ⇒ `a²Y² − b²X² = a²b²`（见上面那段说明）。
+   * 注意**两个方向上的量级也换位**：x² 的系数恒为 `±b²`、y² 的恒为 `∓a²`，
+   * 不是"符号一换、量级不动"。
+   */
+  const qxx = parameterAlongX ? b * b : -(b * b)
+  const qyy = parameterAlongX ? -(a * a) : a * a
   const A = qxx * cos * cos + qyy * sin * sin
   const B = 2 * (qxx - qyy) * sin * cos
   const C = qxx * sin * sin + qyy * cos * cos
@@ -741,20 +753,47 @@ export function hyperbolaConstraint(id: string, hyperbola: HyperbolaPrimitive): 
   const b = Math.abs(hyperbola.radiusY)
   const rotation = hyperbola.rotation ?? 0
   const opensAlongX = hyperbola.axis === "x"
+  /**
+   * **参数扫的是实轴那条坐标**（Task 14，2026-10-12 修正；与 `sampleHyperbola` 同一口径）。
+   * `axis: "x"` 时局部点是 `(u, ±b√(u²/a² − 1))`、`|u| ≥ a`；`axis: "y"` 时两轴互换。
+   *
+   * 旧实现把 `b√(1 + u²/a²)` 加到 y 上，于是曲线实轴落在 **y** —— 与 `axis` 的声明、焦点/顶点
+   * 标记（`GraphicsView.tsx:79`、`annotations.ts:18`）以及核验文案都差 90°（旧注释把它当成
+   * "坐标约定"，见 `hyperbolaConicCoefficients` 上面那段）。
+   *
+   * **`|u| < 半实轴` 的参数在曲线上没有点，返回 `null`** —— 不能夹到顶点：夹出来的是 `(u, 0)`
+   * 这种根本不在曲线上的点，投影与切线判据都会被它污染（`coarsestSample` 会跳过 `null`，
+   * 所以搜索仍然可用）。
+   */
+  const semiTransverse = opensAlongX ? a : b
+  const semiConjugate = opensAlongX ? b : a
   const evaluate = (parameter: number, branch = 0): Coordinate | null => {
     if (a <= EPSILON || b <= EPSILON) return null
-    const transverse = b * Math.sqrt(1 + (parameter * parameter) / (a * a))
+    /**
+     * **参数夹到实轴上**：`|u| < 半实轴` 那一段曲线上没有点，但**约束这一层必须满射**
+     * （投影 / 切线 / 残差都靠它），所以把参数夹到 `±半实轴` —— 那正是离这一段最近的
+     * 曲线点（两支各自的顶点）。
+     *
+     * **夹的是参数，不是偏移量**：把偏移量夹成 0 会吐出 `(u, 0)` 这种根本不在曲线上的点，
+     * 投影与切线判据都会被它污染（2026-10-12 修轴向时实测：那正是切线用例红的原因之一）。
+     *
+     * 采样式的那条路（`sampleHyperbola`）**不夹** —— 它画折线，缺口必须留空，
+     * 否则会把两支之间连出一条根本不存在的线段。两处口径不同是有意的：一个求"最近点"、
+     * 一个求"画出来的曲线"。
+     */
+    const clamped = (parameter < 0 ? -1 : 1) * Math.max(Math.abs(parameter), semiTransverse)
+    const offset = semiConjugate * Math.sqrt((clamped * clamped) / (semiTransverse * semiTransverse) - 1)
     const sign = branch === 1 ? -1 : 1
     const local = opensAlongX
-      ? { x: parameter, y: sign * transverse }
-      : { x: sign * transverse, y: parameter }
+      ? { x: clamped, y: sign * offset }
+      : { x: sign * offset, y: clamped }
     return finitePoint(rotateAround({ x: center.x + local.x, y: center.y + local.y }, center, rotation))
   }
   const search = (desired: Coordinate, branch: number): NearestSample | null => {
     const local = toLocal(desired, center, rotation)
     const seed = opensAlongX ? local.x : local.y
     // 横向尺度取顶点间距离与目标纵向偏移的较大者，保证窗口覆盖住真正的最近点。
-    const scale = Math.max(a, Math.abs(seed), Math.abs(opensAlongX ? local.y : local.x))
+    const scale = Math.max(semiTransverse, Math.abs(seed), Math.abs(opensAlongX ? local.y : local.x))
     const from = seed - scale
     const to = seed + scale
     const branchEvaluate = (parameter: number) => evaluate(parameter, branch)
@@ -788,16 +827,31 @@ export function hyperbolaConstraint(id: string, hyperbola: HyperbolaPrimitive): 
     },
     tangent(parameter, branch = 0) {
       if (a <= EPSILON || b <= EPSILON) return null
-      const transverse = b * Math.sqrt(1 + (parameter * parameter) / (a * a))
-      if (transverse <= EPSILON) return null
-      const sign = branch === 1 ? -1 : 1
-      // d/du (±b√(1 + u²/a²)) = ±(b²u) / (a² · transverse)
-      const slope = sign * (b * b * parameter) / (a * a * transverse)
-      const localTangent = opensAlongX ? { x: 1, y: slope } : { x: slope, y: 1 }
+      const point = evaluate(parameter, branch)
+      if (!point) return null
+      /**
+       * **切向由隐式梯度给出**，不写斜率的闭式：`axis: "x"` 时局部 `F = b²x'² − a²y'² − a²b²`，
+       * `∇F ∝ (b²x', −a²y')`，切向与梯度垂直 ⇒ `t ∝ (a²y', b²x')`（`axis: "y"` 时两轴互换）。
+       *
+       * 这条写法在**顶点**也成立 —— 那里斜率无穷大，旧闭式会在 `transverse → 0` 时退化。
+       * 顶点 `(a, 0)` 给出 `t = (0, a·b²)` ⇒ 竖直切线，正是 `x²/a² − y²/b² = 1` 在顶点的切线。
+       */
+      const local = toLocal(point, center, rotation)
+      const localTangent = opensAlongX
+        ? { x: a * a * local.y, y: b * b * local.x }
+        : { x: -(a * a) * local.y, y: -(b * b) * local.x }
       const length = Math.hypot(localTangent.x, localTangent.y)
+      if (length <= EPSILON) return null
       const cos = Math.cos(rotation)
       const sin = Math.sin(rotation)
-      return { x: (localTangent.x * cos - localTangent.y * sin) / length, y: (localTangent.x * sin + localTangent.y * cos) / length }
+      const direction = { x: (localTangent.x * cos - localTangent.y * sin) / length, y: (localTangent.x * sin + localTangent.y * cos) / length }
+      /**
+       * **方向的整体正负是任意的**（切线是一条线，不是向量），所以这里固定一个朝向：
+       * 第一个非零分量取正。这样同一个参数在两支上给出的方向**互为镜像**、读数也稳定 ——
+       * 与旧闭式（恒取 x 分量为正）同一口径，换算法不换约定。
+       */
+      const flip = direction.x < 0 || (Math.abs(direction.x) <= EPSILON && direction.y < 0)
+      return flip ? { x: -direction.x, y: -direction.y } : direction
     }
   }
 }

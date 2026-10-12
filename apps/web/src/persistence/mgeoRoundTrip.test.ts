@@ -83,16 +83,24 @@ describe("mgeo round trip", () => {
     const document = createEmptyDocument("conics")
     document.primitives = [
       { id: "hyperbola-1", type: "hyperbola", center: { x: 0, y: 0 }, radiusX: 3, radiusY: 2, axis: "x" },
-      { id: "point-1", type: "point", x: 0, y: -2, binding: { kind: "onPath", pathId: "hyperbola-1", parameter: 0, branch: 1, domain: [-6, 6] } }
+      { id: "point-1", type: "point", x: 3, y: 0, binding: { kind: "onPath", pathId: "hyperbola-1", parameter: 0, branch: 1, domain: [-6, 6] } }
     ]
 
     const restored = decodeMgeo(encodeMgeo(recomputeDerivedObjects(document)))
     const point = restored.primitives.find((primitive) => primitive.id === "point-1")
     expect(point?.type === "point" ? point.binding : null).toMatchObject({ branch: 1, domain: [-6, 6] })
-    // Still pinned to the lower branch after a reload.
+    /**
+     * **"仍钉在下支"不能写成 `y < 0`**（2026-10-12）：`axis: "x"` 的双曲线实轴沿 x，
+     * 起点取的是**顶点** `(3, 0)`，往上拖时下支上离目标最近的点**就是顶点本身**（y = 0）。
+     * 这条用例要钉的是"重载之后绑定还在、还锁在下支"，所以判据改成
+     * "分支仍是 1 + 点在曲线上"。
+     */
     const dragged = applyOperation(restored, { op: "translatePrimitive", id: "point-1", delta: { x: 0, y: 10 } })
-    const moved = dragged.document.primitives.find((primitive) => primitive.id === "point-1")
-    expect(moved?.type === "point" ? moved.y : 0).toBeLessThan(0)
+    const moved = dragged.document.primitives.find((primitive) => primitive.id === "point-1") as { x: number; y: number; type: string; binding?: { kind: string; branch?: number } } | undefined
+    expect(moved?.type === "point" && moved.binding?.kind === "onPath" ? moved.binding.branch : null).toBe(1)
+    expect(moved!.y).toBeLessThanOrEqual(0)
+    // 仍在曲线上：自己算 `x²/9 − y²/4 = 1`。
+    expect(moved!.x ** 2 / 9 - moved!.y ** 2 / 4).toBeCloseTo(1, 6)
   })
 
   /**

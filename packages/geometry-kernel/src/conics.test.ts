@@ -11,11 +11,72 @@ import {
   type PlaceableConic
 } from "./conics"
 
+/**
+ * **双曲线的 `axis` 是"实轴往哪边走"**（Task 14，2026-10-12）。
+ *
+ * 判据来自题面侧的唯一声明 —— `diagramObligations.ts:150` 的注释原文：
+ * 「`axis` 由**写法**决定：`x²/… − y²/… = 1` 的实轴沿 x」，两条写法各自映射成
+ * `hyperbolaAxes(分母, 分母, "x" | "y")`；核验文案（`diagramVerification.ts:361` 的
+ * `实轴沿 ${axis} 轴`）与焦点 / 顶点标记（`GraphicsView.tsx:79`、`annotations.ts:18`）
+ * 也都把 `axis` 当**实轴**用。所以：
+ *
+ * - `axis: "x"` ⇒ 曲线是 `x'²/radiusX² − y'²/radiusY² = 1`（半实轴 = `radiusX`，顶点在 `(±radiusX, 0)`）；
+ * - `axis: "y"` ⇒ 曲线是 `y'²/radiusY² − x'²/radiusX² = 1`（半实轴 = `radiusY`，顶点在 `(0, ±radiusY)`）。
+ *
+ * 下面这几条**自己用普通算术算**，不读内核的隐式形式 —— 拿 `conicValue` 去验
+ * `sampleHyperbola` 是"用系统自己的判断证明系统自己"（那两处本来就一致，一起错也能自洽）。
+ */
+describe("双曲线的 axis 语义（实轴，不是参数方向）", () => {
+  const hyperbola = (axis: "x" | "y") => ({ id: "h", type: "hyperbola" as const, center: { x: 0, y: 0 }, radiusX: 3, radiusY: 2, axis })
+
+  it("采样点必须落在 axis 声明的那条双曲线上", () => {
+    for (const axis of ["x", "y"] as const) {
+      const primitive = hyperbola(axis)
+      const a = primitive.radiusX
+      const b = primitive.radiusY
+      const branches = [sampleHyperbola(primitive, [0, 6], 48), ...sampleHyperbolaBranches(primitive, [0, 6], 48)]
+      let counted = 0
+      for (const branch of branches) {
+        for (const point of branch) {
+          // axis=x ⇒ x²/a² − y²/b² = 1；axis=y ⇒ y²/b² − x²/a² = 1。
+          const value = axis === "x" ? point.x * point.x / (a * a) - point.y * point.y / (b * b) : point.y * point.y / (b * b) - point.x * point.x / (a * a)
+          expect(value, `axis=${axis} 的点 (${point.x}, ${point.y}) 不在这条双曲线上`).toBeCloseTo(1, 6)
+          counted += 1
+        }
+      }
+      expect(counted, `axis=${axis} 一个采样点都没有`).toBeGreaterThan(0)
+    }
+  })
+
+  it("顶点落在实轴上：axis=x ⇒ (±radiusX, 0)，axis=y ⇒ (0, ±radiusY)", () => {
+    for (const axis of ["x", "y"] as const) {
+      const primitive = hyperbola(axis)
+      const points = sampleHyperbolaBranches(primitive, [0, 6], 512).flat()
+      const semi = axis === "x" ? primitive.radiusX : primitive.radiusY
+      const has = (predicate: (point: { x: number; y: number }) => boolean) => points.some(predicate)
+      // **两个**顶点都要在：只要求"有一个"会把"只有一支画出来了"放过去。
+      const onAxis = (sign: 1 | -1) => (axis === "x"
+        ? (point: { x: number; y: number }) => Math.abs(point.y) < 1e-9 && Math.abs(point.x - sign * semi) < 1e-9
+        : (point: { x: number; y: number }) => Math.abs(point.x) < 1e-9 && Math.abs(point.y - sign * semi) < 1e-9)
+      expect(has(onAxis(1)), `axis=${axis} 的正向顶点没落在曲线上`).toBe(true)
+      expect(has(onAxis(-1)), `axis=${axis} 的负向顶点没落在曲线上`).toBe(true)
+      // 而"垂直方向 ± 半虚轴"那些点**不在**曲线上（旧实现在那里给出顶点，正是错的来源）。
+      const offCurve = axis === "x" ? { x: 0, y: primitive.radiusY } : { x: primitive.radiusX, y: 0 }
+      expect(has((point) => Math.abs(point.x - offCurve.x) < 1e-9 && Math.abs(point.y - offCurve.y) < 1e-9)).toBe(false)
+    }
+  })
+})
+
 describe("conic sampling", () => {
   it("samples finite parabola, ellipse, and hyperbola points", () => {
     expect(sampleParabola({ id: "p", type: "parabola", vertex: { x: 0, y: 0 }, focalParameter: 2, axis: "y" }, [-2, 2], 8)).toHaveLength(9)
     expect(sampleEllipse({ id: "e", type: "ellipse", center: { x: 0, y: 0 }, radiusX: 3, radiusY: 2 }, 16)).toHaveLength(17)
-    expect(sampleHyperbola({ id: "h", type: "hyperbola", center: { x: 0, y: 0 }, radiusX: 3, radiusY: 2, axis: "x" }, [-3, 3], 8)).toHaveLength(9)
+    /**
+     * 双曲线的 `domain` 是**实轴那条坐标**的范围，`|坐标| < 半实轴` 的部分不存在
+     * （2026-10-12 起；旧实现把参数扫在 x 上，所以 `[-3, 3]` 也"有"点）。这里取 `[0, 6]`：
+     * 夹到顶点 3 之后是从 3 扫到 6 的一支 —— 下半支 9 个点 + 上半支 8 个（顶点只算一次）。
+     */
+    expect(sampleHyperbola({ id: "h", type: "hyperbola", center: { x: 0, y: 0 }, radiusX: 3, radiusY: 2, axis: "x" }, [0, 6], 8)).toHaveLength(17)
   })
 
   it("rotates sampled conics around their vertex or center", () => {
@@ -29,7 +90,7 @@ describe("conic sampling", () => {
   })
 
   it("keeps both hyperbola branches on the rotated local axis", () => {
-    const [first, second] = sampleHyperbolaBranches({ id: "h", type: "hyperbola", center: { x: 1, y: 2 }, radiusX: 3, radiusY: 2, axis: "x", rotation: Math.PI / 4 }, [2, 2], 1)
+    const [first, second] = sampleHyperbolaBranches({ id: "h", type: "hyperbola", center: { x: 1, y: 2 }, radiusX: 3, radiusY: 2, axis: "x", rotation: Math.PI / 4 }, [3, 5], 1)
 
     expect(second[0].x).toBeCloseTo(2 - first[0].x)
     expect(second[0].y).toBeCloseTo(4 - first[0].y)

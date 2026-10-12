@@ -722,22 +722,28 @@ describe("scene graph operations", () => {
     const document = createEmptyDocument("conics")
     document.primitives = [
       { id: "hyperbola-1", type: "hyperbola", center: { x: 0, y: 0 }, radiusX: 3, radiusY: 2, axis: "x" },
-      // axis "x": local = (u, ±b√(1 + u²/a²)); branch 1 takes the minus sign, so u = 0 is (0, -2).
-      { id: "point-1", type: "point", x: 0, y: -2, binding: { kind: "onPath", pathId: "hyperbola-1", parameter: 0, branch: 1, domain: [-6, 6] } }
+      /**
+       * `axis: "x"` ⇒ **实轴沿 x**：局部点 `(u, ±b√(u²/a² − 1))`、`|u| ≥ a = 3`（2026-10-12 起）。
+       * 旧约定是 `(u, ±b√(1 + u²/a²))`（参数扫 x、实轴落在 y），所以旧断言里 `u = 0` 是 `(0, ±2)`；
+       * 现在约束层把 `|u| < 3` 夹到顶点，`u = 0`、branch 1 落在**顶点** `(3, 0)`。
+       */
+      { id: "point-1", type: "point", x: 3, y: 0, binding: { kind: "onPath", pathId: "hyperbola-1", parameter: 0, branch: 1, domain: [-6, 6] } }
     ]
     const initial = recomputeDerivedObjects(document)
-    expect(initial.primitives.find((primitive) => primitive.id === "point-1")).toMatchObject({ x: expect.closeTo(0, 6), y: expect.closeTo(-2, 6) })
+    expect(initial.primitives.find((primitive) => primitive.id === "point-1")).toMatchObject({ x: expect.closeTo(3, 6), y: expect.closeTo(0, 6) })
 
     // Drag far above the axis: the upper branch is nearer, but the binding pins this point to the lower one.
     const upward = applyOperation(initial, { op: "translatePrimitive", id: "point-1", delta: { x: 0, y: 10 } })
-    const pinned = upward.document.primitives.find((primitive) => primitive.id === "point-1")
-    expect(pinned && pinned.type === "point" ? pinned.y : 0).toBeLessThan(0)
+    const pinned = upward.document.primitives.find((primitive) => primitive.id === "point-1") as { x: number; y: number; type: string; binding?: { kind: string; branch?: number } } | undefined
     expect(pinned?.type === "point" && pinned.binding?.kind === "onPath" ? pinned.binding.branch : null).toBe(1)
+    // 仍在下支（实轴以下），而且**仍在曲线上**：自己算 `x²/9 − y²/4 = 1`。
+    expect(pinned!.y).toBeLessThanOrEqual(0)
+    expect(pinned!.x ** 2 / 9 - pinned!.y ** 2 / 4).toBeCloseTo(1, 6)
 
-    // And it can still travel far along its own branch: u = 6 gives (6, -2√5).
-    const along = applyOperation(initial, { op: "translatePrimitive", id: "point-1", delta: { x: 6, y: -2.4721 } })
+    // And it can still travel far along its own branch: u = 6 gives (6, −2√3)。
+    const along = applyOperation(initial, { op: "translatePrimitive", id: "point-1", delta: { x: 3, y: -2 * Math.sqrt(3) } })
     const moved = along.document.primitives.find((primitive) => primitive.id === "point-1")
-    expect(moved).toMatchObject({ x: expect.closeTo(6, 3), y: expect.closeTo(-2 * Math.sqrt(5), 3) })
+    expect(moved).toMatchObject({ x: expect.closeTo(6, 3), y: expect.closeTo(-2 * Math.sqrt(3), 3) })
   })
 
   /**

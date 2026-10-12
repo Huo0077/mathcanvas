@@ -209,9 +209,10 @@ type FigureConic =
  * 与多面体那条同一条纪律：**恰好一个**才谈得上"题面说的就是它"。多一条就说不清
  * 判的是哪一条，宁可返回 `null`（报告里表现为"未核验"，而不是"通过"）。
  *
- * 只认 `ellipse`：`hyperbola` / `parabola` 的题面写法与判据都还没做，
- * 把它们也收进来只会让"我支持圆锥曲线"听起来比实际宽 —— 而它们会走
- * "解析器不认识 ⇒ 未核验"那条诚实路径。
+ * ⚠️ **这段注释原先写着"只认 `ellipse`：`hyperbola` / `parabola` 的题面写法与判据都还没做"** ——
+ * 那句话早就过期了：解析器（`diagramObligations.ts:218-224`、`:231-237`）读得出三类，
+ * 下面三个分支与 `calculate` 里的 `conicAxes`（本文件 `:389`、`:400`）也都按类判。
+ * 留着它会让下一个人以为"双曲线只是没做"，而实际上它**判得比注释说的多**（2026-10-12 更正）。
  */
 function candidateConic(plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument): FigureConic | null {
   if (plan.kind !== "plan") return null
