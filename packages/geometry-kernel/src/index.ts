@@ -12,6 +12,11 @@ export * from "./numeric"
 export * from "./polyline"
 export * from "./conics"
 export * from "./calculus"
+/**
+ * **函数与导数的证据分级**（Task 15）：外点切线、公切线、交点根数与"个数能不能当个数用"
+ * 的 `complete` 读数，以及"参数实例 ≠ 全称"的判据。核验侧直接从包根取。
+ */
+export * from "./function-evidence"
 export * from "./curve-intersections"
 /**
  * **代数直线 ∩ 圆锥曲线**（Task 14）：与上面那条采样法并列 —— 采样法给不出"相切"，
